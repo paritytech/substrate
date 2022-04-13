@@ -1681,6 +1681,114 @@ mod unbond {
 			let _ = fully_unbond_other(Origin::signed(11), 11);
 		});
 	}
+
+	#[test]
+	fn partial_unbond_era_tracking() {
+		ExtBuilder::default().build_and_execute(|| {
+			// given
+			assert_eq!(Delegators::<Runtime>::get(10).unwrap().active_points(), 10);
+			assert_eq!(Delegators::<Runtime>::get(10).unwrap().unbonding_points(), 0);
+			assert_eq!(Delegators::<Runtime>::get(10).unwrap().pool_id, 1);
+			assert_eq!(
+				Delegators::<Runtime>::get(10).unwrap().unbonding_eras,
+				typed_bounded_btree_map!()
+			);
+			assert_eq!(BondedPool::<Runtime>::get(1).unwrap().points, 10);
+			assert!(SubPoolsStorage::<Runtime>::get(1).is_none());
+			assert_eq!(CurrentEra::get(), 0);
+			assert_eq!(BondingDuration::get(), 3);
+
+			// so event the depositor can leave, just keeps the test simpler.
+			unsafe_set_state(1, PoolState::Destroying).unwrap();
+
+			// when: casual unbond
+			assert_ok!(Pools::unbond_other(Origin::signed(10), 10, 1));
+
+			// then
+			assert_eq!(Delegators::<Runtime>::get(10).unwrap().active_points(), 9);
+			assert_eq!(Delegators::<Runtime>::get(10).unwrap().unbonding_points(), 1);
+			assert_eq!(BondedPool::<Runtime>::get(1).unwrap().points, 9);
+			assert_eq!(
+				Delegators::<Runtime>::get(10).unwrap().unbonding_eras,
+				typed_bounded_btree_map!(3 => 1)
+			);
+			assert_eq!(
+				SubPoolsStorage::<Runtime>::get(1).unwrap(),
+				SubPools {
+					no_era: Default::default(),
+					with_era: unbonding_pools_with_era! {
+						3 => UnbondPool { points: 1, balance: 1 }
+					}
+				}
+			);
+
+			// when: casual further unbond, same era.
+			assert_ok!(Pools::unbond_other(Origin::signed(10), 10, 5));
+
+			// then
+			assert_eq!(Delegators::<Runtime>::get(10).unwrap().active_points(), 4);
+			assert_eq!(Delegators::<Runtime>::get(10).unwrap().unbonding_points(), 6);
+			assert_eq!(BondedPool::<Runtime>::get(1).unwrap().points, 4);
+			assert_eq!(
+				Delegators::<Runtime>::get(10).unwrap().unbonding_eras,
+				typed_bounded_btree_map!(3 => 6)
+			);
+			assert_eq!(
+				SubPoolsStorage::<Runtime>::get(1).unwrap(),
+				SubPools {
+					no_era: Default::default(),
+					with_era: unbonding_pools_with_era! {
+						3 => UnbondPool { points: 6, balance: 6 }
+					}
+				}
+			);
+
+			// when: casual further unbond, next era.
+			CurrentEra::set(1);
+			assert_ok!(Pools::unbond_other(Origin::signed(10), 10, 1));
+
+			// then
+			assert_eq!(Delegators::<Runtime>::get(10).unwrap().active_points(), 3);
+			assert_eq!(Delegators::<Runtime>::get(10).unwrap().unbonding_points(), 7);
+			assert_eq!(BondedPool::<Runtime>::get(1).unwrap().points, 3);
+			assert_eq!(
+				Delegators::<Runtime>::get(10).unwrap().unbonding_eras,
+				typed_bounded_btree_map!(3 => 6, 4 => 1)
+			);
+			assert_eq!(
+				SubPoolsStorage::<Runtime>::get(1).unwrap(),
+				SubPools {
+					no_era: Default::default(),
+					with_era: unbonding_pools_with_era! {
+						3 => UnbondPool { points: 6, balance: 6 },
+						4 => UnbondPool { points: 1, balance: 1 }
+					}
+				}
+			);
+
+			// when: unbonding more than our active: capped
+			assert_ok!(Pools::unbond_other(Origin::signed(10), 10, 5));
+
+			// then
+			assert_eq!(Delegators::<Runtime>::get(10).unwrap().active_points(), 0);
+			assert_eq!(Delegators::<Runtime>::get(10).unwrap().unbonding_points(), 10);
+			assert_eq!(BondedPool::<Runtime>::get(1).unwrap().points, 0);
+			assert_eq!(
+				Delegators::<Runtime>::get(10).unwrap().unbonding_eras,
+				typed_bounded_btree_map!(3 => 6, 4 => 4)
+			);
+			assert_eq!(
+				SubPoolsStorage::<Runtime>::get(1).unwrap(),
+				SubPools {
+					no_era: Default::default(),
+					with_era: unbonding_pools_with_era! {
+						3 => UnbondPool { points: 6, balance: 6 },
+						4 => UnbondPool { points: 4, balance: 4 }
+					}
+				}
+			);
+		});
+	}
 }
 
 mod pool_withdraw_unbonded {
@@ -1708,9 +1816,8 @@ mod pool_withdraw_unbonded {
 }
 
 mod withdraw_unbonded_other {
-	use frame_support::bounded_btree_map;
-
 	use super::*;
+	use frame_support::bounded_btree_map;
 
 	#[test]
 	fn withdraw_unbonded_other_works_against_slashed_no_era_sub_pool() {
@@ -1911,15 +2018,6 @@ mod withdraw_unbonded_other {
 			let mut delegator = Delegator { pool_id: 1, points: 10, ..Default::default() };
 			Delegators::<Runtime>::insert(11, delegator.clone());
 
-			// TODO: this correctly triggers the defensive `SubPoolsNotFound` because a
-			// corresponding call to `unbond_other` has not been called to create the sub-pools. how
-			// on earth is it working on master?
-			// The delegator has not called `unbond`
-			assert_noop!(
-				Pools::withdraw_unbonded_other(Origin::signed(11), 11, 0),
-				Error::<Runtime>::NotUnbonding
-			);
-
 			// Simulate calling `unbond`
 			delegator.unbonding_eras = typed_bounded_btree_map!(3 + 0 => 10);
 			Delegators::<Runtime>::insert(11, delegator.clone());
@@ -1927,7 +2025,7 @@ mod withdraw_unbonded_other {
 			// We are still in the bonding duration
 			assert_noop!(
 				Pools::withdraw_unbonded_other(Origin::signed(11), 11, 0),
-				Error::<Runtime>::NotUnbondedYet
+				Error::<Runtime>::CannotWithdrawAny
 			);
 
 			// If we error the delegator does not get removed
@@ -2152,6 +2250,147 @@ mod withdraw_unbonded_other {
 			assert!(!SubPoolsStorage::<Runtime>::contains_key(1));
 			assert!(!RewardPools::<Runtime>::contains_key(1));
 			assert!(!BondedPools::<Runtime>::contains_key(1));
+		});
+	}
+
+	#[test]
+	fn partial_withdraw_unbonded_depositor() {
+		ExtBuilder::default().build_and_execute(|| {
+			// so event the depositor can leave, just keeps the test simpler.
+			unsafe_set_state(1, PoolState::Destroying).unwrap();
+
+			// given
+			assert_ok!(Pools::unbond_other(Origin::signed(10), 10, 6));
+			CurrentEra::set(1);
+			assert_ok!(Pools::unbond_other(Origin::signed(10), 10, 1));
+			assert_eq!(
+				Delegators::<Runtime>::get(10).unwrap().unbonding_eras,
+				typed_bounded_btree_map!(3 => 6, 4 => 1)
+			);
+			assert_eq!(
+				SubPoolsStorage::<Runtime>::get(1).unwrap(),
+				SubPools {
+					no_era: Default::default(),
+					with_era: unbonding_pools_with_era! {
+						3 => UnbondPool { points: 6, balance: 6 },
+						4 => UnbondPool { points: 1, balance: 1 }
+					}
+				}
+			);
+			assert_eq!(Delegators::<Runtime>::get(10).unwrap().active_points(), 3);
+			assert_eq!(Delegators::<Runtime>::get(10).unwrap().unbonding_points(), 7);
+
+			// when
+			CurrentEra::set(2);
+			assert_noop!(
+				Pools::withdraw_unbonded_other(Origin::signed(10), 10, 0),
+				Error::<Runtime>::CannotWithdrawAny
+			);
+
+			// when
+			CurrentEra::set(3);
+			assert_ok!(Pools::withdraw_unbonded_other(Origin::signed(10), 10, 0));
+
+			// then
+			assert_eq!(
+				Delegators::<Runtime>::get(10).unwrap().unbonding_eras,
+				typed_bounded_btree_map!(4 => 1)
+			);
+			assert_eq!(
+				SubPoolsStorage::<Runtime>::get(1).unwrap(),
+				SubPools {
+					no_era: Default::default(),
+					with_era: unbonding_pools_with_era! {
+						4 => UnbondPool { points: 1, balance: 1 }
+					}
+				}
+			);
+
+			// when
+			CurrentEra::set(4);
+			assert_ok!(Pools::withdraw_unbonded_other(Origin::signed(10), 10, 0));
+
+			// then
+			assert_eq!(
+				Delegators::<Runtime>::get(10).unwrap().unbonding_eras,
+				typed_bounded_btree_map!()
+			);
+			assert_eq!(SubPoolsStorage::<Runtime>::get(1).unwrap(), Default::default());
+
+			// when repeating:
+			assert_noop!(
+				Pools::withdraw_unbonded_other(Origin::signed(10), 10, 0),
+				Error::<Runtime>::CannotWithdrawAny
+			);
+		});
+	}
+
+	#[test]
+	fn partial_withdraw_unbonded_non_depositor() {
+		ExtBuilder::default().add_delegators(vec![(11, 10)]).build_and_execute(|| {
+			// given
+			assert_ok!(Pools::unbond_other(Origin::signed(11), 11, 6));
+			CurrentEra::set(1);
+			assert_ok!(Pools::unbond_other(Origin::signed(11), 11, 1));
+			assert_eq!(
+				Delegators::<Runtime>::get(11).unwrap().unbonding_eras,
+				typed_bounded_btree_map!(3 => 6, 4 => 1)
+			);
+			assert_eq!(
+				SubPoolsStorage::<Runtime>::get(1).unwrap(),
+				SubPools {
+					no_era: Default::default(),
+					with_era: unbonding_pools_with_era! {
+						3 => UnbondPool { points: 6, balance: 6 },
+						4 => UnbondPool { points: 1, balance: 1 }
+					}
+				}
+			);
+			assert_eq!(Delegators::<Runtime>::get(11).unwrap().active_points(), 3);
+			assert_eq!(Delegators::<Runtime>::get(11).unwrap().unbonding_points(), 7);
+
+			// when
+			CurrentEra::set(2);
+			assert_noop!(
+				Pools::withdraw_unbonded_other(Origin::signed(11), 11, 0),
+				Error::<Runtime>::CannotWithdrawAny
+			);
+
+			// when
+			CurrentEra::set(3);
+			assert_ok!(Pools::withdraw_unbonded_other(Origin::signed(11), 11, 0));
+
+			// then
+			assert_eq!(
+				Delegators::<Runtime>::get(11).unwrap().unbonding_eras,
+				typed_bounded_btree_map!(4 => 1)
+			);
+			assert_eq!(
+				SubPoolsStorage::<Runtime>::get(1).unwrap(),
+				SubPools {
+					no_era: Default::default(),
+					with_era: unbonding_pools_with_era! {
+						4 => UnbondPool { points: 1, balance: 1 }
+					}
+				}
+			);
+
+			// when
+			CurrentEra::set(4);
+			assert_ok!(Pools::withdraw_unbonded_other(Origin::signed(11), 11, 0));
+
+			// then
+			assert_eq!(
+				Delegators::<Runtime>::get(11).unwrap().unbonding_eras,
+				typed_bounded_btree_map!()
+			);
+			assert_eq!(SubPoolsStorage::<Runtime>::get(1).unwrap(), Default::default());
+
+			// when repeating:
+			assert_noop!(
+				Pools::withdraw_unbonded_other(Origin::signed(11), 11, 0),
+				Error::<Runtime>::CannotWithdrawAny
+			);
 		});
 	}
 }

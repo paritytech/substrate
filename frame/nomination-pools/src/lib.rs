@@ -428,20 +428,21 @@ impl<T: Config> Delegator<T> {
 		unbonding_era: EraIndex,
 	) -> Result<(), Error<T>> {
 		if let Some(new_points) = self.points.checked_sub(&points) {
-			ensure!(
-				!self.unbonding_eras.contains_key(&unbonding_era),
-				Error::<T>::AlreadyUnbonding
-			);
-			self.unbonding_eras.try_insert(unbonding_era, points).map_or(
-				Err(Error::<T>::MaxUnbonding),
-				|maybe_old| {
-					if maybe_old.is_some() {
-						defensive!("map is checked to not contain this kye.");
-					}
-					self.points = new_points;
-					Ok(())
-				},
-			)
+			match self.unbonding_eras.get_mut(&unbonding_era) {
+				Some(already_unbonding_points) =>
+					*already_unbonding_points = already_unbonding_points.saturating_add(points),
+				None => self
+					.unbonding_eras
+					.try_insert(unbonding_era, points)
+					.map(|old| {
+						if old.is_some() {
+							defensive!("value checked to not exist in the map; qed");
+						}
+					})
+					.map_err(|_| Error::<T>::MaxUnbonding)?,
+			}
+			self.points = new_points;
+			Ok(())
 		} else {
 			Err(Error::<T>::NotEnoughPointsToUnbond)
 		}
@@ -730,6 +731,7 @@ impl<T: Config> BondedPool<T> {
 			// destroying it cannot switch states, so by being in destroying we are guaranteed no
 			// other delegators can possibly join.
 			(_, true) => {
+				// TODO: a secondary invariant here is that no delegator can have 0 points.
 				ensure!(
 					target_delegator.active_points() == self.points,
 					Error::<T>::NotOnlyDelegator
@@ -755,30 +757,10 @@ impl<T: Config> BondedPool<T> {
 		sub_pools: &SubPools<T>,
 	) -> Result<bool, DispatchError> {
 		if *target_account == self.roles.depositor {
-			// This is a depositor
-			if !sub_pools.no_era.points.is_zero() {
-				// Unbonded pool has some points, so if they are the last delegator they must be
-				// here. Since the depositor is the last to unbond, this should never be possible.
-				ensure!(sub_pools.with_era.len().is_zero(), Error::<T>::NotOnlyDelegator);
-				ensure!(
-					sub_pools.no_era.points == target_delegator.unbonding_points(),
-					Error::<T>::NotOnlyDelegator
-				);
-			} else {
-				// No points in the `no_era` pool, so they must be in a `with_era` pool
-				// If there are no other delegators, this can be the only `with_era` pool since the
-				// depositor was the last to withdraw. This assumes with_era sub pools are destroyed
-				// whenever their points go to zero.
-				ensure!(sub_pools.with_era.len() == 1, Error::<T>::NotOnlyDelegator);
-				sub_pools
-					.with_era
-					.values()
-					.next()
-					.filter(|only_unbonding_pool| {
-						only_unbonding_pool.points == target_delegator.unbonding_points()
-					})
-					.ok_or(Error::<T>::NotOnlyDelegator)?;
-			}
+			ensure!(
+				sub_pools.sum_unbonding_points() == target_delegator.unbonding_points(),
+				Error::<T>::NotOnlyDelegator
+			);
 			Ok(true)
 		} else {
 			// This isn't a depositor
@@ -906,7 +888,7 @@ impl<T: Config> RewardPool<T> {
 
 /// An unbonding pool. This is always mapped with an era.
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, DefaultNoBound, RuntimeDebugNoBound)]
-#[cfg_attr(feature = "std", derive(Clone, PartialEq))]
+#[cfg_attr(feature = "std", derive(Clone, PartialEq, Eq))]
 #[codec(mel_bound(T: Config))]
 #[scale_info(skip_type_params(T))]
 pub struct UnbondPool<T: Config> {
@@ -984,6 +966,25 @@ impl<T: Config> SubPools<T> {
 		}
 
 		self
+	}
+
+	/// The sum of all unbonding points, regardless of whether they are actually unlocked or not.
+	fn sum_unbonding_points(&self) -> BalanceOf<T> {
+		self.no_era.points.saturating_add(
+			self.with_era
+				.values()
+				.fold(BalanceOf::<T>::zero(), |acc, pool| acc.saturating_add(pool.points)),
+		)
+	}
+
+	/// The sum of all unbonding balance, regardless of whether they are actually unlocked or not.
+	#[cfg(any(test, debug_assertions))]
+	fn sum_unbonding_balance(&self) -> BalanceOf<T> {
+		self.no_era.balance.saturating_add(
+			self.with_era
+				.values()
+				.fold(BalanceOf::<T>::zero(), |acc, pool| acc.saturating_add(pool.balance)),
+		)
 	}
 }
 
@@ -1188,10 +1189,8 @@ pub mod pallet {
 		FullyUnbonding,
 		/// The delegator cannot unbond further chunks due to reaching the limit.
 		MaxUnbonding,
-		/// The delegator is not unbonding and thus cannot withdraw funds.
-		NotUnbonding,
-		/// Unbonded funds cannot be withdrawn yet because the bonding duration has not passed.
-		NotUnbondedYet,
+		/// None of the funds cannot be withdrawn yet because the bonding duration has not passed.
+		CannotWithdrawAny,
 		/// The amount does not meet the minimum bond to either join or create a pool.
 		MinimumBondNotMet,
 		/// The transaction could not be executed due to overflow risk for the pool.
@@ -1466,7 +1465,7 @@ pub mod pallet {
 		}
 
 		/// Withdraw unbonded funds who's unbonding period has passed for the `target` delegator. If
-		/// no bond can be unbonded, this is a successful no-op.
+		/// no bond can be unbonded, an error is returned.
 		///
 		/// Under certain conditions, this call can be dispatched permissionlessly (i.e. by any
 		/// account).
@@ -1512,6 +1511,7 @@ pub mod pallet {
 
 			// NOTE: must do this after we have done the `ok_to_withdraw_unbonded_other_with` check.
 			let withdrawn_points = delegator.withdraw_unlocked(current_era);
+			ensure!(!withdrawn_points.is_empty(), Error::<T>::CannotWithdrawAny);
 
 			// Before calculate the `balance_to_unbond`, with call withdraw unbonded to ensure the
 			// `non_locked_balance` is correct.
@@ -2072,24 +2072,20 @@ impl<T: Config> Pallet<T> {
 			return Ok(())
 		}
 
-		for (pool_id, _) in BondedPools::<T>::iter() {
+		for (pool_id, _pool) in BondedPools::<T>::iter() {
 			let pool_account = Pallet::<T>::create_bonded_account(pool_id);
 			let subs = SubPoolsStorage::<T>::get(pool_id).unwrap_or_default();
-			let sum_unbonding_balance = subs
-				.with_era
-				.into_iter()
-				.map(|(_, v)| v)
-				.chain(sp_std::iter::once(subs.no_era))
-				.map(|unbond_pool| unbond_pool.balance)
-				.fold(Zero::zero(), |a, b| a + b);
 
+			let sum_unbonding_balance = subs.sum_unbonding_balance();
 			let bonded_balance =
 				T::StakingInterface::active_stake(&pool_account).unwrap_or_default();
 			let total_balance = T::Currency::total_balance(&pool_account);
 
 			assert!(
 				total_balance >= bonded_balance + sum_unbonding_balance,
-				"total_balance {:?} >= bonded_balance {:?} + sum_unbonding_balance {:?}",
+				"fault pool: {:?} / {:?}, total_balance {:?} >= bonded_balance {:?} + sum_unbonding_balance {:?}",
+				pool_id,
+				_pool,
 				total_balance,
 				bonded_balance,
 				sum_unbonding_balance

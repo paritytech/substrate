@@ -20,9 +20,9 @@ pub fn default_reward_account() -> AccountId {
 
 parameter_types! {
 	pub static CurrentEra: EraIndex = 0;
+	pub static BondingDuration: EraIndex = 3;
 	static BondedBalanceMap: HashMap<AccountId, Balance> = Default::default();
 	static UnbondingBalanceMap: HashMap<AccountId, Balance> = Default::default();
-	pub static BondingDuration: EraIndex = 3;
 	#[derive(Clone, PartialEq)]
 	pub const MaxUnbonding: u32 = 8;
 	pub static Nominations: Vec<AccountId> = vec![];
