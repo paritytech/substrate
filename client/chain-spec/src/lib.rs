@@ -162,7 +162,7 @@
 //! /// Optional map of `block_number` to `wasm_code`.
 //! ///
 //! /// The given `wasm_code` will be used to substitute the on-chain wasm code starting with the
-//! /// given block number until the `spec_version` on chain changes. The given `wasm_code` should
+//! /// given block number until the `spec_version` on-chain changes. The given `wasm_code` should
 //! /// be as close as possible to the on-chain wasm code. A substitute should be used to fix a bug
 //! /// that can not be fixed with a runtime upgrade, if for example the runtime is constantly
 //! /// panicking. Introducing new runtime apis isn't supported, because the node
