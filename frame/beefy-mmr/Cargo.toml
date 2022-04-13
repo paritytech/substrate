@@ -18,7 +18,6 @@ serde = { version = "1.0.136", optional = true }
 frame-support = { version = "4.0.0-dev", path = "../support", default-features = false }
 frame-system = { version = "4.0.0-dev", path = "../system", default-features = false }
 pallet-mmr = { version = "4.0.0-dev", path = "../merkle-mountain-range", default-features = false }
-pallet-mmr-primitives = { version = "4.0.0-dev", path = "../merkle-mountain-range/primitives", default-features = false }
 pallet-session = { version = "4.0.0-dev", path = "../session", default-features = false }
 
 sp-core = { version = "6.0.0", path = "../../primitives/core", default-features = false }
@@ -46,7 +45,6 @@ std = [
     "k256/std",
     "log/std",
     "pallet-beefy/std",
-    "pallet-mmr-primitives/std",
     "pallet-mmr/std",
     "pallet-session/std",
     "serde",

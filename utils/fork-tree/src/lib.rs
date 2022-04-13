@@ -509,14 +509,14 @@ where
 	}
 
 	/// Checks if any node in the tree is finalized by either finalizing the
-	/// node itself or a child node that's not in the tree, guaranteeing that
-	/// the node being finalized isn't a descendent of any of the node's
-	/// children. Returns `Some(true)` if the node being finalized is a root,
-	/// `Some(false)` if the node being finalized is not a root, and `None` if
-	/// no node in the tree is finalized. The given `predicate` is checked on
-	/// the prospective finalized root and must pass for finalization to occur.
-	/// The given function `is_descendent_of` should return `true` if the second
-	/// hash (target) is a descendent of the first hash (base).
+	/// node itself or a node's descendent that's not in the tree, guaranteeing
+	/// that the node being finalized isn't a descendent of (or equal to) any of
+	/// the node's children. Returns `Some(true)` if the node being finalized is
+	/// a root, `Some(false)` if the node being finalized is not a root, and
+	/// `None` if no node in the tree is finalized. The given `predicate` is
+	/// checked on the prospective finalized root and must pass for finalization
+	/// to occur. The given function `is_descendent_of` should return `true` if
+	/// the second hash (target) is a descendent of the first hash (base).
 	pub fn finalizes_any_with_descendent_if<F, P, E>(
 		&self,
 		hash: &H,
@@ -541,8 +541,10 @@ where
 		for node in self.node_iter() {
 			if predicate(&node.data) {
 				if node.hash == *hash || is_descendent_of(&node.hash, hash)? {
-					for node in node.children.iter() {
-						if node.number <= number && is_descendent_of(&node.hash, &hash)? {
+					for child in node.children.iter() {
+						if child.number <= number &&
+							(child.hash == *hash || is_descendent_of(&child.hash, hash)?)
+						{
 							return Err(Error::UnfinalizedAncestor)
 						}
 					}
@@ -556,12 +558,12 @@ where
 	}
 
 	/// Finalize a root in the tree by either finalizing the node itself or a
-	/// child node that's not in the tree, guaranteeing that the node being
-	/// finalized isn't a descendent of any of the root's children. The given
-	/// `predicate` is checked on the prospective finalized root and must pass for
-	/// finalization to occur. The given function `is_descendent_of` should
-	/// return `true` if the second hash (target) is a descendent of the first
-	/// hash (base).
+	/// node's descendent that's not in the tree, guaranteeing that the node
+	/// being finalized isn't a descendent of (or equal to) any of the root's
+	/// children. The given `predicate` is checked on the prospective finalized
+	/// root and must pass for finalization to occur. The given function
+	/// `is_descendent_of` should return `true` if the second hash (target) is a
+	/// descendent of the first hash (base).
 	pub fn finalize_with_descendent_if<F, P, E>(
 		&mut self,
 		hash: &H,
@@ -587,8 +589,10 @@ where
 		for (i, root) in self.roots.iter().enumerate() {
 			if predicate(&root.data) {
 				if root.hash == *hash || is_descendent_of(&root.hash, hash)? {
-					for node in root.children.iter() {
-						if node.number <= number && is_descendent_of(&node.hash, &hash)? {
+					for child in root.children.iter() {
+						if child.number <= number &&
+							(child.hash == *hash || is_descendent_of(&child.hash, hash)?)
+						{
 							return Err(Error::UnfinalizedAncestor)
 						}
 					}
@@ -606,12 +610,11 @@ where
 			node.data
 		});
 
-		// if the block being finalized is earlier than a given root, then it
-		// must be its ancestor, otherwise we can prune the root. if there's a
-		// root at the same height then the hashes must match. otherwise the
-		// node being finalized is higher than the root so it must be its
-		// descendent (in this case the node wasn't finalized earlier presumably
-		// because the predicate didn't pass).
+		// Retain only roots that are descendents of the finalized block (this
+		// happens if the node has been properly finalized) or that are
+		// ancestors (or equal) to the finalized block (in this case the node
+		// wasn't finalized earlier presumably because the predicate didn't
+		// pass).
 		let mut changed = false;
 		let roots = std::mem::take(&mut self.roots);
 
@@ -1275,18 +1278,31 @@ mod test {
 			Ok(None),
 		);
 
+		// finalizing "D" is not allowed since it is not a root.
+		assert_eq!(
+			tree.finalize_with_descendent_if(&"D", 10, &is_descendent_of, |c| c.effective <= 10),
+			Err(Error::UnfinalizedAncestor)
+		);
+
 		// finalizing "D" will finalize a block from the tree, but it can't be applied yet
-		// since it is not a root change
+		// since it is not a root change.
 		assert_eq!(
 			tree.finalizes_any_with_descendent_if(&"D", 10, &is_descendent_of, |c| c.effective ==
-				10,),
+				10),
 			Ok(Some(false)),
+		);
+
+		// finalizing "E" is not allowed since there are not finalized anchestors.
+		assert_eq!(
+			tree.finalizes_any_with_descendent_if(&"E", 15, &is_descendent_of, |c| c.effective ==
+				10),
+			Err(Error::UnfinalizedAncestor)
 		);
 
 		// finalizing "B" doesn't finalize "A0" since the predicate doesn't pass,
 		// although it will clear out "A1" from the tree
 		assert_eq!(
-			tree.finalize_with_descendent_if(&"B", 2, &is_descendent_of, |c| c.effective <= 2,),
+			tree.finalize_with_descendent_if(&"B", 2, &is_descendent_of, |c| c.effective <= 2),
 			Ok(FinalizationResult::Changed(None)),
 		);
 
@@ -1307,7 +1323,7 @@ mod test {
 		);
 
 		assert_eq!(
-			tree.finalize_with_descendent_if(&"C", 5, &is_descendent_of, |c| c.effective <= 5,),
+			tree.finalize_with_descendent_if(&"C", 5, &is_descendent_of, |c| c.effective <= 5),
 			Ok(FinalizationResult::Changed(Some(Change { effective: 5 }))),
 		);
 
@@ -1326,12 +1342,12 @@ mod test {
 		// it will work with "G" though since it is not in the same branch as "E"
 		assert_eq!(
 			tree.finalizes_any_with_descendent_if(&"G", 100, &is_descendent_of, |c| c.effective <=
-				100,),
+				100),
 			Ok(Some(true)),
 		);
 
 		assert_eq!(
-			tree.finalize_with_descendent_if(&"G", 100, &is_descendent_of, |c| c.effective <= 100,),
+			tree.finalize_with_descendent_if(&"G", 100, &is_descendent_of, |c| c.effective <= 100),
 			Ok(FinalizationResult::Changed(Some(Change { effective: 10 }))),
 		);
 

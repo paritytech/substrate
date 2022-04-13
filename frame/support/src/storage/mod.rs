@@ -17,7 +17,6 @@
 
 //! Stuff to do with the runtime's storage.
 
-pub use self::types::StorageEntryMetadataBuilder;
 use crate::{
 	hash::{ReversibleStorageHasher, StorageHasher},
 	storage::types::{
@@ -27,12 +26,14 @@ use crate::{
 };
 use codec::{Decode, Encode, EncodeLike, FullCodec, FullEncode};
 use sp_core::storage::ChildInfo;
-pub use sp_runtime::TransactionOutcome;
-use sp_runtime::{
-	generic::{Digest, DigestItem},
-	DispatchError, TransactionalError,
-};
+use sp_runtime::generic::{Digest, DigestItem};
 use sp_std::prelude::*;
+
+pub use self::{
+	transactional::{with_transaction, with_transaction_unchecked},
+	types::StorageEntryMetadataBuilder,
+};
+pub use sp_runtime::TransactionOutcome;
 pub use types::Key;
 
 pub mod bounded_btree_map;
@@ -43,139 +44,10 @@ pub mod child;
 pub mod generator;
 pub mod hashed;
 pub mod migration;
+pub mod transactional;
 pub mod types;
 pub mod unhashed;
 pub mod weak_bounded_vec;
-
-mod transaction_level_tracker {
-	type Layer = u32;
-	const TRANSACTION_LEVEL_KEY: &'static [u8] = b":transaction_level:";
-	const TRANSACTIONAL_LIMIT: Layer = 255;
-
-	pub fn get_transaction_level() -> Layer {
-		crate::storage::unhashed::get_or_default::<Layer>(TRANSACTION_LEVEL_KEY)
-	}
-
-	fn set_transaction_level(level: &Layer) {
-		crate::storage::unhashed::put::<Layer>(TRANSACTION_LEVEL_KEY, level);
-	}
-
-	fn kill_transaction_level() {
-		crate::storage::unhashed::kill(TRANSACTION_LEVEL_KEY);
-	}
-
-	/// Increments the transaction level. Returns an error if levels go past the limit.
-	///
-	/// Returns a guard that when dropped decrements the transaction level automatically.
-	pub fn inc_transaction_level() -> Result<StorageLayerGuard, ()> {
-		let existing_levels = get_transaction_level();
-		if existing_levels >= TRANSACTIONAL_LIMIT {
-			return Err(())
-		}
-		// Cannot overflow because of check above.
-		set_transaction_level(&(existing_levels + 1));
-		Ok(StorageLayerGuard)
-	}
-
-	fn dec_transaction_level() {
-		let existing_levels = get_transaction_level();
-		if existing_levels == 0 {
-			log::warn!(
-				"We are underflowing with calculating transactional levels. Not great, but let's not panic...",
-			);
-		} else if existing_levels == 1 {
-			// Don't leave any trace of this storage item.
-			kill_transaction_level();
-		} else {
-			// Cannot underflow because of checks above.
-			set_transaction_level(&(existing_levels - 1));
-		}
-	}
-
-	pub fn is_transactional() -> bool {
-		get_transaction_level() > 0
-	}
-
-	pub struct StorageLayerGuard;
-
-	impl Drop for StorageLayerGuard {
-		fn drop(&mut self) {
-			dec_transaction_level()
-		}
-	}
-}
-
-/// Check if the current call is within a transactional layer.
-pub fn is_transactional() -> bool {
-	transaction_level_tracker::is_transactional()
-}
-
-/// Execute the supplied function in a new storage transaction.
-///
-/// All changes to storage performed by the supplied function are discarded if the returned
-/// outcome is `TransactionOutcome::Rollback`.
-///
-/// Transactions can be nested up to `TRANSACTIONAL_LIMIT` times; more than that will result in an
-/// error.
-///
-/// Commits happen to the parent transaction.
-pub fn with_transaction<T, E>(f: impl FnOnce() -> TransactionOutcome<Result<T, E>>) -> Result<T, E>
-where
-	E: From<DispatchError>,
-{
-	use sp_io::storage::{commit_transaction, rollback_transaction, start_transaction};
-	use TransactionOutcome::*;
-
-	let _guard = transaction_level_tracker::inc_transaction_level()
-		.map_err(|()| TransactionalError::LimitReached.into())?;
-
-	start_transaction();
-
-	match f() {
-		Commit(res) => {
-			commit_transaction();
-			res
-		},
-		Rollback(res) => {
-			rollback_transaction();
-			res
-		},
-	}
-}
-
-/// Same as [`with_transaction`] but without a limit check on nested transactional layers.
-///
-/// This is mostly for backwards compatibility before there was a transactional layer limit.
-/// It is recommended to only use [`with_transaction`] to avoid users from generating too many
-/// transactional layers.
-pub fn with_transaction_unchecked<R>(f: impl FnOnce() -> TransactionOutcome<R>) -> R {
-	use sp_io::storage::{commit_transaction, rollback_transaction, start_transaction};
-	use TransactionOutcome::*;
-
-	let maybe_guard = transaction_level_tracker::inc_transaction_level();
-
-	if maybe_guard.is_err() {
-		log::warn!(
-			"The transactional layer limit has been reached, and new transactional layers are being
-			spawned with `with_transaction_unchecked`. This could be caused by someone trying to
-			attack your chain, and you should investigate usage of `with_transaction_unchecked` and
-			potentially migrate to `with_transaction`, which enforces a transactional limit.",
-		);
-	}
-
-	start_transaction();
-
-	match f() {
-		Commit(res) => {
-			commit_transaction();
-			res
-		},
-		Rollback(res) => {
-			rollback_transaction();
-			res
-		},
-	}
-}
 
 /// A trait for working with macro-generated storage values under the substrate storage API.
 ///
@@ -630,7 +502,18 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 		KArg1: EncodeLike<K1>,
 		KArg2: EncodeLike<K2>;
 
-	/// Remove all values under the first key.
+	/// Remove all values under the first key `k1` in the overlay and up to `limit` in the
+	/// backend.
+	///
+	/// All values in the client overlay will be deleted, if there is some `limit` then up to
+	/// `limit` values are deleted from the client backend, if `limit` is none then all values in
+	/// the client backend are deleted.
+	///
+	/// # Note
+	///
+	/// Calling this multiple times per block with a `limit` set leads always to the same keys being
+	/// removed and the same result being returned. This happens because the keys to delete in the
+	/// overlay are not taken into account when deleting keys in the backend.
 	fn remove_prefix<KArg1>(k1: KArg1, limit: Option<u32>) -> sp_io::KillStorageResult
 	where
 		KArg1: ?Sized + EncodeLike<K1>;
@@ -760,7 +643,18 @@ pub trait StorageNMap<K: KeyGenerator, V: FullCodec> {
 	/// Remove the value under a key.
 	fn remove<KArg: EncodeLikeTuple<K::KArg> + TupleToEncodedIter>(key: KArg);
 
-	/// Remove all values under the partial prefix key.
+	/// Remove all values starting with `partial_key` in the overlay and up to `limit` in the
+	/// backend.
+	///
+	/// All values in the client overlay will be deleted, if there is some `limit` then up to
+	/// `limit` values are deleted from the client backend, if `limit` is none then all values in
+	/// the client backend are deleted.
+	///
+	/// # Note
+	///
+	/// Calling this multiple times per block with a `limit` set leads always to the same keys being
+	/// removed and the same result being returned. This happens because the keys to delete in the
+	/// overlay are not taken into account when deleting keys in the backend.
 	fn remove_prefix<KP>(partial_key: KP, limit: Option<u32>) -> sp_io::KillStorageResult
 	where
 		K: HasKeyPrefix<KP>;
@@ -1204,11 +1098,17 @@ pub trait StoragePrefixedMap<Value: FullCodec> {
 		crate::storage::storage_prefix(Self::module_prefix(), Self::storage_prefix())
 	}
 
-	/// Remove all values of the storage in the overlay and up to `limit` in the backend.
+	/// Remove all values in the overlay and up to `limit` in the backend.
 	///
 	/// All values in the client overlay will be deleted, if there is some `limit` then up to
 	/// `limit` values are deleted from the client backend, if `limit` is none then all values in
 	/// the client backend are deleted.
+	///
+	/// # Note
+	///
+	/// Calling this multiple times per block with a `limit` set leads always to the same keys being
+	/// removed and the same result being returned. This happens because the keys to delete in the
+	/// overlay are not taken into account when deleting keys in the backend.
 	fn remove_all(limit: Option<u32>) -> sp_io::KillStorageResult {
 		sp_io::storage::clear_prefix(&Self::final_prefix(), limit)
 	}
@@ -1473,13 +1373,12 @@ pub fn storage_prefix(pallet_name: &[u8], storage_name: &[u8]) -> [u8; 32] {
 #[cfg(test)]
 mod test {
 	use super::*;
-	use crate::{assert_noop, assert_ok, hash::Identity, Twox128};
+	use crate::{assert_ok, hash::Identity, Twox128};
 	use bounded_vec::BoundedVec;
 	use frame_support::traits::ConstU32;
 	use generator::StorageValue as _;
 	use sp_core::hashing::twox_128;
 	use sp_io::TestExternalities;
-	use sp_runtime::DispatchResult;
 	use weak_bounded_vec::WeakBoundedVec;
 
 	#[test]
@@ -1587,71 +1486,6 @@ mod test {
 
 			let expected = Digest { logs: vec![DigestItem::Other(Vec::new())] };
 			assert_eq!(Digest::decode(&mut &value[..]).unwrap(), expected);
-		});
-	}
-
-	#[test]
-	fn is_transactional_should_return_false() {
-		TestExternalities::default().execute_with(|| {
-			assert!(!is_transactional());
-		});
-	}
-
-	#[test]
-	fn is_transactional_should_not_error_in_with_transaction() {
-		TestExternalities::default().execute_with(|| {
-			assert_ok!(with_transaction(|| -> TransactionOutcome<DispatchResult> {
-				assert!(is_transactional());
-				TransactionOutcome::Commit(Ok(()))
-			}));
-
-			assert_noop!(
-				with_transaction(|| -> TransactionOutcome<DispatchResult> {
-					assert!(is_transactional());
-					TransactionOutcome::Rollback(Err("revert".into()))
-				}),
-				"revert"
-			);
-		});
-	}
-
-	fn recursive_transactional(num: u32) -> DispatchResult {
-		if num == 0 {
-			return Ok(())
-		}
-
-		with_transaction(|| -> TransactionOutcome<DispatchResult> {
-			let res = recursive_transactional(num - 1);
-			TransactionOutcome::Commit(res)
-		})
-	}
-
-	#[test]
-	fn transaction_limit_should_work() {
-		TestExternalities::default().execute_with(|| {
-			assert_eq!(transaction_level_tracker::get_transaction_level(), 0);
-
-			assert_ok!(with_transaction(|| -> TransactionOutcome<DispatchResult> {
-				assert_eq!(transaction_level_tracker::get_transaction_level(), 1);
-				TransactionOutcome::Commit(Ok(()))
-			}));
-
-			assert_ok!(with_transaction(|| -> TransactionOutcome<DispatchResult> {
-				assert_eq!(transaction_level_tracker::get_transaction_level(), 1);
-				let res = with_transaction(|| -> TransactionOutcome<DispatchResult> {
-					assert_eq!(transaction_level_tracker::get_transaction_level(), 2);
-					TransactionOutcome::Commit(Ok(()))
-				});
-				TransactionOutcome::Commit(res)
-			}));
-
-			assert_ok!(recursive_transactional(255));
-			assert_noop!(
-				recursive_transactional(256),
-				sp_runtime::TransactionalError::LimitReached
-			);
-
-			assert_eq!(transaction_level_tracker::get_transaction_level(), 0);
 		});
 	}
 
