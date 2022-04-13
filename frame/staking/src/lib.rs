@@ -294,10 +294,11 @@ mod tests;
 
 pub mod inflation;
 pub mod migrations;
+pub mod npos;
+pub mod pallet;
 pub mod slashing;
+pub mod stakers;
 pub mod weights;
-
-mod pallet;
 
 use codec::{Decode, Encode, HasCompact};
 use frame_support::{
