@@ -24,7 +24,7 @@ use sp_runtime::{ArithmeticError, DispatchError, TokenError};
 use sp_std::fmt::Debug;
 
 /// One of a number of consequences of withdrawing a fungible from an account.
-#[derive(Copy, Clone, Eq, PartialEq)]
+#[derive(Copy, Clone, RuntimeDebug, Eq, PartialEq)]
 pub enum WithdrawConsequence<Balance> {
 	/// Withdraw could not happen since the amount to be withdrawn is less than the total funds in
 	/// the account.
@@ -69,7 +69,7 @@ impl<Balance: Zero> WithdrawConsequence<Balance> {
 }
 
 /// One of a number of consequences of withdrawing a fungible from an account.
-#[derive(Copy, Clone, Eq, PartialEq)]
+#[derive(Copy, Clone, RuntimeDebug, Eq, PartialEq)]
 pub enum DepositConsequence {
 	/// Deposit couldn't happen due to the amount being too low. This is usually because the
 	/// account doesn't yet exist and the deposit wouldn't bring it to at least the minimum needed
@@ -104,7 +104,7 @@ impl DepositConsequence {
 }
 
 /// Simple boolean for whether an account needs to be kept in existence.
-#[derive(Copy, Clone, Eq, PartialEq)]
+#[derive(Copy, Clone, RuntimeDebug, Eq, PartialEq)]
 pub enum ExistenceRequirement {
 	/// Operation must not result in the account going out of existence.
 	///
