@@ -578,7 +578,7 @@ macro_rules! implement_per_thing {
 					let rest = n % ($max / 100);
 					write!(fmt, "{}", units)?;
 					if rest > 0 {
-						write!(fmt, ".", units)?;
+						write!(fmt, ".")?;
 						let mut m = $max;
 						while rest % m > 0 {
 							m /= 10;
