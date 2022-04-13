@@ -1102,8 +1102,6 @@ pub mod pallet {
 		/// Some error occurred that should never happen. This should be reported to the
 		/// maintainers.
 		DefensiveError,
-		/// The caller has insufficient balance to create the pool.
-		InsufficientBalanceToCreate,
 	}
 
 	#[pallet::call]
@@ -1507,11 +1505,6 @@ pub mod pallet {
 				Error::<T>::MaxPools
 			);
 			ensure!(!Delegators::<T>::contains_key(&who), Error::<T>::AccountBelongsToOtherPool);
-			ensure!(
-				T::Currency::free_balance(&who) >=
-					amount.saturating_add(T::Currency::minimum_balance()),
-				Error::<T>::InsufficientBalanceToCreate
-			);
 
 			let pool_id = LastPoolId::<T>::mutate(|id| {
 				*id += 1;
