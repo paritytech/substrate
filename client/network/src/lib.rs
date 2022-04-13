@@ -260,6 +260,7 @@ pub mod block_request_handler;
 pub mod config;
 pub mod error;
 pub mod light_client_requests;
+pub mod mixnet;
 pub mod network_state;
 pub mod state_request_handler;
 pub mod transactions;

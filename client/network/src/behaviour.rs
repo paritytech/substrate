@@ -548,10 +548,12 @@ impl<B: BlockT> NetworkBehaviourEventProcess<mixnet::NetworkEvent> for Behaviour
 					.push_back(BehaviourOut::MixnetMessage(message.peer, message.message));
 			},
 			mixnet::NetworkEvent::Connected(peer_id) => {
-				eprintln!("peer con {:?}", peer_id);
+				// TODO forward to topology
+				debug!(target: "mixnet", "Peer connection added to mixnet {:?}", peer_id);
 			},
 			mixnet::NetworkEvent::Disconnected(peer_id) => {
-				eprintln!("peer disco {:?}", peer_id);
+				// TODO forward to topology
+				debug!(target: "mixnet", "Peer removed from mixnet {:?}", peer_id);
 			},
 		}
 	}

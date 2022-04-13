@@ -46,7 +46,6 @@ use crate::{
 	transactions, transport, DhtEvent, ExHashT, NetworkStateInfo, NetworkStatus, ReputationChange,
 };
 
-use mixnet::Mixnet;
 use codec::Encode as _;
 use futures::{channel::oneshot, prelude::*};
 use libp2p::{
@@ -65,6 +64,7 @@ use libp2p::{
 };
 use log::{debug, error, info, trace, warn};
 use metrics::{Histogram, HistogramVec, MetricSources, Metrics};
+use mixnet::Mixnet;
 use parking_lot::Mutex;
 use sc_consensus::{BlockImportError, BlockImportStatus, ImportQueue, Link};
 use sc_peerset::PeersetHandle;
@@ -336,7 +336,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				)
 			};
 
-
 			let behaviour = {
 				let bitswap = params.network_config.ipfs_server.then(|| Bitswap::new(client));
 
@@ -347,12 +346,12 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 					// TODO here we need to support all keypair, so multikey but cannot dh then...
 					if let libp2p::core::identity::Keypair::Ed25519(kp) = &local_identity {
 						let local_public_key = local_identity.public();
-						let mut mixnet_config =
-							mixnet::Config::new_with_ed25519_keypair(kp, local_public_key.clone().into());
-						// Using a simple star topology on a set of trusted (validators) nodes.
-						// TODO consider notification protocol : event_stream ...
-/*						let topology = ;
-						mixnet_confix.topology = topology;*/
+						let mut mixnet_config = mixnet::Config::new_with_ed25519_keypair(
+							kp,
+							local_public_key.clone().into(),
+						);
+						let topology = crate::mixnet::AuthorityStar::new();
+						mixnet_config.topology = Some(Box::new(topology));
 						mixnet = Some(Mixnet::new(mixnet_config));
 					} else {
 						log::error!(target: "sync", "Ignoring mixnet, non Ed25519 identity");
