@@ -502,6 +502,7 @@ dependencies = [
  "sp-finality-grandpa",
  "sp-keyring",
  "sp-keystore",
+ "sp-mmr-primitives",
  "sp-runtime",
  "sp-tracing",
  "strum",
@@ -5652,7 +5653,6 @@ dependencies = [
  "log 0.4.14",
  "pallet-beefy",
  "pallet-mmr",
- "pallet-mmr-primitives",
  "pallet-session",
  "parity-scale-codec",
  "scale-info",
@@ -6081,27 +6081,11 @@ dependencies = [
  "frame-support",
  "frame-system",
  "hex-literal",
- "pallet-mmr-primitives",
  "parity-scale-codec",
  "scale-info",
  "sp-core",
  "sp-io",
- "sp-runtime",
- "sp-std",
-]
-
-[[package]]
-name = "pallet-mmr-primitives"
-version = "4.0.0-dev"
-dependencies = [
- "frame-support",
- "frame-system",
- "hex-literal",
- "log 0.4.14",
- "parity-scale-codec",
- "serde",
- "sp-api",
- "sp-core",
+ "sp-mmr-primitives",
  "sp-runtime",
  "sp-std",
 ]
@@ -6113,13 +6097,13 @@ dependencies = [
  "jsonrpc-core",
  "jsonrpc-core-client",
  "jsonrpc-derive",
- "pallet-mmr-primitives",
  "parity-scale-codec",
  "serde",
  "serde_json",
  "sp-api",
  "sp-blockchain",
  "sp-core",
+ "sp-mmr-primitives",
  "sp-runtime",
 ]
 
@@ -10138,6 +10122,21 @@ version = "4.1.0-dev"
 dependencies = [
  "thiserror",
  "zstd",
+]
+
+[[package]]
+name = "sp-mmr-primitives"
+version = "4.0.0-dev"
+dependencies = [
+ "hex-literal",
+ "log 0.4.14",
+ "parity-scale-codec",
+ "serde",
+ "sp-api",
+ "sp-core",
+ "sp-debug-derive",
+ "sp-runtime",
+ "sp-std",
 ]
 
 [[package]]

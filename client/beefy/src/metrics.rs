@@ -18,9 +18,7 @@
 
 //! BEEFY Prometheus metrics definition
 
-#[cfg(not(test))]
-use prometheus::{register, PrometheusError, Registry};
-use prometheus::{Counter, Gauge, U64};
+use prometheus::{register, Counter, Gauge, PrometheusError, Registry, U64};
 
 /// BEEFY metrics exposed through Prometheus
 pub(crate) struct Metrics {
@@ -39,7 +37,6 @@ pub(crate) struct Metrics {
 }
 
 impl Metrics {
-	#[cfg(not(test))]
 	pub(crate) fn register(registry: &Registry) -> Result<Self, PrometheusError> {
 		Ok(Self {
 			beefy_validator_set_id: register(
