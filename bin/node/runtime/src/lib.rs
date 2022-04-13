@@ -573,7 +573,7 @@ parameter_types! {
 	pub const SignedRewardBase: Balance = 1 * DOLLARS;
 	pub const SignedDepositBase: Balance = 1 * DOLLARS;
 	pub const SignedDepositByte: Balance = 1 * CENTS;
-	pub const ChallengeDepositDiff: Balance = 1 * DOLLARS;
+	pub const ChallengeDepositDiff: Perbill = Perbill::from_percent(75);
 
 	pub SolutionImprovementThreshold: Perbill = Perbill::from_rational(1u32, 10_000);
 
