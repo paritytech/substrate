@@ -27,7 +27,6 @@ use sp_runtime::traits::{BlockNumberProvider, Bounded};
 
 const SEED: u32 = 0;
 
-#[allow(dead_code)]
 fn assert_last_event<T: Config>(generic_event: <T as Config>::Event) {
 	frame_system::Pallet::<T>::assert_last_event(generic_event.into());
 }
