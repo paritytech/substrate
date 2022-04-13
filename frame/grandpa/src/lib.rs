@@ -498,7 +498,7 @@ impl<T: Config> Pallet<T> {
 	/// Deposit one of this module's logs.
 	fn deposit_log(log: ConsensusLog<T::BlockNumber>) {
 		let log = DigestItem::Consensus(GRANDPA_ENGINE_ID, log.encode());
-		<frame_system::Pallet<T>>::deposit_log(log.into());
+		<frame_system::Pallet<T>>::deposit_log(log);
 	}
 
 	// Perform module initialization, abstracted so that it can be called either through genesis

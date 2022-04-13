@@ -21,7 +21,6 @@
 
 use std::{
 	collections::{HashMap, HashSet},
-	convert::TryInto,
 	hash::Hash,
 };
 
@@ -47,7 +46,7 @@ crate::generate_solution_type! {
 		VoterIndex = u32,
 		TargetIndex = u16,
 		Accuracy = TestAccuracy,
-		MaxVoters = frame_support::traits::ConstU32::<20>,
+		MaxVoters = frame_support::traits::ConstU32::<2_500>,
 	>(16)
 }
 
