@@ -29,10 +29,10 @@ use serde::{Deserialize, Serialize};
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
 use sp_core::Bytes;
-use sp_mmr_primitives::{Error as MmrError, LeafIndex, Proof};
+use sp_mmr_primitives::{Error as MmrError, LeafIndex};
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 
-pub use sp_mmr_primitives::MmrApi as MmrRuntimeApi;
+pub use sp_mmr_primitives::{BatchProof, MmrApi as MmrRuntimeApi};
 
 /// Retrieved MMR leaf and its proof.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -42,13 +42,13 @@ pub struct LeafProof<BlockHash> {
 	pub block_hash: BlockHash,
 	/// SCALE-encoded leaf data.
 	pub leaf: Bytes,
-	/// SCALE-encoded proof data. See [sp_mmr_primitives::Proof].
+	/// SCALE-encoded proof data. See [sp_mmr_primitives::BatchProof].
 	pub proof: Bytes,
 }
 
 impl<BlockHash> LeafProof<BlockHash> {
 	/// Create new `LeafProof` from given concrete `leaf` and `proof`.
-	pub fn new<Leaf, MmrHash>(block_hash: BlockHash, leaf: Leaf, proof: Proof<MmrHash>) -> Self
+	pub fn new<Leaf, MmrHash>(block_hash: BlockHash, leaf: Leaf, proof: BatchProof<MmrHash>) -> Self
 	where
 		Leaf: Encode,
 		MmrHash: Encode,
@@ -63,7 +63,7 @@ impl<BlockHash> LeafProof<BlockHash> {
 pub struct LeafBatchProof<BlockHash> {
 	/// Block hash the proof was generated for.
 	pub block_hash: BlockHash,
-	/// SCALE-encoded vector of leaf index and leaf data `(LeafData, LeafIndex)`.
+	/// SCALE-encoded vector of leaf data `LeafData`.
 	pub leaves: Bytes,
 	/// SCALE-encoded proof data. See [pallet_mmr_primitives::BatchProof].
 	pub proof: Bytes,
@@ -74,7 +74,7 @@ impl<BlockHash> LeafBatchProof<BlockHash> {
 	/// [pallet_mmr_primitives::LeafIndex]) and a [pallet_mmr_primitives::BatchProof].
 	pub fn new<Leaf, MmrHash>(
 		block_hash: BlockHash,
-		leaves: Vec<(Leaf, LeafIndex)>,
+		leaves: Vec<Leaf>,
 		proof: BatchProof<MmrHash>,
 	) -> Self
 	where
@@ -226,8 +226,8 @@ mod tests {
 	fn should_serialize_leaf_proof() {
 		// given
 		let leaf = vec![1_u8, 2, 3, 4];
-		let proof = Proof {
-			leaf_index: 1,
+		let proof = BatchProof {
+			leaf_indices: vec![1],
 			leaf_count: 9,
 			items: vec![H256::repeat_byte(1), H256::repeat_byte(2)],
 		};
@@ -240,7 +240,7 @@ mod tests {
 		// then
 		assert_eq!(
 			actual,
-			r#"{"blockHash":"0x0000000000000000000000000000000000000000000000000000000000000000","leaf":"0x1001020304","proof":"0x010000000000000009000000000000000801010101010101010101010101010101010101010101010101010101010101010202020202020202020202020202020202020202020202020202020202020202"}"#
+			r#"{"blockHash":"0x0000000000000000000000000000000000000000000000000000000000000000","leaf":"0x1001020304","proof":"0x04010000000000000009000000000000000801010101010101010101010101010101010101010101010101010101010101010202020202020202020202020202020202020202020202020202020202020202"}"#
 		);
 	}
 
@@ -254,14 +254,15 @@ mod tests {
 			items: vec![H256::repeat_byte(1), H256::repeat_byte(2)],
 		};
 
-		let leaf_proof = LeafBatchProof::new(H256::repeat_byte(0), vec![(leaf, 1)], proof);
+		let leaf_proof = LeafBatchProof::new(H256::repeat_byte(0), vec![leaf], proof);
 
 		// when
 		let actual = serde_json::to_string(&leaf_proof).unwrap();
+
 		// then
 		assert_eq!(
 			actual,
-			r#"{"blockHash":"0x0000000000000000000000000000000000000000000000000000000000000000","leaves":"0x0410010203040100000000000000","proof":"0x04010000000000000009000000000000000801010101010101010101010101010101010101010101010101010101010101010202020202020202020202020202020202020202020202020202020202020202"}"#
+			r#"{"blockHash":"0x0000000000000000000000000000000000000000000000000000000000000000","leaves":"0x041001020304","proof":"0x04010000000000000009000000000000000801010101010101010101010101010101010101010101010101010101010101010202020202020202020202020202020202020202020202020202020202020202"}"#
 		);
 	}
 
@@ -272,8 +273,8 @@ mod tests {
 			block_hash: H256::repeat_byte(0),
 			leaf: Bytes(vec![1_u8, 2, 3, 4].encode()),
 			proof: Bytes(
-				Proof {
-					leaf_index: 1,
+				BatchProof {
+					leaf_indices: vec![1],
 					leaf_count: 9,
 					items: vec![H256::repeat_byte(1), H256::repeat_byte(2)],
 				}
@@ -285,7 +286,7 @@ mod tests {
 		let actual: LeafProof<H256> = serde_json::from_str(r#"{
 			"blockHash":"0x0000000000000000000000000000000000000000000000000000000000000000",
 			"leaf":"0x1001020304",
-			"proof":"0x010000000000000009000000000000000801010101010101010101010101010101010101010101010101010101010101010202020202020202020202020202020202020202020202020202020202020202"
+			"proof":"0x04010000000000000009000000000000000801010101010101010101010101010101010101010101010101010101010101010202020202020202020202020202020202020202020202020202020202020202"
 		}"#).unwrap();
 
 		// then
@@ -297,7 +298,7 @@ mod tests {
 		// given
 		let expected = LeafBatchProof {
 			block_hash: H256::repeat_byte(0),
-			leaves: Bytes(vec![(vec![1_u8, 2, 3, 4], 1)].encode()),
+			leaves: Bytes(vec![vec![1_u8, 2, 3, 4]].encode()),
 			proof: Bytes(
 				BatchProof {
 					leaf_indices: vec![1],
@@ -311,7 +312,7 @@ mod tests {
 		// when
 		let actual: LeafBatchProof<H256> = serde_json::from_str(r#"{
 			"blockHash":"0x0000000000000000000000000000000000000000000000000000000000000000",
-			"leaves":"0x04100102030401000000",
+			"leaves":"0x041001020304",
 			"proof":"0x04010000000000000009000000000000000801010101010101010101010101010101010101010101010101010101010101010202020202020202020202020202020202020202020202020202020202020202"
 		}"#).unwrap();
 

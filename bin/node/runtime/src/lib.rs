@@ -1823,7 +1823,7 @@ impl_runtime_apis! {
 		fn mmr_root() -> Result<mmr::Hash, mmr::Error> {
 			Ok(Mmr::mmr_root())
 		}
-		
+
 		fn generate_batch_proof(leaf_indices: Vec<pallet_mmr::primitives::LeafIndex>)
 			-> Result<(Vec<(mmr::EncodableOpaqueLeaf, pallet_mmr::primitives::LeafIndex)>, mmr::BatchProof<mmr::Hash>), mmr::Error>
 		{
