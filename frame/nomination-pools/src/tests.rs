@@ -2503,6 +2503,7 @@ mod bond_extra {
 				pool_events_since_last_call(),
 				vec![
 					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { delegator: 10, pool_id: 1, bonded: 10, joined: true },
 					Event::Bonded { delegator: 10, pool_id: 1, bonded: 10, joined: false }
 				]
 			);
@@ -2548,6 +2549,7 @@ mod bond_extra {
 				pool_events_since_last_call(),
 				vec![
 					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { delegator: 10, pool_id: 1, bonded: 10, joined: true },
 					Event::PaidOut { delegator: 10, pool_id: 1, payout: claimable_reward },
 					Event::Bonded {
 						delegator: 10,
@@ -2601,6 +2603,7 @@ mod bond_extra {
 				pool_events_since_last_call(),
 				vec![
 					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { delegator: 10, pool_id: 1, bonded: 10, joined: true },
 					Event::Bonded { delegator: 20, pool_id: 1, bonded: 20, joined: true },
 					Event::PaidOut { delegator: 10, pool_id: 1, payout: 1 },
 					Event::Bonded { delegator: 10, pool_id: 1, bonded: 1, joined: false },

@@ -1544,7 +1544,12 @@ pub mod pallet {
 				},
 			);
 			ReversePoolIdLookup::<T>::insert(bonded_pool.bonded_account(), pool_id);
-			Self::deposit_event(Event::<T>::Created { depositor: who, pool_id });
+			Self::deposit_event(
+				Event::<T>::Created { depositor: who.clone(), pool_id: pool_id.clone() }
+			);
+			Self::deposit_event(
+				Event::<T>::Bonded { delegator: who, pool_id, bonded: amount, joined: true }
+			);
 			bonded_pool.put();
 
 			Ok(())
