@@ -104,11 +104,11 @@ fn info<T: Config>(index: ReferendumIndex) -> &'static TrackInfoOf<T> {
 }
 
 fn make_passing_after<T: Config>(index: ReferendumIndex, period_portion: Perbill) {
-	let turnout = info::<T>(index).min_turnout.threshold(period_portion);
+	let support = info::<T>(index).min_support.threshold(period_portion);
 	let approval = info::<T>(index).min_approval.threshold(period_portion);
 	Referenda::<T>::access_poll(index, |status| {
 		if let PollStatus::Ongoing(tally, ..) = status {
-			*tally = T::Tally::from_requirements(turnout, approval);
+			*tally = T::Tally::from_requirements(support, approval);
 		}
 	});
 }

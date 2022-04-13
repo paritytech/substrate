@@ -128,9 +128,9 @@ pub struct TrackInfo<Balance, Moment> {
 	/// Minimum aye votes as percentage of overall conviction-weighted votes needed for
 	/// approval as a function of time into decision period.
 	pub min_approval: Curve,
-	/// Minimum turnout as percentage of overall population that is needed for
-	/// approval as a function of time into decision period.
-	pub min_turnout: Curve,
+	/// Minimum pre-conviction aye-votes ("support") as percentage of overall population that is
+	/// needed for approval as a function of time into decision period.
+	pub min_support: Curve,
 }
 
 /// Information on the voting tracks.
@@ -493,45 +493,45 @@ mod tests {
 	}
 
 	const TIP_APP: Curve = Curve::make_linear(10, 28, percent(50));
-	const TIP_QUO: Curve = Curve::make_reciprocal(1, 28, percent(4), percent(0));
+	const TIP_SUP: Curve = Curve::make_reciprocal(1, 28, percent(4), percent(0));
 	const ROOT_APP: Curve = Curve::make_reciprocal(4, 28, percent(80), percent(50));
-	const ROOT_QUO: Curve = Curve::make_linear(28, 28, percent(0));
+	const ROOT_SUP: Curve = Curve::make_linear(28, 28, percent(0));
 	const WHITE_APP: Curve = Curve::make_reciprocal(16, 28 * 24, percent(96), percent(50));
-	const WHITE_QUO: Curve = Curve::make_reciprocal(1, 28, percent(20), percent(10));
+	const WHITE_SUP: Curve = Curve::make_reciprocal(1, 28, percent(20), percent(10));
 	const SMALL_APP: Curve = Curve::make_linear(10, 28, percent(50));
-	const SMALL_QUO: Curve = Curve::make_reciprocal(8, 28, percent(1), percent(0));
+	const SMALL_SUP: Curve = Curve::make_reciprocal(8, 28, percent(1), percent(0));
 	const MID_APP: Curve = Curve::make_linear(17, 28, percent(50));
-	const MID_QUO: Curve = Curve::make_reciprocal(12, 28, percent(1), percent(0));
+	const MID_SUP: Curve = Curve::make_reciprocal(12, 28, percent(1), percent(0));
 	const BIG_APP: Curve = Curve::make_linear(23, 28, percent(50));
-	const BIG_QUO: Curve = Curve::make_reciprocal(16, 28, percent(1), percent(0));
+	const BIG_SUP: Curve = Curve::make_reciprocal(16, 28, percent(1), percent(0));
 	const HUGE_APP: Curve = Curve::make_linear(28, 28, percent(50));
-	const HUGE_QUO: Curve = Curve::make_reciprocal(20, 28, percent(1), percent(0));
+	const HUGE_SUP: Curve = Curve::make_reciprocal(20, 28, percent(1), percent(0));
 	const PARAM_APP: Curve = Curve::make_reciprocal(4, 28, percent(80), percent(50));
-	const PARAM_QUO: Curve = Curve::make_reciprocal(7, 28, percent(10), percent(0));
+	const PARAM_SUP: Curve = Curve::make_reciprocal(7, 28, percent(10), percent(0));
 	const ADMIN_APP: Curve = Curve::make_linear(17, 28, percent(50));
-	const ADMIN_QUO: Curve = Curve::make_reciprocal(12, 28, percent(1), percent(0));
+	const ADMIN_SUP: Curve = Curve::make_reciprocal(12, 28, percent(1), percent(0));
 
 	#[test]
 	#[should_panic]
 	fn check_curves() {
 		TIP_APP.info(28u32, "Tip Approval");
-		TIP_QUO.info(28u32, "Tip Quorum");
+		TIP_SUP.info(28u32, "Tip Support");
 		ROOT_APP.info(28u32, "Root Approval");
-		ROOT_QUO.info(28u32, "Root Quorum");
+		ROOT_SUP.info(28u32, "Root Support");
 		WHITE_APP.info(28u32, "Whitelist Approval");
-		WHITE_QUO.info(28u32, "Whitelist Quorum");
+		WHITE_SUP.info(28u32, "Whitelist Support");
 		SMALL_APP.info(28u32, "Small Spend Approval");
-		SMALL_QUO.info(28u32, "Small Spend Quorum");
+		SMALL_SUP.info(28u32, "Small Spend Support");
 		MID_APP.info(28u32, "Mid Spend Approval");
-		MID_QUO.info(28u32, "Mid Spend Quorum");
+		MID_SUP.info(28u32, "Mid Spend Support");
 		BIG_APP.info(28u32, "Big Spend Approval");
-		BIG_QUO.info(28u32, "Big Spend Quorum");
+		BIG_SUP.info(28u32, "Big Spend Support");
 		HUGE_APP.info(28u32, "Huge Spend Approval");
-		HUGE_QUO.info(28u32, "Huge Spend Quorum");
+		HUGE_SUP.info(28u32, "Huge Spend Support");
 		PARAM_APP.info(28u32, "Mid-tier Parameter Change Approval");
-		PARAM_QUO.info(28u32, "Mid-tier Parameter Change Quorum");
+		PARAM_SUP.info(28u32, "Mid-tier Parameter Change Support");
 		ADMIN_APP.info(28u32, "Admin (e.g. Cancel Slash) Approval");
-		ADMIN_QUO.info(28u32, "Admin (e.g. Cancel Slash) Quorum");
+		ADMIN_SUP.info(28u32, "Admin (e.g. Cancel Slash) Support");
 		assert!(false);
 	}
 

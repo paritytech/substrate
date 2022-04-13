@@ -54,8 +54,8 @@ pub struct Tally<
 	pub ayes: Votes,
 	/// The number of nay votes, expressed in terms of post-conviction lock-vote.
 	pub nays: Votes,
-	/// The amount of funds currently expressing its opinion. Pre-conviction.
-	pub turnout: Votes,
+	/// The basic number of aye votes, expressed pre-conviction.
+	pub support: Votes,
 	/// Dummy.
 	dummy: PhantomData<Total>,
 }
@@ -77,8 +77,8 @@ impl<
 		self.ayes
 	}
 
-	fn turnout(&self) -> Perbill {
-		Perbill::from_rational(self.turnout, Total::get())
+	fn support(&self) -> Perbill {
+		Perbill::from_rational(self.support, Total::get())
 	}
 
 	fn approval(&self) -> Perbill {
@@ -87,14 +87,15 @@ impl<
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn unanimity() -> Self {
-		Self { ayes: Total::get(), nays: Zero::zero(), turnout: Total::get(), dummy: PhantomData }
+		Self { ayes: Total::get(), nays: Zero::zero(), support: Total::get(), dummy: PhantomData }
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn from_requirements(turnout: Perbill, approval: Perbill) -> Self {
-		let turnout = turnout.mul_ceil(Total::get());
-		let ayes = approval.mul_ceil(turnout);
-		Self { ayes, nays: turnout - ayes, turnout, dummy: PhantomData }
+	fn from_requirements(support: Perbill, approval: Perbill) -> Self {
+		let support = support.mul_ceil(Total::get());
+		let ayes = approval.mul_ceil(support);
+		// TODO
+		Self { ayes, nays: support - ayes, support, dummy: PhantomData }
 	}
 }
 
@@ -117,13 +118,18 @@ impl<
 		Self {
 			ayes: if vote.aye { votes } else { Zero::zero() },
 			nays: if vote.aye { Zero::zero() } else { votes },
-			turnout: capital,
+			support: capital,
 			dummy: PhantomData,
 		}
 	}
 
-	pub fn from_parts(ayes: Votes, nays: Votes, turnout: Votes) -> Self {
-		Self { ayes, nays, turnout, dummy: PhantomData }
+	pub fn from_parts(ayes_with_conviction: Votes, nays_with_conviction: Votes, ayes: Votes) -> Self {
+		Self {
+			ayes: ayes_with_conviction,
+			nays: nays_with_conviction,
+			support: ayes,
+			dummy: PhantomData,
+		}
 	}
 
 	/// Add an account's vote into the tally.
@@ -131,16 +137,18 @@ impl<
 		match vote {
 			AccountVote::Standard { vote, balance } => {
 				let Delegations { votes, capital } = vote.conviction.votes(balance);
-				self.turnout = self.turnout.checked_add(&capital)?;
 				match vote.aye {
-					true => self.ayes = self.ayes.checked_add(&votes)?,
+					true => {
+						self.support = self.support.checked_add(&capital)?;
+						self.ayes = self.ayes.checked_add(&votes)?
+					},
 					false => self.nays = self.nays.checked_add(&votes)?,
 				}
 			},
 			AccountVote::Split { aye, nay } => {
 				let aye = Conviction::None.votes(aye);
 				let nay = Conviction::None.votes(nay);
-				self.turnout = self.turnout.checked_add(&aye.capital)?.checked_add(&nay.capital)?;
+				self.support = self.support.checked_add(&aye.capital)?;
 				self.ayes = self.ayes.checked_add(&aye.votes)?;
 				self.nays = self.nays.checked_add(&nay.votes)?;
 			},
@@ -153,16 +161,19 @@ impl<
 		match vote {
 			AccountVote::Standard { vote, balance } => {
 				let Delegations { votes, capital } = vote.conviction.votes(balance);
-				self.turnout = self.turnout.checked_sub(&capital)?;
 				match vote.aye {
-					true => self.ayes = self.ayes.checked_sub(&votes)?,
+					true => {
+						self.support = self.support.checked_sub(&capital)?;
+						self.ayes = self.ayes.checked_sub(&votes)?
+					},
 					false => self.nays = self.nays.checked_sub(&votes)?,
 				}
 			},
+			// TODO: abstain.
 			AccountVote::Split { aye, nay } => {
 				let aye = Conviction::None.votes(aye);
 				let nay = Conviction::None.votes(nay);
-				self.turnout = self.turnout.checked_sub(&aye.capital)?.checked_sub(&nay.capital)?;
+				self.support = self.support.checked_sub(&aye.capital)?;
 				self.ayes = self.ayes.checked_sub(&aye.votes)?;
 				self.nays = self.nays.checked_sub(&nay.votes)?;
 			},
@@ -172,18 +183,22 @@ impl<
 
 	/// Increment some amount of votes.
 	pub fn increase(&mut self, approve: bool, delegations: Delegations<Votes>) {
-		self.turnout = self.turnout.saturating_add(delegations.capital);
 		match approve {
-			true => self.ayes = self.ayes.saturating_add(delegations.votes),
+			true => {
+				self.support = self.support.saturating_add(delegations.capital);
+				self.ayes = self.ayes.saturating_add(delegations.votes);
+			},
 			false => self.nays = self.nays.saturating_add(delegations.votes),
 		}
 	}
 
 	/// Decrement some amount of votes.
 	pub fn reduce(&mut self, approve: bool, delegations: Delegations<Votes>) {
-		self.turnout = self.turnout.saturating_sub(delegations.capital);
 		match approve {
-			true => self.ayes = self.ayes.saturating_sub(delegations.votes),
+			true => {
+				self.support = self.support.saturating_sub(delegations.capital);
+				self.ayes = self.ayes.saturating_sub(delegations.votes);
+			},
 			false => self.nays = self.nays.saturating_sub(delegations.votes),
 		}
 	}
@@ -196,7 +211,7 @@ impl<
 pub struct Delegations<Balance> {
 	/// The number of votes (this is post-conviction).
 	pub votes: Balance,
-	/// The amount of raw capital, used for the turnout.
+	/// The amount of raw capital, used for the support.
 	pub capital: Balance,
 }
 

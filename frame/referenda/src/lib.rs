@@ -41,7 +41,7 @@
 //! In order to become concluded, one of three things must happen:
 //! - The referendum should remain in an unbroken _Passing_ state for a period of time. This
 //! is known as the _Confirmation Period_ and is determined by the track. A referendum is considered
-//! _Passing_ when there is a sufficiently high turnout and approval, given the amount of time it
+//! _Passing_ when there is a sufficiently high support and approval, given the amount of time it
 //! has been being decided. Generally the threshold for what counts as being "sufficiently high"
 //! will reduce over time. The curves setting these thresholds are determined by the track. In this
 //! case, the referendum is considered _Approved_ and the proposal is scheduled for dispatch.
@@ -53,6 +53,10 @@
 //! conclude without ever entering into a deciding stage.
 //!
 //! Once a referendum is concluded, the decision deposit may be refunded.
+//!
+//! ## Terms
+//! - *Support*: The number of aye-votes, pre-conviction, as a proportion of the total number of
+//!   pre-conviction votes able to be cast in the population.
 //!
 //! - [`Config`]
 //! - [`Call`]
@@ -723,7 +727,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			&status.tally,
 			Zero::zero(),
 			track.decision_period,
-			&track.min_turnout,
+			&track.min_support,
 			&track.min_approval,
 		);
 		status.in_queue = false;
@@ -930,7 +934,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					&status.tally,
 					now.saturating_sub(deciding.since),
 					track.decision_period,
-					&track.min_turnout,
+					&track.min_support,
 					&track.min_approval,
 				);
 				branch = if is_passing {
@@ -1014,10 +1018,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		deciding.confirming.unwrap_or_else(|| {
 			// Set alarm to the point where the current voting would make it pass.
 			let approval = tally.approval();
-			let turnout = tally.turnout();
+			let support = tally.support();
 			let until_approval = track.min_approval.delay(approval);
-			let until_turnout = track.min_turnout.delay(turnout);
-			let offset = until_turnout.max(until_approval);
+			let until_support = track.min_support.delay(support);
+			let offset = until_support.max(until_approval);
 			deciding.since.saturating_add(offset * track.decision_period)
 		})
 	}
@@ -1062,16 +1066,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	/// Determine whether the given `tally` would result in a referendum passing at `elapsed` blocks
-	/// into a total decision `period`, given the two curves for `turnout_needed` and
+	/// into a total decision `period`, given the two curves for `support_needed` and
 	/// `approval_needed`.
 	fn is_passing(
 		tally: &T::Tally,
 		elapsed: T::BlockNumber,
 		period: T::BlockNumber,
-		turnout_needed: &Curve,
+		support_needed: &Curve,
 		approval_needed: &Curve,
 	) -> bool {
 		let x = Perbill::from_rational(elapsed.min(period), period);
-		turnout_needed.passing(x, tally.turnout()) && approval_needed.passing(x, tally.approval())
+		support_needed.passing(x, tally.support()) && approval_needed.passing(x, tally.approval())
 	}
 }

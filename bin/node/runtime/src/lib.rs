@@ -739,7 +739,7 @@ impl pallet_referenda::TracksInfo<Balance, BlockNumber> for TracksInfo {
 					begin: Perbill::from_percent(100),
 					delta: Perbill::from_percent(50),
 				},
-				min_turnout: pallet_referenda::Curve::LinearDecreasing {
+				min_support: pallet_referenda::Curve::LinearDecreasing {
 					begin: Perbill::from_percent(100),
 					delta: Perbill::from_percent(100),
 				},

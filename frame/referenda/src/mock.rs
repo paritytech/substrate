@@ -175,7 +175,7 @@ impl TracksInfo<u64, u64> for TestTracksInfo {
 						length: Perbill::from_percent(100),
 						floor: Perbill::from_percent(50),
 					},
-					min_turnout: Curve::LinearDecreasing {
+					min_support: Curve::LinearDecreasing {
 						length: Perbill::from_percent(100),
 						floor: Perbill::from_percent(100),
 					},
@@ -195,7 +195,7 @@ impl TracksInfo<u64, u64> for TestTracksInfo {
 						length: Perbill::from_percent(55),
 						floor: Perbill::from_percent(5),
 					},
-					min_turnout: Curve::LinearDecreasing {
+					min_support: Curve::LinearDecreasing {
 						length: Perbill::from_percent(10),
 						floor: Perbill::from_percent(10),
 					},
@@ -264,8 +264,8 @@ impl VoteTally<u32> for Tally {
 		self.ayes
 	}
 
-	fn turnout(&self) -> Perbill {
-		Perbill::from_percent(self.ayes + self.nays)
+	fn support(&self) -> Perbill {
+		Perbill::from_percent(self.ayes)
 	}
 
 	fn approval(&self) -> Perbill {
@@ -278,10 +278,10 @@ impl VoteTally<u32> for Tally {
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn from_requirements(turnout: Perbill, approval: Perbill) -> Self {
-		let turnout = turnout.mul_ceil(100u32);
-		let ayes = approval.mul_ceil(turnout);
-		Self { ayes, nays: turnout - ayes }
+	fn from_requirements(support: Perbill, approval: Perbill) -> Self {
+		let ayes = support.mul_ceil(100u32);
+		let nays = (ayes * 1_000_000_000u64 / approval.deconstruct() as u64) - ayes;
+		Self { ayes, nays }
 	}
 }
 
