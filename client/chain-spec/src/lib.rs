@@ -171,6 +171,9 @@
 //! /// with a on-chain runtime upgrade.
 //! "codeSubstitutes": [],
 //! ```
+//!
+//! The chain spec can be extended with other fields that are opaque to the default chain spec.
+//! Specific node implementations will need to be able to deserialize these extensions.
 
 mod chain_spec;
 mod extension;
