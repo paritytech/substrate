@@ -452,7 +452,9 @@ where
 		// after previous block is applied it is possible to prevalidate incomming transaction
 		// but eventually changess needs to be rolled back, as those can be executed
 		// only in the following(future) block
-		block_builder.record_valid_extrinsics_and_revert_changes(|api| {
+		let (block, storage_changes, proof) = block_builder.record_valid_extrinsics_and_revert_changes(
+			seed,
+			|at,api| {
             let mut valid_txs = Vec::new();
 			if omit_transactions {
 				debug!(target:"block_builder", "new session starts in next block, omiting transaction from the pool");
@@ -498,7 +500,7 @@ where
 				}
 
 				trace!(target:"block_builder", "[{:?}] Pushing to the block.", pending_tx_hash);
-				match validate_transaction::<Block, C>(&self.parent_id, &api, pending_tx_data.clone()) {
+				match validate_transaction::<Block, C>(at, &api, pending_tx_data.clone()) {
 					Ok(()) => {
 						transaction_pushed = true;
 						valid_txs.push(pending_tx_data);
@@ -538,7 +540,7 @@ where
 				}
 			}
             valid_txs
-		});
+		})?.into_inner();
 
 		if hit_block_size_limit && !transaction_pushed {
 			warn!(
@@ -549,7 +551,6 @@ where
 
 		self.transaction_pool.remove_invalid(&unqueue_invalid);
 
-		let (block, storage_changes, proof) = block_builder.build_with_seed(seed)?.into_inner();
 		debug!(target: "block_builder","created block {:?}", block);
 
 		self.metrics.report(|metrics| {

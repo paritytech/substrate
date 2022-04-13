@@ -204,17 +204,73 @@ where
 
 	/// temporaily apply extrinsics and record them on the list
 	pub fn record_valid_extrinsics_and_revert_changes<
-		F: FnOnce(&'_ A::Api) -> Vec<Block::Extrinsic>,
+		F: FnOnce(&'_ BlockId<Block>, &'_ A::Api) -> Vec<Block::Extrinsic>,
 	>(
-		&mut self,
+		mut self,
+		seed: ShufflingSeed,
 		call: F,
-	) -> () {
+	) -> Result<BuiltBlock<Block, backend::StateBackendFor<B, Block>>, Error>  {
+		let mut next_header = self
+			.api
+			.finalize_block_with_context(&self.block_id, ExecutionContext::BlockConstruction)?;
+
+		let proof = self.api.extract_proof();
+
+		let state = self.backend.state_at(self.block_id)?;
+		let parent_hash = self.parent_hash;
+
+		let storage_changes = self
+			.api
+			.into_storage_changes(&state, parent_hash)
+			.map_err(|e| sp_blockchain::Error::StorageChanges(e))?;
+
 		let valid_txs = self.api.execute_in_transaction(|api| {
-			let txs = call(&api);
-			TransactionOutcome::Rollback(txs)
+			let header = <<Block as BlockT>::Header as HeaderT>::new(
+				*next_header.number() + One::one(),
+				Default::default(),
+				Default::default(),
+				next_header.hash(),
+				// NOTE: no access to next block extrinsics ;/
+				Default::default(),
+			);
+			let at = BlockId::Hash(*header.parent_hash());
+			if let Err(_) = api.initialize_block_with_context(&at, ExecutionContext::BlockConstruction, &header){
+				TransactionOutcome::Rollback(Default::default())
+			}else{
+				let txs = call(&at, &api);
+				TransactionOutcome::Rollback(txs)
+			}
 		});
+
 		log::debug!(target: "block_builder", "consume {} valid transactios", valid_txs.len());
 		self.extrinsics.extend(valid_txs);
+
+		// store hash of all extrinsics include in given bloack
+		//
+		let curr_block_extrinsics_count = self.extrinsics.len() + self.inherents.len();
+		let all_extrinsics: Vec<_> = self
+			.inherents
+			.iter()
+			.chain(self.extrinsics.iter())
+			.chain(self.previous_block_extrinsics.unwrap().iter())
+			.cloned()
+			.collect();
+
+		let extrinsics_root = HashFor::<Block>::ordered_trie_root(
+			all_extrinsics.iter().map(Encode::encode).collect(),
+			sp_runtime::StateVersion::V0,
+		);
+		next_header.set_extrinsics_root(extrinsics_root);
+		next_header.set_seed(seed);
+		next_header.set_count((curr_block_extrinsics_count as u32).into());
+
+		Ok(BuiltBlock {
+			block: <Block as BlockT>::new(next_header, all_extrinsics),
+			storage_changes,
+			proof,
+		})
+
+
 	}
 
 	/// Push onto the block's list of extrinsics.
