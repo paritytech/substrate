@@ -126,7 +126,7 @@
 //!   "/dns/0.flamingfir.paritytech.net/tcp/30333/p2p/12D3KooWLK2gMLhWsYJzjW3q35zAs9FDDVqfqVfVuskiGZGRSMvR",
 //! ],
 //! // Optional list of "multi address, verbosity" of telemetry endpoints.
-//! // The verbosity goes from `0` to `9`. While `0` being the mode with the highest verbosity.
+//! // The verbosity goes from `0` to `9`. While `0` being the mode with the lowest verbosity.
 //! "telemetryEndpoints": [
 //!   [
 //!     "/dns/telemetry.polkadot.io/tcp/443/x-parity-wss/%2Fsubmit%2F",
