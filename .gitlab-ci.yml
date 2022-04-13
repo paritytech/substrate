@@ -105,7 +105,7 @@ build-linux-substrate:
         echo "${CI_COMMIT_TAG}" | tee ./artifacts/substrate/VERSION;
       else
         ./artifacts/substrate/substrate --version |
-          |  cut -d ' ' -f 2 | tee ./artifacts/substrate/VERSION;
+          cut -d ' ' -f 2 | tee ./artifacts/substrate/VERSION;
       fi
     - cat ./artifacts/substrate/VERSION
     - echo ${CI_COMMIT_TAG}
