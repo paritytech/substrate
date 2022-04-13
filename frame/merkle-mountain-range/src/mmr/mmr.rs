@@ -24,8 +24,7 @@ use crate::{
 	primitives::{self, Error, NodeIndex},
 	Config, HashingOf,
 };
-#[cfg(not(feature = "std"))]
-use sp_std::{prelude::Vec, vec};
+use sp_std::prelude::*;
 
 /// Stateless verification of the proof for a batch of leaves.
 /// Note, the leaves should be sorted such that corresponding leaves and leaf indices have the

@@ -71,6 +71,7 @@ mod tests;
 
 pub use pallet::*;
 pub use sp_mmr_primitives::{self as primitives, Error, LeafDataProvider, LeafIndex, NodeIndex};
+use sp_std::prelude::*;
 
 /// The most common use case for MMRs is to store historical block hashes,
 /// so that any point in time in the future we can receive a proof about some past
