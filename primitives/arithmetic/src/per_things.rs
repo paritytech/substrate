@@ -568,18 +568,18 @@ macro_rules! implement_per_thing {
 
 		#[cfg(not(feature = "std"))]
 		impl sp_std::fmt::Debug for $name {
-			fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+			fn fmt(&self, fmt: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 				if $max == <$type>::max_value() {
 					// Not a power of ten: show as N/D and approx %
 					write!(fmt, "{}/{}", self.0, $max)
 				} else {
 					// A power of ten: calculate exact percent
-					let units = n / ($max / 100);
-					let rest = n % ($max / 100);
+					let units = self.0 / ($max / 100);
+					let rest = self.0 % ($max / 100);
 					write!(fmt, "{}", units)?;
 					if rest > 0 {
 						write!(fmt, ".")?;
-						let mut m = $max;
+						let mut m = $max / 100;
 						while rest % m > 0 {
 							m /= 10;
 							write!(fmt, "{:01}", rest / m % 10)?;

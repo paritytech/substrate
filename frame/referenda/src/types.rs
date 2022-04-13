@@ -249,9 +249,9 @@ impl<
 #[derive(Clone, Eq, PartialEq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 #[cfg_attr(not(feature = "std"), derive(RuntimeDebug))]
 pub enum Curve {
-	/// Linear curve starting at `(0, 0)`, proceeding linearly to `(length, floor)`, then
+	/// Linear curve starting at `(0, ceil)`, proceeding linearly to `(length, floor)`, then
 	/// remaining at `floor` until the end of the period.
-	LinearDecreasing { length: Perbill, floor: Perbill },
+	LinearDecreasing { length: Perbill, floor: Perbill, ceil: Perbill },
 	/// Stepped curve, beginning at `(0, begin)`, then remaining constant for `period`, at which
 	/// point it steps down to `(period, begin - step)`. It then remains constant for another
 	/// `period` before stepping down to `(period * 2, begin - step * 2)`. This pattern continues
@@ -272,31 +272,34 @@ impl Curve {
 		length: u128,
 		period: u128,
 		floor: FixedI64,
+		ceil: FixedI64,
 	) -> Curve {
 		let length = FixedI64::from_rational(length, period).into_perbill();
 		let floor = floor.into_perbill();
-		Curve::LinearDecreasing { length, floor }
+		let ceil = ceil.into_perbill();
+		Curve::LinearDecreasing { length, floor, ceil }
 	}
 	pub const fn make_reciprocal(
 		delay: u128,
 		period: u128,
 		level: FixedI64,
 		floor: FixedI64,
+		ceil: FixedI64,
 	) -> Curve {
 		let delay = FixedI64::from_rational(delay, period).into_perbill();
 		let mut bounds = ((
 			FixedI64::from_u32(0),
-			Self::reciprocal_from_parts(FixedI64::from_u32(0), floor),
+			Self::reciprocal_from_parts(FixedI64::from_u32(0), floor, ceil),
 			FixedI64::from_inner(i64::max_value()),
 		), (
 			FixedI64::from_u32(1),
-			Self::reciprocal_from_parts(FixedI64::from_u32(1), floor),
+			Self::reciprocal_from_parts(FixedI64::from_u32(1), floor, ceil),
 			FixedI64::from_inner(i64::max_value()),
 		));
 		const TWO: FixedI64 = FixedI64::from_u32(2);
 		while (bounds.1).0.sub((bounds.0).0).into_inner() > 1 {
 			let factor = (bounds.0).0.add((bounds.1).0).div(TWO);
-			let curve = Self::reciprocal_from_parts(factor, floor);
+			let curve = Self::reciprocal_from_parts(factor, floor, ceil);
 			let curve_level = FixedI64::from_perbill(curve.const_threshold(delay));
 			if curve_level.into_inner() > level.into_inner() {
 				bounds = (bounds.0, (factor, curve, curve_level.sub(level)));
@@ -311,14 +314,15 @@ impl Curve {
 		}
 	}
 
-	const fn reciprocal_from_parts(factor: FixedI64, floor: FixedI64) -> Self {
-		let one_minus_floor = FixedI64::from_u32(1).sub(floor);
+	const fn reciprocal_from_parts(factor: FixedI64, floor: FixedI64, ceil: FixedI64) -> Self {
+		let one_minus_floor = ceil.sub(floor);
 		let x_offset = pos_quad_solution(one_minus_floor, one_minus_floor, factor.neg());
 		let y_offset = floor.sub(factor.div(FixedI64::from_u32(1).add(x_offset)));
 		Curve::Reciprocal { factor, x_offset, y_offset }
 	}
 
 	/// Print some info on the curve.
+	#[cfg(feature = "std")]
 	pub fn info(&self, days: u32, name: impl std::fmt::Display) {
 		let hours = days * 24;
 		println!("Curve {name} := {:?}:", self);
@@ -375,8 +379,8 @@ impl Curve {
 	/// Determine the `y` value for the given `x` value.
 	pub(crate) fn threshold(&self, x: Perbill) -> Perbill {
 		match self {
-			Self::LinearDecreasing { length, floor } =>
-				(x.min(*length).saturating_div(*length, Down) * floor.left_from_one()).left_from_one(),
+			Self::LinearDecreasing { length, floor, ceil } =>
+				*ceil - (x.min(*length).saturating_div(*length, Down) * (*ceil - *floor)),
 			Self::SteppedDecreasing { begin, end, step, period } =>
 				(*begin - (step.int_mul(x.int_div(*period))).min(*begin)).max(*end),
 			Self::Reciprocal { factor, x_offset, y_offset } => {
@@ -390,7 +394,6 @@ impl Curve {
 	/// Determine the `y` value for the given `x` value.
 	///
 	/// This is a partial implementation designed only for use in const functions.
-	#[cfg(feature = "std")]
 	const fn const_threshold(&self, x: Perbill) -> Perbill {
 		match self {
 			Self::Reciprocal { factor, x_offset, y_offset } => {
@@ -419,11 +422,13 @@ impl Curve {
 	/// ```
 	pub fn delay(&self, y: Perbill) -> Perbill {
 		match self {
-			Self::LinearDecreasing { length, floor } =>
+			Self::LinearDecreasing { length, floor, ceil } =>
 				if y < *floor {
 					Perbill::one()
+				} else if y > *ceil {
+					Perbill::zero()
 				} else {
-					y.left_from_one().saturating_div(floor.left_from_one(), Up) * *length
+					(*ceil - y).saturating_div(*ceil - *floor, Up) * *length
 				},
 			Self::SteppedDecreasing { begin, end, step, period } =>
 				if y < *end {
@@ -450,10 +455,11 @@ impl Curve {
 impl Debug for Curve {
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
 		match self {
-			Self::LinearDecreasing { length, floor } => {
+			Self::LinearDecreasing { length, floor, ceil } => {
 				write!(
 					f,
-					"Linear[(0%, 100%) -> ({:?}, {:?}) -> (100%, {:?})]",
+					"Linear[(0%, {:?}) -> ({:?}, {:?}) -> (100%, {:?})]",
+					ceil,
 					length,
 					floor,
 					floor,
@@ -492,24 +498,26 @@ mod tests {
 		FixedI64::from_rational(x, 100)
 	}
 
-	const TIP_APP: Curve = Curve::make_linear(10, 28, percent(50));
-	const TIP_SUP: Curve = Curve::make_reciprocal(1, 28, percent(4), percent(0));
-	const ROOT_APP: Curve = Curve::make_reciprocal(4, 28, percent(80), percent(50));
-	const ROOT_SUP: Curve = Curve::make_linear(28, 28, percent(0));
-	const WHITE_APP: Curve = Curve::make_reciprocal(16, 28 * 24, percent(96), percent(50));
-	const WHITE_SUP: Curve = Curve::make_reciprocal(1, 28, percent(20), percent(10));
-	const SMALL_APP: Curve = Curve::make_linear(10, 28, percent(50));
-	const SMALL_SUP: Curve = Curve::make_reciprocal(8, 28, percent(1), percent(0));
-	const MID_APP: Curve = Curve::make_linear(17, 28, percent(50));
-	const MID_SUP: Curve = Curve::make_reciprocal(12, 28, percent(1), percent(0));
-	const BIG_APP: Curve = Curve::make_linear(23, 28, percent(50));
-	const BIG_SUP: Curve = Curve::make_reciprocal(16, 28, percent(1), percent(0));
-	const HUGE_APP: Curve = Curve::make_linear(28, 28, percent(50));
-	const HUGE_SUP: Curve = Curve::make_reciprocal(20, 28, percent(1), percent(0));
-	const PARAM_APP: Curve = Curve::make_reciprocal(4, 28, percent(80), percent(50));
-	const PARAM_SUP: Curve = Curve::make_reciprocal(7, 28, percent(10), percent(0));
-	const ADMIN_APP: Curve = Curve::make_linear(17, 28, percent(50));
-	const ADMIN_SUP: Curve = Curve::make_reciprocal(12, 28, percent(1), percent(0));
+	const TIP_APP: Curve = Curve::make_linear(10, 28, percent(50), percent(100));
+	const TIP_SUP: Curve = Curve::make_reciprocal(1, 28, percent(4), percent(0), percent(50));
+	const ROOT_APP: Curve = Curve::make_reciprocal(4, 28, percent(80), percent(50), percent(100));
+	const ROOT_SUP: Curve = Curve::make_linear(28, 28, percent(0), percent(50));
+	const WHITE_APP: Curve = Curve::make_reciprocal(16, 28 * 24, percent(96), percent(50), percent(100));
+	const WHITE_SUP: Curve = Curve::make_reciprocal(1, 28, percent(20), percent(10), percent(50));
+	const SMALL_APP: Curve = Curve::make_linear(10, 28, percent(50), percent(100));
+	const SMALL_SUP: Curve = Curve::make_reciprocal(8, 28, percent(1), percent(0), percent(50));
+	const MID_APP: Curve = Curve::make_linear(17, 28, percent(50), percent(100));
+	const MID_SUP: Curve = Curve::make_reciprocal(12, 28, percent(1), percent(0), percent(50));
+	const BIG_APP: Curve = Curve::make_linear(23, 28, percent(50), percent(100));
+	const BIG_SUP: Curve = Curve::make_reciprocal(16, 28, percent(1), percent(0), percent(50));
+	const HUGE_APP: Curve = Curve::make_linear(28, 28, percent(50), percent(100));
+	const HUGE_SUP: Curve = Curve::make_reciprocal(20, 28, percent(1), percent(0), percent(50));
+	const PARAM_APP: Curve = Curve::make_reciprocal(4, 28, percent(80), percent(50), percent(100));
+	const PARAM_SUP: Curve = Curve::make_reciprocal(7, 28, percent(10), percent(0), percent(50));
+	const ADMIN_APP: Curve = Curve::make_linear(17, 28, percent(50), percent(100));
+	const ADMIN_SUP: Curve = Curve::make_reciprocal(12, 28, percent(1), percent(0), percent(50));
+
+	// TODO: ceil for linear.
 
 	#[test]
 	#[should_panic]
