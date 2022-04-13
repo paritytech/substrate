@@ -38,7 +38,7 @@ sp-inherents = { version = "4.0.0-dev", path = "../../primitives/inherents" }
 default = ["std"]
 
 # Enable signature verification in background task
-background-sig-check = []
+background-signature-verification = []
 std = [
 	"codec/std",
 	"scale-info/std",
