@@ -23,8 +23,8 @@ use sp_core::{
 	offchain::{testing::TestOffchainExt, OffchainDbExt, OffchainWorkerExt},
 	H256,
 };
-use sp_runtime::traits::Zero;
 use sp_mmr_primitives::{Compact, Proof};
+use sp_runtime::traits::Zero;
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
