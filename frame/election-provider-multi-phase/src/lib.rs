@@ -710,7 +710,7 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 
 		#[pallet::constant]
-		type ChallengeDepositDiff: Get<BalanceOf<Self>>;
+		type ChallengeDepositDiff: Get<Perbill>;
 	}
 
 	#[pallet::hooks]
@@ -1094,7 +1094,7 @@ pub mod pallet {
 						T::Currency::repatriate_reserved(
 							&submission.who,
 							&who,
-							submission.deposit.saturating_sub(T::ChallengeDepositDiff::get()),
+							T::ChallengeDepositDiff::get() * submission.deposit,
 							Free,
 						)?;
 						let mut signed_submissions = Self::signed_submissions();

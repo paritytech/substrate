@@ -275,7 +275,7 @@ parameter_types! {
 
 	pub static OnChainFallback: bool = true;
 
-	pub static ChallengeDepositDiff: Balance = 2;
+	pub static ChallengeDepositDiff: Perbill = Perbill::from_percent(75);
 }
 
 pub struct OnChainSeqPhragmen;
