@@ -83,7 +83,7 @@ impl<B: BlockT> GossipEngine<B> {
 		B: 'static,
 	{
 		let protocol = protocol.into();
-		let network_event_stream = network.event_stream();
+		let network_event_stream = network.event_stream(None);
 
 		GossipEngine {
 			state_machine: ConsensusGossip::new(validator, protocol.clone(), metrics_registry),

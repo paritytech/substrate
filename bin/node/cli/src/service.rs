@@ -480,7 +480,7 @@ pub fn new_full_base(
 		let authority_discovery_role =
 			sc_authority_discovery::Role::PublishAndDiscover(keystore_container.keystore());
 		let dht_event_stream =
-			network.event_stream("authority-discovery").filter_map(|e| async move {
+			network.event_stream("authority-discovery", None).filter_map(|e| async move {
 				match e {
 					Event::Dht(e) => Some(e),
 					_ => None,

@@ -171,7 +171,7 @@ impl TransactionsHandlerPrototype {
 		transaction_pool: Arc<dyn TransactionPool<H, B>>,
 		metrics_registry: Option<&Registry>,
 	) -> error::Result<(TransactionsHandler<B, H>, TransactionsHandlerController<H>)> {
-		let event_stream = service.event_stream("transactions-handler").boxed();
+		let event_stream = service.event_stream("transactions-handler", Some(event_filter)).boxed();
 		let (to_handler, from_controller) = mpsc::unbounded();
 		let gossip_enabled = Arc::new(AtomicBool::new(false));
 
@@ -311,7 +311,7 @@ impl<B: BlockT + 'static, H: ExHashT> TransactionsHandler<B, H> {
 
 	async fn handle_network_event(&mut self, event: Event) {
 		match event {
-			Event::Dht(_) => {},
+			Event::Dht(_) => {}, // filtered by the filter.
 			Event::SyncConnected { remote } => {
 				let addr = iter::once(multiaddr::Protocol::P2p(remote.into()))
 					.collect::<multiaddr::Multiaddr>();
@@ -329,7 +329,6 @@ impl<B: BlockT + 'static, H: ExHashT> TransactionsHandler<B, H> {
 					iter::once(remote).collect(),
 				);
 			},
-
 			Event::NotificationStreamOpened { remote, protocol, role, .. }
 				if protocol == self.protocol_name =>
 			{
@@ -350,7 +349,6 @@ impl<B: BlockT + 'static, H: ExHashT> TransactionsHandler<B, H> {
 				let _peer = self.peers.remove(&remote);
 				debug_assert!(_peer.is_some());
 			},
-
 			Event::NotificationsReceived { remote, messages } => {
 				for (protocol, message) in messages {
 					if protocol != self.protocol_name {
@@ -366,7 +364,6 @@ impl<B: BlockT + 'static, H: ExHashT> TransactionsHandler<B, H> {
 					}
 				}
 			},
-
 			// Not our concern.
 			Event::NotificationStreamOpened { .. } | Event::NotificationStreamClosed { .. } => {},
 		}
@@ -502,5 +499,12 @@ impl<B: BlockT + 'static, H: ExHashT> TransactionsHandler<B, H> {
 		let transactions = self.transaction_pool.transactions();
 		let propagated_to = self.do_propagate_transactions(&transactions);
 		self.transaction_pool.on_broadcasted(propagated_to);
+	}
+}
+
+fn event_filter(event: &Event) -> bool {
+	match event {
+		Event::Dht(_) => false,
+		_ => true,
 	}
 }

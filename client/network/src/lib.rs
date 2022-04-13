@@ -331,3 +331,5 @@ pub struct NetworkStatus<B: BlockT> {
 	/// Warp sync in progress.
 	pub warp_sync: Option<protocol::sync::WarpSyncProgress<B>>,
 }
+
+type Mixnet = ::mixnet::Mixnet<crate::mixnet::AuthorityStar>;

@@ -39,7 +39,6 @@ use libp2p::{
 	NetworkBehaviour,
 };
 use log::debug;
-use mixnet::Mixnet;
 use prost::Message;
 use sc_consensus::import_queue::{IncomingBlock, Origin};
 use sc_peerset::PeersetHandle;
@@ -59,6 +58,7 @@ use std::{
 pub use crate::request_responses::{
 	IfDisconnected, InboundFailure, OutboundFailure, RequestFailure, RequestId, ResponseFailure,
 };
+use crate::Mixnet;
 
 /// General behaviour of the network. Combines all protocols together.
 #[derive(NetworkBehaviour)]

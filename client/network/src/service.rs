@@ -46,6 +46,7 @@ use crate::{
 	transactions, transport, DhtEvent, ExHashT, NetworkStateInfo, NetworkStatus, ReputationChange,
 };
 
+use crate::Mixnet;
 use codec::Encode as _;
 use futures::{channel::oneshot, prelude::*};
 use libp2p::{
@@ -64,7 +65,6 @@ use libp2p::{
 };
 use log::{debug, error, info, trace, warn};
 use metrics::{Histogram, HistogramVec, MetricSources, Metrics};
-use mixnet::Mixnet;
 use parking_lot::Mutex;
 use sc_consensus::{BlockImportError, BlockImportStatus, ImportQueue, Link};
 use sc_peerset::PeersetHandle;
@@ -91,7 +91,7 @@ pub use behaviour::{
 };
 
 mod metrics;
-mod out_events;
+pub(crate) mod out_events;
 mod signature;
 #[cfg(test)]
 mod tests;
@@ -250,6 +250,8 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 		let num_connected = Arc::new(AtomicUsize::new(0));
 		let is_major_syncing = Arc::new(AtomicBool::new(false));
 
+		let mut event_streams = out_events::OutChannels::new(params.metrics_registry.as_ref())?;
+
 		// Build the swarm.
 		let client = params.chain.clone();
 		let (mut swarm, bandwidth): (Swarm<B>, _) = {
@@ -343,6 +345,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				// through call backs in crate and same as transaction handler to register
 				let mut mixnet = None;
 				if params.network_config.mixnet {
+					let authority_protocol = "authority-discovery"; // TODO check in polkadot.
 					// TODO here we need to support all keypair, so multikey but cannot dh then...
 					if let libp2p::core::identity::Keypair::Ed25519(kp) = &local_identity {
 						let local_public_key = local_identity.public();
@@ -350,9 +353,14 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 							kp,
 							local_public_key.clone().into(),
 						);
-						let topology = crate::mixnet::AuthorityStar::new();
-						mixnet_config.topology = Some(Box::new(topology));
-						mixnet = Some(Mixnet::new(mixnet_config));
+						let topology = crate::mixnet::AuthorityStar::new(authority_protocol);
+						let commands =
+							crate::mixnet::AuthorityStar::command_stream(&mut event_streams);
+						mixnet = Some(
+							Mixnet::new(mixnet_config)
+								.with_topology(topology)
+								.with_commands(commands),
+						);
 					} else {
 						log::error!(target: "sync", "Ignoring mixnet, non Ed25519 identity");
 					}
@@ -463,7 +471,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			service,
 			import_queue: params.import_queue,
 			from_service,
-			event_streams: out_events::OutChannels::new(params.metrics_registry.as_ref())?,
+			event_streams,
 			peers_notifications_sinks,
 			tx_handler_controller,
 			metrics,
@@ -894,9 +902,16 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	///
 	/// The name passed is used to identify the channel in the Prometheus metrics. Note that the
 	/// parameter is a `&'static str`, and not a `String`, in order to avoid accidentally having
-	/// an unbounded set of Prometheus metrics, which would be quite bad in terms of memory
-	pub fn event_stream(&self, name: &'static str) -> impl Stream<Item = Event> {
-		let (tx, rx) = out_events::channel(name);
+	/// an unbounded set of Prometheus metrics, which would be quite bad in terms of memory.
+	///
+	/// Events can be filtered with and optional `filter` method.
+	/// TODO consider event_stream_with_filter to avoid breaking existing code
+	pub fn event_stream(
+		&self,
+		name: &'static str,
+		filter: Option<fn(&Event) -> bool>,
+	) -> impl Stream<Item = Event> {
+		let (tx, rx) = out_events::channel(name, filter);
 		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::EventStream(tx));
 		rx
 	}
