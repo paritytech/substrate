@@ -444,6 +444,20 @@ impl<Block: BlockT> blockchain::Backend<Block> for Blockchain<Block> {
 		Ok(self.storage.read().leaves.hashes())
 	}
 
+	fn displaced_leaves_after_finalizing(
+		&self,
+		block_number: NumberFor<Block>,
+	) -> sp_blockchain::Result<Vec<Block::Hash>> {
+		Ok(self
+			.storage
+			.read()
+			.leaves
+			.displaced_by_finalize_height(block_number)
+			.leaves()
+			.cloned()
+			.collect::<Vec<_>>())
+	}
+
 	fn children(&self, _parent_hash: Block::Hash) -> sp_blockchain::Result<Vec<Block::Hash>> {
 		unimplemented!()
 	}
