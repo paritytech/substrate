@@ -24,7 +24,7 @@ parameter_types! {
 	static BondedBalanceMap: HashMap<AccountId, Balance> = Default::default();
 	static UnbondingBalanceMap: HashMap<AccountId, Balance> = Default::default();
 	#[derive(Clone, PartialEq)]
-	pub const MaxUnbonding: u32 = 8;
+	pub static MaxUnbonding: u32 = 8;
 	pub static Nominations: Vec<AccountId> = vec![];
 
 }

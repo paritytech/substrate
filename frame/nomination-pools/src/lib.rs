@@ -439,7 +439,7 @@ impl<T: Config> Delegator<T> {
 							defensive!("value checked to not exist in the map; qed");
 						}
 					})
-					.map_err(|_| Error::<T>::MaxUnbonding)?,
+					.map_err(|_| Error::<T>::MaxUnbondingLimit)?,
 			}
 			self.points = new_points;
 			Ok(())
@@ -1188,7 +1188,7 @@ pub mod pallet {
 		/// anymore to, for example, collect rewards).
 		FullyUnbonding,
 		/// The delegator cannot unbond further chunks due to reaching the limit.
-		MaxUnbonding,
+		MaxUnbondingLimit,
 		/// None of the funds cannot be withdrawn yet because the bonding duration has not passed.
 		CannotWithdrawAny,
 		/// The amount does not meet the minimum bond to either join or create a pool.
@@ -1274,7 +1274,14 @@ pub mod pallet {
 				},
 			);
 
+			Self::deposit_event(Event::<T>::Bonded {
+				delegator: who,
+				pool_id,
+				bonded: amount,
+				joined: true,
+			});
 			bonded_pool.put();
+
 			Ok(())
 		}
 
