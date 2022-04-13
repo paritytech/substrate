@@ -42,7 +42,7 @@ where
 {
 	let size = NodesUtils::new(proof.leaf_count).size();
 
-	let leaves_and_position = proof
+	let leaves_and_position_data = proof
 		.leaf_indices
 		.into_iter()
 		.map(|index| mmr_lib::leaf_index_to_pos(index))
@@ -53,7 +53,7 @@ where
 		size,
 		proof.items.into_iter().map(Node::Hash).collect(),
 	);
-	p.verify(Node::Hash(root), leaves_and_position)
+	p.verify(Node::Hash(root), leaves_and_position_data)
 		.map_err(|e| Error::Verify.log_debug(e))
 }
 
