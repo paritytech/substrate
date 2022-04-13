@@ -418,7 +418,7 @@ sp_api::decl_runtime_apis! {
 		/// Return the on-chain MMR root hash.
 		fn mmr_root() -> Result<Hash, Error>;
 		/// Generate MMR proof for a series of leaves under given indices.
-		fn generate_batch_proof(leaf_indices: Vec<LeafIndex>) -> Result<(Vec<(EncodableOpaqueLeaf, LeafIndex)>, BatchProof<Hash>), Error>;
+		fn generate_batch_proof(leaf_indices: Vec<LeafIndex>) -> Result<(Vec<EncodableOpaqueLeaf>, BatchProof<Hash>), Error>;
 
 		/// Verify MMR proof against on-chain MMR for a batch of leaves.
 		///

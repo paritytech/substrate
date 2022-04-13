@@ -85,7 +85,7 @@ where
 		Self { mmr: mmr_lib::MMR::new(size, Default::default()), leaves }
 	}
 
-	/// Verify proof of a single leaf.
+	/// Verify proof for a set of leaves.
 	/// Note, the leaves should be sorted such that corresponding leaves and leaf indices have
 	/// the same position in both the `leaves` vector and the `leaf_indices` vector contained in the
 	/// [primitives::BatchProof]
@@ -98,14 +98,15 @@ where
 			self.mmr.mmr_size(),
 			proof.items.into_iter().map(Node::Hash).collect(),
 		);
-		let leaves_and_position = proof
+		let leaves_positions_and_data = proof
 			.leaf_indices
 			.into_iter()
 			.map(|index| mmr_lib::leaf_index_to_pos(index))
 			.zip(leaves.into_iter().map(|leaf| Node::Data(leaf)))
 			.collect();
 		let root = self.mmr.get_root().map_err(|e| Error::GetRoot.log_error(e))?;
-		p.verify(root, leaves_and_position).map_err(|e| Error::Verify.log_debug(e))
+		p.verify(root, leaves_positions_and_data)
+			.map_err(|e| Error::Verify.log_debug(e))
 	}
 
 	/// Return the internal size of the MMR (number of nodes).

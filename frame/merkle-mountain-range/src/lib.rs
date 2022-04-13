@@ -230,10 +230,11 @@ pub(crate) type HashingOf<T, I> = <T as Config<I>>::Hashing;
 
 /// Stateless MMR proof verification for batch of leaves.
 ///
-/// This function can be used to verify received MMR proof (`proof`)
-/// for given leaf data (`leaf`) against a known MMR root hash (`root`).
-///
-/// The verification does not require any storage access.
+/// This function can be used to verify received MMR [primitives::BatchProof] (`proof`)
+/// for given leaves set (`leaves`) against a known MMR root hash (`root`).
+/// Note, the leaves should be sorted such that corresponding leaves and leaf indices have the
+/// same position in both the `leaves` vector and the `leaf_indices` vector contained in the
+/// [primitives::BatchProof].
 pub fn verify_leaves_proof<H, L>(
 	root: H::Output,
 	leaves: Vec<mmr::Node<H, L>>,
