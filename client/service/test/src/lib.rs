@@ -331,7 +331,7 @@ where
 				self.base_port,
 				temp,
 			);
-			let addr = node_config.network.listen_addresses.get(0).unwrap().clone();
+			let addr = node_config.network.listen_addresses.first().unwrap().clone();
 			let (service, user_data) = full(node_config).expect("Error creating test node service");
 
 			handle.spawn(service.clone().map_err(|_| ()));
