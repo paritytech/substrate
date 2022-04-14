@@ -337,6 +337,10 @@ pub fn benchmark_disk_random_writes(directory: &Path) -> Result<u64, String> {
 		.map(|s| s as u64)
 }
 
+/// Benchmarks the verification speed of sr25519 signatures.
+///
+/// Returns the throughput in MB/s by convention.
+/// The values are rather small (0.4-0.8) so it is advised to convert them into KB/s.
 pub fn benchmark_sr25519_verify(limit: ExecutionLimit) -> f64 {
 	const INPUT_SIZE: usize = 32;
 	const ITERATION_SIZE: usize = 2048;
