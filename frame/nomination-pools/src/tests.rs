@@ -30,7 +30,7 @@ macro_rules! unbonding_pools_with_era {
 	}};
 }
 
-macro_rules! typed_bounded_btree_map {
+macro_rules! delegator_unbonding_eras {
 	($( $any:tt )*) => {{
 		let x: BoundedBTreeMap<EraIndex, Balance, MaxUnbonding> = bounded_btree_map!($( $any )*);
 		x
@@ -1431,7 +1431,7 @@ mod unbond {
 				assert_eq!(StakingMock::active_stake(&default_bonded_account()).unwrap(), 94);
 				assert_eq!(
 					Delegators::<Runtime>::get(40).unwrap().unbonding_eras,
-					typed_bounded_btree_map!(0 + 3 => 40)
+					delegator_unbonding_eras!(0 + 3 => 40)
 				);
 				assert_eq!(Balances::free_balance(&40), 40 + 40); // We claim rewards when unbonding
 
@@ -1459,7 +1459,7 @@ mod unbond {
 				assert_eq!(StakingMock::active_stake(&default_bonded_account()).unwrap(), 2);
 				assert_eq!(
 					Delegators::<Runtime>::get(550).unwrap().unbonding_eras,
-					typed_bounded_btree_map!(0 + 3 => 550)
+					delegator_unbonding_eras!(0 + 3 => 550)
 				);
 				assert_eq!(Balances::free_balance(&550), 550 + 550);
 
@@ -1486,7 +1486,7 @@ mod unbond {
 				assert_eq!(StakingMock::active_stake(&default_bonded_account()).unwrap(), 0);
 				assert_eq!(
 					Delegators::<Runtime>::get(550).unwrap().unbonding_eras,
-					typed_bounded_btree_map!(0 + 3 => 550)
+					delegator_unbonding_eras!(0 + 3 => 550)
 				);
 				assert_eq!(Balances::free_balance(&550), 550 + 550);
 			});
@@ -1691,7 +1691,7 @@ mod unbond {
 			assert_eq!(Delegators::<Runtime>::get(10).unwrap().pool_id, 1);
 			assert_eq!(
 				Delegators::<Runtime>::get(10).unwrap().unbonding_eras,
-				typed_bounded_btree_map!()
+				delegator_unbonding_eras!()
 			);
 			assert_eq!(BondedPool::<Runtime>::get(1).unwrap().points, 10);
 			assert!(SubPoolsStorage::<Runtime>::get(1).is_none());
@@ -1710,7 +1710,7 @@ mod unbond {
 			assert_eq!(BondedPool::<Runtime>::get(1).unwrap().points, 9);
 			assert_eq!(
 				Delegators::<Runtime>::get(10).unwrap().unbonding_eras,
-				typed_bounded_btree_map!(3 => 1)
+				delegator_unbonding_eras!(3 => 1)
 			);
 			assert_eq!(
 				SubPoolsStorage::<Runtime>::get(1).unwrap(),
@@ -1731,7 +1731,7 @@ mod unbond {
 			assert_eq!(BondedPool::<Runtime>::get(1).unwrap().points, 4);
 			assert_eq!(
 				Delegators::<Runtime>::get(10).unwrap().unbonding_eras,
-				typed_bounded_btree_map!(3 => 6)
+				delegator_unbonding_eras!(3 => 6)
 			);
 			assert_eq!(
 				SubPoolsStorage::<Runtime>::get(1).unwrap(),
@@ -1753,7 +1753,7 @@ mod unbond {
 			assert_eq!(BondedPool::<Runtime>::get(1).unwrap().points, 3);
 			assert_eq!(
 				Delegators::<Runtime>::get(10).unwrap().unbonding_eras,
-				typed_bounded_btree_map!(3 => 6, 4 => 1)
+				delegator_unbonding_eras!(3 => 6, 4 => 1)
 			);
 			assert_eq!(
 				SubPoolsStorage::<Runtime>::get(1).unwrap(),
@@ -1775,7 +1775,7 @@ mod unbond {
 			assert_eq!(BondedPool::<Runtime>::get(1).unwrap().points, 0);
 			assert_eq!(
 				Delegators::<Runtime>::get(10).unwrap().unbonding_eras,
-				typed_bounded_btree_map!(3 => 6, 4 => 4)
+				delegator_unbonding_eras!(3 => 6, 4 => 4)
 			);
 			assert_eq!(
 				SubPoolsStorage::<Runtime>::get(1).unwrap(),
@@ -1803,7 +1803,7 @@ mod unbond {
 			assert_ok!(Pools::unbond_other(Origin::signed(10), 10, 3));
 			assert_eq!(
 				Delegators::<Runtime>::get(10).unwrap().unbonding_eras,
-				typed_bounded_btree_map!(3 => 2, 4 => 3)
+				delegator_unbonding_eras!(3 => 2, 4 => 3)
 			);
 
 			// when
@@ -1818,7 +1818,7 @@ mod unbond {
 			assert_ok!(Pools::unbond_other(Origin::signed(10), 10, 1));
 			assert_eq!(
 				Delegators::<Runtime>::get(10).unwrap().unbonding_eras,
-				typed_bounded_btree_map!(3 => 2, 4 => 3, 5 => 1)
+				delegator_unbonding_eras!(3 => 2, 4 => 3, 5 => 1)
 			);
 		})
 	}
@@ -2052,7 +2052,7 @@ mod withdraw_unbonded_other {
 			Delegators::<Runtime>::insert(11, delegator.clone());
 
 			// Simulate calling `unbond`
-			delegator.unbonding_eras = typed_bounded_btree_map!(3 + 0 => 10);
+			delegator.unbonding_eras = delegator_unbonding_eras!(3 + 0 => 10);
 			Delegators::<Runtime>::insert(11, delegator.clone());
 
 			// We are still in the bonding duration
@@ -2298,7 +2298,7 @@ mod withdraw_unbonded_other {
 			assert_ok!(Pools::unbond_other(Origin::signed(10), 10, 1));
 			assert_eq!(
 				Delegators::<Runtime>::get(10).unwrap().unbonding_eras,
-				typed_bounded_btree_map!(3 => 6, 4 => 1)
+				delegator_unbonding_eras!(3 => 6, 4 => 1)
 			);
 			assert_eq!(
 				SubPoolsStorage::<Runtime>::get(1).unwrap(),
@@ -2337,7 +2337,7 @@ mod withdraw_unbonded_other {
 			// then
 			assert_eq!(
 				Delegators::<Runtime>::get(10).unwrap().unbonding_eras,
-				typed_bounded_btree_map!(4 => 1)
+				delegator_unbonding_eras!(4 => 1)
 			);
 			assert_eq!(
 				SubPoolsStorage::<Runtime>::get(1).unwrap(),
@@ -2360,7 +2360,7 @@ mod withdraw_unbonded_other {
 			// then
 			assert_eq!(
 				Delegators::<Runtime>::get(10).unwrap().unbonding_eras,
-				typed_bounded_btree_map!()
+				delegator_unbonding_eras!()
 			);
 			assert_eq!(SubPoolsStorage::<Runtime>::get(1).unwrap(), Default::default());
 			assert_eq!(
@@ -2385,7 +2385,7 @@ mod withdraw_unbonded_other {
 			assert_ok!(Pools::unbond_other(Origin::signed(11), 11, 1));
 			assert_eq!(
 				Delegators::<Runtime>::get(11).unwrap().unbonding_eras,
-				typed_bounded_btree_map!(3 => 6, 4 => 1)
+				delegator_unbonding_eras!(3 => 6, 4 => 1)
 			);
 			assert_eq!(
 				SubPoolsStorage::<Runtime>::get(1).unwrap(),
@@ -2425,7 +2425,7 @@ mod withdraw_unbonded_other {
 			// then
 			assert_eq!(
 				Delegators::<Runtime>::get(11).unwrap().unbonding_eras,
-				typed_bounded_btree_map!(4 => 1)
+				delegator_unbonding_eras!(4 => 1)
 			);
 			assert_eq!(
 				SubPoolsStorage::<Runtime>::get(1).unwrap(),
@@ -2448,7 +2448,7 @@ mod withdraw_unbonded_other {
 			// then
 			assert_eq!(
 				Delegators::<Runtime>::get(11).unwrap().unbonding_eras,
-				typed_bounded_btree_map!()
+				delegator_unbonding_eras!()
 			);
 			assert_eq!(SubPoolsStorage::<Runtime>::get(1).unwrap(), Default::default());
 			assert_eq!(
