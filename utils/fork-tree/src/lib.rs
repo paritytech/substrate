@@ -1069,7 +1069,7 @@ mod test {
 		let finalize_a = || {
 			let (mut tree, ..) = test_fork_tree();
 
-			assert_eq!(tree.roots().map(|(h, n, _)| (*h, *n)).collect::<Vec<_>>(), vec![("A", 1)],);
+			assert_eq!(tree.roots().map(|(h, n, _)| (*h, *n)).collect::<Vec<_>>(), vec![("A", 1)]);
 
 			// finalizing "A" opens up three possible forks
 			tree.finalize_root(&"A");
