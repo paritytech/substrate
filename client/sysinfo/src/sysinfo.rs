@@ -88,7 +88,7 @@ pub fn gather_sysinfo() -> SysInfo {
 }
 
 #[inline(never)]
-fn clobber(slice: &mut [u8]) {
+fn clobber_slice<T>(slice: &mut [T]) {
 	assert!(!slice.is_empty());
 
 	// Discourage the compiler from optimizing out our benchmarks.
@@ -104,6 +104,14 @@ fn clobber(slice: &mut [u8]) {
 	unsafe {
 		let value = std::ptr::read_volatile(slice.as_ptr());
 		std::ptr::write_volatile(slice.as_mut_ptr(), value);
+	}
+}
+
+#[inline(never)]
+fn clobber_value<T>(input: &mut T) {
+	unsafe {
+		let value = std::ptr::read_volatile(input);
+		std::ptr::write_volatile(input, value);
 	}
 }
 
@@ -130,9 +138,9 @@ pub fn benchmark_cpu() -> u64 {
 	let mut hash = Default::default();
 
 	let run = || -> Result<(), ()> {
-		clobber(&mut buffer);
+		clobber_slice(&mut buffer);
 		hash = sp_core::hashing::blake2_256(&buffer);
-		clobber(&mut hash);
+		clobber_slice(&mut hash);
 
 		Ok(())
 	};
@@ -166,8 +174,8 @@ pub fn benchmark_memory() -> u64 {
 	dst.resize(SIZE, 0x77);
 
 	let run = || -> Result<(), ()> {
-		clobber(&mut src);
-		clobber(&mut dst);
+		clobber_slice(&mut src);
+		clobber_slice(&mut dst);
 
 		// SAFETY: Both vectors are of the same type and of the same size,
 		//         so copying data between them is safe.
@@ -177,8 +185,8 @@ pub fn benchmark_memory() -> u64 {
 			libc::memcpy(dst.as_mut_ptr().cast(), src.as_ptr().cast(), SIZE);
 		}
 
-		clobber(&mut dst);
-		clobber(&mut src);
+		clobber_slice(&mut dst);
+		clobber_slice(&mut src);
 
 		Ok(())
 	};
@@ -351,14 +359,7 @@ pub fn benchmark_sr25519_verify(
 	let run = || {
 		for (sig, msg) in sigs.iter().zip(msgs.iter()) {
 			let mut ok = sr25519_verify(&sig, &msg[..], &pair.public());
-			// Clobber the result.
-			unsafe {
-				let mut raw = std::slice::from_raw_parts_mut(
-					&mut ok as *mut bool as *mut u8,
-					core::mem::size_of::<bool>(),
-				);
-				clobber(&mut raw);
-			}
+			clobber_value(&mut ok);
 		}
 		Ok(())
 	};
