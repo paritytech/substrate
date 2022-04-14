@@ -44,9 +44,9 @@ pub struct MachineCmd {
 	#[clap(flatten)]
 	pub shared_params: SharedParams,
 
-	/// Iterations of the verification function.
-	#[clap(long, default_value = "20000")]
-	pub verify_reps: usize,
+	/// Time limit for the verification benchmark.
+	#[clap(long, default_value = "2.0", value_name = "SECONDS")]
+	pub verify_duration: f32,
 }
 
 impl MachineCmd {
@@ -60,7 +60,8 @@ impl MachineCmd {
 		let write = benchmark_disk_sequential_writes(dir)?;
 		let read = benchmark_disk_random_writes(dir)?;
 		let verify =
-			benchmark_sr25519_verify(self.verify_reps, Duration::from_secs(2), 32)? * 1024.0;
+			benchmark_sr25519_verify(None, Some(Duration::from_secs_f32(self.verify_duration)))? *
+				1024.0;
 
 		// Use a table for nicer console output.
 		let table = table!(

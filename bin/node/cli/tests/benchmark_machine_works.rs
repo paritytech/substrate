@@ -24,7 +24,7 @@ use std::process::Command;
 fn benchmark_machine_works() {
 	let status = Command::new(cargo_bin("substrate"))
 		.args(["benchmark", "machine", "--dev"])
-		.args(["--verify-reps", "1"])
+		.args(["--verify-duration", "0.1"])
 		.status()
 		.unwrap();
 

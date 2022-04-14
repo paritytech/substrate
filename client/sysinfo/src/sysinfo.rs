@@ -337,20 +337,23 @@ pub fn benchmark_disk_random_writes(directory: &Path) -> Result<u64, String> {
 		.map(|s| s as u64)
 }
 
-/// Verify signatures of different random data `reps` many times.
 pub fn benchmark_sr25519_verify(
-	reps: usize,
-	duration: Duration,
-	input_len: usize,
+	max_iterations: Option<usize>,
+	max_duration: Option<Duration>,
 ) -> Result<f64, String> {
+	if max_iterations.is_none() && max_duration.is_none() {
+		return Err("max_iterations and max_duration cannot both be None".into())
+	}
+	const INPUT_SIZE: usize = 32;
+	const ITERATION_SIZE: usize = 2048;
 	let pair = sr25519::Pair::from_string("//Alice", None).unwrap();
 
 	let mut rng = rng();
 	let mut msgs = Vec::new();
 	let mut sigs = Vec::new();
 
-	for _ in 0..reps {
-		let mut msg = vec![0u8; input_len];
+	for _ in 0..ITERATION_SIZE {
+		let mut msg = vec![0u8; INPUT_SIZE];
 		rng.fill_bytes(&mut msg[..]);
 
 		sigs.push(pair.sign(&msg));
@@ -364,7 +367,13 @@ pub fn benchmark_sr25519_verify(
 		}
 		Ok(())
 	};
-	benchmark("sr25519 verification score", reps * input_len, 1, duration, run)
+	benchmark(
+		"sr25519 verification score",
+		INPUT_SIZE * ITERATION_SIZE,
+		max_iterations.unwrap_or(usize::MAX),
+		max_duration.unwrap_or(Duration::MAX),
+		run,
+	)
 }
 
 /// Benchmarks the hardware and returns the results of those benchmarks.
@@ -439,6 +448,7 @@ mod tests {
 
 	#[test]
 	fn test_benchmark_sr25519_verify() {
-		assert!(benchmark_sr25519_verify(10, Duration::from_secs(1), 32).unwrap() > 0.0);
+		assert!(benchmark_sr25519_verify(Some(1), None).unwrap() > 0.0);
+		assert!(benchmark_sr25519_verify(None, None).is_err());
 	}
 }
