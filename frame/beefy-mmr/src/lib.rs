@@ -39,7 +39,7 @@ use sp_std::prelude::*;
 use beefy_primitives::mmr::{BeefyDataProvider, BeefyNextAuthoritySet, MmrLeaf, MmrLeafVersion};
 use pallet_mmr::primitives::LeafDataProvider;
 
-use frame_support::{crypto::ecdsa::RuntimeECDSA, traits::Get};
+use frame_support::{crypto::ecdsa::ECDSAExt, traits::Get};
 
 pub use pallet::*;
 

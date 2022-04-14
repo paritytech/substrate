@@ -22,7 +22,7 @@ use crate::{
 	Pallet as Contracts, Schedule,
 };
 use frame_support::{
-	crypto::ecdsa::RuntimeECDSA,
+	crypto::ecdsa::ECDSAExt,
 	dispatch::{DispatchError, DispatchResult, DispatchResultWithPostInfo, Dispatchable},
 	storage::{with_transaction, TransactionOutcome},
 	traits::{Contains, Currency, ExistenceRequirement, OriginTrait, Randomness, Time},
