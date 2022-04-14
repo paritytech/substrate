@@ -1392,7 +1392,9 @@ pub mod pallet {
 			bonded_pool.ok_to_unbond_other_with(&caller, &delegator_account, &delegator)?;
 
 			unbonding_points = unbonding_points.min(delegator.active_points());
-			// This is only for UX.
+			// Claim the the payout prior to unbonding. Once the user is unbonding their points
+			// no longer exist in the bonded pool and thus they can no longer claim their payouts.
+			// It is not strictly necessary to claim the rewards, but we do it here for UX.
 			Self::do_reward_payout(
 				&delegator_account,
 				&mut delegator,
@@ -1591,7 +1593,7 @@ pub mod pallet {
 				// we certainly don't need to delete any pools, because no one is being removed.
 				SubPoolsStorage::<T>::insert(&delegator.pool_id, sub_pools);
 				Delegators::<T>::insert(&delegator_account, delegator);
-				None
+     Some(T::WeightInfo::withdraw_unbonded_other_update(num_slashing_spans))
 			};
 
 			Ok(post_info_weight.into())
