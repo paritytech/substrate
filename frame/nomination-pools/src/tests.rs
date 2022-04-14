@@ -2041,7 +2041,7 @@ mod withdraw_unbonded_other {
 				no_era: Default::default(),
 				with_era: unbonding_pools_with_era! { 0 + 3 => UnbondPool { points: 10, balance: 10  }},
 			};
-			SubPoolsStorage::<Runtime>::insert(123, sub_pools.clone());
+			SubPoolsStorage::<Runtime>::insert(1, sub_pools.clone());
 
 			assert_noop!(
 				Pools::withdraw_unbonded_other(Origin::signed(11), 11, 0),
@@ -2064,7 +2064,7 @@ mod withdraw_unbonded_other {
 			// If we error the delegator does not get removed
 			assert_eq!(Delegators::<Runtime>::get(&11), Some(delegator));
 			// and the sub pools do not get updated.
-			assert_eq!(SubPoolsStorage::<Runtime>::get(123).unwrap(), sub_pools)
+			assert_eq!(SubPoolsStorage::<Runtime>::get(1).unwrap(), sub_pools)
 		});
 	}
 
@@ -2316,6 +2316,7 @@ mod withdraw_unbonded_other {
 				pool_events_since_last_call(),
 				vec![
 					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { delegator: 10, pool_id: 1, bonded: 10, joined: true },
 					Event::PaidOut { delegator: 10, pool_id: 1, payout: 0 },
 					Event::Unbonded { delegator: 10, pool_id: 1, amount: 6 },
 					Event::PaidOut { delegator: 10, pool_id: 1, payout: 0 },
@@ -2403,6 +2404,7 @@ mod withdraw_unbonded_other {
 				pool_events_since_last_call(),
 				vec![
 					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { delegator: 10, pool_id: 1, bonded: 10, joined: true },
 					Event::Bonded { delegator: 11, pool_id: 1, bonded: 10, joined: true },
 					Event::PaidOut { delegator: 11, pool_id: 1, payout: 0 },
 					Event::Unbonded { delegator: 11, pool_id: 1, amount: 6 },
@@ -2577,14 +2579,6 @@ mod create {
 			assert_eq!(Delegators::<Runtime>::count(), 1);
 			MaxPools::<Runtime>::put(3);
 			MaxDelegators::<Runtime>::put(1);
-
-			// Then
-			assert_noop!(
-				Pools::create(Origin::signed(11), 20, 11, 11, 11),
-				Error::<Runtime>::InsufficientBalanceToCreate
-			);
-
-			// Given
 			Balances::make_free_balance_be(&11, 5 + 20);
 
 			// Then
@@ -2810,6 +2804,7 @@ mod bond_extra {
 				pool_events_since_last_call(),
 				vec![
 					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { delegator: 10, pool_id: 1, bonded: 10, joined: true },
 					Event::Bonded { delegator: 10, pool_id: 1, bonded: 10, joined: false }
 				]
 			);
@@ -2855,6 +2850,7 @@ mod bond_extra {
 				pool_events_since_last_call(),
 				vec![
 					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { delegator: 10, pool_id: 1, bonded: 10, joined: true },
 					Event::PaidOut { delegator: 10, pool_id: 1, payout: claimable_reward },
 					Event::Bonded {
 						delegator: 10,
@@ -2908,6 +2904,7 @@ mod bond_extra {
 				pool_events_since_last_call(),
 				vec![
 					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { delegator: 10, pool_id: 1, bonded: 10, joined: true },
 					Event::Bonded { delegator: 20, pool_id: 1, bonded: 20, joined: true },
 					Event::PaidOut { delegator: 10, pool_id: 1, payout: 1 },
 					Event::Bonded { delegator: 10, pool_id: 1, bonded: 1, joined: false },

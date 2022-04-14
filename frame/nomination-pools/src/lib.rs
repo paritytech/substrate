@@ -406,6 +406,11 @@ pub struct Delegator<T: Config> {
 }
 
 impl<T: Config> Delegator<T> {
+	#[cfg(any(test, debug_assertions))]
+	fn total_points(&self) -> BalanceOf<T> {
+		self.active_points().saturating_add(self.unbonding_points())
+	}
+
 	/// Active points of the delegator.
 	pub(crate) fn active_points(&self) -> BalanceOf<T> {
 		self.points
@@ -1222,8 +1227,6 @@ pub mod pallet {
 		/// Some error occurred that should never happen. This should be reported to the
 		/// maintainers.
 		DefensiveError,
-		/// The caller has insufficient balance to create the pool.
-		InsufficientBalanceToCreate,
 		/// Not enough points. Ty unbonding less.
 		NotEnoughPointsToUnbond,
 	}
@@ -1639,11 +1642,6 @@ pub mod pallet {
 				Error::<T>::MaxPools
 			);
 			ensure!(!Delegators::<T>::contains_key(&who), Error::<T>::AccountBelongsToOtherPool);
-			ensure!(
-				T::Currency::free_balance(&who) >=
-					amount.saturating_add(T::Currency::minimum_balance()),
-				Error::<T>::InsufficientBalanceToCreate
-			);
 
 			let pool_id = LastPoolId::<T>::mutate(|id| {
 				*id += 1;
@@ -1683,7 +1681,16 @@ pub mod pallet {
 				},
 			);
 			ReversePoolIdLookup::<T>::insert(bonded_pool.bonded_account(), pool_id);
-			Self::deposit_event(Event::<T>::Created { depositor: who.clone(), pool_id });
+			Self::deposit_event(Event::<T>::Created {
+				depositor: who.clone(),
+				pool_id: pool_id.clone(),
+			});
+			Self::deposit_event(Event::<T>::Bonded {
+				delegator: who,
+				pool_id,
+				bonded: amount,
+				joined: true,
+			});
 			bonded_pool.put();
 
 			Ok(())
@@ -2059,7 +2066,7 @@ impl<T: Config> Pallet<T> {
 		let mut all_delegators = 0u32;
 		Delegators::<T>::iter().for_each(|(_, d)| {
 			assert!(BondedPools::<T>::contains_key(d.pool_id));
-			assert!(!d.points.is_zero(), "no delegator should have zero points");
+			assert!(!d.total_points().is_zero(), "no delegator should have zero points: {:?}", d);
 			*pools_delegators.entry(d.pool_id).or_default() += 1;
 			all_delegators += 1;
 		});
