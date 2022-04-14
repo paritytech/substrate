@@ -491,7 +491,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 		Key: std::borrow::Borrow<Q>,
 		Q: std::hash::Hash + Eq,
 	{
-		if let Some((_, value)) = self.values.get(key) {
+		self.values.get(key).map(|v| v.1.clone())
 			return Some(value.clone())
 		}
 		None
