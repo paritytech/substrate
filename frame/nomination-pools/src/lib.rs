@@ -1179,10 +1179,9 @@ pub mod pallet {
 			let (mut delegator, mut bonded_pool, mut reward_pool) =
 				Self::get_delegator_with_pools(&who)?;
 
-
 			let (points_issued, bonded) = match extra {
-					BondExtra::FreeBalance(amount) =>
-						(bonded_pool.try_bond_funds(&who, amount, BondType::Later)?, amount),
+				BondExtra::FreeBalance(amount) =>
+					(bonded_pool.try_bond_funds(&who, amount, BondType::Later)?, amount),
 				BondExtra::Rewards => {
 					let claimed = Self::do_reward_payout(
 						&who,
@@ -1546,12 +1545,16 @@ pub mod pallet {
 				},
 			);
 			ReversePoolIdLookup::<T>::insert(bonded_pool.bonded_account(), pool_id);
-			Self::deposit_event(
-				Event::<T>::Created { depositor: who.clone(), pool_id: pool_id.clone() }
-			);
-			Self::deposit_event(
-				Event::<T>::Bonded { delegator: who, pool_id, bonded: amount, joined: true }
-			);
+			Self::deposit_event(Event::<T>::Created {
+				depositor: who.clone(),
+				pool_id: pool_id.clone(),
+			});
+			Self::deposit_event(Event::<T>::Bonded {
+				delegator: who,
+				pool_id,
+				bonded: amount,
+				joined: true,
+			});
 			bonded_pool.put();
 
 			Ok(())
