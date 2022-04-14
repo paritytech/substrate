@@ -492,9 +492,6 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 		Q: std::hash::Hash + Eq,
 	{
 		self.values.get(key).map(|v| v.1.clone())
-			return Some(value.clone())
-		}
-		None
 	}
 
 	/// Check if the block is in the canonicalization queue.
