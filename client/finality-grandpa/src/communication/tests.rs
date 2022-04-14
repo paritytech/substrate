@@ -535,3 +535,46 @@ fn peer_with_higher_view_leads_to_catch_up_request() {
 
 	futures::executor::block_on(test);
 }
+
+fn local_chain_spec() -> Box<dyn sc_chain_spec::ChainSpec> {
+	use sc_chain_spec::{ChainSpec, GenericChainSpec};
+	use serde::{Deserialize, Serialize};
+	use sp_runtime::{BuildStorage, Storage};
+
+	#[derive(Debug, Serialize, Deserialize)]
+	struct Genesis(std::collections::BTreeMap<String, String>);
+	impl BuildStorage for Genesis {
+		fn assimilate_storage(&self, storage: &mut Storage) -> Result<(), String> {
+			storage.top.extend(
+				self.0.iter().map(|(a, b)| (a.clone().into_bytes(), b.clone().into_bytes())),
+			);
+			Ok(())
+		}
+	}
+	let chain_spec = GenericChainSpec::<Genesis>::from_json_file(std::path::PathBuf::from(
+		"../chain-spec/res/chain_spec.json",
+	))
+	.unwrap();
+	chain_spec.cloned_box()
+}
+
+#[test]
+fn grandpa_protocol_name() {
+	let chain_spec = local_chain_spec();
+
+	// Create protocol name using random genesis hash.
+	let genesis_hash = sp_core::H256::random();
+	let expected = format!("/{}/grandpa/1", hex::encode(genesis_hash));
+	let proto_name = grandpa_protocol_name::standard_name(&genesis_hash, &chain_spec);
+	assert_eq!(proto_name.to_string(), expected);
+
+	// Create protocol name using hardcoded genesis hash. Verify exact representation.
+	let genesis_hash = [
+		53, 79, 112, 97, 119, 217, 39, 202, 147, 138, 225, 38, 88, 182, 215, 185, 110, 88, 8, 53,
+		125, 210, 158, 151, 50, 113, 102, 59, 245, 199, 221, 240,
+	];
+	let expected =
+		"/354f706177d927ca938ae12658b6d7b96e5808357dd29e973271663bf5c7ddf0/grandpa/1".to_string();
+	let proto_name = grandpa_protocol_name::standard_name(&genesis_hash, &chain_spec);
+	assert_eq!(proto_name.to_string(), expected);
+}

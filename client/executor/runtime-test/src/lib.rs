@@ -113,7 +113,9 @@ sp_core::wasm_export_functions! {
 	   }
    }
 
-   fn test_exhaust_heap() -> Vec<u8> { Vec::with_capacity(16777216) }
+	fn test_allocate_vec(size: u32) -> Vec<u8> {
+		Vec::with_capacity(size as usize)
+	}
 
    fn test_fp_f32add(a: [u8; 4], b: [u8; 4]) -> [u8; 4] {
 	   let a = f32::from_le_bytes(a);
@@ -340,6 +342,14 @@ sp_core::wasm_export_functions! {
 
 	fn test_take_i8(value: i8) {
 		assert_eq!(value, -66);
+	}
+
+	fn test_abort_on_panic() {
+		sp_io::panic_handler::abort_on_panic("test_abort_on_panic called");
+	}
+
+	fn test_unreachable_intrinsic() {
+		core::arch::wasm32::unreachable()
 	}
 }
 

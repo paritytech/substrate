@@ -201,12 +201,17 @@ impl<Block: BlockT> TreeRoute<Block> {
 	pub fn enacted(&self) -> &[HashAndNumber<Block>] {
 		&self.route[self.pivot + 1..]
 	}
+
+	/// Returns the last block.
+	pub fn last(&self) -> Option<&HashAndNumber<Block>> {
+		self.route.last()
+	}
 }
 
 /// Handles header metadata: hash, number, parent hash, etc.
 pub trait HeaderMetadata<Block: BlockT> {
 	/// Error used in case the header metadata is not found.
-	type Error;
+	type Error: std::error::Error;
 
 	fn header_metadata(
 		&self,

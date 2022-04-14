@@ -186,7 +186,7 @@ impl WasmOverride {
 		for entry in fs::read_dir(dir).map_err(handle_err)? {
 			let entry = entry.map_err(handle_err)?;
 			let path = entry.path();
-			match path.extension().map(|e| e.to_str()).flatten() {
+			match path.extension().and_then(|e| e.to_str()) {
 				Some("wasm") => {
 					let code = fs::read(&path).map_err(handle_err)?;
 					let code_hash = make_hash(&code);
@@ -243,7 +243,7 @@ impl WasmOverride {
 					hash: code_hash.into(),
 				},
 			)
-			.map_err(|e| WasmOverrideError::VersionInvalid(format!("{:?}", e)).into())
+			.map_err(|e| WasmOverrideError::VersionInvalid(e.to_string()).into())
 	}
 }
 

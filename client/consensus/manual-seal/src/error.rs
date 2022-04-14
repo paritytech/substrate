@@ -102,7 +102,7 @@ impl Error {
 	}
 }
 
-impl std::convert::From<Error> for jsonrpc_core::Error {
+impl From<Error> for jsonrpc_core::Error {
 	fn from(error: Error) -> Self {
 		jsonrpc_core::Error {
 			code: jsonrpc_core::ErrorCode::ServerError(error.to_code()),

@@ -19,7 +19,7 @@
 use crate::{
 	build_network_future,
 	client::{Client, ClientConfig},
-	config::{Configuration, KeystoreConfig, PrometheusConfig, TransactionStorageMode},
+	config::{Configuration, KeystoreConfig, PrometheusConfig},
 	error::Error,
 	metrics::MetricsService,
 	start_rpc_servers, RpcHandlers, SpawnTaskHandle, TaskManager, TransactionPoolAdapter,
@@ -264,7 +264,6 @@ where
 			state_pruning: config.state_pruning.clone(),
 			source: config.database.clone(),
 			keep_blocks: config.keep_blocks.clone(),
-			transaction_storage: config.transaction_storage.clone(),
 		};
 
 		let backend = new_db_backend(db_config)?;
@@ -488,8 +487,13 @@ where
 	)
 	.map_err(|e| Error::Application(Box::new(e)))?;
 
+	let sysinfo = sc_sysinfo::gather_sysinfo();
+	sc_sysinfo::print_sysinfo(&sysinfo);
+
 	let telemetry = telemetry
-		.map(|telemetry| init_telemetry(&mut config, network.clone(), client.clone(), telemetry))
+		.map(|telemetry| {
+			init_telemetry(&mut config, network.clone(), client.clone(), telemetry, Some(sysinfo))
+		})
 		.transpose()?;
 
 	info!("📦 Highest known block at #{}", chain_info.best_number);
@@ -610,12 +614,16 @@ fn init_telemetry<TBl: BlockT, TCl: BlockBackend<TBl>>(
 	network: Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
 	client: Arc<TCl>,
 	telemetry: &mut Telemetry,
+	sysinfo: Option<sc_telemetry::SysInfo>,
 ) -> sc_telemetry::Result<TelemetryHandle> {
 	let genesis_hash = client.block_hash(Zero::zero()).ok().flatten().unwrap_or_default();
 	let connection_message = ConnectionMessage {
 		name: config.network.node_name.to_owned(),
 		implementation: config.impl_name.to_owned(),
 		version: config.impl_version.to_owned(),
+		target_os: sc_sysinfo::TARGET_OS.into(),
+		target_arch: sc_sysinfo::TARGET_ARCH.into(),
+		target_env: sc_sysinfo::TARGET_ENV.into(),
 		config: String::new(),
 		chain: config.chain_spec.name().to_owned(),
 		genesis_hash: format!("{:?}", genesis_hash),
@@ -626,6 +634,7 @@ fn init_telemetry<TBl: BlockT, TCl: BlockBackend<TBl>>(
 			.unwrap_or(0)
 			.to_string(),
 		network_id: network.local_peer_id().to_base58(),
+		sysinfo,
 	};
 
 	telemetry.start_telemetry(connection_message)?;
@@ -768,6 +777,18 @@ where
 		warp_sync,
 	} = params;
 
+	if warp_sync.is_none() && config.network.sync_mode.is_warp() {
+		return Err("Warp sync enabled, but no warp sync provider configured.".into())
+	}
+
+	if config.state_pruning.is_archive() {
+		match config.network.sync_mode {
+			SyncMode::Fast { .. } => return Err("Fast sync doesn't work for archive nodes".into()),
+			SyncMode::Warp => return Err("Warp sync doesn't work for archive nodes".into()),
+			SyncMode::Full => {},
+		};
+	}
+
 	let transaction_pool_adapter = Arc::new(TransactionPoolAdapter {
 		imports_external_transactions: !matches!(config.role, Role::Light),
 		pool: transaction_pool,
@@ -842,7 +863,7 @@ where
 		}
 	};
 
-	let mut network_params = sc_network::config::Params {
+	let network_params = sc_network::config::Params {
 		role: config.role.clone(),
 		executor: {
 			let spawn_handle = Clone::clone(&spawn_handle);
@@ -868,13 +889,6 @@ where
 		warp_sync: warp_sync_params,
 		light_client_request_protocol_config,
 	};
-
-	// Storage chains don't keep full block history and can't be synced in full mode.
-	// Force fast sync when storage chain mode is enabled.
-	if matches!(config.transaction_storage, TransactionStorageMode::StorageChain) {
-		network_params.network_config.sync_mode =
-			SyncMode::Fast { storage_chain_mode: true, skip_proofs: false };
-	}
 
 	let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();
 	let network_mut = sc_network::NetworkWorker::new(network_params)?;
