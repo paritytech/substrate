@@ -109,6 +109,7 @@ fn clobber_slice<T>(slice: &mut [T]) {
 
 #[inline(never)]
 fn clobber_value<T>(input: &mut T) {
+	// Look into `clobber_slice` for a comment.
 	unsafe {
 		let value = std::ptr::read_volatile(input);
 		std::ptr::write_volatile(input, value);
