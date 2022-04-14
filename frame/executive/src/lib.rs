@@ -121,8 +121,8 @@ use codec::{Codec, Encode};
 use frame_support::{
 	dispatch::PostDispatchInfo,
 	traits::{
-		EnsureInherentsAreFirst, ExecuteBlock, OffchainWorker, OnFinalize, OnIdle, OnInitialize,
-		OnRuntimeUpgrade,
+		EnsureInherentsAreFirst, ExecuteBlock, Get, OffchainWorker, OnFinalize, OnIdle,
+		OnInitialize, OnRuntimeUpgrade,
 	},
 	weights::{DispatchClass, DispatchInfo, GetDispatchInfo},
 };
@@ -187,7 +187,8 @@ impl<
 where
 	Block::Extrinsic: IdentifyAccountWithLookup<Context, AccountId = System::AccountId>
 		+ Checkable<Context>
-		+ Codec,
+		+ Codec
+		+ GetDispatchInfo,
 	CheckedOf<Block::Extrinsic, Context>: Applyable + GetDispatchInfo,
 	CallOf<Block::Extrinsic, Context>:
 		Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
@@ -206,7 +207,7 @@ where
 		>::execute_block(block);
 	}
 
-	fn execute_block_ver(block: Block, public: Vec<u8>) {
+	fn execute_block_ver(block: Block, public: Vec<u8>, precedes_new_session: bool) {
 		Executive::<
 			System,
 			Block,
@@ -214,7 +215,7 @@ where
 			UnsignedValidator,
 			AllPalletsWithSystem,
 			COnRuntimeUpgrade,
-		>::execute_block_ver_impl(block, public);
+		>::execute_block_ver_impl(block, public, precedes_new_session);
 	}
 }
 
@@ -234,7 +235,8 @@ where
 	<System as frame_system::Config>::BlockNumber: AtLeast32BitUnsigned,
 	Block::Extrinsic: IdentifyAccountWithLookup<Context, AccountId = System::AccountId>
 		+ Checkable<Context>
-		+ Codec,
+		+ Codec
+		+ GetDispatchInfo,
 	CheckedOf<Block::Extrinsic, Context>: Applyable + GetDispatchInfo,
 	CallOf<Block::Extrinsic, Context>:
 		Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
@@ -411,6 +413,7 @@ where
 
 			// execute extrinsics
 			let (header, extrinsics) = block.deconstruct();
+
 			Self::execute_extrinsics_with_book_keeping(extrinsics, *header.number());
 
 			if !signature_batching.verify() {
@@ -423,7 +426,7 @@ where
 	}
 
 	/// Actually execute all transitions for `block`.
-	pub fn execute_block_ver_impl(block: Block, public: Vec<u8>) {
+	pub fn execute_block_ver_impl(block: Block, public: Vec<u8>, precedes_new_session: bool) {
 		sp_io::init_tracing();
 		sp_tracing::within_span! {
 			sp_tracing::info_span!("execute_block", ?block);
@@ -446,8 +449,22 @@ where
 			let curr_block_txs = extrinsics.iter().take(count);
 			let prev_block_txs = extrinsics.iter().skip(count);
 
+			// verify that all extrinsics can be executed in single block
+			let max = System::BlockWeights::get();
+			let mut all: frame_system::ConsumedWeight = Default::default();
+			for tx in extrinsics.iter() {
+				let info = tx.clone().get_dispatch_info();
+				all = frame_system::calculate_consumed_weight::<CallOf<Block::Extrinsic, Context>>(max.clone(), all, &info)
+					.expect("sum of extrinsics should fit into single block");
+			}
 
-			let curr_block_inherents = curr_block_txs.filter(|e| !e.is_signed().unwrap());
+			let curr_block_inherents = curr_block_txs.clone().filter(|e| !e.is_signed().unwrap());
+
+			let curr_block_txs_count = curr_block_txs.count();
+			let curr_block_inherents_count = curr_block_inherents.clone().count();
+			if precedes_new_session && ( curr_block_txs_count != curr_block_inherents_count ){
+				panic!("only inherents can be included in block that precede new session");
+			}
 			let prev_block_extrinsics = prev_block_txs.filter(|e| e.is_signed().unwrap());
 			let tx_to_be_executed = curr_block_inherents.chain(prev_block_extrinsics).cloned().collect::<Vec<_>>();
 
@@ -459,7 +476,7 @@ where
 			).collect();
 			let shuffled_extrinsics = extrinsic_shuffler::shuffle_using_seed(extrinsics_with_author, &header.seed().seed);
 
-			Self::execute_extrinsics_with_book_keeping(shuffled_extrinsics, *header.number());
+			Self::execute_extrinsics_impl(shuffled_extrinsics, *header.number());
 
 			if !signature_batching.verify() {
 				panic!("Signature verification failed.");
@@ -476,6 +493,28 @@ where
 		block_number: NumberFor<Block>,
 	) {
 		extrinsics.into_iter().for_each(|e| {
+			if let Err(e) = Self::apply_extrinsic(e) {
+				let err: &'static str = e.into();
+				panic!("{}", err)
+			}
+		});
+
+		// post-extrinsics book-keeping
+		<frame_system::Pallet<System>>::note_finished_extrinsics();
+
+		Self::idle_and_finalize_hook(block_number);
+	}
+
+	#[cfg(not(feature = "disable-execution"))]
+	/// regular impl execute inherents & extrinsics
+	fn execute_extrinsics_impl(extrinsics: Vec<Block::Extrinsic>, block_number: NumberFor<Block>) {
+		Self::execute_extrinsics_with_book_keeping(extrinsics, block_number)
+	}
+
+	#[cfg(feature = "disable-execution")]
+	/// impl for benchmark -  execute inherents only
+	fn execute_extrinsics_impl(extrinsics: Vec<Block::Extrinsic>, block_number: NumberFor<Block>) {
+		extrinsics.into_iter().filter(|e| !e.is_signed().unwrap()).for_each(|e| {
 			if let Err(e) = Self::apply_extrinsic(e) {
 				let err: &'static str = e.into();
 				panic!("{}", err)

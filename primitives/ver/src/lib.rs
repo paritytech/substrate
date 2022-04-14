@@ -1,6 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::{Codec, Decode, Encode};
+use codec::{Decode, Encode};
 use sp_core::ShufflingSeed;
 use sp_inherents::{InherentData, InherentIdentifier};
 use sp_runtime::{
