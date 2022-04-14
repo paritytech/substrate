@@ -1590,7 +1590,7 @@ pub mod pallet {
 				// we certainly don't need to delete any pools, because no one is being removed.
 				SubPoolsStorage::<T>::insert(&delegator.pool_id, sub_pools);
 				Delegators::<T>::insert(&delegator_account, delegator);
-				None
+     Some(T::WeightInfo::withdraw_unbonded_other_update(num_slashing_spans))
 			};
 
 			Ok(post_info_weight.into())
