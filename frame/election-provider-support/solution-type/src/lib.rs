@@ -265,6 +265,11 @@ fn imports() -> Result<TokenStream2> {
 mod tests {
 	#[test]
 	fn ui_fail() {
+		// Only run the ui tests when `RUN_UI_TESTS` is set.
+		if std::env::var("RUN_UI_TESTS").is_err() {
+			return
+		}
+
 		let cases = trybuild::TestCases::new();
 		cases.compile_fail("tests/ui/fail/*.rs");
 	}

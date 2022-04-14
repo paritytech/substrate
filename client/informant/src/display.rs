@@ -30,7 +30,7 @@ use std::{fmt, time::Instant};
 /// like:
 ///
 /// > Syncing  5.4 bps, target=#531028 (4 peers), best: #90683 (0x4ca8…51b8),
-/// >  finalized #360 (0x6f24…a38b), ⬇ 5.5kiB/s ⬆ 0.9kiB/s
+/// > finalized #360 (0x6f24…a38b), ⬇ 5.5kiB/s ⬆ 0.9kiB/s
 ///
 /// # Usage
 ///

@@ -158,9 +158,7 @@ pub trait Storage {
 	/// The limit can be used to partially delete a prefix storage in case it is too large
 	/// to delete in one go (block).
 	///
-	/// It returns a boolean false iff some keys are remaining in
-	/// the prefix after the functions returns. Also returns a `u32` with
-	/// the number of keys removed from the process.
+	/// Returns [`KillStorageResult`] to inform about the result.
 	///
 	/// # Note
 	///
@@ -171,8 +169,10 @@ pub trait Storage {
 	///
 	/// Calling this function multiple times per block for the same `prefix` does
 	/// not make much sense because it is not cumulative when called inside the same block.
-	/// Use this function to distribute the deletion of a single child trie across multiple
-	/// blocks.
+	/// The deletion would always start from `prefix` resulting in the same keys being deleted
+	/// every time this function is called with the exact same arguments per block. This happens
+	/// because the keys in the overlay are not taken into account when deleting keys in the
+	/// backend.
 	#[version(2)]
 	fn clear_prefix(&mut self, prefix: &[u8], limit: Option<u32>) -> KillStorageResult {
 		let (all_removed, num_removed) = Externalities::clear_prefix(*self, prefix, limit);

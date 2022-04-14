@@ -132,7 +132,10 @@ mod extrinsic_weights;
 mod paritydb_weights;
 mod rocksdb_weights;
 
-use crate::dispatch::{DispatchError, DispatchErrorWithPostInfo, DispatchResultWithPostInfo};
+use crate::{
+	dispatch::{DispatchError, DispatchErrorWithPostInfo, DispatchResultWithPostInfo},
+	traits::Get,
+};
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
@@ -709,6 +712,34 @@ where
 	}
 }
 
+/// Implementor of [`WeightToFeePolynomial`] that uses a constant multiplier.
+/// # Example
+///
+/// ```
+/// # use frame_support::traits::ConstU128;
+/// # use frame_support::weights::ConstantMultiplier;
+/// // Results in a multiplier of 10 for each unit of weight (or length)
+/// type LengthToFee = ConstantMultiplier::<u128, ConstU128<10u128>>;
+/// ```
+pub struct ConstantMultiplier<T, M>(sp_std::marker::PhantomData<(T, M)>);
+
+impl<T, M> WeightToFeePolynomial for ConstantMultiplier<T, M>
+where
+	T: BaseArithmetic + From<u32> + Copy + Unsigned,
+	M: Get<T>,
+{
+	type Balance = T;
+
+	fn polynomial() -> WeightToFeeCoefficients<Self::Balance> {
+		smallvec!(WeightToFeeCoefficient {
+			coeff_integer: M::get(),
+			coeff_frac: Perbill::zero(),
+			negative: false,
+			degree: 1,
+		})
+	}
+}
+
 /// A struct holding value for each `DispatchClass`.
 #[derive(Clone, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode, TypeInfo)]
 pub struct PerDispatchClass<T> {
@@ -982,5 +1013,14 @@ mod tests {
 		assert_eq!(IdentityFee::<Balance>::calc(&0), 0);
 		assert_eq!(IdentityFee::<Balance>::calc(&50), 50);
 		assert_eq!(IdentityFee::<Balance>::calc(&Weight::max_value()), Balance::max_value());
+	}
+
+	#[test]
+	fn constant_fee_works() {
+		use crate::traits::ConstU128;
+		assert_eq!(ConstantMultiplier::<u128, ConstU128<100u128>>::calc(&0), 0);
+		assert_eq!(ConstantMultiplier::<u128, ConstU128<10u128>>::calc(&50), 500);
+		assert_eq!(ConstantMultiplier::<u128, ConstU128<1024u128>>::calc(&16), 16384);
+		assert_eq!(ConstantMultiplier::<u128, ConstU128<{ u128::MAX }>>::calc(&2), u128::MAX);
 	}
 }

@@ -201,6 +201,11 @@ impl<Block: BlockT> TreeRoute<Block> {
 	pub fn enacted(&self) -> &[HashAndNumber<Block>] {
 		&self.route[self.pivot + 1..]
 	}
+
+	/// Returns the last block.
+	pub fn last(&self) -> Option<&HashAndNumber<Block>> {
+		self.route.last()
+	}
 }
 
 /// Handles header metadata: hash, number, parent hash, etc.

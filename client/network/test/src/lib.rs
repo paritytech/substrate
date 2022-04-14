@@ -334,7 +334,7 @@ where
 
 	/// Add blocks to the peer -- edit the block before adding. The chain will
 	/// start at the given block iD.
-	fn generate_blocks_at<F>(
+	pub fn generate_blocks_at<F>(
 		&mut self,
 		at: BlockId<Block>,
 		count: usize,

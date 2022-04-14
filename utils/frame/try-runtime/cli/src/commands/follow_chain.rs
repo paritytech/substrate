@@ -20,7 +20,7 @@ use crate::{
 	state_machine_call_with_proof, SharedParams, LOG_TARGET,
 };
 use jsonrpsee::{
-	types::{traits::SubscriptionClient, Subscription},
+	core::client::{Subscription, SubscriptionClientT},
 	ws_client::WsClientBuilder,
 };
 use parity_scale_codec::Decode;
@@ -76,13 +76,13 @@ where
 
 	loop {
 		let header = match subscription.next().await {
-			Ok(Some(header)) => header,
-			Ok(None) => {
-				log::warn!("subscription returned `None`. Probably decoding has failed.");
+			Some(Ok(header)) => header,
+			None => {
+				log::warn!("subscription closed");
 				break
 			},
-			Err(why) => {
-				log::warn!("subscription returned error: {:?}.", why);
+			Some(Err(why)) => {
+				log::warn!("subscription returned error: {:?}. Probably decoding has failed.", why);
 				continue
 			},
 		};

@@ -26,7 +26,7 @@ use std::{
 use inflector::Inflector;
 use serde::Serialize;
 
-use crate::BenchmarkCmd;
+use crate::{shared::UnderscoreHelper, PalletCmd};
 use frame_benchmarking::{
 	Analysis, AnalysisChoice, BenchmarkBatchSplitResults, BenchmarkResult, BenchmarkSelector,
 	RegressionModel,
@@ -68,7 +68,7 @@ struct BenchmarkData {
 	comments: Vec<String>,
 }
 
-// This forwards some specific metadata from the `BenchmarkCmd`
+// This forwards some specific metadata from the `PalletCmd`
 #[derive(Serialize, Default, Debug, Clone)]
 struct CmdData {
 	steps: u32,
@@ -255,7 +255,7 @@ pub fn write_results(
 	batches: &[BenchmarkBatchSplitResults],
 	storage_info: &[StorageInfo],
 	path: &PathBuf,
-	cmd: &BenchmarkCmd,
+	cmd: &PalletCmd,
 ) -> Result<(), std::io::Error> {
 	// Use custom template if provided.
 	let template: String = match &cmd.template {
@@ -413,44 +413,6 @@ pub(crate) fn add_storage_comments(
 				},
 			}
 		}
-	}
-}
-
-// Add an underscore after every 3rd character, i.e. a separator for large numbers.
-fn underscore<Number>(i: Number) -> String
-where
-	Number: std::string::ToString,
-{
-	let mut s = String::new();
-	let i_str = i.to_string();
-	let a = i_str.chars().rev().enumerate();
-	for (idx, val) in a {
-		if idx != 0 && idx % 3 == 0 {
-			s.insert(0, '_');
-		}
-		s.insert(0, val);
-	}
-	s
-}
-
-// A Handlebars helper to add an underscore after every 3rd character,
-// i.e. a separator for large numbers.
-#[derive(Clone, Copy)]
-pub(crate) struct UnderscoreHelper;
-impl handlebars::HelperDef for UnderscoreHelper {
-	fn call<'reg: 'rc, 'rc>(
-		&self,
-		h: &handlebars::Helper,
-		_: &handlebars::Handlebars,
-		_: &handlebars::Context,
-		_rc: &mut handlebars::RenderContext,
-		out: &mut dyn handlebars::Output,
-	) -> handlebars::HelperResult {
-		use handlebars::JsonRender;
-		let param = h.param(0).unwrap();
-		let underscore_param = underscore(param.value().render());
-		out.write(&underscore_param)?;
-		Ok(())
 	}
 }
 

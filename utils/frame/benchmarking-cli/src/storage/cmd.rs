@@ -34,8 +34,9 @@ use sp_runtime::generic::BlockId;
 use std::{fmt::Debug, path::PathBuf, sync::Arc};
 
 use super::template::TemplateData;
-use crate::post_processing::WeightParams;
-/// Benchmark the storage of a Substrate node with a live chain snapshot.
+use crate::shared::WeightParams;
+
+/// Benchmark the storage speed of a chain snapshot.
 #[derive(Debug, Parser)]
 pub struct StorageCmd {
 	#[allow(missing_docs)]
@@ -99,7 +100,7 @@ pub struct StorageParams {
 impl StorageCmd {
 	/// Calls into the Read and Write benchmarking functions.
 	/// Processes the output and writes it into files and stdout.
-	pub async fn run<Block, BA, C>(
+	pub fn run<Block, BA, C>(
 		&self,
 		cfg: Configuration,
 		client: Arc<C>,

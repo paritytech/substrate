@@ -1832,7 +1832,9 @@ where
 	Ok(BasicQueue::new(verifier, Box::new(block_import), justification_import, spawner, registry))
 }
 
-/// Reverts aux data.
+/// Reverts protocol aux data to at most the last finalized block.
+/// In particular, epoch-changes and block weights announced after the revert
+/// point are removed.
 pub fn revert<Block, Client, Backend>(
 	client: Arc<Client>,
 	backend: Arc<Backend>,

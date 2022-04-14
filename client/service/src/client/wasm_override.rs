@@ -190,7 +190,6 @@ impl WasmOverride {
 				let code = fs::read(&path).map_err(handle_err)?;
 				let code_hash = make_hash(&code);
 				let version = Self::runtime_version(executor, &code, &code_hash, Some(128))?;
-
 				tracing::info!(
 					target: "wasm_overrides",
 					version = %version,

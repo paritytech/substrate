@@ -580,17 +580,12 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> hash_db::HashDB<H, DBValue>
 	for Ephemeral<'a, S, H>
 {
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Option<DBValue> {
-		if let Some(val) = HashDB::get(self.overlay, key, prefix) {
-			Some(val)
-		} else {
-			match self.storage.get(key, prefix) {
-				Ok(x) => x,
-				Err(e) => {
-					warn!(target: "trie", "Failed to read from DB: {}", e);
-					None
-				},
-			}
-		}
+		HashDB::get(self.overlay, key, prefix).or_else(|| {
+			self.storage.get(key, prefix).unwrap_or_else(|e| {
+				warn!(target: "trie", "Failed to read from DB: {}", e);
+				None
+			})
+		})
 	}
 
 	fn contains(&self, key: &H::Out, prefix: Prefix) -> bool {

@@ -20,8 +20,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![warn(missing_docs)]
 
-use frame_support::RuntimeDebug;
-use sp_runtime::traits::{self, One, Saturating};
+use sp_debug_derive::RuntimeDebug;
+use sp_runtime::traits;
 use sp_std::fmt;
 #[cfg(not(feature = "std"))]
 use sp_std::prelude::Vec;
@@ -57,21 +57,6 @@ impl LeafDataProvider for () {
 	}
 }
 
-/// The most common use case for MMRs is to store historical block hashes,
-/// so that any point in time in the future we can receive a proof about some past
-/// blocks without using excessive on-chain storage.
-///
-/// Hence we implement the [LeafDataProvider] for [frame_system::Pallet]. Since the
-/// current block hash is not available (since the block is not finished yet),
-/// we use the `parent_hash` here along with parent block number.
-impl<T: frame_system::Config> LeafDataProvider for frame_system::Pallet<T> {
-	type LeafData = (<T as frame_system::Config>::BlockNumber, <T as frame_system::Config>::Hash);
-
-	fn leaf_data() -> Self::LeafData {
-		(Self::block_number().saturating_sub(One::one()), Self::parent_hash())
-	}
-}
-
 /// New MMR root notification hook.
 pub trait OnNewRoot<Hash> {
 	/// Function called by the pallet in case new MMR root has been computed.
@@ -81,6 +66,17 @@ pub trait OnNewRoot<Hash> {
 /// No-op implementation of [OnNewRoot].
 impl<Hash> OnNewRoot<Hash> for () {
 	fn on_new_root(_root: &Hash) {}
+}
+
+/// A MMR proof data for one of the leaves.
+#[derive(codec::Encode, codec::Decode, RuntimeDebug, Clone, PartialEq, Eq)]
+pub struct Proof<Hash> {
+	/// The index of the leaf the proof is for.
+	pub leaf_index: LeafIndex,
+	/// Number of leaves in MMR, when the proof was generated.
+	pub leaf_count: NodeIndex,
+	/// Proof elements (hashes of siblings of inner nodes on the path to the leaf).
+	pub items: Vec<Hash>,
 }
 
 /// A full leaf content stored in the offchain-db.
@@ -94,6 +90,80 @@ pub trait FullLeaf: Clone + PartialEq + fmt::Debug {
 impl<T: codec::Encode + codec::Decode + Clone + PartialEq + fmt::Debug> FullLeaf for T {
 	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F, _compact: bool) -> R {
 		codec::Encode::using_encoded(self, f)
+	}
+}
+
+/// A helper type to allow using arbitrary SCALE-encoded leaf data in the RuntimeApi.
+///
+/// The point is to be able to verify MMR proofs from external MMRs, where we don't
+/// know the exact leaf type, but it's enough for us to have it SCALE-encoded.
+///
+/// Note the leaf type should be encoded in its compact form when passed through this type.
+/// See [FullLeaf] documentation for details.
+///
+/// This type does not implement SCALE encoding/decoding on purpose to avoid confusion,
+/// it would have to be SCALE-compatible with the concrete leaf type, but due to SCALE limitations
+/// it's not possible to know how many bytes the encoding of concrete leaf type uses.
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
+#[derive(RuntimeDebug, Clone, PartialEq)]
+pub struct OpaqueLeaf(
+	/// Raw bytes of the leaf type encoded in its compact form.
+	///
+	/// NOTE it DOES NOT include length prefix (like `Vec<u8>` encoding would).
+	#[cfg_attr(feature = "std", serde(with = "sp_core::bytes"))]
+	pub Vec<u8>,
+);
+
+impl OpaqueLeaf {
+	/// Convert a concrete MMR leaf into an opaque type.
+	pub fn from_leaf<T: FullLeaf>(leaf: &T) -> Self {
+		let encoded_leaf = leaf.using_encoded(|d| d.to_vec(), true);
+		OpaqueLeaf::from_encoded_leaf(encoded_leaf)
+	}
+
+	/// Create a `OpaqueLeaf` given raw bytes of compact-encoded leaf.
+	pub fn from_encoded_leaf(encoded_leaf: Vec<u8>) -> Self {
+		OpaqueLeaf(encoded_leaf)
+	}
+
+	/// Attempt to decode the leaf into expected concrete type.
+	pub fn try_decode<T: codec::Decode>(&self) -> Option<T> {
+		codec::Decode::decode(&mut &*self.0).ok()
+	}
+}
+
+impl FullLeaf for OpaqueLeaf {
+	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F, _compact: bool) -> R {
+		f(&self.0)
+	}
+}
+
+/// A type-safe wrapper for the concrete leaf type.
+///
+/// This structure serves merely to avoid passing raw `Vec<u8>` around.
+/// It must be `Vec<u8>`-encoding compatible.
+///
+/// It is different from [`OpaqueLeaf`], because it does implement `Codec`
+/// and the encoding has to match raw `Vec<u8>` encoding.
+#[derive(codec::Encode, codec::Decode, RuntimeDebug, PartialEq, Eq)]
+pub struct EncodableOpaqueLeaf(pub Vec<u8>);
+
+impl EncodableOpaqueLeaf {
+	/// Convert a concrete leaf into encodable opaque version.
+	pub fn from_leaf<T: FullLeaf>(leaf: &T) -> Self {
+		let opaque = OpaqueLeaf::from_leaf(leaf);
+		Self::from_opaque_leaf(opaque)
+	}
+
+	/// Given an opaque leaf, make it encodable.
+	pub fn from_opaque_leaf(opaque: OpaqueLeaf) -> Self {
+		Self(opaque.0)
+	}
+
+	/// Try to convert into a [OpaqueLeaf].
+	pub fn into_opaque_leaf(self) -> OpaqueLeaf {
+		// wrap into `OpaqueLeaf` type
+		OpaqueLeaf::from_encoded_leaf(self.0)
 	}
 }
 
@@ -281,17 +351,6 @@ impl_leaf_data_for_tuple!(A:0, B:1, C:2);
 impl_leaf_data_for_tuple!(A:0, B:1, C:2, D:3);
 impl_leaf_data_for_tuple!(A:0, B:1, C:2, D:3, E:4);
 
-/// A MMR proof data for one of the leaves.
-#[derive(codec::Encode, codec::Decode, RuntimeDebug, Clone, PartialEq, Eq)]
-pub struct Proof<Hash> {
-	/// The index of the leaf the proof is for.
-	pub leaf_index: LeafIndex,
-	/// Number of leaves in MMR, when the proof was generated.
-	pub leaf_count: NodeIndex,
-	/// Proof elements (hashes of siblings of inner nodes on the path to the leaf).
-	pub items: Vec<Hash>,
-}
-
 /// Merkle Mountain Range operation error.
 #[derive(RuntimeDebug, codec::Encode, codec::Decode, PartialEq, Eq)]
 pub enum Error {
@@ -334,80 +393,6 @@ impl Error {
 	}
 }
 
-/// A helper type to allow using arbitrary SCALE-encoded leaf data in the RuntimeApi.
-///
-/// The point is to be able to verify MMR proofs from external MMRs, where we don't
-/// know the exact leaf type, but it's enough for us to have it SCALE-encoded.
-///
-/// Note the leaf type should be encoded in its compact form when passed through this type.
-/// See [FullLeaf] documentation for details.
-///
-/// This type does not implement SCALE encoding/decoding on purpose to avoid confusion,
-/// it would have to be SCALE-compatible with the concrete leaf type, but due to SCALE limitations
-/// it's not possible to know how many bytes the encoding of concrete leaf type uses.
-#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-#[derive(RuntimeDebug, Clone, PartialEq)]
-pub struct OpaqueLeaf(
-	/// Raw bytes of the leaf type encoded in its compact form.
-	///
-	/// NOTE it DOES NOT include length prefix (like `Vec<u8>` encoding would).
-	#[cfg_attr(feature = "std", serde(with = "sp_core::bytes"))]
-	pub Vec<u8>,
-);
-
-impl OpaqueLeaf {
-	/// Convert a concrete MMR leaf into an opaque type.
-	pub fn from_leaf<T: FullLeaf>(leaf: &T) -> Self {
-		let encoded_leaf = leaf.using_encoded(|d| d.to_vec(), true);
-		OpaqueLeaf::from_encoded_leaf(encoded_leaf)
-	}
-
-	/// Create a `OpaqueLeaf` given raw bytes of compact-encoded leaf.
-	pub fn from_encoded_leaf(encoded_leaf: Vec<u8>) -> Self {
-		OpaqueLeaf(encoded_leaf)
-	}
-
-	/// Attempt to decode the leaf into expected concrete type.
-	pub fn try_decode<T: codec::Decode>(&self) -> Option<T> {
-		codec::Decode::decode(&mut &*self.0).ok()
-	}
-}
-
-impl FullLeaf for OpaqueLeaf {
-	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F, _compact: bool) -> R {
-		f(&self.0)
-	}
-}
-
-/// A type-safe wrapper for the concrete leaf type.
-///
-/// This structure serves merely to avoid passing raw `Vec<u8>` around.
-/// It must be `Vec<u8>`-encoding compatible.
-///
-/// It is different from [`OpaqueLeaf`], because it does implement `Codec`
-/// and the encoding has to match raw `Vec<u8>` encoding.
-#[derive(codec::Encode, codec::Decode, RuntimeDebug, PartialEq, Eq)]
-pub struct EncodableOpaqueLeaf(pub Vec<u8>);
-
-impl EncodableOpaqueLeaf {
-	/// Convert a concrete leaf into encodable opaque version.
-	pub fn from_leaf<T: FullLeaf>(leaf: &T) -> Self {
-		let opaque = OpaqueLeaf::from_leaf(leaf);
-		Self::from_opaque_leaf(opaque)
-	}
-
-	/// Given an opaque leaf, make it encodable.
-	pub fn from_opaque_leaf(opaque: OpaqueLeaf) -> Self {
-		Self(opaque.0)
-	}
-
-	/// Try to convert into a [OpaqueLeaf].
-	pub fn into_opaque_leaf(self) -> OpaqueLeaf {
-		// wrap into `OpaqueLeaf` type
-		OpaqueLeaf::from_encoded_leaf(self.0)
-	}
-}
-
 sp_api::decl_runtime_apis! {
 	/// API to interact with MMR pallet.
 	pub trait MmrApi<Hash: codec::Codec> {
@@ -429,6 +414,9 @@ sp_api::decl_runtime_apis! {
 		/// The leaf data is expected to be encoded in it's compact form.
 		fn verify_proof_stateless(root: Hash, leaf: EncodableOpaqueLeaf, proof: Proof<Hash>)
 			-> Result<(), Error>;
+
+		/// Return the on-chain MMR root hash.
+		fn mmr_root() -> Result<Hash, Error>;
 	}
 }
 

@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Calculates a weight from the statistics of a benchmark result.
+//! Calculates a weight from the [`super::Stats`] of a benchmark result.
 
 use sc_cli::Result;
 
@@ -23,7 +23,7 @@ use clap::Args;
 use serde::Serialize;
 use std::path::PathBuf;
 
-use crate::storage::record::{StatSelect, Stats};
+use super::{StatSelect, Stats};
 
 /// Configures the weight generation.
 #[derive(Debug, Default, Serialize, Clone, PartialEq, Args)]
@@ -55,7 +55,7 @@ pub struct WeightParams {
 /// `weight_mul` and adding `weight_add`.
 /// Does not use safe casts and can overflow.
 impl WeightParams {
-	pub(crate) fn calc_weight(&self, stat: &Stats) -> Result<u64> {
+	pub fn calc_weight(&self, stat: &Stats) -> Result<u64> {
 		if self.weight_mul.is_sign_negative() || !self.weight_mul.is_normal() {
 			return Err("invalid floating number for `weight_mul`".into())
 		}
@@ -68,7 +68,7 @@ impl WeightParams {
 #[cfg(test)]
 mod test_weight_params {
 	use super::WeightParams;
-	use crate::storage::record::{StatSelect, Stats};
+	use crate::shared::{StatSelect, Stats};
 
 	#[test]
 	fn calc_weight_works() {
