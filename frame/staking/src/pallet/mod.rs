@@ -628,6 +628,8 @@ pub mod pallet {
 		Chilled(T::AccountId),
 		/// The stakers' rewards are getting paid. \[era_index, validator_stash\]
 		PayoutStarted(EraIndex, T::AccountId),
+		/// A validator has set their preferences.
+		ValidatorPrefsSet(T::AccountId, ValidatorPrefs),
 	}
 
 	#[pallet::error]
@@ -1016,7 +1018,9 @@ pub mod pallet {
 			}
 
 			Self::do_remove_nominator(stash);
-			Self::do_add_validator(stash, prefs);
+			Self::do_add_validator(stash, prefs.clone());
+			Self::deposit_event(Event::<T>::ValidatorPrefsSet(ledger.stash, prefs));
+
 			Ok(())
 		}
 

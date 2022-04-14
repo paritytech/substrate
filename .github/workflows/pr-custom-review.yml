@@ -1,4 +1,4 @@
-name: Check reviews
+name: Assign reviewers
 
 on:
   pull_request:
