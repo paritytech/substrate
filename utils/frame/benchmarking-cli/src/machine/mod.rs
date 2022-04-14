@@ -38,22 +38,6 @@ use std::{fmt::Debug, fs, time::Duration};
 /// which influence the results.
 ///
 /// You can use the `--base-path` flag to set a location for the disk benchmarks.
-/// The output of `benchmark machine --dev` looks like this:
-/// ```text
-/// +----------+----------------+-------+------+
-/// | Category | Function       | Score | Unit |
-/// +----------+----------------+-------+------+
-/// | CPU      | BLAKE2-256     | 1056  | MB/s |
-/// +----------+----------------+-------+------+
-/// | CPU      | SR25519 Verify | 666.0 | KB/s |
-/// +----------+----------------+-------+------+
-/// | Memory   | Copy           | 21205 | MB/s |
-/// +----------+----------------+-------+------+
-/// | Disk     | Seq Write      | 2500  | MB/s |
-/// +----------+----------------+-------+------+
-/// | Disk     | Rnd Write      | 311   | MB/s |
-/// +----------+----------------+-------+------+
-/// ```
 #[derive(Debug, Parser)]
 pub struct MachineCmd {
 	#[allow(missing_docs)]
