@@ -435,4 +435,9 @@ mod tests {
 	fn test_benchmark_disk_random_writes() {
 		assert!(benchmark_disk_random_writes("./".as_ref()).unwrap() > 0);
 	}
+
+	#[test]
+	fn test_benchmark_sr25519_verify() {
+		assert!(benchmark_sr25519_verify(10, Duration::from_secs(1), 32).unwrap() > 0.0);
+	}
 }
