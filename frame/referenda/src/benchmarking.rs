@@ -57,7 +57,7 @@ fn create_referendum<T: Config>() -> (T::AccountId, ReferendumIndex) {
 fn place_deposit<T: Config>(index: ReferendumIndex) {
 	let caller = funded_account::<T>("caller", 0);
 	whitelist_account!(caller);
-	assert_ok!(Referenda::<T>::place_decision_deposit(RawOrigin::Signed(caller).into(), index,));
+	assert_ok!(Referenda::<T>::place_decision_deposit(RawOrigin::Signed(caller).into(), index));
 }
 
 fn nudge<T: Config>(index: ReferendumIndex) {
