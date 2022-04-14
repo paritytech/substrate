@@ -75,7 +75,7 @@ impl Convert<beefy_primitives::crypto::AuthorityId, Vec<u8>> for BeefyEcdsaToEth
 			.map_err(|_| {
 				log::error!(target: "runtime::beefy", "Invalid BEEFY PublicKey format!");
 			})
-			.unwrap()
+			.unwrap_or(sp_core::ecdsa::Public::from_raw([0u8; 33]))
 			.to_eth_address()
 			.map(|v| v.to_vec())
 			.map_err(|_| {
