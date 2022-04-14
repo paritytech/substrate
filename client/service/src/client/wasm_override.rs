@@ -186,7 +186,7 @@ impl WasmOverride {
 		for entry in fs::read_dir(dir).map_err(handle_err)? {
 			let entry = entry.map_err(handle_err)?;
 			let path = entry.path();
-			if let Some("wasm") = path.extension().map(|e| e.to_str()).flatten() {
+			if let Some("wasm") = path.extension().and_then(|e| e.to_str()) {
 				let code = fs::read(&path).map_err(handle_err)?;
 				let code_hash = make_hash(&code);
 				let version = Self::runtime_version(executor, &code, &code_hash, Some(128))?;
