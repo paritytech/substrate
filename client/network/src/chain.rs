@@ -18,7 +18,7 @@
 
 //! Blockchain access trait
 
-use sc_client_api::{BlockBackend, ProofProvider};
+use sc_client_api::{BlockBackend, ProofProvider, BlockchainEvents};
 pub use sc_client_api::{StorageData, StorageKey};
 pub use sc_consensus::ImportedState;
 use sp_blockchain::{Error, HeaderBackend, HeaderMetadata};
@@ -31,6 +31,7 @@ pub trait Client<Block: BlockT>:
 	+ BlockIdTo<Block, Error = Error>
 	+ BlockBackend<Block>
 	+ HeaderMetadata<Block, Error = Error>
+	+ BlockchainEvents<Block>
 	+ Send
 	+ Sync
 {
@@ -42,6 +43,7 @@ impl<Block: BlockT, T> Client<Block> for T where
 		+ BlockIdTo<Block, Error = Error>
 		+ BlockBackend<Block>
 		+ HeaderMetadata<Block, Error = Error>
+		+ BlockchainEvents<Block>
 		+ Send
 		+ Sync
 {

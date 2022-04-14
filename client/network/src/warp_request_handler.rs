@@ -66,6 +66,8 @@ pub trait WarpSyncProvider<B: BlockT>: Send + Sync {
 	/// Get current list of authorities. This is supposed to be genesis authorities when starting
 	/// sync.
 	fn current_authorities(&self) -> AuthorityList;
+	/// Get current session.
+	fn current_session(&self) -> SetId;
 }
 
 /// Generates a [`RequestResponseConfig`] for the grandpa warp sync request protocol, refusing

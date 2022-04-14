@@ -332,4 +332,4 @@ pub struct NetworkStatus<B: BlockT> {
 	pub warp_sync: Option<protocol::sync::WarpSyncProgress<B>>,
 }
 
-type Mixnet = ::mixnet::Mixnet<Event>;
+type Mixnet = ::mixnet::Mixnet<crate::mixnet::Command>;

@@ -540,8 +540,8 @@ impl<B: BlockT> NetworkBehaviourEventProcess<DiscoveryOut> for Behaviour<B> {
 	}
 }
 
-impl<B: BlockT> NetworkBehaviourEventProcess<mixnet::NetworkEvent<crate::Event>> for Behaviour<B> {
-	fn inject_event(&mut self, event: mixnet::NetworkEvent<crate::Event>) {
+impl<B: BlockT> NetworkBehaviourEventProcess<mixnet::NetworkEvent<crate::mixnet::Command>> for Behaviour<B> {
+	fn inject_event(&mut self, event: mixnet::NetworkEvent<crate::mixnet::Command>) {
 		match event {
 			mixnet::NetworkEvent::Message(message) => {
 				self.events
@@ -556,7 +556,11 @@ impl<B: BlockT> NetworkBehaviourEventProcess<mixnet::NetworkEvent<crate::Event>>
 				debug!(target: "mixnet", "Peer removed from mixnet {:?}", peer_id);
 			},
 			mixnet::NetworkEvent::Command(command) => {
-				match &command {
+				debug!(target: "mixnet", "Received command {:?}", command);
+				// TODO this is actually not used: these only show maybe authority
+				// getting connected to others protocol.
+				// What we want is the one getting connected
+/*				match &command {
 					e @ crate::Event::NotificationStreamOpened {
 						remote: peer,
 						role,
@@ -599,7 +603,7 @@ impl<B: BlockT> NetworkBehaviourEventProcess<mixnet::NetworkEvent<crate::Event>>
 					_ => {
 						error!(target: "mixnet", "Incorrect network event filtering for mixnet.");
 					},
-				}
+				}*/
 			},
 		}
 	}

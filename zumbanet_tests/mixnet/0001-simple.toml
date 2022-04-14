@@ -34,12 +34,12 @@ default_command = "substrate"
   [[relaychain.nodes]]
   name = "one"
   args = [ "-lmixnet=trace", "--mixnet", "--database=paritydb" ]
-	validator = "false"
+	validator = false
 
   [[relaychain.nodes]]
   name = "two"
   args = [ "-lmixnet=trace", "--mixnet", "--database=paritydb" ]
-	validator = "false"
+	validator = false
 
 [types.Header]
 number = "u64"

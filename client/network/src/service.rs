@@ -201,6 +201,9 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			None => (None, None),
 		};
 
+		let shared_authority_set = warp_sync_provider.as_ref().unwrap(); // TODO remove the unwrap or expect warpsynch always init
+		let shared_authority_set: Arc<dyn WarpSyncProvider<B>> = shared_authority_set.clone(); // TODO only if mixnet?
+
 		let (protocol, peerset_handle, mut known_addresses) = Protocol::new(
 			protocol::ProtocolConfig {
 				roles: From::from(&params.role),
@@ -254,6 +257,24 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 
 		// Build the swarm.
 		let client = params.chain.clone();
+		let client_stream = params.chain.clone();
+		use sc_client_api::BlockchainEvents;
+		use sp_runtime::traits::Header;
+		use crate::warp_request_handler::WarpSyncProvider;
+		let mut session = None;
+		let finality_notif_stream = client.finality_notification_stream().map(move |notif| {
+			let at = sp_runtime::generic::BlockId::<B>::hash(notif.header.hash());
+			// TODO check header for change of session 
+
+			let new_session = Some(shared_authority_set.current_session());
+			if new_session != session {
+				let authority_set = shared_authority_set.current_authorities();
+				session = new_session;
+				crate::mixnet::Command::NewAuthoritySet(authority_set)
+			} else {
+				crate::mixnet::Command::BlockFinalized
+			}
+		});
 		let (mut swarm, bandwidth): (Swarm<B>, _) = {
 			let user_agent = format!(
 				"{} ({})",
@@ -352,13 +373,16 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 							kp,
 							local_public_key.clone().into(),
 						);
-						let topology = crate::mixnet::AuthorityStar::new(authority_protocol);
-						let commands =
-							crate::mixnet::AuthorityStar::command_stream(&mut event_streams);
+						// TODO read validator from session
+						// TODO is this node part of session (role means nothing).
+						let routing = params.role.is_authority();
+						let topology = crate::mixnet::AuthorityStar::new(authority_protocol, routing);
+/*						let commands =
+							crate::mixnet::AuthorityStar::command_stream(&mut event_streams);*/
 						mixnet = Some(
 							Mixnet::new(mixnet_config)
 								.with_topology(Box::new(topology))
-								.with_commands(commands),
+								.with_commands(Box::pin(finality_notif_stream)),
 						);
 					} else {
 						log::error!(target: "sync", "Ignoring mixnet, non Ed25519 identity");
