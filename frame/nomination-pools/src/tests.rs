@@ -1698,7 +1698,7 @@ mod unbond {
 			assert_eq!(CurrentEra::get(), 0);
 			assert_eq!(BondingDuration::get(), 3);
 
-			// so event the depositor can leave, just keeps the test simpler.
+			// so the depositor can leave, just keeps the test simpler.
 			unsafe_set_state(1, PoolState::Destroying).unwrap();
 
 			// when: casual unbond
