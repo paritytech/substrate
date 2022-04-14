@@ -2,6 +2,7 @@ use super::*;
 use crate::{self as pools};
 use frame_support::{assert_ok, parameter_types, PalletId};
 use frame_system::RawOrigin;
+use std::collections::HashMap;
 
 pub type AccountId = u128;
 pub type Balance = u128;
