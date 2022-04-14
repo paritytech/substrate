@@ -23,9 +23,9 @@
 use futures::Stream;
 use log::error;
 use mixnet::{MixPeerId, MixPublicKey, Topology};
+pub use sp_finality_grandpa::{AuthorityList, SetId};
 use sp_runtime::traits::Block as BlockT;
 use std::{collections::BTreeMap, pin::Pin};
-pub use sp_finality_grandpa::{AuthorityList, SetId};
 
 type EventsStream = Pin<Box<dyn Stream<Item = Command> + Send>>;
 

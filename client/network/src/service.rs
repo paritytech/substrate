@@ -258,13 +258,13 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 		// Build the swarm.
 		let client = params.chain.clone();
 		let client_stream = params.chain.clone();
+		use crate::warp_request_handler::WarpSyncProvider;
 		use sc_client_api::BlockchainEvents;
 		use sp_runtime::traits::Header;
-		use crate::warp_request_handler::WarpSyncProvider;
 		let mut session = None;
 		let finality_notif_stream = client.finality_notification_stream().map(move |notif| {
 			let at = sp_runtime::generic::BlockId::<B>::hash(notif.header.hash());
-			// TODO check header for change of session 
+			// TODO check header for change of session
 
 			let new_session = Some(shared_authority_set.current_session());
 			if new_session != session {
@@ -376,9 +376,10 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 						// TODO read validator from session
 						// TODO is this node part of session (role means nothing).
 						let routing = params.role.is_authority();
-						let topology = crate::mixnet::AuthorityStar::new(authority_protocol, routing);
-/*						let commands =
-							crate::mixnet::AuthorityStar::command_stream(&mut event_streams);*/
+						let topology =
+							crate::mixnet::AuthorityStar::new(authority_protocol, routing);
+						/*						let commands =
+						crate::mixnet::AuthorityStar::command_stream(&mut event_streams);*/
 						mixnet = Some(
 							Mixnet::new(mixnet_config)
 								.with_topology(Box::new(topology))
