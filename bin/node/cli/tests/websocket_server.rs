@@ -123,12 +123,12 @@ impl WsServer {
 			let mut server = Server::new(pending_incoming);
 
 			let websocket_key = match server.receive_request().await {
-				Ok(req) => req.into_key(),
+				Ok(req) => req.key(),
 				Err(err) => return Err(Box::new(err) as Box<_>),
 			};
 
 			match server
-				.send_response(&{ Response::Accept { key: &websocket_key, protocol: None } })
+				.send_response(&{ Response::Accept { key: websocket_key, protocol: None } })
 				.await
 			{
 				Ok(()) => {},

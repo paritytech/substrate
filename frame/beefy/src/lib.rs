@@ -105,20 +105,20 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn change_authorities(new: Vec<T::BeefyId>, queued: Vec<T::BeefyId>) {
-		// As in GRANDPA, we trigger a validator set change only if the the validator
-		// set has actually changed.
-		if new != Self::authorities() {
-			<Authorities<T>>::put(&new);
+		// Always issue a change if `session` says that the validators have changed.
+		// Even if their session keys are the same as before, the underlying economic
+		// identities have changed. Furthermore, the digest below is used to signal
+		// BEEFY mandatory blocks.
+		<Authorities<T>>::put(&new);
 
-			let next_id = Self::validator_set_id() + 1u64;
-			<ValidatorSetId<T>>::put(next_id);
-			if let Some(validator_set) = ValidatorSet::<T::BeefyId>::new(new, next_id) {
-				let log = DigestItem::Consensus(
-					BEEFY_ENGINE_ID,
-					ConsensusLog::AuthoritiesChange(validator_set).encode(),
-				);
-				<frame_system::Pallet<T>>::deposit_log(log);
-			}
+		let next_id = Self::validator_set_id() + 1u64;
+		<ValidatorSetId<T>>::put(next_id);
+		if let Some(validator_set) = ValidatorSet::<T::BeefyId>::new(new, next_id) {
+			let log = DigestItem::Consensus(
+				BEEFY_ENGINE_ID,
+				ConsensusLog::AuthoritiesChange(validator_set).encode(),
+			);
+			<frame_system::Pallet<T>>::deposit_log(log);
 		}
 
 		<NextAuthorities<T>>::put(&queued);

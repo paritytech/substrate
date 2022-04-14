@@ -39,7 +39,7 @@ use sc_executor::RuntimeVersionOf;
 use sc_keystore::LocalKeystore;
 use sc_network::{
 	block_request_handler::{self, BlockRequestHandler},
-	config::Role,
+	config::{Role, SyncMode},
 	light_client_requests::{self, handler::LightClientRequestHandler},
 	state_request_handler::{self, StateRequestHandler},
 	warp_request_handler::{self, RequestHandler as WarpSyncRequestHandler, WarpSyncProvider},
@@ -487,8 +487,13 @@ where
 	)
 	.map_err(|e| Error::Application(Box::new(e)))?;
 
+	let sysinfo = sc_sysinfo::gather_sysinfo();
+	sc_sysinfo::print_sysinfo(&sysinfo);
+
 	let telemetry = telemetry
-		.map(|telemetry| init_telemetry(&mut config, network.clone(), client.clone(), telemetry))
+		.map(|telemetry| {
+			init_telemetry(&mut config, network.clone(), client.clone(), telemetry, Some(sysinfo))
+		})
 		.transpose()?;
 
 	info!("📦 Highest known block at #{}", chain_info.best_number);
@@ -609,12 +614,16 @@ fn init_telemetry<TBl: BlockT, TCl: BlockBackend<TBl>>(
 	network: Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
 	client: Arc<TCl>,
 	telemetry: &mut Telemetry,
+	sysinfo: Option<sc_telemetry::SysInfo>,
 ) -> sc_telemetry::Result<TelemetryHandle> {
 	let genesis_hash = client.block_hash(Zero::zero()).ok().flatten().unwrap_or_default();
 	let connection_message = ConnectionMessage {
 		name: config.network.node_name.to_owned(),
 		implementation: config.impl_name.to_owned(),
 		version: config.impl_version.to_owned(),
+		target_os: sc_sysinfo::TARGET_OS.into(),
+		target_arch: sc_sysinfo::TARGET_ARCH.into(),
+		target_env: sc_sysinfo::TARGET_ENV.into(),
 		config: String::new(),
 		chain: config.chain_spec.name().to_owned(),
 		genesis_hash: format!("{:?}", genesis_hash),
@@ -625,6 +634,7 @@ fn init_telemetry<TBl: BlockT, TCl: BlockBackend<TBl>>(
 			.unwrap_or(0)
 			.to_string(),
 		network_id: network.local_peer_id().to_base58(),
+		sysinfo,
 	};
 
 	telemetry.start_telemetry(connection_message)?;
@@ -766,6 +776,18 @@ where
 		block_announce_validator_builder,
 		warp_sync,
 	} = params;
+
+	if warp_sync.is_none() && config.network.sync_mode.is_warp() {
+		return Err("Warp sync enabled, but no warp sync provider configured.".into())
+	}
+
+	if config.state_pruning.is_archive() {
+		match config.network.sync_mode {
+			SyncMode::Fast { .. } => return Err("Fast sync doesn't work for archive nodes".into()),
+			SyncMode::Warp => return Err("Warp sync doesn't work for archive nodes".into()),
+			SyncMode::Full => {},
+		};
+	}
 
 	let transaction_pool_adapter = Arc::new(TransactionPoolAdapter {
 		imports_external_transactions: !matches!(config.role, Role::Light),
