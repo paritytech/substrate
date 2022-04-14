@@ -1179,9 +1179,10 @@ pub mod pallet {
 			let (mut delegator, mut bonded_pool, mut reward_pool) =
 				Self::get_delegator_with_pools(&who)?;
 
+
 			let (points_issued, bonded) = match extra {
-				BondExtra::FreeBalance(amount) =>
-					(bonded_pool.try_bond_funds(&who, amount, BondType::Later)?, amount),
+					BondExtra::FreeBalance(amount) =>
+						(bonded_pool.try_bond_funds(&who, amount, BondType::Later)?, amount),
 				BondExtra::Rewards => {
 					let claimed = Self::do_reward_payout(
 						&who,
@@ -1192,6 +1193,7 @@ pub mod pallet {
 					(bonded_pool.try_bond_funds(&who, claimed, BondType::Later)?, claimed)
 				},
 			};
+			bonded_pool.ok_to_be_open(bonded)?;
 			delegator.points = delegator.points.saturating_add(points_issued);
 
 			Self::deposit_event(Event::<T>::Bonded {
