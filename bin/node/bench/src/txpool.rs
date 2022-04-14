@@ -78,13 +78,17 @@ impl core::Benchmark for PoolBenchmark {
 			context.client.clone(),
 		);
 
-		let start = std::time::Instant::now();
-		let submissions = self
+		let generated_transactions = self
 			.database
 			.block_content(
 				BlockType::RandomTransfersKeepAlive.to_content(Some(100)),
 				&context.client,
 			)
+			.into_iter()
+			.collect::<Vec<_>>();
+
+		let start = std::time::Instant::now();
+		let submissions = generated_transactions
 			.into_iter()
 			.map(|tx| txpool.submit_one(&BlockId::Number(0), TransactionSource::External, tx));
 		futures::executor::block_on(futures::future::join_all(submissions));
