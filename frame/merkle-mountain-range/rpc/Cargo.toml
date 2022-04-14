@@ -22,9 +22,8 @@ serde = { version = "1.0.136", features = ["derive"] }
 sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
 sp-core = { version = "6.0.0", path = "../../../primitives/core" }
+sp-mmr-primitives = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/merkle-mountain-range" }
 sp-runtime = { version = "6.0.0", path = "../../../primitives/runtime" }
-
-pallet-mmr-primitives = { version = "4.0.0-dev", path = "../primitives" }
 
 [dev-dependencies]
 serde_json = "1.0.79"
