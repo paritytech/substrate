@@ -1698,7 +1698,7 @@ mod unbond {
 			assert_eq!(CurrentEra::get(), 0);
 			assert_eq!(BondingDuration::get(), 3);
 
-			// so event the depositor can leave, just keeps the test simpler.
+			// so the depositor can leave, just keeps the test simpler.
 			unsafe_set_state(1, PoolState::Destroying).unwrap();
 
 			// when: casual unbond
@@ -1793,7 +1793,7 @@ mod unbond {
 	#[test]
 	fn partial_unbond_mac_chunks() {
 		ExtBuilder::default().ed(1).build_and_execute(|| {
-			// so event the depositor can leave, just keeps the test simpler.
+			// so the depositor can leave, just keeps the test simpler.
 			unsafe_set_state(1, PoolState::Destroying).unwrap();
 			MaxUnbonding::set(2);
 
@@ -2289,7 +2289,7 @@ mod withdraw_unbonded_other {
 	#[test]
 	fn partial_withdraw_unbonded_depositor() {
 		ExtBuilder::default().ed(1).build_and_execute(|| {
-			// so event the depositor can leave, just keeps the test simpler.
+			// so the depositor can leave, just keeps the test simpler.
 			unsafe_set_state(1, PoolState::Destroying).unwrap();
 
 			// given
