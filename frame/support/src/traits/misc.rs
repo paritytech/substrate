@@ -380,7 +380,7 @@ impl<T: Default> Get<T> for GetDefault {
 
 macro_rules! impl_const_get {
 	($name:ident, $t:ty) => {
-		#[derive($crate::RuntimeDebug, Clone)]
+		#[derive($crate::RuntimeDebug)]
 		pub struct $name<const T: $t>;
 		impl<const T: $t> Get<$t> for $name<T> {
 			fn get() -> $t {
