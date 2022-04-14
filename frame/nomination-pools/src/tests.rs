@@ -2289,7 +2289,7 @@ mod withdraw_unbonded_other {
 	#[test]
 	fn partial_withdraw_unbonded_depositor() {
 		ExtBuilder::default().ed(1).build_and_execute(|| {
-			// so event the depositor can leave, just keeps the test simpler.
+			// so the depositor can leave, just keeps the test simpler.
 			unsafe_set_state(1, PoolState::Destroying).unwrap();
 
 			// given
