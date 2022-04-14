@@ -96,7 +96,6 @@ pub mod test_utils {
 	}
 	macro_rules! assert_return_code {
 		( $x:expr , $y:expr $(,)? ) => {{
-			use sp_std::convert::TryInto;
 			assert_eq!(u32::from_le_bytes($x.data[..].try_into().unwrap()), $y as u32);
 		}};
 	}
@@ -762,7 +761,6 @@ fn deploy_and_call_other_contract() {
 }
 
 #[test]
-#[cfg(feature = "unstable-interface")]
 fn delegate_call() {
 	let (caller_wasm, caller_code_hash) = compile_module::<Test>("delegate_call").unwrap();
 	let (callee_wasm, callee_code_hash) = compile_module::<Test>("delegate_call_lib").unwrap();

@@ -1011,12 +1011,16 @@ fn finalizing_diverged_block_should_trigger_reorg() {
 
 	assert_eq!(client.chain_info().best_hash, b3.hash());
 
-	finality_notification_check(&mut finality_notifications, &[b1.hash()], &[a2.hash()]);
+	ClientExt::finalize_block(&client, BlockId::Hash(b3.hash()), None).unwrap();
+
+	finality_notification_check(&mut finality_notifications, &[b1.hash()], &[]);
+	finality_notification_check(&mut finality_notifications, &[b2.hash(), b3.hash()], &[a2.hash()]);
 	assert!(finality_notifications.try_next().is_err());
 }
 
 #[test]
 fn finality_notifications_content() {
+	sp_tracing::try_init_simple();
 	let (mut client, _select_chain) = TestClientBuilder::new().build_with_longest_chain();
 
 	//               -> D3 -> D4
@@ -1110,12 +1114,8 @@ fn finality_notifications_content() {
 	// Import and finalize D4
 	block_on(client.import_as_final(BlockOrigin::Own, d4.clone())).unwrap();
 
-	finality_notification_check(
-		&mut finality_notifications,
-		&[a1.hash(), a2.hash()],
-		&[c1.hash(), b2.hash()],
-	);
-	finality_notification_check(&mut finality_notifications, &[d3.hash(), d4.hash()], &[a3.hash()]);
+	finality_notification_check(&mut finality_notifications, &[a1.hash(), a2.hash()], &[c1.hash()]);
+	finality_notification_check(&mut finality_notifications, &[d3.hash(), d4.hash()], &[b2.hash()]);
 	assert!(finality_notifications.try_next().is_err());
 }
 
@@ -1214,7 +1214,7 @@ fn doesnt_import_blocks_that_revert_finality() {
 
 	//    -> C1
 	//   /
-	// G -> A1 -> A2
+	// G -> A1 -> A2 -> A3
 	//   \
 	//    -> B1 -> B2 -> B3
 
@@ -1294,7 +1294,19 @@ fn doesnt_import_blocks_that_revert_finality() {
 
 	assert_eq!(import_err.to_string(), expected_err.to_string());
 
-	finality_notification_check(&mut finality_notifications, &[a1.hash(), a2.hash()], &[b2.hash()]);
+	let a3 = client
+		.new_block_at(&BlockId::Hash(a2.hash()), Default::default(), false)
+		.unwrap()
+		.build()
+		.unwrap()
+		.block;
+	block_on(client.import(BlockOrigin::Own, a3.clone())).unwrap();
+	ClientExt::finalize_block(&client, BlockId::Hash(a3.hash()), None).unwrap();
+
+	finality_notification_check(&mut finality_notifications, &[a1.hash(), a2.hash()], &[]);
+
+	finality_notification_check(&mut finality_notifications, &[a3.hash()], &[b2.hash()]);
+
 	assert!(finality_notifications.try_next().is_err());
 }
 

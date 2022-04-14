@@ -129,6 +129,16 @@ impl<T, S> BoundedVec<T, S> {
 		self.0.sort_by(compare)
 	}
 
+	/// Exactly the same semantics as [`slice::sort`].
+	///
+	/// This is safe since sorting cannot change the number of elements in the vector.
+	pub fn sort(&mut self)
+	where
+		T: sp_std::cmp::Ord,
+	{
+		self.0.sort()
+	}
+
 	/// Exactly the same semantics as `Vec::remove`.
 	///
 	/// # Panics
@@ -374,6 +384,17 @@ impl<T, S: Get<u32>> BoundedVec<T, S> {
 		}
 	}
 
+	/// Exactly the same semantics as [`Vec::append`], but returns an error and does nothing if the
+	/// length of the outcome is larger than the bound.
+	pub fn try_append(&mut self, other: &mut Vec<T>) -> Result<(), ()> {
+		if other.len().saturating_add(self.len()) <= Self::bound() {
+			self.0.append(other);
+			Ok(())
+		} else {
+			Err(())
+		}
+	}
+
 	/// Consumes self and mutates self via the given `mutate` function.
 	///
 	/// If the outcome of mutation is within bounds, `Some(Self)` is returned. Else, `None` is
@@ -589,10 +610,10 @@ pub mod test {
 	use sp_io::TestExternalities;
 
 	crate::generate_storage_alias! { Prefix, Foo => Value<BoundedVec<u32, ConstU32<7>>> }
-	crate::generate_storage_alias! { Prefix, FooMap => Map<(u32, Twox128), BoundedVec<u32, ConstU32<7>>> }
+	crate::generate_storage_alias! { Prefix, FooMap => Map<(Twox128, u32), BoundedVec<u32, ConstU32<7>>> }
 	crate::generate_storage_alias! {
 		Prefix,
-		FooDoubleMap => DoubleMap<(u32, Twox128), (u32, Twox128), BoundedVec<u32, ConstU32<7>>>
+		FooDoubleMap => DoubleMap<(Twox128, u32), (Twox128, u32), BoundedVec<u32, ConstU32<7>>>
 	}
 
 	#[test]
@@ -693,7 +714,7 @@ pub mod test {
 	}
 
 	#[test]
-	fn try_append_is_correct() {
+	fn bound_returns_correct_value() {
 		assert_eq!(BoundedVec::<u32, ConstU32<7>>::bound(), 7);
 	}
 
