@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::HwBench;
+use crate::{ExecutionLimit, HwBench};
 
 use sc_telemetry::SysInfo;
 use sp_core::{sr25519, Pair};
@@ -337,13 +337,7 @@ pub fn benchmark_disk_random_writes(directory: &Path) -> Result<u64, String> {
 		.map(|s| s as u64)
 }
 
-pub fn benchmark_sr25519_verify(
-	max_iterations: Option<usize>,
-	max_duration: Option<Duration>,
-) -> Result<f64, String> {
-	if max_iterations.is_none() && max_duration.is_none() {
-		return Err("max_iterations and max_duration cannot both be None".into())
-	}
+pub fn benchmark_sr25519_verify(limit: ExecutionLimit) -> f64 {
 	const INPUT_SIZE: usize = 32;
 	const ITERATION_SIZE: usize = 2048;
 	let pair = sr25519::Pair::from_string("//Alice", None).unwrap();
@@ -360,7 +354,7 @@ pub fn benchmark_sr25519_verify(
 		msgs.push(msg);
 	}
 
-	let run = || {
+	let run = || -> Result<(), String> {
 		for (sig, msg) in sigs.iter().zip(msgs.iter()) {
 			let mut ok = sr25519_verify(&sig, &msg[..], &pair.public());
 			clobber_value(&mut ok);
@@ -370,10 +364,11 @@ pub fn benchmark_sr25519_verify(
 	benchmark(
 		"sr25519 verification score",
 		INPUT_SIZE * ITERATION_SIZE,
-		max_iterations.unwrap_or(usize::MAX),
-		max_duration.unwrap_or(Duration::MAX),
+		limit.max_iterations(),
+		limit.max_duration(),
 		run,
 	)
+	.expect("sr25519 verification cannot fail; qed")
 }
 
 /// Benchmarks the hardware and returns the results of those benchmarks.
@@ -448,7 +443,6 @@ mod tests {
 
 	#[test]
 	fn test_benchmark_sr25519_verify() {
-		assert!(benchmark_sr25519_verify(Some(1), None).unwrap() > 0.0);
-		assert!(benchmark_sr25519_verify(None, None).is_err());
+		assert!(benchmark_sr25519_verify(ExecutionLimit::MaxIterations(1)) > 0.0);
 	}
 }

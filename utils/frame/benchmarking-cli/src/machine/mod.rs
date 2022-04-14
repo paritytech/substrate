@@ -22,7 +22,7 @@ use sc_cli::{CliConfiguration, Result, SharedParams};
 use sc_service::Configuration;
 use sc_sysinfo::{
 	benchmark_cpu, benchmark_disk_random_writes, benchmark_disk_sequential_writes,
-	benchmark_memory, benchmark_sr25519_verify,
+	benchmark_memory, benchmark_sr25519_verify, ExecutionLimit,
 };
 
 use clap::Parser;
@@ -59,9 +59,9 @@ impl MachineCmd {
 		info!("Running machine benchmarks...");
 		let write = benchmark_disk_sequential_writes(dir)?;
 		let read = benchmark_disk_random_writes(dir)?;
-		let verify =
-			benchmark_sr25519_verify(None, Some(Duration::from_secs_f32(self.verify_duration)))? *
-				1024.0;
+		let verify_limit =
+			ExecutionLimit::MaxDuration(Duration::from_secs_f32(self.verify_duration));
+		let verify = benchmark_sr25519_verify(verify_limit)? * 1024.0;
 
 		// Use a table for nicer console output.
 		let table = table!(
