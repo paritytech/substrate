@@ -1466,7 +1466,7 @@ pub mod pallet {
 		}
 
 		/// Withdraw unbonded funds who's unbonding period has passed for the `target` delegator. If
-		/// no bond can be unbonded, an error is returned.
+		/// no bonded funds can be unbonded, an error is returned.
 		///
 		/// Under certain conditions, this call can be dispatched permissionlessly (i.e. by any
 		/// account).
