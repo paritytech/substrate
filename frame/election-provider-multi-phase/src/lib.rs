@@ -102,8 +102,8 @@
 //! valid if propagated, and it acts similar to an inherent.
 //!
 //! Validators will only submit solutions if the one that they have computed is sufficiently better
-//! than the best queued one (see [`pallet::Config::SolutionImprovementThresholdUnsigned`]) and will
-//! limit the weight of the solution to [`pallet::Config::MinerMaxWeight`].
+//! than the best queued one (see [`pallet::Config::BetterUnsignedThreshold`]) and will limit the
+//! weight of the solution to [`pallet::Config::MinerMaxWeight`].
 //!
 //! The unsigned phase can be made passive depending on how the previous signed phase went, by
 //! setting the first inner value of [`Phase`] to `false`. For now, the signed phase is always
@@ -587,12 +587,12 @@ pub mod pallet {
 		/// The minimum amount of improvement to the solution score that defines a solution as
 		/// "better" in the Signed phase.
 		#[pallet::constant]
-		type SolutionImprovementThresholdSigned: Get<Perbill>;
+		type BetterSignedThreshold: Get<Perbill>;
 
 		/// The minimum amount of improvement to the solution score that defines a solution as
 		/// "better" in the Unsigned phase.
 		#[pallet::constant]
-		type SolutionImprovementThresholdUnsigned: Get<Perbill>;
+		type BetterUnsignedThreshold: Get<Perbill>;
 
 		/// The repeat threshold of the offchain worker.
 		///

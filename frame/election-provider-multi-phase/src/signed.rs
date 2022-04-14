@@ -291,7 +291,7 @@ impl<T: Config> SignedSubmissions<T> {
 					None => return InsertResult::NotInserted,
 					Some((score, _)) => *score,
 				};
-				let threshold = T::SolutionImprovementThresholdSigned::get();
+				let threshold = T::BetterSignedThreshold::get();
 
 				// if we haven't improved on the weakest score, don't change anything.
 				if !insert_score.strict_threshold_better(weakest_score, threshold) {
@@ -633,10 +633,10 @@ mod tests {
 	}
 
 	#[test]
-	fn cannot_submit_worse_with_full_queue_threshold_100() {
+	fn cannot_submit_worse_with_full_queue_depends_on_threshold() {
 		ExtBuilder::default()
 			.signed_max_submission(1)
-			.solution_improvement_threshold_signed(Perbill::from_percent(100))
+			.better_signed_threshold(Perbill::from_percent(20))
 			.build_and_execute(|| {
 				roll_to(15);
 				assert!(MultiPhase::current_phase().is_signed());
@@ -651,8 +651,7 @@ mod tests {
 				};
 				assert_ok!(MultiPhase::submit(Origin::signed(99), Box::new(solution)));
 
-				// With threshold at 100%, the below is not considered a better solution, and is
-				// therefore rejected.
+				// This is 10% better, so does not meet the 20% threshold and is therefore rejected.
 				solution = RawSolution {
 					score: ElectionScore {
 						minimal_stake: 5u128,
@@ -666,40 +665,18 @@ mod tests {
 					MultiPhase::submit(Origin::signed(99), Box::new(solution)),
 					Error::<Runtime>::SignedQueueFull,
 				);
-			})
-	}
 
-	#[test]
-	fn can_submit_better_with_full_queue_threshold_0() {
-		ExtBuilder::default()
-			.signed_max_submission(1)
-			.solution_improvement_threshold_signed(Perbill::from_percent(0))
-			.build_and_execute(|| {
-				roll_to(15);
-				assert!(MultiPhase::current_phase().is_signed());
-
-				let mut solution = RawSolution {
-					score: ElectionScore {
-						minimal_stake: 5u128,
-						sum_stake: 0u128,
-						sum_stake_squared: 10u128,
-					},
-					..Default::default()
-				};
-				assert_ok!(MultiPhase::submit(Origin::signed(99), Box::new(solution)));
-
-				// With threshold at 0% the below is a better solution because of the lower
-				// `sum_stake_squared`.
+				// This is however 30% better and should therefore be accepted.
 				solution = RawSolution {
 					score: ElectionScore {
 						minimal_stake: 5u128,
 						sum_stake: 0u128,
-						sum_stake_squared: 9u128,
+						sum_stake_squared: 7u128,
 					},
 					..Default::default()
 				};
 
-				assert_ok!(MultiPhase::submit(Origin::signed(99), Box::new(solution)),);
+				assert_ok!(MultiPhase::submit(Origin::signed(99), Box::new(solution)));
 			})
 	}
 

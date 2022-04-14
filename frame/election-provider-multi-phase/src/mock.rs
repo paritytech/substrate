@@ -263,8 +263,8 @@ parameter_types! {
 	pub static SignedRewardBase: Balance = 7;
 	pub static SignedMaxWeight: Weight = BlockWeights::get().max_block;
 	pub static MinerTxPriority: u64 = 100;
-	pub static SolutionImprovementThresholdSigned: Perbill = Perbill::zero();
-	pub static SolutionImprovementThresholdUnsigned: Perbill = Perbill::zero();
+	pub static BetterSignedThreshold: Perbill = Perbill::zero();
+	pub static BetterUnsignedThreshold: Perbill = Perbill::zero();
 	pub static OffchainRepeat: BlockNumber = 5;
 	pub static MinerMaxWeight: Weight = BlockWeights::get().max_block;
 	pub static MinerMaxLength: u32 = 256;
@@ -414,8 +414,8 @@ impl crate::Config for Runtime {
 	type EstimateCallFee = frame_support::traits::ConstU32<8>;
 	type SignedPhase = SignedPhase;
 	type UnsignedPhase = UnsignedPhase;
-	type SolutionImprovementThresholdUnsigned = SolutionImprovementThresholdUnsigned;
-	type SolutionImprovementThresholdSigned = SolutionImprovementThresholdSigned;
+	type BetterUnsignedThreshold = BetterUnsignedThreshold;
+	type BetterSignedThreshold = BetterSignedThreshold;
 	type OffchainRepeat = OffchainRepeat;
 	type MinerMaxWeight = MinerMaxWeight;
 	type MinerMaxLength = MinerMaxLength;
@@ -538,12 +538,12 @@ impl ExtBuilder {
 		<MinerTxPriority>::set(p);
 		self
 	}
-	pub fn solution_improvement_threshold_signed(self, p: Perbill) -> Self {
-		<SolutionImprovementThresholdSigned>::set(p);
+	pub fn better_signed_threshold(self, p: Perbill) -> Self {
+		<BetterSignedThreshold>::set(p);
 		self
 	}
-	pub fn solution_improvement_threshold_unsigned(self, p: Perbill) -> Self {
-		<SolutionImprovementThresholdUnsigned>::set(p);
+	pub fn better_unsigned_threshold(self, p: Perbill) -> Self {
+		<BetterUnsignedThreshold>::set(p);
 		self
 	}
 	pub fn phases(self, signed: BlockNumber, unsigned: BlockNumber) -> Self {
