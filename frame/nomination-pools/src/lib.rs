@@ -55,11 +55,11 @@
 //!
 //! In order to leave, a delegator must take two steps.
 //!
-//! First, they must call [`Call::unbond_other`]. The unbond other extrinsic will start the
+//! First, they must call [`Call::unbond`]. The unbond other extrinsic will start the
 //! unbonding process by unbonding all of the delegators funds.
 //!
 //! Second, once [`sp_staking::StakingInterface::bonding_duration`] eras have passed, the delegator
-//! can call [`Call::withdraw_unbonded_other`] to withdraw all their funds.
+//! can call [`Call::withdraw_unbonded`] to withdraw all their funds.
 //!
 //! For design docs see the [bonded pool](#bonded-pool) and [unbonding sub
 //! pools](#unbonding-sub-pools) sections.
@@ -84,7 +84,7 @@
 //! * Open: Anyone can join the pool and no delegators can be permissionlessly removed.
 //! * Blocked: No delegators can join and some admin roles can kick delegators.
 //! * Destroying: No delegators can join and all delegators can be permissionlessly removed with
-//!   [`Call::unbond_other`] and [`Call::withdraw_unbonded_other`]. Once a pool is in destroying
+//!   [`Call::unbond`] and [`Call::withdraw_unbonded`]. Once a pool is in destroying
 //!   state, it cannot be reverted to another state.
 //!
 //! A pool has 3 administrative roles (see [`PoolRoles`]):
@@ -262,8 +262,8 @@
 //!
 //! **Relevant extrinsics:**
 //!
-//! * [`Call::unbond_other`]
-//! * [`Call::withdraw_unbonded_other`]
+//! * [`Call::unbond`]
+//! * [`Call::withdraw_unbonded`]
 //!
 //! ### Slashing
 //!
@@ -615,7 +615,7 @@ impl<T: Config> BondedPool<T> {
 		Ok(())
 	}
 
-	fn ok_to_unbond_other_with(
+	fn ok_to_unbond_with(
 		&self,
 		caller: &T::AccountId,
 		target_account: &T::AccountId,
@@ -648,12 +648,12 @@ impl<T: Config> BondedPool<T> {
 
 	/// # Returns
 	///
-	/// * Ok(true) if [`Call::withdraw_unbonded_other`] can be called and the target account is the
+	/// * Ok(true) if [`Call::withdraw_unbonded`] can be called and the target account is the
 	///   depositor.
-	/// * Ok(false) if [`Call::withdraw_unbonded_other`] can be called and target account is *not*
+	/// * Ok(false) if [`Call::withdraw_unbonded`] can be called and target account is *not*
 	///   the depositor.
-	/// * Err(DispatchError) if [`Call::withdraw_unbonded_other`] *cannot* be called.
-	fn ok_to_withdraw_unbonded_other_with(
+	/// * Err(DispatchError) if [`Call::withdraw_unbonded`] *cannot* be called.
+	fn ok_to_withdraw_unbonded_with(
 		&self,
 		caller: &T::AccountId,
 		target_account: &T::AccountId,
@@ -1252,9 +1252,9 @@ pub mod pallet {
 		/// [`Call::pool_withdraw_unbonded`] can be called to try and minimize unlocking chunks. If
 		/// there are too many unlocking chunks, the result of this call will likely be the
 		/// `NoMoreChunks` error from the staking system.
-		#[pallet::weight(T::WeightInfo::unbond_other())]
+		#[pallet::weight(T::WeightInfo::unbond())]
 		#[transactional]
-		pub fn unbond_other(
+		pub fn unbond(
 			origin: OriginFor<T>,
 			delegator_account: T::AccountId,
 		) -> DispatchResult {
@@ -1262,7 +1262,7 @@ pub mod pallet {
 			let (mut delegator, mut bonded_pool, mut reward_pool) =
 				Self::get_delegator_with_pools(&delegator_account)?;
 
-			bonded_pool.ok_to_unbond_other_with(&caller, &delegator_account, &delegator)?;
+			bonded_pool.ok_to_unbond_with(&caller, &delegator_account, &delegator)?;
 
 			// Claim the the payout prior to unbonding. Once the user is unbonding their points
 			// no longer exist in the bonded pool and thus they can no longer claim their payouts.
@@ -1324,7 +1324,7 @@ pub mod pallet {
 
 		/// Call `withdraw_unbonded` for the pools account. This call can be made by any account.
 		///
-		/// This is useful if their are too many unlocking chunks to call `unbond_other`, and some
+		/// This is useful if their are too many unlocking chunks to call `unbond`, and some
 		/// can be cleared by withdrawing. In the case there are too many unlocking chunks, the user
 		/// would probably see an error like `NoMoreChunks` emitted from the staking system when
 		/// they attempt to unbond.
@@ -1338,7 +1338,7 @@ pub mod pallet {
 			let _ = ensure_signed(origin)?;
 			let pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
 			// For now we only allow a pool to withdraw unbonded if its not destroying. If the pool
-			// is destroying then `withdraw_unbonded_other` can be used.
+			// is destroying then `withdraw_unbonded` can be used.
 			ensure!(pool.state != PoolState::Destroying, Error::<T>::NotDestroying);
 			T::StakingInterface::withdraw_unbonded(pool.bonded_account(), num_slashing_spans)?;
 			Ok(())
@@ -1361,10 +1361,10 @@ pub mod pallet {
 		///
 		/// If the target is the depositor, the pool will be destroyed.
 		#[pallet::weight(
-			T::WeightInfo::withdraw_unbonded_other_kill(*num_slashing_spans)
+			T::WeightInfo::withdraw_unbonded_kill(*num_slashing_spans)
 		)]
 		#[transactional]
-		pub fn withdraw_unbonded_other(
+		pub fn withdraw_unbonded(
 			origin: OriginFor<T>,
 			delegator_account: T::AccountId,
 			num_slashing_spans: u32,
@@ -1380,7 +1380,7 @@ pub mod pallet {
 				.defensive_ok_or_else(|| Error::<T>::SubPoolsNotFound)?;
 			let bonded_pool = BondedPool::<T>::get(delegator.pool_id)
 				.defensive_ok_or_else(|| Error::<T>::PoolNotFound)?;
-			let should_remove_pool = bonded_pool.ok_to_withdraw_unbonded_other_with(
+			let should_remove_pool = bonded_pool.ok_to_withdraw_unbonded_with(
 				&caller,
 				&delegator_account,
 				&delegator,
@@ -1458,7 +1458,7 @@ pub mod pallet {
 			} else {
 				bonded_pool.dec_delegators().put();
 				SubPoolsStorage::<T>::insert(&delegator.pool_id, sub_pools);
-				Some(T::WeightInfo::withdraw_unbonded_other_update(num_slashing_spans))
+				Some(T::WeightInfo::withdraw_unbonded_update(num_slashing_spans))
 			};
 			Delegators::<T>::remove(&delegator_account);
 
@@ -1573,8 +1573,8 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::weight(T::WeightInfo::set_state_other())]
-		pub fn set_state_other(
+		#[pallet::weight(T::WeightInfo::set_state())]
+		pub fn set_state(
 			origin: OriginFor<T>,
 			pool_id: PoolId,
 			state: PoolState,
