@@ -71,5 +71,5 @@ where
 /// Uses a random seed if none is provided.
 pub fn new_rng(seed: Option<u64>) -> (impl rand::Rng, u64) {
 	let seed = seed.unwrap_or(rand::thread_rng().gen::<u64>());
-	(StdRng::seed_from_u64(seed), seed)
+	(rand_pcg::Pcg64::seed_from_u64(seed), seed)
 }
