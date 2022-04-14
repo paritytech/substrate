@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use super::*;
 use crate::{self as pools};
 use frame_support::{assert_ok, parameter_types, PalletId};
