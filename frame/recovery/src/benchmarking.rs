@@ -71,24 +71,14 @@ fn add_caller_and_generate_friends<T: Config>(
 	num: u32,
 ) -> Vec<<T as frame_system::Config>::AccountId> {
 	// Create friends
-	let mut friends = vec![];
+	let mut friends = generate_friends::<T>(num - 1);
 
-	for i in 0..num - 1 {
-		friends.push(account("friend", i, SEED));
-	}
+	T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 
 	friends.push(caller);
 
 	// Sort
 	friends.sort();
-
-	for friend in 0..friends.len() {
-		// Top up accounts of friends
-		T::Currency::make_free_balance_be(
-			&friends.get(friend).unwrap(),
-			BalanceOf::<T>::max_value(),
-		);
-	}
 
 	friends
 }
@@ -217,7 +207,7 @@ benchmarks! {
 		let recovery_status = ActiveRecovery {
 			created: block_number::<T>(),
 			deposit: total_deposit,
-			friends: vec![].try_into().unwrap(),
+			friends: generate_friends::<T>(n - 1).try_into().unwrap(),
 		};
 
 		// Create the active recovery storage item
