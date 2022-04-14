@@ -731,7 +731,6 @@ impl<T: Config> BondedPool<T> {
 			// destroying it cannot switch states, so by being in destroying we are guaranteed no
 			// other delegators can possibly join.
 			(_, true) => {
-				// TODO: a secondary invariant here is that no delegator can have 0 points.
 				ensure!(
 					target_delegator.active_points() == self.points,
 					Error::<T>::NotOnlyDelegator
@@ -1593,7 +1592,7 @@ pub mod pallet {
 				// we certainly don't need to delete any pools, because no one is being removed.
 				SubPoolsStorage::<T>::insert(&delegator.pool_id, sub_pools);
 				Delegators::<T>::insert(&delegator_account, delegator);
-     Some(T::WeightInfo::withdraw_unbonded_other_update(num_slashing_spans))
+				Some(T::WeightInfo::withdraw_unbonded_other_update(num_slashing_spans))
 			};
 
 			Ok(post_info_weight.into())
@@ -2060,6 +2059,7 @@ impl<T: Config> Pallet<T> {
 		let mut all_delegators = 0u32;
 		Delegators::<T>::iter().for_each(|(_, d)| {
 			assert!(BondedPools::<T>::contains_key(d.pool_id));
+			assert!(!d.points.is_zero(), "no delegator should have zero points");
 			*pools_delegators.entry(d.pool_id).or_default() += 1;
 			all_delegators += 1;
 		});
