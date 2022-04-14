@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) 2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,9 +15,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Simple ECDSA secp256k1 API. This is an extension trait for `sp_core::ecdsa::Public` to be used
-//! in cases where the performance penalty of doing in-runtime crypto isn't severe. In case this
-//! becomes a performance bottleneck a new host function should be considered.
+//! Simple ECDSA secp256k1 API. 
+//!
+//! Provides an extension trait for [`sp_core::ecdsa::Public`] to do certain operations. 
+
 use sp_core::{crypto::ByteArray, ecdsa::Public};
 
 /// Extension trait for [`Public`] to be used from inside the runtime.
@@ -26,24 +27,22 @@ use sp_core::{crypto::ByteArray, ecdsa::Public};
 ///
 /// This is needed because host functions cannot be called from within
 /// `sp_core` due to cyclic dependencies  on `sp_io`.
-pub trait RuntimeECDSA {
+pub trait ECDSAExt {
 	/// Returns Ethereum address calculated from this ECDSA public key.
 	fn to_eth_address(&self) -> Result<[u8; 20], ()>;
 }
 
-impl RuntimeECDSA for Public {
+impl ECDSAExt for Public {
 	fn to_eth_address(&self) -> Result<[u8; 20], ()> {
 		use k256::{elliptic_curve::sec1::ToEncodedPoint, PublicKey};
 
 		PublicKey::from_sec1_bytes(self.as_slice())
-			.map(|pub_key| {
+			.and_then(|pub_key| {
 				// uncompress the key
 				let uncompressed = pub_key.to_encoded_point(false);
 				// convert to ETH address
-				let res: [u8; 20] = sp_io::hashing::keccak_256(&uncompressed.as_bytes()[1..])[12..]
-					.try_into()
-					.unwrap();
-				res
+				[u8; 20]::try_from(sp_io::hashing::keccak_256(&uncompressed.as_bytes()[1..])[12..])
+					.map_err(drop)
 			})
 			.map_err(|_| ())
 	}
