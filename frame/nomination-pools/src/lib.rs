@@ -1355,7 +1355,7 @@ pub mod pallet {
 		/// Under certain conditions, this call can be dispatched permissionlessly (i.e. by any
 		/// account).
 		///
-		/// ## Conditions for a permissionless dispatch.
+		/// # Conditions for a permissionless dispatch.
 		///
 		/// * The pool is blocked and the caller is either the root or state-toggler. This is
 		///   refereed to as a kick.
