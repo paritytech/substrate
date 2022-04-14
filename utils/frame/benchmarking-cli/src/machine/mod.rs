@@ -61,7 +61,7 @@ impl MachineCmd {
 		let read = benchmark_disk_random_writes(dir)?;
 		let verify_limit =
 			ExecutionLimit::MaxDuration(Duration::from_secs_f32(self.verify_duration));
-		let verify = benchmark_sr25519_verify(verify_limit)? * 1024.0;
+		let verify = benchmark_sr25519_verify(verify_limit) * 1024.0;
 
 		// Use a table for nicer console output.
 		let table = table!(
