@@ -1465,7 +1465,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Withdraw unbonded funds who's unbonding period has passed for the `target` delegator. If
+		/// Withdraw unbonded funds from `delegator_account`. If
 		/// no bonded funds can be unbonded, an error is returned.
 		///
 		/// Under certain conditions, this call can be dispatched permissionlessly (i.e. by any
