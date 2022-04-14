@@ -1057,6 +1057,9 @@ pub mod pallet {
 	pub type MinJoinBond<T: Config> = StorageValue<_, BalanceOf<T>, ValueQuery>;
 
 	/// Minimum bond required to create a pool.
+	///
+	/// This is the amount that the depositor must put as their initial stake in the pool, as an
+	/// indication of "skin in the game".
 	#[pallet::storage]
 	pub type MinCreateBond<T: Config> = StorageValue<_, BalanceOf<T>, ValueQuery>;
 

@@ -1791,7 +1791,7 @@ mod unbond {
 	}
 
 	#[test]
-	fn partial_unbond_mac_chunks() {
+	fn partial_unbond_max_chunks() {
 		ExtBuilder::default().ed(1).build_and_execute(|| {
 			// so the depositor can leave, just keeps the test simpler.
 			unsafe_set_state(1, PoolState::Destroying).unwrap();
