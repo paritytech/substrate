@@ -38,7 +38,7 @@ use libp2p::{
 	},
 	NetworkBehaviour,
 };
-use log::debug;
+use log::{debug, error};
 use prost::Message;
 use sc_consensus::import_queue::{IncomingBlock, Origin};
 use sc_peerset::PeersetHandle;
@@ -540,8 +540,8 @@ impl<B: BlockT> NetworkBehaviourEventProcess<DiscoveryOut> for Behaviour<B> {
 	}
 }
 
-impl<B: BlockT> NetworkBehaviourEventProcess<mixnet::NetworkEvent> for Behaviour<B> {
-	fn inject_event(&mut self, event: mixnet::NetworkEvent) {
+impl<B: BlockT> NetworkBehaviourEventProcess<mixnet::NetworkEvent<crate::Event>> for Behaviour<B> {
+	fn inject_event(&mut self, event: mixnet::NetworkEvent<crate::Event>) {
 		match event {
 			mixnet::NetworkEvent::Message(message) => {
 				self.events
@@ -554,6 +554,52 @@ impl<B: BlockT> NetworkBehaviourEventProcess<mixnet::NetworkEvent> for Behaviour
 			mixnet::NetworkEvent::Disconnected(peer_id) => {
 				// TODO forward to topology
 				debug!(target: "mixnet", "Peer removed from mixnet {:?}", peer_id);
+			},
+			mixnet::NetworkEvent::Command(command) => {
+				match &command {
+					e @ crate::Event::NotificationStreamOpened {
+						remote: peer,
+						role,
+						protocol,
+						..
+					} => {
+						// TODO
+						error!(target: "mixnet", "Con event {:?}", e);
+						/*
+										 *
+										let role = ObservedRole::from(role);
+										let peer_set = match PeerSet::try_from_protocol_name(&protocol) {
+											None => continue,
+											Some(peer_set) => peer_set,
+										};
+
+							pub fn try_from_protocol_name(name: &Cow<'static, str>) -> Option<PeerSet> {
+								match name {
+									n if n == &PeerSet::Validation.into_protocol_name() => Some(PeerSet::Validation),
+									n if n == &PeerSet::Collation.into_protocol_name() => Some(PeerSet::Collation),
+									_ => None,
+								}
+							}
+
+									PeerSet::Validation => "/polkadot/validation/1",
+									PeerSet::Collation => "/polkadot/collation/1",
+						in substrate: only got
+
+						2022-04-13 18:17:24.995 ERROR tokio-runtime-worker mixnet: Con event NotificationStreamOpened { remote: PeerId("12D3KooWHmTccx3iQVudoetE7K4ANiproMfppKrXgYd2Gfd1UcTQ"), protocol: "/sup/transactions/1", negotiated_fallback: None, role: Authority }
+						2022-04-13 18:17:25.004 ERROR tokio-runtime-worker mixnet: Con event NotificationStreamOpened { remote: PeerId("12D3KooWHmTccx3iQVudoetE7K4ANiproMfppKrXgYd2Gfd1UcTQ"), protocol: "/0166fca5b2f2d878c2b27d582de59c8a7f663855e1145c0f6e19a0cd1236e795/grandpa/1", negotiated_fallback: None, role: Authority }
+
+						-> can use the grandpa one (with a wildcard on chain).
+										*/
+					},
+					e @ crate::Event::NotificationStreamClosed { .. } => {
+						error!(target: "mixnet", "Con close event {:?}", e);
+
+						// TODO
+					},
+					_ => {
+						error!(target: "mixnet", "Incorrect network event filtering for mixnet.");
+					},
+				}
 			},
 		}
 	}

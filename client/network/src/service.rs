@@ -346,7 +346,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				let mut mixnet = None;
 				if params.network_config.mixnet {
 					let authority_protocol = "authority-discovery"; // TODO check in polkadot.
-					// TODO here we need to support all keypair, so multikey but cannot dh then...
 					if let libp2p::core::identity::Keypair::Ed25519(kp) = &local_identity {
 						let local_public_key = local_identity.public();
 						let mut mixnet_config = mixnet::Config::new_with_ed25519_keypair(
@@ -358,7 +357,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 							crate::mixnet::AuthorityStar::command_stream(&mut event_streams);
 						mixnet = Some(
 							Mixnet::new(mixnet_config)
-								.with_topology(topology)
+								.with_topology(Box::new(topology))
 								.with_commands(commands),
 						);
 					} else {
