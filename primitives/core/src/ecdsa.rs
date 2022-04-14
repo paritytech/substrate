@@ -439,7 +439,7 @@ impl TraitPair for Pair {
 		#[cfg(not(feature = "std"))]
 		let context = Secp256k1::signing_only();
 
-		let public = PublicKey::from_secret_key(context, &secret);
+		let public = PublicKey::from_secret_key(&context, &secret);
 		let public = Public(public.serialize());
 		Ok(Pair { public, secret })
 	}
