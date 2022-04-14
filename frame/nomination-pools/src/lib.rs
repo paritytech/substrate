@@ -1389,7 +1389,9 @@ pub mod pallet {
 			bonded_pool.ok_to_unbond_other_with(&caller, &delegator_account, &delegator)?;
 
 			unbonding_points = unbonding_points.min(delegator.active_points());
-			// This is only for UX.
+			// Claim the the payout prior to unbonding. Once the user is unbonding their points
+			// no longer exist in the bonded pool and thus they can no longer claim their payouts.
+			// It is not strictly necessary to claim the rewards, but we do it here for UX.
 			Self::do_reward_payout(
 				&delegator_account,
 				&mut delegator,
