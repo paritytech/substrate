@@ -1760,8 +1760,13 @@ mod unbond {
 				}
 			);
 
-			// when: unbonding more than our active: capped
-			assert_ok!(Pools::unbond(Origin::signed(10), 10, 5));
+			// when: unbonding more than our active: error
+			assert_noop!(
+				Pools::unbond(Origin::signed(10), 10, 5),
+				Error::<Runtime>::NotEnoughPointsToUnbond
+			);
+			// instead:
+			assert_ok!(Pools::unbond(Origin::signed(10), 10, 3));
 
 			// then
 			assert_eq!(Delegators::<Runtime>::get(10).unwrap().active_points(), 0);

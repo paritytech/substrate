@@ -317,7 +317,7 @@ use frame_support::{
 		Currency, Defensive, DefensiveOption, DefensiveResult, DefensiveSaturating,
 		ExistenceRequirement, Get,
 	},
-	DefaultNoBound, RuntimeDebugNoBound,
+	CloneNoBound, DefaultNoBound, PartialEqNoBound, RuntimeDebugNoBound,
 };
 use scale_info::TypeInfo;
 use sp_core::U256;
@@ -384,14 +384,7 @@ enum AccountType {
 
 /// A delegator in a pool.
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebugNoBound)]
-#[cfg_attr(
-	feature = "std",
-	derive(
-		frame_support::CloneNoBound,
-		frame_support::PartialEqNoBound,
-		frame_support::DefaultNoBound
-	)
-)]
+#[cfg_attr(feature = "std", derive(CloneNoBound, PartialEqNoBound, DefaultNoBound))]
 #[codec(mel_bound(T: Config))]
 #[scale_info(skip_type_params(T))]
 pub struct Delegator<T: Config> {
@@ -768,24 +761,21 @@ impl<T: Config> BondedPool<T> {
 
 	/// # Returns
 	///
-	/// * Ok(true) if [`Call::withdraw_unbonded`] can be called and the target account is the
-	///   depositor.
-	/// * Ok(false) if [`Call::withdraw_unbonded`] can be called and target account is *not* the
-	///   depositor.
-	/// * Err(DispatchError) if [`Call::withdraw_unbonded`] *cannot* be called.
+	/// * Ok(()) if [`Call::withdraw_unbonded`] can be called, `Err(DispatchError)` otherwise.
 	fn ok_to_withdraw_unbonded_with(
 		&self,
 		caller: &T::AccountId,
 		target_account: &T::AccountId,
 		target_delegator: &Delegator<T>,
 		sub_pools: &SubPools<T>,
-	) -> Result<bool, DispatchError> {
+	) -> Result<(), DispatchError> {
 		if *target_account == self.roles.depositor {
 			ensure!(
 				sub_pools.sum_unbonding_points() == target_delegator.unbonding_points(),
 				Error::<T>::NotOnlyDelegator
 			);
-			Ok(true)
+			debug_assert_eq!(self.delegator_counter, 1, "only delegator must exist at this point");
+			Ok(())
 		} else {
 			// This isn't a depositor
 			let is_permissioned = caller == target_account;
@@ -793,7 +783,7 @@ impl<T: Config> BondedPool<T> {
 				is_permissioned || self.can_kick(caller) || self.is_destroying(),
 				Error::<T>::NotKickerOrDestroying
 			);
-			Ok(false)
+			Ok(())
 		}
 	}
 
@@ -1411,12 +1401,11 @@ pub mod pallet {
 		pub fn unbond(
 			origin: OriginFor<T>,
 			delegator_account: T::AccountId,
-			#[pallet::compact] mut unbonding_points: BalanceOf<T>,
+			#[pallet::compact] unbonding_points: BalanceOf<T>,
 		) -> DispatchResult {
 			let caller = ensure_signed(origin)?;
 			let (mut delegator, mut bonded_pool, mut reward_pool) =
 				Self::get_delegator_with_pools(&delegator_account)?;
-			unbonding_points = unbonding_points.min(delegator.active_points());
 
 			bonded_pool.ok_to_unbond_with(
 				&caller,
@@ -1503,8 +1492,8 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Withdraw unbonded funds from `delegator_account`. If
-		/// no bonded funds can be unbonded, an error is returned.
+		/// Withdraw unbonded funds from `delegator_account`. If no bonded funds can be unbonded, an
+		/// error is returned.
 		///
 		/// Under certain conditions, this call can be dispatched permissionlessly (i.e. by any
 		/// account).
@@ -1541,7 +1530,7 @@ pub mod pallet {
 			let mut sub_pools = SubPoolsStorage::<T>::get(delegator.pool_id)
 				.defensive_ok_or_else(|| Error::<T>::SubPoolsNotFound)?;
 
-			let should_remove_pool = bonded_pool.ok_to_withdraw_unbonded_with(
+			bonded_pool.ok_to_withdraw_unbonded_with(
 				&caller,
 				&delegator_account,
 				&delegator,
@@ -1600,31 +1589,9 @@ pub mod pallet {
 			let post_info_weight = if delegator.active_points().is_zero() {
 				// delegator being reaped.
 				Delegators::<T>::remove(&delegator_account);
-				if should_remove_pool {
-					let reward_account = bonded_pool.reward_account();
-					ReversePoolIdLookup::<T>::remove(bonded_pool.bonded_account());
-					RewardPools::<T>::remove(delegator.pool_id);
-					SubPoolsStorage::<T>::remove(delegator.pool_id);
-					// Kill accounts from storage by making their balance go below ED. We assume
-					// that the accounts have no references that would prevent destruction once we
-					// get to this point.
-					debug_assert_eq!(
-						T::StakingInterface::total_stake(&bonded_pool.bonded_account())
-							.unwrap_or_default(),
-						Zero::zero()
-					);
-					let reward_pool_remaining = T::Currency::free_balance(&reward_account);
-					// This shouldn't fail, but if it does we don't really care
-					let _ = T::Currency::transfer(
-						&reward_account,
-						&delegator_account,
-						reward_pool_remaining,
-						ExistenceRequirement::AllowDeath,
-					);
-					T::Currency::make_free_balance_be(&reward_account, Zero::zero());
-					T::Currency::make_free_balance_be(&bonded_pool.bonded_account(), Zero::zero());
-					Self::deposit_event(Event::<T>::Destroyed { pool_id: delegator.pool_id });
-					bonded_pool.remove();
+
+				if delegator_account == bonded_pool.roles.depositor {
+					Pallet::<T>::dissolve_pool(bonded_pool);
 					None
 				} else {
 					bonded_pool.dec_delegators().put();
@@ -1856,6 +1823,38 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
+	/// Remove everything related to the given bonded pool.
+	///
+	/// All sub-pools are also deleted. All accounts are dusted and the leftover of the reward
+	/// account is returned to the depositor.
+	pub fn dissolve_pool(bonded_pool: BondedPool<T>) {
+		// .. and the pool being destroyed now.
+		let reward_account = bonded_pool.reward_account();
+		let bonded_account = bonded_pool.bonded_account();
+		ReversePoolIdLookup::<T>::remove(&bonded_account);
+		RewardPools::<T>::remove(bonded_pool.id);
+		SubPoolsStorage::<T>::remove(bonded_pool.id);
+		// Kill accounts from storage by making their balance go below ED. We assume
+		// that the accounts have no references that would prevent destruction once we
+		// get to this point.
+		debug_assert_eq!(
+			T::StakingInterface::total_stake(&bonded_account).unwrap_or_default(),
+			Zero::zero()
+		);
+		let reward_pool_remaining = T::Currency::free_balance(&reward_account);
+		// This shouldn't fail, but if it does we don't really care
+		let _ = T::Currency::transfer(
+			&reward_account,
+			&bonded_pool.roles.depositor,
+			reward_pool_remaining,
+			ExistenceRequirement::AllowDeath,
+		);
+		T::Currency::make_free_balance_be(&reward_account, Zero::zero());
+		T::Currency::make_free_balance_be(&bonded_pool.bonded_account(), Zero::zero());
+		Self::deposit_event(Event::<T>::Destroyed { pool_id: bonded_pool.id });
+		bonded_pool.remove();
+	}
+
 	/// Create the main, bonded account of a pool with the given id.
 	pub fn create_bonded_account(id: PoolId) -> T::AccountId {
 		T::PalletId::get().into_sub_account((AccountType::Bonded, id))
@@ -2011,7 +2010,7 @@ impl<T: Config> Pallet<T> {
 	/// If the delegator has some rewards, transfer a payout from the reward pool to the delegator.
 	// Emits events and potentially modifies pool state if any arithmetic saturates, but does
 	// not persist any of the mutable inputs to storage.
-	pub fn do_reward_payout(
+	fn do_reward_payout(
 		delegator_account: &T::AccountId,
 		delegator: &mut Delegator<T>,
 		bonded_pool: &mut BondedPool<T>,
