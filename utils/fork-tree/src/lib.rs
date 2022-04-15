@@ -143,8 +143,8 @@ where
 		}
 
 		let mut children = &mut self.roots;
-		let mut i = 0;
 		let mut len = children.len();
+		let mut i = 0;
 		while i < len {
 			let child = &children[i];
 			if child.hash == hash {
@@ -154,9 +154,9 @@ where
 				children = &mut children[i].children;
 				len = children.len();
 				i = 0;
-				continue
+			} else {
+				i += 1;
 			}
-			i += 1;
 		}
 
 		let is_first = children.is_empty();
@@ -166,6 +166,7 @@ where
 		let is_root = children.as_ptr() == self.roots.as_ptr();
 
 		if is_first {
+			// Rebalance is required only if we've extended the branch depth.
 			self.rebalance();
 		}
 
