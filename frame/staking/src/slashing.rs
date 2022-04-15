@@ -611,6 +611,7 @@ pub fn do_slash<T: Config>(
 	};
 
 	let value = ledger.slash(value, T::Currency::minimum_balance(), slash_era);
+
 	if !value.is_zero() {
 		// TODO: if this happens the UnbondPools that did not get slashed could think
 		// there are more funds unbonding then there really is, which could lead to attempts

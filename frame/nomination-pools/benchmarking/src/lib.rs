@@ -282,7 +282,7 @@ frame_benchmarking::benchmarks! {
 		);
 	}
 
-	unbond_other {
+	unbond {
 		// The weight the nominator will start at. The value used here is expected to be
 		// significantly higher than the first position in a list (e.g. the first bag threshold).
 		let origin_weight = BalanceOf::<T>::try_from(952_994_955_240_703u128)
@@ -329,7 +329,7 @@ frame_benchmarking::benchmarks! {
 		assert_eq!(CurrencyOf::<T>::free_balance(&joiner), min_join_bond);
 
 		// Unbond the new delegator
-		Pools::<T>::unbond_other(Origin::Signed(joiner.clone()).into(), joiner.clone()).unwrap();
+		Pools::<T>::unbond(Origin::Signed(joiner.clone()).into(), joiner.clone()).unwrap();
 
 		// Sanity check that unbond worked
 		assert_eq!(
@@ -351,7 +351,7 @@ frame_benchmarking::benchmarks! {
 		assert_eq!(pallet_staking::Ledger::<T>::get(pool_account).unwrap().unlocking.len(), 0);
 	}
 
-	withdraw_unbonded_other_update {
+	withdraw_unbonded_update {
 		let s in 0 .. MAX_SPANS;
 
 		let min_create_bond = MinCreateBond::<T>::get()
@@ -374,7 +374,7 @@ frame_benchmarking::benchmarks! {
 
 		// Unbond the new delegator
 		pallet_staking::CurrentEra::<T>::put(0);
-		Pools::<T>::unbond_other(Origin::Signed(joiner.clone()).into(), joiner.clone()).unwrap();
+		Pools::<T>::unbond(Origin::Signed(joiner.clone()).into(), joiner.clone()).unwrap();
 
 		// Sanity check that unbond worked
 		assert_eq!(
@@ -388,7 +388,7 @@ frame_benchmarking::benchmarks! {
 
 		pallet_staking::benchmarking::add_slashing_spans::<T>(&pool_account, s);
 		whitelist_account!(joiner);
-	}: withdraw_unbonded_other(Origin::Signed(joiner.clone()), joiner.clone(), s)
+	}: withdraw_unbonded(Origin::Signed(joiner.clone()), joiner.clone(), s)
 	verify {
 		assert_eq!(
 			CurrencyOf::<T>::free_balance(&joiner),
@@ -398,7 +398,7 @@ frame_benchmarking::benchmarks! {
 		assert_eq!(pallet_staking::Ledger::<T>::get(&pool_account).unwrap().unlocking.len(), 0);
 	}
 
-	withdraw_unbonded_other_kill {
+	withdraw_unbonded_kill {
 		let s in 0 .. MAX_SPANS;
 
 		let min_create_bond = MinCreateBond::<T>::get()
@@ -423,7 +423,7 @@ frame_benchmarking::benchmarks! {
 		// up when unbonding.
 		let reward_account = Pools::<T>::create_reward_account(1);
 		assert!(frame_system::Account::<T>::contains_key(&reward_account));
-		Pools::<T>::unbond_other(Origin::Signed(depositor.clone()).into(), depositor.clone()).unwrap();
+		Pools::<T>::unbond(Origin::Signed(depositor.clone()).into(), depositor.clone()).unwrap();
 
 		// Sanity check that unbond worked
 		assert_eq!(
@@ -448,7 +448,7 @@ frame_benchmarking::benchmarks! {
 		assert!(frame_system::Account::<T>::contains_key(&reward_account));
 
 		whitelist_account!(depositor);
-	}: withdraw_unbonded_other(Origin::Signed(depositor.clone()), depositor.clone(), s)
+	}: withdraw_unbonded(Origin::Signed(depositor.clone()), depositor.clone(), s)
 	verify {
 		// Pool removal worked
 		assert!(!pallet_staking::Ledger::<T>::contains_key(&pool_account));
@@ -553,7 +553,7 @@ frame_benchmarking::benchmarks! {
 		);
 	}
 
-	set_state_other {
+	set_state {
 		// Create a pool
 		let min_create_bond = MinCreateBond::<T>::get()
 			.max(T::StakingInterface::minimum_bond())

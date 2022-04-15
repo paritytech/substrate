@@ -196,7 +196,10 @@ pub trait SubstrateCli: Sized {
 
 	/// Create a runner for the command provided in argument. This will create a Configuration and
 	/// a tokio runtime
-	fn create_runner<T: CliConfiguration>(&self, command: &T) -> error::Result<Runner<Self>> {
+	fn create_runner<T: CliConfiguration<DVC>, DVC: DefaultConfigurationValues>(
+		&self,
+		command: &T,
+	) -> error::Result<Runner<Self>> {
 		let tokio_runtime = build_runtime()?;
 		let config = command.create_configuration(self, tokio_runtime.handle().clone())?;
 

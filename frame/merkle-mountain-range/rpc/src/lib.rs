@@ -26,13 +26,13 @@ use jsonrpc_core::{Error, ErrorCode, Result};
 use jsonrpc_derive::rpc;
 use serde::{Deserialize, Serialize};
 
-use pallet_mmr_primitives::{Error as MmrError, Proof};
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
 use sp_core::Bytes;
+use sp_mmr_primitives::{Error as MmrError, LeafIndex, Proof};
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 
-pub use pallet_mmr_primitives::{LeafIndex, MmrApi as MmrRuntimeApi};
+pub use sp_mmr_primitives::MmrApi as MmrRuntimeApi;
 
 /// Retrieved MMR leaf and its proof.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -42,7 +42,7 @@ pub struct LeafProof<BlockHash> {
 	pub block_hash: BlockHash,
 	/// SCALE-encoded leaf data.
 	pub leaf: Bytes,
-	/// SCALE-encoded proof data. See [pallet_mmr_primitives::Proof].
+	/// SCALE-encoded proof data. See [sp_mmr_primitives::Proof].
 	pub proof: Bytes,
 }
 

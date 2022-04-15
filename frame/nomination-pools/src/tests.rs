@@ -816,7 +816,7 @@ mod claim_payout {
 	fn reward_payout_errors_if_a_delegator_is_fully_unbonding() {
 		ExtBuilder::default().add_delegators(vec![(11, 11)]).build_and_execute(|| {
 			// fully unbond the delegator.
-			assert_ok!(fully_unbond_other(Origin::signed(11), 11));
+			assert_ok!(fully_unbond(Origin::signed(11), 11));
 
 			let mut bonded_pool = BondedPool::<Runtime>::get(1).unwrap();
 			let mut reward_pool = RewardPools::<Runtime>::get(1).unwrap();
@@ -1369,10 +1369,10 @@ mod unbond {
 	use super::*;
 
 	#[test]
-	fn unbond_other_of_1_works() {
+	fn unbond_of_1_works() {
 		ExtBuilder::default().build_and_execute(|| {
 			unsafe_set_state(1, PoolState::Destroying).unwrap();
-			assert_ok!(fully_unbond_other(Origin::signed(10), 10));
+			assert_ok!(fully_unbond(Origin::signed(10), 10));
 
 			assert_eq!(
 				SubPoolsStorage::<Runtime>::get(1).unwrap().with_era,
@@ -1397,7 +1397,7 @@ mod unbond {
 	}
 
 	#[test]
-	fn unbond_other_of_3_works() {
+	fn unbond_of_3_works() {
 		ExtBuilder::default()
 			.add_delegators(vec![(40, 40), (550, 550)])
 			.build_and_execute(|| {
@@ -1408,7 +1408,7 @@ mod unbond {
 				Balances::make_free_balance_be(&default_reward_account(), ed + 600);
 
 				// When
-				assert_ok!(fully_unbond_other(Origin::signed(40), 40));
+				assert_ok!(fully_unbond(Origin::signed(40), 40));
 
 				// Then
 				assert_eq!(
@@ -1437,7 +1437,7 @@ mod unbond {
 
 				// When
 				unsafe_set_state(1, PoolState::Destroying).unwrap();
-				assert_ok!(fully_unbond_other(Origin::signed(550), 550));
+				assert_ok!(fully_unbond(Origin::signed(550), 550));
 
 				// Then
 				assert_eq!(
@@ -1464,7 +1464,7 @@ mod unbond {
 				assert_eq!(Balances::free_balance(&550), 550 + 550);
 
 				// When
-				assert_ok!(fully_unbond_other(Origin::signed(10), 10));
+				assert_ok!(fully_unbond(Origin::signed(10), 10));
 
 				// Then
 				assert_eq!(
@@ -1493,7 +1493,7 @@ mod unbond {
 	}
 
 	#[test]
-	fn unbond_other_merges_older_pools() {
+	fn unbond_merges_older_pools() {
 		ExtBuilder::default().with_check(1).build_and_execute(|| {
 			// Given
 			assert_eq!(StakingMock::bonding_duration(), 3);
@@ -1514,7 +1514,7 @@ mod unbond {
 			let current_era = 1 + TotalUnbondingPools::<Runtime>::get();
 			CurrentEra::set(current_era);
 
-			assert_ok!(fully_unbond_other(Origin::signed(10), 10));
+			assert_ok!(fully_unbond(Origin::signed(10), 10));
 
 			// Then
 			assert_eq!(
@@ -1531,7 +1531,7 @@ mod unbond {
 	}
 
 	#[test]
-	fn unbond_other_kick_works() {
+	fn unbond_kick_works() {
 		// Kick: the pool is blocked and the caller is either the root or state-toggler.
 		ExtBuilder::default()
 			.add_delegators(vec![(100, 100), (200, 200)])
@@ -1545,15 +1545,15 @@ mod unbond {
 
 				// When the nominator trys to kick, then its a noop
 				assert_noop!(
-					fully_unbond_other(Origin::signed(901), 100),
+					fully_unbond(Origin::signed(901), 100),
 					Error::<Runtime>::NotKickerOrDestroying
 				);
 
 				// When the root kicks then its ok
-				assert_ok!(fully_unbond_other(Origin::signed(900), 100));
+				assert_ok!(fully_unbond(Origin::signed(900), 100));
 
 				// When the state toggler kicks then its ok
-				assert_ok!(fully_unbond_other(Origin::signed(902), 200));
+				assert_ok!(fully_unbond(Origin::signed(902), 200));
 
 				assert_eq!(
 					BondedPool::<Runtime>::get(1).unwrap(),
@@ -1586,7 +1586,7 @@ mod unbond {
 	}
 
 	#[test]
-	fn unbond_other_with_non_admins_works() {
+	fn unbond_with_non_admins_works() {
 		// Scenarios where non-admin accounts can unbond others
 		ExtBuilder::default().add_delegators(vec![(100, 100)]).build_and_execute(|| {
 			// Given the pool is blocked
@@ -1594,7 +1594,7 @@ mod unbond {
 
 			// A permissionless unbond attempt errors
 			assert_noop!(
-				fully_unbond_other(Origin::signed(420), 100),
+				fully_unbond(Origin::signed(420), 100),
 				Error::<Runtime>::NotKickerOrDestroying
 			);
 
@@ -1602,28 +1602,22 @@ mod unbond {
 			unsafe_set_state(1, PoolState::Destroying).unwrap();
 
 			// The depositor cannot be unbonded until they are the last delegator
-			assert_noop!(
-				fully_unbond_other(Origin::signed(420), 10),
-				Error::<Runtime>::NotOnlyDelegator
-			);
+			assert_noop!(fully_unbond(Origin::signed(420), 10), Error::<Runtime>::NotOnlyDelegator);
 
 			// Any account can unbond a delegator that is not the depositor
-			assert_ok!(fully_unbond_other(Origin::signed(420), 100));
+			assert_ok!(fully_unbond(Origin::signed(420), 100));
 
 			// Given the pool is blocked
 			unsafe_set_state(1, PoolState::Blocked).unwrap();
 
 			// The depositor cannot be unbonded
-			assert_noop!(
-				fully_unbond_other(Origin::signed(420), 10),
-				Error::<Runtime>::NotDestroying
-			);
+			assert_noop!(fully_unbond(Origin::signed(420), 10), Error::<Runtime>::NotDestroying);
 
 			// Given the pools is destroying
 			unsafe_set_state(1, PoolState::Destroying).unwrap();
 
 			// The depositor can be unbonded
-			assert_ok!(fully_unbond_other(Origin::signed(420), 10));
+			assert_ok!(fully_unbond(Origin::signed(420), 10));
 
 			assert_eq!(BondedPools::<Runtime>::get(1).unwrap().points, 0);
 			assert_eq!(
@@ -1648,16 +1642,13 @@ mod unbond {
 	#[should_panic = "Defensive failure has been triggered!"]
 	fn unbond_errors_correctly() {
 		ExtBuilder::default().build_and_execute(|| {
-			assert_noop!(
-				fully_unbond_other(Origin::signed(11), 11),
-				Error::<Runtime>::DelegatorNotFound
-			);
+			assert_noop!(fully_unbond(Origin::signed(11), 11), Error::<Runtime>::DelegatorNotFound);
 
 			// Add the delegator
 			let delegator = Delegator { pool_id: 2, points: 10, ..Default::default() };
 			Delegators::<Runtime>::insert(11, delegator);
 
-			let _ = fully_unbond_other(Origin::signed(11), 11);
+			let _ = fully_unbond(Origin::signed(11), 11);
 		});
 	}
 
@@ -1678,7 +1669,7 @@ mod unbond {
 			}
 			.put();
 
-			let _ = fully_unbond_other(Origin::signed(11), 11);
+			let _ = fully_unbond(Origin::signed(11), 11);
 		});
 	}
 
@@ -1702,7 +1693,7 @@ mod unbond {
 			unsafe_set_state(1, PoolState::Destroying).unwrap();
 
 			// when: casual unbond
-			assert_ok!(Pools::unbond_other(Origin::signed(10), 10, 1));
+			assert_ok!(Pools::unbond(Origin::signed(10), 10, 1));
 
 			// then
 			assert_eq!(Delegators::<Runtime>::get(10).unwrap().active_points(), 9);
@@ -1723,7 +1714,7 @@ mod unbond {
 			);
 
 			// when: casual further unbond, same era.
-			assert_ok!(Pools::unbond_other(Origin::signed(10), 10, 5));
+			assert_ok!(Pools::unbond(Origin::signed(10), 10, 5));
 
 			// then
 			assert_eq!(Delegators::<Runtime>::get(10).unwrap().active_points(), 4);
@@ -1745,7 +1736,7 @@ mod unbond {
 
 			// when: casual further unbond, next era.
 			CurrentEra::set(1);
-			assert_ok!(Pools::unbond_other(Origin::signed(10), 10, 1));
+			assert_ok!(Pools::unbond(Origin::signed(10), 10, 1));
 
 			// then
 			assert_eq!(Delegators::<Runtime>::get(10).unwrap().active_points(), 3);
@@ -1767,7 +1758,7 @@ mod unbond {
 			);
 
 			// when: unbonding more than our active: capped
-			assert_ok!(Pools::unbond_other(Origin::signed(10), 10, 5));
+			assert_ok!(Pools::unbond(Origin::signed(10), 10, 5));
 
 			// then
 			assert_eq!(Delegators::<Runtime>::get(10).unwrap().active_points(), 0);
@@ -1798,9 +1789,9 @@ mod unbond {
 			MaxUnbonding::set(2);
 
 			// given
-			assert_ok!(Pools::unbond_other(Origin::signed(10), 10, 2));
+			assert_ok!(Pools::unbond(Origin::signed(10), 10, 2));
 			CurrentEra::set(1);
-			assert_ok!(Pools::unbond_other(Origin::signed(10), 10, 3));
+			assert_ok!(Pools::unbond(Origin::signed(10), 10, 3));
 			assert_eq!(
 				Delegators::<Runtime>::get(10).unwrap().unbonding_eras,
 				delegator_unbonding_eras!(3 => 2, 4 => 3)
@@ -1809,13 +1800,13 @@ mod unbond {
 			// when
 			CurrentEra::set(2);
 			assert_noop!(
-				Pools::unbond_other(Origin::signed(10), 10, 4),
+				Pools::unbond(Origin::signed(10), 10, 4),
 				Error::<Runtime>::MaxUnbondingLimit
 			);
 
 			// when
 			MaxUnbonding::set(3);
-			assert_ok!(Pools::unbond_other(Origin::signed(10), 10, 1));
+			assert_ok!(Pools::unbond(Origin::signed(10), 10, 1));
 			assert_eq!(
 				Delegators::<Runtime>::get(10).unwrap().unbonding_eras,
 				delegator_unbonding_eras!(3 => 2, 4 => 3, 5 => 1)
@@ -1848,26 +1839,26 @@ mod pool_withdraw_unbonded {
 	}
 }
 
-mod withdraw_unbonded_other {
+mod withdraw_unbonded {
 	use super::*;
 	use frame_support::bounded_btree_map;
 
 	#[test]
-	fn withdraw_unbonded_other_works_against_slashed_no_era_sub_pool() {
+	fn withdraw_unbonded_works_against_slashed_no_era_sub_pool() {
 		ExtBuilder::default()
 			.add_delegators(vec![(40, 40), (550, 550)])
 			.build_and_execute(|| {
 				// Given
 				assert_eq!(StakingMock::bonding_duration(), 3);
-				assert_ok!(fully_unbond_other(Origin::signed(550), 550));
-				assert_ok!(fully_unbond_other(Origin::signed(40), 40));
+				assert_ok!(fully_unbond(Origin::signed(550), 550));
+				assert_ok!(fully_unbond(Origin::signed(40), 40));
 				assert_eq!(Balances::free_balance(&default_bonded_account()), 600);
 
 				let mut current_era = 1;
 				CurrentEra::set(current_era);
 				// In a new era, unbond the depositor
 				unsafe_set_state(1, PoolState::Destroying).unwrap();
-				assert_ok!(fully_unbond_other(Origin::signed(10), 10));
+				assert_ok!(fully_unbond(Origin::signed(10), 10));
 
 				let mut sub_pools = SubPoolsStorage::<Runtime>::get(1).unwrap();
 				let unbond_pool = sub_pools.with_era.get_mut(&(current_era + 3)).unwrap();
@@ -1902,7 +1893,7 @@ mod withdraw_unbonded_other {
 				);
 
 				// When
-				assert_ok!(Pools::withdraw_unbonded_other(Origin::signed(550), 550, 0));
+				assert_ok!(Pools::withdraw_unbonded(Origin::signed(550), 550, 0));
 
 				// Then
 				assert_eq!(
@@ -1914,7 +1905,7 @@ mod withdraw_unbonded_other {
 				assert!(!Delegators::<Runtime>::contains_key(550));
 
 				// When
-				assert_ok!(Pools::withdraw_unbonded_other(Origin::signed(40), 40, 0));
+				assert_ok!(Pools::withdraw_unbonded(Origin::signed(40), 40, 0));
 
 				// Then
 				assert_eq!(
@@ -1926,10 +1917,10 @@ mod withdraw_unbonded_other {
 				assert!(!Delegators::<Runtime>::contains_key(40));
 
 				// When
-				assert_ok!(Pools::withdraw_unbonded_other(Origin::signed(10), 10, 0));
+				assert_ok!(Pools::withdraw_unbonded(Origin::signed(10), 10, 0));
 
 				// Then
-				assert_eq!(Balances::free_balance(&10), 5 + 10);
+				assert_eq!(Balances::free_balance(&10), 10 + 10);
 				assert_eq!(Balances::free_balance(&default_bonded_account()), 0);
 				assert!(!Delegators::<Runtime>::contains_key(10));
 				// Pools are removed from storage because the depositor left
@@ -1942,7 +1933,7 @@ mod withdraw_unbonded_other {
 	// This test also documents the case when the pools free balance goes below ED before all
 	// delegators have unbonded.
 	#[test]
-	fn withdraw_unbonded_other_works_against_slashed_with_era_sub_pools() {
+	fn withdraw_unbonded_works_against_slashed_with_era_sub_pools() {
 		ExtBuilder::default()
 			.add_delegators(vec![(40, 40), (550, 550)])
 			.build_and_execute(|| {
@@ -1951,10 +1942,10 @@ mod withdraw_unbonded_other {
 				Balances::make_free_balance_be(&default_bonded_account(), 100);
 				assert_eq!(StakingMock::total_stake(&default_bonded_account()), Some(100));
 
-				assert_ok!(fully_unbond_other(Origin::signed(40), 40));
-				assert_ok!(fully_unbond_other(Origin::signed(550), 550));
+				assert_ok!(fully_unbond(Origin::signed(40), 40));
+				assert_ok!(fully_unbond(Origin::signed(550), 550));
 				unsafe_set_state(1, PoolState::Destroying).unwrap();
-				assert_ok!(fully_unbond_other(Origin::signed(10), 10));
+				assert_ok!(fully_unbond(Origin::signed(10), 10));
 
 				SubPoolsStorage::<Runtime>::insert(
 					1,
@@ -1966,7 +1957,7 @@ mod withdraw_unbonded_other {
 				CurrentEra::set(StakingMock::bonding_duration());
 
 				// When
-				assert_ok!(Pools::withdraw_unbonded_other(Origin::signed(40), 40, 0));
+				assert_ok!(Pools::withdraw_unbonded(Origin::signed(40), 40, 0));
 
 				// Then
 				assert_eq!(
@@ -1978,7 +1969,7 @@ mod withdraw_unbonded_other {
 				assert!(!Delegators::<Runtime>::contains_key(40));
 
 				// When
-				assert_ok!(Pools::withdraw_unbonded_other(Origin::signed(550), 550, 0));
+				assert_ok!(Pools::withdraw_unbonded(Origin::signed(550), 550, 0));
 
 				// Then
 				assert_eq!(
@@ -1991,10 +1982,10 @@ mod withdraw_unbonded_other {
 				assert!(!Delegators::<Runtime>::contains_key(550));
 
 				// When
-				assert_ok!(Pools::withdraw_unbonded_other(Origin::signed(10), 10, 0));
+				assert_ok!(Pools::withdraw_unbonded(Origin::signed(10), 10, 0));
 
 				// Then
-				assert_eq!(Balances::free_balance(&10), 5 + 0);
+				assert_eq!(Balances::free_balance(&10), 10 + 0);
 				assert_eq!(Balances::free_balance(&default_bonded_account()), 0);
 				assert!(!Delegators::<Runtime>::contains_key(10));
 				// Pools are removed from storage because the depositor left
@@ -2005,14 +1996,14 @@ mod withdraw_unbonded_other {
 	}
 
 	#[test]
-	fn withdraw_unbonded_other_handles_faulty_sub_pool_accounting() {
+	fn withdraw_unbonded_handles_faulty_sub_pool_accounting() {
 		ExtBuilder::default().build_and_execute(|| {
 			// Given
 			assert_eq!(Balances::minimum_balance(), 5);
 			assert_eq!(Balances::free_balance(&10), 5);
 			assert_eq!(Balances::free_balance(&default_bonded_account()), 10);
 			unsafe_set_state(1, PoolState::Destroying).unwrap();
-			assert_ok!(fully_unbond_other(Origin::signed(10), 10));
+			assert_ok!(fully_unbond(Origin::signed(10), 10));
 
 			// Simulate a slash that is not accounted for in the sub pools.
 			Balances::make_free_balance_be(&default_bonded_account(), 5);
@@ -2025,16 +2016,16 @@ mod withdraw_unbonded_other {
 			CurrentEra::set(0 + 3);
 
 			// When
-			assert_ok!(Pools::withdraw_unbonded_other(Origin::signed(10), 10, 0));
+			assert_ok!(Pools::withdraw_unbonded(Origin::signed(10), 10, 0));
 
 			// Then
-			assert_eq!(Balances::free_balance(10), 5 + 5);
+			assert_eq!(Balances::free_balance(10), 10 + 5);
 			assert_eq!(Balances::free_balance(&default_bonded_account()), 0);
 		});
 	}
 
 	#[test]
-	fn withdraw_unbonded_other_errors_correctly() {
+	fn withdraw_unbonded_errors_correctly() {
 		ExtBuilder::default().with_check(0).build_and_execute(|| {
 			// Insert the sub-pool
 			let sub_pools = SubPools {
@@ -2044,7 +2035,7 @@ mod withdraw_unbonded_other {
 			SubPoolsStorage::<Runtime>::insert(1, sub_pools.clone());
 
 			assert_noop!(
-				Pools::withdraw_unbonded_other(Origin::signed(11), 11, 0),
+				Pools::withdraw_unbonded(Origin::signed(11), 11, 0),
 				Error::<Runtime>::DelegatorNotFound
 			);
 
@@ -2057,7 +2048,7 @@ mod withdraw_unbonded_other {
 
 			// We are still in the bonding duration
 			assert_noop!(
-				Pools::withdraw_unbonded_other(Origin::signed(11), 11, 0),
+				Pools::withdraw_unbonded(Origin::signed(11), 11, 0),
 				Error::<Runtime>::CannotWithdrawAny
 			);
 
@@ -2069,13 +2060,13 @@ mod withdraw_unbonded_other {
 	}
 
 	#[test]
-	fn withdraw_unbonded_other_kick() {
+	fn withdraw_unbonded_kick() {
 		ExtBuilder::default()
 			.add_delegators(vec![(100, 100), (200, 200)])
 			.build_and_execute(|| {
 				// Given
-				assert_ok!(fully_unbond_other(Origin::signed(100), 100));
-				assert_ok!(fully_unbond_other(Origin::signed(200), 200));
+				assert_ok!(fully_unbond(Origin::signed(100), 100));
+				assert_ok!(fully_unbond(Origin::signed(200), 200));
 				assert_eq!(
 					BondedPool::<Runtime>::get(1).unwrap(),
 					BondedPool {
@@ -2092,7 +2083,7 @@ mod withdraw_unbonded_other {
 
 				// Cannot kick when pool is open
 				assert_noop!(
-					Pools::withdraw_unbonded_other(Origin::signed(902), 100, 0),
+					Pools::withdraw_unbonded(Origin::signed(902), 100, 0),
 					Error::<Runtime>::NotKickerOrDestroying
 				);
 
@@ -2101,15 +2092,15 @@ mod withdraw_unbonded_other {
 
 				// Cannot kick as a nominator
 				assert_noop!(
-					Pools::withdraw_unbonded_other(Origin::signed(901), 100, 0),
+					Pools::withdraw_unbonded(Origin::signed(901), 100, 0),
 					Error::<Runtime>::NotKickerOrDestroying
 				);
 
 				// Can kick as root
-				assert_ok!(Pools::withdraw_unbonded_other(Origin::signed(900), 100, 0));
+				assert_ok!(Pools::withdraw_unbonded(Origin::signed(900), 100, 0));
 
 				// Can kick as state toggler
-				assert_ok!(Pools::withdraw_unbonded_other(Origin::signed(900), 200, 0));
+				assert_ok!(Pools::withdraw_unbonded(Origin::signed(900), 200, 0));
 
 				assert_eq!(Balances::free_balance(100), 100 + 100);
 				assert_eq!(Balances::free_balance(200), 200 + 200);
@@ -2120,10 +2111,10 @@ mod withdraw_unbonded_other {
 	}
 
 	#[test]
-	fn withdraw_unbonded_other_destroying_permissionless() {
+	fn withdraw_unbonded_destroying_permissionless() {
 		ExtBuilder::default().add_delegators(vec![(100, 100)]).build_and_execute(|| {
 			// Given
-			assert_ok!(fully_unbond_other(Origin::signed(100), 100));
+			assert_ok!(fully_unbond(Origin::signed(100), 100));
 			assert_eq!(
 				BondedPool::<Runtime>::get(1).unwrap(),
 				BondedPool {
@@ -2141,7 +2132,7 @@ mod withdraw_unbonded_other {
 
 			// Cannot permissionlessly withdraw
 			assert_noop!(
-				fully_unbond_other(Origin::signed(420), 100),
+				fully_unbond(Origin::signed(420), 100),
 				Error::<Runtime>::NotKickerOrDestroying
 			);
 
@@ -2149,7 +2140,7 @@ mod withdraw_unbonded_other {
 			unsafe_set_state(1, PoolState::Destroying).unwrap();
 
 			// Can permissionlesly withdraw a delegator that is not the depositor
-			assert_ok!(Pools::withdraw_unbonded_other(Origin::signed(420), 100, 0));
+			assert_ok!(Pools::withdraw_unbonded(Origin::signed(420), 100, 0));
 
 			assert_eq!(SubPoolsStorage::<Runtime>::get(1).unwrap(), Default::default(),);
 			assert_eq!(Balances::free_balance(100), 100 + 100);
@@ -2158,19 +2149,19 @@ mod withdraw_unbonded_other {
 	}
 
 	#[test]
-	fn withdraw_unbonded_other_depositor_with_era_pool() {
+	fn withdraw_unbonded_depositor_with_era_pool() {
 		ExtBuilder::default()
 			.add_delegators(vec![(100, 100), (200, 200)])
 			.build_and_execute(|| {
 				// Given
-				assert_ok!(fully_unbond_other(Origin::signed(100), 100));
+				assert_ok!(fully_unbond(Origin::signed(100), 100));
 
 				let mut current_era = 1;
 				CurrentEra::set(current_era);
 
-				assert_ok!(fully_unbond_other(Origin::signed(200), 200));
+				assert_ok!(fully_unbond(Origin::signed(200), 200));
 				unsafe_set_state(1, PoolState::Destroying).unwrap();
-				assert_ok!(fully_unbond_other(Origin::signed(10), 10));
+				assert_ok!(fully_unbond(Origin::signed(10), 10));
 
 				assert_eq!(
 					SubPoolsStorage::<Runtime>::get(1).unwrap(),
@@ -2189,12 +2180,12 @@ mod withdraw_unbonded_other {
 
 				// Cannot withdraw the depositor if their is a delegator in another `with_era` pool.
 				assert_noop!(
-					Pools::withdraw_unbonded_other(Origin::signed(420), 10, 0),
+					Pools::withdraw_unbonded(Origin::signed(420), 10, 0),
 					Error::<Runtime>::NotOnlyDelegator
 				);
 
 				// Given
-				assert_ok!(Pools::withdraw_unbonded_other(Origin::signed(420), 100, 0));
+				assert_ok!(Pools::withdraw_unbonded(Origin::signed(420), 100, 0));
 				assert_eq!(
 					SubPoolsStorage::<Runtime>::get(1).unwrap(),
 					SubPools {
@@ -2208,12 +2199,12 @@ mod withdraw_unbonded_other {
 
 				// Cannot withdraw the depositor if their is a delegator in another `with_era` pool.
 				assert_noop!(
-					Pools::withdraw_unbonded_other(Origin::signed(420), 10, 0),
+					Pools::withdraw_unbonded(Origin::signed(420), 10, 0),
 					Error::<Runtime>::NotOnlyDelegator
 				);
 
 				// Given
-				assert_ok!(Pools::withdraw_unbonded_other(Origin::signed(420), 200, 0));
+				assert_ok!(Pools::withdraw_unbonded(Origin::signed(420), 200, 0));
 				assert_eq!(
 					SubPoolsStorage::<Runtime>::get(1).unwrap(),
 					SubPools {
@@ -2225,9 +2216,9 @@ mod withdraw_unbonded_other {
 				);
 
 				// The depositor can withdraw
-				assert_ok!(Pools::withdraw_unbonded_other(Origin::signed(420), 10, 0));
+				assert_ok!(Pools::withdraw_unbonded(Origin::signed(420), 10, 0));
 				assert!(!Delegators::<Runtime>::contains_key(10));
-				assert_eq!(Balances::free_balance(10), 10 + 10 - Balances::minimum_balance());
+				assert_eq!(Balances::free_balance(10), 10 + 10);
 				// Pools are removed from storage because the depositor left
 				assert!(!SubPoolsStorage::<Runtime>::contains_key(1));
 				assert!(!RewardPools::<Runtime>::contains_key(1));
@@ -2236,12 +2227,12 @@ mod withdraw_unbonded_other {
 	}
 
 	#[test]
-	fn withdraw_unbonded_other_depositor_no_era_pool() {
+	fn withdraw_unbonded_depositor_no_era_pool() {
 		ExtBuilder::default().add_delegators(vec![(100, 100)]).build_and_execute(|| {
 			// Given
-			assert_ok!(fully_unbond_other(Origin::signed(100), 100));
+			assert_ok!(fully_unbond(Origin::signed(100), 100));
 			unsafe_set_state(1, PoolState::Destroying).unwrap();
-			assert_ok!(fully_unbond_other(Origin::signed(10), 10));
+			assert_ok!(fully_unbond(Origin::signed(10), 10));
 			// Skip ahead to an era where the `with_era` pools can get merged into the `no_era`
 			// pool.
 			let current_era = TotalUnbondingPools::<Runtime>::get();
@@ -2261,12 +2252,12 @@ mod withdraw_unbonded_other {
 
 			// Cannot withdraw depositor with another delegator in the `no_era` pool
 			assert_noop!(
-				Pools::withdraw_unbonded_other(Origin::signed(420), 10, 0),
+				Pools::withdraw_unbonded(Origin::signed(420), 10, 0),
 				Error::<Runtime>::NotOnlyDelegator
 			);
 
 			// Given
-			assert_ok!(Pools::withdraw_unbonded_other(Origin::signed(420), 100, 0));
+			assert_ok!(Pools::withdraw_unbonded(Origin::signed(420), 100, 0));
 			assert_eq!(
 				SubPoolsStorage::<Runtime>::get(1).unwrap(),
 				SubPools {
@@ -2276,9 +2267,9 @@ mod withdraw_unbonded_other {
 			);
 
 			// The depositor can withdraw
-			assert_ok!(Pools::withdraw_unbonded_other(Origin::signed(420), 10, 0));
+			assert_ok!(Pools::withdraw_unbonded(Origin::signed(420), 10, 0));
 			assert!(!Delegators::<Runtime>::contains_key(10));
-			assert_eq!(Balances::free_balance(10), 5 + 10);
+			assert_eq!(Balances::free_balance(10), 10 + 10);
 			// Pools are removed from storage because the depositor left
 			assert!(!SubPoolsStorage::<Runtime>::contains_key(1));
 			assert!(!RewardPools::<Runtime>::contains_key(1));
@@ -2293,9 +2284,9 @@ mod withdraw_unbonded_other {
 			unsafe_set_state(1, PoolState::Destroying).unwrap();
 
 			// given
-			assert_ok!(Pools::unbond_other(Origin::signed(10), 10, 6));
+			assert_ok!(Pools::unbond(Origin::signed(10), 10, 6));
 			CurrentEra::set(1);
-			assert_ok!(Pools::unbond_other(Origin::signed(10), 10, 1));
+			assert_ok!(Pools::unbond(Origin::signed(10), 10, 1));
 			assert_eq!(
 				Delegators::<Runtime>::get(10).unwrap().unbonding_eras,
 				delegator_unbonding_eras!(3 => 6, 4 => 1)
@@ -2327,13 +2318,13 @@ mod withdraw_unbonded_other {
 			// when
 			CurrentEra::set(2);
 			assert_noop!(
-				Pools::withdraw_unbonded_other(Origin::signed(10), 10, 0),
+				Pools::withdraw_unbonded(Origin::signed(10), 10, 0),
 				Error::<Runtime>::CannotWithdrawAny
 			);
 
 			// when
 			CurrentEra::set(3);
-			assert_ok!(Pools::withdraw_unbonded_other(Origin::signed(10), 10, 0));
+			assert_ok!(Pools::withdraw_unbonded(Origin::signed(10), 10, 0));
 
 			// then
 			assert_eq!(
@@ -2356,7 +2347,7 @@ mod withdraw_unbonded_other {
 
 			// when
 			CurrentEra::set(4);
-			assert_ok!(Pools::withdraw_unbonded_other(Origin::signed(10), 10, 0));
+			assert_ok!(Pools::withdraw_unbonded(Origin::signed(10), 10, 0));
 
 			// then
 			assert_eq!(
@@ -2371,7 +2362,7 @@ mod withdraw_unbonded_other {
 
 			// when repeating:
 			assert_noop!(
-				Pools::withdraw_unbonded_other(Origin::signed(10), 10, 0),
+				Pools::withdraw_unbonded(Origin::signed(10), 10, 0),
 				Error::<Runtime>::CannotWithdrawAny
 			);
 		});
@@ -2381,9 +2372,9 @@ mod withdraw_unbonded_other {
 	fn partial_withdraw_unbonded_non_depositor() {
 		ExtBuilder::default().add_delegators(vec![(11, 10)]).build_and_execute(|| {
 			// given
-			assert_ok!(Pools::unbond_other(Origin::signed(11), 11, 6));
+			assert_ok!(Pools::unbond(Origin::signed(11), 11, 6));
 			CurrentEra::set(1);
-			assert_ok!(Pools::unbond_other(Origin::signed(11), 11, 1));
+			assert_ok!(Pools::unbond(Origin::signed(11), 11, 1));
 			assert_eq!(
 				Delegators::<Runtime>::get(11).unwrap().unbonding_eras,
 				delegator_unbonding_eras!(3 => 6, 4 => 1)
@@ -2416,13 +2407,13 @@ mod withdraw_unbonded_other {
 			// when
 			CurrentEra::set(2);
 			assert_noop!(
-				Pools::withdraw_unbonded_other(Origin::signed(11), 11, 0),
+				Pools::withdraw_unbonded(Origin::signed(11), 11, 0),
 				Error::<Runtime>::CannotWithdrawAny
 			);
 
 			// when
 			CurrentEra::set(3);
-			assert_ok!(Pools::withdraw_unbonded_other(Origin::signed(11), 11, 0));
+			assert_ok!(Pools::withdraw_unbonded(Origin::signed(11), 11, 0));
 
 			// then
 			assert_eq!(
@@ -2445,7 +2436,7 @@ mod withdraw_unbonded_other {
 
 			// when
 			CurrentEra::set(4);
-			assert_ok!(Pools::withdraw_unbonded_other(Origin::signed(11), 11, 0));
+			assert_ok!(Pools::withdraw_unbonded(Origin::signed(11), 11, 0));
 
 			// then
 			assert_eq!(
@@ -2460,7 +2451,7 @@ mod withdraw_unbonded_other {
 
 			// when repeating:
 			assert_noop!(
-				Pools::withdraw_unbonded_other(Origin::signed(11), 11, 0),
+				Pools::withdraw_unbonded(Origin::signed(11), 11, 0),
 				Error::<Runtime>::CannotWithdrawAny
 			);
 		});
@@ -2625,40 +2616,40 @@ mod nominate {
 	}
 }
 
-mod set_state_other {
+mod set_state {
 	use super::*;
 
 	#[test]
-	fn set_state_other_works() {
+	fn set_state_works() {
 		ExtBuilder::default().build_and_execute(|| {
 			// Given
 			assert_ok!(BondedPool::<Runtime>::get(1).unwrap().ok_to_be_open(0));
 
 			// Only the root and state toggler can change the state when the pool is ok to be open.
 			assert_noop!(
-				Pools::set_state_other(Origin::signed(10), 1, PoolState::Blocked),
+				Pools::set_state(Origin::signed(10), 1, PoolState::Blocked),
 				Error::<Runtime>::CanNotChangeState
 			);
 			assert_noop!(
-				Pools::set_state_other(Origin::signed(901), 1, PoolState::Blocked),
+				Pools::set_state(Origin::signed(901), 1, PoolState::Blocked),
 				Error::<Runtime>::CanNotChangeState
 			);
 
 			// Root can change state
-			assert_ok!(Pools::set_state_other(Origin::signed(900), 1, PoolState::Blocked));
+			assert_ok!(Pools::set_state(Origin::signed(900), 1, PoolState::Blocked));
 			assert_eq!(BondedPool::<Runtime>::get(1).unwrap().state, PoolState::Blocked);
 
 			// State toggler can change state
-			assert_ok!(Pools::set_state_other(Origin::signed(902), 1, PoolState::Destroying));
+			assert_ok!(Pools::set_state(Origin::signed(902), 1, PoolState::Destroying));
 			assert_eq!(BondedPool::<Runtime>::get(1).unwrap().state, PoolState::Destroying);
 
 			// If the pool is destroying, then no one can set state
 			assert_noop!(
-				Pools::set_state_other(Origin::signed(900), 1, PoolState::Blocked),
+				Pools::set_state(Origin::signed(900), 1, PoolState::Blocked),
 				Error::<Runtime>::CanNotChangeState
 			);
 			assert_noop!(
-				Pools::set_state_other(Origin::signed(902), 1, PoolState::Blocked),
+				Pools::set_state(Origin::signed(902), 1, PoolState::Blocked),
 				Error::<Runtime>::CanNotChangeState
 			);
 
@@ -2670,7 +2661,7 @@ mod set_state_other {
 			bonded_pool.points = 100;
 			bonded_pool.put();
 			// When
-			assert_ok!(Pools::set_state_other(Origin::signed(11), 1, PoolState::Destroying));
+			assert_ok!(Pools::set_state(Origin::signed(11), 1, PoolState::Destroying));
 			// Then
 			assert_eq!(BondedPool::<Runtime>::get(1).unwrap().state, PoolState::Destroying);
 
@@ -2678,7 +2669,7 @@ mod set_state_other {
 			Balances::make_free_balance_be(&default_bonded_account(), Balance::max_value() / 10);
 			unsafe_set_state(1, PoolState::Open).unwrap();
 			// When
-			assert_ok!(Pools::set_state_other(Origin::signed(11), 1, PoolState::Destroying));
+			assert_ok!(Pools::set_state(Origin::signed(11), 1, PoolState::Destroying));
 			// Then
 			assert_eq!(BondedPool::<Runtime>::get(1).unwrap().state, PoolState::Destroying);
 
@@ -2686,7 +2677,7 @@ mod set_state_other {
 			// isn't destroying
 			unsafe_set_state(1, PoolState::Open).unwrap();
 			assert_noop!(
-				Pools::set_state_other(Origin::signed(11), 1, PoolState::Blocked),
+				Pools::set_state(Origin::signed(11), 1, PoolState::Blocked),
 				Error::<Runtime>::CanNotChangeState
 			);
 		});

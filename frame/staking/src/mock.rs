@@ -255,7 +255,7 @@ impl onchain::ExecutionConfig for OnChainSeqPhragmen {
 	type DataProvider = Staking;
 }
 
-struct OnStakerSlashMock<T: Config>(core::marker::PhantomData<T>);
+pub struct OnStakerSlashMock<T: Config>(core::marker::PhantomData<T>);
 impl<T: Config> sp_staking::OnStakerSlash<AccountId, Balance> for OnStakerSlashMock<T> {
 	fn on_slash(
 		_pool_account: &AccountId,
@@ -269,6 +269,7 @@ impl<T: Config> sp_staking::OnStakerSlash<AccountId, Balance> for OnStakerSlashM
 impl crate::pallet::pallet::Config for Test {
 	type MaxNominations = MaxNominations;
 	type Currency = Balances;
+	type CurrencyBalance = <Self as pallet_balances::Config>::Balance;
 	type UnixTime = Timestamp;
 	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
 	type RewardRemainder = RewardRemainderMock;
@@ -289,8 +290,8 @@ impl crate::pallet::pallet::Config for Test {
 	// NOTE: consider a macro and use `UseNominatorsAndValidatorsMap<Self>` as well.
 	type VoterList = BagsList;
 	type MaxUnlockingChunks = ConstU32<32>;
+	type OnStakerSlash = OnStakerSlashMock<Test>;
 	type BenchmarkingConfig = TestBenchmarkingConfig;
-	type OnStakerSlash = ();
 	type WeightInfo = ();
 }
 

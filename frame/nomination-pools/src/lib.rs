@@ -55,11 +55,11 @@
 //!
 //! In order to leave, a delegator must take two steps.
 //!
-//! First, they must call [`Call::unbond_other`]. The unbond other extrinsic will start the
+//! First, they must call [`Call::unbond`]. The unbond other extrinsic will start the
 //! unbonding process by unbonding all of the delegators funds.
 //!
 //! Second, once [`sp_staking::StakingInterface::bonding_duration`] eras have passed, the delegator
-//! can call [`Call::withdraw_unbonded_other`] to withdraw all their funds.
+//! can call [`Call::withdraw_unbonded`] to withdraw all their funds.
 //!
 //! For design docs see the [bonded pool](#bonded-pool) and [unbonding sub
 //! pools](#unbonding-sub-pools) sections.
@@ -84,8 +84,8 @@
 //! * Open: Anyone can join the pool and no delegators can be permissionlessly removed.
 //! * Blocked: No delegators can join and some admin roles can kick delegators.
 //! * Destroying: No delegators can join and all delegators can be permissionlessly removed with
-//!   [`Call::unbond_other`] and [`Call::withdraw_unbonded_other`]. Once a pool is in destroying
-//!   state, it cannot be reverted to another state.
+//!   [`Call::unbond`] and [`Call::withdraw_unbonded`]. Once a pool is in destroying state, it
+//!   cannot be reverted to another state.
 //!
 //! A pool has 3 administrative roles (see [`PoolRoles`]):
 //!
@@ -216,6 +216,11 @@
 //! because it's vote weight will not be counted until the election snapshot in active era + 1.
 //! Related: <https://github.com/paritytech/substrate/issues/10861>
 //!
+//! _Note to maintainers_: In order to ensure the reward account never falls below the existential
+//! deposit, at creation the reward account must be endowed with the existential deposit. All logic
+//! for calculating rewards then does not see that existential deposit as part of the free balance.
+//! See `RewardPool::current_balance`.
+//!
 //! **Relevant extrinsics:**
 //!
 //! * [`Call::claim_payout`]
@@ -262,8 +267,8 @@
 //!
 //! **Relevant extrinsics:**
 //!
-//! * [`Call::unbond_other`]
-//! * [`Call::withdraw_unbonded_other`]
+//! * [`Call::unbond`]
+//! * [`Call::withdraw_unbonded`]
 //!
 //! ### Slashing
 //!
@@ -659,8 +664,8 @@ impl<T: Config> BondedPool<T> {
 	}
 
 	fn can_kick(&self, who: &T::AccountId) -> bool {
-		*who == self.roles.root ||
-			*who == self.roles.state_toggler && self.state == PoolState::Blocked
+		(*who == self.roles.root || *who == self.roles.state_toggler) &&
+			self.state == PoolState::Blocked
 	}
 
 	fn can_toggle_state(&self, who: &T::AccountId) -> bool {
@@ -712,7 +717,7 @@ impl<T: Config> BondedPool<T> {
 		Ok(())
 	}
 
-	fn ok_to_unbond_other_with(
+	fn ok_to_unbond_with(
 		&self,
 		caller: &T::AccountId,
 		target_account: &T::AccountId,
@@ -748,12 +753,12 @@ impl<T: Config> BondedPool<T> {
 
 	/// # Returns
 	///
-	/// * Ok(true) if [`Call::withdraw_unbonded_other`] can be called and the target account is the
+	/// * Ok(true) if [`Call::withdraw_unbonded`] can be called and the target account is the
 	///   depositor.
-	/// * Ok(false) if [`Call::withdraw_unbonded_other`] can be called and target account is *not*
-	///   the depositor.
-	/// * Err(DispatchError) if [`Call::withdraw_unbonded_other`] *cannot* be called.
-	fn ok_to_withdraw_unbonded_other_with(
+	/// * Ok(false) if [`Call::withdraw_unbonded`] can be called and target account is *not* the
+	///   depositor.
+	/// * Err(DispatchError) if [`Call::withdraw_unbonded`] *cannot* be called.
+	fn ok_to_withdraw_unbonded_with(
 		&self,
 		caller: &T::AccountId,
 		target_account: &T::AccountId,
@@ -1245,7 +1250,11 @@ pub mod pallet {
 		/// * Only a pool with [`PoolState::Open`] can be joined
 		#[pallet::weight(T::WeightInfo::join())]
 		#[transactional]
-		pub fn join(origin: OriginFor<T>, amount: BalanceOf<T>, pool_id: PoolId) -> DispatchResult {
+		pub fn join(
+			origin: OriginFor<T>,
+			#[pallet::compact] amount: BalanceOf<T>,
+			pool_id: PoolId,
+		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
 			ensure!(amount >= MinJoinBond::<T>::get(), Error::<T>::MinimumBondNotMet);
@@ -1320,6 +1329,7 @@ pub mod pallet {
 					(bonded_pool.try_bond_funds(&who, claimed, BondType::Later)?, claimed)
 				},
 			};
+			bonded_pool.ok_to_be_open(bonded)?;
 			delegator.points = delegator.points.saturating_add(points_issued);
 
 			Self::deposit_event(Event::<T>::Bonded {
@@ -1381,9 +1391,9 @@ pub mod pallet {
 		/// [`Call::pool_withdraw_unbonded`] can be called to try and minimize unlocking chunks. If
 		/// there are too many unlocking chunks, the result of this call will likely be the
 		/// `NoMoreChunks` error from the staking system.
-		#[pallet::weight(T::WeightInfo::unbond_other())]
+		#[pallet::weight(T::WeightInfo::unbond())]
 		#[transactional]
-		pub fn unbond_other(
+		pub fn unbond(
 			origin: OriginFor<T>,
 			delegator_account: T::AccountId,
 			mut unbonding_points: BalanceOf<T>,
@@ -1391,7 +1401,7 @@ pub mod pallet {
 			let caller = ensure_signed(origin)?;
 			let (mut delegator, mut bonded_pool, mut reward_pool) =
 				Self::get_delegator_with_pools(&delegator_account)?;
-			bonded_pool.ok_to_unbond_other_with(&caller, &delegator_account, &delegator)?;
+			bonded_pool.ok_to_unbond_with(&caller, &delegator_account, &delegator)?;
 
 			unbonding_points = unbonding_points.min(delegator.active_points());
 			// Claim the the payout prior to unbonding. Once the user is unbonding their points
@@ -1452,7 +1462,7 @@ pub mod pallet {
 
 		/// Call `withdraw_unbonded` for the pools account. This call can be made by any account.
 		///
-		/// This is useful if their are too many unlocking chunks to call `unbond_other`, and some
+		/// This is useful if their are too many unlocking chunks to call `unbond`, and some
 		/// can be cleared by withdrawing. In the case there are too many unlocking chunks, the user
 		/// would probably see an error like `NoMoreChunks` emitted from the staking system when
 		/// they attempt to unbond.
@@ -1466,7 +1476,7 @@ pub mod pallet {
 			let _ = ensure_signed(origin)?;
 			let pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
 			// For now we only allow a pool to withdraw unbonded if its not destroying. If the pool
-			// is destroying then `withdraw_unbonded_other` can be used.
+			// is destroying then `withdraw_unbonded` can be used.
 			ensure!(pool.state != PoolState::Destroying, Error::<T>::NotDestroying);
 			T::StakingInterface::withdraw_unbonded(pool.bonded_account(), num_slashing_spans)?;
 			Ok(())
@@ -1492,10 +1502,10 @@ pub mod pallet {
 		///
 		/// If the target is the depositor, the pool will be destroyed.
 		#[pallet::weight(
-			T::WeightInfo::withdraw_unbonded_other_kill(*num_slashing_spans)
+			T::WeightInfo::withdraw_unbonded_kill(*num_slashing_spans)
 		)]
 		#[transactional]
-		pub fn withdraw_unbonded_other(
+		pub fn withdraw_unbonded(
 			origin: OriginFor<T>,
 			delegator_account: T::AccountId,
 			num_slashing_spans: u32,
@@ -1510,7 +1520,7 @@ pub mod pallet {
 			let mut sub_pools = SubPoolsStorage::<T>::get(delegator.pool_id)
 				.defensive_ok_or_else(|| Error::<T>::SubPoolsNotFound)?;
 
-			let should_remove_pool = bonded_pool.ok_to_withdraw_unbonded_other_with(
+			let should_remove_pool = bonded_pool.ok_to_withdraw_unbonded_with(
 				&caller,
 				&delegator_account,
 				&delegator,
@@ -1570,9 +1580,9 @@ pub mod pallet {
 				// delegator being reaped.
 				Delegators::<T>::remove(&delegator_account);
 				if should_remove_pool {
+					let reward_account = bonded_pool.reward_account();
 					ReversePoolIdLookup::<T>::remove(bonded_pool.bonded_account());
 					RewardPools::<T>::remove(delegator.pool_id);
-					Self::deposit_event(Event::<T>::Destroyed { pool_id: delegator.pool_id });
 					SubPoolsStorage::<T>::remove(delegator.pool_id);
 					// Kill accounts from storage by making their balance go below ED. We assume
 					// that the accounts have no references that would prevent destruction once we
@@ -1582,20 +1592,29 @@ pub mod pallet {
 							.unwrap_or_default(),
 						Zero::zero()
 					);
-					T::Currency::make_free_balance_be(&bonded_pool.reward_account(), Zero::zero());
+					let reward_pool_remaining = T::Currency::free_balance(&reward_account);
+					// This shouldn't fail, but if it does we don't really care
+					let _ = T::Currency::transfer(
+						&reward_account,
+						&delegator_account,
+						reward_pool_remaining,
+						ExistenceRequirement::AllowDeath,
+					);
+					T::Currency::make_free_balance_be(&reward_account, Zero::zero());
 					T::Currency::make_free_balance_be(&bonded_pool.bonded_account(), Zero::zero());
+					Self::deposit_event(Event::<T>::Destroyed { pool_id: delegator.pool_id });
 					bonded_pool.remove();
 					None
 				} else {
 					bonded_pool.dec_delegators().put();
 					SubPoolsStorage::<T>::insert(&delegator.pool_id, sub_pools);
-					Some(T::WeightInfo::withdraw_unbonded_other_update(num_slashing_spans))
+					Some(T::WeightInfo::withdraw_unbonded_update(num_slashing_spans))
 				}
 			} else {
 				// we certainly don't need to delete any pools, because no one is being removed.
 				SubPoolsStorage::<T>::insert(&delegator.pool_id, sub_pools);
 				Delegators::<T>::insert(&delegator_account, delegator);
-				Some(T::WeightInfo::withdraw_unbonded_other_update(num_slashing_spans))
+				Some(T::WeightInfo::withdraw_unbonded_update(num_slashing_spans))
 			};
 
 			Ok(post_info_weight.into())
@@ -1622,7 +1641,7 @@ pub mod pallet {
 		#[transactional]
 		pub fn create(
 			origin: OriginFor<T>,
-			amount: BalanceOf<T>,
+			#[pallet::compact] amount: BalanceOf<T>,
 			root: T::AccountId,
 			nominator: T::AccountId,
 			state_toggler: T::AccountId,
@@ -1660,8 +1679,7 @@ pub mod pallet {
 				&bonded_pool.reward_account(),
 				T::Currency::minimum_balance(),
 				ExistenceRequirement::AllowDeath,
-			)
-			.defensive()?;
+			)?;
 
 			Delegators::<T>::insert(
 				who.clone(),
@@ -1709,8 +1727,8 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::weight(T::WeightInfo::set_state_other())]
-		pub fn set_state_other(
+		#[pallet::weight(T::WeightInfo::set_state())]
+		pub fn set_state(
 			origin: OriginFor<T>,
 			pool_id: PoolId,
 			state: PoolState,
@@ -1861,6 +1879,8 @@ impl<T: Config> Pallet<T> {
 		current_points: BalanceOf<T>,
 		new_funds: BalanceOf<T>,
 	) -> BalanceOf<T> {
+		let u256 = |x| T::BalanceToU256::convert(x);
+		let balance = |x| T::U256ToBalance::convert(x);
 		match (current_balance.is_zero(), current_points.is_zero()) {
 			(_, true) => new_funds.saturating_mul(POINTS_TO_BALANCE_INIT_RATIO.into()),
 			(true, false) => {
@@ -1870,10 +1890,12 @@ impl<T: Config> Pallet<T> {
 			},
 			(false, false) => {
 				// Equivalent to (current_points / current_balance) * new_funds
-				current_points
-					.saturating_mul(new_funds)
-					// We check for zero above
-					.div(current_balance)
+				balance(
+					u256(current_points)
+						.saturating_mul(u256(new_funds))
+						// We check for zero above
+						.div(u256(current_balance)),
+				)
 			},
 		}
 	}
