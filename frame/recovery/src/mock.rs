@@ -101,6 +101,7 @@ parameter_types! {
 
 impl Config for Test {
 	type Event = Event;
+	type WeightInfo = ();
 	type Call = Call;
 	type Currency = Balances;
 	type ConfigDepositBase = ConfigDepositBase;
