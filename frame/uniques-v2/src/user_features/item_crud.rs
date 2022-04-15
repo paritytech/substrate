@@ -47,8 +47,14 @@ impl<T: Config> Pallet<T> {
 				);
 			}
 
-			let item =
-				Item { id: item_id, owner: owner.clone(), deposit: None, price: None, buyer: None };
+			let item = Item {
+				id: item_id,
+				owner: owner.clone(),
+				deposit: None,
+				price: None,
+				buyer: None,
+				approvals: Default::default(),
+			};
 
 			let instances = collection.items.checked_add(1).ok_or(ArithmeticError::Overflow)?;
 			collection.items = instances;

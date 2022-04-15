@@ -98,6 +98,7 @@ impl Config for Test {
 	type AttributeKeyLimit = ConstU32<10_000>;
 	type AttributeValueLimit = ConstU32<10_000>;
 	type DefaultSystemConfig = NoDeposit;
+	type ApprovalsLimit = ConstU32<100>;
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {

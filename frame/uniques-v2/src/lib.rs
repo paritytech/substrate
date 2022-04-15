@@ -45,6 +45,17 @@ pub mod pallet {
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
 
+	/// A single approval.
+	#[derive(
+		Clone, Eq, PartialEq, Default, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen,
+	)]
+	pub struct Approval<AccountId, BlockNumber> {
+		/// The delegate.
+		pub who: AccountId,
+		/// The deadline until the approval is valid.
+		pub deadline: Option<BlockNumber>,
+	}
+
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
@@ -74,11 +85,19 @@ pub mod pallet {
 		/// The maximum length of an attribute value.
 		#[pallet::constant]
 		type AttributeValueLimit: Get<u32>;
+
+		/// The maximum amount of approvals an item could have.
+		#[pallet::constant]
+		type ApprovalsLimit: Get<u32>;
 	}
 
 	pub type MetadataOf<T> = BoundedVec<u8, <T as Config>::MetadataLimit>;
 	pub type BalanceOf<T> =
 		<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+	pub type ApprovalsOf<T> = BoundedVec<
+		Approval<<T as frame_system::Config>::AccountId, <T as frame_system::Config>::BlockNumber>,
+		<T as Config>::ApprovalsLimit,
+	>;
 	pub type AttributeKeyOf<T> = BoundedVec<u8, <T as Config>::AttributeKeyLimit>;
 	pub type AttributeValueOf<T> = BoundedVec<u8, <T as Config>::AttributeValueLimit>;
 
@@ -150,7 +169,7 @@ pub mod pallet {
 		T::CollectionId,
 		Blake2_128Concat,
 		T::ItemId,
-		Item<T::ItemId, T::AccountId, BalanceOf<T>>,
+		Item<T::ItemId, T::AccountId, BalanceOf<T>, ApprovalsOf<T>>,
 		OptionQuery,
 	>;
 
@@ -241,6 +260,18 @@ pub mod pallet {
 		CollectionConfigChanged {
 			id: T::CollectionId,
 		},
+		ApprovalAdded {
+			collection_id: T::CollectionId,
+			item_id: T::ItemId,
+			owner: T::AccountId,
+			delegate: T::AccountId,
+		},
+		ApprovalRemoved {
+			collection: T::CollectionId,
+			item: T::ItemId,
+			owner: T::AccountId,
+			delegate: T::AccountId,
+		},
 		AttributeSet {
 			id: T::CollectionId,
 			maybe_item: Option<T::ItemId>,
@@ -321,6 +352,8 @@ pub mod pallet {
 		BadWitness,
 		/// Trying to transfer or buy an item from oneself.
 		TransferToSelf,
+		/// User reached the limit of possible approvals per item.
+		MaxApprovalsReached,
 	}
 
 	// Pallet's callable functions.
@@ -398,6 +431,22 @@ pub mod pallet {
 			let sender = ensure_signed(origin)?;
 			let new_owner = T::Lookup::lookup(new_owner)?;
 			Self::do_transfer_collection_ownership(id, sender, new_owner)?;
+			Ok(())
+		}
+
+		#[pallet::weight(0)]
+		pub fn approve_transfer(
+			origin: OriginFor<T>,
+			collection_id: T::CollectionId,
+			item_id: T::ItemId,
+			delegate: <T::Lookup as StaticLookup>::Source,
+			deadline: Option<T::BlockNumber>,
+		) -> DispatchResult {
+			let sender = ensure_signed(origin)?;
+			let delegate = T::Lookup::lookup(delegate)?;
+			let config =
+				CollectionConfigs::<T>::get(collection_id).ok_or(Error::<T>::CollectionNotFound)?;
+			Self::do_approve_transfer(sender, collection_id, item_id, delegate, deadline, config)?;
 			Ok(())
 		}
 

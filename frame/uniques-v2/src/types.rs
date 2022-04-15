@@ -61,7 +61,7 @@ pub struct Collection<CollectionId, Account, Balance> {
 }
 
 #[derive(Encode, Decode, PartialEq, Default, MaxEncodedLen, TypeInfo)]
-pub struct Item<ItemId, Account, Balance> {
+pub struct Item<ItemId, Account, Balance, Approvals> {
 	pub id: ItemId,
 	pub owner: Account,
 	pub deposit: Option<Balance>,
@@ -69,6 +69,7 @@ pub struct Item<ItemId, Account, Balance> {
 	pub price: Option<Balance>,
 	// `None` assumes anyone can buy
 	pub buyer: Option<Account>,
+	pub approvals: Approvals,
 }
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default, TypeInfo, MaxEncodedLen)]

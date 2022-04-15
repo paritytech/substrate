@@ -104,6 +104,13 @@ fn attributes(collection: u32) -> Vec<(Option<u32>, Vec<u8>, Vec<u8>)> {
 	s
 }
 
+fn approvals(collection_id: u32, item_id: u32) -> Vec<(u64, Option<u64>)> {
+	let item = Items::<Test>::get(collection_id, item_id);
+	let mut s: Vec<_> = item.unwrap().approvals.iter().map(|x| (x.who, x.deadline)).collect();
+	s.sort();
+	s
+}
+
 pub const DEFAULT_SYSTEM_FEATURES: SystemFeatures = SystemFeatures::NoDeposit;
 pub const DEFAULT_USER_FEATURES: UserFeatures = UserFeatures::Administration;
 
@@ -747,6 +754,70 @@ fn buy_item_should_work() {
 		assert_noop!(
 			Uniques::buy_item(Origin::signed(user_1), collection_id, item_1, price_1),
 			Error::<Test>::ItemNotForSale
+		);
+	});
+}
+
+#[test]
+fn add_approval_should_work() {
+	new_test_ext().execute_with(|| {
+		let user_1 = 1;
+		let user_2 = 2;
+		let collection_id = 0;
+		let item_id = 1;
+
+		assert_ok!(Uniques::create(
+			Origin::signed(user_1),
+			user_1,
+			DEFAULT_USER_FEATURES,
+			None,
+			None,
+		));
+
+		// validate we can't set an approval for non-existing item
+		assert_noop!(
+			Uniques::approve_transfer(Origin::signed(user_1), collection_id, item_id, user_2, None),
+			Error::<Test>::ItemNotFound
+		);
+
+		// validate we can set an approval when all the conditions are met
+		assert_ok!(Uniques::mint(Origin::signed(user_1), user_1, collection_id, item_id));
+		assert_ok!(Uniques::approve_transfer(
+			Origin::signed(user_1),
+			collection_id,
+			item_id,
+			user_2,
+			None
+		));
+
+		assert_eq!(approvals(collection_id, item_id), vec![(user_2, None)]);
+
+		// setting the deadline should work
+		assert_ok!(Uniques::approve_transfer(
+			Origin::signed(user_1),
+			collection_id,
+			item_id,
+			user_2,
+			Some(2)
+		));
+
+		assert_eq!(approvals(collection_id, item_id), vec![(user_2, Some(2))]);
+
+		// ensure we can't buy an item when the collection has a NonTransferableItems flag
+		let collection_id = 1;
+		assert_ok!(Uniques::create(
+			Origin::signed(user_1),
+			user_1,
+			UserFeatures::NonTransferableItems,
+			None,
+			None,
+		));
+
+		assert_ok!(Uniques::mint(Origin::signed(user_1), user_1, collection_id, item_id));
+
+		assert_noop!(
+			Uniques::approve_transfer(Origin::signed(user_1), collection_id, item_id, user_2, None),
+			Error::<Test>::ItemsNotTransferable
 		);
 	});
 }
