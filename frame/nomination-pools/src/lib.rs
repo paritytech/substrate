@@ -1530,8 +1530,7 @@ pub mod pallet {
 				&bonded_pool.reward_account(),
 				T::Currency::minimum_balance(),
 				ExistenceRequirement::AllowDeath,
-			)
-			.defensive()?;
+			)?;
 
 			Delegators::<T>::insert(
 				who.clone(),
