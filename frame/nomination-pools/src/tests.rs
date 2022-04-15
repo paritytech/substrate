@@ -1610,10 +1610,7 @@ mod unbond {
 			unsafe_set_state(1, PoolState::Blocked).unwrap();
 
 			// The depositor cannot be unbonded
-			assert_noop!(
-				Pools::unbond(Origin::signed(420), 10),
-				Error::<Runtime>::NotDestroying
-			);
+			assert_noop!(Pools::unbond(Origin::signed(420), 10), Error::<Runtime>::NotDestroying);
 
 			// Given the pools is destroying
 			unsafe_set_state(1, PoolState::Destroying).unwrap();
@@ -1793,7 +1790,7 @@ mod withdraw_unbonded {
 				assert_ok!(Pools::withdraw_unbonded(Origin::signed(10), 10, 0));
 
 				// Then
-				assert_eq!(Balances::free_balance(&10), 5 + 10);
+				assert_eq!(Balances::free_balance(&10), 10 + 10);
 				assert_eq!(Balances::free_balance(&default_bonded_account()), 0);
 				assert!(!Delegators::<Runtime>::contains_key(10));
 				// Pools are removed from storage because the depositor left
@@ -1858,7 +1855,7 @@ mod withdraw_unbonded {
 				assert_ok!(Pools::withdraw_unbonded(Origin::signed(10), 10, 0));
 
 				// Then
-				assert_eq!(Balances::free_balance(&10), 5 + 0);
+				assert_eq!(Balances::free_balance(&10), 10 + 0);
 				assert_eq!(Balances::free_balance(&default_bonded_account()), 0);
 				assert!(!Delegators::<Runtime>::contains_key(10));
 				// Pools are removed from storage because the depositor left
@@ -1892,7 +1889,7 @@ mod withdraw_unbonded {
 			assert_ok!(Pools::withdraw_unbonded(Origin::signed(10), 10, 0));
 
 			// Then
-			assert_eq!(Balances::free_balance(10), 5 + 5);
+			assert_eq!(Balances::free_balance(10), 10 + 5);
 			assert_eq!(Balances::free_balance(&default_bonded_account()), 0);
 		});
 	}
@@ -2101,7 +2098,7 @@ mod withdraw_unbonded {
 				// The depositor can withdraw
 				assert_ok!(Pools::withdraw_unbonded(Origin::signed(420), 10, 0));
 				assert!(!Delegators::<Runtime>::contains_key(10));
-				assert_eq!(Balances::free_balance(10), 10 + 10 - Balances::minimum_balance());
+				assert_eq!(Balances::free_balance(10), 10 + 10);
 				// Pools are removed from storage because the depositor left
 				assert!(!SubPoolsStorage::<Runtime>::contains_key(1));
 				assert!(!RewardPools::<Runtime>::contains_key(1));
@@ -2152,7 +2149,7 @@ mod withdraw_unbonded {
 			// The depositor can withdraw
 			assert_ok!(Pools::withdraw_unbonded(Origin::signed(420), 10, 0));
 			assert!(!Delegators::<Runtime>::contains_key(10));
-			assert_eq!(Balances::free_balance(10), 5 + 10);
+			assert_eq!(Balances::free_balance(10), 10 + 10);
 			// Pools are removed from storage because the depositor left
 			assert!(!SubPoolsStorage::<Runtime>::contains_key(1));
 			assert!(!RewardPools::<Runtime>::contains_key(1));

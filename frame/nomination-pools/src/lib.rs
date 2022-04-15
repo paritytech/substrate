@@ -84,8 +84,8 @@
 //! * Open: Anyone can join the pool and no delegators can be permissionlessly removed.
 //! * Blocked: No delegators can join and some admin roles can kick delegators.
 //! * Destroying: No delegators can join and all delegators can be permissionlessly removed with
-//!   [`Call::unbond`] and [`Call::withdraw_unbonded`]. Once a pool is in destroying
-//!   state, it cannot be reverted to another state.
+//!   [`Call::unbond`] and [`Call::withdraw_unbonded`]. Once a pool is in destroying state, it
+//!   cannot be reverted to another state.
 //!
 //! A pool has 3 administrative roles (see [`PoolRoles`]):
 //!
@@ -650,8 +650,8 @@ impl<T: Config> BondedPool<T> {
 	///
 	/// * Ok(true) if [`Call::withdraw_unbonded`] can be called and the target account is the
 	///   depositor.
-	/// * Ok(false) if [`Call::withdraw_unbonded`] can be called and target account is *not*
-	///   the depositor.
+	/// * Ok(false) if [`Call::withdraw_unbonded`] can be called and target account is *not* the
+	///   depositor.
 	/// * Err(DispatchError) if [`Call::withdraw_unbonded`] *cannot* be called.
 	fn ok_to_withdraw_unbonded_with(
 		&self,
@@ -1254,10 +1254,7 @@ pub mod pallet {
 		/// `NoMoreChunks` error from the staking system.
 		#[pallet::weight(T::WeightInfo::unbond())]
 		#[transactional]
-		pub fn unbond(
-			origin: OriginFor<T>,
-			delegator_account: T::AccountId,
-		) -> DispatchResult {
+		pub fn unbond(origin: OriginFor<T>, delegator_account: T::AccountId) -> DispatchResult {
 			let caller = ensure_signed(origin)?;
 			let (mut delegator, mut bonded_pool, mut reward_pool) =
 				Self::get_delegator_with_pools(&delegator_account)?;
@@ -1439,6 +1436,7 @@ pub mod pallet {
 			});
 
 			let post_info_weight = if should_remove_pool {
+				let reward_account = bonded_pool.reward_account();
 				ReversePoolIdLookup::<T>::remove(bonded_pool.bonded_account());
 				RewardPools::<T>::remove(delegator.pool_id);
 				Self::deposit_event(Event::<T>::Destroyed { pool_id: delegator.pool_id });
@@ -1451,7 +1449,15 @@ pub mod pallet {
 						.unwrap_or_default(),
 					Zero::zero()
 				);
-				T::Currency::make_free_balance_be(&bonded_pool.reward_account(), Zero::zero());
+				let reward_pool_remaining = T::Currency::free_balance(&reward_account);
+				// This shouldn't fail, but if it does we don't really care
+				let _ = T::Currency::transfer(
+					&reward_account,
+					&delegator_account,
+					reward_pool_remaining,
+					ExistenceRequirement::AllowDeath,
+				);
+				T::Currency::make_free_balance_be(&reward_account, Zero::zero());
 				T::Currency::make_free_balance_be(&bonded_pool.bonded_account(), Zero::zero());
 				bonded_pool.remove();
 				None
@@ -1736,10 +1742,12 @@ impl<T: Config> Pallet<T> {
 			},
 			(false, false) => {
 				// Equivalent to (current_points / current_balance) * new_funds
-				balance(u256(current_points)
-					.saturating_mul(u256(new_funds))
-					// We check for zero above
-					.div(u256(current_balance)))
+				balance(
+					u256(current_points)
+						.saturating_mul(u256(new_funds))
+						// We check for zero above
+						.div(u256(current_balance)),
+				)
 			},
 		}
 	}
