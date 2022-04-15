@@ -589,7 +589,7 @@ impl<T: Config> StakingLedger<T> {
 
 			// slash out from *target exactly `slash_from_target`.
 			*target = *target - slash_from_target;
-			if *target <= minimum_balance {
+			if *target < minimum_balance {
 				// Slash the rest of the target if its dust
 				slash_from_target =
 					sp_std::mem::replace(target, Zero::zero()).saturating_add(slash_from_target)
