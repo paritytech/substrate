@@ -680,6 +680,15 @@ impl<T: Config> BondedPool<T> {
 		matches!(self.state, PoolState::Destroying)
 	}
 
+	fn is_destroying_and_only_bonded_delegator(
+		&self,
+		alleged_depositor_points: BalanceOf<T>,
+	) -> bool {
+		// NOTE: if we add `&& self.delegator_counter == 1`, then this becomes even more strict and
+		// ensures that there ano unbonding delegators hanging around either.
+		self.is_destroying() && self.points == alleged_depositor_points
+	}
+
 	/// Whether or not the pool is ok to be in `PoolSate::Open`. If this returns an `Err`, then the
 	/// pool is unrecoverable and should be in the destroying state.
 	fn ok_to_be_open(&self, new_funds: BalanceOf<T>) -> Result<(), DispatchError> {
@@ -722,6 +731,7 @@ impl<T: Config> BondedPool<T> {
 		caller: &T::AccountId,
 		target_account: &T::AccountId,
 		target_delegator: &Delegator<T>,
+		unbonding_points: BalanceOf<T>,
 	) -> Result<(), DispatchError> {
 		let is_permissioned = caller == target_account;
 		let is_depositor = *target_account == self.roles.depositor;
@@ -736,16 +746,21 @@ impl<T: Config> BondedPool<T> {
 			},
 			// Any delegator who is not the depositor can always unbond themselves
 			(true, false) => (),
-			// The depositor can only start unbonding if the pool is already being destroyed and
-			// they are the delegator in the pool. Note that an invariant is once the pool is
-			// destroying it cannot switch states, so by being in destroying we are guaranteed no
-			// other delegators can possibly join.
 			(_, true) => {
-				ensure!(
-					target_delegator.active_points() == self.points,
-					Error::<T>::NotOnlyDelegator
-				);
-				ensure!(self.is_destroying(), Error::<T>::NotDestroying);
+				if self.is_destroying_and_only_bonded_delegator(target_delegator.active_points()) {
+					// if the pool is about to be destroyed, anyone can unbond the depositor, and
+					// they can fully unbond.
+				} else {
+					// only the depositor can partially unbond, and they can only unbond up to the
+					// threshold.
+					ensure!(is_permissioned, Error::<T>::DoesNotHavePermission);
+					let new_depositor_points =
+						target_delegator.active_points().saturating_sub(unbonding_points);
+					ensure!(
+						new_depositor_points >= MinCreateBond::<T>::get(),
+						Error::<T>::NotOnlyDelegator
+					);
+				}
 			},
 		};
 		Ok(())
@@ -1396,14 +1411,20 @@ pub mod pallet {
 		pub fn unbond(
 			origin: OriginFor<T>,
 			delegator_account: T::AccountId,
-			mut unbonding_points: BalanceOf<T>,
+			#[pallet::compact] mut unbonding_points: BalanceOf<T>,
 		) -> DispatchResult {
 			let caller = ensure_signed(origin)?;
 			let (mut delegator, mut bonded_pool, mut reward_pool) =
 				Self::get_delegator_with_pools(&delegator_account)?;
-			bonded_pool.ok_to_unbond_with(&caller, &delegator_account, &delegator)?;
-
 			unbonding_points = unbonding_points.min(delegator.active_points());
+
+			bonded_pool.ok_to_unbond_with(
+				&caller,
+				&delegator_account,
+				&delegator,
+				unbonding_points,
+			)?;
+
 			// Claim the the payout prior to unbonding. Once the user is unbonding their points
 			// no longer exist in the bonded pool and thus they can no longer claim their payouts.
 			// It is not strictly necessary to claim the rewards, but we do it here for UX.
@@ -2093,13 +2114,22 @@ impl<T: Config> Pallet<T> {
 			all_delegators += 1;
 		});
 
-		BondedPools::<T>::iter().for_each(|(id, bonded_pool)| {
+		BondedPools::<T>::iter().for_each(|(id, inner)| {
+			let bonded_pool = BondedPool { id, inner };
 			assert_eq!(
 				pools_delegators.get(&id).map(|x| *x).unwrap_or_default(),
 				bonded_pool.delegator_counter
 			);
 			assert!(MaxDelegatorsPerPool::<T>::get()
 				.map_or(true, |max| bonded_pool.delegator_counter <= max));
+
+			let depositor = Delegators::<T>::get(&bonded_pool.roles.depositor).unwrap();
+			assert!(
+				bonded_pool.is_destroying_and_only_bonded_delegator(depositor.active_points()) ||
+					depositor.active_points() >= MinCreateBond::<T>::get(),
+				"depositor must always have MinCreateBond stake in the pool, except for when the \
+				pool is being destroyed and the depositor is the last member",
+			);
 		});
 		assert!(MaxDelegators::<T>::get().map_or(true, |max| all_delegators <= max));
 

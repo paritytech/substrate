@@ -1372,7 +1372,7 @@ mod unbond {
 	fn unbond_of_1_works() {
 		ExtBuilder::default().build_and_execute(|| {
 			unsafe_set_state(1, PoolState::Destroying).unwrap();
-			assert_ok!(fully_unbond(Origin::signed(10), 10));
+			assert_ok!(fully_unbond_permissioned(10));
 
 			assert_eq!(
 				SubPoolsStorage::<Runtime>::get(1).unwrap().with_era,
@@ -1408,7 +1408,7 @@ mod unbond {
 				Balances::make_free_balance_be(&default_reward_account(), ed + 600);
 
 				// When
-				assert_ok!(fully_unbond(Origin::signed(40), 40));
+				assert_ok!(fully_unbond_permissioned(40));
 
 				// Then
 				assert_eq!(
@@ -1437,7 +1437,7 @@ mod unbond {
 
 				// When
 				unsafe_set_state(1, PoolState::Destroying).unwrap();
-				assert_ok!(fully_unbond(Origin::signed(550), 550));
+				assert_ok!(fully_unbond_permissioned(550));
 
 				// Then
 				assert_eq!(
@@ -1464,7 +1464,7 @@ mod unbond {
 				assert_eq!(Balances::free_balance(&550), 550 + 550);
 
 				// When
-				assert_ok!(fully_unbond(Origin::signed(10), 10));
+				assert_ok!(fully_unbond_permissioned(10));
 
 				// Then
 				assert_eq!(
@@ -1514,7 +1514,7 @@ mod unbond {
 			let current_era = 1 + TotalUnbondingPools::<Runtime>::get();
 			CurrentEra::set(current_era);
 
-			assert_ok!(fully_unbond(Origin::signed(10), 10));
+			assert_ok!(fully_unbond_permissioned(10));
 
 			// Then
 			assert_eq!(
@@ -1586,7 +1586,7 @@ mod unbond {
 	}
 
 	#[test]
-	fn unbond_with_non_admins_works() {
+	fn unbond_permissionless_works() {
 		// Scenarios where non-admin accounts can unbond others
 		ExtBuilder::default().add_delegators(vec![(100, 100)]).build_and_execute(|| {
 			// Given the pool is blocked
@@ -1601,8 +1601,8 @@ mod unbond {
 			// Given the pool is destroying
 			unsafe_set_state(1, PoolState::Destroying).unwrap();
 
-			// The depositor cannot be unbonded until they are the last delegator
-			assert_noop!(fully_unbond(Origin::signed(420), 10), Error::<Runtime>::NotOnlyDelegator);
+			// The depositor cannot be fully unbonded until they are the last delegator
+			assert_noop!(fully_unbond(Origin::signed(10), 10), Error::<Runtime>::NotOnlyDelegator);
 
 			// Any account can unbond a delegator that is not the depositor
 			assert_ok!(fully_unbond(Origin::signed(420), 100));
@@ -1611,12 +1611,15 @@ mod unbond {
 			unsafe_set_state(1, PoolState::Blocked).unwrap();
 
 			// The depositor cannot be unbonded
-			assert_noop!(fully_unbond(Origin::signed(420), 10), Error::<Runtime>::NotDestroying);
+			assert_noop!(
+				fully_unbond(Origin::signed(420), 10),
+				Error::<Runtime>::DoesNotHavePermission
+			);
 
 			// Given the pools is destroying
 			unsafe_set_state(1, PoolState::Destroying).unwrap();
 
-			// The depositor can be unbonded
+			// The depositor can be unbonded by anyone.
 			assert_ok!(fully_unbond(Origin::signed(420), 10));
 
 			assert_eq!(BondedPools::<Runtime>::get(1).unwrap().points, 0);
@@ -1812,6 +1815,31 @@ mod unbond {
 				delegator_unbonding_eras!(3 => 2, 4 => 3, 5 => 1)
 			);
 		})
+	}
+
+	#[test]
+	fn depositor_permissioned_partial_unbond() {
+		// Scenarios where non-admin accounts can unbond others
+		ExtBuilder::default()
+			.ed(1)
+			.add_delegators(vec![(100, 100)])
+			.build_and_execute(|| {
+				// given
+				assert_eq!(MinCreateBond::<Runtime>::get(), 2);
+				assert_eq!(Delegators::<Runtime>::get(10).unwrap().active_points(), 10);
+				assert_eq!(Delegators::<Runtime>::get(10).unwrap().unbonding_points(), 0);
+
+				// can unbond a bit..
+				assert_ok!(Pools::unbond(Origin::signed(10), 10, 3));
+				assert_eq!(Delegators::<Runtime>::get(10).unwrap().active_points(), 7);
+				assert_eq!(Delegators::<Runtime>::get(10).unwrap().unbonding_points(), 3);
+
+				// but not less than 2
+				assert_noop!(
+					Pools::unbond(Origin::signed(10), 10, 6),
+					Error::<Runtime>::NotOnlyDelegator
+				);
+			});
 	}
 }
 
