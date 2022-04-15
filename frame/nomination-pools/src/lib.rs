@@ -1828,29 +1828,39 @@ impl<T: Config> Pallet<T> {
 	/// All sub-pools are also deleted. All accounts are dusted and the leftover of the reward
 	/// account is returned to the depositor.
 	pub fn dissolve_pool(bonded_pool: BondedPool<T>) {
-		// .. and the pool being destroyed now.
 		let reward_account = bonded_pool.reward_account();
 		let bonded_account = bonded_pool.bonded_account();
+
 		ReversePoolIdLookup::<T>::remove(&bonded_account);
 		RewardPools::<T>::remove(bonded_pool.id);
 		SubPoolsStorage::<T>::remove(bonded_pool.id);
-		// Kill accounts from storage by making their balance go below ED. We assume
-		// that the accounts have no references that would prevent destruction once we
-		// get to this point.
+
+		// Kill accounts from storage by making their balance go below ED. We assume that the
+		// accounts have no references that would prevent destruction once we get to this point. We
+		// don't work with the system pallet directly, but
+		// 1. we drain the reward account and kill it. This account should never have any extra
+		// consumers anyway.
+		// 2. the bonded account should become a 'killed stash' in the staking system, and all of
+		//    its consumers removed.
+		debug_assert_eq!(frame_system::Pallet::<T>::consumers(&reward_account), 0);
+		debug_assert_eq!(frame_system::Pallet::<T>::consumers(&bonded_account), 0);
 		debug_assert_eq!(
 			T::StakingInterface::total_stake(&bonded_account).unwrap_or_default(),
 			Zero::zero()
 		);
-		let reward_pool_remaining = T::Currency::free_balance(&reward_account);
+
 		// This shouldn't fail, but if it does we don't really care
+		let reward_pool_remaining = T::Currency::free_balance(&reward_account);
 		let _ = T::Currency::transfer(
 			&reward_account,
 			&bonded_pool.roles.depositor,
 			reward_pool_remaining,
 			ExistenceRequirement::AllowDeath,
 		);
+
 		T::Currency::make_free_balance_be(&reward_account, Zero::zero());
 		T::Currency::make_free_balance_be(&bonded_pool.bonded_account(), Zero::zero());
+
 		Self::deposit_event(Event::<T>::Destroyed { pool_id: bonded_pool.id });
 		bonded_pool.remove();
 	}
