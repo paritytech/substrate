@@ -167,6 +167,7 @@ use frame_support::{
 };
 
 pub use pallet::*;
+pub use weights::WeightInfo;
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
@@ -225,6 +226,9 @@ pub mod pallet {
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+
+		/// Weight information for extrinsics in this pallet.
+		type WeightInfo: WeightInfo;
 
 		/// The overarching call type.
 		type Call: Parameter
@@ -370,21 +374,7 @@ pub mod pallet {
 		/// Parameters:
 		/// - `account`: The recovered account you want to make a call on-behalf-of.
 		/// - `call`: The call you want to make with the recovered account.
-		///
-		/// # <weight>
-		/// - The weight of the `call` + 10,000.
-		/// - One storage lookup to check account is recovered by `who`. O(1)
-		/// # </weight>
-		#[pallet::weight({
-			let dispatch_info = call.get_dispatch_info();
-			(
-				dispatch_info.weight
-					.saturating_add(10_000)
-					// AccountData for inner call origin accountdata.
-					.saturating_add(T::DbWeight::get().reads_writes(1, 1)),
-				dispatch_info.class,
-			)
-		})]
+		#[pallet::weight(T::WeightInfo::as_recovered())]
 		pub fn as_recovered(
 			origin: OriginFor<T>,
 			account: T::AccountId,
@@ -407,12 +397,7 @@ pub mod pallet {
 		/// Parameters:
 		/// - `lost`: The "lost account" to be recovered.
 		/// - `rescuer`: The "rescuer account" which can call as the lost account.
-		///
-		/// # <weight>
-		/// - One storage write O(1)
-		/// - One event
-		/// # </weight>
-		#[pallet::weight(30_000_000)]
+		#[pallet::weight(T::WeightInfo::set_recovered())]
 		pub fn set_recovered(
 			origin: OriginFor<T>,
 			lost: T::AccountId,
@@ -444,18 +429,7 @@ pub mod pallet {
 		///   friends.
 		/// - `delay_period`: The number of blocks after a recovery attempt is initialized that
 		///   needs to pass before the account can be recovered.
-		///
-		/// # <weight>
-		/// - Key: F (len of friends)
-		/// - One storage read to check that account is not already recoverable. O(1).
-		/// - A check that the friends list is sorted and unique. O(F)
-		/// - One currency reserve operation. O(X)
-		/// - One storage write. O(1). Codec O(F).
-		/// - One event.
-		///
-		/// Total Complexity: O(F + X)
-		/// # </weight>
-		#[pallet::weight(100_000_000)]
+		#[pallet::weight(T::WeightInfo::create_recovery(T::MaxFriends::get()))]
 		pub fn create_recovery(
 			origin: OriginFor<T>,
 			friends: Vec<T::AccountId>,
@@ -506,18 +480,7 @@ pub mod pallet {
 		/// Parameters:
 		/// - `account`: The lost account that you want to recover. This account needs to be
 		///   recoverable (i.e. have a recovery configuration).
-		///
-		/// # <weight>
-		/// - One storage read to check that account is recoverable. O(F)
-		/// - One storage read to check that this recovery process hasn't already started. O(1)
-		/// - One currency reserve operation. O(X)
-		/// - One storage read to get the current block number. O(1)
-		/// - One storage write. O(1).
-		/// - One event.
-		///
-		/// Total Complexity: O(F + X)
-		/// # </weight>
-		#[pallet::weight(100_000_000)]
+		#[pallet::weight(T::WeightInfo::initiate_recovery())]
 		pub fn initiate_recovery(origin: OriginFor<T>, account: T::AccountId) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			// Check that the account is recoverable
@@ -557,19 +520,7 @@ pub mod pallet {
 		///
 		/// The combination of these two parameters must point to an active recovery
 		/// process.
-		///
-		/// # <weight>
-		/// Key: F (len of friends in config), V (len of vouching friends)
-		/// - One storage read to get the recovery configuration. O(1), Codec O(F)
-		/// - One storage read to get the active recovery process. O(1), Codec O(V)
-		/// - One binary search to confirm caller is a friend. O(logF)
-		/// - One binary search to confirm caller has not already vouched. O(logV)
-		/// - One storage write. O(1), Codec O(V).
-		/// - One event.
-		///
-		/// Total Complexity: O(F + logF + V + logV)
-		/// # </weight>
-		#[pallet::weight(100_000_000)]
+		#[pallet::weight(T::WeightInfo::vouch_recovery(T::MaxFriends::get()))]
 		pub fn vouch_recovery(
 			origin: OriginFor<T>,
 			lost: T::AccountId,
@@ -610,18 +561,7 @@ pub mod pallet {
 		/// Parameters:
 		/// - `account`: The lost account that you want to claim has been successfully recovered by
 		///   you.
-		///
-		/// # <weight>
-		/// Key: F (len of friends in config), V (len of vouching friends)
-		/// - One storage read to get the recovery configuration. O(1), Codec O(F)
-		/// - One storage read to get the active recovery process. O(1), Codec O(V)
-		/// - One storage read to get the current block number. O(1)
-		/// - One storage write. O(1), Codec O(V).
-		/// - One event.
-		///
-		/// Total Complexity: O(F + V)
-		/// # </weight>
-		#[pallet::weight(100_000_000)]
+		#[pallet::weight(T::WeightInfo::claim_recovery(T::MaxFriends::get()))]
 		pub fn claim_recovery(origin: OriginFor<T>, account: T::AccountId) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			// Get the recovery configuration for the lost account
@@ -664,16 +604,7 @@ pub mod pallet {
 		///
 		/// Parameters:
 		/// - `rescuer`: The account trying to rescue this recoverable account.
-		///
-		/// # <weight>
-		/// Key: V (len of vouching friends)
-		/// - One storage read/remove to get the active recovery process. O(1), Codec O(V)
-		/// - One balance call to repatriate reserved. O(X)
-		/// - One event.
-		///
-		/// Total Complexity: O(V + X)
-		/// # </weight>
-		#[pallet::weight(30_000_000)]
+		#[pallet::weight(T::WeightInfo::close_recovery(T::MaxFriends::get()))]
 		pub fn close_recovery(origin: OriginFor<T>, rescuer: T::AccountId) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			// Take the active recovery process started by the rescuer for this account.
@@ -706,17 +637,7 @@ pub mod pallet {
 		///
 		/// The dispatch origin for this call must be _Signed_ and must be a
 		/// recoverable account (i.e. has a recovery configuration).
-		///
-		/// # <weight>
-		/// Key: F (len of friends)
-		/// - One storage read to get the prefix iterator for active recoveries. O(1)
-		/// - One storage read/remove to get the recovery configuration. O(1), Codec O(F)
-		/// - One balance call to unreserved. O(X)
-		/// - One event.
-		///
-		/// Total Complexity: O(F + X)
-		/// # </weight>
-		#[pallet::weight(30_000_000)]
+		#[pallet::weight(T::WeightInfo::remove_recovery(T::MaxFriends::get()))]
 		pub fn remove_recovery(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			// Check there are no active recoveries
@@ -738,11 +659,7 @@ pub mod pallet {
 		///
 		/// Parameters:
 		/// - `account`: The recovered account you are able to call on-behalf-of.
-		///
-		/// # <weight>
-		/// - One storage mutation to check account is recovered by `who`. O(1)
-		/// # </weight>
-		#[pallet::weight(30_000_000)]
+		#[pallet::weight(T::WeightInfo::cancel_recovered())]
 		pub fn cancel_recovered(origin: OriginFor<T>, account: T::AccountId) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			// Check `who` is allowed to make a call on behalf of `account`
