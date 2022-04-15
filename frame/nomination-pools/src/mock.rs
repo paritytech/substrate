@@ -25,7 +25,6 @@ parameter_types! {
 	#[derive(Clone, PartialEq)]
 	pub static MaxUnbonding: u32 = 8;
 	pub static Nominations: Vec<AccountId> = vec![];
-
 }
 
 pub struct StakingMock;
