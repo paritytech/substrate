@@ -4985,6 +4985,7 @@ dependencies = [
  "sc-executor",
  "sc-finality-grandpa",
  "sc-keystore",
+ "sc-mixnet",
  "sc-network",
  "sc-rpc",
  "sc-service",
@@ -8849,6 +8850,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "sc-mixnet"
+version = "0.1.0-dev"
+dependencies = [
+ "futures 0.3.21",
+ "libp2p",
+ "log 0.4.14",
+ "mixnet",
+ "rand 0.7.3",
+ "sc-client-api",
+ "sc-finality-grandpa",
+ "sc-network",
+ "sc-utils",
+ "sp-finality-grandpa",
+ "sp-runtime",
+]
+
+[[package]]
 name = "sc-network"
 version = "0.10.0-dev"
 dependencies = [
@@ -9127,6 +9145,7 @@ dependencies = [
  "sc-executor",
  "sc-informant",
  "sc-keystore",
+ "sc-mixnet",
  "sc-network",
  "sc-offchain",
  "sc-rpc",

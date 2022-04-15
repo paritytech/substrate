@@ -477,6 +477,10 @@ impl CliConfiguration for RunCmd {
 			}
 		})
 	}
+
+	fn mixnet(&self) -> bool {
+		self.network_params.mixnet
+	}
 }
 
 /// Check whether a node name is considered as valid.

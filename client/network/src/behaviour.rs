@@ -540,10 +540,10 @@ impl<B: BlockT> NetworkBehaviourEventProcess<DiscoveryOut> for Behaviour<B> {
 	}
 }
 
-impl<B: BlockT> NetworkBehaviourEventProcess<mixnet::NetworkEvent<crate::mixnet::Command>>
+impl<B: BlockT> NetworkBehaviourEventProcess<mixnet::NetworkEvent<crate::MixnetCommand>>
 	for Behaviour<B>
 {
-	fn inject_event(&mut self, event: mixnet::NetworkEvent<crate::mixnet::Command>) {
+	fn inject_event(&mut self, event: mixnet::NetworkEvent<crate::MixnetCommand>) {
 		match event {
 			mixnet::NetworkEvent::Message(message) => {
 				self.events

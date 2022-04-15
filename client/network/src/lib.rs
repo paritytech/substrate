@@ -260,7 +260,6 @@ pub mod block_request_handler;
 pub mod config;
 pub mod error;
 pub mod light_client_requests;
-pub mod mixnet;
 pub mod network_state;
 pub mod state_request_handler;
 pub mod transactions;
@@ -332,4 +331,14 @@ pub struct NetworkStatus<B: BlockT> {
 	pub warp_sync: Option<protocol::sync::WarpSyncProgress<B>>,
 }
 
-type Mixnet = ::mixnet::Mixnet<crate::mixnet::Command>;
+/// Command for the mixnet behaviour.
+#[derive(Clone, Debug)]
+pub enum MixnetCommand {
+	/// Finalized block.
+	BlockFinalized,
+	/// New authority set on block finalized.
+	NewAuthoritySet(sp_finality_grandpa::AuthorityList),
+}
+
+pub type MixnetWorker = ::mixnet::MixnetWorker<MixnetCommand>;
+pub type Mixnet = ::mixnet::Mixnet<MixnetCommand>;

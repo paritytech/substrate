@@ -117,6 +117,11 @@ where
 		)
 	}
 
+	/// Get the current authorities and their weights (for the current set ID).
+	pub fn current_authority_list(&self) -> AuthorityList {
+		self.inner().current_authorities.clone()
+	}
+
 	/// Clone the inner `AuthoritySet`.
 	pub fn clone_inner(&self) -> AuthoritySet<H, N> {
 		self.inner().clone()

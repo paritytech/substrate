@@ -261,20 +261,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 		use crate::warp_request_handler::WarpSyncProvider;
 		use sc_client_api::BlockchainEvents;
 		use sp_runtime::traits::Header;
-		let mut session = None;
-		let finality_notif_stream = client.finality_notification_stream().map(move |notif| {
-			let at = sp_runtime::generic::BlockId::<B>::hash(notif.header.hash());
-			// TODO check header for change of session
-
-			let new_session = Some(shared_authority_set.current_session());
-			if new_session != session {
-				let authority_set = shared_authority_set.current_authorities();
-				session = new_session;
-				crate::mixnet::Command::NewAuthoritySet(authority_set)
-			} else {
-				crate::mixnet::Command::BlockFinalized
-			}
-		});
 		let (mut swarm, bandwidth): (Swarm<B>, _) = {
 			let user_agent = format!(
 				"{} ({})",
@@ -365,26 +351,9 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				// TODO move mixnet building to MixnetHandlePrototype?? + add metrics
 				// through call backs in crate and same as transaction handler to register
 				let mut mixnet = None;
-				if params.network_config.mixnet {
-					let authority_protocol = "authority-discovery"; // TODO check in polkadot.
+				if let Some((mixnet_in, mixnet_out)) = params.mixnet {
 					if let libp2p::core::identity::Keypair::Ed25519(kp) = &local_identity {
-						let local_public_key = local_identity.public();
-						let mut mixnet_config = mixnet::Config::new_with_ed25519_keypair(
-							kp,
-							local_public_key.clone().into(),
-						);
-						// TODO read validator from session
-						// TODO is this node part of session (role means nothing).
-						let routing = params.role.is_authority();
-						let topology =
-							crate::mixnet::AuthorityStar::new(authority_protocol, routing);
-						/*						let commands =
-						crate::mixnet::AuthorityStar::command_stream(&mut event_streams);*/
-						mixnet = Some(
-							Mixnet::new(mixnet_config)
-								.with_topology(Box::new(topology))
-								.with_commands(Box::pin(finality_notif_stream)),
-						);
+						mixnet = Some(Mixnet::new_from_worker(kp, mixnet_in, mixnet_out));
 					} else {
 						log::error!(target: "sync", "Ignoring mixnet, non Ed25519 identity");
 					}

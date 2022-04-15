@@ -352,6 +352,24 @@ pub fn new_full_base(
 		Vec::default(),
 	));
 
+	let mut mixnet = None;
+	if config.mixnet {
+		use sc_client_api::BlockchainEvents;
+		let finality_notification_stream = client.finality_notification_stream();
+		let role = config.role.clone();
+		let local_id = config.network.node_key.clone().into_keypair()?;
+		let (mixnet_worker, worker_in, worker_out) = sc_mixnet::MixnetWorker::new(
+			finality_notification_stream,
+			import_setup.1.shared_authority_set().clone(),
+			role,
+			local_id,
+		).ok_or(ServiceError::Other("Cannot start mixnet.".to_string()))?;
+		task_manager
+			.spawn_handle()
+			.spawn("mixnet-worker", Some("mixnet"), mixnet_worker.run());
+		mixnet = Some((worker_in, worker_out));
+	}
+
 	let (network, system_rpc_tx, mixnet_tx, network_starter) =
 		sc_service::build_network(sc_service::BuildNetworkParams {
 			config: &config,
@@ -361,6 +379,7 @@ pub fn new_full_base(
 			import_queue,
 			block_announce_validator_builder: None,
 			warp_sync: Some(warp_sync),
+			mixnet,
 		})?;
 
 	if config.offchain_worker.enabled {

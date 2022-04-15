@@ -396,7 +396,7 @@ pub struct SpawnTasksParams<'a, TBl: BlockT, TCl, TExPool, TRpc, Backend> {
 	pub network: Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
 	/// A Sender for RPC requests.
 	pub system_rpc_tx: TracingUnboundedSender<sc_rpc::system::Request<TBl>>,
-	/// A Sender for mixnet message. TODO remove rpc from namea and move type somewhere else.
+	/// A Sender for mixnet message. TODO remove rpc from name and move type somewhere else.
 	pub mixnet_tx: TracingUnboundedSender<sc_rpc::author::SendToMixnet>,
 	/// Telemetry instance for this node.
 	pub telemetry: Option<&'a mut Telemetry>,
@@ -751,6 +751,8 @@ pub struct BuildNetworkParams<'a, TBl: BlockT, TExPool, TImpQu, TCl> {
 		Option<Box<dyn FnOnce(Arc<TCl>) -> Box<dyn BlockAnnounceValidator<TBl> + Send> + Send>>,
 	/// An optional warp sync provider.
 	pub warp_sync: Option<Arc<dyn WarpSyncProvider<TBl>>>,
+	/// Mixnet worker access if running.
+	pub mixnet: Option<(sc_mixnet::WorkerSink, sc_mixnet::WorkerStream)>,
 }
 
 /// Build the network service, the network status sinks and an RPC sender.
@@ -787,6 +789,7 @@ where
 		import_queue,
 		block_announce_validator_builder,
 		warp_sync,
+		mixnet,
 	} = params;
 
 	if warp_sync.is_none() && config.network.sync_mode.is_warp() {
@@ -900,6 +903,7 @@ where
 		state_request_protocol_config,
 		warp_sync: warp_sync_params,
 		light_client_request_protocol_config,
+		mixnet,
 	};
 
 	let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();

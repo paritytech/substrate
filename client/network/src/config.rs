@@ -134,6 +134,9 @@ pub struct Params<B: BlockT, H: ExHashT> {
 
 	/// Optional warp sync protocol support. Include protocol config and sync provider.
 	pub warp_sync: Option<(Arc<dyn WarpSyncProvider<B>>, RequestResponseConfig)>,
+
+	/// Mixnet worker access if running.
+	pub mixnet: Option<(mixnet::WorkerSink, mixnet::WorkerStream)>,
 }
 
 /// Role of the local node.
@@ -458,8 +461,6 @@ pub struct NetworkConfiguration {
 	pub kademlia_disjoint_query_paths: bool,
 	/// Enable serving block data over IPFS bitswap.
 	pub ipfs_server: bool,
-	/// Enable mixnet participation
-	pub mixnet: bool,
 
 	/// Size of Yamux receive window of all substreams. `None` for the default (256kiB).
 	/// Any value less than 256kiB is invalid.
@@ -481,6 +482,9 @@ pub struct NetworkConfiguration {
 	/// a modification of the way the implementation works. Different nodes with different
 	/// configured values remain compatible with each other.
 	pub yamux_window_size: Option<u32>,
+
+	/// Enable running mixnet.
+	pub mixnet: bool,
 }
 
 impl NetworkConfiguration {

@@ -41,6 +41,7 @@ members = [
 	"client/finality-grandpa",
 	"client/informant",
 	"client/keystore",
+	"client/mixnet",
 	"client/network",
 	"client/network-gossip",
 	"client/network/test",
