@@ -1118,7 +1118,11 @@ pub mod pallet {
 		/// * Only a pool with [`PoolState::Open`] can be joined
 		#[pallet::weight(T::WeightInfo::join())]
 		#[transactional]
-		pub fn join(origin: OriginFor<T>, amount: BalanceOf<T>, pool_id: PoolId) -> DispatchResult {
+		pub fn join(
+			origin: OriginFor<T>,
+			#[pallet::compact] amount: BalanceOf<T>,
+			pool_id: PoolId,
+		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
 			ensure!(amount >= MinJoinBond::<T>::get(), Error::<T>::MinimumBondNotMet);
@@ -1492,7 +1496,7 @@ pub mod pallet {
 		#[transactional]
 		pub fn create(
 			origin: OriginFor<T>,
-			amount: BalanceOf<T>,
+			#[pallet::compact] amount: BalanceOf<T>,
 			root: T::AccountId,
 			nominator: T::AccountId,
 			state_toggler: T::AccountId,
