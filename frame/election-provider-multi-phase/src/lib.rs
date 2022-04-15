@@ -1098,7 +1098,7 @@ pub mod pallet {
 							Free,
 						)?;
 						let _ = signed_submissions.pop(submission.raw_solution.score);
-						
+
 						signed_submissions.put();
 						Self::deposit_event(Event::Challenged { account: who, outcome: true });
 
