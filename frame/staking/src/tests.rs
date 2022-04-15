@@ -4979,8 +4979,8 @@ fn ledger_slash_works() {
 	// When
 	assert_eq!(
 		ledger.slash(
-			350, // active + era 6 + era 7 + era 5 / 2
-			50,  // min balance - everything slashed to 50 or below will get dusted
+			351, // active + era 6 + era 7 + era 5 / 2 + 1
+			50,  // min balance - everything slashed below 50 will get dusted
 			2    /* slash era 2+4 first, so the affected parts are era 2+4, era 3+4 and
 			      * ledge.active. This will cause the affected to go to zero, and then we will
 			      * start slashing older chunks */
@@ -4990,7 +4990,6 @@ fn ledger_slash_works() {
 	// Then
 	assert_eq!(ledger.active, 0);
 	assert_eq!(ledger.unlocking, vec![c(4, 100)]);
-	//------goes to min balance and then gets dusted^^^
 	assert_eq!(ledger.total, 100);
 	assert_eq!(LedgerSlashPerEra::get().0, 0);
 	assert_eq!(LedgerSlashPerEra::get().1, BTreeMap::from([(5, 0), (6, 0), (7, 0)]));
