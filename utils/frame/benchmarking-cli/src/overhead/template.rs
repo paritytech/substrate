@@ -28,7 +28,7 @@ use std::{env, fs, path::PathBuf};
 
 use crate::{
 	overhead::{bench::BenchmarkType, cmd::OverheadParams},
-	storage::record::Stats,
+	shared::{Stats, UnderscoreHelper},
 };
 
 static VERSION: &'static str = env!("CARGO_PKG_VERSION");
@@ -85,7 +85,7 @@ impl TemplateData {
 	pub fn write(&self, path: &Option<PathBuf>) -> Result<()> {
 		let mut handlebars = Handlebars::new();
 		// Format large integers with underscores.
-		handlebars.register_helper("underscore", Box::new(crate::writer::UnderscoreHelper));
+		handlebars.register_helper("underscore", Box::new(UnderscoreHelper));
 		// Don't HTML escape any characters.
 		handlebars.register_escape_fn(|s| -> String { s.to_string() });
 

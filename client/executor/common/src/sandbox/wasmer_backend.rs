@@ -43,9 +43,8 @@ pub struct Backend {
 
 impl Backend {
 	pub fn new() -> Self {
-		let compiler = wasmer_compiler_singlepass::Singlepass::default();
-
-		Backend { store: wasmer::Store::new(&wasmer::JIT::new(compiler).engine()) }
+		let compiler = wasmer::Singlepass::default();
+		Backend { store: wasmer::Store::new(&wasmer::Universal::new(compiler).engine()) }
 	}
 }
 
@@ -191,6 +190,7 @@ pub fn instantiate(
 			wasmer::InstantiationError::Start(_) => InstantiationError::StartTrapped,
 			wasmer::InstantiationError::HostEnvInitialization(_) =>
 				InstantiationError::EnvironmentDefinitionCorrupted,
+			wasmer::InstantiationError::CpuFeature(_) => InstantiationError::CpuFeature,
 		})
 	})?;
 
