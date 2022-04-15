@@ -170,7 +170,7 @@ impl<T: Config> SignedSubmissions<T> {
 	/// Get the submission at a particular index.
 	pub fn get_submission(&self, index: u32) -> Option<SignedSubmissionOf<T>> {
 		if self.deletion_overlay.contains(&index) {
-			// Note: can't actually remove the item from the insertion overlay (if present)
+			// Note: can't actually remove the ite m from the insertion overlay (if present)
 			// because we don't want to use `&mut self` here. There may be some kind of
 			// `RefCell` optimization possible here in the future.
 			None

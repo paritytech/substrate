@@ -1076,6 +1076,7 @@ pub mod pallet {
 					T::Currency::can_slash(&who, submission.deposit),
 					<Error<T>>::SignedCannotPayDeposit
 				);
+				let mut signed_submissions = Self::signed_submissions();
 				match Self::feasibility_check(
 					submission.raw_solution.clone(),
 					ElectionCompute::Signed,
@@ -1083,7 +1084,6 @@ pub mod pallet {
 					Ok(solution) => {
 						let _ = T::Currency::slash(&who, submission.deposit);
 						<QueuedSolution<T>>::put(solution);
-						let mut signed_submissions = Self::signed_submissions();
 						let _ = signed_submissions.pop(submission.raw_solution.score);
 
 						Self::deposit_event(Event::Challenged { account: who, outcome: false });
@@ -1097,9 +1097,9 @@ pub mod pallet {
 							T::ChallengeDepositDiff::get() * submission.deposit,
 							Free,
 						)?;
-						let mut signed_submissions = Self::signed_submissions();
 						let _ = signed_submissions.pop(submission.raw_solution.score);
-
+						
+						signed_submissions.put();
 						Self::deposit_event(Event::Challenged { account: who, outcome: true });
 
 						Ok(())
@@ -1132,7 +1132,6 @@ pub mod pallet {
 		SignedPhaseStarted { round: u32 },
 		/// The unsigned phase of the given round has started.
 		UnsignedPhaseStarted { round: u32 },
-
 		/// A solution from `account` was challenged, with the given `outcome`.
 		Challenged { account: <T as frame_system::Config>::AccountId, outcome: bool },
 	}

@@ -525,7 +525,7 @@ frame_benchmarking::benchmarks! {
 
 		// Insert `max - 1` submissions because the call to `submit` will insert another
 		// submission and the score is worse then the previous scores.
-		for i in 0..(T::SignedMaxSubmissions::get() - 1) {
+		for i in 0..(T::SignedMaxSubmissions::get()) {
 			let raw_solution = RawSolution {
 				score: ElectionScore { minimal_stake: 10_000_000u128 + (i as u128), ..Default::default() },
 				..Default::default()
