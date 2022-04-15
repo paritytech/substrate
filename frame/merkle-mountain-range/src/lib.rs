@@ -265,7 +265,23 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub fn generate_proof(
 		leaf_index: LeafIndex,
 	) -> Result<(LeafOf<T, I>, primitives::Proof<<T as Config<I>>::Hash>), primitives::Error> {
-		let mmr: ModuleMmr<mmr::storage::OffchainStorage, T, I> = mmr::Mmr::new(Self::mmr_leaves());
+		Self::generate_historical_proof(leaf_index, Self::mmr_leaves())
+	}
+
+	/// Generate a MMR proof for the given `leaf_index`.
+	///
+	/// This method is not touching any runtime storage keys, as all it needs is coming
+	/// either from arguments, or from the offchain storage.
+	///
+	/// Note this method can only be used from an off-chain context
+	/// (Offchain Worker or Runtime API call), since it requires
+	/// all the leaves to be present.
+	/// It may return an error or panic if used incorrectly.
+	pub fn generate_historical_proof(
+		leaf_index: LeafIndex,
+		leaves_count: LeafIndex,
+	) -> Result<(LeafOf<T, I>, primitives::Proof<<T as Config<I>>::Hash>), primitives::Error> {
+		let mmr: ModuleMmr<mmr::storage::OffchainStorage, T, I> = mmr::Mmr::new(leaves_count);
 		mmr.generate_proof(leaf_index)
 	}
 

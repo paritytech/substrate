@@ -243,6 +243,11 @@ macro_rules! create_test_api {
 						unimplemented!()
 					}
 
+					fn generate_historical_proof(_leaf_index: LeafIndex, _leaves_count: LeafIndex)
+						-> Result<(EncodableOpaqueLeaf, Proof<MmrRootHash>), MmrError> {
+						unimplemented!()
+					}
+
 					fn verify_proof(_leaf: EncodableOpaqueLeaf, _proof: Proof<MmrRootHash>)
 						-> Result<(), MmrError> {
 						unimplemented!()

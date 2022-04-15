@@ -74,6 +74,29 @@ pub trait MmrApi<BlockHash> {
 		leaf_index: LeafIndex,
 		at: Option<BlockHash>,
 	) -> Result<LeafProof<BlockHash>>;
+
+	/// Generate MMR proof for given leaf index.
+	///
+	/// This method calls into a runtime with MMR pallet included and attempts to generate
+	/// MMR proof for leaf at given `leaf_index` with MMR fixed to the state with exactly
+	/// `leaves_count` leaves. `leaves_count` must be larger than the `leaf_index` for
+	/// function to succeed.
+	///
+	/// Optionally, a block hash at which the runtime should be queried can be specified.
+	/// Note that specifying the block hash isn't super-useful here, unless you're generating
+	/// proof using non-finalized blocks where there are several competing forks. That's because
+	/// MMR state will be fixed to the state with `leaves_count`, which already points to some
+	/// historical block.
+	///
+	/// Returns the (full) leaf itself and a proof for this leaf (compact encoding, i.e. hash of
+	/// the leaf). Both parameters are SCALE-encoded.
+	#[rpc(name = "mmr_generateProof")]
+	fn generate_historical_proof(
+		&self,
+		leaf_index: LeafIndex,
+		leaves_index: LeafIndex,
+		at: Option<BlockHash>,
+	) -> Result<LeafProof<BlockHash>>;
 }
 
 /// An implementation of MMR specific RPC methods.
@@ -111,6 +134,30 @@ where
 				&BlockId::hash(block_hash),
 				sp_core::ExecutionContext::OffchainCall(None),
 				leaf_index,
+			)
+			.map_err(runtime_error_into_rpc_error)?
+			.map_err(mmr_error_into_rpc_error)?;
+
+		Ok(LeafProof::new(block_hash, leaf, proof))
+	}
+
+	fn generate_historical_proof(
+		&self,
+		leaf_index: LeafIndex,
+		leaves_count: LeafIndex,
+		at: Option<<Block as BlockT>::Hash>,
+	) -> Result<LeafProof<<Block as BlockT>::Hash>> {
+		let api = self.client.runtime_api();
+		let block_hash = at.unwrap_or_else(||
+			// If the block hash is not supplied assume the best block.
+			self.client.info().best_hash);
+
+		let (leaf, proof) = api
+			.generate_historical_proof_with_context(
+				&BlockId::hash(block_hash),
+				sp_core::ExecutionContext::OffchainCall(None),
+				leaf_index,
+				leaves_count,
 			)
 			.map_err(runtime_error_into_rpc_error)?
 			.map_err(mmr_error_into_rpc_error)?;

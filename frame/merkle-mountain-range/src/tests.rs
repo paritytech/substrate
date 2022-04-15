@@ -347,3 +347,101 @@ fn should_verify_on_the_next_block_since_there_is_no_pruning_yet() {
 		assert_eq!(crate::Pallet::<Test>::verify_leaf(leaf, proof5), Ok(()));
 	});
 }
+
+#[test]
+fn able_to_generate_historical_proofs() {
+	let _ = env_logger::try_init();
+	let mut ext = new_test_ext();
+
+	// Given full client (where the code is executed) that has 7 blocks (aka 7 MMR leafs).
+	// Let's imagine that the state for blocks 1..=5 has been pruned already.
+	//
+	// And BEEFY light client, which has synced to the 3rd block and needs to verify some
+	// MMR proof there. It can't just use `generate_proof(block_3_hash)`, because the state
+	// has already been discarded. So it must use `generate_historical_proof` instead.
+	let mmr_root_known_to_light_client = ext.execute_with(|| {
+		new_block(); // 1
+		new_block(); // 2
+		new_block(); // 3
+		let mmr_root_at_3 = crate::RootHash::<Test>::get();
+		new_block(); // 4
+		new_block(); // 5
+		new_block(); // 6
+		new_block(); // 7
+		mmr_root_at_3
+	});
+	ext.persist_offchain_overlay();
+
+	// Try to generate historical proof using latest state. This requires the offchain
+	// extensions to be present to retrieve full leaf data.
+	register_offchain_ext(&mut ext);
+	ext.execute_with(|| {
+		// ensure that there are exactly 7 leaves
+		assert_eq!(crate::NumberOfLeaves::<Test>::get(), 7);
+
+		// try to generate both regular and historical proofs
+		let leaf_index = 2;
+		let leaf_count_at_block_3 = 3;
+		let (_, regular_proof) = crate::Pallet::<Test>::generate_proof(leaf_index).unwrap();
+		let (leaf, historical_proof) =
+			crate::Pallet::<Test>::generate_historical_proof(leaf_index, leaf_count_at_block_3)
+				.unwrap();
+
+		// verify that the regular proof has 3 items:
+		//
+		//       D
+		//     /   \
+		//    /     \
+		//   A       B       C
+		//  / \     / \     / \
+		// 1   2   3   4   5   6  7
+		//
+		// we're proving 3 => we need { 4, A, C++7 }
+		assert_eq!(regular_proof.items.len(), 3);
+
+		// verify that the historical proof has 1 item:
+		//
+		//   A
+		//  / \
+		// 1   2   3
+		//
+		// we're proving 3 => we need { A }
+		assert_eq!(historical_proof.items.len(), 1);
+
+		// verify that the light client is able to verify historical proof using MMR root from block
+		// 3
+		let verification_result = verify_leaf_proof::<HashingOf<Test, ()>, LeafOf<Test, ()>>(
+			mmr_root_known_to_light_client,
+			leaf.into(),
+			historical_proof,
+		);
+		assert_eq!(verification_result, Ok(()));
+	});
+}
+
+#[test]
+fn does_not_panic_when_generating_historical_proofs() {
+	let _ = env_logger::try_init();
+	let mut ext = new_test_ext();
+
+	// given 7 blocks (7 MMR leaves)
+	ext.execute_with(|| init_chain(7));
+	ext.persist_offchain_overlay();
+
+	// Try to generate historical proof with invalid arguments. This requires the offchain
+	// extensions to be present to retrieve full leaf data.
+	register_offchain_ext(&mut ext);
+	ext.execute_with(|| {
+		// when leaf index is invalid
+		assert_eq!(
+			crate::Pallet::<Test>::generate_historical_proof(10, 7),
+			Err(Error::LeafNotFound),
+		);
+
+		// when leaves count is invalid
+		assert_eq!(
+			crate::Pallet::<Test>::generate_historical_proof(3, 100),
+			Err(Error::GenerateProof),
+		);
+	});
+}

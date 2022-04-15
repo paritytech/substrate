@@ -1786,6 +1786,14 @@ impl_runtime_apis! {
 				.map(|(leaf, proof)| (mmr::EncodableOpaqueLeaf::from_leaf(&leaf), proof))
 		}
 
+		fn generate_historical_proof(
+			leaf_index: pallet_mmr::primitives::LeafIndex,
+			leaves_count: pallet_mmr::primitives::LeafIndex,
+		) -> Result<(mmr::EncodableOpaqueLeaf, mmr::Proof<mmr::Hash>), mmr::Error> {
+			Mmr::generate_historical_proof(leaf_index, leaves_count)
+				.map(|(leaf, proof)| (mmr::EncodableOpaqueLeaf::from_leaf(&leaf), proof))
+		}
+
 		fn verify_proof(leaf: mmr::EncodableOpaqueLeaf, proof: mmr::Proof<mmr::Hash>)
 			-> Result<(), mmr::Error>
 		{
