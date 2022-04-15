@@ -426,7 +426,7 @@ where
 	}
 
 	/// Actually execute all transitions for `block`.
-	pub fn execute_block_ver_impl(block: Block, public: Vec<u8>, precedes_new_session: bool) {
+	pub fn execute_block_ver_impl(block: Block, public: Vec<u8>, _precedes_new_session: bool) {
 		sp_io::init_tracing();
 		sp_tracing::within_span! {
 			sp_tracing::info_span!("execute_block", ?block);
@@ -462,9 +462,6 @@ where
 
 			let curr_block_txs_count = curr_block_txs.count();
 			let curr_block_inherents_count = curr_block_inherents.clone().count();
-			if precedes_new_session && ( curr_block_txs_count != curr_block_inherents_count ){
-				panic!("only inherents can be included in block that precede new session");
-			}
 			let prev_block_extrinsics = prev_block_txs.filter(|e| e.is_signed().unwrap());
 			let tx_to_be_executed = curr_block_inherents.chain(prev_block_extrinsics).cloned().collect::<Vec<_>>();
 

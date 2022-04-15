@@ -50,8 +50,6 @@ use ver_api::VerApi;
 use prometheus_endpoint::Registry as PrometheusRegistry;
 use sc_proposer_metrics::MetricsLink as PrometheusMetrics;
 use sp_inherents::InherentDataProvider;
-use sp_runtime::traits::One;
-use std::ops::Add;
 
 /// Default block size limit in bytes used by [`Proposer`].
 ///
@@ -362,7 +360,6 @@ where
 	) -> Result<Proposal<Block, backend::TransactionFor<B, Block>, PR::Proof>, sp_blockchain::Error>
 	{
 		let propose_with_start = time::Instant::now();
-		let next_block_number = self.parent_number.add(One::one()).add(One::one());
 
 		let mut block_builder =
 			self.client.new_block_at(&self.parent_id, inherent_digests, PR::ENABLED)?;
@@ -378,8 +375,6 @@ where
 					.as_secs_f64(),
 			);
 		});
-		let api = self.client.runtime_api();
-		let omit_transactions = api.is_new_session(&self.parent_id, next_block_number).unwrap();
 
 		debug!(target:"block_builder", "found {} inherents", inherents.len());
 		for inherent in inherents {
@@ -440,9 +435,8 @@ where
 
 		let block_size_limit = block_size_limit.unwrap_or(self.default_block_size_limit) / 2;
 
-
-		debug!("Attempting to push transactions from the pool.");
-		debug!("Pool status: {:?}", self.transaction_pool.status());
+		debug!(target: "block_builder", "Attempting to push transactions from the pool.");
+		debug!(target: "block_builder", "Pool status: {:?}", self.transaction_pool.status());
 		let mut transaction_pushed = false;
 		let mut hit_block_size_limit = false;
 
@@ -456,10 +450,6 @@ where
 			seed,
 			|at,api| {
             let mut valid_txs = Vec::new();
-			if omit_transactions {
-				debug!(target:"block_builder", "new session starts in next block, omiting transaction from the pool");
-				return valid_txs;
-			}
 
 			while let Some(pending_tx) = pending_iterator.next() {
 				let now = (self.now)();
@@ -608,12 +598,10 @@ mod tests {
 
 	use futures::executor::block_on;
 	use parking_lot::Mutex;
-	use sc_client_api::Backend;
 	use sc_transaction_pool::BasicPool;
 	use sc_transaction_pool_api::{ChainEvent, MaintainedTransactionPool, TransactionSource};
-	use sp_api::Core;
 	use sp_blockchain::HeaderBackend;
-	use sp_consensus::{BlockOrigin, Environment, Proposer};
+	use sp_consensus::{Environment, Proposer};
 	use sp_core::Pair;
 	use sp_runtime::traits::NumberFor;
 	use substrate_test_runtime_client::{
@@ -749,7 +737,7 @@ mod tests {
 
 	#[test]
 	fn proposed_storage_changes_should_match_execute_block_storage_changes() {
-		let (client, backend) = TestClientBuilder::new().build_with_backend();
+		let (client, _) = TestClientBuilder::new().build_with_backend();
 		let client = Arc::new(client);
 		let spawner = sp_core::testing::TaskExecutor::new();
 		let txpool = BasicPool::new_full(
@@ -789,8 +777,8 @@ mod tests {
 
 		assert_eq!(proposal.block.extrinsics().len(), 1);
 
-		let api = client.runtime_api();
 		// as test runtime does not implement ver block execution below does not apply
+		// let api = client.runtime_api();
 		// api.execute_block(&block_id, proposal.block).unwrap();
 		//
 		// let state = backend.state_at(block_id).unwrap();
@@ -805,7 +793,7 @@ mod tests {
 
 	#[test]
 	fn should_cease_building_block_when_block_limit_is_reached() {
-		env_logger::try_init();
+		let _ = env_logger::try_init();
 		let client = Arc::new(substrate_test_runtime_client::new());
 		let spawner = sp_core::testing::TaskExecutor::new();
 		let txpool = BasicPool::new_full(
@@ -835,7 +823,7 @@ mod tests {
 
 		let mut size = genesis_header.encoded_size() + Vec::<Extrinsic>::new().encoded_size();
 
-		println!("{}", size);
+		println!("INIT {}", size);
 		for i in extrinsics.iter() {
 			size += i.encoded_size();
 			println!("{}", size)
@@ -856,7 +844,7 @@ mod tests {
 			Default::default(),
 			Default::default(),
 			deadline,
-			Some(block_limit),
+			Some(block_limit * 2),
 		))
 		.map(|r| r.block)
 		.unwrap();
@@ -889,7 +877,7 @@ mod tests {
 			Default::default(),
 			Default::default(),
 			deadline,
-			Some(block_limit),
+			Some(block_limit * 2),
 		))
 		.map(|r| r.block)
 		.unwrap();
