@@ -4868,14 +4868,13 @@ fn ledger_slash_works() {
 	assert_eq!(LedgerSlashPerEra::get().0, 0);
 	assert_eq!(LedgerSlashPerEra::get().1, BTreeMap::from([(4, 0), (5, 0)]));
 
-	// TODO test does not slash earlier eras
 	// Given
 	ledger.unlocking = bounded_vec![c(4, 100), c(5, 100), c(6, 100), c(7, 100)];
 	ledger.total = 4 * 100;
 	ledger.active = 0;
 	// When the first 2 chunks don't overlap with the affected range of unlock eras.
-	assert_eq!(ledger.slash(140, 0, 2), 140); // TODO
-										  // Then
+	assert_eq!(ledger.slash(140, 0, 2), 140);
+	// Then
 	assert_eq!(ledger.unlocking, vec![c(4, 100), c(5, 100), c(6, 30), c(7, 30)]);
 	assert_eq!(ledger.total, 4 * 100 - 140);
 	assert_eq!(LedgerSlashPerEra::get().0, 0);
