@@ -355,13 +355,7 @@ fn should_verify_batch_proof() {
 	ext.execute_with(|| {
 		init_chain(7);
 		// then
-		assert_eq!(
-			crate::Pallet::<Test>::verify_leaves(
-				leaves.into_iter().map(|leaf| leaf).collect(),
-				proof
-			),
-			Ok(())
-		);
+		assert_eq!(crate::Pallet::<Test>::verify_leaves(leaves, proof), Ok(()));
 	});
 }
 

@@ -68,6 +68,17 @@ impl<Hash> OnNewRoot<Hash> for () {
 	fn on_new_root(_root: &Hash) {}
 }
 
+/// A MMR proof data for one of the leaves.
+#[derive(codec::Encode, codec::Decode, RuntimeDebug, Clone, PartialEq, Eq)]
+pub struct Proof<Hash> {
+	/// The index of the leaf the proof is for.
+	pub leaf_index: LeafIndex,
+	/// Number of leaves in MMR, when the proof was generated.
+	pub leaf_count: NodeIndex,
+	/// Proof elements (hashes of siblings of inner nodes on the path to the leaf).
+	pub items: Vec<Hash>,
+}
+
 /// A full leaf content stored in the offchain-db.
 pub trait FullLeaf: Clone + PartialEq + fmt::Debug {
 	/// Encode the leaf either in it's full or compact form.
@@ -351,6 +362,23 @@ pub struct BatchProof<Hash> {
 	pub items: Vec<Hash>,
 }
 
+impl<Hash> TryFrom<BatchProof<Hash>> for Proof<Hash> {
+	type Error = &'static str;
+	fn try_from(proof: BatchProof<Hash>) -> Result<Self, Self::Error> {
+		if proof.leaf_indices.len() > 1 {
+			return Err("BatchProof can only be converted to Proof for single leaf")
+		}
+		Ok(Proof {
+			leaf_index: proof
+				.leaf_indices
+				.get(0)
+				.ok_or("BatchProof can only be converted to Proof for single leaf")?
+				.clone(),
+			leaf_count: proof.leaf_count,
+			items: proof.items,
+		})
+	}
+}
 /// Merkle Mountain Range operation error.
 #[derive(RuntimeDebug, codec::Encode, codec::Decode, PartialEq, Eq)]
 pub enum Error {
@@ -397,14 +425,14 @@ sp_api::decl_runtime_apis! {
 	/// API to interact with MMR pallet.
 	pub trait MmrApi<Hash: codec::Codec> {
 		/// Generate MMR proof for a leaf under given index.
-		fn generate_proof(leaf_index: LeafIndex) -> Result<(EncodableOpaqueLeaf, BatchProof<Hash>), Error>;
+		fn generate_proof(leaf_index: LeafIndex) -> Result<(EncodableOpaqueLeaf, Proof<Hash>), Error>;
 
 		/// Verify MMR proof against on-chain MMR.
 		///
 		/// Note this function will use on-chain MMR root hash and check if the proof
 		/// matches the hash.
 		/// See [Self::verify_proof_stateless] for a stateless verifier.
-		fn verify_proof(leaf: EncodableOpaqueLeaf, proof: BatchProof<Hash>) -> Result<(), Error>;
+		fn verify_proof(leaf: EncodableOpaqueLeaf, proof: Proof<Hash>) -> Result<(), Error>;
 
 		/// Verify MMR proof against given root hash.
 		///
@@ -412,7 +440,7 @@ sp_api::decl_runtime_apis! {
 		/// proof is verified against given MMR root hash.
 		///
 		/// The leaf data is expected to be encoded in it's compact form.
-		fn verify_proof_stateless(root: Hash, leaf: EncodableOpaqueLeaf, proof: BatchProof<Hash>)
+		fn verify_proof_stateless(root: Hash, leaf: EncodableOpaqueLeaf, proof: Proof<Hash>)
 			-> Result<(), Error>;
 
 		/// Return the on-chain MMR root hash.
@@ -454,13 +482,13 @@ mod tests {
 
 	type Test = DataOrHash<Keccak256, String>;
 	type TestCompact = Compact<Keccak256, (Test, Test)>;
-	type TestProof = BatchProof<<Keccak256 as traits::Hash>::Output>;
+	type TestProof = Proof<<Keccak256 as traits::Hash>::Output>;
 
 	#[test]
 	fn should_encode_decode_proof() {
 		// given
-		let proof: TestProof = BatchProof {
-			leaf_indices: vec![5],
+		let proof: TestProof = Proof {
+			leaf_index: 5,
 			leaf_count: 10,
 			items: vec![
 				hex("c3e7ba6b511162fead58f2c8b5764ce869ed1118011ac37392522ed16720bbcd"),
