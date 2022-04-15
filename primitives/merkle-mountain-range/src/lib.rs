@@ -363,21 +363,14 @@ pub struct BatchProof<Hash> {
 	pub items: Vec<Hash>,
 }
 
-impl<Hash> TryFrom<BatchProof<Hash>> for Proof<Hash> {
-	type Error = &'static str;
-	fn try_from(proof: BatchProof<Hash>) -> Result<Self, Self::Error> {
-		if proof.leaf_indices.len() > 1 {
-			return Err("BatchProof can only be converted to Proof for single leaf")
-		}
-		Ok(Proof {
-			leaf_index: proof
-				.leaf_indices
-				.get(0)
-				.ok_or("BatchProof can only be converted to Proof for single leaf")?
-				.clone(),
+impl<Hash> From<BatchProof<Hash>> for Proof<Hash> {
+	/// Will panic if leaf indices is less than 1
+	fn from(proof: BatchProof<Hash>) -> Self {
+		Proof {
+			leaf_index: proof.leaf_indices[0],
 			leaf_count: proof.leaf_count,
 			items: proof.items,
-		})
+		}
 	}
 }
 
