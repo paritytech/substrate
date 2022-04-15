@@ -37,7 +37,7 @@ use sp_runtime::traits::{Convert, Hash, Member};
 use sp_std::prelude::*;
 
 use beefy_primitives::mmr::{BeefyDataProvider, BeefyNextAuthoritySet, MmrLeaf, MmrLeafVersion};
-use pallet_mmr::primitives::LeafDataProvider;
+use pallet_mmr::{LeafDataProvider, ParentNumberAndHash};
 
 use frame_support::traits::Get;
 
@@ -150,7 +150,7 @@ where
 	fn leaf_data() -> Self::LeafData {
 		MmrLeaf {
 			version: T::LeafVersion::get(),
-			parent_number_and_hash: frame_system::Pallet::<T>::leaf_data(),
+			parent_number_and_hash: ParentNumberAndHash::<T>::leaf_data(),
 			leaf_extra: T::BeefyDataProvider::extra_data(),
 			beefy_next_authority_set: Pallet::<T>::update_beefy_next_authority_set(),
 		}
