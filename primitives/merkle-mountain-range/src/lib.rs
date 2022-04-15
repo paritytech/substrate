@@ -25,6 +25,7 @@ use sp_runtime::traits;
 use sp_std::fmt;
 #[cfg(not(feature = "std"))]
 use sp_std::prelude::Vec;
+use sp_std::vec;
 
 /// A type to describe node position in the MMR (node index).
 pub type NodeIndex = u64;
@@ -377,6 +378,16 @@ impl<Hash> TryFrom<BatchProof<Hash>> for Proof<Hash> {
 			leaf_count: proof.leaf_count,
 			items: proof.items,
 		})
+	}
+}
+
+impl<Hash> From<Proof<Hash>> for BatchProof<Hash> {
+	fn from(proof: Proof<Hash>) -> Self {
+		BatchProof {
+			leaf_indices: vec![proof.leaf_index],
+			leaf_count: proof.leaf_count,
+			items: proof.items,
+		}
 	}
 }
 /// Merkle Mountain Range operation error.
