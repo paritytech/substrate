@@ -292,7 +292,6 @@ impl crate::pallet::pallet::Config for Test {
 	type MaxUnlockingChunks = ConstU32<32>;
 	type OnStakerSlash = OnStakerSlashMock<Test>;
 	type BenchmarkingConfig = TestBenchmarkingConfig;
-	type OnStakerSlash = ();
 	type WeightInfo = ();
 }
 
