@@ -15,7 +15,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use platforms::*;
 use std::{borrow::Cow, process::Command};
 
 /// Generate the `cargo:` key output
@@ -42,26 +41,13 @@ pub fn generate_cargo_keys() {
 	println!("cargo:rustc-env=SUBSTRATE_CLI_IMPL_VERSION={}", get_version(&commit))
 }
 
-fn get_platform() -> String {
-	let env_dash = if TARGET_ENV.is_some() { "-" } else { "" };
-
-	format!(
-		"{}-{}{}{}",
-		TARGET_ARCH.as_str(),
-		TARGET_OS.as_str(),
-		env_dash,
-		TARGET_ENV.map(|x| x.as_str()).unwrap_or(""),
-	)
-}
-
 fn get_version(impl_commit: &str) -> String {
 	let commit_dash = if impl_commit.is_empty() { "" } else { "-" };
 
 	format!(
-		"{}{}{}-{}",
+		"{}{}{}",
 		std::env::var("CARGO_PKG_VERSION").unwrap_or_default(),
 		commit_dash,
-		impl_commit,
-		get_platform(),
+		impl_commit
 	)
 }
