@@ -562,8 +562,8 @@ impl<T: Config> BondedPool<T> {
 	}
 
 	fn can_kick(&self, who: &T::AccountId) -> bool {
-		*who == self.roles.root ||
-			*who == self.roles.state_toggler && self.state == PoolState::Blocked
+		(*who == self.roles.root || *who == self.roles.state_toggler) &&
+			self.state == PoolState::Blocked
 	}
 
 	fn can_toggle_state(&self, who: &T::AccountId) -> bool {
