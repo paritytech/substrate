@@ -4935,29 +4935,6 @@ fn ledger_slash_works() {
 		BTreeMap::from([(4, 0), (5, 100 / 2), (6, 0), (7, 250 / 2)])
 	);
 
-	// Given we have the same as above,
-	ledger.unlocking = bounded_vec![c(4, 40), c(5, 100), c(6, 10), c(7, 250)];
-	ledger.active = 500;
-	ledger.total = 40 + 10 + 100 + 250 + 500; // 900
-	assert_eq!(
-		ledger.slash(
-			900 / 2,
-			25, /* min balance - chunks with era 5 & 5 will be slashed to <=25, causing them to
-			     * get swept */
-			0
-		),
-		475
-	);
-	// Then
-	assert_eq!(ledger.active, 500 / 2);
-	assert_eq!(ledger.unlocking, vec![c(5, 100 / 2), c(7, 250 / 2)]);
-	assert_eq!(ledger.total, 425);
-	assert_eq!(LedgerSlashPerEra::get().0, 500 / 2);
-	assert_eq!(
-		LedgerSlashPerEra::get().1,
-		BTreeMap::from([(4, 0), (5, 100 / 2), (6, 0), (7, 250 / 2)])
-	);
-
 	// Given
 	// slash order --------------------NA--------2----------0----------1----
 	ledger.unlocking = bounded_vec![c(4, 40), c(5, 100), c(6, 10), c(7, 250)];
