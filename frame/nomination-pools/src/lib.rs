@@ -216,6 +216,11 @@
 //! because it's vote weight will not be counted until the election snapshot in active era + 1.
 //! Related: <https://github.com/paritytech/substrate/issues/10861>
 //!
+//! _Note to maintainers_: In order to ensure the reward account never falls below the existential
+//! deposit, at creation the reward account must be endowed with the existential deposit. All logic
+//! for calculating rewards then does not see that existential deposit as part of the free balance.
+//! See `RewardPool::current_balance`.
+//!
 //! **Relevant extrinsics:**
 //!
 //! * [`Call::claim_payout`]
