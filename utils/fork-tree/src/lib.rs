@@ -227,10 +227,10 @@ where
 				stack.push((old_children, &mut new_children[i].children as *mut _));
 			}
 			// Process the next children lists.
-			(old_children, new_children) = match stack.pop() {
-				Some((old_children, new_children_ptr)) => {
-					let new_children = unsafe { &mut *new_children_ptr };
-					(old_children, new_children)
+			match stack.pop() {
+				Some((old, new_ptr)) => {
+					old_children = old;
+					new_children = unsafe { &mut *new_ptr };
 				},
 				None => break,
 			};
