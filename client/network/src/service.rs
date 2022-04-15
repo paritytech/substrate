@@ -46,7 +46,7 @@ use crate::{
 	transactions, transport, DhtEvent, ExHashT, NetworkStateInfo, NetworkStatus, ReputationChange,
 };
 
-use crate::Mixnet;
+use mixnet::Mixnet;
 use codec::Encode as _;
 use futures::{channel::oneshot, prelude::*};
 use libp2p::{
@@ -91,7 +91,7 @@ pub use behaviour::{
 };
 
 mod metrics;
-pub(crate) mod out_events;
+mod out_events;
 mod signature;
 #[cfg(test)]
 mod tests;
@@ -201,9 +201,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			None => (None, None),
 		};
 
-		let shared_authority_set = warp_sync_provider.as_ref().unwrap(); // TODO remove the unwrap or expect warpsynch always init
-		let shared_authority_set: Arc<dyn WarpSyncProvider<B>> = shared_authority_set.clone(); // TODO only if mixnet?
-
 		let (protocol, peerset_handle, mut known_addresses) = Protocol::new(
 			protocol::ProtocolConfig {
 				roles: From::from(&params.role),
@@ -253,14 +250,8 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 		let num_connected = Arc::new(AtomicUsize::new(0));
 		let is_major_syncing = Arc::new(AtomicBool::new(false));
 
-		let mut event_streams = out_events::OutChannels::new(params.metrics_registry.as_ref())?;
-
 		// Build the swarm.
 		let client = params.chain.clone();
-		let client_stream = params.chain.clone();
-		use crate::warp_request_handler::WarpSyncProvider;
-		use sc_client_api::BlockchainEvents;
-		use sp_runtime::traits::Header;
 		let (mut swarm, bandwidth): (Swarm<B>, _) = {
 			let user_agent = format!(
 				"{} ({})",
@@ -464,7 +455,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			service,
 			import_queue: params.import_queue,
 			from_service,
-			event_streams,
+			event_streams: out_events::OutChannels::new(params.metrics_registry.as_ref())?,
 			peers_notifications_sinks,
 			tx_handler_controller,
 			metrics,

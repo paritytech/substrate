@@ -330,15 +330,3 @@ pub struct NetworkStatus<B: BlockT> {
 	/// Warp sync in progress.
 	pub warp_sync: Option<protocol::sync::WarpSyncProgress<B>>,
 }
-
-/// Command for the mixnet behaviour.
-#[derive(Clone, Debug)]
-pub enum MixnetCommand {
-	/// Finalized block.
-	BlockFinalized,
-	/// New authority set on block finalized.
-	NewAuthoritySet(sp_finality_grandpa::AuthorityList),
-}
-
-pub type MixnetWorker = ::mixnet::MixnetWorker<MixnetCommand>;
-pub type Mixnet = ::mixnet::Mixnet<MixnetCommand>;

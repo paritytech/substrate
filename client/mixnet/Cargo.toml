@@ -1,0 +1,29 @@
+[package]
+description = "Substrate mixnet"
+name = "sc-mixnet"
+version = "0.1.0-dev"
+license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2021"
+homepage = "https://substrate.io"
+repository = "https://github.com/paritytech/substrate/"
+documentation = "https://docs.rs/sc-mixnet"
+readme = "README.md"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+futures = "0.3.21"
+libp2p = "0.40.0"
+log = "0.4.8"
+mixnet = { git = "https://github.com/paritytech/mixnet", version = "0.1.0"}
+rand = "0.7.2"
+
+sp-runtime = { version = "6.0.0", path = "../../primitives/runtime" }
+sp-finality-grandpa = { version = "4.0.0-dev", path = "../../primitives/finality-grandpa" } # TODO is there reexport from  sc crate?
+
+sc-client-api = { version = "4.0.0-dev", path = "../api" }
+sc-finality-grandpa = { version = "0.10.0-dev", path = "../finality-grandpa" }
+sc-network = { version = "0.10.0-dev", path = "../network" }
+sc-utils = { version = "4.0.0-dev", path = "../utils" }
