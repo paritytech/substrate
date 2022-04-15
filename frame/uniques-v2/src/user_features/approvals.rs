@@ -62,6 +62,55 @@ impl<T: Config> Pallet<T> {
 		})
 	}
 
-	// remove approvals
-	// apply approval to transfer method
+	pub fn do_remove_transfer_approval(
+		caller: T::AccountId,
+		collection_id: T::CollectionId,
+		item_id: T::ItemId,
+		delegate: T::AccountId,
+	) -> DispatchResult {
+		Items::<T>::try_mutate(collection_id, item_id, |maybe_item| {
+			let item = maybe_item.as_mut().ok_or(Error::<T>::ItemNotFound)?;
+			ensure!(item.owner == caller, Error::<T>::NotAuthorized);
+
+			// TODO: shall we throw an error if the approval can't be found?
+
+			// remove the approval
+			if let Some(pos) = item.approvals.iter().position(|ap| delegate == ap.who) {
+				item.approvals.remove(pos);
+			}
+
+			Self::deposit_event(Event::ApprovalRemoved {
+				collection_id,
+				item_id,
+				owner: item.owner.clone(),
+				delegate,
+			});
+
+			Ok(())
+		})
+	}
+
+	pub fn do_clear_all_transfer_approvals(
+		caller: T::AccountId,
+		collection_id: T::CollectionId,
+		item_id: T::ItemId,
+	) -> DispatchResult {
+		Items::<T>::try_mutate(collection_id, item_id, |maybe_item| {
+			let item = maybe_item.as_mut().ok_or(Error::<T>::ItemNotFound)?;
+			ensure!(item.owner == caller, Error::<T>::NotAuthorized);
+
+			// clear the approvals
+			item.approvals = Default::default();
+
+			Self::deposit_event(Event::ApprovalsCleared {
+				collection_id,
+				item_id,
+				owner: item.owner.clone(),
+			});
+
+			Ok(())
+		})
+	}
+
+	// TODO: apply approval to transfer method
 }

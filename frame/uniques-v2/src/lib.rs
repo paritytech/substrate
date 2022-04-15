@@ -266,9 +266,14 @@ pub mod pallet {
 			owner: T::AccountId,
 			delegate: T::AccountId,
 		},
+		ApprovalsCleared {
+			collection_id: T::CollectionId,
+			item_id: T::ItemId,
+			owner: T::AccountId,
+		},
 		ApprovalRemoved {
-			collection: T::CollectionId,
-			item: T::ItemId,
+			collection_id: T::CollectionId,
+			item_id: T::ItemId,
 			owner: T::AccountId,
 			delegate: T::AccountId,
 		},
@@ -447,6 +452,30 @@ pub mod pallet {
 			let config =
 				CollectionConfigs::<T>::get(collection_id).ok_or(Error::<T>::CollectionNotFound)?;
 			Self::do_approve_transfer(sender, collection_id, item_id, delegate, deadline, config)?;
+			Ok(())
+		}
+
+		#[pallet::weight(0)]
+		pub fn remove_transfer_approval(
+			origin: OriginFor<T>,
+			collection_id: T::CollectionId,
+			item_id: T::ItemId,
+			delegate: <T::Lookup as StaticLookup>::Source,
+		) -> DispatchResult {
+			let sender = ensure_signed(origin)?;
+			let delegate = T::Lookup::lookup(delegate)?;
+			Self::do_remove_transfer_approval(sender, collection_id, item_id, delegate)?;
+			Ok(())
+		}
+
+		#[pallet::weight(0)]
+		pub fn clear_all_transfer_approvals(
+			origin: OriginFor<T>,
+			collection_id: T::CollectionId,
+			item_id: T::ItemId,
+		) -> DispatchResult {
+			let sender = ensure_signed(origin)?;
+			Self::do_clear_all_transfer_approvals(sender, collection_id, item_id)?;
 			Ok(())
 		}
 

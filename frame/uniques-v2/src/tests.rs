@@ -759,10 +759,11 @@ fn buy_item_should_work() {
 }
 
 #[test]
-fn add_approval_should_work() {
+fn add_remove_approval_should_work() {
 	new_test_ext().execute_with(|| {
 		let user_1 = 1;
 		let user_2 = 2;
+		let user_3 = 3;
 		let collection_id = 0;
 		let item_id = 1;
 
@@ -802,6 +803,36 @@ fn add_approval_should_work() {
 		));
 
 		assert_eq!(approvals(collection_id, item_id), vec![(user_2, Some(2))]);
+
+		// add one more approval
+		assert_ok!(Uniques::approve_transfer(
+			Origin::signed(user_1),
+			collection_id,
+			item_id,
+			user_3,
+			None
+		));
+
+		assert_eq!(approvals(collection_id, item_id), vec![(user_2, Some(2)), (user_3, None)]);
+
+		// ensure we can remove the approval
+		assert_ok!(Uniques::remove_transfer_approval(
+			Origin::signed(user_1),
+			collection_id,
+			item_id,
+			user_2
+		));
+
+		assert_eq!(approvals(collection_id, item_id), vec![(user_3, None)]);
+
+		// ensure we can clear all the approvals
+		assert_ok!(Uniques::clear_all_transfer_approvals(
+			Origin::signed(user_1),
+			collection_id,
+			item_id
+		));
+
+		assert_eq!(approvals(collection_id, item_id), vec![]);
 
 		// ensure we can't buy an item when the collection has a NonTransferableItems flag
 		let collection_id = 1;
