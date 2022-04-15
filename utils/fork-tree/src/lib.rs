@@ -125,47 +125,47 @@ where
 	/// imported in order.
 	///
 	/// Returns `true` if the imported node is a root.
-	pub fn old_import<F, E>(
-		&mut self,
-		mut hash: H,
-		mut number: N,
-		mut data: V,
-		is_descendent_of: &F,
-	) -> Result<bool, Error<E>>
-	where
-		E: std::error::Error,
-		F: Fn(&H, &H) -> Result<bool, E>,
-	{
-		if let Some(ref best_finalized_number) = self.best_finalized_number {
-			if number <= *best_finalized_number {
-				return Err(Error::Revert)
-			}
-		}
+	// pub fn old_import<F, E>(
+	// 	&mut self,
+	// 	mut hash: H,
+	// 	mut number: N,
+	// 	mut data: V,
+	// 	is_descendent_of: &F,
+	// ) -> Result<bool, Error<E>>
+	// where
+	// 	E: std::error::Error,
+	// 	F: Fn(&H, &H) -> Result<bool, E>,
+	// {
+	// 	if let Some(ref best_finalized_number) = self.best_finalized_number {
+	// 		if number <= *best_finalized_number {
+	// 			return Err(Error::Revert)
+	// 		}
+	// 	}
 
-		for root in self.roots.iter_mut() {
-			if root.hash == hash {
-				return Err(Error::Duplicate)
-			}
+	// 	for root in self.roots.iter_mut() {
+	// 		if root.hash == hash {
+	// 			return Err(Error::Duplicate)
+	// 		}
 
-			match root.import(hash, number, data, is_descendent_of)? {
-				Some((h, n, d)) => {
-					hash = h;
-					number = n;
-					data = d;
-				},
-				None => {
-					self.rebalance();
-					return Ok(false)
-				},
-			}
-		}
+	// 		match root.import(hash, number, data, is_descendent_of)? {
+	// 			Some((h, n, d)) => {
+	// 				hash = h;
+	// 				number = n;
+	// 				data = d;
+	// 			},
+	// 			None => {
+	// 				self.rebalance();
+	// 				return Ok(false)
+	// 			},
+	// 		}
+	// 	}
 
-		self.roots.push(Node { data, hash, number, children: Vec::new() });
+	// 	self.roots.push(Node { data, hash, number, children: Vec::new() });
 
-		self.rebalance();
+	// 	self.rebalance();
 
-		Ok(true)
-	}
+	// 	Ok(true)
+	// }
 
 	/// Import a new node into the tree. The given function `is_descendent_of`
 	/// should return `true` if the second hash (target) is a descendent of the
@@ -235,9 +235,46 @@ where
 	where
 		F: FnMut(&H, &N, V) -> VT,
 	{
-		let roots = self.roots.into_iter().map(|root| root.map(f)).collect();
+		let mut stack = vec![];
 
-		ForkTree { roots, best_finalized_number: self.best_finalized_number }
+		let mut new_tree = ForkTree {
+			roots: Default::default(),
+			best_finalized_number: self.best_finalized_number,
+		};
+
+		let mut old_children = self.roots;
+		let mut new_children = &mut new_tree.roots;
+
+		loop {
+			let mut tmp = vec![];
+			for node in old_children {
+				let data = f(&node.hash, &node.number, node.data);
+				new_children.push(Node {
+					data,
+					hash: node.hash,
+					number: node.number,
+					children: Default::default(),
+				});
+
+				tmp.push(node.children);
+			}
+			// SAFETY: take new children addresses after they are not subject to relocation.
+			for (i, old_children) in tmp.into_iter().enumerate() {
+				stack.push((old_children, &mut new_children[i].children as *mut _));
+			}
+			// SAFETY: borrow checker doesn't allow to have multiple mutable references to the
+			// same vector. Here we carefully use the raw pointer pushed after that referenced
+			// elements have a stable memory address.
+			(old_children, new_children) = match stack.pop() {
+				Some((old_children, new_children_ptr)) => {
+					let new_children = unsafe { &mut *new_children_ptr };
+					(old_children, new_children)
+				},
+				None => break,
+			};
+		}
+
+		new_tree
 	}
 
 	/// Find a node in the tree that is the deepest ancestor of the given
@@ -673,29 +710,39 @@ where
 	where
 		F: FnMut(&H, &N, &V) -> FilterAction,
 	{
-		let mut stack: Vec<*mut Node<H, N, V>> = vec![];
+		let mut stack = vec![];
 		let mut children = &mut self.roots;
 		let mut removed = vec![];
 
 		loop {
-			for node in std::mem::take(children) {
+			let mut push_indices = vec![];
+			let mut i = 0;
+			while i < children.len() {
+				let node = &children[i];
 				match filter(&node.hash, &node.number, &node.data) {
 					FilterAction::KeepNode => {
-						let i = children.len();
-						children.push(node);
-						stack.push(&mut children[i] as *mut _);
+						push_indices.push(i);
+						i += 1;
 					},
 					FilterAction::KeepTree => {
-						children.push(node);
+						i += 1;
 					},
 					FilterAction::Remove => {
-						removed.push(node);
+						removed.push(children.remove(i));
 					},
 				}
 			}
-
+			// This should be performed once we know that the addresses are stable,
+			// i.e. we've optionally removed some elements.
+			push_indices.into_iter().for_each(|i| {
+				stack.push(&mut children[i].children as *mut _);
+			});
+			// Get the next children list.
+			// SAFETY: mutable borrow of multiple parts of the tree is not allowed
+			// in safe Rust. This action is safe since we've taken care to push only
+			// pointers that are not subject to relocation.
 			children = match stack.pop() {
-				Some(n) => unsafe { &mut (*n).children },
+				Some(children) => unsafe { &mut *children },
 				None => break,
 			};
 		}
@@ -743,54 +790,54 @@ mod node_implementation {
 		}
 
 		/// Map node data into values of new types.
-		pub fn map<VT, F>(self, f: &mut F) -> Node<H, N, VT>
-		where
-			F: FnMut(&H, &N, V) -> VT,
-		{
-			let children = self.children.into_iter().map(|node| node.map(f)).collect();
+		// pub fn map<VT, F>(self, f: &mut F) -> Node<H, N, VT>
+		// where
+		// 	F: FnMut(&H, &N, V) -> VT,
+		// {
+		// 	let children = self.children.into_iter().map(|node| node.map(f)).collect();
 
-			let vt = f(&self.hash, &self.number, self.data);
-			Node { hash: self.hash, number: self.number, data: vt, children }
-		}
+		// 	let vt = f(&self.hash, &self.number, self.data);
+		// 	Node { hash: self.hash, number: self.number, data: vt, children }
+		// }
 
-		pub fn import<F, E: std::error::Error>(
-			&mut self,
-			mut hash: H,
-			mut number: N,
-			mut data: V,
-			is_descendent_of: &F,
-		) -> Result<Option<(H, N, V)>, Error<E>>
-		where
-			E: fmt::Debug,
-			F: Fn(&H, &H) -> Result<bool, E>,
-		{
-			if self.hash == hash {
-				return Err(Error::Duplicate)
-			};
+		// pub fn import<F, E: std::error::Error>(
+		// 	&mut self,
+		// 	mut hash: H,
+		// 	mut number: N,
+		// 	mut data: V,
+		// 	is_descendent_of: &F,
+		// ) -> Result<Option<(H, N, V)>, Error<E>>
+		// where
+		// 	E: fmt::Debug,
+		// 	F: Fn(&H, &H) -> Result<bool, E>,
+		// {
+		// 	if self.hash == hash {
+		// 		return Err(Error::Duplicate)
+		// 	};
 
-			if number <= self.number {
-				return Ok(Some((hash, number, data)))
-			}
+		// 	if number <= self.number {
+		// 		return Ok(Some((hash, number, data)))
+		// 	}
 
-			for node in self.children.iter_mut() {
-				match node.import(hash, number, data, is_descendent_of)? {
-					Some((h, n, d)) => {
-						hash = h;
-						number = n;
-						data = d;
-					},
-					None => return Ok(None),
-				}
-			}
+		// 	for node in self.children.iter_mut() {
+		// 		match node.import(hash, number, data, is_descendent_of)? {
+		// 			Some((h, n, d)) => {
+		// 				hash = h;
+		// 				number = n;
+		// 				data = d;
+		// 			},
+		// 			None => return Ok(None),
+		// 		}
+		// 	}
 
-			if is_descendent_of(&self.hash, &hash)? {
-				self.children.push(Node { data, hash, number, children: Vec::new() });
+		// 	if is_descendent_of(&self.hash, &hash)? {
+		// 		self.children.push(Node { data, hash, number, children: Vec::new() });
 
-				Ok(None)
-			} else {
-				Ok(Some((hash, number, data)))
-			}
-		}
+		// 		Ok(None)
+		// 	} else {
+		// 		Ok(Some((hash, number, data)))
+		// 	}
+		// }
 
 		pub fn find_node_index_where<F, P, E>(
 			&self,
@@ -1401,7 +1448,14 @@ mod test {
 	fn map_works() {
 		let (tree, _is_descendent_of) = test_fork_tree();
 
-		let _tree = tree.map(&mut |_, _, _| ());
+		let old_tree = tree.clone();
+		let new_tree = tree.map(&mut |hash, _, _| hash.to_owned());
+
+		assert!(new_tree.iter().all(|(hash, _, data)| hash == data));
+		assert_eq!(
+			old_tree.iter().map(|(hash, _, _)| *hash).collect::<Vec<_>>(),
+			new_tree.iter().map(|(hash, _, _)| *hash).collect::<Vec<_>>(),
+		);
 	}
 
 	#[test]
