@@ -1461,7 +1461,6 @@ pub mod pallet {
 					reward_pool_remaining,
 					ExistenceRequirement::AllowDeath,
 				);
-				T::Currency::make_free_balance_be(&reward_account, Zero::zero());
 				T::Currency::make_free_balance_be(&bonded_pool.bonded_account(), Zero::zero());
 				bonded_pool.remove();
 				None
