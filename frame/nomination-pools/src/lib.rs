@@ -1725,6 +1725,8 @@ impl<T: Config> Pallet<T> {
 		current_points: BalanceOf<T>,
 		new_funds: BalanceOf<T>,
 	) -> BalanceOf<T> {
+		let u256 = |x| T::BalanceToU256::convert(x);
+		let balance = |x| T::U256ToBalance::convert(x);
 		match (current_balance.is_zero(), current_points.is_zero()) {
 			(_, true) => new_funds.saturating_mul(POINTS_TO_BALANCE_INIT_RATIO.into()),
 			(true, false) => {
@@ -1734,10 +1736,10 @@ impl<T: Config> Pallet<T> {
 			},
 			(false, false) => {
 				// Equivalent to (current_points / current_balance) * new_funds
-				current_points
-					.saturating_mul(new_funds)
+				balance(u256(current_points)
+					.saturating_mul(u256(new_funds))
 					// We check for zero above
-					.div(current_balance)
+					.div(u256(current_balance)))
 			},
 		}
 	}
