@@ -609,7 +609,7 @@ impl<T: Config> BondedPool<T> {
 		points_to_issue
 	}
 
-	/// Dissolve i.e. unbond the given amount of points from this pool. This is the opposite of
+	/// Dissolve some points from the pool i.e. unbond the given amount of points from this pool. This is the opposite of
 	/// issuing some funds into the pool.
 	///
 	/// Mutates self in place, but does not write anything to storage.
