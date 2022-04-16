@@ -253,7 +253,7 @@ impl<T: Config> SignedSubmissions<T> {
 					true
 				}
 			})
-			.chain(self.insertion_overlay.keys().map(|n| *n))
+			.chain(self.insertion_overlay.keys().copied()
 			.collect::<Vec<_>>();
 		keys.sort();
 
