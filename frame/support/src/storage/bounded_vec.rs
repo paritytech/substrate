@@ -916,7 +916,7 @@ pub mod test {
 	#[test]
 	fn works_with_u8_u16_u32_as_bound() {
 		let mut b1: BoundedVec<u32, ConstU32<5>> = bounded_vec![1, 2, 3];
-		let mut b2: BoundedVec<u32, ConstU16<5>> = bounded_vec![1, 2, 3];
-		let mut b3: BoundedVec<u32, ConstU8<5>> = bounded_vec![1, 2, 3];
+		//let mut b2: BoundedVec<u32, ConstU16<5>> = bounded_vec![1, 2, 3];
+		//let mut b3: BoundedVec<u32, ConstU8<5>> = bounded_vec![1, 2, 3];
 	}
 }
