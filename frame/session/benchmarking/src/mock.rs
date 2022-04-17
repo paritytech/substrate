@@ -190,6 +190,7 @@ impl pallet_staking::Config for Test {
 	type VoterList = pallet_staking::UseNominatorsAndValidatorsMap<Self>;
 	type BenchmarkingConfig = pallet_staking::TestBenchmarkingConfig;
 	type WeightInfo = ();
+	type Pages = ConstU32<1>;
 }
 
 impl crate::Config for Test {}

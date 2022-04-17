@@ -184,6 +184,7 @@ impl pallet_staking::Config for Test {
 	type MaxUnlockingChunks = ConstU32<32>;
 	type BenchmarkingConfig = pallet_staking::TestBenchmarkingConfig;
 	type WeightInfo = ();
+	type Pages = ConstU32<1>;
 }
 
 impl pallet_im_online::Config for Test {
