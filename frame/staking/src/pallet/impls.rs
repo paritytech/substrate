@@ -18,8 +18,8 @@
 //! Implementations for the Staking FRAME Pallet.
 
 use frame_election_provider_support::{
-	data_provider, BoundedSupportsOf, ElectionDataProvider, ElectionProvider, ScoreProvider,
-	SortedListProvider, VoteWeight, VoterOf,
+	data_provider, BoundedSupportsOf, ElectionDataProvider, ElectionProvider, PageIndex,
+	ScoreProvider, SortedListProvider, VoteWeight, VoterOf,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -438,13 +438,14 @@ impl<T: Config> Pallet<T> {
 		start_session_index: SessionIndex,
 		is_genesis: bool,
 	) -> Option<Vec<T::AccountId>> {
+		// TODO: for now pass 0 as `remaining`.
 		let election_result = if is_genesis {
-			T::GenesisElectionProvider::elect().map_err(|e| {
+			T::GenesisElectionProvider::elect(0).map_err(|e| {
 				log!(warn, "genesis election provider failed due to {:?}", e);
 				Self::deposit_event(Event::StakingElectionFailed);
 			})
 		} else {
-			T::ElectionProvider::elect().map_err(|e| {
+			T::ElectionProvider::elect(0).map_err(|e| {
 				log!(warn, "election provider failed due to {:?}", e);
 				Self::deposit_event(Event::StakingElectionFailed);
 			})

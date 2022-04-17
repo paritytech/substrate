@@ -21,7 +21,7 @@
 
 use crate::{
 	BoundedSupports, BoundedSupportsOf, Debug, ElectionDataProvider, ElectionProvider,
-	InstantElectionProvider, NposSolver, WeightInfo,
+	InstantElectionProvider, NposSolver, PageIndex, WeightInfo,
 };
 use frame_support::{traits::Get, weights::DispatchClass, BoundedVec};
 use sp_npos_elections::*;
@@ -107,6 +107,7 @@ pub trait BoundedConfig: Config {
 fn elect_with<T: Config>(
 	maybe_max_voters: Option<usize>,
 	maybe_max_targets: Option<usize>,
+	remaining: PageIndex,
 ) -> Result<
 	BoundedSupports<
 		<T::System as frame_system::Config>::AccountId,
@@ -115,9 +116,10 @@ fn elect_with<T: Config>(
 	>,
 	Error,
 > {
-	let voters = T::DataProvider::electing_voters(maybe_max_voters).map_err(Error::DataProvider)?;
-	let targets =
-		T::DataProvider::electable_targets(maybe_max_targets).map_err(Error::DataProvider)?;
+	let voters = T::DataProvider::electing_voters_paged(maybe_max_voters, remaining)
+		.map_err(Error::DataProvider)?;
+	let targets = T::DataProvider::electable_targets_paged(maybe_max_targets, remaining)
+		.map_err(Error::DataProvider)?;
 	let desired_targets = T::DataProvider::desired_targets().map_err(Error::DataProvider)?;
 
 	let voters_len = voters.len() as u32;
@@ -147,6 +149,7 @@ fn elect_with<T: Config>(
 		DispatchClass::Mandatory,
 	);
 
+	// TODO: maybe something more clever
 	let supports = to_supports(&staked);
 	let mut bounded_supports = supports
 		.into_iter()
@@ -167,7 +170,7 @@ impl<T: Config> ElectionProvider for UnboundedExecution<T> {
 	type MaxBackersPerWinner = T::MaxBackersPerWinner;
 	type MaxWinnersPerPage = T::MaxWinnersPerPage;
 
-	fn elect() -> Result<BoundedSupportsOf<Self>, Self::Error> {
+	fn elect(remaining: PageIndex) -> Result<BoundedSupportsOf<Self>, Self::Error> {
 		// This should not be called if not in `std` mode (and therefore neither in genesis nor in
 		// testing)
 		if cfg!(not(feature = "std")) {
@@ -177,7 +180,7 @@ impl<T: Config> ElectionProvider for UnboundedExecution<T> {
 			);
 		}
 
-		elect_with::<T>(None, None)
+		elect_with::<T>(None, None, remaining)
 	}
 }
 
@@ -185,8 +188,9 @@ impl<T: Config> InstantElectionProvider for UnboundedExecution<T> {
 	fn elect_with_bounds(
 		max_voters: usize,
 		max_targets: usize,
+		remaining: PageIndex,
 	) -> Result<BoundedSupportsOf<Self>, Self::Error> {
-		elect_with::<T>(Some(max_voters), Some(max_targets))
+		elect_with::<T>(Some(max_voters), Some(max_targets), remaining)
 	}
 }
 
@@ -198,8 +202,12 @@ impl<T: BoundedConfig> ElectionProvider for BoundedExecution<T> {
 	type MaxBackersPerWinner = T::MaxBackersPerWinner;
 	type MaxWinnersPerPage = T::MaxWinnersPerPage;
 
-	fn elect() -> Result<BoundedSupportsOf<Self>, Self::Error> {
-		elect_with::<T>(Some(T::VotersBound::get() as usize), Some(T::TargetsBound::get() as usize))
+	fn elect(remaining: PageIndex) -> Result<BoundedSupportsOf<Self>, Self::Error> {
+		elect_with::<T>(
+			Some(T::VotersBound::get() as usize),
+			Some(T::TargetsBound::get() as usize),
+			remaining,
+		)
 	}
 }
 
@@ -207,10 +215,12 @@ impl<T: BoundedConfig> InstantElectionProvider for BoundedExecution<T> {
 	fn elect_with_bounds(
 		max_voters: usize,
 		max_targets: usize,
+		remaining: PageIndex,
 	) -> Result<BoundedSupportsOf<Self>, Self::Error> {
 		elect_with::<T>(
 			Some(max_voters.min(T::VotersBound::get() as usize)),
 			Some(max_targets.min(T::TargetsBound::get() as usize)),
+			remaining,
 		)
 	}
 }
@@ -344,7 +354,7 @@ mod tests {
 	fn onchain_seq_phragmen_works() {
 		sp_io::TestExternalities::new_empty().execute_with(|| {
 			assert_eq!(
-				bounded_supports_to_supports(BoundedExecution::<PhragmenParams>::elect().unwrap()),
+				bounded_supports_to_supports(BoundedExecution::<PhragmenParams>::elect(0).unwrap()),
 				vec![
 					(10, Support { total: 25, voters: vec![(1, 10), (3, 15)] }),
 					(30, Support { total: 35, voters: vec![(2, 20), (3, 15)] })
@@ -357,7 +367,7 @@ mod tests {
 	fn onchain_phragmms_works() {
 		sp_io::TestExternalities::new_empty().execute_with(|| {
 			assert_eq!(
-				bounded_supports_to_supports(BoundedExecution::<PhragMMSParams>::elect().unwrap()),
+				bounded_supports_to_supports(BoundedExecution::<PhragMMSParams>::elect(0).unwrap()),
 				vec![
 					(10, Support { total: 25, voters: vec![(1, 10), (3, 15)] }),
 					(30, Support { total: 35, voters: vec![(2, 20), (3, 15)] })

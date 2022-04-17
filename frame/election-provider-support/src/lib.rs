@@ -141,8 +141,8 @@
 //! 		type MaxBackersPerWinner = ();
 //! 		type MaxWinnersPerPage = ();
 //!
-//!         fn elect() -> Result<BoundedSupportsOf<Self>, Self::Error> {
-//!             Self::DataProvider::electable_targets(None)
+//!         fn elect(remaining: PageIndex) -> Result<BoundedSupportsOf<Self>, Self::Error> {
+//!             Self::DataProvider::electable_targets_paged(None, remaining)
 //!                 .map_err(|_| "failed to elect")
 //!                 .map(|t| bounded_vec![(t[0], BoundedSupport::default())])
 //!         }
@@ -175,10 +175,8 @@ pub mod traits;
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
-	traits::{DefensiveSaturating, Get},
-	weights::Weight,
-	BoundedVec, CloneNoBound, DefaultNoBound, EqNoBound, PartialEqNoBound, RuntimeDebug,
-	RuntimeDebugNoBound,
+	traits::DefensiveSaturating, weights::Weight, BoundedVec, CloneNoBound, DefaultNoBound,
+	EqNoBound, PartialEqNoBound, RuntimeDebug, RuntimeDebugNoBound,
 };
 use sp_runtime::traits::Bounded;
 use sp_std::{fmt::Debug, prelude::*};
@@ -186,6 +184,7 @@ use sp_std::{fmt::Debug, prelude::*};
 /// Re-export the solution generation macro.
 pub use frame_election_provider_solution_type::generate_solution_type;
 /// Re-export some type as they are used in the interface.
+pub use frame_support::traits::Get;
 pub use sp_arithmetic::PerThing;
 pub use sp_npos_elections::{
 	Assignment, ElectionResult, Error, ExtendedBalance, IdentifierT, PerThing128, Support,
@@ -436,7 +435,7 @@ pub trait ElectionProvider {
 	///
 	/// This should be implemented as a self-weighing function. The implementor should register its
 	/// appropriate weight at the end of execution with the system pallet directly.
-	fn elect() -> Result<BoundedSupportsOf<Self>, Self::Error>;
+	fn elect(remaining: PageIndex) -> Result<BoundedSupportsOf<Self>, Self::Error>;
 }
 
 /// A sub-trait of the [`ElectionProvider`] for cases where we need to be sure an election needs to
@@ -458,6 +457,7 @@ pub trait InstantElectionProvider: ElectionProvider {
 	fn elect_with_bounds(
 		max_voters: usize,
 		max_targets: usize,
+		remaining: PageIndex,
 	) -> Result<BoundedSupportsOf<Self>, Self::Error>;
 }
 
@@ -480,7 +480,7 @@ where
 	type MaxBackersPerWinner = ();
 	type MaxWinnersPerPage = ();
 
-	fn elect() -> Result<BoundedSupportsOf<Self>, Self::Error> {
+	fn elect(_: PageIndex) -> Result<BoundedSupportsOf<Self>, Self::Error> {
 		Err("<NoElection as ElectionProvider> cannot do anything.")
 	}
 }

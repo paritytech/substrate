@@ -232,7 +232,7 @@
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_election_provider_support::{
 	try_supports_to_bounded_supports, BoundedSupports, BoundedSupportsOf, ElectionDataProvider,
-	ElectionProvider, InstantElectionProvider, NposSolution,
+	ElectionProvider, InstantElectionProvider, NposSolution, PageIndex,
 };
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
@@ -320,14 +320,18 @@ impl<T: Config> ElectionProvider for NoFallback<T> {
 	type MaxBackersPerWinner = T::MaxBackersPerWinner;
 	type MaxWinnersPerPage = T::MaxWinnersPerPage;
 
-	fn elect() -> Result<BoundedSupportsOf<Self>, Self::Error> {
+	fn elect(_: PageIndex) -> Result<BoundedSupportsOf<Self>, Self::Error> {
 		// Do nothing, this will enable the emergency phase.
 		Err("NoFallback.")
 	}
 }
 
 impl<T: Config> InstantElectionProvider for NoFallback<T> {
-	fn elect_with_bounds(_: usize, _: usize) -> Result<BoundedSupportsOf<Self>, Self::Error> {
+	fn elect_with_bounds(
+		_: usize,
+		_: usize,
+		_: PageIndex,
+	) -> Result<BoundedSupportsOf<Self>, Self::Error> {
 		Err("NoFallback.")
 	}
 }
@@ -1073,9 +1077,11 @@ pub mod pallet {
 			let maybe_max_voters = maybe_max_voters.map(|x| x as usize);
 			let maybe_max_targets = maybe_max_targets.map(|x| x as usize);
 
+			// TODO: is it right to pass 0 remaining?
 			let supports = T::GovernanceFallback::elect_with_bounds(
 				maybe_max_voters.unwrap_or(Bounded::max_value()),
 				maybe_max_targets.unwrap_or(Bounded::max_value()),
+				0,
 			)
 			.map_err(|e| {
 				log!(error, "GovernanceFallback failed: {:?}", e);
@@ -1547,7 +1553,9 @@ impl<T: Config> Pallet<T> {
 		Self::kill_snapshot();
 	}
 
-	fn do_elect() -> Result<
+	fn do_elect(
+		remaining: PageIndex,
+	) -> Result<
 		BoundedSupports<T::AccountId, T::MaxWinnersPerPage, T::MaxBackersPerWinner>,
 		ElectionError<T>,
 	> {
@@ -1562,7 +1570,7 @@ impl<T: Config> Pallet<T> {
 		<QueuedSolution<T>>::take()
 			.map_or_else(
 				|| {
-					T::Fallback::elect()
+					T::Fallback::elect(remaining)
 						.map_err(|fe| ElectionError::Fallback(fe))
 						.map(|supports| (supports, ElectionCompute::Fallback))
 				},
@@ -1603,8 +1611,8 @@ impl<T: Config> ElectionProvider for Pallet<T> {
 	type MaxBackersPerWinner = T::MaxBackersPerWinner;
 	type MaxWinnersPerPage = T::MaxWinnersPerPage;
 
-	fn elect() -> Result<BoundedSupportsOf<Self>, Self::Error> {
-		match Self::do_elect() {
+	fn elect(remaining: PageIndex) -> Result<BoundedSupportsOf<Self>, Self::Error> {
+		match Self::do_elect(remaining) {
 			Ok(supports) => {
 				// All went okay, record the weight, put sign to be Off, clean snapshot, etc.
 				Self::weigh_supports(&supports);
@@ -1892,7 +1900,7 @@ mod tests {
 			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
 			assert!(MultiPhase::snapshot().is_some());
 
-			assert_ok!(MultiPhase::elect());
+			assert_ok!(MultiPhase::elect(0));
 
 			assert!(MultiPhase::current_phase().is_off());
 			assert!(MultiPhase::snapshot().is_none());
@@ -1925,7 +1933,7 @@ mod tests {
 			roll_to(30);
 			assert!(MultiPhase::current_phase().is_unsigned_open_at(20));
 
-			assert_ok!(MultiPhase::elect());
+			assert_ok!(MultiPhase::elect(0));
 
 			assert!(MultiPhase::current_phase().is_off());
 			assert!(MultiPhase::snapshot().is_none());
@@ -1948,7 +1956,7 @@ mod tests {
 			roll_to(30);
 			assert!(MultiPhase::current_phase().is_signed());
 
-			assert_ok!(MultiPhase::elect());
+			assert_ok!(MultiPhase::elect(0));
 
 			assert!(MultiPhase::current_phase().is_off());
 			assert!(MultiPhase::snapshot().is_none());
@@ -1971,7 +1979,7 @@ mod tests {
 			assert!(MultiPhase::current_phase().is_off());
 
 			// This module is now only capable of doing on-chain backup.
-			assert_ok!(MultiPhase::elect());
+			assert_ok!(MultiPhase::elect(0));
 
 			assert!(MultiPhase::current_phase().is_off());
 		});
@@ -1992,7 +2000,7 @@ mod tests {
 
 			// An unexpected call to elect.
 			roll_to(20);
-			assert_ok!(MultiPhase::elect());
+			assert_ok!(MultiPhase::elect(0));
 
 			// We surely can't have any feasible solutions. This will cause an on-chain election.
 			assert_eq!(
@@ -2036,7 +2044,7 @@ mod tests {
 
 			// an unexpected call to elect.
 			roll_to(20);
-			assert_ok!(MultiPhase::elect());
+			assert_ok!(MultiPhase::elect(0));
 
 			// all storage items must be cleared.
 			assert_eq!(MultiPhase::round(), 2);
@@ -2056,7 +2064,7 @@ mod tests {
 
 			// Zilch solutions thus far, but we get a result.
 			assert!(MultiPhase::queued_solution().is_none());
-			let supports = MultiPhase::elect().unwrap();
+			let supports = MultiPhase::elect(0).unwrap();
 
 			assert_eq!(
 				bounded_supports_to_supports(supports),
@@ -2073,7 +2081,7 @@ mod tests {
 
 			// Zilch solutions thus far.
 			assert!(MultiPhase::queued_solution().is_none());
-			assert_eq!(MultiPhase::elect().unwrap_err(), ElectionError::Fallback("NoFallback."));
+			assert_eq!(MultiPhase::elect(0).unwrap_err(), ElectionError::Fallback("NoFallback."));
 			// phase is now emergency.
 			assert_eq!(MultiPhase::current_phase(), Phase::Emergency);
 		})
@@ -2095,7 +2103,7 @@ mod tests {
 
 			// On-chain backup works though.
 			roll_to(29);
-			let supports = MultiPhase::elect().unwrap();
+			let supports = MultiPhase::elect(0).unwrap();
 			assert!(supports.len() > 0);
 		});
 	}
@@ -2117,7 +2125,7 @@ mod tests {
 			assert_eq!(MultiPhase::current_phase(), Phase::Off);
 
 			roll_to(29);
-			let err = MultiPhase::elect().unwrap_err();
+			let err = MultiPhase::elect(0).unwrap_err();
 			assert_eq!(err, ElectionError::Fallback("NoFallback."));
 			assert_eq!(MultiPhase::current_phase(), Phase::Emergency);
 		});

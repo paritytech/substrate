@@ -830,8 +830,10 @@ benchmarks! {
 
 		let num_voters = (v + n) as usize;
 	}: {
-		let voters = <Staking<T>>::get_npos_voters(None);
-		assert_eq!(voters.len(), num_voters);
+		// TODO: is this the right thing?
+		let slashing_spans = SlashingSpans::<T>::iter().collect::<BTreeMap<_, _>>();
+		let voters = <Staking<T>>::get_npos_voters_page(None, None, &slashing_spans);
+		assert_eq!(voters.0.len(), num_voters);
 	}
 
 	get_npos_targets {

@@ -294,8 +294,8 @@ impl ElectionProvider for MockFallback {
 	type MaxBackersPerWinner = MaxElectingVoters;
 	type MaxWinnersPerPage = MaxElectableTargets;
 
-	fn elect() -> Result<BoundedSupportsOf<Self>, Self::Error> {
-		Self::elect_with_bounds(Bounded::max_value(), Bounded::max_value())
+	fn elect(remaining: PageIndex) -> Result<BoundedSupportsOf<Self>, Self::Error> {
+		Self::elect_with_bounds(Bounded::max_value(), Bounded::max_value(), remaining)
 	}
 }
 
@@ -303,15 +303,17 @@ impl InstantElectionProvider for MockFallback {
 	fn elect_with_bounds(
 		max_voters: usize,
 		max_targets: usize,
+		remaining: PageIndex,
 	) -> Result<BoundedSupportsOf<Self>, Self::Error> {
 		if OnChainFallback::get() {
 			onchain::UnboundedExecution::<OnChainSeqPhragmen>::elect_with_bounds(
 				max_voters,
 				max_targets,
+				remaining,
 			)
 			.map_err(|_| "onchain::UnboundedExecution failed.")
 		} else {
-			super::NoFallback::<Runtime>::elect_with_bounds(max_voters, max_targets)
+			super::NoFallback::<Runtime>::elect_with_bounds(max_voters, max_targets, remaining)
 		}
 	}
 }
@@ -467,6 +469,7 @@ impl ElectionDataProvider for StakingMock {
 	type AccountId = AccountId;
 	type BlockNumber = u64;
 	type MaxVotesPerVoter = MaxNominations;
+	type Pages = ConstU32<1>;
 
 	fn electable_targets_paged(
 		maybe_max_len: Option<usize>,

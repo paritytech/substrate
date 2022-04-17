@@ -1287,7 +1287,7 @@ mod tests {
 
 			// after an election, the solution is not cleared
 			// we don't actually care about the result of the election
-			let _ = MultiPhase::do_elect();
+			let _ = MultiPhase::do_elect(0);
 			MultiPhase::offchain_worker(block_plus(1));
 			assert!(ocw_solution_exists::<Runtime>(), "elections does not clear the ocw cache");
 

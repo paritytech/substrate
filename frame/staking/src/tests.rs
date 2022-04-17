@@ -1961,7 +1961,7 @@ fn bond_with_duplicate_vote_should_be_ignored_by_election_provider() {
 
 			// winners should be 21 and 31. Otherwise this election is taking duplicates into
 			// account.
-			let supports = <Test as Config>::ElectionProvider::elect().unwrap();
+			let supports = <Test as Config>::ElectionProvider::elect(0).unwrap();
 			assert_eq!(
 				bounded_supports_to_supports(supports),
 				vec![
@@ -2005,7 +2005,7 @@ fn bond_with_duplicate_vote_should_be_ignored_by_election_provider_elected() {
 			assert_ok!(Staking::nominate(Origin::signed(4), vec![21]));
 
 			// winners should be 21 and 11.
-			let supports = <Test as Config>::ElectionProvider::elect().unwrap();
+			let supports = <Test as Config>::ElectionProvider::elect(0).unwrap();
 			assert_eq!(
 				bounded_supports_to_supports(supports),
 				vec![
@@ -4315,22 +4315,24 @@ mod election_data_provider {
 				assert_eq!(LastIteratedNominator::<Test>::get(), Some(61));
 
 				// tandem: node 61 cannot be chilled in any humanly possible way now.
-				frame_support::storage::with_transaction(|| {
-					// normal chilling
-					assert_noop!(
-						Staking::chill(Origin::signed(60)),
-						Error::<Test>::TemporarilyNotAllowed
-					);
-					// chill-other with the virtue of being less than min-bond
-					MinNominatorBond::<Test>::put(501);
-					ChillThreshold::<Test>::put(Percent::default());
-					MaxNominatorsCount::<Test>::put(1);
-					assert_noop!(
-						Staking::chill_other(Origin::signed(100), 60),
-						Error::<Test>::TemporarilyNotAllowed
-					);
-					storage::TransactionOutcome::Rollback(())
-				});
+				assert_ok!(frame_support::storage::with_transaction(
+					|| -> storage::TransactionOutcome<DispatchResult> {
+						// normal chilling
+						assert_noop!(
+							Staking::chill(Origin::signed(60)),
+							Error::<Test>::TemporarilyNotAllowed
+						);
+						// chill-other with the virtue of being less than min-bond
+						MinNominatorBond::<Test>::put(501);
+						ChillThreshold::<Test>::put(Percent::default());
+						MaxNominatorsCount::<Test>::put(1);
+						assert_noop!(
+							Staking::chill_other(Origin::signed(100), 60),
+							Error::<Test>::TemporarilyNotAllowed
+						);
+						storage::TransactionOutcome::Rollback(Ok(()))
+					},
+				));
 				// and making this nominator un-decodable.
 				MaxNominations::set(0);
 				assert_noop!(
