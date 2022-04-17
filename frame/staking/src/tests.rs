@@ -4020,6 +4020,7 @@ fn on_finalize_weight_is_nonzero() {
 mod election_data_provider {
 	use super::*;
 	use frame_election_provider_support::ElectionDataProvider;
+	use frame_support::bounded_vec;
 
 	#[test]
 	fn targets_2sec_block() {
@@ -4125,8 +4126,10 @@ mod election_data_provider {
 
 				// if limit is more.
 				assert_eq!(Staking::electing_voters(Some(55)).unwrap().len(), 5);
+				assert_eq!(Staking::electing_voters(None).unwrap().len(), 5);
 
 				// if target limit is more..
+				assert_eq!(Staking::electable_targets(None).unwrap().len(), 4);
 				assert_eq!(Staking::electable_targets(Some(6)).unwrap().len(), 4);
 				assert_eq!(Staking::electable_targets(Some(4)).unwrap().len(), 4);
 
@@ -4135,7 +4138,7 @@ mod election_data_provider {
 					Staking::electable_targets(Some(1)).unwrap_err(),
 					"Target snapshot too big"
 				);
-			});
+			})
 	}
 
 	// Tests the criteria that in `ElectionDataProvider::voters` function, we try to get at most
@@ -4279,6 +4282,75 @@ mod election_data_provider {
 			// The new era has been planned, forcing is changed from `ForceNew` to `NotForcing`.
 			assert_eq!(ForceEra::<Test>::get(), Forcing::NotForcing);
 		})
+	}
+
+	#[test]
+	fn can_paginate() {
+		ExtBuilder::default()
+			.add_staker(61, 60, 500, StakerStatus::Nominator(vec![11]))
+			.add_staker(71, 70, 500, StakerStatus::Nominator(vec![11]))
+			.add_staker(81, 80, 500, StakerStatus::Nominator(vec![11]))
+			.add_staker(91, 90, 500, StakerStatus::Nominator(vec![11]))
+			.set_status(31, StakerStatus::Idle)
+			.set_status(41, StakerStatus::Idle)
+			.build_and_execute(|| {
+				// we shall have 2 validators and 5 nominators.
+				assert_eq!(Nominators::<Test>::count(), 5);
+				assert_eq!(Validators::<Test>::count(), 2);
+
+				// a correct, 2 page snapshot.
+				Pages::set(2);
+				// we have 6 voters in total, get them over two pages, each 4 max.
+				assert_eq!(
+					Staking::electing_voters_paged(Some(4), 1).unwrap(),
+					vec![
+						// everything sorted based on stake.
+						(11, 1000, bounded_vec![11]),
+						(21, 1000, bounded_vec![21]),
+						(101, 500, bounded_vec![11, 21]),
+						(61, 500, bounded_vec![11]),
+					]
+				);
+
+				assert_eq!(LastIteratedNominator::<Test>::get(), Some(61));
+
+				// tandem: node 61 cannot be chilled in any humanly possible way now.
+				frame_support::storage::with_transaction(|| {
+					// normal chilling
+					assert_noop!(
+						Staking::chill(Origin::signed(60)),
+						Error::<Test>::TemporarilyNotAllowed
+					);
+					// chill-other with the virtue of being less than min-bond
+					MinNominatorBond::<Test>::put(501);
+					ChillThreshold::<Test>::put(Percent::default());
+					MaxNominatorsCount::<Test>::put(1);
+					assert_noop!(
+						Staking::chill_other(Origin::signed(100), 60),
+						Error::<Test>::TemporarilyNotAllowed
+					);
+					storage::TransactionOutcome::Rollback(())
+				});
+				// and making this nominator un-decodable.
+				MaxNominations::set(0);
+				assert_noop!(
+					Staking::chill_other(Origin::signed(100), 60),
+					Error::<Test>::TemporarilyNotAllowed
+				);
+				// this needs to reverted, despite being transactional scope, because it is
+				// thread-local, not storage.
+				MaxNominations::set(16);
+
+				assert_eq!(
+					Staking::electing_voters_paged(Some(4), 0).unwrap(),
+					vec![
+						(71, 500, bounded_vec![11]),
+						(81, 500, bounded_vec![11]),
+						(91, 500, bounded_vec![11])
+					]
+				);
+				assert_eq!(LastIteratedNominator::<Test>::get(), None);
+			});
 	}
 }
 

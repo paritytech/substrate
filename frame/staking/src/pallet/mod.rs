@@ -50,7 +50,7 @@ const STAKING_ID: LockIdentifier = *b"staking ";
 
 #[frame_support::pallet]
 pub mod pallet {
-	use frame_election_provider_support::ElectionDataProvider;
+	use frame_election_provider_support::{ElectionDataProvider, PageIndex};
 
 	use crate::BenchmarkingConfig;
 
@@ -171,6 +171,10 @@ pub mod pallet {
 		/// The changes to nominators are reported to this. Moreover, each validator's self-vote is
 		/// also reported as one independent vote.
 		type VoterList: SortedListProvider<Self::AccountId, Score = VoteWeight>;
+
+		/// The number of pages that we expect to return as part of our role as
+		/// [`ElectionDataProvider`].
+		type Pages: Get<PageIndex>;
 
 		/// The maximum number of `unlocking` chunks a [`StakingLedger`] can have. Effectively
 		/// determines how many unique eras a staker may be unbonding in.
@@ -497,6 +501,11 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(crate) type ChillThreshold<T: Config> = StorageValue<_, Percent, OptionQuery>;
 
+	/// Last nominator that was being iterated. This is only useful for multi-page snapshot, and
+	/// does not affect anything else.
+	#[pallet::storage]
+	pub(crate) type LastIteratedNominator<T: Config> = StorageValue<_, T::AccountId, OptionQuery>;
+
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub history_depth: u32,
@@ -640,14 +649,16 @@ pub mod pallet {
 		NotController,
 		/// Not a stash account.
 		NotStash,
+		/// Not a validators account.
+		NotValidator,
+		/// Not a nominator account.
+		NotNominator,
 		/// Stash is already bonded.
 		AlreadyBonded,
 		/// Controller is already paired.
 		AlreadyPaired,
 		/// Targets cannot be empty.
 		EmptyTargets,
-		/// Duplicate index.
-		DuplicateIndex,
 		/// Slash record index out of bounds.
 		InvalidSlashIndex,
 		/// Cannot have a validator or nominator role, with value less than the minimum defined by
@@ -688,6 +699,8 @@ pub mod pallet {
 		TooManyValidators,
 		/// Commission is too low. Must be at least `MinCommission`.
 		CommissionTooLow,
+		/// Operation is not permitted at this time. Try again later.
+		TemporarilyNotAllowed,
 	}
 
 	#[pallet::hooks]
@@ -719,6 +732,8 @@ pub mod pallet {
 			);
 			// and that MaxNominations is always greater than 1, since we count on this.
 			assert!(!T::MaxNominations::get().is_zero());
+
+			assert!(T::Pages::get() > 0, "number of pages can be 1 or more");
 
 			sp_std::if_std! {
 				sp_io::TestExternalities::new_empty().execute_with(||
@@ -1019,10 +1034,9 @@ pub mod pallet {
 				}
 			}
 
-			Self::do_remove_nominator(stash);
-			Self::do_add_validator(stash, prefs.clone());
+			let _ = Self::try_remove_nominator(stash);
+			Self::do_add_validator(stash, prefs);
 			Self::deposit_event(Event::<T>::ValidatorPrefsSet(ledger.stash, prefs));
-
 			Ok(())
 		}
 
@@ -1089,7 +1103,7 @@ pub mod pallet {
 				suppressed: false,
 			};
 
-			Self::do_remove_validator(stash);
+			let _ = Self::try_remove_validator(stash);
 			Self::do_add_nominator(stash, nominations);
 			Ok(())
 		}
@@ -1109,8 +1123,7 @@ pub mod pallet {
 		pub fn chill(origin: OriginFor<T>) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
-			Self::chill_stash(&ledger.stash);
-			Ok(())
+			Self::try_chill_stash(&ledger.stash).map_err(Into::into)
 		}
 
 		/// (Re-)set the payment target for a controller.
@@ -1638,8 +1651,7 @@ pub mod pallet {
 			// Otherwise, if caller is the same as the controller, this is just like `chill`.
 
 			if Nominators::<T>::contains_key(&stash) && Nominators::<T>::get(&stash).is_none() {
-				Self::chill_stash(&stash);
-				return Ok(())
+				return Self::try_chill_stash(&stash).map_err(Into::into)
 			}
 
 			if caller != controller {
@@ -1669,8 +1681,7 @@ pub mod pallet {
 				ensure!(ledger.active < min_active_bond, Error::<T>::CannotChillOther);
 			}
 
-			Self::chill_stash(&stash);
-			Ok(())
+			Self::try_chill_stash(&stash).map_err(Into::into)
 		}
 
 		/// Force a validator to have at least the minimum commission. This will not affect a

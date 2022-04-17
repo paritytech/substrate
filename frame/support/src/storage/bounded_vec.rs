@@ -606,7 +606,11 @@ where
 #[cfg(test)]
 pub mod test {
 	use super::*;
-	use crate::{bounded_vec, traits::ConstU32, Twox128};
+	use crate::{
+		bounded_vec,
+		traits::{ConstU16, ConstU32, ConstU8},
+		Twox128,
+	};
 	use sp_io::TestExternalities;
 
 	crate::generate_storage_alias! { Prefix, Foo => Value<BoundedVec<u32, ConstU32<7>>> }
@@ -907,5 +911,12 @@ pub mod test {
 		let mut b: BoundedVec<u32, ConstU32<5>> = bounded_vec![1, 2, 3];
 		assert!(b.try_extend(vec![4, 5, 6].into_iter()).is_err());
 		assert_eq!(*b, vec![1, 2, 3]);
+	}
+
+	#[test]
+	fn works_with_u8_u16_u32_as_bound() {
+		let mut b1: BoundedVec<u32, ConstU32<5>> = bounded_vec![1, 2, 3];
+		let mut b2: BoundedVec<u32, ConstU16<5>> = bounded_vec![1, 2, 3];
+		let mut b3: BoundedVec<u32, ConstU8<5>> = bounded_vec![1, 2, 3];
 	}
 }

@@ -24,8 +24,8 @@ use frame_election_provider_support::{
 use frame_support::{
 	pallet_prelude::*,
 	traits::{
-		Currency, CurrencyToVote, Defensive, EstimateNextNewSession, Get, Imbalance,
-		LockableCurrency, OnUnbalanced, UnixTime, WithdrawReasons,
+		Currency, CurrencyToVote, Defensive, DefensiveSaturating, EstimateNextNewSession, Get,
+		Imbalance, LockableCurrency, OnUnbalanced, UnixTime, WithdrawReasons,
 	},
 	weights::{Weight, WithPostDispatchInfo},
 };
@@ -218,12 +218,17 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Chill a stash account.
-	pub(crate) fn chill_stash(stash: &T::AccountId) {
-		let chilled_as_validator = Self::do_remove_validator(stash);
-		let chilled_as_nominator = Self::do_remove_nominator(stash);
-		if chilled_as_validator || chilled_as_nominator {
+	///
+	/// Returns `Ok(())` if it was actually chilled (either from a validator or a nominator), and
+	/// `Error` otherwise.
+	pub(crate) fn try_chill_stash(stash: &T::AccountId) -> Result<(), Error<T>> {
+		let chilled_as_validator = Self::try_remove_validator(stash);
+		let chilled_as_nominator = Self::try_remove_nominator(stash);
+		if chilled_as_validator.is_ok() || chilled_as_nominator.is_ok() {
 			Self::deposit_event(Event::<T>::Chilled(stash.clone()));
 		}
+
+		chilled_as_validator.or(chilled_as_nominator)
 	}
 
 	/// Actually make a payment to a staker. This uses the currency's reward function
@@ -574,8 +579,10 @@ impl<T: Config> Pallet<T> {
 		<Ledger<T>>::remove(&controller);
 
 		<Payee<T>>::remove(stash);
-		Self::do_remove_validator(stash);
-		Self::do_remove_nominator(stash);
+		// dropping result is justified: we just want to make sure they are no longer
+		// nominator/validator.
+		let _ = Self::try_remove_validator(stash);
+		let _ = Self::try_remove_nominator(stash);
 
 		frame_system::Pallet::<T>::dec_consumers(stash);
 
@@ -655,35 +662,43 @@ impl<T: Config> Pallet<T> {
 		SlashRewardFraction::<T>::put(fraction);
 	}
 
-	/// Get all of the voters that are eligible for the npos election.
+	/// Get at most `maybe_max_len` voters ready for the npos election, assuming that `remaining`
+	/// more calls will be made in the same 'unit of election'.
 	///
-	/// `maybe_max_len` can imposes a cap on the number of voters returned;
-	///
-	/// This function is self-weighing as [`DispatchClass::Mandatory`].
-	///
-	/// ### Slashing
-	///
-	/// All votes that have been submitted before the last non-zero slash of the corresponding
-	/// target are *auto-chilled*, but still count towards the limit imposed by `maybe_max_len`.
-	pub fn get_npos_voters(maybe_max_len: Option<usize>) -> Vec<VoterOf<Self>> {
+	/// If `remaining > 0`, `LastIteratedNominator` is set to the last item that is returned.
+	/// Consequently, regardless of the value of `remaining`, if `LastIteratedNominator` exists, it
+	/// is used as the starting point of the iteration.
+	pub fn get_npos_voters_page(
+		maybe_max_len: Option<usize>,
+		maybe_last: Option<T::AccountId>,
+		slashing_spans: &BTreeMap<T::AccountId, slashing::SlashingSpans>,
+	) -> (Vec<VoterOf<Self>>, u32, u32) {
 		let max_allowed_len = {
 			let all_voter_count = T::VoterList::count() as usize;
 			maybe_max_len.unwrap_or(all_voter_count).min(all_voter_count)
 		};
 
-		let mut all_voters = Vec::<_>::with_capacity(max_allowed_len);
+		let mut voters = Vec::<_>::with_capacity(max_allowed_len);
 
-		// cache a few things.
+		// cache the total-issuance once in this function
 		let weight_of = Self::weight_of_fn();
-		let slashing_spans = <SlashingSpans<T>>::iter().collect::<BTreeMap<_, _>>();
-
 		let mut voters_seen = 0u32;
 		let mut validators_taken = 0u32;
 		let mut nominators_taken = 0u32;
 
-		let mut sorted_voters = T::VoterList::iter();
-		while all_voters.len() < max_allowed_len &&
-			voters_seen < (NPOS_MAX_ITERATIONS_COEFFICIENT * max_allowed_len as u32)
+		let mut sorted_voters = if let Some(last) = maybe_last {
+			// Defensive: a correctly working pallet-staking will store a last node that is already
+			// part of of the voter list. If otherwise, we start from the beginning and return
+			// duplicates, hopefully our beloved `ElectionProvider` can handle duplicate voters
+			// (substrate implementations do). This is guaranteed by making sure while
+			// `LastIteratedNominator` is set, this voter cannot chill themselves.
+			T::VoterList::iter_from(&last).defensive_unwrap_or_else(T::VoterList::iter)
+		} else {
+			T::VoterList::iter()
+		};
+
+		while voters.len() < max_allowed_len &&
+			voters_seen < (max_allowed_len as u32 * NPOS_MAX_ITERATIONS_COEFFICIENT)
 		{
 			let voter = match sorted_voters.next() {
 				Some(voter) => {
@@ -696,14 +711,13 @@ impl<T: Config> Pallet<T> {
 			if let Some(Nominations { submitted_in, mut targets, suppressed: _ }) =
 				<Nominators<T>>::get(&voter)
 			{
-				// if this voter is a nominator:
 				targets.retain(|stash| {
 					slashing_spans
 						.get(stash)
 						.map_or(true, |spans| submitted_in >= spans.last_nonzero_slash())
 				});
 				if !targets.len().is_zero() {
-					all_voters.push((voter.clone(), weight_of(&voter), targets));
+					voters.push((voter.clone(), weight_of(&voter), targets));
 					nominators_taken.saturating_inc();
 				}
 			} else if Validators::<T>::contains_key(&voter) {
@@ -715,24 +729,24 @@ impl<T: Config> Pallet<T> {
 						.try_into()
 						.expect("`MaxVotesPerVoter` must be greater than or equal to 1"),
 				);
-				all_voters.push(self_vote);
+				voters.push(self_vote);
 				validators_taken.saturating_inc();
 			} else {
-				// this can only happen if: 1. there a bug in the bags-list (or whatever is the
-				// sorted list) logic and the state of the two pallets is no longer compatible, or
-				// because the nominators is not decodable since they have more nomination than
-				// `T::MaxNominations`. The latter can rarely happen, and is not really an emergency
-				// or bug if it does.
+				// this can only happen if: 1. there a pretty bad bug in the bags-list (or whatever
+				// is the sorted list) logic and the state of the two pallets is no longer
+				// compatible, or because the nominators is not decodable since they have more
+				// nomination than `T::MaxNominations`. This can rarely happen, and is not really an
+				// emergency or bug if it does.
 				log!(
 					warn,
-					"DEFENSIVE: invalid item in `VoterList`: {:?}, this nominator probably has too many nominations now",
+					"DEFENSIVE: invalid item in `SortedListProvider`: {:?}, this nominator probably has too many nominations now",
 					voter
-				)
+				);
 			}
 		}
 
-		// all_voters should have not re-allocated.
-		debug_assert!(all_voters.capacity() == max_allowed_len);
+		// voters should have never re-allocated.
+		debug_assert!(voters.capacity() >= voters.len());
 
 		Self::register_weight(T::WeightInfo::get_npos_voters(
 			validators_taken,
@@ -740,15 +754,7 @@ impl<T: Config> Pallet<T> {
 			slashing_spans.len() as u32,
 		));
 
-		log!(
-			info,
-			"generated {} npos voters, {} from validators and {} nominators",
-			all_voters.len(),
-			validators_taken,
-			nominators_taken
-		);
-
-		all_voters
+		(voters, validators_taken, nominators_taken)
 	}
 
 	/// Get the targets for an upcoming npos election.
@@ -768,14 +774,12 @@ impl<T: Config> Pallet<T> {
 		targets
 	}
 
-	/// This function will add a nominator to the `Nominators` storage map,
-	/// and `VoterList`.
+	/// This function will add a nominator to the `Nominators` storage map, and `VoterList`.
 	///
 	/// If the nominator already exists, their nominations will be updated.
 	///
 	/// NOTE: you must ALWAYS use this function to add nominator or update their targets. Any access
-	/// to `Nominators` or `VoterList` outside of this function is almost certainly
-	/// wrong.
+	/// to `Nominators` or `VoterList` outside of this function is almost certainly wrong.
 	pub fn do_add_nominator(who: &T::AccountId, nominations: Nominations<T>) {
 		if !Nominators::<T>::contains_key(who) {
 			// maybe update sorted list.
@@ -794,18 +798,22 @@ impl<T: Config> Pallet<T> {
 	/// This function will remove a nominator from the `Nominators` storage map,
 	/// and `VoterList`.
 	///
-	/// Returns true if `who` was removed from `Nominators`, otherwise false.
+	/// Returns `Ok(())` if `who` was removed from `Nominators`, otherwise `Err(_)`.
 	///
 	/// NOTE: you must ALWAYS use this function to remove a nominator from the system. Any access to
 	/// `Nominators` or `VoterList` outside of this function is almost certainly
 	/// wrong.
-	pub fn do_remove_nominator(who: &T::AccountId) -> bool {
+	pub fn try_remove_nominator(who: &T::AccountId) -> Result<(), Error<T>> {
 		let outcome = if Nominators::<T>::contains_key(who) {
+			ensure!(
+				LastIteratedNominator::<T>::get().map_or(true, |last| &last != who),
+				Error::<T>::TemporarilyNotAllowed
+			);
 			Nominators::<T>::remove(who);
 			T::VoterList::on_remove(who);
-			true
+			Ok(())
 		} else {
-			false
+			Err(Error::<T>::NotNominator)
 		};
 
 		debug_assert_eq!(T::VoterList::sanity_check(), Ok(()));
@@ -846,13 +854,13 @@ impl<T: Config> Pallet<T> {
 	/// NOTE: you must ALWAYS use this function to remove a validator from the system. Any access to
 	/// `Validators` or `VoterList` outside of this function is almost certainly
 	/// wrong.
-	pub fn do_remove_validator(who: &T::AccountId) -> bool {
+	pub fn try_remove_validator(who: &T::AccountId) -> Result<(), Error<T>> {
 		let outcome = if Validators::<T>::contains_key(who) {
 			Validators::<T>::remove(who);
 			T::VoterList::on_remove(who);
-			true
+			Ok(())
 		} else {
-			false
+			Err(Error::<T>::NotValidator)
 		};
 
 		debug_assert_eq!(T::VoterList::sanity_check(), Ok(()));
@@ -879,21 +887,73 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 	type AccountId = T::AccountId;
 	type BlockNumber = BlockNumberFor<T>;
 	type MaxVotesPerVoter = T::MaxNominations;
+	type Pages = T::Pages;
 
 	fn desired_targets() -> data_provider::Result<u32> {
 		Self::register_weight(T::DbWeight::get().reads(1));
 		Ok(Self::validator_count())
 	}
 
-	fn electing_voters(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<VoterOf<Self>>> {
-		// This can never fail -- if `maybe_max_len` is `Some(_)` we handle it.
-		let voters = Self::get_npos_voters(maybe_max_len);
-		debug_assert!(maybe_max_len.map_or(true, |max| voters.len() <= max));
+	/// implementation notes: Given the loose dynamics of the `ElectionProvider`, namely the fact
+	/// that number of entries returned per page is dynamic, this implementation is best-effort at
+	/// best. We try and use the `LastIteratedNominator`, which is always kept as long call with
+	/// `remaining > 0` are made. Any call with `remaining = 0` will clear this history item, and
+	/// the next call will be fresh.
+	///
+	/// This function is written defensively:
+	fn electing_voters_paged(
+		maybe_max_len: Option<usize>,
+		mut remaining: PageIndex,
+	) -> data_provider::Result<Vec<VoterOf<Self>>> {
+		remaining = remaining.min(T::Pages::get().defensive_saturating_sub(1));
+		// either this is the first call, or `LastIteratedNominator` should exist.
+		let mut maybe_last = LastIteratedNominator::<T>::get();
 
+		let is_valid_state = if T::Pages::get() > 1 {
+			// in the first page, the `LastIteratedNominator` should not exist, in the rest of the
+			// pages it should
+			(remaining == Self::msp()) ^ maybe_last.is_some()
+		} else {
+			maybe_last.is_none()
+		};
+
+		// defensive: since, at least as of now, this function is also used for governance fallback,
+		// we really really prefer it to NEVER fail. Thus, we play defensive and return just the
+		// first page if the state of `LastIteratedNominator` is corrupt.
+		if !is_valid_state {
+			frame_support::defensive!("corrupt state in staking election data provider");
+			maybe_last = None;
+		}
+
+		let slashing_spans = <SlashingSpans<T>>::iter().collect::<BTreeMap<_, _>>();
+		let (voters, _validators_taken, _nominators_taken) =
+			Self::get_npos_voters_page(maybe_max_len, maybe_last, &slashing_spans);
+
+		log!(
+			debug,
+			"generated {} npos voters, {} from validators and {} nominators",
+			voters.len(),
+			_validators_taken,
+			_nominators_taken,
+		);
+
+		match remaining {
+			0 => LastIteratedNominator::<T>::kill(),
+			_ =>
+				if let Some(last) = voters.last().map(|(x, _, _)| x) {
+					LastIteratedNominator::<T>::put(last.clone())
+				},
+		};
 		Ok(voters)
 	}
 
-	fn electable_targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<T::AccountId>> {
+	fn electable_targets_paged(
+		maybe_max_len: Option<usize>,
+		remaining: PageIndex,
+	) -> data_provider::Result<Vec<T::AccountId>> {
+		if remaining > 0 {
+			return Err("Cannot support more than a single page of targets")
+		}
 		let target_count = Validators::<T>::count();
 
 		// We can't handle this case yet -- return an error.

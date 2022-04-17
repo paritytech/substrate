@@ -103,16 +103,17 @@
 //!         type AccountId = AccountId;
 //!         type BlockNumber = BlockNumber;
 //!         type MaxVotesPerVoter = ConstU32<1>;
+//!         type Pages = ConstU32<1>;
 //!
 //!         fn desired_targets() -> data_provider::Result<u32> {
 //!             Ok(1)
 //!         }
-//!         fn electing_voters(maybe_max_len: Option<usize>)
+//!         fn electing_voters_paged(maybe_max_len: Option<usize>, _: PageIndex)
 //!           -> data_provider::Result<Vec<VoterOf<Self>>>
 //!         {
 //!             Ok(Default::default())
 //!         }
-//!         fn electable_targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<AccountId>> {
+//!         fn electable_targets_paged(maybe_max_len: Option<usize>, _: PageIndex) -> data_provider::Result<Vec<AccountId>> {
 //!             Ok(vec![10, 20, 30])
 //!         }
 //!         fn next_election_prediction(now: BlockNumber) -> BlockNumber {
@@ -174,15 +175,16 @@ pub mod traits;
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
-	weights::Weight, BoundedVec, CloneNoBound, DefaultNoBound, EqNoBound, PartialEqNoBound,
-	RuntimeDebug, RuntimeDebugNoBound,
+	traits::{DefensiveSaturating, Get},
+	weights::Weight,
+	BoundedVec, CloneNoBound, DefaultNoBound, EqNoBound, PartialEqNoBound, RuntimeDebug,
+	RuntimeDebugNoBound,
 };
 use sp_runtime::traits::Bounded;
 use sp_std::{fmt::Debug, prelude::*};
 
 /// Re-export the solution generation macro.
 pub use frame_election_provider_solution_type::generate_solution_type;
-pub use frame_support::traits::Get;
 /// Re-export some type as they are used in the interface.
 pub use sp_arithmetic::PerThing;
 pub use sp_npos_elections::{
@@ -190,6 +192,13 @@ pub use sp_npos_elections::{
 	Supports, VoteWeight,
 };
 pub use traits::NposSolution;
+
+/// The index used to indicate the page number.
+///
+/// A u8 would have probably been enough until the end of universe, but since we use this as the
+/// bound of `BoundedVec` and similar, using `u32` will save us some hassle.
+// TODO: https://github.com/paritytech/substrate/issues/11076
+pub type PageIndex = u32;
 
 // re-export for the solution macro, with the dependencies of the macro.
 #[doc(hidden)]
@@ -281,6 +290,10 @@ pub trait ElectionDataProvider {
 	/// Maximum number of votes per voter that this data provider is providing.
 	type MaxVotesPerVoter: Get<u32>;
 
+	/// The number of pages that this data provider is expected to be able to provide. An
+	/// implementation could use this to verify the value of `remaining: PageIndex`.
+	type Pages: Get<PageIndex>;
+
 	/// All possible targets for the election, i.e. the targets that could become elected, thus
 	/// "electable".
 	///
@@ -289,8 +302,9 @@ pub trait ElectionDataProvider {
 	///
 	/// This should be implemented as a self-weighing function. The implementor should register its
 	/// appropriate weight at the end of execution with the system pallet directly.
-	fn electable_targets(
+	fn electable_targets_paged(
 		maybe_max_len: Option<usize>,
+		remaining_pages: PageIndex,
 	) -> data_provider::Result<Vec<Self::AccountId>>;
 
 	/// All the voters that participate in the election, thus "electing".
@@ -302,7 +316,22 @@ pub trait ElectionDataProvider {
 	///
 	/// This should be implemented as a self-weighing function. The implementor should register its
 	/// appropriate weight at the end of execution with the system pallet directly.
-	fn electing_voters(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<VoterOf<Self>>>;
+	fn electing_voters_paged(
+		maybe_max_len: Option<usize>,
+		remaining_pages: PageIndex,
+	) -> data_provider::Result<Vec<VoterOf<Self>>>;
+
+	/// Same as [`Self::electable_targets_paged`], but the page 0 is assumed.
+	fn electable_targets(
+		maybe_max_len: Option<usize>,
+	) -> data_provider::Result<Vec<Self::AccountId>> {
+		Self::electable_targets_paged(maybe_max_len, 0)
+	}
+
+	/// Same as [`Self::electing_voters_paged`], but the page 0 is assumed.
+	fn electing_voters(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<VoterOf<Self>>> {
+		Self::electing_voters_paged(maybe_max_len, 0)
+	}
 
 	/// The number of targets to elect.
 	///
@@ -323,6 +352,20 @@ pub trait ElectionDataProvider {
 	///
 	/// This is only useful for stateful election providers.
 	fn next_election_prediction(now: Self::BlockNumber) -> Self::BlockNumber;
+
+	/// Shorthand for "most significant page".
+	///
+	/// The least significant, aka "first" page that this election provider is expected to receive.
+	fn msp() -> PageIndex {
+		Self::Pages::get().defensive_saturating_sub(1)
+	}
+
+	/// Shorthand for "least significant page".
+	///
+	/// The most significant, aka "first" page that this election provider is expected to receive.
+	fn lsp() -> PageIndex {
+		0
+	}
 
 	/// Utility function only to be used in benchmarking scenarios, to be implemented optionally,
 	/// else a noop.
@@ -461,7 +504,7 @@ pub trait SortedListProvider<AccountId> {
 	/// An iterator over the list, which can have `take` called on it.
 	fn iter() -> Box<dyn Iterator<Item = AccountId>>;
 
-	/// Returns an iterator over the list, starting right after from the given voter.
+	/// Returns an iterator over the list, starting from the given voter.
 	///
 	/// May return an error if `start` is invalid.
 	fn iter_from(start: &AccountId) -> Result<Box<dyn Iterator<Item = AccountId>>, Self::Error>;

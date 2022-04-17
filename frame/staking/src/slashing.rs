@@ -281,7 +281,9 @@ pub(crate) fn compute_slash<T: Config>(
 			// chill the validator - it misbehaved in the current span and should
 			// not continue in the next election. also end the slashing span.
 			spans.end_span(params.now);
-			<Pallet<T>>::chill_stash(params.stash);
+			// dropping result is justified: we don't care if they were a validator or not, rather
+			// that they are certainly no longer a validator.
+			let _ = <Pallet<T>>::try_chill_stash(params.stash);
 		}
 	}
 
@@ -316,7 +318,9 @@ fn kick_out_if_recent<T: Config>(params: SlashParams<T>) {
 
 	if spans.era_span(params.slash_era).map(|s| s.index) == Some(spans.span_index()) {
 		spans.end_span(params.now);
-		<Pallet<T>>::chill_stash(params.stash);
+		// dropping result is justified: we don't care if they were a validator or not, rather
+		// that they are certainly no longer a validator.
+		let _ = <Pallet<T>>::try_chill_stash(params.stash);
 	}
 
 	let disable_without_slash = params.disable_strategy == DisableStrategy::Always;
