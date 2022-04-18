@@ -678,7 +678,7 @@ impl<T: Config> BondedPool<T> {
 		alleged_depositor_points: BalanceOf<T>,
 	) -> bool {
 		// NOTE: if we add `&& self.delegator_counter == 1`, then this becomes even more strict and
-		// ensures that there ano unbonding delegators hanging around either.
+		// ensures that there are no unbonding delegators hanging around either.
 		self.is_destroying() && self.points == alleged_depositor_points
 	}
 
