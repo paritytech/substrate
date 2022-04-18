@@ -83,6 +83,7 @@ pallet-proxy = { version = "4.0.0-dev", default-features = false, path = "../../
 pallet-randomness-collective-flip = { version = "4.0.0-dev", default-features = false, path = "../../../frame/randomness-collective-flip" }
 pallet-recovery = { version = "4.0.0-dev", default-features = false, path = "../../../frame/recovery" }
 pallet-referenda = { version = "4.0.0-dev", default-features = false, path = "../../../frame/referenda" }
+pallet-remark = { version = "4.0.0-dev", default-features = false, path = "../../../frame/remark" }
 pallet-session = { version = "4.0.0-dev", features = [ "historical" ], path = "../../../frame/session", default-features = false }
 pallet-session-benchmarking = { version = "4.0.0-dev", path = "../../../frame/session/benchmarking", default-features = false, optional = true }
 pallet-staking = { version = "4.0.0-dev", default-features = false, path = "../../../frame/staking" }
@@ -173,6 +174,7 @@ std = [
 	"sp-version/std",
 	"pallet-society/std",
 	"pallet-referenda/std",
+	"pallet-remark/std",
 	"pallet-recovery/std",
 	"pallet-uniques/std",
 	"pallet-vesting/std",
@@ -213,6 +215,7 @@ runtime-benchmarks = [
 	"pallet-proxy/runtime-benchmarks",
 	"pallet-scheduler/runtime-benchmarks",
 	"pallet-referenda/runtime-benchmarks",
+	"pallet-remark/runtime-benchmarks",
 	"pallet-session-benchmarking",
 	"pallet-society/runtime-benchmarks",
 	"pallet-staking/runtime-benchmarks",
