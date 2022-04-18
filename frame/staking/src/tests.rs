@@ -3398,14 +3398,14 @@ fn test_payout_stakers() {
 
 		// compute and ensure the reward amount is greater than zero.
 		let payout = current_total_payout_for_duration(reward_time_per_era());
-		let actual_paid_out = payout_exposure_part.mul_ceil(payout);
+		let actual_paid_out = payout_exposure_part * payout;
 
 		mock::start_active_era(2);
 
 		let pre_payout_total_issuance = Balances::total_issuance();
 		RewardOnUnbalanceWasCalled::set(false);
 		assert_ok!(Staking::payout_stakers(Origin::signed(1337), 11, 1));
-		assert_eq!(Balances::total_issuance(), pre_payout_total_issuance + actual_paid_out);
+		assert_eq_error_rate!(Balances::total_issuance(), pre_payout_total_issuance + actual_paid_out, 1);
 		assert!(RewardOnUnbalanceWasCalled::get());
 
 		// Top 64 nominators of validator 11 automatically paid out, including the validator
@@ -3436,13 +3436,13 @@ fn test_payout_stakers() {
 
 			// compute and ensure the reward amount is greater than zero.
 			let payout = current_total_payout_for_duration(reward_time_per_era());
-			let actual_paid_out = payout_exposure_part.mul_ceil(payout);
+			let actual_paid_out = payout_exposure_part * payout;
 			let pre_payout_total_issuance = Balances::total_issuance();
 
 			mock::start_active_era(i);
 			RewardOnUnbalanceWasCalled::set(false);
 			assert_ok!(Staking::payout_stakers(Origin::signed(1337), 11, i - 1));
-			assert_eq!(Balances::total_issuance(), pre_payout_total_issuance + actual_paid_out);
+			assert_eq_error_rate!(Balances::total_issuance(), pre_payout_total_issuance + actual_paid_out, 1);
 			assert!(RewardOnUnbalanceWasCalled::get());
 		}
 
