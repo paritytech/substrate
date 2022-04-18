@@ -64,6 +64,7 @@ pub mod event;
 pub mod inherent;
 #[macro_use]
 pub mod error;
+pub mod crypto;
 pub mod instances;
 pub mod migrations;
 pub mod traits;
