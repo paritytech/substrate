@@ -17,9 +17,9 @@ log = "0.4.8"
 prometheus = { version = "0.13.0", default-features = false }
 futures-util = { version = "0.3.19", default-features = false, features = ["io"] }
 thiserror = "1.0"
-tokio = { version = "1.15", features = ["parking_lot"] }
+tokio = { version = "1.17.0", features = ["parking_lot"] }
 hyper = { version = "0.14.16", default-features = false, features = ["http1", "server", "tcp"] }
 
 [dev-dependencies]
 hyper = { version = "0.14.16", features = ["client"] }
-tokio = { version = "1.15", features = ["rt-multi-thread"] }
+tokio = { version = "1.17.0", features = ["rt-multi-thread"] }

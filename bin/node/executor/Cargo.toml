@@ -13,7 +13,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "3.0.0" }
-scale-info = { version = "2.0.0", features = ["derive"] }
+scale-info = { version = "2.0.1", features = ["derive"] }
 node-primitives = { version = "2.0.0", path = "../primitives" }
 node-runtime = { version = "3.0.0-dev", path = "../runtime" }
 sc-executor = { version = "0.10.0-dev", path = "../../../client/executor" }
@@ -40,7 +40,7 @@ sp-runtime = { version = "6.0.0", path = "../../../primitives/runtime" }
 sp-externalities = { version = "0.12.0", path = "../../../primitives/externalities" }
 sp-keyring = { version = "6.0.0", path = "../../../primitives/keyring" }
 wat = "1.0"
-futures = "0.3.19"
+futures = "0.3.21"
 
 [features]
 wasmtime = ["sc-executor/wasmtime"]

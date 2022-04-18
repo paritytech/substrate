@@ -105,11 +105,7 @@ impl<Block: BlockT, ExecutorDispatch, G: GenesisInit>
 
 	/// Create new `TestClientBuilder` with default backend and storage chain mode
 	pub fn with_tx_storage(keep_blocks: u32) -> Self {
-		let backend = Arc::new(Backend::new_test_with_tx_storage(
-			keep_blocks,
-			0,
-			sc_client_db::TransactionStorageMode::StorageChain,
-		));
+		let backend = Arc::new(Backend::new_test_with_tx_storage(keep_blocks, 0));
 		Self::with_backend(backend)
 	}
 }

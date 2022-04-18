@@ -11,7 +11,7 @@ repository = "https://github.com/paritytech/substrate/"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-clap = { version = "3.0", features = ["derive"] }
+clap = { version = "3.1.6", features = ["derive"] }
 codec = { package = "parity-scale-codec", version = "3.0.0" }
 thiserror = "1.0"
 sc-cli = { version = "0.10.0-dev", path = "../../../client/cli" }

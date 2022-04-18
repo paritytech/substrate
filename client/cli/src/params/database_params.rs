@@ -18,7 +18,6 @@
 
 use crate::arg_enums::Database;
 use clap::Args;
-use sc_service::TransactionStorageMode;
 
 /// Parameters for block import.
 #[derive(Debug, Clone, PartialEq, Args)]
@@ -36,15 +35,6 @@ pub struct DatabaseParams {
 	/// Limit the memory the database cache can use.
 	#[clap(long = "db-cache", value_name = "MiB")]
 	pub database_cache_size: Option<usize>,
-
-	/// Enable storage chain mode
-	///
-	/// This changes the storage format for blocks bodies.
-	/// If this is enabled, each transaction is stored separately in the
-	/// transaction database column and is only referenced by hash
-	/// in the block body column.
-	#[clap(long)]
-	pub storage_chain: bool,
 }
 
 impl DatabaseParams {
@@ -56,14 +46,5 @@ impl DatabaseParams {
 	/// Limit the memory the database cache can use.
 	pub fn database_cache_size(&self) -> Option<usize> {
 		self.database_cache_size
-	}
-
-	/// Transaction storage scheme.
-	pub fn transaction_storage(&self) -> TransactionStorageMode {
-		if self.storage_chain {
-			TransactionStorageMode::StorageChain
-		} else {
-			TransactionStorageMode::BlockBody
-		}
 	}
 }

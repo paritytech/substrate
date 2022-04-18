@@ -17,10 +17,10 @@
 
 //! Tests for the module.
 
-use super::{Event, MaxUnlockingChunks, *};
+use super::{ConfigOp, Event, MaxUnlockingChunks, *};
 use frame_election_provider_support::{ElectionProvider, SortedListProvider, Support};
 use frame_support::{
-	assert_noop, assert_ok, bounded_vec,
+	assert_noop, assert_ok, assert_storage_noop, bounded_vec,
 	dispatch::WithPostDispatchInfo,
 	pallet_prelude::*,
 	traits::{Currency, Get, ReservableCurrency},
@@ -39,6 +39,56 @@ use sp_staking::{
 };
 use sp_std::prelude::*;
 use substrate_test_utils::assert_eq_uvec;
+
+#[test]
+fn set_staking_configs_works() {
+	ExtBuilder::default().build_and_execute(|| {
+		// setting works
+		assert_ok!(Staking::set_staking_configs(
+			Origin::root(),
+			ConfigOp::Set(1_500),
+			ConfigOp::Set(2_000),
+			ConfigOp::Set(10),
+			ConfigOp::Set(20),
+			ConfigOp::Set(Percent::from_percent(75)),
+			ConfigOp::Set(Zero::zero())
+		));
+		assert_eq!(MinNominatorBond::<Test>::get(), 1_500);
+		assert_eq!(MinValidatorBond::<Test>::get(), 2_000);
+		assert_eq!(MaxNominatorsCount::<Test>::get(), Some(10));
+		assert_eq!(MaxValidatorsCount::<Test>::get(), Some(20));
+		assert_eq!(ChillThreshold::<Test>::get(), Some(Percent::from_percent(75)));
+		assert_eq!(MinCommission::<Test>::get(), Perbill::from_percent(0));
+
+		// noop does nothing
+		assert_storage_noop!(assert_ok!(Staking::set_staking_configs(
+			Origin::root(),
+			ConfigOp::Noop,
+			ConfigOp::Noop,
+			ConfigOp::Noop,
+			ConfigOp::Noop,
+			ConfigOp::Noop,
+			ConfigOp::Noop
+		)));
+
+		// removing works
+		assert_ok!(Staking::set_staking_configs(
+			Origin::root(),
+			ConfigOp::Remove,
+			ConfigOp::Remove,
+			ConfigOp::Remove,
+			ConfigOp::Remove,
+			ConfigOp::Remove,
+			ConfigOp::Remove
+		));
+		assert_eq!(MinNominatorBond::<Test>::get(), 0);
+		assert_eq!(MinValidatorBond::<Test>::get(), 0);
+		assert_eq!(MaxNominatorsCount::<Test>::get(), None);
+		assert_eq!(MaxValidatorsCount::<Test>::get(), None);
+		assert_eq!(ChillThreshold::<Test>::get(), None);
+		assert_eq!(MinCommission::<Test>::get(), Perbill::from_percent(0));
+	});
+}
 
 #[test]
 fn force_unstake_works() {
@@ -1480,7 +1530,7 @@ fn rebond_is_fifo() {
 				active: 300,
 				unlocking: bounded_vec![
 					UnlockChunk { value: 400, era: 2 + 3 },
-					UnlockChunk { value: 300, era: 3 + 3 }
+					UnlockChunk { value: 300, era: 3 + 3 },
 				],
 				claimed_rewards: vec![],
 			})
@@ -1499,7 +1549,7 @@ fn rebond_is_fifo() {
 				unlocking: bounded_vec![
 					UnlockChunk { value: 400, era: 2 + 3 },
 					UnlockChunk { value: 300, era: 3 + 3 },
-					UnlockChunk { value: 200, era: 4 + 3 }
+					UnlockChunk { value: 200, era: 4 + 3 },
 				],
 				claimed_rewards: vec![],
 			})
@@ -1515,7 +1565,7 @@ fn rebond_is_fifo() {
 				active: 500,
 				unlocking: bounded_vec![
 					UnlockChunk { value: 400, era: 2 + 3 },
-					UnlockChunk { value: 100, era: 3 + 3 }
+					UnlockChunk { value: 100, era: 3 + 3 },
 				],
 				claimed_rewards: vec![],
 			})
@@ -4027,10 +4077,12 @@ mod election_data_provider {
 	#[test]
 	fn voters_include_self_vote() {
 		ExtBuilder::default().nominate(false).build_and_execute(|| {
-			assert!(<Validators<Test>>::iter().map(|(x, _)| x).all(|v| Staking::voters(None)
-				.unwrap()
-				.into_iter()
-				.any(|(w, _, t)| { v == w && t[0] == w })))
+			assert!(<Validators<Test>>::iter().map(|(x, _)| x).all(|v| Staking::electing_voters(
+				None
+			)
+			.unwrap()
+			.into_iter()
+			.any(|(w, _, t)| { v == w && t[0] == w })))
 		})
 	}
 
@@ -4039,7 +4091,7 @@ mod election_data_provider {
 		ExtBuilder::default().build_and_execute(|| {
 			assert_eq!(Staking::nominators(101).unwrap().targets, vec![11, 21]);
 			assert_eq!(
-				<Staking as ElectionDataProvider>::voters(None)
+				<Staking as ElectionDataProvider>::electing_voters(None)
 					.unwrap()
 					.iter()
 					.find(|x| x.0 == 101)
@@ -4054,7 +4106,7 @@ mod election_data_provider {
 			// 11 is gone.
 			start_active_era(2);
 			assert_eq!(
-				<Staking as ElectionDataProvider>::voters(None)
+				<Staking as ElectionDataProvider>::electing_voters(None)
 					.unwrap()
 					.iter()
 					.find(|x| x.0 == 101)
@@ -4066,7 +4118,7 @@ mod election_data_provider {
 			// resubmit and it is back
 			assert_ok!(Staking::nominate(Origin::signed(100), vec![11, 21]));
 			assert_eq!(
-				<Staking as ElectionDataProvider>::voters(None)
+				<Staking as ElectionDataProvider>::electing_voters(None)
 					.unwrap()
 					.iter()
 					.find(|x| x.0 == 101)
@@ -4083,67 +4135,66 @@ mod election_data_provider {
 			.set_status(41, StakerStatus::Validator)
 			.build_and_execute(|| {
 				// sum of all nominators who'd be voters (1), plus the self-votes (4).
-				assert_eq!(
-					<Test as Config>::SortedListProvider::count() +
-						<Validators<Test>>::iter().count() as u32,
-					5
-				);
+				assert_eq!(<Test as Config>::VoterList::count(), 5);
 
 				// if limits is less..
-				assert_eq!(Staking::voters(Some(1)).unwrap().len(), 1);
+				assert_eq!(Staking::electing_voters(Some(1)).unwrap().len(), 1);
 
 				// if limit is equal..
-				assert_eq!(Staking::voters(Some(5)).unwrap().len(), 5);
+				assert_eq!(Staking::electing_voters(Some(5)).unwrap().len(), 5);
 
 				// if limit is more.
-				assert_eq!(Staking::voters(Some(55)).unwrap().len(), 5);
+				assert_eq!(Staking::electing_voters(Some(55)).unwrap().len(), 5);
 
 				// if target limit is more..
-				assert_eq!(Staking::targets(Some(6)).unwrap().len(), 4);
-				assert_eq!(Staking::targets(Some(4)).unwrap().len(), 4);
+				assert_eq!(Staking::electable_targets(Some(6)).unwrap().len(), 4);
+				assert_eq!(Staking::electable_targets(Some(4)).unwrap().len(), 4);
 
 				// if target limit is less, then we return an error.
-				assert_eq!(Staking::targets(Some(1)).unwrap_err(), "Target snapshot too big");
+				assert_eq!(
+					Staking::electable_targets(Some(1)).unwrap_err(),
+					"Target snapshot too big"
+				);
 			});
 	}
 
+	// Tests the criteria that in `ElectionDataProvider::voters` function, we try to get at most
+	// `maybe_max_len` voters, and if some of them end up being skipped, we iterate at most `2 *
+	// maybe_max_len`.
 	#[test]
-	fn only_iterates_max_2_times_nominators_quota() {
+	fn only_iterates_max_2_times_max_allowed_len() {
 		ExtBuilder::default()
-			.nominate(true) // add nominator 101, who nominates [11, 21]
+			.nominate(false)
 			// the other nominators only nominate 21
 			.add_staker(61, 60, 2_000, StakerStatus::<AccountId>::Nominator(vec![21]))
 			.add_staker(71, 70, 2_000, StakerStatus::<AccountId>::Nominator(vec![21]))
 			.add_staker(81, 80, 2_000, StakerStatus::<AccountId>::Nominator(vec![21]))
 			.build_and_execute(|| {
-				// given our nominators ordered by stake,
+				// all voters ordered by stake,
 				assert_eq!(
-					<Test as Config>::SortedListProvider::iter().collect::<Vec<_>>(),
-					vec![61, 71, 81, 101]
+					<Test as Config>::VoterList::iter().collect::<Vec<_>>(),
+					vec![61, 71, 81, 11, 21, 31]
 				);
 
-				// and total voters
-				assert_eq!(
-					<Test as Config>::SortedListProvider::count() +
-						<Validators<Test>>::iter().count() as u32,
-					7
-				);
-
-				// roll to session 5
 				run_to_block(25);
 
 				// slash 21, the only validator nominated by our first 3 nominators
 				add_slash(&21);
 
-				// we take 4 voters: 2 validators and 2 nominators (so nominators quota = 2)
+				// we want 2 voters now, and in maximum we allow 4 iterations. This is what happens:
+				// 61 is pruned;
+				// 71 is pruned;
+				// 81 is pruned;
+				// 11 is taken;
+				// we finish since the 2x limit is reached.
 				assert_eq!(
-					Staking::voters(Some(3))
+					Staking::electing_voters(Some(2))
 						.unwrap()
 						.iter()
 						.map(|(stash, _, _)| stash)
 						.copied()
 						.collect::<Vec<_>>(),
-					vec![31, 11], // 2 validators, but no nominators because we hit the quota
+					vec![11],
 				);
 			});
 	}
@@ -4156,57 +4207,43 @@ mod election_data_provider {
 	#[test]
 	fn get_max_len_voters_even_if_some_nominators_are_slashed() {
 		ExtBuilder::default()
-			.nominate(true) // add nominator 101, who nominates [11, 21]
+			.nominate(false)
 			.add_staker(61, 60, 20, StakerStatus::<AccountId>::Nominator(vec![21]))
-			//                                 61 only nominates validator 21 ^^
 			.add_staker(71, 70, 10, StakerStatus::<AccountId>::Nominator(vec![11, 21]))
+			.add_staker(81, 80, 10, StakerStatus::<AccountId>::Nominator(vec![11, 21]))
 			.build_and_execute(|| {
-				// given our nominators ordered by stake,
+				// given our voters ordered by stake,
 				assert_eq!(
-					<Test as Config>::SortedListProvider::iter().collect::<Vec<_>>(),
-					vec![101, 61, 71]
+					<Test as Config>::VoterList::iter().collect::<Vec<_>>(),
+					vec![11, 21, 31, 61, 71, 81]
 				);
 
-				// and total voters
+				// we take 4 voters
 				assert_eq!(
-					<Test as Config>::SortedListProvider::count() +
-						<Validators<Test>>::iter().count() as u32,
-					6
-				);
-
-				// we take 5 voters
-				assert_eq!(
-					Staking::voters(Some(5))
+					Staking::electing_voters(Some(4))
 						.unwrap()
 						.iter()
 						.map(|(stash, _, _)| stash)
 						.copied()
 						.collect::<Vec<_>>(),
-					// then
-					vec![
-						31, 21, 11, // 3 nominators
-						101, 61 // 2 validators, and 71 is excluded
-					],
+					vec![11, 21, 31, 61],
 				);
 
 				// roll to session 5
 				run_to_block(25);
 
-				// slash 21, the only validator nominated by 61
+				// slash 21, the only validator nominated by 61.
 				add_slash(&21);
 
-				// we take 4 voters
+				// we take 4 voters; 71 and 81 are replacing the ejected ones.
 				assert_eq!(
-					Staking::voters(Some(4))
+					Staking::electing_voters(Some(4))
 						.unwrap()
 						.iter()
 						.map(|(stash, _, _)| stash)
 						.copied()
 						.collect::<Vec<_>>(),
-					vec![
-						31, 11, // 2 validators (21 was slashed)
-						101, 71 // 2 nominators, excluding 61
-					],
+					vec![11, 31, 71, 81],
 				);
 			});
 	}
@@ -4390,12 +4427,12 @@ fn chill_other_works() {
 			// Change the minimum bond... but no limits.
 			assert_ok!(Staking::set_staking_configs(
 				Origin::root(),
-				1_500,
-				2_000,
-				None,
-				None,
-				None,
-				Zero::zero()
+				ConfigOp::Set(1_500),
+				ConfigOp::Set(2_000),
+				ConfigOp::Remove,
+				ConfigOp::Remove,
+				ConfigOp::Remove,
+				ConfigOp::Remove
 			));
 
 			// Still can't chill these users
@@ -4411,12 +4448,12 @@ fn chill_other_works() {
 			// Add limits, but no threshold
 			assert_ok!(Staking::set_staking_configs(
 				Origin::root(),
-				1_500,
-				2_000,
-				Some(10),
-				Some(10),
-				None,
-				Zero::zero()
+				ConfigOp::Noop,
+				ConfigOp::Noop,
+				ConfigOp::Set(10),
+				ConfigOp::Set(10),
+				ConfigOp::Noop,
+				ConfigOp::Noop
 			));
 
 			// Still can't chill these users
@@ -4432,12 +4469,12 @@ fn chill_other_works() {
 			// Add threshold, but no limits
 			assert_ok!(Staking::set_staking_configs(
 				Origin::root(),
-				1_500,
-				2_000,
-				None,
-				None,
-				Some(Percent::from_percent(0)),
-				Zero::zero()
+				ConfigOp::Noop,
+				ConfigOp::Noop,
+				ConfigOp::Remove,
+				ConfigOp::Remove,
+				ConfigOp::Noop,
+				ConfigOp::Noop
 			));
 
 			// Still can't chill these users
@@ -4453,12 +4490,12 @@ fn chill_other_works() {
 			// Add threshold and limits
 			assert_ok!(Staking::set_staking_configs(
 				Origin::root(),
-				1_500,
-				2_000,
-				Some(10),
-				Some(10),
-				Some(Percent::from_percent(75)),
-				Zero::zero()
+				ConfigOp::Noop,
+				ConfigOp::Noop,
+				ConfigOp::Set(10),
+				ConfigOp::Set(10),
+				ConfigOp::Set(Percent::from_percent(75)),
+				ConfigOp::Noop
 			));
 
 			// 16 people total because tests start with 2 active one
@@ -4498,12 +4535,12 @@ fn capped_stakers_works() {
 		let max = 10;
 		assert_ok!(Staking::set_staking_configs(
 			Origin::root(),
-			10,
-			10,
-			Some(max),
-			Some(max),
-			Some(Percent::from_percent(0)),
-			Zero::zero(),
+			ConfigOp::Set(10),
+			ConfigOp::Set(10),
+			ConfigOp::Set(max),
+			ConfigOp::Set(max),
+			ConfigOp::Remove,
+			ConfigOp::Remove,
 		));
 
 		// can create `max - validator_count` validators
@@ -4568,12 +4605,12 @@ fn capped_stakers_works() {
 		// No problem when we set to `None` again
 		assert_ok!(Staking::set_staking_configs(
 			Origin::root(),
-			10,
-			10,
-			None,
-			None,
-			None,
-			Zero::zero(),
+			ConfigOp::Noop,
+			ConfigOp::Noop,
+			ConfigOp::Remove,
+			ConfigOp::Remove,
+			ConfigOp::Noop,
+			ConfigOp::Noop,
 		));
 		assert_ok!(Staking::nominate(Origin::signed(last_nominator), vec![1]));
 		assert_ok!(Staking::validate(Origin::signed(last_validator), ValidatorPrefs::default()));
@@ -4583,19 +4620,29 @@ fn capped_stakers_works() {
 #[test]
 fn min_commission_works() {
 	ExtBuilder::default().build_and_execute(|| {
+		// account 10 controls the stash from account 11
 		assert_ok!(Staking::validate(
 			Origin::signed(10),
 			ValidatorPrefs { commission: Perbill::from_percent(5), blocked: false }
 		));
 
+		// event emitted should be correct
+		assert_eq!(
+			*staking_events().last().unwrap(),
+			Event::ValidatorPrefsSet(
+				11,
+				ValidatorPrefs { commission: Perbill::from_percent(5), blocked: false }
+			)
+		);
+
 		assert_ok!(Staking::set_staking_configs(
 			Origin::root(),
-			0,
-			0,
-			None,
-			None,
-			None,
-			Perbill::from_percent(10),
+			ConfigOp::Remove,
+			ConfigOp::Remove,
+			ConfigOp::Remove,
+			ConfigOp::Remove,
+			ConfigOp::Remove,
+			ConfigOp::Set(Perbill::from_percent(10)),
 		));
 
 		// can't make it less than 10 now
@@ -4638,7 +4685,7 @@ fn change_of_max_nominations() {
 				vec![(70, 3), (101, 2), (60, 1)]
 			);
 			// 3 validators and 3 nominators
-			assert_eq!(Staking::voters(None).unwrap().len(), 3 + 3);
+			assert_eq!(Staking::electing_voters(None).unwrap().len(), 3 + 3);
 
 			// abrupt change from 16 to 4, everyone should be fine.
 			MaxNominations::set(4);
@@ -4649,7 +4696,7 @@ fn change_of_max_nominations() {
 					.collect::<Vec<_>>(),
 				vec![(70, 3), (101, 2), (60, 1)]
 			);
-			assert_eq!(Staking::voters(None).unwrap().len(), 3 + 3);
+			assert_eq!(Staking::electing_voters(None).unwrap().len(), 3 + 3);
 
 			// abrupt change from 4 to 3, everyone should be fine.
 			MaxNominations::set(3);
@@ -4660,7 +4707,7 @@ fn change_of_max_nominations() {
 					.collect::<Vec<_>>(),
 				vec![(70, 3), (101, 2), (60, 1)]
 			);
-			assert_eq!(Staking::voters(None).unwrap().len(), 3 + 3);
+			assert_eq!(Staking::electing_voters(None).unwrap().len(), 3 + 3);
 
 			// abrupt change from 3 to 2, this should cause some nominators to be non-decodable, and
 			// thus non-existent unless if they update.
@@ -4677,7 +4724,7 @@ fn change_of_max_nominations() {
 			// but its value cannot be decoded and default is returned.
 			assert!(Nominators::<Test>::get(70).is_none());
 
-			assert_eq!(Staking::voters(None).unwrap().len(), 3 + 2);
+			assert_eq!(Staking::electing_voters(None).unwrap().len(), 3 + 2);
 			assert!(Nominators::<Test>::contains_key(101));
 
 			// abrupt change from 2 to 1, this should cause some nominators to be non-decodable, and
@@ -4694,7 +4741,7 @@ fn change_of_max_nominations() {
 			assert!(Nominators::<Test>::contains_key(60));
 			assert!(Nominators::<Test>::get(70).is_none());
 			assert!(Nominators::<Test>::get(60).is_some());
-			assert_eq!(Staking::voters(None).unwrap().len(), 3 + 1);
+			assert_eq!(Staking::electing_voters(None).unwrap().len(), 3 + 1);
 
 			// now one of them can revive themselves by re-nominating to a proper value.
 			assert_ok!(Staking::nominate(Origin::signed(71), vec![1]));
@@ -4722,19 +4769,45 @@ mod sorted_list_provider {
 	fn re_nominate_does_not_change_counters_or_list() {
 		ExtBuilder::default().nominate(true).build_and_execute(|| {
 			// given
-			let pre_insert_nominator_count = Nominators::<Test>::iter().count() as u32;
-			assert_eq!(<Test as Config>::SortedListProvider::count(), pre_insert_nominator_count);
-			assert!(Nominators::<Test>::contains_key(101));
-			assert_eq!(<Test as Config>::SortedListProvider::iter().collect::<Vec<_>>(), vec![101]);
+			let pre_insert_voter_count =
+				(Nominators::<Test>::count() + Validators::<Test>::count()) as u32;
+			assert_eq!(<Test as Config>::VoterList::count(), pre_insert_voter_count);
+
+			assert_eq!(
+				<Test as Config>::VoterList::iter().collect::<Vec<_>>(),
+				vec![11, 21, 31, 101]
+			);
 
 			// when account 101 renominates
 			assert_ok!(Staking::nominate(Origin::signed(100), vec![41]));
 
 			// then counts don't change
-			assert_eq!(<Test as Config>::SortedListProvider::count(), pre_insert_nominator_count);
-			assert_eq!(Nominators::<Test>::iter().count() as u32, pre_insert_nominator_count);
+			assert_eq!(<Test as Config>::VoterList::count(), pre_insert_voter_count);
 			// and the list is the same
-			assert_eq!(<Test as Config>::SortedListProvider::iter().collect::<Vec<_>>(), vec![101]);
+			assert_eq!(
+				<Test as Config>::VoterList::iter().collect::<Vec<_>>(),
+				vec![11, 21, 31, 101]
+			);
+		});
+	}
+
+	#[test]
+	fn re_validate_does_not_change_counters_or_list() {
+		ExtBuilder::default().nominate(false).build_and_execute(|| {
+			// given
+			let pre_insert_voter_count =
+				(Nominators::<Test>::count() + Validators::<Test>::count()) as u32;
+			assert_eq!(<Test as Config>::VoterList::count(), pre_insert_voter_count);
+
+			assert_eq!(<Test as Config>::VoterList::iter().collect::<Vec<_>>(), vec![11, 21, 31]);
+
+			// when account 11 re-validates
+			assert_ok!(Staking::validate(Origin::signed(10), Default::default()));
+
+			// then counts don't change
+			assert_eq!(<Test as Config>::VoterList::count(), pre_insert_voter_count);
+			// and the list is the same
+			assert_eq!(<Test as Config>::VoterList::iter().collect::<Vec<_>>(), vec![11, 21, 31]);
 		});
 	}
 }

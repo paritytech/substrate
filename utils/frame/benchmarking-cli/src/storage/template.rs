@@ -22,7 +22,8 @@ use log::info;
 use serde::Serialize;
 use std::{env, fs, path::PathBuf};
 
-use super::{cmd::StorageParams, record::Stats};
+use super::cmd::StorageParams;
+use crate::shared::{Stats, UnderscoreHelper};
 
 static VERSION: &'static str = env!("CARGO_PKG_VERSION");
 static TEMPLATE: &str = include_str!("./weights.hbs");
@@ -32,6 +33,8 @@ static TEMPLATE: &str = include_str!("./weights.hbs");
 pub(crate) struct TemplateData {
 	/// Name of the database used.
 	db_name: String,
+	/// Block number that was used.
+	block_number: String,
 	/// Name of the runtime. Taken from the chain spec.
 	runtime_name: String,
 	/// Version of the benchmarking CLI used.
@@ -75,52 +78,56 @@ impl TemplateData {
 		write: Option<(Stats, Stats)>,
 	) -> Result<()> {
 		if let Some(read) = read {
-			self.read_weight = calc_weight(&read.0, &self.params)?;
+			self.read_weight = self.params.weight_params.calc_weight(&read.0)?;
 			self.read = Some(read);
 		}
 		if let Some(write) = write {
-			self.write_weight = calc_weight(&write.0, &self.params)?;
+			self.write_weight = self.params.weight_params.calc_weight(&write.0)?;
 			self.write = Some(write);
 		}
 		Ok(())
 	}
 
-	/// Filles out the `weights.hbs` HBS template with its own data.
+	/// Sets the block id that was used.
+	pub fn set_block_number(&mut self, block_number: String) {
+		self.block_number = block_number
+	}
+
+	/// Fills out the `weights.hbs` or specified HBS template with its own data.
 	/// Writes the result to `path` which can be a directory or file.
-	pub fn write(&self, path: &str) -> Result<()> {
+	pub fn write(&self, path: &Option<PathBuf>, hbs_template: &Option<PathBuf>) -> Result<()> {
 		let mut handlebars = handlebars::Handlebars::new();
 		// Format large integers with underscore.
-		handlebars.register_helper("underscore", Box::new(crate::writer::UnderscoreHelper));
+		handlebars.register_helper("underscore", Box::new(UnderscoreHelper));
 		// Don't HTML escape any characters.
 		handlebars.register_escape_fn(|s| -> String { s.to_string() });
+		// Use custom template if provided.
+		let template = match hbs_template {
+			Some(template) if template.is_file() => fs::read_to_string(template)?,
+			Some(_) => return Err("Handlebars template is not a valid file!".into()),
+			None => TEMPLATE.to_string(),
+		};
 
 		let out_path = self.build_path(path);
 		let mut fd = fs::File::create(&out_path)?;
 		info!("Writing weights to {:?}", fs::canonicalize(&out_path)?);
+
 		handlebars
-			.render_template_to_write(&TEMPLATE, &self, &mut fd)
+			.render_template_to_write(&template, &self, &mut fd)
 			.map_err(|e| format!("HBS template write: {:?}", e).into())
 	}
 
 	/// Builds a path for the weight file.
-	fn build_path(&self, weight_out: &str) -> PathBuf {
-		let mut path = PathBuf::from(weight_out);
-		if path.is_dir() {
-			path.push(format!("{}_weights.rs", self.db_name.to_lowercase()));
+	fn build_path(&self, weight_out: &Option<PathBuf>) -> PathBuf {
+		let mut path = match weight_out {
+			Some(p) => PathBuf::from(p),
+			None => PathBuf::new(),
+		};
+
+		if path.is_dir() || path.as_os_str().is_empty() {
+			path.push(format!("{}_weights", self.db_name.to_lowercase()));
 			path.set_extension("rs");
 		}
 		path
 	}
-}
-
-/// Calculates the final weight by multiplying the selected metric with
-/// `mul` and adding `add`.
-/// Does not use safe casts and can overflow.
-fn calc_weight(stat: &Stats, params: &StorageParams) -> Result<u64> {
-	if params.weight_mul.is_sign_negative() || !params.weight_mul.is_normal() {
-		return Err("invalid floating number for `weight_mul`".into())
-	}
-	let s = stat.select(params.weight_metric) as f64;
-	let w = s.mul_add(params.weight_mul, params.weight_add as f64).ceil();
-	Ok(w as u64) // No safe cast here since there is no `From<f64>` for `u64`.
 }
