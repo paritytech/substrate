@@ -276,10 +276,11 @@ parameter_types! {
 }
 
 pub struct OnChainSeqPhragmen;
-impl onchain::ExecutionConfig for OnChainSeqPhragmen {
+impl onchain::Config for OnChainSeqPhragmen {
 	type System = Runtime;
 	type Solver = SequentialPhragmen<AccountId, SolutionAccuracyOf<Runtime>, Balancing>;
 	type DataProvider = StakingMock;
+	type WeightInfo = ();
 }
 
 pub struct MockFallback;
@@ -304,7 +305,7 @@ impl InstantElectionProvider for MockFallback {
 				max_voters,
 				max_targets,
 			)
-			.map_err(|_| "UnboundedExecution failed")
+			.map_err(|_| "onchain::UnboundedExecution failed.")
 		} else {
 			super::NoFallback::<Runtime>::elect_with_bounds(max_voters, max_targets)
 		}
