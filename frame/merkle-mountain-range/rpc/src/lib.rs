@@ -90,7 +90,7 @@ pub trait MmrApi<BlockHash> {
 	///
 	/// Returns the (full) leaf itself and a proof for this leaf (compact encoding, i.e. hash of
 	/// the leaf). Both parameters are SCALE-encoded.
-	#[rpc(name = "mmr_generateProof")]
+	#[rpc(name = "mmr_generateHistoricalProof")]
 	fn generate_historical_proof(
 		&self,
 		leaf_index: LeafIndex,
