@@ -54,8 +54,26 @@ macro_rules! test_wasm_execution {
 
 			#[test]
 			#[cfg(feature = "wasmtime")]
-			fn [<$method_name _compiled>]() {
-				$method_name(WasmExecutionMethod::Compiled);
+			fn [<$method_name _compiled_recreate_instance_cow>]() {
+				$method_name(WasmExecutionMethod::Compiled {
+					instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::RecreateInstanceCopyOnWrite
+				});
+			}
+
+			#[test]
+			#[cfg(feature = "wasmtime")]
+			fn [<$method_name _compiled_pooling_cow>]() {
+				$method_name(WasmExecutionMethod::Compiled {
+					instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::PoolingCopyOnWrite
+				});
+			}
+
+			#[test]
+			#[cfg(feature = "wasmtime")]
+			fn [<$method_name _compiled_legacy_instance_reuse>]() {
+				$method_name(WasmExecutionMethod::Compiled {
+					instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::LegacyInstanceReuse
+				});
 			}
 		}
 	};
@@ -89,13 +107,17 @@ macro_rules! test_wasm_execution_sandbox {
 			#[test]
 			#[cfg(feature = "wasmtime")]
 			fn [<$method_name _compiled_host_executor>]() {
-				$method_name(WasmExecutionMethod::Compiled, "_host");
+				$method_name(WasmExecutionMethod::Compiled {
+					instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::RecreateInstance
+				}, "_host");
 			}
 
 			#[test]
 			#[cfg(feature = "wasmtime")]
 			fn [<$method_name _compiled_embedded_executor>]() {
-				$method_name(WasmExecutionMethod::Compiled, "_embedded");
+				$method_name(WasmExecutionMethod::Compiled {
+					instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::RecreateInstance
+				}, "_embedded");
 			}
 		}
 	};
@@ -153,7 +175,7 @@ fn call_not_existing_function(wasm_method: WasmExecutionMethod) {
 			let expected = match wasm_method {
 				WasmExecutionMethod::Interpreted => "Trap: Host(Other(\"Function `missing_external` is only a stub. Calling a stub is not allowed.\"))",
 				#[cfg(feature = "wasmtime")]
-				WasmExecutionMethod::Compiled => "call to a missing function env:missing_external"
+				WasmExecutionMethod::Compiled { .. } => "call to a missing function env:missing_external"
 			};
 			assert_eq!(error.message, expected);
 		},
@@ -173,7 +195,7 @@ fn call_yet_another_not_existing_function(wasm_method: WasmExecutionMethod) {
 			let expected = match wasm_method {
 				WasmExecutionMethod::Interpreted => "Trap: Host(Other(\"Function `yet_another_missing_external` is only a stub. Calling a stub is not allowed.\"))",
 				#[cfg(feature = "wasmtime")]
-				WasmExecutionMethod::Compiled => "call to a missing function env:yet_another_missing_external"
+				WasmExecutionMethod::Compiled { .. } => "call to a missing function env:yet_another_missing_external"
 			};
 			assert_eq!(error.message, expected);
 		},
@@ -473,7 +495,9 @@ fn should_trap_when_heap_exhausted(wasm_method: WasmExecutionMethod) {
 
 	match err {
 		#[cfg(feature = "wasmtime")]
-		Error::AbortedDueToTrap(error) if wasm_method == WasmExecutionMethod::Compiled => {
+		Error::AbortedDueToTrap(error)
+			if matches!(wasm_method, WasmExecutionMethod::Compiled { .. }) =>
+		{
 			assert_eq!(
 				error.message,
 				r#"host code panicked while being called by the runtime: Failed to allocate memory: "Allocator ran out of space""#
@@ -807,7 +831,7 @@ fn unreachable_intrinsic(wasm_method: WasmExecutionMethod) {
 			let expected = match wasm_method {
 				WasmExecutionMethod::Interpreted => "Trap: Unreachable",
 				#[cfg(feature = "wasmtime")]
-				WasmExecutionMethod::Compiled => "wasm trap: wasm `unreachable` instruction executed",
+				WasmExecutionMethod::Compiled { .. } => "wasm trap: wasm `unreachable` instruction executed",
 			};
 			assert_eq!(error.message, expected);
 		},

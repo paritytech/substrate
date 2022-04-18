@@ -21,11 +21,13 @@ use sc_executor_common::{error::Error, runtime_blob::RuntimeBlob, wasm_runtime::
 use sc_runtime_test::wasm_binary_unwrap;
 use std::sync::Arc;
 
+use crate::InstantiationStrategy;
+
 type HostFunctions = sp_io::SubstrateHostFunctions;
 
 struct RuntimeBuilder {
 	code: Option<String>,
-	fast_instance_reuse: bool,
+	instantiation_strategy: InstantiationStrategy,
 	canonicalize_nans: bool,
 	deterministic_stack: bool,
 	extra_heap_pages: u64,
@@ -39,7 +41,7 @@ impl RuntimeBuilder {
 	fn new_on_demand() -> Self {
 		Self {
 			code: None,
-			fast_instance_reuse: false,
+			instantiation_strategy: InstantiationStrategy::RecreateInstance,
 			canonicalize_nans: false,
 			deterministic_stack: false,
 			extra_heap_pages: 1024,
@@ -94,7 +96,7 @@ impl RuntimeBuilder {
 			allow_missing_func_imports: true,
 			cache_path: None,
 			semantics: crate::Semantics {
-				fast_instance_reuse: self.fast_instance_reuse,
+				instantiation_strategy: self.instantiation_strategy,
 				deterministic_stack_limit: match self.deterministic_stack {
 					true => Some(crate::DeterministicStackLimit {
 						logical_max: 65536,
@@ -109,8 +111,11 @@ impl RuntimeBuilder {
 		};
 
 		let rt = if self.precompile_runtime {
+			let dir = tempfile::tempdir().unwrap();
+			let path = dir.path().join("runtime.bin");
 			let artifact = crate::prepare_runtime_artifact(blob, &config.semantics).unwrap();
-			unsafe { crate::create_runtime_from_artifact::<HostFunctions>(&artifact, config) }
+			std::fs::write(&path, artifact).unwrap();
+			unsafe { crate::create_runtime_from_artifact::<HostFunctions>(&path, config) }
 		} else {
 			crate::create_runtime::<HostFunctions>(blob, config)
 		}
@@ -381,7 +386,7 @@ fn test_instances_without_reuse_are_not_leaked() {
 			allow_missing_func_imports: true,
 			cache_path: None,
 			semantics: crate::Semantics {
-				fast_instance_reuse: false,
+				instantiation_strategy: InstantiationStrategy::RecreateInstance,
 				deterministic_stack_limit: None,
 				canonicalize_nans: false,
 				parallel_compilation: true,

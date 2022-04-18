@@ -28,9 +28,12 @@ wasmtime = { version = "0.35.3", default-features = false, features = [
     "cranelift",
     "jitdump",
     "parallel-compilation",
+    "memory-init-cow",
+    "pooling-allocator",
 ] }
 
 [dev-dependencies]
 sc-runtime-test = { version = "2.0.0", path = "../runtime-test" }
 sp-io = { version = "6.0.0", path = "../../../primitives/io" }
 wat = "1.0"
+tempfile = "3.3.0"

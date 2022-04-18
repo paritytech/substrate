@@ -20,6 +20,33 @@
 
 use clap::ArgEnum;
 
+/// The instantiation strategy to use in compiled mode.
+#[derive(Debug, Clone, Copy, ArgEnum)]
+#[clap(rename_all = "kebab-case")]
+pub enum WasmInstantiationStrategy {
+	/// Pool the instances to avoid initializing everything from scratch
+	/// on each instantiation. Use copy-on-write memory when possible.
+	PoolingCopyOnWrite,
+
+	/// Recreate the instance from scratch on every instantiation.
+	/// Use copy-on-write memory when possible.
+	RecreateInstanceCopyOnWrite,
+
+	/// Pool the instances to avoid initializing everything from scratch
+	/// on each instantiation.
+	Pooling,
+
+	/// Recreate the instance from scratch on every instantiation. Very slow.
+	RecreateInstance,
+
+	/// Legacy instance reuse mechanism. DEPRECATED. Will be removed. Do not use.
+	LegacyInstanceReuse,
+}
+
+/// The default [`WasmInstantiationStrategy`].
+pub const DEFAULT_WASM_INSTANTIATION_STRATEGY: WasmInstantiationStrategy =
+	WasmInstantiationStrategy::PoolingCopyOnWrite;
+
 /// How to execute Wasm runtime code.
 #[derive(Debug, Clone, Copy)]
 pub enum WasmExecutionMethod {
@@ -71,18 +98,33 @@ impl WasmExecutionMethod {
 	}
 }
 
-impl Into<sc_service::config::WasmExecutionMethod> for WasmExecutionMethod {
-	fn into(self) -> sc_service::config::WasmExecutionMethod {
-		match self {
-			WasmExecutionMethod::Interpreted =>
-				sc_service::config::WasmExecutionMethod::Interpreted,
-			#[cfg(feature = "wasmtime")]
-			WasmExecutionMethod::Compiled => sc_service::config::WasmExecutionMethod::Compiled,
-			#[cfg(not(feature = "wasmtime"))]
-			WasmExecutionMethod::Compiled => panic!(
-				"Substrate must be compiled with \"wasmtime\" feature for compiled Wasm execution"
-			),
-		}
+/// Converts the execution method and instantiation strategy command line arguments
+/// into an execution method which can be used internally.
+pub fn execution_method_from_cli(
+	execution_method: WasmExecutionMethod,
+	_instantiation_strategy: WasmInstantiationStrategy,
+) -> sc_service::config::WasmExecutionMethod {
+	match execution_method {
+		WasmExecutionMethod::Interpreted => sc_service::config::WasmExecutionMethod::Interpreted,
+		#[cfg(feature = "wasmtime")]
+		WasmExecutionMethod::Compiled => sc_service::config::WasmExecutionMethod::Compiled {
+			instantiation_strategy: match _instantiation_strategy {
+				WasmInstantiationStrategy::PoolingCopyOnWrite =>
+					sc_service::config::WasmInstantiationStrategy::PoolingCopyOnWrite,
+				WasmInstantiationStrategy::RecreateInstanceCopyOnWrite =>
+					sc_service::config::WasmInstantiationStrategy::RecreateInstanceCopyOnWrite,
+				WasmInstantiationStrategy::Pooling =>
+					sc_service::config::WasmInstantiationStrategy::Pooling,
+				WasmInstantiationStrategy::RecreateInstance =>
+					sc_service::config::WasmInstantiationStrategy::RecreateInstance,
+				WasmInstantiationStrategy::LegacyInstanceReuse =>
+					sc_service::config::WasmInstantiationStrategy::LegacyInstanceReuse,
+			},
+		},
+		#[cfg(not(feature = "wasmtime"))]
+		WasmExecutionMethod::Compiled => panic!(
+			"Substrate must be compiled with \"wasmtime\" feature for compiled Wasm execution"
+		),
 	}
 }
 
