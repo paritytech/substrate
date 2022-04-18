@@ -277,6 +277,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub fn mmr_root() -> <T as Config<I>>::Hash {
 		Self::mmr_root_hash()
 	}
+
 	/// Verify MMR proof for given `leaves`.
 	///
 	/// This method is safe to use within the runtime code.

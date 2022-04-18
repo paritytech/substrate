@@ -57,7 +57,7 @@ impl<BlockHash> LeafProof<BlockHash> {
 	}
 }
 
-/// Retrieved MMR leaf and its proof.
+/// Retrieved MMR leaves and their proof.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct LeafBatchProof<BlockHash> {

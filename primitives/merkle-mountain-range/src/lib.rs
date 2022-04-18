@@ -362,9 +362,9 @@ pub struct BatchProof<Hash> {
 	pub items: Vec<Hash>,
 }
 
-impl<Hash> From<BatchProof<Hash>> for Proof<Hash> {
-	/// Will panic if leaf indices is less than 1
-	fn from(proof: BatchProof<Hash>) -> Self {
+impl<Hash> BatchProof<Hash> {
+	/// Will panic if leaf indices length is less than 1
+	pub fn into_single_leaf_proof(proof: BatchProof<Hash>) -> Proof<Hash> {
 		Proof {
 			leaf_index: proof.leaf_indices[0],
 			leaf_count: proof.leaf_count,
@@ -373,8 +373,9 @@ impl<Hash> From<BatchProof<Hash>> for Proof<Hash> {
 	}
 }
 
-impl<Hash> From<Proof<Hash>> for BatchProof<Hash> {
-	fn from(proof: Proof<Hash>) -> Self {
+impl<Hash> Proof<Hash> {
+	/// Converts a single leaf proof into a batch proof
+	pub fn into_batch_proof(proof: Proof<Hash>) -> BatchProof<Hash> {
 		BatchProof {
 			leaf_indices: vec![proof.leaf_index],
 			leaf_count: proof.leaf_count,
@@ -448,6 +449,7 @@ sp_api::decl_runtime_apis! {
 
 		/// Return the on-chain MMR root hash.
 		fn mmr_root() -> Result<Hash, Error>;
+
 		/// Generate MMR proof for a series of leaves under given indices.
 		fn generate_batch_proof(leaf_indices: Vec<LeafIndex>) -> Result<(Vec<EncodableOpaqueLeaf>, BatchProof<Hash>), Error>;
 
