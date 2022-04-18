@@ -5032,6 +5032,7 @@ dependencies = [
  "pallet-randomness-collective-flip",
  "pallet-recovery",
  "pallet-referenda",
+ "pallet-remark",
  "pallet-scheduler",
  "pallet-session",
  "pallet-session-benchmarking",
@@ -6297,6 +6298,22 @@ dependencies = [
  "pallet-balances",
  "pallet-preimage",
  "pallet-scheduler",
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
+name = "pallet-remark"
+version = "4.0.0-dev"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
  "parity-scale-codec",
  "scale-info",
  "serde",
