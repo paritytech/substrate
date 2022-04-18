@@ -213,10 +213,7 @@ fn bench_call_instance(c: &mut Criterion) {
 		("interpreted", Method::Interpreted),
 	];
 
-	let runtimes = [
-		("kusama_runtime", kusama_runtime()),
-		("test_runtime", test_runtime()),
-	];
+	let runtimes = [("kusama_runtime", kusama_runtime()), ("test_runtime", test_runtime())];
 
 	let thread_counts = [1, 2, 4, 8, 16];
 
