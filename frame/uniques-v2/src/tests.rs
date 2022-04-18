@@ -825,6 +825,17 @@ fn add_remove_approval_should_work() {
 
 		assert_eq!(approvals(collection_id, item_id), vec![(user_3, None)]);
 
+		// ensure we can't remove an approval if it wasn't set before
+		assert_noop!(
+			Uniques::remove_transfer_approval(
+				Origin::signed(user_1),
+				collection_id,
+				item_id,
+				user_2
+			),
+			Error::<Test>::WrongDelegate
+		);
+
 		// ensure we can clear all the approvals
 		assert_ok!(Uniques::clear_all_transfer_approvals(
 			Origin::signed(user_1),

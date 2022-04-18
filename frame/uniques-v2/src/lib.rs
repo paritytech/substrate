@@ -351,6 +351,8 @@ pub mod pallet {
 		NotAuthorized,
 		/// The calling user has an approval that already expired.
 		AuthorizationExpired,
+		/// The delegate turned out to be different to what was expected.
+		WrongDelegate,
 		/// The hint provided by the user was incorrect.
 		BadHint,
 		/// An overflow has occurred.

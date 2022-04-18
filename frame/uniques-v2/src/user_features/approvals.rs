@@ -72,11 +72,11 @@ impl<T: Config> Pallet<T> {
 			let item = maybe_item.as_mut().ok_or(Error::<T>::ItemNotFound)?;
 			ensure!(item.owner == caller, Error::<T>::NotAuthorized);
 
-			// TODO: shall we throw an error if the approval can't be found?
-
 			// remove the approval
 			if let Some(pos) = item.approvals.iter().position(|ap| delegate == ap.who) {
 				item.approvals.remove(pos);
+			} else {
+				return Err(Error::<T>::WrongDelegate.into());
 			}
 
 			Self::deposit_event(Event::ApprovalRemoved {
