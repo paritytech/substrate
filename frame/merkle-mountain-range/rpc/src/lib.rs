@@ -111,6 +111,8 @@ pub trait MmrApi<BlockHash> {
 	///
 	/// Returns the leaves and a proof for these leaves (compact encoding, i.e. hash of
 	/// the leaves). Both parameters are SCALE-encoded.
+	/// The order of entries in the `leaves` field of the returned struct
+	/// is the same as the order of the entries in `leaf_indices` supplied
 	#[rpc(name = "mmr_generateBatchProof")]
 	fn generate_batch_proof(
 		&self,

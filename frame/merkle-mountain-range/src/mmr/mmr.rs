@@ -41,6 +41,10 @@ where
 {
 	let size = NodesUtils::new(proof.leaf_count).size();
 
+	if leaves.len() != proof.leaf_indices.len() {
+		return Err(Error::Verify.log_debug("Proof leaf_indices not same length with leaves"))
+	}
+
 	let leaves_and_position_data = proof
 		.leaf_indices
 		.into_iter()
@@ -97,6 +101,11 @@ where
 			self.mmr.mmr_size(),
 			proof.items.into_iter().map(Node::Hash).collect(),
 		);
+
+		if leaves.len() != proof.leaf_indices.len() {
+			return Err(Error::Verify.log_debug("Proof leaf_indices not same length with leaves"))
+		}
+
 		let leaves_positions_and_data = proof
 			.leaf_indices
 			.into_iter()
