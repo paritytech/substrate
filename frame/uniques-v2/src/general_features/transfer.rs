@@ -36,10 +36,21 @@ impl<T: Config> Pallet<T> {
 
 		Items::<T>::try_mutate(collection_id, item_id, |maybe_item| {
 			let item = maybe_item.as_mut().ok_or(Error::<T>::ItemNotFound)?;
-			ensure!(&sender == &item.owner, Error::<T>::NotAuthorized);
 
 			let collection =
 				Collections::<T>::get(collection_id).ok_or(Error::<T>::CollectionNotFound)?;
+
+			// approvals
+			if item.owner != sender {
+				if let Some(approval) = item.approvals.iter().find(|ap| sender == ap.who) {
+					if let Some(deadline) = approval.deadline {
+						let now = frame_system::Pallet::<T>::block_number();
+						ensure!(deadline >= now, Error::<T>::AuthorizationExpired);
+					}
+				} else {
+					return Err(Error::<T>::NotAuthorized.into());
+				}
+			}
 
 			if item.owner == receiver {
 				return Ok(());
@@ -54,7 +65,7 @@ impl<T: Config> Pallet<T> {
 				CountForAccountItems::<T>::get(&receiver, &collection_id);
 			let receiver_items_amount = maybe_receiver_items_amount.get_or_insert(0);
 
-			let sender_items_amount = CountForAccountItems::<T>::get(&sender, &collection_id)
+			let sender_items_amount = CountForAccountItems::<T>::get(&item.owner, &collection_id)
 				.ok_or(Error::<T>::ItemNotFound)?;
 
 			if collection.max_items_per_account.is_some() {
@@ -64,6 +75,8 @@ impl<T: Config> Pallet<T> {
 				);
 			}
 
+			// all checks passed
+
 			AccountItems::<T>::remove((&item.owner, &collection_id, &item_id));
 			AccountItems::<T>::insert((&receiver, &collection_id, &item_id), ());
 
@@ -71,10 +84,11 @@ impl<T: Config> Pallet<T> {
 				sender_items_amount.checked_sub(1).ok_or(ArithmeticError::Overflow)?;
 			let new_receiver_items_amount =
 				receiver_items_amount.checked_add(1).ok_or(ArithmeticError::Overflow)?;
-			CountForAccountItems::<T>::insert(&sender, &collection_id, new_sender_items_amount);
+			CountForAccountItems::<T>::insert(&item.owner, &collection_id, new_sender_items_amount);
 			CountForAccountItems::<T>::insert(&receiver, &collection_id, new_receiver_items_amount);
 
 			item.owner = receiver.clone();
+			item.approvals = Default::default();
 
 			Self::deposit_event(Event::ItemTransferred {
 				collection_id,

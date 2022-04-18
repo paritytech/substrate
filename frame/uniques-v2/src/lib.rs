@@ -349,6 +349,8 @@ pub mod pallet {
 		CollectionItemsPerAccountLimitReached,
 		/// The calling user is not authorized to make this call.
 		NotAuthorized,
+		/// The calling user has an approval that already expired.
+		AuthorizationExpired,
 		/// The hint provided by the user was incorrect.
 		BadHint,
 		/// An overflow has occurred.

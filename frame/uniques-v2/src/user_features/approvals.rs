@@ -111,6 +111,4 @@ impl<T: Config> Pallet<T> {
 			Ok(())
 		})
 	}
-
-	// TODO: apply approval to transfer method
 }

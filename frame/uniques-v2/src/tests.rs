@@ -854,6 +854,85 @@ fn add_remove_approval_should_work() {
 }
 
 #[test]
+fn transfer_with_approval_should_works() {
+	new_test_ext().execute_with(|| {
+		let user_1 = 1;
+		let user_2 = 2;
+		let user_3 = 3;
+		let collection_id = 0;
+		let item_id = 1;
+
+		assert_ok!(Uniques::create(
+			Origin::signed(user_1),
+			user_1,
+			DEFAULT_USER_FEATURES,
+			None,
+			None,
+		));
+		assert_ok!(Uniques::mint(Origin::signed(user_1), user_1, collection_id, item_id));
+		assert_ok!(Uniques::approve_transfer(
+			Origin::signed(user_1),
+			collection_id,
+			item_id,
+			user_2,
+			None
+		));
+
+		assert_ok!(Uniques::transfer_item(
+			Origin::signed(user_2),
+			collection_id,
+			item_id,
+			user_3,
+			CollectionConfigs::<Test>::get(collection_id).unwrap()
+		));
+
+		// the approvals field should be reset
+		assert_eq!(approvals(collection_id, item_id), vec![]);
+
+		// and we can't transfer this item from the previous owner or pre-approved account anymore
+		assert_noop!(
+			Uniques::transfer_item(
+				Origin::signed(user_2),
+				collection_id,
+				item_id,
+				user_3,
+				CollectionConfigs::<Test>::get(collection_id).unwrap()
+			),
+			Error::<Test>::NotAuthorized
+		);
+		assert_noop!(
+			Uniques::transfer_item(
+				Origin::signed(user_1),
+				collection_id,
+				item_id,
+				user_3,
+				CollectionConfigs::<Test>::get(collection_id).unwrap()
+			),
+			Error::<Test>::NotAuthorized
+		);
+
+		// validate approval's deadline works
+		assert_ok!(Uniques::approve_transfer(
+			Origin::signed(user_3),
+			collection_id,
+			item_id,
+			user_2,
+			Some(0)
+		));
+		assert_noop!(
+			Uniques::transfer_item(
+				Origin::signed(user_2),
+				collection_id,
+				item_id,
+				user_1,
+				CollectionConfigs::<Test>::get(collection_id).unwrap()
+			),
+			Error::<Test>::AuthorizationExpired
+		);
+	});
+}
+
+#[test]
 fn different_user_flags() {
 	new_test_ext().execute_with(|| {
 		// TODO: try to pass an empty value
