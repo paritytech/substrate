@@ -14,7 +14,7 @@
 #![allow(unused_parens)]
 #![allow(unused_imports)]
 
-use frame_support::{traits::Get, weights::Weight};
+use frame_support::{traits::Get, weights::{Weight, constants}};
 use sp_std::marker::PhantomData;
 
 /// Weight functions for `{{pallet}}`.
@@ -29,10 +29,10 @@ impl<T: frame_system::Config> {{pallet}}::WeightInfo for WeightInfo<T> {
 		{{~#each benchmark.components as |c| ~}}
 		{{~#if (not c.is_used)}}_{{/if}}{{c.name}}: u32, {{/each~}}
 	) -> Weight {
-		({{underscore benchmark.base_weight}} as Weight)
+		({{underscoreFormat benchmark.base_weight}})
 			{{#each benchmark.component_weight as |cw|}}
-			// Standard Error: {{underscore cw.error}}
-			.saturating_add(({{underscore cw.slope}} as Weight).saturating_mul({{cw.name}} as Weight))
+			// Standard Error: {{underscoreFormat cw.error}}
+			.saturating_add(({{underscoreFormat cw.slope}}).saturating_mul({{cw.name}} as Weight))
 			{{/each}}
 			{{#if (ne benchmark.base_reads "0")}}
 			.saturating_add(T::DbWeight::get().reads({{benchmark.base_reads}} as Weight))

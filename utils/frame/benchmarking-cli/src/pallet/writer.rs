@@ -26,7 +26,7 @@ use std::{
 use inflector::Inflector;
 use serde::Serialize;
 
-use crate::{shared::UnderscoreHelper, PalletCmd};
+use crate::{shared::UnderscoreFormatHelper, PalletCmd};
 use frame_benchmarking::{
 	Analysis, AnalysisChoice, BenchmarkBatchSplitResults, BenchmarkResult, BenchmarkSelector,
 	RegressionModel,
@@ -297,7 +297,7 @@ pub fn write_results(
 
 	// New Handlebars instance with helpers.
 	let mut handlebars = handlebars::Handlebars::new();
-	handlebars.register_helper("underscore", Box::new(UnderscoreHelper));
+	handlebars.register_helper("underscoreFormat", Box::new(UnderscoreFormatHelper));
 	handlebars.register_helper("join", Box::new(JoinHelper));
 	// Don't HTML escape any characters.
 	handlebars.register_escape_fn(|s| -> String { s.to_string() });
