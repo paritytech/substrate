@@ -543,7 +543,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 
 		// Figure out the debit and credit, together with side-effects.
-		let debit = dbg!(Self::prep_debit(id, &source, amount, f.into()))?;
+		let debit = Self::prep_debit(id, &source, amount, f.into())?;
 		let (credit, maybe_burn) = dbg!(Self::prep_credit(id, &dest, amount, debit, f.burn_dust))?;
 
 		let mut source_account =
