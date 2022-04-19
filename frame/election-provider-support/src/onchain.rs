@@ -22,7 +22,10 @@
 use crate::{
 	Debug, ElectionDataProvider, ElectionProvider, InstantElectionProvider, NposSolver, WeightInfo,
 };
-use frame_support::{traits::Get, weights::DispatchClass};
+use frame_support::{
+	traits::{ConstU32, Get},
+	weights::DispatchClass,
+};
 use sp_npos_elections::*;
 use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData, prelude::*};
 
@@ -81,6 +84,7 @@ pub trait Config {
 	type DataProvider: ElectionDataProvider<
 		AccountId = <Self::System as frame_system::Config>::AccountId,
 		BlockNumber = <Self::System as frame_system::Config>::BlockNumber,
+		Pages = ConstU32<1>,
 	>;
 	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;

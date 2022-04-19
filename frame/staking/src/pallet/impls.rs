@@ -662,12 +662,11 @@ impl<T: Config> Pallet<T> {
 		SlashRewardFraction::<T>::put(fraction);
 	}
 
-	/// Get at most `maybe_max_len` voters ready for the npos election, assuming that `remaining`
-	/// more calls will be made in the same 'unit of election'.
+	/// Get at most `maybe_max_len` voters ready for the npos election, starting from `maybe_last`
+	/// if specified.
 	///
-	/// If `remaining > 0`, `LastIteratedNominator` is set to the last item that is returned.
-	/// Consequently, regardless of the value of `remaining`, if `LastIteratedNominator` exists, it
-	/// is used as the starting point of the iteration.
+	/// Returns the vector of voters (which is implicitly at most `maybe_max_len`), grouped with the
+	/// number of validators taken and the number of nominators taken respectively.
 	pub fn get_npos_voters_page(
 		maybe_max_len: Option<usize>,
 		maybe_last: Option<T::AccountId>,
@@ -774,7 +773,8 @@ impl<T: Config> Pallet<T> {
 		targets
 	}
 
-	/// This function will add a nominator to the `Nominators` storage map, and `VoterList`.
+	/// This function will add a nominator to the `Nominators` storage map, and reflect it in
+	/// `VoterList`.
 	///
 	/// If the nominator already exists, their nominations will be updated.
 	///
@@ -796,7 +796,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// This function will remove a nominator from the `Nominators` storage map,
-	/// and `VoterList`.
+	/// and reflect it in the `VoterList`.
 	///
 	/// Returns `Ok(())` if `who` was removed from `Nominators`, otherwise `Err(_)`.
 	///
@@ -849,7 +849,7 @@ impl<T: Config> Pallet<T> {
 
 	/// This function will remove a validator from the `Validators` storage map.
 	///
-	/// Returns true if `who` was removed from `Validators`, otherwise false.
+	/// Returns `Ok(_)` if `who` was removed from `Validators`, `Err(_)` otherwise.
 	///
 	/// NOTE: you must ALWAYS use this function to remove a validator from the system. Any access to
 	/// `Validators` or `VoterList` outside of this function is almost certainly
@@ -895,20 +895,17 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 	}
 
 	/// implementation notes: Given the loose dynamics of the `ElectionProvider`, namely the fact
-	/// that number of entries returned per page is dynamic, this implementation is best-effort at
-	/// best. We try and use the `LastIteratedNominator`, which is always kept as long call with
-	/// `remaining > 0` are made. Any call with `remaining = 0` will clear this history item, and
-	/// the next call will be fresh.
-	///
-	/// This function is written defensively:
+	/// that number of entries returned per page is dynamic, this implementation is best-effort. We
+	/// try and use the `LastIteratedNominator`, which is always kept as long call with `remaining >
+	/// 0` are made. Any call with `remaining = 0` will clear this history item, and the next call
+	/// will be a fresh start.
 	fn electing_voters_paged(
 		maybe_max_len: Option<usize>,
 		mut remaining: PageIndex,
 	) -> data_provider::Result<Vec<VoterOf<Self>>> {
 		remaining = remaining.min(Self::msp());
-		// either this is the first call, or `LastIteratedNominator` should exist.
-		let mut maybe_last = LastIteratedNominator::<T>::get();
 
+		let mut maybe_last = LastIteratedNominator::<T>::get();
 		let is_valid_state = if T::Pages::get() > 1 {
 			// in the first page, the `LastIteratedNominator` should not exist, in the rest of the
 			// pages it should.
@@ -916,7 +913,6 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 		} else {
 			maybe_last.is_none()
 		};
-
 		// defensive: since, at least as of now, this function is also used for governance fallback,
 		// we really really prefer it to NEVER fail. Thus, we play defensive and return just the
 		// first page if the state of `LastIteratedNominator` is corrupt.

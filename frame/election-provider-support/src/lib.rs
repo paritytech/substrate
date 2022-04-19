@@ -286,6 +286,8 @@ pub trait ElectionDataProvider {
 
 	/// The number of pages that this data provider is expected to be able to provide. An
 	/// implementation could use this to verify the value of `remaining: PageIndex`.
+	// TODO: this should maybe be a generic, because a single type might want implement it with
+	// different bounds.
 	type Pages: Get<PageIndex>;
 
 	/// All possible targets for the election, i.e. the targets that could become elected, thus
@@ -315,16 +317,33 @@ pub trait ElectionDataProvider {
 		remaining_pages: PageIndex,
 	) -> data_provider::Result<Vec<VoterOf<Self>>>;
 
-	/// Same as [`Self::electable_targets_paged`], but the page 0 is assumed.
+	/// Same as [`Self::electable_targets_paged`], but the most significant page is assumed.
+	///
+	/// This should only be used in the case where `Self::Pages` is `1`.
 	fn electable_targets(
 		maybe_max_len: Option<usize>,
 	) -> data_provider::Result<Vec<Self::AccountId>> {
-		Self::electable_targets_paged(maybe_max_len, 0)
+		if Self::Pages::get() != 1 {
+			frame_support::defensive!(
+				"using the backward compatibility single page election data \
+				in a multi-page context. This is most likely a mis-config"
+			);
+		}
+		Self::electable_targets_paged(maybe_max_len, Self::msp())
 	}
 
 	/// Same as [`Self::electing_voters_paged`], but the page 0 is assumed.
+	///
+	///
+	/// This should only be used in the case where `Self::Pages` is `1`.
 	fn electing_voters(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<VoterOf<Self>>> {
-		Self::electing_voters_paged(maybe_max_len, 0)
+		if Self::Pages::get() != 1 {
+			frame_support::defensive!(
+				"using the backward compatibility single page election data \
+				in a multi-page context. This is most likely a mis-config"
+			);
+		}
+		Self::electing_voters_paged(maybe_max_len, Self::msp())
 	}
 
 	/// The number of targets to elect.
@@ -335,8 +354,6 @@ pub trait ElectionDataProvider {
 	/// A sensible implementation should use the minimum between this value and
 	/// [`Self::targets().len()`], since desiring a winner set larger than candidates is not
 	/// feasible.
-	///
-	/// This is documented further in issue: <https://github.com/paritytech/substrate/issues/9478>
 	fn desired_targets() -> data_provider::Result<u32>;
 
 	/// Provide a best effort prediction about when the next election is about to happen.
