@@ -284,7 +284,7 @@ pub trait ElectionDataProvider {
 	/// Maximum number of votes per voter that this data provider is providing.
 	type MaxVotesPerVoter: Get<u32>;
 
-	/// The number of pages that this data provider is expected to be able to provide. An
+	/// The maximum number of pages that this data provider is expected to be able to provide. An
 	/// implementation could use this to verify the value of `remaining: PageIndex`.
 	// TODO: this should maybe be a generic, because a single type might want implement it with
 	// different bounds.
