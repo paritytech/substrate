@@ -374,7 +374,12 @@ pub mod pallet {
 		/// Parameters:
 		/// - `account`: The recovered account you want to make a call on-behalf-of.
 		/// - `call`: The call you want to make with the recovered account.
-		#[pallet::weight(T::WeightInfo::as_recovered())]
+		#[pallet::weight({
+			let dispatch_info = call.get_dispatch_info();
+			(
+				T::WeightInfo::as_recovered().saturating_add(dispatch_info.weight),
+				dispatch_info.class,
+			)})]
 		pub fn as_recovered(
 			origin: OriginFor<T>,
 			account: T::AccountId,
@@ -429,7 +434,7 @@ pub mod pallet {
 		///   friends.
 		/// - `delay_period`: The number of blocks after a recovery attempt is initialized that
 		///   needs to pass before the account can be recovered.
-		#[pallet::weight(T::WeightInfo::create_recovery(T::MaxFriends::get()))]
+		#[pallet::weight(T::WeightInfo::create_recovery(friends.len() as u32))]
 		pub fn create_recovery(
 			origin: OriginFor<T>,
 			friends: Vec<T::AccountId>,

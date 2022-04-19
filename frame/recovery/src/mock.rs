@@ -97,6 +97,8 @@ parameter_types! {
 	pub const ConfigDepositBase: u64 = 10;
 	pub const FriendDepositFactor: u64 = 1;
 	pub const RecoveryDeposit: u64 = 10;
+	// Large number of friends for benchmarking.
+	pub const MaxFriends: u32 = 128;
 }
 
 impl Config for Test {
@@ -106,8 +108,7 @@ impl Config for Test {
 	type Currency = Balances;
 	type ConfigDepositBase = ConfigDepositBase;
 	type FriendDepositFactor = FriendDepositFactor;
-	// Large number of friends for benchmarking.
-	type MaxFriends = ConstU32<9>;
+	type MaxFriends = MaxFriends;
 	type RecoveryDeposit = RecoveryDeposit;
 }
 

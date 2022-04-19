@@ -20,7 +20,8 @@
 use super::*;
 use frame_support::{assert_noop, assert_ok, bounded_vec, traits::Currency};
 use mock::{
-	new_test_ext, run_to_block, Balances, BalancesCall, Call, Origin, Recovery, RecoveryCall, Test,
+	new_test_ext, run_to_block, Balances, BalancesCall, Call, MaxFriends, Origin, Recovery,
+	RecoveryCall, Test,
 };
 use sp_runtime::traits::BadOrigin;
 
@@ -167,8 +168,8 @@ fn create_recovery_handles_basic_errors() {
 		assert_noop!(
 			Recovery::create_recovery(
 				Origin::signed(5),
-				vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
-				10,
+				vec![1; (MaxFriends::get() + 1) as usize],
+				1,
 				0
 			),
 			Error::<Test>::MaxFriends
