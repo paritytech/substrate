@@ -1221,7 +1221,7 @@ pub mod pallet {
 		FullyUnbonding,
 		/// The delegator cannot unbond further chunks due to reaching the limit.
 		MaxUnbondingLimit,
-		/// None of the funds cannot be withdrawn yet because the bonding duration has not passed.
+		/// None of the funds can be withdrawn yet because the bonding duration has not passed.
 		CannotWithdrawAny,
 		/// The amount does not meet the minimum bond to either join or create a pool.
 		MinimumBondNotMet,
