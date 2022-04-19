@@ -18,7 +18,7 @@
 //! The signed phase implementation.
 
 use crate::{
-	Config, ElectionCompute, Pallet, QueuedSolution, RawSolution, ReadySolutionOf,
+	Config, ElectionCompute, Pallet, QueuedSolution, RawSolution, ReadySolution,
 	SignedSubmissionIndices, SignedSubmissionNextIndex, SignedSubmissionsMap, SolutionOf,
 	SolutionOrSnapshotSize, Weight, WeightInfo,
 };
@@ -423,7 +423,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Infallible
 	pub fn finalize_signed_phase_accept_solution(
-		ready_solution: ReadySolutionOf<T>,
+		ready_solution: ReadySolution<T>,
 		who: &T::AccountId,
 		deposit: BalanceOf<T>,
 		reward: BalanceOf<T>,

@@ -239,7 +239,7 @@ use frame_support::{
 	ensure,
 	traits::{Currency, Get, OnUnbalanced, ReservableCurrency},
 	weights::{DispatchClass, Weight},
-	CloneNoBound, DefaultNoBound, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
+	DefaultNoBound, PartialEqNoBound,
 };
 use frame_system::{ensure_none, offchain::SendTransactionTypes};
 use scale_info::TypeInfo;
@@ -443,27 +443,22 @@ impl<C: Default> Default for RawSolution<C> {
 /// A checked solution, ready to be enacted.
 #[derive(
 	PartialEqNoBound,
-	EqNoBound,
-	CloneNoBound,
+	Eq,
+	Clone,
 	Encode,
 	Decode,
-	RuntimeDebugNoBound,
+	RuntimeDebug,
 	DefaultNoBound,
 	TypeInfo,
 	MaxEncodedLen,
 )]
-#[codec(mel_bound(AccountId: MaxEncodedLen, MaxWinnersPerPage: Get<u32>, MaxBackersPerWinner: Get<u32>))]
-#[scale_info(skip_type_params(MaxWinnersPerPage, MaxBackersPerWinner))]
-pub struct ReadySolution<
-	AccountId: Eq + Clone + sp_std::fmt::Debug,
-	MaxWinnersPerPage: Get<u32>,
-	MaxBackersPerWinner: Get<u32>,
-> {
+#[scale_info(skip_type_params(T))]
+pub struct ReadySolution<T: Config> {
 	/// The final supports of the solution.
 	///
 	/// This is target-major vector, storing each winners, total backing, and each individual
 	/// backer.
-	pub supports: BoundedSupports<AccountId, MaxWinnersPerPage, MaxBackersPerWinner>,
+	pub supports: BoundedSupports<T::AccountId, T::MaxWinnersPerPage, T::MaxBackersPerWinner>,
 	/// The score of the solution.
 	///
 	/// This is needed to potentially challenge the solution.
@@ -471,12 +466,6 @@ pub struct ReadySolution<
 	/// How this election was computed.
 	pub compute: ElectionCompute,
 }
-
-pub type ReadySolutionOf<T> = ReadySolution<
-	<T as frame_system::Config>::AccountId,
-	<T as Config>::MaxWinnersPerPage,
-	<T as Config>::MaxBackersPerWinner,
->;
 
 /// A snapshot of all the data that is needed for en entire round. They are provided by
 /// [`ElectionDataProvider`] and are kept around until the round is finished.
@@ -1079,6 +1068,7 @@ pub mod pallet {
 			let supports = T::GovernanceFallback::elect_with_bounds(
 				maybe_max_voters.unwrap_or(Bounded::max_value()),
 				maybe_max_targets.unwrap_or(Bounded::max_value()),
+				T::DataProvider::msp(),
 			)
 			.map_err(|e| {
 				log!(error, "GovernanceFallback failed: {:?}", e);
@@ -1219,7 +1209,7 @@ pub mod pallet {
 	/// Current best solution, signed or unsigned, queued to be returned upon `elect`.
 	#[pallet::storage]
 	#[pallet::getter(fn queued_solution)]
-	pub type QueuedSolution<T: Config> = StorageValue<_, ReadySolutionOf<T>>;
+	pub type QueuedSolution<T: Config> = StorageValue<_, ReadySolution<T>>;
 
 	/// Snapshot data of the round.
 	///
@@ -1453,7 +1443,7 @@ impl<T: Config> Pallet<T> {
 	pub fn feasibility_check(
 		raw_solution: RawSolution<SolutionOf<T>>,
 		compute: ElectionCompute,
-	) -> Result<ReadySolutionOf<T>, FeasibilityError> {
+	) -> Result<ReadySolution<T>, FeasibilityError> {
 		let RawSolution { solution, score, round } = raw_solution;
 
 		// First, check round.
