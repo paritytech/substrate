@@ -30,6 +30,7 @@ pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 sp-tracing = { version = "5.0.0", path = "../../primitives/tracing" }
 
 [features]
+runtime-benchmarks = []
 default = ["std"]
 std = [
 	"codec/std",

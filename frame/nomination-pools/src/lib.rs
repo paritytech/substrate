@@ -215,7 +215,6 @@
 //! after the election snapshot is taken it will benefit from the rewards of the next _2_ eras
 //! because it's vote weight will not be counted until the election snapshot in active era + 1.
 //! Related: <https://github.com/paritytech/substrate/issues/10861>
-//!
 // _Note to maintainers_: In order to ensure the reward account never falls below the existential
 // deposit, at creation the reward account must be endowed with the existential deposit. All logic
 // for calculating rewards then does not see that existential deposit as part of the free balance.
@@ -383,8 +382,8 @@ enum AccountType {
 }
 
 /// A delegator in a pool.
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebugNoBound)]
-#[cfg_attr(feature = "std", derive(CloneNoBound, PartialEqNoBound, DefaultNoBound))]
+#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebugNoBound, CloneNoBound)]
+#[cfg_attr(feature = "std", derive(PartialEqNoBound, DefaultNoBound))]
 #[codec(mel_bound(T: Config))]
 #[scale_info(skip_type_params(T))]
 pub struct Delegator<T: Config> {
@@ -761,7 +760,7 @@ impl<T: Config> BondedPool<T> {
 					let balance_after_unbond = {
 						let new_depositor_points =
 							target_delegator.active_points().saturating_sub(unbonding_points);
-						let mut depositor_after_unbond = target_delegator.clone();
+						let mut depositor_after_unbond = (*target_delegator).clone();
 						depositor_after_unbond.points = new_depositor_points;
 						depositor_after_unbond.active_balance()
 					};
@@ -2183,6 +2182,20 @@ impl<T: Config> Pallet<T> {
 		}
 
 		Ok(())
+	}
+
+	/// Fully unbond the shares of `delegator`, when executed from `origin`.
+	///
+	/// This is useful for backwards compatibility with the majority of tests that only deal with
+	/// full unbonding, not partial unbonding.
+	#[cfg(any(feature = "runtime-benchmarks", test))]
+	pub fn fully_unbond(
+		origin: frame_system::pallet_prelude::OriginFor<T>,
+		delegator: T::AccountId,
+	) -> DispatchResult {
+		let points =
+			Delegators::<T>::get(&delegator).map(|d| d.active_points()).unwrap_or_default();
+		Self::unbond(origin, delegator, points)
 	}
 }
 

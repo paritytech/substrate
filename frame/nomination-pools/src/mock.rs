@@ -278,17 +278,6 @@ pub(crate) fn pool_events_since_last_call() -> Vec<super::Event<Runtime>> {
 	events.into_iter().skip(already_seen).collect()
 }
 
-/// Fully unbond the shares of `delegator`, when executed from `origin`.
-///
-/// This is useful for backwards compatibility with the majority of tests that only deal with full
-/// unbonding, not partial unbonding.
-pub fn fully_unbond(origin: Origin, delegator: AccountId) -> DispatchResult {
-	let points = Delegators::<Runtime>::get(&delegator)
-		.map(|d| d.active_points())
-		.unwrap_or_default();
-	Pools::unbond(origin, delegator, points)
-}
-
 /// Same as `fully_unbond`, in permissioned setting.
 pub fn fully_unbond_permissioned(delegator: AccountId) -> DispatchResult {
 	let points = Delegators::<Runtime>::get(&delegator)
