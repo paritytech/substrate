@@ -1079,3 +1079,19 @@ impl<
 		O::from(RawOrigin::Members(0u32, 0u32))
 	}
 }
+
+pub trait GetMembers<AccountId> {
+	fn get_members() -> Vec<AccountId>;
+}
+
+impl<T: Config<I>, I: 'static> GetMembers<T::AccountId> for Pallet<T, I> {
+	fn get_members() -> Vec<T::AccountId> {
+		Pallet::<T, I>::members()
+	}
+}
+
+impl<A> GetMembers<A> for () {
+	fn get_members() -> Vec<A> {
+		Vec::<A>::default()
+	}
+}
