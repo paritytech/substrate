@@ -286,7 +286,7 @@ pub trait ElectionDataProvider {
 
 	/// The maximum number of pages that this data provider is expected to be able to provide. An
 	/// implementation could use this to verify the value of `remaining: PageIndex`.
-	// TODO: this should maybe be a generic, because a single type might want implement it with
+	// NOTE: this should maybe be a generic, because a single type might want implement it with
 	// different bounds.
 	type Pages: Get<PageIndex>;
 
@@ -367,10 +367,6 @@ pub trait ElectionDataProvider {
 	}
 
 	/// The range of `take` pages, from most significant to least significant.
-	///
-	/// ```
-	/// todo!();
-	/// ```
 	fn range(take: PageIndex) -> Box<dyn Iterator<Item = PageIndex>> {
 		Box::new((Self::lsp()..Self::Pages::get()).take(take as usize).rev())
 	}
