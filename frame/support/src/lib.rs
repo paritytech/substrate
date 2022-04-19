@@ -64,6 +64,7 @@ pub mod event;
 pub mod inherent;
 #[macro_use]
 pub mod error;
+pub mod crypto;
 pub mod instances;
 pub mod migrations;
 pub mod traits;
@@ -127,13 +128,11 @@ impl TypeId for PalletId {
 macro_rules! bounded_vec {
 	($ ($values:expr),* $(,)?) => {
 		{
-			use $crate::sp_std::convert::TryInto as _;
 			$crate::sp_std::vec![$($values),*].try_into().unwrap()
 		}
 	};
 	( $value:expr ; $repetition:expr ) => {
 		{
-			use $crate::sp_std::convert::TryInto as _;
 			$crate::sp_std::vec![$value ; $repetition].try_into().unwrap()
 		}
 	}

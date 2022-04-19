@@ -27,7 +27,7 @@ sc-telemetry = { version = "4.0.0-dev", path = "../../telemetry" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
 sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
 sp-timestamp = { version = "4.0.0-dev", path = "../../../primitives/timestamp" }
-futures = "0.3.19"
+futures = "0.3.21"
 futures-timer = "3.0.1"
 log = "0.4.11"
 thiserror = "1.0.30"

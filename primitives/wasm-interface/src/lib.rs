@@ -73,7 +73,7 @@ impl From<ValueType> for u8 {
 	}
 }
 
-impl sp_std::convert::TryFrom<u8> for ValueType {
+impl TryFrom<u8> for ValueType {
 	type Error = ();
 
 	fn try_from(val: u8) -> sp_std::result::Result<ValueType, ()> {
