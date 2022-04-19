@@ -412,7 +412,7 @@ impl<T: Config> Delegator<T> {
 	pub(crate) fn active_balance(&self) -> BalanceOf<T> {
 		if let Some(pool) = BondedPool::<T>::get(self.pool_id).defensive() {
 			// TODO: this function is questionable in both name and implementation.
-			pool.balance_to_unbond(self.points)
+			pool.points_to_balance(self.points)
 		} else {
 			Zero::zero()
 		}
@@ -596,30 +596,33 @@ impl<T: Config> BondedPool<T> {
 		BondedPools::<T>::remove(self.id);
 	}
 
-	/// Get the amount of points to issue for some new funds that will be bonded in the pool.
-	fn points_to_issue(&self, new_funds: BalanceOf<T>) -> BalanceOf<T> {
+	/// Convert the given amount of balance to points given the current pool state.
+	///
+	/// This is often used for bonding and issuing new funds into the pool.
+	fn balance_to_point(&self, new_funds: BalanceOf<T>) -> BalanceOf<T> {
 		let bonded_balance =
 			T::StakingInterface::active_stake(&self.bonded_account()).unwrap_or(Zero::zero());
-		Pallet::<T>::points_to_issue(bonded_balance, self.points, new_funds)
+		Pallet::<T>::balance_to_point(bonded_balance, self.points, new_funds)
 	}
 
-	/// Get the amount of balance to unbond from the pool based on a delegator's points of the pool.
-	fn balance_to_unbond(&self, delegator_points: BalanceOf<T>) -> BalanceOf<T> {
+	/// Convert the given number of points to balance given the current pool state.
+	///
+	/// This is often used for unbonding.
+	fn points_to_balance(&self, points: BalanceOf<T>) -> BalanceOf<T> {
 		let bonded_balance =
 			T::StakingInterface::active_stake(&self.bonded_account()).unwrap_or(Zero::zero());
-		Pallet::<T>::balance_to_unbond(bonded_balance, self.points, delegator_points)
+		Pallet::<T>::point_to_balance(bonded_balance, self.points, points)
 	}
 
 	/// Issue points to [`Self`] for `new_funds`.
 	fn issue(&mut self, new_funds: BalanceOf<T>) -> BalanceOf<T> {
-		let points_to_issue = self.points_to_issue(new_funds);
+		let points_to_issue = self.balance_to_point(new_funds);
 		self.points = self.points.saturating_add(points_to_issue);
-
 		points_to_issue
 	}
 
-	/// Dissolve some points from the pool i.e. unbond the given amount of points from this pool. This is the opposite of
-	/// issuing some funds into the pool.
+	/// Dissolve some points from the pool i.e. unbond the given amount of points from this pool.
+	/// This is the opposite of issuing some funds into the pool.
 	///
 	/// Mutates self in place, but does not write anything to storage.
 	///
@@ -627,7 +630,7 @@ impl<T: Config> BondedPool<T> {
 	fn dissolve(&mut self, points: BalanceOf<T>) -> BalanceOf<T> {
 		// NOTE: do not optimize by removing `balance`. it must be computed before mutating
 		// `self.point`.
-		let balance = self.balance_to_unbond(points);
+		let balance = self.points_to_balance(points);
 		self.points = self.points.saturating_sub(points);
 		balance
 	}
@@ -927,17 +930,17 @@ pub struct UnbondPool<T: Config> {
 }
 
 impl<T: Config> UnbondPool<T> {
-	fn points_to_issue(&self, new_funds: BalanceOf<T>) -> BalanceOf<T> {
-		Pallet::<T>::points_to_issue(self.balance, self.points, new_funds)
+	fn balance_to_point(&self, new_funds: BalanceOf<T>) -> BalanceOf<T> {
+		Pallet::<T>::balance_to_point(self.balance, self.points, new_funds)
 	}
 
-	fn balance_to_unbond(&self, delegator_points: BalanceOf<T>) -> BalanceOf<T> {
-		Pallet::<T>::balance_to_unbond(self.balance, self.points, delegator_points)
+	fn point_to_balance(&self, points: BalanceOf<T>) -> BalanceOf<T> {
+		Pallet::<T>::point_to_balance(self.balance, self.points, points)
 	}
 
 	/// Issue points and update the balance given `new_balance`.
 	fn issue(&mut self, new_funds: BalanceOf<T>) {
-		self.points = self.points.saturating_add(self.points_to_issue(new_funds));
+		self.points = self.points.saturating_add(self.balance_to_point(new_funds));
 		self.balance = self.balance.saturating_add(new_funds);
 	}
 
@@ -948,7 +951,7 @@ impl<T: Config> UnbondPool<T> {
 	///
 	/// Returns the actual amount of `Balance` that was removed from the pool.
 	fn dissolve(&mut self, points: BalanceOf<T>) -> BalanceOf<T> {
-		let balance_to_unbond = self.balance_to_unbond(points);
+		let balance_to_unbond = self.point_to_balance(points);
 		self.points = self.points.saturating_sub(points);
 		self.balance = self.balance.saturating_sub(balance_to_unbond);
 
@@ -1916,9 +1919,9 @@ impl<T: Config> Pallet<T> {
 		Delegators::<T>::insert(delegator_account, delegator);
 	}
 
-	/// Calculate the number of points to issue from a pool as `(current_points / current_balance) *
-	/// new_funds` except for some zero edge cases; see logic and tests for details.
-	fn points_to_issue(
+	/// Calculate the equivalent point of `new_funds` in a pool with `current_balance` and
+	/// `current_points`.
+	fn balance_to_point(
 		current_balance: BalanceOf<T>,
 		current_points: BalanceOf<T>,
 		new_funds: BalanceOf<T>,
@@ -1944,21 +1947,21 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	// Calculate the balance of a pool to unbond as `(current_balance / current_points) *
-	// delegator_points`. Returns zero if any of the inputs are zero.
-	fn balance_to_unbond(
+	/// Calculate the equivalent balance of `points` in a pool with `current_balance` and
+	/// `current_points`.
+	fn point_to_balance(
 		current_balance: BalanceOf<T>,
 		current_points: BalanceOf<T>,
-		delegator_points: BalanceOf<T>,
+		points: BalanceOf<T>,
 	) -> BalanceOf<T> {
-		if current_balance.is_zero() || current_points.is_zero() || delegator_points.is_zero() {
+		if current_balance.is_zero() || current_points.is_zero() || points.is_zero() {
 			// There is nothing to unbond
 			return Zero::zero()
 		}
 
-		// Equivalent of (current_balance / current_points) * delegator_points
+		// Equivalent of (current_balance / current_points) * points
 		current_balance
-			.saturating_mul(delegator_points)
+			.saturating_mul(points)
 			// We check for zero above
 			.div(current_points)
 	}
