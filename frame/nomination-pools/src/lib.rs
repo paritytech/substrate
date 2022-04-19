@@ -411,7 +411,6 @@ impl<T: Config> Delegator<T> {
 
 	pub(crate) fn active_balance(&self) -> BalanceOf<T> {
 		if let Some(pool) = BondedPool::<T>::get(self.pool_id).defensive() {
-			// TODO: this function is questionable in both name and implementation.
 			pool.points_to_balance(self.points)
 		} else {
 			Zero::zero()
@@ -762,9 +761,9 @@ impl<T: Config> BondedPool<T> {
 					let balance_after_unbond = {
 						let new_depositor_points =
 							target_delegator.active_points().saturating_sub(unbonding_points);
-						let mut delegator_after_unbond = target_delegator.clone();
-						delegator_after_unbond.points = new_depositor_points;
-						delegator_after_unbond.active_balance()
+						let mut depositor_after_unbond = target_delegator.clone();
+						depositor_after_unbond.points = new_depositor_points;
+						depositor_after_unbond.active_balance()
 					};
 					ensure!(
 						balance_after_unbond >= MinCreateBond::<T>::get(),
