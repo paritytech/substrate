@@ -730,6 +730,7 @@ impl pallet_nomination_pools::Config for Runtime {
 	type StakingInterface = pallet_staking::Pallet<Self>;
 	type PostUnbondingPoolsWindow = PostUnbondPoolsWindow;
 	type MaxMetadataLen = ConstU32<256>;
+	type MaxUnbonding = ConstU32<8>;
 	type PalletId = NominationPoolsPalletId;
 }
 
@@ -1854,6 +1855,21 @@ impl_runtime_apis! {
 			encoded: Vec<u8>,
 		) -> Option<Vec<(Vec<u8>, KeyTypeId)>> {
 			SessionKeys::decode_into_raw_public_keys(&encoded)
+		}
+	}
+
+	impl pallet_nomination_pools_rpc_runtime_api::NominationPoolsApi<Block, AccountId, Balance> for Runtime {
+		fn status(member_account: AccountId) -> pallet_nomination_pools_rpc_runtime_api::MemberStatus<Balance> {
+			use pallet_nomination_pools_rpc_runtime_api::{MemberStatus, PointsAndBalance};
+			let member = pallet_nomination_pools::Delegators::<Runtime>::get(member_account).unwrap();
+			MemberStatus {
+				active: PointsAndBalance {
+					points: member.active_points(),
+					balance: member.active_balance(),
+				},
+				unbonding: todo!(),
+				pool: member.pool_id
+			}
 		}
 	}
 

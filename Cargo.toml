@@ -110,6 +110,8 @@ members = [
 	"frame/proxy",
 	"frame/nomination-pools",
 	"frame/nomination-pools/benchmarking",
+	"frame/nomination-pools/rpc",
+	"frame/nomination-pools/rpc/runtime-api",
 	"frame/randomness-collective-flip",
 	"frame/recovery",
 	"frame/referenda",

@@ -24,7 +24,7 @@ frame-support = { version = "4.0.0-dev", default-features = false, path = "../..
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../../system" }
 pallet-bags-list = { version = "4.0.0-dev", default-features = false, features = ["runtime-benchmarks"], path = "../../bags-list" }
 pallet-staking = { version = "4.0.0-dev", default-features = false, features = ["runtime-benchmarks"], path = "../../staking" }
-pallet-nomination-pools = { version = "1.0.0", default-features = false, path = "../" }
+pallet-nomination-pools = { default-features = false, path = "../" }
 
 # Substrate Primitives
 sp-runtime = { version = "6.0.0", default-features = false, path = "../../../primitives/runtime" }

@@ -383,8 +383,8 @@ enum AccountType {
 }
 
 /// A delegator in a pool.
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebugNoBound)]
-#[cfg_attr(feature = "std", derive(CloneNoBound, PartialEqNoBound, DefaultNoBound))]
+#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebugNoBound, CloneNoBound)]
+#[cfg_attr(feature = "std", derive(PartialEqNoBound, DefaultNoBound))]
 #[codec(mel_bound(T: Config))]
 #[scale_info(skip_type_params(T))]
 pub struct Delegator<T: Config> {
@@ -409,17 +409,18 @@ impl<T: Config> Delegator<T> {
 		self.active_points().saturating_add(self.unbonding_points())
 	}
 
-	pub(crate) fn active_balance(&self) -> BalanceOf<T> {
+	/// Active points of the delegator.
+	pub fn active_points(&self) -> BalanceOf<T> {
+		self.points
+	}
+
+	/// Active balance of the delegator.
+	pub fn active_balance(&self) -> BalanceOf<T> {
 		if let Some(pool) = BondedPool::<T>::get(self.pool_id).defensive() {
 			pool.points_to_balance(self.points)
 		} else {
 			Zero::zero()
 		}
-	}
-
-	/// Active points of the delegator.
-	pub(crate) fn active_points(&self) -> BalanceOf<T> {
-		self.points
 	}
 
 	/// Inactive points of the delegator, waiting to be withdrawn.
@@ -428,6 +429,11 @@ impl<T: Config> Delegator<T> {
 			.as_ref()
 			.iter()
 			.fold(BalanceOf::<T>::zero(), |acc, (_, v)| acc.saturating_add(*v))
+	}
+
+	/// Unbonding balance of the delegator.
+	pub(crate) fn unbonding_balance(&self) -> Vec<(EraIndex, BalanceOf<T>)> {
+		todo!()
 	}
 
 	/// Try and unbond `points` from self, with the given target unbonding era.
@@ -761,7 +767,7 @@ impl<T: Config> BondedPool<T> {
 					let balance_after_unbond = {
 						let new_depositor_points =
 							target_delegator.active_points().saturating_sub(unbonding_points);
-						let mut depositor_after_unbond = target_delegator.clone();
+						let mut depositor_after_unbond = (*target_delegator).clone();
 						depositor_after_unbond.points = new_depositor_points;
 						depositor_after_unbond.active_balance()
 					};

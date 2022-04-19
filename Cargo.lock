@@ -5010,6 +5010,7 @@ dependencies = [
  "pallet-multisig",
  "pallet-nomination-pools",
  "pallet-nomination-pools-benchmarking",
+ "pallet-nomination-pools-rpc-runtime-api",
  "pallet-offences",
  "pallet-offences-benchmarking",
  "pallet-preimage",
@@ -6154,7 +6155,7 @@ dependencies = [
 
 [[package]]
 name = "pallet-nomination-pools"
-version = "1.0.0"
+version = "1.0.0-dev"
 dependencies = [
  "frame-support",
  "frame-system",
@@ -6190,6 +6191,32 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-staking",
+ "sp-std",
+]
+
+[[package]]
+name = "pallet-nomination-pools-rpc"
+version = "1.0.0-dev"
+dependencies = [
+ "jsonrpc-core",
+ "jsonrpc-core-client",
+ "jsonrpc-derive",
+ "pallet-nomination-pools-rpc-runtime-api",
+ "parity-scale-codec",
+ "sp-api",
+ "sp-blockchain",
+ "sp-core",
+ "sp-rpc",
+ "sp-runtime",
+]
+
+[[package]]
+name = "pallet-nomination-pools-rpc-runtime-api"
+version = "1.0.0-dev"
+dependencies = [
+ "pallet-nomination-pools",
+ "parity-scale-codec",
+ "sp-api",
  "sp-std",
 ]
 
