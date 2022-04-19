@@ -21,9 +21,9 @@
 
 use crate::{
 	BoundedSupports, BoundedSupportsOf, Debug, ElectionDataProvider, ElectionProvider,
-	InstantElectionProvider, NposSolver, WeightInfo,
+	InstantElectionProvider, NposSolver, TruncateIntoBoundedSupports, WeightInfo,
 };
-use frame_support::{traits::Get, weights::DispatchClass, BoundedVec};
+use frame_support::{traits::Get, weights::DispatchClass};
 use sp_npos_elections::*;
 use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData, prelude::*};
 
@@ -147,16 +147,8 @@ fn elect_with<T: Config>(
 		DispatchClass::Mandatory,
 	);
 
-	let supports = to_supports(&staked);
-	let mut bounded_supports = supports
-		.into_iter()
-		.map(|(candidate, mut support)| {
-			support.voters.truncate(T::MaxBackersPerWinner::get() as usize);
-			(candidate, support.try_into().expect("Just truncated it"))
-		})
-		.collect::<Vec<_>>();
-	bounded_supports.truncate(T::MaxWinnersPerPage::get() as usize);
-	Ok(BoundedVec::try_from(bounded_supports).expect("Just truncated it"))
+	// TODO: a sort impl as well would be good.
+	Ok(to_supports(&staked).truncate_into_bounded_supports().into())
 }
 
 impl<T: Config> ElectionProvider for UnboundedExecution<T> {

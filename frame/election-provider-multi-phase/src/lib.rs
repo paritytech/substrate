@@ -231,8 +231,8 @@
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_election_provider_support::{
-	try_supports_to_bounded_supports, BoundedSupports, BoundedSupportsOf, ElectionDataProvider,
-	ElectionProvider, InstantElectionProvider, NposSolution,
+	BoundedSupports, BoundedSupportsOf, ElectionDataProvider, ElectionProvider,
+	InstantElectionProvider, NposSolution, TryIntoBoundedSupports,
 };
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
@@ -681,10 +681,16 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxElectableTargets: Get<SolutionTargetIndexOf<Self::MinerConfig>>;
 
-		/// Maximum number of backers one winner has in the election results.
+		/// Maximum number of backers that a single winner may have in the election.
+		///
+		/// By "backer per winner", this interface means "all backers in all pages" per winner.
+		/// Thus, hypothetically, a user of an election provider should be able to safely aggregate
+		/// all backers of each winner in a bounded vector with this bound.
+		#[pallet::constant]
 		type MaxBackersPerWinner: Get<u32>;
 
-		/// Maximum number of winners we can have in one page.
+		/// Maximum number of winner that can be returned, per page (i.e. per call to `elect`).
+		#[pallet::constant]
 		type MaxWinnersPerPage: Get<u32>;
 
 		/// Handler for the slashed deposits.
@@ -1541,7 +1547,8 @@ impl<T: Config> Pallet<T> {
 		let known_score = supports.evaluate();
 		ensure!(known_score == score, FeasibilityError::InvalidScore);
 
-		let supports = try_supports_to_bounded_supports(supports)
+		let supports = supports
+			.try_into_bounded_supports()
 			.map_err(|_| FeasibilityError::WrongWinnerCount)?;
 		Ok(ReadySolution { supports, compute, score })
 	}

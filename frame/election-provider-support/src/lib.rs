@@ -373,11 +373,15 @@ pub trait ElectionProvider {
 	/// The error type that is returned by the provider.
 	type Error: Debug;
 
-	/// Maximum number of voters who back a winner in the results returned from this election
-	/// provider.
+	/// Maximum number of backers that a single winner may have, in the results returned from this
+	/// election provider.
+	///
+	/// By "backer per winner", this interface means "all backers in all pages" per winner. Thus,
+	/// hypothetically, a user of an election provider should be able to safely aggregate all
+	/// backers of each winner in a bounded vector with this bound.
 	type MaxBackersPerWinner: Get<u32>;
 
-	/// Maximum number of election winners per page.
+	/// Maximum number of winner that can be returned, per page (i.e. per call to `elect`).
 	type MaxWinnersPerPage: Get<u32>;
 
 	/// The data provider of the election.
@@ -684,7 +688,8 @@ impl<AccountId: Eq + Clone + Debug, MaxVoters: Get<u32>> From<BoundedSupport<Acc
 	}
 }
 
-/// A bounded version of [`sp_npos_elections::Supports`].
+/// A bounded version of [`sp_npos_elections::Supports`]. When possible, use [`BoundedSupportsOf`]
+/// to avoid mistakes.
 pub type BoundedSupports<AccountId, MaxWinnersPerPage, MaxBackersPerWinner> =
 	BoundedVec<(AccountId, BoundedSupport<AccountId, MaxBackersPerWinner>), MaxWinnersPerPage>;
 /// A specialization of [`BoundedSupports`] for a type implementing [`ElectionProvider`].
@@ -693,6 +698,39 @@ pub type BoundedSupportsOf<T> = BoundedSupports<
 	<T as ElectionProvider>::MaxWinnersPerPage,
 	<T as ElectionProvider>::MaxBackersPerWinner,
 >;
+
+/// Extension trait to convert from [`sp_npos_elections::Supports<AccountId>`] to `BoundedSupports`.
+pub trait TryIntoBoundedSupports<
+	AccountId: Eq + Clone + Debug,
+	MaxWinnersPerPage: Get<u32>,
+	MaxBackersPerWinner: Get<u32>,
+>
+{
+	/// Perform the conversion.
+	fn try_into_bounded_supports(
+		self,
+	) -> Result<BoundedSupports<AccountId, MaxWinnersPerPage, MaxBackersPerWinner>, ()>;
+}
+
+impl<AccountId, MaxWinnersPerPage, MaxBackersPerWinner>
+	TryIntoBoundedSupports<AccountId, MaxWinnersPerPage, MaxBackersPerWinner>
+	for sp_npos_elections::Supports<AccountId>
+where
+	AccountId: Eq + Clone + Debug,
+	MaxWinnersPerPage: Get<u32>,
+	MaxBackersPerWinner: Get<u32>,
+{
+	fn try_into_bounded_supports(
+		self,
+	) -> Result<BoundedSupports<AccountId, MaxWinnersPerPage, MaxBackersPerWinner>, ()> {
+		let bounded_supports = self
+			.into_iter()
+			.map(|(candidate, support)| support.try_into().map(|support| (candidate, support)))
+			.collect::<Result<Vec<_>, _>>()
+			.map_err(|_| ())?;
+		bounded_supports.try_into().map_err(|_| ())
+	}
+}
 
 pub fn bounded_supports_to_supports<AccountId, MaxWinnersPerPage, MaxBackersPerWinner>(
 	bs: BoundedSupports<AccountId, MaxWinnersPerPage, MaxBackersPerWinner>,
@@ -705,18 +743,38 @@ where
 	bs.into_iter().map(|(a, s)| (a, s.into())).collect()
 }
 
-pub fn try_supports_to_bounded_supports<AccountId, MaxWinnersPerPage, MaxBackersPerWinner>(
-	supports: Supports<AccountId>,
-) -> Result<BoundedSupports<AccountId, MaxWinnersPerPage, MaxBackersPerWinner>, ()>
+// TODO: most of these conversion traits are doing allocations, but no other way other than unsafe
+// code as it seems.
+
+/// Extension trait to convert an unbounded [`sp_npos_elections::Supports`]
+// TODO: someday we can have an expensive `SortIntoBoundedSupports` as well.
+pub trait TruncateIntoBoundedSupports<
+	AccountId: Eq + Clone + Debug,
+	MaxWinnersPerPage: Get<u32>,
+	MaxBackersPerWinner: Get<u32>,
+>
+{
+	fn truncate_into_bounded_supports(
+		self,
+	) -> BoundedSupports<AccountId, MaxWinnersPerPage, MaxBackersPerWinner>;
+}
+
+impl<AccountId, MaxWinnersPerPage, MaxBackersPerWinner>
+	TruncateIntoBoundedSupports<AccountId, MaxWinnersPerPage, MaxBackersPerWinner>
+	for sp_npos_elections::Supports<AccountId>
 where
 	AccountId: Eq + Clone + Debug,
 	MaxWinnersPerPage: Get<u32>,
 	MaxBackersPerWinner: Get<u32>,
 {
-	let bounded_supports = supports
-		.into_iter()
-		.map(|(candidate, support)| support.try_into().map(|support| (candidate, support)))
-		.collect::<Result<Vec<_>, _>>()
-		.map_err(|_| ())?;
-	bounded_supports.try_into().map_err(|_| ())
+	fn truncate_into_bounded_supports(
+		mut self,
+	) -> BoundedSupports<AccountId, MaxWinnersPerPage, MaxBackersPerWinner> {
+		// truncate the inner stuff.
+		self.iter_mut()
+			.for_each(|(_, s)| s.voters.truncate(MaxBackersPerWinner::get() as usize));
+		// truncate the outer stuff.
+		self.truncate(MaxWinnersPerPage::get() as usize);
+		self.try_into_bounded_supports().expect("truncated self to proper bounds; qed")
+	}
 }
