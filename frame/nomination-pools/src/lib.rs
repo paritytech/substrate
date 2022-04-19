@@ -618,7 +618,7 @@ impl<T: Config> BondedPool<T> {
 		points_to_issue
 	}
 
-	/// Dissolve i.e. unbond the given amount of points from this pool. This is the opposite of
+	/// Dissolve some points from the pool i.e. unbond the given amount of points from this pool. This is the opposite of
 	/// issuing some funds into the pool.
 	///
 	/// Mutates self in place, but does not write anything to storage.
@@ -687,7 +687,7 @@ impl<T: Config> BondedPool<T> {
 		alleged_depositor_points: BalanceOf<T>,
 	) -> bool {
 		// NOTE: if we add `&& self.delegator_counter == 1`, then this becomes even more strict and
-		// ensures that there ano unbonding delegators hanging around either.
+		// ensures that there are no unbonding delegators hanging around either.
 		self.is_destroying() && self.points == alleged_depositor_points
 	}
 
