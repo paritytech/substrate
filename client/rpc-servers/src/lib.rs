@@ -77,17 +77,24 @@ pub fn start_http<M: Send + Sync + 'static>(
 		.custom_tokio_runtime(rt.clone());
 
 	let rpc_api = build_rpc_api(rpc_api);
-	let handle = if let Some(metrics) = metrics {
+	let (handle, addr) = if let Some(metrics) = metrics {
 		let middleware = RpcMiddleware::new(metrics, "http".into());
 		let builder = builder.set_middleware(middleware);
 		let server = tokio::task::block_in_place(|| rt.block_on(builder.build(addrs)))?;
-		server.start(rpc_api)?
+		let addr = server.local_addr();
+		(server.start(rpc_api)?, addr)
 	} else {
 		let server = tokio::task::block_in_place(|| rt.block_on(builder.build(addrs)))?;
-		server.start(rpc_api)?
+		let addr = server.local_addr();
+		(server.start(rpc_api)?, addr)
 	};
 
-	log::info!("Starting JSON-RPC HTTP server: addrs={:?}, allowed origins={:?}", addrs, cors);
+	log::info!(
+		"Running JSON-RPC HTTP server: addr={}, allowed origins={:?}",
+		addr.map_or_else(|_| "unknown".to_string(), |a| a.to_string()),
+		cors
+	);
+
 	Ok(handle)
 }
 
@@ -128,17 +135,24 @@ pub fn start_ws<M: Send + Sync + 'static>(
 	}
 
 	let rpc_api = build_rpc_api(rpc_api);
-	let handle = if let Some(metrics) = metrics {
+	let (handle, addr) = if let Some(metrics) = metrics {
 		let middleware = RpcMiddleware::new(metrics, "ws".into());
 		let builder = builder.set_middleware(middleware);
 		let server = tokio::task::block_in_place(|| rt.block_on(builder.build(addrs)))?;
-		server.start(rpc_api)?
+		let addr = server.local_addr();
+		(server.start(rpc_api)?, addr)
 	} else {
 		let server = tokio::task::block_in_place(|| rt.block_on(builder.build(addrs)))?;
-		server.start(rpc_api)?
+		let addr = server.local_addr();
+		(server.start(rpc_api)?, addr)
 	};
 
-	log::info!("Starting JSON-RPC WS server: addrs={:?}, allowed origins={:?}", addrs, cors);
+	log::info!(
+		"Running JSON-RPC WS server: addr={}, allowed origins={:?}",
+		addr.map_or_else(|_| "unknown".to_string(), |a| a.to_string()),
+		cors
+	);
+
 	Ok(handle)
 }
 
