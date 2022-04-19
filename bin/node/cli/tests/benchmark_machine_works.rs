@@ -16,33 +16,17 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-// Unix only since it uses signals from [`common::run_node_for_a_while`].
-#![cfg(unix)]
-
 use assert_cmd::cargo::cargo_bin;
 use std::process::Command;
-use tempfile::tempdir;
 
-pub mod common;
-
-/// `benchmark block` works for the dev runtime using the wasm executor.
-#[tokio::test]
-async fn benchmark_block_works() {
-	let base_dir = tempdir().expect("could not create a temp dir");
-
-	common::run_node_for_a_while(base_dir.path(), &["--dev", "--no-hardware-benchmarks"]).await;
-
-	// Invoke `benchmark block` with all options to make sure that they are valid.
+/// Tests that the `benchmark machine` command works for the substrate dev runtime.
+#[test]
+fn benchmark_machine_works() {
 	let status = Command::new(cargo_bin("substrate"))
-		.args(["benchmark", "block", "--dev"])
-		.arg("-d")
-		.arg(base_dir.path())
-		.args(["--pruning", "archive"])
-		.args(["--from", "1", "--to", "1"])
-		.args(["--repeat", "1"])
-		.args(["--execution", "wasm", "--wasm-execution", "compiled"])
+		.args(["benchmark", "machine", "--dev"])
+		.args(["--verify-duration", "0.1"])
 		.status()
 		.unwrap();
 
-	assert!(status.success())
+	assert!(status.success());
 }

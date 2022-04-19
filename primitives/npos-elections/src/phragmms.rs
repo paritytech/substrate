@@ -37,7 +37,7 @@ use sp_std::{prelude::*, rc::Rc};
 /// - The algorithm is a _best-effort_ to elect `to_elect`. If less candidates are provided, less
 ///   winners are returned, without an error.
 ///
-/// This can only fail of the normalization fails. This can happen if for any of the resulting
+/// This can only fail if the normalization fails. This can happen if for any of the resulting
 /// assignments, `assignment.distribution.map(|p| p.deconstruct()).sum()` fails to fit inside
 /// `UpperOf<P>`. A user of this crate may statically assert that this can never happen and safely
 /// `expect` this to return `Ok`.

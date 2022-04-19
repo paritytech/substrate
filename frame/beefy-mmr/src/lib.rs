@@ -39,7 +39,7 @@ use sp_std::prelude::*;
 use beefy_primitives::mmr::{BeefyDataProvider, BeefyNextAuthoritySet, MmrLeaf, MmrLeafVersion};
 use pallet_mmr::{LeafDataProvider, ParentNumberAndHash};
 
-use frame_support::traits::Get;
+use frame_support::{crypto::ecdsa::ECDSAExt, traits::Get};
 
 pub use pallet::*;
 
@@ -71,18 +71,15 @@ where
 pub struct BeefyEcdsaToEthereum;
 impl Convert<beefy_primitives::crypto::AuthorityId, Vec<u8>> for BeefyEcdsaToEthereum {
 	fn convert(a: beefy_primitives::crypto::AuthorityId) -> Vec<u8> {
-		use k256::{elliptic_curve::sec1::ToEncodedPoint, PublicKey};
-		use sp_core::crypto::ByteArray;
-
-		PublicKey::from_sec1_bytes(a.as_slice())
-			.map(|pub_key| {
-				// uncompress the key
-				let uncompressed = pub_key.to_encoded_point(false);
-				// convert to ETH address
-				sp_io::hashing::keccak_256(&uncompressed.as_bytes()[1..])[12..].to_vec()
-			})
+		sp_core::ecdsa::Public::try_from(a.as_ref())
 			.map_err(|_| {
 				log::error!(target: "runtime::beefy", "Invalid BEEFY PublicKey format!");
+			})
+			.unwrap_or(sp_core::ecdsa::Public::from_raw([0u8; 33]))
+			.to_eth_address()
+			.map(|v| v.to_vec())
+			.map_err(|_| {
+				log::error!(target: "runtime::beefy", "Failed to convert BEEFY PublicKey to ETH address!");
 			})
 			.unwrap_or_default()
 	}

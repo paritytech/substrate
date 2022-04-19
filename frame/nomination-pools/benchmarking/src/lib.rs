@@ -463,7 +463,7 @@ frame_benchmarking::benchmarks! {
 		assert_eq!(
 			CurrencyOf::<T>::free_balance(&depositor),
 			// gets bond back + rewards collecting when unbonding
-			min_create_bond * 2u32.into()
+			min_create_bond * 2u32.into() + CurrencyOf::<T>::minimum_balance()
 		);
 	}
 

@@ -249,10 +249,11 @@ impl pallet_bags_list::Config for Test {
 }
 
 pub struct OnChainSeqPhragmen;
-impl onchain::ExecutionConfig for OnChainSeqPhragmen {
+impl onchain::Config for OnChainSeqPhragmen {
 	type System = Test;
 	type Solver = SequentialPhragmen<AccountId, Perbill>;
 	type DataProvider = Staking;
+	type WeightInfo = ();
 }
 
 pub struct OnStakerSlashMock<T: Config>(core::marker::PhantomData<T>);

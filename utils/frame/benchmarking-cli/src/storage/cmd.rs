@@ -34,7 +34,7 @@ use sp_runtime::generic::BlockId;
 use std::{fmt::Debug, path::PathBuf, sync::Arc};
 
 use super::template::TemplateData;
-use crate::shared::WeightParams;
+use crate::shared::{new_rng, WeightParams};
 
 /// Benchmark the storage speed of a chain snapshot.
 #[derive(Debug, Parser)]
@@ -151,13 +151,6 @@ impl StorageCmd {
 		}
 	}
 
-	/// Creates an rng from a random seed.
-	pub(crate) fn setup_rng() -> impl rand::Rng {
-		let seed = rand::thread_rng().gen::<u64>();
-		info!("Using seed {}", seed);
-		StdRng::seed_from_u64(seed)
-	}
-
 	/// Run some rounds of the (read) benchmark as warmup.
 	/// See `frame_benchmarking_cli::storage::read::bench_read` for detailed comments.
 	fn bench_warmup<B, BA, C>(&self, client: &Arc<C>) -> Result<()>
@@ -169,7 +162,7 @@ impl StorageCmd {
 		let block = BlockId::Number(client.usage_info().chain.best_number);
 		let empty_prefix = StorageKey(Vec::new());
 		let mut keys = client.storage_keys(&block, &empty_prefix)?;
-		let mut rng = Self::setup_rng();
+		let (mut rng, _) = new_rng(None);
 		keys.shuffle(&mut rng);
 
 		for i in 0..self.params.warmups {
