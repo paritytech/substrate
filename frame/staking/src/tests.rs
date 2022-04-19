@@ -18,7 +18,9 @@
 //! Tests for the module.
 
 use super::{ConfigOp, Event, MaxUnlockingChunks, *};
-use frame_election_provider_support::{ElectionProvider, SortedListProvider, Support};
+use frame_election_provider_support::{
+	bounded_supports_to_supports, ElectionProvider, SortedListProvider, Support,
+};
 use frame_support::{
 	assert_noop, assert_ok, assert_storage_noop, bounded_vec,
 	dispatch::WithPostDispatchInfo,
@@ -1961,7 +1963,7 @@ fn bond_with_duplicate_vote_should_be_ignored_by_election_provider() {
 			// account.
 			let supports = <Test as Config>::ElectionProvider::elect().unwrap();
 			assert_eq!(
-				supports,
+				bounded_supports_to_supports(supports),
 				vec![
 					(21, Support { total: 1800, voters: vec![(21, 1000), (1, 400), (3, 400)] }),
 					(31, Support { total: 2200, voters: vec![(31, 1000), (1, 600), (3, 600)] })
@@ -2005,7 +2007,7 @@ fn bond_with_duplicate_vote_should_be_ignored_by_election_provider_elected() {
 			// winners should be 21 and 11.
 			let supports = <Test as Config>::ElectionProvider::elect().unwrap();
 			assert_eq!(
-				supports,
+				bounded_supports_to_supports(supports),
 				vec![
 					(11, Support { total: 1500, voters: vec![(11, 1000), (1, 500)] }),
 					(21, Support { total: 2500, voters: vec![(21, 1000), (1, 500), (3, 1000)] })
