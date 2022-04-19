@@ -360,7 +360,10 @@ where
 			.map_err(client_err)
 	}
 
-	fn subscribe_runtime_version(&self, mut sink: SubscriptionSink) -> std::result::Result<(), Error> {
+	fn subscribe_runtime_version(
+		&self,
+		mut sink: SubscriptionSink,
+	) -> std::result::Result<(), Error> {
 		let client = self.client.clone();
 
 		let initial = self
