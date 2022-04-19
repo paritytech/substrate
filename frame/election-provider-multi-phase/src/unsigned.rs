@@ -774,7 +774,7 @@ impl<T: MinerConfig> Miner<T> {
 
 		// ensure score is being improved. Panic henceforth.
 		ensure!(
-			Self::queued_solution().map_or(true, |q: ReadySolution<_, _, _>| raw_solution
+			Self::queued_solution().map_or(true, |q: ReadySolution<_>| raw_solution
 				.score
 				.strict_threshold_better(q.score, T::SolutionImprovementThreshold::get())),
 			Error::<T>::PreDispatchWeakSubmission,
