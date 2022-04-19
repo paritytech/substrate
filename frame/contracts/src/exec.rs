@@ -22,6 +22,7 @@ use crate::{
 	Pallet as Contracts, Schedule,
 };
 use frame_support::{
+	crypto::ecdsa::ECDSAExt,
 	dispatch::{DispatchError, DispatchResult, DispatchResultWithPostInfo, Dispatchable},
 	storage::{with_transaction, TransactionOutcome},
 	traits::{Contains, Currency, ExistenceRequirement, OriginTrait, Randomness, Time},
@@ -30,7 +31,7 @@ use frame_support::{
 use frame_system::RawOrigin;
 use pallet_contracts_primitives::ExecReturnValue;
 use smallvec::{Array, SmallVec};
-use sp_core::crypto::UncheckedFrom;
+use sp_core::{crypto::UncheckedFrom, ecdsa::Public as ECDSAPublic};
 use sp_io::crypto::secp256k1_ecdsa_recover_compressed;
 use sp_runtime::traits::Convert;
 use sp_std::{marker::PhantomData, mem, prelude::*};
@@ -231,6 +232,9 @@ pub trait Ext: sealing::Sealed {
 
 	/// Recovers ECDSA compressed public key based on signature and message hash.
 	fn ecdsa_recover(&self, signature: &[u8; 65], message_hash: &[u8; 32]) -> Result<[u8; 33], ()>;
+
+	/// Returns Ethereum address from the ECDSA compressed public key.
+	fn ecdsa_to_eth_address(&self, pk: &[u8; 33]) -> Result<[u8; 20], ()>;
 
 	/// Tests sometimes need to modify and inspect the contract info directly.
 	#[cfg(test)]
@@ -1204,6 +1208,10 @@ where
 		secp256k1_ecdsa_recover_compressed(&signature, &message_hash).map_err(|_| ())
 	}
 
+	fn ecdsa_to_eth_address(&self, pk: &[u8; 33]) -> Result<[u8; 20], ()> {
+		ECDSAPublic(*pk).to_eth_address()
+	}
+
 	#[cfg(test)]
 	fn contract_info(&mut self) -> &mut ContractInfo<Self::T> {
 		self.top_frame_mut().contract_info()
@@ -1267,6 +1275,7 @@ mod tests {
 	use codec::{Decode, Encode};
 	use frame_support::{assert_err, assert_ok};
 	use frame_system::{EventRecord, Phase};
+	use hex_literal::hex;
 	use pallet_contracts_primitives::ReturnFlags;
 	use pretty_assertions::assert_eq;
 	use sp_core::Bytes;
@@ -2716,6 +2725,38 @@ mod tests {
 				vec![],
 				None,
 			));
+		});
+	}
+	#[test]
+	fn ecdsa_to_eth_address_returns_proper_value() {
+		let bob_ch = MockLoader::insert(Call, |ctx, _| {
+			let pubkey_compressed: [u8; 33] =
+				hex!("028db55b05db86c0b1786ca49f095d76344c9e6056b2f02701a7e7f3c20aabfd91")[..]
+					.try_into()
+					.unwrap();
+			assert_eq!(
+				ctx.ext.ecdsa_to_eth_address(&pubkey_compressed).unwrap(),
+				hex!("09231da7b19A016f9e576d23B16277062F4d46A8")[..]
+			);
+			exec_success()
+		});
+
+		ExtBuilder::default().build().execute_with(|| {
+			let schedule = <Test as Config>::Schedule::get();
+			place_contract(&BOB, bob_ch);
+
+			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(0), 0).unwrap();
+			let result = MockStack::run_call(
+				ALICE,
+				BOB,
+				&mut GasMeter::<Test>::new(GAS_LIMIT),
+				&mut storage_meter,
+				&schedule,
+				0,
+				vec![],
+				None,
+			);
+			assert_matches!(result, Ok(_));
 		});
 	}
 }

@@ -24,16 +24,16 @@ use std::{marker::PhantomData, sync::Arc};
 
 use codec::{Codec, Encode};
 use jsonrpsee::{core::async_trait, proc_macros::rpc, types::error::CallError};
-use pallet_mmr_primitives::{Error as MmrError, Proof};
 use serde::{Deserialize, Serialize};
 use serde_json::value::to_raw_value;
 
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
 use sp_core::Bytes;
+use sp_mmr_primitives::{Error as MmrError, LeafIndex, Proof};
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 
-pub use pallet_mmr_primitives::{LeafIndex, MmrApi as MmrRuntimeApi};
+pub use sp_mmr_primitives::MmrApi as MmrRuntimeApi;
 
 const RUNTIME_ERROR: i32 = 8000;
 const MMR_ERROR: i32 = 8010;
@@ -50,7 +50,7 @@ pub struct LeafProof<BlockHash> {
 	pub block_hash: BlockHash,
 	/// SCALE-encoded leaf data.
 	pub leaf: Bytes,
-	/// SCALE-encoded proof data. See [pallet_mmr_primitives::Proof].
+	/// SCALE-encoded proof data. See [sp_mmr_primitives::Proof].
 	pub proof: Bytes,
 }
 

@@ -118,7 +118,7 @@ impl BlockNumberOrHash {
 #[derive(Debug, Clone, Args)]
 pub struct CryptoSchemeFlag {
 	/// cryptography scheme
-	#[clap(long, value_name = "SCHEME", arg_enum, ignore_case = true, default_value = "Sr25519")]
+	#[clap(long, value_name = "SCHEME", arg_enum, ignore_case = true, default_value = "sr25519")]
 	pub scheme: CryptoScheme,
 }
 
@@ -126,7 +126,7 @@ pub struct CryptoSchemeFlag {
 #[derive(Debug, Clone, Args)]
 pub struct OutputTypeFlag {
 	/// output format
-	#[clap(long, value_name = "FORMAT", arg_enum, ignore_case = true, default_value = "Text")]
+	#[clap(long, value_name = "FORMAT", arg_enum, ignore_case = true, default_value = "text")]
 	pub output_type: OutputType,
 }
 
