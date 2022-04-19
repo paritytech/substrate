@@ -409,6 +409,15 @@ impl<T: Config> Delegator<T> {
 		self.active_points().saturating_add(self.unbonding_points())
 	}
 
+	pub(crate) fn active_balance(&self) -> BalanceOf<T> {
+		if let Some(pool) = BondedPool::<T>::get(self.pool_id).defensive() {
+			// TODO: this function is questionable in both name and implementation.
+			pool.balance_to_unbond(self.points)
+		} else {
+			Zero::zero()
+		}
+	}
+
 	/// Active points of the delegator.
 	pub(crate) fn active_points(&self) -> BalanceOf<T> {
 		self.points
@@ -747,10 +756,15 @@ impl<T: Config> BondedPool<T> {
 					// only the depositor can partially unbond, and they can only unbond up to the
 					// threshold.
 					ensure!(is_permissioned, Error::<T>::DoesNotHavePermission);
-					let new_depositor_points =
-						target_delegator.active_points().saturating_sub(unbonding_points);
+					let balance_after_unbond = {
+						let new_depositor_points =
+							target_delegator.active_points().saturating_sub(unbonding_points);
+						let mut delegator_after_unbond = target_delegator.clone();
+						delegator_after_unbond.points = new_depositor_points;
+						delegator_after_unbond.active_balance()
+					};
 					ensure!(
-						new_depositor_points >= MinCreateBond::<T>::get(),
+						balance_after_unbond >= MinCreateBond::<T>::get(),
 						Error::<T>::NotOnlyDelegator
 					);
 				}
