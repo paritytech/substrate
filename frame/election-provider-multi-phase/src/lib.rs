@@ -239,7 +239,7 @@ use frame_support::{
 	ensure,
 	traits::{Currency, Get, OnUnbalanced, ReservableCurrency},
 	weights::{DispatchClass, Weight},
-	DefaultNoBound, PartialEqNoBound,
+	DefaultNoBound, PartialEqNoBound, RuntimeDebugNoBound,
 };
 use frame_system::{ensure_none, offchain::SendTransactionTypes};
 use scale_info::TypeInfo;
@@ -449,7 +449,7 @@ impl<C: Default> Default for RawSolution<C> {
 	Clone,
 	Encode,
 	Decode,
-	RuntimeDebug,
+	RuntimeDebugNoBound,
 	DefaultNoBound,
 	TypeInfo,
 	MaxEncodedLen,

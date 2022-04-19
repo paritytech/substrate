@@ -221,7 +221,7 @@ frame_benchmarking::benchmarks! {
 		let initial_balance = T::Currency::minimum_balance() * 10u32.into();
 		T::Currency::make_free_balance_be(&receiver, initial_balance);
 		let ready = ReadySolution {
-			supports: vec![],
+			supports: Default::default(),
 			score: Default::default(),
 			compute: Default::default()
 		};
