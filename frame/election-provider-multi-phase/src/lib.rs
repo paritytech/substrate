@@ -1068,7 +1068,6 @@ pub mod pallet {
 			let supports = T::GovernanceFallback::elect_with_bounds(
 				maybe_max_voters.unwrap_or(Bounded::max_value()),
 				maybe_max_targets.unwrap_or(Bounded::max_value()),
-				T::DataProvider::msp(),
 			)
 			.map_err(|e| {
 				log!(error, "GovernanceFallback failed: {:?}", e);

@@ -175,8 +175,8 @@ pub mod traits;
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
-	weights::Weight, BoundedVec, CloneNoBound, DefaultNoBound, EqNoBound, PartialEqNoBound,
-	RuntimeDebug, RuntimeDebugNoBound,
+	traits::DefensiveSaturating, weights::Weight, BoundedVec, CloneNoBound, DefaultNoBound,
+	EqNoBound, PartialEqNoBound, RuntimeDebug, RuntimeDebugNoBound,
 };
 use sp_runtime::traits::Bounded;
 use sp_std::{fmt::Debug, prelude::*};
