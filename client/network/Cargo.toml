@@ -74,7 +74,7 @@ sp-tracing = { version = "5.0.0", path = "../../primitives/tracing" }
 substrate-test-runtime = { version = "2.0.0", path = "../../test-utils/runtime" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
 tempfile = "3.1.0"
-async-std = "1.10.0"
+async-std = "1.11.0"
 
 [features]
 default = []
