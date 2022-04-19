@@ -397,7 +397,7 @@ pub struct Delegator<T: Config> {
 	/// This value lines up with the [`RewardPool::total_earnings`] after a delegator claims a
 	/// payout.
 	pub reward_pool_total_earnings: BalanceOf<T>,
-	/// The eras as which this delegator is unbonding, mapped from era index to the number of
+	/// The eras in which this delegator is unbonding, mapped from era index to the number of
 	/// points scheduled to unbond in the given era.
 	pub unbonding_eras: BoundedBTreeMap<EraIndex, BalanceOf<T>, T::MaxUnbonding>,
 }
