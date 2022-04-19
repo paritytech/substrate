@@ -292,6 +292,8 @@ impl onchain::Config for OnChainSeqPhragmen {
 	type Solver = SequentialPhragmen<AccountId, SolutionAccuracyOf<Runtime>, Balancing>;
 	type DataProvider = StakingMock;
 	type WeightInfo = ();
+	type MaxBackersPerWinner = MaxElectingVoters;
+	type MaxWinnersPerPage = MaxElectableTargets;
 }
 
 pub struct MockFallback;
@@ -300,8 +302,10 @@ impl ElectionProvider for MockFallback {
 	type BlockNumber = u64;
 	type Error = &'static str;
 	type DataProvider = StakingMock;
+	type MaxBackersPerWinner = MaxElectingVoters;
+	type MaxWinnersPerPage = MaxElectableTargets;
 
-	fn elect() -> Result<Supports<AccountId>, Self::Error> {
+	fn elect() -> Result<BoundedSupportsOf<Self>, Self::Error> {
 		Self::elect_with_bounds(Bounded::max_value(), Bounded::max_value())
 	}
 }
@@ -310,7 +314,7 @@ impl InstantElectionProvider for MockFallback {
 	fn elect_with_bounds(
 		max_voters: usize,
 		max_targets: usize,
-	) -> Result<Supports<Self::AccountId>, Self::Error> {
+	) -> Result<BoundedSupportsOf<Self>, Self::Error> {
 		if OnChainFallback::get() {
 			onchain::UnboundedExecution::<OnChainSeqPhragmen>::elect_with_bounds(
 				max_voters,
@@ -375,6 +379,8 @@ impl crate::Config for Runtime {
 	type SignedMaxWeight = SignedMaxWeight;
 	type SignedMaxSubmissions = SignedMaxSubmissions;
 	type SignedMaxRefunds = SignedMaxRefunds;
+	type MaxBackersPerWinner = MaxElectingVoters;
+	type MaxWinnersPerPage = MaxElectableTargets;
 	type SlashHandler = ();
 	type RewardHandler = ();
 	type DataProvider = StakingMock;

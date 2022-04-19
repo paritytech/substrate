@@ -229,15 +229,17 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, MaxEncodedLen};
 use frame_election_provider_support::{
-	ElectionDataProvider, ElectionProvider, InstantElectionProvider, NposSolution,
+	try_supports_to_bounded_supports, BoundedSupports, BoundedSupportsOf, ElectionDataProvider,
+	ElectionProvider, InstantElectionProvider, NposSolution,
 };
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	ensure,
 	traits::{Currency, Get, OnUnbalanced, ReservableCurrency},
 	weights::{DispatchClass, Weight},
+	CloneNoBound, DefaultNoBound, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
 };
 use frame_system::{ensure_none, offchain::SendTransactionTypes};
 use scale_info::TypeInfo;
@@ -246,7 +248,7 @@ use sp_arithmetic::{
 	UpperOf,
 };
 use sp_npos_elections::{
-	assignment_ratio_to_staked_normalized, ElectionScore, EvaluateSupport, Supports, VoteWeight,
+	assignment_ratio_to_staked_normalized, ElectionScore, EvaluateSupport, VoteWeight,
 };
 use sp_runtime::{
 	transaction_validity::{
@@ -317,15 +319,17 @@ impl<T: Config> ElectionProvider for NoFallback<T> {
 	type BlockNumber = T::BlockNumber;
 	type DataProvider = T::DataProvider;
 	type Error = &'static str;
+	type MaxBackersPerWinner = T::MaxBackersPerWinner;
+	type MaxWinnersPerPage = T::MaxWinnersPerPage;
 
-	fn elect() -> Result<Supports<T::AccountId>, Self::Error> {
+	fn elect() -> Result<BoundedSupportsOf<Self>, Self::Error> {
 		// Do nothing, this will enable the emergency phase.
 		Err("NoFallback.")
 	}
 }
 
 impl<T: Config> InstantElectionProvider for NoFallback<T> {
-	fn elect_with_bounds(_: usize, _: usize) -> Result<Supports<T::AccountId>, Self::Error> {
+	fn elect_with_bounds(_: usize, _: usize) -> Result<BoundedSupportsOf<Self>, Self::Error> {
 		Err("NoFallback.")
 	}
 }
@@ -393,7 +397,7 @@ impl<Bn: PartialEq + Eq> Phase<Bn> {
 }
 
 /// The type of `Computation` that provided this election data.
-#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, Debug, TypeInfo)]
+#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, Debug, TypeInfo, MaxEncodedLen)]
 pub enum ElectionCompute {
 	/// Election was computed on-chain.
 	OnChain,
@@ -437,13 +441,29 @@ impl<C: Default> Default for RawSolution<C> {
 }
 
 /// A checked solution, ready to be enacted.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default, TypeInfo)]
-pub struct ReadySolution<A> {
+#[derive(
+	PartialEqNoBound,
+	EqNoBound,
+	CloneNoBound,
+	Encode,
+	Decode,
+	RuntimeDebugNoBound,
+	DefaultNoBound,
+	TypeInfo,
+	MaxEncodedLen,
+)]
+#[codec(mel_bound(AccountId: MaxEncodedLen, MaxWinnersPerPage: Get<u32>, MaxBackersPerWinner: Get<u32>))]
+#[scale_info(skip_type_params(MaxWinnersPerPage, MaxBackersPerWinner))]
+pub struct ReadySolution<
+	AccountId: Eq + Clone + sp_std::fmt::Debug,
+	MaxWinnersPerPage: Get<u32>,
+	MaxBackersPerWinner: Get<u32>,
+> {
 	/// The final supports of the solution.
 	///
 	/// This is target-major vector, storing each winners, total backing, and each individual
 	/// backer.
-	pub supports: Supports<A>,
+	pub supports: BoundedSupports<AccountId, MaxWinnersPerPage, MaxBackersPerWinner>,
 	/// The score of the solution.
 	///
 	/// This is needed to potentially challenge the solution.
@@ -451,6 +471,12 @@ pub struct ReadySolution<A> {
 	/// How this election was computed.
 	pub compute: ElectionCompute,
 }
+
+pub type ReadySolutionOf<T> = ReadySolution<
+	<T as frame_system::Config>::AccountId,
+	<T as Config>::MaxWinnersPerPage,
+	<T as Config>::MaxBackersPerWinner,
+>;
 
 /// A snapshot of all the data that is needed for en entire round. They are provided by
 /// [`ElectionDataProvider`] and are kept around until the round is finished.
@@ -664,6 +690,12 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxElectableTargets: Get<SolutionTargetIndexOf<Self::MinerConfig>>;
 
+		/// Maximum number of backers one winner has in the election results.
+		type MaxBackersPerWinner: Get<u32>;
+
+		/// Maximum number of winners we can have in one page.
+		type MaxWinnersPerPage: Get<u32>;
+
 		/// Handler for the slashed deposits.
 		type SlashHandler: OnUnbalanced<NegativeImbalanceOf<Self>>;
 
@@ -681,6 +713,8 @@ pub mod pallet {
 			AccountId = Self::AccountId,
 			BlockNumber = Self::BlockNumber,
 			DataProvider = Self::DataProvider,
+			MaxBackersPerWinner = Self::MaxBackersPerWinner,
+			MaxWinnersPerPage = Self::MaxWinnersPerPage,
 		>;
 
 		/// Configuration of the governance-only fallback.
@@ -691,6 +725,8 @@ pub mod pallet {
 			AccountId = Self::AccountId,
 			BlockNumber = Self::BlockNumber,
 			DataProvider = Self::DataProvider,
+			MaxBackersPerWinner = Self::MaxBackersPerWinner,
+			MaxWinnersPerPage = Self::MaxWinnersPerPage,
 		>;
 
 		/// OCW election solution miner algorithm implementation.
@@ -934,7 +970,7 @@ pub mod pallet {
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
 		pub fn set_emergency_election_result(
 			origin: OriginFor<T>,
-			supports: Supports<T::AccountId>,
+			supports: BoundedSupports<T::AccountId, T::MaxWinnersPerPage, T::MaxBackersPerWinner>,
 		) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
 			ensure!(Self::current_phase().is_emergency(), <Error<T>>::CallNotAllowed);
@@ -1195,7 +1231,7 @@ pub mod pallet {
 	/// Current best solution, signed or unsigned, queued to be returned upon `elect`.
 	#[pallet::storage]
 	#[pallet::getter(fn queued_solution)]
-	pub type QueuedSolution<T: Config> = StorageValue<_, ReadySolution<T::AccountId>>;
+	pub type QueuedSolution<T: Config> = StorageValue<_, ReadySolutionOf<T>>;
 
 	/// Snapshot data of the round.
 	///
@@ -1429,7 +1465,7 @@ impl<T: Config> Pallet<T> {
 	pub fn feasibility_check(
 		raw_solution: RawSolution<SolutionOf<T::MinerConfig>>,
 		compute: ElectionCompute,
-	) -> Result<ReadySolution<T::AccountId>, FeasibilityError> {
+	) -> Result<ReadySolutionOf<T>, FeasibilityError> {
 		let RawSolution { solution, score, round } = raw_solution;
 
 		// First, check round.
@@ -1502,6 +1538,8 @@ impl<T: Config> Pallet<T> {
 		let known_score = supports.evaluate();
 		ensure!(known_score == score, FeasibilityError::InvalidScore);
 
+		let supports = try_supports_to_bounded_supports(supports)
+			.map_err(|_| FeasibilityError::WrongWinnerCount)?;
 		Ok(ReadySolution { supports, compute, score })
 	}
 
@@ -1521,7 +1559,10 @@ impl<T: Config> Pallet<T> {
 		Self::kill_snapshot();
 	}
 
-	fn do_elect() -> Result<Supports<T::AccountId>, ElectionError<T>> {
+	fn do_elect() -> Result<
+		BoundedSupports<T::AccountId, T::MaxWinnersPerPage, T::MaxBackersPerWinner>,
+		ElectionError<T>,
+	> {
 		// We have to unconditionally try finalizing the signed phase here. There are only two
 		// possibilities:
 		//
@@ -1556,7 +1597,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// record the weight of the given `supports`.
-	fn weigh_supports(supports: &Supports<T::AccountId>) {
+	fn weigh_supports(supports: &BoundedSupportsOf<Self>) {
 		let active_voters = supports
 			.iter()
 			.map(|(_, x)| x)
@@ -1571,8 +1612,10 @@ impl<T: Config> ElectionProvider for Pallet<T> {
 	type BlockNumber = T::BlockNumber;
 	type Error = ElectionError<T>;
 	type DataProvider = T::DataProvider;
+	type MaxBackersPerWinner = T::MaxBackersPerWinner;
+	type MaxWinnersPerPage = T::MaxWinnersPerPage;
 
-	fn elect() -> Result<Supports<T::AccountId>, Self::Error> {
+	fn elect() -> Result<BoundedSupportsOf<Self>, Self::Error> {
 		match Self::do_elect() {
 			Ok(supports) => {
 				// All went okay, record the weight, put sign to be Off, clean snapshot, etc.
@@ -1806,7 +1849,7 @@ mod tests {
 		},
 		Phase,
 	};
-	use frame_election_provider_support::ElectionProvider;
+	use frame_election_provider_support::{bounded_supports_to_supports, ElectionProvider};
 	use frame_support::{assert_noop, assert_ok};
 	use sp_npos_elections::Support;
 
@@ -2028,7 +2071,7 @@ mod tests {
 			let supports = MultiPhase::elect().unwrap();
 
 			assert_eq!(
-				supports,
+				bounded_supports_to_supports(supports),
 				vec![
 					(30, Support { total: 40, voters: vec![(2, 5), (4, 5), (30, 30)] }),
 					(40, Support { total: 60, voters: vec![(2, 5), (3, 10), (4, 5), (40, 40)] })

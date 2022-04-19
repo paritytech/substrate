@@ -118,6 +118,8 @@ pub mod pallet {
 			AccountId = Self::AccountId,
 			BlockNumber = Self::BlockNumber,
 			DataProvider = Pallet<Self>,
+			MaxBackersPerWinner = <Self::ElectionProvider as frame_election_provider_support::ElectionProvider>::MaxBackersPerWinner,
+			MaxWinnersPerPage = <Self::ElectionProvider as frame_election_provider_support::ElectionProvider>::MaxWinnersPerPage,
 		>;
 
 		/// Maximum number of nominations per nominator.
