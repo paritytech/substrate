@@ -1873,6 +1873,7 @@ impl<T: Config> Pallet<T> {
 			ExistenceRequirement::AllowDeath,
 		);
 
+		// TODO: this is purely defensive.
 		T::Currency::make_free_balance_be(&reward_account, Zero::zero());
 		T::Currency::make_free_balance_be(&bonded_pool.bonded_account(), Zero::zero());
 
