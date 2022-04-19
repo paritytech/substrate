@@ -446,10 +446,15 @@ where
 		// after previous block is applied it is possible to prevalidate incomming transaction
 		// but eventually changess needs to be rolled back, as those can be executed
 		// only in the following(future) block
-		let (block, storage_changes, proof) = block_builder.record_valid_extrinsics_and_revert_changes(
+		let (block, storage_changes, proof) = block_builder.build_with_seed(
 			seed,
 			|at,api| {
             let mut valid_txs = Vec::new();
+			
+			if api.is_storage_migration_scheduled(&at).unwrap() {
+				debug!(target:"block_builder", "new session starts in next block, omiting transaction from the pool");
+				return valid_txs;
+			}
 
 			while let Some(pending_tx) = pending_iterator.next() {
 				let now = (self.now)();

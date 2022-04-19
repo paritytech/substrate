@@ -203,7 +203,7 @@ where
 	}
 
 	/// temporaily apply extrinsics and record them on the list
-	pub fn record_valid_extrinsics_and_revert_changes<
+	pub fn build_with_seed<
 		F: FnOnce(&'_ BlockId<Block>, &'_ A::Api) -> Vec<Block::Extrinsic>,
 	>(
 		mut self,
@@ -365,57 +365,6 @@ where
 			})
 		}
 	}
-
-	// /// Consume the builder to build a valid `Block` containing all pushed extrinsics.
-	// ///
-	// /// Returns the build `Block`, the changes to the storage and an optional `StorageProof`
-	// /// supplied by `self.api`, combined as [`BuiltBlock`].
-	// /// The storage proof will be `Some(_)` when proof recording was enabled.
-	// pub fn build_with_seed(
-	// 	mut self,
-	// 	seed: ShufflingSeed,
-	// ) -> Result<BuiltBlock<Block, backend::StateBackendFor<B, Block>>, Error> {
-	// 	if let None = self.previous_block_extrinsics {
-	// 		self.apply_previous_block_extrinsics(seed.clone())
-	// 	}
-	// 	let mut header = self
-	// 		.api
-	// 		.finalize_block_with_context(&self.block_id, ExecutionContext::BlockConstruction)?;
-    //
-	// 	let proof = self.api.extract_proof();
-    //
-	// 	let state = self.backend.state_at(self.block_id)?;
-	// 	let parent_hash = self.parent_hash;
-    //
-	// 	let storage_changes = self
-	// 		.api
-	// 		.into_storage_changes(&state, parent_hash)
-	// 		.map_err(|e| sp_blockchain::Error::StorageChanges(e))?;
-	// 	// store hash of all extrinsics include in given bloack
-	// 	//
-	// 	let curr_block_extrinsics_count = self.extrinsics.len() + self.inherents.len();
-	// 	let all_extrinsics: Vec<_> = self
-	// 		.inherents
-	// 		.iter()
-	// 		.chain(self.extrinsics.iter())
-	// 		.chain(self.previous_block_extrinsics.unwrap().iter())
-	// 		.cloned()
-	// 		.collect();
-    //
-	// 	let extrinsics_root = HashFor::<Block>::ordered_trie_root(
-	// 		all_extrinsics.iter().map(Encode::encode).collect(),
-	// 		sp_runtime::StateVersion::V0,
-	// 	);
-	// 	header.set_extrinsics_root(extrinsics_root);
-	// 	header.set_seed(seed);
-	// 	header.set_count((curr_block_extrinsics_count as u32).into());
-    //
-	// 	Ok(BuiltBlock {
-	// 		block: <Block as BlockT>::new(header, all_extrinsics),
-	// 		storage_changes,
-	// 		proof,
-	// 	})
-	// }
 
 	/// Create the inherents for the block.
 	///
