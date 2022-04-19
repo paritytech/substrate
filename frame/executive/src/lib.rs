@@ -207,7 +207,7 @@ where
 		>::execute_block(block);
 	}
 
-	fn execute_block_ver(block: Block, public: Vec<u8>, precedes_new_session: bool) {
+	fn execute_block_ver(block: Block, public: Vec<u8>) {
 		Executive::<
 			System,
 			Block,
@@ -215,7 +215,7 @@ where
 			UnsignedValidator,
 			AllPalletsWithSystem,
 			COnRuntimeUpgrade,
-		>::execute_block_ver_impl(block, public, precedes_new_session);
+		>::execute_block_ver_impl(block, public);
 	}
 }
 
@@ -426,7 +426,7 @@ where
 	}
 
 	/// Actually execute all transitions for `block`.
-	pub fn execute_block_ver_impl(block: Block, public: Vec<u8>, _precedes_new_session: bool) {
+	pub fn execute_block_ver_impl(block: Block, public: Vec<u8>) {
 		sp_io::init_tracing();
 		sp_tracing::within_span! {
 			sp_tracing::info_span!("execute_block", ?block);
