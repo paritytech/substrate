@@ -17,7 +17,7 @@ cfg-if = "1.0"
 libc = "0.2.121"
 log = "0.4.8"
 parity-wasm = "0.42.0"
-wasmtime = { version = "0.33.0", default-features = false, features = [
+wasmtime = { version = "0.35.3", default-features = false, features = [
 	"cache",
 	"cranelift",
 	"jitdump",

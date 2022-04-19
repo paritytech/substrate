@@ -41,6 +41,13 @@ variables:                         &default-vars
   CI_IMAGE:                        "paritytech/ci-linux:production"
 
 default:
+  retry:
+    max: 2
+    when:
+      - runner_system_failure
+      - unknown_failure
+      - api_failure
+  interruptible:                   true
   cache:                           {}
 
 .collect-artifacts:                &collect-artifacts
@@ -60,13 +67,6 @@ default:
       - artifacts/
 
 .kubernetes-env:                   &kubernetes-env
-  retry:
-    max: 2
-    when:
-      - runner_system_failure
-      - unknown_failure
-      - api_failure
-  interruptible:                   true
   tags:
     - kubernetes-parity-build
 
@@ -81,13 +81,6 @@ default:
   image:                           "${CI_IMAGE}"
   before_script:
     - *rust-info-script
-  retry:
-    max: 2
-    when:
-      - runner_system_failure
-      - unknown_failure
-      - api_failure
-  interruptible:                   true
   tags:
     - linux-docker
 
@@ -168,21 +161,6 @@ default:
     | tee ./artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA/::node::import::native::sr25519::transfer_keep_alive::paritydb::small.json'
   - 'cargo run --release -p node-bench -- ::trie::read::small --json
     | tee ./artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA/::trie::read::small.json'
-  - sccache -s
-
-.build-linux-substrate-script:     &build-linux-substrate-script
-  - WASM_BUILD_NO_COLOR=1 time cargo build --release --verbose
-  - mv ./target/release/substrate ./artifacts/substrate/.
-  - echo -n "Substrate version = "
-  - if [ "${CI_COMMIT_TAG}" ]; then
-      echo "${CI_COMMIT_TAG}" | tee ./artifacts/substrate/VERSION;
-    else
-      ./artifacts/substrate/substrate --version |
-        sed -n -E 's/^substrate ([0-9.]+.*-[0-9a-f]{7,13})-.*$/\1/p' |
-          tee ./artifacts/substrate/VERSION;
-    fi
-  - sha256sum ./artifacts/substrate/substrate | tee ./artifacts/substrate/substrate.sha256
-  - cp -r ./scripts/ci/docker/substrate.Dockerfile ./artifacts/substrate/
   - sccache -s
 
 
@@ -525,7 +503,17 @@ build-linux-substrate:
   before_script:
     - mkdir -p ./artifacts/substrate/
   script:
-    - *build-linux-substrate-script
+    - WASM_BUILD_NO_COLOR=1 time cargo build --release --verbose
+    - mv ./target/release/substrate ./artifacts/substrate/.
+    - echo -n "Substrate version = "
+    - if [ "${CI_COMMIT_TAG}" ]; then
+        echo "${CI_COMMIT_TAG}" | tee ./artifacts/substrate/VERSION;
+      else
+        ./artifacts/substrate/substrate --version |
+          cut -d ' ' -f 2 | tee ./artifacts/substrate/VERSION;
+      fi
+    - sha256sum ./artifacts/substrate/substrate | tee ./artifacts/substrate/substrate.sha256
+    - cp -r ./scripts/ci/docker/substrate.Dockerfile ./artifacts/substrate/
     - printf '\n# building node-template\n\n'
     - ./scripts/ci/node-template-release.sh ./artifacts/substrate/substrate-node-template.tar.gz
 

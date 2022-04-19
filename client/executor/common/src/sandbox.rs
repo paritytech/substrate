@@ -27,7 +27,7 @@ mod wasmi_backend;
 use std::{collections::HashMap, rc::Rc};
 
 use codec::Decode;
-use sp_sandbox::env;
+use sp_sandbox::env as sandbox_env;
 use sp_wasm_interface::{FunctionContext, Pointer, WordSize};
 
 use crate::{
@@ -259,7 +259,7 @@ fn decode_environment_definition(
 	mut raw_env_def: &[u8],
 	memories: &[Option<Memory>],
 ) -> std::result::Result<(Imports, GuestToSupervisorFunctionMapping), InstantiationError> {
-	let env_def = env::EnvironmentDefinition::decode(&mut raw_env_def)
+	let env_def = sandbox_env::EnvironmentDefinition::decode(&mut raw_env_def)
 		.map_err(|_| InstantiationError::EnvironmentDefinitionCorrupted)?;
 
 	let mut func_map = HashMap::new();
@@ -271,12 +271,12 @@ fn decode_environment_definition(
 		let field = entry.field_name.clone();
 
 		match entry.entity {
-			env::ExternEntity::Function(func_idx) => {
+			sandbox_env::ExternEntity::Function(func_idx) => {
 				let externals_idx =
 					guest_to_supervisor_mapping.define(SupervisorFuncIndex(func_idx as usize));
 				func_map.insert((module, field), externals_idx);
 			},
-			env::ExternEntity::Memory(memory_idx) => {
+			sandbox_env::ExternEntity::Memory(memory_idx) => {
 				let memory_ref = memories
 					.get(memory_idx as usize)
 					.cloned()
@@ -462,7 +462,7 @@ impl<DT: Clone> Store<DT> {
 		let backend_context = &self.backend_context;
 
 		let maximum = match maximum {
-			env::MEM_UNLIMITED => None,
+			sandbox_env::MEM_UNLIMITED => None,
 			specified_limit => Some(specified_limit),
 		};
 

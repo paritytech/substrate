@@ -29,7 +29,7 @@ use sc_executor_common::{
 	sandbox::{self, SupervisorFuncIndex},
 	util::MemoryTransfer,
 };
-use sp_sandbox::env;
+use sp_sandbox::env as sandbox_env;
 use sp_wasm_interface::{FunctionContext, MemoryId, Pointer, Sandbox, WordSize};
 
 use crate::{runtime::StoreData, util};
@@ -166,15 +166,15 @@ impl<'a> Sandbox for HostContext<'a> {
 		let len = buf_len as usize;
 
 		let buffer = match sandboxed_memory.read(Pointer::new(offset as u32), len) {
-			Err(_) => return Ok(env::ERR_OUT_OF_BOUNDS),
+			Err(_) => return Ok(sandbox_env::ERR_OUT_OF_BOUNDS),
 			Ok(buffer) => buffer,
 		};
 
 		if util::write_memory_from(&mut self.caller, buf_ptr, &buffer).is_err() {
-			return Ok(env::ERR_OUT_OF_BOUNDS)
+			return Ok(sandbox_env::ERR_OUT_OF_BOUNDS)
 		}
 
-		Ok(env::ERR_OK)
+		Ok(sandbox_env::ERR_OK)
 	}
 
 	fn memory_set(
@@ -189,15 +189,15 @@ impl<'a> Sandbox for HostContext<'a> {
 		let len = val_len as usize;
 
 		let buffer = match util::read_memory(&self.caller, val_ptr, len) {
-			Err(_) => return Ok(env::ERR_OUT_OF_BOUNDS),
+			Err(_) => return Ok(sandbox_env::ERR_OUT_OF_BOUNDS),
 			Ok(buffer) => buffer,
 		};
 
 		if sandboxed_memory.write_from(Pointer::new(offset as u32), &buffer).is_err() {
-			return Ok(env::ERR_OUT_OF_BOUNDS)
+			return Ok(sandbox_env::ERR_OUT_OF_BOUNDS)
 		}
 
-		Ok(env::ERR_OK)
+		Ok(sandbox_env::ERR_OK)
 	}
 
 	fn memory_teardown(&mut self, memory_id: MemoryId) -> sp_wasm_interface::Result<()> {
@@ -238,7 +238,7 @@ impl<'a> Sandbox for HostContext<'a> {
 		);
 
 		match result {
-			Ok(None) => Ok(env::ERR_OK),
+			Ok(None) => Ok(sandbox_env::ERR_OK),
 			Ok(Some(val)) => {
 				// Serialize return value and write it back into the memory.
 				sp_wasm_interface::ReturnValue::Value(val.into()).using_encoded(|val| {
@@ -247,10 +247,10 @@ impl<'a> Sandbox for HostContext<'a> {
 					}
 					<HostContext as FunctionContext>::write_memory(self, return_val, val)
 						.map_err(|_| "can't write return value")?;
-					Ok(env::ERR_OK)
+					Ok(sandbox_env::ERR_OK)
 				})
 			},
-			Err(_) => Ok(env::ERR_EXECUTION),
+			Err(_) => Ok(sandbox_env::ERR_EXECUTION),
 		}
 	}
 
@@ -287,7 +287,7 @@ impl<'a> Sandbox for HostContext<'a> {
 		let guest_env = match sandbox::GuestEnvironment::decode(&self.sandbox_store(), raw_env_def)
 		{
 			Ok(guest_env) => guest_env,
-			Err(_) => return Ok(env::ERR_MODULE as u32),
+			Err(_) => return Ok(sandbox_env::ERR_MODULE as u32),
 		};
 
 		let mut store = self
@@ -317,8 +317,8 @@ impl<'a> Sandbox for HostContext<'a> {
 
 		let instance_idx_or_err_code = match result {
 			Ok(instance) => instance.register(&mut self.sandbox_store_mut(), dispatch_thunk),
-			Err(sandbox::InstantiationError::StartTrapped) => env::ERR_EXECUTION,
-			Err(_) => env::ERR_MODULE,
+			Err(sandbox::InstantiationError::StartTrapped) => sandbox_env::ERR_EXECUTION,
+			Err(_) => sandbox_env::ERR_MODULE,
 		};
 
 		Ok(instance_idx_or_err_code as u32)

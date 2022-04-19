@@ -174,7 +174,7 @@ impl<T> ImportResolver for EnvironmentDefinitionBuilder<T> {
 					target: TARGET,
 					"Export {}:{} is not a host func",
 					module_name,
-					field_name
+					field_name,
 				);
 				return Err(wasmi::Error::Instantiation(String::new()))
 			},
@@ -210,7 +210,7 @@ impl<T> ImportResolver for EnvironmentDefinitionBuilder<T> {
 					target: TARGET,
 					"Export {}:{} is not a memory",
 					module_name,
-					field_name
+					field_name,
 				);
 				return Err(wasmi::Error::Instantiation(String::new()))
 			},

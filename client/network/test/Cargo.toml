@@ -13,7 +13,7 @@ repository = "https://github.com/paritytech/substrate/"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-async-std = "1.10.0"
+async-std = "1.11.0"
 sc-network = { version = "0.10.0-dev", path = "../" }
 log = "0.4.8"
 parking_lot = "0.12.0"
