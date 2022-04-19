@@ -46,7 +46,6 @@ use crate::{
 	transactions, transport, DhtEvent, ExHashT, NetworkStateInfo, NetworkStatus, ReputationChange,
 };
 
-use mixnet::Mixnet;
 use codec::Encode as _;
 use futures::{channel::oneshot, prelude::*};
 use libp2p::{
@@ -65,6 +64,7 @@ use libp2p::{
 };
 use log::{debug, error, info, trace, warn};
 use metrics::{Histogram, HistogramVec, MetricSources, Metrics};
+use mixnet::Mixnet;
 use parking_lot::Mutex;
 use sc_consensus::{BlockImportError, BlockImportStatus, ImportQueue, Link};
 use sc_peerset::PeersetHandle;
@@ -342,9 +342,14 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				// TODO move mixnet building to MixnetHandlePrototype?? + add metrics
 				// through call backs in crate and same as transaction handler to register
 				let mut mixnet = None;
-				if let Some((mixnet_in, mixnet_out)) = params.mixnet {
+				if let Some((mixnet_in, mixnet_out, encoded_connection_info)) = params.mixnet {
 					if let libp2p::core::identity::Keypair::Ed25519(kp) = &local_identity {
-						mixnet = Some(Mixnet::new_from_worker(kp, mixnet_in, mixnet_out));
+						mixnet = Some(Mixnet::new_from_worker(
+							kp,
+							encoded_connection_info,
+							mixnet_in,
+							mixnet_out,
+						));
 					} else {
 						log::error!(target: "sync", "Ignoring mixnet, non Ed25519 identity");
 					}

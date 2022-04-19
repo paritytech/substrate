@@ -136,7 +136,7 @@ pub struct Params<B: BlockT, H: ExHashT> {
 	pub warp_sync: Option<(Arc<dyn WarpSyncProvider<B>>, RequestResponseConfig)>,
 
 	/// Mixnet worker access if running.
-	pub mixnet: Option<(mixnet::WorkerSink, mixnet::WorkerStream)>,
+	pub mixnet: Option<(mixnet::WorkerSink, mixnet::WorkerStream, Vec<u8>)>,
 }
 
 /// Role of the local node.

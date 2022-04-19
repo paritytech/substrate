@@ -330,3 +330,6 @@ pub struct NetworkStatus<B: BlockT> {
 	/// Warp sync in progress.
 	pub warp_sync: Option<protocol::sync::WarpSyncProgress<B>>,
 }
+
+// Topology is only define at worker level.
+type Mixnet = mixnet::Mixnet<mixnet::NoTopology>;

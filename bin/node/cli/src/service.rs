@@ -354,20 +354,20 @@ pub fn new_full_base(
 
 	let mut mixnet = None;
 	if config.mixnet {
-		use sc_client_api::BlockchainEvents;
-		let finality_notification_stream = client.finality_notification_stream();
-		let role = config.role.clone();
 		let local_id = config.network.node_key.clone().into_keypair()?;
-		let (mixnet_worker, worker_in, worker_out) = sc_mixnet::MixnetWorker::new(
-			finality_notification_stream,
-			import_setup.1.shared_authority_set().clone(),
-			role,
-			local_id,
-		).ok_or(ServiceError::Other("Cannot start mixnet.".to_string()))?;
+		let (mixnet_worker, worker_in, worker_out, encoded_client_info) =
+			sc_mixnet::MixnetWorker::new(
+				client.clone(),
+				import_setup.1.shared_authority_set().clone(),
+				local_id,
+
+				keystore_container.sync_keystore(),
+			)
+			.ok_or(ServiceError::Other("Cannot start mixnet.".to_string()))?;
 		task_manager
 			.spawn_handle()
 			.spawn("mixnet-worker", Some("mixnet"), mixnet_worker.run());
-		mixnet = Some((worker_in, worker_out));
+		mixnet = Some((worker_in, worker_out, encoded_client_info));
 	}
 
 	let (network, system_rpc_tx, mixnet_tx, network_starter) =

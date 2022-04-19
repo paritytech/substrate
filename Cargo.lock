@@ -8857,12 +8857,15 @@ dependencies = [
  "libp2p",
  "log 0.4.14",
  "mixnet",
+ "parity-scale-codec",
  "rand 0.7.3",
  "sc-client-api",
  "sc-finality-grandpa",
  "sc-network",
  "sc-utils",
+ "sp-application-crypto",
  "sp-finality-grandpa",
+ "sp-keystore",
  "sp-runtime",
 ]
 

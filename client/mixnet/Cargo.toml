@@ -14,12 +14,15 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
+codec = { package = "parity-scale-codec", version = "3.0.0" }
 futures = "0.3.21"
 libp2p = "0.40.0"
 log = "0.4.8"
 mixnet = { git = "https://github.com/paritytech/mixnet", version = "0.1.0"}
 rand = "0.7.2"
 
+sp-application-crypto = { version = "6.0.0", path = "../../primitives/application-crypto" }
+sp-keystore = { version = "0.12.0", path = "../../primitives/keystore" }
 sp-runtime = { version = "6.0.0", path = "../../primitives/runtime" }
 sp-finality-grandpa = { version = "4.0.0-dev", path = "../../primitives/finality-grandpa" } # TODO is there reexport from  sc crate?
 

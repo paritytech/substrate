@@ -58,7 +58,7 @@ use std::{
 pub use crate::request_responses::{
 	IfDisconnected, InboundFailure, OutboundFailure, RequestFailure, RequestId, ResponseFailure,
 };
-use mixnet::Mixnet;
+use crate::Mixnet;
 
 /// General behaviour of the network. Combines all protocols together.
 #[derive(NetworkBehaviour)]
@@ -540,9 +540,7 @@ impl<B: BlockT> NetworkBehaviourEventProcess<DiscoveryOut> for Behaviour<B> {
 	}
 }
 
-impl<B: BlockT> NetworkBehaviourEventProcess<mixnet::NetworkEvent>
-	for Behaviour<B>
-{
+impl<B: BlockT> NetworkBehaviourEventProcess<mixnet::NetworkEvent> for Behaviour<B> {
 	fn inject_event(&mut self, event: mixnet::NetworkEvent) {
 		match event {
 			mixnet::NetworkEvent::Message(message) => {
