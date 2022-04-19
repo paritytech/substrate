@@ -68,7 +68,7 @@ where
 }
 
 /// A Handlebars helper to add an underscore after every 3rd character,then format it,
-/// i.e. a separator for large numbers : 123000000 -> 123_000 * WEIGHT_PER_NANOS .
+/// i.e. a separator for large numbers : 123000000 -> 123_000 * WEIGHT_PER_NANOS.
 #[derive(Clone, Copy)]
 pub struct UnderscoreFormatHelper;
 
@@ -90,22 +90,23 @@ impl handlebars::HelperDef for UnderscoreFormatHelper {
 }
 
 /// Add an underscore after every 3rd character, then format it, i.e. a separator for large numbers:
-/// 123000000 -> 123_000 * WEIGHT_PER_NANOS .
+/// 123000000 -> 123_000 * WEIGHT_PER_NANOS.
 fn underscore_format<Number>(i: Number) -> String
 where
 	Number: std::string::ToString,
 {
+	let mut i = i.to_string().parse::<u64>().unwrap();
+	if i % constants::WEIGHT_PER_NANOS != 0 {
+		panic!("Nano seconds is the smallest unit; Weight must be divisible by it; qed");
+	}
+	i = i / constants::WEIGHT_PER_NANOS;
+
 	let mut s = String::new();
 	let i_str = i.to_string();
-	let f_u64 = i_str.parse::<f64>().unwrap();
-	let j_str = (f_u64 / constants::WEIGHT_PER_NANOS as f64).to_string();
-	let a = j_str.chars().rev().enumerate();
+	let a = i_str.chars().rev().enumerate();
 	for (idx, val) in a {
 		if idx != 0 && idx % 3 == 0 {
-			if val == '.' {
-			} else {
-				s.insert(0, '_');
-			}
+			s.insert(0, '_');
 		}
 		s.insert(0, val);
 	}
