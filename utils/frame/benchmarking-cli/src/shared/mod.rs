@@ -26,6 +26,7 @@ pub use stats::{StatSelect, Stats};
 pub use weight_params::WeightParams;
 
 use frame_support::weights::constants;
+use rand::prelude::*;
 
 /// A Handlebars helper to add an underscore after every 3rd character,
 /// i.e. a separator for large numbers.
@@ -110,4 +111,10 @@ where
 	}
 	s.push_str(" * WEIGHT_PER_NANOS");
 	s
+/// Returns an rng and the seed that was used to create it.
+///
+/// Uses a random seed if none is provided.
+pub fn new_rng(seed: Option<u64>) -> (impl rand::Rng, u64) {
+	let seed = seed.unwrap_or(rand::thread_rng().gen::<u64>());
+	(rand_pcg::Pcg64::seed_from_u64(seed), seed)
 }
