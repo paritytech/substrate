@@ -4018,7 +4018,8 @@ fn on_finalize_weight_is_nonzero() {
 mod election_data_provider {
 	use super::*;
 	use frame_election_provider_support::ElectionDataProvider;
-	use frame_support::bounded_vec;
+	use frame_support::{bounded_vec, storage::with_transaction};
+	use sp_runtime::{DispatchResult, TransactionOutcome};
 
 	#[test]
 	fn targets_2sec_block() {
@@ -4313,7 +4314,7 @@ mod election_data_provider {
 				assert_eq!(LastIteratedNominator::<Test>::get(), Some(61));
 
 				// tandem: node 61 cannot be chilled in any humanly possible way now.
-				frame_support::storage::with_transaction(|| {
+				let _ = with_transaction(|| -> TransactionOutcome<DispatchResult> {
 					// normal chilling
 					assert_noop!(
 						Staking::chill(Origin::signed(60)),
@@ -4327,8 +4328,9 @@ mod election_data_provider {
 						Staking::chill_other(Origin::signed(100), 60),
 						Error::<Test>::TemporarilyNotAllowed
 					);
-					storage::TransactionOutcome::Rollback(())
+					storage::TransactionOutcome::Rollback(Ok(()))
 				});
+
 				// and making this nominator un-decodable.
 				MaxNominations::set(0);
 				assert_noop!(
@@ -4670,10 +4672,20 @@ fn capped_stakers_works() {
 #[test]
 fn min_commission_works() {
 	ExtBuilder::default().build_and_execute(|| {
+		// account 10 controls the stash from account 11
 		assert_ok!(Staking::validate(
 			Origin::signed(10),
 			ValidatorPrefs { commission: Perbill::from_percent(5), blocked: false }
 		));
+
+		// event emitted should be correct
+		assert_eq!(
+			*staking_events().last().unwrap(),
+			Event::ValidatorPrefsSet(
+				11,
+				ValidatorPrefs { commission: Perbill::from_percent(5), blocked: false }
+			)
+		);
 
 		assert_ok!(Staking::set_staking_configs(
 			Origin::root(),

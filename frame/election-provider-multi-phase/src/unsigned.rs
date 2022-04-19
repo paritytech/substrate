@@ -931,7 +931,7 @@ mod tests {
 	#[test]
 	#[should_panic(expected = "Invalid unsigned submission must produce invalid block and \
 	                           deprive validator from their authoring reward.: \
-	                           Module(ModuleError { index: 2, error: 1, message: \
+	                           Module(ModuleError { index: 2, error: [1, 0, 0, 0], message: \
 	                           Some(\"PreDispatchWrongWinnerCount\") })")]
 	fn unfeasible_solution_panics() {
 		ExtBuilder::default().build_and_execute(|| {
@@ -1053,7 +1053,7 @@ mod tests {
 				MultiPhase::basic_checks(&solution, "mined").unwrap_err(),
 				MinerError::PreDispatchChecksFailed(DispatchError::Module(ModuleError {
 					index: 2,
-					error: 1,
+					error: [1, 0, 0, 0],
 					message: Some("PreDispatchWrongWinnerCount"),
 				})),
 			);

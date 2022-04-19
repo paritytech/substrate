@@ -22,7 +22,7 @@ use crate::{ConfigOp, Pallet as Staking};
 use testing_utils::*;
 
 use codec::Decode;
-use frame_election_provider_support::SortedListProvider;
+use frame_election_provider_support::{ElectionDataProvider, SortedListProvider};
 use frame_support::{
 	dispatch::UnfilteredDispatchable,
 	pallet_prelude::*,
@@ -809,7 +809,7 @@ benchmarks! {
 		assert!(balance_before > balance_after);
 	}
 
-	get_npos_voters {
+	electing_voters_paged {
 		// number of validator intention.
 		let v in (MaxValidators::<T>::get() / 2) .. MaxValidators::<T>::get();
 		// number of nominator intention.
@@ -830,11 +830,11 @@ benchmarks! {
 
 		let num_voters = (v + n) as usize;
 	}: {
-		let voters = <Staking<T>>::get_npos_voters(None);
+		let voters = <Staking<T>>::electing_voters(None).unwrap();
 		assert_eq!(voters.len(), num_voters);
 	}
 
-	get_npos_targets {
+	electable_targets_paged {
 		// number of validator intention.
 		let v in (MaxValidators::<T>::get() / 2) .. MaxValidators::<T>::get();
 		// number of nominator intention.
@@ -844,7 +844,7 @@ benchmarks! {
 			v, n, T::MaxNominations::get() as usize, false, None
 		)?;
 	}: {
-		let targets = <Staking<T>>::get_npos_targets();
+		let targets = <Staking<T>>::electable_targets(None).unwrap();
 		assert_eq!(targets.len() as u32, v);
 	}
 

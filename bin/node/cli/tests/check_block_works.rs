@@ -28,7 +28,7 @@ pub mod common;
 async fn check_block_works() {
 	let base_path = tempdir().expect("could not create a temp dir");
 
-	common::run_node_for_a_while(base_path.path(), &["--dev"]).await;
+	common::run_node_for_a_while(base_path.path(), &["--dev", "--no-hardware-benchmarks"]).await;
 
 	let status = Command::new(cargo_bin("substrate"))
 		.args(&["check-block", "--dev", "--pruning", "archive", "-d"])

@@ -19,7 +19,7 @@
 //! the *overhead* benchmarks.
 
 use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider};
-use sc_cli::{CliConfiguration, Result, SharedParams};
+use sc_cli::{CliConfiguration, ImportParams, Result, SharedParams};
 use sc_client_api::Backend as ClientBackend;
 use sc_service::Configuration;
 use sp_api::{ApiExt, ProvideRuntimeApi};
@@ -35,15 +35,19 @@ use crate::{
 		bench::{Benchmark, BenchmarkParams, BenchmarkType},
 		template::TemplateData,
 	},
-	post_processing::WeightParams,
+	shared::WeightParams,
 };
 
-/// Benchmarks the per-block and per-extrinsic execution overhead.
+/// Benchmark the execution overhead per-block and per-extrinsic.
 #[derive(Debug, Parser)]
 pub struct OverheadCmd {
 	#[allow(missing_docs)]
 	#[clap(flatten)]
 	pub shared_params: SharedParams,
+
+	#[allow(missing_docs)]
+	#[clap(flatten)]
+	pub import_params: ImportParams,
 
 	#[allow(missing_docs)]
 	#[clap(flatten)]
@@ -72,11 +76,11 @@ pub trait ExtrinsicBuilder {
 }
 
 impl OverheadCmd {
-	/// Measures the per-block and per-extrinsic execution overhead.
+	/// Measure the per-block and per-extrinsic execution overhead.
 	///
 	/// Writes the results to console and into two instances of the
 	/// `weights.hbs` template, one for each benchmark.
-	pub async fn run<Block, BA, C>(
+	pub fn run<Block, BA, C>(
 		&self,
 		cfg: Configuration,
 		client: Arc<C>,
@@ -114,5 +118,9 @@ impl OverheadCmd {
 impl CliConfiguration for OverheadCmd {
 	fn shared_params(&self) -> &SharedParams {
 		&self.shared_params
+	}
+
+	fn import_params(&self) -> Option<&ImportParams> {
+		Some(&self.import_params)
 	}
 }

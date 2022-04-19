@@ -926,6 +926,12 @@ cfg_if! {
 				}
 			}
 
+			impl beefy_primitives::BeefyApi<Block> for RuntimeApi {
+				fn validator_set() -> Option<beefy_primitives::ValidatorSet<beefy_primitives::crypto::AuthorityId>> {
+					None
+				}
+			}
+
 			impl frame_system_rpc_runtime_api::AccountNonceApi<Block, AccountId, Index> for Runtime {
 				fn account_nonce(_account: AccountId) -> Index {
 					0

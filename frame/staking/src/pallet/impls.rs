@@ -24,8 +24,8 @@ use frame_election_provider_support::{
 use frame_support::{
 	pallet_prelude::*,
 	traits::{
-		Currency, CurrencyToVote, Defensive, DefensiveSaturating, EstimateNextNewSession, Get,
-		Imbalance, LockableCurrency, OnUnbalanced, UnixTime, WithdrawReasons,
+		Currency, CurrencyToVote, Defensive, EstimateNextNewSession, Get, Imbalance,
+		LockableCurrency, OnUnbalanced, UnixTime, WithdrawReasons,
 	},
 	weights::{Weight, WithPostDispatchInfo},
 };
@@ -905,13 +905,13 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 		maybe_max_len: Option<usize>,
 		mut remaining: PageIndex,
 	) -> data_provider::Result<Vec<VoterOf<Self>>> {
-		remaining = remaining.min(T::Pages::get().defensive_saturating_sub(1));
+		remaining = remaining.min(Self::msp());
 		// either this is the first call, or `LastIteratedNominator` should exist.
 		let mut maybe_last = LastIteratedNominator::<T>::get();
 
 		let is_valid_state = if T::Pages::get() > 1 {
 			// in the first page, the `LastIteratedNominator` should not exist, in the rest of the
-			// pages it should
+			// pages it should.
 			(remaining == Self::msp()) ^ maybe_last.is_some()
 		} else {
 			maybe_last.is_none()
@@ -944,6 +944,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 					LastIteratedNominator::<T>::put(last.clone())
 				},
 		};
+
 		Ok(voters)
 	}
 
@@ -1375,7 +1376,6 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsAndValidatorsM
 				.chain(Nominators::<T>::iter().map(|(n, _)| n)),
 		)
 	}
-
 	fn iter_from(
 		start: &T::AccountId,
 	) -> Result<Box<dyn Iterator<Item = T::AccountId>>, Self::Error> {
@@ -1393,7 +1393,6 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsAndValidatorsM
 			Err(())
 		}
 	}
-
 	fn count() -> u32 {
 		Nominators::<T>::count().saturating_add(Validators::<T>::count())
 	}

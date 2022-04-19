@@ -23,7 +23,7 @@ test-helpers = []
 
 [dependencies]
 thiserror = "1.0.30"
-futures = "0.3.19"
+futures = "0.3.21"
 jsonrpc-pubsub = "18.0"
 jsonrpc-core = "18.0"
 rand = "0.7.3"
@@ -72,13 +72,14 @@ sc-offchain = { version = "4.0.0-dev", path = "../offchain" }
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus", version = "0.10.0-dev" }
 sc-tracing = { version = "4.0.0-dev", path = "../tracing" }
 sp-tracing = { version = "5.0.0", path = "../../primitives/tracing" }
+sc-sysinfo = { version = "6.0.0-dev", path = "../sysinfo" }
 tracing = "0.1.29"
 tracing-futures = { version = "0.2.4" }
 parity-util-mem = { version = "0.11.0", default-features = false, features = [
 	"primitive-types",
 ] }
 async-trait = "0.1.50"
-tokio = { version = "1.15", features = ["time", "rt-multi-thread", "parking_lot"] }
+tokio = { version = "1.17.0", features = ["time", "rt-multi-thread", "parking_lot"] }
 tempfile = "3.1.0"
 directories = "4.0.1"
 

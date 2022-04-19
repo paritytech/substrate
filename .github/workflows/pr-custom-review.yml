@@ -1,0 +1,23 @@
+name: Assign reviewers
+
+on:
+  pull_request:
+    branches:
+      - master
+      - main
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - review_requested
+      - review_request_removed
+  pull_request_review:
+
+jobs:
+  pr-custom-review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: pr-custom-review
+        uses: paritytech/pr-custom-review@v2
+        with:
+          token: ${{ secrets.PRCR_TOKEN }}

@@ -473,6 +473,7 @@ mod sorted_list_provider {
 			assert_eq!(BagsList::iter_from(&6).unwrap().collect::<Vec<_>>(), vec![1, 5]);
 			assert_eq!(BagsList::iter_from(&1).unwrap().collect::<Vec<_>>(), vec![5]);
 			assert!(BagsList::iter_from(&5).unwrap().collect::<Vec<_>>().is_empty());
+			assert!(BagsList::iter_from(&7).is_err());
 
 			assert_storage_noop!(assert!(BagsList::iter_from(&8).is_err()));
 		});
@@ -538,7 +539,7 @@ mod sorted_list_provider {
 			// then
 			assert_storage_noop!(assert_eq!(
 				BagsList::on_insert(3, 20).unwrap_err(),
-				Error::Duplicate
+				ListError::Duplicate
 			));
 		});
 	}

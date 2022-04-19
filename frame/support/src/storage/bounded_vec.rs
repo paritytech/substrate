@@ -129,6 +129,16 @@ impl<T, S> BoundedVec<T, S> {
 		self.0.sort_by(compare)
 	}
 
+	/// Exactly the same semantics as [`slice::sort`].
+	///
+	/// This is safe since sorting cannot change the number of elements in the vector.
+	pub fn sort(&mut self)
+	where
+		T: sp_std::cmp::Ord,
+	{
+		self.0.sort()
+	}
+
 	/// Exactly the same semantics as `Vec::remove`.
 	///
 	/// # Panics
@@ -374,6 +384,17 @@ impl<T, S: Get<u32>> BoundedVec<T, S> {
 		}
 	}
 
+	/// Exactly the same semantics as [`Vec::append`], but returns an error and does nothing if the
+	/// length of the outcome is larger than the bound.
+	pub fn try_append(&mut self, other: &mut Vec<T>) -> Result<(), ()> {
+		if other.len().saturating_add(self.len()) <= Self::bound() {
+			self.0.append(other);
+			Ok(())
+		} else {
+			Err(())
+		}
+	}
+
 	/// Consumes self and mutates self via the given `mutate` function.
 	///
 	/// If the outcome of mutation is within bounds, `Some(Self)` is returned. Else, `None` is
@@ -585,11 +606,7 @@ where
 #[cfg(test)]
 pub mod test {
 	use super::*;
-	use crate::{
-		bounded_vec,
-		traits::{ConstU16, ConstU32, ConstU8},
-		Twox128,
-	};
+	use crate::{bounded_vec, traits::ConstU32, Twox128};
 	use sp_io::TestExternalities;
 
 	crate::generate_storage_alias! { Prefix, Foo => Value<BoundedVec<u32, ConstU32<7>>> }
@@ -697,7 +714,7 @@ pub mod test {
 	}
 
 	#[test]
-	fn try_append_is_correct() {
+	fn bound_returns_correct_value() {
 		assert_eq!(BoundedVec::<u32, ConstU32<7>>::bound(), 7);
 	}
 
@@ -890,12 +907,5 @@ pub mod test {
 		let mut b: BoundedVec<u32, ConstU32<5>> = bounded_vec![1, 2, 3];
 		assert!(b.try_extend(vec![4, 5, 6].into_iter()).is_err());
 		assert_eq!(*b, vec![1, 2, 3]);
-	}
-
-	#[test]
-	fn works_with_u8_u16_u32_as_bound() {
-		let mut b1: BoundedVec<u32, ConstU32<5>> = bounded_vec![1, 2, 3];
-		let mut b2: BoundedVec<u32, ConstU16<5>> = bounded_vec![1, 2, 3];
-		let mut b3: BoundedVec<u32, ConstU8<5>> = bounded_vec![1, 2, 3];
 	}
 }
