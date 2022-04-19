@@ -22,7 +22,7 @@ use crate::{
 	SignedSubmissionIndices, SignedSubmissionNextIndex, SignedSubmissionsMap, SolutionOf,
 	SolutionOrSnapshotSize, Weight, WeightInfo,
 };
-use codec::{Decode, Encode, HasCompact};
+use codec::{Decode, Encode, HasCompact, MaxEncodedLen};
 use frame_election_provider_support::NposSolution;
 use frame_support::{
 	storage::bounded_btree_map::BoundedBTreeMap,
@@ -43,7 +43,9 @@ use sp_std::{
 /// A raw, unchecked signed submission.
 ///
 /// This is just a wrapper around [`RawSolution`] and some additional info.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, scale_info::TypeInfo)]
+#[derive(
+	PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, scale_info::TypeInfo, MaxEncodedLen,
+)]
 pub struct SignedSubmission<AccountId, Balance: HasCompact, Solution> {
 	/// Who submitted this solution.
 	pub who: AccountId,

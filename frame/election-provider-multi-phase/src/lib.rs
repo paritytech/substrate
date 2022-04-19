@@ -333,7 +333,7 @@ impl<T: Config> InstantElectionProvider for NoFallback<T> {
 }
 
 /// Current phase of the pallet.
-#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, Debug, TypeInfo)]
+#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, Debug, TypeInfo, MaxEncodedLen)]
 pub enum Phase<Bn> {
 	/// Nothing, the election is not happening.
 	Off,
@@ -421,7 +421,9 @@ impl Default for ElectionCompute {
 ///
 /// Such a solution should never become effective in anyway before being checked by the
 /// `Pallet::feasibility_check`.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, PartialOrd, Ord, TypeInfo)]
+#[derive(
+	PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, PartialOrd, Ord, TypeInfo, MaxEncodedLen,
+)]
 pub struct RawSolution<S> {
 	/// the solution itself.
 	pub solution: S,
@@ -495,7 +497,7 @@ pub struct RoundSnapshot<T: Config> {
 /// This is stored automatically on-chain, and it contains the **size of the entire snapshot**.
 /// This is also used in dispatchables as weight witness data and should **only contain the size of
 /// the presented solution**, not the entire snapshot.
-#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, Debug, Default, TypeInfo)]
+#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, Debug, Default, TypeInfo, MaxEncodedLen)]
 pub struct SolutionOrSnapshotSize {
 	/// The length of voters.
 	#[codec(compact)]
@@ -709,7 +711,8 @@ pub mod pallet {
 			+ sp_std::fmt::Debug
 			+ Ord
 			+ NposSolution
-			+ TypeInfo;
+			+ TypeInfo
+			+ MaxEncodedLen;
 
 		/// Configuration for the fallback.
 		type Fallback: InstantElectionProvider<
