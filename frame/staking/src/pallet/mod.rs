@@ -502,6 +502,7 @@ pub mod pallet {
 	/// Last nominator that was being iterated. This is only useful for multi-page snapshot, and
 	/// does not affect anything else.
 	#[pallet::storage]
+	#[pallet::getter(fn last_iterated_nominator)]
 	pub(crate) type LastIteratedNominator<T: Config> = StorageValue<_, T::AccountId, OptionQuery>;
 
 	#[pallet::genesis_config]

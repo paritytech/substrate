@@ -319,30 +319,18 @@ pub trait ElectionDataProvider {
 
 	/// Same as [`Self::electable_targets_paged`], but the most significant page is assumed.
 	///
-	/// This should only be used in the case where `Self::Pages` is `1`.
+	/// This should almost only be used in the case where `Self::Pages` is `1`.
 	fn electable_targets(
 		maybe_max_len: Option<usize>,
 	) -> data_provider::Result<Vec<Self::AccountId>> {
-		if Self::Pages::get() != 1 {
-			frame_support::defensive!(
-				"using the backward compatibility single page election data \
-				in a multi-page context. This is most likely a mis-config"
-			);
-		}
 		Self::electable_targets_paged(maybe_max_len, Self::msp())
 	}
 
 	/// Same as [`Self::electing_voters_paged`], but the page 0 is assumed.
 	///
 	///
-	/// This should only be used in the case where `Self::Pages` is `1`.
+	/// This should almost only be used in the case where `Self::Pages` is `1`.
 	fn electing_voters(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<VoterOf<Self>>> {
-		if Self::Pages::get() != 1 {
-			frame_support::defensive!(
-				"using the backward compatibility single page election data \
-				in a multi-page context. This is most likely a mis-config"
-			);
-		}
 		Self::electing_voters_paged(maybe_max_len, Self::msp())
 	}
 
@@ -378,8 +366,18 @@ pub trait ElectionDataProvider {
 		0
 	}
 
+	/// The range of `take` pages, from most significant to least significant.
+	///
+	/// ```
+	/// todo!();
+	/// ```
+	fn range(take: PageIndex) -> Box<dyn Iterator<Item = PageIndex>> {
+		Box::new((Self::lsp()..Self::Pages::get()).take(take as usize).rev())
+	}
+
 	/// Utility function only to be used in benchmarking scenarios, to be implemented optionally,
 	/// else a noop.
+
 	#[cfg(any(feature = "runtime-benchmarks", test))]
 	fn put_snapshot(
 		_voters: Vec<VoterOf<Self>>,

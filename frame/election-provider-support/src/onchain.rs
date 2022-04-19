@@ -22,16 +22,15 @@
 use crate::{
 	Debug, ElectionDataProvider, ElectionProvider, InstantElectionProvider, NposSolver, WeightInfo,
 };
-use frame_support::{
-	traits::{ConstU32, Get},
-	weights::DispatchClass,
-};
+use frame_support::{traits::Get, weights::DispatchClass};
 use sp_npos_elections::*;
 use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData, prelude::*};
 
 /// Errors of the on-chain election.
 #[derive(Eq, PartialEq, Debug)]
 pub enum Error {
+	/// The number of pages is incorrect.
+	WrongPageSize,
 	/// An internal error in the NPoS elections crate.
 	NposElections(sp_npos_elections::Error),
 	/// Errors from the data provider.
@@ -84,7 +83,6 @@ pub trait Config {
 	type DataProvider: ElectionDataProvider<
 		AccountId = <Self::System as frame_system::Config>::AccountId,
 		BlockNumber = <Self::System as frame_system::Config>::BlockNumber,
-		Pages = ConstU32<1>,
 	>;
 	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
@@ -101,6 +99,9 @@ fn elect_with<T: Config>(
 	maybe_max_voters: Option<usize>,
 	maybe_max_targets: Option<usize>,
 ) -> Result<Supports<<T::System as frame_system::Config>::AccountId>, Error> {
+	if <T::DataProvider as ElectionDataProvider>::Pages::get() != 1 {
+		return Err(Error::WrongPageSize)
+	}
 	let voters = T::DataProvider::electing_voters(maybe_max_voters).map_err(Error::DataProvider)?;
 	let targets =
 		T::DataProvider::electable_targets(maybe_max_targets).map_err(Error::DataProvider)?;

@@ -16,19 +16,19 @@
 
 //! Test to execute the snapshot using the voter bag.
 
-use frame_election_provider_support::SortedListProvider;
-use frame_support::traits::PalletInfoAccess;
+use frame_election_provider_support::{ElectionDataProvider, SortedListProvider};
+use frame_support::{storage::generator::StorageMap, traits::PalletInfoAccess};
+use pallet_staking::Pallet as Staking;
 use remote_externalities::{Builder, Mode, OnlineConfig};
 use sp_runtime::{traits::Block as BlockT, DeserializeOwned};
 
 /// Execute create a snapshot from pallet-staking.
 pub async fn execute<Runtime: crate::RuntimeT, Block: BlockT + DeserializeOwned>(
-	voter_limit: Option<usize>,
+	page_limit: Option<usize>,
+	pages: usize,
 	currency_unit: u64,
 	ws_url: String,
 ) {
-	use frame_support::storage::generator::StorageMap;
-
 	let mut ext = Builder::<Block>::new()
 		.mode(Mode::Online(OnlineConfig {
 			transport: ws_url.to_string().into(),
@@ -49,38 +49,49 @@ pub async fn execute<Runtime: crate::RuntimeT, Block: BlockT + DeserializeOwned>
 		.unwrap();
 
 	ext.execute_with(|| {
-		use frame_election_provider_support::ElectionDataProvider;
 		log::info!(
 			target: crate::LOG_TARGET,
 			"{} nodes in bags list.",
 			<Runtime as pallet_staking::Config>::VoterList::count(),
 		);
-
-		let voters =
-			<pallet_staking::Pallet<Runtime> as ElectionDataProvider>::electing_voters(voter_limit)
-				.unwrap();
-
-		let mut voters_nominator_only = voters
-			.iter()
-			.filter(|(v, _, _)| pallet_staking::Nominators::<Runtime>::contains_key(v))
-			.cloned()
-			.collect::<Vec<_>>();
-		voters_nominator_only.sort_by_key(|(_, w, _)| *w);
-
-		let currency_unit = currency_unit as f64;
-		let min_voter = voters_nominator_only
-			.first()
-			.map(|(x, y, _)| (x.clone(), *y as f64 / currency_unit));
-		let max_voter = voters_nominator_only
-			.last()
-			.map(|(x, y, _)| (x.clone(), *y as f64 / currency_unit));
 		log::info!(
 			target: crate::LOG_TARGET,
-			"a snapshot with limit {:?} has been created, {} voters are taken. min nominator: {:?}, max: {:?}",
-			voter_limit,
-			voters.len(),
-			min_voter,
-			max_voter
+			"generating {} pages of snapshot, ranging {:?}",
+			pages,
+			<Staking<Runtime>>::range(pages as u32).collect::<Vec<_>>(),
 		);
+
+		assert!(Staking::<Runtime>::last_iterated_nominator().is_none());
+
+		for page in <Staking<Runtime>>::range(pages as u32) {
+			let page_voters =
+				<pallet_staking::Pallet<Runtime> as ElectionDataProvider>::electing_voters_paged(
+					page_limit, page,
+				)
+				.unwrap();
+
+			let currency_unit = currency_unit as f64;
+			let min_voter =
+				page_voters.last().map(|(x, y, _)| (x.clone(), *y as f64 / currency_unit));
+			let max_voter =
+				page_voters.first().map(|(x, y, _)| (x.clone(), *y as f64 / currency_unit));
+			assert!(
+				page == 0 ||
+					Staking::<Runtime>::last_iterated_nominator() ==
+						page_voters.last().map(|(x, _, _)| x.clone()),
+			);
+
+			log::info!(
+				target: crate::LOG_TARGET,
+				"took snapshot page {:?} with limit {:?}, {} voters are taken. min voter: {:?}, max: {:?}",
+				page,
+				page_limit,
+				page_voters.len(),
+				min_voter,
+				max_voter
+			);
+		}
+
+		assert!(Staking::<Runtime>::last_iterated_nominator().is_none());
 	});
 }
