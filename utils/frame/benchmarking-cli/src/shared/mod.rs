@@ -111,6 +111,8 @@ where
 	}
 	s.push_str(" * WEIGHT_PER_NANOS");
 	s
+}
+
 /// Returns an rng and the seed that was used to create it.
 ///
 /// Uses a random seed if none is provided.
