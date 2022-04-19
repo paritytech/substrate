@@ -215,7 +215,6 @@
 //! after the election snapshot is taken it will benefit from the rewards of the next _2_ eras
 //! because it's vote weight will not be counted until the election snapshot in active era + 1.
 //! Related: <https://github.com/paritytech/substrate/issues/10861>
-//!
 // _Note to maintainers_: In order to ensure the reward account never falls below the existential
 // deposit, at creation the reward account must be endowed with the existential deposit. All logic
 // for calculating rewards then does not see that existential deposit as part of the free balance.
@@ -1766,14 +1765,15 @@ impl<T: Config> Pallet<T> {
 		current_points: BalanceOf<T>,
 		delegator_points: BalanceOf<T>,
 	) -> BalanceOf<T> {
+		let u256 = |x| T::BalanceToU256::convert(x);
+		let balance = |x| T::U256ToBalance::convert(x);
 		if current_balance.is_zero() || current_points.is_zero() || delegator_points.is_zero() {
 			// There is nothing to unbond
 			return Zero::zero()
 		}
 
 		// Equivalent of (current_balance / current_points) * delegator_points
-		current_balance
-			.saturating_mul(delegator_points)
+		balance(u256(current_balance).saturating_mul(u256(delegator_points)))
 			// We check for zero above
 			.div(current_points)
 	}
