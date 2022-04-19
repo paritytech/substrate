@@ -17,7 +17,7 @@ jsonrpsee = { version = "0.10.1", features = ["ws-client", "macros"] }
 
 env_logger = "0.9"
 frame-support = { path = "../../../frame/support", optional = true, version = "4.0.0-dev" }
-log = "0.4.11"
+log = "0.4.16"
 codec = { package = "parity-scale-codec", version = "3.0.0" }
 serde_json = "1.0"
 serde = "1.0.136"

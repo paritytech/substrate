@@ -24,7 +24,7 @@ sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
 sp-consensus-pow = { version = "0.10.0-dev", path = "../../../primitives/consensus/pow" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
 sc-consensus = { version = "0.10.0-dev", path = "../../../client/consensus/common" }
-log = "0.4.8"
+log = "0.4.16"
 futures = "0.3.21"
 futures-timer = "3.0.1"
 parking_lot = "0.12.0"
