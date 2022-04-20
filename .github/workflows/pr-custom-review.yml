@@ -33,7 +33,7 @@ jobs:
         # 4. Move it to "Ready for review"; now the workflow is passing (it was
         #    skipped) and "Check reviews" is also passing (it won't be updated
         #    until the workflow is finished)
-        if: github.event.pull_request.draft == false
+        if: github.event.pull_request.draft == true
         run: exit 1
       - name: pr-custom-review
         uses: paritytech/pr-custom-review@v2
