@@ -398,6 +398,8 @@ pub enum Error {
 	Verify,
 	/// Leaf not found in the storage.
 	LeafNotFound,
+	/// Mmr Pallet not included in runtime
+	PalletNotIncluded
 }
 
 impl Error {
