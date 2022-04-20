@@ -24,9 +24,13 @@ use frame_support::{
 	construct_runtime, parameter_types,
 	traits::{ConstU32, ConstU64},
 };
-use sp_core::H256;
+// use sp_core::H256;
+use sp_core::{
+	sr25519::{Public, Signature},
+	H256,
+};
 use sp_runtime::{
-	testing::Header,
+	testing::{Header, TestSignature, UintAuthorityId},
 	traits::{BlakeTwo256, IdentityLookup},
 };
 
@@ -99,6 +103,8 @@ impl Config for Test {
 	type AttributeValueLimit = ConstU32<10_000>;
 	type DefaultSystemConfig = NoDeposit;
 	type ApprovalsLimit = ConstU32<100>;
+	type Signature = Signature; // TestSignature;
+	type PublicKey = Public; // UintAuthorityId;
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {

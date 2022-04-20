@@ -102,4 +102,27 @@ impl<T: Config> Pallet<T> {
 			Ok(())
 		})
 	}
+
+	pub fn do_accept_buy_offer(
+		caller: T::AccountId,
+		collection_id: T::CollectionId,
+		item_id: T::ItemId,
+		config: CollectionConfig,
+		buyer: T::AccountId,
+		receiver: T::AccountId,
+		item_owner: T::AccountId,
+		bid_price: BalanceOf<T>,
+		deadline: Option<T::BlockNumber>,
+	) -> DispatchResult {
+		// dbg!(&buyer);
+		dbg!(&receiver);
+		/*
+		 * Validate:
+		 * 1
+		 * 2
+		 * 3
+		 * 4
+		 */
+		Ok(())
+	}
 }

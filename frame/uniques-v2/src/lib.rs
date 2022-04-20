@@ -28,7 +28,7 @@ mod tests;
 mod mock;
 
 pub use pallet::*;
-use sp_runtime::traits::StaticLookup;
+use sp_runtime::traits::{IdentifyAccount, StaticLookup, Verify};
 pub use types::*;
 
 #[frame_support::pallet]
@@ -89,6 +89,17 @@ pub mod pallet {
 		/// The maximum amount of approvals an item could have.
 		#[pallet::constant]
 		type ApprovalsLimit: Get<u32>;
+
+		/// A Signature can be verified with a specific `PublicKey`.
+		type Signature: Verify<Signer = Self::PublicKey> + Encode + Decode + Member + TypeInfo;
+
+		/// A PublicKey can be converted into an `AccountId`. This is required by the
+		/// `Signature` type.
+		type PublicKey: IdentifyAccount<AccountId = Self::PublicKey>
+			+ Encode
+			+ Decode
+			+ Member
+			+ TypeInfo;
 	}
 
 	pub type MetadataOf<T> = BoundedVec<u8, <T as Config>::MetadataLimit>;
@@ -100,6 +111,16 @@ pub mod pallet {
 	>;
 	pub type AttributeKeyOf<T> = BoundedVec<u8, <T as Config>::AttributeKeyLimit>;
 	pub type AttributeValueOf<T> = BoundedVec<u8, <T as Config>::AttributeValueLimit>;
+
+	pub type SignatureOf<T> = <T as pallet::Config>::Signature;
+	pub type BuyOfferOf<T> = BuyOffer<
+		<T as Config>::CollectionId,
+		<T as Config>::ItemId,
+		BalanceOf<T>,
+		<T as frame_system::Config>::BlockNumber,
+		<T as Config>::PublicKey,
+		<T as frame_system::Config>::AccountId,
+	>;
 
 	/// Maps a unique collection id to it's config.
 	#[pallet::storage]
@@ -363,6 +384,8 @@ pub mod pallet {
 		TransferToSelf,
 		/// User reached the limit of possible approvals per item.
 		MaxApprovalsReached,
+		/// Invalid signature provided.
+		InvalidSignature,
 	}
 
 	// Pallet's callable functions.
@@ -612,6 +635,33 @@ pub mod pallet {
 			let config =
 				CollectionConfigs::<T>::get(collection_id).ok_or(Error::<T>::CollectionNotFound)?;
 			Self::do_buy_item(collection_id, item_id, config, sender, bid_price)?;
+			Ok(())
+		}
+
+		#[pallet::weight(0)]
+		pub fn accept_buy_offer(
+			origin: OriginFor<T>,
+			offer: BuyOfferOf<T>,
+			offer_signature: SignatureOf<T>,
+		) -> DispatchResult {
+			let sender = ensure_signed(origin)?;
+			ensure!(offer.verify(&offer_signature), Error::<T>::InvalidSignature);
+
+			let config = CollectionConfigs::<T>::get(offer.collection_id)
+				.ok_or(Error::<T>::CollectionNotFound)?;
+
+			Self::do_accept_buy_offer(
+				sender,
+				offer.collection_id,
+				offer.item_id,
+				config,
+				offer.signer.into_account(),
+				offer.receiver,
+				offer.item_owner,
+				offer.bid_price,
+				offer.deadline,
+			)?;
+
 			Ok(())
 		}
 	}

@@ -19,6 +19,7 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use enumflags2::bitflags;
 use frame_support::RuntimeDebug;
 use scale_info::TypeInfo;
+use sp_runtime::traits::{IdentifyAccount, Verify};
 
 // Support for up to 64 user-enabled features on a collection.
 #[bitflags]
@@ -102,6 +103,45 @@ pub struct DestroyWitness {
 	/// The total number of attributes for this asset class.
 	#[codec(compact)]
 	pub attributes: u32,
+}
+
+#[derive(Encode, Decode, Default, Copy, Clone, PartialEq, RuntimeDebug, TypeInfo)]
+#[codec(dumb_trait_bound)]
+/// Authorization to buy an item.
+///
+/// This is signed by an off-chain participant too authorize
+/// on-chain item buy operation by a specific on-chain account.
+///
+/// NOTE: The signature is not part of the struct.
+pub struct BuyOffer<CollectionId, ItemId, Balance, BlockNumber, PublicKey, AccountId> {
+	/// Collection id.
+	pub collection_id: CollectionId,
+	/// An item id to buy.
+	pub item_id: ItemId,
+	/// A price the buyer offers.
+	pub bid_price: Balance,
+	/// A block number this is offer is valid until
+	pub deadline: Option<BlockNumber>,
+	/// Item's owner, will be credited with `bid_price`.
+	pub item_owner: AccountId,
+	/// Off-chain buyer to debit.
+	pub signer: PublicKey,
+	/// An account that will receive an item.
+	pub receiver: AccountId,
+}
+
+impl<CollectionId, ItemId, Balance, BlockNumber, PublicKey, AccountId>
+	BuyOffer<CollectionId, ItemId, Balance, BlockNumber, PublicKey, AccountId>
+where
+	BuyOffer<CollectionId, ItemId, Balance, BlockNumber, PublicKey, AccountId>: Encode,
+	PublicKey: IdentifyAccount<AccountId = PublicKey>,
+{
+	/// Returns whether `signature` is a valid signature for this Offer
+	/// and was created by the signer.
+	pub fn verify<Signature: Verify<Signer = PublicKey>>(&self, signature: &Signature) -> bool {
+		let data = Encode::encode(&self);
+		signature.verify(&*data, &self.signer)
+	}
 }
 
 impl<ItemId, Account, Balance> Collection<ItemId, Account, Balance> {

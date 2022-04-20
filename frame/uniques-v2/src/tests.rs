@@ -19,6 +19,7 @@ use crate::{mock::*, *};
 use enumflags2::BitFlags;
 
 use frame_support::{assert_noop, assert_ok, traits::Currency};
+// use sp_runtime::testing::UintAuthorityId;
 
 macro_rules! bvec {
 	($( $x:tt )*) => {
@@ -940,6 +941,41 @@ fn transfer_with_approval_should_works() {
 			),
 			Error::<Test>::AuthorizationExpired
 		);
+	});
+}
+
+#[test]
+fn accept_buy_offer_should_works() {
+	new_test_ext().execute_with(|| {
+		// UintAuthorityId::set_all_keys(vec![1, 2, 3]);
+		let user_1 = 1;
+		let user_2 = 2;
+		let user_3 = 3;
+		let collection_id = 0;
+		let item_id = 1;
+		let bid_price = 5;
+		let initial_balance = 100;
+
+		Balances::make_free_balance_be(&user_2, initial_balance);
+
+		assert_ok!(Uniques::create(
+			Origin::signed(user_1),
+			user_1,
+			DEFAULT_USER_FEATURES,
+			None,
+			None,
+		));
+
+		assert_ok!(Uniques::mint(Origin::signed(user_1), user_1, collection_id, item_id));
+
+		/*let offer = BuyOffer {
+			collection_id,
+			item_id,
+			bid_price,
+			deadline: None,
+			item_owner: user_1,
+
+		}*/
 	});
 }
 
