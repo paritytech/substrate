@@ -408,6 +408,10 @@ impl<T: Config> Delegator<T> {
 		self.active_points().saturating_add(self.unbonding_points())
 	}
 
+	/// Active balance of the delegator.
+	///
+	/// This is derived from the ratio of points in the pool to which the delegator belongs to.
+	/// Might return different values based on the pool state for the same delegator and points.
 	pub(crate) fn active_balance(&self) -> BalanceOf<T> {
 		if let Some(pool) = BondedPool::<T>::get(self.pool_id).defensive() {
 			pool.points_to_balance(self.points)
@@ -683,10 +687,7 @@ impl<T: Config> BondedPool<T> {
 		matches!(self.state, PoolState::Destroying)
 	}
 
-	fn is_destroying_and_only_bonded_delegator(
-		&self,
-		alleged_depositor_points: BalanceOf<T>,
-	) -> bool {
+	fn is_destroying_and_only_depositor(&self, alleged_depositor_points: BalanceOf<T>) -> bool {
 		// NOTE: if we add `&& self.delegator_counter == 1`, then this becomes even more strict and
 		// ensures that there are no unbonding delegators hanging around either.
 		self.is_destroying() && self.points == alleged_depositor_points
@@ -750,7 +751,7 @@ impl<T: Config> BondedPool<T> {
 			// Any delegator who is not the depositor can always unbond themselves
 			(true, false) => (),
 			(_, true) => {
-				if self.is_destroying_and_only_bonded_delegator(target_delegator.active_points()) {
+				if self.is_destroying_and_only_depositor(target_delegator.active_points()) {
 					// if the pool is about to be destroyed, anyone can unbond the depositor, and
 					// they can fully unbond.
 				} else {
@@ -1557,7 +1558,7 @@ pub mod pallet {
 			ensure!(!withdrawn_points.is_empty(), Error::<T>::CannotWithdrawAny);
 
 			// Before calculate the `balance_to_unbond`, with call withdraw unbonded to ensure the
-			// `non_locked_balance` is correct.
+			// `transferrable_balance` is correct.
 			T::StakingInterface::withdraw_unbonded(
 				bonded_pool.bonded_account(),
 				num_slashing_spans,
@@ -2151,7 +2152,7 @@ impl<T: Config> Pallet<T> {
 
 			let depositor = Delegators::<T>::get(&bonded_pool.roles.depositor).unwrap();
 			assert!(
-				bonded_pool.is_destroying_and_only_bonded_delegator(depositor.active_points()) ||
+				bonded_pool.is_destroying_and_only_depositor(depositor.active_points()) ||
 					depositor.active_points() >= MinCreateBond::<T>::get(),
 				"depositor must always have MinCreateBond stake in the pool, except for when the \
 				pool is being destroyed and the depositor is the last member",
