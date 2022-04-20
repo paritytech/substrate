@@ -135,10 +135,7 @@ where
 		.header(BlockId::Hash(best_block_hash()))
 		.map_err(client_err)
 		.and_then(|header| header.ok_or_else(|| Error::Other("Best header missing.".to_string())))
-		.map_err(|e| {
-			log::warn!("Best header error {:?}", e);
-			e
-		})
+		.map_err(|e| log::warn!("Best header error {:?}", e))
 		.ok();
 
 	// NOTE: by the time we set up the stream there might be a new best block and so there is a risk
