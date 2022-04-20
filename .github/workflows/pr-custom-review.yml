@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Skip if pull request is in Draft
-        # `if: github.event.pull_request.draft == false` should be kept here, at
+        # `if: github.event.pull_request.draft == true` should be kept here, at
         # the step level, rather than at the job level. The latter is not
         # recommended because when the PR is moved from "Draft" to "Ready to
         # review" the workflow will immediately be passing (since it was skipped),
