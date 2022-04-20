@@ -86,7 +86,6 @@ impl pallet_balances::Config for Test {
 	type WeightInfo = ();
 }
 parameter_types! {
-	pub const MinVestedTransfer: u64 = 256 * 2;
 	pub static ExistentialDeposit: u64 = 0;
 }
 impl Config for Test {
@@ -94,7 +93,7 @@ impl Config for Test {
 	type Currency = Balances;
 	type Event = Event;
 	const MAX_VESTING_SCHEDULES: u32 = 3;
-	type MinVestedTransfer = MinVestedTransfer;
+	type MinVestedTransfer = ConstU64<{ 256 * 2 }>;
 	type WeightInfo = ();
 }
 
