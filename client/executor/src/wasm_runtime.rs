@@ -307,7 +307,7 @@ where
 
 			sc_executor_wasmi::create_runtime(
 				blob,
-				heap_pages,
+				heap_pages as u32,
 				H::host_functions(),
 				allow_missing_func_imports,
 				None,
