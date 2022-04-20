@@ -86,14 +86,8 @@ pub trait Config {
 		BlockNumber = <Self::System as frame_system::Config>::BlockNumber,
 	>;
 	/// Maximum number of backers allowed per target.
-	///
-	/// This implementation will naively trim some of the backers, without any sorting.
 	type MaxBackersPerWinner: Get<u32>;
-
 	/// Maximum number of supports that can be returned per page.
-	///
-	/// Similarly, if this is less than `DataProvider`'s `desired_targets`, then it will naively
-	/// trim the winners without any sorting.
 	type MaxWinnersPerPage: Get<u32>;
 	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
@@ -106,6 +100,10 @@ pub trait BoundedConfig: Config {
 	type TargetsBound: Get<u32>;
 }
 
+/// If the number of backers per winner is larger than [`MaxBackersPerWinner`], this implementation
+/// will naively trim some of the backers, without any sorting. Similarly, if the
+/// [`MaxWinnersPerPage`] is less than `DataProvider`'s `desired_targets`, then it will naively trim
+/// the winners without any sorting.
 fn elect_with<T: Config>(
 	maybe_max_voters: Option<usize>,
 	maybe_max_targets: Option<usize>,

@@ -603,8 +603,7 @@ frame_election_provider_support::generate_solution_type!(
 parameter_types! {
 	pub MaxNominations: u32 = <NposSolution16 as frame_election_provider_support::NposSolution>::LIMIT as u32;
 	pub MaxElectingVoters: u32 = 10_000;
-	pub MaxBackersPerWinner: u32 = u32::max_value();
-	pub MaxWinnersPerPage: u32 = u32::max_value();
+	pub MaxElectableTargets: u32 = u32::max_value();
 }
 
 /// The numbers configured here could always be more than the the maximum limits of staking pallet
@@ -654,8 +653,9 @@ impl onchain::Config for OnChainSeqPhragmen {
 	>;
 	type DataProvider = <Runtime as pallet_election_provider_multi_phase::Config>::DataProvider;
 	type WeightInfo = frame_election_provider_support::weights::SubstrateWeight<Runtime>;
-	type MaxBackersPerWinner = MaxBackersPerWinner;
-	type MaxWinnersPerPage = MaxWinnersPerPage;
+	// This is being defensive by defending the maximum bound possible.
+	type MaxBackersPerWinner = MaxElectingVoters;
+	type MaxWinnersPerPage = MaxElectableTargets;
 }
 
 impl onchain::BoundedConfig for OnChainSeqPhragmen {
@@ -688,10 +688,11 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type GovernanceFallback = onchain::BoundedExecution<OnChainSeqPhragmen>;
 	type Solver = SequentialPhragmen<AccountId, SolutionAccuracyOf<Self>, OffchainRandomBalancing>;
 	type ForceOrigin = EnsureRootOrHalfCouncil;
-	type MaxElectableTargets = ConstU16<{ u16::MAX }>;
+	type MaxElectableTargets = MaxElectableTargets;
 	type MaxElectingVoters = MaxElectingVoters;
-	type MaxBackersPerWinner = MaxBackersPerWinner;
-	type MaxWinnersPerPage = MaxWinnersPerPage;
+	// This is being defensive by defending the maximum bound possible.
+	type MaxBackersPerWinner = MaxElectingVoters;
+	type MaxWinnersPerPage = MaxElectableTargets;
 	type BenchmarkingConfig = ElectionProviderBenchmarkConfig;
 	type WeightInfo = pallet_election_provider_multi_phase::weights::SubstrateWeight<Self>;
 }
