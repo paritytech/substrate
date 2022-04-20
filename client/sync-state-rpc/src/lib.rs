@@ -172,7 +172,7 @@ where
 	Backend: HeaderBackend<Block> + sc_client_api::AuxStore + 'static,
 {
 	fn system_gen_sync_spec(&self, raw: bool) -> RpcResult<String> {
-		// self.deny_unsafe.check_if_safe()?;
+		self.deny_unsafe.check_if_safe()?;
 
 		let current_sync_state =
 			self.build_sync_state().map_err(|e| JsonRpseeError::to_call_error(e))?;
