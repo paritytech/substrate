@@ -752,7 +752,12 @@ pub struct BuildNetworkParams<'a, TBl: BlockT, TExPool, TImpQu, TCl> {
 	/// An optional warp sync provider.
 	pub warp_sync: Option<Arc<dyn WarpSyncProvider<TBl>>>,
 	/// Mixnet worker access if running.
-	pub mixnet: Option<(sc_mixnet::WorkerSink, sc_mixnet::WorkerStream, Vec<u8>)>,
+	/// TODO type instead of tuple.
+	pub mixnet: Option<(
+		sc_mixnet::WorkerSink,
+		sc_mixnet::WorkerStream,
+		TracingUnboundedSender<sc_network::MixnetCommand>,
+	)>,
 }
 
 /// Build the network service, the network status sinks and an RPC sender.

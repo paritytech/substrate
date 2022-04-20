@@ -73,6 +73,19 @@ impl Service {
 		rx.await.ok().flatten()
 	}
 
+	/// TODO
+	pub fn get_addresses_by_authority_id_callback(
+		&mut self,
+		authority: AuthorityId,
+	) -> Option<oneshot::Receiver<Option<HashSet<Multiaddr>>>> {
+		let (tx, rx) = oneshot::channel();
+
+		self.to_worker
+			.start_send(ServicetoWorkerMsg::GetAddressesByAuthorityId(authority, tx))
+			.ok()?;
+		Some(rx)
+	}
+
 	/// Get the [`AuthorityId`] for the given [`PeerId`] from the local address
 	/// cache.
 	///

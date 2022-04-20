@@ -203,6 +203,7 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 			import_queue,
 			block_announce_validator_builder: None,
 			warp_sync: Some(warp_sync),
+			mixnet: None,
 		})?;
 
 	if config.offchain_worker.enabled {

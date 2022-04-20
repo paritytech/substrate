@@ -59,6 +59,15 @@ pub use crate::request_responses::{
 	IfDisconnected, InboundFailure, OutboundFailure, RequestFailure, RequestId, ResponseFailure,
 };
 use crate::Mixnet;
+use mixnet::{MixPeerId, MixPublicKey};
+use sc_utils::mpsc::TracingUnboundedSender;
+
+/// Command for the mixnet worker.
+pub enum MixnetCommand {
+	AuthorityId(sp_finality_grandpa::AuthorityId, MixPeerId),
+	Connected(MixPeerId, MixPublicKey),
+	Disconnected(MixPeerId),
+}
 
 /// General behaviour of the network. Combines all protocols together.
 #[derive(NetworkBehaviour)]
@@ -75,6 +84,9 @@ pub struct Behaviour<B: BlockT> {
 	bitswap: Toggle<Bitswap<B>>,
 	/// Mixnet handler.
 	mixnet: Toggle<Mixnet>,
+	/// Mixnet command sender if mixnet is enabled.
+	#[behaviour(ignore)]
+	mixnet_command_sender: Option<TracingUnboundedSender<MixnetCommand>>,
 	/// Generic request-reponse protocols.
 	request_responses: request_responses::RequestResponsesBehaviour,
 
@@ -208,7 +220,7 @@ impl<B: BlockT> Behaviour<B> {
 		state_request_protocol_config: request_responses::ProtocolConfig,
 		warp_sync_protocol_config: Option<request_responses::ProtocolConfig>,
 		bitswap: Option<Bitswap<B>>,
-		mixnet: Option<Mixnet>,
+		mixnet: Option<(Mixnet, TracingUnboundedSender<MixnetCommand>)>,
 		light_client_request_protocol_config: request_responses::ProtocolConfig,
 		// All remaining request protocol configs.
 		mut request_response_protocols: Vec<request_responses::ProtocolConfig>,
@@ -230,12 +242,15 @@ impl<B: BlockT> Behaviour<B> {
 		request_response_protocols.push(state_request_protocol_config);
 		request_response_protocols.push(light_client_request_protocol_config);
 
+		let (mixnet, mixnet_command_sender) =
+			if let Some(mixnet) = mixnet { (Some(mixnet.0), Some(mixnet.1)) } else { (None, None) };
 		Ok(Self {
 			substrate,
 			peer_info: peer_info::PeerInfoBehaviour::new(user_agent, local_public_key),
 			discovery: disco_config.finish(),
 			bitswap: bitswap.into(),
 			mixnet: mixnet.into(),
+			mixnet_command_sender,
 			request_responses: request_responses::RequestResponsesBehaviour::new(
 				request_response_protocols.into_iter(),
 				peerset,
@@ -547,12 +562,17 @@ impl<B: BlockT> NetworkBehaviourEventProcess<mixnet::NetworkEvent> for Behaviour
 				self.events
 					.push_back(BehaviourOut::MixnetMessage(message.peer, message.message));
 			},
-			mixnet::NetworkEvent::Connected(peer_id) => {
-				// TODO useless event??
+			mixnet::NetworkEvent::Connected(peer_id, key) => {
 				debug!(target: "mixnet", "Peer connection added to mixnet {:?}", peer_id);
+				self.mixnet_command_sender
+					.as_mut()
+					.map(|sender| sender.start_send(MixnetCommand::Connected(peer_id, key)));
 			},
 			mixnet::NetworkEvent::Disconnected(peer_id) => {
 				debug!(target: "mixnet", "Peer removed from mixnet {:?}", peer_id);
+				self.mixnet_command_sender
+					.as_mut()
+					.map(|sender| sender.start_send(MixnetCommand::Disconnected(peer_id)));
 			},
 		}
 	}

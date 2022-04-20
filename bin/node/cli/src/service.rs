@@ -352,22 +352,14 @@ pub fn new_full_base(
 		Vec::default(),
 	));
 
-	let mut mixnet = None;
+	let mut mixnet_channels = None;
+	let mut mixnet_worker = None;
 	if config.mixnet {
+		let (worker_inner, (worker_in, worker_out, command_sender)) = sc_mixnet::new_channels();
+		mixnet_channels = Some((worker_in, worker_out, command_sender));
 		let local_id = config.network.node_key.clone().into_keypair()?;
-		let (mixnet_worker, worker_in, worker_out, encoded_client_info) =
-			sc_mixnet::MixnetWorker::new(
-				client.clone(),
-				import_setup.1.shared_authority_set().clone(),
-				local_id,
-
-				keystore_container.sync_keystore(),
-			)
-			.ok_or(ServiceError::Other("Cannot start mixnet.".to_string()))?;
-		task_manager
-			.spawn_handle()
-			.spawn("mixnet-worker", Some("mixnet"), mixnet_worker.run());
-		mixnet = Some((worker_in, worker_out, encoded_client_info));
+		let authority_set = import_setup.1.shared_authority_set().clone();
+		mixnet_worker = Some((local_id, authority_set, worker_inner));
 	}
 
 	let (network, system_rpc_tx, mixnet_tx, network_starter) =
@@ -379,7 +371,7 @@ pub fn new_full_base(
 			import_queue,
 			block_announce_validator_builder: None,
 			warp_sync: Some(warp_sync),
-			mixnet,
+			mixnet: mixnet_channels,
 		})?;
 
 	if config.offchain_worker.enabled {
@@ -495,9 +487,12 @@ pub fn new_full_base(
 	}
 
 	// Spawn authority discovery module.
-	if role.is_authority() {
-		let authority_discovery_role =
-			sc_authority_discovery::Role::PublishAndDiscover(keystore_container.keystore());
+	if role.is_authority() || mixnet_worker.is_some() {
+		let authority_discovery_role = if role.is_authority() {
+			sc_authority_discovery::Role::PublishAndDiscover(keystore_container.keystore())
+		} else {
+			sc_authority_discovery::Role::Discover
+		};
 		let dht_event_stream =
 			network.event_stream("authority-discovery", None).filter_map(|e| async move {
 				match e {
@@ -505,7 +500,7 @@ pub fn new_full_base(
 					_ => None,
 				}
 			});
-		let (authority_discovery_worker, _service) =
+		let (authority_discovery_worker, service) =
 			sc_authority_discovery::new_worker_and_service_with_config(
 				sc_authority_discovery::WorkerConfig {
 					publish_non_global_ips: auth_disc_publish_non_global_ips,
@@ -523,6 +518,21 @@ pub fn new_full_base(
 			Some("networking"),
 			authority_discovery_worker.run(),
 		);
+		if let Some((local_id, authority_set, inner_channels)) = mixnet_worker {
+			let mixnet_worker = sc_mixnet::MixnetWorker::new(
+				inner_channels,
+				client.clone(),
+				authority_set,
+				local_id,
+				service,
+				//				keystore_container.sync_keystore(),
+			)
+			.ok_or(ServiceError::Other("Cannot start mixnet.".to_string()))?;
+
+			task_manager
+				.spawn_handle()
+				.spawn("mixnet-worker", Some("mixnet"), mixnet_worker.run());
+		}
 	}
 
 	// if the node isn't actively participating in consensus then it doesn't

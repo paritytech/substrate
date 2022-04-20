@@ -8859,6 +8859,7 @@ dependencies = [
  "mixnet",
  "parity-scale-codec",
  "rand 0.7.3",
+ "sc-authority-discovery",
  "sc-client-api",
  "sc-finality-grandpa",
  "sc-network",

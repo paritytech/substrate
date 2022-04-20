@@ -265,6 +265,7 @@ pub mod state_request_handler;
 pub mod transactions;
 pub mod warp_request_handler;
 
+pub use behaviour::MixnetCommand;
 #[doc(inline)]
 pub use libp2p::{multiaddr, Multiaddr, PeerId};
 pub use protocol::{

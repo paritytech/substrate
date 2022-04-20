@@ -45,6 +45,7 @@ use libp2p::{
 };
 use prometheus_endpoint::Registry;
 use sc_consensus::ImportQueue;
+use sc_utils::mpsc::TracingUnboundedSender;
 use sp_consensus::block_validation::BlockAnnounceValidator;
 use sp_runtime::traits::Block as BlockT;
 use std::{
@@ -136,7 +137,11 @@ pub struct Params<B: BlockT, H: ExHashT> {
 	pub warp_sync: Option<(Arc<dyn WarpSyncProvider<B>>, RequestResponseConfig)>,
 
 	/// Mixnet worker access if running.
-	pub mixnet: Option<(mixnet::WorkerSink, mixnet::WorkerStream, Vec<u8>)>,
+	pub mixnet: Option<(
+		mixnet::WorkerSink,
+		mixnet::WorkerStream,
+		TracingUnboundedSender<crate::MixnetCommand>,
+	)>,
 }
 
 /// Role of the local node.
