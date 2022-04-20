@@ -136,14 +136,14 @@ struct InstanceSnapshotData {
 pub struct WasmtimeRuntime {
 	engine: wasmtime::Engine,
 	instance_pre: Arc<wasmtime::InstancePre<StoreData>>,
-	instantiation_strategy: InstantiationStrategyWithData,
+	instantiation_strategy: InternalInstantiationStrategy,
 	config: Config,
 }
 
 impl WasmModule for WasmtimeRuntime {
 	fn new_instance(&self) -> Result<Box<dyn WasmInstance>> {
 		let strategy = match self.instantiation_strategy {
-			InstantiationStrategyWithData::LegacyInstanceReuse(ref snapshot_data) => {
+			InternalInstantiationStrategy::LegacyInstanceReuse(ref snapshot_data) => {
 				let mut instance_wrapper = InstanceWrapper::new(
 					&self.engine,
 					&self.instance_pre,
@@ -167,7 +167,7 @@ impl WasmModule for WasmtimeRuntime {
 					heap_base,
 				}
 			},
-			InstantiationStrategyWithData::Native => Strategy::RecreateInstance(InstanceCreator {
+			InternalInstantiationStrategy::Builtin => Strategy::RecreateInstance(InstanceCreator {
 				engine: self.engine.clone(),
 				instance_pre: self.instance_pre.clone(),
 				max_memory_size: self.config.max_memory_size,
@@ -416,7 +416,7 @@ pub struct DeterministicStackLimit {
 
 /// The instantiation strategy to use for the WASM executor.
 ///
-/// All of the CoW strategies (with `CopyOnWrite` suffix) are only supported when:
+/// All of the CoW strategies (with `CopyOnWrite` suffix) are only supported when either:
 ///   a) we're running on Linux,
 ///   b) we're running on an Unix-like system and we're precompiling
 ///      our module beforehand.
@@ -447,9 +447,9 @@ pub enum InstantiationStrategy {
 	LegacyInstanceReuse,
 }
 
-enum InstantiationStrategyWithData {
+enum InternalInstantiationStrategy {
 	LegacyInstanceReuse(InstanceSnapshotData),
-	Native,
+	Builtin,
 }
 
 pub struct Semantics {
@@ -550,14 +550,19 @@ where
 	unsafe { do_create_runtime::<H>(CodeSupplyMode::Fresh(blob), config) }
 }
 
-/// The same as [`create_runtime`] but takes a precompiled artifact, which makes this function
-/// considerably faster than [`create_runtime`].
+/// The same as [`create_runtime`] but takes a path to a precompiled artifact,
+/// which makes this function considerably faster than [`create_runtime`].
 ///
 /// # Safety
 ///
-/// The caller must ensure that the compiled artifact passed here was produced by
-/// [`prepare_runtime_artifact`]. Otherwise, there is a risk of arbitrary code execution with all
-/// implications.
+/// The caller must ensure that the compiled artifact passed here was:
+///   1) produced by [`prepare_runtime_artifact`],
+///   2) written to the disk as a file,
+///   3) was not modified,
+///   4) will not be modified while any runtime using this artifact is alive, or is being
+///      instantiated.
+///
+/// Failure to adhere to these requirements might lead to crashes and arbitrary code execution.
 ///
 /// It is ok though if the compiled artifact was created by code of another version or with
 /// different configuration flags. In such case the caller will receive an `Err` deterministically.
@@ -614,7 +619,7 @@ where
 
 					(
 						module,
-						InstantiationStrategyWithData::LegacyInstanceReuse(InstanceSnapshotData {
+						InternalInstantiationStrategy::LegacyInstanceReuse(InstanceSnapshotData {
 							data_segments_snapshot,
 							mutable_globals,
 						}),
@@ -624,7 +629,7 @@ where
 				InstantiationStrategy::PoolingCopyOnWrite |
 				InstantiationStrategy::RecreateInstance |
 				InstantiationStrategy::RecreateInstanceCopyOnWrite =>
-					(module, InstantiationStrategyWithData::Native),
+					(module, InternalInstantiationStrategy::Builtin),
 			}
 		},
 		CodeSupplyMode::Precompiled(compiled_artifact_path) => {
@@ -636,10 +641,12 @@ where
 
 			// SAFETY: The unsafety of `deserialize_file` is covered by this function. The
 			//         responsibilities to maintain the invariants are passed to the caller.
+			//
+			//         See [`create_runtime_from_artifact`] for more details.
 			let module = wasmtime::Module::deserialize_file(&engine, compiled_artifact_path)
 				.map_err(|e| WasmError::Other(format!("cannot deserialize module: {}", e)))?;
 
-			(module, InstantiationStrategyWithData::Native)
+			(module, InternalInstantiationStrategy::Builtin)
 		},
 	};
 
@@ -667,8 +674,10 @@ fn prepare_blob_for_compilation(
 		blob = blob.inject_stack_depth_metering(logical_max)?;
 	}
 
-	// If enabled, this should happen after all other passes that may introduce global variables.
 	if let InstantiationStrategy::LegacyInstanceReuse = semantics.instantiation_strategy {
+		// When this strategy is used this must be called after all other passes which may introduce
+		// new global variables, otherwise they will not be reset when we call into the runtime
+		// again.
 		blob.expose_mutable_globals();
 	}
 
