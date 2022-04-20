@@ -277,7 +277,8 @@ mod waiting {
 	impl Drop for HttpServer {
 		fn drop(&mut self) {
 			if let Some(server) = self.0.take() {
-				let _ = server.stop().map(|stop| futures::executor::block_on(stop));
+				// This doesn't not wait for the server to be stopped but fires the signal.
+				let _ = server.stop();
 			}
 		}
 	}
@@ -287,7 +288,8 @@ mod waiting {
 	impl Drop for WsServer {
 		fn drop(&mut self) {
 			if let Some(server) = self.0.take() {
-				let _ = server.stop().map(|stop| futures::executor::block_on(stop));
+				// This doesn't not wait for the server to be stopped but fires the signal.
+				let _ = server.stop();
 			}
 		}
 	}
