@@ -231,8 +231,8 @@
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_election_provider_support::{
-	BoundedSupports, BoundedSupportsOf, ElectionDataProvider, ElectionProvider,
-	InstantElectionProvider, NposSolution, TryIntoBoundedSupports,
+	BoundedSupportsOf, ElectionDataProvider, ElectionProvider, InstantElectionProvider,
+	NposSolution, TryIntoBoundedSupports,
 };
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
@@ -966,7 +966,7 @@ pub mod pallet {
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
 		pub fn set_emergency_election_result(
 			origin: OriginFor<T>,
-			supports: BoundedSupports<T::AccountId, T::MaxWinnersPerPage, T::MaxBackersPerWinner>,
+			supports: BoundedSupportsOf<Pallet<T>>,
 		) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
 			ensure!(Self::current_phase().is_emergency(), <Error<T>>::CallNotAllowed);
@@ -1546,10 +1546,7 @@ impl<T: Config> Pallet<T> {
 		Self::kill_snapshot();
 	}
 
-	fn do_elect() -> Result<
-		BoundedSupports<T::AccountId, T::MaxWinnersPerPage, T::MaxBackersPerWinner>,
-		ElectionError<T>,
-	> {
+	fn do_elect() -> Result<BoundedSupportsOf<Self>, ElectionError<T>> {
 		// We have to unconditionally try finalizing the signed phase here. There are only two
 		// possibilities:
 		//
