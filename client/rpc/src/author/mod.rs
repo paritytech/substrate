@@ -26,7 +26,7 @@ use std::sync::Arc;
 use crate::SubscriptionTaskExecutor;
 
 use codec::{Decode, Encode};
-use futures::{task::Spawn, FutureExt};
+use futures::FutureExt;
 use jsonrpsee::{
 	core::{async_trait, Error as JsonRpseeError, RpcResult},
 	SubscriptionSink,
@@ -204,7 +204,7 @@ where
 		.boxed();
 
 		self.executor
-			.spawn_obj(fut.into())
-			.map_err(|e| JsonRpseeError::to_call_error(e))
+			.spawn("substrate-rpc-subscription", Some("rpc"), fut.map(drop).boxed());
+		Ok(())
 	}
 }

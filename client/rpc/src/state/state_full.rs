@@ -27,7 +27,7 @@ use super::{
 };
 use crate::SubscriptionTaskExecutor;
 
-use futures::{future, stream, task::Spawn, FutureExt, StreamExt};
+use futures::{future, stream, FutureExt, StreamExt};
 use jsonrpsee::SubscriptionSink;
 use sc_client_api::{
 	Backend, BlockBackend, BlockchainEvents, CallExecutor, ExecutorProvider, ProofProvider,
@@ -399,7 +399,9 @@ where
 		let stream = futures::stream::once(future::ready(initial)).chain(version_stream);
 		let fut = sink.pipe_from_stream(stream).map(|_| ()).boxed();
 
-		self.executor.spawn_obj(fut.into()).map_err(|e| Error::Client(Box::new(e)))
+		self.executor
+			.spawn("substrate-rpc-subscription", Some("rpc"), fut.map(drop).boxed());
+		Ok(())
 	}
 
 	fn subscribe_storage(
@@ -443,7 +445,9 @@ where
 			.filter(|storage| future::ready(!storage.changes.is_empty()));
 
 		let fut = sink.pipe_from_stream(stream).map(|_| ()).boxed();
-		self.executor.spawn_obj(fut.into()).map_err(|e| Error::Client(Box::new(e)))
+		self.executor
+			.spawn("substrate-rpc-subscription", Some("rpc"), fut.map(drop).boxed());
+		Ok(())
 	}
 
 	async fn trace_block(

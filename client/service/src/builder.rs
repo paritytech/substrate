@@ -614,9 +614,9 @@ where
 		properties: config.chain_spec.properties(),
 		chain_type: config.chain_spec.chain_type(),
 	};
-	let task_executor = SubscriptionTaskExecutor::new(spawn_handle);
 
 	let mut rpc_api = RpcModule::new(());
+	let task_executor = Arc::new(spawn_handle);
 
 	let (chain, state, child_state) = {
 		let chain = sc_rpc::chain::new_full(client.clone(), task_executor.clone()).into_rpc();

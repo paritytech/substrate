@@ -17,7 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use super::*;
-use crate::testing::timeout_secs;
+use crate::testing::{test_executor, timeout_secs};
 use assert_matches::assert_matches;
 use jsonrpsee::{core::error::SubscriptionClosed, types::EmptyParams};
 use sc_block_builder::BlockBuilderProvider;
@@ -31,7 +31,7 @@ use substrate_test_runtime_client::{
 #[tokio::test]
 async fn should_return_header() {
 	let client = Arc::new(substrate_test_runtime_client::new());
-	let api = new_full(client.clone(), SubscriptionTaskExecutor::default()).into_rpc();
+	let api = new_full(client.clone(), test_executor()).into_rpc();
 
 	let res: Header =
 		api.call("chain_getHeader", [H256::from(client.genesis_hash())]).await.unwrap();
@@ -73,7 +73,7 @@ async fn should_return_header() {
 #[tokio::test]
 async fn should_return_a_block() {
 	let mut client = Arc::new(substrate_test_runtime_client::new());
-	let api = new_full(client.clone(), SubscriptionTaskExecutor::default()).into_rpc();
+	let api = new_full(client.clone(), test_executor()).into_rpc();
 
 	let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
 	let block_hash = block.hash();
@@ -131,7 +131,7 @@ async fn should_return_a_block() {
 #[tokio::test]
 async fn should_return_block_hash() {
 	let mut client = Arc::new(substrate_test_runtime_client::new());
-	let api = new_full(client.clone(), SubscriptionTaskExecutor::default()).into_rpc();
+	let api = new_full(client.clone(), test_executor()).into_rpc();
 
 	let res: ListOrValue<Option<H256>> =
 		api.call("chain_getBlockHash", EmptyParams::new()).await.unwrap();
@@ -191,7 +191,7 @@ async fn should_return_block_hash() {
 #[tokio::test]
 async fn should_return_finalized_hash() {
 	let mut client = Arc::new(substrate_test_runtime_client::new());
-	let api = new_full(client.clone(), SubscriptionTaskExecutor::default()).into_rpc();
+	let api = new_full(client.clone(), test_executor()).into_rpc();
 
 	let res: H256 = api.call("chain_getFinalizedHead", EmptyParams::new()).await.unwrap();
 	assert_eq!(res, client.genesis_hash());
@@ -229,7 +229,7 @@ async fn test_head_subscription(method: &str) {
 	let mut client = Arc::new(substrate_test_runtime_client::new());
 
 	let mut sub = {
-		let api = new_full(client.clone(), SubscriptionTaskExecutor::default()).into_rpc();
+		let api = new_full(client.clone(), test_executor()).into_rpc();
 		let sub = api.subscribe(method, EmptyParams::new()).await.unwrap();
 		let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
 		client.import(BlockOrigin::Own, block).await.unwrap();

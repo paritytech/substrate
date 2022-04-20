@@ -25,7 +25,6 @@ use std::{marker::PhantomData, sync::Arc};
 use futures::{
 	future::{self, FutureExt},
 	stream::{self, Stream, StreamExt},
-	task::Spawn,
 };
 use jsonrpsee::ws_server::SubscriptionSink;
 use sc_client_api::{BlockBackend, BlockchainEvents};
@@ -149,5 +148,6 @@ where
 	let stream = stream::iter(maybe_header).chain(stream());
 	let fut = sink.pipe_from_stream(stream).map(|_| ()).boxed();
 
-	executor.spawn_obj(fut.into()).map_err(|e| Error::Client(Box::new(e)))
+	executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.map(drop).boxed());
+	Ok(())
 }
