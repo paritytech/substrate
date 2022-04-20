@@ -77,10 +77,6 @@ impl frame_system::Config for Test {
 	type MaxConsumers = ConstU32<16>;
 }
 
-parameter_types! {
-	pub const ExistentialDeposit: u64 = 1;
-}
-
 impl pallet_balances::Config for Test {
 	type MaxLocks = ();
 	type MaxReserves = ();
@@ -88,25 +84,19 @@ impl pallet_balances::Config for Test {
 	type Balance = u128;
 	type DustRemoval = ();
 	type Event = Event;
-	type ExistentialDeposit = ExistentialDeposit;
+	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
-}
-
-parameter_types! {
-	pub const ConfigDepositBase: u64 = 10;
-	pub const FriendDepositFactor: u64 = 1;
-	pub const RecoveryDeposit: u64 = 10;
 }
 
 impl Config for Test {
 	type Event = Event;
 	type Call = Call;
 	type Currency = Balances;
-	type ConfigDepositBase = ConfigDepositBase;
-	type FriendDepositFactor = FriendDepositFactor;
+	type ConfigDepositBase = ConstU64<10>;
+	type FriendDepositFactor = ConstU64<1>;
 	type MaxFriends = ConstU32<3>;
-	type RecoveryDeposit = RecoveryDeposit;
+	type RecoveryDeposit = ConstU64<10>;
 }
 
 pub type BalancesCall = pallet_balances::Call<Test>;
