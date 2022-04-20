@@ -20,6 +20,7 @@ use enumflags2::bitflags;
 use frame_support::RuntimeDebug;
 use scale_info::TypeInfo;
 use sp_runtime::traits::{IdentifyAccount, Verify};
+use sp_runtime::{MultiSignature, MultiSigner};
 
 // Support for up to 64 user-enabled features on a collection.
 #[bitflags]
@@ -105,15 +106,15 @@ pub struct DestroyWitness {
 	pub attributes: u32,
 }
 
-#[derive(Encode, Decode, Default, Copy, Clone, PartialEq, RuntimeDebug, TypeInfo)]
-#[codec(dumb_trait_bound)]
 /// Authorization to buy an item.
 ///
 /// This is signed by an off-chain participant too authorize
 /// on-chain item buy operation by a specific on-chain account.
 ///
 /// NOTE: The signature is not part of the struct.
-pub struct BuyOffer<CollectionId, ItemId, Balance, BlockNumber, PublicKey, AccountId> {
+#[derive(Encode, Decode, Clone, PartialEq, RuntimeDebug, TypeInfo)]
+#[codec(dumb_trait_bound)]
+pub struct BuyOffer<CollectionId, ItemId, Balance, BlockNumber, AccountId> {
 	/// Collection id.
 	pub collection_id: CollectionId,
 	/// An item id to buy.
@@ -125,22 +126,21 @@ pub struct BuyOffer<CollectionId, ItemId, Balance, BlockNumber, PublicKey, Accou
 	/// Item's owner, will be credited with `bid_price`.
 	pub item_owner: AccountId,
 	/// Off-chain buyer to debit.
-	pub signer: PublicKey,
+	pub signer: MultiSigner,
 	/// An account that will receive an item.
 	pub receiver: AccountId,
 }
 
-impl<CollectionId, ItemId, Balance, BlockNumber, PublicKey, AccountId>
-	BuyOffer<CollectionId, ItemId, Balance, BlockNumber, PublicKey, AccountId>
+impl<CollectionId, ItemId, Balance, BlockNumber, AccountId>
+	BuyOffer<CollectionId, ItemId, Balance, BlockNumber, AccountId>
 where
-	BuyOffer<CollectionId, ItemId, Balance, BlockNumber, PublicKey, AccountId>: Encode,
-	PublicKey: IdentifyAccount<AccountId = PublicKey>,
+	BuyOffer<CollectionId, ItemId, Balance, BlockNumber, AccountId>: Encode,
 {
 	/// Returns whether `signature` is a valid signature for this Offer
 	/// and was created by the signer.
-	pub fn verify<Signature: Verify<Signer = PublicKey>>(&self, signature: &Signature) -> bool {
+	pub fn verify(&self, signature: &MultiSignature) -> bool {
 		let data = Encode::encode(&self);
-		signature.verify(&*data, &self.signer)
+		signature.verify(&*data, &self.signer.clone().into_account())
 	}
 }
 

@@ -39,7 +39,9 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 
 	use frame_support::traits::{Currency, ReservableCurrency};
+	use sp_core::crypto::AccountId32;
 	use sp_runtime::traits::{CheckedAdd, One};
+	use sp_runtime::{MultiSignature, MultiSigner};
 
 	// The struct on which we build all of our Pallet logic.
 	#[pallet::pallet]
@@ -89,17 +91,6 @@ pub mod pallet {
 		/// The maximum amount of approvals an item could have.
 		#[pallet::constant]
 		type ApprovalsLimit: Get<u32>;
-
-		/// A Signature can be verified with a specific `PublicKey`.
-		type Signature: Verify<Signer = Self::PublicKey> + Encode + Decode + Member + TypeInfo;
-
-		/// A PublicKey can be converted into an `AccountId`. This is required by the
-		/// `Signature` type.
-		type PublicKey: IdentifyAccount<AccountId = Self::PublicKey>
-			+ Encode
-			+ Decode
-			+ Member
-			+ TypeInfo;
 	}
 
 	pub type MetadataOf<T> = BoundedVec<u8, <T as Config>::MetadataLimit>;
@@ -112,13 +103,11 @@ pub mod pallet {
 	pub type AttributeKeyOf<T> = BoundedVec<u8, <T as Config>::AttributeKeyLimit>;
 	pub type AttributeValueOf<T> = BoundedVec<u8, <T as Config>::AttributeValueLimit>;
 
-	pub type SignatureOf<T> = <T as pallet::Config>::Signature;
 	pub type BuyOfferOf<T> = BuyOffer<
 		<T as Config>::CollectionId,
 		<T as Config>::ItemId,
 		BalanceOf<T>,
 		<T as frame_system::Config>::BlockNumber,
-		<T as Config>::PublicKey,
 		<T as frame_system::Config>::AccountId,
 	>;
 
@@ -642,7 +631,7 @@ pub mod pallet {
 		pub fn accept_buy_offer(
 			origin: OriginFor<T>,
 			offer: BuyOfferOf<T>,
-			offer_signature: SignatureOf<T>,
+			offer_signature: MultiSignature,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			ensure!(offer.verify(&offer_signature), Error::<T>::InvalidSignature);
@@ -650,12 +639,16 @@ pub mod pallet {
 			let config = CollectionConfigs::<T>::get(offer.collection_id)
 				.ok_or(Error::<T>::CollectionNotFound)?;
 
+			let signer = offer.signer.into_account();
+			let buyer = T::AccountId::decode(&mut AccountId32::as_ref(&signer))
+				.expect("32 bytes can always construct an AccountId32");
+
 			Self::do_accept_buy_offer(
 				sender,
 				offer.collection_id,
 				offer.item_id,
 				config,
-				offer.signer.into_account(),
+				buyer,
 				offer.receiver,
 				offer.item_owner,
 				offer.bid_price,

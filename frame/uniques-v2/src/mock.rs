@@ -103,8 +103,8 @@ impl Config for Test {
 	type AttributeValueLimit = ConstU32<10_000>;
 	type DefaultSystemConfig = NoDeposit;
 	type ApprovalsLimit = ConstU32<100>;
-	type Signature = Signature; // TestSignature;
-	type PublicKey = Public; // UintAuthorityId;
+	// type Signature = Signature; // TestSignature;
+	// type PublicKey = Public; // UintAuthorityId;
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
