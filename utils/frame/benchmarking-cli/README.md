@@ -1,16 +1,16 @@
-# The Benchmarking Commands
+# The Benchmarking CLI
 
 This crate contains commands to benchmark various aspects of Substrate and the hardware.  
 All commands are exposed by the Substrate node but can be exposed by any Substrate client.  
-The goal is to have a comprehensive suite of benchmarks that cover all aspects of Substrate and the hardware that its run on.
+The goal is to have a comprehensive suite of benchmarks that cover all aspects of Substrate and the hardware that its running on.
 
-Invoking the root benchmark command just prints a help menu. Try it:  
+Invoking the root benchmark command just prints a help menu.  
 ```sh
 cargo run --profile=production -- benchmark
 ```
 All examples use the `production` profile for correctness.  
-The compile speed is *very* slow; you can use `--release` when debugging.  
-Just for the final results you should use `production` for additional performance.
+The compile speed is *very* slow; you can use `--release` when just trying it out.  
+For the final results you should use `production` and the reference hardware, otherwise the results are not comparable.
 
 Output:  
 ```pre
@@ -31,7 +31,7 @@ SUBCOMMANDS:
     storage     Benchmark the storage speed of a chain snapshot
 ```
 
-All commands are explained in-depth in their respective folder:  
+All sub-commands are explained in-depth in their respective folder:  
 - [pallet] Creates weight files for a Pallet
 - [machine] Gauges the speed of the hardware
 - [storage] Creates weight files for *Read* and *Write* storage operations

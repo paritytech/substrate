@@ -53,7 +53,7 @@ This will overwrite the the [block_weights.rs](https://github.com/paritytech/pol
 You can try the same for *Rococo* and to see that the results slightly differ.  
 👉 It is paramount to use `--profile=production`, `--execution=wasm` and `--wasm-execution=compiled` as the results are otherwise useless.
 
-## Interpretation
+## Output Interpretation
 
 Lower is better. The less weight (=time) the execution overhead takes, the better.  
 Since the weights of the overhead is charged per extrinsic and per block, a larger weight results in less extrinsics per block.  
