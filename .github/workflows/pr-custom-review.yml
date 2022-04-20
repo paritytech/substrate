@@ -12,6 +12,7 @@ on:
       - review_requested
       - review_request_removed
       - ready_for_review
+      - converted_to_draft
   pull_request_review:
 
 jobs:
