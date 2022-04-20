@@ -49,15 +49,14 @@ fn count_migrate<'a, H: Hasher>(
 	for node in iter_node {
 		let node = node.map_err(|e| format!("TrieDB node iterator error: {}", e))?;
 		match node.2.node_plan() {
-			NodePlan::Leaf { value, .. } | NodePlan::NibbledBranch { value: Some(value), .. } => {
+			NodePlan::Leaf { value, .. } | NodePlan::NibbledBranch { value: Some(value), .. } =>
 				if let ValuePlan::Inline(range) = value {
-					if (range.end - range.start) as u32
-						>= sp_core::storage::TRIE_VALUE_NODE_THRESHOLD
+					if (range.end - range.start) as u32 >=
+						sp_core::storage::TRIE_VALUE_NODE_THRESHOLD
 					{
 						nb += 1;
 					}
-				}
-			},
+				},
 			_ => (),
 		}
 	}
@@ -74,7 +73,7 @@ where
 	let trie_backend = if let Some(backend) = backend.as_trie_backend() {
 		backend
 	} else {
-		return Err("No access to trie from backend.".to_string());
+		return Err("No access to trie from backend.".to_string())
 	};
 	let essence = trie_backend.essence();
 	let (nb_to_migrate, trie) = count_migrate(essence, &essence.root())?;

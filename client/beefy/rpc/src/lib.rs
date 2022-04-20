@@ -208,7 +208,7 @@ mod tests {
 			if response != not_ready {
 				assert_eq!(response, expected);
 				// Success
-				return;
+				return
 			}
 			std::thread::sleep(std::time::Duration::from_millis(50))
 		}

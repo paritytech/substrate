@@ -23,7 +23,7 @@ use codec::{Codec, Decode};
 use jsonrpsee::{
 	core::{async_trait, Error as JsonRpseeError, RpcResult},
 	proc_macros::rpc,
-	types::error::{CallError, ErrorObject, ErrorCode},
+	types::error::{CallError, ErrorCode, ErrorObject},
 };
 use pallet_transaction_payment_rpc_runtime_api::{FeeDetails, InclusionFee, RuntimeDispatchInfo};
 use sp_api::ProvideRuntimeApi;

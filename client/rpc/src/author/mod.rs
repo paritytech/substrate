@@ -26,7 +26,7 @@ use std::sync::Arc;
 use crate::SubscriptionTaskExecutor;
 
 use codec::{Decode, Encode};
-use futures::FutureExt;
+use futures::{FutureExt, TryFutureExt};
 use jsonrpsee::{
 	core::{async_trait, Error as JsonRpseeError, RpcResult},
 	PendingSubscription,
@@ -177,37 +177,38 @@ where
 
 	fn watch_extrinsic(&self, pending: PendingSubscription, xt: Bytes) {
 		let best_block_hash = self.client.info().best_hash;
-		let dxt = match TransactionFor::<P>::decode(&mut &xt[..]) {
+		let dxt = match TransactionFor::<P>::decode(&mut &xt[..]).map_err(|e| Error::from(e)) {
 			Ok(dxt) => dxt,
 			Err(e) => {
-				log::debug!("[author_watchExtrinsic] failed to decode extrinsic: {:?}", e);
-				let err = JsonRpseeError::to_call_error(e);
-				pending.reject(err);
-				return;
+				pending.reject(JsonRpseeError::from(e));
+				return
 			},
 		};
 
-		let pool = self.pool.clone();
+		let submit = self
+			.pool
+			.submit_and_watch(&generic::BlockId::hash(best_block_hash), TX_SOURCE, dxt)
+			.map_err(|e| {
+				e.into_pool_error()
+					.map(error::Error::from)
+					.unwrap_or_else(|e| error::Error::Verification(Box::new(e)).into())
+			});
+
 		let fut = async move {
-			let stream = match pool
-				.submit_and_watch(&generic::BlockId::hash(best_block_hash), TX_SOURCE, dxt)
-				.await
-			{
+			let stream = match submit.await {
 				Ok(stream) => stream,
 				Err(err) => {
-					let _ = pending.reject(JsonRpseeError::to_call_error(err));
-					return;
+					pending.reject(JsonRpseeError::from(err));
+					return
 				},
 			};
 
 			let mut sink = match pending.accept() {
 				Some(sink) => sink,
-				_ => {
-					return;
-				},
+				_ => return,
 			};
 
-			let _ = sink.pipe_from_stream(stream).await;
+			sink.pipe_from_stream(stream).await;
 		}
 		.boxed();
 

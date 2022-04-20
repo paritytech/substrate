@@ -22,7 +22,7 @@ use crate::testing::{test_executor, timeout_secs};
 use assert_matches::assert_matches;
 use codec::Encode;
 use jsonrpsee::{
-	core::{Error as RpcError},
+	core::Error as RpcError,
 	types::{error::CallError, EmptyParams},
 	RpcModule,
 };

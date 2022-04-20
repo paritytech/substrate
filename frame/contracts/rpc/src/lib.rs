@@ -25,7 +25,7 @@ use codec::Codec;
 use jsonrpsee::{
 	core::{async_trait, Error as JsonRpseeError, RpcResult},
 	proc_macros::rpc,
-	types::error::{CallError, ErrorObject, ErrorCode},
+	types::error::{CallError, ErrorCode, ErrorObject},
 };
 use pallet_contracts_primitives::{
 	Code, CodeUploadResult, ContractExecResult, ContractInstantiateResult,
@@ -322,7 +322,7 @@ fn decode_hex<H: std::fmt::Debug + Copy, T: TryFrom<H>>(from: H, name: &str) -> 
 		JsonRpseeError::Call(CallError::Custom(ErrorObject::owned(
 			ErrorCode::InvalidParams.code(),
 			format!("{:?} does not fit into the {} type", from, name),
-			None::<()>
+			None::<()>,
 		)))
 	})
 }
