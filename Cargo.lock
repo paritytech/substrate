@@ -8864,10 +8864,12 @@ dependencies = [
  "sc-finality-grandpa",
  "sc-network",
  "sc-utils",
+ "sp-api",
  "sp-application-crypto",
  "sp-finality-grandpa",
  "sp-keystore",
  "sp-runtime",
+ "sp-session",
 ]
 
 [[package]]

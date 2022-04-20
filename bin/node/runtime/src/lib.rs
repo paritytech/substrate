@@ -1816,6 +1816,25 @@ impl_runtime_apis! {
 		) -> Option<Vec<(Vec<u8>, KeyTypeId)>> {
 			SessionKeys::decode_into_raw_public_keys(&encoded)
 		}
+
+		fn session_index() -> sp_staking::SessionIndex {
+			Session::current_index()
+		}
+
+		fn queued_keys() -> Vec<(Vec<u8>, Vec<sp_core::crypto::CryptoTypePublicPair>)> {
+			let mut keys = Vec::new();
+			for (node_id, key_set) in Session::queued_keys().into_iter() {
+				use sp_core::crypto::Public;
+				let mut node_keys = Vec::new();
+				node_keys.push(key_set.grandpa.to_public_crypto_pair());
+				node_keys.push(key_set.babe.to_public_crypto_pair());
+				node_keys.push(key_set.im_online.to_public_crypto_pair());
+				node_keys.push(key_set.authority_discovery.to_public_crypto_pair());
+				let node_id: &[u8] = node_id.as_ref();
+				keys.push((node_id.to_vec(), node_keys));
+			}
+			Vec::new()
+		}
 	}
 
 	#[cfg(feature = "try-runtime")]

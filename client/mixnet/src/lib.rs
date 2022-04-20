@@ -35,6 +35,7 @@ use futures::{channel::mpsc::SendError, future, FutureExt, Stream, StreamExt};
 use futures::{channel::oneshot, future::OptionFuture};
 use log::{debug, error};
 use sc_client_api::{BlockchainEvents, FinalityNotification, UsageProvider};
+use sp_api::{ApiExt, ProvideRuntimeApi};
 use sc_network::MixnetCommand;
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 pub use sp_finality_grandpa::{AuthorityId, AuthorityList, SetId};
@@ -44,6 +45,7 @@ use std::{
 	pin::Pin,
 	sync::Arc,
 };
+use sp_session::SessionKeys;
 
 // TODO could be a ratio with the number of hop
 // require.
@@ -56,6 +58,7 @@ const UNSYNCH_FINALIZED_MARGIN: u32 = 10;
 /// Mixnet running worker.
 pub struct MixnetWorker<B: BlockT, C> {
 	worker: mixnet::MixnetWorker<AuthorityStar>,
+	// TODO use OnFinalityAction instead and update some shared cache.
 	finality_stream: sc_client_api::FinalityNotifications<B>,
 	shared_authority_set:
 		sc_finality_grandpa::SharedAuthoritySet<<B as BlockT>::Hash, NumberFor<B>>,
@@ -105,7 +108,8 @@ pub fn new_channels(
 impl<B, C> MixnetWorker<B, C>
 where
 	B: BlockT,
-	C: UsageProvider<B> + BlockchainEvents<B>,
+	C: UsageProvider<B> + BlockchainEvents<B> + ProvideRuntimeApi<B>,
+	C::Api: SessionKeys<B>,
 {
 	pub fn new(
 		inner_channels: WorkerChannels,
@@ -182,7 +186,7 @@ where
 			// first finality notification)
 			let authority_set = self.shared_authority_set.current_authority_list();
 			let session = self.shared_authority_set.set_id();
-			self.handle_new_authority(authority_set, session);
+			self.handle_new_authority(authority_set, session, info.finalized_number);
 		}
 		// TODO change in crate to use directly as a future..
 		loop {
@@ -244,7 +248,7 @@ where
 		let new_session = self.shared_authority_set.set_id();
 		if self.session.map(|session| new_session != session).unwrap_or(true) {
 			let authority_set = self.shared_authority_set.current_authority_list();
-			self.handle_new_authority(authority_set, new_session);
+			self.handle_new_authority(authority_set, new_session, *notif.header.number());
 		}
 	}
 
@@ -268,14 +272,15 @@ where
 		}
 	}
 
-	fn handle_new_authority(&mut self, set: AuthorityList, session: SetId) {
+	fn handle_new_authority(&mut self, set: AuthorityList, session: SetId, at: NumberFor<B>) {
 		self.session = Some(session);
 		if let Some(topology) = self.worker.topology_mut() {
-			topology.change_authorities(
+			topology.change_authorities::<B>(
 				set,
 				&mut self.authority_discovery_service,
 				&mut self.authority_replies,
 				&mut self.authority_queries,
+				at,
 			);
 			if topology.as_enough_nodes() {
 				self.state = State::Running
@@ -340,12 +345,13 @@ impl AuthorityStar {
 	}
 	*/
 
-	fn change_authorities(
+	fn change_authorities<B: BlockT>(
 		&mut self,
 		new_set: AuthorityList,
 		authority_discovery_service: &mut sc_authority_discovery::Service,
 		authority_replies: &mut VecDeque<AuthorityRx>,
 		authority_queries: &mut VecDeque<AuthorityId>,
+		at: NumberFor<B>,
 	) {
 		debug!(target: "mixnet", "Change authorities {:?}", new_set);
 		self.current_authorities.clear();
@@ -365,6 +371,8 @@ impl AuthorityStar {
 					self.routing_nodes.insert(node_id.clone());
 				} else {
 					/* TODO auth from session cache
+//		let at = sp_runtime::generic::BlockId::number(0u32.into());
+//		self.client.runtime_api().session_index(&at);
 					if let Some(rx) = authority_discovery_service.get_addresses_by_authority_id_callback(auth) {
 						authority_queries.push_back(rx);
 					}*/
@@ -557,4 +565,8 @@ fn event_filter(event: &Event) -> bool {
 }*/
 
 /// Cache current session key on the chain.
-struct SessionCache {}
+struct SessionCache {
+		//fn session_index() -> sp_staking::SessionIndex {
+		//fn queued_keys() -> Vec<(Vec<u8>, Vec<sp_core::crypto::CryptoTypePublicPair>)> {
+				// node_id: AccountId32
+}
