@@ -23,9 +23,9 @@ use std::{marker::PhantomData, sync::Arc};
 
 use codec::Codec;
 use jsonrpsee::{
-	core::{async_trait, to_json_raw_value, Error as JsonRpseeError, RpcResult},
+	core::{async_trait, Error as JsonRpseeError, RpcResult},
 	proc_macros::rpc,
-	types::error::{CallError, ErrorCode},
+	types::error::{CallError, ErrorCode, ErrorObject},
 };
 use pallet_contracts_primitives::{
 	Code, CodeUploadResult, ContractExecResult, ContractInstantiateResult,
@@ -68,11 +68,11 @@ impl From<ContractAccessError> for JsonRpseeError {
 	fn from(e: ContractAccessError) -> Self {
 		use pallet_contracts_primitives::ContractAccessError::*;
 		match e.0 {
-			DoesntExist => CallError::Custom {
-				code: CONTRACT_DOESNT_EXIST,
-				message: "The specified contract doesn't exist.".into(),
-				data: None,
-			}
+			DoesntExist => CallError::Custom(ErrorObject::owned(
+				CONTRACT_DOESNT_EXIST,
+				"The specified contract doesn't exist.",
+				None::<()>,
+			))
 			.into(),
 		}
 	}
@@ -309,34 +309,34 @@ where
 
 /// Converts a runtime trap into an RPC error.
 fn runtime_error_into_rpc_err(err: impl std::fmt::Debug) -> JsonRpseeError {
-	CallError::Custom {
-		code: RUNTIME_ERROR,
-		message: "Runtime error".into(),
-		data: to_json_raw_value(&format!("{:?}", err)).ok(),
-	}
+	CallError::Custom(ErrorObject::owned(
+		RUNTIME_ERROR,
+		"Runtime error",
+		Some(format!("{:?}", err)),
+	))
 	.into()
 }
 
 fn decode_hex<H: std::fmt::Debug + Copy, T: TryFrom<H>>(from: H, name: &str) -> RpcResult<T> {
 	from.try_into().map_err(|_| {
-		JsonRpseeError::Call(CallError::Custom {
-			code: ErrorCode::InvalidParams.code(),
-			message: format!("{:?} does not fit into the {} type", from, name),
-			data: None,
-		})
+		JsonRpseeError::Call(CallError::Custom(ErrorObject::owned(
+			ErrorCode::InvalidParams.code(),
+			format!("{:?} does not fit into the {} type", from, name),
+			None::<()>,
+		)))
 	})
 }
 
 fn limit_gas(gas_limit: Weight) -> RpcResult<()> {
 	if gas_limit > GAS_LIMIT {
-		Err(JsonRpseeError::Call(CallError::Custom {
-			code: ErrorCode::InvalidParams.code(),
-			message: format!(
+		Err(JsonRpseeError::Call(CallError::Custom(ErrorObject::owned(
+			ErrorCode::InvalidParams.code(),
+			format!(
 				"Requested gas limit is greater than maximum allowed: {} > {}",
 				gas_limit, GAS_LIMIT
 			),
-			data: None,
-		}))
+			None::<()>,
+		))))
 	} else {
 		Ok(())
 	}

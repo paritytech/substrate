@@ -64,6 +64,6 @@ async fn deny_unsafe_works() {
 	assert_matches!(
 		api.call::<_, Option<BlockStats>>("dev_getBlockStats", [client.info().best_hash])
 			.await,
-		Err(JsonRpseeError::Call(CallError::Custom { message, .. })) if message.as_str() == "RPC call is unsafe to be called externally"
+		Err(JsonRpseeError::Call(CallError::Custom(err))) if err.message().contains("RPC call is unsafe to be called externally")
 	);
 }

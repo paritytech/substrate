@@ -44,6 +44,7 @@
 use jsonrpsee::{
 	core::{Error as JsonRpseeError, RpcResult},
 	proc_macros::rpc,
+	types::{error::CallError, ErrorObject},
 };
 use sc_client_api::StorageData;
 use sp_blockchain::HeaderBackend;
@@ -80,7 +81,11 @@ pub enum Error<Block: BlockT> {
 
 impl<Block: BlockT> From<Error<Block>> for JsonRpseeError {
 	fn from(error: Error<Block>) -> Self {
-		JsonRpseeError::to_call_error(error)
+		let message = match error {
+			Error::JsonRpc(s) => s,
+			_ => error.to_string(),
+		};
+		CallError::Custom(ErrorObject::owned(1, message, None::<()>)).into()
 	}
 }
 
@@ -181,8 +186,7 @@ where
 	Backend: HeaderBackend<Block> + sc_client_api::AuxStore + 'static,
 {
 	fn system_gen_sync_spec(&self, raw: bool) -> RpcResult<String> {
-		let current_sync_state =
-			self.build_sync_state().map_err(|e| JsonRpseeError::to_call_error(e))?;
+		let current_sync_state = self.build_sync_state()?;
 		let mut chain_spec = self.chain_spec.cloned_box();
 
 		let extension = sc_chain_spec::get_extension_mut::<LightSyncStateExtension>(

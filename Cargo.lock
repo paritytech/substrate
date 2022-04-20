@@ -238,9 +238,9 @@ dependencies = [
 
 [[package]]
 name = "async-lock"
-version = "2.3.0"
+version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1996609732bde4a9988bc42125f55f2af5f3c36370e27c778d5191a4a1b63bfb"
+checksum = "e97a171d191782fba31bb902b14ad94e24a68145032b7eedf871ab0bc0d077b6"
 dependencies = [
  "event-listener",
 ]
@@ -3161,8 +3161,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee"
 version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "91dc760c341fa81173f9a434931aaf32baad5552b0230cc6c93e8fb7eaad4c19"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#20e6e5de40214e0b88e475d87bf14e465123eaba"
 dependencies = [
  "jsonrpsee-core",
  "jsonrpsee-http-server",
@@ -3175,10 +3174,9 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-client-transport"
 version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "765f7a36d5087f74e3b3b47805c2188fef8eb54afcb587b078d9f8ebfe9c7220"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#20e6e5de40214e0b88e475d87bf14e465123eaba"
 dependencies = [
- "futures",
+ "futures-util",
  "http",
  "jsonrpsee-core",
  "jsonrpsee-types",
@@ -3196,14 +3194,16 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-core"
 version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "82ef77ecd20c2254d54f5da8c0738eacca61e6b6511268a8f2753e3148c6c706"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#20e6e5de40214e0b88e475d87bf14e465123eaba"
 dependencies = [
  "anyhow",
  "arrayvec 0.7.1",
+ "async-channel",
+ "async-lock",
  "async-trait",
  "beef",
  "futures-channel",
+ "futures-timer",
  "futures-util",
  "hyper",
  "jsonrpsee-types",
@@ -3221,8 +3221,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-http-server"
 version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d35477aab03691360d21a77dd475f384474bc138c2051aafa766fe4aed50ac50"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#20e6e5de40214e0b88e475d87bf14e465123eaba"
 dependencies = [
  "futures-channel",
  "futures-util",
@@ -3240,8 +3239,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-proc-macros"
 version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b7291c72805bc7d413b457e50d8ef3e87aa554da65ecbbc278abb7dfc283e7f0"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#20e6e5de40214e0b88e475d87bf14e465123eaba"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
@@ -3252,8 +3250,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-types"
 version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "38b6aa52f322cbf20c762407629b8300f39bcc0cf0619840d9252a2f65fd2dd9"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#20e6e5de40214e0b88e475d87bf14e465123eaba"
 dependencies = [
  "anyhow",
  "beef",
@@ -3266,8 +3263,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-ws-client"
 version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dd66d18bab78d956df24dd0d2e41e4c00afbb818fda94a98264bdd12ce8506ac"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#20e6e5de40214e0b88e475d87bf14e465123eaba"
 dependencies = [
  "jsonrpsee-client-transport",
  "jsonrpsee-core",
@@ -3277,8 +3273,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-ws-server"
 version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a382e22db11cd9a1f04f5a4cc5446f155a3cd20cd1778fc65f30a76aff524120"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#20e6e5de40214e0b88e475d87bf14e465123eaba"
 dependencies = [
  "futures-channel",
  "futures-util",
@@ -11019,9 +11014,9 @@ version = "1.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4ee73e6e4924fe940354b8d4d98cad5231175d615cd855b758adc658c0aac6a0"
 dependencies = [
- "cfg-if 1.0.0",
+ "cfg-if 0.1.10",
  "digest 0.10.3",
- "rand 0.8.4",
+ "rand 0.6.5",
  "static_assertions",
 ]
 

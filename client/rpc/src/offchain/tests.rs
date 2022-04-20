@@ -47,14 +47,14 @@ fn offchain_calls_considered_unsafe() {
 
 	assert_matches!(
 		offchain.set_local_storage(StorageKind::PERSISTENT, key.clone(), value.clone()),
-		Err(JsonRpseeError::Call(CallError::Failed(err))) => {
-			assert_eq!(err.to_string(), "RPC call is unsafe to be called externally")
+		Err(JsonRpseeError::Call(CallError::Custom(err))) => {
+			assert_eq!(err.message(), "RPC call is unsafe to be called externally")
 		}
 	);
 	assert_matches!(
 		offchain.get_local_storage(StorageKind::PERSISTENT, key),
-		Err(JsonRpseeError::Call(CallError::Failed(err))) => {
-			assert_eq!(err.to_string(), "RPC call is unsafe to be called externally")
+		Err(JsonRpseeError::Call(CallError::Custom(err))) => {
+			assert_eq!(err.message(), "RPC call is unsafe to be called externally")
 		}
 	);
 }

@@ -24,7 +24,7 @@ mod tests;
 use futures::channel::oneshot;
 use jsonrpsee::{
 	core::{async_trait, error::Error as JsonRpseeError, JsonValue, RpcResult},
-	types::error::{CallError, ErrorCode},
+	types::error::{CallError, ErrorCode, ErrorObject},
 };
 use sc_rpc_api::DenyUnsafe;
 use sc_tracing::logging;
@@ -144,7 +144,7 @@ impl<B: traits::Block> SystemApiServer<B::Hash, <B::Header as HeaderT>::Number> 
 		let _ = self.send_back.unbounded_send(Request::NetworkAddReservedPeer(peer, tx));
 		match rx.await {
 			Ok(Ok(())) => Ok(()),
-			Ok(Err(e)) => Err(JsonRpseeError::to_call_error(e)),
+			Ok(Err(e)) => Err(JsonRpseeError::from(e)),
 			Err(e) => Err(JsonRpseeError::to_call_error(e)),
 		}
 	}
@@ -155,7 +155,7 @@ impl<B: traits::Block> SystemApiServer<B::Hash, <B::Header as HeaderT>::Number> 
 		let _ = self.send_back.unbounded_send(Request::NetworkRemoveReservedPeer(peer, tx));
 		match rx.await {
 			Ok(Ok(())) => Ok(()),
-			Ok(Err(e)) => Err(JsonRpseeError::to_call_error(e)),
+			Ok(Err(e)) => Err(JsonRpseeError::from(e)),
 			Err(e) => Err(JsonRpseeError::to_call_error(e)),
 		}
 	}
@@ -183,22 +183,22 @@ impl<B: traits::Block> SystemApiServer<B::Hash, <B::Header as HeaderT>::Number> 
 
 		logging::add_directives(&directives);
 		logging::reload_filter().map_err(|e| {
-			JsonRpseeError::Call(CallError::Custom {
-				code: ErrorCode::InternalError.code(),
-				message: e,
-				data: None,
-			})
+			JsonRpseeError::Call(CallError::Custom(ErrorObject::owned(
+				ErrorCode::InternalError.code(),
+				e,
+				None::<()>,
+			)))
 		})
 	}
 
 	fn system_reset_log_filter(&self) -> RpcResult<()> {
 		self.deny_unsafe.check_if_safe()?;
 		logging::reset_log_filter().map_err(|e| {
-			JsonRpseeError::Call(CallError::Custom {
-				code: ErrorCode::InternalError.code(),
-				message: e,
-				data: None,
-			})
+			JsonRpseeError::Call(CallError::Custom(ErrorObject::owned(
+				ErrorCode::InternalError.code(),
+				e,
+				None::<()>,
+			)))
 		})
 	}
 }

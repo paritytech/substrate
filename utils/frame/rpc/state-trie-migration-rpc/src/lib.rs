@@ -18,9 +18,9 @@
 //! Rpc for state migration.
 
 use jsonrpsee::{
-	core::{to_json_raw_value, Error as JsonRpseeError, RpcResult},
+	core::{Error as JsonRpseeError, RpcResult},
 	proc_macros::rpc,
-	types::error::{CallError, ErrorCode},
+	types::error::{CallError, ErrorCode, ErrorObject},
 };
 use sc_rpc_api::DenyUnsafe;
 use serde::{Deserialize, Serialize};
@@ -157,9 +157,9 @@ where
 }
 
 fn error_into_rpc_err(err: impl std::fmt::Display) -> JsonRpseeError {
-	JsonRpseeError::Call(CallError::Custom {
-		code: ErrorCode::InternalError.code(),
-		message: "Error while checking migration state".into(),
-		data: to_json_raw_value(&err.to_string()).ok(),
-	})
+	JsonRpseeError::Call(CallError::Custom(ErrorObject::owned(
+		ErrorCode::InternalError.code(),
+		"Error while checking migration state",
+		Some(err.to_string()),
+	)))
 }

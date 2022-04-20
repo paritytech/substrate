@@ -19,7 +19,7 @@
 use super::*;
 use crate::testing::{test_executor, timeout_secs};
 use assert_matches::assert_matches;
-use jsonrpsee::{core::error::SubscriptionClosed, types::EmptyParams};
+use jsonrpsee::types::EmptyParams;
 use sc_block_builder::BlockBuilderProvider;
 use sp_consensus::BlockOrigin;
 use sp_rpc::list::ListOrValue;
@@ -241,5 +241,5 @@ async fn test_head_subscription(method: &str) {
 	assert_matches!(timeout_secs(10, sub.next::<Header>()).await, Ok(Some(_)));
 
 	sub.close();
-	assert_matches!(timeout_secs(10, sub.next::<SubscriptionClosed>()).await, Ok(Some(_)))
+	assert_matches!(timeout_secs(10, sub.next::<Header>()).await, Ok(None));
 }

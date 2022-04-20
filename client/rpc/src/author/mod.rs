@@ -26,10 +26,10 @@ use std::sync::Arc;
 use crate::SubscriptionTaskExecutor;
 
 use codec::{Decode, Encode};
-use futures::FutureExt;
+use futures::{FutureExt, TryFutureExt};
 use jsonrpsee::{
 	core::{async_trait, Error as JsonRpseeError, RpcResult},
-	SubscriptionSink,
+	PendingSubscription,
 };
 use sc_rpc_api::DenyUnsafe;
 use sc_transaction_pool_api::{
@@ -93,7 +93,7 @@ where
 	async fn submit_extrinsic(&self, ext: Bytes) -> RpcResult<TxHash<P>> {
 		let xt = match Decode::decode(&mut &ext[..]) {
 			Ok(xt) => xt,
-			Err(err) => return Err(JsonRpseeError::to_call_error(err)),
+			Err(err) => return Err(Error::Client(Box::new(err)).into()),
 		};
 		let best_block_hash = self.client.info().best_hash;
 		self.pool
@@ -101,8 +101,9 @@ where
 			.await
 			.map_err(|e| {
 				e.into_pool_error()
-					.map(|e| JsonRpseeError::to_call_error(e))
-					.unwrap_or_else(|e| JsonRpseeError::to_call_error(e))
+					.map(|e| Error::Pool(e))
+					.unwrap_or_else(|e| Error::Verification(Box::new(e)))
+					.into()
 			})
 	}
 
@@ -134,7 +135,7 @@ where
 			.client
 			.runtime_api()
 			.decode_session_keys(&generic::BlockId::Hash(best_block_hash), session_keys.to_vec())
-			.map_err(|e| JsonRpseeError::to_call_error(e))?
+			.map_err(|e| Error::Client(Box::new(e)))?
 			.ok_or_else(|| Error::InvalidSessionKeys)?;
 
 		Ok(SyncCryptoStore::has_keys(&*self.keystore, &keys))
@@ -175,36 +176,44 @@ where
 			.collect())
 	}
 
-	fn watch_extrinsic(&self, mut sink: SubscriptionSink, xt: Bytes) -> RpcResult<()> {
+	fn watch_extrinsic(&self, pending: PendingSubscription, xt: Bytes) {
 		let best_block_hash = self.client.info().best_hash;
-		let dxt = match TransactionFor::<P>::decode(&mut &xt[..]) {
+		let dxt = match TransactionFor::<P>::decode(&mut &xt[..]).map_err(|e| Error::from(e)) {
 			Ok(dxt) => dxt,
 			Err(e) => {
-				log::debug!("[author_watchExtrinsic] failed to decode extrinsic: {:?}", e);
-				let _ = sink.close_with_custom_message(&e.to_string());
-				return Err(JsonRpseeError::to_call_error(e))
+				pending.reject(JsonRpseeError::from(e));
+				return
 			},
 		};
 
-		let pool = self.pool.clone();
+		let submit = self
+			.pool
+			.submit_and_watch(&generic::BlockId::hash(best_block_hash), TX_SOURCE, dxt)
+			.map_err(|e| {
+				e.into_pool_error()
+					.map(error::Error::from)
+					.unwrap_or_else(|e| error::Error::Verification(Box::new(e)).into())
+			});
+
 		let fut = async move {
-			let stream = match pool
-				.submit_and_watch(&generic::BlockId::hash(best_block_hash), TX_SOURCE, dxt)
-				.await
-			{
+			let stream = match submit.await {
 				Ok(stream) => stream,
 				Err(err) => {
-					let _ = sink.close_with_custom_message(&err.to_string());
+					pending.reject(JsonRpseeError::from(err));
 					return
 				},
 			};
 
-			let _ = sink.pipe_from_stream(stream).await;
+			let mut sink = match pending.accept() {
+				Some(sink) => sink,
+				_ => return,
+			};
+
+			sink.pipe_from_stream(stream).await;
 		}
 		.boxed();
 
 		self.executor
 			.spawn("substrate-rpc-subscription", Some("rpc"), fut.map(drop).boxed());
-		Ok(())
 	}
 }

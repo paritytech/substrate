@@ -24,9 +24,9 @@ use log::warn;
 use std::sync::Arc;
 
 use jsonrpsee::{
-	core::{async_trait, Error as JsonRpseeError, RpcResult},
+	core::{async_trait, RpcResult},
 	proc_macros::rpc,
-	SubscriptionSink,
+	PendingSubscription,
 };
 
 mod error;
@@ -57,7 +57,7 @@ pub trait GrandpaApi<Notification, Hash, Number> {
 		unsubscribe = "grandpa_unsubscribeJustifications",
 		item = Notification
 	)]
-	fn subscribe_justifications(&self) -> RpcResult<()>;
+	fn subscribe_justifications(&self);
 
 	/// Prove finality for the given block number by returning the Justification for the last block
 	/// in the set and all the intermediary headers to link them together.
@@ -99,21 +99,25 @@ where
 	ProofProvider: RpcFinalityProofProvider<Block> + Send + Sync + 'static,
 {
 	async fn round_state(&self) -> RpcResult<ReportedRoundStates> {
-		ReportedRoundStates::from(&self.authority_set, &self.voter_state)
-			.map_err(|e| JsonRpseeError::to_call_error(e))
+		ReportedRoundStates::from(&self.authority_set, &self.voter_state).map_err(Into::into)
 	}
 
-	fn subscribe_justifications(&self, sink: SubscriptionSink) -> RpcResult<()> {
+	fn subscribe_justifications(&self, pending: PendingSubscription) {
 		let stream = self.justification_stream.subscribe().map(
 			|x: sc_finality_grandpa::GrandpaJustification<Block>| {
 				JustificationNotification::from(x)
 			},
 		);
 
-		let fut = sink.pipe_from_stream(stream).map(|_| ()).boxed();
+		let fut = async move {
+			if let Some(mut sink) = pending.accept() {
+				sink.pipe_from_stream(stream).await;
+			}
+		}
+		.boxed();
+
 		self.executor
 			.spawn("substrate-rpc-subscription", Some("rpc"), fut.map(drop).boxed());
-		Ok(())
 	}
 
 	async fn prove_finality(
@@ -122,8 +126,11 @@ where
 	) -> RpcResult<Option<EncodedFinalityProof>> {
 		self.finality_proof_provider
 			.rpc_prove_finality(block)
-			.map_err(|finality_err| error::Error::ProveFinalityFailed(finality_err))
-			.map_err(|e| JsonRpseeError::to_call_error(e))
+			.map_err(|e| {
+				warn!("Error proving finality: {}", e);
+				error::Error::ProveFinalityFailed(e)
+			})
+			.map_err(Into::into)
 	}
 }
 
@@ -276,7 +283,7 @@ mod tests {
 	#[tokio::test]
 	async fn uninitialized_rpc_handler() {
 		let (rpc, _) = setup_io_handler(EmptyVoterState);
-		let expected_response = r#"{"jsonrpc":"2.0","error":{"code":-32000,"message":"GRANDPA RPC endpoint not ready"},"id":0}"#.to_string();
+		let expected_response = r#"{"jsonrpc":"2.0","error":{"code":1,"message":"GRANDPA RPC endpoint not ready"},"id":0}"#.to_string();
 		let request = r#"{"jsonrpc":"2.0","method":"grandpa_roundState","params":[],"id":0}"#;
 		let (result, _) = rpc.raw_json_request(&request).await.unwrap();
 

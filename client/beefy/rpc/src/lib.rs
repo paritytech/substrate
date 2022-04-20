@@ -30,7 +30,8 @@ use futures::{task::SpawnError, FutureExt, StreamExt};
 use jsonrpsee::{
 	core::{async_trait, Error as JsonRpseeError, RpcResult},
 	proc_macros::rpc,
-	SubscriptionSink,
+	types::{error::CallError, ErrorObject},
+	PendingSubscription,
 };
 use log::warn;
 
@@ -49,7 +50,36 @@ pub enum Error {
 	RpcTaskFailure(#[from] SpawnError),
 }
 
-/// Provides RPC methods for interacting with BEEFY.
+/// The error codes returned by jsonrpc.
+pub enum ErrorCode {
+	/// Returned when BEEFY RPC endpoint is not ready.
+	NotReady = 1,
+	/// Returned on BEEFY RPC background task failure.
+	TaskFailure = 2,
+}
+
+impl From<Error> for ErrorCode {
+	fn from(error: Error) -> Self {
+		match error {
+			Error::EndpointNotReady => ErrorCode::NotReady,
+			Error::RpcTaskFailure(_) => ErrorCode::TaskFailure,
+		}
+	}
+}
+
+impl From<Error> for JsonRpseeError {
+	fn from(error: Error) -> Self {
+		let message = error.to_string();
+		let code = ErrorCode::from(error);
+		JsonRpseeError::Call(CallError::Custom(ErrorObject::owned(
+			code as i32,
+			message,
+			None::<()>,
+		)))
+	}
+}
+
+// Provides RPC methods for interacting with BEEFY.
 #[rpc(client, server)]
 pub trait BeefyApi<Notification, Hash> {
 	/// Returns the block most recently finalized by BEEFY, alongside side its justification.
@@ -58,7 +88,7 @@ pub trait BeefyApi<Notification, Hash> {
 		unsubscribe = "beefy_unsubscribeJustifications",
 		item = Notification,
 	)]
-	fn subscribe_justifications(&self) -> RpcResult<()>;
+	fn subscribe_justifications(&self);
 
 	/// Returns hash of the latest BEEFY finalized block as seen by this client.
 	///
@@ -106,17 +136,21 @@ impl<Block> BeefyApiServer<notification::EncodedSignedCommitment, Block::Hash>
 where
 	Block: BlockT,
 {
-	fn subscribe_justifications(&self, sink: SubscriptionSink) -> RpcResult<()> {
+	fn subscribe_justifications(&self, pending: PendingSubscription) {
 		let stream = self
 			.signed_commitment_stream
 			.subscribe()
 			.map(|sc| notification::EncodedSignedCommitment::new::<Block>(sc));
 
-		let fut = sink.pipe_from_stream(stream).map(|_| ()).boxed();
+		let fut = async move {
+			if let Some(mut sink) = pending.accept() {
+				sink.pipe_from_stream(stream).await;
+			}
+		}
+		.boxed();
 
 		self.executor
 			.spawn("substrate-rpc-subscription", Some("rpc"), fut.map(drop).boxed());
-		Ok(())
 	}
 
 	async fn latest_finalized(&self) -> RpcResult<Block::Hash> {
@@ -125,7 +159,7 @@ where
 			.as_ref()
 			.cloned()
 			.ok_or(Error::EndpointNotReady)
-			.map_err(|e| JsonRpseeError::to_call_error(e))
+			.map_err(Into::into)
 	}
 }
 
@@ -168,7 +202,7 @@ mod tests {
 	async fn uninitialized_rpc_handler() {
 		let (rpc, _) = setup_io_handler();
 		let request = r#"{"jsonrpc":"2.0","method":"beefy_getFinalizedHead","params":[],"id":1}"#;
-		let expected_response = r#"{"jsonrpc":"2.0","error":{"code":-32000,"message":"BEEFY RPC endpoint not ready"},"id":1}"#.to_string();
+		let expected_response = r#"{"jsonrpc":"2.0","error":{"code":1,"message":"BEEFY RPC endpoint not ready"},"id":1}"#.to_string();
 		let (result, _) = rpc.raw_json_request(&request).await.unwrap();
 
 		assert_eq!(expected_response, result,);
@@ -193,7 +227,7 @@ mod tests {
 		.to_string();
 		let not_ready = "{\
 			\"jsonrpc\":\"2.0\",\
-			\"error\":{\"code\":-32000,\"message\":\"BEEFY RPC endpoint not ready\"},\
+			\"error\":{\"code\":1,\"message\":\"BEEFY RPC endpoint not ready\"},\
 			\"id\":1\
 		}"
 		.to_string();

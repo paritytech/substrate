@@ -23,7 +23,7 @@ use codec::{Codec, Decode};
 use jsonrpsee::{
 	core::{async_trait, Error as JsonRpseeError, RpcResult},
 	proc_macros::rpc,
-	types::error::{CallError, ErrorCode},
+	types::error::{CallError, ErrorCode, ErrorObject},
 };
 use pallet_transaction_payment_rpc_runtime_api::{FeeDetails, InclusionFee, RuntimeDispatchInfo};
 use sp_api::ProvideRuntimeApi;
@@ -64,6 +64,23 @@ impl<C, P> TransactionPaymentRpc<C, P> {
 	}
 }
 
+/// Error type of this RPC api.
+pub enum Error {
+	/// The transaction was not decodable.
+	DecodeError,
+	/// The call to runtime failed.
+	RuntimeError,
+}
+
+impl From<Error> for i32 {
+	fn from(e: Error) -> i32 {
+		match e {
+			Error::RuntimeError => 1,
+			Error::DecodeError => 2,
+		}
+	}
+}
+
 #[async_trait]
 impl<C, Block, Balance>
 	TransactionPaymentApiServer<<Block as BlockT>::Hash, RuntimeDispatchInfo<Balance>>
@@ -84,10 +101,21 @@ where
 
 		let encoded_len = encoded_xt.len() as u32;
 
-		let uxt: Block::Extrinsic = Decode::decode(&mut &*encoded_xt)
-			.map_err(|codec_err| JsonRpseeError::to_call_error(codec_err))?;
-		api.query_info(&at, uxt, encoded_len)
-			.map_err(|api_err| JsonRpseeError::to_call_error(api_err))
+		let uxt: Block::Extrinsic = Decode::decode(&mut &*encoded_xt).map_err(|e| {
+			CallError::Custom(ErrorObject::owned(
+				Error::DecodeError.into(),
+				"Unable to query dispatch info.",
+				Some(format!("{:?}", e)),
+			))
+		})?;
+		api.query_info(&at, uxt, encoded_len).map_err(|e| {
+			CallError::Custom(ErrorObject::owned(
+				Error::RuntimeError.into(),
+				"Unable to query dispatch info.",
+				Some(e.to_string()),
+			))
+			.into()
+		})
 	}
 
 	fn query_fee_details(
@@ -100,19 +128,28 @@ where
 
 		let encoded_len = encoded_xt.len() as u32;
 
-		let uxt: Block::Extrinsic = Decode::decode(&mut &*encoded_xt)
-			.map_err(|codec_err| JsonRpseeError::to_call_error(codec_err))?;
-		let fee_details = api
-			.query_fee_details(&at, uxt, encoded_len)
-			.map_err(|api_err| JsonRpseeError::to_call_error(api_err))?;
+		let uxt: Block::Extrinsic = Decode::decode(&mut &*encoded_xt).map_err(|e| {
+			CallError::Custom(ErrorObject::owned(
+				Error::DecodeError.into(),
+				"Unable to query fee details.",
+				Some(format!("{:?}", e)),
+			))
+		})?;
+		let fee_details = api.query_fee_details(&at, uxt, encoded_len).map_err(|e| {
+			CallError::Custom(ErrorObject::owned(
+				Error::RuntimeError.into(),
+				"Unable to query fee details.",
+				Some(e.to_string()),
+			))
+		})?;
 
 		let try_into_rpc_balance = |value: Balance| {
 			value.try_into().map_err(|_| {
-				JsonRpseeError::Call(CallError::Custom {
-					code: ErrorCode::InvalidParams.code(),
-					message: format!("{} doesn't fit in NumberOrHex representation", value),
-					data: None,
-				})
+				JsonRpseeError::Call(CallError::Custom(ErrorObject::owned(
+					ErrorCode::InvalidParams.code(),
+					format!("{} doesn't fit in NumberOrHex representation", value),
+					None::<()>,
+				)))
 			})
 		};
 

@@ -22,8 +22,8 @@ use crate::testing::{test_executor, timeout_secs};
 use assert_matches::assert_matches;
 use futures::executor;
 use jsonrpsee::{
-	core::{error::SubscriptionClosed, Error as RpcError},
-	types::{error::CallError as RpcCallError, EmptyParams},
+	core::Error as RpcError,
+	types::{error::CallError as RpcCallError, EmptyParams, ErrorObject},
 };
 use sc_block_builder::BlockBuilderProvider;
 use sc_rpc_api::DenyUnsafe;
@@ -251,8 +251,8 @@ async fn should_notify_about_storage_changes() {
 	// We should get a message back on our subscription about the storage change:
 	// NOTE: previous versions of the subscription code used to return an empty value for the
 	// "initial" storage change here
-	assert_matches!(timeout_secs(1, sub.next::<StorageChangeSet<H256>>()).await, Ok(_));
-	assert_matches!(timeout_secs(1, sub.next::<SubscriptionClosed>()).await, Ok(_));
+	assert_matches!(timeout_secs(1, sub.next::<StorageChangeSet<H256>>()).await, Ok(Some(_)));
+	assert_matches!(timeout_secs(1, sub.next::<StorageChangeSet<H256>>()).await, Ok(None));
 }
 
 #[tokio::test]
@@ -285,11 +285,11 @@ async fn should_send_initial_storage_changes_and_notifications() {
 		sub
 	};
 
-	assert_matches!(timeout_secs(1, sub.next::<StorageChangeSet<H256>>()).await, Ok(_));
-	assert_matches!(timeout_secs(1, sub.next::<StorageChangeSet<H256>>()).await, Ok(_));
+	assert_matches!(timeout_secs(1, sub.next::<StorageChangeSet<H256>>()).await, Ok(Some(_)));
+	assert_matches!(timeout_secs(1, sub.next::<StorageChangeSet<H256>>()).await, Ok(Some(_)));
 
 	// No more messages to follow
-	assert_matches!(timeout_secs(1, sub.next::<SubscriptionClosed>()).await, Ok(_));
+	assert_matches!(timeout_secs(1, sub.next::<StorageChangeSet<H256>>()).await, Ok(None));
 }
 
 #[tokio::test]
@@ -372,14 +372,16 @@ async fn should_query_storage() {
 
 		assert_eq!(
 			result.await.map_err(|e| e.to_string()),
-			Err(RpcError::Call(RpcCallError::Failed(
+			Err(RpcError::Call(RpcCallError::Custom(ErrorObject::owned(
+				4001,
 				Error::InvalidBlockRange {
 					from: format!("1 ({:?})", block1_hash),
 					to: format!("0 ({:?})", genesis_hash),
 					details: "from number > to number".to_owned(),
 				}
-				.into()
-			)))
+				.to_string(),
+				None::<()>,
+			))))
 			.map_err(|e| e.to_string())
 		);
 
@@ -391,7 +393,8 @@ async fn should_query_storage() {
 
 		assert_eq!(
 			result.await.map_err(|e| e.to_string()),
-			Err(RpcError::Call(RpcCallError::Failed(
+			Err(RpcError::Call(RpcCallError::Custom(ErrorObject::owned(
+				4001,
 				Error::InvalidBlockRange {
 					from: format!("{:?}", genesis_hash),
 					to: format!("{:?}", Some(random_hash1)),
@@ -400,8 +403,9 @@ async fn should_query_storage() {
 						random_hash1
 					),
 				}
-				.into()
-			)))
+				.to_string(),
+				None::<()>,
+			))))
 			.map_err(|e| e.to_string())
 		);
 
@@ -410,7 +414,8 @@ async fn should_query_storage() {
 
 		assert_eq!(
 			result.await.map_err(|e| e.to_string()),
-			Err(RpcError::Call(RpcCallError::Failed(
+			Err(RpcError::Call(RpcCallError::Custom(ErrorObject::owned(
+				4001,
 				Error::InvalidBlockRange {
 					from: format!("{:?}", random_hash1),
 					to: format!("{:?}", Some(genesis_hash)),
@@ -419,8 +424,9 @@ async fn should_query_storage() {
 						random_hash1
 					),
 				}
-				.into()
-			)))
+				.to_string(),
+				None::<()>,
+			))))
 			.map_err(|e| e.to_string()),
 		);
 
@@ -429,7 +435,8 @@ async fn should_query_storage() {
 
 		assert_eq!(
 			result.await.map_err(|e| e.to_string()),
-			Err(RpcError::Call(RpcCallError::Failed(
+			Err(RpcError::Call(RpcCallError::Custom(ErrorObject::owned(
+				4001,
 				Error::InvalidBlockRange {
 					from: format!("{:?}", random_hash1),
 					to: format!("{:?}", Some(block2_hash)), // Best block hash.
@@ -438,8 +445,9 @@ async fn should_query_storage() {
 						random_hash1
 					),
 				}
-				.into()
-			)))
+				.to_string(),
+				None::<()>,
+			))))
 			.map_err(|e| e.to_string()),
 		);
 
@@ -448,7 +456,8 @@ async fn should_query_storage() {
 
 		assert_eq!(
 			result.await.map_err(|e| e.to_string()),
-			Err(RpcError::Call(RpcCallError::Failed(
+			Err(RpcError::Call(RpcCallError::Custom(ErrorObject::owned(
+				4001,
 				Error::InvalidBlockRange {
 					from: format!("{:?}", random_hash1), // First hash not found.
 					to: format!("{:?}", Some(random_hash2)),
@@ -457,8 +466,9 @@ async fn should_query_storage() {
 						random_hash1
 					),
 				}
-				.into()
-			)))
+				.to_string(),
+				None::<()>
+			))))
 			.map_err(|e| e.to_string()),
 		);
 
@@ -523,7 +533,7 @@ async fn should_notify_on_runtime_version_initially() {
 	assert_matches!(timeout_secs(10, sub.next::<RuntimeVersion>()).await, Ok(Some(_)));
 
 	sub.close();
-	assert_matches!(timeout_secs(10, sub.next::<SubscriptionClosed>()).await, Ok(_));
+	assert_matches!(timeout_secs(10, sub.next::<RuntimeVersion>()).await, Ok(None));
 }
 
 #[test]

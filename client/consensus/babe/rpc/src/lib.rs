@@ -22,6 +22,7 @@ use futures::TryFutureExt;
 use jsonrpsee::{
 	core::{async_trait, Error as JsonRpseeError, RpcResult},
 	proc_macros::rpc,
+	types::{error::CallError, ErrorObject},
 };
 
 use sc_consensus_babe::{authorship, Config, Epoch};
@@ -172,7 +173,11 @@ pub enum Error {
 
 impl From<Error> for JsonRpseeError {
 	fn from(error: Error) -> Self {
-		JsonRpseeError::to_call_error(error)
+		JsonRpseeError::Call(CallError::Custom(ErrorObject::owned(
+			1234,
+			error.to_string(),
+			None::<()>,
+		)))
 	}
 }
 
@@ -267,7 +272,7 @@ mod tests {
 
 		let request = r#"{"jsonrpc":"2.0","method":"babe_epochAuthorship","params":[],"id":1}"#;
 		let (response, _) = api.raw_json_request(request).await.unwrap();
-		let expected = r#"{"jsonrpc":"2.0","error":{"code":-32000,"message":"RPC call is unsafe to be called externally"},"id":1}"#;
+		let expected = r#"{"jsonrpc":"2.0","error":{"code":-32601,"message":"RPC call is unsafe to be called externally"},"id":1}"#;
 
 		assert_eq!(&response, expected);
 	}
