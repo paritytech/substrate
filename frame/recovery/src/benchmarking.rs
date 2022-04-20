@@ -23,7 +23,7 @@ use crate::Pallet;
 use frame_benchmarking::{account, benchmarks, whitelisted_caller};
 use frame_support::traits::{Currency, Get};
 use frame_system::RawOrigin;
-use sp_runtime::traits::{BlockNumberProvider, Bounded};
+use sp_runtime::traits::Bounded;
 
 const SEED: u32 = 0;
 
@@ -32,7 +32,7 @@ fn assert_last_event<T: Config>(generic_event: <T as Config>::Event) {
 }
 
 fn block_number<T: Config>() -> T::BlockNumber {
-	frame_system::Pallet::<T>::current_block_number()
+	42u32.into()
 }
 
 fn get_total_deposit<T: Config>(
@@ -147,7 +147,7 @@ benchmarks! {
 		RawOrigin::Signed(caller.clone()),
 		friends,
 		n as u16,
-		42u32.into()
+		block_number::<T>()
 	) verify {
 		assert_last_event::<T>(Event::RecoveryCreated { account: caller }.into());
 	}
@@ -236,13 +236,11 @@ benchmarks! {
 		let friends = generate_friends::<T>(n);
 		let bounded_friends: FriendsOf<T> = friends.try_into().unwrap();
 
-		let delay_period = block_number::<T>();
-
 		// Get deposit for recovery
 		let total_deposit = get_total_deposit::<T>(&bounded_friends).unwrap();
 
 		let recovery_config = RecoveryConfig {
-			delay_period,
+			delay_period: 0u32.into(),
 			deposit: total_deposit.clone(),
 			friends: bounded_friends.clone(),
 			threshold: n as u16,
@@ -256,7 +254,7 @@ benchmarks! {
 
 		// Create an active recovery status
 		let recovery_status = ActiveRecovery {
-			created: block_number::<T>(),
+			created: 0u32.into(),
 			deposit: total_deposit,
 			friends: bounded_friends.clone(),
 		};
@@ -292,7 +290,7 @@ benchmarks! {
 		let total_deposit = get_total_deposit::<T>(&bounded_friends).unwrap();
 
 		let recovery_config = RecoveryConfig {
-			delay_period: 42u32.into(),
+			delay_period: block_number::<T>(),
 			deposit: total_deposit.clone(),
 			friends: bounded_friends.clone(),
 			threshold: n as u16,
