@@ -16,10 +16,10 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 log = "0.4.8"
 wasmi = "0.9.1"
-codec = { package = "parity-scale-codec", version = "2.0.0" }
+codec = { package = "parity-scale-codec", version = "3.0.0" }
 sc-executor-common = { version = "0.10.0-dev", path = "../common" }
 sc-allocator = { version = "4.1.0-dev", path = "../../allocator" }
-sp-wasm-interface = { version = "4.0.0-dev", path = "../../../primitives/wasm-interface" }
-sp-runtime-interface = { version = "4.0.0-dev", path = "../../../primitives/runtime-interface" }
-sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
+sp-wasm-interface = { version = "6.0.0", path = "../../../primitives/wasm-interface" }
+sp-runtime-interface = { version = "6.0.0", path = "../../../primitives/runtime-interface" }
+sp-core = { version = "6.0.0", path = "../../../primitives/core" }
 scoped-tls = "1.0"

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -26,7 +26,6 @@ use nix::{
 use node_primitives::Block;
 use remote_externalities::rpc_api;
 use std::{
-	convert::TryInto,
 	ops::{Deref, DerefMut},
 	path::Path,
 	process::{Child, Command, ExitStatus},

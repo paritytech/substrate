@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -26,7 +26,7 @@ use sp_core::{
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, HashFor, Header as HeaderT, NumberFor, Zero},
-	Justification, Justifications, Storage,
+	Justification, Justifications, StateVersion, Storage,
 };
 use sp_state_machine::{
 	Backend as StateBackend, ChildStorageCollection, InMemoryBackend, IndexOperation,
@@ -444,6 +444,20 @@ impl<Block: BlockT> blockchain::Backend<Block> for Blockchain<Block> {
 		Ok(self.storage.read().leaves.hashes())
 	}
 
+	fn displaced_leaves_after_finalizing(
+		&self,
+		block_number: NumberFor<Block>,
+	) -> sp_blockchain::Result<Vec<Block::Hash>> {
+		Ok(self
+			.storage
+			.read()
+			.leaves
+			.displaced_by_finalize_height(block_number)
+			.leaves()
+			.cloned()
+			.collect::<Vec<_>>())
+	}
+
 	fn children(&self, _parent_hash: Block::Hash) -> sp_blockchain::Result<Vec<Block::Hash>> {
 		unimplemented!()
 	}
@@ -506,6 +520,7 @@ where
 		&mut self,
 		storage: Storage,
 		commit: bool,
+		state_version: StateVersion,
 	) -> sp_blockchain::Result<Block::Hash> {
 		check_genesis_storage(&storage)?;
 
@@ -519,6 +534,7 @@ where
 		let (root, transaction) = self.old_state.full_storage_root(
 			storage.top.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref()))),
 			child_delta,
+			state_version,
 		);
 
 		if commit {
@@ -566,12 +582,17 @@ where
 		&mut self,
 		storage: Storage,
 		commit: bool,
+		state_version: StateVersion,
 	) -> sp_blockchain::Result<Block::Hash> {
-		self.apply_storage(storage, commit)
+		self.apply_storage(storage, commit, state_version)
 	}
 
-	fn reset_storage(&mut self, storage: Storage) -> sp_blockchain::Result<Block::Hash> {
-		self.apply_storage(storage, true)
+	fn reset_storage(
+		&mut self,
+		storage: Storage,
+		state_version: StateVersion,
+	) -> sp_blockchain::Result<Block::Hash> {
+		self.apply_storage(storage, true, state_version)
 	}
 
 	fn insert_aux<I>(&mut self, ops: I) -> sp_blockchain::Result<()>

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,7 +17,7 @@
 
 //! Some helper functions/macros for this crate.
 
-use super::{Config, SolutionTargetIndexOf, SolutionVoterIndexOf, VoteWeight};
+use crate::{unsigned::VoterOf, Config, SolutionTargetIndexOf, SolutionVoterIndexOf, VoteWeight};
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
 #[macro_export]
@@ -34,7 +34,7 @@ macro_rules! log {
 ///
 /// This can be used to efficiently build index getter closures.
 pub fn generate_voter_cache<T: Config>(
-	snapshot: &Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>,
+	snapshot: &Vec<VoterOf<T>>,
 ) -> BTreeMap<T::AccountId, usize> {
 	let mut cache: BTreeMap<T::AccountId, usize> = BTreeMap::new();
 	snapshot.iter().enumerate().for_each(|(i, (x, _, _))| {
@@ -97,7 +97,7 @@ pub fn voter_index_fn_usize<T: Config>(
 /// Not meant to be used in production.
 #[cfg(test)]
 pub fn voter_index_fn_linear<T: Config>(
-	snapshot: &Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>,
+	snapshot: &Vec<VoterOf<T>>,
 ) -> impl Fn(&T::AccountId) -> Option<SolutionVoterIndexOf<T>> + '_ {
 	move |who| {
 		snapshot
@@ -148,7 +148,7 @@ pub fn target_index_fn_linear<T: Config>(
 /// Create a function that can map a voter index ([`SolutionVoterIndexOf`]) to the actual voter
 /// account using a linearly indexible snapshot.
 pub fn voter_at_fn<T: Config>(
-	snapshot: &Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>,
+	snapshot: &Vec<VoterOf<T>>,
 ) -> impl Fn(SolutionVoterIndexOf<T>) -> Option<T::AccountId> + '_ {
 	move |i| {
 		<SolutionVoterIndexOf<T> as TryInto<usize>>::try_into(i)
@@ -174,7 +174,7 @@ pub fn target_at_fn<T: Config>(
 /// This is not optimized and uses a linear search.
 #[cfg(test)]
 pub fn stake_of_fn_linear<T: Config>(
-	snapshot: &Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>,
+	snapshot: &Vec<VoterOf<T>>,
 ) -> impl Fn(&T::AccountId) -> VoteWeight + '_ {
 	move |who| {
 		snapshot
@@ -192,7 +192,7 @@ pub fn stake_of_fn_linear<T: Config>(
 /// The cache need must be derived from the same snapshot. Zero is returned if a voter is
 /// non-existent.
 pub fn stake_of_fn<'a, T: Config>(
-	snapshot: &'a Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>,
+	snapshot: &'a Vec<VoterOf<T>>,
 	cache: &'a BTreeMap<T::AccountId, usize>,
 ) -> impl Fn(&T::AccountId) -> VoteWeight + 'a {
 	move |who| {

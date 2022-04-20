@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -393,14 +393,13 @@ impl BenchDb {
 			state_pruning: PruningMode::ArchiveAll,
 			source: database_type.into_settings(dir.into()),
 			keep_blocks: sc_client_db::KeepBlocks::All,
-			transaction_storage: sc_client_db::TransactionStorageMode::BlockBody,
 		};
 		let task_executor = TaskExecutor::new();
 
 		let backend = sc_service::new_db_backend(db_config).expect("Should not fail");
 		let client = sc_service::new_client(
 			backend.clone(),
-			NativeElseWasmExecutor::new(WasmExecutionMethod::Compiled, None, 8),
+			NativeElseWasmExecutor::new(WasmExecutionMethod::Compiled, None, 8, 2),
 			&keyring.generate_genesis(),
 			None,
 			None,

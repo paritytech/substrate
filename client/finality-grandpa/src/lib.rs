@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -63,6 +63,7 @@ use parking_lot::RwLock;
 use prometheus_endpoint::{PrometheusError, Registry};
 use sc_client_api::{
 	backend::{AuxStore, Backend},
+	utils::is_descendent_of,
 	BlockchainEvents, CallExecutor, ExecutionStrategy, ExecutorProvider, Finalizer, LockImportRun,
 	StorageProvider, TransactionFor,
 };
@@ -71,9 +72,9 @@ use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_INFO};
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
 use sp_api::ProvideRuntimeApi;
 use sp_application_crypto::AppKey;
-use sp_blockchain::{Error as ClientError, HeaderBackend, HeaderMetadata};
+use sp_blockchain::{Error as ClientError, HeaderBackend, HeaderMetadata, Result as ClientResult};
 use sp_consensus::SelectChain;
-use sp_core::crypto::Public;
+use sp_core::crypto::ByteArray;
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::{
 	generic::BlockId,
@@ -123,6 +124,7 @@ pub mod warp_proof;
 
 pub use authorities::{AuthoritySet, AuthoritySetChanges, SharedAuthoritySet};
 pub use aux_schema::best_justification;
+pub use communication::grandpa_protocol_name::standard_name as protocol_standard_name;
 pub use finality_grandpa::voter::report;
 pub use finality_proof::{FinalityProof, FinalityProofError, FinalityProofProvider};
 pub use import::{find_forced_change, find_scheduled_change, GrandpaBlockImport};
@@ -263,45 +265,50 @@ pub struct Config {
 	pub keystore: Option<SyncCryptoStorePtr>,
 	/// TelemetryHandle instance.
 	pub telemetry: Option<TelemetryHandle>,
+	/// Chain specific GRANDPA protocol name. See [`crate::protocol_standard_name`].
+	pub protocol_name: std::borrow::Cow<'static, str>,
 }
 
 impl Config {
 	fn name(&self) -> &str {
-		self.name.as_ref().map(|s| s.as_str()).unwrap_or("<unknown>")
+		self.name.as_deref().unwrap_or("<unknown>")
 	}
 }
 
 /// Errors that can occur while voting in GRANDPA.
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
 	/// An error within grandpa.
-	Grandpa(GrandpaError),
+	#[error("grandpa error: {0}")]
+	Grandpa(#[from] GrandpaError),
+
 	/// A network error.
+	#[error("network error: {0}")]
 	Network(String),
+
 	/// A blockchain error.
+	#[error("blockchain error: {0}")]
 	Blockchain(String),
+
 	/// Could not complete a round on disk.
-	Client(ClientError),
+	#[error("could not complete a round on disk: {0}")]
+	Client(#[from] ClientError),
+
 	/// Could not sign outgoing message
+	#[error("could not sign outgoing message: {0}")]
 	Signing(String),
+
 	/// An invariant has been violated (e.g. not finalizing pending change blocks in-order)
+	#[error("safety invariant has been violated: {0}")]
 	Safety(String),
+
 	/// A timer failed to fire.
+	#[error("a timer failed to fire: {0}")]
 	Timer(io::Error),
+
 	/// A runtime api request failed.
+	#[error("runtime API request failed: {0}")]
 	RuntimeApi(sp_api::ApiError),
-}
-
-impl From<GrandpaError> for Error {
-	fn from(e: GrandpaError) -> Self {
-		Error::Grandpa(e)
-	}
-}
-
-impl From<ClientError> for Error {
-	fn from(e: ClientError) -> Self {
-		Error::Client(e)
-	}
 }
 
 /// Something which can determine if a block is known.
@@ -319,7 +326,7 @@ where
 {
 	fn block_number(&self, hash: Block::Hash) -> Result<Option<NumberFor<Block>>, Error> {
 		self.block_number_from_id(&BlockId::Hash(hash))
-			.map_err(|e| Error::Blockchain(format!("{:?}", e)))
+			.map_err(|e| Error::Blockchain(e.to_string()))
 	}
 }
 
@@ -456,7 +463,7 @@ impl<H: fmt::Debug, N: fmt::Debug> ::std::error::Error for CommandOrError<H, N> 
 impl<H, N> fmt::Display for CommandOrError<H, N> {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match *self {
-			CommandOrError::Error(ref e) => write!(f, "{:?}", e),
+			CommandOrError::Error(ref e) => write!(f, "{}", e),
 			CommandOrError::VoterCommand(ref cmd) => write!(f, "{}", cmd),
 		}
 	}
@@ -541,6 +548,24 @@ where
 	)
 }
 
+/// A descriptor for an authority set hard fork. These are authority set changes
+/// that are not signalled by the runtime and instead are defined off-chain
+/// (hence the hard fork).
+pub struct AuthoritySetHardFork<Block: BlockT> {
+	/// The new authority set id.
+	pub set_id: SetId,
+	/// The block hash and number at which the hard fork should be applied.
+	pub block: (Block::Hash, NumberFor<Block>),
+	/// The authorities in the new set.
+	pub authorities: AuthorityList,
+	/// The latest block number that was finalized before this authority set
+	/// hard fork. When defined, the authority set change will be forced, i.e.
+	/// the node won't wait for the block above to be finalized before enacting
+	/// the change, and the given finalized number will be used as a base for
+	/// voting.
+	pub last_finalized: Option<NumberFor<Block>>,
+}
+
 /// Make block importer and link half necessary to tie the background voter to
 /// it. A vector of authority set hard forks can be passed, any authority set
 /// change signaled at the given block (either already signalled or in a further
@@ -550,7 +575,7 @@ pub fn block_import_with_authority_set_hard_forks<BE, Block: BlockT, Client, SC>
 	client: Arc<Client>,
 	genesis_authorities_provider: &dyn GenesisAuthoritySetProvider<Block>,
 	select_chain: SC,
-	authority_set_hard_forks: Vec<(SetId, (Block::Hash, NumberFor<Block>), AuthorityList)>,
+	authority_set_hard_forks: Vec<AuthoritySetHardFork<Block>>,
 	telemetry: Option<TelemetryHandle>,
 ) -> Result<(GrandpaBlockImport<BE, Block, Client, SC>, LinkHalf<Block, Client, SC>), ClientError>
 where
@@ -580,19 +605,24 @@ where
 
 	let (justification_sender, justification_stream) = GrandpaJustificationStream::channel();
 
-	// create pending change objects with 0 delay and enacted on finality
-	// (i.e. standard changes) for each authority set hard fork.
+	// create pending change objects with 0 delay for each authority set hard fork.
 	let authority_set_hard_forks = authority_set_hard_forks
 		.into_iter()
-		.map(|(set_id, (hash, number), authorities)| {
+		.map(|fork| {
+			let delay_kind = if let Some(last_finalized) = fork.last_finalized {
+				authorities::DelayKind::Best { median_last_finalized: last_finalized }
+			} else {
+				authorities::DelayKind::Finalized
+			};
+
 			(
-				set_id,
+				fork.set_id,
 				authorities::PendingChange {
-					next_authorities: authorities,
+					next_authorities: fork.authorities,
 					delay: Zero::zero(),
-					canon_hash: hash,
-					canon_height: number,
-					delay_kind: authorities::DelayKind::Finalized,
+					canon_hash: fork.block.0,
+					canon_height: fork.block.1,
+					delay_kind,
 				},
 			)
 		})
@@ -691,10 +721,14 @@ pub struct GrandpaParams<Block: BlockT, C, N, SC, VR> {
 
 /// Returns the configuration value to put in
 /// [`sc_network::config::NetworkConfiguration::extra_sets`].
-pub fn grandpa_peers_set_config() -> sc_network::config::NonDefaultSetConfig {
+/// For standard protocol name see [`crate::protocol_standard_name`].
+pub fn grandpa_peers_set_config(
+	protocol_name: std::borrow::Cow<'static, str>,
+) -> sc_network::config::NonDefaultSetConfig {
+	use communication::grandpa_protocol_name;
 	sc_network::config::NonDefaultSetConfig {
-		notifications_protocol: communication::GRANDPA_PROTOCOL_NAME.into(),
-		fallback_names: Vec::new(),
+		notifications_protocol: protocol_name,
+		fallback_names: grandpa_protocol_name::LEGACY_NAMES.iter().map(|&n| n.into()).collect(),
 		// Notifications reach ~256kiB in size at the time of writing on Kusama and Polkadot.
 		max_notification_size: 1024 * 1024,
 		set_config: sc_network::config::SetConfig {
@@ -763,8 +797,8 @@ where
 			let events = telemetry_on_connect.for_each(move |_| {
 				let current_authorities = authorities.current_authorities();
 				let set_id = authorities.set_id();
-				let authority_id = local_authority_id(&current_authorities, conf.keystore.as_ref())
-					.unwrap_or_default();
+				let maybe_authority_id =
+					local_authority_id(&current_authorities, conf.keystore.as_ref());
 
 				let authorities =
 					current_authorities.iter().map(|(id, _)| id.to_string()).collect::<Vec<_>>();
@@ -778,7 +812,7 @@ where
 					telemetry;
 					CONSENSUS_INFO;
 					"afg.authority_set";
-					"authority_id" => authority_id.to_string(),
+					"authority_id" => maybe_authority_id.map_or("".into(), |s| s.to_string()),
 					"authority_set_id" => ?set_id,
 					"authorities" => authorities,
 				);
@@ -808,7 +842,7 @@ where
 		Ok(()) => error!(target: "afg",
 			"GRANDPA voter future has concluded naturally, this should be unreachable."
 		),
-		Err(e) => error!(target: "afg", "GRANDPA voter error: {:?}", e),
+		Err(e) => error!(target: "afg", "GRANDPA voter error: {}", e),
 	});
 
 	// Make sure that `telemetry_task` doesn't accidentally finish and kill grandpa.
@@ -917,8 +951,9 @@ where
 	fn rebuild_voter(&mut self) {
 		debug!(target: "afg", "{}: Starting new voter with set ID {}", self.env.config.name(), self.env.set_id);
 
-		let authority_id = local_authority_id(&self.env.voters, self.env.config.keystore.as_ref())
-			.unwrap_or_default();
+		let maybe_authority_id =
+			local_authority_id(&self.env.voters, self.env.config.keystore.as_ref());
+		let authority_id = maybe_authority_id.map_or("<unknown>".into(), |s| s.to_string());
 
 		telemetry!(
 			self.telemetry;
@@ -926,7 +961,7 @@ where
 			"afg.starting_new_voter";
 			"name" => ?self.env.config.name(),
 			"set_id" => ?self.env.set_id,
-			"authority_id" => authority_id.to_string(),
+			"authority_id" => authority_id,
 		);
 
 		let chain_info = self.env.client.info();
@@ -943,7 +978,7 @@ where
 			"afg.authority_set";
 			"number" => ?chain_info.finalized_number,
 			"hash" => ?chain_info.finalized_hash,
-			"authority_id" => authority_id.to_string(),
+			"authority_id" => authority_id,
 			"authority_set_id" => ?self.env.set_id,
 			"authorities" => authorities,
 		);
@@ -1126,5 +1161,48 @@ fn local_authority_id(
 				SyncCryptoStore::has_keys(&**keystore, &[(p.to_raw_vec(), AuthorityId::ID)])
 			})
 			.map(|(p, _)| p.clone())
+	})
+}
+
+/// Reverts protocol aux data to at most the last finalized block.
+/// In particular, standard and forced authority set changes announced after the
+/// revert point are removed.
+pub fn revert<Block, Client>(client: Arc<Client>, blocks: NumberFor<Block>) -> ClientResult<()>
+where
+	Block: BlockT,
+	Client: AuxStore + HeaderMetadata<Block, Error = sp_blockchain::Error> + HeaderBackend<Block>,
+{
+	let best_number = client.info().best_number;
+	let finalized = client.info().finalized_number;
+	let revertible = blocks.min(best_number - finalized);
+
+	let number = best_number - revertible;
+	let hash = client
+		.block_hash_from_id(&BlockId::Number(number))?
+		.ok_or(ClientError::Backend(format!(
+			"Unexpected hash lookup failure for block number: {}",
+			number
+		)))?;
+
+	let info = client.info();
+	let persistent_data: PersistentData<Block> =
+		aux_schema::load_persistent(&*client, info.genesis_hash, Zero::zero(), || unreachable!())?;
+
+	let shared_authority_set = persistent_data.authority_set;
+	let mut authority_set = shared_authority_set.inner();
+
+	let is_descendent_of = is_descendent_of(&*client, None);
+	authority_set.revert(hash, number, &is_descendent_of);
+
+	// The following has the side effect to properly reset the current voter state.
+	let (set_id, set_ref) = authority_set.current();
+	let new_set = Some(NewAuthoritySet {
+		canon_hash: info.finalized_hash,
+		canon_number: info.finalized_number,
+		set_id,
+		authorities: set_ref.to_vec(),
+	});
+	aux_schema::update_authority_set::<Block, _, _>(&authority_set, new_set.as_ref(), |values| {
+		client.insert_aux(values, None)
 	})
 }

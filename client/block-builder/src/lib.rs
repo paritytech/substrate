@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -35,6 +35,7 @@ use sp_blockchain::{ApplyExtrinsicFailed, Error};
 use sp_core::ExecutionContext;
 use sp_runtime::{
 	generic::BlockId,
+	legacy,
 	traits::{Block as BlockT, Hash, HashFor, Header as HeaderT, NumberFor, One},
 	Digest,
 };
@@ -135,6 +136,7 @@ where
 pub struct BlockBuilder<'a, Block: BlockT, A: ProvideRuntimeApi<Block>, B> {
 	extrinsics: Vec<Block::Extrinsic>,
 	api: ApiRef<'a, A::Api>,
+	version: u32,
 	block_id: BlockId<Block>,
 	parent_hash: Block::Hash,
 	backend: &'a B,
@@ -183,10 +185,15 @@ where
 
 		api.initialize_block_with_context(&block_id, ExecutionContext::BlockConstruction, &header)?;
 
+		let version = api
+			.api_version::<dyn BlockBuilderApi<Block>>(&block_id)?
+			.ok_or_else(|| Error::VersionInvalid("BlockBuilderApi".to_string()))?;
+
 		Ok(Self {
 			parent_hash,
 			extrinsics: Vec::new(),
 			api,
+			version,
 			block_id,
 			backend,
 			estimated_header_size,
@@ -199,13 +206,26 @@ where
 	pub fn push(&mut self, xt: <Block as BlockT>::Extrinsic) -> Result<(), Error> {
 		let block_id = &self.block_id;
 		let extrinsics = &mut self.extrinsics;
+		let version = self.version;
 
 		self.api.execute_in_transaction(|api| {
-			match api.apply_extrinsic_with_context(
-				block_id,
-				ExecutionContext::BlockConstruction,
-				xt.clone(),
-			) {
+			let res = if version < 6 {
+				#[allow(deprecated)]
+				api.apply_extrinsic_before_version_6_with_context(
+					block_id,
+					ExecutionContext::BlockConstruction,
+					xt.clone(),
+				)
+				.map(legacy::byte_sized_error::convert_to_latest)
+			} else {
+				api.apply_extrinsic_with_context(
+					block_id,
+					ExecutionContext::BlockConstruction,
+					xt.clone(),
+				)
+			};
+
+			match res {
 				Ok(Ok(_)) => {
 					extrinsics.push(xt);
 					TransactionOutcome::Commit(Ok(()))
@@ -232,6 +252,7 @@ where
 			header.extrinsics_root().clone(),
 			HashFor::<Block>::ordered_trie_root(
 				self.extrinsics.iter().map(Encode::encode).collect(),
+				sp_runtime::StateVersion::V0,
 			),
 		);
 

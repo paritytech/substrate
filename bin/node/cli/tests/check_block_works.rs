@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -28,7 +28,7 @@ pub mod common;
 async fn check_block_works() {
 	let base_path = tempdir().expect("could not create a temp dir");
 
-	common::run_node_for_a_while(base_path.path(), &["--dev"]).await;
+	common::run_node_for_a_while(base_path.path(), &["--dev", "--no-hardware-benchmarks"]).await;
 
 	let status = Command::new(cargo_bin("substrate"))
 		.args(&["check-block", "--dev", "--pruning", "archive", "-d"])

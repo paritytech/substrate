@@ -1,6 +1,6 @@
 [package]
 name = "sp-trie"
-version = "4.0.0-dev"
+version = "6.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Patricia trie stuff using a parity-scale-codec node format"
 repository = "https://github.com/paritytech/substrate/"
@@ -18,21 +18,22 @@ name = "bench"
 harness = false
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
-scale-info = { version = "1.0", default-features = false, features = ["derive"] }
-sp-std = { version = "4.0.0-dev", default-features = false, path = "../std" }
+codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false }
+scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
+sp-std = { version = "4.0.0", default-features = false, path = "../std" }
 hash-db = { version = "0.15.2", default-features = false }
-trie-db = { version = "0.22.6", default-features = false }
-trie-root = { version = "0.16.0", default-features = false }
-memory-db = { version = "0.27.0", default-features = false }
-sp-core = { version = "4.0.0-dev", default-features = false, path = "../core" }
+trie-db = { version = "0.23.1", default-features = false }
+trie-root = { version = "0.17.0", default-features = false }
+memory-db = { version = "0.29.0", default-features = false }
+sp-core = { version = "6.0.0", default-features = false, path = "../core" }
+thiserror = { version = "1.0.30", optional = true }
 
 [dev-dependencies]
-trie-bench = "0.28.0"
+trie-bench = "0.30.0"
 trie-standardmap = "0.15.2"
 criterion = "0.3.3"
 hex-literal = "0.3.4"
-sp-runtime = { version = "4.0.0-dev", path = "../runtime" }
+sp-runtime = { version = "6.0.0", path = "../runtime" }
 
 [features]
 default = ["std"]
@@ -45,5 +46,6 @@ std = [
 	"trie-db/std",
 	"trie-root/std",
 	"sp-core/std",
+	"thiserror",
 ]
 memory-tracker = []

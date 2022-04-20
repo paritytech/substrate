@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,6 +17,7 @@
 
 //! Implementation of the `palletid` subcommand
 
+use clap::Parser;
 use frame_support::PalletId;
 use sc_cli::{
 	utils::print_from_uri, with_crypto_scheme, CryptoSchemeFlag, Error, KeystoreParams,
@@ -24,35 +25,34 @@ use sc_cli::{
 };
 use sp_core::crypto::{unwrap_or_default_ss58_version, Ss58AddressFormat, Ss58Codec};
 use sp_runtime::traits::AccountIdConversion;
-use structopt::StructOpt;
 
 /// The `palletid` command
-#[derive(Debug, StructOpt)]
-#[structopt(name = "palletid", about = "Inspect a module ID address")]
+#[derive(Debug, Parser)]
+#[clap(name = "palletid", about = "Inspect a module ID address")]
 pub struct PalletIdCmd {
 	/// The module ID used to derive the account
 	id: String,
 
 	/// network address format
-	#[structopt(
+	#[clap(
 		long,
 		value_name = "NETWORK",
 		possible_values = &Ss58AddressFormat::all_names()[..],
 		parse(try_from_str = Ss58AddressFormat::try_from),
-		case_insensitive = true,
+		ignore_case = true,
 	)]
 	pub network: Option<Ss58AddressFormat>,
 
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	pub output_scheme: OutputTypeFlag,
 
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	pub crypto_scheme: CryptoSchemeFlag,
 
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	pub keystore_params: KeystoreParams,
 }
 

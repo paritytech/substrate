@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,12 +17,12 @@
 
 //! Traits, types and structs to support a bounded `BTreeSet`.
 
-use crate::{storage::StorageDecodeLength, traits::Get};
-use codec::{Decode, Encode, MaxEncodedLen};
-use sp_std::{
-	borrow::Borrow, collections::btree_set::BTreeSet, convert::TryFrom, marker::PhantomData,
-	ops::Deref,
+use crate::{
+	storage::StorageDecodeLength,
+	traits::{Get, TryCollect},
 };
+use codec::{Decode, Encode, MaxEncodedLen};
+use sp_std::{borrow::Borrow, collections::btree_set::BTreeSet, marker::PhantomData, ops::Deref};
 
 /// A bounded set based on a B-Tree.
 ///
@@ -68,6 +68,11 @@ where
 	T: Ord,
 	S: Get<u32>,
 {
+	/// Create `Self` from `t` without any checks.
+	fn unchecked_from(t: BTreeSet<T>) -> Self {
+		Self(t, Default::default())
+	}
+
 	/// Create a new `BoundedBTreeSet`.
 	///
 	/// Does not allocate.
@@ -168,20 +173,28 @@ where
 	}
 }
 
-impl<T, S> PartialEq for BoundedBTreeSet<T, S>
+impl<T, S1, S2> PartialEq<BoundedBTreeSet<T, S1>> for BoundedBTreeSet<T, S2>
 where
 	BTreeSet<T>: PartialEq,
+	S1: Get<u32>,
+	S2: Get<u32>,
 {
-	fn eq(&self, other: &Self) -> bool {
-		self.0 == other.0
+	fn eq(&self, other: &BoundedBTreeSet<T, S1>) -> bool {
+		S1::get() == S2::get() && self.0 == other.0
 	}
 }
 
-impl<T, S> Eq for BoundedBTreeSet<T, S> where BTreeSet<T>: Eq {}
+impl<T, S> Eq for BoundedBTreeSet<T, S>
+where
+	BTreeSet<T>: Eq,
+	S: Get<u32>,
+{
+}
 
 impl<T, S> PartialEq<BTreeSet<T>> for BoundedBTreeSet<T, S>
 where
 	BTreeSet<T>: PartialEq,
+	S: Get<u32>,
 {
 	fn eq(&self, other: &BTreeSet<T>) -> bool {
 		self.0 == *other
@@ -191,6 +204,7 @@ where
 impl<T, S> PartialOrd for BoundedBTreeSet<T, S>
 where
 	BTreeSet<T>: PartialOrd,
+	S: Get<u32>,
 {
 	fn partial_cmp(&self, other: &Self) -> Option<sp_std::cmp::Ordering> {
 		self.0.partial_cmp(&other.0)
@@ -200,6 +214,7 @@ where
 impl<T, S> Ord for BoundedBTreeSet<T, S>
 where
 	BTreeSet<T>: Ord,
+	S: Get<u32>,
 {
 	fn cmp(&self, other: &Self) -> sp_std::cmp::Ordering {
 		self.0.cmp(&other.0)
@@ -283,50 +298,62 @@ impl<T, S> StorageDecodeLength for BoundedBTreeSet<T, S> {}
 
 impl<T, S> codec::EncodeLike<BTreeSet<T>> for BoundedBTreeSet<T, S> where BTreeSet<T>: Encode {}
 
+impl<I, T, Bound> TryCollect<BoundedBTreeSet<T, Bound>> for I
+where
+	T: Ord,
+	I: ExactSizeIterator + Iterator<Item = T>,
+	Bound: Get<u32>,
+{
+	type Error = &'static str;
+
+	fn try_collect(self) -> Result<BoundedBTreeSet<T, Bound>, Self::Error> {
+		if self.len() > Bound::get() as usize {
+			Err("iterator length too big")
+		} else {
+			Ok(BoundedBTreeSet::<T, Bound>::unchecked_from(self.collect::<BTreeSet<T>>()))
+		}
+	}
+}
+
 #[cfg(test)]
 pub mod test {
 	use super::*;
 	use crate::Twox128;
+	use frame_support::traits::ConstU32;
 	use sp_io::TestExternalities;
-	use sp_std::convert::TryInto;
 
-	crate::parameter_types! {
-		pub const Seven: u32 = 7;
-		pub const Four: u32 = 4;
-	}
-
-	crate::generate_storage_alias! { Prefix, Foo => Value<BoundedBTreeSet<u32, Seven>> }
-	crate::generate_storage_alias! { Prefix, FooMap => Map<(u32, Twox128), BoundedBTreeSet<u32, Seven>> }
+	crate::generate_storage_alias! { Prefix, Foo => Value<BoundedBTreeSet<u32, ConstU32<7>>> }
+	crate::generate_storage_alias! { Prefix, FooMap => Map<(Twox128, u32), BoundedBTreeSet<u32, ConstU32<7>>> }
 	crate::generate_storage_alias! {
 		Prefix,
-		FooDoubleMap => DoubleMap<(u32, Twox128), (u32, Twox128), BoundedBTreeSet<u32, Seven>>
+		FooDoubleMap => DoubleMap<(Twox128, u32), (Twox128, u32), BoundedBTreeSet<u32, ConstU32<7>>>
 	}
 
-	fn map_from_keys<T>(keys: &[T]) -> BTreeSet<T>
+	fn set_from_keys<T>(keys: &[T]) -> BTreeSet<T>
 	where
 		T: Ord + Copy,
 	{
 		keys.iter().copied().collect()
 	}
 
-	fn boundedmap_from_keys<T, S>(keys: &[T]) -> BoundedBTreeSet<T, S>
+	fn boundedset_from_keys<T, S>(keys: &[T]) -> BoundedBTreeSet<T, S>
 	where
 		T: Ord + Copy,
 		S: Get<u32>,
 	{
-		map_from_keys(keys).try_into().unwrap()
+		set_from_keys(keys).try_into().unwrap()
 	}
 
 	#[test]
 	fn decode_len_works() {
 		TestExternalities::default().execute_with(|| {
-			let bounded = boundedmap_from_keys::<u32, Seven>(&[1, 2, 3]);
+			let bounded = boundedset_from_keys::<u32, ConstU32<7>>(&[1, 2, 3]);
 			Foo::put(bounded);
 			assert_eq!(Foo::decode_len().unwrap(), 3);
 		});
 
 		TestExternalities::default().execute_with(|| {
-			let bounded = boundedmap_from_keys::<u32, Seven>(&[1, 2, 3]);
+			let bounded = boundedset_from_keys::<u32, ConstU32<7>>(&[1, 2, 3]);
 			FooMap::insert(1, bounded);
 			assert_eq!(FooMap::decode_len(1).unwrap(), 3);
 			assert!(FooMap::decode_len(0).is_none());
@@ -334,7 +361,7 @@ pub mod test {
 		});
 
 		TestExternalities::default().execute_with(|| {
-			let bounded = boundedmap_from_keys::<u32, Seven>(&[1, 2, 3]);
+			let bounded = boundedset_from_keys::<u32, ConstU32<7>>(&[1, 2, 3]);
 			FooDoubleMap::insert(1, 1, bounded);
 			assert_eq!(FooDoubleMap::decode_len(1, 1).unwrap(), 3);
 			assert!(FooDoubleMap::decode_len(2, 1).is_none());
@@ -345,17 +372,17 @@ pub mod test {
 
 	#[test]
 	fn try_insert_works() {
-		let mut bounded = boundedmap_from_keys::<u32, Four>(&[1, 2, 3]);
+		let mut bounded = boundedset_from_keys::<u32, ConstU32<4>>(&[1, 2, 3]);
 		bounded.try_insert(0).unwrap();
-		assert_eq!(*bounded, map_from_keys(&[1, 0, 2, 3]));
+		assert_eq!(*bounded, set_from_keys(&[1, 0, 2, 3]));
 
 		assert!(bounded.try_insert(9).is_err());
-		assert_eq!(*bounded, map_from_keys(&[1, 0, 2, 3]));
+		assert_eq!(*bounded, set_from_keys(&[1, 0, 2, 3]));
 	}
 
 	#[test]
 	fn deref_coercion_works() {
-		let bounded = boundedmap_from_keys::<u32, Seven>(&[1, 2, 3]);
+		let bounded = boundedset_from_keys::<u32, ConstU32<7>>(&[1, 2, 3]);
 		// these methods come from deref-ed vec.
 		assert_eq!(bounded.len(), 3);
 		assert!(bounded.iter().next().is_some());
@@ -364,7 +391,7 @@ pub mod test {
 
 	#[test]
 	fn try_mutate_works() {
-		let bounded = boundedmap_from_keys::<u32, Seven>(&[1, 2, 3, 4, 5, 6]);
+		let bounded = boundedset_from_keys::<u32, ConstU32<7>>(&[1, 2, 3, 4, 5, 6]);
 		let bounded = bounded
 			.try_mutate(|v| {
 				v.insert(7);
@@ -380,15 +407,15 @@ pub mod test {
 
 	#[test]
 	fn btree_map_eq_works() {
-		let bounded = boundedmap_from_keys::<u32, Seven>(&[1, 2, 3, 4, 5, 6]);
-		assert_eq!(bounded, map_from_keys(&[1, 2, 3, 4, 5, 6]));
+		let bounded = boundedset_from_keys::<u32, ConstU32<7>>(&[1, 2, 3, 4, 5, 6]);
+		assert_eq!(bounded, set_from_keys(&[1, 2, 3, 4, 5, 6]));
 	}
 
 	#[test]
 	fn too_big_fail_to_decode() {
 		let v: Vec<u32> = vec![1, 2, 3, 4, 5];
 		assert_eq!(
-			BoundedBTreeSet::<u32, Four>::decode(&mut &v.encode()[..]),
+			BoundedBTreeSet::<u32, ConstU32<4>>::decode(&mut &v.encode()[..]),
 			Err("BoundedBTreeSet exceeds its limit".into()),
 		);
 	}
@@ -418,7 +445,7 @@ pub mod test {
 			}
 		}
 
-		let mut set = BoundedBTreeSet::<Unequal, Four>::new();
+		let mut set = BoundedBTreeSet::<Unequal, ConstU32<4>>::new();
 
 		// when the set is full
 
@@ -436,5 +463,52 @@ pub mod test {
 		let zero_item = set.get(&Unequal(0, true)).unwrap();
 		assert_eq!(zero_item.0, 0);
 		assert_eq!(zero_item.1, false);
+	}
+
+	#[test]
+	fn can_be_collected() {
+		let b1 = boundedset_from_keys::<u32, ConstU32<5>>(&[1, 2, 3, 4]);
+		let b2: BoundedBTreeSet<u32, ConstU32<5>> = b1.iter().map(|k| k + 1).try_collect().unwrap();
+		assert_eq!(b2.into_iter().collect::<Vec<_>>(), vec![2, 3, 4, 5]);
+
+		// can also be collected into a collection of length 4.
+		let b2: BoundedBTreeSet<u32, ConstU32<4>> = b1.iter().map(|k| k + 1).try_collect().unwrap();
+		assert_eq!(b2.into_iter().collect::<Vec<_>>(), vec![2, 3, 4, 5]);
+
+		// can be mutated further into iterators that are `ExactSizedIterator`.
+		let b2: BoundedBTreeSet<u32, ConstU32<5>> =
+			b1.iter().map(|k| k + 1).rev().skip(2).try_collect().unwrap();
+		// note that the binary tree will re-sort this, so rev() is not really seen
+		assert_eq!(b2.into_iter().collect::<Vec<_>>(), vec![2, 3]);
+
+		let b2: BoundedBTreeSet<u32, ConstU32<5>> =
+			b1.iter().map(|k| k + 1).take(2).try_collect().unwrap();
+		assert_eq!(b2.into_iter().collect::<Vec<_>>(), vec![2, 3]);
+
+		// but these worn't work
+		let b2: Result<BoundedBTreeSet<u32, ConstU32<3>>, _> =
+			b1.iter().map(|k| k + 1).try_collect();
+		assert!(b2.is_err());
+
+		let b2: Result<BoundedBTreeSet<u32, ConstU32<1>>, _> =
+			b1.iter().map(|k| k + 1).skip(2).try_collect();
+		assert!(b2.is_err());
+	}
+
+	#[test]
+	fn eq_works() {
+		// of same type
+		let b1 = boundedset_from_keys::<u32, ConstU32<7>>(&[1, 2]);
+		let b2 = boundedset_from_keys::<u32, ConstU32<7>>(&[1, 2]);
+		assert_eq!(b1, b2);
+
+		// of different type, but same value and bound.
+		crate::parameter_types! {
+			B1: u32 = 7;
+			B2: u32 = 7;
+		}
+		let b1 = boundedset_from_keys::<u32, B1>(&[1, 2]);
+		let b2 = boundedset_from_keys::<u32, B2>(&[1, 2]);
+		assert_eq!(b1, b2);
 	}
 }

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -40,22 +40,24 @@ pub use paste;
 #[doc(hidden)]
 pub use sp_application_crypto as app_crypto;
 
+pub use sp_core::storage::StateVersion;
 #[cfg(feature = "std")]
 pub use sp_core::storage::{Storage, StorageChild};
 
 use sp_core::{
-	crypto::{self, Public},
+	crypto::{self, ByteArray},
 	ecdsa, ed25519,
 	hash::{H256, H512},
 	sr25519,
 };
-use sp_std::{convert::TryFrom, prelude::*};
+use sp_std::prelude::*;
 
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 
 pub mod curve;
 pub mod generic;
+pub mod legacy;
 mod multiaddress;
 pub mod offchain;
 pub mod runtime_logger;
@@ -95,6 +97,10 @@ pub use sp_arithmetic::{
 };
 
 pub use either::Either;
+
+/// The number of bytes of the module-specific `error` field defined in [`ModuleError`].
+/// In FRAME, this is the maximum encoded size of a pallet error type.
+pub const MAX_MODULE_ERROR_ENCODED_SIZE: usize = 4;
 
 /// An abstraction over justification for a block's validity under a consensus algorithm.
 ///
@@ -223,7 +229,7 @@ pub type ConsensusEngineId = [u8; 4];
 
 /// Signature verify that can work with any known signature types..
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[derive(Eq, PartialEq, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
+#[derive(Eq, PartialEq, Clone, Encode, Decode, MaxEncodedLen, RuntimeDebug, TypeInfo)]
 pub enum MultiSignature {
 	/// An Ed25519 signature.
 	Ed25519(ed25519::Signature),
@@ -284,12 +290,6 @@ impl TryFrom<MultiSignature> for ecdsa::Signature {
 	}
 }
 
-impl Default for MultiSignature {
-	fn default() -> Self {
-		Self::Ed25519(Default::default())
-	}
-}
-
 /// Public key for any known crypto algorithm.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
@@ -300,12 +300,6 @@ pub enum MultiSigner {
 	Sr25519(sr25519::Public),
 	/// An SECP256k1/ECDSA identity (actually, the Blake2 hash of the compressed pub key).
 	Ecdsa(ecdsa::Public),
-}
-
-impl Default for MultiSigner {
-	fn default() -> Self {
-		Self::Ed25519(Default::default())
-	}
 }
 
 /// NOTE: This implementations is required by `SimpleAddressDeterminer`,
@@ -403,10 +397,14 @@ impl Verify for MultiSignature {
 	type Signer = MultiSigner;
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &AccountId32) -> bool {
 		match (self, signer) {
-			(Self::Ed25519(ref sig), who) =>
-				sig.verify(msg, &ed25519::Public::from_slice(who.as_ref())),
-			(Self::Sr25519(ref sig), who) =>
-				sig.verify(msg, &sr25519::Public::from_slice(who.as_ref())),
+			(Self::Ed25519(ref sig), who) => match ed25519::Public::from_slice(who.as_ref()) {
+				Ok(signer) => sig.verify(msg, &signer),
+				Err(()) => false,
+			},
+			(Self::Sr25519(ref sig), who) => match sr25519::Public::from_slice(who.as_ref()) {
+				Ok(signer) => sig.verify(msg, &signer),
+				Err(()) => false,
+			},
 			(Self::Ecdsa(ref sig), who) => {
 				let m = sp_io::hashing::blake2_256(msg.get());
 				match sp_io::crypto::secp256k1_ecdsa_recover_compressed(sig.as_ref(), &m) {
@@ -433,7 +431,10 @@ impl Verify for AnySignature {
 			.map(|s| s.verify(msg, signer))
 			.unwrap_or(false) ||
 			ed25519::Signature::try_from(self.0.as_fixed_bytes().as_ref())
-				.map(|s| s.verify(msg, &ed25519::Public::from_slice(signer.as_ref())))
+				.map(|s| match ed25519::Public::from_slice(signer.as_ref()) {
+					Err(()) => false,
+					Ok(signer) => s.verify(msg, &signer),
+				})
 				.unwrap_or(false)
 	}
 }
@@ -465,8 +466,53 @@ pub type DispatchResult = sp_std::result::Result<(), DispatchError>;
 /// about the `Dispatchable` that is only known post dispatch.
 pub type DispatchResultWithInfo<T> = sp_std::result::Result<T, DispatchErrorWithPostInfo<T>>;
 
-/// Reason why a dispatch call failed.
+/// Reason why a pallet call failed.
 #[derive(Eq, Clone, Copy, Encode, Decode, Debug, TypeInfo)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct ModuleError {
+	/// Module index, matching the metadata module index.
+	pub index: u8,
+	/// Module specific error value.
+	pub error: [u8; MAX_MODULE_ERROR_ENCODED_SIZE],
+	/// Optional error message.
+	#[codec(skip)]
+	#[cfg_attr(feature = "std", serde(skip_deserializing))]
+	pub message: Option<&'static str>,
+}
+
+impl PartialEq for ModuleError {
+	fn eq(&self, other: &Self) -> bool {
+		(self.index == other.index) && (self.error == other.error)
+	}
+}
+
+/// Errors related to transactional storage layers.
+#[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, Debug, TypeInfo)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub enum TransactionalError {
+	/// Too many transactional layers have been spawned.
+	LimitReached,
+	/// A transactional layer was expected, but does not exist.
+	NoLayer,
+}
+
+impl From<TransactionalError> for &'static str {
+	fn from(e: TransactionalError) -> &'static str {
+		match e {
+			TransactionalError::LimitReached => "Too many transactional layers have been spawned",
+			TransactionalError::NoLayer => "A transactional layer was expected, but does not exist",
+		}
+	}
+}
+
+impl From<TransactionalError> for DispatchError {
+	fn from(e: TransactionalError) -> DispatchError {
+		Self::Transactional(e)
+	}
+}
+
+/// Reason why a dispatch call failed.
+#[derive(Eq, Clone, Copy, Encode, Decode, Debug, TypeInfo, PartialEq)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum DispatchError {
 	/// Some error occurred.
@@ -480,29 +526,25 @@ pub enum DispatchError {
 	/// A bad origin.
 	BadOrigin,
 	/// A custom error in a module.
-	Module {
-		/// Module index, matching the metadata module index.
-		index: u8,
-		/// Module specific error value.
-		error: u8,
-		/// Optional error message.
-		#[codec(skip)]
-		#[cfg_attr(feature = "std", serde(skip_deserializing))]
-		message: Option<&'static str>,
-	},
+	Module(ModuleError),
 	/// At least one consumer is remaining so the account cannot be destroyed.
 	ConsumerRemaining,
 	/// There are no providers so the account cannot be created.
 	NoProviders,
+	/// There are too many consumers so the account cannot be created.
+	TooManyConsumers,
 	/// An error to do with tokens.
 	Token(TokenError),
 	/// An arithmetic error.
 	Arithmetic(ArithmeticError),
+	/// The number of transactional layers has been reached, or we are not in a transactional
+	/// layer.
+	Transactional(TransactionalError),
 }
 
 /// Result of a `Dispatchable` which contains the `DispatchResult` and additional information about
 /// the `Dispatchable` that is only known post dispatch.
-#[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, RuntimeDebug)]
+#[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, RuntimeDebug, TypeInfo)]
 pub struct DispatchErrorWithPostInfo<Info>
 where
 	Info: Eq + PartialEq + Clone + Copy + Encode + Decode + traits::Printable,
@@ -517,8 +559,8 @@ impl DispatchError {
 	/// Return the same error but without the attached message.
 	pub fn stripped(self) -> Self {
 		match self {
-			DispatchError::Module { index, error, message: Some(_) } =>
-				DispatchError::Module { index, error, message: None },
+			DispatchError::Module(ModuleError { index, error, message: Some(_) }) =>
+				DispatchError::Module(ModuleError { index, error, message: None }),
 			m => m,
 		}
 	}
@@ -626,11 +668,14 @@ impl From<DispatchError> for &'static str {
 			DispatchError::Other(msg) => msg,
 			DispatchError::CannotLookup => "Cannot lookup",
 			DispatchError::BadOrigin => "Bad origin",
-			DispatchError::Module { message, .. } => message.unwrap_or("Unknown module error"),
+			DispatchError::Module(ModuleError { message, .. }) =>
+				message.unwrap_or("Unknown module error"),
 			DispatchError::ConsumerRemaining => "Consumer remaining",
 			DispatchError::NoProviders => "No providers",
+			DispatchError::TooManyConsumers => "Too many consumers",
 			DispatchError::Token(e) => e.into(),
 			DispatchError::Arithmetic(e) => e.into(),
+			DispatchError::Transactional(e) => e.into(),
 		}
 	}
 }
@@ -651,7 +696,7 @@ impl traits::Printable for DispatchError {
 			Self::Other(err) => err.print(),
 			Self::CannotLookup => "Cannot lookup".print(),
 			Self::BadOrigin => "Bad origin".print(),
-			Self::Module { index, error, message } => {
+			Self::Module(ModuleError { index, error, message }) => {
 				index.print();
 				error.print();
 				if let Some(msg) = message {
@@ -660,12 +705,17 @@ impl traits::Printable for DispatchError {
 			},
 			Self::ConsumerRemaining => "Consumer remaining".print(),
 			Self::NoProviders => "No providers".print(),
+			Self::TooManyConsumers => "Too many consumers".print(),
 			Self::Token(e) => {
 				"Token error: ".print();
 				<&'static str>::from(*e).print();
 			},
 			Self::Arithmetic(e) => {
 				"Arithmetic error: ".print();
+				<&'static str>::from(*e).print();
+			},
+			Self::Transactional(e) => {
+				"Transactional error: ".print();
 				<&'static str>::from(*e).print();
 			},
 		}
@@ -680,30 +730,6 @@ where
 		self.error.print();
 		"PostInfo: ".print();
 		self.post_info.print();
-	}
-}
-
-impl PartialEq for DispatchError {
-	fn eq(&self, other: &Self) -> bool {
-		use DispatchError::*;
-
-		match (self, other) {
-			(CannotLookup, CannotLookup) |
-			(BadOrigin, BadOrigin) |
-			(ConsumerRemaining, ConsumerRemaining) |
-			(NoProviders, NoProviders) => true,
-
-			(Token(l), Token(r)) => l == r,
-			(Other(l), Other(r)) => l == r,
-			(Arithmetic(l), Arithmetic(r)) => l == r,
-
-			(
-				Module { index: index_l, error: error_l, .. },
-				Module { index: index_r, error: error_r, .. },
-			) => (index_l == index_r) && (error_l == error_r),
-
-			_ => false,
-		}
 	}
 }
 
@@ -801,7 +827,7 @@ macro_rules! assert_eq_error_rate {
 
 /// Simple blob to hold an extrinsic without committing to its format and ensure it is serialized
 /// correctly.
-#[derive(PartialEq, Eq, Clone, Default, Encode, Decode)]
+#[derive(PartialEq, Eq, Clone, Default, Encode, Decode, TypeInfo)]
 pub struct OpaqueExtrinsic(Vec<u8>);
 
 impl OpaqueExtrinsic {
@@ -920,7 +946,7 @@ mod tests {
 
 	use super::*;
 	use codec::{Decode, Encode};
-	use sp_core::crypto::Pair;
+	use sp_core::crypto::{Pair, UncheckedFrom};
 	use sp_io::TestExternalities;
 	use sp_state_machine::create_proof_check_backend;
 
@@ -932,11 +958,18 @@ mod tests {
 
 	#[test]
 	fn dispatch_error_encoding() {
-		let error = DispatchError::Module { index: 1, error: 2, message: Some("error message") };
+		let error = DispatchError::Module(ModuleError {
+			index: 1,
+			error: [2, 0, 0, 0],
+			message: Some("error message"),
+		});
 		let encoded = error.encode();
 		let decoded = DispatchError::decode(&mut &encoded[..]).unwrap();
-		assert_eq!(encoded, vec![3, 1, 2]);
-		assert_eq!(decoded, DispatchError::Module { index: 1, error: 2, message: None });
+		assert_eq!(encoded, vec![3, 1, 2, 0, 0, 0]);
+		assert_eq!(
+			decoded,
+			DispatchError::Module(ModuleError { index: 1, error: [2, 0, 0, 0], message: None })
+		);
 	}
 
 	#[test]
@@ -948,9 +981,9 @@ mod tests {
 			Other("bar"),
 			CannotLookup,
 			BadOrigin,
-			Module { index: 1, error: 1, message: None },
-			Module { index: 1, error: 2, message: None },
-			Module { index: 2, error: 1, message: None },
+			Module(ModuleError { index: 1, error: [1, 0, 0, 0], message: None }),
+			Module(ModuleError { index: 1, error: [2, 0, 0, 0], message: None }),
+			Module(ModuleError { index: 2, error: [1, 0, 0, 0], message: None }),
 			ConsumerRemaining,
 			NoProviders,
 			Token(TokenError::NoFunds),
@@ -975,8 +1008,8 @@ mod tests {
 
 		// Ignores `message` field in `Module` variant.
 		assert_eq!(
-			Module { index: 1, error: 1, message: Some("foo") },
-			Module { index: 1, error: 1, message: None },
+			Module(ModuleError { index: 1, error: [1, 0, 0, 0], message: Some("foo") }),
+			Module(ModuleError { index: 1, error: [1, 0, 0, 0], message: None }),
 		);
 	}
 
@@ -1006,7 +1039,9 @@ mod tests {
 
 		ext.execute_with(|| {
 			let _batching = SignatureBatching::start();
-			sp_io::crypto::sr25519_verify(&Default::default(), &Vec::new(), &Default::default());
+			let dummy = UncheckedFrom::unchecked_from([1; 32]);
+			let dummy_sig = UncheckedFrom::unchecked_from([1; 64]);
+			sp_io::crypto::sr25519_verify(&dummy_sig, &Vec::new(), &dummy);
 		});
 	}
 

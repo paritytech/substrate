@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -22,7 +22,7 @@ mod sandbox;
 
 use codec::{Decode, Encode};
 use hex_literal::hex;
-use sc_executor_common::{runtime_blob::RuntimeBlob, wasm_runtime::WasmModule};
+use sc_executor_common::{error::Error, runtime_blob::RuntimeBlob, wasm_runtime::WasmModule};
 use sc_runtime_test::wasm_binary_unwrap;
 use sp_core::{
 	blake2_128, blake2_256, ed25519, map,
@@ -33,8 +33,7 @@ use sp_core::{
 };
 use sp_runtime::traits::BlakeTwo256;
 use sp_state_machine::TestExternalities as CoreTestExternalities;
-use sp_trie::{trie_types::Layout, TrieConfiguration};
-use sp_wasm_interface::HostFunctions as _;
+use sp_trie::{LayoutV1 as Layout, TrieConfiguration};
 use std::sync::Arc;
 use tracing_subscriber::layer::SubscriberExt;
 
@@ -123,16 +122,11 @@ fn call_in_wasm<E: Externalities>(
 	call_data: &[u8],
 	execution_method: WasmExecutionMethod,
 	ext: &mut E,
-) -> Result<Vec<u8>, String> {
-	let executor = crate::WasmExecutor::new(
-		execution_method,
-		Some(1024),
-		HostFunctions::host_functions(),
-		8,
-		None,
-	);
+) -> Result<Vec<u8>, Error> {
+	let executor =
+		crate::WasmExecutor::<HostFunctions>::new(execution_method, Some(1024), 8, None, 2);
 	executor.uncached_call(
-		RuntimeBlob::uncompress_if_needed(&wasm_binary_unwrap()[..]).unwrap(),
+		RuntimeBlob::uncompress_if_needed(wasm_binary_unwrap()).unwrap(),
 		ext,
 		true,
 		function,
@@ -154,25 +148,16 @@ fn call_not_existing_function(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
 
-	match call_in_wasm(
-		"test_calling_missing_external",
-		&[],
-		wasm_method,
-		&mut ext,
-	) {
-		Ok(_) => panic!("was expected an `Err`"),
-		Err(e) => {
-			match wasm_method {
-				WasmExecutionMethod::Interpreted => assert_eq!(
-					&format!("{:?}", e),
-					"\"Trap: Trap { kind: Host(Other(\\\"Function `missing_external` is only a stub. Calling a stub is not allowed.\\\")) }\""
-				),
+	match call_in_wasm("test_calling_missing_external", &[], wasm_method, &mut ext).unwrap_err() {
+		Error::AbortedDueToTrap(error) => {
+			let expected = match wasm_method {
+				WasmExecutionMethod::Interpreted => "Trap: Host(Other(\"Function `missing_external` is only a stub. Calling a stub is not allowed.\"))",
 				#[cfg(feature = "wasmtime")]
-				WasmExecutionMethod::Compiled => assert!(
-					format!("{:?}", e).contains("Wasm execution trapped: call to a missing function env:missing_external")
-				),
-			}
-		}
+				WasmExecutionMethod::Compiled => "call to a missing function env:missing_external"
+			};
+			assert_eq!(error.message, expected);
+		},
+		error => panic!("unexpected error: {:?}", error),
 	}
 }
 
@@ -181,25 +166,18 @@ fn call_yet_another_not_existing_function(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
 
-	match call_in_wasm(
-		"test_calling_yet_another_missing_external",
-		&[],
-		wasm_method,
-		&mut ext,
-	) {
-		Ok(_) => panic!("was expected an `Err`"),
-		Err(e) => {
-			match wasm_method {
-				WasmExecutionMethod::Interpreted => assert_eq!(
-					&format!("{:?}", e),
-					"\"Trap: Trap { kind: Host(Other(\\\"Function `yet_another_missing_external` is only a stub. Calling a stub is not allowed.\\\")) }\""
-				),
+	match call_in_wasm("test_calling_yet_another_missing_external", &[], wasm_method, &mut ext)
+		.unwrap_err()
+	{
+		Error::AbortedDueToTrap(error) => {
+			let expected = match wasm_method {
+				WasmExecutionMethod::Interpreted => "Trap: Host(Other(\"Function `yet_another_missing_external` is only a stub. Calling a stub is not allowed.\"))",
 				#[cfg(feature = "wasmtime")]
-				WasmExecutionMethod::Compiled => assert!(
-					format!("{:?}", e).contains("Wasm execution trapped: call to a missing function env:yet_another_missing_external")
-				),
-			}
-		}
+				WasmExecutionMethod::Compiled => "call to a missing function env:yet_another_missing_external"
+			};
+			assert_eq!(error.message, expected);
+		},
+		error => panic!("unexpected error: {:?}", error),
 	}
 }
 
@@ -221,21 +199,22 @@ fn panicking_should_work(wasm_method: WasmExecutionMethod) {
 test_wasm_execution!(storage_should_work);
 fn storage_should_work(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
+	// Test value must be bigger than 32 bytes
+	// to test the trie versioning.
+	let value = vec![7u8; 60];
 
 	{
 		let mut ext = ext.ext();
 		ext.set_storage(b"foo".to_vec(), b"bar".to_vec());
 
-		let output =
-			call_in_wasm("test_data_in", &b"Hello world".to_vec().encode(), wasm_method, &mut ext)
-				.unwrap();
+		let output = call_in_wasm("test_data_in", &value.encode(), wasm_method, &mut ext).unwrap();
 
 		assert_eq!(output, b"all ok!".to_vec().encode());
 	}
 
 	let expected = TestExternalities::new(sp_core::storage::Storage {
 		top: map![
-			b"input".to_vec() => b"Hello world".to_vec(),
+			b"input".to_vec() => value,
 			b"foo".to_vec() => b"bar".to_vec(),
 			b"baz".to_vec() => b"bar".to_vec()
 		],
@@ -474,36 +453,47 @@ test_wasm_execution!(should_trap_when_heap_exhausted);
 fn should_trap_when_heap_exhausted(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 
-	let executor = crate::WasmExecutor::new(
+	let executor = crate::WasmExecutor::<HostFunctions>::new(
 		wasm_method,
 		Some(17), // `17` is the initial number of pages compiled into the binary.
-		HostFunctions::host_functions(),
 		8,
 		None,
+		2,
 	);
 
 	let err = executor
 		.uncached_call(
-			RuntimeBlob::uncompress_if_needed(&wasm_binary_unwrap()[..]).unwrap(),
+			RuntimeBlob::uncompress_if_needed(wasm_binary_unwrap()).unwrap(),
 			&mut ext.ext(),
 			true,
-			"test_exhaust_heap",
-			&[0],
+			"test_allocate_vec",
+			&16777216_u32.encode(),
 		)
 		.unwrap_err();
 
-	assert!(err.contains("Allocator ran out of space"));
+	match err {
+		#[cfg(feature = "wasmtime")]
+		Error::AbortedDueToTrap(error) if wasm_method == WasmExecutionMethod::Compiled => {
+			assert_eq!(
+				error.message,
+				r#"host code panicked while being called by the runtime: Failed to allocate memory: "Allocator ran out of space""#
+			);
+		},
+		Error::RuntimePanicked(error) if wasm_method == WasmExecutionMethod::Interpreted => {
+			assert_eq!(error, r#"Failed to allocate memory: "Allocator ran out of space""#);
+		},
+		error => panic!("unexpected error: {:?}", error),
+	}
 }
 
 fn mk_test_runtime(wasm_method: WasmExecutionMethod, pages: u64) -> Arc<dyn WasmModule> {
-	let blob = RuntimeBlob::uncompress_if_needed(&wasm_binary_unwrap()[..])
+	let blob = RuntimeBlob::uncompress_if_needed(wasm_binary_unwrap())
 		.expect("failed to create a runtime blob out of test runtime");
 
-	crate::wasm_runtime::create_wasm_runtime_with_code(
+	crate::wasm_runtime::create_wasm_runtime_with_code::<HostFunctions>(
 		wasm_method,
 		pages,
 		blob,
-		HostFunctions::host_functions(),
 		true,
 		None,
 	)
@@ -587,12 +577,12 @@ fn heap_is_reset_between_calls(wasm_method: WasmExecutionMethod) {
 
 test_wasm_execution!(parallel_execution);
 fn parallel_execution(wasm_method: WasmExecutionMethod) {
-	let executor = std::sync::Arc::new(crate::WasmExecutor::new(
+	let executor = std::sync::Arc::new(crate::WasmExecutor::<HostFunctions>::new(
 		wasm_method,
 		Some(1024),
-		HostFunctions::host_functions(),
 		8,
 		None,
+		2,
 	));
 	let threads: Vec<_> = (0..8)
 		.map(|_| {
@@ -603,7 +593,7 @@ fn parallel_execution(wasm_method: WasmExecutionMethod) {
 				assert_eq!(
 					executor
 						.uncached_call(
-							RuntimeBlob::uncompress_if_needed(&wasm_binary_unwrap()[..]).unwrap(),
+							RuntimeBlob::uncompress_if_needed(wasm_binary_unwrap()).unwrap(),
 							&mut ext,
 							true,
 							"test_twox_128",
@@ -629,11 +619,11 @@ fn wasm_tracing_should_work(wasm_method: WasmExecutionMethod) {
 	struct TestTraceHandler(Arc<Mutex<Vec<SpanDatum>>>);
 
 	impl sc_tracing::TraceHandler for TestTraceHandler {
-		fn handle_span(&self, sd: SpanDatum) {
-			self.0.lock().unwrap().push(sd);
+		fn handle_span(&self, sd: &SpanDatum) {
+			self.0.lock().unwrap().push(sd.clone());
 		}
 
-		fn handle_event(&self, _event: TraceEvent) {}
+		fn handle_event(&self, _event: &TraceEvent) {}
 	}
 
 	let traces = Arc::new(Mutex::new(Vec::new()));
@@ -697,7 +687,7 @@ fn panic_in_spawned_instance_panics_on_joining_its_result(wasm_method: WasmExecu
 	let error_result =
 		call_in_wasm("test_panic_in_spawned", &[], wasm_method, &mut ext).unwrap_err();
 
-	assert!(format!("{}", error_result).contains("Spawned task"));
+	assert!(error_result.to_string().contains("Spawned task"));
 }
 
 test_wasm_execution!(allocate_two_gigabyte);
@@ -769,11 +759,10 @@ fn memory_is_cleared_between_invocations(wasm_method: WasmExecutionMethod) {
 	 )
 	)"#).unwrap();
 
-	let runtime = crate::wasm_runtime::create_wasm_runtime_with_code(
+	let runtime = crate::wasm_runtime::create_wasm_runtime_with_code::<HostFunctions>(
 		wasm_method,
 		1024,
 		RuntimeBlob::uncompress_if_needed(&binary[..]).unwrap(),
-		HostFunctions::host_functions(),
 		true,
 		None,
 	)
@@ -785,4 +774,52 @@ fn memory_is_cleared_between_invocations(wasm_method: WasmExecutionMethod) {
 
 	let res = instance.call_export("returns_no_bss_mutable_static", &[0]).unwrap();
 	assert_eq!(1, u64::decode(&mut &res[..]).unwrap());
+}
+
+test_wasm_execution!(return_i8);
+fn return_i8(wasm_method: WasmExecutionMethod) {
+	let mut ext = TestExternalities::default();
+	let mut ext = ext.ext();
+
+	assert_eq!(
+		call_in_wasm("test_return_i8", &[], wasm_method, &mut ext).unwrap(),
+		(-66_i8).encode()
+	);
+}
+
+test_wasm_execution!(take_i8);
+fn take_i8(wasm_method: WasmExecutionMethod) {
+	let mut ext = TestExternalities::default();
+	let mut ext = ext.ext();
+
+	call_in_wasm("test_take_i8", &(-66_i8).encode(), wasm_method, &mut ext).unwrap();
+}
+
+test_wasm_execution!(abort_on_panic);
+fn abort_on_panic(wasm_method: WasmExecutionMethod) {
+	let mut ext = TestExternalities::default();
+	let mut ext = ext.ext();
+
+	match call_in_wasm("test_abort_on_panic", &[], wasm_method, &mut ext).unwrap_err() {
+		Error::AbortedDueToPanic(error) => assert_eq!(error.message, "test_abort_on_panic called"),
+		error => panic!("unexpected error: {:?}", error),
+	}
+}
+
+test_wasm_execution!(unreachable_intrinsic);
+fn unreachable_intrinsic(wasm_method: WasmExecutionMethod) {
+	let mut ext = TestExternalities::default();
+	let mut ext = ext.ext();
+
+	match call_in_wasm("test_unreachable_intrinsic", &[], wasm_method, &mut ext).unwrap_err() {
+		Error::AbortedDueToTrap(error) => {
+			let expected = match wasm_method {
+				WasmExecutionMethod::Interpreted => "Trap: Unreachable",
+				#[cfg(feature = "wasmtime")]
+				WasmExecutionMethod::Compiled => "wasm trap: wasm `unreachable` instruction executed",
+			};
+			assert_eq!(error.message, expected);
+		},
+		error => panic!("unexpected error: {:?}", error),
+	}
 }

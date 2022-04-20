@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -86,13 +86,13 @@ pub enum Error {
 	CannotSign(Vec<u8>, String),
 }
 
-impl core::convert::From<Public> for Error {
+impl From<Public> for Error {
 	fn from(p: Public) -> Self {
 		Self::InvalidAuthority(p)
 	}
 }
 
-impl core::convert::From<String> for Error {
+impl From<String> for Error {
 	fn from(s: String) -> Self {
 		Self::StateUnavailable(s)
 	}

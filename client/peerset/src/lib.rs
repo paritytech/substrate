@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -129,7 +129,7 @@ impl PeersetHandle {
 	/// Has no effect if the node was already a reserved peer.
 	///
 	/// > **Note**: Keep in mind that the networking has to know an address for this node,
-	/// >           otherwise it will not be able to connect to it.
+	/// > otherwise it will not be able to connect to it.
 	pub fn add_reserved_peer(&self, set_id: SetId, peer_id: PeerId) {
 		let _ = self.tx.unbounded_send(Action::AddReservedPeer(set_id, peer_id));
 	}
@@ -232,7 +232,7 @@ pub struct SetConfig {
 	/// List of bootstrap nodes to initialize the set with.
 	///
 	/// > **Note**: Keep in mind that the networking has to know an address for these nodes,
-	/// >           otherwise it will not be able to connect to them.
+	/// > otherwise it will not be able to connect to them.
 	pub bootnodes: Vec<PeerId>,
 
 	/// Lists of nodes we should always be connected to.

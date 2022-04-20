@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,10 +15,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use frame_support::{assert_ok, assert_storage_noop, traits::IntegrityTest};
+use frame_support::{assert_noop, assert_ok, assert_storage_noop, traits::IntegrityTest};
 
 use super::*;
-use frame_election_provider_support::SortedListProvider;
+use frame_election_provider_support::{SortedListProvider, VoteWeight};
 use list::Bag;
 use mock::{test_utils::*, *};
 
@@ -35,7 +35,7 @@ mod pallet {
 			);
 
 			// when increasing vote weight to the level of non-existent bag
-			NextVoteWeight::set(2_000);
+			StakingMock::set_score_of(&42, 2_000);
 			assert_ok!(BagsList::rebag(Origin::signed(0), 42));
 
 			// then a new bag is created and the id moves into it
@@ -45,7 +45,7 @@ mod pallet {
 			);
 
 			// when decreasing weight within the range of the current bag
-			NextVoteWeight::set(1001);
+			StakingMock::set_score_of(&42, 1_001);
 			assert_ok!(BagsList::rebag(Origin::signed(0), 42));
 
 			// then the id does not move
@@ -55,7 +55,7 @@ mod pallet {
 			);
 
 			// when reducing weight to the level of a non-existent bag
-			NextVoteWeight::set(30);
+			StakingMock::set_score_of(&42, 30);
 			assert_ok!(BagsList::rebag(Origin::signed(0), 42));
 
 			// then a new bag is created and the id moves into it
@@ -65,7 +65,7 @@ mod pallet {
 			);
 
 			// when increasing weight to the level of a pre-existing bag
-			NextVoteWeight::set(500);
+			StakingMock::set_score_of(&42, 500);
 			assert_ok!(BagsList::rebag(Origin::signed(0), 42));
 
 			// then the id moves into that bag
@@ -85,7 +85,7 @@ mod pallet {
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4])]);
 
 			// when
-			NextVoteWeight::set(10);
+			StakingMock::set_score_of(&4, 10);
 			assert_ok!(BagsList::rebag(Origin::signed(0), 4));
 
 			// then
@@ -93,6 +93,7 @@ mod pallet {
 			assert_eq!(Bag::<Runtime>::get(1_000).unwrap(), Bag::new(Some(2), Some(3), 1_000));
 
 			// when
+			StakingMock::set_score_of(&3, 10);
 			assert_ok!(BagsList::rebag(Origin::signed(0), 3));
 
 			// then
@@ -103,6 +104,7 @@ mod pallet {
 			assert_eq!(get_list_as_ids(), vec![2u32, 1, 4, 3]);
 
 			// when
+			StakingMock::set_score_of(&2, 10);
 			assert_ok!(BagsList::rebag(Origin::signed(0), 2));
 
 			// then
@@ -117,7 +119,7 @@ mod pallet {
 	fn rebag_head_works() {
 		ExtBuilder::default().build_and_execute(|| {
 			// when
-			NextVoteWeight::set(10);
+			StakingMock::set_score_of(&2, 10);
 			assert_ok!(BagsList::rebag(Origin::signed(0), 2));
 
 			// then
@@ -125,6 +127,7 @@ mod pallet {
 			assert_eq!(Bag::<Runtime>::get(1_000).unwrap(), Bag::new(Some(3), Some(4), 1_000));
 
 			// when
+			StakingMock::set_score_of(&3, 10);
 			assert_ok!(BagsList::rebag(Origin::signed(0), 3));
 
 			// then
@@ -132,6 +135,7 @@ mod pallet {
 			assert_eq!(Bag::<Runtime>::get(1_000).unwrap(), Bag::new(Some(4), Some(4), 1_000));
 
 			// when
+			StakingMock::set_score_of(&4, 10);
 			assert_ok!(BagsList::rebag(Origin::signed(0), 4));
 
 			// then
@@ -196,6 +200,249 @@ mod pallet {
 			assert_storage_noop!(assert!(BagsList::rebag(Origin::signed(0), 10).is_ok()));
 		})
 	}
+
+	#[test]
+	fn put_in_front_of_two_node_bag_heavier_is_tail() {
+		ExtBuilder::default()
+			.skip_genesis_ids()
+			.add_ids(vec![(10, 15), (11, 16)])
+			.build_and_execute(|| {
+				// given
+				assert_eq!(List::<Runtime>::get_bags(), vec![(20, vec![10, 11])]);
+
+				// when
+				assert_ok!(BagsList::put_in_front_of(Origin::signed(11), 10));
+
+				// then
+				assert_eq!(List::<Runtime>::get_bags(), vec![(20, vec![11, 10])]);
+			});
+	}
+
+	#[test]
+	fn put_in_front_of_two_node_bag_heavier_is_head() {
+		ExtBuilder::default()
+			.skip_genesis_ids()
+			.add_ids(vec![(11, 16), (10, 15)])
+			.build_and_execute(|| {
+				// given
+				assert_eq!(List::<Runtime>::get_bags(), vec![(20, vec![11, 10])]);
+
+				// when
+				assert_ok!(BagsList::put_in_front_of(Origin::signed(11), 10));
+
+				// then
+				assert_eq!(List::<Runtime>::get_bags(), vec![(20, vec![11, 10])]);
+			});
+	}
+
+	#[test]
+	fn put_in_front_of_non_terminal_nodes_heavier_behind() {
+		ExtBuilder::default().add_ids(vec![(5, 1_000)]).build_and_execute(|| {
+			// given
+			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4, 5])]);
+
+			StakingMock::set_score_of(&3, 999);
+
+			// when
+			assert_ok!(BagsList::put_in_front_of(Origin::signed(4), 3));
+
+			// then
+			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 4, 3, 5])]);
+		});
+	}
+
+	#[test]
+	fn put_in_front_of_non_terminal_nodes_heavier_in_front() {
+		ExtBuilder::default()
+			.add_ids(vec![(5, 1_000), (6, 1_000)])
+			.build_and_execute(|| {
+				// given
+				assert_eq!(
+					List::<Runtime>::get_bags(),
+					vec![(10, vec![1]), (1_000, vec![2, 3, 4, 5, 6])]
+				);
+
+				StakingMock::set_score_of(&5, 999);
+
+				// when
+				assert_ok!(BagsList::put_in_front_of(Origin::signed(3), 5));
+
+				// then
+				assert_eq!(
+					List::<Runtime>::get_bags(),
+					vec![(10, vec![1]), (1_000, vec![2, 4, 3, 5, 6])]
+				);
+			});
+	}
+
+	#[test]
+	fn put_in_front_of_lighter_is_head_heavier_is_non_terminal() {
+		ExtBuilder::default().build_and_execute(|| {
+			// given
+			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4])]);
+
+			StakingMock::set_score_of(&2, 999);
+
+			// when
+			assert_ok!(BagsList::put_in_front_of(Origin::signed(3), 2));
+
+			// then
+			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![3, 2, 4])]);
+		});
+	}
+
+	#[test]
+	fn put_in_front_of_heavier_is_tail_lighter_is_non_terminal() {
+		ExtBuilder::default().build_and_execute(|| {
+			// given
+			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4])]);
+
+			StakingMock::set_score_of(&3, 999);
+
+			// when
+			assert_ok!(BagsList::put_in_front_of(Origin::signed(4), 3));
+
+			// then
+			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 4, 3])]);
+		});
+	}
+
+	#[test]
+	fn put_in_front_of_heavier_is_tail_lighter_is_head() {
+		ExtBuilder::default().add_ids(vec![(5, 1_000)]).build_and_execute(|| {
+			// given
+			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4, 5])]);
+
+			StakingMock::set_score_of(&2, 999);
+
+			// when
+			assert_ok!(BagsList::put_in_front_of(Origin::signed(5), 2));
+
+			// then
+			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![5, 2, 3, 4])]);
+		});
+	}
+
+	#[test]
+	fn put_in_front_of_heavier_is_head_lighter_is_not_terminal() {
+		ExtBuilder::default().add_ids(vec![(5, 1_000)]).build_and_execute(|| {
+			// given
+			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4, 5])]);
+
+			StakingMock::set_score_of(&4, 999);
+
+			// when
+			BagsList::put_in_front_of(Origin::signed(2), 4).unwrap();
+
+			// then
+			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![3, 2, 4, 5])]);
+		});
+	}
+
+	#[test]
+	fn put_in_front_of_lighter_is_tail_heavier_is_not_terminal() {
+		ExtBuilder::default().add_ids(vec![(5, 900)]).build_and_execute(|| {
+			// given
+			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4, 5])]);
+
+			// when
+			BagsList::put_in_front_of(Origin::signed(3), 5).unwrap();
+
+			// then
+			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 4, 3, 5])]);
+		});
+	}
+
+	#[test]
+	fn put_in_front_of_lighter_is_tail_heavier_is_head() {
+		ExtBuilder::default().build_and_execute(|| {
+			// given
+			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4])]);
+
+			StakingMock::set_score_of(&4, 999);
+
+			// when
+			BagsList::put_in_front_of(Origin::signed(2), 4).unwrap();
+
+			// then
+			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![3, 2, 4])]);
+		});
+	}
+
+	#[test]
+	fn put_in_front_of_errors_if_heavier_is_less_than_lighter() {
+		ExtBuilder::default().build_and_execute(|| {
+			// given
+			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4])]);
+
+			StakingMock::set_score_of(&3, 999);
+
+			// then
+			assert_noop!(
+				BagsList::put_in_front_of(Origin::signed(3), 2),
+				crate::pallet::Error::<Runtime>::NotHeavier
+			);
+		});
+	}
+
+	#[test]
+	fn put_in_front_of_errors_if_heavier_is_equal_weight_to_lighter() {
+		ExtBuilder::default().build_and_execute(|| {
+			// given
+			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4])]);
+
+			// then
+			assert_noop!(
+				BagsList::put_in_front_of(Origin::signed(3), 4),
+				crate::pallet::Error::<Runtime>::NotHeavier
+			);
+		});
+	}
+
+	#[test]
+	fn put_in_front_of_errors_if_nodes_not_found() {
+		// `heavier` not found
+		ExtBuilder::default().build_and_execute(|| {
+			// given
+			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4])]);
+
+			assert!(!ListNodes::<Runtime>::contains_key(5));
+
+			// then
+			assert_noop!(
+				BagsList::put_in_front_of(Origin::signed(5), 4),
+				crate::pallet::Error::<Runtime>::IdNotFound
+			);
+		});
+
+		// `lighter` not found
+		ExtBuilder::default().build_and_execute(|| {
+			// given
+			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4])]);
+
+			assert!(!ListNodes::<Runtime>::contains_key(5));
+
+			// then
+			assert_noop!(
+				BagsList::put_in_front_of(Origin::signed(4), 5),
+				crate::pallet::Error::<Runtime>::IdNotFound
+			);
+		});
+	}
+
+	#[test]
+	fn put_in_front_of_errors_if_nodes_not_in_same_bag() {
+		ExtBuilder::default().build_and_execute(|| {
+			// given
+			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4])]);
+
+			// then
+			assert_noop!(
+				BagsList::put_in_front_of(Origin::signed(4), 1),
+				crate::pallet::Error::<Runtime>::NotInSameBag
+			);
+		});
+	}
 }
 
 mod sorted_list_provider {
@@ -208,6 +455,27 @@ mod sorted_list_provider {
 			for (i, id) in BagsList::iter().enumerate() {
 				assert_eq!(id, expected[i])
 			}
+		});
+	}
+
+	#[test]
+	fn iter_from_works() {
+		ExtBuilder::default().add_ids(vec![(5, 5), (6, 15)]).build_and_execute(|| {
+			// given
+			assert_eq!(
+				List::<Runtime>::get_bags(),
+				vec![(10, vec![1, 5]), (20, vec![6]), (1000, vec![2, 3, 4])]
+			);
+
+			assert_eq!(BagsList::iter_from(&2).unwrap().collect::<Vec<_>>(), vec![3, 4, 6, 1, 5]);
+			assert_eq!(BagsList::iter_from(&3).unwrap().collect::<Vec<_>>(), vec![4, 6, 1, 5]);
+			assert_eq!(BagsList::iter_from(&4).unwrap().collect::<Vec<_>>(), vec![6, 1, 5]);
+			assert_eq!(BagsList::iter_from(&6).unwrap().collect::<Vec<_>>(), vec![1, 5]);
+			assert_eq!(BagsList::iter_from(&1).unwrap().collect::<Vec<_>>(), vec![5]);
+			assert!(BagsList::iter_from(&5).unwrap().collect::<Vec<_>>().is_empty());
+			assert!(BagsList::iter_from(&7).is_err());
+
+			assert_storage_noop!(assert!(BagsList::iter_from(&8).is_err()));
 		});
 	}
 
@@ -271,7 +539,7 @@ mod sorted_list_provider {
 			// then
 			assert_storage_noop!(assert_eq!(
 				BagsList::on_insert(3, 20).unwrap_err(),
-				Error::Duplicate
+				ListError::Duplicate
 			));
 		});
 	}

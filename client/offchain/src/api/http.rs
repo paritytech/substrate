@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -37,7 +37,6 @@ use once_cell::sync::Lazy;
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_core::offchain::{HttpError, HttpRequestId, HttpRequestStatus, Timestamp};
 use std::{
-	convert::TryFrom,
 	fmt,
 	io::Read as _,
 	pin::Pin,
@@ -432,8 +431,9 @@ impl HttpApi {
 							);
 						},
 						None => {}, // can happen if we detected an IO error when sending the body
-						_ =>
-							tracing::error!(target: "offchain-worker::http", "State mismatch between the API and worker"),
+						_ => {
+							tracing::error!(target: "offchain-worker::http", "State mismatch between the API and worker")
+						},
 					}
 				},
 
@@ -443,8 +443,9 @@ impl HttpApi {
 						self.requests.insert(id, HttpApiRequest::Fail(error));
 					},
 					None => {}, // can happen if we detected an IO error when sending the body
-					_ =>
-						tracing::error!(target: "offchain-worker::http", "State mismatch between the API and worker"),
+					_ => {
+						tracing::error!(target: "offchain-worker::http", "State mismatch between the API and worker")
+					},
 				},
 
 				None => {

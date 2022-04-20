@@ -13,37 +13,38 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-parking_lot = "0.11.1"
+parking_lot = "0.12.0"
 log = "0.4.8"
-kvdb = "0.10.0"
-kvdb-rocksdb = { version = "0.14.0", optional = true }
-kvdb-memorydb = "0.10.0"
+kvdb = "0.11.0"
+kvdb-rocksdb = { version = "0.15.2", optional = true }
+kvdb-memorydb = "0.11.0"
 linked-hash-map = "0.5.4"
 hash-db = "0.15.2"
-codec = { package = "parity-scale-codec", version = "2.0.0", features = [
+codec = { package = "parity-scale-codec", version = "3.0.0", features = [
     "derive",
 ] }
 
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
-sp-arithmetic = { version = "4.0.0-dev", path = "../../primitives/arithmetic" }
-sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
-sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
-sp-state-machine = { version = "0.10.0-dev", path = "../../primitives/state-machine" }
+sp-arithmetic = { version = "5.0.0", path = "../../primitives/arithmetic" }
+sp-core = { version = "6.0.0", path = "../../primitives/core" }
+sp-runtime = { version = "6.0.0", path = "../../primitives/runtime" }
+sp-state-machine = { version = "0.12.0", path = "../../primitives/state-machine" }
 sc-state-db = { version = "0.10.0-dev", path = "../state-db" }
-sp-trie = { version = "4.0.0-dev", path = "../../primitives/trie" }
+sp-trie = { version = "6.0.0", path = "../../primitives/trie" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
 sp-database = { version = "4.0.0-dev", path = "../../primitives/database" }
-parity-db = { version = "0.3.4", optional = true }
+parity-db = { version = "0.3.9", optional = true }
 
 [dev-dependencies]
-sp-tracing = { version = "4.0.0-dev", path = "../../primitives/tracing" }
+sp-tracing = { version = "5.0.0", path = "../../primitives/tracing" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
 quickcheck = "1.0.3"
-kvdb-rocksdb = "0.14.0"
+kvdb-rocksdb = "0.15.1"
 tempfile = "3"
 
 [features]
 default = []
 test-helpers = []
+runtime-benchmarks = []
 with-kvdb-rocksdb = ["kvdb-rocksdb"]
 with-parity-db = ["parity-db"]

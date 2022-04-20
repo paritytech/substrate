@@ -12,15 +12,16 @@ repository = "https://github.com/paritytech/substrate/"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "2.0.0" }
-scale-info = { version = "1.0", features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "3.0.0" }
+scale-info = { version = "2.0.1", features = ["derive"] }
 node-primitives = { version = "2.0.0", path = "../primitives" }
 node-runtime = { version = "3.0.0-dev", path = "../runtime" }
 sc-executor = { version = "0.10.0-dev", path = "../../../client/executor" }
-sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
-sp-keystore = { version = "0.10.0-dev", path = "../../../primitives/keystore" }
-sp-state-machine = { version = "0.10.0-dev", path = "../../../primitives/state-machine" }
-sp-trie = { version = "4.0.0-dev", path = "../../../primitives/trie" }
+sp-core = { version = "6.0.0", path = "../../../primitives/core" }
+sp-keystore = { version = "0.12.0", path = "../../../primitives/keystore" }
+sp-state-machine = { version = "0.12.0", path = "../../../primitives/state-machine" }
+sp-tracing = { version = "5.0.0", path = "../../../primitives/tracing" }
+sp-trie = { version = "6.0.0", path = "../../../primitives/trie" }
 frame-benchmarking = { version = "4.0.0-dev", path = "../../../frame/benchmarking" }
 
 [dev-dependencies]
@@ -33,12 +34,13 @@ pallet-contracts = { version = "4.0.0-dev", path = "../../../frame/contracts" }
 pallet-im-online = { version = "4.0.0-dev", path = "../../../frame/im-online" }
 pallet-timestamp = { version = "4.0.0-dev", path = "../../../frame/timestamp" }
 pallet-treasury = { version = "4.0.0-dev", path = "../../../frame/treasury" }
-sp-application-crypto = { version = "4.0.0-dev", path = "../../../primitives/application-crypto" }
+sp-application-crypto = { version = "6.0.0", path = "../../../primitives/application-crypto" }
 sp-consensus-babe = { version = "0.10.0-dev", path = "../../../primitives/consensus/babe" }
-sp-runtime = { version = "4.0.0-dev", path = "../../../primitives/runtime" }
-sp-externalities = { version = "0.10.0-dev", path = "../../../primitives/externalities" }
+sp-runtime = { version = "6.0.0", path = "../../../primitives/runtime" }
+sp-externalities = { version = "0.12.0", path = "../../../primitives/externalities" }
+sp-keyring = { version = "6.0.0", path = "../../../primitives/keyring" }
 wat = "1.0"
-futures = "0.3.9"
+futures = "0.3.21"
 
 [features]
 wasmtime = ["sc-executor/wasmtime"]

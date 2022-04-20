@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -84,23 +84,23 @@
 //!
 //! We only send polite messages to peers,
 
-use parity_scale_codec::{Decode, Encode};
-use sc_network::{ObservedRole, PeerId, ReputationChange};
-use sc_network_gossip::{MessageIntent, ValidatorContext};
-use sp_finality_grandpa::AuthorityId;
-use sp_runtime::traits::{Block as BlockT, NumberFor, Zero};
-
+use ahash::{AHashMap, AHashSet};
 use log::{debug, trace};
+use parity_scale_codec::{Decode, Encode};
 use prometheus_endpoint::{register, CounterVec, Opts, PrometheusError, Registry, U64};
 use rand::seq::SliceRandom;
+use sc_network::{ObservedRole, PeerId, ReputationChange};
+use sc_network_gossip::{MessageIntent, ValidatorContext};
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG};
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
+use sp_finality_grandpa::AuthorityId;
+use sp_runtime::traits::{Block as BlockT, NumberFor, Zero};
 
 use super::{benefit, cost, Round, SetId};
 use crate::{environment, CatchUp, CompactCommit, SignedMessage};
 
 use std::{
-	collections::{HashMap, HashSet, VecDeque},
+	collections::{HashSet, VecDeque},
 	time::{Duration, Instant},
 };
 
@@ -260,7 +260,7 @@ const KEEP_RECENT_ROUNDS: usize = 3;
 struct KeepTopics<B: BlockT> {
 	current_set: SetId,
 	rounds: VecDeque<(Round, SetId)>,
-	reverse_map: HashMap<B::Hash, (Option<Round>, SetId)>,
+	reverse_map: AHashMap<B::Hash, (Option<Round>, SetId)>,
 }
 
 impl<B: BlockT> KeepTopics<B> {
@@ -268,7 +268,7 @@ impl<B: BlockT> KeepTopics<B> {
 		KeepTopics {
 			current_set: SetId(0),
 			rounds: VecDeque::with_capacity(KEEP_RECENT_ROUNDS + 2),
-			reverse_map: HashMap::new(),
+			reverse_map: Default::default(),
 		}
 	}
 
@@ -290,7 +290,7 @@ impl<B: BlockT> KeepTopics<B> {
 			let _ = self.rounds.pop_front();
 		}
 
-		let mut map = HashMap::with_capacity(KEEP_RECENT_ROUNDS + 3);
+		let mut map = AHashMap::with_capacity(KEEP_RECENT_ROUNDS + 3);
 		map.insert(super::global_topic::<B>(self.current_set.0), (None, self.current_set));
 
 		for &(round, set) in &self.rounds {
@@ -477,10 +477,10 @@ impl<N> PeerInfo<N> {
 
 /// The peers we're connected to in gossip.
 struct Peers<N> {
-	inner: HashMap<PeerId, PeerInfo<N>>,
+	inner: AHashMap<PeerId, PeerInfo<N>>,
 	/// The randomly picked set of `LUCKY_PEERS` we'll gossip to in the first stage of round
 	/// gossiping.
-	first_stage_peers: HashSet<PeerId>,
+	first_stage_peers: AHashSet<PeerId>,
 	/// The randomly picked set of peers we'll gossip to in the second stage of gossiping if the
 	/// first stage didn't allow us to spread the voting data enough to conclude the round. This
 	/// set should have size `sqrt(connected_peers)`.
@@ -492,10 +492,10 @@ struct Peers<N> {
 impl<N> Default for Peers<N> {
 	fn default() -> Self {
 		Peers {
-			inner: HashMap::new(),
-			first_stage_peers: HashSet::new(),
-			second_stage_peers: HashSet::new(),
-			lucky_light_peers: HashSet::new(),
+			inner: Default::default(),
+			first_stage_peers: Default::default(),
+			second_stage_peers: Default::default(),
+			lucky_light_peers: Default::default(),
 		}
 	}
 }
@@ -608,15 +608,14 @@ impl<N: Ord> Peers<N> {
 			}
 		});
 
-		let mut first_stage_peers = HashSet::new();
+		let mut first_stage_peers = AHashSet::new();
 		let mut second_stage_peers = HashSet::new();
 
 		// we start by allocating authorities to the first stage set and when the minimum of
 		// `LUCKY_PEERS / 2` is filled we start allocating to the second stage set.
 		let half_lucky = LUCKY_PEERS / 2;
 		let one_and_a_half_lucky = LUCKY_PEERS + half_lucky;
-		let mut n_authorities_added = 0;
-		for peer_id in shuffled_authorities {
+		for (n_authorities_added, peer_id) in shuffled_authorities.enumerate() {
 			if n_authorities_added < half_lucky {
 				first_stage_peers.insert(*peer_id);
 			} else if n_authorities_added < one_and_a_half_lucky {
@@ -624,8 +623,6 @@ impl<N: Ord> Peers<N> {
 			} else {
 				break
 			}
-
-			n_authorities_added += 1;
 		}
 
 		// fill up first and second sets with remaining peers (either full or authorities)
@@ -802,7 +799,7 @@ impl<Block: BlockT> Inner<Block> {
 				Some(ref mut v) =>
 					if v.set_id == set_id {
 						let diff_authorities = self.authorities.iter().collect::<HashSet<_>>() !=
-							authorities.iter().collect();
+							authorities.iter().collect::<HashSet<_>>();
 
 						if diff_authorities {
 							debug!(target: "afg",
@@ -1299,7 +1296,7 @@ impl Metrics {
 			messages_validated: register(
 				CounterVec::new(
 					Opts::new(
-						"finality_grandpa_communication_gossip_validator_messages",
+						"substrate_finality_grandpa_communication_gossip_validator_messages",
 						"Number of messages validated by the finality grandpa gossip validator.",
 					),
 					&["message", "action"],
@@ -1667,10 +1664,11 @@ pub(super) struct PeerReport {
 #[cfg(test)]
 mod tests {
 	use super::{environment::SharedVoterSetState, *};
+	use crate::communication;
 	use sc_network::config::Role;
 	use sc_network_gossip::Validator as GossipValidatorT;
 	use sc_network_test::Block;
-	use sp_core::{crypto::Public, H256};
+	use sp_core::{crypto::UncheckedFrom, H256};
 
 	// some random config (not really needed)
 	fn config() -> crate::Config {
@@ -1682,6 +1680,7 @@ mod tests {
 			local_role: Role::Authority,
 			observer_enabled: true,
 			telemetry: None,
+			protocol_name: communication::grandpa_protocol_name::NAME.into(),
 		}
 	}
 
@@ -1691,7 +1690,7 @@ mod tests {
 
 		let base = (H256::zero(), 0);
 
-		let voters = vec![(AuthorityId::from_slice(&[1; 32]), 1)];
+		let voters = vec![(AuthorityId::unchecked_from([1; 32]), 1)];
 		let voters = AuthoritySet::genesis(voters).unwrap();
 
 		let set_state = VoterSetState::live(0, &voters, base);
@@ -1843,13 +1842,13 @@ mod tests {
 
 			// messages from old rounds are expired.
 			for round_num in 1u64..last_kept_round {
-				let topic = crate::communication::round_topic::<Block>(round_num, 1);
+				let topic = communication::round_topic::<Block>(round_num, 1);
 				assert!(is_expired(topic, &[1, 2, 3]));
 			}
 
 			// messages from not-too-old rounds are not expired.
 			for round_num in last_kept_round..10 {
-				let topic = crate::communication::round_topic::<Block>(round_num, 1);
+				let topic = communication::round_topic::<Block>(round_num, 1);
 				assert!(!is_expired(topic, &[1, 2, 3]));
 			}
 		}
@@ -1861,7 +1860,7 @@ mod tests {
 
 		let (val, _) = GossipValidator::<Block>::new(config(), voter_set_state(), None, None);
 		let set_id = 1;
-		let auth = AuthorityId::from_slice(&[1u8; 32]);
+		let auth = AuthorityId::unchecked_from([1u8; 32]);
 		let peer = PeerId::random();
 
 		val.note_set(SetId(set_id), vec![auth.clone()], |_, _| {});
@@ -1878,8 +1877,8 @@ mod tests {
 						target_hash: Default::default(),
 						target_number: 10,
 					}),
-					signature: Default::default(),
-					id: AuthorityId::from_slice(&[2u8; 32]),
+					signature: UncheckedFrom::unchecked_from([1; 64]),
+					id: UncheckedFrom::unchecked_from([2u8; 32]),
 				},
 			},
 		);
@@ -1894,7 +1893,7 @@ mod tests {
 						target_hash: Default::default(),
 						target_number: 10,
 					}),
-					signature: Default::default(),
+					signature: UncheckedFrom::unchecked_from([1; 64]),
 					id: auth.clone(),
 				},
 			},
@@ -1909,7 +1908,7 @@ mod tests {
 		let (val, _) = GossipValidator::<Block>::new(config(), voter_set_state(), None, None);
 
 		let set_id = 1;
-		let auth = AuthorityId::from_slice(&[1u8; 32]);
+		let auth = AuthorityId::unchecked_from([1u8; 32]);
 		let peer = PeerId::random();
 
 		val.note_set(SetId(set_id), vec![auth.clone()], |_, _| {});
@@ -1972,7 +1971,7 @@ mod tests {
 		let (val, _) = GossipValidator::<Block>::new(config(), set_state.clone(), None, None);
 
 		let set_id = 1;
-		let auth = AuthorityId::from_slice(&[1u8; 32]);
+		let auth = AuthorityId::unchecked_from([1u8; 32]);
 		let peer = PeerId::random();
 
 		val.note_set(SetId(set_id), vec![auth.clone()], |_, _| {});
@@ -2265,7 +2264,7 @@ mod tests {
 		// we accept messages from rounds 9, 10 and 11
 		// therefore neither of those should be considered expired
 		for round in &[9, 10, 11] {
-			assert!(!is_expired(crate::communication::round_topic::<Block>(*round, 1), &[]))
+			assert!(!is_expired(communication::round_topic::<Block>(*round, 1), &[]))
 		}
 	}
 
@@ -2313,7 +2312,7 @@ mod tests {
 					if message_allowed(
 						peer,
 						MessageIntent::Broadcast,
-						&crate::communication::round_topic::<Block>(1, 0),
+						&communication::round_topic::<Block>(1, 0),
 						&[],
 					) {
 						allowed += 1;
@@ -2377,7 +2376,7 @@ mod tests {
 		assert!(!val.message_allowed()(
 			&light_peer,
 			MessageIntent::Broadcast,
-			&crate::communication::round_topic::<Block>(1, 0),
+			&communication::round_topic::<Block>(1, 0),
 			&[],
 		));
 
@@ -2391,7 +2390,7 @@ mod tests {
 		assert!(!val.message_allowed()(
 			&light_peer,
 			MessageIntent::Broadcast,
-			&crate::communication::round_topic::<Block>(1, 0),
+			&communication::round_topic::<Block>(1, 0),
 			&[],
 		));
 
@@ -2415,8 +2414,8 @@ mod tests {
 				auth_data: Vec::new(),
 			};
 
-			crate::communication::gossip::GossipMessage::<Block>::Commit(
-				crate::communication::gossip::FullCommitMessage {
+			communication::gossip::GossipMessage::<Block>::Commit(
+				communication::gossip::FullCommitMessage {
 					round: Round(2),
 					set_id: SetId(0),
 					message: commit,
@@ -2429,7 +2428,7 @@ mod tests {
 		assert!(val.message_allowed()(
 			&light_peer,
 			MessageIntent::Broadcast,
-			&crate::communication::global_topic::<Block>(0),
+			&communication::global_topic::<Block>(0),
 			&commit,
 		));
 	}
@@ -2469,8 +2468,8 @@ mod tests {
 				auth_data: Vec::new(),
 			};
 
-			crate::communication::gossip::GossipMessage::<Block>::Commit(
-				crate::communication::gossip::FullCommitMessage {
+			communication::gossip::GossipMessage::<Block>::Commit(
+				communication::gossip::FullCommitMessage {
 					round: Round(1),
 					set_id: SetId(1),
 					message: commit,
@@ -2488,7 +2487,7 @@ mod tests {
 		assert!(message_allowed(
 			&peer1,
 			MessageIntent::Broadcast,
-			&crate::communication::global_topic::<Block>(1),
+			&communication::global_topic::<Block>(1),
 			&commit,
 		));
 
@@ -2497,7 +2496,7 @@ mod tests {
 		assert!(!message_allowed(
 			&peer2,
 			MessageIntent::Broadcast,
-			&crate::communication::global_topic::<Block>(1),
+			&communication::global_topic::<Block>(1),
 			&commit,
 		));
 	}
@@ -2514,8 +2513,8 @@ mod tests {
 				auth_data: Vec::new(),
 			};
 
-			crate::communication::gossip::GossipMessage::<Block>::Commit(
-				crate::communication::gossip::FullCommitMessage {
+			communication::gossip::GossipMessage::<Block>::Commit(
+				communication::gossip::FullCommitMessage {
 					round: Round(round),
 					set_id: SetId(set_id),
 					message: commit,
@@ -2535,27 +2534,26 @@ mod tests {
 
 		// a commit message for round 1 that finalizes the same height as we
 		// have observed previously should not be expired
-		assert!(
-			!message_expired(crate::communication::global_topic::<Block>(1), &commit(1, 1, 2),)
-		);
+		assert!(!message_expired(communication::global_topic::<Block>(1), &commit(1, 1, 2),));
 
 		// it should be expired if it is for a lower block
-		assert!(message_expired(crate::communication::global_topic::<Block>(1), &commit(1, 1, 1)));
+		assert!(message_expired(communication::global_topic::<Block>(1), &commit(1, 1, 1)));
 
 		// or the same block height but from the previous round
-		assert!(message_expired(crate::communication::global_topic::<Block>(1), &commit(0, 1, 2)));
+		assert!(message_expired(communication::global_topic::<Block>(1), &commit(0, 1, 2)));
 	}
 
 	#[test]
 	fn allow_noting_different_authorities_for_same_set() {
 		let (val, _) = GossipValidator::<Block>::new(config(), voter_set_state(), None, None);
 
-		let a1 = vec![AuthorityId::from_slice(&[0; 32])];
+		let a1 = vec![UncheckedFrom::unchecked_from([0; 32])];
 		val.note_set(SetId(1), a1.clone(), |_, _| {});
 
 		assert_eq!(val.inner().read().authorities, a1);
 
-		let a2 = vec![AuthorityId::from_slice(&[1; 32]), AuthorityId::from_slice(&[2; 32])];
+		let a2 =
+			vec![UncheckedFrom::unchecked_from([1; 32]), UncheckedFrom::unchecked_from([2; 32])];
 		val.note_set(SetId(1), a2.clone(), |_, _| {});
 
 		assert_eq!(val.inner().read().authorities, a2);

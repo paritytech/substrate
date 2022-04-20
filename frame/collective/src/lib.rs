@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -43,7 +43,6 @@
 #![recursion_limit = "128"]
 
 use scale_info::TypeInfo;
-use sp_core::u32_trait::Value as U32;
 use sp_io::storage;
 use sp_runtime::{traits::Hash, RuntimeDebug};
 use sp_std::{marker::PhantomData, prelude::*, result};
@@ -172,6 +171,7 @@ pub mod pallet {
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
 	#[pallet::storage_version(STORAGE_VERSION)]
+	#[pallet::without_storage_info]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	#[pallet::config]
@@ -989,8 +989,8 @@ where
 pub struct EnsureMember<AccountId, I: 'static>(PhantomData<(AccountId, I)>);
 impl<
 		O: Into<Result<RawOrigin<AccountId, I>, O>> + From<RawOrigin<AccountId, I>>,
-		AccountId: Default,
 		I,
+		AccountId: Decode,
 	> EnsureOrigin<O> for EnsureMember<AccountId, I>
 {
 	type Success = AccountId;
@@ -1003,47 +1003,50 @@ impl<
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn successful_origin() -> O {
-		O::from(RawOrigin::Member(Default::default()))
+		let zero_account_id =
+			AccountId::decode(&mut sp_runtime::traits::TrailingZeroInput::zeroes())
+				.expect("infinite length input; no invalid inputs for type; qed");
+		O::from(RawOrigin::Member(zero_account_id))
 	}
 }
 
-pub struct EnsureMembers<N: U32, AccountId, I: 'static>(PhantomData<(N, AccountId, I)>);
+pub struct EnsureMembers<AccountId, I: 'static, const N: u32>(PhantomData<(AccountId, I)>);
 impl<
 		O: Into<Result<RawOrigin<AccountId, I>, O>> + From<RawOrigin<AccountId, I>>,
-		N: U32,
 		AccountId,
 		I,
-	> EnsureOrigin<O> for EnsureMembers<N, AccountId, I>
+		const N: u32,
+	> EnsureOrigin<O> for EnsureMembers<AccountId, I, N>
 {
 	type Success = (MemberCount, MemberCount);
 	fn try_origin(o: O) -> Result<Self::Success, O> {
 		o.into().and_then(|o| match o {
-			RawOrigin::Members(n, m) if n >= N::VALUE => Ok((n, m)),
+			RawOrigin::Members(n, m) if n >= N => Ok((n, m)),
 			r => Err(O::from(r)),
 		})
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn successful_origin() -> O {
-		O::from(RawOrigin::Members(N::VALUE, N::VALUE))
+		O::from(RawOrigin::Members(N, N))
 	}
 }
 
-pub struct EnsureProportionMoreThan<N: U32, D: U32, AccountId, I: 'static>(
-	PhantomData<(N, D, AccountId, I)>,
+pub struct EnsureProportionMoreThan<AccountId, I: 'static, const N: u32, const D: u32>(
+	PhantomData<(AccountId, I)>,
 );
 impl<
 		O: Into<Result<RawOrigin<AccountId, I>, O>> + From<RawOrigin<AccountId, I>>,
-		N: U32,
-		D: U32,
 		AccountId,
 		I,
-	> EnsureOrigin<O> for EnsureProportionMoreThan<N, D, AccountId, I>
+		const N: u32,
+		const D: u32,
+	> EnsureOrigin<O> for EnsureProportionMoreThan<AccountId, I, N, D>
 {
 	type Success = ();
 	fn try_origin(o: O) -> Result<Self::Success, O> {
 		o.into().and_then(|o| match o {
-			RawOrigin::Members(n, m) if n * D::VALUE > N::VALUE * m => Ok(()),
+			RawOrigin::Members(n, m) if n * D > N * m => Ok(()),
 			r => Err(O::from(r)),
 		})
 	}
@@ -1054,21 +1057,21 @@ impl<
 	}
 }
 
-pub struct EnsureProportionAtLeast<N: U32, D: U32, AccountId, I: 'static>(
-	PhantomData<(N, D, AccountId, I)>,
+pub struct EnsureProportionAtLeast<AccountId, I: 'static, const N: u32, const D: u32>(
+	PhantomData<(AccountId, I)>,
 );
 impl<
 		O: Into<Result<RawOrigin<AccountId, I>, O>> + From<RawOrigin<AccountId, I>>,
-		N: U32,
-		D: U32,
 		AccountId,
 		I,
-	> EnsureOrigin<O> for EnsureProportionAtLeast<N, D, AccountId, I>
+		const N: u32,
+		const D: u32,
+	> EnsureOrigin<O> for EnsureProportionAtLeast<AccountId, I, N, D>
 {
 	type Success = ();
 	fn try_origin(o: O) -> Result<Self::Success, O> {
 		o.into().and_then(|o| match o {
-			RawOrigin::Members(n, m) if n * D::VALUE >= N::VALUE * m => Ok(()),
+			RawOrigin::Members(n, m) if n * D >= N * m => Ok(()),
 			r => Err(O::from(r)),
 		})
 	}

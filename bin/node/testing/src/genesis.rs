@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -54,11 +54,11 @@ pub fn config_endowed(code: Option<&[u8]>, extra_endowed: Vec<AccountId>) -> Gen
 		balances: BalancesConfig { balances: endowed },
 		session: SessionConfig {
 			keys: vec![
-				(dave(), alice(), to_session_keys(&Ed25519Keyring::Alice, &Sr25519Keyring::Alice)),
-				(eve(), bob(), to_session_keys(&Ed25519Keyring::Bob, &Sr25519Keyring::Bob)),
+				(alice(), dave(), to_session_keys(&Ed25519Keyring::Alice, &Sr25519Keyring::Alice)),
+				(bob(), eve(), to_session_keys(&Ed25519Keyring::Bob, &Sr25519Keyring::Bob)),
 				(
-					ferdie(),
 					charlie(),
+					ferdie(),
 					to_session_keys(&Ed25519Keyring::Charlie, &Sr25519Keyring::Charlie),
 				),
 			],
@@ -91,7 +91,6 @@ pub fn config_endowed(code: Option<&[u8]>, extra_endowed: Vec<AccountId>) -> Gen
 		assets: Default::default(),
 		gilt: Default::default(),
 		transaction_storage: Default::default(),
-		scheduler: Default::default(),
 		transaction_payment: Default::default(),
 	}
 }

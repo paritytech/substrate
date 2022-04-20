@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -25,8 +25,8 @@
 //! slots.
 //!
 //! > Note: This module is purely dedicated to managing slots and reputations. Features such as
-//! >       for example connecting to some nodes in priority should be added outside of this
-//! >       module, rather than inside.
+//! > for example connecting to some nodes in priority should be added outside of this
+//! > module, rather than inside.
 
 use libp2p::PeerId;
 use log::error;
@@ -50,8 +50,8 @@ pub struct PeersState {
 	/// List of nodes that we know about.
 	///
 	/// > **Note**: This list should really be ordered by decreasing reputation, so that we can
-	///           easily select the best node to connect to. As a first draft, however, we don't
-	///           sort, to make the logic easier.
+	/// > easily select the best node to connect to. As a first draft, however, we don't sort, to
+	/// > make the logic easier.
 	nodes: HashMap<PeerId, Node>,
 
 	/// Configuration of each set. The size of this `Vec` is never modified.

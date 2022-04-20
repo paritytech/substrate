@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -171,7 +171,7 @@ where
 mod tests {
 	use super::*;
 	use jsonrpc_core::{types::Params, Notification, Output};
-	use std::{collections::HashSet, convert::TryInto, sync::Arc};
+	use std::{collections::HashSet, sync::Arc};
 
 	use parity_scale_codec::{Decode, Encode};
 	use sc_block_builder::{BlockBuilder, RecordProof};
@@ -179,7 +179,7 @@ mod tests {
 		report, AuthorityId, FinalityProof, GrandpaJustification, GrandpaJustificationSender,
 	};
 	use sp_blockchain::HeaderBackend;
-	use sp_core::crypto::Public;
+	use sp_core::crypto::ByteArray;
 	use sp_keyring::Ed25519Keyring;
 	use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 	use substrate_test_runtime_client::{
@@ -196,8 +196,8 @@ mod tests {
 	}
 
 	fn voters() -> HashSet<AuthorityId> {
-		let voter_id_1 = AuthorityId::from_slice(&[1; 32]);
-		let voter_id_2 = AuthorityId::from_slice(&[2; 32]);
+		let voter_id_1 = AuthorityId::from_slice(&[1; 32]).unwrap();
+		let voter_id_2 = AuthorityId::from_slice(&[2; 32]).unwrap();
 
 		vec![voter_id_1, voter_id_2].into_iter().collect()
 	}
@@ -245,7 +245,7 @@ mod tests {
 
 	impl ReportVoterState for TestVoterState {
 		fn get(&self) -> Option<report::VoterState<AuthorityId>> {
-			let voter_id_1 = AuthorityId::from_slice(&[1; 32]);
+			let voter_id_1 = AuthorityId::from_slice(&[1; 32]).unwrap();
 			let voters_best: HashSet<_> = vec![voter_id_1].into_iter().collect();
 
 			let best_round_state = sc_finality_grandpa::report::RoundState {
@@ -469,7 +469,7 @@ mod tests {
 
 		// Notify with a header and justification
 		let justification = create_justification();
-		justification_sender.notify(|| Ok(justification.clone())).unwrap();
+		justification_sender.notify(|| Ok::<_, ()>(justification.clone())).unwrap();
 
 		// Inspect what we received
 		let recv = futures::executor::block_on(receiver.take(1).collect::<Vec<_>>());

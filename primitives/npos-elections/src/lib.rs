@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd. SPDX-License-Identifier: Apache-2.0
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd. SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 // in compliance with the License. You may obtain a copy of the License at
@@ -74,11 +74,14 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use scale_info::TypeInfo;
 use sp_arithmetic::{traits::Zero, Normalizable, PerThing, Rational128, ThresholdOrd};
 use sp_core::RuntimeDebug;
-use sp_std::{cell::RefCell, cmp::Ordering, collections::btree_map::BTreeMap, prelude::*, rc::Rc};
+use sp_std::{
+	cell::RefCell, cmp::Ordering, collections::btree_map::BTreeMap, prelude::*, rc::Rc, vec,
+};
 
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, MaxEncodedLen};
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 
@@ -97,29 +100,16 @@ pub mod pjr;
 pub mod reduce;
 pub mod traits;
 
-pub use assignments::{Assignment, IndexAssignment, IndexAssignmentOf, StakedAssignment};
+pub use assignments::{Assignment, StakedAssignment};
 pub use balancing::*;
 pub use helpers::*;
 pub use phragmen::*;
 pub use phragmms::*;
 pub use pjr::*;
 pub use reduce::reduce;
-pub use traits::{IdentifierT, NposSolution, PerThing128, __OrInvalidIndex};
+pub use traits::{IdentifierT, PerThing128};
 
-// re-export for the solution macro, with the dependencies of the macro.
-#[doc(hidden)]
-pub use codec;
-#[doc(hidden)]
-pub use scale_info;
-#[doc(hidden)]
-pub use sp_arithmetic;
-#[doc(hidden)]
-pub use sp_std;
-
-// re-export the solution type macro.
-pub use sp_npos_elections_solution_type::generate_solution_type;
-
-/// The errors that might occur in the this crate and solution-type.
+/// The errors that might occur in this crate and `frame-election-provider-solution-type`.
 #[derive(Eq, PartialEq, RuntimeDebug)]
 pub enum Error {
 	/// While going from solution indices to ratio, the weight of all the edges has gone above the
@@ -129,12 +119,14 @@ pub enum Error {
 	SolutionTargetOverflow,
 	/// One of the index functions returned none.
 	SolutionInvalidIndex,
-	/// One of the page indices was invalid
+	/// One of the page indices was invalid.
 	SolutionInvalidPageIndex,
 	/// An error occurred in some arithmetic operation.
 	ArithmeticError(&'static str),
 	/// The data provided to create support map was invalid.
 	InvalidSupportEdge,
+	/// The number of voters is bigger than the `MaxVoters` bound.
+	TooManyVoters,
 }
 
 /// A type which is used in the API of this crate as a numeric weight of a vote, most often the
@@ -144,9 +136,86 @@ pub type VoteWeight = u64;
 /// A type in which performing operations on vote weights are safe.
 pub type ExtendedBalance = u128;
 
-/// The score of an assignment. This can be computed from the support map via
-/// [`EvaluateSupport::evaluate`].
-pub type ElectionScore = [ExtendedBalance; 3];
+/// The score of an election. This is the main measure of an election's quality.
+///
+/// By definition, the order of significance in [`ElectionScore`] is:
+///
+/// 1. `minimal_stake`.
+/// 2. `sum_stake`.
+/// 3. `sum_stake_squared`.
+#[derive(Clone, Copy, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, Default)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct ElectionScore {
+	/// The minimal winner, in terms of total backing stake.
+	///
+	/// This parameter should be maximized.
+	pub minimal_stake: ExtendedBalance,
+	/// The sum of the total backing of all winners.
+	///
+	/// This parameter should maximized
+	pub sum_stake: ExtendedBalance,
+	/// The sum squared of the total backing of all winners, aka. the variance.
+	///
+	/// Ths parameter should be minimized.
+	pub sum_stake_squared: ExtendedBalance,
+}
+
+impl ElectionScore {
+	/// Iterate over the inner items, first visiting the most significant one.
+	fn iter_by_significance(self) -> impl Iterator<Item = ExtendedBalance> {
+		[self.minimal_stake, self.sum_stake, self.sum_stake_squared].into_iter()
+	}
+
+	/// Compares two sets of election scores based on desirability, returning true if `self` is
+	/// strictly `threshold` better than `other`. In other words, each element of `self` must be
+	/// `self * threshold` better than `other`.
+	///
+	/// Evaluation is done based on the order of significance of the fields of [`ElectionScore`].
+	pub fn strict_threshold_better(self, other: Self, threshold: impl PerThing) -> bool {
+		match self
+			.iter_by_significance()
+			.zip(other.iter_by_significance())
+			.map(|(this, that)| (this.ge(&that), this.tcmp(&that, threshold.mul_ceil(that))))
+			.collect::<Vec<(bool, Ordering)>>()
+			.as_slice()
+		{
+			// threshold better in the `score.minimal_stake`, accept.
+			[(x, Ordering::Greater), _, _] => {
+				debug_assert!(x);
+				true
+			},
+
+			// less than threshold better in `score.minimal_stake`, but more than threshold better
+			// in `score.sum_stake`.
+			[(true, Ordering::Equal), (_, Ordering::Greater), _] => true,
+
+			// less than threshold better in `score.minimal_stake` and `score.sum_stake`, but more
+			// than threshold better in `score.sum_stake_squared`.
+			[(true, Ordering::Equal), (true, Ordering::Equal), (_, Ordering::Less)] => true,
+
+			// anything else is not a good score.
+			_ => false,
+		}
+	}
+}
+
+impl sp_std::cmp::Ord for ElectionScore {
+	fn cmp(&self, other: &Self) -> Ordering {
+		// we delegate this to the lexicographic cmp of slices`, and to incorporate that we want the
+		// third element to be minimized, we swap them.
+		[self.minimal_stake, self.sum_stake, other.sum_stake_squared].cmp(&[
+			other.minimal_stake,
+			other.sum_stake,
+			self.sum_stake_squared,
+		])
+	}
+}
+
+impl sp_std::cmp::PartialOrd for ElectionScore {
+	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+		Some(self.cmp(other))
+	}
+}
 
 /// A pointer to a candidate struct with interior mutability.
 pub type CandidatePtr<A> = Rc<RefCell<Candidate<A>>>;
@@ -178,7 +247,7 @@ impl<AccountId> Candidate<AccountId> {
 }
 
 /// A vote being casted by a [`Voter`] to a [`Candidate`] is an `Edge`.
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct Edge<AccountId> {
 	/// Identifier of the target.
 	///
@@ -191,6 +260,15 @@ pub struct Edge<AccountId> {
 	candidate: CandidatePtr<AccountId>,
 	/// The weight (i.e. stake given to `who`) of this edge.
 	weight: ExtendedBalance,
+}
+
+#[cfg(test)]
+impl<AccountId: Clone> Edge<AccountId> {
+	fn new(candidate: Candidate<AccountId>, weight: ExtendedBalance) -> Self {
+		let who = candidate.who.clone();
+		let candidate = Rc::new(RefCell::new(candidate));
+		Self { weight, who, candidate, load: Default::default() }
+	}
 }
 
 #[cfg(feature = "std")]
@@ -223,7 +301,12 @@ impl<A: IdentifierT> std::fmt::Debug for Voter<A> {
 impl<AccountId: IdentifierT> Voter<AccountId> {
 	/// Create a new `Voter`.
 	pub fn new(who: AccountId) -> Self {
-		Self { who, ..Default::default() }
+		Self {
+			who,
+			edges: Default::default(),
+			budget: Default::default(),
+			load: Default::default(),
+		}
 	}
 
 	/// Returns `true` if `self` votes for `target`.
@@ -339,13 +422,19 @@ pub struct ElectionResult<AccountId, P: PerThing> {
 ///
 /// This, at the current version, resembles the `Exposure` defined in the Staking pallet, yet they
 /// do not necessarily have to be the same.
-#[derive(Default, RuntimeDebug, Encode, Decode, Clone, Eq, PartialEq, scale_info::TypeInfo)]
+#[derive(RuntimeDebug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct Support<AccountId> {
 	/// Total support.
 	pub total: ExtendedBalance,
 	/// Support from voters.
 	pub voters: Vec<(AccountId, ExtendedBalance)>,
+}
+
+impl<AccountId> Default for Support<AccountId> {
+	fn default() -> Self {
+		Self { total: Default::default(), voters: vec![] }
+	}
 }
 
 /// A target-major representation of the the election outcome.
@@ -398,49 +487,22 @@ pub trait EvaluateSupport {
 
 impl<AccountId: IdentifierT> EvaluateSupport for Supports<AccountId> {
 	fn evaluate(&self) -> ElectionScore {
-		let mut min_support = ExtendedBalance::max_value();
-		let mut sum: ExtendedBalance = Zero::zero();
+		let mut minimal_stake = ExtendedBalance::max_value();
+		let mut sum_stake: ExtendedBalance = Zero::zero();
 		// NOTE: The third element might saturate but fine for now since this will run on-chain and
 		// need to be fast.
-		let mut sum_squared: ExtendedBalance = Zero::zero();
+		let mut sum_stake_squared: ExtendedBalance = Zero::zero();
+
 		for (_, support) in self {
-			sum = sum.saturating_add(support.total);
+			sum_stake = sum_stake.saturating_add(support.total);
 			let squared = support.total.saturating_mul(support.total);
-			sum_squared = sum_squared.saturating_add(squared);
-			if support.total < min_support {
-				min_support = support.total;
+			sum_stake_squared = sum_stake_squared.saturating_add(squared);
+			if support.total < minimal_stake {
+				minimal_stake = support.total;
 			}
 		}
-		[min_support, sum, sum_squared]
-	}
-}
 
-/// Compares two sets of election scores based on desirability and returns true if `this` is better
-/// than `that`.
-///
-/// Evaluation is done in a lexicographic manner, and if each element of `this` is `that * epsilon`
-/// greater or less than `that`.
-///
-/// Note that the third component should be minimized.
-pub fn is_score_better<P: PerThing>(this: ElectionScore, that: ElectionScore, epsilon: P) -> bool {
-	match this
-		.iter()
-		.zip(that.iter())
-		.map(|(thi, tha)| (thi.ge(&tha), thi.tcmp(&tha, epsilon.mul_ceil(*tha))))
-		.collect::<Vec<(bool, Ordering)>>()
-		.as_slice()
-	{
-		// epsilon better in the score[0], accept.
-		[(_, Ordering::Greater), _, _] => true,
-
-		// less than epsilon better in score[0], but more than epsilon better in the second.
-		[(true, Ordering::Equal), (_, Ordering::Greater), _] => true,
-
-		// less than epsilon better in score[0, 1], but more than epsilon better in the third
-		[(true, Ordering::Equal), (true, Ordering::Equal), (_, Ordering::Less)] => true,
-
-		// anything else is not a good score.
-		_ => false,
+		ElectionScore { minimal_stake, sum_stake, sum_stake_squared }
 	}
 }
 
@@ -451,7 +513,7 @@ pub fn is_score_better<P: PerThing>(this: ElectionScore, that: ElectionScore, ep
 /// - It drops duplicate targets within a voter.
 pub fn setup_inputs<AccountId: IdentifierT>(
 	initial_candidates: Vec<AccountId>,
-	initial_voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
+	initial_voters: Vec<(AccountId, VoteWeight, impl IntoIterator<Item = AccountId>)>,
 ) -> (Vec<CandidatePtr<AccountId>>, Vec<Voter<AccountId>>) {
 	// used to cache and access candidates index.
 	let mut c_idx_cache = BTreeMap::<AccountId, usize>::new();
@@ -461,14 +523,22 @@ pub fn setup_inputs<AccountId: IdentifierT>(
 		.enumerate()
 		.map(|(idx, who)| {
 			c_idx_cache.insert(who.clone(), idx);
-			Candidate { who, ..Default::default() }.to_ptr()
+			Candidate {
+				who,
+				score: Default::default(),
+				approval_stake: Default::default(),
+				backed_stake: Default::default(),
+				elected: Default::default(),
+				round: Default::default(),
+			}
+			.to_ptr()
 		})
 		.collect::<Vec<CandidatePtr<AccountId>>>();
 
 	let voters = initial_voters
 		.into_iter()
 		.filter_map(|(who, voter_stake, votes)| {
-			let mut edges: Vec<Edge<AccountId>> = Vec::with_capacity(votes.len());
+			let mut edges: Vec<Edge<AccountId>> = Vec::new();
 			for v in votes {
 				if edges.iter().any(|e| e.who == v) {
 					// duplicate edge.
@@ -482,7 +552,8 @@ pub fn setup_inputs<AccountId: IdentifierT>(
 					edges.push(Edge {
 						who: v.clone(),
 						candidate: Rc::clone(&candidates[*idx]),
-						..Default::default()
+						load: Default::default(),
+						weight: Default::default(),
 					});
 				} // else {} would be wrong votes. We don't really care about it.
 			}

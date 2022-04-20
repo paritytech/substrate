@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,6 +22,7 @@
 use crate::{self as pallet_balances, decl_tests, Config, Pallet};
 use frame_support::{
 	parameter_types,
+	traits::{ConstU32, ConstU64, ConstU8},
 	weights::{DispatchInfo, IdentityFee, Weight},
 };
 use pallet_transaction_payment::CurrencyAdapter;
@@ -44,7 +45,6 @@ frame_support::construct_runtime!(
 );
 
 parameter_types! {
-	pub const BlockHashCount: u64 = 250;
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(1024);
 	pub static ExistentialDeposit: u64 = 0;
@@ -64,7 +64,7 @@ impl frame_system::Config for Test {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = BlockHashCount;
+	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
 	type AccountData = super::AccountData<u64>;
@@ -73,21 +73,15 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
-}
-parameter_types! {
-	pub const TransactionByteFee: u64 = 1;
-	pub const OperationalFeeMultiplier: u8 = 5;
-}
-impl pallet_transaction_payment::Config for Test {
-	type OnChargeTransaction = CurrencyAdapter<Pallet<Test>, ()>;
-	type TransactionByteFee = TransactionByteFee;
-	type OperationalFeeMultiplier = OperationalFeeMultiplier;
-	type WeightToFee = IdentityFee<u64>;
-	type FeeMultiplierUpdate = ();
+	type MaxConsumers = frame_support::traits::ConstU32<16>;
 }
 
-parameter_types! {
-	pub const MaxReserves: u32 = 2;
+impl pallet_transaction_payment::Config for Test {
+	type OnChargeTransaction = CurrencyAdapter<Pallet<Test>, ()>;
+	type OperationalFeeMultiplier = ConstU8<5>;
+	type WeightToFee = IdentityFee<u64>;
+	type LengthToFee = IdentityFee<u64>;
+	type FeeMultiplierUpdate = ();
 }
 
 impl Config for Test {
@@ -97,7 +91,7 @@ impl Config for Test {
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = frame_system::Pallet<Test>;
 	type MaxLocks = ();
-	type MaxReserves = MaxReserves;
+	type MaxReserves = ConstU32<2>;
 	type ReserveIdentifier = [u8; 8];
 	type WeightInfo = ();
 }

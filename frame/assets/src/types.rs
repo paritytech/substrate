@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -26,6 +26,8 @@ use sp_runtime::{traits::Convert, FixedPointNumber, FixedPointOperand, FixedU128
 
 pub(super) type DepositBalanceOf<T, I = ()> =
 	<<T as Config<I>>::Currency as Currency<<T as SystemConfig>::AccountId>>::Balance;
+pub(super) type AssetAccountOf<T, I> =
+	AssetAccount<<T as Config<I>>::Balance, DepositBalanceOf<T, I>, <T as Config<I>>::Extra>;
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, MaxEncodedLen, TypeInfo)]
 pub struct AssetDetails<Balance, AccountId, DepositBalance> {
@@ -76,14 +78,47 @@ pub struct Approval<Balance, DepositBalance> {
 	pub(super) deposit: DepositBalance,
 }
 
-#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default, MaxEncodedLen, TypeInfo)]
-pub struct AssetBalance<Balance, Extra> {
+#[test]
+fn ensure_bool_decodes_to_consumer_or_sufficient() {
+	assert_eq!(false.encode(), ExistenceReason::<()>::Consumer.encode());
+	assert_eq!(true.encode(), ExistenceReason::<()>::Sufficient.encode());
+}
+
+#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, MaxEncodedLen, TypeInfo)]
+pub enum ExistenceReason<Balance> {
+	#[codec(index = 0)]
+	Consumer,
+	#[codec(index = 1)]
+	Sufficient,
+	#[codec(index = 2)]
+	DepositHeld(Balance),
+	#[codec(index = 3)]
+	DepositRefunded,
+}
+
+impl<Balance> ExistenceReason<Balance> {
+	pub(crate) fn take_deposit(&mut self) -> Option<Balance> {
+		if !matches!(self, ExistenceReason::DepositHeld(_)) {
+			return None
+		}
+		if let ExistenceReason::DepositHeld(deposit) =
+			sp_std::mem::replace(self, ExistenceReason::DepositRefunded)
+		{
+			return Some(deposit)
+		} else {
+			return None
+		}
+	}
+}
+
+#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, MaxEncodedLen, TypeInfo)]
+pub struct AssetAccount<Balance, DepositBalance, Extra> {
 	/// The balance.
 	pub(super) balance: Balance,
 	/// Whether the account is frozen.
 	pub(super) is_frozen: bool,
-	/// `true` if this balance gave the account a self-sufficient reference.
-	pub(super) sufficient: bool,
+	/// The reason for the existence of the account.
+	pub(super) reason: ExistenceReason<DepositBalance>,
 	/// Additional "sidecar" data, in case some other pallet wants to use this storage item.
 	pub(super) extra: Extra,
 }
@@ -122,20 +157,24 @@ pub struct DestroyWitness {
 /// `minimum_balance` of the asset. This is additive - the `minimum_balance` of the asset must be
 /// met *and then* anything here in addition.
 pub trait FrozenBalance<AssetId, AccountId, Balance> {
-	/// Return the frozen balance. Under normal behaviour, this amount should always be
-	/// withdrawable.
+	/// Return the frozen balance.
 	///
-	/// In reality, the balance of every account must be at least the sum of this (if `Some`) and
-	/// the asset's minimum_balance, since there may be complications to destroying an asset's
-	/// account completely.
+	/// Generally, the balance of every account must be at least the sum of this (if `Some`) and
+	/// the asset's `minimum_balance` (the latter since there may be complications to destroying an
+	/// asset's account completely).
+	///
+	/// Under normal behaviour, the account balance should not go below the sum of this (if `Some`)
+	/// and the asset's minimum balance. However, the account balance may reasonably begin below
+	/// this sum (e.g. if less than the sum had ever been transfered into the account).
+	///
+	/// In special cases (privileged intervention) the account balance may also go below the sum.
 	///
 	/// If `None` is returned, then nothing special is enforced.
-	///
-	/// If any operation ever breaks this requirement (which will only happen through some sort of
-	/// privileged intervention), then `melted` is called to do any cleanup.
 	fn frozen_balance(asset: AssetId, who: &AccountId) -> Option<Balance>;
 
-	/// Called when an account has been removed.
+	/// Called after an account has been removed.
+	///
+	/// NOTE: It is possible that the asset does no longer exist when this hook is called.
 	fn died(asset: AssetId, who: &AccountId);
 }
 

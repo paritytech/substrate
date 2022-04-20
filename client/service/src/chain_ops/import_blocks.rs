@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -35,8 +35,7 @@ use sp_runtime::{
 	},
 };
 use std::{
-	convert::{TryFrom, TryInto},
-	io::{Read, Seek},
+	io::Read,
 	pin::Pin,
 	task::Poll,
 	time::{Duration, Instant},
@@ -63,7 +62,7 @@ pub fn build_spec(spec: &dyn ChainSpec, raw: bool) -> error::Result<String> {
 /// SignedBlock and return it.
 enum BlockIter<R, B>
 where
-	R: std::io::Read + std::io::Seek,
+	R: std::io::Read,
 {
 	Binary {
 		// Total number of blocks we are expecting to decode.
@@ -83,7 +82,7 @@ where
 
 impl<R, B> BlockIter<R, B>
 where
-	R: Read + Seek + 'static,
+	R: Read + 'static,
 	B: BlockT + MaybeSerializeDeserialize,
 {
 	fn new(input: R, binary: bool) -> Result<Self, String> {
@@ -119,7 +118,7 @@ where
 
 impl<R, B> Iterator for BlockIter<R, B>
 where
-	R: Read + Seek + 'static,
+	R: Read + 'static,
 	B: BlockT + MaybeSerializeDeserialize,
 {
 	type Item = Result<SignedBlock<B>, String>;
@@ -267,10 +266,11 @@ impl<B: BlockT> Speedometer<B> {
 /// Different State that the `import_blocks` future could be in.
 enum ImportState<R, B>
 where
-	R: Read + Seek + 'static,
+	R: Read + 'static,
 	B: BlockT + MaybeSerializeDeserialize,
 {
-	/// We are reading from the BlockIter structure, adding those blocks to the queue if possible.
+	/// We are reading from the [`BlockIter`] structure, adding those blocks to the queue if
+	/// possible.
 	Reading { block_iter: BlockIter<R, B> },
 	/// The queue is full (contains at least MAX_PENDING_BLOCKS blocks) and we are waiting for it
 	/// to catch up.
@@ -291,7 +291,7 @@ where
 pub fn import_blocks<B, IQ, C>(
 	client: Arc<C>,
 	mut import_queue: IQ,
-	input: impl Read + Seek + Send + 'static,
+	input: impl Read + Send + 'static,
 	force: bool,
 	binary: bool,
 ) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>
@@ -322,7 +322,7 @@ where
 
 			for result in results {
 				if let (Err(err), hash) = result {
-					warn!("There was an error importing block with hash {:?}: {:?}", hash, err);
+					warn!("There was an error importing block with hash {:?}: {}", hash, err);
 					self.has_error = true;
 					break
 				}

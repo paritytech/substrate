@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -186,7 +186,6 @@ fn build_nodes_one_proto() -> (
 	(node1, events_stream1, node2, events_stream2)
 }
 
-#[ignore]
 #[test]
 fn notifications_state_consistent() {
 	// Runs two nodes and ensures that events are propagated out of the API in a consistent
@@ -272,38 +271,38 @@ fn notifications_state_consistent() {
 			match next_event {
 				future::Either::Left(Event::NotificationStreamOpened {
 					remote, protocol, ..
-				}) => {
-					something_happened = true;
-					assert!(!node1_to_node2_open);
-					node1_to_node2_open = true;
-					assert_eq!(remote, *node2.local_peer_id());
-					assert_eq!(protocol, PROTOCOL_NAME);
-				},
+				}) =>
+					if protocol == PROTOCOL_NAME {
+						something_happened = true;
+						assert!(!node1_to_node2_open);
+						node1_to_node2_open = true;
+						assert_eq!(remote, *node2.local_peer_id());
+					},
 				future::Either::Right(Event::NotificationStreamOpened {
 					remote, protocol, ..
-				}) => {
-					something_happened = true;
-					assert!(!node2_to_node1_open);
-					node2_to_node1_open = true;
-					assert_eq!(remote, *node1.local_peer_id());
-					assert_eq!(protocol, PROTOCOL_NAME);
-				},
+				}) =>
+					if protocol == PROTOCOL_NAME {
+						something_happened = true;
+						assert!(!node2_to_node1_open);
+						node2_to_node1_open = true;
+						assert_eq!(remote, *node1.local_peer_id());
+					},
 				future::Either::Left(Event::NotificationStreamClosed {
 					remote, protocol, ..
-				}) => {
-					assert!(node1_to_node2_open);
-					node1_to_node2_open = false;
-					assert_eq!(remote, *node2.local_peer_id());
-					assert_eq!(protocol, PROTOCOL_NAME);
-				},
+				}) =>
+					if protocol == PROTOCOL_NAME {
+						assert!(node1_to_node2_open);
+						node1_to_node2_open = false;
+						assert_eq!(remote, *node2.local_peer_id());
+					},
 				future::Either::Right(Event::NotificationStreamClosed {
 					remote, protocol, ..
-				}) => {
-					assert!(node2_to_node1_open);
-					node2_to_node1_open = false;
-					assert_eq!(remote, *node1.local_peer_id());
-					assert_eq!(protocol, PROTOCOL_NAME);
-				},
+				}) =>
+					if protocol == PROTOCOL_NAME {
+						assert!(node2_to_node1_open);
+						node2_to_node1_open = false;
+						assert_eq!(remote, *node1.local_peer_id());
+					},
 				future::Either::Left(Event::NotificationsReceived { remote, .. }) => {
 					assert!(node1_to_node2_open);
 					assert_eq!(remote, *node2.local_peer_id());

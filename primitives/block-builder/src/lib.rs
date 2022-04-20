@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,17 +20,23 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_inherents::{CheckInherentsResult, InherentData};
-use sp_runtime::{traits::Block as BlockT, ApplyExtrinsicResult};
+use sp_runtime::{
+	legacy::byte_sized_error::ApplyExtrinsicResult as ApplyExtrinsicResultBeforeV6,
+	traits::Block as BlockT, ApplyExtrinsicResult,
+};
 
 sp_api::decl_runtime_apis! {
 	/// The `BlockBuilder` api trait that provides the required functionality for building a block.
-	#[api_version(5)]
+	#[api_version(6)]
 	pub trait BlockBuilder {
 		/// Apply the given extrinsic.
 		///
 		/// Returns an inclusion outcome which specifies if this extrinsic is included in
 		/// this block or not.
 		fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyExtrinsicResult;
+
+		#[changed_in(6)]
+		fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyExtrinsicResultBeforeV6;
 
 		/// Finish the current block.
 		#[renamed("finalise_block", 3)]

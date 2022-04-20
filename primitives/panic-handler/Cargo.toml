@@ -1,6 +1,6 @@
 [package]
 name = "sp-panic-handler"
-version = "4.0.0-dev"
+version = "4.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
 license = "Apache-2.0"
@@ -14,6 +14,6 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-backtrace = "0.3.38"
-regex = "1.5.4"
+backtrace = "0.3.64"
+regex = "1.5.5"
 lazy_static = "1.4.0"

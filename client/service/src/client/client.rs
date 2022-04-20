@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -30,22 +30,23 @@ use rand::Rng;
 use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider, RecordProof};
 use sc_client_api::{
 	backend::{
-		self, apply_aux, BlockImportOperation, ClientImportOperation, Finalizer, ImportSummary,
-		LockImportRun, NewBlockState, StorageProvider,
+		self, apply_aux, BlockImportOperation, ClientImportOperation, FinalizeSummary, Finalizer,
+		ImportSummary, LockImportRun, NewBlockState, StorageProvider,
 	},
 	client::{
 		BadBlocks, BlockBackend, BlockImportNotification, BlockOf, BlockchainEvents, ClientInfo,
 		FinalityNotification, FinalityNotifications, ForkBlocks, ImportNotifications,
-		ProvideUncles,
+		PreCommitActions, ProvideUncles,
 	},
 	execution_extensions::ExecutionExtensions,
 	notifications::{StorageEventStream, StorageNotifications},
-	CallExecutor, ExecutorProvider, KeyIterator, ProofProvider, UsageProvider,
+	CallExecutor, ExecutorProvider, KeyIterator, OnFinalityAction, OnImportAction, ProofProvider,
+	UsageProvider,
 };
 use sc_consensus::{
 	BlockCheckParams, BlockImportParams, ForkChoiceStrategy, ImportResult, StateAction,
 };
-use sc_executor::RuntimeVersion;
+use sc_executor::{RuntimeVersion, RuntimeVersionOf};
 use sc_telemetry::{telemetry, TelemetryHandle, SUBSTRATE_INFO};
 use sp_api::{
 	ApiExt, ApiRef, CallApiAt, CallApiAtParams, ConstructRuntimeApi, Core as CoreApi,
@@ -60,8 +61,8 @@ use sp_consensus::{BlockOrigin, BlockStatus, Error as ConsensusError};
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 use sp_core::{
 	storage::{
-		well_known_keys, ChildInfo, ChildType, PrefixedStorageKey, StorageChild, StorageData,
-		StorageKey,
+		well_known_keys, ChildInfo, ChildType, PrefixedStorageKey, Storage, StorageChild,
+		StorageData, StorageKey,
 	},
 	NativeOrEncoded,
 };
@@ -72,16 +73,17 @@ use sp_runtime::{
 	traits::{
 		Block as BlockT, HashFor, Header as HeaderT, NumberFor, One, SaturatedConversion, Zero,
 	},
-	BuildStorage, Digest, Justification, Justifications,
+	BuildStorage, Digest, Justification, Justifications, StateVersion,
 };
 use sp_state_machine::{
 	prove_child_read, prove_range_read_with_child_with_size, prove_read,
-	read_range_proof_check_with_child_on_proving_backend, Backend as StateBackend, KeyValueStates,
-	KeyValueStorageLevel, MAX_NESTED_TRIE_DEPTH,
+	read_range_proof_check_with_child_on_proving_backend, Backend as StateBackend,
+	ChildStorageCollection, KeyValueStates, KeyValueStorageLevel, StorageCollection,
+	MAX_NESTED_TRIE_DEPTH,
 };
 use sp_trie::{CompactProof, StorageProof};
 use std::{
-	collections::{HashMap, HashSet},
+	collections::{hash_map::DefaultHasher, HashMap, HashSet},
 	marker::PhantomData,
 	panic::UnwindSafe,
 	path::PathBuf,
@@ -93,7 +95,6 @@ use std::{
 use {
 	super::call_executor::LocalCallExecutor,
 	sc_client_api::in_mem,
-	sc_executor::RuntimeVersionOf,
 	sp_core::traits::{CodeExecutor, SpawnNamed},
 };
 
@@ -106,10 +107,16 @@ where
 {
 	backend: Arc<B>,
 	executor: E,
-	storage_notifications: Mutex<StorageNotifications<Block>>,
+	storage_notifications: StorageNotifications<Block>,
 	import_notification_sinks: NotificationSinks<BlockImportNotification<Block>>,
 	finality_notification_sinks: NotificationSinks<FinalityNotification<Block>>,
-	// holds the block hash currently being imported. TODO: replace this with block queue
+	// Collects auxiliary operations to be performed atomically together with
+	// block import operations.
+	import_actions: Mutex<Vec<OnImportAction<Block>>>,
+	// Collects auxiliary operations to be performed atomically together with
+	// block finalization operations.
+	finality_actions: Mutex<Vec<OnFinalityAction<Block>>>,
+	// Holds the block hash currently being imported. TODO: replace this with block queue.
 	importing_block: RwLock<Option<Block::Hash>>,
 	block_rules: BlockRules<Block>,
 	execution_extensions: ExecutionExtensions<Block>,
@@ -195,7 +202,7 @@ pub struct ClientConfig<Block: BlockT> {
 	pub no_genesis: bool,
 	/// Map of WASM runtime substitute starting at the child of the given block until the runtime
 	/// version doesn't match anymore.
-	pub wasm_runtime_substitutes: HashMap<Block::Hash, Vec<u8>>,
+	pub wasm_runtime_substitutes: HashMap<NumberFor<Block>, Vec<u8>>,
 }
 
 impl<Block: BlockT> Default for ClientConfig<Block> {
@@ -275,16 +282,37 @@ where
 			let mut op = ClientImportOperation {
 				op: self.backend.begin_operation()?,
 				notify_imported: None,
-				notify_finalized: Vec::new(),
+				notify_finalized: None,
 			};
 
 			let r = f(&mut op)?;
 
-			let ClientImportOperation { op, notify_imported, notify_finalized } = op;
+			let ClientImportOperation { mut op, notify_imported, notify_finalized } = op;
+
+			let finality_notification = notify_finalized.map(|summary| summary.into());
+			let (import_notification, storage_changes) = match notify_imported {
+				Some(mut summary) => {
+					let storage_changes = summary.storage_changes.take();
+					(Some(summary.into()), storage_changes)
+				},
+				None => (None, None),
+			};
+
+			if let Some(ref notification) = finality_notification {
+				for action in self.finality_actions.lock().iter_mut() {
+					op.insert_aux(action(notification))?;
+				}
+			}
+			if let Some(ref notification) = import_notification {
+				for action in self.import_actions.lock().iter_mut() {
+					op.insert_aux(action(notification))?;
+				}
+			}
+
 			self.backend.commit_operation(op)?;
 
-			self.notify_finalized(notify_finalized)?;
-			self.notify_imported(notify_imported)?;
+			self.notify_finalized(finality_notification)?;
+			self.notify_imported(import_notification, storage_changes)?;
 
 			Ok(r)
 		};
@@ -334,8 +362,11 @@ where
 		if info.finalized_state.is_none() {
 			let genesis_storage =
 				build_genesis_storage.build_storage().map_err(sp_blockchain::Error::Storage)?;
+			let genesis_state_version =
+				Self::resolve_state_version_from_wasm(&genesis_storage, &executor)?;
 			let mut op = backend.begin_operation()?;
-			let state_root = op.set_genesis_state(genesis_storage, !config.no_genesis)?;
+			let state_root =
+				op.set_genesis_state(genesis_storage, !config.no_genesis, genesis_state_version)?;
 			let genesis_block = genesis::construct_genesis_block::<Block>(state_root.into());
 			info!(
 				"🔨 Initializing Genesis block/state (state: {}, header-hash: {})",
@@ -362,9 +393,11 @@ where
 		Ok(Client {
 			backend,
 			executor,
-			storage_notifications: Mutex::new(StorageNotifications::new(prometheus_registry)),
+			storage_notifications: StorageNotifications::new(prometheus_registry),
 			import_notification_sinks: Default::default(),
 			finality_notification_sinks: Default::default(),
+			import_actions: Default::default(),
+			finality_actions: Default::default(),
 			importing_block: Default::default(),
 			block_rules: BlockRules::new(fork_blocks, bad_blocks),
 			execution_extensions,
@@ -403,7 +436,7 @@ where
 
 	/// Get the RuntimeVersion at a given block.
 	pub fn runtime_version_at(&self, id: &BlockId<Block>) -> sp_blockchain::Result<RuntimeVersion> {
-		self.executor.runtime_version(id)
+		CallExecutor::runtime_version(&self.executor, id)
 	}
 
 	/// Apply a checked and validated block to an operation. If a justification is provided
@@ -606,7 +639,11 @@ where
 							}
 						}
 
-						let state_root = operation.op.reset_storage(storage)?;
+						// This is use by fast sync for runtime version to be resolvable from
+						// changes.
+						let state_version =
+							Self::resolve_state_version_from_wasm(&storage, &self.executor)?;
+						let state_root = operation.op.reset_storage(storage, state_version)?;
 						if state_root != *import_headers.post().state_root() {
 							// State root mismatch when importing state. This should not happen in
 							// safe fast sync mode, but may happen in unsafe mode.
@@ -616,24 +653,24 @@ where
 						None
 					},
 				};
-				// Ensure parent chain is finalized to maintain invariant that
-				// finality is called sequentially. This will also send finality
-				// notifications for top 250 newly finalized blocks.
-				if finalized && parent_exists {
-					self.apply_finality_with_block_hash(
-						operation,
-						parent_hash,
-						None,
-						info.best_hash,
-						make_notifications,
-					)?;
-				}
 
 				operation.op.update_cache(new_cache);
 				storage_changes
 			},
 			None => None,
 		};
+
+		// Ensure parent chain is finalized to maintain invariant that finality is called
+		// sequentially.
+		if finalized && parent_exists {
+			self.apply_finality_with_block_hash(
+				operation,
+				parent_hash,
+				None,
+				info.best_hash,
+				make_notifications,
+			)?;
+		}
 
 		let is_new_best = !gap_block &&
 			(finalized ||
@@ -677,17 +714,51 @@ where
 
 		operation.op.insert_aux(aux)?;
 
-		// we only notify when we are already synced to the tip of the chain
+		// We only notify when we are already synced to the tip of the chain
 		// or if this import triggers a re-org
 		if make_notifications || tree_route.is_some() {
+			let header = import_headers.into_post();
 			if finalized {
-				operation.notify_finalized.push(hash);
+				let mut summary = match operation.notify_finalized.take() {
+					Some(mut summary) => {
+						summary.header = header.clone();
+						summary.finalized.push(hash);
+						summary
+					},
+					None => FinalizeSummary {
+						header: header.clone(),
+						finalized: vec![hash],
+						stale_heads: Vec::new(),
+					},
+				};
+
+				if parent_exists {
+					// Add to the stale list all heads that are branching from parent besides our
+					// current `head`.
+					for head in self
+						.backend
+						.blockchain()
+						.leaves()?
+						.into_iter()
+						.filter(|h| *h != parent_hash)
+					{
+						let route_from_parent = sp_blockchain::tree_route(
+							self.backend.blockchain(),
+							parent_hash,
+							head,
+						)?;
+						if route_from_parent.retracted().is_empty() {
+							summary.stale_heads.push(head);
+						}
+					}
+				}
+				operation.notify_finalized = Some(summary);
 			}
 
 			operation.notify_imported = Some(ImportSummary {
 				hash,
 				origin,
-				header: import_headers.into_post(),
+				header,
 				is_new_best,
 				storage_changes,
 				tree_route,
@@ -825,97 +896,91 @@ where
 		operation.op.mark_finalized(BlockId::Hash(block), justification)?;
 
 		if notify {
-			// sometimes when syncing, tons of blocks can be finalized at once.
-			// we'll send notifications spuriously in that case.
-			const MAX_TO_NOTIFY: usize = 256;
-			let enacted = route_from_finalized.enacted();
-			let start = enacted.len() - std::cmp::min(enacted.len(), MAX_TO_NOTIFY);
-			for finalized in &enacted[start..] {
-				operation.notify_finalized.push(finalized.hash);
-			}
+			let finalized =
+				route_from_finalized.enacted().iter().map(|elem| elem.hash).collect::<Vec<_>>();
+
+			let block_number = route_from_finalized
+				.last()
+				.expect(
+					"The block to finalize is always the latest \
+						block in the route to the finalized block; qed",
+				)
+				.number;
+
+			// The stale heads are the leaves that will be displaced after the
+			// block is finalized.
+			let stale_heads =
+				self.backend.blockchain().displaced_leaves_after_finalizing(block_number)?;
+
+			let header = self
+				.backend
+				.blockchain()
+				.header(BlockId::Hash(block))?
+				.expect("Block to finalize expected to be onchain; qed");
+
+			operation.notify_finalized = Some(FinalizeSummary { header, finalized, stale_heads });
 		}
 
 		Ok(())
 	}
 
-	fn notify_finalized(&self, notify_finalized: Vec<Block::Hash>) -> sp_blockchain::Result<()> {
+	fn notify_finalized(
+		&self,
+		notification: Option<FinalityNotification<Block>>,
+	) -> sp_blockchain::Result<()> {
 		let mut sinks = self.finality_notification_sinks.lock();
 
-		if notify_finalized.is_empty() {
-			// cleanup any closed finality notification sinks
-			// since we won't be running the loop below which
-			// would also remove any closed sinks.
-			sinks.retain(|sink| !sink.is_closed());
+		let notification = match notification {
+			Some(notify_finalized) => notify_finalized,
+			None => {
+				// Cleanup any closed finality notification sinks
+				// since we won't be running the loop below which
+				// would also remove any closed sinks.
+				sinks.retain(|sink| !sink.is_closed());
+				return Ok(())
+			},
+		};
 
-			return Ok(())
-		}
+		telemetry!(
+			self.telemetry;
+			SUBSTRATE_INFO;
+			"notify.finalized";
+			"height" => format!("{}", notification.header.number()),
+			"best" => ?notification.hash,
+		);
 
-		// We assume the list is sorted and only want to inform the
-		// telemetry once about the finalized block.
-		if let Some(last) = notify_finalized.last() {
-			let header = self.header(&BlockId::Hash(*last))?.expect(
-				"Header already known to exist in DB because it is indicated in the tree route; \
-				 qed",
-			);
-
-			telemetry!(
-				self.telemetry;
-				SUBSTRATE_INFO;
-				"notify.finalized";
-				"height" => format!("{}", header.number()),
-				"best" => ?last,
-			);
-		}
-
-		for finalized_hash in notify_finalized {
-			let header = self.header(&BlockId::Hash(finalized_hash))?.expect(
-				"Header already known to exist in DB because it is indicated in the tree route; \
-				 qed",
-			);
-
-			let notification = FinalityNotification { header, hash: finalized_hash };
-
-			sinks.retain(|sink| sink.unbounded_send(notification.clone()).is_ok());
-		}
+		sinks.retain(|sink| sink.unbounded_send(notification.clone()).is_ok());
 
 		Ok(())
 	}
 
 	fn notify_imported(
 		&self,
-		notify_import: Option<ImportSummary<Block>>,
+		notification: Option<BlockImportNotification<Block>>,
+		storage_changes: Option<(StorageCollection, ChildStorageCollection)>,
 	) -> sp_blockchain::Result<()> {
-		let notify_import = match notify_import {
+		let notification = match notification {
 			Some(notify_import) => notify_import,
 			None => {
-				// cleanup any closed import notification sinks since we won't
+				// Cleanup any closed import notification sinks since we won't
 				// be sending any notifications below which would remove any
 				// closed sinks. this is necessary since during initial sync we
 				// won't send any import notifications which could lead to a
 				// temporary leak of closed/discarded notification sinks (e.g.
 				// from consensus code).
 				self.import_notification_sinks.lock().retain(|sink| !sink.is_closed());
-
 				return Ok(())
 			},
 		};
 
-		if let Some(storage_changes) = notify_import.storage_changes {
+		if let Some(storage_changes) = storage_changes {
 			// TODO [ToDr] How to handle re-orgs? Should we re-emit all storage changes?
-			self.storage_notifications.lock().trigger(
-				&notify_import.hash,
+			self.storage_notifications.trigger(
+				&notification.hash,
 				storage_changes.0.into_iter(),
 				storage_changes.1.into_iter().map(|(sk, v)| (sk, v.into_iter())),
 			);
 		}
-
-		let notification = BlockImportNotification::<Block> {
-			hash: notify_import.hash,
-			origin: notify_import.origin,
-			header: notify_import.header,
-			is_new_best: notify_import.is_new_best,
-			tree_route: notify_import.tree_route.map(Arc::new),
-		};
 
 		self.import_notification_sinks
 			.lock()
@@ -1041,6 +1106,35 @@ where
 		trace!("Collected {} uncles", uncles.len());
 		Ok(uncles)
 	}
+
+	fn resolve_state_version_from_wasm(
+		storage: &Storage,
+		executor: &E,
+	) -> sp_blockchain::Result<StateVersion> {
+		if let Some(wasm) = storage.top.get(well_known_keys::CODE) {
+			let mut ext = sp_state_machine::BasicExternalities::new_empty(); // just to read runtime version.
+
+			let code_fetcher = sp_core::traits::WrappedRuntimeCode(wasm.as_slice().into());
+			let runtime_code = sp_core::traits::RuntimeCode {
+				code_fetcher: &code_fetcher,
+				heap_pages: None,
+				hash: {
+					use std::hash::{Hash, Hasher};
+					let mut state = DefaultHasher::new();
+					wasm.hash(&mut state);
+					state.finish().to_le_bytes().to_vec()
+				},
+			};
+			let runtime_version =
+				RuntimeVersionOf::runtime_version(executor, &mut ext, &runtime_code)
+					.map_err(|e| sp_blockchain::Error::VersionInvalid(e.to_string()))?;
+			Ok(runtime_version.state_version())
+		} else {
+			Err(sp_blockchain::Error::VersionInvalid(
+				"Runtime missing from initial storage, could not read state version.".to_string(),
+			))
+		}
+	}
 }
 
 impl<B, E, Block, RA> UsageProvider<Block> for Client<B, E, Block, RA>
@@ -1095,12 +1189,14 @@ where
 		size_limit: usize,
 	) -> sp_blockchain::Result<(CompactProof, u32)> {
 		let state = self.state_at(id)?;
-		let root = state.storage_root(std::iter::empty()).0;
+		// this is a read proof, using version V0 or V1 is equivalent.
+		let root = state.storage_root(std::iter::empty(), StateVersion::V0).0;
 
 		let (proof, count) = prove_range_read_with_child_with_size::<_, HashFor<Block>>(
 			state, size_limit, start_key,
 		)?;
-		let proof = sp_trie::encode_compact::<sp_trie::Layout<HashFor<Block>>>(proof, root)
+		// This is read proof only, we can use either LayoutV0 or LayoutV1.
+		let proof = sp_trie::encode_compact::<sp_trie::LayoutV0<HashFor<Block>>>(proof, root)
 			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?;
 		Ok((proof, count))
 	}
@@ -1225,7 +1321,8 @@ where
 		start_key: &[Vec<u8>],
 	) -> sp_blockchain::Result<(KeyValueStates, usize)> {
 		let mut db = sp_state_machine::MemoryDB::<HashFor<Block>>::new(&[]);
-		let _ = sp_trie::decode_compact::<sp_state_machine::Layout<HashFor<Block>>, _, _>(
+		// Compact encoding
+		let _ = sp_trie::decode_compact::<sp_state_machine::LayoutV0<HashFor<Block>>, _, _>(
 			&mut db,
 			proof.iter_compact_encoded_nodes(),
 			Some(&root),
@@ -1371,10 +1468,9 @@ where
 		id: &BlockId<Block>,
 		key: &StorageKey,
 	) -> sp_blockchain::Result<Option<Block::Hash>> {
-		Ok(self
-			.state_at(id)?
+		self.state_at(id)?
 			.storage_hash(&key.0)
-			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?)
+			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))
 	}
 
 	fn child_storage_keys(
@@ -1411,10 +1507,9 @@ where
 		child_info: &ChildInfo,
 		key: &StorageKey,
 	) -> sp_blockchain::Result<Option<Block::Hash>> {
-		Ok(self
-			.state_at(id)?
+		self.state_at(id)?
 			.child_storage_hash(child_info, &key.0)
-			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?)
+			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))
 	}
 }
 
@@ -1594,7 +1689,7 @@ where
 	}
 
 	fn runtime_version_at(&self, at: &BlockId<Block>) -> Result<RuntimeVersion, sp_api::ApiError> {
-		self.runtime_version_at(at).map_err(Into::into)
+		CallExecutor::runtime_version(&self.executor, at).map_err(Into::into)
 	}
 }
 
@@ -1635,7 +1730,7 @@ where
 
 		let storage_changes =
 			match self.prepare_block_storage_changes(&mut import_block).map_err(|e| {
-				warn!("Block prepare storage changes error:\n{:?}", e);
+				warn!("Block prepare storage changes error: {}", e);
 				ConsensusError::ClientImport(e.to_string())
 			})? {
 				PrepareStorageChangesResult::Discard(res) => return Ok(res),
@@ -1646,7 +1741,7 @@ where
 			self.apply_block(operation, import_block, new_cache, storage_changes)
 		})
 		.map_err(|e| {
-			warn!("Block import error:\n{:?}", e);
+			warn!("Block import error: {}", e);
 			ConsensusError::ClientImport(e.to_string()).into()
 		})
 	}
@@ -1690,9 +1785,8 @@ where
 			.block_status(&BlockId::Hash(hash))
 			.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
 		{
-			BlockStatus::InChainWithState | BlockStatus::Queued if !import_existing =>
+			BlockStatus::InChainWithState | BlockStatus::Queued =>
 				return Ok(ImportResult::AlreadyInChain),
-			BlockStatus::InChainWithState | BlockStatus::Queued => {},
 			BlockStatus::InChainPruned if !import_existing =>
 				return Ok(ImportResult::AlreadyInChain),
 			BlockStatus::InChainPruned => {},
@@ -1809,6 +1903,19 @@ where
 	}
 }
 
+impl<B, E, Block, RA> PreCommitActions<Block> for Client<B, E, Block, RA>
+where
+	Block: BlockT,
+{
+	fn register_import_action(&self, action: OnImportAction<Block>) {
+		self.import_actions.lock().push(action);
+	}
+
+	fn register_finality_action(&self, action: OnFinalityAction<Block>) {
+		self.finality_actions.lock().push(action);
+	}
+}
+
 impl<B, E, Block, RA> BlockchainEvents<Block> for Client<B, E, Block, RA>
 where
 	E: CallExecutor<Block>,
@@ -1833,7 +1940,7 @@ where
 		filter_keys: Option<&[StorageKey]>,
 		child_filter_keys: Option<&[(StorageKey, Option<Vec<StorageKey>>)]>,
 	) -> sp_blockchain::Result<StorageEventStream<Block::Hash>> {
-		Ok(self.storage_notifications.lock().listen(filter_keys, child_filter_keys))
+		Ok(self.storage_notifications.listen(filter_keys, child_filter_keys))
 	}
 }
 

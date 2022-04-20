@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -26,13 +26,6 @@
 
 use crate::Config;
 use frame_support::traits::Get;
-use pwasm_utils::parity_wasm::{
-	builder,
-	elements::{
-		self, BlockType, CustomSection, External, FuncBody, Instruction, Instructions, Module,
-		Section, ValueType,
-	},
-};
 use sp_core::crypto::UncheckedFrom;
 use sp_runtime::traits::Hash;
 use sp_sandbox::{
@@ -40,6 +33,21 @@ use sp_sandbox::{
 	SandboxEnvironmentBuilder, SandboxMemory,
 };
 use sp_std::{borrow::ToOwned, prelude::*};
+use wasm_instrument::parity_wasm::{
+	builder,
+	elements::{
+		self, BlockType, CustomSection, External, FuncBody, Instruction, Instructions, Module,
+		Section, ValueType,
+	},
+};
+
+/// The location where to put the genrated code.
+pub enum Location {
+	/// Generate all code into the `call` exported function.
+	Call,
+	/// Generate all code into the `deploy` exported function.
+	Deploy,
+}
 
 /// Pass to `create_code` in order to create a compiled `WasmModule`.
 ///
@@ -308,7 +316,8 @@ where
 	/// Creates a wasm module of `target_bytes` size. Used to benchmark the performance of
 	/// `instantiate_with_code` for different sizes of wasm modules. The generated module maximizes
 	/// instrumentation runtime by nesting blocks as deeply as possible given the byte budget.
-	pub fn sized(target_bytes: u32) -> Self {
+	/// `code_location`: Whether to place the code into `deploy` or `call`.
+	pub fn sized(target_bytes: u32, code_location: Location) -> Self {
 		use self::elements::Instruction::{End, I32Const, If, Return};
 		// Base size of a contract is 63 bytes and each expansion adds 6 bytes.
 		// We do one expansion less to account for the code section and function body
@@ -317,23 +326,25 @@ where
 		// because of the maximum code size that is enforced by `instantiate_with_code`.
 		let expansions = (target_bytes.saturating_sub(63) / 6).saturating_sub(1);
 		const EXPANSION: [Instruction; 4] = [I32Const(0), If(BlockType::NoResult), Return, End];
-		ModuleDefinition {
-			call_body: Some(body::repeated(expansions, &EXPANSION)),
-			memory: Some(ImportedMemory::max::<T>()),
-			..Default::default()
+		let mut module =
+			ModuleDefinition { memory: Some(ImportedMemory::max::<T>()), ..Default::default() };
+		let body = Some(body::repeated(expansions, &EXPANSION));
+		match code_location {
+			Location::Call => module.call_body = body,
+			Location::Deploy => module.deploy_body = body,
 		}
-		.into()
+		module.into()
 	}
 
 	/// Creates a wasm module that calls the imported function named `getter_name` `repeat`
 	/// times. The imported function is expected to have the "getter signature" of
 	/// (out_ptr: u32, len_ptr: u32) -> ().
-	pub fn getter(getter_name: &'static str, repeat: u32) -> Self {
+	pub fn getter(module_name: &'static str, getter_name: &'static str, repeat: u32) -> Self {
 		let pages = max_pages::<T>();
 		ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
-				module: "seal0",
+				module: module_name,
 				name: getter_name,
 				params: vec![ValueType::I32, ValueType::I32],
 				return_type: None,
@@ -551,10 +562,13 @@ where
 fn inject_gas_metering<T: Config>(module: Module) -> Module {
 	let schedule = T::Schedule::get();
 	let gas_rules = schedule.rules(&module);
-	pwasm_utils::inject_gas_counter(module, &gas_rules, "seal0").unwrap()
+	wasm_instrument::gas_metering::inject(module, &gas_rules, "seal0").unwrap()
 }
 
 fn inject_stack_metering<T: Config>(module: Module) -> Module {
-	let height = T::Schedule::get().limits.stack_height;
-	pwasm_utils::stack_height::inject_limiter(module, height).unwrap()
+	if let Some(height) = T::Schedule::get().limits.stack_height {
+		wasm_instrument::inject_stack_limiter(module, height).unwrap()
+	} else {
+		module
+	}
 }

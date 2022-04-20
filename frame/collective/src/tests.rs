@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,13 +18,13 @@
 use super::{Event as CollectiveEvent, *};
 use crate as pallet_collective;
 use frame_support::{
-	assert_noop, assert_ok, parameter_types, traits::GenesisBuild, weights::Pays, Hashable,
+	assert_noop, assert_ok, parameter_types,
+	traits::{ConstU32, ConstU64, GenesisBuild},
+	weights::Pays,
+	Hashable,
 };
 use frame_system::{EventRecord, Phase};
-use sp_core::{
-	u32_trait::{_3, _4},
-	H256,
-};
+use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
@@ -83,11 +83,11 @@ mod mock_democracy {
 	}
 }
 
+pub type MaxMembers = ConstU32<100>;
+
 parameter_types! {
-	pub const BlockHashCount: u64 = 250;
 	pub const MotionDuration: u64 = 3;
 	pub const MaxProposals: u32 = 100;
-	pub const MaxMembers: u32 = 100;
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(1024);
 }
@@ -106,7 +106,7 @@ impl frame_system::Config for Test {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = BlockHashCount;
+	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
 	type AccountData = ();
@@ -115,12 +115,13 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
+	type MaxConsumers = ConstU32<16>;
 }
 impl Config<Instance1> for Test {
 	type Origin = Origin;
 	type Proposal = Call;
 	type Event = Event;
-	type MotionDuration = MotionDuration;
+	type MotionDuration = ConstU64<3>;
 	type MaxProposals = MaxProposals;
 	type MaxMembers = MaxMembers;
 	type DefaultVote = PrimeDefaultVote;
@@ -130,7 +131,7 @@ impl Config<Instance2> for Test {
 	type Origin = Origin;
 	type Proposal = Call;
 	type Event = Event;
-	type MotionDuration = MotionDuration;
+	type MotionDuration = ConstU64<3>;
 	type MaxProposals = MaxProposals;
 	type MaxMembers = MaxMembers;
 	type DefaultVote = MoreThanMajorityThenPrimeDefaultVote;
@@ -138,13 +139,13 @@ impl Config<Instance2> for Test {
 }
 impl mock_democracy::Config for Test {
 	type Event = Event;
-	type ExternalMajorityOrigin = EnsureProportionAtLeast<_3, _4, u64, Instance1>;
+	type ExternalMajorityOrigin = EnsureProportionAtLeast<u64, Instance1, 3, 4>;
 }
 impl Config for Test {
 	type Origin = Origin;
 	type Proposal = Call;
 	type Event = Event;
-	type MotionDuration = MotionDuration;
+	type MotionDuration = ConstU64<3>;
 	type MaxProposals = MaxProposals;
 	type MaxMembers = MaxMembers;
 	type DefaultVote = PrimeDefaultVote;
@@ -171,7 +172,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 }
 
 fn make_proposal(value: u64) -> Call {
-	Call::System(frame_system::Call::remark { remark: value.encode() })
+	Call::System(frame_system::Call::remark_with_event { remark: value.to_be_bytes().to_vec() })
 }
 
 fn record(event: Event) -> EventRecord<Event, H256> {

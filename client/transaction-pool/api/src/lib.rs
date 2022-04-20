@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -278,7 +278,7 @@ impl<T> ReadyTransactions for std::iter::Empty<T> {
 
 /// Events that the transaction pool listens for.
 pub enum ChainEvent<B: BlockT> {
-	/// New best block have been added to the chain
+	/// New best block have been added to the chain.
 	NewBestBlock {
 		/// Hash of the block.
 		hash: B::Hash,
@@ -289,8 +289,10 @@ pub enum ChainEvent<B: BlockT> {
 	},
 	/// An existing block has been finalized.
 	Finalized {
-		/// Hash of just finalized block
+		/// Hash of just finalized block.
 		hash: B::Hash,
+		/// Path from old finalized to new finalized parent.
+		tree_route: Arc<[B::Hash]>,
 	},
 }
 
@@ -353,7 +355,7 @@ impl<TPool: LocalTransactionPool> OffchainSubmitTransaction<TPool::Block> for TP
 		result.map(|_| ()).map_err(|e| {
 			log::warn!(
 				target: "txpool",
-				"(offchain call) Error submitting a transaction to the pool: {:?}",
+				"(offchain call) Error submitting a transaction to the pool: {}",
 				e
 			)
 		})

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use std::{convert::TryFrom, time::SystemTime};
+use std::time::SystemTime;
 
 use crate::config::Configuration;
 use futures_timer::Delay;
@@ -55,7 +55,7 @@ impl PrometheusMetrics {
 		register(
 			Gauge::<U64>::with_opts(
 				Opts::new(
-					"build_info",
+					"substrate_build_info",
 					"A metric with a constant '1' value labeled by name, version",
 				)
 				.const_label("name", name)
@@ -65,8 +65,11 @@ impl PrometheusMetrics {
 		)?
 		.set(1);
 
-		register(Gauge::<U64>::new("node_roles", "The roles the node is running as")?, &registry)?
-			.set(roles);
+		register(
+			Gauge::<U64>::new("substrate_node_roles", "The roles the node is running as")?,
+			&registry,
+		)?
+		.set(roles);
 
 		register_globals(registry)?;
 
@@ -74,7 +77,7 @@ impl PrometheusMetrics {
 			SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap_or_default();
 		register(
 			Gauge::<U64>::new(
-				"process_start_time_seconds",
+				"substrate_process_start_time_seconds",
 				"Number of seconds between the UNIX epoch and the moment the process started",
 			)?,
 			registry,
@@ -85,20 +88,20 @@ impl PrometheusMetrics {
 			// generic internals
 			block_height: register(
 				GaugeVec::new(
-					Opts::new("block_height", "Block height info of the chain"),
+					Opts::new("substrate_block_height", "Block height info of the chain"),
 					&["status"],
 				)?,
 				registry,
 			)?,
 
 			number_leaves: register(
-				Gauge::new("number_leaves", "Number of known chain leaves (aka forks)")?,
+				Gauge::new("substrate_number_leaves", "Number of known chain leaves (aka forks)")?,
 				registry,
 			)?,
 
 			ready_transactions_number: register(
 				Gauge::new(
-					"ready_transactions_number",
+					"substrate_ready_transactions_number",
 					"Number of transactions in the ready queue",
 				)?,
 				registry,
@@ -106,16 +109,16 @@ impl PrometheusMetrics {
 
 			// I/ O
 			database_cache: register(
-				Gauge::new("database_cache_bytes", "RocksDB cache size in bytes")?,
+				Gauge::new("substrate_database_cache_bytes", "RocksDB cache size in bytes")?,
 				registry,
 			)?,
 			state_cache: register(
-				Gauge::new("state_cache_bytes", "State cache size in bytes")?,
+				Gauge::new("substrate_state_cache_bytes", "State cache size in bytes")?,
 				registry,
 			)?,
 			state_db: register(
 				GaugeVec::new(
-					Opts::new("state_db_cache_bytes", "State DB cache in bytes"),
+					Opts::new("substrate_state_db_cache_bytes", "State DB cache in bytes"),
 					&["subtype"],
 				)?,
 				registry,

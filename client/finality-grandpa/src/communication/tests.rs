@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -22,7 +22,7 @@ use super::{
 	gossip::{self, GossipValidator},
 	Round, SetId, VoterSet,
 };
-use crate::{communication::GRANDPA_PROTOCOL_NAME, environment::SharedVoterSetState};
+use crate::{communication::grandpa_protocol_name, environment::SharedVoterSetState};
 use futures::prelude::*;
 use parity_scale_codec::Encode;
 use sc_network::{config::Role, Event as NetworkEvent, ObservedRole, PeerId};
@@ -97,7 +97,7 @@ impl sc_network_gossip::ValidatorContext<Block> for TestNetwork {
 		<Self as sc_network_gossip::Network<Block>>::write_notification(
 			self,
 			who.clone(),
-			GRANDPA_PROTOCOL_NAME.into(),
+			grandpa_protocol_name::NAME.into(),
 			data,
 		);
 	}
@@ -148,6 +148,7 @@ fn config() -> crate::Config {
 		local_role: Role::Authority,
 		observer_enabled: true,
 		telemetry: None,
+		protocol_name: grandpa_protocol_name::NAME.into(),
 	}
 }
 
@@ -155,13 +156,13 @@ fn config() -> crate::Config {
 fn voter_set_state() -> SharedVoterSetState<Block> {
 	use crate::{authorities::AuthoritySet, environment::VoterSetState};
 	use finality_grandpa::round::State as RoundState;
-	use sp_core::{crypto::Public, H256};
+	use sp_core::{crypto::ByteArray, H256};
 	use sp_finality_grandpa::AuthorityId;
 
 	let state = RoundState::genesis((H256::zero(), 0));
 	let base = state.prevote_ghost.unwrap();
 
-	let voters = vec![(AuthorityId::from_slice(&[1; 32]), 1)];
+	let voters = vec![(AuthorityId::from_slice(&[1; 32]).unwrap(), 1)];
 	let voters = AuthoritySet::genesis(voters).unwrap();
 
 	let set_state = VoterSetState::live(0, &voters, base);
@@ -286,7 +287,7 @@ fn good_commit_leads_to_relay() {
 					// Add the sending peer and send the commit
 					let _ = sender.unbounded_send(NetworkEvent::NotificationStreamOpened {
 						remote: sender_id.clone(),
-						protocol: GRANDPA_PROTOCOL_NAME.into(),
+						protocol: grandpa_protocol_name::NAME.into(),
 						negotiated_fallback: None,
 						role: ObservedRole::Full,
 					});
@@ -294,7 +295,7 @@ fn good_commit_leads_to_relay() {
 					let _ = sender.unbounded_send(NetworkEvent::NotificationsReceived {
 						remote: sender_id.clone(),
 						messages: vec![(
-							GRANDPA_PROTOCOL_NAME.into(),
+							grandpa_protocol_name::NAME.into(),
 							commit_to_send.clone().into(),
 						)],
 					});
@@ -303,7 +304,7 @@ fn good_commit_leads_to_relay() {
 					let receiver_id = sc_network::PeerId::random();
 					let _ = sender.unbounded_send(NetworkEvent::NotificationStreamOpened {
 						remote: receiver_id.clone(),
-						protocol: GRANDPA_PROTOCOL_NAME.into(),
+						protocol: grandpa_protocol_name::NAME.into(),
 						negotiated_fallback: None,
 						role: ObservedRole::Full,
 					});
@@ -321,7 +322,10 @@ fn good_commit_leads_to_relay() {
 
 						sender.unbounded_send(NetworkEvent::NotificationsReceived {
 							remote: receiver_id,
-							messages: vec![(GRANDPA_PROTOCOL_NAME.into(), msg.encode().into())],
+							messages: vec![(
+								grandpa_protocol_name::NAME.into(),
+								msg.encode().into(),
+							)],
 						})
 					};
 
@@ -433,14 +437,14 @@ fn bad_commit_leads_to_report() {
 				Event::EventStream(sender) => {
 					let _ = sender.unbounded_send(NetworkEvent::NotificationStreamOpened {
 						remote: sender_id.clone(),
-						protocol: GRANDPA_PROTOCOL_NAME.into(),
+						protocol: grandpa_protocol_name::NAME.into(),
 						negotiated_fallback: None,
 						role: ObservedRole::Full,
 					});
 					let _ = sender.unbounded_send(NetworkEvent::NotificationsReceived {
 						remote: sender_id.clone(),
 						messages: vec![(
-							GRANDPA_PROTOCOL_NAME.into(),
+							grandpa_protocol_name::NAME.into(),
 							commit_to_send.clone().into(),
 						)],
 					});
@@ -530,4 +534,47 @@ fn peer_with_higher_view_leads_to_catch_up_request() {
 		});
 
 	futures::executor::block_on(test);
+}
+
+fn local_chain_spec() -> Box<dyn sc_chain_spec::ChainSpec> {
+	use sc_chain_spec::{ChainSpec, GenericChainSpec};
+	use serde::{Deserialize, Serialize};
+	use sp_runtime::{BuildStorage, Storage};
+
+	#[derive(Debug, Serialize, Deserialize)]
+	struct Genesis(std::collections::BTreeMap<String, String>);
+	impl BuildStorage for Genesis {
+		fn assimilate_storage(&self, storage: &mut Storage) -> Result<(), String> {
+			storage.top.extend(
+				self.0.iter().map(|(a, b)| (a.clone().into_bytes(), b.clone().into_bytes())),
+			);
+			Ok(())
+		}
+	}
+	let chain_spec = GenericChainSpec::<Genesis>::from_json_file(std::path::PathBuf::from(
+		"../chain-spec/res/chain_spec.json",
+	))
+	.unwrap();
+	chain_spec.cloned_box()
+}
+
+#[test]
+fn grandpa_protocol_name() {
+	let chain_spec = local_chain_spec();
+
+	// Create protocol name using random genesis hash.
+	let genesis_hash = sp_core::H256::random();
+	let expected = format!("/{}/grandpa/1", hex::encode(genesis_hash));
+	let proto_name = grandpa_protocol_name::standard_name(&genesis_hash, &chain_spec);
+	assert_eq!(proto_name.to_string(), expected);
+
+	// Create protocol name using hardcoded genesis hash. Verify exact representation.
+	let genesis_hash = [
+		53, 79, 112, 97, 119, 217, 39, 202, 147, 138, 225, 38, 88, 182, 215, 185, 110, 88, 8, 53,
+		125, 210, 158, 151, 50, 113, 102, 59, 245, 199, 221, 240,
+	];
+	let expected =
+		"/354f706177d927ca938ae12658b6d7b96e5808357dd29e973271663bf5c7ddf0/grandpa/1".to_string();
+	let proto_name = grandpa_protocol_name::standard_name(&genesis_hash, &chain_spec);
+	assert_eq!(proto_name.to_string(), expected);
 }

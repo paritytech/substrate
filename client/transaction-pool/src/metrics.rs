@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -56,28 +56,28 @@ impl Metrics {
 		Ok(Self {
 			submitted_transactions: register(
 				Counter::new(
-					"sub_txpool_submitted_transactions",
+					"substrate_sub_txpool_submitted_transactions",
 					"Total number of transactions submitted",
 				)?,
 				registry,
 			)?,
 			validations_invalid: register(
 				Counter::new(
-					"sub_txpool_validations_invalid",
+					"substrate_sub_txpool_validations_invalid",
 					"Total number of transactions that were removed from the pool as invalid",
 				)?,
 				registry,
 			)?,
 			block_transactions_pruned: register(
 				Counter::new(
-					"sub_txpool_block_transactions_pruned",
+					"substrate_sub_txpool_block_transactions_pruned",
 					"Total number of transactions that was requested to be pruned by block events",
 				)?,
 				registry,
 			)?,
 			block_transactions_resubmitted: register(
 				Counter::new(
-					"sub_txpool_block_transactions_resubmitted",
+					"substrate_sub_txpool_block_transactions_resubmitted",
 					"Total number of transactions that was requested to be resubmitted by block events",
 				)?,
 				registry,
@@ -98,14 +98,14 @@ impl ApiMetrics {
 		Ok(Self {
 			validations_scheduled: register(
 				Counter::new(
-					"sub_txpool_validations_scheduled",
+					"substrate_sub_txpool_validations_scheduled",
 					"Total number of transactions scheduled for validation",
 				)?,
 				registry,
 			)?,
 			validations_finished: register(
 				Counter::new(
-					"sub_txpool_validations_finished",
+					"substrate_sub_txpool_validations_finished",
 					"Total number of transactions that finished validation",
 				)?,
 				registry,

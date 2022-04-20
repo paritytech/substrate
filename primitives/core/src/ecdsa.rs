@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,19 +15,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// tag::description[]
-//! Simple ECDSA API.
-// end::description[]
+//! Simple ECDSA secp256k1 API.
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_runtime_interface::pass_by::PassByInner;
-use sp_std::cmp::Ordering;
 
 #[cfg(feature = "std")]
 use crate::crypto::Ss58Codec;
 use crate::crypto::{
-	CryptoType, CryptoTypeId, CryptoTypePublicPair, Derive, Public as TraitPublic, UncheckedFrom,
+	ByteArray, CryptoType, CryptoTypeId, CryptoTypePublicPair, Derive, Public as TraitPublic,
+	UncheckedFrom,
 };
 #[cfg(feature = "full_crypto")]
 use crate::{
@@ -36,10 +34,15 @@ use crate::{
 };
 #[cfg(feature = "std")]
 use bip39::{Language, Mnemonic, MnemonicType};
+#[cfg(all(feature = "full_crypto", not(feature = "std")))]
+use secp256k1::Secp256k1;
+#[cfg(feature = "std")]
+use secp256k1::SECP256K1;
 #[cfg(feature = "full_crypto")]
-use core::convert::{TryFrom, TryInto};
-#[cfg(feature = "full_crypto")]
-use libsecp256k1::{PublicKey, SecretKey};
+use secp256k1::{
+	ecdsa::{RecoverableSignature, RecoveryId},
+	Message, PublicKey, SecretKey,
+};
 #[cfg(feature = "std")]
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 #[cfg(feature = "full_crypto")]
@@ -55,42 +58,21 @@ pub const CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"ecds");
 type Seed = [u8; 32];
 
 /// The ECDSA compressed public key.
-#[derive(Clone, Encode, Decode, PassByInner, MaxEncodedLen, TypeInfo)]
+#[cfg_attr(feature = "full_crypto", derive(Hash))]
+#[derive(
+	Clone,
+	Copy,
+	Encode,
+	Decode,
+	PassByInner,
+	MaxEncodedLen,
+	TypeInfo,
+	Eq,
+	PartialEq,
+	PartialOrd,
+	Ord,
+)]
 pub struct Public(pub [u8; 33]);
-
-impl PartialOrd for Public {
-	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-		Some(self.cmp(other))
-	}
-}
-
-impl Ord for Public {
-	fn cmp(&self, other: &Self) -> Ordering {
-		self.as_ref().cmp(&other.as_ref())
-	}
-}
-
-impl PartialEq for Public {
-	fn eq(&self, other: &Self) -> bool {
-		self.as_ref() == other.as_ref()
-	}
-}
-
-impl Eq for Public {}
-
-/// An error type for SS58 decoding.
-#[cfg(feature = "std")]
-#[derive(Clone, Copy, Eq, PartialEq, Debug)]
-pub enum PublicError {
-	/// Bad alphabet.
-	BadBase58,
-	/// Bad length.
-	BadLength,
-	/// Unknown version.
-	UnknownVersion,
-	/// Invalid checksum.
-	InvalidChecksum,
-}
 
 impl Public {
 	/// A new instance from the given 33-byte `data`.
@@ -106,24 +88,24 @@ impl Public {
 	/// This will convert the full public key into the compressed format.
 	#[cfg(feature = "std")]
 	pub fn from_full(full: &[u8]) -> Result<Self, ()> {
-		libsecp256k1::PublicKey::parse_slice(full, None)
-			.map(|k| k.serialize_compressed())
-			.map(Self)
-			.map_err(|_| ())
+		let pubkey = if full.len() == 64 {
+			// Tag it as uncompressed public key.
+			let mut tagged_full = [0u8; 65];
+			tagged_full[0] = 0x04;
+			tagged_full[1..].copy_from_slice(full);
+			secp256k1::PublicKey::from_slice(&tagged_full)
+		} else {
+			secp256k1::PublicKey::from_slice(full)
+		};
+		pubkey.map(|k| Self(k.serialize())).map_err(|_| ())
 	}
 }
 
-impl TraitPublic for Public {
-	/// A new instance from the given slice that should be 33 bytes long.
-	///
-	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if
-	/// you are certain that the array actually is a pubkey. GIGO!
-	fn from_slice(data: &[u8]) -> Self {
-		let mut r = [0u8; 33];
-		r.copy_from_slice(data);
-		Self(r)
-	}
+impl ByteArray for Public {
+	const LEN: usize = 33;
+}
 
+impl TraitPublic for Public {
 	fn to_public_crypto_pair(&self) -> CryptoTypePublicPair {
 		CryptoTypePublicPair(CRYPTO_ID, self.to_raw_vec())
 	}
@@ -143,12 +125,6 @@ impl From<&Public> for CryptoTypePublicPair {
 
 impl Derive for Public {}
 
-impl Default for Public {
-	fn default() -> Self {
-		Public([0u8; 33])
-	}
-}
-
 impl AsRef<[u8]> for Public {
 	fn as_ref(&self) -> &[u8] {
 		&self.0[..]
@@ -161,15 +137,16 @@ impl AsMut<[u8]> for Public {
 	}
 }
 
-impl sp_std::convert::TryFrom<&[u8]> for Public {
+impl TryFrom<&[u8]> for Public {
 	type Error = ();
 
 	fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
-		if data.len() == 33 {
-			Ok(Self::from_slice(data))
-		} else {
-			Err(())
+		if data.len() != Self::LEN {
+			return Err(())
 		}
+		let mut r = [0u8; Self::LEN];
+		r.copy_from_slice(data);
+		Ok(Self::unchecked_from(r))
 	}
 }
 
@@ -227,18 +204,12 @@ impl<'de> Deserialize<'de> for Public {
 	}
 }
 
-#[cfg(feature = "full_crypto")]
-impl sp_std::hash::Hash for Public {
-	fn hash<H: sp_std::hash::Hasher>(&self, state: &mut H) {
-		self.as_ref().hash(state);
-	}
-}
-
 /// A signature (a 512-bit value, plus 8 bits for recovery ID).
-#[derive(Encode, Decode, PassByInner, TypeInfo)]
+#[cfg_attr(feature = "full_crypto", derive(Hash))]
+#[derive(Encode, Decode, MaxEncodedLen, PassByInner, TypeInfo, PartialEq, Eq)]
 pub struct Signature(pub [u8; 65]);
 
-impl sp_std::convert::TryFrom<&[u8]> for Signature {
+impl TryFrom<&[u8]> for Signature {
 	type Error = ();
 
 	fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
@@ -289,14 +260,6 @@ impl Default for Signature {
 	}
 }
 
-impl PartialEq for Signature {
-	fn eq(&self, b: &Self) -> bool {
-		self.0[..] == b.0[..]
-	}
-}
-
-impl Eq for Signature {}
-
 impl From<Signature> for [u8; 65] {
 	fn from(v: Signature) -> [u8; 65] {
 		v.0
@@ -333,10 +296,9 @@ impl sp_std::fmt::Debug for Signature {
 	}
 }
 
-#[cfg(feature = "full_crypto")]
-impl sp_std::hash::Hash for Signature {
-	fn hash<H: sp_std::hash::Hasher>(&self, state: &mut H) {
-		sp_std::hash::Hash::hash(&self.0[..], state);
+impl UncheckedFrom<[u8; 65]> for Signature {
+	fn unchecked_from(data: [u8; 65]) -> Signature {
+		Signature(data)
 	}
 }
 
@@ -353,63 +315,56 @@ impl Signature {
 	///
 	/// NOTE: No checking goes on to ensure this is a real signature. Only use it if
 	/// you are certain that the array actually is a signature. GIGO!
-	pub fn from_slice(data: &[u8]) -> Self {
+	pub fn from_slice(data: &[u8]) -> Option<Self> {
+		if data.len() != 65 {
+			return None
+		}
 		let mut r = [0u8; 65];
 		r.copy_from_slice(data);
-		Signature(r)
+		Some(Signature(r))
 	}
 
 	/// Recover the public key from this signature and a message.
 	#[cfg(feature = "full_crypto")]
 	pub fn recover<M: AsRef<[u8]>>(&self, message: M) -> Option<Public> {
-		let message = libsecp256k1::Message::parse(&blake2_256(message.as_ref()));
-		let sig: (_, _) = self.try_into().ok()?;
-		libsecp256k1::recover(&message, &sig.0, &sig.1)
-			.ok()
-			.map(|recovered| Public(recovered.serialize_compressed()))
+		self.recover_prehashed(&blake2_256(message.as_ref()))
 	}
 
 	/// Recover the public key from this signature and a pre-hashed message.
 	#[cfg(feature = "full_crypto")]
 	pub fn recover_prehashed(&self, message: &[u8; 32]) -> Option<Public> {
-		let message = libsecp256k1::Message::parse(message);
+		let rid = RecoveryId::from_i32(self.0[64] as i32).ok()?;
+		let sig = RecoverableSignature::from_compact(&self.0[..64], rid).ok()?;
+		let message = Message::from_slice(message).expect("Message is 32 bytes; qed");
 
-		let sig: (_, _) = self.try_into().ok()?;
+		#[cfg(feature = "std")]
+		let context = SECP256K1;
+		#[cfg(not(feature = "std"))]
+		let context = Secp256k1::verification_only();
 
-		libsecp256k1::recover(&message, &sig.0, &sig.1)
+		context
+			.recover_ecdsa(&message, &sig)
 			.ok()
-			.map(|key| Public(key.serialize_compressed()))
+			.map(|pubkey| Public(pubkey.serialize()))
 	}
 }
 
 #[cfg(feature = "full_crypto")]
-impl From<(libsecp256k1::Signature, libsecp256k1::RecoveryId)> for Signature {
-	fn from(x: (libsecp256k1::Signature, libsecp256k1::RecoveryId)) -> Signature {
+impl From<RecoverableSignature> for Signature {
+	fn from(recsig: RecoverableSignature) -> Signature {
 		let mut r = Self::default();
-		r.0[0..64].copy_from_slice(&x.0.serialize()[..]);
-		r.0[64] = x.1.serialize();
+		let (recid, sig) = recsig.serialize_compact();
+		r.0[..64].copy_from_slice(&sig);
+		// This is safe due to the limited range of possible valid ids.
+		r.0[64] = recid.to_i32() as u8;
 		r
-	}
-}
-
-#[cfg(feature = "full_crypto")]
-impl<'a> TryFrom<&'a Signature> for (libsecp256k1::Signature, libsecp256k1::RecoveryId) {
-	type Error = ();
-	fn try_from(
-		x: &'a Signature,
-	) -> Result<(libsecp256k1::Signature, libsecp256k1::RecoveryId), Self::Error> {
-		parse_signature_standard(&x.0).map_err(|_| ())
 	}
 }
 
 /// Derive a single hard junction.
 #[cfg(feature = "full_crypto")]
 fn derive_hard_junction(secret_seed: &Seed, cc: &[u8; 32]) -> Seed {
-	("Secp256k1HDKD", secret_seed, cc).using_encoded(|data| {
-		let mut res = [0u8; 32];
-		res.copy_from_slice(blake2_rfc::blake2b::blake2b(32, &[], data).as_bytes());
-		res
-	})
+	("Secp256k1HDKD", secret_seed, cc).using_encoded(|data| sp_core_hashing::blake2_256(data))
 }
 
 /// An error when deriving a key.
@@ -423,7 +378,7 @@ pub enum DeriveError {
 #[cfg(feature = "full_crypto")]
 #[derive(Clone)]
 pub struct Pair {
-	public: PublicKey,
+	public: Public,
 	secret: SecretKey,
 }
 
@@ -477,8 +432,15 @@ impl TraitPair for Pair {
 	/// You should never need to use this; generate(), generate_with_phrase
 	fn from_seed_slice(seed_slice: &[u8]) -> Result<Pair, SecretStringError> {
 		let secret =
-			SecretKey::parse_slice(seed_slice).map_err(|_| SecretStringError::InvalidSeedLength)?;
-		let public = PublicKey::from_secret_key(&secret);
+			SecretKey::from_slice(seed_slice).map_err(|_| SecretStringError::InvalidSeedLength)?;
+
+		#[cfg(feature = "std")]
+		let context = SECP256K1;
+		#[cfg(not(feature = "std"))]
+		let context = Secp256k1::signing_only();
+
+		let public = PublicKey::from_secret_key(&context, &secret);
+		let public = Public(public.serialize());
 		Ok(Pair { public, secret })
 	}
 
@@ -488,7 +450,7 @@ impl TraitPair for Pair {
 		path: Iter,
 		_seed: Option<Seed>,
 	) -> Result<(Pair, Option<Seed>), DeriveError> {
-		let mut acc = self.secret.serialize();
+		let mut acc = self.seed();
 		for j in path {
 			match j {
 				DeriveJunction::Soft(_cc) => return Err(DeriveError::SoftKeyInPath),
@@ -500,25 +462,19 @@ impl TraitPair for Pair {
 
 	/// Get the public key.
 	fn public(&self) -> Public {
-		Public(self.public.serialize_compressed())
+		self.public
 	}
 
 	/// Sign a message.
 	fn sign(&self, message: &[u8]) -> Signature {
-		let message = libsecp256k1::Message::parse(&blake2_256(message));
-		libsecp256k1::sign(&message, &self.secret).into()
+		self.sign_prehashed(&blake2_256(message))
 	}
 
 	/// Verify a signature on a message. Returns true if the signature is good.
 	fn verify<M: AsRef<[u8]>>(sig: &Self::Signature, message: M, pubkey: &Self::Public) -> bool {
-		let message = libsecp256k1::Message::parse(&blake2_256(message.as_ref()));
-		let sig: (_, _) = match sig.try_into() {
-			Ok(x) => x,
-			_ => return false,
-		};
-		match libsecp256k1::recover(&message, &sig.0, &sig.1) {
-			Ok(actual) => pubkey.0[..] == actual.serialize_compressed()[..],
-			_ => false,
+		match sig.recover(message) {
+			Some(actual) => actual == *pubkey,
+			None => false,
 		}
 	}
 
@@ -527,17 +483,9 @@ impl TraitPair for Pair {
 	/// This doesn't use the type system to ensure that `sig` and `pubkey` are the correct
 	/// size. Use it only if you're coming from byte buffers and need the speed.
 	fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(sig: &[u8], message: M, pubkey: P) -> bool {
-		let message = libsecp256k1::Message::parse(&blake2_256(message.as_ref()));
-		if sig.len() != 65 {
-			return false
-		}
-		let (sig, ri) = match parse_signature_standard(&sig) {
-			Ok(sigri) => sigri,
-			_ => return false,
-		};
-		match libsecp256k1::recover(&message, &sig, &ri) {
-			Ok(actual) => pubkey.as_ref() == &actual.serialize()[1..],
-			_ => false,
+		match Signature::from_slice(sig).and_then(|sig| sig.recover(message)) {
+			Some(actual) => actual.as_ref() == pubkey.as_ref(),
+			None => false,
 		}
 	}
 
@@ -551,7 +499,7 @@ impl TraitPair for Pair {
 impl Pair {
 	/// Get the seed for this key.
 	pub fn seed(&self) -> Seed {
-		self.secret.serialize()
+		self.secret.serialize_secret()
 	}
 
 	/// Exactly as `from_string` except that if no matches are found then, the the first 32
@@ -568,57 +516,63 @@ impl Pair {
 
 	/// Sign a pre-hashed message
 	pub fn sign_prehashed(&self, message: &[u8; 32]) -> Signature {
-		let message = libsecp256k1::Message::parse(message);
-		libsecp256k1::sign(&message, &self.secret).into()
+		let message = Message::from_slice(message).expect("Message is 32 bytes; qed");
+
+		#[cfg(feature = "std")]
+		let context = SECP256K1;
+		#[cfg(not(feature = "std"))]
+		let context = Secp256k1::signing_only();
+
+		context.sign_ecdsa_recoverable(&message, &self.secret).into()
 	}
 
 	/// Verify a signature on a pre-hashed message. Return `true` if the signature is valid
 	/// and thus matches the given `public` key.
 	pub fn verify_prehashed(sig: &Signature, message: &[u8; 32], public: &Public) -> bool {
-		let message = libsecp256k1::Message::parse(message);
-
-		let sig: (_, _) = match sig.try_into() {
-			Ok(x) => x,
-			_ => return false,
-		};
-
-		match libsecp256k1::recover(&message, &sig.0, &sig.1) {
-			Ok(actual) => public.0[..] == actual.serialize_compressed()[..],
-			_ => false,
+		match sig.recover_prehashed(message) {
+			Some(actual) => actual == *public,
+			None => false,
 		}
 	}
 
 	/// Verify a signature on a message. Returns true if the signature is good.
-	/// Parses Signature using parse_overflowing_slice
+	/// Parses Signature using parse_overflowing_slice.
+	#[deprecated(note = "please use `verify` instead")]
 	pub fn verify_deprecated<M: AsRef<[u8]>>(sig: &Signature, message: M, pubkey: &Public) -> bool {
 		let message = libsecp256k1::Message::parse(&blake2_256(message.as_ref()));
-		let (sig, ri) = match parse_signature_overflowing(&sig.0) {
-			Ok(sigri) => sigri,
+
+		let parse_signature_overflowing = |x: [u8; 65]| {
+			let sig = libsecp256k1::Signature::parse_overflowing_slice(&x[..64]).ok()?;
+			let rid = libsecp256k1::RecoveryId::parse(x[64]).ok()?;
+			Some((sig, rid))
+		};
+
+		let (sig, rid) = match parse_signature_overflowing(sig.0) {
+			Some(sigri) => sigri,
 			_ => return false,
 		};
-		match libsecp256k1::recover(&message, &sig, &ri) {
-			Ok(actual) => pubkey.0[..] == actual.serialize_compressed()[..],
+		match libsecp256k1::recover(&message, &sig, &rid) {
+			Ok(actual) => pubkey.0 == actual.serialize_compressed(),
 			_ => false,
 		}
 	}
 }
 
+// The `secp256k1` backend doesn't implement cleanup for their private keys.
+// Currently we should take care of wiping the secret from memory.
+// NOTE: this solution is not effective when `Pair` is moved around memory.
+// The very same problem affects other cryptographic backends that are just using
+// `zeroize`for their secrets.
 #[cfg(feature = "full_crypto")]
-fn parse_signature_standard(
-	x: &[u8],
-) -> Result<(libsecp256k1::Signature, libsecp256k1::RecoveryId), libsecp256k1::Error> {
-	let sig = libsecp256k1::Signature::parse_standard_slice(&x[..64])?;
-	let ri = libsecp256k1::RecoveryId::parse(x[64])?;
-	Ok((sig, ri))
-}
-
-#[cfg(feature = "full_crypto")]
-fn parse_signature_overflowing(
-	x: &[u8],
-) -> Result<(libsecp256k1::Signature, libsecp256k1::RecoveryId), libsecp256k1::Error> {
-	let sig = libsecp256k1::Signature::parse_overflowing_slice(&x[..64])?;
-	let ri = libsecp256k1::RecoveryId::parse(x[64])?;
-	Ok((sig, ri))
+impl Drop for Pair {
+	fn drop(&mut self) {
+		let ptr = self.secret.as_mut_ptr();
+		for off in 0..self.secret.len() {
+			unsafe {
+				core::ptr::write_volatile(ptr.add(off), 0);
+			}
+		}
+	}
 }
 
 impl CryptoType for Public {
@@ -639,12 +593,9 @@ impl CryptoType for Pair {
 #[cfg(test)]
 mod test {
 	use super::*;
-	use crate::{
-		crypto::{
-			set_default_ss58_version, PublicError, Ss58AddressFormat, Ss58AddressFormatRegistry,
-			DEV_PHRASE,
-		},
-		keccak_256,
+	use crate::crypto::{
+		set_default_ss58_version, PublicError, Ss58AddressFormat, Ss58AddressFormatRegistry,
+		DEV_PHRASE,
 	};
 	use hex_literal::hex;
 	use serde_json;
@@ -863,22 +814,20 @@ mod test {
 		// `msg` shouldn't be mangled
 		let msg = [0u8; 32];
 		let sig1 = pair.sign_prehashed(&msg);
-		let sig2: Signature =
-			libsecp256k1::sign(&libsecp256k1::Message::parse(&msg), &pair.secret).into();
-
+		let sig2: Signature = {
+			let message = Message::from_slice(&msg).unwrap();
+			SECP256K1.sign_ecdsa_recoverable(&message, &pair.secret).into()
+		};
 		assert_eq!(sig1, sig2);
 
 		// signature is actually different
 		let sig2 = pair.sign(&msg);
-
 		assert_ne!(sig1, sig2);
 
 		// using pre-hashed `msg` works
-		let msg = keccak_256(b"this should be hashed");
-		let sig1 = pair.sign_prehashed(&msg);
-		let sig2: Signature =
-			libsecp256k1::sign(&libsecp256k1::Message::parse(&msg), &pair.secret).into();
-
+		let msg = b"this should be hashed";
+		let sig1 = pair.sign_prehashed(&blake2_256(msg));
+		let sig2 = pair.sign(msg);
 		assert_eq!(sig1, sig2);
 	}
 
@@ -887,12 +836,12 @@ mod test {
 		let (pair, _, _) = Pair::generate_with_phrase(Some("password"));
 
 		// `msg` and `sig` match
-		let msg = keccak_256(b"this should be hashed");
+		let msg = blake2_256(b"this should be hashed");
 		let sig = pair.sign_prehashed(&msg);
 		assert!(Pair::verify_prehashed(&sig, &msg, &pair.public()));
 
 		// `msg` and `sig` don't match
-		let msg = keccak_256(b"this is a different message");
+		let msg = blake2_256(b"this is a different message");
 		assert!(!Pair::verify_prehashed(&sig, &msg, &pair.public()));
 	}
 
@@ -901,7 +850,7 @@ mod test {
 		let (pair, _, _) = Pair::generate_with_phrase(Some("password"));
 
 		// recovered key matches signing key
-		let msg = keccak_256(b"this should be hashed");
+		let msg = blake2_256(b"this should be hashed");
 		let sig = pair.sign_prehashed(&msg);
 		let key = sig.recover_prehashed(&msg).unwrap();
 		assert_eq!(pair.public(), key);
@@ -910,7 +859,7 @@ mod test {
 		assert!(Pair::verify_prehashed(&sig, &msg, &key));
 
 		// recovered key and signing key don't match
-		let msg = keccak_256(b"this is a different message");
+		let msg = blake2_256(b"this is a different message");
 		let key = sig.recover_prehashed(&msg).unwrap();
 		assert_ne!(pair.public(), key);
 	}

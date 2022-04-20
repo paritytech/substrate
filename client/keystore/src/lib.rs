@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -28,26 +28,31 @@ mod local;
 pub use local::LocalKeystore;
 
 /// Keystore error.
-#[derive(Debug, derive_more::Display, derive_more::From)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
 	/// IO error.
-	Io(io::Error),
+	#[error(transparent)]
+	Io(#[from] io::Error),
 	/// JSON error.
-	Json(serde_json::Error),
+	#[error(transparent)]
+	Json(#[from] serde_json::Error),
 	/// Invalid password.
-	#[display(fmt = "Invalid password")]
-	InvalidPassword,
+	#[error(
+		"Requested public key and public key of the loaded private key do not match. \n
+			This means either that the keystore password is incorrect or that the private key was stored under a wrong public key."
+	)]
+	PublicKeyMismatch,
 	/// Invalid BIP39 phrase
-	#[display(fmt = "Invalid recovery phrase (BIP39) data")]
+	#[error("Invalid recovery phrase (BIP39) data")]
 	InvalidPhrase,
 	/// Invalid seed
-	#[display(fmt = "Invalid seed")]
+	#[error("Invalid seed")]
 	InvalidSeed,
 	/// Public key type is not supported
-	#[display(fmt = "Key crypto type is not supported")]
+	#[error("Key crypto type is not supported")]
 	KeyNotSupported(KeyTypeId),
 	/// Keystore unavailable
-	#[display(fmt = "Keystore unavailable")]
+	#[error("Keystore unavailable")]
 	Unavailable,
 }
 
@@ -58,21 +63,11 @@ impl From<Error> for TraitError {
 	fn from(error: Error) -> Self {
 		match error {
 			Error::KeyNotSupported(id) => TraitError::KeyNotSupported(id),
-			Error::InvalidSeed | Error::InvalidPhrase | Error::InvalidPassword =>
+			Error::InvalidSeed | Error::InvalidPhrase | Error::PublicKeyMismatch =>
 				TraitError::ValidationError(error.to_string()),
 			Error::Unavailable => TraitError::Unavailable,
 			Error::Io(e) => TraitError::Other(e.to_string()),
 			Error::Json(e) => TraitError::Other(e.to_string()),
-		}
-	}
-}
-
-impl std::error::Error for Error {
-	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-		match self {
-			Error::Io(ref err) => Some(err),
-			Error::Json(ref err) => Some(err),
-			_ => None,
 		}
 	}
 }

@@ -13,19 +13,21 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
-scale-info = { version = "1.0", default-features = false, features = ["derive"] }
-sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
-sp-arithmetic = { version = "4.0.0-dev", default-features = false, path = "../../primitives/arithmetic" }
+codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"] }
+scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
+sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
+sp-arithmetic = { version = "5.0.0", default-features = false, path = "../../primitives/arithmetic" }
 sp-npos-elections = { version = "4.0.0-dev", default-features = false, path = "../../primitives/npos-elections" }
+sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
+frame-election-provider-solution-type = { version = "4.0.0-dev", path = "solution-type" }
 
 [dev-dependencies]
+rand = "0.7.3"
 sp-npos-elections = { version = "4.0.0-dev", path = "../../primitives/npos-elections" }
-sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
-sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
-sp-io = { version = "4.0.0-dev", path = "../../primitives/io" }
+sp-core = { version = "6.0.0", path = "../../primitives/core" }
+sp-io = { version = "6.0.0", path = "../../primitives/io" }
 
 [features]
 default = ["std"]

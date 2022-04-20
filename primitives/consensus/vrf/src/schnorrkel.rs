@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,7 +21,6 @@ use codec::{Decode, Encode, EncodeLike};
 use schnorrkel::errors::MultiSignatureStage;
 use sp_core::U512;
 use sp_std::{
-	convert::TryFrom,
 	ops::{Deref, DerefMut},
 	prelude::*,
 };

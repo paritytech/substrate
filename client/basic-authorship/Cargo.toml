@@ -13,14 +13,14 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "2.0.0" }
-futures = "0.3.9"
+codec = { package = "parity-scale-codec", version = "3.0.0" }
+futures = "0.3.21"
 futures-timer = "3.0.1"
 log = "0.4.8"
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus", version = "0.10.0-dev"}
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
-sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
-sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
+sp-runtime = { version = "6.0.0", path = "../../primitives/runtime" }
+sp-core = { version = "6.0.0", path = "../../primitives/core" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
 sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
@@ -33,4 +33,4 @@ sc-proposer-metrics = { version = "0.10.0-dev", path = "../proposer-metrics" }
 [dev-dependencies]
 sc-transaction-pool = { version = "4.0.0-dev", path = "../transaction-pool" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
-parking_lot = "0.11.1"
+parking_lot = "0.12.0"

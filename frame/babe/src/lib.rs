@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -31,7 +31,7 @@ use frame_support::{
 	weights::{Pays, Weight},
 	BoundedVec, WeakBoundedVec,
 };
-use sp_application_crypto::Public;
+use sp_application_crypto::ByteArray;
 use sp_runtime::{
 	generic::DigestItem,
 	traits::{IsMember, One, SaturatedConversion, Saturating, Zero},
@@ -115,7 +115,6 @@ pub mod pallet {
 	/// The BABE Pallet
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
-	#[pallet::generate_storage_info]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
@@ -310,17 +309,11 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(super) type NextEpochConfig<T> = StorageValue<_, BabeEpochConfiguration>;
 
+	#[cfg_attr(feature = "std", derive(Default))]
 	#[pallet::genesis_config]
 	pub struct GenesisConfig {
 		pub authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
 		pub epoch_config: Option<BabeEpochConfiguration>,
-	}
-
-	#[cfg(feature = "std")]
-	impl Default for GenesisConfig {
-		fn default() -> Self {
-			GenesisConfig { authorities: Default::default(), epoch_config: Default::default() }
-		}
 	}
 
 	#[pallet::genesis_build]
@@ -634,7 +627,7 @@ impl<T: Config> Pallet<T> {
 
 	fn deposit_consensus<U: Encode>(new: U) {
 		let log = DigestItem::Consensus(BABE_ENGINE_ID, new.encode());
-		<frame_system::Pallet<T>>::deposit_log(log.into())
+		<frame_system::Pallet<T>>::deposit_log(log)
 	}
 
 	fn deposit_randomness(randomness: &schnorrkel::Randomness) {

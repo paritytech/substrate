@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -1237,6 +1237,30 @@ macro_rules! decl_tests {
 				assert_ok!(Balances::repatriate_all_reserved_named(&id, &2, &3, Status::Free));
 				assert_eq!(Balances::reserved_balance_named(&id, &2), 0);
 				assert_eq!(Balances::free_balance(&3), 25);
+			});
+		}
+
+		#[test]
+		fn set_balance_handles_killing_account() {
+			<$ext_builder>::default().build().execute_with(|| {
+					let _ = Balances::deposit_creating(&1, 111);
+					assert_ok!(frame_system::Pallet::<Test>::inc_consumers(&1));
+					assert_noop!(
+						Balances::set_balance(Origin::root(), 1, 0, 0),
+						DispatchError::ConsumerRemaining,
+					);
+			});
+		}
+
+		#[test]
+		fn set_balance_handles_total_issuance() {
+			<$ext_builder>::default().build().execute_with(|| {
+					let old_total_issuance = Balances::total_issuance();
+					assert_ok!(Balances::set_balance(Origin::root(), 1337, 69, 42));
+					assert_eq!(Balances::total_issuance(), old_total_issuance + 69 + 42);
+					assert_eq!(Balances::total_balance(&1337), 69 + 42);
+					assert_eq!(Balances::free_balance(&1337), 69);
+					assert_eq!(Balances::reserved_balance(&1337), 42);
 			});
 		}
 	}

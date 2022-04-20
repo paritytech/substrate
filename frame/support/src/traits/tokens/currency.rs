@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,7 +21,10 @@ use super::{
 	imbalance::{Imbalance, SignedImbalance},
 	misc::{Balance, ExistenceRequirement, WithdrawReasons},
 };
-use crate::dispatch::{DispatchError, DispatchResult};
+use crate::{
+	dispatch::{DispatchError, DispatchResult},
+	traits::Get,
+};
 use codec::MaxEncodedLen;
 use sp_runtime::traits::MaybeSerializeDeserialize;
 use sp_std::fmt::Debug;
@@ -198,4 +201,101 @@ pub trait Currency<AccountId> {
 		who: &AccountId,
 		balance: Self::Balance,
 	) -> SignedImbalance<Self::Balance, Self::PositiveImbalance>;
+}
+
+/// A non-const `Get` implementation parameterised by a `Currency` impl which provides the result
+/// of `total_issuance`.
+pub struct TotalIssuanceOf<C: Currency<A>, A>(sp_std::marker::PhantomData<(C, A)>);
+impl<C: Currency<A>, A> Get<C::Balance> for TotalIssuanceOf<C, A> {
+	fn get() -> C::Balance {
+		C::total_issuance()
+	}
+}
+
+#[cfg(feature = "std")]
+impl<AccountId> Currency<AccountId> for () {
+	type Balance = u32;
+	type PositiveImbalance = ();
+	type NegativeImbalance = ();
+	fn total_balance(_: &AccountId) -> Self::Balance {
+		0
+	}
+	fn can_slash(_: &AccountId, _: Self::Balance) -> bool {
+		true
+	}
+	fn total_issuance() -> Self::Balance {
+		0
+	}
+	fn minimum_balance() -> Self::Balance {
+		0
+	}
+	fn burn(_: Self::Balance) -> Self::PositiveImbalance {
+		()
+	}
+	fn issue(_: Self::Balance) -> Self::NegativeImbalance {
+		()
+	}
+	fn pair(_: Self::Balance) -> (Self::PositiveImbalance, Self::NegativeImbalance) {
+		((), ())
+	}
+	fn free_balance(_: &AccountId) -> Self::Balance {
+		0
+	}
+	fn ensure_can_withdraw(
+		_: &AccountId,
+		_: Self::Balance,
+		_: WithdrawReasons,
+		_: Self::Balance,
+	) -> DispatchResult {
+		Ok(())
+	}
+	fn transfer(
+		_: &AccountId,
+		_: &AccountId,
+		_: Self::Balance,
+		_: ExistenceRequirement,
+	) -> DispatchResult {
+		Ok(())
+	}
+	fn slash(_: &AccountId, _: Self::Balance) -> (Self::NegativeImbalance, Self::Balance) {
+		((), 0)
+	}
+	fn deposit_into_existing(
+		_: &AccountId,
+		_: Self::Balance,
+	) -> Result<Self::PositiveImbalance, DispatchError> {
+		Ok(())
+	}
+	fn resolve_into_existing(
+		_: &AccountId,
+		_: Self::NegativeImbalance,
+	) -> Result<(), Self::NegativeImbalance> {
+		Ok(())
+	}
+	fn deposit_creating(_: &AccountId, _: Self::Balance) -> Self::PositiveImbalance {
+		()
+	}
+	fn resolve_creating(_: &AccountId, _: Self::NegativeImbalance) {}
+	fn withdraw(
+		_: &AccountId,
+		_: Self::Balance,
+		_: WithdrawReasons,
+		_: ExistenceRequirement,
+	) -> Result<Self::NegativeImbalance, DispatchError> {
+		Ok(())
+	}
+	fn settle(
+		_: &AccountId,
+		_: Self::PositiveImbalance,
+		_: WithdrawReasons,
+		_: ExistenceRequirement,
+	) -> Result<(), Self::PositiveImbalance> {
+		Ok(())
+	}
+	fn make_free_balance_be(
+		_: &AccountId,
+		_: Self::Balance,
+	) -> SignedImbalance<Self::Balance, Self::PositiveImbalance> {
+		SignedImbalance::Positive(())
+	}
 }

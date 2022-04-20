@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,7 +17,7 @@
 
 use super::*;
 use codec::{Decode, Encode, MaxEncodedLen};
-use enumflags2::BitFlags;
+use enumflags2::{bitflags, BitFlags};
 use frame_support::{
 	traits::{ConstU32, Get},
 	BoundedVec, CloneNoBound, PartialEqNoBound, RuntimeDebugNoBound,
@@ -51,6 +51,12 @@ pub enum Data {
 	/// Only the SHA3-256 hash of the data is stored. The preimage of the hash may be retrieved
 	/// through some hash-lookup service.
 	ShaThree256([u8; 32]),
+}
+
+impl Data {
+	pub fn is_none(&self) -> bool {
+		self == &Data::None
+	}
 }
 
 impl Decode for Data {
@@ -230,8 +236,9 @@ impl<Balance: Encode + Decode + MaxEncodedLen + Copy + Clone + Debug + Eq + Part
 
 /// The fields that we use to identify the owner of an account with. Each corresponds to a field
 /// in the `IdentityInfo` struct.
+#[bitflags]
 #[repr(u64)]
-#[derive(Clone, Copy, PartialEq, Eq, BitFlags, RuntimeDebug, TypeInfo)]
+#[derive(Clone, Copy, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub enum IdentityField {
 	Display = 0b0000000000000000000000000000000000000000000000000000000000000001,
 	Legal = 0b0000000000000000000000000000000000000000000000000000000000000010,
@@ -245,7 +252,7 @@ pub enum IdentityField {
 
 /// Wrapper type for `BitFlags<IdentityField>` that implements `Codec`.
 #[derive(Clone, Copy, PartialEq, Default, RuntimeDebug)]
-pub struct IdentityFields(pub(crate) BitFlags<IdentityField>);
+pub struct IdentityFields(pub BitFlags<IdentityField>);
 
 impl MaxEncodedLen for IdentityFields {
 	fn max_encoded_len() -> usize {
@@ -283,7 +290,7 @@ impl TypeInfo for IdentityFields {
 #[derive(
 	CloneNoBound, Encode, Decode, Eq, MaxEncodedLen, PartialEqNoBound, RuntimeDebugNoBound, TypeInfo,
 )]
-#[codec(mel_bound(FieldLimit: Get<u32>))]
+#[codec(mel_bound())]
 #[cfg_attr(test, derive(frame_support::DefaultNoBound))]
 #[scale_info(skip_type_params(FieldLimit))]
 pub struct IdentityInfo<FieldLimit: Get<u32>> {
@@ -332,6 +339,37 @@ pub struct IdentityInfo<FieldLimit: Get<u32>> {
 	pub twitter: Data,
 }
 
+impl<FieldLimit: Get<u32>> IdentityInfo<FieldLimit> {
+	pub(crate) fn fields(&self) -> IdentityFields {
+		let mut res = <BitFlags<IdentityField>>::empty();
+		if !self.display.is_none() {
+			res.insert(IdentityField::Display);
+		}
+		if !self.legal.is_none() {
+			res.insert(IdentityField::Legal);
+		}
+		if !self.web.is_none() {
+			res.insert(IdentityField::Web);
+		}
+		if !self.riot.is_none() {
+			res.insert(IdentityField::Riot);
+		}
+		if !self.email.is_none() {
+			res.insert(IdentityField::Email);
+		}
+		if self.pgp_fingerprint.is_some() {
+			res.insert(IdentityField::PgpFingerprint);
+		}
+		if !self.image.is_none() {
+			res.insert(IdentityField::Image);
+		}
+		if !self.twitter.is_none() {
+			res.insert(IdentityField::Twitter);
+		}
+		IdentityFields(res)
+	}
+}
+
 /// Information concerning the identity of the controller of an account.
 ///
 /// NOTE: This is stored separately primarily to facilitate the addition of extra fields in a
@@ -339,11 +377,7 @@ pub struct IdentityInfo<FieldLimit: Get<u32>> {
 #[derive(
 	CloneNoBound, Encode, Eq, MaxEncodedLen, PartialEqNoBound, RuntimeDebugNoBound, TypeInfo,
 )]
-#[codec(mel_bound(
-	Balance: Encode + Decode + MaxEncodedLen + Copy + Clone + Debug + Eq + PartialEq + Zero + Add,
-	MaxJudgements: Get<u32>,
-	MaxAdditionalFields: Get<u32>,
-))]
+#[codec(mel_bound())]
 #[scale_info(skip_type_params(MaxJudgements, MaxAdditionalFields))]
 pub struct Registration<
 	Balance: Encode + Decode + MaxEncodedLen + Copy + Clone + Debug + Eq + PartialEq,

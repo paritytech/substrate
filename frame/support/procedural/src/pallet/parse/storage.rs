@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -704,11 +704,11 @@ impl StorageDef {
 			})
 			.unwrap_or(Some(QueryKind::OptionQuery)); // This value must match the default generic.
 
-		if query_kind.is_none() && getter.is_some() {
+		if let (None, Some(getter)) = (query_kind.as_ref(), getter.as_ref()) {
 			let msg = "Invalid pallet::storage, cannot generate getter because QueryKind is not \
 				identifiable. QueryKind must be `OptionQuery`, `ValueQuery`, or default one to be \
 				identifiable.";
-			return Err(syn::Error::new(getter.unwrap().span(), msg))
+			return Err(syn::Error::new(getter.span(), msg))
 		}
 
 		Ok(StorageDef {

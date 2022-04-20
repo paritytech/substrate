@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -103,8 +103,8 @@
 //! protocol ID.
 //!
 //! > **Note**: It is possible for the same connection to be used for multiple chains. For example,
-//! >           one can use both the `/dot/sync/2` and `/sub/sync/2` protocols on the same
-//! >           connection, provided that the remote supports them.
+//! > one can use both the `/dot/sync/2` and `/sub/sync/2` protocols on the same
+//! > connection, provided that the remote supports them.
 //!
 //! Substrate uses the following standard libp2p protocols:
 //!
@@ -273,8 +273,9 @@ pub use protocol::{
 	PeerInfo,
 };
 pub use service::{
-	IfDisconnected, NetworkService, NetworkWorker, NotificationSender, NotificationSenderReady,
-	OutboundFailure, RequestFailure,
+	DecodingError, IfDisconnected, KademliaKey, Keypair, NetworkService, NetworkWorker,
+	NotificationSender, NotificationSenderReady, OutboundFailure, PublicKey, RequestFailure,
+	Signature, SigningError,
 };
 
 pub use sc_peerset::ReputationChange;

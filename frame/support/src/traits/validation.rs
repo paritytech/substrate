@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -77,7 +77,7 @@ pub trait VerifySeal<Header, Author> {
 /// A session handler for specific key type.
 pub trait OneSessionHandler<ValidatorId>: BoundToRuntimeAppPublic {
 	/// The key type expected.
-	type Key: Decode + Default + RuntimeAppPublic;
+	type Key: Decode + RuntimeAppPublic;
 
 	/// The given validator set will be used for the genesis session.
 	/// It is guaranteed that the given validator set will also be used

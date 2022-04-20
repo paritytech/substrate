@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,11 +18,16 @@
 use super::*;
 use crate as multi_phase;
 use frame_election_provider_support::{
-	data_provider, onchain, ElectionDataProvider, SequentialPhragmen,
+	data_provider, onchain, ElectionDataProvider, NposSolution, SequentialPhragmen,
 };
 pub use frame_support::{assert_noop, assert_ok};
-use frame_support::{parameter_types, traits::Hooks, weights::Weight};
-use multi_phase::unsigned::{IndexAssignmentOf, Voter};
+use frame_support::{
+	bounded_vec, parameter_types,
+	traits::{ConstU32, Hooks},
+	weights::Weight,
+	BoundedVec,
+};
+use multi_phase::unsigned::{IndexAssignmentOf, VoterOf};
 use parking_lot::RwLock;
 use sp_core::{
 	offchain::{
@@ -33,7 +38,7 @@ use sp_core::{
 };
 use sp_npos_elections::{
 	assignment_ratio_to_staked_normalized, seq_phragmen, to_supports, ElectionResult,
-	EvaluateSupport, ExtendedBalance, NposSolution,
+	EvaluateSupport, ExtendedBalance,
 };
 use sp_runtime::{
 	testing::Header,
@@ -63,9 +68,14 @@ pub(crate) type BlockNumber = u64;
 pub(crate) type VoterIndex = u32;
 pub(crate) type TargetIndex = u16;
 
-sp_npos_elections::generate_solution_type!(
+frame_election_provider_support::generate_solution_type!(
 	#[compact]
-	pub struct TestNposSolution::<VoterIndex = VoterIndex, TargetIndex = TargetIndex, Accuracy = PerU16>(16)
+	pub struct TestNposSolution::<
+		VoterIndex = VoterIndex,
+		TargetIndex = TargetIndex,
+		Accuracy = PerU16,
+		MaxVoters = ConstU32::<2_000>
+	>(16)
 );
 
 /// All events of this pallet.
@@ -96,7 +106,7 @@ pub fn roll_to_with_ocw(n: BlockNumber) {
 }
 
 pub struct TrimHelpers {
-	pub voters: Vec<Voter<Runtime>>,
+	pub voters: Vec<VoterOf<Runtime>>,
 	pub assignments: Vec<IndexAssignmentOf<Runtime>>,
 	pub encoded_size_of:
 		Box<dyn Fn(&[IndexAssignmentOf<Runtime>]) -> Result<usize, sp_npos_elections::Error>>,
@@ -127,13 +137,8 @@ pub fn trim_helpers() -> TrimHelpers {
 
 	let desired_targets = MultiPhase::desired_targets().unwrap();
 
-	let ElectionResult { mut assignments, .. } = seq_phragmen::<_, SolutionAccuracyOf<Runtime>>(
-		desired_targets as usize,
-		targets.clone(),
-		voters.clone(),
-		None,
-	)
-	.unwrap();
+	let ElectionResult::<_, SolutionAccuracyOf<Runtime>> { mut assignments, .. } =
+		seq_phragmen(desired_targets as usize, targets.clone(), voters.clone(), None).unwrap();
 
 	// sort by decreasing order of stake
 	assignments.sort_unstable_by_key(|assignment| {
@@ -159,14 +164,8 @@ pub fn raw_solution() -> RawSolution<SolutionOf<Runtime>> {
 	let RoundSnapshot { voters, targets } = MultiPhase::snapshot().unwrap();
 	let desired_targets = MultiPhase::desired_targets().unwrap();
 
-	let ElectionResult { winners: _, assignments } =
-		seq_phragmen::<_, SolutionAccuracyOf<Runtime>>(
-			desired_targets as usize,
-			targets.clone(),
-			voters.clone(),
-			None,
-		)
-		.unwrap();
+	let ElectionResult::<_, SolutionAccuracyOf<Runtime>> { winners: _, assignments } =
+		seq_phragmen(desired_targets as usize, targets.clone(), voters.clone(), None).unwrap();
 
 	// closures
 	let cache = helpers::generate_voter_cache::<Runtime>(&voters);
@@ -218,6 +217,7 @@ impl frame_system::Config for Runtime {
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type OnSetCode = ();
+	type MaxConsumers = ConstU32<16>;
 }
 
 const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(75);
@@ -241,16 +241,16 @@ impl pallet_balances::Config for Runtime {
 
 parameter_types! {
 	pub static Targets: Vec<AccountId> = vec![10, 20, 30, 40];
-	pub static Voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)> = vec![
-		(1, 10, vec![10, 20]),
-		(2, 10, vec![30, 40]),
-		(3, 10, vec![40]),
-		(4, 10, vec![10, 20, 30, 40]),
+	pub static Voters: Vec<VoterOf<Runtime>> = vec![
+		(1, 10, bounded_vec![10, 20]),
+		(2, 10, bounded_vec![30, 40]),
+		(3, 10, bounded_vec![40]),
+		(4, 10, bounded_vec![10, 20, 30, 40]),
 		// self votes.
-		(10, 10, vec![10]),
-		(20, 20, vec![20]),
-		(30, 30, vec![30]),
-		(40, 40, vec![40]),
+		(10, 10, bounded_vec![10]),
+		(20, 20, bounded_vec![20]),
+		(30, 30, bounded_vec![30]),
+		(40, 40, bounded_vec![40]),
 	];
 
 	pub static DesiredTargets: u32 = 2;
@@ -268,28 +268,46 @@ parameter_types! {
 	pub static MinerMaxWeight: Weight = BlockWeights::get().max_block;
 	pub static MinerMaxLength: u32 = 256;
 	pub static MockWeightInfo: bool = false;
-	pub static VoterSnapshotPerBlock: VoterIndex = u32::max_value();
+	pub static MaxElectingVoters: VoterIndex = u32::max_value();
+	pub static MaxElectableTargets: TargetIndex = TargetIndex::max_value();
 
 	pub static EpochLength: u64 = 30;
-	pub static OnChianFallback: bool = true;
+	pub static OnChainFallback: bool = true;
 }
 
-impl onchain::Config for Runtime {
-	type Accuracy = sp_runtime::Perbill;
+pub struct OnChainSeqPhragmen;
+impl onchain::Config for OnChainSeqPhragmen {
+	type System = Runtime;
+	type Solver = SequentialPhragmen<AccountId, SolutionAccuracyOf<Runtime>, Balancing>;
 	type DataProvider = StakingMock;
+	type WeightInfo = ();
 }
 
 pub struct MockFallback;
-impl ElectionProvider<AccountId, u64> for MockFallback {
+impl ElectionProvider for MockFallback {
+	type AccountId = AccountId;
+	type BlockNumber = u64;
 	type Error = &'static str;
 	type DataProvider = StakingMock;
 
 	fn elect() -> Result<Supports<AccountId>, Self::Error> {
-		if OnChianFallback::get() {
-			onchain::OnChainSequentialPhragmen::<Runtime>::elect()
-				.map_err(|_| "OnChainSequentialPhragmen failed")
+		Self::elect_with_bounds(Bounded::max_value(), Bounded::max_value())
+	}
+}
+
+impl InstantElectionProvider for MockFallback {
+	fn elect_with_bounds(
+		max_voters: usize,
+		max_targets: usize,
+	) -> Result<Supports<Self::AccountId>, Self::Error> {
+		if OnChainFallback::get() {
+			onchain::UnboundedExecution::<OnChainSeqPhragmen>::elect_with_bounds(
+				max_voters,
+				max_targets,
+			)
+			.map_err(|_| "onchain::UnboundedExecution failed.")
 		} else {
-			super::NoFallback::<Runtime>::elect()
+			super::NoFallback::<Runtime>::elect_with_bounds(max_voters, max_targets)
 		}
 	}
 }
@@ -346,11 +364,11 @@ impl multi_phase::weights::WeightInfo for DualMockWeightInfo {
 			<() as multi_phase::weights::WeightInfo>::finalize_signed_phase_reject_solution()
 		}
 	}
-	fn submit(c: u32) -> Weight {
+	fn submit() -> Weight {
 		if MockWeightInfo::get() {
 			Zero::zero()
 		} else {
-			<() as multi_phase::weights::WeightInfo>::submit(c)
+			<() as multi_phase::weights::WeightInfo>::submit()
 		}
 	}
 	fn submit_unsigned(v: u32, t: u32, a: u32, d: u32) -> Weight {
@@ -413,9 +431,11 @@ impl crate::Config for Runtime {
 	type WeightInfo = DualMockWeightInfo;
 	type BenchmarkingConfig = TestBenchmarkingConfig;
 	type Fallback = MockFallback;
+	type GovernanceFallback = NoFallback<Self>;
 	type ForceOrigin = frame_system::EnsureRoot<AccountId>;
 	type Solution = TestNposSolution;
-	type VoterSnapshotPerBlock = VoterSnapshotPerBlock;
+	type MaxElectingVoters = MaxElectingVoters;
+	type MaxElectableTargets = MaxElectableTargets;
 	type Solver = SequentialPhragmen<AccountId, SolutionAccuracyOf<Runtime>, Balancing>;
 }
 
@@ -429,13 +449,20 @@ where
 
 pub type Extrinsic = sp_runtime::testing::TestXt<Call, ()>;
 
+parameter_types! {
+	pub MaxNominations: u32 = <TestNposSolution as NposSolution>::LIMIT as u32;
+}
+
 #[derive(Default)]
 pub struct ExtBuilder {}
 
 pub struct StakingMock;
-impl ElectionDataProvider<AccountId, u64> for StakingMock {
-	const MAXIMUM_VOTES_PER_VOTER: u32 = <TestNposSolution as NposSolution>::LIMIT as u32;
-	fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<AccountId>> {
+impl ElectionDataProvider for StakingMock {
+	type AccountId = AccountId;
+	type BlockNumber = u64;
+	type MaxVotesPerVoter = MaxNominations;
+
+	fn electable_targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<AccountId>> {
 		let targets = Targets::get();
 
 		if maybe_max_len.map_or(false, |max_len| targets.len() > max_len) {
@@ -445,9 +472,9 @@ impl ElectionDataProvider<AccountId, u64> for StakingMock {
 		Ok(targets)
 	}
 
-	fn voters(
+	fn electing_voters(
 		maybe_max_len: Option<usize>,
-	) -> data_provider::Result<Vec<(AccountId, VoteWeight, Vec<AccountId>)>> {
+	) -> data_provider::Result<Vec<VoterOf<Runtime>>> {
 		let mut voters = Voters::get();
 		if let Some(max_len) = maybe_max_len {
 			voters.truncate(max_len)
@@ -466,7 +493,7 @@ impl ElectionDataProvider<AccountId, u64> for StakingMock {
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn put_snapshot(
-		voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
+		voters: Vec<VoterOf<Runtime>>,
 		targets: Vec<AccountId>,
 		_target_stake: Option<VoteWeight>,
 	) {
@@ -481,7 +508,11 @@ impl ElectionDataProvider<AccountId, u64> for StakingMock {
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn add_voter(voter: AccountId, weight: VoteWeight, targets: Vec<AccountId>) {
+	fn add_voter(
+		voter: AccountId,
+		weight: VoteWeight,
+		targets: frame_support::BoundedVec<AccountId, Self::MaxVotesPerVoter>,
+	) {
 		let mut current = Voters::get();
 		current.push((voter, weight, targets));
 		Voters::set(current);
@@ -496,7 +527,7 @@ impl ElectionDataProvider<AccountId, u64> for StakingMock {
 		// to be on-par with staking, we add a self vote as well. the stake is really not that
 		// important.
 		let mut current = Voters::get();
-		current.push((target, ExistentialDeposit::get() as u64, vec![target]));
+		current.push((target, ExistentialDeposit::get() as u64, bounded_vec![target]));
 		Voters::set(current);
 	}
 }
@@ -516,7 +547,7 @@ impl ExtBuilder {
 		self
 	}
 	pub fn onchain_fallback(self, onchain: bool) -> Self {
-		<OnChianFallback>::set(onchain);
+		<OnChainFallback>::set(onchain);
 		self
 	}
 	pub fn miner_weight(self, weight: Weight) -> Self {
@@ -531,7 +562,12 @@ impl ExtBuilder {
 		<DesiredTargets>::set(t);
 		self
 	}
-	pub fn add_voter(self, who: AccountId, stake: Balance, targets: Vec<AccountId>) -> Self {
+	pub fn add_voter(
+		self,
+		who: AccountId,
+		stake: Balance,
+		targets: BoundedVec<AccountId, MaxNominations>,
+	) -> Self {
 		VOTERS.with(|v| v.borrow_mut().push((who, stake, targets)));
 		self
 	}

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -25,7 +25,7 @@ mod sandbox;
 use self::{
 	code::{
 		body::{self, DynInstr::*},
-		DataSegment, ImportedFunction, ImportedMemory, ModuleDefinition, WasmModule,
+		DataSegment, ImportedFunction, ImportedMemory, Location, ModuleDefinition, WasmModule,
 	},
 	sandbox::Sandbox,
 };
@@ -33,18 +33,19 @@ use crate::{
 	exec::{AccountIdOf, StorageKey},
 	schedule::{API_BENCHMARK_BATCH_SIZE, INSTR_BENCHMARK_BATCH_SIZE},
 	storage::Storage,
+	wasm::CallFlags,
 	Pallet as Contracts, *,
 };
-use codec::Encode;
+use codec::{Encode, MaxEncodedLen};
 use frame_benchmarking::{account, benchmarks, whitelisted_caller};
 use frame_support::weights::Weight;
 use frame_system::RawOrigin;
-use pwasm_utils::parity_wasm::elements::{BlockType, BrTableData, Instruction, ValueType};
 use sp_runtime::{
 	traits::{Bounded, Hash},
 	Perbill,
 };
 use sp_std::prelude::*;
+use wasm_instrument::parity_wasm::elements::{BlockType, BrTableData, Instruction, ValueType};
 
 /// How many batches we do per API benchmark.
 const API_BENCHMARK_BATCHES: u32 = 20;
@@ -57,13 +58,14 @@ struct Contract<T: Config> {
 	caller: T::AccountId,
 	account_id: T::AccountId,
 	addr: <T::Lookup as StaticLookup>::Source,
-	endowment: BalanceOf<T>,
+	value: BalanceOf<T>,
 }
 
 impl<T: Config> Contract<T>
 where
 	T: Config,
 	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
+	<BalanceOf<T> as HasCompact>::Type: Clone + Eq + PartialEq + Debug + TypeInfo + Encode,
 {
 	/// Create new contract and use a default account id as instantiator.
 	fn new(module: WasmModule<T>, data: Vec<u8>) -> Result<Contract<T>, &'static str> {
@@ -85,27 +87,24 @@ where
 		module: WasmModule<T>,
 		data: Vec<u8>,
 	) -> Result<Contract<T>, &'static str> {
-		let endowment = contract_funding::<T>();
+		let value = T::Currency::minimum_balance();
 		T::Currency::make_free_balance_be(&caller, caller_funding::<T>());
 		let salt = vec![0xff];
 		let addr = Contracts::<T>::contract_address(&caller, &module.hash, &salt);
 
-		Contracts::<T>::store_code_raw(module.code)?;
+		Contracts::<T>::store_code_raw(module.code, caller.clone())?;
 		Contracts::<T>::instantiate(
 			RawOrigin::Signed(caller.clone()).into(),
-			endowment,
-			Weight::max_value(),
+			value,
+			Weight::MAX,
+			None,
 			module.hash,
 			data,
 			salt,
 		)?;
 
-		let result = Contract {
-			caller,
-			account_id: addr.clone(),
-			addr: T::Lookup::unlookup(addr),
-			endowment,
-		};
+		let result =
+			Contract { caller, account_id: addr.clone(), addr: T::Lookup::unlookup(addr), value };
 
 		ContractInfoOf::<T>::insert(&result.account_id, result.info()?);
 
@@ -134,9 +133,9 @@ where
 
 	/// Store the supplied storage items into this contracts storage.
 	fn store(&self, items: &Vec<(StorageKey, Vec<u8>)>) -> Result<(), &'static str> {
-		let mut info = self.info()?;
+		let info = self.info()?;
 		for item in items {
-			Storage::<T>::write(&mut info, &item.0, Some(item.1.clone()))
+			Storage::<T>::write(&info.trie_id, &item.0, Some(item.1.clone()), None, false)
 				.map_err(|_| "Failed to write storage to restoration dest")?;
 		}
 		<ContractInfoOf<T>>::insert(&self.account_id, info.clone());
@@ -152,16 +151,30 @@ where
 	fn info(&self) -> Result<ContractInfo<T>, &'static str> {
 		Self::address_info(&self.account_id)
 	}
+
+	/// Set the balance of the contract to the supplied amount.
+	fn set_balance(&self, balance: BalanceOf<T>) {
+		T::Currency::make_free_balance_be(&self.account_id, balance);
+	}
+
+	/// Returns `true` iff all storage entries related to code storage exist.
+	fn code_exists(hash: &CodeHash<T>) -> bool {
+		<PristineCode<T>>::contains_key(hash) &&
+			<CodeStorage<T>>::contains_key(&hash) &&
+			<OwnerInfoOf<T>>::contains_key(&hash)
+	}
+
+	/// Returns `true` iff no storage entry related to code storage exist.
+	fn code_removed(hash: &CodeHash<T>) -> bool {
+		!<PristineCode<T>>::contains_key(hash) &&
+			!<CodeStorage<T>>::contains_key(&hash) &&
+			!<OwnerInfoOf<T>>::contains_key(&hash)
+	}
 }
 
 /// The funding that each account that either calls or instantiates contracts is funded with.
 fn caller_funding<T: Config>() -> BalanceOf<T> {
 	BalanceOf::<T>::max_value() / 2u32.into()
-}
-
-/// The funding used for contracts. It is less than `caller_funding` in purpose.
-fn contract_funding<T: Config>() -> BalanceOf<T> {
-	caller_funding::<T>().saturating_sub(T::Currency::minimum_balance() * 100u32.into())
 }
 
 /// Load the specified contract file from disk by including it into the runtime.
@@ -186,11 +199,12 @@ benchmarks! {
 	where_clause { where
 		T::AccountId: UncheckedFrom<T::Hash>,
 		T::AccountId: AsRef<[u8]>,
+		<BalanceOf<T> as codec::HasCompact>::Type: Clone + Eq + PartialEq + sp_std::fmt::Debug + scale_info::TypeInfo + codec::Encode,
 	}
 
 	// The base weight without any actual work performed apart from the setup costs.
 	on_initialize {}: {
-		Storage::<T>::process_deletion_queue_batch(Weight::max_value())
+		Storage::<T>::process_deletion_queue_batch(Weight::MAX)
 	}
 
 	#[skip_meta]
@@ -199,7 +213,7 @@ benchmarks! {
 		let instance = Contract::<T>::with_storage(WasmModule::dummy(), k, T::Schedule::get().limits.payload_len)?;
 		Storage::<T>::queue_trie_for_deletion(&instance.info()?)?;
 	}: {
-		Storage::<T>::process_deletion_queue_batch(Weight::max_value())
+		Storage::<T>::process_deletion_queue_batch(Weight::MAX)
 	}
 
 	on_initialize_per_queue_item {
@@ -210,45 +224,45 @@ benchmarks! {
 			ContractInfoOf::<T>::remove(instance.account_id);
 		}
 	}: {
-		Storage::<T>::process_deletion_queue_batch(Weight::max_value())
+		Storage::<T>::process_deletion_queue_batch(Weight::MAX)
 	}
 
 	// This benchmarks the additional weight that is charged when a contract is executed the
 	// first time after a new schedule was deployed: For every new schedule a contract needs
 	// to re-run the instrumentation once.
-	instrument {
-		let c in 0 .. T::Schedule::get().limits.code_len / 1024;
-		let WasmModule { code, hash, .. } = WasmModule::<T>::sized(c * 1024);
-		Contracts::<T>::store_code_raw(code)?;
-		let mut module = PrefabWasmModule::from_storage_noinstr(hash)?;
+	reinstrument {
+		let c in 0 .. T::Schedule::get().limits.code_len;
+		let WasmModule { code, hash, .. } = WasmModule::<T>::sized(c, Location::Call);
+		Contracts::<T>::store_code_raw(code, whitelisted_caller())?;
 		let schedule = T::Schedule::get();
+		let mut gas_meter = GasMeter::new(Weight::MAX);
+		let mut module = PrefabWasmModule::from_storage(hash, &schedule, &mut gas_meter)?;
 	}: {
 		Contracts::<T>::reinstrument_module(&mut module, &schedule)?;
 	}
 
-	// The weight of loading and decoding of a contract's code per kilobyte.
-	code_load {
-		let c in 0 .. T::Schedule::get().limits.code_len / 1024;
-		let WasmModule { code, hash, .. } = WasmModule::<T>::dummy_with_bytes(c * 1024);
-		Contracts::<T>::store_code_raw(code)?;
-	}: {
-		<PrefabWasmModule<T>>::from_storage_noinstr(hash)?;
-	}
-
-	// The weight of changing the refcount of a contract's code per kilobyte.
-	code_refcount {
-		let c in 0 .. T::Schedule::get().limits.code_len / 1024;
-		let WasmModule { code, hash, .. } = WasmModule::<T>::dummy_with_bytes(c * 1024);
-		Contracts::<T>::store_code_raw(code)?;
-		let mut gas_meter = GasMeter::new(Weight::max_value());
-	}: {
-		<PrefabWasmModule<T>>::add_user(hash, &mut gas_meter)?;
-	}
+	// This benchmarks the overhead of loading a code of size `c` byte from storage and into
+	// the sandbox. This does **not** include the actual execution for which the gas meter
+	// is responsible. This is achieved by generating all code to the `deploy` function
+	// which is in the wasm module but not executed on `call`.
+	// The results are supposed to be used as `call_with_code_kb(c) - call_with_code_kb(0)`.
+	call_with_code_per_byte {
+		let c in 0 .. T::Schedule::get().limits.code_len;
+		let instance = Contract::<T>::with_caller(
+			whitelisted_caller(), WasmModule::sized(c, Location::Deploy), vec![],
+		)?;
+		let value = T::Currency::minimum_balance();
+		let origin = RawOrigin::Signed(instance.caller.clone());
+		let callee = instance.addr.clone();
+	}: call(origin, callee, value, Weight::MAX, None, vec![])
 
 	// This constructs a contract that is maximal expensive to instrument.
 	// It creates a maximum number of metering blocks per byte.
 	// The size of the salt influences the runtime because is is hashed in order to
-	// determine the contract address.
+	// determine the contract address. All code is generated to the `call` function so that
+	// we don't benchmark the actual execution of this code but merely what it takes to load
+	// a code of that size into the sandbox.
+	//
 	// `c`: Size of the code in kilobytes.
 	// `s`: Size of the salt in kilobytes.
 	//
@@ -257,21 +271,27 @@ benchmarks! {
 	// We cannot let `c` grow to the maximum code size because the code is not allowed
 	// to be larger than the maximum size **after instrumentation**.
 	instantiate_with_code {
-		let c in 0 .. Perbill::from_percent(50).mul_ceil(T::Schedule::get().limits.code_len / 1024);
-		let s in 0 .. code::max_pages::<T>() * 64;
-		let salt = vec![42u8; (s * 1024) as usize];
-		let endowment = contract_funding::<T>() / 3u32.into();
+		let c in 0 .. Perbill::from_percent(49).mul_ceil(T::Schedule::get().limits.code_len);
+		let s in 0 .. code::max_pages::<T>() * 64 * 1024;
+		let salt = vec![42u8; s as usize];
+		let value = T::Currency::minimum_balance();
 		let caller = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, caller_funding::<T>());
-		let WasmModule { code, hash, .. } = WasmModule::<T>::sized(c * 1024);
+		let WasmModule { code, hash, .. } = WasmModule::<T>::sized(c, Location::Call);
 		let origin = RawOrigin::Signed(caller.clone());
 		let addr = Contracts::<T>::contract_address(&caller, &hash, &salt);
-	}: _(origin, endowment, Weight::max_value(), code, vec![], salt)
+	}: _(origin, value, Weight::MAX, None, code, vec![], salt)
 	verify {
-		// endowment was removed from the caller
-		assert_eq!(T::Currency::free_balance(&caller), caller_funding::<T>() - endowment);
-		// contract has the full endowment
-		assert_eq!(T::Currency::free_balance(&addr), endowment);
+		// the contract itself does not trigger any reserves
+		let deposit = T::Currency::reserved_balance(&addr);
+		// uploading the code reserves some balance in the callers account
+		let code_deposit = T::Currency::reserved_balance(&caller);
+		assert_eq!(
+			T::Currency::free_balance(&caller),
+			caller_funding::<T>() - value - deposit - code_deposit,
+		);
+		// contract has the full value
+		assert_eq!(T::Currency::free_balance(&addr), value);
 		// instantiate should leave a contract
 		Contract::<T>::address_info(&addr)?;
 	}
@@ -279,21 +299,23 @@ benchmarks! {
 	// Instantiate uses a dummy contract constructor to measure the overhead of the instantiate.
 	// `s`: Size of the salt in kilobytes.
 	instantiate {
-		let s in 0 .. code::max_pages::<T>() * 64;
-		let salt = vec![42u8; (s * 1024) as usize];
-		let endowment = contract_funding::<T>() / 3u32.into();
+		let s in 0 .. code::max_pages::<T>() * 64 * 1024;
+		let salt = vec![42u8; s as usize];
+		let value = T::Currency::minimum_balance();
 		let caller = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, caller_funding::<T>());
 		let WasmModule { code, hash, .. } = WasmModule::<T>::dummy();
 		let origin = RawOrigin::Signed(caller.clone());
 		let addr = Contracts::<T>::contract_address(&caller, &hash, &salt);
-		Contracts::<T>::store_code_raw(code)?;
-	}: _(origin, endowment, Weight::max_value(), hash, vec![], salt)
+		Contracts::<T>::store_code_raw(code, caller.clone())?;
+	}: _(origin, value, Weight::MAX, None, hash, vec![], salt)
 	verify {
-		// endowment was removed from the caller
-		assert_eq!(T::Currency::free_balance(&caller), caller_funding::<T>() - endowment);
-		// contract has the full endowment
-		assert_eq!(T::Currency::free_balance(&addr), endowment);
+		// the contract itself does not trigger any reserves
+		let deposit = T::Currency::reserved_balance(&addr);
+		// value was removed from the caller
+		assert_eq!(T::Currency::free_balance(&caller), caller_funding::<T>() - value - deposit);
+		// contract has the full value
+		assert_eq!(T::Currency::free_balance(&addr), value);
 		// instantiate should leave a contract
 		Contract::<T>::address_info(&addr)?;
 	}
@@ -302,7 +324,9 @@ benchmarks! {
 	// The size of the data has no influence on the costs of this extrinsic as long as the contract
 	// won't call `seal_input` in its constructor to copy the data to contract memory.
 	// The dummy contract used here does not do this. The costs for the data copy is billed as
-	// part of `seal_input`.
+	// part of `seal_input`. The costs for invoking a contract of a specific size are not part
+	// of this benchmark because we cannot know the size of the contract when issuing a call
+	// transaction. See `invoke_per_code_kb` for this.
 	call {
 		let data = vec![42u8; 1024];
 		let instance = Contract::<T>::with_caller(
@@ -312,12 +336,14 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 		let callee = instance.addr.clone();
 		let before = T::Currency::free_balance(&instance.account_id);
-	}: _(origin, callee, value, Weight::max_value(), data)
+	}: _(origin, callee, value, Weight::MAX, None, data)
 	verify {
-		// endowment and value transfered via call should be removed from the caller
+		// the contract itself does not trigger any reserves
+		let deposit = T::Currency::reserved_balance(&instance.account_id);
+		// value and value transfered via call should be removed from the caller
 		assert_eq!(
 			T::Currency::free_balance(&instance.caller),
-			caller_funding::<T>() - instance.endowment - value,
+			caller_funding::<T>() - instance.value - value - deposit,
 		);
 		// contract should have received the value
 		assert_eq!(T::Currency::free_balance(&instance.account_id), before + value);
@@ -325,77 +351,219 @@ benchmarks! {
 		instance.info()?;
 	}
 
+	// This constructs a contract that is maximal expensive to instrument.
+	// It creates a maximum number of metering blocks per byte.
+	// `c`: Size of the code in kilobytes.
+	//
+	// # Note
+	//
+	// We cannot let `c` grow to the maximum code size because the code is not allowed
+	// to be larger than the maximum size **after instrumentation**.
+	upload_code {
+		let c in 0 .. Perbill::from_percent(50).mul_ceil(T::Schedule::get().limits.code_len);
+		let caller = whitelisted_caller();
+		T::Currency::make_free_balance_be(&caller, caller_funding::<T>());
+		let WasmModule { code, hash, .. } = WasmModule::<T>::sized(c, Location::Call);
+		let origin = RawOrigin::Signed(caller.clone());
+	}: _(origin, code, None)
+	verify {
+		// uploading the code reserves some balance in the callers account
+		assert!(T::Currency::reserved_balance(&caller) > 0u32.into());
+		assert!(<Contract<T>>::code_exists(&hash));
+	}
+
+	// Removing code does not depend on the size of the contract because all the information
+	// needed to verify the removal claim (refcount, owner) is stored in a separate storage
+	// item (`OwnerInfoOf`).
+	remove_code {
+		let caller = whitelisted_caller();
+		T::Currency::make_free_balance_be(&caller, caller_funding::<T>());
+		let WasmModule { code, hash, .. } = WasmModule::<T>::dummy();
+		let origin = RawOrigin::Signed(caller.clone());
+		let uploaded = <Contracts<T>>::bare_upload_code(caller.clone(), code, None)?;
+		assert_eq!(uploaded.code_hash, hash);
+		assert_eq!(uploaded.deposit, T::Currency::reserved_balance(&caller));
+		assert!(<Contract<T>>::code_exists(&hash));
+	}: _(origin, hash)
+	verify {
+		// removing the code should have unreserved the deposit
+		assert_eq!(T::Currency::reserved_balance(&caller), 0u32.into());
+		assert!(<Contract<T>>::code_removed(&hash));
+	}
+
 	seal_caller {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let instance = Contract::<T>::new(WasmModule::getter(
-			"seal_caller", r * API_BENCHMARK_BATCH_SIZE
+			"seal0", "seal_caller", r * API_BENCHMARK_BATCH_SIZE
 		), vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
+
+	seal_is_contract {
+		let r in 0 .. API_BENCHMARK_BATCHES;
+		let accounts = (0 .. r * API_BENCHMARK_BATCH_SIZE)
+			.map(|n| account::<T::AccountId>("account", n, 0))
+			.collect::<Vec<_>>();
+		let account_len = accounts.get(0).map(|i| i.encode().len()).unwrap_or(0);
+		let accounts_bytes = accounts.iter().map(|a| a.encode()).flatten().collect::<Vec<_>>();
+		let code = WasmModule::<T>::from(ModuleDefinition {
+			memory: Some(ImportedMemory::max::<T>()),
+			imported_functions: vec![ImportedFunction {
+				module: "seal0",
+				name: "seal_is_contract",
+				params: vec![ValueType::I32],
+				return_type: Some(ValueType::I32),
+			}],
+			data_segments: vec![
+				DataSegment {
+					offset: 0,
+					value: accounts_bytes
+				},
+			],
+			call_body: Some(body::repeated_dyn(r * API_BENCHMARK_BATCH_SIZE, vec![
+				Counter(0, account_len as u32), // address_ptr
+				Regular(Instruction::Call(0)),
+				Regular(Instruction::Drop),
+			])),
+			.. Default::default()
+		});
+		let instance = Contract::<T>::new(code, vec![])?;
+		let info = instance.info()?;
+		// every account would be a contract (worst case)
+		for acc in accounts.iter() {
+			<ContractInfoOf<T>>::insert(acc, info.clone());
+		}
+		let origin = RawOrigin::Signed(instance.caller.clone());
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
+
+	seal_code_hash {
+		let r in 0 .. API_BENCHMARK_BATCHES;
+		let accounts = (0 .. r * API_BENCHMARK_BATCH_SIZE)
+			.map(|n| account::<T::AccountId>("account", n, 0))
+			.collect::<Vec<_>>();
+		let account_len = accounts.get(0).map(|i| i.encode().len()).unwrap_or(0);
+		let accounts_bytes = accounts.iter().map(|a| a.encode()).flatten().collect::<Vec<_>>();
+		let accounts_len = accounts_bytes.len();
+		let pages = code::max_pages::<T>();
+		let code = WasmModule::<T>::from(ModuleDefinition {
+			memory: Some(ImportedMemory::max::<T>()),
+			imported_functions: vec![ImportedFunction {
+				module: "__unstable__",
+				name: "seal_code_hash",
+				params: vec![ValueType::I32, ValueType::I32, ValueType::I32],
+				return_type: Some(ValueType::I32),
+			}],
+			data_segments: vec![
+				DataSegment {
+					offset: 0,
+					value: 32u32.to_le_bytes().to_vec(), // output length
+				},
+				DataSegment {
+					offset: 36,
+					value: accounts_bytes,
+				},
+			],
+			call_body: Some(body::repeated_dyn(r * API_BENCHMARK_BATCH_SIZE, vec![
+				Counter(36, account_len as u32), // address_ptr
+				Regular(Instruction::I32Const(4)), // ptr to output data
+				Regular(Instruction::I32Const(0)), // ptr to output length
+				Regular(Instruction::Call(0)),
+				Regular(Instruction::Drop),
+			])),
+			.. Default::default()
+		});
+		let instance = Contract::<T>::new(code, vec![])?;
+		let info = instance.info()?;
+		// every account would be a contract (worst case)
+		for acc in accounts.iter() {
+			<ContractInfoOf<T>>::insert(acc, info.clone());
+		}
+		let origin = RawOrigin::Signed(instance.caller.clone());
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
+
+	seal_own_code_hash {
+		let r in 0 .. API_BENCHMARK_BATCHES;
+		let instance = Contract::<T>::new(WasmModule::getter(
+			"__unstable__", "seal_own_code_hash", r * API_BENCHMARK_BATCH_SIZE
+		), vec![])?;
+		let origin = RawOrigin::Signed(instance.caller.clone());
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
+
+	seal_caller_is_origin {
+		let r in 0 .. API_BENCHMARK_BATCHES;
+		let code = WasmModule::<T>::from(ModuleDefinition {
+			memory: Some(ImportedMemory::max::<T>()),
+			imported_functions: vec![ImportedFunction {
+				module: "seal0",
+				name: "seal_caller_is_origin",
+				params: vec![],
+				return_type: Some(ValueType::I32),
+			}],
+			call_body: Some(body::repeated(r * API_BENCHMARK_BATCH_SIZE, &[
+				Instruction::Call(0),
+				Instruction::Drop,
+			])),
+			.. Default::default()
+		});
+		let instance = Contract::<T>::new(code, vec![])?;
+		let origin = RawOrigin::Signed(instance.caller.clone());
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
 	seal_address {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let instance = Contract::<T>::new(WasmModule::getter(
-			"seal_address", r * API_BENCHMARK_BATCH_SIZE
+			"seal0", "seal_address", r * API_BENCHMARK_BATCH_SIZE
 		), vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
 	seal_gas_left {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let instance = Contract::<T>::new(WasmModule::getter(
-			"seal_gas_left", r * API_BENCHMARK_BATCH_SIZE
+			"seal0", "seal_gas_left", r * API_BENCHMARK_BATCH_SIZE
 		), vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
 	seal_balance {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let instance = Contract::<T>::new(WasmModule::getter(
-			"seal_balance", r * API_BENCHMARK_BATCH_SIZE
+			"seal0", "seal_balance", r * API_BENCHMARK_BATCH_SIZE
 		), vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
 	seal_value_transferred {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let instance = Contract::<T>::new(WasmModule::getter(
-			"seal_value_transferred", r * API_BENCHMARK_BATCH_SIZE
+			"seal0", "seal_value_transferred", r * API_BENCHMARK_BATCH_SIZE
 		), vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
 	seal_minimum_balance {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let instance = Contract::<T>::new(WasmModule::getter(
-			"seal_minimum_balance", r * API_BENCHMARK_BATCH_SIZE
+			"seal0", "seal_minimum_balance", r * API_BENCHMARK_BATCH_SIZE
 		), vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
-
-	seal_tombstone_deposit {
-		let r in 0 .. API_BENCHMARK_BATCHES;
-		let instance = Contract::<T>::new(WasmModule::getter(
-			"seal_tombstone_deposit", r * API_BENCHMARK_BATCH_SIZE
-		), vec![])?;
-		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
 	seal_block_number {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let instance = Contract::<T>::new(WasmModule::getter(
-			"seal_block_number", r * API_BENCHMARK_BATCH_SIZE
+			"seal0", "seal_block_number", r * API_BENCHMARK_BATCH_SIZE
 		), vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
 	seal_now {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let instance = Contract::<T>::new(WasmModule::getter(
-			"seal_now", r * API_BENCHMARK_BATCH_SIZE
+			"seal0", "seal_now", r * API_BENCHMARK_BATCH_SIZE
 		), vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
 	seal_weight_to_fee {
 		let r in 0 .. API_BENCHMARK_BATCHES;
@@ -422,7 +590,7 @@ benchmarks! {
 		});
 		let instance = Contract::<T>::new(code, vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
 	seal_gas {
 		let r in 0 .. API_BENCHMARK_BATCHES;
@@ -442,7 +610,7 @@ benchmarks! {
 		let instance = Contract::<T>::new(code, vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 
-	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
 	seal_input {
 		let r in 0 .. API_BENCHMARK_BATCHES;
@@ -469,7 +637,7 @@ benchmarks! {
 		});
 		let instance = Contract::<T>::new(code, vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
 	seal_input_per_kb {
 		let n in 0 .. code::max_pages::<T>() * 64;
@@ -499,7 +667,7 @@ benchmarks! {
 		let instance = Contract::<T>::new(code, vec![])?;
 		let data = vec![42u8; (n * 1024).min(buffer_size) as usize];
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), data)
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, data)
 
 	// We cannot call `seal_return` multiple times. Therefore our weight determination is not
 	// as precise as with other APIs. Because this function can only be called once per
@@ -524,7 +692,7 @@ benchmarks! {
 		});
 		let instance = Contract::<T>::new(code, vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
 	seal_return_per_kb {
 		let n in 0 .. code::max_pages::<T>() * 64;
@@ -547,7 +715,7 @@ benchmarks! {
 		});
 		let instance = Contract::<T>::new(code, vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
 	// The same argument as for `seal_return` is true here.
 	seal_terminate {
@@ -579,12 +747,13 @@ benchmarks! {
 		let instance = Contract::<T>::new(code, vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 		assert_eq!(T::Currency::total_balance(&beneficiary), 0u32.into());
-		assert_eq!(T::Currency::total_balance(&instance.account_id), contract_funding::<T>());
-	}: call(origin, instance.addr.clone(), 0u32.into(), Weight::max_value(), vec![])
+		assert_eq!(T::Currency::free_balance(&instance.account_id), T::Currency::minimum_balance());
+		assert_ne!(T::Currency::reserved_balance(&instance.account_id), 0u32.into());
+	}: call(origin, instance.addr.clone(), 0u32.into(), Weight::MAX, None, vec![])
 	verify {
 		if r > 0 {
 			assert_eq!(T::Currency::total_balance(&instance.account_id), 0u32.into());
-			assert_eq!(T::Currency::total_balance(&beneficiary), contract_funding::<T>());
+			assert_eq!(T::Currency::total_balance(&beneficiary), T::Currency::minimum_balance());
 		}
 	}
 
@@ -621,7 +790,7 @@ benchmarks! {
 		});
 		let instance = Contract::<T>::new(code, vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
 	// Overhead of calling the function without any topic.
 	// We benchmark for the worst case (largest event).
@@ -646,7 +815,7 @@ benchmarks! {
 		});
 		let instance = Contract::<T>::new(code, vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
 	// Benchmark the overhead that topics generate.
 	// `t`: Number of topics
@@ -684,7 +853,7 @@ benchmarks! {
 		});
 		let instance = Contract::<T>::new(code, vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
 	// The size of the supplied message does not influence the weight because as it is never
 	// processed during on-chain execution: It is only ever read during debugging which happens
@@ -710,7 +879,7 @@ benchmarks! {
 		});
 		let instance = Contract::<T>::new(code, vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
 	// Only the overhead of calling the function itself with minimal arguments.
 	// The contract is a bit more complex because I needs to use different keys in order
@@ -720,21 +889,22 @@ benchmarks! {
 	seal_set_storage {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let keys = (0 .. r * API_BENCHMARK_BATCH_SIZE)
-			.flat_map(|n| T::Hashing::hash_of(&n).as_ref().to_vec())
+			.map(|n| T::Hashing::hash_of(&n).as_ref().to_vec())
 			.collect::<Vec<_>>();
-		let key_len = sp_std::mem::size_of::<<T::Hashing as sp_runtime::traits::Hash>::Output>();
+		let key_len = keys.get(0).map(|i| i.len() as u32).unwrap_or(0);
+		let key_bytes = keys.iter().flatten().cloned().collect::<Vec<_>>();
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
-				module: "seal0",
+				module: "__unstable__",
 				name: "seal_set_storage",
 				params: vec![ValueType::I32, ValueType::I32, ValueType::I32],
-				return_type: None,
+				return_type: Some(ValueType::I32),
 			}],
 			data_segments: vec![
 				DataSegment {
 					offset: 0,
-					value: keys,
+					value: key_bytes,
 				},
 			],
 			call_body: Some(body::repeated_dyn(r * API_BENCHMARK_BATCH_SIZE, vec![
@@ -742,42 +912,116 @@ benchmarks! {
 				Regular(Instruction::I32Const(0)), // value_ptr
 				Regular(Instruction::I32Const(0)), // value_len
 				Regular(Instruction::Call(0)),
+				Regular(Instruction::Drop),
 			])),
 			.. Default::default()
 		});
 		let instance = Contract::<T>::new(code, vec![])?;
+		let info = instance.info()?;
+		for key in keys {
+			Storage::<T>::write(
+				&info.trie_id,
+				key.as_slice().try_into().map_err(|e| "Key has wrong length")?,
+				Some(vec![]),
+				None,
+				false,
+			)
+			.map_err(|_| "Failed to write to storage during setup.")?;
+		}
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
-	seal_set_storage_per_kb {
+	#[skip_meta]
+	seal_set_storage_per_new_kb {
 		let n in 0 .. T::Schedule::get().limits.payload_len / 1024;
-		let key = T::Hashing::hash_of(&1u32).as_ref().to_vec();
-		let key_len = key.len();
+		let keys = (0 .. API_BENCHMARK_BATCH_SIZE)
+			.map(|n| T::Hashing::hash_of(&n).as_ref().to_vec())
+			.collect::<Vec<_>>();
+		let key_len = keys.get(0).map(|i| i.len() as u32).unwrap_or(0);
+		let key_bytes = keys.iter().flatten().cloned().collect::<Vec<_>>();
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
-				module: "seal0",
+				module: "__unstable__",
 				name: "seal_set_storage",
 				params: vec![ValueType::I32, ValueType::I32, ValueType::I32],
-				return_type: None,
+				return_type: Some(ValueType::I32),
 			}],
 			data_segments: vec![
 				DataSegment {
 					offset: 0,
-					value: key,
+					value: key_bytes,
 				},
 			],
-			call_body: Some(body::repeated(API_BENCHMARK_BATCH_SIZE, &[
-				Instruction::I32Const(0), // key_ptr
-				Instruction::I32Const(0), // value_ptr
-				Instruction::I32Const((n * 1024) as i32), // value_len
-				Instruction::Call(0),
+			call_body: Some(body::repeated_dyn(API_BENCHMARK_BATCH_SIZE, vec![
+				Counter(0, key_len as u32), // key_ptr
+				Regular(Instruction::I32Const(0)), // value_ptr
+				Regular(Instruction::I32Const((n * 1024) as i32)), // value_len
+				Regular(Instruction::Call(0)),
+				Regular(Instruction::Drop),
 			])),
 			.. Default::default()
 		});
 		let instance = Contract::<T>::new(code, vec![])?;
+		let info = instance.info()?;
+		for key in keys {
+			Storage::<T>::write(
+				&info.trie_id,
+				key.as_slice().try_into().map_err(|e| "Key has wrong length")?,
+				Some(vec![]),
+				None,
+				false,
+			)
+			.map_err(|_| "Failed to write to storage during setup.")?;
+		}
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
+
+	#[skip_meta]
+	seal_set_storage_per_old_kb {
+		let n in 0 .. T::Schedule::get().limits.payload_len / 1024;
+		let keys = (0 .. API_BENCHMARK_BATCH_SIZE)
+			.map(|n| T::Hashing::hash_of(&n).as_ref().to_vec())
+			.collect::<Vec<_>>();
+		let key_len = keys.get(0).map(|i| i.len() as u32).unwrap_or(0);
+		let key_bytes = keys.iter().flatten().cloned().collect::<Vec<_>>();
+		let code = WasmModule::<T>::from(ModuleDefinition {
+			memory: Some(ImportedMemory::max::<T>()),
+			imported_functions: vec![ImportedFunction {
+				module: "__unstable__",
+				name: "seal_set_storage",
+				params: vec![ValueType::I32, ValueType::I32, ValueType::I32],
+				return_type: Some(ValueType::I32),
+			}],
+			data_segments: vec![
+				DataSegment {
+					offset: 0,
+					value: key_bytes,
+				},
+			],
+			call_body: Some(body::repeated_dyn(API_BENCHMARK_BATCH_SIZE, vec![
+				Counter(0, key_len as u32), // key_ptr
+				Regular(Instruction::I32Const(0)), // value_ptr
+				Regular(Instruction::I32Const(0)), // value_len
+				Regular(Instruction::Call(0)),
+				Regular(Instruction::Drop),
+			])),
+			.. Default::default()
+		});
+		let instance = Contract::<T>::new(code, vec![])?;
+		let info = instance.info()?;
+		for key in keys {
+			Storage::<T>::write(
+				&info.trie_id,
+				key.as_slice().try_into().map_err(|e| "Key has wrong length")?,
+				Some(vec![42u8; (n * 1024) as usize]),
+				None,
+				false,
+			)
+			.map_err(|_| "Failed to write to storage during setup.")?;
+		}
+		let origin = RawOrigin::Signed(instance.caller.clone());
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
 	// Similar to seal_set_storage. However, we store all the keys that we are about to
 	// delete beforehand in order to prevent any optimizations that could occur when
@@ -789,14 +1033,14 @@ benchmarks! {
 			.map(|n| T::Hashing::hash_of(&n).as_ref().to_vec())
 			.collect::<Vec<_>>();
 		let key_bytes = keys.iter().flatten().cloned().collect::<Vec<_>>();
-		let key_len = sp_std::mem::size_of::<<T::Hashing as sp_runtime::traits::Hash>::Output>();
+		let key_len = keys.get(0).map(|i| i.len() as u32).unwrap_or(0);
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
-				module: "seal0",
+				module: "__unstable__",
 				name: "seal_clear_storage",
 				params: vec![ValueType::I32],
-				return_type: None,
+				return_type: Some(ValueType::I32),
 			}],
 			data_segments: vec![
 				DataSegment {
@@ -807,22 +1051,69 @@ benchmarks! {
 			call_body: Some(body::repeated_dyn(r * API_BENCHMARK_BATCH_SIZE, vec![
 				Counter(0, key_len as u32),
 				Regular(Instruction::Call(0)),
+				Regular(Instruction::Drop),
 			])),
 			.. Default::default()
 		});
 		let instance = Contract::<T>::new(code, vec![])?;
-		let mut info = instance.info()?;
+		let info = instance.info()?;
 		for key in keys {
 			Storage::<T>::write(
-				&mut info,
+				&info.trie_id,
 				key.as_slice().try_into().map_err(|e| "Key has wrong length")?,
-				Some(vec![42; T::Schedule::get().limits.payload_len as usize])
+				Some(vec![]),
+				None,
+				false,
 			)
 			.map_err(|_| "Failed to write to storage during setup.")?;
 		}
 		<ContractInfoOf<T>>::insert(&instance.account_id, info.clone());
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
+
+	#[skip_meta]
+	seal_clear_storage_per_kb {
+		let n in 0 .. T::Schedule::get().limits.payload_len / 1024;
+		let keys = (0 .. API_BENCHMARK_BATCH_SIZE)
+			.map(|n| T::Hashing::hash_of(&n).as_ref().to_vec())
+			.collect::<Vec<_>>();
+		let key_len = keys.get(0).map(|i| i.len() as u32).unwrap_or(0);
+		let key_bytes = keys.iter().flatten().cloned().collect::<Vec<_>>();
+		let code = WasmModule::<T>::from(ModuleDefinition {
+			memory: Some(ImportedMemory::max::<T>()),
+			imported_functions: vec![ImportedFunction {
+				module: "__unstable__",
+				name: "seal_clear_storage",
+				params: vec![ValueType::I32],
+				return_type: Some(ValueType::I32),
+			}],
+			data_segments: vec![
+				DataSegment {
+					offset: 0,
+					value: key_bytes,
+				},
+			],
+			call_body: Some(body::repeated_dyn(API_BENCHMARK_BATCH_SIZE, vec![
+				Counter(0, key_len as u32), // key_ptr
+				Regular(Instruction::Call(0)),
+				Regular(Instruction::Drop),
+			])),
+			.. Default::default()
+		});
+		let instance = Contract::<T>::new(code, vec![])?;
+		let info = instance.info()?;
+		for key in keys {
+			Storage::<T>::write(
+				&info.trie_id,
+				key.as_slice().try_into().map_err(|e| "Key has wrong length")?,
+				Some(vec![42u8; (n * 1024) as usize]),
+				None,
+				false,
+			)
+			.map_err(|_| "Failed to write to storage during setup.")?;
+		}
+		let origin = RawOrigin::Signed(instance.caller.clone());
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
 	// We make sure that all storage accesses are to unique keys.
 	#[skip_meta]
@@ -831,7 +1122,7 @@ benchmarks! {
 		let keys = (0 .. r * API_BENCHMARK_BATCH_SIZE)
 			.map(|n| T::Hashing::hash_of(&n).as_ref().to_vec())
 			.collect::<Vec<_>>();
-		let key_len = sp_std::mem::size_of::<<T::Hashing as sp_runtime::traits::Hash>::Output>();
+		let key_len = keys.get(0).map(|i| i.len() as u32).unwrap_or(0);
 		let key_bytes = keys.iter().flatten().cloned().collect::<Vec<_>>();
 		let key_bytes_len = key_bytes.len();
 		let code = WasmModule::<T>::from(ModuleDefinition {
@@ -847,6 +1138,10 @@ benchmarks! {
 					offset: 0,
 					value: key_bytes,
 				},
+				DataSegment {
+					offset: key_bytes_len as u32,
+					value: T::Schedule::get().limits.payload_len.to_le_bytes().into(),
+				},
 			],
 			call_body: Some(body::repeated_dyn(r * API_BENCHMARK_BATCH_SIZE, vec![
 				Counter(0, key_len as u32), // key_ptr
@@ -858,23 +1153,30 @@ benchmarks! {
 			.. Default::default()
 		});
 		let instance = Contract::<T>::new(code, vec![])?;
-		let mut info = instance.info()?;
+		let info = instance.info()?;
 		for key in keys {
 			Storage::<T>::write(
-				&mut info,
+				&info.trie_id,
 				key.as_slice().try_into().map_err(|e| "Key has wrong length")?,
-				Some(vec![])
+				Some(vec![]),
+				None,
+				false,
 			)
 			.map_err(|_| "Failed to write to storage during setup.")?;
 		}
 		<ContractInfoOf<T>>::insert(&instance.account_id, info.clone());
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
+	#[skip_meta]
 	seal_get_storage_per_kb {
 		let n in 0 .. T::Schedule::get().limits.payload_len / 1024;
-		let key = T::Hashing::hash_of(&1u32).as_ref().to_vec();
-		let key_len = key.len();
+		let keys = (0 .. API_BENCHMARK_BATCH_SIZE)
+			.map(|n| T::Hashing::hash_of(&n).as_ref().to_vec())
+			.collect::<Vec<_>>();
+		let key_len = keys.get(0).map(|i| i.len() as u32).unwrap_or(0);
+		let key_bytes = keys.iter().flatten().cloned().collect::<Vec<_>>();
+		let key_bytes_len = key_bytes.len();
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
@@ -886,34 +1188,233 @@ benchmarks! {
 			data_segments: vec![
 				DataSegment {
 					offset: 0,
-					value: key.clone(),
+					value: key_bytes,
 				},
 				DataSegment {
-					offset: key_len as u32,
+					offset: key_bytes_len as u32,
 					value: T::Schedule::get().limits.payload_len.to_le_bytes().into(),
 				},
 			],
-			call_body: Some(body::repeated(API_BENCHMARK_BATCH_SIZE, &[
-				// call at key_ptr
-				Instruction::I32Const(0), // key_ptr
-				Instruction::I32Const((key_len + 4) as i32), // out_ptr
-				Instruction::I32Const(key_len as i32), // out_len_ptr
-				Instruction::Call(0),
-				Instruction::Drop,
+			call_body: Some(body::repeated_dyn(API_BENCHMARK_BATCH_SIZE, vec![
+				Counter(0, key_len as u32), // key_ptr
+				Regular(Instruction::I32Const((key_bytes_len + 4) as i32)), // out_ptr
+				Regular(Instruction::I32Const(key_bytes_len as i32)), // out_len_ptr
+				Regular(Instruction::Call(0)),
+				Regular(Instruction::Drop),
 			])),
 			.. Default::default()
 		});
 		let instance = Contract::<T>::new(code, vec![])?;
-		let mut info = instance.info()?;
-		Storage::<T>::write(
-			&mut info,
-			key.as_slice().try_into().map_err(|e| "Key has wrong length")?,
-			Some(vec![42u8; (n * 1024) as usize])
-		)
-		.map_err(|_| "Failed to write to storage during setup.")?;
+		let info = instance.info()?;
+		for key in keys {
+			Storage::<T>::write(
+				&info.trie_id,
+				key.as_slice().try_into().map_err(|e| "Key has wrong length")?,
+				Some(vec![42u8; (n * 1024) as usize]),
+				None,
+				false,
+			)
+			.map_err(|_| "Failed to write to storage during setup.")?;
+		}
 		<ContractInfoOf<T>>::insert(&instance.account_id, info.clone());
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
+
+	// We make sure that all storage accesses are to unique keys.
+	#[skip_meta]
+	seal_contains_storage {
+		let r in 0 .. API_BENCHMARK_BATCHES;
+		let keys = (0 .. r * API_BENCHMARK_BATCH_SIZE)
+			.map(|n| T::Hashing::hash_of(&n).as_ref().to_vec())
+			.collect::<Vec<_>>();
+		let key_len = keys.get(0).map(|i| i.len() as u32).unwrap_or(0);
+		let key_bytes = keys.iter().flatten().cloned().collect::<Vec<_>>();
+		let key_bytes_len = key_bytes.len();
+		let code = WasmModule::<T>::from(ModuleDefinition {
+			memory: Some(ImportedMemory::max::<T>()),
+			imported_functions: vec![ImportedFunction {
+				module: "__unstable__",
+				name: "seal_contains_storage",
+				params: vec![ValueType::I32],
+				return_type: Some(ValueType::I32),
+			}],
+			data_segments: vec![
+				DataSegment {
+					offset: 0,
+					value: key_bytes,
+				},
+			],
+			call_body: Some(body::repeated_dyn(r * API_BENCHMARK_BATCH_SIZE, vec![
+				Counter(0, key_len as u32), // key_ptr
+				Regular(Instruction::Call(0)),
+				Regular(Instruction::Drop),
+			])),
+			.. Default::default()
+		});
+		let instance = Contract::<T>::new(code, vec![])?;
+		let info = instance.info()?;
+		for key in keys {
+			Storage::<T>::write(
+				&info.trie_id,
+				key.as_slice().try_into().map_err(|e| "Key has wrong length")?,
+				Some(vec![]),
+				None,
+				false,
+			)
+			.map_err(|_| "Failed to write to storage during setup.")?;
+		}
+		<ContractInfoOf<T>>::insert(&instance.account_id, info.clone());
+		let origin = RawOrigin::Signed(instance.caller.clone());
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
+
+	#[skip_meta]
+	seal_contains_storage_per_kb {
+		let n in 0 .. T::Schedule::get().limits.payload_len / 1024;
+		let keys = (0 .. API_BENCHMARK_BATCH_SIZE)
+			.map(|n| T::Hashing::hash_of(&n).as_ref().to_vec())
+			.collect::<Vec<_>>();
+		let key_len = keys.get(0).map(|i| i.len() as u32).unwrap_or(0);
+		let key_bytes = keys.iter().flatten().cloned().collect::<Vec<_>>();
+		let code = WasmModule::<T>::from(ModuleDefinition {
+			memory: Some(ImportedMemory::max::<T>()),
+			imported_functions: vec![ImportedFunction {
+				module: "__unstable__",
+				name: "seal_contains_storage",
+				params: vec![ValueType::I32],
+				return_type: Some(ValueType::I32),
+			}],
+			data_segments: vec![
+				DataSegment {
+					offset: 0,
+					value: key_bytes,
+				},
+			],
+			call_body: Some(body::repeated_dyn(API_BENCHMARK_BATCH_SIZE, vec![
+				Counter(0, key_len as u32), // key_ptr
+				Regular(Instruction::Call(0)),
+				Regular(Instruction::Drop),
+			])),
+			.. Default::default()
+		});
+		let instance = Contract::<T>::new(code, vec![])?;
+		let info = instance.info()?;
+		for key in keys {
+			Storage::<T>::write(
+				&info.trie_id,
+				key.as_slice().try_into().map_err(|e| "Key has wrong length")?,
+				Some(vec![42u8; (n * 1024) as usize]),
+				None,
+				false,
+			)
+			.map_err(|_| "Failed to write to storage during setup.")?;
+		}
+		<ContractInfoOf<T>>::insert(&instance.account_id, info.clone());
+		let origin = RawOrigin::Signed(instance.caller.clone());
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
+
+	#[skip_meta]
+	seal_take_storage {
+		let r in 0 .. API_BENCHMARK_BATCHES;
+		let keys = (0 .. r * API_BENCHMARK_BATCH_SIZE)
+			.map(|n| T::Hashing::hash_of(&n).as_ref().to_vec())
+			.collect::<Vec<_>>();
+		let key_len = keys.get(0).map(|i| i.len() as u32).unwrap_or(0);
+		let key_bytes = keys.iter().flatten().cloned().collect::<Vec<_>>();
+		let key_bytes_len = key_bytes.len();
+		let code = WasmModule::<T>::from(ModuleDefinition {
+			memory: Some(ImportedMemory::max::<T>()),
+			imported_functions: vec![ImportedFunction {
+				module: "__unstable__",
+				name: "seal_take_storage",
+				params: vec![ValueType::I32, ValueType::I32, ValueType::I32],
+				return_type: Some(ValueType::I32),
+			}],
+			data_segments: vec![
+				DataSegment {
+					offset: 0,
+					value: key_bytes,
+				},
+				DataSegment {
+					offset: key_bytes_len as u32,
+					value: T::Schedule::get().limits.payload_len.to_le_bytes().into(),
+				},
+			],
+			call_body: Some(body::repeated_dyn(r * API_BENCHMARK_BATCH_SIZE, vec![
+				Counter(0, key_len as u32), // key_ptr
+				Regular(Instruction::I32Const((key_bytes_len + 4) as i32)), // out_ptr
+				Regular(Instruction::I32Const(key_bytes_len as i32)), // out_len_ptr
+				Regular(Instruction::Call(0)),
+				Regular(Instruction::Drop),
+			])),
+			.. Default::default()
+		});
+		let instance = Contract::<T>::new(code, vec![])?;
+		let info = instance.info()?;
+		for key in keys {
+			Storage::<T>::write(
+				&info.trie_id,
+				key.as_slice().try_into().map_err(|e| "Key has wrong length")?,
+				Some(vec![]),
+				None,
+				false,
+			)
+			.map_err(|_| "Failed to write to storage during setup.")?;
+		}
+		<ContractInfoOf<T>>::insert(&instance.account_id, info.clone());
+		let origin = RawOrigin::Signed(instance.caller.clone());
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
+
+	#[skip_meta]
+	seal_take_storage_per_kb {
+		let n in 0 .. T::Schedule::get().limits.payload_len / 1024;
+		let keys = (0 .. API_BENCHMARK_BATCH_SIZE)
+			.map(|n| T::Hashing::hash_of(&n).as_ref().to_vec())
+			.collect::<Vec<_>>();
+		let key_len = keys.get(0).map(|i| i.len() as u32).unwrap_or(0);
+		let key_bytes = keys.iter().flatten().cloned().collect::<Vec<_>>();
+		let key_bytes_len = key_bytes.len();
+		let code = WasmModule::<T>::from(ModuleDefinition {
+			memory: Some(ImportedMemory::max::<T>()),
+			imported_functions: vec![ImportedFunction {
+				module: "__unstable__",
+				name: "seal_take_storage",
+				params: vec![ValueType::I32, ValueType::I32, ValueType::I32],
+				return_type: Some(ValueType::I32),
+			}],
+			data_segments: vec![
+				DataSegment {
+					offset: 0,
+					value: key_bytes,
+				},
+				DataSegment {
+					offset: key_bytes_len as u32,
+					value: T::Schedule::get().limits.payload_len.to_le_bytes().into(),
+				},
+			],
+			call_body: Some(body::repeated_dyn(API_BENCHMARK_BATCH_SIZE, vec![
+				Counter(0, key_len as u32), // key_ptr
+				Regular(Instruction::I32Const((key_bytes_len + 4) as i32)), // out_ptr
+				Regular(Instruction::I32Const(key_bytes_len as i32)), // out_len_ptr
+				Regular(Instruction::Call(0)),
+				Regular(Instruction::Drop),
+			])),
+			.. Default::default()
+		});
+		let instance = Contract::<T>::new(code, vec![])?;
+		let info = instance.info()?;
+		for key in keys {
+			Storage::<T>::write(
+				&info.trie_id,
+				key.as_slice().try_into().map_err(|e| "Key has wrong length")?,
+				Some(vec![42u8; (n * 1024) as usize]),
+				None,
+				false,
+			)
+			.map_err(|_| "Failed to write to storage during setup.")?;
+		}
+		<ContractInfoOf<T>>::insert(&instance.account_id, info.clone());
+		let origin = RawOrigin::Signed(instance.caller.clone());
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
 	// We transfer to unique accounts.
 	seal_transfer {
@@ -923,7 +1424,7 @@ benchmarks! {
 			.collect::<Vec<_>>();
 		let account_len = accounts.get(0).map(|i| i.encode().len()).unwrap_or(0);
 		let account_bytes = accounts.iter().flat_map(|x| x.encode()).collect();
-		let value = Contracts::<T>::subsistence_threshold();
+		let value = T::Currency::minimum_balance();
 		assert!(value > 0u32.into());
 		let value_bytes = value.encode();
 		let value_len = value_bytes.len();
@@ -956,11 +1457,12 @@ benchmarks! {
 			.. Default::default()
 		});
 		let instance = Contract::<T>::new(code, vec![])?;
+		instance.set_balance(value * (r * API_BENCHMARK_BATCH_SIZE + 1).into());
 		let origin = RawOrigin::Signed(instance.caller.clone());
 		for account in &accounts {
 			assert_eq!(T::Currency::total_balance(account), 0u32.into());
 		}
-	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 	verify {
 		for account in &accounts {
 			assert_eq!(T::Currency::total_balance(account), value);
@@ -1015,7 +1517,7 @@ benchmarks! {
 				Regular(Instruction::I32Const(value_len as i32)), // value_len
 				Regular(Instruction::I32Const(0)), // input_data_ptr
 				Regular(Instruction::I32Const(0)), // input_data_len
-				Regular(Instruction::I32Const(u32::max_value() as i32)), // output_ptr
+				Regular(Instruction::I32Const(SENTINEL as i32)), // output_ptr
 				Regular(Instruction::I32Const(0)), // output_len_ptr
 				Regular(Instruction::Call(0)),
 				Regular(Instruction::Drop),
@@ -1024,52 +1526,80 @@ benchmarks! {
 		});
 		let instance = Contract::<T>::new(code, vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
-	seal_call_per_transfer_input_output_kb {
-		let t in 0 .. 1;
-		let i in 0 .. code::max_pages::<T>() * 64;
-		let o in 0 .. (code::max_pages::<T>() - 1) * 64;
-		let callee_code = WasmModule::<T>::from(ModuleDefinition {
+	seal_delegate_call {
+		let r in 0 .. API_BENCHMARK_BATCHES;
+		let hashes = (0..r * API_BENCHMARK_BATCH_SIZE)
+			.map(|i| {
+				let code = WasmModule::<T>::dummy_with_bytes(i);
+				Contracts::<T>::store_code_raw(code.code, whitelisted_caller())?;
+				Ok(code.hash)
+			})
+			.collect::<Result<Vec<_>, &'static str>>()?;
+		let hash_len = hashes.get(0).map(|x| x.encode().len()).unwrap_or(0);
+		let hashes_bytes = hashes.iter().flat_map(|x| x.encode()).collect::<Vec<_>>();
+		let hashes_len = hashes_bytes.len();
+		let hashes_offset = 0;
+
+		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
 				module: "seal0",
-				name: "seal_return",
+				name: "seal_delegate_call",
 				params: vec![
 					ValueType::I32,
 					ValueType::I32,
 					ValueType::I32,
+					ValueType::I32,
+					ValueType::I32,
+					ValueType::I32,
 				],
-				return_type: None,
+				return_type: Some(ValueType::I32),
 			}],
-			call_body: Some(body::plain(vec![
-				Instruction::I32Const(0), // flags
-				Instruction::I32Const(0), // data_ptr
-				Instruction::I32Const((o * 1024) as i32), // data_len
-				Instruction::Call(0),
-				Instruction::End,
+			data_segments: vec![
+				DataSegment {
+					offset: hashes_offset as u32,
+					value: hashes_bytes,
+				},
+			],
+			call_body: Some(body::repeated_dyn(r * API_BENCHMARK_BATCH_SIZE, vec![
+				Regular(Instruction::I32Const(0)), // flags
+				Counter(hashes_offset as u32, hash_len as u32), // code_hash_ptr
+				Regular(Instruction::I32Const(0)), // input_data_ptr
+				Regular(Instruction::I32Const(0)), // input_data_len
+				Regular(Instruction::I32Const(u32::max_value() as i32)), // output_ptr
+				Regular(Instruction::I32Const(0)), // output_len_ptr
+				Regular(Instruction::Call(0)),
+				Regular(Instruction::Drop),
 			])),
 			.. Default::default()
 		});
+		let instance = Contract::<T>::new(code, vec![])?;
+		let callee = instance.addr.clone();
+		let origin = RawOrigin::Signed(instance.caller.clone());
+	}: call(origin, callee, 0u32.into(), Weight::MAX, None, vec![])
+
+	seal_call_per_transfer_clone_kb {
+		let t in 0 .. 1;
+		let c in 0 .. code::max_pages::<T>() * 64;
 		let callees = (0..API_BENCHMARK_BATCH_SIZE)
-			.map(|i| Contract::with_index(i + 1, callee_code.clone(), vec![]))
+			.map(|i| Contract::with_index(i + 1, <WasmModule<T>>::dummy(), vec![]))
 			.collect::<Result<Vec<_>, _>>()?;
 		let callee_len = callees.get(0).map(|i| i.account_id.encode().len()).unwrap_or(0);
 		let callee_bytes = callees.iter().flat_map(|x| x.account_id.encode()).collect::<Vec<_>>();
-		let callees_len = callee_bytes.len();
 		let value: BalanceOf<T> = t.into();
 		let value_bytes = value.encode();
 		let value_len = value_bytes.len();
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
-				module: "seal0",
+				module: "seal1",
 				name: "seal_call",
 				params: vec![
 					ValueType::I32,
 					ValueType::I32,
 					ValueType::I64,
-					ValueType::I32,
 					ValueType::I32,
 					ValueType::I32,
 					ValueType::I32,
@@ -1087,21 +1617,16 @@ benchmarks! {
 					offset: value_len as u32,
 					value: callee_bytes,
 				},
-				DataSegment {
-					offset: (value_len + callees_len) as u32,
-					value: (o * 1024).to_le_bytes().into(),
-				},
 			],
 			call_body: Some(body::repeated_dyn(API_BENCHMARK_BATCH_SIZE, vec![
+				Regular(Instruction::I32Const(CallFlags::CLONE_INPUT.bits() as i32)), // flags
 				Counter(value_len as u32, callee_len as u32), // callee_ptr
-				Regular(Instruction::I32Const(callee_len as i32)), // callee_len
 				Regular(Instruction::I64Const(0)), // gas
 				Regular(Instruction::I32Const(0)), // value_ptr
-				Regular(Instruction::I32Const(value_len as i32)), // value_len
 				Regular(Instruction::I32Const(0)), // input_data_ptr
-				Regular(Instruction::I32Const((i * 1024) as i32)), // input_data_len
-				Regular(Instruction::I32Const((value_len + callees_len + 4) as i32)), // output_ptr
-				Regular(Instruction::I32Const((value_len + callees_len) as i32)), // output_len_ptr
+				Regular(Instruction::I32Const(0)), // input_data_len
+				Regular(Instruction::I32Const(SENTINEL as i32)), // output_ptr
+				Regular(Instruction::I32Const(0)), // output_len_ptr
 				Regular(Instruction::Call(0)),
 				Regular(Instruction::Drop),
 			])),
@@ -1109,9 +1634,10 @@ benchmarks! {
 		});
 		let instance = Contract::<T>::new(code, vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
+		let bytes = vec![42; (c * 1024) as usize];
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, bytes)
 
-	// We assume that every instantiate sends at least the subsistence amount.
+	// We assume that every instantiate sends at least the minimum balance.
 	seal_instantiate {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let hashes = (0..r * API_BENCHMARK_BATCH_SIZE)
@@ -1127,18 +1653,18 @@ benchmarks! {
 					])),
 					.. Default::default()
 				});
-				Contracts::<T>::store_code_raw(code.code)?;
+				Contracts::<T>::store_code_raw(code.code, whitelisted_caller())?;
 				Ok(code.hash)
 			})
 			.collect::<Result<Vec<_>, &'static str>>()?;
 		let hash_len = hashes.get(0).map(|x| x.encode().len()).unwrap_or(0);
 		let hashes_bytes = hashes.iter().flat_map(|x| x.encode()).collect::<Vec<_>>();
 		let hashes_len = hashes_bytes.len();
-		let value = contract_funding::<T>() / (r * API_BENCHMARK_BATCH_SIZE + 2).into();
+		let value = T::Currency::minimum_balance();
 		assert!(value > 0u32.into());
 		let value_bytes = value.encode();
 		let value_len = value_bytes.len();
-		let addr_len = sp_std::mem::size_of::<T::AccountId>();
+		let addr_len = T::AccountId::max_encoded_len();
 
 		// offsets where to place static data in contract memory
 		let value_offset = 0;
@@ -1192,7 +1718,7 @@ benchmarks! {
 				Regular(Instruction::I32Const(0)), // input_data_len
 				Regular(Instruction::I32Const(addr_offset as i32)), // address_ptr
 				Regular(Instruction::I32Const(addr_len_offset as i32)), // address_len_ptr
-				Regular(Instruction::I32Const(u32::max_value() as i32)), // output_ptr
+				Regular(Instruction::I32Const(SENTINEL as i32)), // output_ptr
 				Regular(Instruction::I32Const(0)), // output_len_ptr
 				Regular(Instruction::I32Const(0)), // salt_ptr
 				Regular(Instruction::I32Const(0)), // salt_ptr_len
@@ -1202,6 +1728,7 @@ benchmarks! {
 			.. Default::default()
 		});
 		let instance = Contract::<T>::new(code, vec![])?;
+		instance.set_balance(value * (r * API_BENCHMARK_BATCH_SIZE + 1).into());
 		let origin = RawOrigin::Signed(instance.caller.clone());
 		let callee = instance.addr.clone();
 		let addresses = hashes
@@ -1216,7 +1743,7 @@ benchmarks! {
 				return Err("Expected that contract does not exist at this point.".into());
 			}
 		}
-	}: call(origin, callee, 0u32.into(), Weight::max_value(), vec![])
+	}: call(origin, callee, 0u32.into(), Weight::MAX, None, vec![])
 	verify {
 		for addr in &addresses {
 			ContractInfoOf::<T>::get(&addr)
@@ -1224,52 +1751,28 @@ benchmarks! {
 		}
 	}
 
-	seal_instantiate_per_input_output_salt_kb {
-		let i in 0 .. (code::max_pages::<T>() - 1) * 64;
-		let o in 0 .. (code::max_pages::<T>() - 1) * 64;
+	seal_instantiate_per_transfer_salt_kb {
+		let t in 0 .. 1;
 		let s in 0 .. (code::max_pages::<T>() - 1) * 64;
-		let callee_code = WasmModule::<T>::from(ModuleDefinition {
-			memory: Some(ImportedMemory::max::<T>()),
-			imported_functions: vec![ImportedFunction {
-				module: "seal0",
-				name: "seal_return",
-				params: vec![
-					ValueType::I32,
-					ValueType::I32,
-					ValueType::I32,
-				],
-				return_type: None,
-			}],
-			deploy_body: Some(body::plain(vec![
-				Instruction::I32Const(0), // flags
-				Instruction::I32Const(0), // data_ptr
-				Instruction::I32Const((o * 1024) as i32), // data_len
-				Instruction::Call(0),
-				Instruction::End,
-			])),
-			.. Default::default()
-		});
+		let callee_code = WasmModule::<T>::dummy();
 		let hash = callee_code.hash.clone();
 		let hash_bytes = callee_code.hash.encode();
 		let hash_len = hash_bytes.len();
-		Contracts::<T>::store_code_raw(callee_code.code)?;
-		let inputs = (0..API_BENCHMARK_BATCH_SIZE).map(|x| x.encode()).collect::<Vec<_>>();
-		let input_len = inputs.get(0).map(|x| x.len()).unwrap_or(0);
-		let input_bytes = inputs.iter().cloned().flatten().collect::<Vec<_>>();
-		let inputs_len = input_bytes.len();
-		let value = contract_funding::<T>() / (API_BENCHMARK_BATCH_SIZE + 2).into();
-		assert!(value > 0u32.into());
+		Contracts::<T>::store_code_raw(callee_code.code, whitelisted_caller())?;
+		let salts = (0..API_BENCHMARK_BATCH_SIZE).map(|x| x.encode()).collect::<Vec<_>>();
+		let salt_len = salts.get(0).map(|x| x.len()).unwrap_or(0);
+		let salt_bytes = salts.iter().cloned().flatten().collect::<Vec<_>>();
+		let salts_len = salt_bytes.len();
+		let value: BalanceOf<T> = t.into();
 		let value_bytes = value.encode();
 		let value_len = value_bytes.len();
-		let addr_len = sp_std::mem::size_of::<T::AccountId>();
+		let addr_len = T::AccountId::max_encoded_len();
 
 		// offsets where to place static data in contract memory
-		let input_offset = 0;
-		let value_offset = inputs_len;
+		let salt_offset = 0;
+		let value_offset = salts_len;
 		let hash_offset = value_offset + value_len;
 		let addr_len_offset = hash_offset + hash_len;
-		let output_len_offset = addr_len_offset + 4;
-		let output_offset = output_len_offset + 4;
 
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
@@ -1295,8 +1798,8 @@ benchmarks! {
 			}],
 			data_segments: vec![
 				DataSegment {
-					offset: input_offset as u32,
-					value: input_bytes,
+					offset: salt_offset as u32,
+					value: salt_bytes,
 				},
 				DataSegment {
 					offset: value_offset as u32,
@@ -1310,10 +1813,6 @@ benchmarks! {
 					offset: addr_len_offset as u32,
 					value: (addr_len as u32).to_le_bytes().into(),
 				},
-				DataSegment {
-					offset: output_len_offset as u32,
-					value: (o * 1024).to_le_bytes().into(),
-				},
 			],
 			call_body: Some(body::repeated_dyn(API_BENCHMARK_BATCH_SIZE, vec![
 				Regular(Instruction::I32Const(hash_offset as i32)), // code_hash_ptr
@@ -1321,14 +1820,14 @@ benchmarks! {
 				Regular(Instruction::I64Const(0)), // gas
 				Regular(Instruction::I32Const(value_offset as i32)), // value_ptr
 				Regular(Instruction::I32Const(value_len as i32)), // value_len
-				Counter(input_offset as u32, input_len as u32), // input_data_ptr
-				Regular(Instruction::I32Const((i * 1024).max(input_len as u32) as i32)), // input_data_len
+				Regular(Instruction::I32Const(0)), // input_data_ptr
+				Regular(Instruction::I32Const(0)), // input_data_len
 				Regular(Instruction::I32Const((addr_len_offset + addr_len) as i32)), // address_ptr
 				Regular(Instruction::I32Const(addr_len_offset as i32)), // address_len_ptr
-				Regular(Instruction::I32Const(output_offset as i32)), // output_ptr
-				Regular(Instruction::I32Const(output_len_offset as i32)), // output_len_ptr
-				Counter(input_offset as u32, input_len as u32), // salt_ptr
-				Regular(Instruction::I32Const((s * 1024).max(input_len as u32) as i32)), // salt_len
+				Regular(Instruction::I32Const(SENTINEL as i32)), // output_ptr
+				Regular(Instruction::I32Const(0)), // output_len_ptr
+				Counter(salt_offset as u32, salt_len as u32), // salt_ptr
+				Regular(Instruction::I32Const((s * 1024).max(salt_len as u32) as i32)), // salt_len
 				Regular(Instruction::Call(0)),
 				Regular(Instruction::I32Eqz),
 				Regular(Instruction::If(BlockType::NoResult)),
@@ -1340,8 +1839,9 @@ benchmarks! {
 			.. Default::default()
 		});
 		let instance = Contract::<T>::new(code, vec![])?;
+		instance.set_balance(value * (API_BENCHMARK_BATCH_SIZE + 1).into());
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
 	// Only the overhead of calling the function itself with minimal arguments.
 	seal_hash_sha2_256 {
@@ -1350,7 +1850,7 @@ benchmarks! {
 			"seal_hash_sha2_256", r * API_BENCHMARK_BATCH_SIZE, 0,
 		), vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
 	// `n`: Input to hash in kilobytes
 	seal_hash_sha2_256_per_kb {
@@ -1359,7 +1859,7 @@ benchmarks! {
 			"seal_hash_sha2_256", API_BENCHMARK_BATCH_SIZE, n * 1024,
 		), vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
 	// Only the overhead of calling the function itself with minimal arguments.
 	seal_hash_keccak_256 {
@@ -1368,7 +1868,7 @@ benchmarks! {
 			"seal_hash_keccak_256", r * API_BENCHMARK_BATCH_SIZE, 0,
 		), vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
 	// `n`: Input to hash in kilobytes
 	seal_hash_keccak_256_per_kb {
@@ -1377,7 +1877,7 @@ benchmarks! {
 			"seal_hash_keccak_256", API_BENCHMARK_BATCH_SIZE, n * 1024,
 		), vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
 	// Only the overhead of calling the function itself with minimal arguments.
 	seal_hash_blake2_256 {
@@ -1386,7 +1886,7 @@ benchmarks! {
 			"seal_hash_blake2_256", r * API_BENCHMARK_BATCH_SIZE, 0,
 		), vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
 	// `n`: Input to hash in kilobytes
 	seal_hash_blake2_256_per_kb {
@@ -1395,7 +1895,7 @@ benchmarks! {
 			"seal_hash_blake2_256", API_BENCHMARK_BATCH_SIZE, n * 1024,
 		), vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
 	// Only the overhead of calling the function itself with minimal arguments.
 	seal_hash_blake2_128 {
@@ -1404,7 +1904,7 @@ benchmarks! {
 			"seal_hash_blake2_128", r * API_BENCHMARK_BATCH_SIZE, 0,
 		), vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
 	// `n`: Input to hash in kilobytes
 	seal_hash_blake2_128_per_kb {
@@ -1413,26 +1913,20 @@ benchmarks! {
 			"seal_hash_blake2_128", API_BENCHMARK_BATCH_SIZE, n * 1024,
 		), vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
 	// Only calling the function itself with valid arguments.
 	// It generates different private keys and signatures for the message "Hello world".
 	seal_ecdsa_recover {
 		let r in 0 .. API_BENCHMARK_BATCHES;
-		use rand::SeedableRng;
-		let mut rng = rand_pcg::Pcg32::seed_from_u64(123456);
 
 		let message_hash = sp_io::hashing::blake2_256("Hello world".as_bytes());
+		let key_type = sp_core::crypto::KeyTypeId(*b"code");
 		let signatures = (0..r * API_BENCHMARK_BATCH_SIZE)
 			.map(|i| {
-				use libsecp256k1::{SecretKey, Message, sign};
-
-				let private_key = SecretKey::random(&mut rng);
-				let (signature, recovery_id) = sign(&Message::parse(&message_hash), &private_key);
-				let mut full_signature = [0; 65];
-				full_signature[..64].copy_from_slice(&signature.serialize());
-				full_signature[64] = recovery_id.serialize();
-				full_signature
+				let pub_key = sp_io::crypto::ecdsa_generate(key_type, None);
+				let sig = sp_io::crypto::ecdsa_sign_prehashed(key_type, &pub_key, &message_hash).expect("Generates signature");
+				AsRef::<[u8; 65]>::as_ref(&sig).to_vec()
 			})
 			.collect::<Vec<_>>();
 		let signatures = signatures.iter().flatten().cloned().collect::<Vec<_>>();
@@ -1467,7 +1961,85 @@ benchmarks! {
 		});
 		let instance = Contract::<T>::new(code, vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
+
+	// Only calling the function itself for the list of
+	// generated different ECDSA keys.
+	seal_ecdsa_to_eth_address {
+		let r in 0 .. API_BENCHMARK_BATCHES;
+		let key_type = sp_core::crypto::KeyTypeId(*b"code");
+		let pub_keys_bytes = (0..r * API_BENCHMARK_BATCH_SIZE)
+			.map(|_| {
+				sp_io::crypto::ecdsa_generate(key_type, None).0
+			})
+		.flatten()
+		.collect::<Vec<_>>();
+		let pub_keys_bytes_len = pub_keys_bytes.len() as i32;
+		let code = WasmModule::<T>::from(ModuleDefinition {
+			memory: Some(ImportedMemory::max::<T>()),
+			imported_functions: vec![ImportedFunction {
+				module: "__unstable__",
+				name: "seal_ecdsa_to_eth_address",
+				params: vec![ValueType::I32, ValueType::I32],
+				return_type: Some(ValueType::I32),
+			}],
+			data_segments: vec![
+				DataSegment {
+					offset: 0,
+					value: pub_keys_bytes,
+				},
+			],
+			call_body: Some(body::repeated_dyn(r * API_BENCHMARK_BATCH_SIZE, vec![
+				Counter(0, 33), // pub_key_ptr
+				Regular(Instruction::I32Const(pub_keys_bytes_len)), // out_ptr
+				Regular(Instruction::Call(0)),
+				Regular(Instruction::Drop),
+			])),
+			.. Default::default()
+		});
+		let instance = Contract::<T>::new(code, vec![])?;
+		let origin = RawOrigin::Signed(instance.caller.clone());
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
+
+	seal_set_code_hash {
+		let r in 0 .. API_BENCHMARK_BATCHES;
+		let code_hashes = (0..r * API_BENCHMARK_BATCH_SIZE)
+			.map(|i| {
+				let new_code = WasmModule::<T>::dummy_with_bytes(i);
+				Contracts::<T>::store_code_raw(new_code.code, whitelisted_caller())?;
+				Ok(new_code.hash)
+			})
+			.collect::<Result<Vec<_>, &'static str>>()?;
+		let code_hash_len = code_hashes.get(0).map(|x| x.encode().len()).unwrap_or(0);
+		let code_hashes_bytes = code_hashes.iter().flat_map(|x| x.encode()).collect::<Vec<_>>();
+		let code_hashes_len = code_hashes_bytes.len();
+
+		let code = WasmModule::<T>::from(ModuleDefinition {
+			memory: Some(ImportedMemory::max::<T>()),
+			imported_functions: vec![ImportedFunction {
+				module: "__unstable__",
+				name: "seal_set_code_hash",
+				params: vec![
+					ValueType::I32,
+				],
+				return_type: Some(ValueType::I32),
+			}],
+			data_segments: vec![
+				DataSegment {
+					offset: 0,
+					value: code_hashes_bytes,
+				},
+			],
+			call_body: Some(body::repeated_dyn(r * API_BENCHMARK_BATCH_SIZE, vec![
+				Counter(0, code_hash_len as u32), // code_hash_ptr
+				Regular(Instruction::Call(0)),
+				Regular(Instruction::Drop),
+			])),
+			.. Default::default()
+		});
+		let instance = Contract::<T>::new(code, vec![])?;
+		let origin = RawOrigin::Signed(instance.caller.clone());
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
 	// We make the assumption that pushing a constant and dropping a value takes roughly
 	// the same amount of time. We follow that `t.load` and `drop` both have the weight
@@ -1763,7 +2335,7 @@ benchmarks! {
 	// w_local_get = w_bench - 1 * w_param
 	instr_local_get {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
-		let max_locals = T::Schedule::get().limits.stack_height;
+		let max_locals = T::Schedule::get().limits.stack_height.unwrap_or(512);
 		let mut call_body = body::repeated_dyn(r * INSTR_BENCHMARK_BATCH_SIZE, vec![
 			RandomGetLocal(0, max_locals),
 			Regular(Instruction::Drop),
@@ -1780,7 +2352,7 @@ benchmarks! {
 	// w_local_set = w_bench - 1 * w_param
 	instr_local_set {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
-		let max_locals = T::Schedule::get().limits.stack_height;
+		let max_locals = T::Schedule::get().limits.stack_height.unwrap_or(512);
 		let mut call_body = body::repeated_dyn(r * INSTR_BENCHMARK_BATCH_SIZE, vec![
 			RandomI64Repeated(1),
 			RandomSetLocal(0, max_locals),
@@ -1797,7 +2369,7 @@ benchmarks! {
 	// w_local_tee = w_bench - 2 * w_param
 	instr_local_tee {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
-		let max_locals = T::Schedule::get().limits.stack_height;
+		let max_locals = T::Schedule::get().limits.stack_height.unwrap_or(512);
 		let mut call_body = body::repeated_dyn(r * INSTR_BENCHMARK_BATCH_SIZE, vec![
 			RandomI64Repeated(1),
 			RandomTeeLocal(0, max_locals),
@@ -1860,7 +2432,7 @@ benchmarks! {
 	}
 
 	// w_memory_grow = w_bench - 2 * w_param
-	// We can only allow allocate as much memory as it is allowed in a a contract.
+	// We can only allow allocate as much memory as it is allowed in a contract.
 	// Therefore the repeat count is limited by the maximum memory any contract can have.
 	// Using a contract with more memory will skew the benchmark because the runtime of grow
 	// depends on how much memory is already allocated.
@@ -2221,7 +2793,7 @@ benchmarks! {
 	// configured `Schedule` during benchmark development.
 	// It can be outputed using the following command:
 	// cargo run --manifest-path=bin/node/cli/Cargo.toml --release \
-	//     --features runtime-benchmarks -- benchmark --dev --execution=native \
+	//     --features runtime-benchmarks -- benchmark --extra --dev --execution=native \
 	//     -p pallet_contracts -e print_schedule --no-median-slopes --no-min-squares
 	#[extra]
 	print_schedule {
@@ -2274,6 +2846,7 @@ benchmarks! {
 			instance.account_id,
 			0u32.into(),
 			Weight::MAX,
+			None,
 			data,
 			false,
 		)
@@ -2320,6 +2893,7 @@ benchmarks! {
 			instance.account_id,
 			0u32.into(),
 			Weight::MAX,
+			None,
 			data,
 			false,
 		)

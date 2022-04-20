@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -37,7 +37,7 @@ use sp_std::prelude::*;
 ///
 /// In almost all cases, a balanced solution will have a better score than an unbalanced solution,
 /// yet this is not 100% guaranteed because the first element of a [`crate::ElectionScore`] does not
-/// directly related to balancing.
+/// directly relate to balancing.
 ///
 /// Note that some reference implementation adopt an approach in which voters are balanced randomly
 /// per round. To advocate determinism, we don't do this. In each round, all voters are exactly

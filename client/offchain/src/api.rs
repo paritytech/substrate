@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use std::{collections::HashSet, convert::TryFrom, str::FromStr, sync::Arc, thread::sleep};
+use std::{collections::HashSet, str::FromStr, sync::Arc, thread::sleep};
 
 use crate::NetworkProvider;
 use codec::{Decode, Encode};
@@ -327,10 +327,7 @@ mod tests {
 	use sc_client_db::offchain::LocalStorage;
 	use sc_network::{NetworkStateInfo, PeerId};
 	use sp_core::offchain::{DbExternalities, Externalities};
-	use std::{
-		convert::{TryFrom, TryInto},
-		time::SystemTime,
-	};
+	use std::time::SystemTime;
 
 	pub(super) struct TestNetwork();
 

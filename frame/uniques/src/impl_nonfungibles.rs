@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -128,8 +128,19 @@ impl<T: Config<I>, I: 'static> Mutate<<T as SystemConfig>::AccountId> for Pallet
 		Self::do_mint(class.clone(), instance.clone(), who.clone(), |_| Ok(()))
 	}
 
-	fn burn_from(class: &Self::ClassId, instance: &Self::InstanceId) -> DispatchResult {
-		Self::do_burn(class.clone(), instance.clone(), |_, _| Ok(()))
+	fn burn(
+		class: &Self::ClassId,
+		instance: &Self::InstanceId,
+		maybe_check_owner: Option<&T::AccountId>,
+	) -> DispatchResult {
+		Self::do_burn(class.clone(), instance.clone(), |_, d| {
+			if let Some(check_owner) = maybe_check_owner {
+				if &d.owner != check_owner {
+					Err(Error::<T, I>::NoPermission)?;
+				}
+			}
+			Ok(())
+		})
 	}
 }
 

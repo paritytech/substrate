@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -28,9 +28,13 @@
 	doc = "Substrate's runtime standard library as compiled without Rust's standard library."
 )]
 
+/// Initialize a key-value collection from array.
+///
+/// Creates a vector of given pairs and calls `collect` on the iterator from it.
+/// Can be used to create a `HashMap`.
 #[macro_export]
 macro_rules! map {
-	($( $name:expr => $value:expr ),*) => (
+	($( $name:expr => $value:expr ),* $(,)? ) => (
 		vec![ $( ( $name, $value ) ),* ].into_iter().collect()
 	)
 }
@@ -95,10 +99,10 @@ impl Writer {
 /// This should include only things which are in the normal std prelude.
 pub mod prelude {
 	pub use crate::{
+		borrow::ToOwned,
 		boxed::Box,
 		clone::Clone,
 		cmp::{Eq, PartialEq, Reverse},
-		convert::{TryFrom, TryInto},
 		iter::IntoIterator,
 		vec::Vec,
 	};

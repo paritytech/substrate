@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -44,8 +44,7 @@ pub fn embed_runtime_version(
 		.apis
 		.iter()
 		.map(Encode::encode)
-		.map(|v| v.into_iter())
-		.flatten()
+		.flat_map(|v| v.into_iter())
 		.collect::<Vec<u8>>();
 
 	module.set_custom_section("runtime_apis", apis);

@@ -14,8 +14,8 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 futures = "0.3.16"
 substrate-test-utils-derive = { version = "0.10.0-dev", path = "./derive" }
-tokio = { version = "1.10", features = ["macros", "time"] }
+tokio = { version = "1.17.0", features = ["macros", "time"] }
 
 [dev-dependencies]
 sc-service = { version = "0.10.0-dev", path = "../client/service" }
-trybuild = { version = "1.0.52", features = [ "diff" ] }
+trybuild = { version = "1.0.53", features = [ "diff" ] }

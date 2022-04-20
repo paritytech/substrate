@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -27,7 +27,6 @@ use crate::{
 };
 use codec::{CompactAs, Decode, Encode};
 use sp_std::{
-	convert::{TryFrom, TryInto},
 	fmt::Debug,
 	ops::{self, Add, Div, Mul, Sub},
 	prelude::*,
@@ -122,7 +121,8 @@ pub trait FixedPointNumber:
 	/// Creates `self` from an integer number `int`.
 	///
 	/// Returns `None` if `int` exceeds accuracy.
-	fn checked_from_integer(int: Self::Inner) -> Option<Self> {
+	fn checked_from_integer<N: Into<Self::Inner>>(int: N) -> Option<Self> {
+		let int: Self::Inner = int.into();
 		int.checked_mul(&Self::DIV).map(Self::from_inner)
 	}
 
@@ -369,6 +369,7 @@ macro_rules! implement_fixed {
 			Default,
 			Copy,
 			Clone,
+			codec::MaxEncodedLen,
 			PartialEq,
 			Eq,
 			PartialOrd,
@@ -668,6 +669,15 @@ macro_rules! implement_fixed {
 			}
 
 			#[test]
+			fn has_max_encoded_len() {
+				struct AsMaxEncodedLen<T: codec::MaxEncodedLen> {
+					_data: T,
+				}
+
+				let _ = AsMaxEncodedLen { _data: $name::min_value() };
+			}
+
+			#[test]
 			fn from_i129_works() {
 				let a = I129 { value: 1, negative: true };
 
@@ -889,31 +899,32 @@ macro_rules! implement_fixed {
 				let accuracy = $name::accuracy();
 
 				// Case where integer fits.
-				let a = $name::checked_from_integer(42).expect("42 * accuracy <= inner_max; qed");
+				let a = $name::checked_from_integer::<$inner_type>(42)
+					.expect("42 * accuracy <= inner_max; qed");
 				assert_eq!(a.into_inner(), 42 * accuracy);
 
 				// Max integer that fit.
-				let a = $name::checked_from_integer(inner_max / accuracy)
+				let a = $name::checked_from_integer::<$inner_type>(inner_max / accuracy)
 					.expect("(inner_max / accuracy) * accuracy <= inner_max; qed");
 				assert_eq!(a.into_inner(), (inner_max / accuracy) * accuracy);
 
 				// Case where integer doesn't fit, so it returns `None`.
-				let a = $name::checked_from_integer(inner_max / accuracy + 1);
+				let a = $name::checked_from_integer::<$inner_type>(inner_max / accuracy + 1);
 				assert_eq!(a, None);
 
 				if $name::SIGNED {
 					// Case where integer fits.
-					let a = $name::checked_from_integer(0.saturating_sub(42))
+					let a = $name::checked_from_integer::<$inner_type>(0.saturating_sub(42))
 						.expect("-42 * accuracy >= inner_min; qed");
 					assert_eq!(a.into_inner(), 0 - 42 * accuracy);
 
 					// Min integer that fit.
-					let a = $name::checked_from_integer(inner_min / accuracy)
+					let a = $name::checked_from_integer::<$inner_type>(inner_min / accuracy)
 						.expect("(inner_min / accuracy) * accuracy <= inner_min; qed");
 					assert_eq!(a.into_inner(), (inner_min / accuracy) * accuracy);
 
 					// Case where integer doesn't fit, so it returns `None`.
-					let a = $name::checked_from_integer(inner_min / accuracy - 1);
+					let a = $name::checked_from_integer::<$inner_type>(inner_min / accuracy - 1);
 					assert_eq!(a, None);
 				}
 			}

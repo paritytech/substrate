@@ -14,13 +14,14 @@ publish = false
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
-scale-info = { version = "1.0", default-features = false, features = ["derive"] }
+clap = { version = "3.1.6", features = ["derive"] }
 honggfuzz = "0.5"
-rand = { version = "0.7.3", features = ["std", "small_rng"] }
+rand = { version = "0.8", features = ["std", "small_rng"] }
+
+codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"] }
+scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
 sp-npos-elections = { version = "4.0.0-dev", path = ".." }
-sp-runtime = { version = "4.0.0-dev", path = "../../runtime" }
-structopt = "0.3.25"
+sp-runtime = { version = "6.0.0", path = "../../runtime" }
 
 [[bin]]
 name = "reduce"
@@ -33,10 +34,6 @@ path = "src/phragmen_balancing.rs"
 [[bin]]
 name = "phragmms_balancing"
 path = "src/phragmms_balancing.rs"
-
-[[bin]]
-name = "compact"
-path = "src/compact.rs"
 
 [[bin]]
 name = "phragmen_pjr"

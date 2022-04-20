@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -45,13 +45,14 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 mod benchmarking;
-mod migrations;
+
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
 mod tests;
 mod vesting_info;
 
+pub mod migrations;
 pub mod weights;
 
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -73,7 +74,7 @@ use sp_runtime::{
 	},
 	RuntimeDebug,
 };
-use sp_std::{convert::TryInto, fmt::Debug, prelude::*};
+use sp_std::{fmt::Debug, prelude::*};
 pub use vesting_info::*;
 pub use weights::WeightInfo;
 
@@ -170,38 +171,14 @@ pub mod pallet {
 
 	#[pallet::extra_constants]
 	impl<T: Config> Pallet<T> {
-		// TODO: rename to snake case after https://github.com/paritytech/substrate/issues/8826 fixed.
-		#[allow(non_snake_case)]
-		fn MaxVestingSchedules() -> u32 {
+		#[pallet::constant_name(MaxVestingSchedules)]
+		fn max_vesting_schedules() -> u32 {
 			T::MAX_VESTING_SCHEDULES
 		}
 	}
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<(), &'static str> {
-			if StorageVersion::<T>::get() == Releases::V0 {
-				migrations::v1::pre_migrate::<T>()
-			} else {
-				Ok(())
-			}
-		}
-
-		fn on_runtime_upgrade() -> Weight {
-			if StorageVersion::<T>::get() == Releases::V0 {
-				StorageVersion::<T>::put(Releases::V1);
-				migrations::v1::migrate::<T>().saturating_add(T::DbWeight::get().reads_writes(1, 1))
-			} else {
-				T::DbWeight::get().reads(1)
-			}
-		}
-
-		#[cfg(feature = "try-runtime")]
-		fn post_upgrade() -> Result<(), &'static str> {
-			migrations::v1::post_migrate::<T>()
-		}
-
 		fn integrity_test() {
 			assert!(T::MAX_VESTING_SCHEDULES > 0, "`MaxVestingSchedules` must ge greater than 0");
 		}
@@ -225,7 +202,6 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
-	#[pallet::generate_storage_info]
 	pub struct Pallet<T>(_);
 
 	#[pallet::genesis_config]
@@ -572,14 +548,13 @@ impl<T: Config> Pallet<T> {
 		let mut total_locked_now: BalanceOf<T> = Zero::zero();
 		let filtered_schedules = action
 			.pick_schedules::<T>(schedules)
-			.filter_map(|schedule| {
+			.filter(|schedule| {
 				let locked_now = schedule.locked_at::<T::BlockNumberToBalance>(now);
-				if locked_now.is_zero() {
-					None
-				} else {
+				let keep = !locked_now.is_zero();
+				if keep {
 					total_locked_now = total_locked_now.saturating_add(locked_now);
-					Some(schedule)
 				}
+				keep
 			})
 			.collect::<Vec<_>>();
 

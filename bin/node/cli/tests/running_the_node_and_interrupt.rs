@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -25,10 +25,7 @@ use nix::{
 	},
 	unistd::Pid,
 };
-use std::{
-	convert::TryInto,
-	process::{Child, Command},
-};
+use std::process::{Child, Command};
 use tempfile::tempdir;
 
 pub mod common;
@@ -41,6 +38,7 @@ async fn running_the_node_works_and_can_be_interrupted() {
 			Command::new(cargo_bin("substrate"))
 				.args(&["--dev", "-d"])
 				.arg(base_path.path())
+				.arg("--no-hardware-benchmarks")
 				.spawn()
 				.unwrap(),
 		);
@@ -64,7 +62,7 @@ async fn running_the_node_works_and_can_be_interrupted() {
 async fn running_two_nodes_with_the_same_ws_port_should_work() {
 	fn start_node() -> Child {
 		Command::new(cargo_bin("substrate"))
-			.args(&["--dev", "--tmp", "--ws-port=45789"])
+			.args(&["--dev", "--tmp", "--ws-port=45789", "--no-hardware-benchmarks"])
 			.spawn()
 			.unwrap()
 	}

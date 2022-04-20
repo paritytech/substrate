@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -24,9 +24,7 @@ use crate::traits::{
 };
 use codec::{CompactAs, Encode};
 use num_traits::{Pow, SaturatingAdd, SaturatingSub};
-use sp_debug_derive::RuntimeDebug;
 use sp_std::{
-	convert::{TryFrom, TryInto},
 	fmt, ops,
 	ops::{Add, Sub},
 	prelude::*,
@@ -425,7 +423,7 @@ macro_rules! implement_per_thing {
 		///
 		#[doc = $title]
 		#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-		#[derive(Encode, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, RuntimeDebug, scale_info::TypeInfo)]
+		#[derive(Encode, Copy, Clone, PartialEq, Eq, codec::MaxEncodedLen, PartialOrd, Ord, sp_std::fmt::Debug, scale_info::TypeInfo)]
 		pub struct $name($type);
 
 		/// Implementation makes any compact encoding of `PerThing::Inner` valid,
@@ -847,7 +845,7 @@ macro_rules! implement_per_thing {
 		#[cfg(test)]
 		mod $test_mod {
 			use codec::{Encode, Decode};
-			use super::{$name, Saturating, RuntimeDebug, PerThing};
+			use super::{$name, Saturating, PerThing};
 			use crate::traits::Zero;
 
 			#[test]
@@ -871,7 +869,7 @@ macro_rules! implement_per_thing {
 				assert!(<$upper_type>::from($max) * <$upper_type>::from($max) < <$upper_type>::max_value());
 			}
 
-			#[derive(Encode, Decode, PartialEq, Eq, RuntimeDebug)]
+			#[derive(Encode, Decode, PartialEq, Eq, Debug)]
 			struct WithCompact<T: codec::HasCompact> {
 				data: T,
 			}
@@ -903,6 +901,15 @@ macro_rules! implement_per_thing {
 					let per_thingy: $name = decoded.into();
 					assert_eq!(per_thingy, $name(n));
 				}
+			}
+
+			#[test]
+			fn has_max_encoded_len() {
+				struct AsMaxEncodedLen<T: codec::MaxEncodedLen> {
+					_data: T,
+				}
+
+				let _ = AsMaxEncodedLen { _data: $name(1) };
 			}
 
 			#[test]

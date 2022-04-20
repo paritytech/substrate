@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -51,7 +51,7 @@ pub fn derive_impl(input: DeriveInput) -> Result<TokenStream> {
 				type PassBy = #crate_::pass_by::Enum<#ident>;
 			}
 
-			impl #crate_::sp_std::convert::TryFrom<u8> for #ident {
+			impl TryFrom<u8> for #ident {
 				type Error = ();
 
 				fn try_from(inner: u8) -> #crate_::sp_std::result::Result<Self, ()> {

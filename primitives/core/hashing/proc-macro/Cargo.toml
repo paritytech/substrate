@@ -1,6 +1,6 @@
 [package]
 name = "sp-core-hashing-proc-macro"
-version = "4.0.0-dev"
+version = "5.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
 license = "Apache-2.0"
@@ -16,7 +16,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 proc-macro = true
 
 [dependencies]
-syn = { version = "1.0.81", features = ["full", "parsing"] }
+syn = { version = "1.0.82", features = ["full", "parsing"] }
 quote = "1.0.6"
-proc-macro2 = "1.0.29"
-sp-core-hashing = { version = "4.0.0-dev", path = "../", default-features = false }
+proc-macro2 = "1.0.36"
+sp-core-hashing = { version = "4.0.0", path = "../", default-features = false }

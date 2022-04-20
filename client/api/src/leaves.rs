@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -56,7 +56,7 @@ impl<H, N: Ord> FinalizationDisplaced<H, N> {
 	}
 
 	/// Iterate over all displaced leaves.
-	pub fn leaves(&self) -> impl IntoIterator<Item = &H> {
+	pub fn leaves(&self) -> impl Iterator<Item = &H> {
 		self.leaves.values().flatten()
 	}
 }
@@ -143,6 +143,24 @@ where
 		self.pending_removed
 			.extend(below_boundary.values().flat_map(|h| h.iter()).cloned());
 		FinalizationDisplaced { leaves: below_boundary }
+	}
+
+	/// The same as [`Self::finalize_height`], but it only simulates the operation.
+	///
+	/// This means that no changes are done.
+	///
+	/// Returns the leaves that would be displaced by finalizing the given block.
+	pub fn displaced_by_finalize_height(&self, number: N) -> FinalizationDisplaced<H, N> {
+		let boundary = if number == N::zero() {
+			return FinalizationDisplaced { leaves: BTreeMap::new() }
+		} else {
+			number - N::one()
+		};
+
+		let below_boundary = self.storage.range(&Reverse(boundary)..);
+		FinalizationDisplaced {
+			leaves: below_boundary.map(|(k, v)| (k.clone(), v.clone())).collect(),
+		}
 	}
 
 	/// Undo all pending operations.

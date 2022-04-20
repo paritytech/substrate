@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -28,7 +28,7 @@ use log::debug;
 use rand::RngCore;
 use rand_chacha::{rand_core::SeedableRng, ChaChaRng};
 use sc_block_builder::{BlockBuilder, BlockBuilderProvider};
-use sc_client_api::{backend::TransactionFor, BlockchainEvents};
+use sc_client_api::{backend::TransactionFor, BlockchainEvents, Finalizer};
 use sc_consensus::{BoxBlockImport, BoxJustificationImport};
 use sc_consensus_slots::BackoffAuthoringOnFinalizedHeadLagging;
 use sc_keystore::LocalKeystore;
@@ -143,7 +143,7 @@ impl DummyProposer {
 				&self.parent_hash,
 				self.parent_number,
 				this_slot,
-				|slot| Epoch::genesis(&self.factory.config, slot),
+				|slot| Epoch::genesis(self.factory.config.genesis_config(), slot),
 			)
 			.expect("client has data to find epoch")
 			.expect("can compute epoch for baked block");
@@ -297,7 +297,7 @@ impl TestNetFactory for BabeTestNet {
 	) {
 		let client = client.as_client();
 
-		let config = Config::get_or_compute(&*client).expect("config available");
+		let config = Config::get(&*client).expect("config available");
 		let (block_import, link) = crate::block_import(config, client.clone(), client.clone())
 			.expect("can initialize block-import");
 
@@ -336,9 +336,9 @@ impl TestNetFactory for BabeTestNet {
 				select_chain: longest_chain,
 				create_inherent_data_providers: Box::new(|_, _| async {
 					let timestamp = TimestampInherentDataProvider::from_system_time();
-					let slot = InherentDataProvider::from_timestamp_and_duration(
+					let slot = InherentDataProvider::from_timestamp_and_slot_duration(
 						*timestamp,
-						Duration::from_secs(6),
+						SlotDuration::from_millis(6000),
 					);
 
 					Ok((timestamp, slot))
@@ -449,9 +449,9 @@ fn run_one_test(mutator: impl Fn(&mut TestHeader, Stage) + Send + Sync + 'static
 				sync_oracle: DummyOracle,
 				create_inherent_data_providers: Box::new(|_, _| async {
 					let timestamp = TimestampInherentDataProvider::from_system_time();
-					let slot = InherentDataProvider::from_timestamp_and_duration(
+					let slot = InherentDataProvider::from_timestamp_and_slot_duration(
 						*timestamp,
-						Duration::from_secs(6),
+						SlotDuration::from_millis(6000),
 					);
 
 					Ok((timestamp, slot))
@@ -608,8 +608,8 @@ fn propose_and_import_block<Transaction: Send + 'static>(
 	slot: Option<Slot>,
 	proposer_factory: &mut DummyFactory,
 	block_import: &mut BoxBlockImport<TestBlock, Transaction>,
-) -> sp_core::H256 {
-	let mut proposer = futures::executor::block_on(proposer_factory.init(parent)).unwrap();
+) -> Hash {
+	let mut proposer = block_on(proposer_factory.init(parent)).unwrap();
 
 	let slot = slot.unwrap_or_else(|| {
 		let parent_pre_digest = find_pre_digest::<TestBlock>(parent).unwrap();
@@ -625,7 +625,7 @@ fn propose_and_import_block<Transaction: Send + 'static>(
 
 	let parent_hash = parent.hash();
 
-	let mut block = futures::executor::block_on(proposer.propose_with(pre_digest)).unwrap().block;
+	let mut block = block_on(proposer.propose_with(pre_digest)).unwrap().block;
 
 	let epoch_descriptor = proposer_factory
 		.epoch_changes
@@ -673,6 +673,29 @@ fn propose_and_import_block<Transaction: Send + 'static>(
 	post_hash
 }
 
+// Propose and import n valid BABE blocks that are built on top of the given parent.
+// The proposer takes care of producing epoch change digests according to the epoch
+// duration (which is set to 6 slots in the test runtime).
+fn propose_and_import_blocks<Transaction: Send + 'static>(
+	client: &PeersFullClient,
+	proposer_factory: &mut DummyFactory,
+	block_import: &mut BoxBlockImport<TestBlock, Transaction>,
+	parent_id: BlockId<TestBlock>,
+	n: usize,
+) -> Vec<Hash> {
+	let mut hashes = Vec::with_capacity(n);
+	let mut parent_header = client.header(&parent_id).unwrap().unwrap();
+
+	for _ in 0..n {
+		let block_hash =
+			propose_and_import_block(&parent_header, None, proposer_factory, block_import);
+		hashes.push(block_hash);
+		parent_header = client.header(&BlockId::Hash(block_hash)).unwrap().unwrap();
+	}
+
+	hashes
+}
+
 #[test]
 fn importing_block_one_sets_genesis_epoch() {
 	let mut net = BabeTestNet::new(1);
@@ -699,12 +722,12 @@ fn importing_block_one_sets_genesis_epoch() {
 		&mut block_import,
 	);
 
-	let genesis_epoch = Epoch::genesis(&data.link.config, 999.into());
+	let genesis_epoch = Epoch::genesis(data.link.config.genesis_config(), 999.into());
 
 	let epoch_changes = data.link.epoch_changes.shared_data();
 	let epoch_for_second_block = epoch_changes
 		.epoch_data_for_child_of(descendent_query(&*client), &block_hash, 1, 1000.into(), |slot| {
-			Epoch::genesis(&data.link.config, slot)
+			Epoch::genesis(data.link.config.genesis_config(), slot)
 		})
 		.unwrap()
 		.unwrap();
@@ -713,9 +736,89 @@ fn importing_block_one_sets_genesis_epoch() {
 }
 
 #[test]
-fn importing_epoch_change_block_prunes_tree() {
-	use sc_client_api::Finalizer;
+fn revert_prunes_epoch_changes_and_removes_weights() {
+	let mut net = BabeTestNet::new(1);
 
+	let peer = net.peer(0);
+	let data = peer.data.as_ref().expect("babe link set up during initialization");
+
+	let client = peer.client().as_client();
+	let backend = peer.client().as_backend();
+	let mut block_import = data.block_import.lock().take().expect("import set up during init");
+	let epoch_changes = data.link.epoch_changes.clone();
+
+	let mut proposer_factory = DummyFactory {
+		client: client.clone(),
+		config: data.link.config.clone(),
+		epoch_changes: data.link.epoch_changes.clone(),
+		mutator: Arc::new(|_, _| ()),
+	};
+
+	let mut propose_and_import_blocks_wrap = |parent_id, n| {
+		propose_and_import_blocks(&client, &mut proposer_factory, &mut block_import, parent_id, n)
+	};
+
+	// Test scenario.
+	// Information for epoch 19 is produced on three different forks at block #13.
+	// One branch starts before the revert point (epoch data should be maintained).
+	// One branch starts after the revert point (epoch data should be removed).
+	//
+	//                        *----------------- F(#13) --#18                  < fork #2
+	//                       /
+	// A(#1) ---- B(#7) ----#8----+-----#12----- C(#13) ---- D(#19) ------#21  < canon
+	//   \                        ^       \
+	//    \                    revert      *---- G(#13) ---- H(#19) ---#20     < fork #3
+	//     \                   to #10
+	//      *-----E(#7)---#11                                          < fork #1
+	let canon = propose_and_import_blocks_wrap(BlockId::Number(0), 21);
+	let fork1 = propose_and_import_blocks_wrap(BlockId::Hash(canon[0]), 10);
+	let fork2 = propose_and_import_blocks_wrap(BlockId::Hash(canon[7]), 10);
+	let fork3 = propose_and_import_blocks_wrap(BlockId::Hash(canon[11]), 8);
+
+	// We should be tracking a total of 9 epochs in the fork tree
+	assert_eq!(epoch_changes.shared_data().tree().iter().count(), 8);
+	// And only one root
+	assert_eq!(epoch_changes.shared_data().tree().roots().count(), 1);
+
+	// Revert canon chain to block #10 (best(21) - 11)
+	revert(client.clone(), backend, 11).expect("revert should work for baked test scenario");
+
+	// Load and check epoch changes.
+
+	let actual_nodes = aux_schema::load_epoch_changes::<Block, TestClient>(
+		&*client,
+		data.link.config.genesis_config(),
+	)
+	.expect("load epoch changes")
+	.shared_data()
+	.tree()
+	.iter()
+	.map(|(h, _, _)| *h)
+	.collect::<Vec<_>>();
+
+	let expected_nodes = vec![
+		canon[0], // A
+		canon[6], // B
+		fork2[4], // F
+		fork1[5], // E
+	];
+
+	assert_eq!(actual_nodes, expected_nodes);
+
+	let weight_data_check = |hashes: &[Hash], expected: bool| {
+		hashes.iter().all(|hash| {
+			aux_schema::load_block_weight(&*client, hash).unwrap().is_some() == expected
+		})
+	};
+	assert!(weight_data_check(&canon[..10], true));
+	assert!(weight_data_check(&canon[10..], false));
+	assert!(weight_data_check(&fork1, true));
+	assert!(weight_data_check(&fork2, true));
+	assert!(weight_data_check(&fork3, false));
+}
+
+#[test]
+fn importing_epoch_change_block_prunes_tree() {
 	let mut net = BabeTestNet::new(1);
 
 	let peer = net.peer(0);
@@ -732,26 +835,8 @@ fn importing_epoch_change_block_prunes_tree() {
 		mutator: Arc::new(|_, _| ()),
 	};
 
-	// This is just boilerplate code for proposing and importing n valid BABE
-	// blocks that are built on top of the given parent. The proposer takes care
-	// of producing epoch change digests according to the epoch duration (which
-	// is set to 6 slots in the test runtime).
-	let mut propose_and_import_blocks = |parent_id, n| {
-		let mut hashes = Vec::new();
-		let mut parent_header = client.header(&parent_id).unwrap().unwrap();
-
-		for _ in 0..n {
-			let block_hash = propose_and_import_block(
-				&parent_header,
-				None,
-				&mut proposer_factory,
-				&mut block_import,
-			);
-			hashes.push(block_hash);
-			parent_header = client.header(&BlockId::Hash(block_hash)).unwrap().unwrap();
-		}
-
-		hashes
+	let mut propose_and_import_blocks_wrap = |parent_id, n| {
+		propose_and_import_blocks(&client, &mut proposer_factory, &mut block_import, parent_id, n)
 	};
 
 	// This is the block tree that we're going to use in this test. Each node
@@ -766,12 +851,12 @@ fn importing_epoch_change_block_prunes_tree() {
 
 	// Create and import the canon chain and keep track of fork blocks (A, C, D)
 	// from the diagram above.
-	let canon_hashes = propose_and_import_blocks(BlockId::Number(0), 30);
+	let canon_hashes = propose_and_import_blocks_wrap(BlockId::Number(0), 30);
 
 	// Create the forks
-	let fork_1 = propose_and_import_blocks(BlockId::Hash(canon_hashes[0]), 10);
-	let fork_2 = propose_and_import_blocks(BlockId::Hash(canon_hashes[12]), 15);
-	let fork_3 = propose_and_import_blocks(BlockId::Hash(canon_hashes[18]), 10);
+	let fork_1 = propose_and_import_blocks_wrap(BlockId::Hash(canon_hashes[0]), 10);
+	let fork_2 = propose_and_import_blocks_wrap(BlockId::Hash(canon_hashes[12]), 15);
+	let fork_3 = propose_and_import_blocks_wrap(BlockId::Hash(canon_hashes[18]), 10);
 
 	// We should be tracking a total of 9 epochs in the fork tree
 	assert_eq!(epoch_changes.shared_data().tree().iter().count(), 9);
@@ -782,7 +867,7 @@ fn importing_epoch_change_block_prunes_tree() {
 	// We finalize block #13 from the canon chain, so on the next epoch
 	// change the tree should be pruned, to not contain F (#7).
 	client.finalize_block(BlockId::Hash(canon_hashes[12]), None, false).unwrap();
-	propose_and_import_blocks(BlockId::Hash(client.chain_info().best_hash), 7);
+	propose_and_import_blocks_wrap(BlockId::Hash(client.chain_info().best_hash), 7);
 
 	// at this point no hashes from the first fork must exist on the tree
 	assert!(!epoch_changes
@@ -809,7 +894,7 @@ fn importing_epoch_change_block_prunes_tree() {
 
 	// finalizing block #25 from the canon chain should prune out the second fork
 	client.finalize_block(BlockId::Hash(canon_hashes[24]), None, false).unwrap();
-	propose_and_import_blocks(BlockId::Hash(client.chain_info().best_hash), 8);
+	propose_and_import_blocks_wrap(BlockId::Hash(client.chain_info().best_hash), 8);
 
 	// at this point no hashes from the second fork must exist on the tree
 	assert!(!epoch_changes
@@ -893,4 +978,69 @@ fn babe_transcript_generation_match() {
 		b
 	};
 	debug_assert!(test(orig_transcript) == test(transcript_from_data(new_transcript)));
+}
+
+#[test]
+fn obsolete_blocks_aux_data_cleanup() {
+	let mut net = BabeTestNet::new(1);
+
+	let peer = net.peer(0);
+	let data = peer.data.as_ref().expect("babe link set up during initialization");
+	let client = peer.client().as_client();
+
+	// Register the handler (as done by `babe_start`)
+	let client_clone = client.clone();
+	let on_finality = move |summary: &FinalityNotification<TestBlock>| {
+		aux_storage_cleanup(client_clone.as_ref(), summary)
+	};
+	client.register_finality_action(Box::new(on_finality));
+
+	let mut proposer_factory = DummyFactory {
+		client: client.clone(),
+		config: data.link.config.clone(),
+		epoch_changes: data.link.epoch_changes.clone(),
+		mutator: Arc::new(|_, _| ()),
+	};
+
+	let mut block_import = data.block_import.lock().take().expect("import set up during init");
+
+	let mut propose_and_import_blocks_wrap = |parent_id, n| {
+		propose_and_import_blocks(&client, &mut proposer_factory, &mut block_import, parent_id, n)
+	};
+
+	let aux_data_check = |hashes: &[Hash], expected: bool| {
+		hashes.iter().all(|hash| {
+			aux_schema::load_block_weight(&*peer.client().as_backend(), hash)
+				.unwrap()
+				.is_some() == expected
+		})
+	};
+
+	// Create the following test scenario:
+	//
+	//  /--- --B3 --- B4                       ( < fork2 )
+	// G --- A1 --- A2 --- A3 --- A4           ( < fork1 )
+	//                      \-----C4 --- C5    ( < fork3 )
+
+	let fork1_hashes = propose_and_import_blocks_wrap(BlockId::Number(0), 4);
+	let fork2_hashes = propose_and_import_blocks_wrap(BlockId::Number(0), 2);
+	let fork3_hashes = propose_and_import_blocks_wrap(BlockId::Number(3), 2);
+
+	// Check that aux data is present for all but the genesis block.
+	assert!(aux_data_check(&[client.chain_info().genesis_hash], false));
+	assert!(aux_data_check(&fork1_hashes, true));
+	assert!(aux_data_check(&fork2_hashes, true));
+	assert!(aux_data_check(&fork3_hashes, true));
+
+	// Finalize A3
+	client.finalize_block(BlockId::Number(3), None, true).unwrap();
+
+	// Wiped: A1, A2
+	assert!(aux_data_check(&fork1_hashes[..2], false));
+	// Present: A3, A4
+	assert!(aux_data_check(&fork1_hashes[2..], true));
+	// Wiped: B3, B4
+	assert!(aux_data_check(&fork2_hashes, false));
+	// Present C4, C5
+	assert!(aux_data_check(&fork3_hashes, true));
 }

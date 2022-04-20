@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,14 +18,14 @@
 //! Implementations for the Staking FRAME Pallet.
 
 use frame_election_provider_support::{
-	data_provider, ElectionDataProvider, ElectionProvider, SortedListProvider, Supports,
-	VoteWeight, VoteWeightProvider,
+	data_provider, ElectionDataProvider, ElectionProvider, ScoreProvider, SortedListProvider,
+	Supports, VoteWeight, VoterOf,
 };
 use frame_support::{
 	pallet_prelude::*,
 	traits::{
-		Currency, CurrencyToVote, EstimateNextNewSession, Get, Imbalance, LockableCurrency,
-		OnUnbalanced, UnixTime, WithdrawReasons,
+		Currency, CurrencyToVote, Defensive, EstimateNextNewSession, Get, Imbalance,
+		LockableCurrency, OnUnbalanced, UnixTime, WithdrawReasons,
 	},
 	weights::{Weight, WithPostDispatchInfo},
 };
@@ -37,17 +37,25 @@ use sp_runtime::{
 };
 use sp_staking::{
 	offence::{DisableStrategy, OffenceDetails, OnOffenceHandler},
-	SessionIndex,
+	EraIndex, SessionIndex,
 };
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
 use crate::{
-	log, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraIndex, EraPayout, Exposure,
-	ExposureOf, Forcing, IndividualExposure, Nominations, PositiveImbalanceOf, RewardDestination,
+	log, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraPayout, Exposure, ExposureOf,
+	Forcing, IndividualExposure, Nominations, PositiveImbalanceOf, RewardDestination,
 	SessionInterface, StakingLedger, ValidatorPrefs,
 };
 
 use super::{pallet::*, STAKING_ID};
+
+/// The maximum number of iterations that we do whilst iterating over `T::VoterList` in
+/// `get_npos_voters`.
+///
+/// In most cases, if we want n items, we iterate exactly n times. In rare cases, if a voter is
+/// invalid (for any reason) the iteration continues. With this constant, we iterate at most 2 * n
+/// times and then give up.
+const NPOS_MAX_ITERATIONS_COEFFICIENT: u32 = 2;
 
 impl<T: Config> Pallet<T> {
 	/// The total balance that can be slashed from a stash account as of right now.
@@ -224,7 +232,7 @@ impl<T: Config> Pallet<T> {
 		let dest = Self::payee(stash);
 		match dest {
 			RewardDestination::Controller => Self::bonded(stash)
-				.and_then(|controller| Some(T::Currency::deposit_creating(&controller, amount))),
+				.map(|controller| T::Currency::deposit_creating(&controller, amount)),
 			RewardDestination::Stash => T::Currency::deposit_into_existing(stash, amount).ok(),
 			RewardDestination::Staked => Self::bonded(stash)
 				.and_then(|c| Self::ledger(&c).map(|l| (c, l)))
@@ -649,82 +657,77 @@ impl<T: Config> Pallet<T> {
 
 	/// Get all of the voters that are eligible for the npos election.
 	///
-	/// `maybe_max_len` can imposes a cap on the number of voters returned; First all the validator
-	/// are included in no particular order, then remainder is taken from the nominators, as
-	/// returned by [`Config::SortedListProvider`].
-	///
-	/// This will use nominators, and all the validators will inject a self vote.
+	/// `maybe_max_len` can imposes a cap on the number of voters returned;
 	///
 	/// This function is self-weighing as [`DispatchClass::Mandatory`].
 	///
 	/// ### Slashing
 	///
-	/// All nominations that have been submitted before the last non-zero slash of the validator are
-	/// auto-chilled, but still count towards the limit imposed by `maybe_max_len`.
-	pub fn get_npos_voters(
-		maybe_max_len: Option<usize>,
-	) -> Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)> {
+	/// All votes that have been submitted before the last non-zero slash of the corresponding
+	/// target are *auto-chilled*, but still count towards the limit imposed by `maybe_max_len`.
+	pub fn get_npos_voters(maybe_max_len: Option<usize>) -> Vec<VoterOf<Self>> {
 		let max_allowed_len = {
-			let nominator_count = CounterForNominators::<T>::get() as usize;
-			let validator_count = CounterForValidators::<T>::get() as usize;
-			let all_voter_count = validator_count.saturating_add(nominator_count);
+			let all_voter_count = T::VoterList::count() as usize;
 			maybe_max_len.unwrap_or(all_voter_count).min(all_voter_count)
 		};
 
 		let mut all_voters = Vec::<_>::with_capacity(max_allowed_len);
 
-		// first, grab all validators in no particular order, capped by the maximum allowed length.
-		let mut validators_taken = 0u32;
-		for (validator, _) in <Validators<T>>::iter().take(max_allowed_len) {
-			// Append self vote.
-			let self_vote =
-				(validator.clone(), Self::weight_of(&validator), vec![validator.clone()]);
-			all_voters.push(self_vote);
-			validators_taken.saturating_inc();
-		}
-
-		// .. and grab whatever we have left from nominators.
-		let nominators_quota = (max_allowed_len as u32).saturating_sub(validators_taken);
+		// cache a few things.
+		let weight_of = Self::weight_of_fn();
 		let slashing_spans = <SlashingSpans<T>>::iter().collect::<BTreeMap<_, _>>();
 
-		// track the count of nominators added to `all_voters
+		let mut voters_seen = 0u32;
+		let mut validators_taken = 0u32;
 		let mut nominators_taken = 0u32;
-		// track every nominator iterated over, but not necessarily added to `all_voters`
-		let mut nominators_seen = 0u32;
 
-		// cache the total-issuance once in this function
-		let weight_of = Self::weight_of_fn();
-
-		let mut nominators_iter = T::SortedListProvider::iter();
-		while nominators_taken < nominators_quota && nominators_seen < nominators_quota * 2 {
-			let nominator = match nominators_iter.next() {
-				Some(nominator) => {
-					nominators_seen.saturating_inc();
-					nominator
+		let mut sorted_voters = T::VoterList::iter();
+		while all_voters.len() < max_allowed_len &&
+			voters_seen < (NPOS_MAX_ITERATIONS_COEFFICIENT * max_allowed_len as u32)
+		{
+			let voter = match sorted_voters.next() {
+				Some(voter) => {
+					voters_seen.saturating_inc();
+					voter
 				},
 				None => break,
 			};
 
 			if let Some(Nominations { submitted_in, mut targets, suppressed: _ }) =
-				<Nominators<T>>::get(&nominator)
+				<Nominators<T>>::get(&voter)
 			{
-				log!(
-					trace,
-					"fetched nominator {:?} with weight {:?}",
-					nominator,
-					weight_of(&nominator)
-				);
+				// if this voter is a nominator:
 				targets.retain(|stash| {
 					slashing_spans
 						.get(stash)
 						.map_or(true, |spans| submitted_in >= spans.last_nonzero_slash())
 				});
 				if !targets.len().is_zero() {
-					all_voters.push((nominator.clone(), weight_of(&nominator), targets));
+					all_voters.push((voter.clone(), weight_of(&voter), targets));
 					nominators_taken.saturating_inc();
 				}
+			} else if Validators::<T>::contains_key(&voter) {
+				// if this voter is a validator:
+				let self_vote = (
+					voter.clone(),
+					weight_of(&voter),
+					vec![voter.clone()]
+						.try_into()
+						.expect("`MaxVotesPerVoter` must be greater than or equal to 1"),
+				);
+				all_voters.push(self_vote);
+				validators_taken.saturating_inc();
 			} else {
-				log!(error, "DEFENSIVE: invalid item in `SortedListProvider`: {:?}", nominator)
+				// this can only happen if: 1. there a bug in the bags-list (or whatever is the
+				// sorted list) logic and the state of the two pallets is no longer compatible, or
+				// because the nominators is not decodable since they have more nomination than
+				// `T::MaxNominations`. The latter can rarely happen, and is not really an emergency
+				// or bug if it does.
+				log!(
+					warn,
+					"DEFENSIVE: invalid item in `VoterList`: {:?}, this nominator probably has too many nominations now",
+					voter
+				)
 			}
 		}
 
@@ -744,6 +747,7 @@ impl<T: Config> Pallet<T> {
 			validators_taken,
 			nominators_taken
 		);
+
 		all_voters
 	}
 
@@ -765,82 +769,99 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// This function will add a nominator to the `Nominators` storage map,
-	/// [`SortedListProvider`] and keep track of the `CounterForNominators`.
+	/// and `VoterList`.
 	///
 	/// If the nominator already exists, their nominations will be updated.
 	///
 	/// NOTE: you must ALWAYS use this function to add nominator or update their targets. Any access
-	/// to `Nominators`, its counter, or `VoterList` outside of this function is almost certainly
+	/// to `Nominators` or `VoterList` outside of this function is almost certainly
 	/// wrong.
-	pub fn do_add_nominator(who: &T::AccountId, nominations: Nominations<T::AccountId>) {
+	pub fn do_add_nominator(who: &T::AccountId, nominations: Nominations<T>) {
 		if !Nominators::<T>::contains_key(who) {
-			// maybe update the counter.
-			CounterForNominators::<T>::mutate(|x| x.saturating_inc());
-
-			// maybe update sorted list. Error checking is defensive-only - this should never fail.
-			if T::SortedListProvider::on_insert(who.clone(), Self::weight_of(who)).is_err() {
-				log!(warn, "attempt to insert duplicate nominator ({:#?})", who);
-				debug_assert!(false, "attempt to insert duplicate nominator");
-			};
-
-			debug_assert_eq!(T::SortedListProvider::sanity_check(), Ok(()));
+			// maybe update sorted list.
+			let _ = T::VoterList::on_insert(who.clone(), Self::weight_of(who))
+				.defensive_unwrap_or_default();
 		}
-
 		Nominators::<T>::insert(who, nominations);
+
+		debug_assert_eq!(
+			Nominators::<T>::count() + Validators::<T>::count(),
+			T::VoterList::count()
+		);
+		debug_assert_eq!(T::VoterList::sanity_check(), Ok(()));
 	}
 
 	/// This function will remove a nominator from the `Nominators` storage map,
-	/// [`SortedListProvider`] and keep track of the `CounterForNominators`.
+	/// and `VoterList`.
 	///
 	/// Returns true if `who` was removed from `Nominators`, otherwise false.
 	///
 	/// NOTE: you must ALWAYS use this function to remove a nominator from the system. Any access to
-	/// `Nominators`, its counter, or `VoterList` outside of this function is almost certainly
+	/// `Nominators` or `VoterList` outside of this function is almost certainly
 	/// wrong.
 	pub fn do_remove_nominator(who: &T::AccountId) -> bool {
-		if Nominators::<T>::contains_key(who) {
+		let outcome = if Nominators::<T>::contains_key(who) {
 			Nominators::<T>::remove(who);
-			CounterForNominators::<T>::mutate(|x| x.saturating_dec());
-			T::SortedListProvider::on_remove(who);
-			debug_assert_eq!(T::SortedListProvider::sanity_check(), Ok(()));
-			debug_assert_eq!(CounterForNominators::<T>::get(), T::SortedListProvider::count());
+			T::VoterList::on_remove(who);
 			true
 		} else {
 			false
-		}
+		};
+
+		debug_assert_eq!(T::VoterList::sanity_check(), Ok(()));
+		debug_assert_eq!(
+			Nominators::<T>::count() + Validators::<T>::count(),
+			T::VoterList::count()
+		);
+
+		outcome
 	}
 
-	/// This function will add a validator to the `Validators` storage map, and keep track of the
-	/// `CounterForValidators`.
+	/// This function will add a validator to the `Validators` storage map.
 	///
 	/// If the validator already exists, their preferences will be updated.
 	///
 	/// NOTE: you must ALWAYS use this function to add a validator to the system. Any access to
-	/// `Validators`, its counter, or `VoterList` outside of this function is almost certainly
+	/// `Validators` or `VoterList` outside of this function is almost certainly
 	/// wrong.
 	pub fn do_add_validator(who: &T::AccountId, prefs: ValidatorPrefs) {
 		if !Validators::<T>::contains_key(who) {
-			CounterForValidators::<T>::mutate(|x| x.saturating_inc())
+			// maybe update sorted list.
+			let _ = T::VoterList::on_insert(who.clone(), Self::weight_of(who))
+				.defensive_unwrap_or_default();
 		}
 		Validators::<T>::insert(who, prefs);
+
+		debug_assert_eq!(
+			Nominators::<T>::count() + Validators::<T>::count(),
+			T::VoterList::count()
+		);
+		debug_assert_eq!(T::VoterList::sanity_check(), Ok(()));
 	}
 
-	/// This function will remove a validator from the `Validators` storage map,
-	/// and keep track of the `CounterForValidators`.
+	/// This function will remove a validator from the `Validators` storage map.
 	///
 	/// Returns true if `who` was removed from `Validators`, otherwise false.
 	///
 	/// NOTE: you must ALWAYS use this function to remove a validator from the system. Any access to
-	/// `Validators`, its counter, or `VoterList` outside of this function is almost certainly
+	/// `Validators` or `VoterList` outside of this function is almost certainly
 	/// wrong.
 	pub fn do_remove_validator(who: &T::AccountId) -> bool {
-		if Validators::<T>::contains_key(who) {
+		let outcome = if Validators::<T>::contains_key(who) {
 			Validators::<T>::remove(who);
-			CounterForValidators::<T>::mutate(|x| x.saturating_dec());
+			T::VoterList::on_remove(who);
 			true
 		} else {
 			false
-		}
+		};
+
+		debug_assert_eq!(T::VoterList::sanity_check(), Ok(()));
+		debug_assert_eq!(
+			Nominators::<T>::count() + Validators::<T>::count(),
+			T::VoterList::count()
+		);
+
+		outcome
 	}
 
 	/// Register some amount of weight directly with the system pallet.
@@ -854,25 +875,17 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet<T> {
-	const MAXIMUM_VOTES_PER_VOTER: u32 = T::MAX_NOMINATIONS;
+impl<T: Config> ElectionDataProvider for Pallet<T> {
+	type AccountId = T::AccountId;
+	type BlockNumber = BlockNumberFor<T>;
+	type MaxVotesPerVoter = T::MaxNominations;
 
 	fn desired_targets() -> data_provider::Result<u32> {
 		Self::register_weight(T::DbWeight::get().reads(1));
 		Ok(Self::validator_count())
 	}
 
-	fn voters(
-		maybe_max_len: Option<usize>,
-	) -> data_provider::Result<Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>> {
-		debug_assert!(<Nominators<T>>::iter().count() as u32 == CounterForNominators::<T>::get());
-		debug_assert!(<Validators<T>>::iter().count() as u32 == CounterForValidators::<T>::get());
-		debug_assert_eq!(
-			CounterForNominators::<T>::get(),
-			T::SortedListProvider::count(),
-			"voter_count must be accurate",
-		);
-
+	fn electing_voters(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<VoterOf<Self>>> {
 		// This can never fail -- if `maybe_max_len` is `Some(_)` we handle it.
 		let voters = Self::get_npos_voters(maybe_max_len);
 		debug_assert!(maybe_max_len.map_or(true, |max| voters.len() <= max));
@@ -880,8 +893,8 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 		Ok(voters)
 	}
 
-	fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<T::AccountId>> {
-		let target_count = CounterForValidators::<T>::get();
+	fn electable_targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<T::AccountId>> {
+		let target_count = Validators::<T>::count();
 
 		// We can't handle this case yet -- return an error.
 		if maybe_max_len.map_or(false, |max_len| target_count > max_len as u32) {
@@ -925,7 +938,11 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn add_voter(voter: T::AccountId, weight: VoteWeight, targets: Vec<T::AccountId>) {
+	fn add_voter(
+		voter: T::AccountId,
+		weight: VoteWeight,
+		targets: BoundedVec<T::AccountId, Self::MaxVotesPerVoter>,
+	) {
 		let stake = <BalanceOf<T>>::try_from(weight).unwrap_or_else(|_| {
 			panic!("cannot convert a VoteWeight into BalanceOf, benchmark needs reconfiguring.")
 		});
@@ -936,10 +953,11 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 				stash: voter.clone(),
 				active: stake,
 				total: stake,
-				unlocking: vec![],
+				unlocking: Default::default(),
 				claimed_rewards: vec![],
 			},
 		);
+
 		Self::do_add_nominator(&voter, Nominations { targets, submitted_in: 0, suppressed: false });
 	}
 
@@ -953,7 +971,7 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 				stash: target.clone(),
 				active: stake,
 				total: stake,
-				unlocking: vec![],
+				unlocking: Default::default(),
 				claimed_rewards: vec![],
 			},
 		);
@@ -967,16 +985,15 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 	fn clear() {
 		<Bonded<T>>::remove_all(None);
 		<Ledger<T>>::remove_all(None);
-		<Validators<T>>::remove_all(None);
-		<Nominators<T>>::remove_all(None);
-		<CounterForNominators<T>>::kill();
-		<CounterForValidators<T>>::kill();
-		T::SortedListProvider::unsafe_clear();
+		<Validators<T>>::remove_all();
+		<Nominators<T>>::remove_all();
+
+		T::VoterList::unsafe_clear();
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn put_snapshot(
-		voters: Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>,
+		voters: Vec<VoterOf<Self>>,
 		targets: Vec<T::AccountId>,
 		target_stake: Option<VoteWeight>,
 	) {
@@ -991,7 +1008,7 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 					stash: v.clone(),
 					active: stake,
 					total: stake,
-					unlocking: vec![],
+					unlocking: Default::default(),
 					claimed_rewards: vec![],
 				},
 			);
@@ -1012,13 +1029,13 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 					stash: v.clone(),
 					active: stake,
 					total: stake,
-					unlocking: vec![],
+					unlocking: Default::default(),
 					claimed_rewards: vec![],
 				},
 			);
 			Self::do_add_nominator(
 				&v,
-				Nominations { targets: t, submitted_in: 0, suppressed: false },
+				Nominations { targets: t.try_into().unwrap(), submitted_in: 0, suppressed: false },
 			);
 		});
 	}
@@ -1108,8 +1125,13 @@ where
 	fn note_author(author: T::AccountId) {
 		Self::reward_by_ids(vec![(author, 20)])
 	}
-	fn note_uncle(author: T::AccountId, _age: T::BlockNumber) {
-		Self::reward_by_ids(vec![(<pallet_authorship::Pallet<T>>::author(), 2), (author, 1)])
+	fn note_uncle(uncle_author: T::AccountId, _age: T::BlockNumber) {
+		// defensive-only: block author must exist.
+		if let Some(block_author) = <pallet_authorship::Pallet<T>>::author() {
+			Self::reward_by_ids(vec![(block_author, 2), (uncle_author, 1)])
+		} else {
+			crate::log!(warn, "block author not set, this should never happen");
+		}
 	}
 }
 
@@ -1172,7 +1194,7 @@ where
 			add_db_reads_writes(1, 0);
 
 			// Reverse because it's more likely to find reports from recent eras.
-			match eras.iter().rev().filter(|&&(_, ref sesh)| sesh <= &slash_session).next() {
+			match eras.iter().rev().find(|&&(_, ref sesh)| sesh <= &slash_session) {
 				Some(&(ref slash_era, _)) => *slash_era,
 				// Before bonding period. defensive - should be filtered out.
 				None => return consumed_weight,
@@ -1247,18 +1269,24 @@ where
 	}
 }
 
-impl<T: Config> VoteWeightProvider<T::AccountId> for Pallet<T> {
-	fn vote_weight(who: &T::AccountId) -> VoteWeight {
+impl<T: Config> ScoreProvider<T::AccountId> for Pallet<T> {
+	type Score = VoteWeight;
+
+	fn score(who: &T::AccountId) -> Self::Score {
 		Self::weight_of(who)
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn set_vote_weight_of(who: &T::AccountId, weight: VoteWeight) {
+	fn set_score_of(who: &T::AccountId, weight: Self::Score) {
 		// this will clearly results in an inconsistent state, but it should not matter for a
 		// benchmark.
 		let active: BalanceOf<T> = weight.try_into().map_err(|_| ()).unwrap();
-		let mut ledger = Self::ledger(who).unwrap_or_default();
+		let mut ledger = match Self::ledger(who) {
+			None => StakingLedger::default_from(who.clone()),
+			Some(l) => l,
+		};
 		ledger.active = active;
+
 		<Ledger<T>>::insert(who, ledger);
 		<Bonded<T>>::insert(who, who);
 
@@ -1275,25 +1303,46 @@ impl<T: Config> VoteWeightProvider<T::AccountId> for Pallet<T> {
 /// A simple voter list implementation that does not require any additional pallets. Note, this
 /// does not provided nominators in sorted ordered. If you desire nominators in a sorted order take
 /// a look at [`pallet-bags-list].
-pub struct UseNominatorsMap<T>(sp_std::marker::PhantomData<T>);
-impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsMap<T> {
+pub struct UseNominatorsAndValidatorsMap<T>(sp_std::marker::PhantomData<T>);
+impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsAndValidatorsMap<T> {
 	type Error = ();
+	type Score = VoteWeight;
 
-	/// Returns iterator over voter list, which can have `take` called on it.
 	fn iter() -> Box<dyn Iterator<Item = T::AccountId>> {
-		Box::new(Nominators::<T>::iter().map(|(n, _)| n))
+		Box::new(
+			Validators::<T>::iter()
+				.map(|(v, _)| v)
+				.chain(Nominators::<T>::iter().map(|(n, _)| n)),
+		)
+	}
+	fn iter_from(
+		start: &T::AccountId,
+	) -> Result<Box<dyn Iterator<Item = T::AccountId>>, Self::Error> {
+		if Validators::<T>::contains_key(start) {
+			let start_key = Validators::<T>::hashed_key_for(start);
+			Ok(Box::new(
+				Validators::<T>::iter_from(start_key)
+					.map(|(n, _)| n)
+					.chain(Nominators::<T>::iter().map(|(x, _)| x)),
+			))
+		} else if Nominators::<T>::contains_key(start) {
+			let start_key = Nominators::<T>::hashed_key_for(start);
+			Ok(Box::new(Nominators::<T>::iter_from(start_key).map(|(n, _)| n)))
+		} else {
+			Err(())
+		}
 	}
 	fn count() -> u32 {
-		CounterForNominators::<T>::get()
+		Nominators::<T>::count().saturating_add(Validators::<T>::count())
 	}
 	fn contains(id: &T::AccountId) -> bool {
-		Nominators::<T>::contains_key(id)
+		Nominators::<T>::contains_key(id) || Validators::<T>::contains_key(id)
 	}
-	fn on_insert(_: T::AccountId, _weight: VoteWeight) -> Result<(), Self::Error> {
+	fn on_insert(_: T::AccountId, _weight: Self::Score) -> Result<(), Self::Error> {
 		// nothing to do on insert.
 		Ok(())
 	}
-	fn on_update(_: &T::AccountId, _weight: VoteWeight) {
+	fn on_update(_: &T::AccountId, _weight: Self::Score) {
 		// nothing to do on update.
 	}
 	fn on_remove(_: &T::AccountId) {
@@ -1301,7 +1350,7 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsMap<T> {
 	}
 	fn unsafe_regenerate(
 		_: impl IntoIterator<Item = T::AccountId>,
-		_: Box<dyn Fn(&T::AccountId) -> VoteWeight>,
+		_: Box<dyn Fn(&T::AccountId) -> Self::Score>,
 	) -> u32 {
 		// nothing to do upon regenerate.
 		0
@@ -1309,10 +1358,11 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsMap<T> {
 	fn sanity_check() -> Result<(), &'static str> {
 		Ok(())
 	}
+
 	fn unsafe_clear() {
 		// NOTE: Caller must ensure this doesn't lead to too many storage accesses. This is a
 		// condition of SortedListProvider::unsafe_clear.
-		Nominators::<T>::remove_all(None);
-		CounterForNominators::<T>::take();
+		Nominators::<T>::remove_all();
+		Validators::<T>::remove_all();
 	}
 }

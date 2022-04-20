@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -31,7 +31,7 @@ pub enum Error {
 	Io(#[from] std::io::Error),
 
 	#[error(transparent)]
-	Cli(#[from] structopt::clap::Error),
+	Cli(#[from] clap::Error),
 
 	#[error(transparent)]
 	Service(#[from] sc_service::Error),
@@ -51,13 +51,11 @@ pub enum Error {
 	#[error("Invalid URI; expecting either a secret URI or a public URI.")]
 	InvalidUri(crypto::PublicError),
 
-	#[error("Signature has an invalid length. Read {read} bytes, expected {expected} bytes")]
-	SignatureInvalidLength {
-		/// Amount of signature bytes read.
-		read: usize,
-		/// Expected number of signature bytes.
-		expected: usize,
-	},
+	#[error("Signature is an invalid format.")]
+	SignatureFormatInvalid,
+
+	#[error("Key is an invalid format.")]
+	KeyFormatInvalid,
 
 	#[error("Unknown key type, must be a known 4-character sequence")]
 	KeyTypeInvalid,
@@ -82,19 +80,19 @@ pub enum Error {
 	GlobalLoggerError(#[from] sc_tracing::logging::Error),
 }
 
-impl std::convert::From<&str> for Error {
+impl From<&str> for Error {
 	fn from(s: &str) -> Error {
 		Error::Input(s.to_string())
 	}
 }
 
-impl std::convert::From<String> for Error {
+impl From<String> for Error {
 	fn from(s: String) -> Error {
 		Error::Input(s)
 	}
 }
 
-impl std::convert::From<crypto::PublicError> for Error {
+impl From<crypto::PublicError> for Error {
 	fn from(e: crypto::PublicError) -> Error {
 		Error::InvalidUri(e)
 	}

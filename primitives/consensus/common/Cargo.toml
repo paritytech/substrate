@@ -15,22 +15,22 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 async-trait = "0.1.42"
-codec = { package = "parity-scale-codec", version = "2.0.0", features = [
+codec = { package = "parity-scale-codec", version = "3.0.0", features = [
     "derive",
 ] }
-futures = { version = "0.3.1", features = ["thread-pool"] }
+futures = { version = "0.3.21", features = ["thread-pool"] }
 log = "0.4.8"
-sp-core = { path = "../../core", version = "4.0.0-dev" }
+sp-core = { path = "../../core", version = "6.0.0"}
 sp-inherents = { version = "4.0.0-dev", path = "../../inherents" }
-sp-state-machine = { version = "0.10.0-dev", path = "../../state-machine" }
+sp-state-machine = { version = "0.12.0", path = "../../state-machine" }
 futures-timer = "3.0.1"
-sp-std = { version = "4.0.0-dev", path = "../../std" }
-sp-version = { version = "4.0.0-dev", path = "../../version" }
-sp-runtime = { version = "4.0.0-dev", path = "../../runtime" }
+sp-std = { version = "4.0.0", path = "../../std" }
+sp-version = { version = "5.0.0", path = "../../version" }
+sp-runtime = { version = "6.0.0", path = "../../runtime" }
 thiserror = "1.0.30"
 
 [dev-dependencies]
-futures = "0.3.9"
+futures = "0.3.21"
 sp-test-primitives = { version = "2.0.0", path = "../../test-primitives" }
 
 [features]

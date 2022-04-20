@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,7 +18,10 @@
 //! Handling of blobs that may be compressed, based on an 8-byte magic identifier
 //! at the head.
 
-use std::{borrow::Cow, io::Read};
+use std::{
+	borrow::Cow,
+	io::{Read, Write},
+};
 
 // An arbitrary prefix, that indicates a blob beginning with should be decompressed with
 // Zstd compression.
@@ -34,24 +37,15 @@ const ZSTD_PREFIX: [u8; 8] = [82, 188, 83, 118, 70, 219, 142, 5];
 pub const CODE_BLOB_BOMB_LIMIT: usize = 50 * 1024 * 1024;
 
 /// A possible bomb was encountered.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, thiserror::Error)]
 pub enum Error {
 	/// Decoded size was too large, and the code payload may be a bomb.
+	#[error("Possible compression bomb encountered")]
 	PossibleBomb,
 	/// The compressed value had an invalid format.
+	#[error("Blob had invalid format")]
 	Invalid,
 }
-
-impl std::fmt::Display for Error {
-	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-		match *self {
-			Error::PossibleBomb => write!(f, "Possible compression bomb encountered"),
-			Error::Invalid => write!(f, "Blob had invalid format"),
-		}
-	}
-}
-
-impl std::error::Error for Error {}
 
 fn read_from_decoder(
 	decoder: impl Read,
@@ -90,8 +84,6 @@ pub fn decompress(blob: &[u8], bomb_limit: usize) -> Result<Cow<[u8]>, Error> {
 /// this will not compress the blob, as the decoder will not be able to be
 /// able to differentiate it from a compression bomb.
 pub fn compress(blob: &[u8], bomb_limit: usize) -> Option<Vec<u8>> {
-	use std::io::Write;
-
 	if blob.len() > bomb_limit {
 		return None
 	}
@@ -109,7 +101,6 @@ pub fn compress(blob: &[u8], bomb_limit: usize) -> Option<Vec<u8>> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use std::io::Write;
 
 	const BOMB_LIMIT: usize = 10;
 

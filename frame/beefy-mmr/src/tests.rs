@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -49,7 +49,7 @@ fn offchain_key(pos: usize) -> Vec<u8> {
 }
 
 fn read_mmr_leaf(ext: &mut TestExternalities, index: usize) -> MmrLeaf {
-	type Node = pallet_mmr_primitives::DataOrHash<Keccak256, MmrLeaf>;
+	type Node = pallet_mmr::primitives::DataOrHash<Keccak256, MmrLeaf>;
 	ext.persist_offchain_overlay();
 	let offchain_db = ext.offchain_db();
 	offchain_db
@@ -71,7 +71,7 @@ fn should_contain_mmr_digest() {
 		assert_eq!(
 			System::digest().logs,
 			vec![beefy_log(ConsensusLog::MmrRoot(
-				hex!("f3e3afbfa69e89cd1e99f8d3570155962f3346d1d8758dc079be49ef70387758").into()
+				hex!("fa0275b19b2565089f7e2377ee73b9050e8d53bce108ef722a3251fd9d371d4b").into()
 			))]
 		);
 
@@ -82,14 +82,13 @@ fn should_contain_mmr_digest() {
 			System::digest().logs,
 			vec![
 				beefy_log(ConsensusLog::MmrRoot(
-					hex!("f3e3afbfa69e89cd1e99f8d3570155962f3346d1d8758dc079be49ef70387758").into()
+					hex!("fa0275b19b2565089f7e2377ee73b9050e8d53bce108ef722a3251fd9d371d4b").into()
 				)),
-				beefy_log(ConsensusLog::AuthoritiesChange(ValidatorSet {
-					validators: vec![mock_beefy_id(3), mock_beefy_id(4),],
-					id: 1,
-				})),
+				beefy_log(ConsensusLog::AuthoritiesChange(
+					ValidatorSet::new(vec![mock_beefy_id(3), mock_beefy_id(4),], 1,).unwrap()
+				)),
 				beefy_log(ConsensusLog::MmrRoot(
-					hex!("7d4ae4524bae75d52b63f08eab173b0c263eb95ae2c55c3a1d871241bd0cc559").into()
+					hex!("85554fa7d4e863cce3cdce668c1ae82c0174ad37f8d1399284018bec9f9971c3").into()
 				)),
 			]
 		);
@@ -112,13 +111,11 @@ fn should_contain_valid_leaf_data() {
 			beefy_next_authority_set: BeefyNextAuthoritySet {
 				id: 1,
 				len: 2,
-				root: hex!("01b1a742589773fc054c8f5021a456316ffcec0370b25678b0696e116d1ef9ae")
+				root: hex!("176e73f1bf656478b728e28dd1a7733c98621b8acf830bff585949763dca7a96")
 					.into(),
 			},
-			parachain_heads: hex!(
-				"ed893c8f8cc87195a5d4d2805b011506322036bcace79642aa3e94ab431e442e"
-			)
-			.into(),
+			leaf_extra: hex!("55b8e9e1cc9f0db7776fac0ca66318ef8acfb8ec26db11e373120583e07ee648")
+				.to_vec(),
 		}
 	);
 
@@ -139,10 +136,8 @@ fn should_contain_valid_leaf_data() {
 				root: hex!("9c6b2c1b0d0b25a008e6c882cc7b415f309965c72ad2b944ac0931048ca31cd5")
 					.into(),
 			},
-			parachain_heads: hex!(
-				"ed893c8f8cc87195a5d4d2805b011506322036bcace79642aa3e94ab431e442e"
-			)
-			.into(),
+			leaf_extra: hex!("55b8e9e1cc9f0db7776fac0ca66318ef8acfb8ec26db11e373120583e07ee648")
+				.to_vec()
 		}
 	);
 }

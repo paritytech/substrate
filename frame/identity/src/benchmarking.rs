@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -75,7 +75,7 @@ fn create_sub_accounts<T: Config>(
 	}
 
 	// Set identity so `set_subs` does not fail.
-	let _ = T::Currency::make_free_balance_be(&who, BalanceOf::<T>::max_value());
+	let _ = T::Currency::make_free_balance_be(&who, BalanceOf::<T>::max_value() / 2u32.into());
 	let info = create_identity_info::<T>(1);
 	Identity::<T>::set_identity(who_origin.clone().into(), Box::new(info))?;
 

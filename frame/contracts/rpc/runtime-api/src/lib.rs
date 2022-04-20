@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -25,7 +25,7 @@
 
 use codec::Codec;
 use pallet_contracts_primitives::{
-	Code, ContractExecResult, ContractInstantiateResult, GetStorageResult,
+	Code, CodeUploadResult, ContractExecResult, ContractInstantiateResult, GetStorageResult,
 };
 use sp_std::vec::Vec;
 
@@ -45,20 +45,32 @@ sp_api::decl_runtime_apis! {
 			dest: AccountId,
 			value: Balance,
 			gas_limit: u64,
+			storage_deposit_limit: Option<Balance>,
 			input_data: Vec<u8>,
-		) -> ContractExecResult;
+		) -> ContractExecResult<Balance>;
 
 		/// Instantiate a new contract.
 		///
 		/// See `pallet_contracts::Pallet::instantiate`.
 		fn instantiate(
 			origin: AccountId,
-			endowment: Balance,
+			value: Balance,
 			gas_limit: u64,
+			storage_deposit_limit: Option<Balance>,
 			code: Code<Hash>,
 			data: Vec<u8>,
 			salt: Vec<u8>,
-		) -> ContractInstantiateResult<AccountId>;
+		) -> ContractInstantiateResult<AccountId, Balance>;
+
+
+		/// Upload new code without instantiating a contract from it.
+		///
+		/// See `pallet_contracts::Pallet::upload_code`.
+		fn upload_code(
+			origin: AccountId,
+			code: Vec<u8>,
+			storage_deposit_limit: Option<Balance>,
+		) -> CodeUploadResult<Hash, Balance>;
 
 		/// Query a given storage key in a given contract.
 		///

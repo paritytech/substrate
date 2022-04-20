@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -32,7 +32,7 @@ use substrate_test_runtime_client::{prelude::*, runtime};
 const STORAGE_KEY: &[u8] = b"child";
 
 fn prefixed_storage_key() -> PrefixedStorageKey {
-	let child_info = ChildInfo::new_default(&STORAGE_KEY[..]);
+	let child_info = ChildInfo::new_default(STORAGE_KEY);
 	child_info.prefixed_storage_key()
 }
 
@@ -526,11 +526,11 @@ fn should_return_runtime_version() {
 	);
 
 	let result = "{\"specName\":\"test\",\"implName\":\"parity-test\",\"authoringVersion\":1,\
-		\"specVersion\":2,\"implVersion\":2,\"apis\":[[\"0xdf6acb689907609b\",3],\
-		[\"0x37e397fc7c91f5e4\",1],[\"0xd2bc9897eed08f15\",3],[\"0x40fe3ad401f8959a\",5],\
+		\"specVersion\":2,\"implVersion\":2,\"apis\":[[\"0xdf6acb689907609b\",4],\
+		[\"0x37e397fc7c91f5e4\",1],[\"0xd2bc9897eed08f15\",3],[\"0x40fe3ad401f8959a\",6],\
 		[\"0xc6e9a76309f39b09\",1],[\"0xdd718d5cc53262d4\",1],[\"0xcbca25e39f142387\",2],\
 		[\"0xf78b278be53f454c\",2],[\"0xab3c0572291feb8b\",1],[\"0xbc9d89904f5b923f\",1]],\
-		\"transactionVersion\":1}";
+		\"transactionVersion\":1,\"stateVersion\":1}";
 
 	let runtime_version = executor::block_on(api.runtime_version(None.into())).unwrap();
 	let serialized = serde_json::to_string(&runtime_version).unwrap();

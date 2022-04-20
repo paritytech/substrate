@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -19,12 +19,12 @@
 //! implementation of the `verify` subcommand
 
 use crate::{error, utils, with_crypto_scheme, CryptoSchemeFlag};
-use sp_core::{crypto::Ss58Codec, Public};
-use structopt::StructOpt;
+use clap::Parser;
+use sp_core::crypto::{ByteArray, Ss58Codec};
 
 /// The `verify` command
-#[derive(Debug, StructOpt, Clone)]
-#[structopt(
+#[derive(Debug, Clone, Parser)]
+#[clap(
 	name = "verify",
 	about = "Verify a signature for a message, provided on STDIN, with a given (public or secret) key"
 )]
@@ -39,15 +39,15 @@ pub struct VerifyCmd {
 
 	/// Message to verify, if not provided you will be prompted to
 	/// pass the message via STDIN
-	#[structopt(long)]
+	#[clap(long)]
 	message: Option<String>,
 
 	/// The message on STDIN is hex-encoded data
-	#[structopt(long)]
+	#[clap(long)]
 	hex: bool,
 
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	pub crypto_scheme: CryptoSchemeFlag,
 }
 
@@ -57,7 +57,7 @@ impl VerifyCmd {
 		let message = utils::read_message(self.message.as_ref(), self.hex)?;
 		let sig_data = utils::decode_hex(&self.sig)?;
 		let uri = utils::read_uri(self.uri.as_ref())?;
-		let uri = if uri.starts_with("0x") { &uri[2..] } else { &uri };
+		let uri = if let Some(uri) = uri.strip_prefix("0x") { uri } else { &uri };
 
 		with_crypto_scheme!(self.crypto_scheme.scheme, verify(sig_data, message, uri))
 	}
@@ -66,19 +66,14 @@ impl VerifyCmd {
 fn verify<Pair>(sig_data: Vec<u8>, message: Vec<u8>, uri: &str) -> error::Result<()>
 where
 	Pair: sp_core::Pair,
-	Pair::Signature: Default + AsMut<[u8]>,
+	Pair::Signature: for<'a> TryFrom<&'a [u8]>,
 {
-	let mut signature = Pair::Signature::default();
-	if sig_data.len() != signature.as_ref().len() {
-		return Err(error::Error::SignatureInvalidLength {
-			read: sig_data.len(),
-			expected: signature.as_ref().len(),
-		})
-	}
-	signature.as_mut().copy_from_slice(&sig_data);
+	let signature =
+		Pair::Signature::try_from(&sig_data).map_err(|_| error::Error::SignatureFormatInvalid)?;
 
 	let pubkey = if let Ok(pubkey_vec) = hex::decode(uri) {
 		Pair::Public::from_slice(pubkey_vec.as_slice())
+			.map_err(|_| error::Error::KeyFormatInvalid)?
 	} else {
 		Pair::Public::from_string(uri)?
 	};

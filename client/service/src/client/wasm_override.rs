@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -186,7 +186,7 @@ impl WasmOverride {
 		for entry in fs::read_dir(dir).map_err(handle_err)? {
 			let entry = entry.map_err(handle_err)?;
 			let path = entry.path();
-			match path.extension().map(|e| e.to_str()).flatten() {
+			match path.extension().and_then(|e| e.to_str()) {
 				Some("wasm") => {
 					let code = fs::read(&path).map_err(handle_err)?;
 					let code_hash = make_hash(&code);
@@ -243,7 +243,7 @@ impl WasmOverride {
 					hash: code_hash.into(),
 				},
 			)
-			.map_err(|e| WasmOverrideError::VersionInvalid(format!("{:?}", e)).into())
+			.map_err(|e| WasmOverrideError::VersionInvalid(e.to_string()).into())
 	}
 }
 
@@ -282,6 +282,7 @@ mod tests {
 				WasmExecutionMethod::Interpreted,
 				Some(128),
 				1,
+				2,
 			);
 		let bytes = substrate_test_runtime::wasm_binary_unwrap();
 		let dir = tempfile::tempdir().expect("Create a temporary directory");
@@ -295,6 +296,7 @@ mod tests {
 			WasmExecutionMethod::Interpreted,
 			Some(128),
 			1,
+			2,
 		);
 
 		let version = WasmOverride::runtime_version(

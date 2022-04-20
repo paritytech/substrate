@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -29,16 +29,13 @@ use sp_std::{marker::PhantomData, prelude::*};
 
 use sp_application_crypto::{ecdsa, ed25519, sr25519, RuntimeAppPublic};
 use sp_core::{offchain::KeyTypeId, OpaqueMetadata, RuntimeDebug};
-use sp_trie::{
-	trie_types::{TrieDB, TrieDBMut},
-	PrefixedMemoryDB, StorageProof,
-};
+use sp_trie::{trie_types::TrieDB, PrefixedMemoryDB, StorageProof};
 use trie_db::{Trie, TrieMut};
 
 use cfg_if::cfg_if;
 use frame_support::{
 	parameter_types,
-	traits::{CrateVersion, KeyOwnerProofSystem},
+	traits::{ConstU32, ConstU64, CrateVersion, KeyOwnerProofSystem},
 	weights::RuntimeDbWeight,
 };
 use frame_system::limits::{BlockLength, BlockWeights};
@@ -62,6 +59,8 @@ use sp_runtime::{
 #[cfg(any(feature = "std", test))]
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
+// bench on latest state.
+use sp_trie::trie_types::TrieDBMutV1 as TrieDBMut;
 
 // Ensure Babe and Aura use the same crypto to simplify things a bit.
 pub use sp_consensus_babe::{AllowedSlots, AuthorityId, Slot};
@@ -105,6 +104,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	impl_version: 2,
 	apis: RUNTIME_API_VERSIONS,
 	transaction_version: 1,
+	state_version: 1,
 };
 
 fn version() -> RuntimeVersion {
@@ -132,8 +132,7 @@ impl Transfer {
 	pub fn into_signed_tx(self) -> Extrinsic {
 		let signature = sp_keyring::AccountKeyring::from_public(&self.from)
 			.expect("Creates keyring from public key.")
-			.sign(&self.encode())
-			.into();
+			.sign(&self.encode());
 		Extrinsic::Transfer { transfer: self, signature, exhaust_resources_when_not_first: false }
 	}
 
@@ -144,8 +143,7 @@ impl Transfer {
 	pub fn into_resources_exhausting_tx(self) -> Extrinsic {
 		let signature = sp_keyring::AccountKeyring::from_public(&self.from)
 			.expect("Creates keyring from public key.")
-			.sign(&self.encode())
-			.into();
+			.sign(&self.encode());
 		Extrinsic::Transfer { transfer: self, signature, exhaust_resources_when_not_first: true }
 	}
 }
@@ -277,9 +275,9 @@ pub fn run_tests(mut input: &[u8]) -> Vec<u8> {
 	print("run_tests...");
 	let block = Block::decode(&mut input).unwrap();
 	print("deserialized block.");
-	let stxs = block.extrinsics.iter().map(Encode::encode).collect::<Vec<_>>();
+	let stxs = block.extrinsics.iter().map(Encode::encode);
 	print("reserialized transactions.");
-	[stxs.len() as u8].encode()
+	[stxs.count() as u8].encode()
 }
 
 /// A type that can not be decoded.
@@ -296,9 +294,9 @@ impl<B: BlockT> Encode for DecodeFails<B> {
 
 impl<B: BlockT> codec::EncodeLike for DecodeFails<B> {}
 
-impl<B: BlockT> DecodeFails<B> {
-	/// Create a new instance.
-	pub fn new() -> DecodeFails<B> {
+impl<B: BlockT> Default for DecodeFails<B> {
+	/// Create a default instance.
+	fn default() -> DecodeFails<B> {
 		DecodeFails { _phantom: Default::default() }
 	}
 }
@@ -428,7 +426,7 @@ impl GetRuntimeBlockType for Runtime {
 	type RuntimeBlock = Block;
 }
 
-#[derive(Clone, RuntimeDebug)]
+#[derive(Clone, RuntimeDebug, Encode, Decode, PartialEq, Eq, TypeInfo)]
 pub struct Origin;
 
 impl From<frame_system::Origin<Runtime>> for Origin {
@@ -436,8 +434,8 @@ impl From<frame_system::Origin<Runtime>> for Origin {
 		unimplemented!("Not required in tests!")
 	}
 }
-impl Into<Result<frame_system::Origin<Runtime>, Origin>> for Origin {
-	fn into(self) -> Result<frame_system::Origin<Runtime>, Origin> {
+impl From<Origin> for Result<frame_system::Origin<Runtime>, Origin> {
+	fn from(_origin: Origin) -> Result<frame_system::Origin<Runtime>, Origin> {
 		unimplemented!("Not required in tests!")
 	}
 }
@@ -556,7 +554,6 @@ impl frame_support::traits::PalletInfo for Runtime {
 
 parameter_types! {
 	pub const BlockHashCount: BlockNumber = 2400;
-	pub const MinimumPeriod: u64 = 5;
 	pub const DbWeight: RuntimeDbWeight = RuntimeDbWeight {
 		read: 100,
 		write: 1000,
@@ -591,25 +588,24 @@ impl frame_system::Config for Runtime {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
+	type MaxConsumers = ConstU32<16>;
 }
 
 impl pallet_timestamp::Config for Runtime {
 	/// A timestamp: milliseconds since the unix epoch.
 	type Moment = u64;
 	type OnTimestampSet = ();
-	type MinimumPeriod = MinimumPeriod;
+	type MinimumPeriod = ConstU64<5>;
 	type WeightInfo = ();
 }
 
 parameter_types! {
 	pub const EpochDuration: u64 = 6;
-	pub const ExpectedBlockTime: u64 = 10_000;
-	pub const MaxAuthorities: u32 = 10;
 }
 
 impl pallet_babe::Config for Runtime {
 	type EpochDuration = EpochDuration;
-	type ExpectedBlockTime = ExpectedBlockTime;
+	type ExpectedBlockTime = ConstU64<10_000>;
 	// there is no actual runtime in this test-runtime, so testing crates
 	// are manually adding the digests. normally in this situation you'd use
 	// pallet_babe::SameAuthoritiesForever.
@@ -629,7 +625,7 @@ impl pallet_babe::Config for Runtime {
 	type HandleEquivocation = ();
 	type WeightInfo = ();
 
-	type MaxAuthorities = MaxAuthorities;
+	type MaxAuthorities = ConstU32<10>;
 }
 
 /// Adds one to the given input and returns the final result.
@@ -653,12 +649,9 @@ fn code_using_trie() -> u64 {
 	let mut mdb = PrefixedMemoryDB::default();
 	let mut root = sp_std::default::Default::default();
 	let _ = {
-		let v = &pairs;
 		let mut t = TrieDBMut::<Hashing>::new(&mut mdb, &mut root);
-		for i in 0..v.len() {
-			let key: &[u8] = &v[i].0;
-			let val: &[u8] = &v[i].1;
-			if !t.insert(key, val).is_ok() {
+		for (key, value) in &pairs {
+			if t.insert(key, value).is_err() {
 				return 101
 			}
 		}
@@ -667,13 +660,7 @@ fn code_using_trie() -> u64 {
 
 	if let Ok(trie) = TrieDB::<Hashing>::new(&mdb, &root) {
 		if let Ok(iter) = trie.iter() {
-			let mut iter_pairs = Vec::new();
-			for pair in iter {
-				if let Ok((key, value)) = pair {
-					iter_pairs.push((key, value.to_vec()));
-				}
-			}
-			iter_pairs.len() as u64
+			iter.flatten().count() as u64
 		} else {
 			102
 		}
@@ -769,7 +756,7 @@ cfg_if! {
 				fn fail_convert_parameter(_: DecodeFails<Block>) {}
 
 				fn fail_convert_return_value() -> DecodeFails<Block> {
-					DecodeFails::new()
+					DecodeFails::default()
 				}
 
 				fn function_signature_changed() -> u64 {
@@ -939,6 +926,12 @@ cfg_if! {
 				}
 			}
 
+			impl beefy_primitives::BeefyApi<Block> for RuntimeApi {
+				fn validator_set() -> Option<beefy_primitives::ValidatorSet<beefy_primitives::crypto::AuthorityId>> {
+					None
+				}
+			}
+
 			impl frame_system_rpc_runtime_api::AccountNonceApi<Block, AccountId, Index> for Runtime {
 				fn account_nonce(_account: AccountId) -> Index {
 					0
@@ -1023,7 +1016,7 @@ cfg_if! {
 				fn fail_convert_parameter(_: DecodeFails<Block>) {}
 
 				fn fail_convert_return_value() -> DecodeFails<Block> {
-					DecodeFails::new()
+					DecodeFails::default()
 				}
 
 				fn function_signature_changed() -> Vec<u64> {
@@ -1270,9 +1263,9 @@ fn test_witness(proof: StorageProof, root: crate::Hash) {
 		None,
 	);
 	assert!(ext.storage(b"value3").is_some());
-	assert!(ext.storage_root().as_slice() == &root[..]);
+	assert!(ext.storage_root(Default::default()).as_slice() == &root[..]);
 	ext.place_storage(vec![0], Some(vec![1]));
-	assert!(ext.storage_root().as_slice() != &root[..]);
+	assert!(ext.storage_root(Default::default()).as_slice() != &root[..]);
 }
 
 #[cfg(test)]
@@ -1336,7 +1329,7 @@ mod tests {
 		let mut root = crate::Hash::default();
 		let mut mdb = sp_trie::MemoryDB::<crate::Hashing>::default();
 		{
-			let mut trie = sp_trie::trie_types::TrieDBMut::new(&mut mdb, &mut root);
+			let mut trie = sp_trie::trie_types::TrieDBMutV1::new(&mut mdb, &mut root);
 			trie.insert(b"value3", &[142]).expect("insert failed");
 			trie.insert(b"value4", &[124]).expect("insert failed");
 		};

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -105,11 +105,7 @@ impl<Block: BlockT, ExecutorDispatch, G: GenesisInit>
 
 	/// Create new `TestClientBuilder` with default backend and storage chain mode
 	pub fn with_tx_storage(keep_blocks: u32) -> Self {
-		let backend = Arc::new(Backend::new_test_with_tx_storage(
-			keep_blocks,
-			0,
-			sc_client_db::TransactionStorageMode::StorageChain,
-		));
+		let backend = Arc::new(Backend::new_test_with_tx_storage(keep_blocks, 0));
 		Self::with_backend(backend)
 	}
 }
@@ -208,13 +204,13 @@ impl<Block: BlockT, ExecutorDispatch, Backend, G: GenesisInit>
 		sc_consensus::LongestChain<Backend, Block>,
 	)
 	where
-		ExecutorDispatch: sc_client_api::CallExecutor<Block> + 'static,
+		ExecutorDispatch:
+			sc_client_api::CallExecutor<Block> + sc_executor::RuntimeVersionOf + 'static,
 		Backend: sc_client_api::backend::Backend<Block>,
 		<Backend as sc_client_api::backend::Backend<Block>>::OffchainStorage: 'static,
 	{
 		let storage = {
 			let mut storage = self.genesis_init.genesis_storage();
-
 			// Add some child storage keys.
 			for (key, child_content) in self.child_storage_extension {
 				storage.children_default.insert(
@@ -262,7 +258,8 @@ impl<Block: BlockT, D, Backend, G: GenesisInit>
 		client::LocalCallExecutor<Block, Backend, NativeElseWasmExecutor<D>>,
 		Backend,
 		G,
-	>
+	> where
+	D: sc_executor::NativeExecutionDispatch,
 {
 	/// Build the test client with the given native executor.
 	pub fn build_with_native_executor<RuntimeApi, I>(
@@ -283,7 +280,7 @@ impl<Block: BlockT, D, Backend, G: GenesisInit>
 		Backend: sc_client_api::backend::Backend<Block> + 'static,
 	{
 		let executor = executor.into().unwrap_or_else(|| {
-			NativeElseWasmExecutor::new(WasmExecutionMethod::Interpreted, None, 8)
+			NativeElseWasmExecutor::new(WasmExecutionMethod::Interpreted, None, 8, 2)
 		});
 		let executor = LocalCallExecutor::new(
 			self.backend.clone(),

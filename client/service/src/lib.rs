@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -34,10 +34,10 @@ mod client;
 mod metrics;
 mod task_manager;
 
-use std::{collections::HashMap, io, net::SocketAddr, pin::Pin, task::Poll};
+use std::{collections::HashMap, io, net::SocketAddr, pin::Pin};
 
 use codec::{Decode, Encode};
-use futures::{stream, Future, FutureExt, Stream, StreamExt};
+use futures::{Future, FutureExt, StreamExt};
 use log::{debug, error, warn};
 use sc_network::PeerId;
 use sc_utils::mpsc::TracingUnboundedReceiver;
@@ -58,7 +58,6 @@ pub use self::{
 };
 pub use config::{
 	BasePath, Configuration, DatabaseSource, KeepBlocks, PruningMode, Role, RpcMethods, TaskType,
-	TransactionStorageMode,
 };
 pub use sc_chain_spec::{
 	ChainSpec, ChainType, Extension as ChainSpecExtension, GenericChainSpec, NoExtension,
@@ -152,26 +151,7 @@ async fn build_network_future<
 	let starting_block = client.info().best_number;
 
 	// Stream of finalized blocks reported by the client.
-	let mut finality_notification_stream = {
-		let mut finality_notification_stream = client.finality_notification_stream().fuse();
-
-		// We tweak the `Stream` in order to merge together multiple items if they happen to be
-		// ready. This way, we only get the latest finalized block.
-		stream::poll_fn(move |cx| {
-			let mut last = None;
-			while let Poll::Ready(Some(item)) =
-				Pin::new(&mut finality_notification_stream).poll_next(cx)
-			{
-				last = Some(item);
-			}
-			if let Some(last) = last {
-				Poll::Ready(Some(last))
-			} else {
-				Poll::Pending
-			}
-		})
-		.fuse()
-	};
+	let mut finality_notification_stream = client.finality_notification_stream().fuse();
 
 	loop {
 		futures::select! {
@@ -528,7 +508,7 @@ where
 						TransactionImport::Bad
 					},
 					Err(e) => {
-						debug!("Error converting pool error: {:?}", e);
+						debug!("Error converting pool error: {}", e);
 						// it is not bad at least, just some internal node logic error, so peer is
 						// innocent.
 						TransactionImport::KnownGood
@@ -576,7 +556,7 @@ mod tests {
 			amount: 5,
 			nonce: 0,
 			from: AccountKeyring::Alice.into(),
-			to: Default::default(),
+			to: AccountKeyring::Bob.into(),
 		}
 		.into_signed_tx();
 		block_on(pool.submit_one(&BlockId::hash(best.hash()), source, transaction.clone()))

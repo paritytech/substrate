@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -38,41 +38,52 @@ mod codes {
 }
 
 /// errors encountered by background block authorship task
-#[derive(Debug, derive_more::Display, derive_more::From)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
 	/// An error occurred while importing the block
-	#[display(fmt = "Block import failed: {:?}", _0)]
+	#[error("Block import failed: {0:?}")]
 	BlockImportError(ImportResult),
 	/// Transaction pool is empty, cannot create a block
-	#[display(fmt = "Transaction pool is empty, set create_empty to true,\
-	if you want to create empty blocks")]
+	#[error(
+		"Transaction pool is empty, set create_empty to true, if you want to create empty blocks"
+	)]
 	EmptyTransactionPool,
 	/// encountered during creation of Proposer.
-	#[display(fmt = "Consensus Error: {}", _0)]
-	ConsensusError(ConsensusError),
+	#[error("Consensus Error: {0}")]
+	ConsensusError(#[from] ConsensusError),
 	/// Failed to create Inherents data
-	#[display(fmt = "Inherents Error: {}", _0)]
-	InherentError(InherentsError),
+	#[error("Inherents Error: {0}")]
+	InherentError(#[from] InherentsError),
 	/// error encountered during finalization
-	#[display(fmt = "Finalization Error: {}", _0)]
-	BlockchainError(BlockchainError),
+	#[error("Finalization Error: {0}")]
+	BlockchainError(#[from] BlockchainError),
 	/// Supplied parent_hash doesn't exist in chain
-	#[display(fmt = "Supplied parent_hash: {} doesn't exist in chain", _0)]
-	#[from(ignore)]
+	#[error("Supplied parent_hash: {0} doesn't exist in chain")]
 	BlockNotFound(String),
 	/// Some string error
-	#[display(fmt = "{}", _0)]
-	#[from(ignore)]
+	#[error("{0}")]
 	StringError(String),
 	/// send error
-	#[display(fmt = "Consensus process is terminating")]
-	Canceled(oneshot::Canceled),
+	#[error("Consensus process is terminating")]
+	Canceled(#[from] oneshot::Canceled),
 	/// send error
-	#[display(fmt = "Consensus process is terminating")]
-	SendError(SendError),
+	#[error("Consensus process is terminating")]
+	SendError(#[from] SendError),
 	/// Some other error.
-	#[display(fmt = "Other error: {}", _0)]
-	Other(Box<dyn std::error::Error + Send>),
+	#[error("Other error: {0}")]
+	Other(#[from] Box<dyn std::error::Error + Send>),
+}
+
+impl From<ImportResult> for Error {
+	fn from(err: ImportResult) -> Self {
+		Error::BlockImportError(err)
+	}
+}
+
+impl From<String> for Error {
+	fn from(s: String) -> Self {
+		Error::StringError(s)
+	}
 }
 
 impl Error {
@@ -91,7 +102,7 @@ impl Error {
 	}
 }
 
-impl std::convert::From<Error> for jsonrpc_core::Error {
+impl From<Error> for jsonrpc_core::Error {
 	fn from(error: Error) -> Self {
 		jsonrpc_core::Error {
 			code: jsonrpc_core::ErrorCode::ServerError(error.to_code()),

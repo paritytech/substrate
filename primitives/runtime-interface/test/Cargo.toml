@@ -12,13 +12,13 @@ repository = "https://github.com/paritytech/substrate/"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sp-runtime-interface = { version = "4.0.0-dev", path = "../" }
+sp-runtime-interface = { version = "6.0.0", path = "../" }
 sc-executor = { version = "0.10.0-dev", path = "../../../client/executor" }
 sc-executor-common = { version = "0.10.0-dev", path = "../../../client/executor/common" }
 sp-runtime-interface-test-wasm = { version = "2.0.0", path = "../test-wasm" }
 sp-runtime-interface-test-wasm-deprecated = { version = "2.0.0", path = "../test-wasm-deprecated" }
-sp-state-machine = { version = "0.10.0-dev", path = "../../state-machine" }
-sp-runtime = { version = "4.0.0-dev", path = "../../runtime" }
-sp-io = { version = "4.0.0-dev", path = "../../io" }
+sp-state-machine = { version = "0.12.0", path = "../../state-machine" }
+sp-runtime = { version = "6.0.0", path = "../../runtime" }
+sp-io = { version = "6.0.0", path = "../../io" }
 tracing = "0.1.29"
 tracing-core = "0.1.17"

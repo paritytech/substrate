@@ -1,6 +1,6 @@
 [package]
 name = "sp-arithmetic"
-version = "4.0.0-dev"
+version = "5.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
 license = "Apache-2.0"
@@ -15,21 +15,22 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = [
+codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = [
 	"derive",
+	"max-encoded-len",
 ] }
-scale-info = { version = "1.0", default-features = false, features = ["derive"] }
+scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
 integer-sqrt = "0.1.2"
 static_assertions = "1.1.0"
 num-traits = { version = "0.2.8", default-features = false }
-sp-std = { version = "4.0.0-dev", default-features = false, path = "../std" }
-serde = { version = "1.0.126", optional = true, features = ["derive"] }
-sp-debug-derive = { version = "4.0.0-dev", default-features = false, path = "../debug-derive" }
+sp-std = { version = "4.0.0", default-features = false, path = "../std" }
+serde = { version = "1.0.136", optional = true, features = ["derive"] }
+sp-debug-derive = { version = "4.0.0", default-features = false, path = "../debug-derive" }
 
 [dev-dependencies]
 rand = "0.7.2"
 criterion = "0.3"
-primitive-types = "0.10.1"
+primitive-types = "0.11.1"
 
 [features]
 default = ["std"]

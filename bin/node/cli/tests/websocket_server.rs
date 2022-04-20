@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -123,12 +123,12 @@ impl WsServer {
 			let mut server = Server::new(pending_incoming);
 
 			let websocket_key = match server.receive_request().await {
-				Ok(req) => req.into_key(),
+				Ok(req) => req.key(),
 				Err(err) => return Err(Box::new(err) as Box<_>),
 			};
 
 			match server
-				.send_response(&{ Response::Accept { key: &websocket_key, protocol: None } })
+				.send_response(&{ Response::Accept { key: websocket_key, protocol: None } })
 				.await
 			{
 				Ok(()) => {},

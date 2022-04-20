@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -16,10 +16,10 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+use clap::Args;
 use sc_network::config::{identity::ed25519, NodeKeyConfig};
 use sp_core::H256;
 use std::{path::PathBuf, str::FromStr};
-use structopt::StructOpt;
 
 use crate::{arg_enums::NodeKeyType, error};
 
@@ -30,7 +30,7 @@ const NODE_KEY_ED25519_FILE: &str = "secret_ed25519";
 
 /// Parameters used to create the `NodeKeyConfig`, which determines the keypair
 /// used for libp2p networking.
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, Clone, Args)]
 pub struct NodeKeyParams {
 	/// The secret key to use for libp2p networking.
 	///
@@ -46,7 +46,7 @@ pub struct NodeKeyParams {
 	/// WARNING: Secrets provided as command-line arguments are easily exposed.
 	/// Use of this option should be limited to development and testing. To use
 	/// an externally managed secret key, use `--node-key-file` instead.
-	#[structopt(long = "node-key", value_name = "KEY")]
+	#[clap(long, value_name = "KEY")]
 	pub node_key: Option<String>,
 
 	/// The type of secret key to use for libp2p networking.
@@ -66,13 +66,7 @@ pub struct NodeKeyParams {
 	///
 	/// The node's secret key determines the corresponding public key and hence the
 	/// node's peer ID in the context of libp2p.
-	#[structopt(
-		long = "node-key-type",
-		value_name = "TYPE",
-		possible_values = &NodeKeyType::variants(),
-		case_insensitive = true,
-		default_value = "Ed25519"
-	)]
+	#[clap(long, value_name = "TYPE", arg_enum, ignore_case = true, default_value = "ed25519")]
 	pub node_key_type: NodeKeyType,
 
 	/// The file from which to read the node's secret key to use for libp2p networking.
@@ -85,7 +79,7 @@ pub struct NodeKeyParams {
 	///
 	/// If the file does not exist, it is created with a newly generated secret key of
 	/// the chosen type.
-	#[structopt(long = "node-key-file", value_name = "FILE")]
+	#[clap(long, value_name = "FILE")]
 	pub node_key_file: Option<PathBuf>,
 }
 
@@ -128,14 +122,15 @@ fn parse_ed25519_secret(hex: &str) -> error::Result<sc_network::config::Ed25519S
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use clap::ArgEnum;
 	use sc_network::config::identity::{ed25519, Keypair};
 	use std::fs;
 
 	#[test]
 	fn test_node_key_config_input() {
 		fn secret_input(net_config_dir: &PathBuf) -> error::Result<()> {
-			NodeKeyType::variants().iter().try_for_each(|t| {
-				let node_key_type = NodeKeyType::from_str(t).unwrap();
+			NodeKeyType::value_variants().iter().try_for_each(|t| {
+				let node_key_type = *t;
 				let sk = match node_key_type {
 					NodeKeyType::Ed25519 => ed25519::SecretKey::generate().as_ref().to_vec(),
 				};
@@ -194,8 +189,8 @@ mod tests {
 		where
 			F: Fn(NodeKeyParams) -> error::Result<()>,
 		{
-			NodeKeyType::variants().iter().try_for_each(|t| {
-				let node_key_type = NodeKeyType::from_str(t).unwrap();
+			NodeKeyType::value_variants().iter().try_for_each(|t| {
+				let node_key_type = *t;
 				f(NodeKeyParams { node_key_type, node_key: None, node_key_file: None })
 			})
 		}

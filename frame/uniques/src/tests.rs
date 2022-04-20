@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -39,12 +39,21 @@ fn assets() -> Vec<(u64, u32, u32)> {
 				Some(Some(item))
 			}
 		})
-		.filter_map(|item| item)
+		.flatten()
 	{
 		let details = Class::<Test>::get(class).unwrap();
 		let instances = Asset::<Test>::iter_prefix(class).count() as u32;
 		assert_eq!(details.instances, instances);
 	}
+	r
+}
+
+fn classes() -> Vec<(u64, u32)> {
+	let mut r: Vec<_> = ClassAccount::<Test>::iter().map(|x| (x.0, x.1)).collect();
+	r.sort();
+	let mut s: Vec<_> = Class::<Test>::iter().map(|x| (x.1.owner, x.0)).collect();
+	s.sort();
+	assert_eq!(r, s);
 	r
 }
 
@@ -73,10 +82,12 @@ fn basic_setup_works() {
 fn basic_minting_should_work() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true));
+		assert_eq!(classes(), vec![(1, 0)]);
 		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 1));
 		assert_eq!(assets(), vec![(1, 0, 42)]);
 
 		assert_ok!(Uniques::force_create(Origin::root(), 1, 2, true));
+		assert_eq!(classes(), vec![(1, 0), (2, 1)]);
 		assert_ok!(Uniques::mint(Origin::signed(2), 1, 69, 1));
 		assert_eq!(assets(), vec![(1, 0, 42), (1, 1, 69)]);
 	});
@@ -88,7 +99,7 @@ fn lifecycle_should_work() {
 		Balances::make_free_balance_be(&1, 100);
 		assert_ok!(Uniques::create(Origin::signed(1), 0, 1));
 		assert_eq!(Balances::reserved_balance(&1), 2);
-
+		assert_eq!(classes(), vec![(1, 0)]);
 		assert_ok!(Uniques::set_class_metadata(Origin::signed(1), 0, bvec![0, 0], false));
 		assert_eq!(Balances::reserved_balance(&1), 5);
 		assert!(ClassMetadataOf::<Test>::contains_key(0));
@@ -120,6 +131,7 @@ fn lifecycle_should_work() {
 		assert!(!ClassMetadataOf::<Test>::contains_key(0));
 		assert!(!InstanceMetadataOf::<Test>::contains_key(0, 42));
 		assert!(!InstanceMetadataOf::<Test>::contains_key(0, 69));
+		assert_eq!(classes(), vec![]);
 		assert_eq!(assets(), vec![]);
 	});
 }
@@ -142,6 +154,7 @@ fn mint_should_work() {
 		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true));
 		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 1));
 		assert_eq!(Uniques::owner(0, 42).unwrap(), 1);
+		assert_eq!(classes(), vec![(1, 0)]);
 		assert_eq!(assets(), vec![(1, 0, 42)]);
 	});
 }
@@ -183,6 +196,9 @@ fn origin_guards_should_work() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true));
 		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 1));
+
+		Balances::make_free_balance_be(&2, 100);
+		assert_ok!(Uniques::set_accept_ownership(Origin::signed(2), Some(0)));
 		assert_noop!(
 			Uniques::transfer_ownership(Origin::signed(2), 0, 2),
 			Error::<Test>::NoPermission
@@ -204,12 +220,21 @@ fn transfer_owner_should_work() {
 		Balances::make_free_balance_be(&2, 100);
 		Balances::make_free_balance_be(&3, 100);
 		assert_ok!(Uniques::create(Origin::signed(1), 0, 1));
+		assert_eq!(classes(), vec![(1, 0)]);
+		assert_noop!(
+			Uniques::transfer_ownership(Origin::signed(1), 0, 2),
+			Error::<Test>::Unaccepted
+		);
+		assert_ok!(Uniques::set_accept_ownership(Origin::signed(2), Some(0)));
 		assert_ok!(Uniques::transfer_ownership(Origin::signed(1), 0, 2));
+
+		assert_eq!(classes(), vec![(2, 0)]);
 		assert_eq!(Balances::total_balance(&1), 98);
 		assert_eq!(Balances::total_balance(&2), 102);
 		assert_eq!(Balances::reserved_balance(&1), 0);
 		assert_eq!(Balances::reserved_balance(&2), 2);
 
+		assert_ok!(Uniques::set_accept_ownership(Origin::signed(1), Some(0)));
 		assert_noop!(
 			Uniques::transfer_ownership(Origin::signed(1), 0, 1),
 			Error::<Test>::NoPermission
@@ -219,11 +244,20 @@ fn transfer_owner_should_work() {
 		assert_ok!(Uniques::set_class_metadata(Origin::signed(2), 0, bvec![0u8; 20], false));
 		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 1));
 		assert_ok!(Uniques::set_metadata(Origin::signed(2), 0, 42, bvec![0u8; 20], false));
+		assert_ok!(Uniques::set_accept_ownership(Origin::signed(3), Some(0)));
 		assert_ok!(Uniques::transfer_ownership(Origin::signed(2), 0, 3));
+		assert_eq!(classes(), vec![(3, 0)]);
 		assert_eq!(Balances::total_balance(&2), 57);
 		assert_eq!(Balances::total_balance(&3), 145);
 		assert_eq!(Balances::reserved_balance(&2), 0);
 		assert_eq!(Balances::reserved_balance(&3), 45);
+
+		// 2's acceptence from before is reset when it became owner, so it cannot be transfered
+		// without a fresh acceptance.
+		assert_noop!(
+			Uniques::transfer_ownership(Origin::signed(3), 0, 2),
+			Error::<Test>::Unaccepted
+		);
 	});
 }
 
@@ -247,7 +281,7 @@ fn set_class_metadata_should_work() {
 		// Cannot add metadata to unknown asset
 		assert_noop!(
 			Uniques::set_class_metadata(Origin::signed(1), 0, bvec![0u8; 20], false),
-			Error::<Test>::Unknown,
+			Error::<Test>::UnknownClass,
 		);
 		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, false));
 		// Cannot add metadata to unowned asset
@@ -291,7 +325,10 @@ fn set_class_metadata_should_work() {
 			Uniques::clear_class_metadata(Origin::signed(2), 0),
 			Error::<Test>::NoPermission
 		);
-		assert_noop!(Uniques::clear_class_metadata(Origin::signed(1), 1), Error::<Test>::Unknown);
+		assert_noop!(
+			Uniques::clear_class_metadata(Origin::signed(1), 1),
+			Error::<Test>::UnknownClass
+		);
 		assert_ok!(Uniques::clear_class_metadata(Origin::signed(1), 0));
 		assert!(!ClassMetadataOf::<Test>::contains_key(0));
 	});
@@ -345,7 +382,10 @@ fn set_instance_metadata_should_work() {
 			Uniques::clear_metadata(Origin::signed(2), 0, 42),
 			Error::<Test>::NoPermission
 		);
-		assert_noop!(Uniques::clear_metadata(Origin::signed(1), 1, 42), Error::<Test>::Unknown);
+		assert_noop!(
+			Uniques::clear_metadata(Origin::signed(1), 1, 42),
+			Error::<Test>::UnknownClass
+		);
 		assert_ok!(Uniques::clear_metadata(Origin::signed(1), 0, 42));
 		assert!(!InstanceMetadataOf::<Test>::contains_key(0, 42));
 	});
@@ -470,7 +510,7 @@ fn burn_works() {
 		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, false));
 		assert_ok!(Uniques::set_team(Origin::signed(1), 0, 2, 3, 4));
 
-		assert_noop!(Uniques::burn(Origin::signed(5), 0, 42, Some(5)), Error::<Test>::Unknown);
+		assert_noop!(Uniques::burn(Origin::signed(5), 0, 42, Some(5)), Error::<Test>::UnknownClass);
 
 		assert_ok!(Uniques::mint(Origin::signed(2), 0, 42, 5));
 		assert_ok!(Uniques::mint(Origin::signed(2), 0, 69, 5));
@@ -509,11 +549,11 @@ fn cancel_approval_works() {
 		assert_ok!(Uniques::approve_transfer(Origin::signed(2), 0, 42, 3));
 		assert_noop!(
 			Uniques::cancel_approval(Origin::signed(2), 1, 42, None),
-			Error::<Test>::Unknown
+			Error::<Test>::UnknownClass
 		);
 		assert_noop!(
 			Uniques::cancel_approval(Origin::signed(2), 0, 43, None),
-			Error::<Test>::Unknown
+			Error::<Test>::UnknownClass
 		);
 		assert_noop!(
 			Uniques::cancel_approval(Origin::signed(3), 0, 42, None),
@@ -541,11 +581,11 @@ fn cancel_approval_works_with_admin() {
 		assert_ok!(Uniques::approve_transfer(Origin::signed(2), 0, 42, 3));
 		assert_noop!(
 			Uniques::cancel_approval(Origin::signed(1), 1, 42, None),
-			Error::<Test>::Unknown
+			Error::<Test>::UnknownClass
 		);
 		assert_noop!(
 			Uniques::cancel_approval(Origin::signed(1), 0, 43, None),
-			Error::<Test>::Unknown
+			Error::<Test>::UnknownClass
 		);
 		assert_noop!(
 			Uniques::cancel_approval(Origin::signed(1), 0, 42, Some(4)),
@@ -567,8 +607,14 @@ fn cancel_approval_works_with_force() {
 		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 2));
 
 		assert_ok!(Uniques::approve_transfer(Origin::signed(2), 0, 42, 3));
-		assert_noop!(Uniques::cancel_approval(Origin::root(), 1, 42, None), Error::<Test>::Unknown);
-		assert_noop!(Uniques::cancel_approval(Origin::root(), 0, 43, None), Error::<Test>::Unknown);
+		assert_noop!(
+			Uniques::cancel_approval(Origin::root(), 1, 42, None),
+			Error::<Test>::UnknownClass
+		);
+		assert_noop!(
+			Uniques::cancel_approval(Origin::root(), 0, 43, None),
+			Error::<Test>::UnknownClass
+		);
 		assert_noop!(
 			Uniques::cancel_approval(Origin::root(), 0, 42, Some(4)),
 			Error::<Test>::WrongDelegate

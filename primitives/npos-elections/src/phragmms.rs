@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -37,14 +37,14 @@ use sp_std::{prelude::*, rc::Rc};
 /// - The algorithm is a _best-effort_ to elect `to_elect`. If less candidates are provided, less
 ///   winners are returned, without an error.
 ///
-/// This can only fail of the normalization fails. This can happen if for any of the resulting
+/// This can only fail if the normalization fails. This can happen if for any of the resulting
 /// assignments, `assignment.distribution.map(|p| p.deconstruct()).sum()` fails to fit inside
 /// `UpperOf<P>`. A user of this crate may statically assert that this can never happen and safely
 /// `expect` this to return `Ok`.
 pub fn phragmms<AccountId: IdentifierT, P: PerThing128>(
 	to_elect: usize,
 	candidates: Vec<AccountId>,
-	voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
+	voters: Vec<(AccountId, VoteWeight, impl IntoIterator<Item = AccountId>)>,
 	balancing: Option<(usize, ExtendedBalance)>,
 ) -> Result<ElectionResult<AccountId, P>, crate::Error> {
 	let (candidates, mut voters) = setup_inputs(candidates, voters);
@@ -351,8 +351,8 @@ mod tests {
 		let candidates = vec![1, 2, 3];
 		let voters = vec![(10, 10, vec![1, 2]), (20, 20, vec![1, 3]), (30, 30, vec![2, 3])];
 
-		let ElectionResult { winners, assignments } =
-			phragmms::<_, Perbill>(2, candidates, voters, Some((2, 0))).unwrap();
+		let ElectionResult::<_, Perbill> { winners, assignments } =
+			phragmms(2, candidates, voters, Some((2, 0))).unwrap();
 		assert_eq!(winners, vec![(3, 30), (2, 30)]);
 		assert_eq!(
 			assignments,
@@ -383,8 +383,8 @@ mod tests {
 			(130, 1000, vec![61, 71]),
 		];
 
-		let ElectionResult { winners, assignments: _ } =
-			phragmms::<_, Perbill>(4, candidates, voters, Some((2, 0))).unwrap();
+		let ElectionResult::<_, Perbill> { winners, assignments: _ } =
+			phragmms(4, candidates, voters, Some((2, 0))).unwrap();
 		assert_eq!(winners, vec![(11, 3000), (31, 2000), (51, 1500), (61, 1500),]);
 	}
 
@@ -396,8 +396,8 @@ mod tests {
 		// give a bit more to 1 and 3.
 		voters.push((2, u64::MAX, vec![1, 3]));
 
-		let ElectionResult { winners, assignments: _ } =
-			phragmms::<_, Perbill>(2, candidates, voters, Some((2, 0))).unwrap();
+		let ElectionResult::<_, Perbill> { winners, assignments: _ } =
+			phragmms(2, candidates, voters, Some((2, 0))).unwrap();
 		assert_eq!(winners.into_iter().map(|(w, _)| w).collect::<Vec<_>>(), vec![1u32, 3]);
 	}
 }

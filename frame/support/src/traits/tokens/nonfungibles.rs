@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -165,7 +165,11 @@ pub trait Mutate<AccountId>: Inspect<AccountId> {
 	/// Burn some asset `instance` of `class`.
 	///
 	/// By default, this is not a supported operation.
-	fn burn_from(_class: &Self::ClassId, _instance: &Self::InstanceId) -> DispatchResult {
+	fn burn(
+		_class: &Self::ClassId,
+		_instance: &Self::InstanceId,
+		_maybe_check_owner: Option<&AccountId>,
+	) -> DispatchResult {
 		Err(TokenError::Unsupported.into())
 	}
 

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -71,7 +71,6 @@ use crate::{Error, Memory};
 pub use sp_core::MAX_POSSIBLE_ALLOCATION;
 use sp_wasm_interface::{Pointer, WordSize};
 use std::{
-	convert::{TryFrom, TryInto},
 	mem,
 	ops::{Index, IndexMut, Range},
 };

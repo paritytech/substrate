@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -30,7 +30,7 @@ use sc_service::{
 	client::Client,
 	config::{BasePath, DatabaseSource, KeystoreConfig},
 	ChainSpecExtension, Configuration, Error, GenericChainSpec, KeepBlocks, Role, RuntimeGenesis,
-	SpawnTaskHandle, TaskManager, TransactionStorageMode,
+	SpawnTaskHandle, TaskManager,
 };
 use sc_transaction_pool_api::TransactionPool;
 use sp_api::BlockId;
@@ -235,7 +235,6 @@ fn node_config<
 		state_cache_child_ratio: None,
 		state_pruning: Default::default(),
 		keep_blocks: KeepBlocks::All,
-		transaction_storage: TransactionStorageMode::BlockBody,
 		chain_spec: Box::new((*spec).clone()),
 		wasm_method: sc_service::config::WasmExecutionMethod::Interpreted,
 		wasm_runtime_overrides: Default::default(),
@@ -261,6 +260,7 @@ fn node_config<
 		announce_block: true,
 		base_path: Some(BasePath::new(root)),
 		informant_output_format: Default::default(),
+		runtime_cache_size: 2,
 	}
 }
 

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -27,7 +27,7 @@ use hash_db::Hasher;
 pub use offchain::OffchainOverlayedChanges;
 use sp_core::{
 	offchain::OffchainOverlayedChange,
-	storage::{well_known_keys::EXTRINSIC_INDEX, ChildInfo},
+	storage::{well_known_keys::EXTRINSIC_INDEX, ChildInfo, StateVersion},
 };
 #[cfg(feature = "std")]
 use sp_externalities::{Extension, Extensions};
@@ -104,7 +104,7 @@ pub struct OverlayedChanges {
 	stats: StateMachineStats,
 }
 
-/// Transcation index operation.
+/// Transaction index operation.
 #[derive(Debug, Clone)]
 pub enum IndexOperation {
 	/// Insert transaction into index.
@@ -500,28 +500,28 @@ impl OverlayedChanges {
 	pub fn into_storage_changes<B: Backend<H>, H: Hasher>(
 		mut self,
 		backend: &B,
-		parent_hash: H::Out,
 		mut cache: StorageTransactionCache<B::Transaction, H>,
+		state_version: StateVersion,
 	) -> Result<StorageChanges<B::Transaction, H>, DefaultError>
 	where
 		H::Out: Ord + Encode + 'static,
 	{
-		self.drain_storage_changes(backend, parent_hash, &mut cache)
+		self.drain_storage_changes(backend, &mut cache, state_version)
 	}
 
 	/// Drain all changes into a [`StorageChanges`] instance. Leave empty overlay in place.
 	pub fn drain_storage_changes<B: Backend<H>, H: Hasher>(
 		&mut self,
 		backend: &B,
-		_parent_hash: H::Out,
 		mut cache: &mut StorageTransactionCache<B::Transaction, H>,
+		state_version: StateVersion,
 	) -> Result<StorageChanges<B::Transaction, H>, DefaultError>
 	where
 		H::Out: Ord + Encode + 'static,
 	{
 		// If the transaction does not exist, we generate it.
 		if cache.transaction.is_none() {
-			self.storage_root(backend, &mut cache);
+			self.storage_root(backend, &mut cache, state_version);
 		}
 
 		let (transaction, transaction_storage_root) = cache
@@ -580,6 +580,7 @@ impl OverlayedChanges {
 		&self,
 		backend: &B,
 		cache: &mut StorageTransactionCache<B::Transaction, H>,
+		state_version: StateVersion,
 	) -> H::Out
 	where
 		H::Out: Ord + Encode,
@@ -589,7 +590,7 @@ impl OverlayedChanges {
 			(info, changes.map(|(k, v)| (&k[..], v.value().map(|v| &v[..]))))
 		});
 
-		let (root, transaction) = backend.full_storage_root(delta, child_delta);
+		let (root, transaction) = backend.full_storage_root(delta, child_delta, state_version);
 
 		cache.transaction = Some(transaction);
 		cache.transaction_storage_root = Some(root);
@@ -830,6 +831,7 @@ mod tests {
 
 	#[test]
 	fn overlayed_storage_root_works() {
+		let state_version = StateVersion::default();
 		let initial: BTreeMap<_, _> = vec![
 			(b"doe".to_vec(), b"reindeer".to_vec()),
 			(b"dog".to_vec(), b"puppyXXX".to_vec()),
@@ -838,7 +840,7 @@ mod tests {
 		]
 		.into_iter()
 		.collect();
-		let backend = InMemoryBackend::<Blake2Hasher>::from(initial);
+		let backend = InMemoryBackend::<Blake2Hasher>::from((initial, state_version));
 		let mut overlay = OverlayedChanges::default();
 
 		overlay.start_transaction();
@@ -856,7 +858,7 @@ mod tests {
 		const ROOT: [u8; 32] =
 			hex!("39245109cef3758c2eed2ccba8d9b370a917850af3824bc8348d505df2c298fa");
 
-		assert_eq!(&ext.storage_root()[..], &ROOT);
+		assert_eq!(&ext.storage_root(state_version)[..], &ROOT);
 	}
 
 	#[test]

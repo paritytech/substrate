@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -67,6 +67,17 @@ pub enum FinalizationResult<V> {
 	Changed(Option<V>),
 	/// The tree has not changed.
 	Unchanged,
+}
+
+/// Filtering action.
+#[derive(Debug, PartialEq)]
+pub enum FilterAction {
+	/// Remove the node and its subtree.
+	Remove,
+	/// Maintain the node.
+	KeepNode,
+	/// Maintain the node and its subtree.
+	KeepTree,
 }
 
 /// A tree data structure that stores several nodes across multiple branches.
@@ -498,14 +509,14 @@ where
 	}
 
 	/// Checks if any node in the tree is finalized by either finalizing the
-	/// node itself or a child node that's not in the tree, guaranteeing that
-	/// the node being finalized isn't a descendent of any of the node's
-	/// children. Returns `Some(true)` if the node being finalized is a root,
-	/// `Some(false)` if the node being finalized is not a root, and `None` if
-	/// no node in the tree is finalized. The given `predicate` is checked on
-	/// the prospective finalized root and must pass for finalization to occur.
-	/// The given function `is_descendent_of` should return `true` if the second
-	/// hash (target) is a descendent of the first hash (base).
+	/// node itself or a node's descendent that's not in the tree, guaranteeing
+	/// that the node being finalized isn't a descendent of (or equal to) any of
+	/// the node's children. Returns `Some(true)` if the node being finalized is
+	/// a root, `Some(false)` if the node being finalized is not a root, and
+	/// `None` if no node in the tree is finalized. The given `predicate` is
+	/// checked on the prospective finalized root and must pass for finalization
+	/// to occur. The given function `is_descendent_of` should return `true` if
+	/// the second hash (target) is a descendent of the first hash (base).
 	pub fn finalizes_any_with_descendent_if<F, P, E>(
 		&self,
 		hash: &H,
@@ -530,8 +541,10 @@ where
 		for node in self.node_iter() {
 			if predicate(&node.data) {
 				if node.hash == *hash || is_descendent_of(&node.hash, hash)? {
-					for node in node.children.iter() {
-						if node.number <= number && is_descendent_of(&node.hash, &hash)? {
+					for child in node.children.iter() {
+						if child.number <= number &&
+							(child.hash == *hash || is_descendent_of(&child.hash, hash)?)
+						{
 							return Err(Error::UnfinalizedAncestor)
 						}
 					}
@@ -545,12 +558,12 @@ where
 	}
 
 	/// Finalize a root in the tree by either finalizing the node itself or a
-	/// child node that's not in the tree, guaranteeing that the node being
-	/// finalized isn't a descendent of any of the root's children. The given
-	/// `predicate` is checked on the prospective finalized root and must pass for
-	/// finalization to occur. The given function `is_descendent_of` should
-	/// return `true` if the second hash (target) is a descendent of the first
-	/// hash (base).
+	/// node's descendent that's not in the tree, guaranteeing that the node
+	/// being finalized isn't a descendent of (or equal to) any of the root's
+	/// children. The given `predicate` is checked on the prospective finalized
+	/// root and must pass for finalization to occur. The given function
+	/// `is_descendent_of` should return `true` if the second hash (target) is a
+	/// descendent of the first hash (base).
 	pub fn finalize_with_descendent_if<F, P, E>(
 		&mut self,
 		hash: &H,
@@ -576,8 +589,10 @@ where
 		for (i, root) in self.roots.iter().enumerate() {
 			if predicate(&root.data) {
 				if root.hash == *hash || is_descendent_of(&root.hash, hash)? {
-					for node in root.children.iter() {
-						if node.number <= number && is_descendent_of(&node.hash, &hash)? {
+					for child in root.children.iter() {
+						if child.number <= number &&
+							(child.hash == *hash || is_descendent_of(&child.hash, hash)?)
+						{
 							return Err(Error::UnfinalizedAncestor)
 						}
 					}
@@ -595,12 +610,11 @@ where
 			node.data
 		});
 
-		// if the block being finalized is earlier than a given root, then it
-		// must be its ancestor, otherwise we can prune the root. if there's a
-		// root at the same height then the hashes must match. otherwise the
-		// node being finalized is higher than the root so it must be its
-		// descendent (in this case the node wasn't finalized earlier presumably
-		// because the predicate didn't pass).
+		// Retain only roots that are descendents of the finalized block (this
+		// happens if the node has been properly finalized) or that are
+		// ancestors (or equal) to the finalized block (in this case the node
+		// wasn't finalized earlier presumably because the predicate didn't
+		// pass).
 		let mut changed = false;
 		let roots = std::mem::take(&mut self.roots);
 
@@ -623,6 +637,29 @@ where
 			(None, true) => Ok(FinalizationResult::Changed(None)),
 			(None, false) => Ok(FinalizationResult::Unchanged),
 		}
+	}
+
+	/// Remove from the tree some nodes (and their subtrees) using a `filter` predicate.
+	/// The `filter` is called over tree nodes and returns a filter action:
+	/// - `Remove` if the node and its subtree should be removed;
+	/// - `KeepNode` if we should maintain the node and keep processing the tree.
+	/// - `KeepTree` if we should maintain the node and its entire subtree.
+	/// An iterator over all the pruned nodes is returned.
+	pub fn drain_filter<F>(&mut self, mut filter: F) -> impl Iterator<Item = (H, N, V)>
+	where
+		F: FnMut(&H, &N, &V) -> FilterAction,
+	{
+		let mut removed = Vec::new();
+		let mut i = 0;
+		while i < self.roots.len() {
+			if self.roots[i].drain_filter(&mut filter, &mut removed) {
+				removed.push(self.roots.remove(i));
+			} else {
+				i += 1;
+			}
+		}
+		self.rebalance();
+		RemovedIterator { stack: removed }
 	}
 }
 
@@ -849,6 +886,34 @@ mod node_implementation {
 				},
 			}
 		}
+
+		/// Calls a `filter` predicate for the given node.
+		/// The `filter` is called over tree nodes and returns a filter action:
+		/// - `Remove` if the node and its subtree should be removed;
+		/// - `KeepNode` if we should maintain the node and keep processing the tree;
+		/// - `KeepTree` if we should maintain the node and its entire subtree.
+		/// Pruned subtrees are added to the `removed` list.
+		/// Returns a booleans indicateing if this node (and its subtree) should be removed.
+		pub fn drain_filter<F>(&mut self, filter: &mut F, removed: &mut Vec<Node<H, N, V>>) -> bool
+		where
+			F: FnMut(&H, &N, &V) -> FilterAction,
+		{
+			match filter(&self.hash, &self.number, &self.data) {
+				FilterAction::KeepNode => {
+					let mut i = 0;
+					while i < self.children.len() {
+						if self.children[i].drain_filter(filter, removed) {
+							removed.push(self.children.remove(i));
+						} else {
+							i += 1;
+						}
+					}
+					false
+				},
+				FilterAction::KeepTree => false,
+				FilterAction::Remove => true,
+			}
+		}
 	}
 }
 
@@ -895,6 +960,8 @@ impl<H, N, V> Iterator for RemovedIterator<H, N, V> {
 
 #[cfg(test)]
 mod test {
+	use crate::FilterAction;
+
 	use super::{Error, FinalizationResult, ForkTree};
 
 	#[derive(Debug, PartialEq)]
@@ -919,11 +986,11 @@ mod test {
 		//   /   - G
 		//  /   /
 		// A - F - H - I
-		//          \
-		//           - L - M \
-		//               - O
-		//  \
-		//   — J - K
+		//  \       \
+		//   \       - L - M
+		//    \          \
+		//     \          - O
+		//      - J - K
 		//
 		// (where N is not a part of fork tree)
 		//
@@ -1211,18 +1278,31 @@ mod test {
 			Ok(None),
 		);
 
+		// finalizing "D" is not allowed since it is not a root.
+		assert_eq!(
+			tree.finalize_with_descendent_if(&"D", 10, &is_descendent_of, |c| c.effective <= 10),
+			Err(Error::UnfinalizedAncestor)
+		);
+
 		// finalizing "D" will finalize a block from the tree, but it can't be applied yet
-		// since it is not a root change
+		// since it is not a root change.
 		assert_eq!(
 			tree.finalizes_any_with_descendent_if(&"D", 10, &is_descendent_of, |c| c.effective ==
-				10,),
+				10),
 			Ok(Some(false)),
+		);
+
+		// finalizing "E" is not allowed since there are not finalized anchestors.
+		assert_eq!(
+			tree.finalizes_any_with_descendent_if(&"E", 15, &is_descendent_of, |c| c.effective ==
+				10),
+			Err(Error::UnfinalizedAncestor)
 		);
 
 		// finalizing "B" doesn't finalize "A0" since the predicate doesn't pass,
 		// although it will clear out "A1" from the tree
 		assert_eq!(
-			tree.finalize_with_descendent_if(&"B", 2, &is_descendent_of, |c| c.effective <= 2,),
+			tree.finalize_with_descendent_if(&"B", 2, &is_descendent_of, |c| c.effective <= 2),
 			Ok(FinalizationResult::Changed(None)),
 		);
 
@@ -1243,7 +1323,7 @@ mod test {
 		);
 
 		assert_eq!(
-			tree.finalize_with_descendent_if(&"C", 5, &is_descendent_of, |c| c.effective <= 5,),
+			tree.finalize_with_descendent_if(&"C", 5, &is_descendent_of, |c| c.effective <= 5),
 			Ok(FinalizationResult::Changed(Some(Change { effective: 5 }))),
 		);
 
@@ -1262,12 +1342,12 @@ mod test {
 		// it will work with "G" though since it is not in the same branch as "E"
 		assert_eq!(
 			tree.finalizes_any_with_descendent_if(&"G", 100, &is_descendent_of, |c| c.effective <=
-				100,),
+				100),
 			Ok(Some(true)),
 		);
 
 		assert_eq!(
-			tree.finalize_with_descendent_if(&"G", 100, &is_descendent_of, |c| c.effective <= 100,),
+			tree.finalize_with_descendent_if(&"G", 100, &is_descendent_of, |c| c.effective <= 100),
 			Ok(FinalizationResult::Changed(Some(Change { effective: 10 }))),
 		);
 
@@ -1456,6 +1536,30 @@ mod test {
 		assert_eq!(
 			tree.iter().map(|(h, _, _)| *h).collect::<Vec<_>>(),
 			["A", "F", "H", "L", "O", "P", "M", "I", "G", "B", "C", "D", "E", "J", "K"]
+		);
+	}
+
+	#[test]
+	fn tree_drain_filter() {
+		let (mut tree, _) = test_fork_tree();
+
+		let filter = |h: &&str, _: &u64, _: &()| match *h {
+			"A" | "B" | "F" | "G" => FilterAction::KeepNode,
+			"C" => FilterAction::KeepTree,
+			"H" | "J" => FilterAction::Remove,
+			_ => panic!("Unexpected filtering for node: {}", *h),
+		};
+
+		let removed = tree.drain_filter(filter);
+
+		assert_eq!(
+			tree.iter().map(|(h, _, _)| *h).collect::<Vec<_>>(),
+			["A", "B", "C", "D", "E", "F", "G"]
+		);
+
+		assert_eq!(
+			removed.map(|(h, _, _)| h).collect::<Vec<_>>(),
+			["J", "K", "H", "L", "M", "O", "I"]
 		);
 	}
 }

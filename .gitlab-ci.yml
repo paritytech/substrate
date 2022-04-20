@@ -18,7 +18,7 @@
 #   script:
 #     - echo "List of shell commands to run in your job"
 #     - echo "You can also just specify a script here, like so:"
-#     - ./.maintain/gitlab/my_amazing_script.sh
+#     - ./scripts/ci/gitlab/my_amazing_script.sh
 
 stages:
   - check
@@ -39,16 +39,15 @@ variables:                         &default-vars
   DOCKER_OS:                       "debian:stretch"
   ARCH:                            "x86_64"
   CI_IMAGE:                        "paritytech/ci-linux:production"
-  # FIXME set to release
-  CARGO_UNLEASH_INSTALL_PARAMS:    "--version 1.0.0-alpha.13"
-  CARGO_UNLEASH_PKG_DEF:           "--skip node node-* pallet-template pallet-example-* subkey chain-spec-builder"
-  VAULT_SERVER_URL:                "https://vault.parity-mgmt-vault.parity.io"
-  VAULT_AUTH_PATH:                 "gitlab-parity-io-jwt"
-  VAULT_AUTH_ROLE:                 "cicd_gitlab_parity_${CI_PROJECT_NAME}"
-  SIMNET_FEATURES_PATH:            "simnet_tests/tests"
-  PIPELINE_SCRIPTS_TAG:            "v0.4"
 
 default:
+  retry:
+    max: 2
+    when:
+      - runner_system_failure
+      - unknown_failure
+      - api_failure
+  interruptible:                   true
   cache:                           {}
 
 .collect-artifacts:                &collect-artifacts
@@ -68,13 +67,6 @@ default:
       - artifacts/
 
 .kubernetes-env:                   &kubernetes-env
-  retry:
-    max: 2
-    when:
-      - runner_system_failure
-      - unknown_failure
-      - api_failure
-  interruptible:                   true
   tags:
     - kubernetes-parity-build
 
@@ -89,13 +81,6 @@ default:
   image:                           "${CI_IMAGE}"
   before_script:
     - *rust-info-script
-  retry:
-    max: 2
-    when:
-      - runner_system_failure
-      - unknown_failure
-      - api_failure
-  interruptible:                   true
   tags:
     - linux-docker
 
@@ -170,96 +155,20 @@ default:
     fi
 
 .cargo-check-benches-script:       &cargo-check-benches-script
-  - mkdir -p artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA
+  - mkdir -p ./artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA
   - SKIP_WASM_BUILD=1 time cargo +nightly check --benches --all
   - 'cargo run --release -p node-bench -- ::node::import::native::sr25519::transfer_keep_alive::paritydb::small --json
-    | tee artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA/::node::import::native::sr25519::transfer_keep_alive::paritydb::small.json'
+    | tee ./artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA/::node::import::native::sr25519::transfer_keep_alive::paritydb::small.json'
   - 'cargo run --release -p node-bench -- ::trie::read::small --json
-    | tee artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA/::trie::read::small.json'
+    | tee ./artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA/::trie::read::small.json'
   - sccache -s
 
-.build-linux-substrate-script:     &build-linux-substrate-script
-  - WASM_BUILD_NO_COLOR=1 time cargo build --release --verbose
-  - mv ./target/release/substrate ./artifacts/substrate/.
-  - echo -n "Substrate version = "
-  - if [ "${CI_COMMIT_TAG}" ]; then
-      echo "${CI_COMMIT_TAG}" | tee ./artifacts/substrate/VERSION;
-    else
-      ./artifacts/substrate/substrate --version |
-        sed -n -E 's/^substrate ([0-9.]+.*-[0-9a-f]{7,13})-.*$/\1/p' |
-          tee ./artifacts/substrate/VERSION;
-    fi
-  - sha256sum ./artifacts/substrate/substrate | tee ./artifacts/substrate/substrate.sha256
-  - cp -r .maintain/docker/substrate.Dockerfile ./artifacts/substrate/
-  - sccache -s
-
-#### Vault secrets
-.vault-secrets:                    &vault-secrets
-  secrets:
-    DOCKER_HUB_USER:
-      vault:                       cicd/gitlab/parity/DOCKER_HUB_USER@kv
-      file:                        false
-    DOCKER_HUB_PASS:
-      vault:                       cicd/gitlab/parity/DOCKER_HUB_PASS@kv
-      file:                        false
-    GITHUB_PR_TOKEN:
-      vault:                       cicd/gitlab/parity/GITHUB_PR_TOKEN@kv
-      file:                        false
-    GITHUB_TOKEN:
-      vault:                       cicd/gitlab/parity/GITHUB_TOKEN@kv
-      file:                        false
-    AWS_ACCESS_KEY_ID:
-      vault:                       cicd/gitlab/$CI_PROJECT_PATH/AWS_ACCESS_KEY_ID@kv
-      file:                        false
-    AWS_SECRET_ACCESS_KEY:
-      vault:                       cicd/gitlab/$CI_PROJECT_PATH/AWS_SECRET_ACCESS_KEY@kv
-      file:                        false
-    AWX_TOKEN:
-      vault:                       cicd/gitlab/$CI_PROJECT_PATH/AWX_TOKEN@kv
-      file:                        false
-    CRATES_TOKEN:
-      vault:                       cicd/gitlab/$CI_PROJECT_PATH/CRATES_TOKEN@kv
-      file:                        false
-    DOCKER_CHAOS_TOKEN:
-      vault:                       cicd/gitlab/$CI_PROJECT_PATH/DOCKER_CHAOS_TOKEN@kv
-      file:                        false
-    DOCKER_CHAOS_USER:
-      vault:                       cicd/gitlab/$CI_PROJECT_PATH/DOCKER_CHAOS_USER@kv
-      file:                        false
-    GITHUB_EMAIL:
-      vault:                       cicd/gitlab/$CI_PROJECT_PATH/GITHUB_EMAIL@kv
-      file:                        false
-    GITHUB_RELEASE_TOKEN:
-      vault:                       cicd/gitlab/$CI_PROJECT_PATH/GITHUB_RELEASE_TOKEN@kv
-      file:                        false
-    GITHUB_SSH_PRIV_KEY:
-      vault:                       cicd/gitlab/$CI_PROJECT_PATH/GITHUB_SSH_PRIV_KEY@kv
-      file:                        false
-    GITHUB_USER:
-      vault:                       cicd/gitlab/$CI_PROJECT_PATH/GITHUB_USER@kv
-      file:                        false
-    MATRIX_ACCESS_TOKEN:
-      vault:                       cicd/gitlab/$CI_PROJECT_PATH/MATRIX_ACCESS_TOKEN@kv
-      file:                        false
-    MATRIX_ROOM_ID:
-      vault:                       cicd/gitlab/$CI_PROJECT_PATH/MATRIX_ROOM_ID@kv
-      file:                        false
-    PIPELINE_TOKEN:
-      vault:                       cicd/gitlab/$CI_PROJECT_PATH/PIPELINE_TOKEN@kv
-      file:                        false
-    VALIDATOR_KEYS:
-      vault:                       cicd/gitlab/$CI_PROJECT_PATH/VALIDATOR_KEYS@kv
-      file:                        false
-    VALIDATOR_KEYS_CHAOS:
-      vault:                       cicd/gitlab/$CI_PROJECT_PATH/VALIDATOR_KEYS_CHAOS@kv
-      file:                        false
 
 #### stage:                       .pre
 
 skip-if-draft:
   image:                           paritytech/tools:latest
   <<:                              *kubernetes-env
-  <<:                              *vault-secrets
   stage:                           .pre
   rules:
     - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
@@ -267,7 +176,7 @@ skip-if-draft:
      - echo "Commit message is ${CI_COMMIT_MESSAGE}"
      - echo "Ref is ${CI_COMMIT_REF_NAME}"
      - echo "pipeline source is ${CI_PIPELINE_SOURCE}"
-     - ./.maintain/gitlab/skip_if_draft.sh
+     - ./scripts/ci/gitlab/skip_if_draft.sh
 
 #### stage:                        check
 
@@ -275,7 +184,6 @@ check-runtime:
   stage:                           check
   image:                           paritytech/tools:latest
   <<:                              *kubernetes-env
-  <<:                              *vault-secrets
   rules:
     - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
   variables:
@@ -283,19 +191,18 @@ check-runtime:
     GITLAB_API:                    "https://gitlab.parity.io/api/v4"
     GITHUB_API_PROJECT:            "parity%2Finfrastructure%2Fgithub-api"
   script:
-    - ./.maintain/gitlab/check_runtime.sh
+    - ./scripts/ci/gitlab/check_runtime.sh
   allow_failure:                   true
 
 check-signed-tag:
   stage:                           check
   image:                           paritytech/tools:latest
   <<:                              *kubernetes-env
-  <<:                              *vault-secrets
   rules:
     - if: $CI_COMMIT_REF_NAME =~ /^ci-release-.*$/
     - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
   script:
-    - ./.maintain/gitlab/check_signed.sh
+    - ./scripts/ci/gitlab/check_signed.sh
 
 test-dependency-rules:
   stage:                           check
@@ -304,7 +211,7 @@ test-dependency-rules:
   rules:
     - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
   script:
-    - .maintain/ensure-deps.sh
+    - ./scripts/ci/gitlab/ensure-deps.sh
 
 test-prometheus-alerting-rules:
   stage:                           check
@@ -316,11 +223,11 @@ test-prometheus-alerting-rules:
     - if: $CI_COMMIT_BRANCH
       changes:
         - .gitlab-ci.yml
-        - .maintain/monitoring/**/*
+        - ./scripts/ci/monitoring/**/*
   script:
-    - promtool check rules .maintain/monitoring/alerting-rules/alerting-rules.yaml
-    - cat .maintain/monitoring/alerting-rules/alerting-rules.yaml |
-        promtool test rules .maintain/monitoring/alerting-rules/alerting-rule-tests.yaml
+    - promtool check rules ./scripts/ci/monitoring/alerting-rules/alerting-rules.yaml
+    - cat ./scripts/ci/monitoring/alerting-rules/alerting-rules.yaml |
+        promtool test rules ./scripts/ci/monitoring/alerting-rules/alerting-rule-tests.yaml
 
 #### stage:                        test
 
@@ -329,10 +236,10 @@ cargo-deny:
   <<:                              *docker-env
   <<:                              *nightly-pipeline
   script:
-    - cargo deny check --hide-inclusion-graph -c .maintain/deny.toml
+    - cargo deny check --hide-inclusion-graph -c ./scripts/ci/deny.toml
   after_script:
     - echo "___The complete log is in the artifacts___"
-    - cargo deny check -c .maintain/deny.toml 2> deny.log
+    - cargo deny check -c ./scripts/ci/deny.toml 2> deny.log
   artifacts:
     name:                          $CI_COMMIT_SHORT_SHA
     expire_in:                     3 days
@@ -354,7 +261,7 @@ cargo-clippy:
   <<:                              *docker-env
   <<:                              *test-refs
   script:
-    - SKIP_WASM_BUILD=1 env -u RUSTFLAGS cargo +nightly clippy
+    - SKIP_WASM_BUILD=1 env -u RUSTFLAGS cargo +nightly clippy --all-targets
 
 cargo-check-benches:
   stage:                           test
@@ -432,13 +339,13 @@ test-deterministic-wasm:
     # build runtime
     - cargo build --verbose --release -p node-runtime
     # make checksum
-    - sha256sum target/release/wbuild/node-runtime/target/wasm32-unknown-unknown/release/node_runtime.wasm > checksum.sha256
+    - sha256sum ./target/release/wbuild/node-runtime/target/wasm32-unknown-unknown/release/node_runtime.wasm > checksum.sha256
     # clean up – FIXME: can we reuse some of the artifacts?
     - cargo clean
     # build again
     - cargo build --verbose --release -p node-runtime
     # confirm checksum
-    - sha256sum -c checksum.sha256
+    - sha256sum -c ./checksum.sha256
     - sccache -s
 
 test-linux-stable:                 &test-linux
@@ -452,27 +359,14 @@ test-linux-stable:                 &test-linux
     RUSTFLAGS:                     "-Cdebug-assertions=y -Dwarnings"
     RUST_BACKTRACE:                1
     WASM_BUILD_NO_COLOR:           1
+    # Ensure we run the UI tests.
+    RUN_UI_TESTS:                  1
   script:
     # this job runs all tests in former runtime-benchmarks, frame-staking and wasmtime tests
-    - time cargo test --workspace --locked --release --verbose --features runtime-benchmarks --manifest-path bin/node/cli/Cargo.toml
-    - time cargo test -p frame-support-test --features=conditional-storage --manifest-path frame/support/test/Cargo.toml --test pallet # does not reuse cache 1 min 44 sec
+    - time cargo test --workspace --locked --release --verbose --features runtime-benchmarks --manifest-path ./bin/node/cli/Cargo.toml
+    - time cargo test -p frame-support-test --features=conditional-storage,no-metadata-docs --manifest-path ./frame/support/test/Cargo.toml --test pallet # does not reuse cache 1 min 44 sec
     - SUBSTRATE_TEST_TIMEOUT=1 time cargo test -p substrate-test-utils --release --verbose --locked -- --ignored timeout
     - sccache -s
-
-unleash-check:
-  stage:                           test
-  <<:                              *docker-env
-  <<:                              *test-refs-no-trigger
-  script:
-    - cargo install cargo-unleash ${CARGO_UNLEASH_INSTALL_PARAMS}
-    - cargo unleash de-dev-deps
-    # Reuse build artifacts when running checks (cuts down check time by 3x)
-    # TODO: Implement this optimization in cargo-unleash rather than here
-    - mkdir -p target/unleash
-    - export CARGO_TARGET_DIR=target/unleash
-    - cargo unleash check ${CARGO_UNLEASH_PKG_DEF}
-  # FIXME: this job must not fail, or unleash-to-crates-io will publish broken stuff
-  allow_failure:                   true
 
 test-frame-examples-compile-to-wasm:
   # into one job
@@ -486,7 +380,7 @@ test-frame-examples-compile-to-wasm:
     RUSTFLAGS:                     "-Cdebug-assertions=y"
     RUST_BACKTRACE: 1
   script:
-    - cd frame/examples/offchain-worker/
+    - cd ./frame/examples/offchain-worker/
     - cargo +nightly build --target=wasm32-unknown-unknown --no-default-features
     - cd ../basic
     - cargo +nightly build --target=wasm32-unknown-unknown --no-default-features
@@ -518,8 +412,8 @@ check-tracing:
   <<:                              *test-refs
   script:
     # with-tracing must be explicitly activated, we run a test to ensure this works as expected in both cases
-    - time cargo +nightly test --manifest-path primitives/tracing/Cargo.toml --no-default-features
-    - time cargo +nightly test --manifest-path primitives/tracing/Cargo.toml --no-default-features --features=with-tracing
+    - time cargo +nightly test --manifest-path ./primitives/tracing/Cargo.toml --no-default-features
+    - time cargo +nightly test --manifest-path ./primitives/tracing/Cargo.toml --no-default-features --features=with-tracing
     - sccache -s
 
 test-full-crypto-feature:
@@ -538,35 +432,6 @@ test-full-crypto-feature:
     - cd ../application-crypto
     - time cargo +nightly build --verbose --no-default-features --features full_crypto
     - sccache -s
-
-
-# Mostly same as the job above, additional instrumentation was added to push test run times
-# to the time series database.
-# This is temporary and will be eventually removed.
-bench-test-full-crypto-feature:
-  stage:                           test
-  <<:                              *docker-env
-  <<:                              *build-refs
-  variables:
-    <<:                            *default-vars
-    RUSTFLAGS:                     "-Cdebug-assertions=y"
-    RUST_BACKTRACE: 1
-  before_script: [""]
-  script:
-    # disable sccache for the bench purposes
-    - unset RUSTC_WRAPPER
-    - START_TIME=`date '+%s'`
-    - cd primitives/core/
-    - time cargo +nightly build --verbose --no-default-features --features full_crypto
-    - cd ../application-crypto
-    - time cargo +nightly build --verbose --no-default-features --features full_crypto
-    - END_TIME=`date '+%s'`
-    - TOTAL_TIME=`expr $END_TIME - $START_TIME`
-    # send the job time measuring to the prometheus endpoint
-    - curl -d "parity_gitlab_job_time{project=\"$CI_PROJECT_PATH\",job=\"$CI_JOB_NAME\",runner=\"gitlab\"} $TOTAL_TIME" -X POST $VM_LONGTERM_URI/api/v1/import/prometheus
-  tags:
-    - linux-docker-compare
-
 
 test-wasmer-sandbox:
   stage:                           test
@@ -591,11 +456,12 @@ cargo-check-macos:
 
 #### stage:                        build
 
+# PIPELINE_SCRIPTS_TAG can be found in the project variables
+
 .check-dependent-project:          &check-dependent-project
   stage:                           build
   <<:                              *docker-env
-  <<:                              *test-refs-no-trigger
-  <<:                              *vault-secrets
+  <<:                              *test-refs-no-trigger-prs-only
   script:
     - git clone
         --depth=1
@@ -637,21 +503,19 @@ build-linux-substrate:
   before_script:
     - mkdir -p ./artifacts/substrate/
   script:
-    - *build-linux-substrate-script
+    - WASM_BUILD_NO_COLOR=1 time cargo build --release --verbose
+    - mv ./target/release/substrate ./artifacts/substrate/.
+    - echo -n "Substrate version = "
+    - if [ "${CI_COMMIT_TAG}" ]; then
+        echo "${CI_COMMIT_TAG}" | tee ./artifacts/substrate/VERSION;
+      else
+        ./artifacts/substrate/substrate --version |
+          cut -d ' ' -f 2 | tee ./artifacts/substrate/VERSION;
+      fi
+    - sha256sum ./artifacts/substrate/substrate | tee ./artifacts/substrate/substrate.sha256
+    - cp -r ./scripts/ci/docker/substrate.Dockerfile ./artifacts/substrate/
     - printf '\n# building node-template\n\n'
-    - ./.maintain/node-template-release.sh ./artifacts/substrate/substrate-node-template.tar.gz
-
-
-#Build binary for simnet quick tests.
-build-linux-substrate-simnet:
-  stage:                           build
-  <<:                              *collect-artifacts-short
-  <<:                              *docker-env
-  <<:                              *test-refs-no-trigger-prs-only
-  before_script:
-    - mkdir -p ./artifacts/substrate/
-  script:
-    - *build-linux-substrate-script
+    - ./scripts/ci/node-template-release.sh ./artifacts/substrate/substrate-node-template.tar.gz
 
 build-linux-subkey:                &build-subkey
   stage:                           build
@@ -673,13 +537,25 @@ build-linux-subkey:                &build-subkey
         sed -n -E 's/^subkey ([0-9.]+.*)/\1/p' |
           tee ./artifacts/subkey/VERSION;
     - sha256sum ./artifacts/subkey/subkey | tee ./artifacts/subkey/subkey.sha256
-    - cp -r .maintain/docker/subkey.Dockerfile ./artifacts/subkey/
+    - cp -r ./scripts/ci/docker/subkey.Dockerfile ./artifacts/subkey/
     - sccache -s
 
 build-macos-subkey:
   <<:                              *build-subkey
   tags:
     - osx
+
+check-rustdoc:
+  stage:                           test
+  <<:                              *docker-env
+  <<:                              *test-refs
+  variables:
+    <<:                            *default-vars
+    SKIP_WASM_BUILD:               1
+    RUSTDOCFLAGS:                  "-Dwarnings"
+  script:
+    - time cargo +nightly doc --workspace --all-features --verbose --no-deps
+    - sccache -s
 
 build-rustdoc:
   stage:                           build
@@ -696,7 +572,6 @@ build-rustdoc:
     paths:
     - ./crate-docs/
   script:
-    # FIXME: it fails with `RUSTDOCFLAGS="-Dwarnings"`
     - time cargo +nightly doc --workspace --all-features --verbose
     - rm -f ./target/doc/.lock
     - mv ./target/doc ./crate-docs
@@ -710,7 +585,6 @@ build-rustdoc:
 .build-push-docker-image:          &build-push-docker-image
   <<:                              *build-refs
   <<:                              *kubernetes-env
-  <<:                              *vault-secrets
   image:                           quay.io/buildah/stable
   variables:                       &docker-build-vars
     <<:                            *default-vars
@@ -739,7 +613,6 @@ build-rustdoc:
     - buildah push --format=v2s2 "$IMAGE_NAME:latest"
   after_script:
     - buildah logout --all
-    # pass artifacts to the trigger-simnet job
     - echo "SUBSTRATE_IMAGE_NAME=${IMAGE_NAME}" | tee -a ./artifacts/$PRODUCT/build.env
     - IMAGE_TAG="$(cat ./artifacts/$PRODUCT/VERSION)"
     - echo "SUBSTRATE_IMAGE_TAG=${IMAGE_TAG}"   | tee -a ./artifacts/$PRODUCT/build.env
@@ -755,30 +628,6 @@ publish-docker-substrate:
   variables:
     <<:                            *docker-build-vars
     PRODUCT:                       substrate
-  artifacts:
-    reports:
-      # this artifact is used in trigger-simnet job
-      # https://docs.gitlab.com/ee/ci/multi_project_pipelines.html#with-variable-inheritance
-      dotenv: ./artifacts/substrate/build.env
-
-#publish artifact for quick simnet tests
-publish-docker-substrate-simnet:
-  stage:                           publish
-  <<:                              *build-push-docker-image
-  <<:                              *test-refs-no-trigger-prs-only
-  needs:
-    - job:                         build-linux-substrate-simnet
-      artifacts:                   true
-  variables:
-    <<:                            *default-vars
-    GIT_STRATEGY:                  none
-    DOCKERFILE:                    $PRODUCT.Dockerfile
-    PRODUCT:                       substrate
-    IMAGE_NAME:                    docker.io/paritypr/$PRODUCT
-  artifacts:
-    reports:
-      # this artifact is used in simnet-tests-quick job
-      dotenv: ./artifacts/substrate/build.env
 
 publish-docker-subkey:
   stage:                           publish
@@ -794,7 +643,6 @@ publish-s3-release:
   stage:                           publish
   <<:                              *build-refs
   <<:                              *kubernetes-env
-  <<:                              *vault-secrets
   needs:
     - job:                         build-linux-substrate
       artifacts:                   true
@@ -816,17 +664,10 @@ publish-s3-release:
 publish-rustdoc:
   stage:                           publish
   <<:                              *kubernetes-env
-  <<:                              *vault-secrets
   image:                           node:16
   variables:
     GIT_DEPTH:                     100
-    # --- Following variables are for rustdocs deployment ---
-    # Space separated values of branches and tags to generate rustdocs
-    RUSTDOCS_DEPLOY_REFS:          "master monthly-2021-09+1 monthly-2021-08 v3.0.0"
-    # Location of the docs index template
-    INDEX_TPL:                     ".maintain/docs-index-tpl.ejs"
-    # Where the `/latest` symbolic link links to. One of the $RUSTDOCS_DEPLOY_REFS value.
-    LATEST:                        "monthly-2021-09+1"
+    RUSTDOCS_DEPLOY_REFS:          "master"
   rules:
     - if: $CI_PIPELINE_SOURCE == "pipeline"
       when: never
@@ -846,8 +687,6 @@ publish-rustdoc:
     # whole space-separated value.
     - '[[ " ${RUSTDOCS_DEPLOY_REFS} " =~ " ${CI_COMMIT_REF_NAME} " ]] || exit 0'
     # setup ssh
-    # FIXME: add ssh to docker image
-    - apt-get update && apt-get install -y ssh
     - eval $(ssh-agent)
     - ssh-add - <<< ${GITHUB_SSH_PRIV_KEY}
     - mkdir ~/.ssh && touch ~/.ssh/known_hosts
@@ -858,34 +697,19 @@ publish-rustdoc:
     - git config remote.origin.url "git@github.com:/paritytech/${CI_PROJECT_NAME}.git"
     - git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
     - git fetch origin gh-pages
-    # Install `ejs` and generate index.html based on RUSTDOCS_DEPLOY_REFS
-    - yarn global add ejs
-    - 'ejs ${INDEX_TPL} -i "{\"deploy_refs\":\"${RUSTDOCS_DEPLOY_REFS}\",\"repo_name\":\"${CI_PROJECT_NAME}\",\"latest\":\"${LATEST}\"}" > /tmp/index.html'
     # Save README and docs
     - cp -r ./crate-docs/ /tmp/doc/
     - cp README.md /tmp/doc/
-    - git checkout gh-pages
-    # Remove directories no longer necessary, as specified in $RUSTDOCS_DEPLOY_REFS.
-    # Also ensure $RUSTDOCS_DEPLOY_REFS is not just empty spaces.
-    # Even though this block spans multiple lines, they are concatenated to run as a single line
-    #   command, so note for the semi-colons in the inner-most code block.
-    - if [[ ! -z ${RUSTDOCS_DEPLOY_REFS// } ]]; then
-        for FILE in *; do
-          if [[ ! " $RUSTDOCS_DEPLOY_REFS " =~ " $FILE " ]]; then
-            echo "Removing ${FILE}...";
-            rm -rf $FILE;
-          fi
-        done
-      fi
-    # Move the index page & built back
-    - mv -f /tmp/index.html .
+    # we don't need to commit changes because we copy docs to /tmp
+    - git checkout gh-pages --force
+    # Install `index-tpl-crud` and generate index.html based on RUSTDOCS_DEPLOY_REFS
+    - which index-tpl-crud &> /dev/null || yarn global add @substrate/index-tpl-crud
+    - index-tpl-crud upsert ./index.html ${CI_COMMIT_REF_NAME}
     # Ensure the destination dir doesn't exist.
     - rm -rf ${CI_COMMIT_REF_NAME}
     - mv -f /tmp/doc ${CI_COMMIT_REF_NAME}
-    # Add the symlink
-    - '[[ -e "$LATEST" ]] && ln -sf "${LATEST}" latest'
     # Upload files
-    - git add --all --force
+    - git add --all
     # `git commit` has an exit code of > 0 if there is nothing to commit.
     # This causes GitLab to exit immediately and marks this job failed.
     # We don't want to mark the entire job failed if there's nothing to
@@ -898,25 +722,12 @@ publish-rustdoc:
 
 publish-draft-release:
   stage:                           publish
-  <<:                              *vault-secrets
   image:                           paritytech/tools:latest
   rules:
     - if: $CI_COMMIT_REF_NAME =~ /^ci-release-.*$/
     - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
   script:
-    - ./.maintain/gitlab/publish_draft_release.sh
-  allow_failure:                   true
-
-unleash-to-crates-io:
-  stage:                           publish
-  <<:                              *docker-env
-  <<:                              *vault-secrets
-  rules:
-    - if: $CI_COMMIT_REF_NAME =~ /^ci-release-.*$/
-    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
-  script:
-    - cargo install cargo-unleash ${CARGO_UNLEASH_INSTALL_PARAMS}
-    - cargo unleash em-dragons --no-check --owner github:paritytech:core-devs ${CARGO_UNLEASH_PKG_DEF}
+    - ./scripts/ci/gitlab/publish_draft_release.sh
   allow_failure:                   true
 
 #### stage:                        deploy
@@ -939,63 +750,4 @@ deploy-prometheus-alerting-rules:
     - if: $CI_COMMIT_REF_NAME == "master"
       changes:
         - .gitlab-ci.yml
-        - .maintain/monitoring/**/*
-
-# Runs "quick" and "long" tests on nightly schedule and on commit / merge to master
-# A "quick" test is a smoke test where basic check-expect tests run by
-# checking values from metrics exposed by the app.
-# A "long" test is the load testing where we send 50K transactions into the
-# network and check if all completed successfully
-simnet-tests:
-  stage:                           deploy
-  image:                           docker.io/paritytech/simnet:${SIMNET_REF}
-  <<:                              *kubernetes-env
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "pipeline"
-      when: never
-    - if: $CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_REF_NAME == "master"
-    - if: $CI_COMMIT_REF_NAME == "master"
-  needs:
-    - job:                         publish-docker-substrate
-  # variables:
-  # `build.env` brings here `${SUBSTRATE_IMAGE_NAME}` and `${SUBSTRATE_IMAGE_TAG}`
-  # (`$VERSION` here, # i.e. `2643-0.8.29-5f689e0a-6b24dc54`).
-  # ${SIMNET_REF} is a gitlab variable
-  before_script:
-    - echo "Simnet Tests Config
-      docker.io/paritytech/simnet:${SIMNET_REF}
-      ${SUBSTRATE_IMAGE_NAME} ${SUBSTRATE_IMAGE_TAG}"
-  script:
-    - /home/nonroot/simnet/gurke/scripts/run-test-environment-manager.sh
-        --github-remote-dir="https://github.com/paritytech/substrate/tree/master/simnet_tests"
-        --config="simnet_tests/configs/default_local_testnet.toml"
-        --image="${SUBSTRATE_IMAGE_NAME}:${SUBSTRATE_IMAGE_TAG}"
-  retry: 2
-  tags:
-    - substrate-simnet
-
-#run quick simnet-tests for each PR
-simnet-tests-quick:
-  stage:                           deploy
-  image:                           docker.io/paritytech/simnet:${SIMNET_REF}
-  <<:                              *kubernetes-env
-  <<:                              *test-refs-no-trigger-prs-only
-  variables:
-    SIMNET_FEATURES:               "${SIMNET_FEATURES_PATH}/quick"
-  needs:
-    - job:                         publish-docker-substrate-simnet
-  before_script:
-    - echo "Simnet Tests Config
-      docker.io/paritytech/simnet:${SIMNET_REF}
-      ${SUBSTRATE_IMAGE_NAME} ${SUBSTRATE_IMAGE_TAG}"
-  script:
-    - echo "Image=${SUBSTRATE_IMAGE_NAME}:${SUBSTRATE_IMAGE_TAG}"
-    - echo "Features=${SIMNET_FEATURES}"
-    - /home/nonroot/simnet/gurke/scripts/run-test-environment-manager.sh
-        --github-remote-dir="https://github.com/paritytech/substrate/tree/master/simnet_tests"
-        --config="simnet_tests/configs/default_local_testnet.toml"
-        --image="${SUBSTRATE_IMAGE_NAME}:${SUBSTRATE_IMAGE_TAG}"
-        --features="${SIMNET_FEATURES}"
-  tags:
-    - substrate-simnet
-
+        - ./scripts/ci/monitoring/**/*

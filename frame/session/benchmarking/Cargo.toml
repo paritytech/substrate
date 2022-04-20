@@ -15,8 +15,8 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 rand = { version = "0.7.2", default-features = false }
 
-sp-std = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/std" }
-sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/runtime" }
+sp-std = { version = "4.0.0", default-features = false, path = "../../../primitives/std" }
+sp-runtime = { version = "6.0.0", default-features = false, path = "../../../primitives/runtime" }
 sp-session = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/session" }
 
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../../benchmarking" }
@@ -26,10 +26,10 @@ pallet-session = { version = "4.0.0-dev", default-features = false, path = "../.
 pallet-staking = { version = "4.0.0-dev", default-features = false, features = ["runtime-benchmarks"], path = "../../staking" }
 
 [dev-dependencies]
-codec = { package = "parity-scale-codec", version = "2.0.0", features = ["derive"] }
-scale-info = "1.0"
-sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
-sp-io = { version = "4.0.0-dev", path = "../../../primitives/io" }
+codec = { package = "parity-scale-codec", version = "3.0.0", features = ["derive"] }
+scale-info = "2.0.1"
+sp-core = { version = "6.0.0", path = "../../../primitives/core" }
+sp-io = { version = "6.0.0", path = "../../../primitives/io" }
 pallet-balances = { version = "4.0.0-dev", path = "../../balances" }
 pallet-timestamp = { version = "4.0.0-dev", path = "../../timestamp" }
 pallet-staking-reward-curve = { version = "4.0.0-dev", path = "../../staking/reward-curve" }

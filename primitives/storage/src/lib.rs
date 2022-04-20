@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -119,8 +119,7 @@ impl DerefMut for PrefixedStorageKey {
 }
 
 impl PrefixedStorageKey {
-	/// Create a prefixed storage key from its byte array
-	/// representation.
+	/// Create a prefixed storage key from its byte array representation.
 	pub fn new(inner: Vec<u8>) -> Self {
 		PrefixedStorageKey(inner)
 	}
@@ -130,9 +129,7 @@ impl PrefixedStorageKey {
 		PrefixedStorageKey::ref_cast(inner)
 	}
 
-	/// Get inner key, this should
-	/// only be needed when writing
-	/// into parent trie to avoid an
+	/// Get inner key, this should only be needed when writing into parent trie to avoid an
 	/// allocation.
 	pub fn into_inner(self) -> Vec<u8> {
 		self.0
@@ -171,10 +168,8 @@ pub struct StorageChild {
 pub struct Storage {
 	/// Top trie storage data.
 	pub top: StorageMap,
-	/// Children trie storage data.
-	/// The key does not including prefix, for the `default`
-	/// trie kind, so this is exclusively for the `ChildType::ParentKeyId`
-	/// tries.
+	/// Children trie storage data. Key does not include prefix, only for the `default` trie kind,
+	/// of `ChildType::ParentKeyId` type.
 	pub children_default: std::collections::HashMap<Vec<u8>, StorageChild>,
 }
 
@@ -236,6 +231,9 @@ pub mod well_known_keys {
 		}
 	}
 }
+
+/// Threshold size to start using trie value nodes in state.
+pub const TRIE_VALUE_NODE_THRESHOLD: u32 = 33;
 
 /// Information related to a child state.
 #[derive(Debug, Clone)]
@@ -397,6 +395,54 @@ impl ChildTrieParentKeyId {
 	fn try_update(&mut self, other: &ChildInfo) -> bool {
 		match other {
 			ChildInfo::ParentKeyId(other) => self.data[..] == other.data[..],
+		}
+	}
+}
+
+/// Different possible state version.
+///
+/// V0 and V1 uses a same trie implementation, but V1 will write external value node in the trie for
+/// value with size at least `TRIE_VALUE_NODE_THRESHOLD`.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum StateVersion {
+	/// Old state version, no value nodes.
+	V0 = 0,
+	/// New state version can use value nodes.
+	V1 = 1,
+}
+
+impl Default for StateVersion {
+	fn default() -> Self {
+		StateVersion::V1
+	}
+}
+
+impl From<StateVersion> for u8 {
+	fn from(version: StateVersion) -> u8 {
+		version as u8
+	}
+}
+
+impl TryFrom<u8> for StateVersion {
+	type Error = ();
+	fn try_from(val: u8) -> sp_std::result::Result<StateVersion, ()> {
+		match val {
+			0 => Ok(StateVersion::V0),
+			1 => Ok(StateVersion::V1),
+			_ => Err(()),
+		}
+	}
+}
+
+impl StateVersion {
+	/// If defined, values in state of size bigger or equal
+	/// to this threshold will use a separate trie node.
+	/// Otherwhise, value will be inlined in branch or leaf
+	/// node.
+	pub fn state_value_threshold(&self) -> Option<u32> {
+		match self {
+			StateVersion::V0 => None,
+			StateVersion::V1 => Some(TRIE_VALUE_NODE_THRESHOLD),
 		}
 	}
 }

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -173,7 +173,18 @@ where
 		<Self as crate::storage::StorageNMap<Key, Value>>::remove(key)
 	}
 
-	/// Remove all values under the first key.
+	/// Remove all values starting with `partial_key` in the overlay and up to `limit` in the
+	/// backend.
+	///
+	/// All values in the client overlay will be deleted, if there is some `limit` then up to
+	/// `limit` values are deleted from the client backend, if `limit` is none then all values in
+	/// the client backend are deleted.
+	///
+	/// # Note
+	///
+	/// Calling this multiple times per block with a `limit` set leads always to the same keys being
+	/// removed and the same result being returned. This happens because the keys to delete in the
+	/// overlay are not taken into account when deleting keys in the backend.
 	pub fn remove_prefix<KP>(partial_key: KP, limit: Option<u32>) -> sp_io::KillStorageResult
 	where
 		Key: HasKeyPrefix<KP>,
@@ -217,6 +228,8 @@ where
 	}
 
 	/// Mutate the item, only if an `Ok` value is returned. Deletes the item if mutated to a `None`.
+	/// `f` will always be called with an option representing if the storage item exists (`Some<V>`)
+	/// or if the storage item does not exist (`None`), independent of the `QueryType`.
 	pub fn try_mutate_exists<KArg, R, E, F>(key: KArg, f: F) -> Result<R, E>
 	where
 		KArg: EncodeLikeTuple<Key::KArg> + TupleToEncodedIter,
@@ -275,7 +288,17 @@ where
 		<Self as crate::storage::StorageNMap<Key, Value>>::migrate_keys::<_>(key, hash_fns)
 	}
 
-	/// Remove all value of the storage.
+	/// Remove all values in the overlay and up to `limit` in the backend.
+	///
+	/// All values in the client overlay will be deleted, if there is some `limit` then up to
+	/// `limit` values are deleted from the client backend, if `limit` is none then all values in
+	/// the client backend are deleted.
+	///
+	/// # Note
+	///
+	/// Calling this multiple times per block with a `limit` set leads always to the same keys being
+	/// removed and the same result being returned. This happens because the keys to delete in the
+	/// overlay are not taken into account when deleting keys in the backend.
 	pub fn remove_all(limit: Option<u32>) -> sp_io::KillStorageResult {
 		<Self as crate::storage::StoragePrefixedMap<Value>>::remove_all(limit)
 	}
@@ -451,6 +474,8 @@ where
 	MaxValues: Get<Option<u32>>,
 {
 	fn build_metadata(docs: Vec<&'static str>, entries: &mut Vec<StorageEntryMetadata>) {
+		let docs = if cfg!(feature = "no-metadata-docs") { vec![] } else { docs };
+
 		let entry = StorageEntryMetadata {
 			name: Prefix::STORAGE_PREFIX,
 			modifier: QueryKind::METADATA,
@@ -565,7 +590,7 @@ mod test {
 
 			{
 				crate::generate_storage_alias!(test, Foo => NMap<
-					Key<(u16, Blake2_128Concat)>,
+					Key<(Blake2_128Concat, u16)>,
 					u32
 				>);
 

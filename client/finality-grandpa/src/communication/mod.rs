@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -67,9 +67,27 @@ mod periodic;
 #[cfg(test)]
 pub(crate) mod tests;
 
-/// Name of the notifications protocol used by Grandpa. Must be registered towards the networking
-/// in order for Grandpa to properly function.
-pub const GRANDPA_PROTOCOL_NAME: &'static str = "/paritytech/grandpa/1";
+pub mod grandpa_protocol_name {
+	use sc_chain_spec::ChainSpec;
+
+	pub(crate) const NAME: &'static str = "/grandpa/1";
+	/// Old names for the notifications protocol, used for backward compatibility.
+	pub(crate) const LEGACY_NAMES: [&'static str; 1] = ["/paritytech/grandpa/1"];
+
+	/// Name of the notifications protocol used by GRANDPA.
+	///
+	/// Must be registered towards the networking in order for GRANDPA to properly function.
+	pub fn standard_name<Hash: AsRef<[u8]>>(
+		genesis_hash: &Hash,
+		chain_spec: &Box<dyn ChainSpec>,
+	) -> std::borrow::Cow<'static, str> {
+		let chain_prefix = match chain_spec.fork_id() {
+			Some(fork_id) => format!("/{}/{}", hex::encode(genesis_hash), fork_id),
+			None => format!("/{}", hex::encode(genesis_hash)),
+		};
+		format!("{}{}", chain_prefix, NAME).into()
+	}
+}
 
 // cost scalars for reporting peers.
 mod cost {
@@ -220,13 +238,14 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		prometheus_registry: Option<&Registry>,
 		telemetry: Option<TelemetryHandle>,
 	) -> Self {
+		let protocol = config.protocol_name.clone();
 		let (validator, report_stream) =
 			GossipValidator::new(config, set_state.clone(), prometheus_registry, telemetry.clone());
 
 		let validator = Arc::new(validator);
 		let gossip_engine = Arc::new(Mutex::new(GossipEngine::new(
 			service.clone(),
-			GRANDPA_PROTOCOL_NAME,
+			protocol,
 			validator.clone(),
 			prometheus_registry,
 		)));
