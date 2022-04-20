@@ -17,10 +17,10 @@
 
 //! Rpc for state migration.
 
-use anyhow::anyhow;
 use jsonrpsee::{
 	core::{Error as JsonRpseeError, RpcResult},
 	proc_macros::rpc,
+	types::error::{CallError, ErrorCode, ErrorObject},
 };
 use sc_rpc_api::DenyUnsafe;
 use serde::{Deserialize, Serialize};
@@ -49,14 +49,15 @@ fn count_migrate<'a, H: Hasher>(
 	for node in iter_node {
 		let node = node.map_err(|e| format!("TrieDB node iterator error: {}", e))?;
 		match node.2.node_plan() {
-			NodePlan::Leaf { value, .. } | NodePlan::NibbledBranch { value: Some(value), .. } =>
+			NodePlan::Leaf { value, .. } | NodePlan::NibbledBranch { value: Some(value), .. } => {
 				if let ValuePlan::Inline(range) = value {
-					if (range.end - range.start) as u32 >=
-						sp_core::storage::TRIE_VALUE_NODE_THRESHOLD
+					if (range.end - range.start) as u32
+						>= sp_core::storage::TRIE_VALUE_NODE_THRESHOLD
 					{
 						nb += 1;
 					}
-				},
+				}
+			},
 			_ => (),
 		}
 	}
@@ -73,7 +74,7 @@ where
 	let trie_backend = if let Some(backend) = backend.as_trie_backend() {
 		backend
 	} else {
-		return Err("No access to trie from backend.".to_string())
+		return Err("No access to trie from backend.".to_string());
 	};
 	let essence = trie_backend.essence();
 	let (nb_to_migrate, trie) = count_migrate(essence, &essence.root())?;
@@ -146,14 +147,20 @@ where
 		self.deny_unsafe.check_if_safe()?;
 
 		let block_id = BlockId::hash(at.unwrap_or_else(|| self.client.info().best_hash));
-		let state =
-			self.backend.state_at(block_id).map_err(|e| JsonRpseeError::to_call_error(e))?;
-		let (top, child) =
-			migration_status(&state).map_err(|e| JsonRpseeError::from(anyhow!(e)))?;
+		let state = self.backend.state_at(block_id).map_err(error_into_rpc_err)?;
+		let (top, child) = migration_status(&state).map_err(error_into_rpc_err)?;
 
 		Ok(MigrationStatusResult {
 			top_remaining_to_migrate: top,
 			child_remaining_to_migrate: child,
 		})
 	}
+}
+
+fn error_into_rpc_err(err: impl std::fmt::Display) -> JsonRpseeError {
+	JsonRpseeError::Call(CallError::Custom(ErrorObject::owned(
+		ErrorCode::InternalError.code(),
+		"Error while checking migration state",
+		Some(err.to_string()),
+	)))
 }

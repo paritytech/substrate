@@ -176,7 +176,7 @@ impl serde::Serialize for Extrinsic {
 	}
 }
 
-// TODO: rustc can't deduce this trait bound https://github.com/rust-lang/rust/issues/48214
+// rustc can't deduce this trait bound https://github.com/rust-lang/rust/issues/48214
 #[cfg(feature = "std")]
 impl<'a> serde::Deserialize<'a> for Extrinsic {
 	fn deserialize<D>(de: D) -> Result<Self, D::Error>

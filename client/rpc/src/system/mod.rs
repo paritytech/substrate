@@ -22,7 +22,10 @@
 mod tests;
 
 use futures::channel::oneshot;
-use jsonrpsee::core::{async_trait, error::Error as JsonRpseeError, JsonValue, RpcResult};
+use jsonrpsee::{
+	core::{async_trait, error::Error as JsonRpseeError, JsonValue, RpcResult},
+	types::error::{CallError, ErrorCode, ErrorObject},
+};
 use sc_rpc_api::DenyUnsafe;
 use sc_tracing::logging;
 use sc_utils::mpsc::TracingUnboundedSender;
@@ -179,11 +182,23 @@ impl<B: traits::Block> SystemApiServer<B::Hash, <B::Header as HeaderT>::Number> 
 		self.deny_unsafe.check_if_safe()?;
 
 		logging::add_directives(&directives);
-		logging::reload_filter().map_err(|e| anyhow::anyhow!("{:?}", e).into())
+		logging::reload_filter().map_err(|e| {
+			JsonRpseeError::Call(CallError::Custom(ErrorObject::owned(
+				ErrorCode::InternalError.code(),
+				e,
+				None::<()>,
+			)))
+		})
 	}
 
 	fn system_reset_log_filter(&self) -> RpcResult<()> {
 		self.deny_unsafe.check_if_safe()?;
-		logging::reset_log_filter().map_err(|e| anyhow::anyhow!("{:?}", e).into())
+		logging::reset_log_filter().map_err(|e| {
+			JsonRpseeError::Call(CallError::Custom(ErrorObject::owned(
+				ErrorCode::InternalError.code(),
+				e,
+				None::<()>,
+			)))
+		})
 	}
 }

@@ -21,12 +21,11 @@
 
 use std::{marker::PhantomData, sync::Arc};
 
-use anyhow::anyhow;
 use codec::Codec;
 use jsonrpsee::{
 	core::{async_trait, Error as JsonRpseeError, RpcResult},
 	proc_macros::rpc,
-	types::error::{CallError, ErrorObject},
+	types::error::{CallError, ErrorObject, ErrorCode},
 };
 use pallet_contracts_primitives::{
 	Code, CodeUploadResult, ContractExecResult, ContractInstantiateResult,
@@ -318,22 +317,26 @@ fn runtime_error_into_rpc_err(err: impl std::fmt::Debug) -> JsonRpseeError {
 	.into()
 }
 
-fn decode_hex<H: std::fmt::Debug + Copy, T: TryFrom<H>>(
-	from: H,
-	name: &str,
-) -> Result<T, JsonRpseeError> {
-	from.try_into()
-		.map_err(|_| anyhow!("{:?} does not fit into the {} type", from, name).into())
+fn decode_hex<H: std::fmt::Debug + Copy, T: TryFrom<H>>(from: H, name: &str) -> RpcResult<T> {
+	from.try_into().map_err(|_| {
+		JsonRpseeError::Call(CallError::Custom(ErrorObject::owned(
+			ErrorCode::InvalidParams.code(),
+			format!("{:?} does not fit into the {} type", from, name),
+			None::<()>
+		)))
+	})
 }
 
-fn limit_gas(gas_limit: Weight) -> Result<(), JsonRpseeError> {
+fn limit_gas(gas_limit: Weight) -> RpcResult<()> {
 	if gas_limit > GAS_LIMIT {
-		Err(anyhow!(
-			"Requested gas limit is greater than maximum allowed: {} > {}",
-			gas_limit,
-			GAS_LIMIT
-		)
-		.into())
+		Err(JsonRpseeError::Call(CallError::Custom(ErrorObject::owned(
+			ErrorCode::InvalidParams.code(),
+			format!(
+				"Requested gas limit is greater than maximum allowed: {} > {}",
+				gas_limit, GAS_LIMIT
+			),
+			None::<()>,
+		))))
 	} else {
 		Ok(())
 	}

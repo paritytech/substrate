@@ -68,11 +68,20 @@ pub enum Error<Block: BlockT> {
 	#[error("Failed to load the block weight for block {0:?}")]
 	LoadingBlockWeightFailed(Block::Hash),
 
+	#[error("JsonRpc error: {0}")]
+	JsonRpc(String),
+
 	#[error(
 		"The light sync state extension is not provided by the chain spec. \
 		Read the `sc-sync-state-rpc` crate docs on how to do this!"
 	)]
 	LightSyncStateExtensionNotFound,
+}
+
+impl<Block: BlockT> From<Error<Block>> for JsonRpseeError {
+	fn from(error: Error<Block>) -> Self {
+		JsonRpseeError::to_call_error(error)
+	}
 }
 
 /// Serialize the given `val` by encoding it with SCALE codec and serializing it as hex.
@@ -172,8 +181,6 @@ where
 	Backend: HeaderBackend<Block> + sc_client_api::AuxStore + 'static,
 {
 	fn system_gen_sync_spec(&self, raw: bool) -> RpcResult<String> {
-		// self.deny_unsafe.check_if_safe()?;
-
 		let current_sync_state =
 			self.build_sync_state().map_err(|e| JsonRpseeError::to_call_error(e))?;
 		let mut chain_spec = self.chain_spec.cloned_box();
@@ -181,16 +188,11 @@ where
 		let extension = sc_chain_spec::get_extension_mut::<LightSyncStateExtension>(
 			chain_spec.extensions_mut(),
 		)
-		.ok_or_else(|| {
-			JsonRpseeError::from(anyhow::anyhow!(
-				"Could not find `LightSyncState` chain-spec extension!"
-			))
-		})?;
+		.ok_or(Error::<Block>::LightSyncStateExtensionNotFound)?;
 
-		let val = serde_json::to_value(&current_sync_state)
-			.map_err(|e| JsonRpseeError::to_call_error(e))?;
+		let val = serde_json::to_value(&current_sync_state)?;
 		*extension = Some(val);
 
-		chain_spec.as_json(raw).map_err(|e| anyhow::anyhow!(e).into())
+		chain_spec.as_json(raw).map_err(|e| Error::<Block>::JsonRpc(e).into())
 	}
 }

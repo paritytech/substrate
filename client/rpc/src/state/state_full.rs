@@ -27,8 +27,8 @@ use super::{
 };
 use crate::SubscriptionTaskExecutor;
 
-use futures::{future, stream, task::Spawn, FutureExt, StreamExt};
-use jsonrpsee::{core::Error as JsonRpseeError, PendingSubscription};
+use futures::{future, stream, FutureExt, StreamExt};
+use jsonrpsee::{PendingSubscription, core::Error as JsonRpseeError};
 use sc_client_api::{
 	Backend, BlockBackend, BlockchainEvents, CallExecutor, ExecutorProvider, ProofProvider,
 	StorageProvider,
@@ -405,7 +405,8 @@ where
 		}
 		.boxed();
 
-		let _ = self.executor.spawn_obj(fut.into());
+		self.executor
+			.spawn("substrate-rpc-subscription", Some("rpc"), fut.map(drop).boxed());
 	}
 
 	fn subscribe_storage(&self, pending: PendingSubscription, keys: Option<Vec<StorageKey>>) {
@@ -450,7 +451,9 @@ where
 			}
 		}
 		.boxed();
-		let _ = self.executor.spawn_obj(fut.into());
+
+		self.executor
+			.spawn("substrate-rpc-subscription", Some("rpc"), fut.map(drop).boxed());
 	}
 
 	async fn trace_block(

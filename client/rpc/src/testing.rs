@@ -18,32 +18,13 @@
 
 //! Testing utils used by the RPC tests.
 
-use futures::{
-	executor,
-	task::{FutureObj, Spawn, SpawnError},
-};
-use std::future::Future;
+use std::{future::Future, sync::Arc};
 
-// Executor shared by all tests.
-//
-// This shared executor is used to prevent `Too many open files` errors
-// on systems with a lot of cores.
-lazy_static::lazy_static! {
-	static ref EXECUTOR: executor::ThreadPool = executor::ThreadPool::new()
-		.expect("Failed to create thread pool executor for tests");
-}
+use sp_core::testing::TaskExecutor;
 
-/// Executor for use in testing
-pub struct TaskExecutor;
-impl Spawn for TaskExecutor {
-	fn spawn_obj(&self, future: FutureObj<'static, ()>) -> Result<(), SpawnError> {
-		EXECUTOR.spawn_ok(future);
-		Ok(())
-	}
-
-	fn status(&self) -> Result<(), SpawnError> {
-		Ok(())
-	}
+/// Executor for testing.
+pub fn test_executor() -> Arc<sp_core::testing::TaskExecutor> {
+	Arc::new(TaskExecutor::default())
 }
 
 /// Wrap a future in a timeout a little more concisely

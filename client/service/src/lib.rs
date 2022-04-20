@@ -329,19 +329,18 @@ where
 
 	let metrics = sc_rpc_server::RpcMetrics::new(config.prometheus_registry())?;
 
-	let http = sc_rpc_server::start_http(
-		&[http_addr, http_addr2],
+	let http_fut = sc_rpc_server::start_http(
+		[http_addr, http_addr2],
 		config.rpc_cors.as_ref(),
 		max_request_size,
 		http_max_response_size,
 		metrics.clone(),
 		gen_rpc_module(deny_unsafe(ws_addr, &config.rpc_methods))?,
 		config.tokio_handle.clone(),
-	)
-	.map_err(|e| Error::Application(e.into()))?;
+	);
 
-	let ws = sc_rpc_server::start_ws(
-		&[ws_addr, ws_addr2],
+	let ws_fut = sc_rpc_server::start_ws(
+		[ws_addr, ws_addr2],
 		config.rpc_ws_max_connections,
 		config.rpc_cors.as_ref(),
 		max_request_size,
@@ -350,10 +349,14 @@ where
 		gen_rpc_module(deny_unsafe(http_addr, &config.rpc_methods))?,
 		config.tokio_handle.clone(),
 		rpc_id_provider,
-	)
-	.map_err(|e| Error::Application(e.into()))?;
+	);
 
-	Ok(Box::new((http, ws)))
+	match tokio::task::block_in_place(|| {
+		config.tokio_handle.block_on(futures::future::try_join(http_fut, ws_fut))
+	}) {
+		Ok((http, ws)) => Ok(Box::new((http, ws))),
+		Err(e) => Err(Error::Application(e)),
+	}
 }
 
 /// Transaction pool adapter.

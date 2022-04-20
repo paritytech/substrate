@@ -26,7 +26,7 @@ use std::sync::Arc;
 use crate::SubscriptionTaskExecutor;
 
 use codec::{Decode, Encode};
-use futures::{task::Spawn, FutureExt};
+use futures::FutureExt;
 use jsonrpsee::{
 	core::{async_trait, Error as JsonRpseeError, RpcResult},
 	PendingSubscription,
@@ -182,7 +182,7 @@ where
 			Err(e) => {
 				log::debug!("[author_watchExtrinsic] failed to decode extrinsic: {:?}", e);
 				let err = JsonRpseeError::to_call_error(e);
-				let _ = pending.reject(err);
+				pending.reject(err);
 				return;
 			},
 		};
@@ -211,6 +211,7 @@ where
 		}
 		.boxed();
 
-		let _ = self.executor.spawn_obj(fut.into());
+		self.executor
+			.spawn("substrate-rpc-subscription", Some("rpc"), fut.map(drop).boxed());
 	}
 }

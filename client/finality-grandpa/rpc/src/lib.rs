@@ -19,7 +19,7 @@
 //! RPC API for GRANDPA.
 #![warn(missing_docs)]
 
-use futures::{task::Spawn, FutureExt, StreamExt};
+use futures::{FutureExt, StreamExt};
 use log::warn;
 use std::sync::Arc;
 
@@ -117,7 +117,8 @@ where
 		}
 		.boxed();
 
-		let _ = self.executor.spawn_obj(fut.into());
+		self.executor
+			.spawn("substrate-rpc-subscription", Some("rpc"), fut.map(drop).boxed());
 	}
 
 	async fn prove_finality(
@@ -146,7 +147,7 @@ mod tests {
 		report, AuthorityId, FinalityProof, GrandpaJustification, GrandpaJustificationSender,
 	};
 	use sp_blockchain::HeaderBackend;
-	use sp_core::crypto::ByteArray;
+	use sp_core::{crypto::ByteArray, testing::TaskExecutor};
 	use sp_keyring::Ed25519Keyring;
 	use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 	use substrate_test_runtime_client::{
@@ -263,9 +264,10 @@ mod tests {
 	{
 		let (justification_sender, justification_stream) = GrandpaJustificationStream::channel();
 		let finality_proof_provider = Arc::new(TestFinalityProofProvider { finality_proof });
+		let executor = Arc::new(TaskExecutor::default());
 
 		let rpc = GrandpaRpc::new(
-			sc_rpc::SubscriptionTaskExecutor::default(),
+			executor,
 			TestAuthoritySet,
 			voter_state,
 			justification_stream,

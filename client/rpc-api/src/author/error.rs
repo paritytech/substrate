@@ -177,10 +177,7 @@ impl From<Error> for JsonRpseeError {
 				))
 			},
 			Error::UnsafeRpcCalled(e) => e.into(),
-			Error::Client(e) => CallError::Failed(anyhow::anyhow!(e)),
-			Error::BadKeyType => CallError::InvalidParams(e.into()),
-			Error::InvalidSessionKeys | Error::KeyStoreUnavailable => CallError::Failed(e.into()),
-		}
-		.into()
+			e => CallError::Failed(e.into()),
+		}.into()
 	}
 }

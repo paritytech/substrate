@@ -18,7 +18,7 @@
 
 use super::*;
 
-use crate::testing::timeout_secs;
+use crate::testing::{test_executor, timeout_secs};
 use assert_matches::assert_matches;
 use codec::Encode;
 use jsonrpsee::{
@@ -82,7 +82,7 @@ impl TestSetup {
 			pool: self.pool.clone(),
 			keystore: self.keystore.clone(),
 			deny_unsafe: DenyUnsafe::No,
-			executor: SubscriptionTaskExecutor::default(),
+			executor: test_executor(),
 		}
 	}
 

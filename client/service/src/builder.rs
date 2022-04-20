@@ -431,8 +431,13 @@ where
 	)
 	.map_err(|e| Error::Application(Box::new(e)))?;
 
+	let sysinfo = sc_sysinfo::gather_sysinfo();
+	sc_sysinfo::print_sysinfo(&sysinfo);
+
 	let telemetry = telemetry
-		.map(|telemetry| init_telemetry(&mut config, network.clone(), client.clone(), telemetry))
+		.map(|telemetry| {
+			init_telemetry(&mut config, network.clone(), client.clone(), telemetry, Some(sysinfo))
+		})
 		.transpose()?;
 
 	info!("📦 Highest known block at #{}", chain_info.best_number);
@@ -543,12 +548,16 @@ fn init_telemetry<TBl: BlockT, TCl: BlockBackend<TBl>>(
 	network: Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
 	client: Arc<TCl>,
 	telemetry: &mut Telemetry,
+	sysinfo: Option<sc_telemetry::SysInfo>,
 ) -> sc_telemetry::Result<TelemetryHandle> {
 	let genesis_hash = client.block_hash(Zero::zero()).ok().flatten().unwrap_or_default();
 	let connection_message = ConnectionMessage {
 		name: config.network.node_name.to_owned(),
 		implementation: config.impl_name.to_owned(),
 		version: config.impl_version.to_owned(),
+		target_os: sc_sysinfo::TARGET_OS.into(),
+		target_arch: sc_sysinfo::TARGET_ARCH.into(),
+		target_env: sc_sysinfo::TARGET_ENV.into(),
 		config: String::new(),
 		chain: config.chain_spec.name().to_owned(),
 		genesis_hash: format!("{:?}", genesis_hash),
@@ -559,6 +568,7 @@ fn init_telemetry<TBl: BlockT, TCl: BlockBackend<TBl>>(
 			.unwrap_or(0)
 			.to_string(),
 		network_id: network.local_peer_id().to_base58(),
+		sysinfo,
 	};
 
 	telemetry.start_telemetry(connection_message)?;
@@ -604,9 +614,9 @@ where
 		properties: config.chain_spec.properties(),
 		chain_type: config.chain_spec.chain_type(),
 	};
-	let task_executor = SubscriptionTaskExecutor::new(spawn_handle);
 
 	let mut rpc_api = RpcModule::new(());
+	let task_executor = Arc::new(spawn_handle);
 
 	let (chain, state, child_state) = {
 		let chain = sc_rpc::chain::new_full(client.clone(), task_executor.clone()).into_rpc();

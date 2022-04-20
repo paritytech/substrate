@@ -25,7 +25,6 @@ use std::{marker::PhantomData, sync::Arc};
 use futures::{
 	future::{self, FutureExt},
 	stream::{self, Stream, StreamExt},
-	task::Spawn,
 };
 use jsonrpsee::PendingSubscription;
 use sc_client_api::{BlockBackend, BlockchainEvents};
@@ -134,11 +133,8 @@ fn subscribe_headers<Block, Client, F, G, S>(
 	let maybe_header = client
 		.header(BlockId::Hash(best_block_hash()))
 		.map_err(client_err)
-		.and_then(|header| header.ok_or_else(|| Error::Other("Best header missing.".to_string())))
-		.map_err(|e| {
-			log::warn!("Best header error {:?}", e);
-			e
-		})
+		.and_then(|header| header.ok_or_else(|| Error::Other("Best header missing.".into())))
+		.map_err(|e| log::warn!("Best header error {:?}", e))
 		.ok();
 
 	// NOTE: by the time we set up the stream there might be a new best block and so there is a risk
@@ -153,5 +149,6 @@ fn subscribe_headers<Block, Client, F, G, S>(
 		}
 	}
 	.boxed();
-	let _ = executor.spawn_obj(fut.into());
+
+	executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.map(drop).boxed());
 }

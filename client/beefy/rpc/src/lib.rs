@@ -26,10 +26,7 @@ use std::sync::Arc;
 use sc_rpc::SubscriptionTaskExecutor;
 use sp_runtime::traits::Block as BlockT;
 
-use futures::{
-	task::{Spawn, SpawnError},
-	FutureExt, StreamExt,
-};
+use futures::{task::SpawnError, FutureExt, StreamExt};
 use jsonrpsee::{
 	core::{async_trait, Error as JsonRpseeError, RpcResult},
 	proc_macros::rpc,
@@ -98,7 +95,7 @@ where
 			async move { *async_clone.write() = Some(best_beefy) }
 		});
 
-		executor.spawn_obj(future.boxed().into())?;
+		executor.spawn("substrate-rpc-subscription", Some("rpc"), future.map(drop).boxed());
 		Ok(Self { signed_commitment_stream, beefy_best_block, executor })
 	}
 }
@@ -122,7 +119,8 @@ where
 		}
 		.boxed();
 
-		let _ = self.executor.spawn_obj(fut.into());
+		self.executor
+			.spawn("substrate-rpc-subscription", Some("rpc"), fut.map(drop).boxed());
 	}
 
 	async fn latest_finalized(&self) -> RpcResult<Block::Hash> {
@@ -163,7 +161,7 @@ mod tests {
 		let handler = BeefyRpcHandler::new(
 			commitment_stream,
 			best_block_stream,
-			sc_rpc::SubscriptionTaskExecutor::default(),
+			sc_rpc::testing::test_executor(),
 		)
 		.expect("Setting up the BEEFY RPC handler works");
 
