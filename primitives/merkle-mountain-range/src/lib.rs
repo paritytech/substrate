@@ -399,7 +399,7 @@ pub enum Error {
 	/// Leaf not found in the storage.
 	LeafNotFound,
 	/// Mmr Pallet not included in runtime
-	PalletNotIncluded
+	PalletNotIncluded,
 }
 
 impl Error {
