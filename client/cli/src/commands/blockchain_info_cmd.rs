@@ -25,7 +25,7 @@ use serde::Serialize;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use std::{fmt::Debug, io, sync::Arc};
 
-/// The `chain-info` subcommand used to output db meta columns information.
+/// The `blockchain-info` subcommand used to output db meta columns information.
 #[derive(Debug, Clone, Parser)]
 pub struct BlockchainInfoCmd {
 	#[allow(missing_docs)]
