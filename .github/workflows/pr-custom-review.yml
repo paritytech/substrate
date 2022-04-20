@@ -17,6 +17,9 @@ jobs:
   pr-custom-review:
     runs-on: ubuntu-latest
     steps:
+      - name: Skip if pull request is in Draft
+        if: github.event.pull_request.draft == true
+        run: exit 1
       - name: pr-custom-review
         uses: paritytech/pr-custom-review@v2
         with:
