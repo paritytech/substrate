@@ -1828,9 +1828,9 @@ mod unbond {
 		})
 	}
 
+	// depositor can unbond inly up to `MinCreateBond`.
 	#[test]
 	fn depositor_permissioned_partial_unbond() {
-		// Scenarios where non-admin accounts can unbond others
 		ExtBuilder::default()
 			.ed(1)
 			.add_delegators(vec![(100, 100)])
@@ -1848,6 +1848,29 @@ mod unbond {
 				// but not less than 2
 				assert_noop!(
 					Pools::unbond(Origin::signed(10), 10, 6),
+					Error::<Runtime>::NotOnlyDelegator
+				);
+			});
+	}
+
+	// same as above, but the pool is slashed and therefore the depositor cannot partially unbond.
+	#[test]
+	fn depositor_permissioned_partial_unbond_slashed() {
+		ExtBuilder::default()
+			.ed(1)
+			.add_delegators(vec![(100, 100)])
+			.build_and_execute(|| {
+				// given
+				assert_eq!(MinCreateBond::<Runtime>::get(), 2);
+				assert_eq!(Delegators::<Runtime>::get(10).unwrap().active_points(), 10);
+				assert_eq!(Delegators::<Runtime>::get(10).unwrap().unbonding_points(), 0);
+
+				// slash the default pool
+				StakingMock::set_bonded_balance(Pools::create_bonded_account(1), 5);
+
+				// cannot unbond even 7, because the value of shares is now less.
+				assert_noop!(
+					Pools::unbond(Origin::signed(10), 10, 7),
 					Error::<Runtime>::NotOnlyDelegator
 				);
 			});

@@ -1953,14 +1953,15 @@ impl<T: Config> Pallet<T> {
 		current_points: BalanceOf<T>,
 		points: BalanceOf<T>,
 	) -> BalanceOf<T> {
+		let u256 = |x| T::BalanceToU256::convert(x);
+		let balance = |x| T::U256ToBalance::convert(x);
 		if current_balance.is_zero() || current_points.is_zero() || points.is_zero() {
 			// There is nothing to unbond
 			return Zero::zero()
 		}
 
 		// Equivalent of (current_balance / current_points) * points
-		current_balance
-			.saturating_mul(points)
+		balance(u256(current_balance).saturating_mul(u256(points)))
 			// We check for zero above
 			.div(current_points)
 	}
