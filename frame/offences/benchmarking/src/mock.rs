@@ -151,10 +151,11 @@ parameter_types! {
 pub type Extrinsic = sp_runtime::testing::TestXt<Call, ()>;
 
 pub struct OnChainSeqPhragmen;
-impl onchain::ExecutionConfig for OnChainSeqPhragmen {
+impl onchain::Config for OnChainSeqPhragmen {
 	type System = Test;
 	type Solver = SequentialPhragmen<AccountId, Perbill>;
 	type DataProvider = Staking;
+	type WeightInfo = ();
 }
 
 impl pallet_staking::Config for Test {

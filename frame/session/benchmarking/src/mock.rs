@@ -157,10 +157,11 @@ where
 }
 
 pub struct OnChainSeqPhragmen;
-impl onchain::ExecutionConfig for OnChainSeqPhragmen {
+impl onchain::Config for OnChainSeqPhragmen {
 	type System = Test;
 	type Solver = SequentialPhragmen<AccountId, sp_runtime::Perbill>;
 	type DataProvider = Staking;
+	type WeightInfo = ();
 }
 
 impl pallet_staking::Config for Test {
