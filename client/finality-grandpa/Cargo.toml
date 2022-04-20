@@ -20,7 +20,7 @@ fork-tree = { version = "3.0.0", path = "../../utils/fork-tree" }
 futures = "0.3.21"
 futures-timer = "3.0.1"
 hex = "0.4.2"
-log = "0.4.8"
+log = "0.4.16"
 parking_lot = "0.12.0"
 rand = "0.8.4"
 ahash = "0.7.6"

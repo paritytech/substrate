@@ -16,7 +16,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 wasmi = { version = "0.9.1", optional = true }
 wasmtime = { version = "0.35.3", optional = true, default-features = false }
-log = { version = "0.4.14", optional = true }
+log = { version = "0.4.16", optional = true }
 impl-trait-for-tuples = "0.2.2"
 sp-std = { version = "4.0.0", path = "../std", default-features = false }
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"] }
