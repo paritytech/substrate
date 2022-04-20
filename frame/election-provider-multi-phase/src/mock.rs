@@ -20,7 +20,7 @@ use crate as multi_phase;
 use frame_election_provider_support::{
 	data_provider, onchain, ElectionDataProvider, NposSolution, SequentialPhragmen,
 };
-pub use frame_support::{assert_noop, assert_ok};
+pub use frame_support::{assert_noop, assert_ok, pallet_prelude::GetDefault};
 use frame_support::{
 	bounded_vec, parameter_types,
 	traits::{ConstU32, Hooks},
@@ -263,7 +263,8 @@ parameter_types! {
 	pub static SignedRewardBase: Balance = 7;
 	pub static SignedMaxWeight: Weight = BlockWeights::get().max_block;
 	pub static MinerTxPriority: u64 = 100;
-	pub static SolutionImprovementThreshold: Perbill = Perbill::zero();
+	pub static BetterSignedThreshold: Perbill = Perbill::zero();
+	pub static BetterUnsignedThreshold: Perbill = Perbill::zero();
 	pub static OffchainRepeat: BlockNumber = 5;
 	pub static MinerMaxWeight: Weight = BlockWeights::get().max_block;
 	pub static MinerMaxLength: u32 = 256;
@@ -414,7 +415,8 @@ impl crate::Config for Runtime {
 	type EstimateCallFee = frame_support::traits::ConstU32<8>;
 	type SignedPhase = SignedPhase;
 	type UnsignedPhase = UnsignedPhase;
-	type SolutionImprovementThreshold = SolutionImprovementThreshold;
+	type BetterUnsignedThreshold = BetterUnsignedThreshold;
+	type BetterSignedThreshold = BetterSignedThreshold;
 	type OffchainRepeat = OffchainRepeat;
 	type MinerMaxWeight = MinerMaxWeight;
 	type MinerMaxLength = MinerMaxLength;
@@ -537,8 +539,12 @@ impl ExtBuilder {
 		<MinerTxPriority>::set(p);
 		self
 	}
-	pub fn solution_improvement_threshold(self, p: Perbill) -> Self {
-		<SolutionImprovementThreshold>::set(p);
+	pub fn better_signed_threshold(self, p: Perbill) -> Self {
+		<BetterSignedThreshold>::set(p);
+		self
+	}
+	pub fn better_unsigned_threshold(self, p: Perbill) -> Self {
+		<BetterUnsignedThreshold>::set(p);
 		self
 	}
 	pub fn phases(self, signed: BlockNumber, unsigned: BlockNumber) -> Self {

@@ -29,7 +29,7 @@ sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
 sp-timestamp = { version = "4.0.0-dev", path = "../../../primitives/timestamp" }
 futures = "0.3.21"
 futures-timer = "3.0.1"
-log = "0.4.11"
+log = "0.4.16"
 thiserror = "1.0.30"
 async-trait = "0.1.50"
 
