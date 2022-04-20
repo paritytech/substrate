@@ -48,7 +48,7 @@ fn get_total_deposit<T: Config>(
 
 fn generate_friends<T: Config>(num: u32) -> Vec<<T as frame_system::Config>::AccountId> {
 	// Create friends
-	let friends = (0..num).map(|x| account("friend", i, SEED)).collect::<Vec<_>>();
+	let mut friends = (0..num).map(|x| account("friend", x, SEED)).collect::<Vec<_>>();
 	// Sort
 	friends.sort();
 
