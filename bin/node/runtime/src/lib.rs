@@ -731,6 +731,7 @@ impl pallet_nomination_pools::Config for Runtime {
 	type StakingInterface = pallet_staking::Pallet<Self>;
 	type PostUnbondingPoolsWindow = PostUnbondPoolsWindow;
 	type MaxMetadataLen = ConstU32<256>;
+	type MaxUnbonding = ConstU32<8>;
 	type PalletId = NominationPoolsPalletId;
 }
 

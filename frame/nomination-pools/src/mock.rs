@@ -2,6 +2,7 @@ use super::*;
 use crate::{self as pools};
 use frame_support::{assert_ok, parameter_types, PalletId};
 use frame_system::RawOrigin;
+use std::collections::HashMap;
 
 pub type AccountId = u128;
 pub type Balance = u128;
@@ -18,9 +19,11 @@ pub fn default_reward_account() -> AccountId {
 
 parameter_types! {
 	pub static CurrentEra: EraIndex = 0;
-	static BondedBalanceMap: std::collections::HashMap<AccountId, Balance> = Default::default();
-	static UnbondingBalanceMap: std::collections::HashMap<AccountId, Balance> = Default::default();
 	pub static BondingDuration: EraIndex = 3;
+	static BondedBalanceMap: HashMap<AccountId, Balance> = Default::default();
+	static UnbondingBalanceMap: HashMap<AccountId, Balance> = Default::default();
+	#[derive(Clone, PartialEq)]
+	pub static MaxUnbonding: u32 = 8;
 	pub static Nominations: Vec<AccountId> = vec![];
 }
 
@@ -170,6 +173,7 @@ impl pools::Config for Runtime {
 	type PostUnbondingPoolsWindow = PostUnbondingPoolsWindow;
 	type PalletId = PoolsPalletId;
 	type MaxMetadataLen = MaxMetadataLen;
+	type MaxUnbonding = MaxUnbonding;
 }
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;
@@ -195,6 +199,11 @@ impl ExtBuilder {
 	// Add delegators to pool 0.
 	pub(crate) fn add_delegators(mut self, delegators: Vec<(AccountId, Balance)>) -> Self {
 		self.delegators = delegators;
+		self
+	}
+
+	pub(crate) fn ed(self, ed: Balance) -> Self {
+		ExistentialDeposit::set(ed);
 		self
 	}
 
@@ -267,6 +276,14 @@ pub(crate) fn pool_events_since_last_call() -> Vec<super::Event<Runtime>> {
 	let already_seen = ObservedEvents::get();
 	ObservedEvents::set(events.len());
 	events.into_iter().skip(already_seen).collect()
+}
+
+/// Same as `fully_unbond`, in permissioned setting.
+pub fn fully_unbond_permissioned(delegator: AccountId) -> DispatchResult {
+	let points = Delegators::<Runtime>::get(&delegator)
+		.map(|d| d.active_points())
+		.unwrap_or_default();
+	Pools::unbond(Origin::signed(delegator), delegator, points)
 }
 
 #[cfg(test)]

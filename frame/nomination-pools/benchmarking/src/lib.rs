@@ -289,13 +289,13 @@ frame_benchmarking::benchmarks! {
 			.map_err(|_| "balance expected to be a u128")
 			.unwrap();
 		let scenario = ListScenario::<T>::new(origin_weight, false)?;
-
 		let amount = origin_weight - scenario.dest_weight.clone();
 
 		let scenario = scenario.add_joiner(amount);
 		let delegator_id = scenario.origin1_delegator.unwrap().clone();
+		let all_points = Delegators::<T>::get(&delegator_id).unwrap().points;
 		whitelist_account!(delegator_id);
-	}: _(Origin::Signed(delegator_id.clone()), delegator_id.clone())
+	}: _(Origin::Signed(delegator_id.clone()), delegator_id.clone(), all_points)
 	verify {
 		let bonded_after = T::StakingInterface::active_stake(&scenario.origin1).unwrap();
 		// We at least went down to the destination bag
@@ -304,7 +304,14 @@ frame_benchmarking::benchmarks! {
 			&delegator_id
 		)
 		.unwrap();
-		assert_eq!(delegator.unbonding_era, Some(0 + T::StakingInterface::bonding_duration()));
+		assert_eq!(
+			delegator.unbonding_eras.keys().cloned().collect::<Vec<_>>(),
+			vec![0 + T::StakingInterface::bonding_duration()]
+		);
+		assert_eq!(
+			delegator.unbonding_eras.values().cloned().collect::<Vec<_>>(),
+			vec![all_points]
+		);
 	}
 
 	pool_withdraw_unbonded {
@@ -329,7 +336,7 @@ frame_benchmarking::benchmarks! {
 		assert_eq!(CurrencyOf::<T>::free_balance(&joiner), min_join_bond);
 
 		// Unbond the new delegator
-		Pools::<T>::unbond(Origin::Signed(joiner.clone()).into(), joiner.clone()).unwrap();
+		Pools::<T>::fully_unbond(Origin::Signed(joiner.clone()).into(), joiner.clone()).unwrap();
 
 		// Sanity check that unbond worked
 		assert_eq!(
@@ -374,7 +381,7 @@ frame_benchmarking::benchmarks! {
 
 		// Unbond the new delegator
 		pallet_staking::CurrentEra::<T>::put(0);
-		Pools::<T>::unbond(Origin::Signed(joiner.clone()).into(), joiner.clone()).unwrap();
+		Pools::<T>::fully_unbond(Origin::Signed(joiner.clone()).into(), joiner.clone()).unwrap();
 
 		// Sanity check that unbond worked
 		assert_eq!(
@@ -423,7 +430,7 @@ frame_benchmarking::benchmarks! {
 		// up when unbonding.
 		let reward_account = Pools::<T>::create_reward_account(1);
 		assert!(frame_system::Account::<T>::contains_key(&reward_account));
-		Pools::<T>::unbond(Origin::Signed(depositor.clone()).into(), depositor.clone()).unwrap();
+		Pools::<T>::fully_unbond(Origin::Signed(depositor.clone()).into(), depositor.clone()).unwrap();
 
 		// Sanity check that unbond worked
 		assert_eq!(
