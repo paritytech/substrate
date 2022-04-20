@@ -215,10 +215,7 @@ where
 		data: Bytes,
 		block: Option<Block::Hash>,
 	) -> RpcResult<Bytes> {
-		self.backend
-			.call(block, method, data)
-			.await
-			.map_err(|e| JsonRpseeError::to_call_error(e))
+		self.backend.call(block, method, data).await.map_err(Into::into)
 	}
 
 	async fn storage_keys(
@@ -226,10 +223,7 @@ where
 		key_prefix: StorageKey,
 		block: Option<Block::Hash>,
 	) -> RpcResult<Vec<StorageKey>> {
-		self.backend
-			.storage_keys(block, key_prefix)
-			.await
-			.map_err(|e| JsonRpseeError::to_call_error(e))
+		self.backend.storage_keys(block, key_prefix).await.map_err(Into::into)
 	}
 
 	async fn storage_pairs(
@@ -238,10 +232,7 @@ where
 		block: Option<Block::Hash>,
 	) -> RpcResult<Vec<(StorageKey, StorageData)>> {
 		self.deny_unsafe.check_if_safe()?;
-		self.backend
-			.storage_pairs(block, key_prefix)
-			.await
-			.map_err(|e| JsonRpseeError::to_call_error(e))
+		self.backend.storage_pairs(block, key_prefix).await.map_err(Into::into)
 	}
 
 	async fn storage_keys_paged(
@@ -252,7 +243,7 @@ where
 		block: Option<Block::Hash>,
 	) -> RpcResult<Vec<StorageKey>> {
 		if count > STORAGE_KEYS_PAGED_MAX_COUNT {
-			return Err(JsonRpseeError::to_call_error(Error::InvalidCount {
+			return Err(JsonRpseeError::from(Error::InvalidCount {
 				value: count,
 				max: STORAGE_KEYS_PAGED_MAX_COUNT,
 			}))
@@ -260,7 +251,7 @@ where
 		self.backend
 			.storage_keys_paged(block, prefix, count, start_key)
 			.await
-			.map_err(|e| JsonRpseeError::to_call_error(e))
+			.map_err(Into::into)
 	}
 
 	async fn storage(
@@ -268,10 +259,7 @@ where
 		key: StorageKey,
 		block: Option<Block::Hash>,
 	) -> RpcResult<Option<StorageData>> {
-		self.backend
-			.storage(block, key)
-			.await
-			.map_err(|e| JsonRpseeError::to_call_error(e))
+		self.backend.storage(block, key).await.map_err(Into::into)
 	}
 
 	async fn storage_hash(
@@ -279,10 +267,7 @@ where
 		key: StorageKey,
 		block: Option<Block::Hash>,
 	) -> RpcResult<Option<Block::Hash>> {
-		self.backend
-			.storage_hash(block, key)
-			.await
-			.map_err(|e| JsonRpseeError::to_call_error(e))
+		self.backend.storage_hash(block, key).await.map_err(Into::into)
 	}
 
 	async fn storage_size(
@@ -290,21 +275,15 @@ where
 		key: StorageKey,
 		block: Option<Block::Hash>,
 	) -> RpcResult<Option<u64>> {
-		self.backend
-			.storage_size(block, key)
-			.await
-			.map_err(|e| JsonRpseeError::to_call_error(e))
+		self.backend.storage_size(block, key).await.map_err(Into::into)
 	}
 
 	async fn metadata(&self, block: Option<Block::Hash>) -> RpcResult<Bytes> {
-		self.backend.metadata(block).await.map_err(|e| JsonRpseeError::to_call_error(e))
+		self.backend.metadata(block).await.map_err(Into::into)
 	}
 
 	async fn runtime_version(&self, at: Option<Block::Hash>) -> RpcResult<RuntimeVersion> {
-		self.backend
-			.runtime_version(at)
-			.await
-			.map_err(|e| JsonRpseeError::to_call_error(e))
+		self.backend.runtime_version(at).await.map_err(Into::into)
 	}
 
 	async fn query_storage(
@@ -314,10 +293,7 @@ where
 		to: Option<Block::Hash>,
 	) -> RpcResult<Vec<StorageChangeSet<Block::Hash>>> {
 		self.deny_unsafe.check_if_safe()?;
-		self.backend
-			.query_storage(from, to, keys)
-			.await
-			.map_err(|e| JsonRpseeError::to_call_error(e))
+		self.backend.query_storage(from, to, keys).await.map_err(Into::into)
 	}
 
 	async fn query_storage_at(
@@ -325,10 +301,7 @@ where
 		keys: Vec<StorageKey>,
 		at: Option<Block::Hash>,
 	) -> RpcResult<Vec<StorageChangeSet<Block::Hash>>> {
-		self.backend
-			.query_storage_at(keys, at)
-			.await
-			.map_err(|e| JsonRpseeError::to_call_error(e))
+		self.backend.query_storage_at(keys, at).await.map_err(Into::into)
 	}
 
 	async fn read_proof(
@@ -336,10 +309,7 @@ where
 		keys: Vec<StorageKey>,
 		block: Option<Block::Hash>,
 	) -> RpcResult<ReadProof<Block::Hash>> {
-		self.backend
-			.read_proof(block, keys)
-			.await
-			.map_err(|e| JsonRpseeError::to_call_error(e))
+		self.backend.read_proof(block, keys).await.map_err(Into::into)
 	}
 
 	/// Re-execute the given block with the tracing targets given in `targets`
@@ -358,7 +328,7 @@ where
 		self.backend
 			.trace_block(block, targets, storage_keys, methods)
 			.await
-			.map_err(|e| JsonRpseeError::to_call_error(e))
+			.map_err(Into::into)
 	}
 
 	fn subscribe_runtime_version(&self, sink: PendingSubscription) {
@@ -459,7 +429,7 @@ where
 		self.backend
 			.storage_keys(block, storage_key, key_prefix)
 			.await
-			.map_err(|e| JsonRpseeError::to_call_error(e))
+			.map_err(Into::into)
 	}
 
 	async fn storage_keys_paged(
@@ -473,7 +443,7 @@ where
 		self.backend
 			.storage_keys_paged(block, storage_key, prefix, count, start_key)
 			.await
-			.map_err(|e| JsonRpseeError::to_call_error(e))
+			.map_err(Into::into)
 	}
 
 	async fn storage(
@@ -482,10 +452,7 @@ where
 		key: StorageKey,
 		block: Option<Block::Hash>,
 	) -> RpcResult<Option<StorageData>> {
-		self.backend
-			.storage(block, storage_key, key)
-			.await
-			.map_err(|e| JsonRpseeError::to_call_error(e))
+		self.backend.storage(block, storage_key, key).await.map_err(Into::into)
 	}
 
 	async fn storage_entries(
@@ -494,10 +461,7 @@ where
 		keys: Vec<StorageKey>,
 		block: Option<Block::Hash>,
 	) -> RpcResult<Vec<Option<StorageData>>> {
-		self.backend
-			.storage_entries(block, storage_key, keys)
-			.await
-			.map_err(|e| JsonRpseeError::to_call_error(e))
+		self.backend.storage_entries(block, storage_key, keys).await.map_err(Into::into)
 	}
 
 	async fn storage_hash(
@@ -506,10 +470,7 @@ where
 		key: StorageKey,
 		block: Option<Block::Hash>,
 	) -> RpcResult<Option<Block::Hash>> {
-		self.backend
-			.storage_hash(block, storage_key, key)
-			.await
-			.map_err(|e| JsonRpseeError::to_call_error(e))
+		self.backend.storage_hash(block, storage_key, key).await.map_err(Into::into)
 	}
 
 	async fn storage_size(
@@ -518,10 +479,7 @@ where
 		key: StorageKey,
 		block: Option<Block::Hash>,
 	) -> RpcResult<Option<u64>> {
-		self.backend
-			.storage_size(block, storage_key, key)
-			.await
-			.map_err(|e| JsonRpseeError::to_call_error(e))
+		self.backend.storage_size(block, storage_key, key).await.map_err(Into::into)
 	}
 
 	async fn read_child_proof(
@@ -533,7 +491,7 @@ where
 		self.backend
 			.read_child_proof(block, child_storage_key, keys)
 			.await
-			.map_err(|e| JsonRpseeError::to_call_error(e))
+			.map_err(Into::into)
 	}
 }
 

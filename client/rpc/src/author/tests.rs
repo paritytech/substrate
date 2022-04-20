@@ -104,7 +104,7 @@ async fn author_submit_transaction_should_not_cause_error() {
 
 	assert_matches!(
 		api.call::<_, H256>("author_submitExtrinsic", [xt]).await,
-		Err(RpcError::Call(CallError::Custom(err))) if err.message().contains("Already imported")
+		Err(RpcError::Call(CallError::Custom(err))) if err.message().contains("Already Imported") && err.code() == 1013
 	);
 }
 
@@ -159,7 +159,7 @@ async fn author_should_return_watch_validation_error() {
 
 	assert_matches!(
 		failed_sub,
-		Err(RpcError::Call(CallError::Custom(err))) if err.message().contains("Transaction pool error")
+		Err(RpcError::Call(CallError::Custom(err))) if err.message().contains("Invalid Transaction") && err.code() == 1010
 	);
 }
 

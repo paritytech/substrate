@@ -102,9 +102,14 @@ where
 		let api = self.client.runtime_api();
 		let best = self.client.info().best_hash;
 		let at = BlockId::hash(best);
-		let nonce = api
-			.account_nonce(&at, account.clone())
-			.map_err(|api_err| CallError::from_std_error(api_err))?;
+
+		let nonce = api.account_nonce(&at, account.clone()).map_err(|e| {
+			CallError::Custom(ErrorObject::owned(
+				Error::RuntimeError.into(),
+				"Unable to query nonce.",
+				Some(e.to_string()),
+			))
+		})?;
 		Ok(adjust_nonce(&*self.pool, account, nonce))
 	}
 
@@ -269,8 +274,8 @@ mod tests {
 
 		// when
 		let res = accounts.dry_run(vec![].into(), None).await;
-		assert_matches!(res, Err(JsonRpseeError::Call(CallError::Failed(e))) => {
-			assert_eq!(e.to_string(), "RPC call is unsafe to be called externally");
+		assert_matches!(res, Err(JsonRpseeError::Call(CallError::Custom(e))) => {
+			assert!(e.message().contains("RPC call is unsafe to be called externally"));
 		});
 	}
 

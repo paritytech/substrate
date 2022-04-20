@@ -144,7 +144,7 @@ impl<B: traits::Block> SystemApiServer<B::Hash, <B::Header as HeaderT>::Number> 
 		let _ = self.send_back.unbounded_send(Request::NetworkAddReservedPeer(peer, tx));
 		match rx.await {
 			Ok(Ok(())) => Ok(()),
-			Ok(Err(e)) => Err(JsonRpseeError::to_call_error(e)),
+			Ok(Err(e)) => Err(JsonRpseeError::from(e)),
 			Err(e) => Err(JsonRpseeError::to_call_error(e)),
 		}
 	}
@@ -155,7 +155,7 @@ impl<B: traits::Block> SystemApiServer<B::Hash, <B::Header as HeaderT>::Number> 
 		let _ = self.send_back.unbounded_send(Request::NetworkRemoveReservedPeer(peer, tx));
 		match rx.await {
 			Ok(Ok(())) => Ok(()),
-			Ok(Err(e)) => Err(JsonRpseeError::to_call_error(e)),
+			Ok(Err(e)) => Err(JsonRpseeError::from(e)),
 			Err(e) => Err(JsonRpseeError::to_call_error(e)),
 		}
 	}

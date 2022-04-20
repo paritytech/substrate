@@ -23,7 +23,7 @@ use assert_matches::assert_matches;
 use futures::executor;
 use jsonrpsee::{
 	core::Error as RpcError,
-	types::{error::CallError as RpcCallError, EmptyParams},
+	types::{error::CallError as RpcCallError, EmptyParams, ErrorObject},
 };
 use sc_block_builder::BlockBuilderProvider;
 use sc_rpc_api::DenyUnsafe;
@@ -372,14 +372,16 @@ async fn should_query_storage() {
 
 		assert_eq!(
 			result.await.map_err(|e| e.to_string()),
-			Err(RpcError::Call(RpcCallError::Failed(
+			Err(RpcError::Call(RpcCallError::Custom(ErrorObject::owned(
+				4001,
 				Error::InvalidBlockRange {
 					from: format!("1 ({:?})", block1_hash),
 					to: format!("0 ({:?})", genesis_hash),
 					details: "from number > to number".to_owned(),
 				}
-				.into()
-			)))
+				.to_string(),
+				None::<()>,
+			))))
 			.map_err(|e| e.to_string())
 		);
 
@@ -391,7 +393,8 @@ async fn should_query_storage() {
 
 		assert_eq!(
 			result.await.map_err(|e| e.to_string()),
-			Err(RpcError::Call(RpcCallError::Failed(
+			Err(RpcError::Call(RpcCallError::Custom(ErrorObject::owned(
+				4001,
 				Error::InvalidBlockRange {
 					from: format!("{:?}", genesis_hash),
 					to: format!("{:?}", Some(random_hash1)),
@@ -400,8 +403,9 @@ async fn should_query_storage() {
 						random_hash1
 					),
 				}
-				.into()
-			)))
+				.to_string(),
+				None::<()>,
+			))))
 			.map_err(|e| e.to_string())
 		);
 
@@ -410,7 +414,8 @@ async fn should_query_storage() {
 
 		assert_eq!(
 			result.await.map_err(|e| e.to_string()),
-			Err(RpcError::Call(RpcCallError::Failed(
+			Err(RpcError::Call(RpcCallError::Custom(ErrorObject::owned(
+				4001,
 				Error::InvalidBlockRange {
 					from: format!("{:?}", random_hash1),
 					to: format!("{:?}", Some(genesis_hash)),
@@ -419,8 +424,9 @@ async fn should_query_storage() {
 						random_hash1
 					),
 				}
-				.into()
-			)))
+				.to_string(),
+				None::<()>,
+			))))
 			.map_err(|e| e.to_string()),
 		);
 
@@ -429,7 +435,8 @@ async fn should_query_storage() {
 
 		assert_eq!(
 			result.await.map_err(|e| e.to_string()),
-			Err(RpcError::Call(RpcCallError::Failed(
+			Err(RpcError::Call(RpcCallError::Custom(ErrorObject::owned(
+				4001,
 				Error::InvalidBlockRange {
 					from: format!("{:?}", random_hash1),
 					to: format!("{:?}", Some(block2_hash)), // Best block hash.
@@ -438,8 +445,9 @@ async fn should_query_storage() {
 						random_hash1
 					),
 				}
-				.into()
-			)))
+				.to_string(),
+				None::<()>,
+			))))
 			.map_err(|e| e.to_string()),
 		);
 
@@ -448,7 +456,8 @@ async fn should_query_storage() {
 
 		assert_eq!(
 			result.await.map_err(|e| e.to_string()),
-			Err(RpcError::Call(RpcCallError::Failed(
+			Err(RpcError::Call(RpcCallError::Custom(ErrorObject::owned(
+				4001,
 				Error::InvalidBlockRange {
 					from: format!("{:?}", random_hash1), // First hash not found.
 					to: format!("{:?}", Some(random_hash2)),
@@ -457,8 +466,9 @@ async fn should_query_storage() {
 						random_hash1
 					),
 				}
-				.into()
-			)))
+				.to_string(),
+				None::<()>
+			))))
 			.map_err(|e| e.to_string()),
 		);
 

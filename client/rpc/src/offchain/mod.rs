@@ -55,8 +55,7 @@ impl<T: OffchainStorage + 'static> OffchainApiServer for Offchain<T> {
 
 		let prefix = match kind {
 			StorageKind::PERSISTENT => sp_offchain::STORAGE_PREFIX,
-			StorageKind::LOCAL =>
-				return Err(JsonRpseeError::to_call_error(Error::UnavailableStorageKind)),
+			StorageKind::LOCAL => return Err(JsonRpseeError::from(Error::UnavailableStorageKind)),
 		};
 		self.storage.write().set(prefix, &*key, &*value);
 		Ok(())
@@ -67,8 +66,7 @@ impl<T: OffchainStorage + 'static> OffchainApiServer for Offchain<T> {
 
 		let prefix = match kind {
 			StorageKind::PERSISTENT => sp_offchain::STORAGE_PREFIX,
-			StorageKind::LOCAL =>
-				return Err(JsonRpseeError::to_call_error(Error::UnavailableStorageKind)),
+			StorageKind::LOCAL => return Err(JsonRpseeError::from(Error::UnavailableStorageKind)),
 		};
 
 		Ok(self.storage.read().get(prefix, &*key).map(Into::into))

@@ -93,7 +93,7 @@ where
 	async fn submit_extrinsic(&self, ext: Bytes) -> RpcResult<TxHash<P>> {
 		let xt = match Decode::decode(&mut &ext[..]) {
 			Ok(xt) => xt,
-			Err(err) => return Err(JsonRpseeError::to_call_error(err)),
+			Err(err) => return Err(Error::Client(Box::new(err)).into()),
 		};
 		let best_block_hash = self.client.info().best_hash;
 		self.pool
@@ -101,8 +101,9 @@ where
 			.await
 			.map_err(|e| {
 				e.into_pool_error()
-					.map(|e| JsonRpseeError::to_call_error(e))
-					.unwrap_or_else(|e| JsonRpseeError::to_call_error(e))
+					.map(|e| Error::Pool(e))
+					.unwrap_or_else(|e| Error::Verification(Box::new(e)))
+					.into()
 			})
 	}
 
@@ -134,7 +135,7 @@ where
 			.client
 			.runtime_api()
 			.decode_session_keys(&generic::BlockId::Hash(best_block_hash), session_keys.to_vec())
-			.map_err(|e| JsonRpseeError::to_call_error(e))?
+			.map_err(|e| Error::Client(Box::new(e)))?
 			.ok_or_else(|| Error::InvalidSessionKeys)?;
 
 		Ok(SyncCryptoStore::has_keys(&*self.keystore, &keys))

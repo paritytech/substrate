@@ -66,7 +66,7 @@ impl From<Error> for JsonRpseeError {
 			Error::InvalidCount { .. } =>
 				CallError::Custom(ErrorObject::owned(BASE_ERROR + 2, e.to_string(), None::<()>))
 					.into(),
-			e => e.into(),
+			e => Self::to_call_error(e),
 		}
 	}
 }
