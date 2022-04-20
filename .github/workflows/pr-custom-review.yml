@@ -11,6 +11,7 @@ on:
       - synchronize
       - review_requested
       - review_request_removed
+      - ready_for_review
   pull_request_review:
 
 jobs:
