@@ -460,7 +460,7 @@ pub struct ReadySolution<T: Config> {
 	///
 	/// This is target-major vector, storing each winners, total backing, and each individual
 	/// backer.
-	pub supports: BoundedSupports<T::AccountId, T::MaxWinnersPerPage, T::MaxBackersPerWinner>,
+	pub supports: BoundedSupportsOf<Pallet<T>>,
 	/// The score of the solution.
 	///
 	/// This is needed to potentially challenge the solution.
