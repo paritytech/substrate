@@ -17,10 +17,10 @@
 
 //! Rpc for state migration.
 
-use anyhow::anyhow;
 use jsonrpsee::{
-	core::{Error as JsonRpseeError, RpcResult},
+	core::{to_json_raw_value, Error as JsonRpseeError, RpcResult},
 	proc_macros::rpc,
+	types::error::{CallError, ErrorCode},
 };
 use sc_rpc_api::DenyUnsafe;
 use serde::{Deserialize, Serialize};
@@ -146,14 +146,20 @@ where
 		self.deny_unsafe.check_if_safe()?;
 
 		let block_id = BlockId::hash(at.unwrap_or_else(|| self.client.info().best_hash));
-		let state =
-			self.backend.state_at(block_id).map_err(|e| JsonRpseeError::to_call_error(e))?;
-		let (top, child) =
-			migration_status(&state).map_err(|e| JsonRpseeError::from(anyhow!(e)))?;
+		let state = self.backend.state_at(block_id).map_err(error_into_rpc_err)?;
+		let (top, child) = migration_status(&state).map_err(error_into_rpc_err)?;
 
 		Ok(MigrationStatusResult {
 			top_remaining_to_migrate: top,
 			child_remaining_to_migrate: child,
 		})
 	}
+}
+
+fn error_into_rpc_err(err: impl std::fmt::Display) -> JsonRpseeError {
+	JsonRpseeError::Call(CallError::Custom {
+		code: ErrorCode::InternalError.code(),
+		message: "Error while checking migration state".into(),
+		data: to_json_raw_value(&err.to_string()).ok(),
+	})
 }

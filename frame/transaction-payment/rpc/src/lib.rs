@@ -19,12 +19,11 @@
 
 use std::{convert::TryInto, sync::Arc};
 
-use anyhow::anyhow;
 use codec::{Codec, Decode};
 use jsonrpsee::{
 	core::{async_trait, Error as JsonRpseeError, RpcResult},
 	proc_macros::rpc,
-	types::error::CallError,
+	types::error::{CallError, ErrorCode},
 };
 use pallet_transaction_payment_rpc_runtime_api::{FeeDetails, InclusionFee, RuntimeDispatchInfo};
 use sp_api::ProvideRuntimeApi;
@@ -86,7 +85,7 @@ where
 		let encoded_len = encoded_xt.len() as u32;
 
 		let uxt: Block::Extrinsic = Decode::decode(&mut &*encoded_xt)
-			.map_err(|codec_err| CallError::from_std_error(codec_err))?;
+			.map_err(|codec_err| JsonRpseeError::to_call_error(codec_err))?;
 		api.query_info(&at, uxt, encoded_len)
 			.map_err(|api_err| JsonRpseeError::to_call_error(api_err))
 	}
@@ -102,15 +101,19 @@ where
 		let encoded_len = encoded_xt.len() as u32;
 
 		let uxt: Block::Extrinsic = Decode::decode(&mut &*encoded_xt)
-			.map_err(|codec_err| CallError::from_std_error(codec_err))?;
+			.map_err(|codec_err| JsonRpseeError::to_call_error(codec_err))?;
 		let fee_details = api
 			.query_fee_details(&at, uxt, encoded_len)
-			.map_err(|api_err| CallError::from_std_error(api_err))?;
+			.map_err(|api_err| JsonRpseeError::to_call_error(api_err))?;
 
 		let try_into_rpc_balance = |value: Balance| {
-			value
-				.try_into()
-				.map_err(|_| anyhow!("{} doesn't fit in NumberOrHex representation", value))
+			value.try_into().map_err(|_| {
+				JsonRpseeError::Call(CallError::Custom {
+					code: ErrorCode::InvalidParams.code(),
+					message: format!("{} doesn't fit in NumberOrHex representation", value),
+					data: None,
+				})
+			})
 		};
 
 		Ok(FeeDetails {
