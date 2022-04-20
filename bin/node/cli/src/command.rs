@@ -206,5 +206,12 @@ pub fn run() -> Result<()> {
 		Some(Subcommand::TryRuntime) => Err("TryRuntime wasn't enabled when building the node. \
 				You can enable it with `--features try-runtime`."
 			.into()),
+		Some(Subcommand::BlockchainInfo(cmd)) => {
+			let runner = cli.create_runner(cmd)?;
+			runner.async_run(|config| {
+				let PartialComponents { backend, task_manager, .. } = new_partial(&config)?;
+				Ok((cmd.run(backend.clone()), task_manager))
+			})
+		},
 	}
 }
