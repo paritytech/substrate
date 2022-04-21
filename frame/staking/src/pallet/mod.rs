@@ -112,6 +112,8 @@ pub mod pallet {
 
 		/// Tokens have been minted and are unused for validator-reward.
 		/// See [Era payout](./index.html#era-payout).
+		/// NOTE: in most cases, the implementation of `OnUnbalanced` should modify the total
+		/// issuance.
 		type RewardRemainder: OnUnbalanced<NegativeImbalanceOf<Self>>;
 
 		/// The overarching event type.
