@@ -213,10 +213,7 @@ impl<T: Config> Pallet<T> {
 	/// Update the ledger for a controller.
 	///
 	/// This will also update the stash lock.
-	pub(crate) fn update_ledger(
-		controller: &T::AccountId,
-		ledger: &StakingLedger<T::AccountId, BalanceOf<T>>,
-	) {
+	pub(crate) fn update_ledger(controller: &T::AccountId, ledger: &StakingLedger<T>) {
 		T::Currency::set_lock(STAKING_ID, &ledger.stash, ledger.total, WithdrawReasons::all());
 		<Ledger<T>>::insert(controller, ledger);
 	}
@@ -606,7 +603,7 @@ impl<T: Config> Pallet<T> {
 				for era in (*earliest)..keep_from {
 					let era_slashes = <Self as Store>::UnappliedSlashes::take(&era);
 					for slash in era_slashes {
-						slashing::apply_slash::<T>(slash);
+						slashing::apply_slash::<T>(slash, era);
 					}
 				}
 
@@ -1248,7 +1245,7 @@ where
 				unapplied.reporters = details.reporters.clone();
 				if slash_defer_duration == 0 {
 					// Apply right away.
-					slashing::apply_slash::<T>(unapplied);
+					slashing::apply_slash::<T>(unapplied, slash_era);
 					{
 						let slash_cost = (6, 5);
 						let reward_cost = (2, 2);
