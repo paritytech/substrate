@@ -28,7 +28,7 @@ mod tests;
 mod mock;
 
 pub use pallet::*;
-use sp_runtime::traits::{IdentifyAccount, StaticLookup, Verify};
+use sp_runtime::traits::{IdentifyAccount, StaticLookup};
 pub use types::*;
 
 #[frame_support::pallet]
@@ -41,7 +41,7 @@ pub mod pallet {
 	use frame_support::traits::{Currency, ReservableCurrency};
 	use sp_runtime::{
 		traits::{CheckedAdd, One},
-		AccountId32, MultiSignature, MultiSigner,
+		AccountId32, MultiSignature,
 	};
 
 	// The struct on which we build all of our Pallet logic.
@@ -376,6 +376,8 @@ pub mod pallet {
 		MaxApprovalsReached,
 		/// Invalid signature provided.
 		InvalidSignature,
+		/// Invalid signature provided.
+		ErrorConvertingToAccountId,
 	}
 
 	// Pallet's callable functions.
@@ -642,7 +644,7 @@ pub mod pallet {
 
 			let signer = offer.signer.into_account();
 			let buyer = T::AccountId::decode(&mut AccountId32::as_ref(&signer))
-				.expect("32 bytes can always construct an AccountId32");
+				.map_err(|_| Error::<T>::ErrorConvertingToAccountId)?;
 
 			Self::do_accept_buy_offer(
 				sender,

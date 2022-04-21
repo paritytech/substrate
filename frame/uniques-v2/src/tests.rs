@@ -288,7 +288,7 @@ fn transfer_owner_should_work() {
 			collection_id,
 			user_2
 		));
-		assert_eq!(collections(), vec![(user_1, collection_id)]);
+		assert_eq!(collections(), vec![(user_2, collection_id)]);
 
 		assert_noop!(
 			Uniques::transfer_collection_ownership(Origin::signed(user_1), collection_id, user_1),

@@ -81,6 +81,8 @@ impl<T: Config> Pallet<T> {
 			frame_support::traits::ExistenceRequirement::KeepAlive,
 		)?;
 
+		let old_owner = item.owner.clone();
+
 		Self::do_transfer_item(collection_id, item_id, config, item.owner.clone(), buyer.clone())?;
 
 		// reset the price & the buyer
@@ -94,7 +96,7 @@ impl<T: Config> Pallet<T> {
 				collection_id,
 				item_id,
 				price: bid_price,
-				seller: item.owner.clone(),
+				seller: old_owner,
 				buyer,
 			});
 
