@@ -240,6 +240,8 @@ where
 		if notif.header.number() < &(best_finalized - UNSYNCH_FINALIZED_MARGIN.into()) {
 			self.state = State::Synching;
 			return
+		} else {
+			self.update_state(true);
 		}
 
 		// TODO could just look frame sessing new event!!, this is currently inefficient.
@@ -257,16 +259,19 @@ where
 			MixnetCommand::AuthorityId(authority_id, peer_id) => {
 				if let Some(topology) = self.worker.topology_mut() {
 					topology.add_authority_peer_id(authority_id, peer_id);
+					self.update_state(false);
 				}
 			},
 			MixnetCommand::Connected(peer_id, key) => {
 				if let Some(topology) = self.worker.topology_mut() {
 					topology.add_connected_peer(peer_id, key);
+					self.update_state(false);
 				}
 			},
 			MixnetCommand::Disconnected(peer_id) => {
 				if let Some(topology) = self.worker.topology_mut() {
 					topology.add_disconnected_peer(peer_id);
+					self.update_state(false);
 				}
 			},
 		}
@@ -282,11 +287,32 @@ where
 				&mut self.authority_queries,
 				at,
 			);
-			if topology.as_enough_nodes() {
-				self.state = State::Running
-			} else {
-				self.state = State::WaitingMorePeers;
-			}
+			self.update_state(false);
+		}
+	}
+
+	fn update_state(&mut self, synched: bool) {
+		match &self.state {
+			State::Running => {
+				if self.worker.topology().map(|t| !t.has_enough_nodes()).unwrap_or(false) {
+					self.state = State::WaitingMorePeers;
+				}
+			},
+			State::WaitingMorePeers => {
+				if self.worker.topology().map(|t| t.has_enough_nodes()).unwrap_or(false) {
+					debug!(target: "mixnet", "Running.");
+					self.state = State::Running;
+				}
+			},
+			State::Synching if synched => {
+				if self.worker.topology().map(|t| t.has_enough_nodes()).unwrap_or(false) {
+					debug!(target: "mixnet", "Running.");
+					self.state = State::Running;
+				} else {
+					self.state = State::WaitingMorePeers;
+				}
+			},
+			State::Synching => (),
 		}
 	}
 }
@@ -382,7 +408,7 @@ impl AuthorityStar {
 		}
 	}
 
-	fn as_enough_nodes(&self) -> bool {
+	fn has_enough_nodes(&self) -> bool {
 		self.routing_nodes.len() >= LOW_MIXNET_THRESHOLD
 	}
 
@@ -467,7 +493,7 @@ impl Topology for AuthorityStar {
 
 	fn random_recipient(&self) -> Option<MixPeerId> {
 		use rand::RngCore;
-		if !self.as_enough_nodes() {
+		if !self.has_enough_nodes() {
 			debug!(target: "mixnet", "Not enough routing nodes for path.");
 			return None
 		}
