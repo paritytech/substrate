@@ -133,7 +133,6 @@ const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(75);
 
 parameter_types! {
 	pub const Version: RuntimeVersion = VERSION;
-	pub const BlockHashCount: BlockNumber = 2400;
 	/// We allow for 2 seconds of compute with a 6 second average block time.
 	pub BlockWeights: frame_system::limits::BlockWeights = frame_system::limits::BlockWeights
 		::with_sensible_defaults(2 * WEIGHT_PER_SECOND, NORMAL_DISPATCH_RATIO);
@@ -171,7 +170,7 @@ impl frame_system::Config for Runtime {
 	/// The ubiquitous origin type.
 	type Origin = Origin;
 	/// Maximum number of block number to block hash mappings to keep (oldest pruned first).
-	type BlockHashCount = BlockHashCount;
+	type BlockHashCount = ConstU32<2400>;
 	/// The weight of database operations that the runtime can invoke.
 	type DbWeight = RocksDbWeight;
 	/// Version of the runtime.
