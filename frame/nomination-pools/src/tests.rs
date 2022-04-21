@@ -535,7 +535,10 @@ mod join {
 			Balances::make_free_balance_be(&103, 100 + Balances::minimum_balance());
 
 			// Then
-			assert_noop!(Pools::join(Origin::signed(103), 100, 1), Error::<Runtime>::MaxPoolMembers);
+			assert_noop!(
+				Pools::join(Origin::signed(103), 100, 1),
+				Error::<Runtime>::MaxPoolMembers
+			);
 
 			// Given
 			assert_eq!(PoolMembers::<Runtime>::count(), 3);
@@ -841,12 +844,9 @@ mod claim_payout {
 
 			// Given no rewards have been earned
 			// When
-			let payout = Pools::calculate_member_payout(
-				&mut member,
-				&mut bonded_pool,
-				&mut reward_pool,
-			)
-			.unwrap();
+			let payout =
+				Pools::calculate_member_payout(&mut member, &mut bonded_pool, &mut reward_pool)
+					.unwrap();
 
 			// Then
 			assert_eq!(payout, 0);
@@ -857,12 +857,9 @@ mod claim_payout {
 			Balances::make_free_balance_be(&default_reward_account(), ed + 5);
 
 			// When
-			let payout = Pools::calculate_member_payout(
-				&mut member,
-				&mut bonded_pool,
-				&mut reward_pool,
-			)
-			.unwrap();
+			let payout =
+				Pools::calculate_member_payout(&mut member, &mut bonded_pool, &mut reward_pool)
+					.unwrap();
 
 			// Then
 			assert_eq!(payout, 5); //  (10 * 5 del virtual points / 10 * 5 pool points) * 5 pool balance
@@ -873,12 +870,9 @@ mod claim_payout {
 			Balances::make_free_balance_be(&default_reward_account(), ed + 10);
 
 			// When
-			let payout = Pools::calculate_member_payout(
-				&mut member,
-				&mut bonded_pool,
-				&mut reward_pool,
-			)
-			.unwrap();
+			let payout =
+				Pools::calculate_member_payout(&mut member, &mut bonded_pool, &mut reward_pool)
+					.unwrap();
 
 			// Then
 			assert_eq!(payout, 10); // (10 * 10 del virtual points / 10 pool points) * 5 pool balance
@@ -889,12 +883,9 @@ mod claim_payout {
 			Balances::make_free_balance_be(&default_reward_account(), ed + 0);
 
 			// When
-			let payout = Pools::calculate_member_payout(
-				&mut member,
-				&mut bonded_pool,
-				&mut reward_pool,
-			)
-			.unwrap();
+			let payout =
+				Pools::calculate_member_payout(&mut member, &mut bonded_pool, &mut reward_pool)
+					.unwrap();
 
 			// Then
 			assert_eq!(payout, 0);
@@ -925,12 +916,9 @@ mod claim_payout {
 				Balances::make_free_balance_be(&default_reward_account(), ed + 100);
 
 				// When
-				let payout = Pools::calculate_member_payout(
-					&mut del_10,
-					&mut bonded_pool,
-					&mut reward_pool,
-				)
-				.unwrap();
+				let payout =
+					Pools::calculate_member_payout(&mut del_10, &mut bonded_pool, &mut reward_pool)
+						.unwrap();
 
 				// Then
 				assert_eq!(payout, 10); // (10 del virtual points / 100 pool points) * 100 pool balance
@@ -940,12 +928,9 @@ mod claim_payout {
 				assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free -= 10));
 
 				// When
-				let payout = Pools::calculate_member_payout(
-					&mut del_40,
-					&mut bonded_pool,
-					&mut reward_pool,
-				)
-				.unwrap();
+				let payout =
+					Pools::calculate_member_payout(&mut del_40, &mut bonded_pool, &mut reward_pool)
+						.unwrap();
 
 				// Then
 				assert_eq!(payout, 40); // (400 del virtual points / 900 pool points) * 90 pool balance
@@ -963,12 +948,9 @@ mod claim_payout {
 				assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free -= 40));
 
 				// When
-				let payout = Pools::calculate_member_payout(
-					&mut del_50,
-					&mut bonded_pool,
-					&mut reward_pool,
-				)
-				.unwrap();
+				let payout =
+					Pools::calculate_member_payout(&mut del_50, &mut bonded_pool, &mut reward_pool)
+						.unwrap();
 
 				// Then
 				assert_eq!(payout, 50); // (50 del virtual points / 50 pool points) * 50 pool balance
@@ -981,12 +963,9 @@ mod claim_payout {
 				Balances::make_free_balance_be(&default_reward_account(), ed + 50);
 
 				// When
-				let payout = Pools::calculate_member_payout(
-					&mut del_10,
-					&mut bonded_pool,
-					&mut reward_pool,
-				)
-				.unwrap();
+				let payout =
+					Pools::calculate_member_payout(&mut del_10, &mut bonded_pool, &mut reward_pool)
+						.unwrap();
 
 				// Then
 				assert_eq!(payout, 5); // (500  del virtual points / 5,000 pool points) * 50 pool balance
@@ -996,12 +975,9 @@ mod claim_payout {
 				assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free -= 5));
 
 				// When
-				let payout = Pools::calculate_member_payout(
-					&mut del_40,
-					&mut bonded_pool,
-					&mut reward_pool,
-				)
-				.unwrap();
+				let payout =
+					Pools::calculate_member_payout(&mut del_40, &mut bonded_pool, &mut reward_pool)
+						.unwrap();
 
 				// Then
 				assert_eq!(payout, 20); // (2,000 del virtual points / 4,500 pool points) * 45 pool balance
@@ -1014,12 +990,9 @@ mod claim_payout {
 				assert_eq!(Balances::free_balance(&default_reward_account()), ed + 75);
 
 				// When
-				let payout = Pools::calculate_member_payout(
-					&mut del_50,
-					&mut bonded_pool,
-					&mut reward_pool,
-				)
-				.unwrap();
+				let payout =
+					Pools::calculate_member_payout(&mut del_50, &mut bonded_pool, &mut reward_pool)
+						.unwrap();
 
 				// Then
 				assert_eq!(payout, 50); // (5,000 del virtual points / 7,5000 pool points) * 75 pool balance
@@ -1040,12 +1013,9 @@ mod claim_payout {
 				assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free -= 50));
 
 				// When
-				let payout = Pools::calculate_member_payout(
-					&mut del_10,
-					&mut bonded_pool,
-					&mut reward_pool,
-				)
-				.unwrap();
+				let payout =
+					Pools::calculate_member_payout(&mut del_10, &mut bonded_pool, &mut reward_pool)
+						.unwrap();
 
 				// Then
 				assert_eq!(payout, 5);
@@ -1059,12 +1029,9 @@ mod claim_payout {
 				assert_eq!(Balances::free_balance(&default_reward_account()), ed + 420);
 
 				// When
-				let payout = Pools::calculate_member_payout(
-					&mut del_10,
-					&mut bonded_pool,
-					&mut reward_pool,
-				)
-				.unwrap();
+				let payout =
+					Pools::calculate_member_payout(&mut del_10, &mut bonded_pool, &mut reward_pool)
+						.unwrap();
 
 				// Then
 				assert_eq!(payout, 40);
@@ -1089,12 +1056,9 @@ mod claim_payout {
 				assert_eq!(Balances::free_balance(&default_reward_account()), ed + 400);
 
 				// When
-				let payout = Pools::calculate_member_payout(
-					&mut del_10,
-					&mut bonded_pool,
-					&mut reward_pool,
-				)
-				.unwrap();
+				let payout =
+					Pools::calculate_member_payout(&mut del_10, &mut bonded_pool, &mut reward_pool)
+						.unwrap();
 
 				// Then
 				assert_eq!(payout, 2); // (200 del virtual points / 38,000 pool points) * 400 pool balance
@@ -1104,12 +1068,9 @@ mod claim_payout {
 				assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free -= 2));
 
 				// When
-				let payout = Pools::calculate_member_payout(
-					&mut del_40,
-					&mut bonded_pool,
-					&mut reward_pool,
-				)
-				.unwrap();
+				let payout =
+					Pools::calculate_member_payout(&mut del_40, &mut bonded_pool, &mut reward_pool)
+						.unwrap();
 
 				// Then
 				assert_eq!(payout, 188); // (18,800 del virtual points /  39,800 pool points) * 399 pool balance
@@ -1119,12 +1080,9 @@ mod claim_payout {
 				assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free -= 188));
 
 				// When
-				let payout = Pools::calculate_member_payout(
-					&mut del_50,
-					&mut bonded_pool,
-					&mut reward_pool,
-				)
-				.unwrap();
+				let payout =
+					Pools::calculate_member_payout(&mut del_50, &mut bonded_pool, &mut reward_pool)
+						.unwrap();
 
 				// Then
 				assert_eq!(payout, 210); // (21,000 / 21,000) * 210
@@ -1831,49 +1789,43 @@ mod unbond {
 	// depositor can unbond inly up to `MinCreateBond`.
 	#[test]
 	fn depositor_permissioned_partial_unbond() {
-		ExtBuilder::default()
-			.ed(1)
-			.add_members(vec![(100, 100)])
-			.build_and_execute(|| {
-				// given
-				assert_eq!(MinCreateBond::<Runtime>::get(), 2);
-				assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().active_points(), 10);
-				assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().unbonding_points(), 0);
+		ExtBuilder::default().ed(1).add_members(vec![(100, 100)]).build_and_execute(|| {
+			// given
+			assert_eq!(MinCreateBond::<Runtime>::get(), 2);
+			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().active_points(), 10);
+			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().unbonding_points(), 0);
 
-				// can unbond a bit..
-				assert_ok!(Pools::unbond(Origin::signed(10), 10, 3));
-				assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().active_points(), 7);
-				assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().unbonding_points(), 3);
+			// can unbond a bit..
+			assert_ok!(Pools::unbond(Origin::signed(10), 10, 3));
+			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().active_points(), 7);
+			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().unbonding_points(), 3);
 
-				// but not less than 2
-				assert_noop!(
-					Pools::unbond(Origin::signed(10), 10, 6),
-					Error::<Runtime>::NotOnlyPoolMember
-				);
-			});
+			// but not less than 2
+			assert_noop!(
+				Pools::unbond(Origin::signed(10), 10, 6),
+				Error::<Runtime>::NotOnlyPoolMember
+			);
+		});
 	}
 
 	// same as above, but the pool is slashed and therefore the depositor cannot partially unbond.
 	#[test]
 	fn depositor_permissioned_partial_unbond_slashed() {
-		ExtBuilder::default()
-			.ed(1)
-			.add_members(vec![(100, 100)])
-			.build_and_execute(|| {
-				// given
-				assert_eq!(MinCreateBond::<Runtime>::get(), 2);
-				assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().active_points(), 10);
-				assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().unbonding_points(), 0);
+		ExtBuilder::default().ed(1).add_members(vec![(100, 100)]).build_and_execute(|| {
+			// given
+			assert_eq!(MinCreateBond::<Runtime>::get(), 2);
+			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().active_points(), 10);
+			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().unbonding_points(), 0);
 
-				// slash the default pool
-				StakingMock::set_bonded_balance(Pools::create_bonded_account(1), 5);
+			// slash the default pool
+			StakingMock::set_bonded_balance(Pools::create_bonded_account(1), 5);
 
-				// cannot unbond even 7, because the value of shares is now less.
-				assert_noop!(
-					Pools::unbond(Origin::signed(10), 10, 7),
-					Error::<Runtime>::NotOnlyPoolMember
-				);
-			});
+			// cannot unbond even 7, because the value of shares is now less.
+			assert_noop!(
+				Pools::unbond(Origin::signed(10), 10, 7),
+				Error::<Runtime>::NotOnlyPoolMember
+			);
+		});
 	}
 }
 
@@ -2547,7 +2499,11 @@ mod create {
 			assert_eq!(Balances::free_balance(&11), 0);
 			assert_eq!(
 				PoolMembers::<Runtime>::get(11).unwrap(),
-				PoolMember { pool_id: 2, points: StakingMock::minimum_bond(), ..Default::default() }
+				PoolMember {
+					pool_id: 2,
+					points: StakingMock::minimum_bond(),
+					..Default::default()
+				}
 			);
 			assert_eq!(
 				BondedPool::<Runtime>::get(2).unwrap(),

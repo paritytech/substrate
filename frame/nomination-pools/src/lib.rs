@@ -89,8 +89,8 @@
 //!
 //! A pool has 3 administrative roles (see [`PoolRoles`]):
 //!
-//! * Depositor: creates the pool and is the initial member. They can only leave the pool once
-//!   all other members have left. Once they fully leave the pool is destroyed.
+//! * Depositor: creates the pool and is the initial member. They can only leave the pool once all
+//!   other members have left. Once they fully leave the pool is destroyed.
 //! * Nominator: can select which validators the pool nominates.
 //! * State-Toggler: can change the pools state and kick members if the pool is blocked.
 //! * Root: can change the nominator, state-toggler, or itself and can perform any of the actions
@@ -182,9 +182,9 @@
 //!			new_earnings = current_total_earnings - reward_pool.total_earnings;
 //!       	current_points = reward_pool.points + bonding_pool.points * new_earnings;
 //!			```
-//!     * Finally, the`member_virtual_points` are computed: the product of the member's points
-//!       in the bonding pool and the total inflow of balance units since the last time the
-//!       member claimed rewards
+//!     * Finally, the`member_virtual_points` are computed: the product of the member's points in
+//!       the bonding pool and the total inflow of balance units since the last time the member
+//!       claimed rewards
 //!			```text
 //!			new_earnings_since_last_claim = current_total_earnings - member.reward_pool_total_earnings;
 //!        	member_virtual_points = member.points * new_earnings_since_last_claim;
@@ -295,8 +295,8 @@
 //! ### Limitations
 //!
 //! * PoolMembers cannot vote with their staked funds because they are transferred into the pools
-//!   account. In the future this can be overcome by allowing the members to vote with their
-//!   bonded funds via vote splitting.
+//!   account. In the future this can be overcome by allowing the members to vote with their bonded
+//!   funds via vote splitting.
 //! * PoolMembers cannot quickly transfer to another pool if they do no like nominations, instead
 //!   they must wait for the unbonding duration.
 //!
@@ -1110,7 +1110,8 @@ pub mod pallet {
 
 	/// Active members.
 	#[pallet::storage]
-	pub type PoolMembers<T: Config> = CountedStorageMap<_, Twox64Concat, T::AccountId, PoolMember<T>>;
+	pub type PoolMembers<T: Config> =
+		CountedStorageMap<_, Twox64Concat, T::AccountId, PoolMember<T>>;
 
 	/// Storage for bonded pools.
 	// To get or insert a pool see [`BondedPool::get`] and [`BondedPool::put`]
@@ -1334,8 +1335,7 @@ pub mod pallet {
 		#[transactional]
 		pub fn bond_extra(origin: OriginFor<T>, extra: BondExtra<BalanceOf<T>>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			let (mut member, mut bonded_pool, mut reward_pool) =
-				Self::get_member_with_pools(&who)?;
+			let (mut member, mut bonded_pool, mut reward_pool) = Self::get_member_with_pools(&who)?;
 
 			let (points_issued, bonded) = match extra {
 				BondExtra::FreeBalance(amount) =>
@@ -1374,11 +1374,9 @@ pub mod pallet {
 		#[transactional]
 		pub fn claim_payout(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			let (mut member, mut bonded_pool, mut reward_pool) =
-				Self::get_member_with_pools(&who)?;
+			let (mut member, mut bonded_pool, mut reward_pool) = Self::get_member_with_pools(&who)?;
 
-			let _ =
-				Self::do_reward_payout(&who, &mut member, &mut bonded_pool, &mut reward_pool)?;
+			let _ = Self::do_reward_payout(&who, &mut member, &mut bonded_pool, &mut reward_pool)?;
 
 			Self::put_member_with_pools(&who, member, bonded_pool, reward_pool);
 			Ok(())
@@ -1396,8 +1394,8 @@ pub mod pallet {
 		/// * The pool is blocked and the caller is either the root or state-toggler. This is
 		///   refereed to as a kick.
 		/// * The pool is destroying and the member is not the depositor.
-		/// * The pool is destroying, the member is the depositor and no other members are in
-		///   the pool.
+		/// * The pool is destroying, the member is the depositor and no other members are in the
+		///   pool.
 		///
 		/// ## Conditions for permissioned dispatch (i.e. the caller is also the
 		/// `member_account`):
@@ -1423,12 +1421,7 @@ pub mod pallet {
 			let (mut member, mut bonded_pool, mut reward_pool) =
 				Self::get_member_with_pools(&member_account)?;
 
-			bonded_pool.ok_to_unbond_with(
-				&caller,
-				&member_account,
-				&member,
-				unbonding_points,
-			)?;
+			bonded_pool.ok_to_unbond_with(&caller, &member_account, &member, unbonding_points)?;
 
 			// Claim the the payout prior to unbonding. Once the user is unbonding their points
 			// no longer exist in the bonded pool and thus they can no longer claim their payouts.
@@ -2049,8 +2042,7 @@ impl<T: Config> Pallet<T> {
 		ensure!(!member.active_points().is_zero(), Error::<T>::FullyUnbonding);
 		let was_destroying = bonded_pool.is_destroying();
 
-		let member_payout =
-			Self::calculate_member_payout(member, bonded_pool, reward_pool)?;
+		let member_payout = Self::calculate_member_payout(member, bonded_pool, reward_pool)?;
 
 		// Transfer payout to the member.
 		T::Currency::transfer(
@@ -2196,8 +2188,7 @@ impl<T: Config> Pallet<T> {
 		origin: frame_system::pallet_prelude::OriginFor<T>,
 		member: T::AccountId,
 	) -> DispatchResult {
-		let points =
-			PoolMembers::<T>::get(&member).map(|d| d.active_points()).unwrap_or_default();
+		let points = PoolMembers::<T>::get(&member).map(|d| d.active_points()).unwrap_or_default();
 		Self::unbond(origin, member, points)
 	}
 }

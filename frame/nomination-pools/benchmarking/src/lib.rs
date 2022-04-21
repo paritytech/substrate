@@ -8,9 +8,9 @@ use frame_election_provider_support::SortedListProvider;
 use frame_support::{ensure, traits::Get};
 use frame_system::RawOrigin as Origin;
 use pallet_nomination_pools::{
-	BalanceOf, BondExtra, BondedPoolInner, BondedPools, ConfigOp, PoolMembers, MaxPoolMembers,
+	BalanceOf, BondExtra, BondedPoolInner, BondedPools, ConfigOp, MaxPoolMembers,
 	MaxPoolMembersPerPool, MaxPools, Metadata, MinCreateBond, MinJoinBond, Pallet as Pools,
-	PoolRoles, PoolState, RewardPools, SubPoolsStorage,
+	PoolMembers, PoolRoles, PoolState, RewardPools, SubPoolsStorage,
 };
 use sp_runtime::traits::{Bounded, Zero};
 use sp_staking::{EraIndex, StakingInterface};
