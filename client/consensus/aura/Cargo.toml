@@ -25,7 +25,7 @@ sp-consensus-slots = { version = "0.10.0-dev", path = "../../../primitives/conse
 thiserror = "1.0"
 futures = "0.3.21"
 sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
-log = "0.4.8"
+log = "0.4.16"
 sp-core = { version = "6.0.0", path = "../../../primitives/core" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
 sc-consensus-slots = { version = "0.10.0-dev", path = "../slots" }

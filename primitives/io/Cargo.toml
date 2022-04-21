@@ -27,7 +27,7 @@ sp-runtime-interface = { version = "6.0.0", default-features = false, path = "..
 sp-trie = { version = "6.0.0", optional = true, path = "../trie" }
 sp-externalities = { version = "0.12.0", optional = true, path = "../externalities" }
 sp-tracing = { version = "5.0.0", default-features = false, path = "../tracing" }
-log = { version = "0.4.8", optional = true }
+log = { version = "0.4.16", optional = true }
 futures = { version = "0.3.21", features = ["thread-pool"], optional = true }
 parking_lot = { version = "0.12.0", optional = true }
 secp256k1 = { version = "0.21.2", features = ["recovery", "global-context"], optional = true }

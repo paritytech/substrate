@@ -174,11 +174,13 @@ impl<T: Config> Pallet<T> {
 
 		Self::deposit_event(Event::<T>::PayoutStarted(era, ledger.stash.clone()));
 
+		let mut total_imbalance = PositiveImbalanceOf::<T>::zero();
 		// We can now make total validator payout:
 		if let Some(imbalance) =
 			Self::make_payout(&ledger.stash, validator_staking_payout + validator_commission_payout)
 		{
 			Self::deposit_event(Event::<T>::Rewarded(ledger.stash, imbalance.peek()));
+			total_imbalance.subsume(imbalance);
 		}
 
 		// Track the number of payout ops to nominators. Note:
@@ -199,9 +201,11 @@ impl<T: Config> Pallet<T> {
 				nominator_payout_count += 1;
 				let e = Event::<T>::Rewarded(nominator.who.clone(), imbalance.peek());
 				Self::deposit_event(e);
+				total_imbalance.subsume(imbalance);
 			}
 		}
 
+		T::Reward::on_unbalanced(total_imbalance);
 		debug_assert!(nominator_payout_count <= T::MaxNominatorRewardedPerValidator::get());
 		Ok(Some(T::WeightInfo::payout_stakers_alive_staked(nominator_payout_count)).into())
 	}

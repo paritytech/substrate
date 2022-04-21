@@ -181,10 +181,11 @@ parameter_types! {
 }
 
 pub struct OnChainSeqPhragmen;
-impl onchain::ExecutionConfig for OnChainSeqPhragmen {
+impl onchain::Config for OnChainSeqPhragmen {
 	type System = Test;
-	type Solver = SequentialPhragmen<<Test as frame_system::Config>::AccountId, Perbill>;
+	type Solver = SequentialPhragmen<u64, Perbill>;
 	type DataProvider = Staking;
+	type WeightInfo = ();
 }
 
 impl pallet_staking::Config for Test {
