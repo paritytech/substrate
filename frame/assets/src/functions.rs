@@ -19,6 +19,7 @@
 
 use super::*;
 use frame_support::{traits::Get, BoundedVec};
+use sp_std::vec;
 
 #[must_use]
 pub(super) enum DeadConsequence {
