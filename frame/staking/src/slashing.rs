@@ -598,6 +598,7 @@ pub fn do_slash<T: Config>(
 	value: BalanceOf<T>,
 	reward_payout: &mut BalanceOf<T>,
 	slashed_imbalance: &mut NegativeImbalanceOf<T>,
+	slash_era: EraIndex,
 ) {
 	let controller = match <Pallet<T>>::bonded(stash) {
 		None => return, // defensive: should always exist.
@@ -609,7 +610,7 @@ pub fn do_slash<T: Config>(
 		None => return, // nothing to do.
 	};
 
-	let value = ledger.slash(value, T::Currency::minimum_balance());
+	let value = ledger.slash(value, T::Currency::minimum_balance(), slash_era);
 
 	if !value.is_zero() {
 		let (imbalance, missing) = T::Currency::slash(stash, value);
@@ -628,7 +629,10 @@ pub fn do_slash<T: Config>(
 }
 
 /// Apply a previously-unapplied slash.
-pub(crate) fn apply_slash<T: Config>(unapplied_slash: UnappliedSlash<T::AccountId, BalanceOf<T>>) {
+pub(crate) fn apply_slash<T: Config>(
+	unapplied_slash: UnappliedSlash<T::AccountId, BalanceOf<T>>,
+	slash_era: EraIndex,
+) {
 	let mut slashed_imbalance = NegativeImbalanceOf::<T>::zero();
 	let mut reward_payout = unapplied_slash.payout;
 
@@ -637,10 +641,17 @@ pub(crate) fn apply_slash<T: Config>(unapplied_slash: UnappliedSlash<T::AccountI
 		unapplied_slash.own,
 		&mut reward_payout,
 		&mut slashed_imbalance,
+		slash_era,
 	);
 
 	for &(ref nominator, nominator_slash) in &unapplied_slash.others {
-		do_slash::<T>(&nominator, nominator_slash, &mut reward_payout, &mut slashed_imbalance);
+		do_slash::<T>(
+			&nominator,
+			nominator_slash,
+			&mut reward_payout,
+			&mut slashed_imbalance,
+			slash_era,
+		);
 	}
 
 	pay_reporters::<T>(reward_payout, slashed_imbalance, &unapplied_slash.reporters);
