@@ -220,7 +220,7 @@ where
 			let round = msg.commitment.block_number;
 			let allowed = known_votes.is_live(&round);
 
-			debug!(target: "beefy", "🥩 Message for round #{} allowed: {}", round, allowed);
+			trace!(target: "beefy", "🥩 Message for round #{} allowed: {}", round, allowed);
 
 			allowed
 		})

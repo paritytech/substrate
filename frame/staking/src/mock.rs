@@ -237,6 +237,7 @@ const THRESHOLDS: [sp_npos_elections::VoteWeight; 9] =
 parameter_types! {
 	pub static BagThresholds: &'static [sp_npos_elections::VoteWeight] = &THRESHOLDS;
 	pub static MaxNominations: u32 = 16;
+	pub static RewardOnUnbalanceWasCalled: bool = false;
 	pub static LedgerSlashPerEra: (BalanceOf<Test>, BTreeMap<EraIndex, BalanceOf<Test>>) = (Zero::zero(), BTreeMap::new());
 }
 
@@ -254,6 +255,13 @@ impl onchain::Config for OnChainSeqPhragmen {
 	type Solver = SequentialPhragmen<AccountId, Perbill>;
 	type DataProvider = Staking;
 	type WeightInfo = ();
+}
+
+pub struct MockReward {}
+impl OnUnbalanced<PositiveImbalanceOf<Test>> for MockReward {
+	fn on_unbalanced(_: PositiveImbalanceOf<Test>) {
+		RewardOnUnbalanceWasCalled::set(true);
+	}
 }
 
 pub struct OnStakerSlashMock<T: Config>(core::marker::PhantomData<T>);
@@ -276,7 +284,7 @@ impl crate::pallet::pallet::Config for Test {
 	type RewardRemainder = RewardRemainderMock;
 	type Event = Event;
 	type Slash = ();
-	type Reward = ();
+	type Reward = MockReward;
 	type SessionsPerEra = SessionsPerEra;
 	type SlashDeferDuration = SlashDeferDuration;
 	type SlashCancelOrigin = frame_system::EnsureRoot<Self::AccountId>;
