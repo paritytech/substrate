@@ -426,46 +426,35 @@ impl<'a> wasmi::ModuleImportResolver for Resolver<'a> {
 	fn resolve_memory(
 		&self,
 		field_name: &str,
-		desc: &wasmi::MemoryDescriptor,
+		memory_type: &wasmi::MemoryDescriptor,
 	) -> Result<MemoryRef, wasmi::Error> {
 		if field_name == "memory" {
 			match &mut *self.import_memory.borrow_mut() {
 				Some(_) =>
 					Err(wasmi::Error::Instantiation("Memory can not be imported twice!".into())),
 				memory_ref @ None => {
-					if desc.initial() > self.heap_pages {
-						return Err(wasmi::Error::Instantiation(format!(
-							"Wasm minimum heap pages `{}` is bigger than requested heap pages `{}`.",
-							desc.initial(),
+					if memory_type
+						.maximum()
+						.map(|m| m.saturating_sub(memory_type.initial()))
+						.map(|m| self.heap_pages > m)
+						.unwrap_or(false)
+					{
+						Err(wasmi::Error::Instantiation(format!(
+							"Heap pages ({}) is greater than imported memory maximum ({}).",
 							self.heap_pages,
+							memory_type
+								.maximum()
+								.map(|m| m.saturating_sub(memory_type.initial()))
+								.expect("Maximum is set, checked above; qed"),
 						)))
+					} else {
+						let memory = MemoryInstance::alloc(
+							Pages((memory_type.initial() + self.heap_pages) as usize),
+							Some(Pages((memory_type.initial() + self.heap_pages) as usize)),
+						)?;
+						*memory_ref = Some(memory.clone());
+						Ok(memory)
 					}
-
-					if desc.maximum().map_or(false, |m| self.heap_pages > m) {
-						return Err(wasmi::Error::Instantiation(format!(
-							"Requested heap pages `{}` is bigger than maximum requested\
-							 by the runtime wasm module `{}`",
-							self.heap_pages,
-							desc.maximum().unwrap_or(0),
-						)))
-					}
-
-					if desc.maximum() > self.max_heap_pages {
-						return Err(wasmi::Error::Instantiation(format!(
-							"Requested maximum heap pages `{}` is smaller than maximum requested\
-							 by the runtime wasm module `{}`",
-							self.max_heap_pages.unwrap_or(0),
-							desc.maximum().unwrap_or(0),
-						)))
-					}
-
-					let memory = MemoryInstance::alloc(
-						Pages(self.heap_pages as usize),
-						self.max_heap_pages.map(|v| Pages(v as usize)),
-					)?;
-
-					*memory_ref = Some(memory.clone());
-					Ok(memory)
 				},
 			}
 		} else {
