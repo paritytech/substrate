@@ -144,7 +144,20 @@ pub trait StateApi<Hash> {
 		id: SubscriptionId,
 	) -> RpcResult<bool>;
 
-	/// New storage subscription
+	/// Subscribe to the changes in the storage.
+	///
+	/// This RPC endpoint has two modes of operation:
+	///   1) When `keys` is not `None` you'll only be informed about the changes
+	///      done to the specified keys; this is RPC-safe.
+	///   2) When `keys` is `None` you'll be informed of *all* of the changes;
+	///      **this is RPC-unsafe**.
+	///
+	/// When subscribed to all of the changes this API will emit every storage
+	/// change for every block that is imported and will **not** send any fixup
+	/// notifications when those changes end up being *not* finalized or if
+	/// any of the previously unseen changes from before you've subscribed will
+	/// get finalized. It is your responsibility to make sure your view of the
+	/// storage is consistent, if you need that guarantee.
 	#[pubsub(subscription = "state_storage", subscribe, name = "state_subscribeStorage")]
 	fn subscribe_storage(
 		&self,
