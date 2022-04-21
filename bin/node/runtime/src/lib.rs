@@ -607,7 +607,7 @@ parameter_types! {
 	pub MaxNominations: u32 = <NposSolution16 as frame_election_provider_support::NposSolution>::LIMIT as u32;
 	pub MaxElectingVoters: u32 = 10_000;
 	// Conservative value, unbounded to keep backward compatibility.
-	pub MaxBackersPerWinner: u32 = u32::max_value();
+	pub MaxWinnersPerPage: u32 = u32::max_value();
 }
 
 /// The numbers configured here could always be more than the the maximum limits of staking pallet
@@ -659,7 +659,7 @@ impl onchain::Config for OnChainSeqPhragmen {
 	type WeightInfo = frame_election_provider_support::weights::SubstrateWeight<Runtime>;
 	// This is being defensive by defending the maximum bound possible.
 	type MaxBackersPerWinner = MaxElectingVoters;
-	type MaxWinnersPerPage = MaxBackersPerWinner;
+	type MaxWinnersPerPage = MaxWinnersPerPage;
 }
 
 impl onchain::BoundedConfig for OnChainSeqPhragmen {
@@ -715,7 +715,7 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type MaxElectingVoters = MaxElectingVoters;
 	// This is being defensive by defending the maximum bound possible.
 	type MaxBackersPerWinner = MaxElectingVoters;
-	type MaxWinnersPerPage = MaxBackersPerWinner;
+	type MaxWinnersPerPage = MaxWinnersPerPage;
 	type BenchmarkingConfig = ElectionProviderBenchmarkConfig;
 	type WeightInfo = pallet_election_provider_multi_phase::weights::SubstrateWeight<Self>;
 }
