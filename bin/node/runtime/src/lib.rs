@@ -1833,7 +1833,7 @@ impl_runtime_apis! {
 				let node_id: &[u8] = node_id.as_ref();
 				keys.push((node_id.to_vec(), node_keys));
 			}
-			Vec::new()
+			keys
 		}
 	}
 

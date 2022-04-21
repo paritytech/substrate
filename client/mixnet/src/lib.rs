@@ -33,7 +33,7 @@ use codec::{Decode, Encode};
 use futures::{channel::mpsc::SendError, future, FutureExt, Stream, StreamExt};
 
 use futures::{channel::oneshot, future::OptionFuture};
-use log::{debug, error};
+use log::{debug, warn, error};
 use sc_client_api::{BlockchainEvents, FinalityNotification, UsageProvider};
 use sp_api::{ApiExt, ProvideRuntimeApi};
 use sc_network::MixnetCommand;
@@ -187,6 +187,7 @@ where
 			let authority_set = self.shared_authority_set.current_authority_list();
 			let session = self.shared_authority_set.set_id();
 			self.handle_new_authority(authority_set, session, info.finalized_number);
+// TODO this need to run when genesis built: on block import 1 or 0
 		}
 		// TODO change in crate to use directly as a future..
 		loop {
@@ -210,14 +211,30 @@ where
 				notif = self.finality_stream.next().fuse() => {
 					if let Some(notif) = notif {
 						self.handle_new_finalize_block(notif);
+					} else {
+						// This point is reached if the other component did shutdown.
+						// Shutdown as well.
+						debug!(target: "mixnet", "Mixnet, shutdown.");
+						return;
 					}
 				},
 				command = self.command_stream.next().fuse() => {
 					if let Some(command) = command {
 						self.handle_command(command);
+					} else {
+						// This point is reached if the other component did shutdown.
+						// Shutdown as well.
+						// TODO actually having an instance of sink it will never happen.
+						debug!(target: "mixnet", "Mixnet, shutdown.");
+						return;
 					}
 				},
-				_ = future::poll_fn(|cx| self.worker.poll(cx)).fuse() => (),
+				success = future::poll_fn(|cx| self.worker.poll(cx)).fuse() => {
+					if !success {
+						debug!(target: "mixnet", "Mixnet, shutdown.");
+						return;
+					}
+				},
 				// TODO a Delay that if too long without finalization will put state back to in synch
 			}
 
@@ -238,6 +255,7 @@ where
 		let info = self.client.usage_info().chain; // these could be part of finality stream info?
 		let best_finalized = info.finalized_number;
 		if notif.header.number() < &(best_finalized - UNSYNCH_FINALIZED_MARGIN.into()) {
+			debug!(target: "mixnet", "Synching, mixnet suspended.");
 			self.state = State::Synching;
 			return
 		} else {
@@ -245,8 +263,8 @@ where
 		}
 
 		// TODO could just look frame sessing new event!!, this is currently inefficient.
+		// Also looking at finalized is discutable.
 
-		// TODO move the processing out of the stream and into the worker.
 		let new_session = self.shared_authority_set.set_id();
 		if self.session.map(|session| new_session != session).unwrap_or(true) {
 			let authority_set = self.shared_authority_set.current_authority_list();
@@ -280,12 +298,14 @@ where
 	fn handle_new_authority(&mut self, set: AuthorityList, session: SetId, at: NumberFor<B>) {
 		self.session = Some(session);
 		if let Some(topology) = self.worker.topology_mut() {
-			topology.change_authorities::<B>(
+			topology.change_authorities::<B, C>(
+				&*self.client,
 				set,
 				&mut self.authority_discovery_service,
 				&mut self.authority_replies,
 				&mut self.authority_queries,
 				at,
+				session,
 			);
 			self.update_state(false);
 		}
@@ -371,19 +391,78 @@ impl AuthorityStar {
 	}
 	*/
 
-	fn change_authorities<B: BlockT>(
+	fn change_authorities<B, C>(
 		&mut self,
+		client: &C, 
 		new_set: AuthorityList,
 		authority_discovery_service: &mut sc_authority_discovery::Service,
 		authority_replies: &mut VecDeque<AuthorityRx>,
 		authority_queries: &mut VecDeque<AuthorityId>,
-		at: NumberFor<B>,
-	) {
+		mut at: NumberFor<B>,
+		session: SetId,
+	)
+		where
+				B: BlockT,
+				C: UsageProvider<B> + BlockchainEvents<B> + ProvideRuntimeApi<B>,
+				C::Api: SessionKeys<B>,
+	{
 		debug!(target: "mixnet", "Change authorities {:?}", new_set);
 		self.current_authorities.clear();
 		self.routing_nodes.clear();
 		self.unconnected_authorities.clear(); // TODO could keep for a few session
 		self.routing = false;
+
+			let mut block_id = sp_runtime::generic::BlockId::number(at); // TODO may need at + 1?
+			// find first block with previous session id
+			let runtime_api = client.runtime_api();
+			if session == 0 {
+				at = 0u32.into();
+				block_id = sp_runtime::generic::BlockId::number(at);
+			} else {
+
+				let mut nb = 0;
+				let target = match runtime_api.session_index(&block_id) {
+					Ok(at) => at - 1,
+					Err(e) => {
+						// TODO util meth returning error and handling outside
+						error!(target: "mixnet", "Could not fetch session index {:?}, no peer id fetching.", e);
+						return;
+					},
+				};
+				loop {
+					at -= 1u32.into();
+					nb += 1;
+					block_id = sp_runtime::generic::BlockId::number(at);
+					let session_at = match runtime_api.session_index(&block_id) {
+						Ok(at) => at,
+						Err(e) => {
+							error!(target: "mixnet", "Could not fetch session index {:?}, no peer id fetching.", e);
+							return;
+						},
+					};
+					if session_at == target {
+						break;
+					} else if session_at < target {
+						error!(target: "mixnet", "Could not fetch previous session index, no peer id fetching.");
+						return;
+					}
+				}
+
+				if nb > 3 {
+					warn!(target: "mixnet", "{:?} query to fetch previous session index.", nb);
+				}
+			}
+			// TODO could use queued change to avoid one fetch when updating
+			let sessions = match runtime_api.queued_keys(&block_id) {
+					Ok(at) => at,
+					Err(e) => {
+						error!(target: "mixnet", "Could not fetch queued session keys {:?}, no peer id fetching.", e);
+						return;
+					},
+			};
+			debug!(target: "mixnet", "Fetched session keys {:?}, new auth set {:?}, at {:?}", sessions, new_set, block_id);
+			let sessions: HashMap<_, _> = sessions.into_iter().collect();
+
 		let mut auth_peer_id = None;
 		for (auth, _) in new_set.into_iter() {
 			if let Some(node_id) = self.connected_authorities.get(&auth) {
@@ -396,12 +475,9 @@ impl AuthorityStar {
 				{
 					self.routing_nodes.insert(node_id.clone());
 				} else {
-					/* TODO auth from session cache
-//		let at = sp_runtime::generic::BlockId::number(0u32.into());
-//		self.client.runtime_api().session_index(&at);
-					if let Some(rx) = authority_discovery_service.get_addresses_by_authority_id_callback(auth) {
-						authority_queries.push_back(rx);
-					}*/
+//fn queued_keys() -> Vec<(Vec<u8>, Vec<sp_core::crypto::CryptoTypePublicPair>)> {
+					// TODO resolve auth disc and grandpa auth then add / query auth disco
+					// + store auth disc along grandpa auth
 				}
 			}
 			self.current_authorities.insert(auth, auth_peer_id);
@@ -591,6 +667,7 @@ fn event_filter(event: &Event) -> bool {
 }*/
 
 /// Cache current session key on the chain.
+/// TODO could be useful, here we just query again at each session.
 struct SessionCache {
 		//fn session_index() -> sp_staking::SessionIndex {
 		//fn queued_keys() -> Vec<(Vec<u8>, Vec<sp_core::crypto::CryptoTypePublicPair>)> {
