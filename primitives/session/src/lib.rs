@@ -53,7 +53,7 @@ sp_api::decl_runtime_apis! {
 		/// Access queued key session keys.
 		///
 		/// Returns the list of public raw public keys + key type per node id.
-		fn queued_keys() -> Vec<(Vec<u8>, Vec<sp_core::crypto::CryptoTypePublicPair>)>;
+		fn queued_keys() -> Vec<(Vec<u8>, Vec<(KeyTypeId, sp_core::crypto::CryptoTypePublicPair)>)>;
 	}
 }
 

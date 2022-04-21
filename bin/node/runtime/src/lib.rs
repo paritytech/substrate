@@ -56,7 +56,10 @@ pub use pallet_transaction_payment::{CurrencyAdapter, Multiplier, TargetedFeeAdj
 use pallet_transaction_payment::{FeeDetails, RuntimeDispatchInfo};
 use sp_api::impl_runtime_apis;
 use sp_authority_discovery::AuthorityId as AuthorityDiscoveryId;
-use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
+use sp_core::{
+	crypto::{key_types, KeyTypeId},
+	OpaqueMetadata,
+};
 use sp_inherents::{CheckInherentsResult, InherentData};
 use sp_runtime::{
 	create_runtime_str,
@@ -1821,15 +1824,15 @@ impl_runtime_apis! {
 			Session::current_index()
 		}
 
-		fn queued_keys() -> Vec<(Vec<u8>, Vec<sp_core::crypto::CryptoTypePublicPair>)> {
+		fn queued_keys() -> Vec<(Vec<u8>, Vec<(KeyTypeId, sp_core::crypto::CryptoTypePublicPair)>)> {
 			let mut keys = Vec::new();
 			for (node_id, key_set) in Session::queued_keys().into_iter() {
 				use sp_core::crypto::Public;
 				let mut node_keys = Vec::new();
-				node_keys.push(key_set.grandpa.to_public_crypto_pair());
-				node_keys.push(key_set.babe.to_public_crypto_pair());
-				node_keys.push(key_set.im_online.to_public_crypto_pair());
-				node_keys.push(key_set.authority_discovery.to_public_crypto_pair());
+				node_keys.push((key_types::GRANDPA, key_set.grandpa.to_public_crypto_pair()));
+				node_keys.push((key_types::BABE, key_set.babe.to_public_crypto_pair()));
+				node_keys.push((key_types::IM_ONLINE, key_set.im_online.to_public_crypto_pair()));
+				node_keys.push((key_types::AUTHORITY_DISCOVERY, key_set.authority_discovery.to_public_crypto_pair()));
 				let node_id: &[u8] = node_id.as_ref();
 				keys.push((node_id.to_vec(), node_keys));
 			}

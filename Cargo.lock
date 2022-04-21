@@ -8866,6 +8866,7 @@ dependencies = [
  "sc-utils",
  "sp-api",
  "sp-application-crypto",
+ "sp-core",
  "sp-finality-grandpa",
  "sp-keystore",
  "sp-runtime",

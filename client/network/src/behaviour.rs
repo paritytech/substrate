@@ -64,7 +64,7 @@ use sc_utils::mpsc::TracingUnboundedSender;
 
 /// Command for the mixnet worker.
 pub enum MixnetCommand {
-	AuthorityId(sp_finality_grandpa::AuthorityId, MixPeerId),
+	AuthorityId(sp_finality_grandpa::AuthorityId, sp_core::crypto::CryptoTypePublicPair, MixPeerId),
 	Connected(MixPeerId, MixPublicKey),
 	Disconnected(MixPeerId),
 }
