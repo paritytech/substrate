@@ -19,8 +19,10 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use enumflags2::bitflags;
 use frame_support::RuntimeDebug;
 use scale_info::TypeInfo;
-use sp_runtime::traits::{IdentifyAccount, Verify};
-use sp_runtime::{MultiSignature, MultiSigner};
+use sp_runtime::{
+	traits::{IdentifyAccount, Verify},
+	MultiSignature, MultiSigner,
+};
 
 // Support for up to 64 user-enabled features on a collection.
 #[bitflags]

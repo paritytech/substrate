@@ -83,7 +83,7 @@ impl<T: Config> Pallet<T> {
 		let user_features: BitFlags<UserFeatures> = config.user_features.into();
 
 		if user_features.contains(UserFeatures::IsLocked) {
-			return Err(Error::<T>::CollectionIsLocked.into());
+			return Err(Error::<T>::CollectionIsLocked.into())
 		}
 
 		collection.max_supply = max_supply;
@@ -106,7 +106,7 @@ impl<T: Config> Pallet<T> {
 		let user_features: BitFlags<UserFeatures> = config.user_features.into();
 
 		if user_features.contains(UserFeatures::IsLocked) {
-			return Err(Error::<T>::CollectionIsLocked.into());
+			return Err(Error::<T>::CollectionIsLocked.into())
 		}
 
 		collection.max_items_per_account = max_items_per_account;
@@ -132,7 +132,7 @@ impl<T: Config> Pallet<T> {
 		let user_features: BitFlags<UserFeatures> = current_config.user_features.into();
 
 		if user_features.contains(UserFeatures::IsLocked) {
-			return Err(Error::<T>::CollectionIsLocked.into());
+			return Err(Error::<T>::CollectionIsLocked.into())
 		}
 
 		CollectionConfigs::<T>::try_mutate(id, |maybe_config| {
@@ -161,7 +161,7 @@ impl<T: Config> Pallet<T> {
 		let user_features: BitFlags<UserFeatures> = config.user_features.into();
 
 		if user_features.contains(UserFeatures::IsLocked) {
-			return Err(Error::<T>::CollectionIsLocked.into());
+			return Err(Error::<T>::CollectionIsLocked.into())
 		}
 
 		// destroy the collection

@@ -30,7 +30,7 @@ impl<T: Config> Pallet<T> {
 		let user_features: BitFlags<UserFeatures> = config.user_features.into();
 
 		if user_features.contains(UserFeatures::IsLocked) {
-			return Err(Error::<T>::CollectionIsLocked.into());
+			return Err(Error::<T>::CollectionIsLocked.into())
 		}
 
 		let collection = Collections::<T>::get(id).ok_or(Error::<T>::CollectionNotFound)?;

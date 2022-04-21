@@ -48,12 +48,12 @@ impl<T: Config> Pallet<T> {
 						ensure!(deadline >= now, Error::<T>::AuthorizationExpired);
 					}
 				} else {
-					return Err(Error::<T>::NotAuthorized.into());
+					return Err(Error::<T>::NotAuthorized.into())
 				}
 			}
 
 			if item.owner == receiver {
-				return Ok(());
+				return Ok(())
 			}
 
 			if user_features.contains(UserFeatures::Royalty) {
@@ -111,7 +111,7 @@ impl<T: Config> Pallet<T> {
 			ensure!(&caller == &collection.owner, Error::<T>::NotAuthorized);
 
 			if collection.owner == new_owner {
-				return Ok(());
+				return Ok(())
 			}
 
 			CollectionOwner::<T>::remove(&collection.owner, &id);

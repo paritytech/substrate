@@ -32,9 +32,8 @@ fn get_id_from_event() -> Result<<Test as Config>::CollectionId, &'static str> {
 	if let Some(e) = last_event.clone() {
 		match e.event {
 			mock::Event::Uniques(inner_event) => match inner_event {
-				Event::CollectionCreated { id, max_supply: _, creator: _, owner: _ } => {
-					return Ok(id)
-				},
+				Event::CollectionCreated { id, max_supply: _, creator: _, owner: _ } =>
+					return Ok(id),
 				_ => {},
 			},
 			_ => {},

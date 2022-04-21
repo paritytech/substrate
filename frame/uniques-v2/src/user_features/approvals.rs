@@ -76,7 +76,7 @@ impl<T: Config> Pallet<T> {
 			if let Some(pos) = item.approvals.iter().position(|ap| delegate == ap.who) {
 				item.approvals.remove(pos);
 			} else {
-				return Err(Error::<T>::WrongDelegate.into());
+				return Err(Error::<T>::WrongDelegate.into())
 			}
 
 			Self::deposit_event(Event::ApprovalRemoved {

@@ -39,9 +39,10 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 
 	use frame_support::traits::{Currency, ReservableCurrency};
-	use sp_core::crypto::AccountId32;
-	use sp_runtime::traits::{CheckedAdd, One};
-	use sp_runtime::{MultiSignature, MultiSigner};
+	use sp_runtime::{
+		traits::{CheckedAdd, One},
+		AccountId32, MultiSignature, MultiSigner,
+	};
 
 	// The struct on which we build all of our Pallet logic.
 	#[pallet::pallet]

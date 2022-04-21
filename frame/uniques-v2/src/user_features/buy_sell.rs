@@ -17,8 +17,7 @@
 
 use crate::*;
 use enumflags2::BitFlags;
-use frame_support::pallet_prelude::*;
-use frame_support::traits::Currency;
+use frame_support::{pallet_prelude::*, traits::Currency};
 
 impl<T: Config> Pallet<T> {
 	pub fn do_set_price(
@@ -68,7 +67,7 @@ impl<T: Config> Pallet<T> {
 		if let Some(price) = item.price {
 			ensure!(bid_price >= price, Error::<T>::ItemUnderpriced);
 		} else {
-			return Err(Error::<T>::ItemNotForSale.into());
+			return Err(Error::<T>::ItemNotForSale.into())
 		}
 
 		if let Some(only_buyer) = item.buyer {
