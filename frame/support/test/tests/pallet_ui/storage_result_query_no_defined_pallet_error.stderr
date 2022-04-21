@@ -1,0 +1,19 @@
+error: Invalid pallet::storage, ResultQuery requires a defined pallet::error
+  --> tests/pallet_ui/storage_result_query_no_defined_pallet_error.rs:12:7
+   |
+12 |     type Foo<T: Config> = StorageValue<_, u8, ResultQuery<NonExistentValue>>;
+   |          ^^^
+
+error[E0412]: cannot find type `_GeneratedPrefixForStorageFoo` in this scope
+  --> tests/pallet_ui/storage_result_query_no_defined_pallet_error.rs:12:7
+   |
+12 |     type Foo<T: Config> = StorageValue<_, u8, ResultQuery<NonExistentValue>>;
+   |          ^^^ not found in this scope
+
+error[E0412]: cannot find type `NonExistentValue` in this scope
+  --> tests/pallet_ui/storage_result_query_no_defined_pallet_error.rs:12:56
+   |
+12 |     type Foo<T: Config> = StorageValue<_, u8, ResultQuery<NonExistentValue>>;
+   |                       -                                   ^^^^^^^^^^^^^^^^ not found in this scope
+   |                       |
+   |                       help: you might be missing a type parameter: `, NonExistentValue`

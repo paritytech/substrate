@@ -1,0 +1,5 @@
+error: Invalid pallet::storage, unexpected number of path segments for the generics in ResultQuery, expected 1 ident representing a pallet enum error variant name, found 2
+  --> tests/pallet_ui/storage_result_query_multiple_path_segments.rs:18:56
+   |
+18 |     type Foo<T: Config> = StorageValue<_, u8, ResultQuery<Error::NonExistentValue>>;
+   |                                                           ^^^^^

@@ -1381,8 +1381,8 @@ pub mod pallet_prelude {
 		storage::{
 			bounded_vec::BoundedVec,
 			types::{
-				CountedStorageMap, Key as NMapKey, OptionQuery, StorageDoubleMap, StorageMap,
-				StorageNMap, StorageValue, ValueQuery,
+				CountedStorageMap, Key as NMapKey, OptionQuery, ResultQuery, StorageDoubleMap,
+				StorageMap, StorageNMap, StorageValue, ValueQuery,
 			},
 		},
 		traits::{

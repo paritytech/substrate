@@ -233,6 +233,7 @@ pub mod pallet {
 	pub enum Error<T> {
 		/// doc comment put into metadata
 		InsufficientProposersBalance,
+		NonExistentStorageValue,
 		Code(u8),
 		#[codec(skip)]
 		Skipped(u128),
@@ -285,6 +286,10 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type Map2<T> =
 		StorageMap<Hasher = Twox64Concat, Key = u16, Value = u32, MaxValues = ConstU32<3>>;
+
+	#[pallet::storage]
+	pub type Map3<T> =
+		StorageMap<_, Blake2_128Concat, u32, u64, ResultQuery<NonExistentStorageValue>>;
 
 	#[pallet::storage]
 	pub type DoubleMap<T> = StorageDoubleMap<_, Blake2_128Concat, u8, Twox64Concat, u16, u32>;
@@ -930,6 +935,16 @@ fn storage_expand() {
 		k.extend(1u16.using_encoded(twox_64_concat));
 		assert_eq!(unhashed::get::<u32>(&k), Some(2u32));
 		assert_eq!(&k[..32], &<pallet::Map2<Runtime>>::final_prefix());
+
+		pallet::Map3::<Runtime>::insert(1, 2);
+		let mut k = [twox_128(b"Example"), twox_128(b"Map3")].concat();
+		k.extend(1u32.using_encoded(blake2_128_concat));
+		assert_eq!(unhashed::get::<u64>(&k), Some(2u64));
+		assert_eq!(&k[..32], &<pallet::Map3<Runtime>>::final_prefix());
+		assert_eq!(
+			pallet::Map3::<Runtime>::get(2),
+			Err(pallet::Error::<Runtime>::NonExistentStorageValue),
+		);
 
 		pallet::DoubleMap::<Runtime>::insert(&1, &2, &3);
 		let mut k = [twox_128(b"Example"), twox_128(b"DoubleMap")].concat();

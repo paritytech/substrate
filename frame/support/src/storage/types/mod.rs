@@ -42,9 +42,11 @@ pub use value::StorageValue;
 /// Trait implementing how the storage optional value is converted into the queried type.
 ///
 /// It is implemented by:
-/// * `OptionQuery` which convert an optional value to an optional value, user when querying storage
-///   will get an optional value.
-/// * `ValueQuery` which convert an optional value to a value, user when querying storage will get a
+/// * `OptionQuery` which converts an optional value to an optional value, used when querying
+///   storage returns an optional value.
+/// * `ResultQuery` which converts an optional value to a result value, used when querying storage
+///   returns a result value.
+/// * `ValueQuery` which converts an optional value to a value, used when querying storage returns a
 ///   value.
 pub trait QueryKindTrait<Value, OnEmpty> {
 	/// Metadata for the storage kind.
@@ -82,6 +84,30 @@ where
 
 	fn from_query_to_optional_value(v: Self::Query) -> Option<Value> {
 		v
+	}
+}
+
+/// Implement QueryKindTrait with query being `Result<Value, PalletError>`
+pub struct ResultQuery<Error>(sp_std::marker::PhantomData<Error>);
+impl<Value, Error, OnEmpty> QueryKindTrait<Value, OnEmpty> for ResultQuery<Error>
+where
+	Value: FullCodec + 'static,
+	Error: FullCodec + 'static,
+	OnEmpty: crate::traits::Get<Result<Value, Error>>,
+{
+	const METADATA: StorageEntryModifier = StorageEntryModifier::Optional;
+
+	type Query = Result<Value, Error>;
+
+	fn from_optional_value_to_query(v: Option<Value>) -> Self::Query {
+		match v {
+			Some(v) => Ok(v),
+			None => OnEmpty::get(),
+		}
+	}
+
+	fn from_query_to_optional_value(v: Self::Query) -> Option<Value> {
+		v.ok()
 	}
 }
 
