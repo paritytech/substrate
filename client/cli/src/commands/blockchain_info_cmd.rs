@@ -18,6 +18,7 @@
 
 use parity_scale_codec::{Decode, Encode};
 use crate::{CliConfiguration, PruningParams, Result as CliResult, SharedParams};
+use sc_client_api::{backend::Backend as BackendT, blockchain::HeaderBackend};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use std::{fmt::Debug, io};
 
@@ -61,15 +62,14 @@ impl BlockchainInfoCmd {
 			source: config.database.clone(),
 			keep_blocks: config.keep_blocks.clone(),
 		};
-		let db = sc_client_db::open_database::<B>(&db_config, sc_client_db::DatabaseType::Full)
-			.map_err(|e| format!("{}", e))?;
-		let meta = sc_client_db::read_meta::<B>(&*db, sc_client_db::columns::HEADER)?;
+		let backend = sc_service::new_db_backend::<B>(db_config)?;
+		let blockchain_info = backend.blockchain().info();
 		let info = BlockchainInfo::<B> {
-			best_hash: meta.best_hash,
-			best_number: meta.best_number,
-			genesis_hash: meta.genesis_hash,
-			finalized_hash: meta.finalized_hash,
-			finalized_number: meta.finalized_number,
+			best_hash: blockchain_info.best_hash,
+			best_number: blockchain_info.best_number,
+			genesis_hash: blockchain_info.genesis_hash,
+			finalized_hash: blockchain_info.finalized_hash,
+			finalized_number: blockchain_info.finalized_number,
 		};
 		let mut out = io::stdout();
 		serde_json::to_writer_pretty(&mut out, &info).map_err(|e| format!("Error writing JSON: {}", e))?;

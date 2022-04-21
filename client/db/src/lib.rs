@@ -55,11 +55,8 @@ use std::{
 use crate::{
 	stats::StateUsageStats,
 	storage_cache::{new_shared_cache, CachingState, SharedCache, SyncingCachingState},
-	utils::{meta_keys, read_db, Meta},
+	utils::{meta_keys, read_db, read_meta, DatabaseType, Meta},
 };
-
-pub use crate::utils::{read_meta, open_database, DatabaseType};
-
 use codec::{Decode, Encode};
 use hash_db::Prefix;
 use sc_client_api::{
@@ -390,29 +387,20 @@ impl std::fmt::Display for DatabaseSource {
 	}
 }
 
-/// Database column indexes
-pub mod columns {
-	/// Meta
+pub(crate) mod columns {
 	pub const META: u32 = crate::utils::COLUMN_META;
-	/// State
 	pub const STATE: u32 = 1;
-	/// State meta
 	pub const STATE_META: u32 = 2;
 	/// maps hashes to lookup keys and numbers to canon hashes.
 	pub const KEY_LOOKUP: u32 = 3;
-	/// Header
 	pub const HEADER: u32 = 4;
-	/// Body
 	pub const BODY: u32 = 5;
-	/// Justifications
 	pub const JUSTIFICATIONS: u32 = 6;
-	/// Aux
 	pub const AUX: u32 = 8;
 	/// Offchain workers local storage
 	pub const OFFCHAIN: u32 = 9;
 	/// Transactions
 	pub const TRANSACTION: u32 = 11;
-	/// Body index
 	pub const BODY_INDEX: u32 = 12;
 }
 
@@ -1025,7 +1013,7 @@ impl<Block: BlockT> Backend<Block> {
 	///
 	/// The pruning window is how old a block must be before the state is pruned.
 	pub fn new(config: DatabaseSettings, canonicalization_delay: u64) -> ClientResult<Self> {
-		let db = open_database::<Block>(&config, DatabaseType::Full)?;
+		let db = crate::utils::open_database::<Block>(&config, DatabaseType::Full)?;
 		Self::from_database(db as Arc<_>, canonicalization_delay, &config)
 	}
 
