@@ -39,7 +39,7 @@ codec = { package = "parity-scale-codec", version = "3.0.0" }
 serde = { version = "1.0.136", features = ["derive"] }
 futures = "0.3.21"
 hex-literal = "0.3.4"
-log = "0.4.8"
+log = "0.4.16"
 rand = "0.8"
 
 # primitives
@@ -124,7 +124,7 @@ nix = "0.23"
 serde_json = "1.0"
 regex = "1.5.5"
 platforms = "2.0"
-async-std = { version = "1.10.0", features = ["attributes"] }
+async-std = { version = "1.11.0", features = ["attributes"] }
 soketto = "0.7.1"
 criterion = { version = "0.3.5", features = ["async_tokio"] }
 tokio = { version = "1.17.0", features = ["macros", "time", "parking_lot"] }
