@@ -18,10 +18,8 @@
 
 use parity_scale_codec::{Decode, Encode};
 use crate::{CliConfiguration, PruningParams, Result as CliResult, SharedParams};
-use sc_client_api::{backend::Backend as BackendT, blockchain::HeaderBackend};
-use sc_client_db::Backend;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
-use std::{fmt::Debug, io, sync::Arc};
+use std::{fmt::Debug, io};
 
 /// The `blockchain-info` subcommand used to output db meta columns information.
 #[derive(Debug, Clone, clap::Parser)]
@@ -52,17 +50,26 @@ struct BlockchainInfo<B: BlockT> {
 
 impl BlockchainInfoCmd {
 	/// Run the `blockchain-info` subcommand
-	pub fn run<B>(&self, backend: Arc<Backend<B>>) -> CliResult<()>
+	pub fn run<B>(&self, config: &sc_service::Configuration) -> CliResult<()>
 	where
 		B: BlockT,
 	{
-		let blockchain_info = backend.blockchain().info();
+		let db_config = sc_client_db::DatabaseSettings {
+			state_cache_size: config.state_cache_size,
+			state_cache_child_ratio: config.state_cache_child_ratio.map(|v| (v, 100)),
+			state_pruning: config.state_pruning.clone(),
+			source: config.database.clone(),
+			keep_blocks: config.keep_blocks.clone(),
+		};
+		let db = sc_client_db::open_database::<B>(&db_config, sc_client_db::DatabaseType::Full)
+			.map_err(|e| format!("{}", e))?;
+		let meta = sc_client_db::read_meta::<B>(&*db, sc_client_db::columns::HEADER)?;
 		let info = BlockchainInfo::<B> {
-			best_hash: blockchain_info.best_hash,
-			best_number: blockchain_info.best_number,
-			genesis_hash: blockchain_info.genesis_hash,
-			finalized_hash: blockchain_info.finalized_hash,
-			finalized_number: blockchain_info.finalized_number,
+			best_hash: meta.best_hash,
+			best_number: meta.best_number,
+			genesis_hash: meta.genesis_hash,
+			finalized_hash: meta.finalized_hash,
+			finalized_number: meta.finalized_number,
 		};
 		let mut out = io::stdout();
 		serde_json::to_writer_pretty(&mut out, &info).map_err(|e| format!("Error writing JSON: {}", e))?;

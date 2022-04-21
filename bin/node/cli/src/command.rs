@@ -208,10 +208,7 @@ pub fn run() -> Result<()> {
 			.into()),
 		Some(Subcommand::BlockchainInfo(cmd)) => {
 			let runner = cli.create_runner(cmd)?;
-			runner.sync_run(|config| {
-				let PartialComponents { backend, .. } = new_partial(&config)?;
-				cmd.run(backend.clone())
-			})
+			runner.sync_run(|config| cmd.run::<Block>(&config))
 		},
 	}
 }
