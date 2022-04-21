@@ -30,7 +30,7 @@ macro_rules! unbonding_pools_with_era {
 	}};
 }
 
-macro_rules! delegator_unbonding_eras {
+macro_rules! member_unbonding_eras {
 	($( $any:tt )*) => {{
 		let x: BoundedBTreeMap<EraIndex, Balance, MaxUnbonding> = bounded_btree_map!($( $any )*);
 		x
@@ -46,7 +46,7 @@ fn test_setup_works() {
 		assert_eq!(BondedPools::<Runtime>::count(), 1);
 		assert_eq!(RewardPools::<Runtime>::count(), 1);
 		assert_eq!(SubPoolsStorage::<Runtime>::count(), 0);
-		assert_eq!(Delegators::<Runtime>::count(), 1);
+		assert_eq!(PoolMembers::<Runtime>::count(), 1);
 		assert_eq!(StakingMock::bonding_duration(), 3);
 
 		let last_pool = LastPoolId::<Runtime>::get();
@@ -57,7 +57,7 @@ fn test_setup_works() {
 				inner: BondedPoolInner {
 					state: PoolState::Open,
 					points: 10,
-					delegator_counter: 1,
+					member_counter: 1,
 					roles: DEFAULT_ROLES
 				},
 			}
@@ -67,8 +67,8 @@ fn test_setup_works() {
 			RewardPool::<Runtime> { balance: 0, points: 0.into(), total_earnings: 0 }
 		);
 		assert_eq!(
-			Delegators::<Runtime>::get(10).unwrap(),
-			Delegator::<Runtime> { pool_id: last_pool, points: 10, ..Default::default() }
+			PoolMembers::<Runtime>::get(10).unwrap(),
+			PoolMember::<Runtime> { pool_id: last_pool, points: 10, ..Default::default() }
 		)
 	})
 }
@@ -82,7 +82,7 @@ mod bonded_pool {
 			inner: BondedPoolInner {
 				state: PoolState::Open,
 				points: 100,
-				delegator_counter: 1,
+				member_counter: 1,
 				roles: DEFAULT_ROLES,
 			},
 		};
@@ -134,7 +134,7 @@ mod bonded_pool {
 			inner: BondedPoolInner {
 				state: PoolState::Open,
 				points: 100,
-				delegator_counter: 1,
+				member_counter: 1,
 				roles: DEFAULT_ROLES,
 			},
 		};
@@ -181,7 +181,7 @@ mod bonded_pool {
 				inner: BondedPoolInner {
 					state: PoolState::Open,
 					points: 100,
-					delegator_counter: 1,
+					member_counter: 1,
 					roles: DEFAULT_ROLES,
 				},
 			};
@@ -390,27 +390,27 @@ mod join {
 
 	#[test]
 	fn join_works() {
-		let bonded = |points, delegator_counter| BondedPool::<Runtime> {
+		let bonded = |points, member_counter| BondedPool::<Runtime> {
 			id: 1,
 			inner: BondedPoolInner {
 				state: PoolState::Open,
 				points,
-				delegator_counter,
+				member_counter,
 				roles: DEFAULT_ROLES,
 			},
 		};
 		ExtBuilder::default().build_and_execute(|| {
 			// Given
 			Balances::make_free_balance_be(&11, ExistentialDeposit::get() + 2);
-			assert!(!Delegators::<Runtime>::contains_key(&11));
+			assert!(!PoolMembers::<Runtime>::contains_key(&11));
 
 			// When
 			assert_ok!(Pools::join(Origin::signed(11), 2, 1));
 
 			// then
 			assert_eq!(
-				Delegators::<Runtime>::get(&11).unwrap(),
-				Delegator::<Runtime> { pool_id: 1, points: 2, ..Default::default() }
+				PoolMembers::<Runtime>::get(&11).unwrap(),
+				PoolMember::<Runtime> { pool_id: 1, points: 2, ..Default::default() }
 			);
 			assert_eq!(BondedPool::<Runtime>::get(1).unwrap(), bonded(12, 2));
 
@@ -420,15 +420,15 @@ mod join {
 
 			// And
 			Balances::make_free_balance_be(&12, ExistentialDeposit::get() + 12);
-			assert!(!Delegators::<Runtime>::contains_key(&12));
+			assert!(!PoolMembers::<Runtime>::contains_key(&12));
 
 			// When
 			assert_ok!(Pools::join(Origin::signed(12), 12, 1));
 
 			// Then
 			assert_eq!(
-				Delegators::<Runtime>::get(&12).unwrap(),
-				Delegator::<Runtime> { pool_id: 1, points: 24, ..Default::default() }
+				PoolMembers::<Runtime>::get(&12).unwrap(),
+				PoolMember::<Runtime> { pool_id: 1, points: 24, ..Default::default() }
 			);
 			assert_eq!(BondedPool::<Runtime>::get(1).unwrap(), bonded(12 + 24, 3));
 		});
@@ -438,7 +438,7 @@ mod join {
 	fn join_errors_correctly() {
 		ExtBuilder::default().with_check(0).build_and_execute(|| {
 			// 10 is already part of the default pool created.
-			assert_eq!(Delegators::<Runtime>::get(&10).unwrap().pool_id, 1);
+			assert_eq!(PoolMembers::<Runtime>::get(&10).unwrap().pool_id, 1);
 
 			assert_noop!(
 				Pools::join(Origin::signed(10), 420, 123),
@@ -455,7 +455,7 @@ mod join {
 			BondedPool::<Runtime> {
 				id: 123,
 				inner: BondedPoolInner {
-					delegator_counter: 1,
+					member_counter: 1,
 					state: PoolState::Open,
 					points: 100,
 					roles: DEFAULT_ROLES,
@@ -511,7 +511,7 @@ mod join {
 				inner: BondedPoolInner {
 					state: PoolState::Open,
 					points: 100,
-					delegator_counter: 1,
+					member_counter: 1,
 					roles: DEFAULT_ROLES,
 				},
 			}
@@ -521,10 +521,10 @@ mod join {
 	}
 
 	#[test]
-	fn join_max_delegator_limits_are_respected() {
+	fn join_max_member_limits_are_respected() {
 		ExtBuilder::default().build_and_execute(|| {
 			// Given
-			assert_eq!(MaxDelegatorsPerPool::<Runtime>::get(), Some(3));
+			assert_eq!(MaxPoolMembersPerPool::<Runtime>::get(), Some(3));
 			for i in 1..3 {
 				let account = i + 100;
 				Balances::make_free_balance_be(&account, 100 + Balances::minimum_balance());
@@ -535,11 +535,11 @@ mod join {
 			Balances::make_free_balance_be(&103, 100 + Balances::minimum_balance());
 
 			// Then
-			assert_noop!(Pools::join(Origin::signed(103), 100, 1), Error::<Runtime>::MaxDelegators);
+			assert_noop!(Pools::join(Origin::signed(103), 100, 1), Error::<Runtime>::MaxPoolMembers);
 
 			// Given
-			assert_eq!(Delegators::<Runtime>::count(), 3);
-			assert_eq!(MaxDelegators::<Runtime>::get(), Some(4));
+			assert_eq!(PoolMembers::<Runtime>::count(), 3);
+			assert_eq!(MaxPoolMembers::<Runtime>::get(), Some(4));
 
 			Balances::make_free_balance_be(&104, 100 + Balances::minimum_balance());
 			assert_ok!(Pools::create(Origin::signed(104), 100, 104, 104, 104));
@@ -552,7 +552,7 @@ mod join {
 			// Then
 			assert_noop!(
 				Pools::join(Origin::signed(103), 100, pool_account),
-				Error::<Runtime>::MaxDelegators
+				Error::<Runtime>::MaxPoolMembers
 			);
 		});
 	}
@@ -561,8 +561,8 @@ mod join {
 mod claim_payout {
 	use super::*;
 
-	fn del(points: Balance, reward_pool_total_earnings: Balance) -> Delegator<Runtime> {
-		Delegator {
+	fn del(points: Balance, reward_pool_total_earnings: Balance) -> PoolMember<Runtime> {
+		PoolMember {
 			pool_id: 1,
 			points,
 			reward_pool_total_earnings,
@@ -577,9 +577,9 @@ mod claim_payout {
 	#[test]
 	fn claim_payout_works() {
 		ExtBuilder::default()
-			.add_delegators(vec![(40, 40), (50, 50)])
+			.add_members(vec![(40, 40), (50, 50)])
 			.build_and_execute(|| {
-				// Given each delegator currently has a free balance of
+				// Given each member currently has a free balance of
 				Balances::make_free_balance_be(&10, 0);
 				Balances::make_free_balance_be(&40, 0);
 				Balances::make_free_balance_be(&50, 0);
@@ -593,7 +593,7 @@ mod claim_payout {
 				// Then
 				// Expect a payout of 10: (10 del virtual points / 100 pool points) * 100 pool
 				// balance
-				assert_eq!(Delegators::<Runtime>::get(10).unwrap(), del(10, 100));
+				assert_eq!(PoolMembers::<Runtime>::get(10).unwrap(), del(10, 100));
 				assert_eq!(
 					RewardPools::<Runtime>::get(&1).unwrap(),
 					rew(90, 100 * 100 - 100 * 10, 100)
@@ -606,7 +606,7 @@ mod claim_payout {
 
 				// Then
 				// Expect payout 40: (400 del virtual points / 900 pool points) * 90 pool balance
-				assert_eq!(Delegators::<Runtime>::get(40).unwrap(), del(40, 100));
+				assert_eq!(PoolMembers::<Runtime>::get(40).unwrap(), del(40, 100));
 				assert_eq!(
 					RewardPools::<Runtime>::get(&1).unwrap(),
 					rew(50, 9_000 - 100 * 40, 100)
@@ -619,7 +619,7 @@ mod claim_payout {
 
 				// Then
 				// Expect payout 50: (50 del virtual points / 50 pool points) * 50 pool balance
-				assert_eq!(Delegators::<Runtime>::get(50).unwrap(), del(50, 100));
+				assert_eq!(PoolMembers::<Runtime>::get(50).unwrap(), del(50, 100));
 				assert_eq!(RewardPools::<Runtime>::get(&1).unwrap(), rew(0, 0, 100));
 				assert_eq!(Balances::free_balance(&50), 50);
 				assert_eq!(Balances::free_balance(&default_reward_account()), ed + 0);
@@ -632,7 +632,7 @@ mod claim_payout {
 
 				// Then
 				// Expect payout 5: (500  del virtual points / 5,000 pool points) * 50 pool balance
-				assert_eq!(Delegators::<Runtime>::get(10).unwrap(), del(10, 150));
+				assert_eq!(PoolMembers::<Runtime>::get(10).unwrap(), del(10, 150));
 				assert_eq!(RewardPools::<Runtime>::get(&1).unwrap(), rew(45, 5_000 - 50 * 10, 150));
 				assert_eq!(Balances::free_balance(&10), 10 + 5);
 				assert_eq!(Balances::free_balance(&default_reward_account()), ed + 45);
@@ -643,7 +643,7 @@ mod claim_payout {
 				// Then
 				// Expect payout 20: (2,000 del virtual points / 4,500 pool points) * 45 pool
 				// balance
-				assert_eq!(Delegators::<Runtime>::get(40).unwrap(), del(40, 150));
+				assert_eq!(PoolMembers::<Runtime>::get(40).unwrap(), del(40, 150));
 				assert_eq!(RewardPools::<Runtime>::get(&1).unwrap(), rew(25, 4_500 - 50 * 40, 150));
 				assert_eq!(Balances::free_balance(&40), 40 + 20);
 				assert_eq!(Balances::free_balance(&default_reward_account()), ed + 25);
@@ -658,7 +658,7 @@ mod claim_payout {
 				// Then
 				// We expect a payout of 50: (5,000 del virtual points / 7,5000 pool points) * 75
 				// pool balance
-				assert_eq!(Delegators::<Runtime>::get(50).unwrap(), del(50, 200));
+				assert_eq!(PoolMembers::<Runtime>::get(50).unwrap(), del(50, 200));
 				assert_eq!(
 					RewardPools::<Runtime>::get(&1).unwrap(),
 					rew(
@@ -666,7 +666,7 @@ mod claim_payout {
 						// old pool points + points from new earnings - del points.
 						//
 						// points from new earnings = new earnings(50) * bonded_pool.points(100)
-						// del points = delegator.points(50) * new_earnings_since_last_claim (100)
+						// del points = member.points(50) * new_earnings_since_last_claim (100)
 						(2_500 + 50 * 100) - 50 * 100,
 						200,
 					)
@@ -679,7 +679,7 @@ mod claim_payout {
 
 				// Then
 				// We expect a payout of 5
-				assert_eq!(Delegators::<Runtime>::get(10).unwrap(), del(10, 200));
+				assert_eq!(PoolMembers::<Runtime>::get(10).unwrap(), del(10, 200));
 				assert_eq!(RewardPools::<Runtime>::get(&1).unwrap(), rew(20, 2_500 - 10 * 50, 200));
 				assert_eq!(Balances::free_balance(&10), 15 + 5);
 				assert_eq!(Balances::free_balance(&default_reward_account()), ed + 20);
@@ -693,7 +693,7 @@ mod claim_payout {
 
 				// Then
 				// We expect a payout of 40
-				assert_eq!(Delegators::<Runtime>::get(10).unwrap(), del(10, 600));
+				assert_eq!(PoolMembers::<Runtime>::get(10).unwrap(), del(10, 600));
 				assert_eq!(
 					RewardPools::<Runtime>::get(&1).unwrap(),
 					rew(
@@ -701,7 +701,7 @@ mod claim_payout {
 						// old pool points + points from new earnings - del points
 						//
 						// points from new earnings = new earnings(400) * bonded_pool.points(100)
-						// del points = delegator.points(10) * new_earnings_since_last_claim(400)
+						// del points = member.points(10) * new_earnings_since_last_claim(400)
 						(2_000 + 400 * 100) - 10 * 400,
 						600
 					)
@@ -719,7 +719,7 @@ mod claim_payout {
 				// Then
 				// Expect a payout of 2: (200 del virtual points / 38,000 pool points) * 400 pool
 				// balance
-				assert_eq!(Delegators::<Runtime>::get(10).unwrap(), del(10, 620));
+				assert_eq!(PoolMembers::<Runtime>::get(10).unwrap(), del(10, 620));
 				assert_eq!(
 					RewardPools::<Runtime>::get(&1).unwrap(),
 					rew(398, (38_000 + 20 * 100) - 10 * 20, 620)
@@ -733,7 +733,7 @@ mod claim_payout {
 				// Then
 				// Expect a payout of 188: (18,800 del virtual points /  39,800 pool points) * 399
 				// pool balance
-				assert_eq!(Delegators::<Runtime>::get(40).unwrap(), del(40, 620));
+				assert_eq!(PoolMembers::<Runtime>::get(40).unwrap(), del(40, 620));
 				assert_eq!(
 					RewardPools::<Runtime>::get(&1).unwrap(),
 					rew(210, 39_800 - 40 * 470, 620)
@@ -746,7 +746,7 @@ mod claim_payout {
 
 				// Then
 				// Expect payout of 210: (21,000 / 21,000) * 210
-				assert_eq!(Delegators::<Runtime>::get(50).unwrap(), del(50, 620));
+				assert_eq!(PoolMembers::<Runtime>::get(50).unwrap(), del(50, 620));
 				assert_eq!(
 					RewardPools::<Runtime>::get(&1).unwrap(),
 					rew(0, 21_000 - 50 * 420, 620)
@@ -762,7 +762,7 @@ mod claim_payout {
 			let _ = with_transaction(|| -> TransactionOutcome<DispatchResult> {
 				let mut bonded_pool = BondedPool::<Runtime>::get(1).unwrap();
 				let mut reward_pool = RewardPools::<Runtime>::get(1).unwrap();
-				let mut delegator = Delegators::<Runtime>::get(10).unwrap();
+				let mut member = PoolMembers::<Runtime>::get(10).unwrap();
 
 				// -- reward_pool.total_earnings saturates
 
@@ -772,7 +772,7 @@ mod claim_payout {
 				// When
 				assert_ok!(Pools::do_reward_payout(
 					&10,
-					&mut delegator,
+					&mut member,
 					&mut bonded_pool,
 					&mut reward_pool
 				));
@@ -788,7 +788,7 @@ mod claim_payout {
 				// Given
 				let mut bonded_pool = BondedPool::<Runtime>::get(1).unwrap();
 				let mut reward_pool = RewardPools::<Runtime>::get(1).unwrap();
-				let mut delegator = Delegators::<Runtime>::get(10).unwrap();
+				let mut member = PoolMembers::<Runtime>::get(10).unwrap();
 				// Force new_earnings * bonded_pool.points == 100
 				Balances::make_free_balance_be(&default_reward_account(), 5 + 10);
 				assert_eq!(bonded_pool.points, 10);
@@ -799,7 +799,7 @@ mod claim_payout {
 				// When
 				assert_ok!(Pools::do_reward_payout(
 					&10,
-					&mut delegator,
+					&mut member,
 					&mut bonded_pool,
 					&mut reward_pool
 				));
@@ -813,36 +813,36 @@ mod claim_payout {
 	}
 
 	#[test]
-	fn reward_payout_errors_if_a_delegator_is_fully_unbonding() {
-		ExtBuilder::default().add_delegators(vec![(11, 11)]).build_and_execute(|| {
-			// fully unbond the delegator.
+	fn reward_payout_errors_if_a_member_is_fully_unbonding() {
+		ExtBuilder::default().add_members(vec![(11, 11)]).build_and_execute(|| {
+			// fully unbond the member.
 			assert_ok!(Pools::fully_unbond(Origin::signed(11), 11));
 
 			let mut bonded_pool = BondedPool::<Runtime>::get(1).unwrap();
 			let mut reward_pool = RewardPools::<Runtime>::get(1).unwrap();
-			let mut delegator = Delegators::<Runtime>::get(11).unwrap();
+			let mut member = PoolMembers::<Runtime>::get(11).unwrap();
 
 			assert_noop!(
-				Pools::do_reward_payout(&11, &mut delegator, &mut bonded_pool, &mut reward_pool,),
+				Pools::do_reward_payout(&11, &mut member, &mut bonded_pool, &mut reward_pool,),
 				Error::<Runtime>::FullyUnbonding
 			);
 		});
 	}
 
 	#[test]
-	fn calculate_delegator_payout_works_with_a_pool_of_1() {
+	fn calculate_member_payout_works_with_a_pool_of_1() {
 		let del = |reward_pool_total_earnings| del(10, reward_pool_total_earnings);
 
 		ExtBuilder::default().build_and_execute(|| {
 			let mut bonded_pool = BondedPool::<Runtime>::get(1).unwrap();
 			let mut reward_pool = RewardPools::<Runtime>::get(1).unwrap();
-			let mut delegator = Delegators::<Runtime>::get(10).unwrap();
+			let mut member = PoolMembers::<Runtime>::get(10).unwrap();
 			let ed = Balances::minimum_balance();
 
 			// Given no rewards have been earned
 			// When
-			let payout = Pools::calculate_delegator_payout(
-				&mut delegator,
+			let payout = Pools::calculate_member_payout(
+				&mut member,
 				&mut bonded_pool,
 				&mut reward_pool,
 			)
@@ -850,15 +850,15 @@ mod claim_payout {
 
 			// Then
 			assert_eq!(payout, 0);
-			assert_eq!(delegator, del(0));
+			assert_eq!(member, del(0));
 			assert_eq!(reward_pool, rew(0, 0, 0));
 
 			// Given the pool has earned some rewards for the first time
 			Balances::make_free_balance_be(&default_reward_account(), ed + 5);
 
 			// When
-			let payout = Pools::calculate_delegator_payout(
-				&mut delegator,
+			let payout = Pools::calculate_member_payout(
+				&mut member,
 				&mut bonded_pool,
 				&mut reward_pool,
 			)
@@ -867,14 +867,14 @@ mod claim_payout {
 			// Then
 			assert_eq!(payout, 5); //  (10 * 5 del virtual points / 10 * 5 pool points) * 5 pool balance
 			assert_eq!(reward_pool, rew(0, 0, 5));
-			assert_eq!(delegator, del(5));
+			assert_eq!(member, del(5));
 
 			// Given the pool has earned rewards again
 			Balances::make_free_balance_be(&default_reward_account(), ed + 10);
 
 			// When
-			let payout = Pools::calculate_delegator_payout(
-				&mut delegator,
+			let payout = Pools::calculate_member_payout(
+				&mut member,
 				&mut bonded_pool,
 				&mut reward_pool,
 			)
@@ -883,14 +883,14 @@ mod claim_payout {
 			// Then
 			assert_eq!(payout, 10); // (10 * 10 del virtual points / 10 pool points) * 5 pool balance
 			assert_eq!(reward_pool, rew(0, 0, 15));
-			assert_eq!(delegator, del(15));
+			assert_eq!(member, del(15));
 
 			// Given the pool has earned no new rewards
 			Balances::make_free_balance_be(&default_reward_account(), ed + 0);
 
 			// When
-			let payout = Pools::calculate_delegator_payout(
-				&mut delegator,
+			let payout = Pools::calculate_member_payout(
+				&mut member,
 				&mut bonded_pool,
 				&mut reward_pool,
 			)
@@ -899,33 +899,33 @@ mod claim_payout {
 			// Then
 			assert_eq!(payout, 0);
 			assert_eq!(reward_pool, rew(0, 0, 15));
-			assert_eq!(delegator, del(15));
+			assert_eq!(member, del(15));
 		});
 	}
 
 	#[test]
-	fn calculate_delegator_payout_works_with_a_pool_of_3() {
+	fn calculate_member_payout_works_with_a_pool_of_3() {
 		ExtBuilder::default()
-			.add_delegators(vec![(40, 40), (50, 50)])
+			.add_members(vec![(40, 40), (50, 50)])
 			.build_and_execute(|| {
 				let mut bonded_pool = BondedPool::<Runtime>::get(1).unwrap();
 				let mut reward_pool = RewardPools::<Runtime>::get(1).unwrap();
 				let ed = Balances::minimum_balance();
-				// Delegator with 10 points
-				let mut del_10 = Delegators::<Runtime>::get(10).unwrap();
-				// Delegator with 40 points
-				let mut del_40 = Delegators::<Runtime>::get(40).unwrap();
-				// Delegator with 50 points
-				let mut del_50 = Delegators::<Runtime>::get(50).unwrap();
+				// PoolMember with 10 points
+				let mut del_10 = PoolMembers::<Runtime>::get(10).unwrap();
+				// PoolMember with 40 points
+				let mut del_40 = PoolMembers::<Runtime>::get(40).unwrap();
+				// PoolMember with 50 points
+				let mut del_50 = PoolMembers::<Runtime>::get(50).unwrap();
 
-				// Given we have a total of 100 points split among the delegators
+				// Given we have a total of 100 points split among the members
 				assert_eq!(del_50.points + del_40.points + del_10.points, 100);
 				assert_eq!(bonded_pool.points, 100);
 				// and the reward pool has earned 100 in rewards
 				Balances::make_free_balance_be(&default_reward_account(), ed + 100);
 
 				// When
-				let payout = Pools::calculate_delegator_payout(
+				let payout = Pools::calculate_member_payout(
 					&mut del_10,
 					&mut bonded_pool,
 					&mut reward_pool,
@@ -940,7 +940,7 @@ mod claim_payout {
 				assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free -= 10));
 
 				// When
-				let payout = Pools::calculate_delegator_payout(
+				let payout = Pools::calculate_member_payout(
 					&mut del_40,
 					&mut bonded_pool,
 					&mut reward_pool,
@@ -954,7 +954,7 @@ mod claim_payout {
 					reward_pool,
 					rew(
 						50,
-						// old pool points - delegator virtual points
+						// old pool points - member virtual points
 						9_000 - 100 * 40,
 						100
 					)
@@ -963,7 +963,7 @@ mod claim_payout {
 				assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free -= 40));
 
 				// When
-				let payout = Pools::calculate_delegator_payout(
+				let payout = Pools::calculate_member_payout(
 					&mut del_50,
 					&mut bonded_pool,
 					&mut reward_pool,
@@ -981,7 +981,7 @@ mod claim_payout {
 				Balances::make_free_balance_be(&default_reward_account(), ed + 50);
 
 				// When
-				let payout = Pools::calculate_delegator_payout(
+				let payout = Pools::calculate_member_payout(
 					&mut del_10,
 					&mut bonded_pool,
 					&mut reward_pool,
@@ -996,7 +996,7 @@ mod claim_payout {
 				assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free -= 5));
 
 				// When
-				let payout = Pools::calculate_delegator_payout(
+				let payout = Pools::calculate_member_payout(
 					&mut del_40,
 					&mut bonded_pool,
 					&mut reward_pool,
@@ -1014,7 +1014,7 @@ mod claim_payout {
 				assert_eq!(Balances::free_balance(&default_reward_account()), ed + 75);
 
 				// When
-				let payout = Pools::calculate_delegator_payout(
+				let payout = Pools::calculate_member_payout(
 					&mut del_50,
 					&mut bonded_pool,
 					&mut reward_pool,
@@ -1031,7 +1031,7 @@ mod claim_payout {
 						// old pool points + points from new earnings - del points.
 						//
 						// points from new earnings = new earnings(50) * bonded_pool.points(100)
-						// del points = delegator.points(50) * new_earnings_since_last_claim (100)
+						// del points = member.points(50) * new_earnings_since_last_claim (100)
 						(2_500 + 50 * 100) - 50 * 100,
 						200,
 					)
@@ -1040,7 +1040,7 @@ mod claim_payout {
 				assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free -= 50));
 
 				// When
-				let payout = Pools::calculate_delegator_payout(
+				let payout = Pools::calculate_member_payout(
 					&mut del_10,
 					&mut bonded_pool,
 					&mut reward_pool,
@@ -1059,7 +1059,7 @@ mod claim_payout {
 				assert_eq!(Balances::free_balance(&default_reward_account()), ed + 420);
 
 				// When
-				let payout = Pools::calculate_delegator_payout(
+				let payout = Pools::calculate_member_payout(
 					&mut del_10,
 					&mut bonded_pool,
 					&mut reward_pool,
@@ -1076,7 +1076,7 @@ mod claim_payout {
 						// old pool points + points from new earnings - del points
 						//
 						// points from new earnings = new earnings(400) * bonded_pool.points(100)
-						// del points = delegator.points(10) * new_earnings_since_last_claim(400)
+						// del points = member.points(10) * new_earnings_since_last_claim(400)
 						(2_000 + 400 * 100) - 10 * 400,
 						600
 					)
@@ -1089,7 +1089,7 @@ mod claim_payout {
 				assert_eq!(Balances::free_balance(&default_reward_account()), ed + 400);
 
 				// When
-				let payout = Pools::calculate_delegator_payout(
+				let payout = Pools::calculate_member_payout(
 					&mut del_10,
 					&mut bonded_pool,
 					&mut reward_pool,
@@ -1104,7 +1104,7 @@ mod claim_payout {
 				assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free -= 2));
 
 				// When
-				let payout = Pools::calculate_delegator_payout(
+				let payout = Pools::calculate_member_payout(
 					&mut del_40,
 					&mut bonded_pool,
 					&mut reward_pool,
@@ -1119,7 +1119,7 @@ mod claim_payout {
 				assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free -= 188));
 
 				// When
-				let payout = Pools::calculate_delegator_payout(
+				let payout = Pools::calculate_member_payout(
 					&mut del_50,
 					&mut bonded_pool,
 					&mut reward_pool,
@@ -1136,7 +1136,7 @@ mod claim_payout {
 	#[test]
 	fn do_reward_payout_works() {
 		ExtBuilder::default()
-			.add_delegators(vec![(40, 40), (50, 50)])
+			.add_members(vec![(40, 40), (50, 50)])
 			.build_and_execute(|| {
 				let mut bonded_pool = BondedPool::<Runtime>::get(1).unwrap();
 				let mut reward_pool = RewardPools::<Runtime>::get(1).unwrap();
@@ -1144,16 +1144,16 @@ mod claim_payout {
 
 				// Given the bonded pool has 100 points
 				assert_eq!(bonded_pool.points, 100);
-				// Each delegator currently has a free balance of
+				// Each member currently has a free balance of
 				Balances::make_free_balance_be(&10, 0);
 				Balances::make_free_balance_be(&40, 0);
 				Balances::make_free_balance_be(&50, 0);
 				// and the reward pool has earned 100 in rewards
 				Balances::make_free_balance_be(&default_reward_account(), ed + 100);
 
-				let mut del_10 = Delegators::get(10).unwrap();
-				let mut del_40 = Delegators::get(40).unwrap();
-				let mut del_50 = Delegators::get(50).unwrap();
+				let mut del_10 = PoolMembers::get(10).unwrap();
+				let mut del_40 = PoolMembers::get(40).unwrap();
+				let mut del_50 = PoolMembers::get(50).unwrap();
 
 				// When
 				assert_ok!(Pools::do_reward_payout(
@@ -1258,7 +1258,7 @@ mod claim_payout {
 						// old pool points + points from new earnings - del points.
 						//
 						// points from new earnings = new earnings(50) * bonded_pool.points(100)
-						// del points = delegator.points(50) * new_earnings_since_last_claim (100)
+						// del points = member.points(50) * new_earnings_since_last_claim (100)
 						(2_500 + 50 * 100) - 50 * 100,
 						200,
 					)
@@ -1303,7 +1303,7 @@ mod claim_payout {
 						// old pool points + points from new earnings - del points
 						//
 						// points from new earnings = new earnings(400) * bonded_pool.points(100)
-						// del points = delegator.points(10) * new_earnings_since_last_claim(400)
+						// del points = member.points(10) * new_earnings_since_last_claim(400)
 						(2_000 + 400 * 100) - 10 * 400,
 						600
 					)
@@ -1386,7 +1386,7 @@ mod unbond {
 					inner: BondedPoolInner {
 						state: PoolState::Destroying,
 						points: 0,
-						delegator_counter: 1,
+						member_counter: 1,
 						roles: DEFAULT_ROLES,
 					}
 				}
@@ -1399,7 +1399,7 @@ mod unbond {
 	#[test]
 	fn unbond_of_3_works() {
 		ExtBuilder::default()
-			.add_delegators(vec![(40, 40), (550, 550)])
+			.add_members(vec![(40, 40), (550, 550)])
 			.build_and_execute(|| {
 				let ed = Balances::minimum_balance();
 				// Given a slash from 600 -> 100
@@ -1422,7 +1422,7 @@ mod unbond {
 						inner: BondedPoolInner {
 							state: PoolState::Open,
 							points: 560,
-							delegator_counter: 3,
+							member_counter: 3,
 							roles: DEFAULT_ROLES,
 						}
 					}
@@ -1430,8 +1430,8 @@ mod unbond {
 
 				assert_eq!(StakingMock::active_stake(&default_bonded_account()).unwrap(), 94);
 				assert_eq!(
-					Delegators::<Runtime>::get(40).unwrap().unbonding_eras,
-					delegator_unbonding_eras!(0 + 3 => 40)
+					PoolMembers::<Runtime>::get(40).unwrap().unbonding_eras,
+					member_unbonding_eras!(0 + 3 => 40)
 				);
 				assert_eq!(Balances::free_balance(&40), 40 + 40); // We claim rewards when unbonding
 
@@ -1451,15 +1451,15 @@ mod unbond {
 						inner: BondedPoolInner {
 							state: PoolState::Destroying,
 							points: 10,
-							delegator_counter: 3,
+							member_counter: 3,
 							roles: DEFAULT_ROLES
 						}
 					}
 				);
 				assert_eq!(StakingMock::active_stake(&default_bonded_account()).unwrap(), 2);
 				assert_eq!(
-					Delegators::<Runtime>::get(550).unwrap().unbonding_eras,
-					delegator_unbonding_eras!(0 + 3 => 550)
+					PoolMembers::<Runtime>::get(550).unwrap().unbonding_eras,
+					member_unbonding_eras!(0 + 3 => 550)
 				);
 				assert_eq!(Balances::free_balance(&550), 550 + 550);
 
@@ -1478,15 +1478,15 @@ mod unbond {
 						inner: BondedPoolInner {
 							state: PoolState::Destroying,
 							points: 0,
-							delegator_counter: 3,
+							member_counter: 3,
 							roles: DEFAULT_ROLES
 						}
 					}
 				);
 				assert_eq!(StakingMock::active_stake(&default_bonded_account()).unwrap(), 0);
 				assert_eq!(
-					Delegators::<Runtime>::get(550).unwrap().unbonding_eras,
-					delegator_unbonding_eras!(0 + 3 => 550)
+					PoolMembers::<Runtime>::get(550).unwrap().unbonding_eras,
+					member_unbonding_eras!(0 + 3 => 550)
 				);
 				assert_eq!(Balances::free_balance(&550), 550 + 550);
 			});
@@ -1534,7 +1534,7 @@ mod unbond {
 	fn unbond_kick_works() {
 		// Kick: the pool is blocked and the caller is either the root or state-toggler.
 		ExtBuilder::default()
-			.add_delegators(vec![(100, 100), (200, 200)])
+			.add_members(vec![(100, 100), (200, 200)])
 			.build_and_execute(|| {
 				// Given
 				unsafe_set_state(1, PoolState::Blocked).unwrap();
@@ -1563,7 +1563,7 @@ mod unbond {
 							roles: DEFAULT_ROLES,
 							state: PoolState::Blocked,
 							points: 10, // Only 10 points because 200 + 100 was unbonded
-							delegator_counter: 3,
+							member_counter: 3,
 						}
 					}
 				);
@@ -1588,7 +1588,7 @@ mod unbond {
 	#[test]
 	fn unbond_permissionless_works() {
 		// Scenarios where non-admin accounts can unbond others
-		ExtBuilder::default().add_delegators(vec![(100, 100)]).build_and_execute(|| {
+		ExtBuilder::default().add_members(vec![(100, 100)]).build_and_execute(|| {
 			// Given the pool is blocked
 			unsafe_set_state(1, PoolState::Blocked).unwrap();
 
@@ -1601,13 +1601,13 @@ mod unbond {
 			// Given the pool is destroying
 			unsafe_set_state(1, PoolState::Destroying).unwrap();
 
-			// The depositor cannot be fully unbonded until they are the last delegator
+			// The depositor cannot be fully unbonded until they are the last member
 			assert_noop!(
 				Pools::fully_unbond(Origin::signed(10), 10),
-				Error::<Runtime>::NotOnlyDelegator
+				Error::<Runtime>::NotOnlyPoolMember
 			);
 
-			// Any account can unbond a delegator that is not the depositor
+			// Any account can unbond a member that is not the depositor
 			assert_ok!(Pools::fully_unbond(Origin::signed(420), 100));
 
 			// Given the pool is blocked
@@ -1650,12 +1650,12 @@ mod unbond {
 		ExtBuilder::default().build_and_execute(|| {
 			assert_noop!(
 				Pools::fully_unbond(Origin::signed(11), 11),
-				Error::<Runtime>::DelegatorNotFound
+				Error::<Runtime>::PoolMemberNotFound
 			);
 
-			// Add the delegator
-			let delegator = Delegator { pool_id: 2, points: 10, ..Default::default() };
-			Delegators::<Runtime>::insert(11, delegator);
+			// Add the member
+			let member = PoolMember { pool_id: 2, points: 10, ..Default::default() };
+			PoolMembers::<Runtime>::insert(11, member);
 
 			let _ = Pools::fully_unbond(Origin::signed(11), 11);
 		});
@@ -1665,14 +1665,14 @@ mod unbond {
 	#[should_panic = "Defensive failure has been triggered!"]
 	fn unbond_panics_when_reward_pool_not_found() {
 		ExtBuilder::default().build_and_execute(|| {
-			let delegator = Delegator { pool_id: 2, points: 10, ..Default::default() };
-			Delegators::<Runtime>::insert(11, delegator);
+			let member = PoolMember { pool_id: 2, points: 10, ..Default::default() };
+			PoolMembers::<Runtime>::insert(11, member);
 			BondedPool::<Runtime> {
 				id: 1,
 				inner: BondedPoolInner {
 					state: PoolState::Open,
 					points: 10,
-					delegator_counter: 1,
+					member_counter: 1,
 					roles: DEFAULT_ROLES,
 				},
 			}
@@ -1686,12 +1686,12 @@ mod unbond {
 	fn partial_unbond_era_tracking() {
 		ExtBuilder::default().build_and_execute(|| {
 			// given
-			assert_eq!(Delegators::<Runtime>::get(10).unwrap().active_points(), 10);
-			assert_eq!(Delegators::<Runtime>::get(10).unwrap().unbonding_points(), 0);
-			assert_eq!(Delegators::<Runtime>::get(10).unwrap().pool_id, 1);
+			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().active_points(), 10);
+			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().unbonding_points(), 0);
+			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().pool_id, 1);
 			assert_eq!(
-				Delegators::<Runtime>::get(10).unwrap().unbonding_eras,
-				delegator_unbonding_eras!()
+				PoolMembers::<Runtime>::get(10).unwrap().unbonding_eras,
+				member_unbonding_eras!()
 			);
 			assert_eq!(BondedPool::<Runtime>::get(1).unwrap().points, 10);
 			assert!(SubPoolsStorage::<Runtime>::get(1).is_none());
@@ -1705,12 +1705,12 @@ mod unbond {
 			assert_ok!(Pools::unbond(Origin::signed(10), 10, 1));
 
 			// then
-			assert_eq!(Delegators::<Runtime>::get(10).unwrap().active_points(), 9);
-			assert_eq!(Delegators::<Runtime>::get(10).unwrap().unbonding_points(), 1);
+			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().active_points(), 9);
+			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().unbonding_points(), 1);
 			assert_eq!(BondedPool::<Runtime>::get(1).unwrap().points, 9);
 			assert_eq!(
-				Delegators::<Runtime>::get(10).unwrap().unbonding_eras,
-				delegator_unbonding_eras!(3 => 1)
+				PoolMembers::<Runtime>::get(10).unwrap().unbonding_eras,
+				member_unbonding_eras!(3 => 1)
 			);
 			assert_eq!(
 				SubPoolsStorage::<Runtime>::get(1).unwrap(),
@@ -1726,12 +1726,12 @@ mod unbond {
 			assert_ok!(Pools::unbond(Origin::signed(10), 10, 5));
 
 			// then
-			assert_eq!(Delegators::<Runtime>::get(10).unwrap().active_points(), 4);
-			assert_eq!(Delegators::<Runtime>::get(10).unwrap().unbonding_points(), 6);
+			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().active_points(), 4);
+			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().unbonding_points(), 6);
 			assert_eq!(BondedPool::<Runtime>::get(1).unwrap().points, 4);
 			assert_eq!(
-				Delegators::<Runtime>::get(10).unwrap().unbonding_eras,
-				delegator_unbonding_eras!(3 => 6)
+				PoolMembers::<Runtime>::get(10).unwrap().unbonding_eras,
+				member_unbonding_eras!(3 => 6)
 			);
 			assert_eq!(
 				SubPoolsStorage::<Runtime>::get(1).unwrap(),
@@ -1748,12 +1748,12 @@ mod unbond {
 			assert_ok!(Pools::unbond(Origin::signed(10), 10, 1));
 
 			// then
-			assert_eq!(Delegators::<Runtime>::get(10).unwrap().active_points(), 3);
-			assert_eq!(Delegators::<Runtime>::get(10).unwrap().unbonding_points(), 7);
+			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().active_points(), 3);
+			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().unbonding_points(), 7);
 			assert_eq!(BondedPool::<Runtime>::get(1).unwrap().points, 3);
 			assert_eq!(
-				Delegators::<Runtime>::get(10).unwrap().unbonding_eras,
-				delegator_unbonding_eras!(3 => 6, 4 => 1)
+				PoolMembers::<Runtime>::get(10).unwrap().unbonding_eras,
+				member_unbonding_eras!(3 => 6, 4 => 1)
 			);
 			assert_eq!(
 				SubPoolsStorage::<Runtime>::get(1).unwrap(),
@@ -1775,12 +1775,12 @@ mod unbond {
 			assert_ok!(Pools::unbond(Origin::signed(10), 10, 3));
 
 			// then
-			assert_eq!(Delegators::<Runtime>::get(10).unwrap().active_points(), 0);
-			assert_eq!(Delegators::<Runtime>::get(10).unwrap().unbonding_points(), 10);
+			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().active_points(), 0);
+			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().unbonding_points(), 10);
 			assert_eq!(BondedPool::<Runtime>::get(1).unwrap().points, 0);
 			assert_eq!(
-				Delegators::<Runtime>::get(10).unwrap().unbonding_eras,
-				delegator_unbonding_eras!(3 => 6, 4 => 4)
+				PoolMembers::<Runtime>::get(10).unwrap().unbonding_eras,
+				member_unbonding_eras!(3 => 6, 4 => 4)
 			);
 			assert_eq!(
 				SubPoolsStorage::<Runtime>::get(1).unwrap(),
@@ -1807,8 +1807,8 @@ mod unbond {
 			CurrentEra::set(1);
 			assert_ok!(Pools::unbond(Origin::signed(10), 10, 3));
 			assert_eq!(
-				Delegators::<Runtime>::get(10).unwrap().unbonding_eras,
-				delegator_unbonding_eras!(3 => 2, 4 => 3)
+				PoolMembers::<Runtime>::get(10).unwrap().unbonding_eras,
+				member_unbonding_eras!(3 => 2, 4 => 3)
 			);
 
 			// when
@@ -1822,8 +1822,8 @@ mod unbond {
 			MaxUnbonding::set(3);
 			assert_ok!(Pools::unbond(Origin::signed(10), 10, 1));
 			assert_eq!(
-				Delegators::<Runtime>::get(10).unwrap().unbonding_eras,
-				delegator_unbonding_eras!(3 => 2, 4 => 3, 5 => 1)
+				PoolMembers::<Runtime>::get(10).unwrap().unbonding_eras,
+				member_unbonding_eras!(3 => 2, 4 => 3, 5 => 1)
 			);
 		})
 	}
@@ -1833,22 +1833,22 @@ mod unbond {
 	fn depositor_permissioned_partial_unbond() {
 		ExtBuilder::default()
 			.ed(1)
-			.add_delegators(vec![(100, 100)])
+			.add_members(vec![(100, 100)])
 			.build_and_execute(|| {
 				// given
 				assert_eq!(MinCreateBond::<Runtime>::get(), 2);
-				assert_eq!(Delegators::<Runtime>::get(10).unwrap().active_points(), 10);
-				assert_eq!(Delegators::<Runtime>::get(10).unwrap().unbonding_points(), 0);
+				assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().active_points(), 10);
+				assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().unbonding_points(), 0);
 
 				// can unbond a bit..
 				assert_ok!(Pools::unbond(Origin::signed(10), 10, 3));
-				assert_eq!(Delegators::<Runtime>::get(10).unwrap().active_points(), 7);
-				assert_eq!(Delegators::<Runtime>::get(10).unwrap().unbonding_points(), 3);
+				assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().active_points(), 7);
+				assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().unbonding_points(), 3);
 
 				// but not less than 2
 				assert_noop!(
 					Pools::unbond(Origin::signed(10), 10, 6),
-					Error::<Runtime>::NotOnlyDelegator
+					Error::<Runtime>::NotOnlyPoolMember
 				);
 			});
 	}
@@ -1858,12 +1858,12 @@ mod unbond {
 	fn depositor_permissioned_partial_unbond_slashed() {
 		ExtBuilder::default()
 			.ed(1)
-			.add_delegators(vec![(100, 100)])
+			.add_members(vec![(100, 100)])
 			.build_and_execute(|| {
 				// given
 				assert_eq!(MinCreateBond::<Runtime>::get(), 2);
-				assert_eq!(Delegators::<Runtime>::get(10).unwrap().active_points(), 10);
-				assert_eq!(Delegators::<Runtime>::get(10).unwrap().unbonding_points(), 0);
+				assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().active_points(), 10);
+				assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().unbonding_points(), 0);
 
 				// slash the default pool
 				StakingMock::set_bonded_balance(Pools::create_bonded_account(1), 5);
@@ -1871,7 +1871,7 @@ mod unbond {
 				// cannot unbond even 7, because the value of shares is now less.
 				assert_noop!(
 					Pools::unbond(Origin::signed(10), 10, 7),
-					Error::<Runtime>::NotOnlyDelegator
+					Error::<Runtime>::NotOnlyPoolMember
 				);
 			});
 	}
@@ -1908,7 +1908,7 @@ mod withdraw_unbonded {
 	#[test]
 	fn withdraw_unbonded_works_against_slashed_no_era_sub_pool() {
 		ExtBuilder::default()
-			.add_delegators(vec![(40, 40), (550, 550)])
+			.add_members(vec![(40, 40), (550, 550)])
 			.build_and_execute(|| {
 				// Given
 				assert_eq!(StakingMock::bonding_duration(), 3);
@@ -1964,7 +1964,7 @@ mod withdraw_unbonded {
 				);
 				assert_eq!(Balances::free_balance(&550), 550 + 545);
 				assert_eq!(Balances::free_balance(&default_bonded_account()), 50);
-				assert!(!Delegators::<Runtime>::contains_key(550));
+				assert!(!PoolMembers::<Runtime>::contains_key(550));
 
 				// When
 				assert_ok!(Pools::withdraw_unbonded(Origin::signed(40), 40, 0));
@@ -1976,7 +1976,7 @@ mod withdraw_unbonded {
 				);
 				assert_eq!(Balances::free_balance(&40), 40 + 40);
 				assert_eq!(Balances::free_balance(&default_bonded_account()), 50 - 40);
-				assert!(!Delegators::<Runtime>::contains_key(40));
+				assert!(!PoolMembers::<Runtime>::contains_key(40));
 
 				// When
 				assert_ok!(Pools::withdraw_unbonded(Origin::signed(10), 10, 0));
@@ -1984,7 +1984,7 @@ mod withdraw_unbonded {
 				// Then
 				assert_eq!(Balances::free_balance(&10), 10 + 10);
 				assert_eq!(Balances::free_balance(&default_bonded_account()), 0);
-				assert!(!Delegators::<Runtime>::contains_key(10));
+				assert!(!PoolMembers::<Runtime>::contains_key(10));
 				// Pools are removed from storage because the depositor left
 				assert!(!SubPoolsStorage::<Runtime>::contains_key(1),);
 				assert!(!RewardPools::<Runtime>::contains_key(1),);
@@ -1993,11 +1993,11 @@ mod withdraw_unbonded {
 	}
 
 	// This test also documents the case when the pools free balance goes below ED before all
-	// delegators have unbonded.
+	// members have unbonded.
 	#[test]
 	fn withdraw_unbonded_works_against_slashed_with_era_sub_pools() {
 		ExtBuilder::default()
-			.add_delegators(vec![(40, 40), (550, 550)])
+			.add_members(vec![(40, 40), (550, 550)])
 			.build_and_execute(|| {
 				// Given
 				StakingMock::set_bonded_balance(default_bonded_account(), 100); // slash bonded balance
@@ -2028,7 +2028,7 @@ mod withdraw_unbonded {
 				);
 				assert_eq!(Balances::free_balance(&40), 40 + 6);
 				assert_eq!(Balances::free_balance(&default_bonded_account()), 94);
-				assert!(!Delegators::<Runtime>::contains_key(40));
+				assert!(!PoolMembers::<Runtime>::contains_key(40));
 
 				// When
 				assert_ok!(Pools::withdraw_unbonded(Origin::signed(550), 550, 0));
@@ -2041,7 +2041,7 @@ mod withdraw_unbonded {
 				assert_eq!(Balances::free_balance(&550), 550 + 92);
 				// The account was dusted because it went below ED(5)
 				assert_eq!(Balances::free_balance(&default_bonded_account()), 0);
-				assert!(!Delegators::<Runtime>::contains_key(550));
+				assert!(!PoolMembers::<Runtime>::contains_key(550));
 
 				// When
 				assert_ok!(Pools::withdraw_unbonded(Origin::signed(10), 10, 0));
@@ -2049,7 +2049,7 @@ mod withdraw_unbonded {
 				// Then
 				assert_eq!(Balances::free_balance(&10), 10 + 0);
 				assert_eq!(Balances::free_balance(&default_bonded_account()), 0);
-				assert!(!Delegators::<Runtime>::contains_key(10));
+				assert!(!PoolMembers::<Runtime>::contains_key(10));
 				// Pools are removed from storage because the depositor left
 				assert!(!SubPoolsStorage::<Runtime>::contains_key(1),);
 				assert!(!RewardPools::<Runtime>::contains_key(1),);
@@ -2098,15 +2098,15 @@ mod withdraw_unbonded {
 
 			assert_noop!(
 				Pools::withdraw_unbonded(Origin::signed(11), 11, 0),
-				Error::<Runtime>::DelegatorNotFound
+				Error::<Runtime>::PoolMemberNotFound
 			);
 
-			let mut delegator = Delegator { pool_id: 1, points: 10, ..Default::default() };
-			Delegators::<Runtime>::insert(11, delegator.clone());
+			let mut member = PoolMember { pool_id: 1, points: 10, ..Default::default() };
+			PoolMembers::<Runtime>::insert(11, member.clone());
 
 			// Simulate calling `unbond`
-			delegator.unbonding_eras = delegator_unbonding_eras!(3 + 0 => 10);
-			Delegators::<Runtime>::insert(11, delegator.clone());
+			member.unbonding_eras = member_unbonding_eras!(3 + 0 => 10);
+			PoolMembers::<Runtime>::insert(11, member.clone());
 
 			// We are still in the bonding duration
 			assert_noop!(
@@ -2114,8 +2114,8 @@ mod withdraw_unbonded {
 				Error::<Runtime>::CannotWithdrawAny
 			);
 
-			// If we error the delegator does not get removed
-			assert_eq!(Delegators::<Runtime>::get(&11), Some(delegator));
+			// If we error the member does not get removed
+			assert_eq!(PoolMembers::<Runtime>::get(&11), Some(member));
 			// and the sub pools do not get updated.
 			assert_eq!(SubPoolsStorage::<Runtime>::get(1).unwrap(), sub_pools)
 		});
@@ -2124,7 +2124,7 @@ mod withdraw_unbonded {
 	#[test]
 	fn withdraw_unbonded_kick() {
 		ExtBuilder::default()
-			.add_delegators(vec![(100, 100), (200, 200)])
+			.add_members(vec![(100, 100), (200, 200)])
 			.build_and_execute(|| {
 				// Given
 				assert_ok!(Pools::fully_unbond(Origin::signed(100), 100));
@@ -2136,7 +2136,7 @@ mod withdraw_unbonded {
 						inner: BondedPoolInner {
 							points: 10,
 							state: PoolState::Open,
-							delegator_counter: 3,
+							member_counter: 3,
 							roles: DEFAULT_ROLES
 						}
 					}
@@ -2166,15 +2166,15 @@ mod withdraw_unbonded {
 
 				assert_eq!(Balances::free_balance(100), 100 + 100);
 				assert_eq!(Balances::free_balance(200), 200 + 200);
-				assert!(!Delegators::<Runtime>::contains_key(100));
-				assert!(!Delegators::<Runtime>::contains_key(200));
+				assert!(!PoolMembers::<Runtime>::contains_key(100));
+				assert!(!PoolMembers::<Runtime>::contains_key(200));
 				assert_eq!(SubPoolsStorage::<Runtime>::get(1).unwrap(), Default::default());
 			});
 	}
 
 	#[test]
 	fn withdraw_unbonded_destroying_permissionless() {
-		ExtBuilder::default().add_delegators(vec![(100, 100)]).build_and_execute(|| {
+		ExtBuilder::default().add_members(vec![(100, 100)]).build_and_execute(|| {
 			// Given
 			assert_ok!(Pools::fully_unbond(Origin::signed(100), 100));
 			assert_eq!(
@@ -2184,7 +2184,7 @@ mod withdraw_unbonded {
 					inner: BondedPoolInner {
 						points: 10,
 						state: PoolState::Open,
-						delegator_counter: 2,
+						member_counter: 2,
 						roles: DEFAULT_ROLES,
 					}
 				}
@@ -2201,19 +2201,19 @@ mod withdraw_unbonded {
 			// Given
 			unsafe_set_state(1, PoolState::Destroying).unwrap();
 
-			// Can permissionlesly withdraw a delegator that is not the depositor
+			// Can permissionlesly withdraw a member that is not the depositor
 			assert_ok!(Pools::withdraw_unbonded(Origin::signed(420), 100, 0));
 
 			assert_eq!(SubPoolsStorage::<Runtime>::get(1).unwrap(), Default::default(),);
 			assert_eq!(Balances::free_balance(100), 100 + 100);
-			assert!(!Delegators::<Runtime>::contains_key(100));
+			assert!(!PoolMembers::<Runtime>::contains_key(100));
 		});
 	}
 
 	#[test]
 	fn withdraw_unbonded_depositor_with_era_pool() {
 		ExtBuilder::default()
-			.add_delegators(vec![(100, 100), (200, 200)])
+			.add_members(vec![(100, 100), (200, 200)])
 			.build_and_execute(|| {
 				// Given
 				assert_ok!(Pools::fully_unbond(Origin::signed(100), 100));
@@ -2236,14 +2236,14 @@ mod withdraw_unbonded {
 					}
 				);
 
-				// Skip ahead eras to where its valid for the delegators to withdraw
+				// Skip ahead eras to where its valid for the members to withdraw
 				current_era += StakingMock::bonding_duration();
 				CurrentEra::set(current_era);
 
-				// Cannot withdraw the depositor if their is a delegator in another `with_era` pool.
+				// Cannot withdraw the depositor if their is a member in another `with_era` pool.
 				assert_noop!(
 					Pools::withdraw_unbonded(Origin::signed(420), 10, 0),
-					Error::<Runtime>::NotOnlyDelegator
+					Error::<Runtime>::NotOnlyPoolMember
 				);
 
 				// Given
@@ -2259,10 +2259,10 @@ mod withdraw_unbonded {
 					}
 				);
 
-				// Cannot withdraw the depositor if their is a delegator in another `with_era` pool.
+				// Cannot withdraw the depositor if their is a member in another `with_era` pool.
 				assert_noop!(
 					Pools::withdraw_unbonded(Origin::signed(420), 10, 0),
-					Error::<Runtime>::NotOnlyDelegator
+					Error::<Runtime>::NotOnlyPoolMember
 				);
 
 				// Given
@@ -2279,7 +2279,7 @@ mod withdraw_unbonded {
 
 				// The depositor can withdraw
 				assert_ok!(Pools::withdraw_unbonded(Origin::signed(420), 10, 0));
-				assert!(!Delegators::<Runtime>::contains_key(10));
+				assert!(!PoolMembers::<Runtime>::contains_key(10));
 				assert_eq!(Balances::free_balance(10), 10 + 10);
 				// Pools are removed from storage because the depositor left
 				assert!(!SubPoolsStorage::<Runtime>::contains_key(1));
@@ -2290,7 +2290,7 @@ mod withdraw_unbonded {
 
 	#[test]
 	fn withdraw_unbonded_depositor_no_era_pool() {
-		ExtBuilder::default().add_delegators(vec![(100, 100)]).build_and_execute(|| {
+		ExtBuilder::default().add_members(vec![(100, 100)]).build_and_execute(|| {
 			// Given
 			assert_ok!(Pools::fully_unbond(Origin::signed(100), 100));
 			unsafe_set_state(1, PoolState::Destroying).unwrap();
@@ -2312,10 +2312,10 @@ mod withdraw_unbonded {
 				}
 			);
 
-			// Cannot withdraw depositor with another delegator in the `no_era` pool
+			// Cannot withdraw depositor with another member in the `no_era` pool
 			assert_noop!(
 				Pools::withdraw_unbonded(Origin::signed(420), 10, 0),
-				Error::<Runtime>::NotOnlyDelegator
+				Error::<Runtime>::NotOnlyPoolMember
 			);
 
 			// Given
@@ -2330,7 +2330,7 @@ mod withdraw_unbonded {
 
 			// The depositor can withdraw
 			assert_ok!(Pools::withdraw_unbonded(Origin::signed(420), 10, 0));
-			assert!(!Delegators::<Runtime>::contains_key(10));
+			assert!(!PoolMembers::<Runtime>::contains_key(10));
 			assert_eq!(Balances::free_balance(10), 10 + 10);
 			// Pools are removed from storage because the depositor left
 			assert!(!SubPoolsStorage::<Runtime>::contains_key(1));
@@ -2350,8 +2350,8 @@ mod withdraw_unbonded {
 			CurrentEra::set(1);
 			assert_ok!(Pools::unbond(Origin::signed(10), 10, 1));
 			assert_eq!(
-				Delegators::<Runtime>::get(10).unwrap().unbonding_eras,
-				delegator_unbonding_eras!(3 => 6, 4 => 1)
+				PoolMembers::<Runtime>::get(10).unwrap().unbonding_eras,
+				member_unbonding_eras!(3 => 6, 4 => 1)
 			);
 			assert_eq!(
 				SubPoolsStorage::<Runtime>::get(1).unwrap(),
@@ -2363,17 +2363,17 @@ mod withdraw_unbonded {
 					}
 				}
 			);
-			assert_eq!(Delegators::<Runtime>::get(10).unwrap().active_points(), 3);
-			assert_eq!(Delegators::<Runtime>::get(10).unwrap().unbonding_points(), 7);
+			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().active_points(), 3);
+			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().unbonding_points(), 7);
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
 					Event::Created { depositor: 10, pool_id: 1 },
-					Event::Bonded { delegator: 10, pool_id: 1, bonded: 10, joined: true },
-					Event::PaidOut { delegator: 10, pool_id: 1, payout: 0 },
-					Event::Unbonded { delegator: 10, pool_id: 1, amount: 6 },
-					Event::PaidOut { delegator: 10, pool_id: 1, payout: 0 },
-					Event::Unbonded { delegator: 10, pool_id: 1, amount: 1 }
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::PaidOut { member: 10, pool_id: 1, payout: 0 },
+					Event::Unbonded { member: 10, pool_id: 1, amount: 6 },
+					Event::PaidOut { member: 10, pool_id: 1, payout: 0 },
+					Event::Unbonded { member: 10, pool_id: 1, amount: 1 }
 				]
 			);
 
@@ -2390,8 +2390,8 @@ mod withdraw_unbonded {
 
 			// then
 			assert_eq!(
-				Delegators::<Runtime>::get(10).unwrap().unbonding_eras,
-				delegator_unbonding_eras!(4 => 1)
+				PoolMembers::<Runtime>::get(10).unwrap().unbonding_eras,
+				member_unbonding_eras!(4 => 1)
 			);
 			assert_eq!(
 				SubPoolsStorage::<Runtime>::get(1).unwrap(),
@@ -2404,7 +2404,7 @@ mod withdraw_unbonded {
 			);
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![Event::Withdrawn { delegator: 10, pool_id: 1, amount: 6 }]
+				vec![Event::Withdrawn { member: 10, pool_id: 1, amount: 6 }]
 			);
 
 			// when
@@ -2413,13 +2413,13 @@ mod withdraw_unbonded {
 
 			// then
 			assert_eq!(
-				Delegators::<Runtime>::get(10).unwrap().unbonding_eras,
-				delegator_unbonding_eras!()
+				PoolMembers::<Runtime>::get(10).unwrap().unbonding_eras,
+				member_unbonding_eras!()
 			);
 			assert_eq!(SubPoolsStorage::<Runtime>::get(1).unwrap(), Default::default());
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![Event::Withdrawn { delegator: 10, pool_id: 1, amount: 1 },]
+				vec![Event::Withdrawn { member: 10, pool_id: 1, amount: 1 },]
 			);
 
 			// when repeating:
@@ -2432,14 +2432,14 @@ mod withdraw_unbonded {
 
 	#[test]
 	fn partial_withdraw_unbonded_non_depositor() {
-		ExtBuilder::default().add_delegators(vec![(11, 10)]).build_and_execute(|| {
+		ExtBuilder::default().add_members(vec![(11, 10)]).build_and_execute(|| {
 			// given
 			assert_ok!(Pools::unbond(Origin::signed(11), 11, 6));
 			CurrentEra::set(1);
 			assert_ok!(Pools::unbond(Origin::signed(11), 11, 1));
 			assert_eq!(
-				Delegators::<Runtime>::get(11).unwrap().unbonding_eras,
-				delegator_unbonding_eras!(3 => 6, 4 => 1)
+				PoolMembers::<Runtime>::get(11).unwrap().unbonding_eras,
+				member_unbonding_eras!(3 => 6, 4 => 1)
 			);
 			assert_eq!(
 				SubPoolsStorage::<Runtime>::get(1).unwrap(),
@@ -2451,18 +2451,18 @@ mod withdraw_unbonded {
 					}
 				}
 			);
-			assert_eq!(Delegators::<Runtime>::get(11).unwrap().active_points(), 3);
-			assert_eq!(Delegators::<Runtime>::get(11).unwrap().unbonding_points(), 7);
+			assert_eq!(PoolMembers::<Runtime>::get(11).unwrap().active_points(), 3);
+			assert_eq!(PoolMembers::<Runtime>::get(11).unwrap().unbonding_points(), 7);
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
 					Event::Created { depositor: 10, pool_id: 1 },
-					Event::Bonded { delegator: 10, pool_id: 1, bonded: 10, joined: true },
-					Event::Bonded { delegator: 11, pool_id: 1, bonded: 10, joined: true },
-					Event::PaidOut { delegator: 11, pool_id: 1, payout: 0 },
-					Event::Unbonded { delegator: 11, pool_id: 1, amount: 6 },
-					Event::PaidOut { delegator: 11, pool_id: 1, payout: 0 },
-					Event::Unbonded { delegator: 11, pool_id: 1, amount: 1 }
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::Bonded { member: 11, pool_id: 1, bonded: 10, joined: true },
+					Event::PaidOut { member: 11, pool_id: 1, payout: 0 },
+					Event::Unbonded { member: 11, pool_id: 1, amount: 6 },
+					Event::PaidOut { member: 11, pool_id: 1, payout: 0 },
+					Event::Unbonded { member: 11, pool_id: 1, amount: 1 }
 				]
 			);
 
@@ -2479,8 +2479,8 @@ mod withdraw_unbonded {
 
 			// then
 			assert_eq!(
-				Delegators::<Runtime>::get(11).unwrap().unbonding_eras,
-				delegator_unbonding_eras!(4 => 1)
+				PoolMembers::<Runtime>::get(11).unwrap().unbonding_eras,
+				member_unbonding_eras!(4 => 1)
 			);
 			assert_eq!(
 				SubPoolsStorage::<Runtime>::get(1).unwrap(),
@@ -2493,7 +2493,7 @@ mod withdraw_unbonded {
 			);
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![Event::Withdrawn { delegator: 11, pool_id: 1, amount: 6 }]
+				vec![Event::Withdrawn { member: 11, pool_id: 1, amount: 6 }]
 			);
 
 			// when
@@ -2502,13 +2502,13 @@ mod withdraw_unbonded {
 
 			// then
 			assert_eq!(
-				Delegators::<Runtime>::get(11).unwrap().unbonding_eras,
-				delegator_unbonding_eras!()
+				PoolMembers::<Runtime>::get(11).unwrap().unbonding_eras,
+				member_unbonding_eras!()
 			);
 			assert_eq!(SubPoolsStorage::<Runtime>::get(1).unwrap(), Default::default());
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![Event::Withdrawn { delegator: 11, pool_id: 1, amount: 1 }]
+				vec![Event::Withdrawn { member: 11, pool_id: 1, amount: 1 }]
 			);
 
 			// when repeating:
@@ -2532,7 +2532,7 @@ mod create {
 
 			assert!(!BondedPools::<Runtime>::contains_key(2));
 			assert!(!RewardPools::<Runtime>::contains_key(2));
-			assert!(!Delegators::<Runtime>::contains_key(11));
+			assert!(!PoolMembers::<Runtime>::contains_key(11));
 			assert_eq!(StakingMock::active_stake(&next_pool_stash), None);
 
 			Balances::make_free_balance_be(&11, StakingMock::minimum_bond() + ed);
@@ -2546,8 +2546,8 @@ mod create {
 
 			assert_eq!(Balances::free_balance(&11), 0);
 			assert_eq!(
-				Delegators::<Runtime>::get(11).unwrap(),
-				Delegator { pool_id: 2, points: StakingMock::minimum_bond(), ..Default::default() }
+				PoolMembers::<Runtime>::get(11).unwrap(),
+				PoolMember { pool_id: 2, points: StakingMock::minimum_bond(), ..Default::default() }
 			);
 			assert_eq!(
 				BondedPool::<Runtime>::get(2).unwrap(),
@@ -2555,7 +2555,7 @@ mod create {
 					id: 2,
 					inner: BondedPoolInner {
 						points: StakingMock::minimum_bond(),
-						delegator_counter: 1,
+						member_counter: 1,
 						state: PoolState::Open,
 						roles: PoolRoles {
 							depositor: 11,
@@ -2614,7 +2614,7 @@ mod create {
 				inner: BondedPoolInner {
 					state: PoolState::Open,
 					points: 10,
-					delegator_counter: 1,
+					member_counter: 1,
 					roles: DEFAULT_ROLES,
 				},
 			}
@@ -2629,15 +2629,15 @@ mod create {
 			);
 
 			// Given
-			assert_eq!(Delegators::<Runtime>::count(), 1);
+			assert_eq!(PoolMembers::<Runtime>::count(), 1);
 			MaxPools::<Runtime>::put(3);
-			MaxDelegators::<Runtime>::put(1);
+			MaxPoolMembers::<Runtime>::put(1);
 			Balances::make_free_balance_be(&11, 5 + 20);
 
 			// Then
 			assert_noop!(
 				Pools::create(Origin::signed(11), 20, 11, 11, 11),
-				Error::<Runtime>::MaxDelegators
+				Error::<Runtime>::MaxPoolMembers
 			);
 		});
 	}
@@ -2799,8 +2799,8 @@ mod set_configs {
 			assert_eq!(MinJoinBond::<Runtime>::get(), 1);
 			assert_eq!(MinCreateBond::<Runtime>::get(), 2);
 			assert_eq!(MaxPools::<Runtime>::get(), Some(3));
-			assert_eq!(MaxDelegators::<Runtime>::get(), Some(4));
-			assert_eq!(MaxDelegatorsPerPool::<Runtime>::get(), Some(5));
+			assert_eq!(MaxPoolMembers::<Runtime>::get(), Some(4));
+			assert_eq!(MaxPoolMembersPerPool::<Runtime>::get(), Some(5));
 
 			// Noop does nothing
 			assert_storage_noop!(assert_ok!(Pools::set_configs(
@@ -2824,8 +2824,8 @@ mod set_configs {
 			assert_eq!(MinJoinBond::<Runtime>::get(), 0);
 			assert_eq!(MinCreateBond::<Runtime>::get(), 0);
 			assert_eq!(MaxPools::<Runtime>::get(), None);
-			assert_eq!(MaxDelegators::<Runtime>::get(), None);
-			assert_eq!(MaxDelegatorsPerPool::<Runtime>::get(), None);
+			assert_eq!(MaxPoolMembers::<Runtime>::get(), None);
+			assert_eq!(MaxPoolMembersPerPool::<Runtime>::get(), None);
 		});
 	}
 }
@@ -2837,11 +2837,11 @@ mod bond_extra {
 	#[test]
 	fn bond_extra_from_free_balance_creator() {
 		ExtBuilder::default().build_and_execute(|| {
-			// 10 is the owner and a delegator in pool 1, give them some more funds.
+			// 10 is the owner and a member in pool 1, give them some more funds.
 			Balances::make_free_balance_be(&10, 100);
 
 			// given
-			assert_eq!(Delegators::<Runtime>::get(10).unwrap().points, 10);
+			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().points, 10);
 			assert_eq!(BondedPools::<Runtime>::get(1).unwrap().points, 10);
 			assert_eq!(Balances::free_balance(10), 100);
 
@@ -2850,15 +2850,15 @@ mod bond_extra {
 
 			// then
 			assert_eq!(Balances::free_balance(10), 90);
-			assert_eq!(Delegators::<Runtime>::get(10).unwrap().points, 20);
+			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().points, 20);
 			assert_eq!(BondedPools::<Runtime>::get(1).unwrap().points, 20);
 
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
 					Event::Created { depositor: 10, pool_id: 1 },
-					Event::Bonded { delegator: 10, pool_id: 1, bonded: 10, joined: true },
-					Event::Bonded { delegator: 10, pool_id: 1, bonded: 10, joined: false }
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: false }
 				]
 			);
 
@@ -2867,12 +2867,12 @@ mod bond_extra {
 
 			// then
 			assert_eq!(Balances::free_balance(10), 70);
-			assert_eq!(Delegators::<Runtime>::get(10).unwrap().points, 40);
+			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().points, 40);
 			assert_eq!(BondedPools::<Runtime>::get(1).unwrap().points, 40);
 
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![Event::Bonded { delegator: 10, pool_id: 1, bonded: 20, joined: false }]
+				vec![Event::Bonded { member: 10, pool_id: 1, bonded: 20, joined: false }]
 			);
 		})
 	}
@@ -2881,13 +2881,13 @@ mod bond_extra {
 	fn bond_extra_from_rewards_creator() {
 		ExtBuilder::default().build_and_execute(|| {
 			// put some money in the reward account, all of which will belong to 10 as the only
-			// delegator of the pool.
+			// member of the pool.
 			Balances::make_free_balance_be(&default_reward_account(), 7);
 			// ... if which only 2 is claimable to make sure the reward account does not die.
 			let claimable_reward = 7 - ExistentialDeposit::get();
 
 			// given
-			assert_eq!(Delegators::<Runtime>::get(10).unwrap().points, 10);
+			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().points, 10);
 			assert_eq!(BondedPools::<Runtime>::get(1).unwrap().points, 10);
 			assert_eq!(Balances::free_balance(10), 5);
 
@@ -2896,17 +2896,17 @@ mod bond_extra {
 
 			// then
 			assert_eq!(Balances::free_balance(10), 5);
-			assert_eq!(Delegators::<Runtime>::get(10).unwrap().points, 10 + claimable_reward);
+			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().points, 10 + claimable_reward);
 			assert_eq!(BondedPools::<Runtime>::get(1).unwrap().points, 10 + claimable_reward);
 
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
 					Event::Created { depositor: 10, pool_id: 1 },
-					Event::Bonded { delegator: 10, pool_id: 1, bonded: 10, joined: true },
-					Event::PaidOut { delegator: 10, pool_id: 1, payout: claimable_reward },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::PaidOut { member: 10, pool_id: 1, payout: claimable_reward },
 					Event::Bonded {
-						delegator: 10,
+						member: 10,
 						pool_id: 1,
 						bonded: claimable_reward,
 						joined: false
@@ -2918,9 +2918,9 @@ mod bond_extra {
 
 	#[test]
 	fn bond_extra_from_rewards_joiner() {
-		ExtBuilder::default().add_delegators(vec![(20, 20)]).build_and_execute(|| {
+		ExtBuilder::default().add_members(vec![(20, 20)]).build_and_execute(|| {
 			// put some money in the reward account, all of which will belong to 10 as the only
-			// delegator of the pool.
+			// member of the pool.
 			Balances::make_free_balance_be(&default_reward_account(), 8);
 			// ... if which only 3 is claimable to make sure the reward account does not die.
 			let claimable_reward = 8 - ExistentialDeposit::get();
@@ -2928,8 +2928,8 @@ mod bond_extra {
 			assert_eq!(claimable_reward, 3, "test is correct if rewards are divisible by 3");
 
 			// given
-			assert_eq!(Delegators::<Runtime>::get(10).unwrap().points, 10);
-			assert_eq!(Delegators::<Runtime>::get(20).unwrap().points, 20);
+			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().points, 10);
+			assert_eq!(PoolMembers::<Runtime>::get(20).unwrap().points, 20);
 			assert_eq!(BondedPools::<Runtime>::get(1).unwrap().points, 30);
 			assert_eq!(Balances::free_balance(10), 5);
 			assert_eq!(Balances::free_balance(20), 20);
@@ -2940,7 +2940,7 @@ mod bond_extra {
 			// then
 			assert_eq!(Balances::free_balance(10), 5);
 			// 10's share of the reward is 1/3, since they gave 10/30 of the total shares.
-			assert_eq!(Delegators::<Runtime>::get(10).unwrap().points, 10 + 1);
+			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().points, 10 + 1);
 			assert_eq!(BondedPools::<Runtime>::get(1).unwrap().points, 30 + 1);
 
 			// when
@@ -2950,19 +2950,19 @@ mod bond_extra {
 			assert_eq!(Balances::free_balance(20), 20);
 			// 20's share of the rewards is the other 2/3 of the rewards, since they have 20/30 of
 			// the shares
-			assert_eq!(Delegators::<Runtime>::get(20).unwrap().points, 20 + 2);
+			assert_eq!(PoolMembers::<Runtime>::get(20).unwrap().points, 20 + 2);
 			assert_eq!(BondedPools::<Runtime>::get(1).unwrap().points, 30 + 3);
 
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
 					Event::Created { depositor: 10, pool_id: 1 },
-					Event::Bonded { delegator: 10, pool_id: 1, bonded: 10, joined: true },
-					Event::Bonded { delegator: 20, pool_id: 1, bonded: 20, joined: true },
-					Event::PaidOut { delegator: 10, pool_id: 1, payout: 1 },
-					Event::Bonded { delegator: 10, pool_id: 1, bonded: 1, joined: false },
-					Event::PaidOut { delegator: 20, pool_id: 1, payout: 2 },
-					Event::Bonded { delegator: 20, pool_id: 1, bonded: 2, joined: false }
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::Bonded { member: 20, pool_id: 1, bonded: 20, joined: true },
+					Event::PaidOut { member: 10, pool_id: 1, payout: 1 },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 1, joined: false },
+					Event::PaidOut { member: 20, pool_id: 1, payout: 2 },
+					Event::Bonded { member: 20, pool_id: 1, bonded: 2, joined: false }
 				]
 			);
 		})

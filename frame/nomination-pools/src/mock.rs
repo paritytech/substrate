@@ -192,13 +192,13 @@ frame_support::construct_runtime!(
 
 #[derive(Default)]
 pub struct ExtBuilder {
-	delegators: Vec<(AccountId, Balance)>,
+	members: Vec<(AccountId, Balance)>,
 }
 
 impl ExtBuilder {
-	// Add delegators to pool 0.
-	pub(crate) fn add_delegators(mut self, delegators: Vec<(AccountId, Balance)>) -> Self {
-		self.delegators = delegators;
+	// Add members to pool 0.
+	pub(crate) fn add_members(mut self, members: Vec<(AccountId, Balance)>) -> Self {
+		self.members = members;
 		self
 	}
 
@@ -220,8 +220,8 @@ impl ExtBuilder {
 			min_join_bond: 2,
 			min_create_bond: 2,
 			max_pools: Some(2),
-			max_delegators_per_pool: Some(3),
-			max_delegators: Some(4),
+			max_members_per_pool: Some(3),
+			max_members: Some(4),
 		}
 		.assimilate_storage(&mut storage);
 
@@ -237,7 +237,7 @@ impl ExtBuilder {
 			assert_ok!(Pools::create(RawOrigin::Signed(10).into(), amount_to_bond, 900, 901, 902));
 
 			let last_pool = LastPoolId::<Runtime>::get();
-			for (account_id, bonded) in self.delegators {
+			for (account_id, bonded) in self.members {
 				Balances::make_free_balance_be(&account_id, bonded * 2);
 				assert_ok!(Pools::join(RawOrigin::Signed(account_id).into(), bonded, last_pool));
 			}
@@ -279,11 +279,11 @@ pub(crate) fn pool_events_since_last_call() -> Vec<super::Event<Runtime>> {
 }
 
 /// Same as `fully_unbond`, in permissioned setting.
-pub fn fully_unbond_permissioned(delegator: AccountId) -> DispatchResult {
-	let points = Delegators::<Runtime>::get(&delegator)
+pub fn fully_unbond_permissioned(member: AccountId) -> DispatchResult {
+	let points = PoolMembers::<Runtime>::get(&member)
 		.map(|d| d.active_points())
 		.unwrap_or_default();
-	Pools::unbond(Origin::signed(delegator), delegator, points)
+	Pools::unbond(Origin::signed(member), member, points)
 }
 
 #[cfg(test)]

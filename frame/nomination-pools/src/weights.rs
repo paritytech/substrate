@@ -62,7 +62,7 @@ pub trait WeightInfo {
 pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: NominationPools MinJoinBond (r:1 w:0)
-	// Storage: NominationPools Delegators (r:1 w:1)
+	// Storage: NominationPools PoolMembers (r:1 w:1)
 	// Storage: NominationPools BondedPools (r:1 w:1)
 	// Storage: Staking Ledger (r:1 w:1)
 	// Storage: NominationPools RewardPools (r:1 w:0)
@@ -71,7 +71,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Balances Locks (r:1 w:1)
 	// Storage: BagsList ListNodes (r:3 w:3)
 	// Storage: BagsList ListBags (r:2 w:2)
-	// Storage: NominationPools CounterForDelegators (r:1 w:1)
+	// Storage: NominationPools CounterForPoolMembers (r:1 w:1)
 	fn join() -> Weight {
 		(109_762_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(15 as Weight))
@@ -87,7 +87,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(15 as Weight))
 			.saturating_add(T::DbWeight::get().writes(11 as Weight))
 	}
-	// Storage: NominationPools Delegators (r:1 w:1)
+	// Storage: NominationPools PoolMembers (r:1 w:1)
 	// Storage: NominationPools BondedPools (r:1 w:0)
 	// Storage: NominationPools RewardPools (r:1 w:1)
 	// Storage: System Account (r:1 w:1)
@@ -96,7 +96,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
-	// Storage: NominationPools Delegators (r:1 w:1)
+	// Storage: NominationPools PoolMembers (r:1 w:1)
 	// Storage: NominationPools BondedPools (r:1 w:1)
 	// Storage: NominationPools RewardPools (r:1 w:1)
 	// Storage: System Account (r:2 w:1)
@@ -125,14 +125,14 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(3 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
-	// Storage: NominationPools Delegators (r:1 w:1)
+	// Storage: NominationPools PoolMembers (r:1 w:1)
 	// Storage: Staking CurrentEra (r:1 w:0)
 	// Storage: NominationPools SubPoolsStorage (r:1 w:1)
 	// Storage: NominationPools BondedPools (r:1 w:0)
 	// Storage: Staking Ledger (r:1 w:1)
 	// Storage: Balances Locks (r:1 w:1)
 	// Storage: System Account (r:1 w:1)
-	// Storage: NominationPools CounterForDelegators (r:1 w:1)
+	// Storage: NominationPools CounterForPoolMembers (r:1 w:1)
 	fn withdraw_unbonded_update(s: u32, ) -> Weight {
 		(66_522_000 as Weight)
 			// Standard Error: 0
@@ -151,7 +151,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: NominationPools MinCreateBond (r:1 w:0)
 	// Storage: NominationPools MaxPools (r:1 w:0)
 	// Storage: NominationPools CounterForBondedPools (r:1 w:1)
-	// Storage: NominationPools Delegators (r:1 w:1)
+	// Storage: NominationPools PoolMembers (r:1 w:1)
 	// Storage: System ParentHash (r:1 w:0)
 	// Storage: unknown [0x3a65787472696e7369635f696e646578] (r:1 w:0)
 	// Storage: NominationPools BondedPools (r:1 w:1)
@@ -161,7 +161,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Staking CurrentEra (r:1 w:0)
 	// Storage: Staking HistoryDepth (r:1 w:0)
 	// Storage: Balances Locks (r:1 w:1)
-	// Storage: NominationPools CounterForDelegators (r:1 w:1)
+	// Storage: NominationPools CounterForPoolMembers (r:1 w:1)
 	// Storage: NominationPools RewardPools (r:1 w:1)
 	// Storage: NominationPools CounterForRewardPools (r:1 w:1)
 	// Storage: Staking Payee (r:0 w:1)
@@ -207,7 +207,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 // For backwards compatibility and tests
 impl WeightInfo for () {
 	// Storage: NominationPools MinJoinBond (r:1 w:0)
-	// Storage: NominationPools Delegators (r:1 w:1)
+	// Storage: NominationPools PoolMembers (r:1 w:1)
 	// Storage: NominationPools BondedPools (r:1 w:1)
 	// Storage: Staking Ledger (r:1 w:1)
 	// Storage: NominationPools RewardPools (r:1 w:0)
@@ -216,7 +216,7 @@ impl WeightInfo for () {
 	// Storage: Balances Locks (r:1 w:1)
 	// Storage: BagsList ListNodes (r:3 w:3)
 	// Storage: BagsList ListBags (r:2 w:2)
-	// Storage: NominationPools CounterForDelegators (r:1 w:1)
+	// Storage: NominationPools CounterForPoolMembers (r:1 w:1)
 	fn join() -> Weight {
 		(109_762_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(15 as Weight))
@@ -232,7 +232,7 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(15 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(11 as Weight))
 	}
-	// Storage: NominationPools Delegators (r:1 w:1)
+	// Storage: NominationPools PoolMembers (r:1 w:1)
 	// Storage: NominationPools BondedPools (r:1 w:0)
 	// Storage: NominationPools RewardPools (r:1 w:1)
 	// Storage: System Account (r:1 w:1)
@@ -241,7 +241,7 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
 	}
-	// Storage: NominationPools Delegators (r:1 w:1)
+	// Storage: NominationPools PoolMembers (r:1 w:1)
 	// Storage: NominationPools BondedPools (r:1 w:1)
 	// Storage: NominationPools RewardPools (r:1 w:1)
 	// Storage: System Account (r:2 w:1)
@@ -270,14 +270,14 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
-	// Storage: NominationPools Delegators (r:1 w:1)
+	// Storage: NominationPools PoolMembers (r:1 w:1)
 	// Storage: Staking CurrentEra (r:1 w:0)
 	// Storage: NominationPools SubPoolsStorage (r:1 w:1)
 	// Storage: NominationPools BondedPools (r:1 w:0)
 	// Storage: Staking Ledger (r:1 w:1)
 	// Storage: Balances Locks (r:1 w:1)
 	// Storage: System Account (r:1 w:1)
-	// Storage: NominationPools CounterForDelegators (r:1 w:1)
+	// Storage: NominationPools CounterForPoolMembers (r:1 w:1)
 	fn withdraw_unbonded_update(s: u32) -> Weight {
 		(66_522_000 as Weight)
 			// Standard Error: 0
@@ -285,7 +285,7 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(8 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(6 as Weight))
 	}
-	// Storage: NominationPools CounterForDelegators (r:1 w:1)
+	// Storage: NominationPools CounterForPoolMembers (r:1 w:1)
 	fn withdraw_unbonded_kill(s: u32) -> Weight {
 		(66_522_000 as Weight)
 			// Standard Error: 0
@@ -297,7 +297,7 @@ impl WeightInfo for () {
 	// Storage: NominationPools MinCreateBond (r:1 w:0)
 	// Storage: NominationPools MaxPools (r:1 w:0)
 	// Storage: NominationPools CounterForBondedPools (r:1 w:1)
-	// Storage: NominationPools Delegators (r:1 w:1)
+	// Storage: NominationPools PoolMembers (r:1 w:1)
 	// Storage: System ParentHash (r:1 w:0)
 	// Storage: unknown [0x3a65787472696e7369635f696e646578] (r:1 w:0)
 	// Storage: NominationPools BondedPools (r:1 w:1)
@@ -307,7 +307,7 @@ impl WeightInfo for () {
 	// Storage: Staking CurrentEra (r:1 w:0)
 	// Storage: Staking HistoryDepth (r:1 w:0)
 	// Storage: Balances Locks (r:1 w:1)
-	// Storage: NominationPools CounterForDelegators (r:1 w:1)
+	// Storage: NominationPools CounterForPoolMembers (r:1 w:1)
 	// Storage: NominationPools RewardPools (r:1 w:1)
 	// Storage: NominationPools CounterForRewardPools (r:1 w:1)
 	// Storage: Staking Payee (r:0 w:1)

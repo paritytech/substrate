@@ -8,8 +8,8 @@ use frame_election_provider_support::SortedListProvider;
 use frame_support::{ensure, traits::Get};
 use frame_system::RawOrigin as Origin;
 use pallet_nomination_pools::{
-	BalanceOf, BondExtra, BondedPoolInner, BondedPools, ConfigOp, Delegators, MaxDelegators,
-	MaxDelegatorsPerPool, MaxPools, Metadata, MinCreateBond, MinJoinBond, Pallet as Pools,
+	BalanceOf, BondExtra, BondedPoolInner, BondedPools, ConfigOp, PoolMembers, MaxPoolMembers,
+	MaxPoolMembersPerPool, MaxPools, Metadata, MinCreateBond, MinJoinBond, Pallet as Pools,
 	PoolRoles, PoolState, RewardPools, SubPoolsStorage,
 };
 use sp_runtime::traits::{Bounded, Zero};
@@ -78,7 +78,7 @@ struct ListScenario<T: pallet_nomination_pools::Config> {
 	origin1: T::AccountId,
 	creator1: T::AccountId,
 	dest_weight: BalanceOf<T>,
-	origin1_delegator: Option<T::AccountId>,
+	origin1_member: Option<T::AccountId>,
 }
 
 impl<T: Config> ListScenario<T> {
@@ -146,7 +146,7 @@ impl<T: Config> ListScenario<T> {
 			origin1: pool_origin1,
 			creator1: pool_creator1,
 			dest_weight,
-			origin1_delegator: None,
+			origin1_member: None,
 		})
 	}
 
@@ -158,12 +158,12 @@ impl<T: Config> ListScenario<T> {
 			.max(amount);
 
 		let joiner: T::AccountId = account("joiner", USER_SEED, 0);
-		self.origin1_delegator = Some(joiner.clone());
+		self.origin1_member = Some(joiner.clone());
 		CurrencyOf::<T>::make_free_balance_be(&joiner, amount * 2u32.into());
 
 		let original_bonded = T::StakingInterface::active_stake(&self.origin1).unwrap();
 
-		// Unbond `amount` from the underlying pool account so when the delegator joins
+		// Unbond `amount` from the underlying pool account so when the member joins
 		// we will maintain `current_bonded`.
 		T::StakingInterface::unbond(self.origin1.clone(), amount)
 			.expect("the pool was created in `Self::new`.");
@@ -179,10 +179,10 @@ impl<T: Config> ListScenario<T> {
 		let weight_of = pallet_staking::Pallet::<T>::weight_of_fn();
 		assert_eq!(vote_to_balance::<T>(weight_of(&self.origin1)).unwrap(), original_bonded);
 
-		// Sanity check the delegator was added correctly
-		let delegator = Delegators::<T>::get(&joiner).unwrap();
-		assert_eq!(delegator.points, amount);
-		assert_eq!(delegator.pool_id, 1);
+		// Sanity check the member was added correctly
+		let member = PoolMembers::<T>::get(&joiner).unwrap();
+		assert_eq!(member.points, amount);
+		assert_eq!(member.pool_id, 1);
 
 		self
 	}
@@ -292,24 +292,24 @@ frame_benchmarking::benchmarks! {
 		let amount = origin_weight - scenario.dest_weight.clone();
 
 		let scenario = scenario.add_joiner(amount);
-		let delegator_id = scenario.origin1_delegator.unwrap().clone();
-		let all_points = Delegators::<T>::get(&delegator_id).unwrap().points;
-		whitelist_account!(delegator_id);
-	}: _(Origin::Signed(delegator_id.clone()), delegator_id.clone(), all_points)
+		let member_id = scenario.origin1_member.unwrap().clone();
+		let all_points = PoolMembers::<T>::get(&member_id).unwrap().points;
+		whitelist_account!(member_id);
+	}: _(Origin::Signed(member_id.clone()), member_id.clone(), all_points)
 	verify {
 		let bonded_after = T::StakingInterface::active_stake(&scenario.origin1).unwrap();
 		// We at least went down to the destination bag
 		assert!(bonded_after <= scenario.dest_weight.clone());
-		let delegator = Delegators::<T>::get(
-			&delegator_id
+		let member = PoolMembers::<T>::get(
+			&member_id
 		)
 		.unwrap();
 		assert_eq!(
-			delegator.unbonding_eras.keys().cloned().collect::<Vec<_>>(),
+			member.unbonding_eras.keys().cloned().collect::<Vec<_>>(),
 			vec![0 + T::StakingInterface::bonding_duration()]
 		);
 		assert_eq!(
-			delegator.unbonding_eras.values().cloned().collect::<Vec<_>>(),
+			member.unbonding_eras.values().cloned().collect::<Vec<_>>(),
 			vec![all_points]
 		);
 	}
@@ -322,7 +322,7 @@ frame_benchmarking::benchmarks! {
 			.max(CurrencyOf::<T>::minimum_balance());
 		let (depositor, pool_account) = create_pool_account::<T>(0, min_create_bond);
 
-		// Add a new delegator
+		// Add a new member
 		let min_join_bond = MinJoinBond::<T>::get().max(CurrencyOf::<T>::minimum_balance());
 		let joiner = create_funded_user_with_balance::<T>("joiner", 0, min_join_bond * 2u32.into());
 		Pools::<T>::join(Origin::Signed(joiner.clone()).into(), min_join_bond, 1)
@@ -335,7 +335,7 @@ frame_benchmarking::benchmarks! {
 		);
 		assert_eq!(CurrencyOf::<T>::free_balance(&joiner), min_join_bond);
 
-		// Unbond the new delegator
+		// Unbond the new member
 		Pools::<T>::fully_unbond(Origin::Signed(joiner.clone()).into(), joiner.clone()).unwrap();
 
 		// Sanity check that unbond worked
@@ -366,7 +366,7 @@ frame_benchmarking::benchmarks! {
 			.max(CurrencyOf::<T>::minimum_balance());
 		let (depositor, pool_account) = create_pool_account::<T>(0, min_create_bond);
 
-		// Add a new delegator
+		// Add a new member
 		let min_join_bond = MinJoinBond::<T>::get().max(CurrencyOf::<T>::minimum_balance());
 		let joiner = create_funded_user_with_balance::<T>("joiner", 0, min_join_bond * 2u32.into());
 		Pools::<T>::join(Origin::Signed(joiner.clone()).into(), min_join_bond, 1)
@@ -379,7 +379,7 @@ frame_benchmarking::benchmarks! {
 		);
 		assert_eq!(CurrencyOf::<T>::free_balance(&joiner), min_join_bond);
 
-		// Unbond the new delegator
+		// Unbond the new member
 		pallet_staking::CurrentEra::<T>::put(0);
 		Pools::<T>::fully_unbond(Origin::Signed(joiner.clone()).into(), joiner.clone()).unwrap();
 
@@ -451,7 +451,7 @@ frame_benchmarking::benchmarks! {
 		assert!(BondedPools::<T>::contains_key(&1));
 		assert!(SubPoolsStorage::<T>::contains_key(&1));
 		assert!(RewardPools::<T>::contains_key(&1));
-		assert!(Delegators::<T>::contains_key(&depositor));
+		assert!(PoolMembers::<T>::contains_key(&depositor));
 		assert!(frame_system::Account::<T>::contains_key(&reward_account));
 
 		whitelist_account!(depositor);
@@ -462,7 +462,7 @@ frame_benchmarking::benchmarks! {
 		assert!(!BondedPools::<T>::contains_key(&1));
 		assert!(!SubPoolsStorage::<T>::contains_key(&1));
 		assert!(!RewardPools::<T>::contains_key(&1));
-		assert!(!Delegators::<T>::contains_key(&depositor));
+		assert!(!PoolMembers::<T>::contains_key(&depositor));
 		assert!(!frame_system::Account::<T>::contains_key(&pool_account));
 		assert!(!frame_system::Account::<T>::contains_key(&reward_account));
 
@@ -504,7 +504,7 @@ frame_benchmarking::benchmarks! {
 			BondedPoolInner {
 				points: min_create_bond,
 				state: PoolState::Open,
-				delegator_counter: 1,
+				member_counter: 1,
 				roles: PoolRoles {
 					depositor: depositor.clone(),
 					root: depositor.clone(),
@@ -545,7 +545,7 @@ frame_benchmarking::benchmarks! {
 			BondedPoolInner {
 				points: min_create_bond,
 				state: PoolState::Open,
-				delegator_counter: 1,
+				member_counter: 1,
 				roles: PoolRoles {
 					depositor: depositor.clone(),
 					root: depositor.clone(),
@@ -608,8 +608,8 @@ frame_benchmarking::benchmarks! {
 		assert_eq!(MinJoinBond::<T>::get(), BalanceOf::<T>::max_value());
 		assert_eq!(MinCreateBond::<T>::get(), BalanceOf::<T>::max_value());
 		assert_eq!(MaxPools::<T>::get(), Some(u32::MAX));
-		assert_eq!(MaxDelegators::<T>::get(), Some(u32::MAX));
-		assert_eq!(MaxDelegatorsPerPool::<T>::get(), Some(u32::MAX));
+		assert_eq!(MaxPoolMembers::<T>::get(), Some(u32::MAX));
+		assert_eq!(MaxPoolMembersPerPool::<T>::get(), Some(u32::MAX));
 	}
 
 	impl_benchmark_test_suite!(
