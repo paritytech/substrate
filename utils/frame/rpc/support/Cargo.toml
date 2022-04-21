@@ -15,7 +15,7 @@ description = "Substrate RPC for FRAME's support"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-jsonrpsee = { version = "0.10.1", features = ["jsonrpsee-types"] }
+jsonrpsee = { version = "0.11.0", features = ["jsonrpsee-types"] }
 futures = "0.3.21"
 codec = { package = "parity-scale-codec", version = "3.0.0" }
 serde = "1"
@@ -26,5 +26,5 @@ sc-rpc-api = { version = "0.10.0-dev", path = "../../../../client/rpc-api" }
 [dev-dependencies]
 frame-system = { version = "4.0.0-dev", path = "../../../../frame/system" }
 scale-info = "2.0.1"
-jsonrpsee = { version = "0.10.1", features = ["ws-client", "jsonrpsee-types"] }
+jsonrpsee = { version = "0.11.0", features = ["ws-client", "jsonrpsee-types"] }
 tokio = "1.17.0"
