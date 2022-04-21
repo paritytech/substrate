@@ -16,17 +16,15 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use clap::Parser;
 use parity_scale_codec::{Decode, Encode};
 use crate::{CliConfiguration, PruningParams, Result as CliResult, SharedParams};
 use sc_client_api::{backend::Backend as BackendT, blockchain::HeaderBackend};
 use sc_client_db::Backend;
-use serde::Serialize;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use std::{fmt::Debug, io, sync::Arc};
 
 /// The `blockchain-info` subcommand used to output db meta columns information.
-#[derive(Debug, Clone, Parser)]
+#[derive(Debug, Clone, clap::Parser)]
 pub struct BlockchainInfoCmd {
 	#[allow(missing_docs)]
 	#[clap(flatten)]
@@ -38,7 +36,7 @@ pub struct BlockchainInfoCmd {
 }
 
 /// Serializable `blockchain-info` subcommand output.
-#[derive(Clone, Eq, PartialEq, Debug, Encode, Decode, Serialize)]
+#[derive(Clone, Eq, PartialEq, Debug, Encode, Decode, serde::Serialize)]
 struct BlockchainInfo<B: BlockT> {
 	/// Best block hash.
 	best_hash: B::Hash,
@@ -50,8 +48,6 @@ struct BlockchainInfo<B: BlockT> {
 	finalized_hash: B::Hash,
 	/// Last finalized block number.
 	finalized_number: <<B as BlockT>::Header as HeaderT>::Number,
-	/// Last finalized state.
-	finalized_state: Option<(B::Hash, <<B as BlockT>::Header as HeaderT>::Number)>,
 }
 
 impl BlockchainInfoCmd {
@@ -67,10 +63,9 @@ impl BlockchainInfoCmd {
 			genesis_hash: blockchain_info.genesis_hash,
 			finalized_hash: blockchain_info.finalized_hash,
 			finalized_number: blockchain_info.finalized_number,
-			finalized_state: blockchain_info.finalized_state,
 		};
-		let mut out = Box::new(io::stdout());
-		serde_json::to_writer(&mut out, &info).map_err(|e| format!("Error writing JSON: {}", e))?;
+		let mut out = io::stdout();
+		serde_json::to_writer_pretty(&mut out, &info).map_err(|e| format!("Error writing JSON: {}", e))?;
 		Ok(())
 	}
 }
