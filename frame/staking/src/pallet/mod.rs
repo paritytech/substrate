@@ -121,6 +121,8 @@ pub mod pallet {
 		type Slash: OnUnbalanced<NegativeImbalanceOf<Self>>;
 
 		/// Handler for the unbalanced increment when rewarding a staker.
+		/// NOTE: in most cases, the implementation of `OnUnbalanced` should modify the total
+		/// issuance.
 		type Reward: OnUnbalanced<PositiveImbalanceOf<Self>>;
 
 		/// Number of sessions per era.
