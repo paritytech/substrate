@@ -52,7 +52,7 @@ struct BlockchainInfo<B: BlockT> {
 
 impl BlockchainInfoCmd {
 	/// Run the `blockchain-info` subcommand
-	pub async fn run<B>(&self, backend: Arc<Backend<B>>) -> CliResult<()>
+	pub fn run<B>(&self, backend: Arc<Backend<B>>) -> CliResult<()>
 	where
 		B: BlockT,
 	{

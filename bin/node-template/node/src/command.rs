@@ -164,9 +164,9 @@ pub fn run() -> sc_cli::Result<()> {
 			.into()),
 		Some(Subcommand::BlockchainInfo(cmd)) => {
 			let runner = cli.create_runner(cmd)?;
-			runner.async_run(|config| {
-				let PartialComponents { backend, task_manager, .. } = service::new_partial(&config)?;
-				Ok((cmd.run(backend.clone()), task_manager))
+			runner.sync_run(|config| {
+				let PartialComponents { backend, .. } = service::new_partial(&config)?;
+				cmd.run(backend.clone())
 			})
 		},
 		None => {
