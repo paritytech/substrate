@@ -23,10 +23,10 @@ sp-runtime = { version = "6.0.0", default-features = false, path = "../../primit
 sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
 sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../primitives/staking" }
 sp-core = { version = "6.0.0", default-features = false, path = "../../primitives/core" }
-sp-io = { version = "6.0.0",  default-features = false, path = "../../primitives/io" }
 
 [dev-dependencies]
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
+sp-io = { version = "6.0.0", path = "../../primitives/io" }
 sp-tracing = { version = "5.0.0", path = "../../primitives/tracing" }
 
 [features]
@@ -34,10 +34,11 @@ runtime-benchmarks = []
 default = ["std"]
 std = [
 	"codec/std",
-	"sp-core/std",
-	"sp-io/std",
 	"scale-info/std",
-	"sp-std/std",
 	"frame-support/std",
 	"frame-system/std",
+	"sp-runtime/std",
+	"sp-std/std",
+	"sp-staking/std",
+	"sp-core/std",
 ]
