@@ -50,8 +50,10 @@ pub struct MachineCmd {
 	pub shared_params: SharedParams,
 
 	/// Do not return an error if any check fails.
+	///
+	/// Should only be used for debugging.
 	#[clap(long)]
-	pub no_check: bool,
+	pub allow_fail: bool,
 
 	/// Set a fault tolerance for passing a requirement.
 	///
@@ -116,7 +118,7 @@ impl MachineCmd {
 		let score = self.measure(&requirement.metric, dir)?;
 		let rel_score = score.to_bs() / requirement.minimum.to_bs();
 
-		// Sanity check the range of the result with factor 100x.
+		// Sanity check if the result is off by factor >100x.
 		if rel_score >= 100.0 || rel_score <= 0.01 {
 			self.check_failed(Error::BadResults)?;
 		}
@@ -179,13 +181,13 @@ impl MachineCmd {
 		Ok(())
 	}
 
-	/// Returns the error if [`self.no_check`] is false and `Ok` otherwise.
+	/// Returns `Ok` if [`self.allow_fail`] is set and otherwise the error argument.
 	fn check_failed(&self, e: Error) -> Result<()> {
-		if !self.no_check {
-			error!("Failing since --no-check is not configured");
+		if !self.allow_fail {
+			error!("Failing since --allow-fail is not set");
 			Err(sc_cli::Error::Application(Box::new(e)))
 		} else {
-			warn!("Ignoring since --no-check is configured: {:?}", e);
+			warn!("Ignoring error since --allow-fail is set: {:?}", e);
 			Ok(())
 		}
 	}
@@ -193,14 +195,14 @@ impl MachineCmd {
 	/// Validates the CLI arguments.
 	fn validate_args(&self) -> Result<()> {
 		if self.tolerance > 100.0 || self.tolerance < 0.0 {
-			return Err("The fault tolerance is out of range".into())
+			return Err("The --tolerance argument is out of range".into())
 		}
 		Ok(())
 	}
 }
 
 impl BenchResult {
-	/// Formats [`self`] as row that can be printed in a table.
+	/// Format [`Self`] as row that can be printed in a table.
 	fn to_row(&self, req: &HwRequirement) -> prettytable::Row {
 		let passed = if self.passed { "✅ Pass" } else { "❌ Fail" };
 		row![

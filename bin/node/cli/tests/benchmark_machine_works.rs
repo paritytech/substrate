@@ -25,8 +25,8 @@ fn benchmark_machine_works() {
 	let status = Command::new(cargo_bin("substrate"))
 		.args(["benchmark", "machine", "--dev"])
 		.args(["--verify-duration", "0.1"])
-		// Disable the check to make it succeed.
-		.args(["--no-check"])
+		// Make it succeed.
+		.args(["--allow-fail"])
 		.status()
 		.unwrap();
 
@@ -51,9 +51,9 @@ fn benchmark_machine_fails_with_bad_build_profile() {
 	assert!(log.contains("BadBuildProfile"));
 }
 
-/// Test that the hardware fails the check.
+/// Test that the hardware does not meet the requirements.
 ///
-/// This is most likely the case since it using a test profile.
+/// This is most likely to succeed since it uses a test profile.
 #[test]
 fn benchmark_machine_fails_with_slow_hardware() {
 	let output = Command::new(cargo_bin("substrate"))
@@ -64,7 +64,7 @@ fn benchmark_machine_fails_with_slow_hardware() {
 
 	// Command should have failed.
 	assert!(!output.status.success());
-	// A `UnmetRequirement` error should have been printed.
+	// An `UnmetRequirement` error should have been printed.
 	let log = String::from_utf8_lossy(&output.stderr).to_string();
 	assert!(log.contains("UnmetRequirement"));
 }

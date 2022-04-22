@@ -30,7 +30,7 @@ lazy_static! {
 	/// The reference hardware is describe here:
 	/// <https://wiki.polkadot.network/docs/maintain-guides-how-to-validate-polkadot>
 	pub static ref POLKADOT_REFERENCE_HARDWARE: HwRequirements = {
-		let raw = include_bytes!("polkadot_requirements.json").as_slice();
+		let raw = include_bytes!("polkadot_reference_hardware.json").as_slice();
 		serde_json::from_slice(raw).expect("Hardcoded data is known good; qed")
 	};
 }
@@ -98,6 +98,8 @@ impl HwMetric {
 	}
 }
 
+const KIBIBYTE: f64 = 1024.0;
+
 impl Throughput {
 	/// The unit of the metric.
 	pub fn unit(&self) -> &'static str {
@@ -110,24 +112,24 @@ impl Throughput {
 
 	/// [`Self`] as number of byte/s.
 	pub fn to_bs(&self) -> f64 {
-		self.to_kibs() * 1024.0
+		self.to_kibs() * KIBIBYTE
 	}
 
-	/// [`Self`] as number of kibibyte.
+	/// [`Self`] as number of kibibyte/s.
 	pub fn to_kibs(&self) -> f64 {
-		self.to_mibs() * 1024.0
+		self.to_mibs() * KIBIBYTE
 	}
 
 	/// [`Self`] as number of mebibyte/s.
 	pub fn to_mibs(&self) -> f64 {
-		self.to_gibs() * 1024.0
+		self.to_gibs() * KIBIBYTE
 	}
 
 	/// [`Self`] as number of gibibyte/s.
 	pub fn to_gibs(&self) -> f64 {
 		match self {
-			Self::KiBs(k) => *k / (1024.0 * 1024.0),
-			Self::MiBs(m) => *m / 1024.0,
+			Self::KiBs(k) => *k / (KIBIBYTE * KIBIBYTE),
+			Self::MiBs(m) => *m / KIBIBYTE,
 			Self::GiBs(g) => *g,
 		}
 	}
@@ -136,9 +138,9 @@ impl Throughput {
 	pub fn normalize(&self) -> Self {
 		let bs = self.to_bs();
 
-		if bs >= 1024.0 * 1024.0 * 1024.0 {
+		if bs >= KIBIBYTE * KIBIBYTE * KIBIBYTE {
 			Self::GiBs(self.to_gibs())
-		} else if bs >= 1024.0 * 1024.0 {
+		} else if bs >= KIBIBYTE * KIBIBYTE {
 			Self::MiBs(self.to_mibs())
 		} else {
 			Self::KiBs(self.to_kibs())
@@ -170,6 +172,7 @@ mod tests {
 		assert_eq!(decoded, POLKADOT_REFERENCE_HARDWARE.clone());
 	}
 
+	/// Test the [`Throughput`].
 	#[test]
 	fn throughput_works() {
 		/// Float precision.
