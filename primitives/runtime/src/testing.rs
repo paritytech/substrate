@@ -336,7 +336,7 @@ use crate::traits::LookupError;
 
 impl<T, Call, Extra> IdentifyAccountWithLookup<T> for TestXt<Call, Extra> {
 	type AccountId = u64;
-	fn get_account_id(&self, lookup: &T) -> Result<Option<u64>, LookupError> {
+	fn get_account_id(&self, _lookup: &T) -> Result<Option<u64>, LookupError> {
 		Ok(None)
 	}
 }
