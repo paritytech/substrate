@@ -336,7 +336,9 @@ fn common_config(semantics: &Semantics) -> std::result::Result<wasmtime::Config,
 	};
 
 	config.memory_init_cow(use_cow);
-	config.memory_guaranteed_dense_image_size(u64::MAX);
+	config.memory_guaranteed_dense_image_size(
+		semantics.max_memory_size.map(|max| max as u64).unwrap_or(u64::MAX),
+	);
 
 	if use_pooling {
 		config.allocation_strategy(wasmtime::InstanceAllocationStrategy::Pooling {
