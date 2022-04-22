@@ -10507,6 +10507,7 @@ dependencies = [
  "hash-db",
  "hex-literal",
  "memory-db",
+ "nohash-hasher",
  "parity-scale-codec",
  "parking_lot 0.11.2",
  "scale-info",
