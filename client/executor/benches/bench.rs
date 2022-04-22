@@ -49,7 +49,11 @@ fn kusama_runtime() -> &'static [u8] {
 	include_bytes!("kusama_runtime.wasm")
 }
 
-fn initialize(runtime: &[u8], method: Method) -> Arc<dyn WasmModule> {
+fn initialize(
+	_tmpdir: &mut Option<tempfile::TempDir>,
+	runtime: &[u8],
+	method: Method,
+) -> Arc<dyn WasmModule> {
 	let blob = RuntimeBlob::uncompress_if_needed(runtime).unwrap();
 	let host_functions = sp_io::SubstrateHostFunctions::host_functions();
 	let heap_pages = 2048;
@@ -82,7 +86,12 @@ fn initialize(runtime: &[u8], method: Method) -> Arc<dyn WasmModule> {
 				let precompiled_blob =
 					sc_executor_wasmtime::prepare_runtime_artifact(blob, &config.semantics)
 						.unwrap();
-				let tmpdir = tempfile::tempdir().unwrap();
+
+				// Create a fresh temporary directory to make absolutely sure
+				// we'll use the right module.
+				*_tmpdir = Some(tempfile::tempdir().unwrap());
+				let tmpdir = _tmpdir.as_ref().unwrap();
+
 				let path = tmpdir.path().join("module.bin");
 				std::fs::write(&path, &precompiled_blob).unwrap();
 				unsafe {
@@ -231,10 +240,11 @@ fn bench_call_instance(c: &mut Criterion) {
 	];
 
 	let num_cpus = num_cpus::get_physical();
+	let mut tmpdir = None;
 
 	for (strategy_name, strategy) in strategies {
 		for (runtime_name, runtime) in runtimes {
-			let runtime = initialize(runtime, strategy.clone());
+			let runtime = initialize(&mut tmpdir, runtime, strategy.clone());
 
 			for (testcase_name, testcase) in testcases {
 				for thread_count in thread_counts {
