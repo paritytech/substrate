@@ -525,7 +525,7 @@ pub fn new_full_base(
 				authority_set,
 				local_id,
 				service,
-				//				keystore_container.sync_keystore(),
+				keystore_container.sync_keystore(),
 			)
 			.ok_or(ServiceError::Other("Cannot start mixnet.".to_string()))?;
 
