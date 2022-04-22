@@ -16,10 +16,11 @@
 // limitations under the License.
 
 use crate::{mock::*, *};
+use codec::{Decode, Encode};
 use enumflags2::BitFlags;
+use sp_runtime::{traits::TrailingZeroInput, MultiSignature};
 
 use frame_support::{assert_noop, assert_ok, traits::Currency};
-// use sp_runtime::testing::UintAuthorityId;
 
 macro_rules! bvec {
 	($( $x:tt )*) => {
@@ -112,6 +113,24 @@ fn approvals(collection_id: u32, item_id: u32) -> Vec<(u64, Option<u64>)> {
 
 pub const DEFAULT_SYSTEM_FEATURES: SystemFeatures = SystemFeatures::NoDeposit;
 pub const DEFAULT_USER_FEATURES: UserFeatures = UserFeatures::Administration;
+
+#[cfg(test)]
+mod crypto {
+	use sp_core::ed25519;
+	use sp_io::crypto::{ed25519_generate, ed25519_sign};
+	use sp_runtime::{MultiSignature, MultiSigner};
+	use sp_std::vec::Vec;
+
+	pub fn create_ed25519_pubkey(seed: Vec<u8>) -> MultiSigner {
+		ed25519_generate(0.into(), Some(seed)).into()
+	}
+
+	pub fn create_ed25519_signature(payload: &[u8], pubkey: MultiSigner) -> MultiSignature {
+		let edpubkey = ed25519::Public::try_from(pubkey).unwrap();
+		let edsig = ed25519_sign(0.into(), &edpubkey, payload).unwrap();
+		edsig.into()
+	}
+}
 
 #[test]
 fn minting_should_work() {
@@ -960,7 +979,6 @@ fn transfer_with_approval_should_works() {
 #[test]
 fn accept_buy_offer_should_works() {
 	new_test_ext().execute_with(|| {
-		// UintAuthorityId::set_all_keys(vec![1, 2, 3]);
 		let user_1 = 1;
 		let user_2 = 2;
 		let user_3 = 3;
@@ -968,6 +986,7 @@ fn accept_buy_offer_should_works() {
 		let item_id = 1;
 		let bid_price = 5;
 		let initial_balance = 100;
+		let signer = crypto::create_ed25519_pubkey(b"//verifier".to_vec());
 
 		Balances::make_free_balance_be(&user_2, initial_balance);
 
@@ -981,14 +1000,28 @@ fn accept_buy_offer_should_works() {
 
 		assert_ok!(Uniques::mint(Origin::signed(user_1), user_1, collection_id, item_id));
 
-		/*let offer = BuyOffer {
+		let offer = BuyOffer {
 			collection_id,
 			item_id,
 			bid_price,
 			deadline: None,
 			item_owner: user_1,
+			signer: signer.clone(),
+			receiver: 2,
+		};
+		let valid_signature =
+			crypto::create_ed25519_signature(&Encode::encode(&offer), signer.clone());
+		let invalid_signature = MultiSignature::decode(&mut TrailingZeroInput::zeroes()).unwrap();
 
-		}*/
+		assert_ok!(Uniques::accept_buy_offer(
+			Origin::signed(user_1),
+			offer.clone(),
+			valid_signature
+		));
+		assert_noop!(
+			Uniques::accept_buy_offer(Origin::signed(user_1), offer, invalid_signature),
+			Error::<Test>::InvalidSignature
+		);
 	});
 }
 
