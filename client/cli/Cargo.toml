@@ -19,7 +19,7 @@ fdlimit = "0.2.1"
 futures = "0.3.21"
 hex = "0.4.2"
 libp2p = "0.40.0"
-log = "0.4.11"
+log = "0.4.16"
 names = { version = "0.13.0", default-features = false }
 rand = "0.7.3"
 regex = "1.5.5"
