@@ -16,9 +16,10 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use parity_scale_codec::{Decode, Encode};
 use crate::{CliConfiguration, PruningParams, Result as CliResult, SharedParams};
+use parity_scale_codec::{Decode, Encode};
 use sc_client_api::{backend::Backend as BackendT, blockchain::HeaderBackend};
+use sp_blockchain::Info;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use std::{fmt::Debug, io};
 
@@ -49,6 +50,18 @@ struct BlockchainInfo<B: BlockT> {
 	finalized_number: <<B as BlockT>::Header as HeaderT>::Number,
 }
 
+impl<B: BlockT> From<Info<B>> for BlockchainInfo<B> {
+	fn from(info: Info<B>) -> Self {
+		BlockchainInfo::<B> {
+			best_hash: info.best_hash,
+			best_number: info.best_number,
+			genesis_hash: info.genesis_hash,
+			finalized_hash: info.finalized_hash,
+			finalized_number: info.finalized_number,
+		}
+	}
+}
+
 impl BlockchainInfoCmd {
 	/// Run the `blockchain-info` subcommand
 	pub fn run<B>(&self, config: &sc_service::Configuration) -> CliResult<()>
@@ -63,14 +76,7 @@ impl BlockchainInfoCmd {
 			keep_blocks: config.keep_blocks.clone(),
 		};
 		let backend = sc_service::new_db_backend::<B>(db_config)?;
-		let blockchain_info = backend.blockchain().info();
-		let info = BlockchainInfo::<B> {
-			best_hash: blockchain_info.best_hash,
-			best_number: blockchain_info.best_number,
-			genesis_hash: blockchain_info.genesis_hash,
-			finalized_hash: blockchain_info.finalized_hash,
-			finalized_number: blockchain_info.finalized_number,
-		};
+		let info: BlockchainInfo<B> = backend.blockchain().info().into();
 		let mut out = io::stdout();
 		serde_json::to_writer_pretty(&mut out, &info).map_err(|e| format!("Error writing JSON: {}", e))?;
 		Ok(())
