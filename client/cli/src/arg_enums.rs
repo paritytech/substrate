@@ -39,7 +39,10 @@ pub enum WasmtimeInstantiationStrategy {
 	/// Recreate the instance from scratch on every instantiation. Very slow.
 	RecreateInstance,
 
-	/// Legacy instance reuse mechanism. DEPRECATED. Will be removed. Do not use.
+	/// Legacy instance reuse mechanism. DEPRECATED. Will be removed in the future.
+	///
+	/// Should only be used in case of encountering any issues with the new default
+	/// instantiation strategy.
 	LegacyInstanceReuse,
 }
 

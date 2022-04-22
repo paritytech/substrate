@@ -62,6 +62,16 @@ pub struct ImportParams {
 	/// The WASM instantiation method to use.
 	///
 	/// Only has an effect when `wasm-execution` is set to `compiled`.
+	///
+	/// The copy-on-write strategies are only supported on Linux.
+	/// If the copy-on-write variant of a strategy is unsupported
+	/// the executor will fall back to the non-CoW equivalent.
+	///
+	/// The fastest (and the default) strategy available is `pooling-copy-on-write`.
+	///
+	/// The `legacy-instance-reuse` strategy is deprecated and will
+	/// be removed in the future. It should only be used in case of
+	/// issues with the default instantiation strategy.
 	#[clap(
 		long,
 		value_name = "STRATEGY",
