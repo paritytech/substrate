@@ -30,13 +30,7 @@ use sc_sysinfo::{
 use clap::Parser;
 use log::{error, info, warn};
 use prettytable::{cell, row, table};
-use std::{
-	boxed::Box,
-	fmt::Debug,
-	fs,
-	path::{Path, PathBuf},
-	time::Duration,
-};
+use std::{boxed::Box, fmt::Debug, fs, path::Path, time::Duration};
 
 use crate::shared::check_build_profile;
 pub use hw::{HwMetric, HwRequirement, HwRequirements, Throughput, POLKADOT_REFERENCE_HARDWARE};

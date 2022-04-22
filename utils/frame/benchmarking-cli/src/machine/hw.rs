@@ -164,7 +164,7 @@ mod tests {
 	/// `POLKADOT_REFERENCE_HARDWARE` can be en- and decoded.
 	#[test]
 	fn json_static_data() {
-		let raw = serde_json::to_json(POLKADOT_REFERENCE_HARDWARE.clone()).unwrap();
+		let raw = serde_json::to_string(&*POLKADOT_REFERENCE_HARDWARE).unwrap();
 		let decoded: HwRequirements = serde_json::from_str(&raw).unwrap();
 
 		assert_eq!(decoded, POLKADOT_REFERENCE_HARDWARE.clone());
