@@ -432,3 +432,17 @@ impl MemoryTransfer for MemoryWrapper {
 		}
 	}
 }
+
+/// Get global value by name
+pub fn get_global(instance: &wasmer::Instance, name: &str) -> Option<Value> {
+	let global = instance.exports.get_global(name).ok()?;
+	let wasmtime_value = match global.get() {
+		wasmer::Val::I32(val) => Value::I32(val),
+		wasmer::Val::I64(val) => Value::I64(val),
+		wasmer::Val::F32(val) => Value::F32(f32::to_bits(val)),
+		wasmer::Val::F64(val) => Value::F64(f64::to_bits(val)),
+		_ => None?,
+	};
+
+	Some(wasmtime_value)
+}

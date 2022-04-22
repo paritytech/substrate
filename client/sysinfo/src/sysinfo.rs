@@ -16,9 +16,14 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::HwBench;
-use rand::{seq::SliceRandom, Rng};
+use crate::{ExecutionLimit, HwBench};
+
 use sc_telemetry::SysInfo;
+use sp_core::{sr25519, Pair};
+use sp_io::crypto::sr25519_verify;
+use sp_std::prelude::*;
+
+use rand::{seq::SliceRandom, Rng, RngCore};
 use std::{
 	fs::File,
 	io::{Seek, SeekFrom, Write},
@@ -34,7 +39,7 @@ pub(crate) fn benchmark<E>(
 	max_iterations: usize,
 	max_duration: Duration,
 	mut run: impl FnMut() -> Result<(), E>,
-) -> Result<u64, E> {
+) -> Result<f64, E> {
 	// Run the benchmark once as a warmup to get the code into the L1 cache.
 	run()?;
 
@@ -53,11 +58,11 @@ pub(crate) fn benchmark<E>(
 		}
 	}
 
-	let score = (((size * count) as f64 / elapsed.as_secs_f64()) / (1024.0 * 1024.0)) as u64;
+	let score = ((size * count) as f64 / elapsed.as_secs_f64()) / (1024.0 * 1024.0);
 	log::trace!(
 		"Calculated {} of {}MB/s in {} iterations in {}ms",
 		name,
-		score,
+		score as u64,
 		count,
 		elapsed.as_millis()
 	);
@@ -83,7 +88,7 @@ pub fn gather_sysinfo() -> SysInfo {
 }
 
 #[inline(never)]
-fn clobber(slice: &mut [u8]) {
+fn clobber_slice<T>(slice: &mut [T]) {
 	assert!(!slice.is_empty());
 
 	// Discourage the compiler from optimizing out our benchmarks.
@@ -102,8 +107,17 @@ fn clobber(slice: &mut [u8]) {
 	}
 }
 
+#[inline(never)]
+fn clobber_value<T>(input: &mut T) {
+	// Look into `clobber_slice` for a comment.
+	unsafe {
+		let value = std::ptr::read_volatile(input);
+		std::ptr::write_volatile(input, value);
+	}
+}
+
 // This benchmarks the CPU speed as measured by calculating BLAKE2b-256 hashes, in MB/s.
-fn benchmark_cpu() -> u64 {
+pub fn benchmark_cpu() -> u64 {
 	// In general the results of this benchmark are somewhat sensitive to how much
 	// data we hash at the time. The smaller this is the *less* MB/s we can hash,
 	// the bigger this is the *more* MB/s we can hash, up until a certain point
@@ -125,15 +139,15 @@ fn benchmark_cpu() -> u64 {
 	let mut hash = Default::default();
 
 	let run = || -> Result<(), ()> {
-		clobber(&mut buffer);
+		clobber_slice(&mut buffer);
 		hash = sp_core::hashing::blake2_256(&buffer);
-		clobber(&mut hash);
+		clobber_slice(&mut hash);
 
 		Ok(())
 	};
 
 	benchmark("CPU score", SIZE, MAX_ITERATIONS, MAX_DURATION, run)
-		.expect("benchmark cannot fail; qed")
+		.expect("benchmark cannot fail; qed") as u64
 }
 
 // This benchmarks the effective `memcpy` memory bandwidth available in MB/s.
@@ -141,7 +155,7 @@ fn benchmark_cpu() -> u64 {
 // It doesn't technically measure the absolute maximum memory bandwidth available,
 // but that's fine, because real code most of the time isn't optimized to take
 // advantage of the full memory bandwidth either.
-fn benchmark_memory() -> u64 {
+pub fn benchmark_memory() -> u64 {
 	// Ideally this should be at least as big as the CPU's L3 cache,
 	// and it should be big enough so that the `memcpy` takes enough
 	// time to be actually measurable.
@@ -161,8 +175,8 @@ fn benchmark_memory() -> u64 {
 	dst.resize(SIZE, 0x77);
 
 	let run = || -> Result<(), ()> {
-		clobber(&mut src);
-		clobber(&mut dst);
+		clobber_slice(&mut src);
+		clobber_slice(&mut dst);
 
 		// SAFETY: Both vectors are of the same type and of the same size,
 		//         so copying data between them is safe.
@@ -172,14 +186,14 @@ fn benchmark_memory() -> u64 {
 			libc::memcpy(dst.as_mut_ptr().cast(), src.as_ptr().cast(), SIZE);
 		}
 
-		clobber(&mut dst);
-		clobber(&mut src);
+		clobber_slice(&mut dst);
+		clobber_slice(&mut src);
 
 		Ok(())
 	};
 
 	benchmark("memory score", SIZE, MAX_ITERATIONS, MAX_DURATION, run)
-		.expect("benchmark cannot fail; qed")
+		.expect("benchmark cannot fail; qed") as u64
 }
 
 struct TemporaryFile {
@@ -260,6 +274,7 @@ pub fn benchmark_disk_sequential_writes(directory: &Path) -> Result<u64, String>
 	};
 
 	benchmark("disk sequential write score", SIZE, MAX_ITERATIONS, MAX_DURATION, run)
+		.map(|s| s as u64)
 }
 
 pub fn benchmark_disk_random_writes(directory: &Path) -> Result<u64, String> {
@@ -319,6 +334,45 @@ pub fn benchmark_disk_random_writes(directory: &Path) -> Result<u64, String> {
 
 	// We only wrote half of the bytes hence `SIZE / 2`.
 	benchmark("disk random write score", SIZE / 2, MAX_ITERATIONS, MAX_DURATION, run)
+		.map(|s| s as u64)
+}
+
+/// Benchmarks the verification speed of sr25519 signatures.
+///
+/// Returns the throughput in MB/s by convention.
+/// The values are rather small (0.4-0.8) so it is advised to convert them into KB/s.
+pub fn benchmark_sr25519_verify(limit: ExecutionLimit) -> f64 {
+	const INPUT_SIZE: usize = 32;
+	const ITERATION_SIZE: usize = 2048;
+	let pair = sr25519::Pair::from_string("//Alice", None).unwrap();
+
+	let mut rng = rng();
+	let mut msgs = Vec::new();
+	let mut sigs = Vec::new();
+
+	for _ in 0..ITERATION_SIZE {
+		let mut msg = vec![0u8; INPUT_SIZE];
+		rng.fill_bytes(&mut msg[..]);
+
+		sigs.push(pair.sign(&msg));
+		msgs.push(msg);
+	}
+
+	let run = || -> Result<(), String> {
+		for (sig, msg) in sigs.iter().zip(msgs.iter()) {
+			let mut ok = sr25519_verify(&sig, &msg[..], &pair.public());
+			clobber_value(&mut ok);
+		}
+		Ok(())
+	};
+	benchmark(
+		"sr25519 verification score",
+		INPUT_SIZE * ITERATION_SIZE,
+		limit.max_iterations(),
+		limit.max_duration(),
+		run,
+	)
+	.expect("sr25519 verification cannot fail; qed")
 }
 
 /// Benchmarks the hardware and returns the results of those benchmarks.
@@ -389,5 +443,10 @@ mod tests {
 	#[test]
 	fn test_benchmark_disk_random_writes() {
 		assert!(benchmark_disk_random_writes("./".as_ref()).unwrap() > 0);
+	}
+
+	#[test]
+	fn test_benchmark_sr25519_verify() {
+		assert!(benchmark_sr25519_verify(ExecutionLimit::MaxIterations(1)) > 0.0);
 	}
 }

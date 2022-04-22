@@ -99,8 +99,6 @@ pub fn run() -> Result<()> {
 			let runner = cli.create_runner(cmd)?;
 
 			runner.sync_run(|config| {
-				let PartialComponents { client, backend, .. } = new_partial(&config)?;
-
 				// This switch needs to be in the client, since the client decides
 				// which sub-commands it wants to support.
 				match cmd {
@@ -115,18 +113,24 @@ pub fn run() -> Result<()> {
 
 						cmd.run::<Block, ExecutorDispatch>(config)
 					},
-					BenchmarkCmd::Block(cmd) => cmd.run(client),
+					BenchmarkCmd::Block(cmd) => {
+						let PartialComponents { client, .. } = new_partial(&config)?;
+						cmd.run(client)
+					},
 					BenchmarkCmd::Storage(cmd) => {
+						let PartialComponents { client, backend, .. } = new_partial(&config)?;
 						let db = backend.expose_db();
 						let storage = backend.expose_storage();
 
 						cmd.run(config, client, db, storage)
 					},
 					BenchmarkCmd::Overhead(cmd) => {
+						let PartialComponents { client, .. } = new_partial(&config)?;
 						let ext_builder = BenchmarkExtrinsicBuilder::new(client.clone());
 
 						cmd.run(config, client, inherent_benchmark_data()?, Arc::new(ext_builder))
 					},
+					BenchmarkCmd::Machine(cmd) => cmd.run(&config),
 				}
 			})
 		},

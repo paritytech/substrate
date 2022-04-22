@@ -20,12 +20,16 @@
 //! and software telemetry information about the node on which we're running.
 
 use futures::prelude::*;
+use std::time::Duration;
 
 mod sysinfo;
 #[cfg(target_os = "linux")]
 mod sysinfo_linux;
 
-pub use sysinfo::{gather_hwbench, gather_sysinfo};
+pub use sysinfo::{
+	benchmark_cpu, benchmark_disk_random_writes, benchmark_disk_sequential_writes,
+	benchmark_memory, benchmark_sr25519_verify, gather_hwbench, gather_sysinfo,
+};
 
 /// The operating system part of the current target triplet.
 pub const TARGET_OS: &str = include_str!(concat!(env!("OUT_DIR"), "/target_os.txt"));
@@ -47,6 +51,38 @@ pub struct HwBench {
 	pub disk_sequential_write_score: Option<u64>,
 	/// Random disk write speed in MB/s.
 	pub disk_random_write_score: Option<u64>,
+}
+
+/// Limit the execution time of a benchmark.
+pub enum ExecutionLimit {
+	/// Limit by the maximal duration.
+	MaxDuration(Duration),
+
+	/// Limit by the maximal number of iterations.
+	MaxIterations(usize),
+
+	/// Limit by the maximal duration and maximal number of iterations.
+	Both { max_iterations: usize, max_duration: Duration },
+}
+
+impl ExecutionLimit {
+	/// Returns the duration limit or `MAX` if none is present.
+	pub fn max_duration(&self) -> Duration {
+		match self {
+			Self::MaxDuration(d) => *d,
+			Self::Both { max_duration, .. } => *max_duration,
+			_ => Duration::from_secs(u64::MAX),
+		}
+	}
+
+	/// Returns the iterations limit or `MAX` if none is present.
+	pub fn max_iterations(&self) -> usize {
+		match self {
+			Self::MaxIterations(d) => *d,
+			Self::Both { max_iterations, .. } => *max_iterations,
+			_ => usize::MAX,
+		}
+	}
 }
 
 /// Prints out the system software/hardware information in the logs.

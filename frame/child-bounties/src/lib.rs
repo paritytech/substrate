@@ -15,16 +15,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! # Child Bounties Pallet ( pallet-child-bounties )
+//! # Child Bounties Pallet ( `pallet-child-bounties` )
 //!
 //! ## Child Bounty
 //!
-//! > NOTE: This pallet is tightly coupled with pallet-treasury and pallet-bounties.
+//! > NOTE: This pallet is tightly coupled with `pallet-treasury` and `pallet-bounties`.
 //!
 //! With child bounties, a large bounty proposal can be divided into smaller chunks,
 //! for parallel execution, and for efficient governance and tracking of spent funds.
-//! A child-bounty is a smaller piece of work, extracted from a parent bounty.
-//! A curator is assigned after the child-bounty is created by the parent bounty curator,
+//! A child bounty is a smaller piece of work, extracted from a parent bounty.
+//! A curator is assigned after the child bounty is created by the parent bounty curator,
 //! to be delegated with the responsibility of assigning a payout address once the specified
 //! set of tasks is completed.
 //!
@@ -33,22 +33,22 @@
 //! ### Dispatchable Functions
 //!
 //! Child Bounty protocol:
-//! - `add_child_bounty` - Add a child-bounty for a parent-bounty to for dividing the work in
+//! - `add_child_bounty` - Add a child bounty for a parent bounty to for dividing the work in
 //!   smaller tasks.
-//! - `propose_curator` - Assign an account to a child-bounty as candidate curator.
-//! - `accept_curator` - Accept a child-bounty assignment from the parent-bounty curator, setting a
+//! - `propose_curator` - Assign an account to a child bounty as candidate curator.
+//! - `accept_curator` - Accept a child bounty assignment from the parent bounty curator, setting a
 //!   curator deposit.
 //! - `award_child_bounty` - Close and pay out the specified amount for the completed work.
-//! - `claim_child_bounty` - Claim a specific child-bounty amount from the payout address.
-//! - `unassign_curator` - Unassign an accepted curator from a specific child-bounty.
-//! - `close_child_bounty` - Cancel the child-bounty for a specific treasury amount and close the
+//! - `claim_child_bounty` - Claim a specific child bounty amount from the payout address.
+//! - `unassign_curator` - Unassign an accepted curator from a specific child bounty.
+//! - `close_child_bounty` - Cancel the child bounty for a specific treasury amount and close the
 //!   bounty.
 
 // Most of the business logic in this pallet has been
 // originally contributed by "https://github.com/shamb0",
 // as part of the PR - https://github.com/paritytech/substrate/pull/7965.
 // The code has been moved here and then refactored in order to
-// extract child-bounties as a separate pallet.
+// extract child bounties as a separate pallet.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -101,7 +101,7 @@ pub struct ChildBounty<AccountId, Balance, BlockNumber> {
 pub enum ChildBountyStatus<AccountId, BlockNumber> {
 	/// The child-bounty is added and waiting for curator assignment.
 	Added,
-	/// A curator has been proposed by the parent-bounty curator. Waiting for
+	/// A curator has been proposed by the parent bounty curator. Waiting for
 	/// acceptance from the child-bounty curator.
 	CuratorProposed {
 		/// The assigned child-bounty curator of this bounty.
@@ -136,7 +136,7 @@ pub mod pallet {
 	pub trait Config:
 		frame_system::Config + pallet_treasury::Config + pallet_bounties::Config
 	{
-		/// Maximum number of child-bounties that can be added to a parent bounty.
+		/// Maximum number of child bounties that can be added to a parent bounty.
 		#[pallet::constant]
 		type MaxActiveChildBountyCount: Get<u32>;
 
@@ -157,7 +157,7 @@ pub mod pallet {
 		ParentBountyNotActive,
 		/// The bounty balance is not enough to add new child-bounty.
 		InsufficientBountyBalance,
-		/// Number of child-bounties exceeds limit `MaxActiveChildBountyCount`.
+		/// Number of child bounties exceeds limit `MaxActiveChildBountyCount`.
 		TooManyChildBounties,
 	}
 
@@ -184,14 +184,14 @@ pub mod pallet {
 	#[pallet::getter(fn child_bounty_count)]
 	pub type ChildBountyCount<T: Config> = StorageValue<_, BountyIndex, ValueQuery>;
 
-	/// Number of child-bounties per parent bounty.
+	/// Number of child bounties per parent bounty.
 	/// Map of parent bounty index to number of child bounties.
 	#[pallet::storage]
 	#[pallet::getter(fn parent_child_bounties)]
 	pub type ParentChildBounties<T: Config> =
 		StorageMap<_, Twox64Concat, BountyIndex, u32, ValueQuery>;
 
-	/// Child-bounties that have been added.
+	/// Child bounties that have been added.
 	#[pallet::storage]
 	#[pallet::getter(fn child_bounties)]
 	pub type ChildBounties<T: Config> = StorageDoubleMap<
@@ -226,7 +226,7 @@ pub mod pallet {
 		/// parent bounty to child-bounty account, if parent bounty has enough
 		/// funds, else the call fails.
 		///
-		/// Upper bound to maximum number of active  child-bounties that can be
+		/// Upper bound to maximum number of active  child bounties that can be
 		/// added are managed via runtime trait config
 		/// [`Config::MaxActiveChildBountyCount`].
 		///
@@ -427,12 +427,12 @@ pub mod pallet {
 		/// the curator of the parent bounty, or any signed origin.
 		///
 		/// For the origin other than T::RejectOrigin and the child-bounty
-		/// curator, parent-bounty must be in active state, for this call to
+		/// curator, parent bounty must be in active state, for this call to
 		/// work. We allow child-bounty curator and T::RejectOrigin to execute
-		/// this call irrespective of the parent-bounty state.
+		/// this call irrespective of the parent bounty state.
 		///
 		/// If this function is called by the `RejectOrigin` or the
-		/// parent-bounty curator, we assume that the child-bounty curator is
+		/// parent bounty curator, we assume that the child-bounty curator is
 		/// malicious or inactive. As a result, child-bounty curator deposit is
 		/// slashed.
 		///
@@ -486,7 +486,7 @@ pub mod pallet {
 						},
 						ChildBountyStatus::CuratorProposed { ref curator } => {
 							// A child-bounty curator has been proposed, but not accepted yet.
-							// Either `RejectOrigin`, parent-bounty curator or the proposed
+							// Either `RejectOrigin`, parent bounty curator or the proposed
 							// child-bounty curator can unassign the child-bounty curator.
 							ensure!(
 								maybe_sender.map_or(true, |sender| {
@@ -524,7 +524,7 @@ pub mod pallet {
 										update_due < frame_system::Pallet::<T>::block_number()
 									{
 										// Slash the child-bounty curator if
-										// + the call is made by the parent-bounty curator.
+										// + the call is made by the parent bounty curator.
 										// + or the curator is inactive.
 										slash_curator(curator, &mut child_bounty.curator_deposit);
 									// Continue to change bounty status below.
@@ -556,7 +556,7 @@ pub mod pallet {
 		///
 		/// The beneficiary will be able to claim the funds after a delay.
 		///
-		/// The dispatch origin for this call must be the master curator or
+		/// The dispatch origin for this call must be the parent curator or
 		/// curator of this child-bounty.
 		///
 		/// Parent bounty must be in active state, for this child-bounty call to
@@ -835,7 +835,7 @@ impl<T: Config> Pallet<T> {
 						// Nothing extra to do besides the removal of the child-bounty below.
 					},
 					ChildBountyStatus::Active { curator } => {
-						// Cancelled by master curator or RejectOrigin,
+						// Cancelled by parent curator or RejectOrigin,
 						// refund deposit of the working child-bounty curator.
 						let _ = T::Currency::unreserve(curator, child_bounty.curator_deposit);
 						// Then execute removal of the child-bounty below.
@@ -850,7 +850,7 @@ impl<T: Config> Pallet<T> {
 					},
 				}
 
-				// Revert the curator fee back to parent-bounty curator &
+				// Revert the curator fee back to parent bounty curator &
 				// reduce the active child-bounty count.
 				ChildrenCuratorFees::<T>::mutate(parent_bounty_id, |value| {
 					*value = value.saturating_sub(child_bounty.fee)
@@ -888,7 +888,7 @@ impl<T: Config> Pallet<T> {
 }
 
 // Implement ChildBountyManager to connect with the bounties pallet. This is
-// where we pass the active child-bounties and child curator fees to the parent
+// where we pass the active child bounties and child curator fees to the parent
 // bounty.
 impl<T: Config> pallet_bounties::ChildBountyManager<BalanceOf<T>> for Pallet<T> {
 	fn child_bounties_count(
