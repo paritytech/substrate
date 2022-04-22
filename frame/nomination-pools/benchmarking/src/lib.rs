@@ -248,7 +248,7 @@ frame_benchmarking::benchmarks! {
 	}: bond_extra(Origin::Signed(scenario.creator1.clone()), BondExtra::FreeBalance(extra))
 	verify {
 		assert!(
-			T::StakingInterface::active_stake(&scenario.origin1).unwrap() >
+			T::StakingInterface::active_stake(&scenario.origin1).unwrap() >=
 			scenario.dest_weight
 		);
 	}
@@ -268,7 +268,7 @@ frame_benchmarking::benchmarks! {
 	}: bond_extra(Origin::Signed(scenario.creator1.clone()), BondExtra::Rewards)
 	verify {
 		assert!(
-			T::StakingInterface::active_stake(&scenario.origin1).unwrap() >
+			T::StakingInterface::active_stake(&scenario.origin1).unwrap() >=
 			scenario.dest_weight
 		);
 	}
