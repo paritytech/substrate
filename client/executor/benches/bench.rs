@@ -66,7 +66,6 @@ fn initialize(runtime: &[u8], method: Method) -> Arc<dyn WasmModule> {
 		#[cfg(feature = "wasmtime")]
 		Method::Compiled { instantiation_strategy, precompile } => {
 			let config = sc_executor_wasmtime::Config {
-				max_memory_size: None,
 				allow_missing_func_imports,
 				cache_path: None,
 				semantics: sc_executor_wasmtime::Semantics {
@@ -75,6 +74,7 @@ fn initialize(runtime: &[u8], method: Method) -> Arc<dyn WasmModule> {
 					deterministic_stack_limit: None,
 					canonicalize_nans: false,
 					parallel_compilation: true,
+					max_memory_size: None,
 				},
 			};
 

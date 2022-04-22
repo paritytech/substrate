@@ -324,7 +324,6 @@ where
 			sc_executor_wasmtime::create_runtime::<H>(
 				blob,
 				sc_executor_wasmtime::Config {
-					max_memory_size: None,
 					allow_missing_func_imports,
 					cache_path: cache_path.map(ToOwned::to_owned),
 					semantics: sc_executor_wasmtime::Semantics {
@@ -333,6 +332,7 @@ where
 						deterministic_stack_limit: None,
 						canonicalize_nans: false,
 						parallel_compilation: true,
+						max_memory_size: None,
 					},
 				},
 			)

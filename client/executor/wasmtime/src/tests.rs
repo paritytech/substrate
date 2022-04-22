@@ -92,7 +92,6 @@ impl RuntimeBuilder {
 		};
 
 		let config = crate::Config {
-			max_memory_size: self.max_memory_size,
 			allow_missing_func_imports: true,
 			cache_path: None,
 			semantics: crate::Semantics {
@@ -107,6 +106,7 @@ impl RuntimeBuilder {
 				canonicalize_nans: self.canonicalize_nans,
 				parallel_compilation: true,
 				extra_heap_pages: self.extra_heap_pages,
+				max_memory_size: self.max_memory_size,
 			},
 		};
 
@@ -382,7 +382,6 @@ fn test_instances_without_reuse_are_not_leaked() {
 	let runtime = crate::create_runtime::<HostFunctions>(
 		RuntimeBlob::uncompress_if_needed(wasm_binary_unwrap()).unwrap(),
 		crate::Config {
-			max_memory_size: None,
 			allow_missing_func_imports: true,
 			cache_path: None,
 			semantics: crate::Semantics {
@@ -391,6 +390,7 @@ fn test_instances_without_reuse_are_not_leaked() {
 				canonicalize_nans: false,
 				parallel_compilation: true,
 				extra_heap_pages: 2048,
+				max_memory_size: None,
 			},
 		},
 	)

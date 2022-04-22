@@ -147,7 +147,7 @@ impl WasmModule for WasmtimeRuntime {
 				let mut instance_wrapper = InstanceWrapper::new(
 					&self.engine,
 					&self.instance_pre,
-					self.config.max_memory_size,
+					self.config.semantics.max_memory_size,
 				)?;
 				let heap_base = instance_wrapper.extract_heap_base()?;
 
@@ -170,7 +170,7 @@ impl WasmModule for WasmtimeRuntime {
 			InternalInstantiationStrategy::Builtin => Strategy::RecreateInstance(InstanceCreator {
 				engine: self.engine.clone(),
 				instance_pre: self.instance_pre.clone(),
-				max_memory_size: self.config.max_memory_size,
+				max_memory_size: self.config.semantics.max_memory_size,
 			}),
 		};
 
@@ -488,9 +488,7 @@ pub struct Semantics {
 	/// The number of extra WASM pages which will be allocated
 	/// on top of what is requested by the WASM blob itself.
 	pub extra_heap_pages: u64,
-}
 
-pub struct Config {
 	/// The total amount of memory in bytes an instance can request.
 	///
 	/// If specified, the runtime will be able to allocate only that much of wasm memory.
@@ -506,7 +504,9 @@ pub struct Config {
 	///
 	/// The default is `None`.
 	pub max_memory_size: Option<usize>,
+}
 
+pub struct Config {
 	/// The WebAssembly standard requires all imports of an instantiated module to be resolved,
 	/// otherwise, the instantiation fails. If this option is set to `true`, then this behavior is
 	/// overriden and imports that are requested by the module and not provided by the host
@@ -653,7 +653,8 @@ where
 	let mut linker = wasmtime::Linker::new(&engine);
 	crate::imports::prepare_imports::<H>(&mut linker, &module, config.allow_missing_func_imports)?;
 
-	let mut store = crate::instance_wrapper::create_store(module.engine(), config.max_memory_size);
+	let mut store =
+		crate::instance_wrapper::create_store(module.engine(), config.semantics.max_memory_size);
 	let instance_pre = linker
 		.instantiate_pre(&mut store, &module)
 		.map_err(|e| WasmError::Other(format!("cannot preinstantiate module: {}", e)))?;
