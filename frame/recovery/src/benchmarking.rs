@@ -26,13 +26,10 @@ use frame_system::RawOrigin;
 use sp_runtime::traits::Bounded;
 
 const SEED: u32 = 0;
+const DEFAULT_DELAY: u32 = 0;
 
 fn assert_last_event<T: Config>(generic_event: <T as Config>::Event) {
 	frame_system::Pallet::<T>::assert_last_event(generic_event.into());
-}
-
-fn block_number<T: Config>() -> T::BlockNumber {
-	42u32.into()
 }
 
 fn get_total_deposit<T: Config>(
@@ -86,7 +83,6 @@ fn insert_recovery_account<T: Config>(caller: &T::AccountId, account: &T::Accoun
 	let n = T::MaxFriends::get();
 
 	let friends = generate_friends::<T>(n);
-	let delay_period = block_number::<T>();
 
 	let bounded_friends: FriendsOf<T> = friends.try_into().unwrap();
 
@@ -94,7 +90,7 @@ fn insert_recovery_account<T: Config>(caller: &T::AccountId, account: &T::Accoun
 	let total_deposit = get_total_deposit::<T>(&bounded_friends).unwrap();
 
 	let recovery_config = RecoveryConfig {
-		delay_period,
+		delay_period: DEFAULT_DELAY.into(),
 		deposit: total_deposit,
 		friends: bounded_friends,
 		threshold: n as u16,
@@ -147,7 +143,7 @@ benchmarks! {
 		RawOrigin::Signed(caller.clone()),
 		friends,
 		n as u16,
-		block_number::<T>()
+		DEFAULT_DELAY.into()
 	) verify {
 		assert_last_event::<T>(Event::RecoveryCreated { account: caller }.into());
 	}
@@ -182,13 +178,11 @@ benchmarks! {
 		let friends = add_caller_and_generate_friends::<T>(caller.clone(), n);
 		let bounded_friends: FriendsOf<T> = friends.try_into().unwrap();
 
-		let delay_period = block_number::<T>();
-
 		// Get deposit for recovery
 		let total_deposit = get_total_deposit::<T>(&bounded_friends).unwrap();
 
 		let recovery_config = RecoveryConfig {
-			delay_period,
+			delay_period: DEFAULT_DELAY.into(),
 			deposit: total_deposit.clone(),
 			friends: bounded_friends.clone(),
 			threshold: n as u16,
@@ -202,7 +196,7 @@ benchmarks! {
 
 		// Create an active recovery status
 		let recovery_status = ActiveRecovery {
-			created: block_number::<T>(),
+			created: DEFAULT_DELAY.into(),
 			deposit: total_deposit,
 			friends: generate_friends::<T>(n - 1).try_into().unwrap(),
 		};
@@ -290,7 +284,7 @@ benchmarks! {
 		let total_deposit = get_total_deposit::<T>(&bounded_friends).unwrap();
 
 		let recovery_config = RecoveryConfig {
-			delay_period: block_number::<T>(),
+			delay_period: DEFAULT_DELAY.into(),
 			deposit: total_deposit.clone(),
 			friends: bounded_friends.clone(),
 			threshold: n as u16,
@@ -304,7 +298,7 @@ benchmarks! {
 
 		// Create an active recovery status
 		let recovery_status = ActiveRecovery {
-			created: block_number::<T>(),
+			created: DEFAULT_DELAY.into(),
 			deposit: total_deposit,
 			friends: bounded_friends.clone(),
 		};
@@ -334,13 +328,11 @@ benchmarks! {
 		let friends = generate_friends::<T>(n);
 		let bounded_friends: FriendsOf<T> = friends.try_into().unwrap();
 
-		let delay_period = block_number::<T>();
-
 		// Get deposit for recovery
 		let total_deposit = get_total_deposit::<T>(&bounded_friends).unwrap();
 
 		let recovery_config = RecoveryConfig {
-			delay_period,
+			delay_period: DEFAULT_DELAY.into(),
 			deposit: total_deposit.clone(),
 			friends: bounded_friends.clone(),
 			threshold: n as u16,
