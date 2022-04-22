@@ -35,7 +35,7 @@
 //! * unbonding sub pools: Collection of pools at different phases of the unbonding lifecycle. See
 //!   [`SubPools`] and [`SubPoolsStorage`]. Sub pools are identified via the pools bonded account.
 //! * members: Accounts that are members of pools. See [`PoolMember`] and [`PoolMembers`].
-//!   PoolMembers are identified via their account.
+//!   Pool members are identified via their account.
 //! * point: A unit of measure for a members portion of a pool's funds.
 //! * kick: The act of a pool administrator forcibly ejecting a member.
 //!
