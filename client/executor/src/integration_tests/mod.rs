@@ -62,9 +62,25 @@ macro_rules! test_wasm_execution {
 
 			#[test]
 			#[cfg(feature = "wasmtime")]
+			fn [<$method_name _compiled_recreate_instance_vanilla>]() {
+				$method_name(WasmExecutionMethod::Compiled {
+					instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::RecreateInstance
+				});
+			}
+
+			#[test]
+			#[cfg(feature = "wasmtime")]
 			fn [<$method_name _compiled_pooling_cow>]() {
 				$method_name(WasmExecutionMethod::Compiled {
 					instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::PoolingCopyOnWrite
+				});
+			}
+
+			#[test]
+			#[cfg(feature = "wasmtime")]
+			fn [<$method_name _compiled_pooling_vanilla>]() {
+				$method_name(WasmExecutionMethod::Compiled {
+					instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::Pooling
 				});
 			}
 
@@ -106,7 +122,55 @@ macro_rules! test_wasm_execution_sandbox {
 
 			#[test]
 			#[cfg(feature = "wasmtime")]
-			fn [<$method_name _compiled_host_executor>]() {
+			fn [<$method_name _compiled_pooling_cow_host_executor>]() {
+				$method_name(WasmExecutionMethod::Compiled {
+					instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::PoolingCopyOnWrite
+				}, "_host");
+			}
+
+			#[test]
+			#[cfg(feature = "wasmtime")]
+			fn [<$method_name _compiled_pooling_cow_embedded_executor>]() {
+				$method_name(WasmExecutionMethod::Compiled {
+					instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::PoolingCopyOnWrite
+				}, "_embedded");
+			}
+
+			#[test]
+			#[cfg(feature = "wasmtime")]
+			fn [<$method_name _compiled_pooling_vanilla_host_executor>]() {
+				$method_name(WasmExecutionMethod::Compiled {
+					instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::Pooling
+				}, "_host");
+			}
+
+			#[test]
+			#[cfg(feature = "wasmtime")]
+			fn [<$method_name _compiled_pooling_vanilla_embedded_executor>]() {
+				$method_name(WasmExecutionMethod::Compiled {
+					instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::Pooling
+				}, "_embedded");
+			}
+
+			#[test]
+			#[cfg(feature = "wasmtime")]
+			fn [<$method_name _compiled_recreate_instance_cow_host_executor>]() {
+				$method_name(WasmExecutionMethod::Compiled {
+					instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::RecreateInstanceCopyOnWrite
+				}, "_host");
+			}
+
+			#[test]
+			#[cfg(feature = "wasmtime")]
+			fn [<$method_name _compiled_recreate_instance_cow_embedded_executor>]() {
+				$method_name(WasmExecutionMethod::Compiled {
+					instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::RecreateInstanceCopyOnWrite
+				}, "_embedded");
+			}
+
+			#[test]
+			#[cfg(feature = "wasmtime")]
+			fn [<$method_name _compiled_recreate_instance_vanilla_host_executor>]() {
 				$method_name(WasmExecutionMethod::Compiled {
 					instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::RecreateInstance
 				}, "_host");
@@ -114,9 +178,25 @@ macro_rules! test_wasm_execution_sandbox {
 
 			#[test]
 			#[cfg(feature = "wasmtime")]
-			fn [<$method_name _compiled_embedded_executor>]() {
+			fn [<$method_name _compiled_recreate_instance_vanilla_embedded_executor>]() {
 				$method_name(WasmExecutionMethod::Compiled {
 					instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::RecreateInstance
+				}, "_embedded");
+			}
+
+			#[test]
+			#[cfg(feature = "wasmtime")]
+			fn [<$method_name _compiled_legacy_instance_reuse_host_executor>]() {
+				$method_name(WasmExecutionMethod::Compiled {
+					instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::LegacyInstanceReuse
+				}, "_host");
+			}
+
+			#[test]
+			#[cfg(feature = "wasmtime")]
+			fn [<$method_name _compiled_legacy_instance_reuse_embedded_executor>]() {
+				$method_name(WasmExecutionMethod::Compiled {
+					instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::LegacyInstanceReuse
 				}, "_embedded");
 			}
 		}
