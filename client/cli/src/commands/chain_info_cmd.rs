@@ -23,9 +23,9 @@ use sp_blockchain::Info;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use std::{fmt::Debug, io};
 
-/// The `blockchain-info` subcommand used to output db meta columns information.
+/// The `chain-info` subcommand used to output db meta columns information.
 #[derive(Debug, Clone, clap::Parser)]
-pub struct BlockchainInfoCmd {
+pub struct ChainInfoCmd {
 	#[allow(missing_docs)]
 	#[clap(flatten)]
 	pub pruning_params: PruningParams,
@@ -35,9 +35,9 @@ pub struct BlockchainInfoCmd {
 	pub shared_params: SharedParams,
 }
 
-/// Serializable `blockchain-info` subcommand output.
+/// Serializable `chain-info` subcommand output.
 #[derive(Clone, Eq, PartialEq, Debug, Encode, Decode, serde::Serialize)]
-struct BlockchainInfo<B: BlockT> {
+struct ChainInfo<B: BlockT> {
 	/// Best block hash.
 	best_hash: B::Hash,
 	/// Best block number.
@@ -50,9 +50,9 @@ struct BlockchainInfo<B: BlockT> {
 	finalized_number: <<B as BlockT>::Header as HeaderT>::Number,
 }
 
-impl<B: BlockT> From<Info<B>> for BlockchainInfo<B> {
+impl<B: BlockT> From<Info<B>> for ChainInfo<B> {
 	fn from(info: Info<B>) -> Self {
-		BlockchainInfo::<B> {
+		ChainInfo::<B> {
 			best_hash: info.best_hash,
 			best_number: info.best_number,
 			genesis_hash: info.genesis_hash,
@@ -62,8 +62,8 @@ impl<B: BlockT> From<Info<B>> for BlockchainInfo<B> {
 	}
 }
 
-impl BlockchainInfoCmd {
-	/// Run the `blockchain-info` subcommand
+impl ChainInfoCmd {
+	/// Run the `chain-info` subcommand
 	pub fn run<B>(&self, config: &sc_service::Configuration) -> CliResult<()>
 	where
 		B: BlockT,
@@ -76,14 +76,14 @@ impl BlockchainInfoCmd {
 			keep_blocks: config.keep_blocks.clone(),
 		};
 		let backend = sc_service::new_db_backend::<B>(db_config)?;
-		let info: BlockchainInfo<B> = backend.blockchain().info().into();
+		let info: ChainInfo<B> = backend.blockchain().info().into();
 		let mut out = io::stdout();
 		serde_json::to_writer_pretty(&mut out, &info).map_err(|e| format!("Error writing JSON: {}", e))?;
 		Ok(())
 	}
 }
 
-impl CliConfiguration for BlockchainInfoCmd {
+impl CliConfiguration for ChainInfoCmd {
 	fn shared_params(&self) -> &SharedParams {
 		&self.shared_params
 	}

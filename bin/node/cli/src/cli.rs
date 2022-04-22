@@ -96,5 +96,5 @@ pub enum Subcommand {
 	Revert(sc_cli::RevertCmd),
 
 	/// Db meta columns information.
-	BlockchainInfo(sc_cli::BlockchainInfoCmd),
+	ChainInfo(sc_cli::ChainInfoCmd),
 }

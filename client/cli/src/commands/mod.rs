@@ -15,7 +15,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
-mod blockchain_info_cmd;
+mod chain_info_cmd;
 mod build_spec_cmd;
 mod check_block_cmd;
 mod export_blocks_cmd;
@@ -36,7 +36,7 @@ mod vanity;
 mod verify;
 
 pub use self::{
-	blockchain_info_cmd::BlockchainInfoCmd, build_spec_cmd::BuildSpecCmd, check_block_cmd::CheckBlockCmd,
+	chain_info_cmd::ChainInfoCmd, build_spec_cmd::BuildSpecCmd, check_block_cmd::CheckBlockCmd,
 	export_blocks_cmd::ExportBlocksCmd, export_state_cmd::ExportStateCmd, generate::GenerateCmd,
 	generate_node_key::GenerateNodeKeyCmd, import_blocks_cmd::ImportBlocksCmd,
 	insert_key::InsertKeyCmd, inspect_key::InspectKeyCmd, inspect_node_key::InspectNodeKeyCmd,
