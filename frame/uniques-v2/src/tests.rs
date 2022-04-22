@@ -844,6 +844,21 @@ fn add_remove_approval_should_work() {
 
 		assert_eq!(approvals(collection_id, item_id), vec![]);
 
+		// validate anyone can remove an expired approval
+		assert_ok!(Uniques::approve_transfer(
+			Origin::signed(user_1),
+			collection_id,
+			item_id,
+			user_3,
+			Some(0)
+		));
+		assert_ok!(Uniques::remove_transfer_approval(
+			Origin::signed(user_2),
+			collection_id,
+			item_id,
+			user_3
+		));
+
 		// ensure we can't buy an item when the collection has a NonTransferableItems flag
 		let collection_id = 1;
 		assert_ok!(Uniques::create(
@@ -851,7 +866,7 @@ fn add_remove_approval_should_work() {
 			user_1,
 			UserFeatures::NonTransferableItems,
 			None,
-			None,
+			None
 		));
 
 		assert_ok!(Uniques::mint(Origin::signed(user_1), user_1, collection_id, item_id));

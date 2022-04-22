@@ -42,7 +42,7 @@ impl<T: Config> Pallet<T> {
 
 			// approvals
 			if item.owner != sender {
-				if let Some((_, deadline)) = item.approvals.get_key_value(&sender) {
+				if let Some(deadline) = item.approvals.get(&sender) {
 					if let Some(deadline) = deadline {
 						let now = frame_system::Pallet::<T>::block_number();
 						ensure!(deadline >= &now, Error::<T>::AuthorizationExpired);

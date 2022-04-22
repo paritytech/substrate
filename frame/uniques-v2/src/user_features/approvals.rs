@@ -62,10 +62,24 @@ impl<T: Config> Pallet<T> {
 	) -> DispatchResult {
 		Items::<T>::try_mutate(collection_id, item_id, |maybe_item| {
 			let item = maybe_item.as_mut().ok_or(Error::<T>::ItemNotFound)?;
-			ensure!(item.owner == caller, Error::<T>::NotAuthorized);
+			let is_owner = item.owner == caller;
 
 			// remove the approval
-			if let None = item.approvals.remove(&delegate) {
+			if let Some(deadline) = item.approvals.get(&delegate) {
+				// anyone can remove an expired approval
+				let mut is_past_deadline = false;
+				if let Some(deadline) = deadline {
+					let now = frame_system::Pallet::<T>::block_number();
+					if deadline < &now {
+						is_past_deadline = true;
+					}
+				}
+				if is_past_deadline || is_owner {
+					item.approvals.remove(&delegate);
+				} else {
+					return Err(Error::<T>::NotAuthorized.into())
+				}
+			} else {
 				return Err(Error::<T>::WrongDelegate.into())
 			}
 
