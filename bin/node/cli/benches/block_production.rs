@@ -29,7 +29,7 @@ use sc_consensus::{
 use sc_service::{
 	config::{
 		DatabaseSource, KeepBlocks, KeystoreConfig, NetworkConfiguration, OffchainWorkerConfig,
-		PruningMode, WasmExecutionMethod, WasmInstantiationStrategy,
+		PruningMode, WasmExecutionMethod, WasmtimeInstantiationStrategy,
 	},
 	BasePath, Configuration, Role,
 };
@@ -78,7 +78,7 @@ fn new_node(tokio_handle: Handle) -> node_cli::service::NewFullBase {
 		keep_blocks: KeepBlocks::All,
 		chain_spec: spec,
 		wasm_method: WasmExecutionMethod::Compiled {
-			instantiation_strategy: WasmInstantiationStrategy::PoolingCopyOnWrite,
+			instantiation_strategy: WasmtimeInstantiationStrategy::PoolingCopyOnWrite,
 		},
 		execution_strategies: ExecutionStrategies {
 			syncing: execution_strategy,

@@ -19,8 +19,8 @@ mod command;
 mod writer;
 
 use sc_cli::{
-	ExecutionStrategy, WasmExecutionMethod, WasmInstantiationStrategy,
-	DEFAULT_WASM_EXECUTION_METHOD, DEFAULT_WASM_INSTANTIATION_STRATEGY,
+	ExecutionStrategy, WasmExecutionMethod, WasmtimeInstantiationStrategy,
+	DEFAULT_WASMTIME_INSTANTIATION_STRATEGY, DEFAULT_WASM_EXECUTION_METHOD,
 };
 use std::{fmt::Debug, path::PathBuf};
 
@@ -140,10 +140,10 @@ pub struct PalletCmd {
 	#[clap(
 		long = "wasm-instantiation-strategy",
 		value_name = "STRATEGY",
-		default_value_t = DEFAULT_WASM_INSTANTIATION_STRATEGY,
+		default_value_t = DEFAULT_WASMTIME_INSTANTIATION_STRATEGY,
 		arg_enum,
 	)]
-	pub wasm_instantiation_strategy: WasmInstantiationStrategy,
+	pub wasmtime_instantiation_strategy: WasmtimeInstantiationStrategy,
 
 	/// Limit the memory the database cache can use.
 	#[clap(long = "db-cache", value_name = "MiB", default_value = "1024")]

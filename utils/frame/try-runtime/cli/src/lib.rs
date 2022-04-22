@@ -272,7 +272,8 @@ use remote_externalities::{
 use sc_chain_spec::ChainSpec;
 use sc_cli::{
 	execution_method_from_cli, CliConfiguration, ExecutionStrategy, WasmExecutionMethod,
-	WasmInstantiationStrategy, DEFAULT_WASM_EXECUTION_METHOD, DEFAULT_WASM_INSTANTIATION_STRATEGY,
+	WasmtimeInstantiationStrategy, DEFAULT_WASMTIME_INSTANTIATION_STRATEGY,
+	DEFAULT_WASM_EXECUTION_METHOD,
 };
 use sc_executor::NativeElseWasmExecutor;
 use sc_service::{Configuration, NativeExecutionDispatch};
@@ -407,10 +408,10 @@ pub struct SharedParams {
 	#[clap(
 		long = "wasm-instantiation-strategy",
 		value_name = "STRATEGY",
-		default_value_t = DEFAULT_WASM_INSTANTIATION_STRATEGY,
+		default_value_t = DEFAULT_WASMTIME_INSTANTIATION_STRATEGY,
 		arg_enum,
 	)]
-	pub wasm_instantiation_strategy: WasmInstantiationStrategy,
+	pub wasmtime_instantiation_strategy: WasmtimeInstantiationStrategy,
 
 	/// The number of 64KB pages to allocate for Wasm execution. Defaults to
 	/// [`sc_service::Configuration.default_heap_pages`].
@@ -692,7 +693,7 @@ pub(crate) fn build_executor<D: NativeExecutionDispatch + 'static>(
 	let runtime_cache_size = config.runtime_cache_size;
 
 	NativeElseWasmExecutor::<D>::new(
-		execution_method_from_cli(shared.wasm_method, shared.wasm_instantiation_strategy),
+		execution_method_from_cli(shared.wasm_method, shared.wasmtime_instantiation_strategy),
 		heap_pages,
 		max_runtime_instances,
 		runtime_cache_size,

@@ -142,7 +142,7 @@ impl PalletCmd {
 		let state_without_tracking =
 			BenchmarkingState::<BB>::new(genesis_storage, cache_size, self.record_proof, false)?;
 		let executor = NativeElseWasmExecutor::<ExecDispatch>::new(
-			execution_method_from_cli(self.wasm_method, self.wasm_instantiation_strategy),
+			execution_method_from_cli(self.wasm_method, self.wasmtime_instantiation_strategy),
 			self.heap_pages,
 			2, // The runtime instances cache size.
 			2, // The runtime cache size

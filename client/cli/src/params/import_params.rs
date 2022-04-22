@@ -18,11 +18,11 @@
 
 use crate::{
 	arg_enums::{
-		ExecutionStrategy, WasmExecutionMethod, WasmInstantiationStrategy,
+		ExecutionStrategy, WasmExecutionMethod, WasmtimeInstantiationStrategy,
 		DEFAULT_EXECUTION_BLOCK_CONSTRUCTION, DEFAULT_EXECUTION_IMPORT_BLOCK,
 		DEFAULT_EXECUTION_IMPORT_BLOCK_VALIDATOR, DEFAULT_EXECUTION_OFFCHAIN_WORKER,
-		DEFAULT_EXECUTION_OTHER, DEFAULT_EXECUTION_SYNCING, DEFAULT_WASM_EXECUTION_METHOD,
-		DEFAULT_WASM_INSTANTIATION_STRATEGY,
+		DEFAULT_EXECUTION_OTHER, DEFAULT_EXECUTION_SYNCING,
+		DEFAULT_WASMTIME_INSTANTIATION_STRATEGY, DEFAULT_WASM_EXECUTION_METHOD,
 	},
 	params::{DatabaseParams, PruningParams},
 };
@@ -65,10 +65,10 @@ pub struct ImportParams {
 	#[clap(
 		long,
 		value_name = "STRATEGY",
-		default_value_t = DEFAULT_WASM_INSTANTIATION_STRATEGY,
+		default_value_t = DEFAULT_WASMTIME_INSTANTIATION_STRATEGY,
 		arg_enum,
 	)]
-	pub wasm_instantiation_strategy: WasmInstantiationStrategy,
+	pub wasmtime_instantiation_strategy: WasmtimeInstantiationStrategy,
 
 	/// Specify the path where local WASM runtimes are stored.
 	///
@@ -93,7 +93,7 @@ impl ImportParams {
 
 	/// Get the WASM execution method from the parameters
 	pub fn wasm_method(&self) -> sc_service::config::WasmExecutionMethod {
-		crate::execution_method_from_cli(self.wasm_method, self.wasm_instantiation_strategy)
+		crate::execution_method_from_cli(self.wasm_method, self.wasmtime_instantiation_strategy)
 	}
 
 	/// Enable overriding on-chain WASM with locally-stored WASM

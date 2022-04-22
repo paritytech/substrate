@@ -23,7 +23,7 @@ use clap::ArgEnum;
 /// The instantiation strategy to use in compiled mode.
 #[derive(Debug, Clone, Copy, ArgEnum)]
 #[clap(rename_all = "kebab-case")]
-pub enum WasmInstantiationStrategy {
+pub enum WasmtimeInstantiationStrategy {
 	/// Pool the instances to avoid initializing everything from scratch
 	/// on each instantiation. Use copy-on-write memory when possible.
 	PoolingCopyOnWrite,
@@ -43,9 +43,9 @@ pub enum WasmInstantiationStrategy {
 	LegacyInstanceReuse,
 }
 
-/// The default [`WasmInstantiationStrategy`].
-pub const DEFAULT_WASM_INSTANTIATION_STRATEGY: WasmInstantiationStrategy =
-	WasmInstantiationStrategy::PoolingCopyOnWrite;
+/// The default [`WasmtimeInstantiationStrategy`].
+pub const DEFAULT_WASMTIME_INSTANTIATION_STRATEGY: WasmtimeInstantiationStrategy =
+	WasmtimeInstantiationStrategy::PoolingCopyOnWrite;
 
 /// How to execute Wasm runtime code.
 #[derive(Debug, Clone, Copy)]
@@ -102,23 +102,23 @@ impl WasmExecutionMethod {
 /// into an execution method which can be used internally.
 pub fn execution_method_from_cli(
 	execution_method: WasmExecutionMethod,
-	_instantiation_strategy: WasmInstantiationStrategy,
+	_instantiation_strategy: WasmtimeInstantiationStrategy,
 ) -> sc_service::config::WasmExecutionMethod {
 	match execution_method {
 		WasmExecutionMethod::Interpreted => sc_service::config::WasmExecutionMethod::Interpreted,
 		#[cfg(feature = "wasmtime")]
 		WasmExecutionMethod::Compiled => sc_service::config::WasmExecutionMethod::Compiled {
 			instantiation_strategy: match _instantiation_strategy {
-				WasmInstantiationStrategy::PoolingCopyOnWrite =>
-					sc_service::config::WasmInstantiationStrategy::PoolingCopyOnWrite,
-				WasmInstantiationStrategy::RecreateInstanceCopyOnWrite =>
-					sc_service::config::WasmInstantiationStrategy::RecreateInstanceCopyOnWrite,
-				WasmInstantiationStrategy::Pooling =>
-					sc_service::config::WasmInstantiationStrategy::Pooling,
-				WasmInstantiationStrategy::RecreateInstance =>
-					sc_service::config::WasmInstantiationStrategy::RecreateInstance,
-				WasmInstantiationStrategy::LegacyInstanceReuse =>
-					sc_service::config::WasmInstantiationStrategy::LegacyInstanceReuse,
+				WasmtimeInstantiationStrategy::PoolingCopyOnWrite =>
+					sc_service::config::WasmtimeInstantiationStrategy::PoolingCopyOnWrite,
+				WasmtimeInstantiationStrategy::RecreateInstanceCopyOnWrite =>
+					sc_service::config::WasmtimeInstantiationStrategy::RecreateInstanceCopyOnWrite,
+				WasmtimeInstantiationStrategy::Pooling =>
+					sc_service::config::WasmtimeInstantiationStrategy::Pooling,
+				WasmtimeInstantiationStrategy::RecreateInstance =>
+					sc_service::config::WasmtimeInstantiationStrategy::RecreateInstance,
+				WasmtimeInstantiationStrategy::LegacyInstanceReuse =>
+					sc_service::config::WasmtimeInstantiationStrategy::LegacyInstanceReuse,
 			},
 		},
 		#[cfg(not(feature = "wasmtime"))]

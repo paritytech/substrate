@@ -26,7 +26,7 @@ use node_runtime::{
 };
 use node_testing::keyring::*;
 #[cfg(feature = "wasmtime")]
-use sc_executor::WasmInstantiationStrategy;
+use sc_executor::WasmtimeInstantiationStrategy;
 use sc_executor::{Externalities, NativeElseWasmExecutor, RuntimeVersionOf, WasmExecutionMethod};
 use sp_core::{
 	storage::well_known_keys,
@@ -186,7 +186,7 @@ fn bench_execute_block(c: &mut Criterion) {
 		ExecutionMethod::Wasm(WasmExecutionMethod::Interpreted),
 		#[cfg(feature = "wasmtime")]
 		ExecutionMethod::Wasm(WasmExecutionMethod::Compiled {
-			instantiation_strategy: WasmInstantiationStrategy::PoolingCopyOnWrite,
+			instantiation_strategy: WasmtimeInstantiationStrategy::PoolingCopyOnWrite,
 		}),
 	];
 

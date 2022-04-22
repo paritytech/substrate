@@ -46,7 +46,7 @@ use sc_client_api::{
 };
 use sc_client_db::PruningMode;
 use sc_consensus::{BlockImport, BlockImportParams, ForkChoiceStrategy, ImportResult, ImportedAux};
-use sc_executor::{NativeElseWasmExecutor, WasmExecutionMethod, WasmInstantiationStrategy};
+use sc_executor::{NativeElseWasmExecutor, WasmExecutionMethod, WasmtimeInstantiationStrategy};
 use sp_api::ProvideRuntimeApi;
 use sp_block_builder::BlockBuilder;
 use sp_consensus::BlockOrigin;
@@ -401,7 +401,7 @@ impl BenchDb {
 			backend.clone(),
 			NativeElseWasmExecutor::new(
 				WasmExecutionMethod::Compiled {
-					instantiation_strategy: WasmInstantiationStrategy::PoolingCopyOnWrite,
+					instantiation_strategy: WasmtimeInstantiationStrategy::PoolingCopyOnWrite,
 				},
 				None,
 				8,
