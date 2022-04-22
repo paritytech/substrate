@@ -887,25 +887,3 @@ pub(crate) fn staking_events() -> Vec<crate::Event<Test>> {
 pub(crate) fn balances(who: &AccountId) -> (Balance, Balance) {
 	(Balances::free_balance(who), Balances::reserved_balance(who))
 }
-
-// fn do_nominate_bench_setup() -> Vec<> {
-// 	// clean up any existing state.
-// 	clear_validators_and_nominators::<T>();
-
-// 	let origin_weight = MinNominatorBond::<T>::get().max(T::Currency::minimum_balance());
-
-// 	// setup a worst case list scenario. Note we don't care about the destination position, because
-// 	// we are just doing an insert into the origin position.
-// 	let scenario = ListScenario::<T>::new(origin_weight, true)?;
-// 	let (stash, controller) = create_stash_controller_with_balance::<T>(
-// 		SEED + T::MaxNominations::get() + 1, // make sure the account does not conflict with others
-// 		origin_weight,
-// 		Default::default(),
-// 	).unwrap();
-
-// 	assert!(!Nominators::<T>::contains_key(&stash));
-// 	assert!(!T::SortedListProvider::contains(&stash));
-
-// 	let validators = create_validators::<T>(T::MaxNominations::get(), 100).unwrap();
-// 	return validators
-// }
