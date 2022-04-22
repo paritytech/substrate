@@ -78,7 +78,8 @@ impl ChainInfoCmd {
 		let backend = sc_service::new_db_backend::<B>(db_config)?;
 		let info: ChainInfo<B> = backend.blockchain().info().into();
 		let mut out = io::stdout();
-		serde_json::to_writer_pretty(&mut out, &info).map_err(|e| format!("Error writing JSON: {}", e))?;
+		serde_json::to_writer_pretty(&mut out, &info)
+			.map_err(|e| format!("Error writing JSON: {}", e))?;
 		Ok(())
 	}
 }
