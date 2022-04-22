@@ -38,7 +38,10 @@ pub mod pallet {
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 
-	use frame_support::traits::{Currency, ReservableCurrency};
+	use frame_support::{
+		storage::bounded_btree_map::BoundedBTreeMap,
+		traits::{Currency, ReservableCurrency},
+	};
 	use sp_runtime::{
 		traits::{CheckedAdd, One},
 		AccountId32, MultiSignature,
@@ -47,17 +50,6 @@ pub mod pallet {
 	// The struct on which we build all of our Pallet logic.
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
-
-	/// A single approval.
-	#[derive(
-		Clone, Eq, PartialEq, Default, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen,
-	)]
-	pub struct Approval<AccountId, BlockNumber> {
-		/// The delegate.
-		pub who: AccountId,
-		/// The deadline until the approval is valid.
-		pub deadline: Option<BlockNumber>,
-	}
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
@@ -97,8 +89,9 @@ pub mod pallet {
 	pub type MetadataOf<T> = BoundedVec<u8, <T as Config>::MetadataLimit>;
 	pub type BalanceOf<T> =
 		<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
-	pub type ApprovalsOf<T> = BoundedVec<
-		Approval<<T as frame_system::Config>::AccountId, <T as frame_system::Config>::BlockNumber>,
+	pub type ApprovalsOf<T> = BoundedBTreeMap<
+		<T as frame_system::Config>::AccountId,
+		Option<<T as frame_system::Config>::BlockNumber>,
 		<T as Config>::ApprovalsLimit,
 	>;
 	pub type AttributeKeyOf<T> = BoundedVec<u8, <T as Config>::AttributeKeyLimit>;

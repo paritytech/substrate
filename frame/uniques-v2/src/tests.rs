@@ -105,9 +105,8 @@ fn attributes(collection: u32) -> Vec<(Option<u32>, Vec<u8>, Vec<u8>)> {
 }
 
 fn approvals(collection_id: u32, item_id: u32) -> Vec<(u64, Option<u64>)> {
-	let item = Items::<Test>::get(collection_id, item_id);
-	let mut s: Vec<_> = item.unwrap().approvals.iter().map(|x| (x.who, x.deadline)).collect();
-	s.sort();
+	let item = Items::<Test>::get(collection_id, item_id).unwrap();
+	let s: Vec<_> = item.approvals.into_iter().collect();
 	s
 }
 

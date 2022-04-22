@@ -39,17 +39,9 @@ impl<T: Config> Pallet<T> {
 			ensure!(item.owner == caller, Error::<T>::NotAuthorized);
 
 			// update the approvals
-			match item.approvals.iter_mut().find(|ap| delegate == ap.who) {
-				Some(approval) => {
-					approval.who = delegate.clone();
-					approval.deadline = deadline;
-				},
-				None => {
-					item.approvals
-						.try_push(Approval { who: delegate.clone(), deadline })
-						.map_err(|()| Error::<T>::MaxApprovalsReached)?;
-				},
-			};
+			item.approvals
+				.try_insert(delegate.clone(), deadline)
+				.map_err(|_| Error::<T>::MaxApprovalsReached)?;
 
 			Self::deposit_event(Event::ApprovalAdded {
 				collection_id,
@@ -73,9 +65,7 @@ impl<T: Config> Pallet<T> {
 			ensure!(item.owner == caller, Error::<T>::NotAuthorized);
 
 			// remove the approval
-			if let Some(pos) = item.approvals.iter().position(|ap| delegate == ap.who) {
-				item.approvals.remove(pos);
-			} else {
+			if let None = item.approvals.remove(&delegate) {
 				return Err(Error::<T>::WrongDelegate.into())
 			}
 
