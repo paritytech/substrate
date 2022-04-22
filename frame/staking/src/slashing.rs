@@ -613,11 +613,6 @@ pub fn do_slash<T: Config>(
 	let value = ledger.slash(value, T::Currency::minimum_balance(), slash_era);
 
 	if !value.is_zero() {
-		// TODO: if this happens the UnbondPools that did not get slashed could think
-		// there are more funds unbonding then there really is, which could lead to attempts
-		// at over-withdraw when a delegator goes to withdraw unbonded
-		// to solve this, when the go to withdraw unbonded, we can min the withdraw amount
-		// with the non locked balance.
 		let (imbalance, missing) = T::Currency::slash(stash, value);
 		slashed_imbalance.subsume(imbalance);
 
