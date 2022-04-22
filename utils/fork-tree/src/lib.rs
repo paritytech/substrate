@@ -194,50 +194,42 @@ where
 	where
 		F: FnMut(&H, &N, V) -> VT,
 	{
-		let mut new_tree = ForkTree {
-			roots: Default::default(),
-			best_finalized_number: self.best_finalized_number,
-		};
+		let mut queue: Vec<_> =
+			self.roots.into_iter().rev().map(|node| (usize::MAX, node)).collect();
+		let mut next_queue = Vec::new();
+		let mut output = Vec::new();
 
-		let mut old_children = self.roots;
-		let mut new_children = &mut new_tree.roots;
-
-		let mut stack = vec![];
-
-		loop {
-			let mut tmp = vec![];
-			for node in old_children {
-				let data = f(&node.hash, &node.number, node.data);
-				new_children.push(Node {
-					data,
+		while !queue.is_empty() {
+			for (parent_index, node) in queue.drain(..) {
+				let new_data = f(&node.hash, &node.number, node.data);
+				let new_node = Node {
 					hash: node.hash,
 					number: node.number,
-					children: Default::default(),
-				});
+					data: new_data,
+					children: Vec::with_capacity(node.children.len()),
+				};
 
-				tmp.push(node.children);
+				let node_id = output.len();
+				output.push((parent_index, new_node));
+
+				for child in node.children.into_iter().rev() {
+					next_queue.push((node_id, child));
+				}
 			}
 
-			// SAFETY: borrow checker doesn't allow mutable references to multiple parts of
-			// the tree. Usage or raw pointers is safe as far as we take care to handle
-			// only pointers to data that is not subject to relocation.
-			//
-			// This should be performed after the node children have a stable addresses,
-			// i.e. vector buffer not subject to relocation due to some element insertion.
-			for (i, old_children) in tmp.into_iter().enumerate() {
-				stack.push((old_children, &mut new_children[i].children as *mut _));
-			}
-			// Process the next children lists.
-			match stack.pop() {
-				Some((old, new_ptr)) => {
-					old_children = old;
-					new_children = unsafe { &mut *new_ptr };
-				},
-				None => break,
-			};
+			std::mem::swap(&mut queue, &mut next_queue);
 		}
 
-		new_tree
+		let mut roots = Vec::new();
+		while let Some((parent_index, new_node)) = output.pop() {
+			if parent_index == usize::MAX {
+				roots.push(new_node);
+			} else {
+				output[parent_index].1.children.push(new_node);
+			}
+		}
+
+		ForkTree { roots, best_finalized_number: self.best_finalized_number }
 	}
 
 	/// Find a node in the tree that is the deepest ancestor of the given
@@ -683,43 +675,46 @@ where
 	where
 		F: FnMut(&H, &N, &V) -> FilterAction,
 	{
-		let mut stack = vec![];
-		let mut children = &mut self.roots;
 		let mut removed = vec![];
+		let mut retained = Vec::new();
 
-		loop {
-			let mut push_indices = vec![];
-			let mut i = 0;
-			while i < children.len() {
-				let node = &children[i];
+		let mut queue: Vec<_> = std::mem::take(&mut self.roots)
+			.into_iter()
+			.rev()
+			.map(|node| (usize::MAX, node))
+			.collect();
+		let mut next_queue = Vec::new();
+
+		while !queue.is_empty() {
+			for (parent_idx, mut node) in queue.drain(..) {
 				match filter(&node.hash, &node.number, &node.data) {
 					FilterAction::KeepNode => {
-						push_indices.push(i);
-						i += 1;
+						let node_idx = retained.len();
+						let children = std::mem::take(&mut node.children);
+						retained.push((parent_idx, node));
+						for child in children.into_iter().rev() {
+							next_queue.push((node_idx, child));
+						}
 					},
 					FilterAction::KeepTree => {
-						i += 1;
+						retained.push((parent_idx, node));
 					},
 					FilterAction::Remove => {
-						removed.push(children.remove(i));
+						removed.push(node);
 					},
 				}
 			}
 
-			// SAFETY: borrow checker doesn't allow mutable references to multiple parts of
-			// the tree. Usage or raw pointers is safe as far as we take care to handle
-			// only pointers to data that is not subject to relocation.
-			//
-			// This should be performed after the node children have a stable addresses,
-			// i.e. not subject to relocation due to some element removal.
-			push_indices.into_iter().for_each(|i| {
-				stack.push(&mut children[i].children as *mut _);
-			});
-			// Process the next children list.
-			children = match stack.pop() {
-				Some(children) => unsafe { &mut *children },
-				None => break,
-			};
+			std::mem::swap(&mut queue, &mut next_queue);
+		}
+
+		// Reconstruct
+		while let Some((parent_idx, node)) = retained.pop() {
+			if parent_idx == usize::MAX {
+				self.roots.push(node);
+			} else {
+				retained[parent_idx].1.children.push(node);
+			}
 		}
 
 		if !removed.is_empty() {
@@ -1287,6 +1282,7 @@ mod test {
 		let old_tree = tree.clone();
 		let new_tree = tree.map(&mut |hash, _, _| hash.to_owned());
 
+		// Check content and order
 		assert!(new_tree.iter().all(|(hash, _, data)| hash == data));
 		assert_eq!(
 			old_tree.iter().map(|(hash, _, _)| *hash).collect::<Vec<_>>(),
@@ -1351,7 +1347,7 @@ mod test {
 	}
 
 	#[test]
-	fn tree_rebalance() {
+	fn rebalance_works() {
 		let (mut tree, _) = test_fork_tree();
 
 		// the tree is automatically rebalanced on import, therefore we should iterate in preorder
@@ -1382,7 +1378,7 @@ mod test {
 	}
 
 	#[test]
-	fn tree_drain_filter() {
+	fn drain_filter_works() {
 		let (mut tree, _) = test_fork_tree();
 
 		let filter = |h: &&str, _: &u64, _: &()| match *h {
