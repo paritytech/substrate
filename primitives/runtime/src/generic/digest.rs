@@ -67,8 +67,14 @@ impl Digest {
 	}
 }
 
-/// Digest item that is able to encode/decode 'system' digest items and
-/// provide opaque access to other items.
+/// Digest item to encode context specific, mostly consensus related, opaque
+/// information within a block header.
+///
+/// During block authoring, `DigestItem` entries must be pushed into the header
+/// digest log in the following order:
+/// - `PreRuntime` entries, added by native code before entering the runtime;
+/// - `Consensus` entries, added by the runtime;
+/// - `Seal` entry, added by the native code after exiting the runtime.
 #[derive(PartialEq, Eq, Clone, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(parity_util_mem::MallocSizeOf))]
 pub enum DigestItem {
