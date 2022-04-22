@@ -74,7 +74,7 @@ pub async fn start_http<M: Send + Sync + 'static>(
 		.max_request_body_size(max_payload_in as u32)
 		.max_response_body_size(max_payload_out as u32)
 		.set_access_control(acl.build())
-		.custom_tokio_runtime(rt.clone());
+		.custom_tokio_runtime(rt);
 
 	let rpc_api = build_rpc_api(rpc_api);
 	let (handle, addr) = if let Some(metrics) = metrics {
@@ -119,7 +119,7 @@ pub async fn start_ws<M: Send + Sync + 'static>(
 		.max_request_body_size(max_payload_in as u32)
 		.max_response_body_size(max_payload_out as u32)
 		.max_connections(max_connections as u64)
-		.custom_tokio_runtime(rt.clone());
+		.custom_tokio_runtime(rt);
 
 	if let Some(provider) = id_provider {
 		builder = builder.set_id_provider(provider);
