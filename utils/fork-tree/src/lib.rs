@@ -708,7 +708,6 @@ where
 			std::mem::swap(&mut queue, &mut next_queue);
 		}
 
-		// Reconstruct
 		while let Some((parent_idx, node)) = retained.pop() {
 			if parent_idx == usize::MAX {
 				self.roots.push(node);
