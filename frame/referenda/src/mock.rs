@@ -26,7 +26,6 @@ use frame_support::{
 		ConstU32, ConstU64, Contains, EqualPrivilegeOnly, OnInitialize, OriginTrait, Polling,
 		PreimageRecipient, SortedMembers,
 	},
-	weights::Weight,
 };
 use frame_system::{EnsureRoot, EnsureSignedBy};
 use sp_core::H256;

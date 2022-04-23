@@ -982,7 +982,7 @@ mod mock {
 	use crate as pallet_state_trie_migration;
 	use frame_support::{
 		parameter_types,
-		traits::{ConstU8, ConstU32, ConstU64, Hooks}
+		traits::{ConstU32, ConstU64, Hooks}
 	};
 	use frame_system::{EnsureRoot, EnsureSigned};
 	use sp_core::{
@@ -1010,6 +1010,10 @@ mod mock {
 		}
 	);
 
+	parameter_types! {
+		pub const SS58Prefix: u8 = 42;
+	}
+
 	impl frame_system::Config for Test {
 		type BaseCallFilter = frame_support::traits::Everything;
 		type BlockWeights = ();
@@ -1032,7 +1036,7 @@ mod mock {
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
 		type SystemWeightInfo = ();
-		type SS58Prefix = ConstU8<42>;
+		type SS58Prefix = SS58Prefix;
 		type OnSetCode = ();
 		type MaxConsumers = ConstU32<16>;
 	}
