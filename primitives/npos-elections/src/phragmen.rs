@@ -21,8 +21,8 @@
 //! to the Maximin problem.
 
 use crate::{
-	balancing, setup_inputs, CandidatePtr, ElectionResult, ExtendedBalance, IdentifierT,
-	PerThing128, VoteWeight, Voter,
+	balancing, setup_inputs, BalancingConfig, CandidatePtr, ElectionResult, ExtendedBalance,
+	IdentifierT, PerThing128, VoteWeight, Voter,
 };
 use sp_arithmetic::{
 	helpers_128bit::multiply_by_rational,
@@ -71,16 +71,16 @@ pub fn seq_phragmen<AccountId: IdentifierT, P: PerThing128>(
 	to_elect: usize,
 	candidates: Vec<AccountId>,
 	voters: Vec<(AccountId, VoteWeight, impl IntoIterator<Item = AccountId>)>,
-	balancing: Option<(usize, ExtendedBalance)>,
+	balancing: Option<BalancingConfig>,
 ) -> Result<ElectionResult<AccountId, P>, crate::Error> {
 	let (candidates, voters) = setup_inputs(candidates, voters);
 
 	let (candidates, mut voters) = seq_phragmen_core::<AccountId>(to_elect, candidates, voters)?;
 
-	if let Some((iterations, tolerance)) = balancing {
+	if let Some(ref config) = balancing {
 		// NOTE: might create zero-edges, but we will strip them again when we convert voter into
 		// assignment.
-		let _iters = balancing::balance::<AccountId>(&mut voters, iterations, tolerance);
+		let _iters = balancing::balance::<AccountId>(&mut voters, config);
 	}
 
 	let mut winners = candidates

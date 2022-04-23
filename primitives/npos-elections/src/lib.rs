@@ -224,6 +224,12 @@ impl sp_std::cmp::PartialOrd for ElectionScore {
 	}
 }
 
+/// Utility struct to group parameters for the balancing algorithm.
+pub struct BalancingConfig {
+	pub iterations: usize,
+	pub tolerance: ExtendedBalance,
+}
+
 /// A pointer to a candidate struct with interior mutability.
 pub type CandidatePtr<A> = Rc<RefCell<Candidate<A>>>;
 
