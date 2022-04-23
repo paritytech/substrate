@@ -500,3 +500,20 @@ fn setting_account_id_should_work() {
 		assert_ok!(Identity::set_account_id(Origin::signed(4), 0, 3));
 	});
 }
+
+#[test]
+fn test_has_identity() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Identity::set_identity(Origin::signed(10), Box::new(ten())));
+		assert!(Identity::has_identity(&10, IdentityField::Display as u64));
+		assert!(Identity::has_identity(&10, IdentityField::Legal as u64));
+		assert!(Identity::has_identity(
+			&10,
+			IdentityField::Display as u64 | IdentityField::Legal as u64
+		));
+		assert!(!Identity::has_identity(
+			&10,
+			IdentityField::Display as u64 | IdentityField::Legal as u64 | IdentityField::Web as u64
+		));
+	});
+}
