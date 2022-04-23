@@ -619,6 +619,10 @@ impl<AccountId: IdentifierT, Accuracy: PerThing128, Balancing: Get<Option<Balanc
 	fn weight<T: WeightInfo>(voters: u32, targets: u32, vote_degree: u32) -> Weight {
 		T::mms(voters, targets, vote_degree)
 	}
+
+	fn weight<T: WeightInfo>(voters: u32, targets: u32, vote_degree: u32) -> Weight {
+		T::mms(voters, targets, vote_degree)
+	}
 }
 
 /// A voter, at the level of abstraction of this crate.
