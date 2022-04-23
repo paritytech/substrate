@@ -289,7 +289,7 @@ pub mod pallet {
 		InvalidIndex,
 		/// Too many approvals in the queue.
 		TooManyApprovals,
-		/// Proposal not in approval queue.
+		/// Proposal has not been approved.
 		ProposalNotApproved,
 	}
 
