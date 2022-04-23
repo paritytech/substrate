@@ -257,6 +257,7 @@ parameter_types! {
 	pub static SignedPhase: BlockNumber = 10;
 	pub static UnsignedPhase: BlockNumber = 5;
 	pub static SignedMaxSubmissions: u32 = 5;
+	pub static SignedMaxRefunds: u32 = 1;
 	pub static SignedDepositBase: Balance = 5;
 	pub static SignedDepositByte: Balance = 0;
 	pub static SignedDepositWeight: Balance = 0;
@@ -427,6 +428,7 @@ impl crate::Config for Runtime {
 	type SignedDepositWeight = ();
 	type SignedMaxWeight = SignedMaxWeight;
 	type SignedMaxSubmissions = SignedMaxSubmissions;
+	type SignedMaxRefunds = SignedMaxRefunds;
 	type SlashHandler = ();
 	type RewardHandler = ();
 	type DataProvider = StakingMock;
