@@ -18,14 +18,13 @@ mmr-lib = { package = "ckb-merkle-mountain-range", default-features = false, ver
 
 sp-core = { version = "6.0.0", default-features = false, path = "../../primitives/core" }
 sp-io = { version = "6.0.0", default-features = false, path = "../../primitives/io" }
+sp-mmr-primitives = { version = "4.0.0-dev", default-features = false, path = "../../primitives/merkle-mountain-range" }
 sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
 
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
-
-pallet-mmr-primitives = { version = "4.0.0-dev", default-features = false, path = "./primitives" }
 
 [dev-dependencies]
 env_logger = "0.9"
@@ -39,12 +38,12 @@ std = [
 	"mmr-lib/std",
 	"sp-core/std",
 	"sp-io/std",
+	"sp-mmr-primitives/std",
 	"sp-runtime/std",
 	"sp-std/std",
 	"frame-benchmarking/std",
 	"frame-support/std",
 	"frame-system/std",
-	"pallet-mmr-primitives/std",
 ]
 runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks"]
 try-runtime = ["frame-support/try-runtime"]

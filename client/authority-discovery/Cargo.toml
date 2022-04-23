@@ -24,7 +24,7 @@ futures = "0.3.21"
 futures-timer = "3.0.1"
 ip_network = "0.4.1"
 libp2p = { version = "0.40.0", default-features = false, features = ["kad"] }
-log = "0.4.8"
+log = "0.4.16"
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus", version = "0.10.0-dev" }
 prost = "0.9"
 rand = "0.7.2"

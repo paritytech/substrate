@@ -171,7 +171,7 @@ where
 			let signatures = self.rounds.remove(round)?.votes;
 			self.rounds.retain(|&(_, number), _| number > round.1);
 			self.best_done = self.best_done.clone().max(Some(round.1.clone()));
-			trace!(target: "beefy", "🥩 Concluded round #{}", round.1);
+			debug!(target: "beefy", "🥩 Concluded round #{}", round.1);
 
 			Some(
 				self.validator_set
