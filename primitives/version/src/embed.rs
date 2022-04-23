@@ -44,8 +44,7 @@ pub fn embed_runtime_version(
 		.apis
 		.iter()
 		.map(Encode::encode)
-		.map(|v| v.into_iter())
-		.flatten()
+		.flat_map(|v| v.into_iter())
 		.collect::<Vec<u8>>();
 
 	module.set_custom_section("runtime_apis", apis);

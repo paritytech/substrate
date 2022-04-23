@@ -26,7 +26,7 @@ use crate::{
 use codec::{Decode, Encode};
 use sp_core::sandbox::HostError;
 use sp_wasm_interface::{FunctionContext, Pointer, ReturnValue, Value, WordSize};
-use std::{cell::RefCell, collections::HashMap, convert::TryInto, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use wasmer::RuntimeError;
 
 use crate::sandbox::{
@@ -43,9 +43,8 @@ pub struct Backend {
 
 impl Backend {
 	pub fn new() -> Self {
-		let compiler = wasmer_compiler_singlepass::Singlepass::default();
-
-		Backend { store: wasmer::Store::new(&wasmer::JIT::new(compiler).engine()) }
+		let compiler = wasmer::Singlepass::default();
+		Backend { store: wasmer::Store::new(&wasmer::Universal::new(compiler).engine()) }
 	}
 }
 
@@ -191,6 +190,7 @@ pub fn instantiate(
 			wasmer::InstantiationError::Start(_) => InstantiationError::StartTrapped,
 			wasmer::InstantiationError::HostEnvInitialization(_) =>
 				InstantiationError::EnvironmentDefinitionCorrupted,
+			wasmer::InstantiationError::CpuFeature(_) => InstantiationError::CpuFeature,
 		})
 	})?;
 
@@ -431,4 +431,18 @@ impl MemoryTransfer for MemoryWrapper {
 			Ok(())
 		}
 	}
+}
+
+/// Get global value by name
+pub fn get_global(instance: &wasmer::Instance, name: &str) -> Option<Value> {
+	let global = instance.exports.get_global(name).ok()?;
+	let wasmtime_value = match global.get() {
+		wasmer::Val::I32(val) => Value::I32(val),
+		wasmer::Val::I64(val) => Value::I64(val),
+		wasmer::Val::F32(val) => Value::F32(f32::to_bits(val)),
+		wasmer::Val::F64(val) => Value::F64(f64::to_bits(val)),
+		_ => None?,
+	};
+
+	Some(wasmtime_value)
 }

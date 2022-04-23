@@ -17,7 +17,7 @@
 
 //! Staking FRAME Pallet.
 
-use frame_election_provider_support::SortedListProvider;
+use frame_election_provider_support::{SortedListProvider, VoteWeight};
 use frame_support::{
 	dispatch::Codec,
 	pallet_prelude::*,
@@ -33,16 +33,16 @@ use sp_runtime::{
 	DispatchError, Perbill, Percent,
 };
 use sp_staking::{EraIndex, SessionIndex};
-use sp_std::{cmp::max, convert::From, prelude::*};
+use sp_std::{cmp::max, prelude::*};
 
 mod impls;
 
 pub use impls::*;
 
 use crate::{
-	log, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraPayout, EraRewardPoints,
-	Exposure, Forcing, MaxUnlockingChunks, NegativeImbalanceOf, Nominations, PositiveImbalanceOf,
-	Releases, RewardDestination, SessionInterface, StakingLedger, UnappliedSlash, UnlockChunk,
+	slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraPayout, EraRewardPoints, Exposure,
+	Forcing, MaxUnlockingChunks, NegativeImbalanceOf, Nominations, PositiveImbalanceOf, Releases,
+	RewardDestination, SessionInterface, StakingLedger, UnappliedSlash, UnlockChunk,
 	ValidatorPrefs,
 };
 
@@ -75,8 +75,22 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>> {
 		/// The staking balance.
-		type Currency: LockableCurrency<Self::AccountId, Moment = Self::BlockNumber>;
-
+		type Currency: LockableCurrency<
+			Self::AccountId,
+			Moment = Self::BlockNumber,
+			Balance = Self::CurrencyBalance,
+		>;
+		/// Just the `Currency::Balance` type; we have this item to allow us to constrain it to
+		/// `From<u64>`.
+		type CurrencyBalance: sp_runtime::traits::AtLeast32BitUnsigned
+			+ codec::FullCodec
+			+ Copy
+			+ MaybeSerializeDeserialize
+			+ sp_std::fmt::Debug
+			+ Default
+			+ From<u64>
+			+ TypeInfo
+			+ MaxEncodedLen;
 		/// Time used for computing era duration.
 		///
 		/// It is guaranteed to start being called from the first `on_finalize`. Thus value at
@@ -121,6 +135,8 @@ pub mod pallet {
 		type Slash: OnUnbalanced<NegativeImbalanceOf<Self>>;
 
 		/// Handler for the unbalanced increment when rewarding a staker.
+		/// NOTE: in most cases, the implementation of `OnUnbalanced` should modify the total
+		/// issuance.
 		type Reward: OnUnbalanced<PositiveImbalanceOf<Self>>;
 
 		/// Number of sessions per era.
@@ -163,18 +179,21 @@ pub mod pallet {
 		/// After the threshold is reached a new era will be forced.
 		type OffendingValidatorsThreshold: Get<Perbill>;
 
-		/// Something that can provide a sorted list of voters in a somewhat sorted way. The
-		/// original use case for this was designed with `pallet_bags_list::Pallet` in mind. If
-		/// the bags-list is not desired, [`impls::UseNominatorsMap`] is likely the desired option.
-		type SortedListProvider: SortedListProvider<
-			Self::AccountId,
-			Score = frame_election_provider_support::VoteWeight,
-		>;
+		/// Something that provides a best-effort sorted list of voters aka electing nominators,
+		/// used for NPoS election.
+		///
+		/// The changes to nominators are reported to this. Moreover, each validator's self-vote is
+		/// also reported as one independent vote.
+		type VoterList: SortedListProvider<Self::AccountId, Score = VoteWeight>;
 
 		/// The maximum number of `unlocking` chunks a [`StakingLedger`] can have. Effectively
 		/// determines how many unique eras a staker may be unbonding in.
 		#[pallet::constant]
 		type MaxUnlockingChunks: Get<u32>;
+
+		/// A hook called when any staker is slashed. Mostly likely this can be a no-op unless
+		/// other pallets exist that are affected by slashing per-staker.
+		type OnStakerSlash: sp_staking::OnStakerSlash<Self::AccountId, BalanceOf<Self>>;
 
 		/// Some parameters of the benchmarking.
 		type BenchmarkingConfig: BenchmarkingConfig;
@@ -238,8 +257,7 @@ pub mod pallet {
 	/// Map from all (unlocked) "controller" accounts to the info regarding the staking.
 	#[pallet::storage]
 	#[pallet::getter(fn ledger)]
-	pub type Ledger<T: Config> =
-		StorageMap<_, Blake2_128Concat, T::AccountId, StakingLedger<T::AccountId, BalanceOf<T>>>;
+	pub type Ledger<T: Config> = StorageMap<_, Blake2_128Concat, T::AccountId, StakingLedger<T>>;
 
 	/// Where the reward payment should be made. Keyed by stash.
 	#[pallet::storage]
@@ -554,7 +572,7 @@ pub mod pallet {
 			}
 
 			for &(ref stash, ref controller, balance, ref status) in &self.stakers {
-				log!(
+				crate::log!(
 					trace,
 					"inserting genesis staker: {:?} => {:?} => {:?}",
 					stash,
@@ -584,10 +602,10 @@ pub mod pallet {
 				});
 			}
 
-			// all voters are reported to the `SortedListProvider`.
+			// all voters are reported to the `VoterList`.
 			assert_eq!(
-				T::SortedListProvider::count(),
-				Nominators::<T>::count(),
+				T::VoterList::count(),
+				Nominators::<T>::count() + Validators::<T>::count(),
 				"not all genesis stakers were inserted into sorted list provider, something is wrong."
 			);
 		}
@@ -629,6 +647,8 @@ pub mod pallet {
 		Chilled(T::AccountId),
 		/// The stakers' rewards are getting paid. \[era_index, validator_stash\]
 		PayoutStarted(EraIndex, T::AccountId),
+		/// A validator has set their preferences.
+		ValidatorPrefsSet(T::AccountId, ValidatorPrefs),
 	}
 
 	#[pallet::error]
@@ -837,9 +857,9 @@ pub mod pallet {
 				// NOTE: ledger must be updated prior to calling `Self::weight_of`.
 				Self::update_ledger(&controller, &ledger);
 				// update this staker in the sorted list, if they exist in it.
-				if T::SortedListProvider::contains(&stash) {
-					T::SortedListProvider::on_update(&stash, Self::weight_of(&ledger.stash));
-					debug_assert_eq!(T::SortedListProvider::sanity_check(), Ok(()));
+				if T::VoterList::contains(&stash) {
+					T::VoterList::on_update(&stash, Self::weight_of(&ledger.stash));
+					debug_assert_eq!(T::VoterList::sanity_check(), Ok(()));
 				}
 
 				Self::deposit_event(Event::<T>::Bonded(stash.clone(), extra));
@@ -920,8 +940,8 @@ pub mod pallet {
 				Self::update_ledger(&controller, &ledger);
 
 				// update this staker in the sorted list, if they exist in it.
-				if T::SortedListProvider::contains(&ledger.stash) {
-					T::SortedListProvider::on_update(&ledger.stash, Self::weight_of(&ledger.stash));
+				if T::VoterList::contains(&ledger.stash) {
+					T::VoterList::on_update(&ledger.stash, Self::weight_of(&ledger.stash));
 				}
 
 				Self::deposit_event(Event::<T>::Unbonded(ledger.stash, value));
@@ -1017,7 +1037,9 @@ pub mod pallet {
 			}
 
 			Self::do_remove_nominator(stash);
-			Self::do_add_validator(stash, prefs);
+			Self::do_add_validator(stash, prefs.clone());
+			Self::deposit_event(Event::<T>::ValidatorPrefsSet(ledger.stash, prefs));
+
 			Ok(())
 		}
 
@@ -1110,7 +1132,7 @@ pub mod pallet {
 
 		/// (Re-)set the payment target for a controller.
 		///
-		/// Effects will be felt at the beginning of the next era.
+		/// Effects will be felt instantly (as soon as this function is completed successfully).
 		///
 		/// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
 		///
@@ -1138,7 +1160,7 @@ pub mod pallet {
 
 		/// (Re-)set the controller of a stash.
 		///
-		/// Effects will be felt at the beginning of the next era.
+		/// Effects will be felt instantly (as soon as this function is completed successfully).
 		///
 		/// The dispatch origin for this call must be _Signed_ by the stash, not the controller.
 		///
@@ -1403,8 +1425,8 @@ pub mod pallet {
 
 			// NOTE: ledger must be updated prior to calling `Self::weight_of`.
 			Self::update_ledger(&controller, &ledger);
-			if T::SortedListProvider::contains(&ledger.stash) {
-				T::SortedListProvider::on_update(&ledger.stash, Self::weight_of(&ledger.stash));
+			if T::VoterList::contains(&ledger.stash) {
+				T::VoterList::on_update(&ledger.stash, Self::weight_of(&ledger.stash));
 			}
 
 			let removed_chunks = 1u32 // for the case where the last iterated chunk is not removed

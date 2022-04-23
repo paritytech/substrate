@@ -20,6 +20,11 @@ use std::env;
 #[rustversion::attr(not(stable), ignore)]
 #[test]
 fn ui() {
+	// Only run the ui tests when `RUN_UI_TESTS` is set.
+	if env::var("RUN_UI_TESTS").is_err() {
+		return
+	}
+
 	// As trybuild is using `cargo check`, we don't need the real WASM binaries.
 	env::set_var("SKIP_WASM_BUILD", "1");
 
