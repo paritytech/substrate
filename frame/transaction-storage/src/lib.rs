@@ -170,7 +170,7 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Index and store data on chain. Minimum data size is 1 bytes, maximum is
+		/// Index and store data off chain. Minimum data size is 1 bytes, maximum is
 		/// `MaxTransactionSize`. Data will be removed after `STORAGE_PERIOD` blocks, unless `renew`
 		/// is called. # <weight>
 		/// - n*log(n) of data size, as all data is pushed to an in-memory trie.

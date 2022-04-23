@@ -14,8 +14,8 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-log = "0.4.11"
-lru = "0.7.3"
+log = "0.4.16"
+lru = "0.7.5"
 parking_lot = "0.12.0"
 thiserror = "1.0.30"
 futures = "0.3.21"

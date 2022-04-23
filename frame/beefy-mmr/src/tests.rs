@@ -49,7 +49,7 @@ fn offchain_key(pos: usize) -> Vec<u8> {
 }
 
 fn read_mmr_leaf(ext: &mut TestExternalities, index: usize) -> MmrLeaf {
-	type Node = pallet_mmr_primitives::DataOrHash<Keccak256, MmrLeaf>;
+	type Node = pallet_mmr::primitives::DataOrHash<Keccak256, MmrLeaf>;
 	ext.persist_offchain_overlay();
 	let offchain_db = ext.offchain_db();
 	offchain_db
