@@ -88,10 +88,10 @@ pub mod pallet {
 		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// Identifier for the class of asset.
-		type ClassId: Member + Parameter + MaxEncodedLen + Copy;
+		type ClassId: Member + Parameter + MaxEncodedLen + Copy + MaybeSerializeDeserialize;
 
 		/// The type used to identify a unique asset within an asset class.
-		type InstanceId: Member + Parameter + MaxEncodedLen + Copy;
+		type InstanceId: Member + Parameter + MaxEncodedLen + Copy + MaybeSerializeDeserialize;
 
 		/// The currency mechanism, used for paying for reserves.
 		type Currency: ReservableCurrency<Self::AccountId>;
@@ -236,6 +236,102 @@ pub mod pallet {
 		(BoundedVec<u8, T::ValueLimit>, DepositBalanceOf<T, I>),
 		OptionQuery,
 	>;
+	
+	//TODO  classes: free_holding is_frozen ????
+	//TODO: classes_metadata: deposit, is_frozen???
+	//TODO: instances ???
+	//TODO: instances_metadata ???
+	#[pallet::genesis_config]
+	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
+		/// Genesis assets clases: class, owner, issuer, admin, freezer  
+		pub classes: Vec<(T::ClassId, T::AccountId, T::AccountId, T::AccountId, T::AccountId)>,
+		/// Genesis assets clases instances: instance, owner, approved, is_frozen, deposit
+		pub instances: Vec<(T::InstanceId, T::AccountId, Option<T::AccountId>, bool, DepositBalanceOf<T, I>)>,
+		/// Genesis assets clases metadata: class, deposit, data, is_frozen
+		pub classes_metadata: Vec<(T::ClassId, DepositBalanceOf<T, I>, Vec<u8>, bool)>,
+		/// Genesis assets clases attributes: class, key, value
+		pub classes_attributes: Vec<(T::ClassId, Vec<u8>, Vec<u8>)>,
+		/// Genesis assets clases instances metadatas: class, deposit, data, is_frozen  
+		pub instances_metadata: Vec<(T::ClassId, DepositBalanceOf<T, I>, Vec<u8>, bool)>,
+		/// Genesis assets clases instances attributes: class, instance, key, value
+		pub instance_attributes: Vec<(T::ClassId, T::InstanceId, Vec<u8>, Vec<u8>)>,
+	}
+
+	#[cfg(feature = "std")]
+	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
+		fn default() -> Self {
+			Self { 
+				classes: Default::default(), 
+				instances: Default::default(),
+				classes_metadata: Default::default(),
+				classes_attributes: Default::default(),
+				instances_metadata: Default::default(),
+				instance_attributes: Default::default(),
+			}
+		}
+	}
+
+	#[pallet::genesis_build]
+	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I> {
+		fn build(&self) {
+			for item in self.classes {
+				let deposit = todo!();
+				let details = ClassDetails { 
+					owner: item.1, 
+					issuer: item.2, 
+					admin: item.3, 
+					freezer: item.4, 
+					total_deposit: 0, 
+					free_holding: todo!(), 
+					instances: 0, 
+					instance_metadatas: 0, 
+					attributes: 0, 
+					is_frozen: todo!(),
+				};
+				assert!(Class::<T, I>::contains_key(item.0), "duplicate class {:?} definition", item.0);
+				
+				T::Currency::reserve(&item.1, deposit)
+					.expect(format!("can't reserve currency from owner accout {}", item.1).as_str());
+				Class::<T, I>::insert(&item.0, details);
+				ClassAccount::<T, I>::insert(&item.1, &item.0, ());
+			}
+
+			for item in self.instances {
+
+			}
+
+			for item in self.classes_metadata {
+
+			}
+
+			for item in self.classes_attributes {
+
+			}
+
+			for item in self.instances_metadata {
+
+			}
+
+			// for (class, atribs) in self.instance_attributes {
+			// 	assert!(Class::<T, I>::contains_key(class), "class {:?} not found", class);
+				
+			// 	for (instance, key, value) in atribs {
+			// 		assert!(, "instanst {} from class {}", class);
+				
+			// 		Attribute::<T, I>::insert((&class, Some(instance), key), (value, deposit));
+			// 		Class::<T, I>::insert(class, &class_details);
+			// 	}
+			// }
+
+			for item in self.instance_attributes {
+
+				Attribute::<T, I>::insert((&class, maybe_instance, &key), (&value, deposit));
+				Class::<T, I>::try_mutate(item.0, |class| {
+					class.
+				});
+			}
+		}
+	}
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
