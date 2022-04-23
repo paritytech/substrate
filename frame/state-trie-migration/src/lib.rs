@@ -982,7 +982,7 @@ mod mock {
 	use crate as pallet_state_trie_migration;
 	use frame_support::{
 		parameter_types,
-		traits::{ConstU32, ConstU64, Hooks}
+		traits::{ConstU32, ConstU64, Hooks},
 	};
 	use frame_system::{EnsureRoot, EnsureSigned};
 	use sp_core::{
