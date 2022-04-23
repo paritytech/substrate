@@ -35,6 +35,7 @@ fn benchmark_machine_works() {
 
 /// Test that the command fails when run with the test profile.
 #[test]
+#[cfg(not(release))]
 fn benchmark_machine_fails_with_bad_build_profile() {
 	let output = Command::new(cargo_bin("substrate"))
 		.args(["benchmark", "machine", "--dev"])
