@@ -29,7 +29,7 @@
 //! functionality. It can be used with other modules that implement accounts based on [`Currency`].
 //! These "smart-contract accounts" have the ability to instantiate smart-contracts and make calls
 //! to other contract and non-contract accounts.
-
+//!
 //! The smart-contract code is stored once in a code cache, and later retrievable via its hash.
 //! This means that multiple smart-contracts can be instantiated from the same hash, without
 //! replicating the code each time.
