@@ -612,11 +612,7 @@ impl<
 	fn solve(
 		winners: usize,
 		targets: Vec<Self::AccountId>,
-		voters: Vec<(
-			Self::AccountId,
-			VoteWeight,
-			impl IntoIterator<Item = Self::AccountId> + Clone,
-		)>,
+		voters: Vec<(Self::AccountId, VoteWeight, impl IntoIterator<Item = Self::AccountId>)>,
 	) -> Result<ElectionResult<Self::AccountId, Self::Accuracy>, Self::Error> {
 		if Balancing::get().is_none() {
 			return Err(Self::Error::MissingBalancingParams)

@@ -52,7 +52,7 @@ use sp_std::vec;
 pub fn mms<AccountId: IdentifierT, P: PerThing128>(
 	to_elect: usize,
 	candidates: Vec<AccountId>,
-	voters: Vec<(AccountId, VoteWeight, impl IntoIterator<Item = AccountId> + Clone)>,
+	voters: Vec<(AccountId, VoteWeight, impl IntoIterator<Item = AccountId>)>,
 	iterations: usize,
 	tolerance: ExtendedBalance,
 ) -> Result<ElectionResult<AccountId, P>, crate::Error> {
@@ -64,6 +64,7 @@ pub fn mms<AccountId: IdentifierT, P: PerThing128>(
 
 	// To be able to amend it below
 	let mut candidates = candidates;
+	let voters = convert_voters(voters);
 
 	for _round in 0..to_elect {
 		let mut max_support = Zero::zero();
@@ -94,6 +95,16 @@ pub fn mms<AccountId: IdentifierT, P: PerThing128>(
 		setup_inputs_with_balance(winners, voters, iterations, tolerance);
 
 	crate::voter_candidate_to_election_result(used_voters, used_candidates)
+}
+
+/// Utility function to avoid having to add Clone as a trait
+fn convert_voters<AccountId>(
+	voters: Vec<(AccountId, VoteWeight, impl IntoIterator<Item = AccountId>)>,
+) -> Vec<(AccountId, VoteWeight, Vec<AccountId>)> {
+	voters
+		.into_iter()
+		.map(|(voter, weight, votes)| (voter, weight, votes.into_iter().collect()))
+		.collect()
 }
 
 /// Constructs the `voters` and `candidates` inputs for the `mms` function.
