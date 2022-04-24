@@ -322,7 +322,7 @@ pub mod pallet {
 	{
 		fn on_idle(_block: T::BlockNumber, remaining_weight: Weight) -> Weight {
 			Storage::<T>::process_deletion_queue_batch(remaining_weight)
-				.saturating_add(T::WeightInfo::on_idle())
+				.saturating_add(T::WeightInfo::on_process_deletion_queue_batch())
 		}
 
 		fn on_initialize(_block: T::BlockNumber) -> Weight {
@@ -340,7 +340,7 @@ pub mod pallet {
 				Storage::<T>::process_deletion_queue_batch(weight_limit)
 					.saturating_add(T::WeightInfo::on_initialize())
 			} else {
-				T::WeightInfo::on_initialize()
+				T::WeightInfo::on_process_deletion_queue_batch()
 			}
 		}
 	}

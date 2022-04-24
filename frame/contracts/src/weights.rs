@@ -44,7 +44,7 @@ use sp_std::marker::PhantomData;
 
 /// Weight functions needed for pallet_contracts.
 pub trait WeightInfo {
-	fn on_initialize() -> Weight;
+	fn on_process_deletion_queue_batch() -> Weight;
 	fn on_initialize_per_trie_key(k: u32, ) -> Weight;
 	fn on_initialize_per_queue_item(q: u32, ) -> Weight;
 	fn reinstrument(c: u32, ) -> Weight;
@@ -161,7 +161,7 @@ pub trait WeightInfo {
 pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts DeletionQueue (r:1 w:0)
-	fn on_initialize() -> Weight {
+	fn on_process_deletion_queue_batch() -> Weight {
 		(1_569_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 	}

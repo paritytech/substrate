@@ -203,7 +203,7 @@ benchmarks! {
 	}
 
 	// The base weight without any actual work performed apart from the setup costs.
-	on_initialize {}: {
+	on_process_deletion_queue_batch {}: {
 		Storage::<T>::process_deletion_queue_batch(Weight::MAX)
 	}
 
