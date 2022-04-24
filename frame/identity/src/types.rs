@@ -17,7 +17,7 @@
 
 use super::*;
 use codec::{Decode, Encode, MaxEncodedLen};
-use enumflags2::BitFlags;
+use enumflags2::{bitflags, BitFlags};
 use frame_support::{
 	traits::{ConstU32, Get},
 	BoundedVec, CloneNoBound, PartialEqNoBound, RuntimeDebugNoBound,
@@ -51,6 +51,12 @@ pub enum Data {
 	/// Only the SHA3-256 hash of the data is stored. The preimage of the hash may be retrieved
 	/// through some hash-lookup service.
 	ShaThree256([u8; 32]),
+}
+
+impl Data {
+	pub fn is_none(&self) -> bool {
+		self == &Data::None
+	}
 }
 
 impl Decode for Data {
@@ -230,8 +236,9 @@ impl<Balance: Encode + Decode + MaxEncodedLen + Copy + Clone + Debug + Eq + Part
 
 /// The fields that we use to identify the owner of an account with. Each corresponds to a field
 /// in the `IdentityInfo` struct.
+#[bitflags]
 #[repr(u64)]
-#[derive(Clone, Copy, PartialEq, Eq, BitFlags, RuntimeDebug, TypeInfo)]
+#[derive(Clone, Copy, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub enum IdentityField {
 	Display = 0b0000000000000000000000000000000000000000000000000000000000000001,
 	Legal = 0b0000000000000000000000000000000000000000000000000000000000000010,
@@ -330,6 +337,37 @@ pub struct IdentityInfo<FieldLimit: Get<u32>> {
 
 	/// The Twitter identity. The leading `@` character may be elided.
 	pub twitter: Data,
+}
+
+impl<FieldLimit: Get<u32>> IdentityInfo<FieldLimit> {
+	pub(crate) fn fields(&self) -> IdentityFields {
+		let mut res = <BitFlags<IdentityField>>::empty();
+		if !self.display.is_none() {
+			res.insert(IdentityField::Display);
+		}
+		if !self.legal.is_none() {
+			res.insert(IdentityField::Legal);
+		}
+		if !self.web.is_none() {
+			res.insert(IdentityField::Web);
+		}
+		if !self.riot.is_none() {
+			res.insert(IdentityField::Riot);
+		}
+		if !self.email.is_none() {
+			res.insert(IdentityField::Email);
+		}
+		if self.pgp_fingerprint.is_some() {
+			res.insert(IdentityField::PgpFingerprint);
+		}
+		if !self.image.is_none() {
+			res.insert(IdentityField::Image);
+		}
+		if !self.twitter.is_none() {
+			res.insert(IdentityField::Twitter);
+		}
+		IdentityFields(res)
+	}
 }
 
 /// Information concerning the identity of the controller of an account.

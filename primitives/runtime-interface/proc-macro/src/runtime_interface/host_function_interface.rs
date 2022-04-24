@@ -374,11 +374,27 @@ fn generate_host_function_implementation(
 				-> std::result::Result<#ffi_return_ty, #crate_::sp_wasm_interface::wasmtime::Trap>
 			{
 				T::with_function_context(caller, move |__function_context__| {
-					#struct_name::call(
-						__function_context__,
-						#(#ffi_names,)*
-					)
-				}).map_err(#crate_::sp_wasm_interface::wasmtime::Trap::new)
+					let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+						#struct_name::call(
+							__function_context__,
+							#(#ffi_names,)*
+						).map_err(#crate_::sp_wasm_interface::wasmtime::Trap::new)
+					}));
+					match result {
+						Ok(result) => result,
+						Err(panic) => {
+							let message =
+								if let Some(message) = panic.downcast_ref::<String>() {
+									format!("host code panicked while being called by the runtime: {}", message)
+								} else if let Some(message) = panic.downcast_ref::<&'static str>() {
+									format!("host code panicked while being called by the runtime: {}", message)
+								} else {
+									"host code panicked while being called by the runtime".to_owned()
+								};
+							return Err(#crate_::sp_wasm_interface::wasmtime::Trap::new(message));
+						}
+					}
+				})
 			}
 		)?;
 	};

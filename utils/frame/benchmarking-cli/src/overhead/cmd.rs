@@ -35,10 +35,10 @@ use crate::{
 		bench::{Benchmark, BenchmarkParams, BenchmarkType},
 		template::TemplateData,
 	},
-	post_processing::WeightParams,
+	shared::WeightParams,
 };
 
-/// Benchmarks the per-block and per-extrinsic execution overhead.
+/// Benchmark the execution overhead per-block and per-extrinsic.
 #[derive(Debug, Parser)]
 pub struct OverheadCmd {
 	#[allow(missing_docs)]
@@ -76,11 +76,11 @@ pub trait ExtrinsicBuilder {
 }
 
 impl OverheadCmd {
-	/// Measures the per-block and per-extrinsic execution overhead.
+	/// Measure the per-block and per-extrinsic execution overhead.
 	///
 	/// Writes the results to console and into two instances of the
 	/// `weights.hbs` template, one for each benchmark.
-	pub async fn run<Block, BA, C>(
+	pub fn run<Block, BA, C>(
 		&self,
 		cfg: Configuration,
 		client: Arc<C>,
