@@ -328,10 +328,9 @@ pub mod pallet {
 		fn on_initialize(_block: T::BlockNumber) -> Weight {
 			// We want to process the deletion_queue in the on_idle hook. Only in the case
 			// that the queue length has reached its maximal depth, we process it here
-			let queue_depth = T::DeletionQueueDepth::get() as usize;
+			let max_len = T::DeletionQueueDepth::get() as usize;
 			let queue_len = <DeletionQueue<T>>::decode_len().unwrap_or(0);
-			let queue_full = queue_len >= queue_depth;
-			if queue_full {
+			if queue_len >= max_len {
 	     	    // We do not want to go above the block limit and rather avoid lazy deletion
 		    	// in that case. This should only happen on runtime upgrades.
 		    	let weight_limit = T::BlockWeights::get()
