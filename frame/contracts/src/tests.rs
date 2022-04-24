@@ -1630,7 +1630,7 @@ fn lazy_removal_on_full_queue_works_on_initialize() {
 		let queue_len = <DeletionQueue<Test>>::decode_len().unwrap_or(0);
 
 		// Run the lazy removal
-		Contracts::on_initialize(Weight::max_value());
+		Contracts::on_initialize(System::block_number());
 
 		let queue_len_after_on_initialize = <DeletionQueue<Test>>::decode_len().unwrap_or(0);
 
@@ -1797,7 +1797,7 @@ fn lazy_removal_does_no_run_on_full_queue_and_full_block() {
 
 		// Run the lazy removal without any limit so that all keys would be removed if there
 		// had been some weight left in the block.
-		let weight_used = Contracts::on_initialize(Weight::max_value());
+		let weight_used = Contracts::on_initialize(System::block_number());
 		let base = <<Test as Config>::WeightInfo as WeightInfo>::on_process_deletion_queue_batch();
 		assert_eq!(weight_used, base);
 	});
