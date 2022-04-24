@@ -331,16 +331,15 @@ pub mod pallet {
 			let max_len = T::DeletionQueueDepth::get() as usize;
 			let queue_len = <DeletionQueue<T>>::decode_len().unwrap_or(0);
 			if queue_len >= max_len {
-	     	    // We do not want to go above the block limit and rather avoid lazy deletion
-		    	// in that case. This should only happen on runtime upgrades.
-		    	let weight_limit = T::BlockWeights::get()
-			    	.max_block
-			    	.saturating_sub(System::<T>::block_weight().total())
-			    	.min(T::DeletionWeightLimit::get());
-			    Storage::<T>::process_deletion_queue_batch(weight_limit)
-			    	.saturating_add(T::WeightInfo::on_initialize())
-			}
-			else {
+				// We do not want to go above the block limit and rather avoid lazy deletion
+				// in that case. This should only happen on runtime upgrades.
+				let weight_limit = T::BlockWeights::get()
+					.max_block
+					.saturating_sub(System::<T>::block_weight().total())
+					.min(T::DeletionWeightLimit::get());
+				Storage::<T>::process_deletion_queue_batch(weight_limit)
+					.saturating_add(T::WeightInfo::on_initialize())
+			} else {
 				T::WeightInfo::on_initialize()
 			}
 		}

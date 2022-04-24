@@ -24,8 +24,8 @@ use crate::{
 	storage::Storage,
 	wasm::{PrefabWasmModule, ReturnCode as RuntimeReturnCode},
 	weights::WeightInfo,
-	BalanceOf, Code, CodeStorage, Config, ContractInfoOf, DefaultAddressGenerator, DeletionQueue, Error, Pallet,
-	Schedule,
+	BalanceOf, Code, CodeStorage, Config, ContractInfoOf, DefaultAddressGenerator, DeletionQueue,
+	Error, Pallet, Schedule,
 };
 use assert_matches::assert_matches;
 use codec::Encode;
@@ -35,7 +35,8 @@ use frame_support::{
 	parameter_types,
 	storage::child,
 	traits::{
-		BalanceStatus, ConstU32, ConstU64, Contains, Currency, OnInitialize, OnIdle, ReservableCurrency,
+		BalanceStatus, ConstU32, ConstU64, Contains, Currency, OnIdle, OnInitialize,
+		ReservableCurrency,
 	},
 	weights::{constants::WEIGHT_PER_SECOND, DispatchClass, PostDispatchInfo, Weight},
 };
@@ -1682,7 +1683,7 @@ fn lazy_batch_removal_works() {
 		}
 
 		// Run single lazy removal
-		Contracts::on_idle(Weight::max_value(),Weight::max_value());
+		Contracts::on_idle(Weight::max_value(), Weight::max_value());
 
 		// The single lazy removal should have removed all queued tries
 		for trie in tries.iter() {
