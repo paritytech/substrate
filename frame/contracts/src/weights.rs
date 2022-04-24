@@ -47,7 +47,6 @@ pub trait WeightInfo {
 	fn on_initialize() -> Weight;
 	fn on_initialize_per_trie_key(k: u32, ) -> Weight;
 	fn on_initialize_per_queue_item(q: u32, ) -> Weight;
-	fn on_idle() -> Weight;
 	fn reinstrument(c: u32, ) -> Weight;
 	fn call_with_code_per_byte(c: u32, ) -> Weight;
 	fn instantiate_with_code(c: u32, s: u32, ) -> Weight;
@@ -182,9 +181,6 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add((1_795_000 as Weight).saturating_mul(q as Weight))
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
-	}
-	fn on_idle() -> Weight {
-		Self::on_initialize()
 	}
 	// Storage: Contracts PristineCode (r:1 w:0)
 	// Storage: Contracts CodeStorage (r:0 w:1)
