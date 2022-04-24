@@ -338,7 +338,7 @@ pub mod pallet {
 					.saturating_sub(System::<T>::block_weight().total())
 					.min(T::DeletionWeightLimit::get());
 				Storage::<T>::process_deletion_queue_batch(weight_limit)
-					.saturating_add(T::WeightInfo::on_initialize())
+					.saturating_add(T::WeightInfo::on_process_deletion_queue_batch())
 			} else {
 				T::WeightInfo::on_process_deletion_queue_batch()
 			}

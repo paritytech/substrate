@@ -1073,7 +1073,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 // For backwards compatibility and tests
 impl WeightInfo for () {
 	// Storage: Contracts DeletionQueue (r:1 w:0)
-	fn on_initialize() -> Weight {
+	fn on_process_deletion_queue_batch() -> Weight {
 		(1_569_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 	}
@@ -1093,9 +1093,6 @@ impl WeightInfo for () {
 			.saturating_add((1_795_000 as Weight).saturating_mul(q as Weight))
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
-	}
-	fn on_idle() -> Weight {
-		Self::on_initialize()
 	}
 	// Storage: Contracts PristineCode (r:1 w:0)
 	// Storage: Contracts CodeStorage (r:0 w:1)
