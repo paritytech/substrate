@@ -1784,57 +1784,7 @@ fn lazy_removal_partial_remove_works() {
 
 #[test]
 fn lazy_removal_does_no_run_on_full_queue_and_full_block() {
-	let (code, hash) = compile_module::<Test>("self_destruct").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
-		let min_balance = <Test as Config>::Currency::minimum_balance();
-		let _ = Balances::deposit_creating(&ALICE, 1000 * min_balance);
-
-		assert_ok!(Contracts::instantiate_with_code(
-			Origin::signed(ALICE),
-			min_balance * 100,
-			GAS_LIMIT,
-			None,
-			code,
-			vec![],
-			vec![],
-		),);
-
-		let addr = Contracts::contract_address(&ALICE, &hash, &[]);
-		let info = <ContractInfoOf<Test>>::get(&addr).unwrap();
-		let max_keys = 30;
-
-		// Create some storage items for the contract.
-		let vals: Vec<_> = (0..max_keys)
-			.map(|i| (blake2_256(&i.encode()), (i as u32), (i as u32).encode()))
-			.collect();
-
-		// Put value into the contracts child trie
-		for val in &vals {
-			Storage::<Test>::write(&info.trie_id, &val.0, Some(val.2.clone()), None, false)
-				.unwrap();
-		}
-		<ContractInfoOf<Test>>::insert(&addr, info.clone());
-
-		// Terminate the contract
-		assert_ok!(Contracts::call(
-			Origin::signed(ALICE),
-			addr.clone(),
-			0,
-			GAS_LIMIT,
-			None,
-			vec![]
-		));
-
-		// Contract info should be gone
-		assert!(!<ContractInfoOf::<Test>>::contains_key(&addr));
-
-		let trie = info.child_trie_info();
-
-		// But value should be still there as the lazy removal did not run, yet.
-		for val in &vals {
-			assert_eq!(child::get::<u32>(&trie, &blake2_256(&val.0)), Some(val.1));
-		}
-
 		// Fill up the block which should prevent the lazy storage removal from running.
 		System::register_extra_weight_unchecked(
 			<Test as system::Config>::BlockWeights::get().max_block,
@@ -1850,19 +1800,6 @@ fn lazy_removal_does_no_run_on_full_queue_and_full_block() {
 		let weight_used = Contracts::on_initialize(Weight::max_value());
 		let base = <<Test as Config>::WeightInfo as WeightInfo>::on_initialize();
 		assert_eq!(weight_used, base);
-
-		// All the keys are still in place
-		for val in &vals {
-			assert_eq!(child::get::<u32>(&trie, &blake2_256(&val.0)), Some(val.1));
-		}
-
-		// // Run the lazy removal directly which disregards the block limits
-		// Storage::<Test>::process_deletion_queue_batch(Weight::max_value());
-
-		// // Now the keys should be gone
-		// for val in &vals {
-		// 	assert_eq!(child::get::<u32>(&trie, &blake2_256(&val.0)), None);
-		// }
 	});
 }
 
