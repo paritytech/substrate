@@ -1184,6 +1184,17 @@ fn metadata() {
 						docs: vec![],
 					},
 					StorageEntryMetadata {
+						name: "Map3",
+						modifier: StorageEntryModifier::Optional,
+						ty: StorageEntryType::Map {
+							key: meta_type::<u32>(),
+							value: meta_type::<u64>(),
+							hashers: vec![StorageHasher::Blake2_128Concat],
+						},
+						default: vec![1, 1],
+						docs: vec![],
+					},
+					StorageEntryMetadata {
 						name: "DoubleMap",
 						modifier: StorageEntryModifier::Optional,
 						ty: StorageEntryType::Map {
