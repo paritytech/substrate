@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::{CliConfiguration, PruningParams, Result as CliResult, SharedParams};
+use crate::{CliConfiguration, DatabaseParams, PruningParams, Result as CliResult, SharedParams};
 use parity_scale_codec::{Decode, Encode};
 use sc_client_api::{backend::Backend as BackendT, blockchain::HeaderBackend};
 use sp_blockchain::Info;
@@ -33,6 +33,10 @@ pub struct ChainInfoCmd {
 	#[allow(missing_docs)]
 	#[clap(flatten)]
 	pub shared_params: SharedParams,
+
+	#[allow(missing_docs)]
+	#[clap(flatten)]
+	pub database_params: DatabaseParams,
 }
 
 /// Serializable `chain-info` subcommand output.
@@ -91,5 +95,9 @@ impl CliConfiguration for ChainInfoCmd {
 
 	fn pruning_params(&self) -> Option<&PruningParams> {
 		Some(&self.pruning_params)
+	}
+
+	fn database_params(&self) -> Option<&DatabaseParams> {
+		Some(&self.database_params)
 	}
 }
