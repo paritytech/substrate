@@ -23,7 +23,7 @@
 //!
 //! Topology specific to substrate and utils to link to network.
 
-use mixnet::{MixPeerId, MixPublicKey, Topology};
+use mixnet::{MixPeerId, MixPublicKey, Topology, Error};
 
 pub use mixnet::{WorkerSink, WorkerStream};
 use sp_application_crypto::key_types;
@@ -784,16 +784,8 @@ pub struct ConnectionInfo {
 	authority_id: Option<(AuthorityId, Vec<u8>)>,
 }
 */
-
-impl Topology for AuthorityStar {
-	//type ConnectionInfo = ConnectionInfo;
-	// TODO consider authority still only when really authority: but signing is awkward.
-	// Probably consumer will not stay connected and rely only on auth discovery dht.
-	// Gossip can be ok though: may be of use in gossip system (attach the neighbor too).
-	// DHT is kind of gossip though.
-	type ConnectionInfo = ();
-
-	fn random_recipient(&self) -> Option<MixPeerId> {
+impl AuthorityStar {
+	fn random_connected(&self, skip: impl Fn(&MixPeerId) -> bool) -> Option<MixPeerId> {
 		use rand::RngCore;
 		if !self.has_enough_nodes() {
 			debug!(target: "mixnet", "Not enough routing nodes for path.");
@@ -814,23 +806,39 @@ impl Topology for AuthorityStar {
 			},
 		};
 		debug!(target: "mixnet", "routing {:?}, ix {:?}", self.routing_nodes, ix);
-		if let Some(key) = self.routing_nodes.range(ix..).next() {
-			if let Some(info) = self.connected_nodes.get(key) {
+		while let Some(key) = self.routing_nodes.range(ix..).next() {
+			if !skip(key) {
 				debug!(target: "mixnet", "Random route node");
-				Some(info.id.clone())
+				return Some(key.clone());
+			}
+/*			if let Some(info) = self.connected_nodes.get(key) {
+				debug!(target: "mixnet", "Random route node");
+				return Some(info.id.clone())
 			} else {
 				unreachable!()
+			}*/
+		} 
+		while let	Some(key) = self.routing_nodes.range(..ix).rev().next() {
+			if !skip(key) {
+				debug!(target: "mixnet", "Random route node");
+				return Some(key.clone());
 			}
-		} else {
-			self.routing_nodes.range(..ix).rev().next().map(|key| {
-				if let Some(info) = self.connected_nodes.get(key) {
-					debug!(target: "mixnet", "Random route node");
-					info.id.clone()
-				} else {
-					unreachable!()
-				}
-			})
 		}
+		None
+	}
+
+}
+
+impl Topology for AuthorityStar {
+	//type ConnectionInfo = ConnectionInfo;
+	// TODO consider authority still only when really authority: but signing is awkward.
+	// Probably consumer will not stay connected and rely only on auth discovery dht.
+	// Gossip can be ok though: may be of use in gossip system (attach the neighbor too).
+	// DHT is kind of gossip though.
+	type ConnectionInfo = ();
+
+	fn random_recipient(&self) -> Option<MixPeerId> {
+		self.random_connected(|_| false)
 	}
 
 	/// For a given peer return a list of peers it is supposed to be connected to.
@@ -839,7 +847,7 @@ impl Topology for AuthorityStar {
 	/// external hop for latest (see gen_path function). Then last hop will expose
 	/// a new connection, so it need to be an additional hop (if possible).
 	fn neighbors(&self, from: &MixPeerId) -> Option<Vec<(MixPeerId, MixPublicKey)>> {
-		if self.routing_nodes.contains(from) || &self.node_id == from {
+		if self.routing_nodes.contains(from) || (&self.node_id == from && self.routing) {
 			Some(
 				self.routing_nodes
 					.iter()
@@ -858,6 +866,69 @@ impl Topology for AuthorityStar {
 		} else {
 			None
 		}
+	}
+
+	fn random_path(
+		&self,
+		start: &MixPeerId,
+		recipient: &MixPeerId,
+		count: usize,
+		num_hops: usize,
+	) -> Result<Vec<Vec<(MixPeerId, MixPublicKey)>>, Error> {
+		// Diverging from default implementation (random from all possible paths) as `neighbor`
+		// return same result for all routing peer (minus self).
+
+		let num_hops = if !(self.routing_nodes.contains(start) || (self.routing() && &self.node_id == start)) {
+			// num hops is between routing, last one is not receiving covers.
+			num_hops + 1
+		} else {
+			num_hops
+		};
+		let num_hops = if !(self.routing_nodes.contains(recipient) || (self.routing() && &self.node_id == recipient)) {
+			// num hops is between routing, last one is not receiving covers.
+			num_hops + 1
+		} else {
+			num_hops
+		};
+
+		debug!(target: "mixnet", "nb_hop: {:?}", num_hops);
+		let mut result = Vec::with_capacity(count);
+		while result.len() < count {
+			let mut ids = BTreeSet::new();
+			ids.insert(start.clone());
+			ids.insert(recipient.clone());
+			while ids.len() - 2 < num_hops - 1 {
+				if let Some(key) = self.random_connected(|k| ids.contains(k)) {
+					debug!(target: "mixnet", "Add hop {:?}.", key);
+					ids.insert(key);
+				} else {
+					debug!(target: "mixnet", "No random connected {:?}.", ids.len() - 2);
+					return Err(Error::NotEnoughRoutingPeers);
+				}
+			}
+
+			let mut path = Vec::with_capacity(num_hops);
+			ids.remove(start);
+			ids.remove(recipient);
+			for peer_id in ids.into_iter() {
+				if let Some(info) = self.connected_nodes.get(&peer_id) {
+					path.push((peer_id, info.public_key.clone()));
+				} else {
+					error!(target: "mixnet", "node in routing_nodes must also be in connected_nodes");
+					unreachable!("node in routing_nodes must also be in connected_nodes");
+				}
+			}
+			if let Some(info) = self.connected_nodes.get(recipient) {
+				path.push((recipient.clone(), info.public_key.clone()));
+			} else {
+				error!(target: "mixnet", "unknown recipient");
+				return Err(Error::NotEnoughRoutingPeers);
+			}
+
+			result.push(path);
+		}
+		debug!(target: "mixnet", "Path: {:?}", result);
+		Ok(result)
 	}
 
 	fn routing(&self) -> bool {
