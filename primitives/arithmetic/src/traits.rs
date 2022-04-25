@@ -155,7 +155,9 @@ pub trait AtLeast32BitUnsigned: AtLeast32Bit + Unsigned {}
 impl<T: AtLeast32Bit + Unsigned> AtLeast32BitUnsigned for T {}
 
 // A meta trait for arithmetic. Only allows for unsigned integers, at most of 32 bits, the opposite of [`AtLeast32BitUnsigned`]
-pub trait AtMost32BitUnsigned: BaseArithmetic + Ord + Num + Unsigned {}
+pub trait AtMost32BitUnsigned: BaseArithmetic + Ord + Num + Unsigned {
+	pub fn to_usize(&self) -> usize;
+}
 
 impl AtMost32BitUnsigned for u8 {}
 
