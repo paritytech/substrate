@@ -22,7 +22,7 @@ sp-io = { version = "6.0.0", path = "../../primitives/io", default-features = fa
 sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-version = { version = "5.0.0", default-features = false, path = "../../primitives/version" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
-log = { version = "0.4.14", default-features = false }
+log = { version = "0.4.16", default-features = false }
 
 [dev-dependencies]
 criterion = "0.3.3"

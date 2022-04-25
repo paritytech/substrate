@@ -19,7 +19,7 @@ codec = { package = "parity-scale-codec", version = "3.0.0", features = [
     "derive",
 ] }
 futures = { version = "0.3.21", features = ["thread-pool"] }
-log = "0.4.8"
+log = "0.4.16"
 sp-core = { path = "../../core", version = "6.0.0"}
 sp-inherents = { version = "4.0.0-dev", path = "../../inherents" }
 sp-state-machine = { version = "0.12.0", path = "../../state-machine" }
