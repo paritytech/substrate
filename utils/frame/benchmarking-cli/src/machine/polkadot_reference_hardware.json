@@ -20,13 +20,13 @@
 	{
 		"metric": "DiskSeqWrite",
 		"minimum": {
-			"MiBs": 502.0
+			"MiBs": 450.0
 		}
 	},
 	{
 		"metric": "DiskRndWrite",
 		"minimum": {
-			"MiBs": 227.0
+			"MiBs": 200.0
 		}
 	}
 ]
