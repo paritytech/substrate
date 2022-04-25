@@ -26,7 +26,8 @@ pub use num_traits::{
 use sp_std::ops::{
 	Add, AddAssign, Div, DivAssign, Mul, MulAssign, Rem, RemAssign, Shl, Shr, Sub, SubAssign,
 };
-use num_traits::Num;
+use funty::AtMost32;
+
 
 /// A meta trait for arithmetic type operations, regardless of any limitation on size.
 pub trait BaseArithmetic:
@@ -155,9 +156,9 @@ pub trait AtLeast32BitUnsigned: AtLeast32Bit + Unsigned {}
 impl<T: AtLeast32Bit + Unsigned> AtLeast32BitUnsigned for T {}
 
 // A meta trait for arithmetic. Only allows for unsigned integers, at most of 32 bits, the opposite of [`AtLeast32BitUnsigned`]
-pub trait AtMost32BitUnsigned: Into<u32> + AtMostU32 + Unsigned {}
+pub trait AtMost32BitUnsigned: Into<u32> + AtMost32 + Unsigned {}
 
-impl<T: Into<u32> + AtMostU32 + Unsigned> AtMost32BitUnsigned for T {}
+impl<T: Into<u32> + AtMost32 + Unsigned> AtMost32BitUnsigned for T {}
 
 
 /// Just like `From` except that if the source value is too big to fit into the destination type

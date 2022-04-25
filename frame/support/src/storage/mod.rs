@@ -23,6 +23,7 @@ use crate::{
 		EncodeLikeTuple, HasKeyPrefix, HasReversibleKeyPrefix, KeyGenerator,
 		ReversibleKeyGenerator, TupleToEncodedIter,
 	},
+	traits::{ Get },
 };
 use codec::{Decode, Encode, EncodeLike, FullCodec, FullEncode};
 use sp_core::storage::ChildInfo;
@@ -1199,7 +1200,7 @@ mod private {
 
 	impl<T: Encode> Sealed for Vec<T> {}
 	impl Sealed for Digest {}
-	impl<T, B, S> Sealed for BoundedVec<T, B, S> {}
+	impl<T, B, S: Get<B>> Sealed for BoundedVec<T, B, S> {}
 	impl<T, S> Sealed for WeakBoundedVec<T, S> {}
 	impl<K, V, S> Sealed for bounded_btree_map::BoundedBTreeMap<K, V, S> {}
 	impl<T, S> Sealed for bounded_btree_set::BoundedBTreeSet<T, S> {}
@@ -1664,10 +1665,10 @@ mod test {
 	}
 
 	crate::generate_storage_alias! { Prefix, Foo => Value<WeakBoundedVec<u32, ConstU32<7>>> }
-	crate::generate_storage_alias! { Prefix, FooMap => Map<(Twox128, u32), BoundedVec<u32, ConstU32<7>>> }
+	crate::generate_storage_alias! { Prefix, FooMap => Map<(Twox128, u32), BoundedVec<u32, u32, ConstU32<7>>> }
 	crate::generate_storage_alias! {
 		Prefix,
-		FooDoubleMap => DoubleMap<(Twox128, u32), (Twox128, u32), BoundedVec<u32, ConstU32<7>>>
+		FooDoubleMap => DoubleMap<(Twox128, u32), (Twox128, u32), BoundedVec<u32, u32, ConstU32<7>>>
 	}
 
 	#[test]
@@ -1684,7 +1685,7 @@ mod test {
 		});
 
 		TestExternalities::default().execute_with(|| {
-			let bounded: BoundedVec<u32, ConstU32<7>> = vec![1, 2, 3].try_into().unwrap();
+			let bounded: BoundedVec<u32, u32, ConstU32<7>> = vec![1, 2, 3].try_into().unwrap();
 			FooMap::insert(1, bounded);
 
 			assert_ok!(FooMap::try_append(1, 4));
@@ -1699,17 +1700,17 @@ mod test {
 			assert_ok!(FooMap::try_append(2, 4));
 			assert_eq!(
 				FooMap::get(2).unwrap(),
-				BoundedVec::<u32, ConstU32<7>>::try_from(vec![4]).unwrap(),
+				BoundedVec::<u32, u32, ConstU32<7>>::try_from(vec![4]).unwrap(),
 			);
 			assert_ok!(FooMap::try_append(2, 5));
 			assert_eq!(
 				FooMap::get(2).unwrap(),
-				BoundedVec::<u32, ConstU32<7>>::try_from(vec![4, 5]).unwrap(),
+				BoundedVec::<u32, u32, ConstU32<7>>::try_from(vec![4, 5]).unwrap(),
 			);
 		});
 
 		TestExternalities::default().execute_with(|| {
-			let bounded: BoundedVec<u32, ConstU32<7>> = vec![1, 2, 3].try_into().unwrap();
+			let bounded: BoundedVec<u32, u32, ConstU32<7>> = vec![1, 2, 3].try_into().unwrap();
 			FooDoubleMap::insert(1, 1, bounded);
 
 			assert_ok!(FooDoubleMap::try_append(1, 1, 4));
@@ -1724,12 +1725,12 @@ mod test {
 			assert_ok!(FooDoubleMap::try_append(2, 1, 4));
 			assert_eq!(
 				FooDoubleMap::get(2, 1).unwrap(),
-				BoundedVec::<u32, ConstU32<7>>::try_from(vec![4]).unwrap(),
+				BoundedVec::<u32, u32, ConstU32<7>>::try_from(vec![4]).unwrap(),
 			);
 			assert_ok!(FooDoubleMap::try_append(2, 1, 5));
 			assert_eq!(
 				FooDoubleMap::get(2, 1).unwrap(),
-				BoundedVec::<u32, ConstU32<7>>::try_from(vec![4, 5]).unwrap(),
+				BoundedVec::<u32, u32, ConstU32<7>>::try_from(vec![4, 5]).unwrap(),
 			);
 		});
 	}
