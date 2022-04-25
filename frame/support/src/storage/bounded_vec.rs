@@ -77,8 +77,7 @@ impl<T: Ord, B: AtMost32BitUnsigned, Bound: Get<B>> Ord for BoundedVec<T, B, Bou
 impl<'a, T, B: AtMost32BitUnsigned, S: Get<B>> TryFrom<&'a [T]> for BoundedSlice<'a, T, B, S> {
 	type Error = ();
 	fn try_from(t: &'a [T]) -> Result<Self, Self::Error> {
-		let bound: usize = S::get().into();
-		if t.len() < bound {
+		if S::get().into().try_into().map_or(false, |v: usize| t.len() < v) {
 			Ok(BoundedSlice(t, PhantomData, PhantomData))
 		} else {
 			Err(())
@@ -95,8 +94,7 @@ impl<'a, T, B, S> From<BoundedSlice<'a, T, B, S>> for &'a [T] {
 impl<T: Decode, B: AtMost32BitUnsigned, S: Get<B>> Decode for BoundedVec<T, B, S> {
 	fn decode<I: codec::Input>(input: &mut I) -> Result<Self, codec::Error> {
 		let inner = Vec::<T>::decode(input)?;
-		let bound: usize = S::get().into();
-		if inner.len() > bound {
+		if S::get().into().try_into().map_or(false, |v: usize| inner.len() > v) {
 			return Err("BoundedVec exceeds its limit".into())
 		}
 		Ok(Self(inner, PhantomData, PhantomData))
@@ -232,7 +230,7 @@ impl<T, B: AtMost32BitUnsigned, S: Get<B>> BoundedVec<T, B, S> {
 
 	/// Get the bound of the type in `usize`.
 	pub fn bound() -> usize {
-		let bound: usize = S::get().into();
+		let bound: usize = S::get().into().try_into();
 		bound
 	}
 
@@ -577,7 +575,7 @@ impl<T, B, S> StorageDecodeLength for BoundedVec<T, B, S> {}
 
 impl<T, B: AtMost32BitUnsigned, S: Get<B>> StorageTryAppend<T> for BoundedVec<T, B, S> {
 	fn bound() -> usize {
-		let bound: usize = S::get().into();
+		let bound: usize = S::get().into().try_into();
 		bound
 	}
 }
@@ -593,7 +591,7 @@ where
 		// BoundedVec<T, B, S> encodes like Vec<T> which encodes like [T], which is a compact u32
 		// plus each item in the slice:
 		// https://docs.substrate.io/v3/advanced/scale-codec
-		let bound: usize = S::get().into();
+		let bound: usize = S::get().into().try_into();
 		codec::Compact(bound)
 			.encoded_size()
 			.saturating_add(Self::bound().saturating_mul(T::max_encoded_len()))
