@@ -396,7 +396,10 @@ fn remove_already_removed_approval_fails() {
 
 		assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
 		assert_ok!(Treasury::approve_proposal(Origin::root(), 0));
+		assert_eq!(Treasury::approvals(), vec![0]);
 		assert_ok!(Treasury::remove_approval(Origin::root(), 0));
+		assert_eq!(Treasury::approvals(), vec![]);
+
 		assert_noop!(
 			Treasury::remove_approval(Origin::root(), 0),
 			Error::<Test, _>::ProposalNotApproved

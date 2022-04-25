@@ -50,6 +50,7 @@
 //! - `propose_spend` - Make a spending proposal and stake the required deposit.
 //! - `reject_proposal` - Reject a proposal, slashing the deposit.
 //! - `approve_proposal` - Accept the proposal, returning the deposit.
+//! - `remove_approval` - Remove an approval, the deposit will no longer be returned.
 //!
 //! ## GenesisConfig
 //!
@@ -397,6 +398,7 @@ pub mod pallet {
 		}
 
 		/// Force a previously approved proposal to be removed from the approval queue.
+		/// The original deposit will no longer be returned.
 		///
 		/// May only be called from `T::RejectOrigin`.
 		///
@@ -404,6 +406,9 @@ pub mod pallet {
 		/// - Complexity: O(A) where `A` is the number of approvals
 		/// - Db reads and writes: `Approvals`
 		/// # </weight>
+		///
+		/// Errors:
+		/// - `ProposalNotApproved`: Proposal has not been approved.
 		#[pallet::weight((T::WeightInfo::remove_approval(), DispatchClass::Operational))]
 		pub fn remove_approval(
 			origin: OriginFor<T>,
