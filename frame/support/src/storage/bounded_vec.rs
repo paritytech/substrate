@@ -77,7 +77,8 @@ impl<T: Ord, B: AtMost32BitUnsigned, Bound: Get<B>> Ord for BoundedVec<T, B, Bou
 impl<'a, T, B: AtMost32BitUnsigned, S: Get<B>> TryFrom<&'a [T]> for BoundedSlice<'a, T, B, S> {
 	type Error = ();
 	fn try_from(t: &'a [T]) -> Result<Self, Self::Error> {
-		if t.len() < S::get() as usize {
+		let bound: usize = S::get().into();
+		if t.len() < bound {
 			Ok(BoundedSlice(t, PhantomData, PhantomData))
 		} else {
 			Err(())
@@ -94,7 +95,8 @@ impl<'a, T, B, S> From<BoundedSlice<'a, T, B, S>> for &'a [T] {
 impl<T: Decode, B: AtMost32BitUnsigned, S: Get<B>> Decode for BoundedVec<T, B, S> {
 	fn decode<I: codec::Input>(input: &mut I) -> Result<Self, codec::Error> {
 		let inner = Vec::<T>::decode(input)?;
-		if inner.len() > S::get() as usize {
+		let bound: usize = S::get().into();
+		if inner.len() > bound {
 			return Err("BoundedVec exceeds its limit".into())
 		}
 		Ok(Self(inner, PhantomData, PhantomData))
@@ -230,7 +232,8 @@ impl<T, B: AtMost32BitUnsigned, S: Get<B>> BoundedVec<T, B, S> {
 
 	/// Get the bound of the type in `usize`.
 	pub fn bound() -> usize {
-		S::get() as usize
+		let bound: usize = S::get().into();
+		bound
 	}
 
 	/// Returns true of this collection is full.
@@ -574,7 +577,8 @@ impl<T, B, S> StorageDecodeLength for BoundedVec<T, B, S> {}
 
 impl<T, B: AtMost32BitUnsigned, S: Get<B>> StorageTryAppend<T> for BoundedVec<T, B, S> {
 	fn bound() -> usize {
-		S::get() as usize
+		let bound: usize = S::get().into();
+		bound
 	}
 }
 
@@ -589,7 +593,8 @@ where
 		// BoundedVec<T, B, S> encodes like Vec<T> which encodes like [T], which is a compact u32
 		// plus each item in the slice:
 		// https://docs.substrate.io/v3/advanced/scale-codec
-		codec::Compact(S::get())
+		let bound: usize = S::get().into();
+		codec::Compact(bound)
 			.encoded_size()
 			.saturating_add(Self::bound().saturating_mul(T::max_encoded_len()))
 	}
@@ -604,7 +609,8 @@ where
 	type Error = &'static str;
 
 	fn try_collect(self) -> Result<BoundedVec<T, B, Bound>, Self::Error> {
-		if self.len() > Bound::get() as usize {
+		let bound: usize = Bound::get().into();
+		if self.len() > bound {
 			Err("iterator length too big")
 		} else {
 			Ok(BoundedVec::<T, B, Bound>::unchecked_from(self.collect::<Vec<T>>()))
