@@ -25,7 +25,7 @@ frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 sp-timestamp = { version = "4.0.0-dev", default-features = false, path = "../../primitives/timestamp" }
-log = { version = "0.4.14", default-features = false }
+log = { version = "0.4.16", default-features = false }
 
 [dev-dependencies]
 sp-io ={ version = "6.0.0", path = "../../primitives/io" }

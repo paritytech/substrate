@@ -129,6 +129,16 @@ impl<T, S> BoundedVec<T, S> {
 		self.0.sort_by(compare)
 	}
 
+	/// Exactly the same semantics as [`slice::sort`].
+	///
+	/// This is safe since sorting cannot change the number of elements in the vector.
+	pub fn sort(&mut self)
+	where
+		T: sp_std::cmp::Ord,
+	{
+		self.0.sort()
+	}
+
 	/// Exactly the same semantics as `Vec::remove`.
 	///
 	/// # Panics
@@ -368,6 +378,17 @@ impl<T, S: Get<u32>> BoundedVec<T, S> {
 	) -> Result<(), ()> {
 		if with.len().saturating_add(self.len()) <= Self::bound() {
 			self.0.extend(with);
+			Ok(())
+		} else {
+			Err(())
+		}
+	}
+
+	/// Exactly the same semantics as [`Vec::append`], but returns an error and does nothing if the
+	/// length of the outcome is larger than the bound.
+	pub fn try_append(&mut self, other: &mut Vec<T>) -> Result<(), ()> {
+		if other.len().saturating_add(self.len()) <= Self::bound() {
+			self.0.append(other);
 			Ok(())
 		} else {
 			Err(())

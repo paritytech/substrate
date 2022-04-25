@@ -28,7 +28,7 @@ use rand::prelude::*;
 use std::{fmt::Debug, sync::Arc, time::Instant};
 
 use super::cmd::StorageCmd;
-use crate::shared::BenchRecord;
+use crate::shared::{new_rng, BenchRecord};
 
 impl StorageCmd {
 	/// Benchmarks the time it takes to read a single Storage item.
@@ -47,7 +47,7 @@ impl StorageCmd {
 		// Load all keys and randomly shuffle them.
 		let empty_prefix = StorageKey(Vec::new());
 		let mut keys = client.storage_keys(&block, &empty_prefix)?;
-		let mut rng = Self::setup_rng();
+		let (mut rng, _) = new_rng(None);
 		keys.shuffle(&mut rng);
 
 		// Interesting part here:

@@ -32,7 +32,7 @@ use rand::prelude::*;
 use std::{fmt::Debug, sync::Arc, time::Instant};
 
 use super::cmd::StorageCmd;
-use crate::shared::BenchRecord;
+use crate::shared::{new_rng, BenchRecord};
 
 impl StorageCmd {
 	/// Benchmarks the time it takes to write a single Storage item.
@@ -59,7 +59,7 @@ impl StorageCmd {
 		info!("Preparing keys from block {}", block);
 		// Load all KV pairs and randomly shuffle them.
 		let mut kvs = trie.pairs();
-		let mut rng = Self::setup_rng();
+		let (mut rng, _) = new_rng(None);
 		kvs.shuffle(&mut rng);
 
 		// Generate all random values first; Make sure there are no collisions with existing

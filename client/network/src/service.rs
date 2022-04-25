@@ -572,7 +572,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 							.collect();
 
 					let endpoint = if let Some(e) =
-						swarm.behaviour_mut().node(peer_id).map(|i| i.endpoint()).flatten()
+						swarm.behaviour_mut().node(peer_id).and_then(|i| i.endpoint())
 					{
 						e.clone().into()
 					} else {

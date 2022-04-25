@@ -26,7 +26,7 @@ sp-application-crypto = { version = "6.0.0", path = "../../primitives/applicatio
 sp-storage = { version = "6.0.0", path = "../../primitives/storage", default-features = false }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
-log = { version = "0.4.14", default-features = false }
+log = { version = "0.4.16", default-features = false }
 serde = { version = "1.0.136", optional = true }
 
 [dev-dependencies]
