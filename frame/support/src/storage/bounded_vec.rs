@@ -620,25 +620,8 @@ pub mod test {
 	use crate::{bounded_vec, traits::ConstU8, traits::ConstU16, traits::ConstU32, Twox128};
 	use sp_io::TestExternalities;
 
-	crate::generate_storage_alias! { Prefix, FooU8 => Value<BoundedVec<u32, u8, ConstU8<7>>> }
-	crate::generate_storage_alias! { Prefix, FooMapU8 => Map<(Twox128, u8), BoundedVec<u32, u8, ConstU8<7>>> }
-	
-	crate::generate_storage_alias! { Prefix, FooU16 => Value<BoundedVec<u32, u16, ConstU16<7>>> }
-	crate::generate_storage_alias! { Prefix, FooMapU16 => Map<(Twox128, u16), BoundedVec<u32, u16, ConstU16<7>>> }
-
 	crate::generate_storage_alias! { Prefix, Foo => Value<BoundedVec<u32, u32, ConstU32<7>>> }
 	crate::generate_storage_alias! { Prefix, FooMap => Map<(Twox128, u32), BoundedVec<u32, u32, ConstU32<7>>> }
-	
-	crate::generate_storage_alias! {
-		Prefix,
-		FooDoubleMap8 => DoubleMap<(Twox128, u8), (Twox128, u32), BoundedVec<u32, u8, ConstU8<7>>>
-	}
-
-	crate::generate_storage_alias! {
-		Prefix,
-		FooDoubleMap16 => DoubleMap<(Twox128, u16), (Twox128, u32), BoundedVec<u32, u16, ConstU16<7>>>
-	}
-
 	crate::generate_storage_alias! {
 		Prefix,
 		FooDoubleMap => DoubleMap<(Twox128, u32), (Twox128, u32), BoundedVec<u32, u32, ConstU32<7>>>
@@ -922,52 +905,6 @@ pub mod test {
 
 	#[test]
 	fn decode_len_works() {
-		TestExternalities::default().execute_with(|| {
-			let bounded8: BoundedVec<u32, u8, ConstU8<7>> = bounded_vec![1, 2, 3];
-			FooU8::put(bounded8);
-			assert_eq!(Foo::decode_len().unwrap(), 3);
-		});
-
-		TestExternalities::default().execute_with(|| {
-			let bounded8: BoundedVec<u32, u8, ConstU8<7>> = bounded_vec![1, 2, 3];
-			FooMapU8::insert(1, bounded8);
-			assert_eq!(FooMap::decode_len(1).unwrap(), 3);
-			assert!(FooMap::decode_len(0).is_none());
-			assert!(FooMap::decode_len(2).is_none());
-		});
-
-		TestExternalities::default().execute_with(|| {
-			let bounded8: BoundedVec<u32, u8, ConstU8<7>> = bounded_vec![1, 2, 3];
-			FooDoubleMap8::insert(1, 1, bounded8);
-			assert_eq!(FooDoubleMap::decode_len(1, 1).unwrap(), 3);
-			assert!(FooDoubleMap::decode_len(2, 1).is_none());
-			assert!(FooDoubleMap::decode_len(1, 2).is_none());
-			assert!(FooDoubleMap::decode_len(2, 2).is_none());
-		});
-
-		TestExternalities::default().execute_with(|| {
-			let bounded16: BoundedVec<u32, u16, ConstU16<7>> = bounded_vec![1, 2, 3];
-			FooU16::put(bounded16);
-			assert_eq!(Foo::decode_len().unwrap(), 3);
-		});
-
-		TestExternalities::default().execute_with(|| {
-			let bounded16: BoundedVec<u32, u16, ConstU16<7>> = bounded_vec![1, 2, 3];
-			FooMapU16::insert(1, bounded16);
-			assert_eq!(FooMap::decode_len(1).unwrap(), 3);
-			assert!(FooMapU16::decode_len(0).is_none());
-			assert!(FooMapU16::decode_len(2).is_none());
-		});
-
-		TestExternalities::default().execute_with(|| {
-			let bounded16: BoundedVec<u32, u16, ConstU16<7>> = bounded_vec![1, 2, 3];
-			FooDoubleMap16::insert(1, 1, bounded16);
-			assert_eq!(FooDoubleMap16::decode_len(1, 1).unwrap(), 3);
-			assert!(FooDoubleMap16::decode_len(2, 1).is_none());
-			assert!(FooDoubleMap16::decode_len(1, 2).is_none());
-			assert!(FooDoubleMap16::decode_len(2, 2).is_none());
-		});
-
 		TestExternalities::default().execute_with(|| {
 			let bounded: BoundedVec<u32, u32, ConstU32<7>> = bounded_vec![1, 2, 3];
 			Foo::put(bounded);
