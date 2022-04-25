@@ -29,7 +29,7 @@ lazy_static! {
 	///
 	/// The reference hardware is describe here:
 	/// <https://wiki.polkadot.network/docs/maintain-guides-how-to-validate-polkadot>
-	pub static ref POLKADOT_REFERENCE_HARDWARE: HwRequirements = {
+	pub static ref POLKADOT_REFERENCE_HARDWARE: Requirements = {
 		let raw = include_bytes!("polkadot_reference_hardware.json").as_slice();
 		serde_json::from_slice(raw).expect("Hardcoded data is known good; qed")
 	};
@@ -37,13 +37,13 @@ lazy_static! {
 
 /// Multiple requirements for the hardware.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub struct HwRequirements(pub Vec<HwRequirement>);
+pub struct Requirements(pub Vec<Requirement>);
 
 /// A single requirement for the hardware.
 #[derive(Deserialize, Serialize, Debug, Clone, Copy, PartialEq)]
-pub struct HwRequirement {
+pub struct Requirement {
 	/// The metric to measure.
-	pub metric: HwMetric,
+	pub metric: Metric,
 	/// The minimal throughput that needs to be archived for this requirement.
 	pub minimum: Throughput,
 }
@@ -52,7 +52,7 @@ pub struct HwRequirement {
 ///
 /// The implementation of these is in `sc-sysinfo`.
 #[derive(Deserialize, Serialize, Debug, Clone, Copy, PartialEq)]
-pub enum HwMetric {
+pub enum Metric {
 	/// SR25519 signature verification.
 	Sr25519Verify,
 	/// Blake2-256 hashing algorithm.
@@ -76,7 +76,7 @@ pub enum Throughput {
 	GiBs(f64),
 }
 
-impl HwMetric {
+impl Metric {
 	/// The category of the metric.
 	pub fn category(&self) -> &'static str {
 		match self {
@@ -167,7 +167,7 @@ mod tests {
 	#[test]
 	fn json_static_data() {
 		let raw = serde_json::to_string(&*POLKADOT_REFERENCE_HARDWARE).unwrap();
-		let decoded: HwRequirements = serde_json::from_str(&raw).unwrap();
+		let decoded: Requirements = serde_json::from_str(&raw).unwrap();
 
 		assert_eq!(decoded, POLKADOT_REFERENCE_HARDWARE.clone());
 	}

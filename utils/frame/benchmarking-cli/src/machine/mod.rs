@@ -18,7 +18,7 @@
 //! Contains the [`MachineCmd`] as entry point for the node
 //! and the core benchmarking logic.
 
-pub mod hw;
+pub mod hardware;
 
 use sc_cli::{CliConfiguration, Result, SharedParams};
 use sc_service::Configuration;
@@ -30,10 +30,10 @@ use sc_sysinfo::{
 use clap::Parser;
 use log::{error, info, warn};
 use prettytable::{cell, row, table};
-use std::{boxed::Box, fmt::Debug, fs, path::Path, time::Duration};
+use std::{boxed::Box, fmt::Debug, fs, path::Path};
 
 use crate::shared::check_build_profile;
-pub use hw::{HwMetric, HwRequirement, HwRequirements, Throughput, POLKADOT_REFERENCE_HARDWARE};
+pub use hardware::{Metric, Requirement, Requirements, Throughput, POLKADOT_REFERENCE_HARDWARE};
 
 /// Command to benchmark the hardware.
 ///
@@ -65,6 +65,10 @@ pub struct MachineCmd {
 	/// Time limit for the verification benchmark.
 	#[clap(long, default_value = "2.0", value_name = "SECONDS")]
 	pub verify_duration: f32,
+
+	/// Time limit for each disk benchmark.
+	#[clap(long, default_value = "5.0", value_name = "SECONDS")]
+	pub disk_duration: f32,
 }
 
 /// Helper for the result of a concrete benchmark.
@@ -97,7 +101,7 @@ pub enum Error {
 
 impl MachineCmd {
 	/// Execute the benchmark and print the results.
-	pub fn run(&self, cfg: &Configuration, requirements: HwRequirements) -> Result<()> {
+	pub fn run(&self, cfg: &Configuration, requirements: Requirements) -> Result<()> {
 		self.validate_args()?;
 		// Ensure that the dir exists since the node is not started to take care of it.
 		let dir = cfg.database.path().ok_or("No DB directory provided")?;
@@ -113,7 +117,7 @@ impl MachineCmd {
 	}
 
 	/// Benchmarks a specific metric of the hardware and judges the resulting score.
-	fn run_benchmark(&self, requirement: &HwRequirement, dir: &Path) -> Result<BenchResult> {
+	fn run_benchmark(&self, requirement: &Requirement, dir: &Path) -> Result<BenchResult> {
 		// Dispatch the concrete function from `sc-sysinfo`.
 		let score = self.measure(&requirement.metric, dir)?;
 		let rel_score = score.to_bs() / requirement.minimum.to_bs();
@@ -127,24 +131,24 @@ impl MachineCmd {
 	}
 
 	/// Measures a metric of the hardware.
-	fn measure(&self, metric: &HwMetric, dir: &Path) -> Result<Throughput> {
+	fn measure(&self, metric: &Metric, dir: &Path) -> Result<Throughput> {
+		let verify_limit = ExecutionLimit::from_secs_f32(self.verify_duration);
+		let disk_limit = ExecutionLimit::from_secs_f32(self.disk_duration);
+
 		let score = match metric {
-			HwMetric::Blake2256 => Throughput::MiBs(benchmark_cpu() as f64),
-			HwMetric::Sr25519Verify => {
-				let verify_limit =
-					ExecutionLimit::MaxDuration(Duration::from_secs_f32(self.verify_duration));
-				Throughput::MiBs(benchmark_sr25519_verify(verify_limit))
-			},
-			HwMetric::MemCopy => Throughput::MiBs(benchmark_memory() as f64),
-			HwMetric::DiskSeqWrite =>
-				Throughput::MiBs(benchmark_disk_sequential_writes(dir)? as f64),
-			HwMetric::DiskRndWrite => Throughput::MiBs(benchmark_disk_random_writes(dir)? as f64),
+			Metric::Blake2256 => Throughput::MiBs(benchmark_cpu() as f64),
+			Metric::Sr25519Verify => Throughput::MiBs(benchmark_sr25519_verify(verify_limit)),
+			Metric::MemCopy => Throughput::MiBs(benchmark_memory() as f64),
+			Metric::DiskSeqWrite =>
+				Throughput::MiBs(benchmark_disk_sequential_writes(disk_limit, dir)? as f64),
+			Metric::DiskRndWrite =>
+				Throughput::MiBs(benchmark_disk_random_writes(disk_limit, dir)? as f64),
 		};
 		Ok(score)
 	}
 
 	/// Prints a human-readable summary.
-	fn print_summary(&self, requirements: HwRequirements, results: Vec<BenchResult>) -> Result<()> {
+	fn print_summary(&self, requirements: Requirements, results: Vec<BenchResult>) -> Result<()> {
 		// Use a table for nicer console output.
 		let mut table = table!(["Category", "Function", "Score", "Minimum", "Result"]);
 		// Count how many passed and how many failed.
@@ -203,7 +207,7 @@ impl MachineCmd {
 
 impl BenchResult {
 	/// Format [`Self`] as row that can be printed in a table.
-	fn to_row(&self, req: &HwRequirement) -> prettytable::Row {
+	fn to_row(&self, req: &Requirement) -> prettytable::Row {
 		let passed = if self.passed { "✅ Pass" } else { "❌ Fail" };
 		row![
 			req.metric.category(),

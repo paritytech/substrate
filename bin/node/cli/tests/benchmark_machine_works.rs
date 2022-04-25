@@ -24,7 +24,7 @@ use std::process::Command;
 fn benchmark_machine_works() {
 	let status = Command::new(cargo_bin("substrate"))
 		.args(["benchmark", "machine", "--dev"])
-		.args(["--verify-duration", "0.1"])
+		.args(["--verify-duration", "0.1", "--disk-duration", "0.1"])
 		// Make it succeed.
 		.args(["--allow-fail"])
 		.status()
@@ -39,7 +39,7 @@ fn benchmark_machine_works() {
 fn benchmark_machine_fails_with_bad_build_profile() {
 	let output = Command::new(cargo_bin("substrate"))
 		.args(["benchmark", "machine", "--dev"])
-		.args(["--verify-duration", "0.1"])
+		.args(["--disk-duration", "0.1"])
 		// Set the tolerance to 100% so that the hardware check passes.
 		.args(["--tolerance", "100.0"])
 		.output()
@@ -56,10 +56,11 @@ fn benchmark_machine_fails_with_bad_build_profile() {
 ///
 /// This is most likely to succeed since it uses a test profile.
 #[test]
+#[cfg(not(release))]
 fn benchmark_machine_fails_with_slow_hardware() {
 	let output = Command::new(cargo_bin("substrate"))
 		.args(["benchmark", "machine", "--dev"])
-		.args(["--verify-duration", "0.1", "--tolerance", "0"])
+		.args(["--verify-duration", "0.1", "--disk-duration", "2", "--tolerance", "0"])
 		.output()
 		.unwrap();
 
