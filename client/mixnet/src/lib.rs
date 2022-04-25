@@ -801,8 +801,10 @@ impl Topology for AuthorityStar {
 		}
 		// Warning this assume that PeerId is a random value.
 		// This is currently the case (sha256 of encoded ed25519 key).
-		let mut ix = [0u8; 32];
-		rand::thread_rng().fill_bytes(&mut ix[..]); // TODO can less than 32 bytes.
+		let mut ix = [0u8; 32 + PEER_ID_PREFIX.len()];
+		rand::thread_rng().fill_bytes(&mut ix[PEER_ID_PREFIX.len()..]); // TODO can less than 32 bytes.
+		ix[..PEER_ID_PREFIX.len()].copy_from_slice(&PEER_ID_PREFIX[..]);
+
 		let ix = match MixPeerId::from_bytes(&ix[..]) {
 			Ok(ix) => ix,
 			Err(err) => {
@@ -811,6 +813,7 @@ impl Topology for AuthorityStar {
 				return None
 			},
 		};
+		debug!(target: "mixnet", "routing {:?}, ix {:?}", self.routing_nodes, ix);
 		if let Some(key) = self.routing_nodes.range(ix..).next() {
 			if let Some(info) = self.connected_nodes.get(key) {
 				debug!(target: "mixnet", "Random route node");
@@ -921,4 +924,25 @@ impl<F: futures::Future + Unpin> futures::Future for OptionFuture2<F> {
 			None => futures::task::Poll::Pending,
 		}
 	}
+}
+const PEER_ID_PREFIX: [u8; 6] = [0, 36, 8, 1, 18, 32];
+#[test]
+fn test_random_route() {
+	let mut routing_nodes: BTreeSet<MixPeerId> = Default::default();
+	for _ in 0..6 {
+		let config = sc_network::config::Secret::New;
+		let config = sc_network::config::NodeKeyConfig::Ed25519(config);
+		let key_pair = config.into_keypair().unwrap();
+		let public = key_pair.public();
+		let peer_id = public.to_peer_id();
+		assert!(peer_id.to_bytes().len() == 32 + PEER_ID_PREFIX.len());
+		assert!(&peer_id.to_bytes()[..PEER_ID_PREFIX.len()] == &PEER_ID_PREFIX[..]);
+		routing_nodes.insert(peer_id);
+	}
+	use rand::RngCore;
+	let mut ix = [0u8; 32 + PEER_ID_PREFIX.len()];
+	rand::thread_rng().fill_bytes(&mut ix[PEER_ID_PREFIX.len()..]); // TODO can less than 32 bytes.
+	ix[..PEER_ID_PREFIX.len()].copy_from_slice(&PEER_ID_PREFIX[..]);
+	let ix = MixPeerId::from_bytes(&ix[..]).unwrap();
+	routing_nodes.range(ix..).next();
 }
