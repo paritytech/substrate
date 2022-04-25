@@ -22,6 +22,7 @@ use crate::{
 	Pallet as Contracts, Schedule,
 };
 use frame_support::{
+	crypto::ecdsa::ECDSAExt,
 	dispatch::{DispatchError, DispatchResult, DispatchResultWithPostInfo, Dispatchable},
 	storage::{with_transaction, TransactionOutcome},
 	traits::{Contains, Currency, ExistenceRequirement, OriginTrait, Randomness, Time},
@@ -30,7 +31,7 @@ use frame_support::{
 use frame_system::RawOrigin;
 use pallet_contracts_primitives::ExecReturnValue;
 use smallvec::{Array, SmallVec};
-use sp_core::crypto::UncheckedFrom;
+use sp_core::{crypto::UncheckedFrom, ecdsa::Public as ECDSAPublic};
 use sp_io::crypto::secp256k1_ecdsa_recover_compressed;
 use sp_runtime::traits::Convert;
 use sp_std::{marker::PhantomData, mem, prelude::*};
@@ -162,6 +163,14 @@ pub trait Ext: sealing::Sealed {
 	/// Check if a contract lives at the specified `address`.
 	fn is_contract(&self, address: &AccountIdOf<Self::T>) -> bool;
 
+	/// Returns the code hash of the contract for the given `address`.
+	///
+	/// Returns `None` if the `address` does not belong to a contract.
+	fn code_hash(&self, address: &AccountIdOf<Self::T>) -> Option<CodeHash<Self::T>>;
+
+	/// Returns the code hash of the contract being executed.
+	fn own_code_hash(&mut self) -> &CodeHash<Self::T>;
+
 	/// Check if the caller of the current contract is the origin of the whole call stack.
 	///
 	/// This can be checked with `is_contract(self.caller())` as well.
@@ -223,6 +232,9 @@ pub trait Ext: sealing::Sealed {
 
 	/// Recovers ECDSA compressed public key based on signature and message hash.
 	fn ecdsa_recover(&self, signature: &[u8; 65], message_hash: &[u8; 32]) -> Result<[u8; 33], ()>;
+
+	/// Returns Ethereum address from the ECDSA compressed public key.
+	fn ecdsa_to_eth_address(&self, pk: &[u8; 33]) -> Result<[u8; 20], ()>;
 
 	/// Tests sometimes need to modify and inspect the contract info directly.
 	#[cfg(test)]
@@ -766,14 +778,27 @@ where
 
 		// All changes performed by the contract are executed under a storage transaction.
 		// This allows for roll back on error. Changes to the cached contract_info are
-		// comitted or rolled back when popping the frame.
-		let (success, output) = with_transaction(|| {
-			let output = do_transaction();
-			match &output {
-				Ok(result) if !result.did_revert() => TransactionOutcome::Commit((true, output)),
-				_ => TransactionOutcome::Rollback((false, output)),
-			}
-		});
+		// committed or rolled back when popping the frame.
+		//
+		// `with_transactional` may return an error caused by a limit in the
+		// transactional storage depth.
+		let transaction_outcome =
+			with_transaction(|| -> TransactionOutcome<Result<_, DispatchError>> {
+				let output = do_transaction();
+				match &output {
+					Ok(result) if !result.did_revert() =>
+						TransactionOutcome::Commit(Ok((true, output))),
+					_ => TransactionOutcome::Rollback(Ok((false, output))),
+				}
+			});
+
+		let (success, output) = match transaction_outcome {
+			// `with_transactional` executed successfully, and we have the expected output.
+			Ok((success, output)) => (success, output),
+			// `with_transactional` returned an error, and we propagate that error and note no state
+			// has changed.
+			Err(error) => (false, Err(error.into())),
+		};
 		self.pop_frame(success);
 		output
 	}
@@ -1103,6 +1128,14 @@ where
 		ContractInfoOf::<T>::contains_key(&address)
 	}
 
+	fn code_hash(&self, address: &T::AccountId) -> Option<CodeHash<Self::T>> {
+		<ContractInfoOf<T>>::get(&address).map(|contract| contract.code_hash)
+	}
+
+	fn own_code_hash(&mut self) -> &CodeHash<Self::T> {
+		&self.top_frame_mut().contract_info().code_hash
+	}
+
 	fn caller_is_origin(&self) -> bool {
 		self.caller() == &self.origin
 	}
@@ -1175,6 +1208,10 @@ where
 		secp256k1_ecdsa_recover_compressed(&signature, &message_hash).map_err(|_| ())
 	}
 
+	fn ecdsa_to_eth_address(&self, pk: &[u8; 33]) -> Result<[u8; 20], ()> {
+		ECDSAPublic(*pk).to_eth_address()
+	}
+
 	#[cfg(test)]
 	fn contract_info(&mut self) -> &mut ContractInfo<Self::T> {
 		self.top_frame_mut().contract_info()
@@ -1238,6 +1275,7 @@ mod tests {
 	use codec::{Decode, Encode};
 	use frame_support::{assert_err, assert_ok};
 	use frame_system::{EventRecord, Phase};
+	use hex_literal::hex;
 	use pallet_contracts_primitives::ReturnFlags;
 	use pretty_assertions::assert_eq;
 	use sp_core::Bytes;
@@ -1747,6 +1785,62 @@ mod tests {
 				&schedule,
 				0,
 				vec![],
+				None,
+			);
+			assert_matches!(result, Ok(_));
+		});
+	}
+
+	#[test]
+	fn code_hash_returns_proper_values() {
+		let code_bob = MockLoader::insert(Call, |ctx, _| {
+			// ALICE is not a contract and hence she does not have a code_hash
+			assert!(ctx.ext.code_hash(&ALICE).is_none());
+			// BOB is a contract and hence he has a code_hash
+			assert!(ctx.ext.code_hash(&BOB).is_some());
+			exec_success()
+		});
+
+		ExtBuilder::default().build().execute_with(|| {
+			let schedule = <Test as Config>::Schedule::get();
+			place_contract(&BOB, code_bob);
+			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(0), 0).unwrap();
+			// ALICE (not contract) -> BOB (contract)
+			let result = MockStack::run_call(
+				ALICE,
+				BOB,
+				&mut GasMeter::<Test>::new(GAS_LIMIT),
+				&mut storage_meter,
+				&schedule,
+				0,
+				vec![0],
+				None,
+			);
+			assert_matches!(result, Ok(_));
+		});
+	}
+
+	#[test]
+	fn own_code_hash_returns_proper_values() {
+		let bob_ch = MockLoader::insert(Call, |ctx, _| {
+			let code_hash = ctx.ext.code_hash(&BOB).unwrap();
+			assert_eq!(*ctx.ext.own_code_hash(), code_hash);
+			exec_success()
+		});
+
+		ExtBuilder::default().build().execute_with(|| {
+			let schedule = <Test as Config>::Schedule::get();
+			place_contract(&BOB, bob_ch);
+			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(0), 0).unwrap();
+			// ALICE (not contract) -> BOB (contract)
+			let result = MockStack::run_call(
+				ALICE,
+				BOB,
+				&mut GasMeter::<Test>::new(GAS_LIMIT),
+				&mut storage_meter,
+				&schedule,
+				0,
+				vec![0],
 				None,
 			);
 			assert_matches!(result, Ok(_));
@@ -2631,6 +2725,38 @@ mod tests {
 				vec![],
 				None,
 			));
+		});
+	}
+	#[test]
+	fn ecdsa_to_eth_address_returns_proper_value() {
+		let bob_ch = MockLoader::insert(Call, |ctx, _| {
+			let pubkey_compressed: [u8; 33] =
+				hex!("028db55b05db86c0b1786ca49f095d76344c9e6056b2f02701a7e7f3c20aabfd91")[..]
+					.try_into()
+					.unwrap();
+			assert_eq!(
+				ctx.ext.ecdsa_to_eth_address(&pubkey_compressed).unwrap(),
+				hex!("09231da7b19A016f9e576d23B16277062F4d46A8")[..]
+			);
+			exec_success()
+		});
+
+		ExtBuilder::default().build().execute_with(|| {
+			let schedule = <Test as Config>::Schedule::get();
+			place_contract(&BOB, bob_ch);
+
+			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(0), 0).unwrap();
+			let result = MockStack::run_call(
+				ALICE,
+				BOB,
+				&mut GasMeter::<Test>::new(GAS_LIMIT),
+				&mut storage_meter,
+				&schedule,
+				0,
+				vec![],
+				None,
+			);
+			assert_matches!(result, Ok(_));
 		});
 	}
 }

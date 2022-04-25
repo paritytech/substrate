@@ -144,6 +144,10 @@ frame_benchmarking::benchmarks! {
 		// - both heavier's `prev` and `next` are nodes that will need to be read and written.
 		// - `lighter` is the bag's `head`, so the bag will need to be read and written.
 
+		// clear any pre-existing storage.
+		// NOTE: safe to call outside block production
+		List::<T>::unsafe_clear();
+
 		let bag_thresh = T::BagThresholds::get()[0];
 
 		// insert the nodes in order

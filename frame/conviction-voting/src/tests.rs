@@ -19,8 +19,6 @@
 
 use std::collections::BTreeMap;
 
-use super::*;
-use crate as pallet_conviction_voting;
 use frame_support::{
 	assert_noop, assert_ok, parameter_types,
 	traits::{ConstU32, ConstU64, Contains, Polling},
@@ -30,6 +28,9 @@ use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 };
+
+use super::*;
+use crate as pallet_conviction_voting;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;

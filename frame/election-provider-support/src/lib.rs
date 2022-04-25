@@ -168,13 +168,15 @@
 
 pub mod onchain;
 pub mod traits;
+#[cfg(feature = "std")]
 use codec::{Decode, Encode};
-use frame_support::{traits::Get, BoundedVec, RuntimeDebug};
+use frame_support::{weights::Weight, BoundedVec, RuntimeDebug};
 use sp_runtime::traits::Bounded;
 use sp_std::{fmt::Debug, prelude::*};
 
 /// Re-export the solution generation macro.
 pub use frame_election_provider_solution_type::generate_solution_type;
+pub use frame_support::traits::Get;
 /// Re-export some type as they are used in the interface.
 pub use sp_arithmetic::PerThing;
 pub use sp_npos_elections::{
@@ -192,6 +194,14 @@ pub use scale_info;
 pub use sp_arithmetic;
 #[doc(hidden)]
 pub use sp_std;
+
+pub mod weights;
+pub use weights::WeightInfo;
+
+#[cfg(test)]
+mod mock;
+#[cfg(test)]
+mod tests;
 // Simple Extension trait to easily convert `None` from index closures to `Err`.
 //
 // This is only generated and re-exported for the solution code to use.
@@ -363,9 +373,10 @@ pub trait ElectionProvider {
 		BlockNumber = Self::BlockNumber,
 	>;
 
-	/// Elect a new set of winners.
+	/// Elect a new set of winners, without specifying any bounds on the amount of data fetched from
+	/// [`Self::DataProvider`]. An implementation could nonetheless impose its own custom limits.
 	///
-	/// The result is returned in a target major format, namely as vector of supports.
+	/// The result is returned in a target major format, namely as *vector of supports*.
 	///
 	/// This should be implemented as a self-weighing function. The implementor should register its
 	/// appropriate weight at the end of execution with the system pallet directly.
@@ -380,11 +391,17 @@ pub trait ElectionProvider {
 /// Consequently, allows for control over the amount of data that is being fetched from the
 /// [`ElectionProvider::DataProvider`].
 pub trait InstantElectionProvider: ElectionProvider {
-	/// Elect a new set of winners, instantly, with the given given limits set on the
+	/// Elect a new set of winners, but unlike [`ElectionProvider::elect`] which cannot enforce
+	/// bounds, this trait method can enforce bounds on the amount of data provided by the
 	/// `DataProvider`.
-	fn instant_elect(
-		maybe_max_voters: Option<usize>,
-		maybe_max_targets: Option<usize>,
+	///
+	/// An implementing type, if itself bounded, should choose the minimum of the two bounds to
+	/// choose the final value of `max_voters` and `max_targets`. In other words, an implementation
+	/// should guarantee that `max_voter` and `max_targets` provided to this method are absolutely
+	/// respected.
+	fn elect_with_bounds(
+		max_voters: usize,
+		max_targets: usize,
 	) -> Result<Supports<Self::AccountId>, Self::Error>;
 }
 
@@ -426,6 +443,11 @@ pub trait SortedListProvider<AccountId> {
 
 	/// An iterator over the list, which can have `take` called on it.
 	fn iter() -> Box<dyn Iterator<Item = AccountId>>;
+
+	/// Returns an iterator over the list, starting right after from the given voter.
+	///
+	/// May return an error if `start` is invalid.
+	fn iter_from(start: &AccountId) -> Result<Box<dyn Iterator<Item = AccountId>>, Self::Error>;
 
 	/// The current count of ids in the list.
 	fn count() -> u32;
@@ -504,6 +526,12 @@ pub trait NposSolver {
 		targets: Vec<Self::AccountId>,
 		voters: Vec<(Self::AccountId, VoteWeight, impl IntoIterator<Item = Self::AccountId>)>,
 	) -> Result<ElectionResult<Self::AccountId, Self::Accuracy>, Self::Error>;
+
+	/// Measure the weight used in the calculation of the solver.
+	/// - `voters` is the number of voters.
+	/// - `targets` is the number of targets.
+	/// - `vote_degree` is the degree ie the maximum numbers of votes per voter.
+	fn weight<T: WeightInfo>(voters: u32, targets: u32, vote_degree: u32) -> Weight;
 }
 
 /// A wrapper for [`sp_npos_elections::seq_phragmen`] that implements [`NposSolver`]. See the
@@ -528,6 +556,10 @@ impl<
 	) -> Result<ElectionResult<Self::AccountId, Self::Accuracy>, Self::Error> {
 		sp_npos_elections::seq_phragmen(winners, targets, voters, Balancing::get())
 	}
+
+	fn weight<T: WeightInfo>(voters: u32, targets: u32, vote_degree: u32) -> Weight {
+		T::phragmen(voters, targets, vote_degree)
+	}
 }
 
 /// A wrapper for [`sp_npos_elections::phragmms()`] that implements [`NposSolver`]. See the
@@ -551,6 +583,10 @@ impl<
 		voters: Vec<(Self::AccountId, VoteWeight, impl IntoIterator<Item = Self::AccountId>)>,
 	) -> Result<ElectionResult<Self::AccountId, Self::Accuracy>, Self::Error> {
 		sp_npos_elections::phragmms(winners, targets, voters, Balancing::get())
+	}
+
+	fn weight<T: WeightInfo>(voters: u32, targets: u32, vote_degree: u32) -> Weight {
+		T::phragmms(voters, targets, vote_degree)
 	}
 }
 

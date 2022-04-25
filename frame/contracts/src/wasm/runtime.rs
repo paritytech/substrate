@@ -71,7 +71,9 @@ pub enum ReturnCode {
 	/// The call dispatched by `seal_call_runtime` was executed but returned an error.
 	#[cfg(feature = "unstable-interface")]
 	CallRuntimeReturnedError = 10,
-	/// ECDSA pubkey recovery failed. Most probably wrong recovery id or signature.
+	/// ECDSA pubkey recovery failed (most probably wrong recovery id or signature), or
+	/// ECDSA compressed pubkey conversion into Ethereum address failed (most probably
+	/// wrong pubkey provided).
 	#[cfg(feature = "unstable-interface")]
 	EcdsaRecoverFailed = 11,
 }
@@ -144,6 +146,12 @@ pub enum RuntimeCosts {
 	Caller,
 	/// Weight of calling `seal_is_contract`.
 	IsContract,
+	/// Weight of calling `seal_code_hash`.
+	#[cfg(feature = "unstable-interface")]
+	CodeHash,
+	/// Weight of calling `seal_own_code_hash`.
+	#[cfg(feature = "unstable-interface")]
+	OwnCodeHash,
 	/// Weight of calling `seal_caller_is_origin`.
 	CallerIsOrigin,
 	/// Weight of calling `seal_address`.
@@ -219,6 +227,9 @@ pub enum RuntimeCosts {
 	/// Weight of calling `seal_set_code_hash`
 	#[cfg(feature = "unstable-interface")]
 	SetCodeHash,
+	/// Weight of calling `ecdsa_to_eth_address`
+	#[cfg(feature = "unstable-interface")]
+	EcdsaToEthAddress,
 }
 
 impl RuntimeCosts {
@@ -234,6 +245,10 @@ impl RuntimeCosts {
 			CopyToContract(len) => s.input_per_byte.saturating_mul(len.into()),
 			Caller => s.caller,
 			IsContract => s.is_contract,
+			#[cfg(feature = "unstable-interface")]
+			CodeHash => s.code_hash,
+			#[cfg(feature = "unstable-interface")]
+			OwnCodeHash => s.own_code_hash,
 			CallerIsOrigin => s.caller_is_origin,
 			Address => s.address,
 			GasLeft => s.gas_left,
@@ -299,6 +314,8 @@ impl RuntimeCosts {
 			CallRuntime(weight) => weight,
 			#[cfg(feature = "unstable-interface")]
 			SetCodeHash => s.set_code_hash,
+			#[cfg(feature = "unstable-interface")]
+			EcdsaToEthAddress => s.ecdsa_to_eth_address,
 		};
 		RuntimeToken {
 			#[cfg(test)]
@@ -1371,6 +1388,44 @@ define_env!(Env, <E: Ext>,
 		Ok(ctx.ext.is_contract(&address) as u32)
 	},
 
+	// Retrieve the code hash for a specified contract address.
+	//
+	// # Parameters
+	//
+	// - `account_ptr`: a pointer to the address in question.
+	//   Should be decodable as an `T::AccountId`. Traps otherwise.
+	// - `out_ptr`: pointer to the linear memory where the returning value is written to.
+	// - `out_len_ptr`: in-out pointer into linear memory where the buffer length
+	//   is read from and the value length is written to.
+	//
+	// # Errors
+	//
+	// `ReturnCode::KeyNotFound`
+	[__unstable__] seal_code_hash(ctx, account_ptr: u32, out_ptr: u32, out_len_ptr: u32) -> ReturnCode => {
+		ctx.charge_gas(RuntimeCosts::CodeHash)?;
+		let address: <<E as Ext>::T as frame_system::Config>::AccountId =
+			ctx.read_sandbox_memory_as(account_ptr)?;
+		if let Some(value) = ctx.ext.code_hash(&address) {
+			ctx.write_sandbox_output(out_ptr, out_len_ptr, &value.encode(), false, already_charged)?;
+			Ok(ReturnCode::Success)
+		} else {
+			Ok(ReturnCode::KeyNotFound)
+		}
+	},
+
+	// Retrieve the code hash of the currently executing contract.
+	//
+	// # Parameters
+	//
+	// - `out_ptr`: pointer to the linear memory where the returning value is written to.
+	// - `out_len_ptr`: in-out pointer into linear memory where the buffer length
+	//   is read from and the value length is written to.
+	[__unstable__] seal_own_code_hash(ctx, out_ptr: u32, out_len_ptr: u32) => {
+		ctx.charge_gas(RuntimeCosts::OwnCodeHash)?;
+		let code_hash_encoded = &ctx.ext.own_code_hash().encode();
+		Ok(ctx.write_sandbox_output(out_ptr, out_len_ptr, code_hash_encoded, false, already_charged)?)
+	},
+
 	// Checks whether the caller of the current contract is the origin of the whole call stack.
 	//
 	// Prefer this over `seal_is_contract` when checking whether your contract is being called by a contract
@@ -1936,12 +1991,12 @@ define_env!(Env, <E: Ext>,
 	// # Parameters
 	//
 	// - `signature_ptr`: the pointer into the linear memory where the signature
-	//					  is placed. Should be decodable as a 65 bytes. Traps otherwise.
+	//					 is placed. Should be decodable as a 65 bytes. Traps otherwise.
 	// - `message_hash_ptr`: the pointer into the linear memory where the message
 	// 						 hash is placed. Should be decodable as a 32 bytes. Traps otherwise.
 	// - `output_ptr`: the pointer into the linear memory where the output
-	//                 data is placed. The buffer should be 33 bytes. Traps otherwise.
-	// 				   The function will write the result directly into this buffer.
+	//                 data is placed. The buffer should be 33 bytes. The function
+	// 					will write the result directly into this buffer.
 	//
 	// # Errors
 	//
@@ -1988,7 +2043,7 @@ define_env!(Env, <E: Ext>,
 	//
 	// # Parameters
 	//
-	// - code_hash_ptr: A pointer to the buffer that contains the new code hash.
+	// - `code_hash_ptr`: A pointer to the buffer that contains the new code hash.
 	//
 	// # Errors
 	//
@@ -2002,6 +2057,37 @@ define_env!(Env, <E: Ext>,
 				Ok(code)
 			},
 			Ok(()) => Ok(ReturnCode::Success)
+		}
+	},
+
+	// Calculates Ethereum address from the ECDSA compressed public key and stores
+	// it into the supplied buffer.
+	//
+	// # Parameters
+	//
+	// - `key_ptr`: a pointer to the ECDSA compressed public key. Should be decodable as a 33 bytes value.
+	//		Traps otherwise.
+	// - `out_ptr`: the pointer into the linear memory where the output
+	//                 data is placed. The function will write the result
+	//                 directly into this buffer.
+	//
+	// The value is stored to linear memory at the address pointed to by `out_ptr`.
+	// If the available space at `out_ptr` is less than the size of the value a trap is triggered.
+	//
+	// # Errors
+	//
+	// `ReturnCode::EcdsaRecoverFailed`
+	[__unstable__] seal_ecdsa_to_eth_address(ctx, key_ptr: u32, out_ptr: u32) -> ReturnCode => {
+		ctx.charge_gas(RuntimeCosts::EcdsaToEthAddress)?;
+		let mut compressed_key: [u8; 33] = [0;33];
+		ctx.read_sandbox_memory_into_buf(key_ptr, &mut compressed_key)?;
+		let result = ctx.ext.ecdsa_to_eth_address(&compressed_key);
+		match result {
+			Ok(eth_address) => {
+				ctx.write_sandbox_memory(out_ptr, eth_address.as_ref())?;
+				Ok(ReturnCode::Success)
+			},
+			Err(_) => Ok(ReturnCode::EcdsaRecoverFailed),
 		}
 	},
 );

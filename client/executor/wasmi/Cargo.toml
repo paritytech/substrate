@@ -14,7 +14,7 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-log = "0.4.8"
+log = "0.4.16"
 wasmi = "0.9.1"
 codec = { package = "parity-scale-codec", version = "3.0.0" }
 sc-executor-common = { version = "0.10.0-dev", path = "../common" }

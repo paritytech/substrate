@@ -529,14 +529,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		maybe_need_admin: Option<T::AccountId>,
 		f: TransferFlags,
 	) -> Result<(T::Balance, Option<DeadConsequence>), DispatchError> {
-		// Early exist if no-op.
+		// Early exit if no-op.
 		if amount.is_zero() {
-			Self::deposit_event(Event::Transferred {
-				asset_id: id,
-				from: source.clone(),
-				to: dest.clone(),
-				amount,
-			});
 			return Ok((amount, None))
 		}
 
