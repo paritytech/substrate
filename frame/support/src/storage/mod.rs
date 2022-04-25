@@ -1199,7 +1199,7 @@ mod private {
 
 	impl<T: Encode> Sealed for Vec<T> {}
 	impl Sealed for Digest {}
-	impl<T, S> Sealed for BoundedVec<T, S> {}
+	impl<T, B, S> Sealed for BoundedVec<T, B, S> {}
 	impl<T, S> Sealed for WeakBoundedVec<T, S> {}
 	impl<K, V, S> Sealed for bounded_btree_map::BoundedBTreeMap<K, V, S> {}
 	impl<T, S> Sealed for bounded_btree_set::BoundedBTreeSet<T, S> {}

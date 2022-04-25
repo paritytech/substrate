@@ -936,7 +936,7 @@ pub trait PreimageRecipient<Hash>: PreimageProvider<Hash> {
 	type MaxSize: Get<u32>;
 
 	/// Store the bytes of a preimage on chain.
-	fn note_preimage(bytes: crate::BoundedVec<u8, Self::MaxSize>);
+	fn note_preimage(bytes: crate::BoundedVec<u8, u32, Self::MaxSize>);
 
 	/// Clear a previously noted preimage. This is infallible and should be treated more like a
 	/// hint - if it was not previously noted or if it is now requested, then this will not do
@@ -946,7 +946,7 @@ pub trait PreimageRecipient<Hash>: PreimageProvider<Hash> {
 
 impl<Hash> PreimageRecipient<Hash> for () {
 	type MaxSize = ();
-	fn note_preimage(_: crate::BoundedVec<u8, Self::MaxSize>) {}
+	fn note_preimage(_: crate::BoundedVec<u8, u32, Self::MaxSize>) {}
 	fn unnote_preimage(_: &Hash) {}
 }
 

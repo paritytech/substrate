@@ -22,8 +22,13 @@ use crate::{
 	storage::{StorageDecodeLength, StorageTryAppend},
 	traits::{Get, TryCollect},
 	WeakBoundedVec,
+	
 };
+
+extern crate sp_arithmetic;
+
 use codec::{Decode, Encode, EncodeLike, MaxEncodedLen};
+use sp_arithmetic::traits::AtMost32BitUnsigned;
 use core::{
 	ops::{Deref, Index, IndexMut, RangeBounds},
 	slice::SliceIndex,
@@ -39,60 +44,60 @@ use sp_std::{marker::PhantomData, prelude::*};
 /// this bound is respected.
 #[derive(Encode, scale_info::TypeInfo)]
 #[scale_info(skip_type_params(S))]
-pub struct BoundedVec<T, S>(Vec<T>, PhantomData<S>);
+pub struct BoundedVec<T, B, S>(Vec<T>, PhantomData<B>, PhantomData<S>);
 
 /// A bounded slice.
 ///
 /// Similar to a `BoundedVec`, but not owned and cannot be decoded.
 #[derive(Encode, scale_info::TypeInfo)]
 #[scale_info(skip_type_params(S))]
-pub struct BoundedSlice<'a, T, S>(&'a [T], PhantomData<S>);
+pub struct BoundedSlice<'a, T, B, S>(&'a [T], PhantomData<B>, PhantomData<S>);
 
 // `BoundedSlice`s encode to something which will always decode into a `BoundedVec`,
 // `WeakBoundedVec`, or a `Vec`.
-impl<'a, T: Encode + Decode, S: Get<u32>> EncodeLike<BoundedVec<T, S>> for BoundedSlice<'a, T, S> {}
-impl<'a, T: Encode + Decode, S: Get<u32>> EncodeLike<WeakBoundedVec<T, S>>
-	for BoundedSlice<'a, T, S>
+impl<'a, T: Encode + Decode, B: AtMost32BitUnsigned, S: Get<B>> EncodeLike<BoundedVec<T, B, S>> for BoundedSlice<'a, T, B, S> {}
+impl<'a, T: Encode + Decode, B: AtMost32BitUnsigned, S: Get<B>> EncodeLike<WeakBoundedVec<T, S>>
+	for BoundedSlice<'a, T, B, S>
 {
 }
-impl<'a, T: Encode + Decode, S: Get<u32>> EncodeLike<Vec<T>> for BoundedSlice<'a, T, S> {}
+impl<'a, T: Encode + Decode, B: AtMost32BitUnsigned, S: Get<B>> EncodeLike<Vec<T>> for BoundedSlice<'a, T, B, S> {}
 
-impl<T: PartialOrd, Bound: Get<u32>> PartialOrd for BoundedVec<T, Bound> {
+impl<T: PartialOrd, B: AtMost32BitUnsigned, Bound: Get<B>> PartialOrd for BoundedVec<T, B, Bound> {
 	fn partial_cmp(&self, other: &Self) -> Option<sp_std::cmp::Ordering> {
 		self.0.partial_cmp(&other.0)
 	}
 }
 
-impl<T: Ord, Bound: Get<u32>> Ord for BoundedVec<T, Bound> {
+impl<T: Ord, B: AtMost32BitUnsigned, Bound: Get<B>> Ord for BoundedVec<T, B, Bound> {
 	fn cmp(&self, other: &Self) -> sp_std::cmp::Ordering {
 		self.0.cmp(&other.0)
 	}
 }
 
-impl<'a, T, S: Get<u32>> TryFrom<&'a [T]> for BoundedSlice<'a, T, S> {
+impl<'a, T, B: AtMost32BitUnsigned, S: Get<B>> TryFrom<&'a [T]> for BoundedSlice<'a, T, B, S> {
 	type Error = ();
 	fn try_from(t: &'a [T]) -> Result<Self, Self::Error> {
 		if t.len() < S::get() as usize {
-			Ok(BoundedSlice(t, PhantomData))
+			Ok(BoundedSlice(t, PhantomData, PhantomData))
 		} else {
 			Err(())
 		}
 	}
 }
 
-impl<'a, T, S> From<BoundedSlice<'a, T, S>> for &'a [T] {
-	fn from(t: BoundedSlice<'a, T, S>) -> Self {
+impl<'a, T, B, S> From<BoundedSlice<'a, T, B, S>> for &'a [T] {
+	fn from(t: BoundedSlice<'a, T, B, S>) -> Self {
 		t.0
 	}
 }
 
-impl<T: Decode, S: Get<u32>> Decode for BoundedVec<T, S> {
+impl<T: Decode, B: AtMost32BitUnsigned, S: Get<B>> Decode for BoundedVec<T, B, S> {
 	fn decode<I: codec::Input>(input: &mut I) -> Result<Self, codec::Error> {
 		let inner = Vec::<T>::decode(input)?;
 		if inner.len() > S::get() as usize {
 			return Err("BoundedVec exceeds its limit".into())
 		}
-		Ok(Self(inner, PhantomData))
+		Ok(Self(inner, PhantomData, PhantomData))
 	}
 
 	fn skip<I: codec::Input>(input: &mut I) -> Result<(), codec::Error> {
@@ -101,12 +106,12 @@ impl<T: Decode, S: Get<u32>> Decode for BoundedVec<T, S> {
 }
 
 // `BoundedVec`s encode to something which will always decode as a `Vec`.
-impl<T: Encode + Decode, S: Get<u32>> EncodeLike<Vec<T>> for BoundedVec<T, S> {}
+impl<T: Encode + Decode, B: AtMost32BitUnsigned, S: Get<B>> EncodeLike<Vec<T>> for BoundedVec<T, B, S> {}
 
-impl<T, S> BoundedVec<T, S> {
+impl<T, B, S> BoundedVec<T, B, S> {
 	/// Create `Self` from `t` without any checks.
 	fn unchecked_from(t: Vec<T>) -> Self {
-		Self(t, Default::default())
+		Self(t, Default::default(), Default::default())
 	}
 
 	/// Consume self, and return the inner `Vec`. Henceforth, the `Vec<_>` can be altered in an
@@ -203,19 +208,19 @@ impl<T, S> BoundedVec<T, S> {
 	}
 }
 
-impl<T, S: Get<u32>> From<BoundedVec<T, S>> for Vec<T> {
-	fn from(x: BoundedVec<T, S>) -> Vec<T> {
+impl<T, B: AtMost32BitUnsigned, S: Get<B>> From<BoundedVec<T, B, S>> for Vec<T> {
+	fn from(x: BoundedVec<T, B, S>) -> Vec<T> {
 		x.0
 	}
 }
 
-impl<T, S: Get<u32>> BoundedVec<T, S> {
+impl<T, B: AtMost32BitUnsigned, S: Get<B>> BoundedVec<T, B, S> {
 	/// Pre-allocate `capacity` items in self.
 	///
 	/// If `capacity` is greater than [`Self::bound`], then the minimum of the two is used.
 	pub fn with_bounded_capacity(capacity: usize) -> Self {
 		let capacity = capacity.min(Self::bound());
-		Self(Vec::with_capacity(capacity), Default::default())
+		Self(Vec::with_capacity(capacity), Default::default(), Default::default())
 	}
 
 	/// Allocate self with the maximum possible capacity.
@@ -438,24 +443,25 @@ impl<T, S: Get<u32>> BoundedVec<T, S> {
 	}
 }
 
-impl<T, S> Default for BoundedVec<T, S> {
+impl<T, B, S> Default for BoundedVec<T, B, S> {
 	fn default() -> Self {
 		// the bound cannot be below 0, which is satisfied by an empty vector
 		Self::unchecked_from(Vec::default())
 	}
 }
 
-impl<T, S> sp_std::fmt::Debug for BoundedVec<T, S>
+impl<T, B, S> sp_std::fmt::Debug for BoundedVec<T, B, S>
 where
 	T: sp_std::fmt::Debug,
-	S: Get<u32>,
+	B: AtMost32BitUnsigned,
+	S: Get<B>,
 {
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
 		f.debug_tuple("BoundedVec").field(&self.0).field(&Self::bound()).finish()
 	}
 }
 
-impl<T, S> Clone for BoundedVec<T, S>
+impl<T, B, S> Clone for BoundedVec<T, B, S>
 where
 	T: Clone,
 {
@@ -465,7 +471,7 @@ where
 	}
 }
 
-impl<T, S: Get<u32>> TryFrom<Vec<T>> for BoundedVec<T, S> {
+impl<T, B: AtMost32BitUnsigned, S: Get<B>> TryFrom<Vec<T>> for BoundedVec<T, B, S> {
 	type Error = ();
 	fn try_from(t: Vec<T>) -> Result<Self, Self::Error> {
 		if t.len() <= Self::bound() {
@@ -478,26 +484,26 @@ impl<T, S: Get<u32>> TryFrom<Vec<T>> for BoundedVec<T, S> {
 }
 
 // It is okay to give a non-mutable reference of the inner vec to anyone.
-impl<T, S> AsRef<Vec<T>> for BoundedVec<T, S> {
+impl<T, B, S> AsRef<Vec<T>> for BoundedVec<T, B, S> {
 	fn as_ref(&self) -> &Vec<T> {
 		&self.0
 	}
 }
 
-impl<T, S> AsRef<[T]> for BoundedVec<T, S> {
+impl<T, B, S> AsRef<[T]> for BoundedVec<T, B, S> {
 	fn as_ref(&self) -> &[T] {
 		&self.0
 	}
 }
 
-impl<T, S> AsMut<[T]> for BoundedVec<T, S> {
+impl<T, B, S> AsMut<[T]> for BoundedVec<T, B, S> {
 	fn as_mut(&mut self) -> &mut [T] {
 		&mut self.0
 	}
 }
 
 // will allow for immutable all operations of `Vec<T>` on `BoundedVec<T>`.
-impl<T, S> Deref for BoundedVec<T, S> {
+impl<T, B, S> Deref for BoundedVec<T, B, S> {
 	type Target = Vec<T>;
 
 	fn deref(&self) -> &Self::Target {
@@ -506,7 +512,7 @@ impl<T, S> Deref for BoundedVec<T, S> {
 }
 
 // Allows for indexing similar to a normal `Vec`. Can panic if out of bound.
-impl<T, S, I> Index<I> for BoundedVec<T, S>
+impl<T, B, S, I> Index<I> for BoundedVec<T, B, S>
 where
 	I: SliceIndex<[T]>,
 {
@@ -518,7 +524,7 @@ where
 	}
 }
 
-impl<T, S, I> IndexMut<I> for BoundedVec<T, S>
+impl<T, B, S, I> IndexMut<I> for BoundedVec<T, B, S>
 where
 	I: SliceIndex<[T]>,
 {
@@ -528,7 +534,7 @@ where
 	}
 }
 
-impl<T, S> sp_std::iter::IntoIterator for BoundedVec<T, S> {
+impl<T, B, S> sp_std::iter::IntoIterator for BoundedVec<T, B, S> {
 	type Item = T;
 	type IntoIter = sp_std::vec::IntoIter<T>;
 	fn into_iter(self) -> Self::IntoIter {
@@ -536,7 +542,7 @@ impl<T, S> sp_std::iter::IntoIterator for BoundedVec<T, S> {
 	}
 }
 
-impl<T, S> codec::DecodeLength for BoundedVec<T, S> {
+impl<T, B, S> codec::DecodeLength for BoundedVec<T, B, S> {
 	fn len(self_encoded: &[u8]) -> Result<usize, codec::Error> {
 		// `BoundedVec<T, _>` stored just a `Vec<T>`, thus the length is at the beginning in
 		// `Compact` form, and same implementation as `Vec<T>` can be used.
@@ -544,41 +550,43 @@ impl<T, S> codec::DecodeLength for BoundedVec<T, S> {
 	}
 }
 
-impl<T, BoundSelf, BoundRhs> PartialEq<BoundedVec<T, BoundRhs>> for BoundedVec<T, BoundSelf>
+impl<T, B, BoundSelf, BoundRhs> PartialEq<BoundedVec<T, B, BoundRhs>> for BoundedVec<T, B, BoundSelf>
 where
 	T: PartialEq,
-	BoundSelf: Get<u32>,
-	BoundRhs: Get<u32>,
+	B: AtMost32BitUnsigned,
+	BoundSelf: Get<B>,
+	BoundRhs: Get<B>,
 {
-	fn eq(&self, rhs: &BoundedVec<T, BoundRhs>) -> bool {
+	fn eq(&self, rhs: &BoundedVec<T, B, BoundRhs>) -> bool {
 		BoundSelf::get() == BoundRhs::get() && self.0 == rhs.0
 	}
 }
 
-impl<T: PartialEq, S: Get<u32>> PartialEq<Vec<T>> for BoundedVec<T, S> {
+impl<T: PartialEq, B: AtMost32BitUnsigned, S: Get<B>> PartialEq<Vec<T>> for BoundedVec<T, B, S> {
 	fn eq(&self, other: &Vec<T>) -> bool {
 		&self.0 == other
 	}
 }
 
-impl<T, S: Get<u32>> Eq for BoundedVec<T, S> where T: Eq {}
+impl<T, B: AtMost32BitUnsigned, S: Get<B>> Eq for BoundedVec<T, B, S> where T: Eq {}
 
-impl<T, S> StorageDecodeLength for BoundedVec<T, S> {}
+impl<T, B, S> StorageDecodeLength for BoundedVec<T, B, S> {}
 
-impl<T, S: Get<u32>> StorageTryAppend<T> for BoundedVec<T, S> {
+impl<T, B: AtMost32BitUnsigned, S: Get<B>> StorageTryAppend<T> for BoundedVec<T, B, S> {
 	fn bound() -> usize {
 		S::get() as usize
 	}
 }
 
-impl<T, S> MaxEncodedLen for BoundedVec<T, S>
+impl<T, B, S> MaxEncodedLen for BoundedVec<T, B, S>
 where
 	T: MaxEncodedLen,
-	S: Get<u32>,
-	BoundedVec<T, S>: Encode,
+	B: AtMost32BitUnsigned,
+	S: Get<B>,
+	BoundedVec<T, B, S>: Encode,
 {
 	fn max_encoded_len() -> usize {
-		// BoundedVec<T, S> encodes like Vec<T> which encodes like [T], which is a compact u32
+		// BoundedVec<T, B, S> encodes like Vec<T> which encodes like [T], which is a compact u32
 		// plus each item in the slice:
 		// https://docs.substrate.io/v3/advanced/scale-codec
 		codec::Compact(S::get())
@@ -587,18 +595,19 @@ where
 	}
 }
 
-impl<I, T, Bound> TryCollect<BoundedVec<T, Bound>> for I
+impl<I, T, B, Bound> TryCollect<BoundedVec<T, B, Bound>> for I
 where
 	I: ExactSizeIterator + Iterator<Item = T>,
-	Bound: Get<u32>,
+	B: AtMost32BitUnsigned,
+	Bound: Get<B>,
 {
 	type Error = &'static str;
 
-	fn try_collect(self) -> Result<BoundedVec<T, Bound>, Self::Error> {
+	fn try_collect(self) -> Result<BoundedVec<T, B, Bound>, Self::Error> {
 		if self.len() > Bound::get() as usize {
 			Err("iterator length too big")
 		} else {
-			Ok(BoundedVec::<T, Bound>::unchecked_from(self.collect::<Vec<T>>()))
+			Ok(BoundedVec::<T, B, Bound>::unchecked_from(self.collect::<Vec<T>>()))
 		}
 	}
 }
