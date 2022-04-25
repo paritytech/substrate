@@ -155,15 +155,10 @@ pub trait AtLeast32BitUnsigned: AtLeast32Bit + Unsigned {}
 impl<T: AtLeast32Bit + Unsigned> AtLeast32BitUnsigned for T {}
 
 // A meta trait for arithmetic. Only allows for unsigned integers, at most of 32 bits, the opposite of [`AtLeast32BitUnsigned`]
-pub trait AtMost32BitUnsigned: BaseArithmetic + Ord + Num + Unsigned {
-	pub fn to_usize(&self) -> usize;
-}
+pub trait AtMost32BitUnsigned: Into<u32> + AtMostU32 + Unsigned {}
 
-impl AtMost32BitUnsigned for u8 {}
+impl<T: Into<u32> + AtMostU32 + Unsigned> AtMost32BitUnsigned for T {}
 
-impl AtMost32BitUnsigned for u16 {}
-
-impl AtMost32BitUnsigned for u32 {}
 
 /// Just like `From` except that if the source value is too big to fit into the destination type
 /// then it'll saturate the destination.

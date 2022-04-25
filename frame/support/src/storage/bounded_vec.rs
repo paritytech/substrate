@@ -44,14 +44,14 @@ use sp_std::{marker::PhantomData, prelude::*};
 /// this bound is respected.
 #[derive(Encode, scale_info::TypeInfo)]
 #[scale_info(skip_type_params(S))]
-pub struct BoundedVec<T, B, S>(Vec<T>, PhantomData<B>, PhantomData<S>);
+pub struct BoundedVec<T, B, S: Get<B>>(Vec<T>, PhantomData<B>, PhantomData<S>);
 
 /// A bounded slice.
 ///
 /// Similar to a `BoundedVec`, but not owned and cannot be decoded.
 #[derive(Encode, scale_info::TypeInfo)]
 #[scale_info(skip_type_params(S))]
-pub struct BoundedSlice<'a, T, B, S>(&'a [T], PhantomData<B>, PhantomData<S>);
+pub struct BoundedSlice<'a, T, B, S: Get<B>>(&'a [T], PhantomData<B>, PhantomData<S>);
 
 // `BoundedSlice`s encode to something which will always decode into a `BoundedVec`,
 // `WeakBoundedVec`, or a `Vec`.
