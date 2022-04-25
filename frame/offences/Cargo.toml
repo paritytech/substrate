@@ -22,7 +22,7 @@ sp-runtime = { version = "6.0.0", default-features = false, path = "../../primit
 sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../primitives/staking" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
-log = { version = "0.4.14", default-features = false }
+log = { version = "0.4.16", default-features = false }
 
 [dev-dependencies]
 sp-io = { version = "6.0.0", path = "../../primitives/io" }

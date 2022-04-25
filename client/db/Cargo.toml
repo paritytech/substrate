@@ -14,7 +14,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 parking_lot = "0.12.0"
-log = "0.4.8"
+log = "0.4.16"
 kvdb = "0.11.0"
 kvdb-rocksdb = { version = "0.15.2", optional = true }
 kvdb-memorydb = "0.11.0"

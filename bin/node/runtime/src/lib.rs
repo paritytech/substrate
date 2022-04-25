@@ -537,6 +537,7 @@ impl pallet_staking::BenchmarkingConfig for StakingBenchmarkingConfig {
 impl pallet_staking::Config for Runtime {
 	type MaxNominations = MaxNominations;
 	type Currency = Balances;
+	type CurrencyBalance = Balance;
 	type UnixTime = Timestamp;
 	type CurrencyToVote = U128CurrencyToVote;
 	type RewardRemainder = Treasury;
@@ -560,6 +561,7 @@ impl pallet_staking::Config for Runtime {
 	type GenesisElectionProvider = onchain::UnboundedExecution<OnChainSeqPhragmen>;
 	type VoterList = BagsList;
 	type MaxUnlockingChunks = ConstU32<32>;
+	type OnStakerSlash = ();
 	type WeightInfo = pallet_staking::weights::SubstrateWeight<Runtime>;
 	type BenchmarkingConfig = StakingBenchmarkingConfig;
 }
@@ -574,7 +576,7 @@ parameter_types! {
 	pub const SignedDepositBase: Balance = 1 * DOLLARS;
 	pub const SignedDepositByte: Balance = 1 * CENTS;
 
-	pub SolutionImprovementThreshold: Perbill = Perbill::from_rational(1u32, 10_000);
+	pub BetterUnsignedThreshold: Perbill = Perbill::from_rational(1u32, 10_000);
 
 	// miner configs
 	pub const MultiPhaseUnsignedPriority: TransactionPriority = StakingUnsignedPriority::get() - 1u64;
@@ -664,7 +666,8 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type EstimateCallFee = TransactionPayment;
 	type SignedPhase = SignedPhase;
 	type UnsignedPhase = UnsignedPhase;
-	type SolutionImprovementThreshold = SolutionImprovementThreshold;
+	type BetterUnsignedThreshold = BetterUnsignedThreshold;
+	type BetterSignedThreshold = ();
 	type OffchainRepeat = OffchainRepeat;
 	type MinerMaxWeight = MinerMaxWeight;
 	type MinerMaxLength = MinerMaxLength;
@@ -673,6 +676,7 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type SignedRewardBase = SignedRewardBase;
 	type SignedDepositBase = SignedDepositBase;
 	type SignedDepositByte = SignedDepositByte;
+	type SignedMaxRefunds = ConstU32<3>;
 	type SignedDepositWeight = ();
 	type SignedMaxWeight = MinerMaxWeight;
 	type SlashHandler = (); // burn slashes
