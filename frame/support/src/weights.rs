@@ -710,6 +710,10 @@ where
 			degree: 1,
 		})
 	}
+
+	fn calc(weight: &Weight) -> Self::Balance {
+		Self::Balance::saturated_from(*weight)
+	}
 }
 
 /// Implementor of [`WeightToFeePolynomial`] that uses a constant multiplier.
@@ -737,6 +741,10 @@ where
 			negative: false,
 			degree: 1,
 		})
+	}
+
+	fn calc(weight: &Weight) -> Self::Balance {
+		Self::Balance::saturated_from(*weight).saturating_mul(M::get())
 	}
 }
 

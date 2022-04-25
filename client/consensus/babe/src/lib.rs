@@ -541,49 +541,66 @@ where
 // Remove obsolete block's weight data by leveraging finality notifications.
 // This includes data for all finalized blocks (excluding the most recent one)
 // and all stale branches.
-fn aux_storage_cleanup<C: HeaderMetadata<Block>, Block: BlockT>(
+fn aux_storage_cleanup<C: HeaderMetadata<Block> + HeaderBackend<Block>, Block: BlockT>(
 	client: &C,
 	notification: &FinalityNotification<Block>,
 ) -> AuxDataOperations {
 	let mut aux_keys = HashSet::new();
 
-	// Cleans data for finalized block's ancestors down to, and including, the previously
-	// finalized one.
-
-	let first_new_finalized = notification.tree_route.get(0).unwrap_or(&notification.hash);
-	match client.header_metadata(*first_new_finalized) {
+	let first = notification.tree_route.first().unwrap_or(&notification.hash);
+	match client.header_metadata(*first) {
 		Ok(meta) => {
 			aux_keys.insert(aux_schema::block_weight_key(meta.parent));
 		},
-		Err(err) => {
-			warn!(target: "babe", "header lookup fail while cleaning data for block {}: {}", first_new_finalized.to_string(), err.to_string());
-		},
+		Err(err) => warn!(
+			target: "babe",
+			"Failed to lookup metadata for block `{:?}`: {}",
+			first,
+			err,
+		),
 	}
 
-	aux_keys.extend(notification.tree_route.iter().map(aux_schema::block_weight_key));
+	// Cleans data for finalized block's ancestors
+	aux_keys.extend(
+		notification
+			.tree_route
+			.iter()
+			// Ensure we don't prune latest finalized block.
+			// This should not happen, but better be safe than sorry!
+			.filter(|h| **h != notification.hash)
+			.map(aux_schema::block_weight_key),
+	);
 
 	// Cleans data for stale branches.
 
-	// A safenet in case of malformed notification.
-	let height_limit = notification.header.number().saturating_sub(
-		notification.tree_route.len().saturated_into::<NumberFor<Block>>() + One::one(),
-	);
 	for head in notification.stale_heads.iter() {
 		let mut hash = *head;
-		// Insert stale blocks hashes until canonical chain is not reached.
-		// Soon or late we should hit an element already present within the `aux_keys` set.
+		// Insert stale blocks hashes until canonical chain is reached.
+		// If we reach a block that is already part of the `aux_keys` we can stop the processing the
+		// head.
 		while aux_keys.insert(aux_schema::block_weight_key(hash)) {
 			match client.header_metadata(hash) {
 				Ok(meta) => {
-					// This should never happen and must be considered a bug.
-					if meta.number <= height_limit {
-						warn!(target: "babe", "unexpected canonical chain state or malformed finality notification");
+					hash = meta.parent;
+
+					// If the parent is part of the canonical chain or there doesn't exist a block
+					// hash for the parent number (bug?!), we can abort adding blocks.
+					if client
+						.hash(meta.number.saturating_sub(1u32.into()))
+						.ok()
+						.flatten()
+						.map_or(true, |h| h == hash)
+					{
 						break
 					}
-					hash = meta.parent;
 				},
 				Err(err) => {
-					warn!(target: "babe", "header lookup fail while cleaning data for block {}: {}", head.to_string(), err.to_string());
+					warn!(
+						target: "babe",
+						"Header lookup fail while cleaning data for block {:?}: {}",
+						hash,
+						err,
+					);
 					break
 				},
 			}
