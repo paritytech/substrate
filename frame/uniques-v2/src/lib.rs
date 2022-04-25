@@ -324,6 +324,14 @@ pub mod pallet {
 			seller: T::AccountId,
 			buyer: T::AccountId,
 		},
+		BuyOfferAccepted {
+			collection_id: T::CollectionId,
+			item_id: T::ItemId,
+			price: BalanceOf<T>,
+			seller: T::AccountId,
+			buyer: T::AccountId,
+			receiver: T::AccountId,
+		},
 	}
 
 	// Your Pallet's error messages.

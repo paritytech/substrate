@@ -85,23 +85,15 @@ impl<T: Config> Pallet<T> {
 
 		Self::do_transfer_item(collection_id, item_id, config, item.owner.clone(), buyer.clone())?;
 
-		// reset the price & the buyer
-		Items::<T>::try_mutate(collection_id, item_id, |maybe_item| {
-			let item = maybe_item.as_mut().ok_or(Error::<T>::ItemNotFound)?;
+		Self::deposit_event(Event::ItemBought {
+			collection_id,
+			item_id,
+			price: bid_price,
+			seller: old_owner,
+			buyer,
+		});
 
-			item.price = None;
-			item.buyer = None;
-
-			Self::deposit_event(Event::ItemBought {
-				collection_id,
-				item_id,
-				price: bid_price,
-				seller: old_owner,
-				buyer,
-			});
-
-			Ok(())
-		})
+		Ok(())
 	}
 
 	pub fn do_accept_buy_offer(
@@ -115,15 +107,46 @@ impl<T: Config> Pallet<T> {
 		bid_price: BalanceOf<T>,
 		deadline: Option<T::BlockNumber>,
 	) -> DispatchResult {
-		// dbg!(&buyer);
-		dbg!(&receiver);
-		/*
-		 * Validate:
-		 * 1
-		 * 2
-		 * 3
-		 * 4
-		 */
+		let user_features: BitFlags<UserFeatures> = config.user_features.into();
+		ensure!(
+			!user_features.contains(UserFeatures::NonTransferableItems),
+			Error::<T>::ItemNotForSale
+		);
+
+		let item = Items::<T>::get(collection_id, item_id).ok_or(Error::<T>::ItemNotFound)?;
+		ensure!(item.owner == item_owner && caller == item.owner, Error::<T>::NotAuthorized);
+
+		if let Some(deadline) = deadline {
+			let now = frame_system::Pallet::<T>::block_number();
+			ensure!(deadline >= now, Error::<T>::AuthorizationExpired);
+		}
+
+		T::Currency::transfer(
+			&buyer,
+			&item.owner,
+			bid_price,
+			frame_support::traits::ExistenceRequirement::KeepAlive,
+		)?;
+
+		let old_owner = item.owner.clone();
+
+		Self::do_transfer_item(
+			collection_id,
+			item_id,
+			config,
+			item.owner.clone(),
+			receiver.clone(),
+		)?;
+
+		Self::deposit_event(Event::BuyOfferAccepted {
+			collection_id,
+			item_id,
+			price: bid_price,
+			seller: old_owner,
+			buyer,
+			receiver,
+		});
+
 		Ok(())
 	}
 }

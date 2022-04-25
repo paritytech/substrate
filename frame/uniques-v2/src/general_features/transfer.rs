@@ -89,6 +89,8 @@ impl<T: Config> Pallet<T> {
 
 			item.owner = receiver.clone();
 			item.approvals = Default::default();
+			item.price = None;
+			item.buyer = None;
 
 			Self::deposit_event(Event::ItemTransferred {
 				collection_id,

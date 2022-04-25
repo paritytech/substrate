@@ -18,7 +18,7 @@
 use crate::{mock::*, *};
 use codec::{Decode, Encode};
 use enumflags2::BitFlags;
-use sp_runtime::{traits::TrailingZeroInput, MultiSignature};
+use sp_runtime::{traits::TrailingZeroInput, AccountId32, MultiSignature};
 
 use frame_support::{assert_noop, assert_ok, traits::Currency};
 
@@ -981,14 +981,19 @@ fn accept_buy_offer_should_works() {
 	new_test_ext().execute_with(|| {
 		let user_1 = 1;
 		let user_2 = 2;
-		let user_3 = 3;
 		let collection_id = 0;
 		let item_id = 1;
 		let bid_price = 5;
 		let initial_balance = 100;
 		let signer = crypto::create_ed25519_pubkey(b"//verifier".to_vec());
 
-		Balances::make_free_balance_be(&user_2, initial_balance);
+		let signer_id = <Test as frame_system::Config>::AccountId::decode(
+			&mut AccountId32::as_ref(&signer.clone().into_account()),
+		)
+		.unwrap();
+
+		Balances::make_free_balance_be(&user_1, initial_balance);
+		Balances::make_free_balance_be(&signer_id, initial_balance);
 
 		assert_ok!(Uniques::create(
 			Origin::signed(user_1),
@@ -1007,7 +1012,7 @@ fn accept_buy_offer_should_works() {
 			deadline: None,
 			item_owner: user_1,
 			signer: signer.clone(),
-			receiver: 2,
+			receiver: user_2.clone(),
 		};
 		let valid_signature =
 			crypto::create_ed25519_signature(&Encode::encode(&offer), signer.clone());
@@ -1018,6 +1023,21 @@ fn accept_buy_offer_should_works() {
 			offer.clone(),
 			valid_signature
 		));
+
+		assert!(events().contains(&Event::<Test>::BuyOfferAccepted {
+			collection_id,
+			item_id,
+			price: bid_price,
+			seller: user_1,
+			buyer: signer_id,
+			receiver: user_2,
+		}));
+
+		assert_eq!(items(), vec![(user_2, collection_id, item_id)]);
+
+		assert_eq!(Balances::total_balance(&user_1), initial_balance + bid_price);
+		assert_eq!(Balances::total_balance(&signer_id), initial_balance - bid_price);
+
 		assert_noop!(
 			Uniques::accept_buy_offer(Origin::signed(user_1), offer, invalid_signature),
 			Error::<Test>::InvalidSignature
