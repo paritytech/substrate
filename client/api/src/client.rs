@@ -29,8 +29,6 @@ use sp_runtime::{
 };
 use std::{collections::HashSet, convert::TryFrom, fmt, pin::Pin, sync::Arc};
 
-use crate::{blockchain::Info, notifications::StorageEventStream, FinalizeSummary, ImportSummary};
-
 use sc_transaction_pool_api::ChainEvent;
 use sc_utils::mpsc::TracingUnboundedReceiver;
 use sp_blockchain;

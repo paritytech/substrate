@@ -859,13 +859,6 @@ where
 		light_client_request_protocol_config,
 	};
 
-	// Storage chains don't keep full block history and can't be synced in full mode.
-	// Force fast sync when storage chain mode is enabled.
-	if matches!(config.transaction_storage, TransactionStorageMode::StorageChain) {
-		network_params.network_config.sync_mode =
-			SyncMode::Fast { storage_chain_mode: true, skip_proofs: false };
-	}
-
 	let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();
 	let network_mut = sc_network::NetworkWorker::new(network_params)?;
 	let network = network_mut.service().clone();
