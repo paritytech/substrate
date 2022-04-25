@@ -963,7 +963,7 @@ mod test {
 
 	#[test]
 	fn try_append_decode_len_works() {
-		type B = CountedStorageMap<Prefix, Twox64Concat, u16, BoundedVec<u32, ConstU32<3u32>>>;
+		type B = CountedStorageMap<Prefix, Twox64Concat, u16, BoundedVec<u32, u32, ConstU32<3u32>>>;
 
 		TestExternalities::default().execute_with(|| {
 			assert_eq!(B::decode_len(0), None);
