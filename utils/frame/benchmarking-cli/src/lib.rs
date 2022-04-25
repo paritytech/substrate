@@ -18,12 +18,14 @@
 //! Contains the root [`BenchmarkCmd`] command and exports its sub-commands.
 
 mod block;
+mod machine;
 mod overhead;
 mod pallet;
 mod shared;
 mod storage;
 
 pub use block::BlockCmd;
+pub use machine::MachineCmd;
 pub use overhead::{ExtrinsicBuilder, OverheadCmd};
 pub use pallet::PalletCmd;
 pub use storage::StorageCmd;
@@ -39,6 +41,8 @@ pub enum BenchmarkCmd {
 	Storage(StorageCmd),
 	Overhead(OverheadCmd),
 	Block(BlockCmd),
+	#[clap(hide = true)] // Hidden until fully completed.
+	Machine(MachineCmd),
 }
 
 /// Unwraps a [`BenchmarkCmd`] into its concrete sub-command.
@@ -53,6 +57,7 @@ macro_rules! unwrap_cmd {
 			BenchmarkCmd::Storage($cmd) => $code,
 			BenchmarkCmd::Overhead($cmd) => $code,
 			BenchmarkCmd::Block($cmd) => $code,
+			BenchmarkCmd::Machine($cmd) => $code,
 		}
 	}
 }

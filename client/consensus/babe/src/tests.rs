@@ -1018,12 +1018,12 @@ fn obsolete_blocks_aux_data_cleanup() {
 
 	// Create the following test scenario:
 	//
-	//               /-----B3 --- B4           ( < fork2 )
+	//  /--- --B3 --- B4                       ( < fork2 )
 	// G --- A1 --- A2 --- A3 --- A4           ( < fork1 )
 	//                      \-----C4 --- C5    ( < fork3 )
 
 	let fork1_hashes = propose_and_import_blocks_wrap(BlockId::Number(0), 4);
-	let fork2_hashes = propose_and_import_blocks_wrap(BlockId::Number(2), 2);
+	let fork2_hashes = propose_and_import_blocks_wrap(BlockId::Number(0), 2);
 	let fork3_hashes = propose_and_import_blocks_wrap(BlockId::Number(3), 2);
 
 	// Check that aux data is present for all but the genesis block.
@@ -1041,6 +1041,15 @@ fn obsolete_blocks_aux_data_cleanup() {
 	assert!(aux_data_check(&fork1_hashes[2..], true));
 	// Wiped: B3, B4
 	assert!(aux_data_check(&fork2_hashes, false));
+	// Present C4, C5
+	assert!(aux_data_check(&fork3_hashes, true));
+
+	client.finalize_block(BlockId::Number(4), None, true).unwrap();
+
+	// Wiped: A3
+	assert!(aux_data_check(&fork1_hashes[2..3], false));
+	// Present: A4
+	assert!(aux_data_check(&fork1_hashes[3..], true));
 	// Present C4, C5
 	assert!(aux_data_check(&fork3_hashes, true));
 }

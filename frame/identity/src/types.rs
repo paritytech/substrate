@@ -53,6 +53,12 @@ pub enum Data {
 	ShaThree256([u8; 32]),
 }
 
+impl Data {
+	pub fn is_none(&self) -> bool {
+		self == &Data::None
+	}
+}
+
 impl Decode for Data {
 	fn decode<I: codec::Input>(input: &mut I) -> sp_std::result::Result<Self, codec::Error> {
 		let b = input.read_byte()?;
@@ -331,6 +337,37 @@ pub struct IdentityInfo<FieldLimit: Get<u32>> {
 
 	/// The Twitter identity. The leading `@` character may be elided.
 	pub twitter: Data,
+}
+
+impl<FieldLimit: Get<u32>> IdentityInfo<FieldLimit> {
+	pub(crate) fn fields(&self) -> IdentityFields {
+		let mut res = <BitFlags<IdentityField>>::empty();
+		if !self.display.is_none() {
+			res.insert(IdentityField::Display);
+		}
+		if !self.legal.is_none() {
+			res.insert(IdentityField::Legal);
+		}
+		if !self.web.is_none() {
+			res.insert(IdentityField::Web);
+		}
+		if !self.riot.is_none() {
+			res.insert(IdentityField::Riot);
+		}
+		if !self.email.is_none() {
+			res.insert(IdentityField::Email);
+		}
+		if self.pgp_fingerprint.is_some() {
+			res.insert(IdentityField::PgpFingerprint);
+		}
+		if !self.image.is_none() {
+			res.insert(IdentityField::Image);
+		}
+		if !self.twitter.is_none() {
+			res.insert(IdentityField::Twitter);
+		}
+		IdentityFields(res)
+	}
 }
 
 /// Information concerning the identity of the controller of an account.

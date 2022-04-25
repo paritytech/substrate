@@ -100,6 +100,14 @@ pub trait Backend<Block: BlockT>:
 	/// Results must be ordered best (longest, highest) chain first.
 	fn leaves(&self) -> Result<Vec<Block::Hash>>;
 
+	/// Returns displaced leaves after the given block would be finalized.
+	///
+	/// The returned leaves do not contain the leaves from the same height as `block_number`.
+	fn displaced_leaves_after_finalizing(
+		&self,
+		block_number: NumberFor<Block>,
+	) -> Result<Vec<Block::Hash>>;
+
 	/// Return hashes of all blocks that are children of the block with `parent_hash`.
 	fn children(&self, parent_hash: Block::Hash) -> Result<Vec<Block::Hash>>;
 
