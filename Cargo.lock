@@ -10383,7 +10383,7 @@ dependencies = [
  "assert_matches",
  "log 0.4.16",
  "parity-scale-codec",
- "sp-debug-derive",
+ "sp-core",
  "sp-io",
  "sp-std",
  "sp-wasm-interface",

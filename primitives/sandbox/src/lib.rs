@@ -45,7 +45,7 @@ pub mod env;
 #[cfg(not(feature = "std"))]
 pub mod host_executor;
 
-use sp_debug_derive::RuntimeDebug;
+use sp_core::RuntimeDebug;
 use sp_std::prelude::*;
 
 pub use sp_wasm_interface::{ReturnValue, Value};

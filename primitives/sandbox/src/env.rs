@@ -19,7 +19,7 @@
 
 use codec::{Decode, Encode};
 
-use sp_debug_derive::RuntimeDebug;
+use sp_core::RuntimeDebug;
 use sp_std::vec::Vec;
 
 /// Error error that can be returned from host function.
