@@ -474,6 +474,7 @@ cargo-check-macos:
         "$DEPENDENT_REPO"
         "$GITHUB_PR_TOKEN"
         "$CARGO_UPDATE_CRATES"
+        "$EXTRA_DEPENDENCIES"
 
 # Individual jobs are set up for each dependent project so that they can be ran in parallel.
 # Arguably we could generate a job for each companion in the PR's description using Gitlab's
@@ -490,6 +491,7 @@ check-dependent-cumulus:
   variables:
     DEPENDENT_REPO: cumulus
     CARGO_UPDATE_CRATES: "sp-io polkadot-runtime-common"
+    EXTRA_DEPENDENCIES: polkadot
 
 
 build-linux-substrate:
