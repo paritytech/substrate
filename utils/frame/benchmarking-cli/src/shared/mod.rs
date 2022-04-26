@@ -81,7 +81,7 @@ pub fn new_rng(seed: Option<u64>) -> (impl rand::Rng, u64) {
 /// This means that `release` and `production` cannot be told apart.
 /// This function additionally checks for OPT-LEVEL = 3.
 pub fn check_build_profile() -> Result<(), String> {
-	if cfg!(debug_assertions) {
+	if cfg!(profile = "debug") {
 		Err("Detected a `debug` profile".into())
 	} else if !cfg!(opt_level = "3") {
 		Err("The optimization level is not set to 3".into())
