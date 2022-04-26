@@ -241,10 +241,16 @@ fn random_data(size: usize) -> Vec<u8> {
 	buffer
 }
 
-pub fn benchmark_disk_sequential_writes(directory: &Path) -> Result<u64, String> {
+/// A default [`ExecutionLimit`] that can be used to call [`benchmark_disk_sequential_writes`]
+/// and [`benchmark_disk_random_writes`].
+pub const DEFAULT_DISK_EXECUTION_LIMIT: ExecutionLimit =
+	ExecutionLimit::Both { max_iterations: 32, max_duration: Duration::from_millis(300) };
+
+pub fn benchmark_disk_sequential_writes(
+	limit: ExecutionLimit,
+	directory: &Path,
+) -> Result<u64, String> {
 	const SIZE: usize = 64 * 1024 * 1024;
-	const MAX_ITERATIONS: usize = 32;
-	const MAX_DURATION: Duration = Duration::from_millis(300);
 
 	let buffer = random_data(SIZE);
 	let path = directory.join(".disk_bench_seq_wr.tmp");
@@ -273,14 +279,21 @@ pub fn benchmark_disk_sequential_writes(directory: &Path) -> Result<u64, String>
 		Ok(())
 	};
 
-	benchmark("disk sequential write score", SIZE, MAX_ITERATIONS, MAX_DURATION, run)
-		.map(|s| s as u64)
+	benchmark(
+		"disk sequential write score",
+		SIZE,
+		limit.max_iterations(),
+		limit.max_duration(),
+		run,
+	)
+	.map(|s| s as u64)
 }
 
-pub fn benchmark_disk_random_writes(directory: &Path) -> Result<u64, String> {
+pub fn benchmark_disk_random_writes(
+	limit: ExecutionLimit,
+	directory: &Path,
+) -> Result<u64, String> {
 	const SIZE: usize = 64 * 1024 * 1024;
-	const MAX_ITERATIONS: usize = 32;
-	const MAX_DURATION: Duration = Duration::from_millis(300);
 
 	let buffer = random_data(SIZE);
 	let path = directory.join(".disk_bench_rand_wr.tmp");
@@ -333,8 +346,14 @@ pub fn benchmark_disk_random_writes(directory: &Path) -> Result<u64, String> {
 	};
 
 	// We only wrote half of the bytes hence `SIZE / 2`.
-	benchmark("disk random write score", SIZE / 2, MAX_ITERATIONS, MAX_DURATION, run)
-		.map(|s| s as u64)
+	benchmark(
+		"disk random write score",
+		SIZE / 2,
+		limit.max_iterations(),
+		limit.max_duration(),
+		run,
+	)
+	.map(|s| s as u64)
 }
 
 /// Benchmarks the verification speed of sr25519 signatures.
@@ -389,7 +408,8 @@ pub fn gather_hwbench(scratch_directory: Option<&Path>) -> HwBench {
 
 	if let Some(scratch_directory) = scratch_directory {
 		hwbench.disk_sequential_write_score =
-			match benchmark_disk_sequential_writes(scratch_directory) {
+			match benchmark_disk_sequential_writes(DEFAULT_DISK_EXECUTION_LIMIT, scratch_directory)
+			{
 				Ok(score) => Some(score),
 				Err(error) => {
 					log::warn!("Failed to run the sequential write disk benchmark: {}", error);
@@ -397,13 +417,14 @@ pub fn gather_hwbench(scratch_directory: Option<&Path>) -> HwBench {
 				},
 			};
 
-		hwbench.disk_random_write_score = match benchmark_disk_random_writes(scratch_directory) {
-			Ok(score) => Some(score),
-			Err(error) => {
-				log::warn!("Failed to run the random write disk benchmark: {}", error);
-				None
-			},
-		};
+		hwbench.disk_random_write_score =
+			match benchmark_disk_random_writes(DEFAULT_DISK_EXECUTION_LIMIT, scratch_directory) {
+				Ok(score) => Some(score),
+				Err(error) => {
+					log::warn!("Failed to run the random write disk benchmark: {}", error);
+					None
+				},
+			};
 	}
 
 	hwbench
@@ -437,12 +458,17 @@ mod tests {
 
 	#[test]
 	fn test_benchmark_disk_sequential_writes() {
-		assert!(benchmark_disk_sequential_writes("./".as_ref()).unwrap() > 0);
+		assert!(
+			benchmark_disk_sequential_writes(DEFAULT_DISK_EXECUTION_LIMIT, "./".as_ref()).unwrap() >
+				0
+		);
 	}
 
 	#[test]
 	fn test_benchmark_disk_random_writes() {
-		assert!(benchmark_disk_random_writes("./".as_ref()).unwrap() > 0);
+		assert!(
+			benchmark_disk_random_writes(DEFAULT_DISK_EXECUTION_LIMIT, "./".as_ref()).unwrap() > 0
+		);
 	}
 
 	#[test]
