@@ -57,9 +57,9 @@ pub struct MachineCmd {
 
 	/// Set a fault tolerance for passing a requirement.
 	///
-	/// 5% means that the test would pass even when only 95% score was archived.
+	/// 10% means that the test would pass even when only 90% score was archived.
 	/// Can be used to mitigate outliers of the benchmarks.
-	#[clap(long, default_value = "5.0", value_name = "PERCENT")]
+	#[clap(long, default_value = "10.0", value_name = "PERCENT")]
 	pub tolerance: f64,
 
 	/// Time limit for the verification benchmark.
