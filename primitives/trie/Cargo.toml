@@ -29,6 +29,7 @@ memory-db = { version = "0.29.0", default-features = false }
 parking_lot = "0.11.1"
 thiserror = { version = "1.0.30", optional = true }
 nohash-hasher = "0.2.0"
+lru = "0.7.5"
 
 [dev-dependencies]
 trie-bench = "0.30.0"

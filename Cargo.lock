@@ -4120,7 +4120,7 @@ dependencies = [
  "libp2p-core",
  "libp2p-swarm",
  "log 0.4.14",
- "lru 0.7.0",
+ "lru 0.7.5",
  "rand 0.7.3",
  "smallvec 1.8.0",
  "unsigned-varint 0.7.0",
@@ -4399,9 +4399,9 @@ dependencies = [
 
 [[package]]
 name = "lru"
-version = "0.7.0"
+version = "0.7.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6c748cfe47cb8da225c37595b3108bea1c198c84aaae8ea0ba76d01dda9fc803"
+checksum = "32613e41de4c47ab04970c348ca7ae7382cf116625755af070b008a15516a889"
 dependencies = [
  "hashbrown 0.11.2",
 ]
@@ -8777,7 +8777,7 @@ dependencies = [
  "linked-hash-map",
  "linked_hash_set",
  "log 0.4.14",
- "lru 0.7.0",
+ "lru 0.7.5",
  "parity-scale-codec",
  "parking_lot 0.12.0",
  "pin-project 1.0.10",
@@ -8821,7 +8821,7 @@ dependencies = [
  "futures-timer",
  "libp2p",
  "log 0.4.14",
- "lru 0.7.0",
+ "lru 0.7.5",
  "quickcheck",
  "sc-network",
  "sp-runtime",
@@ -9889,7 +9889,7 @@ version = "4.0.0-dev"
 dependencies = [
  "futures 0.3.19",
  "log 0.4.14",
- "lru 0.7.0",
+ "lru 0.7.5",
  "parity-scale-codec",
  "parking_lot 0.12.0",
  "sp-api",
@@ -10506,6 +10506,7 @@ dependencies = [
  "criterion",
  "hash-db",
  "hex-literal",
+ "lru 0.7.5",
  "memory-db",
  "nohash-hasher",
  "parity-scale-codec",
@@ -11415,7 +11416,7 @@ dependencies = [
  "chrono",
  "lazy_static",
  "matchers",
- "parking_lot 0.9.0",
+ "parking_lot 0.11.2",
  "regex",
  "serde",
  "serde_json",
