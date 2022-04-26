@@ -109,7 +109,7 @@ impl<T: Encode + Decode, B: AtMost32BitUnsigned, S: Get<B>> EncodeLike<Vec<T>> f
 impl<T, B, S: Get<B>> BoundedVec<T, B, S> {
 	/// Create `Self` from `t` without any checks.
 	fn unchecked_from(t: Vec<T>) -> Self {
-		Self(t, Default::default(), Default::default())
+		Self(t, Default::default())
 	}
 
 	/// Consume self, and return the inner `Vec`. Henceforth, the `Vec<_>` can be altered in an
