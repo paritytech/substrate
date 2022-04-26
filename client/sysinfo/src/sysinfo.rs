@@ -243,7 +243,7 @@ fn random_data(size: usize) -> Vec<u8> {
 
 /// A default [`ExecutionLimit`] that can be used to call [`benchmark_disk_sequential_writes`]
 /// and [`benchmark_disk_random_writes`].
-pub const DISK_WRITE_LIMIT: ExecutionLimit =
+pub const DEFAULT_DISK_EXECUTION_LIMIT: ExecutionLimit =
 	ExecutionLimit::Both { max_iterations: 32, max_duration: Duration::from_millis(300) };
 
 pub fn benchmark_disk_sequential_writes(
@@ -408,7 +408,8 @@ pub fn gather_hwbench(scratch_directory: Option<&Path>) -> HwBench {
 
 	if let Some(scratch_directory) = scratch_directory {
 		hwbench.disk_sequential_write_score =
-			match benchmark_disk_sequential_writes(DISK_WRITE_LIMIT, scratch_directory) {
+			match benchmark_disk_sequential_writes(DEFAULT_DISK_EXECUTION_LIMIT, scratch_directory)
+			{
 				Ok(score) => Some(score),
 				Err(error) => {
 					log::warn!("Failed to run the sequential write disk benchmark: {}", error);
@@ -417,7 +418,7 @@ pub fn gather_hwbench(scratch_directory: Option<&Path>) -> HwBench {
 			};
 
 		hwbench.disk_random_write_score =
-			match benchmark_disk_random_writes(DISK_WRITE_LIMIT, scratch_directory) {
+			match benchmark_disk_random_writes(DEFAULT_DISK_EXECUTION_LIMIT, scratch_directory) {
 				Ok(score) => Some(score),
 				Err(error) => {
 					log::warn!("Failed to run the random write disk benchmark: {}", error);
@@ -457,12 +458,17 @@ mod tests {
 
 	#[test]
 	fn test_benchmark_disk_sequential_writes() {
-		assert!(benchmark_disk_sequential_writes(DISK_WRITE_LIMIT, "./".as_ref()).unwrap() > 0);
+		assert!(
+			benchmark_disk_sequential_writes(DEFAULT_DISK_EXECUTION_LIMIT, "./".as_ref()).unwrap() >
+				0
+		);
 	}
 
 	#[test]
 	fn test_benchmark_disk_random_writes() {
-		assert!(benchmark_disk_random_writes(DISK_WRITE_LIMIT, "./".as_ref()).unwrap() > 0);
+		assert!(
+			benchmark_disk_random_writes(DEFAULT_DISK_EXECUTION_LIMIT, "./".as_ref()).unwrap() > 0
+		);
 	}
 
 	#[test]
