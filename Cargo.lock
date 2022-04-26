@@ -10704,7 +10704,6 @@ dependencies = [
  "clap 3.1.6",
  "frame-support",
  "frame-system",
- "lazy_static",
  "sc-cli",
  "sp-core",
  "sp-runtime",
