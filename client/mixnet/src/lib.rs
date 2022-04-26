@@ -217,10 +217,13 @@ where
 			let mut pop_auth_query = false;
 			let mut err_auth_query = false;
 			let auth_poll = self.authority_replies.get_mut(0).map(Option::as_mut).flatten();
-			// TODO consider stream_select
+			let auth_poll = OptionFuture2(auth_poll);
+			//future::poll_fn(|cx| auth_poll.map(|a|
+			// Pin::new(a).poll(cx)).unwrap_or(futures::task::Poll::Pending)); TODO consider
+			// stream_select
 			futures::select! {
-				// TODO poll more than first?? (useless with current auth impl)
-				auth_address = auth_poll.select_next_some() => {
+				// TODO poll more than first??
+				auth_address = auth_poll.fuse() => {
 					debug!(target: "mixnet", "Received auth reply {:?}.", auth_address);
 					match auth_address {
 						Ok(Some(addresses)) => {
@@ -984,6 +987,22 @@ struct SessionCache {
 	// node_id: AccountId32
 }
 
+struct OptionFuture2<F>(Option<F>);
+// TODO find something doing it
+impl<F: futures::Future + Unpin> futures::Future for OptionFuture2<F> {
+	type Output = F::Output;
+
+	fn poll(
+		self: Pin<&mut Self>,
+		cx: &mut futures::task::Context<'_>,
+	) -> futures::task::Poll<Self::Output> {
+		match self.get_mut().0.as_mut() {
+			Some(x) => x.poll_unpin(cx),
+			// Do not try to wakeup cx: in a select and handled by a Delay.
+			None => futures::task::Poll::Pending,
+		}
+	}
+}
 const PEER_ID_PREFIX: [u8; 6] = [0, 36, 8, 1, 18, 32];
 #[test]
 fn test_random_route() {
