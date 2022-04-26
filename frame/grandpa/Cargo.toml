@@ -28,7 +28,7 @@ frame-support = { version = "4.0.0-dev", default-features = false, path = "../su
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 pallet-authorship = { version = "4.0.0-dev", default-features = false, path = "../authorship" }
 pallet-session = { version = "4.0.0-dev", default-features = false, path = "../session" }
-log = { version = "0.4.14", default-features = false }
+log = { version = "0.4.16", default-features = false }
 
 [dev-dependencies]
 frame-benchmarking = { version = "4.0.0-dev", path = "../benchmarking" }

@@ -66,6 +66,11 @@ pub enum ExecutionLimit {
 }
 
 impl ExecutionLimit {
+	/// Creates a new execution limit with the passed seconds as duration limit.
+	pub fn from_secs_f32(secs: f32) -> Self {
+		Self::MaxDuration(Duration::from_secs_f32(secs))
+	}
+
 	/// Returns the duration limit or `MAX` if none is present.
 	pub fn max_duration(&self) -> Duration {
 		match self {
