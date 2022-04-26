@@ -55,6 +55,8 @@ thousands = "0.2.0"
 prettytable-rs = "0.8.0"
 tempfile = "3.2.0"
 rand_pcg = "0.3.1"
+lazy_static = "1.4.0"
+thiserror = "1.0.30"
 
 [features]
 default = ["db", "sc-client-db/runtime-benchmarks"]
