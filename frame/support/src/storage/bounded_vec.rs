@@ -25,14 +25,12 @@ use crate::{
 	
 };
 
-extern crate sp_arithmetic;
-use sp_arithmetic::traits::AtMost32BitUnsigned;
-
 use codec::{Decode, Encode, EncodeLike, MaxEncodedLen};
 use core::{
 	ops::{Deref, Index, IndexMut, RangeBounds},
 	slice::SliceIndex,
 };
+use sp_arithmetic::traits::AtMost32BitUnsigned;
 use sp_std::{marker::PhantomData, prelude::*};
 
 /// A bounded vector.
