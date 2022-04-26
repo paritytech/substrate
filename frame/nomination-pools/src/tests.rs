@@ -502,7 +502,8 @@ mod join {
 	}
 
 	#[test]
-	#[should_panic = "Defensive failure has been triggered!"]
+	#[cfg_attr(debug_assertions, should_panic(expected = "Defensive failure has been triggered!"))]
+	#[cfg_attr(not(debug_assertions), should_panic)]
 	fn join_panics_when_reward_pool_not_found() {
 		ExtBuilder::default().build_and_execute(|| {
 			StakingMock::set_bonded_balance(Pools::create_bonded_account(123), 100);
@@ -1603,7 +1604,8 @@ mod unbond {
 	}
 
 	#[test]
-	#[should_panic = "Defensive failure has been triggered!"]
+	#[cfg_attr(debug_assertions, should_panic(expected = "Defensive failure has been triggered!"))]
+	#[cfg_attr(not(debug_assertions), should_panic)]
 	fn unbond_errors_correctly() {
 		ExtBuilder::default().build_and_execute(|| {
 			assert_noop!(
@@ -1620,7 +1622,8 @@ mod unbond {
 	}
 
 	#[test]
-	#[should_panic = "Defensive failure has been triggered!"]
+	#[cfg_attr(debug_assertions, should_panic(expected = "Defensive failure has been triggered!"))]
+	#[cfg_attr(not(debug_assertions), should_panic)]
 	fn unbond_panics_when_reward_pool_not_found() {
 		ExtBuilder::default().build_and_execute(|| {
 			let member = PoolMember { pool_id: 2, points: 10, ..Default::default() };
