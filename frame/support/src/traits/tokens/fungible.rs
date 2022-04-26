@@ -50,7 +50,11 @@ pub trait Inspect<AccountId> {
 	fn reducible_balance(who: &AccountId, keep_alive: bool) -> Self::Balance;
 
 	/// Returns `true` if the balance of `who` may be increased by `amount`.
-	fn can_deposit(who: &AccountId, amount: Self::Balance) -> DepositConsequence;
+	///
+	/// - `who`: The account of which the balance should be increased by `amount`.
+	/// - `amount`: How much should the balance be increased?
+	/// - `mint`: Will `amount` be minted to deposit it into `account`?
+	fn can_deposit(who: &AccountId, amount: Self::Balance, mint: bool) -> DepositConsequence;
 
 	/// Returns `Failed` if the balance of `who` may not be decreased by `amount`, otherwise
 	/// the consequence.
@@ -86,7 +90,9 @@ pub trait Mutate<AccountId>: Inspect<AccountId> {
 		amount: Self::Balance,
 	) -> Result<Self::Balance, DispatchError> {
 		let extra = Self::can_withdraw(&source, amount).into_result()?;
-		Self::can_deposit(&dest, amount.saturating_add(extra)).into_result()?;
+		// As we first burn and then mint, we don't need to check if `mint` fits into the supply.
+		// If we can withdraw/burn it, we can also mint it again.
+		Self::can_deposit(&dest, amount.saturating_add(extra), false).into_result()?;
 		let actual = Self::burn_from(source, amount)?;
 		debug_assert!(
 			actual == amount.saturating_add(extra),
@@ -216,8 +222,8 @@ impl<
 	fn reducible_balance(who: &AccountId, keep_alive: bool) -> Self::Balance {
 		<F as fungibles::Inspect<AccountId>>::reducible_balance(A::get(), who, keep_alive)
 	}
-	fn can_deposit(who: &AccountId, amount: Self::Balance) -> DepositConsequence {
-		<F as fungibles::Inspect<AccountId>>::can_deposit(A::get(), who, amount)
+	fn can_deposit(who: &AccountId, amount: Self::Balance, mint: bool) -> DepositConsequence {
+		<F as fungibles::Inspect<AccountId>>::can_deposit(A::get(), who, amount, mint)
 	}
 	fn can_withdraw(who: &AccountId, amount: Self::Balance) -> WithdrawConsequence<Self::Balance> {
 		<F as fungibles::Inspect<AccountId>>::can_withdraw(A::get(), who, amount)
