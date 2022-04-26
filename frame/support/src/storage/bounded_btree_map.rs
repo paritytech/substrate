@@ -65,7 +65,7 @@ where
 {
 	/// Get the bound of the type in `usize`.
 	pub fn bound() -> usize {
-		let bound: usize = S::get().into().try_into().unwrap();
+		let bound: usize = S::get().into() as usize;
 		bound
 	}
 }
@@ -359,7 +359,7 @@ where
 pub mod test {
 	use super::*;
 	use crate::Twox128;
-	use frame_support::traits::ConstU32;
+	use frame_support::traits::{ ConstU8, ConstU16, ConstU32 };
 	use sp_io::TestExternalities;
 
 	crate::generate_storage_alias! { Prefix, Foo => Value<BoundedBTreeMap<u32, (), u32, ConstU32<7>>> }
@@ -376,24 +376,40 @@ pub mod test {
 		keys.iter().copied().zip(std::iter::repeat(())).collect()
 	}
 
-	fn boundedmap_from_keys<K, S>(keys: &[K]) -> BoundedBTreeMap<K, (), u32, S>
+	fn boundedmap_from_keys<K, B, S>(keys: &[K]) -> BoundedBTreeMap<K, (), B, S>
 	where
 		K: Ord + Copy,
-		S: Get<u32>,
+		B: AtMost32BitUnsigned,
+		S: Get<B>,
 	{
 		map_from_keys(keys).try_into().unwrap()
 	}
 
 	#[test]
+	fn type_bounds_work() {
+		let bt1 = boundedmap_from_keys::<u32, u8, ConstU8<6>>(&[0, 1, 2, 3, 4, 5]);
+		let bt2 = boundedmap_from_keys::<u32, u16, ConstU16<6>>(&[0, 1, 2, 3, 4, 5]);
+		let bt3 = boundedmap_from_keys::<u32, u32, ConstU32<6>>(&[0, 1, 2, 3, 4, 5]);
+
+		assert_eq!(bt1.len(), 6);
+		assert_eq!(bt2.len(), 6);
+		assert_eq!(bt3.len(), 6);
+
+		assert_eq!(*bt1, map_from_keys(&[0, 1, 2, 3, 4, 5]));
+		assert_eq!(*bt2, map_from_keys(&[0, 1, 2, 3, 4, 5]));
+		assert_eq!(*bt3, map_from_keys(&[0, 1, 2, 3, 4, 5]));
+	}
+
+	#[test]
 	fn decode_len_works() {
 		TestExternalities::default().execute_with(|| {
-			let bounded = boundedmap_from_keys::<u32, ConstU32<7>>(&[1, 2, 3]);
+			let bounded = boundedmap_from_keys::<u32, u32, ConstU32<7>>(&[1, 2, 3]);
 			Foo::put(bounded);
 			assert_eq!(Foo::decode_len().unwrap(), 3);
 		});
 
 		TestExternalities::default().execute_with(|| {
-			let bounded = boundedmap_from_keys::<u32, ConstU32<7>>(&[1, 2, 3]);
+			let bounded = boundedmap_from_keys::<u32, u32, ConstU32<7>>(&[1, 2, 3]);
 			FooMap::insert(1, bounded);
 			assert_eq!(FooMap::decode_len(1).unwrap(), 3);
 			assert!(FooMap::decode_len(0).is_none());
@@ -401,7 +417,7 @@ pub mod test {
 		});
 
 		TestExternalities::default().execute_with(|| {
-			let bounded = boundedmap_from_keys::<u32, ConstU32<7>>(&[1, 2, 3]);
+			let bounded = boundedmap_from_keys::<u32, u32, ConstU32<7>>(&[1, 2, 3]);
 			FooDoubleMap::insert(1, 1, bounded);
 			assert_eq!(FooDoubleMap::decode_len(1, 1).unwrap(), 3);
 			assert!(FooDoubleMap::decode_len(2, 1).is_none());
@@ -412,7 +428,7 @@ pub mod test {
 
 	#[test]
 	fn try_insert_works() {
-		let mut bounded = boundedmap_from_keys::<u32, ConstU32<4>>(&[1, 2, 3]);
+		let mut bounded = boundedmap_from_keys::<u32, u32, ConstU32<4>>(&[1, 2, 3]);
 		bounded.try_insert(0, ()).unwrap();
 		assert_eq!(*bounded, map_from_keys(&[1, 0, 2, 3]));
 
@@ -422,7 +438,7 @@ pub mod test {
 
 	#[test]
 	fn deref_coercion_works() {
-		let bounded = boundedmap_from_keys::<u32, ConstU32<7>>(&[1, 2, 3]);
+		let bounded = boundedmap_from_keys::<u32, u32, ConstU32<7>>(&[1, 2, 3]);
 		// these methods come from deref-ed vec.
 		assert_eq!(bounded.len(), 3);
 		assert!(bounded.iter().next().is_some());
@@ -431,7 +447,7 @@ pub mod test {
 
 	#[test]
 	fn try_mutate_works() {
-		let bounded = boundedmap_from_keys::<u32, ConstU32<7>>(&[1, 2, 3, 4, 5, 6]);
+		let bounded = boundedmap_from_keys::<u32, u32, ConstU32<7>>(&[1, 2, 3, 4, 5, 6]);
 		let bounded = bounded
 			.try_mutate(|v| {
 				v.insert(7, ());
@@ -447,7 +463,7 @@ pub mod test {
 
 	#[test]
 	fn btree_map_eq_works() {
-		let bounded = boundedmap_from_keys::<u32, ConstU32<7>>(&[1, 2, 3, 4, 5, 6]);
+		let bounded = boundedmap_from_keys::<u32, u32, ConstU32<7>>(&[1, 2, 3, 4, 5, 6]);
 		assert_eq!(bounded, map_from_keys(&[1, 2, 3, 4, 5, 6]));
 	}
 
@@ -508,7 +524,7 @@ pub mod test {
 
 	#[test]
 	fn can_be_collected() {
-		let b1 = boundedmap_from_keys::<u32, ConstU32<5>>(&[1, 2, 3, 4]);
+		let b1 = boundedmap_from_keys::<u32, u32, ConstU32<5>>(&[1, 2, 3, 4]);
 		let b2: BoundedBTreeMap<u32, (), u32, ConstU32<5>> =
 			b1.iter().map(|(k, v)| (k + 1, *v)).try_collect().unwrap();
 		assert_eq!(b2.into_iter().map(|(k, _)| k).collect::<Vec<_>>(), vec![2, 3, 4, 5]);
@@ -541,8 +557,8 @@ pub mod test {
 	#[test]
 	fn eq_works() {
 		// of same type
-		let b1 = boundedmap_from_keys::<u32, ConstU32<7>>(&[1, 2]);
-		let b2 = boundedmap_from_keys::<u32, ConstU32<7>>(&[1, 2]);
+		let b1 = boundedmap_from_keys::<u32, u32, ConstU32<7>>(&[1, 2]);
+		let b2 = boundedmap_from_keys::<u32, u32, ConstU32<7>>(&[1, 2]);
 		assert_eq!(b1, b2);
 
 		// of different type, but same value and bound.
@@ -550,8 +566,8 @@ pub mod test {
 			B1: u32 = 7;
 			B2: u32 = 7;
 		}
-		let b1 = boundedmap_from_keys::<u32, B1>(&[1, 2]);
-		let b2 = boundedmap_from_keys::<u32, B2>(&[1, 2]);
+		let b1 = boundedmap_from_keys::<u32, u32, B1>(&[1, 2]);
+		let b2 = boundedmap_from_keys::<u32, u32, B2>(&[1, 2]);
 		assert_eq!(b1, b2);
 	}
 }
