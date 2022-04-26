@@ -2059,9 +2059,7 @@ dependencies = [
 
 [[package]]
 name = "finality-grandpa"
-version = "0.15.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d9def033d8505edf199f6a5d07aa7e6d2d6185b164293b77f0efd108f4f3e11d"
+version = "0.16.0"
 dependencies = [
  "either",
  "futures 0.3.21",
@@ -2069,7 +2067,7 @@ dependencies = [
  "log 0.4.16",
  "num-traits",
  "parity-scale-codec",
- "parking_lot 0.11.2",
+ "parking_lot 0.12.0",
  "rand 0.8.4",
  "scale-info",
 ]
