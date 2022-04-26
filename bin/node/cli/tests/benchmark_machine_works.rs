@@ -35,8 +35,7 @@ fn benchmark_machine_works() {
 
 /// Test that the command fails when run with the test profile.
 #[test]
-// NOTE: Use `debug_assertions` since there is no build.rs available.
-#[cfg_attr(not(debug_assertions), ignore)]
+#[ignore]
 fn benchmark_machine_fails_with_bad_build_profile() {
 	let output = Command::new(cargo_bin("substrate"))
 		.args(["benchmark", "machine", "--dev"])
