@@ -6276,6 +6276,7 @@ dependencies = [
 name = "pallet-recovery"
 version = "4.0.0-dev"
 dependencies = [
+ "frame-benchmarking",
  "frame-support",
  "frame-system",
  "pallet-balances",
@@ -8242,6 +8243,7 @@ dependencies = [
  "regex",
  "rpassword",
  "sc-client-api",
+ "sc-client-db",
  "sc-keystore",
  "sc-network",
  "sc-service",
@@ -8617,8 +8619,8 @@ dependencies = [
  "environmental",
  "parity-scale-codec",
  "sc-allocator",
- "sp-core",
  "sp-maybe-compressed-blob",
+ "sp-sandbox",
  "sp-serializer",
  "sp-wasm-interface",
  "thiserror",
@@ -8636,8 +8638,8 @@ dependencies = [
  "sc-allocator",
  "sc-executor-common",
  "scoped-tls",
- "sp-core",
  "sp-runtime-interface",
+ "sp-sandbox",
  "sp-wasm-interface",
  "wasmi",
 ]
@@ -8654,9 +8656,9 @@ dependencies = [
  "sc-allocator",
  "sc-executor-common",
  "sc-runtime-test",
- "sp-core",
  "sp-io",
  "sp-runtime-interface",
+ "sp-sandbox",
  "sp-wasm-interface",
  "wasmtime",
  "wat",
@@ -11403,12 +11405,14 @@ dependencies = [
 
 [[package]]
 name = "tracing-log"
-version = "0.1.2"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a6923477a48e41c1951f1999ef8bb5a3023eb723ceadafe78ffb65dc366761e3"
+checksum = "78ddad33d2d10b1ed7eb9d1f518a5674713876e97e5bb9b7345a7984fbb4f922"
 dependencies = [
+ "ahash",
  "lazy_static",
  "log 0.4.16",
+ "lru 0.7.5",
  "tracing-core",
 ]
 
