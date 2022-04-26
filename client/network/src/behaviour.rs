@@ -282,7 +282,10 @@ impl<B: BlockT> Behaviour<B> {
 			if let Ok(decoded) = <B::Extrinsic as Decode>::decode(&mut encoded_tx.as_ref()) {
 				let message = crate::protocol::message::Message::<B>::Transactions(vec![decoded]);
 				mixnet
-					.send_to_random_recipient(message.encode(), false)
+					.send_to_random_recipient(message.encode(), mixnet::SendOptions {
+						num_hop: Some(num_hop),
+						with_surbs: surbs_reply,
+					})
 					.map_err(|e| e.to_string())
 			} else {
 				Err("Invalid transaction".into())

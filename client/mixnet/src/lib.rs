@@ -870,6 +870,7 @@ impl Topology for AuthorityStar {
 		recipient: &MixPeerId,
 		count: usize,
 		num_hops: usize,
+		max_hops: usize,
 	) -> Result<Vec<Vec<(MixPeerId, MixPublicKey)>>, Error> {
 		// Diverging from default implementation (random from all possible paths) as `neighbor`
 		// return same result for all routing peer (minus self).
@@ -891,6 +892,9 @@ impl Topology for AuthorityStar {
 			num_hops
 		};
 
+		if num_hops > max_hops {
+			return Err(Error::TooManyHops);
+		}
 		debug!(target: "mixnet", "nb_hop: {:?}", num_hops);
 		let mut result = Vec::with_capacity(count);
 		while result.len() < count {
