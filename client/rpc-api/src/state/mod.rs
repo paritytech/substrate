@@ -153,7 +153,7 @@ pub trait StateApi<Hash> {
 	///      **this is RPC-unsafe**.
 	///
 	/// When subscribed to all of the changes this API will emit every storage
-	/// change for every block that is imported. These changes will only be send
+	/// change for every block that is imported. These changes will only be sent
 	/// after a block is imported. If you require a consistent view across all changes
 	/// of every block, you need to take this into account.
 	#[pubsub(subscription = "state_storage", subscribe, name = "state_subscribeStorage")]
