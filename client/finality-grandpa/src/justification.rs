@@ -66,16 +66,33 @@ impl<Block: BlockT> GrandpaJustification<Block> {
 			Err(Error::Client(ClientError::BadJustification(msg)))
 		};
 
+		// we pick the precommit for the lowest block as the base that
+		// should serve as the root block for populating ancestry (i.e.
+		// collect all headers from all precommit blocks to the base)
+		let (base_hash, base_number) = match commit
+			.precommits
+			.iter()
+			.map(|signed| &signed.precommit)
+			.min_by_key(|precommit| precommit.target_number)
+			.map(|precommit| (precommit.target_hash.clone(), precommit.target_number))
+		{
+			None => return error(),
+			Some(base) => base,
+		};
+
 		for signed in commit.precommits.iter() {
 			let mut current_hash = signed.precommit.target_hash;
 			loop {
-				if current_hash == commit.target_hash {
+				if current_hash == base_hash {
 					break
 				}
 
 				match client.header(BlockId::Hash(current_hash))? {
 					Some(current_header) => {
-						if *current_header.number() <= commit.target_number {
+						// NOTE: this should never happen as we pick the lowest block
+						// as base and only traverse backwards from the other blocks
+						// in the commit. but better be safe to avoid an unbound loop.
+						if *current_header.number() <= base_number {
 							return error()
 						}
 
@@ -83,6 +100,7 @@ impl<Block: BlockT> GrandpaJustification<Block> {
 						if votes_ancestries_hashes.insert(current_hash) {
 							votes_ancestries.push(current_header);
 						}
+
 						current_hash = parent_hash;
 					},
 					_ => return error(),
@@ -149,6 +167,23 @@ impl<Block: BlockT> GrandpaJustification<Block> {
 			},
 		}
 
+		// we pick the precommit for the lowest block as the base that
+		// should serve as the root block for populating ancestry (i.e.
+		// collect all headers from all precommit blocks to the base)
+		let base_hash = self
+			.commit
+			.precommits
+			.iter()
+			.map(|signed| &signed.precommit)
+			.min_by_key(|precommit| precommit.target_number)
+			.map(|precommit| precommit.target_hash.clone())
+			.expect(
+				"can only fail if precommits is empty; \
+				 commit has been validated above; \
+				 valid commits must include precommits; \
+				 qed.",
+			);
+
 		let mut buf = Vec::new();
 		let mut visited_hashes = HashSet::new();
 		for signed in self.commit.precommits.iter() {
@@ -165,11 +200,11 @@ impl<Block: BlockT> GrandpaJustification<Block> {
 				))
 			}
 
-			if self.commit.target_hash == signed.precommit.target_hash {
+			if base_hash == signed.precommit.target_hash {
 				continue
 			}
 
-			match ancestry_chain.ancestry(self.commit.target_hash, signed.precommit.target_hash) {
+			match ancestry_chain.ancestry(base_hash, signed.precommit.target_hash) {
 				Ok(route) => {
 					// ancestry starts from parent hash but the precommit target hash has been
 					// visited

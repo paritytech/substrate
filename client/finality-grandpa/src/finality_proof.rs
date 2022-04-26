@@ -237,7 +237,7 @@ where
 }
 
 #[cfg(test)]
-pub(crate) mod tests {
+mod tests {
 	use super::*;
 	use crate::{authorities::AuthoritySetChanges, BlockNumberOps, ClientError, SetId};
 	use futures::executor::block_on;
