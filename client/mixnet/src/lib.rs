@@ -23,7 +23,7 @@
 //!
 //! Topology specific to substrate and utils to link to network.
 
-use mixnet::{MixPeerId, MixPublicKey, Topology, Error};
+use mixnet::{Error, MixPeerId, MixPublicKey, Topology};
 
 pub use mixnet::{WorkerSink, WorkerStream};
 use sp_application_crypto::key_types;
@@ -809,24 +809,23 @@ impl AuthorityStar {
 		for key in self.routing_nodes.range(ix..) {
 			if !skip(key) {
 				debug!(target: "mixnet", "Random route node");
-				return Some(key.clone());
+				return Some(key.clone())
 			}
-/*			if let Some(info) = self.connected_nodes.get(key) {
+			/*			if let Some(info) = self.connected_nodes.get(key) {
 				debug!(target: "mixnet", "Random route node");
 				return Some(info.id.clone())
 			} else {
 				unreachable!()
 			}*/
-		} 
+		}
 		for key in self.routing_nodes.range(..ix).rev() {
 			if !skip(key) {
 				debug!(target: "mixnet", "Random route node");
-				return Some(key.clone());
+				return Some(key.clone())
 			}
 		}
 		None
 	}
-
 }
 
 impl Topology for AuthorityStar {
@@ -878,13 +877,17 @@ impl Topology for AuthorityStar {
 		// Diverging from default implementation (random from all possible paths) as `neighbor`
 		// return same result for all routing peer (minus self).
 
-		let num_hops = if !(self.routing_nodes.contains(start) || (self.routing() && &self.node_id == start)) {
+		let num_hops = if !(self.routing_nodes.contains(start) ||
+			(self.routing() && &self.node_id == start))
+		{
 			// num hops is between routing, last one is not receiving covers.
 			num_hops + 1
 		} else {
 			num_hops
 		};
-		let num_hops = if !(self.routing_nodes.contains(recipient) || (self.routing() && &self.node_id == recipient)) {
+		let num_hops = if !(self.routing_nodes.contains(recipient) ||
+			(self.routing() && &self.node_id == recipient))
+		{
 			// num hops is between routing, last one is not receiving covers.
 			num_hops + 1
 		} else {
@@ -903,7 +906,7 @@ impl Topology for AuthorityStar {
 					ids.insert(key);
 				} else {
 					debug!(target: "mixnet", "No random connected {:?}.", ids.len() - 2);
-					return Err(Error::NotEnoughRoutingPeers);
+					return Err(Error::NotEnoughRoutingPeers)
 				}
 			}
 
@@ -922,7 +925,7 @@ impl Topology for AuthorityStar {
 				path.push((recipient.clone(), info.public_key.clone()));
 			} else {
 				error!(target: "mixnet", "unknown recipient");
-				return Err(Error::NotEnoughRoutingPeers);
+				return Err(Error::NotEnoughRoutingPeers)
 			}
 
 			result.push(path);

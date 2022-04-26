@@ -50,7 +50,17 @@ pub use sc_rpc_api::author::*;
 
 /// Submit transaction to the mix network. TODO these request are query request, probably
 /// somewhere else for SendToMixnet
-pub struct SendToMixnet(pub Vec<u8>, pub oneshot::Sender<Result<()>>);
+pub struct SendToMixnet {
+	/// Mixnet message to send.
+	pub message: Vec<u8>,
+	/// Mixnet number of hop (maximum number is defined by the packet size, there is no way to
+	/// limit it but change the packet size).
+	pub num_hop: usize,
+	/// Reply to message if needed.
+	pub surbs_reply: bool,
+	/// Rpc error reply channel.
+	pub reply: oneshot::Sender<Result<()>>,
+}
 
 /// Authoring API
 pub struct Author<P: TransactionPool + Sync + Send + 'static, Client> {
@@ -163,10 +173,15 @@ where
 			.boxed()
 	}
 
-	fn mix_extrinsic(&self, ext: Bytes) -> FutureResult<()> {
-		log::debug!(target: "mixnet", "Extrinsic for mixnet of len {}", ext.len());
+	fn mix_extrinsic(&self, ext: Bytes, num_hop: usize, reply: bool) -> FutureResult<()> {
+		log::debug!(target: "mixnet", "Extrinsic for mixnet of len {}, {} hop and reply {}", ext.len(), num_hop, reply);
 		let (tx, rx) = oneshot::channel();
-		let _ = self.mixnet.unbounded_send(SendToMixnet(ext.to_vec(), tx));
+		let _ = self.mixnet.unbounded_send(SendToMixnet {
+			message: ext.to_vec(),
+			num_hop,
+			surbs_reply: reply,
+			reply: tx,
+		});
 		async move {
 			match rx.await {
 				Ok(Ok(())) => Ok(()),

@@ -695,8 +695,15 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 	}
 
 	/// Submit transaction to the mix network.
-	pub fn send_transaction_to_mixnet(&mut self, tx: Vec<u8>) -> Result<(), String> {
-		self.network_service.behaviour_mut().send_transaction_to_mixnet(tx)
+	pub fn send_transaction_to_mixnet(
+		&mut self,
+		tx: Vec<u8>,
+		num_hop: usize,
+		surbs_reply: bool,
+	) -> Result<(), String> {
+		self.network_service
+			.behaviour_mut()
+			.send_transaction_to_mixnet(tx, num_hop, surbs_reply)
 	}
 }
 

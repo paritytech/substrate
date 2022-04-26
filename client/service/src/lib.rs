@@ -267,8 +267,8 @@ async fn build_network_future<
 
 			// Answer mixnet message to send.
 			request = mixnet_rx.select_next_some() => {
-				let sc_rpc::author::SendToMixnet(tx, sender) = request;
-				let _ = match network.send_transaction_to_mixnet(tx) {
+				let sc_rpc::author::SendToMixnet { message: tx, num_hop, surbs_reply, reply: sender} = request;
+				let _ = match network.send_transaction_to_mixnet(tx, num_hop, surbs_reply) {
 					Ok(()) => sender.send(Ok(())),
 					Err(e) => sender.send(Err(sc_rpc::author::error::Error::Mixnet(e))),
 				};

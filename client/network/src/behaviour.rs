@@ -64,8 +64,11 @@ use sc_utils::mpsc::TracingUnboundedSender;
 
 /// Command for the mixnet worker.
 pub enum MixnetCommand {
+	/// New authority id from session grandpa session change.
 	AuthorityId(sp_finality_grandpa::AuthorityId, sp_core::crypto::CryptoTypePublicPair, MixPeerId),
+	/// New connection at mixnet swarm behavior level.
 	Connected(MixPeerId, MixPublicKey),
+	/// Disconnection at mixnet swarm behavior level.
 	Disconnected(MixPeerId),
 }
 
@@ -269,7 +272,12 @@ impl<B: BlockT> Behaviour<B> {
 
 	/// TODO this doc? more like a TODO ?
 	/// Adds a hard-coded address for the given peer, that never expires.
-	pub fn send_transaction_to_mixnet(&mut self, encoded_tx: Vec<u8>) -> Result<(), String> {
+	pub fn send_transaction_to_mixnet(
+		&mut self,
+		encoded_tx: Vec<u8>,
+		num_hop: usize,
+		surbs_reply: bool,
+	) -> Result<(), String> {
 		if let Some(mixnet) = self.mixnet.as_mut() {
 			if let Ok(decoded) = <B::Extrinsic as Decode>::decode(&mut encoded_tx.as_ref()) {
 				let message = crate::protocol::message::Message::<B>::Transactions(vec![decoded]);
