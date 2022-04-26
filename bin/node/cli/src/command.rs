@@ -131,7 +131,7 @@ pub fn run() -> Result<()> {
 						cmd.run(config, client, inherent_benchmark_data()?, Arc::new(ext_builder))
 					},
 					BenchmarkCmd::Machine(cmd) =>
-						cmd.run(&config, POLKADOT_REFERENCE_HARDWARE.clone()),
+						cmd.run(&config, SUBSTRATE_REFERENCE_HARDWARE.clone()),
 				}
 			})
 		},

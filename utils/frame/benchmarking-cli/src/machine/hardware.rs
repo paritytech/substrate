@@ -29,8 +29,8 @@ lazy_static! {
 	///
 	/// The reference hardware is describe here:
 	/// <https://wiki.polkadot.network/docs/maintain-guides-how-to-validate-polkadot>
-	pub static ref POLKADOT_REFERENCE_HARDWARE: Requirements = {
-		let raw = include_bytes!("polkadot_reference_hardware.json").as_slice();
+	pub static ref SUBSTRATE_REFERENCE_HARDWARE: Requirements = {
+		let raw = include_bytes!("reference_hardware.json").as_slice();
 		serde_json::from_slice(raw).expect("Hardcoded data is known good; qed")
 	};
 }
@@ -163,13 +163,13 @@ mod tests {
 	use super::*;
 	use sp_runtime::assert_eq_error_rate;
 
-	/// `POLKADOT_REFERENCE_HARDWARE` can be en- and decoded.
+	/// `SUBSTRATE_REFERENCE_HARDWARE` can be en- and decoded.
 	#[test]
 	fn json_static_data() {
-		let raw = serde_json::to_string(&*POLKADOT_REFERENCE_HARDWARE).unwrap();
+		let raw = serde_json::to_string(&*SUBSTRATE_REFERENCE_HARDWARE).unwrap();
 		let decoded: Requirements = serde_json::from_str(&raw).unwrap();
 
-		assert_eq!(decoded, POLKADOT_REFERENCE_HARDWARE.clone());
+		assert_eq!(decoded, SUBSTRATE_REFERENCE_HARDWARE.clone());
 	}
 
 	/// Test the [`Throughput`].

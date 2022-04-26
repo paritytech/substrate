@@ -33,7 +33,7 @@ use prettytable::{cell, row, table};
 use std::{boxed::Box, fmt::Debug, fs, path::Path};
 
 use crate::shared::check_build_profile;
-pub use hardware::{Metric, Requirement, Requirements, Throughput, POLKADOT_REFERENCE_HARDWARE};
+pub use hardware::{Metric, Requirement, Requirements, Throughput, SUBSTRATE_REFERENCE_HARDWARE};
 
 /// Command to benchmark the hardware.
 ///
