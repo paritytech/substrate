@@ -300,21 +300,19 @@ where
 	{
 		let mut path = vec![];
 		let mut children = &self.roots;
+		let mut i = 0;
 
-		loop {
-			let mut keep_search = false;
-			for (idx, node) in children.iter().enumerate() {
-				if node.number < *number && is_descendent_of(&node.hash, hash)? {
-					if predicate(&node.data) {
-						path.push(idx);
-						children = &node.children;
-						keep_search = true;
-					}
+		while i < children.len() {
+			let node = &children[i];
+			if node.number < *number && is_descendent_of(&node.hash, hash)? {
+				if !predicate(&node.data) {
 					break
 				}
-			}
-			if !keep_search {
-				break
+				path.push(i);
+				i = 0;
+				children = &node.children;
+			} else {
+				i += 1;
 			}
 		}
 
@@ -1276,7 +1274,14 @@ mod test {
 
 	#[test]
 	fn map_works() {
-		let (tree, _is_descendent_of) = test_fork_tree();
+		let (mut tree, _) = test_fork_tree();
+
+		// Extend the single root fork-tree to also excercise the roots order during map.
+		let is_descendent_of = |_: &&str, _: &&str| -> Result<bool, TestError> { Ok(false) };
+		let is_root = tree.import("A1", 1, (), &is_descendent_of).unwrap();
+		assert!(is_root);
+		let is_root = tree.import("A2", 1, (), &is_descendent_of).unwrap();
+		assert!(is_root);
 
 		let old_tree = tree.clone();
 		let new_tree = tree.map(&mut |hash, _, _| hash.to_owned());
