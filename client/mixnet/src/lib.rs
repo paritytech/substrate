@@ -806,7 +806,7 @@ impl AuthorityStar {
 			},
 		};
 		debug!(target: "mixnet", "routing {:?}, ix {:?}", self.routing_nodes, ix);
-		while let Some(key) = self.routing_nodes.range(ix..).next() {
+		for key in self.routing_nodes.range(ix..) {
 			if !skip(key) {
 				debug!(target: "mixnet", "Random route node");
 				return Some(key.clone());
@@ -818,7 +818,7 @@ impl AuthorityStar {
 				unreachable!()
 			}*/
 		} 
-		while let	Some(key) = self.routing_nodes.range(..ix).rev().next() {
+		for key in self.routing_nodes.range(..ix).rev() {
 			if !skip(key) {
 				debug!(target: "mixnet", "Random route node");
 				return Some(key.clone());
