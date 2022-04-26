@@ -95,7 +95,7 @@ impl<T: Decode, B: AtMost32BitUnsigned, S: Get<B>> Decode for BoundedVec<T, B, S
 		if S::get().into().try_into().map_or(false, |v: usize| inner.len() > v) {
 			return Err("BoundedVec exceeds its limit".into())
 		}
-		Ok(Self(inner, PhantomData, PhantomData))
+		Ok(Self(inner, PhantomData))
 	}
 
 	fn skip<I: codec::Input>(input: &mut I) -> Result<(), codec::Error> {
