@@ -2181,6 +2181,7 @@ dependencies = [
  "hex",
  "itertools",
  "kvdb",
+ "lazy_static",
  "linked-hash-map",
  "log 0.4.16",
  "memory-db",
@@ -2210,6 +2211,7 @@ dependencies = [
  "sp-storage",
  "sp-trie",
  "tempfile",
+ "thiserror",
  "thousands",
 ]
 
