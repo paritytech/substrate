@@ -8636,7 +8636,6 @@ dependencies = [
  "parity-scale-codec",
  "sc-allocator",
  "sc-executor-common",
- "sp-core",
  "sp-runtime-interface",
  "sp-sandbox",
  "sp-wasm-interface",
