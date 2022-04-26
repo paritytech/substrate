@@ -33,31 +33,11 @@ fn benchmark_machine_works() {
 	assert!(status.success());
 }
 
-/// Test that the command fails when run with the test profile.
-#[test]
-#[ignore]
-fn benchmark_machine_fails_with_bad_build_profile() {
-	let output = Command::new(cargo_bin("substrate"))
-		.args(["benchmark", "machine", "--dev"])
-		.args(["--disk-duration", "0.1"])
-		// Set the tolerance to 100% so that the hardware check passes.
-		.args(["--tolerance", "100.0"])
-		.output()
-		.unwrap();
-
-	// Command should have failed.
-	assert!(!output.status.success());
-	// A `BadBuildProfile` error should have been printed.
-	let log = String::from_utf8_lossy(&output.stderr).to_string();
-	assert!(log.contains("BadBuildProfile"));
-}
-
 /// Test that the hardware does not meet the requirements.
 ///
 /// This is most likely to succeed since it uses a test profile.
 #[test]
-// NOTE: Use `debug_assertions` since there is no build.rs available.
-#[cfg_attr(not(debug_assertions), ignore)]
+#[cfg(debug_assertions)]
 fn benchmark_machine_fails_with_slow_hardware() {
 	let output = Command::new(cargo_bin("substrate"))
 		.args(["benchmark", "machine", "--dev"])
