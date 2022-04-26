@@ -401,6 +401,7 @@ pub mod pallet {
 		/// The original deposit will no longer be returned.
 		///
 		/// May only be called from `T::RejectOrigin`.
+		/// - `proposal_id`: The index of a proposal
 		///
 		/// # <weight>
 		/// - Complexity: O(A) where `A` is the number of approvals
@@ -408,7 +409,9 @@ pub mod pallet {
 		/// # </weight>
 		///
 		/// Errors:
-		/// - `ProposalNotApproved`: Proposal has not been approved.
+		/// - `ProposalNotApproved`: The `proposal_id` supplied was not found in the approval queue,
+		/// i.e., the proposal has not been approved. This could also mean the proposal does not
+		/// exist altogether, thus there is no way it would have been approved in the first place.
 		#[pallet::weight((T::WeightInfo::remove_approval(), DispatchClass::Operational))]
 		pub fn remove_approval(
 			origin: OriginFor<T>,
