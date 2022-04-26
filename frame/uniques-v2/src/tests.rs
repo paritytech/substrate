@@ -1031,6 +1031,7 @@ fn accept_buy_offer_should_works() {
 			seller: user_1,
 			buyer: signer_id,
 			receiver: user_2,
+			deadline: None,
 		}));
 
 		assert_eq!(items(), vec![(user_2, collection_id, item_id)]);
@@ -1041,6 +1042,116 @@ fn accept_buy_offer_should_works() {
 		assert_noop!(
 			Uniques::accept_buy_offer(Origin::signed(user_1), offer, invalid_signature),
 			Error::<Test>::InvalidSignature
+		);
+	});
+}
+
+#[test]
+fn swap_items_should_works() {
+	new_test_ext().execute_with(|| {
+		let user_2 = 2;
+		let collection_from_id = 0;
+		let collection_to_id = 1;
+		let item_from_id = 1;
+		let item_to_id = 2;
+		let price = 5;
+		let initial_balance = 100;
+		let signer = crypto::create_ed25519_pubkey(b"//verifier".to_vec());
+
+		let user_1 = <Test as frame_system::Config>::AccountId::decode(&mut AccountId32::as_ref(
+			&signer.clone().into_account(),
+		))
+		.unwrap();
+
+		Balances::make_free_balance_be(&user_1, initial_balance);
+		Balances::make_free_balance_be(&user_2, initial_balance);
+
+		assert_ok!(Uniques::create(
+			Origin::signed(user_1),
+			user_1,
+			DEFAULT_USER_FEATURES,
+			None,
+			None,
+		));
+
+		assert_ok!(Uniques::mint(Origin::signed(user_1), user_1, collection_from_id, item_from_id));
+
+		assert_ok!(Uniques::create(
+			Origin::signed(user_2),
+			user_2,
+			DEFAULT_USER_FEATURES,
+			None,
+			None,
+		));
+
+		assert_ok!(Uniques::mint(Origin::signed(user_2), user_2, collection_to_id, item_to_id));
+
+		assert_eq!(
+			items(),
+			vec![
+				(user_2, collection_to_id, item_to_id),
+				(user_1, collection_from_id, item_from_id)
+			]
+		);
+
+		let offer = SwapOffer {
+			collection_from_id,
+			item_from_id,
+			collection_to_id,
+			item_to_id,
+			price: Some(price),
+			deadline: None,
+			item_to_owner: user_2,
+			signer: signer.clone(),
+			item_from_receiver: user_2.clone(),
+		};
+		let valid_signature =
+			crypto::create_ed25519_signature(&Encode::encode(&offer), signer.clone());
+		let invalid_signature = MultiSignature::decode(&mut TrailingZeroInput::zeroes()).unwrap();
+
+		assert_noop!(
+			Uniques::swap_items(Origin::signed(user_1), offer.clone(), valid_signature.clone()),
+			Error::<Test>::NotAuthorized
+		);
+
+		assert_ok!(Uniques::swap_items(
+			Origin::signed(user_2),
+			offer.clone(),
+			valid_signature.clone()
+		));
+
+		assert!(events().contains(&Event::<Test>::ItemsSwapExecuted {
+			collection_from_id,
+			collection_to_id,
+			item_from_id,
+			item_to_id,
+			executed_by: user_2,
+			new_item_from_owner: user_2,
+			new_item_to_owner: user_1,
+			price: Some(price),
+			deadline: None,
+		}));
+
+		assert_eq!(
+			items(),
+			vec![
+				(user_2, collection_from_id, item_from_id),
+				(user_1, collection_to_id, item_to_id)
+			]
+		);
+
+		assert_eq!(Balances::total_balance(&user_1), initial_balance + price);
+		assert_eq!(Balances::total_balance(&user_2), initial_balance - price);
+
+		assert_noop!(
+			Uniques::swap_items(Origin::signed(user_2), offer.clone(), invalid_signature),
+			Error::<Test>::InvalidSignature
+		);
+
+		// item's owner has changed, thus the signature is no longer valid
+		assert_noop!(
+			Uniques::swap_items(Origin::signed(user_2), offer, valid_signature),
+			Error::<Test>::NotAuthorized
 		);
 	});
 }

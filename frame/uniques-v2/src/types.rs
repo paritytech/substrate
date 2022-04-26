@@ -110,8 +110,8 @@ pub struct DestroyWitness {
 
 /// Authorization to buy an item.
 ///
-/// This is signed by an off-chain participant too authorize
-/// on-chain item buy operation by a specific on-chain account.
+/// This is signed by an off-chain participant to authorize
+/// an on-chain item buy operation by a specific on-chain account.
 ///
 /// NOTE: The signature is not part of the struct.
 #[derive(Encode, Decode, Clone, PartialEq, RuntimeDebug, TypeInfo)]
@@ -133,10 +133,52 @@ pub struct BuyOffer<CollectionId, ItemId, Balance, BlockNumber, AccountId> {
 	pub receiver: AccountId,
 }
 
+/// Authorization to swap an item.
+///
+/// This is signed by an off-chain participant to authorize
+/// an on-chain item swap operation by a specific on-chain account.
+///
+/// NOTE: The signature is not part of the struct.
+#[derive(Encode, Decode, Clone, PartialEq, RuntimeDebug, TypeInfo)]
+#[codec(dumb_trait_bound)]
+pub struct SwapOffer<CollectionId, ItemId, Balance, BlockNumber, AccountId> {
+	/// Swap item from collection id.
+	pub collection_from_id: CollectionId,
+	/// An item id to swap.
+	pub item_from_id: ItemId,
+	/// Swap to an item from specific collection id.
+	pub collection_to_id: CollectionId,
+	/// An item id to swap for.
+	pub item_to_id: ItemId,
+	/// An optional price for the swap operation.
+	pub price: Option<Balance>,
+	/// A block number this is offer is valid until
+	pub deadline: Option<BlockNumber>,
+	/// Restrict this offer to a specific `item_to` owner.
+	pub item_to_owner: AccountId,
+	/// Off-chain offer's signer (an owner of `item_from`).
+	pub signer: MultiSigner,
+	/// An account that will receive an `item_from`.
+	pub item_from_receiver: AccountId,
+}
+
 impl<CollectionId, ItemId, Balance, BlockNumber, AccountId>
 	BuyOffer<CollectionId, ItemId, Balance, BlockNumber, AccountId>
 where
 	BuyOffer<CollectionId, ItemId, Balance, BlockNumber, AccountId>: Encode,
+{
+	/// Returns whether `signature` is a valid signature for this Offer
+	/// and was created by the signer.
+	pub fn verify(&self, signature: &MultiSignature) -> bool {
+		let data = Encode::encode(&self);
+		signature.verify(&*data, &self.signer.clone().into_account())
+	}
+}
+
+impl<CollectionId, ItemId, Balance, BlockNumber, AccountId>
+	SwapOffer<CollectionId, ItemId, Balance, BlockNumber, AccountId>
+where
+	SwapOffer<CollectionId, ItemId, Balance, BlockNumber, AccountId>: Encode,
 {
 	/// Returns whether `signature` is a valid signature for this Offer
 	/// and was created by the signer.

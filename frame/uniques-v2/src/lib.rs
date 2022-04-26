@@ -105,6 +105,14 @@ pub mod pallet {
 		<T as frame_system::Config>::AccountId,
 	>;
 
+	pub type SwapOfferOf<T> = SwapOffer<
+		<T as Config>::CollectionId,
+		<T as Config>::ItemId,
+		BalanceOf<T>,
+		<T as frame_system::Config>::BlockNumber,
+		<T as frame_system::Config>::AccountId,
+	>;
+
 	/// Maps a unique collection id to it's config.
 	#[pallet::storage]
 	pub(super) type CollectionConfigs<T: Config> =
@@ -331,6 +339,18 @@ pub mod pallet {
 			seller: T::AccountId,
 			buyer: T::AccountId,
 			receiver: T::AccountId,
+			deadline: Option<T::BlockNumber>,
+		},
+		ItemsSwapExecuted {
+			collection_from_id: T::CollectionId,
+			item_from_id: T::ItemId,
+			collection_to_id: T::CollectionId,
+			item_to_id: T::ItemId,
+			executed_by: T::AccountId,
+			new_item_from_owner: T::AccountId,
+			new_item_to_owner: T::AccountId,
+			price: Option<BalanceOf<T>>,
+			deadline: Option<T::BlockNumber>,
 		},
 	}
 
@@ -657,6 +677,54 @@ pub mod pallet {
 				offer.item_owner,
 				offer.bid_price,
 				offer.deadline,
+			)?;
+
+			Ok(())
+		}
+
+		#[pallet::weight(0)]
+		pub fn swap_items(
+			origin: OriginFor<T>,
+			offer: SwapOfferOf<T>,
+			offer_signature: MultiSignature,
+		) -> DispatchResult {
+			let sender = ensure_signed(origin)?;
+			ensure!(offer.verify(&offer_signature), Error::<T>::InvalidSignature);
+
+			let SwapOffer {
+				collection_from_id,
+				collection_to_id,
+				item_from_id,
+				item_to_id,
+				signer,
+				item_from_receiver,
+				item_to_owner,
+				price,
+				deadline,
+			} = offer;
+
+			let config_from = CollectionConfigs::<T>::get(collection_from_id)
+				.ok_or(Error::<T>::CollectionNotFound)?;
+			let config_to = CollectionConfigs::<T>::get(collection_to_id)
+				.ok_or(Error::<T>::CollectionNotFound)?;
+
+			let signer = signer.into_account();
+			let signer_account = T::AccountId::decode(&mut AccountId32::as_ref(&signer))
+				.map_err(|_| Error::<T>::ErrorConvertingToAccountId)?;
+
+			Self::do_swap_items(
+				sender,
+				collection_from_id,
+				item_from_id,
+				collection_to_id,
+				item_to_id,
+				config_from,
+				config_to,
+				signer_account,
+				item_from_receiver,
+				item_to_owner,
+				price,
+				deadline,
 			)?;
 
 			Ok(())

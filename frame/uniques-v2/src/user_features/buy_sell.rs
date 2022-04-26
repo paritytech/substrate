@@ -96,14 +96,16 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
+	// user 1 signed an offer to buy user's 2 item
+	// user 2 executes that offer
 	pub fn do_accept_buy_offer(
-		caller: T::AccountId,
-		collection_id: T::CollectionId,
-		item_id: T::ItemId,
+		caller: T::AccountId,           // user 2
+		collection_id: T::CollectionId, // user's 2 item
+		item_id: T::ItemId,             // user's 2 item
 		config: CollectionConfig,
-		buyer: T::AccountId,
+		buyer: T::AccountId, // user 1
 		receiver: T::AccountId,
-		item_owner: T::AccountId,
+		item_owner: T::AccountId, // user 2
 		bid_price: BalanceOf<T>,
 		deadline: Option<T::BlockNumber>,
 	) -> DispatchResult {
@@ -145,6 +147,92 @@ impl<T: Config> Pallet<T> {
 			seller: old_owner,
 			buyer,
 			receiver,
+			deadline,
+		});
+
+		Ok(())
+	}
+
+	// user 1 signed an offer to swap his item to user's 2 item by paying some price
+	// `collection_from_id/`item_from_id` would refer to user 1
+	// user 2 executes that offer
+	// user 2 will pay the `price` (if specified), send his `to_item` and get the `from_item`
+	pub fn do_swap_items(
+		caller: T::AccountId,                // user 2
+		collection_from_id: T::CollectionId, // user's 1 item
+		item_from_id: T::ItemId,             // user's 1 item
+		collection_to_id: T::CollectionId,   // user's 2 item
+		item_to_id: T::ItemId,               // user's 2 item
+		config_from: CollectionConfig,
+		config_to: CollectionConfig,
+		signer_account: T::AccountId, // user 1
+		item_from_receiver: T::AccountId,
+		item_to_owner: T::AccountId, // user 2
+		price: Option<BalanceOf<T>>,
+		deadline: Option<T::BlockNumber>,
+	) -> DispatchResult {
+		let user_features: BitFlags<UserFeatures> = config_from.user_features.into();
+		ensure!(
+			!user_features.contains(UserFeatures::NonTransferableItems),
+			Error::<T>::ItemNotForSale
+		);
+		let user_features: BitFlags<UserFeatures> = config_to.user_features.into();
+		ensure!(
+			!user_features.contains(UserFeatures::NonTransferableItems),
+			Error::<T>::ItemNotForSale
+		);
+
+		let from_item =
+			Items::<T>::get(collection_from_id, item_from_id).ok_or(Error::<T>::ItemNotFound)?;
+		ensure!(signer_account == from_item.owner, Error::<T>::NotAuthorized);
+
+		let to_item =
+			Items::<T>::get(collection_to_id, item_to_id).ok_or(Error::<T>::ItemNotFound)?;
+		ensure!(
+			to_item.owner == item_to_owner && caller == to_item.owner,
+			Error::<T>::NotAuthorized
+		);
+
+		if let Some(deadline) = deadline {
+			let now = frame_system::Pallet::<T>::block_number();
+			ensure!(deadline >= now, Error::<T>::AuthorizationExpired);
+		}
+
+		if let Some(price) = price {
+			T::Currency::transfer(
+				&caller,
+				&from_item.owner,
+				price,
+				frame_support::traits::ExistenceRequirement::KeepAlive,
+			)?;
+		}
+
+		Self::do_transfer_item(
+			collection_to_id,
+			item_to_id,
+			config_to,
+			to_item.owner.clone(),
+			signer_account.clone(),
+		)?;
+
+		Self::do_transfer_item(
+			collection_from_id,
+			item_from_id,
+			config_from,
+			signer_account.clone(),
+			item_from_receiver.clone(),
+		)?;
+
+		Self::deposit_event(Event::ItemsSwapExecuted {
+			collection_from_id,
+			collection_to_id,
+			item_from_id,
+			item_to_id,
+			executed_by: caller,
+			new_item_from_owner: item_from_receiver,
+			new_item_to_owner: signer_account,
+			price,
+			deadline,
 		});
 
 		Ok(())
