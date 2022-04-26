@@ -18,11 +18,11 @@
 
 //! Wasmi specific impls for sandbox
 
-use codec::{Decode, Encode};
-use sp_core::sandbox::HostError;
-use sp_wasm_interface::{FunctionContext, Pointer, ReturnValue, Value, WordSize};
 use std::rc::Rc;
 
+use codec::{Decode, Encode};
+use sp_sandbox::HostError;
+use sp_wasm_interface::{FunctionContext, Pointer, ReturnValue, Value, WordSize};
 use wasmi::{
 	memory_units::Pages, ImportResolver, MemoryInstance, Module, ModuleInstance, RuntimeArgs,
 	RuntimeValue, Trap, TrapKind,
@@ -320,4 +320,9 @@ pub fn invoke(
 				.map_err(|error| error::Error::Sandbox(error.to_string()))
 		})
 	})
+}
+
+/// Get global value by name
+pub fn get_global(instance: &wasmi::ModuleRef, name: &str) -> Option<Value> {
+	Some(instance.export_by_name(name)?.as_global()?.get().into())
 }
