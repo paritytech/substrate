@@ -1904,9 +1904,12 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::MixnetMessage(
 					sender,
 					message,
+					kind,
+					reply,
 				))) => {
+					// TODO sender in message still make sense to possibly track com from peer (worker side)
 					debug!(target: "mixnet", "Inject transaction from mixnet from {:?}) tx: {:?}", sender, message);
-					this.tx_handler_controller.inject_transaction(sender, message);
+					this.tx_handler_controller.inject_transaction_mixnet(kind, message, reply);
 				},
 				Poll::Ready(SwarmEvent::ConnectionEstablished {
 					peer_id,

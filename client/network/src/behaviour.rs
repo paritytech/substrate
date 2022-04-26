@@ -38,7 +38,7 @@ use libp2p::{
 	},
 	NetworkBehaviour,
 };
-use log::debug;
+use log::{trace, debug, info};
 use prost::Message;
 use sc_consensus::import_queue::{IncomingBlock, Origin};
 use sc_peerset::PeersetHandle;
@@ -70,6 +70,23 @@ pub enum MixnetCommand {
 	Connected(MixPeerId, MixPublicKey),
 	/// Disconnection at mixnet swarm behavior level.
 	Disconnected(MixPeerId),
+	/// Received transaction is invalid with a surbs reply.
+	TransactionImportResult(mixnet::SurbsEncoded, MixnetImportResult),
+}
+
+/// Result reported in surbs for a transaction imported from a mixnet.
+#[derive(Debug, Encode, Decode)]
+pub enum MixnetImportResult {
+	/// Succesfully managed transaction.
+	Success,
+	/// Could not decode.
+	BadEncoding,
+	/// Transaction is invalid.
+	BadTransaction,
+	/// Client error.
+	Error,
+	/// Import skipped.
+	Skipped,
 }
 
 /// General behaviour of the network. Combines all protocols together.
@@ -209,7 +226,7 @@ pub enum BehaviourOut<B: BlockT> {
 	Dht(DhtEvent, Duration),
 
 	/// Messages coming from the mix network.
-	MixnetMessage(PeerId, Vec<u8>),
+	MixnetMessage(PeerId, Vec<u8>, mixnet::MessageType, Option<TracingUnboundedSender<MixnetCommand>>),
 }
 
 impl<B: BlockT> Behaviour<B> {
@@ -570,8 +587,28 @@ impl<B: BlockT> NetworkBehaviourEventProcess<mixnet::NetworkEvent> for Behaviour
 	fn inject_event(&mut self, event: mixnet::NetworkEvent) {
 		match event {
 			mixnet::NetworkEvent::Message(message) => {
-				self.events
-					.push_back(BehaviourOut::MixnetMessage(message.peer, message.message));
+				// TODO could write specifically a message type here, but currently
+				// only one of a kind for query or reply.
+				match message.kind {
+					mixnet::MessageType::FromSurbs => {
+						trace!(target: "mixnet", "Got surbs reply");
+
+						// TODO send in some client notification (keep query in worker?).
+						// Also attach query to FromSurbs??
+						let result = MixnetImportResult::decode(&mut message.message.as_ref()); 
+						info!(target: "mixnet", "Received from surbs {:?}", result);
+					},
+					kind => {
+						trace!(target: "mixnet", "Got query");
+						let reply = if kind.with_surbs() {
+							self.mixnet_command_sender.clone()
+						} else {
+							None
+						};
+						self.events
+							.push_back(BehaviourOut::MixnetMessage(message.peer, message.message, kind, reply));
+					},
+				}
 			},
 			mixnet::NetworkEvent::Connected(peer_id, key) => {
 				debug!(target: "mixnet", "Peer connection added to mixnet {:?}", peer_id);

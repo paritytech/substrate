@@ -186,6 +186,8 @@ pub enum TransactionImport {
 	NewGood,
 	/// Transaction is invalid.
 	Bad,
+	/// Could not be processed but transaction may be valid.
+	ErrorIgnore,
 	/// Transaction import was not performed.
 	None,
 }

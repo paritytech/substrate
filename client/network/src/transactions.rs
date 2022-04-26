@@ -33,12 +33,14 @@ use crate::{
 	service::NetworkService,
 	utils::{interval, LruHashSet},
 	Event, ExHashT, ObservedRole,
+	behaviour::{MixnetCommand, MixnetImportResult},
 };
 
 use codec::{Decode, Encode};
 use futures::{channel::mpsc, prelude::*, stream::FuturesUnordered};
 use libp2p::{multiaddr, PeerId};
 use log::{debug, trace, warn};
+use sc_utils::mpsc::TracingUnboundedSender;
 use prometheus_endpoint::{register, Counter, PrometheusError, Registry, U64};
 use sp_runtime::traits::Block as BlockT;
 use std::{
@@ -109,16 +111,31 @@ struct PendingTransaction<H> {
 	#[pin]
 	validation: TransactionImportFuture,
 	tx_hash: H,
+	mixnet: Option<Option<(TracingUnboundedSender<MixnetCommand>, mixnet::SurbsEncoded)>>,
 }
 
 impl<H: ExHashT> Future for PendingTransaction<H> {
-	type Output = (H, TransactionImport);
+	type Output = (H, TransactionImport, bool);
 
 	fn poll(self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
 		let mut this = self.project();
 
 		if let Poll::Ready(import_result) = Pin::new(&mut this.validation).poll_unpin(cx) {
-			return Poll::Ready((this.tx_hash.clone(), import_result))
+			let is_from_mixnet = this.mixnet.is_some();
+			if let Some((mut reply, surbs)) = this.mixnet.as_mut().map(|reply| reply.take()).flatten() {
+				trace!(target: "mixnet", "Import result from mixnet tx {:?}", import_result);
+				let import_result = match import_result {
+					TransactionImport::KnownGood => MixnetImportResult::Success,
+					TransactionImport::NewGood => MixnetImportResult::Success,
+					TransactionImport::Bad => MixnetImportResult::BadTransaction,
+					TransactionImport::ErrorIgnore => MixnetImportResult::Error,
+					TransactionImport::None => MixnetImportResult::Skipped,
+				};
+				if let Err(e) = reply.start_send(MixnetCommand::TransactionImportResult(surbs, import_result)) {
+					trace!(target: "mixnet", "Channel issue could not report error in surbs {:?}", &e);
+				}
+			}
+			return Poll::Ready((this.tx_hash.clone(), import_result, is_from_mixnet))
 		}
 
 		Poll::Pending
@@ -232,12 +249,18 @@ impl<H: ExHashT> TransactionsHandlerController<H> {
 	pub fn inject_transaction(&self, sender: PeerId, data: Vec<u8>) {
 		let _ = self.to_handler.unbounded_send(ToHandler::InjectTransaction(sender, data));
 	}
+
+	/// Validate and inject transaction received from mixnet.
+	pub fn inject_transaction_mixnet(&self, kind: mixnet::MessageType, data: Vec<u8>, reply: Option<TracingUnboundedSender<MixnetCommand>>) {
+		let _ = self.to_handler.unbounded_send(ToHandler::InjectTransactionMixnet(kind, data, reply));
+	}
 }
 
 enum ToHandler<H: ExHashT> {
 	PropagateTransactions,
 	PropagateTransaction(H),
 	InjectTransaction(PeerId, Vec<u8>),
+	InjectTransactionMixnet(mixnet::MessageType, Vec<u8>, Option<TracingUnboundedSender<MixnetCommand>>),
 }
 
 /// Handler for transactions. Call [`TransactionsHandler::run`] to start the processing.
@@ -283,11 +306,13 @@ impl<B: BlockT + 'static, H: ExHashT> TransactionsHandler<B, H> {
 				_ = self.propagate_timeout.next().fuse() => {
 					self.propagate_transactions();
 				},
-				(tx_hash, result) = self.pending_transactions.select_next_some() => {
-					if let Some(peers) = self.pending_transactions_peers.remove(&tx_hash) {
-						peers.into_iter().for_each(|p| self.on_handle_transaction_import(p, result));
-					} else {
-						warn!(target: "sub-libp2p", "Inconsistent state, no peers for pending transaction!");
+				(tx_hash, result, is_from_mixnet) = self.pending_transactions.select_next_some() => {
+					if !is_from_mixnet {
+						if let Some(peers) = self.pending_transactions_peers.remove(&tx_hash) {
+							peers.into_iter().for_each(|p| self.on_handle_transaction_import(p, result));
+						} else {
+							warn!(target: "sub-libp2p", "Inconsistent state, no peers for pending transaction!");
+						}
 					}
 				},
 				network_event = self.event_stream.next().fuse() => {
@@ -303,6 +328,7 @@ impl<B: BlockT + 'static, H: ExHashT> TransactionsHandler<B, H> {
 						ToHandler::PropagateTransaction(hash) => self.propagate_transaction(&hash),
 						ToHandler::PropagateTransactions => self.propagate_transactions(),
 						ToHandler::InjectTransaction(peer_id, data) => self.inject_transaction(peer_id, data),
+						ToHandler::InjectTransactionMixnet(kind, data, reply) => self.inject_transaction_mixnet(kind, data, reply),
 					}
 				},
 			}
@@ -379,6 +405,46 @@ impl<B: BlockT + 'static, H: ExHashT> TransactionsHandler<B, H> {
 		}
 	}
 
+	// same as inject transaction but do not penalize peer and allow replying
+	// from surbs.
+	fn inject_transaction_mixnet(&mut self, kind: mixnet::MessageType, transactions: Vec<u8>, reply: Option<TracingUnboundedSender<MixnetCommand>>) {
+		if let Ok(transactions) =
+			<message::Transactions<B::Extrinsic> as Decode>::decode(&mut transactions.as_ref())
+		{
+			trace!(target: "sync", "Received {} transactions from mixnet", transactions.len());
+			if !self.gossip_enabled.load(Ordering::Relaxed) {
+				trace!(target: "sync", "Ignoring mixnet transactions while disabled");
+				return
+			}
+
+			for t in transactions {
+				let hash = self.transaction_pool.hash_of(&t);
+				let mixnet_reply = if let Some(surbs) = kind.clone().surbs() {
+					// note that only first reply will pass (other will be blocked by replay protection.
+					// TODO consider single transaction only
+					reply.clone().map(move |r| (r, surbs))
+				} else {
+					None
+				};
+				self.pending_transactions.push(PendingTransaction {
+					validation: self.transaction_pool.import(t),
+					tx_hash: hash,
+					mixnet: Some(mixnet_reply),
+				});
+			}
+
+		} else {
+			warn!(target: "sub-libp2p", "Failed to decode transactions list from mixnet");
+			if let Some(surbs) = kind.surbs() {
+				if let Some(mut reply) = reply {
+					if let Err(e) = reply.start_send(MixnetCommand::TransactionImportResult(surbs, MixnetImportResult::BadEncoding)) {
+						trace!(target: "mixnet", "Channel issue could not report error in surbs {:?}", e);
+					}
+				}
+			}
+		}
+	}
+
 	/// Called when peer sends us new transactions
 	fn on_transactions(&mut self, who: PeerId, transactions: message::Transactions<B::Extrinsic>) {
 		// sending transaction to light node is considered a bad behavior
@@ -417,6 +483,7 @@ impl<B: BlockT + 'static, H: ExHashT> TransactionsHandler<B, H> {
 						self.pending_transactions.push(PendingTransaction {
 							validation: self.transaction_pool.import(t),
 							tx_hash: hash,
+							mixnet: None,
 						});
 						entry.insert(vec![who]);
 					},
@@ -434,6 +501,7 @@ impl<B: BlockT + 'static, H: ExHashT> TransactionsHandler<B, H> {
 				self.service.report_peer(who, rep::ANY_TRANSACTION_REFUND),
 			TransactionImport::NewGood => self.service.report_peer(who, rep::GOOD_TRANSACTION),
 			TransactionImport::Bad => self.service.report_peer(who, rep::BAD_TRANSACTION),
+			TransactionImport::ErrorIgnore => {},
 			TransactionImport::None => {},
 		}
 	}

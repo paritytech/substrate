@@ -148,7 +148,7 @@ where
 				mixnet::Config::new_with_ed25519_keypair(kp, local_public_key.clone().into());
 			// TODO read validator from session
 			// TODO is this node part of session (role means nothing).
-			let topology = AuthorityStar::new(local_public_key.clone().into());
+			let topology = AuthorityStar::new(local_public_key.clone().into(), mixnet_config.public_key.clone());
 			/*						let commands =
 			crate::mixnet::AuthorityStar::command_stream(&mut event_streams);*/
 			let worker = mixnet::MixnetWorker::new(mixnet_config, topology, inner_channels.0);
@@ -375,6 +375,11 @@ where
 					self.update_state(false);
 				}
 			},
+			MixnetCommand::TransactionImportResult(surbs, result) => {
+				if let Err(e) = self.worker.mixnet.register_surbs(result.encode(), surbs) {
+					error!(target: "mixnet", "Could not register surbs {:?}", e);
+				}
+			},
 		}
 	}
 
@@ -572,6 +577,7 @@ where
 /// TODO node with only mix component (proxying transaction and query).
 pub struct AuthorityStar {
 	node_id: MixPeerId,
+	node_public_key: MixPublicKey,
 
 	connected_nodes: HashMap<MixPeerId, NodeInfo>,
 	connected_authorities: HashMap<AuthorityId, MixPeerId>,
@@ -600,9 +606,10 @@ pub struct NodeInfo {
 
 impl AuthorityStar {
 	/// Instantiate a new topology.
-	pub fn new(node_id: MixPeerId) -> Self {
+	pub fn new(node_id: MixPeerId, node_public_key: MixPublicKey) -> Self {
 		AuthorityStar {
 			node_id,
+			node_public_key,
 			current_authorities: HashMap::new(),
 			connected_nodes: HashMap::new(),
 			connected_authorities: HashMap::new(),
@@ -928,8 +935,13 @@ impl Topology for AuthorityStar {
 			if let Some(info) = self.connected_nodes.get(recipient) {
 				path.push((recipient.clone(), info.public_key.clone()));
 			} else {
-				error!(target: "mixnet", "unknown recipient");
-				return Err(Error::NotEnoughRoutingPeers)
+				if &self.node_id == recipient {
+					// surbs reply
+					path.push((self.node_id.clone(), self.node_public_key.clone()));
+				} else {
+					error!(target: "mixnet", "Unknown recipient");
+					return Err(Error::NotEnoughRoutingPeers)
+				}
 			}
 
 			result.push(path);
