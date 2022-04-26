@@ -28,10 +28,7 @@
 //! the network, or whenever a block has been successfully verified, call the appropriate method in
 //! order to update it.
 
-use crate::{
-	protocol::message::{self, BlockAnnounce, BlockAttributes, BlockRequest, BlockResponse},
-	schema::v1::{StateRequest, StateResponse},
-};
+use crate::protocol::message::{self, BlockAnnounce, BlockAttributes, BlockRequest, BlockResponse};
 use blocks::BlockCollection;
 use codec::Encode;
 use either::Either;
@@ -41,6 +38,7 @@ use libp2p::PeerId;
 use log::{debug, error, info, trace, warn};
 use sc_client_api::{BlockBackend, ProofProvider};
 use sc_consensus::{BlockImportError, BlockImportStatus, IncomingBlock};
+use sc_network_sync::schema::v1::{StateRequest, StateResponse};
 use sp_arithmetic::traits::Saturating;
 use sp_blockchain::{Error as ClientError, HeaderBackend, HeaderMetadata};
 use sp_consensus::{

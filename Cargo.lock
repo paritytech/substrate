@@ -9000,6 +9000,7 @@ dependencies = [
  "sc-block-builder",
  "sc-client-api",
  "sc-consensus",
+ "sc-network-sync",
  "sc-peerset",
  "sc-utils",
  "serde",
@@ -9040,6 +9041,14 @@ dependencies = [
  "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
  "tracing",
+]
+
+[[package]]
+name = "sc-network-sync"
+version = "0.10.0-dev"
+dependencies = [
+ "prost",
+ "prost-build",
 ]
 
 [[package]]

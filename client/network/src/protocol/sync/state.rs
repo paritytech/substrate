@@ -16,11 +16,11 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::schema::v1::{StateEntry, StateRequest, StateResponse};
 use codec::{Decode, Encode};
 use log::debug;
 use sc_client_api::{CompactProof, ProofProvider};
 use sc_consensus::ImportedState;
+use sc_network_sync::schema::v1::{StateEntry, StateRequest, StateResponse};
 use smallvec::SmallVec;
 use sp_core::storage::well_known_keys;
 use sp_runtime::traits::{Block as BlockT, Header, NumberFor};

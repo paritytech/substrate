@@ -21,7 +21,6 @@ use crate::{
 	config::ProtocolId,
 	protocol::message::BlockAttributes,
 	request_responses::{IncomingRequest, OutgoingResponse, ProtocolConfig},
-	schema::v1::{block_request::FromBlock, BlockResponse, Direction},
 	PeerId, ReputationChange,
 };
 use codec::{Decode, Encode};
@@ -33,6 +32,7 @@ use log::debug;
 use lru::LruCache;
 use prost::Message;
 use sc_client_api::BlockBackend;
+use sc_network_sync::schema::v1::{block_request::FromBlock, BlockResponse, Direction};
 use sp_blockchain::HeaderBackend;
 use sp_runtime::{
 	generic::BlockId,
@@ -167,7 +167,7 @@ where
 		pending_response: oneshot::Sender<OutgoingResponse>,
 		peer: &PeerId,
 	) -> Result<(), HandleRequestError> {
-		let request = crate::schema::v1::BlockRequest::decode(&payload[..])?;
+		let request = sc_network_sync::schema::v1::BlockRequest::decode(&payload[..])?;
 
 		let from_block_id = match request.from_block.ok_or(HandleRequestError::MissingFromField)? {
 			FromBlock::Hash(ref h) => {
@@ -361,7 +361,7 @@ where
 				Vec::new()
 			};
 
-			let block_data = crate::schema::v1::BlockData {
+			let block_data = sc_network_sync::schema::v1::BlockData {
 				hash: hash.encode(),
 				header: if get_header { header.encode() } else { Vec::new() },
 				body,

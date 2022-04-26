@@ -20,7 +20,6 @@
 use crate::{
 	config::ProtocolId,
 	request_responses::{IncomingRequest, OutgoingResponse, ProtocolConfig},
-	schema::v1::{KeyValueStateEntry, StateEntry, StateRequest, StateResponse},
 	PeerId, ReputationChange,
 };
 use codec::{Decode, Encode};
@@ -32,6 +31,7 @@ use log::{debug, trace};
 use lru::LruCache;
 use prost::Message;
 use sc_client_api::ProofProvider;
+use sc_network_sync::schema::v1::{KeyValueStateEntry, StateEntry, StateRequest, StateResponse};
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 use std::{
 	hash::{Hash, Hasher},

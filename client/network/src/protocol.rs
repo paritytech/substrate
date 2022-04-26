@@ -20,7 +20,6 @@ use crate::{
 	config::{self, ProtocolId, WarpSyncProvider},
 	error,
 	request_responses::RequestFailure,
-	schema::v1::StateResponse,
 	utils::{interval, LruHashSet},
 	warp_request_handler::EncodedProof,
 };
@@ -50,6 +49,7 @@ use prometheus_endpoint::{register, Gauge, GaugeVec, Opts, PrometheusError, Regi
 use prost::Message as _;
 use sc_client_api::{BlockBackend, HeaderBackend, ProofProvider};
 use sc_consensus::import_queue::{BlockImportError, BlockImportStatus, IncomingBlock, Origin};
+use sc_network_sync::schema::v1::StateResponse;
 use sp_arithmetic::traits::SaturatedConversion;
 use sp_consensus::{block_validation::BlockAnnounceValidator, BlockOrigin};
 use sp_runtime::{
@@ -607,7 +607,7 @@ where
 		&mut self,
 		peer_id: PeerId,
 		request: message::BlockRequest<B>,
-		response: crate::schema::v1::BlockResponse,
+		response: sc_network_sync::schema::v1::BlockResponse,
 	) -> CustomMessageOutcome<B> {
 		let blocks = response
 			.blocks
@@ -1276,13 +1276,13 @@ fn prepare_block_request<B: BlockT>(
 		peer.request = Some((PeerRequest::Block(request.clone()), rx));
 	}
 
-	let request = crate::schema::v1::BlockRequest {
+	let request = sc_network_sync::schema::v1::BlockRequest {
 		fields: request.fields.to_be_u32(),
 		from_block: match request.from {
 			message::FromBlock::Hash(h) =>
-				Some(crate::schema::v1::block_request::FromBlock::Hash(h.encode())),
+				Some(sc_network_sync::schema::v1::block_request::FromBlock::Hash(h.encode())),
 			message::FromBlock::Number(n) =>
-				Some(crate::schema::v1::block_request::FromBlock::Number(n.encode())),
+				Some(sc_network_sync::schema::v1::block_request::FromBlock::Number(n.encode())),
 		},
 		to_block: request.to.map(|h| h.encode()).unwrap_or_default(),
 		direction: request.direction as i32,
@@ -1296,7 +1296,7 @@ fn prepare_block_request<B: BlockT>(
 fn prepare_state_request<B: BlockT>(
 	peers: &mut HashMap<PeerId, Peer<B>>,
 	who: PeerId,
-	request: crate::schema::v1::StateRequest,
+	request: sc_network_sync::schema::v1::StateRequest,
 ) -> CustomMessageOutcome<B> {
 	let (tx, rx) = oneshot::channel();
 
@@ -1353,13 +1353,13 @@ pub enum CustomMessageOutcome<B: BlockT> {
 	/// A new block request must be emitted.
 	BlockRequest {
 		target: PeerId,
-		request: crate::schema::v1::BlockRequest,
+		request: sc_network_sync::schema::v1::BlockRequest,
 		pending_response: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
 	},
 	/// A new storage request must be emitted.
 	StateRequest {
 		target: PeerId,
-		request: crate::schema::v1::StateRequest,
+		request: sc_network_sync::schema::v1::StateRequest,
 		pending_response: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
 	},
 	/// A new warp sync request must be emitted.
@@ -1463,7 +1463,9 @@ where
 						match req {
 							PeerRequest::Block(req) => {
 								let protobuf_response =
-									match crate::schema::v1::BlockResponse::decode(&resp[..]) {
+									match sc_network_sync::schema::v1::BlockResponse::decode(
+										&resp[..],
+									) {
 										Ok(proto) => proto,
 										Err(e) => {
 											debug!(
@@ -1483,7 +1485,9 @@ where
 							},
 							PeerRequest::State => {
 								let protobuf_response =
-									match crate::schema::v1::StateResponse::decode(&resp[..]) {
+									match sc_network_sync::schema::v1::StateResponse::decode(
+										&resp[..],
+									) {
 										Ok(proto) => proto,
 										Err(e) => {
 											debug!(

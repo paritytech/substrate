@@ -18,11 +18,11 @@
 
 ///! Warp sync support.
 use super::state::{ImportResult, StateSync};
-use crate::schema::v1::{StateRequest, StateResponse};
 pub use crate::warp_request_handler::{
 	EncodedProof, Request as WarpProofRequest, VerificationResult, WarpSyncProvider,
 };
 use sc_client_api::ProofProvider;
+use sc_network_sync::schema::v1::{StateRequest, StateResponse};
 use sp_blockchain::HeaderBackend;
 use sp_finality_grandpa::{AuthorityList, SetId};
 use sp_runtime::traits::{Block as BlockT, NumberFor, Zero};
