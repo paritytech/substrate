@@ -1202,7 +1202,7 @@ mod private {
 	impl Sealed for Digest {}
 	impl<T, B, S: Get<B>> Sealed for BoundedVec<T, B, S> {}
 	impl<T, S> Sealed for WeakBoundedVec<T, S> {}
-	impl<K, V, S> Sealed for bounded_btree_map::BoundedBTreeMap<K, V, S> {}
+	impl<K, V, B, S: Get<B>> Sealed for bounded_btree_map::BoundedBTreeMap<K, V, B, S> {}
 	impl<T, S> Sealed for bounded_btree_set::BoundedBTreeSet<T, S> {}
 
 	macro_rules! impl_sealed_for_tuple {
