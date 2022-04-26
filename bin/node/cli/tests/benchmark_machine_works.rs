@@ -35,7 +35,8 @@ fn benchmark_machine_works() {
 
 /// Test that the command fails when run with the test profile.
 #[test]
-#[cfg(not(release))]
+// NOTE: Use `debug_assertions` since there is no build.rs available.
+#[cfg_attr(not(debug_assertions), ignore)]
 fn benchmark_machine_fails_with_bad_build_profile() {
 	let output = Command::new(cargo_bin("substrate"))
 		.args(["benchmark", "machine", "--dev"])
@@ -56,7 +57,8 @@ fn benchmark_machine_fails_with_bad_build_profile() {
 ///
 /// This is most likely to succeed since it uses a test profile.
 #[test]
-#[cfg(not(release))]
+// NOTE: Use `debug_assertions` since there is no build.rs available.
+#[cfg_attr(not(debug_assertions), ignore)]
 fn benchmark_machine_fails_with_slow_hardware() {
 	let output = Command::new(cargo_bin("substrate"))
 		.args(["benchmark", "machine", "--dev"])
