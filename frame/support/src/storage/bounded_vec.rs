@@ -228,7 +228,7 @@ impl<T, B: AtMost32BitUnsigned, S: Get<B>> BoundedVec<T, B, S> {
 
 	/// Get the bound of the type in `usize`.
 	pub fn bound() -> usize {
-		let bound: usize = S::get().into().try_into().unwrap();
+		let bound: usize = S::get().into() as usize;
 		bound
 	}
 
@@ -573,7 +573,7 @@ impl<T, B, S: Get<B>> StorageDecodeLength for BoundedVec<T, B, S> {}
 
 impl<T, B: AtMost32BitUnsigned, S: Get<B>> StorageTryAppend<T> for BoundedVec<T, B, S> {
 	fn bound() -> usize {
-		let bound: usize = S::get().into().try_into().unwrap();
+		let bound: usize = S::get().into() as usize;
 		bound
 	}
 }

@@ -2305,7 +2305,6 @@ dependencies = [
  "frame-metadata",
  "frame-support-procedural",
  "frame-system",
- "funty",
  "impl-trait-for-tuples",
  "k256",
  "log 0.4.16",
@@ -9850,7 +9849,6 @@ name = "sp-arithmetic"
 version = "5.0.0"
 dependencies = [
  "criterion",
- "funty",
  "integer-sqrt",
  "num-traits",
  "parity-scale-codec",

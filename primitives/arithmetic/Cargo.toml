@@ -26,7 +26,6 @@ num-traits = { version = "0.2.8", default-features = false }
 sp-std = { version = "4.0.0", default-features = false, path = "../std" }
 serde = { version = "1.0.136", optional = true, features = ["derive"] }
 sp-debug-derive = { version = "4.0.0", default-features = false, path = "../debug-derive" }
-funty = "2.0.0"
 
 [dev-dependencies]
 rand = "0.7.2"
