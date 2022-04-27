@@ -24,7 +24,6 @@ pub use crate::warp_request_handler::{
 use crate::{
 	chain::Client,
 	schema::v1::{StateRequest, StateResponse},
-	WarpSyncPhase, WarpSyncProgress,
 };
 use sp_finality_grandpa::{AuthorityList, SetId};
 use sp_runtime::traits::{Block as BlockT, NumberFor, Zero};
@@ -33,6 +32,30 @@ use std::sync::Arc;
 enum Phase<B: BlockT> {
 	WarpProof { set_id: SetId, authorities: AuthorityList, last_hash: B::Hash },
 	State(StateSync<B>),
+}
+
+/// Reported warp sync phase.
+#[derive(Clone, Eq, PartialEq, Debug)]
+pub enum WarpSyncPhase<B: BlockT> {
+	/// Waiting for peers to connect.
+	AwaitingPeers,
+	/// Downloading and verifying grandpa warp proofs.
+	DownloadingWarpProofs,
+	/// Downloading state data.
+	DownloadingState,
+	/// Importing state.
+	ImportingState,
+	/// Downloading block history.
+	DownloadingBlocks(NumberFor<B>),
+}
+
+/// Reported warp sync progress.
+#[derive(Clone, Eq, PartialEq, Debug)]
+pub struct WarpSyncProgress<B: BlockT> {
+	/// Estimated download percentage.
+	pub phase: WarpSyncPhase<B>,
+	/// Total bytes downloaded so far.
+	pub total_bytes: u64,
 }
 
 /// Import warp proof result.

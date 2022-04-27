@@ -16,7 +16,6 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use super::StateDownloadProgress;
 use crate::{
 	chain::Client,
 	schema::v1::{StateEntry, StateRequest, StateResponse},
@@ -44,6 +43,15 @@ pub struct StateSync<B: BlockT> {
 	client: Arc<dyn Client<B>>,
 	imported_bytes: u64,
 	skip_proof: bool,
+}
+
+/// Reported state download progress.
+#[derive(Clone, Eq, PartialEq, Debug)]
+pub struct StateDownloadProgress {
+	/// Estimated download percentage.
+	pub percentage: u32,
+	/// Total state size in bytes downloaded so far.
+	pub size: u64,
 }
 
 /// Import state chunk result.

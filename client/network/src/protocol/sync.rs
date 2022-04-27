@@ -54,6 +54,7 @@ use sp_runtime::{
 	},
 	EncodedJustification, Justifications,
 };
+pub use state::StateDownloadProgress;
 use state::StateSync;
 use std::{
 	collections::{hash_map::Entry, HashMap, HashSet},
@@ -63,6 +64,7 @@ use std::{
 	sync::Arc,
 };
 use warp::{WarpProofRequest, WarpSync, WarpSyncProvider};
+pub use warp::{WarpSyncPhase, WarpSyncProgress};
 
 mod blocks;
 mod extra_requests;
@@ -329,30 +331,6 @@ pub enum SyncState {
 	Downloading,
 }
 
-/// Reported state download progress.
-#[derive(Clone, Eq, PartialEq, Debug)]
-pub struct StateDownloadProgress {
-	/// Estimated download percentage.
-	pub percentage: u32,
-	/// Total state size in bytes downloaded so far.
-	pub size: u64,
-}
-
-/// Reported warp sync phase.
-#[derive(Clone, Eq, PartialEq, Debug)]
-pub enum WarpSyncPhase<B: BlockT> {
-	/// Waiting for peers to connect.
-	AwaitingPeers,
-	/// Downloading and verifying grandpa warp proofs.
-	DownloadingWarpProofs,
-	/// Downloading state data.
-	DownloadingState,
-	/// Importing state.
-	ImportingState,
-	/// Downloading block history.
-	DownloadingBlocks(NumberFor<B>),
-}
-
 impl<B: BlockT> fmt::Display for WarpSyncPhase<B> {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match self {
@@ -363,15 +341,6 @@ impl<B: BlockT> fmt::Display for WarpSyncPhase<B> {
 			Self::DownloadingBlocks(n) => write!(f, "Downloading block history (#{})", n),
 		}
 	}
-}
-
-/// Reported warp sync progress.
-#[derive(Clone, Eq, PartialEq, Debug)]
-pub struct WarpSyncProgress<B: BlockT> {
-	/// Estimated download percentage.
-	pub phase: WarpSyncPhase<B>,
-	/// Total bytes downloaded so far.
-	pub total_bytes: u64,
 }
 
 /// Syncing status and statistics.
