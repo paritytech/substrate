@@ -30,7 +30,7 @@ use frame_support::{
 use frame_system::{ensure_root, ensure_signed, offchain::SendTransactionTypes, pallet_prelude::*};
 use sp_runtime::{
 	traits::{CheckedSub, SaturatedConversion, StaticLookup, Zero},
-	DispatchError, Perbill, Percent,
+	Perbill, Percent,
 };
 use sp_staking::{EraIndex, SessionIndex};
 use sp_std::{cmp::max, prelude::*};
