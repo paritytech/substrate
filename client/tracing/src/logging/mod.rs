@@ -155,7 +155,10 @@ where
 	let max_level_hint = Layer::<FmtSubscriber>::max_level_hint(&env_filter);
 	let max_level = to_log_level_filter(max_level_hint);
 
-	tracing_log::LogTracer::builder().with_max_level(max_level).init()?;
+	tracing_log::LogTracer::builder()
+		.with_max_level(max_level)
+		.with_interest_cache(tracing_log::InterestCacheConfig::default())
+		.init()?;
 
 	// If we're only logging `INFO` entries then we'll use a simplified logging format.
 	let detailed_output = match max_level_hint {

@@ -18,11 +18,11 @@
 
 //! Wasmi specific impls for sandbox
 
-use codec::{Decode, Encode};
-use sp_core::sandbox::HostError;
-use sp_wasm_interface::{FunctionContext, Pointer, ReturnValue, Value, WordSize};
 use std::rc::Rc;
 
+use codec::{Decode, Encode};
+use sp_sandbox::HostError;
+use sp_wasm_interface::{FunctionContext, Pointer, ReturnValue, Value, WordSize};
 use wasmi::{
 	memory_units::Pages, ImportResolver, MemoryInstance, Module, ModuleInstance, RuntimeArgs,
 	RuntimeValue, Trap, TrapKind,

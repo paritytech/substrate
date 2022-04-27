@@ -18,20 +18,21 @@
 
 //! Wasmer specific impls for sandbox
 
-use crate::{
-	error::{Error, Result},
-	sandbox::Memory,
-	util::{checked_range, MemoryTransfer},
-};
-use codec::{Decode, Encode};
-use sp_core::sandbox::HostError;
-use sp_wasm_interface::{FunctionContext, Pointer, ReturnValue, Value, WordSize};
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
+
 use wasmer::RuntimeError;
 
-use crate::sandbox::{
-	BackendInstance, GuestEnvironment, InstantiationError, SandboxContext, SandboxInstance,
-	SupervisorFuncIndex,
+use codec::{Decode, Encode};
+use sp_sandbox::HostError;
+use sp_wasm_interface::{FunctionContext, Pointer, ReturnValue, Value, WordSize};
+
+use crate::{
+	error::{Error, Result},
+	sandbox::{
+		BackendInstance, GuestEnvironment, InstantiationError, Memory, SandboxContext,
+		SandboxInstance, SupervisorFuncIndex,
+	},
+	util::{checked_range, MemoryTransfer},
 };
 
 environmental::environmental!(SandboxContextStore: trait SandboxContext);

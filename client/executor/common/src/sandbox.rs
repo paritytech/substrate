@@ -22,26 +22,26 @@
 
 #[cfg(feature = "wasmer-sandbox")]
 mod wasmer_backend;
-
 mod wasmi_backend;
+
+use std::{collections::HashMap, rc::Rc};
+
+use codec::Decode;
+use sp_sandbox::env as sandbox_env;
+use sp_wasm_interface::{FunctionContext, Pointer, WordSize};
 
 use crate::{
 	error::{self, Result},
 	util,
 };
-use codec::Decode;
-use sp_core::sandbox as sandbox_primitives;
-use sp_wasm_interface::{FunctionContext, Pointer, WordSize};
-use std::{collections::HashMap, rc::Rc};
 
 #[cfg(feature = "wasmer-sandbox")]
-use wasmer_backend::{
+use self::wasmer_backend::{
 	get_global as wasmer_get_global, instantiate as wasmer_instantiate, invoke as wasmer_invoke,
 	new_memory as wasmer_new_memory, Backend as WasmerBackend,
 	MemoryWrapper as WasmerMemoryWrapper,
 };
-
-use wasmi_backend::{
+use self::wasmi_backend::{
 	get_global as wasmi_get_global, instantiate as wasmi_instantiate, invoke as wasmi_invoke,
 	new_memory as wasmi_new_memory, MemoryWrapper as WasmiMemoryWrapper,
 };
@@ -243,7 +243,7 @@ fn decode_environment_definition(
 	mut raw_env_def: &[u8],
 	memories: &[Option<Memory>],
 ) -> std::result::Result<(Imports, GuestToSupervisorFunctionMapping), InstantiationError> {
-	let env_def = sandbox_primitives::EnvironmentDefinition::decode(&mut raw_env_def)
+	let env_def = sandbox_env::EnvironmentDefinition::decode(&mut raw_env_def)
 		.map_err(|_| InstantiationError::EnvironmentDefinitionCorrupted)?;
 
 	let mut func_map = HashMap::new();
@@ -255,12 +255,12 @@ fn decode_environment_definition(
 		let field = entry.field_name.clone();
 
 		match entry.entity {
-			sandbox_primitives::ExternEntity::Function(func_idx) => {
+			sandbox_env::ExternEntity::Function(func_idx) => {
 				let externals_idx =
 					guest_to_supervisor_mapping.define(SupervisorFuncIndex(func_idx as usize));
 				func_map.insert((module, field), externals_idx);
 			},
-			sandbox_primitives::ExternEntity::Memory(memory_idx) => {
+			sandbox_env::ExternEntity::Memory(memory_idx) => {
 				let memory_ref = memories
 					.get(memory_idx as usize)
 					.cloned()
@@ -446,7 +446,7 @@ impl<DT: Clone> Store<DT> {
 		let backend_context = &self.backend_context;
 
 		let maximum = match maximum {
-			sandbox_primitives::MEM_UNLIMITED => None,
+			sandbox_env::MEM_UNLIMITED => None,
 			specified_limit => Some(specified_limit),
 		};
 

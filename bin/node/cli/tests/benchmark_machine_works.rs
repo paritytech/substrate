@@ -24,9 +24,30 @@ use std::process::Command;
 fn benchmark_machine_works() {
 	let status = Command::new(cargo_bin("substrate"))
 		.args(["benchmark", "machine", "--dev"])
-		.args(["--verify-duration", "0.1"])
+		.args(["--verify-duration", "0.1", "--disk-duration", "0.1"])
+		// Make it succeed.
+		.args(["--allow-fail"])
 		.status()
 		.unwrap();
 
 	assert!(status.success());
+}
+
+/// Test that the hardware does not meet the requirements.
+///
+/// This is most likely to succeed since it uses a test profile.
+#[test]
+#[cfg(debug_assertions)]
+fn benchmark_machine_fails_with_slow_hardware() {
+	let output = Command::new(cargo_bin("substrate"))
+		.args(["benchmark", "machine", "--dev"])
+		.args(["--verify-duration", "0.1", "--disk-duration", "2", "--tolerance", "0"])
+		.output()
+		.unwrap();
+
+	// Command should have failed.
+	assert!(!output.status.success());
+	// An `UnmetRequirement` error should have been printed.
+	let log = String::from_utf8_lossy(&output.stderr).to_string();
+	assert!(log.contains("UnmetRequirement"));
 }
