@@ -497,13 +497,12 @@ check-dependent-polkadot:
   <<: *check-dependent-project
   variables:
     DEPENDENT_REPO: polkadot
-    CARGO_UPDATE_CRATES: "sp-io"
 
 check-dependent-cumulus:
   <<: *check-dependent-project
   variables:
     DEPENDENT_REPO: cumulus
-    CARGO_UPDATE_CRATES: "sp-io polkadot-runtime-common"
+    EXTRA_DEPENDENCIES: polkadot
 
 
 build-linux-substrate:
