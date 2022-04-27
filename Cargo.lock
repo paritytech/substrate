@@ -4705,7 +4705,6 @@ dependencies = [
  "libp2p-swarm",
  "lioness",
  "log 0.4.14",
- "lru 0.7.5",
  "rand 0.8.4",
  "rand_distr",
  "sha2 0.10.2",

@@ -86,6 +86,7 @@ pub struct MixnetWorker<B: BlockT, C> {
 	authority_replies: VecDeque<Option<AuthorityRx>>,
 	authority_queries: VecDeque<AuthorityInfo>,
 	key_store: Arc<dyn SyncCryptoStore>,
+	default_limit_config: Option<u32>,
 }
 
 // TODO consider restoring a command support in mixnet
@@ -155,6 +156,7 @@ where
 			// TODO read validator from session
 			// TODO is this node part of session (role means nothing).
 			let topology = AuthorityStar::new(mixnet_config.local_id.clone(), mixnet_config.public_key.clone());
+					let default_limit_config = mixnet_config.limit_per_window.clone();
 			/*						let commands =
 			crate::mixnet::AuthorityStar::command_stream(&mut event_streams);*/
 			let worker = mixnet::MixnetWorker::new(mixnet_config, topology, inner_channels.0);
@@ -193,6 +195,7 @@ where
 					authority_queries: VecDeque::new(),
 					authority_replies: VecDeque::new(),
 					key_store,
+					default_limit_config,
 					//connection_info,
 				}
 				//encoded_connection_info,
@@ -389,9 +392,11 @@ where
 		let local_id = self.worker.local_id().clone();
 		let new_session = self.fetch_new_session_keys(at, session);
 		self.update_own_public_key_within_authority_set(&set);
+		let mut remove_limit = Vec::new();
+		let mut restore_limit = Vec::new();
 		if let Some(topology) = self.worker.topology_mut() {
 			debug!(target: "mixnet", "Change authorities {:?}", set);
-			topology.current_authorities.clear();
+			let old_authority = std::mem::take(&mut topology.current_authorities);
 			topology.routing_nodes.clear();
 			topology.unconnected_authorities.clear(); // TODO could keep for a few session
 											// TODO also remove authorty disocvery query??
@@ -449,10 +454,26 @@ where
 						continue
 					}
 				}
+				if let Some(peer) = auth_peer_id.clone() {
+					remove_limit.push(peer);
+				}
 				topology.current_authorities.insert(auth, auth_peer_id);
 			}
 
-			self.update_state(false);
+			for (auth, peer) in old_authority {
+				if !topology.current_authorities.contains_key(&auth) {
+					if let Some(peer) = peer.clone() {
+						restore_limit.push(peer);
+					}
+				}
+			}
+		}
+		self.update_state(false);
+		for peer in remove_limit.into_iter() {
+			self.worker.change_peer_limit_window(peer, None);
+		}
+		for peer in restore_limit.into_iter() {
+			self.worker.change_peer_limit_window(peer, self.default_limit_config.clone());
 		}
 	}
 
