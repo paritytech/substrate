@@ -50,6 +50,7 @@
 //! - `propose_spend` - Make a spending proposal and stake the required deposit.
 //! - `reject_proposal` - Reject a proposal, slashing the deposit.
 //! - `approve_proposal` - Accept the proposal, returning the deposit.
+//! - `remove_approval` - Remove an approval, the deposit will no longer be returned.
 //!
 //! ## GenesisConfig
 //!
@@ -289,6 +290,8 @@ pub mod pallet {
 		InvalidIndex,
 		/// Too many approvals in the queue.
 		TooManyApprovals,
+		/// Proposal has not been approved.
+		ProposalNotApproved,
 	}
 
 	#[pallet::hooks]
@@ -391,6 +394,40 @@ pub mod pallet {
 			ensure!(<Proposals<T, I>>::contains_key(proposal_id), Error::<T, I>::InvalidIndex);
 			Approvals::<T, I>::try_append(proposal_id)
 				.map_err(|_| Error::<T, I>::TooManyApprovals)?;
+			Ok(())
+		}
+
+		/// Force a previously approved proposal to be removed from the approval queue.
+		/// The original deposit will no longer be returned.
+		///
+		/// May only be called from `T::RejectOrigin`.
+		/// - `proposal_id`: The index of a proposal
+		///
+		/// # <weight>
+		/// - Complexity: O(A) where `A` is the number of approvals
+		/// - Db reads and writes: `Approvals`
+		/// # </weight>
+		///
+		/// Errors:
+		/// - `ProposalNotApproved`: The `proposal_id` supplied was not found in the approval queue,
+		/// i.e., the proposal has not been approved. This could also mean the proposal does not
+		/// exist altogether, thus there is no way it would have been approved in the first place.
+		#[pallet::weight((T::WeightInfo::remove_approval(), DispatchClass::Operational))]
+		pub fn remove_approval(
+			origin: OriginFor<T>,
+			#[pallet::compact] proposal_id: ProposalIndex,
+		) -> DispatchResult {
+			T::RejectOrigin::ensure_origin(origin)?;
+
+			Approvals::<T, I>::try_mutate(|v| -> DispatchResult {
+				if let Some(index) = v.iter().position(|x| x == &proposal_id) {
+					v.remove(index);
+					Ok(())
+				} else {
+					Err(Error::<T, I>::ProposalNotApproved.into())
+				}
+			})?;
+
 			Ok(())
 		}
 	}
