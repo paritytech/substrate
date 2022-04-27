@@ -399,6 +399,8 @@ pub mod pallet {
 		InvalidSignature,
 		/// Invalid signature provided.
 		ErrorConvertingToAccountId,
+		/// Invalid item id provided.
+		InvalidItemId,
 	}
 
 	// Pallet's callable functions.
@@ -687,6 +689,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			offer: SwapOfferOf<T>,
 			offer_signature: MultiSignature,
+			item_to: T::ItemId,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			ensure!(offer.verify(&offer_signature), Error::<T>::InvalidSignature);
@@ -711,6 +714,12 @@ pub mod pallet {
 			let signer = signer.into_account();
 			let signer_account = T::AccountId::decode(&mut AccountId32::as_ref(&signer))
 				.map_err(|_| Error::<T>::ErrorConvertingToAccountId)?;
+
+			let item_to_id = match item_to_id {
+				Some(item_to_id) => item_to_id,
+				_ => item_to,
+			};
+			ensure!(item_to_id == item_to, Error::<T>::InvalidItemId);
 
 			Self::do_swap_items(
 				sender,

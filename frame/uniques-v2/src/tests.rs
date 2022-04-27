@@ -1098,7 +1098,7 @@ fn swap_items_should_works() {
 			collection_from_id,
 			item_from_id,
 			collection_to_id,
-			item_to_id,
+			item_to_id: Some(item_to_id),
 			price: Some(price),
 			deadline: None,
 			item_to_owner: user_2,
@@ -1110,14 +1110,20 @@ fn swap_items_should_works() {
 		let invalid_signature = MultiSignature::decode(&mut TrailingZeroInput::zeroes()).unwrap();
 
 		assert_noop!(
-			Uniques::swap_items(Origin::signed(user_1), offer.clone(), valid_signature.clone()),
+			Uniques::swap_items(
+				Origin::signed(user_1),
+				offer.clone(),
+				valid_signature.clone(),
+				item_to_id
+			),
 			Error::<Test>::NotAuthorized
 		);
 
 		assert_ok!(Uniques::swap_items(
 			Origin::signed(user_2),
 			offer.clone(),
-			valid_signature.clone()
+			valid_signature.clone(),
+			item_to_id
 		));
 
 		assert!(events().contains(&Event::<Test>::ItemsSwapExecuted {
@@ -1144,13 +1150,18 @@ fn swap_items_should_works() {
 		assert_eq!(Balances::total_balance(&user_2), initial_balance - price);
 
 		assert_noop!(
-			Uniques::swap_items(Origin::signed(user_2), offer.clone(), invalid_signature),
+			Uniques::swap_items(
+				Origin::signed(user_2),
+				offer.clone(),
+				invalid_signature,
+				item_to_id
+			),
 			Error::<Test>::InvalidSignature
 		);
 
 		// item's owner has changed, thus the signature is no longer valid
 		assert_noop!(
-			Uniques::swap_items(Origin::signed(user_2), offer, valid_signature),
+			Uniques::swap_items(Origin::signed(user_2), offer, valid_signature, item_to_id),
 			Error::<Test>::NotAuthorized
 		);
 	});

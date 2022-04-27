@@ -148,8 +148,8 @@ pub struct SwapOffer<CollectionId, ItemId, Balance, BlockNumber, AccountId> {
 	pub item_from_id: ItemId,
 	/// Swap to an item from specific collection id.
 	pub collection_to_id: CollectionId,
-	/// An item id to swap for.
-	pub item_to_id: ItemId,
+	/// An item id to swap for. If `None` then any item from a specified collection would suit.
+	pub item_to_id: Option<ItemId>,
 	/// An optional price for the swap operation.
 	pub price: Option<Balance>,
 	/// A block number this is offer is valid until
