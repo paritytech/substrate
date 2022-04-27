@@ -69,11 +69,12 @@ use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{
 		AtLeast32BitUnsigned, Bounded, Convert, MaybeSerializeDeserialize, One, Saturating,
-		StaticLookup, Zero,
+		StaticLookup, Zero, CheckedSub
 	},
 	RuntimeDebug,
 };
 use sp_std::{convert::TryInto, fmt::Debug, prelude::*};
+use orml_tokens::{MultiTokenLockableCurrency, MultiTokenCurrency};
 pub use vesting_info::*;
 pub use weights::WeightInfo;
 
@@ -153,6 +154,9 @@ pub mod pallet {
 
 		/// The currency trait.
 		type Currency: LockableCurrency<Self::AccountId>;
+
+		/// The tokens trait.
+		type Tokens: MultiTokenLockableCurrency<Self::AccountId>;
 
 		/// Convert the block number into a balance.
 		type BlockNumberToBalance: Convert<Self::BlockNumber, BalanceOf<Self>>;
@@ -289,6 +293,11 @@ pub mod pallet {
 		ScheduleIndexOutOfBounds,
 		/// Failed to create a new schedule because some parameter was invalid.
 		InvalidScheduleParams,
+		/// No suitable schedule found
+		/// Perhaps the user could merge vesting schedules and try again
+		NoSuitableScheduleFound,
+		/// An overflow or underflow has occured
+		MathError,
 	}
 
 	#[pallet::call]
@@ -634,6 +643,113 @@ impl<T: Config> Pallet<T> {
 		Ok((schedules, locked_now))
 	}
 }
+
+/// A vesting schedule over a currency. This allows a particular currency to have vesting limits
+/// applied to it.
+pub trait NonNativeVestingLocks<AccountId> {
+	/// The quantity used to denote time; usually just a `BlockNumber`.
+	type Moment;
+
+	/// The currency that this schedule applies to.
+	type Currency: MultiTokenCurrency<AccountId>;
+
+	fn lock_non_native(who: &AccountId, token_id: <Self::Currency as MultiTokenCurrency<AccountId>>::CurrencyId, unlock_amount:  <Self::Currency as MultiTokenCurrency<AccountId>>::Balance)
+		 -> Result<<Self::Currency as MultiTokenCurrency<AccountId>>::Balance, DispatchError>;
+
+}
+
+
+pub trait NativeVestingLocks<AccountId> {
+	/// The quantity used to denote time; usually just a `BlockNumber`.
+	type Moment;
+
+	/// The currency that this schedule applies to.
+	type Currency: Currency<AccountId>;
+
+	/// Finds a vesting schedule with locked_at value greater than unlock_amount
+	/// Removes that old vesting schedule, adds a new one with new_locked and new_per_block
+	/// reflecting old locked_at - unlock_amount, to be unlocked by old ending block.
+	fn unlock_native(who: &AccountId, unlock_amount:  <Self::Currency as Currency<AccountId>>::Balance)
+		 -> Result<<Self::Currency as Currency<AccountId>>::Balance, DispatchError>;
+
+}
+
+
+impl<T: Config> NativeVestingLocks<T::AccountId> for Pallet<T>
+where
+	BalanceOf<T>: MaybeSerializeDeserialize + Debug,
+{
+	type Currency = T::Currency;
+	type Moment = T::BlockNumber;
+
+
+	fn unlock_native(who: &T::AccountId, unlock_amount: BalanceOf<T>) -> Result<BalanceOf<T>, DispatchError> {
+		let now = <frame_system::Pallet<T>>::block_number();
+		// First we get the schedules of who
+		let schedules: Vec<VestingInfo<BalanceOf<T>, T::BlockNumber>> = Self::vesting(who).ok_or(Error::<T>::NotVesting)?.into();
+		// Then we enumerate and iterate through them
+		// and select the one which has atleast the `unlock_amount` as `locked_at` in the schedule
+		// Amongst the ones that satisfy the above condition we pick the one with least ending_block number
+		// index of the schedule to be removed, the schedule, locked_at of the schedule, ending_block_as_balance of the schedule
+		let mut selected_schedule: Option<(usize, VestingInfo<BalanceOf<T>, T::BlockNumber>, BalanceOf<T>, BalanceOf<T>)> = None;
+		for (i, schedule) in schedules.clone().into_iter().enumerate() {
+			let schedule_locked_at = schedule.locked_at::<T::BlockNumberToBalance>(now);
+			match ( schedule_locked_at >= unlock_amount, selected_schedule){
+				(true, None) => selected_schedule = Some ((i, schedule, schedule_locked_at, schedule.ending_block_as_balance::<T::BlockNumberToBalance>())),
+				(true, Some(currently_selected_schedule))
+					=> {
+					let schedule_ending_block_as_balance = schedule.ending_block_as_balance::<T::BlockNumberToBalance>();
+					if currently_selected_schedule.1.ending_block_as_balance::<T::BlockNumberToBalance>()
+						> schedule_ending_block_as_balance{
+							selected_schedule = Some ((i, schedule, schedule_locked_at, schedule_ending_block_as_balance))
+						}
+					},
+				_ => (),
+			}
+		}
+
+		// Attempt to unwrap selected_schedule
+		// If it is still none that means no suitable vesting schedule was found
+		// Perhaps the user could merge vesting schedules and try again
+		let selected_schedule = selected_schedule.ok_or(Error::<T>::NoSuitableScheduleFound)?;
+
+		// Remove selected_schedule
+		let mut updated_schedules = schedules.into_iter().enumerate().filter_map(move |(index, schedule)| {
+			if index == selected_schedule.0 {
+				None
+			} else {
+				Some(schedule)
+			}
+		}).collect::<Vec<_>>();
+
+		let new_locked = selected_schedule.2.checked_sub(&unlock_amount).ok_or(Error::<T>::MathError)?;
+		
+		if !new_locked.is_zero(){
+			let length_as_balance = selected_schedule.3.saturating_sub(T::BlockNumberToBalance::convert(now)).max(One::one());
+
+			// .max in length_as_balance computation protects against unsafe div
+			let new_per_block = new_locked / length_as_balance;
+
+			let vesting_schedule = VestingInfo::new(new_locked, new_per_block, now);
+
+			// We skip schedule is_valid check as we are okay with raw_per_block being 0.
+
+			// We just removed an element so this raw push shouldn't fail
+			updated_schedules.push(vesting_schedule);
+		}
+
+		// This is mostly to calculate locked_now
+		// It also removes schedules that represent 0 value locked 
+		let (updated_schedules, locked_now) =
+			Self::exec_action(updated_schedules.to_vec(), VestingAction::Passive)?;
+
+		Self::write_vesting(&who, updated_schedules)?;
+		Self::write_lock(who, locked_now);
+
+		Ok(selected_schedule.3)
+	}
+}
+
 
 impl<T: Config> VestingSchedule<T::AccountId> for Pallet<T>
 where
