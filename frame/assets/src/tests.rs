@@ -967,3 +967,13 @@ fn querying_allowance_should_work() {
 		assert_eq!(Assets::allowance(0, &1, &2), 0);
 	});
 }
+
+#[test]
+fn transfer_large_asset() {
+	new_test_ext().execute_with(|| {
+		let amount = u64::pow(2, 63) + 2;
+		assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 1));
+		assert_ok!(Assets::mint(Origin::signed(1), 0, 1, amount));
+		assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, amount - 1));
+	})
+}

@@ -537,6 +537,7 @@ impl pallet_staking::BenchmarkingConfig for StakingBenchmarkingConfig {
 impl pallet_staking::Config for Runtime {
 	type MaxNominations = MaxNominations;
 	type Currency = Balances;
+	type CurrencyBalance = Balance;
 	type UnixTime = Timestamp;
 	type CurrencyToVote = U128CurrencyToVote;
 	type RewardRemainder = Treasury;
@@ -560,6 +561,7 @@ impl pallet_staking::Config for Runtime {
 	type GenesisElectionProvider = onchain::UnboundedExecution<OnChainSeqPhragmen>;
 	type VoterList = BagsList;
 	type MaxUnlockingChunks = ConstU32<32>;
+	type OnStakerSlash = ();
 	type WeightInfo = pallet_staking::weights::SubstrateWeight<Runtime>;
 	type BenchmarkingConfig = StakingBenchmarkingConfig;
 }
@@ -1211,6 +1213,7 @@ parameter_types! {
 
 impl pallet_recovery::Config for Runtime {
 	type Event = Event;
+	type WeightInfo = pallet_recovery::weights::SubstrateWeight<Runtime>;
 	type Call = Call;
 	type Currency = Balances;
 	type ConfigDepositBase = ConfigDepositBase;
@@ -1555,6 +1558,7 @@ mod benches {
 		[pallet_preimage, Preimage]
 		[pallet_proxy, Proxy]
 		[pallet_referenda, Referenda]
+		[pallet_recovery, Recovery]
 		[pallet_remark, Remark]
 		[pallet_scheduler, Scheduler]
 		[pallet_session, SessionBench::<Runtime>]
