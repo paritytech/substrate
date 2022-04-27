@@ -81,25 +81,21 @@ impl handlebars::HelperDef for UnderscoreFormatHelper {
 		_rc: &mut handlebars::RenderContext,
 		out: &mut dyn handlebars::Output,
 	) -> handlebars::HelperResult {
-		use handlebars::JsonRender;
 		let param = h.param(0).unwrap();
-		let underscore_format_param = underscore_format(param.value().render());
-		out.write(&underscore_format_param)?;
+		let weight_as_nanoseconds_param = weight_as_nanoseconds(param.render());
+		out.write(&weight_as_nanoseconds_param)?;
 		Ok(())
 	}
 }
 
 /// Add an underscore after every 3rd character, then format it, i.e. a separator for large numbers:
 /// 123000000 -> 123_000 * WEIGHT_PER_NANOS.
-fn underscore_format<Number>(i: Number) -> String
+fn weight_as_nanoseconds<Number>(i: Number) -> String
 where
 	Number: std::string::ToString,
 {
 	let mut i = i.to_string().parse::<u64>().unwrap();
-	if i % constants::WEIGHT_PER_NANOS != 0 {
-		panic!("Nano seconds is the smallest unit; Weight must be divisible by it; qed");
-	}
-	i = i / constants::WEIGHT_PER_NANOS;
+	i = i.checked_div(constants::WEIGHT_PER_NANOS).unwrap();
 
 	let mut s = String::new();
 	let i_str = i.to_string();
