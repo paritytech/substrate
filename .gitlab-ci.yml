@@ -160,7 +160,7 @@ default:
 check-dependent:
   <<: *check-dependent-project
   variables:
-    DEPENDENT_REPO: cumulus
+    DEPENDENT_REPO: polkadot
     COMPANION_OVERRIDES: |
       substrate: polkadot-v*
-      cumulus: polkadot-v*
+      polkadot: release-v*
