@@ -56,7 +56,7 @@ impl std::fmt::Display for UnsafeRpcError {
 impl std::error::Error for UnsafeRpcError {}
 
 impl From<UnsafeRpcError> for rpc::Error {
-	fn from(_: UnsafeRpcError) -> rpc::Error {
-		rpc::Error::method_not_found()
+	fn from(error: UnsafeRpcError) -> rpc::Error {
+		rpc::Error { code: rpc::ErrorCode::MethodNotFound, message: error.to_string(), data: None }
 	}
 }
