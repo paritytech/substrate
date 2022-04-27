@@ -39,8 +39,6 @@ use crate::crypto::{DeriveJunction, Pair as TraitPair, SecretStringError};
 #[cfg(feature = "std")]
 use bip39::{Language, Mnemonic, MnemonicType};
 #[cfg(feature = "full_crypto")]
-use core::convert::TryFrom;
-#[cfg(feature = "full_crypto")]
 use ed25519_dalek::{Signer as _, Verifier as _};
 #[cfg(feature = "std")]
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
@@ -116,7 +114,7 @@ impl Deref for Public {
 	}
 }
 
-impl sp_std::convert::TryFrom<&[u8]> for Public {
+impl TryFrom<&[u8]> for Public {
 	type Error = ();
 
 	fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
@@ -215,7 +213,7 @@ impl<'de> Deserialize<'de> for Public {
 #[derive(Encode, Decode, MaxEncodedLen, PassByInner, TypeInfo, PartialEq, Eq)]
 pub struct Signature(pub [u8; 64]);
 
-impl sp_std::convert::TryFrom<&[u8]> for Signature {
+impl TryFrom<&[u8]> for Signature {
 	type Error = ();
 
 	fn try_from(data: &[u8]) -> Result<Self, Self::Error> {

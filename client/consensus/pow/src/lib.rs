@@ -119,13 +119,13 @@ pub enum Error<B: BlockT> {
 	Other(String),
 }
 
-impl<B: BlockT> std::convert::From<Error<B>> for String {
+impl<B: BlockT> From<Error<B>> for String {
 	fn from(error: Error<B>) -> String {
 		error.to_string()
 	}
 }
 
-impl<B: BlockT> std::convert::From<Error<B>> for ConsensusError {
+impl<B: BlockT> From<Error<B>> for ConsensusError {
 	fn from(error: Error<B>) -> ConsensusError {
 		ConsensusError::ClientImport(error.to_string())
 	}

@@ -29,15 +29,15 @@ use frame_support::{
 	},
 	weights::{Weight, WithPostDispatchInfo},
 };
-use frame_system::pallet_prelude::BlockNumberFor;
+use frame_system::{pallet_prelude::BlockNumberFor, RawOrigin};
 use pallet_session::historical;
 use sp_runtime::{
-	traits::{Bounded, Convert, SaturatedConversion, Saturating, Zero},
+	traits::{Bounded, Convert, SaturatedConversion, Saturating, StaticLookup, Zero},
 	Perbill,
 };
 use sp_staking::{
 	offence::{DisableStrategy, OffenceDetails, OnOffenceHandler},
-	EraIndex, SessionIndex,
+	EraIndex, SessionIndex, StakingInterface,
 };
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
@@ -174,11 +174,13 @@ impl<T: Config> Pallet<T> {
 
 		Self::deposit_event(Event::<T>::PayoutStarted(era, ledger.stash.clone()));
 
+		let mut total_imbalance = PositiveImbalanceOf::<T>::zero();
 		// We can now make total validator payout:
 		if let Some(imbalance) =
 			Self::make_payout(&ledger.stash, validator_staking_payout + validator_commission_payout)
 		{
 			Self::deposit_event(Event::<T>::Rewarded(ledger.stash, imbalance.peek()));
+			total_imbalance.subsume(imbalance);
 		}
 
 		// Track the number of payout ops to nominators. Note:
@@ -199,9 +201,11 @@ impl<T: Config> Pallet<T> {
 				nominator_payout_count += 1;
 				let e = Event::<T>::Rewarded(nominator.who.clone(), imbalance.peek());
 				Self::deposit_event(e);
+				total_imbalance.subsume(imbalance);
 			}
 		}
 
+		T::Reward::on_unbalanced(total_imbalance);
 		debug_assert!(nominator_payout_count <= T::MaxNominatorRewardedPerValidator::get());
 		Ok(Some(T::WeightInfo::payout_stakers_alive_staked(nominator_payout_count)).into())
 	}
@@ -209,10 +213,7 @@ impl<T: Config> Pallet<T> {
 	/// Update the ledger for a controller.
 	///
 	/// This will also update the stash lock.
-	pub(crate) fn update_ledger(
-		controller: &T::AccountId,
-		ledger: &StakingLedger<T::AccountId, BalanceOf<T>>,
-	) {
+	pub(crate) fn update_ledger(controller: &T::AccountId, ledger: &StakingLedger<T>) {
 		T::Currency::set_lock(STAKING_ID, &ledger.stash, ledger.total, WithdrawReasons::all());
 		<Ledger<T>>::insert(controller, ledger);
 	}
@@ -602,7 +603,7 @@ impl<T: Config> Pallet<T> {
 				for era in (*earliest)..keep_from {
 					let era_slashes = <Self as Store>::UnappliedSlashes::take(&era);
 					for slash in era_slashes {
-						slashing::apply_slash::<T>(slash);
+						slashing::apply_slash::<T>(slash, era);
 					}
 				}
 
@@ -1244,7 +1245,7 @@ where
 				unapplied.reporters = details.reporters.clone();
 				if slash_defer_duration == 0 {
 					// Apply right away.
-					slashing::apply_slash::<T>(unapplied);
+					slashing::apply_slash::<T>(unapplied, slash_era);
 					{
 						let slash_cost = (6, 5);
 						let reward_cost = (2, 2);
@@ -1308,13 +1309,29 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsAndValidatorsM
 	type Error = ();
 	type Score = VoteWeight;
 
-	/// Returns iterator over voter list, which can have `take` called on it.
 	fn iter() -> Box<dyn Iterator<Item = T::AccountId>> {
 		Box::new(
 			Validators::<T>::iter()
 				.map(|(v, _)| v)
 				.chain(Nominators::<T>::iter().map(|(n, _)| n)),
 		)
+	}
+	fn iter_from(
+		start: &T::AccountId,
+	) -> Result<Box<dyn Iterator<Item = T::AccountId>>, Self::Error> {
+		if Validators::<T>::contains_key(start) {
+			let start_key = Validators::<T>::hashed_key_for(start);
+			Ok(Box::new(
+				Validators::<T>::iter_from(start_key)
+					.map(|(n, _)| n)
+					.chain(Nominators::<T>::iter().map(|(x, _)| x)),
+			))
+		} else if Nominators::<T>::contains_key(start) {
+			let start_key = Nominators::<T>::hashed_key_for(start);
+			Ok(Box::new(Nominators::<T>::iter_from(start_key).map(|(n, _)| n)))
+		} else {
+			Err(())
+		}
 	}
 	fn count() -> u32 {
 		Nominators::<T>::count().saturating_add(Validators::<T>::count())
@@ -1348,5 +1365,70 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsAndValidatorsM
 		// condition of SortedListProvider::unsafe_clear.
 		Nominators::<T>::remove_all();
 		Validators::<T>::remove_all();
+	}
+}
+
+impl<T: Config> StakingInterface for Pallet<T> {
+	type AccountId = T::AccountId;
+	type Balance = BalanceOf<T>;
+
+	fn minimum_bond() -> Self::Balance {
+		MinNominatorBond::<T>::get()
+	}
+
+	fn bonding_duration() -> EraIndex {
+		T::BondingDuration::get()
+	}
+
+	fn current_era() -> EraIndex {
+		Self::current_era().unwrap_or(Zero::zero())
+	}
+
+	fn active_stake(controller: &Self::AccountId) -> Option<Self::Balance> {
+		Self::ledger(controller).map(|l| l.active)
+	}
+
+	fn total_stake(controller: &Self::AccountId) -> Option<Self::Balance> {
+		Self::ledger(controller).map(|l| l.total)
+	}
+
+	fn bond_extra(stash: Self::AccountId, extra: Self::Balance) -> DispatchResult {
+		Self::bond_extra(RawOrigin::Signed(stash).into(), extra)
+	}
+
+	fn unbond(controller: Self::AccountId, value: Self::Balance) -> DispatchResult {
+		Self::unbond(RawOrigin::Signed(controller).into(), value)
+	}
+
+	fn withdraw_unbonded(
+		controller: Self::AccountId,
+		num_slashing_spans: u32,
+	) -> Result<u64, DispatchError> {
+		Self::withdraw_unbonded(RawOrigin::Signed(controller).into(), num_slashing_spans)
+			.map(|post_info| {
+				post_info
+					.actual_weight
+					.unwrap_or(T::WeightInfo::withdraw_unbonded_kill(num_slashing_spans))
+			})
+			.map_err(|err_with_post_info| err_with_post_info.error)
+	}
+
+	fn bond(
+		stash: Self::AccountId,
+		controller: Self::AccountId,
+		value: Self::Balance,
+		payee: Self::AccountId,
+	) -> DispatchResult {
+		Self::bond(
+			RawOrigin::Signed(stash).into(),
+			T::Lookup::unlookup(controller),
+			value,
+			RewardDestination::Account(payee),
+		)
+	}
+
+	fn nominate(controller: Self::AccountId, targets: Vec<Self::AccountId>) -> DispatchResult {
+		let targets = targets.into_iter().map(T::Lookup::unlookup).collect::<Vec<_>>();
+		Self::nominate(RawOrigin::Signed(controller).into(), targets)
 	}
 }
