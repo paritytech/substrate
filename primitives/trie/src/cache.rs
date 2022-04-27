@@ -135,15 +135,25 @@ impl<H: Hasher> LocalTrieNodeCache<H> {
 impl<H: Hasher> Drop for LocalTrieNodeCache<H> {
 	fn drop(&mut self) {
 		let mut shared_node_cache = self.shared.node_cache.write();
+		let mut shared_node_cache_access = self.shared_node_cache_access.lock();
 		self.node_cache.lock().drain().for_each(|(k, v)| {
+			shared_node_cache_access.remove(&k);
 			shared_node_cache.put(k, v);
+		});
+		shared_node_cache_access.drain().for_each(|k| {
+			shared_node_cache.get(dbg!(&k));
 		});
 
 		if let Some(shared_value_cache) = self.shared.value_cache.as_ref() {
 			let mut shared_value_cache = shared_value_cache.write();
+			let mut shared_value_cache_access = self.shared_value_cache_access.lock();
 
 			self.value_cache.lock().drain().for_each(|(k, v)| {
+				shared_value_cache_access.remove(&k);
 				shared_value_cache.put(k, v);
+			});
+			shared_value_cache_access.drain().for_each(|k| {
+				shared_value_cache.get(&k);
 			});
 		}
 	}
@@ -247,6 +257,7 @@ impl<'a, H: Hasher> trie_db::TrieCache<NodeCodec<H>> for TrieNodeCache<'a, H> {
 		fetch_node: &mut dyn FnMut() -> trie_db::Result<NodeOwned<H::Out>, H::Out, Error<H::Out>>,
 	) -> trie_db::Result<&NodeOwned<H::Out>, H::Out, Error<H::Out>> {
 		if let Some(res) = self.shared_cache.peek(&hash) {
+			self.shared_node_cache_access.insert(hash);
 			return Ok(res)
 		}
 
@@ -485,5 +496,78 @@ mod tests {
 
 			assert_eq!(new_root, proof_root)
 		}
+	}
+
+	#[test]
+	fn cache_lru_works() {
+		let (db, root) = create_trie();
+
+		let shared_cache = Cache::new(true);
+
+		{
+			let local_cache = shared_cache.local_cache();
+
+			let mut cache = local_cache.as_trie_db_cache(root);
+			let trie = TrieDBBuilder::<Layout>::new(&db, &root).with_cache(&mut cache).build();
+
+			for (k, _) in TEST_DATA {
+				trie.get(k).unwrap().unwrap();
+			}
+		}
+
+		// Check that all items are there.
+		assert!(shared_cache
+			.value_cache
+			.as_ref()
+			.unwrap()
+			.read()
+			.iter()
+			.map(|d| d.0)
+			.all(|l| TEST_DATA.iter().any(|d| *l == value_cache_get_key(&d.0, &root))));
+
+		{
+			let local_cache = shared_cache.local_cache();
+
+			let mut cache = local_cache.as_trie_db_cache(root);
+			let trie = TrieDBBuilder::<Layout>::new(&db, &root).with_cache(&mut cache).build();
+
+			for (k, _) in TEST_DATA.iter().take(2) {
+				trie.get(k).unwrap().unwrap();
+			}
+		}
+
+		// Ensure that the accessed items are most recently used items of the shared value cache.
+		assert!(shared_cache
+			.value_cache
+			.as_ref()
+			.unwrap()
+			.read()
+			.iter()
+			.take(2)
+			.map(|d| d.0)
+			.all(|l| { TEST_DATA.iter().take(2).any(|d| *l == value_cache_get_key(&d.0, &root)) }));
+
+		let most_recently_used_nodes =
+			shared_cache.node_cache.read().iter().map(|d| d.0.clone()).collect::<Vec<_>>();
+
+		// Delete the value cache, so that we access the nodes.
+		shared_cache.value_cache.as_ref().unwrap().write().clear();
+
+		{
+			let local_cache = shared_cache.local_cache();
+
+			let mut cache = local_cache.as_trie_db_cache(root);
+			let trie = TrieDBBuilder::<Layout>::new(&db, &root).with_cache(&mut cache).build();
+
+			for (k, _) in TEST_DATA.iter().take(2) {
+				trie.get(k).unwrap().unwrap();
+			}
+		}
+
+		// Ensure that the most recently used nodes changed as well.
+		assert_ne!(
+			most_recently_used_nodes,
+			shared_cache.node_cache.read().iter().map(|d| d.0.clone()).collect::<Vec<_>>()
+		);
 	}
 }
