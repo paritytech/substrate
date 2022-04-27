@@ -102,7 +102,7 @@ pub use libp2p::{
 	},
 	kad::record::Key as KademliaKey,
 };
-pub use signature::*;
+pub use signature::Signature;
 
 /// Substrate network service. Handles network IO and manages connectivity.
 pub struct NetworkService<B: BlockT + 'static, H: ExHashT> {

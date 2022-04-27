@@ -18,12 +18,13 @@
 
 use super::StateDownloadProgress;
 use crate::{
-	chain::{Client, ImportedState},
+	chain::Client,
 	schema::v1::{StateEntry, StateRequest, StateResponse},
 };
 use codec::{Decode, Encode};
 use log::debug;
 use sc_client_api::CompactProof;
+use sc_consensus::ImportedState;
 use smallvec::SmallVec;
 use sp_core::storage::well_known_keys;
 use sp_runtime::traits::{Block as BlockT, Header, NumberFor};
@@ -71,7 +72,7 @@ impl<B: BlockT> StateSync<B> {
 		}
 	}
 
-	///  Validate and import a state reponse.
+	///  Validate and import a state response.
 	pub fn import(&mut self, response: StateResponse) -> ImportResult<B> {
 		if response.entries.is_empty() && response.proof.is_empty() {
 			debug!(target: "sync", "Bad state response");

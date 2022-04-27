@@ -17,8 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 ///! Warp sync support.
-pub use super::state::ImportResult;
-use super::state::StateSync;
+use super::state::{ImportResult, StateSync};
 pub use crate::warp_request_handler::{
 	EncodedProof, Request as WarpProofRequest, VerificationResult, WarpSyncProvider,
 };

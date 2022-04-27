@@ -19,8 +19,6 @@
 //! Blockchain access trait
 
 use sc_client_api::{BlockBackend, ProofProvider};
-pub use sc_client_api::{StorageData, StorageKey};
-pub use sc_consensus::ImportedState;
 use sp_blockchain::{Error, HeaderBackend, HeaderMetadata};
 use sp_runtime::traits::{Block as BlockT, BlockIdTo};
 
