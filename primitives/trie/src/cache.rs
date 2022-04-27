@@ -47,7 +47,7 @@ fn value_cache_get_key(key: &[u8], storage_root: &impl AsRef<[u8]>) -> u64 {
 
 pub struct SharedTrieNodeCache<H: Hasher> {
 	node_cache: Arc<RwLock<LruCache<H::Out, NodeOwned<H::Out>>>>,
-	value_cache: Option<Arc<RwLock<NoHashingLruCache<CachedValue<H::Out>>>>>,
+	value_cache: Arc<RwLock<NoHashingLruCache<CachedValue<H::Out>>>>,
 }
 
 impl<H: Hasher> Clone for SharedTrieNodeCache<H> {
@@ -58,16 +58,12 @@ impl<H: Hasher> Clone for SharedTrieNodeCache<H> {
 
 impl<H: Hasher> SharedTrieNodeCache<H> {
 	/// Create a new [`SharedTrieNodeCache`].
-	///
-	/// If `enable_value_cache` is `true`, the special value cache will be enabled. The value cache
-	/// caches `key => value` per storage root. So, when trying to access some value in the trie
-	/// using a key, we can directly look up the value instead of traversing the trie.
-	pub fn new(enable_value_cache: bool) -> Self {
+	pub fn new() -> Self {
 		Self {
 			node_cache: Arc::new(RwLock::new(LruCache::unbounded())),
-			value_cache: enable_value_cache.then(|| {
-				Arc::new(RwLock::new(NoHashingLruCache::unbounded_with_hasher(Default::default())))
-			}),
+			value_cache: Arc::new(RwLock::new(NoHashingLruCache::unbounded_with_hasher(
+				Default::default(),
+			))),
 		}
 	}
 
@@ -96,21 +92,17 @@ impl<H: Hasher> LocalTrieNodeCache<H> {
 	///
 	/// The given `storage_root` needs to be the storage root of the trie this cache is used for.
 	pub fn as_trie_db_cache<'a>(&'a self, storage_root: H::Out) -> TrieNodeCache<'a, H> {
-		let data_cache = if let Some(ref cache) = self.shared.value_cache {
-			ValueCache::ForStorageRoot {
-				storage_root,
-				local_value_cache: self.value_cache.lock(),
-				shared_value_cache: cache.read(),
-				shared_value_cache_access: self.shared_value_cache_access.lock(),
-			}
-		} else {
-			ValueCache::Disabled
+		let value_cache = ValueCache::ForStorageRoot {
+			storage_root,
+			local_value_cache: self.value_cache.lock(),
+			shared_value_cache: self.shared.value_cache.read(),
+			shared_value_cache_access: self.shared_value_cache_access.lock(),
 		};
 
 		TrieNodeCache {
 			shared_cache: self.shared.node_cache.read(),
 			local_cache: self.node_cache.lock(),
-			value_cache: data_cache,
+			value_cache,
 			shared_node_cache_access: self.shared_node_cache_access.lock(),
 		}
 	}
@@ -141,28 +133,24 @@ impl<H: Hasher> Drop for LocalTrieNodeCache<H> {
 			shared_node_cache.put(k, v);
 		});
 		shared_node_cache_access.drain().for_each(|k| {
-			shared_node_cache.get(dbg!(&k));
+			shared_node_cache.get(&k);
 		});
 
-		if let Some(shared_value_cache) = self.shared.value_cache.as_ref() {
-			let mut shared_value_cache = shared_value_cache.write();
-			let mut shared_value_cache_access = self.shared_value_cache_access.lock();
+		let mut shared_value_cache = self.shared.value_cache.write();
+		let mut shared_value_cache_access = self.shared_value_cache_access.lock();
 
-			self.value_cache.lock().drain().for_each(|(k, v)| {
-				shared_value_cache_access.remove(&k);
-				shared_value_cache.put(k, v);
-			});
-			shared_value_cache_access.drain().for_each(|k| {
-				shared_value_cache.get(&k);
-			});
-		}
+		self.value_cache.lock().drain().for_each(|(k, v)| {
+			shared_value_cache_access.remove(&k);
+			shared_value_cache.put(k, v);
+		});
+		shared_value_cache_access.drain().for_each(|k| {
+			shared_value_cache.get(&k);
+		});
 	}
 }
 
 /// The abstraction of the value cache for the [`TrieNodeCache`].
 enum ValueCache<'a, H> {
-	/// The value cache is disabled.
-	Disabled,
 	/// The value cache is fresh, aka not yet associated to any storage root.
 	/// This is used for example when a new trie is being build, to cache new values.
 	Fresh(HashMap<Vec<u8>, CachedValue<H>>),
@@ -179,7 +167,6 @@ impl<H: AsRef<[u8]>> ValueCache<'_, H> {
 	/// Get the value for the given `key`.
 	fn get(&mut self, key: &[u8]) -> Option<&CachedValue<H>> {
 		match self {
-			Self::Disabled => None,
 			Self::Fresh(map) => map.get(key),
 			Self::ForStorageRoot {
 				local_value_cache,
@@ -209,7 +196,6 @@ impl<H: AsRef<[u8]>> ValueCache<'_, H> {
 	/// Insert some new `value` under the given `key`.
 	fn insert(&mut self, key: &[u8], value: CachedValue<H>) {
 		match self {
-			Self::Disabled => {},
 			Self::Fresh(map) => {
 				map.insert(key.into(), value);
 			},
@@ -238,15 +224,13 @@ impl<'a, H: Hasher> TrieNodeCache<'a, H> {
 	pub fn merge_into(self, local: &LocalTrieNodeCache<H>, storage_root: H::Out) {
 		let cache = if let ValueCache::Fresh(cache) = self.value_cache { cache } else { return };
 
-		if let Some(ref value_cache) = local.shared.value_cache {
-			let mut value_cache = value_cache.write();
-			cache
-				.into_iter()
-				.map(|(k, v)| (value_cache_get_key(&k, &storage_root), v))
-				.for_each(|(k, v)| {
-					value_cache.push(k, v);
-				});
-		}
+		let mut value_cache = local.shared.value_cache.write();
+		cache
+			.into_iter()
+			.map(|(k, v)| (value_cache_get_key(&k, &storage_root), v))
+			.for_each(|(k, v)| {
+				value_cache.push(k, v);
+			});
 	}
 }
 
@@ -324,7 +308,7 @@ mod tests {
 	fn basic_cache_works() {
 		let (db, root) = create_trie();
 
-		let shared_cache = Cache::new(true);
+		let shared_cache = Cache::new();
 		let local_cache = shared_cache.local_cache();
 
 		{
@@ -334,7 +318,7 @@ mod tests {
 		}
 
 		// Local cache wasn't dropped yet, so there should nothing in the shared caches.
-		assert!(shared_cache.value_cache.as_ref().unwrap().read().is_empty());
+		assert!(shared_cache.value_cache.read().is_empty());
 		assert!(shared_cache.node_cache.read().is_empty());
 
 		drop(local_cache);
@@ -343,8 +327,6 @@ mod tests {
 		assert!(shared_cache.node_cache.read().len() >= 1);
 		let cached_data = shared_cache
 			.value_cache
-			.as_ref()
-			.unwrap()
 			.read()
 			.peek(&value_cache_get_key(TEST_DATA[0].0, &root))
 			.unwrap()
@@ -354,7 +336,7 @@ mod tests {
 		let fake_data = Bytes::from(&b"fake_data"[..]);
 
 		let local_cache = shared_cache.local_cache();
-		shared_cache.value_cache.as_ref().unwrap().write().put(
+		shared_cache.value_cache.write().put(
 			value_cache_get_key(TEST_DATA[1].0, &root),
 			(fake_data.clone(), Default::default()).into(),
 		);
@@ -376,7 +358,7 @@ mod tests {
 		// Use some long value to not have it inlined
 		let new_value = vec![23; 64];
 
-		let shared_cache = Cache::new(true);
+		let shared_cache = Cache::new();
 		let local_cache = shared_cache.local_cache();
 
 		let mut new_root = root;
@@ -394,8 +376,6 @@ mod tests {
 
 		let cached_data = shared_cache
 			.value_cache
-			.as_ref()
-			.unwrap()
 			.read()
 			.peek(&value_cache_get_key(&new_key, &new_root))
 			.unwrap()
@@ -407,7 +387,7 @@ mod tests {
 	fn trie_db_cache_and_recorder_work_together() {
 		let (db, root) = create_trie();
 
-		let shared_cache = Cache::new(true);
+		let shared_cache = Cache::new();
 		let local_cache = shared_cache.local_cache();
 
 		// Run this twice so that we use the data cache in the second run.
@@ -452,7 +432,7 @@ mod tests {
 
 		let (db, root) = create_trie();
 
-		let shared_cache = Cache::new(true);
+		let shared_cache = Cache::new();
 		let local_cache = shared_cache.local_cache();
 
 		// Run this twice so that we use the data cache in the second run.
@@ -502,7 +482,7 @@ mod tests {
 	fn cache_lru_works() {
 		let (db, root) = create_trie();
 
-		let shared_cache = Cache::new(true);
+		let shared_cache = Cache::new();
 
 		{
 			let local_cache = shared_cache.local_cache();
@@ -518,8 +498,6 @@ mod tests {
 		// Check that all items are there.
 		assert!(shared_cache
 			.value_cache
-			.as_ref()
-			.unwrap()
 			.read()
 			.iter()
 			.map(|d| d.0)
@@ -539,8 +517,6 @@ mod tests {
 		// Ensure that the accessed items are most recently used items of the shared value cache.
 		assert!(shared_cache
 			.value_cache
-			.as_ref()
-			.unwrap()
 			.read()
 			.iter()
 			.take(2)
@@ -551,7 +527,7 @@ mod tests {
 			shared_cache.node_cache.read().iter().map(|d| d.0.clone()).collect::<Vec<_>>();
 
 		// Delete the value cache, so that we access the nodes.
-		shared_cache.value_cache.as_ref().unwrap().write().clear();
+		shared_cache.value_cache.write().clear();
 
 		{
 			let local_cache = shared_cache.local_cache();
