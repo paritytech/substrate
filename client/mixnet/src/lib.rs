@@ -25,7 +25,7 @@
 
 use mixnet::{Error, MixPeerId, MixPublicKey, Topology};
 
-pub use mixnet::{WorkerSink, WorkerStream};
+pub use mixnet::{WorkerSink, WorkerStream, Config};
 use sp_application_crypto::key_types;
 use sp_keystore::SyncCryptoStore;
 
@@ -104,6 +104,16 @@ enum State {
 	Running,
 }
 
+/// Build mixnet config.
+pub fn config(local_identity: &libp2p::core::identity::Keypair) -> Option<mixnet::Config> {
+	if let libp2p::core::identity::Keypair::Ed25519(kp) = local_identity {
+		let local_public_key = local_identity.public();
+		Some(mixnet::Config::new_with_ed25519_keypair(kp, local_public_key.clone().into()))
+	} else {
+		None
+	}
+}
+
 /// Instantiate channels needed to spawn and communicate with the mixnet worker.
 pub fn new_channels(
 ) -> (WorkerChannels, (WorkerSink, WorkerStream, TracingUnboundedSender<MixnetCommand>)) {
@@ -128,27 +138,23 @@ where
 {
 	pub fn new(
 		inner_channels: WorkerChannels,
+		mixnet_config: mixnet::Config,
 		client: Arc<C>,
 		shared_authority_set: sc_finality_grandpa::SharedAuthoritySet<
 			<B as BlockT>::Hash,
 			NumberFor<B>,
 		>,
 		//		role: sc_network::config::Role,
-		local_identity: libp2p::core::identity::Keypair,
 		authority_discovery_service: sc_authority_discovery::Service,
 		//authority_id: Option<AuthorityId>,
 		key_store: Arc<dyn SyncCryptoStore>,
 		//authority-discovery which is slow).
 		//key_store: &dyn SyncCryptoStore,
-	) -> Option<Self> {
+	) -> Self {
 		let finality_stream = client.finality_notification_stream();
-		if let libp2p::core::identity::Keypair::Ed25519(kp) = &local_identity {
-			let local_public_key = local_identity.public();
-			let mixnet_config =
-				mixnet::Config::new_with_ed25519_keypair(kp, local_public_key.clone().into());
 			// TODO read validator from session
 			// TODO is this node part of session (role means nothing).
-			let topology = AuthorityStar::new(local_public_key.clone().into(), mixnet_config.public_key.clone());
+			let topology = AuthorityStar::new(mixnet_config.local_id.clone(), mixnet_config.public_key.clone());
 			/*						let commands =
 			crate::mixnet::AuthorityStar::command_stream(&mut event_streams);*/
 			let worker = mixnet::MixnetWorker::new(mixnet_config, topology, inner_channels.0);
@@ -173,7 +179,6 @@ where
 			//			let encoded_connection_info =
 			// AuthorityStar::encoded_connection_info(&connection_info);
 			let state = State::Synching;
-			Some(
 				MixnetWorker {
 					authority_id: None,
 					worker,
@@ -189,12 +194,8 @@ where
 					authority_replies: VecDeque::new(),
 					key_store,
 					//connection_info,
-				},
+				}
 				//encoded_connection_info,
-			)
-		} else {
-			None
-		}
 	}
 
 	pub async fn run(mut self) {
@@ -389,18 +390,68 @@ where
 		let new_session = self.fetch_new_session_keys(at, session);
 		self.update_own_public_key_within_authority_set(&set);
 		if let Some(topology) = self.worker.topology_mut() {
-			// TODO not at topology level, code here
-			topology.change_authorities::<B, C>(
-				local_id,
-				&*self.client,
-				set,
-				self.authority_id.as_ref(),
-				&mut self.authority_discovery_service,
-				&mut self.authority_replies,
-				&mut self.authority_queries,
-				at,
-				session,
-			);
+			debug!(target: "mixnet", "Change authorities {:?}", set);
+			topology.current_authorities.clear();
+			topology.routing_nodes.clear();
+			topology.unconnected_authorities.clear(); // TODO could keep for a few session
+											// TODO also remove authorty disocvery query??
+
+			while let Some(i) = self.authority_replies.iter().rev().position(|v| v.is_none()) {
+				self.authority_replies.remove(i);
+				self.authority_queries.remove(i);
+			}
+
+			topology.routing = false;
+
+			for (auth, _) in set.into_iter() {
+				if self.authority_id.as_ref() == Some(&auth) {
+					debug!(target: "mixnet", "In new authority set, routing.");
+					topology.routing = true;
+					topology.current_authorities.insert(auth, Some(local_id));
+					continue
+				}
+
+				use sp_application_crypto::Public;
+				let authority_discovery_id =
+					if let Some(id) = topology.sessions.get(&auth.clone().to_public_crypto_pair()) {
+						id.clone()
+					} else {
+						warn!(target: "mixnet", "Skipped authority {:?}, no session key", auth);
+						continue
+					};
+				let mut auth_peer_id = None;
+				if let Some(node_id) = topology.connected_authorities.get(&auth) {
+					if let Some(NodeInfo { authority_id, .. }) = topology.connected_nodes.get_mut(node_id) {
+						*authority_id =
+							Some(AuthorityInfo { grandpa_id: auth.clone(), authority_discovery_id });
+						topology.routing_nodes.insert(node_id.clone());
+						auth_peer_id = Some(node_id.clone());
+					} else {
+						unreachable!();
+					}
+				} else {
+					if let Ok(auth_public) = authority_discovery_id.1.as_slice().try_into() {
+						self.authority_queries.push_back(AuthorityInfo {
+							grandpa_id: auth.clone(),
+							authority_discovery_id,
+						});
+
+						if let Some(rx) = self.authority_discovery_service
+							.get_addresses_by_authority_id_callback(auth_public)
+						{
+							self.authority_replies.push_back(Some(rx));
+						} else {
+							debug!(target: "mixnet", "Query authority full channel.");
+							self.authority_replies.push_back(None);
+						}
+					} else {
+						error!(target: "mixnet", "Invalid authority discovery key {:?}", authority_discovery_id);
+						continue
+					}
+				}
+				topology.current_authorities.insert(auth, auth_peer_id);
+			}
+
 			self.update_state(false);
 		}
 	}
@@ -628,85 +679,6 @@ impl AuthorityStar {
 		Box::pin(rx)
 	}
 	*/
-
-	fn change_authorities<B, C>(
-		&mut self,
-		local_id: MixPeerId,
-		client: &C,
-		new_set: AuthorityList,
-		current_authority_id: Option<&AuthorityId>,
-		authority_discovery_service: &mut sc_authority_discovery::Service,
-		authority_replies: &mut VecDeque<Option<AuthorityRx>>,
-		authority_queries: &mut VecDeque<AuthorityInfo>,
-		mut at: NumberFor<B>,
-		session: SetId,
-	) where
-		B: BlockT,
-		C: UsageProvider<B> + BlockchainEvents<B> + ProvideRuntimeApi<B>,
-		C::Api: SessionKeys<B>,
-	{
-		debug!(target: "mixnet", "Change authorities {:?}", new_set);
-		self.current_authorities.clear();
-		self.routing_nodes.clear();
-		self.unconnected_authorities.clear(); // TODO could keep for a few session
-									  // TODO also remove authorty disocvery query??
-
-		while let Some(i) = authority_replies.iter().rev().position(|v| v.is_none()) {
-			authority_replies.remove(i);
-			authority_queries.remove(i);
-		}
-
-		self.routing = false;
-
-		for (auth, _) in new_set.into_iter() {
-			if current_authority_id == Some(&auth) {
-				debug!(target: "mixnet", "In new authority set, routing.");
-				self.routing = true;
-				self.current_authorities.insert(auth, Some(local_id));
-				continue
-			}
-
-			use sp_application_crypto::Public;
-			let authority_discovery_id =
-				if let Some(id) = self.sessions.get(&auth.clone().to_public_crypto_pair()) {
-					id.clone()
-				} else {
-					warn!(target: "mixnet", "Skipped authority {:?}, no session key", auth);
-					continue
-				};
-			let mut auth_peer_id = None;
-			if let Some(node_id) = self.connected_authorities.get(&auth) {
-				if let Some(NodeInfo { authority_id, .. }) = self.connected_nodes.get_mut(node_id) {
-					*authority_id =
-						Some(AuthorityInfo { grandpa_id: auth.clone(), authority_discovery_id });
-					self.routing_nodes.insert(node_id.clone());
-					auth_peer_id = Some(node_id.clone());
-				} else {
-					unreachable!();
-				}
-			} else {
-				if let Ok(auth_public) = authority_discovery_id.1.as_slice().try_into() {
-					authority_queries.push_back(AuthorityInfo {
-						grandpa_id: auth.clone(),
-						authority_discovery_id,
-					});
-
-					if let Some(rx) = authority_discovery_service
-						.get_addresses_by_authority_id_callback(auth_public)
-					{
-						authority_replies.push_back(Some(rx));
-					} else {
-						debug!(target: "mixnet", "Query authority full channel.");
-						authority_replies.push_back(None);
-					}
-				} else {
-					error!(target: "mixnet", "Invalid authority discovery key {:?}", authority_discovery_id);
-					continue
-				}
-			}
-			self.current_authorities.insert(auth, auth_peer_id);
-		}
-	}
 
 	fn has_enough_nodes(&self) -> bool {
 		self.routing_nodes.len() >= LOW_MIXNET_THRESHOLD

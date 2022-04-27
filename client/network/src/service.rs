@@ -342,21 +342,17 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				// TODO move mixnet building to MixnetHandlePrototype?? + add metrics
 				// through call backs in crate and same as transaction handler to register
 				let mut mixnet = None;
-				if let Some((mixnet_in, mixnet_out, command_sender)) = params.mixnet {
+				if let Some((mixnet_in, mixnet_out, command_sender, config)) = params.mixnet {
 					let encoded_connection_info = Vec::new();
-					if let libp2p::core::identity::Keypair::Ed25519(kp) = &local_identity {
-						mixnet = Some((
-							Mixnet::new_from_worker(
-								kp,
-								encoded_connection_info,
-								mixnet_in,
-								mixnet_out,
-							),
-							command_sender,
-						));
-					} else {
-						log::error!(target: "sync", "Ignoring mixnet, non Ed25519 identity");
-					}
+					mixnet = Some((
+						Mixnet::new_from_worker(
+							config,
+							encoded_connection_info,
+							mixnet_in,
+							mixnet_out,
+						),
+						command_sender,
+					));
 				};
 
 				let result = Behaviour::new(

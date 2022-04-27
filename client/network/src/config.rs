@@ -141,6 +141,7 @@ pub struct Params<B: BlockT, H: ExHashT> {
 		mixnet::WorkerSink,
 		mixnet::WorkerStream,
 		TracingUnboundedSender<crate::MixnetCommand>,
+		mixnet::Config,
 	)>,
 }
 
