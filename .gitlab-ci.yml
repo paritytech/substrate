@@ -263,6 +263,20 @@ cargo-clippy:
   script:
     - SKIP_WASM_BUILD=1 env -u RUSTFLAGS cargo +nightly clippy --all-targets
 
+cargo-check-nixos:
+  stage:                           test
+  <<:                              *docker-env
+  <<:                              *test-refs
+  before_script:                   []
+  variables:
+    CI_IMAGE:                      "nixos/nix"
+    SNAP:                          "DUMMY"
+    WS_API:                        "DUMMY"
+  script:
+    - nix-channel --update
+    - nix-shell shell.nix
+    - nix-shell --run "cargo check --workspace --all-targets --all-features"
+
 cargo-check-benches:
   stage:                           test
   <<:                              *docker-env
