@@ -571,3 +571,39 @@ fn should_deserialize_storage_key() {
 
 	assert_eq!(k.0.len(), 32);
 }
+
+#[test]
+fn wildcard_storage_subscriptions_are_rpc_unsafe() {
+	let (subscriber, id, _) = Subscriber::new_test("test");
+
+	let client = Arc::new(substrate_test_runtime_client::new());
+	let (api, _child) = new_full(
+		client.clone(),
+		SubscriptionManager::new(Arc::new(TaskExecutor)),
+		DenyUnsafe::Yes,
+		None,
+	);
+
+	api.subscribe_storage(Default::default(), subscriber, None.into());
+
+	let error = executor::block_on(id).unwrap().unwrap_err();
+	assert_eq!(error.to_string(), "Method not found: RPC call is unsafe to be called externally");
+}
+
+#[test]
+fn concrete_storage_subscriptions_are_rpc_safe() {
+	let (subscriber, id, _) = Subscriber::new_test("test");
+
+	let client = Arc::new(substrate_test_runtime_client::new());
+	let (api, _child) = new_full(
+		client.clone(),
+		SubscriptionManager::new(Arc::new(TaskExecutor)),
+		DenyUnsafe::Yes,
+		None,
+	);
+
+	let key = StorageKey(STORAGE_KEY.to_vec());
+	api.subscribe_storage(Default::default(), subscriber, Some(vec![key]));
+
+	assert!(matches!(executor::block_on(id), Ok(Ok(SubscriptionId::String(_)))));
+}
