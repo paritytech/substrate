@@ -186,7 +186,7 @@ impl Sandbox for FunctionExecutor {
 		};
 
 		if sandboxed_memory.write_from(Pointer::new(offset as u32), &buffer).is_err() {
-			return Ok(sandbox_env::ERR_OUT_OF_BOUNDS);
+			return Ok(sandbox_env::ERR_OUT_OF_BOUNDS)
 		}
 
 		Ok(sandbox_env::ERR_OK)
