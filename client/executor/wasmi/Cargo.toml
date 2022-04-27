@@ -22,4 +22,3 @@ sp-allocator = { version = "4.1.0-dev", path = "../../../primitives/allocator" }
 sp-sandbox = { version = "0.10.0-dev", path = "../../../primitives/sandbox" }
 sp-wasm-interface = { version = "6.0.0", path = "../../../primitives/wasm-interface" }
 sp-runtime-interface = { version = "6.0.0", path = "../../../primitives/runtime-interface" }
-sp-core = { version = "6.0.0", path = "../../../primitives/core" }
