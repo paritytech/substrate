@@ -26,7 +26,10 @@ use std::{
 use inflector::Inflector;
 use serde::Serialize;
 
-use crate::{shared::{UnderscoreFormatHelper,UnderscoreHelper}, PalletCmd};
+use crate::{
+	shared::{UnderscoreFormatHelper, UnderscoreHelper},
+	PalletCmd,
+};
 use frame_benchmarking::{
 	Analysis, AnalysisChoice, BenchmarkBatchSplitResults, BenchmarkResult, BenchmarkSelector,
 	RegressionModel,
