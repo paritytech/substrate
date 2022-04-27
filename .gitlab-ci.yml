@@ -270,6 +270,8 @@ cargo-check-nixos:
   before_script:                   []
   variables:
     CI_IMAGE:                      "nixos/nix"
+    SNAP:                          "DUMMY"
+    WS_API:                        "DUMMY"
   script:
     - nix-channel --update
     - nix-shell shell.nix
