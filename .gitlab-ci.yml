@@ -447,6 +447,7 @@ cargo-check-nixos:
   stage:                           test
   <<:                              *docker-env
   <<:                              *test-refs
+  before_script:                   []
   variables:
     CI_IMAGE:                      "nixos/nix"
   script:
