@@ -120,6 +120,14 @@ pub struct RandomnessFromOneEpochAgo<T>(sp_std::marker::PhantomData<T>);
 /// we process VRF outputs on block execution finalization, i.e. `on_finalize`).
 pub struct ParentBlockRandomness<T>(sp_std::marker::PhantomData<T>);
 
+/// Randomness produced semi-freshly with each block, but inherits limitations of
+/// `RandomnessFromTwoEpochsAgo` from which it derives.
+///
+/// See [`ParentBlockRandomness`].
+#[deprecated(note = "Should not be relied upon for correctness, \
+					 will not provide fresh randomness for the current block. \
+					 Please use `ParentBlockRandomness` instead.")]
+pub struct CurrentBlockRandomness<T>(sp_std::marker::PhantomData<T>);
 
 impl<T: Config> RandomnessT<T::Hash, T::BlockNumber> for RandomnessFromTwoEpochsAgo<T> {
 	fn random(subject: &[u8]) -> (T::Hash, T::BlockNumber) {
@@ -152,5 +160,13 @@ impl<T: Config> RandomnessT<Option<T::Hash>, T::BlockNumber> for ParentBlockRand
 		});
 
 		(random, <frame_system::Pallet<T>>::block_number().saturating_sub(One::one()))
+	}
+}
+
+#[allow(deprecated)]
+impl<T: Config> RandomnessT<Option<T::Hash>, T::BlockNumber> for CurrentBlockRandomness<T> {
+	fn random(subject: &[u8]) -> (Option<T::Hash>, T::BlockNumber) {
+		let (random, _) = ParentBlockRandomness::<T>::random(subject);
+		(random, <frame_system::Pallet<T>>::block_number())
 	}
 }
