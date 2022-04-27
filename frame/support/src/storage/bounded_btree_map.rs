@@ -74,6 +74,14 @@ where
 		Self(t, Default::default())
 	}
 
+	/// Exactly the same semantics as `BTreeMap::retain`.
+	///
+	/// The is a safe `&mut self` borrow because `retain` can only ever decrease the length of the
+	/// inner map.
+	pub fn retain<F: FnMut(&K, &mut V) -> bool>(&mut self, f: F) {
+		self.0.retain(f)
+	}
+
 	/// Create a new `BoundedBTreeMap`.
 	///
 	/// Does not allocate.
