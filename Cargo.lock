@@ -8120,16 +8120,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sc-allocator"
-version = "4.1.0-dev"
-dependencies = [
- "log 0.4.16",
- "sp-core",
- "sp-wasm-interface",
- "thiserror",
-]
-
-[[package]]
 name = "sc-authority-discovery"
 version = "0.10.0-dev"
 dependencies = [
@@ -8616,7 +8606,7 @@ version = "0.10.0-dev"
 dependencies = [
  "environmental",
  "parity-scale-codec",
- "sc-allocator",
+ "sp-allocator",
  "sp-core",
  "sp-maybe-compressed-blob",
  "sp-serializer",
@@ -8633,9 +8623,8 @@ version = "0.10.0-dev"
 dependencies = [
  "log 0.4.16",
  "parity-scale-codec",
- "sc-allocator",
  "sc-executor-common",
- "scoped-tls",
+ "sp-allocator",
  "sp-core",
  "sp-runtime-interface",
  "sp-wasm-interface",
@@ -8651,9 +8640,9 @@ dependencies = [
  "log 0.4.16",
  "parity-scale-codec",
  "parity-wasm 0.42.2",
- "sc-allocator",
  "sc-executor-common",
  "sc-runtime-test",
+ "sp-allocator",
  "sp-core",
  "sp-io",
  "sp-runtime-interface",
@@ -9344,12 +9333,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "scoped-tls"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ea6a9290e3c9cf0f18145ef7ffa62d68ee0bf5fcd651017e586dc7fd5da448c2"
-
-[[package]]
 name = "scopeguard"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9769,6 +9752,17 @@ dependencies = [
  "log 0.4.16",
  "rand 0.8.4",
  "sha-1 0.9.4",
+]
+
+[[package]]
+name = "sp-allocator"
+version = "4.1.0-dev"
+dependencies = [
+ "log 0.4.16",
+ "sp-core",
+ "sp-std",
+ "sp-wasm-interface",
+ "thiserror",
 ]
 
 [[package]]
@@ -10382,6 +10376,7 @@ dependencies = [
  "assert_matches",
  "log 0.4.16",
  "parity-scale-codec",
+ "sp-allocator",
  "sp-core",
  "sp-io",
  "sp-std",

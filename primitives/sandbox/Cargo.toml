@@ -24,6 +24,7 @@ sp-core = { version = "6.0.0", default-features = false, path = "../core" }
 sp-std = { version = "4.0.0", default-features = false, path = "../std" }
 sp-io = { version = "6.0.0", default-features = false, path = "../io" }
 sp-wasm-interface = { version = "6.0.0", default-features = false, path = "../wasm-interface" }
+sp-allocator = { version = "4.1.0-dev", default-features = false, path = "../allocator" }
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false }
 log = { version = "0.4", default-features = false }
 

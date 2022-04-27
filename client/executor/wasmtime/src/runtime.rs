@@ -24,7 +24,7 @@ use crate::{
 	util,
 };
 
-use sc_allocator::FreeingBumpHeapAllocator;
+use sp_allocator::FreeingBumpHeapAllocator;
 use sc_executor_common::{
 	error::{Result, WasmError},
 	runtime_blob::{

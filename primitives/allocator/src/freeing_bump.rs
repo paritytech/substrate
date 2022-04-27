@@ -216,7 +216,7 @@ impl Link {
 /// |            0 | next element link |
 /// +--------------+-------------------+
 /// ```
-/// 
+///
 /// ## Occupied header
 /// ```ignore
 /// 64             32                  0
@@ -284,6 +284,7 @@ impl Header {
 }
 
 /// This struct represents a collection of intrusive linked lists for each order.
+#[derive(Clone)]
 struct FreeLists {
 	heads: [Link; N_ORDERS],
 }
@@ -318,6 +319,7 @@ impl IndexMut<Order> for FreeLists {
 /// An implementation of freeing bump allocator.
 ///
 /// Refer to the module-level documentation for further details.
+#[derive(Clone)]
 pub struct FreeingBumpHeapAllocator {
 	bumper: u32,
 	free_lists: FreeLists,

@@ -22,7 +22,7 @@
 use crate::{runtime::StoreData, util};
 use codec::{Decode, Encode};
 use log::trace;
-use sc_allocator::FreeingBumpHeapAllocator;
+use sp_allocator::FreeingBumpHeapAllocator;
 use sc_executor_common::{
 	error::Result,
 	sandbox::{self, SupervisorFuncIndex},

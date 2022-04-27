@@ -22,7 +22,7 @@ sc-executor-common = { version = "0.10.0-dev", path = "../common" }
 sp-wasm-interface = { version = "6.0.0", path = "../../../primitives/wasm-interface", features = ["wasmtime"] }
 sp-runtime-interface = { version = "6.0.0", path = "../../../primitives/runtime-interface" }
 sp-core = { version = "6.0.0", path = "../../../primitives/core" }
-sc-allocator = { version = "4.1.0-dev", path = "../../allocator" }
+sp-allocator = { version = "4.1.0-dev", path = "../../../primitives/allocator" }
 wasmtime = { version = "0.35.3", default-features = false, features = [
     "cache",
     "cranelift",

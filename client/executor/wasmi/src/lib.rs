@@ -42,7 +42,7 @@ use wasmi::{
 
 struct FunctionExecutor {
 	sandbox_store: Rc<RefCell<sandbox::Store<wasmi::FuncRef>>>,
-	heap: RefCell<sc_allocator::FreeingBumpHeapAllocator>,
+	heap: RefCell<sp_allocator::FreeingBumpHeapAllocator>,
 	memory: MemoryRef,
 	table: Option<TableRef>,
 	host_functions: Arc<Vec<&'static dyn Function>>,
@@ -64,7 +64,7 @@ impl FunctionExecutor {
 			sandbox_store: Rc::new(RefCell::new(sandbox::Store::new(
 				sandbox::SandboxBackend::Wasmi,
 			))),
-			heap: RefCell::new(sc_allocator::FreeingBumpHeapAllocator::new(heap_base)),
+			heap: RefCell::new(sp_allocator::FreeingBumpHeapAllocator::new(heap_base)),
 			memory: m,
 			table: t,
 			host_functions,
