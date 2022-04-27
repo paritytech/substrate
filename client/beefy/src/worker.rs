@@ -263,7 +263,7 @@ where
 	}
 
 	fn handle_finality_notification(&mut self, notification: &FinalityNotification<B>) {
-		trace!(target: "beefy", "🥩 Finality notification: {:?}", notification);
+		debug!(target: "beefy", "🥩 Finality notification: {:?}", notification);
 		let number = *notification.header.number();
 
 		// On start-up ignore old finality notifications that we're not interested in.
@@ -332,7 +332,7 @@ where
 						VersionedFinalityProof::V1(signed_commitment.clone()).encode(),
 					),
 				) {
-					trace!(target: "beefy", "🥩 Error {:?} on appending justification: {:?}", e, signed_commitment);
+					debug!(target: "beefy", "🥩 Error {:?} on appending justification: {:?}", e, signed_commitment);
 				}
 				self.signed_commitment_sender
 					.notify(|| Ok::<_, ()>(signed_commitment))
@@ -352,7 +352,7 @@ where
 	///
 	/// Also handle this self vote by calling `self.handle_vote()` for it.
 	fn do_vote(&mut self, target_number: NumberFor<B>) {
-		trace!(target: "beefy", "🥩 Try voting on {}", target_number);
+		debug!(target: "beefy", "🥩 Try voting on {}", target_number);
 
 		// Most of the time we get here, `target` is actually `best_grandpa`,
 		// avoid asking `client` for header in that case.
@@ -455,7 +455,7 @@ where
 					future::ready(false)
 				} else {
 					trace!(target: "beefy", "🥩 Finality notification: {:?}", notif);
-					trace!(target: "beefy", "🥩 Waiting for BEEFY pallet to become available...");
+					debug!(target: "beefy", "🥩 Waiting for BEEFY pallet to become available...");
 					future::ready(true)
 				}
 			})
@@ -475,7 +475,7 @@ where
 
 		let mut votes = Box::pin(self.gossip_engine.lock().messages_for(topic::<B>()).filter_map(
 			|notification| async move {
-				debug!(target: "beefy", "🥩 Got vote message: {:?}", notification);
+				trace!(target: "beefy", "🥩 Got vote message: {:?}", notification);
 
 				VoteMessage::<NumberFor<B>, AuthorityId, Signature>::decode(
 					&mut &notification.message[..],
@@ -577,7 +577,7 @@ where
 	// we vote on it
 	let target = match best_beefy {
 		None => {
-			trace!(
+			debug!(
 				target: "beefy",
 				"🥩 vote target - mandatory block: #{:?}",
 				session_start,
@@ -585,7 +585,7 @@ where
 			session_start
 		},
 		Some(bbb) if bbb < session_start => {
-			trace!(
+			debug!(
 				target: "beefy",
 				"🥩 vote target - mandatory block: #{:?}",
 				session_start,
@@ -597,7 +597,7 @@ where
 			let diff = diff.saturated_into::<u32>() / 2;
 			let target = bbb + min_delta.max(diff.next_power_of_two()).into();
 
-			trace!(
+			debug!(
 				target: "beefy",
 				"🥩 vote target - diff: {:?}, next_power_of_two: {:?}, target block: #{:?}",
 				diff,

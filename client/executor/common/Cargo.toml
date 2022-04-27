@@ -14,17 +14,18 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-wasm-instrument = "0.1"
-codec = { package = "parity-scale-codec", version = "3.0.0" }
-wasmi = "0.9.1"
-sp-core = { version = "6.0.0", path = "../../../primitives/core" }
-sc-allocator = { version = "4.1.0-dev", path = "../../allocator" }
-sp-wasm-interface = { version = "6.0.0", path = "../../../primitives/wasm-interface" }
-sp-maybe-compressed-blob = { version = "4.1.0-dev", path = "../../../primitives/maybe-compressed-blob" }
-sp-serializer = { version = "4.0.0-dev", path = "../../../primitives/serializer" }
-thiserror = "1.0.30"
 environmental = "1.1.3"
-wasmer = { version = "2.2", optional = true, features = ["singlepass"] }
+thiserror = "1.0.30"
+wasm-instrument = "0.1"
+wasmi = "0.9.1"
+wasmer = { version = "2.2", features = ["singlepass"], optional = true }
+
+codec = { package = "parity-scale-codec", version = "3.0.0" }
+sc-allocator = { version = "4.1.0-dev", path = "../../allocator" }
+sp-maybe-compressed-blob = { version = "4.1.0-dev", path = "../../../primitives/maybe-compressed-blob" }
+sp-sandbox = { version = "0.10.0-dev", path = "../../../primitives/sandbox" }
+sp-serializer = { version = "4.0.0-dev", path = "../../../primitives/serializer" }
+sp-wasm-interface = { version = "6.0.0", path = "../../../primitives/wasm-interface" }
 
 [features]
 default = []

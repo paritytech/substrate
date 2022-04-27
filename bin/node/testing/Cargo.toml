@@ -45,7 +45,7 @@ sp-block-builder = { version = "4.0.0-dev", path = "../../../primitives/block-bu
 sc-block-builder = { version = "0.10.0-dev", path = "../../../client/block-builder" }
 sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
-log = "0.4.8"
+log = "0.4.16"
 tempfile = "3.1.0"
 fs_extra = "1"
 futures = "0.3.21"
