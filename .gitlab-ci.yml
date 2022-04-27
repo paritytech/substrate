@@ -762,3 +762,4 @@ deploy-prometheus-alerting-rules:
       changes:
         - .gitlab-ci.yml
         - ./scripts/ci/monitoring/**/*
+        - ./scripts/ci/monitoring/**/*
