@@ -62,8 +62,8 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	) -> Weight {
 		({{underscoreFormat benchmark.base_weight}})
 			{{#each benchmark.component_weight as |cw|}}
-			// Standard Error: {{underscoreFormat cw.error}}
-			.saturating_add(({{underscoreFormat cw.slope}}).saturating_mul({{cw.name}} as Weight))
+			// Standard Error: {{weightAsNanoseconds cw.error}}
+			.saturating_add(({{weightAsNanoseconds cw.slope}}).saturating_mul({{cw.name}} as Weight))
 			{{/each}}
 			{{#if (ne benchmark.base_reads "0")}}
 			.saturating_add(T::DbWeight::get().reads({{benchmark.base_reads}} as Weight))
