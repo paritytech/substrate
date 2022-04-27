@@ -443,6 +443,17 @@ test-wasmer-sandbox:
     - time cargo test --release --features runtime-benchmarks,wasmer-sandbox,disable-ui-tests
     - sccache -s
 
+cargo-check-nixos:
+  stage:                           test
+  <<:                              *docker-env
+  <<:                              *test-refs
+  variables:
+    CI_IMAGE:                      "nixos/nix"
+  script:
+    - nix-channel --update
+    - nix-shell shell-nix
+    - nix-shell --run "cargo check --workspace --all-targets --all-features"
+
 cargo-check-macos:
   stage:                           test
   # shell runner on mac ignores the image set in *docker-env
