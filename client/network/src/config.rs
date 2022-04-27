@@ -22,7 +22,6 @@
 //! See the documentation of [`Params`].
 
 pub use crate::{
-	chain::Client,
 	request_responses::{
 		IncomingRequest, OutgoingResponse, ProtocolConfig as RequestResponseConfig,
 	},
@@ -64,7 +63,11 @@ use std::{
 use zeroize::Zeroize;
 
 /// Network initialization parameters.
-pub struct Params<B: BlockT, H: ExHashT> {
+pub struct Params<B, H, Client>
+where
+	B: BlockT + 'static,
+	H: ExHashT,
+{
 	/// Assigned role for our node (full, light, ...).
 	pub role: Role,
 
@@ -79,7 +82,7 @@ pub struct Params<B: BlockT, H: ExHashT> {
 	pub network_config: NetworkConfiguration,
 
 	/// Client that contains the blockchain.
-	pub chain: Arc<dyn Client<B>>,
+	pub chain: Arc<Client>,
 
 	/// Pool of transactions.
 	///

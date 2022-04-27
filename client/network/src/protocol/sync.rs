@@ -39,9 +39,10 @@ use extra_requests::ExtraRequests;
 use futures::{stream::FuturesUnordered, task::Poll, Future, FutureExt, StreamExt};
 use libp2p::PeerId;
 use log::{debug, error, info, trace, warn};
+use sc_client_api::{BlockBackend, ProofProvider};
 use sc_consensus::{BlockImportError, BlockImportStatus, IncomingBlock};
 use sp_arithmetic::traits::Saturating;
-use sp_blockchain::{Error as ClientError, HeaderMetadata};
+use sp_blockchain::{Error as ClientError, HeaderBackend, HeaderMetadata};
 use sp_consensus::{
 	block_validation::{BlockAnnounceValidator, Validation},
 	BlockOrigin, BlockStatus,
@@ -196,9 +197,9 @@ struct GapSync<B: BlockT> {
 
 /// The main data structure which contains all the state for a chains
 /// active syncing strategy.
-pub struct ChainSync<B: BlockT> {
+pub struct ChainSync<B: BlockT, Client> {
 	/// Chain client.
-	client: Arc<dyn crate::chain::Client<B>>,
+	client: Arc<Client>,
 	/// The active peers that we are using to sync and their PeerSync status
 	peers: HashMap<PeerId, PeerSync<B>>,
 	/// A `BlockCollection` of blocks that are being downloaded from peers
@@ -230,9 +231,9 @@ pub struct ChainSync<B: BlockT> {
 	/// Stats per peer about the number of concurrent block announce validations.
 	block_announce_validation_per_peer_stats: HashMap<PeerId, usize>,
 	/// State sync in progress, if any.
-	state_sync: Option<StateSync<B>>,
+	state_sync: Option<StateSync<B, Client>>,
 	/// Warp sync in progress, if any.
-	warp_sync: Option<WarpSync<B>>,
+	warp_sync: Option<WarpSync<B, Client>>,
 	/// Warp sync provider.
 	warp_sync_provider: Option<Arc<dyn WarpSyncProvider<B>>>,
 	/// Enable importing existing blocks. This is used used after the state download to
@@ -503,11 +504,21 @@ enum HasSlotForBlockAnnounceValidation {
 	MaximumPeerSlotsReached,
 }
 
-impl<B: BlockT> ChainSync<B> {
+impl<B, Client> ChainSync<B, Client>
+where
+	B: BlockT,
+	Client: HeaderBackend<B>
+		+ BlockBackend<B>
+		+ HeaderMetadata<B, Error = sp_blockchain::Error>
+		+ ProofProvider<B>
+		+ Send
+		+ Sync
+		+ 'static,
+{
 	/// Create a new instance.
 	pub fn new(
 		mode: SyncMode,
-		client: Arc<dyn crate::chain::Client<B>>,
+		client: Arc<Client>,
 		block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>,
 		max_parallel_downloads: u32,
 		warp_sync_provider: Option<Arc<dyn WarpSyncProvider<B>>>,
@@ -2710,7 +2721,11 @@ mod test {
 	}
 
 	/// Send a block annoucnement for the given `header`.
-	fn send_block_announce(header: Header, peer_id: &PeerId, sync: &mut ChainSync<Block>) {
+	fn send_block_announce(
+		header: Header,
+		peer_id: &PeerId,
+		sync: &mut ChainSync<Block, TestClient>,
+	) {
 		let block_annnounce = BlockAnnounce {
 			header: header.clone(),
 			state: Some(BlockState::Best),
@@ -2749,7 +2764,7 @@ mod test {
 
 	/// Get a block request from `sync` and check that is matches the expected request.
 	fn get_block_request(
-		sync: &mut ChainSync<Block>,
+		sync: &mut ChainSync<Block, TestClient>,
 		from: FromBlock<Hash, u64>,
 		max: u32,
 		peer: &PeerId,

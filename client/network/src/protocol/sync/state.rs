@@ -16,13 +16,10 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::{
-	chain::Client,
-	schema::v1::{StateEntry, StateRequest, StateResponse},
-};
+use crate::schema::v1::{StateEntry, StateRequest, StateResponse};
 use codec::{Decode, Encode};
 use log::debug;
-use sc_client_api::CompactProof;
+use sc_client_api::{CompactProof, ProofProvider};
 use sc_consensus::ImportedState;
 use smallvec::SmallVec;
 use sp_core::storage::well_known_keys;
@@ -33,14 +30,14 @@ use std::{collections::HashMap, sync::Arc};
 
 /// State sync state machine. Accumulates partial state data until it
 /// is ready to be imported.
-pub struct StateSync<B: BlockT> {
+pub struct StateSync<B: BlockT, Client> {
 	target_block: B::Hash,
 	target_header: B::Header,
 	target_root: B::Hash,
 	last_key: SmallVec<[Vec<u8>; 2]>,
 	state: HashMap<Vec<u8>, (Vec<(Vec<u8>, Vec<u8>)>, Vec<Vec<u8>>)>,
 	complete: bool,
-	client: Arc<dyn Client<B>>,
+	client: Arc<Client>,
 	imported_bytes: u64,
 	skip_proof: bool,
 }
@@ -64,9 +61,13 @@ pub enum ImportResult<B: BlockT> {
 	BadResponse,
 }
 
-impl<B: BlockT> StateSync<B> {
+impl<B, Client> StateSync<B, Client>
+where
+	B: BlockT,
+	Client: ProofProvider<B> + Send + Sync + 'static,
+{
 	///  Create a new instance.
-	pub fn new(client: Arc<dyn Client<B>>, target: B::Header, skip_proof: bool) -> Self {
+	pub fn new(client: Arc<Client>, target: B::Header, skip_proof: bool) -> Self {
 		Self {
 			client,
 			target_block: target.hash(),
