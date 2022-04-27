@@ -343,11 +343,9 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				// through call backs in crate and same as transaction handler to register
 				let mut mixnet = None;
 				if let Some((mixnet_in, mixnet_out, command_sender, config)) = params.mixnet {
-					let encoded_connection_info = Vec::new();
 					mixnet = Some((
 						Mixnet::new_from_worker(
 							config,
-							encoded_connection_info,
 							mixnet_in,
 							mixnet_out,
 						),

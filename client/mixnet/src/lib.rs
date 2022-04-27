@@ -834,7 +834,6 @@ impl Topology for AuthorityStar {
 	// Probably consumer will not stay connected and rely only on auth discovery dht.
 	// Gossip can be ok though: may be of use in gossip system (attach the neighbor too).
 	// DHT is kind of gossip though.
-	type ConnectionInfo = ();
 
 	fn random_recipient(&self) -> Option<MixPeerId> {
 		self.random_connected(|_| false)
@@ -947,26 +946,7 @@ impl Topology for AuthorityStar {
 		self.routing
 	}
 
-	fn encoded_connection_info(info: &Self::ConnectionInfo) -> Vec<u8> {
-		Vec::new()
-		//info.encode()
-	}
-
-	fn read_connection_info(encoded: &[u8]) -> Option<Self::ConnectionInfo> {
-		if encoded.len() == 0 {
-			Some(())
-		} else {
-			None
-		}
-		/*		let encoded = &mut &encoded[..];
-		let info = Decode::decode(encoded);
-		if encoded.len() > 0 {
-			return None
-		}
-		info.ok()*/
-	}
-
-	fn connected(&mut self, _: MixPeerId, _: MixPublicKey, _: Self::ConnectionInfo) {
+	fn connected(&mut self, _: MixPeerId, _: MixPublicKey) {
 		debug!(target: "mixnet", "Connected from internal");
 		//		unimplemented!("TODO");
 	}
