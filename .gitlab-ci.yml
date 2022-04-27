@@ -164,21 +164,6 @@ default:
   - sccache -s
 
 
-#### stage:                       .pre
-
-skip-if-draft:
-  image:                           paritytech/tools:latest
-  <<:                              *kubernetes-env
-  stage:                           .pre
-  rules:
-    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
-  script:
-     - echo "Commit message is ${CI_COMMIT_MESSAGE}"
-     - echo "Ref is ${CI_COMMIT_REF_NAME}"
-     - echo "pipeline source is ${CI_PIPELINE_SOURCE}"
-     - ./scripts/ci/gitlab/skip_if_draft.sh
-
-
 #### stage:                        test
 
 cargo-deny:
@@ -332,54 +317,6 @@ test-linux-stable-nextest:
     # - time cargo test --workspace --locked --release --verbose --features runtime-benchmarks --manifest-path ./bin/node/cli/Cargo.toml
     - time cargo test -p frame-support-test --features=conditional-storage,no-metadata-docs --manifest-path ./frame/support/test/Cargo.toml --test pallet # does not reuse cache 1 min 44 sec
     - SUBSTRATE_TEST_TIMEOUT=1 time cargo test -p substrate-test-utils --release --verbose --locked -- --ignored timeout
-    - sccache -s
-
-
-test-linux-stable-int:
-  <<:                              *test-linux
-  stage:                           test
-  script:
-    - echo "___Logs will be partly shown at the end in case of failure.___"
-    - echo "___Full log will be saved to the job artifacts only in case of failure.___"
-    - WASM_BUILD_NO_COLOR=1
-      RUST_LOG=sync=trace,consensus=trace,client=trace,state-db=trace,db=trace,forks=trace,state_db=trace,storage_cache=trace
-        time cargo test -p node-cli --release --verbose --locked -- --ignored
-        &> ${CI_COMMIT_SHORT_SHA}_int_failure.log
-    - sccache -s
-  after_script:
-    - awk '/FAILED|^error\[/,0' ${CI_COMMIT_SHORT_SHA}_int_failure.log
-  artifacts:
-    name:                          $CI_COMMIT_SHORT_SHA
-    when:                          on_failure
-    expire_in:                     3 days
-    paths:
-      - ${CI_COMMIT_SHORT_SHA}_int_failure.log
-
-check-tracing:
-  stage:                           test
-  <<:                              *docker-env
-  <<:                              *test-refs
-  script:
-    # with-tracing must be explicitly activated, we run a test to ensure this works as expected in both cases
-    - time cargo +nightly test --manifest-path ./primitives/tracing/Cargo.toml --no-default-features
-    - time cargo +nightly test --manifest-path ./primitives/tracing/Cargo.toml --no-default-features --features=with-tracing
-    - sccache -s
-
-test-full-crypto-feature:
-  stage:                           test
-  <<:                              *docker-env
-  <<:                              *test-refs
-  variables:
-    <<:                            *default-vars
-    # Enable debug assertions since we are running optimized builds for testing
-    # but still want to have debug assertions.
-    RUSTFLAGS:                     "-Cdebug-assertions=y"
-    RUST_BACKTRACE: 1
-  script:
-    - cd primitives/core/
-    - time cargo +nightly build --verbose --no-default-features --features full_crypto
-    - cd ../application-crypto
-    - time cargo +nightly build --verbose --no-default-features --features full_crypto
     - sccache -s
 
 test-wasmer-sandbox:
