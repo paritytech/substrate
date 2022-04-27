@@ -297,7 +297,7 @@ test-deterministic-wasm:
     - sha256sum -c ./checksum.sha256
     - sccache -s
 
-test-linux-stable-nextest:
+test-linux-stable-nextest-b:
   stage:                           test
   <<:                              *docker-env
   <<:                              *test-refs
