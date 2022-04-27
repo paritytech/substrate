@@ -29,15 +29,15 @@ use frame_support::{
 	},
 	weights::{Weight, WithPostDispatchInfo},
 };
-use frame_system::pallet_prelude::BlockNumberFor;
+use frame_system::{pallet_prelude::BlockNumberFor, RawOrigin};
 use pallet_session::historical;
 use sp_runtime::{
-	traits::{Bounded, Convert, SaturatedConversion, Saturating, Zero},
+	traits::{Bounded, Convert, SaturatedConversion, Saturating, StaticLookup, Zero},
 	Perbill,
 };
 use sp_staking::{
 	offence::{DisableStrategy, OffenceDetails, OnOffenceHandler},
-	EraIndex, SessionIndex,
+	EraIndex, SessionIndex, StakingInterface,
 };
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
@@ -1365,5 +1365,70 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsAndValidatorsM
 		// condition of SortedListProvider::unsafe_clear.
 		Nominators::<T>::remove_all();
 		Validators::<T>::remove_all();
+	}
+}
+
+impl<T: Config> StakingInterface for Pallet<T> {
+	type AccountId = T::AccountId;
+	type Balance = BalanceOf<T>;
+
+	fn minimum_bond() -> Self::Balance {
+		MinNominatorBond::<T>::get()
+	}
+
+	fn bonding_duration() -> EraIndex {
+		T::BondingDuration::get()
+	}
+
+	fn current_era() -> EraIndex {
+		Self::current_era().unwrap_or(Zero::zero())
+	}
+
+	fn active_stake(controller: &Self::AccountId) -> Option<Self::Balance> {
+		Self::ledger(controller).map(|l| l.active)
+	}
+
+	fn total_stake(controller: &Self::AccountId) -> Option<Self::Balance> {
+		Self::ledger(controller).map(|l| l.total)
+	}
+
+	fn bond_extra(stash: Self::AccountId, extra: Self::Balance) -> DispatchResult {
+		Self::bond_extra(RawOrigin::Signed(stash).into(), extra)
+	}
+
+	fn unbond(controller: Self::AccountId, value: Self::Balance) -> DispatchResult {
+		Self::unbond(RawOrigin::Signed(controller).into(), value)
+	}
+
+	fn withdraw_unbonded(
+		controller: Self::AccountId,
+		num_slashing_spans: u32,
+	) -> Result<u64, DispatchError> {
+		Self::withdraw_unbonded(RawOrigin::Signed(controller).into(), num_slashing_spans)
+			.map(|post_info| {
+				post_info
+					.actual_weight
+					.unwrap_or(T::WeightInfo::withdraw_unbonded_kill(num_slashing_spans))
+			})
+			.map_err(|err_with_post_info| err_with_post_info.error)
+	}
+
+	fn bond(
+		stash: Self::AccountId,
+		controller: Self::AccountId,
+		value: Self::Balance,
+		payee: Self::AccountId,
+	) -> DispatchResult {
+		Self::bond(
+			RawOrigin::Signed(stash).into(),
+			T::Lookup::unlookup(controller),
+			value,
+			RewardDestination::Account(payee),
+		)
+	}
+
+	fn nominate(controller: Self::AccountId, targets: Vec<Self::AccountId>) -> DispatchResult {
+		let targets = targets.into_iter().map(T::Lookup::unlookup).collect::<Vec<_>>();
+		Self::nominate(RawOrigin::Signed(controller).into(), targets)
 	}
 }

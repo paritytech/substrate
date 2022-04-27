@@ -109,6 +109,8 @@ members = [
 	"frame/offences",
 	"frame/preimage",
 	"frame/proxy",
+	"frame/nomination-pools",
+	"frame/nomination-pools/benchmarking",
 	"frame/randomness-collective-flip",
 	"frame/recovery",
 	"frame/referenda",
