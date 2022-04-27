@@ -165,13 +165,13 @@ benchmarks.
 You can get a list of the available benchmarks by running:
 
 ```bash
-./target/production/substrate benchmark --chain dev --pallet "*" --extrinsic "*" --repeat 0
+./target/production/substrate benchmark pallet --chain dev --pallet "*" --extrinsic "*" --repeat 0
 ```
 
 Then you can run a benchmark like so:
 
 ```bash
-./target/production/substrate benchmark \
+./target/production/substrate benchmark pallet \
     --chain dev \                  # Configurable Chain Spec
     --execution=wasm \             # Always test with Wasm
     --wasm-execution=compiled \    # Always used `wasm-time`
@@ -204,7 +204,7 @@ used for joining all the arguments passed to the CLI.
 To get a full list of available options when running benchmarks, run:
 
 ```bash
-./target/release/substrate benchmark --help
+./target/production/substrate benchmark --help
 ```
 
 License: Apache-2.0

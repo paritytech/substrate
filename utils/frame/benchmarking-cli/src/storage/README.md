@@ -4,19 +4,20 @@ The cost of storage operations in a Substrate chain depends on the current chain
 It is therefore important to regularly update these weights as the chain grows.  
 This sub-command measures the cost of storage operations for a concrete snapshot.  
 
-For the Substrate node it looks like this (for debugging you can use `--profile=release`):  
+For the Substrate node it looks like this (for debugging you can use `--release`):  
 ```sh
 cargo run --profile=production -- benchmark storage --dev --state-version=1
 ```
 
-Running this command on Substrate itself is not verify meaningful, since the genesis state of the `--dev` chain spec is used.  
+Running the command on Substrate itself is not verify meaningful, since the genesis state of the `--dev` chain spec is used.  
 
-You can acquire a recent chain snapshot from [Polkachu] and try it yourself:
+The output for the Polkadot client with a recent chain snapshot will give you a better impression. A recent snapshot can be downloaded from [Polkachu].  
+Then run (remove the `--db=paritydb` if you have a RocksDB snapshot):
 ```sh
 cargo run --profile=production -- benchmark storage --dev --state-version=0 --db=paritydb --weight-path runtime/polkadot/constants/src/weights
 ```
 
-This takes a while to run since it is reading and writing all keys:
+This takes a while since reads and writes all keys from the snapshot:
 ```pre
 # The 'read' benchmark
 Preparing keys from block BlockId::Number(9939462)    
@@ -52,7 +53,39 @@ You will see that the [paritydb_weights.rs] files was modified and now contains 
 The exact command for Polkadot can be seen at the top of the file.  
 This uses the most recent block from your snapshot which is printed at the top.  
 The value size summary tells us that the pruned Polkadot chain state is ~253 MiB in size.  
-Reading a value on average takes (in this examples) 14.2 µs and writing 13 µs.
+Reading a value on average takes (in this examples) 14.3 µs and writing 71.3 µs.  
+The interesting part in the generated weight file tells us the weight constants and some statistics about the measurements:
+```rust
+/// Time to read one storage item.
+/// Calculated by multiplying the *Average* of all values with `1.1` and adding `0`.
+///
+/// Stats [NS]:
+///   Min, Max: 4_611, 1_217_259
+///   Average:  14_262
+///   Median:   14_190
+///   Std-Dev:  3035.79
+///
+/// Percentiles [NS]:
+///   99th: 18_270
+///   95th: 16_190
+///   75th: 14_819
+read: 14_262 * constants::WEIGHT_PER_NANOS,
+
+/// Time to write one storage item.
+/// Calculated by multiplying the *Average* of all values with `1.1` and adding `0`.
+///
+/// Stats [NS]:
+///   Min, Max: 12_969, 13_282_577
+///   Average:  71_347This works under the assumption that the *average* read a
+///   Median:   69_499
+///   Std-Dev:  25145.27
+///
+/// Percentiles [NS]:
+///   99th: 135_839
+///   95th: 106_129
+///   75th: 79_239
+write: 71_347 * constants::WEIGHT_PER_NANOS,
+```
 
 ## Arguments
 
@@ -64,6 +97,8 @@ Reading a value on average takes (in this examples) 14.2 µs and writing 13 µs.
 - [`--weight-path`](../shared/README.md#arguments)
 - `--json-read-path` Write the raw 'read' results to this file or directory.
 - `--json-write-path` Write the raw 'write' results to this file or directory.
+
+License: Apache-2.0
 
 <!-- LINKS -->
 [Polkachu]: https://polkachu.com/snapshots

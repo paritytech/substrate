@@ -112,6 +112,8 @@ Since this block is empty, its not very interesting.
 - [`--db`]
 - [`--pruning`]
 
+License: Apache-2.0
+
 <!-- LINKS -->
 
 [Polkachu]: https://polkachu.com/snapshots
