@@ -62,7 +62,7 @@ mod tests;
 
 pub use equivocation::{BabeEquivocationOffence, EquivocationHandler, HandleEquivocation};
 pub use randomness::{
-	PreviousBlockRandomness, RandomnessFromOneEpochAgo, RandomnessFromTwoEpochsAgo,
+	ParentBlockRandomness, RandomnessFromOneEpochAgo, RandomnessFromTwoEpochsAgo,
 };
 
 pub use pallet::*;
