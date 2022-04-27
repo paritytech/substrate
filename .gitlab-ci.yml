@@ -452,7 +452,7 @@ cargo-check-nixos:
     CI_IMAGE:                      "nixos/nix"
   script:
     - nix-channel --update
-    - nix-shell shell-nix
+    - nix-shell shell.nix
     - nix-shell --run "cargo check --workspace --all-targets --all-features"
 
 cargo-check-macos:
