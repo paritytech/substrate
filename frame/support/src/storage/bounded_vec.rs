@@ -42,14 +42,14 @@ use sp_std::{marker::PhantomData, prelude::*};
 /// this bound is respected.
 #[derive(Encode, scale_info::TypeInfo)]
 #[scale_info(skip_type_params(S))]
-pub struct BoundedVec<T, B, S: Get<B>>(Vec<T>, PhantomData<B>, PhantomData<S>);
+pub struct BoundedVec<T, B, S: Get<B>>(Vec<T>, PhantomData<(B, S)>);
 
 /// A bounded slice.
 ///
 /// Similar to a `BoundedVec`, but not owned and cannot be decoded.
 #[derive(Encode, scale_info::TypeInfo)]
 #[scale_info(skip_type_params(S))]
-pub struct BoundedSlice<'a, T, B, S: Get<B>>(&'a [T], PhantomData<B>, PhantomData<S>);
+pub struct BoundedSlice<'a, T, B, S: Get<B>>(&'a [T], PhantomData<(B, S)>);
 
 // `BoundedSlice`s encode to something which will always decode into a `BoundedVec`,
 // `WeakBoundedVec`, or a `Vec`.
@@ -76,7 +76,7 @@ impl<'a, T, B: AtMost32BitUnsigned, S: Get<B>> TryFrom<&'a [T]> for BoundedSlice
 	type Error = ();
 	fn try_from(t: &'a [T]) -> Result<Self, Self::Error> {
 		if S::get().into().try_into().map_or(false, |v: usize| t.len() < v) {
-			Ok(BoundedSlice(t, PhantomData, PhantomData))
+			Ok(BoundedSlice(t, PhantomData))
 		} else {
 			Err(())
 		}
@@ -95,7 +95,7 @@ impl<T: Decode, B: AtMost32BitUnsigned, S: Get<B>> Decode for BoundedVec<T, B, S
 		if S::get().into().try_into().map_or(false, |v: usize| inner.len() > v) {
 			return Err("BoundedVec exceeds its limit".into())
 		}
-		Ok(Self(inner, PhantomData, PhantomData))
+		Ok(Self(inner, PhantomData))
 	}
 
 	fn skip<I: codec::Input>(input: &mut I) -> Result<(), codec::Error> {
@@ -109,7 +109,7 @@ impl<T: Encode + Decode, B: AtMost32BitUnsigned, S: Get<B>> EncodeLike<Vec<T>> f
 impl<T, B, S: Get<B>> BoundedVec<T, B, S> {
 	/// Create `Self` from `t` without any checks.
 	fn unchecked_from(t: Vec<T>) -> Self {
-		Self(t, Default::default(), Default::default())
+		Self(t, Default::default())
 	}
 
 	/// Consume self, and return the inner `Vec`. Henceforth, the `Vec<_>` can be altered in an
@@ -218,7 +218,7 @@ impl<T, B: AtMost32BitUnsigned, S: Get<B>> BoundedVec<T, B, S> {
 	/// If `capacity` is greater than [`Self::bound`], then the minimum of the two is used.
 	pub fn with_bounded_capacity(capacity: usize) -> Self {
 		let capacity = capacity.min(Self::bound());
-		Self(Vec::with_capacity(capacity), Default::default(), Default::default())
+		Self(Vec::with_capacity(capacity), Default::default())
 	}
 
 	/// Allocate self with the maximum possible capacity.

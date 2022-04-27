@@ -36,7 +36,7 @@ use sp_arithmetic::traits::AtMost32BitUnsigned;
 /// map. All internal operations ensure this bound is respected.
 #[derive(Encode, scale_info::TypeInfo)]
 #[scale_info(skip_type_params(S))]
-pub struct BoundedBTreeMap<K, V, B, S: Get<B>>(BTreeMap<K, V>, PhantomData<B>, PhantomData<S>);
+pub struct BoundedBTreeMap<K, V, B, S: Get<B>>(BTreeMap<K, V>, PhantomData<(B, S)>);
 
 impl<K, V, B, S> Decode for BoundedBTreeMap<K, V, B, S>
 where
@@ -50,7 +50,7 @@ where
 		if S::get().into().try_into().map_or(false, |v: usize| inner.len() > v) {
 			return Err("BoundedBTreeMap exceeds its limit".into())
 		}
-		Ok(Self(inner, PhantomData, PhantomData))
+		Ok(Self(inner, PhantomData))
 	}
 
 	fn skip<I: codec::Input>(input: &mut I) -> Result<(), codec::Error> {
@@ -78,14 +78,14 @@ where
 {
 	/// Create `Self` from `t` without any checks.
 	fn unchecked_from(t: BTreeMap<K, V>) -> Self {
-		Self(t, Default::default(), Default::default()) 
+		Self(t, Default::default()) 
 	}
 
 	/// Create a new `BoundedBTreeMap`.
 	///
 	/// Does not allocate.
 	pub fn new() -> Self {
-		BoundedBTreeMap(BTreeMap::new(), PhantomData, PhantomData)
+		BoundedBTreeMap(BTreeMap::new(), PhantomData)
 	}
 
 	/// Consume self, and return the inner `BTreeMap`.
@@ -183,7 +183,7 @@ where
 	S: Get<B>
 {
 	fn clone(&self) -> Self {
-		BoundedBTreeMap(self.0.clone(), PhantomData, PhantomData)
+		BoundedBTreeMap(self.0.clone(), PhantomData)
 	}
 }
 
@@ -316,7 +316,7 @@ where
 
 	fn try_from(value: BTreeMap<K, V>) -> Result<Self, Self::Error> {
 		(value.len() <= Self::bound())
-			.then(move || BoundedBTreeMap(value, PhantomData, PhantomData))
+			.then(move || BoundedBTreeMap(value, PhantomData))
 			.ok_or(())
 	}
 }
