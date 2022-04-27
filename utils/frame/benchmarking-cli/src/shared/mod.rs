@@ -70,9 +70,9 @@ where
 /// A Handlebars helper to add an underscore after every 3rd character,then format it,
 /// i.e. a separator for large numbers : 123000000 -> 123_000 * WEIGHT_PER_NANOS.
 #[derive(Clone, Copy)]
-pub struct UnderscoreFormatHelper;
+pub struct WeightAsNanoseconds;
 
-impl handlebars::HelperDef for UnderscoreFormatHelper {
+impl handlebars::HelperDef for WeightAsNanoseconds {
 	fn call<'reg: 'rc, 'rc>(
 		&self,
 		h: &handlebars::Helper,
