@@ -53,7 +53,7 @@ impl HostState {
 	pub fn new(allocator: FreeingBumpHeapAllocator) -> Self {
 		HostState {
 			sandbox_store: SandboxStore(Some(Box::new(sandbox::Store::new(
-				sandbox::SandboxBackend::TryWasmer,
+				sandbox::SandboxBackend::Wasmi, //TryWasmer,
 			)))),
 			allocator,
 			panic_message: None,

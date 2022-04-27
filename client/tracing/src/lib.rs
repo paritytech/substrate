@@ -494,7 +494,10 @@ mod tests {
 		let events = Arc::new(Mutex::new(Vec::new()));
 		let handler = TestTraceHandler { spans: spans.clone(), events: events.clone() };
 		let layer = ProfilingLayer::new_with_handler(Box::new(handler), "test_target");
-		let subscriber = tracing_subscriber::fmt().with_writer(std::io::sink).finish().with(layer);
+		let subscriber = tracing_subscriber::fmt()
+			.with_writer(std::io::sink)
+			.finish()
+			.with(layer);
 		(subscriber, spans, events)
 	}
 

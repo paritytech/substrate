@@ -41,6 +41,14 @@ futures = "0.3.21"
 hex-literal = "0.3.4"
 log = "0.4.8"
 rand = "0.8"
+# tracing = "0.1.34"
+# tracing-subscriber = "0.3.11"
+
+tracing = { version = "0.1.29", default-features = false }
+tracing-core = { version = "0.1.21", default-features = false }
+tracing-subscriber = { version = "0.2.25", optional = false, features = [
+	"tracing-log",
+] }
 
 # primitives
 sp-authority-discovery = { version = "4.0.0-dev", path = "../../../primitives/authority-discovery" }
@@ -57,6 +65,7 @@ sp-keystore = { version = "0.12.0", path = "../../../primitives/keystore" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
 sp-transaction-pool = { version = "4.0.0-dev", path = "../../../primitives/transaction-pool" }
 sp-transaction-storage-proof = { version = "4.0.0-dev", path = "../../../primitives/transaction-storage-proof" }
+sp-tracing = { path = "../../../primitives/tracing" }
 
 # client dependencies
 sc-client-api = { version = "4.0.0-dev", path = "../../../client/api" }

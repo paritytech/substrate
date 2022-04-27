@@ -168,8 +168,8 @@ where
 
 	let event_format = EventFormat {
 		timer,
-		display_target: detailed_output,
-		display_level: detailed_output,
+		display_target: true, // detailed_output,
+		display_level: true, // detailed_output,
 		display_thread_name: detailed_output,
 		enable_color,
 		dup_to_stdout: !atty::is(atty::Stream::Stderr) && atty::is(atty::Stream::Stdout),

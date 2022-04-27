@@ -18,6 +18,8 @@
 
 //! Wasmer specific impls for sandbox
 
+use tracing::instrument;
+
 use crate::{
 	error::{Error, Result},
 	sandbox::Memory,
@@ -49,6 +51,7 @@ impl Backend {
 }
 
 /// Invoke a function within a sandboxed module
+#[instrument(skip(instance, sandbox_context), level="error")]
 pub fn invoke(
 	instance: &wasmer::Instance,
 	export_name: &str,
@@ -99,6 +102,7 @@ pub fn invoke(
 }
 
 /// Instantiate a module within a sandbox context
+#[instrument(skip_all, fields(len = wasm.len()), level="error")]
 pub fn instantiate(
 	context: &Backend,
 	wasm: &[u8],
@@ -200,6 +204,7 @@ pub fn instantiate(
 	}))
 }
 
+// #[instrument(skip(store), level="error")]
 fn dispatch_function(
 	supervisor_func_index: SupervisorFuncIndex,
 	store: &wasmer::Store,
@@ -207,6 +212,9 @@ fn dispatch_function(
 	state: u32,
 ) -> wasmer::Function {
 	wasmer::Function::new(store, func_ty, move |params| {
+		let span = tracing::span!(sp_tracing::Level::ERROR, "wasmer::Function closure", index = supervisor_func_index.0, params);
+		let _enter = span.enter();
+
 		SandboxContextStore::with(|sandbox_context| {
 			// Serialize arguments into a byte vector.
 			let invoke_args_data = params
@@ -249,9 +257,14 @@ fn dispatch_function(
 			}
 
 			// Perform the actuall call
-			let serialized_result = sandbox_context
-				.invoke(invoke_args_ptr, invoke_args_len, state, supervisor_func_index)
-				.map_err(|e| RuntimeError::new(e.to_string()));
+			let serialized_result = {
+				let span = tracing::span!(sp_tracing::Level::ERROR, "SandboxContext::invoke", index = supervisor_func_index.0);
+				let _enter = span.enter();
+
+				sandbox_context
+					.invoke(invoke_args_ptr, invoke_args_len, state, supervisor_func_index)
+					.map_err(|e| RuntimeError::new(e.to_string()))
+			};
 
 			deallocate(
 				sandbox_context.supervisor_context(),

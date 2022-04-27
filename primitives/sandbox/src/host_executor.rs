@@ -217,6 +217,8 @@ impl<T> super::SandboxInstance<T> for Instance<T> {
 		env_def_builder: &EnvironmentDefinitionBuilder<T>,
 		state: &mut T,
 	) -> Result<Instance<T>, Error> {
+		log::error!("*** Instance::new");
+
 		let serialized_env_def: Vec<u8> = env_def_builder.env_def.encode();
 		// It's very important to instantiate thunk with the right type.
 		let dispatch_thunk = dispatch_thunk::<T>;
@@ -243,6 +245,8 @@ impl<T> super::SandboxInstance<T> for Instance<T> {
 	}
 
 	fn invoke(&mut self, name: &str, args: &[Value], state: &mut T) -> Result<ReturnValue, Error> {
+		log::error!("*** Instance::invoke");
+
 		let serialized_args = args.to_vec().encode();
 		let mut return_val = vec![0u8; ReturnValue::ENCODED_MAX_SIZE];
 
@@ -267,12 +271,14 @@ impl<T> super::SandboxInstance<T> for Instance<T> {
 	}
 
 	fn get_global_val(&self, name: &str) -> Option<Value> {
+		log::error!("*** Instance::get_global_val");
 		sandbox::get_global_val(self.instance_idx, name)
 	}
 }
 
 impl<T> Drop for Instance<T> {
 	fn drop(&mut self) {
+		log::error!("*** Instance::drop");
 		sandbox::instance_teardown(self.instance_idx);
 	}
 }

@@ -32,6 +32,7 @@ use crate::{
 use codec::Decode;
 use sp_core::sandbox as sandbox_primitives;
 use sp_wasm_interface::{FunctionContext, Pointer, WordSize};
+use tracing::instrument;
 use std::{collections::HashMap, rc::Rc};
 
 #[cfg(feature = "wasmer-sandbox")]
@@ -191,6 +192,7 @@ impl SandboxInstance {
 	///
 	/// The `state` parameter can be used to provide custom data for
 	/// these syscall implementations.
+	#[instrument(skip(self, sandbox_context), level="error")]
 	pub fn invoke(
 		&self,
 		export_name: &str,
@@ -330,6 +332,7 @@ impl UnregisteredInstance {
 }
 
 /// Sandbox backend to use
+#[derive(Debug)]
 pub enum SandboxBackend {
 	/// Wasm interpreter
 	Wasmi,
@@ -414,7 +417,10 @@ enum BackendContext {
 }
 
 impl BackendContext {
+	// #[instrument]
 	pub fn new(backend: SandboxBackend) -> BackendContext {
+		// sp_tracing::warn!(target: "sandbox", "new backend context: {:?}", backend);
+
 		match backend {
 			SandboxBackend::Wasmi => BackendContext::Wasmi,
 
@@ -422,8 +428,11 @@ impl BackendContext {
 			SandboxBackend::TryWasmer => BackendContext::Wasmi,
 
 			#[cfg(feature = "wasmer-sandbox")]
-			SandboxBackend::Wasmer | SandboxBackend::TryWasmer =>
-				BackendContext::Wasmer(WasmerBackend::new()),
+			SandboxBackend::Wasmer | SandboxBackend::TryWasmer => {
+				// sp_tracing::warn!(target: "sandbox", "wasmer is selected");
+
+				BackendContext::Wasmer(WasmerBackend::new())
+			}
 		}
 	}
 }
@@ -458,6 +467,8 @@ impl<DT: Clone> Store<DT> {
 	/// Returns `Err` if the memory couldn't be created.
 	/// Typically happens if `initial` is more than `maximum`.
 	pub fn new_memory(&mut self, initial: u32, maximum: u32) -> Result<u32> {
+		sp_tracing::error!(target: "sandbox", "new memory");
+
 		let memories = &mut self.memories;
 		let backend_context = &self.backend_context;
 
@@ -501,6 +512,7 @@ impl<DT: Clone> Store<DT> {
 	/// Returns `Err` If `instance_idx` isn't a valid index of an instance or
 	/// instance is already torndown.
 	pub fn dispatch_thunk(&self, instance_idx: u32) -> Result<DT> {
+		sp_tracing::error!(target: "sandbox", "dispatch thunk");
 		self.instances
 			.get(instance_idx as usize)
 			.as_ref()
@@ -568,6 +580,7 @@ impl<DT: Clone> Store<DT> {
 	/// Note: Due to borrowing constraints dispatch thunk is now propagated using DTH
 	///
 	/// Returns uninitialized sandboxed module instance or an instantiation error.
+	#[instrument(skip_all, fields(len = wasm.len()), level="error")]
 	pub fn instantiate(
 		&mut self,
 		wasm: &[u8],
@@ -589,6 +602,7 @@ impl<DT: Clone> Store<DT> {
 
 // Private routines
 impl<DT> Store<DT> {
+	#[instrument(skip_all, level="error")]
 	fn register_sandbox_instance(
 		&mut self,
 		sandbox_instance: Rc<SandboxInstance>,

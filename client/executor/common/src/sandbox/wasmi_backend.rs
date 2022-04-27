@@ -21,6 +21,7 @@
 use codec::{Decode, Encode};
 use sp_core::sandbox::HostError;
 use sp_wasm_interface::{FunctionContext, Pointer, ReturnValue, Value, WordSize};
+use tracing::instrument;
 use std::rc::Rc;
 
 use wasmi::{
@@ -157,6 +158,7 @@ impl MemoryTransfer for MemoryWrapper {
 }
 
 impl<'a> wasmi::Externals for GuestExternals<'a> {
+	#[instrument(skip(self), level="error")]
 	fn invoke_index(
 		&mut self,
 		index: usize,
@@ -213,12 +215,17 @@ impl<'a> wasmi::Externals for GuestExternals<'a> {
 				return Err(trap("Can't write invoke args into memory"))
 			}
 
-			let result = sandbox_context.invoke(
-				invoke_args_ptr,
-				invoke_args_len,
-				state,
-				func_idx,
-			);
+			let result = {
+				let span = tracing::span!(sp_tracing::Level::ERROR, "SandboxContext::invoke", index = func_idx.0);
+				let _enter = span.enter();
+
+				sandbox_context.invoke(
+					invoke_args_ptr,
+					invoke_args_len,
+					state,
+					func_idx,
+				)
+			};
 
 			deallocate(
 				sandbox_context.supervisor_context(),
@@ -272,6 +279,7 @@ where
 }
 
 /// Instantiate a module within a sandbox context
+#[instrument(skip_all, fields(len = wasm.len()), level="error")]
 pub fn instantiate(
 	wasm: &[u8],
 	guest_env: GuestEnvironment,
@@ -302,6 +310,7 @@ pub fn instantiate(
 }
 
 /// Invoke a function within a sandboxed module
+#[instrument(skip(instance, module, sandbox_context), level="error")]
 pub fn invoke(
 	instance: &SandboxInstance,
 	module: &wasmi::ModuleRef,
