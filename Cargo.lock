@@ -10379,7 +10379,6 @@ dependencies = [
  "assert_matches",
  "log 0.4.16",
  "parity-scale-codec",
- "sp-allocator",
  "sp-core",
  "sp-io",
  "sp-std",
