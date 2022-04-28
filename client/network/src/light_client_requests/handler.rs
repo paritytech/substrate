@@ -22,16 +22,16 @@
 //! `crate::request_responses::RequestResponsesBehaviour` with
 //! [`LightClientRequestHandler`](handler::LightClientRequestHandler).
 
-use crate::{
-	config::ProtocolId,
-	request_responses::{IncomingRequest, OutgoingResponse, ProtocolConfig},
-	schema, PeerId,
-};
+use crate::{schema, PeerId};
 use codec::{self, Decode, Encode};
 use futures::{channel::mpsc, prelude::*};
 use log::{debug, trace};
 use prost::Message;
 use sc_client_api::{ProofProvider, StorageProof};
+use sc_network_common::{
+	config::ProtocolId,
+	request_responses::{IncomingRequest, OutgoingResponse, ProtocolConfig},
+};
 use sc_peerset::ReputationChange;
 use sp_core::{
 	hexdisplay::HexDisplay,

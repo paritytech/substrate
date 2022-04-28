@@ -9000,6 +9000,7 @@ dependencies = [
  "sc-block-builder",
  "sc-client-api",
  "sc-consensus",
+ "sc-network-common",
  "sc-network-sync",
  "sc-peerset",
  "sc-utils",
@@ -9022,6 +9023,18 @@ dependencies = [
  "unsigned-varint 0.6.0",
  "void",
  "zeroize",
+]
+
+[[package]]
+name = "sc-network-common"
+version = "0.10.0-dev"
+dependencies = [
+ "futures 0.3.21",
+ "libp2p",
+ "parity-scale-codec",
+ "prost-build",
+ "sc-peerset",
+ "smallvec 1.8.0",
 ]
 
 [[package]]
@@ -9075,6 +9088,7 @@ dependencies = [
  "sc-client-api",
  "sc-consensus",
  "sc-network",
+ "sc-network-common",
  "sc-service",
  "sp-blockchain",
  "sp-consensus",
@@ -9263,6 +9277,7 @@ dependencies = [
  "sc-informant",
  "sc-keystore",
  "sc-network",
+ "sc-network-common",
  "sc-offchain",
  "sc-rpc",
  "sc-rpc-server",

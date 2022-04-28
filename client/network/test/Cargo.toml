@@ -14,6 +14,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 async-std = "1.11.0"
+sc-network-common = { version = "0.10.0-dev", path = "../common" }
 sc-network = { version = "0.10.0-dev", path = "../" }
 log = "0.4.16"
 parking_lot = "0.12.0"

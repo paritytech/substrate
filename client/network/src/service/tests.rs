@@ -24,6 +24,7 @@ use crate::{
 
 use futures::prelude::*;
 use libp2p::PeerId;
+use sc_network_common::config::ProtocolId;
 use sp_runtime::traits::{Block as BlockT, Header as _};
 use std::{borrow::Cow, sync::Arc, time::Duration};
 use substrate_test_runtime_client::{TestClientBuilder, TestClientBuilderExt as _};
@@ -87,7 +88,7 @@ fn build_test_full_node(
 		None,
 	));
 
-	let protocol_id = config::ProtocolId::from("/test-protocol-name");
+	let protocol_id = ProtocolId::from("/test-protocol-name");
 
 	let block_request_protocol_config = {
 		let (handler, protocol_config) = BlockRequestHandler::new(&protocol_id, client.clone(), 50);

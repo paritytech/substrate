@@ -53,6 +53,7 @@ sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/comm
 sc-consensus = { version = "0.10.0-dev", path = "../consensus/common" }
 sp-core = { version = "6.0.0", path = "../../primitives/core" }
 sp-runtime = { version = "6.0.0", path = "../../primitives/runtime" }
+sc-network-common = { version = "0.10.0-dev", path = "./common" }
 sc-network-sync = { version = "0.10.0-dev", path = "./sync" }
 sc-utils = { version = "4.0.0-dev", path = "../utils" }
 sp-finality-grandpa = { version = "4.0.0-dev", path = "../../primitives/finality-grandpa" }

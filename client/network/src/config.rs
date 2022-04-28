@@ -21,12 +21,7 @@
 //! The [`Params`] struct is the struct that must be passed in order to initialize the networking.
 //! See the documentation of [`Params`].
 
-pub use crate::{
-	request_responses::{
-		IncomingRequest, OutgoingResponse, ProtocolConfig as RequestResponseConfig,
-	},
-	warp_request_handler::WarpSyncProvider,
-};
+use crate::warp_request_handler::WarpSyncProvider;
 pub use libp2p::{build_multiaddr, core::PublicKey, identity};
 
 // Note: this re-export shouldn't be part of the public API of the crate and will be removed in
@@ -44,6 +39,9 @@ use libp2p::{
 };
 use prometheus_endpoint::Registry;
 use sc_consensus::ImportQueue;
+use sc_network_common::{
+	config::ProtocolId, request_responses::ProtocolConfig as RequestResponseConfig,
+};
 use sp_consensus::block_validation::BlockAnnounceValidator;
 use sp_runtime::traits::Block as BlockT;
 use std::{
@@ -229,29 +227,6 @@ impl<H: ExHashT + Default, B: BlockT> TransactionPool<H, B> for EmptyTransaction
 
 	fn transaction(&self, _h: &H) -> Option<B::Extrinsic> {
 		None
-	}
-}
-
-/// Name of a protocol, transmitted on the wire. Should be unique for each chain. Always UTF-8.
-#[derive(Clone, PartialEq, Eq, Hash)]
-pub struct ProtocolId(smallvec::SmallVec<[u8; 6]>);
-
-impl<'a> From<&'a str> for ProtocolId {
-	fn from(bytes: &'a str) -> ProtocolId {
-		Self(bytes.as_bytes().into())
-	}
-}
-
-impl AsRef<str> for ProtocolId {
-	fn as_ref(&self) -> &str {
-		str::from_utf8(&self.0[..])
-			.expect("the only way to build a ProtocolId is through a UTF-8 String; qed")
-	}
-}
-
-impl fmt::Debug for ProtocolId {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		fmt::Debug::fmt(self.as_ref(), f)
 	}
 }
 

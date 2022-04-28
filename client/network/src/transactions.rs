@@ -27,7 +27,7 @@
 //! `Future` that processes transactions.
 
 use crate::{
-	config::{self, ProtocolId, TransactionImport, TransactionImportFuture, TransactionPool},
+	config::{self, TransactionImport, TransactionImportFuture, TransactionPool},
 	error,
 	protocol::message,
 	service::NetworkService,
@@ -40,6 +40,7 @@ use futures::{channel::mpsc, prelude::*, stream::FuturesUnordered};
 use libp2p::{multiaddr, PeerId};
 use log::{debug, trace, warn};
 use prometheus_endpoint::{register, Counter, PrometheusError, Registry, U64};
+use sc_network_common::config::ProtocolId;
 use sp_runtime::traits::Block as BlockT;
 use std::{
 	borrow::Cow,

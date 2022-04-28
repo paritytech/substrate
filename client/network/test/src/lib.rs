@@ -51,12 +51,13 @@ use sc_network::{
 	block_request_handler::BlockRequestHandler,
 	config::{
 		MultiaddrWithPeerId, NetworkConfiguration, NonDefaultSetConfig, NonReservedPeerMode,
-		ProtocolConfig, ProtocolId, Role, SyncMode, TransportConfig,
+		ProtocolConfig, Role, SyncMode, TransportConfig,
 	},
 	light_client_requests::handler::LightClientRequestHandler,
 	state_request_handler::StateRequestHandler,
 	warp_request_handler, Multiaddr, NetworkService, NetworkWorker,
 };
+pub use sc_network_common::config::ProtocolId;
 use sc_service::client::Client;
 use sp_blockchain::{
 	well_known_cache_keys::{self, Id as CacheKeyId},

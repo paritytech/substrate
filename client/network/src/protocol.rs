@@ -17,11 +17,10 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::{
-	config::{self, ProtocolId, WarpSyncProvider},
-	error,
+	config, error,
 	request_responses::RequestFailure,
 	utils::{interval, LruHashSet},
-	warp_request_handler::EncodedProof,
+	warp_request_handler::{EncodedProof, WarpSyncProvider},
 };
 
 use bytes::Bytes;
@@ -49,6 +48,7 @@ use prometheus_endpoint::{register, Gauge, GaugeVec, Opts, PrometheusError, Regi
 use prost::Message as _;
 use sc_client_api::{BlockBackend, HeaderBackend, ProofProvider};
 use sc_consensus::import_queue::{BlockImportError, BlockImportStatus, IncomingBlock, Origin};
+use sc_network_common::config::ProtocolId;
 use sc_network_sync::{message as sync_message, schema::v1::StateResponse};
 use sp_arithmetic::traits::SaturatedConversion;
 use sp_consensus::{block_validation::BlockAnnounceValidator, BlockOrigin};

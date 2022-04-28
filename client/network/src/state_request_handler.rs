@@ -17,11 +17,7 @@
 //! Helper for handling (i.e. answering) state requests from a remote peer via the
 //! `crate::request_responses::RequestResponsesBehaviour`.
 
-use crate::{
-	config::ProtocolId,
-	request_responses::{IncomingRequest, OutgoingResponse, ProtocolConfig},
-	PeerId, ReputationChange,
-};
+use crate::{PeerId, ReputationChange};
 use codec::{Decode, Encode};
 use futures::{
 	channel::{mpsc, oneshot},
@@ -31,6 +27,10 @@ use log::{debug, trace};
 use lru::LruCache;
 use prost::Message;
 use sc_client_api::ProofProvider;
+use sc_network_common::{
+	config::ProtocolId,
+	request_responses::{IncomingRequest, OutgoingResponse, ProtocolConfig},
+};
 use sc_network_sync::schema::v1::{KeyValueStateEntry, StateEntry, StateRequest, StateResponse};
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 use std::{
