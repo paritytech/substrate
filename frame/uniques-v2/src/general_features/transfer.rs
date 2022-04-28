@@ -56,9 +56,9 @@ impl<T: Config> Pallet<T> {
 				return Ok(())
 			}
 
-			if user_features.contains(UserFeatures::Royalty) {
-				// take a part of the transfer amount
-			}
+			// if user_features.contains(UserFeatures::Royalty) {
+			// 	take a part of the transfer amount
+			// }
 
 			// max items per user
 			let mut maybe_receiver_items_amount =

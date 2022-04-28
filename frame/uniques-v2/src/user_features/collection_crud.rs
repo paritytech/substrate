@@ -18,7 +18,10 @@
 use crate::*;
 use enumflags2::BitFlags;
 use frame_support::pallet_prelude::*;
-use sp_runtime::traits::{CheckedAdd, One};
+use sp_runtime::{
+	traits::{CheckedAdd, One},
+	Perbill,
+};
 
 impl<T: Config> Pallet<T> {
 	pub fn do_create_collection(
@@ -27,14 +30,26 @@ impl<T: Config> Pallet<T> {
 		user_config: UserFeatures,
 		max_supply: Option<u32>,
 		max_items_per_account: Option<u32>,
+		creator_royalties: Perbill,
+		owner_royalties: Perbill,
 	) -> DispatchResult {
 		let id = CollectionNextId::<T>::get();
 
 		ensure!(!CollectionConfigs::<T>::contains_key(id), Error::<T>::CollectionIdTaken);
 
-		let default_system_config = T::DefaultSystemConfig::get();
-		let collection_config =
-			CollectionConfig { system_features: default_system_config, user_features: user_config };
+		/*let mut system_features = BitFlags::from(T::DefaultSystemConfig::get());
+
+		if !Perbill::is_zero(&creator_royalties) {
+			system_features.insert(SystemFeatures::CreatorRoyalties);
+		}
+		if !Perbill::is_zero(&owner_royalties) {
+			system_features.insert(SystemFeatures::OwnerRoyalties);
+		}*/
+
+		let collection_config = CollectionConfig {
+			system_features: T::DefaultSystemConfig::get(), // SystemFeatures::empty().into(),
+			user_features: UserFeatures::new(UserFeature::IsLocked | UserFeature::Administration), //user_config,
+		};
 		CollectionConfigs::<T>::insert(id, collection_config);
 
 		let collection = Collection {
@@ -47,6 +62,8 @@ impl<T: Config> Pallet<T> {
 			item_metadatas: 0,
 			max_supply,
 			max_items_per_account,
+			creator_royalties,
+			owner_royalties,
 		};
 		ensure!(!Collections::<T>::contains_key(id), Error::<T>::CollectionIdTaken);
 

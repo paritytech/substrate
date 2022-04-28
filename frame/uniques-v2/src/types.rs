@@ -21,7 +21,7 @@ use frame_support::RuntimeDebug;
 use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{IdentifyAccount, Verify},
-	MultiSignature, MultiSigner,
+	MultiSignature, MultiSigner, Perbill,
 };
 
 // Support for up to 64 user-enabled features on a collection.
@@ -30,7 +30,6 @@ use sp_runtime::{
 #[derive(Copy, Clone, RuntimeDebug, PartialEq, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub enum UserFeatures {
 	Administration,
-	Royalty,
 	IsLocked,
 	NonTransferableItems,
 }
@@ -41,6 +40,8 @@ pub enum UserFeatures {
 #[derive(Copy, Clone, RuntimeDebug, PartialEq, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub enum SystemFeatures {
 	NoDeposit,
+	CreatorRoyalties,
+	OwnerRoyalties,
 }
 
 // TODO: Implement Default
@@ -62,6 +63,8 @@ pub struct Collection<CollectionId, Account, Balance> {
 	pub item_metadatas: u32,
 	pub max_supply: Option<u32>,
 	pub max_items_per_account: Option<u32>,
+	pub creator_royalties: Perbill,
+	pub owner_royalties: Perbill,
 }
 
 #[derive(Encode, Decode, PartialEq, Default, MaxEncodedLen, TypeInfo)]

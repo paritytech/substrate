@@ -21,3 +21,4 @@ pub mod attributes;
 pub mod buy_sell;
 pub mod collection_crud;
 pub mod item_crud;
+pub mod royalties;

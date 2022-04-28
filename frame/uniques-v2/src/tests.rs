@@ -18,7 +18,7 @@
 use crate::{mock::*, *};
 use codec::{Decode, Encode};
 use enumflags2::BitFlags;
-use sp_runtime::{traits::TrailingZeroInput, AccountId32, MultiSignature};
+use sp_runtime::{traits::TrailingZeroInput, AccountId32, MultiSignature, Perbill};
 
 use frame_support::{assert_noop, assert_ok, traits::Currency};
 
@@ -143,6 +143,8 @@ fn minting_should_work() {
 			DEFAULT_USER_FEATURES,
 			None,
 			None,
+			Perbill::zero(),
+			Perbill::zero(),
 		));
 
 		let id = get_id_from_event().unwrap();
@@ -176,6 +178,8 @@ fn collection_locking_should_work() {
 			DEFAULT_USER_FEATURES,
 			None,
 			None,
+			Perbill::zero(),
+			Perbill::zero(),
 		));
 
 		let id = get_id_from_event().unwrap();
@@ -200,7 +204,15 @@ fn collection_locking_should_fail() {
 		let user_id = 1;
 		let user_features = UserFeatures::IsLocked;
 
-		assert_ok!(Uniques::create(Origin::signed(user_id), user_id, user_features, None, None));
+		assert_ok!(Uniques::create(
+			Origin::signed(user_id),
+			user_id,
+			user_features,
+			None,
+			None,
+			Perbill::zero(),
+			Perbill::zero(),
+		));
 
 		let id = get_id_from_event().unwrap();
 		let new_config = UserFeatures::Administration;
@@ -227,6 +239,8 @@ fn update_max_supply_should_work() {
 			DEFAULT_USER_FEATURES,
 			max_supply,
 			None,
+			Perbill::zero(),
+			Perbill::zero(),
 		));
 
 		let collection = Collections::<Test>::get(id).unwrap();
@@ -257,6 +271,8 @@ fn destroy_collection_should_work() {
 			DEFAULT_USER_FEATURES,
 			None,
 			None,
+			Perbill::zero(),
+			Perbill::zero(),
 		));
 
 		assert_ok!(Uniques::set_collection_metadata(Origin::signed(user_id), id, bvec![0u8; 20]));
@@ -298,6 +314,8 @@ fn transfer_owner_should_work() {
 			DEFAULT_USER_FEATURES,
 			None,
 			None,
+			Perbill::zero(),
+			Perbill::zero(),
 		));
 
 		assert_eq!(collections(), vec![(user_1, collection_id)]);
@@ -329,6 +347,8 @@ fn mint_should_work() {
 			DEFAULT_USER_FEATURES,
 			None,
 			None,
+			Perbill::zero(),
+			Perbill::zero(),
 		));
 
 		assert_ok!(Uniques::mint(Origin::signed(sender), user_id, collection_id, item_id));
@@ -350,6 +370,8 @@ fn mint_should_work() {
 			DEFAULT_USER_FEATURES,
 			Some(1),
 			None,
+			Perbill::zero(),
+			Perbill::zero(),
 		));
 		assert_ok!(Uniques::mint(Origin::signed(user_id), user_id, 1, 1));
 		assert_noop!(
@@ -372,6 +394,8 @@ fn burn_should_work() {
 			DEFAULT_USER_FEATURES,
 			None,
 			None,
+			Perbill::zero(),
+			Perbill::zero(),
 		));
 
 		assert_ok!(Uniques::mint(Origin::signed(user_id), user_id, collection_id, item_id));
@@ -405,6 +429,8 @@ fn transfer_should_work() {
 			DEFAULT_USER_FEATURES,
 			None,
 			None,
+			Perbill::zero(),
+			Perbill::zero(),
 		));
 
 		assert_ok!(Uniques::mint(Origin::signed(user_1), user_2, collection_id, item_id));
@@ -444,6 +470,8 @@ fn transfer_should_work() {
 			UserFeatures::NonTransferableItems,
 			None,
 			None,
+			Perbill::zero(),
+			Perbill::zero(),
 		));
 
 		assert_ok!(Uniques::mint(Origin::signed(user_1), user_1, collection_id, item_id));
@@ -476,6 +504,8 @@ fn set_metadata_should_work() {
 			DEFAULT_USER_FEATURES,
 			None,
 			None,
+			Perbill::zero(),
+			Perbill::zero(),
 		));
 
 		assert_ok!(Uniques::set_collection_metadata(
@@ -543,6 +573,8 @@ fn set_attribute_should_work() {
 			DEFAULT_USER_FEATURES,
 			None,
 			None,
+			Perbill::zero(),
+			Perbill::zero(),
 		));
 
 		assert_ok!(Uniques::set_attribute(Origin::signed(user_id), id, None, bvec![0], bvec![0]));
@@ -612,6 +644,8 @@ fn set_price_should_work() {
 			DEFAULT_USER_FEATURES,
 			None,
 			None,
+			Perbill::zero(),
+			Perbill::zero(),
 		));
 
 		assert_ok!(Uniques::mint(Origin::signed(user_id), user_id, collection_id, item_1));
@@ -656,6 +690,8 @@ fn set_price_should_work() {
 			UserFeatures::NonTransferableItems,
 			None,
 			None,
+			Perbill::zero(),
+			Perbill::zero(),
 		));
 
 		assert_ok!(Uniques::mint(Origin::signed(user_id), user_id, collection_id, item_1));
@@ -691,6 +727,8 @@ fn buy_item_should_work() {
 			DEFAULT_USER_FEATURES,
 			None,
 			None,
+			Perbill::zero(),
+			Perbill::zero(),
 		));
 
 		assert_ok!(Uniques::mint(Origin::signed(user_1), user_1, collection_id, item_1));
@@ -767,6 +805,8 @@ fn buy_item_should_work() {
 			UserFeatures::NonTransferableItems,
 			None,
 			None,
+			Perbill::zero(),
+			Perbill::zero(),
 		));
 
 		assert_noop!(
@@ -791,6 +831,8 @@ fn add_remove_approval_should_work() {
 			DEFAULT_USER_FEATURES,
 			None,
 			None,
+			Perbill::zero(),
+			Perbill::zero(),
 		));
 
 		// validate we can't set an approval for non-existing item
@@ -885,7 +927,9 @@ fn add_remove_approval_should_work() {
 			user_1,
 			UserFeatures::NonTransferableItems,
 			None,
-			None
+			None,
+			Perbill::zero(),
+			Perbill::zero(),
 		));
 
 		assert_ok!(Uniques::mint(Origin::signed(user_1), user_1, collection_id, item_id));
@@ -912,6 +956,8 @@ fn transfer_with_approval_should_works() {
 			DEFAULT_USER_FEATURES,
 			None,
 			None,
+			Perbill::zero(),
+			Perbill::zero(),
 		));
 		assert_ok!(Uniques::mint(Origin::signed(user_1), user_1, collection_id, item_id));
 		assert_ok!(Uniques::approve_transfer(
@@ -1001,6 +1047,8 @@ fn accept_buy_offer_should_works() {
 			DEFAULT_USER_FEATURES,
 			None,
 			None,
+			Perbill::zero(),
+			Perbill::zero(),
 		));
 
 		assert_ok!(Uniques::mint(Origin::signed(user_1), user_1, collection_id, item_id));
@@ -1072,6 +1120,8 @@ fn swap_items_should_works() {
 			DEFAULT_USER_FEATURES,
 			None,
 			None,
+			Perbill::zero(),
+			Perbill::zero(),
 		));
 
 		assert_ok!(Uniques::mint(Origin::signed(user_1), user_1, collection_from_id, item_from_id));
@@ -1082,6 +1132,8 @@ fn swap_items_should_works() {
 			DEFAULT_USER_FEATURES,
 			None,
 			None,
+			Perbill::zero(),
+			Perbill::zero(),
 		));
 
 		assert_ok!(Uniques::mint(Origin::signed(user_2), user_2, collection_to_id, item_to_id));
@@ -1178,6 +1230,14 @@ fn different_user_flags() {
 		// assert_ok!(Uniques::create(Origin::signed(1), 1, BitFlags::EMPTY, None, None));
 
 		let user_features = UserFeatures::IsLocked;
-		assert_ok!(Uniques::create(Origin::signed(1), 1, user_features, None, None));
+		assert_ok!(Uniques::create(
+			Origin::signed(1),
+			1,
+			user_features,
+			None,
+			None,
+			Perbill::zero(),
+			Perbill::zero(),
+		));
 	});
 }
