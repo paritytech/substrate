@@ -541,8 +541,8 @@ frame_benchmarking::benchmarks! {
 		signed_submissions.put();
 
 		let challenger = frame_benchmarking::whitelisted_caller();
-
 		T::Currency::make_free_balance_be(&challenger,  T::Currency::minimum_balance() * 1000u32.into());
+        <CurrentPhase<T>>::put(Phase::Signed);
 
 	}: _(RawOrigin::Signed(challenger), 3)
 

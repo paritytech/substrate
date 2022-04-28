@@ -1066,10 +1066,11 @@ pub mod pallet {
 		/// If the claimed score is not correct, the malicious submitter will lose the deposit,
 		/// the solution will be ejected and the challenger will receive some reward
 		/// less than the solution's deposit.
-		// TODO: Add Proper Benchmarks
 		#[pallet::weight(100)]
 		pub fn challenge_solution(origin: OriginFor<T>, index: u32) -> DispatchResult {
 			let who = ensure_signed(origin)?;
+
+            ensure!(Self::current_phase().is_signed(), Error::<T>::CallNotAllowed);
 
 			if let Some(submission) = Self::signed_submissions().get_submission(index) {
 				ensure!(
@@ -1085,9 +1086,7 @@ pub mod pallet {
 						let _ = T::Currency::slash(&who, submission.deposit);
 						<QueuedSolution<T>>::put(solution);
 						let _ = signed_submissions.pop(submission.raw_solution.score);
-
 						Self::deposit_event(Event::Challenged { account: who, outcome: false });
-
 						Ok(())
 					},
 					Err(_error) => {
@@ -1098,15 +1097,13 @@ pub mod pallet {
 							Free,
 						)?;
 						let _ = signed_submissions.pop(submission.raw_solution.score);
-
 						signed_submissions.put();
 						Self::deposit_event(Event::Challenged { account: who, outcome: true });
-
 						Ok(())
 					},
 				}
 			} else {
-				return Err(Error::<T>::CallNotAllowed.into())
+				return Err(Error::<T>::InvalidSubmissionIndex.into())
 			}
 		}
 	}
