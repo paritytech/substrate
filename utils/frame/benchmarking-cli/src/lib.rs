@@ -25,7 +25,7 @@ mod shared;
 mod storage;
 
 pub use block::BlockCmd;
-pub use machine::MachineCmd;
+pub use machine::{MachineCmd, Requirements, SUBSTRATE_REFERENCE_HARDWARE};
 pub use overhead::{ExtrinsicBuilder, OverheadCmd};
 pub use pallet::PalletCmd;
 pub use storage::StorageCmd;

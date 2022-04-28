@@ -1099,21 +1099,6 @@ mod remote_tests {
 	}
 
 	#[tokio::test]
-	async fn can_build_child_tree() {
-		init_logger();
-		Builder::<Block>::new()
-			.mode(Mode::Online(OnlineConfig {
-				transport: "wss://rpc.polkadot.io:443".to_owned().into(),
-				pallets: vec!["Crowdloan".to_owned()],
-				..Default::default()
-			}))
-			.build()
-			.await
-			.expect(REMOTE_INACCESSIBLE)
-			.execute_with(|| {});
-	}
-
-	#[tokio::test]
 	async fn can_create_child_snapshot() {
 		init_logger();
 		Builder::<Block>::new()
@@ -1196,9 +1181,7 @@ mod remote_tests {
 		init_logger();
 		Builder::<Block>::new()
 			.mode(Mode::Online(OnlineConfig {
-				// transport: "wss://kusama-rpc.polkadot.io".to_owned().into(),
-				transport: "ws://kianenigma-archive:9924".to_owned().into(),
-				// transport: "ws://localhost:9999".to_owned().into(),
+				transport: "wss://rpc.polkadot.io:443".to_owned().into(),
 				pallets: vec!["Crowdloan".to_owned()],
 				..Default::default()
 			}))
