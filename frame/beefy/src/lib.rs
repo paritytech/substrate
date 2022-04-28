@@ -105,10 +105,6 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn change_authorities(new: Vec<T::BeefyId>, queued: Vec<T::BeefyId>) {
-		// Always issue a change on each `session`.
-		// Even if the validator session keys are the same as before, the underlying economic
-		// identities may have changed.
-		// Furthermore, the digest below is used to signal BEEFY mandatory blocks.
 		<Authorities<T>>::put(&new);
 
 		let next_id = Self::validator_set_id() + 1u64;
