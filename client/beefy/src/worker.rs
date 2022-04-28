@@ -242,7 +242,10 @@ where
 		debug!(target: "beefy", "🥩 New active validator set: {:?}", active);
 		metric_set!(self, beefy_validator_set_id, active.id());
 		// BEEFY should produce a signed commitment for each session
-		if active.id() != self.last_signed_id + 1 && active.id() != GENESIS_AUTHORITY_SET_ID {
+		if active.id() != self.last_signed_id + 1 &&
+			active.id() != GENESIS_AUTHORITY_SET_ID &&
+			self.last_signed_id != 0
+		{
 			metric_inc!(self, beefy_skipped_sessions);
 		}
 
