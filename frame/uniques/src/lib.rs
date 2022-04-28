@@ -43,7 +43,7 @@ pub mod weights;
 
 use codec::{Decode, Encode};
 use frame_support::traits::{
-	BalanceStatus::Reserved, Currency, EnsureOriginWithArg, ReservableCurrency,
+	tokens::Locker, BalanceStatus::Reserved, Currency, EnsureOriginWithArg, ReservableCurrency,
 };
 use frame_system::Config as SystemConfig;
 use sp_runtime::{
@@ -107,6 +107,9 @@ pub mod pallet {
 			Self::Origin,
 			Self::ClassId,
 		>;
+
+		/// Locker trait to enable Locking mechanism downstream.
+		type Locker: Locker<Self::ClassId, Self::InstanceId>;
 
 		/// The basic amount of funds that must be reserved for an asset class.
 		#[pallet::constant]
@@ -352,6 +355,8 @@ pub mod pallet {
 		Unapproved,
 		/// The named owner has not signed ownership of the class is acceptable.
 		Unaccepted,
+		/// The asset instance is locked.
+		Locked,
 	}
 
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
