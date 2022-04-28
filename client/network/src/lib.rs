@@ -333,4 +333,4 @@ pub struct NetworkStatus<B: BlockT> {
 }
 
 // Topology is only define at worker level.
-type Mixnet = mixnet::Mixnet<mixnet::NoTopology>;
+type Mixnet = mixnet::MixnetBehaviour;

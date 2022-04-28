@@ -362,7 +362,7 @@ pub fn new_full_base(
 			let authority_set = import_setup.1.shared_authority_set().clone();
 			mixnet_worker = Some((authority_set, worker_inner, config));
 		} else {
-			return Err(ServiceError::Other("Cannot start mixnet.".to_string()));
+			return Err(ServiceError::Other("Cannot start mixnet.".to_string()))
 		}
 	}
 

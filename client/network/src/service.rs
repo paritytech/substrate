@@ -64,7 +64,7 @@ use libp2p::{
 };
 use log::{debug, error, info, trace, warn};
 use metrics::{Histogram, HistogramVec, MetricSources, Metrics};
-use mixnet::Mixnet;
+use mixnet::MixnetBehaviour;
 use parking_lot::Mutex;
 use sc_consensus::{BlockImportError, BlockImportStatus, ImportQueue, Link};
 use sc_peerset::PeersetHandle;
@@ -343,14 +343,8 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				// through call backs in crate and same as transaction handler to register
 				let mut mixnet = None;
 				if let Some((mixnet_in, mixnet_out, command_sender, config)) = params.mixnet {
-					mixnet = Some((
-						Mixnet::new_from_worker(
-							config,
-							mixnet_in,
-							mixnet_out,
-						),
-						command_sender,
-					));
+					mixnet =
+						Some((MixnetBehaviour::new(config, mixnet_in, mixnet_out), command_sender));
 				};
 
 				let result = Behaviour::new(
@@ -1901,7 +1895,8 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					kind,
 					reply,
 				))) => {
-					// TODO sender in message still make sense to possibly track com from peer (worker side)
+					// TODO sender in message still make sense to possibly track com from peer
+					// (worker side)
 					debug!(target: "mixnet", "Inject transaction from mixnet from {:?}) tx: {:?}", sender, message);
 					this.tx_handler_controller.inject_transaction_mixnet(kind, message, reply);
 				},

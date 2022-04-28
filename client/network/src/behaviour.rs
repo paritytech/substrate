@@ -38,7 +38,7 @@ use libp2p::{
 	},
 	NetworkBehaviour,
 };
-use log::{trace, debug, info};
+use log::{debug, info, trace};
 use prost::Message;
 use sc_consensus::import_queue::{IncomingBlock, Origin};
 use sc_peerset::PeersetHandle;
@@ -226,7 +226,12 @@ pub enum BehaviourOut<B: BlockT> {
 	Dht(DhtEvent, Duration),
 
 	/// Messages coming from the mix network.
-	MixnetMessage(PeerId, Vec<u8>, mixnet::MessageType, Option<TracingUnboundedSender<MixnetCommand>>),
+	MixnetMessage(
+		PeerId,
+		Vec<u8>,
+		mixnet::MessageType,
+		Option<TracingUnboundedSender<MixnetCommand>>,
+	),
 }
 
 impl<B: BlockT> Behaviour<B> {
@@ -299,10 +304,10 @@ impl<B: BlockT> Behaviour<B> {
 			if let Ok(decoded) = <B::Extrinsic as Decode>::decode(&mut encoded_tx.as_ref()) {
 				let message = crate::protocol::message::Message::<B>::Transactions(vec![decoded]);
 				mixnet
-					.send_to_random_recipient(message.encode(), mixnet::SendOptions {
-						num_hop: Some(num_hop),
-						with_surbs: surbs_reply,
-					})
+					.send_to_random_recipient(
+						message.encode(),
+						mixnet::SendOptions { num_hop: Some(num_hop), with_surbs: surbs_reply },
+					)
 					.map_err(|e| e.to_string())
 			} else {
 				Err("Invalid transaction".into())
@@ -595,7 +600,7 @@ impl<B: BlockT> NetworkBehaviourEventProcess<mixnet::NetworkEvent> for Behaviour
 
 						// TODO send in some client notification (keep query in worker?).
 						// Also attach query to FromSurbs??
-						let result = MixnetImportResult::decode(&mut message.message.as_ref()); 
+						let result = MixnetImportResult::decode(&mut message.message.as_ref());
 						info!(target: "mixnet", "Received from surbs {:?}", result);
 					},
 					kind => {
@@ -605,8 +610,12 @@ impl<B: BlockT> NetworkBehaviourEventProcess<mixnet::NetworkEvent> for Behaviour
 						} else {
 							None
 						};
-						self.events
-							.push_back(BehaviourOut::MixnetMessage(message.peer, message.message, kind, reply));
+						self.events.push_back(BehaviourOut::MixnetMessage(
+							message.peer,
+							message.message,
+							kind,
+							reply,
+						));
 					},
 				}
 			},
