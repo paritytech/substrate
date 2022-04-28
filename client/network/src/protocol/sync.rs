@@ -29,7 +29,6 @@
 //! order to update it.
 
 use crate::protocol::message::{self, BlockAnnounce, BlockAttributes, BlockRequest, BlockResponse};
-use blocks::BlockCollection;
 use codec::Encode;
 use either::Either;
 use extra_requests::ExtraRequests;
@@ -39,6 +38,8 @@ use log::{debug, error, info, trace, warn};
 use sc_client_api::{BlockBackend, ProofProvider};
 use sc_consensus::{BlockImportError, BlockImportStatus, IncomingBlock};
 use sc_network_sync::{
+	blocks::BlockCollection,
+	message as sync_message,
 	schema::v1::{StateRequest, StateResponse},
 	state::{self, StateDownloadProgress, StateSync},
 };
@@ -66,7 +67,6 @@ use std::{
 use warp::{WarpProofRequest, WarpSync, WarpSyncProvider};
 pub use warp::{WarpSyncPhase, WarpSyncProgress};
 
-mod blocks;
 mod extra_requests;
 mod warp;
 
@@ -2469,7 +2469,7 @@ where
 ///
 /// It is expected that `blocks` are in ascending order.
 fn validate_blocks<Block: BlockT>(
-	blocks: &Vec<message::BlockData<Block>>,
+	blocks: &Vec<sync_message::BlockData<Block>>,
 	who: &PeerId,
 	request: Option<BlockRequest<Block>>,
 ) -> Result<Option<NumberFor<Block>>, BadPeer> {
@@ -2574,11 +2574,12 @@ fn validate_blocks<Block: BlockT>(
 #[cfg(test)]
 mod test {
 	use super::{
-		message::{BlockData, BlockState, FromBlock},
+		message::{BlockState, FromBlock},
 		*,
 	};
 	use futures::{executor::block_on, future::poll_fn};
 	use sc_block_builder::BlockBuilderProvider;
+	use sc_network_sync::message::BlockData;
 	use sp_blockchain::HeaderBackend;
 	use sp_consensus::block_validation::DefaultBlockAnnounceValidator;
 	use substrate_test_runtime_client::{

@@ -49,7 +49,7 @@ use prometheus_endpoint::{register, Gauge, GaugeVec, Opts, PrometheusError, Regi
 use prost::Message as _;
 use sc_client_api::{BlockBackend, HeaderBackend, ProofProvider};
 use sc_consensus::import_queue::{BlockImportError, BlockImportStatus, IncomingBlock, Origin};
-use sc_network_sync::schema::v1::StateResponse;
+use sc_network_sync::{message as sync_message, schema::v1::StateResponse};
 use sp_arithmetic::traits::SaturatedConversion;
 use sp_consensus::{block_validation::BlockAnnounceValidator, BlockOrigin};
 use sp_runtime::{
@@ -613,7 +613,7 @@ where
 			.blocks
 			.into_iter()
 			.map(|block_data| {
-				Ok(message::BlockData::<B> {
+				Ok(sync_message::BlockData::<B> {
 					hash: Decode::decode(&mut block_data.hash.as_ref())?,
 					header: if !block_data.header.is_empty() {
 						Some(Decode::decode(&mut block_data.header.as_ref())?)
@@ -1022,7 +1022,7 @@ where
 			None,
 			message::generic::BlockResponse {
 				id: 0,
-				blocks: vec![message::generic::BlockData {
+				blocks: vec![sync_message::generic::BlockData {
 					hash: header.hash(),
 					header: Some(header),
 					body: None,

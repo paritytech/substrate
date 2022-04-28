@@ -46,10 +46,6 @@ pub type Message<B> = generic::Message<
 pub type BlockRequest<B> =
 	generic::BlockRequest<<B as BlockT>::Hash, <<B as BlockT>::Header as HeaderT>::Number>;
 
-/// Type alias for using the BlockData type using block type parameters.
-pub type BlockData<B> =
-	generic::BlockData<<B as BlockT>::Header, <B as BlockT>::Hash, <B as BlockT>::Extrinsic>;
-
 /// Type alias for using the BlockResponse type using block type parameters.
 pub type BlockResponse<B> =
 	generic::BlockResponse<<B as BlockT>::Header, <B as BlockT>::Hash, <B as BlockT>::Extrinsic>;
@@ -149,7 +145,7 @@ pub struct AnnouncementSummary<H: HeaderT> {
 	pub state: Option<BlockState>,
 }
 
-impl<H: HeaderT> generic::BlockAnnounce<H> {
+impl<H: HeaderT> BlockAnnounce<H> {
 	pub fn summary(&self) -> AnnouncementSummary<H> {
 		AnnouncementSummary {
 			block_hash: self.header.hash(),
@@ -168,7 +164,7 @@ pub mod generic {
 	};
 	use bitflags::bitflags;
 	use codec::{Decode, Encode, Input, Output};
-	use sp_runtime::{EncodedJustification, Justifications};
+	use sc_network_sync::message::generic::BlockData;
 
 	bitflags! {
 		/// Bitmask of the roles that a node fulfills.
@@ -212,7 +208,7 @@ pub mod generic {
 	}
 
 	impl codec::Encode for Roles {
-		fn encode_to<T: codec::Output + ?Sized>(&self, dest: &mut T) {
+		fn encode_to<T: Output + ?Sized>(&self, dest: &mut T) {
 			dest.push_byte(self.bits())
 		}
 	}
@@ -220,7 +216,7 @@ pub mod generic {
 	impl codec::EncodeLike for Roles {}
 
 	impl codec::Decode for Roles {
-		fn decode<I: codec::Input>(input: &mut I) -> Result<Self, codec::Error> {
+		fn decode<I: Input>(input: &mut I) -> Result<Self, codec::Error> {
 			Self::from_bits(input.read_byte()?).ok_or_else(|| codec::Error::from("Invalid bytes"))
 		}
 	}
@@ -232,27 +228,6 @@ pub mod generic {
 		pub protocol: ConsensusEngineId,
 		/// Message payload.
 		pub data: Vec<u8>,
-	}
-
-	/// Block data sent in the response.
-	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
-	pub struct BlockData<Header, Hash, Extrinsic> {
-		/// Block header hash.
-		pub hash: Hash,
-		/// Block header if requested.
-		pub header: Option<Header>,
-		/// Block body if requested.
-		pub body: Option<Vec<Extrinsic>>,
-		/// Block body indexed transactions if requested.
-		pub indexed_body: Option<Vec<Vec<u8>>>,
-		/// Block receipt if requested.
-		pub receipt: Option<Vec<u8>>,
-		/// Block message queue if requested.
-		pub message_queue: Option<Vec<u8>>,
-		/// Justification if requested.
-		pub justification: Option<EncodedJustification>,
-		/// Justifications if requested.
-		pub justifications: Option<Justifications>,
 	}
 
 	/// Identifies starting point of a block sequence.
