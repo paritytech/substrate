@@ -180,11 +180,7 @@ test-linux-stable-nextest:
     # Ensure we run the UI tests.
     RUN_UI_TESTS:                  1
   script:
-<<<<<<< HEAD
     - time cargo install cargo-nextest
-=======
-    - cargo install cargo-nextest
->>>>>>> 55b0af39ffb (update nextest)
     # this job runs all tests in former runtime-benchmarks, frame-staking and wasmtime tests
     - time cargo nextest run --workspace --locked --release --verbose --features runtime-benchmarks --manifest-path ./bin/node/cli/Cargo.toml
     - time cargo test -p frame-support-test --features=conditional-storage,no-metadata-docs --manifest-path ./frame/support/test/Cargo.toml --test pallet # does not reuse cache 1 min 44 sec
