@@ -259,7 +259,6 @@ pub mod config;
 pub mod error;
 pub mod light_client_requests;
 pub mod network_state;
-pub mod state_request_handler;
 pub mod transactions;
 
 #[doc(inline)]
@@ -271,6 +270,7 @@ pub use protocol::{
 pub use sc_network_sync::{
 	block_request_handler,
 	state::StateDownloadProgress,
+	state_request_handler,
 	warp::{WarpSyncPhase, WarpSyncProgress},
 	warp_request_handler, SyncState,
 };
