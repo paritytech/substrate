@@ -255,7 +255,6 @@ mod transport;
 mod utils;
 
 pub mod bitswap;
-pub mod block_request_handler;
 pub mod config;
 pub mod error;
 pub mod light_client_requests;
@@ -270,6 +269,7 @@ pub use protocol::{
 	PeerInfo,
 };
 pub use sc_network_sync::{
+	block_request_handler,
 	state::StateDownloadProgress,
 	warp::{WarpSyncPhase, WarpSyncProgress},
 	warp_request_handler, SyncState,

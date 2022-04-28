@@ -17,12 +17,16 @@
 //! Helper for handling (i.e. answering) block requests from a remote peer via the
 //! `crate::request_responses::RequestResponsesBehaviour`.
 
-use crate::{PeerId, ReputationChange};
+use crate::{
+	message::BlockAttributes,
+	schema::v1::{block_request::FromBlock, BlockResponse, Direction},
+};
 use codec::{Decode, Encode};
 use futures::{
 	channel::{mpsc, oneshot},
 	stream::StreamExt,
 };
+use libp2p::PeerId;
 use log::debug;
 use lru::LruCache;
 use prost::Message;
@@ -30,10 +34,6 @@ use sc_client_api::BlockBackend;
 use sc_network_common::{
 	config::ProtocolId,
 	request_responses::{IncomingRequest, OutgoingResponse, ProtocolConfig},
-};
-use sc_network_sync::{
-	message::BlockAttributes,
-	schema::v1::{block_request::FromBlock, BlockResponse, Direction},
 };
 use sp_blockchain::HeaderBackend;
 use sp_runtime::{
@@ -53,7 +53,7 @@ const MAX_BODY_BYTES: usize = 8 * 1024 * 1024;
 const MAX_NUMBER_OF_SAME_REQUESTS_PER_PEER: usize = 2;
 
 mod rep {
-	use super::ReputationChange as Rep;
+	use sc_peerset::ReputationChange as Rep;
 
 	/// Reputation change when a peer sent us the same request multiple times.
 	pub const SAME_REQUEST: Rep = Rep::new_fatal("Same block request multiple times");
@@ -169,7 +169,7 @@ where
 		pending_response: oneshot::Sender<OutgoingResponse>,
 		peer: &PeerId,
 	) -> Result<(), HandleRequestError> {
-		let request = sc_network_sync::schema::v1::BlockRequest::decode(&payload[..])?;
+		let request = crate::schema::v1::BlockRequest::decode(&payload[..])?;
 
 		let from_block_id = match request.from_block.ok_or(HandleRequestError::MissingFromField)? {
 			FromBlock::Hash(ref h) => {
@@ -363,7 +363,7 @@ where
 				Vec::new()
 			};
 
-			let block_data = sc_network_sync::schema::v1::BlockData {
+			let block_data = crate::schema::v1::BlockData {
 				hash: hash.encode(),
 				header: if get_header { header.encode() } else { Vec::new() },
 				body,

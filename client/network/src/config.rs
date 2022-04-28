@@ -109,10 +109,10 @@ where
 	/// protocol name. In addition all of [`RequestResponseConfig`] is used to handle incoming
 	/// block requests, if enabled.
 	///
-	/// Can be constructed either via [`crate::block_request_handler::generate_protocol_config`]
-	/// allowing outgoing but not incoming requests, or constructed via
-	/// [`crate::block_request_handler::BlockRequestHandler::new`] allowing both outgoing and
-	/// incoming requests.
+	/// Can be constructed either via
+	/// [`sc_network_sync::block_request_handler::generate_protocol_config`] allowing outgoing but
+	/// not incoming requests, or constructed via [`sc_network_sync::block_request_handler::
+	/// BlockRequestHandler::new`] allowing both outgoing and incoming requests.
 	pub block_request_protocol_config: RequestResponseConfig,
 
 	/// Request response configuration for the light client request protocol.
@@ -127,8 +127,8 @@ where
 	/// Request response configuration for the state request protocol.
 	///
 	/// Can be constructed either via
-	/// [`crate::block_request_handler::generate_protocol_config`] allowing outgoing but not
-	/// incoming requests, or constructed via
+	/// [`sc_network_sync::block_request_handler::generate_protocol_config`] allowing outgoing but
+	/// not incoming requests, or constructed via
 	/// [`crate::state_request_handler::StateRequestHandler::new`] allowing
 	/// both outgoing and incoming requests.
 	pub state_request_protocol_config: RequestResponseConfig,

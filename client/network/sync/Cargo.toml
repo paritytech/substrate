@@ -26,6 +26,7 @@ fork-tree = { version = "3.0.0", path = "../../../utils/fork-tree" }
 futures = "0.3.21"
 libp2p = "0.44.0"
 log = "0.4.16"
+lru = "0.7.5"
 prost = "0.9"
 sc-client-api = { version = "4.0.0-dev", path = "../../api" }
 sc-consensus = { version = "0.10.0-dev", path = "../../consensus/common" }

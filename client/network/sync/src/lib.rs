@@ -28,6 +28,7 @@
 //! the network, or whenever a block has been successfully verified, call the appropriate method in
 //! order to update it.
 
+pub mod block_request_handler;
 pub mod blocks;
 pub mod message;
 pub mod schema;
