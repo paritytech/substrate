@@ -38,7 +38,10 @@ use libp2p::PeerId;
 use log::{debug, error, info, trace, warn};
 use sc_client_api::{BlockBackend, ProofProvider};
 use sc_consensus::{BlockImportError, BlockImportStatus, IncomingBlock};
-use sc_network_sync::schema::v1::{StateRequest, StateResponse};
+use sc_network_sync::{
+	schema::v1::{StateRequest, StateResponse},
+	state::{self, StateDownloadProgress, StateSync},
+};
 use sp_arithmetic::traits::Saturating;
 use sp_blockchain::{Error as ClientError, HeaderBackend, HeaderMetadata};
 use sp_consensus::{
@@ -53,8 +56,6 @@ use sp_runtime::{
 	},
 	EncodedJustification, Justifications,
 };
-pub use state::StateDownloadProgress;
-use state::StateSync;
 use std::{
 	collections::{hash_map::Entry, HashMap, HashSet},
 	fmt,
@@ -67,7 +68,6 @@ pub use warp::{WarpSyncPhase, WarpSyncProgress};
 
 mod blocks;
 mod extra_requests;
-mod state;
 mod warp;
 
 /// Maximum blocks to request in a single packet.

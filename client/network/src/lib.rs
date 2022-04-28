@@ -268,9 +268,10 @@ pub mod warp_request_handler;
 pub use libp2p::{multiaddr, Multiaddr, PeerId};
 pub use protocol::{
 	event::{DhtEvent, Event, ObservedRole},
-	sync::{StateDownloadProgress, SyncState, WarpSyncPhase, WarpSyncProgress},
+	sync::{SyncState, WarpSyncPhase, WarpSyncProgress},
 	PeerInfo,
 };
+pub use sc_network_sync::state::StateDownloadProgress;
 pub use service::{
 	DecodingError, IfDisconnected, KademliaKey, Keypair, NetworkService, NetworkWorker,
 	NotificationSender, NotificationSenderReady, OutboundFailure, PublicKey, RequestFailure,
@@ -325,7 +326,7 @@ pub struct NetworkStatus<B: BlockT> {
 	/// The total number of bytes sent.
 	pub total_bytes_outbound: u64,
 	/// State sync in progress.
-	pub state_sync: Option<protocol::sync::StateDownloadProgress>,
+	pub state_sync: Option<StateDownloadProgress>,
 	/// Warp sync in progress.
-	pub warp_sync: Option<protocol::sync::WarpSyncProgress<B>>,
+	pub warp_sync: Option<WarpSyncProgress<B>>,
 }

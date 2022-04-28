@@ -16,13 +16,16 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-///! Warp sync support.
-use super::state::{ImportResult, StateSync};
+//! Warp sync support.
+
 pub use crate::warp_request_handler::{
 	EncodedProof, Request as WarpProofRequest, VerificationResult, WarpSyncProvider,
 };
 use sc_client_api::ProofProvider;
-use sc_network_sync::schema::v1::{StateRequest, StateResponse};
+use sc_network_sync::{
+	schema::v1::{StateRequest, StateResponse},
+	state::{ImportResult, StateSync},
+};
 use sp_blockchain::HeaderBackend;
 use sp_finality_grandpa::{AuthorityList, SetId};
 use sp_runtime::traits::{Block as BlockT, NumberFor, Zero};
