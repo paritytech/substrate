@@ -27,7 +27,7 @@ use inflector::Inflector;
 use serde::Serialize;
 
 use crate::{
-	shared::{UnderscoreFormatHelper, UnderscoreHelper},
+	shared::{WeightAsNanoseconds, UnderscoreHelper},
 	PalletCmd,
 };
 use frame_benchmarking::{
@@ -301,7 +301,7 @@ pub fn write_results(
 	// New Handlebars instance with helpers.
 	let mut handlebars = handlebars::Handlebars::new();
 	handlebars.register_helper("underscore", Box::new(UnderscoreHelper));
-	handlebars.register_helper("underscoreFormat", Box::new(UnderscoreFormatHelper));
+	handlebars.register_helper("weightAsNanoseconds", Box::new(WeightAsNanoseconds));
 	handlebars.register_helper("join", Box::new(JoinHelper));
 	// Don't HTML escape any characters.
 	handlebars.register_escape_fn(|s| -> String { s.to_string() });

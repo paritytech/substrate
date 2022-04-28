@@ -106,7 +106,8 @@ where
 		}
 		s.insert(0, val);
 	}
-	s.push_str(" * WEIGHT_PER_NANOS");
+	s.insert(0, '(');
+	s.push_str(" as Weight).saturating_mul(WEIGHT_PER_NANOS)");
 	s
 }
 
