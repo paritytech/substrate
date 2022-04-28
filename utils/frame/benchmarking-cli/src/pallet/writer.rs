@@ -27,7 +27,7 @@ use inflector::Inflector;
 use serde::Serialize;
 
 use crate::{
-	shared::{WeightAsNanoseconds, UnderscoreHelper},
+	shared::{UnderscoreHelper, WeightAsNanoseconds},
 	PalletCmd,
 };
 use frame_benchmarking::{
