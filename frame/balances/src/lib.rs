@@ -810,12 +810,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		_who: &T::AccountId,
 		amount: T::Balance,
 		account: &AccountData<T::Balance>,
+		mint: bool,
 	) -> DepositConsequence {
 		if amount.is_zero() {
 			return DepositConsequence::Success
 		}
 
-		if TotalIssuance::<T, I>::get().checked_add(&amount).is_none() {
+		if mint && TotalIssuance::<T, I>::get().checked_add(&amount).is_none() {
 			return DepositConsequence::Overflow
 		}
 
@@ -1093,8 +1094,8 @@ impl<T: Config<I>, I: 'static> fungible::Inspect<T::AccountId> for Pallet<T, I> 
 			liquid.saturating_sub(must_remain_to_exist)
 		}
 	}
-	fn can_deposit(who: &T::AccountId, amount: Self::Balance) -> DepositConsequence {
-		Self::deposit_consequence(who, amount, &Self::account(who))
+	fn can_deposit(who: &T::AccountId, amount: Self::Balance, mint: bool) -> DepositConsequence {
+		Self::deposit_consequence(who, amount, &Self::account(who), mint)
 	}
 	fn can_withdraw(
 		who: &T::AccountId,
@@ -1110,7 +1111,7 @@ impl<T: Config<I>, I: 'static> fungible::Mutate<T::AccountId> for Pallet<T, I> {
 			return Ok(())
 		}
 		Self::try_mutate_account(who, |account, _is_new| -> DispatchResult {
-			Self::deposit_consequence(who, amount, &account).into_result()?;
+			Self::deposit_consequence(who, amount, &account, true).into_result()?;
 			account.free += amount;
 			Ok(())
 		})?;

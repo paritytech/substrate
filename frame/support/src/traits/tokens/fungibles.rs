@@ -53,10 +53,16 @@ pub trait Inspect<AccountId> {
 	fn reducible_balance(asset: Self::AssetId, who: &AccountId, keep_alive: bool) -> Self::Balance;
 
 	/// Returns `true` if the `asset` balance of `who` may be increased by `amount`.
+	///
+	/// - `asset`: The asset that should be deposited.
+	/// - `who`: The account of which the balance should be increased by `amount`.
+	/// - `amount`: How much should the balance be increased?
+	/// - `mint`: Will `amount` be minted to deposit it into `account`?
 	fn can_deposit(
 		asset: Self::AssetId,
 		who: &AccountId,
 		amount: Self::Balance,
+		mint: bool,
 	) -> DepositConsequence;
 
 	/// Returns `Failed` if the `asset` balance of `who` may not be decreased by `amount`, otherwise
@@ -137,7 +143,9 @@ pub trait Mutate<AccountId>: Inspect<AccountId> {
 		amount: Self::Balance,
 	) -> Result<Self::Balance, DispatchError> {
 		let extra = Self::can_withdraw(asset, &source, amount).into_result()?;
-		Self::can_deposit(asset, &dest, amount.saturating_add(extra)).into_result()?;
+		// As we first burn and then mint, we don't need to check if `mint` fits into the supply.
+		// If we can withdraw/burn it, we can also mint it again.
+		Self::can_deposit(asset, &dest, amount.saturating_add(extra), false).into_result()?;
 		let actual = Self::burn_from(asset, source, amount)?;
 		debug_assert!(
 			actual == amount.saturating_add(extra),
