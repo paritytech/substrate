@@ -87,7 +87,7 @@ impl pallet_balances::Config for Test {
 }
 
 parameter_types! {
-	pub NoDeposit: SystemFeatures = SystemFeatures::NoDeposit;
+	pub NoDeposit: SystemFeatures = SystemFeatures::new(SystemFeature::NoDeposit.into());
 }
 
 impl Config for Test {

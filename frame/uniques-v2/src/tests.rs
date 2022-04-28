@@ -111,8 +111,8 @@ fn approvals(collection_id: u32, item_id: u32) -> Vec<(u64, Option<u64>)> {
 	s
 }
 
-pub const DEFAULT_SYSTEM_FEATURES: SystemFeatures = SystemFeatures::NoDeposit;
-pub const DEFAULT_USER_FEATURES: UserFeatures = UserFeatures::Administration;
+pub const DEFAULT_SYSTEM_FEATURES: SystemFeature = SystemFeature::NoDeposit;
+pub const DEFAULT_USER_FEATURES: UserFeature = UserFeature::Administration;
 
 #[cfg(test)]
 mod crypto {
@@ -140,7 +140,7 @@ fn minting_should_work() {
 		assert_ok!(Uniques::create(
 			Origin::signed(creator),
 			owner,
-			DEFAULT_USER_FEATURES,
+			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
 			None,
 			None,
 			Perbill::zero(),
@@ -151,8 +151,8 @@ fn minting_should_work() {
 		let collection_config = CollectionConfigs::<Test>::get(id);
 
 		let expected_config = CollectionConfig {
-			system_features: DEFAULT_SYSTEM_FEATURES,
-			user_features: DEFAULT_USER_FEATURES,
+			system_features: SystemFeatures::new(DEFAULT_SYSTEM_FEATURES.into()),
+			user_features: UserFeatures::new(DEFAULT_USER_FEATURES.into()),
 		};
 		assert_eq!(Some(expected_config), collection_config);
 
@@ -175,7 +175,7 @@ fn collection_locking_should_work() {
 		assert_ok!(Uniques::create(
 			Origin::signed(user_id),
 			user_id,
-			DEFAULT_USER_FEATURES,
+			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
 			None,
 			None,
 			Perbill::zero(),
@@ -183,14 +183,14 @@ fn collection_locking_should_work() {
 		));
 
 		let id = get_id_from_event().unwrap();
-		let new_config = UserFeatures::IsLocked;
+		let new_config = UserFeatures::new(UserFeature::IsLocked.into());
 
 		assert_ok!(Uniques::change_collection_config(Origin::signed(user_id), id, new_config));
 
 		let collection_config = CollectionConfigs::<Test>::get(id);
 
 		let expected_config = CollectionConfig {
-			system_features: DEFAULT_SYSTEM_FEATURES,
+			system_features: SystemFeatures::new(DEFAULT_SYSTEM_FEATURES.into()),
 			user_features: new_config,
 		};
 
@@ -202,7 +202,7 @@ fn collection_locking_should_work() {
 fn collection_locking_should_fail() {
 	new_test_ext().execute_with(|| {
 		let user_id = 1;
-		let user_features = UserFeatures::IsLocked;
+		let user_features = UserFeatures::new(UserFeature::IsLocked.into());
 
 		assert_ok!(Uniques::create(
 			Origin::signed(user_id),
@@ -215,7 +215,7 @@ fn collection_locking_should_fail() {
 		));
 
 		let id = get_id_from_event().unwrap();
-		let new_config = UserFeatures::Administration;
+		let new_config = UserFeatures::new(UserFeature::Administration.into());
 
 		assert!(events().contains(&Event::<Test>::CollectionLocked { id }));
 
@@ -236,7 +236,7 @@ fn update_max_supply_should_work() {
 		assert_ok!(Uniques::create(
 			Origin::signed(user_id),
 			user_id,
-			DEFAULT_USER_FEATURES,
+			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
 			max_supply,
 			None,
 			Perbill::zero(),
@@ -268,7 +268,7 @@ fn destroy_collection_should_work() {
 		assert_ok!(Uniques::create(
 			Origin::signed(user_id),
 			user_id,
-			DEFAULT_USER_FEATURES,
+			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
 			None,
 			None,
 			Perbill::zero(),
@@ -311,7 +311,7 @@ fn transfer_owner_should_work() {
 		assert_ok!(Uniques::create(
 			Origin::signed(user_1),
 			user_1,
-			DEFAULT_USER_FEATURES,
+			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
 			None,
 			None,
 			Perbill::zero(),
@@ -344,7 +344,7 @@ fn mint_should_work() {
 		assert_ok!(Uniques::create(
 			Origin::signed(sender),
 			sender,
-			DEFAULT_USER_FEATURES,
+			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
 			None,
 			None,
 			Perbill::zero(),
@@ -367,7 +367,7 @@ fn mint_should_work() {
 		assert_ok!(Uniques::create(
 			Origin::signed(user_id),
 			user_id,
-			DEFAULT_USER_FEATURES,
+			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
 			Some(1),
 			None,
 			Perbill::zero(),
@@ -391,7 +391,7 @@ fn burn_should_work() {
 		assert_ok!(Uniques::create(
 			Origin::signed(user_id),
 			user_id,
-			DEFAULT_USER_FEATURES,
+			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
 			None,
 			None,
 			Perbill::zero(),
@@ -426,7 +426,7 @@ fn transfer_should_work() {
 		assert_ok!(Uniques::create(
 			Origin::signed(user_1),
 			user_1,
-			DEFAULT_USER_FEATURES,
+			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
 			None,
 			None,
 			Perbill::zero(),
@@ -467,7 +467,7 @@ fn transfer_should_work() {
 		assert_ok!(Uniques::create(
 			Origin::signed(user_1),
 			user_1,
-			UserFeatures::NonTransferableItems,
+			UserFeatures::new(UserFeature::NonTransferableItems.into()),
 			None,
 			None,
 			Perbill::zero(),
@@ -501,7 +501,7 @@ fn set_metadata_should_work() {
 		assert_ok!(Uniques::create(
 			Origin::signed(user_1),
 			user_1,
-			DEFAULT_USER_FEATURES,
+			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
 			None,
 			None,
 			Perbill::zero(),
@@ -552,7 +552,7 @@ fn set_metadata_should_work() {
 		assert_ok!(Uniques::change_collection_config(
 			Origin::signed(user_1),
 			collection_id,
-			UserFeatures::IsLocked
+			UserFeatures::new(UserFeature::IsLocked.into())
 		));
 		assert_noop!(
 			Uniques::set_collection_metadata(Origin::signed(user_1), collection_id, bvec![0u8; 20]),
@@ -570,7 +570,7 @@ fn set_attribute_should_work() {
 		assert_ok!(Uniques::create(
 			Origin::signed(user_id),
 			user_id,
-			DEFAULT_USER_FEATURES,
+			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
 			None,
 			None,
 			Perbill::zero(),
@@ -641,7 +641,7 @@ fn set_price_should_work() {
 		assert_ok!(Uniques::create(
 			Origin::signed(user_id),
 			user_id,
-			DEFAULT_USER_FEATURES,
+			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
 			None,
 			None,
 			Perbill::zero(),
@@ -687,7 +687,7 @@ fn set_price_should_work() {
 		assert_ok!(Uniques::create(
 			Origin::signed(user_id),
 			user_id,
-			UserFeatures::NonTransferableItems,
+			UserFeatures::new(UserFeature::NonTransferableItems.into()),
 			None,
 			None,
 			Perbill::zero(),
@@ -724,7 +724,7 @@ fn buy_item_should_work() {
 		assert_ok!(Uniques::create(
 			Origin::signed(user_1),
 			user_1,
-			DEFAULT_USER_FEATURES,
+			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
 			None,
 			None,
 			Perbill::zero(),
@@ -802,7 +802,7 @@ fn buy_item_should_work() {
 		assert_ok!(Uniques::create(
 			Origin::signed(user_1),
 			user_1,
-			UserFeatures::NonTransferableItems,
+			UserFeatures::new(UserFeature::NonTransferableItems.into()),
 			None,
 			None,
 			Perbill::zero(),
@@ -828,7 +828,7 @@ fn add_remove_approval_should_work() {
 		assert_ok!(Uniques::create(
 			Origin::signed(user_1),
 			user_1,
-			DEFAULT_USER_FEATURES,
+			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
 			None,
 			None,
 			Perbill::zero(),
@@ -925,7 +925,7 @@ fn add_remove_approval_should_work() {
 		assert_ok!(Uniques::create(
 			Origin::signed(user_1),
 			user_1,
-			UserFeatures::NonTransferableItems,
+			UserFeatures::new(UserFeature::NonTransferableItems.into()),
 			None,
 			None,
 			Perbill::zero(),
@@ -953,7 +953,7 @@ fn transfer_with_approval_should_works() {
 		assert_ok!(Uniques::create(
 			Origin::signed(user_1),
 			user_1,
-			DEFAULT_USER_FEATURES,
+			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
 			None,
 			None,
 			Perbill::zero(),
@@ -1044,7 +1044,7 @@ fn accept_buy_offer_should_works() {
 		assert_ok!(Uniques::create(
 			Origin::signed(user_1),
 			user_1,
-			DEFAULT_USER_FEATURES,
+			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
 			None,
 			None,
 			Perbill::zero(),
@@ -1117,7 +1117,7 @@ fn swap_items_should_works() {
 		assert_ok!(Uniques::create(
 			Origin::signed(user_1),
 			user_1,
-			DEFAULT_USER_FEATURES,
+			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
 			None,
 			None,
 			Perbill::zero(),
@@ -1129,7 +1129,7 @@ fn swap_items_should_works() {
 		assert_ok!(Uniques::create(
 			Origin::signed(user_2),
 			user_2,
-			DEFAULT_USER_FEATURES,
+			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
 			None,
 			None,
 			Perbill::zero(),
@@ -1222,14 +1222,31 @@ fn swap_items_should_works() {
 #[test]
 fn different_user_flags() {
 	new_test_ext().execute_with(|| {
-		// TODO: try to pass an empty value
-		// TODO: try to pass combined flags
+		let user_features = UserFeatures::new(UserFeature::Administration | UserFeature::IsLocked);
+		// let user_features = UserFeatures::new(UserFeature::IsLocked.into());
 
-		// TODO: uncomment
-		// let user_features = UserFeatures::Administration | UserFeatures::IsLocked;
-		// assert_ok!(Uniques::create(Origin::signed(1), 1, BitFlags::EMPTY, None, None));
+		assert_ok!(Uniques::create(
+			Origin::signed(1),
+			1,
+			UserFeatures::new(BitFlags::EMPTY),
+			None,
+			None,
+			Perbill::zero(),
+			Perbill::zero(),
+		));
 
-		let user_features = UserFeatures::IsLocked;
+		use enumflags2::BitFlag;
+
+		assert_ok!(Uniques::create(
+			Origin::signed(1),
+			1,
+			UserFeatures::new(UserFeature::empty()),
+			None,
+			None,
+			Perbill::zero(),
+			Perbill::zero(),
+		));
+
 		assert_ok!(Uniques::create(
 			Origin::signed(1),
 			1,

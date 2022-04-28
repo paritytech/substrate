@@ -26,8 +26,8 @@ impl<T: Config> Pallet<T> {
 		maybe_caller: Option<T::AccountId>,
 		new_admin: T::AccountId,
 	) -> DispatchResult {
-		let user_features: BitFlags<UserFeatures> = config.user_features.into();
-		ensure!(user_features.contains(UserFeatures::Administration), Error::<T>::NotConfigured);
+		let user_features: BitFlags<UserFeature> = config.user_features.get();
+		ensure!(user_features.contains(UserFeature::Administration), Error::<T>::NotConfigured);
 		Admins::<T>::try_mutate(id, |maybe_admin| -> DispatchResult {
 			if let Some(caller) = maybe_caller {
 				if let Some(admin) = maybe_admin {

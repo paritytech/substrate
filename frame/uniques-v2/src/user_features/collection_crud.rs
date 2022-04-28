@@ -48,7 +48,7 @@ impl<T: Config> Pallet<T> {
 
 		let collection_config = CollectionConfig {
 			system_features: T::DefaultSystemConfig::get(), // SystemFeatures::empty().into(),
-			user_features: UserFeatures::new(UserFeature::IsLocked | UserFeature::Administration), //user_config,
+			user_features: user_config,
 		};
 		CollectionConfigs::<T>::insert(id, collection_config);
 
@@ -73,8 +73,8 @@ impl<T: Config> Pallet<T> {
 
 		// emit events
 
-		let user_features: BitFlags<UserFeatures> = collection_config.user_features.into();
-		if user_features.contains(UserFeatures::IsLocked) {
+		let user_features: BitFlags<UserFeature> = collection_config.user_features.get();
+		if user_features.contains(UserFeature::IsLocked) {
 			Self::deposit_event(Event::<T>::CollectionLocked { id });
 		}
 
@@ -97,9 +97,9 @@ impl<T: Config> Pallet<T> {
 		let mut collection = Collections::<T>::get(&id).ok_or(Error::<T>::CollectionNotFound)?;
 		ensure!(collection.owner == caller, Error::<T>::NotAuthorized);
 
-		let user_features: BitFlags<UserFeatures> = config.user_features.into();
+		let user_features: BitFlags<UserFeature> = config.user_features.get();
 
-		if user_features.contains(UserFeatures::IsLocked) {
+		if user_features.contains(UserFeature::IsLocked) {
 			return Err(Error::<T>::CollectionIsLocked.into())
 		}
 
@@ -120,9 +120,9 @@ impl<T: Config> Pallet<T> {
 		let mut collection = Collections::<T>::get(&id).ok_or(Error::<T>::CollectionNotFound)?;
 		ensure!(collection.owner == caller, Error::<T>::NotAuthorized);
 
-		let user_features: BitFlags<UserFeatures> = config.user_features.into();
+		let user_features: BitFlags<UserFeature> = config.user_features.get();
 
-		if user_features.contains(UserFeatures::IsLocked) {
+		if user_features.contains(UserFeature::IsLocked) {
 			return Err(Error::<T>::CollectionIsLocked.into())
 		}
 
@@ -146,9 +146,9 @@ impl<T: Config> Pallet<T> {
 		let collection = Collections::<T>::get(id).ok_or(Error::<T>::CollectionNotFound)?;
 		ensure!(collection.owner == caller, Error::<T>::NotAuthorized);
 
-		let user_features: BitFlags<UserFeatures> = current_config.user_features.into();
+		let user_features: BitFlags<UserFeature> = current_config.user_features.get();
 
-		if user_features.contains(UserFeatures::IsLocked) {
+		if user_features.contains(UserFeature::IsLocked) {
 			return Err(Error::<T>::CollectionIsLocked.into())
 		}
 
@@ -175,9 +175,9 @@ impl<T: Config> Pallet<T> {
 		ensure!(collection.items == witness.items, Error::<T>::BadWitness);
 		ensure!(collection.item_metadatas == witness.item_metadatas, Error::<T>::BadWitness);
 
-		let user_features: BitFlags<UserFeatures> = config.user_features.into();
+		let user_features: BitFlags<UserFeature> = config.user_features.get();
 
-		if user_features.contains(UserFeatures::IsLocked) {
+		if user_features.contains(UserFeature::IsLocked) {
 			return Err(Error::<T>::CollectionIsLocked.into())
 		}
 

@@ -56,8 +56,8 @@ impl<T: Config> Pallet<T> {
 		config: CollectionConfig,
 		royalties: Perbill,
 	) -> DispatchResult {
-		let user_features: BitFlags<UserFeatures> = config.user_features.into();
-		let is_locked = user_features.contains(UserFeatures::IsLocked);
+		let user_features: BitFlags<UserFeature> = config.user_features.get();
+		let is_locked = user_features.contains(UserFeature::IsLocked);
 
 		Collections::<T>::try_mutate(id, |maybe_collection| {
 			let collection = maybe_collection.as_mut().ok_or(Error::<T>::CollectionNotFound)?;

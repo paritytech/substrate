@@ -28,9 +28,9 @@ impl<T: Config> Pallet<T> {
 		deadline: Option<T::BlockNumber>,
 		config: CollectionConfig,
 	) -> DispatchResult {
-		let user_features: BitFlags<UserFeatures> = config.user_features.into();
+		let user_features: BitFlags<UserFeature> = config.user_features.get();
 		ensure!(
-			!user_features.contains(UserFeatures::NonTransferableItems),
+			!user_features.contains(UserFeature::NonTransferableItems),
 			Error::<T>::ItemsNotTransferable
 		);
 

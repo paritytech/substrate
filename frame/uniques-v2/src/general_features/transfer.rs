@@ -28,9 +28,9 @@ impl<T: Config> Pallet<T> {
 		sender: T::AccountId,
 		receiver: T::AccountId,
 	) -> DispatchResult {
-		let user_features: BitFlags<UserFeatures> = config.user_features.into();
+		let user_features: BitFlags<UserFeature> = config.user_features.get();
 		ensure!(
-			!user_features.contains(UserFeatures::NonTransferableItems),
+			!user_features.contains(UserFeature::NonTransferableItems),
 			Error::<T>::ItemsNotTransferable
 		);
 
@@ -56,7 +56,7 @@ impl<T: Config> Pallet<T> {
 				return Ok(())
 			}
 
-			// if user_features.contains(UserFeatures::Royalty) {
+			// if user_features.contains(UserFeature::Royalty) {
 			// 	take a part of the transfer amount
 			// }
 

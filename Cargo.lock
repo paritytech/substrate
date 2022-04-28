@@ -1850,11 +1850,11 @@ dependencies = [
 
 [[package]]
 name = "enumflags2"
-version = "0.7.3"
+version = "0.7.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a25c90b056b3f84111cf183cbeddef0d3a0bbe9a674f057e1a1533c315f24def"
+checksum = "e75d4cd21b95383444831539909fbb14b9dc3fdceb2a6f5d36577329a1f55ccb"
 dependencies = [
- "enumflags2_derive 0.7.3",
+ "enumflags2_derive 0.7.4",
 ]
 
 [[package]]
@@ -1870,9 +1870,9 @@ dependencies = [
 
 [[package]]
 name = "enumflags2_derive"
-version = "0.7.3"
+version = "0.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "144ec79496cbab6f84fa125dc67be9264aef22eb8a28da8454d9c33f15108da4"
+checksum = "f58dc3c5e468259f19f2d46304a6b28f1c3d034442e14b322d2b850e36f6d5ae"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -6590,7 +6590,7 @@ dependencies = [
 name = "pallet-uniques-v2"
 version = "4.0.0-dev"
 dependencies = [
- "enumflags2 0.7.3",
+ "enumflags2 0.7.5",
  "frame-benchmarking",
  "frame-support",
  "frame-system",

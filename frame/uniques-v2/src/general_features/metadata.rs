@@ -27,9 +27,9 @@ impl<T: Config> Pallet<T> {
 		sender: T::AccountId,
 		data: MetadataOf<T>,
 	) -> DispatchResult {
-		let user_features: BitFlags<UserFeatures> = config.user_features.into();
+		let user_features: BitFlags<UserFeature> = config.user_features.get();
 
-		if user_features.contains(UserFeatures::IsLocked) {
+		if user_features.contains(UserFeature::IsLocked) {
 			return Err(Error::<T>::CollectionIsLocked.into())
 		}
 

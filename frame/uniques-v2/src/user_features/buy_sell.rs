@@ -28,9 +28,9 @@ impl<T: Config> Pallet<T> {
 		price: Option<BalanceOf<T>>,
 		buyer: Option<T::AccountId>,
 	) -> DispatchResult {
-		let user_features: BitFlags<UserFeatures> = config.user_features.into();
+		let user_features: BitFlags<UserFeature> = config.user_features.get();
 		ensure!(
-			!user_features.contains(UserFeatures::NonTransferableItems),
+			!user_features.contains(UserFeature::NonTransferableItems),
 			Error::<T>::ItemsNotTransferable
 		);
 
@@ -55,9 +55,9 @@ impl<T: Config> Pallet<T> {
 		buyer: T::AccountId,
 		bid_price: BalanceOf<T>,
 	) -> DispatchResult {
-		let user_features: BitFlags<UserFeatures> = config.user_features.into();
+		let user_features: BitFlags<UserFeature> = config.user_features.get();
 		ensure!(
-			!user_features.contains(UserFeatures::NonTransferableItems),
+			!user_features.contains(UserFeature::NonTransferableItems),
 			Error::<T>::ItemNotForSale
 		);
 
@@ -109,9 +109,9 @@ impl<T: Config> Pallet<T> {
 		bid_price: BalanceOf<T>,
 		deadline: Option<T::BlockNumber>,
 	) -> DispatchResult {
-		let user_features: BitFlags<UserFeatures> = config.user_features.into();
+		let user_features: BitFlags<UserFeature> = config.user_features.get();
 		ensure!(
-			!user_features.contains(UserFeatures::NonTransferableItems),
+			!user_features.contains(UserFeature::NonTransferableItems),
 			Error::<T>::ItemNotForSale
 		);
 
@@ -171,14 +171,14 @@ impl<T: Config> Pallet<T> {
 		price: Option<BalanceOf<T>>,
 		deadline: Option<T::BlockNumber>,
 	) -> DispatchResult {
-		let user_features: BitFlags<UserFeatures> = config_from.user_features.into();
+		let user_features: BitFlags<UserFeature> = config_from.user_features.get();
 		ensure!(
-			!user_features.contains(UserFeatures::NonTransferableItems),
+			!user_features.contains(UserFeature::NonTransferableItems),
 			Error::<T>::ItemNotForSale
 		);
-		let user_features: BitFlags<UserFeatures> = config_to.user_features.into();
+		let user_features: BitFlags<UserFeature> = config_to.user_features.get();
 		ensure!(
-			!user_features.contains(UserFeatures::NonTransferableItems),
+			!user_features.contains(UserFeature::NonTransferableItems),
 			Error::<T>::ItemNotForSale
 		);
 
