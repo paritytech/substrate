@@ -70,7 +70,7 @@
 use crate::Error;
 pub use sp_core::MAX_POSSIBLE_ALLOCATION;
 use sp_wasm_interface::{Pointer, WordSize};
-use std::{
+use sp_std::{
 	mem,
 	ops::{Index, IndexMut, Range},
 };

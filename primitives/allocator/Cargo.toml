@@ -18,13 +18,11 @@ sp-core = { version = "6.0.0", path = "../../primitives/core" }
 sp-std = { version = "4.0", path = "../../primitives/std" }
 sp-wasm-interface = { version = "6.0.0", path = "../../primitives/wasm-interface" }
 log = { version = "0.4.16", default-features = false }
-thiserror = { version = "1.0.30", optional = true }
 
 [features]
 default = ["std"]
 std = [
 	"sp-core/std",
 	"sp-wasm-interface/std",
-	"thiserror",
 	"log/std"
 ]

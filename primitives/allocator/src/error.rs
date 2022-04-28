@@ -16,26 +16,23 @@
 // limitations under the License.
 
 /// The error type used by the allocators.
-#[cfg_attr(feature = "std", derive(thiserror::Error))]
 #[derive(sp_std::fmt::Debug)]
 pub enum Error {
 	/// Someone tried to allocate more memory than the allowed maximum per allocation.
-	#[cfg_attr(feature = "std", error("Requested allocation size is too large"))]
 	RequestedAllocationTooLarge,
 	/// Allocator run out of space.
-	#[cfg_attr(feature = "std", error("Allocator ran out of space"))]
 	AllocatorOutOfSpace,
 	/// The client passed a memory instance which is smaller than previously observed.
-	#[cfg_attr(feature = "std", error("Shrinking of the underlying memory is observed"))]
 	MemoryShrinked,
 	/// Some other error occurred.
-	#[cfg_attr(feature = "std", error("Other: {0}"))]
 	Other(&'static str),
 }
 
-#[cfg(not(feature = "std"))]
-impl std::fmt::Display for Error {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+#[cfg(feature = "std")]
+impl std::error::Error for Error {}
+
+impl sp_std::fmt::Display for Error {
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
 		match self {
 			Self::RequestedAllocationTooLarge => write!(f, "Requested allocation size is too large"),
 			Self::AllocatorOutOfSpace => write!(f, "Allocator ran out of space"),

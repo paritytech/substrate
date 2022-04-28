@@ -9766,7 +9766,6 @@ dependencies = [
  "sp-core",
  "sp-std",
  "sp-wasm-interface",
- "thiserror",
 ]
 
 [[package]]
