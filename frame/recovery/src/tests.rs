@@ -20,7 +20,8 @@
 use super::*;
 use frame_support::{assert_noop, assert_ok, bounded_vec, traits::Currency};
 use mock::{
-	new_test_ext, run_to_block, Balances, BalancesCall, Call, Origin, Recovery, RecoveryCall, Test,
+	new_test_ext, run_to_block, Balances, BalancesCall, Call, MaxFriends, Origin, Recovery,
+	RecoveryCall, Test,
 };
 use sp_runtime::traits::BadOrigin;
 
@@ -112,10 +113,13 @@ fn malicious_recovery_fails() {
 		// Using account 1, the malicious user begins the recovery process on account 5
 		assert_ok!(Recovery::initiate_recovery(Origin::signed(1), 5));
 		// Off chain, the user **tricks** their friends and asks them to vouch for the recovery
-		assert_ok!(Recovery::vouch_recovery(Origin::signed(2), 5, 1)); // shame on you
-		assert_ok!(Recovery::vouch_recovery(Origin::signed(3), 5, 1)); // shame on you
-		assert_ok!(Recovery::vouch_recovery(Origin::signed(4), 5, 1)); // shame on you
-															   // We met the threshold, lets try to recover the account...?
+		assert_ok!(Recovery::vouch_recovery(Origin::signed(2), 5, 1));
+		// shame on you
+		assert_ok!(Recovery::vouch_recovery(Origin::signed(3), 5, 1));
+		// shame on you
+		assert_ok!(Recovery::vouch_recovery(Origin::signed(4), 5, 1));
+		// shame on you
+		// We met the threshold, lets try to recover the account...?
 		assert_noop!(Recovery::claim_recovery(Origin::signed(1), 5), Error::<Test>::DelayPeriod);
 		// Account 1 needs to wait...
 		run_to_block(19);
@@ -162,7 +166,12 @@ fn create_recovery_handles_basic_errors() {
 		);
 		// Too many friends
 		assert_noop!(
-			Recovery::create_recovery(Origin::signed(5), vec![1, 2, 3, 4], 4, 0),
+			Recovery::create_recovery(
+				Origin::signed(5),
+				vec![1; (MaxFriends::get() + 1) as usize],
+				1,
+				0
+			),
 			Error::<Test>::MaxFriends
 		);
 		// Unsorted friends
