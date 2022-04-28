@@ -185,7 +185,6 @@ test-linux-stable-nextest:
     - time cargo nextest run --workspace --locked --release --verbose --features runtime-benchmarks --manifest-path ./bin/node/cli/Cargo.toml --retries=3
     - time cargo test -p frame-support-test --features=conditional-storage,no-metadata-docs --manifest-path ./frame/support/test/Cargo.toml --test pallet # does not reuse cache 1 min 44 sec
     - SUBSTRATE_TEST_TIMEOUT=1 time cargo test -p substrate-test-utils --release --verbose --locked -- --ignored timeout
-    - sccache -s
 
 test-linux-stable:
   stage:                           test
@@ -205,4 +204,13 @@ test-linux-stable:
     - time cargo test --workspace --locked --release --verbose --features runtime-benchmarks --manifest-path ./bin/node/cli/Cargo.toml
     - time cargo test -p frame-support-test --features=conditional-storage,no-metadata-docs --manifest-path ./frame/support/test/Cargo.toml --test pallet # does not reuse cache 1 min 44 sec
     - SUBSTRATE_TEST_TIMEOUT=1 time cargo test -p substrate-test-utils --release --verbose --locked -- --ignored timeout
-    - sccache -s
+
+test-linux-stable-list:
+  stage:                           test
+  <<:                              *docker-env
+  <<:                              *test-refs
+  <<:                              *collect-artifacts-short
+  script:
+    - time cargo install cargo-nextest
+    - mkdir artifacts
+    - cargo nextest list > ./artifacts/tests.list
