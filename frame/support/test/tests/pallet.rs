@@ -1569,6 +1569,13 @@ fn test_storage_info() {
 			},
 			StorageInfo {
 				pallet_name: b"Example".to_vec(),
+				storage_name: b"Map3".to_vec(),
+				prefix: prefix(b"Example", b"Map3").to_vec(),
+				max_values: None,
+				max_size: Some(12 + 16),
+			},
+			StorageInfo {
+				pallet_name: b"Example".to_vec(),
 				storage_name: b"DoubleMap".to_vec(),
 				prefix: prefix(b"Example", b"DoubleMap").to_vec(),
 				max_values: None,
@@ -1583,6 +1590,13 @@ fn test_storage_info() {
 			},
 			StorageInfo {
 				pallet_name: b"Example".to_vec(),
+				storage_name: b"DoubleMap3".to_vec(),
+				prefix: prefix(b"Example", b"DoubleMap3").to_vec(),
+				max_values: None,
+				max_size: Some(4 + 16 + 32),
+			},
+			StorageInfo {
+				pallet_name: b"Example".to_vec(),
 				storage_name: b"NMap".to_vec(),
 				prefix: prefix(b"Example", b"NMap").to_vec(),
 				max_values: None,
@@ -1594,6 +1608,13 @@ fn test_storage_info() {
 				prefix: prefix(b"Example", b"NMap2").to_vec(),
 				max_values: Some(11),
 				max_size: Some(14 + 8 + 16),
+			},
+			StorageInfo {
+				pallet_name: b"Example".to_vec(),
+				storage_name: b"NMap3".to_vec(),
+				prefix: prefix(b"Example", b"NMap3").to_vec(),
+				max_values: None,
+				max_size: Some(7 + 4 + 32),
 			},
 			#[cfg(feature = "conditional-storage")]
 			{
