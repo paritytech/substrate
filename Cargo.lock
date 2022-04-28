@@ -9060,6 +9060,7 @@ dependencies = [
 name = "sc-network-sync"
 version = "0.10.0-dev"
 dependencies = [
+ "futures 0.3.21",
  "libp2p",
  "log 0.4.16",
  "parity-scale-codec",
@@ -9067,9 +9068,13 @@ dependencies = [
  "prost-build",
  "sc-client-api",
  "sc-consensus",
+ "sc-network-common",
  "smallvec 1.8.0",
+ "sp-blockchain",
  "sp-core",
+ "sp-finality-grandpa",
  "sp-runtime",
+ "thiserror",
 ]
 
 [[package]]

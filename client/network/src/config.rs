@@ -21,8 +21,8 @@
 //! The [`Params`] struct is the struct that must be passed in order to initialize the networking.
 //! See the documentation of [`Params`].
 
-use crate::warp_request_handler::WarpSyncProvider;
 pub use libp2p::{build_multiaddr, core::PublicKey, identity};
+use sc_network_sync::warp_request_handler::WarpSyncProvider;
 
 // Note: this re-export shouldn't be part of the public API of the crate and will be removed in
 // the future.

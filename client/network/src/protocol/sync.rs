@@ -42,6 +42,10 @@ use sc_network_sync::{
 	message as sync_message,
 	schema::v1::{StateRequest, StateResponse},
 	state::{self, StateDownloadProgress, StateSync},
+	warp::{
+		EncodedProof, WarpProofImportResult, WarpProofRequest, WarpSync, WarpSyncPhase,
+		WarpSyncProgress, WarpSyncProvider,
+	},
 };
 use sp_arithmetic::traits::Saturating;
 use sp_blockchain::{Error as ClientError, HeaderBackend, HeaderMetadata};
@@ -64,11 +68,8 @@ use std::{
 	pin::Pin,
 	sync::Arc,
 };
-use warp::{WarpProofRequest, WarpSync, WarpSyncProvider};
-pub use warp::{WarpSyncPhase, WarpSyncProgress};
 
 mod extra_requests;
-mod warp;
 
 /// Maximum blocks to request in a single packet.
 const MAX_BLOCKS_TO_REQUEST: usize = 64;
@@ -328,18 +329,6 @@ pub enum SyncState {
 	Idle,
 	/// Actively catching up with the chain.
 	Downloading,
-}
-
-impl<B: BlockT> fmt::Display for WarpSyncPhase<B> {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		match self {
-			Self::AwaitingPeers => write!(f, "Waiting for peers"),
-			Self::DownloadingWarpProofs => write!(f, "Downloading finality proofs"),
-			Self::DownloadingState => write!(f, "Downloading state"),
-			Self::ImportingState => write!(f, "Importing state"),
-			Self::DownloadingBlocks(n) => write!(f, "Downloading block history (#{})", n),
-		}
-	}
 }
 
 /// Syncing status and statistics.
@@ -1353,7 +1342,7 @@ where
 	pub fn on_warp_sync_data(
 		&mut self,
 		who: &PeerId,
-		response: warp::EncodedProof,
+		response: EncodedProof,
 	) -> Result<(), BadPeer> {
 		if let Some(peer) = self.peers.get_mut(&who) {
 			if let PeerSyncState::DownloadingWarpProof = peer.state {
@@ -1375,8 +1364,8 @@ where
 		};
 
 		match import_result {
-			warp::WarpProofImportResult::Success => Ok(()),
-			warp::WarpProofImportResult::BadResponse => {
+			WarpProofImportResult::Success => Ok(()),
+			WarpProofImportResult::BadResponse => {
 				debug!(target: "sync", "Bad proof data received from {}", who);
 				Err(BadPeer(*who, rep::BAD_BLOCK))
 			},

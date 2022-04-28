@@ -21,15 +21,15 @@
 pub use crate::warp_request_handler::{
 	EncodedProof, Request as WarpProofRequest, VerificationResult, WarpSyncProvider,
 };
-use sc_client_api::ProofProvider;
-use sc_network_sync::{
+use crate::{
 	schema::v1::{StateRequest, StateResponse},
 	state::{ImportResult, StateSync},
 };
+use sc_client_api::ProofProvider;
 use sp_blockchain::HeaderBackend;
 use sp_finality_grandpa::{AuthorityList, SetId};
 use sp_runtime::traits::{Block as BlockT, NumberFor, Zero};
-use std::sync::Arc;
+use std::{fmt, sync::Arc};
 
 enum Phase<B: BlockT, Client> {
 	WarpProof { set_id: SetId, authorities: AuthorityList, last_hash: B::Hash },
@@ -49,6 +49,18 @@ pub enum WarpSyncPhase<B: BlockT> {
 	ImportingState,
 	/// Downloading block history.
 	DownloadingBlocks(NumberFor<B>),
+}
+
+impl<B: BlockT> fmt::Display for WarpSyncPhase<B> {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		match self {
+			Self::AwaitingPeers => write!(f, "Waiting for peers"),
+			Self::DownloadingWarpProofs => write!(f, "Downloading finality proofs"),
+			Self::DownloadingState => write!(f, "Downloading state"),
+			Self::ImportingState => write!(f, "Importing state"),
+			Self::DownloadingBlocks(n) => write!(f, "Downloading block history (#{})", n),
+		}
+	}
 }
 
 /// Reported warp sync progress.

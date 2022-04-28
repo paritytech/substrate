@@ -262,16 +262,19 @@ pub mod light_client_requests;
 pub mod network_state;
 pub mod state_request_handler;
 pub mod transactions;
-pub mod warp_request_handler;
 
 #[doc(inline)]
 pub use libp2p::{multiaddr, Multiaddr, PeerId};
 pub use protocol::{
 	event::{DhtEvent, Event, ObservedRole},
-	sync::{SyncState, WarpSyncPhase, WarpSyncProgress},
+	sync::SyncState,
 	PeerInfo,
 };
-pub use sc_network_sync::state::StateDownloadProgress;
+pub use sc_network_sync::{
+	state::StateDownloadProgress,
+	warp::{WarpSyncPhase, WarpSyncProgress},
+	warp_request_handler,
+};
 pub use service::{
 	DecodingError, IfDisconnected, KademliaKey, Keypair, NetworkService, NetworkWorker,
 	NotificationSender, NotificationSenderReady, OutboundFailure, PublicKey, RequestFailure,
