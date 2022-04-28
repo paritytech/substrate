@@ -113,7 +113,7 @@ pub mod pallet {
 		BatchInterrupted { index: u32, error: DispatchError },
 		/// Batch of dispatches completed fully with no error.
 		BatchCompleted,
-		/// Batch of dispatches complete but has errors. Index of failing dispatches.
+		/// Batch of dispatches completed but has errors.
 		BatchCompletedWithErrors,
 		/// A single item within a Batch of dispatches has completed with no error.
 		ItemCompleted,
