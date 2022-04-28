@@ -267,13 +267,12 @@ pub mod transactions;
 pub use libp2p::{multiaddr, Multiaddr, PeerId};
 pub use protocol::{
 	event::{DhtEvent, Event, ObservedRole},
-	sync::SyncState,
 	PeerInfo,
 };
 pub use sc_network_sync::{
 	state::StateDownloadProgress,
 	warp::{WarpSyncPhase, WarpSyncProgress},
-	warp_request_handler,
+	warp_request_handler, SyncState,
 };
 pub use service::{
 	DecodingError, IfDisconnected, KademliaKey, Keypair, NetworkService, NetworkWorker,

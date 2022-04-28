@@ -28,7 +28,23 @@
 //! the network, or whenever a block has been successfully verified, call the appropriate method in
 //! order to update it.
 
-use crate::protocol::message::{self, BlockAnnounce, BlockAttributes, BlockRequest, BlockResponse};
+pub mod blocks;
+pub mod message;
+pub mod schema;
+pub mod state;
+pub mod warp;
+pub mod warp_request_handler;
+
+use crate::{
+	blocks::BlockCollection,
+	message::{BlockAnnounce, BlockAttributes, BlockRequest, BlockResponse},
+	schema::v1::{StateRequest, StateResponse},
+	state::{StateDownloadProgress, StateSync},
+	warp::{
+		EncodedProof, WarpProofImportResult, WarpProofRequest, WarpSync, WarpSyncPhase,
+		WarpSyncProgress, WarpSyncProvider,
+	},
+};
 use codec::Encode;
 use either::Either;
 use extra_requests::ExtraRequests;
@@ -37,16 +53,6 @@ use libp2p::PeerId;
 use log::{debug, error, info, trace, warn};
 use sc_client_api::{BlockBackend, ProofProvider};
 use sc_consensus::{BlockImportError, BlockImportStatus, IncomingBlock};
-use sc_network_sync::{
-	blocks::BlockCollection,
-	message as sync_message,
-	schema::v1::{StateRequest, StateResponse},
-	state::{self, StateDownloadProgress, StateSync},
-	warp::{
-		EncodedProof, WarpProofImportResult, WarpProofRequest, WarpSync, WarpSyncPhase,
-		WarpSyncProgress, WarpSyncProvider,
-	},
-};
 use sp_arithmetic::traits::Saturating;
 use sp_blockchain::{Error as ClientError, HeaderBackend, HeaderMetadata};
 use sp_consensus::{
@@ -2161,7 +2167,7 @@ where
 	}
 
 	/// Return some key metrics.
-	pub(crate) fn metrics(&self) -> Metrics {
+	pub fn metrics(&self) -> Metrics {
 		Metrics {
 			queued_blocks: self.queue_blocks.len().try_into().unwrap_or(std::u32::MAX),
 			fork_targets: self.fork_targets.len().try_into().unwrap_or(std::u32::MAX),
@@ -2208,10 +2214,10 @@ fn legacy_justification_mapping(
 }
 
 #[derive(Debug)]
-pub(crate) struct Metrics {
-	pub(crate) queued_blocks: u32,
-	pub(crate) fork_targets: u32,
-	pub(crate) justifications: extra_requests::Metrics,
+pub struct Metrics {
+	pub queued_blocks: u32,
+	pub fork_targets: u32,
+	pub justifications: extra_requests::Metrics,
 	_priv: (),
 }
 
@@ -2458,7 +2464,7 @@ where
 ///
 /// It is expected that `blocks` are in ascending order.
 fn validate_blocks<Block: BlockT>(
-	blocks: &Vec<sync_message::BlockData<Block>>,
+	blocks: &Vec<message::BlockData<Block>>,
 	who: &PeerId,
 	request: Option<BlockRequest<Block>>,
 ) -> Result<Option<NumberFor<Block>>, BadPeer> {
@@ -2566,9 +2572,9 @@ mod test {
 		message::{BlockState, FromBlock},
 		*,
 	};
+	use crate::message::BlockData;
 	use futures::{executor::block_on, future::poll_fn};
 	use sc_block_builder::BlockBuilderProvider;
-	use sc_network_sync::message::BlockData;
 	use sp_blockchain::HeaderBackend;
 	use sp_consensus::block_validation::DefaultBlockAnnounceValidator;
 	use substrate_test_runtime_client::{

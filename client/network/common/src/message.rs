@@ -16,9 +16,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-pub mod blocks;
-pub mod message;
-pub mod schema;
-pub mod state;
-pub mod warp;
-pub mod warp_request_handler;
+//! Network packet message types. These get serialized and put into the lower level protocol
+//! payload.
+
+/// A unique ID of a request.
+pub type RequestId = u64;

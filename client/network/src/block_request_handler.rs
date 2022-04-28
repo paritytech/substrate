@@ -17,7 +17,7 @@
 //! Helper for handling (i.e. answering) block requests from a remote peer via the
 //! `crate::request_responses::RequestResponsesBehaviour`.
 
-use crate::{protocol::message::BlockAttributes, PeerId, ReputationChange};
+use crate::{PeerId, ReputationChange};
 use codec::{Decode, Encode};
 use futures::{
 	channel::{mpsc, oneshot},
@@ -31,7 +31,10 @@ use sc_network_common::{
 	config::ProtocolId,
 	request_responses::{IncomingRequest, OutgoingResponse, ProtocolConfig},
 };
-use sc_network_sync::schema::v1::{block_request::FromBlock, BlockResponse, Direction};
+use sc_network_sync::{
+	message::BlockAttributes,
+	schema::v1::{block_request::FromBlock, BlockResponse, Direction},
+};
 use sp_blockchain::HeaderBackend;
 use sp_runtime::{
 	generic::BlockId,

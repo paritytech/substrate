@@ -19,4 +19,5 @@
 //! Common data structures of the networking layer.
 
 pub mod config;
+pub mod message;
 pub mod request_responses;
