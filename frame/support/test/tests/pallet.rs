@@ -305,6 +305,17 @@ pub mod pallet {
 	>;
 
 	#[pallet::storage]
+	pub type DoubleMap3<T> = StorageDoubleMap<
+		_,
+		Blake2_128Concat,
+		u32,
+		Twox64Concat,
+		u64,
+		u128,
+		ResultQuery<NonExistentStorageValue>,
+	>;
+
+	#[pallet::storage]
 	#[pallet::getter(fn nmap)]
 	pub type NMap<T> = StorageNMap<_, storage::Key<Blake2_128Concat, u8>, u32>;
 
@@ -314,6 +325,15 @@ pub mod pallet {
 		Key = (NMapKey<Twox64Concat, u16>, NMapKey<Blake2_128Concat, u32>),
 		Value = u64,
 		MaxValues = ConstU32<11>,
+	>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn nmap3)]
+	pub type NMap3<T> = StorageNMap<
+		_,
+		(NMapKey<Blake2_128Concat, u8>, NMapKey<Twox64Concat, u16>),
+		u128,
+		ResultQuery<NonExistentStorageValue>,
 	>;
 
 	#[pallet::storage]
@@ -960,6 +980,17 @@ fn storage_expand() {
 		assert_eq!(unhashed::get::<u64>(&k), Some(3u64));
 		assert_eq!(&k[..32], &<pallet::DoubleMap2<Runtime>>::final_prefix());
 
+		pallet::DoubleMap3::<Runtime>::insert(&1, &2, &3);
+		let mut k = [twox_128(b"Example"), twox_128(b"DoubleMap3")].concat();
+		k.extend(1u32.using_encoded(blake2_128_concat));
+		k.extend(2u64.using_encoded(twox_64_concat));
+		assert_eq!(unhashed::get::<u128>(&k), Some(3u128));
+		assert_eq!(&k[..32], &<pallet::DoubleMap3<Runtime>>::final_prefix());
+		assert_eq!(
+			pallet::DoubleMap3::<Runtime>::get(2, 3),
+			Err(pallet::Error::<Runtime>::NonExistentStorageValue),
+		);
+
 		pallet::NMap::<Runtime>::insert((&1,), &3);
 		let mut k = [twox_128(b"Example"), twox_128(b"NMap")].concat();
 		k.extend(1u8.using_encoded(blake2_128_concat));
@@ -972,6 +1003,17 @@ fn storage_expand() {
 		k.extend(2u32.using_encoded(blake2_128_concat));
 		assert_eq!(unhashed::get::<u64>(&k), Some(3u64));
 		assert_eq!(&k[..32], &<pallet::NMap2<Runtime>>::final_prefix());
+
+		pallet::NMap3::<Runtime>::insert((&1, &2), &3);
+		let mut k = [twox_128(b"Example"), twox_128(b"NMap3")].concat();
+		k.extend(1u8.using_encoded(blake2_128_concat));
+		k.extend(2u16.using_encoded(twox_64_concat));
+		assert_eq!(unhashed::get::<u128>(&k), Some(3u128));
+		assert_eq!(&k[..32], &<pallet::NMap3<Runtime>>::final_prefix());
+		assert_eq!(
+			pallet::NMap3::<Runtime>::get((2, 3)),
+			Err(pallet::Error::<Runtime>::NonExistentStorageValue),
+		);
 
 		#[cfg(feature = "conditional-storage")]
 		{
@@ -1223,6 +1265,20 @@ fn metadata() {
 						docs: vec![],
 					},
 					StorageEntryMetadata {
+						name: "DoubleMap3",
+						modifier: StorageEntryModifier::Optional,
+						ty: StorageEntryType::Map {
+							value: meta_type::<u128>(),
+							key: meta_type::<(u32, u64)>(),
+							hashers: vec![
+								StorageHasher::Blake2_128Concat,
+								StorageHasher::Twox64Concat,
+							],
+						},
+						default: vec![1, 1],
+						docs: vec![],
+					},
+					StorageEntryMetadata {
 						name: "NMap",
 						modifier: StorageEntryModifier::Optional,
 						ty: StorageEntryType::Map {
@@ -1245,6 +1301,20 @@ fn metadata() {
 							value: meta_type::<u64>(),
 						},
 						default: vec![0],
+						docs: vec![],
+					},
+					StorageEntryMetadata {
+						name: "NMap3",
+						modifier: StorageEntryModifier::Optional,
+						ty: StorageEntryType::Map {
+							key: meta_type::<(u8, u16)>(),
+							hashers: vec![
+								StorageHasher::Blake2_128Concat,
+								StorageHasher::Twox64Concat,
+							],
+							value: meta_type::<u128>(),
+						},
+						default: vec![1, 1],
 						docs: vec![],
 					},
 					#[cfg(feature = "conditional-storage")]
