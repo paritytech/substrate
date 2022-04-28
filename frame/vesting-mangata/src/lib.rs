@@ -637,8 +637,15 @@ pub trait MultiTokenVestingLocks<AccountId> {
 	/// Finds a vesting schedule with locked_at value greater than unlock_amount
 	/// Removes that old vesting schedule, adds a new one with new_locked and new_per_block
 	/// reflecting old locked_at - unlock_amount, to be unlocked by old ending block.
+	/// This does not transfer funds
 	fn unlock_tokens(who: &AccountId, token_id: <Self::Currency as MultiTokenCurrency<AccountId>>::CurrencyId, unlock_amount:  <Self::Currency as MultiTokenCurrency<AccountId>>::Balance)
 		 -> Result<<Self::Currency as MultiTokenCurrency<AccountId>>::Balance, DispatchError>;
+
+	/// Constructs a vesting schedule based on the given data starting from now
+	/// And places it into the appropriate (who, token_id) storage
+	/// This does not transfer funds
+	fn lock_tokens(who: &AccountId, token_id: <Self::Currency as MultiTokenCurrency<AccountId>>::CurrencyId, lock_amount:  <Self::Currency as MultiTokenCurrency<AccountId>>::Balance, ending_block_as_balance: <Self::Currency as MultiTokenCurrency<AccountId>>::Balance)
+		 -> DispatchResult; 
 }
 
 
@@ -716,6 +723,27 @@ where
 
 		Ok(selected_schedule.3)
 	}
+
+	fn lock_tokens(who: &T::AccountId, token_id: TokenIdOf<T>, lock_amount: BalanceOf<T>, ending_block_as_balance: BalanceOf<T>) -> DispatchResult {
+		let now = <frame_system::Pallet<T>>::block_number();
+
+		let length_as_balance = ending_block_as_balance.saturating_sub(T::BlockNumberToBalance::convert(now)).max(One::one());
+		let per_block = (lock_amount / length_as_balance).max(One::one());
+
+		let vesting_schedule = VestingInfo::new(lock_amount, per_block, now);
+		ensure!(vesting_schedule.is_valid(), Error::<T>::InvalidScheduleParams);
+
+		let mut schedules = Self::vesting(who, token_id).unwrap_or_default();
+		ensure!(schedules.try_push(vesting_schedule).is_ok(), Error::<T>::AtMaxVestingSchedules);
+
+		let (schedules, locked_now) =
+			Self::exec_action(schedules.to_vec(), VestingAction::Passive)?;
+
+		Self::write_vesting(&who, schedules, token_id)?;
+		Self::write_lock(who, locked_now, token_id);
+
+		Ok(())
+	} 
 }
 
 /// A vesting schedule over a currency. This allows a particular currency to have vesting limits
