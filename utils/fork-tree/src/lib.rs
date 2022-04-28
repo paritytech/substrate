@@ -143,16 +143,14 @@ where
 		}
 
 		let mut children = &mut self.roots;
-		let mut len = children.len();
 		let mut i = 0;
-		while i < len {
+		while i < children.len() {
 			let child = &children[i];
 			if child.hash == hash {
 				return Err(Error::Duplicate)
 			}
 			if child.number < number && is_descendent_of(&child.hash, &hash)? {
 				children = &mut children[i].children;
-				len = children.len();
 				i = 0;
 			} else {
 				i += 1;
