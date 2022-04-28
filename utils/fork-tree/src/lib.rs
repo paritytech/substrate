@@ -115,7 +115,7 @@ where
 		let mut stack: Vec<_> = self.roots.iter_mut().collect();
 		while let Some(node) = stack.pop() {
 			node.children.sort_by_key(|n| Reverse(n.max_depth()));
-			node.children.iter_mut().for_each(|n| stack.push(n));
+			stack.extend(node.children.iter_mut());
 		}
 	}
 
@@ -301,14 +301,15 @@ where
 		let mut path = vec![];
 		let mut children = &self.roots;
 		let mut i = 0;
+		let mut best_depth = 0;
 
 		while i < children.len() {
 			let node = &children[i];
 			if node.number < *number && is_descendent_of(&node.hash, hash)? {
-				if !predicate(&node.data) {
-					break
-				}
 				path.push(i);
+				if predicate(&node.data) {
+					best_depth = path.len();
+				}
 				i = 0;
 				children = &node.children;
 			} else {
@@ -316,7 +317,12 @@ where
 			}
 		}
 
-		Ok(if path.is_empty() { None } else { Some(path) })
+		Ok(if best_depth == 0 {
+			None
+		} else {
+			path.truncate(best_depth);
+			Some(path)
+		})
 	}
 
 	/// Prune the tree, removing all non-canonical nodes. We find the node in the
@@ -339,46 +345,43 @@ where
 		F: Fn(&H, &H) -> Result<bool, E>,
 		P: Fn(&V) -> bool,
 	{
-		let new_root_index =
-			self.find_node_index_where(hash, number, is_descendent_of, predicate)?;
+		let root_index =
+			match self.find_node_index_where(hash, number, is_descendent_of, predicate)? {
+				Some(idx) => idx,
+				None => return Ok(RemovedIterator { stack: Vec::new() }),
+			};
 
-		let removed = if let Some(root_index) = new_root_index {
-			let mut old_roots = std::mem::take(&mut self.roots);
+		let mut old_roots = std::mem::take(&mut self.roots);
 
-			let curr_children = root_index
-				.iter()
-				.take(root_index.len() - 1)
-				.fold(&mut old_roots, |curr, idx| &mut curr[*idx].children);
-			let mut root = curr_children.remove(root_index[root_index.len() - 1]);
+		let curr_children = root_index
+			.iter()
+			.take(root_index.len() - 1)
+			.fold(&mut old_roots, |curr, idx| &mut curr[*idx].children);
+		let mut root = curr_children.remove(root_index[root_index.len() - 1]);
 
-			let mut removed = old_roots;
+		let mut removed = old_roots;
 
-			// we found the deepest ancestor of the finalized block, so we prune
-			// out any children that don't include the finalized block.
-			let root_children = std::mem::take(&mut root.children);
-			let mut is_first = true;
+		// we found the deepest ancestor of the finalized block, so we prune
+		// out any children that don't include the finalized block.
+		let root_children = std::mem::take(&mut root.children);
+		let mut is_first = true;
 
-			for child in root_children {
-				if is_first &&
-					(child.number == *number && child.hash == *hash ||
-						child.number < *number && is_descendent_of(&child.hash, hash)?)
-				{
-					root.children.push(child);
-					// assuming that the tree is well formed only one child should pass this
-					// requirement due to ancestry restrictions (i.e. they must be different forks).
-					is_first = false;
-				} else {
-					removed.push(child);
-				}
+		for child in root_children {
+			if is_first &&
+				(child.number == *number && child.hash == *hash ||
+					child.number < *number && is_descendent_of(&child.hash, hash)?)
+			{
+				root.children.push(child);
+				// assuming that the tree is well formed only one child should pass this
+				// requirement due to ancestry restrictions (i.e. they must be different forks).
+				is_first = false;
+			} else {
+				removed.push(child);
 			}
+		}
 
-			self.roots = vec![root];
-			self.rebalance();
-
-			removed
-		} else {
-			Vec::new()
-		};
+		self.roots = vec![root];
+		self.rebalance();
 
 		Ok(RemovedIterator { stack: removed })
 	}
@@ -1426,6 +1429,54 @@ mod test {
 			.unwrap()
 			.unwrap();
 		assert_eq!(path, [0, 1, 0, 0, 0]);
+	}
+
+	#[test]
+	fn find_node_index_with_predicate_works() {
+		fn is_descendent_of(parent: &char, child: &char) -> Result<bool, std::convert::Infallible> {
+			match *parent {
+				'A' => Ok(['B', 'C', 'D', 'E', 'F'].contains(child)),
+				'B' => Ok(['C', 'D'].contains(child)),
+				'C' => Ok(['D'].contains(child)),
+				'E' => Ok(['F'].contains(child)),
+				'D' | 'F' => Ok(false),
+				_ => unreachable!(),
+			}
+		}
+
+		// A(t) --- B(f) --- C(t) --- D(f)
+		//      \-- E(t) --- F(f)
+		let mut tree: ForkTree<char, u8, bool> = ForkTree::new();
+		tree.import('A', 1, true, &is_descendent_of).unwrap();
+		tree.import('B', 2, false, &is_descendent_of).unwrap();
+		tree.import('C', 3, true, &is_descendent_of).unwrap();
+		tree.import('D', 4, false, &is_descendent_of).unwrap();
+
+		tree.import('E', 2, true, &is_descendent_of).unwrap();
+		tree.import('F', 3, false, &is_descendent_of).unwrap();
+
+		let path = tree
+			.find_node_index_where(&'D', &4, &is_descendent_of, &|&value| !value)
+			.unwrap()
+			.unwrap();
+		assert_eq!(path, [0, 0]);
+
+		let path = tree
+			.find_node_index_where(&'D', &4, &is_descendent_of, &|&value| value)
+			.unwrap()
+			.unwrap();
+		assert_eq!(path, [0, 0, 0]);
+
+		let path = tree
+			.find_node_index_where(&'F', &3, &is_descendent_of, &|&value| !value)
+			.unwrap();
+		assert_eq!(path, None);
+
+		let path = tree
+			.find_node_index_where(&'F', &3, &is_descendent_of, &|&value| value)
+			.unwrap()
+			.unwrap();
+		assert_eq!(path, [0, 1]);
 	}
 
 	#[test]
