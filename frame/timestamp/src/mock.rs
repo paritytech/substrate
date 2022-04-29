@@ -1,5 +1,6 @@
 use super::*;
 use crate as pallet_timestamp;
+use sp_std::cell::RefCell;
 
 use frame_support::{
     parameter_types,
@@ -14,6 +15,7 @@ use sp_runtime::{
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
+type Moment = u64;
 
 frame_support::construct_runtime!(
 		pub enum Test where
@@ -57,14 +59,34 @@ impl frame_system::Config for Test {
     type MaxConsumers = ConstU32<16>;
 }
 
+thread_local! {
+    pub static CAPTURED_MOMENT: RefCell<Option<Moment>> = RefCell::new(None);
+}
+
+pub struct MockOnTimestampSet;
+impl OnTimestampSet<Moment> for MockOnTimestampSet {
+    fn on_timestamp_set(moment: Moment) {
+        CAPTURED_MOMENT.with(|x| *x.borrow_mut() = Some(moment));
+    }
+}
+
 impl Config for Test {
-    type Moment = u64;
-    type OnTimestampSet = ();
+    type Moment = Moment;
+    type OnTimestampSet = MockOnTimestampSet;
     type MinimumPeriod = ConstU64<5>;
     type WeightInfo = ();
 }
 
-pub fn new_test_ext() -> TestExternalities {
+pub(crate) fn clear_captured_moment() {
+    CAPTURED_MOMENT.with(|x| *x.borrow_mut() = None);
+}
+
+pub(crate) fn get_captured_moment() -> Option<Moment> {
+    CAPTURED_MOMENT.with(|x| x.borrow().clone())
+}
+
+pub(crate) fn new_test_ext() -> TestExternalities {
     let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+    clear_captured_moment();
     TestExternalities::new(t)
 }

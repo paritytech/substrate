@@ -7,6 +7,7 @@ fn timestamp_works() {
         Timestamp::set_timestamp(42);
         assert_ok!(Timestamp::set(Origin::none(), 69));
         assert_eq!(Timestamp::now(), 69);
+        assert_eq!(Some(69), get_captured_moment());
     });
 }
 
