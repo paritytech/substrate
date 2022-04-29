@@ -245,7 +245,6 @@
 //! More precise usage details are still being worked on and will likely change in the future.
 
 mod behaviour;
-mod chain;
 mod discovery;
 mod peer_info;
 mod protocol;

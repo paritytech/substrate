@@ -769,14 +769,11 @@ mod tests {
 	}
 
 	type Balance = u64;
-	parameter_types! {
-		pub const ExistentialDeposit: Balance = 1;
-	}
 	impl pallet_balances::Config for Runtime {
 		type Balance = Balance;
 		type Event = Event;
 		type DustRemoval = ();
-		type ExistentialDeposit = ExistentialDeposit;
+		type ExistentialDeposit = ConstU64<1>;
 		type AccountStore = System;
 		type MaxLocks = ();
 		type MaxReserves = ();

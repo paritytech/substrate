@@ -569,9 +569,6 @@ pub mod pallet {
 		},
 	}
 
-	#[deprecated(note = "use `Event` instead")]
-	pub type RawEvent<T> = Event<T>;
-
 	#[pallet::error]
 	pub enum Error<T> {
 		/// Cannot vote when no candidates or members exist.
