@@ -177,41 +177,36 @@ where
 	})
 }
 
-fn backend_err(feat: &'static str) -> sp_blockchain::Error {
-	sp_blockchain::Error::Backend(feat.to_string())
-}
-
 /// Opens the configured database.
 pub fn open_database<Block: BlockT>(
 	config: &DatabaseSettings,
 	db_type: DatabaseType,
-) -> sp_blockchain::Result<Arc<dyn Database<DbHash>>> {
+) -> OpenDbResult {
 	// Maybe migrate (copy) the database to a type specific subdirectory to make it
 	// possible that light and full databases coexist
 	// NOTE: This function can be removed in a few releases
-	maybe_migrate_to_type_subdir::<Block>(&config.source, db_type).map_err(|e| {
-		sp_blockchain::Error::Backend(format!("Error in migration to role subdirectory: {}", e))
-	})?;
+	maybe_migrate_to_type_subdir::<Block>(&config.source, db_type)?;
 
-	open_database_at::<Block>(&config.source, db_type)
+	open_database_at::<Block>(&config.source, db_type, true)
 }
 
 fn open_database_at<Block: BlockT>(
 	source: &DatabaseSource,
 	db_type: DatabaseType,
-) -> sp_blockchain::Result<Arc<dyn Database<DbHash>>> {
+	create: bool,
+) -> OpenDbResult {
 	let db: Arc<dyn Database<DbHash>> = match &source {
-		DatabaseSource::ParityDb { path } => open_parity_db::<Block>(&path, db_type, true)?,
+		DatabaseSource::ParityDb { path } => open_parity_db::<Block>(&path, db_type, create)?,
 		DatabaseSource::RocksDb { path, cache_size } =>
-			open_kvdb_rocksdb::<Block>(&path, db_type, true, *cache_size)?,
+			open_kvdb_rocksdb::<Block>(&path, db_type, create, *cache_size)?,
 		DatabaseSource::Custom(db) => db.clone(),
 		DatabaseSource::Auto { paritydb_path, rocksdb_path, cache_size } => {
 			// check if rocksdb exists first, if not, open paritydb
 			match open_kvdb_rocksdb::<Block>(&rocksdb_path, db_type, false, *cache_size) {
 				Ok(db) => db,
 				Err(OpenDbError::NotEnabled(_)) | Err(OpenDbError::DoesNotExist) =>
-					open_parity_db::<Block>(&paritydb_path, db_type, true)?,
-				Err(_) => return Err(backend_err("cannot open rocksdb. corrupted database")),
+					open_parity_db::<Block>(&paritydb_path, db_type, create)?,
+				Err(as_is) => return Err(as_is),
 			}
 		},
 	};
@@ -221,12 +216,14 @@ fn open_database_at<Block: BlockT>(
 }
 
 #[derive(Debug)]
-enum OpenDbError {
+pub enum OpenDbError {
 	// constructed only when rocksdb and paritydb are disabled
 	#[allow(dead_code)]
 	NotEnabled(&'static str),
 	DoesNotExist,
 	Internal(String),
+	DatabaseError(sp_database::error::DatabaseError),
+	UnexpectedDbType { expected: DatabaseType, found: Vec<u8>, },
 }
 
 type OpenDbResult = Result<Arc<dyn Database<DbHash>>, OpenDbError>;
@@ -238,6 +235,17 @@ impl fmt::Display for OpenDbError {
 			OpenDbError::DoesNotExist => write!(f, "Database does not exist at given location"),
 			OpenDbError::NotEnabled(feat) => {
 				write!(f, "`{}` feature not enabled, database can not be opened", feat)
+			},
+			OpenDbError::DatabaseError(db_error) => {
+				write!(f, "Database Error: {}", db_error)
+			},
+			OpenDbError::UnexpectedDbType { expected, found } => {
+				write!(
+					f,
+					"Unexpected DB-Type. Expected: {:?}, Found: {:?}",
+					expected.as_str().as_bytes(),
+					found
+				)
 			},
 		}
 	}
@@ -356,20 +364,16 @@ fn open_kvdb_rocksdb<Block: BlockT>(
 pub fn check_database_type(
 	db: &dyn Database<DbHash>,
 	db_type: DatabaseType,
-) -> sp_blockchain::Result<()> {
+) -> Result<(), OpenDbError> {
 	match db.get(COLUMN_META, meta_keys::TYPE) {
 		Some(stored_type) =>
 			if db_type.as_str().as_bytes() != &*stored_type {
-				return Err(sp_blockchain::Error::Backend(format!(
-					"Unexpected database type. Expected: {}",
-					db_type.as_str()
-				))
-				.into())
+				return Err(OpenDbError::UnexpectedDbType { expected: db_type, found: stored_type.to_owned() })
 			},
 		None => {
 			let mut transaction = Transaction::new();
 			transaction.set(COLUMN_META, meta_keys::TYPE, db_type.as_str().as_bytes());
-			db.commit(transaction)?;
+			db.commit(transaction).map_err(OpenDbError::DatabaseError)?;
 		},
 	}
 
@@ -379,7 +383,7 @@ pub fn check_database_type(
 fn maybe_migrate_to_type_subdir<Block: BlockT>(
 	source: &DatabaseSource,
 	db_type: DatabaseType,
-) -> io::Result<()> {
+) -> Result<(), OpenDbError> {
 	if let Some(p) = source.path() {
 		let mut basedir = p.to_path_buf();
 		basedir.pop();
@@ -394,14 +398,14 @@ fn maybe_migrate_to_type_subdir<Block: BlockT>(
 			// database stored in the target directory and close the database on success.
 			let mut old_source = source.clone();
 			old_source.set_path(&basedir);
-			open_database_at::<Block>(&old_source, db_type)
-				.map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+			open_database_at::<Block>(&old_source, db_type, false)?;
 
 			info!(
 				"Migrating database to a database-type-based subdirectory: '{:?}' -> '{:?}'",
 				basedir,
 				basedir.join(db_type.as_str())
 			);
+
 			let mut tmp_dir = basedir.clone();
 			tmp_dir.pop();
 			tmp_dir.push("tmp");
