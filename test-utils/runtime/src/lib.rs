@@ -553,7 +553,6 @@ impl frame_support::traits::PalletInfo for Runtime {
 }
 
 parameter_types! {
-	pub const BlockHashCount: BlockNumber = 2400;
 	pub const DbWeight: RuntimeDbWeight = RuntimeDbWeight {
 		read: 100,
 		write: 1000,
@@ -578,7 +577,7 @@ impl frame_system::Config for Runtime {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = BlockHashCount;
+	type BlockHashCount = ConstU64<2400>;
 	type DbWeight = ();
 	type Version = ();
 	type PalletInfo = Self;
