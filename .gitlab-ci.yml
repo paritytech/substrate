@@ -182,7 +182,7 @@ test-linux-stable-nextest:
   script:
     - time cargo install cargo-nextest
     # this job runs all tests in former runtime-benchmarks, frame-staking and wasmtime tests
-    - time cargo nextest run --workspace --locked --release --verbose --features runtime-benchmarks --manifest-path ./bin/node/cli/Cargo.toml --retries=3
+    - time cargo nextest run --workspace --locked --release --verbose --features runtime-benchmarks --manifest-path ./bin/node/cli/Cargo.toml --test-threads=32
     - time cargo test -p frame-support-test --features=conditional-storage,no-metadata-docs --manifest-path ./frame/support/test/Cargo.toml --test pallet # does not reuse cache 1 min 44 sec
     - SUBSTRATE_TEST_TIMEOUT=1 time cargo test -p substrate-test-utils --release --verbose --locked -- --ignored timeout
 
@@ -217,24 +217,3 @@ test-linux-doctest:
     RUST_BACKTRACE:                1
   script:
     - time cargo test --doc --workspace --locked --release --verbose --features runtime-benchmarks --manifest-path ./bin/node/cli/Cargo.toml
-
-test-linux-stable-nextest-doctest:
-  stage:                           test
-  <<:                              *docker-env
-  <<:                              *test-refs
-  variables:
-    <<:                            *default-vars
-    # Enable debug assertions since we are running optimized builds for testing
-    # but still want to have debug assertions.
-    RUSTFLAGS:                     "-Cdebug-assertions=y -Dwarnings"
-    RUST_BACKTRACE:                1
-    WASM_BUILD_NO_COLOR:           1
-    # Ensure we run the UI tests.
-    RUN_UI_TESTS:                  1
-  script:
-    - time cargo install cargo-nextest
-    # this job runs all tests in former runtime-benchmarks, frame-staking and wasmtime tests
-    - time cargo nextest run --workspace --locked --release --verbose --features runtime-benchmarks --manifest-path ./bin/node/cli/Cargo.toml --retries=3
-    - time cargo test --doc --workspace --locked --release --verbose --features runtime-benchmarks --manifest-path ./bin/node/cli/Cargo.toml
-    - time cargo test -p frame-support-test --features=conditional-storage,no-metadata-docs --manifest-path ./frame/support/test/Cargo.toml --test pallet # does not reuse cache 1 min 44 sec
-    - SUBSTRATE_TEST_TIMEOUT=1 time cargo test -p substrate-test-utils --release --verbose --locked -- --ignored timeout
