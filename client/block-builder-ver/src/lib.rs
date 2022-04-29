@@ -203,13 +203,11 @@ where
 	}
 
 	/// temporaily apply extrinsics and record them on the list
-	pub fn build_with_seed<
-		F: FnOnce(&'_ BlockId<Block>, &'_ A::Api) -> Vec<Block::Extrinsic>,
-	>(
+	pub fn build_with_seed<F: FnOnce(&'_ BlockId<Block>, &'_ A::Api) -> Vec<Block::Extrinsic>>(
 		mut self,
 		seed: ShufflingSeed,
 		call: F,
-	) -> Result<BuiltBlock<Block, backend::StateBackendFor<B, Block>>, Error>  {
+	) -> Result<BuiltBlock<Block, backend::StateBackendFor<B, Block>>, Error> {
 		let mut next_header = self
 			.api
 			.finalize_block_with_context(&self.block_id, ExecutionContext::BlockConstruction)?;
@@ -218,11 +216,6 @@ where
 
 		let state = self.backend.state_at(self.block_id)?;
 		let parent_hash = self.parent_hash;
-
-		let storage_changes = self
-			.api
-			.into_storage_changes(&state, parent_hash)
-			.map_err(|e| sp_blockchain::Error::StorageChanges(e))?;
 
 		let valid_txs = self.api.execute_in_transaction(|api| {
 			// create dummy header just to condider N+1 block extrinsics like new session
@@ -233,10 +226,20 @@ where
 				next_header.hash(),
 				Default::default(),
 			);
-			api.initialize_block_with_context(&self.block_id, ExecutionContext::BlockConstruction, &header).unwrap();
+			api.initialize_block_with_context(
+				&self.block_id,
+				ExecutionContext::BlockConstruction,
+				&header,
+			)
+			.unwrap();
 			let txs = call(&self.block_id, &api);
 			TransactionOutcome::Rollback(txs)
 		});
+
+		let storage_changes = self
+			.api
+			.into_storage_changes(&state, parent_hash)
+			.map_err(|e| sp_blockchain::Error::StorageChanges(e))?;
 
 		log::debug!(target: "block_builder", "consume {} valid transactios", valid_txs.len());
 		self.extrinsics.extend(valid_txs);
@@ -265,8 +268,6 @@ where
 			storage_changes,
 			proof,
 		})
-
-
 	}
 
 	/// Push onto the block's list of extrinsics.
