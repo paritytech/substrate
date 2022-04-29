@@ -279,7 +279,7 @@ mod tests {
 		let res = accounts.dry_run(vec![].into(), None);
 
 		// then
-		assert_eq!(block_on(res), Err(RpcError::method_not_found()));
+		assert_eq!(block_on(res), Err(sc_rpc_api::UnsafeRpcError.into()));
 	}
 
 	#[test]
