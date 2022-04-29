@@ -262,9 +262,6 @@ pub mod pallet {
 		Resumed,
 	}
 
-	#[deprecated(note = "use `Event` instead")]
-	pub type RawEvent = Event;
-
 	#[pallet::error]
 	pub enum Error<T> {
 		/// Attempt to signal GRANDPA pause when the authority set isn't live
