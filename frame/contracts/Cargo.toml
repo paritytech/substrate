@@ -42,6 +42,7 @@ sp-io = { version = "6.0.0", default-features = false, path = "../../primitives/
 sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-sandbox = { version = "0.10.0-dev", default-features = false, path = "../../primitives/sandbox" }
 sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
+sp-tracing = { default-features = false, path = "../../primitives/tracing" }
 
 [dev-dependencies]
 assert_matches = "1"

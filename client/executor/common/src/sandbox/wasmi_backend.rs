@@ -165,6 +165,9 @@ impl<'a> wasmi::Externals for GuestExternals<'a> {
 		args: RuntimeArgs,
 	) -> std::result::Result<Option<RuntimeValue>, Trap> {
 		SandboxContextStore::with(|sandbox_context| {
+			let prepare_span = tracing::span!(sp_tracing::Level::ERROR, "invoke_index prepare", index);
+			let _prepre_enter = prepare_span.enter();
+
 			// Make `index` typesafe again.
 			let index = GuestFuncIndex(index);
 
@@ -215,6 +218,8 @@ impl<'a> wasmi::Externals for GuestExternals<'a> {
 				return Err(trap("Can't write invoke args into memory"))
 			}
 
+			drop(_prepre_enter);
+
 			let result = {
 				let span = tracing::span!(sp_tracing::Level::ERROR, "SandboxContext::invoke", index = func_idx.0);
 				let _enter = span.enter();
@@ -226,6 +231,9 @@ impl<'a> wasmi::Externals for GuestExternals<'a> {
 					func_idx,
 				)
 			};
+
+			let finalize_span = tracing::span!(sp_tracing::Level::ERROR, "invoke_index finalize", index = index.0);
+			let _finalize_enter = finalize_span.enter();
 
 			deallocate(
 				sandbox_context.supervisor_context(),
