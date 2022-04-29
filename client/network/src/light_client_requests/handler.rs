@@ -43,7 +43,7 @@ use std::{marker::PhantomData, sync::Arc};
 const LOG_TARGET: &str = "light-client-request-handler";
 
 /// Handler for incoming light client requests from a remote peer.
-pub struct LightClientRequestHandler<B: Block, Client> {
+pub struct LightClientRequestHandler<B, Client> {
 	request_receiver: mpsc::Receiver<IncomingRequest>,
 	/// Blockchain client.
 	client: Arc<Client>,
