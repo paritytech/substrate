@@ -22,7 +22,7 @@
 //! `crate::request_responses::RequestResponsesBehaviour` with
 //! [`LightClientRequestHandler`](handler::LightClientRequestHandler).
 
-use crate::{schema, PeerId};
+use crate::PeerId;
 use codec::{self, Decode, Encode};
 use futures::{channel::mpsc, prelude::*};
 use log::{debug, trace};
@@ -32,6 +32,7 @@ use sc_network_common::{
 	config::ProtocolId,
 	request_responses::{IncomingRequest, OutgoingResponse, ProtocolConfig},
 };
+use sc_network_light::schema;
 use sc_peerset::ReputationChange;
 use sp_core::{
 	hexdisplay::HexDisplay,
