@@ -16,4 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-pub mod schema;
+//! Light client data structures of the networking layer.
+
+pub mod light_client_requests;
+mod schema;

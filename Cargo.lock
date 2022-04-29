@@ -9032,8 +9032,19 @@ dependencies = [
 name = "sc-network-light"
 version = "0.10.0-dev"
 dependencies = [
+ "futures 0.3.21",
+ "libp2p",
+ "log 0.4.16",
+ "parity-scale-codec",
  "prost",
  "prost-build",
+ "sc-client-api",
+ "sc-network-common",
+ "sc-peerset",
+ "sp-blockchain",
+ "sp-core",
+ "sp-runtime",
+ "thiserror",
 ]
 
 [[package]]

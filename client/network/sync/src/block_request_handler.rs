@@ -75,8 +75,8 @@ pub fn generate_protocol_config(protocol_id: &ProtocolId) -> ProtocolConfig {
 }
 
 /// Generate the block protocol name from chain specific protocol identifier.
-// Visibility `pub(crate)` to allow `crate::light_client_requests::sender` to generate block request
-// protocol name and send block requests.
+// Visibility `pub(crate)` to allow `sc_network_light::light_client_requests::sender` to generate
+// block request protocol name and send block requests.
 pub(crate) fn generate_protocol_name(protocol_id: &ProtocolId) -> String {
 	format!("/{}/sync/2", protocol_id.as_ref())
 }

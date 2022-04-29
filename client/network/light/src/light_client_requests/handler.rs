@@ -22,9 +22,10 @@
 //! `crate::request_responses::RequestResponsesBehaviour` with
 //! [`LightClientRequestHandler`](handler::LightClientRequestHandler).
 
-use crate::PeerId;
+use crate::schema;
 use codec::{self, Decode, Encode};
 use futures::{channel::mpsc, prelude::*};
+use libp2p::PeerId;
 use log::{debug, trace};
 use prost::Message;
 use sc_client_api::{ProofProvider, StorageProof};
@@ -32,7 +33,6 @@ use sc_network_common::{
 	config::ProtocolId,
 	request_responses::{IncomingRequest, OutgoingResponse, ProtocolConfig},
 };
-use sc_network_light::schema;
 use sc_peerset::ReputationChange;
 use sp_core::{
 	hexdisplay::HexDisplay,

@@ -18,8 +18,8 @@
 
 //! Include sources generated from protobuf definitions.
 
-pub mod v1 {
-	pub mod light {
+pub(crate) mod v1 {
+	pub(crate) mod light {
 		include!(concat!(env!("OUT_DIR"), "/api.v1.light.rs"));
 	}
 }
