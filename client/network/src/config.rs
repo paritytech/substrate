@@ -21,8 +21,17 @@
 //! The [`Params`] struct is the struct that must be passed in order to initialize the networking.
 //! See the documentation of [`Params`].
 
+// TODO: Below set of re-exports are for compatibility purposes for Polkadot, replace with regular
+//  imports at some point in the future once Polkadot is migrated
+pub use sc_network_common::{
+	config::ProtocolId,
+	request_responses::{
+		IncomingRequest, OutgoingResponse, ProtocolConfig as RequestResponseConfig,
+	},
+};
+pub use sc_network_sync::warp_request_handler::WarpSyncProvider;
+
 pub use libp2p::{build_multiaddr, core::PublicKey, identity};
-use sc_network_sync::warp_request_handler::WarpSyncProvider;
 
 // Note: this re-export shouldn't be part of the public API of the crate and will be removed in
 // the future.
@@ -39,9 +48,6 @@ use libp2p::{
 };
 use prometheus_endpoint::Registry;
 use sc_consensus::ImportQueue;
-use sc_network_common::{
-	config::ProtocolId, request_responses::ProtocolConfig as RequestResponseConfig,
-};
 use sp_consensus::block_validation::BlockAnnounceValidator;
 use sp_runtime::traits::Block as BlockT;
 use std::{
