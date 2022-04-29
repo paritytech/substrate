@@ -18,7 +18,6 @@
 //! `crate::request_responses::RequestResponsesBehaviour`.
 
 use crate::{
-	chain::Client,
 	config::ProtocolId,
 	request_responses::{IncomingRequest, OutgoingResponse, ProtocolConfig},
 	schema::v1::{KeyValueStateEntry, StateEntry, StateRequest, StateResponse},
@@ -32,6 +31,7 @@ use futures::{
 use log::{debug, trace};
 use lru::LruCache;
 use prost::Message;
+use sc_client_api::ProofProvider;
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 use std::{
 	hash::{Hash, Hasher},
@@ -96,8 +96,8 @@ enum SeenRequestsValue {
 }
 
 /// Handler for incoming block requests from a remote peer.
-pub struct StateRequestHandler<B: BlockT> {
-	client: Arc<dyn Client<B>>,
+pub struct StateRequestHandler<B: BlockT, Client> {
+	client: Arc<Client>,
 	request_receiver: mpsc::Receiver<IncomingRequest>,
 	/// Maps from request to number of times we have seen this request.
 	///
@@ -105,11 +105,15 @@ pub struct StateRequestHandler<B: BlockT> {
 	seen_requests: LruCache<SeenRequestsKey<B>, SeenRequestsValue>,
 }
 
-impl<B: BlockT> StateRequestHandler<B> {
+impl<B, Client> StateRequestHandler<B, Client>
+where
+	B: BlockT,
+	Client: ProofProvider<B> + Send + Sync + 'static,
+{
 	/// Create a new [`StateRequestHandler`].
 	pub fn new(
 		protocol_id: &ProtocolId,
-		client: Arc<dyn Client<B>>,
+		client: Arc<Client>,
 		num_peer_hint: usize,
 	) -> (Self, ProtocolConfig) {
 		// Reserve enough request slots for one request per peer when we are at the maximum
