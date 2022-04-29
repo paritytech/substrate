@@ -7,7 +7,7 @@ license = "Apache-2.0"
 homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 description = "Collection of allocator implementations."
-documentation = "https://docs.rs/sc-allocator"
+documentation = "https://docs.rs/sp-allocator"
 readme = "README.md"
 
 [package.metadata.docs.rs]
