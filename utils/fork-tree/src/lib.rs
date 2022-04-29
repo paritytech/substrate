@@ -88,12 +88,6 @@ pub enum FilterAction {
 /// in order. Each node is uniquely identified by its hash but can be ordered by
 /// its number. In order to build the tree an external function must be provided
 /// when interacting with the tree to establish a node's ancestry.
-///
-/// In order to provide some kind of services, some methods interface requires
-/// the user to provide one or more predicates. Keep in mind that tree traversal
-/// technique (e.g. BFS vs DFS) is left as not specified and may be subject to
-/// change in the future. In other words, you predicates should not rely on the
-/// observed traversal technique currently in use.
 #[derive(Clone, Debug, Decode, Encode, PartialEq)]
 pub struct ForkTree<H, N, V> {
 	roots: Vec<Node<H, N, V>>,
@@ -195,6 +189,10 @@ where
 	}
 
 	/// Map fork tree into values of new types.
+	///
+	/// Tree traversal technique (e.g. BFS vs DFS) is left as not specified and
+	/// may be subject to change in the future. In other words, your predicates
+	/// should not rely on the observed traversal technique currently in use.
 	pub fn map<VT, F>(self, f: &mut F) -> ForkTree<H, N, VT>
 	where
 		F: FnMut(&H, &N, V) -> VT,
