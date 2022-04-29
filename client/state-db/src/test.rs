@@ -34,6 +34,18 @@ impl MetaDb for TestDb {
 	fn get_meta(&self, key: &[u8]) -> Result<Option<DBValue>, ()> {
 		Ok(self.meta.get(key).cloned())
 	}
+	fn set_meta<V: AsRef<[u8]>>(
+		&mut self,
+		key: &[u8],
+		value_opt: Option<V>,
+	) -> Result<(), Self::Error> {
+		if let Some(value) = value_opt {
+			self.meta.insert(key.to_owned(), value.as_ref().to_owned());
+		} else {
+			self.meta.remove(key);
+		}
+		Ok(())
+	}
 }
 
 impl NodeDb for TestDb {

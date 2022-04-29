@@ -296,8 +296,8 @@ pub struct DatabaseSettings {
 	pub state_cache_size: usize,
 	/// Ratio of cache size dedicated to child tries.
 	pub state_cache_child_ratio: Option<(usize, usize)>,
-	/// State pruning mode.
-	pub state_pruning: PruningMode,
+	/// Requested state pruning mode.
+	pub state_pruning: Option<PruningMode>,
 	/// Where to find the database.
 	pub source: DatabaseSource,
 	/// Block pruning mode.
@@ -416,10 +416,28 @@ struct PendingBlock<Block: BlockT> {
 struct StateMetaDb<'a>(&'a dyn Database<DbHash>);
 
 impl<'a> sc_state_db::MetaDb for StateMetaDb<'a> {
-	type Error = io::Error;
+	type Error = sp_database::error::DatabaseError;
 
 	fn get_meta(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		Ok(self.0.get(columns::STATE_META, key))
+	}
+
+	fn set_meta<V: AsRef<[u8]>>(
+		&mut self,
+		key: &[u8],
+		value_opt: Option<V>,
+	) -> Result<(), Self::Error> {
+		let mut trx = Transaction::new();
+
+		if let Some(value) = value_opt {
+			trx.set(columns::STATE_META, key, value.as_ref());
+		} else {
+			trx.remove(columns::STATE_META, key);
+		}
+
+		self.0.commit(trx)?;
+
+		Ok(())
 	}
 }
 
@@ -1012,9 +1030,23 @@ impl<Block: BlockT> Backend<Block> {
 	/// Create a new instance of database backend.
 	///
 	/// The pruning window is how old a block must be before the state is pruned.
-	pub fn new(config: DatabaseSettings, canonicalization_delay: u64) -> ClientResult<Self> {
-		let db = crate::utils::open_database::<Block>(&config, DatabaseType::Full, true)?;
-		Self::from_database(db as Arc<_>, canonicalization_delay, &config)
+	pub fn new(db_config: DatabaseSettings, canonicalization_delay: u64) -> ClientResult<Self> {
+		use utils::OpenDbError;
+
+		let db_source = &db_config.source;
+
+		let (needs_init, db) =
+			match crate::utils::open_database::<Block>(db_source, DatabaseType::Full, false) {
+				Ok(db) => (false, db),
+				Err(OpenDbError::DoesNotExist) => {
+					let db =
+						crate::utils::open_database::<Block>(db_source, DatabaseType::Full, true)?;
+					(true, db)
+				},
+				Err(as_is) => return Err(as_is.into()),
+			};
+
+		Self::from_database(db as Arc<_>, canonicalization_delay, &db_config, needs_init)
 	}
 
 	/// Create new memory-backed client backend for tests.
@@ -1031,7 +1063,7 @@ impl<Block: BlockT> Backend<Block> {
 		let db_setting = DatabaseSettings {
 			state_cache_size: 16777216,
 			state_cache_child_ratio: Some((50, 100)),
-			state_pruning: PruningMode::keep_blocks(keep_blocks),
+			state_pruning: Some(PruningMode::keep_blocks(keep_blocks)),
 			source: DatabaseSource::Custom(db),
 			keep_blocks: KeepBlocks::Some(keep_blocks),
 		};
@@ -1060,16 +1092,25 @@ impl<Block: BlockT> Backend<Block> {
 		db: Arc<dyn Database<DbHash>>,
 		canonicalization_delay: u64,
 		config: &DatabaseSettings,
+		should_init: bool,
 	) -> ClientResult<Self> {
-		let is_archive_pruning = config.state_pruning.is_archive();
-		let blockchain = BlockchainDb::new(db.clone())?;
-		let map_e = |e: sc_state_db::Error<io::Error>| sp_blockchain::Error::from_state_db(e);
-		let state_db: StateDb<_, _> = StateDb::new(
-			config.state_pruning.clone(),
+		let requested_state_pruning = config.state_pruning.clone();
+		let mut state_meta_db = StateMetaDb(db.as_ref());
+		let map_e = |e: sc_state_db::Error<_>| sp_blockchain::Error::from_state_db(e);
+
+		let state_db: StateDb<_, _> = StateDb::open(
+			&mut state_meta_db,
+			requested_state_pruning,
 			!db.supports_ref_counting(),
-			&StateMetaDb(&*db),
+			should_init,
 		)
 		.map_err(map_e)?;
+
+		let state_pruning_used = state_db.pruning_mode();
+
+		let is_archive_pruning = state_pruning_used.is_archive();
+		let blockchain = BlockchainDb::new(db.clone())?;
+
 		let storage_db =
 			StorageDb { db: db.clone(), state_db, prefix_keys: !db.supports_ref_counting() };
 		let offchain_storage = offchain::LocalStorage::new(db.clone());
@@ -2398,7 +2439,7 @@ pub(crate) mod tests {
 			DatabaseSettings {
 				state_cache_size: 16777216,
 				state_cache_child_ratio: Some((50, 100)),
-				state_pruning: PruningMode::keep_blocks(1),
+				state_pruning: Some(PruningMode::keep_blocks(1)),
 				source: DatabaseSource::Custom(backing),
 				keep_blocks: KeepBlocks::All,
 			},

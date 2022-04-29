@@ -261,7 +261,7 @@ where
 		let db_config = sc_client_db::DatabaseSettings {
 			state_cache_size: config.state_cache_size,
 			state_cache_child_ratio: config.state_cache_child_ratio.map(|v| (v, 100)),
-			state_pruning: config.state_pruning.clone(),
+			state_pruning: Some(config.state_pruning.clone()),
 			source: config.database.clone(),
 			keep_blocks: config.keep_blocks.clone(),
 		};

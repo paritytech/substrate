@@ -190,8 +190,7 @@ fn version_file_path(path: &Path) -> PathBuf {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{tests::Block, DatabaseSettings, DatabaseSource, KeepBlocks};
-	use sc_state_db::PruningMode;
+	use crate::{tests::Block, DatabaseSource};
 
 	fn create_db(db_path: &Path, version: Option<u32>) {
 		if let Some(version) = version {
@@ -203,13 +202,7 @@ mod tests {
 
 	fn open_database(db_path: &Path, db_type: DatabaseType) -> sp_blockchain::Result<()> {
 		crate::utils::open_database::<Block>(
-			&DatabaseSettings {
-				state_cache_size: 0,
-				state_cache_child_ratio: None,
-				state_pruning: PruningMode::ArchiveAll,
-				source: DatabaseSource::RocksDb { path: db_path.to_owned(), cache_size: 128 },
-				keep_blocks: KeepBlocks::All,
-			},
+			&DatabaseSource::RocksDb { path: db_path.to_owned(), cache_size: 128 },
 			db_type,
 			true,
 		)

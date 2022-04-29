@@ -97,12 +97,19 @@ impl<
 {
 }
 
-/// Backend database trait. Read-only.
+/// Backend database trait.
 pub trait MetaDb {
 	type Error: fmt::Debug;
 
 	/// Get meta value, such as the journal.
 	fn get_meta(&self, key: &[u8]) -> Result<Option<DBValue>, Self::Error>;
+
+	/// Set meta value
+	fn set_meta<V: AsRef<[u8]>>(
+		&mut self,
+		key: &[u8],
+		value_opt: Option<V>,
+	) -> Result<(), Self::Error>;
 }
 
 /// Backend database trait. Read-only.
@@ -180,7 +187,7 @@ pub struct CommitSet<H: Hash> {
 }
 
 /// Pruning constraints. If none are specified pruning is
-#[derive(Default, Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Constraints {
 	/// Maximum blocks. Defaults to 0 when unspecified, effectively keeping only non-canonical
 	/// states.
@@ -226,7 +233,15 @@ impl PruningMode {
 
 impl Default for PruningMode {
 	fn default() -> Self {
-		PruningMode::keep_blocks(256)
+		PruningMode::Constrained(Default::default())
+	}
+}
+
+impl Default for Constraints {
+	fn default() -> Self {
+		Self {
+			max_blocks: Some(256), max_mem: None
+		}
 	}
 }
 
@@ -480,6 +495,7 @@ pub struct StateDb<BlockHash: Hash, Key: Hash> {
 }
 
 impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf> StateDb<BlockHash, Key> {
+	#[deprecated]
 	/// Creates a new instance. Does not expect any metadata in the database.
 	pub fn new<D: MetaDb>(
 		mode: PruningMode,
@@ -487,6 +503,23 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf> StateDb<BlockHash
 		db: &D,
 	) -> Result<StateDb<BlockHash, Key>, Error<D::Error>> {
 		Ok(StateDb { db: RwLock::new(StateDbSync::new(mode, ref_counting, db)?) })
+	}
+
+	/// Create an instance of [`StateDb`].
+	pub fn open<D>(
+		db: &mut D,
+		requested_mode: Option<PruningMode>,
+		ref_counting: bool,
+		should_init: bool,
+	) -> Result<StateDb<BlockHash, Key>, Error<D::Error>> 
+	where D: MetaDb
+	{
+		let mode = requested_mode.unwrap_or_default();
+		Ok(StateDb { db: RwLock::new(StateDbSync::new(mode, ref_counting, db)?) })
+	}
+
+	pub fn pruning_mode(&self) -> PruningMode {
+		self.db.read().mode.clone()
 	}
 
 	/// Add a new non-canonical block.
