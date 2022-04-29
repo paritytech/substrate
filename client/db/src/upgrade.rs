@@ -211,6 +211,7 @@ mod tests {
 				keep_blocks: KeepBlocks::All,
 			},
 			db_type,
+			true,
 		)
 		.map(|_| ())
 		.map_err(|e| sp_blockchain::Error::Backend(e.to_string()))
