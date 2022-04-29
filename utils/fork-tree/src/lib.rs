@@ -670,14 +670,16 @@ where
 	}
 
 	/// Remove from the tree some nodes (and their subtrees) using a `filter` predicate.
+	///
 	/// The `filter` is called over tree nodes and returns a filter action:
 	/// - `Remove` if the node and its subtree should be removed;
 	/// - `KeepNode` if we should maintain the node and keep processing the tree.
 	/// - `KeepTree` if we should maintain the node and its entire subtree.
+	///
 	/// An iterator over all the pruned nodes is returned.
-	pub fn drain_filter<F>(&mut self, mut filter: F) -> impl Iterator<Item = (H, N, V)>
+	pub fn drain_filter<F>(&mut self, filter: F) -> impl Iterator<Item = (H, N, V)>
 	where
-		F: FnMut(&H, &N, &V) -> FilterAction,
+		F: Fn(&H, &N, &V) -> FilterAction,
 	{
 		let mut removed = vec![];
 		let mut retained = Vec::new();
