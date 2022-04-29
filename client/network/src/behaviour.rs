@@ -33,8 +33,8 @@ use libp2p::{
 	identify::IdentifyInfo,
 	kad::record,
 	swarm::{
-		toggle::Toggle, NetworkBehaviour, NetworkBehaviourAction, NetworkBehaviourEventProcess,
-		PollParameters,
+		behaviour::toggle::Toggle, NetworkBehaviour, NetworkBehaviourAction,
+		NetworkBehaviourEventProcess, PollParameters,
 	},
 	NetworkBehaviour,
 };
@@ -304,7 +304,7 @@ impl<B: BlockT> Behaviour<B> {
 
 	/// Start querying a record from the DHT. Will later produce either a `ValueFound` or a
 	/// `ValueNotFound` event.
-	pub fn get_value(&mut self, key: &record::Key) {
+	pub fn get_value(&mut self, key: record::Key) {
 		self.discovery.get_value(key);
 	}
 
@@ -519,7 +519,7 @@ impl<B: BlockT> Behaviour<B> {
 		&mut self,
 		_cx: &mut Context,
 		_: &mut impl PollParameters,
-	) -> Poll<NetworkBehaviourAction<BehaviourOut<B>, <Self as NetworkBehaviour>::ProtocolsHandler>>
+	) -> Poll<NetworkBehaviourAction<BehaviourOut<B>, <Self as NetworkBehaviour>::ConnectionHandler>>
 	{
 		if let Some(event) = self.events.pop_front() {
 			return Poll::Ready(NetworkBehaviourAction::GenerateEvent(event))

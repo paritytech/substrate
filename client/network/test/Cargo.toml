@@ -20,7 +20,7 @@ parking_lot = "0.12.0"
 futures = "0.3.21"
 futures-timer = "3.0.1"
 rand = "0.7.2"
-libp2p = { version = "0.40.0", default-features = false }
+libp2p = { version = "0.44.0", default-features = false }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
 sc-consensus = { version = "0.10.0-dev", path = "../../consensus/common" }
 sc-client-api = { version = "4.0.0-dev", path = "../../api" }

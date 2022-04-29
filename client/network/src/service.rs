@@ -49,16 +49,12 @@ use crate::{
 use codec::Encode as _;
 use futures::{channel::oneshot, prelude::*};
 use libp2p::{
-	core::{
-		connection::{ConnectionError, ConnectionLimits, PendingConnectionError},
-		either::EitherError,
-		upgrade, ConnectedPoint, Executor,
-	},
+	core::{either::EitherError, upgrade, ConnectedPoint, Executor},
 	multiaddr,
 	ping::Failure as PingFailure,
 	swarm::{
-		protocols_handler::NodeHandlerWrapperError, AddressScore, DialError, NetworkBehaviour,
-		SwarmBuilder, SwarmEvent,
+		AddressScore, ConnectionError, ConnectionLimits, DialError, NetworkBehaviour,
+		PendingConnectionError, SwarmBuilder, SwarmEvent,
 	},
 	Multiaddr, PeerId,
 };
@@ -1531,7 +1527,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 				ServiceToWorkerMsg::PropagateTransactions =>
 					this.tx_handler_controller.propagate_transactions(),
 				ServiceToWorkerMsg::GetValue(key) =>
-					this.network_service.behaviour_mut().get_value(&key),
+					this.network_service.behaviour_mut().get_value(key),
 				ServiceToWorkerMsg::PutValue(key, value) =>
 					this.network_service.behaviour_mut().put_value(key, value),
 				ServiceToWorkerMsg::SetReservedOnly(reserved_only) => this
@@ -1897,21 +1893,18 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 						};
 						let reason = match cause {
 							Some(ConnectionError::IO(_)) => "transport-error",
-							Some(ConnectionError::Handler(NodeHandlerWrapperError::Handler(
-								EitherError::A(EitherError::A(EitherError::A(EitherError::B(
-									EitherError::A(PingFailure::Timeout),
-								)))),
-							))) => "ping-timeout",
-							Some(ConnectionError::Handler(NodeHandlerWrapperError::Handler(
-								EitherError::A(EitherError::A(EitherError::A(EitherError::A(
+							Some(ConnectionError::Handler(EitherError::A(EitherError::A(
+								EitherError::A(EitherError::B(EitherError::A(
+									PingFailure::Timeout,
+								))),
+							)))) => "ping-timeout",
+							Some(ConnectionError::Handler(EitherError::A(EitherError::A(
+								EitherError::A(EitherError::A(
 									NotifsHandlerError::SyncNotificationsClogged,
-								)))),
-							))) => "sync-notifications-clogged",
-							Some(ConnectionError::Handler(NodeHandlerWrapperError::Handler(_))) =>
-								"protocol-error",
-							Some(ConnectionError::Handler(
-								NodeHandlerWrapperError::KeepAliveTimeout,
-							)) => "keep-alive-timeout",
+								)),
+							)))) => "sync-notifications-clogged",
+							Some(ConnectionError::Handler(_)) => "protocol-error",
+							Some(ConnectionError::KeepAliveTimeout) => "keep-alive-timeout",
 							None => "actively-closed",
 						};
 						metrics
@@ -1946,10 +1939,12 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 						);
 
 						if this.boot_node_ids.contains(&peer_id) {
-							if let DialError::InvalidPeerId = error {
+							if let DialError::WrongPeerId { obtained, endpoint } = &error {
 								error!(
-									"💔 The bootnode you want to connect provided a different peer ID than the one you expect: `{}`.",
+									"💔 The bootnode you want to connect provided a different peer ID than the one you expect: `{}` with `{}`:`{:?}`.",
 									peer_id,
+									obtained,
+									endpoint,
 								);
 							}
 						}
@@ -1958,13 +1953,14 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					if let Some(metrics) = this.metrics.as_ref() {
 						let reason = match error {
 							DialError::ConnectionLimit(_) => Some("limit-reached"),
-							DialError::InvalidPeerId => Some("invalid-peer-id"),
+							DialError::InvalidPeerId(_) => Some("invalid-peer-id"),
 							DialError::Transport(_) | DialError::ConnectionIo(_) =>
 								Some("transport-error"),
 							DialError::Banned |
 							DialError::LocalPeerId |
 							DialError::NoAddresses |
 							DialError::DialPeerConditionFalse(_) |
+							DialError::WrongPeerId { .. } |
 							DialError::Aborted => None, // ignore them
 						};
 						if let Some(reason) = reason {
@@ -1998,7 +1994,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					if let Some(metrics) = this.metrics.as_ref() {
 						let reason = match error {
 							PendingConnectionError::ConnectionLimit(_) => Some("limit-reached"),
-							PendingConnectionError::InvalidPeerId => Some("invalid-peer-id"),
+							PendingConnectionError::WrongPeerId { .. } => Some("invalid-peer-id"),
 							PendingConnectionError::Transport(_) |
 							PendingConnectionError::IO(_) => Some("transport-error"),
 							PendingConnectionError::Aborted => None, // ignore it

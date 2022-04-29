@@ -17,7 +17,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 futures = "0.3.21"
 futures-timer = "3.0.1"
-libp2p = { version = "0.40.0", default-features = false }
+libp2p = { version = "0.44.0", default-features = false }
 log = "0.4.16"
 lru = "0.7.5"
 ahash = "0.7.6"
