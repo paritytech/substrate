@@ -194,20 +194,16 @@ impl<B: BlockT> Bitswap<B> {
 }
 
 impl<B: BlockT> NetworkBehaviour for Bitswap<B> {
-	type ProtocolsHandler = OneShotHandler<BitswapConfig, BitswapMessage, HandlerEvent>;
+	type ConnectionHandler = OneShotHandler<BitswapConfig, BitswapMessage, HandlerEvent>;
 	type OutEvent = void::Void;
 
-	fn new_handler(&mut self) -> Self::ProtocolsHandler {
+	fn new_handler(&mut self) -> Self::ConnectionHandler {
 		Default::default()
 	}
 
 	fn addresses_of_peer(&mut self, _peer: &PeerId) -> Vec<Multiaddr> {
 		Vec::new()
 	}
-
-	fn inject_connected(&mut self, _peer: &PeerId) {}
-
-	fn inject_disconnected(&mut self, _peer: &PeerId) {}
 
 	fn inject_event(&mut self, peer: PeerId, _connection: ConnectionId, message: HandlerEvent) {
 		let request = match message {
@@ -300,7 +296,7 @@ impl<B: BlockT> NetworkBehaviour for Bitswap<B> {
 		&mut self,
 		_ctx: &mut Context,
 		_: &mut impl PollParameters,
-	) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ProtocolsHandler>> {
+	) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>> {
 		if let Some((peer_id, message)) = self.ready_blocks.pop_front() {
 			return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
 				peer_id,
