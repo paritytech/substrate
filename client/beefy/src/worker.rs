@@ -16,7 +16,13 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use std::{collections::BTreeSet, fmt::Debug, marker::PhantomData, sync::Arc, time::Duration};
+use std::{
+	collections::{BTreeMap, BTreeSet},
+	fmt::Debug,
+	marker::PhantomData,
+	sync::Arc,
+	time::Duration,
+};
 
 use codec::{Codec, Decode, Encode};
 use futures::{future, FutureExt, StreamExt};
@@ -27,7 +33,7 @@ use sc_client_api::{Backend, FinalityNotification, FinalityNotifications};
 use sc_network_gossip::GossipEngine;
 
 use sp_api::{BlockId, ProvideRuntimeApi};
-use sp_arithmetic::traits::AtLeast32Bit;
+use sp_arithmetic::traits::{AtLeast32Bit, Saturating};
 use sp_consensus::SyncOracle;
 use sp_mmr_primitives::MmrApi;
 use sp_runtime::{
@@ -80,6 +86,8 @@ pub(crate) struct BeefyWorker<B: Block, BE, C, R, SO> {
 	min_block_delta: u32,
 	metrics: Option<Metrics>,
 	rounds: Option<Rounds<Payload, B>>,
+	/// Buffer holding votes for blocks that the client hasn't seen finality for.
+	pending_votes: BTreeMap<NumberFor<B>, Vec<VoteMessage<NumberFor<B>, AuthorityId, Signature>>>,
 	finality_notifications: FinalityNotifications<B>,
 	/// Best block we received a GRANDPA notification for
 	best_grandpa_block_header: <B as Block>::Header,
@@ -141,6 +149,7 @@ where
 			min_block_delta: min_block_delta.max(1),
 			metrics,
 			rounds: None,
+			pending_votes: BTreeMap::new(),
 			finality_notifications: client.finality_notification_stream(),
 			best_grandpa_block_header: last_finalized_header,
 			best_beefy_block: None,
@@ -290,9 +299,33 @@ where
 			self.init_session_at(new_validator_set, *header.number());
 		}
 
+		// Handle any pending votes for now finalized blocks.
+		self.check_pending_votes();
+
 		// Vote if there's now a new vote target.
 		if let Some(target_number) = self.current_vote_target() {
 			self.do_vote(target_number);
+		}
+	}
+
+	// Handles all buffered votes for now finalized blocks.
+	fn check_pending_votes(&mut self) {
+		let not_finalized = self.best_grandpa_block_header.number().saturating_add(1u32.into());
+		let still_pending = self.pending_votes.split_off(&not_finalized);
+		let votes_to_handle = std::mem::replace(&mut self.pending_votes, still_pending);
+		for (num, votes) in votes_to_handle.into_iter() {
+			if Some(num) > self.best_beefy_block {
+				debug!(target: "beefy", "🥩 Handling buffered votes for now GRANDPA finalized block: {:?}.", num);
+				for v in votes.into_iter() {
+					self.handle_vote(
+						(v.commitment.payload, v.commitment.block_number),
+						(v.id, v.signature),
+						false,
+					);
+				}
+			} else {
+				debug!(target: "beefy", "🥩 Dropping outdated buffered votes for now BEEFY finalized block: {:?}.", num);
+			}
 		}
 	}
 
@@ -509,11 +542,23 @@ where
 				},
 				vote = votes.next().fuse() => {
 					if let Some(vote) = vote {
-						self.handle_vote(
-							(vote.commitment.payload, vote.commitment.block_number),
-							(vote.id, vote.signature),
-							false
-						);
+						let block_num = vote.commitment.block_number;
+						if block_num > *self.best_grandpa_block_header.number() {
+							// Only handle votes for blocks we _know_ have been finalized.
+							// Buffer vote to be handled later.
+							debug!(
+								target: "beefy",
+								"🥩 Buffering vote for not (yet) finalized block: {:?}.",
+								block_num
+							);
+							self.pending_votes.entry(block_num).or_default().push(vote);
+						} else {
+							self.handle_vote(
+								(vote.commitment.payload, vote.commitment.block_number),
+								(vote.id, vote.signature),
+								false
+							);
+						}
 					} else {
 						return;
 					}
