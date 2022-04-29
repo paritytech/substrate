@@ -16,7 +16,7 @@
 // limitations under the License.
 
 //! Implementation of conversions between Substrate and wasmi types.
-
+use sp_std::vec::Vec;
 use crate::{Signature, Value, ValueType};
 
 impl From<Value> for wasmi::RuntimeValue {
