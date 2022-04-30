@@ -21,7 +21,7 @@ use sp_runtime::traits::{Bounded, Hash, StaticLookup};
 use sp_std::{
 	convert::{TryFrom, TryInto},
 	mem::size_of,
-	prelude::*
+	prelude::*,
 };
 
 use frame_benchmarking::{account, benchmarks_instance_pallet};
