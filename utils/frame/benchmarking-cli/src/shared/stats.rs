@@ -123,7 +123,7 @@ impl fmt::Debug for Stats {
 		writeln!(f, "Total: {}", self.sum)?;
 		writeln!(f, "Min: {}, Max: {}", self.min, self.max)?;
 		writeln!(f, "Average: {}, Median: {}, Stddev: {}", self.avg, self.median, self.stddev)?;
-		writeln!(f, "Percentiles 99th, 95th, 75th: {}, {}, {}", self.p99, self.p95, self.p75)
+		write!(f, "Percentiles 99th, 95th, 75th: {}, {}, {}", self.p99, self.p95, self.p75)
 	}
 }
 
