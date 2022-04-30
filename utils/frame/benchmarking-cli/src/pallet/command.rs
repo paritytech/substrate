@@ -123,7 +123,7 @@ impl PalletCmd {
 		let spec = config.chain_spec;
 		let wasm_method = self.wasm_method.into();
 		let strategy = self.execution.unwrap_or(ExecutionStrategy::Native);
-		let pallet = self.pallet.clone().unwrap_or_else(String::new);
+		let pallet = self.pallet.clone().unwrap_or_default();
 		let pallet = pallet.as_bytes();
 		let extrinsic = self.extrinsic.clone().unwrap_or_else(String::new);
 		let extrinsic_split: Vec<&str> = extrinsic.split(',').collect();
