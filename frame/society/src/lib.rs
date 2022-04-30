@@ -355,6 +355,28 @@ pub type RoundIndex = u32;
 /// The rank of a member.
 pub type Rank = u32;
 
+/// The number of votes.
+pub type Votes = u32;
+
+/// Tally of votes.
+#[derive(Default, Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+pub struct Tally {
+	/// The approval votes.
+	approvals: Votes,
+	/// The rejection votes.
+	rejections: Votes,
+}
+
+impl Tally {
+	fn more_approvals(&self) -> bool {
+		self.approvals > self.rejections
+	}
+
+	fn more_rejections(&self) -> bool {
+		self.rejections > self.approvals
+	}
+}
+
 /// A bid for entry into society.
 #[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub struct Candidacy<AccountId, Balance> {
@@ -364,16 +386,14 @@ pub struct Candidacy<AccountId, Balance> {
 	kind: BidKind<AccountId, Balance>,
 	/// The reward that the bidder has requested for successfully joining the society.
 	bid: Balance,
-	/// The tally of explicit approval votes so far.
-	approvals: u32,
-	/// The tally of explicit rejection votes so far.
-	rejections: u32,
+	/// The tally of votes so far.
+	tally: Tally,
 }
 
 /// A vote by a member on a candidate application.
 #[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub enum BidKind<AccountId, Balance> {
-	/// The CandidateDeposit was paid for this bid.
+	/// The given deposit was paid for this bid.
 	Deposit(Balance),
 	/// A member vouched for this bid. The account should be reinstated into `Members` once the
 	/// bid is successful (or if it is rescinded prior to launch).
@@ -381,16 +401,8 @@ pub enum BidKind<AccountId, Balance> {
 }
 
 impl<AccountId: PartialEq, Balance> BidKind<AccountId, Balance> {
-	fn check_voucher(&self, v: &AccountId) -> DispatchResult {
-		if let BidKind::Vouch(ref a, _) = self {
-			if a == v {
-				Ok(())
-			} else {
-				Err("incorrect identity")?
-			}
-		} else {
-			Err("not vouched")?
-		}
+	fn is_vouch(&self, v: &AccountId) -> DispatchResult {
+		matches!(self, BidKind::Vouch(ref a, _) if a == v)
 	}
 }
 
@@ -429,6 +441,16 @@ pub type IntakeRecordFor<T, I> = IntakeRecord<
 	BalanceOf<T, I>,
 >;
 
+#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+pub struct GroupParams<Balance> {
+	max_members: u32,
+	max_intake: u32,
+	max_strikes: u32,
+	candidate_deposit: Balance,
+}
+
+pub type GroupParamsFor<T> = GroupParams<BalanceOf<T, I>>;
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -453,22 +475,7 @@ pub mod pallet {
 		/// Something that provides randomness in the runtime.
 		type Randomness: Randomness<Self::Hash, Self::BlockNumber>;
 
-		/// The minimum amount of a deposit required for a bid to be made.
-		#[pallet::constant]
-		type CandidateDeposit: Get<BalanceOf<Self, I>>;
-
-		/// The amount of the unpaid reward that gets deducted in the case that either a skeptic
-		/// doesn't vote or someone votes in the wrong way.
-		#[pallet::constant]
-		type WrongSideDeduction: Get<BalanceOf<Self, I>>;
-
-		/// The number of times a skeptic may not vote or vote the wrong way for a candidate before
-		/// they become suspended.
-		#[pallet::constant]
-		type MaxStrikes: Get<u32>;
-
-		/// The number of times a skeptic may not vote or vote the wrong way for a candidate before
-		/// they get any payouts slashed in half.
+		/// The maximum number of strikes before a member gets funds slashed.
 		#[pallet::constant]
 		type GraceStrikes: Get<u32>;
 
@@ -493,19 +500,9 @@ pub mod pallet {
 		/// The origin that is allowed to call `found`.
 		type FounderSetOrigin: EnsureOrigin<Self::Origin>;
 
-		/// The origin that is allowed to make suspension judgements.
-		type JudgementOrigin: EnsureOrigin<Self::Origin>;
-
 		/// The number of blocks between membership challenges.
 		#[pallet::constant]
 		type ChallengePeriod: Get<Self::BlockNumber>;
-
-		/// The maximum number of candidates that we accept per round.
-		#[pallet::constant]
-		type MaxCandidateIntake: Get<u32>;
-
-		/// The origin that is allowed to set the maximum number of members.
-		type AdminOrigin: Get<u32>;
 
 		/// The maximum number of payouts a member may have waiting unclaimed.
 		#[pallet::constant]
@@ -518,8 +515,6 @@ pub mod pallet {
 
 	#[pallet::error]
 	pub enum Error<T, I = ()> {
-		/// An incorrect position was provided.
-		BadPosition,
 		/// User is not a member.
 		NotMember,
 		/// User is already a member.
@@ -568,6 +563,10 @@ pub mod pallet {
 		Expired,
 		/// User is not a bidder.
 		NotBidder,
+		/// There is no defender currently.
+		NoDefender,
+		/// Group doesn't exist.
+		NotGroup,
 	}
 
 	#[pallet::event]
@@ -602,8 +601,8 @@ pub mod pallet {
 		Vote { candidate: T::AccountId, voter: T::AccountId, vote: bool },
 		/// A vote has been placed for a defending member
 		DefenderVote { voter: T::AccountId, vote: bool },
-		/// A new \[max\] member count has been set
-		NewMaxMembers { max: u32 },
+		/// A new set of \[params\] has been set for the group.
+		NewParams { params: GroupParamsFor<T> },
 		/// Society is unfounded.
 		Unfounded { founder: T::AccountId },
 		/// Some funds were deposited into the society account.
@@ -616,7 +615,7 @@ pub mod pallet {
 
 	/// The max number of members for the society at one time.
 	#[pallet::storage]
-	pub(super) type MaxMembers<T: Config<I>, I: 'static = ()> = StorageValue<_, u32, ValueQuery>;
+	pub(super) type Parameters<T: Config<I>, I: 'static = ()> = StorageValue<_, GroupParamsFor<T>, OptionQuery>;
 
 	/// Amount of our account balance that is specifically for the next round's bid(s).
 	#[pallet::storage]
@@ -632,14 +631,23 @@ pub mod pallet {
 
 	/// A hash of the rules of this society concerning membership. Can only be set once and
 	/// only by the founder.
-	// TODO: Should be a map with rules for each rank and badge.
+	// TODO: Should be a map with rules for each rank and faction.
 	#[pallet::storage]
 	pub type Rules<T: Config<I>, I: 'static = ()> = StorageValue<_, T::Hash>;
 
 	/// The current members and their rank. Doesn't include `SuspendedMembers`.
 	#[pallet::storage]
-	pub type Membership<T: Config<I>, I: 'static = ()> =
+	pub type Members<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, T::AccountId, MemberRecordFor<T>, OptionQuery>;
+	/*
+	// TODO: Migrate from:
+	pub(super) type Vouching<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, T::AccountId, VouchingStatus>;
+	pub(super) type Strikes<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, T::AccountId, StrikeCount, ValueQuery>;
+	pub type Members<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, Vec<T::AccountId>, ValueQuery>;
+	*/
 
 	/// The number of items in `Membership` currently. (Doesn't include `SuspendedMembers`.)
 	#[pallet::storage]
@@ -665,15 +673,20 @@ pub mod pallet {
 	pub(super) type Bids<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, BoundedVec<Bid<T::AccountId, BalanceOf<T, I>>, T::MaxBids>, ValueQuery>;
 
+	/*
+	// TODO: Migrate from:
+	pub type Candidates<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, Vec<Bid<T::AccountId, BalanceOf<T, I>>>, ValueQuery>;
+	*/
 	#[pallet::storage]
-	pub type Candidate<T: Config<I>, I: 'static = ()> = StorageMap<_,
+	pub type Candidates<T: Config<I>, I: 'static = ()> = StorageMap<_,
 		Blake2_128Concat,
 		T::AccountId,
 		Candidacy<T::AccountId, BalanceOf<T, I>>,
 		OptionQuery,
 	>;
 
-	/// The current skeptics.
+	/// The current skeptic.
 	#[pallet::storage]
 	pub type Skeptic<T: Config<I>, I: 'static = ()> = StorageValue<_, Vec<T::AccountId>, ValueQuery>;
 
@@ -700,57 +713,19 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
-	/// The defending member currently being challenged, along with a running tally of approval and
-	/// rejection votes.
+	/// The defending member currently being challenged, along with a running tally of votes.
 	#[pallet::storage]
-	pub(super) type Defending<T: Config<I>, I: 'static = ()> = StorageValue<_, (T::AccountId, T::AccountId, u32, u32)>;
+	pub(super) type Defending<T: Config<I>, I: 'static = ()> = StorageValue<_, (T::AccountId, T::AccountId, Tally)>;
 
 	/// Votes for the defender.
-	// TODO: Migrate (used to be `OldVote`)
 	#[pallet::storage]
 	pub(super) type DefenderVotes<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, T::AccountId, Vote>;
-
-	// OLD STUFF
-
-	// Moved to `Member`.
-	// TODO: Needs refactor, migration into Membership, removal.
-	/// Members currently vouching or banned from vouching again.
-	#[pallet::storage]
-	pub(super) type Vouching<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, T::AccountId, VouchingStatus>;
-
-	/// The ongoing number of losing votes cast by the member.
-	// TODO: Needs refactor, migration into Membership, removal.
-	#[pallet::storage]
-	pub(super) type Strikes<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, T::AccountId, StrikeCount, ValueQuery>;
-
-	/// The current set of members, ordered.
-	// TODO: Needs refactor, migration into Membership, removal.
-	#[pallet::storage]
-	#[pallet::getter(fn members)]
-	pub type Members<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, Vec<T::AccountId>, ValueQuery>;
-
-	/// The current set of candidates; bidders that are attempting to become members.
-	// TODO: Needs refactor, migration into Candidate, removal.
-	#[pallet::storage]
-	#[pallet::getter(fn candidates)]
-	pub type Candidates<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, Vec<Bid<T::AccountId, BalanceOf<T, I>>>, ValueQuery>;
-
-	/// The set of suspended candidates.
-	// TODO: Needs refactor and removal.
-	// TODO: Ensure that it is empty immediately prior to upgrade.
-	#[pallet::storage]
-	#[pallet::getter(fn suspended_candidate)]
-	pub type SuspendedCandidates<T: Config<I>, I: 'static = ()> = StorageMap<
-		_,
-		Twox64Concat,
-		T::AccountId,
-		(BalanceOf<T, I>, BidKind<T::AccountId, BalanceOf<T, I>>),
-	>;
+	/*
+	// TODO: Migrate from
+	pub(super) type DefenderVotes<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, T::AccountId, OldVote>;
+	*/
 
 	#[pallet::hooks]
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
@@ -807,6 +782,12 @@ pub mod pallet {
 		}
 	}
 
+	mod migrations {
+		fn to_v2() {
+
+		}
+	}
+
 	#[pallet::genesis_build]
 	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I> {
 		fn build(&self) {
@@ -827,7 +808,7 @@ pub mod pallet {
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// A user outside of the society can make a bid for entry.
 		///
-		/// Payment: `CandidateDeposit` will be reserved for making a bid. It is returned
+		/// Payment: The group's Candidate Deposit will be reserved for making a bid. It is returned
 		/// when the bid becomes a member, or if the bid calls `unbid`.
 		///
 		/// The dispatch origin for this call must be _Signed_.
@@ -840,16 +821,19 @@ pub mod pallet {
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn bid(origin: OriginFor<T>, value: BalanceOf<T, I>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			ensure!(!SuspendedMembers::<T, I>::contains_key(&who), Error::<T, I>::Suspended);
+
 			let mut bids = Bids::<T, I>::get();
 			ensure!(!Self::has_bid(&bids, &who), Error::<T, I>::AlreadyBid);
-			ensure!(!Candidate::<T, I>::contains_key(&who), Error::<T, I>::AlreadyCandidate);
-			ensure!(!Membership::<T, I>::contains_key(&who), Error::<T, I>::AlreadyMember);
+			ensure!(!Candidates::<T, I>::contains_key(&who), Error::<T, I>::AlreadyCandidate);
+			ensure!(!Members::<T, I>::contains_key(&who), Error::<T, I>::AlreadyMember);
+			ensure!(!SuspendedMembers::<T, I>::contains_key(&who), Error::<T, I>::Suspended);
 
-			let deposit = T::CandidateDeposit::get();
+			let params = Parameters::<T, I>::get().ok_or(Error::<T, I>::NotGroup)?;
+			let deposit = params.candidate_deposit;
+			Self::insert_bid(&mut bids, &who, value.clone(), BidKind::Deposit(deposit));
+
 			T::Currency::reserve(&who, deposit)?;
 
-			Self::insert_bid(&mut bids, &who, value.clone(), BidKind::Deposit(deposit));
 			Bids::<T, I>::put(bids);
 			Self::deposit_event(Event::<T, I>::Bid { candidate_id: who, offer: value });
 			Ok(())
@@ -905,23 +889,28 @@ pub mod pallet {
 			tip: BalanceOf<T, I>,
 		) -> DispatchResult {
 			let voucher = ensure_signed(origin)?;
-			// Check user is not suspended.
-			ensure!(!SuspendedCandidates::<T, I>::contains_key(&who), Error::<T, I>::Suspended);
-			ensure!(!SuspendedMembers::<T, I>::contains_key(&who), Error::<T, I>::Suspended);
-			// Check user is not a bid or candidate.
-			let bids = Bids::<T, I>::get();
-			ensure!(!Self::has_bid(&bids, &who), Error::<T, I>::AlreadyBid);
-			let candidates = Candidates::<T, I>::get();
-			ensure!(!Self::is_candidate(&candidates, &who), Error::<T, I>::AlreadyCandidate);
-			// Check user is not already a member.
-			let members = Members::<T, I>::get();
-			ensure!(!Self::is_member(&members, &who), Error::<T, I>::AlreadyMember);
-			// Check sender can vouch.
-			ensure!(Self::is_member(&members, &voucher), Error::<T, I>::NotMember);
-			ensure!(!Vouching::<T, I>::contains_key(&voucher), Error::<T, I>::AlreadyVouching);
 
-			Vouching::<T, I>::insert(&voucher, VouchingStatus::Vouching);
-			Self::put_bid(bids, &who, value.clone(), BidKind::Vouch(voucher.clone(), tip));
+			// Get bids and check user is not bidding.
+			let mut bids = Bids::<T, I>::get();
+			ensure!(!Self::has_bid(&bids, &who), Error::<T, I>::AlreadyBid);
+
+			// Check user is not already a candidate, member or suspended member.
+			ensure!(!Candidates::<T, I>::contains_key(&who), Error::<T, I>::AlreadyCandidate);
+			ensure!(!Members::<T, I>::contains_key(&who), Error::<T, I>::AlreadyMember);
+			ensure!(!SuspendedMembers::<T, I>::contains_key(&who), Error::<T, I>::Suspended);
+
+			// Check sender can vouch.
+			let mut record = Members::<T, I>::get(voucher).ok_or(Error::<T, I>::NotMember)?;
+			ensure!(record.vouching.is_none(), Error::<T, I>::AlreadyVouching);
+
+			// Update voucher record.
+			record.vouching = Some(VouchingStatus::Vouching);
+			// Update bids
+			Self::insert_bid(&mut bids, &who, value.clone(), BidKind::Vouch(voucher.clone(), tip));
+
+			// Write new state.
+			Members::<T, I>::insert(&voucher, &record);
+			Bids::<T, I>::put(bids);
 			Self::deposit_event(Event::<T, I>::Vouch {
 				candidate_id: who,
 				offer: value,
@@ -941,25 +930,18 @@ pub mod pallet {
 		/// Key: B (len of bids)
 		/// Total Complexity: O(B)
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
-		pub fn unvouch(origin: OriginFor<T>, pos: u32) -> DispatchResult {
+		pub fn unvouch(origin: OriginFor<T>) -> DispatchResult {
 			let voucher = ensure_signed(origin)?;
-			ensure!(
-				Vouching::<T, I>::get(&voucher) == Some(VouchingStatus::Vouching),
-				Error::<T, I>::NotVouching
-			);
 
-			let pos = pos as usize;
-			Bids::<T, I>::mutate(|b| {
-				if pos < b.len() {
-					b[pos].kind.check_voucher(&voucher)?;
-					Vouching::<T, I>::remove(&voucher);
-					let who = b.remove(pos).who;
-					Self::deposit_event(Event::<T, I>::Unvouch { candidate: who });
-					Ok(())
-				} else {
-					Err(Error::<T, I>::BadPosition)?
-				}
-			})
+			let mut bids = Bids::<T, I>::get();
+			let pos = bids.iter().position(|bid| bid.kind.is_vouch(&voucher))
+				.ok_or(Error::<T, I>::NotVouching)?;
+			let bid = bids.remove(pos);
+			Self::clean_bid(&bid);
+
+			Bids::<T, I>::put(bids);
+			Self::deposit_event(Event::<T, I>::Unvouch { candidate: bid.who });
+			Ok(())
 		}
 
 		/// As a member, vote on a candidate.
@@ -982,23 +964,14 @@ pub mod pallet {
 			let voter = ensure_signed(origin)?;
 			let candidate = T::Lookup::lookup(candidate)?;
 
-			let mut candidacy = Candidate::<T, I>::get(candidate).ok_or(Error::<T, I>::NotCandidate)?;
-			let record = Membership::<T, I>::get(&voter).ok_or(Error::<T, I>::NotMember)?;
+			let mut candidacy = Candidates::<T, I>::get(candidate).ok_or(Error::<T, I>::NotCandidate)?;
+			let record = Members::<T, I>::get(&voter).ok_or(Error::<T, I>::NotMember)?;
 
-			// remove the old vote from the count, if there was one.
-			match Votes::<T, I>::get(&candidate, &voter) {
-				Some(Vote { approve: true, weight }) => candidacy.approves.saturating_reduce(weight),
-				Some(Vote { approve: false, weight }) => candidacy.rejects.saturating_reduce(weight),
-				_ => {},
-			}
-			let weight_root = record.rank + 1;
-			let weight = weight_root * weight_root;
-			match approve {
-				true => candidacy.approves.saturating_accrue(1),
-				false => candidacy.rejects.saturating_accrue(1),
-			}
-			Votes::<T, I>::insert(&candidate, &voter, Vote { approve, weight });
-			Candidate::<T, I>::insert(&candidate, &candidacy);
+			Votes::<T, I>::mutate(&candidate, &voter, |v| {
+				v = Some(Self::do_vote(v, approve, record.rank, &mut candidacy.tally));
+			});
+
+			Candidates::<T, I>::insert(&candidate, &candidacy);
 			Self::deposit_event(Event::<T, I>::Vote { candidate, voter, vote: approve });
 			Ok(())
 		}
@@ -1017,12 +990,15 @@ pub mod pallet {
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn defender_vote(origin: OriginFor<T>, approve: bool) -> DispatchResult {
 			let voter = ensure_signed(origin)?;
-			let members = Members::<T, I>::get();
-			ensure!(Self::is_member(&members, &voter), Error::<T, I>::NotMember);
 
-			let vote = if approve { Vote::Approve } else { Vote::Reject };
-			DefenderVotes::<T, I>::insert(&voter, vote);
+			let defending = Defending::<T, I>::get().ok_or(Error::<T, I>::NoDefender)?;
+			let record = Members::<T, I>::get(&voter).ok_or(Error::<T, I>::NotMember)?;
 
+			DefenderVotes::<T, I>::mutate(&voter, |v| {
+				v = Some(Self::do_vote(v, approve, record.rank, &mut defending.2));
+			});
+
+			Defending::<T, I>::put(defending);
 			Self::deposit_event(Event::<T, I>::DefenderVote { voter, vote: approve });
 			Ok(())
 		}
@@ -1043,14 +1019,14 @@ pub mod pallet {
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn payout(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			let mut record = Membership::<T, I>::get(&who).ok_or(Error::<T, I>::NotMember)?;
+			let mut record = Members::<T, I>::get(&who).ok_or(Error::<T, I>::NotMember)?;
 
 			if let Some((when, amount)) = record.payouts.first() {
 				if when <= &<frame_system::Pallet<T>>::block_number() {
 					record.paid = record.paid.checked_add(amount).ok_or(Overflow)?;
 					T::Currency::transfer(&Self::payouts(), &who, *amount, AllowDeath)?;
 					record.payouts.remove(0);
-					Membership::<T, I>::insert(&who, record);
+					Members::<T, I>::insert(&who, record);
 					return Ok(())
 				}
 			}
@@ -1081,22 +1057,30 @@ pub mod pallet {
 		/// Parameters:
 		/// - `founder` - The first member and head of the newly founded society.
 		/// - `max_members` - The initial max number of members for the society.
+		/// - `max_intake` - The maximum number of candidates per intake period.
+		/// - `max_strikes`: The maximum number of strikes a member may get before they become
+		///   suspended and may only be reinstated by the founder.
+		/// - `candidate_deposit`: The deposit required to make a bid for membership of the group.
 		/// - `rules` - The rules of this society concerning membership.
 		///
 		/// Complexity: O(1)
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
-		pub fn found(
+		pub fn found_society(
 			origin: OriginFor<T>,
 			founder: T::AccountId,
 			max_members: u32,
+			max_intake: u32,
+			max_strikes: u32,
+			candidate_deposit: BalanceOf<T, I>,
 			rules: Vec<u8>,
 		) -> DispatchResult {
 			T::FounderSetOrigin::ensure_origin(origin)?;
 			ensure!(!Head::<T, I>::exists(), Error::<T, I>::AlreadyFounded);
 			ensure!(max_members > 1, Error::<T, I>::MaxMembers);
 			// This should never fail in the context of this function...
-			MaxMembers::<T, I>::put(max_members);
-			Self::add_member(&founder, 1, BoundedVec::new())?;
+			let params = GroupParams { max_members, max_intake, max_strikes, candidate_deposit };
+			Parameters::<T, I>::put(params);
+			Self::insert_member(&founder, 1, BoundedVec::new())?;
 			Head::<T, I>::put(&founder);
 			Founder::<T, I>::put(&founder);
 			Rules::<T, I>::put(T::Hashing::hash(&rules));
@@ -1104,7 +1088,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Annul the founding of the society.
+		/// Dissolve the society and remove all members.
 		///
 		/// The dispatch origin for this call must be Signed, and the signing account must be both
 		/// the `Founder` and the `Head`. This implies that it may only be done when there is one
@@ -1118,22 +1102,20 @@ pub mod pallet {
 		/// Total Complexity: O(1)
 		/// # </weight>
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
-		pub fn unfound(origin: OriginFor<T>) -> DispatchResult {
+		pub fn dissolve(origin: OriginFor<T>) -> DispatchResult {
 			let founder = ensure_signed(origin)?;
 			ensure!(Founder::<T, I>::get() == Some(founder.clone()), Error::<T, I>::NotFounder);
 			ensure!(Head::<T, I>::get() == Some(founder.clone()), Error::<T, I>::NotHead);
 
-			Members::<T, I>::kill();
+			Members::<T, I>::remove_all(None);
 			MemberCount::<T, I>::kill();
 			MemberByIndex::<T, I>::remove_all(None);
-			Membership::<T, I>::remove_all(None);
+			Members::<T, I>::remove_all(None);
 			Votes::<T, I>::remove_all(None);
 			Head::<T, I>::kill();
 			Founder::<T, I>::kill();
 			Rules::<T, I>::kill();
-			Candidates::<T, I>::kill();
-			Candidate::<T, I>::remove_all(None);
-			SuspendedCandidates::<T, I>::remove_all(None);
+			Candidates::<T, I>::remove_all(None);
 			Self::deposit_event(Event::<T, I>::Unfounded { founder });
 			Ok(())
 		}
@@ -1146,7 +1128,7 @@ pub mod pallet {
 		/// If a suspended member is rejected, remove all associated storage items, including
 		/// their payouts, and remove any vouched bids they currently have.
 		///
-		/// The dispatch origin for this call must be from the _JudgementOrigin_.
+		/// The dispatch origin for this call must be Signed from the Founder.
 		///
 		/// Parameters:
 		/// - `who` - The suspended member to be judged.
@@ -1161,7 +1143,9 @@ pub mod pallet {
 			who: T::AccountId,
 			forgive: bool,
 		) -> DispatchResult {
-			T::JudgementOrigin::ensure_origin(origin)?;
+			let founder = ensure_signed(origin)?;
+			ensure!(Founder::<T, I>::get() == Some(founder.clone()), Error::<T, I>::NotFounder);
+
 			let record = SuspendedMembers::<T, I>::get(&who).ok_or(Error::<T, I>::NotSuspended)?;
 
 			if forgive {
@@ -1176,21 +1160,33 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Allows root origin to change the maximum number of members in society.
-		/// New max membership count must be no less than the current number of members.
+		/// Change the maximum number of members in society and the maximum number of new candidates
+		/// in a single intake period.
 		///
-		/// The dispatch origin for this call must be Root.
+		/// The dispatch origin for this call must be Signed by the Founder.
 		///
 		/// Parameters:
-		/// - `max` - The maximum number of members for the society.
+		/// - `max_members` - The maximum number of members for the society. This must be no
+		///   less than the current number of members.
+		/// - `max_intake` - The maximum number of candidates per intake period.
+		/// - `max_strikes`: The maximum number of strikes a member may get before they become
+		///   suspended and may only be reinstated by the founder.
+		/// - `candidate_deposit`: The deposit required to make a bid for membership of the group.
 		///
 		/// Total Complexity: O(1)
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
-		pub fn set_max_members(origin: OriginFor<T>, max: u32) -> DispatchResult {
-			T::AdminOrigin::ensure_origin(origin)?;
-			ensure!(max >= MemberCount::<T, I>::get(), Error::<T, I>::MaxMembers);
-			MaxMembers::<T, I>::put(max);
-			Self::deposit_event(Event::<T, I>::NewMaxMembers { max });
+		pub fn set_parameters(
+			origin: OriginFor<T>,
+			max_members: u32,
+			max_intake: u32,
+			max_strikes: u32,
+			candidate_deposit: BalanceOf<T, I>,
+		) -> DispatchResult {
+			ensure!(ensure_signed(origin)? == Founder::<T, I>::get(), Error::<T, I>::NotFounder);
+			ensure!(max_members >= MemberCount::<T, I>::get(), Error::<T, I>::MaxMembers);
+			let params = GroupParams { max_members, max_intake, max_strikes, candidate_deposit };
+			Parameters::<T, I>::put(&params);
+			Self::deposit_event(Event::<T, I>::NewParams { params });
 			Ok(())
 		}
 
@@ -1199,32 +1195,35 @@ pub mod pallet {
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn claim_membership(origin: OriginFor<T>) -> DispatchResult {
 			let candidate = ensure_signed(origin)?;
-			let candidacy = Candidate::<T, I>::get(&candidate).ok_or(Error::<T, I>::NotCandidate)?;
-			ensure!(candidacy.approvals > candidacy.rejections, Error::<T, I>::NotApproved);
+			let candidacy = Candidates::<T, I>::get(&candidate).ok_or(Error::<T, I>::NotCandidate)?;
+			ensure!(candidacy.tally.more_approvals(), Error::<T, I>::NotApproved);
 			ensure!(!Self::in_progress(candidacy.round), Error::<T, I>::InProgress);
 			Self::induct_member(candidate, candidacy, 0)
 		}
 
-		/// Transform an approved candidate into a member. Callable only by the
-		/// `JudgementOrigin` and only after the period for voting has ended.
+		/// Transform an approved candidate into a member. Callable only by the Signed origin of the
+		/// Founder and only after the period for voting has ended.
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn force_membership(origin: OriginFor<T>, candidate: T::AccountId) -> DispatchResult {
-			T::JudgementOrigin::ensure_origin(origin)?;
-			let candidacy = Candidate::<T, I>::get(&candidate).ok_or(Error::<T, I>::NotCandidate)?;
+			let founder = ensure_signed(origin)?;
+			ensure!(Founder::<T, I>::get() == Some(founder.clone()), Error::<T, I>::NotFounder);
+
+			let candidacy = Candidates::<T, I>::get(&candidate).ok_or(Error::<T, I>::NotCandidate)?;
 			ensure!(!Self::in_progress(candidacy.round), Error::<T, I>::InProgress);
 			Self::induct_member(candidate, candidacy, 0)
 		}
 
-		/// Remove the candidate's application from the society. Callable only by the
-		/// `JudgementOrigin` and the candidate, and only after the period for voting has ended.
+		/// Remove the candidate's application from the society. Callable only by the Signed origin
+		/// of the Founder, and only after the period for voting has ended.
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn kick_candidate(origin: OriginFor<T>, candidate: T::AccountId) -> DispatchResult {
-			T::JudgementOrigin::ensure_origin(origin)?;
-			let candidacy = Candidate::<T, I>::get(&candidate).ok_or(Error::<T, I>::NotCandidate)?;
+			let founder = ensure_signed(origin)?;
+			ensure!(Founder::<T, I>::get() == Some(founder.clone()), Error::<T, I>::NotFounder);
+			let candidacy = Candidates::<T, I>::get(&candidate).ok_or(Error::<T, I>::NotCandidate)?;
 			ensure!(!Self::in_progress(candidacy.round), Error::<T, I>::InProgress);
 			Self::check_skeptic(&candidate, &candidacy);
 			Votes::<T, I>::remove_prefix(&candidate, None);
-			Candidate::<T, I>::remove(&candidate);
+			Candidates::<T, I>::remove(&candidate);
 			Ok(())
 		}
 
@@ -1233,12 +1232,12 @@ pub mod pallet {
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn resign_candidate(origin: OriginFor<T>) -> DispatchResult {
 			let candidate = ensure_signed(origin)?;
-			let candidacy = Candidate::<T, I>::get(&candidate).ok_or(Error::<T, I>::NotCandidate)?;
-			ensure!(candidacy.approvals <= candidacy.rejections, Error::<T, I>::Approved);
+			let candidacy = Candidates::<T, I>::get(&candidate).ok_or(Error::<T, I>::NotCandidate)?;
+			ensure!(!candidacy.tally.more_approvals(), Error::<T, I>::Approved);
 			ensure!(!Self::in_progress(candidacy.round), Error::<T, I>::InProgress);
 			Self::check_skeptic(&candidate, &candidacy);
 			Votes::<T, I>::remove_prefix(&candidate, None);
-			Candidate::<T, I>::remove(&candidate);
+			Candidates::<T, I>::remove(&candidate);
 			Ok(())
 		}
 
@@ -1247,11 +1246,11 @@ pub mod pallet {
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn drop_candidate(origin: OriginFor<T>, candidate: T::AccountId) -> DispatchResult {
 			ensure_signed(origin)?;
-			let candidacy = Candidate::<T, I>::get(&candidate).ok_or(Error::<T, I>::NotCandidate)?;
-			ensure!(candidacy.approvals <= candidacy.rejections, Error::<T, I>::Approved);
+			let candidacy = Candidates::<T, I>::get(&candidate).ok_or(Error::<T, I>::NotCandidate)?;
+			ensure!(!candidacy.tally.more_approvals(), Error::<T, I>::Approved);
 			ensure!(RoundCount::<T, I>::get() > candidacy.round + 1, Error::<T, I>::TooEarly);
 			Votes::<T, I>::remove_prefix(&candidate, None);
-			Candidate::<T, I>::remove(&candidate);
+			Candidates::<T, I>::remove(&candidate);
 			Ok(())
 		}
 	}
@@ -1275,20 +1274,7 @@ impl<T: Config> EnsureOrigin<T::Origin> for EnsureFounder<T> {
 	}
 }
 
-/// Pick an item at pseudo-random from the slice, given the `rng`. `None` iff the slice is empty.
-fn pick_item<'a, R: RngCore, T>(rng: &mut R, items: &'a [T]) -> Option<&'a T> {
-	if items.is_empty() {
-		None
-	} else {
-		Some(&items[pick_usize(rng, items.len() - 1)])
-	}
-}
-
-/// Pick a new PRN, in the range [0, `max`] (inclusive).
-fn pick_usize(rng: &mut impl RngCore, max: usize) -> usize {
-	(rng.next_u32() % (max as u32 + 1)) as usize
-}
-
+// TODO: Move close to `FromEntropy`?
 struct InputFromRng<'a, T>(&'a mut T);
 impl<'a, T: RngCore> codec::Input for InputFromRng<'a, T> {
 	fn remaining_len(&mut self) -> Result<Option<usize>, Error> {
@@ -1327,13 +1313,28 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		target_round == round && matches!(Self::period(), Period::Voting {..})
 	}
 
+	fn do_vote(maybe_old: Option<Vote>, approve: bool, rank: Rank, tally: &mut Tally) -> Vote {
+		match maybe_old {
+			Some(Vote { approve: true, weight }) => tally.approvals.saturating_reduce(weight),
+			Some(Vote { approve: false, weight }) => tally.rejections.saturating_reduce(weight),
+			_ => {},
+		}
+		let weight_root = rank + 1;
+		let weight = weight_root * weight_root;
+		match approve {
+			true => tally.approvals.saturating_accrue(1),
+			false => tally.rejections.saturating_accrue(1),
+		}
+		Vote { approve, weight }
+	}
+
 	fn check_skeptic(candidate: &T::AccountId, candidacy: &Candidacy<T::AccountId, BalanceOf<T>>) {
 		if RoundCount::<T, I>::get() != candidacy.round { return }
 		// We expect the skeptic to have voted.
 		let skeptic = Skeptic::<T, I>::get();
 		let maybe_vote = Votes::<T, I>::get(&candidate, &skeptic);
-		let approved = candidacy.approvals > candidacy.rejections;
-		let rejected = candidacy.rejections > candidacy.approvals;
+		let approved = candidacy.tally.more_approvals();
+		let rejected = candidacy.tally.more_rejections();
 		match (maybe_vote, approved, rejected) {
 			(None, _, _) | (Some(false), true, false) | (Some(true), false, true) => {
 				// Can't do much if the punishment doesn't work out.
@@ -1345,17 +1346,25 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// End the current challenge period and start a new one.
 	fn rotate_challenge(rng: &mut impl RngCore) {
-		// TODO.
 		// End current defender rotation
-		if let Some((defender, skeptic, approvals, rejections)) = Defending::<T, I>::get() {
-			if rejections > approvals {
+		if let Some((defender, skeptic, tally)) = Defending::<T, I>::get() {
+			if tally.more_rejections() {
 				// Member has failed the challenge
 				Self::suspend_member(&defender);
 			}
 
-			// TODO: check skeptic voted and that their vote was with the majority. Slash if not.
+			// Check defender skeptic voted and that their vote was with the majority.
+			let skeptic_vote = DefenderVotes::<T, I>::get(&skeptic);
+			match (skeptic_vote, tally.more_approvals(), tally.more_rejections()) {
+				(None, _, _) | (Some(true), false, true) | (Some(false), true, false) => {
+					// Punish skeptic.
+					let _ = Self::strike_member(&skeptic);
+				}
+			}
 
 			// Clean up all votes.
+			// NOTE: To do lazy removal of this we'll need to store the challenge round so that
+			// voting when there's a stale vote does not lead to incorrect arithmetic.
 			DefenderVotes::<T, I>::remove_all(None);
 		}
 
@@ -1419,11 +1428,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		member_count: u32,
 		pot: BalanceOf<T, I>,
 	) -> usize {
-		let max_members = MaxMembers::<T, I>::get() as usize;
+		let max_members = Parameters::<T, I>::get().max_members as usize;
 
 		// Get the number of left-most bidders whose bids add up to less than `pot`.
 		let mut bids = Bids::<T, I>::get();
-		let mut max_selections: usize = (T::MaxCandidateIntake::get() as usize)
+		let mut max_selections: usize = (Parameters::<T, I>::get().max_intake as usize)
 			.min(max_members.saturating_sub(member_count))
 			.min(bids.len());
 
@@ -1442,10 +1451,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					round,
 					kind: bid.kind,
 					bid: bid.value,
-					approvals: 0,
-					rejections: 0,
+					tally: Default::default(),
 				};
-				Candidate::<T, I>::insert(&bid.who, candidacy);
+				Candidates::<T, I>::insert(&bid.who, candidacy);
 				selections.saturating_inc();
 			}
 			!accept
@@ -1476,6 +1484,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// In neither case can we do much if the action isn't completable, but there's
 	/// no reason that either should fail.
+	///
+	/// WARNING: This alters the voucher item of `Members`. You must ensure that you do not
+	/// accidentally overwrite it with an older value after calling this.
 	fn clean_bid(bid: &Bid<T::AccountId, BalanceOf<T, I>>) {
 		match &bid.kind {
 			BidKind::Deposit(deposit) => {
@@ -1483,7 +1494,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				debug_assert!(err_amount.is_zero());
 			},
 			BidKind::Vouch(voucher, _) => {
-				Vouching::<T, I>::remove(voucher);
+				Members::<T, I>::mutate_extant(voucher, |record| record.vouching = None);
 			},
 		}
 	}
@@ -1504,11 +1515,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// NOTE: Generally you should not use this, and instead use `add_new_member` or
 	/// `reinstate_member`, whose names clearly match the desired intention.
 	fn insert_member(who: &T::AccountId, rank: Rank, payouts: PayoutsFor<T>) -> DispatchResult {
-		ensure!(MemberCount::get() < MaxMembers::<T, I>::get() as usize, Error::<T, I>::MaxMembers);
+		let params = Parameters::<T, I>::get().ok_or(Error::<T, I>::NotGroup);
+		ensure!(MemberCount::get() < params.max_members as usize, Error::<T, I>::MaxMembers);
 		let index = MemberCount::<T, I>::mutate(|i| { i.saturating_accrue(1); *i - 1 });
 		let paid = Zero::zero();
 		let record = MemberRecord { rank, strikes: 0, vouching: None, paid, index, payouts };
-		Membership::<T, I>::insert(who, record);
+		Members::<T, I>::insert(who, record);
 		MemberByIndex::<T, I>::insert(index, who);
 		Ok(())
 	}
@@ -1546,19 +1558,20 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let maturity = now + Self::lock_duration(MemberCount::<T, I>::get());
 		Self::reward_bidder(&candidate, candidacy.bid, candidacy.kind, maturity);
 		Votes::<T, I>::remove_prefix(&candidate, None);
-		Candidate::<T, I>::remove(&candidate);
+		Candidates::<T, I>::remove(&candidate);
 		Ok(())
 	}
 
 	fn strike_member(who: &T::AccountId) -> DispatchResult {
-		let mut record = Membership::<T, I>::get(who).ok_or(NotMember)?;
+		let mut record = Members::<T, I>::get(who).ok_or(NotMember)?;
 		record.strikes.saturating_inc();
 		if record.strikes >= T::GraceStrikes::get() {
 			// Too many strikes: slash the payout in half.
 			let total_payout = record.payouts.iter().map(|x| x.1).sum();
 			Self::slash_payout(who, total_payout / 2u32.into());
 		}
-		if record.strikes >= T::MaxStrikes::get() {
+		let params = Parameters::<T, I>::get().ok_or(Error::<T, I>::NotGroup)?;
+		if record.strikes >= params.max_strikes {
 			// Way too many strikes: suspend.
 			Self::suspend_member(who);
 		}
@@ -1578,14 +1591,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub fn remove_member(m: &T::AccountId) -> Result<MemberRecord, DispatchError> {
 		ensure!(Head::<T, I>::get().as_ref() != Some(m), Error::<T, I>::Head);
 		ensure!(Founder::<T, I>::get().as_ref() != Some(m), Error::<T, I>::Founder);
-		if let Some(record) = Membership::<T, I>::get(m) {
+		if let Some(record) = Members::<T, I>::get(m) {
 			let index = record.index;
 			let last_index = MemberCount::<T, I>::mutate(|i| { i.saturating_reduce(1); *i });
 			if index != last_index {
 				// Move the member with the last index down to the index of the member to be removed.
 				if let Some(other) = MemberByIndex::<T, I>::get(last_index) {
 					MemberByIndex::<T, I>::insert(index, other);
-					Membership::<T, I>::mutate(other, |m_r|
+					Members::<T, I>::mutate(other, |m_r|
 						if let Some(r) = m_r { r.index = index }
 					);
 				} else {
@@ -1594,7 +1607,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			}
 
 			MemberByIndex::<T, I>::remove(last_index);
-			Membership::<T, I>::remove(m);
+			Members::<T, I>::remove(m);
 			// Remove their vouching status, potentially unbanning them in the future.
 			if record.vouching.take() == Some(VouchingStatus::Vouching) {
 				// Try to remove their bid if they are vouching.
@@ -1718,7 +1731,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// is not a member or if `value` is zero.
 	fn bump_payout(who: &T::AccountId, when: T::BlockNumber, value: BalanceOf<T, I>) {
 		if !value.is_zero() {
-			Membership::<T, I>::mutate(who, |maybe_record| if let Some(record) = maybe_record {
+			Members::<T, I>::mutate(who, |maybe_record| if let Some(record) = maybe_record {
 				if record.rank == 0 {
 					// Members of rank 1 never get payouts.
 					match record.payouts.binary_search_by_key(&when, |x| x.0) {
@@ -1733,7 +1746,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Attempt to slash the payout of some member. Return the total amount that was deducted.
 	fn slash_payout(who: &T::AccountId, value: BalanceOf<T, I>) -> BalanceOf<T, I> {
-		let mut record = match Membership::<T, I>::get(who) {
+		let mut record = match Members::<T, I>::get(who) {
 			Some(record) => record,
 			None => return Zero::zero(),
 		};
@@ -1750,7 +1763,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				break
 			}
 		}
-		Membership::<T, I>::insert(who, record);
+		Members::<T, I>::insert(who, record);
 		value - rest
 	}
 

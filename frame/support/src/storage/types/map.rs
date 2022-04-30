@@ -165,6 +165,14 @@ where
 		<Self as crate::storage::StorageMap<Key, Value>>::try_mutate(key, f)
 	}
 
+	/// Mutate the value under a key iff it exists. Do nothing and return the default value if not.
+	pub fn mutate_extant<KeyArg: EncodeLike<Key>, R, F: FnOnce(&mut Value) -> R>(
+		key: KeyArg,
+		f: F,
+	) -> R {
+		<Self as crate::storage::StorageMap<Key, Value>>::mutate_extant(key, f)
+	}
+
 	/// Mutate the value under a key. Deletes the item if mutated to a `None`.
 	pub fn mutate_exists<KeyArg: EncodeLike<Key>, R, F: FnOnce(&mut Option<Value>) -> R>(
 		key: KeyArg,
