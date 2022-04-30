@@ -27,10 +27,11 @@
 //! ## Overview
 //!
 //! The network initializes the Alliance via a Root call. After that, anyone with an approved
-//! identity and website can apply to become a Candidate. Members will initiate a motion to
-//! determine whether a Candidate can join the Alliance or not. The motion requires the approval of
-//! the `MembershipManager` origin. The Alliance can also maintain a blacklist of accounts and
-//! websites. Members can also vote to update the Alliance's rule and make announcements.
+//! identity and website can join as an Ally. The `MembershipManager` origin can elevate Allies to
+//! Fellows, giving them voting rights within the Alliance.
+//!
+//! Voting members of the Alliance maintain a blacklist of accounts and websites. Members can also
+//! vote to update the Alliance's rule and make announcements.
 //!
 //! ### Terminology
 //!
@@ -41,13 +42,11 @@
 //!   Founder, Fellow, or Ally. A member can also be kicked by the `MembershipManager` origin or
 //!   retire by itself.
 //! - Founder: An account who is initiated by Root with normal voting rights for basic motions and
-//!   special veto rights for rule change and ally elevation motions.
+//!   special veto rights for rule change and Ally elevation motions.
 //! - Fellow: An account who is elevated from Ally by Founders and other Fellows.
-//! - Ally: An account who is approved by Founders and Fellows from Candidate. An Ally doesn't have
-//!   voting rights.
-//! - Candidate: An account who is trying to become a member. The applicant should already have an
-//!   approved identity with website. The application should be submitted by the account itself with
-//!   some deposit, or be nominated by an existing Founder or Fellow for free.
+//! - Ally: An account who would like to join the alliance. To become a voting member, Fellow or
+//!   Founder, it will need approval from the `MembershipManager` origin. Any account can join as an
+//!   Ally either by placing a deposit or by nomination from a voting member.
 //! - Blacklist: A list of bad websites and addresses, items can be added or removed by Founders and
 //!   Fellows.
 //!
@@ -57,7 +56,7 @@
 //!
 //! #### For General Users
 //!
-//! - `submit_candidacy` - Submit the application to become a candidate with deposit.
+//! - `join_alliance` - Join the Alliance as an Ally. This requires a slashable deposit.
 //!
 //! #### For Members (All)
 //!
@@ -70,9 +69,7 @@
 //! - `close` - Close a motion with enough votes or that has expired.
 //! - `set_rule` - Initialize or update the Alliance's rule by IPFS CID.
 //! - `announce` - Make announcement by IPFS CID.
-//! - `nominate_candidate` - Nominate a non-member to become a Candidate for free.
-//! - `approve_candidate` - Approve a candidate to become an Ally.
-//! - `reject_candidate` - Reject a candidate and slash its deposit.
+//! - `nominate_ally` - Nominate a non-member to become an Ally, without deposit.
 //! - `elevate_ally` - Approve an ally to become a Fellow.
 //! - `kick_member` - Kick a member and slash its deposit.
 //! - `add_blacklist_items` - Add some items, either accounts or websites, to the blacklist.
@@ -105,6 +102,7 @@ use sp_runtime::{
 	RuntimeDebug,
 };
 use sp_std::prelude::*;
+use sp_std::convert::TryInto;
 
 use frame_support::{
 	codec::{Decode, Encode, MaxEncodedLen},
@@ -286,19 +284,16 @@ pub mod pallet {
 
 		/// The deposit required for submitting candidacy.
 		#[pallet::constant]
-		type CandidateDeposit: Get<BalanceOf<Self, I>>;
+		type AllyDeposit: Get<BalanceOf<Self, I>>;
 
 		/// The maximum number of announcements.
 		#[pallet::constant]
 		type MaxAnnouncementsCount: Get<u32>;
 
-		/// The maximum number of members per member role.
+		/// The maximum number of members per member role. Should not exceed the sum of
+		/// `MaxFounders` and `MaxFellows`.
 		#[pallet::constant]
 		type MaxMembersCount: Get<u32>;
-
-		/// The maximum number of candidates.
-		#[pallet::constant]
-		type MaxCandidatesCount: Get<u32>;
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
@@ -308,10 +303,6 @@ pub mod pallet {
 	pub enum Error<T, I = ()> {
 		/// The founders/fellows/allies have already been initialized.
 		MembersAlreadyInitialized,
-		/// Account is already a candidate.
-		AlreadyCandidate,
-		/// Account is not a candidate.
-		NotCandidate,
 		/// Account is already a member.
 		AlreadyMember,
 		/// Account is not a member.
@@ -331,11 +322,11 @@ pub mod pallet {
 		/// Item is not blacklisted.
 		NotInBlacklist,
 		/// Length of blacklist exceeds `MaxBlacklist`.
-		TooManyBlacklist,
+		TooManyItemsInBlacklist,
 		/// Length of website URL exceeds `MaxWebsiteUrlLength`.
 		TooLongWebsiteUrl,
-		/// Balance is insufficient to be a candidate.
-		InsufficientCandidateFunds,
+		/// Balance is insufficient for the required deposit.
+		InsufficientFunds,
 		/// The account's identity does not have display field and website field.
 		WithoutIdentityDisplayAndWebsite,
 		/// The account's identity has no good judgement.
@@ -348,8 +339,6 @@ pub mod pallet {
 		MissingAnnouncement,
 		/// Number of members exceeds `MaxMembersCount`.
 		TooManyMembers,
-		/// Number of candidates exceeds `MaxCandidatesCount`.
-		TooManyCandidates,
 		/// Number of announcements exceeds `MaxAnnouncementsCount`.
 		TooManyAnnouncements,
 	}
@@ -369,21 +358,17 @@ pub mod pallet {
 			fellows: Vec<T::AccountId>,
 			allies: Vec<T::AccountId>,
 		},
-		/// An account has been added as a candidate and reserved its deposit.
-		CandidateAdded {
-			candidate: T::AccountId,
+		/// An account has been added as an Ally and reserved its deposit.
+		NewAllyJoined {
+			ally: T::AccountId,
 			nominator: Option<T::AccountId>,
 			reserved: Option<BalanceOf<T, I>>,
 		},
-		/// A candidate has been approved as an ally.
-		CandidateApproved { candidate: T::AccountId },
-		/// A candidate has been rejected and its deposit slashed.
-		CandidateRejected { candidate: T::AccountId },
-		/// An ally has been elevated to fellow.
+		/// An ally has been elevated to Fellow.
 		AllyElevated { ally: T::AccountId },
-		/// A member has retired to an ordinary account with its deposit unreserved.
+		/// A member has retired with its deposit unreserved.
 		MemberRetired { member: T::AccountId, unreserved: Option<BalanceOf<T, I>> },
-		/// A member has been kicked out to an ordinary account with its deposit slashed.
+		/// A member has been kicked out with its deposit slashed.
 		MemberKicked { member: T::AccountId, slashed: Option<BalanceOf<T, I>> },
 		/// Accounts or websites have been added into the blacklist.
 		BlacklistItemsAdded { items: Vec<BlacklistItemOf<T, I>> },
@@ -467,13 +452,6 @@ pub mod pallet {
 	#[pallet::getter(fn deposit_of)]
 	pub type DepositOf<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Blake2_128Concat, T::AccountId, BalanceOf<T, I>, OptionQuery>;
-
-	/// The current set of candidates.
-	/// If a candidate is approved by a motion, then it will become an ally.
-	#[pallet::storage]
-	#[pallet::getter(fn candidates)]
-	pub type Candidates<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, BoundedVec<T::AccountId, T::MaxCandidatesCount>, ValueQuery>;
 
 	/// Maps member type to members of each type.
 	#[pallet::storage]
@@ -719,100 +697,62 @@ pub mod pallet {
 		}
 
 		/// Submit oneself for candidacy. A fixed deposit is reserved.
-		#[pallet::weight(T::WeightInfo::submit_candidacy())]
-		pub fn submit_candidacy(origin: OriginFor<T>) -> DispatchResult {
+		#[pallet::weight(T::WeightInfo::join_alliance())]
+		pub fn join_alliance(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
+
+			// Blacklisted accounts cannot join.
 			ensure!(!Self::account_blacklisted(&who), Error::<T, I>::AlreadyInBlacklist);
-			ensure!(!Self::is_candidate(&who), Error::<T, I>::AlreadyCandidate);
 			ensure!(!Self::is_member(&who), Error::<T, I>::AlreadyMember);
 			// check user self or parent should has verified identity to reuse display name and
 			// website.
 			Self::has_identity(&who)?;
 
-			let deposit = T::CandidateDeposit::get();
+			let deposit = T::AllyDeposit::get();
 			T::Currency::reserve(&who, deposit)
-				.map_err(|_| Error::<T, I>::InsufficientCandidateFunds)?;
+				.map_err(|_| Error::<T, I>::InsufficientFunds)?;
 			<DepositOf<T, I>>::insert(&who, deposit);
 
-			let res = Self::add_candidate(&who);
-			debug_assert!(res.is_ok());
+			Self::add_member(&who, MemberRole::Ally)?;
 
-			Self::deposit_event(Event::CandidateAdded {
-				candidate: who,
+			Self::deposit_event(Event::NewAllyJoined {
+				ally: who,
 				nominator: None,
 				reserved: Some(deposit),
 			});
 			Ok(())
 		}
 
-		/// A founder or fellow can nominate someone to join the alliance and become a candidate.
+		/// A founder or fellow can nominate someone to join the alliance as an Ally.
 		/// There is no deposit required to the nominator or nominee.
-		#[pallet::weight(T::WeightInfo::nominate_candidate())]
-		pub fn nominate_candidate(
+		#[pallet::weight(T::WeightInfo::nominate_ally())]
+		pub fn nominate_ally(
 			origin: OriginFor<T>,
 			who: <T::Lookup as StaticLookup>::Source,
 		) -> DispatchResult {
 			let nominator = ensure_signed(origin)?;
 			ensure!(Self::has_voting_rights(&nominator), Error::<T, I>::NoVotingRights);
 			let who = T::Lookup::lookup(who)?;
+
+			// Individual voting members cannot nominate blacklisted accounts.
 			ensure!(!Self::account_blacklisted(&who), Error::<T, I>::AlreadyInBlacklist);
-			ensure!(!Self::is_candidate(&who), Error::<T, I>::AlreadyCandidate);
 			ensure!(!Self::is_member(&who), Error::<T, I>::AlreadyMember);
 			// check user self or parent should has verified identity to reuse display name and
 			// website.
 			Self::has_identity(&who)?;
 
-			let res = Self::add_candidate(&who);
-			debug_assert!(res.is_ok());
+			Self::add_member(&who, MemberRole::Ally)?;
 
-			Self::deposit_event(Event::CandidateAdded {
-				candidate: who,
+			Self::deposit_event(Event::NewAllyJoined {
+				ally: who,
 				nominator: Some(nominator),
 				reserved: None,
 			});
 			Ok(())
 		}
 
-		/// Approve a `Candidate` to become an `Ally`.
-		#[pallet::weight(T::WeightInfo::approve_candidate())]
-		pub fn approve_candidate(
-			origin: OriginFor<T>,
-			candidate: <T::Lookup as StaticLookup>::Source,
-		) -> DispatchResult {
-			T::MembershipManager::ensure_origin(origin)?;
-			let candidate = T::Lookup::lookup(candidate)?;
-			ensure!(Self::is_candidate(&candidate), Error::<T, I>::NotCandidate);
-			ensure!(!Self::is_member(&candidate), Error::<T, I>::AlreadyMember);
-
-			Self::remove_candidate(&candidate)?;
-			Self::add_member(&candidate, MemberRole::Ally)?;
-
-			Self::deposit_event(Event::CandidateApproved { candidate });
-			Ok(())
-		}
-
-		/// Reject a `Candidate`. This results in a slash of the candidate's deposit.
-		#[pallet::weight(T::WeightInfo::reject_candidate())]
-		pub fn reject_candidate(
-			origin: OriginFor<T>,
-			candidate: <T::Lookup as StaticLookup>::Source,
-		) -> DispatchResult {
-			T::MembershipManager::ensure_origin(origin)?;
-			let candidate = T::Lookup::lookup(candidate)?;
-			ensure!(Self::is_candidate(&candidate), Error::<T, I>::NotCandidate);
-			ensure!(!Self::is_member(&candidate), Error::<T, I>::AlreadyMember);
-
-			Self::remove_candidate(&candidate)?;
-			if let Some(deposit) = DepositOf::<T, I>::take(&candidate) {
-				T::Slashed::on_unbalanced(T::Currency::slash_reserved(&candidate, deposit).0);
-			}
-
-			Self::deposit_event(Event::CandidateRejected { candidate });
-			Ok(())
-		}
-
 		/// Elevate an ally to fellow.
-		#[pallet::weight(T::WeightInfo::reject_candidate())]
+		#[pallet::weight(T::WeightInfo::elevate_ally())]
 		pub fn elevate_ally(
 			origin: OriginFor<T>,
 			ally: <T::Lookup as StaticLookup>::Source,
@@ -922,31 +862,6 @@ pub mod pallet {
 }
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
-	/// Check if a user is a candidate.
-	pub fn is_candidate(who: &T::AccountId) -> bool {
-		<Candidates<T, I>>::get().contains(who)
-	}
-
-	/// Add a candidate to the sorted candidate list.
-	fn add_candidate(who: &T::AccountId) -> DispatchResult {
-		<Candidates<T, I>>::try_mutate(|candidates| {
-			let pos = candidates.binary_search(who).err().ok_or(Error::<T, I>::AlreadyCandidate)?;
-			candidates
-				.try_insert(pos, who.clone())
-				.map_err(|_| Error::<T, I>::TooManyCandidates)?;
-			Ok(())
-		})
-	}
-
-	/// Remove a candidate from the candidates list.
-	fn remove_candidate(who: &T::AccountId) -> DispatchResult {
-		<Candidates<T, I>>::try_mutate(|candidates| {
-			let pos = candidates.binary_search(who).ok().ok_or(Error::<T, I>::NotCandidate)?;
-			candidates.remove(pos);
-			Ok(())
-		})
-	}
-
 	/// Check if a given role has any members.
 	fn has_member(role: MemberRole) -> bool {
 		Members::<T, I>::decode_len(role).unwrap_or_default() > 0
@@ -1054,7 +969,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> DispatchResult {
 		if !new_accounts.is_empty() {
 			<AccountBlacklist<T, I>>::try_mutate(|accounts| -> DispatchResult {
-				accounts.try_append(new_accounts).map_err(|_| Error::<T, I>::TooManyBlacklist)?;
+				accounts.try_append(new_accounts).map_err(|_| Error::<T, I>::TooManyItemsInBlacklist)?;
 				accounts.sort();
 
 				Ok(())
@@ -1062,7 +977,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 		if !new_webs.is_empty() {
 			<WebsiteBlacklist<T, I>>::try_mutate(|webs| -> DispatchResult {
-				webs.try_append(new_webs).map_err(|_| Error::<T, I>::TooManyBlacklist)?;
+				webs.try_append(new_webs).map_err(|_| Error::<T, I>::TooManyItemsInBlacklist)?;
 				webs.sort();
 
 				Ok(())

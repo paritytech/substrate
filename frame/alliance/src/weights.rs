@@ -56,10 +56,8 @@ pub trait WeightInfo {
 	fn set_rule() -> Weight;
 	fn announce() -> Weight;
 	fn remove_announcement() -> Weight;
-	fn submit_candidacy() -> Weight;
-	fn nominate_candidate() -> Weight;
-	fn approve_candidate() -> Weight;
-	fn reject_candidate() -> Weight;
+	fn join_alliance() -> Weight;
+	fn nominate_ally() -> Weight;
 	fn elevate_ally() -> Weight;
 	fn retire() -> Weight;
 	fn kick_member() -> Weight;
@@ -205,38 +203,20 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	// Storage: Alliance AccountBlacklist (r:1 w:0)
-	// Storage: Alliance Candidates (r:1 w:1)
 	// Storage: Alliance Members (r:4 w:0)
 	// Storage: System Account (r:1 w:1)
 	// Storage: Alliance DepositOf (r:0 w:1)
-	fn submit_candidacy() -> Weight {
+	fn join_alliance() -> Weight {
 		(95_370_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(7 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
 	// Storage: Alliance Members (r:4 w:0)
 	// Storage: Alliance AccountBlacklist (r:1 w:0)
-	// Storage: Alliance Candidates (r:1 w:1)
-	fn nominate_candidate() -> Weight {
+	fn nominate_ally() -> Weight {
 		(44_764_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(6 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
-	}
-	// Storage: Alliance Candidates (r:1 w:1)
-	// Storage: Alliance Members (r:4 w:1)
-	fn approve_candidate() -> Weight {
-		(71_876_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(5 as Weight))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
-	}
-	// Storage: Alliance Candidates (r:1 w:1)
-	// Storage: Alliance Members (r:4 w:0)
-	// Storage: Alliance DepositOf (r:1 w:1)
-	// Storage: System Account (r:1 w:1)
-	fn reject_candidate() -> Weight {
-		(69_732_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(7 as Weight))
-			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
 	// Storage: Alliance Members (r:3 w:2)
 	// Storage: AllianceMotion Proposals (r:1 w:0)
@@ -432,38 +412,20 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	// Storage: Alliance AccountBlacklist (r:1 w:0)
-	// Storage: Alliance Candidates (r:1 w:1)
 	// Storage: Alliance Members (r:4 w:0)
 	// Storage: System Account (r:1 w:1)
 	// Storage: Alliance DepositOf (r:0 w:1)
-	fn submit_candidacy() -> Weight {
+	fn join_alliance() -> Weight {
 		(95_370_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(7 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
 	}
 	// Storage: Alliance Members (r:4 w:0)
 	// Storage: Alliance AccountBlacklist (r:1 w:0)
-	// Storage: Alliance Candidates (r:1 w:1)
-	fn nominate_candidate() -> Weight {
+	fn nominate_ally() -> Weight {
 		(44_764_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(6 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
-	}
-	// Storage: Alliance Candidates (r:1 w:1)
-	// Storage: Alliance Members (r:4 w:1)
-	fn approve_candidate() -> Weight {
-		(71_876_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
-	}
-	// Storage: Alliance Candidates (r:1 w:1)
-	// Storage: Alliance Members (r:4 w:0)
-	// Storage: Alliance DepositOf (r:1 w:1)
-	// Storage: System Account (r:1 w:1)
-	fn reject_candidate() -> Weight {
-		(69_732_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(7 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
 	}
 	// Storage: Alliance Members (r:3 w:2)
 	// Storage: AllianceMotion Proposals (r:1 w:0)

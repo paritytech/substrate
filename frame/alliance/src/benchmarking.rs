@@ -644,7 +644,7 @@ benchmarks_instance_pallet! {
 		assert_last_event::<T, I>(Event::AnnouncementRemoved { announcement }.into());
 	}
 
-	submit_candidacy {
+	join_alliance {
 		set_members::<T, I>();
 
 		let outsider = outsider::<T, I>(1);
@@ -663,7 +663,7 @@ benchmarks_instance_pallet! {
 		}.into());
 	}
 
-	nominate_candidate {
+	nominate_ally {
 		set_members::<T, I>();
 
 		let founder1 = founder::<T, I>(1);

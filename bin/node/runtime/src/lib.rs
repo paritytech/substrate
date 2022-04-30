@@ -1426,6 +1426,7 @@ parameter_types! {
 	pub const MaxFounders: u32 = 10;
 	pub const MaxFellows: u32 = AllianceMaxMembers::get() - MaxFounders::get();
 	pub const MaxAllies: u32 = 100;
+	pub const AllyDeposit: Balance = 10 * DOLLARS;
 }
 
 impl pallet_alliance::Config for Runtime {
@@ -1460,8 +1461,7 @@ impl pallet_alliance::Config for Runtime {
 	type MaxWebsiteUrlLength = ConstU32<255>;
 	type MaxAnnouncementsCount = ConstU32<100>;
 	type MaxMembersCount = AllianceMaxMembers;
-	type MaxCandidatesCount = ConstU32<100>;
-	type CandidateDeposit = CandidateDeposit;
+	type AllyDeposit = AllyDeposit;
 	type WeightInfo = pallet_alliance::weights::SubstrateWeight<Runtime>;
 }
 

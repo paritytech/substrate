@@ -23,7 +23,7 @@ pub use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
 	BuildStorage,
 };
-use sp_std::convert::TryInto;
+use sp_std::convert::{TryFrom, TryInto};
 
 pub use frame_support::{
 	assert_ok, ord_parameter_types, parameter_types,
@@ -199,7 +199,7 @@ parameter_types! {
 	pub const MaxFounders: u32 = 10;
 	pub const MaxFellows: u32 = MaxMembers::get() - MaxFounders::get();
 	pub const MaxAllies: u32 = 100;
-	pub const CandidateDeposit: u64 = 25;
+	pub const AllyDeposit: u64 = 25;
 }
 impl Config for Test {
 	type Event = Event;
@@ -224,8 +224,7 @@ impl Config for Test {
 	type MaxWebsiteUrlLength = ConstU32<255>;
 	type MaxAnnouncementsCount = ConstU32<100>;
 	type MaxMembersCount = MaxMembers;
-	type MaxCandidatesCount = ConstU32<100>;
-	type CandidateDeposit = CandidateDeposit;
+	type AllyDeposit = AllyDeposit;
 	type WeightInfo = ();
 }
 

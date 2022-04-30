@@ -20,6 +20,7 @@ use frame_support::{traits::ConstU32, BoundedVec};
 use scale_info::TypeInfo;
 use sp_runtime::RuntimeDebug;
 use sp_std::prelude::*;
+use sp_std::convert::TryInto;
 
 /// A Multihash instance that only supports the basic functionality and no hashing.
 #[derive(

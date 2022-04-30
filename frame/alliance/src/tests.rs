@@ -277,11 +277,11 @@ fn remove_announcement_works() {
 }
 
 #[test]
-fn submit_candidacy_works() {
+fn join_alliance_works() {
 	new_test_ext().execute_with(|| {
 		// check already member
 		assert_noop!(
-			Alliance::submit_candidacy(Origin::signed(1)),
+			Alliance::join_alliance(Origin::signed(1)),
 			Error::<Test, ()>::AlreadyMember
 		);
 
@@ -291,7 +291,7 @@ fn submit_candidacy_works() {
 			vec![BlacklistItem::AccountId(4)]
 		));
 		assert_noop!(
-			Alliance::submit_candidacy(Origin::signed(4)),
+			Alliance::join_alliance(Origin::signed(4)),
 			Error::<Test, ()>::AlreadyInBlacklist
 		);
 		assert_ok!(Alliance::remove_blacklist_items(
@@ -301,48 +301,48 @@ fn submit_candidacy_works() {
 
 		// check deposit funds
 		assert_noop!(
-			Alliance::submit_candidacy(Origin::signed(5)),
-			Error::<Test, ()>::InsufficientCandidateFunds
+			Alliance::join_alliance(Origin::signed(5)),
+			Error::<Test, ()>::InsufficientFunds
 		);
 
 		// success to submit
-		assert_ok!(Alliance::submit_candidacy(Origin::signed(4)));
+		assert_ok!(Alliance::join_alliance(Origin::signed(4)));
 		assert_eq!(Alliance::deposit_of(4), Some(25));
-		assert_eq!(Alliance::candidates(), vec![4]);
+		assert_eq!(Alliance::members(MemberRole::Ally), vec![4]);
 
-		// check already candidate
+		// check already member
 		assert_noop!(
-			Alliance::submit_candidacy(Origin::signed(4)),
-			Error::<Test, ()>::AlreadyCandidate
+			Alliance::join_alliance(Origin::signed(4)),
+			Error::<Test, ()>::AlreadyMember
 		);
 
 		// check missing identity judgement
 		#[cfg(not(feature = "runtime-benchmarks"))]
 		assert_noop!(
-			Alliance::submit_candidacy(Origin::signed(6)),
+			Alliance::join_alliance(Origin::signed(6)),
 			Error::<Test, ()>::WithoutGoodIdentityJudgement
 		);
 		// check missing identity info
 		#[cfg(not(feature = "runtime-benchmarks"))]
 		assert_noop!(
-			Alliance::submit_candidacy(Origin::signed(7)),
+			Alliance::join_alliance(Origin::signed(7)),
 			Error::<Test, ()>::WithoutIdentityDisplayAndWebsite
 		);
 	});
 }
 
 #[test]
-fn nominate_candidate_works() {
+fn nominate_ally_works() {
 	new_test_ext().execute_with(|| {
 		// check already member
 		assert_noop!(
-			Alliance::nominate_candidate(Origin::signed(1), 2),
+			Alliance::nominate_ally(Origin::signed(1), 2),
 			Error::<Test, ()>::AlreadyMember
 		);
 
 		// only votable member(founder/fellow) have nominate right
 		assert_noop!(
-			Alliance::nominate_candidate(Origin::signed(5), 4),
+			Alliance::nominate_ally(Origin::signed(5), 4),
 			Error::<Test, ()>::NoVotingRights
 		);
 
@@ -352,7 +352,7 @@ fn nominate_candidate_works() {
 			vec![BlacklistItem::AccountId(4)]
 		));
 		assert_noop!(
-			Alliance::nominate_candidate(Origin::signed(1), 4),
+			Alliance::nominate_ally(Origin::signed(1), 4),
 			Error::<Test, ()>::AlreadyInBlacklist
 		);
 		assert_ok!(Alliance::remove_blacklist_items(
@@ -361,63 +361,28 @@ fn nominate_candidate_works() {
 		));
 
 		// success to nominate
-		assert_ok!(Alliance::nominate_candidate(Origin::signed(1), 4));
+		assert_ok!(Alliance::nominate_ally(Origin::signed(1), 4));
 		assert_eq!(Alliance::deposit_of(4), None);
-		assert_eq!(Alliance::candidates(), vec![4]);
+		assert_eq!(Alliance::members(MemberRole::Ally), vec![4]);
 
-		// check already candidate
+		// check already member
 		assert_noop!(
-			Alliance::nominate_candidate(Origin::signed(1), 4),
-			Error::<Test, ()>::AlreadyCandidate
+			Alliance::nominate_ally(Origin::signed(1), 4),
+			Error::<Test, ()>::AlreadyMember
 		);
 
 		// check missing identity judgement
 		#[cfg(not(feature = "runtime-benchmarks"))]
 		assert_noop!(
-			Alliance::submit_candidacy(Origin::signed(6)),
+			Alliance::join_alliance(Origin::signed(6)),
 			Error::<Test, ()>::WithoutGoodIdentityJudgement
 		);
 		// check missing identity info
 		#[cfg(not(feature = "runtime-benchmarks"))]
 		assert_noop!(
-			Alliance::submit_candidacy(Origin::signed(7)),
+			Alliance::join_alliance(Origin::signed(7)),
 			Error::<Test, ()>::WithoutIdentityDisplayAndWebsite
 		);
-	});
-}
-
-#[test]
-fn approve_candidate_works() {
-	new_test_ext().execute_with(|| {
-		assert_noop!(
-			Alliance::approve_candidate(Origin::signed(2), 4),
-			Error::<Test, ()>::NotCandidate
-		);
-
-		assert_ok!(Alliance::submit_candidacy(Origin::signed(4)));
-		assert_eq!(Alliance::candidates(), vec![4]);
-
-		assert_ok!(Alliance::approve_candidate(Origin::signed(2), 4));
-		assert_eq!(Alliance::candidates(), Vec::<u64>::new());
-		assert_eq!(Alliance::members(MemberRole::Ally), vec![4]);
-	});
-}
-
-#[test]
-fn reject_candidate_works() {
-	new_test_ext().execute_with(|| {
-		assert_noop!(
-			Alliance::reject_candidate(Origin::signed(2), 4),
-			Error::<Test, ()>::NotCandidate
-		);
-
-		assert_ok!(Alliance::submit_candidacy(Origin::signed(4)));
-		assert_eq!(Alliance::deposit_of(4), Some(25));
-		assert_eq!(Alliance::candidates(), vec![4]);
-
-		assert_ok!(Alliance::reject_candidate(Origin::signed(2), 4));
-		assert_eq!(Alliance::deposit_of(4), None);
-		assert_eq!(Alliance::candidates(), Vec::<u64>::new());
 	});
 }
 
@@ -426,8 +391,7 @@ fn elevate_ally_works() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(Alliance::elevate_ally(Origin::signed(2), 4), Error::<Test, ()>::NotAlly);
 
-		assert_ok!(Alliance::submit_candidacy(Origin::signed(4)));
-		assert_ok!(Alliance::approve_candidate(Origin::signed(2), 4));
+		assert_ok!(Alliance::join_alliance(Origin::signed(4)));
 		assert_eq!(Alliance::members(MemberRole::Ally), vec![4]);
 		assert_eq!(Alliance::members(MemberRole::Fellow), vec![3]);
 
