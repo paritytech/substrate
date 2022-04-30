@@ -606,7 +606,7 @@ pub fn proposing_remaining_duration<Block: BlockT>(
 		// if we defined a maximum portion of the slot for proposal then we must make sure the
 		// lenience doesn't go over it
 		let lenient_proposing_duration =
-			if let Some(ref max_block_proposal_slot_portion) = max_block_proposal_slot_portion {
+			if let Some(max_block_proposal_slot_portion) = max_block_proposal_slot_portion {
 				std::cmp::min(
 					lenient_proposing_duration,
 					slot_info.duration.mul_f32(max_block_proposal_slot_portion.get()),

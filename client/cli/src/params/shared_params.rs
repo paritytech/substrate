@@ -126,7 +126,7 @@ impl SharedParams {
 
 	/// Receiver to process tracing messages.
 	pub fn tracing_receiver(&self) -> sc_service::TracingReceiver {
-		self.tracing_receiver.clone().into()
+		self.tracing_receiver.into()
 	}
 
 	/// Comma separated list of targets for tracing.

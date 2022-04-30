@@ -434,7 +434,6 @@ where
 							"Trying to send warp sync request when no protocol is configured {:?}",
 							request,
 						);
-						return
 					},
 				},
 			CustomMessageOutcome::NotificationStreamOpened {
@@ -449,7 +448,7 @@ where
 					protocol,
 					negotiated_fallback,
 					role: reported_roles_to_observed_role(roles),
-					notifications_sink: notifications_sink.clone(),
+					notifications_sink,
 				});
 			},
 			CustomMessageOutcome::NotificationStreamReplaced {

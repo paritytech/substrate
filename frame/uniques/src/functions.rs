@@ -73,7 +73,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				owner: owner.clone(),
 				issuer: admin.clone(),
 				admin: admin.clone(),
-				freezer: admin.clone(),
+				freezer: admin,
 				total_deposit: deposit,
 				free_holding,
 				instances: 0,
@@ -135,7 +135,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Class::<T, I>::try_mutate(&class, |maybe_class_details| -> DispatchResult {
 			let class_details = maybe_class_details.as_mut().ok_or(Error::<T, I>::UnknownClass)?;
 
-			with_details(&class_details)?;
+			with_details(class_details)?;
 
 			let instances =
 				class_details.instances.checked_add(1).ok_or(ArithmeticError::Overflow)?;
@@ -171,7 +171,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					maybe_class_details.as_mut().ok_or(Error::<T, I>::UnknownClass)?;
 				let details =
 					Asset::<T, I>::get(&class, &instance).ok_or(Error::<T, I>::UnknownClass)?;
-				with_details(&class_details, &details)?;
+				with_details(class_details, &details)?;
 
 				// Return the deposit.
 				T::Currency::unreserve(&class_details.owner, details.deposit);

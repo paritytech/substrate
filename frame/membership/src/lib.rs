@@ -377,7 +377,7 @@ mod benchmark {
 			let m in 1 .. T::MaxMembers::get();
 
 			let members = (0..m).map(|i| account("member", i, SEED)).collect::<Vec<T::AccountId>>();
-			set_members::<T, I>(members.clone(), None);
+			set_members::<T, I>(members, None);
 			let new_member = account::<T::AccountId>("add", m, SEED);
 		}: {
 			assert_ok!(<Membership<T, I>>::add_member(T::AddOrigin::successful_origin(), new_member.clone()));

@@ -90,7 +90,7 @@ fn error(msg: &'static str) -> Error {
 	Error::Other(msg)
 }
 
-const LOG_TARGET: &'static str = "wasm-heap";
+const LOG_TARGET: &str = "wasm-heap";
 
 // The minimum possible allocation size is chosen to be 8 bytes because in that case we would have
 // easier time to provide the guaranteed alignment of 8.

@@ -287,7 +287,7 @@ impl DiscoveryBehaviour {
 			for b in k.kbuckets() {
 				for e in b.iter() {
 					if !peers.contains(e.node.key.preimage()) {
-						peers.insert(e.node.key.preimage().clone());
+						peers.insert(*e.node.key.preimage());
 					}
 				}
 			}
@@ -307,7 +307,7 @@ impl DiscoveryBehaviour {
 				k.add_address(&peer_id, addr.clone());
 			}
 
-			self.pending_events.push_back(DiscoveryOut::Discovered(peer_id.clone()));
+			self.pending_events.push_back(DiscoveryOut::Discovered(peer_id));
 			addrs_list.push(addr);
 		}
 	}
@@ -718,7 +718,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 
 		// Poll the stream that fires when we need to start a random Kademlia query.
 		if let Some(next_kad_random_query) = self.next_kad_random_query.as_mut() {
-			while let Poll::Ready(_) = next_kad_random_query.poll_unpin(cx) {
+			while next_kad_random_query.poll_unpin(cx).is_ready() {
 				let actually_started = if self.num_connections < self.discovery_only_if_under_num {
 					let random_peer_id = PeerId::random();
 					debug!(
@@ -815,7 +815,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 
 									DiscoveryOut::ValueFound(
 										results,
-										stats.duration().unwrap_or_else(Default::default),
+										stats.duration().unwrap_or_default(),
 									)
 								},
 								Err(e @ libp2p::kad::GetRecordError::NotFound { .. }) => {
@@ -826,7 +826,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 									);
 									DiscoveryOut::ValueNotFound(
 										e.into_key(),
-										stats.duration().unwrap_or_else(Default::default),
+										stats.duration().unwrap_or_default(),
 									)
 								},
 								Err(e) => {
@@ -837,7 +837,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 									);
 									DiscoveryOut::ValueNotFound(
 										e.into_key(),
-										stats.duration().unwrap_or_else(Default::default),
+										stats.duration().unwrap_or_default(),
 									)
 								},
 							};
@@ -851,7 +851,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 							let ev = match res {
 								Ok(ok) => DiscoveryOut::ValuePut(
 									ok.key,
-									stats.duration().unwrap_or_else(Default::default),
+									stats.duration().unwrap_or_default(),
 								),
 								Err(e) => {
 									debug!(
@@ -861,7 +861,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 									);
 									DiscoveryOut::ValuePutFailed(
 										e.into_key(),
-										stats.duration().unwrap_or_else(Default::default),
+										stats.duration().unwrap_or_default(),
 									)
 								},
 							};

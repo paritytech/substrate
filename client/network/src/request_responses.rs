@@ -355,25 +355,21 @@ impl RequestResponsesBehaviour {
 					(Instant::now(), pending_response),
 				);
 				debug_assert!(prev_req_id.is_none(), "Expect request id to be unique.");
-			} else {
-				if pending_response.send(Err(RequestFailure::NotConnected)).is_err() {
-					log::debug!(
-						target: "sub-libp2p",
-						"Not connected to peer {:?}. At the same time local \
-						 node is no longer interested in the result.",
-						target,
-					);
-				};
-			}
-		} else {
-			if pending_response.send(Err(RequestFailure::UnknownProtocol)).is_err() {
+			} else if pending_response.send(Err(RequestFailure::NotConnected)).is_err() {
 				log::debug!(
 					target: "sub-libp2p",
-					"Unknown protocol {:?}. At the same time local \
+					"Not connected to peer {:?}. At the same time local \
 					 node is no longer interested in the result.",
-					protocol_name,
+					target,
 				);
-			};
+			}
+		} else if pending_response.send(Err(RequestFailure::UnknownProtocol)).is_err() {
+			log::debug!(
+				target: "sub-libp2p",
+				"Unknown protocol {:?}. At the same time local \
+				 node is no longer interested in the result.",
+				protocol_name,
+			);
 		}
 	}
 
@@ -599,7 +595,7 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 							// will be reported by the corresponding `RequestResponse` through
 							// an `InboundFailure::Omission` event.
 							let _ = resp_builder.try_send(IncomingRequest {
-								peer: peer.clone(),
+								peer,
 								payload: request,
 								pending_response: tx,
 							});
@@ -648,7 +644,7 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 
 				if let Ok(payload) = result {
 					if let Some((protocol, _)) = self.protocols.get_mut(&*protocol_name) {
-						if let Err(_) = protocol.send_response(inner_channel, Ok(payload)) {
+						if protocol.send_response(inner_channel, Ok(payload)).is_err() {
 							// Note: Failure is handled further below when receiving
 							// `InboundFailure` event from `RequestResponse` behaviour.
 							log::debug!(
@@ -658,11 +654,9 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 								 Dropping response",
 								request_id, protocol_name,
 							);
-						} else {
-							if let Some(sent_feedback) = sent_feedback {
-								self.send_feedback
-									.insert((protocol_name, request_id).into(), sent_feedback);
-							}
+						} else if let Some(sent_feedback) = sent_feedback {
+							self.send_feedback
+								.insert((protocol_name, request_id).into(), sent_feedback);
 						}
 					}
 				}
@@ -718,13 +712,10 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 							message:
 								RequestResponseMessage::Request { request_id, request, channel, .. },
 						} => {
-							self.pending_responses_arrival_time.insert(
-								(protocol.clone(), request_id.clone()).into(),
-								Instant::now(),
-							);
+							self.pending_responses_arrival_time
+								.insert((protocol.clone(), request_id).into(), Instant::now());
 
-							let get_peer_reputation =
-								self.peerset.clone().peer_reputation(peer.clone());
+							let get_peer_reputation = self.peerset.clone().peer_reputation(peer);
 							let get_peer_reputation = Box::pin(get_peer_reputation);
 
 							// Save the Future-like state with params to poll `get_peer_reputation`

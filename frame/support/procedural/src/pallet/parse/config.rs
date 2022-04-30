@@ -373,9 +373,10 @@ impl ConfigDef {
 			let found = if item.supertraits.is_empty() {
 				"none".to_string()
 			} else {
-				let mut found = item.supertraits.iter().fold(String::new(), |acc, s| {
-					format!("{}`{}`, ", acc, quote::quote!(#s).to_string())
-				});
+				let mut found = item
+					.supertraits
+					.iter()
+					.fold(String::new(), |acc, s| format!("{}`{}`, ", acc, quote::quote!(#s)));
 				found.pop();
 				found.pop();
 				found

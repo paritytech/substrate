@@ -134,7 +134,7 @@ impl Lockable for Time {
 
 	fn snooze(deadline: &Self::Deadline) {
 		let now = offchain::timestamp();
-		let remainder: Duration = now.diff(&deadline);
+		let remainder: Duration = now.diff(deadline);
 		// do not snooze the full duration, but instead snooze max 100ms
 		// it might get unlocked in another thread
 		use core::cmp::{max, min};

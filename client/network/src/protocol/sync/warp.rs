@@ -94,7 +94,7 @@ where
 		match &mut self.phase {
 			Phase::WarpProof { .. } => {
 				log::debug!(target: "sync", "Unexpected state response");
-				return ImportResult::BadResponse
+				ImportResult::BadResponse
 			},
 			Phase::State(sync) => sync.import(response),
 		}
@@ -111,13 +111,13 @@ where
 				match self.warp_sync_provider.verify(&response, *set_id, authorities.clone()) {
 					Err(e) => {
 						log::debug!(target: "sync", "Bad warp proof response: {}", e);
-						return WarpProofImportResult::BadResponse
+						WarpProofImportResult::BadResponse
 					},
 					Ok(VerificationResult::Partial(new_set_id, new_authorities, new_last_hash)) => {
 						log::debug!(target: "sync", "Verified partial proof, set_id={:?}", new_set_id);
 						*set_id = new_set_id;
 						*authorities = new_authorities;
-						*last_hash = new_last_hash.clone();
+						*last_hash = new_last_hash;
 						self.total_proof_bytes += response.0.len() as u64;
 						WarpProofImportResult::Success
 					},

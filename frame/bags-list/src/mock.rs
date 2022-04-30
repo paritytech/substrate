@@ -42,7 +42,7 @@ impl frame_election_provider_support::ScoreProvider<AccountId> for StakingMock {
 
 	#[cfg(any(feature = "runtime-benchmarks", test))]
 	fn set_score_of(id: &AccountId, weight: Self::Score) {
-		NEXT_VOTE_WEIGHT_MAP.with(|m| m.borrow_mut().insert(id.clone(), weight));
+		NEXT_VOTE_WEIGHT_MAP.with(|m| m.borrow_mut().insert(*id, weight));
 	}
 }
 
