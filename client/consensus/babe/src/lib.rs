@@ -528,7 +528,7 @@ where
 	let (worker_tx, worker_rx) = channel(HANDLE_BUFFER_SIZE);
 
 	let answer_requests =
-		answer_requests(worker_rx, babe_link.config, client, babe_link.epoch_changes.clone());
+		answer_requests(worker_rx, babe_link.config, client, babe_link.epoch_changes);
 
 	let inner = future::select(Box::pin(slot_worker), Box::pin(answer_requests));
 	Ok(BabeWorker {
@@ -638,13 +638,13 @@ async fn answer_requests<B: BlockT, C>(
 							slot_number,
 						)
 						.map_err(|e| Error::<B>::ForkTree(Box::new(e)))?
-						.ok_or_else(|| Error::<B>::FetchEpoch(parent_hash))?;
+						.ok_or(Error::<B>::FetchEpoch(parent_hash))?;
 
 					let viable_epoch = epoch_changes
 						.viable_epoch(&epoch_descriptor, |slot| {
 							Epoch::genesis(&config.genesis_config, slot)
 						})
-						.ok_or_else(|| Error::<B>::FetchEpoch(parent_hash))?;
+						.ok_or(Error::<B>::FetchEpoch(parent_hash))?;
 
 					Ok(sp_consensus_babe::Epoch {
 						epoch_index: viable_epoch.as_ref().epoch_index,
@@ -788,7 +788,7 @@ where
 			.epoch_descriptor_for_child_of(
 				descendent_query(&*self.client),
 				&parent.hash(),
-				parent.number().clone(),
+				*parent.number(),
 				slot,
 			)
 			.map_err(|e| ConsensusError::ChainLookup(e.to_string()))?
@@ -798,7 +798,7 @@ where
 	fn authorities_len(&self, epoch_descriptor: &Self::EpochData) -> Option<usize> {
 		self.epoch_changes
 			.shared_data()
-			.viable_epoch(&epoch_descriptor, |slot| {
+			.viable_epoch(epoch_descriptor, |slot| {
 				Epoch::genesis(&self.config.genesis_config, slot)
 			})
 			.map(|epoch| epoch.as_ref().authorities.len())
@@ -815,7 +815,7 @@ where
 			slot,
 			self.epoch_changes
 				.shared_data()
-				.viable_epoch(&epoch_descriptor, |slot| {
+				.viable_epoch(epoch_descriptor, |slot| {
 					Epoch::genesis(&self.config.genesis_config, slot)
 				})?
 				.as_ref(),
@@ -886,7 +886,7 @@ where
 			.clone()
 			.try_into()
 			.map_err(|_| sp_consensus::Error::InvalidSignature(signature, public))?;
-		let digest_item = <DigestItem as CompatibleDigestItem>::babe_seal(signature.into());
+		let digest_item = <DigestItem as CompatibleDigestItem>::babe_seal(signature);
 
 		let mut import_block = BlockImportParams::new(BlockOrigin::Own, header);
 		import_block.post_digests.push(digest_item);
@@ -1245,12 +1245,12 @@ where
 					pre_digest.slot(),
 				)
 				.map_err(|e| Error::<Block>::ForkTree(Box::new(e)))?
-				.ok_or_else(|| Error::<Block>::FetchEpoch(parent_hash))?;
+				.ok_or(Error::<Block>::FetchEpoch(parent_hash))?;
 			let viable_epoch = epoch_changes
 				.viable_epoch(&epoch_descriptor, |slot| {
 					Epoch::genesis(&self.config.genesis_config, slot)
 				})
-				.ok_or_else(|| Error::<Block>::FetchEpoch(parent_hash))?;
+				.ok_or(Error::<Block>::FetchEpoch(parent_hash))?;
 
 			// We add one to the current slot to allow for some small drift.
 			// FIXME #1019 in the future, alter this queue to allow deferring of headers

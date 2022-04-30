@@ -70,9 +70,9 @@ pub(crate) mod tests;
 pub mod grandpa_protocol_name {
 	use sc_chain_spec::ChainSpec;
 
-	pub(crate) const NAME: &'static str = "/grandpa/1";
+	pub(crate) const NAME: &str = "/grandpa/1";
 	/// Old names for the notifications protocol, used for backward compatibility.
-	pub(crate) const LEGACY_NAMES: [&'static str; 1] = ["/paritytech/grandpa/1"];
+	pub(crate) const LEGACY_NAMES: [&str; 1] = ["/paritytech/grandpa/1"];
 
 	/// Name of the notifications protocol used by GRANDPA.
 	///
@@ -876,7 +876,7 @@ fn check_catch_up<Block: BlockT>(
 		let mut total_weight = 0;
 
 		for id in votes {
-			if let Some(weight) = voters.get(&id).map(|info| info.weight()) {
+			if let Some(weight) = voters.get(id).map(|info| info.weight()) {
 				total_weight += weight.get();
 				if total_weight > full_threshold {
 					return Err(cost::MALFORMED_CATCH_UP)

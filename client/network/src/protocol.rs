@@ -391,13 +391,8 @@ where
 			sc_peerset::Peerset::from_config(sc_peerset::PeersetConfig { sets })
 		};
 
-		let block_announces_protocol: Cow<'static, str> = Cow::from({
-			let mut proto = String::new();
-			proto.push_str("/");
-			proto.push_str(protocol_id.as_ref());
-			proto.push_str("/block-announces/1");
-			proto
-		});
+		let block_announces_protocol: Cow<'static, str> =
+			format!("/{}/block-announces/1", protocol_id.as_ref()).into();
 
 		let behaviour = {
 			let best_number = info.best_number;
@@ -952,7 +947,7 @@ where
 			},
 		};
 
-		peer.known_blocks.insert(hash.clone());
+		peer.known_blocks.insert(hash);
 
 		let is_best = match announce.state.unwrap_or(message::BlockState::Best) {
 			message::BlockState::Best => true,
@@ -1062,7 +1057,7 @@ where
 	/// Uses `protocol` to queue a new justification request and tries to dispatch all pending
 	/// requests.
 	pub fn request_justification(&mut self, hash: &B::Hash, number: NumberFor<B>) {
-		self.sync.request_justification(&hash, number)
+		self.sync.request_justification(hash, number)
 	}
 
 	/// Clear all pending justification requests.
@@ -1479,7 +1474,7 @@ where
 										},
 									};
 
-								finished_block_requests.push((id.clone(), req, protobuf_response));
+								finished_block_requests.push((*id, req, protobuf_response));
 							},
 							PeerRequest::State => {
 								let protobuf_response =
@@ -1576,7 +1571,7 @@ where
 		}
 
 		for (id, request) in self.sync.block_requests() {
-			let event = prepare_block_request(&mut self.peers, id.clone(), request);
+			let event = prepare_block_request(&mut self.peers, *id, request);
 			self.pending_messages.push_back(event);
 		}
 		if let Some((id, request)) = self.sync.state_request() {
@@ -1727,9 +1722,9 @@ where
 				}
 			},
 			NotificationsOut::CustomProtocolReplaced { peer_id, notifications_sink, set_id } =>
-				if set_id == HARDCODED_PEERSETS_SYNC {
-					CustomMessageOutcome::None
-				} else if self.bad_handshake_substreams.contains(&(peer_id, set_id)) {
+				if set_id == HARDCODED_PEERSETS_SYNC ||
+					self.bad_handshake_substreams.contains(&(peer_id, set_id))
+				{
 					CustomMessageOutcome::None
 				} else {
 					CustomMessageOutcome::NotificationStreamReplaced {

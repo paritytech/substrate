@@ -51,9 +51,9 @@ pub use beefy_protocol_name::standard_name as protocol_standard_name;
 pub(crate) mod beefy_protocol_name {
 	use sc_chain_spec::ChainSpec;
 
-	const NAME: &'static str = "/beefy/1";
+	const NAME: &str = "/beefy/1";
 	/// Old names for the notifications protocol, used for backward compatibility.
-	pub(crate) const LEGACY_NAMES: [&'static str; 1] = ["/paritytech/beefy/1"];
+	pub(crate) const LEGACY_NAMES: [&str; 1] = ["/paritytech/beefy/1"];
 
 	/// Name of the notifications protocol used by BEEFY.
 	///

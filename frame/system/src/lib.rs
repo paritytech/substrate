@@ -456,7 +456,7 @@ pub mod pallet {
 		pub fn kill_storage(origin: OriginFor<T>, keys: Vec<Key>) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			for key in &keys {
-				storage::unhashed::kill(&key);
+				storage::unhashed::kill(key);
 			}
 			Ok(().into())
 		}
@@ -833,7 +833,7 @@ impl<
 			Some(account) => account.clone(),
 			None => zero_account_id,
 		};
-		O::from(RawOrigin::Signed(first_member.clone()))
+		O::from(RawOrigin::Signed(first_member))
 	}
 }
 
@@ -1196,8 +1196,7 @@ impl<T: Config> Pallet<T> {
 		}
 
 		let phase = ExecutionPhase::<T>::get().unwrap_or_default();
-		let event =
-			EventRecord { phase, event, topics: topics.iter().cloned().collect::<Vec<_>>() };
+		let event = EventRecord { phase, event, topics: topics.to_vec() };
 
 		// Index of the to be added event.
 		let event_idx = {
@@ -1522,16 +1521,16 @@ impl<T: Config> Pallet<T> {
 	/// of the old and new runtime has the same spec name and that the spec version is increasing.
 	pub fn can_set_code(code: &[u8]) -> Result<(), sp_runtime::DispatchError> {
 		let current_version = T::Version::get();
-		let new_version = sp_io::misc::runtime_version(&code)
+		let new_version = sp_io::misc::runtime_version(code)
 			.and_then(|v| RuntimeVersion::decode(&mut &v[..]).ok())
-			.ok_or_else(|| Error::<T>::FailedToExtractRuntimeVersion)?;
+			.ok_or(Error::<T>::FailedToExtractRuntimeVersion)?;
 
 		if new_version.spec_name != current_version.spec_name {
-			Err(Error::<T>::InvalidSpecName)?
+			return Err(Error::<T>::InvalidSpecName.into())
 		}
 
 		if new_version.spec_version <= current_version.spec_version {
-			Err(Error::<T>::SpecVersionNeedsToIncrease)?
+			return Err(Error::<T>::SpecVersionNeedsToIncrease.into())
 		}
 
 		Ok(())

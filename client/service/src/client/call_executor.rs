@@ -283,7 +283,7 @@ where
 			state_runtime_code.runtime_code().map_err(sp_blockchain::Error::RuntimeCode)?;
 		self.executor
 			.runtime_version(&mut ext, &runtime_code)
-			.map_err(|e| sp_blockchain::Error::VersionInvalid(e.to_string()).into())
+			.map_err(|e| sp_blockchain::Error::VersionInvalid(e.to_string()))
 	}
 
 	fn prove_execution(
@@ -305,7 +305,7 @@ where
 		let runtime_code = self.check_override(runtime_code, at)?;
 
 		sp_state_machine::prove_execution_on_trie_backend(
-			&trie_backend,
+			trie_backend,
 			&mut Default::default(),
 			&self.executor,
 			self.spawn_handle.clone(),

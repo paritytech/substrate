@@ -340,7 +340,7 @@ pub mod pallet {
 			let hash = T::Hashing::hash_of(&(&reason_hash, &who));
 
 			Reasons::<T>::insert(&reason_hash, &reason);
-			Self::deposit_event(Event::NewTip { tip_hash: hash.clone() });
+			Self::deposit_event(Event::NewTip { tip_hash: hash });
 			let tips = vec![(tipper.clone(), tip_value)];
 			let tip = OpenTip {
 				reason: reason_hash,
@@ -390,7 +390,7 @@ pub mod pallet {
 
 			let mut tip = Tips::<T>::get(hash).ok_or(Error::<T>::UnknownTip)?;
 			if Self::insert_tip_and_check_closing(&mut tip, tipper, tip_value) {
-				Self::deposit_event(Event::TipClosing { tip_hash: hash.clone() });
+				Self::deposit_event(Event::TipClosing { tip_hash: hash });
 			}
 			Tips::<T>::insert(&hash, tip);
 			Ok(())

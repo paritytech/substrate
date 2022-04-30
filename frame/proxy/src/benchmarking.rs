@@ -32,7 +32,7 @@ fn assert_last_event<T: Config>(generic_event: <T as Config>::Event) {
 }
 
 fn add_proxies<T: Config>(n: u32, maybe_who: Option<T::AccountId>) -> Result<(), &'static str> {
-	let caller = maybe_who.unwrap_or_else(|| whitelisted_caller());
+	let caller = maybe_who.unwrap_or_else(whitelisted_caller);
 	T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value() / 2u32.into());
 	for i in 0..n {
 		Proxy::<T>::add_proxy(
@@ -77,7 +77,7 @@ fn add_announcements<T: Config>(
 
 benchmarks! {
 	proxy {
-		let p in 1 .. (T::MaxProxies::get() - 1).into() => add_proxies::<T>(p, None)?;
+		let p in 1 .. (T::MaxProxies::get() - 1) => add_proxies::<T>(p, None)?;
 		// In this case the caller is the "target" proxy
 		let caller: T::AccountId = account("target", p - 1, SEED);
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value() / 2u32.into());
@@ -91,7 +91,7 @@ benchmarks! {
 
 	proxy_announced {
 		let a in 0 .. T::MaxPending::get() - 1;
-		let p in 1 .. (T::MaxProxies::get() - 1).into() => add_proxies::<T>(p, None)?;
+		let p in 1 .. (T::MaxProxies::get() - 1) => add_proxies::<T>(p, None)?;
 		// In this case the caller is the "target" proxy
 		let caller: T::AccountId = account("anonymous", 0, SEED);
 		let delegate: T::AccountId = account("target", p - 1, SEED);
@@ -112,7 +112,7 @@ benchmarks! {
 
 	remove_announcement {
 		let a in 0 .. T::MaxPending::get() - 1;
-		let p in 1 .. (T::MaxProxies::get() - 1).into() => add_proxies::<T>(p, None)?;
+		let p in 1 .. (T::MaxProxies::get() - 1) => add_proxies::<T>(p, None)?;
 		// In this case the caller is the "target" proxy
 		let caller: T::AccountId = account("target", p - 1, SEED);
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value() / 2u32.into());
@@ -133,7 +133,7 @@ benchmarks! {
 
 	reject_announcement {
 		let a in 0 .. T::MaxPending::get() - 1;
-		let p in 1 .. (T::MaxProxies::get() - 1).into() => add_proxies::<T>(p, None)?;
+		let p in 1 .. (T::MaxProxies::get() - 1) => add_proxies::<T>(p, None)?;
 		// In this case the caller is the "target" proxy
 		let caller: T::AccountId = account("target", p - 1, SEED);
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value() / 2u32.into());
@@ -154,7 +154,7 @@ benchmarks! {
 
 	announce {
 		let a in 0 .. T::MaxPending::get() - 1;
-		let p in 1 .. (T::MaxProxies::get() - 1).into() => add_proxies::<T>(p, None)?;
+		let p in 1 .. (T::MaxProxies::get() - 1) => add_proxies::<T>(p, None)?;
 		// In this case the caller is the "target" proxy
 		let caller: T::AccountId = account("target", p - 1, SEED);
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value() / 2u32.into());
@@ -169,11 +169,11 @@ benchmarks! {
 	}
 
 	add_proxy {
-		let p in 1 .. (T::MaxProxies::get() - 1).into() => add_proxies::<T>(p, None)?;
+		let p in 1 .. (T::MaxProxies::get() - 1) => add_proxies::<T>(p, None)?;
 		let caller: T::AccountId = whitelisted_caller();
 	}: _(
 		RawOrigin::Signed(caller.clone()),
-		account("target", T::MaxProxies::get().into(), SEED),
+		account("target", T::MaxProxies::get(), SEED),
 		T::ProxyType::default(),
 		T::BlockNumber::zero()
 	)
@@ -183,7 +183,7 @@ benchmarks! {
 	}
 
 	remove_proxy {
-		let p in 1 .. (T::MaxProxies::get() - 1).into() => add_proxies::<T>(p, None)?;
+		let p in 1 .. (T::MaxProxies::get() - 1) => add_proxies::<T>(p, None)?;
 		let caller: T::AccountId = whitelisted_caller();
 	}: _(
 		RawOrigin::Signed(caller.clone()),
@@ -197,7 +197,7 @@ benchmarks! {
 	}
 
 	remove_proxies {
-		let p in 1 .. (T::MaxProxies::get() - 1).into() => add_proxies::<T>(p, None)?;
+		let p in 1 .. (T::MaxProxies::get() - 1) => add_proxies::<T>(p, None)?;
 		let caller: T::AccountId = whitelisted_caller();
 	}: _(RawOrigin::Signed(caller.clone()))
 	verify {
@@ -206,7 +206,7 @@ benchmarks! {
 	}
 
 	anonymous {
-		let p in 1 .. (T::MaxProxies::get() - 1).into() => add_proxies::<T>(p, None)?;
+		let p in 1 .. (T::MaxProxies::get() - 1) => add_proxies::<T>(p, None)?;
 		let caller: T::AccountId = whitelisted_caller();
 	}: _(
 		RawOrigin::Signed(caller.clone()),
@@ -225,7 +225,7 @@ benchmarks! {
 	}
 
 	kill_anonymous {
-		let p in 0 .. (T::MaxProxies::get() - 2).into();
+		let p in 0 .. (T::MaxProxies::get() - 2);
 
 		let caller: T::AccountId = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());

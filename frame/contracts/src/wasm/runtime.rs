@@ -460,13 +460,13 @@ where
 			return match trap_reason {
 				// The trap was the result of the execution `return` host function.
 				TrapReason::Return(ReturnData { flags, data }) => {
-					let flags = ReturnFlags::from_bits(flags)
-						.ok_or_else(|| Error::<E::T>::InvalidCallFlags)?;
+					let flags =
+						ReturnFlags::from_bits(flags).ok_or(Error::<E::T>::InvalidCallFlags)?;
 					Ok(ExecReturnValue { flags, data: Bytes(data) })
 				},
 				TrapReason::Termination =>
 					Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: Bytes(Vec::new()) }),
-				TrapReason::SupervisorError(error) => Err(error)?,
+				TrapReason::SupervisorError(error) => return Err(error.into()),
 			}
 		}
 
@@ -480,10 +480,10 @@ where
 			//
 			// Because panics are really undesirable in the runtime code, we treat this as
 			// a trap for now. Eventually, we might want to revisit this.
-			Err(sp_sandbox::Error::Module) => Err("validation error")?,
+			Err(sp_sandbox::Error::Module) => return Err("validation error".into()),
 			// Any other kind of a trap should result in a failure.
 			Err(sp_sandbox::Error::Execution) | Err(sp_sandbox::Error::OutOfBounds) =>
-				Err(Error::<E::T>::ContractTrapped)?,
+				return Err(Error::<E::T>::ContractTrapped.into()),
 		}
 	}
 
@@ -620,7 +620,7 @@ where
 		let len: u32 = self.read_sandbox_memory_as(out_len_ptr)?;
 
 		if len < buf_len {
-			Err(Error::<E::T>::OutputBufferTooSmall)?
+			return Err(Error::<E::T>::OutputBufferTooSmall.into())
 		}
 
 		if let Some(costs) = create_token(buf_len) {
@@ -717,7 +717,7 @@ where
 		let charged = self
 			.charge_gas(RuntimeCosts::SetStorage { new_bytes: value_len, old_bytes: max_size })?;
 		if value_len > max_size {
-			Err(Error::<E::T>::ValueTooLarge)?;
+			return Err(Error::<E::T>::ValueTooLarge.into())
 		}
 		let mut key: StorageKey = [0; 32];
 		self.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
@@ -750,11 +750,11 @@ where
 	) -> Result<ReturnCode, TrapReason> {
 		self.charge_gas(call_type.cost())?;
 		let input_data = if flags.contains(CallFlags::CLONE_INPUT) {
-			let input = self.input_data.as_ref().ok_or_else(|| Error::<E::T>::InputForwarded)?;
+			let input = self.input_data.as_ref().ok_or(Error::<E::T>::InputForwarded)?;
 			charge_gas!(self, RuntimeCosts::CallInputCloned(input.len() as u32))?;
 			input.clone()
 		} else if flags.contains(CallFlags::FORWARD_INPUT) {
-			self.input_data.take().ok_or_else(|| Error::<E::T>::InputForwarded)?
+			self.input_data.take().ok_or(Error::<E::T>::InputForwarded)?
 		} else {
 			self.charge_gas(RuntimeCosts::CopyFromContract(input_data_len))?;
 			self.read_sandbox_memory(input_data_ptr, input_data_len)?
@@ -1108,7 +1108,7 @@ define_env!(Env, <E: Ext>,
 		output_len_ptr: u32
 	) -> ReturnCode => {
 		ctx.call(
-			CallFlags::from_bits(flags).ok_or_else(|| Error::<E::T>::InvalidCallFlags)?,
+			CallFlags::from_bits(flags).ok_or(Error::<E::T>::InvalidCallFlags)?,
 			CallType::Call{callee_ptr, value_ptr, gas},
 			input_data_ptr,
 			input_data_len,
@@ -1151,7 +1151,7 @@ define_env!(Env, <E: Ext>,
 		output_len_ptr: u32
 	) -> ReturnCode => {
 		ctx.call(
-			CallFlags::from_bits(flags).ok_or_else(|| Error::<E::T>::InvalidCallFlags)?,
+			CallFlags::from_bits(flags).ok_or(Error::<E::T>::InvalidCallFlags)?,
 			CallType::DelegateCall{code_hash_ptr},
 			input_data_ptr,
 			input_data_len,
@@ -1486,7 +1486,7 @@ define_env!(Env, <E: Ext>,
 		ctx.charge_gas(RuntimeCosts::GasLeft)?;
 		let gas_left = &ctx.ext.gas_meter().gas_left().encode();
 		Ok(ctx.write_sandbox_output(
-			out_ptr, out_len_ptr, &gas_left, false, already_charged,
+			out_ptr, out_len_ptr, gas_left, false, already_charged,
 		)?)
 	},
 
@@ -1535,7 +1535,7 @@ define_env!(Env, <E: Ext>,
 	[seal0] seal_random(ctx, subject_ptr: u32, subject_len: u32, out_ptr: u32, out_len_ptr: u32) => {
 		ctx.charge_gas(RuntimeCosts::Random)?;
 		if subject_len > ctx.ext.schedule().limits.subject_len {
-			Err(Error::<E::T>::RandomSubjectTooLong)?;
+			return Err(Error::<E::T>::RandomSubjectTooLong.into());
 		}
 		let subject_buf = ctx.read_sandbox_memory(subject_ptr, subject_len)?;
 		Ok(ctx.write_sandbox_output(
@@ -1567,7 +1567,7 @@ define_env!(Env, <E: Ext>,
 	[seal1] seal_random(ctx, subject_ptr: u32, subject_len: u32, out_ptr: u32, out_len_ptr: u32) => {
 		ctx.charge_gas(RuntimeCosts::Random)?;
 		if subject_len > ctx.ext.schedule().limits.subject_len {
-			Err(Error::<E::T>::RandomSubjectTooLong)?;
+			return Err(Error::<E::T>::RandomSubjectTooLong.into());
 		}
 		let subject_buf = ctx.read_sandbox_memory(subject_ptr, subject_len)?;
 		Ok(ctx.write_sandbox_output(
@@ -1685,13 +1685,13 @@ define_env!(Env, <E: Ext>,
 
 		let num_topic = topics_len
 			.checked_div(sp_std::mem::size_of::<TopicOf<E::T>>() as u32)
-			.ok_or_else(|| "Zero sized topics are not allowed")?;
+			.ok_or("Zero sized topics are not allowed")?;
 		ctx.charge_gas(RuntimeCosts::DepositEvent {
 			num_topic,
 			len: data_len,
 		})?;
 		if data_len > ctx.ext.max_value_size() {
-			Err(Error::<E::T>::ValueTooLarge)?;
+			return Err(Error::<E::T>::ValueTooLarge.into());
 		}
 
 		let mut topics: Vec::<TopicOf<<E as Ext>::T>> = match topics_len {
@@ -1701,14 +1701,14 @@ define_env!(Env, <E: Ext>,
 
 		// If there are more than `event_topics`, then trap.
 		if topics.len() > ctx.ext.schedule().limits.event_topics as usize {
-			Err(Error::<E::T>::TooManyTopics)?;
+			return Err(Error::<E::T>::TooManyTopics.into());
 		}
 
 		// Check for duplicate topics. If there are any, then trap.
 		// Complexity O(n * log(n)) and no additional allocations.
 		// This also sorts the topics.
 		if has_duplicates(&mut topics) {
-			Err(Error::<E::T>::DuplicateTopics)?;
+			return Err(Error::<E::T>::DuplicateTopics.into());
 		}
 
 		let event_data = ctx.read_sandbox_memory(data_ptr, data_len)?;
@@ -1888,7 +1888,7 @@ define_env!(Env, <E: Ext>,
 	) -> u32 => {
 		use crate::chain_extension::{ChainExtension, Environment, RetVal};
 		if !<E::T as Config>::ChainExtension::enabled() {
-			Err(Error::<E::T>::NoChainExtension)?;
+			return Err(Error::<E::T>::NoChainExtension.into());
 		}
 		let env = Environment::new(ctx, input_ptr, input_len, output_ptr, output_len_ptr);
 		match <E::T as Config>::ChainExtension::call(func_id, env)? {

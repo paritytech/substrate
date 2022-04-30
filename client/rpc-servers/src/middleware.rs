@@ -237,8 +237,5 @@ fn call_name<'a>(call: &'a jsonrpc_core::Call, known_methods: &HashSet<String>) 
 }
 
 fn is_success(output: &Option<jsonrpc_core::Output>) -> bool {
-	match output {
-		Some(jsonrpc_core::Output::Success(..)) => true,
-		_ => false,
-	}
+	matches!(output, Some(jsonrpc_core::Output::Success(..)))
 }

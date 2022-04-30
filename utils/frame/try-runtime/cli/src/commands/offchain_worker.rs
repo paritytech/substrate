@@ -68,12 +68,12 @@ impl OffchainWorkerCmd {
 		<Block::Hash as FromStr>::Err: Debug,
 	{
 		match (&self.header_at, &self.state) {
-			(Some(header_at), State::Snap { .. }) => hash_of::<Block>(&header_at),
+			(Some(header_at), State::Snap { .. }) => hash_of::<Block>(header_at),
 			(Some(header_at), State::Live { .. }) => {
 				log::error!(target: LOG_TARGET, "--header-at is provided while state type is live, this will most likely lead to a nonsensical result.");
-				hash_of::<Block>(&header_at)
+				hash_of::<Block>(header_at)
 			},
-			(None, State::Live { at: Some(at), .. }) => hash_of::<Block>(&at),
+			(None, State::Live { at: Some(at), .. }) => hash_of::<Block>(at),
 			_ => {
 				panic!("either `--header-at` must be provided, or state must be `live` with a proper `--at`");
 			},

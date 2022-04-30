@@ -74,7 +74,7 @@ pub use list::{notional_bag_for, Bag, List, ListError, Node};
 pub use pallet::*;
 pub use weights::WeightInfo;
 
-pub(crate) const LOG_TARGET: &'static str = "runtime::bags_list";
+pub(crate) const LOG_TARGET: &str = "runtime::bags_list";
 
 // syntactic sugar for logging.
 #[macro_export]
@@ -254,7 +254,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub fn do_rebag(account: &T::AccountId, new_weight: T::Score) -> Option<(T::Score, T::Score)> {
 		// if no voter at that node, don't do anything.
 		// the caller just wasted the fee to call this.
-		let maybe_movement = list::Node::<T, I>::get(&account)
+		let maybe_movement = list::Node::<T, I>::get(account)
 			.and_then(|node| List::update_position_for(node, new_weight));
 		if let Some((from, to)) = maybe_movement {
 			Self::deposit_event(Event::<T, I>::Rebagged { who: account.clone(), from, to });

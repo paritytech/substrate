@@ -138,7 +138,7 @@ where
 			Storage::<T>::write(&info.trie_id, &item.0, Some(item.1.clone()), None, false)
 				.map_err(|_| "Failed to write storage to restoration dest")?;
 		}
-		<ContractInfoOf<T>>::insert(&self.account_id, info.clone());
+		<ContractInfoOf<T>>::insert(&self.account_id, info);
 		Ok(())
 	}
 
@@ -253,7 +253,7 @@ benchmarks! {
 		)?;
 		let value = T::Currency::minimum_balance();
 		let origin = RawOrigin::Signed(instance.caller.clone());
-		let callee = instance.addr.clone();
+		let callee = instance.addr;
 	}: call(origin, callee, value, Weight::MAX, None, vec![])
 
 	// This constructs a contract that is maximal expensive to instrument.
@@ -1067,7 +1067,7 @@ benchmarks! {
 			)
 			.map_err(|_| "Failed to write to storage during setup.")?;
 		}
-		<ContractInfoOf<T>>::insert(&instance.account_id, info.clone());
+		<ContractInfoOf<T>>::insert(&instance.account_id, info);
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
@@ -1164,7 +1164,7 @@ benchmarks! {
 			)
 			.map_err(|_| "Failed to write to storage during setup.")?;
 		}
-		<ContractInfoOf<T>>::insert(&instance.account_id, info.clone());
+		<ContractInfoOf<T>>::insert(&instance.account_id, info);
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
@@ -1216,7 +1216,7 @@ benchmarks! {
 			)
 			.map_err(|_| "Failed to write to storage during setup.")?;
 		}
-		<ContractInfoOf<T>>::insert(&instance.account_id, info.clone());
+		<ContractInfoOf<T>>::insert(&instance.account_id, info);
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
@@ -1263,7 +1263,7 @@ benchmarks! {
 			)
 			.map_err(|_| "Failed to write to storage during setup.")?;
 		}
-		<ContractInfoOf<T>>::insert(&instance.account_id, info.clone());
+		<ContractInfoOf<T>>::insert(&instance.account_id, info);
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
@@ -1308,7 +1308,7 @@ benchmarks! {
 			)
 			.map_err(|_| "Failed to write to storage during setup.")?;
 		}
-		<ContractInfoOf<T>>::insert(&instance.account_id, info.clone());
+		<ContractInfoOf<T>>::insert(&instance.account_id, info);
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
@@ -1360,7 +1360,7 @@ benchmarks! {
 			)
 			.map_err(|_| "Failed to write to storage during setup.")?;
 		}
-		<ContractInfoOf<T>>::insert(&instance.account_id, info.clone());
+		<ContractInfoOf<T>>::insert(&instance.account_id, info);
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
@@ -1412,7 +1412,7 @@ benchmarks! {
 			)
 			.map_err(|_| "Failed to write to storage during setup.")?;
 		}
-		<ContractInfoOf<T>>::insert(&instance.account_id, info.clone());
+		<ContractInfoOf<T>>::insert(&instance.account_id, info);
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
@@ -1577,7 +1577,7 @@ benchmarks! {
 		});
 		let instance = Contract::<T>::new(code, vec![])?;
 		let callee = instance.addr.clone();
-		let origin = RawOrigin::Signed(instance.caller.clone());
+		let origin = RawOrigin::Signed(instance.caller);
 	}: call(origin, callee, 0u32.into(), Weight::MAX, None, vec![])
 
 	seal_call_per_transfer_clone_kb {
@@ -1739,7 +1739,7 @@ benchmarks! {
 			.collect::<Vec<_>>();
 
 		for addr in &addresses {
-			if let Some(_) = ContractInfoOf::<T>::get(&addr) {
+			if ContractInfoOf::<T>::get(&addr).is_some() {
 				return Err("Expected that contract does not exist at this point.".into());
 			}
 		}
@@ -1747,7 +1747,7 @@ benchmarks! {
 	verify {
 		for addr in &addresses {
 			ContractInfoOf::<T>::get(&addr)
-				.ok_or_else(|| "Contract should have been instantiated")?;
+				.ok_or("Contract should have been instantiated")?;
 		}
 	}
 
@@ -1755,7 +1755,7 @@ benchmarks! {
 		let t in 0 .. 1;
 		let s in 0 .. (code::max_pages::<T>() - 1) * 64;
 		let callee_code = WasmModule::<T>::dummy();
-		let hash = callee_code.hash.clone();
+		let hash = callee_code.hash;
 		let hash_bytes = callee_code.hash.encode();
 		let hash_len = hash_bytes.len();
 		Contracts::<T>::store_code_raw(callee_code.code, whitelisted_caller())?;

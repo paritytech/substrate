@@ -308,15 +308,15 @@ where
 				handle.clone(),
 				Some(key),
 				self.base_port,
-				&temp,
+				temp,
 			);
-			let addr = node_config.network.listen_addresses.iter().next().unwrap().clone();
+			let addr = node_config.network.listen_addresses.first().unwrap().clone();
 			let (service, user_data) =
 				authority(node_config).expect("Error creating test node service");
 
 			handle.spawn(service.clone().map_err(|_| ()));
-			let addr = addr
-				.with(multiaddr::Protocol::P2p(service.network().local_peer_id().clone().into()));
+			let addr =
+				addr.with(multiaddr::Protocol::P2p((*service.network().local_peer_id()).into()));
 			self.authority_nodes.push((self.nodes, service, user_data, addr));
 			self.nodes += 1;
 		}
@@ -329,14 +329,14 @@ where
 				handle.clone(),
 				None,
 				self.base_port,
-				&temp,
+				temp,
 			);
-			let addr = node_config.network.listen_addresses.iter().next().unwrap().clone();
+			let addr = node_config.network.listen_addresses.first().unwrap().clone();
 			let (service, user_data) = full(node_config).expect("Error creating test node service");
 
 			handle.spawn(service.clone().map_err(|_| ()));
-			let addr = addr
-				.with(multiaddr::Protocol::P2p(service.network().local_peer_id().clone().into()));
+			let addr =
+				addr.with(multiaddr::Protocol::P2p((*service.network().local_peer_id()).into()));
 			self.full_nodes.push((self.nodes, service, user_data, addr));
 			self.nodes += 1;
 		}
@@ -461,7 +461,7 @@ pub fn sync<G, E, Fb, F, B, ExF, U>(
 				info!("Generating #{}", i + 1);
 			}
 
-			make_block_and_import(&first_service, first_user_data);
+			make_block_and_import(first_service, first_user_data);
 		}
 		let info = network.full_nodes[0].1.client().info();
 		network.full_nodes[0]

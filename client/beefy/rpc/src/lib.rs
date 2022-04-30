@@ -192,7 +192,7 @@ where
 			.read()
 			.as_ref()
 			.cloned()
-			.ok_or(Error::EndpointNotReady.into());
+			.ok_or_else(|| Error::EndpointNotReady.into());
 		let future = async move { result }.boxed();
 		future.map_err(jsonrpc_core::Error::from).boxed()
 	}

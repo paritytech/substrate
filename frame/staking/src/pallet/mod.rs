@@ -580,7 +580,7 @@ pub mod pallet {
 					status
 				);
 				assert!(
-					T::Currency::free_balance(&stash) >= balance,
+					T::Currency::free_balance(stash) >= balance,
 					"Stash does not have enough balance to bond."
 				);
 				frame_support::assert_ok!(<Pallet<T>>::bond(
@@ -779,18 +779,18 @@ pub mod pallet {
 			let stash = ensure_signed(origin)?;
 
 			if <Bonded<T>>::contains_key(&stash) {
-				Err(Error::<T>::AlreadyBonded)?
+				return Err(Error::<T>::AlreadyBonded.into())
 			}
 
 			let controller = T::Lookup::lookup(controller)?;
 
 			if <Ledger<T>>::contains_key(&controller) {
-				Err(Error::<T>::AlreadyPaired)?
+				return Err(Error::<T>::AlreadyPaired.into())
 			}
 
 			// Reject a bond which is considered to be _dust_.
 			if value < T::Currency::minimum_balance() {
-				Err(Error::<T>::InsufficientBond)?
+				return Err(Error::<T>::InsufficientBond.into())
 			}
 
 			frame_system::Pallet::<T>::inc_consumers(&stash).map_err(|_| Error::<T>::BadState)?;
@@ -862,7 +862,7 @@ pub mod pallet {
 					debug_assert_eq!(T::VoterList::sanity_check(), Ok(()));
 				}
 
-				Self::deposit_event(Event::<T>::Bonded(stash.clone(), extra));
+				Self::deposit_event(Event::<T>::Bonded(stash, extra));
 			}
 			Ok(())
 		}
@@ -1183,7 +1183,7 @@ pub mod pallet {
 			let old_controller = Self::bonded(&stash).ok_or(Error::<T>::NotStash)?;
 			let controller = T::Lookup::lookup(controller)?;
 			if <Ledger<T>>::contains_key(&controller) {
-				Err(Error::<T>::AlreadyPaired)?
+				return Err(Error::<T>::AlreadyPaired.into())
 			}
 			if controller != old_controller {
 				<Bonded<T>>::insert(&stash, &controller);
@@ -1466,8 +1466,8 @@ pub mod pallet {
 			ensure_root(origin)?;
 			if let Some(current_era) = Self::current_era() {
 				HistoryDepth::<T>::mutate(|history_depth| {
-					let last_kept = current_era.checked_sub(*history_depth).unwrap_or(0);
-					let new_last_kept = current_era.checked_sub(new_history_depth).unwrap_or(0);
+					let last_kept = current_era.saturating_sub(*history_depth);
+					let new_last_kept = current_era.saturating_sub(new_history_depth);
 					for era_index in last_kept..new_last_kept {
 						Self::clear_era_information(era_index);
 					}
