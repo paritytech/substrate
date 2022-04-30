@@ -18,7 +18,7 @@
 //! Alliance pallet benchmarking.
 
 use sp_runtime::traits::{Bounded, Hash, StaticLookup};
-use sp_std::{mem::size_of, prelude::*};
+use sp_std::{convert::{TryFrom, TryInto}, mem::size_of, prelude::*};
 
 use frame_benchmarking::{account, benchmarks_instance_pallet};
 use frame_support::traits::{EnsureOrigin, Get, UnfilteredDispatchable};
