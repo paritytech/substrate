@@ -49,6 +49,7 @@ use sp_core::{
 	ecdsa, ed25519,
 	hash::{H256, H512},
 	sr25519,
+	traits::FromEntropy,
 };
 use sp_std::prelude::*;
 
@@ -169,7 +170,7 @@ impl From<Justification> for Justifications {
 	}
 }
 
-use traits::{Lazy, Verify};
+use traits::{Lazy, Verify, FromEntropy};
 
 use crate::traits::IdentifyAccount;
 #[cfg(feature = "std")]
@@ -300,6 +301,16 @@ pub enum MultiSigner {
 	Sr25519(sr25519::Public),
 	/// An SECP256k1/ECDSA identity (actually, the Blake2 hash of the compressed pub key).
 	Ecdsa(ecdsa::Public),
+}
+
+impl FromEntropy for MultiSigner {
+	fn from_entropy(input: &mut codec::Input) -> Result<Self, ()> {
+		Ok(match input.read_byte() % 3 {
+			0 => Self::Ed25519(FromEntropy::try_from_entropy(input)?),
+			1 => Self::Sr25519(FromEntropy::try_from_entropy(input)?),
+			2.. => Self::Ecdsa(FromEntropy::try_from_entropy(input)?),
+		})
+	}
 }
 
 /// NOTE: This implementations is required by `SimpleAddressDeterminer`,

@@ -278,3 +278,10 @@ impl SpawnEssentialNamed for Box<dyn SpawnEssentialNamed> {
 		(**self).spawn_essential(name, group, future)
 	}
 }
+
+/// Create random values of `Self` given a stream of entropy.
+pub trait FromEntropy {
+	/// Create a random value of `Self` given a stream of random bytes on `input`. May only fail if
+	/// `input` has an error.
+	fn from_entropy(input: &mut codec::Input) -> Result<Self, codec::Error>;
+}

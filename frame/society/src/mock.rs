@@ -109,7 +109,7 @@ impl Config for Test {
 	type RotationPeriod = ConstU64<4>;
 	type MaxLockDuration = ConstU64<100>;
 	type FounderSetOrigin = EnsureSignedBy<FounderSetAccount, u128>;
-	type SuspensionJudgementOrigin = EnsureSignedBy<SuspensionJudgementSetAccount, u128>;
+	type JudgementOrigin = EnsureSignedBy<SuspensionJudgementSetAccount, u128>;
 	type ChallengePeriod = ConstU64<8>;
 	type MaxCandidateIntake = ConstU32<10>;
 	type PalletId = SocietyPalletId;
