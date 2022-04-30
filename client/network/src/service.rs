@@ -49,25 +49,23 @@ use crate::{
 use codec::Encode as _;
 use futures::{channel::oneshot, prelude::*};
 use libp2p::{
-	core::{
-		connection::{ConnectionError, ConnectionLimits, PendingConnectionError},
-		either::EitherError,
-		upgrade, ConnectedPoint, Executor,
-	},
+	core::{either::EitherError, upgrade, ConnectedPoint, Executor},
 	multiaddr,
 	ping::Failure as PingFailure,
 	swarm::{
-		protocols_handler::NodeHandlerWrapperError, AddressScore, DialError, NetworkBehaviour,
-		SwarmBuilder, SwarmEvent,
+		AddressScore, ConnectionError, ConnectionLimits, DialError, NetworkBehaviour,
+		PendingConnectionError, Swarm, SwarmBuilder, SwarmEvent,
 	},
 	Multiaddr, PeerId,
 };
 use log::{debug, error, info, trace, warn};
 use metrics::{Histogram, HistogramVec, MetricSources, Metrics};
 use parking_lot::Mutex;
+use sc_client_api::{BlockBackend, ProofProvider};
 use sc_consensus::{BlockImportError, BlockImportStatus, ImportQueue, Link};
 use sc_peerset::PeersetHandle;
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
+use sp_blockchain::{HeaderBackend, HeaderMetadata};
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 use std::{
 	borrow::Cow,
@@ -102,7 +100,7 @@ pub use libp2p::{
 	},
 	kad::record::Key as KademliaKey,
 };
-pub use signature::*;
+pub use signature::Signature;
 
 /// Substrate network service. Handles network IO and manages connectivity.
 pub struct NetworkService<B: BlockT + 'static, H: ExHashT> {
@@ -134,13 +132,24 @@ pub struct NetworkService<B: BlockT + 'static, H: ExHashT> {
 	_marker: PhantomData<H>,
 }
 
-impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
+impl<B, H, Client> NetworkWorker<B, H, Client>
+where
+	B: BlockT + 'static,
+	H: ExHashT,
+	Client: HeaderBackend<B>
+		+ BlockBackend<B>
+		+ HeaderMetadata<B, Error = sp_blockchain::Error>
+		+ ProofProvider<B>
+		+ Send
+		+ Sync
+		+ 'static,
+{
 	/// Creates the network service.
 	///
 	/// Returns a `NetworkWorker` that implements `Future` and must be regularly polled in order
 	/// for the network processing to advance. From it, you can extract a `NetworkService` using
 	/// `worker.service()`. The `NetworkService` can be shared through the codebase.
-	pub fn new(mut params: Params<B, H>) -> Result<Self, Error> {
+	pub fn new(mut params: Params<B, H, Client>) -> Result<Self, Error> {
 		// Ensure the listen addresses are consistent with the transport.
 		ensure_addresses_consistent_with_transport(
 			params.network_config.listen_addresses.iter(),
@@ -251,7 +260,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 
 		// Build the swarm.
 		let client = params.chain.clone();
-		let (mut swarm, bandwidth): (Swarm<B>, _) = {
+		let (mut swarm, bandwidth): (Swarm<Behaviour<B, Client>>, _) = {
 			let user_agent = format!(
 				"{} ({})",
 				params.network_config.client_version, params.network_config.node_name
@@ -396,14 +405,18 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 
 		// Listen on multiaddresses.
 		for addr in &params.network_config.listen_addresses {
-			if let Err(err) = Swarm::<B>::listen_on(&mut swarm, addr.clone()) {
+			if let Err(err) = Swarm::<Behaviour<B, Client>>::listen_on(&mut swarm, addr.clone()) {
 				warn!(target: "sub-libp2p", "Can't listen on {} because: {:?}", addr, err)
 			}
 		}
 
 		// Add external addresses.
 		for addr in &params.network_config.public_addresses {
-			Swarm::<B>::add_external_address(&mut swarm, addr.clone(), AddressScore::Infinite);
+			Swarm::<Behaviour<B, Client>>::add_external_address(
+				&mut swarm,
+				addr.clone(),
+				AddressScore::Infinite,
+			);
 		}
 
 		let external_addresses = Arc::new(Mutex::new(Vec::new()));
@@ -544,14 +557,14 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 
 	/// Returns the local `PeerId`.
 	pub fn local_peer_id(&self) -> &PeerId {
-		Swarm::<B>::local_peer_id(&self.network_service)
+		Swarm::<Behaviour<B, Client>>::local_peer_id(&self.network_service)
 	}
 
 	/// Returns the list of addresses we are listening on.
 	///
 	/// Does **NOT** include a trailing `/p2p/` with our `PeerId`.
 	pub fn listen_addresses(&self) -> impl Iterator<Item = &Multiaddr> {
-		Swarm::<B>::listeners(&self.network_service)
+		Swarm::<Behaviour<B, Client>>::listeners(&self.network_service)
 	}
 
 	/// Get network state.
@@ -631,7 +644,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				.collect()
 		};
 
-		let peer_id = Swarm::<B>::local_peer_id(swarm).to_base58();
+		let peer_id = Swarm::<Behaviour<B, Client>>::local_peer_id(swarm).to_base58();
 		let listened_addresses = swarm.listeners().cloned().collect();
 		let external_addresses = swarm.external_addresses().map(|r| &r.addr).cloned().collect();
 
@@ -1447,7 +1460,18 @@ enum ServiceToWorkerMsg<B: BlockT, H: ExHashT> {
 ///
 /// You are encouraged to poll this in a separate background thread or task.
 #[must_use = "The NetworkWorker must be polled in order for the network to advance"]
-pub struct NetworkWorker<B: BlockT + 'static, H: ExHashT> {
+pub struct NetworkWorker<B, H, Client>
+where
+	B: BlockT + 'static,
+	H: ExHashT,
+	Client: HeaderBackend<B>
+		+ BlockBackend<B>
+		+ HeaderMetadata<B, Error = sp_blockchain::Error>
+		+ ProofProvider<B>
+		+ Send
+		+ Sync
+		+ 'static,
+{
 	/// Updated by the `NetworkWorker` and loaded by the `NetworkService`.
 	external_addresses: Arc<Mutex<Vec<Multiaddr>>>,
 	/// Updated by the `NetworkWorker` and loaded by the `NetworkService`.
@@ -1457,7 +1481,7 @@ pub struct NetworkWorker<B: BlockT + 'static, H: ExHashT> {
 	/// The network service that can be extracted and shared through the codebase.
 	service: Arc<NetworkService<B, H>>,
 	/// The *actual* network.
-	network_service: Swarm<B>,
+	network_service: Swarm<Behaviour<B, Client>>,
 	/// The import queue that was passed at initialization.
 	import_queue: Box<dyn ImportQueue<B>>,
 	/// Messages from the [`NetworkService`] that must be processed.
@@ -1475,7 +1499,18 @@ pub struct NetworkWorker<B: BlockT + 'static, H: ExHashT> {
 	tx_handler_controller: transactions::TransactionsHandlerController<H>,
 }
 
-impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
+impl<B, H, Client> Future for NetworkWorker<B, H, Client>
+where
+	B: BlockT + 'static,
+	H: ExHashT,
+	Client: HeaderBackend<B>
+		+ BlockBackend<B>
+		+ HeaderMetadata<B, Error = sp_blockchain::Error>
+		+ ProofProvider<B>
+		+ Send
+		+ Sync
+		+ 'static,
+{
 	type Output = ();
 
 	fn poll(mut self: Pin<&mut Self>, cx: &mut std::task::Context) -> Poll<Self::Output> {
@@ -1529,7 +1564,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 				ServiceToWorkerMsg::PropagateTransactions =>
 					this.tx_handler_controller.propagate_transactions(),
 				ServiceToWorkerMsg::GetValue(key) =>
-					this.network_service.behaviour_mut().get_value(&key),
+					this.network_service.behaviour_mut().get_value(key),
 				ServiceToWorkerMsg::PutValue(key, value) =>
 					this.network_service.behaviour_mut().put_value(key, value),
 				ServiceToWorkerMsg::SetReservedOnly(reserved_only) => this
@@ -1894,21 +1929,18 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 						};
 						let reason = match cause {
 							Some(ConnectionError::IO(_)) => "transport-error",
-							Some(ConnectionError::Handler(NodeHandlerWrapperError::Handler(
-								EitherError::A(EitherError::A(EitherError::A(EitherError::B(
-									EitherError::A(PingFailure::Timeout),
-								)))),
-							))) => "ping-timeout",
-							Some(ConnectionError::Handler(NodeHandlerWrapperError::Handler(
-								EitherError::A(EitherError::A(EitherError::A(EitherError::A(
+							Some(ConnectionError::Handler(EitherError::A(EitherError::A(
+								EitherError::A(EitherError::B(EitherError::A(
+									PingFailure::Timeout,
+								))),
+							)))) => "ping-timeout",
+							Some(ConnectionError::Handler(EitherError::A(EitherError::A(
+								EitherError::A(EitherError::A(
 									NotifsHandlerError::SyncNotificationsClogged,
-								)))),
-							))) => "sync-notifications-clogged",
-							Some(ConnectionError::Handler(NodeHandlerWrapperError::Handler(_))) =>
-								"protocol-error",
-							Some(ConnectionError::Handler(
-								NodeHandlerWrapperError::KeepAliveTimeout,
-							)) => "keep-alive-timeout",
+								)),
+							)))) => "sync-notifications-clogged",
+							Some(ConnectionError::Handler(_)) => "protocol-error",
+							Some(ConnectionError::KeepAliveTimeout) => "keep-alive-timeout",
 							None => "actively-closed",
 						};
 						metrics
@@ -1943,10 +1975,12 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 						);
 
 						if this.boot_node_ids.contains(&peer_id) {
-							if let DialError::InvalidPeerId = error {
+							if let DialError::WrongPeerId { obtained, endpoint } = &error {
 								error!(
-									"💔 The bootnode you want to connect provided a different peer ID than the one you expect: `{}`.",
+									"💔 The bootnode you want to connect provided a different peer ID than the one you expect: `{}` with `{}`:`{:?}`.",
 									peer_id,
+									obtained,
+									endpoint,
 								);
 							}
 						}
@@ -1955,13 +1989,14 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					if let Some(metrics) = this.metrics.as_ref() {
 						let reason = match error {
 							DialError::ConnectionLimit(_) => Some("limit-reached"),
-							DialError::InvalidPeerId => Some("invalid-peer-id"),
+							DialError::InvalidPeerId(_) => Some("invalid-peer-id"),
 							DialError::Transport(_) | DialError::ConnectionIo(_) =>
 								Some("transport-error"),
 							DialError::Banned |
 							DialError::LocalPeerId |
 							DialError::NoAddresses |
 							DialError::DialPeerConditionFalse(_) |
+							DialError::WrongPeerId { .. } |
 							DialError::Aborted => None, // ignore them
 						};
 						if let Some(reason) = reason {
@@ -1995,7 +2030,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					if let Some(metrics) = this.metrics.as_ref() {
 						let reason = match error {
 							PendingConnectionError::ConnectionLimit(_) => Some("limit-reached"),
-							PendingConnectionError::InvalidPeerId => Some("invalid-peer-id"),
+							PendingConnectionError::WrongPeerId { .. } => Some("invalid-peer-id"),
 							PendingConnectionError::Transport(_) |
 							PendingConnectionError::IO(_) => Some("transport-error"),
 							PendingConnectionError::Aborted => None, // ignore it
@@ -2056,10 +2091,11 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 		// Update the variables shared with the `NetworkService`.
 		this.num_connected.store(num_connected_peers, Ordering::Relaxed);
 		{
-			let external_addresses = Swarm::<B>::external_addresses(&this.network_service)
-				.map(|r| &r.addr)
-				.cloned()
-				.collect();
+			let external_addresses =
+				Swarm::<Behaviour<B, Client>>::external_addresses(&this.network_service)
+					.map(|r| &r.addr)
+					.cloned()
+					.collect();
 			*this.external_addresses.lock() = external_addresses;
 		}
 
@@ -2111,17 +2147,46 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 	}
 }
 
-impl<B: BlockT + 'static, H: ExHashT> Unpin for NetworkWorker<B, H> {}
-
-/// The libp2p swarm, customized for our needs.
-type Swarm<B> = libp2p::swarm::Swarm<Behaviour<B>>;
-
-// Implementation of `import_queue::Link` trait using the available local variables.
-struct NetworkLink<'a, B: BlockT> {
-	protocol: &'a mut Swarm<B>,
+impl<B, H, Client> Unpin for NetworkWorker<B, H, Client>
+where
+	B: BlockT + 'static,
+	H: ExHashT,
+	Client: HeaderBackend<B>
+		+ BlockBackend<B>
+		+ HeaderMetadata<B, Error = sp_blockchain::Error>
+		+ ProofProvider<B>
+		+ Send
+		+ Sync
+		+ 'static,
+{
 }
 
-impl<'a, B: BlockT> Link<B> for NetworkLink<'a, B> {
+// Implementation of `import_queue::Link` trait using the available local variables.
+struct NetworkLink<'a, B, Client>
+where
+	B: BlockT,
+	Client: HeaderBackend<B>
+		+ BlockBackend<B>
+		+ HeaderMetadata<B, Error = sp_blockchain::Error>
+		+ ProofProvider<B>
+		+ Send
+		+ Sync
+		+ 'static,
+{
+	protocol: &'a mut Swarm<Behaviour<B, Client>>,
+}
+
+impl<'a, B, Client> Link<B> for NetworkLink<'a, B, Client>
+where
+	B: BlockT,
+	Client: HeaderBackend<B>
+		+ BlockBackend<B>
+		+ HeaderMetadata<B, Error = sp_blockchain::Error>
+		+ ProofProvider<B>
+		+ Send
+		+ Sync
+		+ 'static,
+{
 	fn blocks_processed(
 		&mut self,
 		imported: usize,

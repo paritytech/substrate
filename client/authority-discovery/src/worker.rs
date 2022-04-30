@@ -37,7 +37,7 @@ use codec::Decode;
 use ip_network::IpNetwork;
 use libp2p::{
 	core::multiaddr,
-	multihash::{Hasher, Multihash},
+	multihash::{Multihash, MultihashDigest},
 };
 use log::{debug, error, log_enabled};
 use prometheus_endpoint::{register, Counter, CounterVec, Gauge, Opts, U64};
@@ -638,7 +638,7 @@ where
 }
 
 fn hash_authority_id(id: &[u8]) -> sc_network::KademliaKey {
-	sc_network::KademliaKey::new(&libp2p::multihash::Sha2_256::digest(id))
+	sc_network::KademliaKey::new(&libp2p::multihash::Code::Sha2_256.digest(id).digest())
 }
 
 // Makes sure all values are the same and returns it

@@ -39,8 +39,10 @@ use std::{collections::HashMap, io, net::SocketAddr, pin::Pin};
 use codec::{Decode, Encode};
 use futures::{Future, FutureExt, StreamExt};
 use log::{debug, error, warn};
+use sc_client_api::{BlockBackend, ProofProvider};
 use sc_network::PeerId;
 use sc_utils::mpsc::TracingUnboundedReceiver;
+use sp_blockchain::HeaderMetadata;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Header as HeaderT},
@@ -135,11 +137,18 @@ pub struct PartialComponents<Client, Backend, SelectChain, ImportQueue, Transact
 /// The `status_sink` contain a list of senders to send a periodic network status to.
 async fn build_network_future<
 	B: BlockT,
-	C: BlockchainEvents<B> + HeaderBackend<B>,
+	C: BlockchainEvents<B>
+		+ HeaderBackend<B>
+		+ BlockBackend<B>
+		+ HeaderMetadata<B, Error = sp_blockchain::Error>
+		+ ProofProvider<B>
+		+ Send
+		+ Sync
+		+ 'static,
 	H: sc_network::ExHashT,
 >(
 	role: Role,
-	mut network: sc_network::NetworkWorker<B, H>,
+	mut network: sc_network::NetworkWorker<B, H, C>,
 	client: Arc<C>,
 	mut rpc_rx: TracingUnboundedReceiver<sc_rpc::system::Request<B>>,
 	should_have_peers: bool,
@@ -461,7 +470,13 @@ where
 
 impl<B, H, C, Pool, E> sc_network::config::TransactionPool<H, B> for TransactionPoolAdapter<C, Pool>
 where
-	C: sc_network::config::Client<B> + Send + Sync,
+	C: HeaderBackend<B>
+		+ BlockBackend<B>
+		+ HeaderMetadata<B, Error = sp_blockchain::Error>
+		+ ProofProvider<B>
+		+ Send
+		+ Sync
+		+ 'static,
 	Pool: 'static + TransactionPool<Block = B, Hash = H, Error = E>,
 	B: BlockT,
 	H: std::hash::Hash + Eq + sp_runtime::traits::Member + sp_runtime::traits::MaybeSerialize,

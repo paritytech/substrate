@@ -980,7 +980,10 @@ mod benchmarks {
 mod mock {
 	use super::*;
 	use crate as pallet_state_trie_migration;
-	use frame_support::{parameter_types, traits::Hooks};
+	use frame_support::{
+		parameter_types,
+		traits::{ConstU32, ConstU64, Hooks},
+	};
 	use frame_system::{EnsureRoot, EnsureSigned};
 	use sp_core::{
 		storage::{ChildInfo, StateVersion},
@@ -1008,7 +1011,6 @@ mod mock {
 	);
 
 	parameter_types! {
-		pub const BlockHashCount: u32 = 250;
 		pub const SS58Prefix: u8 = 42;
 	}
 
@@ -1026,7 +1028,7 @@ mod mock {
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = sp_runtime::generic::Header<Self::BlockNumber, BlakeTwo256>;
 		type Event = Event;
-		type BlockHashCount = BlockHashCount;
+		type BlockHashCount = ConstU32<250>;
 		type DbWeight = ();
 		type Version = ();
 		type PalletInfo = PalletInfo;
@@ -1036,12 +1038,10 @@ mod mock {
 		type SystemWeightInfo = ();
 		type SS58Prefix = SS58Prefix;
 		type OnSetCode = ();
-		type MaxConsumers = frame_support::traits::ConstU32<16>;
+		type MaxConsumers = ConstU32<16>;
 	}
 
 	parameter_types! {
-		pub const ExistentialDeposit: u64 = 1;
-		pub const OffchainRepeat: u32 = 1;
 		pub const SignedDepositPerItem: u64 = 1;
 		pub const SignedDepositBase: u64 = 5;
 	}
@@ -1050,7 +1050,7 @@ mod mock {
 		type Balance = u64;
 		type Event = Event;
 		type DustRemoval = ();
-		type ExistentialDeposit = ExistentialDeposit;
+		type ExistentialDeposit = ConstU64<1>;
 		type AccountStore = System;
 		type MaxLocks = ();
 		type MaxReserves = ();

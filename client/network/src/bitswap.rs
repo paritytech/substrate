@@ -20,12 +20,9 @@
 //! Only supports bitswap 1.2.0.
 //! CID is expected to reference 256-bit Blake2b transaction hash.
 
-use crate::{
-	chain::Client,
-	schema::bitswap::{
-		message::{wantlist::WantType, Block as MessageBlock, BlockPresence, BlockPresenceType},
-		Message as BitswapMessage,
-	},
+use crate::schema::bitswap::{
+	message::{wantlist::WantType, Block as MessageBlock, BlockPresence, BlockPresenceType},
+	Message as BitswapMessage,
 };
 use cid::Version;
 use core::pin::Pin;
@@ -44,10 +41,12 @@ use libp2p::{
 };
 use log::{debug, error, trace};
 use prost::Message;
+use sc_client_api::BlockBackend;
 use sp_runtime::traits::Block as BlockT;
 use std::{
 	collections::VecDeque,
 	io,
+	marker::PhantomData,
 	sync::Arc,
 	task::{Context, Poll},
 };
@@ -181,33 +180,34 @@ impl Prefix {
 }
 
 /// Network behaviour that handles sending and receiving IPFS blocks.
-pub struct Bitswap<B> {
-	client: Arc<dyn Client<B>>,
+pub struct Bitswap<B, Client> {
+	client: Arc<Client>,
 	ready_blocks: VecDeque<(PeerId, BitswapMessage)>,
+	_block: PhantomData<B>,
 }
 
-impl<B: BlockT> Bitswap<B> {
+impl<B, Client> Bitswap<B, Client> {
 	/// Create a new instance of the bitswap protocol handler.
-	pub fn new(client: Arc<dyn Client<B>>) -> Self {
-		Self { client, ready_blocks: Default::default() }
+	pub fn new(client: Arc<Client>) -> Self {
+		Self { client, ready_blocks: Default::default(), _block: PhantomData::default() }
 	}
 }
 
-impl<B: BlockT> NetworkBehaviour for Bitswap<B> {
-	type ProtocolsHandler = OneShotHandler<BitswapConfig, BitswapMessage, HandlerEvent>;
+impl<B, Client> NetworkBehaviour for Bitswap<B, Client>
+where
+	B: BlockT,
+	Client: BlockBackend<B> + Send + Sync + 'static,
+{
+	type ConnectionHandler = OneShotHandler<BitswapConfig, BitswapMessage, HandlerEvent>;
 	type OutEvent = void::Void;
 
-	fn new_handler(&mut self) -> Self::ProtocolsHandler {
+	fn new_handler(&mut self) -> Self::ConnectionHandler {
 		Default::default()
 	}
 
 	fn addresses_of_peer(&mut self, _peer: &PeerId) -> Vec<Multiaddr> {
 		Vec::new()
 	}
-
-	fn inject_connected(&mut self, _peer: &PeerId) {}
-
-	fn inject_disconnected(&mut self, _peer: &PeerId) {}
 
 	fn inject_event(&mut self, peer: PeerId, _connection: ConnectionId, message: HandlerEvent) {
 		let request = match message {
@@ -300,7 +300,7 @@ impl<B: BlockT> NetworkBehaviour for Bitswap<B> {
 		&mut self,
 		_ctx: &mut Context,
 		_: &mut impl PollParameters,
-	) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ProtocolsHandler>> {
+	) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>> {
 		if let Some((peer_id, message)) = self.ready_blocks.pop_front() {
 			return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
 				peer_id,

@@ -26,8 +26,8 @@ use futures::prelude::*;
 use libp2p::{
 	core::{connection::ConnectionId, ConnectedPoint, Multiaddr, PeerId},
 	swarm::{
-		DialError, DialPeerCondition, IntoProtocolsHandler, NetworkBehaviour,
-		NetworkBehaviourAction, NotifyHandler, PollParameters,
+		DialError, IntoConnectionHandler, NetworkBehaviour, NetworkBehaviourAction, NotifyHandler,
+		PollParameters,
 	},
 };
 use log::{error, trace, warn};
@@ -617,10 +617,8 @@ impl Notifications {
 					set_id,
 				);
 				trace!(target: "sub-libp2p", "Libp2p <= Dial {}", entry.key().0);
-				// The `DialPeerCondition` ensures that dial attempts are de-duplicated
-				self.events.push_back(NetworkBehaviourAction::DialPeer {
-					peer_id: entry.key().0,
-					condition: DialPeerCondition::Disconnected,
+				self.events.push_back(NetworkBehaviourAction::Dial {
+					opts: entry.key().0.into(),
 					handler,
 				});
 				entry.insert(PeerState::Requested);
@@ -654,10 +652,8 @@ impl Notifications {
 					set_id,
 				);
 				trace!(target: "sub-libp2p", "Libp2p <= Dial {:?}", occ_entry.key());
-				// The `DialPeerCondition` ensures that dial attempts are de-duplicated
-				self.events.push_back(NetworkBehaviourAction::DialPeer {
-					peer_id: occ_entry.key().0,
-					condition: DialPeerCondition::Disconnected,
+				self.events.push_back(NetworkBehaviourAction::Dial {
+					opts: occ_entry.key().0.into(),
 					handler,
 				});
 				*occ_entry.into_mut() = PeerState::Requested;
@@ -1054,10 +1050,10 @@ impl Notifications {
 }
 
 impl NetworkBehaviour for Notifications {
-	type ProtocolsHandler = NotifsHandlerProto;
+	type ConnectionHandler = NotifsHandlerProto;
 	type OutEvent = NotificationsOut;
 
-	fn new_handler(&mut self) -> Self::ProtocolsHandler {
+	fn new_handler(&mut self) -> Self::ConnectionHandler {
 		NotifsHandlerProto::new(self.notif_protocols.clone())
 	}
 
@@ -1065,14 +1061,13 @@ impl NetworkBehaviour for Notifications {
 		Vec::new()
 	}
 
-	fn inject_connected(&mut self, _: &PeerId) {}
-
 	fn inject_connection_established(
 		&mut self,
 		peer_id: &PeerId,
 		conn: &ConnectionId,
 		endpoint: &ConnectedPoint,
 		_failed_addresses: Option<&Vec<Multiaddr>>,
+		_other_established: usize,
 	) {
 		for set_id in (0..self.notif_protocols.len()).map(sc_peerset::SetId::from) {
 			match self.peers.entry((*peer_id, set_id)).or_insert(PeerState::Poisoned) {
@@ -1131,7 +1126,8 @@ impl NetworkBehaviour for Notifications {
 		peer_id: &PeerId,
 		conn: &ConnectionId,
 		_endpoint: &ConnectedPoint,
-		_handler: <Self::ProtocolsHandler as IntoProtocolsHandler>::Handler,
+		_handler: <Self::ConnectionHandler as IntoConnectionHandler>::Handler,
+		_remaining_established: usize,
 	) {
 		for set_id in (0..self.notif_protocols.len()).map(sc_peerset::SetId::from) {
 			let mut entry = if let Entry::Occupied(entry) = self.peers.entry((*peer_id, set_id)) {
@@ -1389,12 +1385,10 @@ impl NetworkBehaviour for Notifications {
 		}
 	}
 
-	fn inject_disconnected(&mut self, _peer_id: &PeerId) {}
-
 	fn inject_dial_failure(
 		&mut self,
 		peer_id: Option<PeerId>,
-		_: Self::ProtocolsHandler,
+		_: Self::ConnectionHandler,
 		error: &DialError,
 	) {
 		if let DialError::Transport(errors) = error {
@@ -1980,7 +1974,7 @@ impl NetworkBehaviour for Notifications {
 		&mut self,
 		cx: &mut Context,
 		_params: &mut impl PollParameters,
-	) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ProtocolsHandler>> {
+	) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>> {
 		if let Some(event) = self.events.pop_front() {
 			return Poll::Ready(event)
 		}
@@ -2029,12 +2023,8 @@ impl NetworkBehaviour for Notifications {
 
 				PeerState::PendingRequest { timer, .. } if *timer == delay_id => {
 					trace!(target: "sub-libp2p", "Libp2p <= Dial {:?} now that ban has expired", peer_id);
-					// The `DialPeerCondition` ensures that dial attempts are de-duplicated
-					self.events.push_back(NetworkBehaviourAction::DialPeer {
-						peer_id,
-						condition: DialPeerCondition::Disconnected,
-						handler,
-					});
+					self.events
+						.push_back(NetworkBehaviourAction::Dial { opts: peer_id.into(), handler });
 					*peer_state = PeerState::Requested;
 				},
 

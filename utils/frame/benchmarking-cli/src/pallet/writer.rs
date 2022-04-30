@@ -311,7 +311,7 @@ pub fn write_results(
 			// Check if there might be multiple instances benchmarked.
 			if all_results.keys().any(|(p, i)| p == pallet && i != instance) {
 				// Create new file: "path/to/pallet_name_instance_name.rs".
-				file_path.push(pallet.clone() + "_" + &instance.to_snake_case());
+				file_path.push(pallet.clone() + "_" + instance.to_snake_case().as_str());
 			} else {
 				// Create new file: "path/to/pallet_name.rs".
 				file_path.push(pallet.clone());
