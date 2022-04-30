@@ -94,5 +94,6 @@ pub fn config_endowed(code: Option<&[u8]>, extra_endowed: Vec<AccountId>) -> Gen
 		transaction_payment: Default::default(),
 		alliance: Default::default(),
 		alliance_motion: Default::default(),
+		nomination_pools: Default::default(),
 	}
 }

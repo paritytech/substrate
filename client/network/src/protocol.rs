@@ -17,7 +17,6 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::{
-	chain::Client,
 	config::{self, ProtocolId, WarpSyncProvider},
 	error,
 	request_responses::RequestFailure,
@@ -36,8 +35,8 @@ use libp2p::{
 	},
 	request_response::OutboundFailure,
 	swarm::{
-		IntoProtocolsHandler, NetworkBehaviour, NetworkBehaviourAction, PollParameters,
-		ProtocolsHandler,
+		ConnectionHandler, IntoConnectionHandler, NetworkBehaviour, NetworkBehaviourAction,
+		PollParameters,
 	},
 	Multiaddr, PeerId,
 };
@@ -49,6 +48,7 @@ use message::{
 use notifications::{Notifications, NotificationsOut};
 use prometheus_endpoint::{register, Gauge, GaugeVec, Opts, PrometheusError, Registry, U64};
 use prost::Message as _;
+use sc_client_api::{BlockBackend, HeaderBackend, ProofProvider};
 use sc_consensus::import_queue::{BlockImportError, BlockImportStatus, IncomingBlock, Origin};
 use sp_arithmetic::traits::SaturatedConversion;
 use sp_consensus::{block_validation::BlockAnnounceValidator, BlockOrigin};
@@ -76,6 +76,7 @@ pub mod message;
 pub mod sync;
 
 pub use notifications::{NotificationsSink, NotifsHandlerError, Ready};
+use sp_blockchain::HeaderMetadata;
 
 /// Interval at which we perform time based maintenance
 const TICK_TIMEOUT: time::Duration = time::Duration::from_millis(1100);
@@ -158,7 +159,7 @@ impl Metrics {
 }
 
 // Lock must always be taken in order declared here.
-pub struct Protocol<B: BlockT> {
+pub struct Protocol<B: BlockT, Client> {
 	/// Interval at which we call `tick`.
 	tick_timeout: Pin<Box<dyn Stream<Item = ()> + Send>>,
 	/// Pending list of messages to return from `poll` as a priority.
@@ -167,10 +168,10 @@ pub struct Protocol<B: BlockT> {
 	genesis_hash: B::Hash,
 	/// State machine that handles the list of in-progress requests. Only full node peers are
 	/// registered.
-	sync: ChainSync<B>,
+	sync: ChainSync<B, Client>,
 	// All connected peers. Contains both full and light node peers.
 	peers: HashMap<PeerId, Peer<B>>,
-	chain: Arc<dyn Client<B>>,
+	chain: Arc<Client>,
 	/// List of nodes for which we perform additional logging because they are important for the
 	/// user.
 	important_peers: HashSet<PeerId>,
@@ -283,18 +284,28 @@ impl<B: BlockT> BlockAnnouncesHandshake<B> {
 	}
 }
 
-impl<B: BlockT> Protocol<B> {
+impl<B, Client> Protocol<B, Client>
+where
+	B: BlockT,
+	Client: HeaderBackend<B>
+		+ BlockBackend<B>
+		+ HeaderMetadata<B, Error = sp_blockchain::Error>
+		+ ProofProvider<B>
+		+ Send
+		+ Sync
+		+ 'static,
+{
 	/// Create a new instance.
 	pub fn new(
 		config: ProtocolConfig,
-		chain: Arc<dyn Client<B>>,
+		chain: Arc<Client>,
 		protocol_id: ProtocolId,
 		network_config: &config::NetworkConfiguration,
 		notifications_protocols_handshakes: Vec<Vec<u8>>,
 		block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>,
 		metrics_registry: Option<&Registry>,
 		warp_sync_provider: Option<Arc<dyn WarpSyncProvider<B>>>,
-	) -> error::Result<(Protocol<B>, sc_peerset::PeersetHandle, Vec<(PeerId, Multiaddr)>)> {
+	) -> error::Result<(Protocol<B, Client>, sc_peerset::PeersetHandle, Vec<(PeerId, Multiaddr)>)> {
 		let info = chain.info();
 		let sync = ChainSync::new(
 			config.sync_mode(),
@@ -1366,11 +1377,21 @@ pub enum CustomMessageOutcome<B: BlockT> {
 	None,
 }
 
-impl<B: BlockT> NetworkBehaviour for Protocol<B> {
-	type ProtocolsHandler = <Notifications as NetworkBehaviour>::ProtocolsHandler;
+impl<B, Client> NetworkBehaviour for Protocol<B, Client>
+where
+	B: BlockT,
+	Client: HeaderBackend<B>
+		+ BlockBackend<B>
+		+ HeaderMetadata<B, Error = sp_blockchain::Error>
+		+ ProofProvider<B>
+		+ Send
+		+ Sync
+		+ 'static,
+{
+	type ConnectionHandler = <Notifications as NetworkBehaviour>::ConnectionHandler;
 	type OutEvent = CustomMessageOutcome<B>;
 
-	fn new_handler(&mut self) -> Self::ProtocolsHandler {
+	fn new_handler(&mut self) -> Self::ConnectionHandler {
 		self.behaviour.new_handler()
 	}
 
@@ -1384,9 +1405,15 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 		conn: &ConnectionId,
 		endpoint: &ConnectedPoint,
 		failed_addresses: Option<&Vec<Multiaddr>>,
+		other_established: usize,
 	) {
-		self.behaviour
-			.inject_connection_established(peer_id, conn, endpoint, failed_addresses)
+		self.behaviour.inject_connection_established(
+			peer_id,
+			conn,
+			endpoint,
+			failed_addresses,
+			other_established,
+		)
 	}
 
 	fn inject_connection_closed(
@@ -1394,24 +1421,23 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 		peer_id: &PeerId,
 		conn: &ConnectionId,
 		endpoint: &ConnectedPoint,
-		handler: <Self::ProtocolsHandler as IntoProtocolsHandler>::Handler,
+		handler: <Self::ConnectionHandler as IntoConnectionHandler>::Handler,
+		remaining_established: usize,
 	) {
-		self.behaviour.inject_connection_closed(peer_id, conn, endpoint, handler)
-	}
-
-	fn inject_connected(&mut self, peer_id: &PeerId) {
-		self.behaviour.inject_connected(peer_id)
-	}
-
-	fn inject_disconnected(&mut self, peer_id: &PeerId) {
-		self.behaviour.inject_disconnected(peer_id)
+		self.behaviour.inject_connection_closed(
+			peer_id,
+			conn,
+			endpoint,
+			handler,
+			remaining_established,
+		)
 	}
 
 	fn inject_event(
 		&mut self,
 		peer_id: PeerId,
 		connection: ConnectionId,
-		event: <<Self::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::OutEvent,
+		event: <<Self::ConnectionHandler as IntoConnectionHandler>::Handler as ConnectionHandler>::OutEvent,
 	) {
 		self.behaviour.inject_event(peer_id, connection, event)
 	}
@@ -1420,7 +1446,7 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 		&mut self,
 		cx: &mut std::task::Context,
 		params: &mut impl PollParameters,
-	) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ProtocolsHandler>> {
+	) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>> {
 		if let Some(message) = self.pending_messages.pop_front() {
 			return Poll::Ready(NetworkBehaviourAction::GenerateEvent(message))
 		}
@@ -1581,10 +1607,8 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 		let event = match self.behaviour.poll(cx, params) {
 			Poll::Pending => return Poll::Pending,
 			Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev)) => ev,
-			Poll::Ready(NetworkBehaviourAction::DialAddress { address, handler }) =>
-				return Poll::Ready(NetworkBehaviourAction::DialAddress { address, handler }),
-			Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id, condition, handler }) =>
-				return Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id, condition, handler }),
+			Poll::Ready(NetworkBehaviourAction::Dial { opts, handler }) =>
+				return Poll::Ready(NetworkBehaviourAction::Dial { opts, handler }),
 			Poll::Ready(NetworkBehaviourAction::NotifyHandler { peer_id, handler, event }) =>
 				return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
 					peer_id,
@@ -1800,7 +1824,7 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 	fn inject_dial_failure(
 		&mut self,
 		peer_id: Option<PeerId>,
-		handler: Self::ProtocolsHandler,
+		handler: Self::ConnectionHandler,
 		error: &libp2p::swarm::DialError,
 	) {
 		self.behaviour.inject_dial_failure(peer_id, handler, error);

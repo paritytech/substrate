@@ -26,9 +26,10 @@ use parking_lot::Mutex;
 use sc_client_api::{Backend, FinalityNotification, FinalityNotifications};
 use sc_network_gossip::GossipEngine;
 
-use sp_api::BlockId;
+use sp_api::{BlockId, ProvideRuntimeApi};
 use sp_arithmetic::traits::AtLeast32Bit;
 use sp_consensus::SyncOracle;
+use sp_mmr_primitives::MmrApi;
 use sp_runtime::{
 	generic::OpaqueDigestItemId,
 	traits::{Block, Header, NumberFor},
@@ -52,12 +53,10 @@ use crate::{
 	Client,
 };
 
-pub(crate) struct WorkerParams<B, BE, C, SO>
-where
-	B: Block,
-{
+pub(crate) struct WorkerParams<B: Block, BE, C, R, SO> {
 	pub client: Arc<C>,
 	pub backend: Arc<BE>,
+	pub runtime: Arc<R>,
 	pub key_store: BeefyKeystore,
 	pub signed_commitment_sender: BeefySignedCommitmentSender<B>,
 	pub beefy_best_block_sender: BeefyBestBlockSender<B>,
@@ -69,15 +68,10 @@ where
 }
 
 /// A BEEFY worker plays the BEEFY protocol
-pub(crate) struct BeefyWorker<B, C, BE, SO>
-where
-	B: Block,
-	BE: Backend<B>,
-	C: Client<B, BE>,
-	SO: SyncOracle + Send + Sync + Clone + 'static,
-{
+pub(crate) struct BeefyWorker<B: Block, BE, C, R, SO> {
 	client: Arc<C>,
 	backend: Arc<BE>,
+	runtime: Arc<R>,
 	key_store: BeefyKeystore,
 	signed_commitment_sender: BeefySignedCommitmentSender<B>,
 	gossip_engine: Arc<Mutex<GossipEngine<B>>>,
@@ -99,17 +93,15 @@ where
 	sync_oracle: SO,
 	// keep rustc happy
 	_backend: PhantomData<BE>,
-	#[cfg(test)]
-	// behavior modifiers used in tests
-	test_res: tests::TestModifiers,
 }
 
-impl<B, C, BE, SO> BeefyWorker<B, C, BE, SO>
+impl<B, BE, C, R, SO> BeefyWorker<B, BE, C, R, SO>
 where
 	B: Block + Codec,
 	BE: Backend<B>,
 	C: Client<B, BE>,
-	C::Api: BeefyApi<B>,
+	R: ProvideRuntimeApi<B>,
+	R::Api: BeefyApi<B> + MmrApi<B, MmrRootHash>,
 	SO: SyncOracle + Send + Sync + Clone + 'static,
 {
 	/// Return a new BEEFY worker instance.
@@ -118,15 +110,11 @@ where
 	/// BEEFY pallet has been deployed on-chain.
 	///
 	/// The BEEFY pallet is needed in order to keep track of the BEEFY authority set.
-	pub(crate) fn new(
-		worker_params: WorkerParams<B, BE, C, SO>,
-		#[cfg(test)]
-		// behavior modifiers used in tests
-		test_res: tests::TestModifiers,
-	) -> Self {
+	pub(crate) fn new(worker_params: WorkerParams<B, BE, C, R, SO>) -> Self {
 		let WorkerParams {
 			client,
 			backend,
+			runtime,
 			key_store,
 			signed_commitment_sender,
 			beefy_best_block_sender,
@@ -144,6 +132,7 @@ where
 		BeefyWorker {
 			client: client.clone(),
 			backend,
+			runtime,
 			key_store,
 			signed_commitment_sender,
 			gossip_engine: Arc::new(Mutex::new(gossip_engine)),
@@ -159,20 +148,9 @@ where
 			beefy_best_block_sender,
 			sync_oracle,
 			_backend: PhantomData,
-			#[cfg(test)]
-			test_res,
 		}
 	}
-}
 
-impl<B, C, BE, SO> BeefyWorker<B, C, BE, SO>
-where
-	B: Block,
-	BE: Backend<B>,
-	C: Client<B, BE>,
-	C::Api: BeefyApi<B>,
-	SO: SyncOracle + Send + Sync + Clone + 'static,
-{
 	/// Return `Some(number)` if we should be voting on block `number` now,
 	/// return `None` if there is no block we should vote on now.
 	fn current_vote_target(&self) -> Option<NumberFor<B>> {
@@ -264,7 +242,10 @@ where
 		debug!(target: "beefy", "🥩 New active validator set: {:?}", active);
 		metric_set!(self, beefy_validator_set_id, active.id());
 		// BEEFY should produce a signed commitment for each session
-		if active.id() != self.last_signed_id + 1 && active.id() != GENESIS_AUTHORITY_SET_ID {
+		if active.id() != self.last_signed_id + 1 &&
+			active.id() != GENESIS_AUTHORITY_SET_ID &&
+			self.last_signed_id != 0
+		{
 			metric_inc!(self, beefy_skipped_sessions);
 		}
 
@@ -285,7 +266,7 @@ where
 	}
 
 	fn handle_finality_notification(&mut self, notification: &FinalityNotification<B>) {
-		trace!(target: "beefy", "🥩 Finality notification: {:?}", notification);
+		debug!(target: "beefy", "🥩 Finality notification: {:?}", notification);
 		let number = *notification.header.number();
 
 		// On start-up ignore old finality notifications that we're not interested in.
@@ -354,7 +335,7 @@ where
 						VersionedFinalityProof::V1(signed_commitment.clone()).encode(),
 					),
 				) {
-					trace!(target: "beefy", "🥩 Error {:?} on appending justification: {:?}", e, signed_commitment);
+					debug!(target: "beefy", "🥩 Error {:?} on appending justification: {:?}", e, signed_commitment);
 				}
 				self.signed_commitment_sender
 					.notify(|| Ok::<_, ()>(signed_commitment))
@@ -374,7 +355,7 @@ where
 	///
 	/// Also handle this self vote by calling `self.handle_vote()` for it.
 	fn do_vote(&mut self, target_number: NumberFor<B>) {
-		trace!(target: "beefy", "🥩 Try voting on {}", target_number);
+		debug!(target: "beefy", "🥩 Try voting on {}", target_number);
 
 		// Most of the time we get here, `target` is actually `best_grandpa`,
 		// avoid asking `client` for header in that case.
@@ -396,7 +377,7 @@ where
 		};
 		let target_hash = target_header.hash();
 
-		let mmr_root = if let Some(hash) = self.extract_mmr_root_digest(&target_header) {
+		let mmr_root = if let Some(hash) = self.get_mmr_root_digest(&target_header) {
 			hash
 		} else {
 			warn!(target: "beefy", "🥩 No MMR root digest found for: {:?}", target_hash);
@@ -458,13 +439,12 @@ where
 	}
 
 	/// Wait for BEEFY runtime pallet to be available.
-	#[cfg(not(test))]
 	async fn wait_for_runtime_pallet(&mut self) {
 		self.client
 			.finality_notification_stream()
 			.take_while(|notif| {
 				let at = BlockId::hash(notif.header.hash());
-				if let Some(active) = self.client.runtime_api().validator_set(&at).ok().flatten() {
+				if let Some(active) = self.runtime.runtime_api().validator_set(&at).ok().flatten() {
 					if active.id() == GENESIS_AUTHORITY_SET_ID {
 						// When starting from genesis, there is no session boundary digest.
 						// Just initialize `rounds` to Block #1 as BEEFY mandatory block.
@@ -478,7 +458,7 @@ where
 					future::ready(false)
 				} else {
 					trace!(target: "beefy", "🥩 Finality notification: {:?}", notif);
-					trace!(target: "beefy", "🥩 Waiting for BEEFY pallet to become available...");
+					debug!(target: "beefy", "🥩 Waiting for BEEFY pallet to become available...");
 					future::ready(true)
 				}
 			})
@@ -486,13 +466,6 @@ where
 			.await;
 		// get a new stream that provides _new_ notifications (from here on out)
 		self.finality_notifications = self.client.finality_notification_stream();
-	}
-
-	/// For tests don't use runtime pallet. Start rounds from block #1.
-	#[cfg(test)]
-	async fn wait_for_runtime_pallet(&mut self) {
-		let active = self.test_res.active_validators.clone();
-		self.init_session_at(active, 1u32.into());
 	}
 
 	/// Main loop for BEEFY worker.
@@ -505,7 +478,7 @@ where
 
 		let mut votes = Box::pin(self.gossip_engine.lock().messages_for(topic::<B>()).filter_map(
 			|notification| async move {
-				debug!(target: "beefy", "🥩 Got vote message: {:?}", notification);
+				trace!(target: "beefy", "🥩 Got vote message: {:?}", notification);
 
 				VoteMessage::<NumberFor<B>, AuthorityId, Signature>::decode(
 					&mut &notification.message[..],
@@ -550,20 +523,15 @@ where
 		}
 	}
 
-	/// Simple wrapper over mmr root extraction.
-	#[cfg(not(test))]
-	fn extract_mmr_root_digest(&self, header: &B::Header) -> Option<MmrRootHash> {
-		find_mmr_root_digest::<B>(header)
-	}
-
-	/// For tests, have the option to modify mmr root.
-	#[cfg(test)]
-	fn extract_mmr_root_digest(&self, header: &B::Header) -> Option<MmrRootHash> {
-		let mut mmr_root = find_mmr_root_digest::<B>(header);
-		if self.test_res.corrupt_mmr_roots {
-			mmr_root.as_mut().map(|hash| *hash ^= MmrRootHash::random());
-		}
-		mmr_root
+	/// Simple wrapper that gets MMR root from header digests or from client state.
+	fn get_mmr_root_digest(&self, header: &B::Header) -> Option<MmrRootHash> {
+		find_mmr_root_digest::<B>(header).or_else(|| {
+			self.runtime
+				.runtime_api()
+				.mmr_root(&BlockId::hash(header.hash()))
+				.ok()
+				.and_then(|r| r.ok())
+		})
 	}
 }
 
@@ -612,7 +580,7 @@ where
 	// we vote on it
 	let target = match best_beefy {
 		None => {
-			trace!(
+			debug!(
 				target: "beefy",
 				"🥩 vote target - mandatory block: #{:?}",
 				session_start,
@@ -620,7 +588,7 @@ where
 			session_start
 		},
 		Some(bbb) if bbb < session_start => {
-			trace!(
+			debug!(
 				target: "beefy",
 				"🥩 vote target - mandatory block: #{:?}",
 				session_start,
@@ -632,7 +600,7 @@ where
 			let diff = diff.saturated_into::<u32>() / 2;
 			let target = bbb + min_delta.max(diff.next_power_of_two()).into();
 
-			trace!(
+			debug!(
 				target: "beefy",
 				"🥩 vote target - diff: {:?}, next_power_of_two: {:?}, target block: #{:?}",
 				diff,
@@ -658,11 +626,16 @@ pub(crate) mod tests {
 	use super::*;
 	use crate::{
 		keystore::tests::Keyring,
-		tests::{create_beefy_worker, get_beefy_streams, make_beefy_ids, BeefyTestNet},
+		notification::{BeefyBestBlockStream, BeefySignedCommitmentStream},
+		tests::{
+			create_beefy_keystore, get_beefy_streams, make_beefy_ids, two_validators::TestApi,
+			BeefyPeer, BeefyTestNet, BEEFY_PROTOCOL_NAME,
+		},
 	};
 
 	use futures::{executor::block_on, future::poll_fn, task::Poll};
 
+	use crate::tests::BeefyLinkHalf;
 	use sc_client_api::HeaderBackend;
 	use sc_network::NetworkService;
 	use sc_network_test::{PeersFullClient, TestNetFactory};
@@ -672,10 +645,40 @@ pub(crate) mod tests {
 		Backend,
 	};
 
-	#[derive(Clone)]
-	pub struct TestModifiers {
-		pub active_validators: ValidatorSet<AuthorityId>,
-		pub corrupt_mmr_roots: bool,
+	fn create_beefy_worker(
+		peer: &BeefyPeer,
+		key: &Keyring,
+		min_block_delta: u32,
+	) -> BeefyWorker<Block, Backend, PeersFullClient, TestApi, Arc<NetworkService<Block, H256>>> {
+		let keystore = create_beefy_keystore(*key);
+
+		let (signed_commitment_sender, signed_commitment_stream) =
+			BeefySignedCommitmentStream::<Block>::channel();
+		let (beefy_best_block_sender, beefy_best_block_stream) =
+			BeefyBestBlockStream::<Block>::channel();
+		let beefy_link_half = BeefyLinkHalf { signed_commitment_stream, beefy_best_block_stream };
+		*peer.data.beefy_link_half.lock() = Some(beefy_link_half);
+
+		let api = Arc::new(TestApi {});
+		let network = peer.network_service().clone();
+		let sync_oracle = network.clone();
+		let gossip_validator = Arc::new(crate::gossip::GossipValidator::new());
+		let gossip_engine =
+			GossipEngine::new(network, BEEFY_PROTOCOL_NAME, gossip_validator.clone(), None);
+		let worker_params = crate::worker::WorkerParams {
+			client: peer.client().as_client(),
+			backend: peer.client().as_backend(),
+			runtime: api,
+			key_store: Some(keystore).into(),
+			signed_commitment_sender,
+			beefy_best_block_sender,
+			gossip_engine,
+			gossip_validator,
+			min_block_delta,
+			metrics: None,
+			sync_oracle,
+		};
+		BeefyWorker::<_, _, _, _, _>::new(worker_params)
 	}
 
 	#[test]
@@ -825,7 +828,6 @@ pub(crate) mod tests {
 		let keys = &[Keyring::Alice];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
 		let mut net = BeefyTestNet::new(1, 0);
-		net.peer(0).data.use_validator_set(&validator_set);
 		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1);
 
 		// rounds not initialized -> should vote: `None`
@@ -833,8 +835,9 @@ pub(crate) mod tests {
 
 		let set_up = |worker: &mut BeefyWorker<
 			Block,
-			PeersFullClient,
 			Backend,
+			PeersFullClient,
+			TestApi,
 			Arc<NetworkService<Block, H256>>,
 		>,
 		              best_grandpa: u64,
@@ -889,7 +892,6 @@ pub(crate) mod tests {
 		let keys = &[Keyring::Alice];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
 		let mut net = BeefyTestNet::new(1, 0);
-		net.peer(0).data.use_validator_set(&validator_set);
 		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1);
 
 		// keystore doesn't contain other keys than validators'
@@ -913,7 +915,6 @@ pub(crate) mod tests {
 		let keys = &[Keyring::Alice];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
 		let mut net = BeefyTestNet::new(1, 0);
-		net.peer(0).data.use_validator_set(&validator_set);
 		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1);
 
 		let (mut best_block_streams, _) = get_beefy_streams(&mut net, keys);
@@ -939,7 +940,7 @@ pub(crate) mod tests {
 		// generate 2 blocks, try again expect success
 		let (mut best_block_streams, _) = get_beefy_streams(&mut net, keys);
 		let mut best_block_stream = best_block_streams.drain(..).next().unwrap();
-		net.generate_blocks(2, 10, &validator_set);
+		net.generate_blocks(2, 10, &validator_set, false);
 
 		worker.set_best_beefy_block(2);
 		assert_eq!(worker.best_beefy_block, Some(2));
@@ -961,7 +962,6 @@ pub(crate) mod tests {
 		let keys = &[Keyring::Alice];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
 		let mut net = BeefyTestNet::new(1, 0);
-		net.peer(0).data.use_validator_set(&validator_set);
 		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1);
 
 		assert!(worker.rounds.is_none());

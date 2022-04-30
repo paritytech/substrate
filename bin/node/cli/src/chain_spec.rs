@@ -365,6 +365,7 @@ pub fn testnet_genesis(
 		transaction_payment: Default::default(),
 		alliance: Default::default(),
 		alliance_motion: Default::default(),
+		nomination_pools: Default::default(),
 	}
 }
 
