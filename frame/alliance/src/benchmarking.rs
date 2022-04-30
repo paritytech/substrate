@@ -18,7 +18,11 @@
 //! Alliance pallet benchmarking.
 
 use sp_runtime::traits::{Bounded, Hash, StaticLookup};
-use sp_std::{convert::{TryFrom, TryInto}, mem::size_of, prelude::*};
+use sp_std::{
+	convert::{TryFrom, TryInto},
+	mem::size_of,
+	prelude::*
+};
 
 use frame_benchmarking::{account, benchmarks_instance_pallet};
 use frame_support::traits::{EnsureOrigin, Get, UnfilteredDispatchable};
@@ -638,8 +642,9 @@ benchmarks_instance_pallet! {
 		assert_eq!(DepositOf::<T, I>::get(&outsider), None);
 	}: _(SystemOrigin::Signed(outsider.clone()))
 	verify {
-		assert!(!Alliance::<T, I>::is_member(&outsider));
-		assert_eq!(DepositOf::<T, I>::get(&outsider), Some(T::AllyDeposit::get()));
+		assert!(Alliance::<T, I>::is_member_of(&outsider, MemberRole::Ally)); // outsider is now an ally
+		assert_eq!(DepositOf::<T, I>::get(&outsider), Some(T::AllyDeposit::get())); // with a deposit
+		assert!(!Alliance::<T, I>::has_voting_rights(&outsider)); // allies don't have voting rights
 		assert_last_event::<T, I>(Event::NewAllyJoined {
 			ally: outsider,
 			nominator: None,
@@ -660,8 +665,9 @@ benchmarks_instance_pallet! {
 		let outsider_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(outsider.clone());
 	}: _(SystemOrigin::Signed(founder1.clone()), outsider_lookup)
 	verify {
-		assert!(!Alliance::<T, I>::is_member(&outsider));
-		assert_eq!(DepositOf::<T, I>::get(&outsider), None);
+		assert!(Alliance::<T, I>::is_member_of(&outsider, MemberRole::Ally)); // outsider is now an ally
+		assert_eq!(DepositOf::<T, I>::get(&outsider), None); // without a deposit
+		assert!(!Alliance::<T, I>::has_voting_rights(&outsider)); // allies don't have voting rights
 		assert_last_event::<T, I>(Event::NewAllyJoined {
 			ally: outsider,
 			nominator: Some(founder1),
