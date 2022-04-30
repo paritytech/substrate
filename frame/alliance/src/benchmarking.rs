@@ -68,10 +68,6 @@ fn ally<T: Config<I>, I: 'static>(index: u32) -> T::AccountId {
 	funded_account::<T, I>("ally", index)
 }
 
-fn candidate<T: Config<I>, I: 'static>(index: u32) -> T::AccountId {
-	funded_account::<T, I>("candidate", index)
-}
-
 fn outsider<T: Config<I>, I: 'static>(index: u32) -> T::AccountId {
 	funded_account::<T, I>("outsider", index)
 }
@@ -88,30 +84,20 @@ fn set_members<T: Config<I>, I: 'static>() {
 	let fellows: BoundedVec<_, T::MaxMembersCount> =
 		BoundedVec::try_from(vec![fellow::<T, I>(1), fellow::<T, I>(2)]).unwrap();
 	fellows.iter().for_each(|who| {
-		T::Currency::reserve(&who, T::CandidateDeposit::get()).unwrap();
-		<DepositOf<T, I>>::insert(&who, T::CandidateDeposit::get());
+		T::Currency::reserve(&who, T::AllyDeposit::get()).unwrap();
+		<DepositOf<T, I>>::insert(&who, T::AllyDeposit::get());
 	});
 	Members::<T, I>::insert(MemberRole::Fellow, fellows.clone());
 
 	let allies: BoundedVec<_, T::MaxMembersCount> =
 		BoundedVec::try_from(vec![ally::<T, I>(1)]).unwrap();
 	allies.iter().for_each(|who| {
-		T::Currency::reserve(&who, T::CandidateDeposit::get()).unwrap();
-		<DepositOf<T, I>>::insert(&who, T::CandidateDeposit::get());
+		T::Currency::reserve(&who, T::AllyDeposit::get()).unwrap();
+		<DepositOf<T, I>>::insert(&who, T::AllyDeposit::get());
 	});
 	Members::<T, I>::insert(MemberRole::Ally, allies);
 
 	T::InitializeMembers::initialize_members(&[founders.as_slice(), fellows.as_slice()].concat());
-}
-
-fn set_candidates<T: Config<I>, I: 'static>(indexes: Vec<u32>) {
-	let candidates = indexes.into_iter().map(|i| candidate::<T, I>(i)).collect::<Vec<_>>();
-	candidates.iter().for_each(|who| {
-		T::Currency::reserve(&who, T::CandidateDeposit::get()).unwrap();
-		<DepositOf<T, I>>::insert(&who, T::CandidateDeposit::get());
-	});
-	let candidates: BoundedVec<_, T::MaxCandidatesCount> = candidates.try_into().unwrap();
-	Candidates::<T, I>::put(candidates);
 }
 
 benchmarks_instance_pallet! {
@@ -649,17 +635,15 @@ benchmarks_instance_pallet! {
 
 		let outsider = outsider::<T, I>(1);
 		assert!(!Alliance::<T, I>::is_member(&outsider));
-		assert!(!Alliance::<T, I>::is_candidate(&outsider));
 		assert_eq!(DepositOf::<T, I>::get(&outsider), None);
 	}: _(SystemOrigin::Signed(outsider.clone()))
 	verify {
 		assert!(!Alliance::<T, I>::is_member(&outsider));
-		assert!(Alliance::<T, I>::is_candidate(&outsider));
-		assert_eq!(DepositOf::<T, I>::get(&outsider), Some(T::CandidateDeposit::get()));
-		assert_last_event::<T, I>(Event::CandidateAdded {
-			candidate: outsider,
+		assert_eq!(DepositOf::<T, I>::get(&outsider), Some(T::AllyDeposit::get()));
+		assert_last_event::<T, I>(Event::NewAllyJoined {
+			ally: outsider,
 			nominator: None,
-			reserved: Some(T::CandidateDeposit::get())
+			reserved: Some(T::AllyDeposit::get())
 		}.into());
 	}
 
@@ -671,60 +655,18 @@ benchmarks_instance_pallet! {
 
 		let outsider = outsider::<T, I>(1);
 		assert!(!Alliance::<T, I>::is_member(&outsider));
-		assert!(!Alliance::<T, I>::is_candidate(&outsider));
 		assert_eq!(DepositOf::<T, I>::get(&outsider), None);
 
 		let outsider_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(outsider.clone());
 	}: _(SystemOrigin::Signed(founder1.clone()), outsider_lookup)
 	verify {
 		assert!(!Alliance::<T, I>::is_member(&outsider));
-		assert!(Alliance::<T, I>::is_candidate(&outsider));
 		assert_eq!(DepositOf::<T, I>::get(&outsider), None);
-		assert_last_event::<T, I>(Event::CandidateAdded {
-			candidate: outsider,
+		assert_last_event::<T, I>(Event::NewAllyJoined {
+			ally: outsider,
 			nominator: Some(founder1),
 			reserved: None
 		}.into());
-	}
-
-	approve_candidate {
-		set_members::<T, I>();
-		set_candidates::<T, I>(vec![1]);
-
-		let candidate1 = candidate::<T, I>(1);
-		assert!(Alliance::<T, I>::is_candidate(&candidate1));
-		assert!(!Alliance::<T, I>::is_member(&candidate1));
-		assert_eq!(DepositOf::<T, I>::get(&candidate1), Some(T::CandidateDeposit::get()));
-
-		let candidate1_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(candidate1.clone());
-		let call = Call::<T, I>::approve_candidate { candidate: candidate1_lookup };
-		let origin = T::MembershipManager::successful_origin();
-	}: { call.dispatch_bypass_filter(origin)? }
-	verify {
-		assert!(!Alliance::<T, I>::is_candidate(&candidate1));
-		assert!(Alliance::<T, I>::is_ally(&candidate1));
-		assert_eq!(DepositOf::<T, I>::get(&candidate1), Some(T::CandidateDeposit::get()));
-		assert_last_event::<T, I>(Event::CandidateApproved { candidate: candidate1 }.into());
-	}
-
-	reject_candidate {
-		set_members::<T, I>();
-		set_candidates::<T, I>(vec![1]);
-
-		let candidate1 = candidate::<T, I>(1);
-		assert!(Alliance::<T, I>::is_candidate(&candidate1));
-		assert!(!Alliance::<T, I>::is_member(&candidate1));
-		assert_eq!(DepositOf::<T, I>::get(&candidate1), Some(T::CandidateDeposit::get()));
-
-		let candidate1_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(candidate1.clone());
-		let call = Call::<T, I>::reject_candidate { candidate: candidate1_lookup };
-		let origin = T::MembershipManager::successful_origin();
-	}: { call.dispatch_bypass_filter(origin)? }
-	verify {
-		assert!(!Alliance::<T, I>::is_candidate(&candidate1));
-		assert!(!Alliance::<T, I>::is_member(&candidate1));
-		assert_eq!(DepositOf::<T, I>::get(&candidate1), None);
-		assert_last_event::<T, I>(Event::CandidateRejected { candidate: candidate1 }.into());
 	}
 
 	elevate_ally {
@@ -750,14 +692,14 @@ benchmarks_instance_pallet! {
 		assert!(Alliance::<T, I>::is_fellow(&fellow2));
 		assert!(!Alliance::<T, I>::is_up_for_kicking(&fellow2));
 
-		assert_eq!(DepositOf::<T, I>::get(&fellow2), Some(T::CandidateDeposit::get()));
+		assert_eq!(DepositOf::<T, I>::get(&fellow2), Some(T::AllyDeposit::get()));
 	}: _(SystemOrigin::Signed(fellow2.clone()))
 	verify {
 		assert!(!Alliance::<T, I>::is_member(&fellow2));
 		assert_eq!(DepositOf::<T, I>::get(&fellow2), None);
 		assert_last_event::<T, I>(Event::MemberRetired {
 			member: fellow2,
-			unreserved: Some(T::CandidateDeposit::get())
+			unreserved: Some(T::AllyDeposit::get())
 		}.into());
 	}
 
@@ -770,7 +712,7 @@ benchmarks_instance_pallet! {
 		assert!(Alliance::<T, I>::is_member_of(&fellow2, MemberRole::Fellow));
 		assert!(Alliance::<T, I>::is_up_for_kicking(&fellow2));
 
-		assert_eq!(DepositOf::<T, I>::get(&fellow2), Some(T::CandidateDeposit::get()));
+		assert_eq!(DepositOf::<T, I>::get(&fellow2), Some(T::AllyDeposit::get()));
 
 		let fellow2_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(fellow2.clone());
 		let call = Call::<T, I>::kick_member { who: fellow2_lookup };
@@ -781,7 +723,7 @@ benchmarks_instance_pallet! {
 		assert_eq!(DepositOf::<T, I>::get(&fellow2), None);
 		assert_last_event::<T, I>(Event::MemberKicked {
 			member: fellow2,
-			slashed: Some(T::CandidateDeposit::get())
+			slashed: Some(T::AllyDeposit::get())
 		}.into());
 	}
 
