@@ -1,10 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::{Decode, Encode};
-use sp_runtime::{
-	traits::{Block as BlockT, Header as HeaderT},
-	AccountId32,
-};
+use sp_runtime::{traits::Block as BlockT, AccountId32};
 
 /// Information about extrinsic fetched from runtime API
 #[derive(Encode, Decode, PartialEq)]
@@ -21,8 +18,8 @@ sp_api::decl_runtime_apis! {
 		/// Provides information about extrinsic signer and nonce
 		fn get_signer(tx: <Block as BlockT>::Extrinsic) -> Option<(AccountId32, u32)>;
 
-		/// Checks if given block will start new session
-		fn is_new_session(number: <<Block as BlockT>::Header as HeaderT>::Number) -> bool;
+		/// Checks if storage migration is scheuled
+		fn is_storage_migration_scheduled() -> bool;
 
 		/// Checks if given block will start new session
 		fn store_seed(seed: sp_core::H256);
