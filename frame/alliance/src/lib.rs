@@ -101,8 +101,7 @@ use sp_runtime::{
 	traits::{StaticLookup, Zero},
 	RuntimeDebug,
 };
-use sp_std::prelude::*;
-use sp_std::convert::TryInto;
+use sp_std::{convert::TryInto, prelude::*};
 
 use frame_support::{
 	codec::{Decode, Encode, MaxEncodedLen},
@@ -709,8 +708,7 @@ pub mod pallet {
 			Self::has_identity(&who)?;
 
 			let deposit = T::AllyDeposit::get();
-			T::Currency::reserve(&who, deposit)
-				.map_err(|_| Error::<T, I>::InsufficientFunds)?;
+			T::Currency::reserve(&who, deposit).map_err(|_| Error::<T, I>::InsufficientFunds)?;
 			<DepositOf<T, I>>::insert(&who, deposit);
 
 			Self::add_member(&who, MemberRole::Ally)?;
@@ -969,7 +967,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> DispatchResult {
 		if !new_accounts.is_empty() {
 			<AccountBlacklist<T, I>>::try_mutate(|accounts| -> DispatchResult {
-				accounts.try_append(new_accounts).map_err(|_| Error::<T, I>::TooManyItemsInBlacklist)?;
+				accounts
+					.try_append(new_accounts)
+					.map_err(|_| Error::<T, I>::TooManyItemsInBlacklist)?;
 				accounts.sort();
 
 				Ok(())

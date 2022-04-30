@@ -280,10 +280,7 @@ fn remove_announcement_works() {
 fn join_alliance_works() {
 	new_test_ext().execute_with(|| {
 		// check already member
-		assert_noop!(
-			Alliance::join_alliance(Origin::signed(1)),
-			Error::<Test, ()>::AlreadyMember
-		);
+		assert_noop!(Alliance::join_alliance(Origin::signed(1)), Error::<Test, ()>::AlreadyMember);
 
 		// check already in blacklist
 		assert_ok!(Alliance::add_blacklist_items(
@@ -311,10 +308,7 @@ fn join_alliance_works() {
 		assert_eq!(Alliance::members(MemberRole::Ally), vec![4]);
 
 		// check already member
-		assert_noop!(
-			Alliance::join_alliance(Origin::signed(4)),
-			Error::<Test, ()>::AlreadyMember
-		);
+		assert_noop!(Alliance::join_alliance(Origin::signed(4)), Error::<Test, ()>::AlreadyMember);
 
 		// check missing identity judgement
 		#[cfg(not(feature = "runtime-benchmarks"))]
