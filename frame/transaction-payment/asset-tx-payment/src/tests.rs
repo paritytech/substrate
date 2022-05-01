@@ -23,7 +23,7 @@ use frame_support::{
 	traits::{fungibles::Mutate, ConstU32, ConstU64, ConstU8, FindAuthor},
 	weights::{
 		DispatchClass, DispatchInfo, PostDispatchInfo, Weight, WeightToFeeCoefficient,
-		WeightToFeeCoefficients, WeightToFeePolynomial, WeightV1,
+		WeightToFeeCoefficients, WeightToFeePolynomial, ComputationWeight,
 	},
 	ConsensusEngineId,
 };
@@ -256,12 +256,12 @@ impl ExtBuilder {
 }
 
 /// create a transaction info struct from weight. Handy to avoid building the whole struct.
-pub fn info_from_weight(w: WeightV1) -> DispatchInfo {
+pub fn info_from_weight(w: ComputationWeight) -> DispatchInfo {
 	// pays_fee: Pays::Yes -- class: DispatchClass::Normal
 	DispatchInfo { weight: Weight::computation_only(w), ..Default::default() }
 }
 
-fn post_info_from_weight(w: WeightV1) -> PostDispatchInfo {
+fn post_info_from_weight(w: ComputationWeight) -> PostDispatchInfo {
 	PostDispatchInfo {
 		actual_weight: Some(Weight::computation_only(w)),
 		pays_fee: Default::default(),

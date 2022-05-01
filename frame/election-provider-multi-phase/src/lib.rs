@@ -237,7 +237,7 @@ use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	ensure,
 	traits::{Currency, Get, OnUnbalanced, ReservableCurrency},
-	weights::{DispatchClass, Weight, WeightV1},
+	weights::{DispatchClass, Weight, ComputationWeight},
 };
 use frame_system::{ensure_none, offchain::SendTransactionTypes};
 use scale_info::TypeInfo;
@@ -1416,7 +1416,7 @@ impl<T: Config> Pallet<T> {
 	/// Register some amount of weight directly with the system pallet.
 	///
 	/// This is always mandatory weight.
-	fn register_weight(weight: WeightV1) {
+	fn register_weight(weight: ComputationWeight) {
 		<frame_system::Pallet<T>>::register_extra_weight_unchecked(
 			Weight::computation_only(weight),
 			DispatchClass::Mandatory,

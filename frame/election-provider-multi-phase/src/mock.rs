@@ -24,7 +24,7 @@ pub use frame_support::{assert_noop, assert_ok, pallet_prelude::GetDefault};
 use frame_support::{
 	bounded_vec, parameter_types,
 	traits::{ConstU32, Hooks},
-	weights::{Weight, WeightV1},
+	weights::{Weight, ComputationWeight},
 	BoundedVec,
 };
 use frame_system::limits::BlockWeights;
@@ -320,76 +320,76 @@ impl InstantElectionProvider for MockFallback {
 // Hopefully this won't be too much of a hassle to maintain.
 pub struct DualMockWeightInfo;
 impl multi_phase::weights::WeightInfo for DualMockWeightInfo {
-	fn on_initialize_nothing() -> WeightV1 {
+	fn on_initialize_nothing() -> ComputationWeight {
 		if MockWeightInfo::get() {
 			Zero::zero()
 		} else {
 			<() as multi_phase::weights::WeightInfo>::on_initialize_nothing()
 		}
 	}
-	fn create_snapshot_internal(v: u32, t: u32) -> WeightV1 {
+	fn create_snapshot_internal(v: u32, t: u32) -> ComputationWeight {
 		if MockWeightInfo::get() {
 			Zero::zero()
 		} else {
 			<() as multi_phase::weights::WeightInfo>::create_snapshot_internal(v, t)
 		}
 	}
-	fn on_initialize_open_signed() -> WeightV1 {
+	fn on_initialize_open_signed() -> ComputationWeight {
 		if MockWeightInfo::get() {
 			Zero::zero()
 		} else {
 			<() as multi_phase::weights::WeightInfo>::on_initialize_open_signed()
 		}
 	}
-	fn on_initialize_open_unsigned() -> WeightV1 {
+	fn on_initialize_open_unsigned() -> ComputationWeight {
 		if MockWeightInfo::get() {
 			Zero::zero()
 		} else {
 			<() as multi_phase::weights::WeightInfo>::on_initialize_open_unsigned()
 		}
 	}
-	fn elect_queued(a: u32, d: u32) -> WeightV1 {
+	fn elect_queued(a: u32, d: u32) -> ComputationWeight {
 		if MockWeightInfo::get() {
 			Zero::zero()
 		} else {
 			<() as multi_phase::weights::WeightInfo>::elect_queued(a, d)
 		}
 	}
-	fn finalize_signed_phase_accept_solution() -> WeightV1 {
+	fn finalize_signed_phase_accept_solution() -> ComputationWeight {
 		if MockWeightInfo::get() {
 			Zero::zero()
 		} else {
 			<() as multi_phase::weights::WeightInfo>::finalize_signed_phase_accept_solution()
 		}
 	}
-	fn finalize_signed_phase_reject_solution() -> WeightV1 {
+	fn finalize_signed_phase_reject_solution() -> ComputationWeight {
 		if MockWeightInfo::get() {
 			Zero::zero()
 		} else {
 			<() as multi_phase::weights::WeightInfo>::finalize_signed_phase_reject_solution()
 		}
 	}
-	fn submit() -> WeightV1 {
+	fn submit() -> ComputationWeight {
 		if MockWeightInfo::get() {
 			Zero::zero()
 		} else {
 			<() as multi_phase::weights::WeightInfo>::submit()
 		}
 	}
-	fn submit_unsigned(v: u32, t: u32, a: u32, d: u32) -> WeightV1 {
+	fn submit_unsigned(v: u32, t: u32, a: u32, d: u32) -> ComputationWeight {
 		if MockWeightInfo::get() {
 			// 10 base
 			// 5 per edge.
-			(10 as WeightV1).saturating_add((5 as WeightV1).saturating_mul(a as WeightV1))
+			(10 as ComputationWeight).saturating_add((5 as ComputationWeight).saturating_mul(a as ComputationWeight))
 		} else {
 			<() as multi_phase::weights::WeightInfo>::submit_unsigned(v, t, a, d)
 		}
 	}
-	fn feasibility_check(v: u32, t: u32, a: u32, d: u32) -> WeightV1 {
+	fn feasibility_check(v: u32, t: u32, a: u32, d: u32) -> ComputationWeight {
 		if MockWeightInfo::get() {
 			// 10 base
 			// 5 per edge.
-			(10 as WeightV1).saturating_add((5 as WeightV1).saturating_mul(a as WeightV1))
+			(10 as ComputationWeight).saturating_add((5 as ComputationWeight).saturating_mul(a as ComputationWeight))
 		} else {
 			<() as multi_phase::weights::WeightInfo>::feasibility_check(v, t, a, d)
 		}
@@ -561,7 +561,7 @@ impl ExtBuilder {
 		<OnChainFallback>::set(onchain);
 		self
 	}
-	pub fn miner_weight(self, weight: WeightV1) -> Self {
+	pub fn miner_weight(self, weight: ComputationWeight) -> Self {
 		<MinerMaxWeight>::set(Weight::computation_only(weight));
 		self
 	}
@@ -592,7 +592,7 @@ impl ExtBuilder {
 		<SignedDepositWeight>::set(weight);
 		self
 	}
-	pub fn signed_weight(self, weight: WeightV1) -> Self {
+	pub fn signed_weight(self, weight: ComputationWeight) -> Self {
 		<SignedMaxWeight>::set(Weight::computation_only(weight));
 		self
 	}

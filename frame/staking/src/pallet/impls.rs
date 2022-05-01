@@ -867,7 +867,7 @@ impl<T: Config> Pallet<T> {
 	/// Register some amount of weight directly with the system pallet.
 	///
 	/// This is always mandatory weight.
-	fn register_weight(weight: frame_support::weights::WeightV1) {
+	fn register_weight(weight: frame_support::weights::ComputationWeight) {
 		<frame_system::Pallet<T>>::register_extra_weight_unchecked(
 			Weight::computation_only(weight),
 			DispatchClass::Mandatory,

@@ -27,7 +27,7 @@ use frame_election_provider_support::NposSolution;
 use frame_support::{
 	storage::bounded_btree_map::BoundedBTreeMap,
 	traits::{defensive_prelude::*, Currency, Get, OnUnbalanced, ReservableCurrency},
-	weights::WeightV1,
+	weights::ComputationWeight,
 };
 use sp_arithmetic::traits::SaturatedConversion;
 use sp_npos_elections::ElectionScore;
@@ -487,7 +487,7 @@ impl<T: Config> Pallet<T> {
 	pub fn feasibility_weight_of(
 		raw_solution: &RawSolution<SolutionOf<T>>,
 		size: SolutionOrSnapshotSize,
-	) -> WeightV1 {
+	) -> ComputationWeight {
 		T::WeightInfo::feasibility_check(
 			size.voters,
 			size.targets,

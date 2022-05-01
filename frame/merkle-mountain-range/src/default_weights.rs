@@ -20,11 +20,11 @@
 
 use frame_support::weights::{
 	constants::{RocksDbWeight as DbWeight, WEIGHT_PER_NANOS},
-	WeightV1,
+	ComputationWeight,
 };
 
 impl crate::WeightInfo for () {
-	fn on_initialize(peaks: u64) -> WeightV1 {
+	fn on_initialize(peaks: u64) -> ComputationWeight {
 		// Reading the parent hash.
 		let leaf_weight = DbWeight::get().reads(1);
 		// Blake2 hash cost.

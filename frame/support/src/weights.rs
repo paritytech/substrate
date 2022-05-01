@@ -148,9 +148,6 @@ pub use sp_runtime::transaction_validity::TransactionPriority;
 /// The current canonical version of Weight.
 pub type Weight = weight_v2::Weight;
 
-/// The first version of Weight introduced into FRAME.
-pub type WeightV1 = ComputationWeight;
-
 /// Numeric range of a transaction time weight.
 pub type ComputationWeight = u64;
 
@@ -361,8 +358,8 @@ pub fn extract_actual_weight(result: &DispatchResultWithPostInfo, info: &Dispatc
 	.calc_actual_weight(info)
 }
 
-impl From<(Option<WeightV1>, Pays)> for PostDispatchInfo {
-	fn from(post_weight_info: (Option<WeightV1>, Pays)) -> Self {
+impl From<(Option<ComputationWeight>, Pays)> for PostDispatchInfo {
+	fn from(post_weight_info: (Option<ComputationWeight>, Pays)) -> Self {
 		let (maybe_actual_time, pays_fee) = post_weight_info;
 		let actual_weight = match maybe_actual_time {
 			Some(actual_time) => Some(Weight::new().set_computation(actual_time)),
@@ -378,8 +375,8 @@ impl From<Pays> for PostDispatchInfo {
 	}
 }
 
-impl From<Option<WeightV1>> for PostDispatchInfo {
-	fn from(maybe_actual_computation: Option<WeightV1>) -> Self {
+impl From<Option<ComputationWeight>> for PostDispatchInfo {
+	fn from(maybe_actual_computation: Option<ComputationWeight>) -> Self {
 		let actual_weight = match maybe_actual_computation {
 			Some(actual_computation) => Some(Weight::new().set_computation(actual_computation)),
 			None => None,
@@ -445,73 +442,73 @@ where
 	}
 }
 
-impl<T> WeighData<T> for WeightV1 {
+impl<T> WeighData<T> for ComputationWeight {
 	fn weigh_data(&self, _: T) -> Weight {
 		return Weight::new().set_computation(*self)
 	}
 }
 
-impl<T> ClassifyDispatch<T> for WeightV1 {
+impl<T> ClassifyDispatch<T> for ComputationWeight {
 	fn classify_dispatch(&self, _: T) -> DispatchClass {
 		DispatchClass::Normal
 	}
 }
 
-impl<T> PaysFee<T> for WeightV1 {
+impl<T> PaysFee<T> for ComputationWeight {
 	fn pays_fee(&self, _: T) -> Pays {
 		Pays::Yes
 	}
 }
 
-impl<T> WeighData<T> for (WeightV1, DispatchClass, Pays) {
+impl<T> WeighData<T> for (ComputationWeight, DispatchClass, Pays) {
 	fn weigh_data(&self, args: T) -> Weight {
 		return self.0.weigh_data(args)
 	}
 }
 
-impl<T> ClassifyDispatch<T> for (WeightV1, DispatchClass, Pays) {
+impl<T> ClassifyDispatch<T> for (ComputationWeight, DispatchClass, Pays) {
 	fn classify_dispatch(&self, _: T) -> DispatchClass {
 		self.1
 	}
 }
 
-impl<T> PaysFee<T> for (WeightV1, DispatchClass, Pays) {
+impl<T> PaysFee<T> for (ComputationWeight, DispatchClass, Pays) {
 	fn pays_fee(&self, _: T) -> Pays {
 		self.2
 	}
 }
 
-impl<T> WeighData<T> for (WeightV1, DispatchClass) {
+impl<T> WeighData<T> for (ComputationWeight, DispatchClass) {
 	fn weigh_data(&self, args: T) -> Weight {
 		return self.0.weigh_data(args)
 	}
 }
 
-impl<T> ClassifyDispatch<T> for (WeightV1, DispatchClass) {
+impl<T> ClassifyDispatch<T> for (ComputationWeight, DispatchClass) {
 	fn classify_dispatch(&self, _: T) -> DispatchClass {
 		self.1
 	}
 }
 
-impl<T> PaysFee<T> for (WeightV1, DispatchClass) {
+impl<T> PaysFee<T> for (ComputationWeight, DispatchClass) {
 	fn pays_fee(&self, _: T) -> Pays {
 		Pays::Yes
 	}
 }
 
-impl<T> WeighData<T> for (WeightV1, Pays) {
+impl<T> WeighData<T> for (ComputationWeight, Pays) {
 	fn weigh_data(&self, args: T) -> Weight {
 		return self.0.weigh_data(args)
 	}
 }
 
-impl<T> ClassifyDispatch<T> for (WeightV1, Pays) {
+impl<T> ClassifyDispatch<T> for (ComputationWeight, Pays) {
 	fn classify_dispatch(&self, _: T) -> DispatchClass {
 		DispatchClass::Normal
 	}
 }
 
-impl<T> PaysFee<T> for (WeightV1, Pays) {
+impl<T> PaysFee<T> for (ComputationWeight, Pays) {
 	fn pays_fee(&self, _: T) -> Pays {
 		self.1
 	}
@@ -557,20 +554,20 @@ impl<Call: Encode, Extra: Encode> GetDispatchInfo for sp_runtime::testing::TestX
 /// The weight of database operations that the runtime can invoke.
 #[derive(Clone, Copy, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode, TypeInfo)]
 pub struct RuntimeDbWeight {
-	pub read: WeightV1,
-	pub write: WeightV1,
+	pub read: ComputationWeight,
+	pub write: ComputationWeight,
 }
 
 impl RuntimeDbWeight {
-	pub fn reads(self, r: WeightV1) -> WeightV1 {
+	pub fn reads(self, r: ComputationWeight) -> ComputationWeight {
 		self.read.saturating_mul(r)
 	}
 
-	pub fn writes(self, w: WeightV1) -> WeightV1 {
+	pub fn writes(self, w: ComputationWeight) -> ComputationWeight {
 		self.write.saturating_mul(w)
 	}
 
-	pub fn reads_writes(self, r: WeightV1, w: WeightV1) -> WeightV1 {
+	pub fn reads_writes(self, r: ComputationWeight, w: ComputationWeight) -> ComputationWeight {
 		let read_weight = self.read.saturating_mul(r);
 		let write_weight = self.write.saturating_mul(w);
 		read_weight.saturating_add(write_weight)
@@ -621,7 +618,7 @@ pub trait WeightToFeePolynomial {
 	///
 	/// This should not be overriden in most circumstances. Calculation is done in the
 	/// `Balance` type and never overflows. All evaluation is saturating.
-	fn calc(weight: &WeightV1) -> Self::Balance {
+	fn calc(weight: &ComputationWeight) -> Self::Balance {
 		Self::polynomial()
 			.iter()
 			.fold(Self::Balance::saturated_from(0u32), |mut acc, args| {
@@ -663,7 +660,7 @@ where
 		})
 	}
 
-	fn calc(weight: &WeightV1) -> Self::Balance {
+	fn calc(weight: &ComputationWeight) -> Self::Balance {
 		Self::Balance::saturated_from(*weight)
 	}
 }
@@ -695,7 +692,7 @@ where
 		})
 	}
 
-	fn calc(weight: &WeightV1) -> Self::Balance {
+	fn calc(weight: &ComputationWeight) -> Self::Balance {
 		Self::Balance::saturated_from(*weight).saturating_mul(M::get())
 	}
 }
@@ -828,7 +825,7 @@ mod tests {
 			fn f03(_origin) { unimplemented!(); }
 
 			// weight = a x 10 + b
-			#[weight = ((_a * 10 + _eb * 1) as WeightV1, DispatchClass::Normal, Pays::Yes)]
+			#[weight = ((_a * 10 + _eb * 1) as ComputationWeight, DispatchClass::Normal, Pays::Yes)]
 			fn f11(_origin, _a: u32, _eb: u32) { unimplemented!(); }
 
 			#[weight = (0, DispatchClass::Operational, Pays::Yes)]

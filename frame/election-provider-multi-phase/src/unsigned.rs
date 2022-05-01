@@ -24,7 +24,7 @@ use crate::{
 };
 use codec::Encode;
 use frame_election_provider_support::{NposSolution, NposSolver, PerThing128};
-use frame_support::{dispatch::DispatchResult, ensure, traits::Get, weights::WeightV1};
+use frame_support::{dispatch::DispatchResult, ensure, traits::Get, weights::ComputationWeight};
 use frame_system::offchain::SubmitTransaction;
 use sp_npos_elections::{
 	assignment_ratio_to_staked_normalized, assignment_staked_to_ratio_normalized, ElectionResult,
@@ -392,7 +392,7 @@ impl<T: Config> Pallet<T> {
 	pub fn trim_assignments_weight(
 		desired_targets: u32,
 		size: SolutionOrSnapshotSize,
-		max_weight: WeightV1,
+		max_weight: ComputationWeight,
 		assignments: &mut Vec<IndexAssignmentOf<T>>,
 	) {
 		let maximum_allowed_voters =
@@ -488,7 +488,7 @@ impl<T: Config> Pallet<T> {
 	pub fn maximum_voter_for_weight<W: WeightInfo>(
 		desired_winners: u32,
 		size: SolutionOrSnapshotSize,
-		max_weight: WeightV1,
+		max_weight: ComputationWeight,
 	) -> u32 {
 		if size.voters < 1 {
 			return size.voters
@@ -498,11 +498,11 @@ impl<T: Config> Pallet<T> {
 		let mut voters = max_voters;
 
 		// helper closures.
-		let weight_with = |active_voters: u32| -> WeightV1 {
+		let weight_with = |active_voters: u32| -> ComputationWeight {
 			W::submit_unsigned(size.voters, size.targets, active_voters, desired_winners)
 		};
 
-		let next_voters = |current_weight: WeightV1, voters: u32, step: u32| -> Result<u32, ()> {
+		let next_voters = |current_weight: ComputationWeight, voters: u32, step: u32| -> Result<u32, ()> {
 			match current_weight.cmp(&max_weight) {
 				Ordering::Less => {
 					let next_voters = voters.checked_add(step);
@@ -636,7 +636,7 @@ mod max_weight {
 	#![allow(unused_variables)]
 	use super::*;
 	use crate::mock::MultiPhase;
-	use frame_support::weights::WeightV1 as Weight;
+	use frame_support::weights::ComputationWeight as Weight;
 
 	struct TestWeight;
 	impl crate::weights::WeightInfo for TestWeight {

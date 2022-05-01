@@ -29,7 +29,7 @@ use frame_support::{
 	dispatch::{DispatchError, DispatchResult},
 	storage::child::{self, ChildInfo, KillStorageResult},
 	traits::Get,
-	weights::WeightV1 as Weight,
+	weights::ComputationWeight as Weight,
 };
 use scale_info::TypeInfo;
 use sp_core::crypto::UncheckedFrom;

@@ -30,7 +30,7 @@
 
 use frame_support::{
 	parameter_types,
-	weights::{constants::WEIGHT_PER_NANOS, Weight},
+	weights::{constants::WEIGHT_PER_NANOS, ComputationWeight as Weight},
 };
 
 parameter_types! {
@@ -65,7 +65,7 @@ mod test_weights {
 	fn sane() {
 		let w = super::{{long_name}}Weight::get();
 
-		{{#if (eq short_name "block")}}			
+		{{#if (eq short_name "block")}}
 		// At least 100 µs.
 		assert!(w >= 100 * constants::WEIGHT_PER_MICROS, "Weight should be at least 100 µs.");
 		// At most 50 ms.

@@ -96,7 +96,7 @@ impl<T: frame_system::Config> LeafDataProvider for ParentNumberAndHash<T> {
 }
 
 pub trait WeightInfo {
-	fn on_initialize(peaks: NodeIndex) -> frame_support::weights::WeightV1;
+	fn on_initialize(peaks: NodeIndex) -> frame_support::weights::ComputationWeight;
 }
 
 #[frame_support::pallet]
