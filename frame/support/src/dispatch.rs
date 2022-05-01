@@ -183,7 +183,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug + 
 /// 	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 /// 		#[weight = 1_000_000]
 /// 		fn my_long_function(origin, do_expensive_calc: bool) -> DispatchResultWithPostInfo {
-/// 			ensure_signed(origin).map_err(|e| e.with_weight(Weight { computation: 100_000, bandwidth: 100_000 }))?;
+/// 			ensure_signed(origin).map_err(|e| e.with_weight(Weight::new().set_computation(100_000).set_bandwidth(100_000)))?;
 /// 			if do_expensive_calc {
 /// 				// do the expensive calculation
 /// 				// ...
