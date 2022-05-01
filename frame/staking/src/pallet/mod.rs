@@ -1115,6 +1115,7 @@ pub mod pallet {
 				.try_into()
 				.defensive_map_err(|_| Error::<T>::TooManyTargets)?;
 
+			// TODO: but the existing nominators onchain might have duplicates..
 			ensure!(
 				targets.len() ==
 					targets

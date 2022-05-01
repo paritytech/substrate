@@ -267,7 +267,7 @@ mod list {
 		ExtBuilder::default().build_and_execute(|| {
 			// removing a non-existent id is a noop
 			assert!(!ListNodes::<Runtime>::contains_key(42));
-			assert_noop!(List::<Runtime>::remove(&42), Error::NonExistent);
+			assert_noop!(List::<Runtime>::remove(&42), ListError::NodeNotFound);
 
 			// when removing a node from a bag with multiple nodes:
 			List::<Runtime>::remove(&2).unwrap();

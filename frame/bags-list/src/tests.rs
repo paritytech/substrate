@@ -380,7 +380,7 @@ mod pallet {
 			// then
 			assert_noop!(
 				BagsList::put_in_front_of(Origin::signed(3), 2),
-				crate::pallet::Error::<Runtime>::NotHeavier
+				crate::pallet::Error::<Runtime>::List(ListError::NotHeavier)
 			);
 		});
 	}
@@ -394,7 +394,7 @@ mod pallet {
 			// then
 			assert_noop!(
 				BagsList::put_in_front_of(Origin::signed(3), 4),
-				crate::pallet::Error::<Runtime>::NotHeavier
+				crate::pallet::Error::<Runtime>::List(ListError::NotHeavier)
 			);
 		});
 	}
@@ -411,7 +411,7 @@ mod pallet {
 			// then
 			assert_noop!(
 				BagsList::put_in_front_of(Origin::signed(5), 4),
-				crate::pallet::Error::<Runtime>::IdNotFound
+				crate::pallet::Error::<Runtime>::List(ListError::NodeNotFound)
 			);
 		});
 
@@ -425,7 +425,7 @@ mod pallet {
 			// then
 			assert_noop!(
 				BagsList::put_in_front_of(Origin::signed(4), 5),
-				crate::pallet::Error::<Runtime>::IdNotFound
+				crate::pallet::Error::<Runtime>::List(ListError::NodeNotFound)
 			);
 		});
 	}
@@ -439,7 +439,7 @@ mod pallet {
 			// then
 			assert_noop!(
 				BagsList::put_in_front_of(Origin::signed(4), 1),
-				crate::pallet::Error::<Runtime>::NotInSameBag
+				crate::pallet::Error::<Runtime>::List(ListError::NotInSameBag)
 			);
 		});
 	}
@@ -498,7 +498,7 @@ mod sorted_list_provider {
 			// when updating
 			assert_storage_noop!(assert_eq!(
 				BagsList::on_update(&201, VoteWeight::MAX).unwrap_err(),
-				Error::NonExistent
+				ListError::NodeNotFound
 			));
 			// then the count stays the same
 			assert_eq!(BagsList::count(), 4);
@@ -618,7 +618,7 @@ mod sorted_list_provider {
 		ExtBuilder::default().build_and_execute(|| {
 			// it is a noop removing a non-existent id
 			assert!(!ListNodes::<Runtime>::contains_key(42));
-			assert_noop!(BagsList::on_remove(&42), Error::NonExistent);
+			assert_noop!(BagsList::on_remove(&42), ListError::NodeNotFound);
 
 			// when removing a node from a bag with multiple nodes
 			BagsList::on_remove(&2).unwrap();

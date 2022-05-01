@@ -4607,7 +4607,7 @@ mod target_list {
 			);
 
 			assert_noop!(
-				Staking::nominate(Origin::signed(100), vec![11, 21, 11,]),
+				Staking::nominate(Origin::signed(100), vec![11, 21, 11]),
 				Error::<Test>::DuplicateTarget
 			);
 
@@ -4916,7 +4916,7 @@ mod target_list {
 				assert_eq!(<Test as Config>::TargetList::get_score(&3).unwrap(), 5);
 				assert_eq!(
 					<Test as Config>::TargetList::get_score(&4).unwrap_err(),
-					pallet_bags_list::ListError::NonExistent
+					pallet_bags_list::ListError::NodeNotFound
 				);
 			});
 	}

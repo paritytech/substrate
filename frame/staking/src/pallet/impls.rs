@@ -812,6 +812,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// This function is self-weighing as [`DispatchClass::Mandatory`].
 	pub fn get_npos_targets(maybe_max_len: Option<usize>) -> Vec<T::AccountId> {
+		// TODO: what comes out here might not be a validator.
 		let targets = T::TargetList::iter()
 			.take(maybe_max_len.unwrap_or_else(Bounded::max_value))
 			.collect::<Vec<_>>();
@@ -836,7 +837,6 @@ impl<T: Config> Pallet<T> {
 		nominations: Nominations<T>,
 	) {
 		if !NominatorsHelper::<T>::contains_any(stash) {
-			// maybe update sorted list.
 			let _ = T::VoterList::on_insert(stash.clone(), Self::weight_of(stash)).defensive();
 		}
 

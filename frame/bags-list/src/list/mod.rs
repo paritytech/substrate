@@ -46,8 +46,6 @@ use sp_std::{
 pub enum ListError {
 	/// A duplicate id has been detected.
 	Duplicate,
-	/// the given id does not exists.
-	NonExistent,
 	/// An Id does not have a greater score than another Id.
 	NotHeavier,
 	/// Attempted to place node in front of a node in another bag.
@@ -232,7 +230,7 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 
 	/// Get the score of the given node,
 	pub fn get_score(id: &T::AccountId) -> Result<T::Score, ListError> {
-		Node::<T, I>::get(id).map(|node| node.score()).ok_or(ListError::NonExistent)
+		Node::<T, I>::get(id).map(|node| node.score()).ok_or(ListError::NodeNotFound)
 	}
 
 	/// Iterate over all nodes in all bags in the list.
@@ -339,7 +337,7 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 	/// Remove an id from the list.
 	pub(crate) fn remove(id: &T::AccountId) -> Result<(), ListError> {
 		if !Self::contains(id) {
-			return Err(ListError::NonExistent)
+			return Err(ListError::NodeNotFound)
 		}
 		let _ = Self::remove_many(sp_std::iter::once(id));
 		Ok(())
@@ -447,8 +445,8 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 		lighter_id: &T::AccountId,
 		heavier_id: &T::AccountId,
 	) -> Result<(), ListError> {
-		let lighter_node = Node::<T, I>::get(&lighter_id).ok_or(ListError::NonExistent)?;
-		let heavier_node = Node::<T, I>::get(&heavier_id).ok_or(ListError::NonExistent)?;
+		let lighter_node = Node::<T, I>::get(&lighter_id).ok_or(ListError::NodeNotFound)?;
+		let heavier_node = Node::<T, I>::get(&heavier_id).ok_or(ListError::NodeNotFound)?;
 
 		ensure!(lighter_node.bag_upper == heavier_node.bag_upper, ListError::NotInSameBag);
 
@@ -468,7 +466,7 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 		let lighter_node = Node::<T, I>::get(&lighter_id).ok_or_else(|| {
 			debug_assert!(false, "id that should exist cannot be found");
 			crate::log!(warn, "id that should exist cannot be found");
-			ListError::NonExistent
+			ListError::NodeNotFound
 		})?;
 
 		// insert `heavier_node` directly in front of `lighter_node`. This will update both nodes
@@ -900,6 +898,11 @@ impl<T: Config<I>, I: 'static> Node<T, I> {
 	#[allow(dead_code)]
 	pub fn std_id(&self) -> &T::AccountId {
 		&self.id
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	pub fn set_score(&mut self, s: T::Score) {
+		self.score = s
 	}
 
 	/// The bag this nodes belongs to (public for benchmarks).
