@@ -334,7 +334,7 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 		Ok(())
 	}
 
-	/// Remove an id from the list.
+	/// Remove an id from the list, returning an error if `id` does not exists.
 	pub(crate) fn remove(id: &T::AccountId) -> Result<(), ListError> {
 		if !Self::contains(id) {
 			return Err(ListError::NodeNotFound)
@@ -397,14 +397,6 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 		mut node: Node<T, I>,
 		new_score: T::Score,
 	) -> Option<(T::Score, T::Score)> {
-		crate::log!(
-			debug,
-			"trying to update {:?} from {:?} to {:?} (rebag?: {})",
-			node.id,
-			node.score(),
-			new_score,
-			node.is_misplaced(new_score)
-		);
 		node.score = new_score;
 		if node.is_misplaced(new_score) {
 			let old_bag_upper = node.bag_upper;

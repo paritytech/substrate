@@ -34,9 +34,11 @@ mod pallet {
 				vec![(10, vec![1]), (20, vec![42]), (1_000, vec![2, 3, 4])]
 			);
 
-			// when increasing vote score to the level of non-existent bag
+			// when increasing score to the level of non-existent bag
+			assert_eq!(List::<Runtime>::get_score(&42).unwrap(), 20);
 			StakingMock::set_score_of(&42, 2_000);
 			assert_ok!(BagsList::rebag(Origin::signed(0), 42));
+			assert_eq!(List::<Runtime>::get_score(&42).unwrap(), 2_000);
 
 			// then a new bag is created and the id moves into it
 			assert_eq!(
@@ -53,6 +55,8 @@ mod pallet {
 				List::<Runtime>::get_bags(),
 				vec![(10, vec![1]), (1_000, vec![2, 3, 4]), (2_000, vec![42])]
 			);
+			// but the score is updated
+			assert_eq!(List::<Runtime>::get_score(&42).unwrap(), 1_001);
 
 			// when reducing score to the level of a non-existent bag
 			StakingMock::set_score_of(&42, 30);
@@ -63,6 +67,7 @@ mod pallet {
 				List::<Runtime>::get_bags(),
 				vec![(10, vec![1]), (30, vec![42]), (1_000, vec![2, 3, 4])]
 			);
+			assert_eq!(List::<Runtime>::get_score(&42).unwrap(), 30);
 
 			// when increasing score to the level of a pre-existing bag
 			StakingMock::set_score_of(&42, 500);
@@ -73,6 +78,7 @@ mod pallet {
 				List::<Runtime>::get_bags(),
 				vec![(10, vec![1]), (1_000, vec![2, 3, 4, 42])]
 			);
+			assert_eq!(List::<Runtime>::get_score(&42).unwrap(), 500);
 		});
 	}
 
