@@ -58,7 +58,7 @@ use frame_support::{
 	ensure,
 	pallet_prelude::*,
 	traits::{
-		ExistenceRequirement, Get, LockIdentifier, VestingSchedule,
+		ExistenceRequirement, Get, LockIdentifier,
 		WithdrawReasons,
 	},
 };
