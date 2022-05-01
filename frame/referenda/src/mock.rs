@@ -26,6 +26,7 @@ use frame_support::{
 		ConstU32, ConstU64, Contains, EqualPrivilegeOnly, OnInitialize, OriginTrait, Polling,
 		PreimageRecipient, SortedMembers,
 	},
+	weights::Weight,
 };
 use frame_system::{EnsureRoot, EnsureSignedBy};
 use sp_core::H256;
@@ -103,6 +104,7 @@ impl pallet_preimage::Config for Test {
 	type BaseDeposit = ();
 	type ByteDeposit = ();
 }
+
 parameter_types! {
 	pub MaximumSchedulerWeight: Weight = Weight{
 		computation: 2_000_000_000_000,

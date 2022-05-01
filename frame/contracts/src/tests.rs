@@ -246,6 +246,7 @@ parameter_types! {
 	};
 	pub static DepositPerByte: BalanceOf<Test> = 1;
 	pub const DepositPerItem: BalanceOf<Test> = 2;
+	pub const DeletionWeightLimit: Weight = Weight::computation_only(500_000_000_000);
 }
 
 impl Convert<Weight, BalanceOf<Self>> for Test {
@@ -285,7 +286,7 @@ impl Config for Test {
 	type WeightInfo = ();
 	type ChainExtension = TestExtension;
 	type DeletionQueueDepth = ConstU32<1024>;
-	type DeletionWeightLimit = ConstU64<500_000_000_000>;
+	type DeletionWeightLimit = DeletionWeightLimit;
 	type Schedule = MySchedule;
 	type DepositPerByte = DepositPerByte;
 	type DepositPerItem = DepositPerItem;
