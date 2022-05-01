@@ -423,12 +423,12 @@ pub mod pallet {
 		/// - 1 event
 		/// # </weight>
 		#[pallet::weight({
-			let weight_v1 = T::WeightInfo::execute(
+			let computation_weight = T::WeightInfo::execute(
 				*length_bound, // B
 				T::MaxMembers::get(), // M
 			);
 
-			let final_weight = Weight::computation_only(weight_v1)
+			let final_weight = Weight::computation_only(computation_weight)
 				.saturating_add(proposal.get_dispatch_info().weight); // P
 
 			(final_weight, DispatchClass::Operational)
@@ -453,11 +453,11 @@ pub mod pallet {
 
 			Ok(get_result_weight(result)
 				.map(|w| {
-					let weight_v1 = T::WeightInfo::execute(
+					let computation_weight = T::WeightInfo::execute(
 						proposal_len as u32,  // B
 						members.len() as u32, // M
 					);
-					Weight::computation_only(weight_v1).saturating_add(w) // P
+					Weight::computation_only(computation_weight).saturating_add(w) // P
 				})
 				.into())
 		}
@@ -491,11 +491,11 @@ pub mod pallet {
 		/// # </weight>
 		#[pallet::weight((
 			if *threshold < 2 {
-				let weight_v1 = T::WeightInfo::propose_execute(
+				let computation_weight = T::WeightInfo::propose_execute(
 					*length_bound, // B
 					T::MaxMembers::get(), // M
 				);
-				Weight::computation_only(weight_v1).saturating_add(proposal.get_dispatch_info().weight) // P1
+				Weight::computation_only(computation_weight).saturating_add(proposal.get_dispatch_info().weight) // P1
 			} else {
 				Weight::computation_only(T::WeightInfo::propose_proposed(
 					*length_bound, // B
@@ -533,11 +533,11 @@ pub mod pallet {
 
 				Ok(get_result_weight(result)
 					.map(|w| {
-						let weight_v1 = T::WeightInfo::propose_execute(
+						let computation_weight = T::WeightInfo::propose_execute(
 							proposal_len as u32,  // B
 							members.len() as u32, // M
 						);
-						Weight::computation_only(weight_v1).saturating_add(w) // P1
+						Weight::computation_only(computation_weight).saturating_add(w) // P1
 					})
 					.into())
 			} else {
@@ -722,9 +722,9 @@ pub mod pallet {
 					Self::do_approve_proposal(seats, yes_votes, proposal_hash, proposal);
 				return Ok((
 					Some({
-						let weight_v1 =
+						let computation_weight =
 							T::WeightInfo::close_early_approved(len as u32, seats, proposal_count);
-						Weight::computation_only(weight_v1).saturating_add(proposal_weight)
+						Weight::computation_only(computation_weight).saturating_add(proposal_weight)
 					}),
 					Pays::Yes,
 				)
@@ -768,9 +768,9 @@ pub mod pallet {
 					Self::do_approve_proposal(seats, yes_votes, proposal_hash, proposal);
 				Ok((
 					Some({
-						let weight_v1 =
+						let computation_weight =
 							T::WeightInfo::close_approved(len as u32, seats, proposal_count);
-						Weight::computation_only(weight_v1).saturating_add(proposal_weight)
+						Weight::computation_only(computation_weight).saturating_add(proposal_weight)
 					}),
 					Pays::Yes,
 				)

@@ -150,7 +150,7 @@ pub use preimage_provider::PreimageProviderAndMaybeRecipient;
 
 pub(crate) trait MarginalWeightInfo: WeightInfo {
 	fn item(periodic: bool, named: bool, resolved: Option<bool>) -> Weight {
-		let weight_v1 = match (periodic, named, resolved) {
+		let computation_weight = match (periodic, named, resolved) {
 			(_, false, None) => Self::on_initialize_aborted(2) - Self::on_initialize_aborted(1),
 			(_, true, None) =>
 				Self::on_initialize_named_aborted(2) - Self::on_initialize_named_aborted(1),
@@ -172,7 +172,7 @@ pub(crate) trait MarginalWeightInfo: WeightInfo {
 					Self::on_initialize_periodic_named_resolved(1),
 		};
 
-		Weight::computation_only(weight_v1)
+		Weight::computation_only(computation_weight)
 	}
 }
 impl<T: WeightInfo> MarginalWeightInfo for T {}

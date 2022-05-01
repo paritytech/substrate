@@ -787,10 +787,11 @@ pub mod pallet {
 		/// The real weight of a migration of the given number of `items` with total `size`.
 		fn dynamic_weight(items: u32, size: u32) -> frame_support::pallet_prelude::Weight {
 			let items = items as u64;
-			let weight_v1 = items
+			let computation_weight = items
 				.saturating_mul(<T as frame_system::Config>::DbWeight::get().reads_writes(1, 1));
 			// we assume that the read/write per-byte weight is the same for child and top tree.
-			Weight::computation_only(weight_v1).saturating_add(T::WeightInfo::process_top_key(size))
+			Weight::computation_only(computation_weight)
+				.saturating_add(T::WeightInfo::process_top_key(size))
 		}
 
 		/// Put a stop to all ongoing migrations.

@@ -24,7 +24,7 @@ pub use frame_support::{assert_noop, assert_ok, pallet_prelude::GetDefault};
 use frame_support::{
 	bounded_vec, parameter_types,
 	traits::{ConstU32, Hooks},
-	weights::{Weight, ComputationWeight},
+	weights::{ComputationWeight, Weight},
 	BoundedVec,
 };
 use frame_system::limits::BlockWeights;
@@ -380,7 +380,8 @@ impl multi_phase::weights::WeightInfo for DualMockWeightInfo {
 		if MockWeightInfo::get() {
 			// 10 base
 			// 5 per edge.
-			(10 as ComputationWeight).saturating_add((5 as ComputationWeight).saturating_mul(a as ComputationWeight))
+			(10 as ComputationWeight)
+				.saturating_add((5 as ComputationWeight).saturating_mul(a as ComputationWeight))
 		} else {
 			<() as multi_phase::weights::WeightInfo>::submit_unsigned(v, t, a, d)
 		}
@@ -389,7 +390,8 @@ impl multi_phase::weights::WeightInfo for DualMockWeightInfo {
 		if MockWeightInfo::get() {
 			// 10 base
 			// 5 per edge.
-			(10 as ComputationWeight).saturating_add((5 as ComputationWeight).saturating_mul(a as ComputationWeight))
+			(10 as ComputationWeight)
+				.saturating_add((5 as ComputationWeight).saturating_mul(a as ComputationWeight))
 		} else {
 			<() as multi_phase::weights::WeightInfo>::feasibility_check(v, t, a, d)
 		}

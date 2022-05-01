@@ -327,10 +327,11 @@ pub mod pallet {
 				.max_block
 				.saturating_sub(System::<T>::block_weight().total())
 				.min(T::DeletionWeightLimit::get());
-			let weight_v1 = Storage::<T>::process_deletion_queue_batch(weight_limit.computation())
-				.saturating_add(T::WeightInfo::on_initialize());
+			let computation_weight =
+				Storage::<T>::process_deletion_queue_batch(weight_limit.computation())
+					.saturating_add(T::WeightInfo::on_initialize());
 
-			Weight::computation_only(weight_v1)
+			Weight::computation_only(computation_weight)
 		}
 	}
 
@@ -358,8 +359,8 @@ pub mod pallet {
 		/// * If no account exists and the call value is not less than `existential_deposit`,
 		/// a regular account will be created and any value will be transferred.
 		#[pallet::weight({
-			let weight_v1 = T::WeightInfo::call();
-			Weight::computation_only(weight_v1).saturating_add(*gas_limit)
+			let computation_weight = T::WeightInfo::call();
+			Weight::computation_only(computation_weight).saturating_add(*gas_limit)
 		})]
 		pub fn call(
 			origin: OriginFor<T>,
@@ -418,8 +419,8 @@ pub mod pallet {
 		/// - The `value` is transferred to the new account.
 		/// - The `deploy` function is executed in the context of the newly-created account.
 		#[pallet::weight({
-			let weight_v1 = T::WeightInfo::instantiate_with_code(code.len() as u32, salt.len() as u32);
-			Weight::computation_only(weight_v1).saturating_add(*gas_limit)
+			let computation_weight = T::WeightInfo::instantiate_with_code(code.len() as u32, salt.len() as u32);
+			Weight::computation_only(computation_weight).saturating_add(*gas_limit)
 		})]
 		pub fn instantiate_with_code(
 			origin: OriginFor<T>,
@@ -460,8 +461,8 @@ pub mod pallet {
 		/// code deployment step. Instead, the `code_hash` of an on-chain deployed wasm binary
 		/// must be supplied.
 		#[pallet::weight({
-			let weight_v1 = T::WeightInfo::instantiate(salt.len() as u32);
-			Weight::computation_only(weight_v1).saturating_add(*gas_limit)
+			let computation_weight = T::WeightInfo::instantiate(salt.len() as u32);
+			Weight::computation_only(computation_weight).saturating_add(*gas_limit)
 		})]
 		pub fn instantiate(
 			origin: OriginFor<T>,

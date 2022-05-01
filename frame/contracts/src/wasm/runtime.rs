@@ -239,7 +239,7 @@ impl RuntimeCosts {
 		T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 	{
 		use self::RuntimeCosts::*;
-		let weight_v1 = match *self {
+		let computation_weight = match *self {
 			MeteringBlock(amount) => s.gas.saturating_add(amount.into()),
 			CopyFromContract(len) => s.return_per_byte.saturating_mul(len.into()),
 			CopyToContract(len) => s.input_per_byte.saturating_mul(len.into()),
@@ -318,7 +318,7 @@ impl RuntimeCosts {
 			EcdsaToEthAddress => s.ecdsa_to_eth_address,
 		};
 
-		let weight = Weight::computation_only(weight_v1);
+		let weight = Weight::computation_only(computation_weight);
 		RuntimeToken {
 			#[cfg(test)]
 			_created_from: *self,

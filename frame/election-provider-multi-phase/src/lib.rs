@@ -237,7 +237,7 @@ use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	ensure,
 	traits::{Currency, Get, OnUnbalanced, ReservableCurrency},
-	weights::{DispatchClass, Weight, ComputationWeight},
+	weights::{ComputationWeight, DispatchClass, Weight},
 };
 use frame_system::{ensure_none, offchain::SendTransactionTypes};
 use scale_info::TypeInfo;
@@ -737,7 +737,7 @@ pub mod pallet {
 				next_election,
 				Self::snapshot_metadata()
 			);
-			let weight_v1 = match current_phase {
+			let computation_weight = match current_phase {
 				Phase::Off if remaining <= signed_deadline && remaining > unsigned_deadline => {
 					// NOTE: if signed-phase length is zero, second part of the if-condition fails.
 					match Self::create_snapshot() {
@@ -797,7 +797,7 @@ pub mod pallet {
 				_ => T::WeightInfo::on_initialize_nothing(),
 			};
 
-			Weight::computation_only(weight_v1)
+			Weight::computation_only(computation_weight)
 		}
 
 		fn offchain_worker(now: T::BlockNumber) {

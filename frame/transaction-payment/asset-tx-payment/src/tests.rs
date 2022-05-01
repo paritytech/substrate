@@ -22,8 +22,8 @@ use frame_support::{
 	parameter_types,
 	traits::{fungibles::Mutate, ConstU32, ConstU64, ConstU8, FindAuthor},
 	weights::{
-		DispatchClass, DispatchInfo, PostDispatchInfo, Weight, WeightToFeeCoefficient,
-		WeightToFeeCoefficients, WeightToFeePolynomial, ComputationWeight,
+		ComputationWeight, DispatchClass, DispatchInfo, PostDispatchInfo, Weight,
+		WeightToFeeCoefficient, WeightToFeeCoefficients, WeightToFeePolynomial,
 	},
 	ConsensusEngineId,
 };

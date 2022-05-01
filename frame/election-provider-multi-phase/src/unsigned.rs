@@ -502,19 +502,20 @@ impl<T: Config> Pallet<T> {
 			W::submit_unsigned(size.voters, size.targets, active_voters, desired_winners)
 		};
 
-		let next_voters = |current_weight: ComputationWeight, voters: u32, step: u32| -> Result<u32, ()> {
-			match current_weight.cmp(&max_weight) {
-				Ordering::Less => {
-					let next_voters = voters.checked_add(step);
-					match next_voters {
-						Some(voters) if voters < max_voters => Ok(voters),
-						_ => Err(()),
-					}
-				},
-				Ordering::Greater => voters.checked_sub(step).ok_or(()),
-				Ordering::Equal => Ok(voters),
-			}
-		};
+		let next_voters =
+			|current_weight: ComputationWeight, voters: u32, step: u32| -> Result<u32, ()> {
+				match current_weight.cmp(&max_weight) {
+					Ordering::Less => {
+						let next_voters = voters.checked_add(step);
+						match next_voters {
+							Some(voters) if voters < max_voters => Ok(voters),
+							_ => Err(()),
+						}
+					},
+					Ordering::Greater => voters.checked_sub(step).ok_or(()),
+					Ordering::Equal => Ok(voters),
+				}
+			};
 
 		// First binary-search the right amount of voters
 		let mut step = voters / 2;
