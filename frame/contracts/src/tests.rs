@@ -237,9 +237,6 @@ impl pallet_utility::Config for Test {
 	type WeightInfo = ();
 }
 parameter_types! {
-	pub const MaxValueSize: u32 = 16_384;
-	pub const DeletionWeightLimit: Weight = Weight::computation_only(500_000_000_000);
-	pub const MaxCodeSize: u32 = 2 * 1024;
 	pub MySchedule: Schedule<Test> = {
 		let mut schedule = <Schedule<Test>>::default();
 		// We want stack height to be always enabled for tests so that this
@@ -247,7 +244,6 @@ parameter_types! {
 		schedule.limits.stack_height = Some(512);
 		schedule
 	};
-	pub const TransactionByteFee: u64 = 0;
 	pub static DepositPerByte: BalanceOf<Test> = 1;
 	pub const DepositPerItem: BalanceOf<Test> = 2;
 }
@@ -289,7 +285,7 @@ impl Config for Test {
 	type WeightInfo = ();
 	type ChainExtension = TestExtension;
 	type DeletionQueueDepth = ConstU32<1024>;
-	type DeletionWeightLimit = DeletionWeightLimit;
+	type DeletionWeightLimit = ConstU64<500_000_000_000>;
 	type Schedule = MySchedule;
 	type DepositPerByte = DepositPerByte;
 	type DepositPerItem = DepositPerItem;

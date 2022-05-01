@@ -355,7 +355,7 @@ impl PostDispatchInfo {
 /// Extract the actual weight from a dispatch result if any or fall back to the default weight.
 pub fn extract_actual_weight(result: &DispatchResultWithPostInfo, info: &DispatchInfo) -> Weight {
 	match result {
-		Ok(post_info) => &post_info,
+		Ok(post_info) => post_info,
 		Err(err) => &err.post_info,
 	}
 	.calc_actual_weight(info)
@@ -671,6 +671,10 @@ where
 			degree: 1,
 		})
 	}
+
+	fn calc(weight: &Weight) -> Self::Balance {
+		Self::Balance::saturated_from(*weight)
+	}
 }
 
 /// Implementor of [`WeightToFeePolynomial`] that uses a constant multiplier.
@@ -698,6 +702,10 @@ where
 			negative: false,
 			degree: 1,
 		})
+	}
+
+	fn calc(weight: &Weight) -> Self::Balance {
+		Self::Balance::saturated_from(*weight).saturating_mul(M::get())
 	}
 }
 

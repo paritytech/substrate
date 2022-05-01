@@ -256,7 +256,7 @@ pub mod pallet {
 			// reserve balance for each candidate in the pool.
 			// panicking here is ok, since this just happens one time, pre-genesis.
 			pool.iter().for_each(|(who, _)| {
-				T::Currency::reserve(&who, T::CandidateDeposit::get())
+				T::Currency::reserve(who, T::CandidateDeposit::get())
 					.expect("balance too low to create candidacy");
 				<CandidateExists<T, I>>::insert(who, true);
 			});
@@ -387,7 +387,7 @@ pub mod pallet {
 			// if there is already an element with `score`, we insert
 			// right before that. if not, the search returns a location
 			// where we can insert while maintaining order.
-			let item = (who, Some(score.clone()));
+			let item = (who, Some(score));
 			let location = pool
 				.binary_search_by_key(&Reverse(score), |(_, maybe_score)| {
 					Reverse(maybe_score.unwrap_or_default())

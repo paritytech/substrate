@@ -142,7 +142,7 @@ where
 							claims.entry(key).or_default().secondary.push(slot);
 						},
 						PreDigest::SecondaryVRF { .. } => {
-							claims.entry(key).or_default().secondary_vrf.push(slot.into());
+							claims.entry(key).or_default().secondary_vrf.push(slot);
 						},
 					};
 				}
@@ -205,7 +205,7 @@ where
 		.epoch_data_for_child_of(
 			descendent_query(&**client),
 			&parent.hash(),
-			parent.number().clone(),
+			*parent.number(),
 			slot.into(),
 			|slot| Epoch::genesis(babe_config.genesis_config(), slot),
 		)
@@ -290,6 +290,6 @@ mod tests {
 		let mut response: serde_json::Value = serde_json::from_str(&response).unwrap();
 		let error: RpcError = serde_json::from_value(response["error"].take()).unwrap();
 
-		assert_eq!(error, RpcError::method_not_found())
+		assert_eq!(error, sc_rpc_api::UnsafeRpcError.into())
 	}
 }

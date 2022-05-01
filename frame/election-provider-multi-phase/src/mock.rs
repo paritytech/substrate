@@ -20,7 +20,7 @@ use crate as multi_phase;
 use frame_election_provider_support::{
 	data_provider, onchain, ElectionDataProvider, NposSolution, SequentialPhragmen,
 };
-pub use frame_support::{assert_noop, assert_ok};
+pub use frame_support::{assert_noop, assert_ok, pallet_prelude::GetDefault};
 use frame_support::{
 	bounded_vec, parameter_types,
 	traits::{ConstU32, Hooks},
@@ -260,13 +260,15 @@ parameter_types! {
 	pub static SignedPhase: BlockNumber = 10;
 	pub static UnsignedPhase: BlockNumber = 5;
 	pub static SignedMaxSubmissions: u32 = 5;
+	pub static SignedMaxRefunds: u32 = 1;
 	pub static SignedDepositBase: Balance = 5;
 	pub static SignedDepositByte: Balance = 0;
 	pub static SignedDepositWeight: Balance = 0;
 	pub static SignedRewardBase: Balance = 7;
 	pub static SignedMaxWeight: Weight = SystemBlockWeights::get().max_block;
 	pub static MinerTxPriority: u64 = 100;
-	pub static SolutionImprovementThreshold: Perbill = Perbill::zero();
+	pub static BetterSignedThreshold: Perbill = Perbill::zero();
+	pub static BetterUnsignedThreshold: Perbill = Perbill::zero();
 	pub static OffchainRepeat: BlockNumber = 5;
 	pub static MinerMaxWeight: Weight = SystemBlockWeights::get().max_block;
 	pub static MinerMaxLength: u32 = 256;
@@ -279,10 +281,11 @@ parameter_types! {
 }
 
 pub struct OnChainSeqPhragmen;
-impl onchain::ExecutionConfig for OnChainSeqPhragmen {
+impl onchain::Config for OnChainSeqPhragmen {
 	type System = Runtime;
 	type Solver = SequentialPhragmen<AccountId, SolutionAccuracyOf<Runtime>, Balancing>;
 	type DataProvider = StakingMock;
+	type WeightInfo = ();
 }
 
 pub struct MockFallback;
@@ -307,7 +310,7 @@ impl InstantElectionProvider for MockFallback {
 				max_voters,
 				max_targets,
 			)
-			.map_err(|_| "UnboundedExecution failed")
+			.map_err(|_| "onchain::UnboundedExecution failed.")
 		} else {
 			super::NoFallback::<Runtime>::elect_with_bounds(max_voters, max_targets)
 		}
@@ -416,7 +419,8 @@ impl crate::Config for Runtime {
 	type EstimateCallFee = frame_support::traits::ConstU32<8>;
 	type SignedPhase = SignedPhase;
 	type UnsignedPhase = UnsignedPhase;
-	type SolutionImprovementThreshold = SolutionImprovementThreshold;
+	type BetterUnsignedThreshold = BetterUnsignedThreshold;
+	type BetterSignedThreshold = BetterSignedThreshold;
 	type OffchainRepeat = OffchainRepeat;
 	type MinerMaxWeight = MinerMaxWeight;
 	type MinerMaxLength = MinerMaxLength;
@@ -427,6 +431,7 @@ impl crate::Config for Runtime {
 	type SignedDepositWeight = ();
 	type SignedMaxWeight = SignedMaxWeight;
 	type SignedMaxSubmissions = SignedMaxSubmissions;
+	type SignedMaxRefunds = SignedMaxRefunds;
 	type SlashHandler = ();
 	type RewardHandler = ();
 	type DataProvider = StakingMock;
@@ -539,8 +544,12 @@ impl ExtBuilder {
 		<MinerTxPriority>::set(p);
 		self
 	}
-	pub fn solution_improvement_threshold(self, p: Perbill) -> Self {
-		<SolutionImprovementThreshold>::set(p);
+	pub fn better_signed_threshold(self, p: Perbill) -> Self {
+		<BetterSignedThreshold>::set(p);
+		self
+	}
+	pub fn better_unsigned_threshold(self, p: Perbill) -> Self {
+		<BetterUnsignedThreshold>::set(p);
 		self
 	}
 	pub fn phases(self, signed: BlockNumber, unsigned: BlockNumber) -> Self {

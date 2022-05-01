@@ -229,7 +229,7 @@ pub mod pallet {
 			let data = (*inherent_data).saturated_into::<T::Moment>();
 
 			let next_time = cmp::max(data, Self::now() + T::MinimumPeriod::get());
-			Some(Call::set { now: next_time.into() })
+			Some(Call::set { now: next_time })
 		}
 
 		fn check_inherent(
@@ -240,7 +240,7 @@ pub mod pallet {
 				sp_timestamp::Timestamp::new(30 * 1000);
 
 			let t: u64 = match call {
-				Call::set { ref now } => now.clone().saturated_into::<u64>(),
+				Call::set { ref now } => (*now).saturated_into::<u64>(),
 				_ => return Ok(()),
 			};
 

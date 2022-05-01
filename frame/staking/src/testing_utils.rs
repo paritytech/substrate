@@ -85,7 +85,7 @@ pub fn create_stash_controller<T: Config>(
 		amount,
 		destination,
 	)?;
-	return Ok((stash, controller))
+	Ok((stash, controller))
 }
 
 /// Create a stash and controller pair with fixed balance.
@@ -127,7 +127,7 @@ pub fn create_stash_and_dead_controller<T: Config>(
 		amount,
 		destination,
 	)?;
-	return Ok((stash, controller))
+	Ok((stash, controller))
 }
 
 /// create `max` validators.

@@ -246,7 +246,7 @@ impl TelemetryWorker {
 						"Initializing telemetry for: {:?}",
 						addr,
 					);
-					node_map.entry(id.clone()).or_default().push((verbosity, addr.clone()));
+					node_map.entry(id).or_default().push((verbosity, addr.clone()));
 
 					let node = node_pool.entry(addr.clone()).or_insert_with(|| {
 						Node::new(transport.clone(), addr.clone(), Vec::new(), Vec::new())
@@ -288,7 +288,7 @@ impl TelemetryWorker {
 	) {
 		let (id, verbosity, payload) = input.expect("the stream is never closed; qed");
 
-		let ts = chrono::Local::now().to_rfc3339().to_string();
+		let ts = chrono::Local::now().to_rfc3339();
 		let mut message = serde_json::Map::new();
 		message.insert("id".into(), id.into());
 		message.insert("ts".into(), ts.into());
@@ -318,7 +318,7 @@ impl TelemetryWorker {
 				continue
 			}
 
-			if let Some(node) = node_pool.get_mut(&addr) {
+			if let Some(node) = node_pool.get_mut(addr) {
 				let _ = node.send(message.clone()).await;
 			} else {
 				log::debug!(
@@ -386,7 +386,7 @@ impl Telemetry {
 	/// The `connection_message` argument is a JSON object that is sent every time the connection
 	/// (re-)establishes.
 	pub fn start_telemetry(&mut self, connection_message: ConnectionMessage) -> Result<()> {
-		let endpoints = self.endpoints.take().ok_or_else(|| Error::TelemetryAlreadyInitialized)?;
+		let endpoints = self.endpoints.take().ok_or(Error::TelemetryAlreadyInitialized)?;
 
 		self.register_sender
 			.unbounded_send(Register::Telemetry { id: self.id, endpoints, connection_message })

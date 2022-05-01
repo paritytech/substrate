@@ -24,7 +24,7 @@
 
 use frame_support::{
 	construct_runtime, parameter_types,
-	traits::{ConstU16, ConstU32},
+	traits::{ConstU16, ConstU32, ConstU64},
 };
 use sp_core::{sr25519, H256};
 use sp_runtime::{
@@ -50,7 +50,6 @@ pub type BlockNumber = u64;
 pub type Index = u64;
 
 parameter_types! {
-	pub const BlockHashCount: BlockNumber = 2400;
 	pub const Version: RuntimeVersion = VERSION;
 }
 
@@ -63,7 +62,7 @@ impl frame_system::Config for Runtime {
 	type Hashing = BlakeTwo256;
 	type Header = Header;
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type BlockHashCount = BlockHashCount;
+	type BlockHashCount = ConstU64<2400>;
 	type Version = Version;
 	type AccountData = ();
 	type Origin = Origin;

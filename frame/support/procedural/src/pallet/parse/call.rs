@@ -133,9 +133,10 @@ impl CallDef {
 			return Err(syn::Error::new(item.span(), "Invalid pallet::call, expected item impl"))
 		};
 
-		let mut instances = vec![];
-		instances.push(helper::check_impl_gen(&item.generics, item.impl_token.span())?);
-		instances.push(helper::check_pallet_struct_usage(&item.self_ty)?);
+		let instances = vec![
+			helper::check_impl_gen(&item.generics, item.impl_token.span())?,
+			helper::check_pallet_struct_usage(&item.self_ty)?,
+		];
 
 		if let Some((_, _, for_)) = item.trait_ {
 			let msg = "Invalid pallet::call, expected no trait ident as in \

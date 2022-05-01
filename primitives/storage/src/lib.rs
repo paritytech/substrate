@@ -189,21 +189,21 @@ pub mod well_known_keys {
 	/// Wasm code of the runtime.
 	///
 	/// Stored as a raw byte vector. Required by substrate.
-	pub const CODE: &'static [u8] = b":code";
+	pub const CODE: &[u8] = b":code";
 
 	/// Number of wasm linear memory pages required for execution of the runtime.
 	///
 	/// The type of this value is encoded `u64`.
-	pub const HEAP_PAGES: &'static [u8] = b":heappages";
+	pub const HEAP_PAGES: &[u8] = b":heappages";
 
 	/// Current extrinsic index (u32) is stored under this key.
-	pub const EXTRINSIC_INDEX: &'static [u8] = b":extrinsic_index";
+	pub const EXTRINSIC_INDEX: &[u8] = b":extrinsic_index";
 
 	/// Prefix of child storage keys.
-	pub const CHILD_STORAGE_KEY_PREFIX: &'static [u8] = b":child_storage:";
+	pub const CHILD_STORAGE_KEY_PREFIX: &[u8] = b":child_storage:";
 
 	/// Prefix of the default child storage keys in the top trie.
-	pub const DEFAULT_CHILD_STORAGE_KEY_PREFIX: &'static [u8] = b":child_storage:default:";
+	pub const DEFAULT_CHILD_STORAGE_KEY_PREFIX: &[u8] = b":child_storage:default:";
 
 	/// Whether a key is a default child storage key.
 	///
@@ -359,7 +359,7 @@ impl ChildType {
 	fn do_prefix_key(&self, key: &mut Vec<u8>) {
 		let parent_prefix = self.parent_prefix();
 		let key_len = key.len();
-		if parent_prefix.len() > 0 {
+		if !parent_prefix.is_empty() {
 			key.resize(key_len + parent_prefix.len(), 0);
 			key.copy_within(..key_len, parent_prefix.len());
 			key[..parent_prefix.len()].copy_from_slice(parent_prefix);

@@ -82,11 +82,7 @@ pub fn generate_request_response_config(protocol_id: ProtocolId) -> RequestRespo
 
 /// Generate the grandpa warp sync protocol name from chain specific protocol identifier.
 fn generate_protocol_name(protocol_id: ProtocolId) -> String {
-	let mut s = String::new();
-	s.push_str("/");
-	s.push_str(protocol_id.as_ref());
-	s.push_str("/sync/warp");
-	s
+	format!("/{}/sync/warp", protocol_id.as_ref())
 }
 
 /// Handler for incoming grandpa warp sync requests from a remote peer.

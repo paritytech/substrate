@@ -106,7 +106,7 @@ where
 		let number = header.number();
 
 		if let Some(ref author) = author {
-			if !acc.insert((number.clone(), author.clone())) {
+			if !acc.insert((*number, author.clone())) {
 				return Err("more than one uncle per number per author included")
 			}
 		}
@@ -225,7 +225,7 @@ pub mod pallet {
 			ensure!(new_uncles.len() <= MAX_UNCLES, Error::<T>::TooManyUncles);
 
 			if <DidSetUncles<T>>::get() {
-				Err(Error::<T>::UnclesAlreadySet)?
+				return Err(Error::<T>::UnclesAlreadySet.into())
 			}
 			<DidSetUncles<T>>::put(true);
 
@@ -334,7 +334,7 @@ impl<T: Config> Pallet<T> {
 			let hash = uncle.hash();
 
 			if let Some(author) = maybe_author.clone() {
-				T::EventHandler::note_uncle(author, now - uncle.number().clone());
+				T::EventHandler::note_uncle(author, now - *uncle.number());
 			}
 			uncles.push(UncleEntryItem::Uncle(hash, maybe_author));
 		}
@@ -368,7 +368,7 @@ impl<T: Config> Pallet<T> {
 		}
 
 		{
-			let parent_number = uncle.number().clone() - One::one();
+			let parent_number = *uncle.number() - One::one();
 			let parent_hash = <frame_system::Pallet<T>>::block_hash(&parent_number);
 			if &parent_hash != uncle.parent_hash() {
 				return Err(Error::<T>::InvalidUncleParent.into())
@@ -387,7 +387,7 @@ impl<T: Config> Pallet<T> {
 		}
 
 		// check uncle validity.
-		T::FilterUncle::filter_uncle(&uncle, accumulator).map_err(|e| Into::into(e))
+		T::FilterUncle::filter_uncle(uncle, accumulator).map_err(Into::into)
 	}
 
 	fn prune_old_uncles(minimum_height: T::BlockNumber) {

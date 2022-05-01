@@ -147,7 +147,7 @@ pub mod pallet {
 				deposit
 			} else {
 				let deposit = T::ReservationFee::get();
-				T::Currency::reserve(&sender, deposit.clone())?;
+				T::Currency::reserve(&sender, deposit)?;
 				Self::deposit_event(Event::<T>::NameSet { who: sender.clone() });
 				deposit
 			};
@@ -172,7 +172,7 @@ pub mod pallet {
 
 			let deposit = <NameOf<T>>::take(&sender).ok_or(Error::<T>::Unnamed)?.1;
 
-			let err_amount = T::Currency::unreserve(&sender, deposit.clone());
+			let err_amount = T::Currency::unreserve(&sender, deposit);
 			debug_assert!(err_amount.is_zero());
 
 			Self::deposit_event(Event::<T>::NameCleared { who: sender, deposit });
@@ -204,7 +204,7 @@ pub mod pallet {
 			// Grab their deposit (and check that they have one).
 			let deposit = <NameOf<T>>::take(&target).ok_or(Error::<T>::Unnamed)?.1;
 			// Slash their deposit from them.
-			T::Slashed::on_unbalanced(T::Currency::slash_reserved(&target, deposit.clone()).0);
+			T::Slashed::on_unbalanced(T::Currency::slash_reserved(&target, deposit).0);
 
 			Self::deposit_event(Event::<T>::NameKilled { target, deposit });
 			Ok(())

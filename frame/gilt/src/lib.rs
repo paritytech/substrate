@@ -399,7 +399,7 @@ pub mod pallet {
 				qs[queue_index].0 += net.0;
 				qs[queue_index].1 = qs[queue_index].1.saturating_add(net.1);
 			});
-			Self::deposit_event(Event::BidPlaced { who: who.clone(), amount, duration });
+			Self::deposit_event(Event::BidPlaced { who, amount, duration });
 
 			Ok(().into())
 		}

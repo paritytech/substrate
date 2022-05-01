@@ -26,7 +26,6 @@ use frame_support::{
 		ConstU32, ConstU64, Contains, EqualPrivilegeOnly, OnInitialize, OriginTrait, Polling,
 		PreimageRecipient, SortedMembers,
 	},
-	weights::Weight,
 };
 use frame_system::{EnsureRoot, EnsureSignedBy};
 use sp_core::H256;
@@ -110,6 +109,7 @@ parameter_types! {
 		bandwidth: 2_000_000_000_000,
 	};
 }
+
 impl pallet_scheduler::Config for Test {
 	type Event = Event;
 	type Origin = Origin;
@@ -123,26 +123,19 @@ impl pallet_scheduler::Config for Test {
 	type PreimageProvider = Preimage;
 	type NoPreimagePostponement = ConstU64<10>;
 }
-parameter_types! {
-	pub const ExistentialDeposit: u64 = 1;
-	pub const MaxLocks: u32 = 10;
-}
 impl pallet_balances::Config for Test {
 	type MaxReserves = ();
 	type ReserveIdentifier = [u8; 8];
-	type MaxLocks = MaxLocks;
+	type MaxLocks = ConstU32<10>;
 	type Balance = u64;
 	type Event = Event;
 	type DustRemoval = ();
-	type ExistentialDeposit = ExistentialDeposit;
+	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
 }
 parameter_types! {
 	pub static AlarmInterval: u64 = 1;
-	pub const SubmissionDeposit: u64 = 2;
-	pub const MaxQueued: u32 = 3;
-	pub const UndecidingTimeout: u64 = 20;
 }
 ord_parameter_types! {
 	pub const One: u64 = 1;
@@ -234,9 +227,9 @@ impl Config for Test {
 	type Slash = ();
 	type Votes = u32;
 	type Tally = Tally;
-	type SubmissionDeposit = SubmissionDeposit;
-	type MaxQueued = MaxQueued;
-	type UndecidingTimeout = UndecidingTimeout;
+	type SubmissionDeposit = ConstU64<2>;
+	type MaxQueued = ConstU32<3>;
+	type UndecidingTimeout = ConstU64<20>;
 	type AlarmInterval = AlarmInterval;
 	type Tracks = TestTracksInfo;
 }

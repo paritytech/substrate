@@ -261,7 +261,7 @@ impl<T: Config, Inner: FindAuthor<u32>> FindAuthor<T::AuthorityId>
 		let i = Inner::find_author(digests)?;
 
 		let validators = <Pallet<T>>::authorities();
-		validators.get(i as usize).map(|k| k.clone())
+		validators.get(i as usize).cloned()
 	}
 }
 

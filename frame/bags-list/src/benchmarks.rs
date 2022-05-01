@@ -133,7 +133,7 @@ frame_benchmarking::benchmarks! {
 			List::<T, _>::get_bags(),
 			vec![
 				(origin_bag_thresh, vec![origin_head.clone()]),
-				(dest_bag_thresh, vec![dest_head.clone(), origin_tail.clone()])
+				(dest_bag_thresh, vec![dest_head.clone(), origin_tail])
 			]
 		);
 	}
@@ -179,10 +179,10 @@ frame_benchmarking::benchmarks! {
 			vec![heavier, lighter, heavier_prev, heavier_next]
 		)
 	}
-}
 
-frame_benchmarking::impl_benchmark_test_suite!(
-	Pallet,
-	crate::mock::ExtBuilder::default().skip_genesis_ids().build(),
-	crate::mock::Runtime
-);
+	impl_benchmark_test_suite!(
+		Pallet,
+		crate::mock::ExtBuilder::default().skip_genesis_ids().build(),
+		crate::mock::Runtime
+	);
+}

@@ -499,7 +499,7 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 
 	/// Returns true if state for given block is available.
 	fn have_state_at(&self, hash: &Block::Hash, _number: NumberFor<Block>) -> bool {
-		self.state_at(BlockId::Hash(hash.clone())).is_ok()
+		self.state_at(BlockId::Hash(*hash)).is_ok()
 	}
 
 	/// Returns state backend with post-state of given block.

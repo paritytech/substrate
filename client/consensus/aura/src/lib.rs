@@ -40,7 +40,8 @@ use codec::{Codec, Decode, Encode};
 use sc_client_api::{backend::AuxStore, BlockOf, UsageProvider};
 use sc_consensus::{BlockImport, BlockImportParams, ForkChoiceStrategy, StateAction};
 use sc_consensus_slots::{
-	BackoffAuthoringBlocksStrategy, InherentDataProviderExt, SlotInfo, StorageChanges,
+	BackoffAuthoringBlocksStrategy, InherentDataProviderExt, SimpleSlotWorkerToSlotWorker,
+	SlotInfo, StorageChanges,
 };
 use sc_telemetry::TelemetryHandle;
 use sp_api::ProvideRuntimeApi;
@@ -185,7 +186,7 @@ where
 	Error: std::error::Error + Send + From<sp_consensus::Error> + 'static,
 {
 	let worker = build_aura_worker::<P, _, _, _, _, _, _, _, _>(BuildAuraWorkerParams {
-		client: client.clone(),
+		client,
 		block_import,
 		proposer_factory,
 		keystore,
@@ -201,7 +202,7 @@ where
 	Ok(sc_consensus_slots::start_slot_worker(
 		slot_duration,
 		select_chain,
-		worker,
+		SimpleSlotWorkerToSlotWorker(worker),
 		sync_oracle,
 		create_inherent_data_providers,
 		can_author_with,
@@ -256,7 +257,15 @@ pub fn build_aura_worker<P, B, C, PF, I, SO, L, BS, Error>(
 		telemetry,
 		force_authoring,
 	}: BuildAuraWorkerParams<C, I, PF, SO, L, BS>,
-) -> impl sc_consensus_slots::SlotWorker<B, <PF::Proposer as Proposer<B>>::Proof>
+) -> impl sc_consensus_slots::SimpleSlotWorker<
+	B,
+	Proposer = PF::Proposer,
+	BlockImport = I,
+	SyncOracle = SO,
+	JustificationSyncLink = L,
+	Claim = P::Public,
+	EpochData = Vec<AuthorityId<P>>,
+>
 where
 	B: BlockT,
 	C: ProvideRuntimeApi<B> + BlockOf + AuxStore + HeaderBackend<B> + Send + Sync,
@@ -272,7 +281,7 @@ where
 	L: sc_consensus::JustificationSyncLink<B>,
 	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + Sync + 'static,
 {
-	sc_consensus_slots::SimpleSlotWorkerToSlotWorker(AuraWorker {
+	AuraWorker {
 		client,
 		block_import,
 		env: proposer_factory,
@@ -285,7 +294,7 @@ where
 		block_proposal_slot_portion,
 		max_block_proposal_slot_portion,
 		_key_type: PhantomData::<P>,
-	})
+	}
 }
 
 struct AuraWorker<C, E, I, P, SO, L, BS> {
@@ -448,11 +457,10 @@ where
 	}
 
 	fn proposer(&mut self, block: &B::Header) -> Self::CreateProposer {
-		Box::pin(
-			self.env
-				.init(block)
-				.map_err(|e| sp_consensus::Error::ClientImport(format!("{:?}", e)).into()),
-		)
+		self.env
+			.init(block)
+			.map_err(|e| sp_consensus::Error::ClientImport(format!("{:?}", e)))
+			.boxed()
 	}
 
 	fn telemetry(&self) -> Option<TelemetryHandle> {
@@ -526,7 +534,7 @@ pub fn find_pre_digest<B: BlockT, Signature: Codec>(header: &B::Header) -> Resul
 	for log in header.digest().logs() {
 		trace!(target: "aura", "Checking log {:?}", log);
 		match (CompatibleDigestItem::<Signature>::as_aura_pre_digest(log), pre_digest.is_some()) {
-			(Some(_), true) => Err(aura_err(Error::MultipleHeaders))?,
+			(Some(_), true) => return Err(aura_err(Error::MultipleHeaders)),
 			(None, _) => trace!(target: "aura", "Ignoring digest not meant for us"),
 			(s, false) => pre_digest = s,
 		}
@@ -545,7 +553,7 @@ where
 		.runtime_api()
 		.authorities(at)
 		.ok()
-		.ok_or_else(|| sp_consensus::Error::InvalidAuthoritiesSet.into())
+		.ok_or(sp_consensus::Error::InvalidAuthoritiesSet)
 }
 
 #[cfg(test)]
