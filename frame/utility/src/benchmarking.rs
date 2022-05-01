@@ -70,7 +70,7 @@ benchmarks! {
 		let call = Box::new(frame_system::Call::remark { remark: vec![] }.into());
 		let origin: T::Origin = RawOrigin::Signed(caller).into();
 		let pallets_origin: <T::Origin as frame_support::traits::OriginTrait>::PalletsOrigin = origin.caller().clone();
-		let pallets_origin = Into::<T::PalletsOrigin>::into(pallets_origin.clone());
+		let pallets_origin = Into::<T::PalletsOrigin>::into(pallets_origin);
 	}: _(RawOrigin::Root, Box::new(pallets_origin), call)
 
 	impl_benchmark_test_suite!(Pallet, crate::tests::new_test_ext(), crate::tests::Test);

@@ -115,7 +115,7 @@ impl<H: HeaderT> BlockAnnounce<H> {
 		AnnouncementSummary {
 			block_hash: self.header.hash(),
 			number: *self.header.number(),
-			parent_hash: self.header.parent_hash().clone(),
+			parent_hash: *self.header.parent_hash(),
 			state: self.state,
 		}
 	}

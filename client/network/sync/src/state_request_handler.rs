@@ -63,11 +63,7 @@ pub fn generate_protocol_config(protocol_id: &ProtocolId) -> ProtocolConfig {
 
 /// Generate the state protocol name from chain specific protocol identifier.
 fn generate_protocol_name(protocol_id: &ProtocolId) -> String {
-	let mut s = String::new();
-	s.push_str("/");
-	s.push_str(protocol_id.as_ref());
-	s.push_str("/state/2");
-	s
+	format!("/{}/state/2", protocol_id.as_ref())
 }
 
 /// The key of [`BlockRequestHandler::seen_requests`].
@@ -152,8 +148,7 @@ where
 		let request = StateRequest::decode(&payload[..])?;
 		let block: B::Hash = Decode::decode(&mut request.block.as_ref())?;
 
-		let key =
-			SeenRequestsKey { peer: *peer, block: block.clone(), start: request.start.clone() };
+		let key = SeenRequestsKey { peer: *peer, block, start: request.start.clone() };
 
 		let mut reputation_changes = Vec::new();
 

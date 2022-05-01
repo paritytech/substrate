@@ -244,7 +244,7 @@ impl<VoterIndex, TargetIndex, P: PerThing> IndexAssignment<VoterIndex, TargetInd
 			distribution: assignment
 				.distribution
 				.iter()
-				.map(|(target, proportion)| Some((target_index(target)?, proportion.clone())))
+				.map(|(target, proportion)| Some((target_index(target)?, *proportion)))
 				.collect::<Option<Vec<_>>>()
 				.or_invalid_index()?,
 		})

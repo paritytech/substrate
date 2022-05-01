@@ -355,7 +355,7 @@ impl PostDispatchInfo {
 /// Extract the actual weight from a dispatch result if any or fall back to the default weight.
 pub fn extract_actual_weight(result: &DispatchResultWithPostInfo, info: &DispatchInfo) -> Weight {
 	match result {
-		Ok(post_info) => &post_info,
+		Ok(post_info) => post_info,
 		Err(err) => &err.post_info,
 	}
 	.calc_actual_weight(info)
@@ -432,7 +432,7 @@ where
 
 impl<T> WeighData<T> for Weight {
 	fn weigh_data(&self, _: T) -> Weight {
-		return *self
+		*self
 	}
 }
 
@@ -450,7 +450,7 @@ impl<T> PaysFee<T> for Weight {
 
 impl<T> WeighData<T> for (Weight, DispatchClass, Pays) {
 	fn weigh_data(&self, _: T) -> Weight {
-		return self.0
+		self.0
 	}
 }
 
@@ -468,7 +468,7 @@ impl<T> PaysFee<T> for (Weight, DispatchClass, Pays) {
 
 impl<T> WeighData<T> for (Weight, DispatchClass) {
 	fn weigh_data(&self, _: T) -> Weight {
-		return self.0
+		self.0
 	}
 }
 
@@ -486,7 +486,7 @@ impl<T> PaysFee<T> for (Weight, DispatchClass) {
 
 impl<T> WeighData<T> for (Weight, Pays) {
 	fn weigh_data(&self, _: T) -> Weight {
-		return self.0
+		self.0
 	}
 }
 

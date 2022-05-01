@@ -357,10 +357,10 @@ impl<AccountId: PartialEq, Balance> BidKind<AccountId, Balance> {
 			if a == v {
 				Ok(())
 			} else {
-				Err("incorrect identity")?
+				Err("incorrect identity".into())
 			}
 		} else {
-			Err("not vouched")?
+			Err("not vouched".into())
 		}
 	}
 }
@@ -724,7 +724,7 @@ pub mod pallet {
 			let deposit = T::CandidateDeposit::get();
 			T::Currency::reserve(&who, deposit)?;
 
-			Self::put_bid(bids, &who, value.clone(), BidKind::Deposit(deposit));
+			Self::put_bid(bids, &who, value, BidKind::Deposit(deposit));
 			Self::deposit_event(Event::<T, I>::Bid { candidate_id: who, offer: value });
 			Ok(())
 		}
@@ -770,7 +770,7 @@ pub mod pallet {
 					Self::deposit_event(Event::<T, I>::Unbid { candidate: who });
 					Ok(())
 				} else {
-					Err(Error::<T, I>::BadPosition)?
+					Err(Error::<T, I>::BadPosition.into())
 				}
 			})
 		}
@@ -844,7 +844,7 @@ pub mod pallet {
 			ensure!(!<Vouching<T, I>>::contains_key(&voucher), Error::<T, I>::AlreadyVouching);
 
 			<Vouching<T, I>>::insert(&voucher, VouchingStatus::Vouching);
-			Self::put_bid(bids, &who, value.clone(), BidKind::Vouch(voucher.clone(), tip));
+			Self::put_bid(bids, &who, value, BidKind::Vouch(voucher.clone(), tip));
 			Self::deposit_event(Event::<T, I>::Vouch {
 				candidate_id: who,
 				offer: value,
@@ -887,7 +887,7 @@ pub mod pallet {
 					Self::deposit_event(Event::<T, I>::Unvouch { candidate: who });
 					Ok(())
 				} else {
-					Err(Error::<T, I>::BadPosition)?
+					Err(Error::<T, I>::BadPosition.into())
 				}
 			})
 		}
@@ -1001,7 +1001,7 @@ pub mod pallet {
 					return Ok(())
 				}
 			}
-			Err(Error::<T, I>::NoPayout)?
+			Err(Error::<T, I>::NoPayout.into())
 		}
 
 		/// Found the society.
@@ -1229,7 +1229,7 @@ pub mod pallet {
 				// Remove suspended candidate
 				<SuspendedCandidates<T, I>>::remove(who);
 			} else {
-				Err(Error::<T, I>::NotSuspended)?
+				return Err(Error::<T, I>::NotSuspended.into())
 			}
 			Ok(())
 		}
@@ -1392,8 +1392,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		ensure!(Self::founder() != Some(m.clone()), Error::<T, I>::Founder);
 
 		let mut members = <Members<T, I>>::get();
-		match members.binary_search(&m) {
-			Err(_) => Err(Error::<T, I>::NotMember)?,
+		match members.binary_search(m) {
+			Err(_) => Err(Error::<T, I>::NotMember.into()),
 			Ok(i) => {
 				members.remove(i);
 				T::MembershipChanged::change_members_sorted(&[], &[m.clone()], &members[..]);
@@ -1572,7 +1572,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				<Members<T, I>>::put(&members[..]);
 				<Head<T, I>>::put(&primary);
 
-				T::MembershipChanged::change_members_sorted(&accounts, &[], &members);
+				T::MembershipChanged::change_members_sorted(&accounts, &[], members);
 				Self::deposit_event(Event::<T, I>::Inducted { primary, candidates: accounts });
 			}
 
@@ -1605,7 +1605,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		if !payouts.is_empty() {
 			let mut dropped = 0;
 			for (_, amount) in payouts.iter_mut() {
-				if let Some(new_rest) = rest.checked_sub(&amount) {
+				if let Some(new_rest) = rest.checked_sub(amount) {
 					// not yet totally slashed after this one; drop it completely.
 					rest = new_rest;
 					dropped += 1;
@@ -1635,7 +1635,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Suspend a user, removing them from the member list.
 	fn suspend_member(who: &T::AccountId) {
-		if Self::remove_member(&who).is_ok() {
+		if Self::remove_member(who).is_ok() {
 			<SuspendedMembers<T, I>>::insert(who, true);
 			<Strikes<T, I>>::remove(who);
 			Self::deposit_event(Event::<T, I>::MemberSuspended { member: who.clone() });
@@ -1683,12 +1683,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				let mut approval_count = 0;
 				let mut rejection_count = 0;
 				// Tallies total number of approve and reject votes for the defender.
-				members.iter().filter_map(|m| <DefenderVotes<T, I>>::take(m)).for_each(
-					|v| match v {
-						Vote::Approve => approval_count += 1,
-						_ => rejection_count += 1,
-					},
-				);
+				members.iter().filter_map(<DefenderVotes<T, I>>::take).for_each(|v| match v {
+					Vote::Approve => approval_count += 1,
+					_ => rejection_count += 1,
+				});
 
 				if approval_count <= rejection_count {
 					// User has failed the challenge

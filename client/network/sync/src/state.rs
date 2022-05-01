@@ -71,7 +71,7 @@ where
 		Self {
 			client,
 			target_block: target.hash(),
-			target_root: target.state_root().clone(),
+			target_root: *target.state_root(),
 			target_header: target,
 			last_key: SmallVec::default(),
 			state: HashMap::default(),
@@ -149,18 +149,16 @@ where
 				if entry.0.len() > 0 && entry.1.len() > 1 {
 					// Already imported child_trie with same root.
 					// Warning this will not work with parallel download.
-				} else {
-					if entry.0.is_empty() {
-						for (key, _value) in key_values.iter() {
-							self.imported_bytes += key.len() as u64;
-						}
+				} else if entry.0.is_empty() {
+					for (key, _value) in key_values.iter() {
+						self.imported_bytes += key.len() as u64;
+					}
 
-						entry.0 = key_values;
-					} else {
-						for (key, value) in key_values {
-							self.imported_bytes += key.len() as u64;
-							entry.0.push((key, value))
-						}
+					entry.0 = key_values;
+				} else {
+					for (key, value) in key_values {
+						self.imported_bytes += key.len() as u64;
+						entry.0.push((key, value))
 					}
 				}
 			}
@@ -172,7 +170,7 @@ where
 			// the parent cursor stays valid.
 			// Empty parent trie content only happens when all the response content
 			// is part of a single child trie.
-			if self.last_key.len() == 2 && response.entries[0].entries.len() == 0 {
+			if self.last_key.len() == 2 && response.entries[0].entries.is_empty() {
 				// Do not remove the parent trie position.
 				self.last_key.pop();
 			} else {
@@ -220,7 +218,7 @@ where
 				self.target_block,
 				self.target_header.clone(),
 				ImportedState {
-					block: self.target_block.clone(),
+					block: self.target_block,
 					state: std::mem::take(&mut self.state).into(),
 				},
 			)

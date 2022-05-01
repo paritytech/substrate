@@ -491,7 +491,7 @@ frame_benchmarking::benchmarks! {
 
 		// sort assignments by decreasing voter stake
 		assignments.sort_by_key(|crate::unsigned::Assignment::<T> { who, .. }| {
-			let stake = cache.get(&who).map(|idx| {
+			let stake = cache.get(who).map(|idx| {
 				let (_, stake, _) = voters[*idx];
 				stake
 			}).unwrap_or_default();

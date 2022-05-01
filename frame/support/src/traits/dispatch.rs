@@ -157,7 +157,7 @@ impl<OuterOrigin, L: EnsureOrigin<OuterOrigin>, R: EnsureOrigin<OuterOrigin>>
 	type Success = Either<L::Success, R::Success>;
 	fn try_origin(o: OuterOrigin) -> Result<Self::Success, OuterOrigin> {
 		L::try_origin(o)
-			.map_or_else(|o| R::try_origin(o).map(|o| Either::Right(o)), |o| Ok(Either::Left(o)))
+			.map_or_else(|o| R::try_origin(o).map(Either::Right), |o| Ok(Either::Left(o)))
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]

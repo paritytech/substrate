@@ -491,7 +491,7 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 			};
 
 			input.sig.ident =
-				generate_method_runtime_api_impl_name(&self.impl_trait, &input.sig.ident);
+				generate_method_runtime_api_impl_name(self.impl_trait, &input.sig.ident);
 			let ret_type = return_type_extract_type(&input.sig.output);
 
 			// Generate the correct return type.
@@ -593,7 +593,7 @@ fn generate_api_impl_for_runtime_api(impls: &[ItemImpl]) -> Result<TokenStream> 
 	let mut result = Vec::with_capacity(impls.len());
 
 	for impl_ in impls {
-		let impl_trait_path = extract_impl_trait(&impl_, RequireQualifiedTraitPath::Yes)?;
+		let impl_trait_path = extract_impl_trait(impl_, RequireQualifiedTraitPath::Yes)?;
 		let impl_trait = &impl_trait_path
 			.segments
 			.last()
@@ -634,7 +634,7 @@ fn generate_runtime_api_versions(impls: &[ItemImpl]) -> Result<TokenStream> {
 
 	for impl_ in impls {
 		let mut path = extend_with_runtime_decl_path(
-			extract_impl_trait(&impl_, RequireQualifiedTraitPath::Yes)?.clone(),
+			extract_impl_trait(impl_, RequireQualifiedTraitPath::Yes)?.clone(),
 		);
 		// Remove the trait
 		let trait_ = path
@@ -723,7 +723,7 @@ fn impl_runtime_apis_impl_inner(api_impls: &[ItemImpl]) -> Result<TokenStream> {
 
 // Filters all attributes except the cfg ones.
 fn filter_cfg_attrs(attrs: &[Attribute]) -> Vec<Attribute> {
-	attrs.into_iter().filter(|a| a.path.is_ident("cfg")).cloned().collect()
+	attrs.iter().filter(|a| a.path.is_ident("cfg")).cloned().collect()
 }
 
 #[cfg(test)]

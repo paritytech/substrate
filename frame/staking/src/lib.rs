@@ -321,7 +321,7 @@ pub use weights::WeightInfo;
 
 pub use pallet::{pallet::*, *};
 
-pub(crate) const LOG_TARGET: &'static str = "runtime::staking";
+pub(crate) const LOG_TARGET: &str = "runtime::staking";
 
 // syntactic sugar for logging.
 #[macro_export]
@@ -784,7 +784,7 @@ impl<Balance: AtLeast32BitUnsigned + Clone, T: Get<&'static PiecewiseLinear<'sta
 		era_duration_millis: u64,
 	) -> (Balance, Balance) {
 		let (validator_payout, max_payout) = inflation::compute_total_payout(
-			&T::get(),
+			T::get(),
 			total_staked,
 			total_issuance,
 			// Duration of era; more than u64::MAX is rewarded as u64::MAX.

@@ -114,7 +114,7 @@ where
 			.epoch_descriptor_for_child_of(
 				descendent_query(&*self.client),
 				&parent.hash(),
-				parent.number().clone(),
+				*parent.number(),
 				pre_digest.slot(),
 			)
 			.map_err(|e| format!("failed to fetch epoch_descriptor: {}", e))?
@@ -162,11 +162,11 @@ where
 			.epoch_descriptor_for_child_of(
 				descendent_query(&*self.client),
 				&parent.hash(),
-				parent.number().clone(),
+				*parent.number(),
 				slot,
 			)
 			.map_err(|e| Error::StringError(format!("failed to fetch epoch_descriptor: {}", e)))?
-			.ok_or_else(|| sp_consensus::Error::InvalidAuthoritiesSet)?;
+			.ok_or(sp_consensus::Error::InvalidAuthoritiesSet)?;
 
 		let epoch = epoch_changes
 			.viable_epoch(&epoch_descriptor, |slot| {
@@ -216,19 +216,19 @@ where
 				.epoch_descriptor_for_child_of(
 					descendent_query(&*self.client),
 					&parent.hash(),
-					parent.number().clone(),
+					*parent.number(),
 					slot,
 				)
 				.map_err(|e| {
 					Error::StringError(format!("failed to fetch epoch_descriptor: {}", e))
 				})?
-				.ok_or_else(|| sp_consensus::Error::InvalidAuthoritiesSet)?;
+				.ok_or(sp_consensus::Error::InvalidAuthoritiesSet)?;
 
 			match epoch_descriptor {
 				ViableEpochDescriptor::Signaled(identifier, _epoch_header) => {
 					let epoch_mut = epoch_changes
 						.epoch_mut(&identifier)
-						.ok_or_else(|| sp_consensus::Error::InvalidAuthoritiesSet)?;
+						.ok_or(sp_consensus::Error::InvalidAuthoritiesSet)?;
 
 					// mutate the current epoch
 					epoch_mut.authorities = self.authorities.clone();
@@ -236,7 +236,7 @@ where
 					let next_epoch = ConsensusLog::NextEpochData(NextEpochDescriptor {
 						authorities: self.authorities.clone(),
 						// copy the old randomness
-						randomness: epoch_mut.randomness.clone(),
+						randomness: epoch_mut.randomness,
 					});
 
 					vec![
@@ -268,11 +268,11 @@ where
 			.epoch_descriptor_for_child_of(
 				descendent_query(&*self.client),
 				&parent.hash(),
-				parent.number().clone(),
+				*parent.number(),
 				slot,
 			)
 			.map_err(|e| Error::StringError(format!("failed to fetch epoch_descriptor: {}", e)))?
-			.ok_or_else(|| sp_consensus::Error::InvalidAuthoritiesSet)?;
+			.ok_or(sp_consensus::Error::InvalidAuthoritiesSet)?;
 		// drop the lock
 		drop(epoch_changes);
 		// a quick check to see if we're in the authorities

@@ -217,7 +217,7 @@ impl BlockWeights {
 	/// Verifies correctness of this `BlockWeights` object.
 	pub fn validate(self) -> ValidationResult {
 		fn or_max(w: Option<Weight>) -> Weight {
-			w.unwrap_or_else(|| Weight::max_value())
+			w.unwrap_or_else(Weight::max_value)
 		}
 		let mut error = ValidationErrors::default();
 
@@ -246,7 +246,7 @@ impl BlockWeights {
 			);
 			// Max extrinsic should not be 0
 			error_assert!(
-				weights.max_extrinsic.unwrap_or_else(|| Weight::max_value()) > 0,
+				weights.max_extrinsic.unwrap_or_else(Weight::max_value) > 0,
 				&mut error,
 				"[{:?}] {:?} (max_extrinsic) must not be 0. Check base cost and average initialization cost.",
 				class, weights.max_extrinsic,

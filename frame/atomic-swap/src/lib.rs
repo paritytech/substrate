@@ -138,7 +138,7 @@ where
 	C: ReservableCurrency<AccountId>,
 {
 	fn reserve(&self, source: &AccountId) -> DispatchResult {
-		C::reserve(&source, self.value)
+		C::reserve(source, self.value)
 	}
 
 	fn claim(&self, source: &AccountId, target: &AccountId) -> bool {
@@ -267,7 +267,7 @@ pub mod pallet {
 				action,
 				end_block: frame_system::Pallet::<T>::block_number() + duration,
 			};
-			PendingSwaps::<T>::insert(target.clone(), hashed_proof.clone(), swap.clone());
+			PendingSwaps::<T>::insert(target.clone(), hashed_proof, swap.clone());
 
 			Self::deposit_event(Event::NewSwap { account: target, proof: hashed_proof, swap });
 
@@ -303,7 +303,7 @@ pub mod pallet {
 
 			let succeeded = swap.action.claim(&swap.source, &target);
 
-			PendingSwaps::<T>::remove(target.clone(), hashed_proof.clone());
+			PendingSwaps::<T>::remove(target.clone(), hashed_proof);
 
 			Self::deposit_event(Event::SwapClaimed {
 				account: target,

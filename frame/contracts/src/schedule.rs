@@ -670,7 +670,7 @@ struct ScheduleRules<'a, T: Config> {
 impl<T: Config> Schedule<T> {
 	pub(crate) fn rules(&self, module: &elements::Module) -> impl gas_metering::Rules + '_ {
 		ScheduleRules {
-			schedule: &self,
+			schedule: self,
 			params: module
 				.type_section()
 				.iter()

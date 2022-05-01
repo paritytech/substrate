@@ -275,8 +275,8 @@ impl<B: BlockT + DeserializeOwned> Default for Builder<B> {
 impl<B: BlockT + DeserializeOwned> Builder<B> {
 	fn as_online(&self) -> &OnlineConfig<B> {
 		match &self.mode {
-			Mode::Online(config) => &config,
-			Mode::OfflineOrElseOnline(_, config) => &config,
+			Mode::Online(config) => config,
+			Mode::OfflineOrElseOnline(_, config) => config,
 			_ => panic!("Unexpected mode: Online"),
 		}
 	}
@@ -380,7 +380,7 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 				log::error!(
 					target: LOG_TARGET,
 					"failed to execute batch: {:?}. Error: {:?}",
-					chunk_keys.iter().map(|k| HexDisplay::from(k)).collect::<Vec<_>>(),
+					chunk_keys.iter().map(HexDisplay::from).collect::<Vec<_>>(),
 					e
 				);
 				"batch failed."
@@ -388,7 +388,7 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 
 			assert_eq!(chunk_keys.len(), values.len());
 
-			for (idx, key) in chunk_keys.into_iter().enumerate() {
+			for (idx, key) in chunk_keys.iter().enumerate() {
 				let maybe_value = values[idx].clone();
 				let value = maybe_value.unwrap_or_else(|| {
 					log::warn!(target: LOG_TARGET, "key {:?} had none corresponding value.", &key);
@@ -452,7 +452,7 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 
 			assert_eq!(batch_child_key.len(), batch_response.len());
 
-			for (idx, key) in batch_child_key.into_iter().enumerate() {
+			for (idx, key) in batch_child_key.iter().enumerate() {
 				let maybe_value = batch_response[idx].clone();
 				let value = maybe_value.unwrap_or_else(|| {
 					log::warn!(target: LOG_TARGET, "key {:?} had none corresponding value.", &key);
@@ -571,7 +571,7 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 		&self,
 		top_kv: &[KeyValue],
 	) -> Result<ChildKeyValues, &'static str> {
-		let child_kv = self.load_child_remote(&top_kv).await?;
+		let child_kv = self.load_child_remote(top_kv).await?;
 		if let Some(c) = &self.as_online().state_snapshot {
 			self.save_child_snapshot(&child_kv, &c.path)?;
 		}
@@ -612,7 +612,7 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 				},
 			};
 
-			child_kv.push((ChildInfo::new_default(&un_prefixed), child_kv_inner));
+			child_kv.push((ChildInfo::new_default(un_prefixed), child_kv_inner));
 		}
 
 		Ok(child_kv)
@@ -624,8 +624,7 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 		let at = self
 			.as_online()
 			.at
-			.expect("online config must be initialized by this point; qed.")
-			.clone();
+			.expect("online config must be initialized by this point; qed.");
 		log::info!(target: LOG_TARGET, "scraping key-pairs from remote @ {:?}", at);
 
 		let mut keys_and_values = if config.pallets.len() > 0 {
@@ -848,7 +847,7 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 		info!(
 			target: LOG_TARGET,
 			"injecting a total of {} child keys",
-			child_kv.iter().flat_map(|(_, kv)| kv).count(),
+			child_kv.iter().flat_map(|(_, kv)| kv).count()
 		);
 
 		for (info, key_values) in child_kv {

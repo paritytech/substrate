@@ -131,7 +131,7 @@ benchmarks! {
 		let reason_hash = T::Hashing::hash(&reason[..]);
 		let hash = T::Hashing::hash_of(&(&reason_hash, &beneficiary));
 		ensure!(Tips::<T>::contains_key(hash), "tip does not exist");
-		create_tips::<T>(t - 1, hash.clone(), value)?;
+		create_tips::<T>(t - 1, hash, value)?;
 		let caller = account("member", t - 1, SEED);
 		// Whitelist caller account from further DB operations.
 		let caller_key = frame_system::Account::<T>::hashed_key_for(&caller);
@@ -159,7 +159,7 @@ benchmarks! {
 		let hash = T::Hashing::hash_of(&(&reason_hash, &beneficiary));
 		ensure!(Tips::<T>::contains_key(hash), "tip does not exist");
 
-		create_tips::<T>(t, hash.clone(), value)?;
+		create_tips::<T>(t, hash, value)?;
 
 		let caller = account("caller", t, SEED);
 		// Whitelist caller account from further DB operations.
