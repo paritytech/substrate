@@ -182,7 +182,7 @@ parameter_types! {
 		frame_system::limits::BlockWeights::simple_max(Weight::new()
 			.set_computation(2 * WEIGHT_PER_SECOND)
 			.set_bandwidth(1024),
-		});
+		);
 	pub static ExistentialDeposit: u64 = 1;
 }
 impl frame_system::Config for Test {

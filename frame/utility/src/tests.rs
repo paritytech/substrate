@@ -213,8 +213,8 @@ fn as_derivative_works() {
 #[test]
 fn as_derivative_handles_weight_refund() {
 	new_test_ext().execute_with(|| {
-		let start_weight = Weight { computation: 100, bandwidth: 100 };
-		let end_weight = Weight { computation: 75, bandwidth: 75 };
+		let start_weight = Weight::new().set_computation(100).set_bandwidth(100);
+		let end_weight = Weight::new().set_computation(75).set_bandwidth(75);
 		let diff = start_weight - end_weight;
 
 		// Full weight when ok
@@ -378,8 +378,8 @@ fn batch_weight_calculation_doesnt_overflow() {
 #[test]
 fn batch_handles_weight_refund() {
 	new_test_ext().execute_with(|| {
-		let start_weight = Weight { computation: 100, bandwidth: 100 };
-		let end_weight = Weight { computation: 75, bandwidth: 75 };
+		let start_weight = Weight::new().set_computation(100).set_bandwidth(100);
+		let end_weight = Weight::new().set_computation(75).set_bandwidth(75);
 		let diff = start_weight - end_weight;
 		let batch_len: u64 = 4;
 
@@ -495,8 +495,8 @@ fn batch_all_revert() {
 #[test]
 fn batch_all_handles_weight_refund() {
 	new_test_ext().execute_with(|| {
-		let start_weight = Weight { computation: 100, bandwidth: 100 };
-		let end_weight = Weight { computation: 75, bandwidth: 75 };
+		let start_weight = Weight::new().set_computation(100).set_bandwidth(100);
+		let end_weight = Weight::new().set_computation(75).set_bandwidth(75);
 		let diff = start_weight - end_weight;
 		let batch_len: u64 = 4;
 

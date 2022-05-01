@@ -42,7 +42,7 @@ frame_support::construct_runtime!(
 );
 
 const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(75);
-const MAX_BLOCK_WEIGHT: Weight = Weight { computation: 1024, bandwidth: 1024 };
+const MAX_BLOCK_WEIGHT: Weight = Weight::new().set_computation(1024).set_bandwidth(1024);
 
 parameter_types! {
 	pub Version: RuntimeVersion = RuntimeVersion {
@@ -60,15 +60,14 @@ parameter_types! {
 		write: 100,
 	};
 	pub RuntimeBlockWeights: limits::BlockWeights = limits::BlockWeights::builder()
-		.base_block(Weight {
-			computation: 10,
-			bandwidth: 10,
-		})
+		.base_block(Weight::new()
+			.set_computation(10)
+			.set_bandwidth(10)
+		)
 		.for_class(DispatchClass::all(), |weights| {
-			weights.base_extrinsic = Weight {
-				computation: 5,
-				bandwidth: 5,
-			};
+			weights.base_extrinsic = Weight::new()
+				.set_computation(5)
+				.set_bandwidth(5);
 		})
 		.for_class(DispatchClass::Normal, |weights| {
 			weights.max_total = Some(NORMAL_DISPATCH_RATIO * MAX_BLOCK_WEIGHT);

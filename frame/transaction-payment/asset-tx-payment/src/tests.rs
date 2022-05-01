@@ -76,7 +76,7 @@ impl Get<frame_system::limits::BlockWeights> for BlockWeights {
 				weights.base_extrinsic = EXTRINSIC_BASE_WEIGHT.with(|v| *v.borrow()).into();
 			})
 			.for_class(DispatchClass::non_mandatory(), |weights| {
-				weights.max_total = Some(Weight { computation: 1024, bandwidth: 1024 });
+				weights.max_total = Some(Weight::new().set_computation(1024).set_bandwidth(1024));
 			})
 			.build_or_panic()
 	}

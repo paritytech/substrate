@@ -117,10 +117,10 @@ impl FindAuthor<AccountId> for Author11 {
 
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(frame_support::weights::Weight {
-			computation: 1024,
-			bandwidth: 1024,
-		});
+		frame_system::limits::BlockWeights::simple_max(frame_support::weights::Weight::new()
+			.set_computation(1024)
+			.set_bandwidth(1024)
+		);
 	pub static SessionsPerEra: SessionIndex = 3;
 	pub static ExistentialDeposit: Balance = 1;
 	pub static SlashDeferDuration: EraIndex = 0;

@@ -735,7 +735,7 @@ mod tests {
 				.base_block(Weight::computation_only(10))
 				.for_class(DispatchClass::all(), |weights| weights.base_extrinsic = Weight::computation_only(5))
 				.for_class(DispatchClass::non_mandatory(), |weights|
-					weights.max_total = Some(Weight { computation: 1024, bandwidth: 512 })
+					weights.max_total = Some(Weight::new().set_computation(1024).set_bandwidth(512))
 				)
 				.build_or_panic();
 		pub const DbWeight: RuntimeDbWeight = RuntimeDbWeight {

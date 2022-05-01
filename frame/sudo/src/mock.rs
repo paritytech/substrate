@@ -109,10 +109,10 @@ frame_support::construct_runtime!(
 );
 
 parameter_types! {
-	pub BlockWeights: limits::BlockWeights = limits::BlockWeights::simple_max(frame_support::weights::Weight {
-		computation: 1024,
-		bandwidth: 1024,
-	});
+	pub BlockWeights: limits::BlockWeights = limits::BlockWeights::simple_max(frame_support::weights::Weight::new()
+		.set_computation(1024)
+		.set_bandwidth(1024)
+	);
 }
 
 pub struct BlockEverything;

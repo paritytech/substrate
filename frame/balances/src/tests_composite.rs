@@ -46,10 +46,10 @@ frame_support::construct_runtime!(
 
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(frame_support::weights::Weight {
-			computation: 1024,
-			bandwidth: 1024,
-		});
+		frame_system::limits::BlockWeights::simple_max(frame_support::weights::Weight::new()
+			.set_computation(1024)
+			.set_bandwidth(1024)
+		);
 	pub static ExistentialDeposit: u64 = 0;
 }
 impl frame_system::Config for Test {

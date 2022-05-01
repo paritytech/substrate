@@ -223,7 +223,7 @@ fn deposit_event_uses_actual_weight() {
 		System::note_finished_initialize();
 
 		let pre_info = DispatchInfo {
-			weight: Weight { computation: 1000, bandwidth: 1000 },
+			weight: Weight::new().set_computation(1000).set_bandwidth(1000),
 			..Default::default()
 		};
 		System::note_applied_extrinsic(&Ok(Some(300).into()), pre_info);
@@ -234,7 +234,8 @@ fn deposit_event_uses_actual_weight() {
 			pre_info,
 		);
 		System::note_applied_extrinsic(
-			&Err(DispatchError::BadOrigin.with_weight(Weight { computation: 999, bandwidth: 999 })),
+			&Err(DispatchError::BadOrigin
+				.with_weight(Weight::new().set_computation(999).set_bandwidth(999))),
 			pre_info,
 		);
 
@@ -279,7 +280,7 @@ fn deposit_event_uses_actual_weight() {
 					event: SysEvent::ExtrinsicFailed {
 						dispatch_error: DispatchError::BadOrigin.into(),
 						dispatch_info: DispatchInfo {
-							weight: Weight { computation: 999, bandwidth: 999 },
+							weight: Weight::new().set_computation(999).set_bandwidth(999),
 							..Default::default()
 						},
 					}

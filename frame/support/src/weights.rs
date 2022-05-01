@@ -424,7 +424,7 @@ pub trait WithPostDispatchInfo {
 	/// # Example
 	///
 	/// ```ignore
-	/// let who = ensure_signed(origin).map_err(|e| e.with_weight(Weight { computation: 100, bandwidth: 100 }))?;
+	/// let who = ensure_signed(origin).map_err(|e| e.with_weight(Weight::new().set_computation(100).set_bandwidth(100)))?;
 	/// ensure!(who == me, Error::<T>::NotMe.with_weight(Weight { computation: 200_000, bandwidth: 100 }));
 	/// ```
 	fn with_weight(self, actual_weight: impl Into<Weight>) -> DispatchErrorWithPostInfo;
@@ -897,7 +897,7 @@ mod tests {
 	#[test]
 	fn extract_actual_weight_works() {
 		let pre = DispatchInfo {
-			weight: Weight { computation: 1000, bandwidth: 123 },
+			weight: Weight::new().set_computation(1000).set_bandwidth(123),
 			..Default::default()
 		};
 		assert_eq!(extract_actual_weight(&Ok(Some(7).into()), &pre), Weight::computation_only(7));
@@ -907,17 +907,18 @@ mod tests {
 		);
 		assert_eq!(
 			extract_actual_weight(
-				&Err(DispatchError::BadOrigin.with_weight(Weight { computation: 9, bandwidth: 99 })),
+				&Err(DispatchError::BadOrigin
+					.with_weight(Weight::new().set_computation(9).set_bandwidth(99))),
 				&pre
 			),
-			Weight { computation: 9, bandwidth: 99 }
+			Weight::new().set_computation(9).set_bandwidth(99)
 		);
 	}
 
 	#[test]
 	fn extract_actual_weight_caps_at_pre_weight() {
 		let pre = DispatchInfo {
-			weight: Weight { computation: 1000, bandwidth: 120 },
+			weight: Weight::new().set_computation(1000).set_bandwidth(120),
 			..Default::default()
 		};
 		assert_eq!(
@@ -927,10 +928,10 @@ mod tests {
 		assert_eq!(
 			extract_actual_weight(
 				&Err(DispatchError::BadOrigin
-					.with_weight(Weight { computation: 1300, bandwidth: 130 })),
+					.with_weight(Weight::new().set_computation(1300).set_bandwidth(130))),
 				&pre
 			),
-			Weight { computation: 1000, bandwidth: 120 }
+			Weight::new().set_computation(1000).set_bandwidth(120)
 		);
 	}
 

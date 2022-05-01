@@ -73,10 +73,9 @@ mod multiplier_tests {
 	}
 
 	fn target() -> Weight {
-		Weight {
-			computation: TargetBlockFullness::get() * max_normal().computation(),
-			bandwidth: TargetBlockFullness::get() * max_normal().bandwidth(),
-		}
+		Weight::new()
+			.set_computation(TargetBlockFullness::get() * max_normal().computation())
+			.set_bandwidth(TargetBlockFullness::get() * max_normal().bandwidth())
 	}
 
 	// update based on runtime impl.

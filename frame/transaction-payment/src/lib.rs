@@ -840,7 +840,7 @@ mod tests {
 					weights.base_extrinsic = EXTRINSIC_BASE_WEIGHT.with(|v| *v.borrow()).into();
 				})
 				.for_class(DispatchClass::non_mandatory(), |weights| {
-					weights.max_total = Some(Weight { computation: 1024, bandwidth: 1 });
+					weights.max_total = Some(Weight::new().set_computation(1024).set_bandwidth(1));
 				})
 				.build_or_panic()
 		}
@@ -1032,7 +1032,7 @@ mod tests {
 					.pre_dispatch(
 						&1,
 						CALL,
-						&info_from_weight(Weight { computation: 5, bandwidth: 1 }),
+						&info_from_weight(Weight::new().set_computation(5).set_bandwidth(1)),
 						len,
 					)
 					.unwrap();
@@ -1040,7 +1040,7 @@ mod tests {
 
 				assert_ok!(ChargeTransactionPayment::<Runtime>::post_dispatch(
 					Some(pre),
-					&info_from_weight(Weight { computation: 5, bandwidth: 1 }),
+					&info_from_weight(Weight::new().set_computation(5).set_bandwidth(1)),
 					&default_post_info(),
 					len,
 					&Ok(())
@@ -1055,7 +1055,7 @@ mod tests {
 					.pre_dispatch(
 						&2,
 						CALL,
-						&info_from_weight(Weight { computation: 100, bandwidth: 1 }),
+						&info_from_weight(Weight::new().set_computation(100).set_bandwidth(1)),
 						len,
 					)
 					.unwrap();
@@ -1063,8 +1063,8 @@ mod tests {
 
 				assert_ok!(ChargeTransactionPayment::<Runtime>::post_dispatch(
 					Some(pre),
-					&info_from_weight(Weight { computation: 100, bandwidth: 1 }),
-					&post_info_from_weight(Weight { computation: 50, bandwidth: 1 }),
+					&info_from_weight(Weight::new().set_computation(100).set_bandwidth(1)),
+					&post_info_from_weight(Weight::new().set_computation(50).set_bandwidth(1)),
 					len,
 					&Ok(())
 				));
@@ -1088,7 +1088,7 @@ mod tests {
 					.pre_dispatch(
 						&2,
 						CALL,
-						&info_from_weight(Weight { computation: 100, bandwidth: 1 }),
+						&info_from_weight(Weight::new().set_computation(100).set_bandwidth(1)),
 						len,
 					)
 					.unwrap();
@@ -1097,8 +1097,8 @@ mod tests {
 
 				assert_ok!(ChargeTransactionPayment::<Runtime>::post_dispatch(
 					Some(pre),
-					&info_from_weight(Weight { computation: 100, bandwidth: 1 }),
-					&post_info_from_weight(Weight { computation: 50, bandwidth: 1 }),
+					&info_from_weight(Weight::new().set_computation(100).set_bandwidth(1)),
+					&post_info_from_weight(Weight::new().set_computation(50).set_bandwidth(1)),
 					len,
 					&Ok(())
 				));
@@ -1186,7 +1186,7 @@ mod tests {
 					.pre_dispatch(
 						&1,
 						CALL,
-						&info_from_weight(Weight { computation: 3, bandwidth: 1 }),
+						&info_from_weight(Weight::new().set_computation(3).set_bandwidth(1)),
 						len
 					));
 				assert_eq!(
@@ -1291,7 +1291,7 @@ mod tests {
 				assert_eq!(Pallet::<Runtime>::compute_fee(42, &dispatch_info, 0), 520);
 				// Weight fee + base fee works
 				let dispatch_info = DispatchInfo {
-					weight: Weight { computation: 1000, bandwidth: 1 },
+					weight: Weight::new().set_computation(1000).set_bandwidth(1),
 					class: DispatchClass::Operational,
 					pays_fee: Pays::Yes,
 				};
@@ -1319,7 +1319,7 @@ mod tests {
 
 				// Everything works together :)
 				let dispatch_info = DispatchInfo {
-					weight: Weight { computation: 123, bandwidth: 1 },
+					weight: Weight::new().set_computation(123).set_bandwidth(1),
 					class: DispatchClass::Operational,
 					pays_fee: Pays::Yes,
 				};
@@ -1352,7 +1352,7 @@ mod tests {
 
 				// Everything works together.
 				let dispatch_info = DispatchInfo {
-					weight: Weight { computation: 123, bandwidth: 1 },
+					weight: Weight::new().set_computation(123).set_bandwidth(1),
 					class: DispatchClass::Operational,
 					pays_fee: Pays::Yes,
 				};
@@ -1399,7 +1399,7 @@ mod tests {
 					.pre_dispatch(
 						&2,
 						CALL,
-						&info_from_weight(Weight { computation: 100, bandwidth: 1 }),
+						&info_from_weight(Weight::new().set_computation(100).set_bandwidth(1)),
 						len,
 					)
 					.unwrap();
@@ -1411,8 +1411,8 @@ mod tests {
 
 				assert_ok!(ChargeTransactionPayment::<Runtime>::post_dispatch(
 					Some(pre),
-					&info_from_weight(Weight { computation: 100, bandwidth: 1 }),
-					&post_info_from_weight(Weight { computation: 50, bandwidth: 1 }),
+					&info_from_weight(Weight::new().set_computation(100).set_bandwidth(1)),
+					&post_info_from_weight(Weight::new().set_computation(50).set_bandwidth(1)),
 					len,
 					&Ok(())
 				));
@@ -1442,7 +1442,7 @@ mod tests {
 					.pre_dispatch(
 						&2,
 						CALL,
-						&info_from_weight(Weight { computation: 100, bandwidth: 1 }),
+						&info_from_weight(Weight::new().set_computation(100).set_bandwidth(1)),
 						len,
 					)
 					.unwrap();
@@ -1450,8 +1450,8 @@ mod tests {
 
 				assert_ok!(ChargeTransactionPayment::<Runtime>::post_dispatch(
 					Some(pre),
-					&info_from_weight(Weight { computation: 100, bandwidth: 1 }),
-					&post_info_from_weight(Weight { computation: 101, bandwidth: 1 }),
+					&info_from_weight(Weight::new().set_computation(100).set_bandwidth(1)),
+					&post_info_from_weight(Weight::new().set_computation(101).set_bandwidth(1)),
 					len,
 					&Ok(())
 				));
@@ -1470,7 +1470,7 @@ mod tests {
 				System::set_block_number(10);
 				let len = 10;
 				let dispatch_info = DispatchInfo {
-					weight: Weight { computation: 100, bandwidth: 1 },
+					weight: Weight::new().set_computation(100).set_bandwidth(1),
 					pays_fee: Pays::No,
 					class: DispatchClass::Normal,
 				};
@@ -1499,8 +1499,9 @@ mod tests {
 			.base_weight(7)
 			.build()
 			.execute_with(|| {
-				let info = info_from_weight(Weight { computation: 100, bandwidth: 1 });
-				let post_info = post_info_from_weight(Weight { computation: 33, bandwidth: 1 });
+				let info = info_from_weight(Weight::new().set_computation(100).set_bandwidth(1));
+				let post_info =
+					post_info_from_weight(Weight::new().set_computation(33).set_bandwidth(1));
 				let prev_balance = Balances::free_balance(2);
 				let len = 10;
 				let tip = 5;
@@ -1537,7 +1538,7 @@ mod tests {
 
 		ExtBuilder::default().balance_factor(100).build().execute_with(|| {
 			let normal = DispatchInfo {
-				weight: Weight { computation: 100, bandwidth: 1 },
+				weight: Weight::new().set_computation(100).set_bandwidth(1),
 				class: DispatchClass::Normal,
 				pays_fee: Pays::Yes,
 			};
@@ -1558,7 +1559,7 @@ mod tests {
 
 		ExtBuilder::default().balance_factor(100).build().execute_with(|| {
 			let op = DispatchInfo {
-				weight: Weight { computation: 100, bandwidth: 1 },
+				weight: Weight::new().set_computation(100).set_bandwidth(1),
 				class: DispatchClass::Operational,
 				pays_fee: Pays::Yes,
 			};
@@ -1583,7 +1584,7 @@ mod tests {
 
 		ExtBuilder::default().balance_factor(100).build().execute_with(|| {
 			let normal = DispatchInfo {
-				weight: Weight { computation: 100, bandwidth: 1 },
+				weight: Weight::new().set_computation(100).set_bandwidth(1),
 				class: DispatchClass::Normal,
 				pays_fee: Pays::Yes,
 			};
@@ -1597,7 +1598,7 @@ mod tests {
 
 		ExtBuilder::default().balance_factor(100).build().execute_with(|| {
 			let op = DispatchInfo {
-				weight: Weight { computation: 100, bandwidth: 1 },
+				weight: Weight::new().set_computation(100).set_bandwidth(1),
 				class: DispatchClass::Operational,
 				pays_fee: Pays::Yes,
 			};
@@ -1617,7 +1618,7 @@ mod tests {
 			let len = 10;
 			ExtBuilder::default().balance_factor(100).build().execute_with(|| {
 				let normal = DispatchInfo {
-					weight: Weight { computation: 100, bandwidth: 1 },
+					weight: Weight::new().set_computation(100).set_bandwidth(1),
 					class: DispatchClass::Normal,
 					pays_fee: Pays::Yes,
 				};
@@ -1629,7 +1630,7 @@ mod tests {
 
 			ExtBuilder::default().balance_factor(100).build().execute_with(|| {
 				let op = DispatchInfo {
-					weight: Weight { computation: 100, bandwidth: 1 },
+					weight: Weight::new().set_computation(100).set_bandwidth(1),
 					class: DispatchClass::Operational,
 					pays_fee: Pays::Yes,
 				};
@@ -1659,7 +1660,7 @@ mod tests {
 			.base_weight(7)
 			.build()
 			.execute_with(|| {
-				let info = info_from_weight(Weight { computation: 100, bandwidth: 1 });
+				let info = info_from_weight(Weight::new().set_computation(100).set_bandwidth(1));
 				let post_info = post_info_from_pays(Pays::No);
 				let prev_balance = Balances::free_balance(2);
 				let len = 10;

@@ -127,7 +127,7 @@ mod tests {
 	fn signed_ext_check_era_should_change_longevity() {
 		new_test_ext().execute_with(|| {
 			let normal = DispatchInfo {
-				weight: Weight { computation: 100, bandwidth: 50 },
+				weight: Weight::new().set_computation(100).set_bandwidth(50),
 				class: DispatchClass::Normal,
 				pays_fee: Pays::Yes,
 			};

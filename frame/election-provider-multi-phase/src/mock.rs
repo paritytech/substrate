@@ -224,10 +224,10 @@ impl frame_system::Config for Runtime {
 const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(75);
 parameter_types! {
 	pub const ExistentialDeposit: u64 = 1;
-	pub SystemBlockWeights: BlockWeights = BlockWeights::with_sensible_defaults(Weight {
-		computation: 2 * frame_support::weights::constants::WEIGHT_PER_SECOND,
-		bandwidth: 1024,
-	}, NORMAL_DISPATCH_RATIO);
+	pub SystemBlockWeights: BlockWeights = BlockWeights::with_sensible_defaults(Weight::new()
+		.set_computation(2 * frame_support::weights::constants::WEIGHT_PER_SECOND)
+		.set_bandwidth(1024),
+	NORMAL_DISPATCH_RATIO);
 }
 
 impl pallet_balances::Config for Runtime {
