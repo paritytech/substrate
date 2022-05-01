@@ -151,10 +151,8 @@ where
 		changes: &mut Vec<StorageChangeSet<Block::Hash>>,
 	) -> Result<()> {
 		for block_hash in &range.hashes {
-			let block_hash = block_hash.clone();
-			let mut block_changes =
-				StorageChangeSet { block: block_hash.clone(), changes: Vec::new() };
-			let id = BlockId::hash(block_hash);
+			let mut block_changes = StorageChangeSet { block: *block_hash, changes: Vec::new() };
+			let id = BlockId::hash(*block_hash);
 			for key in keys {
 				let (has_changed, data) = {
 					let curr_data = self.client.storage(&id, key).map_err(client_err)?;

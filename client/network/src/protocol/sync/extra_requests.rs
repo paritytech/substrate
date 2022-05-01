@@ -327,7 +327,7 @@ impl<'a, B: BlockT> Matcher<'a, B> {
 				{
 					continue
 				}
-				self.extras.active_requests.insert(peer.clone(), request);
+				self.extras.active_requests.insert(*peer, request);
 
 				trace!(target: "sync",
 					"Sending {} request to {:?} for {:?}",

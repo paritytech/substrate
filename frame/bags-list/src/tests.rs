@@ -145,7 +145,7 @@ mod pallet {
 	}
 
 	#[test]
-	fn wrong_rebag_is_noop() {
+	fn wrong_rebag_errs() {
 		ExtBuilder::default().build_and_execute(|| {
 			let node_3 = list::Node::<Runtime>::get(&3).unwrap();
 			// when account 3 is _not_ misplaced with score 500
@@ -157,9 +157,8 @@ mod pallet {
 
 			// when account 42 is not in the list
 			assert!(!BagsList::contains(&42));
-
-			// then rebag-ing account 42 is a noop
-			assert_storage_noop!(assert_eq!(BagsList::rebag(Origin::signed(0), 42), Ok(())));
+			// then rebag-ing account 42 is an error
+			assert_storage_noop!(assert!(matches!(BagsList::rebag(Origin::signed(0), 42), Err(_))));
 		});
 	}
 
@@ -182,7 +181,6 @@ mod pallet {
 	#[test]
 	fn empty_threshold_works() {
 		BagThresholds::set(Default::default()); // which is the same as passing `()` to `Get<_>`.
-
 		ExtBuilder::default().build_and_execute(|| {
 			// everyone in the same bag.
 			assert_eq!(List::<Runtime>::get_bags(), vec![(VoteWeight::MAX, vec![1, 2, 3, 4])]);
@@ -196,8 +194,7 @@ mod pallet {
 			);
 
 			// any rebag is noop.
-			assert_storage_noop!(assert!(BagsList::rebag(Origin::signed(0), 1).is_ok()));
-			assert_storage_noop!(assert!(BagsList::rebag(Origin::signed(0), 10).is_ok()));
+			assert_storage_noop!(assert_eq!(BagsList::rebag(Origin::signed(0), 1), Ok(())));
 		})
 	}
 

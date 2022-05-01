@@ -102,8 +102,8 @@
 //! valid if propagated, and it acts similar to an inherent.
 //!
 //! Validators will only submit solutions if the one that they have computed is sufficiently better
-//! than the best queued one (see [`pallet::Config::SolutionImprovementThreshold`]) and will limit
-//! the weight of the solution to [`pallet::Config::MinerMaxWeight`].
+//! than the best queued one (see [`pallet::Config::BetterUnsignedThreshold`]) and will limit the
+//! weight of the solution to [`pallet::Config::MinerMaxWeight`].
 //!
 //! The unsigned phase can be made passive depending on how the previous signed phase went, by
 //! setting the first inner value of [`Phase`] to `false`. For now, the signed phase is always
@@ -242,7 +242,7 @@ use frame_support::{
 use frame_system::{ensure_none, offchain::SendTransactionTypes};
 use scale_info::TypeInfo;
 use sp_arithmetic::{
-	traits::{Bounded, CheckedAdd, Saturating, Zero},
+	traits::{Bounded, CheckedAdd, Zero},
 	UpperOf,
 };
 use sp_npos_elections::{
@@ -264,7 +264,7 @@ mod mock;
 #[macro_use]
 pub mod helpers;
 
-const LOG_TARGET: &'static str = "runtime::election-provider";
+const LOG_TARGET: &str = "runtime::election-provider";
 
 pub mod signed;
 pub mod unsigned;
@@ -585,9 +585,14 @@ pub mod pallet {
 		type SignedPhase: Get<Self::BlockNumber>;
 
 		/// The minimum amount of improvement to the solution score that defines a solution as
-		/// "better" (in any phase).
+		/// "better" in the Signed phase.
 		#[pallet::constant]
-		type SolutionImprovementThreshold: Get<Perbill>;
+		type BetterSignedThreshold: Get<Perbill>;
+
+		/// The minimum amount of improvement to the solution score that defines a solution as
+		/// "better" in the Unsigned phase.
+		#[pallet::constant]
+		type BetterUnsignedThreshold: Get<Perbill>;
 
 		/// The repeat threshold of the offchain worker.
 		///
@@ -622,6 +627,10 @@ pub mod pallet {
 		/// This should probably be similar to [`Config::MinerMaxWeight`].
 		#[pallet::constant]
 		type SignedMaxWeight: Get<Weight>;
+
+		/// The maximum amount of unchecked solutions to refund the call fee for.
+		#[pallet::constant]
+		type SignedMaxRefunds: Get<u32>;
 
 		/// Base reward for a signed solution
 		#[pallet::constant]
@@ -843,6 +852,11 @@ pub mod pallet {
 				<T::DataProvider as ElectionDataProvider>::MaxVotesPerVoter::get(),
 				<SolutionOf<T> as NposSolution>::LIMIT as u32,
 			);
+
+			// While it won't cause any failures, setting `SignedMaxRefunds` gt
+			// `SignedMaxSubmissions` is a red flag that the developer does not understand how to
+			// configure this pallet.
+			assert!(T::SignedMaxSubmissions::get() >= T::SignedMaxRefunds::get());
 		}
 	}
 
@@ -983,14 +997,17 @@ pub mod pallet {
 
 			// create the submission
 			let deposit = Self::deposit_for(&raw_solution, size);
-			let reward = {
+			let call_fee = {
 				let call = Call::submit { raw_solution: raw_solution.clone() };
-				let call_fee = T::EstimateCallFee::estimate_call_fee(&call, None.into());
-				T::SignedRewardBase::get().saturating_add(call_fee)
+				T::EstimateCallFee::estimate_call_fee(&call, None.into())
 			};
 
-			let submission =
-				SignedSubmission { who: who.clone(), deposit, raw_solution: *raw_solution, reward };
+			let submission = SignedSubmission {
+				who: who.clone(),
+				deposit,
+				raw_solution: *raw_solution,
+				call_fee,
+			};
 
 			// insert the submission if the queue has space or it's better than the weakest
 			// eject the weakest if the queue was full
@@ -1429,7 +1446,7 @@ impl<T: Config> Pallet<T> {
 		ensure!(winners.len() as u32 == desired_targets, FeasibilityError::WrongWinnerCount);
 
 		// Ensure that the solution's score can pass absolute min-score.
-		let submitted_score = raw_solution.score.clone();
+		let submitted_score = raw_solution.score;
 		ensure!(
 			Self::minimum_untrusted_score().map_or(true, |min_score| {
 				submitted_score.strict_threshold_better(min_score, Perbill::zero())
@@ -1454,29 +1471,26 @@ impl<T: Config> Pallet<T> {
 			.map_err::<FeasibilityError, _>(Into::into)?;
 
 		// Ensure that assignments is correct.
-		let _ = assignments
-			.iter()
-			.map(|ref assignment| {
-				// Check that assignment.who is actually a voter (defensive-only).
-				// NOTE: while using the index map from `voter_index` is better than a blind linear
-				// search, this *still* has room for optimization. Note that we had the index when
-				// we did `solution -> assignment` and we lost it. Ideal is to keep the index
-				// around.
+		let _ = assignments.iter().try_for_each(|assignment| {
+			// Check that assignment.who is actually a voter (defensive-only).
+			// NOTE: while using the index map from `voter_index` is better than a blind linear
+			// search, this *still* has room for optimization. Note that we had the index when
+			// we did `solution -> assignment` and we lost it. Ideal is to keep the index
+			// around.
 
-				// Defensive-only: must exist in the snapshot.
-				let snapshot_index =
-					voter_index(&assignment.who).ok_or(FeasibilityError::InvalidVoter)?;
-				// Defensive-only: index comes from the snapshot, must exist.
-				let (_voter, _stake, targets) =
-					snapshot_voters.get(snapshot_index).ok_or(FeasibilityError::InvalidVoter)?;
+			// Defensive-only: must exist in the snapshot.
+			let snapshot_index =
+				voter_index(&assignment.who).ok_or(FeasibilityError::InvalidVoter)?;
+			// Defensive-only: index comes from the snapshot, must exist.
+			let (_voter, _stake, targets) =
+				snapshot_voters.get(snapshot_index).ok_or(FeasibilityError::InvalidVoter)?;
 
-				// Check that all of the targets are valid based on the snapshot.
-				if assignment.distribution.iter().any(|(d, _)| !targets.contains(d)) {
-					return Err(FeasibilityError::InvalidVote)
-				}
-				Ok(())
-			})
-			.collect::<Result<(), FeasibilityError>>()?;
+			// Check that all of the targets are valid based on the snapshot.
+			if assignment.distribution.iter().any(|(d, _)| !targets.contains(d)) {
+				return Err(FeasibilityError::InvalidVote)
+			}
+			Ok(())
+		})?;
 
 		// ----- Start building support. First, we need one more closure.
 		let stake_of = helpers::stake_of_fn::<T>(&snapshot_voters, &cache);

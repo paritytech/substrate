@@ -225,14 +225,24 @@ frame_benchmarking::benchmarks! {
 			compute: Default::default()
 		};
 		let deposit: BalanceOf<T> = 10u32.into();
-		let reward: BalanceOf<T> = 20u32.into();
+
+		let reward: BalanceOf<T> = T::SignedRewardBase::get();
+		let call_fee: BalanceOf<T> = 30u32.into();
 
 		assert_ok!(T::Currency::reserve(&receiver, deposit));
 		assert_eq!(T::Currency::free_balance(&receiver), initial_balance - 10u32.into());
 	}: {
-		<MultiPhase<T>>::finalize_signed_phase_accept_solution(ready, &receiver, deposit, reward)
+		<MultiPhase<T>>::finalize_signed_phase_accept_solution(
+			ready,
+			&receiver,
+			deposit,
+			call_fee
+		)
 	} verify {
-		assert_eq!(T::Currency::free_balance(&receiver), initial_balance + 20u32.into());
+		assert_eq!(
+			T::Currency::free_balance(&receiver),
+			initial_balance + reward + call_fee
+		);
 		assert_eq!(T::Currency::reserved_balance(&receiver), 0u32.into());
 	}
 
@@ -333,7 +343,7 @@ frame_benchmarking::benchmarks! {
 				raw_solution,
 				who: account("submitters", i, SEED),
 				deposit: Default::default(),
-				reward: Default::default(),
+				call_fee: Default::default(),
 			};
 			signed_submissions.insert(signed_submission);
 		}
@@ -481,7 +491,7 @@ frame_benchmarking::benchmarks! {
 
 		// sort assignments by decreasing voter stake
 		assignments.sort_by_key(|crate::unsigned::Assignment::<T> { who, .. }| {
-			let stake = cache.get(&who).map(|idx| {
+			let stake = cache.get(who).map(|idx| {
 				let (_, stake, _) = voters[*idx];
 				stake
 			}).unwrap_or_default();

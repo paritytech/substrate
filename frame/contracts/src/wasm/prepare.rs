@@ -225,10 +225,7 @@ impl<'a, T: Config> ContractModule<'a, T> {
 			.map(|is| is.entries())
 			.unwrap_or(&[])
 			.iter()
-			.filter(|entry| match *entry.external() {
-				External::Function(_) => true,
-				_ => false,
-			})
+			.filter(|entry| matches!(*entry.external(), External::Function(_)))
 			.count();
 
 		for export in export_entries {
@@ -259,11 +256,10 @@ impl<'a, T: Config> ContractModule<'a, T> {
 			// We still support () -> (i32) for backwards compatibility.
 			let func_ty_idx = func_entries
 				.get(fn_idx as usize)
-				.ok_or_else(|| "export refers to non-existent function")?
+				.ok_or("export refers to non-existent function")?
 				.type_ref();
-			let Type::Function(ref func_ty) = types
-				.get(func_ty_idx as usize)
-				.ok_or_else(|| "function has a non-existent type")?;
+			let Type::Function(ref func_ty) =
+				types.get(func_ty_idx as usize).ok_or("function has a non-existent type")?;
 			if !(func_ty.params().is_empty() &&
 				(func_ty.results().is_empty() || func_ty.results() == [ValueType::I32]))
 			{
@@ -300,11 +296,11 @@ impl<'a, T: Config> ContractModule<'a, T> {
 		let mut imported_mem_type = None;
 
 		for import in import_entries {
-			let type_idx = match import.external() {
-				&External::Table(_) => return Err("Cannot import tables"),
-				&External::Global(_) => return Err("Cannot import globals"),
-				&External::Function(ref type_idx) => type_idx,
-				&External::Memory(ref memory_type) => {
+			let type_idx = match *import.external() {
+				External::Table(_) => return Err("Cannot import tables"),
+				External::Global(_) => return Err("Cannot import globals"),
+				External::Function(ref type_idx) => type_idx,
+				External::Memory(ref memory_type) => {
 					if import.module() != IMPORT_MODULE_MEMORY {
 						return Err("Invalid module for imported memory")
 					}
@@ -321,7 +317,7 @@ impl<'a, T: Config> ContractModule<'a, T> {
 
 			let Type::Function(ref func_ty) = types
 				.get(*type_idx as usize)
-				.ok_or_else(|| "validation: import entry points to a non-existent type")?;
+				.ok_or("validation: import entry points to a non-existent type")?;
 
 			if !T::ChainExtension::enabled() &&
 				import.field().as_bytes() == b"seal_call_chain_extension"
@@ -352,17 +348,15 @@ fn get_memory_limits<T: Config>(
 		let limits = memory_type.limits();
 		match (limits.initial(), limits.maximum()) {
 			(initial, Some(maximum)) if initial > maximum =>
-				return Err(
-					"Requested initial number of pages should not exceed the requested maximum",
-				),
+				Err("Requested initial number of pages should not exceed the requested maximum"),
 			(_, Some(maximum)) if maximum > schedule.limits.memory_pages =>
-				return Err("Maximum number of pages should not exceed the configured maximum."),
+				Err("Maximum number of pages should not exceed the configured maximum."),
 			(initial, Some(maximum)) => Ok((initial, maximum)),
 			(_, None) => {
 				// Maximum number of pages should be always declared.
 				// This isn't a hard requirement and can be treated as a maximum set
 				// to configured maximum.
-				return Err("Maximum number of pages should be always declared.")
+				Err("Maximum number of pages should be always declared.")
 			},
 		}
 	} else {
@@ -377,7 +371,7 @@ fn check_and_instrument<C: ImportSatisfyCheck, T: Config>(
 	schedule: &Schedule<T>,
 ) -> Result<(Vec<u8>, (u32, u32)), &'static str> {
 	let result = (|| {
-		let contract_module = ContractModule::new(&original_code, schedule)?;
+		let contract_module = ContractModule::new(original_code, schedule)?;
 		contract_module.scan_exports()?;
 		contract_module.ensure_no_internal_memory()?;
 		contract_module.ensure_table_size_limit(schedule.limits.table_size)?;

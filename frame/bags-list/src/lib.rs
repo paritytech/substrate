@@ -74,7 +74,7 @@ pub use list::{notional_bag_for, Bag, List, ListError, Node};
 pub use pallet::*;
 pub use weights::WeightInfo;
 
-pub(crate) const LOG_TARGET: &'static str = "runtime::bags_list";
+pub(crate) const LOG_TARGET: &str = "runtime::bags_list";
 
 // syntactic sugar for logging.
 #[macro_export]
@@ -215,8 +215,10 @@ pub mod pallet {
 		///
 		/// Anyone can call this function about any potentially dislocated account.
 		///
-		/// Will never return an error; if `dislocated` does not exist or doesn't need a rebag, then
-		/// it is a noop and fees are still collected from `origin`.
+		/// Will always update the stored score of `dislocated` to the correct score, based on
+		/// `ScoreProvider`.
+		///
+		/// If `dislocated` does not exists, it returns an error.
 		#[pallet::weight(T::WeightInfo::rebag_non_terminal().max(T::WeightInfo::rebag_terminal()))]
 		pub fn rebag(origin: OriginFor<T>, dislocated: T::AccountId) -> DispatchResult {
 			ensure_signed(origin)?;

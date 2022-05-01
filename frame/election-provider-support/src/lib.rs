@@ -173,7 +173,7 @@ use sp_std::{fmt::Debug, prelude::*};
 
 /// Re-export the solution generation macro.
 pub use frame_election_provider_solution_type::generate_solution_type;
-use frame_support::{traits::Get, BoundedVec, RuntimeDebug};
+use frame_support::{traits::Get, BoundedVec, RuntimeDebug, weights::Weight};
 /// Re-export some type as they are used in the interface.
 pub use sp_arithmetic::PerThing;
 pub use sp_npos_elections::{
@@ -191,6 +191,9 @@ pub use scale_info;
 pub use sp_arithmetic;
 #[doc(hidden)]
 pub use sp_std;
+
+pub mod weights;
+pub use weights::WeightInfo;
 
 #[cfg(test)]
 mod mock;
@@ -238,7 +241,7 @@ impl<VoterIndex, TargetIndex, P: PerThing> IndexAssignment<VoterIndex, TargetInd
 			distribution: assignment
 				.distribution
 				.iter()
-				.map(|(target, proportion)| Some((target_index(target)?, proportion.clone())))
+				.map(|(target, proportion)| Some((target_index(target)?, *proportion)))
 				.collect::<Option<Vec<_>>>()
 				.or_invalid_index()?,
 		})
@@ -551,6 +554,12 @@ pub trait NposSolver {
 		targets: Vec<Self::AccountId>,
 		voters: Vec<(Self::AccountId, VoteWeight, impl IntoIterator<Item = Self::AccountId>)>,
 	) -> Result<ElectionResult<Self::AccountId, Self::Accuracy>, Self::Error>;
+
+	/// Measure the weight used in the calculation of the solver.
+	/// - `voters` is the number of voters.
+	/// - `targets` is the number of targets.
+	/// - `vote_degree` is the degree ie the maximum numbers of votes per voter.
+	fn weight<T: WeightInfo>(voters: u32, targets: u32, vote_degree: u32) -> Weight;
 }
 
 /// A wrapper for [`sp_npos_elections::seq_phragmen`] that implements [`NposSolver`]. See the
@@ -575,6 +584,10 @@ impl<
 	) -> Result<ElectionResult<Self::AccountId, Self::Accuracy>, Self::Error> {
 		sp_npos_elections::seq_phragmen(winners, targets, voters, Balancing::get())
 	}
+
+	fn weight<T: WeightInfo>(voters: u32, targets: u32, vote_degree: u32) -> Weight {
+		T::phragmen(voters, targets, vote_degree)
+	}
 }
 
 /// A wrapper for [`sp_npos_elections::phragmms()`] that implements [`NposSolver`]. See the
@@ -598,6 +611,10 @@ impl<
 		voters: Vec<(Self::AccountId, VoteWeight, impl IntoIterator<Item = Self::AccountId>)>,
 	) -> Result<ElectionResult<Self::AccountId, Self::Accuracy>, Self::Error> {
 		sp_npos_elections::phragmms(winners, targets, voters, Balancing::get())
+	}
+
+	fn weight<T: WeightInfo>(voters: u32, targets: u32, vote_degree: u32) -> Weight {
+		T::phragmms(voters, targets, vote_degree)
 	}
 }
 
