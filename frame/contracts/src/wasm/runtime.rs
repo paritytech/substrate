@@ -311,7 +311,7 @@ impl RuntimeCosts {
 			ChainExtension(amount) => amount,
 
 			#[cfg(feature = "unstable-interface")]
-			CallRuntime(weight) => weight.computation,
+			CallRuntime(weight) => weight.computation(),
 			#[cfg(feature = "unstable-interface")]
 			SetCodeHash => s.set_code_hash,
 			#[cfg(feature = "unstable-interface")]
@@ -1493,7 +1493,7 @@ define_env!(Env, <E: Ext>,
 	// The data is encoded as Gas.
 	[seal0] seal_gas_left(ctx, out_ptr: u32, out_len_ptr: u32) => {
 		ctx.charge_gas(RuntimeCosts::GasLeft)?;
-		let gas_left = &ctx.ext.gas_meter().gas_left().computation.encode();
+		let gas_left = &ctx.ext.gas_meter().gas_left().computation().encode();
 		Ok(ctx.write_sandbox_output(
 			out_ptr, out_len_ptr, gas_left, false, already_charged,
 		)?)

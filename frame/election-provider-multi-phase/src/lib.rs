@@ -994,7 +994,7 @@ pub mod pallet {
 
 			ensure!(
 				Self::feasibility_weight_of(&raw_solution, size) <
-					T::SignedMaxWeight::get().computation,
+					T::SignedMaxWeight::get().computation(),
 				Error::<T>::SignedTooMuchWeight,
 			);
 
@@ -2166,7 +2166,7 @@ mod tests {
 
 		let mut active = 1;
 		while weight_with(active) <=
-			<Runtime as frame_system::Config>::BlockWeights::get().max_block.computation ||
+			<Runtime as frame_system::Config>::BlockWeights::get().max_block.computation() ||
 			active == all_voters
 		{
 			active += 1;

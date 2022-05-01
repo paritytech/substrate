@@ -683,7 +683,7 @@ pub mod pallet {
 			{
 				let b = *length_bound;
 				let m = T::MaxMembers::get();
-				let p1 = proposal_weight_bound.computation;
+				let p1 = proposal_weight_bound.computation();
 				let p2 = T::MaxProposals::get();
 				T::WeightInfo::close_early_approved(b, m, p2)
 					.max(T::WeightInfo::close_early_disapproved(m, p2))

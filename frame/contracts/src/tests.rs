@@ -179,9 +179,9 @@ impl ChainExtension<Test> for TestExtension {
 
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(Weight{
-			computation: 2 * WEIGHT_PER_SECOND,
-			bandwidth: 1024,
+		frame_system::limits::BlockWeights::simple_max(Weight::new()
+			.set_computation(2 * WEIGHT_PER_SECOND)
+			.set_bandwidth(1024),
 		});
 	pub static ExistentialDeposit: u64 = 1;
 }
@@ -251,7 +251,7 @@ parameter_types! {
 
 impl Convert<Weight, BalanceOf<Self>> for Test {
 	fn convert(w: Weight) -> BalanceOf<Self> {
-		w.computation
+		w.computation()
 	}
 }
 
@@ -1611,7 +1611,7 @@ fn lazy_removal_works() {
 		assert_matches!(child::get(trie, &[99]), Some(42));
 
 		// Run the lazy removal
-		Contracts::on_initialize(Weight::MAX.computation);
+		Contracts::on_initialize(Weight::MAX.computation());
 
 		// Value should be gone now
 		assert_matches!(child::get::<i32>(trie, &[99]), None);
@@ -1662,7 +1662,7 @@ fn lazy_batch_removal_works() {
 		}
 
 		// Run single lazy removal
-		Contracts::on_initialize(Weight::MAX.computation);
+		Contracts::on_initialize(Weight::MAX.computation());
 
 		// The single lazy removal should have removed all queued tries
 		for trie in tries.iter() {
@@ -1822,9 +1822,9 @@ fn lazy_removal_does_no_run_on_full_block() {
 
 		// Run the lazy removal without any limit so that all keys would be removed if there
 		// had been some weight left in the block.
-		let weight_used = Contracts::on_initialize(Weight::MAX.computation);
+		let weight_used = Contracts::on_initialize(Weight::MAX.computation());
 		let base = <<Test as Config>::WeightInfo as WeightInfo>::on_initialize();
-		assert_eq!(weight_used.computation, base);
+		assert_eq!(weight_used.computation(), base);
 
 		// All the keys are still in place
 		for val in &vals {
@@ -1832,7 +1832,7 @@ fn lazy_removal_does_no_run_on_full_block() {
 		}
 
 		// Run the lazy removal directly which disregards the block limits
-		Storage::<Test>::process_deletion_queue_batch(Weight::MAX.computation);
+		Storage::<Test>::process_deletion_queue_batch(Weight::MAX.computation());
 
 		// Now the keys should be gone
 		for val in &vals {
@@ -2173,7 +2173,7 @@ fn gas_estimation_nested_call_fixed_limit() {
 		let input: Vec<u8> = AsRef::<[u8]>::as_ref(&addr_callee)
 			.iter()
 			.cloned()
-			.chain((GAS_LIMIT.computation / 5).to_le_bytes())
+			.chain((GAS_LIMIT.computation() / 5).to_le_bytes())
 			.collect();
 
 		// Call in order to determine the gas that is required for this call

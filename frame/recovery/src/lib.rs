@@ -376,7 +376,7 @@ pub mod pallet {
 		/// - `call`: The call you want to make with the recovered account.
 		#[pallet::weight({
 			let mut dispatch_info = call.get_dispatch_info();
-			dispatch_info.weight.computation = dispatch_info.weight.computation
+			*dispatch_info.weight.computation_mut() = dispatch_info.weight.computation()
 				.saturating_add(T::WeightInfo::as_recovered());
 			(
 				dispatch_info.weight,

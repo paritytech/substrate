@@ -257,7 +257,7 @@ pub mod pallet {
 			let dispatch_info = call.get_dispatch_info();
 			(
 				T::WeightInfo::as_multi_threshold_1(call.using_encoded(|c| c.len() as u32))
-					.saturating_add(dispatch_info.weight.computation)
+					.saturating_add(dispatch_info.weight.computation())
 					// AccountData for inner call origin accountdata.
 					.saturating_add(T::DbWeight::get().reads_writes(1, 1)),
 				dispatch_info.class,
@@ -286,14 +286,14 @@ pub mod pallet {
 						.actual_weight
 						.map(|actual_weight| {
 							T::WeightInfo::as_multi_threshold_1(call_len as u32)
-								.saturating_add(actual_weight.computation)
+								.saturating_add(actual_weight.computation())
 						})
 						.into()
 				})
 				.map_err(|err| match err.post_info.actual_weight {
 					Some(actual_weight) => {
 						let weight_used = T::WeightInfo::as_multi_threshold_1(call_len as u32)
-							.saturating_add(actual_weight.computation);
+							.saturating_add(actual_weight.computation());
 						let post_info = Some(weight_used).into();
 						DispatchErrorWithPostInfo { post_info, error: err.error }
 					},
@@ -354,7 +354,7 @@ pub mod pallet {
 			.max(T::WeightInfo::as_multi_create_store(s, z))
 			.max(T::WeightInfo::as_multi_approve(s, z))
 			.max(T::WeightInfo::as_multi_complete(s, z))
-			.saturating_add(max_weight.computation)
+			.saturating_add(max_weight.computation())
 		})]
 		pub fn as_multi(
 			origin: OriginFor<T>,
@@ -417,7 +417,7 @@ pub mod pallet {
 			T::WeightInfo::approve_as_multi_create(s)
 				.max(T::WeightInfo::approve_as_multi_approve(s))
 				.max(T::WeightInfo::approve_as_multi_complete(s))
-				.saturating_add(max_weight.computation)
+				.saturating_add(max_weight.computation())
 		})]
 		pub fn approve_as_multi(
 			origin: OriginFor<T>,
@@ -588,7 +588,7 @@ impl<T: Config> Pallet<T> {
 							other_signatories_len as u32,
 							call_len as u32,
 						)
-						.saturating_add(actual_weight.computation)
+						.saturating_add(actual_weight.computation())
 					})
 					.into())
 			} else {

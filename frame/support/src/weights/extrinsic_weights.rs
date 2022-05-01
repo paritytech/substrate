@@ -23,10 +23,7 @@ pub mod constants {
 
 	parameter_types! {
 		/// Executing a NO-OP `System::remarks` Extrinsic.
-		pub const ExtrinsicBaseWeight: Weight = Weight {
-			computation: 125_000 * constants::WEIGHT_PER_NANOS,
-			bandwidth: 0,
-		};
+		pub const ExtrinsicBaseWeight: Weight = Weight::new().set_computation(125_000 * constants::WEIGHT_PER_NANOS);
 	}
 
 	#[cfg(test)]
@@ -42,12 +39,12 @@ pub mod constants {
 
 			// At least 10 µs.
 			assert!(
-				w.computation >= 10 * constants::WEIGHT_PER_MICROS,
+				w.computation() >= 10 * constants::WEIGHT_PER_MICROS,
 				"Weight should be at least 10 µs."
 			);
 			// At most 1 ms.
 			assert!(
-				w.computation <= constants::WEIGHT_PER_MILLIS,
+				w.computation() <= constants::WEIGHT_PER_MILLIS,
 				"Weight should be at most 1 ms."
 			);
 		}

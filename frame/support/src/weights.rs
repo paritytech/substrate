@@ -365,11 +365,7 @@ impl From<(Option<WeightV1>, Pays)> for PostDispatchInfo {
 	fn from(post_weight_info: (Option<WeightV1>, Pays)) -> Self {
 		let (maybe_actual_time, pays_fee) = post_weight_info;
 		let actual_weight = match maybe_actual_time {
-			Some(actual_time) => Some(Weight {
-				computation: actual_time,
-				// NOTE: This enables backwards compat for `WeightV1` syntax.
-				bandwidth: Zero::zero(),
-			}),
+			Some(actual_time) => Some(Weight::new().set_computation(actual_time)),
 			None => None,
 		};
 		Self { actual_weight, pays_fee }
@@ -385,11 +381,7 @@ impl From<Pays> for PostDispatchInfo {
 impl From<Option<WeightV1>> for PostDispatchInfo {
 	fn from(maybe_actual_computation: Option<WeightV1>) -> Self {
 		let actual_weight = match maybe_actual_computation {
-			Some(actual_computation) => Some(Weight {
-				computation: actual_computation,
-				// NOTE: This enables backwards compat for `WeightV1` syntax.
-				bandwidth: Zero::zero(),
-			}),
+			Some(actual_computation) => Some(Weight::new().set_computation(actual_computation)),
 			None => None,
 		};
 		Self { actual_weight, pays_fee: Default::default() }
@@ -408,11 +400,11 @@ impl sp_runtime::traits::Printable for PostDispatchInfo {
 		match self.actual_weight {
 			Some(weight) => {
 				"time(".print();
-				weight.computation.print();
+				weight.computation().print();
 				")".print();
 				"bandwidth(".print();
 				")".print();
-				weight.bandwidth.print();
+				weight.bandwidth().print();
 			},
 			None => "max-weight".print(),
 		};
@@ -455,7 +447,7 @@ where
 
 impl<T> WeighData<T> for WeightV1 {
 	fn weigh_data(&self, _: T) -> Weight {
-		return Weight { computation: *self, bandwidth: Zero::zero() }
+		return Weight::new().set_computation(*self)
 	}
 }
 
@@ -553,10 +545,9 @@ impl<Call: Encode, Extra: Encode> GetDispatchInfo for sp_runtime::testing::TestX
 	fn get_dispatch_info(&self) -> DispatchInfo {
 		// for testing: weight == size.
 		DispatchInfo {
-			weight: Weight {
-				computation: self.encode().len() as _,
-				bandwidth: self.encode().len() as _,
-			},
+			weight: Weight::new()
+				.set_computation(self.encode().len() as _)
+				.set_bandwidth(self.encode().len() as _),
 			pays_fee: Pays::Yes,
 			..Default::default()
 		}

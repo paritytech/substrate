@@ -196,8 +196,8 @@ where
 		let v = V::get();
 
 		// TODO SHAWN: only factors computation weight.
-		let normal_max_weight = normal_max_weight.computation;
-		let normal_block_weight = normal_block_weight.computation;
+		let normal_max_weight = normal_max_weight.computation();
+		let normal_block_weight = normal_block_weight.computation();
 		let target_weight = (s * normal_max_weight) as u128;
 		let block_weight = normal_block_weight as u128;
 
@@ -356,7 +356,7 @@ pub mod pallet {
 			assert!(
 				<Multiplier as sp_runtime::traits::Bounded>::max_value() >=
 					Multiplier::checked_from_integer::<u128>(
-						T::BlockWeights::get().max_block.computation.try_into().unwrap()
+						T::BlockWeights::get().max_block.computation().try_into().unwrap()
 					)
 					.unwrap(),
 			);
@@ -369,7 +369,7 @@ pub mod pallet {
 						"Setting `max_total` for `Normal` dispatch class is not compatible with \
 					`transaction-payment` pallet.",
 					)
-					.computation;
+					.computation();
 			// add 1 percent;
 			let addition = target / 100;
 			if addition == 0 {
@@ -549,7 +549,7 @@ where
 		// cap the weight to the maximum defined in runtime, otherwise it will be the
 		// `Bounded` maximum of its data type, which is not desired.
 		let capped_weight = weight.min(T::BlockWeights::get().max_block);
-		T::WeightToFee::calc(&capped_weight.computation)
+		T::WeightToFee::calc(&capped_weight.computation())
 	}
 }
 
@@ -646,8 +646,8 @@ where
 		let bounded_weight = info.weight.max(One::one()).min(max_block_weight);
 		let bounded_length = (len as u64).max(One::one()).min(max_block_length);
 
-		let bounded_weight = bounded_weight.computation;
-		let max_block_weight = max_block_weight.computation;
+		let bounded_weight = bounded_weight.computation();
+		let max_block_weight = max_block_weight.computation();
 
 		let max_tx_per_block_weight = max_block_weight / bounded_weight;
 		let max_tx_per_block_length = max_block_length / bounded_length;
@@ -1121,8 +1121,9 @@ mod tests {
 			assert_eq!(
 				Balances::free_balance(&1),
 				(10000 -
-					<Runtime as frame_system::Config>::BlockWeights::get().max_block.computation)
-					as u64
+					<Runtime as frame_system::Config>::BlockWeights::get()
+						.max_block
+						.computation()) as u64
 			);
 		});
 	}
@@ -1223,7 +1224,7 @@ mod tests {
 					class: info.class,
 					partial_fee: 5 * 2 /* base * weight_fee */
 						+ len as u64  /* len * 1 */
-						+ info.weight.min(BlockWeights::get().max_block).computation as u64 * 2 * 3 / 2 /* weight */
+						+ info.weight.min(BlockWeights::get().max_block).computation() as u64 * 2 * 3 / 2 /* weight */
 				},
 			);
 
@@ -1245,7 +1246,8 @@ mod tests {
 						adjusted_weight_fee: info
 							.weight
 							.min(BlockWeights::get().max_block)
-							.computation as u64 * 2 * 3 / 2
+							.computation() as u64 * 2 * 3 /
+							2
 					}),
 					tip: 0,
 				},

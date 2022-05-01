@@ -1754,7 +1754,7 @@ impl<T: Config> Pallet<T> {
 	/// - Db reads per R: `DepositOf`, `ReferendumInfoOf`
 	/// # </weight>
 	fn begin_block(now: T::BlockNumber) -> Weight {
-		let max_block_weight = T::BlockWeights::get().max_block.computation;
+		let max_block_weight = T::BlockWeights::get().max_block.computation();
 		let mut weight = 0;
 
 		let next = Self::lowest_unbaked();

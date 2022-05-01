@@ -363,7 +363,7 @@ impl<T: Config> Pallet<T> {
 	/// being called.
 	pub fn finalize_signed_phase() -> bool {
 		let (weight, found_solution) = Self::finalize_signed_phase_internal();
-		Self::register_weight(weight.computation);
+		Self::register_weight(weight.computation());
 		found_solution
 	}
 
@@ -972,7 +972,7 @@ mod tests {
 				// default solution will have 5 edges (5 * 5 + 10)
 				assert_eq!(solution_weight, 35);
 				assert_eq!(raw.solution.voter_count(), 5);
-				assert_eq!(<Runtime as Config>::SignedMaxWeight::get().computation, 40);
+				assert_eq!(<Runtime as Config>::SignedMaxWeight::get().computation(), 40);
 
 				assert_ok!(MultiPhase::submit(Origin::signed(99), Box::new(raw.clone())));
 

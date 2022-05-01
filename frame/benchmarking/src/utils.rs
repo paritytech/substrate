@@ -128,7 +128,7 @@ pub struct BenchmarkResult {
 impl BenchmarkResult {
 	pub fn from_weight(w: Weight) -> Self {
 		// TODO handle correctly
-		let w: u64 = w.computation;
+		let w: u64 = w.computation();
 		Self { extrinsic_time: (w as u128) / 1_000, ..Default::default() }
 	}
 }

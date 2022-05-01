@@ -1290,30 +1290,30 @@ impl<T: Config> Pallet<T> {
 			).deconstruct(),
 			Self::block_weight().get(DispatchClass::Normal),
 			sp_runtime::Percent::from_rational(
-				Self::block_weight().get(DispatchClass::Normal).computation,
-				T::BlockWeights::get().get(DispatchClass::Normal).max_total.unwrap_or(Bounded::max_value()).computation
+				Self::block_weight().get(DispatchClass::Normal).computation(),
+				T::BlockWeights::get().get(DispatchClass::Normal).max_total.unwrap_or(Bounded::max_value()).computation()
 			).deconstruct(),
 			sp_runtime::Percent::from_rational(
-				Self::block_weight().get(DispatchClass::Normal).bandwidth,
-				T::BlockWeights::get().get(DispatchClass::Normal).max_total.unwrap_or(Bounded::max_value()).bandwidth
+				Self::block_weight().get(DispatchClass::Normal).bandwidth(),
+				T::BlockWeights::get().get(DispatchClass::Normal).max_total.unwrap_or(Bounded::max_value()).bandwidth()
 			).deconstruct(),
 			Self::block_weight().get(DispatchClass::Operational),
 			sp_runtime::Percent::from_rational(
-				Self::block_weight().get(DispatchClass::Operational).computation,
-				T::BlockWeights::get().get(DispatchClass::Operational).max_total.unwrap_or(Bounded::max_value()).computation
+				Self::block_weight().get(DispatchClass::Operational).computation(),
+				T::BlockWeights::get().get(DispatchClass::Operational).max_total.unwrap_or(Bounded::max_value()).computation()
 			).deconstruct(),
 			sp_runtime::Percent::from_rational(
-				Self::block_weight().get(DispatchClass::Operational).bandwidth,
-				T::BlockWeights::get().get(DispatchClass::Operational).max_total.unwrap_or(Bounded::max_value()).bandwidth
+				Self::block_weight().get(DispatchClass::Operational).bandwidth(),
+				T::BlockWeights::get().get(DispatchClass::Operational).max_total.unwrap_or(Bounded::max_value()).bandwidth()
 			).deconstruct(),
 			Self::block_weight().get(DispatchClass::Mandatory),
 			sp_runtime::Percent::from_rational(
-				Self::block_weight().get(DispatchClass::Mandatory).computation,
-				T::BlockWeights::get().get(DispatchClass::Mandatory).max_total.unwrap_or(Bounded::max_value()).computation
+				Self::block_weight().get(DispatchClass::Mandatory).computation(),
+				T::BlockWeights::get().get(DispatchClass::Mandatory).max_total.unwrap_or(Bounded::max_value()).computation()
 			).deconstruct(),
 			sp_runtime::Percent::from_rational(
-				Self::block_weight().get(DispatchClass::Mandatory).bandwidth,
-				T::BlockWeights::get().get(DispatchClass::Mandatory).max_total.unwrap_or(Bounded::max_value()).bandwidth
+				Self::block_weight().get(DispatchClass::Mandatory).bandwidth(),
+				T::BlockWeights::get().get(DispatchClass::Mandatory).max_total.unwrap_or(Bounded::max_value()).bandwidth()
 			).deconstruct(),
 		);
 		ExecutionPhase::<T>::kill();
@@ -1433,10 +1433,10 @@ impl<T: Config> Pallet<T> {
 		BlockWeight::<T>::mutate(|current_weight| {
 			let mut new_weight: Weight = *current_weight.get(DispatchClass::Normal);
 			if let Some(computation) = maybe_computation {
-				new_weight.computation = computation;
+				*new_weight.computation_mut() = computation;
 			}
 			if let Some(bandwidth) = maybe_bandwidth {
-				new_weight.bandwidth = bandwidth;
+				*new_weight.bandwidth_mut() = bandwidth;
 			}
 			current_weight.set(new_weight, DispatchClass::Normal)
 		});

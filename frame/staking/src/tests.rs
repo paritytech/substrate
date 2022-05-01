@@ -3616,7 +3616,7 @@ fn payout_stakers_handles_weight_refund() {
 		let info = call.get_dispatch_info();
 		let result = call.dispatch(Origin::signed(20));
 		assert_ok!(result);
-		assert_eq!(extract_actual_weight(&result, &info).computation, zero_nom_payouts_weight);
+		assert_eq!(extract_actual_weight(&result, &info).computation(), zero_nom_payouts_weight);
 
 		// The validator is not rewarded in this era; so there will be zero payouts to claim for
 		// this era.
@@ -3630,7 +3630,7 @@ fn payout_stakers_handles_weight_refund() {
 		let info = call.get_dispatch_info();
 		let result = call.dispatch(Origin::signed(20));
 		assert_ok!(result);
-		assert_eq!(extract_actual_weight(&result, &info).computation, zero_nom_payouts_weight);
+		assert_eq!(extract_actual_weight(&result, &info).computation(), zero_nom_payouts_weight);
 
 		// Reward the validator and its nominators.
 		Staking::reward_by_ids(vec![(11, 1)]);
@@ -3644,7 +3644,10 @@ fn payout_stakers_handles_weight_refund() {
 		let info = call.get_dispatch_info();
 		let result = call.dispatch(Origin::signed(20));
 		assert_ok!(result);
-		assert_eq!(extract_actual_weight(&result, &info).computation, half_max_nom_rewarded_weight);
+		assert_eq!(
+			extract_actual_weight(&result, &info).computation(),
+			half_max_nom_rewarded_weight
+		);
 
 		// Add enough nominators so that we are at the limit. They will be active nominators
 		// in the next era.
@@ -3668,7 +3671,7 @@ fn payout_stakers_handles_weight_refund() {
 		let info = call.get_dispatch_info();
 		let result = call.dispatch(Origin::signed(20));
 		assert_ok!(result);
-		assert_eq!(extract_actual_weight(&result, &info).computation, max_nom_rewarded_weight);
+		assert_eq!(extract_actual_weight(&result, &info).computation(), max_nom_rewarded_weight);
 
 		// Try and collect payouts for an era that has already been collected.
 		let call =
@@ -3677,7 +3680,7 @@ fn payout_stakers_handles_weight_refund() {
 		let result = call.dispatch(Origin::signed(20));
 		assert!(result.is_err());
 		// When there is an error the consumed weight == weight when there are 0 nominator payouts.
-		assert_eq!(extract_actual_weight(&result, &info).computation, zero_nom_payouts_weight);
+		assert_eq!(extract_actual_weight(&result, &info).computation(), zero_nom_payouts_weight);
 	});
 }
 
@@ -4041,7 +4044,7 @@ fn do_not_die_when_active_is_ed() {
 fn on_finalize_weight_is_nonzero() {
 	ExtBuilder::default().build_and_execute(|| {
 		let on_finalize_weight = <Test as frame_system::Config>::DbWeight::get().reads(1);
-		assert!(<Staking as Hooks<u64>>::on_initialize(1).computation >= on_finalize_weight);
+		assert!(<Staking as Hooks<u64>>::on_initialize(1).computation() >= on_finalize_weight);
 	})
 }
 

@@ -208,10 +208,9 @@ pub struct BlockWeights {
 impl Default for BlockWeights {
 	fn default() -> Self {
 		Self::with_sensible_defaults(
-			Weight {
-				computation: 1 * constants::WEIGHT_PER_SECOND,
-				bandwidth: 5 * 1024 * 1024, // 5 MB
-			},
+			Weight::new()
+				.set_computation(1 * constants::WEIGHT_PER_SECOND)
+				.set_bandwidth(5 * 1024 * 1024), // 5 MB
 			DEFAULT_NORMAL_RATIO,
 		)
 	}

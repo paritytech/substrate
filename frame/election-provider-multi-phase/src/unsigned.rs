@@ -355,7 +355,7 @@ impl<T: Config> Pallet<T> {
 		Self::trim_assignments_weight(
 			desired_targets,
 			size,
-			T::MinerMaxWeight::get().computation,
+			T::MinerMaxWeight::get().computation(),
 			&mut index_assignments,
 		);
 		Self::trim_assignments_length(

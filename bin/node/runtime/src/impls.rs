@@ -74,8 +74,8 @@ mod multiplier_tests {
 
 	fn target() -> Weight {
 		Weight {
-			computation: TargetBlockFullness::get() * max_normal().computation,
-			bandwidth: TargetBlockFullness::get() * max_normal().bandwidth,
+			computation: TargetBlockFullness::get() * max_normal().computation(),
+			bandwidth: TargetBlockFullness::get() * max_normal().bandwidth(),
 		}
 	}
 
@@ -97,13 +97,13 @@ mod multiplier_tests {
 		let previous_float = previous_float.max(min_multiplier().into_inner() as f64 / accuracy);
 
 		// maximum tx weight
-		let m = max_normal().computation as f64;
+		let m = max_normal().computation() as f64;
 		// block weight always truncated to max weight
-		let block_weight = (block_weight.computation as f64).min(m);
+		let block_weight = (block_weight.computation() as f64).min(m);
 		let v: f64 = AdjustmentVariable::get().to_float();
 
 		// Ideal saturation in terms of weight
-		let ss = target().computation as f64;
+		let ss = target().computation() as f64;
 		// Current saturation in terms of weight
 		let s = block_weight;
 
@@ -122,7 +122,7 @@ mod multiplier_tests {
 			.unwrap()
 			.into();
 		t.execute_with(|| {
-			System::set_block_consumed_resources(Some(w.computation), Some(w.bandwidth), None);
+			System::set_block_consumed_resources(Some(w.computation()), Some(w.bandwidth()), None);
 			assertions()
 		});
 	}
@@ -238,7 +238,7 @@ mod multiplier_tests {
 				fm = next;
 				iterations += 1;
 				let fee = <Runtime as pallet_transaction_payment::Config>::WeightToFee::calc(
-					&tx_weight.computation,
+					&tx_weight.computation(),
 				);
 				let adjusted_fee = fm.saturating_mul_acc_int(fee);
 				println!(

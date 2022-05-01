@@ -167,10 +167,9 @@ const AVERAGE_ON_INITIALIZE_RATIO: Perbill = Perbill::from_percent(10);
 /// by  Operational  extrinsics.
 const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(75);
 /// We allow for 2 seconds of compute with a 6 second average block time.
-const MAXIMUM_BLOCK_WEIGHT: Weight = Weight {
-	computation: 2 * WEIGHT_PER_SECOND,
-	bandwidth: 5 * 1024 * 1024, // 5 MB
-};
+const MAXIMUM_BLOCK_WEIGHT: Weight = Weight::new()
+	.set_computation(2 * WEIGHT_PER_SECOND)
+	.set_bandwidth(5 * 1024 * 1024); // 5 MB
 
 parameter_types! {
 	pub const BlockHashCount: BlockNumber = 2400;
@@ -1069,7 +1068,7 @@ parameter_types! {
 	pub DeletionQueueDepth: u32 = ((DeletionWeightLimit::get() / (
 			<Runtime as pallet_contracts::Config>::WeightInfo::on_initialize_per_queue_item(1) -
 			<Runtime as pallet_contracts::Config>::WeightInfo::on_initialize_per_queue_item(0)
-		)).computation / 5) as u32;
+		)).computation() / 5) as u32;
 	pub Schedule: pallet_contracts::Schedule<Runtime> = Default::default();
 }
 

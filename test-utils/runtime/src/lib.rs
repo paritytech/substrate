@@ -560,10 +560,10 @@ parameter_types! {
 	pub RuntimeBlockLength: BlockLength =
 		BlockLength::max(4 * 1024 * 1024);
 	pub RuntimeBlockWeights: BlockWeights =
-		BlockWeights::with_sensible_defaults(Weight {
-			computation: 4 * 1024 * 1024,
-			bandwidth: 5 * 1024 * 1024,
-		}, Perbill::from_percent(75));
+		BlockWeights::with_sensible_defaults(Weight::new()
+			.set_computation(4 * 1024 * 1024)
+			.set_bandwidth(5 * 1024 * 1024),
+		Perbill::from_percent(75));
 }
 
 impl frame_system::Config for Runtime {

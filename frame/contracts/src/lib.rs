@@ -327,7 +327,7 @@ pub mod pallet {
 				.max_block
 				.saturating_sub(System::<T>::block_weight().total())
 				.min(T::DeletionWeightLimit::get());
-			let weight_v1 = Storage::<T>::process_deletion_queue_batch(weight_limit.computation)
+			let weight_v1 = Storage::<T>::process_deletion_queue_batch(weight_limit.computation())
 				.saturating_add(T::WeightInfo::on_initialize());
 
 			Weight::computation_only(weight_v1)
@@ -767,8 +767,8 @@ where
 		);
 		ContractExecResult {
 			result: output.result.map_err(|r| r.error),
-			gas_consumed: output.gas_meter.gas_consumed().computation,
-			gas_required: output.gas_meter.gas_required().computation,
+			gas_consumed: output.gas_meter.gas_consumed().computation(),
+			gas_required: output.gas_meter.gas_required().computation(),
 			storage_deposit: output.storage_deposit,
 			debug_message: debug_message.unwrap_or_default(),
 		}
@@ -812,8 +812,8 @@ where
 				.result
 				.map(|(account_id, result)| InstantiateReturnValue { result, account_id })
 				.map_err(|e| e.error),
-			gas_consumed: output.gas_meter.gas_consumed().computation,
-			gas_required: output.gas_meter.gas_required().computation,
+			gas_consumed: output.gas_meter.gas_consumed().computation(),
+			gas_required: output.gas_meter.gas_required().computation(),
 			storage_deposit: output.storage_deposit,
 			debug_message: debug_message.unwrap_or_default(),
 		}

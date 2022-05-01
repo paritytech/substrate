@@ -13,12 +13,48 @@ use super::*;
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct Weight {
 	/// The weight of computational time used.
-	pub computation: ComputationWeight,
+	computation: ComputationWeight,
 	/// The weight of the storage bandwidth used.
-	pub bandwidth: BandwidthWeight,
+	bandwidth: BandwidthWeight,
 }
 
 impl Weight {
+	pub const fn new() -> Self {
+		Self { computation: 0, bandwidth: 0 }
+	}
+
+	/// Set the computational part of the weight.
+	pub const fn set_computation(mut self, c: ComputationWeight) -> Self {
+		self.computation = c;
+		self
+	}
+
+	/// Set the bandwidth part of the weight.
+	pub const fn set_bandwidth(mut self, b: BandwidthWeight) -> Self {
+		self.bandwidth = b;
+		self
+	}
+
+	/// Return the computational part of the weight.
+	pub const fn computation(&self) -> ComputationWeight {
+		self.computation
+	}
+
+	/// Return the bandwidth part of the weight.
+	pub const fn bandwidth(&self) -> BandwidthWeight {
+		self.bandwidth
+	}
+
+	/// Return a mutable computational part of the weight.
+	pub fn computation_mut(&mut self) -> &mut ComputationWeight {
+		&mut self.computation
+	}
+
+	/// Return a mutable bandwidth part of the weight.
+	pub fn bandwidth_mut(&mut self) -> &mut BandwidthWeight {
+		&mut self.bandwidth
+	}
+
 	pub const MAX: Self =
 		Self { computation: ComputationWeight::MAX, bandwidth: BandwidthWeight::MAX };
 

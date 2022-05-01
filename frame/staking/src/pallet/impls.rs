@@ -1409,7 +1409,7 @@ impl<T: Config> StakingInterface for Pallet<T> {
 				post_info
 					.actual_weight
 					.map_or(T::WeightInfo::withdraw_unbonded_kill(num_slashing_spans), |w| {
-						w.computation
+						w.computation()
 					})
 			})
 			.map_err(|err_with_post_info| err_with_post_info.error)

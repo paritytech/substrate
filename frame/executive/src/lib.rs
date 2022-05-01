@@ -867,8 +867,9 @@ mod tests {
 			<Runtime as frame_system::Config>::BlockWeights::get()
 				.get(DispatchClass::Normal)
 				.base_extrinsic;
-		let fee: Balance =
-			<Runtime as pallet_transaction_payment::Config>::WeightToFee::calc(&weight.computation);
+		let fee: Balance = <Runtime as pallet_transaction_payment::Config>::WeightToFee::calc(
+			&weight.computation(),
+		);
 		let mut t = sp_io::TestExternalities::new(t);
 		t.execute_with(|| {
 			Executive::initialize_block(&Header::new(
@@ -1159,7 +1160,7 @@ mod tests {
 						.base_extrinsic;
 				let fee: Balance =
 					<Runtime as pallet_transaction_payment::Config>::WeightToFee::calc(
-						&weight.computation,
+						&weight.computation(),
 					);
 				Executive::initialize_block(&Header::new(
 					1,

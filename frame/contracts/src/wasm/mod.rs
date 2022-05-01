@@ -388,7 +388,7 @@ mod tests {
 				code_hash: code_hash.clone(),
 				value,
 				data: data.to_vec(),
-				gas_left: gas_limit.computation,
+				gas_left: gas_limit.computation(),
 				salt: salt.to_vec(),
 			});
 			Ok((
@@ -476,7 +476,7 @@ mod tests {
 			16_384
 		}
 		fn get_weight_price(&self, weight: Weight) -> BalanceOf<Self::T> {
-			BalanceOf::<Self::T>::from(1312_u32).saturating_mul(weight.computation.into())
+			BalanceOf::<Self::T>::from(1312_u32).saturating_mul(weight.computation().into())
 		}
 		fn schedule(&self) -> &Schedule<Self::T> {
 			&self.schedule
@@ -1437,8 +1437,8 @@ mod tests {
 
 		let gas_left = u64::decode(&mut &*output.data).unwrap();
 		let actual_left = ext.gas_meter.gas_left();
-		assert!(gas_left < gas_limit.computation, "gas_left must be less than initial");
-		assert!(gas_left > actual_left.computation, "gas_left must be greater than final");
+		assert!(gas_left < gas_limit.computation(), "gas_left must be less than initial");
+		assert!(gas_left > actual_left.computation(), "gas_left must be greater than final");
 	}
 
 	const CODE_VALUE_TRANSFERRED: &str = r#"
@@ -1793,7 +1793,7 @@ mod tests {
 			)]
 		);
 
-		assert!(mock_ext.gas_meter.gas_left().computation > 0);
+		assert!(mock_ext.gas_meter.gas_left().computation() > 0);
 	}
 
 	const CODE_DEPOSIT_EVENT_MAX_TOPICS: &str = r#"
