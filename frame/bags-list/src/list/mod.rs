@@ -433,7 +433,7 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 
 			Some((old_bag_upper, new_bag_upper))
 		} else {
-			// just write the new weight.
+			// just write the new score.
 			node.put();
 			None
 		}
