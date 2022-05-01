@@ -672,7 +672,7 @@ where
 		})
 	}
 
-	fn calc(weight: &Weight) -> Self::Balance {
+	fn calc(weight: &WeightV1) -> Self::Balance {
 		Self::Balance::saturated_from(*weight)
 	}
 }
@@ -704,7 +704,7 @@ where
 		})
 	}
 
-	fn calc(weight: &Weight) -> Self::Balance {
+	fn calc(weight: &WeightV1) -> Self::Balance {
 		Self::Balance::saturated_from(*weight).saturating_mul(M::get())
 	}
 }

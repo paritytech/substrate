@@ -1002,7 +1002,7 @@ pub mod pallet {
 			let deposit = Self::deposit_for(&raw_solution, size);
 			let call_fee = {
 				let call = Call::submit { raw_solution: raw_solution.clone() };
-				T::EstimateCallFee::estimate_call_fee(&call, None.into())
+				T::EstimateCallFee::estimate_call_fee(&call, None::<Weight>.into())
 			};
 
 			let submission = SignedSubmission {

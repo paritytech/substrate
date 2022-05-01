@@ -558,7 +558,7 @@ impl<
 	}
 
 	fn weight<T: WeightInfo>(voters: u32, targets: u32, vote_degree: u32) -> Weight {
-		T::phragmen(voters, targets, vote_degree)
+		Weight::computation_only(T::phragmen(voters, targets, vote_degree))
 	}
 }
 
@@ -586,7 +586,7 @@ impl<
 	}
 
 	fn weight<T: WeightInfo>(voters: u32, targets: u32, vote_degree: u32) -> Weight {
-		T::phragmms(voters, targets, vote_degree)
+		Weight::computation_only(T::phragmms(voters, targets, vote_degree))
 	}
 }
 

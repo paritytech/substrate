@@ -122,7 +122,9 @@ impl<T: Config> Pallet<T> {
 			.retain(|&x| x >= current_era.saturating_sub(history_depth));
 		match ledger.claimed_rewards.binary_search(&era) {
 			Ok(_) =>
-				return Err(Error::<T>::AlreadyClaimed.with_weight(payout_stakers_alive_staked_weight)),
+				return Err(
+					Error::<T>::AlreadyClaimed.with_weight(payout_stakers_alive_staked_weight)
+				),
 			Err(pos) => ledger.claimed_rewards.insert(pos, era),
 		}
 
@@ -1406,7 +1408,9 @@ impl<T: Config> StakingInterface for Pallet<T> {
 			.map(|post_info| {
 				post_info
 					.actual_weight
-					.unwrap_or(T::WeightInfo::withdraw_unbonded_kill(num_slashing_spans))
+					.map_or(T::WeightInfo::withdraw_unbonded_kill(num_slashing_spans), |w| {
+						w.computation
+					})
 			})
 			.map_err(|err_with_post_info| err_with_post_info.error)
 	}
