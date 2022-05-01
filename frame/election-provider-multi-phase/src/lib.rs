@@ -1612,7 +1612,7 @@ mod feasibility_check {
 
 	use super::*;
 	use crate::mock::{
-		raw_solution, roll_to, EpochLength, ExtBuilder, MultiPhase, Runtime, SignedPhase,
+		raw_solution, roll_to, SessionLength, ExtBuilder, MultiPhase, Runtime, SignedPhase,
 		TargetIndex, UnsignedPhase, VoterIndex,
 	};
 	use frame_support::{assert_noop, assert_ok};
@@ -1622,7 +1622,7 @@ mod feasibility_check {
 	#[test]
 	fn snapshot_is_there() {
 		ExtBuilder::default().build_and_execute(|| {
-			roll_to(<EpochLength>::get() - <SignedPhase>::get() - <UnsignedPhase>::get());
+			roll_to(<SessionLength>::get() - <SignedPhase>::get() - <UnsignedPhase>::get());
 			assert!(MultiPhase::current_phase().is_signed());
 			let solution = raw_solution();
 
@@ -1639,7 +1639,7 @@ mod feasibility_check {
 	#[test]
 	fn round() {
 		ExtBuilder::default().build_and_execute(|| {
-			roll_to(<EpochLength>::get() - <SignedPhase>::get() - <UnsignedPhase>::get());
+			roll_to(<SessionLength>::get() - <SignedPhase>::get() - <UnsignedPhase>::get());
 			assert!(MultiPhase::current_phase().is_signed());
 
 			let mut solution = raw_solution();
@@ -1654,7 +1654,7 @@ mod feasibility_check {
 	#[test]
 	fn desired_targets_gets_capped() {
 		ExtBuilder::default().desired_targets(8).build_and_execute(|| {
-			roll_to(<EpochLength>::get() - <SignedPhase>::get() - <UnsignedPhase>::get());
+			roll_to(<SessionLength>::get() - <SignedPhase>::get() - <UnsignedPhase>::get());
 			assert!(MultiPhase::current_phase().is_signed());
 
 			let raw = raw_solution();
@@ -1671,7 +1671,7 @@ mod feasibility_check {
 	#[test]
 	fn less_than_desired_targets_fails() {
 		ExtBuilder::default().desired_targets(8).build_and_execute(|| {
-			roll_to(<EpochLength>::get() - <SignedPhase>::get() - <UnsignedPhase>::get());
+			roll_to(<SessionLength>::get() - <SignedPhase>::get() - <UnsignedPhase>::get());
 			assert!(MultiPhase::current_phase().is_signed());
 
 			let mut raw = raw_solution();
@@ -1694,7 +1694,7 @@ mod feasibility_check {
 	#[test]
 	fn winner_indices() {
 		ExtBuilder::default().desired_targets(2).build_and_execute(|| {
-			roll_to(<EpochLength>::get() - <SignedPhase>::get() - <UnsignedPhase>::get());
+			roll_to(<SessionLength>::get() - <SignedPhase>::get() - <UnsignedPhase>::get());
 			assert!(MultiPhase::current_phase().is_signed());
 
 			let mut raw = raw_solution();
@@ -1728,7 +1728,7 @@ mod feasibility_check {
 	fn voter_indices() {
 		// Should be caught in `solution.into_assignment`.
 		ExtBuilder::default().desired_targets(2).build_and_execute(|| {
-			roll_to(<EpochLength>::get() - <SignedPhase>::get() - <UnsignedPhase>::get());
+			roll_to(<SessionLength>::get() - <SignedPhase>::get() - <UnsignedPhase>::get());
 			assert!(MultiPhase::current_phase().is_signed());
 
 			let mut solution = raw_solution();
@@ -1755,7 +1755,7 @@ mod feasibility_check {
 	#[test]
 	fn voter_votes() {
 		ExtBuilder::default().desired_targets(2).build_and_execute(|| {
-			roll_to(<EpochLength>::get() - <SignedPhase>::get() - <UnsignedPhase>::get());
+			roll_to(<SessionLength>::get() - <SignedPhase>::get() - <UnsignedPhase>::get());
 			assert!(MultiPhase::current_phase().is_signed());
 
 			let mut solution = raw_solution();
@@ -1784,7 +1784,7 @@ mod feasibility_check {
 	#[test]
 	fn score() {
 		ExtBuilder::default().desired_targets(2).build_and_execute(|| {
-			roll_to(<EpochLength>::get() - <SignedPhase>::get() - <UnsignedPhase>::get());
+			roll_to(<SessionLength>::get() - <SignedPhase>::get() - <UnsignedPhase>::get());
 			assert!(MultiPhase::current_phase().is_signed());
 
 			let mut solution = raw_solution();

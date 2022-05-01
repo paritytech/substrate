@@ -8,12 +8,12 @@ right to produce a block. The proof of the VRF function execution will be
 used by other peer to validate the legitimacy of the slot claim.
 
 The engine is also responsible for collecting entropy on-chain which will be
-used to seed the given VRF PRNG. An epoch is a contiguous number of slots
-under which we will be using the same authority set. During an epoch all VRF
+used to seed the given VRF PRNG. An session is a contiguous number of slots
+under which we will be using the same authority set. During an session all VRF
 outputs produced as a result of block production will be collected on an
-on-chain randomness pool. Epoch changes are announced one epoch in advance,
-i.e. when ending epoch N, we announce the parameters (randomness,
-authorities, etc.) for epoch N+2.
+on-chain randomness pool. Session changes are announced one session in advance,
+i.e. when ending session N, we announce the parameters (randomness,
+authorities, etc.) for session N+2.
 
 Since the slot assignment is randomized, it is possible that a slot is
 assigned to multiple validators in which case we will have a temporary fork,
@@ -31,7 +31,7 @@ authoring the node starts by trying to claim a primary slot and falls back
 to a secondary slot claim attempt. The secondary slot assignment is done
 by picking the authority at index:
 
-`blake2_256(epoch_randomness ++ slot_number) % authorities_len`.
+`blake2_256(session_randomness ++ slot_number) % authorities_len`.
 
 The secondary slots supports either a `SecondaryPlain` or `SecondaryVRF`
 variant. Comparing with `SecondaryPlain` variant, the `SecondaryVRF` variant

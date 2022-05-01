@@ -74,7 +74,7 @@ type BabeBlockImport =
 #[derive(Clone)]
 struct DummyFactory {
 	client: Arc<TestClient>,
-	epoch_changes: SharedEpochChanges<TestBlock, Epoch>,
+	session_changes: SharedSessionChanges<TestBlock, Session>,
 	config: Config,
 	mutator: Mutator,
 }
@@ -136,27 +136,27 @@ impl DummyProposer {
 
 		// figure out if we should add a consensus digest, since the test runtime
 		// doesn't.
-		let epoch_changes = self.factory.epoch_changes.shared_data();
-		let epoch = epoch_changes
-			.epoch_data_for_child_of(
+		let session_changes = self.factory.session_changes.shared_data();
+		let session = session_changes
+			.session_data_for_child_of(
 				descendent_query(&*self.factory.client),
 				&self.parent_hash,
 				self.parent_number,
 				this_slot,
-				|slot| Epoch::genesis(self.factory.config.genesis_config(), slot),
+				|slot| Session::genesis(self.factory.config.genesis_config(), slot),
 			)
-			.expect("client has data to find epoch")
-			.expect("can compute epoch for baked block");
+			.expect("client has data to find session")
+			.expect("can compute session for baked block");
 
-		let first_in_epoch = self.parent_slot < epoch.start_slot;
-		if first_in_epoch {
+		let first_in_session = self.parent_slot < session.start_slot;
+		if first_in_session {
 			// push a `Consensus` digest signalling next change.
 			// we just reuse the same randomness and authorities as the prior
-			// epoch. this will break when we add light client support, since
+			// session. this will break when we add light client support, since
 			// that will re-check the randomness logic off-chain.
-			let digest_data = ConsensusLog::NextEpochData(NextEpochDescriptor {
-				authorities: epoch.authorities.clone(),
-				randomness: epoch.randomness.clone(),
+			let digest_data = ConsensusLog::NextSessionData(NextSessionDescriptor {
+				authorities: session.authorities.clone(),
+				randomness: session.randomness.clone(),
 			})
 			.encode();
 			let digest = DigestItem::Consensus(BABE_ENGINE_ID, digest_data);
@@ -344,7 +344,7 @@ impl TestNetFactory for BabeTestNet {
 					Ok((timestamp, slot))
 				}),
 				config: data.link.config.clone(),
-				epoch_changes: data.link.epoch_changes.clone(),
+				session_changes: data.link.session_changes.clone(),
 				can_author_with: AlwaysCanAuthor,
 				telemetry: None,
 			},
@@ -413,7 +413,7 @@ fn run_one_test(mutator: impl Fn(&mut TestHeader, Stage) + Send + Sync + 'static
 		let environ = DummyFactory {
 			client: client.clone(),
 			config: data.link.config.clone(),
-			epoch_changes: data.link.epoch_changes.clone(),
+			session_changes: data.link.session_changes.clone(),
 			mutator: mutator.clone(),
 		};
 
@@ -521,7 +521,7 @@ fn rejects_missing_consensus_digests() {
 		let v = std::mem::take(&mut header.digest_mut().logs);
 		header.digest_mut().logs = v
 			.into_iter()
-			.filter(|v| stage == Stage::PostSeal || v.as_next_epoch_descriptor().is_none())
+			.filter(|v| stage == Stage::PostSeal || v.as_next_session_descriptor().is_none())
 			.collect()
 	});
 }
@@ -561,13 +561,13 @@ fn can_author_block() {
 		.expect("Generates authority pair");
 
 	let mut i = 0;
-	let epoch = Epoch {
+	let session = Session {
 		start_slot: 0.into(),
 		authorities: vec![(public.into(), 1)],
 		randomness: [0; 32],
-		epoch_index: 1,
+		session_index: 1,
 		duration: 100,
-		config: BabeEpochConfiguration {
+		config: BabeSessionConfiguration {
 			c: (3, 10),
 			allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,
 		},
@@ -575,7 +575,7 @@ fn can_author_block() {
 
 	let mut config = crate::BabeGenesisConfiguration {
 		slot_duration: 1000,
-		epoch_length: 100,
+		session_length: 100,
 		c: (3, 10),
 		genesis_authorities: Vec::new(),
 		randomness: [0; 32],
@@ -583,7 +583,7 @@ fn can_author_block() {
 	};
 
 	// with secondary slots enabled it should never be empty
-	match claim_slot(i.into(), &epoch, &keystore) {
+	match claim_slot(i.into(), &session, &keystore) {
 		None => i += 1,
 		Some(s) => debug!(target: "babe", "Authored block {:?}", s.0),
 	}
@@ -592,7 +592,7 @@ fn can_author_block() {
 	// of times.
 	config.allowed_slots = AllowedSlots::PrimarySlots;
 	loop {
-		match claim_slot(i.into(), &epoch, &keystore) {
+		match claim_slot(i.into(), &session, &keystore) {
 			None => i += 1,
 			Some(s) => {
 				debug!(target: "babe", "Authored block {:?}", s.0);
@@ -627,10 +627,10 @@ fn propose_and_import_block<Transaction: Send + 'static>(
 
 	let mut block = block_on(proposer.propose_with(pre_digest)).unwrap().block;
 
-	let epoch_descriptor = proposer_factory
-		.epoch_changes
+	let session_descriptor = proposer_factory
+		.session_changes
 		.shared_data()
-		.epoch_descriptor_for_child_of(
+		.session_descriptor_for_child_of(
 			descendent_query(&*proposer_factory.client),
 			&parent_hash,
 			*parent.number(),
@@ -660,7 +660,7 @@ fn propose_and_import_block<Transaction: Send + 'static>(
 	import.body = Some(block.extrinsics);
 	import.intermediates.insert(
 		Cow::from(INTERMEDIATE_KEY),
-		Box::new(BabeIntermediate::<TestBlock> { epoch_descriptor }) as Box<_>,
+		Box::new(BabeIntermediate::<TestBlock> { session_descriptor }) as Box<_>,
 	);
 	import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 	let import_result = block_on(block_import.import_block(import, Default::default())).unwrap();
@@ -674,7 +674,7 @@ fn propose_and_import_block<Transaction: Send + 'static>(
 }
 
 // Propose and import n valid BABE blocks that are built on top of the given parent.
-// The proposer takes care of producing epoch change digests according to the epoch
+// The proposer takes care of producing session change digests according to the session
 // duration (which is set to 6 slots in the test runtime).
 fn propose_and_import_blocks<Transaction: Send + 'static>(
 	client: &PeersFullClient,
@@ -697,7 +697,7 @@ fn propose_and_import_blocks<Transaction: Send + 'static>(
 }
 
 #[test]
-fn importing_block_one_sets_genesis_epoch() {
+fn importing_block_one_sets_genesis_session() {
 	let mut net = BabeTestNet::new(1);
 
 	let peer = net.peer(0);
@@ -707,7 +707,7 @@ fn importing_block_one_sets_genesis_epoch() {
 	let mut proposer_factory = DummyFactory {
 		client: client.clone(),
 		config: data.link.config.clone(),
-		epoch_changes: data.link.epoch_changes.clone(),
+		session_changes: data.link.session_changes.clone(),
 		mutator: Arc::new(|_, _| ()),
 	};
 
@@ -722,21 +722,21 @@ fn importing_block_one_sets_genesis_epoch() {
 		&mut block_import,
 	);
 
-	let genesis_epoch = Epoch::genesis(data.link.config.genesis_config(), 999.into());
+	let genesis_session = Session::genesis(data.link.config.genesis_config(), 999.into());
 
-	let epoch_changes = data.link.epoch_changes.shared_data();
-	let epoch_for_second_block = epoch_changes
-		.epoch_data_for_child_of(descendent_query(&*client), &block_hash, 1, 1000.into(), |slot| {
-			Epoch::genesis(data.link.config.genesis_config(), slot)
+	let session_changes = data.link.session_changes.shared_data();
+	let session_for_second_block = session_changes
+		.session_data_for_child_of(descendent_query(&*client), &block_hash, 1, 1000.into(), |slot| {
+			Session::genesis(data.link.config.genesis_config(), slot)
 		})
 		.unwrap()
 		.unwrap();
 
-	assert_eq!(epoch_for_second_block, genesis_epoch);
+	assert_eq!(session_for_second_block, genesis_session);
 }
 
 #[test]
-fn revert_prunes_epoch_changes_and_removes_weights() {
+fn revert_prunes_session_changes_and_removes_weights() {
 	let mut net = BabeTestNet::new(1);
 
 	let peer = net.peer(0);
@@ -745,12 +745,12 @@ fn revert_prunes_epoch_changes_and_removes_weights() {
 	let client = peer.client().as_client();
 	let backend = peer.client().as_backend();
 	let mut block_import = data.block_import.lock().take().expect("import set up during init");
-	let epoch_changes = data.link.epoch_changes.clone();
+	let session_changes = data.link.session_changes.clone();
 
 	let mut proposer_factory = DummyFactory {
 		client: client.clone(),
 		config: data.link.config.clone(),
-		epoch_changes: data.link.epoch_changes.clone(),
+		session_changes: data.link.session_changes.clone(),
 		mutator: Arc::new(|_, _| ()),
 	};
 
@@ -759,9 +759,9 @@ fn revert_prunes_epoch_changes_and_removes_weights() {
 	};
 
 	// Test scenario.
-	// Information for epoch 19 is produced on three different forks at block #13.
-	// One branch starts before the revert point (epoch data should be maintained).
-	// One branch starts after the revert point (epoch data should be removed).
+	// Information for session 19 is produced on three different forks at block #13.
+	// One branch starts before the revert point (session data should be maintained).
+	// One branch starts after the revert point (session data should be removed).
 	//
 	//                        *----------------- F(#13) --#18                  < fork #2
 	//                       /
@@ -775,21 +775,21 @@ fn revert_prunes_epoch_changes_and_removes_weights() {
 	let fork2 = propose_and_import_blocks_wrap(BlockId::Hash(canon[7]), 10);
 	let fork3 = propose_and_import_blocks_wrap(BlockId::Hash(canon[11]), 8);
 
-	// We should be tracking a total of 9 epochs in the fork tree
-	assert_eq!(epoch_changes.shared_data().tree().iter().count(), 8);
+	// We should be tracking a total of 9 sessions in the fork tree
+	assert_eq!(session_changes.shared_data().tree().iter().count(), 8);
 	// And only one root
-	assert_eq!(epoch_changes.shared_data().tree().roots().count(), 1);
+	assert_eq!(session_changes.shared_data().tree().roots().count(), 1);
 
 	// Revert canon chain to block #10 (best(21) - 11)
 	revert(client.clone(), backend, 11).expect("revert should work for baked test scenario");
 
-	// Load and check epoch changes.
+	// Load and check session changes.
 
-	let actual_nodes = aux_schema::load_epoch_changes::<Block, TestClient>(
+	let actual_nodes = aux_schema::load_session_changes::<Block, TestClient>(
 		&*client,
 		data.link.config.genesis_config(),
 	)
-	.expect("load epoch changes")
+	.expect("load session changes")
 	.shared_data()
 	.tree()
 	.iter()
@@ -818,7 +818,7 @@ fn revert_prunes_epoch_changes_and_removes_weights() {
 }
 
 #[test]
-fn importing_epoch_change_block_prunes_tree() {
+fn importing_session_change_block_prunes_tree() {
 	let mut net = BabeTestNet::new(1);
 
 	let peer = net.peer(0);
@@ -826,12 +826,12 @@ fn importing_epoch_change_block_prunes_tree() {
 
 	let client = peer.client().as_client();
 	let mut block_import = data.block_import.lock().take().expect("import set up during init");
-	let epoch_changes = data.link.epoch_changes.clone();
+	let session_changes = data.link.session_changes.clone();
 
 	let mut proposer_factory = DummyFactory {
 		client: client.clone(),
 		config: data.link.config.clone(),
-		epoch_changes: data.link.epoch_changes.clone(),
+		session_changes: data.link.session_changes.clone(),
 		mutator: Arc::new(|_, _| ()),
 	};
 
@@ -840,7 +840,7 @@ fn importing_epoch_change_block_prunes_tree() {
 	};
 
 	// This is the block tree that we're going to use in this test. Each node
-	// represents an epoch change block, the epoch duration is 6 slots.
+	// represents an session change block, the session duration is 6 slots.
 	//
 	//    *---- F (#7)
 	//   /                 *------ G (#19) - H (#25)
@@ -858,34 +858,34 @@ fn importing_epoch_change_block_prunes_tree() {
 	let fork_2 = propose_and_import_blocks_wrap(BlockId::Hash(canon_hashes[12]), 15);
 	let fork_3 = propose_and_import_blocks_wrap(BlockId::Hash(canon_hashes[18]), 10);
 
-	// We should be tracking a total of 9 epochs in the fork tree
-	assert_eq!(epoch_changes.shared_data().tree().iter().count(), 9);
+	// We should be tracking a total of 9 sessions in the fork tree
+	assert_eq!(session_changes.shared_data().tree().iter().count(), 9);
 
 	// And only one root
-	assert_eq!(epoch_changes.shared_data().tree().roots().count(), 1);
+	assert_eq!(session_changes.shared_data().tree().roots().count(), 1);
 
-	// We finalize block #13 from the canon chain, so on the next epoch
+	// We finalize block #13 from the canon chain, so on the next session
 	// change the tree should be pruned, to not contain F (#7).
 	client.finalize_block(BlockId::Hash(canon_hashes[12]), None, false).unwrap();
 	propose_and_import_blocks_wrap(BlockId::Hash(client.chain_info().best_hash), 7);
 
 	// at this point no hashes from the first fork must exist on the tree
-	assert!(!epoch_changes
+	assert!(!session_changes
 		.shared_data()
 		.tree()
 		.iter()
 		.map(|(h, _, _)| h)
 		.any(|h| fork_1.contains(h)),);
 
-	// but the epoch changes from the other forks must still exist
-	assert!(epoch_changes
+	// but the session changes from the other forks must still exist
+	assert!(session_changes
 		.shared_data()
 		.tree()
 		.iter()
 		.map(|(h, _, _)| h)
 		.any(|h| fork_2.contains(h)));
 
-	assert!(epoch_changes
+	assert!(session_changes
 		.shared_data()
 		.tree()
 		.iter()
@@ -897,15 +897,15 @@ fn importing_epoch_change_block_prunes_tree() {
 	propose_and_import_blocks_wrap(BlockId::Hash(client.chain_info().best_hash), 8);
 
 	// at this point no hashes from the second fork must exist on the tree
-	assert!(!epoch_changes
+	assert!(!session_changes
 		.shared_data()
 		.tree()
 		.iter()
 		.map(|(h, _, _)| h)
 		.any(|h| fork_2.contains(h)),);
 
-	// while epoch changes from the last fork should still exist
-	assert!(epoch_changes
+	// while session changes from the last fork should still exist
+	assert!(session_changes
 		.shared_data()
 		.tree()
 		.iter()
@@ -927,7 +927,7 @@ fn verify_slots_are_strictly_increasing() {
 	let mut proposer_factory = DummyFactory {
 		client: client.clone(),
 		config: data.link.config.clone(),
-		epoch_changes: data.link.epoch_changes.clone(),
+		session_changes: data.link.session_changes.clone(),
 		mutator: Arc::new(|_, _| ()),
 	};
 
@@ -957,20 +957,20 @@ fn babe_transcript_generation_match() {
 	let public = SyncCryptoStore::sr25519_generate_new(&*keystore, BABE, Some("//Alice"))
 		.expect("Generates authority pair");
 
-	let epoch = Epoch {
+	let session = Session {
 		start_slot: 0.into(),
 		authorities: vec![(public.into(), 1)],
 		randomness: [0; 32],
-		epoch_index: 1,
+		session_index: 1,
 		duration: 100,
-		config: BabeEpochConfiguration {
+		config: BabeSessionConfiguration {
 			c: (3, 10),
 			allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,
 		},
 	};
 
-	let orig_transcript = make_transcript(&epoch.randomness.clone(), 1.into(), epoch.epoch_index);
-	let new_transcript = make_transcript_data(&epoch.randomness, 1.into(), epoch.epoch_index);
+	let orig_transcript = make_transcript(&session.randomness.clone(), 1.into(), session.session_index);
+	let new_transcript = make_transcript_data(&session.randomness, 1.into(), session.session_index);
 
 	let test = |t: merlin::Transcript| -> [u8; 16] {
 		let mut b = [0u8; 16];
@@ -998,7 +998,7 @@ fn obsolete_blocks_aux_data_cleanup() {
 	let mut proposer_factory = DummyFactory {
 		client: client.clone(),
 		config: data.link.config.clone(),
-		epoch_changes: data.link.epoch_changes.clone(),
+		session_changes: data.link.session_changes.clone(),
 		mutator: Arc::new(|_, _| ()),
 	};
 

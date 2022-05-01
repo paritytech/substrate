@@ -105,8 +105,8 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	/// Data associated with a slot claim.
 	type Claim: Send + 'static;
 
-	/// Epoch data necessary for authoring.
-	type EpochData: Send + Sync + 'static;
+	/// Session data necessary for authoring.
+	type SessionData: Send + Sync + 'static;
 
 	/// The logging target to use when logging messages.
 	fn logging_target(&self) -> &'static str;
@@ -114,29 +114,29 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	/// A handle to a `BlockImport`.
 	fn block_import(&mut self) -> &mut Self::BlockImport;
 
-	/// Returns the epoch data necessary for authoring. For time-dependent epochs,
+	/// Returns the session data necessary for authoring. For time-dependent sessions,
 	/// use the provided slot number as a canonical source of time.
-	fn epoch_data(
+	fn session_data(
 		&self,
 		header: &B::Header,
 		slot: Slot,
-	) -> Result<Self::EpochData, sp_consensus::Error>;
+	) -> Result<Self::SessionData, sp_consensus::Error>;
 
-	/// Returns the number of authorities given the epoch data.
+	/// Returns the number of authorities given the session data.
 	/// None indicate that the authorities information is incomplete.
-	fn authorities_len(&self, epoch_data: &Self::EpochData) -> Option<usize>;
+	fn authorities_len(&self, session_data: &Self::SessionData) -> Option<usize>;
 
 	/// Tries to claim the given slot, returning an object with claim data if successful.
 	async fn claim_slot(
 		&self,
 		header: &B::Header,
 		slot: Slot,
-		epoch_data: &Self::EpochData,
+		session_data: &Self::SessionData,
 	) -> Option<Self::Claim>;
 
 	/// Notifies the given slot. Similar to `claim_slot`, but will be called no matter whether we
 	/// need to author blocks or not.
-	fn notify_slot(&self, _header: &B::Header, _slot: Slot, _epoch_data: &Self::EpochData) {}
+	fn notify_slot(&self, _header: &B::Header, _slot: Slot, _session_data: &Self::SessionData) {}
 
 	/// Return the pre digest data to include in a block authored with the given claim.
 	fn pre_digest_data(&self, slot: Slot, claim: &Self::Claim) -> Vec<sp_runtime::DigestItem>;
@@ -149,7 +149,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		body: Vec<B::Extrinsic>,
 		storage_changes: StorageChanges<<Self::BlockImport as BlockImport<B>>::Transaction, B>,
 		public: Self::Claim,
-		epoch: Self::EpochData,
+		session: Self::SessionData,
 	) -> Result<
 		sc_consensus::BlockImportParams<B, <Self::BlockImport as BlockImport<B>>::Transaction>,
 		sp_consensus::Error,
@@ -208,12 +208,12 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			Delay::new(proposing_remaining_duration)
 		};
 
-		let epoch_data = match self.epoch_data(&slot_info.chain_head, slot) {
-			Ok(epoch_data) => epoch_data,
+		let session_data = match self.session_data(&slot_info.chain_head, slot) {
+			Ok(session_data) => session_data,
 			Err(err) => {
 				warn!(
 					target: logging_target,
-					"Unable to fetch epoch data at block {:?}: {}",
+					"Unable to fetch session data at block {:?}: {}",
 					slot_info.chain_head.hash(),
 					err,
 				);
@@ -230,9 +230,9 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			},
 		};
 
-		self.notify_slot(&slot_info.chain_head, slot, &epoch_data);
+		self.notify_slot(&slot_info.chain_head, slot, &session_data);
 
-		let authorities_len = self.authorities_len(&epoch_data);
+		let authorities_len = self.authorities_len(&session_data);
 
 		if !self.force_authoring() &&
 			self.sync_oracle().is_offline() &&
@@ -249,7 +249,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			return None
 		}
 
-		let claim = self.claim_slot(&slot_info.chain_head, slot, &epoch_data).await?;
+		let claim = self.claim_slot(&slot_info.chain_head, slot, &session_data).await?;
 
 		if self.should_backoff(slot, &slot_info.chain_head) {
 			return None
@@ -343,7 +343,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 				body.clone(),
 				proposal.storage_changes,
 				claim,
-				epoch_data,
+				session_data,
 			)
 			.await
 		{

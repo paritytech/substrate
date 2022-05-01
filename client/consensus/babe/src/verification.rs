@@ -19,7 +19,7 @@
 //! Verification for BABE headers.
 use super::{
 	authorship::{calculate_primary_threshold, check_primary_threshold, secondary_slot_author},
-	babe_err, find_pre_digest, BlockT, Epoch, Error,
+	babe_err, find_pre_digest, BlockT, Session, Error,
 };
 use log::{debug, trace};
 use sc_consensus_slots::CheckedHeader;
@@ -44,8 +44,8 @@ pub(super) struct VerificationParams<'a, B: 'a + BlockT> {
 	pub(super) pre_digest: Option<PreDigest>,
 	/// The slot number of the current time.
 	pub(super) slot_now: Slot,
-	/// Epoch descriptor of the epoch this block _should_ be under, if it's valid.
-	pub(super) epoch: &'a Epoch,
+	/// Session descriptor of the session this block _should_ be under, if it's valid.
+	pub(super) session: &'a Session,
 }
 
 /// Check a header has been signed by the right key. If the slot is too far in
@@ -62,9 +62,9 @@ pub(super) struct VerificationParams<'a, B: 'a + BlockT> {
 pub(super) fn check_header<B: BlockT + Sized>(
 	params: VerificationParams<B>,
 ) -> Result<CheckedHeader<B::Header, VerifiedHeaderInfo>, Error<B>> {
-	let VerificationParams { mut header, pre_digest, slot_now, epoch } = params;
+	let VerificationParams { mut header, pre_digest, slot_now, session } = params;
 
-	let authorities = &epoch.authorities;
+	let authorities = &session.authorities;
 	let pre_digest = pre_digest.map(Ok).unwrap_or_else(|| find_pre_digest::<B>(&header))?;
 
 	trace!(target: "babe", "Checking header");
@@ -99,10 +99,10 @@ pub(super) fn check_header<B: BlockT + Sized>(
 				primary.slot,
 			);
 
-			check_primary_header::<B>(pre_hash, primary, sig, &epoch, epoch.config.c)?;
+			check_primary_header::<B>(pre_hash, primary, sig, &session, session.config.c)?;
 		},
 		PreDigest::SecondaryPlain(secondary)
-			if epoch.config.allowed_slots.is_secondary_plain_slots_allowed() =>
+			if session.config.allowed_slots.is_secondary_plain_slots_allowed() =>
 		{
 			debug!(target: "babe",
 				"Verifying secondary plain block #{} at slot: {}",
@@ -110,10 +110,10 @@ pub(super) fn check_header<B: BlockT + Sized>(
 				secondary.slot,
 			);
 
-			check_secondary_plain_header::<B>(pre_hash, secondary, sig, &epoch)?;
+			check_secondary_plain_header::<B>(pre_hash, secondary, sig, &session)?;
 		},
 		PreDigest::SecondaryVRF(secondary)
-			if epoch.config.allowed_slots.is_secondary_vrf_slots_allowed() =>
+			if session.config.allowed_slots.is_secondary_vrf_slots_allowed() =>
 		{
 			debug!(target: "babe",
 				"Verifying secondary VRF block #{} at slot: {}",
@@ -121,7 +121,7 @@ pub(super) fn check_header<B: BlockT + Sized>(
 				secondary.slot,
 			);
 
-			check_secondary_vrf_header::<B>(pre_hash, secondary, sig, &epoch)?;
+			check_secondary_vrf_header::<B>(pre_hash, secondary, sig, &session)?;
 		},
 		_ => return Err(babe_err(Error::SecondarySlotAssignmentsDisabled)),
 	}
@@ -148,14 +148,14 @@ fn check_primary_header<B: BlockT + Sized>(
 	pre_hash: B::Hash,
 	pre_digest: &PrimaryPreDigest,
 	signature: AuthoritySignature,
-	epoch: &Epoch,
+	session: &Session,
 	c: (u64, u64),
 ) -> Result<(), Error<B>> {
-	let author = &epoch.authorities[pre_digest.authority_index as usize].0;
+	let author = &session.authorities[pre_digest.authority_index as usize].0;
 
 	if AuthorityPair::verify(&signature, pre_hash, &author) {
 		let (inout, _) = {
-			let transcript = make_transcript(&epoch.randomness, pre_digest.slot, epoch.epoch_index);
+			let transcript = make_transcript(&session.randomness, pre_digest.slot, session.session_index);
 
 			schnorrkel::PublicKey::from_bytes(author.as_slice())
 				.and_then(|p| {
@@ -165,7 +165,7 @@ fn check_primary_header<B: BlockT + Sized>(
 		};
 
 		let threshold =
-			calculate_primary_threshold(c, &epoch.authorities, pre_digest.authority_index as usize);
+			calculate_primary_threshold(c, &session.authorities, pre_digest.authority_index as usize);
 
 		if !check_primary_threshold(&inout, threshold) {
 			return Err(babe_err(Error::VRFVerificationOfBlockFailed(author.clone(), threshold)))
@@ -185,15 +185,15 @@ fn check_secondary_plain_header<B: BlockT>(
 	pre_hash: B::Hash,
 	pre_digest: &SecondaryPlainPreDigest,
 	signature: AuthoritySignature,
-	epoch: &Epoch,
+	session: &Session,
 ) -> Result<(), Error<B>> {
 	// check the signature is valid under the expected authority and
 	// chain state.
 	let expected_author =
-		secondary_slot_author(pre_digest.slot, &epoch.authorities, epoch.randomness)
+		secondary_slot_author(pre_digest.slot, &session.authorities, session.randomness)
 			.ok_or_else(|| Error::NoSecondaryAuthorExpected)?;
 
-	let author = &epoch.authorities[pre_digest.authority_index as usize].0;
+	let author = &session.authorities[pre_digest.authority_index as usize].0;
 
 	if expected_author != author {
 		return Err(Error::InvalidAuthor(expected_author.clone(), author.clone()))
@@ -211,22 +211,22 @@ fn check_secondary_vrf_header<B: BlockT>(
 	pre_hash: B::Hash,
 	pre_digest: &SecondaryVRFPreDigest,
 	signature: AuthoritySignature,
-	epoch: &Epoch,
+	session: &Session,
 ) -> Result<(), Error<B>> {
 	// check the signature is valid under the expected authority and
 	// chain state.
 	let expected_author =
-		secondary_slot_author(pre_digest.slot, &epoch.authorities, epoch.randomness)
+		secondary_slot_author(pre_digest.slot, &session.authorities, session.randomness)
 			.ok_or_else(|| Error::NoSecondaryAuthorExpected)?;
 
-	let author = &epoch.authorities[pre_digest.authority_index as usize].0;
+	let author = &session.authorities[pre_digest.authority_index as usize].0;
 
 	if expected_author != author {
 		return Err(Error::InvalidAuthor(expected_author.clone(), author.clone()))
 	}
 
 	if AuthorityPair::verify(&signature, pre_hash.as_ref(), author) {
-		let transcript = make_transcript(&epoch.randomness, pre_digest.slot, epoch.epoch_index);
+		let transcript = make_transcript(&session.randomness, pre_digest.slot, session.session_index);
 
 		schnorrkel::PublicKey::from_bytes(author.as_slice())
 			.and_then(|p| p.vrf_verify(transcript, &pre_digest.vrf_output, &pre_digest.vrf_proof))

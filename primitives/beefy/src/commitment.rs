@@ -100,13 +100,13 @@ pub struct Commitment<TBlockNumber> {
 	/// There might be multiple rounds in progress (depending on the block choice rule), however
 	/// since the payload is supposed to be cumulative, it is not required to import all
 	/// commitments.
-	/// BEEFY light client is expected to import at least one commitment per epoch,
+	/// BEEFY light client is expected to import at least one commitment per session,
 	/// but is free to import as many as it requires.
 	pub block_number: TBlockNumber,
 
 	/// BEEFY validator set supposed to sign this commitment.
 	///
-	/// Validator set is changing once per epoch. The Light Client must be provided by details
+	/// Validator set is changing once per session. The Light Client must be provided by details
 	/// about the validator set whenever it's importing first commitment with a new
 	/// `validator_set_id`. Validator set data MUST be verifiable, for instance using
 	/// [payload](Commitment::payload) information.

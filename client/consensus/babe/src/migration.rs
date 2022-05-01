@@ -17,35 +17,35 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::{
-	AuthorityId, BabeAuthorityWeight, BabeEpochConfiguration, BabeGenesisConfiguration, Epoch,
-	NextEpochDescriptor, VRF_OUTPUT_LENGTH,
+	AuthorityId, BabeAuthorityWeight, BabeSessionConfiguration, BabeGenesisConfiguration, Session,
+	NextSessionDescriptor, VRF_OUTPUT_LENGTH,
 };
 use codec::{Decode, Encode};
-use sc_consensus_epochs::Epoch as EpochT;
+use sc_consensus_sessions::Session as SessionT;
 use sp_consensus_slots::Slot;
 
-/// BABE epoch information, version 0.
+/// BABE session information, version 0.
 #[derive(Decode, Encode, PartialEq, Eq, Clone, Debug)]
-pub struct EpochV0 {
-	/// The epoch index.
-	pub epoch_index: u64,
-	/// The starting slot of the epoch.
+pub struct SessionV0 {
+	/// The session index.
+	pub session_index: u64,
+	/// The starting slot of the session.
 	pub start_slot: Slot,
-	/// The duration of this epoch.
+	/// The duration of this session.
 	pub duration: u64,
 	/// The authorities and their weights.
 	pub authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
-	/// Randomness for this epoch.
+	/// Randomness for this session.
 	pub randomness: [u8; VRF_OUTPUT_LENGTH],
 }
 
-impl EpochT for EpochV0 {
-	type NextEpochDescriptor = NextEpochDescriptor;
+impl SessionT for SessionV0 {
+	type NextSessionDescriptor = NextSessionDescriptor;
 	type Slot = Slot;
 
-	fn increment(&self, descriptor: NextEpochDescriptor) -> EpochV0 {
-		EpochV0 {
-			epoch_index: self.epoch_index + 1,
+	fn increment(&self, descriptor: NextSessionDescriptor) -> SessionV0 {
+		SessionV0 {
+			session_index: self.session_index + 1,
 			start_slot: self.start_slot + self.duration,
 			duration: self.duration,
 			authorities: descriptor.authorities,
@@ -62,16 +62,16 @@ impl EpochT for EpochV0 {
 	}
 }
 
-impl EpochV0 {
-	/// Migrate the sturct to current epoch version.
-	pub fn migrate(self, config: &BabeGenesisConfiguration) -> Epoch {
-		Epoch {
-			epoch_index: self.epoch_index,
+impl SessionV0 {
+	/// Migrate the sturct to current session version.
+	pub fn migrate(self, config: &BabeGenesisConfiguration) -> Session {
+		Session {
+			session_index: self.session_index,
 			start_slot: self.start_slot,
 			duration: self.duration,
 			authorities: self.authorities,
 			randomness: self.randomness,
-			config: BabeEpochConfiguration { c: config.c, allowed_slots: config.allowed_slots },
+			config: BabeSessionConfiguration { c: config.c, allowed_slots: config.allowed_slots },
 		}
 	}
 }

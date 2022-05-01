@@ -28,7 +28,7 @@ sc-client-api = { path = "../../api", version = "4.0.0-dev" }
 sc-consensus = { version = "0.10.0-dev", path = "../../consensus/common" }
 sc-consensus-babe = { path = "../../consensus/babe", version = "0.10.0-dev" }
 sc-consensus-aura = { path = "../../consensus/aura", version = "0.10.0-dev" }
-sc-consensus-epochs = { path = "../../consensus/epochs", version = "0.10.0-dev" }
+sc-consensus-sessions = { path = "../../consensus/epochs", version = "0.10.0-dev" }
 sp-consensus-babe = { path = "../../../primitives/consensus/babe", version = "0.10.0-dev" }
 sp-consensus-aura = { path = "../../../primitives/consensus/aura", version = "0.10.0-dev" }
 

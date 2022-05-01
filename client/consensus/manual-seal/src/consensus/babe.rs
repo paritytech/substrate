@@ -24,11 +24,11 @@ use crate::Error;
 use codec::Encode;
 use sc_client_api::{AuxStore, UsageProvider};
 use sc_consensus_babe::{
-	authorship, find_pre_digest, BabeIntermediate, CompatibleDigestItem, Config, Epoch,
+	authorship, find_pre_digest, BabeIntermediate, CompatibleDigestItem, Config, Session,
 	INTERMEDIATE_KEY,
 };
-use sc_consensus_epochs::{
-	descendent_query, EpochHeader, SharedEpochChanges, ViableEpochDescriptor,
+use sc_consensus_sessions::{
+	descendent_query, SessionHeader, SharedSessionChanges, ViableSessionDescriptor,
 };
 use sp_keystore::SyncCryptoStorePtr;
 use std::{borrow::Cow, sync::Arc};
@@ -38,7 +38,7 @@ use sp_api::{ProvideRuntimeApi, TransactionFor};
 use sp_blockchain::{HeaderBackend, HeaderMetadata};
 use sp_consensus::CacheKeyId;
 use sp_consensus_babe::{
-	digests::{NextEpochDescriptor, PreDigest, SecondaryPlainPreDigest},
+	digests::{NextSessionDescriptor, PreDigest, SecondaryPlainPreDigest},
 	inherents::BabeInherentData,
 	AuthorityId, BabeApi, BabeAuthorityWeight, ConsensusLog, BABE_ENGINE_ID,
 };
@@ -60,8 +60,8 @@ pub struct BabeConsensusDataProvider<B: BlockT, C> {
 	/// Shared reference to the client.
 	client: Arc<C>,
 
-	/// Shared epoch changes
-	epoch_changes: SharedEpochChanges<B, Epoch>,
+	/// Shared session changes
+	session_changes: SharedSessionChanges<B, Session>,
 
 	/// BABE config, gotten from the runtime.
 	config: Config,
@@ -72,8 +72,8 @@ pub struct BabeConsensusDataProvider<B: BlockT, C> {
 
 /// Verifier to be used for babe chains
 pub struct BabeVerifier<B: BlockT, C> {
-	/// Shared epoch changes
-	epoch_changes: SharedEpochChanges<B, Epoch>,
+	/// Shared session changes
+	session_changes: SharedSessionChanges<B, Session>,
 
 	/// Shared reference to the client.
 	client: Arc<C>,
@@ -81,8 +81,8 @@ pub struct BabeVerifier<B: BlockT, C> {
 
 impl<B: BlockT, C> BabeVerifier<B, C> {
 	/// create a nrew verifier
-	pub fn new(epoch_changes: SharedEpochChanges<B, Epoch>, client: Arc<C>) -> BabeVerifier<B, C> {
-		BabeVerifier { epoch_changes, client }
+	pub fn new(session_changes: SharedSessionChanges<B, Session>, client: Arc<C>) -> BabeVerifier<B, C> {
+		BabeVerifier { session_changes, client }
 	}
 }
 
@@ -109,22 +109,22 @@ where
 			.ok()
 			.flatten()
 			.ok_or_else(|| format!("header for block {} not found", parent_hash))?;
-		let epoch_changes = self.epoch_changes.shared_data();
-		let epoch_descriptor = epoch_changes
-			.epoch_descriptor_for_child_of(
+		let session_changes = self.session_changes.shared_data();
+		let session_descriptor = session_changes
+			.session_descriptor_for_child_of(
 				descendent_query(&*self.client),
 				&parent.hash(),
 				parent.number().clone(),
 				pre_digest.slot(),
 			)
-			.map_err(|e| format!("failed to fetch epoch_descriptor: {}", e))?
+			.map_err(|e| format!("failed to fetch session_descriptor: {}", e))?
 			.ok_or_else(|| format!("{}", sp_consensus::Error::InvalidAuthoritiesSet))?;
 		// drop the lock
-		drop(epoch_changes);
+		drop(session_changes);
 
 		import_params.intermediates.insert(
 			Cow::from(INTERMEDIATE_KEY),
-			Box::new(BabeIntermediate::<B> { epoch_descriptor }) as Box<_>,
+			Box::new(BabeIntermediate::<B> { session_descriptor }) as Box<_>,
 		);
 
 		Ok((import_params, None))
@@ -144,7 +144,7 @@ where
 	pub fn new(
 		client: Arc<C>,
 		keystore: SyncCryptoStorePtr,
-		epoch_changes: SharedEpochChanges<B, Epoch>,
+		session_changes: SharedSessionChanges<B, Session>,
 		authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
 	) -> Result<Self, Error> {
 		if authorities.is_empty() {
@@ -153,31 +153,31 @@ where
 
 		let config = Config::get(&*client)?;
 
-		Ok(Self { config, client, keystore, epoch_changes, authorities })
+		Ok(Self { config, client, keystore, session_changes, authorities })
 	}
 
-	fn epoch(&self, parent: &B::Header, slot: Slot) -> Result<Epoch, Error> {
-		let epoch_changes = self.epoch_changes.shared_data();
-		let epoch_descriptor = epoch_changes
-			.epoch_descriptor_for_child_of(
+	fn session(&self, parent: &B::Header, slot: Slot) -> Result<Session, Error> {
+		let session_changes = self.session_changes.shared_data();
+		let session_descriptor = session_changes
+			.session_descriptor_for_child_of(
 				descendent_query(&*self.client),
 				&parent.hash(),
 				parent.number().clone(),
 				slot,
 			)
-			.map_err(|e| Error::StringError(format!("failed to fetch epoch_descriptor: {}", e)))?
+			.map_err(|e| Error::StringError(format!("failed to fetch session_descriptor: {}", e)))?
 			.ok_or_else(|| sp_consensus::Error::InvalidAuthoritiesSet)?;
 
-		let epoch = epoch_changes
-			.viable_epoch(&epoch_descriptor, |slot| {
-				Epoch::genesis(self.config.genesis_config(), slot)
+		let session = session_changes
+			.viable_session(&session_descriptor, |slot| {
+				Session::genesis(self.config.genesis_config(), slot)
 			})
 			.ok_or_else(|| {
-				log::info!(target: "babe", "create_digest: no viable_epoch :(");
+				log::info!(target: "babe", "create_digest: no viable_session :(");
 				sp_consensus::Error::InvalidAuthoritiesSet
 			})?;
 
-		Ok(epoch.as_ref().clone())
+		Ok(session.as_ref().clone())
 	}
 }
 
@@ -197,54 +197,54 @@ where
 		let slot = inherents
 			.babe_inherent_data()?
 			.ok_or_else(|| Error::StringError("No babe inherent data".into()))?;
-		let epoch = self.epoch(parent, slot)?;
+		let session = self.session(parent, slot)?;
 
 		// this is a dev node environment, we should always be able to claim a slot.
 		let logs = if let Some((predigest, _)) =
-			authorship::claim_slot(slot, &epoch, &self.keystore)
+			authorship::claim_slot(slot, &session, &self.keystore)
 		{
 			vec![<DigestItem as CompatibleDigestItem>::babe_pre_digest(predigest)]
 		} else {
 			// well we couldn't claim a slot because this is an existing chain and we're not in the
-			// authorities. we need to tell BabeBlockImport that the epoch has changed, and we put
+			// authorities. we need to tell BabeBlockImport that the session has changed, and we put
 			// ourselves in the authorities.
 			let predigest =
 				PreDigest::SecondaryPlain(SecondaryPlainPreDigest { slot, authority_index: 0_u32 });
 
-			let mut epoch_changes = self.epoch_changes.shared_data();
-			let epoch_descriptor = epoch_changes
-				.epoch_descriptor_for_child_of(
+			let mut session_changes = self.session_changes.shared_data();
+			let session_descriptor = session_changes
+				.session_descriptor_for_child_of(
 					descendent_query(&*self.client),
 					&parent.hash(),
 					parent.number().clone(),
 					slot,
 				)
 				.map_err(|e| {
-					Error::StringError(format!("failed to fetch epoch_descriptor: {}", e))
+					Error::StringError(format!("failed to fetch session_descriptor: {}", e))
 				})?
 				.ok_or_else(|| sp_consensus::Error::InvalidAuthoritiesSet)?;
 
-			match epoch_descriptor {
-				ViableEpochDescriptor::Signaled(identifier, _epoch_header) => {
-					let epoch_mut = epoch_changes
-						.epoch_mut(&identifier)
+			match session_descriptor {
+				ViableSessionDescriptor::Signaled(identifier, _session_header) => {
+					let session_mut = session_changes
+						.session_mut(&identifier)
 						.ok_or_else(|| sp_consensus::Error::InvalidAuthoritiesSet)?;
 
-					// mutate the current epoch
-					epoch_mut.authorities = self.authorities.clone();
+					// mutate the current session
+					session_mut.authorities = self.authorities.clone();
 
-					let next_epoch = ConsensusLog::NextEpochData(NextEpochDescriptor {
+					let next_session = ConsensusLog::NextSessionData(NextSessionDescriptor {
 						authorities: self.authorities.clone(),
 						// copy the old randomness
-						randomness: epoch_mut.randomness.clone(),
+						randomness: session_mut.randomness.clone(),
 					});
 
 					vec![
 						DigestItem::PreRuntime(BABE_ENGINE_ID, predigest.encode()),
-						DigestItem::Consensus(BABE_ENGINE_ID, next_epoch.encode()),
+						DigestItem::Consensus(BABE_ENGINE_ID, next_session.encode()),
 					]
 				},
-				ViableEpochDescriptor::UnimportedGenesis(_) => {
+				ViableSessionDescriptor::UnimportedGenesis(_) => {
 					// since this is the genesis, secondary predigest works for now.
 					vec![DigestItem::PreRuntime(BABE_ENGINE_ID, predigest.encode())]
 				},
@@ -263,22 +263,22 @@ where
 		let slot = inherents
 			.babe_inherent_data()?
 			.ok_or_else(|| Error::StringError("No babe inherent data".into()))?;
-		let epoch_changes = self.epoch_changes.shared_data();
-		let mut epoch_descriptor = epoch_changes
-			.epoch_descriptor_for_child_of(
+		let session_changes = self.session_changes.shared_data();
+		let mut session_descriptor = session_changes
+			.session_descriptor_for_child_of(
 				descendent_query(&*self.client),
 				&parent.hash(),
 				parent.number().clone(),
 				slot,
 			)
-			.map_err(|e| Error::StringError(format!("failed to fetch epoch_descriptor: {}", e)))?
+			.map_err(|e| Error::StringError(format!("failed to fetch session_descriptor: {}", e)))?
 			.ok_or_else(|| sp_consensus::Error::InvalidAuthoritiesSet)?;
 		// drop the lock
-		drop(epoch_changes);
+		drop(session_changes);
 		// a quick check to see if we're in the authorities
-		let epoch = self.epoch(parent, slot)?;
+		let session = self.session(parent, slot)?;
 		let (authority, _) = self.authorities.first().expect("authorities is non-emptyp; qed");
-		let has_authority = epoch.authorities.iter().any(|(id, _)| *id == *authority);
+		let has_authority = session.authorities.iter().any(|(id, _)| *id == *authority);
 
 		if !has_authority {
 			log::info!(target: "manual-seal", "authority not found");
@@ -288,25 +288,25 @@ where
 
 			let slot = Slot::from_timestamp(timestamp, self.config.slot_duration());
 
-			// manually hard code epoch descriptor
-			epoch_descriptor = match epoch_descriptor {
-				ViableEpochDescriptor::Signaled(identifier, _header) =>
-					ViableEpochDescriptor::Signaled(
+			// manually hard code session descriptor
+			session_descriptor = match session_descriptor {
+				ViableSessionDescriptor::Signaled(identifier, _header) =>
+					ViableSessionDescriptor::Signaled(
 						identifier,
-						EpochHeader {
+						SessionHeader {
 							start_slot: slot,
-							end_slot: (*slot * self.config.genesis_config().epoch_length).into(),
+							end_slot: (*slot * self.config.genesis_config().session_length).into(),
 						},
 					),
 				_ => unreachable!(
-					"we're not in the authorities, so this isn't the genesis epoch; qed"
+					"we're not in the authorities, so this isn't the genesis session; qed"
 				),
 			};
 		}
 
 		params.intermediates.insert(
 			Cow::from(INTERMEDIATE_KEY),
-			Box::new(BabeIntermediate::<B> { epoch_descriptor }) as Box<_>,
+			Box::new(BabeIntermediate::<B> { session_descriptor }) as Box<_>,
 		);
 
 		Ok(())

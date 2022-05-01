@@ -16,23 +16,23 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! Schema for BABE epoch changes in the aux-db.
+//! Schema for BABE session changes in the aux-db.
 
 use codec::{Decode, Encode};
 use log::info;
 
-use crate::{migration::EpochV0, Epoch};
+use crate::{migration::SessionV0, Session};
 use sc_client_api::backend::AuxStore;
-use sc_consensus_epochs::{
-	migration::{EpochChangesV0For, EpochChangesV1For},
-	EpochChangesFor, SharedEpochChanges,
+use sc_consensus_sessions::{
+	migration::{SessionChangesV0For, SessionChangesV1For},
+	SessionChangesFor, SharedSessionChanges,
 };
 use sp_blockchain::{Error as ClientError, Result as ClientResult};
 use sp_consensus_babe::{BabeBlockWeight, BabeGenesisConfiguration};
 use sp_runtime::traits::Block as BlockT;
 
-const BABE_EPOCH_CHANGES_VERSION: &[u8] = b"babe_epoch_changes_version";
-const BABE_EPOCH_CHANGES_KEY: &[u8] = b"babe_epoch_changes";
+const BABE_EPOCH_CHANGES_VERSION: &[u8] = b"babe_session_changes_version";
+const BABE_EPOCH_CHANGES_KEY: &[u8] = b"babe_session_changes";
 const BABE_EPOCH_CHANGES_CURRENT_VERSION: u32 = 3;
 
 /// The aux storage key used to store the block weight of the given block hash.
@@ -54,61 +54,61 @@ where
 	}
 }
 
-/// Load or initialize persistent epoch change data from backend.
-pub fn load_epoch_changes<Block: BlockT, B: AuxStore>(
+/// Load or initialize persistent session change data from backend.
+pub fn load_session_changes<Block: BlockT, B: AuxStore>(
 	backend: &B,
 	config: &BabeGenesisConfiguration,
-) -> ClientResult<SharedEpochChanges<Block, Epoch>> {
+) -> ClientResult<SharedSessionChanges<Block, Session>> {
 	let version = load_decode::<_, u32>(backend, BABE_EPOCH_CHANGES_VERSION)?;
 
-	let maybe_epoch_changes = match version {
+	let maybe_session_changes = match version {
 		None =>
-			load_decode::<_, EpochChangesV0For<Block, EpochV0>>(backend, BABE_EPOCH_CHANGES_KEY)?
-				.map(|v0| v0.migrate().map(|_, _, epoch| epoch.migrate(config))),
+			load_decode::<_, SessionChangesV0For<Block, SessionV0>>(backend, BABE_EPOCH_CHANGES_KEY)?
+				.map(|v0| v0.migrate().map(|_, _, session| session.migrate(config))),
 		Some(1) =>
-			load_decode::<_, EpochChangesV1For<Block, EpochV0>>(backend, BABE_EPOCH_CHANGES_KEY)?
-				.map(|v1| v1.migrate().map(|_, _, epoch| epoch.migrate(config))),
+			load_decode::<_, SessionChangesV1For<Block, SessionV0>>(backend, BABE_EPOCH_CHANGES_KEY)?
+				.map(|v1| v1.migrate().map(|_, _, session| session.migrate(config))),
 		Some(2) => {
-			// v2 still uses `EpochChanges` v1 format but with a different `Epoch` type.
-			load_decode::<_, EpochChangesV1For<Block, Epoch>>(backend, BABE_EPOCH_CHANGES_KEY)?
+			// v2 still uses `SessionChanges` v1 format but with a different `Session` type.
+			load_decode::<_, SessionChangesV1For<Block, Session>>(backend, BABE_EPOCH_CHANGES_KEY)?
 				.map(|v2| v2.migrate())
 		},
 		Some(BABE_EPOCH_CHANGES_CURRENT_VERSION) =>
-			load_decode::<_, EpochChangesFor<Block, Epoch>>(backend, BABE_EPOCH_CHANGES_KEY)?,
+			load_decode::<_, SessionChangesFor<Block, Session>>(backend, BABE_EPOCH_CHANGES_KEY)?,
 		Some(other) =>
 			return Err(ClientError::Backend(format!("Unsupported BABE DB version: {:?}", other))),
 	};
 
-	let epoch_changes =
-		SharedEpochChanges::<Block, Epoch>::new(maybe_epoch_changes.unwrap_or_else(|| {
+	let session_changes =
+		SharedSessionChanges::<Block, Session>::new(maybe_session_changes.unwrap_or_else(|| {
 			info!(
 				target: "babe",
-				"👶 Creating empty BABE epoch changes on what appears to be first startup.",
+				"👶 Creating empty BABE session changes on what appears to be first startup.",
 			);
-			EpochChangesFor::<Block, Epoch>::default()
+			SessionChangesFor::<Block, Session>::default()
 		}));
 
 	// rebalance the tree after deserialization. this isn't strictly necessary
 	// since the tree is now rebalanced on every update operation. but since the
 	// tree wasn't rebalanced initially it's useful to temporarily leave it here
 	// to avoid having to wait until an import for rebalancing.
-	epoch_changes.shared_data().rebalance();
+	session_changes.shared_data().rebalance();
 
-	Ok(epoch_changes)
+	Ok(session_changes)
 }
 
-/// Update the epoch changes on disk after a change.
-pub(crate) fn write_epoch_changes<Block: BlockT, F, R>(
-	epoch_changes: &EpochChangesFor<Block, Epoch>,
+/// Update the session changes on disk after a change.
+pub(crate) fn write_session_changes<Block: BlockT, F, R>(
+	session_changes: &SessionChangesFor<Block, Session>,
 	write_aux: F,
 ) -> R
 where
 	F: FnOnce(&[(&'static [u8], &[u8])]) -> R,
 {
 	BABE_EPOCH_CHANGES_CURRENT_VERSION.using_encoded(|version| {
-		let encoded_epoch_changes = epoch_changes.encode();
+		let encoded_session_changes = session_changes.encode();
 		write_aux(&[
-			(BABE_EPOCH_CHANGES_KEY, encoded_epoch_changes.as_slice()),
+			(BABE_EPOCH_CHANGES_KEY, encoded_session_changes.as_slice()),
 			(BABE_EPOCH_CHANGES_VERSION, version),
 		])
 	})
@@ -138,9 +138,9 @@ pub fn load_block_weight<H: Encode, B: AuxStore>(
 #[cfg(test)]
 mod test {
 	use super::*;
-	use crate::migration::EpochV0;
+	use crate::migration::SessionV0;
 	use fork_tree::ForkTree;
-	use sc_consensus_epochs::{EpochHeader, PersistedEpoch, PersistedEpochHeader};
+	use sc_consensus_sessions::{SessionHeader, PersistedSession, PersistedSessionHeader};
 	use sc_network_test::Block as TestBlock;
 	use sp_consensus::Error as ConsensusError;
 	use sp_consensus_babe::{AllowedSlots, BabeGenesisConfiguration};
@@ -149,12 +149,12 @@ mod test {
 	use substrate_test_runtime_client;
 
 	#[test]
-	fn load_decode_from_v0_epoch_changes() {
-		let epoch = EpochV0 {
+	fn load_decode_from_v0_session_changes() {
+		let session = SessionV0 {
 			start_slot: 0.into(),
 			authorities: vec![],
 			randomness: [0; 32],
-			epoch_index: 1,
+			session_index: 1,
 			duration: 100,
 		};
 		let client = substrate_test_runtime_client::new();
@@ -163,7 +163,7 @@ mod test {
 			.import::<_, ConsensusError>(
 				Default::default(),
 				Default::default(),
-				PersistedEpoch::Regular(epoch),
+				PersistedSession::Regular(session),
 				&|_, _| Ok(false), // Test is single item only so this can be set to false.
 			)
 			.unwrap();
@@ -172,7 +172,7 @@ mod test {
 			.insert_aux(
 				&[(
 					BABE_EPOCH_CHANGES_KEY,
-					&EpochChangesV0For::<TestBlock, EpochV0>::from_raw(v0_tree).encode()[..],
+					&SessionChangesV0For::<TestBlock, SessionV0>::from_raw(v0_tree).encode()[..],
 				)],
 				&[],
 			)
@@ -180,11 +180,11 @@ mod test {
 
 		assert_eq!(load_decode::<_, u32>(&client, BABE_EPOCH_CHANGES_VERSION).unwrap(), None);
 
-		let epoch_changes = load_epoch_changes::<TestBlock, _>(
+		let session_changes = load_session_changes::<TestBlock, _>(
 			&client,
 			&BabeGenesisConfiguration {
 				slot_duration: 10,
-				epoch_length: 4,
+				session_length: 4,
 				c: (3, 10),
 				genesis_authorities: Vec::new(),
 				randomness: Default::default(),
@@ -194,19 +194,19 @@ mod test {
 		.unwrap();
 
 		assert!(
-			epoch_changes
+			session_changes
 				.shared_data()
 				.tree()
 				.iter()
-				.map(|(_, _, epoch)| epoch.clone())
+				.map(|(_, _, session)| session.clone())
 				.collect::<Vec<_>>() ==
-				vec![PersistedEpochHeader::Regular(EpochHeader {
+				vec![PersistedSessionHeader::Regular(SessionHeader {
 					start_slot: 0.into(),
 					end_slot: 100.into(),
 				})],
-		); // PersistedEpochHeader does not implement Debug, so we use assert! directly.
+		); // PersistedSessionHeader does not implement Debug, so we use assert! directly.
 
-		write_epoch_changes::<TestBlock, _, _>(&epoch_changes.shared_data(), |values| {
+		write_session_changes::<TestBlock, _, _>(&session_changes.shared_data(), |values| {
 			client.insert_aux(values, &[]).unwrap();
 		});
 

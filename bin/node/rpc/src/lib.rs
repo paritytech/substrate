@@ -34,9 +34,9 @@ use std::sync::Arc;
 
 use node_primitives::{AccountId, Balance, Block, BlockNumber, Hash, Index};
 use sc_client_api::AuxStore;
-use sc_consensus_babe::{Config, Epoch};
+use sc_consensus_babe::{Config, Session};
 use sc_consensus_babe_rpc::BabeRpcHandler;
-use sc_consensus_epochs::SharedEpochChanges;
+use sc_consensus_sessions::SharedSessionChanges;
 use sc_finality_grandpa::{
 	FinalityProofProvider, GrandpaJustificationStream, SharedAuthoritySet, SharedVoterState,
 };
@@ -55,8 +55,8 @@ use sp_keystore::SyncCryptoStorePtr;
 pub struct BabeDeps {
 	/// BABE protocol config.
 	pub babe_config: Config,
-	/// BABE pending epoch changes.
-	pub shared_epoch_changes: SharedEpochChanges<Block, Epoch>,
+	/// BABE pending session changes.
+	pub shared_session_changes: SharedSessionChanges<Block, Session>,
 	/// The keystore that manages the keys of the node.
 	pub keystore: SyncCryptoStorePtr,
 }
@@ -130,7 +130,7 @@ where
 	let mut io = jsonrpc_core::IoHandler::default();
 	let FullDeps { client, pool, select_chain, chain_spec, deny_unsafe, babe, grandpa } = deps;
 
-	let BabeDeps { keystore, babe_config, shared_epoch_changes } = babe;
+	let BabeDeps { keystore, babe_config, shared_session_changes } = babe;
 	let GrandpaDeps {
 		shared_voter_state,
 		shared_authority_set,
@@ -148,7 +148,7 @@ where
 	io.extend_with(TransactionPaymentApi::to_delegate(TransactionPayment::new(client.clone())));
 	io.extend_with(sc_consensus_babe_rpc::BabeApi::to_delegate(BabeRpcHandler::new(
 		client.clone(),
-		shared_epoch_changes.clone(),
+		shared_session_changes.clone(),
 		keystore,
 		babe_config,
 		select_chain,
@@ -169,7 +169,7 @@ where
 			chain_spec,
 			client.clone(),
 			shared_authority_set,
-			shared_epoch_changes,
+			shared_session_changes,
 		)?,
 	));
 	io.extend_with(DevApi::to_delegate(Dev::new(client, deny_unsafe)));

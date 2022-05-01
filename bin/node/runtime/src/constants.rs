@@ -61,13 +61,13 @@ pub mod time {
 	// 1 in 4 blocks (on average, not counting collisions) will be primary BABE blocks.
 	pub const PRIMARY_PROBABILITY: (u64, u64) = (1, 4);
 
-	// NOTE: Currently it is not possible to change the epoch duration after the chain has started.
+	// NOTE: Currently it is not possible to change the session duration after the chain has started.
 	//       Attempting to do so will brick block production.
-	pub const EPOCH_DURATION_IN_BLOCKS: BlockNumber = 10 * MINUTES;
-	pub const EPOCH_DURATION_IN_SLOTS: u64 = {
+	pub const SESSION_DURATION_IN_BLOCKS: BlockNumber = 10 * MINUTES;
+	pub const SESSION_DURATION_IN_SLOTS: u64 = {
 		const SLOT_FILL_RATE: f64 = MILLISECS_PER_BLOCK as f64 / SLOT_DURATION as f64;
 
-		(EPOCH_DURATION_IN_BLOCKS as f64 * SLOT_FILL_RATE) as u64
+		(SESSION_DURATION_IN_BLOCKS as f64 * SLOT_FILL_RATE) as u64
 	};
 
 	// These time units are defined in number of blocks.

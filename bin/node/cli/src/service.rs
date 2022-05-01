@@ -244,7 +244,7 @@ pub fn new_partial(
 		);
 
 		let babe_config = babe_link.config().clone();
-		let shared_epoch_changes = babe_link.epoch_changes().clone();
+		let shared_session_changes = babe_link.session_changes().clone();
 
 		let client = client.clone();
 		let pool = transaction_pool.clone();
@@ -262,7 +262,7 @@ pub fn new_partial(
 				deny_unsafe,
 				babe: node_rpc::BabeDeps {
 					babe_config: babe_config.clone(),
-					shared_epoch_changes: shared_epoch_changes.clone(),
+					shared_session_changes: shared_session_changes.clone(),
 					keystore: keystore.clone(),
 				},
 				grandpa: node_rpc::GrandpaDeps {
@@ -573,7 +573,7 @@ mod tests {
 	use sc_client_api::BlockBackend;
 	use sc_consensus::{BlockImport, BlockImportParams, ForkChoiceStrategy};
 	use sc_consensus_babe::{BabeIntermediate, CompatibleDigestItem, INTERMEDIATE_KEY};
-	use sc_consensus_epochs::descendent_query;
+	use sc_consensus_sessions::descendent_query;
 	use sc_keystore::LocalKeystore;
 	use sc_service_test::TestNetNode;
 	use sc_transaction_pool_api::{ChainEvent, MaintainedTransactionPool};
@@ -662,11 +662,11 @@ mod tests {
 
 				// even though there's only one authority some slots might be empty,
 				// so we must keep trying the next slots until we can claim one.
-				let (babe_pre_digest, epoch_descriptor) = loop {
-					let epoch_descriptor = babe_link
-						.epoch_changes()
+				let (babe_pre_digest, session_descriptor) = loop {
+					let session_descriptor = babe_link
+						.session_changes()
 						.shared_data()
-						.epoch_descriptor_for_child_of(
+						.session_descriptor_for_child_of(
 							descendent_query(&*service.client()),
 							&parent_hash,
 							parent_number,
@@ -675,11 +675,11 @@ mod tests {
 						.unwrap()
 						.unwrap();
 
-					let epoch = babe_link
-						.epoch_changes()
+					let session = babe_link
+						.session_changes()
 						.shared_data()
-						.epoch_data(&epoch_descriptor, |slot| {
-							sc_consensus_babe::Epoch::genesis(
+						.session_data(&session_descriptor, |slot| {
+							sc_consensus_babe::Session::genesis(
 								babe_link.config().genesis_config(),
 								slot,
 							)
@@ -687,10 +687,10 @@ mod tests {
 						.unwrap();
 
 					if let Some(babe_pre_digest) =
-						sc_consensus_babe::authorship::claim_slot(slot.into(), &epoch, &keystore)
+						sc_consensus_babe::authorship::claim_slot(slot.into(), &session, &keystore)
 							.map(|(digest, _)| digest)
 					{
-						break (babe_pre_digest, epoch_descriptor)
+						break (babe_pre_digest, session_descriptor)
 					}
 
 					slot += 1;
@@ -740,7 +740,7 @@ mod tests {
 				params.body = Some(new_body);
 				params.intermediates.insert(
 					Cow::from(INTERMEDIATE_KEY),
-					Box::new(BabeIntermediate::<Block> { epoch_descriptor }) as Box<_>,
+					Box::new(BabeIntermediate::<Block> { session_descriptor }) as Box<_>,
 				);
 				params.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 

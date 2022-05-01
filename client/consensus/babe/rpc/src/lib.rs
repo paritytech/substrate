@@ -21,8 +21,8 @@
 use futures::{FutureExt, TryFutureExt};
 use jsonrpc_core::Error as RpcError;
 use jsonrpc_derive::rpc;
-use sc_consensus_babe::{authorship, Config, Epoch};
-use sc_consensus_epochs::{descendent_query, Epoch as EpochT, SharedEpochChanges};
+use sc_consensus_babe::{authorship, Config, Session};
+use sc_consensus_sessions::{descendent_query, Session as SessionT, SharedSessionChanges};
 use sc_rpc_api::DenyUnsafe;
 use serde::{Deserialize, Serialize};
 use sp_api::{BlockId, ProvideRuntimeApi};
@@ -40,18 +40,18 @@ type FutureResult<T> = jsonrpc_core::BoxFuture<Result<T, RpcError>>;
 /// Provides rpc methods for interacting with Babe.
 #[rpc]
 pub trait BabeApi {
-	/// Returns data about which slots (primary or secondary) can be claimed in the current epoch
+	/// Returns data about which slots (primary or secondary) can be claimed in the current session
 	/// with the keys in the keystore.
-	#[rpc(name = "babe_epochAuthorship")]
-	fn epoch_authorship(&self) -> FutureResult<HashMap<AuthorityId, EpochAuthorship>>;
+	#[rpc(name = "babe_sessionAuthorship")]
+	fn session_authorship(&self) -> FutureResult<HashMap<AuthorityId, SessionAuthorship>>;
 }
 
 /// Implements the BabeRpc trait for interacting with Babe.
 pub struct BabeRpcHandler<B: BlockT, C, SC> {
 	/// shared reference to the client.
 	client: Arc<C>,
-	/// shared reference to EpochChanges
-	shared_epoch_changes: SharedEpochChanges<B, Epoch>,
+	/// shared reference to SessionChanges
+	shared_session_changes: SharedSessionChanges<B, Session>,
 	/// shared reference to the Keystore
 	keystore: SyncCryptoStorePtr,
 	/// config (actually holds the slot duration)
@@ -66,13 +66,13 @@ impl<B: BlockT, C, SC> BabeRpcHandler<B, C, SC> {
 	/// Creates a new instance of the BabeRpc handler.
 	pub fn new(
 		client: Arc<C>,
-		shared_epoch_changes: SharedEpochChanges<B, Epoch>,
+		shared_session_changes: SharedSessionChanges<B, Session>,
 		keystore: SyncCryptoStorePtr,
 		babe_config: Config,
 		select_chain: SC,
 		deny_unsafe: DenyUnsafe,
 	) -> Self {
-		Self { client, shared_epoch_changes, keystore, babe_config, select_chain, deny_unsafe }
+		Self { client, shared_session_changes, keystore, babe_config, select_chain, deny_unsafe }
 	}
 }
 
@@ -86,34 +86,34 @@ where
 	C::Api: BabeRuntimeApi<B>,
 	SC: SelectChain<B> + Clone + 'static,
 {
-	fn epoch_authorship(&self) -> FutureResult<HashMap<AuthorityId, EpochAuthorship>> {
+	fn session_authorship(&self) -> FutureResult<HashMap<AuthorityId, SessionAuthorship>> {
 		if let Err(err) = self.deny_unsafe.check_if_safe() {
 			return async move { Err(err.into()) }.boxed()
 		}
 
-		let (babe_config, keystore, shared_epoch, client, select_chain) = (
+		let (babe_config, keystore, shared_session, client, select_chain) = (
 			self.babe_config.clone(),
 			self.keystore.clone(),
-			self.shared_epoch_changes.clone(),
+			self.shared_session_changes.clone(),
 			self.client.clone(),
 			self.select_chain.clone(),
 		);
 
 		async move {
 			let header = select_chain.best_chain().map_err(Error::Consensus).await?;
-			let epoch_start = client
+			let session_start = client
 				.runtime_api()
-				.current_epoch_start(&BlockId::Hash(header.hash()))
+				.current_session_start(&BlockId::Hash(header.hash()))
 				.map_err(|err| Error::StringError(err.to_string()))?;
-			let epoch =
-				epoch_data(&shared_epoch, &client, &babe_config, *epoch_start, &select_chain)
+			let session =
+				session_data(&shared_session, &client, &babe_config, *session_start, &select_chain)
 					.await?;
-			let (epoch_start, epoch_end) = (epoch.start_slot(), epoch.end_slot());
+			let (session_start, session_end) = (session.start_slot(), session.end_slot());
 
-			let mut claims: HashMap<AuthorityId, EpochAuthorship> = HashMap::new();
+			let mut claims: HashMap<AuthorityId, SessionAuthorship> = HashMap::new();
 
 			let keys = {
-				epoch
+				session
 					.authorities
 					.iter()
 					.enumerate()
@@ -130,9 +130,9 @@ where
 					.collect::<Vec<_>>()
 			};
 
-			for slot in *epoch_start..*epoch_end {
+			for slot in *session_start..*session_end {
 				if let Some((claim, key)) =
-					authorship::claim_slot_using_keys(slot.into(), &epoch, &keystore, &keys)
+					authorship::claim_slot_using_keys(slot.into(), &session, &keystore, &keys)
 				{
 					match claim {
 						PreDigest::Primary { .. } => {
@@ -156,7 +156,7 @@ where
 
 /// Holds information about the `slot`'s that can be claimed by a given key.
 #[derive(Default, Debug, Deserialize, Serialize)]
-pub struct EpochAuthorship {
+pub struct SessionAuthorship {
 	/// the array of primary slots that can be claimed
 	primary: Vec<u64>,
 	/// the array of secondary slots that can be claimed
@@ -186,28 +186,28 @@ impl From<Error> for jsonrpc_core::Error {
 	}
 }
 
-/// Fetches the epoch data for a given slot.
-async fn epoch_data<B, C, SC>(
-	epoch_changes: &SharedEpochChanges<B, Epoch>,
+/// Fetches the session data for a given slot.
+async fn session_data<B, C, SC>(
+	session_changes: &SharedSessionChanges<B, Session>,
 	client: &Arc<C>,
 	babe_config: &Config,
 	slot: u64,
 	select_chain: &SC,
-) -> Result<Epoch, Error>
+) -> Result<Session, Error>
 where
 	B: BlockT,
 	C: HeaderBackend<B> + HeaderMetadata<B, Error = BlockChainError> + 'static,
 	SC: SelectChain<B>,
 {
 	let parent = select_chain.best_chain().await?;
-	epoch_changes
+	session_changes
 		.shared_data()
-		.epoch_data_for_child_of(
+		.session_data_for_child_of(
 			descendent_query(&**client),
 			&parent.hash(),
 			parent.number().clone(),
 			slot.into(),
-			|slot| Epoch::genesis(babe_config.genesis_config(), slot),
+			|slot| Session::genesis(babe_config.genesis_config(), slot),
 		)
 		.map_err(|e| Error::Consensus(ConsensusError::ChainLookup(e.to_string())))?
 		.ok_or(Error::Consensus(ConsensusError::InvalidAuthoritiesSet))
@@ -253,12 +253,12 @@ mod tests {
 		let (_, link) = block_import(config.clone(), client.clone(), client.clone())
 			.expect("can initialize block-import");
 
-		let epoch_changes = link.epoch_changes().clone();
+		let session_changes = link.session_changes().clone();
 		let keystore = create_temp_keystore::<AuthorityPair>(Sr25519Keyring::Alice).0;
 
 		BabeRpcHandler::new(
 			client.clone(),
-			epoch_changes,
+			session_changes,
 			keystore,
 			config,
 			longest_chain,
@@ -267,24 +267,24 @@ mod tests {
 	}
 
 	#[test]
-	fn epoch_authorship_works() {
+	fn session_authorship_works() {
 		let handler = test_babe_rpc_handler(DenyUnsafe::No);
 		let mut io = IoHandler::new();
 
 		io.extend_with(BabeApi::to_delegate(handler));
-		let request = r#"{"jsonrpc":"2.0","method":"babe_epochAuthorship","params": [],"id":1}"#;
+		let request = r#"{"jsonrpc":"2.0","method":"babe_sessionAuthorship","params": [],"id":1}"#;
 		let response = r#"{"jsonrpc":"2.0","result":{"5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY":{"primary":[0],"secondary":[1,2,4],"secondary_vrf":[]}},"id":1}"#;
 
 		assert_eq!(Some(response.into()), io.handle_request_sync(request));
 	}
 
 	#[test]
-	fn epoch_authorship_is_unsafe() {
+	fn session_authorship_is_unsafe() {
 		let handler = test_babe_rpc_handler(DenyUnsafe::Yes);
 		let mut io = IoHandler::new();
 
 		io.extend_with(BabeApi::to_delegate(handler));
-		let request = r#"{"jsonrpc":"2.0","method":"babe_epochAuthorship","params": [],"id":1}"#;
+		let request = r#"{"jsonrpc":"2.0","method":"babe_sessionAuthorship","params": [],"id":1}"#;
 
 		let response = io.handle_request_sync(request).unwrap();
 		let mut response: serde_json::Value = serde_json::from_str(&response).unwrap();

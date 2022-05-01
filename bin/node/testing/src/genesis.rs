@@ -22,7 +22,7 @@ use crate::keyring::*;
 use node_runtime::{
 	constants::currency::*, wasm_binary_unwrap, AccountId, BabeConfig, BalancesConfig,
 	GenesisConfig, GrandpaConfig, IndicesConfig, SessionConfig, SocietyConfig, StakerStatus,
-	StakingConfig, SystemConfig, BABE_GENESIS_EPOCH_CONFIG,
+	StakingConfig, SystemConfig, BABE_GENESIS_SESSION_CONFIG,
 };
 use sp_keyring::{Ed25519Keyring, Sr25519Keyring};
 use sp_runtime::Perbill;
@@ -75,7 +75,7 @@ pub fn config_endowed(code: Option<&[u8]>, extra_endowed: Vec<AccountId>) -> Gen
 			invulnerables: vec![alice(), bob(), charlie()],
 			..Default::default()
 		},
-		babe: BabeConfig { authorities: vec![], epoch_config: Some(BABE_GENESIS_EPOCH_CONFIG) },
+		babe: BabeConfig { authorities: vec![], session_config: Some(BABE_GENESIS_SESSION_CONFIG) },
 		grandpa: GrandpaConfig { authorities: vec![] },
 		im_online: Default::default(),
 		authority_discovery: Default::default(),

@@ -19,7 +19,7 @@
 
 use super::{
 	AllowedSlots, AuthorityId, AuthorityIndex, AuthoritySignature, BabeAuthorityWeight,
-	BabeEpochConfiguration, Slot, BABE_ENGINE_ID,
+	BabeSessionConfiguration, Slot, BABE_ENGINE_ID,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use sp_runtime::{DigestItem, RuntimeDebug};
@@ -46,7 +46,7 @@ pub struct SecondaryPlainPreDigest {
 	/// Authority index
 	///
 	/// This is not strictly-speaking necessary, since the secondary slots
-	/// are assigned based on slot number and epoch randomness. But including
+	/// are assigned based on slot number and session randomness. But including
 	/// it makes things easier for higher-level users of the chain data to
 	/// be aware of the author of a secondary-slot block.
 	pub authority_index: super::AuthorityIndex,
@@ -121,10 +121,10 @@ impl PreDigest {
 	}
 }
 
-/// Information about the next epoch. This is broadcast in the first block
-/// of the epoch.
+/// Information about the next session. This is broadcast in the first block
+/// of the session.
 #[derive(Decode, Encode, PartialEq, Eq, Clone, RuntimeDebug)]
-pub struct NextEpochDescriptor {
+pub struct NextSessionDescriptor {
 	/// The authorities.
 	pub authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
 
@@ -132,8 +132,8 @@ pub struct NextEpochDescriptor {
 	pub randomness: Randomness,
 }
 
-/// Information about the next epoch config, if changed. This is broadcast in the first
-/// block of the epoch, and applies using the same rules as `NextEpochDescriptor`.
+/// Information about the next session config, if changed. This is broadcast in the first
+/// block of the session, and applies using the same rules as `NextSessionDescriptor`.
 #[derive(
 	Decode, Encode, PartialEq, Eq, Clone, RuntimeDebug, MaxEncodedLen, scale_info::TypeInfo,
 )]
@@ -141,14 +141,14 @@ pub enum NextConfigDescriptor {
 	/// Version 1.
 	#[codec(index = 1)]
 	V1 {
-		/// Value of `c` in `BabeEpochConfiguration`.
+		/// Value of `c` in `BabeSessionConfiguration`.
 		c: (u64, u64),
-		/// Value of `allowed_slots` in `BabeEpochConfiguration`.
+		/// Value of `allowed_slots` in `BabeSessionConfiguration`.
 		allowed_slots: AllowedSlots,
 	},
 }
 
-impl From<NextConfigDescriptor> for BabeEpochConfiguration {
+impl From<NextConfigDescriptor> for BabeSessionConfiguration {
 	fn from(desc: NextConfigDescriptor) -> Self {
 		match desc {
 			NextConfigDescriptor::V1 { c, allowed_slots } => Self { c, allowed_slots },
@@ -170,8 +170,8 @@ pub trait CompatibleDigestItem: Sized {
 	/// If this item is a BABE signature, return the signature.
 	fn as_babe_seal(&self) -> Option<AuthoritySignature>;
 
-	/// If this item is a BABE epoch descriptor, return it.
-	fn as_next_epoch_descriptor(&self) -> Option<NextEpochDescriptor>;
+	/// If this item is a BABE session descriptor, return it.
+	fn as_next_session_descriptor(&self) -> Option<NextSessionDescriptor>;
 
 	/// If this item is a BABE config descriptor, return it.
 	fn as_next_config_descriptor(&self) -> Option<NextConfigDescriptor>;
@@ -194,10 +194,10 @@ impl CompatibleDigestItem for DigestItem {
 		self.seal_try_to(&BABE_ENGINE_ID)
 	}
 
-	fn as_next_epoch_descriptor(&self) -> Option<NextEpochDescriptor> {
+	fn as_next_session_descriptor(&self) -> Option<NextSessionDescriptor> {
 		self.consensus_try_to(&BABE_ENGINE_ID)
 			.and_then(|x: super::ConsensusLog| match x {
-				super::ConsensusLog::NextEpochData(n) => Some(n),
+				super::ConsensusLog::NextSessionData(n) => Some(n),
 				_ => None,
 			})
 	}

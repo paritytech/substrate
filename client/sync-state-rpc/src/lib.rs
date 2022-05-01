@@ -53,8 +53,8 @@ use jsonrpc_derive::rpc;
 
 type SharedAuthoritySet<TBl> =
 	sc_finality_grandpa::SharedAuthoritySet<<TBl as BlockT>::Hash, NumberFor<TBl>>;
-type SharedEpochChanges<TBl> =
-	sc_consensus_epochs::SharedEpochChanges<TBl, sc_consensus_babe::Epoch>;
+type SharedSessionChanges<TBl> =
+	sc_consensus_sessions::SharedSessionChanges<TBl, sc_consensus_babe::Session>;
 
 /// Error type used by this crate.
 #[derive(Debug, thiserror::Error)]
@@ -109,9 +109,9 @@ pub struct LightSyncState<Block: BlockT> {
 	/// The header of the best finalized block.
 	#[serde(serialize_with = "serialize_encoded")]
 	pub finalized_block_header: <Block as BlockT>::Header,
-	/// The epoch changes tree for babe.
+	/// The session changes tree for babe.
 	#[serde(serialize_with = "serialize_encoded")]
-	pub babe_epoch_changes: sc_consensus_epochs::EpochChangesFor<Block, sc_consensus_babe::Epoch>,
+	pub babe_session_changes: sc_consensus_sessions::SessionChangesFor<Block, sc_consensus_babe::Session>,
 	/// The babe weight of the finalized block.
 	pub babe_finalized_block_weight: sc_consensus_babe::BabeBlockWeight,
 	/// The authority set for grandpa.
@@ -133,7 +133,7 @@ pub struct SyncStateRpcHandler<Block: BlockT, Backend> {
 	chain_spec: Box<dyn sc_chain_spec::ChainSpec>,
 	client: Arc<Backend>,
 	shared_authority_set: SharedAuthoritySet<Block>,
-	shared_epoch_changes: SharedEpochChanges<Block>,
+	shared_session_changes: SharedSessionChanges<Block>,
 }
 
 impl<Block, Backend> SyncStateRpcHandler<Block, Backend>
@@ -146,12 +146,12 @@ where
 		chain_spec: Box<dyn sc_chain_spec::ChainSpec>,
 		client: Arc<Backend>,
 		shared_authority_set: SharedAuthoritySet<Block>,
-		shared_epoch_changes: SharedEpochChanges<Block>,
+		shared_session_changes: SharedSessionChanges<Block>,
 	) -> Result<Self, Error<Block>> {
 		if sc_chain_spec::get_extension::<LightSyncStateExtension>(chain_spec.extensions())
 			.is_some()
 		{
-			Ok(Self { chain_spec, client, shared_authority_set, shared_epoch_changes })
+			Ok(Self { chain_spec, client, shared_authority_set, shared_session_changes })
 		} else {
 			Err(Error::<Block>::LightSyncStateExtensionNotFound)
 		}
@@ -170,7 +170,7 @@ where
 
 		Ok(LightSyncState {
 			finalized_block_header: finalized_header,
-			babe_epoch_changes: self.shared_epoch_changes.shared_data().clone(),
+			babe_session_changes: self.shared_session_changes.shared_data().clone(),
 			babe_finalized_block_weight: finalized_block_weight,
 			grandpa_authority_set: self.shared_authority_set.clone_inner(),
 		})

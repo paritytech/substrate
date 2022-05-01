@@ -24,8 +24,8 @@ use std::time::{Duration, SystemTime};
 /// Returns the current time as a `Timestamp`.
 pub fn now() -> Timestamp {
 	let now = SystemTime::now();
-	let epoch_duration = now.duration_since(SystemTime::UNIX_EPOCH);
-	match epoch_duration {
+	let session_duration = now.duration_since(SystemTime::UNIX_EPOCH);
+	match session_duration {
 		Err(_) => {
 			// Current time is earlier than UNIX_EPOCH.
 			Timestamp::from_unix_millis(0)

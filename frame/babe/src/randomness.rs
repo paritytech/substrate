@@ -15,89 +15,89 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Provides multiple implementations of the randomness trait based on the on-chain epoch
+//! Provides multiple implementations of the randomness trait based on the on-chain session
 //! randomness collected from VRF outputs.
 
 use super::{
-	AuthorVrfRandomness, Config, EpochStart, NextRandomness, Randomness, VRF_OUTPUT_LENGTH,
+	AuthorVrfRandomness, Config, SessionStart, NextRandomness, Randomness, VRF_OUTPUT_LENGTH,
 };
 use frame_support::traits::Randomness as RandomnessT;
 use sp_runtime::traits::Hash;
 
 /// Randomness usable by consensus protocols that **depend** upon finality and take action
-/// based upon on-chain commitments made during the epoch before the previous epoch.
+/// based upon on-chain commitments made during the session before the previous session.
 ///
 /// An off-chain consensus protocol requires randomness be finalized before usage, but one
-/// extra epoch delay beyond `RandomnessFromOneEpochAgo` suffices, under the assumption
-/// that finality never stalls for longer than one epoch.
+/// extra session delay beyond `RandomnessFromOneSessionAgo` suffices, under the assumption
+/// that finality never stalls for longer than one session.
 ///
 /// All randomness is relative to commitments to any other inputs to the computation: If
 /// Alice samples randomness near perfectly using radioactive decay, but then afterwards
 /// Eve selects an arbitrary value with which to xor Alice's randomness, then Eve always
 /// wins whatever game they play.
 ///
-/// All input commitments used with `RandomnessFromTwoEpochsAgo` should come from at least
-/// three epochs ago. We require BABE session keys be registered at least three epochs
+/// All input commitments used with `RandomnessFromTwoSessionsAgo` should come from at least
+/// three sessions ago. We require BABE session keys be registered at least three sessions
 /// before being used to derive `CurrentBlockRandomness` for example.
 ///
-/// All users learn `RandomnessFromTwoEpochsAgo` when epoch `current_epoch - 1` starts,
-/// although some learn it a few block earlier inside epoch `current_epoch - 2`.
+/// All users learn `RandomnessFromTwoSessionsAgo` when session `current_session - 1` starts,
+/// although some learn it a few block earlier inside session `current_session - 2`.
 ///
 /// Adversaries with enough block producers could bias this randomness by choosing upon
-/// what their block producers build at the end of epoch `current_epoch - 2` or the
-/// beginning epoch `current_epoch - 1`, or skipping slots at the end of epoch
-/// `current_epoch - 2`.
+/// what their block producers build at the end of session `current_session - 2` or the
+/// beginning session `current_session - 1`, or skipping slots at the end of session
+/// `current_session - 2`.
 ///
 /// Adversaries should not possess many block production slots towards the beginning or
-/// end of every epoch, but they possess some influence over when they possess more slots.
-pub struct RandomnessFromTwoEpochsAgo<T>(sp_std::marker::PhantomData<T>);
+/// end of every session, but they possess some influence over when they possess more slots.
+pub struct RandomnessFromTwoSessionsAgo<T>(sp_std::marker::PhantomData<T>);
 
 /// Randomness usable by on-chain code that **does not depend** upon finality and takes
-/// action based upon on-chain commitments made during the previous epoch.
+/// action based upon on-chain commitments made during the previous session.
 ///
 /// All randomness is relative to commitments to any other inputs to the computation: If
 /// Alice samples randomness near perfectly using radioactive decay, but then afterwards
 /// Eve selects an arbitrary value with which to xor Alice's randomness, then Eve always
 /// wins whatever game they play.
 ///
-/// All input commitments used with `RandomnessFromOneEpochAgo` should come from at least
-/// two epochs ago, although the previous epoch might work in special cases under
+/// All input commitments used with `RandomnessFromOneSessionAgo` should come from at least
+/// two sessions ago, although the previous session might work in special cases under
 /// additional assumption.
 ///
-/// All users learn `RandomnessFromOneEpochAgo` at the end of the previous epoch, although
+/// All users learn `RandomnessFromOneSessionAgo` at the end of the previous session, although
 /// some block producers learn it several block earlier.
 ///
 /// Adversaries with enough block producers could bias this randomness by choosing upon
-/// what their block producers build at either the end of the previous epoch or the
-/// beginning of the current epoch, or electing to skipping some of their own block
-/// production slots towards the end of the previous epoch.
+/// what their block producers build at either the end of the previous session or the
+/// beginning of the current session, or electing to skipping some of their own block
+/// production slots towards the end of the previous session.
 ///
 /// Adversaries should not possess many block production slots towards the beginning or
-/// end of every epoch, but they possess some influence over when they possess more slots.
+/// end of every session, but they possess some influence over when they possess more slots.
 ///
 /// As an example usage, we determine parachain auctions ending times in Polkadot using
-/// `RandomnessFromOneEpochAgo` because it reduces bias from `CurrentBlockRandomness` and
-/// does not require the extra finality delay of `RandomnessFromTwoEpochsAgo`.
-pub struct RandomnessFromOneEpochAgo<T>(sp_std::marker::PhantomData<T>);
+/// `RandomnessFromOneSessionAgo` because it reduces bias from `CurrentBlockRandomness` and
+/// does not require the extra finality delay of `RandomnessFromTwoSessionsAgo`.
+pub struct RandomnessFromOneSessionAgo<T>(sp_std::marker::PhantomData<T>);
 
 /// Randomness produced semi-freshly with each block, but inherits limitations of
-/// `RandomnessFromTwoEpochsAgo` from which it derives.
+/// `RandomnessFromTwoSessionsAgo` from which it derives.
 ///
 /// All randomness is relative to commitments to any other inputs to the computation: If
 /// Alice samples randomness near perfectly using radioactive decay, but then afterwards
 /// Eve selects an arbitrary value with which to xor Alice's randomness, then Eve always
 /// wins whatever game they play.
 ///
-/// As with `RandomnessFromTwoEpochsAgo`, all input commitments combined with
-/// `CurrentBlockRandomness` should come from at least two epoch ago, except preferably
-/// not near epoch ending, and thus ideally three epochs ago.
+/// As with `RandomnessFromTwoSessionsAgo`, all input commitments combined with
+/// `CurrentBlockRandomness` should come from at least two session ago, except preferably
+/// not near session ending, and thus ideally three sessions ago.
 ///
 /// Almost all users learn this randomness for a block when the block producer announces
 /// the block, which makes this randomness appear quite fresh. Yet, the block producer
-/// themselves learned this randomness at the beginning of epoch `current_epoch - 2`, at
-/// the same time as they learn `RandomnessFromTwoEpochsAgo`.
+/// themselves learned this randomness at the beginning of session `current_session - 2`, at
+/// the same time as they learn `RandomnessFromTwoSessionsAgo`.
 ///
-/// Aside from just biasing `RandomnessFromTwoEpochsAgo`, adversaries could also bias
+/// Aside from just biasing `RandomnessFromTwoSessionsAgo`, adversaries could also bias
 /// `CurrentBlockRandomness` by never announcing their block if doing so yields an
 /// unfavorable randomness. As such, `CurrentBlockRandomness` should be considered weaker
 /// than both other randomness sources provided by BABE, but `CurrentBlockRandomness`
@@ -110,26 +110,26 @@ pub struct RandomnessFromOneEpochAgo<T>(sp_std::marker::PhantomData<T>);
 /// slashing. Any parachain with slashing could operate BABE itself or perhaps better yet
 /// a BABE-like approach that derives its `CurrentBlockRandomness`, and authorizes block
 /// production, based upon the relay parent's `CurrentBlockRandomness` or more likely the
-/// relay parent's `RandomnessFromTwoEpochsAgo`.
+/// relay parent's `RandomnessFromTwoSessionsAgo`.
 pub struct CurrentBlockRandomness<T>(sp_std::marker::PhantomData<T>);
 
-impl<T: Config> RandomnessT<T::Hash, T::BlockNumber> for RandomnessFromTwoEpochsAgo<T> {
+impl<T: Config> RandomnessT<T::Hash, T::BlockNumber> for RandomnessFromTwoSessionsAgo<T> {
 	fn random(subject: &[u8]) -> (T::Hash, T::BlockNumber) {
 		let mut subject = subject.to_vec();
 		subject.reserve(VRF_OUTPUT_LENGTH);
 		subject.extend_from_slice(&Randomness::<T>::get()[..]);
 
-		(T::Hashing::hash(&subject[..]), EpochStart::<T>::get().0)
+		(T::Hashing::hash(&subject[..]), SessionStart::<T>::get().0)
 	}
 }
 
-impl<T: Config> RandomnessT<T::Hash, T::BlockNumber> for RandomnessFromOneEpochAgo<T> {
+impl<T: Config> RandomnessT<T::Hash, T::BlockNumber> for RandomnessFromOneSessionAgo<T> {
 	fn random(subject: &[u8]) -> (T::Hash, T::BlockNumber) {
 		let mut subject = subject.to_vec();
 		subject.reserve(VRF_OUTPUT_LENGTH);
 		subject.extend_from_slice(&NextRandomness::<T>::get()[..]);
 
-		(T::Hashing::hash(&subject[..]), EpochStart::<T>::get().1)
+		(T::Hashing::hash(&subject[..]), SessionStart::<T>::get().1)
 	}
 }
 

@@ -73,7 +73,7 @@ impl PrometheusMetrics {
 
 		register_globals(registry)?;
 
-		let start_time_since_epoch =
+		let start_time_since_session =
 			SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap_or_default();
 		register(
 			Gauge::<U64>::new(
@@ -82,7 +82,7 @@ impl PrometheusMetrics {
 			)?,
 			registry,
 		)?
-		.set(start_time_since_epoch.as_secs());
+		.set(start_time_since_session.as_secs());
 
 		Ok(Self {
 			// generic internals

@@ -254,7 +254,7 @@ header hash, until it arrives at some recent header.
 Once the finality chain is proved for a header, the state matching the header is downloaded much like during
 the fast sync. The state is verified to match the header storage root. After the state is imported into the
 database it is queried for the information that allows GRANDPA and BABE to continue operating from that state.
-This includes BABE epoch information and GRANDPA authority set id.
+This includes BABE session information and GRANDPA authority set id.
 
 ### Background block download.
 

@@ -129,9 +129,9 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	state_version: 1,
 };
 
-/// The BABE epoch configuration at genesis.
-pub const BABE_GENESIS_EPOCH_CONFIG: sp_consensus_babe::BabeEpochConfiguration =
-	sp_consensus_babe::BabeEpochConfiguration {
+/// The BABE session configuration at genesis.
+pub const BABE_GENESIS_SESSION_CONFIG: sp_consensus_babe::BabeSessionConfiguration =
+	sp_consensus_babe::BabeSessionConfiguration {
 		c: PRIMARY_PROBABILITY,
 		allowed_slots: sp_consensus_babe::AllowedSlots::PrimaryAndSecondaryPlainSlots,
 	};
@@ -369,18 +369,18 @@ impl pallet_preimage::Config for Runtime {
 }
 
 parameter_types! {
-	// NOTE: Currently it is not possible to change the epoch duration after the chain has started.
+	// NOTE: Currently it is not possible to change the session duration after the chain has started.
 	//       Attempting to do so will brick block production.
-	pub const EpochDuration: u64 = EPOCH_DURATION_IN_SLOTS;
+	pub const SessionDuration: u64 = SESSION_DURATION_IN_SLOTS;
 	pub const ExpectedBlockTime: Moment = MILLISECS_PER_BLOCK;
 	pub const ReportLongevity: u64 =
-		BondingDuration::get() as u64 * SessionsPerEra::get() as u64 * EpochDuration::get();
+		BondingDuration::get() as u64 * SessionsPerEra::get() as u64 * SessionDuration::get();
 }
 
 impl pallet_babe::Config for Runtime {
-	type EpochDuration = EpochDuration;
+	type SessionDuration = SessionDuration;
 	type ExpectedBlockTime = ExpectedBlockTime;
-	type EpochChangeTrigger = pallet_babe::ExternalTrigger;
+	type SessionChangeTrigger = pallet_babe::ExternalTrigger;
 	type DisabledValidators = Session;
 
 	type KeyOwnerProofSystem = Historical;
@@ -568,8 +568,8 @@ impl pallet_staking::Config for Runtime {
 
 parameter_types! {
 	// phase durations. 1/4 of the last session for each.
-	pub const SignedPhase: u32 = EPOCH_DURATION_IN_BLOCKS / 4;
-	pub const UnsignedPhase: u32 = EPOCH_DURATION_IN_BLOCKS / 4;
+	pub const SignedPhase: u32 = SESSION_DURATION_IN_BLOCKS / 4;
+	pub const UnsignedPhase: u32 = SESSION_DURATION_IN_BLOCKS / 4;
 
 	// signed config
 	pub const SignedRewardBase: Balance = 1 * DOLLARS;
@@ -1711,24 +1711,24 @@ impl_runtime_apis! {
 			// <https://research.web3.foundation/en/latest/polkadot/BABE/Babe/#6-practical-results>
 			sp_consensus_babe::BabeGenesisConfiguration {
 				slot_duration: Babe::slot_duration(),
-				epoch_length: EpochDuration::get(),
-				c: BABE_GENESIS_EPOCH_CONFIG.c,
+				session_length: SessionDuration::get(),
+				c: BABE_GENESIS_SESSION_CONFIG.c,
 				genesis_authorities: Babe::authorities().to_vec(),
 				randomness: Babe::randomness(),
-				allowed_slots: BABE_GENESIS_EPOCH_CONFIG.allowed_slots,
+				allowed_slots: BABE_GENESIS_SESSION_CONFIG.allowed_slots,
 			}
 		}
 
-		fn current_epoch_start() -> sp_consensus_babe::Slot {
-			Babe::current_epoch_start()
+		fn current_session_start() -> sp_consensus_babe::Slot {
+			Babe::current_session_start()
 		}
 
-		fn current_epoch() -> sp_consensus_babe::Epoch {
-			Babe::current_epoch()
+		fn current_session() -> sp_consensus_babe::Session {
+			Babe::current_session()
 		}
 
-		fn next_epoch() -> sp_consensus_babe::Epoch {
-			Babe::next_epoch()
+		fn next_session() -> sp_consensus_babe::Session {
+			Babe::next_session()
 		}
 
 		fn generate_key_ownership_proof(

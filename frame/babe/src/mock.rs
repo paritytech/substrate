@@ -215,15 +215,15 @@ impl pallet_offences::Config for Test {
 }
 
 parameter_types! {
-	pub const EpochDuration: u64 = 3;
+	pub const SessionDuration: u64 = 3;
 	pub const ReportLongevity: u64 =
-		BondingDuration::get() as u64 * SessionsPerEra::get() as u64 * EpochDuration::get();
+		BondingDuration::get() as u64 * SessionsPerEra::get() as u64 * SessionDuration::get();
 }
 
 impl Config for Test {
-	type EpochDuration = EpochDuration;
+	type SessionDuration = SessionDuration;
 	type ExpectedBlockTime = ConstU64<1>;
-	type EpochChangeTrigger = crate::ExternalTrigger;
+	type SessionChangeTrigger = crate::ExternalTrigger;
 	type DisabledValidators = Session;
 
 	type KeyOwnerProofSystem = Historical;

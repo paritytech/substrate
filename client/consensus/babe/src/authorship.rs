@@ -18,7 +18,7 @@
 
 //! BABE authority selection and slot claiming.
 
-use super::Epoch;
+use super::Session;
 use codec::Encode;
 use schnorrkel::{keys::PublicKey, vrf::VRFInOut};
 use sp_application_crypto::AppKey;
@@ -122,12 +122,12 @@ pub(super) fn secondary_slot_author(
 /// to propose.
 fn claim_secondary_slot(
 	slot: Slot,
-	epoch: &Epoch,
+	session: &Session,
 	keys: &[(AuthorityId, usize)],
 	keystore: &SyncCryptoStorePtr,
 	author_secondary_vrf: bool,
 ) -> Option<(PreDigest, AuthorityId)> {
-	let Epoch { authorities, randomness, epoch_index, .. } = epoch;
+	let Session { authorities, randomness, session_index, .. } = session;
 
 	if authorities.is_empty() {
 		return None
@@ -138,7 +138,7 @@ fn claim_secondary_slot(
 	for (authority_id, authority_index) in keys {
 		if authority_id == expected_author {
 			let pre_digest = if author_secondary_vrf {
-				let transcript_data = make_transcript_data(randomness, slot, *epoch_index);
+				let transcript_data = make_transcript_data(randomness, slot, *session_index);
 				let result = SyncCryptoStore::sr25519_vrf_sign(
 					&**keystore,
 					AuthorityId::ID,
@@ -178,40 +178,40 @@ fn claim_secondary_slot(
 
 /// Tries to claim the given slot number. This method starts by trying to claim
 /// a primary VRF based slot. If we are not able to claim it, then if we have
-/// secondary slots enabled for the given epoch, we will fallback to trying to
+/// secondary slots enabled for the given session, we will fallback to trying to
 /// claim a secondary slot.
 pub fn claim_slot(
 	slot: Slot,
-	epoch: &Epoch,
+	session: &Session,
 	keystore: &SyncCryptoStorePtr,
 ) -> Option<(PreDigest, AuthorityId)> {
-	let authorities = epoch
+	let authorities = session
 		.authorities
 		.iter()
 		.enumerate()
 		.map(|(index, a)| (a.0.clone(), index))
 		.collect::<Vec<_>>();
-	claim_slot_using_keys(slot, epoch, keystore, &authorities)
+	claim_slot_using_keys(slot, session, keystore, &authorities)
 }
 
 /// Like `claim_slot`, but allows passing an explicit set of key pairs. Useful if we intend
 /// to make repeated calls for different slots using the same key pairs.
 pub fn claim_slot_using_keys(
 	slot: Slot,
-	epoch: &Epoch,
+	session: &Session,
 	keystore: &SyncCryptoStorePtr,
 	keys: &[(AuthorityId, usize)],
 ) -> Option<(PreDigest, AuthorityId)> {
-	claim_primary_slot(slot, epoch, epoch.config.c, keystore, &keys).or_else(|| {
-		if epoch.config.allowed_slots.is_secondary_plain_slots_allowed() ||
-			epoch.config.allowed_slots.is_secondary_vrf_slots_allowed()
+	claim_primary_slot(slot, session, session.config.c, keystore, &keys).or_else(|| {
+		if session.config.allowed_slots.is_secondary_plain_slots_allowed() ||
+			session.config.allowed_slots.is_secondary_vrf_slots_allowed()
 		{
 			claim_secondary_slot(
 				slot,
-				&epoch,
+				&session,
 				keys,
 				&keystore,
-				epoch.config.allowed_slots.is_secondary_vrf_slots_allowed(),
+				session.config.allowed_slots.is_secondary_vrf_slots_allowed(),
 			)
 		} else {
 			None
@@ -220,21 +220,21 @@ pub fn claim_slot_using_keys(
 }
 
 /// Claim a primary slot if it is our turn.  Returns `None` if it is not our turn.
-/// This hashes the slot number, epoch, genesis hash, and chain randomness into
+/// This hashes the slot number, session, genesis hash, and chain randomness into
 /// the VRF.  If the VRF produces a value less than `threshold`, it is our turn,
 /// so it returns `Some(_)`. Otherwise, it returns `None`.
 fn claim_primary_slot(
 	slot: Slot,
-	epoch: &Epoch,
+	session: &Session,
 	c: (u64, u64),
 	keystore: &SyncCryptoStorePtr,
 	keys: &[(AuthorityId, usize)],
 ) -> Option<(PreDigest, AuthorityId)> {
-	let Epoch { authorities, randomness, epoch_index, .. } = epoch;
+	let Session { authorities, randomness, session_index, .. } = session;
 
 	for (authority_id, authority_index) in keys {
-		let transcript = make_transcript(randomness, slot, *epoch_index);
-		let transcript_data = make_transcript_data(randomness, slot, *epoch_index);
+		let transcript = make_transcript(randomness, slot, *session_index);
+		let transcript_data = make_transcript_data(randomness, slot, *session_index);
 		// Compute the threshold we will use.
 		//
 		// We already checked that authorities contains `key.public()`, so it can't
@@ -273,7 +273,7 @@ fn claim_primary_slot(
 mod tests {
 	use super::*;
 	use sc_keystore::LocalKeystore;
-	use sp_consensus_babe::{AllowedSlots, AuthorityId, BabeEpochConfiguration};
+	use sp_consensus_babe::{AllowedSlots, AuthorityId, BabeSessionConfiguration};
 	use sp_core::{crypto::Pair as _, sr25519::Pair};
 	use std::sync::Arc;
 
@@ -292,21 +292,21 @@ mod tests {
 			(AuthorityId::from(Pair::generate().0.public()), 7),
 		];
 
-		let mut epoch = Epoch {
-			epoch_index: 10,
+		let mut session = Session {
+			session_index: 10,
 			start_slot: 0.into(),
 			duration: 20,
 			authorities: authorities.clone(),
 			randomness: Default::default(),
-			config: BabeEpochConfiguration {
+			config: BabeSessionConfiguration {
 				c: (3, 10),
 				allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,
 			},
 		};
 
-		assert!(claim_slot(10.into(), &epoch, &keystore).is_none());
+		assert!(claim_slot(10.into(), &session, &keystore).is_none());
 
-		epoch.authorities.push((valid_public_key.clone().into(), 10));
-		assert_eq!(claim_slot(10.into(), &epoch, &keystore).unwrap().1, valid_public_key.into());
+		session.authorities.push((valid_public_key.clone().into(), 10));
+		assert_eq!(claim_slot(10.into(), &session, &keystore).unwrap().1, valid_public_key.into());
 	}
 }

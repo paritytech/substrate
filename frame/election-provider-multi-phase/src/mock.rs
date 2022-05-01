@@ -273,7 +273,7 @@ parameter_types! {
 	pub static MaxElectingVoters: VoterIndex = u32::max_value();
 	pub static MaxElectableTargets: TargetIndex = TargetIndex::max_value();
 
-	pub static EpochLength: u64 = 30;
+	pub static SessionLength: u64 = 30;
 	pub static OnChainFallback: bool = true;
 }
 
@@ -492,7 +492,7 @@ impl ElectionDataProvider for StakingMock {
 	}
 
 	fn next_election_prediction(now: u64) -> u64 {
-		now + EpochLength::get() - now % EpochLength::get()
+		now + SessionLength::get() - now % SessionLength::get()
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]

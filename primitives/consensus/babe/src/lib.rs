@@ -37,7 +37,7 @@ use sp_keystore::vrf::{VRFTranscriptData, VRFTranscriptValue};
 use sp_runtime::{traits::Header, ConsensusEngineId, RuntimeDebug};
 use sp_std::vec::Vec;
 
-use crate::digests::{NextConfigDescriptor, NextEpochDescriptor};
+use crate::digests::{NextConfigDescriptor, NextSessionDescriptor};
 
 /// Key type for BABE module.
 pub const KEY_TYPE: sp_core::crypto::KeyTypeId = sp_application_crypto::key_types::BABE;
@@ -73,7 +73,7 @@ pub const PUBLIC_KEY_LENGTH: usize = 32;
 
 /// How many blocks to wait before running the median algorithm for relative time
 /// This will not vary from chain to chain as it is not dependent on slot duration
-/// or epoch length.
+/// or session length.
 pub const MEDIAN_ALGORITHM_CARDINALITY: usize = 1200; // arbitrary suggestion by w3f-research.
 
 /// The index of an authority.
@@ -96,23 +96,23 @@ pub type BabeAuthorityWeight = u64;
 /// of 0 (regardless of whether they are plain or vrf secondary blocks).
 pub type BabeBlockWeight = u32;
 
-/// Make a VRF transcript from given randomness, slot number and epoch.
-pub fn make_transcript(randomness: &Randomness, slot: Slot, epoch: u64) -> Transcript {
+/// Make a VRF transcript from given randomness, slot number and session.
+pub fn make_transcript(randomness: &Randomness, slot: Slot, session: u64) -> Transcript {
 	let mut transcript = Transcript::new(&BABE_ENGINE_ID);
 	transcript.append_u64(b"slot number", *slot);
-	transcript.append_u64(b"current epoch", epoch);
+	transcript.append_u64(b"current session", session);
 	transcript.append_message(b"chain randomness", &randomness[..]);
 	transcript
 }
 
 /// Make a VRF transcript data container
 #[cfg(feature = "std")]
-pub fn make_transcript_data(randomness: &Randomness, slot: Slot, epoch: u64) -> VRFTranscriptData {
+pub fn make_transcript_data(randomness: &Randomness, slot: Slot, session: u64) -> VRFTranscriptData {
 	VRFTranscriptData {
 		label: &BABE_ENGINE_ID,
 		items: vec![
 			("slot number", VRFTranscriptValue::U64(*slot)),
-			("current epoch", VRFTranscriptValue::U64(epoch)),
+			("current session", VRFTranscriptValue::U64(session)),
 			("chain randomness", VRFTranscriptValue::Bytes(randomness.to_vec())),
 		],
 	}
@@ -121,16 +121,16 @@ pub fn make_transcript_data(randomness: &Randomness, slot: Slot, epoch: u64) -> 
 /// An consensus log item for BABE.
 #[derive(Decode, Encode, Clone, PartialEq, Eq)]
 pub enum ConsensusLog {
-	/// The epoch has changed. This provides information about the _next_
-	/// epoch - information about the _current_ epoch (i.e. the one we've just
+	/// The session has changed. This provides information about the _next_
+	/// session - information about the _current_ session (i.e. the one we've just
 	/// entered) should already be available earlier in the chain.
 	#[codec(index = 1)]
-	NextEpochData(NextEpochDescriptor),
+	NextSessionData(NextSessionDescriptor),
 	/// Disable the authority with given index.
 	#[codec(index = 2)]
 	OnDisabled(AuthorityIndex),
-	/// The epoch has changed, and the epoch after the current one will
-	/// enact different epoch configurations.
+	/// The session has changed, and the session after the current one will
+	/// enact different session configurations.
 	#[codec(index = 3)]
 	NextConfigData(NextConfigDescriptor),
 }
@@ -144,8 +144,8 @@ pub struct BabeGenesisConfigurationV1 {
 	/// Dynamic slot duration may be supported in the future.
 	pub slot_duration: u64,
 
-	/// The duration of epochs in slots.
-	pub epoch_length: u64,
+	/// The duration of sessions in slots.
+	pub session_length: u64,
 
 	/// A constant value that is used in the threshold calculation formula.
 	/// Expressed as a rational where the first member of the tuple is the
@@ -155,10 +155,10 @@ pub struct BabeGenesisConfigurationV1 {
 	/// of a slot being empty.
 	pub c: (u64, u64),
 
-	/// The authorities for the genesis epoch.
+	/// The authorities for the genesis session.
 	pub genesis_authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
 
-	/// The randomness for the genesis epoch.
+	/// The randomness for the genesis session.
 	pub randomness: Randomness,
 
 	/// Whether this chain should run with secondary slots, which are assigned
@@ -170,7 +170,7 @@ impl From<BabeGenesisConfigurationV1> for BabeGenesisConfiguration {
 	fn from(v1: BabeGenesisConfigurationV1) -> Self {
 		Self {
 			slot_duration: v1.slot_duration,
-			epoch_length: v1.epoch_length,
+			session_length: v1.session_length,
 			c: v1.c,
 			genesis_authorities: v1.genesis_authorities,
 			randomness: v1.randomness,
@@ -192,8 +192,8 @@ pub struct BabeGenesisConfiguration {
 	/// Dynamic slot duration may be supported in the future.
 	pub slot_duration: u64,
 
-	/// The duration of epochs in slots.
-	pub epoch_length: u64,
+	/// The duration of sessions in slots.
+	pub session_length: u64,
 
 	/// A constant value that is used in the threshold calculation formula.
 	/// Expressed as a rational where the first member of the tuple is the
@@ -203,10 +203,10 @@ pub struct BabeGenesisConfiguration {
 	/// of a slot being empty.
 	pub c: (u64, u64),
 
-	/// The authorities for the genesis epoch.
+	/// The authorities for the genesis session.
 	pub genesis_authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
 
-	/// The randomness for the genesis epoch.
+	/// The randomness for the genesis session.
 	pub randomness: Randomness,
 
 	/// Type of allowed slots.
@@ -240,7 +240,7 @@ impl AllowedSlots {
 /// Configuration data used by the BABE consensus engine.
 #[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, MaxEncodedLen, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub struct BabeEpochConfiguration {
+pub struct BabeSessionConfiguration {
 	/// A constant value that is used in the threshold calculation formula.
 	/// Expressed as a rational where the first member of the tuple is the
 	/// numerator and the second is the denominator. The rational should
@@ -336,21 +336,21 @@ impl OpaqueKeyOwnershipProof {
 	}
 }
 
-/// BABE epoch information
+/// BABE session information
 #[derive(Decode, Encode, PartialEq, Eq, Clone, Debug)]
-pub struct Epoch {
-	/// The epoch index.
-	pub epoch_index: u64,
-	/// The starting slot of the epoch.
+pub struct Session {
+	/// The session index.
+	pub session_index: u64,
+	/// The starting slot of the session.
 	pub start_slot: Slot,
-	/// The duration of this epoch.
+	/// The duration of this session.
 	pub duration: u64,
 	/// The authorities and their weights.
 	pub authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
-	/// Randomness for this epoch.
+	/// Randomness for this session.
 	pub randomness: [u8; VRF_OUTPUT_LENGTH],
-	/// Configuration of the epoch.
-	pub config: BabeEpochConfiguration,
+	/// Configuration of the session.
+	pub config: BabeSessionConfiguration,
 }
 
 sp_api::decl_runtime_apis! {
@@ -364,25 +364,25 @@ sp_api::decl_runtime_apis! {
 		#[changed_in(2)]
 		fn configuration() -> BabeGenesisConfigurationV1;
 
-		/// Returns the slot that started the current epoch.
-		fn current_epoch_start() -> Slot;
+		/// Returns the slot that started the current session.
+		fn current_session_start() -> Slot;
 
-		/// Returns information regarding the current epoch.
-		fn current_epoch() -> Epoch;
+		/// Returns information regarding the current session.
+		fn current_session() -> Session;
 
-		/// Returns information regarding the next epoch (which was already
+		/// Returns information regarding the next session (which was already
 		/// previously announced).
-		fn next_epoch() -> Epoch;
+		fn next_session() -> Session;
 
 		/// Generates a proof of key ownership for the given authority in the
-		/// current epoch. An example usage of this module is coupled with the
+		/// current session. An example usage of this module is coupled with the
 		/// session historical module to prove that a given authority key is
 		/// tied to a given staking identity during a specific session. Proofs
 		/// of key ownership are necessary for submitting equivocation reports.
 		/// NOTE: even though the API takes a `slot` as parameter the current
 		/// implementations ignores this parameter and instead relies on this
 		/// method being called at the correct block height, i.e. any point at
-		/// which the epoch for the given slot is live on-chain. Future
+		/// which the session for the given slot is live on-chain. Future
 		/// implementations will instead use indexed data through an offchain
 		/// worker, not requiring older states to be available.
 		fn generate_key_ownership_proof(

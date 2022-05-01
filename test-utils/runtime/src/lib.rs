@@ -599,16 +599,16 @@ impl pallet_timestamp::Config for Runtime {
 }
 
 parameter_types! {
-	pub const EpochDuration: u64 = 6;
+	pub const SessionDuration: u64 = 6;
 }
 
 impl pallet_babe::Config for Runtime {
-	type EpochDuration = EpochDuration;
+	type SessionDuration = SessionDuration;
 	type ExpectedBlockTime = ConstU64<10_000>;
 	// there is no actual runtime in this test-runtime, so testing crates
 	// are manually adding the digests. normally in this situation you'd use
 	// pallet_babe::SameAuthoritiesForever.
-	type EpochChangeTrigger = pallet_babe::ExternalTrigger;
+	type SessionChangeTrigger = pallet_babe::ExternalTrigger;
 	type DisabledValidators = ();
 
 	type KeyOwnerProofSystem = ();
@@ -841,7 +841,7 @@ cfg_if! {
 				fn configuration() -> sp_consensus_babe::BabeGenesisConfiguration {
 					sp_consensus_babe::BabeGenesisConfiguration {
 						slot_duration: 1000,
-						epoch_length: EpochDuration::get(),
+						session_length: SessionDuration::get(),
 						c: (3, 10),
 						genesis_authorities: system::authorities()
 							.into_iter().map(|x|(x, 1)).collect(),
@@ -850,16 +850,16 @@ cfg_if! {
 					}
 				}
 
-				fn current_epoch_start() -> Slot {
-					<pallet_babe::Pallet<Runtime>>::current_epoch_start()
+				fn current_session_start() -> Slot {
+					<pallet_babe::Pallet<Runtime>>::current_session_start()
 				}
 
-				fn current_epoch() -> sp_consensus_babe::Epoch {
-					<pallet_babe::Pallet<Runtime>>::current_epoch()
+				fn current_session() -> sp_consensus_babe::Session {
+					<pallet_babe::Pallet<Runtime>>::current_session()
 				}
 
-				fn next_epoch() -> sp_consensus_babe::Epoch {
-					<pallet_babe::Pallet<Runtime>>::next_epoch()
+				fn next_session() -> sp_consensus_babe::Session {
+					<pallet_babe::Pallet<Runtime>>::next_session()
 				}
 
 				fn submit_report_equivocation_unsigned_extrinsic(
@@ -1105,7 +1105,7 @@ cfg_if! {
 				fn configuration() -> sp_consensus_babe::BabeGenesisConfiguration {
 					sp_consensus_babe::BabeGenesisConfiguration {
 						slot_duration: 1000,
-						epoch_length: EpochDuration::get(),
+						session_length: SessionDuration::get(),
 						c: (3, 10),
 						genesis_authorities: system::authorities()
 							.into_iter().map(|x|(x, 1)).collect(),
@@ -1114,16 +1114,16 @@ cfg_if! {
 					}
 				}
 
-				fn current_epoch_start() -> Slot {
-					<pallet_babe::Pallet<Runtime>>::current_epoch_start()
+				fn current_session_start() -> Slot {
+					<pallet_babe::Pallet<Runtime>>::current_session_start()
 				}
 
-				fn current_epoch() -> sp_consensus_babe::Epoch {
-					<pallet_babe::Pallet<Runtime>>::current_epoch()
+				fn current_session() -> sp_consensus_babe::Session {
+					<pallet_babe::Pallet<Runtime>>::current_session()
 				}
 
-				fn next_epoch() -> sp_consensus_babe::Epoch {
-					<pallet_babe::Pallet<Runtime>>::next_epoch()
+				fn next_session() -> sp_consensus_babe::Session {
+					<pallet_babe::Pallet<Runtime>>::next_session()
 				}
 
 				fn submit_report_equivocation_unsigned_extrinsic(

@@ -16,65 +16,65 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! Migration types for epoch changes.
+//! Migration types for session changes.
 
-use crate::{Epoch, EpochChanges, PersistedEpoch, PersistedEpochHeader};
+use crate::{Session, SessionChanges, PersistedSession, PersistedSessionHeader};
 use codec::{Decode, Encode};
 use fork_tree::ForkTree;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 use std::collections::BTreeMap;
 
-/// Legacy definition of epoch changes.
+/// Legacy definition of session changes.
 #[derive(Clone, Encode, Decode)]
-pub struct EpochChangesV0<Hash, Number, E: Epoch> {
-	inner: ForkTree<Hash, Number, PersistedEpoch<E>>,
+pub struct SessionChangesV0<Hash, Number, E: Session> {
+	inner: ForkTree<Hash, Number, PersistedSession<E>>,
 }
 
-/// Legacy definition of epoch changes.
+/// Legacy definition of session changes.
 #[derive(Clone, Encode, Decode)]
-pub struct EpochChangesV1<Hash, Number, E: Epoch> {
-	inner: ForkTree<Hash, Number, PersistedEpochHeader<E>>,
-	epochs: BTreeMap<(Hash, Number), PersistedEpoch<E>>,
+pub struct SessionChangesV1<Hash, Number, E: Session> {
+	inner: ForkTree<Hash, Number, PersistedSessionHeader<E>>,
+	sessions: BTreeMap<(Hash, Number), PersistedSession<E>>,
 }
 
-/// Type alias for v0 definition of epoch changes.
-pub type EpochChangesV0For<Block, Epoch> =
-	EpochChangesV0<<Block as BlockT>::Hash, NumberFor<Block>, Epoch>;
-/// Type alias for v1 and v2 definition of epoch changes.
-pub type EpochChangesV1For<Block, Epoch> =
-	EpochChangesV1<<Block as BlockT>::Hash, NumberFor<Block>, Epoch>;
+/// Type alias for v0 definition of session changes.
+pub type SessionChangesV0For<Block, Session> =
+	SessionChangesV0<<Block as BlockT>::Hash, NumberFor<Block>, Session>;
+/// Type alias for v1 and v2 definition of session changes.
+pub type SessionChangesV1For<Block, Session> =
+	SessionChangesV1<<Block as BlockT>::Hash, NumberFor<Block>, Session>;
 
-impl<Hash, Number, E: Epoch> EpochChangesV0<Hash, Number, E>
+impl<Hash, Number, E: Session> SessionChangesV0<Hash, Number, E>
 where
 	Hash: PartialEq + Ord + Copy,
 	Number: Ord + Copy,
 {
 	/// Create a new value of this type from raw.
-	pub fn from_raw(inner: ForkTree<Hash, Number, PersistedEpoch<E>>) -> Self {
+	pub fn from_raw(inner: ForkTree<Hash, Number, PersistedSession<E>>) -> Self {
 		Self { inner }
 	}
 
-	/// Migrate the type into current epoch changes definition.
-	pub fn migrate(self) -> EpochChanges<Hash, Number, E> {
-		let mut epochs = BTreeMap::new();
+	/// Migrate the type into current session changes definition.
+	pub fn migrate(self) -> SessionChanges<Hash, Number, E> {
+		let mut sessions = BTreeMap::new();
 
 		let inner = self.inner.map(&mut |hash, number, data| {
-			let header = PersistedEpochHeader::from(&data);
-			epochs.insert((*hash, *number), data);
+			let header = PersistedSessionHeader::from(&data);
+			sessions.insert((*hash, *number), data);
 			header
 		});
 
-		EpochChanges { inner, epochs, gap: None }
+		SessionChanges { inner, sessions, gap: None }
 	}
 }
 
-impl<Hash, Number, E: Epoch> EpochChangesV1<Hash, Number, E>
+impl<Hash, Number, E: Session> SessionChangesV1<Hash, Number, E>
 where
 	Hash: PartialEq + Ord + Copy,
 	Number: Ord + Copy,
 {
-	/// Migrate the type into current epoch changes definition.
-	pub fn migrate(self) -> EpochChanges<Hash, Number, E> {
-		EpochChanges { inner: self.inner, epochs: self.epochs, gap: None }
+	/// Migrate the type into current session changes definition.
+	pub fn migrate(self) -> SessionChanges<Hash, Number, E> {
+		SessionChanges { inner: self.inner, sessions: self.sessions, gap: None }
 	}
 }

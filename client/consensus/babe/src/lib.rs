@@ -26,12 +26,12 @@
 //! used by other peer to validate the legitimacy of the slot claim.
 //!
 //! The engine is also responsible for collecting entropy on-chain which will be
-//! used to seed the given VRF PRNG. An epoch is a contiguous number of slots
-//! under which we will be using the same authority set. During an epoch all VRF
+//! used to seed the given VRF PRNG. An session is a contiguous number of slots
+//! under which we will be using the same authority set. During an session all VRF
 //! outputs produced as a result of block production will be collected on an
-//! on-chain randomness pool. Epoch changes are announced one epoch in advance,
-//! i.e. when ending epoch N, we announce the parameters (randomness,
-//! authorities, etc.) for epoch N+2.
+//! on-chain randomness pool. Session changes are announced one session in advance,
+//! i.e. when ending session N, we announce the parameters (randomness,
+//! authorities, etc.) for session N+2.
 //!
 //! Since the slot assignment is randomized, it is possible that a slot is
 //! assigned to multiple validators in which case we will have a temporary fork,
@@ -49,7 +49,7 @@
 //! to a secondary slot claim attempt. The secondary slot assignment is done
 //! by picking the authority at index:
 //!
-//! `blake2_256(epoch_randomness ++ slot_number) % authorities_len`.
+//! `blake2_256(session_randomness ++ slot_number) % authorities_len`.
 //!
 //! The secondary slots supports either a `SecondaryPlain` or `SecondaryVRF`
 //! variant. Comparing with `SecondaryPlain` variant, the `SecondaryVRF` variant
@@ -101,8 +101,8 @@ use sc_consensus::{
 	},
 	import_queue::{BasicQueue, BoxJustificationImport, DefaultImportQueue, Verifier},
 };
-use sc_consensus_epochs::{
-	descendent_query, Epoch as EpochT, EpochChangesFor, SharedEpochChanges, ViableEpochDescriptor,
+use sc_consensus_sessions::{
+	descendent_query, Session as SessionT, SessionChangesFor, SharedSessionChanges, ViableSessionDescriptor,
 };
 use sc_consensus_slots::{
 	check_equivocation, BackoffAuthoringBlocksStrategy, CheckedHeader, InherentDataProviderExt,
@@ -134,11 +134,11 @@ pub use sc_consensus_slots::SlotProportion;
 pub use sp_consensus::SyncOracle;
 pub use sp_consensus_babe::{
 	digests::{
-		CompatibleDigestItem, NextConfigDescriptor, NextEpochDescriptor, PreDigest,
+		CompatibleDigestItem, NextConfigDescriptor, NextSessionDescriptor, PreDigest,
 		PrimaryPreDigest, SecondaryPlainPreDigest,
 	},
 	AuthorityId, AuthorityPair, AuthoritySignature, BabeApi, BabeAuthorityWeight, BabeBlockWeight,
-	BabeEpochConfiguration, BabeGenesisConfiguration, ConsensusLog, BABE_ENGINE_ID,
+	BabeSessionConfiguration, BabeGenesisConfiguration, ConsensusLog, BABE_ENGINE_ID,
 	VRF_OUTPUT_LENGTH,
 };
 
@@ -152,33 +152,33 @@ pub mod aux_schema;
 #[cfg(test)]
 mod tests;
 
-/// BABE epoch information
+/// BABE session information
 #[derive(Decode, Encode, PartialEq, Eq, Clone, Debug)]
-pub struct Epoch {
-	/// The epoch index.
-	pub epoch_index: u64,
-	/// The starting slot of the epoch.
+pub struct Session {
+	/// The session index.
+	pub session_index: u64,
+	/// The starting slot of the session.
 	pub start_slot: Slot,
-	/// The duration of this epoch.
+	/// The duration of this session.
 	pub duration: u64,
 	/// The authorities and their weights.
 	pub authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
-	/// Randomness for this epoch.
+	/// Randomness for this session.
 	pub randomness: [u8; VRF_OUTPUT_LENGTH],
-	/// Configuration of the epoch.
-	pub config: BabeEpochConfiguration,
+	/// Configuration of the session.
+	pub config: BabeSessionConfiguration,
 }
 
-impl EpochT for Epoch {
-	type NextEpochDescriptor = (NextEpochDescriptor, BabeEpochConfiguration);
+impl SessionT for Session {
+	type NextSessionDescriptor = (NextSessionDescriptor, BabeSessionConfiguration);
 	type Slot = Slot;
 
 	fn increment(
 		&self,
-		(descriptor, config): (NextEpochDescriptor, BabeEpochConfiguration),
-	) -> Epoch {
-		Epoch {
-			epoch_index: self.epoch_index + 1,
+		(descriptor, config): (NextSessionDescriptor, BabeSessionConfiguration),
+	) -> Session {
+		Session {
+			session_index: self.session_index + 1,
 			start_slot: self.start_slot + self.duration,
 			duration: self.duration,
 			authorities: descriptor.authorities,
@@ -196,30 +196,30 @@ impl EpochT for Epoch {
 	}
 }
 
-impl From<sp_consensus_babe::Epoch> for Epoch {
-	fn from(epoch: sp_consensus_babe::Epoch) -> Self {
-		Epoch {
-			epoch_index: epoch.epoch_index,
-			start_slot: epoch.start_slot,
-			duration: epoch.duration,
-			authorities: epoch.authorities,
-			randomness: epoch.randomness,
-			config: epoch.config,
+impl From<sp_consensus_babe::Session> for Session {
+	fn from(session: sp_consensus_babe::Session) -> Self {
+		Session {
+			session_index: session.session_index,
+			start_slot: session.start_slot,
+			duration: session.duration,
+			authorities: session.authorities,
+			randomness: session.randomness,
+			config: session.config,
 		}
 	}
 }
 
-impl Epoch {
-	/// Create the genesis epoch (epoch #0). This is defined to start at the slot of
+impl Session {
+	/// Create the genesis session (session #0). This is defined to start at the slot of
 	/// the first block, so that has to be provided.
-	pub fn genesis(genesis_config: &BabeGenesisConfiguration, slot: Slot) -> Epoch {
-		Epoch {
-			epoch_index: 0,
+	pub fn genesis(genesis_config: &BabeGenesisConfiguration, slot: Slot) -> Session {
+		Session {
+			session_index: 0,
 			start_slot: slot,
-			duration: genesis_config.epoch_length,
+			duration: genesis_config.session_length,
 			authorities: genesis_config.genesis_authorities.clone(),
 			randomness: genesis_config.randomness,
-			config: BabeEpochConfiguration {
+			config: BabeSessionConfiguration {
 				c: genesis_config.c,
 				allowed_slots: genesis_config.allowed_slots,
 			},
@@ -236,18 +236,18 @@ pub enum Error<B: BlockT> {
 	/// No BABE pre-runtime digest found
 	#[error("No BABE pre-runtime digest found")]
 	NoPreRuntimeDigest,
-	/// Multiple BABE epoch change digests
-	#[error("Multiple BABE epoch change digests, rejecting!")]
-	MultipleEpochChangeDigests,
+	/// Multiple BABE session change digests
+	#[error("Multiple BABE session change digests, rejecting!")]
+	MultipleSessionChangeDigests,
 	/// Multiple BABE config change digests
 	#[error("Multiple BABE config change digests, rejecting!")]
 	MultipleConfigChangeDigests,
 	/// Could not extract timestamp and slot
 	#[error("Could not extract timestamp and slot: {0}")]
 	Extraction(sp_consensus::Error),
-	/// Could not fetch epoch
-	#[error("Could not fetch epoch at {0:?}")]
-	FetchEpoch(B::Hash),
+	/// Could not fetch session
+	#[error("Could not fetch session at {0:?}")]
+	FetchSession(B::Hash),
 	/// Header rejected: too far in the future
 	#[error("Header {0:?} rejected: too far in the future")]
 	TooFarInFuture(B::Hash),
@@ -266,8 +266,8 @@ pub enum Error<B: BlockT> {
 	/// Slot author not found
 	#[error("Slot author not found")]
 	SlotAuthorNotFound,
-	/// Secondary slot assignments are disabled for the current epoch.
-	#[error("Secondary slot assignments are disabled for the current epoch.")]
+	/// Secondary slot assignments are disabled for the current session.
+	#[error("Secondary slot assignments are disabled for the current session.")]
 	SecondarySlotAssignmentsDisabled,
 	/// Bad signature
 	#[error("Bad signature on {0:?}")]
@@ -287,15 +287,15 @@ pub enum Error<B: BlockT> {
 	/// Could not fetch parent header
 	#[error("Could not fetch parent header: {0}")]
 	FetchParentHeader(sp_blockchain::Error),
-	/// Expected epoch change to happen.
-	#[error("Expected epoch change to happen at {0:?}, s{1}")]
-	ExpectedEpochChange(B::Hash, Slot),
+	/// Expected session change to happen.
+	#[error("Expected session change to happen at {0:?}, s{1}")]
+	ExpectedSessionChange(B::Hash, Slot),
 	/// Unexpected config change.
 	#[error("Unexpected config change")]
 	UnexpectedConfigChange,
-	/// Unexpected epoch change
-	#[error("Unexpected epoch change")]
-	UnexpectedEpochChange,
+	/// Unexpected session change
+	#[error("Unexpected session change")]
+	UnexpectedSessionChange,
 	/// Parent block has no associated weight
 	#[error("Parent block of {0} has no associated weight")]
 	ParentBlockNoAssociatedWeight(B::Hash),
@@ -332,8 +332,8 @@ fn babe_err<B: BlockT>(error: Error<B>) -> Error<B> {
 
 /// Intermediate value passed to block importer.
 pub struct BabeIntermediate<B: BlockT> {
-	/// The epoch descriptor.
-	pub epoch_descriptor: ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>,
+	/// The session descriptor.
+	pub session_descriptor: ViableSessionDescriptor<B::Hash, NumberFor<B>, Session>,
 }
 
 /// Intermediate key for Babe engine.
@@ -506,7 +506,7 @@ where
 		force_authoring,
 		backoff_authoring_blocks,
 		keystore,
-		epoch_changes: babe_link.epoch_changes.clone(),
+		session_changes: babe_link.session_changes.clone(),
 		slot_notification_sinks: slot_notification_sinks.clone(),
 		config: babe_link.config.clone(),
 		block_proposal_slot_portion,
@@ -528,7 +528,7 @@ where
 	let (worker_tx, worker_rx) = channel(HANDLE_BUFFER_SIZE);
 
 	let answer_requests =
-		answer_requests(worker_rx, babe_link.config, client, babe_link.epoch_changes.clone());
+		answer_requests(worker_rx, babe_link.config, client, babe_link.session_changes.clone());
 
 	let inner = future::select(Box::pin(slot_worker), Box::pin(answer_requests));
 	Ok(BabeWorker {
@@ -614,7 +614,7 @@ async fn answer_requests<B: BlockT, C>(
 	mut request_rx: Receiver<BabeRequest<B>>,
 	config: Config,
 	client: Arc<C>,
-	epoch_changes: SharedEpochChanges<B, Epoch>,
+	session_changes: SharedSessionChanges<B, Session>,
 ) where
 	C: ProvideRuntimeApi<B>
 		+ ProvideUncles<B>
@@ -627,32 +627,32 @@ async fn answer_requests<B: BlockT, C>(
 {
 	while let Some(request) = request_rx.next().await {
 		match request {
-			BabeRequest::EpochForChild(parent_hash, parent_number, slot_number, response) => {
+			BabeRequest::SessionForChild(parent_hash, parent_number, slot_number, response) => {
 				let lookup = || {
-					let epoch_changes = epoch_changes.shared_data();
-					let epoch_descriptor = epoch_changes
-						.epoch_descriptor_for_child_of(
+					let session_changes = session_changes.shared_data();
+					let session_descriptor = session_changes
+						.session_descriptor_for_child_of(
 							descendent_query(&*client),
 							&parent_hash,
 							parent_number,
 							slot_number,
 						)
 						.map_err(|e| Error::<B>::ForkTree(Box::new(e)))?
-						.ok_or_else(|| Error::<B>::FetchEpoch(parent_hash))?;
+						.ok_or_else(|| Error::<B>::FetchSession(parent_hash))?;
 
-					let viable_epoch = epoch_changes
-						.viable_epoch(&epoch_descriptor, |slot| {
-							Epoch::genesis(&config.genesis_config, slot)
+					let viable_session = session_changes
+						.viable_session(&session_descriptor, |slot| {
+							Session::genesis(&config.genesis_config, slot)
 						})
-						.ok_or_else(|| Error::<B>::FetchEpoch(parent_hash))?;
+						.ok_or_else(|| Error::<B>::FetchSession(parent_hash))?;
 
-					Ok(sp_consensus_babe::Epoch {
-						epoch_index: viable_epoch.as_ref().epoch_index,
-						start_slot: viable_epoch.as_ref().start_slot,
-						duration: viable_epoch.as_ref().duration,
-						authorities: viable_epoch.as_ref().authorities.clone(),
-						randomness: viable_epoch.as_ref().randomness,
-						config: viable_epoch.as_ref().config.clone(),
+					Ok(sp_consensus_babe::Session {
+						session_index: viable_session.as_ref().session_index,
+						start_slot: viable_session.as_ref().start_slot,
+						duration: viable_session.as_ref().duration,
+						authorities: viable_session.as_ref().authorities.clone(),
+						randomness: viable_session.as_ref().randomness,
+						config: viable_session.as_ref().config.clone(),
 					})
 				};
 
@@ -665,14 +665,14 @@ async fn answer_requests<B: BlockT, C>(
 /// Requests to the BABE service.
 #[non_exhaustive]
 pub enum BabeRequest<B: BlockT> {
-	/// Request the epoch that a child of the given block, with the given slot number would have.
+	/// Request the session that a child of the given block, with the given slot number would have.
 	///
 	/// The parent block is identified by its hash and number.
-	EpochForChild(
+	SessionForChild(
 		B::Hash,
 		NumberFor<B>,
 		Slot,
-		oneshot::Sender<Result<sp_consensus_babe::Epoch, Error<B>>>,
+		oneshot::Sender<Result<sp_consensus_babe::Session, Error<B>>>,
 	),
 }
 
@@ -699,10 +699,10 @@ pub struct BabeWorker<B: BlockT> {
 
 impl<B: BlockT> BabeWorker<B> {
 	/// Return an event stream of notifications for when new slot happens, and the corresponding
-	/// epoch descriptor.
+	/// session descriptor.
 	pub fn slot_notification_stream(
 		&self,
-	) -> Receiver<(Slot, ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>)> {
+	) -> Receiver<(Slot, ViableSessionDescriptor<B::Hash, NumberFor<B>, Session>)> {
 		const CHANNEL_BUFFER_SIZE: usize = 1024;
 
 		let (sink, stream) = channel(CHANNEL_BUFFER_SIZE);
@@ -726,7 +726,7 @@ impl<B: BlockT> Future for BabeWorker<B> {
 
 /// Slot notification sinks.
 type SlotNotificationSinks<B> = Arc<
-	Mutex<Vec<Sender<(Slot, ViableEpochDescriptor<<B as BlockT>::Hash, NumberFor<B>, Epoch>)>>>,
+	Mutex<Vec<Sender<(Slot, ViableSessionDescriptor<<B as BlockT>::Hash, NumberFor<B>, Session>)>>>,
 >;
 
 struct BabeSlotWorker<B: BlockT, C, E, I, SO, L, BS> {
@@ -738,7 +738,7 @@ struct BabeSlotWorker<B: BlockT, C, E, I, SO, L, BS> {
 	force_authoring: bool,
 	backoff_authoring_blocks: Option<BS>,
 	keystore: SyncCryptoStorePtr,
-	epoch_changes: SharedEpochChanges<B, Epoch>,
+	session_changes: SharedSessionChanges<B, Session>,
 	slot_notification_sinks: SlotNotificationSinks<B>,
 	config: Config,
 	block_proposal_slot_portion: SlotProportion,
@@ -761,7 +761,7 @@ where
 	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Sync,
 	Error: std::error::Error + Send + From<ConsensusError> + From<I::Error> + 'static,
 {
-	type EpochData = ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>;
+	type SessionData = ViableSessionDescriptor<B::Hash, NumberFor<B>, Session>;
 	type Claim = (PreDigest, AuthorityId);
 	type SyncOracle = SO;
 	type JustificationSyncLink = L;
@@ -778,14 +778,14 @@ where
 		&mut self.block_import
 	}
 
-	fn epoch_data(
+	fn session_data(
 		&self,
 		parent: &B::Header,
 		slot: Slot,
-	) -> Result<Self::EpochData, ConsensusError> {
-		self.epoch_changes
+	) -> Result<Self::SessionData, ConsensusError> {
+		self.session_changes
 			.shared_data()
-			.epoch_descriptor_for_child_of(
+			.session_descriptor_for_child_of(
 				descendent_query(&*self.client),
 				&parent.hash(),
 				parent.number().clone(),
@@ -795,28 +795,28 @@ where
 			.ok_or(sp_consensus::Error::InvalidAuthoritiesSet)
 	}
 
-	fn authorities_len(&self, epoch_descriptor: &Self::EpochData) -> Option<usize> {
-		self.epoch_changes
+	fn authorities_len(&self, session_descriptor: &Self::SessionData) -> Option<usize> {
+		self.session_changes
 			.shared_data()
-			.viable_epoch(&epoch_descriptor, |slot| {
-				Epoch::genesis(&self.config.genesis_config, slot)
+			.viable_session(&session_descriptor, |slot| {
+				Session::genesis(&self.config.genesis_config, slot)
 			})
-			.map(|epoch| epoch.as_ref().authorities.len())
+			.map(|session| session.as_ref().authorities.len())
 	}
 
 	async fn claim_slot(
 		&self,
 		_parent_header: &B::Header,
 		slot: Slot,
-		epoch_descriptor: &ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>,
+		session_descriptor: &ViableSessionDescriptor<B::Hash, NumberFor<B>, Session>,
 	) -> Option<Self::Claim> {
 		debug!(target: "babe", "Attempting to claim slot {}", slot);
 		let s = authorship::claim_slot(
 			slot,
-			self.epoch_changes
+			self.session_changes
 				.shared_data()
-				.viable_epoch(&epoch_descriptor, |slot| {
-					Epoch::genesis(&self.config.genesis_config, slot)
+				.viable_session(&session_descriptor, |slot| {
+					Session::genesis(&self.config.genesis_config, slot)
 				})?
 				.as_ref(),
 			&self.keystore,
@@ -833,10 +833,10 @@ where
 		&self,
 		_parent_header: &B::Header,
 		slot: Slot,
-		epoch_descriptor: &ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>,
+		session_descriptor: &ViableSessionDescriptor<B::Hash, NumberFor<B>, Session>,
 	) {
 		RetainMut::retain_mut(&mut *self.slot_notification_sinks.lock(), |sink| {
-			match sink.try_send((slot, epoch_descriptor.clone())) {
+			match sink.try_send((slot, session_descriptor.clone())) {
 				Ok(()) => true,
 				Err(e) =>
 					if e.is_full() {
@@ -860,7 +860,7 @@ where
 		body: Vec<B::Extrinsic>,
 		storage_changes: StorageChanges<<Self::BlockImport as BlockImport<B>>::Transaction, B>,
 		(_, public): Self::Claim,
-		epoch_descriptor: Self::EpochData,
+		session_descriptor: Self::SessionData,
 	) -> Result<
 		sc_consensus::BlockImportParams<B, <Self::BlockImport as BlockImport<B>>::Transaction>,
 		sp_consensus::Error,
@@ -895,7 +895,7 @@ where
 			StateAction::ApplyChanges(sc_consensus::StorageChanges::Changes(storage_changes));
 		import_block.intermediates.insert(
 			Cow::from(INTERMEDIATE_KEY),
-			Box::new(BabeIntermediate::<B> { epoch_descriptor }) as Box<_>,
+			Box::new(BabeIntermediate::<B> { session_descriptor }) as Box<_>,
 		);
 
 		Ok(import_block)
@@ -980,23 +980,23 @@ pub fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<PreDigest, Error
 	pre_digest.ok_or_else(|| babe_err(Error::NoPreRuntimeDigest))
 }
 
-/// Extract the BABE epoch change digest from the given header, if it exists.
-fn find_next_epoch_digest<B: BlockT>(
+/// Extract the BABE session change digest from the given header, if it exists.
+fn find_next_session_digest<B: BlockT>(
 	header: &B::Header,
-) -> Result<Option<NextEpochDescriptor>, Error<B>> {
-	let mut epoch_digest: Option<_> = None;
+) -> Result<Option<NextSessionDescriptor>, Error<B>> {
+	let mut session_digest: Option<_> = None;
 	for log in header.digest().logs() {
-		trace!(target: "babe", "Checking log {:?}, looking for epoch change digest.", log);
+		trace!(target: "babe", "Checking log {:?}, looking for session change digest.", log);
 		let log = log.try_to::<ConsensusLog>(OpaqueDigestItemId::Consensus(&BABE_ENGINE_ID));
-		match (log, epoch_digest.is_some()) {
-			(Some(ConsensusLog::NextEpochData(_)), true) =>
-				return Err(babe_err(Error::MultipleEpochChangeDigests)),
-			(Some(ConsensusLog::NextEpochData(epoch)), false) => epoch_digest = Some(epoch),
+		match (log, session_digest.is_some()) {
+			(Some(ConsensusLog::NextSessionData(_)), true) =>
+				return Err(babe_err(Error::MultipleSessionChangeDigests)),
+			(Some(ConsensusLog::NextSessionData(session)), false) => session_digest = Some(session),
 			_ => trace!(target: "babe", "Ignoring digest not meant for us"),
 		}
 	}
 
-	Ok(epoch_digest)
+	Ok(session_digest)
 }
 
 /// Extract the BABE config change digest from the given header, if it exists.
@@ -1005,7 +1005,7 @@ fn find_next_config_digest<B: BlockT>(
 ) -> Result<Option<NextConfigDescriptor>, Error<B>> {
 	let mut config_digest: Option<_> = None;
 	for log in header.digest().logs() {
-		trace!(target: "babe", "Checking log {:?}, looking for epoch change digest.", log);
+		trace!(target: "babe", "Checking log {:?}, looking for session change digest.", log);
 		let log = log.try_to::<ConsensusLog>(OpaqueDigestItemId::Consensus(&BABE_ENGINE_ID));
 		match (log, config_digest.is_some()) {
 			(Some(ConsensusLog::NextConfigData(_)), true) =>
@@ -1021,14 +1021,14 @@ fn find_next_config_digest<B: BlockT>(
 /// State that must be shared between the import queue and the authoring logic.
 #[derive(Clone)]
 pub struct BabeLink<Block: BlockT> {
-	epoch_changes: SharedEpochChanges<Block, Epoch>,
+	session_changes: SharedSessionChanges<Block, Session>,
 	config: Config,
 }
 
 impl<Block: BlockT> BabeLink<Block> {
-	/// Get the epoch changes of this link.
-	pub fn epoch_changes(&self) -> &SharedEpochChanges<Block, Epoch> {
-		&self.epoch_changes
+	/// Get the session changes of this link.
+	pub fn session_changes(&self) -> &SharedSessionChanges<Block, Session> {
+		&self.session_changes
 	}
 
 	/// Get the config of this link.
@@ -1043,7 +1043,7 @@ pub struct BabeVerifier<Block: BlockT, Client, SelectChain, CAW, CIDP> {
 	select_chain: SelectChain,
 	create_inherent_data_providers: CIDP,
 	config: Config,
-	epoch_changes: SharedEpochChanges<Block, Epoch>,
+	session_changes: SharedSessionChanges<Block, Session>,
 	can_author_with: CAW,
 	telemetry: Option<TelemetryHandle>,
 }
@@ -1212,7 +1212,7 @@ where
 		let parent_hash = *block.header.parent_hash();
 
 		if block.with_state() {
-			// When importing whole state we don't calculate epoch descriptor, but rather
+			// When importing whole state we don't calculate session descriptor, but rather
 			// read it from the state after import. We also skip all verifications
 			// because there's no parent state and we trust the sync module to verify
 			// that the state is correct and finalized.
@@ -1235,22 +1235,22 @@ where
 			.map_err(Error::<Block>::FetchParentHeader)?;
 
 		let pre_digest = find_pre_digest::<Block>(&block.header)?;
-		let (check_header, epoch_descriptor) = {
-			let epoch_changes = self.epoch_changes.shared_data();
-			let epoch_descriptor = epoch_changes
-				.epoch_descriptor_for_child_of(
+		let (check_header, session_descriptor) = {
+			let session_changes = self.session_changes.shared_data();
+			let session_descriptor = session_changes
+				.session_descriptor_for_child_of(
 					descendent_query(&*self.client),
 					&parent_hash,
 					parent_header_metadata.number,
 					pre_digest.slot(),
 				)
 				.map_err(|e| Error::<Block>::ForkTree(Box::new(e)))?
-				.ok_or_else(|| Error::<Block>::FetchEpoch(parent_hash))?;
-			let viable_epoch = epoch_changes
-				.viable_epoch(&epoch_descriptor, |slot| {
-					Epoch::genesis(&self.config.genesis_config, slot)
+				.ok_or_else(|| Error::<Block>::FetchSession(parent_hash))?;
+			let viable_session = session_changes
+				.viable_session(&session_descriptor, |slot| {
+					Session::genesis(&self.config.genesis_config, slot)
 				})
-				.ok_or_else(|| Error::<Block>::FetchEpoch(parent_hash))?;
+				.ok_or_else(|| Error::<Block>::FetchSession(parent_hash))?;
 
 			// We add one to the current slot to allow for some small drift.
 			// FIXME #1019 in the future, alter this queue to allow deferring of headers
@@ -1258,10 +1258,10 @@ where
 				header: block.header.clone(),
 				pre_digest: Some(pre_digest),
 				slot_now: slot_now + 1,
-				epoch: viable_epoch.as_ref(),
+				session: viable_session.as_ref(),
 			};
 
-			(verification::check_header::<Block>(v_params)?, epoch_descriptor)
+			(verification::check_header::<Block>(v_params)?, session_descriptor)
 		};
 
 		match check_header {
@@ -1323,7 +1323,7 @@ where
 				block.post_digests.push(verified_info.seal);
 				block.intermediates.insert(
 					Cow::from(INTERMEDIATE_KEY),
-					Box::new(BabeIntermediate::<Block> { epoch_descriptor }) as Box<_>,
+					Box::new(BabeIntermediate::<Block> { session_descriptor }) as Box<_>,
 				);
 				block.post_hash = Some(hash);
 
@@ -1345,16 +1345,16 @@ where
 
 /// A block-import handler for BABE.
 ///
-/// This scans each imported block for epoch change signals. The signals are
-/// tracked in a tree (of all forks), and the import logic validates all epoch
-/// change transitions, i.e. whether a given epoch change is expected or whether
+/// This scans each imported block for session change signals. The signals are
+/// tracked in a tree (of all forks), and the import logic validates all session
+/// change transitions, i.e. whether a given session change is expected or whether
 /// it is missing.
 ///
-/// The epoch change tree should be pruned as blocks are finalized.
+/// The session change tree should be pruned as blocks are finalized.
 pub struct BabeBlockImport<Block: BlockT, Client, I> {
 	inner: I,
 	client: Arc<Client>,
-	epoch_changes: SharedEpochChanges<Block, Epoch>,
+	session_changes: SharedSessionChanges<Block, Session>,
 	config: Config,
 }
 
@@ -1363,7 +1363,7 @@ impl<Block: BlockT, I: Clone, Client> Clone for BabeBlockImport<Block, Client, I
 		BabeBlockImport {
 			inner: self.inner.clone(),
 			client: self.client.clone(),
-			epoch_changes: self.epoch_changes.clone(),
+			session_changes: self.session_changes.clone(),
 			config: self.config.clone(),
 		}
 	}
@@ -1372,11 +1372,11 @@ impl<Block: BlockT, I: Clone, Client> Clone for BabeBlockImport<Block, Client, I
 impl<Block: BlockT, Client, I> BabeBlockImport<Block, Client, I> {
 	fn new(
 		client: Arc<Client>,
-		epoch_changes: SharedEpochChanges<Block, Epoch>,
+		session_changes: SharedSessionChanges<Block, Session>,
 		block_import: I,
 		config: Config,
 	) -> Self {
-		BabeBlockImport { client, inner: block_import, epoch_changes, config }
+		BabeBlockImport { client, inner: block_import, session_changes, config }
 	}
 }
 
@@ -1425,18 +1425,18 @@ where
 			Err(r) => return Err(r.into()),
 		};
 
-		// Read epoch info from the imported state.
+		// Read session info from the imported state.
 		let block_id = BlockId::hash(hash);
-		let current_epoch = self.client.runtime_api().current_epoch(&block_id).map_err(|e| {
+		let current_session = self.client.runtime_api().current_session(&block_id).map_err(|e| {
 			ConsensusError::ClientImport(babe_err::<Block>(Error::RuntimeApi(e)).into())
 		})?;
-		let next_epoch = self.client.runtime_api().next_epoch(&block_id).map_err(|e| {
+		let next_session = self.client.runtime_api().next_session(&block_id).map_err(|e| {
 			ConsensusError::ClientImport(babe_err::<Block>(Error::RuntimeApi(e)).into())
 		})?;
 
-		let mut epoch_changes = self.epoch_changes.shared_data_locked();
-		epoch_changes.reset(parent_hash, hash, number, current_epoch.into(), next_epoch.into());
-		aux_schema::write_epoch_changes::<Block, _, _>(&*epoch_changes, |insert| {
+		let mut session_changes = self.session_changes.shared_data_locked();
+		session_changes.reset(parent_hash, hash, number, current_session.into(), next_session.into());
+		aux_schema::write_session_changes::<Block, _, _>(&*session_changes, |insert| {
 			self.client.insert_aux(insert, [])
 		})
 		.map_err(|e| ConsensusError::ClientImport(e.to_string()))?;
@@ -1471,7 +1471,7 @@ where
 		let number = *block.header.number();
 
 		// early exit if block already in chain, otherwise the check for
-		// epoch changes will error when trying to re-import an epoch change
+		// session changes will error when trying to re-import an session change
 		match self.client.status(BlockId::Hash(hash)) {
 			Ok(sp_blockchain::BlockStatus::InChain) => {
 				// When re-importing existing block strip away intermediates.
@@ -1515,21 +1515,21 @@ where
 			))
 		}
 
-		// if there's a pending epoch we'll save the previous epoch changes here
+		// if there's a pending session we'll save the previous session changes here
 		// this way we can revert it if there's any error
-		let mut old_epoch_changes = None;
+		let mut old_session_changes = None;
 
 		// Use an extra scope to make the compiler happy, because otherwise he complains about the
 		// mutex, even if we dropped it...
-		let mut epoch_changes = {
-			let mut epoch_changes = self.epoch_changes.shared_data_locked();
+		let mut session_changes = {
+			let mut session_changes = self.session_changes.shared_data_locked();
 
-			// check if there's any epoch change expected to happen at this slot.
-			// `epoch` is the epoch to verify the block under, and `first_in_epoch` is true
-			// if this is the first block in its chain for that epoch.
+			// check if there's any session change expected to happen at this slot.
+			// `session` is the session to verify the block under, and `first_in_session` is true
+			// if this is the first block in its chain for that session.
 			//
 			// also provides the total weight of the chain, including the imported block.
-			let (epoch_descriptor, first_in_epoch, parent_weight) = {
+			let (session_descriptor, first_in_session, parent_weight) = {
 				let parent_weight = if *parent_header.number() == Zero::zero() {
 					0
 				} else {
@@ -1546,20 +1546,20 @@ where
 				let intermediate =
 					block.take_intermediate::<BabeIntermediate<Block>>(INTERMEDIATE_KEY)?;
 
-				let epoch_descriptor = intermediate.epoch_descriptor;
-				let first_in_epoch = parent_slot < epoch_descriptor.start_slot();
-				(epoch_descriptor, first_in_epoch, parent_weight)
+				let session_descriptor = intermediate.session_descriptor;
+				let first_in_session = parent_slot < session_descriptor.start_slot();
+				(session_descriptor, first_in_session, parent_weight)
 			};
 
 			let total_weight = parent_weight + pre_digest.added_weight();
 
 			// search for this all the time so we can reject unexpected announcements.
-			let next_epoch_digest = find_next_epoch_digest::<Block>(&block.header)
+			let next_session_digest = find_next_session_digest::<Block>(&block.header)
 				.map_err(|e| ConsensusError::ClientImport(e.to_string()))?;
 			let next_config_digest = find_next_config_digest::<Block>(&block.header)
 				.map_err(|e| ConsensusError::ClientImport(e.to_string()))?;
 
-			match (first_in_epoch, next_epoch_digest.is_some(), next_config_digest.is_some()) {
+			match (first_in_session, next_session_digest.is_some(), next_config_digest.is_some()) {
 				(true, true, _) => {},
 				(false, false, false) => {},
 				(false, false, true) =>
@@ -1568,30 +1568,30 @@ where
 					)),
 				(true, false, _) =>
 					return Err(ConsensusError::ClientImport(
-						babe_err(Error::<Block>::ExpectedEpochChange(hash, slot)).into(),
+						babe_err(Error::<Block>::ExpectedSessionChange(hash, slot)).into(),
 					)),
 				(false, true, _) =>
 					return Err(ConsensusError::ClientImport(
-						babe_err(Error::<Block>::UnexpectedEpochChange).into(),
+						babe_err(Error::<Block>::UnexpectedSessionChange).into(),
 					)),
 			}
 
 			let info = self.client.info();
 
-			if let Some(next_epoch_descriptor) = next_epoch_digest {
-				old_epoch_changes = Some((*epoch_changes).clone());
+			if let Some(next_session_descriptor) = next_session_digest {
+				old_session_changes = Some((*session_changes).clone());
 
-				let viable_epoch = epoch_changes
-					.viable_epoch(&epoch_descriptor, |slot| {
-						Epoch::genesis(&self.config.genesis_config, slot)
+				let viable_session = session_changes
+					.viable_session(&session_descriptor, |slot| {
+						Session::genesis(&self.config.genesis_config, slot)
 					})
 					.ok_or_else(|| {
-						ConsensusError::ClientImport(Error::<Block>::FetchEpoch(parent_hash).into())
+						ConsensusError::ClientImport(Error::<Block>::FetchSession(parent_hash).into())
 					})?;
 
-				let epoch_config = next_config_digest
+				let session_config = next_config_digest
 					.map(Into::into)
-					.unwrap_or_else(|| viable_epoch.as_ref().config.clone());
+					.unwrap_or_else(|| viable_session.as_ref().config.clone());
 
 				// restrict info logging during initial sync to avoid spam
 				let log_level = if block.origin == BlockOrigin::NetworkInitialSync {
@@ -1602,42 +1602,42 @@ where
 
 				log!(target: "babe",
 					 log_level,
-					 "👶 New epoch {} launching at block {} (block slot {} >= start slot {}).",
-					 viable_epoch.as_ref().epoch_index,
+					 "👶 New session {} launching at block {} (block slot {} >= start slot {}).",
+					 viable_session.as_ref().session_index,
 					 hash,
 					 slot,
-					 viable_epoch.as_ref().start_slot,
+					 viable_session.as_ref().start_slot,
 				);
 
-				let next_epoch = viable_epoch.increment((next_epoch_descriptor, epoch_config));
+				let next_session = viable_session.increment((next_session_descriptor, session_config));
 
 				log!(target: "babe",
 					 log_level,
-					 "👶 Next epoch starts at slot {}",
-					 next_epoch.as_ref().start_slot,
+					 "👶 Next session starts at slot {}",
+					 next_session.as_ref().start_slot,
 				);
 
-				// prune the tree of epochs not part of the finalized chain or
-				// that are not live anymore, and then track the given epoch change
+				// prune the tree of sessions not part of the finalized chain or
+				// that are not live anymore, and then track the given session change
 				// in the tree.
 				// NOTE: it is important that these operations are done in this
 				// order, otherwise if pruning after import the `is_descendent_of`
 				// used by pruning may not know about the block that is being
 				// imported.
 				let prune_and_import = || {
-					prune_finalized(self.client.clone(), &mut epoch_changes)?;
+					prune_finalized(self.client.clone(), &mut session_changes)?;
 
-					epoch_changes
+					session_changes
 						.import(
 							descendent_query(&*self.client),
 							hash,
 							number,
 							*block.header.parent_hash(),
-							next_epoch,
+							next_session,
 						)
 						.map_err(|e| {
 							ConsensusError::ClientImport(format!(
-								"Error importing epoch changes: {}",
+								"Error importing session changes: {}",
 								e
 							))
 						})?;
@@ -1645,13 +1645,13 @@ where
 				};
 
 				if let Err(e) = prune_and_import() {
-					debug!(target: "babe", "Failed to launch next epoch: {}", e);
-					*epoch_changes =
-						old_epoch_changes.expect("set `Some` above and not taken; qed");
+					debug!(target: "babe", "Failed to launch next session: {}", e);
+					*session_changes =
+						old_session_changes.expect("set `Some` above and not taken; qed");
 					return Err(e)
 				}
 
-				crate::aux_schema::write_epoch_changes::<Block, _, _>(&*epoch_changes, |insert| {
+				crate::aux_schema::write_session_changes::<Block, _, _>(&*session_changes, |insert| {
 					block
 						.auxiliary
 						.extend(insert.iter().map(|(k, v)| (k.to_vec(), Some(v.to_vec()))))
@@ -1694,16 +1694,16 @@ where
 			};
 
 			// Release the mutex, but it stays locked
-			epoch_changes.release_mutex()
+			session_changes.release_mutex()
 		};
 
 		let import_result = self.inner.import_block(block, new_cache).await;
 
-		// revert to the original epoch changes in case there's an error
+		// revert to the original session changes in case there's an error
 		// importing the block
 		if import_result.is_err() {
-			if let Some(old_epoch_changes) = old_epoch_changes {
-				*epoch_changes.upgrade() = old_epoch_changes;
+			if let Some(old_session_changes) = old_session_changes {
+				*session_changes.upgrade() = old_session_changes;
 			}
 		}
 
@@ -1718,10 +1718,10 @@ where
 	}
 }
 
-/// Gets the best finalized block and its slot, and prunes the given epoch tree.
+/// Gets the best finalized block and its slot, and prunes the given session tree.
 fn prune_finalized<Block, Client>(
 	client: Arc<Client>,
-	epoch_changes: &mut EpochChangesFor<Block, Epoch>,
+	session_changes: &mut SessionChangesFor<Block, Session>,
 ) -> Result<(), ConsensusError>
 where
 	Block: BlockT,
@@ -1729,7 +1729,7 @@ where
 {
 	let info = client.info();
 	if info.block_gap.is_none() {
-		epoch_changes.clear_gap();
+		session_changes.clear_gap();
 	}
 
 	let finalized_slot = {
@@ -1745,7 +1745,7 @@ where
 			.slot()
 	};
 
-	epoch_changes
+	session_changes
 		.prune_finalized(
 			descendent_query(&*client),
 			&info.finalized_hash,
@@ -1774,14 +1774,14 @@ where
 		+ PreCommitActions<Block>
 		+ 'static,
 {
-	let epoch_changes =
-		aux_schema::load_epoch_changes::<Block, _>(&*client, &config.genesis_config)?;
-	let link = BabeLink { epoch_changes: epoch_changes.clone(), config: config.clone() };
+	let session_changes =
+		aux_schema::load_session_changes::<Block, _>(&*client, &config.genesis_config)?;
+	let link = BabeLink { session_changes: session_changes.clone(), config: config.clone() };
 
 	// NOTE: this isn't entirely necessary, but since we didn't use to prune the
-	// epoch tree it is useful as a migration, so that nodes prune long trees on
-	// startup rather than waiting until importing the next epoch change block.
-	prune_finalized(client.clone(), &mut epoch_changes.shared_data())?;
+	// session tree it is useful as a migration, so that nodes prune long trees on
+	// startup rather than waiting until importing the next session change block.
+	prune_finalized(client.clone(), &mut session_changes.shared_data())?;
 
 	let client_clone = client.clone();
 	let on_finality = move |summary: &FinalityNotification<Block>| {
@@ -1789,7 +1789,7 @@ where
 	};
 	client.register_finality_action(Box::new(on_finality));
 
-	let import = BabeBlockImport::new(client, epoch_changes, wrapped_block_import, config);
+	let import = BabeBlockImport::new(client, session_changes, wrapped_block_import, config);
 
 	Ok((import, link))
 }
@@ -1799,7 +1799,7 @@ where
 /// This method returns the import queue, some data that needs to be passed to the block authoring
 /// logic (`BabeLink`), and a future that must be run to
 /// completion and is responsible for listening to finality notifications and
-/// pruning the epoch changes tree.
+/// pruning the session changes tree.
 ///
 /// The block import object provided must be the `BabeBlockImport` or a wrapper
 /// of it, otherwise crucial import logic will be omitted.
@@ -1840,7 +1840,7 @@ where
 		select_chain,
 		create_inherent_data_providers,
 		config: babe_link.config,
-		epoch_changes: babe_link.epoch_changes,
+		session_changes: babe_link.session_changes,
 		can_author_with,
 		telemetry,
 		client,
@@ -1850,7 +1850,7 @@ where
 }
 
 /// Reverts protocol aux data to at most the last finalized block.
-/// In particular, epoch-changes and block weights announced after the revert
+/// In particular, session-changes and block weights announced after the revert
 /// point are removed.
 pub fn revert<Block, Client, Backend>(
 	client: Arc<Client>,
@@ -1879,18 +1879,18 @@ where
 			number
 		)))?;
 
-	// Revert epoch changes tree.
+	// Revert session changes tree.
 
 	let config = Config::get(&*client)?;
-	let epoch_changes =
-		aux_schema::load_epoch_changes::<Block, Client>(&*client, config.genesis_config())?;
-	let mut epoch_changes = epoch_changes.shared_data();
+	let session_changes =
+		aux_schema::load_session_changes::<Block, Client>(&*client, config.genesis_config())?;
+	let mut session_changes = session_changes.shared_data();
 
 	if number == Zero::zero() {
-		// Special case, no epoch changes data were present on genesis.
-		*epoch_changes = EpochChangesFor::<Block, Epoch>::default();
+		// Special case, no session changes data were present on genesis.
+		*session_changes = SessionChangesFor::<Block, Session>::default();
 	} else {
-		epoch_changes.revert(descendent_query(&*client), hash, number);
+		session_changes.revert(descendent_query(&*client), hash, number);
 	}
 
 	// Remove block weights added after the revert point.
@@ -1916,8 +1916,8 @@ where
 	}
 	let weight_keys: Vec<_> = weight_keys.iter().map(|val| val.as_slice()).collect();
 
-	// Write epoch changes and remove weights in one shot.
-	aux_schema::write_epoch_changes::<Block, _, _>(&epoch_changes, |values| {
+	// Write session changes and remove weights in one shot.
+	aux_schema::write_session_changes::<Block, _, _>(&session_changes, |values| {
 		client.insert_aux(values, weight_keys.iter())
 	})
 }

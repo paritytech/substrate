@@ -6,7 +6,7 @@ edition = "2021"
 license = "Apache-2.0"
 homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
-description = "Consensus extension module for BABE consensus. Collects on-chain randomness from VRF outputs and manages epoch transitions."
+description = "Consensus extension module for BABE consensus. Collects on-chain randomness from VRF outputs and manages session transitions."
 readme = "README.md"
 
 [package.metadata.docs.rs]

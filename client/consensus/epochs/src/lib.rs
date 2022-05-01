@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! Generic utilities for epoch-based consensus engines.
+//! Generic utilities for session-based consensus engines.
 
 pub mod migration;
 
@@ -74,150 +74,150 @@ where
 	}
 }
 
-/// Epoch data, distinguish whether it is genesis or not.
+/// Session data, distinguish whether it is genesis or not.
 ///
-/// Once an epoch is created, it must have a known `start_slot` and `end_slot`, which cannot be
-/// changed. Consensus engine may modify any other data in the epoch, if needed.
-pub trait Epoch: std::fmt::Debug {
-	/// Descriptor for the next epoch.
-	type NextEpochDescriptor;
+/// Once an session is created, it must have a known `start_slot` and `end_slot`, which cannot be
+/// changed. Consensus engine may modify any other data in the session, if needed.
+pub trait Session: std::fmt::Debug {
+	/// Descriptor for the next session.
+	type NextSessionDescriptor;
 	/// Type of the slot number.
 	type Slot: Ord + Copy + std::fmt::Debug;
 
-	/// The starting slot of the epoch.
+	/// The starting slot of the session.
 	fn start_slot(&self) -> Self::Slot;
-	/// Produce the "end slot" of the epoch. This is NOT inclusive to the epoch,
-	/// i.e. the slots covered by the epoch are `self.start_slot() .. self.end_slot()`.
+	/// Produce the "end slot" of the session. This is NOT inclusive to the session,
+	/// i.e. the slots covered by the session are `self.start_slot() .. self.end_slot()`.
 	fn end_slot(&self) -> Self::Slot;
-	/// Increment the epoch data, using the next epoch descriptor.
-	fn increment(&self, descriptor: Self::NextEpochDescriptor) -> Self;
+	/// Increment the session data, using the next session descriptor.
+	fn increment(&self, descriptor: Self::NextSessionDescriptor) -> Self;
 }
 
-impl<'a, E: Epoch> From<&'a E> for EpochHeader<E> {
-	fn from(epoch: &'a E) -> EpochHeader<E> {
-		Self { start_slot: epoch.start_slot(), end_slot: epoch.end_slot() }
+impl<'a, E: Session> From<&'a E> for SessionHeader<E> {
+	fn from(session: &'a E) -> SessionHeader<E> {
+		Self { start_slot: session.start_slot(), end_slot: session.end_slot() }
 	}
 }
 
-/// Header of epoch data, consisting of start and end slot.
+/// Header of session data, consisting of start and end slot.
 #[derive(Eq, PartialEq, Encode, Decode, Debug)]
-pub struct EpochHeader<E: Epoch> {
-	/// The starting slot of the epoch.
+pub struct SessionHeader<E: Session> {
+	/// The starting slot of the session.
 	pub start_slot: E::Slot,
-	/// The end slot of the epoch. This is NOT inclusive to the epoch,
-	/// i.e. the slots covered by the epoch are `self.start_slot() .. self.end_slot()`.
+	/// The end slot of the session. This is NOT inclusive to the session,
+	/// i.e. the slots covered by the session are `self.start_slot() .. self.end_slot()`.
 	pub end_slot: E::Slot,
 }
 
-impl<E: Epoch> Clone for EpochHeader<E> {
+impl<E: Session> Clone for SessionHeader<E> {
 	fn clone(&self) -> Self {
 		Self { start_slot: self.start_slot, end_slot: self.end_slot }
 	}
 }
 
-/// Position of the epoch identifier.
+/// Position of the session identifier.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Copy, Clone, Debug)]
-pub enum EpochIdentifierPosition {
-	/// The identifier points to a genesis epoch `epoch_0`.
+pub enum SessionIdentifierPosition {
+	/// The identifier points to a genesis session `session_0`.
 	Genesis0,
-	/// The identifier points to a genesis epoch `epoch_1`.
+	/// The identifier points to a genesis session `session_1`.
 	Genesis1,
-	/// The identifier points to a regular epoch.
+	/// The identifier points to a regular session.
 	Regular,
 }
 
-/// Epoch identifier.
+/// Session identifier.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug)]
-pub struct EpochIdentifier<Hash, Number> {
-	/// Location of the epoch.
-	pub position: EpochIdentifierPosition,
-	/// Hash of the block when the epoch is signaled.
+pub struct SessionIdentifier<Hash, Number> {
+	/// Location of the session.
+	pub position: SessionIdentifierPosition,
+	/// Hash of the block when the session is signaled.
 	pub hash: Hash,
-	/// Number of the block when the epoch is signaled.
+	/// Number of the block when the session is signaled.
 	pub number: Number,
 }
 
-/// The viable epoch under which a block can be verified.
+/// The viable session under which a block can be verified.
 ///
 /// If this is the first non-genesis block in the chain, then it will
-/// hold an `UnimportedGenesis` epoch.
-pub enum ViableEpoch<E, ERef = E> {
-	/// Unimported genesis viable epoch data.
+/// hold an `UnimportedGenesis` session.
+pub enum ViableSession<E, ERef = E> {
+	/// Unimported genesis viable session data.
 	UnimportedGenesis(E),
-	/// Regular viable epoch data.
+	/// Regular viable session data.
 	Signaled(ERef),
 }
 
-impl<E, ERef> AsRef<E> for ViableEpoch<E, ERef>
+impl<E, ERef> AsRef<E> for ViableSession<E, ERef>
 where
 	ERef: Borrow<E>,
 {
 	fn as_ref(&self) -> &E {
 		match *self {
-			ViableEpoch::UnimportedGenesis(ref e) => e,
-			ViableEpoch::Signaled(ref e) => e.borrow(),
+			ViableSession::UnimportedGenesis(ref e) => e,
+			ViableSession::Signaled(ref e) => e.borrow(),
 		}
 	}
 }
 
-impl<E, ERef> AsMut<E> for ViableEpoch<E, ERef>
+impl<E, ERef> AsMut<E> for ViableSession<E, ERef>
 where
 	ERef: BorrowMut<E>,
 {
 	fn as_mut(&mut self) -> &mut E {
 		match *self {
-			ViableEpoch::UnimportedGenesis(ref mut e) => e,
-			ViableEpoch::Signaled(ref mut e) => e.borrow_mut(),
+			ViableSession::UnimportedGenesis(ref mut e) => e,
+			ViableSession::Signaled(ref mut e) => e.borrow_mut(),
 		}
 	}
 }
 
-impl<E, ERef> ViableEpoch<E, ERef>
+impl<E, ERef> ViableSession<E, ERef>
 where
-	E: Epoch + Clone,
+	E: Session + Clone,
 	ERef: Borrow<E>,
 {
-	/// Extract the underlying epoch, disregarding the fact that a genesis
-	/// epoch may be unimported.
+	/// Extract the underlying session, disregarding the fact that a genesis
+	/// session may be unimported.
 	pub fn into_cloned_inner(self) -> E {
 		match self {
-			ViableEpoch::UnimportedGenesis(e) => e,
-			ViableEpoch::Signaled(e) => e.borrow().clone(),
+			ViableSession::UnimportedGenesis(e) => e,
+			ViableSession::Signaled(e) => e.borrow().clone(),
 		}
 	}
 
-	/// Get cloned value for the viable epoch.
-	pub fn into_cloned(self) -> ViableEpoch<E, E> {
+	/// Get cloned value for the viable session.
+	pub fn into_cloned(self) -> ViableSession<E, E> {
 		match self {
-			ViableEpoch::UnimportedGenesis(e) => ViableEpoch::UnimportedGenesis(e),
-			ViableEpoch::Signaled(e) => ViableEpoch::Signaled(e.borrow().clone()),
+			ViableSession::UnimportedGenesis(e) => ViableSession::UnimportedGenesis(e),
+			ViableSession::Signaled(e) => ViableSession::Signaled(e.borrow().clone()),
 		}
 	}
 
-	/// Increment the epoch, yielding an `IncrementedEpoch` to be imported
+	/// Increment the session, yielding an `IncrementedSession` to be imported
 	/// into the fork-tree.
-	pub fn increment(&self, next_descriptor: E::NextEpochDescriptor) -> IncrementedEpoch<E> {
+	pub fn increment(&self, next_descriptor: E::NextSessionDescriptor) -> IncrementedSession<E> {
 		let next = self.as_ref().increment(next_descriptor);
 		let to_persist = match *self {
-			ViableEpoch::UnimportedGenesis(ref epoch_0) =>
-				PersistedEpoch::Genesis(epoch_0.clone(), next),
-			ViableEpoch::Signaled(_) => PersistedEpoch::Regular(next),
+			ViableSession::UnimportedGenesis(ref session_0) =>
+				PersistedSession::Genesis(session_0.clone(), next),
+			ViableSession::Signaled(_) => PersistedSession::Regular(next),
 		};
 
-		IncrementedEpoch(to_persist)
+		IncrementedSession(to_persist)
 	}
 }
 
-/// Descriptor for a viable epoch.
+/// Descriptor for a viable session.
 #[derive(PartialEq, Eq, Clone, Debug)]
-pub enum ViableEpochDescriptor<Hash, Number, E: Epoch> {
-	/// The epoch is an unimported genesis, with given start slot number.
+pub enum ViableSessionDescriptor<Hash, Number, E: Session> {
+	/// The session is an unimported genesis, with given start slot number.
 	UnimportedGenesis(E::Slot),
-	/// The epoch is signaled and has been imported, with given identifier and header.
-	Signaled(EpochIdentifier<Hash, Number>, EpochHeader<E>),
+	/// The session is signaled and has been imported, with given identifier and header.
+	Signaled(SessionIdentifier<Hash, Number>, SessionHeader<E>),
 }
 
-impl<Hash, Number, E: Epoch> ViableEpochDescriptor<Hash, Number, E> {
+impl<Hash, Number, E: Session> ViableSessionDescriptor<Hash, Number, E> {
 	/// Start slot of the descriptor.
 	pub fn start_slot(&self) -> E::Slot {
 		match self {
@@ -227,222 +227,222 @@ impl<Hash, Number, E: Epoch> ViableEpochDescriptor<Hash, Number, E> {
 	}
 }
 
-/// Persisted epoch stored in EpochChanges.
+/// Persisted session stored in SessionChanges.
 #[derive(Clone, Encode, Decode, Debug)]
-pub enum PersistedEpoch<E> {
-	/// Genesis persisted epoch data. epoch_0, epoch_1.
+pub enum PersistedSession<E> {
+	/// Genesis persisted session data. session_0, session_1.
 	Genesis(E, E),
-	/// Regular persisted epoch data. epoch_n.
+	/// Regular persisted session data. session_n.
 	Regular(E),
 }
 
-impl<E> PersistedEpoch<E> {
-	/// Returns if this is a genesis epoch.
+impl<E> PersistedSession<E> {
+	/// Returns if this is a genesis session.
 	pub fn is_genesis(&self) -> bool {
 		matches!(self, Self::Genesis(_, _))
 	}
 }
 
-impl<'a, E: Epoch> From<&'a PersistedEpoch<E>> for PersistedEpochHeader<E> {
-	fn from(epoch: &'a PersistedEpoch<E>) -> Self {
-		match epoch {
-			PersistedEpoch::Genesis(ref epoch_0, ref epoch_1) =>
-				PersistedEpochHeader::Genesis(epoch_0.into(), epoch_1.into()),
-			PersistedEpoch::Regular(ref epoch_n) => PersistedEpochHeader::Regular(epoch_n.into()),
+impl<'a, E: Session> From<&'a PersistedSession<E>> for PersistedSessionHeader<E> {
+	fn from(session: &'a PersistedSession<E>) -> Self {
+		match session {
+			PersistedSession::Genesis(ref session_0, ref session_1) =>
+				PersistedSessionHeader::Genesis(session_0.into(), session_1.into()),
+			PersistedSession::Regular(ref session_n) => PersistedSessionHeader::Regular(session_n.into()),
 		}
 	}
 }
 
-impl<E: Epoch> PersistedEpoch<E> {
-	/// Map the epoch to a different type using a conversion function.
-	pub fn map<B, F, Hash, Number>(self, h: &Hash, n: &Number, f: &mut F) -> PersistedEpoch<B>
+impl<E: Session> PersistedSession<E> {
+	/// Map the session to a different type using a conversion function.
+	pub fn map<B, F, Hash, Number>(self, h: &Hash, n: &Number, f: &mut F) -> PersistedSession<B>
 	where
-		B: Epoch<Slot = E::Slot>,
+		B: Session<Slot = E::Slot>,
 		F: FnMut(&Hash, &Number, E) -> B,
 	{
 		match self {
-			PersistedEpoch::Genesis(epoch_0, epoch_1) =>
-				PersistedEpoch::Genesis(f(h, n, epoch_0), f(h, n, epoch_1)),
-			PersistedEpoch::Regular(epoch_n) => PersistedEpoch::Regular(f(h, n, epoch_n)),
+			PersistedSession::Genesis(session_0, session_1) =>
+				PersistedSession::Genesis(f(h, n, session_0), f(h, n, session_1)),
+			PersistedSession::Regular(session_n) => PersistedSession::Regular(f(h, n, session_n)),
 		}
 	}
 }
 
-/// Persisted epoch header stored in ForkTree.
+/// Persisted session header stored in ForkTree.
 #[derive(Encode, Decode, PartialEq, Eq, Debug)]
-pub enum PersistedEpochHeader<E: Epoch> {
-	/// Genesis persisted epoch header. epoch_0, epoch_1.
-	Genesis(EpochHeader<E>, EpochHeader<E>),
-	/// Regular persisted epoch header. epoch_n.
-	Regular(EpochHeader<E>),
+pub enum PersistedSessionHeader<E: Session> {
+	/// Genesis persisted session header. session_0, session_1.
+	Genesis(SessionHeader<E>, SessionHeader<E>),
+	/// Regular persisted session header. session_n.
+	Regular(SessionHeader<E>),
 }
 
-impl<E: Epoch> Clone for PersistedEpochHeader<E> {
+impl<E: Session> Clone for PersistedSessionHeader<E> {
 	fn clone(&self) -> Self {
 		match self {
-			Self::Genesis(epoch_0, epoch_1) => Self::Genesis(epoch_0.clone(), epoch_1.clone()),
-			Self::Regular(epoch_n) => Self::Regular(epoch_n.clone()),
+			Self::Genesis(session_0, session_1) => Self::Genesis(session_0.clone(), session_1.clone()),
+			Self::Regular(session_n) => Self::Regular(session_n.clone()),
 		}
 	}
 }
 
-impl<E: Epoch> PersistedEpochHeader<E> {
-	/// Map the epoch header to a different type.
-	pub fn map<B>(self) -> PersistedEpochHeader<B>
+impl<E: Session> PersistedSessionHeader<E> {
+	/// Map the session header to a different type.
+	pub fn map<B>(self) -> PersistedSessionHeader<B>
 	where
-		B: Epoch<Slot = E::Slot>,
+		B: Session<Slot = E::Slot>,
 	{
 		match self {
-			PersistedEpochHeader::Genesis(epoch_0, epoch_1) => PersistedEpochHeader::Genesis(
-				EpochHeader { start_slot: epoch_0.start_slot, end_slot: epoch_0.end_slot },
-				EpochHeader { start_slot: epoch_1.start_slot, end_slot: epoch_1.end_slot },
+			PersistedSessionHeader::Genesis(session_0, session_1) => PersistedSessionHeader::Genesis(
+				SessionHeader { start_slot: session_0.start_slot, end_slot: session_0.end_slot },
+				SessionHeader { start_slot: session_1.start_slot, end_slot: session_1.end_slot },
 			),
-			PersistedEpochHeader::Regular(epoch_n) => PersistedEpochHeader::Regular(EpochHeader {
-				start_slot: epoch_n.start_slot,
-				end_slot: epoch_n.end_slot,
+			PersistedSessionHeader::Regular(session_n) => PersistedSessionHeader::Regular(SessionHeader {
+				start_slot: session_n.start_slot,
+				end_slot: session_n.end_slot,
 			}),
 		}
 	}
 }
 
-/// A fresh, incremented epoch to import into the underlying fork-tree.
+/// A fresh, incremented session to import into the underlying fork-tree.
 ///
-/// Create this with `ViableEpoch::increment`.
-#[must_use = "Freshly-incremented epoch must be imported with `EpochChanges::import`"]
-pub struct IncrementedEpoch<E: Epoch>(PersistedEpoch<E>);
+/// Create this with `ViableSession::increment`.
+#[must_use = "Freshly-incremented session must be imported with `SessionChanges::import`"]
+pub struct IncrementedSession<E: Session>(PersistedSession<E>);
 
-impl<E: Epoch> AsRef<E> for IncrementedEpoch<E> {
+impl<E: Session> AsRef<E> for IncrementedSession<E> {
 	fn as_ref(&self) -> &E {
 		match self.0 {
-			PersistedEpoch::Genesis(_, ref epoch_1) => epoch_1,
-			PersistedEpoch::Regular(ref epoch_n) => epoch_n,
+			PersistedSession::Genesis(_, ref session_1) => session_1,
+			PersistedSession::Regular(ref session_n) => session_n,
 		}
 	}
 }
 
-/// A pair of epochs for the gap block download validation.
+/// A pair of sessions for the gap block download validation.
 /// Block gap is created after the warp sync is complete. Blocks
 /// are imported both at the tip of the chain and at the start of the gap.
-/// This holds a pair of epochs that are required to validate headers
+/// This holds a pair of sessions that are required to validate headers
 /// at the start of the gap. Since gap download does not allow forks we don't
-/// need to keep a tree of epochs.
+/// need to keep a tree of sessions.
 #[derive(Clone, Encode, Decode, Debug)]
-pub struct GapEpochs<Hash, Number, E: Epoch> {
-	current: (Hash, Number, PersistedEpoch<E>),
+pub struct GapSessions<Hash, Number, E: Session> {
+	current: (Hash, Number, PersistedSession<E>),
 	next: Option<(Hash, Number, E)>,
 }
 
-impl<Hash, Number, E> GapEpochs<Hash, Number, E>
+impl<Hash, Number, E> GapSessions<Hash, Number, E>
 where
 	Hash: Copy + PartialEq + std::fmt::Debug,
 	Number: Copy + PartialEq + std::fmt::Debug,
-	E: Epoch,
+	E: Session,
 {
-	/// Check if given slot matches one of the gap epochs.
-	/// Returns epoch identifier if it does.
+	/// Check if given slot matches one of the gap sessions.
+	/// Returns session identifier if it does.
 	fn matches(
 		&self,
 		slot: E::Slot,
-	) -> Option<(Hash, Number, EpochHeader<E>, EpochIdentifierPosition)> {
+	) -> Option<(Hash, Number, SessionHeader<E>, SessionIdentifierPosition)> {
 		match &self.current {
-			(_, _, PersistedEpoch::Genesis(epoch_0, _))
-				if slot >= epoch_0.start_slot() && slot < epoch_0.end_slot() =>
+			(_, _, PersistedSession::Genesis(session_0, _))
+				if slot >= session_0.start_slot() && slot < session_0.end_slot() =>
 				return Some((
 					self.current.0,
 					self.current.1,
-					epoch_0.into(),
-					EpochIdentifierPosition::Genesis0,
+					session_0.into(),
+					SessionIdentifierPosition::Genesis0,
 				)),
-			(_, _, PersistedEpoch::Genesis(_, epoch_1))
-				if slot >= epoch_1.start_slot() && slot < epoch_1.end_slot() =>
+			(_, _, PersistedSession::Genesis(_, session_1))
+				if slot >= session_1.start_slot() && slot < session_1.end_slot() =>
 				return Some((
 					self.current.0,
 					self.current.1,
-					epoch_1.into(),
-					EpochIdentifierPosition::Genesis1,
+					session_1.into(),
+					SessionIdentifierPosition::Genesis1,
 				)),
-			(_, _, PersistedEpoch::Regular(epoch_n))
-				if slot >= epoch_n.start_slot() && slot < epoch_n.end_slot() =>
+			(_, _, PersistedSession::Regular(session_n))
+				if slot >= session_n.start_slot() && slot < session_n.end_slot() =>
 				return Some((
 					self.current.0,
 					self.current.1,
-					epoch_n.into(),
-					EpochIdentifierPosition::Regular,
+					session_n.into(),
+					SessionIdentifierPosition::Regular,
 				)),
 			_ => {},
 		};
 		match &self.next {
-			Some((h, n, epoch_n)) if slot >= epoch_n.start_slot() && slot < epoch_n.end_slot() =>
-				Some((*h, *n, epoch_n.into(), EpochIdentifierPosition::Regular)),
+			Some((h, n, session_n)) if slot >= session_n.start_slot() && slot < session_n.end_slot() =>
+				Some((*h, *n, session_n.into(), SessionIdentifierPosition::Regular)),
 			_ => None,
 		}
 	}
 
-	/// Returns epoch data if it matches given identifier.
-	pub fn epoch(&self, id: &EpochIdentifier<Hash, Number>) -> Option<&E> {
+	/// Returns session data if it matches given identifier.
+	pub fn session(&self, id: &SessionIdentifier<Hash, Number>) -> Option<&E> {
 		match (&self.current, &self.next) {
 			((h, n, e), _) if h == &id.hash && n == &id.number => match e {
-				PersistedEpoch::Genesis(ref epoch_0, _)
-					if id.position == EpochIdentifierPosition::Genesis0 =>
-					Some(epoch_0),
-				PersistedEpoch::Genesis(_, ref epoch_1)
-					if id.position == EpochIdentifierPosition::Genesis1 =>
-					Some(epoch_1),
-				PersistedEpoch::Regular(ref epoch_n)
-					if id.position == EpochIdentifierPosition::Regular =>
-					Some(epoch_n),
+				PersistedSession::Genesis(ref session_0, _)
+					if id.position == SessionIdentifierPosition::Genesis0 =>
+					Some(session_0),
+				PersistedSession::Genesis(_, ref session_1)
+					if id.position == SessionIdentifierPosition::Genesis1 =>
+					Some(session_1),
+				PersistedSession::Regular(ref session_n)
+					if id.position == SessionIdentifierPosition::Regular =>
+					Some(session_n),
 				_ => None,
 			},
 			(_, Some((h, n, e)))
 				if h == &id.hash &&
-					n == &id.number && id.position == EpochIdentifierPosition::Regular =>
+					n == &id.number && id.position == SessionIdentifierPosition::Regular =>
 				Some(e),
 			_ => None,
 		}
 	}
 
-	/// Import a new gap epoch, potentially replacing an old epoch.
-	fn import(&mut self, slot: E::Slot, hash: Hash, number: Number, epoch: E) -> Result<(), E> {
+	/// Import a new gap session, potentially replacing an old session.
+	fn import(&mut self, slot: E::Slot, hash: Hash, number: Number, session: E) -> Result<(), E> {
 		match (&mut self.current, &mut self.next) {
-			((_, _, PersistedEpoch::Genesis(_, epoch_1)), _) if slot == epoch_1.end_slot() => {
-				self.next = Some((hash, number, epoch));
+			((_, _, PersistedSession::Genesis(_, session_1)), _) if slot == session_1.end_slot() => {
+				self.next = Some((hash, number, session));
 				Ok(())
 			},
-			(_, Some((_, _, epoch_n))) if slot == epoch_n.end_slot() => {
-				let (cur_h, cur_n, cur_epoch) =
+			(_, Some((_, _, session_n))) if slot == session_n.end_slot() => {
+				let (cur_h, cur_n, cur_session) =
 					self.next.take().expect("Already matched as `Some`");
-				self.current = (cur_h, cur_n, PersistedEpoch::Regular(cur_epoch));
-				self.next = Some((hash, number, epoch));
+				self.current = (cur_h, cur_n, PersistedSession::Regular(cur_session));
+				self.next = Some((hash, number, session));
 				Ok(())
 			},
-			_ => Err(epoch),
+			_ => Err(session),
 		}
 	}
 }
 
-/// Tree of all epoch changes across all *seen* forks. Data stored in tree is
-/// the hash and block number of the block signaling the epoch change, and the
-/// epoch that was signalled at that block.
+/// Tree of all session changes across all *seen* forks. Data stored in tree is
+/// the hash and block number of the block signaling the session change, and the
+/// session that was signalled at that block.
 ///
-/// The first epoch, epoch_0, is special cased by saying that it starts at
+/// The first session, session_0, is special cased by saying that it starts at
 /// slot number of the first block in the chain. When bootstrapping a chain,
 /// there can be multiple competing block #1s, so we have to ensure that the overlayed
 /// DAG doesn't get confused.
 ///
-/// The first block of every epoch should be producing a descriptor for the next
-/// epoch - this is checked in higher-level code. So the first block of epoch_0 contains
-/// a descriptor for epoch_1. We special-case these and bundle them together in the
+/// The first block of every session should be producing a descriptor for the next
+/// session - this is checked in higher-level code. So the first block of session_0 contains
+/// a descriptor for session_1. We special-case these and bundle them together in the
 /// same DAG entry, pinned to a specific block #1.
 ///
-/// Further epochs (epoch_2, ..., epoch_n) each get their own entry.
+/// Further sessions (session_2, ..., session_n) each get their own entry.
 ///
-/// Also maintains a pair of epochs for the start of the gap,
+/// Also maintains a pair of sessions for the start of the gap,
 /// as long as there's an active gap download after a warp sync.
 #[derive(Clone, Encode, Decode, Debug)]
-pub struct EpochChanges<Hash, Number, E: Epoch> {
-	inner: ForkTree<Hash, Number, PersistedEpochHeader<E>>,
-	epochs: BTreeMap<(Hash, Number), PersistedEpoch<E>>,
-	gap: Option<GapEpochs<Hash, Number, E>>,
+pub struct SessionChanges<Hash, Number, E: Session> {
+	inner: ForkTree<Hash, Number, PersistedSessionHeader<E>>,
+	sessions: BTreeMap<(Hash, Number), PersistedSession<E>>,
+	gap: Option<GapSessions<Hash, Number, E>>,
 }
 
 // create a fake header hash which hasn't been included in the chain.
@@ -454,58 +454,58 @@ fn fake_head_hash<H: AsRef<[u8]> + AsMut<[u8]> + Clone>(parent_hash: &H) -> H {
 	h
 }
 
-impl<Hash, Number, E: Epoch> Default for EpochChanges<Hash, Number, E>
+impl<Hash, Number, E: Session> Default for SessionChanges<Hash, Number, E>
 where
 	Hash: PartialEq + Ord,
 	Number: Ord,
 {
 	fn default() -> Self {
-		EpochChanges { inner: ForkTree::new(), epochs: BTreeMap::new(), gap: None }
+		SessionChanges { inner: ForkTree::new(), sessions: BTreeMap::new(), gap: None }
 	}
 }
 
-impl<Hash, Number, E: Epoch> EpochChanges<Hash, Number, E>
+impl<Hash, Number, E: Session> SessionChanges<Hash, Number, E>
 where
 	Hash: PartialEq + Ord + AsRef<[u8]> + AsMut<[u8]> + Copy + std::fmt::Debug,
 	Number: Ord + One + Zero + Add<Output = Number> + Sub<Output = Number> + Copy + std::fmt::Debug,
 {
-	/// Create a new epoch change.
+	/// Create a new session change.
 	pub fn new() -> Self {
 		Self::default()
 	}
 
-	/// Rebalances the tree of epoch changes so that it is sorted by length of
+	/// Rebalances the tree of session changes so that it is sorted by length of
 	/// fork (longest fork first).
 	pub fn rebalance(&mut self) {
 		self.inner.rebalance()
 	}
 
-	/// Clear gap epochs if any.
+	/// Clear gap sessions if any.
 	pub fn clear_gap(&mut self) {
 		self.gap = None;
 	}
 
-	/// Map the epoch changes from one storing data to a different one.
-	pub fn map<B, F>(self, mut f: F) -> EpochChanges<Hash, Number, B>
+	/// Map the session changes from one storing data to a different one.
+	pub fn map<B, F>(self, mut f: F) -> SessionChanges<Hash, Number, B>
 	where
-		B: Epoch<Slot = E::Slot>,
+		B: Session<Slot = E::Slot>,
 		F: FnMut(&Hash, &Number, E) -> B,
 	{
-		EpochChanges {
-			inner: self.inner.map(&mut |_, _, header: PersistedEpochHeader<E>| header.map()),
-			gap: self.gap.map(|GapEpochs { current: (h, n, header), next }| GapEpochs {
+		SessionChanges {
+			inner: self.inner.map(&mut |_, _, header: PersistedSessionHeader<E>| header.map()),
+			gap: self.gap.map(|GapSessions { current: (h, n, header), next }| GapSessions {
 				current: (h, n, header.map(&h, &n, &mut f)),
 				next: next.map(|(h, n, e)| (h, n, f(&h, &n, e))),
 			}),
-			epochs: self
-				.epochs
+			sessions: self
+				.sessions
 				.into_iter()
-				.map(|((hash, number), epoch)| ((hash, number), epoch.map(&hash, &number, &mut f)))
+				.map(|((hash, number), session)| ((hash, number), session.map(&hash, &number, &mut f)))
 				.collect(),
 		}
 	}
 
-	/// Prune out finalized epochs, except for the ancestor of the finalized
+	/// Prune out finalized sessions, except for the ancestor of the finalized
 	/// block. The given slot should be the slot number at which the finalized
 	/// block was authored.
 	pub fn prune_finalized<D: IsDescendentOfBuilder<Hash>>(
@@ -517,99 +517,99 @@ where
 	) -> Result<(), fork_tree::Error<D::Error>> {
 		let is_descendent_of = descendent_of_builder.build_is_descendent_of(None);
 
-		let predicate = |epoch: &PersistedEpochHeader<E>| match *epoch {
-			PersistedEpochHeader::Genesis(_, ref epoch_1) => slot >= epoch_1.end_slot,
-			PersistedEpochHeader::Regular(ref epoch_n) => slot >= epoch_n.end_slot,
+		let predicate = |session: &PersistedSessionHeader<E>| match *session {
+			PersistedSessionHeader::Genesis(_, ref session_1) => slot >= session_1.end_slot,
+			PersistedSessionHeader::Regular(ref session_n) => slot >= session_n.end_slot,
 		};
 
-		// prune any epochs which could not be _live_ as of the children of the
+		// prune any sessions which could not be _live_ as of the children of the
 		// finalized block, i.e. re-root the fork tree to the oldest ancestor of
-		// (hash, number) where epoch.end_slot() >= finalized_slot
+		// (hash, number) where session.end_slot() >= finalized_slot
 		let removed = self.inner.prune(hash, &number, &is_descendent_of, &predicate)?;
 
 		for (hash, number, _) in removed {
-			self.epochs.remove(&(hash, number));
+			self.sessions.remove(&(hash, number));
 		}
 
 		Ok(())
 	}
 
-	/// Get a reference to an epoch with given identifier.
-	pub fn epoch(&self, id: &EpochIdentifier<Hash, Number>) -> Option<&E> {
-		if let Some(e) = &self.gap.as_ref().and_then(|gap| gap.epoch(id)) {
+	/// Get a reference to an session with given identifier.
+	pub fn session(&self, id: &SessionIdentifier<Hash, Number>) -> Option<&E> {
+		if let Some(e) = &self.gap.as_ref().and_then(|gap| gap.session(id)) {
 			return Some(e)
 		}
-		self.epochs.get(&(id.hash, id.number)).and_then(|v| match v {
-			PersistedEpoch::Genesis(ref epoch_0, _)
-				if id.position == EpochIdentifierPosition::Genesis0 =>
-				Some(epoch_0),
-			PersistedEpoch::Genesis(_, ref epoch_1)
-				if id.position == EpochIdentifierPosition::Genesis1 =>
-				Some(epoch_1),
-			PersistedEpoch::Regular(ref epoch_n)
-				if id.position == EpochIdentifierPosition::Regular =>
-				Some(epoch_n),
+		self.sessions.get(&(id.hash, id.number)).and_then(|v| match v {
+			PersistedSession::Genesis(ref session_0, _)
+				if id.position == SessionIdentifierPosition::Genesis0 =>
+				Some(session_0),
+			PersistedSession::Genesis(_, ref session_1)
+				if id.position == SessionIdentifierPosition::Genesis1 =>
+				Some(session_1),
+			PersistedSession::Regular(ref session_n)
+				if id.position == SessionIdentifierPosition::Regular =>
+				Some(session_n),
 			_ => None,
 		})
 	}
 
-	/// Get a reference to a viable epoch with given descriptor.
-	pub fn viable_epoch<G>(
+	/// Get a reference to a viable session with given descriptor.
+	pub fn viable_session<G>(
 		&self,
-		descriptor: &ViableEpochDescriptor<Hash, Number, E>,
+		descriptor: &ViableSessionDescriptor<Hash, Number, E>,
 		make_genesis: G,
-	) -> Option<ViableEpoch<E, &E>>
+	) -> Option<ViableSession<E, &E>>
 	where
 		G: FnOnce(E::Slot) -> E,
 	{
 		match descriptor {
-			ViableEpochDescriptor::UnimportedGenesis(slot) =>
-				Some(ViableEpoch::UnimportedGenesis(make_genesis(*slot))),
-			ViableEpochDescriptor::Signaled(identifier, _) =>
-				self.epoch(&identifier).map(ViableEpoch::Signaled),
+			ViableSessionDescriptor::UnimportedGenesis(slot) =>
+				Some(ViableSession::UnimportedGenesis(make_genesis(*slot))),
+			ViableSessionDescriptor::Signaled(identifier, _) =>
+				self.session(&identifier).map(ViableSession::Signaled),
 		}
 	}
 
-	/// Get a mutable reference to an epoch with given identifier.
-	pub fn epoch_mut(&mut self, id: &EpochIdentifier<Hash, Number>) -> Option<&mut E> {
-		self.epochs.get_mut(&(id.hash, id.number)).and_then(|v| match v {
-			PersistedEpoch::Genesis(ref mut epoch_0, _)
-				if id.position == EpochIdentifierPosition::Genesis0 =>
-				Some(epoch_0),
-			PersistedEpoch::Genesis(_, ref mut epoch_1)
-				if id.position == EpochIdentifierPosition::Genesis1 =>
-				Some(epoch_1),
-			PersistedEpoch::Regular(ref mut epoch_n)
-				if id.position == EpochIdentifierPosition::Regular =>
-				Some(epoch_n),
+	/// Get a mutable reference to an session with given identifier.
+	pub fn session_mut(&mut self, id: &SessionIdentifier<Hash, Number>) -> Option<&mut E> {
+		self.sessions.get_mut(&(id.hash, id.number)).and_then(|v| match v {
+			PersistedSession::Genesis(ref mut session_0, _)
+				if id.position == SessionIdentifierPosition::Genesis0 =>
+				Some(session_0),
+			PersistedSession::Genesis(_, ref mut session_1)
+				if id.position == SessionIdentifierPosition::Genesis1 =>
+				Some(session_1),
+			PersistedSession::Regular(ref mut session_n)
+				if id.position == SessionIdentifierPosition::Regular =>
+				Some(session_n),
 			_ => None,
 		})
 	}
 
-	/// Get a mutable reference to a viable epoch with given descriptor.
-	pub fn viable_epoch_mut<G>(
+	/// Get a mutable reference to a viable session with given descriptor.
+	pub fn viable_session_mut<G>(
 		&mut self,
-		descriptor: &ViableEpochDescriptor<Hash, Number, E>,
+		descriptor: &ViableSessionDescriptor<Hash, Number, E>,
 		make_genesis: G,
-	) -> Option<ViableEpoch<E, &mut E>>
+	) -> Option<ViableSession<E, &mut E>>
 	where
 		G: FnOnce(E::Slot) -> E,
 	{
 		match descriptor {
-			ViableEpochDescriptor::UnimportedGenesis(slot) =>
-				Some(ViableEpoch::UnimportedGenesis(make_genesis(*slot))),
-			ViableEpochDescriptor::Signaled(identifier, _) =>
-				self.epoch_mut(&identifier).map(ViableEpoch::Signaled),
+			ViableSessionDescriptor::UnimportedGenesis(slot) =>
+				Some(ViableSession::UnimportedGenesis(make_genesis(*slot))),
+			ViableSessionDescriptor::Signaled(identifier, _) =>
+				self.session_mut(&identifier).map(ViableSession::Signaled),
 		}
 	}
 
-	/// Get the epoch data from an epoch descriptor.
+	/// Get the session data from an session descriptor.
 	///
-	/// Note that this function ignores the fact that an genesis epoch might need to be imported.
+	/// Note that this function ignores the fact that an genesis session might need to be imported.
 	/// Mostly useful for testing.
-	pub fn epoch_data<G>(
+	pub fn session_data<G>(
 		&self,
-		descriptor: &ViableEpochDescriptor<Hash, Number, E>,
+		descriptor: &ViableSessionDescriptor<Hash, Number, E>,
 		make_genesis: G,
 	) -> Option<E>
 	where
@@ -617,17 +617,17 @@ where
 		E: Clone,
 	{
 		match descriptor {
-			ViableEpochDescriptor::UnimportedGenesis(slot) => Some(make_genesis(*slot)),
-			ViableEpochDescriptor::Signaled(identifier, _) => self.epoch(&identifier).cloned(),
+			ViableSessionDescriptor::UnimportedGenesis(slot) => Some(make_genesis(*slot)),
+			ViableSessionDescriptor::Signaled(identifier, _) => self.session(&identifier).cloned(),
 		}
 	}
 
-	/// Finds the epoch data for a child of the given block. Similar to
-	/// `epoch_descriptor_for_child_of` but returns the full data.
+	/// Finds the session data for a child of the given block. Similar to
+	/// `session_descriptor_for_child_of` but returns the full data.
 	///
-	/// Note that this function ignores the fact that an genesis epoch might need to be imported.
+	/// Note that this function ignores the fact that an genesis session might need to be imported.
 	/// Mostly useful for testing.
-	pub fn epoch_data_for_child_of<D: IsDescendentOfBuilder<Hash>, G>(
+	pub fn session_data_for_child_of<D: IsDescendentOfBuilder<Hash>, G>(
 		&self,
 		descendent_of_builder: D,
 		parent_hash: &Hash,
@@ -639,43 +639,43 @@ where
 		G: FnOnce(E::Slot) -> E,
 		E: Clone,
 	{
-		let descriptor = self.epoch_descriptor_for_child_of(
+		let descriptor = self.session_descriptor_for_child_of(
 			descendent_of_builder,
 			parent_hash,
 			parent_number,
 			slot,
 		)?;
 
-		Ok(descriptor.and_then(|des| self.epoch_data(&des, make_genesis)))
+		Ok(descriptor.and_then(|des| self.session_data(&des, make_genesis)))
 	}
 
-	/// Finds the epoch for a child of the given block, assuming the given slot number.
+	/// Finds the session for a child of the given block, assuming the given slot number.
 	///
-	/// If the returned epoch is an `UnimportedGenesis` epoch, it should be imported into the
+	/// If the returned session is an `UnimportedGenesis` session, it should be imported into the
 	/// tree.
-	pub fn epoch_descriptor_for_child_of<D: IsDescendentOfBuilder<Hash>>(
+	pub fn session_descriptor_for_child_of<D: IsDescendentOfBuilder<Hash>>(
 		&self,
 		descendent_of_builder: D,
 		parent_hash: &Hash,
 		parent_number: Number,
 		slot: E::Slot,
-	) -> Result<Option<ViableEpochDescriptor<Hash, Number, E>>, fork_tree::Error<D::Error>> {
+	) -> Result<Option<ViableSessionDescriptor<Hash, Number, E>>, fork_tree::Error<D::Error>> {
 		if parent_number == Zero::zero() {
-			// need to insert the genesis epoch.
-			return Ok(Some(ViableEpochDescriptor::UnimportedGenesis(slot)))
+			// need to insert the genesis session.
+			return Ok(Some(ViableSessionDescriptor::UnimportedGenesis(slot)))
 		}
 
 		if let Some(gap) = &self.gap {
 			if let Some((hash, number, hdr, position)) = gap.matches(slot) {
-				return Ok(Some(ViableEpochDescriptor::Signaled(
-					EpochIdentifier { position, hash, number },
+				return Ok(Some(ViableSessionDescriptor::Signaled(
+					SessionIdentifier { position, hash, number },
 					hdr,
 				)))
 			}
 		}
 
 		// find_node_where will give you the node in the fork-tree which is an ancestor
-		// of the `parent_hash` by default. if the last epoch was signalled at the parent_hash,
+		// of the `parent_hash` by default. if the last session was signalled at the parent_hash,
 		// then it won't be returned. we need to create a new fake chain head hash which
 		// "descends" from our parent-hash.
 		let fake_head_hash = fake_head_hash(parent_hash);
@@ -684,13 +684,13 @@ where
 			descendent_of_builder.build_is_descendent_of(Some((fake_head_hash, *parent_hash)));
 
 		// We want to find the deepest node in the tree which is an ancestor
-		// of our block and where the start slot of the epoch was before the
+		// of our block and where the start slot of the session was before the
 		// slot of our block. The genesis special-case doesn't need to look
-		// at epoch_1 -- all we're doing here is figuring out which node
+		// at session_1 -- all we're doing here is figuring out which node
 		// we need.
-		let predicate = |epoch: &PersistedEpochHeader<E>| match *epoch {
-			PersistedEpochHeader::Genesis(ref epoch_0, _) => epoch_0.start_slot <= slot,
-			PersistedEpochHeader::Regular(ref epoch_n) => epoch_n.start_slot <= slot,
+		let predicate = |session: &PersistedSessionHeader<E>| match *session {
+			PersistedSessionHeader::Genesis(ref session_0, _) => session_0.start_slot <= slot,
+			PersistedSessionHeader::Regular(ref session_n) => session_n.start_slot <= slot,
 		};
 
 		self.inner
@@ -705,31 +705,31 @@ where
 					(
 						match node.data {
 							// Ok, we found our node.
-							// and here we figure out which of the internal epochs
+							// and here we figure out which of the internal sessions
 							// of a genesis node to use based on their start slot.
-							PersistedEpochHeader::Genesis(ref epoch_0, ref epoch_1) => {
-								if epoch_1.start_slot <= slot {
-									(EpochIdentifierPosition::Genesis1, epoch_1.clone())
+							PersistedSessionHeader::Genesis(ref session_0, ref session_1) => {
+								if session_1.start_slot <= slot {
+									(SessionIdentifierPosition::Genesis1, session_1.clone())
 								} else {
-									(EpochIdentifierPosition::Genesis0, epoch_0.clone())
+									(SessionIdentifierPosition::Genesis0, session_0.clone())
 								}
 							},
-							PersistedEpochHeader::Regular(ref epoch_n) =>
-								(EpochIdentifierPosition::Regular, epoch_n.clone()),
+							PersistedSessionHeader::Regular(ref session_n) =>
+								(SessionIdentifierPosition::Regular, session_n.clone()),
 						},
 						node,
 					)
 				})
 				.map(|((position, header), node)| {
-					ViableEpochDescriptor::Signaled(
-						EpochIdentifier { position, hash: node.hash, number: node.number },
+					ViableSessionDescriptor::Signaled(
+						SessionIdentifier { position, hash: node.hash, number: node.number },
 						header,
 					)
 				})
 			})
 	}
 
-	/// Import a new epoch-change, signalled at the given block.
+	/// Import a new session-change, signalled at the given block.
 	///
 	/// This assumes that the given block is prospective (i.e. has not been
 	/// imported yet), but its parent has. This is why the parent hash needs
@@ -740,26 +740,26 @@ where
 		hash: Hash,
 		number: Number,
 		parent_hash: Hash,
-		epoch: IncrementedEpoch<E>,
+		session: IncrementedSession<E>,
 	) -> Result<(), fork_tree::Error<D::Error>> {
 		let is_descendent_of =
 			descendent_of_builder.build_is_descendent_of(Some((hash, parent_hash)));
-		let slot = epoch.as_ref().start_slot();
-		let IncrementedEpoch(mut epoch) = epoch;
-		let header = PersistedEpochHeader::<E>::from(&epoch);
+		let slot = session.as_ref().start_slot();
+		let IncrementedSession(mut session) = session;
+		let header = PersistedSessionHeader::<E>::from(&session);
 
 		if let Some(gap) = &mut self.gap {
-			if let PersistedEpoch::Regular(e) = epoch {
-				epoch = match gap.import(slot, hash.clone(), number.clone(), e) {
+			if let PersistedSession::Regular(e) = session {
+				session = match gap.import(slot, hash.clone(), number.clone(), e) {
 					Ok(()) => return Ok(()),
-					Err(e) => PersistedEpoch::Regular(e),
+					Err(e) => PersistedSession::Regular(e),
 				}
 			}
-		} else if epoch.is_genesis() && !self.epochs.values().all(|e| e.is_genesis()) {
-			// There's a genesis epoch imported when we already have an active epoch.
+		} else if session.is_genesis() && !self.sessions.values().all(|e| e.is_genesis()) {
+			// There's a genesis session imported when we already have an active session.
 			// This happens after the warp sync as the ancient blocks download start.
-			// We need to start tracking gap epochs here.
-			self.gap = Some(GapEpochs { current: (hash, number, epoch), next: None });
+			// We need to start tracking gap sessions here.
+			self.gap = Some(GapSessions { current: (hash, number, session), next: None });
 			return Ok(())
 		}
 
@@ -767,7 +767,7 @@ where
 
 		match res {
 			Ok(_) | Err(fork_tree::Error::Duplicate) => {
-				self.epochs.insert((hash, number), epoch);
+				self.sessions.insert((hash, number), session);
 				Ok(())
 			},
 			Err(e) => Err(e),
@@ -775,32 +775,32 @@ where
 	}
 
 	/// Return the inner fork tree.
-	pub fn tree(&self) -> &ForkTree<Hash, Number, PersistedEpochHeader<E>> {
+	pub fn tree(&self) -> &ForkTree<Hash, Number, PersistedSessionHeader<E>> {
 		&self.inner
 	}
 
-	/// Reset to a specified pair of epochs, as if they were announced at blocks `parent_hash` and
+	/// Reset to a specified pair of sessions, as if they were announced at blocks `parent_hash` and
 	/// `hash`.
 	pub fn reset(&mut self, parent_hash: Hash, hash: Hash, number: Number, current: E, next: E) {
 		self.inner = ForkTree::new();
-		self.epochs.clear();
-		let persisted = PersistedEpoch::Regular(current);
-		let header = PersistedEpochHeader::from(&persisted);
+		self.sessions.clear();
+		let persisted = PersistedSession::Regular(current);
+		let header = PersistedSessionHeader::from(&persisted);
 		let _res = self.inner.import(parent_hash, number - One::one(), header, &|_, _| {
 			Ok(false) as Result<bool, fork_tree::Error<ClientError>>
 		});
-		self.epochs.insert((parent_hash, number - One::one()), persisted);
+		self.sessions.insert((parent_hash, number - One::one()), persisted);
 
-		let persisted = PersistedEpoch::Regular(next);
-		let header = PersistedEpochHeader::from(&persisted);
+		let persisted = PersistedSession::Regular(next);
+		let header = PersistedSessionHeader::from(&persisted);
 		let _res = self.inner.import(hash, number, header, &|_, _| {
 			Ok(true) as Result<bool, fork_tree::Error<ClientError>>
 		});
-		self.epochs.insert((hash, number), persisted);
+		self.sessions.insert((hash, number), persisted);
 	}
 
 	/// Revert to a specified block given its `hash` and `number`.
-	/// This removes all the epoch changes information that were announced by
+	/// This removes all the session changes information that were announced by
 	/// all the given block descendents.
 	pub fn revert<D: IsDescendentOfBuilder<Hash>>(
 		&mut self,
@@ -810,7 +810,7 @@ where
 	) {
 		let is_descendent_of = descendent_of_builder.build_is_descendent_of(None);
 
-		let filter = |node_hash: &Hash, node_num: &Number, _: &PersistedEpochHeader<E>| {
+		let filter = |node_hash: &Hash, node_num: &Number, _: &PersistedSessionHeader<E>| {
 			if number >= *node_num &&
 				(is_descendent_of(node_hash, &hash).unwrap_or_default() || *node_hash == hash)
 			{
@@ -826,22 +826,22 @@ where
 		};
 
 		self.inner.drain_filter(filter).for_each(|(h, n, _)| {
-			self.epochs.remove(&(h, n));
+			self.sessions.remove(&(h, n));
 		});
 	}
 }
 
-/// Type alias to produce the epoch-changes tree from a block type.
-pub type EpochChangesFor<Block, Epoch> =
-	EpochChanges<<Block as BlockT>::Hash, NumberFor<Block>, Epoch>;
+/// Type alias to produce the session-changes tree from a block type.
+pub type SessionChangesFor<Block, Session> =
+	SessionChanges<<Block as BlockT>::Hash, NumberFor<Block>, Session>;
 
-/// A shared epoch changes tree.
-pub type SharedEpochChanges<Block, Epoch> =
-	sc_consensus::shared_data::SharedData<EpochChangesFor<Block, Epoch>>;
+/// A shared session changes tree.
+pub type SharedSessionChanges<Block, Session> =
+	sc_consensus::shared_data::SharedData<SessionChangesFor<Block, Session>>;
 
 #[cfg(test)]
 mod tests {
-	use super::{Epoch as EpochT, *};
+	use super::{Session as SessionT, *};
 
 	#[derive(Debug, PartialEq)]
 	pub struct TestError;
@@ -885,17 +885,17 @@ mod tests {
 	type Slot = u64;
 
 	#[derive(Debug, Clone, Eq, PartialEq)]
-	struct Epoch {
+	struct Session {
 		start_slot: Slot,
 		duration: Slot,
 	}
 
-	impl EpochT for Epoch {
-		type NextEpochDescriptor = ();
+	impl SessionT for Session {
+		type NextSessionDescriptor = ();
 		type Slot = Slot;
 
 		fn increment(&self, _: ()) -> Self {
-			Epoch { start_slot: self.start_slot + self.duration, duration: self.duration }
+			Session { start_slot: self.start_slot + self.duration, duration: self.duration }
 		}
 
 		fn end_slot(&self) -> Slot {
@@ -908,7 +908,7 @@ mod tests {
 	}
 
 	#[test]
-	fn genesis_epoch_is_created_but_not_imported() {
+	fn genesis_session_is_created_but_not_imported() {
 		//
 		// A - B
 		//  \
@@ -923,26 +923,26 @@ mod tests {
 			}
 		};
 
-		let epoch_changes = EpochChanges::<_, _, Epoch>::new();
-		let genesis_epoch = epoch_changes
-			.epoch_descriptor_for_child_of(&is_descendent_of, b"0", 0, 10101)
+		let session_changes = SessionChanges::<_, _, Session>::new();
+		let genesis_session = session_changes
+			.session_descriptor_for_child_of(&is_descendent_of, b"0", 0, 10101)
 			.unwrap()
 			.unwrap();
 
-		match genesis_epoch {
-			ViableEpochDescriptor::UnimportedGenesis(slot) => {
+		match genesis_session {
+			ViableSessionDescriptor::UnimportedGenesis(slot) => {
 				assert_eq!(slot, 10101u64);
 			},
 			_ => panic!("should be unimported genesis"),
 		};
 
-		let genesis_epoch_2 = epoch_changes
-			.epoch_descriptor_for_child_of(&is_descendent_of, b"0", 0, 10102)
+		let genesis_session_2 = session_changes
+			.session_descriptor_for_child_of(&is_descendent_of, b"0", 0, 10102)
 			.unwrap()
 			.unwrap();
 
-		match genesis_epoch_2 {
-			ViableEpochDescriptor::UnimportedGenesis(slot) => {
+		match genesis_session_2 {
+			ViableSessionDescriptor::UnimportedGenesis(slot) => {
 				assert_eq!(slot, 10102u64);
 			},
 			_ => panic!("should be unimported genesis"),
@@ -950,7 +950,7 @@ mod tests {
 	}
 
 	#[test]
-	fn epoch_changes_between_blocks() {
+	fn session_changes_between_blocks() {
 		//
 		// A - B
 		//  \
@@ -965,66 +965,66 @@ mod tests {
 			}
 		};
 
-		let make_genesis = |slot| Epoch { start_slot: slot, duration: 100 };
+		let make_genesis = |slot| Session { start_slot: slot, duration: 100 };
 
-		let mut epoch_changes = EpochChanges::<_, _, Epoch>::new();
-		let genesis_epoch = epoch_changes
-			.epoch_descriptor_for_child_of(&is_descendent_of, b"0", 0, 100)
+		let mut session_changes = SessionChanges::<_, _, Session>::new();
+		let genesis_session = session_changes
+			.session_descriptor_for_child_of(&is_descendent_of, b"0", 0, 100)
 			.unwrap()
 			.unwrap();
 
-		assert_eq!(genesis_epoch, ViableEpochDescriptor::UnimportedGenesis(100));
+		assert_eq!(genesis_session, ViableSessionDescriptor::UnimportedGenesis(100));
 
-		let import_epoch_1 =
-			epoch_changes.viable_epoch(&genesis_epoch, &make_genesis).unwrap().increment(());
-		let epoch_1 = import_epoch_1.as_ref().clone();
+		let import_session_1 =
+			session_changes.viable_session(&genesis_session, &make_genesis).unwrap().increment(());
+		let session_1 = import_session_1.as_ref().clone();
 
-		epoch_changes
-			.import(&is_descendent_of, *b"A", 1, *b"0", import_epoch_1)
+		session_changes
+			.import(&is_descendent_of, *b"A", 1, *b"0", import_session_1)
 			.unwrap();
-		let genesis_epoch = epoch_changes.epoch_data(&genesis_epoch, &make_genesis).unwrap();
+		let genesis_session = session_changes.session_data(&genesis_session, &make_genesis).unwrap();
 
 		assert!(is_descendent_of(b"0", b"A").unwrap());
 
-		let end_slot = genesis_epoch.end_slot();
-		assert_eq!(end_slot, epoch_1.start_slot);
+		let end_slot = genesis_session.end_slot();
+		assert_eq!(end_slot, session_1.start_slot);
 
 		{
-			// x is still within the genesis epoch.
-			let x = epoch_changes
-				.epoch_data_for_child_of(&is_descendent_of, b"A", 1, end_slot - 1, &make_genesis)
+			// x is still within the genesis session.
+			let x = session_changes
+				.session_data_for_child_of(&is_descendent_of, b"A", 1, end_slot - 1, &make_genesis)
 				.unwrap()
 				.unwrap();
 
-			assert_eq!(x, genesis_epoch);
+			assert_eq!(x, genesis_session);
 		}
 
 		{
-			// x is now at the next epoch, because the block is now at the
-			// start slot of epoch 1.
-			let x = epoch_changes
-				.epoch_data_for_child_of(&is_descendent_of, b"A", 1, end_slot, &make_genesis)
+			// x is now at the next session, because the block is now at the
+			// start slot of session 1.
+			let x = session_changes
+				.session_data_for_child_of(&is_descendent_of, b"A", 1, end_slot, &make_genesis)
 				.unwrap()
 				.unwrap();
 
-			assert_eq!(x, epoch_1);
+			assert_eq!(x, session_1);
 		}
 
 		{
-			// x is now at the next epoch, because the block is now after
-			// start slot of epoch 1.
-			let x = epoch_changes
-				.epoch_data_for_child_of(
+			// x is now at the next session, because the block is now after
+			// start slot of session 1.
+			let x = session_changes
+				.session_data_for_child_of(
 					&is_descendent_of,
 					b"A",
 					1,
-					epoch_1.end_slot() - 1,
+					session_1.end_slot() - 1,
 					&make_genesis,
 				)
 				.unwrap()
 				.unwrap();
 
-			assert_eq!(x, epoch_1);
+			assert_eq!(x, session_1);
 		}
 	}
 
@@ -1045,75 +1045,75 @@ mod tests {
 
 		let duration = 100;
 
-		let make_genesis = |slot| Epoch { start_slot: slot, duration };
+		let make_genesis = |slot| Session { start_slot: slot, duration };
 
-		let mut epoch_changes = EpochChanges::new();
+		let mut session_changes = SessionChanges::new();
 		let next_descriptor = ();
 
-		// insert genesis epoch for A
+		// insert genesis session for A
 		{
-			let genesis_epoch_a_descriptor = epoch_changes
-				.epoch_descriptor_for_child_of(&is_descendent_of, b"0", 0, 100)
+			let genesis_session_a_descriptor = session_changes
+				.session_descriptor_for_child_of(&is_descendent_of, b"0", 0, 100)
 				.unwrap()
 				.unwrap();
 
-			let incremented_epoch = epoch_changes
-				.viable_epoch(&genesis_epoch_a_descriptor, &make_genesis)
+			let incremented_session = session_changes
+				.viable_session(&genesis_session_a_descriptor, &make_genesis)
 				.unwrap()
 				.increment(next_descriptor.clone());
 
-			epoch_changes
-				.import(&is_descendent_of, *b"A", 1, *b"0", incremented_epoch)
+			session_changes
+				.import(&is_descendent_of, *b"A", 1, *b"0", incremented_session)
 				.unwrap();
 		}
 
-		// insert genesis epoch for X
+		// insert genesis session for X
 		{
-			let genesis_epoch_x_descriptor = epoch_changes
-				.epoch_descriptor_for_child_of(&is_descendent_of, b"0", 0, 1000)
+			let genesis_session_x_descriptor = session_changes
+				.session_descriptor_for_child_of(&is_descendent_of, b"0", 0, 1000)
 				.unwrap()
 				.unwrap();
 
-			let incremented_epoch = epoch_changes
-				.viable_epoch(&genesis_epoch_x_descriptor, &make_genesis)
+			let incremented_session = session_changes
+				.viable_session(&genesis_session_x_descriptor, &make_genesis)
 				.unwrap()
 				.increment(next_descriptor.clone());
 
-			epoch_changes
-				.import(&is_descendent_of, *b"X", 1, *b"0", incremented_epoch)
+			session_changes
+				.import(&is_descendent_of, *b"X", 1, *b"0", incremented_session)
 				.unwrap();
 		}
 
-		// now check that the genesis epochs for our respective block 1s
+		// now check that the genesis sessions for our respective block 1s
 		// respect the chain structure.
 		{
-			let epoch_for_a_child = epoch_changes
-				.epoch_data_for_child_of(&is_descendent_of, b"A", 1, 101, &make_genesis)
+			let session_for_a_child = session_changes
+				.session_data_for_child_of(&is_descendent_of, b"A", 1, 101, &make_genesis)
 				.unwrap()
 				.unwrap();
 
-			assert_eq!(epoch_for_a_child, make_genesis(100));
+			assert_eq!(session_for_a_child, make_genesis(100));
 
-			let epoch_for_x_child = epoch_changes
-				.epoch_data_for_child_of(&is_descendent_of, b"X", 1, 1001, &make_genesis)
+			let session_for_x_child = session_changes
+				.session_data_for_child_of(&is_descendent_of, b"X", 1, 1001, &make_genesis)
 				.unwrap()
 				.unwrap();
 
-			assert_eq!(epoch_for_x_child, make_genesis(1000));
+			assert_eq!(session_for_x_child, make_genesis(1000));
 
-			let epoch_for_x_child_before_genesis = epoch_changes
-				.epoch_data_for_child_of(&is_descendent_of, b"X", 1, 101, &make_genesis)
+			let session_for_x_child_before_genesis = session_changes
+				.session_data_for_child_of(&is_descendent_of, b"X", 1, 101, &make_genesis)
 				.unwrap();
 
-			// even though there is a genesis epoch at that slot, it's not in
+			// even though there is a genesis session at that slot, it's not in
 			// this chain.
-			assert!(epoch_for_x_child_before_genesis.is_none());
+			assert!(session_for_x_child_before_genesis.is_none());
 		}
 	}
 
 	/// Test that ensures that the gap is not enabled when we import multiple genesis blocks.
 	#[test]
-	fn gap_is_not_enabled_when_multiple_genesis_epochs_are_imported() {
+	fn gap_is_not_enabled_when_multiple_genesis_sessions_are_imported() {
 		//     X
 		//   /
 		// 0 - A
@@ -1127,62 +1127,62 @@ mod tests {
 
 		let duration = 100;
 
-		let make_genesis = |slot| Epoch { start_slot: slot, duration };
+		let make_genesis = |slot| Session { start_slot: slot, duration };
 
-		let mut epoch_changes = EpochChanges::new();
+		let mut session_changes = SessionChanges::new();
 		let next_descriptor = ();
 
-		// insert genesis epoch for A
+		// insert genesis session for A
 		{
-			let genesis_epoch_a_descriptor = epoch_changes
-				.epoch_descriptor_for_child_of(&is_descendent_of, b"0", 0, 100)
+			let genesis_session_a_descriptor = session_changes
+				.session_descriptor_for_child_of(&is_descendent_of, b"0", 0, 100)
 				.unwrap()
 				.unwrap();
 
-			let incremented_epoch = epoch_changes
-				.viable_epoch(&genesis_epoch_a_descriptor, &make_genesis)
+			let incremented_session = session_changes
+				.viable_session(&genesis_session_a_descriptor, &make_genesis)
 				.unwrap()
 				.increment(next_descriptor.clone());
 
-			epoch_changes
-				.import(&is_descendent_of, *b"A", 1, *b"0", incremented_epoch)
+			session_changes
+				.import(&is_descendent_of, *b"A", 1, *b"0", incremented_session)
 				.unwrap();
 		}
 
-		// insert genesis epoch for X
+		// insert genesis session for X
 		{
-			let genesis_epoch_x_descriptor = epoch_changes
-				.epoch_descriptor_for_child_of(&is_descendent_of, b"0", 0, 1000)
+			let genesis_session_x_descriptor = session_changes
+				.session_descriptor_for_child_of(&is_descendent_of, b"0", 0, 1000)
 				.unwrap()
 				.unwrap();
 
-			let incremented_epoch = epoch_changes
-				.viable_epoch(&genesis_epoch_x_descriptor, &make_genesis)
+			let incremented_session = session_changes
+				.viable_session(&genesis_session_x_descriptor, &make_genesis)
 				.unwrap()
 				.increment(next_descriptor.clone());
 
-			epoch_changes
-				.import(&is_descendent_of, *b"X", 1, *b"0", incremented_epoch)
+			session_changes
+				.import(&is_descendent_of, *b"X", 1, *b"0", incremented_session)
 				.unwrap();
 		}
 
 		// Clearing the gap should be a no-op.
-		epoch_changes.clear_gap();
+		session_changes.clear_gap();
 
-		// Check that both epochs are available.
-		epoch_changes
-			.epoch_data_for_child_of(&is_descendent_of, b"A", 1, 101, &make_genesis)
+		// Check that both sessions are available.
+		session_changes
+			.session_data_for_child_of(&is_descendent_of, b"A", 1, 101, &make_genesis)
 			.unwrap()
 			.unwrap();
 
-		epoch_changes
-			.epoch_data_for_child_of(&is_descendent_of, b"X", 1, 1001, &make_genesis)
+		session_changes
+			.session_data_for_child_of(&is_descendent_of, b"X", 1, 1001, &make_genesis)
 			.unwrap()
 			.unwrap();
 	}
 
 	#[test]
-	fn gap_epochs_advance() {
+	fn gap_sessions_advance() {
 		// 0 - 1 - 2 - 3 - .... 42 - 43
 		let is_descendent_of = |base: &Hash, block: &Hash| -> Result<bool, TestError> {
 			match (base, *block) {
@@ -1196,96 +1196,96 @@ mod tests {
 
 		let duration = 100;
 
-		let make_genesis = |slot| Epoch { start_slot: slot, duration };
+		let make_genesis = |slot| Session { start_slot: slot, duration };
 
-		let mut epoch_changes = EpochChanges::new();
+		let mut session_changes = SessionChanges::new();
 		let next_descriptor = ();
 
-		let epoch42 = Epoch { start_slot: 42, duration: 100 };
-		let epoch43 = Epoch { start_slot: 43, duration: 100 };
-		epoch_changes.reset(*b"0", *b"1", 4200, epoch42, epoch43);
-		assert!(epoch_changes.gap.is_none());
+		let session42 = Session { start_slot: 42, duration: 100 };
+		let session43 = Session { start_slot: 43, duration: 100 };
+		session_changes.reset(*b"0", *b"1", 4200, session42, session43);
+		assert!(session_changes.gap.is_none());
 
-		// Import a new genesis epoch, this should crate the gap.
-		let genesis_epoch_a_descriptor = epoch_changes
-			.epoch_descriptor_for_child_of(&is_descendent_of, b"0", 0, 100)
+		// Import a new genesis session, this should crate the gap.
+		let genesis_session_a_descriptor = session_changes
+			.session_descriptor_for_child_of(&is_descendent_of, b"0", 0, 100)
 			.unwrap()
 			.unwrap();
 
-		let incremented_epoch = epoch_changes
-			.viable_epoch(&genesis_epoch_a_descriptor, &make_genesis)
+		let incremented_session = session_changes
+			.viable_session(&genesis_session_a_descriptor, &make_genesis)
 			.unwrap()
 			.increment(next_descriptor.clone());
 
-		epoch_changes
-			.import(&is_descendent_of, *b"1", 1, *b"0", incremented_epoch)
+		session_changes
+			.import(&is_descendent_of, *b"1", 1, *b"0", incremented_session)
 			.unwrap();
-		assert!(epoch_changes.gap.is_some());
+		assert!(session_changes.gap.is_some());
 
-		let genesis_epoch = epoch_changes
-			.epoch_descriptor_for_child_of(&is_descendent_of, b"0", 0, 100)
+		let genesis_session = session_changes
+			.session_descriptor_for_child_of(&is_descendent_of, b"0", 0, 100)
 			.unwrap()
 			.unwrap();
 
-		assert_eq!(genesis_epoch, ViableEpochDescriptor::UnimportedGenesis(100));
+		assert_eq!(genesis_session, ViableSessionDescriptor::UnimportedGenesis(100));
 
-		// Import more epochs and check that gap advances.
-		let import_epoch_1 =
-			epoch_changes.viable_epoch(&genesis_epoch, &make_genesis).unwrap().increment(());
+		// Import more sessions and check that gap advances.
+		let import_session_1 =
+			session_changes.viable_session(&genesis_session, &make_genesis).unwrap().increment(());
 
-		let epoch_1 = import_epoch_1.as_ref().clone();
-		epoch_changes
-			.import(&is_descendent_of, *b"1", 1, *b"0", import_epoch_1)
+		let session_1 = import_session_1.as_ref().clone();
+		session_changes
+			.import(&is_descendent_of, *b"1", 1, *b"0", import_session_1)
 			.unwrap();
-		let genesis_epoch_data = epoch_changes.epoch_data(&genesis_epoch, &make_genesis).unwrap();
-		let end_slot = genesis_epoch_data.end_slot();
-		let x = epoch_changes
-			.epoch_data_for_child_of(&is_descendent_of, b"1", 1, end_slot, &make_genesis)
+		let genesis_session_data = session_changes.session_data(&genesis_session, &make_genesis).unwrap();
+		let end_slot = genesis_session_data.end_slot();
+		let x = session_changes
+			.session_data_for_child_of(&is_descendent_of, b"1", 1, end_slot, &make_genesis)
 			.unwrap()
 			.unwrap();
 
-		assert_eq!(x, epoch_1);
-		assert_eq!(epoch_changes.gap.as_ref().unwrap().current.0, *b"1");
-		assert!(epoch_changes.gap.as_ref().unwrap().next.is_none());
+		assert_eq!(x, session_1);
+		assert_eq!(session_changes.gap.as_ref().unwrap().current.0, *b"1");
+		assert!(session_changes.gap.as_ref().unwrap().next.is_none());
 
-		let epoch_1_desriptor = epoch_changes
-			.epoch_descriptor_for_child_of(&is_descendent_of, b"1", 1, end_slot)
+		let session_1_desriptor = session_changes
+			.session_descriptor_for_child_of(&is_descendent_of, b"1", 1, end_slot)
 			.unwrap()
 			.unwrap();
-		let epoch_1 = epoch_changes.epoch_data(&epoch_1_desriptor, &make_genesis).unwrap();
-		let import_epoch_2 = epoch_changes
-			.viable_epoch(&epoch_1_desriptor, &make_genesis)
-			.unwrap()
-			.increment(());
-		let epoch_2 = import_epoch_2.as_ref().clone();
-		epoch_changes
-			.import(&is_descendent_of, *b"2", 2, *b"1", import_epoch_2)
-			.unwrap();
-
-		let end_slot = epoch_1.end_slot();
-		let x = epoch_changes
-			.epoch_data_for_child_of(&is_descendent_of, b"2", 2, end_slot, &make_genesis)
-			.unwrap()
-			.unwrap();
-		assert_eq!(epoch_changes.gap.as_ref().unwrap().current.0, *b"1");
-		assert_eq!(epoch_changes.gap.as_ref().unwrap().next.as_ref().unwrap().0, *b"2");
-		assert_eq!(x, epoch_2);
-
-		let epoch_2_desriptor = epoch_changes
-			.epoch_descriptor_for_child_of(&is_descendent_of, b"2", 2, end_slot)
-			.unwrap()
-			.unwrap();
-		let import_epoch_3 = epoch_changes
-			.viable_epoch(&epoch_2_desriptor, &make_genesis)
+		let session_1 = session_changes.session_data(&session_1_desriptor, &make_genesis).unwrap();
+		let import_session_2 = session_changes
+			.viable_session(&session_1_desriptor, &make_genesis)
 			.unwrap()
 			.increment(());
-		epoch_changes
-			.import(&is_descendent_of, *b"3", 3, *b"2", import_epoch_3)
+		let session_2 = import_session_2.as_ref().clone();
+		session_changes
+			.import(&is_descendent_of, *b"2", 2, *b"1", import_session_2)
 			.unwrap();
 
-		assert_eq!(epoch_changes.gap.as_ref().unwrap().current.0, *b"2");
+		let end_slot = session_1.end_slot();
+		let x = session_changes
+			.session_data_for_child_of(&is_descendent_of, b"2", 2, end_slot, &make_genesis)
+			.unwrap()
+			.unwrap();
+		assert_eq!(session_changes.gap.as_ref().unwrap().current.0, *b"1");
+		assert_eq!(session_changes.gap.as_ref().unwrap().next.as_ref().unwrap().0, *b"2");
+		assert_eq!(x, session_2);
 
-		epoch_changes.clear_gap();
-		assert!(epoch_changes.gap.is_none());
+		let session_2_desriptor = session_changes
+			.session_descriptor_for_child_of(&is_descendent_of, b"2", 2, end_slot)
+			.unwrap()
+			.unwrap();
+		let import_session_3 = session_changes
+			.viable_session(&session_2_desriptor, &make_genesis)
+			.unwrap()
+			.increment(());
+		session_changes
+			.import(&is_descendent_of, *b"3", 3, *b"2", import_session_3)
+			.unwrap();
+
+		assert_eq!(session_changes.gap.as_ref().unwrap().current.0, *b"2");
+
+		session_changes.clear_gap();
+		assert!(session_changes.gap.is_none());
 	}
 }

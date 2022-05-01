@@ -32,7 +32,7 @@ sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
 sc-telemetry = { version = "4.0.0-dev", path = "../../telemetry" }
 sc-keystore = { version = "4.0.0-dev", path = "../../keystore" }
 sc-client-api = { version = "4.0.0-dev", path = "../../api" }
-sc-consensus-epochs = { version = "0.10.0-dev", path = "../epochs" }
+sc-consensus-sessions = { version = "0.10.0-dev", path = "../epochs" }
 sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
 sp-block-builder = { version = "4.0.0-dev", path = "../../../primitives/block-builder" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
