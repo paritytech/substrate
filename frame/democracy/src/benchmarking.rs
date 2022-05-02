@@ -52,7 +52,7 @@ fn add_proposal<T: Config>(n: u32) -> Result<T::Hash, &'static str> {
 	let value = T::MinimumDeposit::get();
 	let proposal_hash: T::Hash = T::Hashing::hash_of(&n);
 
-	Democracy::<T>::propose(RawOrigin::Signed(other).into(), proposal_hash, value.into())?;
+	Democracy::<T>::propose(RawOrigin::Signed(other).into(), proposal_hash, value)?;
 
 	Ok(proposal_hash)
 }
@@ -98,7 +98,7 @@ benchmarks! {
 		let proposal_hash: T::Hash = T::Hashing::hash_of(&0);
 		let value = T::MinimumDeposit::get();
 		whitelist_account!(caller);
-	}: _(RawOrigin::Signed(caller), proposal_hash, value.into())
+	}: _(RawOrigin::Signed(caller), proposal_hash, value)
 	verify {
 		assert_eq!(Democracy::<T>::public_props().len(), p as usize, "Proposals not created.");
 	}
@@ -133,7 +133,7 @@ benchmarks! {
 		// We need to create existing direct votes
 		for i in 0 .. r {
 			let ref_idx = add_referendum::<T>(i)?;
-			Democracy::<T>::vote(RawOrigin::Signed(caller.clone()).into(), ref_idx, account_vote.clone())?;
+			Democracy::<T>::vote(RawOrigin::Signed(caller.clone()).into(), ref_idx, account_vote)?;
 		}
 		let votes = match VotingOf::<T>::get(&caller) {
 			Voting::Direct { votes, .. } => votes,
@@ -161,7 +161,7 @@ benchmarks! {
 		// We need to create existing direct votes
 		for i in 0 ..=r {
 			let ref_idx = add_referendum::<T>(i)?;
-			Democracy::<T>::vote(RawOrigin::Signed(caller.clone()).into(), ref_idx, account_vote.clone())?;
+			Democracy::<T>::vote(RawOrigin::Signed(caller.clone()).into(), ref_idx, account_vote)?;
 		}
 		let votes = match VotingOf::<T>::get(&caller) {
 			Voting::Direct { votes, .. } => votes,
@@ -217,7 +217,7 @@ benchmarks! {
 		// Place our proposal in the external queue, too.
 		let hash = T::Hashing::hash_of(&0);
 		assert_ok!(
-			Democracy::<T>::external_propose(T::ExternalOrigin::successful_origin(), hash.clone())
+			Democracy::<T>::external_propose(T::ExternalOrigin::successful_origin(), hash)
 		);
 		let origin = T::BlacklistOrigin::successful_origin();
 		// Add a referendum of our proposal.
@@ -275,13 +275,13 @@ benchmarks! {
 	fast_track {
 		let origin_propose = T::ExternalDefaultOrigin::successful_origin();
 		let proposal_hash: T::Hash = T::Hashing::hash_of(&0);
-		Democracy::<T>::external_propose_default(origin_propose, proposal_hash.clone())?;
+		Democracy::<T>::external_propose_default(origin_propose, proposal_hash)?;
 
 		// NOTE: Instant origin may invoke a little bit more logic, but may not always succeed.
 		let origin_fast_track = T::FastTrackOrigin::successful_origin();
 		let voting_period = T::FastTrackVotingPeriod::get();
 		let delay = 0u32;
-	}: _<T::Origin>(origin_fast_track, proposal_hash, voting_period.into(), delay.into())
+	}: _<T::Origin>(origin_fast_track, proposal_hash, voting_period, delay.into())
 	verify {
 		assert_eq!(Democracy::<T>::referendum_count(), 1, "referendum not created")
 	}
@@ -293,7 +293,7 @@ benchmarks! {
 		let proposal_hash: T::Hash = T::Hashing::hash_of(&v);
 
 		let origin_propose = T::ExternalDefaultOrigin::successful_origin();
-		Democracy::<T>::external_propose_default(origin_propose, proposal_hash.clone())?;
+		Democracy::<T>::external_propose_default(origin_propose, proposal_hash)?;
 
 		let mut vetoers: Vec<T::AccountId> = Vec::new();
 		for i in 0 .. v {
@@ -499,7 +499,7 @@ benchmarks! {
 		// We need to create existing direct votes for the `new_delegate`
 		for i in 0..r {
 			let ref_idx = add_referendum::<T>(i)?;
-			Democracy::<T>::vote(RawOrigin::Signed(new_delegate.clone()).into(), ref_idx, account_vote.clone())?;
+			Democracy::<T>::vote(RawOrigin::Signed(new_delegate.clone()).into(), ref_idx, account_vote)?;
 		}
 		let votes = match VotingOf::<T>::get(&new_delegate) {
 			Voting::Direct { votes, .. } => votes,
@@ -550,7 +550,7 @@ benchmarks! {
 			Democracy::<T>::vote(
 				RawOrigin::Signed(the_delegate.clone()).into(),
 				ref_idx,
-				account_vote.clone()
+				account_vote
 			)?;
 		}
 		let votes = match VotingOf::<T>::get(&the_delegate) {
@@ -619,17 +619,17 @@ benchmarks! {
 		let proposal_hash = T::Hashing::hash(&encoded_proposal[..]);
 
 		let submitter = funded_account::<T>("submitter", b);
-		Democracy::<T>::note_preimage(RawOrigin::Signed(submitter.clone()).into(), encoded_proposal.clone())?;
+		Democracy::<T>::note_preimage(RawOrigin::Signed(submitter).into(), encoded_proposal.clone())?;
 
 		// We need to set this otherwise we get `Early` error.
 		let block_number = T::VotingPeriod::get() + T::EnactmentPeriod::get() + T::BlockNumber::one();
-		System::<T>::set_block_number(block_number.into());
+		System::<T>::set_block_number(block_number);
 
 		assert!(Preimages::<T>::contains_key(proposal_hash));
 
 		let caller = funded_account::<T>("caller", 0);
 		whitelist_account!(caller);
-	}: _(RawOrigin::Signed(caller), proposal_hash.clone(), u32::MAX)
+	}: _(RawOrigin::Signed(caller), proposal_hash, u32::MAX)
 	verify {
 		let proposal_hash = T::Hashing::hash(&encoded_proposal[..]);
 		assert!(!Preimages::<T>::contains_key(proposal_hash));
@@ -646,7 +646,7 @@ benchmarks! {
 		// Vote and immediately unvote
 		for i in 0 .. r {
 			let ref_idx = add_referendum::<T>(i)?;
-			Democracy::<T>::vote(RawOrigin::Signed(locker.clone()).into(), ref_idx, small_vote.clone())?;
+			Democracy::<T>::vote(RawOrigin::Signed(locker.clone()).into(), ref_idx, small_vote)?;
 			Democracy::<T>::remove_vote(RawOrigin::Signed(locker.clone()).into(), ref_idx)?;
 		}
 
@@ -669,7 +669,7 @@ benchmarks! {
 		let small_vote = account_vote::<T>(base_balance);
 		for i in 0 .. r {
 			let ref_idx = add_referendum::<T>(i)?;
-			Democracy::<T>::vote(RawOrigin::Signed(locker.clone()).into(), ref_idx, small_vote.clone())?;
+			Democracy::<T>::vote(RawOrigin::Signed(locker.clone()).into(), ref_idx, small_vote)?;
 		}
 
 		// Create a big vote so lock increases
@@ -711,7 +711,7 @@ benchmarks! {
 
 		for i in 0 .. r {
 			let ref_idx = add_referendum::<T>(i)?;
-			Democracy::<T>::vote(RawOrigin::Signed(caller.clone()).into(), ref_idx, account_vote.clone())?;
+			Democracy::<T>::vote(RawOrigin::Signed(caller.clone()).into(), ref_idx, account_vote)?;
 		}
 
 		let votes = match VotingOf::<T>::get(&caller) {
@@ -740,7 +740,7 @@ benchmarks! {
 
 		for i in 0 .. r {
 			let ref_idx = add_referendum::<T>(i)?;
-			Democracy::<T>::vote(RawOrigin::Signed(caller.clone()).into(), ref_idx, account_vote.clone())?;
+			Democracy::<T>::vote(RawOrigin::Signed(caller.clone()).into(), ref_idx, account_vote)?;
 		}
 
 		let votes = match VotingOf::<T>::get(&caller) {

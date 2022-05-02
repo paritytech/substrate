@@ -342,7 +342,7 @@ impl RpcHandlersExt for RpcHandlers {
 		extrinsic: OpaqueExtrinsic,
 	) -> Pin<Box<dyn Future<Output = Result<RpcTransactionOutput, RpcTransactionError>> + Send>> {
 		let (tx, rx) = futures::channel::mpsc::unbounded();
-		let mem = RpcSession::new(tx.into());
+		let mem = RpcSession::new(tx);
 		Box::pin(
 			self.rpc_query(
 				&mem,

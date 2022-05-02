@@ -73,3 +73,19 @@ pub fn new_rng(seed: Option<u64>) -> (impl rand::Rng, u64) {
 	let seed = seed.unwrap_or(rand::thread_rng().gen::<u64>());
 	(rand_pcg::Pcg64::seed_from_u64(seed), seed)
 }
+
+/// Returns an error if a debug profile is detected.
+///
+/// The rust compiler only exposes the binary information whether
+/// or not we are in a `debug` build.
+/// This means that `release` and `production` cannot be told apart.
+/// This function additionally checks for OPT-LEVEL = 3.
+pub fn check_build_profile() -> Result<(), String> {
+	if cfg!(build_profile = "debug") {
+		Err("Detected a `debug` profile".into())
+	} else if !cfg!(build_opt_level = "3") {
+		Err("The optimization level is not set to 3".into())
+	} else {
+		Ok(())
+	}
+}

@@ -561,7 +561,7 @@ impl pallet_staking::Config for Runtime {
 	type GenesisElectionProvider = onchain::UnboundedExecution<OnChainSeqPhragmen>;
 	type VoterList = BagsList;
 	type MaxUnlockingChunks = ConstU32<32>;
-	type OnStakerSlash = ();
+	type OnStakerSlash = NominationPools;
 	type WeightInfo = pallet_staking::weights::SubstrateWeight<Runtime>;
 	type BenchmarkingConfig = StakingBenchmarkingConfig;
 }
@@ -631,7 +631,7 @@ impl Get<Option<(usize, ExtendedBalance)>> for OffchainRandomBalancing {
 		use sp_runtime::traits::TrailingZeroInput;
 		let iters = match MINER_MAX_ITERATIONS {
 			0 => 0,
-			max @ _ => {
+			max => {
 				let seed = sp_io::offchain::random_seed();
 				let random = <u32>::decode(&mut TrailingZeroInput::new(&seed))
 					.expect("input is padded with zeroes; qed") %
@@ -703,6 +703,38 @@ impl pallet_bags_list::Config for Runtime {
 	type WeightInfo = pallet_bags_list::weights::SubstrateWeight<Runtime>;
 	type BagThresholds = BagThresholds;
 	type Score = VoteWeight;
+}
+
+parameter_types! {
+	pub const PostUnbondPoolsWindow: u32 = 4;
+	pub const NominationPoolsPalletId: PalletId = PalletId(*b"py/npols");
+}
+
+use sp_runtime::traits::Convert;
+pub struct BalanceToU256;
+impl Convert<Balance, sp_core::U256> for BalanceToU256 {
+	fn convert(balance: Balance) -> sp_core::U256 {
+		sp_core::U256::from(balance)
+	}
+}
+pub struct U256ToBalance;
+impl Convert<sp_core::U256, Balance> for U256ToBalance {
+	fn convert(n: sp_core::U256) -> Balance {
+		n.try_into().unwrap_or(Balance::max_value())
+	}
+}
+
+impl pallet_nomination_pools::Config for Runtime {
+	type WeightInfo = ();
+	type Event = Event;
+	type Currency = Balances;
+	type BalanceToU256 = BalanceToU256;
+	type U256ToBalance = U256ToBalance;
+	type StakingInterface = pallet_staking::Pallet<Self>;
+	type PostUnbondingPoolsWindow = PostUnbondPoolsWindow;
+	type MaxMetadataLen = ConstU32<256>;
+	type MaxUnbonding = ConstU32<8>;
+	type PalletId = NominationPoolsPalletId;
 }
 
 parameter_types! {
@@ -1116,7 +1148,7 @@ where
 		let signature = raw_payload.using_encoded(|payload| C::sign(payload, public))?;
 		let address = Indices::unlookup(account);
 		let (call, extra, _) = raw_payload.deconstruct();
-		Some((call, (address, signature.into(), extra)))
+		Some((call, (address, signature, extra)))
 	}
 }
 
@@ -1213,6 +1245,7 @@ parameter_types! {
 
 impl pallet_recovery::Config for Runtime {
 	type Event = Event;
+	type WeightInfo = pallet_recovery::weights::SubstrateWeight<Runtime>;
 	type Call = Call;
 	type Currency = Balances;
 	type ConfigDepositBase = ConfigDepositBase;
@@ -1374,6 +1407,7 @@ impl pallet_uniques::Config for Runtime {
 	#[cfg(feature = "runtime-benchmarks")]
 	type Helper = ();
 	type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<AccountId>>;
+	type Locker = ();
 }
 
 impl pallet_transaction_storage::Config for Runtime {
@@ -1469,6 +1503,7 @@ construct_runtime!(
 		Remark: pallet_remark,
 		ConvictionVoting: pallet_conviction_voting,
 		Whitelist: pallet_whitelist,
+		NominationPools: pallet_nomination_pools,
 	}
 );
 
@@ -1553,10 +1588,12 @@ mod benches {
 		[pallet_membership, TechnicalMembership]
 		[pallet_mmr, Mmr]
 		[pallet_multisig, Multisig]
+		[pallet_nomination_pools, NominationPoolsBench::<Runtime>]
 		[pallet_offences, OffencesBench::<Runtime>]
 		[pallet_preimage, Preimage]
 		[pallet_proxy, Proxy]
 		[pallet_referenda, Referenda]
+		[pallet_recovery, Recovery]
 		[pallet_remark, Remark]
 		[pallet_scheduler, Scheduler]
 		[pallet_session, SessionBench::<Runtime>]
@@ -1867,13 +1904,14 @@ impl_runtime_apis! {
 			use pallet_election_provider_support_benchmarking::Pallet as EPSBench;
 			use frame_system_benchmarking::Pallet as SystemBench;
 			use baseline::Pallet as BaselineBench;
+			use pallet_nomination_pools_benchmarking::Pallet as NominationPoolsBench;
 
 			let mut list = Vec::<BenchmarkList>::new();
 			list_benchmarks!(list, extra);
 
 			let storage_info = AllPalletsWithSystem::storage_info();
 
-			return (list, storage_info)
+			(list, storage_info)
 		}
 
 		fn dispatch_benchmark(
@@ -1889,12 +1927,14 @@ impl_runtime_apis! {
 			use pallet_election_provider_support_benchmarking::Pallet as EPSBench;
 			use frame_system_benchmarking::Pallet as SystemBench;
 			use baseline::Pallet as BaselineBench;
+			use pallet_nomination_pools_benchmarking::Pallet as NominationPoolsBench;
 
 			impl pallet_session_benchmarking::Config for Runtime {}
 			impl pallet_offences_benchmarking::Config for Runtime {}
 			impl pallet_election_provider_support_benchmarking::Config for Runtime {}
 			impl frame_system_benchmarking::Config for Runtime {}
 			impl baseline::Config for Runtime {}
+			impl pallet_nomination_pools_benchmarking::Config for Runtime {}
 
 			let whitelist: Vec<TrackedStorageKey> = vec![
 				// Block Number

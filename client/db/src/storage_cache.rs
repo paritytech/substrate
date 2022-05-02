@@ -360,9 +360,9 @@ impl<B: BlockT> CacheChanges<B> {
 					// Same block comitted twice with different state changes.
 					// Treat it as reenacted/retracted.
 					if is_best {
-						enacted.push(commit_hash.clone());
+						enacted.push(*commit_hash);
 					} else {
-						retracted.to_mut().push(commit_hash.clone());
+						retracted.to_mut().push(*commit_hash);
 					}
 				}
 			}
@@ -371,7 +371,7 @@ impl<B: BlockT> CacheChanges<B> {
 		// Propagate cache only if committing on top of the latest canonical state
 		// blocks are ordered by number and only one block with a given number is marked as
 		// canonical (contributed to canonical state cache)
-		if let Some(_) = self.parent_hash {
+		if self.parent_hash.is_some() {
 			let mut local_cache = self.local_cache.write();
 			if is_best {
 				trace!(
@@ -423,9 +423,9 @@ impl<B: BlockT> CacheChanges<B> {
 				storage: modifications,
 				child_storage: child_modifications,
 				number: *number,
-				hash: hash.clone(),
+				hash: *hash,
 				is_canon: is_best,
-				parent: parent.clone(),
+				parent: *parent,
 			};
 			let insert_at = cache
 				.modifications
@@ -564,7 +564,7 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 			let cache = self.cache.shared_cache.upgradable_read();
 			if Self::is_allowed(Some(key), None, &self.cache.parent_hash, &cache.modifications) {
 				let mut cache = RwLockUpgradableReadGuard::upgrade(cache);
-				if let Some(entry) = cache.lru_hashes.get(key).map(|a| a.0.clone()) {
+				if let Some(entry) = cache.lru_hashes.get(key).map(|a| a.0) {
 					trace!("Found hash in shared cache: {:?}", HexDisplay::from(&key));
 					return Ok(entry)
 				}
@@ -934,7 +934,7 @@ impl<S, B: BlockT> Drop for SyncingCachingState<S, B> {
 			let _lock = self.lock.read();
 
 			self.state_usage.merge_sm(caching_state.usage.take());
-			if let Some(hash) = caching_state.cache.parent_hash.clone() {
+			if let Some(hash) = caching_state.cache.parent_hash {
 				let is_best = self.meta.read().best_hash == hash;
 				caching_state.cache.sync_cache(&[], &[], vec![], vec![], None, None, is_best);
 			}

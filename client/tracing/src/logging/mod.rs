@@ -110,7 +110,7 @@ where
 	// Accept all valid directives and print invalid ones
 	fn parse_user_directives(mut env_filter: EnvFilter, dirs: &str) -> Result<EnvFilter> {
 		for dir in dirs.split(',') {
-			env_filter = env_filter.add_directive(parse_default_directive(&dir)?);
+			env_filter = env_filter.add_directive(parse_default_directive(dir)?);
 		}
 		Ok(env_filter)
 	}
@@ -155,7 +155,10 @@ where
 	let max_level_hint = Layer::<FmtSubscriber>::max_level_hint(&env_filter);
 	let max_level = to_log_level_filter(max_level_hint);
 
-	tracing_log::LogTracer::builder().with_max_level(max_level).init()?;
+	tracing_log::LogTracer::builder()
+		.with_max_level(max_level)
+		.with_interest_cache(tracing_log::InterestCacheConfig::default())
+		.init()?;
 
 	// If we're only logging `INFO` entries then we'll use a simplified logging format.
 	let detailed_output = match max_level_hint {
@@ -296,32 +299,30 @@ impl LoggerBuilder {
 
 				Ok(())
 			}
+		} else if self.log_reloading {
+			let subscriber = prepare_subscriber(
+				&self.directives,
+				None,
+				self.force_colors,
+				self.detailed_output,
+				|builder| enable_log_reloading!(builder),
+			)?;
+
+			tracing::subscriber::set_global_default(subscriber)?;
+
+			Ok(())
 		} else {
-			if self.log_reloading {
-				let subscriber = prepare_subscriber(
-					&self.directives,
-					None,
-					self.force_colors,
-					self.detailed_output,
-					|builder| enable_log_reloading!(builder),
-				)?;
+			let subscriber = prepare_subscriber(
+				&self.directives,
+				None,
+				self.force_colors,
+				self.detailed_output,
+				|builder| builder,
+			)?;
 
-				tracing::subscriber::set_global_default(subscriber)?;
+			tracing::subscriber::set_global_default(subscriber)?;
 
-				Ok(())
-			} else {
-				let subscriber = prepare_subscriber(
-					&self.directives,
-					None,
-					self.force_colors,
-					self.detailed_output,
-					|builder| builder,
-				)?;
-
-				tracing::subscriber::set_global_default(subscriber)?;
-
-				Ok(())
-			}
+			Ok(())
 		}
 	}
 }
