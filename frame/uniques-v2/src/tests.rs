@@ -942,7 +942,7 @@ fn add_remove_approval_should_work() {
 }
 
 #[test]
-fn transfer_with_approval_should_works() {
+fn transfer_with_approval_should_work() {
 	new_test_ext().execute_with(|| {
 		let user_1 = 1;
 		let user_2 = 2;
@@ -1023,7 +1023,7 @@ fn transfer_with_approval_should_works() {
 }
 
 #[test]
-fn accept_buy_offer_should_works() {
+fn accept_buy_offer_should_work() {
 	new_test_ext().execute_with(|| {
 		let user_1 = 1;
 		let user_2 = 2;
@@ -1095,7 +1095,7 @@ fn accept_buy_offer_should_works() {
 }
 
 #[test]
-fn swap_items_should_works() {
+fn swap_items_should_work() {
 	new_test_ext().execute_with(|| {
 		let user_2 = 2;
 		let collection_from_id = 0;
@@ -1215,6 +1215,119 @@ fn swap_items_should_works() {
 		assert_noop!(
 			Uniques::swap_items(Origin::signed(user_2), offer, valid_signature, item_to_id),
 			Error::<Test>::NotAuthorized
+		);
+	});
+}
+
+#[test]
+fn setting_royalties_should_work() {
+	new_test_ext().execute_with(|| {
+		let user_1 = 1;
+		let collection_id = 0;
+		let creator_royalties = 10;
+		let owner_royalties = 20;
+
+		assert_ok!(Uniques::create(
+			Origin::signed(user_1),
+			user_1,
+			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
+			None,
+			None,
+			Perbill::from_percent(creator_royalties),
+			Perbill::from_percent(owner_royalties),
+		));
+
+		let collection_config = CollectionConfigs::<Test>::get(collection_id);
+		let system_features = collection_config.unwrap().system_features.get();
+		assert!(system_features.contains(SystemFeature::OwnerRoyalties));
+		assert!(system_features.contains(SystemFeature::CreatorRoyalties));
+
+		// validate we can't increase royalties
+		assert_noop!(
+			Uniques::change_creator_royalties(
+				Origin::signed(user_1),
+				collection_id,
+				Perbill::from_percent(creator_royalties + 10),
+			),
+			Error::<Test>::RoyaltiesBiggerToPreviousValue
+		);
+
+		// validate we can increase owner's royalties while the collection isn't locked
+		assert_ok!(Uniques::change_owner_royalties(
+			Origin::signed(user_1),
+			collection_id,
+			Perbill::from_percent(creator_royalties + 10),
+		));
+		assert_noop!(
+			Uniques::change_owner_royalties(
+				Origin::signed(user_1),
+				collection_id,
+				Perbill::from_percent(95),
+			),
+			Error::<Test>::TotalRoyaltiesExceedHundredPercent
+		);
+		assert_ok!(Uniques::change_collection_config(
+			Origin::signed(user_1),
+			collection_id,
+			UserFeatures::new(UserFeature::IsLocked.into())
+		));
+		assert_noop!(
+			Uniques::change_owner_royalties(
+				Origin::signed(user_1),
+				collection_id,
+				Perbill::from_percent(creator_royalties + 20),
+			),
+			Error::<Test>::RoyaltiesBiggerToPreviousValue
+		);
+
+		// remove owner's royalties
+		assert_ok!(Uniques::change_owner_royalties(
+			Origin::signed(user_1),
+			collection_id,
+			Perbill::zero(),
+		));
+		let collection_config = CollectionConfigs::<Test>::get(collection_id);
+		let system_features = collection_config.unwrap().system_features.get();
+		assert!(!system_features.contains(SystemFeature::OwnerRoyalties));
+		assert!(system_features.contains(SystemFeature::CreatorRoyalties));
+
+		// validate event
+		assert!(events().contains(&Event::<Test>::OwnerRoyaltiesChanged {
+			id: collection_id,
+			owner: user_1,
+			royalties: Perbill::zero(),
+		}));
+
+		// remove creator royalties
+		assert_ok!(Uniques::change_creator_royalties(
+			Origin::signed(user_1),
+			collection_id,
+			Perbill::zero(),
+		));
+		let collection_config = CollectionConfigs::<Test>::get(collection_id);
+		let system_features = collection_config.unwrap().system_features.get();
+		assert!(!system_features.contains(SystemFeature::OwnerRoyalties));
+		assert!(!system_features.contains(SystemFeature::CreatorRoyalties));
+
+		// validate event
+		assert!(events().contains(&Event::<Test>::CreatorRoyaltiesChanged {
+			id: collection_id,
+			creator: user_1,
+			royalties: Perbill::zero(),
+		}));
+
+		// can't set royalties higher to 100% in total
+		assert_noop!(
+			Uniques::create(
+				Origin::signed(user_1),
+				user_1,
+				UserFeatures::new(DEFAULT_USER_FEATURES.into()),
+				None,
+				None,
+				Perbill::from_percent(70),
+				Perbill::from_percent(40),
+			),
+			Error::<Test>::TotalRoyaltiesExceedHundredPercent
 		);
 	});
 }

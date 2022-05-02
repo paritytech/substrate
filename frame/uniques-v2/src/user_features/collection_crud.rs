@@ -37,17 +37,17 @@ impl<T: Config> Pallet<T> {
 
 		ensure!(!CollectionConfigs::<T>::contains_key(id), Error::<T>::CollectionIdTaken);
 
-		/*let mut system_features = BitFlags::from(T::DefaultSystemConfig::get());
+		let mut system_features = (T::DefaultSystemConfig::get()).get();
 
-		if !Perbill::is_zero(&creator_royalties) {
-			system_features.insert(SystemFeatures::CreatorRoyalties);
+		if !creator_royalties.is_zero() {
+			system_features.insert(SystemFeature::CreatorRoyalties);
 		}
-		if !Perbill::is_zero(&owner_royalties) {
-			system_features.insert(SystemFeatures::OwnerRoyalties);
-		}*/
+		if !owner_royalties.is_zero() {
+			system_features.insert(SystemFeature::OwnerRoyalties);
+		}
 
 		let collection_config = CollectionConfig {
-			system_features: T::DefaultSystemConfig::get(), // SystemFeatures::empty().into(),
+			system_features: SystemFeatures::new(system_features),
 			user_features: user_config,
 		};
 		CollectionConfigs::<T>::insert(id, collection_config);

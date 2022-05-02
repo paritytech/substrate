@@ -18,7 +18,7 @@
 use crate::*;
 use enumflags2::BitFlags;
 use frame_support::pallet_prelude::*;
-use sp_runtime::Perbill;
+use sp_runtime::{traits::CheckedAdd, Perbill};
 
 impl<T: Config> Pallet<T> {
 	pub fn do_change_creator_royalties(
@@ -38,7 +38,19 @@ impl<T: Config> Pallet<T> {
 
 			collection.creator_royalties = royalties;
 
-			// TODO: update collection config
+			// update collection's config
+			let mut config =
+				CollectionConfigs::<T>::get(id).ok_or(Error::<T>::CollectionNotFound)?;
+			let mut system_features = config.system_features.get();
+
+			if !royalties.is_zero() && !system_features.contains(SystemFeature::CreatorRoyalties) {
+				system_features.insert(SystemFeature::CreatorRoyalties);
+			} else if royalties.is_zero() {
+				system_features.remove(SystemFeature::CreatorRoyalties);
+			}
+			config.system_features = SystemFeatures::new(system_features);
+
+			CollectionConfigs::<T>::insert(id, config);
 
 			Self::deposit_event(Event::CreatorRoyaltiesChanged {
 				id,
@@ -63,8 +75,9 @@ impl<T: Config> Pallet<T> {
 			let collection = maybe_collection.as_mut().ok_or(Error::<T>::CollectionNotFound)?;
 			ensure!(collection.owner == caller, Error::<T>::NotAuthorized);
 
+			let total = royalties.checked_add(&collection.creator_royalties);
 			ensure!(
-				collection.owner_royalties + collection.creator_royalties < Perbill::one(),
+				total.map_or(false, |v| v < Perbill::one()),
 				Error::<T>::TotalRoyaltiesExceedHundredPercent
 			);
 
@@ -76,7 +89,19 @@ impl<T: Config> Pallet<T> {
 
 			collection.owner_royalties = royalties;
 
-			// TODO: update collection config
+			// update collection's config
+			let mut config =
+				CollectionConfigs::<T>::get(id).ok_or(Error::<T>::CollectionNotFound)?;
+			let mut system_features = config.system_features.get();
+
+			if !royalties.is_zero() && !system_features.contains(SystemFeature::OwnerRoyalties) {
+				system_features.insert(SystemFeature::OwnerRoyalties);
+			} else if royalties.is_zero() {
+				system_features.remove(SystemFeature::OwnerRoyalties);
+			}
+			config.system_features = SystemFeatures::new(system_features);
+
+			CollectionConfigs::<T>::insert(id, config);
 
 			Self::deposit_event(Event::OwnerRoyaltiesChanged {
 				id,

@@ -432,6 +432,13 @@ pub mod pallet {
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			let owner = T::Lookup::lookup(owner)?;
+
+			let total = creator_royalties.checked_add(&owner_royalties);
+			ensure!(
+				total.map_or(false, |v| v < Perbill::one()),
+				Error::<T>::TotalRoyaltiesExceedHundredPercent
+			);
+
 			Self::do_create_collection(
 				sender,
 				owner,
