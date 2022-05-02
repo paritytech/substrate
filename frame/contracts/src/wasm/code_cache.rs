@@ -220,6 +220,6 @@ impl<T: Config> Token<T> for CodeToken {
 				.saturating_sub(T::WeightInfo::call_with_code_per_byte(0)),
 		};
 
-		Weight::computation_only(computation_weight)
+		Weight::from_computation(computation_weight)
 	}
 }

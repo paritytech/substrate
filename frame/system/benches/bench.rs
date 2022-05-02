@@ -64,7 +64,7 @@ frame_support::construct_runtime!(
 frame_support::parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::with_sensible_defaults(
-			Weight::computation_only(4 * 1024 * 1024), Perbill::from_percent(75),
+			Weight::from_computation(4 * 1024 * 1024), Perbill::from_percent(75),
 		);
 	pub BlockLength: frame_system::limits::BlockLength =
 		frame_system::limits::BlockLength::max_with_normal_ratio(

@@ -329,17 +329,17 @@ mod tests {
 		struct Test;
 		impl OnInitialize<u8> for Test {
 			fn on_initialize(_n: u8) -> Weight {
-				Weight::computation_only(10)
+				Weight::from_computation(10)
 			}
 		}
 		impl OnRuntimeUpgrade for Test {
 			fn on_runtime_upgrade() -> Weight {
-				Weight::computation_only(20)
+				Weight::from_computation(20)
 			}
 		}
 
-		assert_eq!(<(Test, Test)>::on_initialize(0), Weight::computation_only(20));
-		assert_eq!(<(Test, Test)>::on_runtime_upgrade(), Weight::computation_only(40));
+		assert_eq!(<(Test, Test)>::on_initialize(0), Weight::from_computation(20));
+		assert_eq!(<(Test, Test)>::on_runtime_upgrade(), Weight::from_computation(40));
 	}
 
 	#[test]

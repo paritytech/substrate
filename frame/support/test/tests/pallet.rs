@@ -168,7 +168,7 @@ pub mod pallet {
 			let _ = T::AccountId::from(SomeType1); // Test for where clause
 			let _ = T::AccountId::from(SomeType2); // Test for where clause
 			Self::deposit_event(Event::Something(10));
-			Weight::computation_only(10)
+			Weight::from_computation(10)
 		}
 		fn on_finalize(_: BlockNumberFor<T>) {
 			let _ = T::AccountId::from(SomeType1); // Test for where clause
@@ -179,7 +179,7 @@ pub mod pallet {
 			let _ = T::AccountId::from(SomeType1); // Test for where clause
 			let _ = T::AccountId::from(SomeType2); // Test for where clause
 			Self::deposit_event(Event::Something(30));
-			Weight::computation_only(30)
+			Weight::from_computation(30)
 		}
 		fn integrity_test() {
 			let _ = T::AccountId::from(SomeType1); // Test for where clause
@@ -193,7 +193,7 @@ pub mod pallet {
 		T::AccountId: From<SomeType1> + From<SomeType3> + SomeAssociation1,
 	{
 		/// Doc comment put in metadata
-		#[pallet::weight(Weight::computation_only(*_foo as u64))]
+		#[pallet::weight(Weight::from_computation(*_foo as u64))]
 		pub fn foo(
 			origin: OriginFor<T>,
 			#[pallet::compact] _foo: u32,
@@ -464,14 +464,14 @@ pub mod pallet2 {
 	{
 		fn on_initialize(_: BlockNumberFor<T>) -> Weight {
 			Self::deposit_event(Event::Something(11));
-			Weight::computation_only(0)
+			Weight::from_computation(0)
 		}
 		fn on_finalize(_: BlockNumberFor<T>) {
 			Self::deposit_event(Event::Something(21));
 		}
 		fn on_runtime_upgrade() -> Weight {
 			Self::deposit_event(Event::Something(31));
-			Weight::computation_only(0)
+			Weight::from_computation(0)
 		}
 	}
 
@@ -639,7 +639,7 @@ fn call_expand() {
 	assert_eq!(
 		call_foo.get_dispatch_info(),
 		DispatchInfo {
-			weight: Weight::computation_only(3),
+			weight: Weight::from_computation(3),
 			class: DispatchClass::Normal,
 			pays_fee: Pays::Yes
 		}
@@ -988,10 +988,10 @@ fn pallet_hooks_expand() {
 	TestExternalities::default().execute_with(|| {
 		frame_system::Pallet::<Runtime>::set_block_number(1);
 
-		assert_eq!(AllPalletsWithoutSystem::on_initialize(1), Weight::computation_only(10));
+		assert_eq!(AllPalletsWithoutSystem::on_initialize(1), Weight::from_computation(10));
 		AllPalletsWithoutSystem::on_finalize(1);
 
-		assert_eq!(AllPalletsWithoutSystem::on_runtime_upgrade(), Weight::computation_only(30));
+		assert_eq!(AllPalletsWithoutSystem::on_runtime_upgrade(), Weight::from_computation(30));
 
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,
@@ -1029,13 +1029,13 @@ fn all_pallets_type_reversed_order_is_correct() {
 		{
 			assert_eq!(
 				AllPalletsWithoutSystemReversed::on_initialize(1),
-				Weight::computation_only(10)
+				Weight::from_computation(10)
 			);
 			AllPalletsWithoutSystemReversed::on_finalize(1);
 
 			assert_eq!(
 				AllPalletsWithoutSystemReversed::on_runtime_upgrade(),
-				Weight::computation_only(30)
+				Weight::from_computation(30)
 			);
 		}
 
@@ -1103,7 +1103,7 @@ fn migrate_from_pallet_version_to_storage_version() {
 		>(&db_weight);
 
 		// 4 pallets, 2 writes and every write costs 5 weight.
-		assert_eq!(Weight::computation_only(4 * 2 * 5), weight);
+		assert_eq!(Weight::from_computation(4 * 2 * 5), weight);
 
 		// All pallet versions should be removed
 		assert!(sp_io::storage::get(&pallet_version_key(Example::name())).is_none());

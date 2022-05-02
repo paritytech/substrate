@@ -497,7 +497,7 @@ pub mod pallet {
 				// In both cases, we will change more weight than need. Refund and abort.
 				return Err(Error::<T>::InvalidReplacement.with_weight(
 					// refund. The weight value comes from a benchmark which is special to this.
-					Weight::computation_only(T::WeightInfo::remove_member_wrong_refund()),
+					Weight::from_computation(T::WeightInfo::remove_member_wrong_refund()),
 				))
 			}
 
@@ -893,7 +893,7 @@ impl<T: Config> Pallet<T> {
 
 		if candidates_and_deposit.len().is_zero() {
 			Self::deposit_event(Event::EmptyTerm);
-			return Weight::computation_only(T::DbWeight::get().reads(5))
+			return Weight::from_computation(T::DbWeight::get().reads(5))
 		}
 
 		// All of the new winners that come out of phragmen will thus have a deposit recorded.
@@ -1074,7 +1074,7 @@ impl<T: Config> Pallet<T> {
 					Self::deposit_event(Event::ElectionError);
 				});
 
-		Weight::computation_only(T::WeightInfo::election_phragmen(
+		Weight::from_computation(T::WeightInfo::election_phragmen(
 			weight_candidates,
 			weight_voters,
 			weight_edges,

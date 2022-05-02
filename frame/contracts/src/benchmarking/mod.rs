@@ -2801,7 +2801,7 @@ benchmarks! {
 		{
 			let weight_per_key = T::WeightInfo::on_initialize_per_trie_key(1) -
 				T::WeightInfo::on_initialize_per_trie_key(0);
-			let weight_per_queue_item = Weight::computation_only(T::WeightInfo::on_initialize_per_queue_item(1) -
+			let weight_per_queue_item = Weight::from_computation(T::WeightInfo::on_initialize_per_queue_item(1) -
 				T::WeightInfo::on_initialize_per_queue_item(0));
 			let weight_limit = T::DeletionWeightLimit::get();
 			let queue_depth: u64 = T::DeletionQueueDepth::get().into();

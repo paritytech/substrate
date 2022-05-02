@@ -50,7 +50,7 @@ pub fn remove_deferred_storage<T: Config>() -> Weight {
 		weight = weight.saturating_add(consumed.computation());
 	}
 
-	Weight::computation_only(weight)
+	Weight::from_computation(weight)
 }
 
 #[cfg(test)]

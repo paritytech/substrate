@@ -85,7 +85,7 @@ impl Weight {
 	}
 
 	/// Construct with computation weight only (zero `bandwith`).
-	pub const fn computation_only(computation: ComputationWeight) -> Self {
+	pub const fn from_computation(computation: ComputationWeight) -> Self {
 		Self { computation, bandwidth: 0 }
 	}
 

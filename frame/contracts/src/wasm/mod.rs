@@ -347,7 +347,7 @@ mod tests {
 				events: Default::default(),
 				runtime_calls: Default::default(),
 				schedule: Default::default(),
-				gas_meter: GasMeter::new(Weight::computation_only(10_000_000_000)),
+				gas_meter: GasMeter::new(Weight::from_computation(10_000_000_000)),
 				debug_buffer: Default::default(),
 				ecdsa_recover: Default::default(),
 			}

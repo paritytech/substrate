@@ -183,7 +183,7 @@ pub mod pallet {
 			let dispatch_weight = dispatch_infos.iter()
 				.map(|di| di.weight)
 				.fold(Zero::zero(), |total: Weight, weight: Weight| total.saturating_add(weight))
-				.saturating_add(Weight::computation_only(T::WeightInfo::batch(calls.len() as u32)));
+				.saturating_add(Weight::from_computation(T::WeightInfo::batch(calls.len() as u32)));
 			let dispatch_class = {
 				let all_operational = dispatch_infos.iter()
 					.map(|di| di.class)
@@ -222,7 +222,7 @@ pub mod pallet {
 						error: e.error,
 					});
 					// Take the weight of this function itself into account.
-					let base_weight = Weight::computation_only(T::WeightInfo::batch(
+					let base_weight = Weight::from_computation(T::WeightInfo::batch(
 						index.saturating_add(1) as u32,
 					));
 					// Return the actual used weight + base_weight of this call.
@@ -231,7 +231,7 @@ pub mod pallet {
 				Self::deposit_event(Event::ItemCompleted);
 			}
 			Self::deposit_event(Event::BatchCompleted);
-			let base_weight = Weight::computation_only(T::WeightInfo::batch(calls_len as u32));
+			let base_weight = Weight::from_computation(T::WeightInfo::batch(calls_len as u32));
 			Ok(Some(base_weight + weight).into())
 		}
 
@@ -251,10 +251,10 @@ pub mod pallet {
 		#[pallet::weight({
 			let dispatch_info = call.get_dispatch_info();
 			(
-				Weight::computation_only(T::WeightInfo::as_derivative())
+				Weight::from_computation(T::WeightInfo::as_derivative())
 					.saturating_add(dispatch_info.weight)
 					// AccountData for inner call origin accountdata.
-					.saturating_add(Weight::computation_only(T::DbWeight::get().reads_writes(1, 1))),
+					.saturating_add(Weight::from_computation(T::DbWeight::get().reads_writes(1, 1))),
 				dispatch_info.class,
 			)
 		})]
@@ -272,7 +272,7 @@ pub mod pallet {
 			// Always take into account the base weight of this call.
 			let mut weight = Weight::zero();
 
-			weight = weight.saturating_add(Weight::computation_only(
+			weight = weight.saturating_add(Weight::from_computation(
 				T::WeightInfo::as_derivative()
 					.saturating_add(T::DbWeight::get().reads_writes(1, 1)),
 			));
@@ -305,7 +305,7 @@ pub mod pallet {
 			let dispatch_weight = dispatch_infos.iter()
 				.map(|di| di.weight)
 				.fold(Zero::zero(), |total: Weight, weight: Weight| total.saturating_add(weight))
-				.saturating_add(Weight::computation_only(T::WeightInfo::batch_all(calls.len() as u32)));
+				.saturating_add(Weight::from_computation(T::WeightInfo::batch_all(calls.len() as u32)));
 			let dispatch_class = {
 				let all_operational = dispatch_infos.iter()
 					.map(|di| di.class)
@@ -347,7 +347,7 @@ pub mod pallet {
 				weight = weight.saturating_add(extract_actual_weight(&result, &info));
 				result.map_err(|mut err| {
 					// Take the weight of this function itself into account.
-					let base_weight = Weight::computation_only(T::WeightInfo::batch_all(
+					let base_weight = Weight::from_computation(T::WeightInfo::batch_all(
 						index.saturating_add(1) as u32,
 					));
 					// Return the actual used weight + base_weight of this call.
@@ -357,7 +357,7 @@ pub mod pallet {
 				Self::deposit_event(Event::ItemCompleted);
 			}
 			Self::deposit_event(Event::BatchCompleted);
-			let base_weight = Weight::computation_only(T::WeightInfo::batch_all(calls_len as u32));
+			let base_weight = Weight::from_computation(T::WeightInfo::batch_all(calls_len as u32));
 			Ok(Some(base_weight + weight).into())
 		}
 
@@ -374,7 +374,7 @@ pub mod pallet {
 		#[pallet::weight({
 			let dispatch_info = call.get_dispatch_info();
 			(
-				Weight::computation_only(T::WeightInfo::dispatch_as())
+				Weight::from_computation(T::WeightInfo::dispatch_as())
 					.saturating_add(dispatch_info.weight),
 				dispatch_info.class,
 			)

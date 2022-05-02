@@ -30,7 +30,7 @@ use substrate_test_utils::assert_eq_uvec;
 #[test]
 fn basic_scheduling_works() {
 	new_test_ext().execute_with(|| {
-		let call = Call::Logger(LoggerCall::log { i: 42, weight: Weight::computation_only(1000) });
+		let call = Call::Logger(LoggerCall::log { i: 42, weight: Weight::from_computation(1000) });
 		assert!(!<Test as frame_system::Config>::BaseCallFilter::contains(&call));
 		assert_ok!(Scheduler::do_schedule(DispatchTime::At(4), None, 127, root(), call.into()));
 		run_to_block(3);
@@ -45,7 +45,7 @@ fn basic_scheduling_works() {
 #[test]
 fn scheduling_with_preimages_works() {
 	new_test_ext().execute_with(|| {
-		let call = Call::Logger(LoggerCall::log { i: 42, weight: Weight::computation_only(1000) });
+		let call = Call::Logger(LoggerCall::log { i: 42, weight: Weight::from_computation(1000) });
 		let hash = <Test as frame_system::Config>::Hashing::hash_of(&call);
 		let hashed = MaybeHashed::Hash(hash.clone());
 		assert_ok!(Preimage::note_preimage(Origin::signed(0), call.encode()));
@@ -65,7 +65,7 @@ fn scheduling_with_preimages_works() {
 #[test]
 fn scheduling_with_preimage_postpones_correctly() {
 	new_test_ext().execute_with(|| {
-		let call = Call::Logger(LoggerCall::log { i: 42, weight: Weight::computation_only(1000) });
+		let call = Call::Logger(LoggerCall::log { i: 42, weight: Weight::from_computation(1000) });
 		let hash = <Test as frame_system::Config>::Hashing::hash_of(&call);
 		let hashed = MaybeHashed::Hash(hash.clone());
 
@@ -98,7 +98,7 @@ fn scheduling_with_preimage_postpones_correctly() {
 fn schedule_after_works() {
 	new_test_ext().execute_with(|| {
 		run_to_block(2);
-		let call = Call::Logger(LoggerCall::log { i: 42, weight: Weight::computation_only(1000) });
+		let call = Call::Logger(LoggerCall::log { i: 42, weight: Weight::from_computation(1000) });
 		assert!(!<Test as frame_system::Config>::BaseCallFilter::contains(&call));
 		// This will schedule the call 3 blocks after the next block... so block 3 + 3 = 6
 		assert_ok!(Scheduler::do_schedule(DispatchTime::After(3), None, 127, root(), call.into()));
@@ -115,7 +115,7 @@ fn schedule_after_works() {
 fn schedule_after_zero_works() {
 	new_test_ext().execute_with(|| {
 		run_to_block(2);
-		let call = Call::Logger(LoggerCall::log { i: 42, weight: Weight::computation_only(1000) });
+		let call = Call::Logger(LoggerCall::log { i: 42, weight: Weight::from_computation(1000) });
 		assert!(!<Test as frame_system::Config>::BaseCallFilter::contains(&call));
 		assert_ok!(Scheduler::do_schedule(DispatchTime::After(0), None, 127, root(), call.into()));
 		// Will trigger on the next block.
@@ -135,7 +135,7 @@ fn periodic_scheduling_works() {
 			Some((3, 3)),
 			127,
 			root(),
-			Call::Logger(logger::Call::log { i: 42, weight: Weight::computation_only(1000) })
+			Call::Logger(logger::Call::log { i: 42, weight: Weight::from_computation(1000) })
 				.into()
 		));
 		run_to_block(3);
@@ -158,7 +158,7 @@ fn periodic_scheduling_works() {
 #[test]
 fn reschedule_works() {
 	new_test_ext().execute_with(|| {
-		let call = Call::Logger(LoggerCall::log { i: 42, weight: Weight::computation_only(1000) });
+		let call = Call::Logger(LoggerCall::log { i: 42, weight: Weight::from_computation(1000) });
 		assert!(!<Test as frame_system::Config>::BaseCallFilter::contains(&call));
 		assert_eq!(
 			Scheduler::do_schedule(DispatchTime::At(4), None, 127, root(), call.into()).unwrap(),
@@ -189,7 +189,7 @@ fn reschedule_works() {
 #[test]
 fn reschedule_named_works() {
 	new_test_ext().execute_with(|| {
-		let call = Call::Logger(LoggerCall::log { i: 42, weight: Weight::computation_only(1000) });
+		let call = Call::Logger(LoggerCall::log { i: 42, weight: Weight::from_computation(1000) });
 		assert!(!<Test as frame_system::Config>::BaseCallFilter::contains(&call));
 		assert_eq!(
 			Scheduler::do_schedule_named(
@@ -231,7 +231,7 @@ fn reschedule_named_works() {
 #[test]
 fn reschedule_named_perodic_works() {
 	new_test_ext().execute_with(|| {
-		let call = Call::Logger(LoggerCall::log { i: 42, weight: Weight::computation_only(1000) });
+		let call = Call::Logger(LoggerCall::log { i: 42, weight: Weight::from_computation(1000) });
 		assert!(!<Test as frame_system::Config>::BaseCallFilter::contains(&call));
 		assert_eq!(
 			Scheduler::do_schedule_named(
@@ -293,7 +293,7 @@ fn cancel_named_scheduling_works_with_normal_cancel() {
 			None,
 			127,
 			root(),
-			Call::Logger(LoggerCall::log { i: 69, weight: Weight::computation_only(1000) }).into(),
+			Call::Logger(LoggerCall::log { i: 69, weight: Weight::from_computation(1000) }).into(),
 		)
 		.unwrap();
 		let i = Scheduler::do_schedule(
@@ -301,7 +301,7 @@ fn cancel_named_scheduling_works_with_normal_cancel() {
 			None,
 			127,
 			root(),
-			Call::Logger(LoggerCall::log { i: 42, weight: Weight::computation_only(1000) }).into(),
+			Call::Logger(LoggerCall::log { i: 42, weight: Weight::from_computation(1000) }).into(),
 		)
 		.unwrap();
 		run_to_block(3);
@@ -323,7 +323,7 @@ fn cancel_named_periodic_scheduling_works() {
 			Some((3, 3)),
 			127,
 			root(),
-			Call::Logger(LoggerCall::log { i: 42, weight: Weight::computation_only(1000) }).into(),
+			Call::Logger(LoggerCall::log { i: 42, weight: Weight::from_computation(1000) }).into(),
 		)
 		.unwrap();
 		// same id results in error.
@@ -333,7 +333,7 @@ fn cancel_named_periodic_scheduling_works() {
 			None,
 			127,
 			root(),
-			Call::Logger(LoggerCall::log { i: 69, weight: Weight::computation_only(1000) }).into(),
+			Call::Logger(LoggerCall::log { i: 69, weight: Weight::from_computation(1000) }).into(),
 		)
 		.is_err());
 		// different id is ok.
@@ -343,7 +343,7 @@ fn cancel_named_periodic_scheduling_works() {
 			None,
 			127,
 			root(),
-			Call::Logger(LoggerCall::log { i: 69, weight: Weight::computation_only(1000) }).into(),
+			Call::Logger(LoggerCall::log { i: 69, weight: Weight::from_computation(1000) }).into(),
 		)
 		.unwrap();
 		run_to_block(3);
@@ -438,8 +438,8 @@ fn scheduler_respects_priority_ordering() {
 fn scheduler_respects_priority_ordering_with_soft_deadlines() {
 	new_test_ext().execute_with(|| {
 		let max_weight = MaximumSchedulerWeight::get() -
-			Weight::computation_only(<() as WeightInfo>::on_initialize(0));
-		let item_weight = Weight::computation_only(
+			Weight::from_computation(<() as WeightInfo>::on_initialize(0));
+		let item_weight = Weight::from_computation(
 			<() as WeightInfo>::on_initialize(1) - <() as WeightInfo>::on_initialize(0),
 		);
 		assert_ok!(Scheduler::do_schedule(
@@ -480,7 +480,7 @@ fn scheduler_respects_priority_ordering_with_soft_deadlines() {
 #[test]
 fn on_initialize_weight_is_correct() {
 	new_test_ext().execute_with(|| {
-		let base_weight = Weight::computation_only(<() as WeightInfo>::on_initialize(0));
+		let base_weight = Weight::from_computation(<() as WeightInfo>::on_initialize(0));
 		let call_weight = MaximumSchedulerWeight::get() / 4;
 
 		// Named
@@ -492,7 +492,7 @@ fn on_initialize_weight_is_correct() {
 			root(),
 			Call::Logger(LoggerCall::log {
 				i: 3,
-				weight: call_weight + Weight::computation_only(1)
+				weight: call_weight + Weight::from_computation(1)
 			})
 			.into(),
 		));
@@ -504,7 +504,7 @@ fn on_initialize_weight_is_correct() {
 			root(),
 			Call::Logger(LoggerCall::log {
 				i: 42,
-				weight: call_weight + Weight::computation_only(2)
+				weight: call_weight + Weight::from_computation(2)
 			})
 			.into(),
 		));
@@ -516,7 +516,7 @@ fn on_initialize_weight_is_correct() {
 			root(),
 			Call::Logger(LoggerCall::log {
 				i: 69,
-				weight: call_weight + Weight::computation_only(3)
+				weight: call_weight + Weight::from_computation(3)
 			})
 			.into(),
 		));
@@ -529,7 +529,7 @@ fn on_initialize_weight_is_correct() {
 			root(),
 			Call::Logger(LoggerCall::log {
 				i: 2600,
-				weight: call_weight + Weight::computation_only(4)
+				weight: call_weight + Weight::from_computation(4)
 			})
 			.into(),
 		));
@@ -539,7 +539,7 @@ fn on_initialize_weight_is_correct() {
 		assert_eq!(
 			actual_weight,
 			base_weight +
-				call_weight + Weight::computation_only(4) +
+				call_weight + Weight::from_computation(4) +
 				<() as MarginalWeightInfo>::item(true, true, Some(false))
 		);
 		assert_eq!(logger::log(), vec![(root(), 2600u32)]);
@@ -549,9 +549,9 @@ fn on_initialize_weight_is_correct() {
 		assert_eq!(
 			actual_weight,
 			base_weight +
-				call_weight + Weight::computation_only(2) +
+				call_weight + Weight::from_computation(2) +
 				<() as MarginalWeightInfo>::item(false, false, Some(false)) +
-				call_weight + Weight::computation_only(3) +
+				call_weight + Weight::from_computation(3) +
 				<() as MarginalWeightInfo>::item(true, false, Some(false))
 		);
 		assert_eq!(logger::log(), vec![(root(), 2600u32), (root(), 69u32), (root(), 42u32)]);
@@ -561,7 +561,7 @@ fn on_initialize_weight_is_correct() {
 		assert_eq!(
 			actual_weight,
 			base_weight +
-				call_weight + Weight::computation_only(1) +
+				call_weight + Weight::from_computation(1) +
 				<() as MarginalWeightInfo>::item(false, true, Some(false))
 		);
 		assert_eq!(
@@ -579,10 +579,10 @@ fn on_initialize_weight_is_correct() {
 fn root_calls_works() {
 	new_test_ext().execute_with(|| {
 		let call = Box::new(
-			Call::Logger(LoggerCall::log { i: 69, weight: Weight::computation_only(1000) }).into(),
+			Call::Logger(LoggerCall::log { i: 69, weight: Weight::from_computation(1000) }).into(),
 		);
 		let call2 = Box::new(
-			Call::Logger(LoggerCall::log { i: 42, weight: Weight::computation_only(1000) }).into(),
+			Call::Logger(LoggerCall::log { i: 42, weight: Weight::from_computation(1000) }).into(),
 		);
 		assert_ok!(Scheduler::schedule_named(Origin::root(), 1u32.encode(), 4, None, 127, call,));
 		assert_ok!(Scheduler::schedule(Origin::root(), 4, None, 127, call2));
@@ -604,13 +604,13 @@ fn fails_to_schedule_task_in_the_past() {
 		run_to_block(3);
 
 		let call1 = Box::new(
-			Call::Logger(LoggerCall::log { i: 69, weight: Weight::computation_only(1000) }).into(),
+			Call::Logger(LoggerCall::log { i: 69, weight: Weight::from_computation(1000) }).into(),
 		);
 		let call2 = Box::new(
-			Call::Logger(LoggerCall::log { i: 42, weight: Weight::computation_only(1000) }).into(),
+			Call::Logger(LoggerCall::log { i: 42, weight: Weight::from_computation(1000) }).into(),
 		);
 		let call3 = Box::new(
-			Call::Logger(LoggerCall::log { i: 42, weight: Weight::computation_only(1000) }).into(),
+			Call::Logger(LoggerCall::log { i: 42, weight: Weight::from_computation(1000) }).into(),
 		);
 
 		assert_err!(
@@ -634,10 +634,10 @@ fn fails_to_schedule_task_in_the_past() {
 fn should_use_orign() {
 	new_test_ext().execute_with(|| {
 		let call = Box::new(
-			Call::Logger(LoggerCall::log { i: 69, weight: Weight::computation_only(1000) }).into(),
+			Call::Logger(LoggerCall::log { i: 69, weight: Weight::from_computation(1000) }).into(),
 		);
 		let call2 = Box::new(
-			Call::Logger(LoggerCall::log { i: 42, weight: Weight::computation_only(1000) }).into(),
+			Call::Logger(LoggerCall::log { i: 42, weight: Weight::from_computation(1000) }).into(),
 		);
 		assert_ok!(Scheduler::schedule_named(
 			system::RawOrigin::Signed(1).into(),
@@ -664,10 +664,10 @@ fn should_use_orign() {
 fn should_check_orign() {
 	new_test_ext().execute_with(|| {
 		let call = Box::new(
-			Call::Logger(LoggerCall::log { i: 69, weight: Weight::computation_only(1000) }).into(),
+			Call::Logger(LoggerCall::log { i: 69, weight: Weight::from_computation(1000) }).into(),
 		);
 		let call2 = Box::new(
-			Call::Logger(LoggerCall::log { i: 42, weight: Weight::computation_only(1000) }).into(),
+			Call::Logger(LoggerCall::log { i: 42, weight: Weight::from_computation(1000) }).into(),
 		);
 		assert_noop!(
 			Scheduler::schedule_named(
@@ -693,14 +693,14 @@ fn should_check_orign_for_cancel() {
 		let call = Box::new(
 			Call::Logger(LoggerCall::log_without_filter {
 				i: 69,
-				weight: Weight::computation_only(1000),
+				weight: Weight::from_computation(1000),
 			})
 			.into(),
 		);
 		let call2 = Box::new(
 			Call::Logger(LoggerCall::log_without_filter {
 				i: 42,
-				weight: Weight::computation_only(1000),
+				weight: Weight::from_computation(1000),
 			})
 			.into(),
 		);
@@ -749,7 +749,7 @@ fn migration_to_v3_works() {
 					priority: i as u8 + 10,
 					call: Call::Logger(LoggerCall::log {
 						i: 96,
-						weight: Weight::computation_only(100),
+						weight: Weight::from_computation(100),
 					}),
 					maybe_periodic: None,
 				}),
@@ -759,7 +759,7 @@ fn migration_to_v3_works() {
 					priority: 123,
 					call: Call::Logger(LoggerCall::log {
 						i: 69,
-						weight: Weight::computation_only(1000),
+						weight: Weight::from_computation(1000),
 					}),
 					maybe_periodic: Some((456u64, 10)),
 				}),
@@ -780,7 +780,7 @@ fn migration_to_v3_works() {
 							priority: 10,
 							call: Call::Logger(LoggerCall::log {
 								i: 96,
-								weight: Weight::computation_only(100)
+								weight: Weight::from_computation(100)
 							})
 							.into(),
 							maybe_periodic: None,
@@ -793,7 +793,7 @@ fn migration_to_v3_works() {
 							priority: 123,
 							call: Call::Logger(LoggerCall::log {
 								i: 69,
-								weight: Weight::computation_only(1000)
+								weight: Weight::from_computation(1000)
 							})
 							.into(),
 							maybe_periodic: Some((456u64, 10)),
@@ -810,7 +810,7 @@ fn migration_to_v3_works() {
 							priority: 11,
 							call: Call::Logger(LoggerCall::log {
 								i: 96,
-								weight: Weight::computation_only(100)
+								weight: Weight::from_computation(100)
 							})
 							.into(),
 							maybe_periodic: None,
@@ -823,7 +823,7 @@ fn migration_to_v3_works() {
 							priority: 123,
 							call: Call::Logger(LoggerCall::log {
 								i: 69,
-								weight: Weight::computation_only(1000)
+								weight: Weight::from_computation(1000)
 							})
 							.into(),
 							maybe_periodic: Some((456u64, 10)),
@@ -840,7 +840,7 @@ fn migration_to_v3_works() {
 							priority: 12,
 							call: Call::Logger(LoggerCall::log {
 								i: 96,
-								weight: Weight::computation_only(100)
+								weight: Weight::from_computation(100)
 							})
 							.into(),
 							maybe_periodic: None,
@@ -853,7 +853,7 @@ fn migration_to_v3_works() {
 							priority: 123,
 							call: Call::Logger(LoggerCall::log {
 								i: 69,
-								weight: Weight::computation_only(1000)
+								weight: Weight::from_computation(1000)
 							})
 							.into(),
 							maybe_periodic: Some((456u64, 10)),
@@ -880,7 +880,7 @@ fn test_migrate_origin() {
 					priority: i as u8 + 10,
 					call: Call::Logger(LoggerCall::log {
 						i: 96,
-						weight: Weight::computation_only(100),
+						weight: Weight::from_computation(100),
 					})
 					.into(),
 					origin: 3u32,
@@ -894,7 +894,7 @@ fn test_migrate_origin() {
 					origin: 2u32,
 					call: Call::Logger(LoggerCall::log {
 						i: 69,
-						weight: Weight::computation_only(1000),
+						weight: Weight::from_computation(1000),
 					})
 					.into(),
 					maybe_periodic: Some((456u64, 10)),
@@ -927,7 +927,7 @@ fn test_migrate_origin() {
 							priority: 10,
 							call: Call::Logger(LoggerCall::log {
 								i: 96,
-								weight: Weight::computation_only(100)
+								weight: Weight::from_computation(100)
 							})
 							.into(),
 							maybe_periodic: None,
@@ -940,7 +940,7 @@ fn test_migrate_origin() {
 							priority: 123,
 							call: Call::Logger(LoggerCall::log {
 								i: 69,
-								weight: Weight::computation_only(1000)
+								weight: Weight::from_computation(1000)
 							})
 							.into(),
 							maybe_periodic: Some((456u64, 10)),
@@ -957,7 +957,7 @@ fn test_migrate_origin() {
 							priority: 11,
 							call: Call::Logger(LoggerCall::log {
 								i: 96,
-								weight: Weight::computation_only(100)
+								weight: Weight::from_computation(100)
 							})
 							.into(),
 							maybe_periodic: None,
@@ -970,7 +970,7 @@ fn test_migrate_origin() {
 							priority: 123,
 							call: Call::Logger(LoggerCall::log {
 								i: 69,
-								weight: Weight::computation_only(1000)
+								weight: Weight::from_computation(1000)
 							})
 							.into(),
 							maybe_periodic: Some((456u64, 10)),
@@ -987,7 +987,7 @@ fn test_migrate_origin() {
 							priority: 12,
 							call: Call::Logger(LoggerCall::log {
 								i: 96,
-								weight: Weight::computation_only(100)
+								weight: Weight::from_computation(100)
 							})
 							.into(),
 							maybe_periodic: None,
@@ -1000,7 +1000,7 @@ fn test_migrate_origin() {
 							priority: 123,
 							call: Call::Logger(LoggerCall::log {
 								i: 69,
-								weight: Weight::computation_only(1000)
+								weight: Weight::from_computation(1000)
 							})
 							.into(),
 							maybe_periodic: Some((456u64, 10)),

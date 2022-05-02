@@ -331,7 +331,7 @@ pub mod pallet {
 				Storage::<T>::process_deletion_queue_batch(weight_limit.computation())
 					.saturating_add(T::WeightInfo::on_initialize());
 
-			Weight::computation_only(computation_weight)
+			Weight::from_computation(computation_weight)
 		}
 	}
 
@@ -360,7 +360,7 @@ pub mod pallet {
 		/// a regular account will be created and any value will be transferred.
 		#[pallet::weight({
 			let computation_weight = T::WeightInfo::call();
-			Weight::computation_only(computation_weight).saturating_add(*gas_limit)
+			Weight::from_computation(computation_weight).saturating_add(*gas_limit)
 		})]
 		pub fn call(
 			origin: OriginFor<T>,
@@ -388,7 +388,7 @@ pub mod pallet {
 			}
 			output.gas_meter.into_dispatch_result(
 				output.result,
-				Weight::computation_only(T::WeightInfo::call()),
+				Weight::from_computation(T::WeightInfo::call()),
 			)
 		}
 
@@ -420,7 +420,7 @@ pub mod pallet {
 		/// - The `deploy` function is executed in the context of the newly-created account.
 		#[pallet::weight({
 			let computation_weight = T::WeightInfo::instantiate_with_code(code.len() as u32, salt.len() as u32);
-			Weight::computation_only(computation_weight).saturating_add(*gas_limit)
+			Weight::from_computation(computation_weight).saturating_add(*gas_limit)
 		})]
 		pub fn instantiate_with_code(
 			origin: OriginFor<T>,
@@ -451,7 +451,7 @@ pub mod pallet {
 			}
 			output.gas_meter.into_dispatch_result(
 				output.result.map(|(_address, result)| result),
-				Weight::computation_only(T::WeightInfo::instantiate_with_code(code_len, salt_len)),
+				Weight::from_computation(T::WeightInfo::instantiate_with_code(code_len, salt_len)),
 			)
 		}
 
@@ -462,7 +462,7 @@ pub mod pallet {
 		/// must be supplied.
 		#[pallet::weight({
 			let computation_weight = T::WeightInfo::instantiate(salt.len() as u32);
-			Weight::computation_only(computation_weight).saturating_add(*gas_limit)
+			Weight::from_computation(computation_weight).saturating_add(*gas_limit)
 		})]
 		pub fn instantiate(
 			origin: OriginFor<T>,
@@ -492,7 +492,7 @@ pub mod pallet {
 			}
 			output.gas_meter.into_dispatch_result(
 				output.result.map(|(_address, output)| output),
-				Weight::computation_only(T::WeightInfo::instantiate(salt_len)),
+				Weight::from_computation(T::WeightInfo::instantiate(salt_len)),
 			)
 		}
 

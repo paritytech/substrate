@@ -1023,7 +1023,7 @@ mod tests {
 				assert_eq!(raw.solution.voter_count(), 5);
 
 				// now reduce the max weight
-				<MinerMaxWeight>::set(Weight::computation_only(25));
+				<MinerMaxWeight>::set(Weight::from_computation(25));
 
 				let (raw, witness) =
 					MultiPhase::mine_solution::<<Runtime as Config>::Solver>().unwrap();

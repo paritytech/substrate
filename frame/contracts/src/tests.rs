@@ -246,7 +246,7 @@ parameter_types! {
 	};
 	pub static DepositPerByte: BalanceOf<Test> = 1;
 	pub const DepositPerItem: BalanceOf<Test> = 2;
-	pub const DeletionWeightLimit: Weight = Weight::computation_only(500_000_000_000);
+	pub const DeletionWeightLimit: Weight = Weight::from_computation(500_000_000_000);
 }
 
 impl Convert<Weight, BalanceOf<Self>> for Test {
@@ -298,7 +298,7 @@ pub const BOB: AccountId32 = AccountId32::new([2u8; 32]);
 pub const CHARLIE: AccountId32 = AccountId32::new([3u8; 32]);
 pub const DJANGO: AccountId32 = AccountId32::new([4u8; 32]);
 
-pub const GAS_LIMIT: Weight = Weight::computation_only(100_000_000_000);
+pub const GAS_LIMIT: Weight = Weight::from_computation(100_000_000_000);
 
 pub struct ExtBuilder {
 	existential_deposit: u64,
@@ -365,7 +365,7 @@ fn calling_plain_account_fails() {
 			Err(DispatchErrorWithPostInfo {
 				error: Error::<Test>::ContractNotFound.into(),
 				post_info: PostDispatchInfo {
-					actual_weight: Some(Weight::computation_only(base_cost)),
+					actual_weight: Some(Weight::from_computation(base_cost)),
 					pays_fee: Default::default(),
 				},
 			})
@@ -533,7 +533,7 @@ fn run_out_of_gas() {
 				Origin::signed(ALICE),
 				addr, // newly created account
 				0,
-				Weight::computation_only(1_000_000_000_000),
+				Weight::from_computation(1_000_000_000_000),
 				None,
 				vec![],
 			),
@@ -2197,7 +2197,7 @@ fn gas_estimation_nested_call_fixed_limit() {
 				ALICE,
 				addr_caller,
 				0,
-				Weight::computation_only(result.gas_required),
+				Weight::from_computation(result.gas_required),
 				Some(result.storage_deposit.charge_or_zero()),
 				input,
 				false,
@@ -2267,7 +2267,7 @@ fn gas_estimation_call_runtime() {
 				ALICE,
 				addr_caller,
 				0,
-				Weight::computation_only(result.gas_required),
+				Weight::from_computation(result.gas_required),
 				None,
 				call.encode(),
 				false,

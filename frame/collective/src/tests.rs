@@ -277,7 +277,7 @@ fn proposal_weight_limit_works_on_approve() {
 				Origin::signed(4),
 				hash,
 				0,
-				proposal_weight - Weight::computation_only(100),
+				proposal_weight - Weight::from_computation(100),
 				proposal_len
 			),
 			Error::<Test, Instance1>::WrongProposalWeight
@@ -310,7 +310,7 @@ fn proposal_weight_limit_ignored_on_disapprove() {
 			Origin::signed(4),
 			hash,
 			0,
-			proposal_weight - Weight::computation_only(100),
+			proposal_weight - Weight::from_computation(100),
 			proposal_len
 		));
 	})
@@ -699,7 +699,7 @@ fn correct_validate_and_get_proposal() {
 			Collective::validate_and_get_proposal(
 				&hash,
 				length,
-				weight - Weight::computation_only(10)
+				weight - Weight::from_computation(10)
 			),
 			Error::<Test, Instance1>::WrongProposalWeight
 		);

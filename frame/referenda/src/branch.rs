@@ -80,7 +80,7 @@ impl ServiceBranch {
 			TimedOut | Fail => T::WeightInfo::nudge_referendum_timed_out(),
 		};
 
-		Weight::computation_only(computation_weight)
+		Weight::from_computation(computation_weight)
 	}
 
 	/// Return the maximum possible weight of the `nudge` function.
@@ -102,7 +102,7 @@ impl ServiceBranch {
 			.max(T::WeightInfo::nudge_referendum_rejected())
 			.max(T::WeightInfo::nudge_referendum_timed_out());
 
-		Weight::computation_only(computation_weight)
+		Weight::from_computation(computation_weight)
 	}
 
 	/// Return the weight of the `place_decision_deposit` function when it takes the branch denoted
@@ -128,7 +128,7 @@ impl ServiceBranch {
 			NoDeposit => return None,
 		};
 
-		Some(Weight::computation_only(computation_weight))
+		Some(Weight::from_computation(computation_weight))
 	}
 
 	/// Return the maximum possible weight of the `place_decision_deposit` function.
@@ -139,7 +139,7 @@ impl ServiceBranch {
 			.max(T::WeightInfo::place_decision_deposit_not_queued())
 			.max(T::WeightInfo::place_decision_deposit_passing())
 			.max(T::WeightInfo::place_decision_deposit_failing());
-		Weight::computation_only(computation_weight)
+		Weight::from_computation(computation_weight)
 	}
 }
 
@@ -171,7 +171,7 @@ impl OneFewerDecidingBranch {
 			BeginDecidingPassing => T::WeightInfo::one_fewer_deciding_passing(),
 			BeginDecidingFailing => T::WeightInfo::one_fewer_deciding_failing(),
 		};
-		Weight::computation_only(computation_weight)
+		Weight::from_computation(computation_weight)
 	}
 
 	/// Return the maximum possible weight of the `one_fewer_deciding` function.
@@ -180,6 +180,6 @@ impl OneFewerDecidingBranch {
 			.max(T::WeightInfo::one_fewer_deciding_queue_empty())
 			.max(T::WeightInfo::one_fewer_deciding_passing())
 			.max(T::WeightInfo::one_fewer_deciding_failing());
-		Weight::computation_only(computation_weight)
+		Weight::from_computation(computation_weight)
 	}
 }

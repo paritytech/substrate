@@ -604,12 +604,12 @@ mod tests {
 			// one with block number arg and one without
 			fn on_initialize(n: T::BlockNumber) -> Weight {
 				println!("on_initialize({})", n);
-				Weight::computation_only(175)
+				Weight::from_computation(175)
 			}
 
 			fn on_idle(n: T::BlockNumber, remaining_weight: Weight) -> Weight {
 				println!("on_idle{}, {})", n, remaining_weight);
-				Weight::computation_only(175)
+				Weight::from_computation(175)
 			}
 
 			fn on_finalize(n: T::BlockNumber) {
@@ -618,7 +618,7 @@ mod tests {
 
 			fn on_runtime_upgrade() -> Weight {
 				sp_io::storage::set(super::TEST_KEY, "module".as_bytes());
-				Weight::computation_only(200)
+				Weight::from_computation(200)
 			}
 
 			fn offchain_worker(n: T::BlockNumber) {
@@ -732,8 +732,8 @@ mod tests {
 	parameter_types! {
 		pub BlockWeights: frame_system::limits::BlockWeights =
 			frame_system::limits::BlockWeights::builder()
-				.base_block(Weight::computation_only(10))
-				.for_class(DispatchClass::all(), |weights| weights.base_extrinsic = Weight::computation_only(5))
+				.base_block(Weight::from_computation(10))
+				.for_class(DispatchClass::all(), |weights| weights.base_extrinsic = Weight::from_computation(5))
 				.for_class(DispatchClass::non_mandatory(), |weights|
 					weights.max_total = Some(Weight::new().set_computation(1024).set_bandwidth(512))
 				)
@@ -826,7 +826,7 @@ mod tests {
 			sp_io::storage::set(TEST_KEY, "custom_upgrade".as_bytes());
 			sp_io::storage::set(CUSTOM_ON_RUNTIME_KEY, &true.encode());
 			System::deposit_event(frame_system::Event::CodeUpdated);
-			Weight::computation_only(100)
+			Weight::from_computation(100)
 		}
 	}
 
@@ -994,55 +994,59 @@ mod tests {
 
 	// SHAWN TODO ADD TESTS FOR NEW WEIGHT
 
-	// #[test]
-	// fn block_weight_limit_enforced() {
-	// 	let mut t = new_test_ext(10000);
-	// 	// given: TestXt uses the encoded len as fixed Len:
-	// 	let xt = TestXt::new(
-	// 		Call::Balances(BalancesCall::transfer { dest: 33, value: 0 }),
-	// 		sign_extra(1, 0, 0),
-	// 	);
-	// 	let encoded = xt.encode();
-	// 	let encoded_len = encoded.len() as u64;
-	// 	// on_initialize weight + base block execution weight
-	// 	let block_weights = <Runtime as frame_system::Config>::BlockWeights::get();
-	// 	let base_block_weight = Weight::computation_only(175) + block_weights.base_block;
-	// 	let limit = block_weights.get(DispatchClass::Normal).max_total.unwrap() - base_block_weight;
-	// 	let num_to_exhaust_block = limit / (encoded_len + 5);
-	// 	t.execute_with(|| {
-	// 		Executive::initialize_block(&Header::new(
-	// 			1,
-	// 			H256::default(),
-	// 			H256::default(),
-	// 			[69u8; 32].into(),
-	// 			Digest::default(),
-	// 		));
-	// 		// Base block execution weight + `on_initialize` weight from the custom module.
-	// 		assert_eq!(<frame_system::Pallet<Runtime>>::block_weight().total(), base_block_weight);
+	#[test]
+	fn block_weight_limit_enforced() {
+		let mut t = new_test_ext(10000);
+		// given: TestXt uses the encoded len as fixed Len:
+		let xt = TestXt::new(
+			Call::Balances(BalancesCall::transfer { dest: 33, value: 0 }),
+			sign_extra(1, 0, 0),
+		);
+		let encoded = xt.encode();
+		let encoded_len = encoded.len() as u64;
+		// on_initialize weight + base block execution weight
+		let block_weights = dbg!(<Runtime as frame_system::Config>::BlockWeights::get());
+		let base_block_weight = Weight::from_computation(175) + block_weights.base_block;
+		let limit = block_weights.get(DispatchClass::Normal).max_total.unwrap() - base_block_weight;
+		let comp_num_to_exhaust_block = limit.computation() / (encoded_len + 5);
+		let band_num_to_exhaust_block = limit.bandwidth() / (encoded_len + 5);
+		let num_to_exhaust_block = comp_num_to_exhaust_block.min(band_num_to_exhaust_block);
+		println!("max: {:?}", num_to_exhaust_block);
+		t.execute_with(|| {
+			Executive::initialize_block(&Header::new(
+				1,
+				H256::default(),
+				H256::default(),
+				[69u8; 32].into(),
+				Digest::default(),
+			));
+			// Base block execution weight + `on_initialize` weight from the custom module.
+			assert_eq!(<frame_system::Pallet<Runtime>>::block_weight().total(), base_block_weight);
 
-	// 		for nonce in 0..=num_to_exhaust_block {
-	// 			let xt = TestXt::new(
-	// 				Call::Balances(BalancesCall::transfer { dest: 33, value: 0 }),
-	// 				sign_extra(1, nonce.into(), 0),
-	// 			);
-	// 			let res = Executive::apply_extrinsic(xt);
-	// 			if nonce != num_to_exhaust_block {
-	// 				assert!(res.is_ok());
-	// 				assert_eq!(
-	// 					<frame_system::Pallet<Runtime>>::block_weight().total(),
-	// 					//--------------------- on_initialize + block_execution + extrinsic_base weight
-	// 					(encoded_len + 5) * (nonce + 1) + base_block_weight,
-	// 				);
-	// 				assert_eq!(
-	// 					<frame_system::Pallet<Runtime>>::extrinsic_index(),
-	// 					Some(nonce as u32 + 1)
-	// 				);
-	// 			} else {
-	// 				assert_eq!(res, Err(InvalidTransaction::ExhaustsResources.into()));
-	// 			}
-	// 		}
-	// 	});
-	// }
+			for nonce in 0..=num_to_exhaust_block {
+				let xt = TestXt::new(
+					Call::Balances(BalancesCall::transfer { dest: 33, value: 0 }),
+					sign_extra(1, nonce.into(), 0),
+				);
+				let res = Executive::apply_extrinsic(xt);
+				if nonce != num_to_exhaust_block {
+					assert!(res.is_ok());
+					assert_eq!(
+						<frame_system::Pallet<Runtime>>::block_weight().total().computation(),
+						//--------------------- on_initialize + block_execution + extrinsic_base weight
+						(encoded_len + 5) * (nonce + 1) + base_block_weight.computation(),
+					);
+					println!("{:?} {:?}", nonce, <frame_system::Pallet<Runtime>>::block_weight().total());
+					assert_eq!(
+						<frame_system::Pallet<Runtime>>::extrinsic_index(),
+						Some(nonce as u32 + 1)
+					);
+				} else {
+					assert_eq!(res, Err(InvalidTransaction::ExhaustsResources.into()));
+				}
+			}
+		});
+	}
 
 	// #[test]
 	// fn block_weight_and_size_is_stored_per_tx() {
@@ -1063,7 +1067,7 @@ mod tests {
 	// 	t.execute_with(|| {
 	// 		// Block execution weight + on_initialize weight from custom module
 	// 		let base_block_weight =
-	// 			Weight::computation_only(175) + <Runtime as
+	// 			Weight::from_computation(175) + <Runtime as
 	// frame_system::Config>::BlockWeights::get().base_block;
 
 	// 		Executive::initialize_block(&Header::new(
@@ -1198,7 +1202,7 @@ mod tests {
 			// the `on_initialize` weight defined in the custom test module.
 			assert_eq!(
 				<frame_system::Pallet<Runtime>>::block_weight().total(),
-				Weight::computation_only(175 + 175 + 10)
+				Weight::from_computation(175 + 175 + 10)
 			);
 		})
 	}

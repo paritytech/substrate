@@ -137,7 +137,7 @@ pub mod pallet {
 		/// # </weight>
 		#[pallet::weight({
 			let dispatch_info = call.get_dispatch_info();
-			(dispatch_info.weight.saturating_add(Weight::computation_only(10_000)), dispatch_info.class)
+			(dispatch_info.weight.saturating_add(Weight::from_computation(10_000)), dispatch_info.class)
 		})]
 		pub fn sudo(
 			origin: OriginFor<T>,
@@ -220,7 +220,7 @@ pub mod pallet {
 			let mut dispatch_info = call.get_dispatch_info();
 			dispatch_info.weight = dispatch_info.weight
 				// AccountData for inner call origin accountdata.
-				.saturating_add(Weight::computation_only(T::DbWeight::get().reads_writes(1, 1)));
+				.saturating_add(Weight::from_computation(T::DbWeight::get().reads_writes(1, 1)));
 			(
 				dispatch_info.weight,
 				dispatch_info.class,

@@ -331,7 +331,7 @@ impl<T: pallet_balances::Config> WeighData<(&BalanceOf<T>,)> for WeightForSetDum
 		let cents = *target.0 / <BalanceOf<T>>::from(MILLICENTS);
 		let computation_weight = (cents * multiplier).saturated_into::<u64>();
 
-		Weight::computation_only(computation_weight)
+		Weight::from_computation(computation_weight)
 	}
 }
 

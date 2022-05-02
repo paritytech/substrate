@@ -28,7 +28,7 @@ pub fn migrate<T: Config>(to_migrate: Vec<T::AccountId>) -> Weight {
 		}
 	}
 
-	Weight::computation_only(weight)
+	Weight::from_computation(weight)
 }
 
 /// Given the list of voters to migrate return a function that does some checks and information

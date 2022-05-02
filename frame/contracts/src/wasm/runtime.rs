@@ -318,7 +318,7 @@ impl RuntimeCosts {
 			EcdsaToEthAddress => s.ecdsa_to_eth_address,
 		};
 
-		let weight = Weight::computation_only(computation_weight);
+		let weight = Weight::from_computation(computation_weight);
 		RuntimeToken {
 			#[cfg(test)]
 			_created_from: *self,
@@ -771,7 +771,7 @@ where
 					self.charge_gas(RuntimeCosts::CallSurchargeTransfer)?;
 				}
 				self.ext.call(
-					Weight::computation_only(gas),
+					Weight::from_computation(gas),
 					callee,
 					value,
 					input_data,
@@ -829,7 +829,7 @@ where
 		let input_data = self.read_sandbox_memory(input_data_ptr, input_data_len)?;
 		let salt = self.read_sandbox_memory(salt_ptr, salt_len)?;
 		let instantiate_outcome = self.ext.instantiate(
-			Weight::computation_only(gas),
+			Weight::from_computation(gas),
 			code_hash,
 			value,
 			input_data,
@@ -1477,7 +1477,7 @@ define_env!(Env, <E: Ext>,
 	// gas can be smaller than one.
 	[seal0] seal_weight_to_fee(ctx, gas: u64, out_ptr: u32, out_len_ptr: u32) => {
 		ctx.charge_gas(RuntimeCosts::WeightToFee)?;
-		let gas = Weight::computation_only(gas);
+		let gas = Weight::from_computation(gas);
 		Ok(ctx.write_sandbox_output(
 			out_ptr, out_len_ptr, &ctx.ext.get_weight_price(gas).encode(), false, already_charged
 		)?)

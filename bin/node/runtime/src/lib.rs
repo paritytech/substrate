@@ -1782,7 +1782,7 @@ impl_runtime_apis! {
 			storage_deposit_limit: Option<Balance>,
 			input_data: Vec<u8>,
 		) -> pallet_contracts_primitives::ContractExecResult<Balance> {
-			let gas_limit = Weight::computation_only(gas_limit);
+			let gas_limit = Weight::from_computation(gas_limit);
 			Contracts::bare_call(origin, dest, value, gas_limit, storage_deposit_limit, input_data, true)
 		}
 
@@ -1796,7 +1796,7 @@ impl_runtime_apis! {
 			salt: Vec<u8>,
 		) -> pallet_contracts_primitives::ContractInstantiateResult<AccountId, Balance>
 		{
-			let gas_limit = Weight::computation_only(gas_limit);
+			let gas_limit = Weight::from_computation(gas_limit);
 			Contracts::bare_instantiate(origin, value, gas_limit, storage_deposit_limit, code, data, salt, true)
 		}
 

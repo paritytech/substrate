@@ -274,19 +274,19 @@ mod tests {
 	struct SimpleToken(u64);
 	impl Token<Test> for SimpleToken {
 		fn weight(&self) -> Weight {
-			Weight::computation_only(self.0)
+			Weight::from_computation(self.0)
 		}
 	}
 
 	#[test]
 	fn it_works() {
-		let gas_meter = GasMeter::<Test>::new(Weight::computation_only(50000));
-		assert_eq!(gas_meter.gas_left(), Weight::computation_only(50000));
+		let gas_meter = GasMeter::<Test>::new(Weight::from_computation(50000));
+		assert_eq!(gas_meter.gas_left(), Weight::from_computation(50000));
 	}
 
 	#[test]
 	fn tracing() {
-		let mut gas_meter = GasMeter::<Test>::new(Weight::computation_only(50000));
+		let mut gas_meter = GasMeter::<Test>::new(Weight::from_computation(50000));
 		assert!(!gas_meter.charge(SimpleToken(1)).is_err());
 
 		let mut tokens = gas_meter.tokens().iter();
@@ -307,7 +307,7 @@ mod tests {
 	// if the gas meter runs out of gas. However, this is just a nice property to have.
 	#[test]
 	fn overcharge_is_unrecoverable() {
-		let mut gas_meter = GasMeter::<Test>::new(Weight::computation_only(200));
+		let mut gas_meter = GasMeter::<Test>::new(Weight::from_computation(200));
 
 		// The first charge is should lead to OOG.
 		assert!(gas_meter.charge(SimpleToken(300)).is_err());
@@ -320,7 +320,7 @@ mod tests {
 	// possible.
 	#[test]
 	fn charge_exact_amount() {
-		let mut gas_meter = GasMeter::<Test>::new(Weight::computation_only(25));
+		let mut gas_meter = GasMeter::<Test>::new(Weight::from_computation(25));
 		assert!(!gas_meter.charge(SimpleToken(25)).is_err());
 	}
 }

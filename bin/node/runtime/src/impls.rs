@@ -131,8 +131,8 @@ mod multiplier_tests {
 		let fm = Multiplier::saturating_from_rational(1, 2);
 		let test_set = vec![
 			(Weight::zero(), fm.clone()),
-			(Weight::computation_only(100), fm.clone()),
-			(Weight::computation_only(1000), fm.clone()),
+			(Weight::from_computation(100), fm.clone()),
+			(Weight::from_computation(1000), fm.clone()),
 			(target(), fm.clone()),
 			(max_normal() / 2, fm.clone()),
 			(max_normal(), fm.clone()),
@@ -217,7 +217,7 @@ mod multiplier_tests {
 
 		// almost full. The entire quota of normal transactions is taken.
 		let block_weight = BlockWeights::get().get(DispatchClass::Normal).max_total.unwrap() -
-			Weight::computation_only(100);
+			Weight::from_computation(100);
 
 		// Default substrate weight.
 		let tx_weight = frame_support::weights::constants::ExtrinsicBaseWeight::get();
@@ -348,15 +348,15 @@ mod multiplier_tests {
 		vec![
 			Weight::zero(),
 			Weight::one(),
-			Weight::computation_only(10),
-			Weight::computation_only(1000),
-			Weight::computation_only(kb),
-			Weight::computation_only(10 * kb),
-			Weight::computation_only(100 * kb),
-			Weight::computation_only(mb),
-			Weight::computation_only(10 * mb),
-			Weight::computation_only(2147483647),
-			Weight::computation_only(4294967295),
+			Weight::from_computation(10),
+			Weight::from_computation(1000),
+			Weight::from_computation(kb),
+			Weight::from_computation(10 * kb),
+			Weight::from_computation(100 * kb),
+			Weight::from_computation(mb),
+			Weight::from_computation(10 * mb),
+			Weight::from_computation(2147483647),
+			Weight::from_computation(4294967295),
 			BlockWeights::get().max_block / 2,
 			BlockWeights::get().max_block,
 			Weight::MAX / 2,
@@ -373,7 +373,7 @@ mod multiplier_tests {
 
 		// Some values that are all above the target and will cause an increase.
 		let t = target();
-		vec![t + Weight::computation_only(100), t * 2, t * 4].into_iter().for_each(|i| {
+		vec![t + Weight::from_computation(100), t * 2, t * 4].into_iter().for_each(|i| {
 			run_with_system_weight(i, || {
 				let fm = runtime_multiplier_update(max_fm);
 				// won't grow. The convert saturates everything.

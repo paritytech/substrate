@@ -1799,7 +1799,7 @@ impl<T: Config> Pallet<T> {
 			}
 		});
 
-		Weight::computation_only(weight)
+		Weight::from_computation(weight)
 	}
 
 	/// Reads the length of account in DepositOf without getting the complete value in the runtime.

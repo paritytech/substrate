@@ -3730,11 +3730,11 @@ fn bond_during_era_correctly_populates_claimed_rewards() {
 fn offences_weight_calculated_correctly() {
 	ExtBuilder::default().nominate(true).build_and_execute(|| {
 		// On offence with zero offenders: 4 Reads, 1 Write
-		let zero_offence_weight = Weight::computation_only(<Test as frame_system::Config>::DbWeight::get().reads_writes(4, 1));
+		let zero_offence_weight = Weight::from_computation(<Test as frame_system::Config>::DbWeight::get().reads_writes(4, 1));
 		assert_eq!(Staking::on_offence(&[], &[Perbill::from_percent(50)], 0, DisableStrategy::WhenSlashed), zero_offence_weight);
 
 		// On Offence with N offenders, Unapplied: 4 Reads, 1 Write + 4 Reads, 5 Writes
-		let n_offence_unapplied_weight = Weight::computation_only(<Test as frame_system::Config>::DbWeight::get().reads_writes(4, 1)
+		let n_offence_unapplied_weight = Weight::from_computation(<Test as frame_system::Config>::DbWeight::get().reads_writes(4, 1)
 			+ <Test as frame_system::Config>::DbWeight::get().reads_writes(4, 5));
 
 		let offenders: Vec<OffenceDetails<<Test as frame_system::Config>::AccountId, pallet_session::historical::IdentificationTuple<Test>>>
@@ -3765,7 +3765,7 @@ fn offences_weight_calculated_correctly() {
 			// `reward_cost` * reporters (1)
 			+ <Test as frame_system::Config>::DbWeight::get().reads_writes(2, 2);
 
-		assert_eq!(Staking::on_offence(&one_offender, &[Perbill::from_percent(50)], 0, DisableStrategy::WhenSlashed), Weight::computation_only(one_offence_unapplied_weight));
+		assert_eq!(Staking::on_offence(&one_offender, &[Perbill::from_percent(50)], 0, DisableStrategy::WhenSlashed), Weight::from_computation(one_offence_unapplied_weight));
 	});
 }
 

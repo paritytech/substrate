@@ -428,7 +428,7 @@ pub mod pallet {
 				T::MaxMembers::get(), // M
 			);
 
-			let final_weight = Weight::computation_only(computation_weight)
+			let final_weight = Weight::from_computation(computation_weight)
 				.saturating_add(proposal.get_dispatch_info().weight); // P
 
 			(final_weight, DispatchClass::Operational)
@@ -457,7 +457,7 @@ pub mod pallet {
 						proposal_len as u32,  // B
 						members.len() as u32, // M
 					);
-					Weight::computation_only(computation_weight).saturating_add(w) // P
+					Weight::from_computation(computation_weight).saturating_add(w) // P
 				})
 				.into())
 		}
@@ -495,9 +495,9 @@ pub mod pallet {
 					*length_bound, // B
 					T::MaxMembers::get(), // M
 				);
-				Weight::computation_only(computation_weight).saturating_add(proposal.get_dispatch_info().weight) // P1
+				Weight::from_computation(computation_weight).saturating_add(proposal.get_dispatch_info().weight) // P1
 			} else {
-				Weight::computation_only(T::WeightInfo::propose_proposed(
+				Weight::from_computation(T::WeightInfo::propose_proposed(
 					*length_bound, // B
 					T::MaxMembers::get(), // M
 					T::MaxProposals::get(), // P2
@@ -537,7 +537,7 @@ pub mod pallet {
 							proposal_len as u32,  // B
 							members.len() as u32, // M
 						);
-						Weight::computation_only(computation_weight).saturating_add(w) // P1
+						Weight::from_computation(computation_weight).saturating_add(w) // P1
 					})
 					.into())
 			} else {
@@ -724,7 +724,7 @@ pub mod pallet {
 					Some({
 						let computation_weight =
 							T::WeightInfo::close_early_approved(len as u32, seats, proposal_count);
-						Weight::computation_only(computation_weight).saturating_add(proposal_weight)
+						Weight::from_computation(computation_weight).saturating_add(proposal_weight)
 					}),
 					Pays::Yes,
 				)
@@ -770,7 +770,7 @@ pub mod pallet {
 					Some({
 						let computation_weight =
 							T::WeightInfo::close_approved(len as u32, seats, proposal_count);
-						Weight::computation_only(computation_weight).saturating_add(proposal_weight)
+						Weight::from_computation(computation_weight).saturating_add(proposal_weight)
 					}),
 					Pays::Yes,
 				)

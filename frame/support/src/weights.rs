@@ -844,49 +844,49 @@ mod tests {
 	fn weights_are_correct() {
 		// #[weight = 1000]
 		let info = Call::<TraitImpl>::f00 {}.get_dispatch_info();
-		assert_eq!(info.weight, Weight::computation_only(1000));
+		assert_eq!(info.weight, Weight::from_computation(1000));
 		assert_eq!(info.class, DispatchClass::Normal);
 		assert_eq!(info.pays_fee, Pays::Yes);
 
 		// #[weight = (1000, DispatchClass::Mandatory)]
 		let info = Call::<TraitImpl>::f01 {}.get_dispatch_info();
-		assert_eq!(info.weight, Weight::computation_only(1000));
+		assert_eq!(info.weight, Weight::from_computation(1000));
 		assert_eq!(info.class, DispatchClass::Mandatory);
 		assert_eq!(info.pays_fee, Pays::Yes);
 
 		// #[weight = (1000, Pays::No)]
 		let info = Call::<TraitImpl>::f02 {}.get_dispatch_info();
-		assert_eq!(info.weight, Weight::computation_only(1000));
+		assert_eq!(info.weight, Weight::from_computation(1000));
 		assert_eq!(info.class, DispatchClass::Normal);
 		assert_eq!(info.pays_fee, Pays::No);
 
 		// #[weight = (1000, DispatchClass::Operational, Pays::No)]
 		let info = Call::<TraitImpl>::f03 {}.get_dispatch_info();
-		assert_eq!(info.weight, Weight::computation_only(1000));
+		assert_eq!(info.weight, Weight::from_computation(1000));
 		assert_eq!(info.class, DispatchClass::Operational);
 		assert_eq!(info.pays_fee, Pays::No);
 
 		// #[weight = ((_a * 10 + _eb * 1) as Weight, DispatchClass::Normal, Pays::Yes)]
 		let info = Call::<TraitImpl>::f11 { _a: 13, _eb: 20 }.get_dispatch_info();
-		assert_eq!(info.weight, Weight::computation_only(150)); // 13*10 + 20
+		assert_eq!(info.weight, Weight::from_computation(150)); // 13*10 + 20
 		assert_eq!(info.class, DispatchClass::Normal);
 		assert_eq!(info.pays_fee, Pays::Yes);
 
 		// #[weight = (0, DispatchClass::Operational, Pays::Yes)]
 		let info = Call::<TraitImpl>::f12 { _a: 10, _eb: 20 }.get_dispatch_info();
-		assert_eq!(info.weight, Weight::computation_only(0));
+		assert_eq!(info.weight, Weight::from_computation(0));
 		assert_eq!(info.class, DispatchClass::Operational);
 		assert_eq!(info.pays_fee, Pays::Yes);
 
 		// #[weight = T::DbWeight::get().reads(3) + T::DbWeight::get().writes(2) + 10_000]
 		let info = Call::<TraitImpl>::f20 {}.get_dispatch_info();
-		assert_eq!(info.weight, Weight::computation_only(12300)); // 100*3 + 1000*2 + 10_1000
+		assert_eq!(info.weight, Weight::from_computation(12300)); // 100*3 + 1000*2 + 10_1000
 		assert_eq!(info.class, DispatchClass::Normal);
 		assert_eq!(info.pays_fee, Pays::Yes);
 
 		// #[weight = T::DbWeight::get().reads_writes(6, 5) + 40_000]
 		let info = Call::<TraitImpl>::f21 {}.get_dispatch_info();
-		assert_eq!(info.weight, Weight::computation_only(45600)); // 100*6 + 1000*5 + 40_1000
+		assert_eq!(info.weight, Weight::from_computation(45600)); // 100*6 + 1000*5 + 40_1000
 		assert_eq!(info.class, DispatchClass::Normal);
 		assert_eq!(info.pays_fee, Pays::Yes);
 	}
@@ -897,10 +897,10 @@ mod tests {
 			weight: Weight::new().set_computation(1000).set_bandwidth(123),
 			..Default::default()
 		};
-		assert_eq!(extract_actual_weight(&Ok(Some(7).into()), &pre), Weight::computation_only(7));
+		assert_eq!(extract_actual_weight(&Ok(Some(7).into()), &pre), Weight::from_computation(7));
 		assert_eq!(
 			extract_actual_weight(&Ok(Some(1000).into()), &pre),
-			Weight::computation_only(1000)
+			Weight::from_computation(1000)
 		);
 		assert_eq!(
 			extract_actual_weight(
@@ -920,7 +920,7 @@ mod tests {
 		};
 		assert_eq!(
 			extract_actual_weight(&Ok(Some(1250).into()), &pre),
-			Weight::computation_only(1000)
+			Weight::from_computation(1000)
 		);
 		assert_eq!(
 			extract_actual_weight(

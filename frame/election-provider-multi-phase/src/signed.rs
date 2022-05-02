@@ -441,7 +441,7 @@ impl<T: Config> Pallet<T> {
 			discarded
 		);
 
-		(Weight::computation_only(weight), found_solution)
+		(Weight::from_computation(weight), found_solution)
 	}
 	/// Helper function for the case where a solution is accepted in the signed phase.
 	///
@@ -976,7 +976,7 @@ mod tests {
 
 				assert_ok!(MultiPhase::submit(Origin::signed(99), Box::new(raw.clone())));
 
-				<SignedMaxWeight>::set(Weight::computation_only(30));
+				<SignedMaxWeight>::set(Weight::from_computation(30));
 
 				// note: resubmitting the same solution is technically okay as long as the queue has
 				// space.

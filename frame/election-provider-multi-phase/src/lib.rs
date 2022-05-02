@@ -797,7 +797,7 @@ pub mod pallet {
 				_ => T::WeightInfo::on_initialize_nothing(),
 			};
 
-			Weight::computation_only(computation_weight)
+			Weight::from_computation(computation_weight)
 		}
 
 		fn offchain_worker(now: T::BlockNumber) {
@@ -1418,7 +1418,7 @@ impl<T: Config> Pallet<T> {
 	/// This is always mandatory weight.
 	fn register_weight(weight: ComputationWeight) {
 		<frame_system::Pallet<T>>::register_extra_weight_unchecked(
-			Weight::computation_only(weight),
+			Weight::from_computation(weight),
 			DispatchClass::Mandatory,
 		);
 	}

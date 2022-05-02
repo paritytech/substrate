@@ -25,7 +25,7 @@ use frame_support::weights::{
 
 impl crate::WeightInfo for () {
 	fn plan_config_change() -> Weight {
-		Weight::computation_only(DbWeight::get().writes(1))
+		Weight::from_computation(DbWeight::get().writes(1))
 	}
 
 	fn report_equivocation(validator_count: u32) -> Weight {
@@ -49,6 +49,6 @@ impl crate::WeightInfo for () {
 			.saturating_add(DbWeight::get().reads(14 + 3 * MAX_NOMINATORS))
 			.saturating_add(DbWeight::get().writes(10 + 3 * MAX_NOMINATORS));
 
-		Weight::computation_only(weight)
+		Weight::from_computation(weight)
 	}
 }
