@@ -298,5 +298,5 @@ lto = "fat"
 codegen-units = 1
 
 [patch."https://github.com/paritytech/mixnet"]
-#mixnet = { git = "https://github.com/cheme/mixnet", branch = "surbs_in_fragment"}
+#mixnet = { git = "https://github.com/cheme/mixnet", branch = "branch_2"}
 mixnet = { path = "../mixnet"}

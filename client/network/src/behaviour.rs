@@ -71,7 +71,7 @@ pub enum MixnetCommand {
 	/// Disconnection at mixnet swarm behavior level.
 	Disconnected(MixPeerId),
 	/// Received transaction is invalid with a surbs reply.
-	TransactionImportResult(mixnet::SurbsEncoded, MixnetImportResult),
+	TransactionImportResult(mixnet::SurbsPayload, MixnetImportResult),
 }
 
 /// Result reported in surbs for a transaction imported from a mixnet.
@@ -595,7 +595,7 @@ impl<B: BlockT> NetworkBehaviourEventProcess<mixnet::NetworkEvent> for Behaviour
 				// TODO could write specifically a message type here, but currently
 				// only one of a kind for query or reply.
 				match message.kind {
-					mixnet::MessageType::FromSurbs => {
+					mixnet::MessageType::FromSurbs(_query) => {
 						trace!(target: "mixnet", "Got surbs reply");
 
 						// TODO send in some client notification (keep query in worker?).
