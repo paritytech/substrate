@@ -1222,8 +1222,38 @@ fn swap_items_should_works() {
 #[test]
 fn different_user_flags() {
 	new_test_ext().execute_with(|| {
+		// when setting one feature it's required to call .into() on it
+		let user_features = UserFeatures::new(UserFeature::IsLocked.into());
+		assert_ok!(Uniques::create(
+			Origin::signed(1),
+			1,
+			user_features,
+			None,
+			None,
+			Perbill::zero(),
+			Perbill::zero(),
+		));
+
+		let collection_config = CollectionConfigs::<Test>::get(0);
+		let stored_user_features = collection_config.unwrap().user_features.get();
+		assert!(stored_user_features.contains(UserFeature::IsLocked));
+		assert!(!stored_user_features.contains(UserFeature::Administration));
+
+		// no need to call .into() for multiple features
 		let user_features = UserFeatures::new(UserFeature::Administration | UserFeature::IsLocked);
-		// let user_features = UserFeatures::new(UserFeature::IsLocked.into());
+		assert_ok!(Uniques::create(
+			Origin::signed(1),
+			1,
+			user_features,
+			None,
+			None,
+			Perbill::zero(),
+			Perbill::zero(),
+		));
+		let collection_config = CollectionConfigs::<Test>::get(1);
+		let stored_user_features = collection_config.unwrap().user_features.get();
+		assert!(stored_user_features.contains(UserFeature::IsLocked));
+		assert!(stored_user_features.contains(UserFeature::Administration));
 
 		assert_ok!(Uniques::create(
 			Origin::signed(1),
@@ -1236,21 +1266,10 @@ fn different_user_flags() {
 		));
 
 		use enumflags2::BitFlag;
-
 		assert_ok!(Uniques::create(
 			Origin::signed(1),
 			1,
 			UserFeatures::new(UserFeature::empty()),
-			None,
-			None,
-			Perbill::zero(),
-			Perbill::zero(),
-		));
-
-		assert_ok!(Uniques::create(
-			Origin::signed(1),
-			1,
-			user_features,
 			None,
 			None,
 			Perbill::zero(),
