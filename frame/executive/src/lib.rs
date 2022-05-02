@@ -1013,8 +1013,6 @@ mod tests {
 		});
 	}
 
-	// SHAWN TODO ADD TESTS FOR NEW WEIGHT
-
 	#[test]
 	fn computational_block_weight_limit_enforced() {
 		let mut t = new_test_ext(10000);
@@ -1119,71 +1117,71 @@ mod tests {
 		});
 	}
 
-	// #[test]
-	// fn block_weight_and_size_is_stored_per_tx() {
-	// 	let xt = TestXt::new(
-	// 		Call::Balances(BalancesCall::transfer { dest: 33, value: 0 }),
-	// 		sign_extra(1, 0, 0),
-	// 	);
-	// 	let x1 = TestXt::new(
-	// 		Call::Balances(BalancesCall::transfer { dest: 33, value: 0 }),
-	// 		sign_extra(1, 1, 0),
-	// 	);
-	// 	let x2 = TestXt::new(
-	// 		Call::Balances(BalancesCall::transfer { dest: 33, value: 0 }),
-	// 		sign_extra(1, 2, 0),
-	// 	);
-	// 	let len = xt.clone().encode().len() as u32;
-	// 	let mut t = new_test_ext(1);
-	// 	t.execute_with(|| {
-	// 		// Block execution weight + on_initialize weight from custom module
-	// 		let base_block_weight =
-	// 			Weight::from_computation(175) + <Runtime as
-	// frame_system::Config>::BlockWeights::get().base_block;
+	#[test]
+	fn block_weight_and_size_is_stored_per_tx() {
+		let xt = TestXt::new(
+			Call::Balances(BalancesCall::transfer { dest: 33, value: 0 }),
+			sign_extra(1, 0, 0),
+		);
+		let x1 = TestXt::new(
+			Call::Balances(BalancesCall::transfer { dest: 33, value: 0 }),
+			sign_extra(1, 1, 0),
+		);
+		let x2 = TestXt::new(
+			Call::Balances(BalancesCall::transfer { dest: 33, value: 0 }),
+			sign_extra(1, 2, 0),
+		);
+		let len = xt.clone().encode().len() as u32;
+		let mut t = new_test_ext(1);
+		t.execute_with(|| {
+			// Block execution weight + on_initialize weight from custom module
+			let base_block_weight = Weight::from_computation(175) +
+				<Runtime as frame_system::Config>::BlockWeights::get().base_block;
 
-	// 		Executive::initialize_block(&Header::new(
-	// 			1,
-	// 			H256::default(),
-	// 			H256::default(),
-	// 			[69u8; 32].into(),
-	// 			Digest::default(),
-	// 		));
+			Executive::initialize_block(&Header::new(
+				1,
+				H256::default(),
+				H256::default(),
+				[69u8; 32].into(),
+				Digest::default(),
+			));
 
-	// 		assert_eq!(<frame_system::Pallet<Runtime>>::block_weight().total(), base_block_weight);
-	// 		assert_eq!(<frame_system::Pallet<Runtime>>::all_extrinsics_len(), 0);
+			assert_eq!(<frame_system::Pallet<Runtime>>::block_weight().total(), base_block_weight);
+			assert_eq!(<frame_system::Pallet<Runtime>>::all_extrinsics_len(), 0);
 
-	// 		assert!(Executive::apply_extrinsic(xt.clone()).unwrap().is_ok());
-	// 		assert!(Executive::apply_extrinsic(x1.clone()).unwrap().is_ok());
-	// 		assert!(Executive::apply_extrinsic(x2.clone()).unwrap().is_ok());
+			assert!(Executive::apply_extrinsic(xt.clone()).unwrap().is_ok());
+			assert!(Executive::apply_extrinsic(x1.clone()).unwrap().is_ok());
+			assert!(Executive::apply_extrinsic(x2.clone()).unwrap().is_ok());
 
-	// 		// default weight for `TestXt` == encoded length.
-	// 		let extrinsic_weight = len as Weight +
-	// 			<Runtime as frame_system::Config>::BlockWeights::get()
-	// 				.get(DispatchClass::Normal)
-	// 				.base_extrinsic;
-	// 		assert_eq!(
-	// 			<frame_system::Pallet<Runtime>>::block_weight().total(),
-	// 			base_block_weight + 3 * extrinsic_weight,
-	// 		);
-	// 		assert_eq!(<frame_system::Pallet<Runtime>>::all_extrinsics_len(), 3 * len);
+			// default weight for `TestXt` == encoded length.
+			let extrinsic_weight =
+				Weight::new().set_computation(len.into()).set_bandwidth(len.into()) +
+					<Runtime as frame_system::Config>::BlockWeights::get()
+						.get(DispatchClass::Normal)
+						.base_extrinsic;
+			assert_eq!(
+				<frame_system::Pallet<Runtime>>::block_weight().total(),
+				base_block_weight + extrinsic_weight * 3,
+			);
+			assert_eq!(<frame_system::Pallet<Runtime>>::all_extrinsics_len(), 3 * len);
 
-	// 		let _ = <frame_system::Pallet<Runtime>>::finalize();
-	// 		// All extrinsics length cleaned on `System::finalize`
-	// 		assert_eq!(<frame_system::Pallet<Runtime>>::all_extrinsics_len(), 0);
+			let _ = <frame_system::Pallet<Runtime>>::finalize();
+			// All extrinsics length cleaned on `System::finalize`
+			assert_eq!(<frame_system::Pallet<Runtime>>::all_extrinsics_len(), 0);
 
-	// 		// New Block
-	// 		Executive::initialize_block(&Header::new(
-	// 			2,
-	// 			H256::default(),
-	// 			H256::default(),
-	// 			[69u8; 32].into(),
-	// 			Digest::default(),
-	// 		));
+			// New Block
+			Executive::initialize_block(&Header::new(
+				2,
+				H256::default(),
+				H256::default(),
+				[69u8; 32].into(),
+				Digest::default(),
+			));
 
-	// 		// Block weight cleaned up on `System::initialize`
-	// 		assert_eq!(<frame_system::Pallet<Runtime>>::block_weight().total(), base_block_weight);
-	// 	});
-	// }
+			// Block weight cleaned up on `System::initialize`
+			assert_eq!(<frame_system::Pallet<Runtime>>::block_weight().total(), base_block_weight);
+		});
+	}
 
 	#[test]
 	fn validate_unsigned() {
