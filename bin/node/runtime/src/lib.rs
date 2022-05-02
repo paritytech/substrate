@@ -289,17 +289,18 @@ impl InstanceFilter<Call> for ProxyType {
 			ProxyType::Any => true,
 			ProxyType::NonTransfer => !matches!(
 				c,
-				Call::Balances(..) |
-					Call::Assets(..) | Call::Uniques(..) |
-					Call::Vesting(pallet_vesting::Call::vested_transfer { .. }) |
-					Call::Indices(pallet_indices::Call::transfer { .. })
+				Call::Balances(..)
+					| Call::Assets(..) | Call::Uniques(..)
+					| Call::Vesting(pallet_vesting::Call::vested_transfer { .. })
+					| Call::Indices(pallet_indices::Call::transfer { .. })
 			),
 			ProxyType::Governance => matches!(
 				c,
-				Call::Democracy(..) |
-					Call::Council(..) | Call::Society(..) |
-					Call::TechnicalCommittee(..) |
-					Call::Elections(..) | Call::Treasury(..)
+				Call::Democracy(..)
+					| Call::Council(..) | Call::Society(..)
+					| Call::TechnicalCommittee(..)
+					| Call::Elections(..)
+					| Call::Treasury(..)
 			),
 			ProxyType::Staking => matches!(c, Call::Staking(..)),
 		}
@@ -632,8 +633,8 @@ impl Get<Option<(usize, ExtendedBalance)>> for OffchainRandomBalancing {
 			max @ _ => {
 				let seed = sp_io::offchain::random_seed();
 				let random = <u32>::decode(&mut TrailingZeroInput::new(&seed))
-					.expect("input is padded with zeroes; qed") %
-					max.saturating_add(1);
+					.expect("input is padded with zeroes; qed")
+					% max.saturating_add(1);
 				random as usize
 			},
 		};
@@ -1285,6 +1286,8 @@ parameter_types! {
 	pub const MinCommitmentAge: BlockNumber = 1 * MINUTES;
 	pub const MaxCommitmentAge: BlockNumber = 10 * MINUTES;
 	pub const MaxNameLength: u32 = 2048; // 2048 is the standard URL limit
+	pub const MaxTextLength: u32 = 2048;
+	pub const PerByteFee: Balance = 1 * DOLLARS;
 }
 
 impl pallet_name_service::Config for Runtime {
@@ -1302,6 +1305,9 @@ impl pallet_name_service::Config for Runtime {
 	type TierDefault = TierDefault;
 	type RegistrationFeePerBlock = RegistrationFeePerBlock;
 	type RegistrationManager = EnsureRoot<Self::AccountId>;
+	type MaxTextLength = MaxTextLength;
+	type PerByteFee = PerByteFee;
+	type NameServiceResolver = pallet_name_service::Pallet<Self>;
 }
 
 parameter_types! {
