@@ -1626,8 +1626,7 @@ fn lazy_removal_on_full_queue_works_on_initialize() {
 		// to clear the queue
 		Storage::<Test>::fill_queue_with_dummies();
 
-		// let queue_depth = <Test as Config>::DeletionQueueDepth;
-		let queue_len = <DeletionQueue<Test>>::decode_len().unwrap_or(0);
+		let queue_len_initial = <DeletionQueue<Test>>::decode_len().unwrap_or(0);
 
 		// Run the lazy removal
 		Contracts::on_initialize(System::block_number());
@@ -1635,7 +1634,7 @@ fn lazy_removal_on_full_queue_works_on_initialize() {
 		let queue_len_after_on_initialize = <DeletionQueue<Test>>::decode_len().unwrap_or(0);
 
 		// Queue length should be decreased after call of on_initialize()
-		assert!(queue_len - queue_len_after_on_initialize > 0);
+		assert!(queue_len_initial - queue_len_after_on_initialize > 0);
 	});
 }
 
