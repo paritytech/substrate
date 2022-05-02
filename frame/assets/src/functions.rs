@@ -102,6 +102,27 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		d.accounts = d.accounts.saturating_sub(1);
 		Remove
 	}
+	
+	//removes account if it is dead
+	fn remove_if_dead(
+        id: T::AssetId, 
+        who: &T::AccountId, 
+        account: 
+            &AssetAccount<<T as Config<I>>::Balance, DepositBalanceOf<T, I>, 
+            <T as Config<I>>::Extra>, 
+        d: &mut AssetDetails<T::Balance, T::AccountId, DepositBalanceOf<T, I>>
+    ) -> Option<DeadConsequence> {
+        let mut source_died: Option<DeadConsequence> = None;
+        if account.balance < d.min_balance {
+            debug_assert!(account.balance.is_zero(), "checked in prep; qed");
+            source_died =
+                Some(Self::dead_account(&who, d, &account.reason, false));
+            if let Some(Remove) = source_died {
+                Account::<T, I>::remove(id, &who);
+            }
+        }
+        source_died
+    }
 
 	/// Returns `true` when the balance of `account` can be increased by `amount`.
 	///
@@ -598,16 +619,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				Ok(())
 			})?;
 
+			source_died = Self::remove_if_dead(id, &source, &source_account, details);
+
 			// Remove source account if it's now dead.
-			if source_account.balance < details.min_balance {
-				debug_assert!(source_account.balance.is_zero(), "checked in prep; qed");
-				source_died =
-					Some(Self::dead_account(&source, details, &source_account.reason, false));
-				if let Some(Remove) = source_died {
-					Account::<T, I>::remove(id, &source);
-					return Ok(())
-				}
+			if let Some(Remove) = source_died {	
+				return Ok(())
 			}
+
 			Account::<T, I>::insert(id, &source, &source_account);
 			Ok(())
 		})?;
