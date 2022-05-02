@@ -138,7 +138,7 @@ pub enum StateDbError {
 	/// Trying to insert block with unknown parent.
 	InvalidParent,
 	/// Invalid pruning mode specified. Contains expected mode.
-	InvalidPruningMode(String),
+	InvalidPruningMode(Vec<u8>),
 	/// Too many unfinalized sibling blocks inserted.
 	TooManySiblingBlocks,
 	/// Trying to insert existing block.
@@ -181,7 +181,7 @@ impl fmt::Debug for StateDbError {
 			Self::InvalidBlock => write!(f, "Trying to canonicalize invalid block"),
 			Self::InvalidBlockNumber => write!(f, "Trying to insert block with invalid number"),
 			Self::InvalidParent => write!(f, "Trying to insert block with unknown parent"),
-			Self::InvalidPruningMode(e) => write!(f, "Expected pruning mode: {}", e),
+			Self::InvalidPruningMode(e) => write!(f, "Expected pruning mode: {:02x?}", e),
 			Self::TooManySiblingBlocks => write!(f, "Too many sibling blocks inserted"),
 			Self::BlockAlreadyExists => write!(f, "Block already exists"),
 			Self::Metadata(message) => write!(f, "Invalid metadata: {}", message),
@@ -250,6 +250,14 @@ impl PruningMode {
 			PruningMode::Constrained(_) => PRUNING_MODE_CONSTRAINED,
 		}
 	}
+	pub fn from_id(id: &[u8]) -> Option<Self> {
+		match id {
+			PRUNING_MODE_ARCHIVE => Some(Self::ArchiveAll),
+			PRUNING_MODE_ARCHIVE_CANON => Some(Self::ArchiveCanonical),
+			PRUNING_MODE_CONSTRAINED => Some(Self::Constrained(Default::default())),
+			_ => None,
+		}
+	}
 }
 
 impl Default for PruningMode {
@@ -306,10 +314,7 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf> StateDbSync<Block
 		);
 		match &db_mode {
 			Some(v) if v.as_slice() == mode.id() => Ok(()),
-			Some(v) =>
-				return Err(
-					StateDbError::InvalidPruningMode(String::from_utf8_lossy(v).into()).into()
-				),
+			Some(v) => return Err(StateDbError::InvalidPruningMode(v.to_owned()).into()),
 			None => Ok(()),
 		}
 	}
@@ -535,33 +540,31 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf> StateDb<BlockHash
 	where
 		D: MetaDb,
 	{
-		let stored_mode = {
-			let meta_key_mode = to_meta_key(PRUNING_MODE, &());
-			let stored_mode = db.get_meta(&meta_key_mode).map_err(Error::Db)?;
-			match stored_mode.as_ref().map(Vec::as_slice) {
-				None => unimplemented!(),
-				Some(PRUNING_MODE_ARCHIVE) => Some(PruningMode::ArchiveAll),
-				Some(PRUNING_MODE_ARCHIVE_CANON) => Some(PruningMode::ArchiveCanonical),
-				Some(PRUNING_MODE_CONSTRAINED) =>
-					Some(PruningMode::Constrained(Default::default())),
-				Some(unsupported) =>
-					return Err(unimplemented!("unsupported mode stored: {:?}", unsupported)),
-			}
-		};
-		let (should_store, selected_mode) = match (should_init, requested_mode, stored_mode) {
+		let stored_mode = fetch_stored_pruning_mode(db)?;
+
+		let (should_store_mode, selected_mode) = match (should_init, stored_mode, requested_mode) {
 			(true, stored_mode, requested_mode) => {
-				assert!(
-					stored_mode.is_none(),
-					"The storage has just been initialized. No meta-data is expected to be found in it.");
+				assert!(stored_mode.is_none(), "The storage has just been initialized. No meta-data is expected to be found in it.");
 				(true, requested_mode.unwrap_or_default())
 			},
-			(false, None, _requested) =>
+
+			(false, None, _) =>
 				return Err(StateDbError::Metadata(
 					"An existing StateDb does not have PRUNING_MODE stored in its meta-data".into(),
 				)
 				.into()),
-			(_, _, _) => unimplemented!(),
+
+			(false, Some(stored), None) => (false, stored),
+
+			(false, Some(stored), Some(requested)) =>
+				(false, choose_pruning_mode(stored, requested)?),
 		};
+
+		if should_store_mode {
+			let () = db
+				.set_meta(&to_meta_key(PRUNING_MODE, &()), Some(selected_mode.id()))
+				.map_err(Error::Db)?;
+		}
 
 		Ok(StateDb { db: RwLock::new(StateDbSync::new(selected_mode, ref_counting, db)?) })
 	}
@@ -652,6 +655,36 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf> StateDb<BlockHash
 	}
 }
 
+fn fetch_stored_pruning_mode<D: MetaDb>(db: &D) -> Result<Option<PruningMode>, Error<D::Error>> {
+	let meta_key_mode = to_meta_key(PRUNING_MODE, &());
+	if let Some(stored_mode) = db.get_meta(&meta_key_mode).map_err(Error::Db)? {
+		if let Some(mode) = PruningMode::from_id(&stored_mode) {
+			Ok(Some(mode))
+		} else {
+			Err(StateDbError::InvalidPruningMode(stored_mode.to_owned()).into())
+		}
+	} else {
+		Ok(None)
+	}
+}
+
+fn choose_pruning_mode(
+	stored: PruningMode,
+	requested: PruningMode,
+) -> Result<PruningMode, StateDbError> {
+	match (stored, requested) {
+		(PruningMode::ArchiveAll, PruningMode::ArchiveAll) => Ok(PruningMode::ArchiveAll),
+		(PruningMode::ArchiveCanonical, PruningMode::ArchiveCanonical) => Ok(PruningMode::ArchiveCanonical),
+		(PruningMode::Constrained(_), PruningMode::Constrained(requested)) => Ok(PruningMode::Constrained(requested)),
+		(stored, requested) => Err(
+			StateDbError::Metadata(
+				format!(
+					"Requested pruning-mode is incompatible with the pruning-mode used upon previous usage [requested: {:?}; stored: {:?}]", 
+					requested, stored))
+		)
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use crate::{
@@ -663,7 +696,7 @@ mod tests {
 
 	fn make_test_db(settings: PruningMode) -> (TestDb, StateDb<H256, H256>) {
 		let mut db = make_db(&[91, 921, 922, 93, 94]);
-		let state_db = StateDb::new(settings, false, &db).unwrap();
+		let state_db = StateDb::open(&mut db, Some(settings), false, true).unwrap();
 
 		db.commit(
 			&state_db
