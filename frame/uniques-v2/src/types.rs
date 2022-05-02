@@ -27,7 +27,7 @@ use sp_runtime::{
 // Support for up to 64 user-enabled features on a collection.
 #[bitflags]
 #[repr(u64)]
-#[derive(Copy, Clone, RuntimeDebug, PartialEq, Encode, Decode, MaxEncodedLen, TypeInfo)]
+#[derive(Copy, Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub enum UserFeature {
 	Administration,
 	IsLocked,
@@ -35,7 +35,7 @@ pub enum UserFeature {
 }
 
 /// Wrapper type for `BitFlags<UserFeature>` that implements `Codec`.
-#[derive(Clone, Copy, PartialEq, Default, RuntimeDebug)]
+#[derive(Clone, Copy, PartialEq, Eq, Default, RuntimeDebug)]
 pub struct UserFeatures(pub BitFlags<UserFeature>);
 
 impl UserFeatures {
@@ -54,7 +54,6 @@ impl MaxEncodedLen for UserFeatures {
 	}
 }
 
-impl Eq for UserFeatures {}
 impl Encode for UserFeatures {
 	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
 		self.0.bits().using_encoded(f)
