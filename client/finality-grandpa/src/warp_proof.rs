@@ -205,7 +205,7 @@ impl<Block: BlockT> WarpSyncProof<Block> {
 			let hash = proof.header.hash();
 			let number = *proof.header.number();
 
-			if let Some((set_id, list)) = hard_forks.get(&(hash.clone(), number)) {
+			if let Some((set_id, list)) = hard_forks.get(&(hash, number)) {
 				current_set_id = *set_id;
 				current_authorities = list.clone();
 			} else {

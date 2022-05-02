@@ -62,7 +62,7 @@ fn main() {
 
 			match action {
 				Action::Insert => {
-					if BagsList::on_insert(id.clone(), vote_weight).is_err() {
+					if BagsList::on_insert(id, vote_weight).is_err() {
 						// this was a duplicate id, which is ok. We can just update it.
 						BagsList::on_update(&id, vote_weight);
 					}

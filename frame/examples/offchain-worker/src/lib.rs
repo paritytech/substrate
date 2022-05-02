@@ -446,7 +446,7 @@ impl<T: Config> Pallet<T> {
 		if !signer.can_sign() {
 			return Err(
 				"No local accounts available. Consider adding one via `author_insertKey` RPC.",
-			)?
+			)
 		}
 		// Make an external HTTP request to fetch the current price.
 		// Note this call will block until response is received.
@@ -640,7 +640,7 @@ impl<T: Config> Pallet<T> {
 			_ => return None,
 		};
 
-		let exp = price.fraction_length.checked_sub(2).unwrap_or(0);
+		let exp = price.fraction_length.saturating_sub(2);
 		Some(price.integer as u32 * 100 + (price.fraction / 10_u64.pow(exp)) as u32)
 	}
 

@@ -237,6 +237,8 @@ const THRESHOLDS: [sp_npos_elections::VoteWeight; 9] =
 parameter_types! {
 	pub static BagThresholds: &'static [sp_npos_elections::VoteWeight] = &THRESHOLDS;
 	pub static MaxNominations: u32 = 16;
+	pub static RewardOnUnbalanceWasCalled: bool = false;
+	pub static LedgerSlashPerEra: (BalanceOf<Test>, BTreeMap<EraIndex, BalanceOf<Test>>) = (Zero::zero(), BTreeMap::new());
 }
 
 impl pallet_bags_list::Config for Test {
@@ -248,21 +250,41 @@ impl pallet_bags_list::Config for Test {
 }
 
 pub struct OnChainSeqPhragmen;
-impl onchain::ExecutionConfig for OnChainSeqPhragmen {
+impl onchain::Config for OnChainSeqPhragmen {
 	type System = Test;
 	type Solver = SequentialPhragmen<AccountId, Perbill>;
 	type DataProvider = Staking;
+	type WeightInfo = ();
+}
+
+pub struct MockReward {}
+impl OnUnbalanced<PositiveImbalanceOf<Test>> for MockReward {
+	fn on_unbalanced(_: PositiveImbalanceOf<Test>) {
+		RewardOnUnbalanceWasCalled::set(true);
+	}
+}
+
+pub struct OnStakerSlashMock<T: Config>(core::marker::PhantomData<T>);
+impl<T: Config> sp_staking::OnStakerSlash<AccountId, Balance> for OnStakerSlashMock<T> {
+	fn on_slash(
+		_pool_account: &AccountId,
+		slashed_bonded: Balance,
+		slashed_chunks: &BTreeMap<EraIndex, Balance>,
+	) {
+		LedgerSlashPerEra::set((slashed_bonded, slashed_chunks.clone()));
+	}
 }
 
 impl crate::pallet::pallet::Config for Test {
 	type MaxNominations = MaxNominations;
 	type Currency = Balances;
+	type CurrencyBalance = <Self as pallet_balances::Config>::Balance;
 	type UnixTime = Timestamp;
 	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
 	type RewardRemainder = RewardRemainderMock;
 	type Event = Event;
 	type Slash = ();
-	type Reward = ();
+	type Reward = MockReward;
 	type SessionsPerEra = SessionsPerEra;
 	type SlashDeferDuration = SlashDeferDuration;
 	type SlashCancelOrigin = frame_system::EnsureRoot<Self::AccountId>;
@@ -277,6 +299,7 @@ impl crate::pallet::pallet::Config for Test {
 	// NOTE: consider a macro and use `UseNominatorsAndValidatorsMap<Self>` as well.
 	type VoterList = BagsList;
 	type MaxUnlockingChunks = ConstU32<32>;
+	type OnStakerSlash = OnStakerSlashMock<Test>;
 	type BenchmarkingConfig = TestBenchmarkingConfig;
 	type WeightInfo = ();
 }
@@ -300,7 +323,7 @@ pub struct ExtBuilder {
 	invulnerables: Vec<AccountId>,
 	has_stakers: bool,
 	initialize_first_session: bool,
-	min_nominator_bond: Balance,
+	pub min_nominator_bond: Balance,
 	min_validator_bond: Balance,
 	balance_factor: Balance,
 	status: BTreeMap<AccountId, StakerStatus<AccountId>>,

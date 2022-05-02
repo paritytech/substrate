@@ -91,6 +91,7 @@ impl Config for Test {
 	type Currency = Balances;
 	type CreateOrigin = AsEnsureOriginWithArg<frame_system::EnsureSigned<u64>>;
 	type ForceOrigin = frame_system::EnsureRoot<u64>;
+	type Locker = ();
 	type ClassDeposit = ConstU64<2>;
 	type InstanceDeposit = ConstU64<1>;
 	type MetadataDepositBase = ConstU64<1>;

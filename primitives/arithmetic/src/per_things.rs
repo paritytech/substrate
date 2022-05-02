@@ -273,7 +273,7 @@ pub trait PerThing:
 	/// ```rust
 	/// # use sp_arithmetic::{Percent, PerThing};
 	/// # fn main () {
-	/// // 989/100 is technically closer to 99%.
+	/// // 989/1000 is technically closer to 99%.
 	/// assert_eq!(
 	/// 		Percent::from_rational(989u64, 1000),
 	/// 		Percent::from_parts(98),

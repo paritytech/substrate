@@ -31,5 +31,5 @@ sp-std = { path = "../../../primitives/std", version = "4.0.0" }
 remote-externalities = { path = "../../../utils/frame/remote-externalities", version = "0.10.0-dev" }
 
 # others
-log = "0.4.14"
+log = "0.4.16"
 tokio = { version = "1", features = ["macros"] }
