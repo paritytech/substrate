@@ -251,9 +251,9 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	///
 	/// By default this is retrieved from `PruningMode` if it is available. Otherwise its
 	/// `PruningMode::default()`.
-	fn state_pruning(&self, unsafe_pruning: bool, role: &Role) -> Result<PruningMode> {
+	fn state_pruning(&self) -> Result<Option<PruningMode>> {
 		self.pruning_params()
-			.map(|x| x.state_pruning(unsafe_pruning, role))
+			.map(|x| x.state_pruning())
 			.unwrap_or_else(|| Ok(Default::default()))
 	}
 
@@ -494,8 +494,6 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		let telemetry_endpoints = self.telemetry_endpoints(&chain_spec)?;
 		let runtime_cache_size = self.runtime_cache_size()?;
 
-		let unsafe_pruning = self.import_params().map(|p| p.unsafe_pruning).unwrap_or(false);
-
 		Ok(Configuration {
 			impl_name: C::impl_name(),
 			impl_version: C::impl_version(),
@@ -516,7 +514,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			database: self.database_config(&config_dir, database_cache_size, database, &role)?,
 			state_cache_size: self.state_cache_size()?,
 			state_cache_child_ratio: self.state_cache_child_ratio()?,
-			state_pruning: self.state_pruning(unsafe_pruning, &role)?,
+			state_pruning: self.state_pruning()?,
 			keep_blocks: self.keep_blocks()?,
 			wasm_method: self.wasm_method()?,
 			wasm_runtime_overrides: self.wasm_runtime_overrides(),
@@ -641,6 +639,17 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 					new_limit, RECOMMENDED_OPEN_FILE_DESCRIPTOR_LIMIT,
 				);
 			}
+		}
+
+		if self.import_params().map_or(false, |p| {
+			#[allow(deprecated)]
+			p.unsafe_pruning
+		}) {
+			// according to https://github.com/substrate/issues/8103;
+			warn!(
+				"WARNING: \"--unsafe-pruning\" CLI-flag is deprecated and has no effect. \
+				In future builds it will be removed, and providing this flag will lead to an error."
+			);
 		}
 
 		Ok(())
