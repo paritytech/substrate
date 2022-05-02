@@ -200,7 +200,12 @@ fn open_database_at<Block: BlockT>(
 		DatabaseSource::ParityDb { path } => open_parity_db::<Block>(&path, db_type, create)?,
 		DatabaseSource::RocksDb { path, cache_size } =>
 			open_kvdb_rocksdb::<Block>(&path, db_type, create, *cache_size)?,
-		DatabaseSource::Custom(db) => db.clone(),
+		DatabaseSource::Custom { db, require_create_flag } => {
+			if *require_create_flag && !create {
+				return Err(OpenDbError::DoesNotExist)
+			}
+			db.clone()
+		},
 		DatabaseSource::Auto { paritydb_path, rocksdb_path, cache_size } => {
 			// check if rocksdb exists first, if not, open paritydb
 			match open_kvdb_rocksdb::<Block>(&rocksdb_path, db_type, false, *cache_size) {

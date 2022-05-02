@@ -138,7 +138,10 @@ pub enum StateDbError {
 	/// Trying to insert block with unknown parent.
 	InvalidParent,
 	/// Invalid pruning mode specified. Contains expected mode.
-	InvalidPruningMode(Vec<u8>),
+	IncompatiblePruningModes {
+		stored: PruningMode,
+		requested: PruningMode,
+	 },
 	/// Too many unfinalized sibling blocks inserted.
 	TooManySiblingBlocks,
 	/// Trying to insert existing block.
@@ -181,7 +184,10 @@ impl fmt::Debug for StateDbError {
 			Self::InvalidBlock => write!(f, "Trying to canonicalize invalid block"),
 			Self::InvalidBlockNumber => write!(f, "Trying to insert block with invalid number"),
 			Self::InvalidParent => write!(f, "Trying to insert block with unknown parent"),
-			Self::InvalidPruningMode(e) => write!(f, "Expected pruning mode: {:02x?}", e),
+			Self::IncompatiblePruningModes {
+				stored,
+				requested,
+			 } => write!(f, "Incompatible pruning modes [stored: {:?}; requested: {:?}]", stored, requested),
 			Self::TooManySiblingBlocks => write!(f, "Too many sibling blocks inserted"),
 			Self::BlockAlreadyExists => write!(f, "Block already exists"),
 			Self::Metadata(message) => write!(f, "Invalid metadata: {}", message),
@@ -293,9 +299,6 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf> StateDbSync<Block
 	) -> Result<StateDbSync<BlockHash, Key>, Error<D::Error>> {
 		trace!(target: "state-db", "StateDb settings: {:?}. Ref-counting: {}", mode, ref_counting);
 
-		// Check that settings match
-		Self::check_meta(&mode, db)?;
-
 		let non_canonical: NonCanonicalOverlay<BlockHash, Key> = NonCanonicalOverlay::new(db)?;
 		let pruning: Option<RefWindow<BlockHash, Key>> = match mode {
 			PruningMode::Constrained(Constraints { max_mem: Some(_), .. }) => unimplemented!(),
@@ -306,19 +309,6 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf> StateDbSync<Block
 		Ok(StateDbSync { mode, non_canonical, pruning, pinned: Default::default() })
 	}
 
-	fn check_meta<D: MetaDb>(mode: &PruningMode, db: &D) -> Result<(), Error<D::Error>> {
-		let db_mode = db.get_meta(&to_meta_key(PRUNING_MODE, &())).map_err(Error::Db)?;
-		trace!(target: "state-db",
-			"DB pruning mode: {:?}",
-			db_mode.as_ref().map(|v| std::str::from_utf8(&v))
-		);
-		match &db_mode {
-			Some(v) if v.as_slice() == mode.id() => Ok(()),
-			Some(v) => return Err(StateDbError::InvalidPruningMode(v.to_owned()).into()),
-			None => Ok(()),
-		}
-	}
-
 	fn insert_block<E: fmt::Debug>(
 		&mut self,
 		hash: &BlockHash,
@@ -326,21 +316,14 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf> StateDbSync<Block
 		parent_hash: &BlockHash,
 		mut changeset: ChangeSet<Key>,
 	) -> Result<CommitSet<Key>, Error<E>> {
-		let mut meta = ChangeSet::default();
-		if number == 0 {
-			// Save pruning mode when writing first block.
-			meta.inserted.push((to_meta_key(PRUNING_MODE, &()), self.mode.id().into()));
-		}
-
 		match self.mode {
 			PruningMode::ArchiveAll => {
 				changeset.deleted.clear();
 				// write changes immediately
-				Ok(CommitSet { data: changeset, meta })
+				Ok(CommitSet { data: changeset, meta: Default::default() })
 			},
 			PruningMode::Constrained(_) | PruningMode::ArchiveCanonical => {
-				let mut commit = self.non_canonical.insert(hash, number, parent_hash, changeset)?;
-				commit.meta.inserted.extend(meta.inserted);
+				let commit = self.non_canonical.insert(hash, number, parent_hash, changeset)?;
 				Ok(commit)
 			},
 		}
@@ -661,7 +644,7 @@ fn fetch_stored_pruning_mode<D: MetaDb>(db: &D) -> Result<Option<PruningMode>, E
 		if let Some(mode) = PruningMode::from_id(&stored_mode) {
 			Ok(Some(mode))
 		} else {
-			Err(StateDbError::InvalidPruningMode(stored_mode.to_owned()).into())
+			Err(StateDbError::Metadata(format!("Invalid value stored for PRUNING_MODE: {:02x?}", stored_mode)).into())
 		}
 	} else {
 		Ok(None)
@@ -677,11 +660,10 @@ fn choose_pruning_mode(
 		(PruningMode::ArchiveCanonical, PruningMode::ArchiveCanonical) => Ok(PruningMode::ArchiveCanonical),
 		(PruningMode::Constrained(_), PruningMode::Constrained(requested)) => Ok(PruningMode::Constrained(requested)),
 		(stored, requested) => Err(
-			StateDbError::Metadata(
-				format!(
-					"Requested pruning-mode is incompatible with the pruning-mode used upon previous usage [requested: {:?}; stored: {:?}]", 
-					requested, stored))
-		)
+			StateDbError::IncompatiblePruningModes {
+				requested,
+				stored,
+			})
 	}
 }
 
@@ -690,6 +672,7 @@ mod tests {
 	use crate::{
 		test::{make_changeset, make_db, TestDb},
 		Constraints, PruningMode, StateDb,
+		Error, StateDbError,
 	};
 	use sp_core::H256;
 	use std::io;
@@ -811,7 +794,7 @@ mod tests {
 	#[test]
 	fn detects_incompatible_mode() {
 		let mut db = make_db(&[]);
-		let state_db = StateDb::new(PruningMode::ArchiveAll, false, &db).unwrap();
+		let state_db = StateDb::open(&mut db, Some(PruningMode::ArchiveAll), false, true).unwrap();
 		db.commit(
 			&state_db
 				.insert_block::<io::Error>(
@@ -823,7 +806,68 @@ mod tests {
 				.unwrap(),
 		);
 		let new_mode = PruningMode::Constrained(Constraints { max_blocks: Some(2), max_mem: None });
-		let state_db: Result<StateDb<H256, H256>, _> = StateDb::new(new_mode, false, &db);
+		let state_db: Result<StateDb<H256, H256>, _> = StateDb::open(&mut db, Some(new_mode), false, false);
 		assert!(state_db.is_err());
+	}
+
+	fn check_stored_and_requested_mode_compatibility(
+		mode_when_created: Option<PruningMode>,
+		mode_when_reopened: Option<PruningMode>,
+		expected_effective_mode_when_reopenned: Result<PruningMode, ()>,
+	) {
+		let mut db = make_db(&[]);
+		let state_db = StateDb::<H256, H256>::open(&mut db, mode_when_created, false, true).unwrap();
+		std::mem::drop(state_db);
+
+		let state_db_reopened = StateDb::<H256, H256>::open(&mut db, mode_when_reopened, false, false);
+		if let Ok(expected_mode) = expected_effective_mode_when_reopenned {
+			assert_eq!(
+				state_db_reopened.unwrap().pruning_mode(),
+				expected_mode,
+			)
+		} else {
+			assert!(matches!(
+				state_db_reopened,
+				Err(Error::StateDb(StateDbError::IncompatiblePruningModes { .. }))
+			));
+		}
+	}
+
+	#[test]
+	fn pruning_mode_compatibility() {
+		for (created, reopened, expected) in [
+			(None, None, Ok(PruningMode::keep_blocks(256))),
+			(None, Some(PruningMode::keep_blocks(256)), Ok(PruningMode::keep_blocks(256))),
+			(None, Some(PruningMode::keep_blocks(128)), Ok(PruningMode::keep_blocks(128))),
+			(None, Some(PruningMode::keep_blocks(512)), Ok(PruningMode::keep_blocks(512))),
+			(None, Some(PruningMode::ArchiveAll), Err(())),
+			(None, Some(PruningMode::ArchiveCanonical), Err(())),
+
+
+			(Some(PruningMode::keep_blocks(256)), None, Ok(PruningMode::keep_blocks(256))),
+			(Some(PruningMode::keep_blocks(256)), Some(PruningMode::keep_blocks(256)), Ok(PruningMode::keep_blocks(256))),
+			(Some(PruningMode::keep_blocks(256)), Some(PruningMode::keep_blocks(128)), Ok(PruningMode::keep_blocks(128))),
+			(Some(PruningMode::keep_blocks(256)), Some(PruningMode::keep_blocks(512)), Ok(PruningMode::keep_blocks(512))),
+			(Some(PruningMode::keep_blocks(256)), Some(PruningMode::ArchiveAll), Err(())),
+			(Some(PruningMode::keep_blocks(256)), Some(PruningMode::ArchiveCanonical), Err(())),
+
+
+			(Some(PruningMode::ArchiveAll), None, Ok(PruningMode::ArchiveAll)),
+			(Some(PruningMode::ArchiveAll), Some(PruningMode::keep_blocks(256)), Err(())),
+			(Some(PruningMode::ArchiveAll), Some(PruningMode::keep_blocks(128)), Err(())),
+			(Some(PruningMode::ArchiveAll), Some(PruningMode::keep_blocks(512)), Err(())),
+			(Some(PruningMode::ArchiveAll), Some(PruningMode::ArchiveAll), Ok(PruningMode::ArchiveAll)),
+			(Some(PruningMode::ArchiveAll), Some(PruningMode::ArchiveCanonical), Err(())),
+
+			(Some(PruningMode::ArchiveCanonical), None, Ok(PruningMode::ArchiveCanonical)),
+			(Some(PruningMode::ArchiveCanonical), Some(PruningMode::keep_blocks(256)), Err(())),
+			(Some(PruningMode::ArchiveCanonical), Some(PruningMode::keep_blocks(128)), Err(())),
+			(Some(PruningMode::ArchiveCanonical), Some(PruningMode::keep_blocks(512)), Err(())),
+			(Some(PruningMode::ArchiveCanonical), Some(PruningMode::ArchiveAll), Err(())),
+			(Some(PruningMode::ArchiveCanonical), Some(PruningMode::ArchiveCanonical), Ok(PruningMode::ArchiveCanonical)),
+		] {
+			check_stored_and_requested_mode_compatibility(created, reopened, expected);
+		}
+		
 	}
 }

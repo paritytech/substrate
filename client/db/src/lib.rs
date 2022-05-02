@@ -341,7 +341,13 @@ pub enum DatabaseSource {
 	},
 
 	/// Use a custom already-open database.
-	Custom(Arc<dyn Database<DbHash>>),
+	Custom { 
+		/// the handle to the custom storage
+		db: Arc<dyn Database<DbHash>>,
+
+		/// if set, the `create` flag will be required to open such datasource
+		require_create_flag: bool,
+	},
 }
 
 impl DatabaseSource {
@@ -354,7 +360,7 @@ impl DatabaseSource {
 			// I would think rocksdb, but later parity-db.
 			DatabaseSource::Auto { paritydb_path, .. } => Some(&paritydb_path),
 			DatabaseSource::RocksDb { path, .. } | DatabaseSource::ParityDb { path } => Some(&path),
-			DatabaseSource::Custom(..) => None,
+			DatabaseSource::Custom { .. } => None,
 		}
 	}
 
@@ -370,7 +376,7 @@ impl DatabaseSource {
 				*path = p.into();
 				true
 			},
-			DatabaseSource::Custom(..) => false,
+			DatabaseSource::Custom { .. } => false,
 		}
 	}
 }
@@ -381,7 +387,7 @@ impl std::fmt::Display for DatabaseSource {
 			DatabaseSource::Auto { .. } => "Auto",
 			DatabaseSource::RocksDb { .. } => "RocksDb",
 			DatabaseSource::ParityDb { .. } => "ParityDb",
-			DatabaseSource::Custom(_) => "Custom",
+			DatabaseSource::Custom { .. } => "Custom",
 		};
 		write!(f, "{}", name)
 	}
@@ -1064,7 +1070,7 @@ impl<Block: BlockT> Backend<Block> {
 			state_cache_size: 16777216,
 			state_cache_child_ratio: Some((50, 100)),
 			state_pruning: Some(PruningMode::keep_blocks(keep_blocks)),
-			source: DatabaseSource::Custom(db),
+			source: DatabaseSource::Custom { db, require_create_flag: true },
 			keep_blocks: KeepBlocks::Some(keep_blocks),
 		};
 
@@ -2440,7 +2446,7 @@ pub(crate) mod tests {
 				state_cache_size: 16777216,
 				state_cache_child_ratio: Some((50, 100)),
 				state_pruning: Some(PruningMode::keep_blocks(1)),
-				source: DatabaseSource::Custom(backing),
+				source: DatabaseSource::Custom { db: backing, require_create_flag: false, },
 				keep_blocks: KeepBlocks::All,
 			},
 			0,

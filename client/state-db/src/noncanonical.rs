@@ -27,7 +27,6 @@ use codec::{Decode, Encode};
 use log::trace;
 use std::{
 	collections::{hash_map::Entry, HashMap, VecDeque},
-	fmt,
 };
 
 const NON_CANONICAL_JOURNAL: &[u8] = b"noncanonical_journal";
