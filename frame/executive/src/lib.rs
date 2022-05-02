@@ -730,7 +730,7 @@ mod tests {
 	);
 
 	parameter_types! {
-		pub BlockWeights: frame_system::limits::BlockWeights =
+		pub NormalBlockWeights: frame_system::limits::BlockWeights =
 			frame_system::limits::BlockWeights::builder()
 				.base_block(Weight::from_computation(10))
 				.for_class(DispatchClass::all(), |weights| weights.base_extrinsic = Weight::from_computation(5))
@@ -738,6 +738,27 @@ mod tests {
 					weights.max_total = Some(Weight::new().set_computation(1024).set_bandwidth(512))
 				)
 				.build_or_panic();
+
+		pub MaxBandwidthBlockWeights: frame_system::limits::BlockWeights =
+			frame_system::limits::BlockWeights::builder()
+				.base_block(Weight::from_computation(10))
+				.for_class(DispatchClass::all(), |weights| weights.base_extrinsic = Weight::from_computation(5))
+				.for_class(DispatchClass::non_mandatory(), |weights|
+					weights.max_total = Some(Weight::new().set_computation(1024).set_bandwidth(u64::MAX))
+				)
+				.build_or_panic();
+
+		pub MaxComputationBlockWeights: frame_system::limits::BlockWeights =
+			frame_system::limits::BlockWeights::builder()
+				.base_block(Weight::from_computation(10))
+				.for_class(DispatchClass::all(), |weights| weights.base_extrinsic = Weight::from_computation(5))
+				.for_class(DispatchClass::non_mandatory(), |weights|
+					weights.max_total = Some(Weight::new().set_computation(u64::MAX).set_bandwidth(1024))
+				)
+				.build_or_panic();
+
+		pub static BlockWeights: frame_system::limits::BlockWeights = NormalBlockWeights::get();
+
 		pub const DbWeight: RuntimeDbWeight = RuntimeDbWeight {
 			read: 10,
 			write: 100,
@@ -995,23 +1016,22 @@ mod tests {
 	// SHAWN TODO ADD TESTS FOR NEW WEIGHT
 
 	#[test]
-	fn block_weight_limit_enforced() {
+	fn computational_block_weight_limit_enforced() {
 		let mut t = new_test_ext(10000);
 		// given: TestXt uses the encoded len as fixed Len:
 		let xt = TestXt::new(
 			Call::Balances(BalancesCall::transfer { dest: 33, value: 0 }),
 			sign_extra(1, 0, 0),
 		);
+		// Ignore the bandwidth limits
+		BlockWeights::set(MaxBandwidthBlockWeights::get());
 		let encoded = xt.encode();
 		let encoded_len = encoded.len() as u64;
 		// on_initialize weight + base block execution weight
-		let block_weights = dbg!(<Runtime as frame_system::Config>::BlockWeights::get());
+		let block_weights = <Runtime as frame_system::Config>::BlockWeights::get();
 		let base_block_weight = Weight::from_computation(175) + block_weights.base_block;
 		let limit = block_weights.get(DispatchClass::Normal).max_total.unwrap() - base_block_weight;
-		let comp_num_to_exhaust_block = limit.computation() / (encoded_len + 5);
-		let band_num_to_exhaust_block = limit.bandwidth() / (encoded_len + 5);
-		let num_to_exhaust_block = comp_num_to_exhaust_block.min(band_num_to_exhaust_block);
-		println!("max: {:?}", num_to_exhaust_block);
+		let num_to_exhaust_block = limit.computation() / (encoded_len + 5);
 		t.execute_with(|| {
 			Executive::initialize_block(&Header::new(
 				1,
@@ -1036,7 +1056,58 @@ mod tests {
 						//--------------------- on_initialize + block_execution + extrinsic_base weight
 						(encoded_len + 5) * (nonce + 1) + base_block_weight.computation(),
 					);
-					println!("{:?} {:?}", nonce, <frame_system::Pallet<Runtime>>::block_weight().total());
+					assert_eq!(
+						<frame_system::Pallet<Runtime>>::extrinsic_index(),
+						Some(nonce as u32 + 1)
+					);
+				} else {
+					assert_eq!(res, Err(InvalidTransaction::ExhaustsResources.into()));
+				}
+			}
+		});
+	}
+
+	#[test]
+	fn bandwidth_block_weight_limit_enforced() {
+		let mut t = new_test_ext(10000);
+		// given: TestXt uses the encoded len as fixed Len:
+		let xt = TestXt::new(
+			Call::Balances(BalancesCall::transfer { dest: 33, value: 0 }),
+			sign_extra(1, 0, 0),
+		);
+		// Ignore the bandwidth limits
+		BlockWeights::set(MaxComputationBlockWeights::get());
+		let encoded = xt.encode();
+		let encoded_len = encoded.len() as u64;
+		// on_initialize weight + base block execution weight
+		let block_weights = <Runtime as frame_system::Config>::BlockWeights::get();
+		let base_block_weight = Weight::from_computation(175) + block_weights.base_block;
+		let limit = block_weights.get(DispatchClass::Normal).max_total.unwrap() - base_block_weight;
+		let num_to_exhaust_block = limit.bandwidth() / encoded_len;
+		t.execute_with(|| {
+			Executive::initialize_block(&Header::new(
+				1,
+				H256::default(),
+				H256::default(),
+				[69u8; 32].into(),
+				Digest::default(),
+			));
+			// Base block execution weight + `on_initialize` weight from the custom module.
+			assert_eq!(<frame_system::Pallet<Runtime>>::block_weight().total(), base_block_weight);
+
+			for nonce in 0..=num_to_exhaust_block {
+				let xt = TestXt::new(
+					Call::Balances(BalancesCall::transfer { dest: 33, value: 0 }),
+					sign_extra(1, nonce.into(), 0),
+				);
+				let res = Executive::apply_extrinsic(xt);
+				if nonce != num_to_exhaust_block {
+					assert!(res.is_ok());
+					assert_eq!(
+						<frame_system::Pallet<Runtime>>::block_weight().total().computation(),
+						//--------------------- on_initialize + block_execution + extrinsic_base weight
+						(encoded_len + 5) * (nonce + 1) + base_block_weight.computation(),
+					);
 					assert_eq!(
 						<frame_system::Pallet<Runtime>>::extrinsic_index(),
 						Some(nonce as u32 + 1)
