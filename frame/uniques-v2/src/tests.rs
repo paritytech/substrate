@@ -33,8 +33,7 @@ fn get_id_from_event() -> Result<<Test as Config>::CollectionId, &'static str> {
 	if let Some(e) = last_event.clone() {
 		match e.event {
 			mock::Event::Uniques(inner_event) => match inner_event {
-				Event::CollectionCreated { id, max_supply: _, creator: _, owner: _ } =>
-					return Ok(id),
+				Event::CollectionCreated { id, .. } => return Ok(id),
 				_ => {},
 			},
 			_ => {},
@@ -158,7 +157,15 @@ fn minting_should_work() {
 
 		assert_eq!(
 			events(),
-			[Event::<Test>::CollectionCreated { id, max_supply: None, owner, creator }]
+			[Event::<Test>::CollectionCreated {
+				id,
+				max_supply: None,
+				max_items_per_account: None,
+				owner,
+				creator,
+				creator_royalties: Perbill::zero(),
+				owner_royalties: Perbill::zero(),
+			}]
 		);
 		assert_eq!(CollectionNextId::<Test>::get(), 1);
 		assert!(CollectionCreator::<Test>::contains_key(creator, id));

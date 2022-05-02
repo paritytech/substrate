@@ -78,7 +78,15 @@ impl<T: Config> Pallet<T> {
 			Self::deposit_event(Event::<T>::CollectionLocked { id });
 		}
 
-		Self::deposit_event(Event::<T>::CollectionCreated { id, max_supply, creator, owner });
+		Self::deposit_event(Event::<T>::CollectionCreated {
+			id,
+			max_supply,
+			max_items_per_account,
+			creator,
+			owner,
+			creator_royalties,
+			owner_royalties,
+		});
 
 		// update the next id value
 		let next_id = id.checked_add(&One::one()).ok_or(Error::<T>::Overflow)?;

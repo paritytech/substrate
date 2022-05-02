@@ -243,8 +243,11 @@ pub mod pallet {
 		CollectionCreated {
 			id: T::CollectionId,
 			max_supply: Option<u32>,
+			max_items_per_account: Option<u32>,
 			creator: T::AccountId,
 			owner: T::AccountId,
+			creator_royalties: Perbill,
+			owner_royalties: Perbill,
 		},
 		CollectionMetadataSet {
 			id: T::CollectionId,
