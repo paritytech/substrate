@@ -122,9 +122,13 @@ pub trait NodeDb {
 }
 
 /// Error type.
-pub enum Error<E: fmt::Debug> {
+pub enum Error<E> {
 	/// Database backend error.
 	Db(E),
+	StateDb(StateDbError),
+}
+
+pub enum StateDbError {
 	/// `Codec` decoding error.
 	Decoding(codec::Error),
 	/// Trying to canonicalize invalid block.
@@ -139,6 +143,14 @@ pub enum Error<E: fmt::Debug> {
 	TooManySiblingBlocks,
 	/// Trying to insert existing block.
 	BlockAlreadyExists,
+	/// Invalid metadata
+	Metadata(String),
+}
+
+impl<E> From<StateDbError> for Error<E> {
+	fn from(inner: StateDbError) -> Self {
+		Self::StateDb(inner)
+	}
 }
 
 /// Pinning error type.
@@ -149,21 +161,30 @@ pub enum PinError {
 
 impl<E: fmt::Debug> From<codec::Error> for Error<E> {
 	fn from(x: codec::Error) -> Self {
-		Error::Decoding(x)
+		StateDbError::Decoding(x).into()
 	}
 }
 
 impl<E: fmt::Debug> fmt::Debug for Error<E> {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match self {
-			Error::Db(e) => e.fmt(f),
-			Error::Decoding(e) => write!(f, "Error decoding sliceable value: {}", e),
-			Error::InvalidBlock => write!(f, "Trying to canonicalize invalid block"),
-			Error::InvalidBlockNumber => write!(f, "Trying to insert block with invalid number"),
-			Error::InvalidParent => write!(f, "Trying to insert block with unknown parent"),
-			Error::InvalidPruningMode(e) => write!(f, "Expected pruning mode: {}", e),
-			Error::TooManySiblingBlocks => write!(f, "Too many sibling blocks inserted"),
-			Error::BlockAlreadyExists => write!(f, "Block already exists"),
+			Self::Db(e) => e.fmt(f),
+			Self::StateDb(e) => e.fmt(f),
+		}
+	}
+}
+
+impl fmt::Debug for StateDbError {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		match self {
+			Self::Decoding(e) => write!(f, "Error decoding sliceable value: {}", e),
+			Self::InvalidBlock => write!(f, "Trying to canonicalize invalid block"),
+			Self::InvalidBlockNumber => write!(f, "Trying to insert block with invalid number"),
+			Self::InvalidParent => write!(f, "Trying to insert block with unknown parent"),
+			Self::InvalidPruningMode(e) => write!(f, "Expected pruning mode: {}", e),
+			Self::TooManySiblingBlocks => write!(f, "Too many sibling blocks inserted"),
+			Self::BlockAlreadyExists => write!(f, "Block already exists"),
+			Self::Metadata(message) => write!(f, "Invalid metadata: {}", message),
 		}
 	}
 }
@@ -239,9 +260,7 @@ impl Default for PruningMode {
 
 impl Default for Constraints {
 	fn default() -> Self {
-		Self {
-			max_blocks: Some(256), max_mem: None
-		}
+		Self { max_blocks: Some(256), max_mem: None }
 	}
 }
 
@@ -287,7 +306,10 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf> StateDbSync<Block
 		);
 		match &db_mode {
 			Some(v) if v.as_slice() == mode.id() => Ok(()),
-			Some(v) => Err(Error::InvalidPruningMode(String::from_utf8_lossy(v).into())),
+			Some(v) =>
+				return Err(
+					StateDbError::InvalidPruningMode(String::from_utf8_lossy(v).into()).into()
+				),
 			None => Ok(()),
 		}
 	}
@@ -312,11 +334,9 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf> StateDbSync<Block
 				Ok(CommitSet { data: changeset, meta })
 			},
 			PruningMode::Constrained(_) | PruningMode::ArchiveCanonical => {
-				let commit = self.non_canonical.insert(hash, number, parent_hash, changeset);
-				commit.map(|mut c| {
-					c.meta.inserted.extend(meta.inserted);
-					c
-				})
+				let mut commit = self.non_canonical.insert(hash, number, parent_hash, changeset)?;
+				commit.meta.inserted.extend(meta.inserted);
+				Ok(commit)
 			},
 		}
 	}
@@ -334,7 +354,7 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf> StateDbSync<Block
 				if self.mode == PruningMode::ArchiveCanonical {
 					commit.data.deleted.clear();
 				},
-			Err(e) => return Err(e),
+			Err(e) => return Err(e.into()),
 		};
 		if let Some(ref mut pruning) = self.pruning {
 			pruning.note_canonical(&hash, &mut commit);
@@ -511,11 +531,39 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf> StateDb<BlockHash
 		requested_mode: Option<PruningMode>,
 		ref_counting: bool,
 		should_init: bool,
-	) -> Result<StateDb<BlockHash, Key>, Error<D::Error>> 
-	where D: MetaDb
+	) -> Result<StateDb<BlockHash, Key>, Error<D::Error>>
+	where
+		D: MetaDb,
 	{
-		let mode = requested_mode.unwrap_or_default();
-		Ok(StateDb { db: RwLock::new(StateDbSync::new(mode, ref_counting, db)?) })
+		let stored_mode = {
+			let meta_key_mode = to_meta_key(PRUNING_MODE, &());
+			let stored_mode = db.get_meta(&meta_key_mode).map_err(Error::Db)?;
+			match stored_mode.as_ref().map(Vec::as_slice) {
+				None => unimplemented!(),
+				Some(PRUNING_MODE_ARCHIVE) => Some(PruningMode::ArchiveAll),
+				Some(PRUNING_MODE_ARCHIVE_CANON) => Some(PruningMode::ArchiveCanonical),
+				Some(PRUNING_MODE_CONSTRAINED) =>
+					Some(PruningMode::Constrained(Default::default())),
+				Some(unsupported) =>
+					return Err(unimplemented!("unsupported mode stored: {:?}", unsupported)),
+			}
+		};
+		let (should_store, selected_mode) = match (should_init, requested_mode, stored_mode) {
+			(true, stored_mode, requested_mode) => {
+				assert!(
+					stored_mode.is_none(),
+					"The storage has just been initialized. No meta-data is expected to be found in it.");
+				(true, requested_mode.unwrap_or_default())
+			},
+			(false, None, _requested) =>
+				return Err(StateDbError::Metadata(
+					"An existing StateDb does not have PRUNING_MODE stored in its meta-data".into(),
+				)
+				.into()),
+			(_, _, _) => unimplemented!(),
+		};
+
+		Ok(StateDb { db: RwLock::new(StateDbSync::new(selected_mode, ref_counting, db)?) })
 	}
 
 	pub fn pruning_mode(&self) -> PruningMode {

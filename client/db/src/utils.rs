@@ -224,7 +224,10 @@ pub enum OpenDbError {
 	DoesNotExist,
 	Internal(String),
 	DatabaseError(sp_database::error::DatabaseError),
-	UnexpectedDbType { expected: DatabaseType, found: Vec<u8>, },
+	UnexpectedDbType {
+		expected: DatabaseType,
+		found: Vec<u8>,
+	},
 }
 
 type OpenDbResult = Result<Arc<dyn Database<DbHash>>, OpenDbError>;
@@ -369,7 +372,10 @@ pub fn check_database_type(
 	match db.get(COLUMN_META, meta_keys::TYPE) {
 		Some(stored_type) =>
 			if db_type.as_str().as_bytes() != &*stored_type {
-				return Err(OpenDbError::UnexpectedDbType { expected: db_type, found: stored_type.to_owned() })
+				return Err(OpenDbError::UnexpectedDbType {
+					expected: db_type,
+					found: stored_type.to_owned(),
+				})
 			},
 		None => {
 			let mut transaction = Transaction::new();
@@ -613,7 +619,7 @@ mod tests {
 			}
 
 			source.set_path(&old_db_path.join(db_type.as_str()));
-			
+
 			let db_res = open_database::<Block>(&source, db_type, true);
 			assert!(db_res.is_ok(), "Reopening the db with the same role should work");
 			// check if the database dir had been migrated
@@ -718,13 +724,21 @@ mod tests {
 
 		// it should fail to open existing auto (pairtydb) database
 		{
-			let db_res = open_database::<Block>(&DatabaseSource::RocksDb { path: rocksdb_path, cache_size: 128 }, DatabaseType::Full, true);
+			let db_res = open_database::<Block>(
+				&DatabaseSource::RocksDb { path: rocksdb_path, cache_size: 128 },
+				DatabaseType::Full,
+				true,
+			);
 			assert!(db_res.is_ok(), "New database should be opened.");
 		}
 
 		// it should reopen existing auto (pairtydb) database
 		{
-			let db_res = open_database::<Block>(&DatabaseSource::ParityDb { path: paritydb_path }, DatabaseType::Full, true);
+			let db_res = open_database::<Block>(
+				&DatabaseSource::ParityDb { path: paritydb_path },
+				DatabaseType::Full,
+				true,
+			);
 			assert!(db_res.is_ok(), "Existing parity database should be reopened");
 		}
 	}
@@ -759,13 +773,21 @@ mod tests {
 
 		// it should fail to open existing auto (rocksdb) database
 		{
-			let db_res = open_database::<Block>(&DatabaseSource::ParityDb { path: paritydb_path }, DatabaseType::Full, true);
+			let db_res = open_database::<Block>(
+				&DatabaseSource::ParityDb { path: paritydb_path },
+				DatabaseType::Full,
+				true,
+			);
 			assert!(db_res.is_ok(), "New paritydb database should be created");
 		}
 
 		// it should reopen existing auto (pairtydb) database
 		{
-			let db_res = open_database::<Block>(&DatabaseSource::RocksDb { path: rocksdb_path, cache_size: 128 }, DatabaseType::Full, true);
+			let db_res = open_database::<Block>(
+				&DatabaseSource::RocksDb { path: rocksdb_path, cache_size: 128 },
+				DatabaseType::Full,
+				true,
+			);
 			assert!(db_res.is_ok(), "Existing rocksdb database should be reopened");
 		}
 	}
@@ -795,13 +817,21 @@ mod tests {
 
 		// it should fail to open existing pairtydb database
 		{
-			let db_res = open_database::<Block>(&DatabaseSource::RocksDb { path: rocksdb_path.clone(), cache_size: 128 }, DatabaseType::Full, true);
+			let db_res = open_database::<Block>(
+				&DatabaseSource::RocksDb { path: rocksdb_path.clone(), cache_size: 128 },
+				DatabaseType::Full,
+				true,
+			);
 			assert!(db_res.is_ok(), "New rocksdb database should be created");
 		}
 
 		// it should reopen existing auto (pairtydb) database
 		{
-			let db_res = open_database::<Block>(&DatabaseSource::Auto { paritydb_path, rocksdb_path, cache_size: 128 }, DatabaseType::Full, true);
+			let db_res = open_database::<Block>(
+				&DatabaseSource::Auto { paritydb_path, rocksdb_path, cache_size: 128 },
+				DatabaseType::Full,
+				true,
+			);
 			assert!(db_res.is_ok(), "Existing parity database should be reopened");
 		}
 	}

@@ -22,7 +22,7 @@
 //! All pending changes are kept in memory until next call to `apply_pending` or
 //! `revert_pending`
 
-use super::{to_meta_key, ChangeSet, CommitSet, DBValue, Error, Hash, MetaDb};
+use super::{to_meta_key, ChangeSet, CommitSet, DBValue, Error, Hash, MetaDb, StateDbError};
 use codec::{Decode, Encode};
 use log::trace;
 use std::{
@@ -244,13 +244,13 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 
 	/// Insert a new block into the overlay. If inserted on the second level or lover expects parent
 	/// to be present in the window.
-	pub fn insert<E: fmt::Debug>(
+	pub fn insert(
 		&mut self,
 		hash: &BlockHash,
 		number: u64,
 		parent_hash: &BlockHash,
 		changeset: ChangeSet<Key>,
-	) -> Result<CommitSet<Key>, Error<E>> {
+	) -> Result<CommitSet<Key>, StateDbError> {
 		let mut commit = CommitSet::default();
 		let front_block_number = self.front_block_number();
 		if self.levels.is_empty() && self.last_canonicalized.is_none() && number > 0 {
@@ -269,7 +269,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 					front_block_number,
 					front_block_number + self.levels.len() as u64,
 				);
-				return Err(Error::InvalidBlockNumber)
+				return Err(StateDbError::InvalidBlockNumber)
 			}
 			// check for valid parent if inserting on second level or higher
 			if number == front_block_number {
@@ -278,10 +278,10 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 					.as_ref()
 					.map_or(false, |&(ref h, n)| h == parent_hash && n == number - 1)
 				{
-					return Err(Error::InvalidParent)
+					return Err(StateDbError::InvalidParent)
 				}
 			} else if !self.parents.contains_key(&parent_hash) {
-				return Err(Error::InvalidParent)
+				return Err(StateDbError::InvalidParent)
 			}
 		}
 		let level = if self.levels.is_empty() ||
@@ -295,10 +295,10 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 		};
 
 		if level.blocks.len() >= MAX_BLOCKS_PER_LEVEL as usize {
-			return Err(Error::TooManySiblingBlocks)
+			return Err(StateDbError::TooManySiblingBlocks)
 		}
 		if level.blocks.iter().any(|b| b.hash == *hash) {
-			return Err(Error::BlockAlreadyExists)
+			return Err(StateDbError::BlockAlreadyExists)
 		}
 
 		let index = level.available_index();
@@ -382,21 +382,21 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 
 	/// Select a top-level root and canonicalized it. Discards all sibling subtrees and the root.
 	/// Returns a set of changes that need to be added to the DB.
-	pub fn canonicalize<E: fmt::Debug>(
+	pub fn canonicalize(
 		&mut self,
 		hash: &BlockHash,
 		commit: &mut CommitSet<Key>,
-	) -> Result<(), Error<E>> {
+	) -> Result<(), StateDbError> {
 		trace!(target: "state-db", "Canonicalizing {:?}", hash);
 		let level = self
 			.levels
 			.get(self.pending_canonicalizations.len())
-			.ok_or_else(|| Error::InvalidBlock)?;
+			.ok_or_else(|| StateDbError::InvalidBlock)?;
 		let index = level
 			.blocks
 			.iter()
 			.position(|overlay| overlay.hash == *hash)
-			.ok_or_else(|| Error::InvalidBlock)?;
+			.ok_or_else(|| StateDbError::InvalidBlock)?;
 
 		let mut discarded_journals = Vec::new();
 		let mut discarded_blocks = Vec::new();
@@ -645,10 +645,9 @@ mod tests {
 	use super::{to_journal_key, NonCanonicalOverlay};
 	use crate::{
 		test::{make_changeset, make_db},
-		ChangeSet, CommitSet, Error, MetaDb,
+		ChangeSet, CommitSet, MetaDb, StateDbError,
 	};
 	use sp_core::H256;
-	use std::io;
 
 	fn contains(overlay: &NonCanonicalOverlay<H256, H256>, key: u64) -> bool {
 		overlay.get(&H256::from_low_u64_be(key)) ==
@@ -670,7 +669,7 @@ mod tests {
 		let db = make_db(&[]);
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
 		let mut commit = CommitSet::default();
-		overlay.canonicalize::<io::Error>(&H256::default(), &mut commit).unwrap();
+		overlay.canonicalize(&H256::default(), &mut commit).unwrap();
 	}
 
 	#[test]
@@ -680,10 +679,8 @@ mod tests {
 		let h1 = H256::random();
 		let h2 = H256::random();
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
-		overlay
-			.insert::<io::Error>(&h1, 2, &H256::default(), ChangeSet::default())
-			.unwrap();
-		overlay.insert::<io::Error>(&h2, 1, &h1, ChangeSet::default()).unwrap();
+		overlay.insert(&h1, 2, &H256::default(), ChangeSet::default()).unwrap();
+		overlay.insert(&h2, 1, &h1, ChangeSet::default()).unwrap();
 	}
 
 	#[test]
@@ -693,10 +690,8 @@ mod tests {
 		let h2 = H256::random();
 		let db = make_db(&[]);
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
-		overlay
-			.insert::<io::Error>(&h1, 1, &H256::default(), ChangeSet::default())
-			.unwrap();
-		overlay.insert::<io::Error>(&h2, 3, &h1, ChangeSet::default()).unwrap();
+		overlay.insert(&h1, 1, &H256::default(), ChangeSet::default()).unwrap();
+		overlay.insert(&h2, 3, &h1, ChangeSet::default()).unwrap();
 	}
 
 	#[test]
@@ -706,12 +701,8 @@ mod tests {
 		let h1 = H256::random();
 		let h2 = H256::random();
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
-		overlay
-			.insert::<io::Error>(&h1, 1, &H256::default(), ChangeSet::default())
-			.unwrap();
-		overlay
-			.insert::<io::Error>(&h2, 2, &H256::default(), ChangeSet::default())
-			.unwrap();
+		overlay.insert(&h1, 1, &H256::default(), ChangeSet::default()).unwrap();
+		overlay.insert(&h2, 2, &H256::default(), ChangeSet::default()).unwrap();
 	}
 
 	#[test]
@@ -719,12 +710,10 @@ mod tests {
 		let db = make_db(&[]);
 		let h1 = H256::random();
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
-		overlay
-			.insert::<io::Error>(&h1, 2, &H256::default(), ChangeSet::default())
-			.unwrap();
+		overlay.insert(&h1, 2, &H256::default(), ChangeSet::default()).unwrap();
 		assert!(matches!(
-			overlay.insert::<io::Error>(&h1, 2, &H256::default(), ChangeSet::default()),
-			Err(Error::BlockAlreadyExists)
+			overlay.insert(&h1, 2, &H256::default(), ChangeSet::default()),
+			Err(StateDbError::BlockAlreadyExists)
 		));
 	}
 
@@ -735,11 +724,9 @@ mod tests {
 		let h2 = H256::random();
 		let db = make_db(&[]);
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
-		overlay
-			.insert::<io::Error>(&h1, 1, &H256::default(), ChangeSet::default())
-			.unwrap();
+		overlay.insert(&h1, 1, &H256::default(), ChangeSet::default()).unwrap();
 		let mut commit = CommitSet::default();
-		overlay.canonicalize::<io::Error>(&h2, &mut commit).unwrap();
+		overlay.canonicalize(&h2, &mut commit).unwrap();
 	}
 
 	#[test]
@@ -748,16 +735,14 @@ mod tests {
 		let mut db = make_db(&[1, 2]);
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
 		let changeset = make_changeset(&[3, 4], &[2]);
-		let insertion = overlay
-			.insert::<io::Error>(&h1, 1, &H256::default(), changeset.clone())
-			.unwrap();
+		let insertion = overlay.insert(&h1, 1, &H256::default(), changeset.clone()).unwrap();
 		assert_eq!(insertion.data.inserted.len(), 0);
 		assert_eq!(insertion.data.deleted.len(), 0);
 		assert_eq!(insertion.meta.inserted.len(), 2);
 		assert_eq!(insertion.meta.deleted.len(), 0);
 		db.commit(&insertion);
 		let mut finalization = CommitSet::default();
-		overlay.canonicalize::<io::Error>(&h1, &mut finalization).unwrap();
+		overlay.canonicalize(&h1, &mut finalization).unwrap();
 		assert_eq!(finalization.data.inserted.len(), changeset.inserted.len());
 		assert_eq!(finalization.data.deleted.len(), changeset.deleted.len());
 		assert_eq!(finalization.meta.inserted.len(), 1);
@@ -774,10 +759,10 @@ mod tests {
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
 		db.commit(
 			&overlay
-				.insert::<io::Error>(&h1, 10, &H256::default(), make_changeset(&[3, 4], &[2]))
+				.insert(&h1, 10, &H256::default(), make_changeset(&[3, 4], &[2]))
 				.unwrap(),
 		);
-		db.commit(&overlay.insert::<io::Error>(&h2, 11, &h1, make_changeset(&[5], &[3])).unwrap());
+		db.commit(&overlay.insert(&h2, 11, &h1, make_changeset(&[5], &[3])).unwrap());
 		assert_eq!(db.meta.len(), 3);
 
 		let overlay2 = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
@@ -794,12 +779,12 @@ mod tests {
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
 		db.commit(
 			&overlay
-				.insert::<io::Error>(&h1, 10, &H256::default(), make_changeset(&[3, 4], &[2]))
+				.insert(&h1, 10, &H256::default(), make_changeset(&[3, 4], &[2]))
 				.unwrap(),
 		);
-		db.commit(&overlay.insert::<io::Error>(&h2, 11, &h1, make_changeset(&[5], &[3])).unwrap());
+		db.commit(&overlay.insert(&h2, 11, &h1, make_changeset(&[5], &[3])).unwrap());
 		let mut commit = CommitSet::default();
-		overlay.canonicalize::<io::Error>(&h1, &mut commit).unwrap();
+		overlay.canonicalize(&h1, &mut commit).unwrap();
 		db.commit(&commit);
 		overlay.apply_pending();
 		assert_eq!(overlay.levels.len(), 1);
@@ -818,15 +803,15 @@ mod tests {
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
 		let changeset1 = make_changeset(&[5, 6], &[2]);
 		let changeset2 = make_changeset(&[7, 8], &[5, 3]);
-		db.commit(&overlay.insert::<io::Error>(&h1, 1, &H256::default(), changeset1).unwrap());
+		db.commit(&overlay.insert(&h1, 1, &H256::default(), changeset1).unwrap());
 		assert!(contains(&overlay, 5));
-		db.commit(&overlay.insert::<io::Error>(&h2, 2, &h1, changeset2).unwrap());
+		db.commit(&overlay.insert(&h2, 2, &h1, changeset2).unwrap());
 		assert!(contains(&overlay, 7));
 		assert!(contains(&overlay, 5));
 		assert_eq!(overlay.levels.len(), 2);
 		assert_eq!(overlay.parents.len(), 2);
 		let mut commit = CommitSet::default();
-		overlay.canonicalize::<io::Error>(&h1, &mut commit).unwrap();
+		overlay.canonicalize(&h1, &mut commit).unwrap();
 		db.commit(&commit);
 		assert!(contains(&overlay, 5));
 		assert_eq!(overlay.levels.len(), 2);
@@ -837,7 +822,7 @@ mod tests {
 		assert!(!contains(&overlay, 5));
 		assert!(contains(&overlay, 7));
 		let mut commit = CommitSet::default();
-		overlay.canonicalize::<io::Error>(&h2, &mut commit).unwrap();
+		overlay.canonicalize(&h2, &mut commit).unwrap();
 		db.commit(&commit);
 		overlay.apply_pending();
 		assert_eq!(overlay.levels.len(), 0);
@@ -852,11 +837,11 @@ mod tests {
 		let (h_2, c_2) = (H256::random(), make_changeset(&[1], &[]));
 
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
-		db.commit(&overlay.insert::<io::Error>(&h_1, 1, &H256::default(), c_1).unwrap());
-		db.commit(&overlay.insert::<io::Error>(&h_2, 1, &H256::default(), c_2).unwrap());
+		db.commit(&overlay.insert(&h_1, 1, &H256::default(), c_1).unwrap());
+		db.commit(&overlay.insert(&h_2, 1, &H256::default(), c_2).unwrap());
 		assert!(contains(&overlay, 1));
 		let mut commit = CommitSet::default();
-		overlay.canonicalize::<io::Error>(&h_1, &mut commit).unwrap();
+		overlay.canonicalize(&h_1, &mut commit).unwrap();
 		db.commit(&commit);
 		assert!(contains(&overlay, 1));
 		overlay.apply_pending();
@@ -871,18 +856,14 @@ mod tests {
 		let mut db = make_db(&[]);
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
 		let changeset = make_changeset(&[], &[]);
-		db.commit(
-			&overlay
-				.insert::<io::Error>(&h1, 1, &H256::default(), changeset.clone())
-				.unwrap(),
-		);
-		db.commit(&overlay.insert::<io::Error>(&h2, 2, &h1, changeset.clone()).unwrap());
+		db.commit(&overlay.insert(&h1, 1, &H256::default(), changeset.clone()).unwrap());
+		db.commit(&overlay.insert(&h2, 2, &h1, changeset.clone()).unwrap());
 		overlay.apply_pending();
 		let mut commit = CommitSet::default();
-		overlay.canonicalize::<io::Error>(&h1, &mut commit).unwrap();
-		overlay.canonicalize::<io::Error>(&h2, &mut commit).unwrap();
+		overlay.canonicalize(&h1, &mut commit).unwrap();
+		overlay.canonicalize(&h2, &mut commit).unwrap();
 		db.commit(&commit);
-		db.commit(&overlay.insert::<io::Error>(&h3, 3, &h2, changeset.clone()).unwrap());
+		db.commit(&overlay.insert(&h3, 3, &h2, changeset.clone()).unwrap());
 		overlay.apply_pending();
 		assert_eq!(overlay.levels.len(), 1);
 	}
@@ -917,21 +898,21 @@ mod tests {
 		let (h_2_1_1, c_2_1_1) = (H256::random(), make_changeset(&[211], &[]));
 
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
-		db.commit(&overlay.insert::<io::Error>(&h_1, 1, &H256::default(), c_1).unwrap());
+		db.commit(&overlay.insert(&h_1, 1, &H256::default(), c_1).unwrap());
 
-		db.commit(&overlay.insert::<io::Error>(&h_1_1, 2, &h_1, c_1_1).unwrap());
-		db.commit(&overlay.insert::<io::Error>(&h_1_2, 2, &h_1, c_1_2).unwrap());
+		db.commit(&overlay.insert(&h_1_1, 2, &h_1, c_1_1).unwrap());
+		db.commit(&overlay.insert(&h_1_2, 2, &h_1, c_1_2).unwrap());
 
-		db.commit(&overlay.insert::<io::Error>(&h_2, 1, &H256::default(), c_2).unwrap());
+		db.commit(&overlay.insert(&h_2, 1, &H256::default(), c_2).unwrap());
 
-		db.commit(&overlay.insert::<io::Error>(&h_2_1, 2, &h_2, c_2_1).unwrap());
-		db.commit(&overlay.insert::<io::Error>(&h_2_2, 2, &h_2, c_2_2).unwrap());
+		db.commit(&overlay.insert(&h_2_1, 2, &h_2, c_2_1).unwrap());
+		db.commit(&overlay.insert(&h_2_2, 2, &h_2, c_2_2).unwrap());
 
-		db.commit(&overlay.insert::<io::Error>(&h_1_1_1, 3, &h_1_1, c_1_1_1).unwrap());
-		db.commit(&overlay.insert::<io::Error>(&h_1_2_1, 3, &h_1_2, c_1_2_1).unwrap());
-		db.commit(&overlay.insert::<io::Error>(&h_1_2_2, 3, &h_1_2, c_1_2_2).unwrap());
-		db.commit(&overlay.insert::<io::Error>(&h_1_2_3, 3, &h_1_2, c_1_2_3).unwrap());
-		db.commit(&overlay.insert::<io::Error>(&h_2_1_1, 3, &h_2_1, c_2_1_1).unwrap());
+		db.commit(&overlay.insert(&h_1_1_1, 3, &h_1_1, c_1_1_1).unwrap());
+		db.commit(&overlay.insert(&h_1_2_1, 3, &h_1_2, c_1_2_1).unwrap());
+		db.commit(&overlay.insert(&h_1_2_2, 3, &h_1_2, c_1_2_2).unwrap());
+		db.commit(&overlay.insert(&h_1_2_3, 3, &h_1_2, c_1_2_3).unwrap());
+		db.commit(&overlay.insert(&h_2_1_1, 3, &h_2_1, c_2_1_1).unwrap());
 
 		assert!(contains(&overlay, 2));
 		assert!(contains(&overlay, 11));
@@ -951,7 +932,7 @@ mod tests {
 
 		// canonicalize 1. 2 and all its children should be discarded
 		let mut commit = CommitSet::default();
-		overlay.canonicalize::<io::Error>(&h_1, &mut commit).unwrap();
+		overlay.canonicalize(&h_1, &mut commit).unwrap();
 		db.commit(&commit);
 		overlay.apply_pending();
 		assert_eq!(overlay.levels.len(), 2);
@@ -972,7 +953,7 @@ mod tests {
 
 		// canonicalize 1_2. 1_1 and all its children should be discarded
 		let mut commit = CommitSet::default();
-		overlay.canonicalize::<io::Error>(&h_1_2, &mut commit).unwrap();
+		overlay.canonicalize(&h_1_2, &mut commit).unwrap();
 		db.commit(&commit);
 		overlay.apply_pending();
 		assert_eq!(overlay.levels.len(), 1);
@@ -989,7 +970,7 @@ mod tests {
 
 		// canonicalize 1_2_2
 		let mut commit = CommitSet::default();
-		overlay.canonicalize::<io::Error>(&h_1_2_2, &mut commit).unwrap();
+		overlay.canonicalize(&h_1_2_2, &mut commit).unwrap();
 		db.commit(&commit);
 		overlay.apply_pending();
 		assert_eq!(overlay.levels.len(), 0);
@@ -1007,8 +988,8 @@ mod tests {
 		assert!(overlay.revert_one().is_none());
 		let changeset1 = make_changeset(&[5, 6], &[2]);
 		let changeset2 = make_changeset(&[7, 8], &[5, 3]);
-		db.commit(&overlay.insert::<io::Error>(&h1, 1, &H256::default(), changeset1).unwrap());
-		db.commit(&overlay.insert::<io::Error>(&h2, 2, &h1, changeset2).unwrap());
+		db.commit(&overlay.insert(&h1, 1, &H256::default(), changeset1).unwrap());
+		db.commit(&overlay.insert(&h2, 2, &h1, changeset2).unwrap());
 		assert!(contains(&overlay, 7));
 		db.commit(&overlay.revert_one().unwrap());
 		assert_eq!(overlay.parents.len(), 1);
@@ -1030,10 +1011,10 @@ mod tests {
 		let changeset1 = make_changeset(&[5, 6], &[2]);
 		let changeset2 = make_changeset(&[7, 8], &[5, 3]);
 		let changeset3 = make_changeset(&[9], &[]);
-		overlay.insert::<io::Error>(&h1, 1, &H256::default(), changeset1).unwrap();
+		overlay.insert(&h1, 1, &H256::default(), changeset1).unwrap();
 		assert!(contains(&overlay, 5));
-		overlay.insert::<io::Error>(&h2_1, 2, &h1, changeset2).unwrap();
-		overlay.insert::<io::Error>(&h2_2, 2, &h1, changeset3).unwrap();
+		overlay.insert(&h2_1, 2, &h1, changeset2).unwrap();
+		overlay.insert(&h2_2, 2, &h1, changeset3).unwrap();
 		assert!(contains(&overlay, 7));
 		assert!(contains(&overlay, 5));
 		assert!(contains(&overlay, 9));
@@ -1057,14 +1038,14 @@ mod tests {
 		let (h_2, c_2) = (H256::random(), make_changeset(&[2], &[]));
 
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
-		db.commit(&overlay.insert::<io::Error>(&h_1, 1, &H256::default(), c_1).unwrap());
-		db.commit(&overlay.insert::<io::Error>(&h_2, 1, &H256::default(), c_2).unwrap());
+		db.commit(&overlay.insert(&h_1, 1, &H256::default(), c_1).unwrap());
+		db.commit(&overlay.insert(&h_2, 1, &H256::default(), c_2).unwrap());
 		overlay.apply_pending();
 
 		overlay.pin(&h_1);
 
 		let mut commit = CommitSet::default();
-		overlay.canonicalize::<io::Error>(&h_2, &mut commit).unwrap();
+		overlay.canonicalize(&h_2, &mut commit).unwrap();
 		db.commit(&commit);
 		overlay.apply_pending();
 		assert!(contains(&overlay, 1));
@@ -1087,15 +1068,15 @@ mod tests {
 		let (h_3, c_3) = (H256::random(), make_changeset(&[], &[]));
 
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
-		db.commit(&overlay.insert::<io::Error>(&h_1, 1, &H256::default(), c_1).unwrap());
-		db.commit(&overlay.insert::<io::Error>(&h_2, 1, &H256::default(), c_2).unwrap());
-		db.commit(&overlay.insert::<io::Error>(&h_3, 1, &H256::default(), c_3).unwrap());
+		db.commit(&overlay.insert(&h_1, 1, &H256::default(), c_1).unwrap());
+		db.commit(&overlay.insert(&h_2, 1, &H256::default(), c_2).unwrap());
+		db.commit(&overlay.insert(&h_3, 1, &H256::default(), c_3).unwrap());
 		overlay.apply_pending();
 
 		overlay.pin(&h_1);
 
 		let mut commit = CommitSet::default();
-		overlay.canonicalize::<io::Error>(&h_3, &mut commit).unwrap();
+		overlay.canonicalize(&h_3, &mut commit).unwrap();
 		db.commit(&commit);
 		overlay.apply_pending(); // 1_2 should be discarded, 1_1 is pinned
 
@@ -1117,15 +1098,15 @@ mod tests {
 		let (h_21, c_21) = (H256::random(), make_changeset(&[], &[]));
 
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
-		db.commit(&overlay.insert::<io::Error>(&h_11, 1, &H256::default(), c_11).unwrap());
-		db.commit(&overlay.insert::<io::Error>(&h_12, 1, &H256::default(), c_12).unwrap());
-		db.commit(&overlay.insert::<io::Error>(&h_21, 2, &h_11, c_21).unwrap());
+		db.commit(&overlay.insert(&h_11, 1, &H256::default(), c_11).unwrap());
+		db.commit(&overlay.insert(&h_12, 1, &H256::default(), c_12).unwrap());
+		db.commit(&overlay.insert(&h_21, 2, &h_11, c_21).unwrap());
 		overlay.apply_pending();
 
 		overlay.pin(&h_21);
 
 		let mut commit = CommitSet::default();
-		overlay.canonicalize::<io::Error>(&h_12, &mut commit).unwrap();
+		overlay.canonicalize(&h_12, &mut commit).unwrap();
 		db.commit(&commit);
 		overlay.apply_pending(); // 1_1 and 2_1 should be both pinned
 
@@ -1146,18 +1127,14 @@ mod tests {
 		let h21 = H256::random();
 		let mut db = make_db(&[]);
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
-		db.commit(
-			&overlay
-				.insert::<io::Error>(&root, 10, &H256::default(), make_changeset(&[], &[]))
-				.unwrap(),
-		);
-		db.commit(&overlay.insert::<io::Error>(&h1, 11, &root, make_changeset(&[1], &[])).unwrap());
-		db.commit(&overlay.insert::<io::Error>(&h2, 11, &root, make_changeset(&[2], &[])).unwrap());
-		db.commit(&overlay.insert::<io::Error>(&h11, 12, &h1, make_changeset(&[11], &[])).unwrap());
-		db.commit(&overlay.insert::<io::Error>(&h21, 12, &h2, make_changeset(&[21], &[])).unwrap());
+		db.commit(&overlay.insert(&root, 10, &H256::default(), make_changeset(&[], &[])).unwrap());
+		db.commit(&overlay.insert(&h1, 11, &root, make_changeset(&[1], &[])).unwrap());
+		db.commit(&overlay.insert(&h2, 11, &root, make_changeset(&[2], &[])).unwrap());
+		db.commit(&overlay.insert(&h11, 12, &h1, make_changeset(&[11], &[])).unwrap());
+		db.commit(&overlay.insert(&h21, 12, &h2, make_changeset(&[21], &[])).unwrap());
 		let mut commit = CommitSet::default();
-		overlay.canonicalize::<io::Error>(&root, &mut commit).unwrap();
-		overlay.canonicalize::<io::Error>(&h2, &mut commit).unwrap(); // h11 should stay in the DB
+		overlay.canonicalize(&root, &mut commit).unwrap();
+		overlay.canonicalize(&h2, &mut commit).unwrap(); // h11 should stay in the DB
 		db.commit(&commit);
 		overlay.apply_pending();
 		assert_eq!(overlay.levels.len(), 1);
@@ -1171,7 +1148,7 @@ mod tests {
 		assert!(contains(&overlay, 21));
 
 		let mut commit = CommitSet::default();
-		overlay.canonicalize::<io::Error>(&h21, &mut commit).unwrap(); // h11 should stay in the DB
+		overlay.canonicalize(&h21, &mut commit).unwrap(); // h11 should stay in the DB
 		db.commit(&commit);
 		overlay.apply_pending();
 		assert!(!contains(&overlay, 21));
@@ -1188,25 +1165,21 @@ mod tests {
 		let h21 = H256::random();
 		let mut db = make_db(&[]);
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
-		db.commit(
-			&overlay
-				.insert::<io::Error>(&root, 10, &H256::default(), make_changeset(&[], &[]))
-				.unwrap(),
-		);
-		db.commit(&overlay.insert::<io::Error>(&h1, 11, &root, make_changeset(&[1], &[])).unwrap());
-		db.commit(&overlay.insert::<io::Error>(&h2, 11, &root, make_changeset(&[2], &[])).unwrap());
-		db.commit(&overlay.insert::<io::Error>(&h11, 12, &h1, make_changeset(&[11], &[])).unwrap());
-		db.commit(&overlay.insert::<io::Error>(&h21, 12, &h2, make_changeset(&[21], &[])).unwrap());
+		db.commit(&overlay.insert(&root, 10, &H256::default(), make_changeset(&[], &[])).unwrap());
+		db.commit(&overlay.insert(&h1, 11, &root, make_changeset(&[1], &[])).unwrap());
+		db.commit(&overlay.insert(&h2, 11, &root, make_changeset(&[2], &[])).unwrap());
+		db.commit(&overlay.insert(&h11, 12, &h1, make_changeset(&[11], &[])).unwrap());
+		db.commit(&overlay.insert(&h21, 12, &h2, make_changeset(&[21], &[])).unwrap());
 		let mut commit = CommitSet::default();
-		overlay.canonicalize::<io::Error>(&root, &mut commit).unwrap();
-		overlay.canonicalize::<io::Error>(&h2, &mut commit).unwrap(); // h11 should stay in the DB
+		overlay.canonicalize(&root, &mut commit).unwrap();
+		overlay.canonicalize(&h2, &mut commit).unwrap(); // h11 should stay in the DB
 		db.commit(&commit);
 		overlay.apply_pending();
 
 		// add another block at top level. It should reuse journal index 0 of previously discarded
 		// block
 		let h22 = H256::random();
-		db.commit(&overlay.insert::<io::Error>(&h22, 12, &h2, make_changeset(&[22], &[])).unwrap());
+		db.commit(&overlay.insert(&h22, 12, &h2, make_changeset(&[22], &[])).unwrap());
 		assert_eq!(overlay.levels[0].blocks[0].journal_index, 1);
 		assert_eq!(overlay.levels[0].blocks[1].journal_index, 0);
 
@@ -1226,15 +1199,11 @@ mod tests {
 		let h21 = H256::random();
 		let mut db = make_db(&[]);
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
-		db.commit(
-			&overlay
-				.insert::<io::Error>(&root, 10, &H256::default(), make_changeset(&[], &[]))
-				.unwrap(),
-		);
-		db.commit(&overlay.insert::<io::Error>(&h1, 11, &root, make_changeset(&[1], &[])).unwrap());
-		db.commit(&overlay.insert::<io::Error>(&h2, 11, &root, make_changeset(&[2], &[])).unwrap());
-		db.commit(&overlay.insert::<io::Error>(&h11, 12, &h1, make_changeset(&[11], &[])).unwrap());
-		db.commit(&overlay.insert::<io::Error>(&h21, 12, &h2, make_changeset(&[21], &[])).unwrap());
+		db.commit(&overlay.insert(&root, 10, &H256::default(), make_changeset(&[], &[])).unwrap());
+		db.commit(&overlay.insert(&h1, 11, &root, make_changeset(&[1], &[])).unwrap());
+		db.commit(&overlay.insert(&h2, 11, &root, make_changeset(&[2], &[])).unwrap());
+		db.commit(&overlay.insert(&h11, 12, &h1, make_changeset(&[11], &[])).unwrap());
+		db.commit(&overlay.insert(&h21, 12, &h2, make_changeset(&[21], &[])).unwrap());
 		assert!(overlay.remove(&h1).is_none());
 		assert!(overlay.remove(&h2).is_none());
 		assert_eq!(overlay.levels.len(), 3);
