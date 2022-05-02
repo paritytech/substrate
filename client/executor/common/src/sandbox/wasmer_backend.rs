@@ -51,7 +51,7 @@ impl Backend {
 }
 
 /// Invoke a function within a sandboxed module
-#[instrument(skip(instance, sandbox_context), level="error")]
+#[instrument(skip(instance, sandbox_context), level = "error")]
 pub fn invoke(
 	instance: &wasmer::Instance,
 	export_name: &str,
@@ -87,11 +87,12 @@ pub fn invoke(
 				wasmer::Val::I64(val) => Value::I64(val),
 				wasmer::Val::F32(val) => Value::F32(f32::to_bits(val)),
 				wasmer::Val::F64(val) => Value::F64(f64::to_bits(val)),
-				_ =>
+				_ => {
 					return Err(Error::Sandbox(format!(
 						"Unsupported return value: {:?}",
 						wasm_value,
-					))),
+					)))
+				},
 			};
 
 			Ok(Some(wasmer_value))
@@ -163,7 +164,7 @@ pub fn instantiate(
 					index
 				} else {
 					// Missing import (should we abort here?)
-					continue
+					continue;
 				};
 
 				let supervisor_func_index = guest_env
@@ -192,8 +193,9 @@ pub fn instantiate(
 		wasmer::Instance::new(&module, &import_object).map_err(|error| match error {
 			wasmer::InstantiationError::Link(_) => InstantiationError::Instantiation,
 			wasmer::InstantiationError::Start(_) => InstantiationError::StartTrapped,
-			wasmer::InstantiationError::HostEnvInitialization(_) =>
-				InstantiationError::EnvironmentDefinitionCorrupted,
+			wasmer::InstantiationError::HostEnvInitialization(_) => {
+				InstantiationError::EnvironmentDefinitionCorrupted
+			},
 			wasmer::InstantiationError::CpuFeature(_) => InstantiationError::CpuFeature,
 		})
 	})?;
@@ -211,12 +213,25 @@ fn dispatch_function(
 	state: u32,
 ) -> wasmer::Function {
 	wasmer::Function::new(store, func_ty, move |params| {
-		let span = tracing::span!(sp_tracing::Level::ERROR, "wasmer::Function closure", index = supervisor_func_index.0, num_params = params.len());
-		let _enter = span.enter();
-
 		SandboxContextStore::with(|sandbox_context| {
-			let prepare_span = tracing::span!(sp_tracing::Level::ERROR, "wasmer::Function prepare", index = supervisor_func_index.0, num_params = params.len());
+			let start = std::time::Instant::now();
+
+			let span = tracing::span!(
+				sp_tracing::Level::ERROR,
+				"wasmer::Function closure",
+				index = supervisor_func_index.0,
+				num_params = params.len()
+			);
+			let _enter = span.enter();
+
+			let prepare_span = tracing::span!(
+				sp_tracing::Level::ERROR,
+				"wasmer::Function prepare",
+				index = supervisor_func_index.0,
+				num_params = params.len()
+			);
 			let _prepre_enter = prepare_span.enter();
+
 
 			// Serialize arguments into a byte vector.
 			let invoke_args_data = params
@@ -226,8 +241,9 @@ fn dispatch_function(
 					wasmer::Val::I64(val) => Ok(Value::I64(*val)),
 					wasmer::Val::F32(val) => Ok(Value::F32(f32::to_bits(*val))),
 					wasmer::Val::F64(val) => Ok(Value::F64(f64::to_bits(*val))),
-					_ =>
-						Err(RuntimeError::new(format!("Unsupported function argument: {:?}", val))),
+					_ => {
+						Err(RuntimeError::new(format!("Unsupported function argument: {:?}", val)))
+					},
 				})
 				.collect::<std::result::Result<Vec<_>, _>>()?
 				.encode();
@@ -255,22 +271,37 @@ fn dispatch_function(
 					"Failed dealloction after failed write of invoke arguments",
 				)?;
 
-				return Err(RuntimeError::new("Can't write invoke args into memory"))
+				return Err(RuntimeError::new("Can't write invoke args into memory"));
 			}
 
 			drop(_prepre_enter);
+			drop(prepare_span);
+
+			let prepared = std::time::Instant::now();
 
 			// Perform the actuall call
 			let serialized_result = {
-				let span = tracing::span!(sp_tracing::Level::ERROR, "SandboxContext::invoke", index = supervisor_func_index.0);
+				let span = tracing::span!(
+					sp_tracing::Level::ERROR,
+					"SandboxContext::invoke",
+					index = supervisor_func_index.0
+				);
 				let _enter = span.enter();
 
 				sandbox_context
 					.invoke(invoke_args_ptr, invoke_args_len, state, supervisor_func_index)
 					.map_err(|e| RuntimeError::new(e.to_string()))
+
 			};
 
-			let finalize_span = tracing::span!(sp_tracing::Level::ERROR, "wasmer::Function finalize", index = supervisor_func_index.0, num_params = params.len());
+			let invoked = std::time::Instant::now();
+
+			let finalize_span = tracing::span!(
+				sp_tracing::Level::ERROR,
+				"wasmer::Function finalize",
+				index = supervisor_func_index.0,
+				num_params = params.len()
+			);
 			let _finalize_enter = finalize_span.enter();
 
 			deallocate(
@@ -320,6 +351,19 @@ fn dispatch_function(
 
 				ReturnValue::Unit => vec![],
 			};
+
+			drop(_finalize_enter);
+			drop(finalize_span);
+			drop(_enter);
+
+			let finalized = std::time::Instant::now();
+
+			println!("*** prepare {:?} + invoke {:?} + finalize {:?} = total {:?}",
+				prepared.duration_since(start),
+				invoked.duration_since(prepared),
+				finalized.duration_since(invoked),
+				finalized.duration_since(start)
+			);
 
 			Ok(result)
 		})

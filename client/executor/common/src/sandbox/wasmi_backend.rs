@@ -165,6 +165,8 @@ impl<'a> wasmi::Externals for GuestExternals<'a> {
 		args: RuntimeArgs,
 	) -> std::result::Result<Option<RuntimeValue>, Trap> {
 		SandboxContextStore::with(|sandbox_context| {
+			let start = std::time::Instant::now();
+
 			let prepare_span = tracing::span!(sp_tracing::Level::ERROR, "invoke_index prepare", index);
 			let _prepre_enter = prepare_span.enter();
 
@@ -220,6 +222,8 @@ impl<'a> wasmi::Externals for GuestExternals<'a> {
 
 			drop(_prepre_enter);
 
+			let prepared = std::time::Instant::now();
+
 			let result = {
 				let span = tracing::span!(sp_tracing::Level::ERROR, "SandboxContext::invoke", index = func_idx.0);
 				let _enter = span.enter();
@@ -231,6 +235,8 @@ impl<'a> wasmi::Externals for GuestExternals<'a> {
 					func_idx,
 				)
 			};
+
+			let invoked = std::time::Instant::now();
 
 			let finalize_span = tracing::span!(sp_tracing::Level::ERROR, "invoke_index finalize", index = index.0);
 			let _finalize_enter = finalize_span.enter();
@@ -257,7 +263,7 @@ impl<'a> wasmi::Externals for GuestExternals<'a> {
 				.read_memory(serialized_result_val_ptr, serialized_result_val_len)
 				.map_err(|_| trap("Can't read the serialized result from dispatch thunk"));
 
-			deallocate(
+			let return_value = deallocate(
 				sandbox_context.supervisor_context(),
 				serialized_result_val_ptr,
 				"Can't deallocate memory for dispatch thunk's result",
@@ -274,7 +280,18 @@ impl<'a> wasmi::Externals for GuestExternals<'a> {
 					}),
 					Err(HostError) => Err(trap("Supervisor function returned sandbox::HostError")),
 				}
-			})
+			});
+
+			let finalized = std::time::Instant::now();
+
+			println!("*** prepare {:?} + invoke {:?} + finalize {:?} = total {:?}",
+				prepared.duration_since(start),
+				invoked.duration_since(prepared),
+				finalized.duration_since(invoked),
+				finalized.duration_since(start)
+			);
+
+			return_value
 		}).expect("SandboxContextStore is set when invoking sandboxed functions; qed")
 	}
 }
