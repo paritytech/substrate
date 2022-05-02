@@ -1799,10 +1799,10 @@ fn lazy_removal_does_no_run_on_full_queue_and_full_block() {
 		let weight_used = Contracts::on_initialize(System::block_number());
 		let base = <<Test as Config>::WeightInfo as WeightInfo>::on_process_deletion_queue_batch();
 		assert_eq!(weight_used, base);
-        
-		// Check that the deletion queue is still full after execution of the 
+
+		// Check that the deletion queue is still full after execution of the
 		// on_initialize() hook.
-		let max_len: u32  = <Test as Config>::DeletionQueueDepth::get();
+		let max_len: u32 = <Test as Config>::DeletionQueueDepth::get();
 		let queue_len: u32 = <DeletionQueue<Test>>::decode_len().unwrap_or(0).try_into().unwrap();
 		assert_eq!(max_len, queue_len);
 	});
