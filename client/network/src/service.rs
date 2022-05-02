@@ -1971,14 +1971,14 @@ where
 						let reason = match cause {
 							Some(ConnectionError::IO(_)) => "transport-error",
 							Some(ConnectionError::Handler(EitherError::A(EitherError::A(
-								EitherError::A(EitherError::B(EitherError::A(
+								EitherError::A(EitherError::A(EitherError::B(EitherError::A(
 									PingFailure::Timeout,
-								))),
+								)))),
 							)))) => "ping-timeout",
 							Some(ConnectionError::Handler(EitherError::A(EitherError::A(
-								EitherError::A(EitherError::A(
+								EitherError::A(EitherError::A(EitherError::A(
 									NotifsHandlerError::SyncNotificationsClogged,
-								)),
+								))),
 							)))) => "sync-notifications-clogged",
 							Some(ConnectionError::Handler(_)) => "protocol-error",
 							Some(ConnectionError::KeepAliveTimeout) => "keep-alive-timeout",
