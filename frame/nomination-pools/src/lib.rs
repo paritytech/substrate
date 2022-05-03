@@ -741,7 +741,7 @@ impl<T: Config> BondedPool<T> {
 		let is_depositor = *target_account == self.roles.depositor;
 		let is_full_unbond = unbonding_points == target_member.active_points();
 
-		// any partial unbonding is onl ever allowed if this unbond is permissioned.
+		// any partial unbonding is only ever allowed if this unbond is permissioned.
 		ensure!(
 			is_permissioned || is_full_unbond,
 			Error::<T>::PartialUnbondNotAllowedPermissionlessly
