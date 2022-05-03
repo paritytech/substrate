@@ -26,6 +26,7 @@ use std::{
 		HashMap, HashSet,
 	},
 	hash::Hasher as _,
+	mem,
 	sync::Arc,
 };
 use trie_db::{node::NodeOwned, CachedValue};
@@ -106,6 +107,13 @@ impl<H: Hasher> SharedNodeCache<H> {
 	}
 }
 
+/// Configuration of the [`SharedTrieNodeCache`].
+#[derive(Debug, Clone)]
+pub struct Configuration {
+	/// The maximum size in bytes the cache should use.
+	pub maximum_size_in_bytes: usize,
+}
+
 pub struct SharedTrieNodeCache<H: Hasher> {
 	node_cache: Arc<RwLock<SharedNodeCache<H>>>,
 	value_cache: Arc<RwLock<NoHashingLruCache<CachedValue<H::Out>>>>,
@@ -119,10 +127,19 @@ impl<H: Hasher> Clone for SharedTrieNodeCache<H> {
 
 impl<H: Hasher> SharedTrieNodeCache<H> {
 	/// Create a new [`SharedTrieNodeCache`].
-	pub fn new() -> Self {
+	pub fn new(config: Configuration) -> Self {
+		// The value cache element size isn't that huge, roughly around 50 bytes (mainly depending
+		// on the hash size). Thus, we only give it 5% of the overall cache size.
+		let value_cache_element_size =
+			mem::size_of::<u64>() + mem::size_of::<CachedValue<H::Out>>();
+		let value_cache_size_in_bytes = (config.maximum_size_in_bytes as f32 * 0.05) as usize;
+
 		Self {
-			node_cache: Arc::new(RwLock::new(SharedNodeCache::new(100000))),
-			value_cache: Arc::new(RwLock::new(NoHashingLruCache::unbounded_with_hasher(
+			node_cache: Arc::new(RwLock::new(SharedNodeCache::new(
+				config.maximum_size_in_bytes - value_cache_size_in_bytes,
+			))),
+			value_cache: Arc::new(RwLock::new(NoHashingLruCache::with_hasher(
+				value_cache_size_in_bytes / value_cache_element_size,
 				Default::default(),
 			))),
 		}
@@ -334,6 +351,7 @@ impl<'a, H: Hasher> trie_db::TrieCache<NodeCodec<H>> for TrieNodeCache<'a, H> {
 
 #[cfg(test)]
 mod tests {
+	use super::*;
 	use trie_db::{Bytes, Trie, TrieDBBuilder, TrieDBMutBuilder, TrieHash, TrieMut};
 
 	use crate::cache::value_cache_get_key;
@@ -345,6 +363,7 @@ mod tests {
 
 	const TEST_DATA: &[(&[u8], &[u8])] =
 		&[(b"key1", b"val1"), (b"key2", &[2; 64]), (b"key3", b"val3"), (b"key4", &[4; 64])];
+	const CACHE_CONFIG: Configuration = Configuration { maximum_size_in_bytes: 1024 * 10 };
 
 	fn create_trie() -> (MemoryDB, TrieHash<Layout>) {
 		let mut db = MemoryDB::default();
@@ -364,7 +383,7 @@ mod tests {
 	fn basic_cache_works() {
 		let (db, root) = create_trie();
 
-		let shared_cache = Cache::new();
+		let shared_cache = Cache::new(CACHE_CONFIG);
 		let local_cache = shared_cache.local_cache();
 
 		{
@@ -414,7 +433,7 @@ mod tests {
 		// Use some long value to not have it inlined
 		let new_value = vec![23; 64];
 
-		let shared_cache = Cache::new();
+		let shared_cache = Cache::new(CACHE_CONFIG);
 		let local_cache = shared_cache.local_cache();
 
 		let mut new_root = root;
@@ -443,7 +462,7 @@ mod tests {
 	fn trie_db_cache_and_recorder_work_together() {
 		let (db, root) = create_trie();
 
-		let shared_cache = Cache::new();
+		let shared_cache = Cache::new(CACHE_CONFIG);
 		let local_cache = shared_cache.local_cache();
 
 		// Run this twice so that we use the data cache in the second run.
@@ -488,7 +507,7 @@ mod tests {
 
 		let (db, root) = create_trie();
 
-		let shared_cache = Cache::new();
+		let shared_cache = Cache::new(CACHE_CONFIG);
 		let local_cache = shared_cache.local_cache();
 
 		// Run this twice so that we use the data cache in the second run.
@@ -538,7 +557,7 @@ mod tests {
 	fn cache_lru_works() {
 		let (db, root) = create_trie();
 
-		let shared_cache = Cache::new();
+		let shared_cache = Cache::new(CACHE_CONFIG);
 
 		{
 			let local_cache = shared_cache.local_cache();
