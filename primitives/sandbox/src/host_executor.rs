@@ -164,6 +164,7 @@ pub struct Instance<T> {
 	instance_idx: u32,
 	_retained_memories: Vec<Memory>,
 	_marker: marker::PhantomData<T>,
+	// timestamp: std::time::Instant,
 }
 
 /// The primary responsibility of this thunk is to deserialize arguments and
@@ -244,8 +245,10 @@ impl<T> super::SandboxInstance<T> for Instance<T> {
 		})
 	}
 
+	// #[instrument(skip(store), level="error")]
 	fn invoke(&mut self, name: &str, args: &[Value], state: &mut T) -> Result<ReturnValue, Error> {
-		log::error!("*** Instance::invoke");
+		log::warn!("*** Instance::invoke");
+		// sp_tracing::enter_span!(sp_tracing::span!(sp_tracing::Level::ERROR, "Instance::invoke"));
 
 		let serialized_args = args.to_vec().encode();
 		let mut return_val = vec![0u8; ReturnValue::ENCODED_MAX_SIZE];
@@ -277,8 +280,10 @@ impl<T> super::SandboxInstance<T> for Instance<T> {
 }
 
 impl<T> Drop for Instance<T> {
+	// #[instrument(skip(self), fields(idx = self.instance_idx), level="error")]
 	fn drop(&mut self) {
 		log::error!("*** Instance::drop");
+		// sp_tracing::enter_span!(sp_tracing::span!(sp_tracing::Level::ERROR, "Instance::drop"));
 		sandbox::instance_teardown(self.instance_idx);
 	}
 }

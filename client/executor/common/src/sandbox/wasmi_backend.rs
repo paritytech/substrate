@@ -21,7 +21,7 @@
 use codec::{Decode, Encode};
 use sp_core::sandbox::HostError;
 use sp_wasm_interface::{FunctionContext, Pointer, ReturnValue, Value, WordSize};
-use tracing::instrument;
+// use tracing::instrument;
 use std::rc::Rc;
 
 use wasmi::{
@@ -158,7 +158,7 @@ impl MemoryTransfer for MemoryWrapper {
 }
 
 impl<'a> wasmi::Externals for GuestExternals<'a> {
-	#[instrument(skip(self), level="error")]
+	// #[instrument(skip(self), level="error")]
 	fn invoke_index(
 		&mut self,
 		index: usize,
@@ -167,8 +167,8 @@ impl<'a> wasmi::Externals for GuestExternals<'a> {
 		SandboxContextStore::with(|sandbox_context| {
 			let start = std::time::Instant::now();
 
-			let prepare_span = tracing::span!(sp_tracing::Level::ERROR, "invoke_index prepare", index);
-			let _prepre_enter = prepare_span.enter();
+			// let prepare_span = tracing::span!(sp_tracing::Level::ERROR, "invoke_index prepare", index);
+			// let _prepre_enter = prepare_span.enter();
 
 			// Make `index` typesafe again.
 			let index = GuestFuncIndex(index);
@@ -220,13 +220,13 @@ impl<'a> wasmi::Externals for GuestExternals<'a> {
 				return Err(trap("Can't write invoke args into memory"))
 			}
 
-			drop(_prepre_enter);
+			// drop(_prepre_enter);
 
 			let prepared = std::time::Instant::now();
 
 			let result = {
-				let span = tracing::span!(sp_tracing::Level::ERROR, "SandboxContext::invoke", index = func_idx.0);
-				let _enter = span.enter();
+				// let span = tracing::span!(sp_tracing::Level::ERROR, "SandboxContext::invoke", index = func_idx.0);
+				// let _enter = span.enter();
 
 				sandbox_context.invoke(
 					invoke_args_ptr,
@@ -238,8 +238,8 @@ impl<'a> wasmi::Externals for GuestExternals<'a> {
 
 			let invoked = std::time::Instant::now();
 
-			let finalize_span = tracing::span!(sp_tracing::Level::ERROR, "invoke_index finalize", index = index.0);
-			let _finalize_enter = finalize_span.enter();
+			// let finalize_span = tracing::span!(sp_tracing::Level::ERROR, "invoke_index finalize", index = index.0);
+			// let _finalize_enter = finalize_span.enter();
 
 			deallocate(
 				sandbox_context.supervisor_context(),
@@ -284,7 +284,8 @@ impl<'a> wasmi::Externals for GuestExternals<'a> {
 
 			let finalized = std::time::Instant::now();
 
-			println!("*** prepare {:?} + invoke {:?} + finalize {:?} = total {:?}",
+			log::warn!("*** invoke index {}: prepare {:?} + invoke {:?} + finalize {:?} = total {:?}",
+				func_idx.0,
 				prepared.duration_since(start),
 				invoked.duration_since(prepared),
 				finalized.duration_since(invoked),
@@ -304,13 +305,15 @@ where
 }
 
 /// Instantiate a module within a sandbox context
-#[instrument(skip_all, fields(len = wasm.len()), level="error")]
+// #[instrument(skip_all, fields(len = wasm.len()), level="error")]
 pub fn instantiate(
 	wasm: &[u8],
 	guest_env: GuestEnvironment,
 	state: u32,
 	sandbox_context: &mut dyn SandboxContext,
 ) -> std::result::Result<Rc<SandboxInstance>, InstantiationError> {
+	let start = std::time::Instant::now();
+
 	let wasmi_module = Module::from_buffer(wasm).map_err(|_| InstantiationError::ModuleDecoding)?;
 	let wasmi_instance = ModuleInstance::new(&wasmi_module, &guest_env.imports)
 		.map_err(|_| InstantiationError::Instantiation)?;
@@ -331,11 +334,14 @@ pub fn instantiate(
 		})
 	})?;
 
+	let instantiated = std::time::Instant::now();
+	log::warn!("*** instantiate wasm len {}: {:?}", wasm.len(), instantiated.duration_since(start));
+
 	Ok(sandbox_instance)
 }
 
 /// Invoke a function within a sandboxed module
-#[instrument(skip(instance, module, sandbox_context), level="error")]
+// #[instrument(skip(instance, module, sandbox_context), level="error")]
 pub fn invoke(
 	instance: &SandboxInstance,
 	module: &wasmi::ModuleRef,
@@ -344,7 +350,9 @@ pub fn invoke(
 	state: u32,
 	sandbox_context: &mut dyn SandboxContext,
 ) -> std::result::Result<Option<Value>, error::Error> {
-	with_guest_externals(instance, state, |guest_externals| {
+	let start = std::time::Instant::now();
+
+	let result = with_guest_externals(instance, state, |guest_externals| {
 		SandboxContextStore::using(sandbox_context, || {
 			let args = args.iter().cloned().map(Into::into).collect::<Vec<_>>();
 
@@ -353,5 +361,10 @@ pub fn invoke(
 				.map(|result| result.map(Into::into))
 				.map_err(|error| error::Error::Sandbox(error.to_string()))
 		})
-	})
+	});
+
+	let invoked = std::time::Instant::now();
+	log::warn!("*** invoke '{}' {:?}", export_name, invoked.duration_since(start));
+
+	result
 }

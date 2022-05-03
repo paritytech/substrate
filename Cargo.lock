@@ -8619,6 +8619,7 @@ name = "sc-executor-common"
 version = "0.10.0-dev"
 dependencies = [
  "environmental",
+ "log 0.4.14",
  "parity-scale-codec",
  "sc-allocator",
  "sp-core",

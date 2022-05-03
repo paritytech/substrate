@@ -27,6 +27,7 @@ environmental = "1.1.3"
 wasmer = { version = "2.2", optional = true, features = ["singlepass"] }
 tracing = "0.1.34"
 sp-tracing = { path = "../../../primitives/tracing" }
+log = "0.4.8"
 
 [features]
 default = []

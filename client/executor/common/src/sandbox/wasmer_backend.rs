@@ -51,7 +51,7 @@ impl Backend {
 }
 
 /// Invoke a function within a sandboxed module
-#[instrument(skip(instance, sandbox_context), level = "error")]
+// #[instrument(skip(instance, sandbox_context), level = "error")]
 pub fn invoke(
 	instance: &wasmer::Instance,
 	export_name: &str,
@@ -59,6 +59,8 @@ pub fn invoke(
 	_state: u32,
 	sandbox_context: &mut dyn SandboxContext,
 ) -> std::result::Result<Option<Value>, Error> {
+	let start = std::time::Instant::now();
+
 	let function = instance
 		.exports
 		.get_function(export_name)
@@ -77,6 +79,9 @@ pub fn invoke(
 	let wasmer_result = SandboxContextStore::using(sandbox_context, || {
 		function.call(&args).map_err(|error| Error::Sandbox(error.to_string()))
 	})?;
+
+	let invoked = std::time::Instant::now();
+	log::warn!("*** invoke '{}' {:?}", export_name, invoked.duration_since(start));
 
 	match wasmer_result.as_ref() {
 		[] => Ok(None),
@@ -103,7 +108,7 @@ pub fn invoke(
 }
 
 /// Instantiate a module within a sandbox context
-#[instrument(skip_all, fields(len = wasm.len()), level="error")]
+// #[instrument(skip_all, fields(len = wasm.len()), level="error")]
 pub fn instantiate(
 	context: &Backend,
 	wasm: &[u8],
@@ -111,6 +116,8 @@ pub fn instantiate(
 	state: u32,
 	sandbox_context: &mut dyn SandboxContext,
 ) -> std::result::Result<Rc<SandboxInstance>, InstantiationError> {
+	let start = std::time::Instant::now();
+
 	let module = wasmer::Module::new(&context.store, wasm)
 		.map_err(|_| InstantiationError::ModuleDecoding)?;
 
@@ -200,6 +207,9 @@ pub fn instantiate(
 		})
 	})?;
 
+	let instantiated = std::time::Instant::now();
+	log::warn!("*** instantiate wasm len {}: {:?}", wasm.len(), instantiated.duration_since(start));
+
 	Ok(Rc::new(SandboxInstance {
 		backend_instance: BackendInstance::Wasmer(instance),
 		guest_to_supervisor_mapping: guest_env.guest_to_supervisor_mapping,
@@ -216,21 +226,21 @@ fn dispatch_function(
 		SandboxContextStore::with(|sandbox_context| {
 			let start = std::time::Instant::now();
 
-			let span = tracing::span!(
-				sp_tracing::Level::ERROR,
-				"wasmer::Function closure",
-				index = supervisor_func_index.0,
-				num_params = params.len()
-			);
-			let _enter = span.enter();
+			// let span = tracing::span!(
+			// 	sp_tracing::Level::ERROR,
+			// 	"wasmer::Function closure",
+			// 	index = supervisor_func_index.0,
+			// 	num_params = params.len()
+			// );
+			// let _enter = span.enter();
 
-			let prepare_span = tracing::span!(
-				sp_tracing::Level::ERROR,
-				"wasmer::Function prepare",
-				index = supervisor_func_index.0,
-				num_params = params.len()
-			);
-			let _prepre_enter = prepare_span.enter();
+			// let prepare_span = tracing::span!(
+			// 	sp_tracing::Level::ERROR,
+			// 	"wasmer::Function prepare",
+			// 	index = supervisor_func_index.0,
+			// 	num_params = params.len()
+			// );
+			// let _prepre_enter = prepare_span.enter();
 
 
 			// Serialize arguments into a byte vector.
@@ -274,19 +284,19 @@ fn dispatch_function(
 				return Err(RuntimeError::new("Can't write invoke args into memory"));
 			}
 
-			drop(_prepre_enter);
-			drop(prepare_span);
+			// drop(_prepre_enter);
+			// drop(prepare_span);
 
 			let prepared = std::time::Instant::now();
 
 			// Perform the actuall call
 			let serialized_result = {
-				let span = tracing::span!(
-					sp_tracing::Level::ERROR,
-					"SandboxContext::invoke",
-					index = supervisor_func_index.0
-				);
-				let _enter = span.enter();
+				// let span = tracing::span!(
+				// 	sp_tracing::Level::ERROR,
+				// 	"SandboxContext::invoke",
+				// 	index = supervisor_func_index.0
+				// );
+				// let _enter = span.enter();
 
 				sandbox_context
 					.invoke(invoke_args_ptr, invoke_args_len, state, supervisor_func_index)
@@ -296,13 +306,13 @@ fn dispatch_function(
 
 			let invoked = std::time::Instant::now();
 
-			let finalize_span = tracing::span!(
-				sp_tracing::Level::ERROR,
-				"wasmer::Function finalize",
-				index = supervisor_func_index.0,
-				num_params = params.len()
-			);
-			let _finalize_enter = finalize_span.enter();
+			// let finalize_span = tracing::span!(
+			// 	sp_tracing::Level::ERROR,
+			// 	"wasmer::Function finalize",
+			// 	index = supervisor_func_index.0,
+			// 	num_params = params.len()
+			// );
+			// let _finalize_enter = finalize_span.enter();
 
 			deallocate(
 				sandbox_context.supervisor_context(),
@@ -352,13 +362,14 @@ fn dispatch_function(
 				ReturnValue::Unit => vec![],
 			};
 
-			drop(_finalize_enter);
-			drop(finalize_span);
-			drop(_enter);
+			// drop(_finalize_enter);
+			// drop(finalize_span);
+			// drop(_enter);
 
 			let finalized = std::time::Instant::now();
 
-			println!("*** prepare {:?} + invoke {:?} + finalize {:?} = total {:?}",
+			log::warn!("*** invoke index {}: prepare {:?} + invoke {:?} + finalize {:?} = total {:?}",
+				supervisor_func_index.0,
 				prepared.duration_since(start),
 				invoked.duration_since(prepared),
 				finalized.duration_since(invoked),
