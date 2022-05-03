@@ -34,7 +34,7 @@ mod pallet {
 				vec![(10, vec![1]), (20, vec![42]), (1_000, vec![2, 3, 4])]
 			);
 
-			// when increasing vote weight to the level of non-existent bag
+			// when increasing vote score to the level of non-existent bag
 			StakingMock::set_score_of(&42, 2_000);
 			assert_ok!(BagsList::rebag(Origin::signed(0), 42));
 
@@ -44,7 +44,7 @@ mod pallet {
 				vec![(10, vec![1]), (1_000, vec![2, 3, 4]), (2_000, vec![42])]
 			);
 
-			// when decreasing weight within the range of the current bag
+			// when decreasing score within the range of the current bag
 			StakingMock::set_score_of(&42, 1_001);
 			assert_ok!(BagsList::rebag(Origin::signed(0), 42));
 
@@ -54,7 +54,7 @@ mod pallet {
 				vec![(10, vec![1]), (1_000, vec![2, 3, 4]), (2_000, vec![42])]
 			);
 
-			// when reducing weight to the level of a non-existent bag
+			// when reducing score to the level of a non-existent bag
 			StakingMock::set_score_of(&42, 30);
 			assert_ok!(BagsList::rebag(Origin::signed(0), 42));
 
@@ -64,7 +64,7 @@ mod pallet {
 				vec![(10, vec![1]), (30, vec![42]), (1_000, vec![2, 3, 4])]
 			);
 
-			// when increasing weight to the level of a pre-existing bag
+			// when increasing score to the level of a pre-existing bag
 			StakingMock::set_score_of(&42, 500);
 			assert_ok!(BagsList::rebag(Origin::signed(0), 42));
 
