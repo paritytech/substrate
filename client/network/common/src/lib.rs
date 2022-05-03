@@ -16,14 +16,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! Include sources generated from protobuf definitions.
+//! Common data structures of the networking layer.
 
-pub mod v1 {
-	pub mod light {
-		include!(concat!(env!("OUT_DIR"), "/api.v1.light.rs"));
-	}
-}
-
-pub mod bitswap {
-	include!(concat!(env!("OUT_DIR"), "/bitswap.message.rs"));
-}
+pub mod config;
+pub mod message;
+pub mod request_responses;

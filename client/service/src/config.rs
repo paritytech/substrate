@@ -23,11 +23,16 @@ pub use sc_client_db::{Database, DatabaseSource, KeepBlocks, PruningMode};
 pub use sc_executor::WasmExecutionMethod;
 pub use sc_network::{
 	config::{
-		IncomingRequest, MultiaddrWithPeerId, NetworkConfiguration, NodeKeyConfig,
-		NonDefaultSetConfig, OutgoingResponse, RequestResponseConfig, Role, SetConfig,
-		TransportConfig,
+		MultiaddrWithPeerId, NetworkConfiguration, NodeKeyConfig, NonDefaultSetConfig, Role,
+		SetConfig, TransportConfig,
 	},
 	Multiaddr,
+};
+pub use sc_network_common::{
+	config::ProtocolId,
+	request_responses::{
+		IncomingRequest, OutgoingResponse, ProtocolConfig as RequestResponseConfig,
+	},
 };
 
 use prometheus_endpoint::Registry;
@@ -208,7 +213,7 @@ impl Configuration {
 	}
 
 	/// Returns the network protocol id from the chain spec, or the default.
-	pub fn protocol_id(&self) -> sc_network::config::ProtocolId {
+	pub fn protocol_id(&self) -> ProtocolId {
 		let protocol_id_full = match self.chain_spec.protocol_id() {
 			Some(pid) => pid,
 			None => {
@@ -220,7 +225,7 @@ impl Configuration {
 				crate::DEFAULT_PROTOCOL_ID
 			},
 		};
-		sc_network::config::ProtocolId::from(protocol_id_full)
+		ProtocolId::from(protocol_id_full)
 	}
 }
 
