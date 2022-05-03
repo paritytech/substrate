@@ -18,7 +18,7 @@
 use crate::{mock::*, *};
 use codec::{Decode, Encode};
 use enumflags2::BitFlags;
-use sp_runtime::{traits::TrailingZeroInput, AccountId32, MultiSignature, Perbill};
+use sp_runtime::{traits::TrailingZeroInput, AccountId32, MultiSignature, MultiSigner, Perbill};
 
 use frame_support::{assert_noop, assert_ok, traits::Currency};
 
@@ -108,6 +108,13 @@ fn approvals(collection_id: u32, item_id: u32) -> Vec<(u64, Option<u64>)> {
 	let item = Items::<Test>::get(collection_id, item_id).unwrap();
 	let s: Vec<_> = item.approvals.into_iter().collect();
 	s
+}
+
+fn signer_to_account_id(signer: &MultiSigner) -> <Test as frame_system::Config>::AccountId {
+	<Test as frame_system::Config>::AccountId::decode(&mut AccountId32::as_ref(
+		&signer.clone().into_account(),
+	))
+	.unwrap()
 }
 
 pub const DEFAULT_SYSTEM_FEATURES: SystemFeature = SystemFeature::NoDeposit;
@@ -720,8 +727,8 @@ fn buy_item_should_work() {
 		let item_1 = 1;
 		let item_2 = 2;
 		let item_3 = 3;
-		let price_1 = 2;
-		let price_2 = 3;
+		let price_1 = 20;
+		let price_2 = 30;
 		let initial_balance = 100;
 
 		Balances::make_free_balance_be(&user_1, initial_balance);
@@ -1039,11 +1046,7 @@ fn accept_buy_offer_should_work() {
 		let bid_price = 5;
 		let initial_balance = 100;
 		let signer = crypto::create_ed25519_pubkey(b"//verifier".to_vec());
-
-		let signer_id = <Test as frame_system::Config>::AccountId::decode(
-			&mut AccountId32::as_ref(&signer.clone().into_account()),
-		)
-		.unwrap();
+		let signer_id = signer_to_account_id(&signer.clone());
 
 		Balances::make_free_balance_be(&user_1, initial_balance);
 		Balances::make_free_balance_be(&signer_id, initial_balance);
@@ -1112,11 +1115,7 @@ fn swap_items_should_work() {
 		let price = 5;
 		let initial_balance = 100;
 		let signer = crypto::create_ed25519_pubkey(b"//verifier".to_vec());
-
-		let user_1 = <Test as frame_system::Config>::AccountId::decode(&mut AccountId32::as_ref(
-			&signer.clone().into_account(),
-		))
-		.unwrap();
+		let user_1 = signer_to_account_id(&signer.clone());
 
 		Balances::make_free_balance_be(&user_1, initial_balance);
 		Balances::make_free_balance_be(&user_2, initial_balance);
@@ -1336,6 +1335,267 @@ fn setting_royalties_should_work() {
 			),
 			Error::<Test>::TotalRoyaltiesExceedHundredPercent
 		);
+	});
+}
+
+#[test]
+fn paying_royalties_when_buying_an_item() {
+	new_test_ext().execute_with(|| {
+		let collection_id = 0;
+		let item_id = 1;
+		let user_1 = 1;
+		let user_2 = 2;
+		let creator = 3;
+		let owner = 4;
+		let price = 10;
+		let initial_balance = 2000;
+
+		Balances::make_free_balance_be(&user_1, initial_balance);
+		Balances::make_free_balance_be(&user_2, initial_balance);
+		Balances::make_free_balance_be(&creator, initial_balance);
+		Balances::make_free_balance_be(&owner, initial_balance);
+
+		assert_ok!(Uniques::create(
+			Origin::signed(creator),
+			owner,
+			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
+			None,
+			None,
+			Perbill::from_percent(10),
+			Perbill::from_percent(20),
+		));
+
+		assert_ok!(Uniques::mint(Origin::signed(owner), user_1, collection_id, item_id));
+
+		assert_ok!(Uniques::set_price(
+			Origin::signed(user_1),
+			collection_id,
+			item_id,
+			Some(price),
+			None,
+		));
+
+		assert_ok!(Uniques::buy_item(Origin::signed(user_2), collection_id, item_id, price));
+
+		// validate balances
+		let expect_creator_royalties = 1;
+		let expect_owner_royalties = 2;
+		let expect_received_for_item = price - expect_creator_royalties - expect_owner_royalties;
+
+		assert_eq!(Balances::total_balance(&creator), initial_balance + expect_creator_royalties);
+		assert_eq!(Balances::total_balance(&owner), initial_balance + expect_owner_royalties);
+		assert_eq!(Balances::total_balance(&user_1), initial_balance + expect_received_for_item);
+		assert_eq!(Balances::total_balance(&user_2), initial_balance - price);
+
+		// validate events
+		let events = events();
+		assert!(events.contains(&Event::<Test>::CreatorRoyaltiesPaid {
+			collection_id,
+			item_id,
+			amount: expect_creator_royalties,
+			payer: user_2,
+			receiver: creator,
+		}));
+		assert!(events.contains(&Event::<Test>::OwnerRoyaltiesPaid {
+			collection_id,
+			item_id,
+			amount: expect_owner_royalties,
+			payer: user_2,
+			receiver: owner,
+		}));
+	});
+}
+
+#[test]
+fn paying_royalties_when_accepting_an_offer() {
+	new_test_ext().execute_with(|| {
+		let collection_id = 0;
+		let item_id = 1;
+
+		let signer = crypto::create_ed25519_pubkey(b"//verifier".to_vec());
+		let user_1 = signer_to_account_id(&signer.clone());
+		let user_2 = 2;
+		let user_3 = 3;
+		let creator = 4;
+		let owner = 5;
+		let price = 10;
+		let initial_balance = 2000;
+
+		Balances::make_free_balance_be(&user_1, initial_balance);
+		Balances::make_free_balance_be(&user_2, initial_balance);
+		Balances::make_free_balance_be(&user_3, initial_balance);
+		Balances::make_free_balance_be(&creator, initial_balance);
+		Balances::make_free_balance_be(&owner, initial_balance);
+
+		assert_ok!(Uniques::create(
+			Origin::signed(creator),
+			owner,
+			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
+			None,
+			None,
+			Perbill::from_percent(10),
+			Perbill::from_percent(20),
+		));
+
+		assert_ok!(Uniques::mint(Origin::signed(owner), user_2, collection_id, item_id));
+
+		let offer = BuyOffer {
+			collection_id,
+			item_id,
+			bid_price: price,
+			deadline: None,
+			item_owner: user_2,
+			signer: signer.clone(),
+			receiver: user_3.clone(),
+		};
+		let valid_signature =
+			crypto::create_ed25519_signature(&Encode::encode(&offer), signer.clone());
+
+		assert_ok!(Uniques::accept_buy_offer(
+			Origin::signed(user_2),
+			offer.clone(),
+			valid_signature,
+		));
+
+		// validate balances
+		let expect_creator_royalties = 1;
+		let expect_owner_royalties = 2;
+		let expect_received_for_item = price - expect_creator_royalties - expect_owner_royalties;
+
+		assert_eq!(Balances::total_balance(&creator), initial_balance + expect_creator_royalties);
+		assert_eq!(Balances::total_balance(&owner), initial_balance + expect_owner_royalties);
+		assert_eq!(Balances::total_balance(&user_1), initial_balance - price);
+		assert_eq!(Balances::total_balance(&user_2), initial_balance + expect_received_for_item);
+		assert_eq!(Balances::total_balance(&user_3), initial_balance);
+
+		// validate events
+		let events = events();
+		assert!(events.contains(&Event::<Test>::CreatorRoyaltiesPaid {
+			collection_id,
+			item_id,
+			amount: expect_creator_royalties,
+			payer: user_1,
+			receiver: creator,
+		}));
+		assert!(events.contains(&Event::<Test>::OwnerRoyaltiesPaid {
+			collection_id,
+			item_id,
+			amount: expect_owner_royalties,
+			payer: user_1,
+			receiver: owner,
+		}));
+	});
+}
+
+#[test]
+fn paying_royalties_when_swapping_items() {
+	new_test_ext().execute_with(|| {
+		let collection_from_id = 0;
+		let collection_to_id = 1;
+		let item_from_id = 1;
+		let item_to_id = 2;
+
+		let signer = crypto::create_ed25519_pubkey(b"//verifier".to_vec());
+		let user_1 = signer_to_account_id(&signer.clone());
+		let user_2 = 2;
+		let user_3 = 3;
+		let creator = 4;
+		let owner = 5;
+		let price = 10;
+		let initial_balance = 2000;
+
+		Balances::make_free_balance_be(&user_1, initial_balance);
+		Balances::make_free_balance_be(&user_2, initial_balance);
+		Balances::make_free_balance_be(&user_3, initial_balance);
+		Balances::make_free_balance_be(&creator, initial_balance);
+		Balances::make_free_balance_be(&owner, initial_balance);
+
+		assert_ok!(Uniques::create(
+			Origin::signed(creator),
+			owner,
+			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
+			None,
+			None,
+			Perbill::from_percent(10),
+			Perbill::from_percent(20),
+		));
+
+		assert_ok!(Uniques::mint(Origin::signed(owner), user_1, collection_from_id, item_from_id));
+
+		assert_ok!(Uniques::create(
+			Origin::signed(creator),
+			owner,
+			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
+			None,
+			None,
+			Perbill::from_percent(10),
+			Perbill::from_percent(20),
+		));
+
+		assert_ok!(Uniques::mint(Origin::signed(owner), user_2, collection_to_id, item_to_id));
+
+		let offer = SwapOffer {
+			collection_from_id,
+			item_from_id,
+			collection_to_id,
+			item_to_id: Some(item_to_id),
+			price: Some(price),
+			deadline: None,
+			item_to_owner: user_2,
+			signer: signer.clone(),
+			item_from_receiver: user_2.clone(),
+		};
+		let valid_signature =
+			crypto::create_ed25519_signature(&Encode::encode(&offer), signer.clone());
+
+		assert_ok!(Uniques::swap_items(
+			Origin::signed(user_2),
+			offer.clone(),
+			valid_signature.clone(),
+			item_to_id,
+		));
+
+		// validate balances
+		let expect_creator_royalties = 2;
+		let expect_owner_royalties = 3;
+		let expect_received_for_item = price - expect_creator_royalties - expect_owner_royalties;
+
+		assert_eq!(Balances::total_balance(&creator), initial_balance + expect_creator_royalties);
+		assert_eq!(Balances::total_balance(&owner), initial_balance + expect_owner_royalties);
+		assert_eq!(Balances::total_balance(&user_1), initial_balance + expect_received_for_item);
+		assert_eq!(Balances::total_balance(&user_2), initial_balance - price);
+		assert_eq!(Balances::total_balance(&user_3), initial_balance);
+
+		// validate events
+		let events = events();
+		assert!(events.contains(&Event::<Test>::CreatorRoyaltiesPaid {
+			collection_id: collection_from_id,
+			item_id: item_from_id,
+			amount: 1,
+			payer: user_2,
+			receiver: creator,
+		}));
+		assert!(events.contains(&Event::<Test>::CreatorRoyaltiesPaid {
+			collection_id: collection_to_id,
+			item_id: item_to_id,
+			amount: 1,
+			payer: user_2,
+			receiver: creator,
+		}));
+		assert!(events.contains(&Event::<Test>::OwnerRoyaltiesPaid {
+			collection_id: collection_from_id,
+			item_id: item_from_id,
+			amount: 2,
+			payer: user_2,
+			receiver: owner,
+		}));
+		assert!(events.contains(&Event::<Test>::OwnerRoyaltiesPaid {
+			collection_id: collection_to_id,
+			item_id: item_to_id,
+			amount: 1,
+			payer: user_2,
+			receiver: owner,
+		}));
 	});
 }
 

@@ -365,6 +365,20 @@ pub mod pallet {
 			royalties: Perbill,
 			owner: T::AccountId,
 		},
+		CreatorRoyaltiesPaid {
+			collection_id: T::CollectionId,
+			item_id: T::ItemId,
+			amount: BalanceOf<T>,
+			payer: T::AccountId,
+			receiver: T::AccountId,
+		},
+		OwnerRoyaltiesPaid {
+			collection_id: T::CollectionId,
+			item_id: T::ItemId,
+			amount: BalanceOf<T>,
+			payer: T::AccountId,
+			receiver: T::AccountId,
+		},
 	}
 
 	// Your Pallet's error messages.

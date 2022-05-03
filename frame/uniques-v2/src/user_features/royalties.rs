@@ -17,8 +17,8 @@
 
 use crate::*;
 use enumflags2::BitFlags;
-use frame_support::pallet_prelude::*;
-use sp_runtime::{traits::CheckedAdd, Perbill};
+use frame_support::{pallet_prelude::*, traits::Currency};
+use sp_runtime::{traits::CheckedAdd, DispatchError, Perbill};
 
 impl<T: Config> Pallet<T> {
 	pub fn do_change_creator_royalties(
@@ -111,5 +111,64 @@ impl<T: Config> Pallet<T> {
 
 			Ok(())
 		})
+	}
+
+	pub fn process_royalties(
+		amount: BalanceOf<T>,
+		source: &T::AccountId,
+		collection: &Collection<T::CollectionId, T::AccountId, BalanceOf<T>>,
+		item_id: T::ItemId,
+	) -> Result<BalanceOf<T>, DispatchError> {
+		let mut amount_left = amount.clone();
+
+		if !collection.creator_royalties.is_zero() {
+			let transfer_amount = collection.creator_royalties * amount;
+			T::Currency::transfer(
+				&source,
+				&collection.creator,
+				transfer_amount,
+				frame_support::traits::ExistenceRequirement::KeepAlive,
+			)?;
+
+			amount_left -= transfer_amount;
+
+			Self::deposit_event(Event::CreatorRoyaltiesPaid {
+				collection_id: collection.id,
+				item_id,
+				amount: transfer_amount,
+				payer: source.clone(),
+				receiver: collection.creator.clone(),
+			});
+		}
+
+		if !collection.owner_royalties.is_zero() {
+			let transfer_amount = collection.owner_royalties * amount;
+			T::Currency::transfer(
+				&source,
+				&collection.owner,
+				transfer_amount,
+				frame_support::traits::ExistenceRequirement::KeepAlive,
+			)?;
+
+			amount_left -= transfer_amount;
+
+			Self::deposit_event(Event::OwnerRoyaltiesPaid {
+				collection_id: collection.id,
+				item_id,
+				amount: transfer_amount,
+				payer: source.clone(),
+				receiver: collection.owner.clone(),
+			});
+		}
+
+		Ok(amount_left)
+	}
+
+	// helpers
+	pub fn has_royalties(config: &CollectionConfig) -> bool {
+		let system_features: BitFlags<SystemFeature> = config.system_features.get();
+
+		return system_features.contains(SystemFeature::CreatorRoyalties) ||
+			system_features.contains(SystemFeature::OwnerRoyalties)
 	}
 }
