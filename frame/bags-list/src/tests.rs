@@ -380,7 +380,7 @@ mod pallet {
 			// then
 			assert_noop!(
 				BagsList::put_in_front_of(Origin::signed(3), 2),
-				crate::pallet::Error::<Runtime>::NotHeavier
+				crate::pallet::Error::<Runtime>::List(ListError::NotHeavier)
 			);
 		});
 	}
@@ -394,7 +394,7 @@ mod pallet {
 			// then
 			assert_noop!(
 				BagsList::put_in_front_of(Origin::signed(3), 4),
-				crate::pallet::Error::<Runtime>::NotHeavier
+				crate::pallet::Error::<Runtime>::List(ListError::NotHeavier)
 			);
 		});
 	}
@@ -411,7 +411,7 @@ mod pallet {
 			// then
 			assert_noop!(
 				BagsList::put_in_front_of(Origin::signed(5), 4),
-				crate::pallet::Error::<Runtime>::IdNotFound
+				crate::pallet::Error::<Runtime>::List(ListError::NodeNotFound)
 			);
 		});
 
@@ -425,7 +425,7 @@ mod pallet {
 			// then
 			assert_noop!(
 				BagsList::put_in_front_of(Origin::signed(4), 5),
-				crate::pallet::Error::<Runtime>::IdNotFound
+				crate::pallet::Error::<Runtime>::List(ListError::NodeNotFound)
 			);
 		});
 	}
@@ -439,7 +439,7 @@ mod pallet {
 			// then
 			assert_noop!(
 				BagsList::put_in_front_of(Origin::signed(4), 1),
-				crate::pallet::Error::<Runtime>::NotInSameBag
+				crate::pallet::Error::<Runtime>::List(ListError::NotInSameBag)
 			);
 		});
 	}
@@ -491,12 +491,12 @@ mod sorted_list_provider {
 			assert_eq!(BagsList::count(), 5);
 
 			// when removing
-			BagsList::on_remove(&201);
+			BagsList::on_remove(&201).unwrap();
 			// then the count goes down
 			assert_eq!(BagsList::count(), 4);
 
 			// when updating
-			BagsList::on_update(&201, VoteWeight::MAX);
+			assert_noop!(BagsList::on_update(&201, VoteWeight::MAX), ListError::NodeNotFound);
 			// then the count stays the same
 			assert_eq!(BagsList::count(), 4);
 		});
@@ -555,7 +555,7 @@ mod sorted_list_provider {
 			assert_eq!(BagsList::count(), 5);
 
 			// when increasing weight to the level of non-existent bag
-			BagsList::on_update(&42, 2_000);
+			BagsList::on_update(&42, 2_000).unwrap();
 
 			// then the bag is created with the id in it,
 			assert_eq!(
@@ -566,7 +566,7 @@ mod sorted_list_provider {
 			assert_eq!(BagsList::iter().collect::<Vec<_>>(), vec![42, 2, 3, 4, 1]);
 
 			// when decreasing weight within the range of the current bag
-			BagsList::on_update(&42, 1_001);
+			BagsList::on_update(&42, 1_001).unwrap();
 
 			// then the id does not change bags,
 			assert_eq!(
@@ -577,7 +577,7 @@ mod sorted_list_provider {
 			assert_eq!(BagsList::iter().collect::<Vec<_>>(), vec![42, 2, 3, 4, 1]);
 
 			// when increasing weight to the level of a non-existent bag with the max threshold
-			BagsList::on_update(&42, VoteWeight::MAX);
+			BagsList::on_update(&42, VoteWeight::MAX).unwrap();
 
 			// the the new bag is created with the id in it,
 			assert_eq!(
@@ -588,7 +588,7 @@ mod sorted_list_provider {
 			assert_eq!(BagsList::iter().collect::<Vec<_>>(), vec![42, 2, 3, 4, 1]);
 
 			// when decreasing the weight to a pre-existing bag
-			BagsList::on_update(&42, 1_000);
+			BagsList::on_update(&42, 1_000).unwrap();
 
 			// then id is moved to the correct bag (as the last member),
 			assert_eq!(
@@ -615,10 +615,10 @@ mod sorted_list_provider {
 		ExtBuilder::default().build_and_execute(|| {
 			// it is a noop removing a non-existent id
 			assert!(!ListNodes::<Runtime>::contains_key(42));
-			assert_storage_noop!(BagsList::on_remove(&42));
+			assert_noop!(BagsList::on_remove(&42), ListError::NodeNotFound);
 
 			// when removing a node from a bag with multiple nodes
-			BagsList::on_remove(&2);
+			BagsList::on_remove(&2).unwrap();
 
 			// then
 			assert_eq!(get_list_as_ids(), vec![3, 4, 1]);
@@ -626,7 +626,7 @@ mod sorted_list_provider {
 			ensure_left(2, 3);
 
 			// when removing a node from a bag with only one node
-			BagsList::on_remove(&1);
+			BagsList::on_remove(&1).unwrap();
 
 			// then
 			assert_eq!(get_list_as_ids(), vec![3, 4]);
@@ -634,10 +634,10 @@ mod sorted_list_provider {
 			ensure_left(1, 2);
 
 			// when removing all remaining ids
-			BagsList::on_remove(&4);
+			BagsList::on_remove(&4).unwrap();
 			assert_eq!(get_list_as_ids(), vec![3]);
 			ensure_left(4, 1);
-			BagsList::on_remove(&3);
+			BagsList::on_remove(&3).unwrap();
 
 			// then the storage is completely cleaned up
 			assert_eq!(get_list_as_ids(), Vec::<AccountId>::new());

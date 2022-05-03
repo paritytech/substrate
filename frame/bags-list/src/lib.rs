@@ -189,17 +189,21 @@ pub mod pallet {
 	pub enum Event<T: Config<I>, I: 'static = ()> {
 		/// Moved an account from one bag to another.
 		Rebagged { who: T::AccountId, from: T::Score, to: T::Score },
+		/// Updated the score of some account to the given amount.
+		ScoreUpdated { who: T::AccountId, new_score: T::Score },
 	}
 
 	#[pallet::error]
 	#[cfg_attr(test, derive(PartialEq))]
 	pub enum Error<T, I = ()> {
-		/// Attempted to place node in front of a node in another bag.
-		NotInSameBag,
-		/// Id not found in list.
-		IdNotFound,
-		/// An Id does not have a greater score than another Id.
-		NotHeavier,
+		/// A error in the list interface implementation.
+		List(ListError),
+	}
+
+	impl<T, I> From<ListError> for Error<T, I> {
+		fn from(t: ListError) -> Self {
+			Error::<T, I>::List(t)
+		}
 	}
 
 	#[pallet::call]
@@ -250,16 +254,19 @@ pub mod pallet {
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Move an account from one bag to another, depositing an event on success.
 	///
-	/// If the account changed bags, returns `Some((from, to))`.
-	pub fn do_rebag(account: &T::AccountId, new_weight: T::Score) -> Option<(T::Score, T::Score)> {
-		// if no voter at that node, don't do anything.
-		// the caller just wasted the fee to call this.
-		let maybe_movement = list::Node::<T, I>::get(account)
-			.and_then(|node| List::update_position_for(node, new_weight));
+	/// If the account changed bags, returns `Ok((from, to))`.
+	pub fn do_rebag(
+		account: &T::AccountId,
+		new_score: T::Score,
+	) -> Result<Option<(T::Score, T::Score)>, ListError> {
+		// If no voter at that node, don't do anything. the caller just wasted the fee to call this.
+		let node = list::Node::<T, I>::get(&account).ok_or(ListError::NodeNotFound)?;
+		let maybe_movement = List::update_position_for(node, new_score);
 		if let Some((from, to)) = maybe_movement {
 			Self::deposit_event(Event::<T, I>::Rebagged { who: account.clone(), from, to });
 		};
-		maybe_movement
+		Self::deposit_event(Event::<T, I>::ScoreUpdated { who: account.clone(), new_score });
+		Ok(maybe_movement)
 	}
 
 	/// Equivalent to `ListBags::get`, but public. Useful for tests in outside of this crate.
@@ -296,11 +303,11 @@ impl<T: Config<I>, I: 'static> SortedListProvider<T::AccountId> for Pallet<T, I>
 		List::<T, I>::insert(id, score)
 	}
 
-	fn on_update(id: &T::AccountId, new_score: T::Score) {
-		Pallet::<T, I>::do_rebag(id, new_score);
+	fn on_update(id: &T::AccountId, new_score: T::Score) -> Result<(), ListError> {
+		Pallet::<T, I>::do_rebag(id, new_score).map(|_| ())
 	}
 
-	fn on_remove(id: &T::AccountId) {
+	fn on_remove(id: &T::AccountId) -> Result<(), ListError> {
 		List::<T, I>::remove(id)
 	}
 

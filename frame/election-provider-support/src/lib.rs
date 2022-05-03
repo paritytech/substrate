@@ -171,7 +171,7 @@ pub mod traits;
 #[cfg(feature = "std")]
 use codec::{Decode, Encode};
 use frame_support::{weights::Weight, BoundedVec, RuntimeDebug};
-use sp_runtime::traits::Bounded;
+use sp_runtime::traits::{Bounded, Saturating, Zero};
 use sp_std::{fmt::Debug, prelude::*};
 
 /// Re-export the solution generation macro.
@@ -439,7 +439,7 @@ pub trait SortedListProvider<AccountId> {
 	type Error: sp_std::fmt::Debug;
 
 	/// The type used by the list to compare nodes for ordering.
-	type Score: Bounded;
+	type Score: Bounded + Saturating + Zero;
 
 	/// An iterator over the list, which can have `take` called on it.
 	fn iter() -> Box<dyn Iterator<Item = AccountId>>;
@@ -456,13 +456,21 @@ pub trait SortedListProvider<AccountId> {
 	fn contains(id: &AccountId) -> bool;
 
 	/// Hook for inserting a new id.
+	///
+	/// Implementation should return an error if duplicate item is being inserted.
 	fn on_insert(id: AccountId, score: Self::Score) -> Result<(), Self::Error>;
 
 	/// Hook for updating a single id.
-	fn on_update(id: &AccountId, score: Self::Score);
+	///
+	/// The `new` score is given.
+	///
+	/// Returns `Ok(())` iff it successfully updates an item, an `Err(_)` otherwise.
+	fn on_update(id: &AccountId, score: Self::Score) -> Result<(), Self::Error>;
 
 	/// Hook for removing am id from the list.
-	fn on_remove(id: &AccountId);
+	///
+	/// Returns `Ok(())` iff it successfully removes an item, an `Err(_)` otherwise.
+	fn on_remove(id: &AccountId) -> Result<(), Self::Error>;
 
 	/// Regenerate this list from scratch. Returns the count of items inserted.
 	///
