@@ -254,7 +254,7 @@ pub mod pallet {
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Move an account from one bag to another, depositing an event on success.
 	///
-	/// If the account changed bags, returns `Ok((from, to))`.
+	/// If the account changed bags, returns `Ok(Some((from, to)))`.
 	pub fn do_rebag(
 		account: &T::AccountId,
 		new_score: T::Score,
