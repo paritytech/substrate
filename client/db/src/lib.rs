@@ -297,12 +297,12 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 
 pub struct TrieNodeCacheSettings {
 	pub enable: bool,
-	pub fast_cache: bool,
+	pub maximum_size_in_bytes: usize,
 }
 
 impl Default for TrieNodeCacheSettings {
 	fn default() -> Self {
-		Self { enable: false, fast_cache: false }
+		Self { enable: false, maximum_size_in_bytes: 256 * 1024 * 1024 }
 	}
 }
 
@@ -1095,10 +1095,11 @@ impl<Block: BlockT> Backend<Block> {
 			state_usage: Arc::new(StateUsageStats::new()),
 			keep_blocks: config.keep_blocks.clone(),
 			genesis_state: RwLock::new(None),
-			trie_node_cache: config
-				.trie_node_cache_settings
-				.enable
-				.then(|| SharedTrieNodeCache::new(config.trie_node_cache_settings.fast_cache)),
+			trie_node_cache: config.trie_node_cache_settings.enable.then(|| {
+				SharedTrieNodeCache::new(sp_trie::cache::Configuration {
+					maximum_size_in_bytes: config.trie_node_cache_settings.maximum_size_in_bytes,
+				})
+			}),
 		};
 
 		// Older DB versions have no last state key. Check if the state is available and set it.
