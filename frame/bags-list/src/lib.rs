@@ -235,7 +235,9 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::put_in_front_of())]
 		pub fn put_in_front_of(origin: OriginFor<T>, lighter: T::AccountId) -> DispatchResult {
 			let heavier = ensure_signed(origin)?;
-			List::<T, I>::put_in_front_of(&lighter, &heavier).map_err(Into::into)
+			List::<T, I>::put_in_front_of(&lighter, &heavier)
+				.map_err::<Error<T, I>, _>(Into::into)
+				.map_err::<DispatchError, _>(Into::into)
 		}
 	}
 

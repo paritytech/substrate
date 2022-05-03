@@ -427,7 +427,7 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 	pub(crate) fn put_in_front_of(
 		lighter_id: &T::AccountId,
 		heavier_id: &T::AccountId,
-	) -> Result<(), crate::pallet::Error<T, I>> {
+	) -> Result<(), ListError> {
 		use frame_support::ensure;
 
 		let lighter_node = Node::<T, I>::get(&lighter_id).ok_or(ListError::NodeNotFound)?;
@@ -437,7 +437,7 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 
 		// this is the most expensive check, so we do it last.
 		ensure!(
-			T::ScoreProvider::score(heavier_id) > T::ScoreProvider::score(lighter_id),
+			T::ScoreProvider::score(&heavier_id) > T::ScoreProvider::score(&lighter_id),
 			ListError::NotHeavier
 		);
 
