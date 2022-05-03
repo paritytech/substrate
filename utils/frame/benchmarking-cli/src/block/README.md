@@ -1,8 +1,8 @@
 # The `benchmark block` command
 
-The whole benchmarking process in Substrate aims to predict the resource usage of a block before executing it.  
-This command measures how accurate this prediction was.  
-It executes a specific historic block and compares its actual resource usage to the prediction.  
+The whole benchmarking process in Substrate aims to predict the resource usage of an unexecuted block.  
+This command measures how accurate this prediction was by executing a block and comparing the predicted weight to its actual resource usage.  
+It can be used to measure the accuracy of the pallet benchmarking.
 
 In the following it will be explained once for Polkadot and once for Substrate.  
 
@@ -10,17 +10,17 @@ In the following it will be explained once for Polkadot and once for Substrate.
 <sup>(Also works for Kusama, Westend and Rococo)</sup>
 
 
-Suppose you have either a synced Polkadot node or downloaded a snapshot from [Polkachu].  
-This example uses a pruned ParityDB snapshot from 2022-4-19 with the last block being 9939462.  
-For pruned snapshots you need to know the number of the best block (to be improved [here]).  
-Archive nodes can use any block range.  
+Suppose you either have a synced Polkadot node or downloaded a snapshot from [Polkachu].  
+This example uses a pruned ParityDB snapshot from the 2022-4-19 with the last block being 9939462.  
+For pruned snapshots you need to know the number of the last block (to be improved [here]).    
+Pruned snapshots normally store the last 256 blocks, archive nodes can use any block range.  
 
-Pruned snapshots normally store the last 256 blocks.  
-In this example we will benchmark just the last 10 blocks for brevity:  
+In this example we will benchmark just the last 10 blocks:  
 ```sh
 cargo run --profile=production -- benchmark block --from 9939453 --to 9939462 --db paritydb
 ```
 
+Output:
 ```pre
 Block 9939453 with     2 tx used   4.57% of its weight (    26,458,801 of    579,047,053 ns)    
 Block 9939454 with     3 tx used   4.80% of its weight (    28,335,826 of    590,414,831 ns)    
@@ -39,19 +39,17 @@ Block 9939462 with     2 tx used   4.60% of its weight (    26,840,938 of    583
 <sup>(Only results from reference hardware are relevant)</sup>
 
 Each block is executed multiple times and the results are averaged.  
-The percent number is the interesting part.  
-It indicates how much weight was used as compared to how much was predicted.  
+The percent number is the interesting part and indicates how much weight was used as compared to how much was predicted.  
 The closer to 100% this is without exceeding 100%, the better.  
-It should never exceed 100% (aka. "overweight"), otherwise the benchmarking under-estimated the weight.  
-This would mean that an honest validator would possibly not be able to keep up with importing blocks.  
+If it exceeds 100%, the block is marked with "**OVER WEIGHT!**" to easier spot them. This is not good since then the benchmarking under-estimated the weight.  
+This would mean that an honest validator would possibly not be able to keep up with importing blocks since users did not pay for enough weight.  
 If that happens the validator could lag behind the chain and get slashed for missing deadlines.  
 It is therefore important to investigate any overweight blocks.  
-Overweight blocks are additionally marked in the output with an "**OVER WEIGHT!**" to easier spot them.  
 
 In this example you can see an unexpected result; only < 5% of the weight was used!  
 The measured blocks can be executed much faster than predicted.  
 This means that the benchmarking process massively over-estimated the execution time.  
-Since they are off by so much, it is also an issue [polkadot#5192].  
+Since they are off by so much, it is an issue [polkadot#5192].  
 
 The ideal range for these results would be 85-100%.
 
@@ -70,10 +68,6 @@ cargo run --profile=production -- benchmark block --from TODO --to TODO --db par
 ```pre
 TODO
 ```
-
-### Output Interpretation
-
-Here we can see that the prediction was a lot closer to the actual values.  
 
 ## Substrate
 

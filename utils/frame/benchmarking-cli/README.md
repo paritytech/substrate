@@ -19,25 +19,21 @@ OPTIONS:
 
 SUBCOMMANDS:
     block       Benchmark the execution time of historic blocks
-    help        Print this message or the help of the given subcommand(s)
+    machine     Command to benchmark the hardware.
     overhead    Benchmark the execution overhead per-block and per-extrinsic
     pallet      Benchmark the extrinsic weight of FRAME Pallets
     storage     Benchmark the storage speed of a chain snapshot
 ```
 
-All examples use the `production` profile for correctness which  
-makes the compilation *very* slow; for testing you can use `--release`.  
-For the final results the `production` profile and reference hardware should be used, otherwise it will produce non comparable results.
+All examples use the `production` profile for correctness which makes the compilation *very* slow; for testing you can use `--release`.  
+For the final results the `production` profile and reference hardware should be used, otherwise the results are not comparable.
 
-All sub-commands are explained in-depth here  
-- [pallet] Creates weight files for a Pallet
-- [machine] Gauges the speed of the hardware
-- [storage] Creates weight files for *Read* and *Write* storage operations
-- [overhead] Creates weight files for the *Block*- and *Extrinsic*-base weights
+The sub-commands are explained in depth here:  
 - [block] Compare the weight of a historic block to its actual resource usage
-
-# TODO
-- Add polkadot wiki links
+- [machine] Gauges the speed of the hardware
+- [overhead] Creates weight files for the *Block*- and *Extrinsic*-base weights
+- [pallet] Creates weight files for a Pallet
+- [storage] Creates weight files for *Read* and *Write* storage operations
 
 License: Apache-2.0
 
