@@ -16,7 +16,7 @@
 // limitations under the License.
 
 use super::*;
-use crate as multi_phase;
+use crate::{self as multi_phase, unsigned::MinerConfig};
 use frame_election_provider_support::{
 	data_provider, onchain, ElectionDataProvider, NposSolution, SequentialPhragmen,
 };
@@ -239,6 +239,13 @@ impl pallet_balances::Config for Runtime {
 	type WeightInfo = ();
 }
 
+#[derive(Eq, PartialEq, Debug, Clone, Copy)]
+pub enum MockedWeightInfo {
+	Basic,
+	Complex,
+	Real,
+}
+
 parameter_types! {
 	pub static Targets: Vec<AccountId> = vec![10, 20, 30, 40];
 	pub static Voters: Vec<VoterOf<Runtime>> = vec![
@@ -269,7 +276,7 @@ parameter_types! {
 	pub static OffchainRepeat: BlockNumber = 5;
 	pub static MinerMaxWeight: Weight = BlockWeights::get().max_block;
 	pub static MinerMaxLength: u32 = 256;
-	pub static MockWeightInfo: bool = false;
+	pub static MockWeightInfo: MockedWeightInfo = MockedWeightInfo::Real;
 	pub static MaxElectingVoters: VoterIndex = u32::max_value();
 	pub static MaxElectableTargets: TargetIndex = TargetIndex::max_value();
 
@@ -312,6 +319,23 @@ impl InstantElectionProvider for MockFallback {
 			super::NoFallback::<Runtime>::elect_with_bounds(max_voters, max_targets)
 		}
 	}
+}
+
+parameter_types! {
+	pub static Balancing: Option<(usize, ExtendedBalance)> = Some((0, 0));
+}
+
+pub struct TestBenchmarkingConfig;
+impl BenchmarkingConfig for TestBenchmarkingConfig {
+	const VOTERS: [u32; 2] = [400, 600];
+	const ACTIVE_VOTERS: [u32; 2] = [100, 300];
+	const TARGETS: [u32; 2] = [200, 400];
+	const DESIRED_TARGETS: [u32; 2] = [100, 180];
+
+	const SNAPSHOT_MAXIMUM_VOTERS: u32 = 1000;
+	const MINER_MAXIMUM_VOTERS: u32 = 1000;
+
+	const MAXIMUM_TARGETS: u32 = 200;
 }
 
 // Hopefully this won't be too much of a hassle to maintain.
@@ -393,21 +417,22 @@ impl multi_phase::weights::WeightInfo for DualMockWeightInfo {
 	}
 }
 
-parameter_types! {
-	pub static Balancing: Option<(usize, ExtendedBalance)> = Some((0, 0));
-}
+impl MinerConfig for Runtime {
+	type AccountId = AccountId;
+	type MaxLength = MinerMaxLength;
+	type MaxWeight = MinerMaxWeight;
+	type MaxVotesPerVoter = <StakingMock as ElectionDataProvider>::MaxVotesPerVoter;
+	type Solution = TestNposSolution;
 
-pub struct TestBenchmarkingConfig;
-impl BenchmarkingConfig for TestBenchmarkingConfig {
-	const VOTERS: [u32; 2] = [400, 600];
-	const ACTIVE_VOTERS: [u32; 2] = [100, 300];
-	const TARGETS: [u32; 2] = [200, 400];
-	const DESIRED_TARGETS: [u32; 2] = [100, 180];
-
-	const SNAPSHOT_MAXIMUM_VOTERS: u32 = 1000;
-	const MINER_MAXIMUM_VOTERS: u32 = 1000;
-
-	const MAXIMUM_TARGETS: u32 = 200;
+	fn solution_weight(v: u32, t: u32, a: u32, d: u32) -> Weight {
+		match MockWeightInfo::get() {
+			MockedWeightInfo::Basic =>
+				(10 as Weight).saturating_add((5 as Weight).saturating_mul(a as Weight)),
+			MockedWeightInfo::Complex => (0 * v + 0 * t + 1000 * a + 0 * d) as Weight,
+			MockedWeightInfo::Real =>
+				<() as multi_phase::weights::WeightInfo>::feasibility_check(v, t, a, d),
+		}
+	}
 }
 
 impl crate::Config for Runtime {
@@ -419,8 +444,6 @@ impl crate::Config for Runtime {
 	type BetterUnsignedThreshold = BetterUnsignedThreshold;
 	type BetterSignedThreshold = BetterSignedThreshold;
 	type OffchainRepeat = OffchainRepeat;
-	type MinerMaxWeight = MinerMaxWeight;
-	type MinerMaxLength = MinerMaxLength;
 	type MinerTxPriority = MinerTxPriority;
 	type SignedRewardBase = SignedRewardBase;
 	type SignedDepositBase = SignedDepositBase;
@@ -432,14 +455,14 @@ impl crate::Config for Runtime {
 	type SlashHandler = ();
 	type RewardHandler = ();
 	type DataProvider = StakingMock;
-	type WeightInfo = DualMockWeightInfo;
+	type WeightInfo = ();
 	type BenchmarkingConfig = TestBenchmarkingConfig;
 	type Fallback = MockFallback;
 	type GovernanceFallback = NoFallback<Self>;
 	type ForceOrigin = frame_system::EnsureRoot<AccountId>;
-	type Solution = TestNposSolution;
 	type MaxElectingVoters = MaxElectingVoters;
 	type MaxElectableTargets = MaxElectableTargets;
+	type MinerConfig = Self;
 	type Solver = SequentialPhragmen<AccountId, SolutionAccuracyOf<Runtime>, Balancing>;
 }
 
@@ -562,7 +585,7 @@ impl ExtBuilder {
 		<MinerMaxWeight>::set(weight);
 		self
 	}
-	pub fn mock_weight_info(self, mock: bool) -> Self {
+	pub fn mock_weight_info(self, mock: MockedWeightInfo) -> Self {
 		<MockWeightInfo>::set(mock);
 		self
 	}
