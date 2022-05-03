@@ -385,6 +385,8 @@ impl<T: Config<I>, I: 'static> ScoreProvider<T::AccountId> for Pallet<T, I> {
 		ListNodes::<T, I>::mutate(id, |maybe_node| {
 			if let Some(node) = maybe_node.as_mut() {
 				node.set_score(new_score)
+			} else {
+				panic!("trying to mutate {:?} which does not exists", id);
 			}
 		})
 	}
