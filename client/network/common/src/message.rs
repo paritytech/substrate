@@ -16,14 +16,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! Include sources generated from protobuf definitions.
+//! Network packet message types. These get serialized and put into the lower level protocol
+//! payload.
 
-pub mod v1 {
-	pub mod light {
-		include!(concat!(env!("OUT_DIR"), "/api.v1.light.rs"));
-	}
-}
-
-pub mod bitswap {
-	include!(concat!(env!("OUT_DIR"), "/bitswap.message.rs"));
-}
+/// A unique ID of a request.
+pub type RequestId = u64;

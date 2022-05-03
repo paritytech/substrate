@@ -8971,6 +8971,8 @@ dependencies = [
  "sc-block-builder",
  "sc-client-api",
  "sc-consensus",
+ "sc-network-common",
+ "sc-network-sync",
  "sc-peerset",
  "sc-utils",
  "serde",
@@ -8995,6 +8997,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "sc-network-common"
+version = "0.10.0-dev"
+dependencies = [
+ "futures 0.3.21",
+ "libp2p",
+ "parity-scale-codec",
+ "prost-build",
+ "sc-peerset",
+ "smallvec 1.8.0",
+]
+
+[[package]]
 name = "sc-network-gossip"
 version = "0.10.0-dev"
 dependencies = [
@@ -9014,6 +9028,39 @@ dependencies = [
 ]
 
 [[package]]
+name = "sc-network-sync"
+version = "0.10.0-dev"
+dependencies = [
+ "bitflags",
+ "either",
+ "fork-tree",
+ "futures 0.3.21",
+ "libp2p",
+ "log 0.4.16",
+ "lru",
+ "parity-scale-codec",
+ "prost",
+ "prost-build",
+ "quickcheck",
+ "sc-block-builder",
+ "sc-client-api",
+ "sc-consensus",
+ "sc-network-common",
+ "sc-peerset",
+ "smallvec 1.8.0",
+ "sp-arithmetic",
+ "sp-blockchain",
+ "sp-consensus",
+ "sp-core",
+ "sp-finality-grandpa",
+ "sp-runtime",
+ "sp-test-primitives",
+ "sp-tracing",
+ "substrate-test-runtime-client",
+ "thiserror",
+]
+
+[[package]]
 name = "sc-network-test"
 version = "0.8.0"
 dependencies = [
@@ -9029,6 +9076,7 @@ dependencies = [
  "sc-client-api",
  "sc-consensus",
  "sc-network",
+ "sc-network-common",
  "sc-service",
  "sp-blockchain",
  "sp-consensus",
@@ -9217,6 +9265,7 @@ dependencies = [
  "sc-informant",
  "sc-keystore",
  "sc-network",
+ "sc-network-common",
  "sc-offchain",
  "sc-rpc",
  "sc-rpc-server",

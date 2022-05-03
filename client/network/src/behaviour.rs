@@ -18,7 +18,6 @@
 
 use crate::{
 	bitswap::Bitswap,
-	config::ProtocolId,
 	discovery::{DiscoveryBehaviour, DiscoveryConfig, DiscoveryOut},
 	peer_info,
 	protocol::{message::Roles, CustomMessageOutcome, NotificationsSink, Protocol},
@@ -42,6 +41,7 @@ use log::debug;
 use prost::Message;
 use sc_client_api::{BlockBackend, ProofProvider};
 use sc_consensus::import_queue::{IncomingBlock, Origin};
+use sc_network_common::{config::ProtocolId, request_responses::ProtocolConfig};
 use sc_peerset::PeersetHandle;
 use sp_blockchain::{HeaderBackend, HeaderMetadata};
 use sp_consensus::BlockOrigin;
@@ -220,13 +220,13 @@ where
 		user_agent: String,
 		local_public_key: PublicKey,
 		disco_config: DiscoveryConfig,
-		block_request_protocol_config: request_responses::ProtocolConfig,
-		state_request_protocol_config: request_responses::ProtocolConfig,
-		warp_sync_protocol_config: Option<request_responses::ProtocolConfig>,
+		block_request_protocol_config: ProtocolConfig,
+		state_request_protocol_config: ProtocolConfig,
+		warp_sync_protocol_config: Option<ProtocolConfig>,
 		bitswap: Option<Bitswap<B, Client>>,
-		light_client_request_protocol_config: request_responses::ProtocolConfig,
+		light_client_request_protocol_config: ProtocolConfig,
 		// All remaining request protocol configs.
-		mut request_response_protocols: Vec<request_responses::ProtocolConfig>,
+		mut request_response_protocols: Vec<ProtocolConfig>,
 		peerset: PeersetHandle,
 	) -> Result<Self, request_responses::RegisterError> {
 		// Extract protocol name and add to `request_response_protocols`.
