@@ -554,7 +554,7 @@ mod sorted_list_provider {
 			);
 			assert_eq!(BagsList::count(), 5);
 
-			// when increasing weight to the level of non-existent bag
+			// when increasing score to the level of non-existent bag
 			BagsList::on_update(&42, 2_000).unwrap();
 
 			// then the bag is created with the id in it,
@@ -565,7 +565,7 @@ mod sorted_list_provider {
 			// and the id position is updated in the list.
 			assert_eq!(BagsList::iter().collect::<Vec<_>>(), vec![42, 2, 3, 4, 1]);
 
-			// when decreasing weight within the range of the current bag
+			// when decreasing score within the range of the current bag
 			BagsList::on_update(&42, 1_001).unwrap();
 
 			// then the id does not change bags,
@@ -576,7 +576,7 @@ mod sorted_list_provider {
 			// or change position in the list.
 			assert_eq!(BagsList::iter().collect::<Vec<_>>(), vec![42, 2, 3, 4, 1]);
 
-			// when increasing weight to the level of a non-existent bag with the max threshold
+			// when increasing score to the level of a non-existent bag with the max threshold
 			BagsList::on_update(&42, VoteWeight::MAX).unwrap();
 
 			// the the new bag is created with the id in it,
@@ -587,7 +587,7 @@ mod sorted_list_provider {
 			// and the id position is updated in the list.
 			assert_eq!(BagsList::iter().collect::<Vec<_>>(), vec![42, 2, 3, 4, 1]);
 
-			// when decreasing the weight to a pre-existing bag
+			// when decreasing the score to a pre-existing bag
 			BagsList::on_update(&42, 1_000).unwrap();
 
 			// then id is moved to the correct bag (as the last member),
