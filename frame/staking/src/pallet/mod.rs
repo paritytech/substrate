@@ -201,7 +201,7 @@ pub mod pallet {
 		/// 2. The targets of any nominator
 		/// 3. The role of any staker (e.g. validator -> chilled, nominator -> validator, etc)
 		///
-		/// Unlike `TargetList`, the values in this list are always kept up to date with reward and
+		/// Unlike `VoterList`, the values in this list are always kept up to date with reward and
 		/// slash as well, and thus represent the accurate approval stake of all account being
 		/// nominated by nominators.
 		///
