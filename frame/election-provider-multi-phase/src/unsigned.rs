@@ -389,7 +389,7 @@ impl<T: Config> Pallet<T> {
 }
 
 pub trait MinerConfig {
-	type AccountId: Parameter + Member + Ord + MaxEncodedLen;
+	type AccountId: Ord + Clone + codec::Codec + sp_std::fmt::Debug;
 	type Solution: codec::Codec
 		+ Default
 		+ PartialEq
