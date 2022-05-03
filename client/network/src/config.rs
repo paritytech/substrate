@@ -21,8 +21,6 @@
 //! The [`Params`] struct is the struct that must be passed in order to initialize the networking.
 //! See the documentation of [`Params`].
 
-// TODO: Below set of re-exports are for compatibility purposes for Polkadot, replace with regular
-//  imports at some point in the future once Polkadot is migrated
 pub use sc_network_common::{
 	config::ProtocolId,
 	request_responses::{

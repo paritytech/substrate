@@ -1,5 +1,5 @@
 [package]
-description = "Substrate network protocol"
+description = "Substrate sync network protocol"
 name = "sc-network-sync"
 version = "0.10.0-dev"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
