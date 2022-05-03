@@ -314,9 +314,9 @@ pub mod tests {
 	use sp_core::H256;
 	use sp_runtime::traits::BlakeTwo256;
 	use sp_trie::{
-		cache::SharedTrieNodeCache,
+		cache::{Configuration, SharedTrieNodeCache},
 		trie_types::{TrieDBMutBuilderV0, TrieDBMutBuilderV1},
-		KeySpacedDBMut, PrefixedMemoryDB, TrieMut,
+		KeySpacedDBMut, PrefixedMemoryDB, TrieCache, TrieMut,
 	};
 	use std::{collections::HashSet, iter};
 
@@ -332,13 +332,37 @@ pub mod tests {
 			fn $name() {
 				let parameters = vec![
 					(StateVersion::V0, None, None),
-					(StateVersion::V0, Some(SharedCache::new(true)), None),
+					(
+						StateVersion::V0,
+						Some(SharedCache::new(Configuration {
+							maximum_size_in_bytes: 1024 * 1024,
+						})),
+						None,
+					),
 					(StateVersion::V0, None, Some(Recorder::default())),
-					(StateVersion::V0, Some(SharedCache::new(true)), Some(Recorder::default())),
+					(
+						StateVersion::V0,
+						Some(SharedCache::new(Configuration {
+							maximum_size_in_bytes: 1024 * 1024,
+						})),
+						Some(Recorder::default()),
+					),
 					(StateVersion::V1, None, None),
-					(StateVersion::V1, Some(SharedCache::new(true)), None),
+					(
+						StateVersion::V1,
+						Some(SharedCache::new(Configuration {
+							maximum_size_in_bytes: 1024 * 1024,
+						})),
+						None,
+					),
 					(StateVersion::V1, None, Some(Recorder::default())),
-					(StateVersion::V1, Some(SharedCache::new(true)), Some(Recorder::default())),
+					(
+						StateVersion::V1,
+						Some(SharedCache::new(Configuration {
+							maximum_size_in_bytes: 1024 * 1024,
+						})),
+						Some(Recorder::default()),
+					),
 				];
 
 				for (version, cache, recorder) in parameters {
@@ -650,9 +674,10 @@ pub mod tests {
 			.clone()
 			.for_each(|i| assert_eq!(trie.storage(&[i]).unwrap().unwrap(), vec![i; size_content]));
 
-		for cache in
-			[Some(SharedTrieNodeCache::new(true)), Some(SharedTrieNodeCache::new(false)), None]
-		{
+		for cache in [
+			Some(SharedTrieNodeCache::new(Configuration { maximum_size_in_bytes: 1024 * 1024 })),
+			None,
+		] {
 			// Run multiple times to have a filled cache.
 			for _ in 0..3 {
 				let proving = TrieBackendBuilder::wrap(&trie)
@@ -677,9 +702,10 @@ pub mod tests {
 		proof_record_works_with_iter_inner(StateVersion::V1);
 	}
 	fn proof_record_works_with_iter_inner(state_version: StateVersion) {
-		for cache in
-			[Some(SharedTrieNodeCache::new(true)), Some(SharedTrieNodeCache::new(false)), None]
-		{
+		for cache in [
+			Some(SharedTrieNodeCache::new(Configuration { maximum_size_in_bytes: 1024 * 1024 })),
+			None,
+		] {
 			// Run multiple times to have a filled cache.
 			for _ in 0..3 {
 				let contents = (0..64).map(|i| (vec![i], Some(vec![i]))).collect::<Vec<_>>();
@@ -748,9 +774,10 @@ pub mod tests {
 			assert_eq!(in_memory.child_storage(child_info_2, &[i]).unwrap().unwrap(), vec![i])
 		});
 
-		for cache in
-			[Some(SharedTrieNodeCache::new(true)), Some(SharedTrieNodeCache::new(false)), None]
-		{
+		for cache in [
+			Some(SharedTrieNodeCache::new(Configuration { maximum_size_in_bytes: 1024 * 1024 })),
+			None,
+		] {
 			// Run multiple times to have a filled cache.
 			for i in 0..3 {
 				eprintln!("Running with cache {}, iteration {}", cache.is_some(), i);
@@ -837,6 +864,34 @@ pub mod tests {
 
 			// Check the estimation
 			check_estimation(backend);
+		}
+	}
+
+	#[test]
+	fn new_data_is_added_to_the_cache() {
+		let shared_cache =
+			SharedTrieNodeCache::new(Configuration { maximum_size_in_bytes: 1024 * 1024 });
+		let new_data = vec![
+			(&b"new_data0"[..], Some(&b"0"[..])),
+			(&b"new_data1"[..], Some(&b"1"[..])),
+			(&b"new_data2"[..], Some(&b"2"[..])),
+			(&b"new_data3"[..], Some(&b"3"[..])),
+			(&b"new_data4"[..], Some(&b"4"[..])),
+		];
+
+		let new_root = {
+			let trie = test_trie(StateVersion::V1, Some(shared_cache.local_cache()), None);
+			trie.storage_root(new_data.clone().into_iter(), StateVersion::V1).0
+		};
+
+		let local_cache = shared_cache.local_cache();
+		let mut cache = local_cache.as_trie_db_cache(new_root);
+		// All the data should be cached now
+		for (key, value) in new_data {
+			assert_eq!(
+				value.unwrap(),
+				cache.lookup_value_for_key(key).unwrap().data().unwrap().as_ref()
+			);
 		}
 	}
 }
