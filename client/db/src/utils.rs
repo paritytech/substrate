@@ -767,11 +767,15 @@ mod tests {
 
 		// it should reopen existing auto (rocksdb) database
 		{
-			let db_res = open_database::<Block>(&DatabaseSource::Auto {
-				paritydb_path: paritydb_path.clone(),
-				rocksdb_path: rocksdb_path.clone(),
-				cache_size: 128,
-			}, DatabaseType::Full, true);
+			let db_res = open_database::<Block>(
+				&DatabaseSource::Auto {
+					paritydb_path: paritydb_path.clone(),
+					rocksdb_path: rocksdb_path.clone(),
+					cache_size: 128,
+				},
+				DatabaseType::Full,
+				true,
+			);
 			assert!(db_res.is_ok(), "Existing rocksdb database should be reopened");
 		}
 

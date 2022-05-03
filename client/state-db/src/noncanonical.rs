@@ -25,9 +25,7 @@
 use super::{to_meta_key, ChangeSet, CommitSet, DBValue, Error, Hash, MetaDb, StateDbError};
 use codec::{Decode, Encode};
 use log::trace;
-use std::{
-	collections::{hash_map::Entry, HashMap, VecDeque},
-};
+use std::collections::{hash_map::Entry, HashMap, VecDeque};
 
 const NON_CANONICAL_JOURNAL: &[u8] = b"noncanonical_journal";
 const LAST_CANONICAL: &[u8] = b"last_canonical";

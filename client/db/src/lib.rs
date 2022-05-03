@@ -341,7 +341,7 @@ pub enum DatabaseSource {
 	},
 
 	/// Use a custom already-open database.
-	Custom { 
+	Custom {
 		/// the handle to the custom storage
 		db: Arc<dyn Database<DbHash>>,
 
@@ -2446,7 +2446,7 @@ pub(crate) mod tests {
 				state_cache_size: 16777216,
 				state_cache_child_ratio: Some((50, 100)),
 				state_pruning: Some(PruningMode::keep_blocks(1)),
-				source: DatabaseSource::Custom { db: backing, require_create_flag: false, },
+				source: DatabaseSource::Custom { db: backing, require_create_flag: false },
 				keep_blocks: KeepBlocks::All,
 			},
 			0,
