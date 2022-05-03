@@ -269,13 +269,14 @@ const LOG_TARGET: &str = "runtime::election-provider";
 pub mod signed;
 pub mod unsigned;
 pub mod weights;
-use unsigned::{MinerConfig, VoterOf};
+use unsigned::VoterOf;
 pub use weights::WeightInfo;
 
 pub use signed::{
 	BalanceOf, NegativeImbalanceOf, PositiveImbalanceOf, SignedSubmission, SignedSubmissionOf,
 	SignedSubmissions, SubmissionIndicesOf,
 };
+pub use unsigned::{Miner, MinerConfig};
 
 /// The solution type used by this crate.
 pub type SolutionOf<T> = <T as MinerConfig>::Solution;
