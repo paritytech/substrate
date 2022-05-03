@@ -33,7 +33,7 @@ sc-state-db = { version = "0.10.0-dev", path = "../state-db" }
 sp-trie = { version = "6.0.0", path = "../../primitives/trie" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
 sp-database = { version = "4.0.0-dev", path = "../../primitives/database" }
-parity-db = { version = "0.3.9", optional = true }
+parity-db = { version = "0.3.12", optional = true }
 
 [dev-dependencies]
 sp-tracing = { version = "5.0.0", path = "../../primitives/tracing" }
