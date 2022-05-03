@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -45,8 +45,69 @@ fn value_cache_get_key(key: &[u8], storage_root: &impl AsRef<[u8]>) -> u64 {
 	hasher.finish()
 }
 
+/// The shared node cache.
+///
+/// Internally this stores all cached nodes in a [`LruCache`]. It ensures that when updating the
+/// cache, that the cache stays within it allowed bounds.
+struct SharedNodeCache<H: Hasher> {
+	/// The cached nodes, ordered by least recently used.
+	lru: LruCache<H::Out, NodeOwned<H::Out>>,
+	/// The size of [`Self::lru`] in bytes.
+	size_in_bytes: usize,
+	/// The maximum size in bytes of [`Self::lru`].
+	maximum_size_in_bytes: usize,
+}
+
+impl<H: Hasher> SharedNodeCache<H> {
+	/// Create a new instance.
+	fn new(maximum_size_in_bytes: usize) -> Self {
+		Self { lru: LruCache::unbounded(), size_in_bytes: 0, maximum_size_in_bytes }
+	}
+
+	/// Get the node for `key`.
+	///
+	/// This doesn't change the least recently order in the internal [`LruCache`].
+	fn get(&self, key: &H::Out) -> Option<&NodeOwned<H::Out>> {
+		self.lru.peek(key)
+	}
+
+	/// Update the cache with the `added` nodes and the `accessed` nodes.
+	///
+	/// The `added` nodes are the ones that have been collected by doing operations on the trie and
+	/// now should be stored in the shared cache. The `accessed` nodes are only referenced by hash
+	/// and represent the nodes that were retrieved from this shared cache through [`Self::get`].
+	/// These `accessed` nodes are being put to the front of the internal [`LruCache`] like the
+	/// `added` ones.
+	///
+	/// After the internal [`LruCache`] was updated, it is ensured that the internal [`LruCache`] is
+	/// inside its bounds ([`Self::maximum_size_in_bytes`]).
+	fn update(
+		&mut self,
+		added: impl IntoIterator<Item = (H::Out, NodeOwned<H::Out>)>,
+		accessed: impl IntoIterator<Item = H::Out>,
+	) {
+		accessed.into_iter().for_each(|key| {
+			// Access every node in the lru to put it to the front.
+			self.lru.get(&key);
+		});
+		added.into_iter().for_each(|(key, node)| {
+			self.size_in_bytes += key.as_ref().len() + node.size_in_bytes();
+
+			self.lru.push(key, node);
+		});
+
+		while self.size_in_bytes > self.maximum_size_in_bytes {
+			// This should always be `Some(_)`, otherwise something is wrong!
+			if let Some((key, node)) = self.lru.pop_lru() {
+				self.size_in_bytes =
+					self.size_in_bytes.saturating_sub(key.as_ref().len() + node.size_in_bytes());
+			}
+		}
+	}
+}
+
 pub struct SharedTrieNodeCache<H: Hasher> {
-	node_cache: Arc<RwLock<LruCache<H::Out, NodeOwned<H::Out>>>>,
+	node_cache: Arc<RwLock<SharedNodeCache<H>>>,
 	value_cache: Arc<RwLock<NoHashingLruCache<CachedValue<H::Out>>>>,
 }
 
@@ -60,7 +121,7 @@ impl<H: Hasher> SharedTrieNodeCache<H> {
 	/// Create a new [`SharedTrieNodeCache`].
 	pub fn new() -> Self {
 		Self {
-			node_cache: Arc::new(RwLock::new(LruCache::unbounded())),
+			node_cache: Arc::new(RwLock::new(SharedNodeCache::new(100000))),
 			value_cache: Arc::new(RwLock::new(NoHashingLruCache::unbounded_with_hasher(
 				Default::default(),
 			))),
@@ -100,7 +161,7 @@ impl<H: Hasher> LocalTrieNodeCache<H> {
 		};
 
 		TrieNodeCache {
-			shared_cache: self.shared.node_cache.read(),
+			shared_node_cache: self.shared.node_cache.read(),
 			local_cache: self.node_cache.lock(),
 			value_cache,
 			shared_node_cache_access: self.shared_node_cache_access.lock(),
@@ -116,7 +177,7 @@ impl<H: Hasher> LocalTrieNodeCache<H> {
 	/// would break because of this.
 	pub fn as_trie_db_mut_cache<'a>(&'a self) -> TrieNodeCache<'a, H> {
 		TrieNodeCache {
-			shared_cache: self.shared.node_cache.read(),
+			shared_node_cache: self.shared.node_cache.read(),
 			local_cache: self.node_cache.lock(),
 			value_cache: ValueCache::Fresh(Default::default()),
 			shared_node_cache_access: self.shared_node_cache_access.lock(),
@@ -126,15 +187,10 @@ impl<H: Hasher> LocalTrieNodeCache<H> {
 
 impl<H: Hasher> Drop for LocalTrieNodeCache<H> {
 	fn drop(&mut self) {
-		let mut shared_node_cache = self.shared.node_cache.write();
-		let mut shared_node_cache_access = self.shared_node_cache_access.lock();
-		self.node_cache.lock().drain().for_each(|(k, v)| {
-			shared_node_cache_access.remove(&k);
-			shared_node_cache.put(k, v);
-		});
-		shared_node_cache_access.drain().for_each(|k| {
-			shared_node_cache.get(&k);
-		});
+		self.shared
+			.node_cache
+			.write()
+			.update(self.node_cache.lock().drain(), self.shared_node_cache_access.lock().drain());
 
 		let mut shared_value_cache = self.shared.value_cache.write();
 		let mut shared_value_cache_access = self.shared_value_cache_access.lock();
@@ -208,7 +264,7 @@ impl<H: AsRef<[u8]>> ValueCache<'_, H> {
 }
 
 pub struct TrieNodeCache<'a, H: Hasher> {
-	shared_cache: RwLockReadGuard<'a, LruCache<H::Out, NodeOwned<H::Out>>>,
+	shared_node_cache: RwLockReadGuard<'a, SharedNodeCache<H>>,
 	shared_node_cache_access: MutexGuard<'a, HashSet<H::Out>>,
 	local_cache: MutexGuard<'a, HashMap<H::Out, NodeOwned<H::Out>>>,
 	value_cache: ValueCache<'a, H::Out>,
@@ -240,7 +296,7 @@ impl<'a, H: Hasher> trie_db::TrieCache<NodeCodec<H>> for TrieNodeCache<'a, H> {
 		hash: H::Out,
 		fetch_node: &mut dyn FnMut() -> trie_db::Result<NodeOwned<H::Out>, H::Out, Error<H::Out>>,
 	) -> trie_db::Result<&NodeOwned<H::Out>, H::Out, Error<H::Out>> {
-		if let Some(res) = self.shared_cache.peek(&hash) {
+		if let Some(res) = self.shared_node_cache.get(&hash) {
 			self.shared_node_cache_access.insert(hash);
 			return Ok(res)
 		}
@@ -259,7 +315,7 @@ impl<'a, H: Hasher> trie_db::TrieCache<NodeCodec<H>> for TrieNodeCache<'a, H> {
 	}
 
 	fn get_node(&mut self, hash: &H::Out) -> Option<&NodeOwned<H::Out>> {
-		if let Some(node) = self.shared_cache.peek(hash) {
+		if let Some(node) = self.shared_node_cache.get(hash) {
 			self.shared_node_cache_access.insert(*hash);
 			return Some(node)
 		}
@@ -319,12 +375,12 @@ mod tests {
 
 		// Local cache wasn't dropped yet, so there should nothing in the shared caches.
 		assert!(shared_cache.value_cache.read().is_empty());
-		assert!(shared_cache.node_cache.read().is_empty());
+		assert!(shared_cache.node_cache.read().lru.is_empty());
 
 		drop(local_cache);
 
 		// Now we should have the cached items in the shared cache.
-		assert!(shared_cache.node_cache.read().len() >= 1);
+		assert!(shared_cache.node_cache.read().lru.len() >= 1);
 		let cached_data = shared_cache
 			.value_cache
 			.read()
@@ -523,8 +579,13 @@ mod tests {
 			.map(|d| d.0)
 			.all(|l| { TEST_DATA.iter().take(2).any(|d| *l == value_cache_get_key(&d.0, &root)) }));
 
-		let most_recently_used_nodes =
-			shared_cache.node_cache.read().iter().map(|d| d.0.clone()).collect::<Vec<_>>();
+		let most_recently_used_nodes = shared_cache
+			.node_cache
+			.read()
+			.lru
+			.iter()
+			.map(|d| d.0.clone())
+			.collect::<Vec<_>>();
 
 		// Delete the value cache, so that we access the nodes.
 		shared_cache.value_cache.write().clear();
@@ -543,7 +604,13 @@ mod tests {
 		// Ensure that the most recently used nodes changed as well.
 		assert_ne!(
 			most_recently_used_nodes,
-			shared_cache.node_cache.read().iter().map(|d| d.0.clone()).collect::<Vec<_>>()
+			shared_cache
+				.node_cache
+				.read()
+				.lru
+				.iter()
+				.map(|d| d.0.clone())
+				.collect::<Vec<_>>()
 		);
 	}
 }
