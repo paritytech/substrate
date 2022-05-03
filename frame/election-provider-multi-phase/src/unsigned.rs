@@ -388,8 +388,11 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
+/// Configurations for a miner that comes with this pallet.
 pub trait MinerConfig {
+	/// The account id type.
 	type AccountId: Ord + Clone + codec::Codec + sp_std::fmt::Debug;
+	/// The solution that the miner is mining.
 	type Solution: codec::Codec
 		+ Default
 		+ PartialEq
@@ -399,23 +402,26 @@ pub trait MinerConfig {
 		+ Ord
 		+ NposSolution
 		+ TypeInfo;
+	/// Maximum number of votes per voter in the snapshots.
 	type MaxVotesPerVoter;
+	/// Maximum length of the solution that the miner is allowed to generate.
+	///
+	/// Solutions are trimmed to respect this.
 	type MaxLength: Get<u32>;
+	/// Maximum weight of the solution that the miner is allowed to generate.
+	///
+	/// Solutions are trimmed to respect this.
+	///
+	/// The weight is computed using `solution_weight`.
 	type MaxWeight: Get<Weight>;
-	fn solution_weight(
-		voters: u32,
-		targets: u32,
-		active_voters: u32,
-		active_targets: u32,
-	) -> Weight;
+	/// Something that can compute the weight of a solution.
+	fn solution_weight(voters: u32, targets: u32, active_voters: u32, degree: u32) -> Weight;
 }
 
+/// A base miner, suitable to be used for both signed and unsigned submissions.
 pub struct Miner<T: MinerConfig>(sp_std::marker::PhantomData<T>);
 impl<T: MinerConfig> Miner<T> {
-	/// Mine a new npos solution.
-	///
-	/// The Npos Solver type, `S`, must have the same AccountId and Error type as the
-	/// [`crate::Config::Solver`] in order to create a unified return type.
+	/// Same as [`Pallet::miner_solution`], but the input snapshot data must be given.
 	pub fn mine_solution_with_snapshot<S>(
 		voters: Vec<(T::AccountId, VoteWeight, BoundedVec<T::AccountId, T::MaxVotesPerVoter>)>,
 		targets: Vec<T::AccountId>,
@@ -425,7 +431,10 @@ impl<T: MinerConfig> Miner<T> {
 		S: NposSolver<AccountId = T::AccountId>,
 	{
 		S::solve(desired_targets as usize, targets.clone(), voters.clone())
-			.map_err(|e| MinerError::Solver)
+			.map_err(|e| {
+				log_no_system!(error, "solver error: {:?}", e);
+				MinerError::Solver
+			})
 			.and_then(|e| {
 				Self::prepare_election_result_with_snapshot::<S::Accuracy>(
 					e,
@@ -436,10 +445,7 @@ impl<T: MinerConfig> Miner<T> {
 			})
 	}
 
-	/// Convert a raw solution from [`sp_npos_elections::ElectionResult`] to [`RawSolution`], which
-	/// is ready to be submitted to the chain.
-	///
-	/// Will always reduce the solution as well.
+	/// Same as [`Pallet::prepare_election_result`], but the input snapshot mut be given as inputs.
 	pub fn prepare_election_result_with_snapshot<Accuracy: PerThing128>(
 		election_result: ElectionResult<T::AccountId, Accuracy>,
 		voters: Vec<(T::AccountId, VoteWeight, BoundedVec<T::AccountId, T::MaxVotesPerVoter>)>,
@@ -777,7 +783,7 @@ mod tests {
 			TestNposSolution, TrimHelpers, UnsignedPhase,
 		},
 		CurrentPhase, InvalidTransaction, Phase, QueuedSolution, TransactionSource,
-		TransactionValidityError, WeightInfo,
+		TransactionValidityError,
 	};
 	use codec::Decode;
 	use frame_benchmarking::Zero;
