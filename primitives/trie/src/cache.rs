@@ -632,4 +632,46 @@ mod tests {
 				.collect::<Vec<_>>()
 		);
 	}
+
+	#[test]
+	fn cache_respects_bounds() {
+		let (mut db, root) = create_trie();
+
+		let shared_cache = Cache::new(CACHE_CONFIG);
+		{
+			let local_cache = shared_cache.local_cache();
+
+			let mut new_root = root;
+
+			{
+				let mut cache = local_cache.as_trie_db_cache(root);
+				{
+					let mut trie =
+						TrieDBMutBuilder::<Layout>::from_existing(&mut db, &mut new_root)
+							.with_cache(&mut cache)
+							.build();
+
+					let value = vec![10u8; 100];
+					// Ensure we add enough data that would overflow the cache.
+					for i in 0..CACHE_CONFIG.maximum_size_in_bytes / 100 * 2 {
+						trie.insert(format!("key{}", i).as_bytes(), &value).unwrap();
+					}
+				}
+
+				cache.merge_into(&local_cache, new_root);
+			}
+		}
+
+		let node_cache_size = shared_cache
+			.node_cache
+			.read()
+			.lru
+			.iter()
+			.map(|(k, v)| k.as_ref().len() + v.size_in_bytes())
+			.sum::<usize>();
+		let value_cache_size = shared_cache.value_cache.read().len() *
+			(mem::size_of::<u64>() + mem::size_of::<CachedValue<sp_core::H256>>());
+
+		assert!(node_cache_size + value_cache_size < CACHE_CONFIG.maximum_size_in_bytes);
+	}
 }
