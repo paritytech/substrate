@@ -4019,11 +4019,11 @@ mod election_data_provider {
 			});
 	}
 
-	// Tests the criteria that in `ElectionDataProvider::voters` function, we try to get at most
-	// `maybe_max_len` voters, and if some of them end up being skipped, we iterate at most `2 *
-	// maybe_max_len`.
+	// Tests the criteria that in `ElectionDataProvider::electing_voters` function, we try to get at
+	// most `maybe_max_len` voters, and if some of them end up being skipped, we iterate at most `2
+	// * maybe_max_len`.
 	#[test]
-	fn only_iterates_max_2_times_max_allowed_len() {
+	fn only_iterates_max_2_times_max_allowed_len_voters() {
 		ExtBuilder::default()
 			.nominate(false)
 			// the other nominators only nominate 21
@@ -4058,6 +4058,40 @@ mod election_data_provider {
 					vec![11],
 				);
 			});
+	}
+
+	#[test]
+	fn filters_out_non_validator_targets() {
+		ExtBuilder::default().build_and_execute(|| {
+			// given
+			assert_eq_uvec!(
+				<Test as Config>::TargetList::iter()
+					.map(|t| (t, <Test as Config>::TargetList::get_score(&t).unwrap()))
+					.collect::<Vec<_>>(),
+				vec![(11, 1500), (21, 1500), (31, 500)]
+			);
+			assert_eq!(Staking::electable_targets(None).unwrap(), vec![11, 21, 31]);
+
+			// when
+			assert_ok!(Staking::chill(Origin::signed(20)));
+
+			// then
+			// 21 is still in TargetList, but gets filtered out.
+			assert_eq_uvec!(
+				<Test as Config>::TargetList::iter()
+					.map(|t| (t, <Test as Config>::TargetList::get_score(&t).unwrap()))
+					.collect::<Vec<_>>(),
+				vec![(11, 1500), (21, 500), (31, 500)]
+			);
+			assert_eq!(Staking::electable_targets(None).unwrap(), vec![11, 31]);
+		});
+	}
+
+	// Similar to `only_iterates_max_2_times_max_allowed_len_voters` but for targets. If some
+	// non-validator targets are being pulled
+	#[test]
+	fn only_iterates_max_2_times_max_allowed_len_targets() {
+		ExtBuilder::default().build_and_execute(|| todo!());
 	}
 
 	// Even if some of the higher staked nominators are slashed, we still get up to max len voters
@@ -4640,7 +4674,6 @@ mod target_list {
 	#[test]
 	fn duplicate_nomination_prevented() {
 		ExtBuilder::default().nominate(true).validator_count(1).build_and_execute(|| {
-			// resubmit and it is back
 			assert_noop!(
 				Staking::nominate(Origin::signed(100), vec![11, 11, 21]),
 				Error::<Test>::DuplicateTarget
@@ -4655,7 +4688,6 @@ mod target_list {
 				Staking::nominate(Origin::signed(100), vec![21, 11, 31, 11]),
 				Error::<Test>::DuplicateTarget
 			);
-			assert_ok!(Staking::nominate(Origin::signed(100), vec![21, 11]));
 		})
 	}
 

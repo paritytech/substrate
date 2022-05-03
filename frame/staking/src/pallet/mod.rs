@@ -184,12 +184,31 @@ pub mod pallet {
 		///
 		/// The changes to nominators are reported to this. Moreover, each validator's self-vote is
 		/// also reported as one independent vote.
+		///
+		/// To keep the load off the chain as much as possible, changes made to the staked amount
+		/// via rewards and slashes are not reported and thus need to be manually fixed by the
+		/// staker. In case of `bags-list`, this always means using `rebag` and `putInFrontOf`.
+		///
+		/// Invariant: what comes out of this list will always be a nominator.
 		type VoterList: SortedListProvider<Self::AccountId, Score = VoteWeight>;
 
 		/// Something that provides a best-effort sorted list of targets aka electable validators,
 		/// used for NPoS election.
 		///
-		/// The changes to the approval stake of each validator are reported to this.
+		/// The changes to the approval stake of each validator are reported to this. This means any
+		/// change to:
+		/// 1. The stake of any validator or nominator.
+		/// 2. The targets of any nominator
+		/// 3. The role of any staker (e.g. validator -> chilled, nominator -> validator, etc)
+		///
+		/// Unlike `TargetList`, the values in this list are always kept up to date with reward and
+		/// slash as well, and thus represent the accurate approval stake of all account being
+		/// nominated by nominators.
+		///
+		/// Note that while at the time of nomination, all targets are checked to be real
+		/// validators, they can chill at any point, and their approval stakes will still be
+		/// recorded. This implies that what comes out of iterating this list MIGHT NOT BE AN ACTIVE
+		/// VALIDATOR.
 		type TargetList: SortedListProvider<Self::AccountId, Score = BalanceOf<Self>>;
 
 		/// determines how many unique eras a staker may be unbonding in.
@@ -649,10 +668,8 @@ pub mod pallet {
 			}
 
 			// all voters are reported to the `VoterList`.
-			#[cfg(debug_assertions)]
-			Pallet::<T>::sanity_check_list_providers();
-			#[cfg(debug_assertions)]
-			Pallet::<T>::sanity_check_approval_stakes();
+			debug_assert!(Pallet::<T>::sanity_check_list_providers().is_ok());
+			debug_assert!(Pallet::<T>::sanity_check_approval_stakes().is_ok());
 		}
 	}
 
@@ -1073,8 +1090,9 @@ pub mod pallet {
 			Self::do_remove_nominator(stash);
 			Self::do_add_validator(stash, prefs);
 
-			#[cfg(debug_assertions)]
-			Self::sanity_check_approval_stakes();
+			// NOTE: we need to do this after all validators and nominators have been updated in the
+			// previous two function calls.
+			debug_assert!(Self::sanity_check_approval_stakes().is_ok());
 
 			Ok(())
 		}
@@ -1158,8 +1176,7 @@ pub mod pallet {
 
 			// NOTE: we need to do this after all validators and nominators have been updated in the
 			// previous two function calls.
-			#[cfg(debug_assertions)]
-			Self::sanity_check_approval_stakes();
+			debug_assert!(Self::sanity_check_approval_stakes().is_ok());
 
 			Ok(())
 		}

@@ -451,7 +451,10 @@ mod list {
 			List::<Runtime>::insert_at_unchecked(node_1, node_42);
 
 			// then
-			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![42, 1]), (1_000, vec![2, 3, 4])]);
+			assert_eq!(
+				List::<Runtime>::get_bags(),
+				vec![(10, vec![42, 1]), (1_000, vec![2, 3, 4])]
+			);
 		})
 	}
 
@@ -478,7 +481,10 @@ mod list {
 			List::<Runtime>::insert_at_unchecked(node_2, node_42);
 
 			// then
-			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![42, 2, 3, 4])]);
+			assert_eq!(
+				List::<Runtime>::get_bags(),
+				vec![(10, vec![1]), (1_000, vec![42, 2, 3, 4])]
+			);
 		})
 	}
 
@@ -505,7 +511,10 @@ mod list {
 			List::<Runtime>::insert_at_unchecked(node_3, node_42);
 
 			// then
-			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 42, 3, 4])]);
+			assert_eq!(
+				List::<Runtime>::get_bags(),
+				vec![(10, vec![1]), (1_000, vec![2, 42, 3, 4])]
+			);
 		})
 	}
 
@@ -532,7 +541,10 @@ mod list {
 			List::<Runtime>::insert_at_unchecked(node_4, node_42);
 
 			// then
-			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 42, 4])]);
+			assert_eq!(
+				List::<Runtime>::get_bags(),
+				vec![(10, vec![1]), (1_000, vec![2, 3, 42, 4])]
+			);
 		})
 	}
 }

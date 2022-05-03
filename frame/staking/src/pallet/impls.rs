@@ -252,8 +252,7 @@ impl<T: Config> Pallet<T> {
 			let _ = T::VoterList::on_update(&ledger.stash, to_vote(ledger.active))
 				.defensive_proof("any nominator should have an entry in the voter list.");
 
-			#[cfg(debug_assertions)]
-			Self::sanity_check_list_providers();
+			debug_assert!(Self::sanity_check_list_providers().is_ok());
 		}
 
 		// if this ledger belonged to a validator..
@@ -263,8 +262,7 @@ impl<T: Config> Pallet<T> {
 			let _ = T::VoterList::on_update(&ledger.stash, to_vote(ledger.active))
 				.defensive_proof("any validator should have an entry in the voter list.");
 
-			#[cfg(debug_assertions)]
-			Self::sanity_check_list_providers();
+			debug_assert!(Self::sanity_check_list_providers().is_ok());
 		}
 	}
 
@@ -276,8 +274,7 @@ impl<T: Config> Pallet<T> {
 			Self::deposit_event(Event::<T>::Chilled(stash.clone()));
 		}
 
-		#[cfg(debug_assertions)]
-		Self::sanity_check_approval_stakes();
+		debug_assert!(Self::sanity_check_list_providers().is_ok())
 	}
 
 	/// Actually make a payment to a staker. This uses the currency's reward function
@@ -628,8 +625,7 @@ impl<T: Config> Pallet<T> {
 		Self::do_remove_validator(stash);
 		Self::do_remove_nominator(stash);
 
-		#[cfg(debug_assertions)]
-		Self::sanity_check_approval_stakes();
+		debug_assert!(Self::sanity_check_list_providers().is_ok());
 
 		<Bonded<T>>::remove(stash);
 		<Ledger<T>>::remove(&controller);
@@ -813,15 +809,31 @@ impl<T: Config> Pallet<T> {
 	///
 	/// This function is self-weighing as [`DispatchClass::Mandatory`].
 	pub fn get_npos_targets(maybe_max_len: Option<usize>) -> Vec<T::AccountId> {
-		// TODO: what comes out here might not be a validator.
-		let targets = T::TargetList::iter()
-			.take(maybe_max_len.unwrap_or_else(Bounded::max_value))
-			.collect::<Vec<_>>();
+		let max_allowed_len = maybe_max_len.unwrap_or_else(|| T::TargetList::count() as usize);
+		let mut all_targets = Vec::<T::AccountId>::with_capacity(max_allowed_len);
+		let mut targets_seen = 0;
 
-		Self::register_weight(T::WeightInfo::get_npos_targets(targets.len() as u32));
-		log!(info, "generated {} npos targets", targets.len());
+		let mut targets_iter = T::TargetList::iter();
+		while all_targets.len() < max_allowed_len &&
+			targets_seen < (NPOS_MAX_ITERATIONS_COEFFICIENT * max_allowed_len as u32)
+		{
+			let target = match targets_iter.next() {
+				Some(target) => {
+					targets_seen.saturating_inc();
+					target
+				},
+				None => break,
+			};
 
-		targets
+			if Validators::<T>::contains_key(&target) {
+				all_targets.push(target);
+			}
+		}
+
+		Self::register_weight(T::WeightInfo::get_npos_targets(all_targets.len() as u32));
+		log!(info, "generated {} npos targets", all_targets.len());
+
+		all_targets
 	}
 
 	/// This function will add a nominator to the `Nominators` storage map,
@@ -865,9 +877,7 @@ impl<T: Config> Pallet<T> {
 		});
 
 		Nominators::<T>::insert(stash, nominations);
-
-		#[cfg(debug_assertions)]
-		Self::sanity_check_list_providers();
+		debug_assert!(Self::sanity_check_list_providers().is_ok())
 	}
 
 	/// This function will remove a nominator from the `Nominators` storage map,
@@ -895,9 +905,7 @@ impl<T: Config> Pallet<T> {
 			false
 		};
 
-		#[cfg(debug_assertions)]
-		Self::sanity_check_list_providers();
-
+		debug_assert!(Self::sanity_check_list_providers().is_ok());
 		outcome
 	}
 
@@ -921,9 +929,7 @@ impl<T: Config> Pallet<T> {
 		}
 
 		Validators::<T>::insert(who, prefs);
-
-		#[cfg(debug_assertions)]
-		Self::sanity_check_list_providers();
+		debug_assert!(Self::sanity_check_list_providers().is_ok());
 	}
 
 	/// This function will remove a validator from the `Validators` storage map.
@@ -946,8 +952,7 @@ impl<T: Config> Pallet<T> {
 			false
 		};
 
-		#[cfg(debug_assertions)]
-		Self::sanity_check_list_providers();
+		debug_assert!(Self::sanity_check_list_providers().is_ok());
 
 		outcome
 	}
@@ -964,33 +969,37 @@ impl<T: Config> Pallet<T> {
 
 	/// Perform all checks related to both [`Config::TargetList`] and [`Config::VoterList`].
 	#[cfg(any(debug_assertions, feature = "std"))]
-	pub(crate) fn sanity_check_list_providers() {
-		debug_assert_eq!(
-			Nominators::<T>::count() + Validators::<T>::count(),
-			T::VoterList::count()
+	pub(crate) fn sanity_check_list_providers() -> Result<(), &'static str> {
+		ensure!(
+			Nominators::<T>::count() + Validators::<T>::count() == T::VoterList::count(),
+			"invalid voter list count",
 		);
-
-		debug_assert_eq!(T::VoterList::sanity_check(), Ok(()));
-		debug_assert_eq!(T::TargetList::sanity_check(), Ok(()));
 		// note that we cannot say much about the count of the target list.
+
+		let _ = T::VoterList::sanity_check()?;
+		let _ = T::TargetList::sanity_check()?;
+
+		Ok(())
 	}
 
 	#[cfg(any(debug_assertions, feature = "std"))]
-	pub(crate) fn sanity_check_approval_stakes() {
+	pub(crate) fn sanity_check_approval_stakes() -> Result<(), &'static str> {
 		// additionally, if asked for the full check, we ensure that the TargetList is indeed
 		// composed of the approval stakes.
 		use crate::migrations::v10::InjectValidatorsApprovalStakeIntoTargetList as TargetListMigration;
 		let approval_stakes = TargetListMigration::<T>::build_approval_stakes();
-		approval_stakes.iter().for_each(|(v, a)| {
-			debug_assert_eq!(
-				T::TargetList::get_score(v).unwrap_or_default(),
-				*a,
-				"staker {:?}, score in TargetList {:?}, computed: {:?}",
-				v,
-				T::TargetList::get_score(v).unwrap_or_default(),
-				a
-			)
-		});
+		approval_stakes
+			.iter()
+			.map(|(v, a)| {
+				let known = T::TargetList::get_score(v).unwrap_or_default();
+				if known != *a {
+					log!(error, "wrong approval computed for {:?}: {:?} != {:?}", v, known, *a);
+					Err("bad approval")
+				} else {
+					Ok(())
+				}
+			})
+			.collect::<Result<_, _>>()
 	}
 }
 

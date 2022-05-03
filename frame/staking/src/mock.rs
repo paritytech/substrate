@@ -37,7 +37,7 @@ use sp_runtime::{
 	traits::{IdentityLookup, Zero},
 };
 use sp_staking::offence::{DisableStrategy, OffenceDetails, OnOffenceHandler};
-use std::{cell::RefCell, cmp::Ordering};
+use std::{cell::RefCell};
 
 pub const INIT_TIMESTAMP: u64 = 30_000;
 pub const BLOCK_TIME: u64 = 1000;
@@ -288,59 +288,60 @@ impl<T: Config> sp_staking::OnStakerSlash<AccountId, Balance> for OnStakerSlashM
 	}
 }
 
-pub struct TargetBagListCompat;
-impl SortedListProvider<AccountId> for TargetBagListCompat {
-	type Error = <TargetBagsList as SortedListProvider<AccountId>>::Error;
-	type Score = <TargetBagsList as SortedListProvider<AccountId>>::Score;
+// pub struct TargetBagsListCompat;
+// impl SortedListProvider<AccountId> for TargetBagsListCompat {
+// 	type Error = <TargetBagsList as SortedListProvider<AccountId>>::Error;
+// 	type Score = <TargetBagsList as SortedListProvider<AccountId>>::Score;
 
-	fn iter() -> Box<dyn Iterator<Item = AccountId>> {
-		let mut all = TargetBagsList::iter()
-			.map(|x| (x, TargetBagsList::get_score(&x).unwrap_or_default()))
-			.collect::<Vec<_>>();
-		all.sort_by(|a, b| match a.1.partial_cmp(&b.1).unwrap() {
-			Ordering::Equal => b.0.partial_cmp(&a.0).unwrap(),
-			x @ _ => x,
-		});
-		Box::new(all.into_iter().map(|(x, _)| x))
-	}
-	fn iter_from(start: &AccountId) -> Result<Box<dyn Iterator<Item = AccountId>>, Self::Error> {
-		TargetBagsList::iter_from(start)
-	}
-	fn count() -> u32 {
-		TargetBagsList::count()
-	}
-	fn contains(id: &AccountId) -> bool {
-		TargetBagsList::contains(id)
-	}
-	fn on_insert(id: AccountId, weight: Self::Score) -> Result<(), Self::Error> {
-		TargetBagsList::on_insert(id, weight)
-	}
-	fn on_update(id: &AccountId, weight: Self::Score) -> Result<(), Self::Error> {
-		TargetBagsList::on_update(id, weight)
-	}
-	fn get_score(id: &AccountId) -> Result<Self::Score, Self::Error> {
-		TargetBagsList::get_score(id)
-	}
-	fn on_remove(id: &AccountId) -> Result<(), Self::Error> {
-		TargetBagsList::on_remove(id)
-	}
-	fn unsafe_regenerate(
-		all: impl IntoIterator<Item = AccountId>,
-		weight_of: Box<dyn Fn(&AccountId) -> Self::Score>,
-	) -> u32 {
-		TargetBagsList::unsafe_regenerate(all, weight_of)
-	}
-	fn unsafe_clear() {
-		TargetBagsList::unsafe_clear();
-	}
-	fn sanity_check() -> Result<(), &'static str> {
-		TargetBagsList::sanity_check()
-	}
-	#[cfg(feature = "runtime-benchmarks")]
-	fn score_update_worst_case(_who: &AccountId, _is_increase: bool) -> Self::Score {
-		Balance::MAX
-	}
-}
+// 	fn iter() -> Box<dyn Iterator<Item = AccountId>> {
+// 		let mut all = TargetBagsList::iter()
+// 			.map(|x| (x, TargetBagsList::get_score(&x).unwrap_or_default()))
+// 			.collect::<Vec<_>>();
+// 		dbg!(&all);
+// 		all.sort_by(|a, b| match a.1.partial_cmp(&b.1).unwrap() {
+// 			Ordering::Equal => b.0.partial_cmp(&a.0).unwrap(),
+// 			x @ _ => x,
+// 		});
+// 		Box::new(all.into_iter().map(|(x, _)| x))
+// 	}
+// 	fn iter_from(start: &AccountId) -> Result<Box<dyn Iterator<Item = AccountId>>, Self::Error> {
+// 		TargetBagsList::iter_from(start)
+// 	}
+// 	fn count() -> u32 {
+// 		TargetBagsList::count()
+// 	}
+// 	fn contains(id: &AccountId) -> bool {
+// 		TargetBagsList::contains(id)
+// 	}
+// 	fn on_insert(id: AccountId, weight: Self::Score) -> Result<(), Self::Error> {
+// 		TargetBagsList::on_insert(id, weight)
+// 	}
+// 	fn on_update(id: &AccountId, weight: Self::Score) -> Result<(), Self::Error> {
+// 		TargetBagsList::on_update(id, weight)
+// 	}
+// 	fn get_score(id: &AccountId) -> Result<Self::Score, Self::Error> {
+// 		TargetBagsList::get_score(id)
+// 	}
+// 	fn on_remove(id: &AccountId) -> Result<(), Self::Error> {
+// 		TargetBagsList::on_remove(id)
+// 	}
+// 	fn unsafe_regenerate(
+// 		all: impl IntoIterator<Item = AccountId>,
+// 		weight_of: Box<dyn Fn(&AccountId) -> Self::Score>,
+// 	) -> u32 {
+// 		TargetBagsList::unsafe_regenerate(all, weight_of)
+// 	}
+// 	fn unsafe_clear() {
+// 		TargetBagsList::unsafe_clear();
+// 	}
+// 	fn sanity_check() -> Result<(), &'static str> {
+// 		TargetBagsList::sanity_check()
+// 	}
+// 	#[cfg(feature = "runtime-benchmarks")]
+// 	fn score_update_worst_case(_who: &AccountId, _is_increase: bool) -> Self::Score {
+// 		Balance::MAX
+// 	}
+// }
 
 impl crate::pallet::pallet::Config for Test {
 	type MaxNominations = MaxNominations;
@@ -365,7 +366,7 @@ impl crate::pallet::pallet::Config for Test {
 	type GenesisElectionProvider = Self::ElectionProvider;
 	// NOTE: consider a macro and use `UseNominatorsAndValidatorsMap<Self>` as well.
 	type VoterList = VoterBagsList;
-	type TargetList = TargetBagListCompat;
+	type TargetList = TargetBagsList;
 	type MaxUnlockingChunks = ConstU32<32>;
 	type OnStakerSlash = OnStakerSlashMock<Test>;
 	type BenchmarkingConfig = TestBenchmarkingConfig;
