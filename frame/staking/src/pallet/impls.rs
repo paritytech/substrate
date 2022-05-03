@@ -214,7 +214,7 @@ impl<T: Config> Pallet<T> {
 
 	/// Update the ledger for a controller.
 	///
-	/// All updates to the ledger amount MUST be reported ot this function, so that the lock amount
+	/// All updates to the ledger amount MUST be reported to this function, so that the lock amount
 	/// and other bookkeeping is maintained.
 	pub(crate) fn update_ledger(controller: &T::AccountId, ledger: &StakingLedger<T>) {
 		let prev_active = Self::ledger(controller).map(|l| l.active).unwrap_or_default();
