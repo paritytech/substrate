@@ -363,13 +363,13 @@ pub struct BatchProof<Hash> {
 }
 
 impl<Hash> BatchProof<Hash> {
-	/// Will panic if leaf indices length is less than 1
-	pub fn into_single_leaf_proof(proof: BatchProof<Hash>) -> Proof<Hash> {
-		Proof {
-			leaf_index: proof.leaf_indices[0],
+	/// Converts batch proof to single leaf proof
+	pub fn into_single_leaf_proof(proof: BatchProof<Hash>) -> Result<Proof<Hash>, Error> {
+		Ok(Proof {
+			leaf_index: *proof.leaf_indices.get(0).ok_or(Error::InvalidLeafIndex)?,
 			leaf_count: proof.leaf_count,
 			items: proof.items,
-		}
+		})
 	}
 }
 
@@ -400,6 +400,8 @@ pub enum Error {
 	LeafNotFound,
 	/// Mmr Pallet not included in runtime
 	PalletNotIncluded,
+	/// Cannot find the requested leaf index
+	InvalidLeafIndex,
 }
 
 impl Error {
