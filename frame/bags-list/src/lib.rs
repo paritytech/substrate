@@ -189,8 +189,6 @@ pub mod pallet {
 	pub enum Event<T: Config<I>, I: 'static = ()> {
 		/// Moved an account from one bag to another.
 		Rebagged { who: T::AccountId, from: T::Score, to: T::Score },
-		/// Updated the score of some account to the given amount.
-		ScoreUpdated { who: T::AccountId, new_score: T::Score },
 	}
 
 	#[pallet::error]
@@ -267,7 +265,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		if let Some((from, to)) = maybe_movement {
 			Self::deposit_event(Event::<T, I>::Rebagged { who: account.clone(), from, to });
 		};
-		Self::deposit_event(Event::<T, I>::ScoreUpdated { who: account.clone(), new_score });
 		Ok(maybe_movement)
 	}
 
