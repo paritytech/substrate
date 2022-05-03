@@ -28,6 +28,7 @@ sp-core = { version = "5.0.0", path = "../../primitives/core" }
 sp-io = { version = "5.0.0", path = "../../primitives/io" }
 sp-keystore = { version = "0.11.0", path = "../../primitives/keystore" }
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
+pallet-assets = { version = "4.0.0-dev", path = "../assets" }
 
 [features]
 default = ["std"]

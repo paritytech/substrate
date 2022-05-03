@@ -43,6 +43,7 @@ construct_runtime!(
 	{
 		System: frame_system,
 		Balances: pallet_balances,
+		Assets: pallet_assets,
 		Uniques: pallet_uniques,
 	}
 );
@@ -86,14 +87,31 @@ impl pallet_balances::Config for Test {
 	type ReserveIdentifier = [u8; 8];
 }
 
+impl pallet_assets::Config for Test {
+	type Event = Event;
+	type Balance = u64;
+	type AssetId = u32;
+	type Currency = Balances;
+	type ForceOrigin = frame_system::EnsureRoot<u64>;
+	type AssetDeposit = ConstU64<1>;
+	type AssetAccountDeposit = ConstU64<10>;
+	type MetadataDepositBase = ConstU64<1>;
+	type MetadataDepositPerByte = ConstU64<1>;
+	type ApprovalDeposit = ConstU64<1>;
+	type StringLimit = ConstU32<50>;
+	type Freezer = ();
+	type WeightInfo = ();
+	type Extra = ();
+}
+
 parameter_types! {
 	pub NoDeposit: SystemFeatures = SystemFeatures::new(SystemFeature::NoDeposit.into());
 }
 
 impl Config for Test {
 	type Event = Event;
-
 	type Currency = Balances;
+	type Assets = Assets;
 	type CollectionId = u32;
 	type ItemId = u32;
 	type MetadataLimit = ConstU32<10_000>;

@@ -40,7 +40,7 @@ pub mod pallet {
 
 	use frame_support::{
 		storage::bounded_btree_map::BoundedBTreeMap,
-		traits::{Currency, ReservableCurrency},
+		traits::{tokens::fungibles, Currency, ReservableCurrency},
 	};
 	use sp_runtime::{
 		traits::{CheckedAdd, One},
@@ -56,6 +56,8 @@ pub mod pallet {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
 		type Currency: ReservableCurrency<Self::AccountId>;
+
+		type Assets: fungibles::Inspect<Self::AccountId> + fungibles::Transfer<Self::AccountId>;
 
 		type CollectionId: Member + Parameter + Default + Copy + MaxEncodedLen + CheckedAdd + One;
 
@@ -112,6 +114,13 @@ pub mod pallet {
 		<T as frame_system::Config>::BlockNumber,
 		<T as frame_system::Config>::AccountId,
 	>;
+
+	pub type AssetIdOf<T> = <<T as Config>::Assets as fungibles::Inspect<
+		<T as frame_system::Config>::AccountId,
+	>>::AssetId;
+	pub type AssetBalanceOf<T> = <<T as Config>::Assets as fungibles::Inspect<
+		<T as frame_system::Config>::AccountId,
+	>>::Balance;
 
 	/// Maps a unique collection id to it's config.
 	#[pallet::storage]
