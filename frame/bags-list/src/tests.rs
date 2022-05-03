@@ -34,7 +34,7 @@ mod pallet {
 				vec![(10, vec![1]), (20, vec![42]), (1_000, vec![2, 3, 4])]
 			);
 
-			// when increasing vote score to the level of non-existent bag
+			// when increasing score to the level of non-existent bag
 			StakingMock::set_score_of(&42, 2_000);
 			assert_ok!(BagsList::rebag(Origin::signed(0), 42));
 
