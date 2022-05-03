@@ -354,19 +354,6 @@ dependencies = [
 
 [[package]]
 name = "asynchronous-codec"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fb4401f0a3622dad2e0763fa79e0eb328bc70fb7dccfdd645341f00d671247d6"
-dependencies = [
- "bytes 1.1.0",
- "futures-sink",
- "futures-util",
- "memchr",
- "pin-project-lite 0.2.6",
-]
-
-[[package]]
-name = "asynchronous-codec"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f0de5164e5edbf51c45fb8c2d9664ae1c095cce1b265ecf7569093c0d66ef690"
@@ -661,29 +648,38 @@ dependencies = [
 ]
 
 [[package]]
-name = "blake2s_simd"
-version = "0.5.11"
+name = "blake2b_simd"
+version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e461a7034e85b211a4acb57ee2e6730b32912b06c08cc242243c39fc21ae6a2"
+checksum = "72936ee4afc7f8f736d1c38383b56480b5497b4617b4a77bdbf1d2ababc76127"
 dependencies = [
  "arrayref",
- "arrayvec 0.5.2",
+ "arrayvec 0.7.1",
+ "constant_time_eq",
+]
+
+[[package]]
+name = "blake2s_simd"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "db539cc2b5f6003621f1cd9ef92d7ded8ea5232c7de0f9faa2de251cd98730d4"
+dependencies = [
+ "arrayref",
+ "arrayvec 0.7.1",
  "constant_time_eq",
 ]
 
 [[package]]
 name = "blake3"
-version = "0.3.7"
+version = "1.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e9ff35b701f3914bdb8fad3368d822c766ef2858b2583198e41639b936f09d3f"
+checksum = "a08e53fc5a564bb15bfe6fae56bd71522205f1f91893f9c0116edad6496c183f"
 dependencies = [
  "arrayref",
- "arrayvec 0.5.2",
+ "arrayvec 0.7.1",
  "cc",
- "cfg-if 0.1.10",
+ "cfg-if 1.0.0",
  "constant_time_eq",
- "crypto-mac 0.8.0",
- "digest 0.9.0",
 ]
 
 [[package]]
@@ -975,13 +971,15 @@ dependencies = [
 
 [[package]]
 name = "cid"
-version = "0.6.1"
+version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ff0e3bc0b6446b3f9663c1a6aba6ef06c5aeaa1bc92bd18077be337198ab9768"
+checksum = "a52cffa791ce5cf490ac3b2d6df970dc04f931b04e727be3c3e220e17164dfc4"
 dependencies = [
+ "core2",
  "multibase",
- "multihash 0.13.2",
- "unsigned-varint 0.5.1",
+ "multihash",
+ "serde",
+ "unsigned-varint",
 ]
 
 [[package]]
@@ -3771,7 +3769,7 @@ dependencies = [
  "libsecp256k1",
  "log 0.4.16",
  "multiaddr",
- "multihash 0.16.2",
+ "multihash",
  "multistream-select",
  "parking_lot 0.12.0",
  "pin-project 1.0.10",
@@ -3783,7 +3781,7 @@ dependencies = [
  "sha2 0.10.2",
  "smallvec 1.8.0",
  "thiserror",
- "unsigned-varint 0.7.1",
+ "unsigned-varint",
  "void",
  "zeroize",
 ]
@@ -3837,7 +3835,7 @@ version = "0.37.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a90c989a7c0969c2ab63e898da9bc735e3be53fb4f376e9c045ce516bcc9f928"
 dependencies = [
- "asynchronous-codec 0.6.0",
+ "asynchronous-codec",
  "base64 0.13.0",
  "byteorder",
  "bytes 1.1.0",
@@ -3855,7 +3853,7 @@ dependencies = [
  "regex",
  "sha2 0.10.2",
  "smallvec 1.8.0",
- "unsigned-varint 0.7.1",
+ "unsigned-varint",
  "wasm-timer",
 ]
 
@@ -3883,7 +3881,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "564e6bd64d177446399ed835b9451a8825b07929d6daa6a94e6405592974725e"
 dependencies = [
  "arrayvec 0.5.2",
- "asynchronous-codec 0.6.0",
+ "asynchronous-codec",
  "bytes 1.1.0",
  "either",
  "fnv",
@@ -3900,7 +3898,7 @@ dependencies = [
  "smallvec 1.8.0",
  "thiserror",
  "uint",
- "unsigned-varint 0.7.1",
+ "unsigned-varint",
  "void",
 ]
 
@@ -3947,7 +3945,7 @@ version = "0.32.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "442eb0c9fff0bf22a34f015724b4143ce01877e079ed0963c722d94c07c72160"
 dependencies = [
- "asynchronous-codec 0.6.0",
+ "asynchronous-codec",
  "bytes 1.1.0",
  "futures 0.3.21",
  "libp2p-core",
@@ -3956,7 +3954,7 @@ dependencies = [
  "parking_lot 0.12.0",
  "rand 0.7.3",
  "smallvec 1.8.0",
- "unsigned-varint 0.7.1",
+ "unsigned-varint",
 ]
 
 [[package]]
@@ -4003,14 +4001,14 @@ version = "0.32.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "962c0fb0e7212fb96a69b87f2d09bcefd317935239bdc79cda900e7a8897a3fe"
 dependencies = [
- "asynchronous-codec 0.6.0",
+ "asynchronous-codec",
  "bytes 1.1.0",
  "futures 0.3.21",
  "libp2p-core",
  "log 0.4.16",
  "prost",
  "prost-build",
- "unsigned-varint 0.7.1",
+ "unsigned-varint",
  "void",
 ]
 
@@ -4034,7 +4032,7 @@ version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3aa754cb7bccef51ebc3c458c6bbcef89d83b578a9925438389be841527d408f"
 dependencies = [
- "asynchronous-codec 0.6.0",
+ "asynchronous-codec",
  "bytes 1.1.0",
  "either",
  "futures 0.3.21",
@@ -4050,7 +4048,7 @@ dependencies = [
  "smallvec 1.8.0",
  "static_assertions",
  "thiserror",
- "unsigned-varint 0.7.1",
+ "unsigned-varint",
  "void",
 ]
 
@@ -4060,7 +4058,7 @@ version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bbd0baab894c5b84da510b915d53264d566c3c35889f09931fe9edbd2a773bee"
 dependencies = [
- "asynchronous-codec 0.6.0",
+ "asynchronous-codec",
  "bimap",
  "futures 0.3.21",
  "futures-timer",
@@ -4073,7 +4071,7 @@ dependencies = [
  "rand 0.8.4",
  "sha2 0.10.2",
  "thiserror",
- "unsigned-varint 0.7.1",
+ "unsigned-varint",
  "void",
 ]
 
@@ -4092,7 +4090,7 @@ dependencies = [
  "log 0.4.16",
  "rand 0.7.3",
  "smallvec 1.8.0",
- "unsigned-varint 0.7.1",
+ "unsigned-varint",
 ]
 
 [[package]]
@@ -4649,19 +4647,19 @@ dependencies = [
  "bs58",
  "byteorder",
  "data-encoding",
- "multihash 0.16.2",
+ "multihash",
  "percent-encoding 2.1.0",
  "serde",
  "static_assertions",
- "unsigned-varint 0.7.1",
+ "unsigned-varint",
  "url 2.2.1",
 ]
 
 [[package]]
 name = "multibase"
-version = "0.8.0"
+version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b78c60039650ff12e140ae867ef5299a58e19dded4d334c849dc7177083667e2"
+checksum = "9b3539ec3c1f04ac9748a260728e855f261b4977f5c3406612c884564f329404"
 dependencies = [
  "base-x",
  "data-encoding",
@@ -4670,46 +4668,19 @@ dependencies = [
 
 [[package]]
 name = "multihash"
-version = "0.13.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4dac63698b887d2d929306ea48b63760431ff8a24fac40ddb22f9c7f49fb7cab"
-dependencies = [
- "blake2b_simd",
- "blake2s_simd",
- "blake3",
- "digest 0.9.0",
- "generic-array 0.14.4",
- "multihash-derive 0.7.2",
- "sha2 0.9.8",
- "sha3 0.9.1",
- "unsigned-varint 0.5.1",
-]
-
-[[package]]
-name = "multihash"
 version = "0.16.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3db354f401db558759dfc1e568d010a5d4146f4d3f637be1275ec4a3cf09689"
 dependencies = [
+ "blake2b_simd 1.0.0",
+ "blake2s_simd",
+ "blake3",
  "core2",
  "digest 0.10.3",
- "multihash-derive 0.8.0",
+ "multihash-derive",
  "sha2 0.10.2",
- "unsigned-varint 0.7.1",
-]
-
-[[package]]
-name = "multihash-derive"
-version = "0.7.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "424f6e86263cd5294cbd7f1e95746b95aca0e0d66bff31e5a40d6baa87b4aa99"
-dependencies = [
- "proc-macro-crate 1.1.3",
- "proc-macro-error",
- "proc-macro2",
- "quote",
- "syn",
- "synstructure",
+ "sha3 0.10.0",
+ "unsigned-varint",
 ]
 
 [[package]]
@@ -4743,7 +4714,7 @@ dependencies = [
  "log 0.4.16",
  "pin-project 1.0.10",
  "smallvec 1.8.0",
- "unsigned-varint 0.7.1",
+ "unsigned-varint",
 ]
 
 [[package]]
@@ -8141,7 +8112,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4b18820d944b33caa75a71378964ac46f58517c92b6ae5f762636247c09e78fb"
 dependencies = [
  "base64 0.13.0",
- "blake2b_simd",
+ "blake2b_simd 0.5.11",
  "constant_time_eq",
  "crossbeam-utils 0.8.5",
 ]
@@ -8974,7 +8945,7 @@ dependencies = [
  "assert_matches",
  "async-std",
  "async-trait",
- "asynchronous-codec 0.5.0",
+ "asynchronous-codec",
  "bitflags",
  "bytes 1.1.0",
  "cid",
@@ -9018,7 +8989,7 @@ dependencies = [
  "substrate-test-runtime-client",
  "tempfile",
  "thiserror",
- "unsigned-varint 0.6.0",
+ "unsigned-varint",
  "void",
  "zeroize",
 ]
@@ -11935,29 +11906,11 @@ dependencies = [
 
 [[package]]
 name = "unsigned-varint"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f7fdeedbf205afadfe39ae559b75c3240f24e257d0ca27e85f85cb82aa19ac35"
-
-[[package]]
-name = "unsigned-varint"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "35581ff83d4101e58b582e607120c7f5ffb17e632a980b1f38334d76b36908b2"
-dependencies = [
- "asynchronous-codec 0.5.0",
- "bytes 1.1.0",
- "futures-io",
- "futures-util",
-]
-
-[[package]]
-name = "unsigned-varint"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d86a8dc7f45e4c1b0d30e43038c38f274e77af056aa5f74b93c2cf9eb3c1c836"
 dependencies = [
- "asynchronous-codec 0.6.0",
+ "asynchronous-codec",
  "bytes 1.1.0",
  "futures-io",
  "futures-util",
