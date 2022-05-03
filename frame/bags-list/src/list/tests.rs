@@ -749,7 +749,7 @@ mod bags {
 					_phantom: PhantomData
 				},
 			);
-			//         ^^ ^ despite being the bags head, it has a prev
+			//         ^^^ despite being the bags head, it has a prev
 
 			assert_eq!(
 				bag_1000,
