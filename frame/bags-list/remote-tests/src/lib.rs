@@ -21,7 +21,7 @@ use frame_election_provider_support::ScoreProvider;
 use sp_std::prelude::*;
 
 /// A common log target to use.
-pub const LOG_TARGET: &'static str = "runtime::bags-list::remote-tests";
+pub const LOG_TARGET: &str = "runtime::bags-list::remote-tests";
 
 pub mod migration;
 pub mod sanity_check;

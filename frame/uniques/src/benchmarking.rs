@@ -176,7 +176,7 @@ benchmarks_instance_pallet! {
 		let witness = Class::<T, I>::get(class).unwrap().destroy_witness();
 	}: _(SystemOrigin::Signed(caller), class, witness)
 	verify {
-		assert_last_event::<T, I>(Event::Destroyed { class: class }.into());
+		assert_last_event::<T, I>(Event::Destroyed { class }.into());
 	}
 
 	mint {
@@ -216,7 +216,7 @@ benchmarks_instance_pallet! {
 			caller_lookup.clone(),
 			caller_lookup.clone(),
 			caller_lookup.clone(),
-			caller_lookup.clone(),
+			caller_lookup,
 			true,
 			false,
 		)?;
@@ -268,7 +268,7 @@ benchmarks_instance_pallet! {
 		let target_lookup = T::Lookup::unlookup(target.clone());
 		T::Currency::make_free_balance_be(&target, T::Currency::minimum_balance());
 		let origin = SystemOrigin::Signed(target.clone()).into();
-		Uniques::<T, I>::set_accept_ownership(origin, Some(class.clone()))?;
+		Uniques::<T, I>::set_accept_ownership(origin, Some(class))?;
 	}: _(SystemOrigin::Signed(caller), class, target_lookup)
 	verify {
 		assert_last_event::<T, I>(Event::OwnerChanged { class, new_owner: target }.into());
@@ -279,7 +279,7 @@ benchmarks_instance_pallet! {
 		let target0 = T::Lookup::unlookup(account("target", 0, SEED));
 		let target1 = T::Lookup::unlookup(account("target", 1, SEED));
 		let target2 = T::Lookup::unlookup(account("target", 2, SEED));
-	}: _(SystemOrigin::Signed(caller), class, target0.clone(), target1.clone(), target2.clone())
+	}: _(SystemOrigin::Signed(caller), class, target0, target1, target2)
 	verify {
 		assert_last_event::<T, I>(Event::TeamChanged{
 			class,
@@ -297,7 +297,7 @@ benchmarks_instance_pallet! {
 			owner: caller_lookup.clone(),
 			issuer: caller_lookup.clone(),
 			admin: caller_lookup.clone(),
-			freezer: caller_lookup.clone(),
+			freezer: caller_lookup,
 			free_holding: true,
 			is_frozen: false,
 		};
@@ -390,7 +390,7 @@ benchmarks_instance_pallet! {
 		let caller: T::AccountId = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, DepositBalanceOf::<T, I>::max_value());
 		let class = T::Helper::class(0);
-	}: _(SystemOrigin::Signed(caller.clone()), Some(class.clone()))
+	}: _(SystemOrigin::Signed(caller.clone()), Some(class))
 	verify {
 		assert_last_event::<T, I>(Event::OwnershipAcceptanceChanged {
 			who: caller,

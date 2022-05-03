@@ -268,7 +268,7 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf> StateDbSync<Block
 		let db_mode = db.get_meta(&to_meta_key(PRUNING_MODE, &())).map_err(Error::Db)?;
 		trace!(target: "state-db",
 			"DB pruning mode: {:?}",
-			db_mode.as_ref().map(|v| std::str::from_utf8(&v))
+			db_mode.as_ref().map(|v| std::str::from_utf8(v))
 		);
 		match &db_mode {
 			Some(v) if v.as_slice() == mode.id() => Ok(()),
@@ -314,7 +314,7 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf> StateDbSync<Block
 		if self.mode == PruningMode::ArchiveAll {
 			return Ok(commit)
 		}
-		match self.non_canonical.canonicalize(&hash, &mut commit) {
+		match self.non_canonical.canonicalize(hash, &mut commit) {
 			Ok(()) =>
 				if self.mode == PruningMode::ArchiveCanonical {
 					commit.data.deleted.clear();
@@ -322,14 +322,14 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf> StateDbSync<Block
 			Err(e) => return Err(e),
 		};
 		if let Some(ref mut pruning) = self.pruning {
-			pruning.note_canonical(&hash, &mut commit);
+			pruning.note_canonical(hash, &mut commit);
 		}
 		self.prune(&mut commit);
 		Ok(commit)
 	}
 
 	fn best_canonical(&self) -> Option<u64> {
-		return self.non_canonical.last_canonicalized_block_number()
+		self.non_canonical.last_canonicalized_block_number()
 	}
 
 	fn is_pruned(&self, hash: &BlockHash, number: u64) -> bool {
@@ -438,7 +438,7 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf> StateDbSync<Block
 		if let Some(value) = self.non_canonical.get(key) {
 			return Ok(Some(value))
 		}
-		db.get(key.as_ref()).map_err(|e| Error::Db(e))
+		db.get(key.as_ref()).map_err(Error::Db)
 	}
 
 	fn apply_pending(&mut self) {

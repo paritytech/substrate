@@ -166,7 +166,7 @@ where
 
 		let finalized_block_weight =
 			sc_consensus_babe::aux_schema::load_block_weight(&*self.client, finalized_hash)?
-				.ok_or_else(|| Error::LoadingBlockWeightFailed(finalized_hash))?;
+				.ok_or(Error::LoadingBlockWeightFailed(finalized_hash))?;
 
 		Ok(LightSyncState {
 			finalized_block_header: finalized_header,

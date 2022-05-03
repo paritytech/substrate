@@ -1038,7 +1038,7 @@ impl<T> Iterator for ChildTriePrefixIterator<T> {
 				Some(self.previous_key.clone())
 			} else {
 				sp_io::default_child_storage::next_key(
-					&self.child_info.storage_key(),
+					self.child_info.storage_key(),
 					&self.previous_key,
 				)
 				.filter(|n| n.starts_with(&self.prefix))

@@ -59,7 +59,7 @@ mod tests;
 pub fn notional_bag_for<T: Config<I>, I: 'static>(score: T::Score) -> T::Score {
 	let thresholds = T::BagThresholds::get();
 	let idx = thresholds.partition_point(|&threshold| score > threshold);
-	thresholds.get(idx).copied().unwrap_or(T::Score::max_value())
+	thresholds.get(idx).copied().unwrap_or_else(T::Score::max_value)
 }
 
 /// The **ONLY** entry point of this module. All operations to the bags-list should happen through
@@ -163,7 +163,7 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 			let affected_bag = {
 				// this recreates `notional_bag_for` logic, but with the old thresholds.
 				let idx = old_thresholds.partition_point(|&threshold| inserted_bag > threshold);
-				old_thresholds.get(idx).copied().unwrap_or(T::Score::max_value())
+				old_thresholds.get(idx).copied().unwrap_or_else(T::Score::max_value)
 			};
 			if !affected_old_bags.insert(affected_bag) {
 				// If the previous threshold list was [10, 20], and we insert [3, 5], then there's
@@ -420,24 +420,24 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 		use crate::pallet;
 		use frame_support::ensure;
 
-		let lighter_node = Node::<T, I>::get(&lighter_id).ok_or(pallet::Error::IdNotFound)?;
-		let heavier_node = Node::<T, I>::get(&heavier_id).ok_or(pallet::Error::IdNotFound)?;
+		let lighter_node = Node::<T, I>::get(lighter_id).ok_or(pallet::Error::IdNotFound)?;
+		let heavier_node = Node::<T, I>::get(heavier_id).ok_or(pallet::Error::IdNotFound)?;
 
 		ensure!(lighter_node.bag_upper == heavier_node.bag_upper, pallet::Error::NotInSameBag);
 
 		// this is the most expensive check, so we do it last.
 		ensure!(
-			T::ScoreProvider::score(&heavier_id) > T::ScoreProvider::score(&lighter_id),
+			T::ScoreProvider::score(heavier_id) > T::ScoreProvider::score(lighter_id),
 			pallet::Error::NotHeavier
 		);
 
 		// remove the heavier node from this list. Note that this removes the node from storage and
 		// decrements the node counter.
-		Self::remove(&heavier_id);
+		Self::remove(heavier_id);
 
 		// re-fetch `lighter_node` from storage since it may have been updated when `heavier_node`
 		// was removed.
-		let lighter_node = Node::<T, I>::get(&lighter_id).ok_or_else(|| {
+		let lighter_node = Node::<T, I>::get(lighter_id).ok_or_else(|| {
 			debug_assert!(false, "id that should exist cannot be found");
 			crate::log!(warn, "id that should exist cannot be found");
 			pallet::Error::IdNotFound
@@ -527,7 +527,7 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 			thresholds.into_iter().filter_map(|t| Bag::<T, I>::get(t))
 		};
 
-		let _ = active_bags.clone().map(|b| b.sanity_check()).collect::<Result<_, _>>()?;
+		let _ = active_bags.clone().try_for_each(|b| b.sanity_check())?;
 
 		let nodes_in_bags_count =
 			active_bags.clone().fold(0u32, |acc, cur| acc + cur.iter().count() as u32);
@@ -708,7 +708,7 @@ impl<T: Config<I>, I: 'static> Bag<T, I> {
 		// the first insertion into the bag. In this case, both head and tail should point to the
 		// same node.
 		if self.head.is_none() {
-			self.head = Some(id.clone());
+			self.head = Some(id);
 			debug_assert!(self.iter().count() == 1);
 		}
 	}

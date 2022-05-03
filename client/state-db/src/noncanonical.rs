@@ -127,7 +127,7 @@ fn discard_values<Key: Hash>(values: &mut HashMap<Key, (u32, DBValue)>, inserted
 
 fn discard_descendants<BlockHash: Hash, Key: Hash>(
 	levels: &mut (&mut [OverlayLevel<BlockHash, Key>], &mut [OverlayLevel<BlockHash, Key>]),
-	mut values: &mut HashMap<Key, (u32, DBValue)>,
+	values: &mut HashMap<Key, (u32, DBValue)>,
 	parents: &mut HashMap<BlockHash, BlockHash>,
 	pinned: &HashMap<BlockHash, u32>,
 	pinned_insertions: &mut HashMap<BlockHash, (Vec<Key>, u32)>,
@@ -135,12 +135,10 @@ fn discard_descendants<BlockHash: Hash, Key: Hash>(
 ) -> u32 {
 	let (first, mut remainder) = if let Some((first, rest)) = levels.0.split_first_mut() {
 		(Some(first), (rest, &mut *levels.1))
+	} else if let Some((first, rest)) = levels.1.split_first_mut() {
+		(Some(first), (&mut *levels.0, rest))
 	} else {
-		if let Some((first, rest)) = levels.1.split_first_mut() {
-			(Some(first), (&mut *levels.0, rest))
-		} else {
-			(None, (&mut *levels.0, &mut *levels.1))
-		}
+		(None, (&mut *levels.0, &mut *levels.1))
 	};
 	let mut pinned_children = 0;
 	if let Some(level) = first {
@@ -169,7 +167,7 @@ fn discard_descendants<BlockHash: Hash, Key: Hash>(
 			} else {
 				// discard immediately.
 				parents.remove(&overlay.hash);
-				discard_values(&mut values, overlay.inserted);
+				discard_values(values, overlay.inserted);
 			}
 		}
 	}
@@ -180,7 +178,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 	/// Creates a new instance. Does not expect any metadata to be present in the DB.
 	pub fn new<D: MetaDb>(db: &D) -> Result<NonCanonicalOverlay<BlockHash, Key>, Error<D::Error>> {
 		let last_canonicalized =
-			db.get_meta(&to_meta_key(LAST_CANONICAL, &())).map_err(|e| Error::Db(e))?;
+			db.get_meta(&to_meta_key(LAST_CANONICAL, &())).map_err(Error::Db)?;
 		let last_canonicalized = last_canonicalized
 			.map(|buffer| <(BlockHash, u64)>::decode(&mut buffer.as_slice()))
 			.transpose()?;
@@ -196,7 +194,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 				let mut level = OverlayLevel::new();
 				for index in 0..MAX_BLOCKS_PER_LEVEL {
 					let journal_key = to_journal_key(block, index);
-					if let Some(record) = db.get_meta(&journal_key).map_err(|e| Error::Db(e))? {
+					if let Some(record) = db.get_meta(&journal_key).map_err(Error::Db)? {
 						let record: JournalRecord<BlockHash, Key> =
 							Decode::decode(&mut record.as_slice())?;
 						let inserted = record.inserted.iter().map(|(k, _)| k.clone()).collect();
@@ -280,7 +278,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 				{
 					return Err(Error::InvalidParent)
 				}
-			} else if !self.parents.contains_key(&parent_hash) {
+			} else if !self.parents.contains_key(parent_hash) {
 				return Err(Error::InvalidParent)
 			}
 		}
@@ -391,12 +389,12 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 		let level = self
 			.levels
 			.get(self.pending_canonicalizations.len())
-			.ok_or_else(|| Error::InvalidBlock)?;
+			.ok_or(Error::InvalidBlock)?;
 		let index = level
 			.blocks
 			.iter()
 			.position(|overlay| overlay.hash == *hash)
-			.ok_or_else(|| Error::InvalidBlock)?;
+			.ok_or(Error::InvalidBlock)?;
 
 		let mut discarded_journals = Vec::new();
 		let mut discarded_blocks = Vec::new();
@@ -493,10 +491,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 		Key: std::borrow::Borrow<Q>,
 		Q: std::hash::Hash + Eq,
 	{
-		if let Some((_, value)) = self.values.get(&key) {
-			return Some(value.clone())
-		}
-		None
+		self.values.get(key).map(|v| v.1.clone())
 	}
 
 	/// Check if the block is in the canonicalization queue.

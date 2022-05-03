@@ -231,7 +231,7 @@ impl<H: traits::Hash, L: FullLeaf> DataOrHash<H, L> {
 	pub fn hash(&self) -> H::Output {
 		match *self {
 			Self::Data(ref leaf) => leaf.using_encoded(<H as traits::Hash>::hash, true),
-			Self::Hash(ref hash) => hash.clone(),
+			Self::Hash(ref hash) => *hash,
 		}
 	}
 }

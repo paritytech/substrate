@@ -93,8 +93,7 @@ fn submit_candidates_with_self_vote<T: Config>(
 	let stake = default_stake::<T>(c);
 	let _ = candidates
 		.iter()
-		.map(|c| submit_voter::<T>(c.clone(), vec![c.clone()], stake).map(|_| ()))
-		.collect::<Result<_, _>>()?;
+		.try_for_each(|c| submit_voter::<T>(c.clone(), vec![c.clone()], stake).map(|_| ()))?;
 	Ok(candidates)
 }
 

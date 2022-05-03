@@ -60,7 +60,7 @@ where
 
 	/// Tries to unwrap passed block hash, or uses best block hash otherwise.
 	fn unwrap_or_best(&self, hash: Option<Block::Hash>) -> Block::Hash {
-		match hash.into() {
+		match hash {
 			None => self.client().info().best_hash,
 			Some(hash) => hash,
 		}
@@ -311,7 +311,7 @@ fn subscribe_headers<Block, Client, F, G, S>(
 		// send further subscriptions
 		let stream = stream()
 			.inspect_err(|e| warn!("Block notification stream error: {:?}", e))
-			.map(|res| Ok(res));
+			.map(Ok);
 
 		stream::iter(vec![Ok(header)])
 			.chain(stream)
