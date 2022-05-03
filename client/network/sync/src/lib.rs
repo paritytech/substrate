@@ -28,11 +28,25 @@
 //! the network, or whenever a block has been successfully verified, call the appropriate method in
 //! order to update it.
 
+pub mod block_request_handler;
+pub mod blocks;
+pub mod message;
+pub mod schema;
+pub mod state;
+pub mod state_request_handler;
+pub mod warp;
+pub mod warp_request_handler;
+
 use crate::{
-	protocol::message::{self, BlockAnnounce, BlockAttributes, BlockRequest, BlockResponse},
+	blocks::BlockCollection,
+	message::{BlockAnnounce, BlockAttributes, BlockRequest, BlockResponse},
 	schema::v1::{StateRequest, StateResponse},
+	state::{StateDownloadProgress, StateSync},
+	warp::{
+		EncodedProof, WarpProofImportResult, WarpProofRequest, WarpSync, WarpSyncPhase,
+		WarpSyncProgress, WarpSyncProvider,
+	},
 };
-use blocks::BlockCollection;
 use codec::Encode;
 use either::Either;
 use extra_requests::ExtraRequests;
@@ -55,8 +69,6 @@ use sp_runtime::{
 	},
 	EncodedJustification, Justifications,
 };
-pub use state::StateDownloadProgress;
-use state::StateSync;
 use std::{
 	collections::{hash_map::Entry, HashMap, HashSet},
 	fmt,
@@ -64,13 +76,8 @@ use std::{
 	pin::Pin,
 	sync::Arc,
 };
-use warp::{WarpProofRequest, WarpSync, WarpSyncProvider};
-pub use warp::{WarpSyncPhase, WarpSyncProgress};
 
-mod blocks;
 mod extra_requests;
-mod state;
-mod warp;
 
 /// Maximum blocks to request in a single packet.
 const MAX_BLOCKS_TO_REQUEST: usize = 64;
@@ -330,18 +337,6 @@ pub enum SyncState {
 	Idle,
 	/// Actively catching up with the chain.
 	Downloading,
-}
-
-impl<B: BlockT> fmt::Display for WarpSyncPhase<B> {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		match self {
-			Self::AwaitingPeers => write!(f, "Waiting for peers"),
-			Self::DownloadingWarpProofs => write!(f, "Downloading finality proofs"),
-			Self::DownloadingState => write!(f, "Downloading state"),
-			Self::ImportingState => write!(f, "Importing state"),
-			Self::DownloadingBlocks(n) => write!(f, "Downloading block history (#{})", n),
-		}
-	}
 }
 
 /// Syncing status and statistics.
@@ -1357,7 +1352,7 @@ where
 	pub fn on_warp_sync_data(
 		&mut self,
 		who: &PeerId,
-		response: warp::EncodedProof,
+		response: EncodedProof,
 	) -> Result<(), BadPeer> {
 		if let Some(peer) = self.peers.get_mut(who) {
 			if let PeerSyncState::DownloadingWarpProof = peer.state {
@@ -1379,8 +1374,8 @@ where
 		};
 
 		match import_result {
-			warp::WarpProofImportResult::Success => Ok(()),
-			warp::WarpProofImportResult::BadResponse => {
+			WarpProofImportResult::Success => Ok(()),
+			WarpProofImportResult::BadResponse => {
 				debug!(target: "sync", "Bad proof data received from {}", who);
 				Err(BadPeer(*who, rep::BAD_BLOCK))
 			},
@@ -2173,7 +2168,7 @@ where
 	}
 
 	/// Return some key metrics.
-	pub(crate) fn metrics(&self) -> Metrics {
+	pub fn metrics(&self) -> Metrics {
 		Metrics {
 			queued_blocks: self.queue_blocks.len().try_into().unwrap_or(std::u32::MAX),
 			fork_targets: self.fork_targets.len().try_into().unwrap_or(std::u32::MAX),
@@ -2220,10 +2215,10 @@ fn legacy_justification_mapping(
 }
 
 #[derive(Debug)]
-pub(crate) struct Metrics {
-	pub(crate) queued_blocks: u32,
-	pub(crate) fork_targets: u32,
-	pub(crate) justifications: extra_requests::Metrics,
+pub struct Metrics {
+	pub queued_blocks: u32,
+	pub fork_targets: u32,
+	pub justifications: extra_requests::Metrics,
 	_priv: (),
 }
 
@@ -2575,9 +2570,10 @@ fn validate_blocks<Block: BlockT>(
 #[cfg(test)]
 mod test {
 	use super::{
-		message::{BlockData, BlockState, FromBlock},
+		message::{BlockState, FromBlock},
 		*,
 	};
+	use crate::message::BlockData;
 	use futures::{executor::block_on, future::poll_fn};
 	use sc_block_builder::BlockBuilderProvider;
 	use sp_blockchain::HeaderBackend;
