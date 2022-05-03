@@ -105,7 +105,7 @@ impl<T: Encode + Decode, S: Get<u32>> EncodeLike<Vec<T>> for BoundedVec<T, S> {}
 
 impl<T, S> BoundedVec<T, S> {
 	/// Create `Self` with no items.
-	fn new() -> Self {
+	pub fn new() -> Self {
 		Self(Vec::new(), Default::default())
 	}
 
@@ -142,6 +142,11 @@ impl<T, S> BoundedVec<T, S> {
 		T: sp_std::cmp::Ord,
 	{
 		self.0.sort()
+	}
+
+	/// Exactly the same semantics as `Vec::clear`.
+	pub fn clear(&mut self) {
+		self.0.clear()
 	}
 
 	/// Exactly the same semantics as `Vec::remove`.

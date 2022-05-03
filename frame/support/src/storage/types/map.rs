@@ -166,7 +166,7 @@ where
 	}
 
 	/// Mutate the value under a key iff it exists. Do nothing and return the default value if not.
-	pub fn mutate_extant<KeyArg: EncodeLike<Key>, R, F: FnOnce(&mut Value) -> R>(
+	pub fn mutate_extant<KeyArg: EncodeLike<Key>, R: Default, F: FnOnce(&mut Value) -> R>(
 		key: KeyArg,
 		f: F,
 	) -> R {

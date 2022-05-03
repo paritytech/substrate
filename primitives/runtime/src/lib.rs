@@ -170,7 +170,7 @@ impl From<Justification> for Justifications {
 	}
 }
 
-use traits::{Lazy, Verify, FromEntropy};
+use traits::{Lazy, Verify};
 
 use crate::traits::IdentifyAccount;
 #[cfg(feature = "std")]
@@ -304,11 +304,11 @@ pub enum MultiSigner {
 }
 
 impl FromEntropy for MultiSigner {
-	fn from_entropy(input: &mut codec::Input) -> Result<Self, ()> {
-		Ok(match input.read_byte() % 3 {
-			0 => Self::Ed25519(FromEntropy::try_from_entropy(input)?),
-			1 => Self::Sr25519(FromEntropy::try_from_entropy(input)?),
-			2.. => Self::Ecdsa(FromEntropy::try_from_entropy(input)?),
+	fn from_entropy(input: &mut impl codec::Input) -> Result<Self, codec::Error> {
+		Ok(match input.read_byte()? % 3 {
+			0 => Self::Ed25519(FromEntropy::from_entropy(input)?),
+			1 => Self::Sr25519(FromEntropy::from_entropy(input)?),
+			2.. => Self::Ecdsa(FromEntropy::from_entropy(input)?),
 		})
 	}
 }
