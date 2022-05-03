@@ -25,7 +25,7 @@ impl<T: Config> Pallet<T> {
 		item_id: T::ItemId,
 		config: CollectionConfig,
 		caller: T::AccountId,
-		price: Option<BalanceOf<T>>,
+		price: Option<BalanceOrAssetOf<T>>,
 		buyer: Option<T::AccountId>,
 	) -> DispatchResult {
 		let user_features: BitFlags<UserFeature> = config.user_features.get();
@@ -53,7 +53,7 @@ impl<T: Config> Pallet<T> {
 		item_id: T::ItemId,
 		config: CollectionConfig,
 		buyer: T::AccountId,
-		bid_price: BalanceOf<T>,
+		bid_price: BalanceOrAssetOf<T>,
 	) -> DispatchResult {
 		let user_features: BitFlags<UserFeature> = config.user_features.get();
 		ensure!(
@@ -65,7 +65,7 @@ impl<T: Config> Pallet<T> {
 		ensure!(item.owner != buyer, Error::<T>::NotAuthorized);
 
 		if let Some(price) = item.price {
-			ensure!(bid_price >= price, Error::<T>::ItemUnderpriced);
+			ensure!(bid_price.is_greater_or_equal(&price), Error::<T>::ItemUnderpriced);
 		} else {
 			return Err(Error::<T>::ItemNotForSale.into())
 		}

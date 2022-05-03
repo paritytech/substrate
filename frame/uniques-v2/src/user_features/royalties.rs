@@ -114,11 +114,11 @@ impl<T: Config> Pallet<T> {
 	}
 
 	pub fn process_royalties(
-		amount: BalanceOf<T>,
+		amount: BalanceOrAssetOf<T>,
 		source: &T::AccountId,
 		collection: &Collection<T::CollectionId, T::AccountId, BalanceOf<T>>,
 		item_id: T::ItemId,
-	) -> Result<BalanceOf<T>, DispatchError> {
+	) -> Result<BalanceOrAssetOf<T>, DispatchError> {
 		let mut amount_left = amount.clone();
 
 		if !collection.creator_royalties.is_zero() {

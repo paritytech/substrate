@@ -121,6 +121,7 @@ pub mod pallet {
 	pub type AssetBalanceOf<T> = <<T as Config>::Assets as fungibles::Inspect<
 		<T as frame_system::Config>::AccountId,
 	>>::Balance;
+	pub type BalanceOrAssetOf<T> = BalanceOrAsset<BalanceOf<T>, AssetIdOf<T>, AssetBalanceOf<T>>;
 
 	/// Maps a unique collection id to it's config.
 	#[pallet::storage]
@@ -190,7 +191,7 @@ pub mod pallet {
 		T::CollectionId,
 		Blake2_128Concat,
 		T::ItemId,
-		Item<T::ItemId, T::AccountId, BalanceOf<T>, ApprovalsOf<T>>,
+		Item<T::ItemId, T::AccountId, BalanceOf<T>, BalanceOrAssetOf<T>, ApprovalsOf<T>>,
 		OptionQuery,
 	>;
 
@@ -334,20 +335,20 @@ pub mod pallet {
 		ItemPriceSet {
 			collection_id: T::CollectionId,
 			item_id: T::ItemId,
-			price: Option<BalanceOf<T>>,
+			price: Option<BalanceOrAssetOf<T>>,
 			buyer: Option<T::AccountId>,
 		},
 		ItemBought {
 			collection_id: T::CollectionId,
 			item_id: T::ItemId,
-			price: BalanceOf<T>,
+			price: BalanceOrAssetOf<T>,
 			seller: T::AccountId,
 			buyer: T::AccountId,
 		},
 		BuyOfferAccepted {
 			collection_id: T::CollectionId,
 			item_id: T::ItemId,
-			price: BalanceOf<T>,
+			price: BalanceOrAssetOf<T>,
 			seller: T::AccountId,
 			buyer: T::AccountId,
 			receiver: T::AccountId,
@@ -709,7 +710,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			collection_id: T::CollectionId,
 			item_id: T::ItemId,
-			price: Option<BalanceOf<T>>,
+			price: Option<BalanceOrAssetOf<T>>,
 			buyer: Option<T::AccountId>,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;

@@ -153,12 +153,12 @@ pub struct Collection<CollectionId, Account, Balance> {
 }
 
 #[derive(Encode, Decode, PartialEq, Default, MaxEncodedLen, TypeInfo)]
-pub struct Item<ItemId, Account, Balance, Approvals> {
+pub struct Item<ItemId, Account, Balance, BalanceOrAsset, Approvals> {
 	pub id: ItemId,
 	pub owner: Account,
 	pub deposit: Option<Balance>,
 	// `None` assumes not for sale
-	pub price: Option<Balance>,
+	pub price: Option<BalanceOrAsset>,
 	// `None` assumes anyone can buy
 	pub buyer: Option<Account>,
 	pub approvals: Approvals,
@@ -282,6 +282,26 @@ impl<ItemId, Account, Balance> Collection<ItemId, Account, Balance> {
 			items: self.items,
 			item_metadatas: self.item_metadatas,
 			attributes: self.attributes,
+		}
+	}
+}
+
+/// Represents either a System currency or a set of fungible assets.
+#[derive(Encode, Decode, Clone, PartialEq, RuntimeDebug, TypeInfo)]
+pub enum BalanceOrAsset<Balance, AssetId, AssetBalance> {
+	Balance { amount: Balance },
+	Asset { id: AssetId, amount: AssetBalance },
+}
+
+impl<B, A, AB> BalanceOrAsset<B, A, AB>
+where
+	B: core::cmp::PartialOrd,
+{
+	pub fn is_greater_or_equal(&self, other: &Self) -> bool {
+		use BalanceOrAsset::*;
+		match (self, other) {
+			(Balance { amount: a }, Balance { amount: b }) => a >= b,
+			_ => false,
 		}
 	}
 }
