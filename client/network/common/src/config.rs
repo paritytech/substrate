@@ -16,14 +16,29 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! Include sources generated from protobuf definitions.
+//! Configuration of the networking layer.
 
-pub mod v1 {
-	pub mod light {
-		include!(concat!(env!("OUT_DIR"), "/api.v1.light.rs"));
+use std::{fmt, str};
+
+/// Name of a protocol, transmitted on the wire. Should be unique for each chain. Always UTF-8.
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub struct ProtocolId(smallvec::SmallVec<[u8; 6]>);
+
+impl<'a> From<&'a str> for ProtocolId {
+	fn from(bytes: &'a str) -> ProtocolId {
+		Self(bytes.as_bytes().into())
 	}
 }
 
-pub mod bitswap {
-	include!(concat!(env!("OUT_DIR"), "/bitswap.message.rs"));
+impl AsRef<str> for ProtocolId {
+	fn as_ref(&self) -> &str {
+		str::from_utf8(&self.0[..])
+			.expect("the only way to build a ProtocolId is through a UTF-8 String; qed")
+	}
+}
+
+impl fmt::Debug for ProtocolId {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		fmt::Debug::fmt(self.as_ref(), f)
+	}
 }
