@@ -46,7 +46,7 @@
 //! active mechanism that asks nodes for the addresses they are listening on. Whenever we learn
 //! of a node's address, you must call `add_self_reported_address`.
 
-use crate::{config::ProtocolId, utils::LruHashSet};
+use crate::utils::LruHashSet;
 use futures::prelude::*;
 use futures_timer::Delay;
 use ip_network::IpNetwork;
@@ -72,6 +72,7 @@ use libp2p::{
 	},
 };
 use log::{debug, error, info, trace, warn};
+use sc_network_common::config::ProtocolId;
 use sp_core::hexdisplay::HexDisplay;
 use std::{
 	cmp,
@@ -1001,7 +1002,6 @@ impl MdnsWrapper {
 #[cfg(test)]
 mod tests {
 	use super::{protocol_name_from_protocol_id, DiscoveryConfig, DiscoveryOut};
-	use crate::config::ProtocolId;
 	use futures::prelude::*;
 	use libp2p::{
 		core::{
@@ -1013,6 +1013,7 @@ mod tests {
 		swarm::{Swarm, SwarmEvent},
 		yamux, Multiaddr, PeerId,
 	};
+	use sc_network_common::config::ProtocolId;
 	use std::{collections::HashSet, task::Poll};
 
 	#[test]

@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::protocol::sync::{PeerSync, PeerSyncState};
+use crate::{PeerSync, PeerSyncState};
 use fork_tree::ForkTree;
 use libp2p::PeerId;
 use log::{debug, trace, warn};
@@ -31,7 +31,7 @@ use std::{
 const EXTRA_RETRY_WAIT: Duration = Duration::from_secs(10);
 
 /// Pending extra data request for the given block (hash and number).
-pub(crate) type ExtraRequest<B> = (<B as BlockT>::Hash, NumberFor<B>);
+type ExtraRequest<B> = (<B as BlockT>::Hash, NumberFor<B>);
 
 /// Manages pending block extra data (e.g. justification) requests.
 ///
@@ -57,11 +57,11 @@ pub(crate) struct ExtraRequests<B: BlockT> {
 }
 
 #[derive(Debug)]
-pub(crate) struct Metrics {
-	pub(crate) pending_requests: u32,
-	pub(crate) active_requests: u32,
-	pub(crate) importing_requests: u32,
-	pub(crate) failed_requests: u32,
+pub struct Metrics {
+	pub pending_requests: u32,
+	pub active_requests: u32,
+	pub importing_requests: u32,
+	pub failed_requests: u32,
 	_priv: (),
 }
 
@@ -352,7 +352,7 @@ impl<'a, B: BlockT> Matcher<'a, B> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::protocol::sync::PeerSync;
+	use crate::PeerSync;
 	use quickcheck::{Arbitrary, Gen, QuickCheck};
 	use sp_blockchain::Error as ClientError;
 	use sp_test_primitives::{Block, BlockNumber, Hash};

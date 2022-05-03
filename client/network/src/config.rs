@@ -21,12 +21,14 @@
 //! The [`Params`] struct is the struct that must be passed in order to initialize the networking.
 //! See the documentation of [`Params`].
 
-pub use crate::{
+pub use sc_network_common::{
+	config::ProtocolId,
 	request_responses::{
 		IncomingRequest, OutgoingResponse, ProtocolConfig as RequestResponseConfig,
 	},
-	warp_request_handler::WarpSyncProvider,
 };
+pub use sc_network_sync::warp_request_handler::WarpSyncProvider;
+
 pub use libp2p::{build_multiaddr, core::PublicKey, identity};
 
 // Note: this re-export shouldn't be part of the public API of the crate and will be removed in
@@ -111,10 +113,10 @@ where
 	/// protocol name. In addition all of [`RequestResponseConfig`] is used to handle incoming
 	/// block requests, if enabled.
 	///
-	/// Can be constructed either via [`crate::block_request_handler::generate_protocol_config`]
-	/// allowing outgoing but not incoming requests, or constructed via
-	/// [`crate::block_request_handler::BlockRequestHandler::new`] allowing both outgoing and
-	/// incoming requests.
+	/// Can be constructed either via
+	/// [`sc_network_sync::block_request_handler::generate_protocol_config`] allowing outgoing but
+	/// not incoming requests, or constructed via [`sc_network_sync::block_request_handler::
+	/// BlockRequestHandler::new`] allowing both outgoing and incoming requests.
 	pub block_request_protocol_config: RequestResponseConfig,
 
 	/// Request response configuration for the light client request protocol.
@@ -129,8 +131,8 @@ where
 	/// Request response configuration for the state request protocol.
 	///
 	/// Can be constructed either via
-	/// [`crate::block_request_handler::generate_protocol_config`] allowing outgoing but not
-	/// incoming requests, or constructed via
+	/// [`sc_network_sync::block_request_handler::generate_protocol_config`] allowing outgoing but
+	/// not incoming requests, or constructed via
 	/// [`crate::state_request_handler::StateRequestHandler::new`] allowing
 	/// both outgoing and incoming requests.
 	pub state_request_protocol_config: RequestResponseConfig,
@@ -229,29 +231,6 @@ impl<H: ExHashT + Default, B: BlockT> TransactionPool<H, B> for EmptyTransaction
 
 	fn transaction(&self, _h: &H) -> Option<B::Extrinsic> {
 		None
-	}
-}
-
-/// Name of a protocol, transmitted on the wire. Should be unique for each chain. Always UTF-8.
-#[derive(Clone, PartialEq, Eq, Hash)]
-pub struct ProtocolId(smallvec::SmallVec<[u8; 6]>);
-
-impl<'a> From<&'a str> for ProtocolId {
-	fn from(bytes: &'a str) -> ProtocolId {
-		Self(bytes.as_bytes().into())
-	}
-}
-
-impl AsRef<str> for ProtocolId {
-	fn as_ref(&self) -> &str {
-		str::from_utf8(&self.0[..])
-			.expect("the only way to build a ProtocolId is through a UTF-8 String; qed")
-	}
-}
-
-impl fmt::Debug for ProtocolId {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		fmt::Debug::fmt(self.as_ref(), f)
 	}
 }
 

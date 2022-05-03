@@ -37,11 +37,8 @@ use crate::{
 		NetworkState, NotConnectedPeer as NetworkStateNotConnectedPeer, Peer as NetworkStatePeer,
 	},
 	protocol::{
-		self,
-		event::Event,
-		message::generic::Roles,
-		sync::{Status as SyncStatus, SyncState},
-		NotificationsSink, NotifsHandlerError, PeerInfo, Protocol, Ready,
+		self, event::Event, message::generic::Roles, NotificationsSink, NotifsHandlerError,
+		PeerInfo, Protocol, Ready,
 	},
 	transactions, transport, DhtEvent, ExHashT, NetworkStateInfo, NetworkStatus, ReputationChange,
 };
@@ -63,6 +60,7 @@ use metrics::{Histogram, HistogramVec, MetricSources, Metrics};
 use parking_lot::Mutex;
 use sc_client_api::{BlockBackend, ProofProvider};
 use sc_consensus::{BlockImportError, BlockImportStatus, ImportQueue, Link};
+use sc_network_sync::{Status as SyncStatus, SyncState};
 use sc_peerset::PeersetHandle;
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_blockchain::{HeaderBackend, HeaderMetadata};
