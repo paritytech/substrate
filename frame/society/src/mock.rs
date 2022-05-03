@@ -99,34 +99,30 @@ impl pallet_balances::Config for Test {
 
 impl Config for Test {
 	type Event = Event;
+	type PalletId = SocietyPalletId;
 	type Currency = pallet_balances::Pallet<Self>;
 	type Randomness = TestRandomness<Self>;
-	type CandidateDeposit = ConstU64<25>;
-	type WrongSideDeduction = ConstU64<2>;
-	type MaxStrikes = ConstU32<2>;
+	type GraceStrikes = ConstU32<1>;
 	type PeriodSpend = ConstU64<1000>;
-	type MembershipChanged = ();
-	type RotationPeriod = ConstU64<4>;
+	type VotingPeriod = ConstU64<3>;
+	type ClaimPeriod = ConstU64<1>;
 	type MaxLockDuration = ConstU64<100>;
 	type FounderSetOrigin = EnsureSignedBy<FounderSetAccount, u128>;
-	type JudgementOrigin = EnsureSignedBy<SuspensionJudgementSetAccount, u128>;
 	type ChallengePeriod = ConstU64<8>;
-	type MaxCandidateIntake = ConstU32<10>;
-	type PalletId = SocietyPalletId;
+	type MaxPayouts = ConstU32<10>;
+	type MaxBids = ConstU32<10>;
 }
 
 pub struct EnvBuilder {
-	members: Vec<u128>,
 	balance: u64,
 	balances: Vec<(u128, u64)>,
 	pot: u64,
-	max_members: u32,
+	founded: bool,
 }
 
 impl EnvBuilder {
 	pub fn new() -> Self {
 		Self {
-			members: vec![10],
 			balance: 10_000,
 			balances: vec![
 				(10, 50),
@@ -140,7 +136,7 @@ impl EnvBuilder {
 				(90, 50),
 			],
 			pot: 0,
-			max_members: 100,
+			founded: true,
 		}
 	}
 
@@ -151,38 +147,18 @@ impl EnvBuilder {
 			.assimilate_storage(&mut t)
 			.unwrap();
 		pallet_society::GenesisConfig::<Test> {
-			members: self.members,
 			pot: self.pot,
-			max_members: self.max_members,
 		}
 		.assimilate_storage(&mut t)
 		.unwrap();
 		let mut ext: sp_io::TestExternalities = t.into();
-		ext.execute_with(f)
+		ext.execute_with(|| {
+			assert!(Society::found_society(Origin::signed(1), 10, 100, 10, 2, 25, b"be cool".to_vec()).is_ok());
+			f()
+		})
 	}
-	#[allow(dead_code)]
-	pub fn with_members(mut self, m: Vec<u128>) -> Self {
-		self.members = m;
-		self
-	}
-	#[allow(dead_code)]
-	pub fn with_balances(mut self, b: Vec<(u128, u64)>) -> Self {
-		self.balances = b;
-		self
-	}
-	#[allow(dead_code)]
-	pub fn with_pot(mut self, p: u64) -> Self {
-		self.pot = p;
-		self
-	}
-	#[allow(dead_code)]
-	pub fn with_balance(mut self, b: u64) -> Self {
-		self.balance = b;
-		self
-	}
-	#[allow(dead_code)]
-	pub fn with_max_members(mut self, n: u32) -> Self {
-		self.max_members = n;
+	pub fn founded(mut self, f: bool) -> Self {
+		self.founded = f;
 		self
 	}
 }
@@ -198,7 +174,7 @@ pub fn run_to_block(n: u64) {
 		Society::on_initialize(System::block_number());
 	}
 }
-
+/*
 /// Creates a bid struct using input parameters.
 pub fn create_bid<AccountId, Balance>(
 	value: Balance,
@@ -206,4 +182,15 @@ pub fn create_bid<AccountId, Balance>(
 	kind: BidKind<AccountId, Balance>,
 ) -> Bid<AccountId, Balance> {
 	Bid { who, kind, value }
+}
+*/
+/// Creates a candidate struct using input parameters.
+pub fn candidacy<AccountId, Balance>(
+	round: RoundIndex,
+	bid: Balance,
+	kind: BidKind<AccountId, Balance>,
+	approvals: VoteCount,
+	rejections: VoteCount,
+) -> Candidacy<AccountId, Balance> {
+	Candidacy { round, kind, bid, tally: Tally { approvals, rejections } }
 }

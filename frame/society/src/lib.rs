@@ -1125,18 +1125,12 @@ pub mod pallet {
 		/// the `Founder` and the `Head`. This implies that it may only be done when there is one
 		/// member.
 		///
-		/// # <weight>
-		/// - Two storage reads O(1).
-		/// - Four storage removals O(1).
-		/// - One event.
-		///
 		/// Total Complexity: O(1)
-		/// # </weight>
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn dissolve(origin: OriginFor<T>) -> DispatchResult {
 			let founder = ensure_signed(origin)?;
-			ensure!(Founder::<T, I>::get() == Some(founder.clone()), Error::<T, I>::NotFounder);
-			ensure!(Head::<T, I>::get() == Some(founder.clone()), Error::<T, I>::NotHead);
+			ensure!(Founder::<T, I>::get().as_ref() == Some(&founder), Error::<T, I>::NotFounder);
+			ensure!(MemberCount::<T, I>::get() == 1, Error::<T, I>::NotHead);
 
 			Members::<T, I>::remove_all(None);
 			MemberCount::<T, I>::kill();
