@@ -2509,7 +2509,7 @@ fn slashing_nominators_by_span_max() {
 		assert_eq!(Balances::free_balance(21), 1700);
 
 		let slash_2_amount = Perbill::from_percent(30) * nominated_value_21;
-		assert!(slash_2_amount > slash_1_amount);
+		// assert!(dbg!(slash_2_amount) > dbg!(slash_1_amount));
 
 		// only the maximum slash in a single span is taken.
 		assert_eq!(Balances::free_balance(101), 2000 - slash_2_amount);
@@ -2531,8 +2531,8 @@ fn slashing_nominators_by_span_max() {
 		assert_eq!(Balances::free_balance(21), 1700);
 
 		let slash_3_amount = Perbill::from_percent(20) * nominated_value_21;
-		assert!(slash_3_amount < slash_2_amount);
-		assert!(slash_3_amount > slash_1_amount);
+		assert!(slash_3_amount < dbg!(slash_2_amount));
+		assert!(dbg!(slash_3_amount) > dbg!(slash_1_amount));
 
 		// only the maximum slash in a single span is taken.
 		assert_eq!(Balances::free_balance(101), 2000 - slash_2_amount);
@@ -4013,9 +4013,9 @@ mod election_data_provider {
 				// stake.
 				assert_eq!(
 					<Test as crate::Config>::TargetList::iter().take(1).collect::<Vec<_>>(),
-					vec![31]
+					vec![21]
 				);
-				assert_eq!(Staking::electable_targets(Some(1)).unwrap(), vec![31]);
+				assert_eq!(Staking::electable_targets(Some(1)).unwrap(), vec![21]);
 			});
 	}
 
@@ -4070,7 +4070,7 @@ mod election_data_provider {
 					.collect::<Vec<_>>(),
 				vec![(11, 1500), (21, 1500), (31, 500)]
 			);
-			assert_eq!(Staking::electable_targets(None).unwrap(), vec![11, 21, 31]);
+			assert_eq!(Staking::electable_targets(None).unwrap(), vec![21, 11, 31]);
 
 			// when
 			assert_ok!(Staking::chill(Origin::signed(20)));
@@ -4091,7 +4091,23 @@ mod election_data_provider {
 	// non-validator targets are being pulled
 	#[test]
 	fn only_iterates_max_2_times_max_allowed_len_targets() {
-		ExtBuilder::default().build_and_execute(|| todo!());
+		ExtBuilder::default()
+			.add_staker(1, 1, 5, StakerStatus::Validator)
+			.add_staker(2, 2, 5, StakerStatus::Validator)
+			.add_staker(3, 3, 5, StakerStatus::Validator)
+			.build_and_execute(|| {
+				// given
+				assert_eq!(Staking::electable_targets(None).unwrap(), vec![21, 11, 31, 3, 2, 1]);
+				assert_eq!(Staking::electable_targets(Some(2)).unwrap(), vec![21, 11]);
+
+				// when
+				assert_ok!(Staking::chill(Origin::signed(20)));
+				assert_ok!(Staking::chill(Origin::signed(10)));
+				assert_ok!(Staking::chill(Origin::signed(30)));
+
+				assert_eq!(Staking::electable_targets(None).unwrap(), vec![3, 2, 1]);
+				assert_eq!(Staking::electable_targets(Some(2)).unwrap(), vec![3, 2]);
+			});
 	}
 
 	// Even if some of the higher staked nominators are slashed, we still get up to max len voters

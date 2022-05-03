@@ -252,7 +252,8 @@ impl<T: Config> Pallet<T> {
 			let _ = T::VoterList::on_update(&ledger.stash, to_vote(ledger.active))
 				.defensive_proof("any nominator should have an entry in the voter list.");
 
-			debug_assert!(Self::sanity_check_list_providers().is_ok());
+			#[cfg(debug_assertions)]
+			assert!(Self::sanity_check_list_providers().is_ok());
 		}
 
 		// if this ledger belonged to a validator..
@@ -262,7 +263,8 @@ impl<T: Config> Pallet<T> {
 			let _ = T::VoterList::on_update(&ledger.stash, to_vote(ledger.active))
 				.defensive_proof("any validator should have an entry in the voter list.");
 
-			debug_assert!(Self::sanity_check_list_providers().is_ok());
+			#[cfg(debug_assertions)]
+			assert!(Self::sanity_check_list_providers().is_ok());
 		}
 	}
 
@@ -274,7 +276,8 @@ impl<T: Config> Pallet<T> {
 			Self::deposit_event(Event::<T>::Chilled(stash.clone()));
 		}
 
-		debug_assert!(Self::sanity_check_list_providers().is_ok())
+		#[cfg(debug_assertions)]
+		assert!(Self::sanity_check_list_providers().is_ok());
 	}
 
 	/// Actually make a payment to a staker. This uses the currency's reward function
@@ -625,7 +628,8 @@ impl<T: Config> Pallet<T> {
 		Self::do_remove_validator(stash);
 		Self::do_remove_nominator(stash);
 
-		debug_assert!(Self::sanity_check_list_providers().is_ok());
+		#[cfg(debug_assertions)]
+		assert!(Self::sanity_check_list_providers().is_ok());
 
 		<Bonded<T>>::remove(stash);
 		<Ledger<T>>::remove(&controller);
@@ -877,7 +881,8 @@ impl<T: Config> Pallet<T> {
 		});
 
 		Nominators::<T>::insert(stash, nominations);
-		debug_assert!(Self::sanity_check_list_providers().is_ok())
+		#[cfg(debug_assertions)]
+		assert!(Self::sanity_check_list_providers().is_ok());
 	}
 
 	/// This function will remove a nominator from the `Nominators` storage map,
@@ -905,7 +910,8 @@ impl<T: Config> Pallet<T> {
 			false
 		};
 
-		debug_assert!(Self::sanity_check_list_providers().is_ok());
+		#[cfg(debug_assertions)]
+		assert!(Self::sanity_check_list_providers().is_ok());
 		outcome
 	}
 
@@ -929,7 +935,8 @@ impl<T: Config> Pallet<T> {
 		}
 
 		Validators::<T>::insert(who, prefs);
-		debug_assert!(Self::sanity_check_list_providers().is_ok());
+		#[cfg(debug_assertions)]
+		assert!(Self::sanity_check_list_providers().is_ok());
 	}
 
 	/// This function will remove a validator from the `Validators` storage map.
@@ -952,7 +959,8 @@ impl<T: Config> Pallet<T> {
 			false
 		};
 
-		debug_assert!(Self::sanity_check_list_providers().is_ok());
+		#[cfg(debug_assertions)]
+		assert!(Self::sanity_check_list_providers().is_ok());
 
 		outcome
 	}
@@ -1164,6 +1172,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 			);
 			Self::do_add_nominator(
 				&v,
+				vec![],
 				Nominations { targets: t, submitted_in: 0, suppressed: false },
 			);
 		});
@@ -1474,7 +1483,7 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsAndValidatorsM
 	fn get_score(id: &T::AccountId) -> Result<Self::Score, Self::Error> {
 		Ok(Pallet::<T>::weight_of(id))
 	}
-	fn on_update(_: &T::AccountId, _weight: VoteWeight) -> Result<(), Self::Error> {
+	fn on_update(_: &T::AccountId, _weight: Self::Score) -> Result<(), Self::Error> {
 		// nothing to do on update.
 		Ok(())
 	}
@@ -1495,6 +1504,64 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsAndValidatorsM
 
 	fn unsafe_clear() {
 		Nominators::<T>::remove_all();
+		Validators::<T>::remove_all();
+	}
+}
+
+/// A simple sorted list implementation that does not require any additional pallets. Note, this
+/// does not provided validators in sorted ordered. If you desire nominators in a sorted order take
+/// a look at [`pallet-bags-list].
+pub struct UseValidatorsMap<T>(sp_std::marker::PhantomData<T>);
+impl<T: Config> SortedListProvider<T::AccountId> for UseValidatorsMap<T> {
+	type Error = ();
+	type Score = BalanceOf<T>;
+
+	fn iter() -> Box<dyn Iterator<Item = T::AccountId>> {
+		Box::new(Validators::<T>::iter().map(|(v, _)| v))
+	}
+	fn iter_from(
+		start: &T::AccountId,
+	) -> Result<Box<dyn Iterator<Item = T::AccountId>>, Self::Error> {
+		if Validators::<T>::contains_key(start) {
+			let start_key = Validators::<T>::hashed_key_for(start);
+			Ok(Box::new(Validators::<T>::iter_from(start_key).map(|(v, _)| v)))
+		} else {
+			Err(())
+		}
+	}
+	fn count() -> u32 {
+		Validators::<T>::count()
+	}
+	fn contains(id: &T::AccountId) -> bool {
+		Validators::<T>::contains_key(id)
+	}
+	fn on_insert(_: T::AccountId, _weight: Self::Score) -> Result<(), Self::Error> {
+		// nothing to do on insert.
+		Ok(())
+	}
+	fn get_score(id: &T::AccountId) -> Result<Self::Score, Self::Error> {
+		Ok(Pallet::<T>::slashable_balance_of(id))
+	}
+	fn on_update(_: &T::AccountId, _weight: Self::Score) -> Result<(), Self::Error> {
+		// nothing to do on update.
+		Ok(())
+	}
+	fn on_remove(_: &T::AccountId) -> Result<(), Self::Error> {
+		// nothing to do on remove.
+		Ok(())
+	}
+	fn unsafe_regenerate(
+		_: impl IntoIterator<Item = T::AccountId>,
+		_: Box<dyn Fn(&T::AccountId) -> Self::Score>,
+	) -> u32 {
+		// nothing to do upon regenerate.
+		0
+	}
+	fn sanity_check() -> Result<(), &'static str> {
+		Ok(())
+	}
+
+	fn unsafe_clear() {
 		Validators::<T>::remove_all();
 	}
 }

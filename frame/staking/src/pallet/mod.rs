@@ -319,12 +319,12 @@ pub mod pallet {
 	/// [`Call::chill_other`] dispatchable by anyone.
 	// Implementors Note: Due to the above nuance, consider using `NominatorsHelper` when ambiguous.
 	#[pallet::storage]
-	pub(crate) type Nominators<T: Config> =
+	pub type Nominators<T: Config> =
 		CountedStorageMap<_, Twox64Concat, T::AccountId, Nominations<T>>;
 
 	/// A helper struct with some explicit functions about nominators that are existing in storage,
 	/// but cannot be decoded. See [`Nominators`] for more info.
-	pub(crate) struct NominatorsHelper<T>(sp_std::marker::PhantomData<T>);
+	pub struct NominatorsHelper<T>(sp_std::marker::PhantomData<T>);
 	impl<T: Config> NominatorsHelper<T> {
 		/// True IFF nominator exists, and is decodable.
 		pub(crate) fn contains_decodable(who: &T::AccountId) -> bool {
@@ -1088,11 +1088,13 @@ pub mod pallet {
 			}
 
 			Self::do_remove_nominator(stash);
-			Self::do_add_validator(stash, prefs);
+			Self::do_add_validator(stash, prefs.clone());
+			Self::deposit_event(Event::<T>::ValidatorPrefsSet(ledger.stash, prefs));
 
 			// NOTE: we need to do this after all validators and nominators have been updated in the
 			// previous two function calls.
-			debug_assert!(Self::sanity_check_approval_stakes().is_ok());
+			#[cfg(debug_assertions)]
+			assert!(Self::sanity_check_approval_stakes().is_ok());
 
 			Ok(())
 		}
@@ -1176,7 +1178,8 @@ pub mod pallet {
 
 			// NOTE: we need to do this after all validators and nominators have been updated in the
 			// previous two function calls.
-			debug_assert!(Self::sanity_check_approval_stakes().is_ok());
+			#[cfg(debug_assertions)]
+			assert!(Self::sanity_check_approval_stakes().is_ok());
 
 			Ok(())
 		}

@@ -173,7 +173,7 @@ use sp_std::{fmt::Debug, prelude::*};
 
 /// Re-export the solution generation macro.
 pub use frame_election_provider_solution_type::generate_solution_type;
-use frame_support::{traits::Get, weights::Weight, BoundedVec, RuntimeDebug};
+pub use frame_support::{traits::Get, weights::Weight, BoundedVec, RuntimeDebug};
 /// Re-export some type as they are used in the interface.
 pub use sp_arithmetic::PerThing;
 pub use sp_npos_elections::{

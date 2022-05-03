@@ -109,6 +109,7 @@ impl pallet_staking::Config for Runtime {
 		frame_election_provider_support::NoElection<(AccountId, BlockNumber, Staking)>;
 	type GenesisElectionProvider = Self::ElectionProvider;
 	type VoterList = pallet_bags_list::Pallet<Self>;
+	type TargetList = pallet_staking::UseValidatorsMap<Self>;
 	type MaxUnlockingChunks = ConstU32<32>;
 	type OnStakerSlash = Pools;
 	type BenchmarkingConfig = pallet_staking::TestBenchmarkingConfig;
