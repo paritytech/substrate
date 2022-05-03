@@ -857,21 +857,20 @@ impl<T: Config> Pallet<T> {
 			let _ = T::VoterList::on_insert(stash.clone(), Self::weight_of(stash)).defensive();
 		}
 
-		let incoming = nominations.targets.iter().filter(|x| !old.contains(x)).collect::<Vec<_>>();
-		let outgoing =
-			old.into_iter().filter(|x| !nominations.targets.contains(x)).collect::<Vec<_>>();
+		let incoming = nominations.targets.iter().filter(|x| !old.contains(x));
+		let outgoing = old.iter().filter(|x| !nominations.targets.contains(x));
 
 		// TODO: edge case: some wanker nominating themselves? should only be possible if they are a
 		// validator and now they nominate themselves.
 		let score = Self::slashable_balance_of(stash);
-		incoming.into_iter().for_each(|i| {
+		incoming.for_each(|i| {
 			if T::TargetList::contains(i) {
 				let _ = T::TargetList::on_increase(i, score).defensive();
 			} else {
 				defensive!("no incoming target can not have an entry in the target-list");
 			}
 		});
-		outgoing.into_iter().for_each(|o| {
+		outgoing.for_each(|o| {
 			if T::TargetList::contains(&o) {
 				let _ = T::TargetList::on_decrease(&o, score);
 			} else {
