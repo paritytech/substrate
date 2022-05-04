@@ -61,8 +61,10 @@ mod mock;
 mod tests;
 
 pub use equivocation::{BabeEquivocationOffence, EquivocationHandler, HandleEquivocation};
+#[allow(deprecated)]
+pub use randomness::CurrentBlockRandomness;
 pub use randomness::{
-	CurrentBlockRandomness, RandomnessFromOneEpochAgo, RandomnessFromTwoEpochsAgo,
+	ParentBlockRandomness, RandomnessFromOneEpochAgo, RandomnessFromTwoEpochsAgo,
 };
 
 pub use pallet::*;
@@ -103,8 +105,6 @@ impl EpochChangeTrigger for SameAuthoritiesForever {
 }
 
 const UNDER_CONSTRUCTION_SEGMENT_LENGTH: u32 = 256;
-
-type MaybeRandomness = Option<schnorrkel::Randomness>;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -271,15 +271,16 @@ pub mod pallet {
 	/// if per-block initialization has already been called for current block.
 	#[pallet::storage]
 	#[pallet::getter(fn initialized)]
-	pub(super) type Initialized<T> = StorageValue<_, MaybeRandomness>;
+	pub(super) type Initialized<T> = StorageValue<_, Option<PreDigest>>;
 
 	/// This field should always be populated during block processing unless
 	/// secondary plain slots are enabled (which don't contain a VRF output).
 	///
-	/// It is set in `on_initialize`, before it will contain the value from the last block.
+	/// It is set in `on_finalize`, before it will contain the value from the last block.
 	#[pallet::storage]
 	#[pallet::getter(fn author_vrf_randomness)]
-	pub(super) type AuthorVrfRandomness<T> = StorageValue<_, MaybeRandomness, ValueQuery>;
+	pub(super) type AuthorVrfRandomness<T> =
+		StorageValue<_, Option<schnorrkel::Randomness>, ValueQuery>;
 
 	/// The block numbers when the last and current epoch have started, respectively `N-1` and
 	/// `N`.
@@ -320,7 +321,7 @@ pub mod pallet {
 	impl<T: Config> GenesisBuild<T> for GenesisConfig {
 		fn build(&self) {
 			SegmentIndex::<T>::put(0);
-			Pallet::<T>::initialize_authorities(&self.authorities);
+			Pallet::<T>::initialize_genesis_authorities(&self.authorities);
 			EpochConfig::<T>::put(
 				self.epoch_config.clone().expect("epoch_config must not be None"),
 			);
@@ -331,19 +332,60 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		/// Initialization
 		fn on_initialize(now: BlockNumberFor<T>) -> Weight {
-			Self::do_initialize(now);
+			Self::initialize(now);
 			0
 		}
 
 		/// Block finalization
-		fn on_finalize(_n: BlockNumberFor<T>) {
+		fn on_finalize(_now: BlockNumberFor<T>) {
 			// at the end of the block, we can safely include the new VRF output
 			// from this block into the under-construction randomness. If we've determined
 			// that this block was the first in a new epoch, the changeover logic has
 			// already occurred at this point, so the under-construction randomness
 			// will only contain outputs from the right epoch.
-			if let Some(Some(randomness)) = Initialized::<T>::take() {
-				Self::deposit_randomness(&randomness);
+			if let Some(pre_digest) = Initialized::<T>::take().flatten() {
+				let authority_index = pre_digest.authority_index();
+
+				if T::DisabledValidators::is_disabled(authority_index) {
+					panic!(
+						"Validator with index {:?} is disabled and should not be attempting to author blocks.",
+						authority_index,
+					);
+				}
+
+				if let Some((vrf_output, vrf_proof)) = pre_digest.vrf() {
+					let randomness: Option<schnorrkel::Randomness> = Authorities::<T>::get()
+						.get(authority_index as usize)
+						.and_then(|(authority, _)| {
+							schnorrkel::PublicKey::from_bytes(authority.as_slice()).ok()
+						})
+						.and_then(|pubkey| {
+							let current_slot = CurrentSlot::<T>::get();
+
+							let transcript = sp_consensus_babe::make_transcript(
+								&Self::randomness(),
+								current_slot,
+								EpochIndex::<T>::get(),
+							);
+
+							// NOTE: this is verified by the client when importing the block, before
+							// execution. we don't run the verification again here to avoid slowing
+							// down the runtime.
+							debug_assert!(pubkey
+								.vrf_verify(transcript.clone(), vrf_output, vrf_proof)
+								.is_ok());
+
+							vrf_output.0.attach_input_hash(&pubkey, transcript).ok()
+						})
+						.map(|inout| inout.make_bytes(sp_consensus_babe::BABE_VRF_INOUT_CONTEXT));
+
+					if let Some(randomness) = pre_digest.is_primary().then(|| randomness).flatten()
+					{
+						Self::deposit_randomness(&randomness);
+					}
+
+					AuthorVrfRandomness::<T>::put(randomness);
+				}
 			}
 
 			// remove temporary "environment" entry from storage
@@ -451,11 +493,10 @@ impl<T: Config> IsMember<AuthorityId> for Pallet<T> {
 impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 	fn should_end_session(now: T::BlockNumber) -> bool {
 		// it might be (and it is in current implementation) that session module is calling
-		// should_end_session() from it's own on_initialize() handler
-		// => because pallet_session on_initialize() is called earlier than ours, let's ensure
-		// that we have synced with digest before checking if session should be ended.
-		Self::do_initialize(now);
-
+		// `should_end_session` from it's own `on_initialize` handler, in which case it's
+		// possible that babe's own `on_initialize` has not run yet, so let's ensure that we
+		// have initialized the pallet and updated the current slot.
+		Self::initialize(now);
 		Self::should_epoch_change(now)
 	}
 }
@@ -573,7 +614,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Finds the start slot of the current epoch. only guaranteed to
-	/// give correct results after `do_initialize` of the first block
+	/// give correct results after `initialize` of the first block
 	/// in the chain (as its result is based off of `GenesisSlot`).
 	pub fn current_epoch_start() -> Slot {
 		Self::epoch_start(EpochIndex::<T>::get())
@@ -649,15 +690,41 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	fn do_initialize(now: T::BlockNumber) {
-		// since do_initialize can be called twice (if session module is present)
-		// => let's ensure that we only modify the storage once per block
+	fn initialize_genesis_authorities(authorities: &[(AuthorityId, BabeAuthorityWeight)]) {
+		if !authorities.is_empty() {
+			assert!(Authorities::<T>::get().is_empty(), "Authorities are already initialized!");
+			let bounded_authorities =
+				WeakBoundedVec::<_, T::MaxAuthorities>::try_from(authorities.to_vec())
+					.expect("Initial number of authorities should be lower than T::MaxAuthorities");
+			Authorities::<T>::put(&bounded_authorities);
+			NextAuthorities::<T>::put(&bounded_authorities);
+		}
+	}
+
+	fn initialize_genesis_epoch(genesis_slot: Slot) {
+		GenesisSlot::<T>::put(genesis_slot);
+		debug_assert_ne!(*GenesisSlot::<T>::get(), 0);
+
+		// deposit a log because this is the first block in epoch #0
+		// we use the same values as genesis because we haven't collected any
+		// randomness yet.
+		let next = NextEpochDescriptor {
+			authorities: Self::authorities().to_vec(),
+			randomness: Self::randomness(),
+		};
+
+		Self::deposit_consensus(ConsensusLog::NextEpochData(next));
+	}
+
+	fn initialize(now: T::BlockNumber) {
+		// since `initialize` can be called twice (e.g. if session module is present)
+		// let's ensure that we only do the initialization once per block
 		let initialized = Self::initialized().is_some();
 		if initialized {
 			return
 		}
 
-		let maybe_pre_digest: Option<PreDigest> =
+		let pre_digest =
 			<frame_system::Pallet<T>>::digest()
 				.logs
 				.iter()
@@ -671,29 +738,16 @@ impl<T: Config> Pallet<T> {
 				})
 				.next();
 
-		let is_primary = matches!(maybe_pre_digest, Some(PreDigest::Primary(..)));
+		if let Some(ref pre_digest) = pre_digest {
+			// the slot number of the current block being initialized
+			let current_slot = pre_digest.slot();
 
-		let maybe_randomness: MaybeRandomness = maybe_pre_digest.and_then(|digest| {
 			// on the first non-zero block (i.e. block #1)
 			// this is where the first epoch (epoch #0) actually starts.
 			// we need to adjust internal storage accordingly.
 			if *GenesisSlot::<T>::get() == 0 {
-				GenesisSlot::<T>::put(digest.slot());
-				debug_assert_ne!(*GenesisSlot::<T>::get(), 0);
-
-				// deposit a log because this is the first block in epoch #0
-				// we use the same values as genesis because we haven't collected any
-				// randomness yet.
-				let next = NextEpochDescriptor {
-					authorities: Self::authorities().to_vec(),
-					randomness: Self::randomness(),
-				};
-
-				Self::deposit_consensus(ConsensusLog::NextEpochData(next))
+				Self::initialize_genesis_epoch(current_slot)
 			}
-
-			// the slot number of the current block being initialized
-			let current_slot = digest.slot();
 
 			// how many slots were skipped between current and last block
 			let lateness = current_slot.saturating_sub(CurrentSlot::<T>::get() + 1);
@@ -701,46 +755,12 @@ impl<T: Config> Pallet<T> {
 
 			Lateness::<T>::put(lateness);
 			CurrentSlot::<T>::put(current_slot);
+		}
 
-			let authority_index = digest.authority_index();
-
-			if T::DisabledValidators::is_disabled(authority_index) {
-				panic!(
-					"Validator with index {:?} is disabled and should not be attempting to author blocks.",
-					authority_index,
-				);
-			}
-
-			// Extract out the VRF output if we have it
-			digest.vrf_output().and_then(|vrf_output| {
-				// Reconstruct the bytes of VRFInOut using the authority id.
-				Authorities::<T>::get()
-					.get(authority_index as usize)
-					.and_then(|author| schnorrkel::PublicKey::from_bytes(author.0.as_slice()).ok())
-					.and_then(|pubkey| {
-						let transcript = sp_consensus_babe::make_transcript(
-							&Self::randomness(),
-							current_slot,
-							EpochIndex::<T>::get(),
-						);
-
-						vrf_output.0.attach_input_hash(&pubkey, transcript).ok()
-					})
-					.map(|inout| inout.make_bytes(sp_consensus_babe::BABE_VRF_INOUT_CONTEXT))
-			})
-		});
-
-		// For primary VRF output we place it in the `Initialized` storage
-		// item and it'll be put onto the under-construction randomness later,
-		// once we've decided which epoch this block is in.
-		Initialized::<T>::put(if is_primary { maybe_randomness } else { None });
-
-		// Place either the primary or secondary VRF output into the
-		// `AuthorVrfRandomness` storage item.
-		AuthorVrfRandomness::<T>::put(maybe_randomness);
+		Initialized::<T>::put(pre_digest);
 
 		// enact epoch change, if necessary.
-		T::EpochChangeTrigger::trigger::<T>(now)
+		T::EpochChangeTrigger::trigger::<T>(now);
 	}
 
 	/// Call this function exactly once when an epoch changes, to update the
@@ -760,17 +780,6 @@ impl<T: Config> Pallet<T> {
 		);
 		NextRandomness::<T>::put(&next_randomness);
 		this_randomness
-	}
-
-	fn initialize_authorities(authorities: &[(AuthorityId, BabeAuthorityWeight)]) {
-		if !authorities.is_empty() {
-			assert!(Authorities::<T>::get().is_empty(), "Authorities are already initialized!");
-			let bounded_authorities =
-				WeakBoundedVec::<_, T::MaxAuthorities>::try_from(authorities.to_vec())
-					.expect("Initial number of authorities should be lower than T::MaxAuthorities");
-			Authorities::<T>::put(&bounded_authorities);
-			NextAuthorities::<T>::put(&bounded_authorities);
-		}
 	}
 
 	fn do_report_equivocation(
@@ -891,7 +900,7 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 		I: Iterator<Item = (&'a T::AccountId, AuthorityId)>,
 	{
 		let authorities = validators.map(|(_, k)| (k, 1)).collect::<Vec<_>>();
-		Self::initialize_authorities(&authorities);
+		Self::initialize_genesis_authorities(&authorities);
 	}
 
 	fn on_new_session<'a, I: 'a>(_changed: bool, validators: I, queued_validators: I)

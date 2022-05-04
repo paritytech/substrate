@@ -10232,6 +10232,7 @@ name = "sp-consensus-vrf"
 version = "0.10.0-dev"
 dependencies = [
  "parity-scale-codec",
+ "scale-info",
  "schnorrkel",
  "sp-core",
  "sp-runtime",
