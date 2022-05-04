@@ -39,7 +39,9 @@ use beefy_primitives::{
 	crypto::AuthorityId, BeefyApi, ConsensusLog, MmrRootHash, ValidatorSet, BEEFY_ENGINE_ID,
 	KEY_TYPE as BeefyKeyType,
 };
-use sp_mmr_primitives::{EncodableOpaqueLeaf, Error as MmrError, LeafIndex, MmrApi, Proof};
+use sp_mmr_primitives::{
+	BatchProof, EncodableOpaqueLeaf, Error as MmrError, LeafIndex, MmrApi, Proof,
+};
 
 use sp_api::{ApiRef, ProvideRuntimeApi};
 use sp_consensus::BlockOrigin;
@@ -258,6 +260,22 @@ macro_rules! create_test_api {
 
 					fn mmr_root() -> Result<MmrRootHash, MmrError> {
 						Ok($mmr_root)
+					}
+
+					fn generate_batch_proof(_leaf_indices: Vec<LeafIndex>) -> Result<(Vec<EncodableOpaqueLeaf>, BatchProof<MmrRootHash>), MmrError> {
+						unimplemented!()
+					}
+
+					fn verify_batch_proof(_leaves: Vec<EncodableOpaqueLeaf>, _proof: BatchProof<MmrRootHash>) -> Result<(), MmrError> {
+						unimplemented!()
+					}
+
+					fn verify_batch_proof_stateless(
+						_root: MmrRootHash,
+						_leaves: Vec<EncodableOpaqueLeaf>,
+						_proof: BatchProof<MmrRootHash>
+					) -> Result<(), MmrError> {
+						unimplemented!()
 					}
 				}
 			}

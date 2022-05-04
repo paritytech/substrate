@@ -22,7 +22,7 @@ pub mod utils;
 use sp_mmr_primitives::{DataOrHash, FullLeaf};
 use sp_runtime::traits;
 
-pub use self::mmr::{verify_leaf_proof, Mmr};
+pub use self::mmr::{verify_leaves_proof, Mmr};
 
 /// Node type for runtime `T`.
 pub type NodeOf<T, I, L> = Node<<T as crate::Config<I>>::Hashing, L>;
