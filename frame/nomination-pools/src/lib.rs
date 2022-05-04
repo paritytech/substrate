@@ -403,7 +403,6 @@ pub struct PoolMember<T: Config> {
 }
 
 impl<T: Config> PoolMember<T> {
-	#[cfg(any(test, debug_assertions))]
 	fn total_points(&self) -> BalanceOf<T> {
 		self.active_points().saturating_add(self.unbonding_points())
 	}
