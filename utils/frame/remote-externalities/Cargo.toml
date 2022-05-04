@@ -13,24 +13,22 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-jsonrpsee = { version = "0.10.1", features = ["ws-client", "macros"] }
-
-env_logger = "0.9"
-frame-support = { path = "../../../frame/support", optional = true, version = "4.0.0-dev" }
-log = "0.4.16"
 codec = { package = "parity-scale-codec", version = "3.0.0" }
-serde_json = "1.0"
+env_logger = "0.9"
+jsonrpsee = { version = "0.10.1", features = ["ws-client", "macros"] }
+log = "0.4.16"
 serde = "1.0.136"
-
-sp-io = { version = "6.0.0", path = "../../../primitives/io" }
+serde_json = "1.0"
+frame-support = { version = "4.0.0-dev", optional = true, path = "../../../frame/support" }
 sp-core = { version = "6.0.0", path = "../../../primitives/core" }
+sp-io = { version = "6.0.0", path = "../../../primitives/io" }
 sp-runtime = { version = "6.0.0", path = "../../../primitives/runtime" }
 sp-version = { version = "5.0.0", path = "../../../primitives/version" }
 
 [dev-dependencies]
 tokio = { version = "1.17.0", features = ["macros", "rt-multi-thread"] }
-pallet-elections-phragmen = { path = "../../../frame/elections-phragmen", version = "5.0.0-dev" }
-frame-support = { path = "../../../frame/support", version = "4.0.0-dev" }
+frame-support = { version = "4.0.0-dev", path = "../../../frame/support" }
+pallet-elections-phragmen = { version = "5.0.0-dev", path = "../../../frame/elections-phragmen" }
 
 [features]
 remote-test = ["frame-support"]

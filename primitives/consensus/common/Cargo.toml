@@ -16,18 +16,18 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 async-trait = "0.1.42"
 codec = { package = "parity-scale-codec", version = "3.0.0", features = [
-    "derive",
+	"derive",
 ] }
 futures = { version = "0.3.21", features = ["thread-pool"] }
-log = "0.4.16"
-sp-core = { path = "../../core", version = "6.0.0"}
-sp-inherents = { version = "4.0.0-dev", path = "../../inherents" }
-sp-state-machine = { version = "0.12.0", path = "../../state-machine" }
 futures-timer = "3.0.1"
+log = "0.4.16"
+thiserror = "1.0.30"
+sp-core = { version = "6.0.0", path = "../../core" }
+sp-inherents = { version = "4.0.0-dev", path = "../../inherents" }
+sp-runtime = { version = "6.0.0", path = "../../runtime" }
+sp-state-machine = { version = "0.12.0", path = "../../state-machine" }
 sp-std = { version = "4.0.0", path = "../../std" }
 sp-version = { version = "5.0.0", path = "../../version" }
-sp-runtime = { version = "6.0.0", path = "../../runtime" }
-thiserror = "1.0.30"
 
 [dev-dependencies]
 futures = "0.3.21"

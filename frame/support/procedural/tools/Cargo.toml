@@ -12,8 +12,8 @@ description = "Proc macro helpers for procedural macros"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-frame-support-procedural-tools-derive = { version = "3.0.0", path = "./derive" }
+proc-macro-crate = "1.1.3"
 proc-macro2 = "1.0.37"
 quote = "1.0.10"
 syn = { version = "1.0.82", features = ["full", "visit", "extra-traits"] }
-proc-macro-crate = "1.1.3"
+frame-support-procedural-tools-derive = { version = "3.0.0", path = "./derive" }
