@@ -19,8 +19,9 @@
 
 use codec::{Decode, Encode};
 use core::marker::PhantomData;
-use frame_support::{ensure, storage::migration, traits::OnRuntimeUpgrade};
 use frame_election_provider_support::ScoreProvider;
+use frame_support::{ensure, storage::migration, traits::OnRuntimeUpgrade};
+use sp_runtime::traits::Zero;
 
 /// A struct that does not migration, but only checks that the counter prefix exists and is correct.
 pub struct CheckCounterPrefix<T: crate::Config<I>, I: 'static>(sp_std::marker::PhantomData<(T, I)>);
@@ -52,12 +53,12 @@ impl<T: crate::Config<I>, I: 'static> OnRuntimeUpgrade for CheckCounterPrefix<T,
 
 #[derive(Encode, Decode)]
 struct PreScoreNode<T: crate::Config<I>, I: 'static = ()> {
-	id: T::AccountId,
-	prev: Option<T::AccountId>,
-	next: Option<T::AccountId>,
-	bag_upper: T::Score,
+	pub id: T::AccountId,
+	pub prev: Option<T::AccountId>,
+	pub next: Option<T::AccountId>,
+	pub bag_upper: T::Score,
 	#[codec(skip)]
-	_phantom: PhantomData<I>,
+	pub _phantom: PhantomData<I>,
 }
 
 /// A struct that migrates all bags lists to contain a score value.
@@ -80,11 +81,11 @@ impl<T: crate::Config<I>, I: 'static> OnRuntimeUpgrade for AddScore<T, I> {
 		migration::move_pallet(b"BagsList", b"VoterList");
 		let old_nodes = migration::storage_iter::<PreScoreNode<T, I>>(b"VoterList", b"ListNodes");
 
-		for node in old_nodes.iter() {
-			let score = T::ScoreProvider::score(node.id);
+		for (_key, node) in old_nodes.drain() {
+			let score = T::ScoreProvider::score(&node.id);
 
 			let new_node = crate::Node {
-				id: node.id,
+				id: node.id.clone(),
 				prev: node.prev,
 				next: node.next,
 				bag_upper: node.bag_upper,
@@ -104,6 +105,9 @@ impl<T: crate::Config<I>, I: 'static> OnRuntimeUpgrade for AddScore<T, I> {
 			crate::ListNodes::<T, I>::iter().count() > 0,
 			"Items do not exist where some were expected."
 		);
+		for (_id, node) in crate::ListNodes::<T, I>::iter() {
+			ensure!(!node.score.is_zero(), "Score should be greater than zero");
+		}
 		ensure!(
 			crate::ListBags::<T, I>::iter().count() > 0,
 			"Items do not exist where some were expected."
