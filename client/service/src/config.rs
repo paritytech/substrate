@@ -19,15 +19,20 @@
 //! Service configuration.
 
 pub use sc_client_api::execution_extensions::{ExecutionStrategies, ExecutionStrategy};
-pub use sc_client_db::{Database, DatabaseSource, KeepBlocks, PruningMode, TransactionStorageMode};
+pub use sc_client_db::{Database, DatabaseSource, KeepBlocks, PruningMode};
 pub use sc_executor::WasmExecutionMethod;
 pub use sc_network::{
 	config::{
-		IncomingRequest, MultiaddrWithPeerId, NetworkConfiguration, NodeKeyConfig,
-		NonDefaultSetConfig, OutgoingResponse, RequestResponseConfig, Role, SetConfig,
-		TransportConfig,
+		MultiaddrWithPeerId, NetworkConfiguration, NodeKeyConfig, NonDefaultSetConfig, Role,
+		SetConfig, TransportConfig,
 	},
 	Multiaddr,
+};
+pub use sc_network_common::{
+	config::ProtocolId,
+	request_responses::{
+		IncomingRequest, OutgoingResponse, ProtocolConfig as RequestResponseConfig,
+	},
 };
 
 use prometheus_endpoint::Registry;
@@ -71,8 +76,6 @@ pub struct Configuration {
 	pub state_pruning: PruningMode,
 	/// Number of blocks to keep in the db.
 	pub keep_blocks: KeepBlocks,
-	/// Transaction storage scheme.
-	pub transaction_storage: TransactionStorageMode,
 	/// Chain configuration.
 	pub chain_spec: Box<dyn ChainSpec>,
 	/// Wasm execution method.
@@ -210,7 +213,7 @@ impl Configuration {
 	}
 
 	/// Returns the network protocol id from the chain spec, or the default.
-	pub fn protocol_id(&self) -> sc_network::config::ProtocolId {
+	pub fn protocol_id(&self) -> ProtocolId {
 		let protocol_id_full = match self.chain_spec.protocol_id() {
 			Some(pid) => pid,
 			None => {
@@ -222,7 +225,7 @@ impl Configuration {
 				crate::DEFAULT_PROTOCOL_ID
 			},
 		};
-		sc_network::config::ProtocolId::from(protocol_id_full)
+		ProtocolId::from(protocol_id_full)
 	}
 }
 
@@ -296,7 +299,7 @@ impl BasePath {
 	}
 }
 
-impl std::convert::From<PathBuf> for BasePath {
+impl From<PathBuf> for BasePath {
 	fn from(path: PathBuf) -> Self {
 		BasePath::new(path)
 	}

@@ -20,8 +20,8 @@ use crate::*;
 
 use codec::{Decode, Encode};
 use frame_support::traits::{ConstU32, ConstU64};
-use pallet_mmr_primitives::{Compact, LeafDataProvider};
 use sp_core::H256;
+use sp_mmr_primitives::{Compact, LeafDataProvider};
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup, Keccak256},
@@ -74,7 +74,7 @@ impl Config for Test {
 
 	type Hashing = Keccak256;
 	type Hash = H256;
-	type LeafData = Compact<Keccak256, (frame_system::Pallet<Test>, LeafData)>;
+	type LeafData = Compact<Keccak256, (ParentNumberAndHash<Test>, LeafData)>;
 	type OnNewRoot = ();
 	type WeightInfo = ();
 }

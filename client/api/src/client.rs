@@ -25,7 +25,7 @@ use sp_runtime::{
 	traits::{Block as BlockT, NumberFor},
 	Justifications,
 };
-use std::{collections::HashSet, convert::TryFrom, fmt, sync::Arc};
+use std::{collections::HashSet, fmt, sync::Arc};
 
 use crate::{blockchain::Info, notifications::StorageEventStream, FinalizeSummary, ImportSummary};
 
@@ -307,9 +307,11 @@ pub struct FinalityNotification<Block: BlockT> {
 	/// Finalized block header.
 	pub header: Block::Header,
 	/// Path from the old finalized to new finalized parent (implicitly finalized blocks).
-	pub tree_route: Arc<Vec<Block::Hash>>,
+	///
+	/// This maps to the range `(old_finalized, new_finalized)`.
+	pub tree_route: Arc<[Block::Hash]>,
 	/// Stale branches heads.
-	pub stale_heads: Arc<Vec<Block::Hash>>,
+	pub stale_heads: Arc<[Block::Hash]>,
 }
 
 impl<B: BlockT> TryFrom<BlockImportNotification<B>> for ChainEvent<B> {
@@ -336,8 +338,8 @@ impl<B: BlockT> From<FinalizeSummary<B>> for FinalityNotification<B> {
 		FinalityNotification {
 			hash,
 			header: summary.header,
-			tree_route: Arc::new(summary.finalized),
-			stale_heads: Arc::new(summary.stale_heads),
+			tree_route: Arc::from(summary.finalized),
+			stale_heads: Arc::from(summary.stale_heads),
 		}
 	}
 }

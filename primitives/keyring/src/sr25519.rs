@@ -168,7 +168,7 @@ impl From<Keyring> for AccountId32 {
 
 impl From<Keyring> for Public {
 	fn from(k: Keyring) -> Self {
-		(*PUBLIC_KEYS).get(&k).unwrap().clone()
+		*(*PUBLIC_KEYS).get(&k).unwrap()
 	}
 }
 

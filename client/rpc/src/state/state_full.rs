@@ -51,7 +51,7 @@ use super::{
 };
 use sc_client_api::{
 	Backend, BlockBackend, BlockchainEvents, CallExecutor, ExecutorProvider, ProofProvider,
-	StorageProvider,
+	StorageNotification, StorageProvider,
 };
 use std::marker::PhantomData;
 
@@ -151,10 +151,8 @@ where
 		changes: &mut Vec<StorageChangeSet<Block::Hash>>,
 	) -> Result<()> {
 		for block_hash in &range.hashes {
-			let block_hash = block_hash.clone();
-			let mut block_changes =
-				StorageChangeSet { block: block_hash.clone(), changes: Vec::new() };
-			let id = BlockId::hash(block_hash);
+			let mut block_changes = StorageChangeSet { block: *block_hash, changes: Vec::new() };
+			let id = BlockId::hash(*block_hash);
 			for key in keys {
 				let (has_changed, data) = {
 					let curr_data = self.client.storage(&id, key).map_err(client_err)?;
@@ -466,7 +464,7 @@ where
 		);
 
 		self.subscriptions.add(subscriber, |sink| {
-			let stream = stream.map(|(block, changes)| {
+			let stream = stream.map(|StorageNotification { block, changes }| {
 				Ok(Ok::<_, rpc::Error>(StorageChangeSet {
 					block,
 					changes: changes

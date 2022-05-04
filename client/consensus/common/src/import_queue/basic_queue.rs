@@ -374,7 +374,7 @@ async fn import_many_blocks<B: BlockT, V: Verifier<B>, Transaction: Send + 'stat
 			},
 		};
 
-		let block_number = block.header.as_ref().map(|h| h.number().clone());
+		let block_number = block.header.as_ref().map(|h| *h.number());
 		let block_hash = block.hash;
 		let import_result = if has_error {
 			Err(BlockImportError::Cancelled)
@@ -382,7 +382,7 @@ async fn import_many_blocks<B: BlockT, V: Verifier<B>, Transaction: Send + 'stat
 			// The actual import.
 			import_single_block_metered(
 				import_handle,
-				blocks_origin.clone(),
+				blocks_origin,
 				block,
 				verifier,
 				metrics.clone(),

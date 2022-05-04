@@ -30,14 +30,7 @@
 //!
 //! NOTE: Aura itself is designed to be generic over the crypto used.
 #![forbid(missing_docs, unsafe_code)]
-use std::{
-	convert::{TryFrom, TryInto},
-	fmt::Debug,
-	hash::Hash,
-	marker::PhantomData,
-	pin::Pin,
-	sync::Arc,
-};
+use std::{fmt::Debug, hash::Hash, marker::PhantomData, pin::Pin, sync::Arc};
 
 use futures::prelude::*;
 use log::{debug, trace};
@@ -47,7 +40,8 @@ use codec::{Codec, Decode, Encode};
 use sc_client_api::{backend::AuxStore, BlockOf, UsageProvider};
 use sc_consensus::{BlockImport, BlockImportParams, ForkChoiceStrategy, StateAction};
 use sc_consensus_slots::{
-	BackoffAuthoringBlocksStrategy, InherentDataProviderExt, SlotInfo, StorageChanges,
+	BackoffAuthoringBlocksStrategy, InherentDataProviderExt, SimpleSlotWorkerToSlotWorker,
+	SlotInfo, StorageChanges,
 };
 use sc_telemetry::TelemetryHandle;
 use sp_api::ProvideRuntimeApi;
@@ -192,7 +186,7 @@ where
 	Error: std::error::Error + Send + From<sp_consensus::Error> + 'static,
 {
 	let worker = build_aura_worker::<P, _, _, _, _, _, _, _, _>(BuildAuraWorkerParams {
-		client: client.clone(),
+		client,
 		block_import,
 		proposer_factory,
 		keystore,
@@ -208,7 +202,7 @@ where
 	Ok(sc_consensus_slots::start_slot_worker(
 		slot_duration,
 		select_chain,
-		worker,
+		SimpleSlotWorkerToSlotWorker(worker),
 		sync_oracle,
 		create_inherent_data_providers,
 		can_author_with,
@@ -263,7 +257,15 @@ pub fn build_aura_worker<P, B, C, PF, I, SO, L, BS, Error>(
 		telemetry,
 		force_authoring,
 	}: BuildAuraWorkerParams<C, I, PF, SO, L, BS>,
-) -> impl sc_consensus_slots::SlotWorker<B, <PF::Proposer as Proposer<B>>::Proof>
+) -> impl sc_consensus_slots::SimpleSlotWorker<
+	B,
+	Proposer = PF::Proposer,
+	BlockImport = I,
+	SyncOracle = SO,
+	JustificationSyncLink = L,
+	Claim = P::Public,
+	EpochData = Vec<AuthorityId<P>>,
+>
 where
 	B: BlockT,
 	C: ProvideRuntimeApi<B> + BlockOf + AuxStore + HeaderBackend<B> + Send + Sync,
@@ -455,11 +457,10 @@ where
 	}
 
 	fn proposer(&mut self, block: &B::Header) -> Self::CreateProposer {
-		Box::pin(
-			self.env
-				.init(block)
-				.map_err(|e| sp_consensus::Error::ClientImport(format!("{:?}", e)).into()),
-		)
+		self.env
+			.init(block)
+			.map_err(|e| sp_consensus::Error::ClientImport(format!("{:?}", e)))
+			.boxed()
 	}
 
 	fn telemetry(&self) -> Option<TelemetryHandle> {
@@ -517,7 +518,7 @@ pub enum Error<B: BlockT> {
 	Inherent(sp_inherents::Error),
 }
 
-impl<B: BlockT> std::convert::From<Error<B>> for String {
+impl<B: BlockT> From<Error<B>> for String {
 	fn from(error: Error<B>) -> String {
 		error.to_string()
 	}
@@ -533,7 +534,7 @@ pub fn find_pre_digest<B: BlockT, Signature: Codec>(header: &B::Header) -> Resul
 	for log in header.digest().logs() {
 		trace!(target: "aura", "Checking log {:?}", log);
 		match (CompatibleDigestItem::<Signature>::as_aura_pre_digest(log), pre_digest.is_some()) {
-			(Some(_), true) => Err(aura_err(Error::MultipleHeaders))?,
+			(Some(_), true) => return Err(aura_err(Error::MultipleHeaders)),
 			(None, _) => trace!(target: "aura", "Ignoring digest not meant for us"),
 			(s, false) => pre_digest = s,
 		}
@@ -552,7 +553,7 @@ where
 		.runtime_api()
 		.authorities(at)
 		.ok()
-		.ok_or_else(|| sp_consensus::Error::InvalidAuthoritiesSet.into())
+		.ok_or(sp_consensus::Error::InvalidAuthoritiesSet)
 }
 
 #[cfg(test)]

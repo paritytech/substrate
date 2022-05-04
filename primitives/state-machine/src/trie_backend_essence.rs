@@ -29,15 +29,13 @@ use sp_trie::{
 	child_delta_trie_root, delta_trie_root, empty_child_trie_root, read_child_trie_value,
 	read_trie_value,
 	trie_types::{TrieDB, TrieError},
-	DBValue, KeySpacedDB, PrefixedMemoryDB, Trie, TrieDBIterator, TrieDBKeyIterator,
+	DBValue, KeySpacedDB, LayoutV1 as Layout, PrefixedMemoryDB, Trie, TrieDBIterator,
+	TrieDBKeyIterator,
 };
 #[cfg(feature = "std")]
 use std::collections::HashMap;
 #[cfg(feature = "std")]
 use std::sync::Arc;
-// In this module, we only use layout for read operation and empty root,
-// where V1 and V0 are equivalent.
-use sp_trie::LayoutV1 as Layout;
 
 #[cfg(not(feature = "std"))]
 macro_rules! format {
@@ -523,7 +521,7 @@ where
 			Ok(None) => default_root,
 			Err(e) => {
 				warn!(target: "trie", "Failed to read child storage root: {}", e);
-				default_root.clone()
+				default_root
 			},
 		};
 
@@ -582,17 +580,12 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> hash_db::HashDB<H, DBValue>
 	for Ephemeral<'a, S, H>
 {
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Option<DBValue> {
-		if let Some(val) = HashDB::get(self.overlay, key, prefix) {
-			Some(val)
-		} else {
-			match self.storage.get(&key, prefix) {
-				Ok(x) => x,
-				Err(e) => {
-					warn!(target: "trie", "Failed to read from DB: {}", e);
-					None
-				},
-			}
-		}
+		HashDB::get(self.overlay, key, prefix).or_else(|| {
+			self.storage.get(key, prefix).unwrap_or_else(|e| {
+				warn!(target: "trie", "Failed to read from DB: {}", e);
+				None
+			})
+		})
 	}
 
 	fn contains(&self, key: &H::Out, prefix: Prefix) -> bool {
@@ -667,7 +660,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> HashDB<H, DBValue> for TrieBackendEsse
 		if *key == self.empty {
 			return Some([0u8].to_vec())
 		}
-		match self.storage.get(&key, prefix) {
+		match self.storage.get(key, prefix) {
 			Ok(x) => x,
 			Err(e) => {
 				warn!(target: "trie", "Failed to read from DB: {}", e);

@@ -48,7 +48,7 @@ fn create_referendum<T: Config>() -> (T::AccountId, ReferendumIndex) {
 		RawOrigin::Signed(caller.clone()).into(),
 		RawOrigin::Root.into(),
 		T::Hashing::hash_of(&0),
-		AtOrAfter::After(0u32.into())
+		DispatchTime::After(0u32.into())
 	));
 	let index = ReferendumCount::<T>::get() - 1;
 	(caller, index)
@@ -57,10 +57,7 @@ fn create_referendum<T: Config>() -> (T::AccountId, ReferendumIndex) {
 fn place_deposit<T: Config>(index: ReferendumIndex) {
 	let caller = funded_account::<T>("caller", 0);
 	whitelist_account!(caller);
-	assert_ok!(Referenda::<T>::place_decision_deposit(
-		RawOrigin::Signed(caller.clone()).into(),
-		index,
-	));
+	assert_ok!(Referenda::<T>::place_decision_deposit(RawOrigin::Signed(caller).into(), index));
 }
 
 fn nudge<T: Config>(index: ReferendumIndex) {
@@ -182,7 +179,7 @@ benchmarks! {
 		RawOrigin::Signed(caller),
 		RawOrigin::Root.into(),
 		T::Hashing::hash_of(&0),
-		AtOrAfter::After(0u32.into())
+		DispatchTime::After(0u32.into())
 	) verify {
 		let index = ReferendumCount::<T>::get().checked_sub(1).unwrap();
 		assert_matches!(ReferendumInfoFor::<T>::get(index), Some(ReferendumInfo::Ongoing(_)));
@@ -265,7 +262,7 @@ benchmarks! {
 		let track = Referenda::<T>::ensure_ongoing(index).unwrap().track;
 		assert_ok!(Referenda::<T>::cancel(T::CancelOrigin::successful_origin(), index));
 		assert_eq!(DecidingCount::<T>::get(&track), 1);
-	}: one_fewer_deciding(RawOrigin::Root, track.clone())
+	}: one_fewer_deciding(RawOrigin::Root, track)
 	verify {
 		assert_eq!(DecidingCount::<T>::get(&track), 0);
 	}
@@ -278,7 +275,7 @@ benchmarks! {
 		assert_ok!(Referenda::<T>::cancel(T::CancelOrigin::successful_origin(), queued[0]));
 		assert_eq!(TrackQueue::<T>::get(&track).len() as u32, T::MaxQueued::get());
 		let deciding_count = DecidingCount::<T>::get(&track);
-	}: one_fewer_deciding(RawOrigin::Root, track.clone())
+	}: one_fewer_deciding(RawOrigin::Root, track)
 	verify {
 		assert_eq!(DecidingCount::<T>::get(&track), deciding_count);
 		assert_eq!(TrackQueue::<T>::get(&track).len() as u32, T::MaxQueued::get() - 1);
@@ -297,7 +294,7 @@ benchmarks! {
 		assert_ok!(Referenda::<T>::cancel(T::CancelOrigin::successful_origin(), queued[0]));
 		assert_eq!(TrackQueue::<T>::get(&track).len() as u32, T::MaxQueued::get());
 		let deciding_count = DecidingCount::<T>::get(&track);
-	}: one_fewer_deciding(RawOrigin::Root, track.clone())
+	}: one_fewer_deciding(RawOrigin::Root, track)
 	verify {
 		assert_eq!(DecidingCount::<T>::get(&track), deciding_count);
 		assert_eq!(TrackQueue::<T>::get(&track).len() as u32, T::MaxQueued::get() - 1);

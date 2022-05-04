@@ -67,6 +67,12 @@ use sp_runtime_interface::{
 use codec::{Decode, Encode};
 
 #[cfg(feature = "std")]
+use secp256k1::{
+	ecdsa::{RecoverableSignature, RecoveryId},
+	Message, SECP256K1,
+};
+
+#[cfg(feature = "std")]
 use sp_externalities::{Externalities, ExternalitiesExt};
 
 #[cfg(feature = "std")]
@@ -152,9 +158,7 @@ pub trait Storage {
 	/// The limit can be used to partially delete a prefix storage in case it is too large
 	/// to delete in one go (block).
 	///
-	/// It returns a boolean false iff some keys are remaining in
-	/// the prefix after the functions returns. Also returns a `u32` with
-	/// the number of keys removed from the process.
+	/// Returns [`KillStorageResult`] to inform about the result.
 	///
 	/// # Note
 	///
@@ -165,8 +169,10 @@ pub trait Storage {
 	///
 	/// Calling this function multiple times per block for the same `prefix` does
 	/// not make much sense because it is not cumulative when called inside the same block.
-	/// Use this function to distribute the deletion of a single child trie across multiple
-	/// blocks.
+	/// The deletion would always start from `prefix` resulting in the same keys being deleted
+	/// every time this function is called with the exact same arguments per block. This happens
+	/// because the keys in the overlay are not taken into account when deleting keys in the
+	/// backend.
 	#[version(2)]
 	fn clear_prefix(&mut self, prefix: &[u8], limit: Option<u32>) -> KillStorageResult {
 		let (all_removed, num_removed) = Externalities::clear_prefix(*self, prefix, limit);
@@ -214,7 +220,7 @@ pub trait Storage {
 
 	/// Get the next key in storage after the given one in lexicographic order.
 	fn next_key(&mut self, key: &[u8]) -> Option<Vec<u8>> {
-		self.next_storage_key(&key)
+		self.next_storage_key(key)
 	}
 
 	/// Start a new nested transaction.
@@ -623,7 +629,7 @@ pub trait Crypto {
 	///
 	/// Returns the public key.
 	fn ed25519_generate(&mut self, id: KeyTypeId, seed: Option<Vec<u8>>) -> ed25519::Public {
-		let seed = seed.as_ref().map(|s| std::str::from_utf8(&s).expect("Seed is valid utf8!"));
+		let seed = seed.as_ref().map(|s| std::str::from_utf8(s).expect("Seed is valid utf8!"));
 		let keystore = &***self
 			.extension::<KeystoreExt>()
 			.expect("No `keystore` associated for the current context!");
@@ -647,7 +653,7 @@ pub trait Crypto {
 		SyncCryptoStore::sign_with(keystore, id, &pub_key.into(), msg)
 			.ok()
 			.flatten()
-			.map(|sig| ed25519::Signature::from_slice(sig.as_slice()))
+			.and_then(|sig| ed25519::Signature::from_slice(&sig))
 	}
 
 	/// Verify `ed25519` signature.
@@ -672,7 +678,7 @@ pub trait Crypto {
 		pub_key: &ed25519::Public,
 	) -> bool {
 		self.extension::<VerificationExt>()
-			.map(|extension| extension.push_ed25519(sig.clone(), pub_key.clone(), msg.to_vec()))
+			.map(|extension| extension.push_ed25519(sig.clone(), *pub_key, msg.to_vec()))
 			.unwrap_or_else(|| ed25519_verify(sig, msg, pub_key))
 	}
 
@@ -699,7 +705,7 @@ pub trait Crypto {
 		pub_key: &sr25519::Public,
 	) -> bool {
 		self.extension::<VerificationExt>()
-			.map(|extension| extension.push_sr25519(sig.clone(), pub_key.clone(), msg.to_vec()))
+			.map(|extension| extension.push_sr25519(sig.clone(), *pub_key, msg.to_vec()))
 			.unwrap_or_else(|| sr25519_verify(sig, msg, pub_key))
 	}
 
@@ -747,7 +753,7 @@ pub trait Crypto {
 	///
 	/// Returns the public key.
 	fn sr25519_generate(&mut self, id: KeyTypeId, seed: Option<Vec<u8>>) -> sr25519::Public {
-		let seed = seed.as_ref().map(|s| std::str::from_utf8(&s).expect("Seed is valid utf8!"));
+		let seed = seed.as_ref().map(|s| std::str::from_utf8(s).expect("Seed is valid utf8!"));
 		let keystore = &***self
 			.extension::<KeystoreExt>()
 			.expect("No `keystore` associated for the current context!");
@@ -771,7 +777,7 @@ pub trait Crypto {
 		SyncCryptoStore::sign_with(keystore, id, &pub_key.into(), msg)
 			.ok()
 			.flatten()
-			.map(|sig| sr25519::Signature::from_slice(sig.as_slice()))
+			.and_then(|sig| sr25519::Signature::from_slice(&sig))
 	}
 
 	/// Verify an `sr25519` signature.
@@ -797,7 +803,7 @@ pub trait Crypto {
 	///
 	/// Returns the public key.
 	fn ecdsa_generate(&mut self, id: KeyTypeId, seed: Option<Vec<u8>>) -> ecdsa::Public {
-		let seed = seed.as_ref().map(|s| std::str::from_utf8(&s).expect("Seed is valid utf8!"));
+		let seed = seed.as_ref().map(|s| std::str::from_utf8(s).expect("Seed is valid utf8!"));
 		let keystore = &***self
 			.extension::<KeystoreExt>()
 			.expect("No `keystore` associated for the current context!");
@@ -820,7 +826,7 @@ pub trait Crypto {
 		SyncCryptoStore::sign_with(keystore, id, &pub_key.into(), msg)
 			.ok()
 			.flatten()
-			.map(|sig| ecdsa::Signature::from_slice(sig.as_slice()))
+			.and_then(|sig| ecdsa::Signature::from_slice(&sig))
 	}
 
 	/// Sign the given a pre-hashed `msg` with the `ecdsa` key that corresponds to the given public
@@ -842,7 +848,9 @@ pub trait Crypto {
 	/// Verify `ecdsa` signature.
 	///
 	/// Returns `true` when the verification was successful.
+	/// This version is able to handle, non-standard, overflowing signatures.
 	fn ecdsa_verify(sig: &ecdsa::Signature, msg: &[u8], pub_key: &ecdsa::Public) -> bool {
+		#[allow(deprecated)]
 		ecdsa::Pair::verify_deprecated(sig, msg, pub_key)
 	}
 
@@ -880,7 +888,7 @@ pub trait Crypto {
 		pub_key: &ecdsa::Public,
 	) -> bool {
 		self.extension::<VerificationExt>()
-			.map(|extension| extension.push_ecdsa(sig.clone(), pub_key.clone(), msg.to_vec()))
+			.map(|extension| extension.push_ecdsa(sig.clone(), *pub_key, msg.to_vec()))
 			.unwrap_or_else(|| ecdsa_verify(sig, msg, pub_key))
 	}
 
@@ -891,18 +899,20 @@ pub trait Crypto {
 	///
 	/// Returns `Err` if the signature is bad, otherwise the 64-byte pubkey
 	/// (doesn't include the 0x04 prefix).
+	/// This version is able to handle, non-standard, overflowing signatures.
 	fn secp256k1_ecdsa_recover(
 		sig: &[u8; 65],
 		msg: &[u8; 32],
 	) -> Result<[u8; 64], EcdsaVerifyError> {
-		let rs = libsecp256k1::Signature::parse_overflowing_slice(&sig[0..64])
-			.map_err(|_| EcdsaVerifyError::BadRS)?;
-		let v = libsecp256k1::RecoveryId::parse(
-			if sig[64] > 26 { sig[64] - 27 } else { sig[64] } as u8
+		let rid = libsecp256k1::RecoveryId::parse(
+			if sig[64] > 26 { sig[64] - 27 } else { sig[64] } as u8,
 		)
 		.map_err(|_| EcdsaVerifyError::BadV)?;
-		let pubkey = libsecp256k1::recover(&libsecp256k1::Message::parse(msg), &rs, &v)
-			.map_err(|_| EcdsaVerifyError::BadSignature)?;
+		let sig = libsecp256k1::Signature::parse_overflowing_slice(&sig[..64])
+			.map_err(|_| EcdsaVerifyError::BadRS)?;
+		let msg = libsecp256k1::Message::parse(msg);
+		let pubkey =
+			libsecp256k1::recover(&msg, &sig, &rid).map_err(|_| EcdsaVerifyError::BadSignature)?;
 		let mut res = [0u8; 64];
 		res.copy_from_slice(&pubkey.serialize()[1..65]);
 		Ok(res)
@@ -920,16 +930,16 @@ pub trait Crypto {
 		sig: &[u8; 65],
 		msg: &[u8; 32],
 	) -> Result<[u8; 64], EcdsaVerifyError> {
-		let rs = libsecp256k1::Signature::parse_standard_slice(&sig[0..64])
+		let rid = RecoveryId::from_i32(if sig[64] > 26 { sig[64] - 27 } else { sig[64] } as i32)
+			.map_err(|_| EcdsaVerifyError::BadV)?;
+		let sig = RecoverableSignature::from_compact(&sig[..64], rid)
 			.map_err(|_| EcdsaVerifyError::BadRS)?;
-		let v = libsecp256k1::RecoveryId::parse(
-			if sig[64] > 26 { sig[64] - 27 } else { sig[64] } as u8
-		)
-		.map_err(|_| EcdsaVerifyError::BadV)?;
-		let pubkey = libsecp256k1::recover(&libsecp256k1::Message::parse(msg), &rs, &v)
+		let msg = Message::from_slice(msg).expect("Message is 32 bytes; qed");
+		let pubkey = SECP256K1
+			.recover_ecdsa(&msg, &sig)
 			.map_err(|_| EcdsaVerifyError::BadSignature)?;
 		let mut res = [0u8; 64];
-		res.copy_from_slice(&pubkey.serialize()[1..65]);
+		res.copy_from_slice(&pubkey.serialize_uncompressed()[1..]);
 		Ok(res)
 	}
 
@@ -943,14 +953,15 @@ pub trait Crypto {
 		sig: &[u8; 65],
 		msg: &[u8; 32],
 	) -> Result<[u8; 33], EcdsaVerifyError> {
-		let rs = libsecp256k1::Signature::parse_overflowing_slice(&sig[0..64])
-			.map_err(|_| EcdsaVerifyError::BadRS)?;
-		let v = libsecp256k1::RecoveryId::parse(
-			if sig[64] > 26 { sig[64] - 27 } else { sig[64] } as u8
+		let rid = libsecp256k1::RecoveryId::parse(
+			if sig[64] > 26 { sig[64] - 27 } else { sig[64] } as u8,
 		)
 		.map_err(|_| EcdsaVerifyError::BadV)?;
-		let pubkey = libsecp256k1::recover(&libsecp256k1::Message::parse(msg), &rs, &v)
-			.map_err(|_| EcdsaVerifyError::BadSignature)?;
+		let sig = libsecp256k1::Signature::parse_overflowing_slice(&sig[0..64])
+			.map_err(|_| EcdsaVerifyError::BadRS)?;
+		let msg = libsecp256k1::Message::parse(msg);
+		let pubkey =
+			libsecp256k1::recover(&msg, &sig, &rid).map_err(|_| EcdsaVerifyError::BadSignature)?;
 		Ok(pubkey.serialize_compressed())
 	}
 
@@ -965,15 +976,15 @@ pub trait Crypto {
 		sig: &[u8; 65],
 		msg: &[u8; 32],
 	) -> Result<[u8; 33], EcdsaVerifyError> {
-		let rs = libsecp256k1::Signature::parse_standard_slice(&sig[0..64])
+		let rid = RecoveryId::from_i32(if sig[64] > 26 { sig[64] - 27 } else { sig[64] } as i32)
+			.map_err(|_| EcdsaVerifyError::BadV)?;
+		let sig = RecoverableSignature::from_compact(&sig[..64], rid)
 			.map_err(|_| EcdsaVerifyError::BadRS)?;
-		let v = libsecp256k1::RecoveryId::parse(
-			if sig[64] > 26 { sig[64] - 27 } else { sig[64] } as u8
-		)
-		.map_err(|_| EcdsaVerifyError::BadV)?;
-		let pubkey = libsecp256k1::recover(&libsecp256k1::Message::parse(msg), &rs, &v)
+		let msg = Message::from_slice(msg).expect("Message is 32 bytes; qed");
+		let pubkey = SECP256K1
+			.recover_ecdsa(&msg, &sig)
 			.map_err(|_| EcdsaVerifyError::BadSignature)?;
-		Ok(pubkey.serialize_compressed())
+		Ok(pubkey.serialize())
 	}
 }
 
@@ -1493,14 +1504,7 @@ pub trait Sandbox {
 		state_ptr: Pointer<u8>,
 	) -> u32 {
 		self.sandbox()
-			.invoke(
-				instance_idx,
-				&function,
-				&args,
-				return_val_ptr,
-				return_val_len,
-				state_ptr.into(),
-			)
+			.invoke(instance_idx, function, args, return_val_ptr, return_val_len, state_ptr.into())
 			.expect("Failed to invoke function with sandbox")
 	}
 

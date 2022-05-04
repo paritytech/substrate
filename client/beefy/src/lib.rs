@@ -18,18 +18,19 @@
 
 use std::sync::Arc;
 
-use log::debug;
 use prometheus::Registry;
 
 use sc_client_api::{Backend, BlockchainEvents, Finalizer};
-use sc_network_gossip::{GossipEngine, Network as GossipNetwork};
+use sc_network_gossip::Network as GossipNetwork;
 
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
+use sp_consensus::SyncOracle;
 use sp_keystore::SyncCryptoStorePtr;
+use sp_mmr_primitives::MmrApi;
 use sp_runtime::traits::Block;
 
-use beefy_primitives::BeefyApi;
+use beefy_primitives::{BeefyApi, MmrRootHash};
 
 use crate::notification::{BeefyBestBlockSender, BeefySignedCommitmentSender};
 
@@ -41,25 +42,29 @@ mod round;
 mod worker;
 
 pub mod notification;
+
+#[cfg(test)]
+mod tests;
+
 pub use beefy_protocol_name::standard_name as protocol_standard_name;
 
 pub(crate) mod beefy_protocol_name {
 	use sc_chain_spec::ChainSpec;
 
-	const NAME: &'static str = "/beefy/1";
+	const NAME: &str = "/beefy/1";
 	/// Old names for the notifications protocol, used for backward compatibility.
-	pub(crate) const LEGACY_NAMES: [&'static str; 1] = ["/paritytech/beefy/1"];
+	pub(crate) const LEGACY_NAMES: [&str; 1] = ["/paritytech/beefy/1"];
 
 	/// Name of the notifications protocol used by BEEFY.
 	///
 	/// Must be registered towards the networking in order for BEEFY to properly function.
-	pub fn standard_name<Hash: std::fmt::Display>(
+	pub fn standard_name<Hash: AsRef<[u8]>>(
 		genesis_hash: &Hash,
 		chain_spec: &Box<dyn ChainSpec>,
 	) -> std::borrow::Cow<'static, str> {
 		let chain_prefix = match chain_spec.fork_id() {
-			Some(fork_id) => format!("/{}/{}", genesis_hash, fork_id),
-			None => format!("/{}", genesis_hash),
+			Some(fork_id) => format!("/{}/{}", hex::encode(genesis_hash), fork_id),
+			None => format!("/{}", hex::encode(genesis_hash)),
 		};
 		format!("{}{}", chain_prefix, NAME).into()
 	}
@@ -83,7 +88,7 @@ pub fn beefy_peers_set_config(
 /// of today, Rust does not allow a type alias to be used as a trait bound. Tracking
 /// issue is <https://github.com/rust-lang/rust/issues/41517>.
 pub trait Client<B, BE>:
-	BlockchainEvents<B> + HeaderBackend<B> + Finalizer<B, BE> + ProvideRuntimeApi<B> + Send + Sync
+	BlockchainEvents<B> + HeaderBackend<B> + Finalizer<B, BE> + Send + Sync
 where
 	B: Block,
 	BE: Backend<B>,
@@ -106,18 +111,21 @@ where
 }
 
 /// BEEFY gadget initialization parameters.
-pub struct BeefyParams<B, BE, C, N>
+pub struct BeefyParams<B, BE, C, N, R>
 where
 	B: Block,
 	BE: Backend<B>,
 	C: Client<B, BE>,
-	C::Api: BeefyApi<B>,
-	N: GossipNetwork<B> + Clone + Send + 'static,
+	R: ProvideRuntimeApi<B>,
+	R::Api: BeefyApi<B> + MmrApi<B, MmrRootHash>,
+	N: GossipNetwork<B> + Clone + SyncOracle + Send + Sync + 'static,
 {
 	/// BEEFY client
 	pub client: Arc<C>,
 	/// Client Backend
 	pub backend: Arc<BE>,
+	/// Runtime Api Provider
+	pub runtime: Arc<R>,
 	/// Local key store
 	pub key_store: Option<SyncCryptoStorePtr>,
 	/// Gossip network
@@ -137,17 +145,19 @@ where
 /// Start the BEEFY gadget.
 ///
 /// This is a thin shim around running and awaiting a BEEFY worker.
-pub async fn start_beefy_gadget<B, BE, C, N>(beefy_params: BeefyParams<B, BE, C, N>)
+pub async fn start_beefy_gadget<B, BE, C, N, R>(beefy_params: BeefyParams<B, BE, C, N, R>)
 where
 	B: Block,
 	BE: Backend<B>,
 	C: Client<B, BE>,
-	C::Api: BeefyApi<B>,
-	N: GossipNetwork<B> + Clone + Send + 'static,
+	R: ProvideRuntimeApi<B>,
+	R::Api: BeefyApi<B> + MmrApi<B, MmrRootHash>,
+	N: GossipNetwork<B> + Clone + SyncOracle + Send + Sync + 'static,
 {
 	let BeefyParams {
 		client,
 		backend,
+		runtime,
 		key_store,
 		network,
 		signed_commitment_sender,
@@ -157,18 +167,24 @@ where
 		protocol_name,
 	} = beefy_params;
 
+	let sync_oracle = network.clone();
 	let gossip_validator = Arc::new(gossip::GossipValidator::new());
-	let gossip_engine = GossipEngine::new(network, protocol_name, gossip_validator.clone(), None);
+	let gossip_engine = sc_network_gossip::GossipEngine::new(
+		network,
+		protocol_name,
+		gossip_validator.clone(),
+		None,
+	);
 
 	let metrics =
 		prometheus_registry.as_ref().map(metrics::Metrics::register).and_then(
 			|result| match result {
 				Ok(metrics) => {
-					debug!(target: "beefy", "🥩 Registered metrics");
+					log::debug!(target: "beefy", "🥩 Registered metrics");
 					Some(metrics)
 				},
 				Err(err) => {
-					debug!(target: "beefy", "🥩 Failed to register metrics: {:?}", err);
+					log::debug!(target: "beefy", "🥩 Failed to register metrics: {:?}", err);
 					None
 				},
 			},
@@ -177,6 +193,7 @@ where
 	let worker_params = worker::WorkerParams {
 		client,
 		backend,
+		runtime,
 		key_store: key_store.into(),
 		signed_commitment_sender,
 		beefy_best_block_sender,
@@ -184,9 +201,10 @@ where
 		gossip_validator,
 		min_block_delta,
 		metrics,
+		sync_oracle,
 	};
 
-	let worker = worker::BeefyWorker::<_, _, _>::new(worker_params);
+	let worker = worker::BeefyWorker::<_, _, _, _, _>::new(worker_params);
 
 	worker.run().await
 }

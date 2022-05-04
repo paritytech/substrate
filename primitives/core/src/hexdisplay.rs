@@ -69,13 +69,13 @@ impl AsBytesRef for &[u8] {
 
 impl AsBytesRef for [u8] {
 	fn as_bytes_ref(&self) -> &[u8] {
-		&self
+		self
 	}
 }
 
 impl AsBytesRef for sp_std::vec::Vec<u8> {
 	fn as_bytes_ref(&self) -> &[u8] {
-		&self
+		self
 	}
 }
 

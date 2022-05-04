@@ -69,7 +69,6 @@
 use std::{
 	borrow::Cow,
 	collections::{HashMap, HashSet},
-	convert::TryInto,
 	future::Future,
 	pin::Pin,
 	sync::Arc,
@@ -92,8 +91,8 @@ use retain_mut::RetainMut;
 use schnorrkel::SignatureError;
 
 use sc_client_api::{
-	backend::AuxStore, AuxDataOperations, BlockchainEvents, FinalityNotification, PreCommitActions,
-	ProvideUncles, UsageProvider,
+	backend::AuxStore, AuxDataOperations, Backend as BackendT, BlockchainEvents,
+	FinalityNotification, PreCommitActions, ProvideUncles, UsageProvider,
 };
 use sc_consensus::{
 	block_import::{
@@ -113,7 +112,9 @@ use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_TRACE}
 use sp_api::{ApiExt, ProvideRuntimeApi};
 use sp_application_crypto::AppKey;
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
-use sp_blockchain::{Error as ClientError, HeaderBackend, HeaderMetadata, Result as ClientResult};
+use sp_blockchain::{
+	Backend as _, Error as ClientError, HeaderBackend, HeaderMetadata, Result as ClientResult,
+};
 use sp_consensus::{
 	BlockOrigin, CacheKeyId, CanAuthorWith, Environment, Error as ConsensusError, Proposer,
 	SelectChain,
@@ -318,7 +319,7 @@ pub enum Error<B: BlockT> {
 	ForkTree(Box<fork_tree::Error<sp_blockchain::Error>>),
 }
 
-impl<B: BlockT> std::convert::From<Error<B>> for String {
+impl<B: BlockT> From<Error<B>> for String {
 	fn from(error: Error<B>) -> String {
 		error.to_string()
 	}
@@ -518,7 +519,7 @@ where
 	let slot_worker = sc_consensus_slots::start_slot_worker(
 		babe_link.config.slot_duration(),
 		select_chain,
-		worker,
+		sc_consensus_slots::SimpleSlotWorkerToSlotWorker(worker),
 		sync_oracle,
 		create_inherent_data_providers,
 		can_author_with,
@@ -527,7 +528,7 @@ where
 	let (worker_tx, worker_rx) = channel(HANDLE_BUFFER_SIZE);
 
 	let answer_requests =
-		answer_requests(worker_rx, babe_link.config, client, babe_link.epoch_changes.clone());
+		answer_requests(worker_rx, babe_link.config, client, babe_link.epoch_changes);
 
 	let inner = future::select(Box::pin(slot_worker), Box::pin(answer_requests));
 	Ok(BabeWorker {
@@ -540,49 +541,66 @@ where
 // Remove obsolete block's weight data by leveraging finality notifications.
 // This includes data for all finalized blocks (excluding the most recent one)
 // and all stale branches.
-fn aux_storage_cleanup<C: HeaderMetadata<Block>, Block: BlockT>(
+fn aux_storage_cleanup<C: HeaderMetadata<Block> + HeaderBackend<Block>, Block: BlockT>(
 	client: &C,
 	notification: &FinalityNotification<Block>,
 ) -> AuxDataOperations {
 	let mut aux_keys = HashSet::new();
 
-	// Cleans data for finalized block's ancestors down to, and including, the previously
-	// finalized one.
-
-	let first_new_finalized = notification.tree_route.get(0).unwrap_or(&notification.hash);
-	match client.header_metadata(*first_new_finalized) {
+	let first = notification.tree_route.first().unwrap_or(&notification.hash);
+	match client.header_metadata(*first) {
 		Ok(meta) => {
 			aux_keys.insert(aux_schema::block_weight_key(meta.parent));
 		},
-		Err(err) => {
-			warn!(target: "babe", "header lookup fail while cleaning data for block {}: {}", first_new_finalized.to_string(), err.to_string());
-		},
+		Err(err) => warn!(
+			target: "babe",
+			"Failed to lookup metadata for block `{:?}`: {}",
+			first,
+			err,
+		),
 	}
 
-	aux_keys.extend(notification.tree_route.iter().map(aux_schema::block_weight_key));
+	// Cleans data for finalized block's ancestors
+	aux_keys.extend(
+		notification
+			.tree_route
+			.iter()
+			// Ensure we don't prune latest finalized block.
+			// This should not happen, but better be safe than sorry!
+			.filter(|h| **h != notification.hash)
+			.map(aux_schema::block_weight_key),
+	);
 
 	// Cleans data for stale branches.
 
-	// A safenet in case of malformed notification.
-	let height_limit = notification.header.number().saturating_sub(
-		notification.tree_route.len().saturated_into::<NumberFor<Block>>() + One::one(),
-	);
 	for head in notification.stale_heads.iter() {
 		let mut hash = *head;
-		// Insert stale blocks hashes until canonical chain is not reached.
-		// Soon or late we should hit an element already present within the `aux_keys` set.
+		// Insert stale blocks hashes until canonical chain is reached.
+		// If we reach a block that is already part of the `aux_keys` we can stop the processing the
+		// head.
 		while aux_keys.insert(aux_schema::block_weight_key(hash)) {
 			match client.header_metadata(hash) {
 				Ok(meta) => {
-					// This should never happen and must be considered a bug.
-					if meta.number <= height_limit {
-						warn!(target: "babe", "unexpected canonical chain state or malformed finality notification");
+					hash = meta.parent;
+
+					// If the parent is part of the canonical chain or there doesn't exist a block
+					// hash for the parent number (bug?!), we can abort adding blocks.
+					if client
+						.hash(meta.number.saturating_sub(1u32.into()))
+						.ok()
+						.flatten()
+						.map_or(true, |h| h == hash)
+					{
 						break
 					}
-					hash = meta.parent;
 				},
 				Err(err) => {
-					warn!(target: "babe", "header lookup fail while cleaning data for block {}: {}", head.to_string(), err.to_string());
+					warn!(
+						target: "babe",
+						"Header lookup fail while cleaning data for block {:?}: {}",
+						hash,
+						err,
+					);
 					break
 				},
 			}
@@ -620,13 +638,13 @@ async fn answer_requests<B: BlockT, C>(
 							slot_number,
 						)
 						.map_err(|e| Error::<B>::ForkTree(Box::new(e)))?
-						.ok_or_else(|| Error::<B>::FetchEpoch(parent_hash))?;
+						.ok_or(Error::<B>::FetchEpoch(parent_hash))?;
 
 					let viable_epoch = epoch_changes
 						.viable_epoch(&epoch_descriptor, |slot| {
 							Epoch::genesis(&config.genesis_config, slot)
 						})
-						.ok_or_else(|| Error::<B>::FetchEpoch(parent_hash))?;
+						.ok_or(Error::<B>::FetchEpoch(parent_hash))?;
 
 					Ok(sp_consensus_babe::Epoch {
 						epoch_index: viable_epoch.as_ref().epoch_index,
@@ -770,7 +788,7 @@ where
 			.epoch_descriptor_for_child_of(
 				descendent_query(&*self.client),
 				&parent.hash(),
-				parent.number().clone(),
+				*parent.number(),
 				slot,
 			)
 			.map_err(|e| ConsensusError::ChainLookup(e.to_string()))?
@@ -780,7 +798,7 @@ where
 	fn authorities_len(&self, epoch_descriptor: &Self::EpochData) -> Option<usize> {
 		self.epoch_changes
 			.shared_data()
-			.viable_epoch(&epoch_descriptor, |slot| {
+			.viable_epoch(epoch_descriptor, |slot| {
 				Epoch::genesis(&self.config.genesis_config, slot)
 			})
 			.map(|epoch| epoch.as_ref().authorities.len())
@@ -797,7 +815,7 @@ where
 			slot,
 			self.epoch_changes
 				.shared_data()
-				.viable_epoch(&epoch_descriptor, |slot| {
+				.viable_epoch(epoch_descriptor, |slot| {
 					Epoch::genesis(&self.config.genesis_config, slot)
 				})?
 				.as_ref(),
@@ -868,7 +886,7 @@ where
 			.clone()
 			.try_into()
 			.map_err(|_| sp_consensus::Error::InvalidSignature(signature, public))?;
-		let digest_item = <DigestItem as CompatibleDigestItem>::babe_seal(signature.into());
+		let digest_item = <DigestItem as CompatibleDigestItem>::babe_seal(signature);
 
 		let mut import_block = BlockImportParams::new(BlockOrigin::Own, header);
 		import_block.post_digests.push(digest_item);
@@ -1227,12 +1245,12 @@ where
 					pre_digest.slot(),
 				)
 				.map_err(|e| Error::<Block>::ForkTree(Box::new(e)))?
-				.ok_or_else(|| Error::<Block>::FetchEpoch(parent_hash))?;
+				.ok_or(Error::<Block>::FetchEpoch(parent_hash))?;
 			let viable_epoch = epoch_changes
 				.viable_epoch(&epoch_descriptor, |slot| {
 					Epoch::genesis(&self.config.genesis_config, slot)
 				})
-				.ok_or_else(|| Error::<Block>::FetchEpoch(parent_hash))?;
+				.ok_or(Error::<Block>::FetchEpoch(parent_hash))?;
 
 			// We add one to the current slot to allow for some small drift.
 			// FIXME #1019 in the future, alter this queue to allow deferring of headers
@@ -1829,4 +1847,77 @@ where
 	};
 
 	Ok(BasicQueue::new(verifier, Box::new(block_import), justification_import, spawner, registry))
+}
+
+/// Reverts protocol aux data to at most the last finalized block.
+/// In particular, epoch-changes and block weights announced after the revert
+/// point are removed.
+pub fn revert<Block, Client, Backend>(
+	client: Arc<Client>,
+	backend: Arc<Backend>,
+	blocks: NumberFor<Block>,
+) -> ClientResult<()>
+where
+	Block: BlockT,
+	Client: AuxStore
+		+ HeaderMetadata<Block, Error = sp_blockchain::Error>
+		+ HeaderBackend<Block>
+		+ ProvideRuntimeApi<Block>
+		+ UsageProvider<Block>,
+	Client::Api: BabeApi<Block>,
+	Backend: BackendT<Block>,
+{
+	let best_number = client.info().best_number;
+	let finalized = client.info().finalized_number;
+	let revertible = blocks.min(best_number - finalized);
+
+	let number = best_number - revertible;
+	let hash = client
+		.block_hash_from_id(&BlockId::Number(number))?
+		.ok_or(ClientError::Backend(format!(
+			"Unexpected hash lookup failure for block number: {}",
+			number
+		)))?;
+
+	// Revert epoch changes tree.
+
+	let config = Config::get(&*client)?;
+	let epoch_changes =
+		aux_schema::load_epoch_changes::<Block, Client>(&*client, config.genesis_config())?;
+	let mut epoch_changes = epoch_changes.shared_data();
+
+	if number == Zero::zero() {
+		// Special case, no epoch changes data were present on genesis.
+		*epoch_changes = EpochChangesFor::<Block, Epoch>::default();
+	} else {
+		epoch_changes.revert(descendent_query(&*client), hash, number);
+	}
+
+	// Remove block weights added after the revert point.
+
+	let mut weight_keys = HashSet::with_capacity(revertible.saturated_into());
+	let leaves = backend.blockchain().leaves()?.into_iter().filter(|&leaf| {
+		sp_blockchain::tree_route(&*client, hash, leaf)
+			.map(|route| route.retracted().is_empty())
+			.unwrap_or_default()
+	});
+	for leaf in leaves {
+		let mut hash = leaf;
+		// Insert parent after parent until we don't hit an already processed
+		// branch or we reach a direct child of the rollback point.
+		while weight_keys.insert(aux_schema::block_weight_key(hash)) {
+			let meta = client.header_metadata(hash)?;
+			if meta.number <= number + One::one() {
+				// We've reached a child of the revert point, stop here.
+				break
+			}
+			hash = client.header_metadata(hash)?.parent;
+		}
+	}
+	let weight_keys: Vec<_> = weight_keys.iter().map(|val| val.as_slice()).collect();
+
+	// Write epoch changes and remove weights in one shot.
+	aux_schema::write_epoch_changes::<Block, _, _>(&epoch_changes, |values| {
+		client.insert_aux(values, weight_keys.iter())
+	})
 }

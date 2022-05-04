@@ -82,11 +82,11 @@ pub fn build_transport(
 				rare panic here is basically zero");
 
 			// Legacy noise configurations for backward compatibility.
-			let mut noise_legacy = noise::LegacyConfig::default();
-			noise_legacy.recv_legacy_handshake = true;
+			let noise_legacy =
+				noise::LegacyConfig { recv_legacy_handshake: true, ..Default::default() };
 
 			let mut xx_config = noise::NoiseConfig::xx(noise_keypair);
-			xx_config.set_legacy_config(noise_legacy.clone());
+			xx_config.set_legacy_config(noise_legacy);
 			xx_config.into_authenticated()
 		};
 
