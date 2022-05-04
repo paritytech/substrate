@@ -18,7 +18,7 @@
 
 //! Wasmer specific impls for sandbox
 
-use tracing::instrument;
+// use tracing::instrument;
 
 use crate::{
 	error::{Error, Result},
@@ -78,10 +78,12 @@ pub fn invoke(
 
 	let wasmer_result = SandboxContextStore::using(sandbox_context, || {
 		function.call(&args).map_err(|error| Error::Sandbox(error.to_string()))
-	})?;
+	});
 
 	let invoked = std::time::Instant::now();
 	log::warn!("*** invoke '{}' {:?}", export_name, invoked.duration_since(start));
+
+	let wasmer_result = wasmer_result?;
 
 	match wasmer_result.as_ref() {
 		[] => Ok(None),
