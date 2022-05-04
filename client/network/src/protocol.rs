@@ -356,13 +356,15 @@ where
 			let mut default_sets_reserved = HashSet::new();
 			for reserved in network_config.default_peers_set.reserved_nodes.iter() {
 				default_sets_reserved.insert(reserved.peer_id);
-				known_addresses.push((reserved.peer_id, reserved.multiaddr.clone()));
+
+				if !reserved.multiaddr.is_empty() {
+					known_addresses.push((reserved.peer_id, reserved.multiaddr.clone()));
+				}
 			}
 
 			let mut bootnodes = Vec::with_capacity(network_config.boot_nodes.len());
 			for bootnode in network_config.boot_nodes.iter() {
 				bootnodes.push(bootnode.peer_id);
-				known_addresses.push((bootnode.peer_id, bootnode.multiaddr.clone()));
 			}
 
 			// Set number 0 is used for block announces.
