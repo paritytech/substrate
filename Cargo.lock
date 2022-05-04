@@ -931,7 +931,7 @@ name = "chain-spec-builder"
 version = "2.0.0"
 dependencies = [
  "ansi_term",
- "clap 3.0.7",
+ "clap 3.1.6",
  "node-cli",
  "rand 0.8.4",
  "sc-chain-spec",
@@ -1006,9 +1006,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "3.0.7"
+version = "3.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12e8611f9ae4e068fa3e56931fded356ff745e70987ff76924a6e0ab1c8ef2e3"
+checksum = "d8c93436c21e4698bacadf42917db28b23017027a4deccb35dbe47a7e7840123"
 dependencies = [
  "atty",
  "bitflags",
@@ -1018,7 +1018,7 @@ dependencies = [
  "os_str_bytes",
  "strsim",
  "termcolor",
- "textwrap 0.14.2",
+ "textwrap 0.15.0",
 ]
 
 [[package]]
@@ -1027,14 +1027,14 @@ version = "3.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a394f7ec0715b42a4e52b294984c27c9a61f77c8d82f7774c5198350be143f19"
 dependencies = [
- "clap 3.0.7",
+ "clap 3.1.6",
 ]
 
 [[package]]
 name = "clap_derive"
-version = "3.0.5"
+version = "3.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "41a0645a430ec9136d2d701e54a95d557de12649a9dd7109ced3187e648ac824"
+checksum = "da95d038ede1a964ce99f49cbe27a7fb538d1da595e4b4f70b8c8f338d17bf16"
 dependencies = [
  "heck 0.4.0",
  "proc-macro-error",
@@ -2126,7 +2126,7 @@ version = "4.0.0-dev"
 dependencies = [
  "Inflector",
  "chrono",
- "clap 3.0.7",
+ "clap 3.1.6",
  "frame-benchmarking",
  "frame-support",
  "handlebars",
@@ -4751,7 +4751,7 @@ dependencies = [
 name = "node-bench"
 version = "0.9.0-dev"
 dependencies = [
- "clap 3.0.7",
+ "clap 3.1.6",
  "derive_more",
  "fs_extra",
  "futures 0.3.19",
@@ -4790,7 +4790,7 @@ version = "3.0.0-dev"
 dependencies = [
  "assert_cmd",
  "async-std",
- "clap 3.0.7",
+ "clap 3.1.6",
  "clap_complete",
  "criterion",
  "frame-benchmarking-cli",
@@ -4904,7 +4904,7 @@ dependencies = [
 name = "node-inspect"
 version = "0.9.0-dev"
 dependencies = [
- "clap 3.0.7",
+ "clap 3.1.6",
  "parity-scale-codec",
  "sc-cli",
  "sc-client-api",
@@ -5050,7 +5050,7 @@ dependencies = [
 name = "node-runtime-generate-bags"
 version = "3.0.0"
 dependencies = [
- "clap 3.0.7",
+ "clap 3.1.6",
  "generate-bags",
  "node-runtime",
 ]
@@ -5059,7 +5059,7 @@ dependencies = [
 name = "node-template"
 version = "4.0.0-dev"
 dependencies = [
- "clap 3.0.7",
+ "clap 3.1.6",
  "frame-benchmarking",
  "frame-benchmarking-cli",
  "jsonrpc-core",
@@ -8083,7 +8083,7 @@ name = "sc-cli"
 version = "0.10.0-dev"
 dependencies = [
  "chrono",
- "clap 3.0.7",
+ "clap 3.1.6",
  "fdlimit",
  "futures 0.3.19",
  "hex",
@@ -10068,7 +10068,7 @@ dependencies = [
 name = "sp-npos-elections-fuzzer"
 version = "2.0.0-alpha.5"
 dependencies = [
- "clap 3.0.7",
+ "clap 3.1.6",
  "honggfuzz",
  "parity-scale-codec",
  "rand 0.8.4",
@@ -10525,7 +10525,7 @@ dependencies = [
 name = "subkey"
 version = "2.0.1"
 dependencies = [
- "clap 3.0.7",
+ "clap 3.1.6",
  "sc-cli",
 ]
 
@@ -10553,7 +10553,7 @@ dependencies = [
 name = "substrate-frame-cli"
 version = "4.0.0-dev"
 dependencies = [
- "clap 3.0.7",
+ "clap 3.1.6",
  "frame-support",
  "frame-system",
  "sc-cli",
@@ -10843,9 +10843,9 @@ dependencies = [
 
 [[package]]
 name = "textwrap"
-version = "0.14.2"
+version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0066c8d12af8b5acd21e00547c3797fde4e8677254a7ee429176ccebbe93dd80"
+checksum = "b1141d4d61095b28419e22cb0bbf02755f5e54e0526f97f1e3d1d160e60885fb"
 
 [[package]]
 name = "thiserror"
@@ -11367,7 +11367,7 @@ checksum = "59547bce71d9c38b83d9c0e92b6066c4253371f15005def0c30d9657f50c7642"
 name = "try-runtime-cli"
 version = "0.10.0-dev"
 dependencies = [
- "clap 3.0.7",
+ "clap 3.1.6",
  "jsonrpsee 0.4.1",
  "log 0.4.14",
  "parity-scale-codec",
