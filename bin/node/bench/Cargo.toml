@@ -10,7 +10,7 @@ license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 
 [dependencies]
 clap = { version = "3.1.6", features = ["derive"] }
-log = "0.4.8"
+log = "0.4.16"
 node-primitives = { version = "2.0.0", path = "../primitives" }
 node-testing = { version = "3.0.0-dev", path = "../testing" }
 node-runtime = { version = "3.0.0-dev", path = "../runtime" }
@@ -39,4 +39,4 @@ parity-util-mem = { version = "0.11.0", default-features = false, features = ["p
 parity-db = { version = "0.3" }
 sc-transaction-pool = { version = "4.0.0-dev", path = "../../../client/transaction-pool" }
 sc-transaction-pool-api = { version = "4.0.0-dev", path = "../../../client/transaction-pool/api" }
-futures = { version = "0.3.19", features = ["thread-pool"] }
+futures = { version = "0.3.21", features = ["thread-pool"] }

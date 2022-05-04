@@ -26,6 +26,16 @@ pub struct Cli {
 	#[allow(missing_docs)]
 	#[clap(flatten)]
 	pub run: sc_cli::RunCmd,
+
+	/// Disable automatic hardware benchmarks.
+	///
+	/// By default these benchmarks are automatically ran at startup and measure
+	/// the CPU speed, the memory bandwidth and the disk speed.
+	///
+	/// The results are then printed out in the logs, and also sent as part of
+	/// telemetry, if telemetry is enabled.
+	#[clap(long)]
+	pub no_hardware_benchmarks: bool,
 }
 
 /// Possible subcommands of the main binary.
@@ -38,27 +48,10 @@ pub enum Subcommand {
 	)]
 	Inspect(node_inspect::cli::InspectCmd),
 
-	/// The custom benchmark subcommmand benchmarking runtime pallets.
-	#[clap(name = "benchmark", about = "Benchmark runtime pallets.")]
+	/// Sub-commands concerned with benchmarking.
+	/// The pallet benchmarking moved to the `pallet` sub-command.
+	#[clap(subcommand)]
 	Benchmark(frame_benchmarking_cli::BenchmarkCmd),
-
-	/// Benchmark the execution time of historic blocks and compare it to their consumed weight.
-	#[clap(
-		name = "benchmark-block",
-		about = "Benchmark the execution time of historic blocks and compare it to their consumed weight."
-	)]
-	BenchmarkBlock(frame_benchmarking_cli::BlockCmd),
-
-	/// Sub command for benchmarking the per-block and per-extrinsic execution overhead.
-	#[clap(
-		name = "benchmark-overhead",
-		about = "Benchmark the per-block and per-extrinsic execution overhead."
-	)]
-	BenchmarkOverhead(frame_benchmarking_cli::OverheadCmd),
-
-	/// Sub command for benchmarking the storage speed.
-	#[clap(name = "benchmark-storage", about = "Benchmark storage speed.")]
-	BenchmarkStorage(frame_benchmarking_cli::StorageCmd),
 
 	/// Try some command against runtime state.
 	#[cfg(feature = "try-runtime")]
@@ -101,4 +94,7 @@ pub enum Subcommand {
 
 	/// Revert the chain to a previous state.
 	Revert(sc_cli::RevertCmd),
+
+	/// Db meta columns information.
+	ChainInfo(sc_cli::ChainInfoCmd),
 }

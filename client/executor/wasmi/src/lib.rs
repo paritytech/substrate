@@ -18,8 +18,17 @@
 
 //! This crate provides an implementation of `WasmModule` that is baked by wasmi.
 
-use codec::{Decode, Encode};
+use std::{cell::RefCell, rc::Rc, str, sync::Arc};
+
 use log::{debug, error, trace};
+use wasmi::{
+	memory_units::Pages,
+	FuncInstance, ImportsBuilder, MemoryInstance, MemoryRef, Module, ModuleInstance, ModuleRef,
+	RuntimeValue::{self, I32, I64},
+	TableRef,
+};
+
+use codec::{Decode, Encode};
 use sc_executor_common::{
 	error::{Error, MessageWithBacktrace, WasmError},
 	runtime_blob::{DataSegmentsSnapshot, RuntimeBlob},
@@ -27,17 +36,10 @@ use sc_executor_common::{
 	util::MemoryTransfer,
 	wasm_runtime::{InvokeMethod, WasmInstance, WasmModule},
 };
-use sp_core::sandbox as sandbox_primitives;
 use sp_runtime_interface::unpack_ptr_and_len;
+use sp_sandbox::env as sandbox_env;
 use sp_wasm_interface::{
 	Function, FunctionContext, MemoryId, Pointer, Result as WResult, Sandbox, WordSize,
-};
-use std::{cell::RefCell, rc::Rc, str, sync::Arc};
-use wasmi::{
-	memory_units::Pages,
-	FuncInstance, ImportsBuilder, MemoryInstance, MemoryRef, Module, ModuleInstance, ModuleRef,
-	RuntimeValue::{self, I32, I64},
-	TableRef,
 };
 
 struct FunctionExecutor {
@@ -155,15 +157,15 @@ impl Sandbox for FunctionExecutor {
 		let len = buf_len as usize;
 
 		let buffer = match sandboxed_memory.read(Pointer::new(offset as u32), len) {
-			Err(_) => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
+			Err(_) => return Ok(sandbox_env::ERR_OUT_OF_BOUNDS),
 			Ok(buffer) => buffer,
 		};
 
 		if let Err(_) = self.memory.set(buf_ptr.into(), &buffer) {
-			return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS)
+			return Ok(sandbox_env::ERR_OUT_OF_BOUNDS)
 		}
 
-		Ok(sandbox_primitives::ERR_OK)
+		Ok(sandbox_env::ERR_OK)
 	}
 
 	fn memory_set(
@@ -179,15 +181,15 @@ impl Sandbox for FunctionExecutor {
 		let len = val_len as usize;
 
 		let buffer = match self.memory.get(val_ptr.into(), len) {
-			Err(_) => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
+			Err(_) => return Ok(sandbox_env::ERR_OUT_OF_BOUNDS),
 			Ok(buffer) => buffer,
 		};
 
 		if let Err(_) = sandboxed_memory.write_from(Pointer::new(offset as u32), &buffer) {
-			return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS)
+			return Ok(sandbox_env::ERR_OUT_OF_BOUNDS)
 		}
 
-		Ok(sandbox_primitives::ERR_OK)
+		Ok(sandbox_env::ERR_OK)
 	}
 
 	fn memory_teardown(&mut self, memory_id: MemoryId) -> WResult<()> {
@@ -236,7 +238,7 @@ impl Sandbox for FunctionExecutor {
 			state,
 			&mut SandboxContext { dispatch_thunk, executor: self },
 		) {
-			Ok(None) => Ok(sandbox_primitives::ERR_OK),
+			Ok(None) => Ok(sandbox_env::ERR_OK),
 			Ok(Some(val)) => {
 				// Serialize return value and write it back into the memory.
 				sp_wasm_interface::ReturnValue::Value(val.into()).using_encoded(|val| {
@@ -244,10 +246,10 @@ impl Sandbox for FunctionExecutor {
 						Err("Return value buffer is too small")?;
 					}
 					self.write_memory(return_val, val).map_err(|_| "Return value buffer is OOB")?;
-					Ok(sandbox_primitives::ERR_OK)
+					Ok(sandbox_env::ERR_OK)
 				})
 			},
-			Err(_) => Ok(sandbox_primitives::ERR_EXECUTION),
+			Err(_) => Ok(sandbox_env::ERR_EXECUTION),
 		}
 	}
 
@@ -280,7 +282,7 @@ impl Sandbox for FunctionExecutor {
 		let guest_env =
 			match sandbox::GuestEnvironment::decode(&*self.sandbox_store.borrow(), raw_env_def) {
 				Ok(guest_env) => guest_env,
-				Err(_) => return Ok(sandbox_primitives::ERR_MODULE as u32),
+				Err(_) => return Ok(sandbox_env::ERR_MODULE as u32),
 			};
 
 		let store = self.sandbox_store.clone();
@@ -294,8 +296,8 @@ impl Sandbox for FunctionExecutor {
 		let instance_idx_or_err_code =
 			match result.map(|i| i.register(&mut store.borrow_mut(), dispatch_thunk)) {
 				Ok(instance_idx) => instance_idx,
-				Err(sandbox::InstantiationError::StartTrapped) => sandbox_primitives::ERR_EXECUTION,
-				Err(_) => sandbox_primitives::ERR_MODULE,
+				Err(sandbox::InstantiationError::StartTrapped) => sandbox_env::ERR_EXECUTION,
+				Err(_) => sandbox_env::ERR_MODULE,
 			};
 
 		Ok(instance_idx_or_err_code)

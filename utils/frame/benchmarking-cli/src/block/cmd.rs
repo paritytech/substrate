@@ -29,7 +29,7 @@ use std::{fmt::Debug, sync::Arc};
 
 use super::bench::{Benchmark, BenchmarkParams};
 
-/// Benchmark the execution time historic blocks.
+/// Benchmark the execution time of historic blocks.
 ///
 /// This can be used to verify that blocks do not use more weight than they consumed
 /// in their `WeightInfo`. Example:
@@ -73,7 +73,7 @@ impl BlockCmd {
 	/// Benchmark the execution time of historic blocks and compare it to their consumed weight.
 	///
 	/// Output will be printed to console.
-	pub async fn run<Block, BA, C>(&self, client: Arc<C>) -> Result<()>
+	pub fn run<Block, BA, C>(&self, client: Arc<C>) -> Result<()>
 	where
 		Block: BlockT<Extrinsic = OpaqueExtrinsic>,
 		BA: ClientBackend<Block>,

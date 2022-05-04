@@ -179,8 +179,20 @@ where
 					Poll::Ready(Ok(sink)) => {
 						log::debug!(target: "telemetry", "✅ Connected to {}", self.addr);
 
-						for sender in self.telemetry_connection_notifier.iter_mut() {
-							let _ = sender.send(());
+						{
+							let mut index = 0;
+							while index < self.telemetry_connection_notifier.len() {
+								let sender = &mut self.telemetry_connection_notifier[index];
+								if let Err(error) = sender.try_send(()) {
+									if !error.is_disconnected() {
+										log::debug!(target: "telemetry", "Failed to send a telemetry connection notification: {}", error);
+									} else {
+										self.telemetry_connection_notifier.swap_remove(index);
+										continue
+									}
+								}
+								index += 1;
+							}
 						}
 
 						let buf = self
