@@ -1658,16 +1658,22 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		mut candidacy: Candidacy<T::AccountId, BalanceOf<T, I>>,
 		rank: Rank,
 	) -> DispatchResult {
-		Self::check_skeptic(&candidate, &mut candidacy);
 		Self::add_new_member(&candidate, rank)?;
+		Self::check_skeptic(&candidate, &mut candidacy);
+		
 		let next_head = NextHead::<T, I>::get()
-			.filter(|old| old.round > candidacy.round
+			.filter(|old| {
+				old.round > candidacy.round
 				|| old.round == candidacy.round && old.bid < candidacy.bid
-			).unwrap_or_else(|| IntakeRecord { who: candidate.clone(), bid: candidacy.bid, round: candidacy.round });
+			}).unwrap_or_else(||
+				IntakeRecord { who: candidate.clone(), bid: candidacy.bid, round: candidacy.round }
+			);
 		NextHead::<T, I>::put(next_head);
+
 		let now = <frame_system::Pallet<T>>::block_number();
 		let maturity = now + Self::lock_duration(MemberCount::<T, I>::get());
 		Self::reward_bidder(&candidate, candidacy.bid, candidacy.kind, maturity);
+
 		Votes::<T, I>::remove_prefix(&candidate, None);
 		Candidates::<T, I>::remove(&candidate);
 		Ok(())

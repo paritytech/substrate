@@ -21,7 +21,7 @@ use super::*;
 use crate as pallet_society;
 
 use frame_support::{
-	ord_parameter_types, parameter_types,
+	assert_noop, assert_ok, ord_parameter_types, parameter_types,
 	traits::{ConstU32, ConstU64},
 };
 use frame_support_test::TestRandomness;
@@ -200,4 +200,86 @@ pub fn candidacy<AccountId, Balance>(
 	rejections: VoteCount,
 ) -> Candidacy<AccountId, Balance> {
 	Candidacy { round, kind, bid, tally: Tally { approvals, rejections }, skeptic_struck: false }
+}
+
+pub fn next_challenge() {
+	let challenge_period: u64 = <Test as Config>::ChallengePeriod::get();
+	let now = System::block_number();
+	run_to_block(now + challenge_period - now % challenge_period);
+}
+
+pub fn next_voting() {
+	if let Period::Voting { more, .. } = Society::period() {
+		run_to_block(System::block_number() + more);
+	}
+}
+
+pub fn conclude_intake(allow_resignation: bool, judge_intake: Option<bool>) {
+	next_voting();
+	let round = RoundCount::<Test>::get();
+	for (who, candidacy) in Candidates::<Test>::iter() {
+		if candidacy.tally.clear_approval() {
+			assert_ok!(Society::claim_membership(Origin::signed(who)));
+			assert_noop!(Society::claim_membership(Origin::signed(who)), Error::<Test>::NotCandidate);
+			continue
+		}
+		if candidacy.tally.clear_rejection() && allow_resignation {
+			assert_noop!(Society::claim_membership(Origin::signed(who)), Error::<Test>::NotApproved);
+			assert_ok!(Society::resign_candidacy(Origin::signed(who)));
+			continue
+		}
+		if let (Some(founder), Some(approve)) = (Founder::<Test>::get(), judge_intake) {
+			if !candidacy.tally.clear_approval() && !approve {
+				// can be rejected by founder
+				assert_ok!(Society::kick_candidate(Origin::signed(founder), who));
+				continue
+			}
+			if !candidacy.tally.clear_rejection() && approve {
+				// can be rejected by founder
+				assert_ok!(Society::bestow_membership(Origin::signed(founder), who));
+				continue
+			}
+		}
+		if candidacy.tally.clear_rejection() && round > candidacy.round + 1 {
+			assert_noop!(Society::claim_membership(Origin::signed(who)), Error::<Test>::NotApproved);
+			assert_ok!(Society::drop_candidate(Origin::signed(0), who));
+			assert_noop!(Society::drop_candidate(Origin::signed(0), who), Error::<Test>::NotCandidate);
+			continue
+		}
+		if !candidacy.skeptic_struck {
+			assert_ok!(Society::punish_skeptic(Origin::signed(who)));
+		}
+	}
+}
+
+pub fn next_intake() {
+	let claim_period: u64 = <Test as Config>::ClaimPeriod::get();
+	match Society::period() {
+		Period::Voting { more, .. } => run_to_block(System::block_number() + more + claim_period),
+		Period::Claim { more, .. } => run_to_block(System::block_number() + more),
+	}
+}
+
+pub fn place_members(members: impl AsRef<[u128]>) {
+	for who in members.as_ref() {
+		assert_ok!(Society::insert_member(who, 0));
+	}
+}
+
+pub fn members() -> Vec<u128> {
+	let mut r = Members::<Test>::iter_keys().collect::<Vec<_>>();
+	r.sort();
+	r
+}
+
+pub fn candidacies() -> Vec<(u128, Candidacy<u128, u64>)> {
+	let mut r = Candidates::<Test>::iter().collect::<Vec<_>>();
+	r.sort_by_key(|x| x.0);
+	r
+}
+
+pub fn candidates() -> Vec<u128> {
+	let mut r = Candidates::<Test>::iter_keys().collect::<Vec<_>>();
+	r.sort();
+	r
 }

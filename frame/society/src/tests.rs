@@ -24,88 +24,6 @@ use frame_support::{assert_noop, assert_ok};
 use sp_core::blake2_256;
 use sp_runtime::traits::BadOrigin;
 
-fn next_challenge() {
-	let challenge_period: u64 = <Test as Config>::ChallengePeriod::get();
-	let now = System::block_number();
-	run_to_block(now + challenge_period - now % challenge_period);
-}
-
-fn next_voting() {
-	if let Period::Voting { more, .. } = Society::period() {
-		run_to_block(System::block_number() + more);
-	}
-}
-
-fn conclude_intake(allow_resignation: bool, judge_intake: Option<bool>) {
-	next_voting();
-	let round = RoundCount::<Test>::get();
-	for (who, candidacy) in Candidates::<Test>::iter() {
-		if candidacy.tally.clear_approval() {
-			assert_ok!(Society::claim_membership(Origin::signed(who)));
-			assert_noop!(Society::claim_membership(Origin::signed(who)), Error::<Test>::NotCandidate);
-			continue
-		}
-		if candidacy.tally.clear_rejection() && allow_resignation {
-			assert_noop!(Society::claim_membership(Origin::signed(who)), Error::<Test>::NotApproved);
-			assert_ok!(Society::resign_candidacy(Origin::signed(who)));
-			continue
-		}
-		if let (Some(founder), Some(approve)) = (Founder::<Test>::get(), judge_intake) {
-			if !candidacy.tally.clear_approval() && !approve {
-				// can be rejected by founder
-				assert_ok!(Society::kick_candidate(Origin::signed(founder), who));
-				continue
-			}
-			if !candidacy.tally.clear_rejection() && approve {
-				// can be rejected by founder
-				assert_ok!(Society::bestow_membership(Origin::signed(founder), who));
-				continue
-			}
-		}
-		if candidacy.tally.clear_rejection() && round > candidacy.round + 1 {
-			assert_noop!(Society::claim_membership(Origin::signed(who)), Error::<Test>::NotApproved);
-			assert_ok!(Society::drop_candidate(Origin::signed(0), who));
-			assert_noop!(Society::drop_candidate(Origin::signed(0), who), Error::<Test>::NotCandidate);
-			continue
-		}
-		if !candidacy.skeptic_struck {
-			assert_ok!(Society::punish_skeptic(Origin::signed(who)));
-		}
-	}
-}
-
-fn next_intake() {
-	let claim_period: u64 = <Test as Config>::ClaimPeriod::get();
-	match Society::period() {
-		Period::Voting { more, .. } => run_to_block(System::block_number() + more + claim_period),
-		Period::Claim { more, .. } => run_to_block(System::block_number() + more),
-	}
-}
-
-fn place_members(members: impl AsRef<[u128]>) {
-	for who in members.as_ref() {
-		assert_ok!(Society::insert_member(who, 0));
-	}
-}
-
-fn members() -> Vec<u128> {
-	let mut r = Members::<Test>::iter_keys().collect::<Vec<_>>();
-	r.sort();
-	r
-}
-
-fn candidacies() -> Vec<(u128, Candidacy<u128, u64>)> {
-	let mut r = Candidates::<Test>::iter().collect::<Vec<_>>();
-	r.sort_by_key(|x| x.0);
-	r
-}
-
-fn candidates() -> Vec<u128> {
-	let mut r = Candidates::<Test>::iter_keys().collect::<Vec<_>>();
-	r.sort();
-	r
-}
-
 #[test]
 fn founding_works() {
 	EnvBuilder::new().founded(false).execute(|| {
@@ -998,6 +916,31 @@ fn candidates_are_limited_by_maximum() {
 
 		// Still only 8 candidates.
 		assert_eq!(candidates().len(), 8);
+	});
+}
+
+#[test]
+fn too_many_candidates_cannot_overflow_membership() {
+	EnvBuilder::new().execute(|| {
+		// One place left
+		place_members([1, 2, 3, 4, 5, 6, 7, 8]);
+		assert_ok!(Society::bid(Origin::signed(20), 0));
+		assert_ok!(Society::bid(Origin::signed(30), 1));
+		next_intake();
+		// Candidate says a candidate.
+		next_intake();
+		// Another candidate taken.
+		// Both approved.
+		assert_ok!(Society::vote(Origin::signed(10), 20, true));
+		assert_ok!(Society::vote(Origin::signed(10), 30, true));
+		next_voting();
+		assert_ok!(Society::claim_membership(Origin::signed(20)));
+		assert_noop!(Society::claim_membership(Origin::signed(30)), Error::<Test>::MaxMembers);
+
+		// Maximum members.
+		assert_eq!(members().len(), 10);
+		// Still 1 candidate.
+		assert_eq!(candidates().len(), 1);
 	});
 }
 
