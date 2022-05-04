@@ -1424,8 +1424,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		// End current defender rotation
 		if let Some((defender, skeptic, tally)) = Defending::<T, I>::get() {
 			if tally.more_rejections() {
-				// Member has failed the challenge
-				Self::suspend_member(&defender);
+				// Member has failed the challenge: Suspend them. This will fail if they are Head
+				// or Founder, in which case we ignore.
+				let _ = Self::suspend_member(&defender);
 			}
 
 			// Check defender skeptic voted and that their vote was with the majority.
@@ -1681,7 +1682,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let params = Parameters::<T, I>::get().ok_or(Error::<T, I>::NotGroup)?;
 		if record.strikes >= params.max_strikes {
 			// Way too many strikes: suspend.
-			Self::suspend_member(who);
+			let _ = Self::suspend_member(who);
 		}
 		Ok(())
 	}
@@ -1740,13 +1741,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// If the member was vouching, then this will be reset. Any bidders that the member was
 	/// vouching for will be cancelled unless they are already selected as candidates (in which case
 	/// they will be able to stand).
-	fn suspend_member(who: &T::AccountId) {
-		if let Ok(record) = Self::remove_member(&who) {
-			SuspendedMembers::<T, I>::insert(who, record);
-			Self::deposit_event(Event::<T, I>::MemberSuspended { member: who.clone() });
-		} else {
-			debug_assert!(false, "Unable to remove member (is it the Head or Founder?)")
-		}
+	fn suspend_member(who: &T::AccountId) -> DispatchResult {
+		let record = Self::remove_member(&who)?;
+		SuspendedMembers::<T, I>::insert(who, record);
+		Self::deposit_event(Event::<T, I>::MemberSuspended { member: who.clone() });
+		Ok(())
 	}
 
 	/// Select a member at random, given the RNG `rng`.

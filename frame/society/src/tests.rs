@@ -420,7 +420,7 @@ fn suspended_member_life_cycle_works() {
 		assert_eq!(members(), vec![10, 20]);
 
 		// Let's suspend them again, directly
-		Society::suspend_member(&20);
+		assert_ok!(Society::suspend_member(&20));
 		assert!(SuspendedMembers::<Test>::contains_key(20));
 		// Suspension judgement origin does not forgive the suspended member
 		assert_ok!(Society::judge_suspended_member(Origin::signed(10), 20, false));
@@ -637,7 +637,6 @@ fn unvouch_works() {
 	});
 }
 
-/*
 #[test]
 fn unbid_vouch_works() {
 	EnvBuilder::new().execute(|| {
@@ -667,57 +666,73 @@ fn founder_and_head_cannot_be_removed() {
 		// 10 can still accumulate strikes
 		assert_ok!(Society::bid(Origin::signed(20), 0));
 		next_intake();
+		conclude_intake(false, None);
 		assert_eq!(Members::<Test>::get(10).unwrap().strikes, 1);
 		assert_ok!(Society::bid(Origin::signed(30), 0));
-		run_to_block(16);
+		next_intake();
+		conclude_intake(false, None);
 		assert_eq!(Members::<Test>::get(10).unwrap().strikes, 2);
 		// Awkwardly they can obtain more than MAX_STRIKES...
 		assert_ok!(Society::bid(Origin::signed(40), 0));
-		run_to_block(24);
+		next_intake();
+		conclude_intake(false, None);
 		assert_eq!(Members::<Test>::get(10).unwrap().strikes, 3);
 
 		// Replace the head
 		assert_ok!(Society::bid(Origin::signed(50), 0));
-		run_to_block(28);
+		next_intake();
 		assert_ok!(Society::vote(Origin::signed(10), 50, true));
-		assert_ok!(Society::defender_vote(Origin::signed(10), true)); // Keep defender around
-		run_to_block(32);
+		conclude_intake(false, None);
 		assert_eq!(members(), vec![10, 50]);
+		assert_eq!(Head::<Test>::get(), Some(10));
+		next_intake();
 		assert_eq!(Head::<Test>::get(), Some(50));
 		// Founder is unchanged
 		assert_eq!(Founder::<Test>::get(), Some(10));
 
 		// 50 can still accumulate strikes
 		assert_ok!(Society::bid(Origin::signed(60), 0));
-		run_to_block(40);
+		next_intake();
+		// Force 50 to be Skeptic so it gets a strike.
+		Skeptic::<Test>::put(50);
+		conclude_intake(false, None);
 		assert_eq!(Members::<Test>::get(50).unwrap().strikes, 1);
 		assert_ok!(Society::bid(Origin::signed(70), 0));
-		run_to_block(48);
+		next_intake();
+		// Force 50 to be Skeptic so it gets a strike.
+		Skeptic::<Test>::put(50);
+		conclude_intake(false, None);
 		assert_eq!(Members::<Test>::get(50).unwrap().strikes, 2);
 
 		// Replace the head
 		assert_ok!(Society::bid(Origin::signed(80), 0));
-		run_to_block(52);
+		next_intake();
 		assert_ok!(Society::vote(Origin::signed(10), 80, true));
 		assert_ok!(Society::vote(Origin::signed(50), 80, true));
-		assert_ok!(Society::defender_vote(Origin::signed(10), true)); // Keep defender around
-		run_to_block(56);
+		conclude_intake(false, None);
+		next_intake();
 		assert_eq!(members(), vec![10, 50, 80]);
 		assert_eq!(Head::<Test>::get(), Some(80));
 		assert_eq!(Founder::<Test>::get(), Some(10));
 
 		// 50 can now be suspended for strikes
 		assert_ok!(Society::bid(Origin::signed(90), 0));
-		run_to_block(60);
-		// The candidate is rejected, so voting approve will give a strike
-		assert_ok!(Society::vote(Origin::signed(50), 90, true));
-		run_to_block(64);
-		assert_eq!(Members::<Test>::get(50).unwrap().strikes, 0);
-		assert_eq!(SuspendedMembers::<Test>::contains_key(50), true);
+		next_intake();
+		// Force 50 to be Skeptic and get it a strike.
+		Skeptic::<Test>::put(50);
+		conclude_intake(false, None);
+		next_intake();
+		assert_eq!(SuspendedMembers::<Test>::get(50), Some(MemberRecord {
+			rank: 0,
+			strikes: 3,
+			vouching: None,
+			index: 1,
+		}));
 		assert_eq!(members(), vec![10, 80]);
 	});
 }
 
+/*
 #[test]
 fn challenges_work() {
 	EnvBuilder::new().execute(|| {
