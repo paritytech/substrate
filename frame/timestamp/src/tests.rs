@@ -17,36 +17,36 @@
 
 //! Tests for the Timestamp module.
 
-use frame_support::assert_ok;
 use crate::mock::*;
+use frame_support::assert_ok;
 
 #[test]
 fn timestamp_works() {
-    new_test_ext().execute_with(|| {
-        Timestamp::set_timestamp(42);
-        assert_ok!(Timestamp::set(Origin::none(), 69));
-        assert_eq!(Timestamp::now(), 69);
-        assert_eq!(Some(69), get_captured_moment());
-    });
+	new_test_ext().execute_with(|| {
+		Timestamp::set_timestamp(42);
+		assert_ok!(Timestamp::set(Origin::none(), 69));
+		assert_eq!(Timestamp::now(), 69);
+		assert_eq!(Some(69), get_captured_moment());
+	});
 }
 
 #[test]
 #[should_panic(expected = "Timestamp must be updated only once in the block")]
 fn double_timestamp_should_fail() {
-    new_test_ext().execute_with(|| {
-        Timestamp::set_timestamp(42);
-        assert_ok!(Timestamp::set(Origin::none(), 69));
-        let _ = Timestamp::set(Origin::none(), 70);
-    });
+	new_test_ext().execute_with(|| {
+		Timestamp::set_timestamp(42);
+		assert_ok!(Timestamp::set(Origin::none(), 69));
+		let _ = Timestamp::set(Origin::none(), 70);
+	});
 }
 
 #[test]
 #[should_panic(
-expected = "Timestamp must increment by at least <MinimumPeriod> between sequential blocks"
+	expected = "Timestamp must increment by at least <MinimumPeriod> between sequential blocks"
 )]
 fn block_period_minimum_enforced() {
-    new_test_ext().execute_with(|| {
-        Timestamp::set_timestamp(42);
-        let _ = Timestamp::set(Origin::none(), 46);
-    });
+	new_test_ext().execute_with(|| {
+		Timestamp::set_timestamp(42);
+		let _ = Timestamp::set(Origin::none(), 46);
+	});
 }
