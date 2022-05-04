@@ -113,7 +113,7 @@ pub trait Defensive<T> {
 	/// ```
 	fn defensive(self) -> Self;
 
-	/// Same as [`Defensive::defensive`], but it takes a proof is input, and displays it if the
+	/// Same as [`Defensive::defensive`], but it takes a proof as input, and displays it if the
 	/// defensive operation has been triggered.
 	fn defensive_proof(self, proof: &'static str) -> Self;
 }
