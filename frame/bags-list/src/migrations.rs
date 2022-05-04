@@ -34,14 +34,14 @@ impl<T: crate::Config<I>, I: 'static> OnRuntimeUpgrade for CheckCounterPrefix<T,
 
 		// ensure that a value exists in the counter struct.
 		ensure!(
-			crate::ListNodes::<T>::count() == CounterForListNodes::get().unwrap(),
+			crate::ListNodes::<T, I>::count() == CounterForListNodes::get().unwrap(),
 			"wrong list node counter"
 		);
 
 		crate::log!(
 			info,
 			"checked bags-list prefix to be correct and have {} nodes",
-			crate::ListNodes::<T>::count()
+			crate::ListNodes::<T, I>::count()
 		);
 
 		Ok(())
