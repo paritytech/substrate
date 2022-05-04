@@ -56,7 +56,7 @@ where
 	B: Block,
 	Client: ProofProvider<B> + Send + Sync + 'static,
 {
-	/// Create a new [`sc_network_sync::block_request_handler::BlockRequestHandler`].
+	/// Create a new [`LightClientRequestHandler`].
 	pub fn new(protocol_id: &ProtocolId, client: Arc<Client>) -> (Self, ProtocolConfig) {
 		// For now due to lack of data on light client request handling in production systems, this
 		// value is chosen to match the block request limit.
