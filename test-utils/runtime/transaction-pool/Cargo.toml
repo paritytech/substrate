@@ -12,12 +12,12 @@ publish = false
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-substrate-test-runtime-client = { version = "2.0.0", path = "../client" }
-parking_lot = "0.12.0"
 codec = { package = "parity-scale-codec", version = "3.0.0" }
-sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
-sp-runtime = { version = "6.0.0", path = "../../../primitives/runtime" }
+futures = "0.3.21"
+parking_lot = "0.12.0"
+thiserror = "1.0"
 sc-transaction-pool = { version = "4.0.0-dev", path = "../../../client/transaction-pool" }
 sc-transaction-pool-api = { version = "4.0.0-dev", path = "../../../client/transaction-pool/api" }
-futures = "0.3.21"
-thiserror = "1.0"
+sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
+sp-runtime = { version = "6.0.0", path = "../../../primitives/runtime" }
+substrate-test-runtime-client = { version = "2.0.0", path = "../client" }

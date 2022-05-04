@@ -3,7 +3,7 @@ name = "pallet-template"
 version = "4.0.0-dev"
 description = "FRAME pallet template for defining custom runtime logic."
 authors = ["Substrate DevHub <https://github.com/substrate-developer-hub>"]
-homepage = "https://substrate.io/"
+homepage = "https://substrate.io"
 edition = "2021"
 license = "Unlicense"
 publish = false
@@ -17,24 +17,23 @@ codec = { package = "parity-scale-codec", version = "3.0.0", default-features = 
 	"derive",
 ] }
 scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
-frame-support = { default-features = false, version = "4.0.0-dev", path = "../../../../frame/support" }
-frame-system = { default-features = false, version = "4.0.0-dev", path = "../../../../frame/system" }
-frame-benchmarking = { default-features = false, version = "4.0.0-dev", path = "../../../../frame/benchmarking", optional = true }
+frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "../../../../frame/benchmarking" }
+frame-support = { version = "4.0.0-dev", default-features = false, path = "../../../../frame/support" }
+frame-system = { version = "4.0.0-dev", default-features = false, path = "../../../../frame/system" }
 
 [dev-dependencies]
-sp-core = { default-features = false, version = "6.0.0", path = "../../../../primitives/core" }
-sp-io = { default-features = false, version = "6.0.0", path = "../../../../primitives/io" }
-sp-runtime = { default-features = false, version = "6.0.0", path = "../../../../primitives/runtime" }
+sp-core = { version = "6.0.0", default-features = false, path = "../../../../primitives/core" }
+sp-io = { version = "6.0.0", default-features = false, path = "../../../../primitives/io" }
+sp-runtime = { version = "6.0.0", default-features = false, path = "../../../../primitives/runtime" }
 
 [features]
 default = ["std"]
 std = [
 	"codec/std",
-	"scale-info/std",
+	"frame-benchmarking/std",
 	"frame-support/std",
 	"frame-system/std",
-	"frame-benchmarking/std",
+	"scale-info/std",
 ]
-
 runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks"]
 try-runtime = ["frame-support/try-runtime"]

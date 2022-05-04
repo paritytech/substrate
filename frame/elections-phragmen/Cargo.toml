@@ -16,16 +16,16 @@ targets = ["x86_64-unknown-linux-gnu"]
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = [
 	"derive",
 ] }
+log = { version = "0.4.14", default-features = false }
 scale-info = { version = "2.0.0", default-features = false, features = ["derive"] }
-sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-npos-elections = { version = "4.0.0-dev", default-features = false, path = "../../primitives/npos-elections" }
-sp-io = { version = "6.0.0", default-features = false, path = "../../primitives/io" }
+frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "../benchmarking" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
-sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
 sp-core = { version = "6.0.0", default-features = false, path = "../../primitives/core" }
-frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
-log = { version = "0.4.14", default-features = false }
+sp-io = { version = "6.0.0", default-features = false, path = "../../primitives/io" }
+sp-npos-elections = { version = "4.0.0-dev", default-features = false, path = "../../primitives/npos-elections" }
+sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
 
 [dev-dependencies]
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
@@ -36,15 +36,15 @@ substrate-test-utils = { version = "4.0.0-dev", path = "../../test-utils" }
 default = ["std"]
 std = [
 	"codec/std",
-	"scale-info/std",
 	"frame-support/std",
-	"sp-runtime/std",
-	"sp-npos-elections/std",
 	"frame-system/std",
-	"sp-std/std",
-	"sp-io/std",
-	"sp-core/std",
 	"log/std",
+	"scale-info/std",
+	"sp-core/std",
+	"sp-io/std",
+	"sp-npos-elections/std",
+	"sp-runtime/std",
+	"sp-std/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",

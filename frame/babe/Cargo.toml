@@ -14,8 +14,9 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"] }
+log = { version = "0.4.16", default-features = false }
 scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
-frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
+frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "../benchmarking" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 pallet-authorship = { version = "4.0.0-dev", default-features = false, path = "../authorship" }
@@ -29,27 +30,27 @@ sp-runtime = { version = "6.0.0", default-features = false, path = "../../primit
 sp-session = { version = "4.0.0-dev", default-features = false, path = "../../primitives/session" }
 sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../primitives/staking" }
 sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
-log = { version = "0.4.16", default-features = false }
 
 [dev-dependencies]
+frame-election-provider-support = { version = "4.0.0-dev", path = "../election-provider-support" }
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 pallet-offences = { version = "4.0.0-dev", path = "../offences" }
 pallet-staking = { version = "4.0.0-dev", path = "../staking" }
 pallet-staking-reward-curve = { version = "4.0.0-dev", path = "../staking/reward-curve" }
 sp-core = { version = "6.0.0", path = "../../primitives/core" }
-frame-election-provider-support = { version = "4.0.0-dev", path = "../election-provider-support" }
 
 [features]
 default = ["std"]
 std = [
 	"codec/std",
-	"scale-info/std",
 	"frame-benchmarking/std",
 	"frame-support/std",
 	"frame-system/std",
+	"log/std",
 	"pallet-authorship/std",
 	"pallet-session/std",
 	"pallet-timestamp/std",
+	"scale-info/std",
 	"sp-application-crypto/std",
 	"sp-consensus-babe/std",
 	"sp-consensus-vrf/std",
@@ -58,7 +59,6 @@ std = [
 	"sp-session/std",
 	"sp-staking/std",
 	"sp-std/std",
-	"log/std",
 ]
 runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks"]
 try-runtime = ["frame-support/try-runtime"]
