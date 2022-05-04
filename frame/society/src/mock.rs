@@ -153,7 +153,10 @@ impl EnvBuilder {
 		.unwrap();
 		let mut ext: sp_io::TestExternalities = t.into();
 		ext.execute_with(|| {
-			assert!(Society::found_society(Origin::signed(1), 10, 100, 10, 2, 25, b"be cool".to_vec()).is_ok());
+			if self.founded {
+				let r = b"be cool".to_vec();
+				assert!(Society::found_society(Origin::signed(1), 10, 100, 10, 2, 25, r).is_ok());
+			}
 			f()
 		})
 	}

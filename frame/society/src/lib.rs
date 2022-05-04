@@ -1462,7 +1462,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		round: RoundIndex,
 		member_count: u32,
 		pot: BalanceOf<T, I>,
-	) -> usize {
+	) -> u32 {
 		// Get the number of left-most bidders whose bids add up to less than `pot`.
 		let mut bids = Bids::<T, I>::get();
 		let params = match Parameters::<T, I>::get() {
@@ -1498,7 +1498,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		// No need to reset Bids if we're not taking anything.
 		Bids::<T, I>::put(&bids);
-		bids.len()
+		selections
 	}
 
 	/// Puts a bid into storage ordered by smallest to largest value.
@@ -1613,6 +1613,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			// Way too many strikes: suspend.
 			Self::suspend_member(who);
 		}
+		Members::<T, I>::insert(who, &record);
 		Ok(())
 	}
 
@@ -1774,20 +1775,19 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// If it the caller's duty to ensure that `who` is already a member. This does nothing if `who`
 	/// is not a member or if `value` is zero.
 	fn bump_payout(who: &T::AccountId, when: T::BlockNumber, value: BalanceOf<T, I>) {
-		if !value.is_zero() {
-			if let Some(MemberRecord { rank: 0, .. }) = Members::<T, I>::get(who) {
-				Payouts::<T, I>::mutate_extant(who, |record| {
-					// Members of rank 1 never get payouts.
-					match record.payouts.binary_search_by_key(&when, |x| x.0) {
-						Ok(index) => record.payouts[index].1.saturating_accrue(value),
-						Err(index) => {
-							// If they have too many pending payouts, then we take discard the payment.
-							let _ = record.payouts.try_insert(index, (when, value));
-						},
-					}
-				});
-				Self::reserve_payout(value);
-			}
+		if value.is_zero() { return }
+		if let Some(MemberRecord { rank: 0, .. }) = Members::<T, I>::get(who) {
+			Payouts::<T, I>::mutate(who, |record| {
+				// Members of rank 1 never get payouts.
+				match record.payouts.binary_search_by_key(&when, |x| x.0) {
+					Ok(index) => record.payouts[index].1.saturating_accrue(value),
+					Err(index) => {
+						// If they have too many pending payouts, then we take discard the payment.
+						let _ = record.payouts.try_insert(index, (when, value));
+					},
+				}
+			});
+			Self::reserve_payout(value);
 		}
 	}
 

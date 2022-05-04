@@ -197,20 +197,18 @@ fn unbidding_works() {
 		// Balances are reserved
 		assert_eq!(Balances::free_balance(30), 25);
 		assert_eq!(Balances::reserved_balance(30), 25);
-		// Must know right position to unbid + cannot unbid someone else
-		assert_noop!(Society::unbid(Origin::signed(30), 1), Error::<Test, _>::BadPosition);
 		// Can unbid themselves with the right position
-		assert_ok!(Society::unbid(Origin::signed(30), 0));
+		assert_ok!(Society::unbid(Origin::signed(30)));
+		assert_noop!(Society::unbid(Origin::signed(30)), Error::<Test, _>::NotBidder);
 		// Balance is returned
 		assert_eq!(Balances::free_balance(30), 50);
 		assert_eq!(Balances::reserved_balance(30), 0);
 		// 20 wins candidacy
 		run_to_block(4);
-		assert_eq!(candidates(), vec![create_bid(1000, 20, BidKind::Deposit(25))]);
+		assert_eq!(candidates(), vec![(20, candidacy(1, 1000, BidKind::Deposit(25), 0, 0))]);
 	});
 }
 
-/*
 #[test]
 fn payout_works() {
 	EnvBuilder::new().execute(|| {
@@ -219,10 +217,11 @@ fn payout_works() {
 		assert_ok!(Society::bid(Origin::signed(20), 1000));
 		run_to_block(4);
 		assert_ok!(Society::vote(Origin::signed(10), 20, true));
-		run_to_block(8);
+		run_to_block(7);
+		assert_ok!(Society::claim_membership(Origin::signed(20)));
 		// payout not ready
 		assert_noop!(Society::payout(Origin::signed(20)), Error::<Test, _>::NoPayout);
-		run_to_block(9);
+		run_to_block(8);
 		// payout should be here
 		assert_ok!(Society::payout(Origin::signed(20)));
 		assert_eq!(Balances::free_balance(20), 1050);
@@ -230,18 +229,49 @@ fn payout_works() {
 }
 
 #[test]
-fn basic_new_member_skeptic_works() {
+fn non_voting_skeptic_is_punished() {
 	EnvBuilder::new().execute(|| {
-		assert_eq!(Strikes::<Test>::get(10), 0);
+		assert_eq!(Members::<Test>::get(10).unwrap().strikes, 0);
 		assert_ok!(Society::bid(Origin::signed(20), 0));
 		run_to_block(4);
-		assert_eq!(candidates(), vec![create_bid(0, 20, BidKind::Deposit(25))]);
+		assert_eq!(candidates(), vec![(20, candidacy(1, 0, BidKind::Deposit(25), 0, 0))]);
+		run_to_block(7);
+		assert_noop!(Society::claim_membership(Origin::signed(20)), Error::<Test>::NotApproved);
+		assert_ok!(Society::resign_candidate(Origin::signed(20)));
 		run_to_block(8);
 		assert_eq!(members(), vec![10]);
-		assert_eq!(Strikes::<Test>::get(10), 1);
+		assert_eq!(Members::<Test>::get(10).unwrap().strikes, 1);
 	});
 }
 
+#[test]
+fn rejecting_skeptic_on_approved_is_punished() {
+	EnvBuilder::new().execute(|| {
+		assert_eq!(Members::<Test>::get(10).unwrap().strikes, 0);
+		assert_ok!(Society::bid(Origin::signed(20), 0));
+		assert_ok!(Society::bid(Origin::signed(30), 1));
+		run_to_block(4);
+		assert_ok!(Society::bid(Origin::signed(40), 0));
+
+		assert_ok!(Society::vote(Origin::signed(10), 20, true));
+		assert_ok!(Society::vote(Origin::signed(10), 30, true));
+		run_to_block(7);
+		assert_ok!(Society::claim_membership(Origin::signed(20)));
+		assert_ok!(Society::claim_membership(Origin::signed(30)));
+		run_to_block(8);
+		let skeptic = Skeptic::<Test>::get().unwrap();
+		for &i in &[10, 20, 30][..] {
+			assert_ok!(Society::vote(Origin::signed(i), 40, i != skeptic));
+		}
+		run_to_block(11);
+		assert_ok!(Society::claim_membership(Origin::signed(40)));
+		run_to_block(12);
+		assert_eq!(members(), vec![10, 20, 30, 40]);
+		assert_eq!(Members::<Test>::get(skeptic).unwrap().strikes, 1);
+	});
+}
+
+/*
 #[test]
 fn basic_new_member_reject_works() {
 	EnvBuilder::new().execute(|| {
@@ -253,7 +283,7 @@ fn basic_new_member_reject_works() {
 		assert_eq!(Balances::reserved_balance(20), 25);
 		// Rotation Period
 		run_to_block(4);
-		assert_eq!(candidates(), vec![create_bid(0, 20, BidKind::Deposit(25))]);
+		assert_eq!(candidates(), vec![(20, candidacy(1, 0, BidKind::Deposit(25), 0, 0))]);
 		// We say no
 		assert_ok!(Society::vote(Origin::signed(10), 20, false));
 		run_to_block(8);
@@ -363,7 +393,7 @@ fn suspended_candidate_rejected_works() {
 		assert_eq!(Balances::reserved_balance(20), 25);
 		// Rotation Period
 		run_to_block(4);
-		assert_eq!(candidates(), vec![create_bid(0, 20, BidKind::Deposit(25))]);
+		assert_eq!(candidates(), vec![(20, candidacy(1, 0, BidKind::Deposit(25), 0, 0))]);
 		// We say no
 		assert_ok!(Society::vote(Origin::signed(10), 20, false));
 		run_to_block(8);
@@ -384,7 +414,7 @@ fn suspended_candidate_rejected_works() {
 		// They are placed back in bid pool, repeat suspension process
 		// Rotation Period
 		run_to_block(12);
-		assert_eq!(candidates(), vec![create_bid(0, 20, BidKind::Deposit(25))]);
+		assert_eq!(candidates(), vec![(20, candidacy(1, 0, BidKind::Deposit(25), 0, 0))]);
 		// We say no
 		assert_ok!(Society::vote(Origin::signed(10), 20, false));
 		run_to_block(16);
@@ -423,10 +453,10 @@ fn vouch_works() {
 			Error::<Test, _>::AlreadyVouching
 		);
 		// Vouching creates the right kind of bid
-		assert_eq!(<Bids<Test>>::get(), vec![create_bid(1000, 20, BidKind::Vouch(10, 100))]);
+		assert_eq!(<Bids<Test>>::get(), vec![(20, candidacy(1, 1000, BidKind::Vouch(10,, 0, 0) 100))]);
 		// Vouched user can become candidate
 		run_to_block(4);
-		assert_eq!(candidates(), vec![create_bid(1000, 20, BidKind::Vouch(10, 100))]);
+		assert_eq!(candidates(), vec![(20, candidacy(1, 1000, BidKind::Vouch(10,, 0, 0) 100))]);
 		// Vote yes
 		assert_ok!(Society::vote(Origin::signed(10), 20, true));
 		// Vouched user can win
@@ -449,10 +479,10 @@ fn voucher_cannot_win_more_than_bid() {
 		// 10 vouches, but asks for more than the bid
 		assert_ok!(Society::vouch(Origin::signed(10), 20, 100, 1000));
 		// Vouching creates the right kind of bid
-		assert_eq!(<Bids<Test>>::get(), vec![create_bid(100, 20, BidKind::Vouch(10, 1000))]);
+		assert_eq!(<Bids<Test>>::get(), vec![(20, candidacy(1, 100, BidKind::Vouch(10,, 0, 0) 1000))]);
 		// Vouched user can become candidate
 		run_to_block(4);
-		assert_eq!(candidates(), vec![create_bid(100, 20, BidKind::Vouch(10, 1000))]);
+		assert_eq!(candidates(), vec![(20, candidacy(1, 100, BidKind::Vouch(10,, 0, 0) 1000))]);
 		// Vote yes
 		assert_ok!(Society::vote(Origin::signed(10), 20, true));
 		// Vouched user can win
@@ -473,7 +503,7 @@ fn unvouch_works() {
 		// 10 vouches for 20
 		assert_ok!(Society::vouch(Origin::signed(10), 20, 100, 0));
 		// 20 has a bid
-		assert_eq!(<Bids<Test>>::get(), vec![create_bid(100, 20, BidKind::Vouch(10, 0))]);
+		assert_eq!(<Bids<Test>>::get(), vec![(20, candidacy(1, 100, BidKind::Vouch(10,, 0, 0) 0))]);
 		// 10 is vouched
 		assert_eq!(<Vouching<Test>>::get(10), Some(VouchingStatus::Vouching));
 		// To unvouch, you must know the right bid position
@@ -488,7 +518,7 @@ fn unvouch_works() {
 		// Cannot unvouch after they become candidate
 		assert_ok!(Society::vouch(Origin::signed(10), 20, 100, 0));
 		run_to_block(4);
-		assert_eq!(candidates(), vec![create_bid(100, 20, BidKind::Vouch(10, 0))]);
+		assert_eq!(candidates(), vec![(20, candidacy(1, 100, BidKind::Vouch(10,, 0, 0) 0))]);
 		assert_noop!(Society::unvouch(Origin::signed(10), 0), Error::<Test, _>::BadPosition);
 		// 10 is still vouching until candidate is approved or rejected
 		assert_eq!(<Vouching<Test>>::get(10), Some(VouchingStatus::Vouching));
@@ -522,11 +552,11 @@ fn unbid_vouch_works() {
 		// 10 vouches for 20
 		assert_ok!(Society::vouch(Origin::signed(10), 20, 100, 0));
 		// 20 has a bid
-		assert_eq!(<Bids<Test>>::get(), vec![create_bid(100, 20, BidKind::Vouch(10, 0))]);
+		assert_eq!(<Bids<Test>>::get(), vec![(20, candidacy(1, 100, BidKind::Vouch(10,, 0, 0) 0))]);
 		// 10 is vouched
 		assert_eq!(<Vouching<Test>>::get(10), Some(VouchingStatus::Vouching));
 		// 20 doesn't want to be a member and can unbid themselves.
-		assert_ok!(Society::unbid(Origin::signed(20), 0));
+		assert_ok!(Society::unbid(Origin::signed(20)));
 		// Everything is cleaned up
 		assert_eq!(<Vouching<Test>>::get(10), None);
 		assert_eq!(<Bids<Test>>::get(), vec![]);
@@ -720,13 +750,13 @@ fn vouching_handles_removed_member_with_bid() {
 		// Have that member vouch for a user
 		assert_ok!(Society::vouch(Origin::signed(20), 30, 1000, 100));
 		// That user is now a bid and the member is vouching
-		assert_eq!(<Bids<Test>>::get(), vec![create_bid(1000, 30, BidKind::Vouch(20, 100))]);
+		assert_eq!(<Bids<Test>>::get(), vec![(30, candidacy(1, 1000, BidKind::Vouch(20,, 0, 0) 100))]);
 		assert_eq!(<Vouching<Test>>::get(20), Some(VouchingStatus::Vouching));
 		// Suspend that member
 		Society::suspend_member(&20);
 		assert_eq!(<SuspendedMembers<Test>>::get(20), true);
 		// Nothing changes yet
-		assert_eq!(<Bids<Test>>::get(), vec![create_bid(1000, 30, BidKind::Vouch(20, 100))]);
+		assert_eq!(<Bids<Test>>::get(), vec![(30, candidacy(1, 1000, BidKind::Vouch(20,, 0, 0) 100))]);
 		assert_eq!(<Vouching<Test>>::get(20), Some(VouchingStatus::Vouching));
 		// Remove member
 		assert_ok!(Society::judge_suspended_member(Origin::signed(2), 20, false));
@@ -744,22 +774,22 @@ fn vouching_handles_removed_member_with_candidate() {
 		// Have that member vouch for a user
 		assert_ok!(Society::vouch(Origin::signed(20), 30, 1000, 100));
 		// That user is now a bid and the member is vouching
-		assert_eq!(<Bids<Test>>::get(), vec![create_bid(1000, 30, BidKind::Vouch(20, 100))]);
+		assert_eq!(<Bids<Test>>::get(), vec![(30, candidacy(1, 1000, BidKind::Vouch(20,, 0, 0) 100))]);
 		assert_eq!(<Vouching<Test>>::get(20), Some(VouchingStatus::Vouching));
 		// Make that bid a candidate
 		run_to_block(4);
-		assert_eq!(candidates(), vec![create_bid(1000, 30, BidKind::Vouch(20, 100))]);
+		assert_eq!(candidates(), vec![(30, candidacy(1, 1000, BidKind::Vouch(20,, 0, 0) 100))]);
 		// Suspend that member
 		Society::suspend_member(&20);
 		assert_eq!(<SuspendedMembers<Test>>::get(20), true);
 		// Nothing changes yet
-		assert_eq!(candidates(), vec![create_bid(1000, 30, BidKind::Vouch(20, 100))]);
+		assert_eq!(candidates(), vec![(30, candidacy(1, 1000, BidKind::Vouch(20,, 0, 0) 100))]);
 		assert_eq!(<Vouching<Test>>::get(20), Some(VouchingStatus::Vouching));
 		// Remove member
 		assert_ok!(Society::judge_suspended_member(Origin::signed(2), 20, false));
 		// Vouching status is removed, but candidate is still in the queue
 		assert_eq!(<Vouching<Test>>::get(20), None);
-		assert_eq!(candidates(), vec![create_bid(1000, 30, BidKind::Vouch(20, 100))]);
+		assert_eq!(candidates(), vec![(30, candidacy(1, 1000, BidKind::Vouch(20,, 0, 0) 100))]);
 		// Candidate wins
 		assert_ok!(Society::vote(Origin::signed(10), 30, true));
 		run_to_block(8);
@@ -811,9 +841,9 @@ fn max_limits_work() {
 		// Length is 1000
 		assert_eq!(bids.len(), 1000);
 		// First bid is smallest number (100)
-		assert_eq!(bids[0], create_bid(100, 100, BidKind::Deposit(25)));
+		assert_eq!(bids[0], (100, candidacy(1, 100, BidKind::Deposit(25), 0, 0)));
 		// Last bid is smallest number + 99 (1099)
-		assert_eq!(bids[999], create_bid(1099, 1099, BidKind::Deposit(25)));
+		assert_eq!(bids[999], (1099, candidacy(1, 1099, BidKind::Deposit(25), 0, 0)));
 		// Rotate period
 		run_to_block(4);
 		// Max of 10 candidates
@@ -883,14 +913,14 @@ fn zero_bid_works() {
 		assert_eq!(
 			candidates(),
 			vec![
-				create_bid(0, 30, BidKind::Deposit(25)),
-				create_bid(300, 50, BidKind::Deposit(25)),
-				create_bid(400, 60, BidKind::Deposit(25)),
+				(30, candidacy(1, 0, BidKind::Deposit(25), 0, 0)),
+				(50, candidacy(1, 300, BidKind::Deposit(25), 0, 0)),
+				(60, candidacy(1, 400, BidKind::Deposit(25), 0, 0)),
 			]
 		);
 		assert_eq!(
 			<Bids<Test>>::get(),
-			vec![create_bid(0, 20, BidKind::Deposit(25)), create_bid(0, 40, BidKind::Deposit(25)),]
+			vec![(20, candidacy(1, 0, BidKind::Deposit(25), 0, 0)), (40, candidacy(1, 0, BidKind::Deposit(25), 0, 0)),]
 		);
 		// A member votes for these candidates to join the society
 		assert_ok!(Society::vote(Origin::signed(10), 30, true));
@@ -921,7 +951,7 @@ fn bids_ordered_correctly() {
 
 		for j in 0..5 {
 			for i in 0..5 {
-				final_list.push(create_bid(j, 100 + (i * 5 + j) as u128, BidKind::Deposit(25)));
+				final_list.push((100 +candidacy(j1, ,  (i * 5 + j), 0, 0) as u128, BidKind::Deposit(25)));
 			}
 		}
 
