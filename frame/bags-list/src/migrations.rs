@@ -20,8 +20,8 @@
 use frame_support::traits::OnRuntimeUpgrade;
 
 /// A struct that does not migration, but only checks that the counter prefix exists and is correct.
-pub struct CheckCounterPrefix<I: 'static, T: crate::Config<I>>(sp_std::marker::PhantomData<(I, T)>);
-impl<I: 'static, T: crate::Config<I>> OnRuntimeUpgrade for CheckCounterPrefix<I, T> {
+pub struct CheckCounterPrefix<T: crate::Config<I>, I: 'static>(sp_std::marker::PhantomData<(T, I)>);
+impl<T: crate::Config<I>, I: 'static> OnRuntimeUpgrade for CheckCounterPrefix<T, I> {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
 		0
 	}
