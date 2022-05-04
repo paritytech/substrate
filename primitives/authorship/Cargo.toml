@@ -13,18 +13,18 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
+async-trait = { version = "0.1.50", optional = true }
+codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"] }
 sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../inherents" }
 sp-runtime = { version = "6.0.0", default-features = false, path = "../runtime" }
 sp-std = { version = "4.0.0", default-features = false, path = "../std" }
-codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"] }
-async-trait = { version = "0.1.50", optional = true }
 
 [features]
 default = [ "std" ]
 std = [
+	"async-trait",
 	"codec/std",
-	"sp-std/std",
 	"sp-inherents/std",
 	"sp-runtime/std",
-	"async-trait",
+	"sp-std/std",
 ]

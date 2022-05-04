@@ -18,24 +18,24 @@ prost-build = "0.9"
 
 [dependencies]
 async-trait = "0.1"
-codec = { package = "parity-scale-codec", default-features = false, version = "3.0.0" }
-thiserror = "1.0"
+codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false }
 futures = "0.3.21"
 futures-timer = "3.0.1"
 ip_network = "0.4.1"
 libp2p = { version = "0.44.0", default-features = false, features = ["kad"] }
 log = "0.4.16"
-prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus", version = "0.10.0-dev" }
 prost = "0.9"
 rand = "0.7.2"
+thiserror = "1.0"
+prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.10.0-dev", path = "../../utils/prometheus" }
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
 sc-network = { version = "0.10.0-dev", path = "../network" }
+sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
 sp-authority-discovery = { version = "4.0.0-dev", path = "../../primitives/authority-discovery" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
 sp-core = { version = "6.0.0", path = "../../primitives/core" }
 sp-keystore = { version = "0.12.0", path = "../../primitives/keystore" }
 sp-runtime = { version = "6.0.0", path = "../../primitives/runtime" }
-sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
 
 [dev-dependencies]
 quickcheck = "1.0.3"
