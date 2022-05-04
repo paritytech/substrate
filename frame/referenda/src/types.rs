@@ -182,7 +182,7 @@ pub trait TracksInfo<Balance, Moment> {
 
 	/// Return the track info for track `id`, by default this just looks it up in `Self::tracks()`.
 	fn info(id: Self::Id) -> Option<&'static TrackInfo<Balance, Moment>> {
-		Self::tracks().iter().find(|x| &x.0 == &id).map(|x| &x.1)
+		Self::tracks().iter().find(|x| x.0 == id).map(|x| &x.1)
 	}
 }
 
@@ -309,9 +309,9 @@ impl Curve {
 		match self {
 			Self::LinearDecreasing { begin, delta } =>
 				if delta.is_zero() {
-					return *delta
+					*delta
 				} else {
-					return (*begin - y.min(*begin)).min(*delta) / *delta
+					(*begin - y.min(*begin)).min(*delta) / *delta
 				},
 		}
 	}

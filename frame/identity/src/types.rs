@@ -217,20 +217,14 @@ impl<Balance: Encode + Decode + MaxEncodedLen + Copy + Clone + Debug + Eq + Part
 	/// Returns `true` if this judgement is indicative of a deposit being currently held. This means
 	/// it should not be cleared or replaced except by an operation which utilizes the deposit.
 	pub(crate) fn has_deposit(&self) -> bool {
-		match self {
-			Judgement::FeePaid(_) => true,
-			_ => false,
-		}
+		matches!(self, Judgement::FeePaid(_))
 	}
 
 	/// Returns `true` if this judgement is one that should not be generally be replaced outside
 	/// of specialized handlers. Examples include "malicious" judgements and deposit-holding
 	/// judgements.
 	pub(crate) fn is_sticky(&self) -> bool {
-		match self {
-			Judgement::FeePaid(_) | Judgement::Erroneous => true,
-			_ => false,
-		}
+		matches!(self, Judgement::FeePaid(_) | Judgement::Erroneous)
 	}
 }
 

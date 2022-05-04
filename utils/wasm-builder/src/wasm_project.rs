@@ -359,10 +359,11 @@ fn project_enabled_features(
 			// this heuristic anymore. However, for the transition phase between now and namespaced
 			// features already being present in nightly, we need this code to make
 			// runtimes compile with all the possible rustc versions.
-			if v.len() == 1 && v.get(0).map_or(false, |v| *v == format!("dep:{}", f)) {
-				if std_enabled.as_ref().map(|e| e.iter().any(|ef| ef == *f)).unwrap_or(false) {
-					return false
-				}
+			if v.len() == 1 &&
+				v.get(0).map_or(false, |v| *v == format!("dep:{}", f)) &&
+				std_enabled.as_ref().map(|e| e.iter().any(|ef| ef == *f)).unwrap_or(false)
+			{
+				return false
 			}
 
 			// We don't want to enable the `std`/`default` feature for the wasm build and
@@ -409,7 +410,7 @@ fn create_project(
 	fs::create_dir_all(wasm_project_folder.join("src"))
 		.expect("Wasm project dir create can not fail; qed");
 
-	let mut enabled_features = project_enabled_features(&project_cargo_toml, &crate_metadata);
+	let mut enabled_features = project_enabled_features(project_cargo_toml, crate_metadata);
 
 	if has_runtime_wasm_feature_declared(project_cargo_toml, crate_metadata) {
 		enabled_features.push("runtime-wasm".into());
@@ -422,7 +423,7 @@ fn create_project(
 		&wasm_project_folder,
 		workspace_root_path,
 		&crate_name,
-		&crate_path,
+		crate_path,
 		&wasm_binary,
 		enabled_features.into_iter(),
 	);
@@ -788,7 +789,7 @@ fn package_rerun_if_changed(package: &DeduplicatePackage) {
 		.filter(|p| {
 			p.is_dir() || p.extension().map(|e| e == "rs" || e == "toml").unwrap_or_default()
 		})
-		.for_each(|p| rerun_if_changed(p));
+		.for_each(rerun_if_changed);
 }
 
 /// Copy the WASM binary to the target directory set in `WASM_TARGET_DIRECTORY` environment

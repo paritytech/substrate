@@ -73,7 +73,7 @@ where
 		return Err("No access to trie from backend.".to_string())
 	};
 	let essence = trie_backend.essence();
-	let (nb_to_migrate, trie) = count_migrate(essence, &essence.root())?;
+	let (nb_to_migrate, trie) = count_migrate(essence, essence.root())?;
 
 	let mut nb_to_migrate_child = 0;
 	let mut child_roots: Vec<(ChildInfo, Vec<u8>)> = Vec::new();

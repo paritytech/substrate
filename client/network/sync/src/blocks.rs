@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::protocol::message;
+use crate::message;
 use libp2p::PeerId;
 use log::trace;
 use sp_runtime::traits::{Block as BlockT, NumberFor, One};
@@ -217,7 +217,8 @@ impl<B: BlockT> BlockCollection<B> {
 #[cfg(test)]
 mod test {
 	use super::{BlockCollection, BlockData, BlockRangeState};
-	use crate::{protocol::message, PeerId};
+	use crate::message;
+	use libp2p::PeerId;
 	use sp_core::H256;
 	use sp_runtime::testing::{Block as RawBlock, ExtrinsicWrapper};
 

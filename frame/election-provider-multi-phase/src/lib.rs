@@ -264,7 +264,7 @@ mod mock;
 #[macro_use]
 pub mod helpers;
 
-const LOG_TARGET: &'static str = "runtime::election-provider";
+const LOG_TARGET: &str = "runtime::election-provider";
 
 pub mod signed;
 pub mod unsigned;
@@ -1446,7 +1446,7 @@ impl<T: Config> Pallet<T> {
 		ensure!(winners.len() as u32 == desired_targets, FeasibilityError::WrongWinnerCount);
 
 		// Ensure that the solution's score can pass absolute min-score.
-		let submitted_score = raw_solution.score.clone();
+		let submitted_score = raw_solution.score;
 		ensure!(
 			Self::minimum_untrusted_score().map_or(true, |min_score| {
 				submitted_score.strict_threshold_better(min_score, Perbill::zero())
@@ -1471,29 +1471,26 @@ impl<T: Config> Pallet<T> {
 			.map_err::<FeasibilityError, _>(Into::into)?;
 
 		// Ensure that assignments is correct.
-		let _ = assignments
-			.iter()
-			.map(|ref assignment| {
-				// Check that assignment.who is actually a voter (defensive-only).
-				// NOTE: while using the index map from `voter_index` is better than a blind linear
-				// search, this *still* has room for optimization. Note that we had the index when
-				// we did `solution -> assignment` and we lost it. Ideal is to keep the index
-				// around.
+		let _ = assignments.iter().try_for_each(|assignment| {
+			// Check that assignment.who is actually a voter (defensive-only).
+			// NOTE: while using the index map from `voter_index` is better than a blind linear
+			// search, this *still* has room for optimization. Note that we had the index when
+			// we did `solution -> assignment` and we lost it. Ideal is to keep the index
+			// around.
 
-				// Defensive-only: must exist in the snapshot.
-				let snapshot_index =
-					voter_index(&assignment.who).ok_or(FeasibilityError::InvalidVoter)?;
-				// Defensive-only: index comes from the snapshot, must exist.
-				let (_voter, _stake, targets) =
-					snapshot_voters.get(snapshot_index).ok_or(FeasibilityError::InvalidVoter)?;
+			// Defensive-only: must exist in the snapshot.
+			let snapshot_index =
+				voter_index(&assignment.who).ok_or(FeasibilityError::InvalidVoter)?;
+			// Defensive-only: index comes from the snapshot, must exist.
+			let (_voter, _stake, targets) =
+				snapshot_voters.get(snapshot_index).ok_or(FeasibilityError::InvalidVoter)?;
 
-				// Check that all of the targets are valid based on the snapshot.
-				if assignment.distribution.iter().any(|(d, _)| !targets.contains(d)) {
-					return Err(FeasibilityError::InvalidVote)
-				}
-				Ok(())
-			})
-			.collect::<Result<(), FeasibilityError>>()?;
+			// Check that all of the targets are valid based on the snapshot.
+			if assignment.distribution.iter().any(|(d, _)| !targets.contains(d)) {
+				return Err(FeasibilityError::InvalidVote)
+			}
+			Ok(())
+		})?;
 
 		// ----- Start building support. First, we need one more closure.
 		let stake_of = helpers::stake_of_fn::<T>(&snapshot_voters, &cache);

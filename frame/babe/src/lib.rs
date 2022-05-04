@@ -377,7 +377,7 @@ pub mod pallet {
 
 							vrf_output.0.attach_input_hash(&pubkey, transcript).ok()
 						})
-						.map(|inout| inout.make_bytes(&sp_consensus_babe::BABE_VRF_INOUT_CONTEXT));
+						.map(|inout| inout.make_bytes(sp_consensus_babe::BABE_VRF_INOUT_CONTEXT));
 
 					if pre_digest.is_primary() {
 						if let Some(randomness) = randomness {
@@ -481,7 +481,7 @@ impl<T: Config> FindAuthor<u32> for Pallet<T> {
 			}
 		}
 
-		return None
+		None
 	}
 }
 
@@ -683,7 +683,7 @@ impl<T: Config> Pallet<T> {
 			let segment_idx = segment_idx + 1;
 			let bounded_randomness =
 				BoundedVec::<_, ConstU32<UNDER_CONSTRUCTION_SEGMENT_LENGTH>>::try_from(vec![
-					randomness.clone(),
+					*randomness,
 				])
 				.expect("UNDER_CONSTRUCTION_SEGMENT_LENGTH >= 1");
 			UnderConstruction::<T>::insert(&segment_idx, bounded_randomness);

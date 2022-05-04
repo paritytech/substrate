@@ -123,8 +123,9 @@ impl<T: Config> Pallet<T> {
 			.claimed_rewards
 			.retain(|&x| x >= current_era.saturating_sub(history_depth));
 		match ledger.claimed_rewards.binary_search(&era) {
-			Ok(_) => Err(Error::<T>::AlreadyClaimed
-				.with_weight(T::WeightInfo::payout_stakers_alive_staked(0)))?,
+			Ok(_) =>
+				return Err(Error::<T>::AlreadyClaimed
+					.with_weight(T::WeightInfo::payout_stakers_alive_staked(0))),
 			Err(pos) => ledger.claimed_rewards.insert(pos, era),
 		}
 
@@ -146,8 +147,8 @@ impl<T: Config> Pallet<T> {
 		let validator_reward_points = era_reward_points
 			.individual
 			.get(&ledger.stash)
-			.map(|points| *points)
-			.unwrap_or_else(|| Zero::zero());
+			.copied()
+			.unwrap_or_else(Zero::zero);
 
 		// Nothing to do if they have no reward points.
 		if validator_reward_points.is_zero() {
@@ -260,8 +261,7 @@ impl<T: Config> Pallet<T> {
 					0
 				});
 
-			let era_length =
-				session_index.checked_sub(current_era_start_session_index).unwrap_or(0); // Must never happen.
+			let era_length = session_index.saturating_sub(current_era_start_session_index); // Must never happen.
 
 			match ForceEra::<T>::get() {
 				// Will be set to `NotForcing` again if a new era has been triggered.
@@ -1036,7 +1036,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 			);
 			Self::do_add_nominator(
 				&v,
-				Nominations { targets: t.try_into().unwrap(), submitted_in: 0, suppressed: false },
+				Nominations { targets: t, submitted_in: 0, suppressed: false },
 			);
 		});
 	}
