@@ -22,8 +22,8 @@ use frame_support::{
 	dispatch::Codec,
 	pallet_prelude::*,
 	traits::{
-		Currency, CurrencyToVote, DefensiveSaturating, EnsureOrigin, EstimateNextNewSession, Get,
-		LockIdentifier, LockableCurrency, OnUnbalanced, UnixTime,
+		Currency, CurrencyToVote, Defensive, DefensiveSaturating, EnsureOrigin,
+		EstimateNextNewSession, Get, LockIdentifier, LockableCurrency, OnUnbalanced, UnixTime,
 	},
 	weights::Weight,
 };
@@ -858,7 +858,8 @@ pub mod pallet {
 				Self::update_ledger(&controller, &ledger);
 				// update this staker in the sorted list, if they exist in it.
 				if T::VoterList::contains(&stash) {
-					T::VoterList::on_update(&stash, Self::weight_of(&ledger.stash));
+					let _ =
+						T::VoterList::on_update(&stash, Self::weight_of(&ledger.stash)).defensive();
 					debug_assert_eq!(T::VoterList::sanity_check(), Ok(()));
 				}
 
@@ -941,7 +942,8 @@ pub mod pallet {
 
 				// update this staker in the sorted list, if they exist in it.
 				if T::VoterList::contains(&ledger.stash) {
-					T::VoterList::on_update(&ledger.stash, Self::weight_of(&ledger.stash));
+					let _ = T::VoterList::on_update(&ledger.stash, Self::weight_of(&ledger.stash))
+						.defensive();
 				}
 
 				Self::deposit_event(Event::<T>::Unbonded(ledger.stash, value));
@@ -1426,7 +1428,8 @@ pub mod pallet {
 			// NOTE: ledger must be updated prior to calling `Self::weight_of`.
 			Self::update_ledger(&controller, &ledger);
 			if T::VoterList::contains(&ledger.stash) {
-				T::VoterList::on_update(&ledger.stash, Self::weight_of(&ledger.stash));
+				let _ = T::VoterList::on_update(&ledger.stash, Self::weight_of(&ledger.stash))
+					.defensive();
 			}
 
 			let removed_chunks = 1u32 // for the case where the last iterated chunk is not removed
