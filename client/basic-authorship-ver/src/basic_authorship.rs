@@ -50,8 +50,6 @@ use ver_api::VerApi;
 use prometheus_endpoint::Registry as PrometheusRegistry;
 use sc_proposer_metrics::MetricsLink as PrometheusMetrics;
 use sp_inherents::InherentDataProvider;
-use sp_runtime::traits::One;
-use std::ops::Add;
 
 /// Default block size limit in bytes used by [`Proposer`].
 ///
@@ -362,7 +360,6 @@ where
 	) -> Result<Proposal<Block, backend::TransactionFor<B, Block>, PR::Proof>, sp_blockchain::Error>
 	{
 		let propose_with_start = time::Instant::now();
-		let next_block_number = self.parent_number.add(One::one()).add(One::one());
 
 		let mut block_builder =
 			self.client.new_block_at(&self.parent_id, inherent_digests, PR::ENABLED)?;
@@ -378,8 +375,6 @@ where
 					.as_secs_f64(),
 			);
 		});
-		let api = self.client.runtime_api();
-		let omit_transactions = api.is_new_session(&self.parent_id, next_block_number).unwrap();
 
 		debug!(target:"block_builder", "found {} inherents", inherents.len());
 		for inherent in inherents {
@@ -412,8 +407,8 @@ where
 		// NOTE reduce deadline by half as we want to avoid situation where
 		// fully filled previous block does not allow for any extrinsic to be included in following
 		// one
-		let soft_deadline =
-			now + time::Duration::from_micros(self.soft_deadline_percent.mul_floor(left_micros) / 2);
+		let soft_deadline = now +
+			time::Duration::from_micros(self.soft_deadline_percent.mul_floor(left_micros) / 2);
 		let block_timer = time::Instant::now();
 		let mut skipped = 0;
 		let mut unqueue_invalid = Vec::new();
@@ -424,7 +419,7 @@ where
 		// fully filled previous block does not allow for any extrinsic to be included in following
 		// one
 		let mut t2 =
-			futures_timer::Delay::new(deadline.saturating_duration_since((self.now)()) / 16 ).fuse();
+			futures_timer::Delay::new(deadline.saturating_duration_since((self.now)()) / 16).fuse();
 
 		let mut pending_iterator = select! {
 			res = t1 => res,
@@ -440,9 +435,8 @@ where
 
 		let block_size_limit = block_size_limit.unwrap_or(self.default_block_size_limit) / 2;
 
-
-		debug!("Attempting to push transactions from the pool.");
-		debug!("Pool status: {:?}", self.transaction_pool.status());
+		debug!(target: "block_builder", "Attempting to push transactions from the pool.");
+		debug!(target: "block_builder", "Pool status: {:?}", self.transaction_pool.status());
 		let mut transaction_pushed = false;
 		let mut hit_block_size_limit = false;
 
@@ -452,9 +446,11 @@ where
 		// after previous block is applied it is possible to prevalidate incomming transaction
 		// but eventually changess needs to be rolled back, as those can be executed
 		// only in the following(future) block
-		block_builder.record_valid_extrinsics_and_revert_changes(|api| {
+		let (block, storage_changes, proof) = block_builder.build_with_seed(
+			seed,
+			|at,api| {
             let mut valid_txs = Vec::new();
-			if omit_transactions {
+			if api.is_storage_migration_scheduled(&at).unwrap() {
 				debug!(target:"block_builder", "new session starts in next block, omiting transaction from the pool");
 				return valid_txs;
 			}
@@ -498,7 +494,7 @@ where
 				}
 
 				trace!(target:"block_builder", "[{:?}] Pushing to the block.", pending_tx_hash);
-				match validate_transaction::<Block, C>(&self.parent_id, &api, pending_tx_data.clone()) {
+				match validate_transaction::<Block, C>(at, &api, pending_tx_data.clone()) {
 					Ok(()) => {
 						transaction_pushed = true;
 						valid_txs.push(pending_tx_data);
@@ -538,7 +534,7 @@ where
 				}
 			}
             valid_txs
-		});
+		})?.into_inner();
 
 		if hit_block_size_limit && !transaction_pushed {
 			warn!(
@@ -549,7 +545,6 @@ where
 
 		self.transaction_pool.remove_invalid(&unqueue_invalid);
 
-		let (block, storage_changes, proof) = block_builder.build_with_seed(seed)?.into_inner();
 		debug!(target: "block_builder","created block {:?}", block);
 
 		self.metrics.report(|metrics| {
@@ -607,12 +602,10 @@ mod tests {
 
 	use futures::executor::block_on;
 	use parking_lot::Mutex;
-	use sc_client_api::Backend;
 	use sc_transaction_pool::BasicPool;
 	use sc_transaction_pool_api::{ChainEvent, MaintainedTransactionPool, TransactionSource};
-	use sp_api::Core;
 	use sp_blockchain::HeaderBackend;
-	use sp_consensus::{BlockOrigin, Environment, Proposer};
+	use sp_consensus::{Environment, Proposer};
 	use sp_core::Pair;
 	use sp_runtime::traits::NumberFor;
 	use substrate_test_runtime_client::{
@@ -748,7 +741,7 @@ mod tests {
 
 	#[test]
 	fn proposed_storage_changes_should_match_execute_block_storage_changes() {
-		let (client, backend) = TestClientBuilder::new().build_with_backend();
+		let (client, _) = TestClientBuilder::new().build_with_backend();
 		let client = Arc::new(client);
 		let spawner = sp_core::testing::TaskExecutor::new();
 		let txpool = BasicPool::new_full(
@@ -788,8 +781,8 @@ mod tests {
 
 		assert_eq!(proposal.block.extrinsics().len(), 1);
 
-		let api = client.runtime_api();
 		// as test runtime does not implement ver block execution below does not apply
+		// let api = client.runtime_api();
 		// api.execute_block(&block_id, proposal.block).unwrap();
 		//
 		// let state = backend.state_at(block_id).unwrap();
@@ -804,7 +797,7 @@ mod tests {
 
 	#[test]
 	fn should_cease_building_block_when_block_limit_is_reached() {
-		env_logger::try_init();
+		let _ = env_logger::try_init();
 		let client = Arc::new(substrate_test_runtime_client::new());
 		let spawner = sp_core::testing::TaskExecutor::new();
 		let txpool = BasicPool::new_full(
@@ -834,7 +827,7 @@ mod tests {
 
 		let mut size = genesis_header.encoded_size() + Vec::<Extrinsic>::new().encoded_size();
 
-		println!("{}", size);
+		println!("INIT {}", size);
 		for i in extrinsics.iter() {
 			size += i.encoded_size();
 			println!("{}", size)
@@ -855,7 +848,7 @@ mod tests {
 			Default::default(),
 			Default::default(),
 			deadline,
-			Some(block_limit),
+			Some(block_limit * 2),
 		))
 		.map(|r| r.block)
 		.unwrap();
@@ -888,7 +881,7 @@ mod tests {
 			Default::default(),
 			Default::default(),
 			deadline,
-			Some(block_limit),
+			Some(block_limit * 2),
 		))
 		.map(|r| r.block)
 		.unwrap();

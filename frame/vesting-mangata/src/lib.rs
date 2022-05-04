@@ -216,7 +216,6 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
-
 			// Genesis uses the latest storage version.
 			StorageVersion::<T>::put(Releases::V1);
 
