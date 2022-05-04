@@ -874,7 +874,7 @@ pub trait SignedExtension:
 
 	/// Do any pre-flight stuff for a signed transaction.
 	///
-	/// Make sure to perform the same checks as in [`Self::pre_dispatch`].
+	/// Make sure to perform the same checks as in [`Self::validate`].
 	fn pre_dispatch(
 		self,
 		who: &Self::AccountId,
