@@ -565,7 +565,7 @@ pub mod pallet {
 		/// Member is already vouching or banned from vouching again.
 		AlreadyVouching,
 		/// Member is not vouching.
-		NotVouching,
+		NotVouchingOnBidder,
 		/// Cannot remove the head of the chain.
 		Head,
 		/// Cannot remove the founder.
@@ -976,7 +976,7 @@ pub mod pallet {
 
 			let mut bids = Bids::<T, I>::get();
 			let pos = bids.iter().position(|bid| bid.kind.is_vouch(&voucher))
-				.ok_or(Error::<T, I>::NotVouching)?;
+				.ok_or(Error::<T, I>::NotVouchingOnBidder)?;
 			let bid = bids.remove(pos);
 			Self::clean_bid(&bid);
 

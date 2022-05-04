@@ -177,16 +177,16 @@ pub fn run_to_block(n: u64) {
 		Society::on_initialize(System::block_number());
 	}
 }
-/*
+
 /// Creates a bid struct using input parameters.
-pub fn create_bid<AccountId, Balance>(
-	value: Balance,
+pub fn bid<AccountId, Balance>(
 	who: AccountId,
 	kind: BidKind<AccountId, Balance>,
+	value: Balance,
 ) -> Bid<AccountId, Balance> {
 	Bid { who, kind, value }
 }
-*/
+
 /// Creates a candidate struct using input parameters.
 pub fn candidacy<AccountId, Balance>(
 	round: RoundIndex,
