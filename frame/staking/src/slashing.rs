@@ -600,8 +600,8 @@ pub fn do_slash<T: Config>(
 	slashed_imbalance: &mut NegativeImbalanceOf<T>,
 	slash_era: EraIndex,
 ) {
-	let controller = match <Pallet<T>>::bonded(stash) {
-		None => return, // defensive: should always exist.
+	let controller = match <Pallet<T>>::bonded(stash).defensive() {
+		None => return,
 		Some(c) => c,
 	};
 
