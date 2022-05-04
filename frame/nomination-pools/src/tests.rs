@@ -923,7 +923,7 @@ mod claim_payout {
 				Pools::do_reward_payout(&11, &mut member, &mut bonded_pool, &mut reward_pool,),
 				Error::<Runtime>::FullyUnbonding
 			);
-			
+
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
