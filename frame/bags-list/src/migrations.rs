@@ -17,7 +17,10 @@
 
 //! The migrations of this pallet.
 
-use frame_support::traits::OnRuntimeUpgrade;
+use codec::{Decode, Encode};
+use core::marker::PhantomData;
+use frame_support::{ensure, storage::migration, traits::OnRuntimeUpgrade};
+use frame_election_provider_support::ScoreProvider;
 
 /// A struct that does not migration, but only checks that the counter prefix exists and is correct.
 pub struct CheckCounterPrefix<T: crate::Config<I>, I: 'static>(sp_std::marker::PhantomData<(T, I)>);
@@ -28,7 +31,6 @@ impl<T: crate::Config<I>, I: 'static> OnRuntimeUpgrade for CheckCounterPrefix<T,
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<(), &'static str> {
-		use frame_support::ensure;
 		// The old explicit storage item.
 		frame_support::generate_storage_alias!(BagsList, CounterForListNodes => Value<u32>);
 
@@ -44,6 +46,68 @@ impl<T: crate::Config<I>, I: 'static> OnRuntimeUpgrade for CheckCounterPrefix<T,
 			crate::ListNodes::<T, I>::count()
 		);
 
+		Ok(())
+	}
+}
+
+#[derive(Encode, Decode)]
+struct PreScoreNode<T: crate::Config<I>, I: 'static = ()> {
+	id: T::AccountId,
+	prev: Option<T::AccountId>,
+	next: Option<T::AccountId>,
+	bag_upper: T::Score,
+	#[codec(skip)]
+	_phantom: PhantomData<I>,
+}
+
+/// A struct that migrates all bags lists to contain a score value.
+pub struct AddScore<T: crate::Config<I>, I: 'static>(sp_std::marker::PhantomData<(T, I)>);
+impl<T: crate::Config<I>, I: 'static> OnRuntimeUpgrade for AddScore<T, I> {
+	#[cfg(feature = "try-runtime")]
+	fn pre_upgrade() -> Result<(), &'static str> {
+		ensure!(
+			crate::ListNodes::<T, I>::iter().count() == 0,
+			"Items already exist where none were expected."
+		);
+		ensure!(
+			crate::ListBags::<T, I>::iter().count() == 0,
+			"Items already exist where none were expected."
+		);
+		Ok(())
+	}
+
+	fn on_runtime_upgrade() -> frame_support::weights::Weight {
+		migration::move_pallet(b"BagsList", b"VoterList");
+		let old_nodes = migration::storage_iter::<PreScoreNode<T, I>>(b"VoterList", b"ListNodes");
+
+		for node in old_nodes.iter() {
+			let score = T::ScoreProvider::score(node.id);
+
+			let new_node = crate::Node {
+				id: node.id,
+				prev: node.prev,
+				next: node.next,
+				bag_upper: node.bag_upper,
+				score,
+				_phantom: node._phantom,
+			};
+
+			crate::ListNodes::<T, I>::insert(node.id, new_node);
+		}
+
+		return u64::MAX
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn post_upgrade() -> Result<(), &'static str> {
+		ensure!(
+			crate::ListNodes::<T, I>::iter().count() > 0,
+			"Items do not exist where some were expected."
+		);
+		ensure!(
+			crate::ListBags::<T, I>::iter().count() > 0,
+			"Items do not exist where some were expected."
+		);
 		Ok(())
 	}
 }
