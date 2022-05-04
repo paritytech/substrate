@@ -247,12 +247,12 @@
 mod behaviour;
 mod discovery;
 mod peer_info;
-mod protocol;
+pub mod protocol;
 mod request_responses;
 mod schema;
-mod service;
+pub mod service;
 mod transport;
-mod utils;
+pub mod utils;
 
 pub mod bitswap;
 pub mod config;
