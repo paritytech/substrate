@@ -13,28 +13,28 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sc-consensus-babe = { version = "0.10.0-dev", path = "../" }
-sc-rpc-api = { version = "0.10.0-dev", path = "../../../rpc-api" }
+futures = "0.3.21"
 jsonrpc-core = "18.0.0"
 jsonrpc-core-client = "18.0.0"
 jsonrpc-derive = "18.0.0"
-sp-consensus-babe = { version = "0.10.0-dev", path = "../../../../primitives/consensus/babe" }
 serde = { version = "1.0.136", features = ["derive"] }
-sp-blockchain = { version = "4.0.0-dev", path = "../../../../primitives/blockchain" }
-sp-runtime = { version = "6.0.0", path = "../../../../primitives/runtime" }
-sc-consensus-epochs = { version = "0.10.0-dev", path = "../../epochs" }
-futures = "0.3.21"
 thiserror = "1.0"
+sc-consensus-babe = { version = "0.10.0-dev", path = "../" }
+sc-consensus-epochs = { version = "0.10.0-dev", path = "../../epochs" }
+sc-rpc-api = { version = "0.10.0-dev", path = "../../../rpc-api" }
 sp-api = { version = "4.0.0-dev", path = "../../../../primitives/api" }
-sp-consensus = { version = "0.10.0-dev", path = "../../../../primitives/consensus/common" }
-sp-core = { version = "6.0.0", path = "../../../../primitives/core" }
 sp-application-crypto = { version = "6.0.0", path = "../../../../primitives/application-crypto" }
+sp-blockchain = { version = "4.0.0-dev", path = "../../../../primitives/blockchain" }
+sp-consensus = { version = "0.10.0-dev", path = "../../../../primitives/consensus/common" }
+sp-consensus-babe = { version = "0.10.0-dev", path = "../../../../primitives/consensus/babe" }
+sp-core = { version = "6.0.0", path = "../../../../primitives/core" }
 sp-keystore = { version = "0.12.0", path = "../../../../primitives/keystore" }
+sp-runtime = { version = "6.0.0", path = "../../../../primitives/runtime" }
 
 [dev-dependencies]
-sc-consensus = { version = "0.10.0-dev", path = "../../../consensus/common" }
 serde_json = "1.0.79"
-sp-keyring = { version = "6.0.0", path = "../../../../primitives/keyring" }
-sc-keystore = { version = "4.0.0-dev", path = "../../../keystore" }
-substrate-test-runtime-client = { version = "2.0.0", path = "../../../../test-utils/runtime/client" }
 tempfile = "3.1.0"
+sc-consensus = { version = "0.10.0-dev", path = "../../../consensus/common" }
+sc-keystore = { version = "4.0.0-dev", path = "../../../keystore" }
+sp-keyring = { version = "6.0.0", path = "../../../../primitives/keyring" }
+substrate-test-runtime-client = { version = "2.0.0", path = "../../../../test-utils/runtime/client" }
