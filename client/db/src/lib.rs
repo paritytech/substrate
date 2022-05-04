@@ -88,7 +88,7 @@ use sp_state_machine::{
 	backend::Backend as StateBackend, ChildStorageCollection, DBValue, IndexOperation,
 	OffchainChangesCollection, StateMachineStats, StorageCollection, UsageInfo as StateUsageInfo,
 };
-use sp_trie::{cache::SharedTrieNodeCache, prefixed_key, MemoryDB, PrefixedMemoryDB};
+use sp_trie::{cache::SharedTrieCache, prefixed_key, MemoryDB, PrefixedMemoryDB};
 
 // Re-export the Database trait so that one can pass an implementation of it.
 pub use sc_state_db::PruningMode;
@@ -1010,7 +1010,7 @@ pub struct Backend<Block: BlockT> {
 	io_stats: FrozenForDuration<(kvdb::IoStats, StateUsageInfo)>,
 	state_usage: Arc<StateUsageStats>,
 	genesis_state: RwLock<Option<Arc<DbGenesisStorage<Block>>>>,
-	trie_node_cache: Option<sp_trie::cache::SharedTrieNodeCache<HashFor<Block>>>,
+	trie_node_cache: Option<sp_trie::cache::SharedTrieCache<HashFor<Block>>>,
 }
 
 impl<Block: BlockT> Backend<Block> {
@@ -1096,7 +1096,7 @@ impl<Block: BlockT> Backend<Block> {
 			keep_blocks: config.keep_blocks.clone(),
 			genesis_state: RwLock::new(None),
 			trie_node_cache: config.trie_node_cache_settings.enable.then(|| {
-				SharedTrieNodeCache::new(sp_trie::cache::Configuration {
+				SharedTrieCache::new(sp_trie::cache::Configuration {
 					maximum_size_in_bytes: config.trie_node_cache_settings.maximum_size_in_bytes,
 				})
 			}),

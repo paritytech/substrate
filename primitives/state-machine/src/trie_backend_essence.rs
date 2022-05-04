@@ -80,7 +80,7 @@ pub struct TrieBackendEssence<S: TrieBackendStorage<H>, H: Hasher> {
 	#[cfg(feature = "std")]
 	pub(crate) cache: Arc<RwLock<Cache<H::Out>>>,
 	#[cfg(feature = "std")]
-	trie_node_cache: Option<sp_trie::cache::LocalTrieNodeCache<H>>,
+	trie_node_cache: Option<sp_trie::cache::LocalTrieCache<H>>,
 	#[cfg(feature = "std")]
 	pub(crate) recorder: Option<Recorder<H>>,
 }
@@ -106,7 +106,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> {
 	pub fn new_with_cache_and_recorder(
 		storage: S,
 		root: H::Out,
-		cache: Option<sp_trie::cache::LocalTrieNodeCache<H>>,
+		cache: Option<sp_trie::cache::LocalTrieCache<H>>,
 		recorder: Option<Recorder<H>>,
 	) -> Self {
 		TrieBackendEssence {

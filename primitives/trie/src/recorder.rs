@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{cache::TrieNodeCache, Error, NodeCodec, StorageProof, TrieDBBuilder};
+use crate::{cache::TrieCache, Error, NodeCodec, StorageProof, TrieDBBuilder};
 use codec::Encode;
 use hash_db::{HashDBRef, Hasher};
 use parking_lot::Mutex;
@@ -83,7 +83,7 @@ impl<H: Hasher> Recorder<H> {
 		self,
 		root: &H::Out,
 		hash_db: &dyn HashDBRef<H, DBValue>,
-		mut cache: Option<&mut TrieNodeCache<H>>,
+		mut cache: Option<&mut TrieCache<H>>,
 	) -> Result<StorageProof, crate::Error<H::Out>> {
 		let mut recorder = mem::take(&mut *self.inner.lock());
 		let accessed_keys = mem::take(&mut recorder.accessed_keys);
