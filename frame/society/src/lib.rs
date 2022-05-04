@@ -1421,9 +1421,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// End the current challenge period and start a new one.
 	fn rotate_challenge(rng: &mut impl RngCore) {
+		let mut next_defender = None;
+
 		// End current defender rotation
 		if let Some((defender, skeptic, tally)) = Defending::<T, I>::get() {
-			if tally.more_rejections() {
+			// We require strictly more approvals, since the member should be voting for themselves.
+			if !tally.more_approvals() {
 				// Member has failed the challenge: Suspend them. This will fail if they are Head
 				// or Founder, in which case we ignore.
 				let _ = Self::suspend_member(&defender);
@@ -1436,8 +1439,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				| (Some(Vote { approve: true, .. }), false, true)
 				| (Some(Vote { approve: false, .. }), true, false)
 				=> {
-					// Punish skeptic.
+					// Punish skeptic and challenge them next.
 					let _ = Self::strike_member(&skeptic);
+					let founder = Founder::<T, I>::get();
+					let head = Head::<T, I>::get();
+					if Some(&skeptic) != founder.as_ref() && Some(&skeptic) != head.as_ref() {
+						next_defender = Some(skeptic);
+					}
 				}
 				_ => {}
 			}
@@ -1451,7 +1459,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		// Avoid challenging if there's only two members since we never challenge the Head or
 		// the Founder.
 		if MemberCount::<T, I>::get() > 2 {
-			let defender = Self::pick_defendent(rng).expect("exited if members empty; qed");
+			let defender = next_defender.or_else(|| Self::pick_defendent(rng)).expect("exited if members empty; qed");
 			let skeptic = Self::pick_member_except(rng, &defender).expect("exited if members empty; qed");
 			Self::deposit_event(Event::<T, I>::Challenged { member: defender.clone() });
 			Defending::<T, I>::put((defender, skeptic, Tally::default()));

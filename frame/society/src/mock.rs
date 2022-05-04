@@ -155,13 +155,17 @@ impl EnvBuilder {
 		ext.execute_with(|| {
 			if self.founded {
 				let r = b"be cool".to_vec();
-				assert!(Society::found_society(Origin::signed(1), 10, 100, 10, 2, 25, r).is_ok());
+				assert!(Society::found_society(Origin::signed(1), 10, 10, 8, 2, 25, r).is_ok());
 			}
 			f()
 		})
 	}
 	pub fn founded(mut self, f: bool) -> Self {
 		self.founded = f;
+		self
+	}
+	pub fn with_pot(mut self, p: u64) -> Self {
+		self.pot = p;
 		self
 	}
 }
