@@ -257,7 +257,7 @@ use frame_support::{
 	pallet_prelude::*,
 	traits::{
 		Currency, EnsureOrigin, ExistenceRequirement::AllowDeath,
-		Imbalance, OnUnbalanced, Randomness, ReservableCurrency,
+		Imbalance, OnUnbalanced, Randomness, ReservableCurrency, BalanceStatus,
 	},
 	PalletId,
 };
@@ -375,6 +375,14 @@ impl Tally {
 	fn more_rejections(&self) -> bool {
 		self.rejections > self.approvals
 	}
+
+	fn clear_approval(&self) -> bool {
+		self.approvals >= (2 * self.rejections).max(1)
+	}
+
+	fn clear_rejection(&self) -> bool {
+		self.rejections >= (2 * self.approvals).max(1)
+	}
 }
 
 /// A bid for entry into society.
@@ -388,6 +396,8 @@ pub struct Candidacy<AccountId, Balance> {
 	bid: Balance,
 	/// The tally of votes so far.
 	tally: Tally,
+	/// True if the skeptic was already punished for note voting.
+	skeptic_struck: bool,
 }
 
 /// A vote by a member on a candidate application.
@@ -572,12 +582,16 @@ pub mod pallet {
 		NotFounder,
 		/// The caller is not the head.
 		NotHead,
-		/// The membership cannot be claimed as the member does not (yet) have enough votes.
+		/// The membership cannot be claimed as the candidate was not clearly approved.
 		NotApproved,
-		/// The candidacy cannot be claimed/dropped as the voting is still in progress.
-		InProgress,
-		/// The candidacy cannot be dropped as the candidate is approved.
+		/// The candidate cannot be kicked as the candidate was not clearly rejected.
+		NotRejected,
+		/// The candidacy cannot be dropped as the candidate was clearly approved.
 		Approved,
+		/// The candidacy cannot be bestowed as the candidate was clearly rejected.
+		Rejected,
+		/// The candidacy cannot be concluded as the voting is still in progress.
+		InProgress,
 		/// The candidacy cannot be pruned until a full additional intake period has passed.
 		TooEarly,
 		/// The skeptic already voted.
@@ -592,6 +606,8 @@ pub mod pallet {
 		NotGroup,
 		/// The member is already elevated to this rank.
 		AlreadyElevated,
+		/// The skeptic has already been punished for this offence.
+		AlreadyPunished,
 	}
 
 	#[pallet::event]
@@ -1044,6 +1060,7 @@ pub mod pallet {
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn payout(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
+			ensure!(Members::<T, I>::get(&who).ok_or(Error::<T, I>::NotMember)?.rank == 0, Error::<T, I>::NoPayout);
 			let mut record = Payouts::<T, I>::get(&who);
 
 			if let Some((when, amount)) = record.payouts.first() {
@@ -1218,65 +1235,90 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Punish the skeptic with a strike if they did not vote on a candidate. Callable by the
+		/// candidate.
+		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
+		pub fn punish_skeptic(origin: OriginFor<T>) -> DispatchResult {
+			let candidate = ensure_signed(origin)?;
+			let mut candidacy = Candidates::<T, I>::get(&candidate).ok_or(Error::<T, I>::NotCandidate)?;
+			ensure!(!candidacy.skeptic_struck, Error::<T, I>::AlreadyPunished);
+			ensure!(!Self::in_progress(candidacy.round), Error::<T, I>::InProgress);
+			Self::check_skeptic(&candidate, &mut candidacy);
+			Candidates::<T, I>::insert(&candidate, candidacy);
+			Ok(())
+		}
+
 		/// Transform an approved candidate into a member. Callable only by the
 		/// the candidate, and only after the period for voting has ended.
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn claim_membership(origin: OriginFor<T>) -> DispatchResult {
 			let candidate = ensure_signed(origin)?;
 			let candidacy = Candidates::<T, I>::get(&candidate).ok_or(Error::<T, I>::NotCandidate)?;
-			ensure!(candidacy.tally.more_approvals(), Error::<T, I>::NotApproved);
+			ensure!(candidacy.tally.clear_approval(), Error::<T, I>::NotApproved);
 			ensure!(!Self::in_progress(candidacy.round), Error::<T, I>::InProgress);
 			Self::induct_member(candidate, candidacy, 0)
 		}
 
 		/// Transform an approved candidate into a member. Callable only by the Signed origin of the
-		/// Founder and only after the period for voting has ended.
+		/// Founder, only after the period for voting has ended and only when the candidate is not
+		/// clearly rejected.
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
-		pub fn force_membership(origin: OriginFor<T>, candidate: T::AccountId) -> DispatchResult {
+		pub fn bestow_membership(origin: OriginFor<T>, candidate: T::AccountId) -> DispatchResult {
 			let founder = ensure_signed(origin)?;
 			ensure!(Founder::<T, I>::get() == Some(founder.clone()), Error::<T, I>::NotFounder);
-
 			let candidacy = Candidates::<T, I>::get(&candidate).ok_or(Error::<T, I>::NotCandidate)?;
+			ensure!(!candidacy.tally.clear_rejection(), Error::<T, I>::Rejected);
 			ensure!(!Self::in_progress(candidacy.round), Error::<T, I>::InProgress);
 			Self::induct_member(candidate, candidacy, 0)
 		}
 
 		/// Remove the candidate's application from the society. Callable only by the Signed origin
-		/// of the Founder, and only after the period for voting has ended.
+		/// of the Founder, only after the period for voting has ended, and only when they do not
+		/// have a clear approval.
+		///
+		/// Any bid deposit is lost and voucher is banned.
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn kick_candidate(origin: OriginFor<T>, candidate: T::AccountId) -> DispatchResult {
 			let founder = ensure_signed(origin)?;
 			ensure!(Founder::<T, I>::get() == Some(founder.clone()), Error::<T, I>::NotFounder);
-			let candidacy = Candidates::<T, I>::get(&candidate).ok_or(Error::<T, I>::NotCandidate)?;
+			let mut candidacy = Candidates::<T, I>::get(&candidate).ok_or(Error::<T, I>::NotCandidate)?;
 			ensure!(!Self::in_progress(candidacy.round), Error::<T, I>::InProgress);
-			Self::check_skeptic(&candidate, &candidacy);
+			ensure!(!candidacy.tally.clear_approval(), Error::<T, I>::Approved);
+			Self::check_skeptic(&candidate, &mut candidacy);
+			Self::reject_candidate(&candidate, &candidacy.kind);
 			Votes::<T, I>::remove_prefix(&candidate, None);
 			Candidates::<T, I>::remove(&candidate);
 			Ok(())
 		}
 
-		/// Remove the candidate's failed application from the society. Callable only by the
-		/// the candidate, and only after the period for voting has ended.
+		/// Remove the candidate's application from the society. Callable only by the candidate.
+		///
+		/// Any bid deposit is lost and voucher is banned.
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
-		pub fn resign_candidate(origin: OriginFor<T>) -> DispatchResult {
+		pub fn resign_candidacy(origin: OriginFor<T>) -> DispatchResult {
 			let candidate = ensure_signed(origin)?;
-			let candidacy = Candidates::<T, I>::get(&candidate).ok_or(Error::<T, I>::NotCandidate)?;
-			ensure!(!candidacy.tally.more_approvals(), Error::<T, I>::Approved);
-			ensure!(!Self::in_progress(candidacy.round), Error::<T, I>::InProgress);
-			Self::check_skeptic(&candidate, &candidacy);
+			let mut candidacy = Candidates::<T, I>::get(&candidate).ok_or(Error::<T, I>::NotCandidate)?;
+			if !Self::in_progress(candidacy.round) {
+				Self::check_skeptic(&candidate, &mut candidacy);
+			}
+			Self::reject_candidate(&candidate, &candidacy.kind);
 			Votes::<T, I>::remove_prefix(&candidate, None);
 			Candidates::<T, I>::remove(&candidate);
 			Ok(())
 		}
 
 		/// Remove a `candidate`'s failed application from the society. Callable by any
-		/// signed origin but only after the subsequent period for voting has ended.
+		/// signed origin but only at the end of the subsequent round and only for
+		/// a candidate with more rejections than approvals.
+		///
+		/// The bid deposit is lost and the voucher is banned.
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn drop_candidate(origin: OriginFor<T>, candidate: T::AccountId) -> DispatchResult {
 			ensure_signed(origin)?;
 			let candidacy = Candidates::<T, I>::get(&candidate).ok_or(Error::<T, I>::NotCandidate)?;
-			ensure!(!candidacy.tally.more_approvals(), Error::<T, I>::Approved);
+			ensure!(candidacy.tally.clear_rejection(), Error::<T, I>::NotRejected);
 			ensure!(RoundCount::<T, I>::get() > candidacy.round + 1, Error::<T, I>::TooEarly);
+			Self::reject_candidate(&candidate, &candidacy.kind);
 			Votes::<T, I>::remove_prefix(&candidate, None);
 			Candidates::<T, I>::remove(&candidate);
 			Ok(())
@@ -1356,20 +1398,22 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Vote { approve, weight }
 	}
 
-	fn check_skeptic(candidate: &T::AccountId, candidacy: &Candidacy<T::AccountId, BalanceOf<T, I>>) {
-		if RoundCount::<T, I>::get() != candidacy.round { return }
+	fn check_skeptic(candidate: &T::AccountId, candidacy: &mut Candidacy<T::AccountId, BalanceOf<T, I>>) {
+		if RoundCount::<T, I>::get() != candidacy.round || candidacy.skeptic_struck { return }
 		// We expect the skeptic to have voted.
 		let skeptic = match Skeptic::<T, I>::get() { Some(s) => s, None => return };
 		let maybe_vote = Votes::<T, I>::get(&candidate, &skeptic);
-		let approved = candidacy.tally.more_approvals();
-		let rejected = candidacy.tally.more_rejections();
+		let approved = candidacy.tally.clear_approval();
+		let rejected = candidacy.tally.clear_rejection();
 		match (maybe_vote, approved, rejected) {
 			(None, _, _)
 			| (Some(Vote { approve: true, .. }), false, true)
 			| (Some(Vote { approve: false, .. }), true, false)
 			=> {
 				// Can't do much if the punishment doesn't work out.
-				let _ = Self::strike_member(&skeptic);
+				if Self::strike_member(&skeptic).is_ok() {
+					candidacy.skeptic_struck = true;
+				}
 			},
 			_ => {},
 		}
@@ -1489,6 +1533,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					kind: bid.kind.clone(),
 					bid: bid.value,
 					tally: Default::default(),
+					skeptic_struck: false,
 				};
 				Candidates::<T, I>::insert(&bid.who, candidacy);
 				selections.saturating_inc();
@@ -1537,6 +1582,26 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 	}
 
+	/// Either repatriate the deposit into the Society account or ban the vouching member.
+	///
+	/// In neither case can we do much if the action isn't completable, but there's
+	/// no reason that either should fail.
+	///
+	/// WARNING: This alters the voucher item of `Members`. You must ensure that you do not
+	/// accidentally overwrite it with an older value after calling this.
+	fn reject_candidate(who: &T::AccountId, kind: &BidKind<T::AccountId, BalanceOf<T, I>>) {
+		match kind {
+			BidKind::Deposit(deposit) => {
+				let pot = Self::account_id();
+				let free = BalanceStatus::Free;
+				debug_assert!(T::Currency::repatriate_reserved(&who, &pot, *deposit, free).is_ok());
+			},
+			BidKind::Vouch(voucher, _) => {
+				Members::<T, I>::mutate_extant(voucher, |record| record.vouching = Some(VouchingStatus::Banned));
+			},
+		}
+	}
+
 	/// Check a user has a bid.
 	fn has_bid(bids: &Vec<Bid<T::AccountId, BalanceOf<T, I>>>, who: &T::AccountId) -> bool {
 		// Bids are ordered by `value`, so we cannot binary search for a user.
@@ -1581,10 +1646,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Induct a new member into the set.
 	fn induct_member(
 		candidate: T::AccountId,
-		candidacy: Candidacy<T::AccountId, BalanceOf<T, I>>,
+		mut candidacy: Candidacy<T::AccountId, BalanceOf<T, I>>,
 		rank: Rank,
 	) -> DispatchResult {
-		Self::check_skeptic(&candidate, &candidacy);
+		Self::check_skeptic(&candidate, &mut candidacy);
 		Self::add_new_member(&candidate, rank)?;
 		let next_head = NextHead::<T, I>::get()
 			.filter(|old| old.round > candidacy.round
@@ -1602,18 +1667,22 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn strike_member(who: &T::AccountId) -> DispatchResult {
 		let mut record = Members::<T, I>::get(who).ok_or(Error::<T, I>::NotMember)?;
 		record.strikes.saturating_inc();
+		Members::<T, I>::insert(who, &record);
+		// ^^^ Keep the member record mutation self-contained as we might be suspending them later
+		// in this function.
+
 		if record.strikes >= T::GraceStrikes::get() {
 			// Too many strikes: slash the payout in half.
 			let total_payout = Payouts::<T, I>::get(who).payouts.iter()
 				.fold(BalanceOf::<T, I>::zero(), |acc, x| acc.saturating_add(x.1));
 			Self::slash_payout(who, total_payout / 2u32.into());
 		}
+
 		let params = Parameters::<T, I>::get().ok_or(Error::<T, I>::NotGroup)?;
 		if record.strikes >= params.max_strikes {
 			// Way too many strikes: suspend.
 			Self::suspend_member(who);
 		}
-		Members::<T, I>::insert(who, &record);
 		Ok(())
 	}
 
@@ -1675,6 +1744,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		if let Ok(record) = Self::remove_member(&who) {
 			SuspendedMembers::<T, I>::insert(who, record);
 			Self::deposit_event(Event::<T, I>::MemberSuspended { member: who.clone() });
+		} else {
+			debug_assert!(false, "Unable to remove member (is it the Head or Founder?)")
 		}
 	}
 
@@ -1772,7 +1843,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Bump the payout amount of `who`, to be unlocked at the given block number.
 	///
-	/// If it the caller's duty to ensure that `who` is already a member. This does nothing if `who`
+	/// It is the caller's duty to ensure that `who` is already a member. This does nothing if `who`
 	/// is not a member or if `value` is zero.
 	fn bump_payout(who: &T::AccountId, when: T::BlockNumber, value: BalanceOf<T, I>) {
 		if value.is_zero() { return }

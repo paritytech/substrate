@@ -195,5 +195,5 @@ pub fn candidacy<AccountId, Balance>(
 	approvals: VoteCount,
 	rejections: VoteCount,
 ) -> Candidacy<AccountId, Balance> {
-	Candidacy { round, kind, bid, tally: Tally { approvals, rejections } }
+	Candidacy { round, kind, bid, tally: Tally { approvals, rejections }, skeptic_struck: false }
 }
