@@ -247,19 +247,19 @@
 mod behaviour;
 mod discovery;
 mod peer_info;
-mod protocol;
 mod request_responses;
 mod schema;
-mod service;
 mod transport;
-mod utils;
 
 pub mod bitswap;
 pub mod config;
 pub mod error;
 pub mod light_client_requests;
 pub mod network_state;
+pub mod protocol;
+pub mod service;
 pub mod transactions;
+pub mod utils;
 
 #[doc(inline)]
 pub use libp2p::{multiaddr, Multiaddr, PeerId};
