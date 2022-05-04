@@ -2105,7 +2105,7 @@ mod tests {
 			// set the solution balancing to get the desired score.
 			crate::mock::Balancing::set(Some((2, 0)));
 
-			let (solution, _) = MultiPhase::mine_solution::<<Runtime as Config>::Solver>().unwrap();
+			let (solution, _) = MultiPhase::mine_solution().unwrap();
 			// Default solution's score.
 			assert!(matches!(solution.score, ElectionScore { minimal_stake: 50, .. }));
 

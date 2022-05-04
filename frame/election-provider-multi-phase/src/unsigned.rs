@@ -21,11 +21,9 @@ use crate::{
 	helpers, Call, Config, ElectionCompute, Error, FeasibilityError, Pallet, RawSolution,
 	ReadySolution, RoundSnapshot, SolutionAccuracyOf, SolutionOf, SolutionOrSnapshotSize, Weight,
 };
-use codec::{Encode, MaxEncodedLen};
+use codec::Encode;
 use frame_election_provider_support::{NposSolution, NposSolver, PerThing128, VoteWeight};
-use frame_support::{
-	dispatch::DispatchResult, ensure, pallet_prelude::Member, traits::Get, BoundedVec, Parameter,
-};
+use frame_support::{dispatch::DispatchResult, ensure, traits::Get, BoundedVec};
 use frame_system::offchain::SubmitTransaction;
 use scale_info::TypeInfo;
 use sp_npos_elections::{
@@ -158,19 +156,14 @@ impl<T: Config> Pallet<T> {
 	///
 	/// The Npos Solver type, `S`, must have the same AccountId and Error type as the
 	/// [`crate::Config::Solver`] in order to create a unified return type.
-	pub fn mine_solution<S>(
-	) -> Result<(RawSolution<SolutionOf<T::MinerConfig>>, SolutionOrSnapshotSize), MinerError>
-	where
-		S: NposSolver<AccountId = T::AccountId>,
-	{
+	pub fn mine_solution(
+	) -> Result<(RawSolution<SolutionOf<T::MinerConfig>>, SolutionOrSnapshotSize), MinerError> {
 		let RoundSnapshot { voters, targets } =
 			Self::snapshot().ok_or(MinerError::SnapshotUnAvailable)?;
 		let desired_targets = Self::desired_targets().ok_or(MinerError::SnapshotUnAvailable)?;
-		let (solution, score, size) = Miner::<T::MinerConfig>::mine_solution_with_snapshot::<S>(
-			voters,
-			targets,
-			desired_targets,
-		)?;
+		let (solution, score, size) = Miner::<T::MinerConfig>::mine_solution_with_snapshot::<
+			T::Solver,
+		>(voters, targets, desired_targets)?;
 		let round = Self::round();
 		Ok((RawSolution { solution, score, round }, size))
 	}
@@ -306,7 +299,7 @@ impl<T: Config> Pallet<T> {
 	/// [`Pallet::mine_check_save_submit`].
 	pub fn mine_and_check(
 	) -> Result<(RawSolution<SolutionOf<T::MinerConfig>>, SolutionOrSnapshotSize), MinerError> {
-		let (raw_solution, witness) = Self::mine_solution::<T::Solver>()?;
+		let (raw_solution, witness) = Self::mine_solution()?;
 		Self::basic_checks(&raw_solution, "mined")?;
 		Ok((raw_solution, witness))
 	}
@@ -1035,8 +1028,7 @@ mod tests {
 			assert_eq!(MultiPhase::desired_targets().unwrap(), 2);
 
 			// mine seq_phragmen solution with 2 iters.
-			let (solution, witness) =
-				MultiPhase::mine_solution::<<Runtime as Config>::Solver>().unwrap();
+			let (solution, witness) = MultiPhase::mine_solution().unwrap();
 
 			// ensure this solution is valid.
 			assert!(MultiPhase::queued_solution().is_none());
@@ -1054,8 +1046,7 @@ mod tests {
 				roll_to(25);
 				assert!(MultiPhase::current_phase().is_unsigned());
 
-				let (raw, witness) =
-					MultiPhase::mine_solution::<<Runtime as Config>::Solver>().unwrap();
+				let (raw, witness) = MultiPhase::mine_solution().unwrap();
 				let solution_weight = <Runtime as MinerConfig>::solution_weight(
 					witness.voters,
 					witness.targets,
@@ -1069,8 +1060,7 @@ mod tests {
 				// now reduce the max weight
 				<MinerMaxWeight>::set(25);
 
-				let (raw, witness) =
-					MultiPhase::mine_solution::<<Runtime as Config>::Solver>().unwrap();
+				let (raw, witness) = MultiPhase::mine_solution().unwrap();
 				let solution_weight = <Runtime as MinerConfig>::solution_weight(
 					witness.voters,
 					witness.targets,
@@ -1091,8 +1081,7 @@ mod tests {
 			assert!(MultiPhase::current_phase().is_unsigned());
 
 			// Force the number of winners to be bigger to fail
-			let (mut solution, _) =
-				MultiPhase::mine_solution::<<Runtime as Config>::Solver>().unwrap();
+			let (mut solution, _) = MultiPhase::mine_solution().unwrap();
 			solution.solution.votes1[0].1 = 4;
 
 			assert_eq!(
@@ -1637,14 +1626,14 @@ mod tests {
 			roll_to(25);
 
 			// how long would the default solution be?
-			let solution = MultiPhase::mine_solution::<<Runtime as Config>::Solver>().unwrap();
+			let solution = MultiPhase::mine_solution().unwrap();
 			let max_length = <Runtime as MinerConfig>::MaxLength::get();
 			let solution_size = solution.0.solution.encoded_size();
 			assert!(solution_size <= max_length as usize);
 
 			// now set the max size to less than the actual size and regenerate
 			<Runtime as MinerConfig>::MaxLength::set(solution_size as u32 - 1);
-			let solution = MultiPhase::mine_solution::<<Runtime as Config>::Solver>().unwrap();
+			let solution = MultiPhase::mine_solution().unwrap();
 			let max_length = <Runtime as MinerConfig>::MaxLength::get();
 			let solution_size = solution.0.solution.encoded_size();
 			assert!(solution_size <= max_length as usize);
