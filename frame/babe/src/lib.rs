@@ -379,10 +379,8 @@ pub mod pallet {
 						})
 						.map(|inout| inout.make_bytes(sp_consensus_babe::BABE_VRF_INOUT_CONTEXT));
 
-					if pre_digest.is_primary() {
-						if let Some(randomness) = randomness {
-							Self::deposit_randomness(&randomness);
-						}
+					if let Some(randomness) = pre_digest.is_primary().then(|| randomness).flatten() {
+						Self::deposit_randomness(&randomness);
 					}
 
 					AuthorVrfRandomness::<T>::put(randomness);
