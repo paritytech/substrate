@@ -2407,12 +2407,11 @@ mod tests {
 	}
 
 	#[test]
-	#[cfg(feature = "unstable-interface")]
 	fn code_hash_works() {
 		/// calls `seal_code_hash` and compares the result with the constant.
 		const CODE_CODE_HASH: &str = r#"
 (module
-	(import "__unstable__" "seal_code_hash" (func $seal_code_hash (param i32 i32 i32) (result i32)))
+	(import "seal0" "seal_code_hash" (func $seal_code_hash (param i32 i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; size of our buffer is 32 bytes
@@ -2460,12 +2459,11 @@ mod tests {
 	}
 
 	#[test]
-	#[cfg(feature = "unstable-interface")]
 	fn own_code_hash_works() {
 		/// calls `seal_own_code_hash` and compares the result with the constant.
 		const CODE_OWN_CODE_HASH: &str = r#"
 (module
-	(import "__unstable__" "seal_own_code_hash" (func $seal_own_code_hash (param i32 i32)))
+	(import "seal0" "seal_own_code_hash" (func $seal_own_code_hash (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; size of our buffer is 32 bytes
@@ -2546,11 +2544,10 @@ mod tests {
 	}
 
 	#[test]
-	#[cfg(feature = "unstable-interface")]
 	fn set_code_hash() {
 		const CODE: &str = r#"
 (module
-	(import "__unstable__" "seal_set_code_hash" (func $seal_set_code_hash (param i32) (result i32)))
+	(import "seal0" "seal_set_code_hash" (func $seal_set_code_hash (param i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 	(func $assert (param i32)
 		(block $ok
