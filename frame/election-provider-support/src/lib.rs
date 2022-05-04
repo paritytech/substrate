@@ -454,7 +454,7 @@ pub trait SortedListProvider<AccountId> {
 
 	/// Hook for inserting a new id.
 	///
-	/// Implementation should return an error if duplicate item is being
+	/// Implementation should return an error if duplicate item is being inserted.
 	fn on_insert(id: AccountId, score: Self::Score) -> Result<(), Self::Error>;
 
 	/// Hook for updating a single id.

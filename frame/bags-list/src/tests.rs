@@ -499,10 +499,7 @@ mod sorted_list_provider {
 			assert_eq!(BagsList::count(), 4);
 
 			// when updating
-			assert_storage_noop!(assert_eq!(
-				BagsList::on_update(&201, VoteWeight::MAX).unwrap_err(),
-				ListError::NodeNotFound
-			));
+			assert_noop!(BagsList::on_update(&201, VoteWeight::MAX), ListError::NodeNotFound);
 			// then the count stays the same
 			assert_eq!(BagsList::count(), 4);
 		});

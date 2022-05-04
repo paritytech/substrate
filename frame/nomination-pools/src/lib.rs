@@ -403,7 +403,6 @@ pub struct PoolMember<T: Config> {
 }
 
 impl<T: Config> PoolMember<T> {
-	#[cfg(any(test, debug_assertions))]
 	fn total_points(&self) -> BalanceOf<T> {
 		self.active_points().saturating_add(self.unbonding_points())
 	}
@@ -739,6 +738,14 @@ impl<T: Config> BondedPool<T> {
 	) -> Result<(), DispatchError> {
 		let is_permissioned = caller == target_account;
 		let is_depositor = *target_account == self.roles.depositor;
+		let is_full_unbond = unbonding_points == target_member.active_points();
+
+		// any partial unbonding is only ever allowed if this unbond is permissioned.
+		ensure!(
+			is_permissioned || is_full_unbond,
+			Error::<T>::PartialUnbondNotAllowedPermissionlessly
+		);
+
 		match (is_permissioned, is_depositor) {
 			// If the pool is blocked, then an admin with kicking permissions can remove a
 			// member. If the pool is being destroyed, anyone can remove a member
@@ -1198,6 +1205,10 @@ pub mod pallet {
 		Destroyed { pool_id: PoolId },
 		/// The state of a pool has changed
 		StateChanged { pool_id: PoolId, new_state: PoolState },
+		/// A member has been removed from a pool.
+		///
+		/// The removal can be voluntary (withdrawn all unbonded funds) or involuntary (kicked).
+		MemberRemoved { pool_id: PoolId, member: T::AccountId },
 	}
 
 	#[pallet::error]
@@ -1256,6 +1267,8 @@ pub mod pallet {
 		DefensiveError,
 		/// Not enough points. Ty unbonding less.
 		NotEnoughPointsToUnbond,
+		/// Partial unbonding now allowed permissionlessly.
+		PartialUnbondNotAllowedPermissionlessly,
 	}
 
 	#[pallet::call]
@@ -1595,9 +1608,13 @@ pub mod pallet {
 				amount: balance_to_unbond,
 			});
 
-			let post_info_weight = if member.active_points().is_zero() {
+			let post_info_weight = if member.total_points().is_zero() {
 				// member being reaped.
 				PoolMembers::<T>::remove(&member_account);
+				Self::deposit_event(Event::<T>::MemberRemoved {
+					pool_id: member.pool_id,
+					member: member_account.clone(),
+				});
 
 				if member_account == bonded_pool.roles.depositor {
 					Pallet::<T>::dissolve_pool(bonded_pool);
@@ -2043,6 +2060,10 @@ impl<T: Config> Pallet<T> {
 		let was_destroying = bonded_pool.is_destroying();
 
 		let member_payout = Self::calculate_member_payout(member, bonded_pool, reward_pool)?;
+
+		if member_payout.is_zero() {
+			return Ok(member_payout)
+		}
 
 		// Transfer payout to the member.
 		T::Currency::transfer(

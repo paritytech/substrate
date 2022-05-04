@@ -13,30 +13,30 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sp-application-crypto = { version = "6.0.0", default-features = false, path = "../../application-crypto" }
+async-trait = { version = "0.1.50", optional = true }
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false }
 scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
-sp-std = { version = "4.0.0", default-features = false, path = "../../std" }
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../../api" }
-sp-runtime = { version = "6.0.0", default-features = false, path = "../../runtime" }
-sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../../inherents" }
-sp-timestamp = { version = "4.0.0-dev", default-features = false, path = "../../timestamp" }
+sp-application-crypto = { version = "6.0.0", default-features = false, path = "../../application-crypto" }
+sp-consensus = { version = "0.10.0-dev", optional = true, path = "../common" }
 sp-consensus-slots = { version = "0.10.0-dev", default-features = false, path = "../slots" }
-sp-consensus = { version = "0.10.0-dev", path = "../common", optional = true }
-async-trait = { version = "0.1.50", optional = true }
+sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../../inherents" }
+sp-runtime = { version = "6.0.0", default-features = false, path = "../../runtime" }
+sp-std = { version = "4.0.0", default-features = false, path = "../../std" }
+sp-timestamp = { version = "4.0.0-dev", default-features = false, path = "../../timestamp" }
 
 [features]
 default = ["std"]
 std = [
-	"sp-application-crypto/std",
+	"async-trait",
 	"codec/std",
 	"scale-info/std",
-	"sp-std/std",
 	"sp-api/std",
-	"sp-runtime/std",
-	"sp-inherents/std",
-	"sp-timestamp/std",
-	"sp-consensus-slots/std",
+	"sp-application-crypto/std",
 	"sp-consensus",
-	"async-trait",
+	"sp-consensus-slots/std",
+	"sp-inherents/std",
+	"sp-runtime/std",
+	"sp-std/std",
+	"sp-timestamp/std",
 ]

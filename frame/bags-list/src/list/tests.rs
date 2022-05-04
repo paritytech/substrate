@@ -21,7 +21,7 @@ use crate::{
 	ListBags, ListNodes,
 };
 use frame_election_provider_support::{SortedListProvider, VoteWeight};
-use frame_support::{assert_ok, assert_storage_noop};
+use frame_support::{assert_noop, assert_ok, assert_storage_noop};
 
 fn node(
 	id: AccountId,
