@@ -24,6 +24,10 @@ default = [
 	"std",
 ]
 std = [
+	"codec/std",
+	"parity-util-mem/std",
 	"serde",
 	"sp-application-crypto/std",
+	"sp-core/std",
+	"sp-runtime/std",
 ]

@@ -55,6 +55,7 @@ std = [
 	"sp-application-crypto/std",
 	"sp-core/std",
 	"sp-finality-grandpa/std",
+	"sp-io/std",
 	"sp-runtime/std",
 	"sp-session/std",
 	"sp-staking/std",

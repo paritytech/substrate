@@ -45,4 +45,5 @@ std = [
 	"sp-io/std",
 	"sp-runtime/std",
 	"sp-std/std",
+	"sp-transaction-storage-proof/std",
 ]
