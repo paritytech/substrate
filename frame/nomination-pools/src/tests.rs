@@ -2551,12 +2551,34 @@ mod withdraw_unbonded {
 				// Given
 				assert_ok!(Pools::fully_unbond(Origin::signed(100), 100));
 
+				assert_eq!(
+					pool_events_since_last_call(),
+					vec![
+						Event::Created { depositor: 10, pool_id: 1 },
+						Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+						Event::Bonded { member: 100, pool_id: 1, bonded: 100, joined: true },
+						Event::Bonded { member: 200, pool_id: 1, bonded: 200, joined: true },
+						Event::Unbonded { member: 100, pool_id: 1, amount: 100 }
+					]
+				);
+
 				let mut current_era = 1;
 				CurrentEra::set(current_era);
 
 				assert_ok!(Pools::fully_unbond(Origin::signed(200), 200));
+
+				assert_eq!(
+					pool_events_since_last_call(),
+					vec![Event::Unbonded { member: 200, pool_id: 1, amount: 200 }]
+				);
+
 				unsafe_set_state(1, PoolState::Destroying).unwrap();
 				assert_ok!(Pools::fully_unbond(Origin::signed(10), 10));
+
+				assert_eq!(
+					pool_events_since_last_call(),
+					vec![Event::Unbonded { member: 10, pool_id: 1, amount: 10 }]
+				);
 
 				assert_eq!(
 					SubPoolsStorage::<Runtime>::get(1).unwrap(),
@@ -2581,6 +2603,15 @@ mod withdraw_unbonded {
 
 				// Given
 				assert_ok!(Pools::withdraw_unbonded(Origin::signed(420), 100, 0));
+
+				assert_eq!(
+					pool_events_since_last_call(),
+					vec![
+						Event::Withdrawn { member: 100, pool_id: 1, amount: 100 },
+						Event::MemberRemoved { pool_id: 1, member: 100 }
+					]
+				);
+
 				assert_eq!(
 					SubPoolsStorage::<Runtime>::get(1).unwrap(),
 					SubPools {
@@ -2600,6 +2631,15 @@ mod withdraw_unbonded {
 
 				// Given
 				assert_ok!(Pools::withdraw_unbonded(Origin::signed(420), 200, 0));
+
+				assert_eq!(
+					pool_events_since_last_call(),
+					vec![
+						Event::Withdrawn { member: 200, pool_id: 1, amount: 200 },
+						Event::MemberRemoved { pool_id: 1, member: 200 }
+					]
+				);
+
 				assert_eq!(
 					SubPoolsStorage::<Runtime>::get(1).unwrap(),
 					SubPools {
@@ -2612,32 +2652,22 @@ mod withdraw_unbonded {
 
 				// The depositor can withdraw
 				assert_ok!(Pools::withdraw_unbonded(Origin::signed(420), 10, 0));
+
+				assert_eq!(
+					pool_events_since_last_call(),
+					vec![
+						Event::Withdrawn { member: 10, pool_id: 1, amount: 10 },
+						Event::MemberRemoved { pool_id: 1, member: 10 },
+						Event::Destroyed { pool_id: 1 }
+					]
+				);
+
 				assert!(!PoolMembers::<Runtime>::contains_key(10));
 				assert_eq!(Balances::free_balance(10), 10 + 10);
 				// Pools are removed from storage because the depositor left
 				assert!(!SubPoolsStorage::<Runtime>::contains_key(1));
 				assert!(!RewardPools::<Runtime>::contains_key(1));
 				assert!(!BondedPools::<Runtime>::contains_key(1));
-
-				assert_eq!(
-					pool_events_since_last_call(),
-					vec![
-						Event::Created { depositor: 10, pool_id: 1 },
-						Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-						Event::Bonded { member: 100, pool_id: 1, bonded: 100, joined: true },
-						Event::Bonded { member: 200, pool_id: 1, bonded: 200, joined: true },
-						Event::Unbonded { member: 100, pool_id: 1, amount: 100 },
-						Event::Unbonded { member: 200, pool_id: 1, amount: 200 },
-						Event::Unbonded { member: 10, pool_id: 1, amount: 10 },
-						Event::Withdrawn { member: 100, pool_id: 1, amount: 100 },
-						Event::MemberRemoved { pool_id: 1, member: 100 },
-						Event::Withdrawn { member: 200, pool_id: 1, amount: 200 },
-						Event::MemberRemoved { pool_id: 1, member: 200 },
-						Event::Withdrawn { member: 10, pool_id: 1, amount: 10 },
-						Event::MemberRemoved { pool_id: 1, member: 10 },
-						Event::Destroyed { pool_id: 1 }
-					]
-				);
 			});
 	}
 
