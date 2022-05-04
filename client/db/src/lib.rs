@@ -2300,7 +2300,10 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 	}
 
 	fn requires_full_sync(&self) -> bool {
-		matches!(self.storage.state_db.pruning_mode(), PruningMode::ArchiveAll | PruningMode::ArchiveCanonical)
+		matches!(
+			self.storage.state_db.pruning_mode(),
+			PruningMode::ArchiveAll | PruningMode::ArchiveCanonical
+		)
 	}
 }
 

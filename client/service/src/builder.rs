@@ -780,8 +780,10 @@ where
 	if warp_sync.is_none() && config.network.sync_mode.is_warp() {
 		return Err("Warp sync enabled, but no warp sync provider configured.".into())
 	}
-	
-	if client.requires_full_sync() && !matches!(config.network.sync_mode, sc_network::config::SyncMode::Full) {
+
+	if client.requires_full_sync() &&
+		!matches!(config.network.sync_mode, sc_network::config::SyncMode::Full)
+	{
 		return Err("The backend settings require the full-sync mode".into())
 	}
 
