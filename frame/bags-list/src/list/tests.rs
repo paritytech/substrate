@@ -21,7 +21,7 @@ use crate::{
 	ListBags, ListNodes,
 };
 use frame_election_provider_support::{SortedListProvider, VoteWeight};
-use frame_support::{assert_noop, assert_ok, assert_storage_noop};
+use frame_support::{assert_ok, assert_storage_noop};
 
 fn node(
 	id: AccountId,
@@ -248,10 +248,7 @@ mod list {
 			assert!(get_list_as_ids().contains(&3));
 
 			// then
-			assert_storage_noop!(assert_eq!(
-				List::<Runtime>::insert(3, 20).unwrap_err(),
-				ListError::Duplicate
-			));
+			assert_noop!(List::<Runtime>::insert(3, 20), ListError::Duplicate);
 		});
 	}
 
