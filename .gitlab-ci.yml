@@ -486,6 +486,7 @@ cargo-check-macos:
         --dependent-repo "$DEPENDENT_REPO"
         --github-api-token "$GITHUB_PR_TOKEN"
         --extra-dependencies "$EXTRA_DEPENDENCIES"
+        --companion-overrides "$COMPANION_OVERRIDES"
 
 # Individual jobs are set up for each dependent project so that they can be ran in parallel.
 # Arguably we could generate a job for each companion in the PR's description using Gitlab's
@@ -495,12 +496,18 @@ check-dependent-polkadot:
   <<: *check-dependent-project
   variables:
     DEPENDENT_REPO: polkadot
+    COMPANION_OVERRIDES: |
+      substrate: polkadot-v*
+      polkadot: release-v*
 
 check-dependent-cumulus:
   <<: *check-dependent-project
   variables:
     DEPENDENT_REPO: cumulus
     EXTRA_DEPENDENCIES: polkadot
+    COMPANION_OVERRIDES: |
+      substrate: polkadot-v*
+      cumulus: polkadot-v*
 
 
 build-linux-substrate:
