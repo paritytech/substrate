@@ -803,6 +803,10 @@ where
 	fn get_import_lock(&self) -> &RwLock<()> {
 		&self.import_lock
 	}
+
+	fn requires_full_sync(&self) -> bool {
+		false
+	}
 }
 
 impl<Block: BlockT> backend::LocalBackend<Block> for Backend<Block> where Block::Hash: Ord {}

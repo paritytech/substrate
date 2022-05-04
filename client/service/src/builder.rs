@@ -780,15 +780,10 @@ where
 	if warp_sync.is_none() && config.network.sync_mode.is_warp() {
 		return Err("Warp sync enabled, but no warp sync provider configured.".into())
 	}
-
-	// TODO
-	// if client.pruning_mode().is_archive() {
-	// 	match config.network.sync_mode {
-	// 		SyncMode::Fast { .. } => return Err("Fast sync doesn't work for archive nodes".into()),
-	// 		SyncMode::Warp => return Err("Warp sync doesn't work for archive nodes".into()),
-	// 		SyncMode::Full => {},
-	// 	};
-	// }
+	
+	if client.requires_full_sync() && !matches!(config.network.sync_mode, sc_network::config::SyncMode::Full) {
+		return Err("The backend settings require the full-sync mode".into())
+	}
 
 	let transaction_pool_adapter = Arc::new(TransactionPoolAdapter {
 		imports_external_transactions: !matches!(config.role, Role::Light),

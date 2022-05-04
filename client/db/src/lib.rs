@@ -2306,6 +2306,10 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 	fn get_import_lock(&self) -> &RwLock<()> {
 		&*self.import_lock
 	}
+
+	fn requires_full_sync(&self) -> bool {
+		matches!(self.storage.state_db.pruning_mode(), PruningMode::ArchiveAll | PruningMode::ArchiveCanonical)
+	}
 }
 
 impl<Block: BlockT> sc_client_api::backend::LocalBackend<Block> for Backend<Block> {}
