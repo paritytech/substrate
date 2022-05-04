@@ -343,7 +343,7 @@ pub mod pallet {
 			// that this block was the first in a new epoch, the changeover logic has
 			// already occurred at this point, so the under-construction randomness
 			// will only contain outputs from the right epoch.
-			if let Some(Some(pre_digest)) = Initialized::<T>::take() {
+			if let Some(pre_digest) = Initialized::<T>::take().flatten() {
 				let authority_index = pre_digest.authority_index();
 
 				if T::DisabledValidators::is_disabled(authority_index) {
