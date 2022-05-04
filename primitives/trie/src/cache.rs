@@ -192,9 +192,19 @@ impl<H: Hasher> SharedTrieCache<H> {
 pub struct LocalTrieCache<H: Hasher> {
 	/// The shared trie cache that created this instance.
 	shared: SharedTrieCache<H>,
+	/// The local cache for the trie nodes.
 	node_cache: Mutex<HashMap<H::Out, NodeOwned<H::Out>>>,
+	/// Keeps track of all the trie nodes accessed in the shared cache.
+	///
+	/// This will be used to ensure that these nodes are brought to the front of the lru when this
+	/// local instance is merged back to the shared cache.
 	shared_node_cache_access: Mutex<HashSet<H::Out>>,
+	/// The local cache for the values.
 	value_cache: Mutex<IntMap<u64, CachedValue<H::Out>>>,
+	/// Keeps track of all values accessed in the shared cache.
+	///
+	/// This will be used to ensure that these nodes are brought to the front of the lru when this
+	/// local instance is merged back to the shared cache.
 	shared_value_cache_access: Mutex<IntSet<u64>>,
 }
 

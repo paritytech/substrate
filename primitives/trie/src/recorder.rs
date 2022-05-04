@@ -52,6 +52,9 @@ impl<H> Default for RecorderInner<H> {
 	}
 }
 
+/// The trie recorder.
+///
+/// It can be used to record accesses to the trie and then to convert them into a [`StorageProof`].
 pub struct Recorder<H: Hasher> {
 	inner: Arc<Mutex<RecorderInner<H::Out>>>,
 }
@@ -79,6 +82,13 @@ impl<H: Hasher> Recorder<H> {
 		TrieRecorder::<H, _> { inner: self.inner.lock(), storage_root }
 	}
 
+	/// Convert the recording into a [`StorageProof`].
+	///
+	/// It requires the `root` and the `hash_db` to lookup values that we served from the `cache`
+	/// and hadn't recorded the trie nodes. It will lookup these values and ensure to record the
+	/// trie nodes to include them in the final [`StorageProof`].
+	///
+	/// Returns the [`StorageProof`] or an error if one of lookups in the trie failed.
 	pub fn into_storage_proof<L: TrieLayout<Hash = H, Codec = NodeCodec<H>>>(
 		self,
 		root: &H::Out,
@@ -120,6 +130,7 @@ impl<H: Hasher> Recorder<H> {
 	}
 }
 
+/// The [`TrieRecorder`](trie_db::TrieRecorder) implementation.
 struct TrieRecorder<H: Hasher, I> {
 	inner: I,
 	storage_root: H::Out,
