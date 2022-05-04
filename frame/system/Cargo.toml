@@ -13,16 +13,16 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-serde = { version = "1.0.136", optional = true, features = ["derive"] }
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"] }
-scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
-sp-core = { version = "6.0.0", default-features = false, path = "../../primitives/core" }
-sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
-sp-io = { version = "6.0.0", path = "../../primitives/io", default-features = false }
-sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-version = { version = "5.0.0", default-features = false, path = "../../primitives/version" }
-frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 log = { version = "0.4.16", default-features = false }
+scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
+serde = { version = "1.0.136", features = ["derive"], optional = true }
+frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
+sp-core = { version = "6.0.0", default-features = false, path = "../../primitives/core" }
+sp-io = { version = "6.0.0", default-features = false, path = "../../primitives/io" }
+sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
+sp-version = { version = "5.0.0", default-features = false, path = "../../primitives/version" }
 
 [dev-dependencies]
 criterion = "0.3.3"
@@ -32,20 +32,20 @@ substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/ru
 [features]
 default = ["std"]
 std = [
-	"serde",
 	"codec/std",
-	"scale-info/std",
-	"sp-core/std",
-	"sp-std/std",
-	"sp-io/std",
 	"frame-support/std",
-	"sp-runtime/std",
-	"sp-version/std",
 	"log/std",
+	"scale-info/std",
+	"serde",
+	"sp-core/std",
+	"sp-io/std",
+	"sp-runtime/std",
+	"sp-std/std",
+	"sp-version/std",
 ]
 runtime-benchmarks = [
-	"sp-runtime/runtime-benchmarks",
 	"frame-support/runtime-benchmarks",
+	"sp-runtime/runtime-benchmarks",
 ]
 try-runtime = ["frame-support/try-runtime"]
 

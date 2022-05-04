@@ -7,31 +7,32 @@ repository = "https://github.com/paritytech/substrate/"
 edition = "2021"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 readme = "README.md"
+homepage = "https://substrate.io"
 
 [dependencies]
+finality-grandpa = { version = "0.15.0", features = ["derive-codec"] }
+futures = "0.3.16"
+jsonrpc-core = "18.0.0"
+jsonrpc-core-client = "18.0.0"
+jsonrpc-derive = "18.0.0"
+jsonrpc-pubsub = "18.0.0"
+log = "0.4.8"
+parity-scale-codec = { version = "3.0.0", features = ["derive"] }
+serde = { version = "1.0.105", features = ["derive"] }
+serde_json = "1.0.50"
+thiserror = "1.0"
+sc-client-api = { version = "4.0.0-dev", path = "../../api" }
 sc-finality-grandpa = { version = "0.10.0-dev", path = "../" }
 sc-rpc = { version = "4.0.0-dev", path = "../../rpc" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
 sp-core = { version = "6.0.0", path = "../../../primitives/core" }
 sp-runtime = { version = "6.0.0", path = "../../../primitives/runtime" }
-finality-grandpa = { version = "0.15.0", features = ["derive-codec"] }
-jsonrpc-core = "18.0.0"
-jsonrpc-core-client = "18.0.0"
-jsonrpc-derive = "18.0.0"
-jsonrpc-pubsub = "18.0.0"
-futures = "0.3.16"
-serde = { version = "1.0.105", features = ["derive"] }
-serde_json = "1.0.50"
-log = "0.4.8"
-thiserror = "1.0"
-parity-scale-codec = { version = "3.0.0", features = ["derive"] }
-sc-client-api = { version = "4.0.0-dev", path = "../../api" }
 
 [dev-dependencies]
 sc-block-builder = { version = "0.10.0-dev", path = "../../block-builder" }
-sc-rpc = { version = "4.0.0-dev", path = "../../rpc", features = [
-    "test-helpers",
-] }
+sc-rpc = { version = "4.0.0-dev", features = [
+	"test-helpers",
+], path = "../../rpc" }
 sp-core = { version = "6.0.0", path = "../../../primitives/core" }
 sp-finality-grandpa = { version = "4.0.0-dev", path = "../../../primitives/finality-grandpa" }
 sp-keyring = { version = "6.0.0", path = "../../../primitives/keyring" }

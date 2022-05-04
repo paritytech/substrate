@@ -14,43 +14,43 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-log = { version = "0.4.16", optional = true }
-thiserror = { version = "1.0.30", optional = true }
-parking_lot = { version = "0.12.0", optional = true }
-hash-db = { version = "0.15.2", default-features = false }
-trie-root = { version = "0.17.0", default-features = false }
-sp-trie = { version = "6.0.0", path = "../trie", default-features = false }
-sp-core = { version = "6.0.0", path = "../core", default-features = false }
-sp-panic-handler = { version = "4.0.0", path = "../panic-handler", optional = true }
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false }
+hash-db = { version = "0.15.2", default-features = false }
+log = { version = "0.4.16", optional = true }
 num-traits = { version = "0.2.8", default-features = false }
+parking_lot = { version = "0.12.0", optional = true }
 rand = { version = "0.7.2", optional = true }
-sp-externalities = { version = "0.12.0", path = "../externalities", default-features = false }
 smallvec = "1.8.0"
-sp-std = { version = "4.0.0", default-features = false, path = "../std" }
+thiserror = { version = "1.0.30", optional = true }
 tracing = { version = "0.1.29", optional = true }
+trie-root = { version = "0.17.0", default-features = false }
+sp-core = { version = "6.0.0", default-features = false, path = "../core" }
+sp-externalities = { version = "0.12.0", default-features = false, path = "../externalities" }
+sp-panic-handler = { version = "4.0.0", optional = true, path = "../panic-handler" }
+sp-std = { version = "4.0.0", default-features = false, path = "../std" }
+sp-trie = { version = "6.0.0", default-features = false, path = "../trie" }
 
 [dev-dependencies]
 hex-literal = "0.3.4"
-sp-runtime = { version = "6.0.0", path = "../runtime" }
 pretty_assertions = "1.0.0"
 rand = "0.7.2"
+sp-runtime = { version = "6.0.0", path = "../runtime" }
 
 [features]
 default = ["std"]
 std = [
 	"codec/std",
 	"hash-db/std",
-	"num-traits/std",
-	"sp-core/std",
-	"sp-externalities/std",
-	"sp-std/std",
-	"sp-trie/std",
-	"trie-root/std",
 	"log",
-	"thiserror",
+	"num-traits/std",
 	"parking_lot",
 	"rand",
+	"sp-core/std",
+	"sp-externalities/std",
 	"sp-panic-handler",
-	"tracing"
+	"sp-std/std",
+	"sp-trie/std",
+	"thiserror",
+	"tracing",
+	"trie-root/std",
 ]

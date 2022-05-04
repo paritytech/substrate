@@ -27,7 +27,10 @@
 use crate::Config;
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_election_provider_support::ScoreProvider;
-use frame_support::{traits::Get, DefaultNoBound};
+use frame_support::{
+	traits::{Defensive, Get},
+	DefaultNoBound, PalletError,
+};
 use scale_info::TypeInfo;
 use sp_runtime::traits::{Bounded, Zero};
 use sp_std::{
@@ -38,10 +41,14 @@ use sp_std::{
 	vec::Vec,
 };
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo, PalletError)]
 pub enum ListError {
 	/// A duplicate id has been detected.
 	Duplicate,
+	/// An Id does not have a greater score than another Id.
+	NotHeavier,
+	/// Attempted to place node in front of a node in another bag.
+	NotInSameBag,
 	/// Given node id was not found.
 	NodeNotFound,
 }
@@ -321,9 +328,13 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 		Ok(())
 	}
 
-	/// Remove an id from the list.
-	pub(crate) fn remove(id: &T::AccountId) {
-		Self::remove_many(sp_std::iter::once(id));
+	/// Remove an id from the list, returning an error if `id` does not exists.
+	pub(crate) fn remove(id: &T::AccountId) -> Result<(), ListError> {
+		if !Self::contains(id) {
+			return Err(ListError::NodeNotFound)
+		}
+		let _ = Self::remove_many(sp_std::iter::once(id));
+		Ok(())
 	}
 
 	/// Remove many ids from the list.
@@ -416,31 +427,31 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 	pub(crate) fn put_in_front_of(
 		lighter_id: &T::AccountId,
 		heavier_id: &T::AccountId,
-	) -> Result<(), crate::pallet::Error<T, I>> {
-		use crate::pallet;
+	) -> Result<(), ListError> {
 		use frame_support::ensure;
 
-		let lighter_node = Node::<T, I>::get(lighter_id).ok_or(pallet::Error::IdNotFound)?;
-		let heavier_node = Node::<T, I>::get(heavier_id).ok_or(pallet::Error::IdNotFound)?;
+		let lighter_node = Node::<T, I>::get(&lighter_id).ok_or(ListError::NodeNotFound)?;
+		let heavier_node = Node::<T, I>::get(&heavier_id).ok_or(ListError::NodeNotFound)?;
 
-		ensure!(lighter_node.bag_upper == heavier_node.bag_upper, pallet::Error::NotInSameBag);
+		ensure!(lighter_node.bag_upper == heavier_node.bag_upper, ListError::NotInSameBag);
 
 		// this is the most expensive check, so we do it last.
 		ensure!(
-			T::ScoreProvider::score(heavier_id) > T::ScoreProvider::score(lighter_id),
-			pallet::Error::NotHeavier
+			T::ScoreProvider::score(&heavier_id) > T::ScoreProvider::score(&lighter_id),
+			ListError::NotHeavier
 		);
 
 		// remove the heavier node from this list. Note that this removes the node from storage and
 		// decrements the node counter.
-		Self::remove(heavier_id);
+		// defensive: both nodes have been checked to exist.
+		let _ = Self::remove(&heavier_id).defensive();
 
 		// re-fetch `lighter_node` from storage since it may have been updated when `heavier_node`
 		// was removed.
 		let lighter_node = Node::<T, I>::get(lighter_id).ok_or_else(|| {
 			debug_assert!(false, "id that should exist cannot be found");
 			crate::log!(warn, "id that should exist cannot be found");
-			pallet::Error::IdNotFound
+			ListError::NodeNotFound
 		})?;
 
 		// insert `heavier_node` directly in front of `lighter_node`. This will update both nodes

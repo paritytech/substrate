@@ -874,12 +874,7 @@ pub trait SignedExtension:
 
 	/// Do any pre-flight stuff for a signed transaction.
 	///
-	/// Note this function by default delegates to `validate`, so that
-	/// all checks performed for the transaction queue are also performed during
-	/// the dispatch phase (applying the extrinsic).
-	///
-	/// If you ever override this function, you need to make sure to always
-	/// perform the same validation as in `validate`.
+	/// Make sure to perform the same checks as in [`Self::validate`].
 	fn pre_dispatch(
 		self,
 		who: &Self::AccountId,

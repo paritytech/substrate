@@ -17,10 +17,9 @@ codec = { package = "parity-scale-codec", version = "3.0.0" }
 jsonrpc-core = "18.0.0"
 jsonrpc-core-client = "18.0.0"
 jsonrpc-derive = "18.0.0"
-
+pallet-transaction-payment-rpc-runtime-api = { version = "4.0.0-dev", path = "./runtime-api" }
 sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
 sp-core = { version = "6.0.0", path = "../../../primitives/core" }
 sp-rpc = { version = "6.0.0", path = "../../../primitives/rpc" }
 sp-runtime = { version = "6.0.0", path = "../../../primitives/runtime" }
-pallet-transaction-payment-rpc-runtime-api = { version = "4.0.0-dev", path = "./runtime-api" }

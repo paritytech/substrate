@@ -18,9 +18,9 @@ prost-build = "0.9"
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "3.0.0", features = [
-    "derive",
+	"derive",
 ] }
 futures = "0.3.21"
 libp2p = "0.44.0"
-sc-peerset = { version = "4.0.0-dev", path = "../../peerset" }
 smallvec = "1.8.0"
+sc-peerset = { version = "4.0.0-dev", path = "../../peerset" }

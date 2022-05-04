@@ -13,34 +13,33 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-parking_lot = "0.12.0"
-log = "0.4.16"
-kvdb = "0.11.0"
-kvdb-rocksdb = { version = "0.15.2", optional = true }
-kvdb-memorydb = "0.11.0"
-linked-hash-map = "0.5.4"
-hash-db = "0.15.2"
 codec = { package = "parity-scale-codec", version = "3.0.0", features = [
-    "derive",
+	"derive",
 ] }
-
+hash-db = "0.15.2"
+kvdb = "0.11.0"
+kvdb-memorydb = "0.11.0"
+kvdb-rocksdb = { version = "0.15.2", optional = true }
+linked-hash-map = "0.5.4"
+log = "0.4.16"
+parity-db = { version = "0.3.12", optional = true }
+parking_lot = "0.12.0"
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
+sc-state-db = { version = "0.10.0-dev", path = "../state-db" }
 sp-arithmetic = { version = "5.0.0", path = "../../primitives/arithmetic" }
+sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
 sp-core = { version = "6.0.0", path = "../../primitives/core" }
+sp-database = { version = "4.0.0-dev", path = "../../primitives/database" }
 sp-runtime = { version = "6.0.0", path = "../../primitives/runtime" }
 sp-state-machine = { version = "0.12.0", path = "../../primitives/state-machine" }
-sc-state-db = { version = "0.10.0-dev", path = "../state-db" }
 sp-trie = { version = "6.0.0", path = "../../primitives/trie" }
-sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
-sp-database = { version = "4.0.0-dev", path = "../../primitives/database" }
-parity-db = { version = "0.3.12", optional = true }
 
 [dev-dependencies]
+kvdb-rocksdb = "0.15.1"
+quickcheck = "1.0.3"
+tempfile = "3"
 sp-tracing = { version = "5.0.0", path = "../../primitives/tracing" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
-quickcheck = "1.0.3"
-kvdb-rocksdb = "0.15.1"
-tempfile = "3"
 
 [features]
 default = []
