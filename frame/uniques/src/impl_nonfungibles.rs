@@ -93,12 +93,12 @@ impl<T: Config<I>, I: 'static> Create<<T as SystemConfig>::AccountId> for Pallet
 		admin: &T::AccountId,
 	) -> DispatchResult {
 		Self::do_create_class(
-			class.clone(),
+			*class,
 			who.clone(),
 			admin.clone(),
 			T::ClassDeposit::get(),
 			false,
-			Event::Created { class: class.clone(), creator: who.clone(), owner: admin.clone() },
+			Event::Created { class: *class, creator: who.clone(), owner: admin.clone() },
 		)
 	}
 }
@@ -125,7 +125,7 @@ impl<T: Config<I>, I: 'static> Mutate<<T as SystemConfig>::AccountId> for Pallet
 		instance: &Self::InstanceId,
 		who: &T::AccountId,
 	) -> DispatchResult {
-		Self::do_mint(class.clone(), instance.clone(), who.clone(), |_| Ok(()))
+		Self::do_mint(*class, *instance, who.clone(), |_| Ok(()))
 	}
 
 	fn burn(
@@ -133,10 +133,10 @@ impl<T: Config<I>, I: 'static> Mutate<<T as SystemConfig>::AccountId> for Pallet
 		instance: &Self::InstanceId,
 		maybe_check_owner: Option<&T::AccountId>,
 	) -> DispatchResult {
-		Self::do_burn(class.clone(), instance.clone(), |_, d| {
+		Self::do_burn(*class, *instance, |_, d| {
 			if let Some(check_owner) = maybe_check_owner {
 				if &d.owner != check_owner {
-					Err(Error::<T, I>::NoPermission)?;
+					return Err(Error::<T, I>::NoPermission.into())
 				}
 			}
 			Ok(())
@@ -150,7 +150,7 @@ impl<T: Config<I>, I: 'static> Transfer<T::AccountId> for Pallet<T, I> {
 		instance: &Self::InstanceId,
 		destination: &T::AccountId,
 	) -> DispatchResult {
-		Self::do_transfer(class.clone(), instance.clone(), destination.clone(), |_, _| Ok(()))
+		Self::do_transfer(*class, *instance, destination.clone(), |_, _| Ok(()))
 	}
 }
 

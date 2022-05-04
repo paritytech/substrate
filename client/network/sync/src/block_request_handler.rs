@@ -18,21 +18,24 @@
 //! `crate::request_responses::RequestResponsesBehaviour`.
 
 use crate::{
-	chain::Client,
-	config::ProtocolId,
-	protocol::message::BlockAttributes,
-	request_responses::{IncomingRequest, OutgoingResponse, ProtocolConfig},
+	message::BlockAttributes,
 	schema::v1::{block_request::FromBlock, BlockResponse, Direction},
-	PeerId, ReputationChange,
 };
 use codec::{Decode, Encode};
 use futures::{
 	channel::{mpsc, oneshot},
 	stream::StreamExt,
 };
+use libp2p::PeerId;
 use log::debug;
 use lru::LruCache;
 use prost::Message;
+use sc_client_api::BlockBackend;
+use sc_network_common::{
+	config::ProtocolId,
+	request_responses::{IncomingRequest, OutgoingResponse, ProtocolConfig},
+};
+use sp_blockchain::HeaderBackend;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Header, One, Zero},
@@ -50,7 +53,7 @@ const MAX_BODY_BYTES: usize = 8 * 1024 * 1024;
 const MAX_NUMBER_OF_SAME_REQUESTS_PER_PEER: usize = 2;
 
 mod rep {
-	use super::ReputationChange as Rep;
+	use sc_peerset::ReputationChange as Rep;
 
 	/// Reputation change when a peer sent us the same request multiple times.
 	pub const SAME_REQUEST: Rep = Rep::new_fatal("Same block request multiple times");
@@ -113,8 +116,8 @@ enum SeenRequestsValue {
 }
 
 /// Handler for incoming block requests from a remote peer.
-pub struct BlockRequestHandler<B: BlockT> {
-	client: Arc<dyn Client<B>>,
+pub struct BlockRequestHandler<B: BlockT, Client> {
+	client: Arc<Client>,
 	request_receiver: mpsc::Receiver<IncomingRequest>,
 	/// Maps from request to number of times we have seen this request.
 	///
@@ -122,11 +125,15 @@ pub struct BlockRequestHandler<B: BlockT> {
 	seen_requests: LruCache<SeenRequestsKey<B>, SeenRequestsValue>,
 }
 
-impl<B: BlockT> BlockRequestHandler<B> {
+impl<B, Client> BlockRequestHandler<B, Client>
+where
+	B: BlockT,
+	Client: HeaderBackend<B> + BlockBackend<B> + Send + Sync + 'static,
+{
 	/// Create a new [`BlockRequestHandler`].
 	pub fn new(
 		protocol_id: &ProtocolId,
-		client: Arc<dyn Client<B>>,
+		client: Arc<Client>,
 		num_peer_hint: usize,
 	) -> (Self, ProtocolConfig) {
 		// Reserve enough request slots for one request per peer when we are at the maximum
@@ -192,7 +199,7 @@ impl<B: BlockT> BlockRequestHandler<B> {
 			peer: *peer,
 			max_blocks,
 			direction,
-			from: from_block_id.clone(),
+			from: from_block_id,
 			attributes,
 			support_multiple_justifications,
 		};

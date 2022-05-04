@@ -388,7 +388,7 @@ pub mod pallet {
 			let who = ensure_signed(origin)?;
 			// Check `who` is allowed to make a call on behalf of `account`
 			let target = Self::proxy(&who).ok_or(Error::<T>::NotAllowed)?;
-			ensure!(&target == &account, Error::<T>::NotAllowed);
+			ensure!(target == account, Error::<T>::NotAllowed);
 			call.dispatch(frame_system::RawOrigin::Signed(account).into())
 				.map(|_| ())
 				.map_err(|e| e.error)
@@ -541,7 +541,7 @@ pub mod pallet {
 			ensure!(Self::is_friend(&recovery_config.friends, &who), Error::<T>::NotFriend);
 			// Either insert the vouch, or return an error that the user already vouched.
 			match active_recovery.friends.binary_search(&who) {
-				Ok(_pos) => Err(Error::<T>::AlreadyVouched)?,
+				Ok(_pos) => return Err(Error::<T>::AlreadyVouched.into()),
 				Err(pos) => active_recovery
 					.friends
 					.try_insert(pos, who.clone())

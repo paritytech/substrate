@@ -430,7 +430,7 @@ where
 
 		let validated = ValidatedTransaction::valid_at(
 			block_number.saturated_into::<u64>(),
-			hash.clone(),
+			hash,
 			TransactionSource::Local,
 			xt,
 			bytes,
@@ -538,7 +538,7 @@ async fn prune_known_txs_for_block<Block: BlockT, Api: graph::ChainApi<Block = B
 		})
 		.unwrap_or_default();
 
-	let hashes = extrinsics.iter().map(|tx| pool.hash_of(&tx)).collect::<Vec<_>>();
+	let hashes = extrinsics.iter().map(|tx| pool.hash_of(tx)).collect::<Vec<_>>();
 
 	log::trace!(target: "txpool", "Pruning transactions: {:?}", hashes);
 
@@ -609,11 +609,11 @@ where
 					if let Some(ref tree_route) = tree_route {
 						for retracted in tree_route.retracted() {
 							// notify txs awaiting finality that it has been retracted
-							pool.validated_pool().on_block_retracted(retracted.hash.clone());
+							pool.validated_pool().on_block_retracted(retracted.hash);
 						}
 
 						future::join_all(tree_route.enacted().iter().map(|h| {
-							prune_known_txs_for_block(BlockId::Hash(h.hash.clone()), &*api, &*pool)
+							prune_known_txs_for_block(BlockId::Hash(h.hash), &*api, &*pool)
 						}))
 						.await
 						.into_iter()
@@ -622,7 +622,7 @@ where
 						})
 					}
 
-					pruned_log.extend(prune_known_txs_for_block(id.clone(), &*api, &*pool).await);
+					pruned_log.extend(prune_known_txs_for_block(id, &*api, &*pool).await);
 
 					metrics.report(|metrics| {
 						metrics.block_transactions_pruned.inc_by(pruned_log.len() as u64)
@@ -632,7 +632,7 @@ where
 						let mut resubmit_transactions = Vec::new();
 
 						for retracted in tree_route.retracted() {
-							let hash = retracted.hash.clone();
+							let hash = retracted.hash;
 
 							let block_transactions = api
 								.block_body(&BlockId::hash(hash))
@@ -649,7 +649,7 @@ where
 
 							resubmit_transactions.extend(block_transactions.into_iter().filter(
 								|tx| {
-									let tx_hash = pool.hash_of(&tx);
+									let tx_hash = pool.hash_of(tx);
 									let contains = pruned_log.contains(&tx_hash);
 
 									// need to count all transactions, not just filtered, here
@@ -699,8 +699,7 @@ where
 					});
 
 					if next_action.revalidate {
-						let hashes =
-							pool.validated_pool().ready().map(|tx| tx.hash.clone()).collect();
+						let hashes = pool.validated_pool().ready().map(|tx| tx.hash).collect();
 						revalidation_queue.revalidate_later(block_number, hashes).await;
 
 						revalidation_strategy.lock().clear();

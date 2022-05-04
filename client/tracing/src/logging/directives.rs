@@ -84,7 +84,7 @@ pub fn reload_filter() -> Result<(), String> {
 	log::debug!(target: "tracing", "Reloading log filter with: {}", env_filter);
 	FILTER_RELOAD_HANDLE
 		.get()
-		.ok_or("No reload handle present".to_string())?
+		.ok_or("No reload handle present")?
 		.reload(env_filter)
 		.map_err(|e| format!("{}", e))
 }
