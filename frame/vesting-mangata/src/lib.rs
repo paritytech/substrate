@@ -45,7 +45,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 mod benchmarking;
-mod migrations;
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
@@ -59,7 +58,7 @@ use frame_support::{
 	ensure,
 	pallet_prelude::*,
 	traits::{
-		Currency, ExistenceRequirement, Get, LockIdentifier, LockableCurrency, VestingSchedule,
+		ExistenceRequirement, Get, LockIdentifier,
 		WithdrawReasons,
 	},
 };
@@ -69,18 +68,21 @@ use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{
 		AtLeast32BitUnsigned, Bounded, Convert, MaybeSerializeDeserialize, One, Saturating,
-		StaticLookup, Zero,
+		StaticLookup, Zero, CheckedSub
 	},
 	RuntimeDebug,
 };
 use sp_std::{convert::TryInto, fmt::Debug, prelude::*};
+use orml_tokens::{MultiTokenLockableCurrency, MultiTokenCurrency};
 pub use vesting_info::*;
 pub use weights::WeightInfo;
 
 type BalanceOf<T> =
-	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+	<<T as Config>::Tokens as MultiTokenCurrency<<T as frame_system::Config>::AccountId>>::Balance;
+type TokenIdOf<T> =
+	<<T as Config>::Tokens as MultiTokenCurrency<<T as frame_system::Config>::AccountId>>::CurrencyId;
 type MaxLocksOf<T> =
-	<<T as Config>::Currency as LockableCurrency<<T as frame_system::Config>::AccountId>>::MaxLocks;
+	<<T as Config>::Tokens as MultiTokenLockableCurrency<<T as frame_system::Config>::AccountId>>::MaxLocks;
 
 const VESTING_ID: LockIdentifier = *b"vesting ";
 
@@ -151,8 +153,8 @@ pub mod pallet {
 		/// The overarching event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
-		/// The currency trait.
-		type Currency: LockableCurrency<Self::AccountId>;
+		/// The tokens trait.
+		type Tokens: MultiTokenLockableCurrency<Self::AccountId>;
 
 		/// Convert the block number into a balance.
 		type BlockNumberToBalance: Convert<Self::BlockNumber, BalanceOf<Self>>;
@@ -177,39 +179,15 @@ pub mod pallet {
 		}
 	}
 
-	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<(), &'static str> {
-			migrations::v1::pre_migrate::<T>()
-		}
-
-		fn on_runtime_upgrade() -> Weight {
-			if StorageVersion::<T>::get() == Releases::V0 {
-				StorageVersion::<T>::put(Releases::V1);
-				migrations::v1::migrate::<T>().saturating_add(T::DbWeight::get().reads_writes(1, 1))
-			} else {
-				T::DbWeight::get().reads(1)
-			}
-		}
-
-		#[cfg(feature = "try-runtime")]
-		fn post_upgrade() -> Result<(), &'static str> {
-			migrations::v1::post_migrate::<T>()
-		}
-
-		fn integrity_test() {
-			assert!(T::MAX_VESTING_SCHEDULES > 0, "`MaxVestingSchedules` must ge greater than 0");
-		}
-	}
-
 	/// Information regarding the vesting of a given account.
 	#[pallet::storage]
 	#[pallet::getter(fn vesting)]
-	pub type Vesting<T: Config> = StorageMap<
+	pub type Vesting<T: Config> = StorageDoubleMap<
 		_,
 		Blake2_128Concat,
 		T::AccountId,
+		Blake2_128Concat,
+		TokenIdOf<T>,
 		BoundedVec<VestingInfo<BalanceOf<T>, T::BlockNumber>, MaxVestingSchedulesGet<T>>,
 	>;
 
@@ -225,7 +203,7 @@ pub mod pallet {
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
-		pub vesting: Vec<(T::AccountId, T::BlockNumber, T::BlockNumber, BalanceOf<T>)>,
+		pub vesting: Vec<(T::AccountId, TokenIdOf<T>, T::BlockNumber, T::BlockNumber, BalanceOf<T>)>,
 	}
 
 	#[cfg(feature = "std")]
@@ -246,7 +224,7 @@ pub mod pallet {
 			// * begin - Block when the account will start to vest
 			// * length - Number of blocks from `begin` until fully vested
 			// * locked - Number of units which are locked for vesting
-			for &(ref who, begin, length, locked) in self.vesting.iter() {
+			for &(ref who, token_id, begin, length, locked) in self.vesting.iter() {
 				let length_as_balance = T::BlockNumberToBalance::convert(length);
 				let per_block = locked / length_as_balance.max(sp_runtime::traits::One::one());
 				let vesting_info = VestingInfo::new(locked, per_block, begin);
@@ -254,11 +232,11 @@ pub mod pallet {
 					panic!("Invalid VestingInfo params at genesis")
 				};
 
-				Vesting::<T>::try_append(who, vesting_info)
+				Vesting::<T>::try_append(who, token_id, vesting_info)
 					.expect("Too many vesting schedules at genesis.");
 
 				let reasons = WithdrawReasons::TRANSFER | WithdrawReasons::RESERVE;
-				T::Currency::set_lock(VESTING_ID, who, locked, reasons);
+				T::Tokens::set_lock(token_id, VESTING_ID, who, locked, reasons);
 			}
 		}
 	}
@@ -269,9 +247,9 @@ pub mod pallet {
 		/// The amount vested has been updated. This could indicate a change in funds available.
 		/// The balance given is the amount which is left unvested (and thus locked).
 		/// \[account, unvested\]
-		VestingUpdated(T::AccountId, BalanceOf<T>),
+		VestingUpdated(T::AccountId, TokenIdOf<T>, BalanceOf<T>),
 		/// An \[account\] has become fully vested.
-		VestingCompleted(T::AccountId),
+		VestingCompleted(T::AccountId, TokenIdOf<T>),
 	}
 
 	/// Error for the vesting pallet.
@@ -288,6 +266,11 @@ pub mod pallet {
 		ScheduleIndexOutOfBounds,
 		/// Failed to create a new schedule because some parameter was invalid.
 		InvalidScheduleParams,
+		/// No suitable schedule found
+		/// Perhaps the user could merge vesting schedules and try again
+		NoSuitableScheduleFound,
+		/// An overflow or underflow has occured
+		MathError,
 	}
 
 	#[pallet::call]
@@ -308,9 +291,9 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::vest_locked(MaxLocksOf::<T>::get(), T::MAX_VESTING_SCHEDULES)
 			.max(T::WeightInfo::vest_unlocked(MaxLocksOf::<T>::get(), T::MAX_VESTING_SCHEDULES))
 		)]
-		pub fn vest(origin: OriginFor<T>) -> DispatchResult {
+		pub fn vest(origin: OriginFor<T>, token_id: TokenIdOf<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			Self::do_vest(who)
+			Self::do_vest(who, token_id)
 		}
 
 		/// Unlock any vested funds of a `target` account.
@@ -333,11 +316,12 @@ pub mod pallet {
 		)]
 		pub fn vest_other(
 			origin: OriginFor<T>,
+			token_id: TokenIdOf<T>,
 			target: <T::Lookup as StaticLookup>::Source,
 		) -> DispatchResult {
 			ensure_signed(origin)?;
 			let who = T::Lookup::lookup(target)?;
-			Self::do_vest(who)
+			Self::do_vest(who, token_id)
 		}
 
 		/// Force a vested transfer.
@@ -363,12 +347,13 @@ pub mod pallet {
 		)]
 		pub fn force_vested_transfer(
 			origin: OriginFor<T>,
+			token_id: TokenIdOf<T>,
 			source: <T::Lookup as StaticLookup>::Source,
 			target: <T::Lookup as StaticLookup>::Source,
 			schedule: VestingInfo<BalanceOf<T>, T::BlockNumber>,
 		) -> DispatchResult {
 			ensure_root(origin)?;
-			Self::do_vested_transfer(source, target, schedule)
+			Self::do_vested_transfer(source, target, schedule, token_id)
 		}
 
 		/// Merge two vesting schedules together, creating a new vesting schedule that unlocks over
@@ -398,6 +383,7 @@ pub mod pallet {
 		)]
 		pub fn merge_schedules(
 			origin: OriginFor<T>,
+			token_id: TokenIdOf<T>,
 			schedule1_index: u32,
 			schedule2_index: u32,
 		) -> DispatchResult {
@@ -408,13 +394,13 @@ pub mod pallet {
 			let schedule1_index = schedule1_index as usize;
 			let schedule2_index = schedule2_index as usize;
 
-			let schedules = Self::vesting(&who).ok_or(Error::<T>::NotVesting)?;
+			let schedules = Self::vesting(&who, token_id).ok_or(Error::<T>::NotVesting)?;
 			let merge_action = VestingAction::Merge(schedule1_index, schedule2_index);
 
 			let (schedules, locked_now) = Self::exec_action(schedules.to_vec(), merge_action)?;
 
-			Self::write_vesting(&who, schedules)?;
-			Self::write_lock(&who, locked_now);
+			Self::write_vesting(&who, schedules, token_id)?;
+			Self::write_lock(&who, locked_now, token_id);
 
 			Ok(())
 		}
@@ -476,6 +462,7 @@ impl<T: Config> Pallet<T> {
 		source: <T::Lookup as StaticLookup>::Source,
 		target: <T::Lookup as StaticLookup>::Source,
 		schedule: VestingInfo<BalanceOf<T>, T::BlockNumber>,
+		token_id: TokenIdOf<T>
 	) -> DispatchResult {
 		// Validate user inputs.
 		ensure!(schedule.locked() >= T::MinVestedTransfer::get(), Error::<T>::AmountLow);
@@ -491,9 +478,11 @@ impl<T: Config> Pallet<T> {
 			schedule.locked(),
 			schedule.per_block(),
 			schedule.starting_block(),
+			token_id
 		)?;
 
-		T::Currency::transfer(
+		T::Tokens::transfer(
+			token_id,
 			&source,
 			&target,
 			schedule.locked(),
@@ -506,6 +495,7 @@ impl<T: Config> Pallet<T> {
 			schedule.locked(),
 			schedule.per_block(),
 			schedule.starting_block(),
+			token_id,
 		);
 		debug_assert!(res.is_ok(), "Failed to add a schedule when we had to succeed.");
 
@@ -546,14 +536,14 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Write an accounts updated vesting lock to storage.
-	fn write_lock(who: &T::AccountId, total_locked_now: BalanceOf<T>) {
+	fn write_lock(who: &T::AccountId, total_locked_now: BalanceOf<T>, token_id: TokenIdOf<T>) {
 		if total_locked_now.is_zero() {
-			T::Currency::remove_lock(VESTING_ID, who);
-			Self::deposit_event(Event::<T>::VestingCompleted(who.clone()));
+			T::Tokens::remove_lock(token_id, VESTING_ID, who);
+			Self::deposit_event(Event::<T>::VestingCompleted(who.clone(), token_id));
 		} else {
 			let reasons = WithdrawReasons::TRANSFER | WithdrawReasons::RESERVE;
-			T::Currency::set_lock(VESTING_ID, who, total_locked_now, reasons);
-			Self::deposit_event(Event::<T>::VestingUpdated(who.clone(), total_locked_now));
+			T::Tokens::set_lock(token_id, VESTING_ID, who, total_locked_now, reasons);
+			Self::deposit_event(Event::<T>::VestingUpdated(who.clone(), token_id, total_locked_now));
 		};
 	}
 
@@ -561,6 +551,7 @@ impl<T: Config> Pallet<T> {
 	fn write_vesting(
 		who: &T::AccountId,
 		schedules: Vec<VestingInfo<BalanceOf<T>, T::BlockNumber>>,
+		token_id: TokenIdOf<T>,
 	) -> Result<(), DispatchError> {
 		let schedules: BoundedVec<
 			VestingInfo<BalanceOf<T>, T::BlockNumber>,
@@ -568,23 +559,23 @@ impl<T: Config> Pallet<T> {
 		> = schedules.try_into().map_err(|_| Error::<T>::AtMaxVestingSchedules)?;
 
 		if schedules.len() == 0 {
-			Vesting::<T>::remove(&who);
+			Vesting::<T>::remove(&who, token_id);
 		} else {
-			Vesting::<T>::insert(who, schedules)
+			Vesting::<T>::insert(who, token_id, schedules)
 		}
 
 		Ok(())
 	}
 
 	/// Unlock any vested funds of `who`.
-	fn do_vest(who: T::AccountId) -> DispatchResult {
-		let schedules = Self::vesting(&who).ok_or(Error::<T>::NotVesting)?;
+	fn do_vest(who: T::AccountId, token_id: TokenIdOf<T>) -> DispatchResult {
+		let schedules = Self::vesting(&who, token_id).ok_or(Error::<T>::NotVesting)?;
 
 		let (schedules, locked_now) =
 			Self::exec_action(schedules.to_vec(), VestingAction::Passive)?;
 
-		Self::write_vesting(&who, schedules)?;
-		Self::write_lock(&who, locked_now);
+		Self::write_vesting(&who, schedules, token_id)?;
+		Self::write_lock(&who, locked_now, token_id);
 
 		Ok(())
 	}
@@ -634,21 +625,188 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-impl<T: Config> VestingSchedule<T::AccountId> for Pallet<T>
+
+pub trait MultiTokenVestingLocks<AccountId> {
+	/// The quantity used to denote time; usually just a `BlockNumber`.
+	type Moment;
+
+	/// The currency that this schedule applies to.
+	type Currency: MultiTokenCurrency<AccountId>;
+
+	/// Finds a vesting schedule with locked_at value greater than unlock_amount
+	/// Removes that old vesting schedule, adds a new one with new_locked and new_per_block
+	/// reflecting old locked_at - unlock_amount, to be unlocked by old ending block.
+	/// This does not transfer funds
+	fn unlock_tokens(who: &AccountId, token_id: <Self::Currency as MultiTokenCurrency<AccountId>>::CurrencyId, unlock_amount:  <Self::Currency as MultiTokenCurrency<AccountId>>::Balance)
+		 -> Result<<Self::Currency as MultiTokenCurrency<AccountId>>::Balance, DispatchError>;
+
+	/// Constructs a vesting schedule based on the given data starting from now
+	/// And places it into the appropriate (who, token_id) storage
+	/// This does not transfer funds
+	fn lock_tokens(who: &AccountId, token_id: <Self::Currency as MultiTokenCurrency<AccountId>>::CurrencyId, lock_amount:  <Self::Currency as MultiTokenCurrency<AccountId>>::Balance, ending_block_as_balance: <Self::Currency as MultiTokenCurrency<AccountId>>::Balance)
+		 -> DispatchResult; 
+}
+
+
+impl<T: Config> MultiTokenVestingLocks<T::AccountId> for Pallet<T>
 where
 	BalanceOf<T>: MaybeSerializeDeserialize + Debug,
+	TokenIdOf<T>: MaybeSerializeDeserialize + Debug,
 {
-	type Currency = T::Currency;
+	type Currency = T::Tokens;
+	type Moment = T::BlockNumber;
+
+
+	fn unlock_tokens(who: &T::AccountId, token_id: TokenIdOf<T>, unlock_amount: BalanceOf<T>) -> Result<BalanceOf<T>, DispatchError> {
+		let now = <frame_system::Pallet<T>>::block_number();
+		// First we get the schedules of who
+		let schedules: Vec<VestingInfo<BalanceOf<T>, T::BlockNumber>> = Self::vesting(who, token_id).ok_or(Error::<T>::NotVesting)?.into();
+		// Then we enumerate and iterate through them
+		// and select the one which has atleast the `unlock_amount` as `locked_at` in the schedule
+		// Amongst the ones that satisfy the above condition we pick the one with least ending_block number
+		// index of the schedule to be removed, the schedule, locked_at of the schedule, ending_block_as_balance of the schedule
+		let mut selected_schedule: Option<(usize, VestingInfo<BalanceOf<T>, T::BlockNumber>, BalanceOf<T>, BalanceOf<T>)> = None;
+		for (i, schedule) in schedules.clone().into_iter().enumerate() {
+			let schedule_locked_at = schedule.locked_at::<T::BlockNumberToBalance>(now);
+			match ( schedule_locked_at >= unlock_amount, selected_schedule){
+				(true, None) => selected_schedule = Some ((i, schedule, schedule_locked_at, schedule.ending_block_as_balance::<T::BlockNumberToBalance>())),
+				(true, Some(currently_selected_schedule))
+					=> {
+					let schedule_ending_block_as_balance = schedule.ending_block_as_balance::<T::BlockNumberToBalance>();
+					if currently_selected_schedule.1.ending_block_as_balance::<T::BlockNumberToBalance>()
+						> schedule_ending_block_as_balance{
+							selected_schedule = Some ((i, schedule, schedule_locked_at, schedule_ending_block_as_balance))
+						}
+					},
+				_ => (),
+			}
+		}
+
+		// Attempt to unwrap selected_schedule
+		// If it is still none that means no suitable vesting schedule was found
+		// Perhaps the user could merge vesting schedules and try again
+		let selected_schedule = selected_schedule.ok_or(Error::<T>::NoSuitableScheduleFound)?;
+
+		// Remove selected_schedule
+		let mut updated_schedules = schedules.into_iter().enumerate().filter_map(move |(index, schedule)| {
+			if index == selected_schedule.0 {
+				None
+			} else {
+				Some(schedule)
+			}
+		}).collect::<Vec<_>>();
+
+		let new_locked = selected_schedule.2.checked_sub(&unlock_amount).ok_or(Error::<T>::MathError)?;
+		
+		if !new_locked.is_zero(){
+			let length_as_balance = selected_schedule.3.saturating_sub(T::BlockNumberToBalance::convert(now)).max(One::one());
+
+			// .max in length_as_balance computation protects against unsafe div
+			let new_per_block = (new_locked / length_as_balance).max(One::one());
+
+			let vesting_schedule = VestingInfo::new(new_locked, new_per_block, now);
+
+			ensure!(vesting_schedule.is_valid(), Error::<T>::InvalidScheduleParams);
+
+			// We just removed an element so this raw push shouldn't fail
+			updated_schedules.push(vesting_schedule);
+		}
+
+		// This is mostly to calculate locked_now
+		// It also removes schedules that represent 0 value locked 
+		let (updated_schedules, locked_now) =
+			Self::exec_action(updated_schedules.to_vec(), VestingAction::Passive)?;
+
+		Self::write_vesting(&who, updated_schedules, token_id)?;
+		Self::write_lock(who, locked_now, token_id);
+
+		Ok(selected_schedule.3)
+	}
+
+	fn lock_tokens(who: &T::AccountId, token_id: TokenIdOf<T>, lock_amount: BalanceOf<T>, ending_block_as_balance: BalanceOf<T>) -> DispatchResult {
+		let now = <frame_system::Pallet<T>>::block_number();
+
+		let length_as_balance = ending_block_as_balance.saturating_sub(T::BlockNumberToBalance::convert(now)).max(One::one());
+		let per_block = (lock_amount / length_as_balance).max(One::one());
+
+		let vesting_schedule = VestingInfo::new(lock_amount, per_block, now);
+		ensure!(vesting_schedule.is_valid(), Error::<T>::InvalidScheduleParams);
+
+		let mut schedules = Self::vesting(who, token_id).unwrap_or_default();
+		ensure!(schedules.try_push(vesting_schedule).is_ok(), Error::<T>::AtMaxVestingSchedules);
+
+		let (schedules, locked_now) =
+			Self::exec_action(schedules.to_vec(), VestingAction::Passive)?;
+
+		Self::write_vesting(&who, schedules, token_id)?;
+		Self::write_lock(who, locked_now, token_id);
+
+		Ok(())
+	} 
+}
+
+/// A vesting schedule over a currency. This allows a particular currency to have vesting limits
+/// applied to it.
+pub trait MultiTokenVestingSchedule<AccountId> {
+	/// The quantity used to denote time; usually just a `BlockNumber`.
+	type Moment;
+
+	/// The currency that this schedule applies to.
+	type Currency: MultiTokenCurrency<AccountId>;
+
+	/// Get the amount that is currently being vested and cannot be transferred out of this account.
+	/// Returns `None` if the account has no vesting schedule.
+	fn vesting_balance(who: &AccountId, token_id: <Self::Currency as MultiTokenCurrency<AccountId>>::CurrencyId)
+		-> Option<<Self::Currency as MultiTokenCurrency<AccountId>>::Balance>;
+
+	/// Adds a vesting schedule to a given account.
+	///
+	/// If the account has `MaxVestingSchedules`, an Error is returned and nothing
+	/// is updated.
+	///
+	/// Is a no-op if the amount to be vested is zero.
+	///
+	/// NOTE: This doesn't alter the free balance of the account.
+	fn add_vesting_schedule(
+		who: &AccountId,
+		locked: <Self::Currency as MultiTokenCurrency<AccountId>>::Balance,
+		per_block: <Self::Currency as MultiTokenCurrency<AccountId>>::Balance,
+		starting_block: Self::Moment,
+		token_id: <Self::Currency as MultiTokenCurrency<AccountId>>::CurrencyId,
+	) -> DispatchResult;
+
+	/// Checks if `add_vesting_schedule` would work against `who`.
+	fn can_add_vesting_schedule(
+		who: &AccountId,
+		locked: <Self::Currency as MultiTokenCurrency<AccountId>>::Balance,
+		per_block: <Self::Currency as MultiTokenCurrency<AccountId>>::Balance,
+		starting_block: Self::Moment,
+		token_id: <Self::Currency as MultiTokenCurrency<AccountId>>::CurrencyId,
+	) -> DispatchResult;
+
+	/// Remove a vesting schedule for a given account.
+	///
+	/// NOTE: This doesn't alter the free balance of the account.
+	fn remove_vesting_schedule(who: &AccountId, token_id: <Self::Currency as MultiTokenCurrency<AccountId>>::CurrencyId, schedule_index: u32) -> DispatchResult;
+}
+
+
+impl<T: Config> MultiTokenVestingSchedule<T::AccountId> for Pallet<T>
+where
+	BalanceOf<T>: MaybeSerializeDeserialize + Debug,
+	TokenIdOf<T>: MaybeSerializeDeserialize + Debug,
+{
+	type Currency = T::Tokens;
 	type Moment = T::BlockNumber;
 
 	/// Get the amount that is currently being vested and cannot be transferred out of this account.
-	fn vesting_balance(who: &T::AccountId) -> Option<BalanceOf<T>> {
-		if let Some(v) = Self::vesting(who) {
+	fn vesting_balance(who: &T::AccountId, token_id: TokenIdOf<T>) -> Option<BalanceOf<T>> {
+		if let Some(v) = Self::vesting(who, token_id) {
 			let now = <frame_system::Pallet<T>>::block_number();
 			let total_locked_now = v.iter().fold(Zero::zero(), |total, schedule| {
 				schedule.locked_at::<T::BlockNumberToBalance>(now).saturating_add(total)
 			});
-			Some(T::Currency::free_balance(who).min(total_locked_now))
+			Some(T::Tokens::free_balance(token_id, who).min(total_locked_now))
 		} else {
 			None
 		}
@@ -671,6 +829,7 @@ where
 		locked: BalanceOf<T>,
 		per_block: BalanceOf<T>,
 		starting_block: T::BlockNumber,
+		token_id: TokenIdOf<T>,
 	) -> DispatchResult {
 		if locked.is_zero() {
 			return Ok(())
@@ -682,7 +841,7 @@ where
 			return Err(Error::<T>::InvalidScheduleParams.into())
 		};
 
-		let mut schedules = Self::vesting(who).unwrap_or_default();
+		let mut schedules = Self::vesting(who, token_id).unwrap_or_default();
 
 		// NOTE: we must push the new schedule so that `exec_action`
 		// will give the correct new locked amount.
@@ -691,8 +850,8 @@ where
 		let (schedules, locked_now) =
 			Self::exec_action(schedules.to_vec(), VestingAction::Passive)?;
 
-		Self::write_vesting(&who, schedules)?;
-		Self::write_lock(who, locked_now);
+		Self::write_vesting(&who, schedules, token_id)?;
+		Self::write_lock(who, locked_now, token_id);
 
 		Ok(())
 	}
@@ -704,6 +863,7 @@ where
 		locked: BalanceOf<T>,
 		per_block: BalanceOf<T>,
 		starting_block: T::BlockNumber,
+		token_id: TokenIdOf<T>,
 	) -> DispatchResult {
 		// Check for `per_block` or `locked` of 0.
 		if !VestingInfo::new(locked, per_block, starting_block).is_valid() {
@@ -711,7 +871,7 @@ where
 		}
 
 		ensure!(
-			(Vesting::<T>::decode_len(who).unwrap_or_default() as u32) < T::MAX_VESTING_SCHEDULES,
+			(Vesting::<T>::decode_len(who, token_id).unwrap_or_default() as u32) < T::MAX_VESTING_SCHEDULES,
 			Error::<T>::AtMaxVestingSchedules
 		);
 
@@ -719,14 +879,14 @@ where
 	}
 
 	/// Remove a vesting schedule for a given account.
-	fn remove_vesting_schedule(who: &T::AccountId, schedule_index: u32) -> DispatchResult {
-		let schedules = Self::vesting(who).ok_or(Error::<T>::NotVesting)?;
+	fn remove_vesting_schedule(who: &T::AccountId, token_id: TokenIdOf<T>, schedule_index: u32) -> DispatchResult {
+		let schedules = Self::vesting(who, token_id).ok_or(Error::<T>::NotVesting)?;
 		let remove_action = VestingAction::Remove(schedule_index as usize);
 
 		let (schedules, locked_now) = Self::exec_action(schedules.to_vec(), remove_action)?;
 
-		Self::write_vesting(&who, schedules)?;
-		Self::write_lock(who, locked_now);
+		Self::write_vesting(&who, schedules, token_id)?;
+		Self::write_lock(who, locked_now, token_id);
 		Ok(())
 	}
 }

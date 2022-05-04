@@ -15,15 +15,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use frame_support::parameter_types;
+use frame_support::{traits::Contains,parameter_types, PalletId};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
-	traits::{BlakeTwo256, Identity, IdentityLookup},
+	traits::{BlakeTwo256, IdentityLookup},
+};
+use orml_traits::parameter_type_with_key;
+use sp_runtime::{
+	traits::{AccountIdConversion, ConvertInto},
 };
 
 use super::*;
-use crate as pallet_vesting;
+use crate as pallet_vesting_mangata;
+
+pub const NATIVE_CURRENCY_ID: u32 = 0;
+
+pub(crate) type Balance = u128;
+pub(crate) type AccountId = u64;
+pub(crate) type TokenId = u32;
+pub(crate) type Amount = i128;
+
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -35,8 +47,8 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-		Vesting: pallet_vesting::{Pallet, Call, Storage, Event<T>, Config<T>},
+		Tokens: orml_tokens::{Pallet, Storage, Call, Event<T>, Config<T>},
+		Vesting: pallet_vesting_mangata::{Pallet, Call, Storage, Event<T>, Config<T>},
 	}
 );
 
@@ -46,8 +58,8 @@ parameter_types! {
 		frame_system::limits::BlockWeights::simple_max(1024);
 }
 impl frame_system::Config for Test {
-	type AccountData = pallet_balances::AccountData<u64>;
-	type AccountId = u64;
+	type AccountData = ();
+	type AccountId = AccountId;
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockHashCount = BlockHashCount;
 	type BlockLength = ();
@@ -71,27 +83,46 @@ impl frame_system::Config for Test {
 	type Version = ();
 	type MaxConsumers = frame_support::traits::ConstU32<16>;
 }
-parameter_types! {
-	pub const MaxLocks: u32 = 10;
+parameter_type_with_key! {
+	pub ExistentialDeposits: |currency_id: TokenId| -> Balance {
+		match currency_id {
+			_ => 0,
+		}
+	};
 }
-impl pallet_balances::Config for Test {
-	type AccountStore = System;
-	type Balance = u64;
-	type DustRemoval = ();
+
+pub struct DustRemovalWhitelist;
+impl Contains<AccountId> for DustRemovalWhitelist {
+	fn contains(a: &AccountId) -> bool {
+		*a == TreasuryAccount::get()
+	}
+}
+
+parameter_types! {
+	pub const NativeCurrencyId: u32 = NATIVE_CURRENCY_ID;
+	pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
+	pub TreasuryAccount: AccountId = TreasuryPalletId::get().into_account();
+	pub const MaxLocks: u32 = 50;
+}
+
+impl orml_tokens::Config for Test {
 	type Event = Event;
-	type ExistentialDeposit = ExistentialDeposit;
-	type MaxLocks = MaxLocks;
-	type MaxReserves = ();
-	type ReserveIdentifier = [u8; 8];
+	type Balance = Balance;
+	type Amount = Amount;
+	type CurrencyId = TokenId;
 	type WeightInfo = ();
+	type ExistentialDeposits = ExistentialDeposits;
+	type OnDust = ();
+	type MaxLocks = MaxLocks;
+	type DustRemovalWhitelist = DustRemovalWhitelist;
 }
 parameter_types! {
 	pub const MinVestedTransfer: u64 = 256 * 2;
 	pub static ExistentialDeposit: u64 = 0;
 }
 impl Config for Test {
-	type BlockNumberToBalance = Identity;
-	type Currency = Balances;
+	type BlockNumberToBalance = ConvertInto;
+	type Tokens = orml_tokens::MultiTokenCurrencyAdapter<Test>;
 	type Event = Event;
 	const MAX_VESTING_SCHEDULES: u32 = 3;
 	type MinVestedTransfer = MinVestedTransfer;
@@ -99,8 +130,8 @@ impl Config for Test {
 }
 
 pub struct ExtBuilder {
-	existential_deposit: u64,
-	vesting_genesis_config: Option<Vec<(u64, u64, u64, u64)>>,
+	existential_deposit: Balance,
+	vesting_genesis_config: Option<Vec<(AccountId, TokenId, u64, u64, Balance)>>,
 }
 
 impl Default for ExtBuilder {
@@ -110,47 +141,53 @@ impl Default for ExtBuilder {
 }
 
 impl ExtBuilder {
-	pub fn existential_deposit(mut self, existential_deposit: u64) -> Self {
+	pub fn existential_deposit(mut self, existential_deposit: Balance) -> Self {
 		self.existential_deposit = existential_deposit;
 		self
 	}
 
-	pub fn vesting_genesis_config(mut self, config: Vec<(u64, u64, u64, u64)>) -> Self {
+	pub fn vesting_genesis_config(mut self, config: Vec<(AccountId, TokenId, u64, u64, Balance)>) -> Self {
 		self.vesting_genesis_config = Some(config);
 		self
 	}
 
 	pub fn build(self) -> sp_io::TestExternalities {
-		EXISTENTIAL_DEPOSIT.with(|v| *v.borrow_mut() = self.existential_deposit);
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		pallet_balances::GenesisConfig::<Test> {
-			balances: vec![
-				(1, 10 * self.existential_deposit),
-				(2, 20 * self.existential_deposit),
-				(3, 30 * self.existential_deposit),
-				(4, 40 * self.existential_deposit),
-				(12, 10 * self.existential_deposit),
-				(13, 9999 * self.existential_deposit),
+
+		orml_tokens::GenesisConfig::<Test> {
+			tokens_endowment: vec![
+				(1, NATIVE_CURRENCY_ID, 10 * self.existential_deposit),
+				(2, NATIVE_CURRENCY_ID, 20 * self.existential_deposit),
+				(3, NATIVE_CURRENCY_ID, 30 * self.existential_deposit),
+				(4, NATIVE_CURRENCY_ID, 40 * self.existential_deposit),
+				(12, NATIVE_CURRENCY_ID, 10 * self.existential_deposit),
+				(13, NATIVE_CURRENCY_ID, 9999 * self.existential_deposit),
 			],
+			created_tokens_for_staking: Default::default(),
 		}
 		.assimilate_storage(&mut t)
-		.unwrap();
+		.expect("Tokens storage can be assimilated");
 
 		let vesting = if let Some(vesting_config) = self.vesting_genesis_config {
 			vesting_config
 		} else {
 			vec![
-				(1, 0, 10, (10 * self.existential_deposit) - (5 * self.existential_deposit)),
-				(2, 10, 20, 20 * self.existential_deposit),
-				(12, 10, 20, (10 * self.existential_deposit) - (5 * self.existential_deposit)),
+				(1, NATIVE_CURRENCY_ID, 0, 10, (10 * self.existential_deposit) - (5 * self.existential_deposit)),
+				(2, NATIVE_CURRENCY_ID, 10, 20, 20 * self.existential_deposit),
+				(12, NATIVE_CURRENCY_ID, 10, 20, (10 * self.existential_deposit) - (5 * self.existential_deposit)),
 			]
 		};
 
-		pallet_vesting::GenesisConfig::<Test> { vesting }
+		pallet_vesting_mangata::GenesisConfig::<Test> { vesting }
 			.assimilate_storage(&mut t)
 			.unwrap();
 		let mut ext = sp_io::TestExternalities::new(t);
 		ext.execute_with(|| System::set_block_number(1));
 		ext
 	}
+}
+
+pub (crate) fn usable_native_balance<T: frame_system::Config + orml_tokens::Config> (who: <T as frame_system::Config>::AccountId) -> <T as orml_tokens::Config>::Balance {
+	let orml_account= <orml_tokens::Pallet<T>>::accounts::<<T as frame_system::Config>::AccountId, <T as orml_tokens::Config>::CurrencyId>(who.into(), NATIVE_CURRENCY_ID.into());
+	orml_account.free.saturating_sub(orml_account.frozen)
 }
