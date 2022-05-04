@@ -132,7 +132,7 @@ where
 			// refund to the the account that paid the fees. If this fails, the
 			// account might have dropped below the existential balance. In
 			// that case we don't refund anything.
-			let refund_imbalance = C::deposit_into_existing(&who, refund_amount)
+			let refund_imbalance = C::deposit_into_existing(who, refund_amount)
 				.unwrap_or_else(|_| C::PositiveImbalance::zero());
 			// merge the imbalance caused by paying the fees and refunding parts of it again.
 			let adjusted_paid = paid

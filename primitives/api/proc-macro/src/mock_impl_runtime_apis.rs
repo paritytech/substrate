@@ -283,7 +283,7 @@ impl<'a> Fold for FoldRuntimeApiImpl<'a> {
 			};
 
 			input.sig.ident =
-				generate_method_runtime_api_impl_name(&self.impl_trait, &input.sig.ident);
+				generate_method_runtime_api_impl_name(self.impl_trait, &input.sig.ident);
 
 			// When using advanced, the user needs to declare the correct return type on its own,
 			// otherwise do it for the user.
@@ -350,7 +350,7 @@ fn generate_runtime_api_impls(impls: &[ItemImpl]) -> Result<GeneratedRuntimeApiI
 	let mut self_ty: Option<Box<Type>> = None;
 
 	for impl_ in impls {
-		let impl_trait_path = extract_impl_trait(&impl_, RequireQualifiedTraitPath::No)?;
+		let impl_trait_path = extract_impl_trait(impl_, RequireQualifiedTraitPath::No)?;
 		let impl_trait = &impl_trait_path
 			.segments
 			.last()

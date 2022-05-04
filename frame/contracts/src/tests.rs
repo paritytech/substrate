@@ -3088,7 +3088,6 @@ fn code_rejected_error_works() {
 }
 
 #[test]
-#[cfg(feature = "unstable-interface")]
 fn set_code_hash() {
 	let (wasm, code_hash) = compile_module::<Test>("set_code_hash").unwrap();
 	let (new_wasm, new_code_hash) = compile_module::<Test>("new_set_code_hash_contract").unwrap();

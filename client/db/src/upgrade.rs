@@ -30,7 +30,7 @@ use kvdb_rocksdb::{Database, DatabaseConfig};
 use sp_runtime::traits::Block as BlockT;
 
 /// Version file name.
-const VERSION_FILE_NAME: &'static str = "db_version";
+const VERSION_FILE_NAME: &str = "db_version";
 
 /// Current db version.
 const CURRENT_VERSION: u32 = 4;

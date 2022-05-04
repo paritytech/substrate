@@ -89,7 +89,7 @@ frame_support::generate_storage_alias!(
 pub fn migrate_from_single_u8_to_triple_ref_count<T: V2ToV3>() -> Weight {
 	let mut translated: usize = 0;
 	<Account<T>>::translate::<(T::Index, u8, T::AccountData), _>(|_key, (nonce, rc, data)| {
-		translated = translated + 1;
+		translated += 1;
 		Some(AccountInfo { nonce, consumers: rc as RefCount, providers: 1, sufficients: 0, data })
 	});
 	log::info!(
@@ -107,7 +107,7 @@ pub fn migrate_from_single_to_triple_ref_count<T: V2ToV3>() -> Weight {
 	let mut translated: usize = 0;
 	<Account<T>>::translate::<(T::Index, RefCount, T::AccountData), _>(
 		|_key, (nonce, consumers, data)| {
-			translated = translated + 1;
+			translated += 1;
 			Some(AccountInfo { nonce, consumers, providers: 1, sufficients: 0, data })
 		},
 	);
@@ -125,7 +125,7 @@ pub fn migrate_from_dual_to_triple_ref_count<T: V2ToV3>() -> Weight {
 	let mut translated: usize = 0;
 	<Account<T>>::translate::<(T::Index, RefCount, RefCount, T::AccountData), _>(
 		|_key, (nonce, consumers, providers, data)| {
-			translated = translated + 1;
+			translated += 1;
 			Some(AccountInfo { nonce, consumers, providers, sufficients: 0, data })
 		},
 	);

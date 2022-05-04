@@ -367,7 +367,7 @@ where
 			let mut op = backend.begin_operation()?;
 			let state_root =
 				op.set_genesis_state(genesis_storage, !config.no_genesis, genesis_state_version)?;
-			let genesis_block = genesis::construct_genesis_block::<Block>(state_root.into());
+			let genesis_block = genesis::construct_genesis_block::<Block>(state_root);
 			info!(
 				"🔨 Initializing Genesis block/state (state: {}, header-hash: {})",
 				genesis_block.header().state_root(),
@@ -551,7 +551,7 @@ where
 		<Self as ProvideRuntimeApi<Block>>::Api:
 			CoreApi<Block> + ApiExt<Block, StateBackend = B::State>,
 	{
-		let parent_hash = import_headers.post().parent_hash().clone();
+		let parent_hash = *import_headers.post().parent_hash();
 		let status = self.backend.blockchain().status(BlockId::Hash(hash))?;
 		let parent_exists = self.backend.blockchain().status(BlockId::Hash(parent_hash))? ==
 			blockchain::BlockStatus::InChain;
@@ -609,7 +609,7 @@ where
 					sc_consensus::StorageChanges::Import(changes) => {
 						let mut storage = sp_storage::Storage::default();
 						for state in changes.state.0.into_iter() {
-							if state.parent_storage_keys.len() == 0 && state.state_root.len() == 0 {
+							if state.parent_storage_keys.is_empty() && state.state_root.is_empty() {
 								for (key, value) in state.key_values.into_iter() {
 									storage.top.insert(key, value);
 								}
@@ -617,7 +617,7 @@ where
 								for parent_storage in state.parent_storage_keys {
 									let storage_key = PrefixedStorageKey::new_ref(&parent_storage);
 									let storage_key =
-										match ChildType::from_prefixed_key(&storage_key) {
+										match ChildType::from_prefixed_key(storage_key) {
 											Some((ChildType::ParentKeyId, storage_key)) =>
 												storage_key,
 											None =>
@@ -1033,7 +1033,7 @@ where
 				return Ok(BlockStatus::Queued)
 			}
 		}
-		let hash_and_number = match id.clone() {
+		let hash_and_number = match *id {
 			BlockId::Hash(hash) => self.backend.blockchain().number(hash)?.map(|n| (hash, n)),
 			BlockId::Number(n) => self.backend.blockchain().hash(n)?.map(|hash| (hash, n)),
 		};
@@ -1212,8 +1212,8 @@ where
 		}
 		let state = self.state_at(id)?;
 		let child_info = |storage_key: &Vec<u8>| -> sp_blockchain::Result<ChildInfo> {
-			let storage_key = PrefixedStorageKey::new_ref(&storage_key);
-			match ChildType::from_prefixed_key(&storage_key) {
+			let storage_key = PrefixedStorageKey::new_ref(storage_key);
+			match ChildType::from_prefixed_key(storage_key) {
 				Some((ChildType::ParentKeyId, storage_key)) =>
 					Ok(ChildInfo::new_default(storage_key)),
 				None => Err(Error::Backend("Invalid child storage key.".to_string())),
@@ -1222,7 +1222,7 @@ where
 		let mut current_child = if start_key.len() == 2 {
 			let start_key = start_key.get(0).expect("checked len");
 			if let Some(child_root) = state
-				.storage(&start_key)
+				.storage(start_key)
 				.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?
 			{
 				Some((child_info(start_key)?, child_root))
@@ -1232,7 +1232,7 @@ where
 		} else {
 			None
 		};
-		let mut current_key = start_key.last().map(Clone::clone).unwrap_or(Vec::new());
+		let mut current_key = start_key.last().map(Clone::clone).unwrap_or_default();
 		let mut total_size = 0;
 		let mut result = vec![(
 			KeyValueStorageLevel {
@@ -1276,14 +1276,13 @@ where
 				total_size += size;
 
 				if current_child.is_none() &&
-					sp_core::storage::well_known_keys::is_child_storage_key(next_key.as_slice())
+					sp_core::storage::well_known_keys::is_child_storage_key(next_key.as_slice()) &&
+					!child_roots.contains(value.as_slice())
 				{
-					if !child_roots.contains(value.as_slice()) {
-						child_roots.insert(value.clone());
-						switch_child_key = Some((next_key.clone(), value.clone()));
-						entries.push((next_key.clone(), value));
-						break
-					}
+					child_roots.insert(value.clone());
+					switch_child_key = Some((next_key.clone(), value.clone()));
+					entries.push((next_key.clone(), value));
+					break
 				}
 				entries.push((next_key.clone(), value));
 				current_key = next_key;
@@ -1647,7 +1646,7 @@ where
 {
 	type Api = <RA as ConstructRuntimeApi<Block, Self>>::RuntimeApi;
 
-	fn runtime_api<'a>(&'a self) -> ApiRef<'a, Self::Api> {
+	fn runtime_api(&self) -> ApiRef<Self::Api> {
 		RA::construct_runtime_api(self)
 	}
 }
@@ -1661,12 +1660,11 @@ where
 	type StateBackend = B::State;
 
 	fn call_api_at<
-		'a,
 		R: Encode + Decode + PartialEq,
 		NC: FnOnce() -> result::Result<R, sp_api::ApiError> + UnwindSafe,
 	>(
 		&self,
-		params: CallApiAtParams<'a, Block, NC, B::State>,
+		params: CallApiAtParams<Block, NC, B::State>,
 	) -> Result<NativeOrEncoded<R>, sp_api::ApiError> {
 		let at = params.at;
 
@@ -1742,7 +1740,7 @@ where
 		})
 		.map_err(|e| {
 			warn!("Block import error: {}", e);
-			ConsensusError::ClientImport(e.to_string()).into()
+			ConsensusError::ClientImport(e.to_string())
 		})
 	}
 
