@@ -18,7 +18,6 @@ log = "0.4.16"
 parity-scale-codec = "3.0.0"
 serde = "1.0.136"
 zstd = { version = "0.10.0", default-features = false }
-
 sc-service = { version = "0.10.0-dev", default-features = false, path = "../../../../client/service" }
 sc-cli = { version = "0.10.0-dev", path = "../../../../client/cli" }
 sc-executor = { version = "0.10.0-dev", path = "../../../../client/executor" }
@@ -30,6 +29,5 @@ sp-io = { version = "6.0.0", path = "../../../../primitives/io" }
 sp-keystore = { version = "0.12.0", path = "../../../../primitives/keystore" }
 sp-externalities = { version = "0.12.0", path = "../../../../primitives/externalities" }
 sp-version = { version = "5.0.0", path = "../../../../primitives/version" }
-
 remote-externalities = { version = "0.10.0-dev", path = "../../remote-externalities" }
 jsonrpsee = { version = "0.10.1", default-features = false, features = ["ws-client"] }

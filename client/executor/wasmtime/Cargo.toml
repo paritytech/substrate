@@ -23,7 +23,6 @@ wasmtime = { version = "0.35.3", default-features = false, features = [
 	"jitdump",
 	"parallel-compilation",
 ] }
-
 codec = { package = "parity-scale-codec", version = "3.0.0" }
 sc-allocator = { version = "4.1.0-dev", path = "../../allocator" }
 sc-executor-common = { version = "0.10.0-dev", path = "../common" }

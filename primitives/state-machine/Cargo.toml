@@ -52,5 +52,5 @@ std = [
 	"parking_lot",
 	"rand",
 	"sp-panic-handler",
-	"tracing"
+	"tracing",
 ]

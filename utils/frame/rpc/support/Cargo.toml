@@ -2,8 +2,8 @@
 name = "substrate-frame-rpc-support"
 version = "3.0.0"
 authors = [
-    "Parity Technologies <admin@parity.io>",
-    "Andrew Dirksen <andrew@dirksen.com>",
+	"Parity Technologies <admin@parity.io>",
+	"Andrew Dirksen <andrew@dirksen.com>",
 ]
 edition = "2021"
 license = "Apache-2.0"

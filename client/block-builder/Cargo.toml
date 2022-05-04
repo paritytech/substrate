@@ -12,7 +12,6 @@ readme = "README.md"
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
-
 [dependencies]
 sp-state-machine = { version = "0.12.0", path = "../../primitives/state-machine" }
 sp-runtime = { version = "6.0.0", path = "../../primitives/runtime" }
@@ -23,7 +22,7 @@ sp-block-builder = { version = "4.0.0-dev", path = "../../primitives/block-build
 sp-inherents = { version = "4.0.0-dev", path = "../../primitives/inherents" }
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
 codec = { package = "parity-scale-codec", version = "3.0.0", features = [
-    "derive",
+	"derive",
 ] }
 
 [dev-dependencies]

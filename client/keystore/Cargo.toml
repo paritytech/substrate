@@ -13,7 +13,6 @@ readme = "README.md"
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
-
 [dependencies]
 async-trait = "0.1.50"
 thiserror = "1.0"

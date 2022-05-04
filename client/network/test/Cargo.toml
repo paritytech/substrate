@@ -33,5 +33,5 @@ sp-consensus-babe = { version = "0.10.0-dev", path = "../../../primitives/consen
 substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }
 substrate-test-runtime = { version = "2.0.0", path = "../../../test-utils/runtime" }
 sp-tracing = { version = "5.0.0", path = "../../../primitives/tracing" }
-sc-service = { version = "0.10.0-dev", default-features = false, features = ["test-helpers"],  path = "../../service" }
+sc-service = { version = "0.10.0-dev", default-features = false, features = ["test-helpers"], path = "../../service" }
 async-trait = "0.1.50"

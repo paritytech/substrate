@@ -30,7 +30,7 @@ sc-client-api = { version = "4.0.0-dev", path = "../../api" }
 [dev-dependencies]
 sc-block-builder = { version = "0.10.0-dev", path = "../../block-builder" }
 sc-rpc = { version = "4.0.0-dev", path = "../../rpc", features = [
-    "test-helpers",
+	"test-helpers",
 ] }
 sp-core = { version = "6.0.0", path = "../../../primitives/core" }
 sp-finality-grandpa = { version = "4.0.0-dev", path = "../../../primitives/finality-grandpa" }

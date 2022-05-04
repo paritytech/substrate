@@ -21,7 +21,6 @@ frame-system = { version = "4.0.0-dev", default-features = false, path = "../../
 frame-election-provider-support = { version = "4.0.0-dev", default-features = false, path = ".." }
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../../benchmarking", optional = true }
 
-
 [features]
 default = ["std"]
 std = [
@@ -31,7 +30,6 @@ std = [
 	"frame-benchmarking/std",
 	"frame-system/std",
 ]
-
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",
 	"frame-election-provider-support/runtime-benchmarks",

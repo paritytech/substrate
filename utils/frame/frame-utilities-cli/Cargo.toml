@@ -12,7 +12,6 @@ readme = "README.md"
 
 [dependencies]
 clap = { version = "3.1.6", features = ["derive"] }
-
 sp-core = { version = "6.0.0", path = "../../../primitives/core" }
 sc-cli = { version = "0.10.0-dev", path = "../../../client/cli" }
 sp-runtime = { version = "6.0.0", path = "../../../primitives/runtime" }

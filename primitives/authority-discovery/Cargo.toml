@@ -28,5 +28,5 @@ std = [
 	"scale-info/std",
 	"sp-std/std",
 	"sp-api/std",
-	"sp-runtime/std"
+	"sp-runtime/std",
 ]

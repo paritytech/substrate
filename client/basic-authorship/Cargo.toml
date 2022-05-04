@@ -17,7 +17,7 @@ codec = { package = "parity-scale-codec", version = "3.0.0" }
 futures = "0.3.21"
 futures-timer = "3.0.1"
 log = "0.4.16"
-prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus", version = "0.10.0-dev"}
+prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus", version = "0.10.0-dev" }
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
 sp-runtime = { version = "6.0.0", path = "../../primitives/runtime" }
 sp-core = { version = "6.0.0", path = "../../primitives/core" }

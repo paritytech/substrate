@@ -17,7 +17,7 @@ futures = "0.3.21"
 jsonrpc-core = "18.0.0"
 pubsub = { package = "jsonrpc-pubsub", version = "18.0.0" }
 log = "0.4.16"
-prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus", version = "0.10.0-dev"}
+prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus", version = "0.10.0-dev" }
 serde_json = "1.0.79"
 tokio = { version = "1.17.0", features = ["parking_lot"] }
 http = { package = "jsonrpc-http-server", version = "18.0.0" }

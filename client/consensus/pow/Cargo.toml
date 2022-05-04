@@ -29,5 +29,5 @@ futures = "0.3.21"
 futures-timer = "3.0.1"
 parking_lot = "0.12.0"
 thiserror = "1.0"
-prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../../utils/prometheus", version = "0.10.0-dev"}
+prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../../utils/prometheus", version = "0.10.0-dev" }
 async-trait = "0.1.50"

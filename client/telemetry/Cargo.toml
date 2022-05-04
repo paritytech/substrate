@@ -13,7 +13,6 @@ readme = "README.md"
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
-
 [dependencies]
 parking_lot = "0.12.0"
 futures = "0.3.21"
