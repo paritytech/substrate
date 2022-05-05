@@ -871,9 +871,9 @@ pub mod pallet {
 
 			let params = Parameters::<T, I>::get().ok_or(Error::<T, I>::NotGroup)?;
 			let deposit = params.candidate_deposit;
-			Self::insert_bid(&mut bids, &who, value.clone(), BidKind::Deposit(deposit));
-
+			// NOTE: Reserve must happen before `insert_bid` since that could end up unreserving.
 			T::Currency::reserve(&who, deposit)?;
+			Self::insert_bid(&mut bids, &who, value.clone(), BidKind::Deposit(deposit));
 
 			Bids::<T, I>::put(bids);
 			Self::deposit_event(Event::<T, I>::Bid { candidate_id: who, offer: value });

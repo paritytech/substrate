@@ -164,10 +164,6 @@ impl EnvBuilder {
 		self.founded = f;
 		self
 	}
-	pub fn with_pot(mut self, p: u64) -> Self {
-		self.pot = p;
-		self
-	}
 }
 
 /// Run until a particular block.

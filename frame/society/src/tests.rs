@@ -994,7 +994,7 @@ fn zero_bid_works() {
 		assert_eq!(Head::<Test>::get(), Some(30));
 	});
 }
-/*
+
 #[test]
 fn bids_ordered_correctly() {
 	// This tests that bids with the same value are placed in the list ordered
@@ -1003,8 +1003,9 @@ fn bids_ordered_correctly() {
 		for i in 0..5 {
 			for j in 0..5 {
 				// Give them some funds
-				let _ = Balances::make_free_balance_be(&(100 + (i * 5 + j) as u128), 1000);
-				assert_ok!(Society::bid(Origin::signed(100 + (i * 5 + j) as u128), j));
+				let who = 100 + (i * 5 + j) as u128;
+				let _ = Balances::make_free_balance_be(&who, 1000);
+				assert_ok!(Society::bid(Origin::signed(who), j));
 			}
 		}
 
@@ -1012,11 +1013,11 @@ fn bids_ordered_correctly() {
 
 		for j in 0..5 {
 			for i in 0..5 {
-				final_list.push((100 +candidacy(j1, ,  (i * 5 + j), 0, 0) as u128, BidKind::Deposit(25)));
+				final_list.push(bid(100 + (i * 5 + j) as u128, BidKind::Deposit(25), j));
 			}
 		}
-
+		let max_bids: u32 = <Test as Config>::MaxBids::get();
+		final_list.truncate(max_bids as usize);
 		assert_eq!(Bids::<Test>::get(), final_list);
 	});
 }
-*/
