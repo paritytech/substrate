@@ -427,24 +427,6 @@ impl<'a> sc_state_db::MetaDb for StateMetaDb<'a> {
 	fn get_meta(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		Ok(self.0.get(columns::STATE_META, key))
 	}
-
-	fn set_meta<V: AsRef<[u8]>>(
-		&mut self,
-		key: &[u8],
-		value_opt: Option<V>,
-	) -> Result<(), Self::Error> {
-		let mut trx = Transaction::new();
-
-		if let Some(value) = value_opt {
-			trx.set(columns::STATE_META, key, value.as_ref());
-		} else {
-			trx.remove(columns::STATE_META, key);
-		}
-
-		self.0.commit(trx)?;
-
-		Ok(())
-	}
 }
 
 struct MetaUpdate<Block: BlockT> {
@@ -1097,17 +1079,21 @@ impl<Block: BlockT> Backend<Block> {
 		config: &DatabaseSettings,
 		should_init: bool,
 	) -> ClientResult<Self> {
+		let mut db_init_transaction = Transaction::new();
+
 		let requested_state_pruning = config.state_pruning.clone();
-		let mut state_meta_db = StateMetaDb(db.as_ref());
+		let state_meta_db = StateMetaDb(db.as_ref());
 		let map_e = sp_blockchain::Error::from_state_db;
 
-		let state_db: StateDb<_, _> = StateDb::open(
-			&mut state_meta_db,
+		let (state_db_init_commit_set, state_db) = StateDb::open(
+			&state_meta_db,
 			requested_state_pruning,
 			!db.supports_ref_counting(),
 			should_init,
 		)
 		.map_err(map_e)?;
+
+		apply_state_commit(&mut db_init_transaction, state_db_init_commit_set);
 
 		let state_pruning_used = state_db.pruning_mode();
 
@@ -1116,6 +1102,7 @@ impl<Block: BlockT> Backend<Block> {
 
 		let storage_db =
 			StorageDb { db: db.clone(), state_db, prefix_keys: !db.supports_ref_counting() };
+
 		let offchain_storage = offchain::LocalStorage::new(db.clone());
 
 		let backend = Backend {
@@ -1152,6 +1139,9 @@ impl<Block: BlockT> Backend<Block> {
 				with_state: true,
 			});
 		}
+
+		db.commit(db_init_transaction)?;
+
 		Ok(backend)
 	}
 
