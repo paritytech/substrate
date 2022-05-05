@@ -35,6 +35,7 @@ pub(crate) type Balance = u128;
 pub(crate) type AccountId = u64;
 pub(crate) type TokenId = u32;
 pub(crate) type Amount = i128;
+pub(crate) type BlockNumber = u64;
 
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -63,7 +64,7 @@ impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockHashCount = BlockHashCount;
 	type BlockLength = ();
-	type BlockNumber = u64;
+	type BlockNumber = BlockNumber;
 	type BlockWeights = ();
 	type Call = Call;
 	type DbWeight = ();
