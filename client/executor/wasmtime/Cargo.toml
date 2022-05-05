@@ -14,6 +14,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 cfg-if = "1.0"
+codec = { package = "parity-scale-codec", version = "3.0.0" }
 libc = "0.2.121"
 log = "0.4.16"
 parity-wasm = "0.42.0"
@@ -23,15 +24,13 @@ wasmtime = { version = "0.35.3", default-features = false, features = [
 	"jitdump",
 	"parallel-compilation",
 ] }
-
-codec = { package = "parity-scale-codec", version = "3.0.0" }
 sc-allocator = { version = "4.1.0-dev", path = "../../allocator" }
 sc-executor-common = { version = "0.10.0-dev", path = "../common" }
 sp-runtime-interface = { version = "6.0.0", path = "../../../primitives/runtime-interface" }
 sp-sandbox = { version = "0.10.0-dev", path = "../../../primitives/sandbox" }
-sp-wasm-interface = { version = "6.0.0", path = "../../../primitives/wasm-interface", features = ["wasmtime"] }
+sp-wasm-interface = { version = "6.0.0", features = ["wasmtime"], path = "../../../primitives/wasm-interface" }
 
 [dev-dependencies]
+wat = "1.0"
 sc-runtime-test = { version = "2.0.0", path = "../runtime-test" }
 sp-io = { version = "6.0.0", path = "../../../primitives/io" }
-wat = "1.0"

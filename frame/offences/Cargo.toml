@@ -13,34 +13,34 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../balances" }
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"] }
+log = { version = "0.4.16", default-features = false }
 scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
-sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
 serde = { version = "1.0.136", optional = true }
-sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../primitives/staking" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
-log = { version = "0.4.16", default-features = false }
+pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../balances" }
+sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../primitives/staking" }
+sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
 
 [dev-dependencies]
-sp-io = { version = "6.0.0", path = "../../primitives/io" }
 sp-core = { version = "6.0.0", path = "../../primitives/core" }
+sp-io = { version = "6.0.0", path = "../../primitives/io" }
 
 [features]
 default = ["std"]
 std = [
-	"pallet-balances/std",
 	"codec/std",
-	"scale-info/std",
-	"sp-std/std",
-	"serde",
-	"sp-runtime/std",
-	"sp-staking/std",
 	"frame-support/std",
 	"frame-system/std",
 	"log/std",
+	"pallet-balances/std",
+	"scale-info/std",
+	"serde",
+	"sp-runtime/std",
+	"sp-staking/std",
+	"sp-std/std",
 ]
 runtime-benchmarks = []
 try-runtime = ["frame-support/try-runtime"]
