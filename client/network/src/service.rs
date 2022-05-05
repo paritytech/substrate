@@ -351,9 +351,9 @@ where
 				// TODO move mixnet building to MixnetHandlePrototype?? + add metrics
 				// through call backs in crate and same as transaction handler to register
 				let mut mixnet = None;
-				if let Some((mixnet_in, mixnet_out, command_sender, config)) = params.mixnet {
+				if let Some((mixnet_in, mixnet_out, command_sender)) = params.mixnet {
 					mixnet =
-						Some((MixnetBehaviour::new(config, mixnet_in, mixnet_out), command_sender));
+						Some((MixnetBehaviour::new(mixnet_in, mixnet_out), command_sender));
 				};
 
 				let result = Behaviour::new(

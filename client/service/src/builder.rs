@@ -757,7 +757,6 @@ pub struct BuildNetworkParams<'a, TBl: BlockT, TExPool, TImpQu, TCl> {
 		sc_mixnet::WorkerSink,
 		sc_mixnet::WorkerStream,
 		TracingUnboundedSender<sc_network::MixnetCommand>,
-		sc_mixnet::Config,
 	)>,
 }
 

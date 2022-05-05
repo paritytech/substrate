@@ -4749,6 +4749,7 @@ dependencies = [
  "blake2-rfc",
  "ctr 0.9.1",
  "curve25519-dalek 3.2.0",
+ "dyn-clone",
  "futures 0.3.21",
  "futures-timer",
  "hkdf",

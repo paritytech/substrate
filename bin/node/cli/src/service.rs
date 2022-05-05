@@ -358,7 +358,7 @@ pub fn new_full_base(
 		let local_id = config.network.node_key.clone().into_keypair()?;
 		if let Some(config) = sc_mixnet::config(&local_id) {
 			let (worker_inner, (worker_in, worker_out, command_sender)) = sc_mixnet::new_channels();
-			mixnet_channels = Some((worker_in, worker_out, command_sender, config.clone()));
+			mixnet_channels = Some((worker_in, worker_out, command_sender));
 			let authority_set = import_setup.1.shared_authority_set().clone();
 			mixnet_worker = Some((authority_set, worker_inner, config));
 		} else {

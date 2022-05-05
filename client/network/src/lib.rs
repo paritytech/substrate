@@ -332,4 +332,4 @@ pub struct NetworkStatus<B: BlockT> {
 }
 
 // Topology is only define at worker level.
-type Mixnet = mixnet::MixnetBehaviour;
+type Mixnet = mixnet::MixnetBehaviour; // TODO remove alias

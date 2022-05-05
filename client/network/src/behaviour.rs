@@ -61,17 +61,15 @@ pub use crate::request_responses::{
 	IfDisconnected, InboundFailure, OutboundFailure, RequestFailure, RequestId, ResponseFailure,
 };
 use crate::Mixnet;
-use mixnet::{MixPeerId, MixPublicKey};
+use mixnet::MixPeerId;
 use sc_utils::mpsc::TracingUnboundedSender;
 
 /// Command for the mixnet worker.
+/// TODO become a bit useless (just transaction import result).
 pub enum MixnetCommand {
 	/// New authority id from session grandpa session change.
+	/// TODO remove
 	AuthorityId(sp_finality_grandpa::AuthorityId, sp_core::crypto::CryptoTypePublicPair, MixPeerId),
-	/// New connection at mixnet swarm behavior level.
-	Connected(MixPeerId, MixPublicKey),
-	/// Disconnection at mixnet swarm behavior level.
-	Disconnected(MixPeerId),
 	/// Received transaction is invalid with a surbs reply.
 	TransactionImportResult(mixnet::SurbsPayload, MixnetImportResult),
 }
@@ -700,17 +698,10 @@ where
 					},
 				}
 			},
-			mixnet::NetworkEvent::Connected(peer_id, key) => {
-				debug!(target: "mixnet", "Peer connection added to mixnet {:?}", peer_id);
-				self.mixnet_command_sender
-					.as_mut()
-					.map(|sender| sender.start_send(MixnetCommand::Connected(peer_id, key)));
+			mixnet::NetworkEvent::Connected(_peer_id, _pub_key) => {
 			},
-			mixnet::NetworkEvent::Disconnected(peer_id) => {
-				debug!(target: "mixnet", "Peer removed from mixnet {:?}", peer_id);
-				self.mixnet_command_sender
-					.as_mut()
-					.map(|sender| sender.start_send(MixnetCommand::Disconnected(peer_id)));
+			mixnet::NetworkEvent::CloseStream => {
+				log::error!(target: "mixnet", "Stream close, no message incomming.");
 			},
 		}
 	}

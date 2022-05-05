@@ -105,6 +105,7 @@ enum State {
 }
 
 /// Build mixnet config.
+/// TODO this is not needed anymore (just add to worker build).
 pub fn config(local_identity: &libp2p::core::identity::Keypair) -> Option<mixnet::Config> {
 	if let libp2p::core::identity::Keypair::Ed25519(kp) = local_identity {
 		let local_public_key = local_identity.public();
@@ -126,7 +127,7 @@ pub fn new_channels(
 			command_sink.clone(),
 			command_stream,
 		),
-		(Box::pin(to_worker_sink), Box::pin(from_worker_stream), command_sink),
+		(Box::new(to_worker_sink), Box::new(from_worker_stream), command_sink),
 	)
 }
 
@@ -367,18 +368,14 @@ where
 						authority_discovery_id,
 						peer_id,
 					);
+					debug!(target: "mixnet", "Removing limit for {:?}.", peer_id);
+					self.worker.change_peer_limit_window(&peer_id, None);
+
 					self.update_state(false);
 				}
 			},
-			MixnetCommand::Connected(peer_id, key) => {
-				self.worker.mixnet.topology.add_connected_peer(peer_id, key);
-				self.update_state(false);
-			},
-			MixnetCommand::Disconnected(peer_id) => {
-				self.worker.mixnet.topology.add_disconnected_peer(peer_id);
-				self.update_state(false);
-			},
 			MixnetCommand::TransactionImportResult(surbs, result) => {
+				debug!(target: "mixnet", "Mixnet, received transaction import result.");
 				if let Err(e) = self.worker.mixnet.register_surbs(result.encode(), surbs) {
 					error!(target: "mixnet", "Could not register surbs {:?}", e);
 				}
@@ -471,10 +468,12 @@ where
 		}
 		self.update_state(false);
 		for peer in remove_limit.into_iter() {
-			self.worker.change_peer_limit_window(peer, None);
+			debug!(target: "mixnet", "Remove limit for {:?}.", peer);
+			self.worker.change_peer_limit_window(&peer, None);
 		}
 		for peer in restore_limit.into_iter() {
-			self.worker.change_peer_limit_window(peer, self.default_limit_config.clone());
+			debug!(target: "mixnet", "Restore limit for {:?}.", peer);
+			self.worker.change_peer_limit_window(&peer, self.default_limit_config.clone());
 		}
 	}
 
@@ -718,15 +717,15 @@ impl AuthorityStar {
 			.insert(peer_id, NodeInfo { id: peer_id, authority_id, public_key: key });
 	}
 
-	fn add_disconnected_peer(&mut self, peer_id: MixPeerId) {
+	fn add_disconnected_peer(&mut self, peer_id: &MixPeerId) {
 		debug!(target: "mixnet", "Disconnected from mixnet {:?}", peer_id);
-		self.routing_nodes.remove(&peer_id);
+		self.routing_nodes.remove(peer_id);
 		if let Some(NodeInfo { authority_id: Some(authority_id), .. }) =
-			self.connected_nodes.remove(&peer_id)
+			self.connected_nodes.remove(peer_id)
 		{
 			if let Some(_peer_id) = self.connected_authorities.remove(&authority_id.grandpa_id) {
-				debug_assert!(_peer_id == peer_id);
-				self.unconnected_authorities.insert(peer_id, authority_id);
+				debug_assert!(&_peer_id == peer_id);
+				self.unconnected_authorities.insert(peer_id.clone(), authority_id);
 			}
 		}
 	}
@@ -941,14 +940,15 @@ impl Topology for AuthorityStar {
 		self.routing
 	}
 
-	fn connected(&mut self, _: MixPeerId, _: MixPublicKey) {
+	fn connected(&mut self, peer_id: MixPeerId, key: MixPublicKey) {
 		debug!(target: "mixnet", "Connected from internal");
-		//		unimplemented!("TODO");
+
+		self.add_connected_peer(peer_id, key)
 	}
 
-	fn disconnect(&mut self, _: &MixPeerId) {
-		debug!(target: "mixnet", "Disonnected from internal");
-		//		unimplemented!("TODO");
+	fn disconnect(&mut self, peer_id: &MixPeerId) {
+		debug!(target: "mixnet", "Disconnected from internal");
+		self.add_disconnected_peer(&peer_id);
 	}
 }
 /*

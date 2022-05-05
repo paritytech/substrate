@@ -144,7 +144,6 @@ where
 		mixnet::WorkerSink,
 		mixnet::WorkerStream,
 		TracingUnboundedSender<crate::MixnetCommand>,
-		mixnet::Config,
 	)>,
 }
 
