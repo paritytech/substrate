@@ -25,6 +25,7 @@ sp-std = { version = "4.0.0", default-features = false, path = "../../std" }
 default = ["std"]
 std = [
 	"blake2/std",
+	"byteorder/std",
 	"sha2/std",
 	"sha3/std",
 	"sp-std/std",

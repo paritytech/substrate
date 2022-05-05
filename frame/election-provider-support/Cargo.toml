@@ -35,8 +35,10 @@ std = [
 	"codec/std",
 	"frame-support/std",
 	"frame-system/std",
+	"scale-info/std",
 	"sp-arithmetic/std",
 	"sp-npos-elections/std",
+	"sp-runtime/std",
 	"sp-std/std",
 ]
 runtime-benchmarks = []
