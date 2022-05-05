@@ -97,20 +97,12 @@ impl<
 {
 }
 
-/// Backend database trait.
+/// Backend database trait. Read-only.
 pub trait MetaDb {
 	type Error: fmt::Debug;
 
 	/// Get meta value, such as the journal.
 	fn get_meta(&self, key: &[u8]) -> Result<Option<DBValue>, Self::Error>;
-
-	/// Write meta key-value to the database.
-	/// This is only used when opening the database to initialise the metadata.
-	fn set_meta<V: AsRef<[u8]>>(
-		&mut self,
-		key: &[u8],
-		value_opt: Option<V>,
-	) -> Result<(), Self::Error>;
 }
 
 /// Backend database trait. Read-only.
@@ -502,23 +494,13 @@ pub struct StateDb<BlockHash: Hash, Key: Hash> {
 }
 
 impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf> StateDb<BlockHash, Key> {
-	#[deprecated]
-	/// Creates a new instance. Does not expect any metadata in the database.
-	pub fn new<D: MetaDb>(
-		mode: PruningMode,
-		ref_counting: bool,
-		db: &D,
-	) -> Result<StateDb<BlockHash, Key>, Error<D::Error>> {
-		Ok(StateDb { db: RwLock::new(StateDbSync::new(mode, ref_counting, db)?) })
-	}
-
 	/// Create an instance of [`StateDb`].
 	pub fn open<D>(
-		db: &mut D,
+		db: &D,
 		requested_mode: Option<PruningMode>,
 		ref_counting: bool,
 		should_init: bool,
-	) -> Result<StateDb<BlockHash, Key>, Error<D::Error>>
+	) -> Result<(CommitSet<Key>, StateDb<BlockHash, Key>), Error<D::Error>>
 	where
 		D: MetaDb,
 	{
@@ -542,13 +524,23 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf> StateDb<BlockHash
 				(false, choose_pruning_mode(stored, requested)?),
 		};
 
-		if should_store_mode {
-			let () = db
-				.set_meta(&to_meta_key(PRUNING_MODE, &()), Some(selected_mode.id()))
-				.map_err(Error::Db)?;
-		}
+		let db_init_commit_set = if should_store_mode {
+			let mut cs: CommitSet<Key> = Default::default();
 
-		Ok(StateDb { db: RwLock::new(StateDbSync::new(selected_mode, ref_counting, db)?) })
+			let key = to_meta_key(PRUNING_MODE, &());
+			let value = selected_mode.id().to_owned();
+
+			cs.meta.inserted.push((key, value));
+
+			cs
+		} else {
+			Default::default()
+		};
+
+		let state_db =
+			StateDb { db: RwLock::new(StateDbSync::new(selected_mode, ref_counting, db)?) };
+
+		Ok((db_init_commit_set, state_db))
 	}
 
 	pub fn pruning_mode(&self) -> PruningMode {
@@ -679,7 +671,9 @@ mod tests {
 
 	fn make_test_db(settings: PruningMode) -> (TestDb, StateDb<H256, H256>) {
 		let mut db = make_db(&[91, 921, 922, 93, 94]);
-		let state_db = StateDb::open(&mut db, Some(settings), false, true).unwrap();
+		let (state_db_init, state_db) =
+			StateDb::open(&mut db, Some(settings), false, true).unwrap();
+		db.commit(&state_db_init);
 
 		db.commit(
 			&state_db
@@ -794,7 +788,9 @@ mod tests {
 	#[test]
 	fn detects_incompatible_mode() {
 		let mut db = make_db(&[]);
-		let state_db = StateDb::open(&mut db, Some(PruningMode::ArchiveAll), false, true).unwrap();
+		let (state_db_init, state_db) =
+			StateDb::open(&mut db, Some(PruningMode::ArchiveAll), false, true).unwrap();
+		db.commit(&state_db_init);
 		db.commit(
 			&state_db
 				.insert_block::<io::Error>(
@@ -806,9 +802,9 @@ mod tests {
 				.unwrap(),
 		);
 		let new_mode = PruningMode::Constrained(Constraints { max_blocks: Some(2), max_mem: None });
-		let state_db: Result<StateDb<H256, H256>, _> =
+		let state_db_open_result: Result<(_, StateDb<H256, H256>), _> =
 			StateDb::open(&mut db, Some(new_mode), false, false);
-		assert!(state_db.is_err());
+		assert!(state_db_open_result.is_err());
 	}
 
 	fn check_stored_and_requested_mode_compatibility(
@@ -817,17 +813,20 @@ mod tests {
 		expected_effective_mode_when_reopenned: Result<PruningMode, ()>,
 	) {
 		let mut db = make_db(&[]);
-		let state_db =
+		let (state_db_init, state_db) =
 			StateDb::<H256, H256>::open(&mut db, mode_when_created, false, true).unwrap();
+		db.commit(&state_db_init);
 		std::mem::drop(state_db);
 
-		let state_db_reopened =
+		let state_db_reopen_result =
 			StateDb::<H256, H256>::open(&mut db, mode_when_reopened, false, false);
 		if let Ok(expected_mode) = expected_effective_mode_when_reopenned {
-			assert_eq!(state_db_reopened.unwrap().pruning_mode(), expected_mode,)
+			let (state_db_init, state_db_reopened) = state_db_reopen_result.unwrap();
+			db.commit(&state_db_init);
+			assert_eq!(state_db_reopened.pruning_mode(), expected_mode,)
 		} else {
 			assert!(matches!(
-				state_db_reopened,
+				state_db_reopen_result,
 				Err(Error::StateDb(StateDbError::IncompatiblePruningModes { .. }))
 			));
 		}
