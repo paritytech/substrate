@@ -241,9 +241,6 @@
 //! * `set_max_membership` - The ROOT origin can update the maximum member count for the society.
 //! The max membership count must be greater than 1.
 
-// TODO: Sort out all the `limit: None` stuff for remove prefix.
-// TODO: Membership subsets: ranks and badges.
-
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -252,6 +249,8 @@ mod mock;
 
 #[cfg(test)]
 mod tests;
+
+pub mod migrations;
 
 use frame_support::{
 	pallet_prelude::*,
@@ -283,17 +282,6 @@ type BalanceOf<T, I> =
 type NegativeImbalanceOf<T, I> = <<T as Config<I>>::Currency as Currency<
 	<T as frame_system::Config>::AccountId,
 >>::NegativeImbalance;
-
-/// A vote by a member on a candidate application.
-#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
-pub enum OldVote {
-	/// The member has been chosen to be skeptic and has not yet taken any action.
-	Skeptic,
-	/// The member has rejected the candidate's application.
-	Reject,
-	/// The member approves of the candidate's application.
-	Approve,
-}
 
 #[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub struct Vote {
@@ -467,22 +455,17 @@ pub struct GroupParams<Balance> {
 }
 
 pub type GroupParamsFor<T, I> = GroupParams<BalanceOf<T, I>>;
-/*
-pub type FactionIndex = u32;
 
-pub enum Faction {
-	Society,
-	Splinter(FactionIndex),
+/// A vote by a member on a candidate application.
+#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+pub enum OldVote {
+	/// The member has been chosen to be skeptic and has not yet taken any action.
+	Skeptic,
+	/// The member has rejected the candidate's application.
+	Reject,
+	/// The member approves of the candidate's application.
+	Approve,
 }
-
-/// A group is just the rank of a faction.
-pub struct Group {
-	faction: Faction,
-	rank: Rank,
-}
-*/
-//TODO: Ranks cannot be indexed linearly if we want to do insertions into the ranking system.
-//  Should just be done as Groups DAG.
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -608,6 +591,8 @@ pub mod pallet {
 		AlreadyElevated,
 		/// The skeptic has already been punished for this offence.
 		AlreadyPunished,
+		/// Funds are insufficient to pay off society debts.
+		insufficientFunds,
 	}
 
 	#[pallet::event]
@@ -665,7 +650,6 @@ pub mod pallet {
 	pub type Pot<T: Config<I>, I: 'static = ()> = StorageValue<_, BalanceOf<T, I>, ValueQuery>;
 
 	/// The first member.
-	// TODO: Rename to `Faction` as a map on `FactionIndex`.
 	#[pallet::storage]
 	pub type Founder<T: Config<I>, I: 'static = ()> = StorageValue<_, T::AccountId>;
 
@@ -675,8 +659,6 @@ pub mod pallet {
 
 	/// A hash of the rules of this society concerning membership. Can only be set once and
 	/// only by the founder.
-	// TODO: Should be a map with rules for each rank and faction.
-	// TODO: Rename to `GroupMeta` as a map on `GroupIndex` and include `name: String`.
 	#[pallet::storage]
 	pub type Rules<T: Config<I>, I: 'static = ()> = StorageValue<_, T::Hash>;
 
@@ -684,24 +666,11 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type Members<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, T::AccountId, MemberRecord, OptionQuery>;
-	/*
-	// TODO: Migrate from:
-	pub(super) type Vouching<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, T::AccountId, VouchingStatus>;
-	pub(super) type Strikes<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, T::AccountId, StrikeCount, ValueQuery>;
-	pub type Members<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, Vec<T::AccountId>, ValueQuery>;
-	*/
 
 	/// Information regarding rank-0 payouts, past and future.
 	#[pallet::storage]
 	pub type Payouts<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, T::AccountId, PayoutRecordFor<T, I>, ValueQuery>;
-	/*
-	// TODO: Migrate from:
-	pub(super) type Payouts<T: Config<I>, I: 'static = ()> = ???
-	*/
 
 	/// The number of items in `Members` currently. (Doesn't include `SuspendedMembers`.)
 	#[pallet::storage]
@@ -727,11 +696,6 @@ pub mod pallet {
 	pub(super) type Bids<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, BoundedVec<Bid<T::AccountId, BalanceOf<T, I>>, T::MaxBids>, ValueQuery>;
 
-	/*
-	// TODO: Migrate from:
-	pub type Candidates<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, Vec<Bid<T::AccountId, BalanceOf<T, I>>>, ValueQuery>;
-	*/
 	#[pallet::storage]
 	pub type Candidates<T: Config<I>, I: 'static = ()> = StorageMap<_,
 		Blake2_128Concat,
@@ -754,9 +718,6 @@ pub mod pallet {
 		Vote,
 		OptionQuery,
 	>;
-	// TODO: Migrate from:
-	//pub(super) type Votes<T: Config<I>, I: 'static = ()> =
-	//	StorageDoubleMap<_, Twox64Concat, T::AccountId, Twox64Concat, T::AccountId, OldVote>;
 
 	/// At the end of the claim period, this contains the most recently approved members (along with
 	/// their bid and round ID) who is from the most recent round with the lowest bid. They will
@@ -775,11 +736,54 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(super) type DefenderVotes<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, T::AccountId, Vote>;
-	/*
-	// TODO: Migrate from
-	pub(super) type DefenderVotes<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, T::AccountId, OldVote>;
-	*/
+
+	mod old {
+		use super::{
+			pallet, StorageMap, StorageValue, StorageDoubleMap, Config, BalanceOf, Twox64Concat,
+			ValueQuery, BidKind, VouchingStatus, StrikeCount, Bid,
+		};
+
+		#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+		pub enum Vote {
+			Skeptic,
+			Reject,
+			Approve,
+		}
+
+		#[pallet::storage]
+		pub type Bids<T: Config<I>, I: 'static = ()> =
+			StorageValue<_, Vec<Bid<T::AccountId, BalanceOf<T, I>>>, ValueQuery>;
+		#[pallet::storage]
+		pub type Candidates<T: Config<I>, I: 'static = ()> =
+			StorageValue<_, Vec<Bid<T::AccountId, BalanceOf<T, I>>>, ValueQuery>;
+		#[pallet::storage]
+		pub type Votes<T: Config<I>, I: 'static = ()> =
+			StorageDoubleMap<_, Twox64Concat, T::AccountId, Twox64Concat, T::AccountId, Vote>;
+		#[pallet::storage]
+		pub type SuspendedCandidates<T: Config<I>, I: 'static = ()> =
+			StorageMap<_, Twox64Concat, T::AccountId, (BalanceOf<T, I>, BidKind<T::AccountId, BalanceOf<T, I>>)>;
+		#[pallet::storage]
+		pub type Members<T: Config<I>, I: 'static = ()> =
+			StorageValue<_, Vec<T::AccountId>, ValueQuery>;
+		#[pallet::storage]
+		pub type Vouching<T: Config<I>, I: 'static = ()> =
+			StorageMap<_, Twox64Concat, T::AccountId, VouchingStatus>;
+		#[pallet::storage]
+		pub type Strikes<T: Config<I>, I: 'static = ()> =
+			StorageMap<_, Twox64Concat, T::AccountId, StrikeCount, ValueQuery>;
+		#[pallet::storage]
+		pub type Payouts<T: Config<I>, I: 'static = ()> =
+			StorageMap<_, Twox64Concat, T::AccountId, Vec<(T::BlockNumber, BalanceOf<T, I>)>, ValueQuery>;
+		#[pallet::storage]
+		pub type SuspendedMembers<T: Config<I>, I: 'static = ()> =
+			StorageMap<_, Twox64Concat, T::AccountId, bool, ValueQuery>;
+		#[pallet::storage]
+		pub type Defender<T: Config<I>, I: 'static = ()> =
+			StorageValue<_, T::AccountId>;
+		#[pallet::storage]
+		pub type DefenderVotes<T: Config<I>, I: 'static = ()> =
+			StorageMap<_, Twox64Concat, T::AccountId, Vote>;
+	}
 
 	#[pallet::hooks]
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
@@ -835,14 +839,6 @@ pub mod pallet {
 		fn build(&self) {
 			Pot::<T, I>::put(self.pot);
 		}
-	}
-
-	mod migrations {
-		/*
-		fn to_v2() {
-
-		}
-		*/
 	}
 
 	#[pallet::call]
@@ -1078,18 +1074,19 @@ pub mod pallet {
 		/// Repay the payment previously given to the member with the signed origin, remove any
 		/// pending payments, and elevate them from rank 0 to rank 1.
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
-		pub fn waive_repay(origin: OriginFor<T>) -> DispatchResult {
+		pub fn waive_repay(origin: OriginFor<T>, amount: BalanceOf<T, I>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let mut record = Members::<T, I>::get(&who).ok_or(Error::<T, I>::NotMember)?;
 			let mut payout_record = Payouts::<T, I>::get(&who);
 			ensure!(record.rank == 0, Error::<T, I>::AlreadyElevated);
+			ensure!(amount >= payout_record.paid, Error::<T, I>::insufficientFunds);
 
 			T::Currency::transfer(&who, &Self::account_id(), payout_record.paid, AllowDeath)?;
+			payout_record.paid = 0;
 			payout_record.payouts.clear();
 			record.rank = 1;
 			Members::<T, I>::insert(&who, record);
 			Payouts::<T, I>::insert(&who, payout_record);
-
 			Self::deposit_event(Event::<T, I>::Elevated { member: who, rank: 1 });
 
 			Ok(())
@@ -1344,7 +1341,6 @@ impl<T: Config> EnsureOrigin<<T as frame_system::Config>::Origin> for EnsureFoun
 	}
 }
 
-// TODO: Move close to `FromEntropy`?
 struct InputFromRng<'a, T>(&'a mut T);
 impl<'a, T: RngCore> codec::Input for InputFromRng<'a, T> {
 	fn remaining_len(&mut self) -> Result<Option<usize>, codec::Error> {

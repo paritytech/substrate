@@ -157,7 +157,9 @@ impl EnvBuilder {
 				let r = b"be cool".to_vec();
 				assert!(Society::found_society(Origin::signed(1), 10, 10, 8, 2, 25, r).is_ok());
 			}
-			f()
+			let r = f();
+			migrations::assert_internal_consistency();
+			r
 		})
 	}
 	pub fn founded(mut self, f: bool) -> Self {
