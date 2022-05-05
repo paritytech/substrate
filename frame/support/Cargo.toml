@@ -39,7 +39,7 @@ k256 = { version = "0.10.2", default-features = false, features = ["ecdsa"] }
 
 [dev-dependencies]
 assert_matches = "1.3.0"
-pretty_assertions = "1.0.0"
+pretty_assertions = "1.2.1"
 frame-system = { version = "4.0.0-dev", path = "../system" }
 parity-util-mem = { version = "0.11.0", default-features = false, features = ["primitive-types"] }
 
