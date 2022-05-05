@@ -39,7 +39,7 @@ use sc_executor::RuntimeVersionOf;
 use sc_keystore::LocalKeystore;
 use sc_network::{
 	block_request_handler::{self, BlockRequestHandler},
-	config::Role,
+	config::{Role, SyncMode},
 	light_client_requests::{self, handler::LightClientRequestHandler},
 	state_request_handler::{self, StateRequestHandler},
 	warp_request_handler::{self, RequestHandler as WarpSyncRequestHandler, WarpSyncProvider},
@@ -307,7 +307,7 @@ where
 				wasm_runtime_overrides: config.wasm_runtime_overrides.clone(),
 				no_genesis: matches!(
 					config.network.sync_mode,
-					sc_network::config::SyncMode::Fast { .. } | sc_network::config::SyncMode::Warp
+					SyncMode::Fast { .. } | SyncMode::Warp { .. }
 				),
 				wasm_runtime_substitutes,
 			},
@@ -781,10 +781,12 @@ where
 		return Err("Warp sync enabled, but no warp sync provider configured.".into())
 	}
 
-	if client.requires_full_sync() &&
-		!matches!(config.network.sync_mode, sc_network::config::SyncMode::Full)
-	{
-		return Err("The backend settings require the full-sync mode".into())
+	if client.requires_full_sync() {
+		match config.network.sync_mode {
+			SyncMode::Fast { .. } => return Err("Fast sync doesn't work for archive nodes".into()),
+			SyncMode::Warp => return Err("Warp sync doesn't work for archive nodes".into()),
+			SyncMode::Full => {},
+		}
 	}
 
 	let transaction_pool_adapter = Arc::new(TransactionPoolAdapter {
