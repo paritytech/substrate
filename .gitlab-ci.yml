@@ -186,7 +186,7 @@ test-linux-stable-nextest:
     - time cargo test -p frame-support-test --features=conditional-storage,no-metadata-docs --manifest-path ./frame/support/test/Cargo.toml --test pallet # does not reuse cache 1 min 44 sec
     - SUBSTRATE_TEST_TIMEOUT=1 time cargo test -p substrate-test-utils --release --verbose --locked -- --ignored timeout
 
-test-linux-stable-node-cli:
+test-linux-stable-non-nextest:
   stage:                           test
   <<:                              *docker-env
   <<:                              *test-refs
@@ -196,23 +196,12 @@ test-linux-stable-node-cli:
     # but still want to have debug assertions.
     RUSTFLAGS:                     "-Cdebug-assertions=y -Dwarnings"
     RUST_BACKTRACE:                1
-    WASM_BUILD_NO_COLOR:           1
-    # Ensure we run the UI tests.
-    RUN_UI_TESTS:                  1
   script:
+    # Run node-cli tests
+    # TODO: add to test-linux-stable-nextest after fix https://github.com/paritytech/substrate/issues/11321
     - time cargo test node-cli --workspace --locked --release --verbose --features runtime-benchmarks --manifest-path ./bin/node/cli/Cargo.toml
-
-test-linux-doctest:
-  stage:                           test
-  <<:                              *docker-env
-  <<:                              *test-refs
-  variables:
-    <<:                            *default-vars
-    # Enable debug assertions since we are running optimized builds for testing
-    # but still want to have debug assertions.
-    RUSTFLAGS:                     "-Cdebug-assertions=y -Dwarnings"
-    RUST_BACKTRACE:                1
-  script:
+    # Run doctests
+    # TODO: add to test-linux-stable-nextest after fix https://github.com/nextest-rs/nextest/issues/16
     - time cargo test --doc --workspace --locked --release --verbose --features runtime-benchmarks --manifest-path ./bin/node/cli/Cargo.toml
 
 test-linux-stable:
