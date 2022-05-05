@@ -42,7 +42,6 @@ pub mod pallet {
 		storage::bounded_btree_map::BoundedBTreeMap,
 		traits::{
 			fungibles::{Inspect, Transfer},
-			tokens::fungibles,
 			Currency, ExistenceRequirement, ReservableCurrency,
 		},
 	};

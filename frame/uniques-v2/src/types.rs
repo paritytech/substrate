@@ -293,6 +293,12 @@ pub enum BalanceOrAsset<Balance, AssetId, AssetBalance> {
 	Asset { id: AssetId, amount: AssetBalance },
 }
 
+impl<B, A, AB> From<B> for BalanceOrAsset<B, A, AB> {
+	fn from(amount: B) -> Self {
+		Self::Balance { amount }
+	}
+}
+
 impl<B, A, AB> BalanceOrAsset<B, A, AB>
 where
 	B: core::cmp::PartialOrd,

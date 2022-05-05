@@ -17,7 +17,7 @@
 
 use crate::*;
 use enumflags2::BitFlags;
-use frame_support::{pallet_prelude::*, traits::Currency};
+use frame_support::pallet_prelude::*;
 use sp_runtime::{traits::CheckedAdd, DispatchError, Perbill};
 
 impl<T: Config> Pallet<T> {
@@ -122,11 +122,11 @@ impl<T: Config> Pallet<T> {
 		let mut amount_left = amount.clone();
 
 		if !collection.creator_royalties.is_zero() {
-			let transfer_amount = collection.creator_royalties * amount;
+			let transfer_amount = collection.creator_royalties * amount.into();
 			Self::transfer(
 				&source,
 				&collection.creator,
-				transfer_amount,
+				transfer_amount.into(),
 				frame_support::traits::ExistenceRequirement::KeepAlive,
 			)?;
 
@@ -135,18 +135,18 @@ impl<T: Config> Pallet<T> {
 			Self::deposit_event(Event::CreatorRoyaltiesPaid {
 				collection_id: collection.id,
 				item_id,
-				amount: transfer_amount,
+				amount: transfer_amount.into(),
 				payer: source.clone(),
 				receiver: collection.creator.clone(),
 			});
 		}
 
 		if !collection.owner_royalties.is_zero() {
-			let transfer_amount = collection.owner_royalties * amount;
+			let transfer_amount = collection.owner_royalties * amount.into();
 			Self::transfer(
 				&source,
 				&collection.owner,
-				transfer_amount,
+				transfer_amount.into(),
 				frame_support::traits::ExistenceRequirement::KeepAlive,
 			)?;
 
@@ -155,7 +155,7 @@ impl<T: Config> Pallet<T> {
 			Self::deposit_event(Event::OwnerRoyaltiesPaid {
 				collection_id: collection.id,
 				item_id,
-				amount: transfer_amount,
+				amount: transfer_amount.into(),
 				payer: source.clone(),
 				receiver: collection.owner.clone(),
 			});

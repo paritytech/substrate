@@ -111,7 +111,7 @@ parameter_types! {
 impl Config for Test {
 	type Event = Event;
 	type Currency = Balances;
-	type CurrencyBalance = Balance;
+	type CurrencyBalance = <Self as pallet_balances::Config>::Balance;
 	type Assets = Assets;
 	type AssetId = u32;
 	type CollectionId = u32;
