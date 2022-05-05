@@ -311,3 +311,16 @@ where
 		}
 	}
 }
+
+impl<B, A, AB> BalanceOrAsset<B, A, AB> {
+	pub fn into_amount<T>(self) -> T
+	where
+		T: From<B>,
+		T: From<AB>,
+	{
+		match self {
+			Self::Balance { amount } => amount.into(),
+			Self::Asset { amount, id: _ } => amount.into(),
+		}
+	}
+}

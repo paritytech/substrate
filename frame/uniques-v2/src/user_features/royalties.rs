@@ -15,6 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::BalanceOrAsset::{Asset, Balance};
 use crate::*;
 use enumflags2::BitFlags;
 use frame_support::pallet_prelude::*;
@@ -122,40 +123,63 @@ impl<T: Config> Pallet<T> {
 		let mut amount_left = amount.clone();
 
 		if !collection.creator_royalties.is_zero() {
-			let transfer_amount = collection.creator_royalties * amount.into();
+			// let transfer_amount = collection.creator_royalties * amount.into_amount();
+
+			let transfer_amount = match amount {
+				Balance { amount } => collection.creator_royalties * amount,
+				Asset { amount, id: _ } => collection.creator_royalties * amount,
+			};
+			amount_left = match amount_left {
+				Balance { amount } => Balance { amount: amount - transfer_amount },
+				Asset { amount, id } => Asset { amount: amount - transfer_amount, id },
+			};
+			let transfer = match amount {
+				Balance { .. } => Balance { amount: transfer_amount },
+				Asset { id, .. } => Asset { amount: transfer_amount, id },
+			};
+
 			Self::transfer(
 				&source,
 				&collection.creator,
-				transfer_amount.into(),
+				transfer.clone(),
 				frame_support::traits::ExistenceRequirement::KeepAlive,
 			)?;
-
-			amount_left -= transfer_amount;
 
 			Self::deposit_event(Event::CreatorRoyaltiesPaid {
 				collection_id: collection.id,
 				item_id,
-				amount: transfer_amount.into(),
+				amount: transfer,
 				payer: source.clone(),
 				receiver: collection.creator.clone(),
 			});
 		}
 
 		if !collection.owner_royalties.is_zero() {
-			let transfer_amount = collection.owner_royalties * amount.into();
+			// let transfer_amount = collection.owner_royalties * amount.into_amount();
+			let transfer_amount = match amount {
+				Balance { amount } => collection.owner_royalties * amount,
+				Asset { amount, id: _ } => collection.owner_royalties * amount,
+			};
+			amount_left = match amount_left {
+				Balance { amount } => Balance { amount: amount - transfer_amount },
+				Asset { amount, id } => Asset { amount: amount - transfer_amount, id },
+			};
+			let transfer = match amount {
+				Balance { .. } => Balance { amount: transfer_amount },
+				Asset { id, .. } => Asset { amount: transfer_amount, id },
+			};
+
 			Self::transfer(
 				&source,
 				&collection.owner,
-				transfer_amount.into(),
+				transfer.clone(),
 				frame_support::traits::ExistenceRequirement::KeepAlive,
 			)?;
-
-			amount_left -= transfer_amount;
 
 			Self::deposit_event(Event::OwnerRoyaltiesPaid {
 				collection_id: collection.id,
 				item_id,
-				amount: transfer_amount.into(),
+				amount: transfer,
 				payer: source.clone(),
 				receiver: collection.owner.clone(),
 			});

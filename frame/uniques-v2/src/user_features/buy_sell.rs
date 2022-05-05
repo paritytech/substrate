@@ -39,7 +39,7 @@ impl<T: Config> Pallet<T> {
 			ensure!(item.owner == caller, Error::<T>::NotAuthorized);
 
 			// Set the price
-			item.price = price;
+			item.price = price.clone();
 			item.buyer = buyer.clone();
 
 			Self::deposit_event(Event::ItemPriceSet { collection_id, item_id, price, buyer });
@@ -75,13 +75,13 @@ impl<T: Config> Pallet<T> {
 		}
 
 		let mut transfer_amount = bid_price.clone();
-		/*if Self::has_royalties(&config) {
+		if Self::has_royalties(&config) {
 			let collection =
 				Collections::<T>::get(collection_id).ok_or(Error::<T>::CollectionNotFound)?;
 
 			transfer_amount =
 				Self::process_royalties(bid_price.clone(), &buyer, &collection, item_id)?;
-		}*/
+		}
 
 		Self::transfer(
 			&buyer,
@@ -89,13 +89,7 @@ impl<T: Config> Pallet<T> {
 			transfer_amount,
 			frame_support::traits::ExistenceRequirement::KeepAlive,
 		)?;
-		/*		T::Currency::transfer(
-					&buyer,
-					&item.owner,
-					transfer_amount,
-					frame_support::traits::ExistenceRequirement::KeepAlive,
-				)?;
-		*/
+
 		let old_owner = item.owner.clone();
 
 		Self::do_transfer_item(collection_id, item_id, config, item.owner.clone(), buyer.clone())?;
@@ -139,13 +133,13 @@ impl<T: Config> Pallet<T> {
 		}
 
 		let mut transfer_amount = bid_price.clone();
-		/*if Self::has_royalties(&config) {
+		if Self::has_royalties(&config) {
 			let collection =
 				Collections::<T>::get(collection_id).ok_or(Error::<T>::CollectionNotFound)?;
 
 			transfer_amount =
 				Self::process_royalties(bid_price.clone(), &buyer, &collection, item_id)?;
-		}*/
+		}
 
 		Self::transfer(
 			&buyer,
@@ -222,17 +216,21 @@ impl<T: Config> Pallet<T> {
 			ensure!(deadline >= now, Error::<T>::AuthorizationExpired);
 		}
 
-		if let Some(price) = price {
+		if let Some(ref price) = price {
 			let mut transfer_amount = price.clone();
-			/*if Self::has_royalties(&config_from) {
+			if Self::has_royalties(&config_from) {
 				let collection = Collections::<T>::get(collection_from_id)
 					.ok_or(Error::<T>::CollectionNotFound)?;
 
-				transfer_amount =
-					Self::process_royalties(price.clone(), &caller, &collection, item_from_id)?;
-			}*/
+				transfer_amount = Self::process_royalties(
+					transfer_amount.clone(),
+					&caller,
+					&collection,
+					item_from_id,
+				)?;
+			}
 
-			/*if Self::has_royalties(&config_to) {
+			if Self::has_royalties(&config_to) {
 				let collection = Collections::<T>::get(collection_to_id)
 					.ok_or(Error::<T>::CollectionNotFound)?;
 
@@ -242,7 +240,7 @@ impl<T: Config> Pallet<T> {
 					&collection,
 					item_to_id,
 				)?;
-			}*/
+			}
 
 			Self::transfer(
 				&caller,
