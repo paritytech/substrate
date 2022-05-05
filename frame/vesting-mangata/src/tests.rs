@@ -20,8 +20,9 @@ use frame_system::RawOrigin;
 use sp_runtime::{SaturatedConversion,traits::{BadOrigin}};
 
 use super::{Vesting as VestingStorage, *};
-use crate::mock::{Tokens, ExtBuilder, System, Test, Vesting, NATIVE_CURRENCY_ID, Balance, usable_native_balance};
+use crate::mock::{Tokens, ExtBuilder, System, Test, Vesting, NATIVE_CURRENCY_ID, Balance, usable_native_balance, TokenId, BlockNumber};
 use orml_traits::MultiCurrency;
+use orml_tokens::MultiTokenCurrencyExtended;
 
 /// A default existential deposit.
 const ED: u128 = 256;
@@ -1158,5 +1159,88 @@ fn vested_transfer_less_than_existential_deposit_fails() {
 			Vesting::force_vested_transfer(RawOrigin::Root.into(), NATIVE_CURRENCY_ID, 3, 99, sched),
 			orml_tokens::Error::<Test>::ExistentialDeposit,
 		);
+	});
+}
+
+#[test]
+fn lock_tokens_works(){
+	ExtBuilder::default().existential_deposit(ED).build().execute_with(|| {
+		let now = <frame_system::Pallet<Test>>::block_number();
+		assert_ok!(orml_tokens::MultiTokenCurrencyAdapter::<Test>::mint(NATIVE_CURRENCY_ID, &999, 10000));
+
+		assert_ok!(<Pallet<Test> as MultiTokenVestingLocks<<Test as frame_system::Config>::AccountId>>::lock_tokens(&999, NATIVE_CURRENCY_ID, 10000, 11));
+
+		assert_noop!(orml_tokens::MultiTokenCurrencyAdapter::<Test>::ensure_can_withdraw(NATIVE_CURRENCY_ID, &999, 1, WithdrawReasons::TRANSFER, Default::default()), orml_tokens::Error::<Test>::LiquidityRestrictions);
+		
+		assert_eq!(Vesting::vesting(&999, NATIVE_CURRENCY_ID).unwrap(),
+			vec![
+				VestingInfo::<Balance, <Test as frame_system::Config>::BlockNumber>::new(10000, 1000, now),
+			]
+		);
+
+		assert_ok!(orml_tokens::MultiTokenCurrencyAdapter::<Test>::mint(NATIVE_CURRENCY_ID, &999, 10000));
+
+		assert_ok!(<Pallet<Test> as MultiTokenVestingLocks<<Test as frame_system::Config>::AccountId>>::lock_tokens(&999, NATIVE_CURRENCY_ID, 10000, 21));
+
+		assert_noop!(orml_tokens::MultiTokenCurrencyAdapter::<Test>::ensure_can_withdraw(NATIVE_CURRENCY_ID, &999, 1, WithdrawReasons::TRANSFER, Default::default()), orml_tokens::Error::<Test>::LiquidityRestrictions);
+		
+		assert_eq!(Vesting::vesting(&999, NATIVE_CURRENCY_ID).unwrap(),
+			vec![
+				VestingInfo::<Balance, <Test as frame_system::Config>::BlockNumber>::new(10000, 1000, now),
+				VestingInfo::<Balance, <Test as frame_system::Config>::BlockNumber>::new(10000, 500, now),
+			]
+		);
+
+	});
+}
+
+#[test]
+fn unlock_tokens_works(){
+	ExtBuilder::default().existential_deposit(ED).build().execute_with(|| {
+		let now = <frame_system::Pallet<Test>>::block_number();
+		assert_ok!(orml_tokens::MultiTokenCurrencyAdapter::<Test>::mint(NATIVE_CURRENCY_ID, &999, 10000));
+
+		assert_ok!(<Pallet<Test> as MultiTokenVestingLocks<<Test as frame_system::Config>::AccountId>>::lock_tokens(&999, NATIVE_CURRENCY_ID, 10000, 11));
+
+		assert_noop!(orml_tokens::MultiTokenCurrencyAdapter::<Test>::ensure_can_withdraw(NATIVE_CURRENCY_ID, &999, 1, WithdrawReasons::TRANSFER, Default::default()), orml_tokens::Error::<Test>::LiquidityRestrictions);
+		
+		assert_eq!(Vesting::vesting(&999, NATIVE_CURRENCY_ID).unwrap(),
+			vec![
+				VestingInfo::<Balance, <Test as frame_system::Config>::BlockNumber>::new(10000, 1000, now),
+			]
+		);
+
+		assert_ok!(orml_tokens::MultiTokenCurrencyAdapter::<Test>::mint(NATIVE_CURRENCY_ID, &999, 10000));
+
+		assert_ok!(<Pallet<Test> as MultiTokenVestingLocks<<Test as frame_system::Config>::AccountId>>::lock_tokens(&999, NATIVE_CURRENCY_ID, 10000, 21));
+
+		assert_noop!(orml_tokens::MultiTokenCurrencyAdapter::<Test>::ensure_can_withdraw(NATIVE_CURRENCY_ID, &999, 1, WithdrawReasons::TRANSFER, Default::default()), orml_tokens::Error::<Test>::LiquidityRestrictions);
+		
+		assert_eq!(Vesting::vesting(&999, NATIVE_CURRENCY_ID).unwrap(),
+			vec![
+				VestingInfo::<Balance, <Test as frame_system::Config>::BlockNumber>::new(10000, 1000, now),
+				VestingInfo::<Balance, <Test as frame_system::Config>::BlockNumber>::new(10000, 500, now),
+			]
+		);
+
+		let cur_block = 6;
+		System::set_block_number(cur_block);
+
+		assert_eq!(<Pallet<Test> as MultiTokenVestingLocks<<Test as frame_system::Config>::AccountId>>::unlock_tokens(&999, NATIVE_CURRENCY_ID, 6000).unwrap(), 21);
+		
+		assert_eq!(Vesting::vesting(&999, NATIVE_CURRENCY_ID).unwrap(),
+			vec![
+				VestingInfo::<Balance, <Test as frame_system::Config>::BlockNumber>::new(10000, 1000, now),
+				VestingInfo::<Balance, <Test as frame_system::Config>::BlockNumber>::new(1500, 100, 6),
+			]
+		);
+
+		assert_eq!(
+				VestingInfo::<Balance, <Test as frame_system::Config>::BlockNumber>::new(1500, 100, 6).locked_at::<<Test as Config>::BlockNumberToBalance>(cur_block), 1500
+		);
+
+		assert_ok!(orml_tokens::MultiTokenCurrencyAdapter::<Test>::ensure_can_withdraw(NATIVE_CURRENCY_ID, &999, 13500, WithdrawReasons::TRANSFER, Default::default()));
+		assert_noop!(orml_tokens::MultiTokenCurrencyAdapter::<Test>::ensure_can_withdraw(NATIVE_CURRENCY_ID, &999, 13501, WithdrawReasons::TRANSFER, Default::default()), orml_tokens::Error::<Test>::LiquidityRestrictions);
+		
 	});
 }
