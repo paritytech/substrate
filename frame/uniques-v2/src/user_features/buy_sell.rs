@@ -65,6 +65,7 @@ impl<T: Config> Pallet<T> {
 		ensure!(item.owner != buyer, Error::<T>::NotAuthorized);
 
 		if let Some(price) = item.price {
+			ensure!(bid_price.is_same_currency(&price), Error::<T>::WrongCurrency);
 			ensure!(bid_price.is_greater_or_equal(&price), Error::<T>::ItemUnderpriced);
 		} else {
 			return Err(Error::<T>::ItemNotForSale.into());

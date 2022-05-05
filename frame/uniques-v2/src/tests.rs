@@ -777,6 +777,17 @@ fn buy_item_should_work() {
 			Error::<Test>::ItemUnderpriced
 		);
 
+		// can't buy for less
+		assert_noop!(
+			Uniques::buy_item(
+				Origin::signed(user_2),
+				collection_id,
+				item_1,
+				types::BalanceOrAsset::Asset { id: 1, amount: price_2.clone() }
+			),
+			Error::<Test>::WrongCurrency
+		);
+
 		assert_ok!(Uniques::buy_item(
 			Origin::signed(user_2),
 			collection_id,

@@ -435,6 +435,8 @@ pub mod pallet {
 		ItemNotForSale,
 		/// Item underpriced.
 		ItemUnderpriced,
+		/// Wrong currency provided.
+		WrongCurrency,
 		/// User reached the limit of allowed items per collection per account
 		CollectionItemsPerAccountLimitReached,
 		/// The calling user is not authorized to make this call.
