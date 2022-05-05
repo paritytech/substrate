@@ -941,50 +941,10 @@ fn too_many_candidates_cannot_overflow_membership() {
 		assert_eq!(members().len(), 10);
 		// Still 1 candidate.
 		assert_eq!(candidates().len(), 1);
-	});
-}
 
-/*
-#[test]
-fn candidates_are_limited_by_maximum() {
-	EnvBuilder::new().execute(|| {
-		for i in 
-		assert_ok!(Society::bid(Origin::signed(20), 0));
-		assert_ok!(Society::bid(Origin::signed(30), 1));
-
-		// Rotate period
-		conclude_intake();
-		// Only of 4 candidates possible now
-		// Fill up members with suspended candidates from the first rotation
-		for i in 100..104 {
-			assert_ok!(Society::judge_suspended_candidate(
-				Origin::signed(2),
-				i,
-				Judgement::Approve
-			));
-		}
-		assert_eq!(members().len(), 100);
-		// Can't add any more members
-		assert_noop!(Society::add_member(&98), Error::<Test>::MaxMembers);
-		// However, a fringe scenario allows for in-progress candidates to increase the membership
-		// pool, but it has no real after-effects.
-		for i in members().iter() {
-			assert_ok!(Society::vote(Origin::signed(*i), 110, true));
-			assert_ok!(Society::vote(Origin::signed(*i), 111, true));
-			assert_ok!(Society::vote(Origin::signed(*i), 112, true));
-		}
-		// Rotate period
-		run_to_block(12);
-		// Members length is over 100, no problem...
-		assert_eq!(members().len(), 103);
-		// No candidates because full
-		assert_eq!(candidates().len(), 0);
-		// Increase member limit
-		assert_ok!(Society::set_max_members(Origin::root(), 200));
-		// Rotate period
-		run_to_block(16);
-		// Candidates are back!
-		assert_eq!(candidates().len(), 10);
+		// Increase max-members and the candidate can get in.
+		assert_ok!(Society::set_parameters(Origin::signed(10), 11, 8, 3, 25));
+		assert_ok!(Society::claim_membership(Origin::signed(30)));
 	});
 }
 
@@ -1008,7 +968,7 @@ fn zero_bid_works() {
 		assert_eq!(Balances::free_balance(Society::account_id()), 10_000);
 		// Choose smallest bidding users whose total is less than pot, with only one zero bid.
 		assert_eq!(
-			candidates(),
+			candidacies(),
 			vec![
 				(30, candidacy(1, 0, BidKind::Deposit(25), 0, 0)),
 				(50, candidacy(1, 300, BidKind::Deposit(25), 0, 0)),
@@ -1017,20 +977,24 @@ fn zero_bid_works() {
 		);
 		assert_eq!(
 			Bids::<Test>::get(),
-			vec![(20, candidacy(1, 0, BidKind::Deposit(25), 0, 0)), (40, candidacy(1, 0, BidKind::Deposit(25), 0, 0)),]
+			vec![
+				bid(20, BidKind::Deposit(25), 0),
+				bid(40, BidKind::Deposit(25), 0),
+			],
 		);
 		// A member votes for these candidates to join the society
 		assert_ok!(Society::vote(Origin::signed(10), 30, true));
 		assert_ok!(Society::vote(Origin::signed(10), 50, true));
 		assert_ok!(Society::vote(Origin::signed(10), 60, true));
-		next_intake();
+		conclude_intake(false, None);
 		// Candidates become members after a period rotation
 		assert_eq!(members(), vec![10, 30, 50, 60]);
+		next_intake();
 		// The zero bid is selected as head
 		assert_eq!(Head::<Test>::get(), Some(30));
 	});
 }
-
+/*
 #[test]
 fn bids_ordered_correctly() {
 	// This tests that bids with the same value are placed in the list ordered
