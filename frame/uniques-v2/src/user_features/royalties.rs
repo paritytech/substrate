@@ -123,7 +123,7 @@ impl<T: Config> Pallet<T> {
 
 		if !collection.creator_royalties.is_zero() {
 			let transfer_amount = collection.creator_royalties * amount;
-			T::Currency::transfer(
+			Self::transfer(
 				&source,
 				&collection.creator,
 				transfer_amount,
@@ -143,7 +143,7 @@ impl<T: Config> Pallet<T> {
 
 		if !collection.owner_royalties.is_zero() {
 			let transfer_amount = collection.owner_royalties * amount;
-			T::Currency::transfer(
+			Self::transfer(
 				&source,
 				&collection.owner,
 				transfer_amount,
@@ -168,7 +168,7 @@ impl<T: Config> Pallet<T> {
 	pub fn has_royalties(config: &CollectionConfig) -> bool {
 		let system_features: BitFlags<SystemFeature> = config.system_features.get();
 
-		return system_features.contains(SystemFeature::CreatorRoyalties) ||
-			system_features.contains(SystemFeature::OwnerRoyalties)
+		return system_features.contains(SystemFeature::CreatorRoyalties)
+			|| system_features.contains(SystemFeature::OwnerRoyalties);
 	}
 }

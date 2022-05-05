@@ -40,7 +40,11 @@ pub mod pallet {
 
 	use frame_support::{
 		storage::bounded_btree_map::BoundedBTreeMap,
-		traits::{tokens::fungibles, Currency, ReservableCurrency},
+		traits::{
+			fungibles::{Inspect, Transfer},
+			tokens::fungibles,
+			Currency, ExistenceRequirement, ReservableCurrency,
+		},
 	};
 	use sp_runtime::{
 		traits::{CheckedAdd, One},
@@ -57,7 +61,7 @@ pub mod pallet {
 
 		type Currency: ReservableCurrency<Self::AccountId>;
 
-		type Assets: fungibles::Inspect<Self::AccountId> + fungibles::Transfer<Self::AccountId>;
+		type Assets: Inspect<Self::AccountId> + Transfer<Self::AccountId>;
 
 		type CollectionId: Member + Parameter + Default + Copy + MaxEncodedLen + CheckedAdd + One;
 
@@ -102,7 +106,7 @@ pub mod pallet {
 	pub type BuyOfferOf<T> = BuyOffer<
 		<T as Config>::CollectionId,
 		<T as Config>::ItemId,
-		BalanceOf<T>,
+		BalanceOrAssetOf<T>,
 		<T as frame_system::Config>::BlockNumber,
 		<T as frame_system::Config>::AccountId,
 	>;
@@ -110,17 +114,15 @@ pub mod pallet {
 	pub type SwapOfferOf<T> = SwapOffer<
 		<T as Config>::CollectionId,
 		<T as Config>::ItemId,
-		BalanceOf<T>,
+		BalanceOrAssetOf<T>,
 		<T as frame_system::Config>::BlockNumber,
 		<T as frame_system::Config>::AccountId,
 	>;
 
-	pub type AssetIdOf<T> = <<T as Config>::Assets as fungibles::Inspect<
-		<T as frame_system::Config>::AccountId,
-	>>::AssetId;
-	pub type AssetBalanceOf<T> = <<T as Config>::Assets as fungibles::Inspect<
-		<T as frame_system::Config>::AccountId,
-	>>::Balance;
+	pub type AssetIdOf<T> =
+		<<T as Config>::Assets as Inspect<<T as frame_system::Config>::AccountId>>::AssetId;
+	pub type AssetBalanceOf<T> =
+		<<T as Config>::Assets as Inspect<<T as frame_system::Config>::AccountId>>::Balance;
 	pub type BalanceOrAssetOf<T> = BalanceOrAsset<BalanceOf<T>, AssetIdOf<T>, AssetBalanceOf<T>>;
 
 	/// Maps a unique collection id to it's config.
@@ -362,7 +364,7 @@ pub mod pallet {
 			executed_by: T::AccountId,
 			new_item_from_owner: T::AccountId,
 			new_item_to_owner: T::AccountId,
-			price: Option<BalanceOf<T>>,
+			price: Option<BalanceOrAssetOf<T>>,
 			deadline: Option<T::BlockNumber>,
 		},
 		CreatorRoyaltiesChanged {
@@ -378,14 +380,14 @@ pub mod pallet {
 		CreatorRoyaltiesPaid {
 			collection_id: T::CollectionId,
 			item_id: T::ItemId,
-			amount: BalanceOf<T>,
+			amount: BalanceOrAssetOf<T>,
 			payer: T::AccountId,
 			receiver: T::AccountId,
 		},
 		OwnerRoyaltiesPaid {
 			collection_id: T::CollectionId,
 			item_id: T::ItemId,
-			amount: BalanceOf<T>,
+			amount: BalanceOrAssetOf<T>,
 			payer: T::AccountId,
 			receiver: T::AccountId,
 		},
@@ -725,7 +727,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			collection_id: T::CollectionId,
 			item_id: T::ItemId,
-			bid_price: BalanceOf<T>,
+			bid_price: BalanceOrAssetOf<T>,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			let config =
@@ -822,5 +824,24 @@ pub mod pallet {
 	}
 
 	// Your Pallet's internal functions.
-	impl<T: Config> Pallet<T> {}
+	impl<T: Config> Pallet<T> {
+		pub fn transfer(
+			source: &T::AccountId,
+			dest: &T::AccountId,
+			value: BalanceOrAssetOf<T>,
+			existence_requirement: ExistenceRequirement,
+		) -> DispatchResult {
+			use BalanceOrAsset::*;
+
+			match value {
+				Balance { amount } => {
+					return T::Currency::transfer(&source, &dest, amount, existence_requirement);
+				},
+				Asset { id, amount } => {
+					let keep_alive = existence_requirement == ExistenceRequirement::KeepAlive;
+					return T::Assets::transfer(id, &source, &dest, amount, keep_alive).map(|_| ());
+				},
+			}
+		}
+	}
 }
