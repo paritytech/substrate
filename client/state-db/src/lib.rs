@@ -104,7 +104,8 @@ pub trait MetaDb {
 	/// Get meta value, such as the journal.
 	fn get_meta(&self, key: &[u8]) -> Result<Option<DBValue>, Self::Error>;
 
-	/// Set meta value
+	/// Write meta key-value to the database. 
+	/// This is only used when opening the database to initialise the metadata.
 	fn set_meta<V: AsRef<[u8]>>(
 		&mut self,
 		key: &[u8],
