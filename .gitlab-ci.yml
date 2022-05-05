@@ -268,8 +268,9 @@ cargo-check-nixos:
   <<:                              *docker-env
   <<:                              *test-refs
   before_script:                   []
+  # Don't use CI_IMAGE here because it breaks nightly checks of paritytech/ci-linux image
+  image:                           nixos/nix
   variables:
-    CI_IMAGE:                      "nixos/nix"
     SNAP:                          "DUMMY"
     WS_API:                        "DUMMY"
   script:
