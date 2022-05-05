@@ -123,6 +123,8 @@ pub fn instantiate(
 	let module = wasmer::Module::new(&context.store, wasm)
 		.map_err(|_| InstantiationError::ModuleDecoding)?;
 
+	let module_created = std::time::Instant::now();
+
 	type Exports = HashMap<String, wasmer::Exports>;
 	let mut exports_map = Exports::new();
 
@@ -198,6 +200,8 @@ pub fn instantiate(
 		import_object.register(module_name, exports);
 	}
 
+	let imports_populated = std::time::Instant::now();
+
 	let instance = SandboxContextStore::using(sandbox_context, || {
 		wasmer::Instance::new(&module, &import_object).map_err(|error| match error {
 			wasmer::InstantiationError::Link(_) => InstantiationError::Instantiation,
@@ -210,7 +214,13 @@ pub fn instantiate(
 	})?;
 
 	let instantiated = std::time::Instant::now();
-	log::warn!("*** instantiate wasm len {}: {:?}", wasm.len(), instantiated.duration_since(start));
+	log::warn!("*** wasmer instantiate, code len {}: module {:?}, imports {:?}, instance {:?}, total {:?}",
+		wasm.len(),
+		module_created.duration_since(start),
+		imports_populated.duration_since(module_created),
+		instantiated.duration_since(imports_populated),
+		instantiated.duration_since(start)
+	);
 
 	Ok(Rc::new(SandboxInstance {
 		backend_instance: BackendInstance::Wasmer(instance),
@@ -370,13 +380,13 @@ fn dispatch_function(
 
 			let finalized = std::time::Instant::now();
 
-			log::warn!("*** invoke index {}: prepare {:?} + invoke {:?} + finalize {:?} = total {:?}",
-				supervisor_func_index.0,
-				prepared.duration_since(start),
-				invoked.duration_since(prepared),
-				finalized.duration_since(invoked),
-				finalized.duration_since(start)
-			);
+			// log::warn!("*** invoke index {}: prepare {:?} + invoke {:?} + finalize {:?} = total {:?}",
+			// 	supervisor_func_index.0,
+			// 	prepared.duration_since(start),
+			// 	invoked.duration_since(prepared),
+			// 	finalized.duration_since(invoked),
+			// 	finalized.duration_since(start)
+			// );
 
 			Ok(result)
 		})
