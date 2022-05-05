@@ -276,9 +276,38 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 				std::clone::Clone::clone(&self.recorder)
 			}
 
-			fn extract_proof(&mut self) -> std::option::Option<#crate_::StorageProof> {
-				std::option::Option::take(&mut self.recorder)
-					.map(|recorder| #crate_::ProofRecorder::<Block>::to_storage_proof(&recorder))
+			fn extract_proof(
+				&mut self,
+				at: &#crate_::BlockId<Block>,
+			) -> core::result::Result<std::option::Option<#crate_::StorageProof>, #crate_::ApiError> {
+				let recorder = std::option::Option::take(&mut self.recorder);
+				let res = std::option::Option::map(recorder, |recorder| {
+					let backend = #crate_::CallApiAt::<Block>::state_at(self.call, at)?;
+					let trie_backend =
+						#crate_::StateBackend::<#crate_::HashFor<Block>>::as_trie_backend(
+							&backend,
+						).ok_or(#crate_::ApiError::StateBackendIsNotTrie)?;
+
+					let state_version = #crate_::CallApiAt::<Block>::runtime_version_at(self.call, &at)
+						.map(|v| #crate_::RuntimeVersion::state_version(&v))
+						.map_err(|e|
+							#crate_::ApiError::Application(
+								std::boxed::Box::from(format!("Failed to get state version: {}", e))
+							)
+						)?;
+
+					let builder = #crate_::TrieBackendBuilder::wrap(&trie_backend);
+					let builder = #crate_::TrieBackendBuilder::with_recorder(builder, recorder);
+					let mut trie_backend = #crate_::TrieBackendBuilder::build(builder);
+					let res = #crate_::TrieBackend::extract_proof(&mut trie_backend, state_version);
+
+					core::result::Result::map_err(
+						res,
+						|err| #crate_::ApiError::Application(std::boxed::Box::from(err)),
+					)
+				});
+
+				std::option::Option::map_or(res, Ok(None), |res| res)
 			}
 
 			fn into_storage_changes(

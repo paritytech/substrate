@@ -231,10 +231,9 @@ where
 						as Box<dyn sp_state_machine::Error>
 				})?;
 
-				let backend = sp_state_machine::ProvingBackend::new_with_recorder(
-					trie_state,
-					recorder.clone(),
-				);
+				let backend = sp_state_machine::TrieBackendBuilder::wrap(&trie_state)
+					.with_recorder(recorder.clone())
+					.build();
 
 				let mut state_machine = StateMachine::new(
 					&backend,

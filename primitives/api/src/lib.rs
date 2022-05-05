@@ -99,7 +99,8 @@ pub use sp_runtime::{
 #[doc(hidden)]
 #[cfg(feature = "std")]
 pub use sp_state_machine::{
-	Backend as StateBackend, InMemoryBackend, OverlayedChanges, StorageProof,
+	Backend as StateBackend, InMemoryBackend, OverlayedChanges, StorageProof, TrieBackend,
+	TrieBackendBuilder,
 };
 #[cfg(feature = "std")]
 use sp_std::result;
@@ -390,7 +391,7 @@ pub use sp_api_proc_macro::mock_impl_runtime_apis;
 
 /// A type that records all accessed trie nodes and generates a proof out of it.
 #[cfg(feature = "std")]
-pub type ProofRecorder<B> = sp_state_machine::ProofRecorder<<B as BlockT>::Hash>;
+pub type ProofRecorder<B> = sp_trie::recorder::Recorder<HashFor<B>>;
 
 /// A type that is used as cache for the storage transactions.
 #[cfg(feature = "std")]
@@ -454,6 +455,8 @@ pub enum ApiError {
 		#[source]
 		error: codec::Error,
 	},
+	#[error("The given `StateBackend` isn't a `TrieBackend`.")]
+	StateBackendIsNotTrie,
 	#[error(transparent)]
 	Application(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
@@ -503,7 +506,10 @@ pub trait ApiExt<Block: BlockT> {
 	/// This stops the proof recording.
 	///
 	/// If `record_proof` was not called before, this will return `None`.
-	fn extract_proof(&mut self) -> Option<StorageProof>;
+	fn extract_proof(
+		&mut self,
+		at: &BlockId<Block>,
+	) -> Result<Option<StorageProof>, ApiError>;
 
 	/// Returns the current active proof recorder.
 	fn proof_recorder(&self) -> Option<ProofRecorder<Block>>;
@@ -564,6 +570,9 @@ pub trait CallApiAt<Block: BlockT> {
 
 	/// Returns the runtime version at the given block.
 	fn runtime_version_at(&self, at: &BlockId<Block>) -> Result<RuntimeVersion, ApiError>;
+
+	/// Get the state `at` the given block.
+	fn state_at(&self, at: &BlockId<Block>) -> Result<Self::StateBackend, ApiError>;
 }
 
 /// Auxiliary wrapper that holds an api instance and binds it to the given lifetime.

@@ -106,7 +106,8 @@ where
 			.execute_block(&BlockId::Hash(parent_header.hash()), block)
 			.map_err(|_| Error::BlockExecutionFailed)?;
 		let witness = runtime_api
-			.extract_proof()
+			.extract_proof(&BlockId::Hash(parent_header.hash()))
+			.map_err(|_| Error::ProofExtractionFailed)?
 			.expect("We enabled proof recording. A proof must be available; qed");
 		let witness_len = witness.encoded_size() as u64;
 		let witness_compact_len = witness

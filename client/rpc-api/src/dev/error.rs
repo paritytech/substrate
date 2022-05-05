@@ -36,6 +36,9 @@ pub enum Error {
 	/// The re-execution of the specified block failed.
 	#[error("Failed to re-execute the specified block")]
 	BlockExecutionFailed,
+	/// Failed to extract the proof.
+	#[error("Failed to extract the proof")]
+	ProofExtractionFailed,
 	/// The witness compaction failed.
 	#[error("Failed to create to compact the witness")]
 	WitnessCompactionFailed,

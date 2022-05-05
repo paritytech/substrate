@@ -1702,6 +1702,10 @@ where
 	fn runtime_version_at(&self, at: &BlockId<Block>) -> Result<RuntimeVersion, sp_api::ApiError> {
 		CallExecutor::runtime_version(&self.executor, at).map_err(Into::into)
 	}
+
+	fn state_at(&self, at: &BlockId<Block>) -> Result<Self::StateBackend, sp_api::ApiError> {
+		self.state_at(at).map_err(Into::into)
+	}
 }
 
 /// NOTE: only use this implementation when you are sure there are NO consensus-level BlockImport

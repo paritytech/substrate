@@ -189,23 +189,27 @@ impl<H: Hasher> SharedTrieCache<H> {
 /// referring to the state of one block. It will cache all the accesses that are done to the state
 /// which could not be fullfilled by the [`SharedTrieCache`]. These locally cached items are merged
 /// back to the shared trie cache when this instance is dropped.
+///
+/// When using [`Self::as_trie_db_cache`] or [`Self::as_trie_db_mut_cache`], it will lock mutexes.
+/// So, it is important that these methods are not called multiple times, because they otherwise
+/// deadlock.
 pub struct LocalTrieCache<H: Hasher> {
 	/// The shared trie cache that created this instance.
 	shared: SharedTrieCache<H>,
 	/// The local cache for the trie nodes.
-	node_cache: Mutex<HashMap<H::Out, NodeOwned<H::Out>>>,
+	node_cache: Arc<Mutex<HashMap<H::Out, NodeOwned<H::Out>>>>,
 	/// Keeps track of all the trie nodes accessed in the shared cache.
 	///
 	/// This will be used to ensure that these nodes are brought to the front of the lru when this
 	/// local instance is merged back to the shared cache.
-	shared_node_cache_access: Mutex<HashSet<H::Out>>,
+	shared_node_cache_access: Arc<Mutex<HashSet<H::Out>>>,
 	/// The local cache for the values.
-	value_cache: Mutex<IntMap<u64, CachedValue<H::Out>>>,
+	value_cache: Arc<Mutex<IntMap<u64, CachedValue<H::Out>>>>,
 	/// Keeps track of all values accessed in the shared cache.
 	///
 	/// This will be used to ensure that these nodes are brought to the front of the lru when this
 	/// local instance is merged back to the shared cache.
-	shared_value_cache_access: Mutex<IntSet<u64>>,
+	shared_value_cache_access: Arc<Mutex<IntSet<u64>>>,
 }
 
 impl<H: Hasher> LocalTrieCache<H> {
@@ -241,6 +245,23 @@ impl<H: Hasher> LocalTrieCache<H> {
 			local_cache: self.node_cache.lock(),
 			value_cache: ValueCache::Fresh(Default::default()),
 			shared_node_cache_access: self.shared_node_cache_access.lock(),
+		}
+	}
+
+	/// Duplicate(clone) this instance.
+	///
+	/// It is not recommended to use this functionality. If multiple instances are required, they
+	/// should be created by the [`SharedTrieCache`] to have unique instances. However, if there
+	/// is no other way around, this function can be used to create a duplicate. As internally the
+	/// creation of a [`TrieCache`] will include locking of mutexes, both instances should be used
+	/// with some care.
+	pub fn duplicate(&self) -> Self {
+		Self {
+			shared: self.shared.clone(),
+			shared_node_cache_access: self.shared_node_cache_access.clone(),
+			node_cache: self.node_cache.clone(),
+			shared_value_cache_access: self.shared_value_cache_access.clone(),
+			value_cache: self.value_cache.clone(),
 		}
 	}
 }

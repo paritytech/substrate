@@ -61,6 +61,8 @@ where
 	/// This can be used for example if all accesses to the trie should
 	/// be recorded while some other functionality still uses the non-recording
 	/// backend.
+	///
+	/// The backend storage and the cache will be taken from `other`.
 	pub fn wrap(other: &TrieBackend<S, H>) -> TrieBackendBuilder<&S, H> {
 		TrieBackendBuilder {
 			storage: other.essence.backend_storage(),
@@ -68,7 +70,7 @@ where
 			#[cfg(feature = "std")]
 			recorder: None,
 			#[cfg(feature = "std")]
-			cache: None,
+			cache: other.essence.trie_node_cache.as_ref().map(|c| c.duplicate()),
 		}
 	}
 
@@ -145,14 +147,32 @@ where
 		self.essence.into_storage()
 	}
 
+	/// Extract the [`StorageProof`].
+	///
+	/// This only returns `Some` when there was a recorder set. The recorder will be consumed as
+	/// part of calling this function. This means that no more nodes will be recorded by this
+	/// instance afterwards.
 	#[cfg(feature = "std")]
-	pub fn extract_proof(mut self) -> Result<Option<StorageProof>, crate::DefaultError> {
+	pub fn extract_proof(
+		&mut self,
+		state_version: StateVersion,
+	) -> Result<Option<StorageProof>, crate::DefaultError> {
 		let recorder = self.essence.recorder.take();
 		let root = self.root();
 		let essence = self.essence();
 
 		recorder
-			.map(|r| r.into_storage_proof::<sp_trie::LayoutV1<H>>(root, essence, None))
+			.map(|r| {
+				let mut cache =
+					self.essence.trie_node_cache.as_ref().map(|c| c.as_trie_db_cache(*root));
+
+				match state_version {
+					StateVersion::V0 =>
+						r.into_storage_proof::<sp_trie::LayoutV0<H>>(root, essence, cache.as_mut()),
+					StateVersion::V1 =>
+						r.into_storage_proof::<sp_trie::LayoutV1<H>>(root, essence, cache.as_mut()),
+				}
+			})
 			.transpose()
 			.map_err(|e| format!("{:?}", e))
 	}
@@ -595,7 +615,7 @@ pub mod tests {
 		assert!(TrieBackendBuilder::wrap(&trie_backend)
 			.with_recorder(Recorder::default())
 			.build()
-			.extract_proof()
+			.extract_proof(state_version)
 			.unwrap()
 			.unwrap()
 			.is_empty());
@@ -611,11 +631,11 @@ pub mod tests {
 		recorder: Option<Recorder>,
 	) {
 		let trie_backend = test_trie(state_version, cache, recorder);
-		let backend = TrieBackendBuilder::wrap(&trie_backend)
+		let mut backend = TrieBackendBuilder::wrap(&trie_backend)
 			.with_recorder(Recorder::default())
 			.build();
 		assert_eq!(backend.storage(b"key").unwrap(), Some(b"value".to_vec()));
-		assert!(!backend.extract_proof().unwrap().unwrap().is_empty());
+		assert!(!backend.extract_proof(state_version).unwrap().unwrap().is_empty());
 	}
 
 	#[test]
@@ -674,19 +694,18 @@ pub mod tests {
 			.clone()
 			.for_each(|i| assert_eq!(trie.storage(&[i]).unwrap().unwrap(), vec![i; size_content]));
 
-		for cache in [
-			Some(SharedTrieCache::new(Configuration { maximum_size_in_bytes: 1024 * 1024 })),
-			None,
-		] {
+		for cache in
+			[Some(SharedTrieCache::new(Configuration { maximum_size_in_bytes: 1024 * 1024 })), None]
+		{
 			// Run multiple times to have a filled cache.
 			for _ in 0..3 {
-				let proving = TrieBackendBuilder::wrap(&trie)
+				let mut proving = TrieBackendBuilder::wrap(&trie)
 					.with_recorder(Recorder::default())
 					.with_optional_cache(cache.as_ref().map(|c| c.local_cache()))
 					.build();
 				assert_eq!(proving.storage(&[42]).unwrap().unwrap(), vec![42; size_content]);
 
-				let proof = proving.extract_proof().unwrap().unwrap();
+				let proof = proving.extract_proof(state_version).unwrap().unwrap();
 
 				let proof_check =
 					create_proof_check_backend::<BlakeTwo256>(in_memory_root.into(), proof)
@@ -702,10 +721,9 @@ pub mod tests {
 		proof_record_works_with_iter_inner(StateVersion::V1);
 	}
 	fn proof_record_works_with_iter_inner(state_version: StateVersion) {
-		for cache in [
-			Some(SharedTrieCache::new(Configuration { maximum_size_in_bytes: 1024 * 1024 })),
-			None,
-		] {
+		for cache in
+			[Some(SharedTrieCache::new(Configuration { maximum_size_in_bytes: 1024 * 1024 })), None]
+		{
 			// Run multiple times to have a filled cache.
 			for _ in 0..3 {
 				let contents = (0..64).map(|i| (vec![i], Some(vec![i]))).collect::<Vec<_>>();
@@ -720,7 +738,7 @@ pub mod tests {
 				assert_eq!(in_memory_root, trie_root);
 				(0..64).for_each(|i| assert_eq!(trie.storage(&[i]).unwrap().unwrap(), vec![i]));
 
-				let proving = TrieBackendBuilder::wrap(&trie)
+				let mut proving = TrieBackendBuilder::wrap(&trie)
 					.with_recorder(Recorder::default())
 					.with_optional_cache(cache.as_ref().map(|c| c.local_cache()))
 					.build();
@@ -729,7 +747,7 @@ pub mod tests {
 					assert_eq!(proving.next_storage_key(&[i]).unwrap(), Some(vec![i + 1]))
 				});
 
-				let proof = proving.extract_proof().unwrap().unwrap();
+				let proof = proving.extract_proof(state_version).unwrap().unwrap();
 
 				let proof_check =
 					create_proof_check_backend::<BlakeTwo256>(in_memory_root.into(), proof)
@@ -774,10 +792,9 @@ pub mod tests {
 			assert_eq!(in_memory.child_storage(child_info_2, &[i]).unwrap().unwrap(), vec![i])
 		});
 
-		for cache in [
-			Some(SharedTrieCache::new(Configuration { maximum_size_in_bytes: 1024 * 1024 })),
-			None,
-		] {
+		for cache in
+			[Some(SharedTrieCache::new(Configuration { maximum_size_in_bytes: 1024 * 1024 })), None]
+		{
 			// Run multiple times to have a filled cache.
 			for i in 0..3 {
 				eprintln!("Running with cache {}, iteration {}", cache.is_some(), i);
@@ -787,13 +804,13 @@ pub mod tests {
 				assert_eq!(in_memory_root, trie_root);
 				(0..64).for_each(|i| assert_eq!(trie.storage(&[i]).unwrap().unwrap(), vec![i]));
 
-				let proving = TrieBackendBuilder::wrap(&trie)
+				let mut proving = TrieBackendBuilder::wrap(&trie)
 					.with_recorder(Recorder::default())
 					.with_optional_cache(cache.as_ref().map(|c| c.local_cache()))
 					.build();
 				assert_eq!(proving.storage(&[42]).unwrap().unwrap(), vec![42]);
 
-				let proof = proving.extract_proof().unwrap().unwrap();
+				let proof = proving.extract_proof(state_version).unwrap().unwrap();
 
 				let proof_check =
 					create_proof_check_backend::<BlakeTwo256>(in_memory_root.into(), proof)
@@ -804,13 +821,13 @@ pub mod tests {
 				assert_eq!(proof_check.storage(&[41]).unwrap().unwrap(), vec![41]);
 				assert_eq!(proof_check.storage(&[64]).unwrap(), None);
 
-				let proving = TrieBackendBuilder::wrap(&trie)
+				let mut proving = TrieBackendBuilder::wrap(&trie)
 					.with_recorder(Recorder::default())
 					.with_optional_cache(cache.as_ref().map(|c| c.local_cache()))
 					.build();
 				assert_eq!(proving.child_storage(child_info_1, &[64]), Ok(Some(vec![64])));
 
-				let proof = proving.extract_proof().unwrap().unwrap();
+				let proof = proving.extract_proof(state_version).unwrap().unwrap();
 				let proof_check =
 					create_proof_check_backend::<BlakeTwo256>(in_memory_root.into(), proof)
 						.unwrap();
@@ -831,6 +848,7 @@ pub mod tests {
 		cache: Option<Cache>,
 		recorder: Option<Recorder>,
 	) {
+		let has_cache = cache.is_some();
 		let trie_backend = test_trie(state_version, cache, recorder);
 		let keys = &[
 			&b"key"[..],
@@ -841,15 +859,21 @@ pub mod tests {
 		];
 
 		fn check_estimation(
-			backend: TrieBackend<impl TrieBackendStorage<BlakeTwo256>, BlakeTwo256>,
+			mut backend: TrieBackend<impl TrieBackendStorage<BlakeTwo256>, BlakeTwo256>,
+			state_version: StateVersion,
+			has_cache: bool,
 		) {
 			let estimation = backend.essence.recorder.as_ref().unwrap().estimate_encoded_size();
-			let storage_proof = backend.extract_proof().unwrap().unwrap();
+			let storage_proof = backend.extract_proof(state_version).unwrap().unwrap();
+			let storage_proof_size =
+				storage_proof.into_nodes().into_iter().map(|n| n.encoded_size()).sum::<usize>();
 
-			assert_eq!(
-				storage_proof.into_nodes().into_iter().map(|n| n.encoded_size()).sum::<usize>(),
-				estimation
-			);
+			if has_cache {
+				// Estimation is not entirely correct when we have values already cached.
+				assert!(estimation >= storage_proof_size)
+			} else {
+				assert_eq!(storage_proof_size, estimation);
+			}
 		}
 
 		for n in 0..keys.len() {
@@ -863,7 +887,7 @@ pub mod tests {
 			});
 
 			// Check the estimation
-			check_estimation(backend);
+			check_estimation(backend, state_version, has_cache);
 		}
 	}
 
