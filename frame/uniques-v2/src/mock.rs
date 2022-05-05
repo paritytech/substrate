@@ -111,7 +111,9 @@ parameter_types! {
 impl Config for Test {
 	type Event = Event;
 	type Currency = Balances;
+	type CurrencyBalance = Balance;
 	type Assets = Assets;
+	type AssetId = u32;
 	type CollectionId = u32;
 	type ItemId = u32;
 	type MetadataLimit = ConstU32<10_000>;

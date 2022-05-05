@@ -81,8 +81,7 @@ pub mod pallet {
 			+ TypeInfo;
 
 		type Assets: Inspect<Self::AccountId, AssetId = Self::AssetId, Balance = Self::CurrencyBalance>
-			+ Transfer<Self::AccountId>
-			+ MaxEncodedLen;
+			+ Transfer<Self::AccountId>;
 
 		type CollectionId: Member + Parameter + Default + Copy + MaxEncodedLen + CheckedAdd + One;
 
