@@ -313,10 +313,10 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf> StateDbSync<Block
 				// write changes immediately
 				Ok(CommitSet { data: changeset, meta: Default::default() })
 			},
-			PruningMode::Constrained(_) | PruningMode::ArchiveCanonical => {
-				let commit = self.non_canonical.insert(hash, number, parent_hash, changeset)?;
-				Ok(commit)
-			},
+			PruningMode::Constrained(_) | PruningMode::ArchiveCanonical => self
+				.non_canonical
+				.insert(hash, number, parent_hash, changeset)
+				.map_err(Into::into),
 		}
 	}
 
@@ -506,10 +506,10 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf> StateDb<BlockHash
 	{
 		let stored_mode = fetch_stored_pruning_mode(db)?;
 
-		let (should_store_mode, selected_mode) = match (should_init, stored_mode, requested_mode) {
+		let selected_mode = match (should_init, stored_mode, requested_mode) {
 			(true, stored_mode, requested_mode) => {
 				assert!(stored_mode.is_none(), "The storage has just been initialized. No meta-data is expected to be found in it.");
-				(true, requested_mode.unwrap_or_default())
+				requested_mode.unwrap_or_default()
 			},
 
 			(false, None, _) =>
@@ -518,13 +518,12 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf> StateDb<BlockHash
 				)
 				.into()),
 
-			(false, Some(stored), None) => (false, stored),
+			(false, Some(stored), None) => stored,
 
-			(false, Some(stored), Some(requested)) =>
-				(false, choose_pruning_mode(stored, requested)?),
+			(false, Some(stored), Some(requested)) => choose_pruning_mode(stored, requested)?,
 		};
 
-		let db_init_commit_set = if should_store_mode {
+		let db_init_commit_set = if should_init {
 			let mut cs: CommitSet<Key> = Default::default();
 
 			let key = to_meta_key(PRUNING_MODE, &());
