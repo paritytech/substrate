@@ -59,9 +59,30 @@ pub mod pallet {
 	pub trait Config: frame_system::Config {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
-		type Currency: ReservableCurrency<Self::AccountId>;
+		type Currency: ReservableCurrency<Self::AccountId, Balance = Self::CurrencyBalance>;
 
-		type Assets: Inspect<Self::AccountId> + Transfer<Self::AccountId>;
+		type CurrencyBalance: sp_runtime::traits::AtLeast32BitUnsigned
+			+ codec::FullCodec
+			+ Copy
+			+ MaybeSerializeDeserialize
+			+ sp_std::fmt::Debug
+			+ Default
+			+ From<u64>
+			+ TypeInfo
+			+ MaxEncodedLen;
+
+		type AssetId: Member
+			+ Parameter
+			+ Default
+			+ Copy
+			+ codec::HasCompact
+			+ MaybeSerializeDeserialize
+			+ MaxEncodedLen
+			+ TypeInfo;
+
+		type Assets: Inspect<Self::AccountId, AssetId = Self::AssetId, Balance = Self::CurrencyBalance>
+			+ Transfer<Self::AccountId>
+			+ MaxEncodedLen;
 
 		type CollectionId: Member + Parameter + Default + Copy + MaxEncodedLen + CheckedAdd + One;
 

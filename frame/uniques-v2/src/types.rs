@@ -287,7 +287,7 @@ impl<ItemId, Account, Balance> Collection<ItemId, Account, Balance> {
 }
 
 /// Represents either a System currency or a set of fungible assets.
-#[derive(Encode, Decode, Clone, PartialEq, RuntimeDebug, TypeInfo)]
+#[derive(Encode, Decode, Clone, PartialEq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
 pub enum BalanceOrAsset<Balance, AssetId, AssetBalance> {
 	Balance { amount: Balance },
 	Asset { id: AssetId, amount: AssetBalance },
