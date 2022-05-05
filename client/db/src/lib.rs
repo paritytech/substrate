@@ -1096,7 +1096,6 @@ impl<Block: BlockT> Backend<Block> {
 		apply_state_commit(&mut db_init_transaction, state_db_init_commit_set);
 
 		let state_pruning_used = state_db.pruning_mode();
-
 		let is_archive_pruning = state_pruning_used.is_archive();
 		let blockchain = BlockchainDb::new(db.clone())?;
 
