@@ -1783,9 +1783,13 @@ where
 	// startup rather than waiting until importing the next epoch change block.
 	prune_finalized(client.clone(), &mut epoch_changes.shared_data())?;
 
-	let client_clone = client.clone();
+	let client_weak = Arc::downgrade(&client);
 	let on_finality = move |summary: &FinalityNotification<Block>| {
-		aux_storage_cleanup(client_clone.as_ref(), summary)
+		if let Some(client) = client_weak.upgrade() {
+			aux_storage_cleanup(client.as_ref(), summary)
+		} else {
+			Default::default()
+		}
 	};
 	client.register_finality_action(Box::new(on_finality));
 
