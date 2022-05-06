@@ -130,16 +130,13 @@ impl<H: Clone + AsRef<[u8]>> Database<H> for DbAdapter {
 		}));
 
 		if not_ref_counted_column.len() > 0 {
-			return Err(DatabaseError(
-				format!(
-					"Ref counted operation on non ref counted columns {:?}",
-					not_ref_counted_column
-				)
-				.into(),
-			))
+			return Err(DatabaseError(Box::new(parity_db::Error::InvalidInput(format!(
+				"Ref counted operation on non ref counted columns {:?}",
+				not_ref_counted_column
+			)))))
 		}
 
-		result.map_err(|e| DatabaseError(format!("Paritydb error: {:?}", e).into()))
+		result.map_err(|e| DatabaseError(Box::new(e)))
 	}
 
 	fn get(&self, col: ColumnId, key: &[u8]) -> Option<Vec<u8>> {
