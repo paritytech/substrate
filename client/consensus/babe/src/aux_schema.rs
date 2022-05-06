@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! Schema for BABE session changes in the aux-db.
+//! Schema for BABE session(formerly known as 'BABE epoch') changes in the aux-db.
 
 use codec::{Decode, Encode};
 use log::info;
@@ -31,8 +31,8 @@ use sp_blockchain::{Error as ClientError, Result as ClientResult};
 use sp_consensus_babe::{BabeBlockWeight, BabeGenesisConfiguration};
 use sp_runtime::traits::Block as BlockT;
 
-const BABE_EPOCH_CHANGES_VERSION: &[u8] = b"babe_session_changes_version";
-const BABE_EPOCH_CHANGES_KEY: &[u8] = b"babe_session_changes";
+const BABE_EPOCH_CHANGES_VERSION: &[u8] = b"babe_epoch_changes_version";
+const BABE_EPOCH_CHANGES_KEY: &[u8] = b"babe_epoch_changes";
 const BABE_EPOCH_CHANGES_CURRENT_VERSION: u32 = 3;
 
 /// The aux storage key used to store the block weight of the given block hash.

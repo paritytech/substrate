@@ -73,7 +73,7 @@ pub const PUBLIC_KEY_LENGTH: usize = 32;
 
 /// How many blocks to wait before running the median algorithm for relative time
 /// This will not vary from chain to chain as it is not dependent on slot duration
-/// or session length.
+/// or session(formerly known as epoch) length.
 pub const MEDIAN_ALGORITHM_CARDINALITY: usize = 1200; // arbitrary suggestion by w3f-research.
 
 /// The index of an authority.
@@ -364,25 +364,28 @@ sp_api::decl_runtime_apis! {
 		#[changed_in(2)]
 		fn configuration() -> BabeGenesisConfigurationV1;
 
-		/// Returns the slot that started the current session.
+		/// Returns the slot that started the current epoch.
+		#[renamed("current_epoch_start", 2)]
 		fn current_session_start() -> Slot;
 
-		/// Returns information regarding the current session.
+		/// Returns information regarding the current epoch.
+		#[renamed("current_epoch", 2)]
 		fn current_session() -> Session;
 
-		/// Returns information regarding the next session (which was already
+		/// Returns information regarding the next epoch (which was already
 		/// previously announced).
+		#[renamed("next_epoch", 2)]
 		fn next_session() -> Session;
 
 		/// Generates a proof of key ownership for the given authority in the
-		/// current session. An example usage of this module is coupled with the
-		/// session historical module to prove that a given authority key is
-		/// tied to a given staking identity during a specific session. Proofs
+		/// current epoch. An example usage of this module is coupled with the
+		/// epoch historical module to prove that a given authority key is
+		/// tied to a given staking identity during a specific epoch. Proofs
 		/// of key ownership are necessary for submitting equivocation reports.
 		/// NOTE: even though the API takes a `slot` as parameter the current
 		/// implementations ignores this parameter and instead relies on this
 		/// method being called at the correct block height, i.e. any point at
-		/// which the session for the given slot is live on-chain. Future
+		/// which the epoch for the given slot is live on-chain. Future
 		/// implementations will instead use indexed data through an offchain
 		/// worker, not requiring older states to be available.
 		fn generate_key_ownership_proof(
