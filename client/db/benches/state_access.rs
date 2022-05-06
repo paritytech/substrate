@@ -20,9 +20,7 @@ use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use pprof::criterion::{Output, PProfProfiler};
 use rand::{distributions::Uniform, rngs::StdRng, Rng, SeedableRng};
 use sc_client_api::{Backend as _, BlockImportOperation, NewBlockState, StateBackend};
-use sc_client_db::{
-	Backend, DatabaseSettings, DatabaseSource, KeepBlocks, PruningMode, TrieNodeCacheSettings,
-};
+use sc_client_db::{Backend, DatabaseSettings, DatabaseSource, KeepBlocks, PruningMode};
 use sp_core::H256;
 use sp_runtime::{
 	generic::BlockId,
@@ -111,29 +109,18 @@ fn insert_blocks(db: &Backend<Block>, storage: Vec<(Vec<u8>, Vec<u8>)>) -> H256 
 enum BenchmarkConfig {
 	NoCache,
 	TrieNodeCache,
-	StateCache,
 }
 
 fn create_backend(config: BenchmarkConfig, temp_dir: &TempDir) -> Backend<Block> {
 	let path = temp_dir.path().to_owned();
 
-	let (state_cache_size, trie_node_cache_settings) = match config {
-		BenchmarkConfig::NoCache =>
-			(0, TrieNodeCacheSettings { enable: false, maximum_size_in_bytes: 0 }),
-		BenchmarkConfig::TrieNodeCache => (
-			0,
-			TrieNodeCacheSettings { enable: true, maximum_size_in_bytes: 2 * 1024 * 1024 * 1024 },
-		),
-		BenchmarkConfig::StateCache => (
-			2 * 1024 * 1024 * 1024,
-			TrieNodeCacheSettings { enable: false, maximum_size_in_bytes: 0 },
-		),
+	let trie_cache_maximum_size = match config {
+		BenchmarkConfig::NoCache => None,
+		BenchmarkConfig::TrieNodeCache => Some(2 * 1024 * 1024 * 1024),
 	};
 
 	let settings = DatabaseSettings {
-		state_cache_size,
-		trie_node_cache_settings,
-		state_cache_child_ratio: None,
+		trie_cache_maximum_size,
 		state_pruning: PruningMode::ArchiveAll,
 		source: DatabaseSource::ParityDb { path },
 		keep_blocks: KeepBlocks::All,
@@ -202,22 +189,12 @@ fn state_access_benchmarks(c: &mut Criterion) {
 	};
 
 	bench_multiple_values(
-		BenchmarkConfig::StateCache,
-		"with state cache and reading each key once",
-		1,
-	);
-	bench_multiple_values(
 		BenchmarkConfig::TrieNodeCache,
 		"with trie node cache and reading each key once",
 		1,
 	);
 	bench_multiple_values(BenchmarkConfig::NoCache, "no cache and reading each key once", 1);
 
-	bench_multiple_values(
-		BenchmarkConfig::StateCache,
-		"with state cache and reading 4 times each key in a row",
-		4,
-	);
 	bench_multiple_values(
 		BenchmarkConfig::TrieNodeCache,
 		"with trie node cache and reading 4 times each key in a row",
@@ -249,7 +226,6 @@ fn state_access_benchmarks(c: &mut Criterion) {
 		});
 	};
 
-	bench_single_value(BenchmarkConfig::StateCache, "with state cache and reading the key once", 1);
 	bench_single_value(
 		BenchmarkConfig::TrieNodeCache,
 		"with trie node cache and reading the key once",
@@ -257,11 +233,6 @@ fn state_access_benchmarks(c: &mut Criterion) {
 	);
 	bench_single_value(BenchmarkConfig::NoCache, "no cache and reading the key once", 1);
 
-	bench_single_value(
-		BenchmarkConfig::StateCache,
-		"with state cache and reading 4 times each key in a row",
-		4,
-	);
 	bench_single_value(
 		BenchmarkConfig::TrieNodeCache,
 		"with trie node cache and reading 4 times each key in a row",
@@ -293,7 +264,6 @@ fn state_access_benchmarks(c: &mut Criterion) {
 		});
 	};
 
-	bench_single_value(BenchmarkConfig::StateCache, "with state cache and hashing the key once", 1);
 	bench_single_value(
 		BenchmarkConfig::TrieNodeCache,
 		"with trie node cache and hashing the key once",
@@ -301,11 +271,6 @@ fn state_access_benchmarks(c: &mut Criterion) {
 	);
 	bench_single_value(BenchmarkConfig::NoCache, "no cache and hashing the key once", 1);
 
-	bench_single_value(
-		BenchmarkConfig::StateCache,
-		"with state cache and hashing 4 times each key in a row",
-		4,
-	);
 	bench_single_value(
 		BenchmarkConfig::TrieNodeCache,
 		"with trie node cache and hashing 4 times each key in a row",
@@ -338,7 +303,6 @@ fn state_access_benchmarks(c: &mut Criterion) {
 		});
 	};
 
-	bench_single_value(BenchmarkConfig::StateCache, "with state cache");
 	bench_single_value(BenchmarkConfig::TrieNodeCache, "with trie node cache");
 	bench_single_value(BenchmarkConfig::NoCache, "no cache");
 

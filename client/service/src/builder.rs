@@ -259,12 +259,10 @@ where
 
 	let (client, backend) = {
 		let db_config = sc_client_db::DatabaseSettings {
-			state_cache_size: config.state_cache_size,
-			state_cache_child_ratio: config.state_cache_child_ratio.map(|v| (v, 100)),
+			trie_cache_maximum_size: config.trie_cache_maximum_size,
 			state_pruning: config.state_pruning.clone(),
 			source: config.database.clone(),
 			keep_blocks: config.keep_blocks.clone(),
-			trie_node_cache_settings: Default::default(),
 		};
 
 		let backend = new_db_backend(db_config)?;

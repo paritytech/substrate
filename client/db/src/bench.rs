@@ -18,10 +18,7 @@
 
 //! State backend that's useful for benchmarking
 
-use crate::{
-	storage_cache::{new_shared_cache, CachingState, SharedCache},
-	DbState, DbStateBuilder,
-};
+use crate::{DbState, DbStateBuilder};
 use hash_db::{Hasher, Prefix};
 use kvdb::{DBTransaction, KeyValueDB};
 use linked_hash_map::LinkedHashMap;
@@ -36,14 +33,14 @@ use sp_runtime::{
 use sp_state_machine::{
 	backend::Backend as StateBackend, ChildStorageCollection, DBValue, StorageCollection,
 };
-use sp_trie::{prefixed_key, MemoryDB};
+use sp_trie::{prefixed_key, MemoryDB, cache::{SharedTrieCache, Configuration}};
 use std::{
 	cell::{Cell, RefCell},
 	collections::HashMap,
 	sync::Arc,
 };
 
-type State<B> = CachingState<DbState<B>, B>;
+type State<B> = DbState<B>;
 
 struct StorageDb<Block: BlockT> {
 	db: Arc<dyn KeyValueDB>,
@@ -67,7 +64,6 @@ pub struct BenchmarkingState<B: BlockT> {
 	db: Cell<Option<Arc<dyn KeyValueDB>>>,
 	genesis: HashMap<Vec<u8>, (Vec<u8>, i32)>,
 	record: Cell<Vec<Vec<u8>>>,
-	shared_cache: SharedCache<B>, // shared cache is always empty
 	/// Key tracker for keys in the main trie.
 	/// We track the total number of reads and writes to these keys,
 	/// not de-duplicated for repeats.
@@ -81,6 +77,7 @@ pub struct BenchmarkingState<B: BlockT> {
 	proof_recorder: Option<sp_trie::recorder::Recorder<HashFor<B>>>,
 	proof_recorder_root: Cell<B::Hash>,
 	enable_tracking: bool,
+	shared_trie_cache: SharedTrieCache<HashFor<B>>,
 }
 
 impl<B: BlockT> BenchmarkingState<B> {
@@ -103,13 +100,14 @@ impl<B: BlockT> BenchmarkingState<B> {
 			genesis: Default::default(),
 			genesis_root: Default::default(),
 			record: Default::default(),
-			shared_cache: new_shared_cache(0, (1, 10)),
 			main_key_tracker: Default::default(),
 			child_key_tracker: Default::default(),
 			whitelist: Default::default(),
 			proof_recorder: record_proof.then(Default::default),
 			proof_recorder_root: Cell::new(root.clone()),
 			enable_tracking,
+			// Enable the cache, but do not sync anything to the shared state.
+			shared_trie_cache: SharedTrieCache::new(Configuration { maximum_size_in_bytes: 0 }),
 		};
 
 		state.add_whitelist_to_tracker();
@@ -146,13 +144,12 @@ impl<B: BlockT> BenchmarkingState<B> {
 			self.proof_recorder_root.set(self.root.get());
 		}
 		let storage_db = Arc::new(StorageDb::<B> { db, _block: Default::default() });
-		*self.state.borrow_mut() = Some(State::new(
+		*self.state.borrow_mut() = Some(
 			DbStateBuilder::<B>::new(storage_db, self.root.get())
 				.with_optional_recorder(self.proof_recorder.clone())
+				.with_cache(self.shared_trie_cache.local_cache())
 				.build(),
-			self.shared_cache.clone(),
-			None,
-		));
+		);
 		Ok(())
 	}
 

@@ -147,11 +147,16 @@ pub struct Configuration {
 pub struct SharedTrieCache<H: Hasher> {
 	node_cache: Arc<RwLock<SharedNodeCache<H>>>,
 	value_cache: Arc<RwLock<NoHashingLruCache<CachedValue<H::Out>>>>,
+	value_cache_element_size: usize,
 }
 
 impl<H: Hasher> Clone for SharedTrieCache<H> {
 	fn clone(&self) -> Self {
-		Self { node_cache: self.node_cache.clone(), value_cache: self.value_cache.clone() }
+		Self {
+			node_cache: self.node_cache.clone(),
+			value_cache: self.value_cache.clone(),
+			value_cache_element_size: self.value_cache_element_size,
+		}
 	}
 }
 
@@ -172,6 +177,7 @@ impl<H: Hasher> SharedTrieCache<H> {
 				value_cache_size_in_bytes / value_cache_element_size,
 				Default::default(),
 			))),
+			value_cache_element_size,
 		}
 	}
 
@@ -184,6 +190,14 @@ impl<H: Hasher> SharedTrieCache<H> {
 			shared_node_cache_access: Default::default(),
 			shared_value_cache_access: Default::default(),
 		}
+	}
+
+	/// Returns the used memory size of this cache in bytes.
+	pub fn used_memory_size(&self) -> usize {
+		let value_cache_size = self.value_cache.read().len() * self.value_cache_element_size;
+		let node_cache_size = self.node_cache.read().size_in_bytes;
+
+		node_cache_size + value_cache_size
 	}
 }
 

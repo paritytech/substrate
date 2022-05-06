@@ -690,12 +690,10 @@ mod tests {
 
 	fn db_settings(source: DatabaseSource) -> DatabaseSettings {
 		DatabaseSettings {
-			state_cache_size: 0,
-			state_cache_child_ratio: None,
 			state_pruning: PruningMode::ArchiveAll,
 			source,
 			keep_blocks: KeepBlocks::All,
-			trie_node_cache_settings: Default::default(),
+			trie_cache_maximum_size: None,
 		}
 	}
 
