@@ -56,7 +56,7 @@ impl<Block: BlockT> WasmSubstitute<Block> {
 	/// Returns `true` when the substitute matches for the given `block_id`.
 	fn matches(&self, block_id: &BlockId<Block>, backend: &impl backend::Backend<Block>) -> bool {
 		let requested_block_number =
-			backend.blockchain().block_number_from_id(&block_id).ok().flatten();
+			backend.blockchain().block_number_from_id(block_id).ok().flatten();
 
 		Some(self.block_number) <= requested_block_number
 	}
@@ -70,7 +70,7 @@ fn make_hash<K: std::hash::Hash + ?Sized>(val: &K) -> Vec<u8> {
 }
 
 impl<Block: BlockT> FetchRuntimeCode for WasmSubstitute<Block> {
-	fn fetch_runtime_code<'a>(&'a self) -> Option<std::borrow::Cow<'a, [u8]>> {
+	fn fetch_runtime_code(&self) -> Option<std::borrow::Cow<[u8]>> {
 		Some(self.code.as_slice().into())
 	}
 }

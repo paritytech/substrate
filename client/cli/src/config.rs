@@ -40,7 +40,7 @@ use std::{net::SocketAddr, path::PathBuf};
 pub(crate) const NODE_NAME_MAX_LENGTH: usize = 64;
 
 /// Default sub directory to store network config.
-pub(crate) const DEFAULT_NETWORK_CONFIG_PATH: &'static str = "network";
+pub(crate) const DEFAULT_NETWORK_CONFIG_PATH: &str = "network";
 
 /// The recommended open file descriptor limit to be configured for the process.
 const RECOMMENDED_OPEN_FILE_DESCRIPTOR_LIMIT: u64 = 10_000;
@@ -629,7 +629,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		}
 
 		// Call hook for custom profiling setup.
-		logger_hook(&mut logger, &config);
+		logger_hook(&mut logger, config);
 
 		logger.init()?;
 

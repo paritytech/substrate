@@ -52,7 +52,7 @@ fn test_once() {
 			bootnodes: (0..Uniform::new_inclusive(0, 4).sample(&mut rng))
 				.map(|_| {
 					let id = PeerId::random();
-					known_nodes.insert(id.clone());
+					known_nodes.insert(id);
 					id
 				})
 				.collect(),
@@ -60,8 +60,8 @@ fn test_once() {
 				(0..Uniform::new_inclusive(0, 2).sample(&mut rng))
 					.map(|_| {
 						let id = PeerId::random();
-						known_nodes.insert(id.clone());
-						reserved_nodes.insert(id.clone());
+						known_nodes.insert(id);
+						reserved_nodes.insert(id);
 						id
 					})
 					.collect()
@@ -114,7 +114,7 @@ fn test_once() {
 				// If we generate 1, discover a new node.
 				1 => {
 					let new_id = PeerId::random();
-					known_nodes.insert(new_id.clone());
+					known_nodes.insert(new_id);
 					peerset.add_to_peers_set(SetId::from(0), new_id);
 				},
 
@@ -122,7 +122,7 @@ fn test_once() {
 				2 =>
 					if let Some(id) = known_nodes.iter().choose(&mut rng) {
 						let val = Uniform::new_inclusive(i32::MIN, i32::MAX).sample(&mut rng);
-						peerset_handle.report_peer(id.clone(), ReputationChange::new(val, ""));
+						peerset_handle.report_peer(*id, ReputationChange::new(val, ""));
 					},
 
 				// If we generate 3, disconnect from a random node.
@@ -142,8 +142,8 @@ fn test_once() {
 						})
 						.choose(&mut rng)
 					{
-						peerset.incoming(SetId::from(0), id.clone(), next_incoming_id.clone());
-						incoming_nodes.insert(next_incoming_id.clone(), id.clone());
+						peerset.incoming(SetId::from(0), *id, next_incoming_id);
+						incoming_nodes.insert(next_incoming_id, *id);
 						next_incoming_id.0 += 1;
 					}
 				},
@@ -157,8 +157,8 @@ fn test_once() {
 					if let Some(id) =
 						known_nodes.iter().filter(|n| !reserved_nodes.contains(*n)).choose(&mut rng)
 					{
-						peerset_handle.add_reserved_peer(SetId::from(0), id.clone());
-						reserved_nodes.insert(id.clone());
+						peerset_handle.add_reserved_peer(SetId::from(0), *id);
+						reserved_nodes.insert(*id);
 					}
 				},
 				8 =>

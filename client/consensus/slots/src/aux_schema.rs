@@ -63,7 +63,7 @@ where
 	P: Clone + Encode + Decode + PartialEq,
 {
 	// We don't check equivocations for old headers out of our capacity.
-	if slot_now.saturating_sub(*slot) > Slot::from(MAX_SLOT_CAPACITY) {
+	if slot_now.saturating_sub(*slot) > MAX_SLOT_CAPACITY {
 		return Ok(None)
 	}
 

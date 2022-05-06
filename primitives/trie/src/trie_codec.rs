@@ -71,7 +71,7 @@ where
 	// Only check root if expected root is passed as argument.
 	if let Some(expected_root) = expected_root {
 		if expected_root != &top_root {
-			return Err(Error::RootMismatch(top_root.clone(), expected_root.clone()))
+			return Err(Error::RootMismatch(top_root, *expected_root))
 		}
 	}
 

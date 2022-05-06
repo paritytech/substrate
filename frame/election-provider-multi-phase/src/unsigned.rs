@@ -23,12 +23,11 @@ use crate::{
 	WeightInfo,
 };
 use codec::Encode;
-use frame_election_provider_support::{NposSolver, PerThing128};
+use frame_election_provider_support::{NposSolution, NposSolver, PerThing128};
 use frame_support::{dispatch::DispatchResult, ensure, traits::Get};
 use frame_system::offchain::SubmitTransaction;
 use sp_npos_elections::{
 	assignment_ratio_to_staked_normalized, assignment_staked_to_ratio_normalized, ElectionResult,
-	NposSolution,
 };
 use sp_runtime::{
 	offchain::storage::{MutateStorageError, StorageValueRef},
@@ -52,9 +51,9 @@ pub type VoterOf<T> = frame_election_provider_support::VoterOf<<T as Config>::Da
 pub type Assignment<T> =
 	sp_npos_elections::Assignment<<T as frame_system::Config>::AccountId, SolutionAccuracyOf<T>>;
 
-/// The [`IndexAssignment`][sp_npos_elections::IndexAssignment] type specialized for a particular
-/// runtime `T`.
-pub type IndexAssignmentOf<T> = sp_npos_elections::IndexAssignmentOf<SolutionOf<T>>;
+/// The [`IndexAssignment`][frame_election_provider_support::IndexAssignment] type specialized for a
+/// particular runtime `T`.
+pub type IndexAssignmentOf<T> = frame_election_provider_support::IndexAssignmentOf<SolutionOf<T>>;
 
 /// Error type of the pallet's [`crate::Config::Solver`].
 pub type SolverErrorOf<T> = <<T as Config>::Solver as NposSolver>::Error;
@@ -100,7 +99,7 @@ impl<T: Config> From<FeasibilityError> for MinerError<T> {
 /// Save a given call into OCW storage.
 fn save_solution<T: Config>(call: &Call<T>) -> Result<(), MinerError<T>> {
 	log!(debug, "saving a call to the offchain storage.");
-	let storage = StorageValueRef::persistent(&OFFCHAIN_CACHED_CALL);
+	let storage = StorageValueRef::persistent(OFFCHAIN_CACHED_CALL);
 	match storage.mutate::<_, (), _>(|_| Ok(call.clone())) {
 		Ok(_) => Ok(()),
 		Err(MutateStorageError::ConcurrentModification(_)) =>
@@ -117,7 +116,7 @@ fn save_solution<T: Config>(call: &Call<T>) -> Result<(), MinerError<T>> {
 
 /// Get a saved solution from OCW storage if it exists.
 fn restore_solution<T: Config>() -> Result<Call<T>, MinerError<T>> {
-	StorageValueRef::persistent(&OFFCHAIN_CACHED_CALL)
+	StorageValueRef::persistent(OFFCHAIN_CACHED_CALL)
 		.get()
 		.ok()
 		.flatten()
@@ -127,7 +126,7 @@ fn restore_solution<T: Config>() -> Result<Call<T>, MinerError<T>> {
 /// Clear a saved solution from OCW storage.
 pub(super) fn kill_ocw_solution<T: Config>() {
 	log!(debug, "clearing offchain call cache storage.");
-	let mut storage = StorageValueRef::persistent(&OFFCHAIN_CACHED_CALL);
+	let mut storage = StorageValueRef::persistent(OFFCHAIN_CACHED_CALL);
 	storage.clear();
 }
 
@@ -136,14 +135,14 @@ pub(super) fn kill_ocw_solution<T: Config>() {
 /// After calling this, the next offchain worker is guaranteed to work, with respect to the
 /// frequency repeat.
 fn clear_offchain_repeat_frequency() {
-	let mut last_block = StorageValueRef::persistent(&OFFCHAIN_LAST_BLOCK);
+	let mut last_block = StorageValueRef::persistent(OFFCHAIN_LAST_BLOCK);
 	last_block.clear();
 }
 
 /// `true` when OCW storage contains a solution
 #[cfg(test)]
 fn ocw_solution_exists<T: Config>() -> bool {
-	matches!(StorageValueRef::persistent(&OFFCHAIN_CACHED_CALL).get::<Call<T>>(), Ok(Some(_)))
+	matches!(StorageValueRef::persistent(OFFCHAIN_CACHED_CALL).get::<Call<T>>(), Ok(Some(_)))
 }
 
 impl<T: Config> Pallet<T> {
@@ -207,9 +206,8 @@ impl<T: Config> Pallet<T> {
 		// get the solution, with a load of checks to ensure if submitted, IT IS ABSOLUTELY VALID.
 		let (raw_solution, witness) = Self::mine_and_check()?;
 
-		let score = raw_solution.score.clone();
-		let call: Call<T> =
-			Call::submit_unsigned { raw_solution: Box::new(raw_solution), witness }.into();
+		let score = raw_solution.score;
+		let call: Call<T> = Call::submit_unsigned { raw_solution: Box::new(raw_solution), witness };
 
 		log!(
 			debug,
@@ -533,7 +531,7 @@ impl<T: Config> Pallet<T> {
 				// we found the right value - early exit the function.
 				Ok(next) => return next,
 			}
-			step = step / 2;
+			step /= 2;
 			current_weight = weight_with(voters);
 		}
 
@@ -567,7 +565,7 @@ impl<T: Config> Pallet<T> {
 	/// is returned, `now` is written in storage and will be used in further calls as the baseline.
 	pub fn ensure_offchain_repeat_frequency(now: T::BlockNumber) -> Result<(), MinerError<T>> {
 		let threshold = T::OffchainRepeat::get();
-		let last_block = StorageValueRef::persistent(&OFFCHAIN_LAST_BLOCK);
+		let last_block = StorageValueRef::persistent(OFFCHAIN_LAST_BLOCK);
 
 		let mutate_stat = last_block.mutate::<_, &'static str, _>(
 			|maybe_head: Result<Option<T::BlockNumber>, _>| {
@@ -625,7 +623,7 @@ impl<T: Config> Pallet<T> {
 		ensure!(
 			Self::queued_solution().map_or(true, |q: ReadySolution<_>| raw_solution
 				.score
-				.strict_threshold_better(q.score, T::SolutionImprovementThreshold::get())),
+				.strict_threshold_better(q.score, T::BetterUnsignedThreshold::get())),
 			Error::<T>::PreDispatchWeakSubmission,
 		);
 
@@ -742,10 +740,11 @@ mod tests {
 	};
 	use codec::Decode;
 	use frame_benchmarking::Zero;
+	use frame_election_provider_support::IndexAssignment;
 	use frame_support::{
 		assert_noop, assert_ok, bounded_vec, dispatch::Dispatchable, traits::OffchainWorker,
 	};
-	use sp_npos_elections::{ElectionScore, IndexAssignment};
+	use sp_npos_elections::ElectionScore;
 	use sp_runtime::{
 		offchain::storage_lock::{BlockAndTime, StorageLock},
 		traits::ValidateUnsigned,
@@ -931,7 +930,7 @@ mod tests {
 	#[test]
 	#[should_panic(expected = "Invalid unsigned submission must produce invalid block and \
 	                           deprive validator from their authoring reward.: \
-	                           Module(ModuleError { index: 2, error: 1, message: \
+	                           Module(ModuleError { index: 2, error: [1, 0, 0, 0], message: \
 	                           Some(\"PreDispatchWrongWinnerCount\") })")]
 	fn unfeasible_solution_panics() {
 		ExtBuilder::default().build_and_execute(|| {
@@ -1044,11 +1043,16 @@ mod tests {
 			roll_to(25);
 			assert!(MultiPhase::current_phase().is_unsigned());
 
+			// Force the number of winners to be bigger to fail
+			let (mut solution, _) =
+				MultiPhase::mine_solution::<<Runtime as Config>::Solver>().unwrap();
+			solution.solution.votes1[0].1 = 4;
+
 			assert_eq!(
-				MultiPhase::mine_check_save_submit().unwrap_err(),
+				MultiPhase::basic_checks(&solution, "mined").unwrap_err(),
 				MinerError::PreDispatchChecksFailed(DispatchError::Module(ModuleError {
 					index: 2,
-					error: 1,
+					error: [1, 0, 0, 0],
 					message: Some("PreDispatchWrongWinnerCount"),
 				})),
 			);
@@ -1061,7 +1065,7 @@ mod tests {
 			.desired_targets(1)
 			.add_voter(7, 2, bounded_vec![10])
 			.add_voter(8, 5, bounded_vec![10])
-			.solution_improvement_threshold(Perbill::from_percent(50))
+			.better_unsigned_threshold(Perbill::from_percent(50))
 			.build_and_execute(|| {
 				roll_to(25);
 				assert!(MultiPhase::current_phase().is_unsigned());

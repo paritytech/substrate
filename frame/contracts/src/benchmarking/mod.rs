@@ -138,7 +138,7 @@ where
 			Storage::<T>::write(&info.trie_id, &item.0, Some(item.1.clone()), None, false)
 				.map_err(|_| "Failed to write storage to restoration dest")?;
 		}
-		<ContractInfoOf<T>>::insert(&self.account_id, info.clone());
+		<ContractInfoOf<T>>::insert(&self.account_id, info);
 		Ok(())
 	}
 
@@ -253,7 +253,7 @@ benchmarks! {
 		)?;
 		let value = T::Currency::minimum_balance();
 		let origin = RawOrigin::Signed(instance.caller.clone());
-		let callee = instance.addr.clone();
+		let callee = instance.addr;
 	}: call(origin, callee, value, Weight::MAX, None, vec![])
 
 	// This constructs a contract that is maximal expensive to instrument.
@@ -394,7 +394,7 @@ benchmarks! {
 	seal_caller {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let instance = Contract::<T>::new(WasmModule::getter(
-			"seal_caller", r * API_BENCHMARK_BATCH_SIZE
+			"seal0", "seal_caller", r * API_BENCHMARK_BATCH_SIZE
 		), vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
@@ -436,6 +436,59 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
+	seal_code_hash {
+		let r in 0 .. API_BENCHMARK_BATCHES;
+		let accounts = (0 .. r * API_BENCHMARK_BATCH_SIZE)
+			.map(|n| account::<T::AccountId>("account", n, 0))
+			.collect::<Vec<_>>();
+		let account_len = accounts.get(0).map(|i| i.encode().len()).unwrap_or(0);
+		let accounts_bytes = accounts.iter().map(|a| a.encode()).flatten().collect::<Vec<_>>();
+		let accounts_len = accounts_bytes.len();
+		let pages = code::max_pages::<T>();
+		let code = WasmModule::<T>::from(ModuleDefinition {
+			memory: Some(ImportedMemory::max::<T>()),
+			imported_functions: vec![ImportedFunction {
+				module: "seal0",
+				name: "seal_code_hash",
+				params: vec![ValueType::I32, ValueType::I32, ValueType::I32],
+				return_type: Some(ValueType::I32),
+			}],
+			data_segments: vec![
+				DataSegment {
+					offset: 0,
+					value: 32u32.to_le_bytes().to_vec(), // output length
+				},
+				DataSegment {
+					offset: 36,
+					value: accounts_bytes,
+				},
+			],
+			call_body: Some(body::repeated_dyn(r * API_BENCHMARK_BATCH_SIZE, vec![
+				Counter(36, account_len as u32), // address_ptr
+				Regular(Instruction::I32Const(4)), // ptr to output data
+				Regular(Instruction::I32Const(0)), // ptr to output length
+				Regular(Instruction::Call(0)),
+				Regular(Instruction::Drop),
+			])),
+			.. Default::default()
+		});
+		let instance = Contract::<T>::new(code, vec![])?;
+		let info = instance.info()?;
+		// every account would be a contract (worst case)
+		for acc in accounts.iter() {
+			<ContractInfoOf<T>>::insert(acc, info.clone());
+		}
+		let origin = RawOrigin::Signed(instance.caller.clone());
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
+
+	seal_own_code_hash {
+		let r in 0 .. API_BENCHMARK_BATCHES;
+		let instance = Contract::<T>::new(WasmModule::getter(
+			"seal0", "seal_own_code_hash", r * API_BENCHMARK_BATCH_SIZE
+		), vec![])?;
+		let origin = RawOrigin::Signed(instance.caller.clone());
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
+
 	seal_caller_is_origin {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let code = WasmModule::<T>::from(ModuleDefinition {
@@ -459,7 +512,7 @@ benchmarks! {
 	seal_address {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let instance = Contract::<T>::new(WasmModule::getter(
-			"seal_address", r * API_BENCHMARK_BATCH_SIZE
+			"seal0", "seal_address", r * API_BENCHMARK_BATCH_SIZE
 		), vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
@@ -467,7 +520,7 @@ benchmarks! {
 	seal_gas_left {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let instance = Contract::<T>::new(WasmModule::getter(
-			"seal_gas_left", r * API_BENCHMARK_BATCH_SIZE
+			"seal0", "seal_gas_left", r * API_BENCHMARK_BATCH_SIZE
 		), vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
@@ -475,7 +528,7 @@ benchmarks! {
 	seal_balance {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let instance = Contract::<T>::new(WasmModule::getter(
-			"seal_balance", r * API_BENCHMARK_BATCH_SIZE
+			"seal0", "seal_balance", r * API_BENCHMARK_BATCH_SIZE
 		), vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
@@ -483,7 +536,7 @@ benchmarks! {
 	seal_value_transferred {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let instance = Contract::<T>::new(WasmModule::getter(
-			"seal_value_transferred", r * API_BENCHMARK_BATCH_SIZE
+			"seal0", "seal_value_transferred", r * API_BENCHMARK_BATCH_SIZE
 		), vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
@@ -491,7 +544,7 @@ benchmarks! {
 	seal_minimum_balance {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let instance = Contract::<T>::new(WasmModule::getter(
-			"seal_minimum_balance", r * API_BENCHMARK_BATCH_SIZE
+			"seal0", "seal_minimum_balance", r * API_BENCHMARK_BATCH_SIZE
 		), vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
@@ -499,7 +552,7 @@ benchmarks! {
 	seal_block_number {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let instance = Contract::<T>::new(WasmModule::getter(
-			"seal_block_number", r * API_BENCHMARK_BATCH_SIZE
+			"seal0", "seal_block_number", r * API_BENCHMARK_BATCH_SIZE
 		), vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
@@ -507,7 +560,7 @@ benchmarks! {
 	seal_now {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let instance = Contract::<T>::new(WasmModule::getter(
-			"seal_now", r * API_BENCHMARK_BATCH_SIZE
+			"seal0", "seal_now", r * API_BENCHMARK_BATCH_SIZE
 		), vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
@@ -1014,7 +1067,7 @@ benchmarks! {
 			)
 			.map_err(|_| "Failed to write to storage during setup.")?;
 		}
-		<ContractInfoOf<T>>::insert(&instance.account_id, info.clone());
+		<ContractInfoOf<T>>::insert(&instance.account_id, info);
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
@@ -1111,7 +1164,7 @@ benchmarks! {
 			)
 			.map_err(|_| "Failed to write to storage during setup.")?;
 		}
-		<ContractInfoOf<T>>::insert(&instance.account_id, info.clone());
+		<ContractInfoOf<T>>::insert(&instance.account_id, info);
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
@@ -1163,7 +1216,7 @@ benchmarks! {
 			)
 			.map_err(|_| "Failed to write to storage during setup.")?;
 		}
-		<ContractInfoOf<T>>::insert(&instance.account_id, info.clone());
+		<ContractInfoOf<T>>::insert(&instance.account_id, info);
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
@@ -1210,7 +1263,7 @@ benchmarks! {
 			)
 			.map_err(|_| "Failed to write to storage during setup.")?;
 		}
-		<ContractInfoOf<T>>::insert(&instance.account_id, info.clone());
+		<ContractInfoOf<T>>::insert(&instance.account_id, info);
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
@@ -1255,7 +1308,7 @@ benchmarks! {
 			)
 			.map_err(|_| "Failed to write to storage during setup.")?;
 		}
-		<ContractInfoOf<T>>::insert(&instance.account_id, info.clone());
+		<ContractInfoOf<T>>::insert(&instance.account_id, info);
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
@@ -1307,7 +1360,7 @@ benchmarks! {
 			)
 			.map_err(|_| "Failed to write to storage during setup.")?;
 		}
-		<ContractInfoOf<T>>::insert(&instance.account_id, info.clone());
+		<ContractInfoOf<T>>::insert(&instance.account_id, info);
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
@@ -1359,7 +1412,7 @@ benchmarks! {
 			)
 			.map_err(|_| "Failed to write to storage during setup.")?;
 		}
-		<ContractInfoOf<T>>::insert(&instance.account_id, info.clone());
+		<ContractInfoOf<T>>::insert(&instance.account_id, info);
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
@@ -1524,7 +1577,7 @@ benchmarks! {
 		});
 		let instance = Contract::<T>::new(code, vec![])?;
 		let callee = instance.addr.clone();
-		let origin = RawOrigin::Signed(instance.caller.clone());
+		let origin = RawOrigin::Signed(instance.caller);
 	}: call(origin, callee, 0u32.into(), Weight::MAX, None, vec![])
 
 	seal_call_per_transfer_clone_kb {
@@ -1686,7 +1739,7 @@ benchmarks! {
 			.collect::<Vec<_>>();
 
 		for addr in &addresses {
-			if let Some(_) = ContractInfoOf::<T>::get(&addr) {
+			if ContractInfoOf::<T>::get(&addr).is_some() {
 				return Err("Expected that contract does not exist at this point.".into());
 			}
 		}
@@ -1694,7 +1747,7 @@ benchmarks! {
 	verify {
 		for addr in &addresses {
 			ContractInfoOf::<T>::get(&addr)
-				.ok_or_else(|| "Contract should have been instantiated")?;
+				.ok_or("Contract should have been instantiated")?;
 		}
 	}
 
@@ -1702,7 +1755,7 @@ benchmarks! {
 		let t in 0 .. 1;
 		let s in 0 .. (code::max_pages::<T>() - 1) * 64;
 		let callee_code = WasmModule::<T>::dummy();
-		let hash = callee_code.hash.clone();
+		let hash = callee_code.hash;
 		let hash_bytes = callee_code.hash.encode();
 		let hash_len = hash_bytes.len();
 		Contracts::<T>::store_code_raw(callee_code.code, whitelisted_caller())?;
@@ -1910,6 +1963,44 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
+	// Only calling the function itself for the list of
+	// generated different ECDSA keys.
+	seal_ecdsa_to_eth_address {
+		let r in 0 .. API_BENCHMARK_BATCHES;
+		let key_type = sp_core::crypto::KeyTypeId(*b"code");
+		let pub_keys_bytes = (0..r * API_BENCHMARK_BATCH_SIZE)
+			.map(|_| {
+				sp_io::crypto::ecdsa_generate(key_type, None).0
+			})
+		.flatten()
+		.collect::<Vec<_>>();
+		let pub_keys_bytes_len = pub_keys_bytes.len() as i32;
+		let code = WasmModule::<T>::from(ModuleDefinition {
+			memory: Some(ImportedMemory::max::<T>()),
+			imported_functions: vec![ImportedFunction {
+				module: "__unstable__",
+				name: "seal_ecdsa_to_eth_address",
+				params: vec![ValueType::I32, ValueType::I32],
+				return_type: Some(ValueType::I32),
+			}],
+			data_segments: vec![
+				DataSegment {
+					offset: 0,
+					value: pub_keys_bytes,
+				},
+			],
+			call_body: Some(body::repeated_dyn(r * API_BENCHMARK_BATCH_SIZE, vec![
+				Counter(0, 33), // pub_key_ptr
+				Regular(Instruction::I32Const(pub_keys_bytes_len)), // out_ptr
+				Regular(Instruction::Call(0)),
+				Regular(Instruction::Drop),
+			])),
+			.. Default::default()
+		});
+		let instance = Contract::<T>::new(code, vec![])?;
+		let origin = RawOrigin::Signed(instance.caller.clone());
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
+
 	seal_set_code_hash {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let code_hashes = (0..r * API_BENCHMARK_BATCH_SIZE)
@@ -1926,7 +2017,7 @@ benchmarks! {
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
-				module: "__unstable__",
+				module: "seal0",
 				name: "seal_set_code_hash",
 				params: vec![
 					ValueType::I32,
@@ -2341,7 +2432,7 @@ benchmarks! {
 	}
 
 	// w_memory_grow = w_bench - 2 * w_param
-	// We can only allow allocate as much memory as it is allowed in a a contract.
+	// We can only allow allocate as much memory as it is allowed in a contract.
 	// Therefore the repeat count is limited by the maximum memory any contract can have.
 	// Using a contract with more memory will skew the benchmark because the runtime of grow
 	// depends on how much memory is already allocated.

@@ -22,52 +22,55 @@
 //! BLOCK-NUM: `{{block_number}}`
 //! SKIP-WRITE: `{{params.skip_write}}`, SKIP-READ: `{{params.skip_read}}`, WARMUPS: `{{params.warmups}}`
 //! STATE-VERSION: `V{{params.state_version}}`, STATE-CACHE-SIZE: `{{params.state_cache_size}}`
-//! WEIGHT-PATH: `{{params.weight_path}}`
-//! METRIC: `{{params.weight_metric}}`, WEIGHT-MUL: `{{params.weight_mul}}`, WEIGHT-ADD: `{{params.weight_add}}`
+//! WEIGHT-PATH: `{{params.weight_params.weight_path}}`
+//! METRIC: `{{params.weight_params.weight_metric}}`, WEIGHT-MUL: `{{params.weight_params.weight_mul}}`, WEIGHT-ADD: `{{params.weight_params.weight_add}}`
 
 // Executed Command:
 {{#each args as |arg|}}
 //   {{arg}}
 {{/each}}
 
-/// Storage DB weights for the {{runtime_name}} runtime and {{db_name}}.
+/// Storage DB weights for the `{{runtime_name}}` runtime and `{{db_name}}`.
 pub mod constants {
-	use frame_support::{parameter_types, weights::{RuntimeDbWeight, constants}};
+	use frame_support::{
+		parameter_types,
+		weights::{constants, RuntimeDbWeight},
+	};
 
 	parameter_types! {
 		{{#if (eq db_name "ParityDb")}}
-		/// ParityDB can be enabled with a feature flag, but is still experimental. These weights
+		/// `ParityDB` can be enabled with a feature flag, but is still experimental. These weights
 		/// are available for brave runtime engineers who may want to try this out as default.
 		{{else}}
-		/// By default, Substrate uses RocksDB, so this will be the weight used throughout
+		/// By default, Substrate uses `RocksDB`, so this will be the weight used throughout
 		/// the runtime.
 		{{/if}}
 		pub const {{db_name}}Weight: RuntimeDbWeight = RuntimeDbWeight {
 			/// Time to read one storage item.
-			/// Calculated by multiplying the *{{params.weight_metric}}* of all values with `{{params.weight_mul}}` and adding `{{params.weight_add}}`.
+			/// Calculated by multiplying the *{{params.weight_params.weight_metric}}* of all values with `{{params.weight_params.weight_mul}}` and adding `{{params.weight_params.weight_add}}`.
 			///
-			/// Stats [ns]:
+			/// Stats [NS]:
 			///   Min, Max: {{underscore read.0.min}}, {{underscore read.0.max}}
 			///   Average:  {{underscore read.0.avg}}
 			///   Median:   {{underscore read.0.median}}
-			///   StdDev:   {{read.0.stddev}}
+			///   Std-Dev:  {{read.0.stddev}}
 			///
-			/// Percentiles [ns]:
+			/// Percentiles [NS]:
 			///   99th: {{underscore read.0.p99}}
 			///   95th: {{underscore read.0.p95}}
 			///   75th: {{underscore read.0.p75}}
 			read: {{underscore read_weight}} * constants::WEIGHT_PER_NANOS,
 
 			/// Time to write one storage item.
-			/// Calculated by multiplying the *{{params.weight_metric}}* of all values with `{{params.weight_mul}}` and adding `{{params.weight_add}}`.
+			/// Calculated by multiplying the *{{params.weight_params.weight_metric}}* of all values with `{{params.weight_params.weight_mul}}` and adding `{{params.weight_params.weight_add}}`.
 			///
-			/// Stats [ns]:
+			/// Stats [NS]:
 			///   Min, Max: {{underscore write.0.min}}, {{underscore write.0.max}}
 			///   Average:  {{underscore write.0.avg}}
 			///   Median:   {{underscore write.0.median}}
-			///   StdDev:   {{write.0.stddev}}
+			///   Std-Dev:  {{write.0.stddev}}
 			///
-			/// Percentiles [ns]:
+			/// Percentiles [NS]:
 			///   99th: {{underscore write.0.p99}}
 			///   95th: {{underscore write.0.p95}}
 			///   75th: {{underscore write.0.p75}}

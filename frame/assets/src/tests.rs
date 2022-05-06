@@ -620,12 +620,8 @@ fn transferring_less_than_one_unit_is_fine() {
 		assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
 		assert_eq!(Assets::balance(0, 1), 100);
 		assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 0));
-		System::assert_last_event(mock::Event::Assets(crate::Event::Transferred {
-			asset_id: 0,
-			from: 1,
-			to: 2,
-			amount: 0,
-		}));
+		// `ForceCreated` and `Issued` but no `Transferred` event.
+		assert_eq!(System::events().len(), 2);
 	});
 }
 
@@ -970,4 +966,14 @@ fn querying_allowance_should_work() {
 		assert_ok!(Assets::transfer_from(0, &1, &2, &3, 50));
 		assert_eq!(Assets::allowance(0, &1, &2), 0);
 	});
+}
+
+#[test]
+fn transfer_large_asset() {
+	new_test_ext().execute_with(|| {
+		let amount = u64::pow(2, 63) + 2;
+		assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 1));
+		assert_ok!(Assets::mint(Origin::signed(1), 0, 1, amount));
+		assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, amount - 1));
+	})
 }

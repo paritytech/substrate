@@ -39,11 +39,15 @@ variables:                         &default-vars
   DOCKER_OS:                       "debian:stretch"
   ARCH:                            "x86_64"
   CI_IMAGE:                        "paritytech/ci-linux:production"
-  VAULT_SERVER_URL:                "https://vault.parity-mgmt-vault.parity.io"
-  VAULT_AUTH_PATH:                 "gitlab-parity-io-jwt"
-  VAULT_AUTH_ROLE:                 "cicd_gitlab_parity_${CI_PROJECT_NAME}"
 
 default:
+  retry:
+    max: 2
+    when:
+      - runner_system_failure
+      - unknown_failure
+      - api_failure
+  interruptible:                   true
   cache:                           {}
 
 .collect-artifacts:                &collect-artifacts
@@ -63,13 +67,6 @@ default:
       - artifacts/
 
 .kubernetes-env:                   &kubernetes-env
-  retry:
-    max: 2
-    when:
-      - runner_system_failure
-      - unknown_failure
-      - api_failure
-  interruptible:                   true
   tags:
     - kubernetes-parity-build
 
@@ -84,13 +81,6 @@ default:
   image:                           "${CI_IMAGE}"
   before_script:
     - *rust-info-script
-  retry:
-    max: 2
-    when:
-      - runner_system_failure
-      - unknown_failure
-      - api_failure
-  interruptible:                   true
   tags:
     - linux-docker
 
@@ -172,61 +162,6 @@ default:
   - 'cargo run --release -p node-bench -- ::trie::read::small --json
     | tee ./artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA/::trie::read::small.json'
   - sccache -s
-
-.build-linux-substrate-script:     &build-linux-substrate-script
-  - WASM_BUILD_NO_COLOR=1 time cargo build --release --verbose
-  - mv ./target/release/substrate ./artifacts/substrate/.
-  - echo -n "Substrate version = "
-  - if [ "${CI_COMMIT_TAG}" ]; then
-      echo "${CI_COMMIT_TAG}" | tee ./artifacts/substrate/VERSION;
-    else
-      ./artifacts/substrate/substrate --version |
-        sed -n -E 's/^substrate ([0-9.]+.*-[0-9a-f]{7,13})-.*$/\1/p' |
-          tee ./artifacts/substrate/VERSION;
-    fi
-  - sha256sum ./artifacts/substrate/substrate | tee ./artifacts/substrate/substrate.sha256
-  - cp -r ./scripts/ci/docker/substrate.Dockerfile ./artifacts/substrate/
-  - sccache -s
-
-#### Vault secrets
-.vault-secrets:                    &vault-secrets
-  secrets:
-    DOCKER_HUB_USER:
-      vault:                       cicd/gitlab/parity/DOCKER_HUB_USER@kv
-      file:                        false
-    DOCKER_HUB_PASS:
-      vault:                       cicd/gitlab/parity/DOCKER_HUB_PASS@kv
-      file:                        false
-    GITHUB_PR_TOKEN:
-      vault:                       cicd/gitlab/parity/GITHUB_PR_TOKEN@kv
-      file:                        false
-    GITHUB_TOKEN:
-      vault:                       cicd/gitlab/parity/GITHUB_TOKEN@kv
-      file:                        false
-    AWS_ACCESS_KEY_ID:
-      vault:                       cicd/gitlab/$CI_PROJECT_PATH/AWS_ACCESS_KEY_ID@kv
-      file:                        false
-    AWS_SECRET_ACCESS_KEY:
-      vault:                       cicd/gitlab/$CI_PROJECT_PATH/AWS_SECRET_ACCESS_KEY@kv
-      file:                        false
-    GITHUB_EMAIL:
-      vault:                       cicd/gitlab/$CI_PROJECT_PATH/GITHUB_EMAIL@kv
-      file:                        false
-    GITHUB_RELEASE_TOKEN:
-      vault:                       cicd/gitlab/$CI_PROJECT_PATH/GITHUB_RELEASE_TOKEN@kv
-      file:                        false
-    GITHUB_SSH_PRIV_KEY:
-      vault:                       cicd/gitlab/$CI_PROJECT_PATH/GITHUB_SSH_PRIV_KEY@kv
-      file:                        false
-    GITHUB_USER:
-      vault:                       cicd/gitlab/$CI_PROJECT_PATH/GITHUB_USER@kv
-      file:                        false
-    MATRIX_ACCESS_TOKEN:
-      vault:                       cicd/gitlab/$CI_PROJECT_PATH/MATRIX_ACCESS_TOKEN@kv
-      file:                        false
-    MATRIX_ROOM_ID:
-      vault:                       cicd/gitlab/$CI_PROJECT_PATH/MATRIX_ROOM_ID@kv
-      file:                        false
 
 
 #### stage:                       .pre
@@ -328,6 +263,21 @@ cargo-clippy:
   script:
     - SKIP_WASM_BUILD=1 env -u RUSTFLAGS cargo +nightly clippy --all-targets
 
+cargo-check-nixos:
+  stage:                           test
+  <<:                              *docker-env
+  <<:                              *test-refs
+  before_script:                   []
+  # Don't use CI_IMAGE here because it breaks nightly checks of paritytech/ci-linux image
+  image:                           nixos/nix
+  variables:
+    SNAP:                          "DUMMY"
+    WS_API:                        "DUMMY"
+  script:
+    - nix-channel --update
+    - nix-shell shell.nix
+    - nix-shell --run "cargo check --workspace --all-targets --all-features"
+
 cargo-check-benches:
   stage:                           test
   <<:                              *docker-env
@@ -424,6 +374,8 @@ test-linux-stable:                 &test-linux
     RUSTFLAGS:                     "-Cdebug-assertions=y -Dwarnings"
     RUST_BACKTRACE:                1
     WASM_BUILD_NO_COLOR:           1
+    # Ensure we run the UI tests.
+    RUN_UI_TESTS:                  1
   script:
     # this job runs all tests in former runtime-benchmarks, frame-staking and wasmtime tests
     - time cargo test --workspace --locked --release --verbose --features runtime-benchmarks --manifest-path ./bin/node/cli/Cargo.toml
@@ -531,12 +483,11 @@ cargo-check-macos:
         "--branch=$PIPELINE_SCRIPTS_TAG"
         https://github.com/paritytech/pipeline-scripts
     - ./pipeline-scripts/check_dependent_project.sh
-        paritytech
-        substrate
-        --substrate
-        "$DEPENDENT_REPO"
-        "$GITHUB_PR_TOKEN"
-        "$CARGO_UPDATE_CRATES"
+        --org paritytech
+        --dependent-repo "$DEPENDENT_REPO"
+        --github-api-token "$GITHUB_PR_TOKEN"
+        --extra-dependencies "$EXTRA_DEPENDENCIES"
+        --companion-overrides "$COMPANION_OVERRIDES"
 
 # Individual jobs are set up for each dependent project so that they can be ran in parallel.
 # Arguably we could generate a job for each companion in the PR's description using Gitlab's
@@ -546,13 +497,18 @@ check-dependent-polkadot:
   <<: *check-dependent-project
   variables:
     DEPENDENT_REPO: polkadot
-    CARGO_UPDATE_CRATES: "sp-io"
+    COMPANION_OVERRIDES: |
+      substrate: polkadot-v*
+      polkadot: release-v*
 
 check-dependent-cumulus:
   <<: *check-dependent-project
   variables:
     DEPENDENT_REPO: cumulus
-    CARGO_UPDATE_CRATES: "sp-io polkadot-runtime-common"
+    EXTRA_DEPENDENCIES: polkadot
+    COMPANION_OVERRIDES: |
+      substrate: polkadot-v*
+      cumulus: polkadot-v*
 
 
 build-linux-substrate:
@@ -566,7 +522,17 @@ build-linux-substrate:
   before_script:
     - mkdir -p ./artifacts/substrate/
   script:
-    - *build-linux-substrate-script
+    - WASM_BUILD_NO_COLOR=1 time cargo build --release --verbose
+    - mv ./target/release/substrate ./artifacts/substrate/.
+    - echo -n "Substrate version = "
+    - if [ "${CI_COMMIT_TAG}" ]; then
+        echo "${CI_COMMIT_TAG}" | tee ./artifacts/substrate/VERSION;
+      else
+        ./artifacts/substrate/substrate --version |
+          cut -d ' ' -f 2 | tee ./artifacts/substrate/VERSION;
+      fi
+    - sha256sum ./artifacts/substrate/substrate | tee ./artifacts/substrate/substrate.sha256
+    - cp -r ./scripts/ci/docker/substrate.Dockerfile ./artifacts/substrate/
     - printf '\n# building node-template\n\n'
     - ./scripts/ci/node-template-release.sh ./artifacts/substrate/substrate-node-template.tar.gz
 
@@ -638,7 +604,6 @@ build-rustdoc:
 .build-push-docker-image:          &build-push-docker-image
   <<:                              *build-refs
   <<:                              *kubernetes-env
-  <<:                              *vault-secrets
   image:                           quay.io/buildah/stable
   variables:                       &docker-build-vars
     <<:                            *default-vars
@@ -651,7 +616,7 @@ build-rustdoc:
     - echo "${PRODUCT} version = ${VERSION}"
     - test -z "${VERSION}" && exit 1
   script:
-    - test "$DOCKER_HUB_USER" -a "$DOCKER_HUB_PASS" ||
+    - test "$Docker_Hub_User_Parity" -a "$Docker_Hub_Pass_Parity" ||
         ( echo "no docker credentials provided"; exit 1 )
     - buildah bud
         --format=docker
@@ -660,8 +625,8 @@ build-rustdoc:
         --tag "$IMAGE_NAME:$VERSION"
         --tag "$IMAGE_NAME:latest"
         --file "$DOCKERFILE" .
-    - echo "$DOCKER_HUB_PASS" |
-        buildah login --username "$DOCKER_HUB_USER" --password-stdin docker.io
+    - echo "$Docker_Hub_Pass_Parity" |
+        buildah login --username "$Docker_Hub_User_Parity" --password-stdin docker.io
     - buildah info
     - buildah push --format=v2s2 "$IMAGE_NAME:$VERSION"
     - buildah push --format=v2s2 "$IMAGE_NAME:latest"
@@ -697,7 +662,6 @@ publish-s3-release:
   stage:                           publish
   <<:                              *build-refs
   <<:                              *kubernetes-env
-  <<:                              *vault-secrets
   needs:
     - job:                         build-linux-substrate
       artifacts:                   true
@@ -719,7 +683,6 @@ publish-s3-release:
 publish-rustdoc:
   stage:                           publish
   <<:                              *kubernetes-env
-  <<:                              *vault-secrets
   image:                           node:16
   variables:
     GIT_DEPTH:                     100
@@ -778,7 +741,6 @@ publish-rustdoc:
 
 publish-draft-release:
   stage:                           publish
-  <<:                              *vault-secrets
   image:                           paritytech/tools:latest
   rules:
     - if: $CI_COMMIT_REF_NAME =~ /^ci-release-.*$/

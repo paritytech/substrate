@@ -20,10 +20,11 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
-use core::convert::TryInto;
 use frame_benchmarking::benchmarks;
-use frame_support::{ensure, traits::PreimageRecipient};
-use sp_runtime::traits::Hash;
+use frame_support::{
+	ensure,
+	traits::{EnsureOrigin, Get, PreimageRecipient},
+};
 
 #[cfg(test)]
 use crate::Pallet as Whitelist;
@@ -68,7 +69,7 @@ benchmarks! {
 		let origin = T::DispatchWhitelistedOrigin::successful_origin();
 		// NOTE: we remove `10` because we need some bytes to encode the variants and vec length
 		let remark_len = <T::PreimageProvider as PreimageRecipient<_>>::MaxSize::get() - 10;
-		let remark = sp_std::vec![1_8; remark_len as usize];
+		let remark = sp_std::vec![1u8; remark_len as usize];
 
 		let call: <T as Config>::Call = frame_system::Call::remark { remark }.into();
 		let call_weight = call.get_dispatch_info().weight;

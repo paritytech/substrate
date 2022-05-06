@@ -25,7 +25,6 @@ use crate::traits::{
 use codec::{CompactAs, Encode};
 use num_traits::{Pow, SaturatingAdd, SaturatingSub};
 use sp_std::{
-	convert::{TryFrom, TryInto},
 	fmt, ops,
 	ops::{Add, Sub},
 	prelude::*,
@@ -274,7 +273,7 @@ pub trait PerThing:
 	/// ```rust
 	/// # use sp_arithmetic::{Percent, PerThing};
 	/// # fn main () {
-	/// // 989/100 is technically closer to 99%.
+	/// // 989/1000 is technically closer to 99%.
 	/// assert_eq!(
 	/// 		Percent::from_rational(989u64, 1000),
 	/// 		Percent::from_parts(98),

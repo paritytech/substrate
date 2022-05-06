@@ -27,7 +27,7 @@ pub use tokens::{
 	},
 	fungible, fungibles,
 	imbalance::{Imbalance, OnUnbalanced, SignedImbalance},
-	BalanceStatus, ExistenceRequirement, WithdrawReasons,
+	BalanceStatus, ExistenceRequirement, Locker, WithdrawReasons,
 };
 
 mod members;
@@ -45,6 +45,9 @@ pub use validation::{
 	KeyOwnerProofSystem, Lateness, OneSessionHandler, ValidatorRegistration, ValidatorSet,
 	ValidatorSetWithIdentification, VerifySeal,
 };
+
+mod error;
+pub use error::PalletError;
 
 mod filter;
 pub use filter::{ClearFilterGuard, FilterStack, FilterStackGuard, InstanceFilter, IntegrityTest};

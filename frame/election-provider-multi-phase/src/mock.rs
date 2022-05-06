@@ -18,9 +18,9 @@
 use super::*;
 use crate as multi_phase;
 use frame_election_provider_support::{
-	data_provider, onchain, ElectionDataProvider, SequentialPhragmen,
+	data_provider, onchain, ElectionDataProvider, NposSolution, SequentialPhragmen,
 };
-pub use frame_support::{assert_noop, assert_ok};
+pub use frame_support::{assert_noop, assert_ok, pallet_prelude::GetDefault};
 use frame_support::{
 	bounded_vec, parameter_types,
 	traits::{ConstU32, Hooks},
@@ -38,7 +38,7 @@ use sp_core::{
 };
 use sp_npos_elections::{
 	assignment_ratio_to_staked_normalized, seq_phragmen, to_supports, ElectionResult,
-	EvaluateSupport, ExtendedBalance, NposSolution,
+	EvaluateSupport, ExtendedBalance,
 };
 use sp_runtime::{
 	testing::Header,
@@ -70,7 +70,12 @@ pub(crate) type TargetIndex = u16;
 
 frame_election_provider_support::generate_solution_type!(
 	#[compact]
-	pub struct TestNposSolution::<VoterIndex = VoterIndex, TargetIndex = TargetIndex, Accuracy = PerU16>(16)
+	pub struct TestNposSolution::<
+		VoterIndex = VoterIndex,
+		TargetIndex = TargetIndex,
+		Accuracy = PerU16,
+		MaxVoters = ConstU32::<2_000>
+	>(16)
 );
 
 /// All events of this pallet.
@@ -252,26 +257,32 @@ parameter_types! {
 	pub static SignedPhase: BlockNumber = 10;
 	pub static UnsignedPhase: BlockNumber = 5;
 	pub static SignedMaxSubmissions: u32 = 5;
+	pub static SignedMaxRefunds: u32 = 1;
 	pub static SignedDepositBase: Balance = 5;
 	pub static SignedDepositByte: Balance = 0;
 	pub static SignedDepositWeight: Balance = 0;
 	pub static SignedRewardBase: Balance = 7;
 	pub static SignedMaxWeight: Weight = BlockWeights::get().max_block;
 	pub static MinerTxPriority: u64 = 100;
-	pub static SolutionImprovementThreshold: Perbill = Perbill::zero();
+	pub static BetterSignedThreshold: Perbill = Perbill::zero();
+	pub static BetterUnsignedThreshold: Perbill = Perbill::zero();
 	pub static OffchainRepeat: BlockNumber = 5;
 	pub static MinerMaxWeight: Weight = BlockWeights::get().max_block;
 	pub static MinerMaxLength: u32 = 256;
 	pub static MockWeightInfo: bool = false;
-	pub static VoterSnapshotPerBlock: VoterIndex = u32::max_value();
+	pub static MaxElectingVoters: VoterIndex = u32::max_value();
+	pub static MaxElectableTargets: TargetIndex = TargetIndex::max_value();
 
 	pub static EpochLength: u64 = 30;
-	pub static OnChianFallback: bool = true;
+	pub static OnChainFallback: bool = true;
 }
 
-impl onchain::Config for Runtime {
-	type Accuracy = sp_runtime::Perbill;
+pub struct OnChainSeqPhragmen;
+impl onchain::Config for OnChainSeqPhragmen {
+	type System = Runtime;
+	type Solver = SequentialPhragmen<AccountId, SolutionAccuracyOf<Runtime>, Balancing>;
 	type DataProvider = StakingMock;
+	type WeightInfo = ();
 }
 
 pub struct MockFallback;
@@ -282,11 +293,23 @@ impl ElectionProvider for MockFallback {
 	type DataProvider = StakingMock;
 
 	fn elect() -> Result<Supports<AccountId>, Self::Error> {
-		if OnChianFallback::get() {
-			onchain::OnChainSequentialPhragmen::<Runtime>::elect()
-				.map_err(|_| "OnChainSequentialPhragmen failed")
+		Self::elect_with_bounds(Bounded::max_value(), Bounded::max_value())
+	}
+}
+
+impl InstantElectionProvider for MockFallback {
+	fn elect_with_bounds(
+		max_voters: usize,
+		max_targets: usize,
+	) -> Result<Supports<Self::AccountId>, Self::Error> {
+		if OnChainFallback::get() {
+			onchain::UnboundedExecution::<OnChainSeqPhragmen>::elect_with_bounds(
+				max_voters,
+				max_targets,
+			)
+			.map_err(|_| "onchain::UnboundedExecution failed.")
 		} else {
-			super::NoFallback::<Runtime>::elect()
+			super::NoFallback::<Runtime>::elect_with_bounds(max_voters, max_targets)
 		}
 	}
 }
@@ -393,7 +416,8 @@ impl crate::Config for Runtime {
 	type EstimateCallFee = frame_support::traits::ConstU32<8>;
 	type SignedPhase = SignedPhase;
 	type UnsignedPhase = UnsignedPhase;
-	type SolutionImprovementThreshold = SolutionImprovementThreshold;
+	type BetterUnsignedThreshold = BetterUnsignedThreshold;
+	type BetterSignedThreshold = BetterSignedThreshold;
 	type OffchainRepeat = OffchainRepeat;
 	type MinerMaxWeight = MinerMaxWeight;
 	type MinerMaxLength = MinerMaxLength;
@@ -404,6 +428,7 @@ impl crate::Config for Runtime {
 	type SignedDepositWeight = ();
 	type SignedMaxWeight = SignedMaxWeight;
 	type SignedMaxSubmissions = SignedMaxSubmissions;
+	type SignedMaxRefunds = SignedMaxRefunds;
 	type SlashHandler = ();
 	type RewardHandler = ();
 	type DataProvider = StakingMock;
@@ -413,7 +438,8 @@ impl crate::Config for Runtime {
 	type GovernanceFallback = NoFallback<Self>;
 	type ForceOrigin = frame_system::EnsureRoot<AccountId>;
 	type Solution = TestNposSolution;
-	type VoterSnapshotPerBlock = VoterSnapshotPerBlock;
+	type MaxElectingVoters = MaxElectingVoters;
+	type MaxElectableTargets = MaxElectableTargets;
 	type Solver = SequentialPhragmen<AccountId, SolutionAccuracyOf<Runtime>, Balancing>;
 }
 
@@ -439,7 +465,8 @@ impl ElectionDataProvider for StakingMock {
 	type AccountId = AccountId;
 	type BlockNumber = u64;
 	type MaxVotesPerVoter = MaxNominations;
-	fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<AccountId>> {
+
+	fn electable_targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<AccountId>> {
 		let targets = Targets::get();
 
 		if maybe_max_len.map_or(false, |max_len| targets.len() > max_len) {
@@ -449,7 +476,9 @@ impl ElectionDataProvider for StakingMock {
 		Ok(targets)
 	}
 
-	fn voters(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<VoterOf<Runtime>>> {
+	fn electing_voters(
+		maybe_max_len: Option<usize>,
+	) -> data_provider::Result<Vec<VoterOf<Runtime>>> {
 		let mut voters = Voters::get();
 		if let Some(max_len) = maybe_max_len {
 			voters.truncate(max_len)
@@ -512,8 +541,12 @@ impl ExtBuilder {
 		<MinerTxPriority>::set(p);
 		self
 	}
-	pub fn solution_improvement_threshold(self, p: Perbill) -> Self {
-		<SolutionImprovementThreshold>::set(p);
+	pub fn better_signed_threshold(self, p: Perbill) -> Self {
+		<BetterSignedThreshold>::set(p);
+		self
+	}
+	pub fn better_unsigned_threshold(self, p: Perbill) -> Self {
+		<BetterUnsignedThreshold>::set(p);
 		self
 	}
 	pub fn phases(self, signed: BlockNumber, unsigned: BlockNumber) -> Self {
@@ -522,7 +555,7 @@ impl ExtBuilder {
 		self
 	}
 	pub fn onchain_fallback(self, onchain: bool) -> Self {
-		<OnChianFallback>::set(onchain);
+		<OnChainFallback>::set(onchain);
 		self
 	}
 	pub fn miner_weight(self, weight: Weight) -> Self {

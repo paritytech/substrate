@@ -28,7 +28,6 @@ use frame_support::{
 use frame_system::RawOrigin;
 use rand::{prelude::SliceRandom, rngs::SmallRng, SeedableRng};
 use sp_arithmetic::{per_things::Percent, traits::One};
-use sp_npos_elections::IndexAssignment;
 use sp_runtime::InnerOf;
 
 const SEED: u32 = 999;
@@ -226,14 +225,24 @@ frame_benchmarking::benchmarks! {
 			compute: Default::default()
 		};
 		let deposit: BalanceOf<T> = 10u32.into();
-		let reward: BalanceOf<T> = 20u32.into();
+
+		let reward: BalanceOf<T> = T::SignedRewardBase::get();
+		let call_fee: BalanceOf<T> = 30u32.into();
 
 		assert_ok!(T::Currency::reserve(&receiver, deposit));
 		assert_eq!(T::Currency::free_balance(&receiver), initial_balance - 10u32.into());
 	}: {
-		<MultiPhase<T>>::finalize_signed_phase_accept_solution(ready, &receiver, deposit, reward)
+		<MultiPhase<T>>::finalize_signed_phase_accept_solution(
+			ready,
+			&receiver,
+			deposit,
+			call_fee
+		)
 	} verify {
-		assert_eq!(T::Currency::free_balance(&receiver), initial_balance + 20u32.into());
+		assert_eq!(
+			T::Currency::free_balance(&receiver),
+			initial_balance + reward + call_fee
+		);
 		assert_eq!(T::Currency::reserved_balance(&receiver), 0u32.into());
 	}
 
@@ -261,8 +270,8 @@ frame_benchmarking::benchmarks! {
 
 		// we don't directly need the data-provider to be populated, but it is just easy to use it.
 		set_up_data_provider::<T>(v, t);
-		let targets = T::DataProvider::targets(None)?;
-		let voters = T::DataProvider::voters(None)?;
+		let targets = T::DataProvider::electable_targets(None)?;
+		let voters = T::DataProvider::electing_voters(None)?;
 		let desired_targets = T::DataProvider::desired_targets()?;
 		assert!(<MultiPhase<T>>::snapshot().is_none());
 	}: {
@@ -310,7 +319,6 @@ frame_benchmarking::benchmarks! {
 	}
 
 	submit {
-
 		// the solution will be worse than all of them meaning the score need to be checked against
 		// ~ log2(c)
 		let solution = RawSolution {
@@ -335,14 +343,18 @@ frame_benchmarking::benchmarks! {
 				raw_solution,
 				who: account("submitters", i, SEED),
 				deposit: Default::default(),
-				reward: Default::default(),
+				call_fee: Default::default(),
 			};
 			signed_submissions.insert(signed_submission);
 		}
 		signed_submissions.put();
 
 		let caller = frame_benchmarking::whitelisted_caller();
-		T::Currency::make_free_balance_be(&caller,  T::Currency::minimum_balance() * 10u32.into());
+		let deposit = MultiPhase::<T>::deposit_for(
+			&solution,
+			MultiPhase::<T>::snapshot_metadata().unwrap_or_default(),
+		);
+		T::Currency::make_free_balance_be(&caller,  T::Currency::minimum_balance() * 1000u32.into() + deposit);
 
 	}: _(RawOrigin::Signed(caller), Box::new(solution))
 	verify {
@@ -461,6 +473,7 @@ frame_benchmarking::benchmarks! {
 			T::BenchmarkingConfig::DESIRED_TARGETS[1];
 		// Subtract this percentage from the actual encoded size
 		let f in 0 .. 95;
+		use frame_election_provider_support::IndexAssignment;
 
 		// Compute a random solution, then work backwards to get the lists of voters, targets, and
 		// assignments
@@ -478,7 +491,7 @@ frame_benchmarking::benchmarks! {
 
 		// sort assignments by decreasing voter stake
 		assignments.sort_by_key(|crate::unsigned::Assignment::<T> { who, .. }| {
-			let stake = cache.get(&who).map(|idx| {
+			let stake = cache.get(who).map(|idx| {
 				let (_, stake, _) = voters[*idx];
 				stake
 			}).unwrap_or_default();
