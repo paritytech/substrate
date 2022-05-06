@@ -66,19 +66,11 @@ pub struct AddScore<T: crate::Config<I>, I: 'static>(sp_std::marker::PhantomData
 impl<T: crate::Config<I>, I: 'static> OnRuntimeUpgrade for AddScore<T, I> {
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<(), &'static str> {
-		ensure!(
-			crate::ListNodes::<T, I>::iter().count() == 0,
-			"Items already exist where none were expected."
-		);
-		ensure!(
-			crate::ListBags::<T, I>::iter().count() == 0,
-			"Items already exist where none were expected."
-		);
+		// Nothing that can really be checked here...
 		Ok(())
 	}
 
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
-		migration::move_pallet(b"BagsList", b"VoterList");
 		let old_nodes = migration::storage_iter::<PreScoreNode<T, I>>(b"VoterList", b"ListNodes");
 
 		for (_key, node) in old_nodes.drain() {
@@ -96,7 +88,7 @@ impl<T: crate::Config<I>, I: 'static> OnRuntimeUpgrade for AddScore<T, I> {
 			crate::ListNodes::<T, I>::insert(node.id, new_node);
 		}
 
-		return u64::MAX
+		return frame_support::weights::Weight::MAX
 	}
 
 	#[cfg(feature = "try-runtime")]
@@ -108,10 +100,6 @@ impl<T: crate::Config<I>, I: 'static> OnRuntimeUpgrade for AddScore<T, I> {
 		for (_id, node) in crate::ListNodes::<T, I>::iter() {
 			ensure!(!node.score.is_zero(), "Score should be greater than zero");
 		}
-		ensure!(
-			crate::ListBags::<T, I>::iter().count() > 0,
-			"Items do not exist where some were expected."
-		);
 		Ok(())
 	}
 }
