@@ -1441,6 +1441,10 @@ impl<Block: BlockT> Backend<Block> {
 
 			self.state_usage.merge_sm(operation.old_state.usage_info());
 
+			// release state reference so that it can be finalized
+			// VERY IMPORTANT
+			drop(operation.old_state);
+
 			if finalized {
 				// TODO: ensure best chain contains this block.
 				self.ensure_sequential_finalization(header, Some(last_finalized_hash))?;
