@@ -113,7 +113,11 @@ impl<H: Hasher> SharedNodeCache<H> {
 		added.into_iter().for_each(|(key, node)| {
 			self.size_in_bytes += key.as_ref().len() + node.size_in_bytes();
 
-			self.lru.push(key, node);
+			if let Some((r_key, r_node)) = self.lru.push(key, node) {
+				self.size_in_bytes = self
+					.size_in_bytes
+					.saturating_sub(r_key.as_ref().len() + r_node.size_in_bytes());
+			}
 		});
 
 		while self.size_in_bytes > self.maximum_size_in_bytes {
@@ -555,11 +559,7 @@ mod tests {
 			}
 
 			let storage_proof = recorder
-				.into_storage_proof(
-					&root,
-					&db,
-					Some(&mut local_cache.as_trie_db_cache(root)),
-				)
+				.into_storage_proof(&root, &db, Some(&mut local_cache.as_trie_db_cache(root)))
 				.unwrap();
 			let memory_db: MemoryDB = storage_proof.into_memory_db();
 
@@ -602,11 +602,7 @@ mod tests {
 			}
 
 			let storage_proof = recorder
-				.into_storage_proof(
-					&root,
-					&db,
-					Some(&mut local_cache.as_trie_db_cache(root)),
-				)
+				.into_storage_proof(&root, &db, Some(&mut local_cache.as_trie_db_cache(root)))
 				.unwrap();
 			let mut memory_db: MemoryDB = storage_proof.into_memory_db();
 			let mut proof_root = root.clone();
