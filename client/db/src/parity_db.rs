@@ -130,21 +130,16 @@ impl<H: Clone + AsRef<[u8]>> Database<H> for DbAdapter {
 		}));
 
 		if not_ref_counted_column.len() > 0 {
-			return Err(DatabaseError(Box::new(std::io::Error::new(
-				std::io::ErrorKind::Other,
+			return Err(DatabaseError(
 				format!(
 					"Ref counted operation on non ref counted columns {:?}",
 					not_ref_counted_column
-				),
-			))))
+				)
+				.into(),
+			))
 		}
 
-		result.map_err(|e| {
-			DatabaseError(Box::new(Box::new(std::io::Error::new(
-				std::io::ErrorKind::Other,
-				format!("Paritydb error: {:?}", e),
-			))))
-		})
+		result.map_err(|e| DatabaseError(format!("Paritydb error: {:?}", e).into()))
 	}
 
 	fn get(&self, col: ColumnId, key: &[u8]) -> Option<Vec<u8>> {
