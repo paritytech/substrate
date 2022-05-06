@@ -196,7 +196,7 @@ where
 /// A conservative implementation to be used for [`pallet::Config::ContractAccessWeight`].
 ///
 /// This derives the weight from the [`BlockWeights`] passed as `B` and the `maxPovSize` passed
-/// as `P`. The default value for `P` is the `maxPovSize` used by polkadot and kusama.
+/// as `P`. The default value for `P` is the `maxPovSize` used by Polkadot and Kusama.
 ///
 /// It simply charges from the weight meter pro rata: If loading the contract code would consume
 /// 50% of the max storage proof then this charges 50% of the max block weight.
@@ -322,7 +322,7 @@ pub mod pallet {
 
 		/// The weight per byte of code that is charged when loading a contract from storage.
 		///
-		/// Currently, FRAME only charged fees for computation incurred but not for PoV
+		/// Currently, FRAME only charges fees for computation incurred but not for PoV
 		/// consumption caused for storage access. This is usually not exploitable because
 		/// accessing storage carries some substantial weight costs, too. However in case
 		/// of contract code very much PoV consumption can be caused while consuming very little
