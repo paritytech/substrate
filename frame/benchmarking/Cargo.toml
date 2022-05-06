@@ -44,8 +44,11 @@ std = [
 	"scale-info/std",
 	"serde",
 	"sp-api/std",
+	"sp-application-crypto/std",
+	"sp-io/std",
 	"sp-runtime-interface/std",
 	"sp-runtime/std",
 	"sp-std/std",
+	"sp-storage/std",
 ]
 runtime-benchmarks = []

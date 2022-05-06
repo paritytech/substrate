@@ -43,6 +43,7 @@ std = [
 	"pallet-beefy/std",
 	"pallet-mmr/std",
 	"pallet-session/std",
+	"scale-info/std",
 	"serde",
 	"sp-core/std",
 	"sp-io/std",

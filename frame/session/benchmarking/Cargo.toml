@@ -41,6 +41,7 @@ std = [
 	"frame-system/std",
 	"pallet-session/std",
 	"pallet-staking/std",
+	"rand/std",
 	"sp-runtime/std",
 	"sp-session/std",
 	"sp-std/std",

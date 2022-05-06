@@ -73,7 +73,7 @@ pub struct Configuration {
 	/// Size in percent of cache size dedicated to child tries
 	pub state_cache_child_ratio: Option<usize>,
 	/// State pruning settings.
-	pub state_pruning: PruningMode,
+	pub state_pruning: Option<PruningMode>,
 	/// Number of blocks to keep in the db.
 	pub keep_blocks: KeepBlocks,
 	/// Chain configuration.
