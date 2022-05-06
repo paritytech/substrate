@@ -11,7 +11,7 @@ homepage = "https://substrate.io"
 [dependencies]
 codec = { package = "parity-scale-codec", version = "3.0.0", features = ["derive"] }
 futures = "0.3.21"
-jsonrpsee = { version = "0.11.0", features = ["server", "macros"] }
+jsonrpsee = { version = "0.12.0", features = ["server", "macros"] }
 log = "0.4"
 parking_lot = "0.12.0"
 serde = { version = "1.0.136", features = ["derive"] }
@@ -29,4 +29,4 @@ sc-rpc = { version = "4.0.0-dev", features = [
 	"test-helpers",
 ], path = "../../rpc" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }
-tokio = { version = "1.15.0", features = ["macros"] }
+tokio = { version = "1.17.0", features = ["macros"] }
