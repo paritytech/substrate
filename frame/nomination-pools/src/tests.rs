@@ -407,7 +407,17 @@ mod join {
 			// When
 			assert_ok!(Pools::join(Origin::signed(11), 2, 1));
 
-			// then
+			// Then
+
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::Bonded { member: 11, pool_id: 1, bonded: 2, joined: true },
+				]
+			);
+
 			assert_eq!(
 				PoolMembers::<Runtime>::get(&11).unwrap(),
 				PoolMember::<Runtime> { pool_id: 1, points: 2, ..Default::default() }
@@ -426,6 +436,11 @@ mod join {
 			assert_ok!(Pools::join(Origin::signed(12), 12, 1));
 
 			// Then
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![Event::Bonded { member: 12, pool_id: 1, bonded: 12, joined: true }]
+			);
+
 			assert_eq!(
 				PoolMembers::<Runtime>::get(&12).unwrap(),
 				PoolMember::<Runtime> { pool_id: 1, points: 24, ..Default::default() }
@@ -536,6 +551,16 @@ mod join {
 			Balances::make_free_balance_be(&103, 100 + Balances::minimum_balance());
 
 			// Then
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::Bonded { member: 101, pool_id: 1, bonded: 100, joined: true },
+					Event::Bonded { member: 102, pool_id: 1, bonded: 100, joined: true }
+				]
+			);
+
 			assert_noop!(
 				Pools::join(Origin::signed(103), 100, 1),
 				Error::<Runtime>::MaxPoolMembers
@@ -554,6 +579,14 @@ mod join {
 				.unwrap();
 
 			// Then
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![
+					Event::Created { depositor: 104, pool_id: 2 },
+					Event::Bonded { member: 104, pool_id: 2, bonded: 100, joined: true }
+				]
+			);
+
 			assert_noop!(
 				Pools::join(Origin::signed(103), 100, pool_account),
 				Error::<Runtime>::MaxPoolMembers
@@ -595,6 +628,17 @@ mod claim_payout {
 				assert_ok!(Pools::claim_payout(Origin::signed(10)));
 
 				// Then
+				assert_eq!(
+					pool_events_since_last_call(),
+					vec![
+						Event::Created { depositor: 10, pool_id: 1 },
+						Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+						Event::Bonded { member: 40, pool_id: 1, bonded: 40, joined: true },
+						Event::Bonded { member: 50, pool_id: 1, bonded: 50, joined: true },
+						Event::PaidOut { member: 10, pool_id: 1, payout: 10 },
+					]
+				);
+
 				// Expect a payout of 10: (10 del virtual points / 100 pool points) * 100 pool
 				// balance
 				assert_eq!(PoolMembers::<Runtime>::get(10).unwrap(), del(10, 100));
@@ -609,6 +653,11 @@ mod claim_payout {
 				assert_ok!(Pools::claim_payout(Origin::signed(40)));
 
 				// Then
+				assert_eq!(
+					pool_events_since_last_call(),
+					vec![Event::PaidOut { member: 40, pool_id: 1, payout: 40 }]
+				);
+
 				// Expect payout 40: (400 del virtual points / 900 pool points) * 90 pool balance
 				assert_eq!(PoolMembers::<Runtime>::get(40).unwrap(), del(40, 100));
 				assert_eq!(
@@ -622,6 +671,11 @@ mod claim_payout {
 				assert_ok!(Pools::claim_payout(Origin::signed(50)));
 
 				// Then
+				assert_eq!(
+					pool_events_since_last_call(),
+					vec![Event::PaidOut { member: 50, pool_id: 1, payout: 50 }]
+				);
+
 				// Expect payout 50: (50 del virtual points / 50 pool points) * 50 pool balance
 				assert_eq!(PoolMembers::<Runtime>::get(50).unwrap(), del(50, 100));
 				assert_eq!(RewardPools::<Runtime>::get(&1).unwrap(), rew(0, 0, 100));
@@ -635,6 +689,11 @@ mod claim_payout {
 				assert_ok!(Pools::claim_payout(Origin::signed(10)));
 
 				// Then
+				assert_eq!(
+					pool_events_since_last_call(),
+					vec![Event::PaidOut { member: 10, pool_id: 1, payout: 5 }]
+				);
+
 				// Expect payout 5: (500  del virtual points / 5,000 pool points) * 50 pool balance
 				assert_eq!(PoolMembers::<Runtime>::get(10).unwrap(), del(10, 150));
 				assert_eq!(RewardPools::<Runtime>::get(&1).unwrap(), rew(45, 5_000 - 50 * 10, 150));
@@ -645,6 +704,11 @@ mod claim_payout {
 				assert_ok!(Pools::claim_payout(Origin::signed(40)));
 
 				// Then
+				assert_eq!(
+					pool_events_since_last_call(),
+					vec![Event::PaidOut { member: 40, pool_id: 1, payout: 20 }]
+				);
+
 				// Expect payout 20: (2,000 del virtual points / 4,500 pool points) * 45 pool
 				// balance
 				assert_eq!(PoolMembers::<Runtime>::get(40).unwrap(), del(40, 150));
@@ -660,6 +724,11 @@ mod claim_payout {
 				assert_ok!(Pools::claim_payout(Origin::signed(50)));
 
 				// Then
+				assert_eq!(
+					pool_events_since_last_call(),
+					vec![Event::PaidOut { member: 50, pool_id: 1, payout: 50 }]
+				);
+
 				// We expect a payout of 50: (5,000 del virtual points / 7,5000 pool points) * 75
 				// pool balance
 				assert_eq!(PoolMembers::<Runtime>::get(50).unwrap(), del(50, 200));
@@ -682,6 +751,11 @@ mod claim_payout {
 				assert_ok!(Pools::claim_payout(Origin::signed(10)));
 
 				// Then
+				assert_eq!(
+					pool_events_since_last_call(),
+					vec![Event::PaidOut { member: 10, pool_id: 1, payout: 5 }]
+				);
+
 				// We expect a payout of 5
 				assert_eq!(PoolMembers::<Runtime>::get(10).unwrap(), del(10, 200));
 				assert_eq!(RewardPools::<Runtime>::get(&1).unwrap(), rew(20, 2_500 - 10 * 50, 200));
@@ -696,6 +770,11 @@ mod claim_payout {
 				assert_ok!(Pools::claim_payout(Origin::signed(10)));
 
 				// Then
+				assert_eq!(
+					pool_events_since_last_call(),
+					vec![Event::PaidOut { member: 10, pool_id: 1, payout: 40 }]
+				);
+
 				// We expect a payout of 40
 				assert_eq!(PoolMembers::<Runtime>::get(10).unwrap(), del(10, 600));
 				assert_eq!(
@@ -721,6 +800,11 @@ mod claim_payout {
 				assert_ok!(Pools::claim_payout(Origin::signed(10)));
 
 				// Then
+				assert_eq!(
+					pool_events_since_last_call(),
+					vec![Event::PaidOut { member: 10, pool_id: 1, payout: 2 }]
+				);
+
 				// Expect a payout of 2: (200 del virtual points / 38,000 pool points) * 400 pool
 				// balance
 				assert_eq!(PoolMembers::<Runtime>::get(10).unwrap(), del(10, 620));
@@ -735,6 +819,11 @@ mod claim_payout {
 				assert_ok!(Pools::claim_payout(Origin::signed(40)));
 
 				// Then
+				assert_eq!(
+					pool_events_since_last_call(),
+					vec![Event::PaidOut { member: 40, pool_id: 1, payout: 188 }]
+				);
+
 				// Expect a payout of 188: (18,800 del virtual points /  39,800 pool points) * 399
 				// pool balance
 				assert_eq!(PoolMembers::<Runtime>::get(40).unwrap(), del(40, 620));
@@ -749,6 +838,11 @@ mod claim_payout {
 				assert_ok!(Pools::claim_payout(Origin::signed(50)));
 
 				// Then
+				assert_eq!(
+					pool_events_since_last_call(),
+					vec![Event::PaidOut { member: 50, pool_id: 1, payout: 210 }]
+				);
+
 				// Expect payout of 210: (21,000 / 21,000) * 210
 				assert_eq!(PoolMembers::<Runtime>::get(50).unwrap(), del(50, 620));
 				assert_eq!(
@@ -830,6 +924,16 @@ mod claim_payout {
 				Pools::do_reward_payout(&11, &mut member, &mut bonded_pool, &mut reward_pool,),
 				Error::<Runtime>::FullyUnbonding
 			);
+
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::Bonded { member: 11, pool_id: 1, bonded: 11, joined: true },
+					Event::Unbonded { member: 11, pool_id: 1, amount: 11 }
+				]
+			);
 		});
 	}
 
@@ -909,6 +1013,16 @@ mod claim_payout {
 				let mut del_40 = PoolMembers::<Runtime>::get(40).unwrap();
 				// PoolMember with 50 points
 				let mut del_50 = PoolMembers::<Runtime>::get(50).unwrap();
+
+				assert_eq!(
+					pool_events_since_last_call(),
+					vec![
+						Event::Created { depositor: 10, pool_id: 1 },
+						Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+						Event::Bonded { member: 40, pool_id: 1, bonded: 40, joined: true },
+						Event::Bonded { member: 50, pool_id: 1, bonded: 50, joined: true }
+					]
+				);
 
 				// Given we have a total of 100 points split among the members
 				assert_eq!(del_50.points + del_40.points + del_10.points, 100);
@@ -1101,6 +1215,16 @@ mod claim_payout {
 				let mut reward_pool = RewardPools::<Runtime>::get(1).unwrap();
 				let ed = Balances::minimum_balance();
 
+				assert_eq!(
+					pool_events_since_last_call(),
+					vec![
+						Event::Created { depositor: 10, pool_id: 1 },
+						Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+						Event::Bonded { member: 40, pool_id: 1, bonded: 40, joined: true },
+						Event::Bonded { member: 50, pool_id: 1, bonded: 50, joined: true }
+					]
+				);
+
 				// Given the bonded pool has 100 points
 				assert_eq!(bonded_pool.points, 100);
 				// Each member currently has a free balance of
@@ -1123,6 +1247,11 @@ mod claim_payout {
 				));
 
 				// Then
+				assert_eq!(
+					pool_events_since_last_call(),
+					vec![Event::PaidOut { member: 10, pool_id: 1, payout: 10 }]
+				);
+
 				// Expect a payout of 10: (10 del virtual points / 100 pool points) * 100 pool
 				// balance
 				assert_eq!(del_10, del(10, 100));
@@ -1139,6 +1268,11 @@ mod claim_payout {
 				));
 
 				// Then
+				assert_eq!(
+					pool_events_since_last_call(),
+					vec![Event::PaidOut { member: 40, pool_id: 1, payout: 40 }]
+				);
+
 				// Expect payout 40: (400 del virtual points / 900 pool points) * 90 pool balance
 				assert_eq!(del_40, del(40, 100));
 				assert_eq!(reward_pool, rew(50, 9_000 - 100 * 40, 100));
@@ -1154,6 +1288,11 @@ mod claim_payout {
 				));
 
 				// Then
+				assert_eq!(
+					pool_events_since_last_call(),
+					vec![Event::PaidOut { member: 50, pool_id: 1, payout: 50 }]
+				);
+
 				// Expect payout 50: (50 del virtual points / 50 pool points) * 50 pool balance
 				assert_eq!(del_50, del(50, 100));
 				assert_eq!(reward_pool, rew(0, 0, 100));
@@ -1172,6 +1311,11 @@ mod claim_payout {
 				));
 
 				// Then
+				assert_eq!(
+					pool_events_since_last_call(),
+					vec![Event::PaidOut { member: 10, pool_id: 1, payout: 5 }]
+				);
+
 				// Expect payout 5: (500  del virtual points / 5,000 pool points) * 50 pool balance
 				assert_eq!(del_10, del(10, 150));
 				assert_eq!(reward_pool, rew(45, 5_000 - 50 * 10, 150));
@@ -1187,6 +1331,11 @@ mod claim_payout {
 				));
 
 				// Then
+				assert_eq!(
+					pool_events_since_last_call(),
+					vec![Event::PaidOut { member: 40, pool_id: 1, payout: 20 }]
+				);
+
 				// Expect payout 20: (2,000 del virtual points / 4,500 pool points) * 45 pool
 				// balance
 				assert_eq!(del_40, del(40, 150));
@@ -1207,6 +1356,11 @@ mod claim_payout {
 				));
 
 				// Then
+				assert_eq!(
+					pool_events_since_last_call(),
+					vec![Event::PaidOut { member: 50, pool_id: 1, payout: 50 }]
+				);
+
 				// We expect a payout of 50: (5,000 del virtual points / 7,5000 pool points) * 75
 				// pool balance
 				assert_eq!(del_50, del(50, 200));
@@ -1234,6 +1388,11 @@ mod claim_payout {
 				));
 
 				// Then
+				assert_eq!(
+					pool_events_since_last_call(),
+					vec![Event::PaidOut { member: 10, pool_id: 1, payout: 5 }]
+				);
+
 				// We expect a payout of 5
 				assert_eq!(del_10, del(10, 200));
 				assert_eq!(reward_pool, rew(20, 2_500 - 10 * 50, 200));
@@ -1253,6 +1412,11 @@ mod claim_payout {
 				));
 
 				// Then
+				assert_eq!(
+					pool_events_since_last_call(),
+					vec![Event::PaidOut { member: 10, pool_id: 1, payout: 40 }]
+				);
+
 				// We expect a payout of 40
 				assert_eq!(del_10, del(10, 600));
 				assert_eq!(
@@ -1283,6 +1447,11 @@ mod claim_payout {
 				));
 
 				// Then
+				assert_eq!(
+					pool_events_since_last_call(),
+					vec![Event::PaidOut { member: 10, pool_id: 1, payout: 2 }]
+				);
+
 				// Expect a payout of 2: (200 del virtual points / 38,000 pool points) * 400 pool
 				// balance
 				assert_eq!(del_10, del(10, 620));
@@ -1299,6 +1468,11 @@ mod claim_payout {
 				));
 
 				// Then
+				assert_eq!(
+					pool_events_since_last_call(),
+					vec![Event::PaidOut { member: 40, pool_id: 1, payout: 188 }]
+				);
+
 				// Expect a payout of 188: (18,800 del virtual points /  39,800 pool points) * 399
 				// pool balance
 				assert_eq!(del_40, del(40, 620));
@@ -1315,6 +1489,11 @@ mod claim_payout {
 				));
 
 				// Then
+				assert_eq!(
+					pool_events_since_last_call(),
+					vec![Event::PaidOut { member: 50, pool_id: 1, payout: 210 }]
+				);
+
 				// Expect payout of 210: (21,000 / 21,000) * 210
 				assert_eq!(del_50, del(50, 620));
 				assert_eq!(reward_pool, rew(0, 21_000 - 50 * 420, 620));
@@ -2372,12 +2551,34 @@ mod withdraw_unbonded {
 				// Given
 				assert_ok!(Pools::fully_unbond(Origin::signed(100), 100));
 
+				assert_eq!(
+					pool_events_since_last_call(),
+					vec![
+						Event::Created { depositor: 10, pool_id: 1 },
+						Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+						Event::Bonded { member: 100, pool_id: 1, bonded: 100, joined: true },
+						Event::Bonded { member: 200, pool_id: 1, bonded: 200, joined: true },
+						Event::Unbonded { member: 100, pool_id: 1, amount: 100 }
+					]
+				);
+
 				let mut current_era = 1;
 				CurrentEra::set(current_era);
 
 				assert_ok!(Pools::fully_unbond(Origin::signed(200), 200));
+
+				assert_eq!(
+					pool_events_since_last_call(),
+					vec![Event::Unbonded { member: 200, pool_id: 1, amount: 200 }]
+				);
+
 				unsafe_set_state(1, PoolState::Destroying).unwrap();
 				assert_ok!(Pools::fully_unbond(Origin::signed(10), 10));
+
+				assert_eq!(
+					pool_events_since_last_call(),
+					vec![Event::Unbonded { member: 10, pool_id: 1, amount: 10 }]
+				);
 
 				assert_eq!(
 					SubPoolsStorage::<Runtime>::get(1).unwrap(),
@@ -2402,6 +2603,15 @@ mod withdraw_unbonded {
 
 				// Given
 				assert_ok!(Pools::withdraw_unbonded(Origin::signed(420), 100, 0));
+
+				assert_eq!(
+					pool_events_since_last_call(),
+					vec![
+						Event::Withdrawn { member: 100, pool_id: 1, amount: 100 },
+						Event::MemberRemoved { pool_id: 1, member: 100 }
+					]
+				);
+
 				assert_eq!(
 					SubPoolsStorage::<Runtime>::get(1).unwrap(),
 					SubPools {
@@ -2421,6 +2631,15 @@ mod withdraw_unbonded {
 
 				// Given
 				assert_ok!(Pools::withdraw_unbonded(Origin::signed(420), 200, 0));
+
+				assert_eq!(
+					pool_events_since_last_call(),
+					vec![
+						Event::Withdrawn { member: 200, pool_id: 1, amount: 200 },
+						Event::MemberRemoved { pool_id: 1, member: 200 }
+					]
+				);
+
 				assert_eq!(
 					SubPoolsStorage::<Runtime>::get(1).unwrap(),
 					SubPools {
@@ -2433,32 +2652,22 @@ mod withdraw_unbonded {
 
 				// The depositor can withdraw
 				assert_ok!(Pools::withdraw_unbonded(Origin::signed(420), 10, 0));
+
+				assert_eq!(
+					pool_events_since_last_call(),
+					vec![
+						Event::Withdrawn { member: 10, pool_id: 1, amount: 10 },
+						Event::MemberRemoved { pool_id: 1, member: 10 },
+						Event::Destroyed { pool_id: 1 }
+					]
+				);
+
 				assert!(!PoolMembers::<Runtime>::contains_key(10));
 				assert_eq!(Balances::free_balance(10), 10 + 10);
 				// Pools are removed from storage because the depositor left
 				assert!(!SubPoolsStorage::<Runtime>::contains_key(1));
 				assert!(!RewardPools::<Runtime>::contains_key(1));
 				assert!(!BondedPools::<Runtime>::contains_key(1));
-
-				assert_eq!(
-					pool_events_since_last_call(),
-					vec![
-						Event::Created { depositor: 10, pool_id: 1 },
-						Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-						Event::Bonded { member: 100, pool_id: 1, bonded: 100, joined: true },
-						Event::Bonded { member: 200, pool_id: 1, bonded: 200, joined: true },
-						Event::Unbonded { member: 100, pool_id: 1, amount: 100 },
-						Event::Unbonded { member: 200, pool_id: 1, amount: 200 },
-						Event::Unbonded { member: 10, pool_id: 1, amount: 10 },
-						Event::Withdrawn { member: 100, pool_id: 1, amount: 100 },
-						Event::MemberRemoved { pool_id: 1, member: 100 },
-						Event::Withdrawn { member: 200, pool_id: 1, amount: 200 },
-						Event::MemberRemoved { pool_id: 1, member: 200 },
-						Event::Withdrawn { member: 10, pool_id: 1, amount: 10 },
-						Event::MemberRemoved { pool_id: 1, member: 10 },
-						Event::Destroyed { pool_id: 1 }
-					]
-				);
 			});
 	}
 
@@ -2510,6 +2719,22 @@ mod withdraw_unbonded {
 			assert!(!SubPoolsStorage::<Runtime>::contains_key(1));
 			assert!(!RewardPools::<Runtime>::contains_key(1));
 			assert!(!BondedPools::<Runtime>::contains_key(1));
+
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::Bonded { member: 100, pool_id: 1, bonded: 100, joined: true },
+					Event::Unbonded { member: 100, pool_id: 1, amount: 100 },
+					Event::Unbonded { member: 10, pool_id: 1, amount: 10 },
+					Event::Withdrawn { member: 100, pool_id: 1, amount: 100 },
+					Event::MemberRemoved { pool_id: 1, member: 100 },
+					Event::Withdrawn { member: 10, pool_id: 1, amount: 10 },
+					Event::MemberRemoved { pool_id: 1, member: 10 },
+					Event::Destroyed { pool_id: 1 }
+				]
+			);
 		});
 	}
 
@@ -2860,6 +3085,16 @@ mod create {
 					total_earnings: Zero::zero(),
 				}
 			);
+
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::Created { depositor: 11, pool_id: 2 },
+					Event::Bonded { member: 11, pool_id: 2, bonded: 10, joined: true }
+				]
+			);
 		});
 	}
 
@@ -2981,6 +3216,16 @@ mod set_state {
 
 			// Root can change state
 			assert_ok!(Pools::set_state(Origin::signed(900), 1, PoolState::Blocked));
+
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::StateChanged { pool_id: 1, new_state: PoolState::Blocked }
+				]
+			);
+
 			assert_eq!(BondedPool::<Runtime>::get(1).unwrap().state, PoolState::Blocked);
 
 			// State toggler can change state
@@ -3023,6 +3268,15 @@ mod set_state {
 			assert_noop!(
 				Pools::set_state(Origin::signed(11), 1, PoolState::Blocked),
 				Error::<Runtime>::CanNotChangeState
+			);
+
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![
+					Event::StateChanged { pool_id: 1, new_state: PoolState::Destroying },
+					Event::StateChanged { pool_id: 1, new_state: PoolState::Destroying },
+					Event::StateChanged { pool_id: 1, new_state: PoolState::Destroying }
+				]
 			);
 		});
 	}
