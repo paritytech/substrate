@@ -12,15 +12,15 @@ publish = false
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
-sc-consensus = { version = "0.10.0-dev", path = "../../../client/consensus/common" }
+codec = { package = "parity-scale-codec", version = "3.0.0" }
+futures = "0.3.21"
 sc-block-builder = { version = "0.10.0-dev", path = "../../../client/block-builder" }
-substrate-test-client = { version = "2.0.0", path = "../../client" }
-sp-core = { version = "6.0.0", path = "../../../primitives/core" }
-substrate-test-runtime = { version = "2.0.0", path = "../../runtime" }
-sp-runtime = { version = "6.0.0", path = "../../../primitives/runtime" }
+sc-client-api = { version = "4.0.0-dev", path = "../../../client/api" }
+sc-consensus = { version = "0.10.0-dev", path = "../../../client/consensus/common" }
 sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
-codec = { package = "parity-scale-codec", version = "3.0.0" }
-sc-client-api = { version = "4.0.0-dev", path = "../../../client/api" }
-futures = "0.3.21"
+sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
+sp-core = { version = "6.0.0", path = "../../../primitives/core" }
+sp-runtime = { version = "6.0.0", path = "../../../primitives/runtime" }
+substrate-test-client = { version = "2.0.0", path = "../../client" }
+substrate-test-runtime = { version = "2.0.0", path = "../../runtime" }

@@ -79,7 +79,7 @@ fn bench_hash_128_dyn_size(c: &mut Criterion) {
 fn bench_ed25519(c: &mut Criterion) {
 	let mut group = c.benchmark_group("ed25519");
 
-	for msg_size in vec![32, 1024, 1024 * 1024] {
+	for &msg_size in &[32, 1024, 1024 * 1024] {
 		let msg = (0..msg_size).map(|_| rand::random::<u8>()).collect::<Vec<_>>();
 		let key = sp_core::ed25519::Pair::generate().0;
 		group.bench_function(BenchmarkId::new("signing", format!("{}", msg_size)), |b| {
@@ -87,7 +87,7 @@ fn bench_ed25519(c: &mut Criterion) {
 		});
 	}
 
-	for msg_size in vec![32, 1024, 1024 * 1024] {
+	for &msg_size in &[32, 1024, 1024 * 1024] {
 		let msg = (0..msg_size).map(|_| rand::random::<u8>()).collect::<Vec<_>>();
 		let key = sp_core::ed25519::Pair::generate().0;
 		let sig = key.sign(&msg);
@@ -103,7 +103,7 @@ fn bench_ed25519(c: &mut Criterion) {
 fn bench_sr25519(c: &mut Criterion) {
 	let mut group = c.benchmark_group("sr25519");
 
-	for msg_size in vec![32, 1024, 1024 * 1024] {
+	for &msg_size in &[32, 1024, 1024 * 1024] {
 		let msg = (0..msg_size).map(|_| rand::random::<u8>()).collect::<Vec<_>>();
 		let key = sp_core::sr25519::Pair::generate().0;
 		group.bench_function(BenchmarkId::new("signing", format!("{}", msg_size)), |b| {
@@ -111,7 +111,7 @@ fn bench_sr25519(c: &mut Criterion) {
 		});
 	}
 
-	for msg_size in vec![32, 1024, 1024 * 1024] {
+	for &msg_size in &[32, 1024, 1024 * 1024] {
 		let msg = (0..msg_size).map(|_| rand::random::<u8>()).collect::<Vec<_>>();
 		let key = sp_core::sr25519::Pair::generate().0;
 		let sig = key.sign(&msg);
@@ -127,7 +127,7 @@ fn bench_sr25519(c: &mut Criterion) {
 fn bench_ecdsa(c: &mut Criterion) {
 	let mut group = c.benchmark_group("ecdsa");
 
-	for msg_size in vec![32, 1024, 1024 * 1024] {
+	for &msg_size in &[32, 1024, 1024 * 1024] {
 		let msg = (0..msg_size).map(|_| rand::random::<u8>()).collect::<Vec<_>>();
 		let key = sp_core::ecdsa::Pair::generate().0;
 		group.bench_function(BenchmarkId::new("signing", format!("{}", msg_size)), |b| {
@@ -135,7 +135,7 @@ fn bench_ecdsa(c: &mut Criterion) {
 		});
 	}
 
-	for msg_size in vec![32, 1024, 1024 * 1024] {
+	for &msg_size in &[32, 1024, 1024 * 1024] {
 		let msg = (0..msg_size).map(|_| rand::random::<u8>()).collect::<Vec<_>>();
 		let key = sp_core::ecdsa::Pair::generate().0;
 		let sig = key.sign(&msg);

@@ -200,7 +200,7 @@ where
 		.epoch_data_for_child_of(
 			descendent_query(&**client),
 			&parent.hash(),
-			parent.number().clone(),
+			*parent.number(),
 			slot.into(),
 			|slot| Epoch::genesis(babe_config.genesis_config(), slot),
 		)

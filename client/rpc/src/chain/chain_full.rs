@@ -26,7 +26,7 @@ use futures::{
 	future::{self, FutureExt},
 	stream::{self, Stream, StreamExt},
 };
-use jsonrpsee::PendingSubscription;
+use jsonrpsee::{core::async_trait, PendingSubscription};
 use sc_client_api::{BlockBackend, BlockchainEvents};
 use sp_blockchain::HeaderBackend;
 use sp_runtime::{
@@ -51,7 +51,7 @@ impl<Block: BlockT, Client> FullChain<Block, Client> {
 	}
 }
 
-#[async_trait::async_trait]
+#[async_trait]
 impl<Block, Client> ChainBackend<Client, Block> for FullChain<Block, Client>
 where
 	Block: BlockT + 'static,

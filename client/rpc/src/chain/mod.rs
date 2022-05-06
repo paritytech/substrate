@@ -45,7 +45,7 @@ pub use sc_rpc_api::chain::*;
 use sp_blockchain::HeaderBackend;
 
 /// Blockchain backend API
-#[async_trait::async_trait]
+#[async_trait]
 trait ChainBackend<Client, Block: BlockT>: Send + Sync + 'static
 where
 	Block: BlockT + 'static,
@@ -57,7 +57,7 @@ where
 
 	/// Tries to unwrap passed block hash, or uses best block hash otherwise.
 	fn unwrap_or_best(&self, hash: Option<Block::Hash>) -> Block::Hash {
-		match hash.into() {
+		match hash {
 			None => self.client().info().best_hash,
 			Some(hash) => hash,
 		}

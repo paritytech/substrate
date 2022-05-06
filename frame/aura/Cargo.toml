@@ -13,15 +13,15 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sp-application-crypto = { version = "6.0.0", default-features = false, path = "../../primitives/application-crypto" }
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive", "max-encoded-len"] }
 scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
-sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
-sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
-sp-consensus-aura = { version = "0.10.0-dev", path = "../../primitives/consensus/aura", default-features = false }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 pallet-timestamp = { version = "4.0.0-dev", default-features = false, path = "../timestamp" }
+sp-application-crypto = { version = "6.0.0", default-features = false, path = "../../primitives/application-crypto" }
+sp-consensus-aura = { version = "0.10.0-dev", default-features = false, path = "../../primitives/consensus/aura" }
+sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
 
 [dev-dependencies]
 sp-core = { version = "6.0.0", default-features = false, path = "../../primitives/core" }
@@ -30,14 +30,14 @@ sp-io = { version = "6.0.0", path = "../../primitives/io" }
 [features]
 default = ["std"]
 std = [
-	"sp-application-crypto/std",
 	"codec/std",
-	"scale-info/std",
-	"sp-std/std",
-	"sp-runtime/std",
 	"frame-support/std",
-	"sp-consensus-aura/std",
 	"frame-system/std",
 	"pallet-timestamp/std",
+	"scale-info/std",
+	"sp-application-crypto/std",
+	"sp-consensus-aura/std",
+	"sp-runtime/std",
+	"sp-std/std",
 ]
 try-runtime = ["frame-support/try-runtime"]

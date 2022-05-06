@@ -363,7 +363,7 @@ pub mod pallet {
 			let status = ReferendumStatus {
 				track,
 				origin: proposal_origin,
-				proposal_hash: proposal_hash.clone(),
+				proposal_hash,
 				enactment: enactment_moment,
 				submitted: now,
 				submission_deposit,
@@ -643,7 +643,7 @@ impl<T: Config<I>, I: 'static> Polling<T::Tally> for Pallet<T, I> {
 			.iter()
 			.max_by_key(|(_, info)| info.max_deciding)
 			.expect("Always one class");
-		(r.0.clone(), r.1.max_deciding)
+		(r.0, r.1.max_deciding)
 	}
 }
 
@@ -730,8 +730,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Self::deposit_event(Event::<T, I>::DecisionStarted {
 			index,
 			tally: status.tally.clone(),
-			proposal_hash: status.proposal_hash.clone(),
-			track: status.track.clone(),
+			proposal_hash: status.proposal_hash,
+			track: status.track,
 		});
 		let confirming = if is_passing {
 			Self::deposit_event(Event::<T, I>::ConfirmStarted { index });
@@ -895,7 +895,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						let prepare_end = status.submitted.saturating_add(track.prepare_period);
 						if now >= prepare_end {
 							let (maybe_alarm, branch) =
-								Self::ready_for_deciding(now, &track, index, &mut status);
+								Self::ready_for_deciding(now, track, index, &mut status);
 							if let Some(set_alarm) = maybe_alarm {
 								alarm = alarm.min(set_alarm);
 							}
@@ -934,7 +934,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					&track.min_approval,
 				);
 				branch = if is_passing {
-					match deciding.confirming.clone() {
+					match deciding.confirming {
 						Some(t) if now >= t => {
 							// Passed!
 							Self::ensure_no_alarm(&mut status);
@@ -996,7 +996,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						ServiceBranch::ContinueNotConfirming
 					}
 				};
-				alarm = Self::decision_time(&deciding, &status.tally, track);
+				alarm = Self::decision_time(deciding, &status.tally, track);
 			},
 		}
 

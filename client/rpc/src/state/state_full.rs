@@ -28,7 +28,10 @@ use super::{
 use crate::SubscriptionTaskExecutor;
 
 use futures::{future, stream, FutureExt, StreamExt};
-use jsonrpsee::{core::Error as JsonRpseeError, PendingSubscription};
+use jsonrpsee::{
+	core::{async_trait, Error as JsonRpseeError},
+	PendingSubscription,
+};
 use sc_client_api::{
 	Backend, BlockBackend, BlockchainEvents, CallExecutor, ExecutorProvider, ProofProvider,
 	StorageProvider,
@@ -144,10 +147,8 @@ where
 		changes: &mut Vec<StorageChangeSet<Block::Hash>>,
 	) -> Result<()> {
 		for block_hash in &range.hashes {
-			let block_hash = block_hash.clone();
-			let mut block_changes =
-				StorageChangeSet { block: block_hash.clone(), changes: Vec::new() };
-			let id = BlockId::hash(block_hash);
+			let mut block_changes = StorageChangeSet { block: *block_hash, changes: Vec::new() };
+			let id = BlockId::hash(*block_hash);
 			for key in keys {
 				let (has_changed, data) = {
 					let curr_data = self.client.storage(&id, key).map_err(client_err)?;
@@ -169,7 +170,7 @@ where
 	}
 }
 
-#[async_trait::async_trait]
+#[async_trait]
 impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Client>
 where
 	Block: BlockT + 'static,
@@ -477,7 +478,7 @@ where
 	}
 }
 
-#[async_trait::async_trait]
+#[async_trait]
 impl<BE, Block, Client> ChildStateBackend<Block, Client> for FullState<BE, Block, Client>
 where
 	Block: BlockT + 'static,

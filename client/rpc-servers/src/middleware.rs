@@ -167,7 +167,11 @@ impl Middleware for RpcMiddleware {
 
 		self.metrics
 			.calls_finished
-			.with_label_values(&[self.transport_label, name, if success { "true" } else { "false" }])
+			.with_label_values(&[
+				self.transport_label,
+				name,
+				if success { "true" } else { "false" },
+			])
 			.inc();
 	}
 

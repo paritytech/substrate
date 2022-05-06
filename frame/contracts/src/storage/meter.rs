@@ -230,7 +230,7 @@ where
 
 		self.total_deposit = self.total_deposit.saturating_add(&absorbed.total_deposit);
 		if !absorbed.own_deposit.is_zero() {
-			E::charge(origin, &contract, &absorbed.own_deposit, absorbed.terminated);
+			E::charge(origin, contract, &absorbed.own_deposit, absorbed.terminated);
 		}
 	}
 
@@ -255,7 +255,7 @@ where
 		limit: Option<BalanceOf<T>>,
 		min_leftover: BalanceOf<T>,
 	) -> Result<Self, DispatchError> {
-		let limit = E::check_limit(&origin, limit, min_leftover)?;
+		let limit = E::check_limit(origin, limit, min_leftover)?;
 		Ok(Self { limit, ..Default::default() })
 	}
 

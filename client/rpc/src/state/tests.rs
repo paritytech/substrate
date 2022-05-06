@@ -543,3 +543,25 @@ fn should_deserialize_storage_key() {
 
 	assert_eq!(k.0.len(), 32);
 }
+
+#[tokio::test]
+async fn wildcard_storage_subscriptions_are_rpc_unsafe() {
+	let client = Arc::new(substrate_test_runtime_client::new());
+	let (api, _child) = new_full(client, test_executor(), DenyUnsafe::Yes, None);
+
+	let api_rpc = api.into_rpc();
+	let err = api_rpc.subscribe("state_subscribeStorage", EmptyParams::new()).await;
+	assert_matches!(err, Err(RpcError::Call(RpcCallError::Custom(e))) if e.message() == "RPC call is unsafe to be called externally");
+}
+
+#[tokio::test]
+async fn concrete_storage_subscriptions_are_rpc_safe() {
+	let client = Arc::new(substrate_test_runtime_client::new());
+	let (api, _child) = new_full(client, test_executor(), DenyUnsafe::Yes, None);
+	let api_rpc = api.into_rpc();
+
+	let key = StorageKey(STORAGE_KEY.to_vec());
+	let sub = api_rpc.subscribe("state_subscribeStorage", [[key]]).await;
+
+	assert!(sub.is_ok());
+}

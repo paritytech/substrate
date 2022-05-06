@@ -53,7 +53,7 @@ use sp_blockchain::{HeaderBackend, HeaderMetadata};
 const STORAGE_KEYS_PAGED_MAX_COUNT: u32 = 1000;
 
 /// State backend API.
-#[async_trait::async_trait]
+#[async_trait]
 pub trait StateBackend<Block: BlockT, Client>: Send + Sync + 'static
 where
 	Block: BlockT + 'static,
@@ -336,12 +336,19 @@ where
 	}
 
 	fn subscribe_storage(&self, sink: PendingSubscription, keys: Option<Vec<StorageKey>>) {
+		if keys.is_none() {
+			if let Err(err) = self.deny_unsafe.check_if_safe() {
+				let _ = sink.reject(JsonRpseeError::from(err));
+				return
+			}
+		}
+
 		self.backend.subscribe_storage(sink, keys)
 	}
 }
 
 /// Child state backend API.
-#[async_trait::async_trait]
+#[async_trait]
 pub trait ChildStateBackend<Block: BlockT, Client>: Send + Sync + 'static
 where
 	Block: BlockT + 'static,
