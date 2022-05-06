@@ -252,13 +252,10 @@ impl<T, E: sp_std::fmt::Debug> Defensive<T> for Result<T, E> {
 	}
 
 	fn defensive_proof(self, proof: &'static str) -> Self {
-		match self {
-			Ok(inner) => Ok(inner),
-			Err(e) => {
-				defensive!(e, proof);
-				Err(e)
-			},
+		if self.is_err() {
+			defensive!(e, proof);
 		}
+		self
 	}
 }
 
