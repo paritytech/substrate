@@ -1989,6 +1989,10 @@ where
 	) -> sp_blockchain::Result<Option<Vec<Vec<u8>>>> {
 		self.backend.blockchain().block_indexed_body(*id)
 	}
+
+	fn requires_full_sync(&self) -> bool {
+		self.backend.requires_full_sync()
+	}
 }
 
 impl<B, E, Block, RA> backend::AuxStore for Client<B, E, Block, RA>

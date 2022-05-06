@@ -307,7 +307,7 @@ where
 				wasm_runtime_overrides: config.wasm_runtime_overrides.clone(),
 				no_genesis: matches!(
 					config.network.sync_mode,
-					sc_network::config::SyncMode::Fast { .. } | sc_network::config::SyncMode::Warp
+					SyncMode::Fast { .. } | SyncMode::Warp { .. }
 				),
 				wasm_runtime_substitutes,
 			},
@@ -781,12 +781,12 @@ where
 		return Err("Warp sync enabled, but no warp sync provider configured.".into())
 	}
 
-	if config.state_pruning.is_archive() {
+	if client.requires_full_sync() {
 		match config.network.sync_mode {
 			SyncMode::Fast { .. } => return Err("Fast sync doesn't work for archive nodes".into()),
 			SyncMode::Warp => return Err("Warp sync doesn't work for archive nodes".into()),
 			SyncMode::Full => {},
-		};
+		}
 	}
 
 	let transaction_pool_adapter = Arc::new(TransactionPoolAdapter {
