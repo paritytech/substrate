@@ -19,10 +19,19 @@ use crate::{cache::TrieCache, Error, NodeCodec, StorageProof, TrieDBBuilder};
 use codec::Encode;
 use hash_db::{HashDBRef, Hasher};
 use parking_lot::Mutex;
-use std::{collections::HashMap, mem, ops::DerefMut, sync::Arc};
-use trie_db::{DBValue, KeyTrieAccessValue, TrieAccess, TrieLayout};
+use std::{
+	collections::HashMap,
+	mem,
+	ops::DerefMut,
+	sync::{
+		atomic::{AtomicUsize, Ordering},
+		Arc,
+	},
+};
+use trie_db::{DBValue, KeyTrieAccessValue, TrieAccess};
 
 /// Combines information about an accessed key.
+#[derive(Clone, Debug)]
 struct AccessedKey {
 	/// Did we already recorded all the trie nodes for accessing this key?
 	trie_nodes_recorded: bool,
@@ -39,16 +48,11 @@ struct RecorderInner<H> {
 	accessed_keys: HashMap<H, HashMap<Vec<u8>, AccessedKey>>,
 	/// The encoded nodes we accessed while recording.
 	accessed_nodes: HashMap<H, Vec<u8>>,
-	encoded_size_estimation: usize,
 }
 
 impl<H> Default for RecorderInner<H> {
 	fn default() -> Self {
-		Self {
-			accessed_keys: HashMap::new(),
-			accessed_nodes: HashMap::new(),
-			encoded_size_estimation: 0,
-		}
+		Self { accessed_keys: Default::default(), accessed_nodes: Default::default() }
 	}
 }
 
@@ -57,17 +61,24 @@ impl<H> Default for RecorderInner<H> {
 /// It can be used to record accesses to the trie and then to convert them into a [`StorageProof`].
 pub struct Recorder<H: Hasher> {
 	inner: Arc<Mutex<RecorderInner<H::Out>>>,
+	/// The estimated encoded size of the storage proof this recorder will produce.
+	///
+	/// We store this in an atomic to be able to fetch the value while the `inner` is may locked.
+	encoded_size_estimation: Arc<AtomicUsize>,
 }
 
 impl<H: Hasher> Default for Recorder<H> {
 	fn default() -> Self {
-		Self { inner: Default::default() }
+		Self { inner: Default::default(), encoded_size_estimation: Arc::new(0.into()) }
 	}
 }
 
 impl<H: Hasher> Clone for Recorder<H> {
 	fn clone(&self) -> Self {
-		Self { inner: self.inner.clone() }
+		Self {
+			inner: self.inner.clone(),
+			encoded_size_estimation: self.encoded_size_estimation.clone(),
+		}
 	}
 }
 
@@ -79,7 +90,11 @@ impl<H: Hasher> Recorder<H> {
 		&self,
 		storage_root: H::Out,
 	) -> impl trie_db::TrieRecorder<H::Out> + '_ {
-		TrieRecorder::<H, _> { inner: self.inner.lock(), storage_root }
+		TrieRecorder::<H, _> {
+			inner: self.inner.lock(),
+			storage_root,
+			encoded_size_estimation: self.encoded_size_estimation.clone(),
+		}
 	}
 
 	/// Convert the recording into a [`StorageProof`].
@@ -89,18 +104,67 @@ impl<H: Hasher> Recorder<H> {
 	/// trie nodes to include them in the final [`StorageProof`].
 	///
 	/// Returns the [`StorageProof`] or an error if one of lookups in the trie failed.
-	pub fn into_storage_proof<L: TrieLayout<Hash = H, Codec = NodeCodec<H>>>(
+	pub fn into_storage_proof(
 		self,
 		root: &H::Out,
 		hash_db: &dyn HashDBRef<H, DBValue>,
-		mut cache: Option<&mut TrieCache<H>>,
+		cache: Option<&mut TrieCache<H>>,
 	) -> Result<StorageProof, crate::Error<H::Out>> {
 		let mut recorder = mem::take(&mut *self.inner.lock());
 		let accessed_keys = mem::take(&mut recorder.accessed_keys);
-		let mut trie_recorder = TrieRecorder::<H, _> { inner: &mut recorder, storage_root: *root };
+		Self::record_accessed_keys(&mut recorder, accessed_keys, root, hash_db, cache)?;
+
+		Ok(StorageProof::new(recorder.accessed_nodes.drain().map(|(_, v)| v)))
+	}
+
+	/// Convert the recording to a [`StorageProof`].
+	///
+	/// It requires the `root` and the `hash_db` to lookup values that we served from the `cache`
+	/// and hadn't recorded the trie nodes. It will lookup these values and ensure to record the
+	/// trie nodes to include them in the final [`StorageProof`].
+	///
+	/// In contrast to [`Self::into_storage_proof`] this doesn't consumes and clears the recordings.
+	///
+	/// Returns the [`StorageProof`] or an error if one of lookups in the trie failed.
+	pub fn to_storage_proof(
+		&self,
+		root: &H::Out,
+		hash_db: &dyn HashDBRef<H, DBValue>,
+		cache: Option<&mut TrieCache<H>>,
+	) -> Result<StorageProof, crate::Error<H::Out>> {
+		let mut recorder = self.inner.lock();
+		let accessed_keys = recorder.accessed_keys.clone();
+		Self::record_accessed_keys(&mut *recorder, accessed_keys, root, hash_db, cache)?;
+		recorder
+			.accessed_keys
+			.values_mut()
+			.map(|v| v.values_mut())
+			.flatten()
+			.for_each(|k| {
+				// Mark all trie nodes as recorded
+				k.trie_nodes_recorded = true;
+			});
+
+		Ok(StorageProof::new(recorder.accessed_nodes.iter().map(|(_, v)| v.clone())))
+	}
+
+	/// Record the trie nodes for the accessed keys.
+	fn record_accessed_keys(
+		inner: &mut RecorderInner<H::Out>,
+		accessed_keys: HashMap<H::Out, HashMap<Vec<u8>, AccessedKey>>,
+		root: &H::Out,
+		hash_db: &dyn HashDBRef<H, DBValue>,
+		mut cache: Option<&mut TrieCache<H>>,
+	) -> Result<(), crate::Error<H::Out>> {
+		let mut trie_recorder = TrieRecorder::<H, _> {
+			inner,
+			storage_root: *root,
+			encoded_size_estimation: Default::default(),
+		};
 
 		accessed_keys.into_iter().try_for_each(|(root, keys)| {
-			let trie = TrieDBBuilder::<L>::new(hash_db, &root)
+			// For reading the trie the layout is compatible
+			let trie = TrieDBBuilder::<crate::LayoutV1<H>>::new(hash_db, &root)
 				.with_recorder(&mut trie_recorder)
 				.with_optional_cache(cache.as_mut().map(|c| *c as _))
 				.build();
@@ -114,9 +178,7 @@ impl<H: Hasher> Recorder<H> {
 					Ok(())
 				}
 			})
-		})?;
-
-		Ok(StorageProof::new(recorder.accessed_nodes.drain().map(|(_, v)| v)))
+		})
 	}
 
 	/// Returns the estimated encoded size of the proof.
@@ -126,7 +188,15 @@ impl<H: Hasher> Recorder<H> {
 	/// gets inaccurate because we may not have recorded all the required trie nodes
 	/// yet.
 	pub fn estimate_encoded_size(&self) -> usize {
-		self.inner.lock().encoded_size_estimation
+		self.encoded_size_estimation.load(Ordering::Relaxed)
+	}
+
+	/// Reset the state.
+	///
+	/// This discards all recorded data.
+	pub fn reset(&self) {
+		mem::take(&mut *self.inner.lock());
+		self.encoded_size_estimation.store(0, Ordering::Relaxed);
 	}
 }
 
@@ -134,6 +204,7 @@ impl<H: Hasher> Recorder<H> {
 struct TrieRecorder<H: Hasher, I> {
 	inner: I,
 	storage_root: H::Out,
+	encoded_size_estimation: Arc<AtomicUsize>,
 }
 
 impl<H: Hasher, I: DerefMut<Target = RecorderInner<H::Out>>> trie_db::TrieRecorder<H::Out>
@@ -213,7 +284,7 @@ impl<H: Hasher, I: DerefMut<Target = RecorderInner<H::Out>>> trie_db::TrieRecord
 			},
 		};
 
-		self.inner.encoded_size_estimation += encoded_size_update;
+		self.encoded_size_estimation.fetch_add(encoded_size_update, Ordering::Relaxed);
 	}
 }
 
@@ -256,7 +327,7 @@ mod tests {
 			assert_eq!(TEST_DATA[0].1.to_vec(), trie.get(TEST_DATA[0].0).unwrap().unwrap());
 		}
 
-		let storage_proof = recorder.into_storage_proof::<Layout>(&root, &db, None).unwrap();
+		let storage_proof = recorder.into_storage_proof(&root, &db, None).unwrap();
 		let memory_db: MemoryDB = storage_proof.into_memory_db();
 
 		// Check that we recorded the required data

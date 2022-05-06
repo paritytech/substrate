@@ -288,18 +288,10 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 							&backend,
 						).ok_or(#crate_::ApiError::StateBackendIsNotTrie)?;
 
-					let state_version = #crate_::CallApiAt::<Block>::runtime_version_at(self.call, &at)
-						.map(|v| #crate_::RuntimeVersion::state_version(&v))
-						.map_err(|e|
-							#crate_::ApiError::Application(
-								std::boxed::Box::from(format!("Failed to get state version: {}", e))
-							)
-						)?;
-
 					let builder = #crate_::TrieBackendBuilder::wrap(&trie_backend);
 					let builder = #crate_::TrieBackendBuilder::with_recorder(builder, recorder);
 					let mut trie_backend = #crate_::TrieBackendBuilder::build(builder);
-					let res = #crate_::TrieBackend::extract_proof(&mut trie_backend, state_version);
+					let res = #crate_::TrieBackend::extract_proof(&mut trie_backend);
 
 					core::result::Result::map_err(
 						res,

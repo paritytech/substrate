@@ -555,7 +555,7 @@ mod tests {
 			}
 
 			let storage_proof = recorder
-				.into_storage_proof::<Layout>(
+				.into_storage_proof(
 					&root,
 					&db,
 					Some(&mut local_cache.as_trie_db_cache(root)),
@@ -602,7 +602,7 @@ mod tests {
 			}
 
 			let storage_proof = recorder
-				.into_storage_proof::<Layout>(
+				.into_storage_proof(
 					&root,
 					&db,
 					Some(&mut local_cache.as_trie_db_cache(root)),

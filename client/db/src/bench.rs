@@ -20,7 +20,7 @@
 
 use crate::{
 	storage_cache::{new_shared_cache, CachingState, SharedCache},
-	DbState, DbStateBuilder
+	DbState, DbStateBuilder,
 };
 use hash_db::{Hasher, Prefix};
 use kvdb::{DBTransaction, KeyValueDB};
@@ -34,8 +34,7 @@ use sp_runtime::{
 	StateVersion, Storage,
 };
 use sp_state_machine::{
-	backend::Backend as StateBackend, ChildStorageCollection, DBValue, ProofRecorder,
-	StorageCollection,
+	backend::Backend as StateBackend, ChildStorageCollection, DBValue, StorageCollection,
 };
 use sp_trie::{prefixed_key, MemoryDB};
 use std::{
@@ -48,28 +47,15 @@ type State<B> = CachingState<DbState<B>, B>;
 
 struct StorageDb<Block: BlockT> {
 	db: Arc<dyn KeyValueDB>,
-	proof_recorder: Option<ProofRecorder<Block::Hash>>,
 	_block: std::marker::PhantomData<Block>,
 }
 
 impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for StorageDb<Block> {
 	fn get(&self, key: &Block::Hash, prefix: Prefix) -> Result<Option<DBValue>, String> {
 		let prefixed_key = prefixed_key::<HashFor<Block>>(key, prefix);
-		if let Some(recorder) = &self.proof_recorder {
-			if let Some(v) = recorder.get(&key) {
-				return Ok(v.clone())
-			}
-			let backend_value = self
-				.db
-				.get(0, &prefixed_key)
-				.map_err(|e| format!("Database backend error: {:?}", e))?;
-			recorder.record(key.clone(), backend_value.clone());
-			Ok(backend_value)
-		} else {
-			self.db
-				.get(0, &prefixed_key)
-				.map_err(|e| format!("Database backend error: {:?}", e))
-		}
+		self.db
+			.get(0, &prefixed_key)
+			.map_err(|e| format!("Database backend error: {:?}", e))
 	}
 }
 
@@ -92,7 +78,7 @@ pub struct BenchmarkingState<B: BlockT> {
 	/// not de-duplicated for repeats.
 	child_key_tracker: RefCell<LinkedHashMap<Vec<u8>, LinkedHashMap<Vec<u8>, TrackedStorageKey>>>,
 	whitelist: RefCell<Vec<TrackedStorageKey>>,
-	proof_recorder: Option<ProofRecorder<B::Hash>>,
+	proof_recorder: Option<sp_trie::recorder::Recorder<HashFor<B>>>,
 	proof_recorder_root: Cell<B::Hash>,
 	enable_tracking: bool,
 }
@@ -159,13 +145,11 @@ impl<B: BlockT> BenchmarkingState<B> {
 			recorder.reset();
 			self.proof_recorder_root.set(self.root.get());
 		}
-		let storage_db = Arc::new(StorageDb::<B> {
-			db,
-			proof_recorder: self.proof_recorder.clone(),
-			_block: Default::default(),
-		});
+		let storage_db = Arc::new(StorageDb::<B> { db, _block: Default::default() });
 		*self.state.borrow_mut() = Some(State::new(
-			DbStateBuilder::<B>::new(storage_db, self.root.get()).build(),
+			DbStateBuilder::<B>::new(storage_db, self.root.get())
+				.with_optional_recorder(self.proof_recorder.clone())
+				.build(),
 			self.shared_cache.clone(),
 			None,
 		));
@@ -604,27 +588,37 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 	}
 
 	fn proof_size(&self) -> Option<u32> {
-		self.proof_recorder.as_ref().map(|recorder| {
-			let proof_size = recorder.estimate_encoded_size() as u32;
-			let proof = recorder.to_storage_proof();
-			let proof_recorder_root = self.proof_recorder_root.get();
-			if proof_recorder_root == Default::default() || proof_size == 1 {
-				// empty trie
-				proof_size
-			} else {
-				if let Some(size) = proof.encoded_compact_size::<HashFor<B>>(proof_recorder_root) {
-					size as u32
+		let state = self.state.borrow();
+		self.proof_recorder.as_ref().and_then(|p| state.as_ref().map(|s| (p, s))).map(
+			|(recorder, state)| {
+				let proof_size = recorder.estimate_encoded_size() as u32;
+				let trie_backend = state.as_trie_backend().expect("State is a trie backend; qed");
+
+				let proof = recorder
+					.to_storage_proof(&self.root.get(), trie_backend.essence(), None)
+					.expect("Failed to generate storage proof");
+
+				let proof_recorder_root = self.proof_recorder_root.get();
+				if proof_recorder_root == Default::default() || proof_size == 1 {
+					// empty trie
+					proof_size
 				} else {
-					panic!(
-						"proof rec root {:?}, root {:?}, genesis {:?}, rec_len {:?}",
-						self.proof_recorder_root.get(),
-						self.root.get(),
-						self.genesis_root,
-						proof_size,
-					);
+					if let Some(size) =
+						proof.encoded_compact_size::<HashFor<B>>(proof_recorder_root)
+					{
+						size as u32
+					} else {
+						panic!(
+							"proof rec root {:?}, root {:?}, genesis {:?}, rec_len {:?}",
+							self.proof_recorder_root.get(),
+							self.root.get(),
+							self.genesis_root,
+							proof_size,
+						);
+					}
 				}
-			}
-		})
+			},
+		)
 	}
 }
 

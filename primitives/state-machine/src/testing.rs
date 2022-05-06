@@ -24,7 +24,7 @@ use std::{
 
 use crate::{
 	backend::Backend, ext::Ext, InMemoryBackend, OverlayedChanges, StorageKey,
-	StorageTransactionCache, StorageValue,
+	StorageTransactionCache, StorageValue, TrieBackendBuilder,
 };
 
 use hash_db::Hasher;
@@ -204,7 +204,9 @@ where
 	/// This implementation will wipe the proof recorded in between calls. Consecutive calls will
 	/// get their own proof from scratch.
 	pub fn execute_and_prove<R>(&mut self, execute: impl FnOnce() -> R) -> (R, StorageProof) {
-		let proving_backend = crate::InMemoryProvingBackend::new(&self.backend);
+		let mut proving_backend = TrieBackendBuilder::wrap(&self.backend)
+			.with_recorder(Default::default())
+			.build();
 		let mut proving_ext = Ext::new(
 			&mut self.overlay,
 			&mut self.storage_transaction_cache,
@@ -213,7 +215,11 @@ where
 		);
 
 		let outcome = sp_externalities::set_and_run_with_externalities(&mut proving_ext, execute);
-		let proof = proving_backend.extract_proof();
+		let proof = proving_backend
+			.extract_proof()
+			.ok()
+			.flatten()
+			.expect("Failed to extract storage proof");
 
 		(outcome, proof)
 	}

@@ -153,10 +153,7 @@ where
 	/// part of calling this function. This means that no more nodes will be recorded by this
 	/// instance afterwards.
 	#[cfg(feature = "std")]
-	pub fn extract_proof(
-		&mut self,
-		state_version: StateVersion,
-	) -> Result<Option<StorageProof>, crate::DefaultError> {
+	pub fn extract_proof(&mut self) -> Result<Option<StorageProof>, crate::DefaultError> {
 		let recorder = self.essence.recorder.take();
 		let root = self.root();
 		let essence = self.essence();
@@ -166,12 +163,7 @@ where
 				let mut cache =
 					self.essence.trie_node_cache.as_ref().map(|c| c.as_trie_db_cache(*root));
 
-				match state_version {
-					StateVersion::V0 =>
-						r.into_storage_proof::<sp_trie::LayoutV0<H>>(root, essence, cache.as_mut()),
-					StateVersion::V1 =>
-						r.into_storage_proof::<sp_trie::LayoutV1<H>>(root, essence, cache.as_mut()),
-				}
+				r.into_storage_proof(root, essence, cache.as_mut())
 			})
 			.transpose()
 			.map_err(|e| format!("{:?}", e))
@@ -615,7 +607,7 @@ pub mod tests {
 		assert!(TrieBackendBuilder::wrap(&trie_backend)
 			.with_recorder(Recorder::default())
 			.build()
-			.extract_proof(state_version)
+			.extract_proof()
 			.unwrap()
 			.unwrap()
 			.is_empty());
@@ -635,7 +627,7 @@ pub mod tests {
 			.with_recorder(Recorder::default())
 			.build();
 		assert_eq!(backend.storage(b"key").unwrap(), Some(b"value".to_vec()));
-		assert!(!backend.extract_proof(state_version).unwrap().unwrap().is_empty());
+		assert!(!backend.extract_proof().unwrap().unwrap().is_empty());
 	}
 
 	#[test]
@@ -705,7 +697,7 @@ pub mod tests {
 					.build();
 				assert_eq!(proving.storage(&[42]).unwrap().unwrap(), vec![42; size_content]);
 
-				let proof = proving.extract_proof(state_version).unwrap().unwrap();
+				let proof = proving.extract_proof().unwrap().unwrap();
 
 				let proof_check =
 					create_proof_check_backend::<BlakeTwo256>(in_memory_root.into(), proof)
@@ -747,7 +739,7 @@ pub mod tests {
 					assert_eq!(proving.next_storage_key(&[i]).unwrap(), Some(vec![i + 1]))
 				});
 
-				let proof = proving.extract_proof(state_version).unwrap().unwrap();
+				let proof = proving.extract_proof().unwrap().unwrap();
 
 				let proof_check =
 					create_proof_check_backend::<BlakeTwo256>(in_memory_root.into(), proof)
@@ -810,7 +802,7 @@ pub mod tests {
 					.build();
 				assert_eq!(proving.storage(&[42]).unwrap().unwrap(), vec![42]);
 
-				let proof = proving.extract_proof(state_version).unwrap().unwrap();
+				let proof = proving.extract_proof().unwrap().unwrap();
 
 				let proof_check =
 					create_proof_check_backend::<BlakeTwo256>(in_memory_root.into(), proof)
@@ -827,7 +819,7 @@ pub mod tests {
 					.build();
 				assert_eq!(proving.child_storage(child_info_1, &[64]), Ok(Some(vec![64])));
 
-				let proof = proving.extract_proof(state_version).unwrap().unwrap();
+				let proof = proving.extract_proof().unwrap().unwrap();
 				let proof_check =
 					create_proof_check_backend::<BlakeTwo256>(in_memory_root.into(), proof)
 						.unwrap();
@@ -860,11 +852,10 @@ pub mod tests {
 
 		fn check_estimation(
 			mut backend: TrieBackend<impl TrieBackendStorage<BlakeTwo256>, BlakeTwo256>,
-			state_version: StateVersion,
 			has_cache: bool,
 		) {
 			let estimation = backend.essence.recorder.as_ref().unwrap().estimate_encoded_size();
-			let storage_proof = backend.extract_proof(state_version).unwrap().unwrap();
+			let storage_proof = backend.extract_proof().unwrap().unwrap();
 			let storage_proof_size =
 				storage_proof.into_nodes().into_iter().map(|n| n.encoded_size()).sum::<usize>();
 
@@ -887,7 +878,7 @@ pub mod tests {
 			});
 
 			// Check the estimation
-			check_estimation(backend, state_version, has_cache);
+			check_estimation(backend, has_cache);
 		}
 	}
 
