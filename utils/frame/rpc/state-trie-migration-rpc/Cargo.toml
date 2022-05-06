@@ -16,7 +16,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false }
 serde = { version = "1", features = ["derive"] }
-log = { version = "0.4.16", default-features = false }
+log = { version = "0.4.17", default-features = false }
 
 sp-std = { path = "../../../../primitives/std" }
 sp-io = { path = "../../../../primitives/io" }
