@@ -621,7 +621,7 @@ pub mod tests {
 		recorder: Option<Recorder>,
 	) {
 		let trie_backend = test_trie(state_version, cache, recorder);
-		let mut backend = TrieBackendBuilder::wrap(&trie_backend)
+		let backend = TrieBackendBuilder::wrap(&trie_backend)
 			.with_recorder(Recorder::default())
 			.build();
 		assert_eq!(backend.storage(b"key").unwrap(), Some(b"value".to_vec()));
@@ -689,7 +689,7 @@ pub mod tests {
 		{
 			// Run multiple times to have a filled cache.
 			for _ in 0..3 {
-				let mut proving = TrieBackendBuilder::wrap(&trie)
+				let proving = TrieBackendBuilder::wrap(&trie)
 					.with_recorder(Recorder::default())
 					.with_optional_cache(cache.as_ref().map(|c| c.local_cache()))
 					.build();
@@ -728,7 +728,7 @@ pub mod tests {
 				assert_eq!(in_memory_root, trie_root);
 				(0..64).for_each(|i| assert_eq!(trie.storage(&[i]).unwrap().unwrap(), vec![i]));
 
-				let mut proving = TrieBackendBuilder::wrap(&trie)
+				let proving = TrieBackendBuilder::wrap(&trie)
 					.with_recorder(Recorder::default())
 					.with_optional_cache(cache.as_ref().map(|c| c.local_cache()))
 					.build();
@@ -794,7 +794,7 @@ pub mod tests {
 				assert_eq!(in_memory_root, trie_root);
 				(0..64).for_each(|i| assert_eq!(trie.storage(&[i]).unwrap().unwrap(), vec![i]));
 
-				let mut proving = TrieBackendBuilder::wrap(&trie)
+				let proving = TrieBackendBuilder::wrap(&trie)
 					.with_recorder(Recorder::default())
 					.with_optional_cache(cache.as_ref().map(|c| c.local_cache()))
 					.build();
@@ -811,7 +811,7 @@ pub mod tests {
 				assert_eq!(proof_check.storage(&[41]).unwrap().unwrap(), vec![41]);
 				assert_eq!(proof_check.storage(&[64]).unwrap(), None);
 
-				let mut proving = TrieBackendBuilder::wrap(&trie)
+				let proving = TrieBackendBuilder::wrap(&trie)
 					.with_recorder(Recorder::default())
 					.with_optional_cache(cache.as_ref().map(|c| c.local_cache()))
 					.build();
@@ -849,7 +849,7 @@ pub mod tests {
 		];
 
 		fn check_estimation(
-			mut backend: TrieBackend<impl TrieBackendStorage<BlakeTwo256>, BlakeTwo256>,
+			backend: TrieBackend<impl TrieBackendStorage<BlakeTwo256>, BlakeTwo256>,
 			has_cache: bool,
 		) {
 			let estimation = backend.essence.recorder.as_ref().unwrap().estimate_encoded_size();
