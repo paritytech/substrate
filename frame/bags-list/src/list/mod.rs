@@ -443,7 +443,7 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 
 		// remove the heavier node from this list. Note that this removes the node from storage and
 		// decrements the node counter.
-		let _ = Self::remove(&heavier_id).defensive("both nodes have been checked to exist; qed");
+		let _ = Self::remove(&heavier_id).defensive_proof("both nodes have been checked to exist; qed");
 
 		// re-fetch `lighter_node` from storage since it may have been updated when `heavier_node`
 		// was removed.
