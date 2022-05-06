@@ -248,6 +248,8 @@ pub struct ChainSync<B: BlockT, Client> {
 	import_existing: bool,
 	/// Gap download process.
 	gap_sync: Option<GapSync<B>>,
+	/// Disable gap sync.
+	no_gap_sync: bool,
 }
 
 /// All the data we have about a Peer that we are trying to sync with
@@ -483,10 +485,10 @@ pub enum SyncMode {
 	Light,
 	// Sync headers and block bodies
 	Full,
-	// Sync headers and the last finalied state
+	// Sync headers and the last finalised state
 	LightState { storage_chain_mode: bool, skip_proofs: bool },
 	// Warp sync mode.
-	Warp,
+	Warp { skip_blocks: bool },
 }
 
 /// Result of [`ChainSync::has_slot_for_block_announce_validation`].
@@ -525,6 +527,7 @@ where
 			best_queued_hash: Default::default(),
 			best_queued_number: Zero::zero(),
 			extra_justifications: ExtraRequests::new("justification"),
+			no_gap_sync: matches!(mode, SyncMode::Warp { skip_blocks: true }),
 			mode,
 			queue_blocks: Default::default(),
 			fork_targets: Default::default(),
@@ -549,7 +552,7 @@ where
 			SyncMode::Full =>
 				BlockAttributes::HEADER | BlockAttributes::JUSTIFICATION | BlockAttributes::BODY,
 			SyncMode::Light => BlockAttributes::HEADER | BlockAttributes::JUSTIFICATION,
-			SyncMode::LightState { storage_chain_mode: false, .. } | SyncMode::Warp =>
+			SyncMode::LightState { storage_chain_mode: false, .. } | SyncMode::Warp { .. } =>
 				BlockAttributes::HEADER | BlockAttributes::JUSTIFICATION | BlockAttributes::BODY,
 			SyncMode::LightState { storage_chain_mode: true, .. } =>
 				BlockAttributes::HEADER |
@@ -563,7 +566,7 @@ where
 			SyncMode::Full => false,
 			SyncMode::Light => true,
 			SyncMode::LightState { .. } => true,
-			SyncMode::Warp => true,
+			SyncMode::Warp { .. }  => true,
 		}
 	}
 
@@ -597,7 +600,7 @@ where
 				phase: WarpSyncPhase::DownloadingBlocks(gap_sync.best_queued_number),
 				total_bytes: 0,
 			}),
-			(None, SyncMode::Warp, _) =>
+			(None, SyncMode::Warp { .. }, _) =>
 				Some(WarpSyncProgress { phase: WarpSyncPhase::AwaitingPeers, total_bytes: 0 }),
 			(Some(sync), _, _) => Some(sync.progress()),
 			_ => None,
@@ -721,7 +724,7 @@ where
 					},
 				);
 
-				if let SyncMode::Warp = &self.mode {
+				if let SyncMode::Warp { .. } = &self.mode {
 					if self.peers.len() >= MIN_PEERS_TO_START_WARP_SYNC && self.warp_sync.is_none()
 					{
 						log::debug!(target: "sync", "Starting warp state sync.");
@@ -864,7 +867,7 @@ where
 	pub fn block_requests(&mut self) -> impl Iterator<Item = (&PeerId, BlockRequest<B>)> + '_ {
 		if self.allowed_requests.is_empty() ||
 			self.state_sync.is_some() ||
-			self.mode == SyncMode::Warp
+			matches!(self.mode, SyncMode::Warp { .. })
 		{
 			return Either::Left(std::iter::empty())
 		}
@@ -2107,7 +2110,7 @@ where
 			);
 			self.mode = SyncMode::Full;
 		}
-		if matches!(self.mode, SyncMode::Warp) && info.finalized_state.is_some() {
+		if matches!(self.mode, SyncMode::Warp { .. }) && info.finalized_state.is_some() {
 			warn!(
 				target: "sync",
 				"Can't use warp sync mode with a partially synced database. Reverting to full sync mode."
@@ -2135,13 +2138,15 @@ where
 			}
 		}
 
-		if let Some((start, end)) = info.block_gap {
-			debug!(target: "sync", "Starting gap sync #{} - #{}", start, end);
-			self.gap_sync = Some(GapSync {
-				best_queued_number: start - One::one(),
-				target: end,
-				blocks: BlockCollection::new(),
-			});
+		if !self.no_gap_sync {
+			if let Some((start, end)) = info.block_gap {
+				debug!(target: "sync", "Starting gap sync #{} - #{}", start, end);
+				self.gap_sync = Some(GapSync {
+					best_queued_number: start - One::one(),
+					target: end,
+					blocks: BlockCollection::new(),
+				});
+			}
 		}
 		trace!(target: "sync", "Restarted sync at #{} ({:?})", self.best_queued_number, self.best_queued_hash);
 		Ok(())

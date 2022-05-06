@@ -307,7 +307,7 @@ where
 				wasm_runtime_overrides: config.wasm_runtime_overrides.clone(),
 				no_genesis: matches!(
 					config.network.sync_mode,
-					sc_network::config::SyncMode::Fast { .. } | sc_network::config::SyncMode::Warp
+					sc_network::config::SyncMode::Fast { .. } | sc_network::config::SyncMode::Warp { .. }
 				),
 				wasm_runtime_substitutes,
 			},
@@ -784,7 +784,7 @@ where
 	if config.state_pruning.is_archive() {
 		match config.network.sync_mode {
 			SyncMode::Fast { .. } => return Err("Fast sync doesn't work for archive nodes".into()),
-			SyncMode::Warp => return Err("Warp sync doesn't work for archive nodes".into()),
+			SyncMode::Warp { .. } => return Err("Warp sync doesn't work for archive nodes".into()),
 			SyncMode::Full => {},
 		};
 	}

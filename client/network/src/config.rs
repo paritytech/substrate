@@ -371,13 +371,16 @@ pub enum SyncMode {
 		storage_chain_mode: bool,
 	},
 	/// Warp sync - verify authority set transitions and the latest state.
-	Warp,
+	Warp {
+		/// Disable block history download after the warp sync is complete.
+		skip_blocks: bool,
+	},
 }
 
 impl SyncMode {
 	/// Returns if `self` is [`Self::Warp`].
 	pub fn is_warp(&self) -> bool {
-		matches!(self, Self::Warp)
+		matches!(self, Self::Warp { .. })
 	}
 
 	/// Returns if `self` is [`Self::Fast`].

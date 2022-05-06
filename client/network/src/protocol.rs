@@ -254,7 +254,7 @@ impl ProtocolConfig {
 				config::SyncMode::Full => sc_network_sync::SyncMode::Full,
 				config::SyncMode::Fast { skip_proofs, storage_chain_mode } =>
 					sc_network_sync::SyncMode::LightState { skip_proofs, storage_chain_mode },
-				config::SyncMode::Warp => sc_network_sync::SyncMode::Warp,
+				config::SyncMode::Warp { skip_blocks } => sc_network_sync::SyncMode::Warp { skip_blocks },
 			}
 		}
 	}
