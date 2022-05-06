@@ -200,13 +200,10 @@ impl<T> Defensive<T> for Option<T> {
 	}
 
 	fn defensive_proof(self, proof: &'static str) -> Self {
-		match self {
-			Some(inner) => Some(inner),
-			None => {
-				defensive!(proof);
-				None
-			},
+		if self.is_none() {
+			defensive!(proof)
 		}
+		self
 	}
 }
 
