@@ -111,7 +111,6 @@ fn insert_blocks(db: &Backend<Block>, storage: Vec<(Vec<u8>, Vec<u8>)>) -> H256 
 enum BenchmarkConfig {
 	NoCache,
 	TrieNodeCache,
-	TrieNodeCacheWithoutDataCache,
 	StateCache,
 }
 
@@ -119,13 +118,16 @@ fn create_backend(config: BenchmarkConfig, temp_dir: &TempDir) -> Backend<Block>
 	let path = temp_dir.path().to_owned();
 
 	let (state_cache_size, trie_node_cache_settings) = match config {
-		BenchmarkConfig::NoCache => (0, TrieNodeCacheSettings { enable: false, fast_cache: false }),
-		BenchmarkConfig::TrieNodeCache =>
-			(0, TrieNodeCacheSettings { enable: true, fast_cache: true }),
-		BenchmarkConfig::TrieNodeCacheWithoutDataCache =>
-			(0, TrieNodeCacheSettings { enable: true, fast_cache: false }),
-		BenchmarkConfig::StateCache =>
-			(2048 * 1024 * 1024, TrieNodeCacheSettings { enable: false, fast_cache: false }),
+		BenchmarkConfig::NoCache =>
+			(0, TrieNodeCacheSettings { enable: false, maximum_size_in_bytes: 0 }),
+		BenchmarkConfig::TrieNodeCache => (
+			0,
+			TrieNodeCacheSettings { enable: true, maximum_size_in_bytes: 2 * 1024 * 1024 * 1024 },
+		),
+		BenchmarkConfig::StateCache => (
+			2 * 1024 * 1024 * 1024,
+			TrieNodeCacheSettings { enable: false, maximum_size_in_bytes: 0 },
+		),
 	};
 
 	let settings = DatabaseSettings {
@@ -209,11 +211,6 @@ fn state_access_benchmarks(c: &mut Criterion) {
 		"with trie node cache and reading each key once",
 		1,
 	);
-	bench_multiple_values(
-		BenchmarkConfig::TrieNodeCacheWithoutDataCache,
-		"with trie node cache (without value cache) and reading each key once",
-		1,
-	);
 	bench_multiple_values(BenchmarkConfig::NoCache, "no cache and reading each key once", 1);
 
 	bench_multiple_values(
@@ -224,11 +221,6 @@ fn state_access_benchmarks(c: &mut Criterion) {
 	bench_multiple_values(
 		BenchmarkConfig::TrieNodeCache,
 		"with trie node cache and reading 4 times each key in a row",
-		4,
-	);
-	bench_multiple_values(
-		BenchmarkConfig::TrieNodeCacheWithoutDataCache,
-		"with trie node cache (without value cache) and reading 4 times each key in a row",
 		4,
 	);
 	bench_multiple_values(
@@ -263,11 +255,6 @@ fn state_access_benchmarks(c: &mut Criterion) {
 		"with trie node cache and reading the key once",
 		1,
 	);
-	bench_single_value(
-		BenchmarkConfig::TrieNodeCacheWithoutDataCache,
-		"with trie node cache (without value cache) and reading the key once",
-		1,
-	);
 	bench_single_value(BenchmarkConfig::NoCache, "no cache and reading the key once", 1);
 
 	bench_single_value(
@@ -278,11 +265,6 @@ fn state_access_benchmarks(c: &mut Criterion) {
 	bench_single_value(
 		BenchmarkConfig::TrieNodeCache,
 		"with trie node cache and reading 4 times each key in a row",
-		4,
-	);
-	bench_single_value(
-		BenchmarkConfig::TrieNodeCacheWithoutDataCache,
-		"with trie node cache (without value cache) and reading 4 times each key in a row",
 		4,
 	);
 	bench_single_value(
@@ -317,11 +299,6 @@ fn state_access_benchmarks(c: &mut Criterion) {
 		"with trie node cache and hashing the key once",
 		1,
 	);
-	bench_single_value(
-		BenchmarkConfig::TrieNodeCacheWithoutDataCache,
-		"with trie node cache (without value cache) and hashing the key once",
-		1,
-	);
 	bench_single_value(BenchmarkConfig::NoCache, "no cache and hashing the key once", 1);
 
 	bench_single_value(
@@ -332,11 +309,6 @@ fn state_access_benchmarks(c: &mut Criterion) {
 	bench_single_value(
 		BenchmarkConfig::TrieNodeCache,
 		"with trie node cache and hashing 4 times each key in a row",
-		4,
-	);
-	bench_single_value(
-		BenchmarkConfig::TrieNodeCacheWithoutDataCache,
-		"with trie node cache (without value cache) and hashing 4 times each key in a row",
 		4,
 	);
 	bench_single_value(
@@ -368,10 +340,6 @@ fn state_access_benchmarks(c: &mut Criterion) {
 
 	bench_single_value(BenchmarkConfig::StateCache, "with state cache");
 	bench_single_value(BenchmarkConfig::TrieNodeCache, "with trie node cache");
-	bench_single_value(
-		BenchmarkConfig::TrieNodeCacheWithoutDataCache,
-		"with trie node cache (without value cache)",
-	);
 	bench_single_value(BenchmarkConfig::NoCache, "no cache");
 
 	group.finish();
