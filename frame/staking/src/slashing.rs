@@ -56,7 +56,7 @@ use crate::{
 use codec::{Decode, Encode};
 use frame_support::{
 	ensure,
-	traits::{Currency, Get, Imbalance, OnUnbalanced},
+	traits::{Currency, Defensive, Get, Imbalance, OnUnbalanced},
 };
 use scale_info::TypeInfo;
 use sp_runtime::{
