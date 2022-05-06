@@ -38,6 +38,7 @@ async fn running_the_node_works_and_can_be_interrupted() {
 			Command::new(cargo_bin("substrate"))
 				.args(&["--dev", "-d"])
 				.arg(base_path.path())
+				.arg("--db=paritydb")
 				.arg("--no-hardware-benchmarks")
 				.spawn()
 				.unwrap(),
@@ -52,6 +53,12 @@ async fn running_the_node_works_and_can_be_interrupted() {
 			"the process must exit gracefully after signal {}",
 			signal,
 		);
+		// Check if the database was closed gracefully. If it was not,
+		// there may exist a ref cycle that prevents the Client from being dropped properly.
+		//
+		// parity-db only writes the stats file on clean shutdown.
+		let stats_file = base_path.path().join("chains/dev/paritydb/full/stats.txt");
+		assert!(std::path::Path::exists(&stats_file));
 	}
 
 	run_command_and_kill(SIGINT).await;

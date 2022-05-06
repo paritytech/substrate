@@ -51,6 +51,7 @@ sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/comm
 sc-consensus = { version = "0.10.0-dev", path = "../../client/consensus/common" }
 sp-inherents = { version = "4.0.0-dev", path = "../../primitives/inherents" }
 sp-storage = { version = "6.0.0", path = "../../primitives/storage" }
+sc-network-common = { version = "0.10.0-dev", path = "../network/common" }
 sc-network = { version = "0.10.0-dev", path = "../network" }
 sc-chain-spec = { version = "4.0.0-dev", path = "../chain-spec" }
 sc-client-api = { version = "4.0.0-dev", path = "../api" }

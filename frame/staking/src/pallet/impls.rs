@@ -29,15 +29,15 @@ use frame_support::{
 	},
 	weights::{Weight, WithPostDispatchInfo},
 };
-use frame_system::pallet_prelude::BlockNumberFor;
+use frame_system::{pallet_prelude::BlockNumberFor, RawOrigin};
 use pallet_session::historical;
 use sp_runtime::{
-	traits::{Bounded, Convert, SaturatedConversion, Saturating, Zero},
+	traits::{Bounded, Convert, SaturatedConversion, Saturating, StaticLookup, Zero},
 	Perbill,
 };
 use sp_staking::{
 	offence::{DisableStrategy, OffenceDetails, OnOffenceHandler},
-	EraIndex, SessionIndex,
+	EraIndex, SessionIndex, StakingInterface,
 };
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
@@ -123,8 +123,9 @@ impl<T: Config> Pallet<T> {
 			.claimed_rewards
 			.retain(|&x| x >= current_era.saturating_sub(history_depth));
 		match ledger.claimed_rewards.binary_search(&era) {
-			Ok(_) => Err(Error::<T>::AlreadyClaimed
-				.with_weight(T::WeightInfo::payout_stakers_alive_staked(0)))?,
+			Ok(_) =>
+				return Err(Error::<T>::AlreadyClaimed
+					.with_weight(T::WeightInfo::payout_stakers_alive_staked(0))),
 			Err(pos) => ledger.claimed_rewards.insert(pos, era),
 		}
 
@@ -146,8 +147,8 @@ impl<T: Config> Pallet<T> {
 		let validator_reward_points = era_reward_points
 			.individual
 			.get(&ledger.stash)
-			.map(|points| *points)
-			.unwrap_or_else(|| Zero::zero());
+			.copied()
+			.unwrap_or_else(Zero::zero);
 
 		// Nothing to do if they have no reward points.
 		if validator_reward_points.is_zero() {
@@ -260,8 +261,7 @@ impl<T: Config> Pallet<T> {
 					0
 				});
 
-			let era_length =
-				session_index.checked_sub(current_era_start_session_index).unwrap_or(0); // Must never happen.
+			let era_length = session_index.saturating_sub(current_era_start_session_index); // Must never happen.
 
 			match ForceEra::<T>::get() {
 				// Will be set to `NotForcing` again if a new era has been triggered.
@@ -803,7 +803,7 @@ impl<T: Config> Pallet<T> {
 	pub fn do_remove_nominator(who: &T::AccountId) -> bool {
 		let outcome = if Nominators::<T>::contains_key(who) {
 			Nominators::<T>::remove(who);
-			T::VoterList::on_remove(who);
+			let _ = T::VoterList::on_remove(who).defensive();
 			true
 		} else {
 			false
@@ -850,7 +850,7 @@ impl<T: Config> Pallet<T> {
 	pub fn do_remove_validator(who: &T::AccountId) -> bool {
 		let outcome = if Validators::<T>::contains_key(who) {
 			Validators::<T>::remove(who);
-			T::VoterList::on_remove(who);
+			let _ = T::VoterList::on_remove(who).defensive();
 			true
 		} else {
 			false
@@ -1036,7 +1036,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 			);
 			Self::do_add_nominator(
 				&v,
-				Nominations { targets: t.try_into().unwrap(), submitted_in: 0, suppressed: false },
+				Nominations { targets: t, submitted_in: 0, suppressed: false },
 			);
 		});
 	}
@@ -1343,11 +1343,13 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsAndValidatorsM
 		// nothing to do on insert.
 		Ok(())
 	}
-	fn on_update(_: &T::AccountId, _weight: Self::Score) {
+	fn on_update(_: &T::AccountId, _weight: VoteWeight) -> Result<(), Self::Error> {
 		// nothing to do on update.
+		Ok(())
 	}
-	fn on_remove(_: &T::AccountId) {
+	fn on_remove(_: &T::AccountId) -> Result<(), Self::Error> {
 		// nothing to do on remove.
+		Ok(())
 	}
 	fn unsafe_regenerate(
 		_: impl IntoIterator<Item = T::AccountId>,
@@ -1365,5 +1367,70 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsAndValidatorsM
 		// condition of SortedListProvider::unsafe_clear.
 		Nominators::<T>::remove_all();
 		Validators::<T>::remove_all();
+	}
+}
+
+impl<T: Config> StakingInterface for Pallet<T> {
+	type AccountId = T::AccountId;
+	type Balance = BalanceOf<T>;
+
+	fn minimum_bond() -> Self::Balance {
+		MinNominatorBond::<T>::get()
+	}
+
+	fn bonding_duration() -> EraIndex {
+		T::BondingDuration::get()
+	}
+
+	fn current_era() -> EraIndex {
+		Self::current_era().unwrap_or(Zero::zero())
+	}
+
+	fn active_stake(controller: &Self::AccountId) -> Option<Self::Balance> {
+		Self::ledger(controller).map(|l| l.active)
+	}
+
+	fn total_stake(controller: &Self::AccountId) -> Option<Self::Balance> {
+		Self::ledger(controller).map(|l| l.total)
+	}
+
+	fn bond_extra(stash: Self::AccountId, extra: Self::Balance) -> DispatchResult {
+		Self::bond_extra(RawOrigin::Signed(stash).into(), extra)
+	}
+
+	fn unbond(controller: Self::AccountId, value: Self::Balance) -> DispatchResult {
+		Self::unbond(RawOrigin::Signed(controller).into(), value)
+	}
+
+	fn withdraw_unbonded(
+		controller: Self::AccountId,
+		num_slashing_spans: u32,
+	) -> Result<u64, DispatchError> {
+		Self::withdraw_unbonded(RawOrigin::Signed(controller).into(), num_slashing_spans)
+			.map(|post_info| {
+				post_info
+					.actual_weight
+					.unwrap_or(T::WeightInfo::withdraw_unbonded_kill(num_slashing_spans))
+			})
+			.map_err(|err_with_post_info| err_with_post_info.error)
+	}
+
+	fn bond(
+		stash: Self::AccountId,
+		controller: Self::AccountId,
+		value: Self::Balance,
+		payee: Self::AccountId,
+	) -> DispatchResult {
+		Self::bond(
+			RawOrigin::Signed(stash).into(),
+			T::Lookup::unlookup(controller),
+			value,
+			RewardDestination::Account(payee),
+		)
+	}
+
+	fn nominate(controller: Self::AccountId, targets: Vec<Self::AccountId>) -> DispatchResult {
+		let targets = targets.into_iter().map(T::Lookup::unlookup).collect::<Vec<_>>();
+		Self::nominate(RawOrigin::Signed(controller).into(), targets)
 	}
 }

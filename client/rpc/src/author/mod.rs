@@ -119,7 +119,7 @@ where
 			.runtime_api()
 			.decode_session_keys(&generic::BlockId::Hash(best_block_hash), session_keys.to_vec())
 			.map_err(|e| Error::Client(Box::new(e)))?
-			.ok_or_else(|| Error::InvalidSessionKeys)?;
+			.ok_or(Error::InvalidSessionKeys)?;
 
 		Ok(SyncCryptoStore::has_keys(&*self.keystore, &keys))
 	}
@@ -143,7 +143,7 @@ where
 			.map_err(|e| {
 				e.into_pool_error()
 					.map(Into::into)
-					.unwrap_or_else(|e| error::Error::Verification(Box::new(e)).into())
+					.unwrap_or_else(|e| error::Error::Verification(Box::new(e)))
 			})
 			.boxed()
 	}
@@ -201,7 +201,7 @@ where
 			.map_err(|e| {
 				e.into_pool_error()
 					.map(error::Error::from)
-					.unwrap_or_else(|e| error::Error::Verification(Box::new(e)).into())
+					.unwrap_or_else(|e| error::Error::Verification(Box::new(e)))
 			});
 
 		let subscriptions = self.subscriptions.clone();

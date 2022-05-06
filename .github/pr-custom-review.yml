@@ -6,10 +6,21 @@ action-review-team: ci
 rules:
   - name: Core developers
     check_type: changed_files
-    condition: .*
+    condition:
+      include: .*
+      # excluding files from 'CI team' rules
+      exclude: ^\.gitlab-ci\.yml|^scripts/ci/.*|^\.github/.*
     min_approvals: 2
     teams:
       - core-devs
+
+  - name: CI team
+    check_type: changed_files
+    condition:
+      include: ^\.gitlab-ci\.yml|^scripts/ci/.*|^\.github/.*
+    min_approvals: 2
+    teams:
+      - ci
 
 prevent-review-request:
   teams:

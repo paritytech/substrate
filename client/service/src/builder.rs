@@ -263,7 +263,7 @@ where
 			state_cache_child_ratio: config.state_cache_child_ratio.map(|v| (v, 100)),
 			state_pruning: config.state_pruning.clone(),
 			source: config.database.clone(),
-			keep_blocks: config.keep_blocks.clone(),
+			keep_blocks: config.keep_blocks,
 		};
 
 		let backend = new_db_backend(db_config)?;
@@ -307,7 +307,7 @@ where
 				wasm_runtime_overrides: config.wasm_runtime_overrides.clone(),
 				no_genesis: matches!(
 					config.network.sync_mode,
-					sc_network::config::SyncMode::Fast { .. } | sc_network::config::SyncMode::Warp
+					SyncMode::Fast { .. } | SyncMode::Warp { .. }
 				),
 				wasm_runtime_substitutes,
 			},
@@ -421,10 +421,10 @@ where
 			Some("offchain-worker"),
 			sc_offchain::notification_future(
 				config.role.is_authority(),
-				client.clone(),
+				client,
 				offchain,
 				Clone::clone(&spawn_handle),
-				network.clone(),
+				network,
 			),
 		);
 	}
@@ -517,7 +517,7 @@ where
 	let metrics_service =
 		if let Some(PrometheusConfig { port, registry }) = config.prometheus_config.clone() {
 			// Set static metrics.
-			let metrics = MetricsService::with_prometheus(telemetry.clone(), &registry, &config)?;
+			let metrics = MetricsService::with_prometheus(telemetry, &registry, &config)?;
 			spawn_handle.spawn(
 				"prometheus-endpoint",
 				None,
@@ -526,7 +526,7 @@ where
 
 			metrics
 		} else {
-			MetricsService::new(telemetry.clone())
+			MetricsService::new(telemetry)
 		};
 
 	// Periodically updated metrics and telemetry updates.
@@ -572,7 +572,7 @@ where
 		None,
 		sc_informant::build(
 			client.clone(),
-			network.clone(),
+			network,
 			transaction_pool.clone(),
 			config.informant_output_format,
 		),
@@ -781,12 +781,12 @@ where
 		return Err("Warp sync enabled, but no warp sync provider configured.".into())
 	}
 
-	if config.state_pruning.is_archive() {
+	if client.requires_full_sync() {
 		match config.network.sync_mode {
 			SyncMode::Fast { .. } => return Err("Fast sync doesn't work for archive nodes".into()),
 			SyncMode::Warp => return Err("Warp sync doesn't work for archive nodes".into()),
 			SyncMode::Full => {},
-		};
+		}
 	}
 
 	let transaction_pool_adapter = Arc::new(TransactionPoolAdapter {

@@ -99,7 +99,7 @@ impl<T: Config> From<FeasibilityError> for MinerError<T> {
 /// Save a given call into OCW storage.
 fn save_solution<T: Config>(call: &Call<T>) -> Result<(), MinerError<T>> {
 	log!(debug, "saving a call to the offchain storage.");
-	let storage = StorageValueRef::persistent(&OFFCHAIN_CACHED_CALL);
+	let storage = StorageValueRef::persistent(OFFCHAIN_CACHED_CALL);
 	match storage.mutate::<_, (), _>(|_| Ok(call.clone())) {
 		Ok(_) => Ok(()),
 		Err(MutateStorageError::ConcurrentModification(_)) =>
@@ -116,7 +116,7 @@ fn save_solution<T: Config>(call: &Call<T>) -> Result<(), MinerError<T>> {
 
 /// Get a saved solution from OCW storage if it exists.
 fn restore_solution<T: Config>() -> Result<Call<T>, MinerError<T>> {
-	StorageValueRef::persistent(&OFFCHAIN_CACHED_CALL)
+	StorageValueRef::persistent(OFFCHAIN_CACHED_CALL)
 		.get()
 		.ok()
 		.flatten()
@@ -126,7 +126,7 @@ fn restore_solution<T: Config>() -> Result<Call<T>, MinerError<T>> {
 /// Clear a saved solution from OCW storage.
 pub(super) fn kill_ocw_solution<T: Config>() {
 	log!(debug, "clearing offchain call cache storage.");
-	let mut storage = StorageValueRef::persistent(&OFFCHAIN_CACHED_CALL);
+	let mut storage = StorageValueRef::persistent(OFFCHAIN_CACHED_CALL);
 	storage.clear();
 }
 
@@ -135,14 +135,14 @@ pub(super) fn kill_ocw_solution<T: Config>() {
 /// After calling this, the next offchain worker is guaranteed to work, with respect to the
 /// frequency repeat.
 fn clear_offchain_repeat_frequency() {
-	let mut last_block = StorageValueRef::persistent(&OFFCHAIN_LAST_BLOCK);
+	let mut last_block = StorageValueRef::persistent(OFFCHAIN_LAST_BLOCK);
 	last_block.clear();
 }
 
 /// `true` when OCW storage contains a solution
 #[cfg(test)]
 fn ocw_solution_exists<T: Config>() -> bool {
-	matches!(StorageValueRef::persistent(&OFFCHAIN_CACHED_CALL).get::<Call<T>>(), Ok(Some(_)))
+	matches!(StorageValueRef::persistent(OFFCHAIN_CACHED_CALL).get::<Call<T>>(), Ok(Some(_)))
 }
 
 impl<T: Config> Pallet<T> {
@@ -206,9 +206,8 @@ impl<T: Config> Pallet<T> {
 		// get the solution, with a load of checks to ensure if submitted, IT IS ABSOLUTELY VALID.
 		let (raw_solution, witness) = Self::mine_and_check()?;
 
-		let score = raw_solution.score.clone();
-		let call: Call<T> =
-			Call::submit_unsigned { raw_solution: Box::new(raw_solution), witness }.into();
+		let score = raw_solution.score;
+		let call: Call<T> = Call::submit_unsigned { raw_solution: Box::new(raw_solution), witness };
 
 		log!(
 			debug,
@@ -532,7 +531,7 @@ impl<T: Config> Pallet<T> {
 				// we found the right value - early exit the function.
 				Ok(next) => return next,
 			}
-			step = step / 2;
+			step /= 2;
 			current_weight = weight_with(voters);
 		}
 
@@ -566,7 +565,7 @@ impl<T: Config> Pallet<T> {
 	/// is returned, `now` is written in storage and will be used in further calls as the baseline.
 	pub fn ensure_offchain_repeat_frequency(now: T::BlockNumber) -> Result<(), MinerError<T>> {
 		let threshold = T::OffchainRepeat::get();
-		let last_block = StorageValueRef::persistent(&OFFCHAIN_LAST_BLOCK);
+		let last_block = StorageValueRef::persistent(OFFCHAIN_LAST_BLOCK);
 
 		let mutate_stat = last_block.mutate::<_, &'static str, _>(
 			|maybe_head: Result<Option<T::BlockNumber>, _>| {
