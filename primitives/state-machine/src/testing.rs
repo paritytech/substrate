@@ -204,7 +204,7 @@ where
 	/// This implementation will wipe the proof recorded in between calls. Consecutive calls will
 	/// get their own proof from scratch.
 	pub fn execute_and_prove<R>(&mut self, execute: impl FnOnce() -> R) -> (R, StorageProof) {
-		let mut proving_backend = TrieBackendBuilder::wrap(&self.backend)
+		let proving_backend = TrieBackendBuilder::wrap(&self.backend)
 			.with_recorder(Default::default())
 			.build();
 		let mut proving_ext = Ext::new(

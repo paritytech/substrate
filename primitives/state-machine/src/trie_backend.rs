@@ -149,11 +149,9 @@ where
 
 	/// Extract the [`StorageProof`].
 	///
-	/// This only returns `Some` when there was a recorder set. The recorder will be consumed as
-	/// part of calling this function. This means that no more nodes will be recorded by this
-	/// instance afterwards.
+	/// This only returns `Some` when there was a recorder set.
 	#[cfg(feature = "std")]
-	pub fn extract_proof(&mut self) -> Result<Option<StorageProof>, crate::DefaultError> {
+	pub fn extract_proof(mut self) -> Result<Option<StorageProof>, crate::DefaultError> {
 		let recorder = self.essence.recorder.take();
 		let root = self.root();
 		let essence = self.essence();

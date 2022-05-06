@@ -290,8 +290,8 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 
 					let builder = #crate_::TrieBackendBuilder::wrap(&trie_backend);
 					let builder = #crate_::TrieBackendBuilder::with_recorder(builder, recorder);
-					let mut trie_backend = #crate_::TrieBackendBuilder::build(builder);
-					let res = #crate_::TrieBackend::extract_proof(&mut trie_backend);
+					let trie_backend = #crate_::TrieBackendBuilder::build(builder);
+					let res = #crate_::TrieBackend::extract_proof(trie_backend);
 
 					core::result::Result::map_err(
 						res,

@@ -735,7 +735,7 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, D: NativeExecutionDis
 	let backend = ext.backend.clone();
 	let runtime_code_backend = sp_state_machine::backend::BackendRuntimeCode::new(&backend);
 
-	let mut proving_backend =
+	let proving_backend =
 		TrieBackendBuilder::wrap(&backend).with_recorder(Default::default()).build();
 
 	let runtime_code = runtime_code_backend.runtime_code()?;

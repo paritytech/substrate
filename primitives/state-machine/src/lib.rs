@@ -600,7 +600,7 @@ mod execution {
 		Exec: CodeExecutor + 'static + Clone,
 		Spawn: SpawnNamed + Send + 'static,
 	{
-		let mut proving_backend =
+		let proving_backend =
 			TrieBackendBuilder::wrap(trie_backend).with_recorder(Default::default()).build();
 
 		let result = {
@@ -859,7 +859,7 @@ mod execution {
 		}
 
 		let recorder = sp_trie::recorder::Recorder::default();
-		let mut proving_backend =
+		let proving_backend =
 			TrieBackendBuilder::wrap(trie_backend).with_recorder(recorder.clone()).build();
 		let mut count = 0;
 
@@ -1001,7 +1001,7 @@ mod execution {
 		H::Out: Ord + Codec,
 	{
 		let recorder = sp_trie::recorder::Recorder::default();
-		let mut proving_backend =
+		let proving_backend =
 			TrieBackendBuilder::wrap(trie_backend).with_recorder(recorder.clone()).build();
 		let mut count = 0;
 		proving_backend
@@ -1059,7 +1059,7 @@ mod execution {
 		I: IntoIterator,
 		I::Item: AsRef<[u8]>,
 	{
-		let mut proving_backend =
+		let proving_backend =
 			TrieBackendBuilder::wrap(trie_backend).with_recorder(Default::default()).build();
 		for key in keys.into_iter() {
 			proving_backend
@@ -1086,7 +1086,7 @@ mod execution {
 		I: IntoIterator,
 		I::Item: AsRef<[u8]>,
 	{
-		let mut proving_backend =
+		let proving_backend =
 			TrieBackendBuilder::wrap(trie_backend).with_recorder(Default::default()).build();
 		for key in keys.into_iter() {
 			proving_backend
@@ -1927,7 +1927,8 @@ mod tests {
 			let trie: InMemoryBackend<BlakeTwo256> =
 				(storage.clone(), StateVersion::default()).into();
 			let trie_root = trie.root().clone();
-			let mut backend = TrieBackendBuilder::wrap(&trie).with_recorder(Default::default()).build();
+			let mut backend =
+				TrieBackendBuilder::wrap(&trie).with_recorder(Default::default()).build();
 			let mut queries = Vec::new();
 			for c in 0..(5 + nb_child_trie / 2) {
 				// random existing query
