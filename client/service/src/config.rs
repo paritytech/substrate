@@ -108,6 +108,10 @@ pub struct Configuration {
 	///
 	/// Default: [`crate::RandomStringSubscriptionId`].
 	pub rpc_id_provider: Option<Box<dyn crate::RpcSubscriptionIdProvider>>,
+	/// Maximum allowed subscriptions per rpc connection
+	///
+	/// Default: 1024.
+	pub rpc_max_subs_per_conn: Option<usize>,
 	/// Maximum size of the output buffer capacity for websocket connections.
 	pub ws_max_out_buffer_capacity: Option<usize>,
 	/// Prometheus endpoint configuration. `None` if disabled.

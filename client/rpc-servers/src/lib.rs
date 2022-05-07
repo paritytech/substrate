@@ -41,12 +41,41 @@ pub const RPC_MAX_PAYLOAD_DEFAULT: usize = 15 * MEGABYTE;
 /// Default maximum number of connections for WS RPC servers.
 const WS_MAX_CONNECTIONS: usize = 100;
 
+/// Default maximum number subscriptions per connection for WS RPC servers.
+const WS_MAX_SUBS_PER_CONN: usize = 1024;
+
 pub mod middleware;
 
 /// Type alias for http server
 pub type HttpServer = HttpServerHandle;
 /// Type alias for ws server
 pub type WsServer = WsServerHandle;
+
+/// WebSocket specific settings on the server.
+pub struct WsConfig {
+	/// Maximum connections.
+	pub max_connections: Option<usize>,
+	/// Maximum subscriptions per connection.
+	pub max_subs_per_conn: Option<usize>,
+	/// Maximum rpc request payload size.
+	pub max_payload_in_mb: Option<usize>,
+	/// Maximum rpc response payload size.
+	pub max_payload_out_mb: Option<usize>,
+}
+
+impl WsConfig {
+	// Deconstructs the config to get the finalized inner values.
+	//
+	// `Payload size` or `max subs per connection` bigger than u32::MAX will be truncated.
+	fn deconstruct(self) -> (u32, u32, u64, u32) {
+		let max_conns = self.max_connections.unwrap_or(WS_MAX_CONNECTIONS) as u64;
+		let max_payload_in_mb = payload_size_or_default(self.max_payload_in_mb) as u32;
+		let max_payload_out_mb = payload_size_or_default(self.max_payload_out_mb) as u32;
+		let max_subs_per_conn = self.max_subs_per_conn.unwrap_or(WS_MAX_SUBS_PER_CONN) as u32;
+
+		(max_payload_in_mb, max_payload_out_mb, max_conns, max_subs_per_conn)
+	}
+}
 
 /// Start HTTP server listening on given address.
 pub async fn start_http<M: Send + Sync + 'static>(
@@ -101,24 +130,21 @@ pub async fn start_http<M: Send + Sync + 'static>(
 /// Start WS server listening on given address.
 pub async fn start_ws<M: Send + Sync + 'static>(
 	addrs: [SocketAddr; 2],
-	max_connections: Option<usize>,
 	cors: Option<&Vec<String>>,
-	max_payload_in_mb: Option<usize>,
-	max_payload_out_mb: Option<usize>,
+	ws_config: WsConfig,
 	metrics: Option<RpcMetrics>,
 	rpc_api: RpcModule<M>,
 	rt: tokio::runtime::Handle,
 	id_provider: Option<Box<dyn IdProvider>>,
 ) -> Result<WsServerHandle, Box<dyn StdError + Send + Sync>> {
-	let max_payload_in = payload_size_or_default(max_payload_in_mb);
-	let max_payload_out = payload_size_or_default(max_payload_out_mb);
-
-	let max_connections = max_connections.unwrap_or(WS_MAX_CONNECTIONS);
+	let (max_payload_in, max_payload_out, max_connections, max_subs_per_conn) =
+		ws_config.deconstruct();
 
 	let mut builder = WsServerBuilder::new()
-		.max_request_body_size(max_payload_in as u32)
-		.max_response_body_size(max_payload_out as u32)
-		.max_connections(max_connections as u64)
+		.max_request_body_size(max_payload_in)
+		.max_response_body_size(max_payload_out)
+		.max_connections(max_connections)
+		.max_subscriptions_per_connection(max_subs_per_conn)
 		.custom_tokio_runtime(rt);
 
 	if let Some(provider) = id_provider {

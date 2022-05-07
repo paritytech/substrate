@@ -541,6 +541,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			rpc_max_request_size: self.rpc_max_request_size()?,
 			rpc_max_response_size: self.rpc_max_response_size()?,
 			rpc_id_provider: None,
+			rpc_max_subs_per_conn: None,
 			ws_max_out_buffer_capacity: self.ws_max_out_buffer_capacity()?,
 			prometheus_config: self
 				.prometheus_config(DCV::prometheus_listen_port(), &chain_spec)?,

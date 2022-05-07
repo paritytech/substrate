@@ -249,6 +249,7 @@ fn node_config<
 		rpc_max_request_size: None,
 		rpc_max_response_size: None,
 		rpc_id_provider: None,
+		rpc_max_subs_per_conn: None,
 		ws_max_out_buffer_capacity: None,
 		prometheus_config: None,
 		telemetry_endpoints: None,

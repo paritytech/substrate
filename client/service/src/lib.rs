@@ -42,6 +42,7 @@ use jsonrpsee::{core::Error as JsonRpseeError, RpcModule};
 use log::{debug, error, warn};
 use sc_client_api::{blockchain::HeaderBackend, BlockBackend, BlockchainEvents, ProofProvider};
 use sc_network::PeerId;
+use sc_rpc_server::WsConfig;
 use sc_utils::mpsc::TracingUnboundedReceiver;
 use sp_blockchain::HeaderMetadata;
 use sp_runtime::{
@@ -349,12 +350,17 @@ where
 		config.tokio_handle.clone(),
 	);
 
+	let ws_config = WsConfig {
+		max_connections: config.rpc_ws_max_connections,
+		max_payload_in_mb: max_request_size,
+		max_payload_out_mb: ws_max_response_size,
+		max_subs_per_conn: config.rpc_max_subs_per_conn,
+	};
+
 	let ws_fut = sc_rpc_server::start_ws(
 		[ws_addr, ws_addr2],
-		config.rpc_ws_max_connections,
 		config.rpc_cors.as_ref(),
-		max_request_size,
-		ws_max_response_size,
+		ws_config,
 		metrics,
 		gen_rpc_module(deny_unsafe(http_addr, &config.rpc_methods))?,
 		config.tokio_handle.clone(),
