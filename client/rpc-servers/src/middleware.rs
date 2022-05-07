@@ -159,7 +159,13 @@ impl Middleware for RpcMiddleware {
 
 	fn on_result(&self, name: &str, success: bool, started_at: Self::Instant) {
 		let micros = started_at.elapsed().as_micros();
-		log::trace!(target: "rpc_metrics", "[{}] on_result name={}, success={}, started_at={:?}; call took {}μs", self.transport_label, name, success, started_at, micros);
+		log::debug!(
+			target: "rpc_metrics",
+			"[{}] {} call took {} μs",
+			self.transport_label,
+			name,
+			micros,
+		);
 		self.metrics
 			.calls_time
 			.with_label_values(&[self.transport_label, name])
