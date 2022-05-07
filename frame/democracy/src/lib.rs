@@ -159,7 +159,7 @@ use frame_support::{
 		defensive_prelude::*,
 		schedule::{DispatchTime, Named as ScheduleNamed},
 		BalanceStatus, Currency, Get, LockIdentifier, LockableCurrency, OnUnbalanced,
-		ReservableCurrency, WithdrawReasons,
+		ReservableCurrency, WithdrawReasons, StorageVersion,
 	},
 	weights::Weight,
 };
@@ -245,8 +245,12 @@ pub mod pallet {
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 
+	/// The current storage version.
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
+
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
@@ -463,12 +467,6 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type Cancellations<T: Config> = StorageMap<_, Identity, T::Hash, bool, ValueQuery>;
 
-	/// Storage version of the pallet.
-	///
-	/// New networks start with last version.
-	#[pallet::storage]
-	pub(crate) type StorageVersion<T> = StorageValue<_, Releases>;
-
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		_phantom: sp_std::marker::PhantomData<T>,
@@ -487,7 +485,6 @@ pub mod pallet {
 			PublicPropCount::<T>::put(0 as PropIndex);
 			ReferendumCount::<T>::put(0 as ReferendumIndex);
 			LowestUnbaked::<T>::put(0 as ReferendumIndex);
-			StorageVersion::<T>::put(Releases::V1);
 		}
 	}
 

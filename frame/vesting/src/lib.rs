@@ -60,7 +60,7 @@ use frame_support::{
 	ensure,
 	pallet_prelude::*,
 	traits::{
-		Currency, ExistenceRequirement, Get, LockIdentifier, LockableCurrency, VestingSchedule,
+		Currency, ExistenceRequirement, Get, LockIdentifier, LockableCurrency, VestingSchedule, StorageVersion,
 		WithdrawReasons,
 	},
 };
@@ -194,14 +194,13 @@ pub mod pallet {
 		BoundedVec<VestingInfo<BalanceOf<T>, T::BlockNumber>, MaxVestingSchedulesGet<T>>,
 	>;
 
-	/// Storage version of the pallet.
-	///
-	/// New networks start with latest version, as determined by the genesis build.
-	#[pallet::storage]
-	pub(crate) type StorageVersion<T: Config> = StorageValue<_, Releases, ValueQuery>;
+	/// The current storage version.
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::storage_version(STORAGE_VERSION)]
+	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
 	#[pallet::genesis_config]
@@ -220,9 +219,6 @@ pub mod pallet {
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
 			use sp_runtime::traits::Saturating;
-
-			// Genesis uses the latest storage version.
-			StorageVersion::<T>::put(Releases::V1);
 
 			// Generate initial vesting configuration
 			// * who - Account which we are generating vesting configuration for
