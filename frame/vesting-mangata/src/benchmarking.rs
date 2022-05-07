@@ -25,19 +25,17 @@ use frame_system::{Pallet as System, RawOrigin};
 use sp_runtime::traits::{Bounded, CheckedDiv, CheckedMul};
 
 use super::*;
-use crate::Pallet as Vesting;
+use crate::{Pallet as Vesting, BalanceOf, TokenIdOf};
 
 const SEED: u32 = 0;
-
-type BalanceOf<T> =
-	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+const NATIVE_CURRENCY_ID: u32 = 0;
 
 fn add_locks<T: Config>(who: &T::AccountId, n: u8) {
 	for id in 0..n {
 		let lock_id = [id; 8];
 		let locked = 256u32;
 		let reasons = WithdrawReasons::TRANSFER | WithdrawReasons::RESERVE;
-		T::Currency::set_lock(lock_id, who, locked.into(), reasons);
+		T::Tokens::set_lock(NATIVE_CURRENCY_ID.into(), lock_id, who, locked.into(), reasons);
 	}
 }
 
@@ -53,7 +51,7 @@ fn add_vesting_schedules<T: Config>(
 
 	let source: T::AccountId = account("source", 0, SEED);
 	let source_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(source.clone());
-	T::Currency::make_free_balance_be(&source, BalanceOf::<T>::max_value());
+	T::Tokens::make_free_balance_be(NATIVE_CURRENCY_ID.into(), &source, BalanceOf::<T>::max_value());
 
 	System::<T>::set_block_number(T::BlockNumber::zero());
 
@@ -65,14 +63,15 @@ fn add_vesting_schedules<T: Config>(
 		assert_ok!(Vesting::<T>::do_vested_transfer(
 			source_lookup.clone(),
 			target.clone(),
-			schedule
+			schedule,
+			NATIVE_CURRENCY_ID.into()
 		));
 
 		// Top up to guarantee we can always transfer another schedule.
-		T::Currency::make_free_balance_be(&source, BalanceOf::<T>::max_value());
+		T::Tokens::make_free_balance_be(NATIVE_CURRENCY_ID.into(), &source, BalanceOf::<T>::max_value());
 	}
 
-	Ok(total_locked.into())
+	Ok(total_locked)
 }
 
 benchmarks! {
@@ -82,7 +81,7 @@ benchmarks! {
 
 		let caller: T::AccountId = whitelisted_caller();
 		let caller_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(caller.clone());
-		T::Currency::make_free_balance_be(&caller, T::Currency::minimum_balance());
+		T::Tokens::make_free_balance_be(NATIVE_CURRENCY_ID.into(), &caller, T::Tokens::minimum_balance(NATIVE_CURRENCY_ID.into()));
 
 		add_locks::<T>(&caller, l as u8);
 		let expected_balance = add_vesting_schedules::<T>(caller_lookup, s)?;
@@ -90,16 +89,16 @@ benchmarks! {
 		// At block zero, everything is vested.
 		assert_eq!(System::<T>::block_number(), T::BlockNumber::zero());
 		assert_eq!(
-			Vesting::<T>::vesting_balance(&caller),
-			Some(expected_balance.into()),
+			Vesting::<T>::vesting_balance(&caller, NATIVE_CURRENCY_ID.into()),
+			Some(expected_balance),
 			"Vesting schedule not added",
 		);
-	}: vest(RawOrigin::Signed(caller.clone()))
+	}: vest(RawOrigin::Signed(caller.clone()), NATIVE_CURRENCY_ID.into())
 	verify {
 		// Nothing happened since everything is still vested.
 		assert_eq!(
-			Vesting::<T>::vesting_balance(&caller),
-			Some(expected_balance.into()),
+			Vesting::<T>::vesting_balance(&caller, NATIVE_CURRENCY_ID.into()),
+			Some(expected_balance),
 			"Vesting schedule was removed",
 		);
 	}
@@ -110,7 +109,7 @@ benchmarks! {
 
 		let caller: T::AccountId = whitelisted_caller();
 		let caller_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(caller.clone());
-		T::Currency::make_free_balance_be(&caller, T::Currency::minimum_balance());
+		T::Tokens::make_free_balance_be(NATIVE_CURRENCY_ID.into(), &caller, T::Tokens::minimum_balance(NATIVE_CURRENCY_ID.into()));
 
 		add_locks::<T>(&caller, l as u8);
 		add_vesting_schedules::<T>(caller_lookup, s)?;
@@ -118,15 +117,15 @@ benchmarks! {
 		// At block 21, everything is unlocked.
 		System::<T>::set_block_number(21u32.into());
 		assert_eq!(
-			Vesting::<T>::vesting_balance(&caller),
+			Vesting::<T>::vesting_balance(&caller, NATIVE_CURRENCY_ID.into()),
 			Some(BalanceOf::<T>::zero()),
 			"Vesting schedule still active",
 		);
-	}: vest(RawOrigin::Signed(caller.clone()))
+	}: vest(RawOrigin::Signed(caller.clone()), NATIVE_CURRENCY_ID.into())
 	verify {
 		// Vesting schedule is removed!
 		assert_eq!(
-			Vesting::<T>::vesting_balance(&caller),
+			Vesting::<T>::vesting_balance(&caller, NATIVE_CURRENCY_ID.into()),
 			None,
 			"Vesting schedule was not removed",
 		);
@@ -145,18 +144,18 @@ benchmarks! {
 		// At block zero, everything is vested.
 		assert_eq!(System::<T>::block_number(), T::BlockNumber::zero());
 		assert_eq!(
-			Vesting::<T>::vesting_balance(&other),
+			Vesting::<T>::vesting_balance(&other, NATIVE_CURRENCY_ID.into()),
 			Some(expected_balance),
 			"Vesting schedule not added",
 		);
 
 		let caller: T::AccountId = whitelisted_caller();
-	}: vest_other(RawOrigin::Signed(caller.clone()), other_lookup)
+	}: vest_other(RawOrigin::Signed(caller.clone()), NATIVE_CURRENCY_ID.into(), other_lookup)
 	verify {
 		// Nothing happened since everything is still vested.
 		assert_eq!(
-			Vesting::<T>::vesting_balance(&other),
-			Some(expected_balance.into()),
+			Vesting::<T>::vesting_balance(&other, NATIVE_CURRENCY_ID.into()),
+			Some(expected_balance),
 			"Vesting schedule was removed",
 		);
 	}
@@ -174,17 +173,17 @@ benchmarks! {
 		System::<T>::set_block_number(21u32.into());
 
 		assert_eq!(
-			Vesting::<T>::vesting_balance(&other),
+			Vesting::<T>::vesting_balance(&other, NATIVE_CURRENCY_ID.into()),
 			Some(BalanceOf::<T>::zero()),
 			"Vesting schedule still active",
 		);
 
 		let caller: T::AccountId = whitelisted_caller();
-	}: vest_other(RawOrigin::Signed(caller.clone()), other_lookup)
+	}: vest_other(RawOrigin::Signed(caller.clone()), NATIVE_CURRENCY_ID.into(), other_lookup)
 	verify {
 		// Vesting schedule is removed.
 		assert_eq!(
-			Vesting::<T>::vesting_balance(&other),
+			Vesting::<T>::vesting_balance(&other, NATIVE_CURRENCY_ID.into()),
 			None,
 			"Vesting schedule was not removed",
 		);
@@ -196,7 +195,7 @@ benchmarks! {
 
 		let source: T::AccountId = account("source", 0, SEED);
 		let source_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(source.clone());
-		T::Currency::make_free_balance_be(&source, BalanceOf::<T>::max_value());
+		T::Tokens::make_free_balance_be(NATIVE_CURRENCY_ID.into(), &source, BalanceOf::<T>::max_value());
 
 		let target: T::AccountId = account("target", 0, SEED);
 		let target_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(target.clone());
@@ -214,16 +213,16 @@ benchmarks! {
 			per_block,
 			1u32.into(),
 		);
-	}: _(RawOrigin::Root, source_lookup, target_lookup, vesting_schedule)
+	}: _(RawOrigin::Root, NATIVE_CURRENCY_ID.into(), source_lookup, target_lookup, vesting_schedule)
 	verify {
 		assert_eq!(
 			expected_balance,
-			T::Currency::free_balance(&target),
+			T::Tokens::free_balance(NATIVE_CURRENCY_ID.into(), &target),
 			"Transfer didn't happen",
 		);
 		assert_eq!(
-			Vesting::<T>::vesting_balance(&target),
-			Some(expected_balance.into()),
+			Vesting::<T>::vesting_balance(&target, NATIVE_CURRENCY_ID.into()),
+			Some(expected_balance),
 				"Lock not correctly updated",
 			);
 		}
@@ -242,16 +241,16 @@ benchmarks! {
 		// Schedules are not vesting at block 0.
 		assert_eq!(System::<T>::block_number(), T::BlockNumber::zero());
 		assert_eq!(
-			Vesting::<T>::vesting_balance(&caller),
+			Vesting::<T>::vesting_balance(&caller, NATIVE_CURRENCY_ID.into()),
 			Some(expected_balance),
 			"Vesting balance should equal sum locked of all schedules",
 		);
 		assert_eq!(
-			Vesting::<T>::vesting(&caller).unwrap().len(),
+			Vesting::<T>::vesting(&caller, Into::<TokenIdOf<T>>::into(NATIVE_CURRENCY_ID)).unwrap().len(),
 			s as usize,
 			"There should be exactly max vesting schedules"
 		);
-	}: merge_schedules(RawOrigin::Signed(caller.clone()), 0, s - 1)
+	}: merge_schedules(RawOrigin::Signed(caller.clone()), NATIVE_CURRENCY_ID.into(), 0, s - 1)
 	verify {
 		let expected_schedule = VestingInfo::new(
 			T::MinVestedTransfer::get() * 20u32.into() * 2u32.into(),
@@ -260,16 +259,16 @@ benchmarks! {
 		);
 		let expected_index = (s - 2) as usize;
 		assert_eq!(
-			Vesting::<T>::vesting(&caller).unwrap()[expected_index],
+			Vesting::<T>::vesting(&caller, Into::<TokenIdOf<T>>::into(NATIVE_CURRENCY_ID)).unwrap()[expected_index],
 			expected_schedule
 		);
 		assert_eq!(
-			Vesting::<T>::vesting_balance(&caller),
+			Vesting::<T>::vesting_balance(&caller, NATIVE_CURRENCY_ID.into()),
 			Some(expected_balance),
 			"Vesting balance should equal total locked of all schedules",
 		);
 		assert_eq!(
-			Vesting::<T>::vesting(&caller).unwrap().len(),
+			Vesting::<T>::vesting(&caller, Into::<TokenIdOf<T>>::into(NATIVE_CURRENCY_ID)).unwrap().len(),
 			(s - 1) as usize,
 			"Schedule count should reduce by 1"
 		);
@@ -294,18 +293,18 @@ benchmarks! {
 		// We expect half the original locked balance (+ any remainder that vests on the last block).
 		let expected_balance = total_transferred / 2u32.into();
 		assert_eq!(
-			Vesting::<T>::vesting_balance(&caller),
+			Vesting::<T>::vesting_balance(&caller, NATIVE_CURRENCY_ID.into()),
 			Some(expected_balance),
 			"Vesting balance should reflect that we are half way through all schedules duration",
 		);
 		assert_eq!(
-			Vesting::<T>::vesting(&caller).unwrap().len(),
+			Vesting::<T>::vesting(&caller, Into::<TokenIdOf<T>>::into(NATIVE_CURRENCY_ID)).unwrap().len(),
 			s as usize,
 			"There should be exactly max vesting schedules"
 		);
 		// The balance is not actually transferable because it has not been unlocked.
-		assert!(T::Currency::transfer(&caller, &test_dest, expected_balance, ExistenceRequirement::AllowDeath).is_err());
-	}: merge_schedules(RawOrigin::Signed(caller.clone()), 0, s - 1)
+		assert!(T::Tokens::transfer(NATIVE_CURRENCY_ID.into(), &caller, &test_dest, expected_balance, ExistenceRequirement::AllowDeath).is_err());
+	}: merge_schedules(RawOrigin::Signed(caller.clone()), NATIVE_CURRENCY_ID.into(), 0, s - 1)
 	verify {
 		let expected_schedule = VestingInfo::new(
 			T::MinVestedTransfer::get() * 2u32.into() * 10u32.into(),
@@ -314,27 +313,27 @@ benchmarks! {
 		);
 		let expected_index = (s - 2) as usize;
 		assert_eq!(
-			Vesting::<T>::vesting(&caller).unwrap()[expected_index],
+			Vesting::<T>::vesting(&caller, Into::<TokenIdOf<T>>::into(NATIVE_CURRENCY_ID)).unwrap()[expected_index],
 			expected_schedule,
 			"New schedule is properly created and placed"
 		);
 		assert_eq!(
-			Vesting::<T>::vesting(&caller).unwrap()[expected_index],
+			Vesting::<T>::vesting(&caller, Into::<TokenIdOf<T>>::into(NATIVE_CURRENCY_ID)).unwrap()[expected_index],
 			expected_schedule
 		);
 		assert_eq!(
-			Vesting::<T>::vesting_balance(&caller),
+			Vesting::<T>::vesting_balance(&caller, NATIVE_CURRENCY_ID.into()),
 			Some(expected_balance),
 			"Vesting balance should equal half total locked of all schedules",
 		);
 		assert_eq!(
-			Vesting::<T>::vesting(&caller).unwrap().len(),
+			Vesting::<T>::vesting(&caller, Into::<TokenIdOf<T>>::into(NATIVE_CURRENCY_ID)).unwrap().len(),
 			(s - 1) as usize,
 			"Schedule count should reduce by 1"
 		);
 		// Since merge unlocks all schedules we can now transfer the balance.
 		assert_ok!(
-			T::Currency::transfer(&caller, &test_dest, expected_balance, ExistenceRequirement::AllowDeath)
+			T::Tokens::transfer(NATIVE_CURRENCY_ID.into(), &caller, &test_dest, expected_balance, ExistenceRequirement::AllowDeath)
 		);
 	}
 
