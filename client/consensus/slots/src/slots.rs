@@ -100,7 +100,7 @@ pub(crate) struct Slots<Block, SC, IDP> {
 	_phantom: std::marker::PhantomData<Block>,
 }
 
-impl<Block, C, IDP> Slots<Block, SC, IDP> {
+impl<Block, SC, IDP> Slots<Block, SC, IDP> {
 	/// Create a new `Slots` stream.
 	pub fn new(slot_duration: Duration, create_inherent_data_providers: IDP, select_chain: SC) -> Self {
 		Slots {
