@@ -194,6 +194,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 		max_pools: Some(3),
 		max_members_per_pool: Some(3),
 		max_members: Some(3 * 3),
+		min_points_to_balance: 10,
 	}
 	.assimilate_storage(&mut storage);
 	sp_io::TestExternalities::from(storage)
