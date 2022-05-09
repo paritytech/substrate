@@ -20,7 +20,10 @@
 use codec::{Decode, Encode};
 use core::marker::PhantomData;
 use frame_election_provider_support::ScoreProvider;
-use frame_support::{storage::migration, traits::OnRuntimeUpgrade};
+use frame_support::{
+	storage::migration,
+	traits::{OnRuntimeUpgrade, PalletInfo},
+};
 use sp_runtime::traits::Zero;
 
 #[cfg(feature = "try-runtime")]
@@ -64,17 +67,22 @@ struct PreScoreNode<T: crate::Config<I>, I: 'static = ()> {
 	pub _phantom: PhantomData<I>,
 }
 
+const TEMP_STORAGE: &[u8] = b"upgrade_bags_list_score";
+
 /// A struct that migrates all bags lists to contain a score value.
 pub struct AddScore<T: crate::Config<I>, I: 'static>(sp_std::marker::PhantomData<(T, I)>);
 impl<T: crate::Config<I>, I: 'static> OnRuntimeUpgrade for AddScore<T, I> {
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<(), &'static str> {
-		// Nothing that can really be checked here...
+		let node_count: u32 = crate::ListNodes::<T, I>::iter().count() as u32;
+		frame_support::storage::unhashed::put(TEMP_STORAGE, &node_count);
+		crate::log!(info, "number of nodes before: {:?}", node_count);
 		Ok(())
 	}
 
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
-		let old_nodes = migration::storage_iter::<PreScoreNode<T, I>>(b"VoterList", b"ListNodes");
+		let pallet_name = T::PalletInfo::name::<I>().unwrap().as_bytes();
+		let old_nodes = migration::storage_iter::<PreScoreNode<T, I>>(pallet_name, b"ListNodes");
 
 		for (_key, node) in old_nodes.drain() {
 			let score = T::ScoreProvider::score(&node.id);
@@ -96,10 +104,11 @@ impl<T: crate::Config<I>, I: 'static> OnRuntimeUpgrade for AddScore<T, I> {
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade() -> Result<(), &'static str> {
-		ensure!(
-			crate::ListNodes::<T, I>::iter().count() > 0,
-			"Items do not exist where some were expected."
-		);
+		let node_count_before: u32 =
+			frame_support::storage::unhashed::get(TEMP_STORAGE).unwrap_or_default();
+		let node_count_after: u32 = crate::ListNodes::<T, I>::iter().count() as u32;
+		crate::log!(info, "number of nodes after: {:?}", node_count_after);
+		ensure!(node_count_after == node_count_before, "Not all nodes were migrated.");
 		for (_id, node) in crate::ListNodes::<T, I>::iter() {
 			ensure!(!node.score.is_zero(), "Score should be greater than zero");
 		}
