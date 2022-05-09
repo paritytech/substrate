@@ -150,6 +150,9 @@ pub struct SignedCommitment<TBlockNumber, TSignature> {
 	pub signatures: Vec<Option<TSignature>>,
     //@drskalman: This was the original suggestion, now the suggestion is to SignedCommitment<BlockNumber, (ecdsa::Signature, (bls::Signature, ecsda::Signature))>). It still doesn't leave a place for aggregation, but maybe aggregation happens somewhere else. This also waste space on otherwise aggregatable BLSSignature.
     // So I'm not sure if I want to drop this before discussing with @AlistairStewart .
+
+    //Alistair said it does not make sense to gossip list bls singnature withou aggergating them.
+    //TOD
     pub bls_signature: BLSSignature;
 }
 

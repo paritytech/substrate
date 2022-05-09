@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,7 +22,10 @@
 #[cfg(feature = "full_crypto")]
 use sp_std::vec::Vec;
 
-use crate::hash::{H256, H512};
+use crate::{
+	crypto::ByteArray,
+	hash::{H256, H384, H512, H768},
+};
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 
@@ -39,7 +42,7 @@ use bip39::{Language, Mnemonic, MnemonicType};
 use core::convert::TryFrom;
 #[cfg(feature = "full_crypto")]
 use bls_like::{
-    BLS377, Keypair, Message,Signed,schnorr_pop::{ProofOfPossessionGenerator, ProofOfPossessionVerifier}, pop::BatchAssumingProofsOfPossession
+    BLS377, EngineBLS, Keypair, Signed,pop::{ProofOfPossessionGenerator, ProofOfPossessionVerifier}, pop::BatchAssumingProofsOfPossession, 
 };
 #[cfg(feature = "std")]
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
@@ -48,14 +51,14 @@ use sp_std::ops::Deref;
 #[cfg(feature = "std")]
 use substrate_bip39::seed_from_entropy;
 
-/// An identifier used to match public keys against ed25519 keys
+/// An identifier used to match public keys against bls377 keys
 pub const CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"bls7");
 
 /// A secret seed. It's not called a "secret key" because ring doesn't expose the secret keys
 /// of the key pair (yeah, dumb); as such we're forced to remember the seed manually if we
 /// will need it later (such as for HDKD).
 #[cfg(feature = "full_crypto")]
-type Seed = [u8; 32];
+type Seed = [u8; BLS377::PUBLICKEY_SERIALIZED_SIZE];
 
 /// A public key.
 #[cfg_attr(feature = "full_crypto", derive(Hash))]
@@ -68,26 +71,25 @@ type Seed = [u8; 32];
 	Copy,
 	Encode,
 	Decode,
-	Default,
 	PassByInner,
 	MaxEncodedLen,
 	TypeInfo,
 )]
-pub struct Public(pub [u8; BLS377::PUBLIC_KEY_SIZE]);
+pub struct Public(pub [u8; BLS377::PUBLICKEY_SERIALIZED_SIZE]);
 
 /// A key pair.
 #[cfg(feature = "full_crypto")]
-pub struct Pair(Keypair);
+pub struct Pair(Keypair<BLS377>);
 
 #[cfg(feature = "full_crypto")]
 impl Clone for Pair {
 	fn clone(&self) -> Self {
-		Pair(Keypair.clone())
+		Pair(self.0.clone())
 	}
 }
 
-impl AsRef<[u8; 32]> for Public {
-	fn as_ref(&self) -> &[u8; 32] {
+impl AsRef<[u8; BLS377::PUBLICKEY_SERIALIZED_SIZE]> for Public {
+	fn as_ref(&self) -> &[u8; BLS377::PUBLICKEY_SERIALIZED_SIZE] {
 		&self.0
 	}
 }
@@ -116,17 +118,16 @@ impl sp_std::convert::TryFrom<&[u8]> for Public {
 	type Error = ();
 
 	fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
-		if data.len() == 32 {
-			let mut inner = [0u8; 32];
-			inner.copy_from_slice(data);
-			Ok(Public(inner))
-		} else {
-			Err(())
+		if data.len() != Self::LEN {
+			return Err(())
 		}
+		let mut r = [0u8; Self::LEN];
+		r.copy_from_slice(data);
+		Ok(Self::unchecked_from(r))
 	}
 }
 
-impl From<Public> for [u8; 32] {
+impl From<Public> for [u8; BLS377::PUBLICKEY_SERIALIZED_SIZE] {
 	fn from(x: Public) -> Self {
 		x.0
 	}
@@ -139,7 +140,7 @@ impl From<Pair> for Public {
 	}
 }
 
-impl From<Public> for H256 {
+impl From<Public> for H384 {
 	fn from(x: Public) -> Self {
 		x.0.into()
 	}
@@ -154,15 +155,15 @@ impl std::str::FromStr for Public {
 	}
 }
 
-impl UncheckedFrom<[u8; 32]> for Public {
-	fn unchecked_from(x: [u8; 32]) -> Self {
+impl UncheckedFrom<[u8; BLS377::PUBLICKEY_SERIALIZED_SIZE]> for Public {
+	fn unchecked_from(x: [u8; BLS377::PUBLICKEY_SERIALIZED_SIZE]) -> Self {
 		Public::from_raw(x)
 	}
 }
 
-impl UncheckedFrom<H256> for Public {
-	fn unchecked_from(x: H256) -> Self {
-		Public::from_h256(x)
+impl UncheckedFrom<H384> for Public {
+	fn unchecked_from(x: H384) -> Self {
+		Public::from_h384(x)
 	}
 }
 
@@ -208,15 +209,16 @@ impl<'de> Deserialize<'de> for Public {
 }
 
 /// A signature (a 512-bit value).
-#[derive(Encode, Decode, PassByInner, TypeInfo)]
-pub struct Signature(pub [u8; 64]);
+#[cfg_attr(feature = "full_crypto", derive(Hash))]
+#[derive(Encode, Decode, MaxEncodedLen, PassByInner, TypeInfo, PartialEq, Eq)]
+pub struct Signature(pub [u8; BLS377::SIGNATURE_SERIALIZED_SIZE]);
 
 impl sp_std::convert::TryFrom<&[u8]> for Signature {
 	type Error = ();
 
 	fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
-		if data.len() == 64 {
-			let mut inner = [0u8; 64];
+		if data.len() ==  BLS377::SIGNATURE_SERIALIZED_SIZE {
+			let mut inner = [0u8; BLS377::SIGNATURE_SERIALIZED_SIZE];
 			inner.copy_from_slice(data);
 			Ok(Signature(inner))
 		} else {
@@ -250,40 +252,26 @@ impl<'de> Deserialize<'de> for Signature {
 
 impl Clone for Signature {
 	fn clone(&self) -> Self {
-		let mut r = [0u8; 64];
+		let mut r = [0u8; BLS377::SIGNATURE_SERIALIZED_SIZE];
 		r.copy_from_slice(&self.0[..]);
 		Signature(r)
 	}
 }
 
-impl Default for Signature {
-	fn default() -> Self {
-		Signature([0u8; 64])
+impl From<Signature> for H768 {
+	fn from(v: Signature) -> H768 {
+		H768::from(v.0)
 	}
 }
 
-impl PartialEq for Signature {
-	fn eq(&self, b: &Self) -> bool {
-		self.0[..] == b.0[..]
-	}
-}
-
-impl Eq for Signature {}
-
-impl From<Signature> for H512 {
-	fn from(v: Signature) -> H512 {
-		H512::from(v.0)
-	}
-}
-
-impl From<Signature> for [u8; 64] {
-	fn from(v: Signature) -> [u8; 64] {
+impl From<Signature> for [u8; BLS377::SIGNATURE_SERIALIZED_SIZE] {
+	fn from(v: Signature) -> [u8; BLS377::SIGNATURE_SERIALIZED_SIZE] {
 		v.0
 	}
 }
 
-impl AsRef<[u8; 64]> for Signature {
-	fn as_ref(&self) -> &[u8; 64] {
+impl AsRef<[u8; BLS377::SIGNATURE_SERIALIZED_SIZE]> for Signature {
+	fn as_ref(&self) -> &[u8; BLS377::SIGNATURE_SERIALIZED_SIZE] {
 		&self.0
 	}
 }
@@ -312,19 +300,18 @@ impl sp_std::fmt::Debug for Signature {
 	}
 }
 
-#[cfg(feature = "full_crypto")]
-impl sp_std::hash::Hash for Signature {
-	fn hash<H: sp_std::hash::Hasher>(&self, state: &mut H) {
-		sp_std::hash::Hash::hash(&self.0[..], state);
+impl UncheckedFrom<[u8; BLS377::SIGNATURE_SERIALIZED_SIZE]> for Signature {
+	fn unchecked_from(data: [u8; BLS377::SIGNATURE_SERIALIZED_SIZE]) -> Signature {
+		Signature(data)
 	}
 }
 
 impl Signature {
-	/// A new instance from the given 64-byte `data`.
+	/// A new instance from the given BLS377::SIGNATURE_SERIALIZED_SIZE-byte `data`.
 	///
 	/// NOTE: No checking goes on to ensure this is a real signature. Only use it if
 	/// you are certain that the array actually is a signature. GIGO!
-	pub fn from_raw(data: [u8; 64]) -> Signature {
+	pub fn from_raw(data: [u8; BLS377::SIGNATURE_SERIALIZED_SIZE]) -> Signature {
 		Signature(data)
 	}
 
@@ -333,7 +320,7 @@ impl Signature {
 	/// NOTE: No checking goes on to ensure this is a real signature. Only use it if
 	/// you are certain that the array actually is a signature. GIGO!
 	pub fn from_slice(data: &[u8]) -> Self {
-		let mut r = [0u8; 64];
+		let mut r = [0u8; BLS377::SIGNATURE_SERIALIZED_SIZE];
 		r.copy_from_slice(data);
 		Signature(r)
 	}
@@ -342,7 +329,7 @@ impl Signature {
 	///
 	/// NOTE: No checking goes on to ensure this is a real signature. Only use it if
 	/// you are certain that the array actually is a signature. GIGO!
-	pub fn from_h512(v: H512) -> Signature {
+	pub fn from_h512(v: H768) -> Signature {
 		Signature(v.into())
 	}
 }
@@ -357,58 +344,34 @@ pub struct LocalizedSignature {
 	pub signature: Signature,
 }
 
-/// An error type for SS58 decoding.
-#[cfg(feature = "std")]
-#[derive(Clone, Copy, Eq, PartialEq, Debug, thiserror::Error)]
-pub enum PublicError {
-	/// Bad alphabet.
-	#[error("Base 58 requirement is violated")]
-	BadBase58,
-	/// Bad length.
-	#[error("Length is bad")]
-	BadLength,
-	/// Unknown version.
-	#[error("Unknown version")]
-	UnknownVersion,
-	/// Invalid checksum.
-	#[error("Invalid checksum")]
-	InvalidChecksum,
-}
-
 impl Public {
-	/// A new instance from the given 32-byte `data`.
+	/// A new instance from the given BLS377::PUBLICKEY_SERIALIZED_SIZE-byte `data`.
 	///
 	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if
 	/// you are certain that the array actually is a pubkey. GIGO!
-	pub fn from_raw(data: [u8; 32]) -> Self {
+	pub fn from_raw(data: [u8; BLS377::PUBLICKEY_SERIALIZED_SIZE]) -> Self {
 		Public(data)
 	}
 
-	/// A new instance from an H256.
+	/// A new instance from an H384.
 	///
 	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if
 	/// you are certain that the array actually is a pubkey. GIGO!
-	pub fn from_h256(x: H256) -> Self {
+	pub fn from_h384(x: H384) -> Self {
 		Public(x.into())
 	}
 
 	/// Return a slice filled with raw data.
-	pub fn as_array_ref(&self) -> &[u8; 32] {
+	pub fn as_array_ref(&self) -> &[u8; BLS377::PUBLICKEY_SERIALIZED_SIZE] {
 		self.as_ref()
 	}
 }
 
-impl TraitPublic for Public {
-	/// A new instance from the given slice that should be 32 bytes long.
-	///
-	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if
-	/// you are certain that the array actually is a pubkey. GIGO!
-	fn from_slice(data: &[u8]) -> Self {
-		let mut r = [0u8; 32];
-		r.copy_from_slice(data);
-		Public(r)
-	}
+impl ByteArray for Public {
+	const LEN: usize = BLS377::PUBLICKEY_SERIALIZED_SIZE;
+}
 
+impl TraitPublic for Public {
 	fn to_public_crypto_pair(&self) -> CryptoTypePublicPair {
 		CryptoTypePublicPair(CRYPTO_ID, self.to_raw_vec())
 	}
@@ -428,12 +391,14 @@ impl From<&Public> for CryptoTypePublicPair {
 	}
 }
 
+///???
+///What is HDKD? What is hard junction? should seed be 48bytes
 /// Derive a single hard junction.
 #[cfg(feature = "full_crypto")]
 fn derive_hard_junction(secret_seed: &Seed, cc: &[u8; 32]) -> Seed {
-	("Ed25519HDKD", secret_seed, cc).using_encoded(|data| {
-		let mut res = [0u8; 32];
-		res.copy_from_slice(blake2_rfc::blake2b::blake2b(32, &[], data).as_bytes());
+	("BLS12377HDKD", secret_seed, cc).using_encoded(|data| {
+		let mut res = [0u8; BLS377::PUBLICKEY_SERIALIZED_SIZE];
+		res.copy_from_slice(blake2_rfc::blake2b::blake2b(BLS377::PUBLICKEY_SERIALIZED_SIZE, &[], data).as_bytes());
 		res
 	})
 }
@@ -494,10 +459,10 @@ impl TraitPair for Pair {
 	///
 	/// You should never need to use this; generate(), generate_with_phrase
 	fn from_seed_slice(seed_slice: &[u8]) -> Result<Pair, SecretStringError> {
-		let secret = bls::SecretKey::from_bytes(seed_slice)
+		let secret = bls_like::SecretKey::from_bytes(seed_slice)
 			.map_err(|_| SecretStringError::InvalidSeedLength)?;
-		let public = bls::PublicKey::from(&secret);
-		Ok(Pair(bls::Keypair { secret, public }))
+		let public = bls_like::PublicKey::from(&secret);
+		Ok(Pair(bls_like::Keypair { secret, public }))
 	}
 
 	/// Derive a child key from a series of given junctions.
@@ -518,7 +483,7 @@ impl TraitPair for Pair {
 
 	/// Get the public key.
 	fn public(&self) -> Public {
-		let mut r = [0u8; 32];
+		let mut r = [0u8; BLS377::PUBLICKEY_SERIALIZED_SIZE];
 		let pk = self.0.public.as_bytes();
 		r.copy_from_slice(pk);
 		Public(r)
