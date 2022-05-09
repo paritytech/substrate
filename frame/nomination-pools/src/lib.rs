@@ -1145,6 +1145,10 @@ pub mod pallet {
 	pub type SubPoolsStorage<T: Config> = CountedStorageMap<_, Twox64Concat, PoolId, SubPools<T>>;
 
 	/// The minimum points to balance ratio that must be maintained for the pool to be `open`.
+	/// This is important in the event slashing takes place and the pools points to balance ratio
+	/// becomes disproportional.
+	/// For a value of 10, the threshold would be a 10:1 ratio of pool points to pool balance.
+	/// such a scenario would also be the equivalent of the pool being slashed 90%.
 	#[pallet::storage]
 	pub type MinPointsToBalance<T: Config> = StorageValue<_, u32, ValueQuery>;
 
