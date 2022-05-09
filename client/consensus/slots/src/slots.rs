@@ -118,10 +118,10 @@ impl<Block, SC, IDP> Slots<Block, SC, IDP> {
 	}
 }
 
-impl<Block, C, IDP> Slots<Block, C, IDP>
+impl<Block, SC, IDP> Slots<Block, SC, IDP>
 where
 	Block: BlockT,
-	C: SelectChain<Block>,
+	SC: SelectChain<Block>,
 	IDP: CreateInherentDataProviders<Block, ()>,
 	IDP::InherentDataProviders: crate::InherentDataProviderExt,
 {
