@@ -1141,9 +1141,14 @@ pub mod pallet {
 	pub type Metadata<T: Config> =
 		CountedStorageMap<_, Twox64Concat, PoolId, BoundedVec<u8, T::MaxMetadataLen>, ValueQuery>;
 
+	/// The last pool id.
 	#[pallet::storage]
 	pub type LastPoolId<T: Config> = StorageValue<_, u32, ValueQuery>;
 
+	/// A reverse lookup from the pool's account id to its id.
+	///
+	/// This is only used for slashing. In all other instances, the pool id is used, and the
+	/// accounts are deterministically derived from it.
 	#[pallet::storage]
 	pub type ReversePoolIdLookup<T: Config> =
 		CountedStorageMap<_, Twox64Concat, T::AccountId, PoolId, OptionQuery>;
