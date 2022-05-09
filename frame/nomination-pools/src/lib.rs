@@ -1140,7 +1140,7 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type SubPoolsStorage<T: Config> = CountedStorageMap<_, Twox64Concat, PoolId, SubPools<T>>;
 
-	/// The minimum points to balance ratio for members to join a pool.
+	/// The minimum points to balance ratio that must be maintained for the pool to be `open`.
 	#[pallet::storage]
 	pub type MinPointsToBalance<T: Config> = StorageValue<_, u32, ValueQuery>;
 
