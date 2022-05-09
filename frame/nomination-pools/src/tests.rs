@@ -200,17 +200,20 @@ mod bonded_pool {
 			assert_ok!(pool.ok_to_join(0));
 
 			// Simulate a slashed pool at `MinPointsToBalance`
-			StakingMock::set_bonded_balance(
-				pool.bonded_account(),
-				min_points_to_balance,
-			);
+			StakingMock::set_bonded_balance(pool.bonded_account(), min_points_to_balance);
 			assert_noop!(pool.ok_to_join(0), Error::<Runtime>::OverflowRisk);
 
-			StakingMock::set_bonded_balance(pool.bonded_account(), Balance::MAX / min_points_to_balance);
+			StakingMock::set_bonded_balance(
+				pool.bonded_account(),
+				Balance::MAX / min_points_to_balance,
+			);
 			// New bonded balance would be over threshold of Balance type
 			assert_noop!(pool.ok_to_join(0), Error::<Runtime>::OverflowRisk);
 			// and a sanity check
-			StakingMock::set_bonded_balance(pool.bonded_account(), Balance::MAX / min_points_to_balance - 1);
+			StakingMock::set_bonded_balance(
+				pool.bonded_account(),
+				Balance::MAX / min_points_to_balance - 1,
+			);
 			assert_ok!(pool.ok_to_join(0));
 		});
 	}
@@ -499,10 +502,16 @@ mod join {
 			// Force the points:balance ratio to `MinPointsToBalance` (100/10)
 			let min_points_to_balance: u128 = MinPointsToBalance::<Runtime>::get().into();
 
-			StakingMock::set_bonded_balance(Pools::create_bonded_account(123), min_points_to_balance);
+			StakingMock::set_bonded_balance(
+				Pools::create_bonded_account(123),
+				min_points_to_balance,
+			);
 			assert_noop!(Pools::join(Origin::signed(11), 420, 123), Error::<Runtime>::OverflowRisk);
 
-			StakingMock::set_bonded_balance(Pools::create_bonded_account(123), Balance::MAX / min_points_to_balance);
+			StakingMock::set_bonded_balance(
+				Pools::create_bonded_account(123),
+				Balance::MAX / min_points_to_balance,
+			);
 			// Balance needs to be gt Balance::MAX / `MinPointsToBalance`
 			assert_noop!(Pools::join(Origin::signed(11), 5, 123), Error::<Runtime>::OverflowRisk);
 
@@ -510,10 +519,16 @@ mod join {
 
 			// Cannot join a pool that isn't open
 			unsafe_set_state(123, PoolState::Blocked).unwrap();
-			assert_noop!(Pools::join(Origin::signed(11), min_points_to_balance, 123), Error::<Runtime>::NotOpen);
+			assert_noop!(
+				Pools::join(Origin::signed(11), min_points_to_balance, 123),
+				Error::<Runtime>::NotOpen
+			);
 
 			unsafe_set_state(123, PoolState::Destroying).unwrap();
-			assert_noop!(Pools::join(Origin::signed(11), min_points_to_balance, 123), Error::<Runtime>::NotOpen);
+			assert_noop!(
+				Pools::join(Origin::signed(11), min_points_to_balance, 123),
+				Error::<Runtime>::NotOpen
+			);
 
 			// Given
 			MinJoinBond::<Runtime>::put(100);

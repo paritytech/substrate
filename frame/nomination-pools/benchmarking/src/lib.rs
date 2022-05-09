@@ -28,8 +28,8 @@ use frame_support::{ensure, traits::Get};
 use frame_system::RawOrigin as Origin;
 use pallet_nomination_pools::{
 	BalanceOf, BondExtra, BondedPoolInner, BondedPools, ConfigOp, MaxPoolMembers,
-	MaxPoolMembersPerPool, MaxPools, Metadata, MinCreateBond, MinJoinBond, MinPointsToBalance, Pallet as Pools,
-	PoolMembers, PoolRoles, PoolState, RewardPools, SubPoolsStorage,
+	MaxPoolMembersPerPool, MaxPools, Metadata, MinCreateBond, MinJoinBond, MinPointsToBalance,
+	Pallet as Pools, PoolMembers, PoolRoles, PoolState, RewardPools, SubPoolsStorage,
 };
 use sp_runtime::traits::{Bounded, Zero};
 use sp_staking::{EraIndex, StakingInterface};
