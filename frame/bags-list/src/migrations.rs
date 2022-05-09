@@ -20,14 +20,17 @@
 use codec::{Decode, Encode};
 use core::marker::PhantomData;
 use frame_election_provider_support::ScoreProvider;
-use frame_support::{ensure, storage::migration, traits::OnRuntimeUpgrade};
+use frame_support::{storage::migration, traits::OnRuntimeUpgrade};
 use sp_runtime::traits::Zero;
+
+#[cfg(feature = "try-runtime")]
+use frame_support::ensure;
 
 /// A struct that does not migration, but only checks that the counter prefix exists and is correct.
 pub struct CheckCounterPrefix<T: crate::Config<I>, I: 'static>(sp_std::marker::PhantomData<(T, I)>);
 impl<T: crate::Config<I>, I: 'static> OnRuntimeUpgrade for CheckCounterPrefix<T, I> {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
-		0
+		frame_support::weights::Weight::zero()
 	}
 
 	#[cfg(feature = "try-runtime")]
