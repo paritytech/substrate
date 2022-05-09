@@ -222,6 +222,7 @@ impl ExtBuilder {
 			max_pools: Some(2),
 			max_members_per_pool: Some(3),
 			max_members: Some(4),
+			min_points_to_balance: 10,
 		}
 		.assimilate_storage(&mut storage);
 

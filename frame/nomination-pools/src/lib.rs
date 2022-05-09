@@ -709,11 +709,15 @@ impl<T: Config> BondedPool<T> {
 		// Pool points can inflate relative to balance, but only if the pool is slashed.
 		// If we cap the ratio of points:balance so one cannot join a pool that has been slashed
 		// 90%,
-		ensure!(points_to_balance_ratio_floor < 10u32.into(), Error::<T>::OverflowRisk);
+		ensure!(
+			points_to_balance_ratio_floor < MinPointsToBalance::<T>::get().into(),
+			Error::<T>::OverflowRisk
+		);
 		// while restricting the balance to 1/10th of max total issuance,
 		let next_bonded_balance = bonded_balance.saturating_add(new_funds);
 		ensure!(
-			next_bonded_balance < BalanceOf::<T>::max_value().div(10u32.into()),
+			next_bonded_balance <
+				BalanceOf::<T>::max_value().div(MinPointsToBalance::<T>::get().into()),
 			Error::<T>::OverflowRisk
 		);
 		// then we can be decently confident the bonding pool points will not overflow
@@ -1136,6 +1140,10 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type SubPoolsStorage<T: Config> = CountedStorageMap<_, Twox64Concat, PoolId, SubPools<T>>;
 
+	/// The minimum points to balance ratio for members to join a pool.
+	#[pallet::storage]
+	pub type MinPointsToBalance<T: Config> = StorageValue<_, u32, ValueQuery>;
+
 	/// Metadata for the pool.
 	#[pallet::storage]
 	pub type Metadata<T: Config> =
@@ -1155,6 +1163,7 @@ pub mod pallet {
 		pub max_pools: Option<u32>,
 		pub max_members_per_pool: Option<u32>,
 		pub max_members: Option<u32>,
+		pub min_points_to_balance: u32,
 	}
 
 	#[cfg(feature = "std")]
@@ -1166,6 +1175,7 @@ pub mod pallet {
 				max_pools: Some(16),
 				max_members_per_pool: Some(32),
 				max_members: Some(16 * 32),
+				min_points_to_balance: 10,
 			}
 		}
 	}
@@ -1184,6 +1194,7 @@ pub mod pallet {
 			if let Some(max_members) = self.max_members {
 				MaxPoolMembers::<T>::put(max_members);
 			}
+			MinPointsToBalance::<T>::put(self.min_points_to_balance);
 		}
 	}
 
@@ -1798,6 +1809,7 @@ pub mod pallet {
 		/// * `max_pools` - Set [`MaxPools`].
 		/// * `max_members` - Set [`MaxPoolMembers`].
 		/// * `max_members_per_pool` - Set [`MaxPoolMembersPerPool`].
+		/// * `min_points_to_balance` - Set [`MinPointsToBalance`],
 		#[pallet::weight(T::WeightInfo::set_configs())]
 		pub fn set_configs(
 			origin: OriginFor<T>,
@@ -1806,6 +1818,7 @@ pub mod pallet {
 			max_pools: ConfigOp<u32>,
 			max_members: ConfigOp<u32>,
 			max_members_per_pool: ConfigOp<u32>,
+			min_points_to_balance: ConfigOp<u32>,
 		) -> DispatchResult {
 			ensure_root(origin)?;
 
@@ -1824,6 +1837,7 @@ pub mod pallet {
 			config_op_exp!(MaxPools::<T>, max_pools);
 			config_op_exp!(MaxPoolMembers::<T>, max_members);
 			config_op_exp!(MaxPoolMembersPerPool::<T>, max_members_per_pool);
+			config_op_exp!(MinPointsToBalance::<T>, min_points_to_balance);
 
 			Ok(())
 		}
