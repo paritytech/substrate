@@ -706,20 +706,24 @@ impl<T: Config> BondedPool<T> {
 			// We checked for zero above
 			.div(bonded_balance);
 
+		let min_points_to_balance = MinPointsToBalance::<T>::get();
+
 		// Pool points can inflate relative to balance, but only if the pool is slashed.
 		// If we cap the ratio of points:balance so one cannot join a pool that has been slashed
-		// 90%,
-		ensure!(
-			points_to_balance_ratio_floor < MinPointsToBalance::<T>::get().into(),
-			Error::<T>::OverflowRisk
-		);
-		// while restricting the balance to 1/10th of max total issuance,
-		let next_bonded_balance = bonded_balance.saturating_add(new_funds);
-		ensure!(
-			next_bonded_balance <
-				BalanceOf::<T>::max_value().div(MinPointsToBalance::<T>::get().into()),
-			Error::<T>::OverflowRisk
-		);
+		// by `min_points_to_balance`%, if not zero.
+
+		if !min_points_to_balance.is_zero() {
+			ensure!(
+				points_to_balance_ratio_floor < min_points_to_balance.into(),
+				Error::<T>::OverflowRisk
+			);
+			// while restricting the balance to `min_points_to_balance` of max total issuance,
+			let next_bonded_balance = bonded_balance.saturating_add(new_funds);
+			ensure!(
+				next_bonded_balance < BalanceOf::<T>::max_value().div(min_points_to_balance.into()),
+				Error::<T>::OverflowRisk
+			);
+		}
 		// then we can be decently confident the bonding pool points will not overflow
 		// `BalanceOf<T>`. Note that these are just heuristics.
 
@@ -1851,7 +1855,6 @@ pub mod pallet {
 					2 * sp_std::mem::size_of::<BalanceOf<T>>(),
 				"bit-length of the reward points must be at least twice as much as balance"
 			);
-
 			assert!(
 				T::StakingInterface::bonding_duration() < TotalUnbondingPools::<T>::get(),
 				"There must be more unbonding pools then the bonding duration /
