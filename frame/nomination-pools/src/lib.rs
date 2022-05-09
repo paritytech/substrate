@@ -1844,7 +1844,7 @@ pub mod pallet {
 		///
 		/// It emits an event, notifying UIs of the role change. This event is quite relevant to
 		/// most pool members and they should be informed of changes to pool roles.
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::update_roles())]
 		pub fn update_roles(
 			origin: OriginFor<T>,
 			pool_id: PoolId,

@@ -58,6 +58,7 @@ pub trait WeightInfo {
 	fn set_state() -> Weight;
 	fn set_metadata(n: u32, ) -> Weight;
 	fn set_configs() -> Weight;
+	fn update_roles() -> Weight;
 }
 
 /// Weights for pallet_nomination_pools using the Substrate node and recommended hardware.
@@ -269,6 +270,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		(2_793_000 as Weight)
 			.saturating_add(T::DbWeight::get().writes(5 as Weight))
 	}
+	fn update_roles() -> Weight {
+		0
+	}
 }
 
 // For backwards compatibility and tests
@@ -478,5 +482,8 @@ impl WeightInfo for () {
 	fn set_configs() -> Weight {
 		(2_793_000 as Weight)
 			.saturating_add(RocksDbWeight::get().writes(5 as Weight))
+	}
+	fn update_roles() -> Weight {
+		0
 	}
 }
