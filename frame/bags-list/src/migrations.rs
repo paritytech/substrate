@@ -67,6 +67,7 @@ struct PreScoreNode<T: crate::Config<I>, I: 'static = ()> {
 	pub _phantom: PhantomData<I>,
 }
 
+#[cfg(feature = "try-runtime")]
 const TEMP_STORAGE: &[u8] = b"upgrade_bags_list_score";
 
 /// A struct that migrates all bags lists to contain a score value.
@@ -81,7 +82,9 @@ impl<T: crate::Config<I>, I: 'static> OnRuntimeUpgrade for AddScore<T, I> {
 	}
 
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
-		let pallet_name = T::PalletInfo::name::<I>().unwrap().as_bytes();
+		let pallet_name = <T as frame_system::Config>::PalletInfo::name::<crate::Pallet<T, I>>()
+			.unwrap()
+			.as_bytes();
 		let old_nodes = migration::storage_iter::<PreScoreNode<T, I>>(pallet_name, b"ListNodes");
 
 		for (_key, node) in old_nodes.drain() {
@@ -105,7 +108,7 @@ impl<T: crate::Config<I>, I: 'static> OnRuntimeUpgrade for AddScore<T, I> {
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade() -> Result<(), &'static str> {
 		let node_count_before: u32 =
-			frame_support::storage::unhashed::get(TEMP_STORAGE).unwrap_or_default();
+			frame_support::storage::unhashed::take(TEMP_STORAGE).unwrap_or_default();
 		let node_count_after: u32 = crate::ListNodes::<T, I>::iter().count() as u32;
 		crate::log!(info, "number of nodes after: {:?}", node_count_after);
 		ensure!(node_count_after == node_count_before, "Not all nodes were migrated.");
