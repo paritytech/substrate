@@ -118,10 +118,10 @@ mod v5 {
 
 	#[storage_alias]
 	type ContractInfoOf<T> =
-		Map<Pallet<T>, Twox64Concat, <T as Config>::AccountId, ContractInfo<T>>;
+		Map<Pallet<T: Config>, Twox64Concat, <T as frame_system::Config>::AccountId, ContractInfo<T>>;
 
 	#[storage_alias]
-	type DeletionQueue<T> = Value<Pallet<T>, Vec<DeletedContract>>;
+	type DeletionQueue<T> = Value<Pallet<T: Config>, Vec<DeletedContract>>;
 
 	pub fn migrate<T: Config>() -> Weight {
 		let mut weight: Weight = 0;
@@ -138,7 +138,7 @@ mod v5 {
 			}
 		});
 
-		DeletionQueue::translate(|old: Option<Vec<OldDeletedContract>>| {
+		DeletionQueue::<T>::translate(|old: Option<Vec<OldDeletedContract>>| {
 			weight = weight.saturating_add(T::DbWeight::get().reads_writes(1, 1));
 			old.map(|old| old.into_iter().map(|o| DeletedContract { trie_id: o.trie_id }).collect())
 		})
@@ -200,13 +200,13 @@ mod v6 {
 
 	#[storage_alias]
 	type ContractInfoOf<T> =
-		Map<Pallet<T>, Twox64Concat, <T as Config>::AccountId, ContractInfo<T>>;
+		Map<Pallet<T: Config>, Twox64Concat, <T as frame_system::Config>::AccountId, ContractInfo<T>>;
 
 	#[storage_alias]
-	type CodeStorage<T> = Map<Pallet<T>, Identity, CodeHash<T>, PrefabWasmModule>;
+	type CodeStorage<T> = Map<Pallet<T: Config>, Identity, CodeHash<T>, PrefabWasmModule>;
 
 	#[storage_alias]
-	type OwnerInfoOf<T> = Map<Pallet<T>, Identity, CodeHash<T>, OwnerInfo<T>>;
+	type OwnerInfoOf<T> = Map<Pallet<T: Config>, Identity, CodeHash<T>, OwnerInfo<T>>;
 
 	pub fn migrate<T: Config>() -> Weight {
 		let mut weight: Weight = 0;
@@ -255,7 +255,7 @@ mod v7 {
 		#[storage_alias]
 		type Nonce<T> = Value<Pallet<T: Config>, u64, ValueQuery>;
 
-		Nonce::set(AccountCounter::take());
+		Nonce::<T>::set(AccountCounter::<T>::take());
 		T::DbWeight::get().reads_writes(1, 2)
 	}
 }
