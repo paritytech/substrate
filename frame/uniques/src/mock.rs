@@ -86,13 +86,13 @@ impl pallet_balances::Config for Test {
 
 impl Config for Test {
 	type Event = Event;
-	type ClassId = u32;
+	type CollectionId = u32;
 	type InstanceId = u32;
 	type Currency = Balances;
 	type CreateOrigin = AsEnsureOriginWithArg<frame_system::EnsureSigned<u64>>;
 	type ForceOrigin = frame_system::EnsureRoot<u64>;
 	type Locker = ();
-	type ClassDeposit = ConstU64<2>;
+	type CollectionDeposit = ConstU64<2>;
 	type InstanceDeposit = ConstU64<1>;
 	type MetadataDepositBase = ConstU64<1>;
 	type AttributeDepositBase = ConstU64<1>;

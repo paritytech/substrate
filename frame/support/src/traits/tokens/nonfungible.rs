@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Traits for dealing with a single non-fungible asset class.
+//! Traits for dealing with a single non-fungible asset collection.
 //!
 //! This assumes a single level namespace identified by `Inspect::InstanceId`, and could
 //! reasonably be implemented by pallets which wants to expose a single collection of NFT-like
@@ -65,10 +65,10 @@ pub trait Inspect<AccountId> {
 /// Interface for enumerating assets in existence or owned by a given account over a collection
 /// of NFTs.
 pub trait InspectEnumerable<AccountId>: Inspect<AccountId> {
-	/// Returns an iterator of the instances of an asset `class` in existence.
+	/// Returns an iterator of the instances of an asset `collection` in existence.
 	fn instances() -> Box<dyn Iterator<Item = Self::InstanceId>>;
 
-	/// Returns an iterator of the asset instances of all classes owned by `who`.
+	/// Returns an iterator of the asset instances of all collectiones owned by `who`.
 	fn owned(who: &AccountId) -> Box<dyn Iterator<Item = Self::InstanceId>>;
 }
 
@@ -121,13 +121,13 @@ pub trait Transfer<AccountId>: Inspect<AccountId> {
 /// a single item.
 pub struct ItemOf<
 	F: nonfungibles::Inspect<AccountId>,
-	A: Get<<F as nonfungibles::Inspect<AccountId>>::ClassId>,
+	A: Get<<F as nonfungibles::Inspect<AccountId>>::CollectionId>,
 	AccountId,
 >(sp_std::marker::PhantomData<(F, A, AccountId)>);
 
 impl<
 		F: nonfungibles::Inspect<AccountId>,
-		A: Get<<F as nonfungibles::Inspect<AccountId>>::ClassId>,
+		A: Get<<F as nonfungibles::Inspect<AccountId>>::CollectionId>,
 		AccountId,
 	> Inspect<AccountId> for ItemOf<F, A, AccountId>
 {
@@ -148,7 +148,7 @@ impl<
 
 impl<
 		F: nonfungibles::InspectEnumerable<AccountId>,
-		A: Get<<F as nonfungibles::Inspect<AccountId>>::ClassId>,
+		A: Get<<F as nonfungibles::Inspect<AccountId>>::CollectionId>,
 		AccountId,
 	> InspectEnumerable<AccountId> for ItemOf<F, A, AccountId>
 {
@@ -156,13 +156,13 @@ impl<
 		<F as nonfungibles::InspectEnumerable<AccountId>>::instances(&A::get())
 	}
 	fn owned(who: &AccountId) -> Box<dyn Iterator<Item = Self::InstanceId>> {
-		<F as nonfungibles::InspectEnumerable<AccountId>>::owned_in_class(&A::get(), who)
+		<F as nonfungibles::InspectEnumerable<AccountId>>::owned_in_collection(&A::get(), who)
 	}
 }
 
 impl<
 		F: nonfungibles::Mutate<AccountId>,
-		A: Get<<F as nonfungibles::Inspect<AccountId>>::ClassId>,
+		A: Get<<F as nonfungibles::Inspect<AccountId>>::CollectionId>,
 		AccountId,
 	> Mutate<AccountId> for ItemOf<F, A, AccountId>
 {
@@ -186,7 +186,7 @@ impl<
 
 impl<
 		F: nonfungibles::Transfer<AccountId>,
-		A: Get<<F as nonfungibles::Inspect<AccountId>>::ClassId>,
+		A: Get<<F as nonfungibles::Inspect<AccountId>>::CollectionId>,
 		AccountId,
 	> Transfer<AccountId> for ItemOf<F, A, AccountId>
 {

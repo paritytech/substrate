@@ -29,7 +29,7 @@ fn assets() -> Vec<(u64, u32, u32)> {
 	let mut s: Vec<_> = Asset::<Test>::iter().map(|x| (x.2.owner, x.0, x.1)).collect();
 	s.sort();
 	assert_eq!(r, s);
-	for class in Asset::<Test>::iter()
+	for collection in Asset::<Test>::iter()
 		.map(|x| x.0)
 		.scan(None, |s, item| {
 			if s.map_or(false, |last| last == item) {
@@ -41,17 +41,17 @@ fn assets() -> Vec<(u64, u32, u32)> {
 		})
 		.flatten()
 	{
-		let details = Class::<Test>::get(class).unwrap();
-		let instances = Asset::<Test>::iter_prefix(class).count() as u32;
+		let details = Collection::<Test>::get(collection).unwrap();
+		let instances = Asset::<Test>::iter_prefix(collection).count() as u32;
 		assert_eq!(details.instances, instances);
 	}
 	r
 }
 
-fn classes() -> Vec<(u64, u32)> {
-	let mut r: Vec<_> = ClassAccount::<Test>::iter().map(|x| (x.0, x.1)).collect();
+fn collectiones() -> Vec<(u64, u32)> {
+	let mut r: Vec<_> = CollectionAccount::<Test>::iter().map(|x| (x.0, x.1)).collect();
 	r.sort();
-	let mut s: Vec<_> = Class::<Test>::iter().map(|x| (x.1.owner, x.0)).collect();
+	let mut s: Vec<_> = Collection::<Test>::iter().map(|x| (x.1.owner, x.0)).collect();
 	s.sort();
 	assert_eq!(r, s);
 	r
@@ -63,8 +63,8 @@ macro_rules! bvec {
 	}
 }
 
-fn attributes(class: u32) -> Vec<(Option<u32>, Vec<u8>, Vec<u8>)> {
-	let mut s: Vec<_> = Attribute::<Test>::iter_prefix((class,))
+fn attributes(collection: u32) -> Vec<(Option<u32>, Vec<u8>, Vec<u8>)> {
+	let mut s: Vec<_> = Attribute::<Test>::iter_prefix((collection,))
 		.map(|(k, v)| (k.0, k.1.into(), v.0.into()))
 		.collect();
 	s.sort();
@@ -82,12 +82,12 @@ fn basic_setup_works() {
 fn basic_minting_should_work() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true));
-		assert_eq!(classes(), vec![(1, 0)]);
+		assert_eq!(collectiones(), vec![(1, 0)]);
 		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 1));
 		assert_eq!(assets(), vec![(1, 0, 42)]);
 
 		assert_ok!(Uniques::force_create(Origin::root(), 1, 2, true));
-		assert_eq!(classes(), vec![(1, 0), (2, 1)]);
+		assert_eq!(collectiones(), vec![(1, 0), (2, 1)]);
 		assert_ok!(Uniques::mint(Origin::signed(2), 1, 69, 1));
 		assert_eq!(assets(), vec![(1, 0, 42), (1, 1, 69)]);
 	});
@@ -99,18 +99,18 @@ fn lifecycle_should_work() {
 		Balances::make_free_balance_be(&1, 100);
 		assert_ok!(Uniques::create(Origin::signed(1), 0, 1));
 		assert_eq!(Balances::reserved_balance(&1), 2);
-		assert_eq!(classes(), vec![(1, 0)]);
-		assert_ok!(Uniques::set_class_metadata(Origin::signed(1), 0, bvec![0, 0], false));
+		assert_eq!(collectiones(), vec![(1, 0)]);
+		assert_ok!(Uniques::set_collection_metadata(Origin::signed(1), 0, bvec![0, 0], false));
 		assert_eq!(Balances::reserved_balance(&1), 5);
-		assert!(ClassMetadataOf::<Test>::contains_key(0));
+		assert!(CollectionMetadataOf::<Test>::contains_key(0));
 
 		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 10));
 		assert_eq!(Balances::reserved_balance(&1), 6);
 		assert_ok!(Uniques::mint(Origin::signed(1), 0, 69, 20));
 		assert_eq!(Balances::reserved_balance(&1), 7);
 		assert_eq!(assets(), vec![(10, 0, 42), (20, 0, 69)]);
-		assert_eq!(Class::<Test>::get(0).unwrap().instances, 2);
-		assert_eq!(Class::<Test>::get(0).unwrap().instance_metadatas, 0);
+		assert_eq!(Collection::<Test>::get(0).unwrap().instances, 2);
+		assert_eq!(Collection::<Test>::get(0).unwrap().instance_metadatas, 0);
 
 		assert_ok!(Uniques::set_metadata(Origin::signed(1), 0, 42, bvec![42, 42], false));
 		assert_eq!(Balances::reserved_balance(&1), 10);
@@ -119,19 +119,19 @@ fn lifecycle_should_work() {
 		assert_eq!(Balances::reserved_balance(&1), 13);
 		assert!(InstanceMetadataOf::<Test>::contains_key(0, 69));
 
-		let w = Class::<Test>::get(0).unwrap().destroy_witness();
+		let w = Collection::<Test>::get(0).unwrap().destroy_witness();
 		assert_eq!(w.instances, 2);
 		assert_eq!(w.instance_metadatas, 2);
 		assert_ok!(Uniques::destroy(Origin::signed(1), 0, w));
 		assert_eq!(Balances::reserved_balance(&1), 0);
 
-		assert!(!Class::<Test>::contains_key(0));
+		assert!(!Collection::<Test>::contains_key(0));
 		assert!(!Asset::<Test>::contains_key(0, 42));
 		assert!(!Asset::<Test>::contains_key(0, 69));
-		assert!(!ClassMetadataOf::<Test>::contains_key(0));
+		assert!(!CollectionMetadataOf::<Test>::contains_key(0));
 		assert!(!InstanceMetadataOf::<Test>::contains_key(0, 42));
 		assert!(!InstanceMetadataOf::<Test>::contains_key(0, 69));
-		assert_eq!(classes(), vec![]);
+		assert_eq!(collectiones(), vec![]);
 		assert_eq!(assets(), vec![]);
 	});
 }
@@ -142,7 +142,7 @@ fn destroy_with_bad_witness_should_not_work() {
 		Balances::make_free_balance_be(&1, 100);
 		assert_ok!(Uniques::create(Origin::signed(1), 0, 1));
 
-		let w = Class::<Test>::get(0).unwrap().destroy_witness();
+		let w = Collection::<Test>::get(0).unwrap().destroy_witness();
 		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 1));
 		assert_noop!(Uniques::destroy(Origin::signed(1), 0, w), Error::<Test>::BadWitness);
 	});
@@ -154,7 +154,7 @@ fn mint_should_work() {
 		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true));
 		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 1));
 		assert_eq!(Uniques::owner(0, 42).unwrap(), 1);
-		assert_eq!(classes(), vec![(1, 0)]);
+		assert_eq!(collectiones(), vec![(1, 0)]);
 		assert_eq!(assets(), vec![(1, 0, 42)]);
 	});
 }
@@ -183,10 +183,10 @@ fn freezing_should_work() {
 		assert_noop!(Uniques::transfer(Origin::signed(1), 0, 42, 2), Error::<Test>::Frozen);
 
 		assert_ok!(Uniques::thaw(Origin::signed(1), 0, 42));
-		assert_ok!(Uniques::freeze_class(Origin::signed(1), 0));
+		assert_ok!(Uniques::freeze_collection(Origin::signed(1), 0));
 		assert_noop!(Uniques::transfer(Origin::signed(1), 0, 42, 2), Error::<Test>::Frozen);
 
-		assert_ok!(Uniques::thaw_class(Origin::signed(1), 0));
+		assert_ok!(Uniques::thaw_collection(Origin::signed(1), 0));
 		assert_ok!(Uniques::transfer(Origin::signed(1), 0, 42, 2));
 	});
 }
@@ -208,7 +208,7 @@ fn origin_guards_should_work() {
 		assert_noop!(Uniques::thaw(Origin::signed(2), 0, 42), Error::<Test>::NoPermission);
 		assert_noop!(Uniques::mint(Origin::signed(2), 0, 69, 2), Error::<Test>::NoPermission);
 		assert_noop!(Uniques::burn(Origin::signed(2), 0, 42, None), Error::<Test>::NoPermission);
-		let w = Class::<Test>::get(0).unwrap().destroy_witness();
+		let w = Collection::<Test>::get(0).unwrap().destroy_witness();
 		assert_noop!(Uniques::destroy(Origin::signed(2), 0, w), Error::<Test>::NoPermission);
 	});
 }
@@ -220,7 +220,7 @@ fn transfer_owner_should_work() {
 		Balances::make_free_balance_be(&2, 100);
 		Balances::make_free_balance_be(&3, 100);
 		assert_ok!(Uniques::create(Origin::signed(1), 0, 1));
-		assert_eq!(classes(), vec![(1, 0)]);
+		assert_eq!(collectiones(), vec![(1, 0)]);
 		assert_noop!(
 			Uniques::transfer_ownership(Origin::signed(1), 0, 2),
 			Error::<Test>::Unaccepted
@@ -228,7 +228,7 @@ fn transfer_owner_should_work() {
 		assert_ok!(Uniques::set_accept_ownership(Origin::signed(2), Some(0)));
 		assert_ok!(Uniques::transfer_ownership(Origin::signed(1), 0, 2));
 
-		assert_eq!(classes(), vec![(2, 0)]);
+		assert_eq!(collectiones(), vec![(2, 0)]);
 		assert_eq!(Balances::total_balance(&1), 98);
 		assert_eq!(Balances::total_balance(&2), 102);
 		assert_eq!(Balances::reserved_balance(&1), 0);
@@ -241,12 +241,12 @@ fn transfer_owner_should_work() {
 		);
 
 		// Mint and set metadata now and make sure that deposit gets transferred back.
-		assert_ok!(Uniques::set_class_metadata(Origin::signed(2), 0, bvec![0u8; 20], false));
+		assert_ok!(Uniques::set_collection_metadata(Origin::signed(2), 0, bvec![0u8; 20], false));
 		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 1));
 		assert_ok!(Uniques::set_metadata(Origin::signed(2), 0, 42, bvec![0u8; 20], false));
 		assert_ok!(Uniques::set_accept_ownership(Origin::signed(3), Some(0)));
 		assert_ok!(Uniques::transfer_ownership(Origin::signed(2), 0, 3));
-		assert_eq!(classes(), vec![(3, 0)]);
+		assert_eq!(collectiones(), vec![(3, 0)]);
 		assert_eq!(Balances::total_balance(&2), 57);
 		assert_eq!(Balances::total_balance(&3), 145);
 		assert_eq!(Balances::reserved_balance(&2), 0);
@@ -276,61 +276,64 @@ fn set_team_should_work() {
 }
 
 #[test]
-fn set_class_metadata_should_work() {
+fn set_collection_metadata_should_work() {
 	new_test_ext().execute_with(|| {
 		// Cannot add metadata to unknown asset
 		assert_noop!(
-			Uniques::set_class_metadata(Origin::signed(1), 0, bvec![0u8; 20], false),
-			Error::<Test>::UnknownClass,
+			Uniques::set_collection_metadata(Origin::signed(1), 0, bvec![0u8; 20], false),
+			Error::<Test>::UnknownCollection,
 		);
 		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, false));
 		// Cannot add metadata to unowned asset
 		assert_noop!(
-			Uniques::set_class_metadata(Origin::signed(2), 0, bvec![0u8; 20], false),
+			Uniques::set_collection_metadata(Origin::signed(2), 0, bvec![0u8; 20], false),
 			Error::<Test>::NoPermission,
 		);
 
 		// Successfully add metadata and take deposit
 		Balances::make_free_balance_be(&1, 30);
-		assert_ok!(Uniques::set_class_metadata(Origin::signed(1), 0, bvec![0u8; 20], false));
+		assert_ok!(Uniques::set_collection_metadata(Origin::signed(1), 0, bvec![0u8; 20], false));
 		assert_eq!(Balances::free_balance(&1), 9);
-		assert!(ClassMetadataOf::<Test>::contains_key(0));
+		assert!(CollectionMetadataOf::<Test>::contains_key(0));
 
 		// Force origin works, too.
-		assert_ok!(Uniques::set_class_metadata(Origin::root(), 0, bvec![0u8; 18], false));
+		assert_ok!(Uniques::set_collection_metadata(Origin::root(), 0, bvec![0u8; 18], false));
 
 		// Update deposit
-		assert_ok!(Uniques::set_class_metadata(Origin::signed(1), 0, bvec![0u8; 15], false));
+		assert_ok!(Uniques::set_collection_metadata(Origin::signed(1), 0, bvec![0u8; 15], false));
 		assert_eq!(Balances::free_balance(&1), 14);
-		assert_ok!(Uniques::set_class_metadata(Origin::signed(1), 0, bvec![0u8; 25], false));
+		assert_ok!(Uniques::set_collection_metadata(Origin::signed(1), 0, bvec![0u8; 25], false));
 		assert_eq!(Balances::free_balance(&1), 4);
 
 		// Cannot over-reserve
 		assert_noop!(
-			Uniques::set_class_metadata(Origin::signed(1), 0, bvec![0u8; 40], false),
+			Uniques::set_collection_metadata(Origin::signed(1), 0, bvec![0u8; 40], false),
 			BalancesError::<Test, _>::InsufficientBalance,
 		);
 
 		// Can't set or clear metadata once frozen
-		assert_ok!(Uniques::set_class_metadata(Origin::signed(1), 0, bvec![0u8; 15], true));
+		assert_ok!(Uniques::set_collection_metadata(Origin::signed(1), 0, bvec![0u8; 15], true));
 		assert_noop!(
-			Uniques::set_class_metadata(Origin::signed(1), 0, bvec![0u8; 15], false),
+			Uniques::set_collection_metadata(Origin::signed(1), 0, bvec![0u8; 15], false),
 			Error::<Test, _>::Frozen,
 		);
-		assert_noop!(Uniques::clear_class_metadata(Origin::signed(1), 0), Error::<Test>::Frozen);
+		assert_noop!(
+			Uniques::clear_collection_metadata(Origin::signed(1), 0),
+			Error::<Test>::Frozen
+		);
 
 		// Clear Metadata
-		assert_ok!(Uniques::set_class_metadata(Origin::root(), 0, bvec![0u8; 15], false));
+		assert_ok!(Uniques::set_collection_metadata(Origin::root(), 0, bvec![0u8; 15], false));
 		assert_noop!(
-			Uniques::clear_class_metadata(Origin::signed(2), 0),
+			Uniques::clear_collection_metadata(Origin::signed(2), 0),
 			Error::<Test>::NoPermission
 		);
 		assert_noop!(
-			Uniques::clear_class_metadata(Origin::signed(1), 1),
-			Error::<Test>::UnknownClass
+			Uniques::clear_collection_metadata(Origin::signed(1), 1),
+			Error::<Test>::UnknownCollection
 		);
-		assert_ok!(Uniques::clear_class_metadata(Origin::signed(1), 0));
-		assert!(!ClassMetadataOf::<Test>::contains_key(0));
+		assert_ok!(Uniques::clear_collection_metadata(Origin::signed(1), 0));
+		assert!(!CollectionMetadataOf::<Test>::contains_key(0));
 	});
 }
 
@@ -384,7 +387,7 @@ fn set_instance_metadata_should_work() {
 		);
 		assert_noop!(
 			Uniques::clear_metadata(Origin::signed(1), 1, 42),
-			Error::<Test>::UnknownClass
+			Error::<Test>::UnknownCollection
 		);
 		assert_ok!(Uniques::clear_metadata(Origin::signed(1), 0, 42));
 		assert!(!InstanceMetadataOf::<Test>::contains_key(0, 42));
@@ -429,7 +432,7 @@ fn set_attribute_should_work() {
 		);
 		assert_eq!(Balances::reserved_balance(1), 15);
 
-		let w = Class::<Test>::get(0).unwrap().destroy_witness();
+		let w = Collection::<Test>::get(0).unwrap().destroy_witness();
 		assert_ok!(Uniques::destroy(Origin::signed(1), 0, w));
 		assert_eq!(attributes(0), vec![]);
 		assert_eq!(Balances::reserved_balance(1), 0);
@@ -456,7 +459,7 @@ fn set_attribute_should_respect_freeze() {
 		);
 		assert_eq!(Balances::reserved_balance(1), 9);
 
-		assert_ok!(Uniques::set_class_metadata(Origin::signed(1), 0, bvec![], true));
+		assert_ok!(Uniques::set_collection_metadata(Origin::signed(1), 0, bvec![], true));
 		let e = Error::<Test>::Frozen;
 		assert_noop!(Uniques::set_attribute(Origin::signed(1), 0, None, bvec![0], bvec![0]), e);
 		assert_ok!(Uniques::set_attribute(Origin::signed(1), 0, Some(0), bvec![0], bvec![1]));
@@ -476,7 +479,7 @@ fn force_asset_status_should_work() {
 		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, false));
 		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 1));
 		assert_ok!(Uniques::mint(Origin::signed(1), 0, 69, 2));
-		assert_ok!(Uniques::set_class_metadata(Origin::signed(1), 0, bvec![0; 20], false));
+		assert_ok!(Uniques::set_collection_metadata(Origin::signed(1), 0, bvec![0; 20], false));
 		assert_ok!(Uniques::set_metadata(Origin::signed(1), 0, 42, bvec![0; 20], false));
 		assert_ok!(Uniques::set_metadata(Origin::signed(1), 0, 69, bvec![0; 20], false));
 		assert_eq!(Balances::reserved_balance(1), 65);
@@ -498,7 +501,7 @@ fn force_asset_status_should_work() {
 		assert_ok!(Uniques::set_metadata(Origin::signed(1), 0, 69, bvec![0; 20], false));
 		assert_eq!(Balances::reserved_balance(1), 21);
 
-		assert_ok!(Uniques::set_class_metadata(Origin::signed(1), 0, bvec![0; 20], false));
+		assert_ok!(Uniques::set_collection_metadata(Origin::signed(1), 0, bvec![0; 20], false));
 		assert_eq!(Balances::reserved_balance(1), 0);
 	});
 }
@@ -510,7 +513,10 @@ fn burn_works() {
 		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, false));
 		assert_ok!(Uniques::set_team(Origin::signed(1), 0, 2, 3, 4));
 
-		assert_noop!(Uniques::burn(Origin::signed(5), 0, 42, Some(5)), Error::<Test>::UnknownClass);
+		assert_noop!(
+			Uniques::burn(Origin::signed(5), 0, 42, Some(5)),
+			Error::<Test>::UnknownCollection
+		);
 
 		assert_ok!(Uniques::mint(Origin::signed(2), 0, 42, 5));
 		assert_ok!(Uniques::mint(Origin::signed(2), 0, 69, 5));
@@ -549,11 +555,11 @@ fn cancel_approval_works() {
 		assert_ok!(Uniques::approve_transfer(Origin::signed(2), 0, 42, 3));
 		assert_noop!(
 			Uniques::cancel_approval(Origin::signed(2), 1, 42, None),
-			Error::<Test>::UnknownClass
+			Error::<Test>::UnknownCollection
 		);
 		assert_noop!(
 			Uniques::cancel_approval(Origin::signed(2), 0, 43, None),
-			Error::<Test>::UnknownClass
+			Error::<Test>::UnknownCollection
 		);
 		assert_noop!(
 			Uniques::cancel_approval(Origin::signed(3), 0, 42, None),
@@ -581,11 +587,11 @@ fn cancel_approval_works_with_admin() {
 		assert_ok!(Uniques::approve_transfer(Origin::signed(2), 0, 42, 3));
 		assert_noop!(
 			Uniques::cancel_approval(Origin::signed(1), 1, 42, None),
-			Error::<Test>::UnknownClass
+			Error::<Test>::UnknownCollection
 		);
 		assert_noop!(
 			Uniques::cancel_approval(Origin::signed(1), 0, 43, None),
-			Error::<Test>::UnknownClass
+			Error::<Test>::UnknownCollection
 		);
 		assert_noop!(
 			Uniques::cancel_approval(Origin::signed(1), 0, 42, Some(4)),
@@ -609,11 +615,11 @@ fn cancel_approval_works_with_force() {
 		assert_ok!(Uniques::approve_transfer(Origin::signed(2), 0, 42, 3));
 		assert_noop!(
 			Uniques::cancel_approval(Origin::root(), 1, 42, None),
-			Error::<Test>::UnknownClass
+			Error::<Test>::UnknownCollection
 		);
 		assert_noop!(
 			Uniques::cancel_approval(Origin::root(), 0, 43, None),
-			Error::<Test>::UnknownClass
+			Error::<Test>::UnknownCollection
 		);
 		assert_noop!(
 			Uniques::cancel_approval(Origin::root(), 0, 42, Some(4)),
