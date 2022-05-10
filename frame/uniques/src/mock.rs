@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Test environment for Assets pallet.
+//! Test environment for Items pallet.
 
 use super::*;
 use crate as pallet_uniques;
@@ -87,13 +87,13 @@ impl pallet_balances::Config for Test {
 impl Config for Test {
 	type Event = Event;
 	type CollectionId = u32;
-	type AssetId = u32;
+	type ItemId = u32;
 	type Currency = Balances;
 	type CreateOrigin = AsEnsureOriginWithArg<frame_system::EnsureSigned<u64>>;
 	type ForceOrigin = frame_system::EnsureRoot<u64>;
 	type Locker = ();
 	type CollectionDeposit = ConstU64<2>;
-	type AssetDeposit = ConstU64<1>;
+	type ItemDeposit = ConstU64<1>;
 	type MetadataDepositBase = ConstU64<1>;
 	type AttributeDepositBase = ConstU64<1>;
 	type DepositPerByte = ConstU64<1>;

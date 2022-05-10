@@ -24,32 +24,32 @@ use sp_runtime::{DispatchError, DispatchResult};
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub fn do_transfer(
 		collection: T::CollectionId,
-		asset: T::AssetId,
+		item: T::ItemId,
 		dest: T::AccountId,
 		with_details: impl FnOnce(
 			&CollectionDetailsFor<T, I>,
-			&mut AssetDetailsFor<T, I>,
+			&mut ItemDetailsFor<T, I>,
 		) -> DispatchResult,
 	) -> DispatchResult {
 		let collection_details =
 			Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
 		ensure!(!collection_details.is_frozen, Error::<T, I>::Frozen);
-		ensure!(!T::Locker::is_locked(collection, asset), Error::<T, I>::Locked);
+		ensure!(!T::Locker::is_locked(collection, item), Error::<T, I>::Locked);
 
 		let mut details =
-			Asset::<T, I>::get(&collection, &asset).ok_or(Error::<T, I>::UnknownCollection)?;
+			Item::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::UnknownCollection)?;
 		ensure!(!details.is_frozen, Error::<T, I>::Frozen);
 		with_details(&collection_details, &mut details)?;
 
-		Account::<T, I>::remove((&details.owner, &collection, &asset));
-		Account::<T, I>::insert((&dest, &collection, &asset), ());
+		Account::<T, I>::remove((&details.owner, &collection, &item));
+		Account::<T, I>::insert((&dest, &collection, &item), ());
 		let origin = details.owner;
 		details.owner = dest;
-		Asset::<T, I>::insert(&collection, &asset, &details);
+		Item::<T, I>::insert(&collection, &item, &details);
 
 		Self::deposit_event(Event::Transferred {
 			collection,
-			asset,
+			item,
 			from: origin,
 			to: details.owner,
 		});
@@ -77,8 +77,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				freezer: admin,
 				total_deposit: deposit,
 				free_holding,
-				assets: 0,
-				asset_metadatas: 0,
+				items: 0,
+				item_metadatas: 0,
 				attributes: 0,
 				is_frozen: false,
 			},
@@ -100,17 +100,17 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			if let Some(check_owner) = maybe_check_owner {
 				ensure!(collection_details.owner == check_owner, Error::<T, I>::NoPermission);
 			}
-			ensure!(collection_details.assets == witness.assets, Error::<T, I>::BadWitness);
+			ensure!(collection_details.items == witness.items, Error::<T, I>::BadWitness);
 			ensure!(
-				collection_details.asset_metadatas == witness.asset_metadatas,
+				collection_details.item_metadatas == witness.item_metadatas,
 				Error::<T, I>::BadWitness
 			);
 			ensure!(collection_details.attributes == witness.attributes, Error::<T, I>::BadWitness);
 
-			for (asset, details) in Asset::<T, I>::drain_prefix(&collection) {
-				Account::<T, I>::remove((&details.owner, &collection, &asset));
+			for (item, details) in Item::<T, I>::drain_prefix(&collection) {
+				Account::<T, I>::remove((&details.owner, &collection, &item));
 			}
-			AssetMetadataOf::<T, I>::remove_prefix(&collection, None);
+			ItemMetadataOf::<T, I>::remove_prefix(&collection, None);
 			CollectionMetadataOf::<T, I>::remove(&collection);
 			Attribute::<T, I>::remove_prefix((&collection,), None);
 			CollectionAccount::<T, I>::remove(&collection_details.owner, &collection);
@@ -119,8 +119,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Self::deposit_event(Event::Destroyed { collection });
 
 			Ok(DestroyWitness {
-				assets: collection_details.assets,
-				asset_metadatas: collection_details.asset_metadatas,
+				items: collection_details.items,
+				item_metadatas: collection_details.item_metadatas,
 				attributes: collection_details.attributes,
 			})
 		})
@@ -128,11 +128,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	pub fn do_mint(
 		collection: T::CollectionId,
-		asset: T::AssetId,
+		item: T::ItemId,
 		owner: T::AccountId,
 		with_details: impl FnOnce(&CollectionDetailsFor<T, I>) -> DispatchResult,
 	) -> DispatchResult {
-		ensure!(!Asset::<T, I>::contains_key(collection, asset), Error::<T, I>::AlreadyExists);
+		ensure!(!Item::<T, I>::contains_key(collection, item), Error::<T, I>::AlreadyExists);
 
 		Collection::<T, I>::try_mutate(
 			&collection,
@@ -142,55 +142,55 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 				with_details(collection_details)?;
 
-				let assets =
-					collection_details.assets.checked_add(1).ok_or(ArithmeticError::Overflow)?;
-				collection_details.assets = assets;
+				let items =
+					collection_details.items.checked_add(1).ok_or(ArithmeticError::Overflow)?;
+				collection_details.items = items;
 
 				let deposit = match collection_details.free_holding {
 					true => Zero::zero(),
-					false => T::AssetDeposit::get(),
+					false => T::ItemDeposit::get(),
 				};
 				T::Currency::reserve(&collection_details.owner, deposit)?;
 				collection_details.total_deposit += deposit;
 
 				let owner = owner.clone();
-				Account::<T, I>::insert((&owner, &collection, &asset), ());
-				let details = AssetDetails { owner, approved: None, is_frozen: false, deposit };
-				Asset::<T, I>::insert(&collection, &asset, details);
+				Account::<T, I>::insert((&owner, &collection, &item), ());
+				let details = ItemDetails { owner, approved: None, is_frozen: false, deposit };
+				Item::<T, I>::insert(&collection, &item, details);
 				Ok(())
 			},
 		)?;
 
-		Self::deposit_event(Event::Issued { collection, asset, owner });
+		Self::deposit_event(Event::Issued { collection, item, owner });
 		Ok(())
 	}
 
 	pub fn do_burn(
 		collection: T::CollectionId,
-		asset: T::AssetId,
-		with_details: impl FnOnce(&CollectionDetailsFor<T, I>, &AssetDetailsFor<T, I>) -> DispatchResult,
+		item: T::ItemId,
+		with_details: impl FnOnce(&CollectionDetailsFor<T, I>, &ItemDetailsFor<T, I>) -> DispatchResult,
 	) -> DispatchResult {
 		let owner = Collection::<T, I>::try_mutate(
 			&collection,
 			|maybe_collection_details| -> Result<T::AccountId, DispatchError> {
 				let collection_details =
 					maybe_collection_details.as_mut().ok_or(Error::<T, I>::UnknownCollection)?;
-				let details = Asset::<T, I>::get(&collection, &asset)
+				let details = Item::<T, I>::get(&collection, &item)
 					.ok_or(Error::<T, I>::UnknownCollection)?;
 				with_details(collection_details, &details)?;
 
 				// Return the deposit.
 				T::Currency::unreserve(&collection_details.owner, details.deposit);
 				collection_details.total_deposit.saturating_reduce(details.deposit);
-				collection_details.assets.saturating_dec();
+				collection_details.items.saturating_dec();
 				Ok(details.owner)
 			},
 		)?;
 
-		Asset::<T, I>::remove(&collection, &asset);
-		Account::<T, I>::remove((&owner, &collection, &asset));
+		Item::<T, I>::remove(&collection, &item);
+		Account::<T, I>::remove((&owner, &collection, &item));
 
-		Self::deposit_event(Event::Burned { collection, asset, owner });
+		Self::deposit_event(Event::Burned { collection, item, owner });
 		Ok(())
 	}
 }

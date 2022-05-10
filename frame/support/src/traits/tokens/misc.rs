@@ -182,16 +182,16 @@ pub trait BalanceConversion<InBalance, AssetId, OutBalance> {
 
 /// Trait to handle asset locking mechanism to ensure interactions with the asset can be implemented
 /// downstream to extend logic of Uniques current functionality.
-pub trait Locker<CollectionId, AssetId> {
+pub trait Locker<CollectionId, ItemId> {
 	/// Check if the asset should be locked and prevent interactions with the asset from executing.
-	fn is_locked(collection: CollectionId, asset: AssetId) -> bool;
+	fn is_locked(collection: CollectionId, item: ItemId) -> bool;
 }
 
-impl<CollectionId, AssetId> Locker<CollectionId, AssetId> for () {
+impl<CollectionId, ItemId> Locker<CollectionId, ItemId> for () {
 	// Default will be false if not implemented downstream.
 	// Note: The logic check in this function must be constant time and consistent for benchmarks
 	// to work.
-	fn is_locked(_collection: CollectionId, _asset: AssetId) -> bool {
+	fn is_locked(_collection: CollectionId, _item: ItemId) -> bool {
 		false
 	}
 }

@@ -23,13 +23,13 @@ use frame_support::{assert_noop, assert_ok, traits::Currency};
 use pallet_balances::Error as BalancesError;
 use sp_std::prelude::*;
 
-fn assets() -> Vec<(u64, u32, u32)> {
+fn items() -> Vec<(u64, u32, u32)> {
 	let mut r: Vec<_> = Account::<Test>::iter().map(|x| x.0).collect();
 	r.sort();
-	let mut s: Vec<_> = Asset::<Test>::iter().map(|x| (x.2.owner, x.0, x.1)).collect();
+	let mut s: Vec<_> = Item::<Test>::iter().map(|x| (x.2.owner, x.0, x.1)).collect();
 	s.sort();
 	assert_eq!(r, s);
-	for collection in Asset::<Test>::iter()
+	for collection in Item::<Test>::iter()
 		.map(|x| x.0)
 		.scan(None, |s, item| {
 			if s.map_or(false, |last| last == item) {
@@ -42,8 +42,8 @@ fn assets() -> Vec<(u64, u32, u32)> {
 		.flatten()
 	{
 		let details = Collection::<Test>::get(collection).unwrap();
-		let assets = Asset::<Test>::iter_prefix(collection).count() as u32;
-		assert_eq!(details.assets, assets);
+		let items = Item::<Test>::iter_prefix(collection).count() as u32;
+		assert_eq!(details.items, items);
 	}
 	r
 }
@@ -74,7 +74,7 @@ fn attributes(collection: u32) -> Vec<(Option<u32>, Vec<u8>, Vec<u8>)> {
 #[test]
 fn basic_setup_works() {
 	new_test_ext().execute_with(|| {
-		assert_eq!(assets(), vec![]);
+		assert_eq!(items(), vec![]);
 	});
 }
 
@@ -84,12 +84,12 @@ fn basic_minting_should_work() {
 		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true));
 		assert_eq!(collections(), vec![(1, 0)]);
 		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 1));
-		assert_eq!(assets(), vec![(1, 0, 42)]);
+		assert_eq!(items(), vec![(1, 0, 42)]);
 
 		assert_ok!(Uniques::force_create(Origin::root(), 1, 2, true));
 		assert_eq!(collections(), vec![(1, 0), (2, 1)]);
 		assert_ok!(Uniques::mint(Origin::signed(2), 1, 69, 1));
-		assert_eq!(assets(), vec![(1, 0, 42), (1, 1, 69)]);
+		assert_eq!(items(), vec![(1, 0, 42), (1, 1, 69)]);
 	});
 }
 
@@ -108,31 +108,31 @@ fn lifecycle_should_work() {
 		assert_eq!(Balances::reserved_balance(&1), 6);
 		assert_ok!(Uniques::mint(Origin::signed(1), 0, 69, 20));
 		assert_eq!(Balances::reserved_balance(&1), 7);
-		assert_eq!(assets(), vec![(10, 0, 42), (20, 0, 69)]);
-		assert_eq!(Collection::<Test>::get(0).unwrap().assets, 2);
-		assert_eq!(Collection::<Test>::get(0).unwrap().asset_metadatas, 0);
+		assert_eq!(items(), vec![(10, 0, 42), (20, 0, 69)]);
+		assert_eq!(Collection::<Test>::get(0).unwrap().items, 2);
+		assert_eq!(Collection::<Test>::get(0).unwrap().item_metadatas, 0);
 
 		assert_ok!(Uniques::set_metadata(Origin::signed(1), 0, 42, bvec![42, 42], false));
 		assert_eq!(Balances::reserved_balance(&1), 10);
-		assert!(AssetMetadataOf::<Test>::contains_key(0, 42));
+		assert!(ItemMetadataOf::<Test>::contains_key(0, 42));
 		assert_ok!(Uniques::set_metadata(Origin::signed(1), 0, 69, bvec![69, 69], false));
 		assert_eq!(Balances::reserved_balance(&1), 13);
-		assert!(AssetMetadataOf::<Test>::contains_key(0, 69));
+		assert!(ItemMetadataOf::<Test>::contains_key(0, 69));
 
 		let w = Collection::<Test>::get(0).unwrap().destroy_witness();
-		assert_eq!(w.assets, 2);
-		assert_eq!(w.asset_metadatas, 2);
+		assert_eq!(w.items, 2);
+		assert_eq!(w.item_metadatas, 2);
 		assert_ok!(Uniques::destroy(Origin::signed(1), 0, w));
 		assert_eq!(Balances::reserved_balance(&1), 0);
 
 		assert!(!Collection::<Test>::contains_key(0));
-		assert!(!Asset::<Test>::contains_key(0, 42));
-		assert!(!Asset::<Test>::contains_key(0, 69));
+		assert!(!Item::<Test>::contains_key(0, 42));
+		assert!(!Item::<Test>::contains_key(0, 69));
 		assert!(!CollectionMetadataOf::<Test>::contains_key(0));
-		assert!(!AssetMetadataOf::<Test>::contains_key(0, 42));
-		assert!(!AssetMetadataOf::<Test>::contains_key(0, 69));
+		assert!(!ItemMetadataOf::<Test>::contains_key(0, 42));
+		assert!(!ItemMetadataOf::<Test>::contains_key(0, 69));
 		assert_eq!(collections(), vec![]);
-		assert_eq!(assets(), vec![]);
+		assert_eq!(items(), vec![]);
 	});
 }
 
@@ -155,7 +155,7 @@ fn mint_should_work() {
 		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 1));
 		assert_eq!(Uniques::owner(0, 42).unwrap(), 1);
 		assert_eq!(collections(), vec![(1, 0)]);
-		assert_eq!(assets(), vec![(1, 0, 42)]);
+		assert_eq!(items(), vec![(1, 0, 42)]);
 	});
 }
 
@@ -166,7 +166,7 @@ fn transfer_should_work() {
 		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 2));
 
 		assert_ok!(Uniques::transfer(Origin::signed(2), 0, 42, 3));
-		assert_eq!(assets(), vec![(3, 0, 42)]);
+		assert_eq!(items(), vec![(3, 0, 42)]);
 		assert_noop!(Uniques::transfer(Origin::signed(2), 0, 42, 4), Error::<Test>::NoPermission);
 
 		assert_ok!(Uniques::approve_transfer(Origin::signed(3), 0, 42, 2));
@@ -278,13 +278,13 @@ fn set_team_should_work() {
 #[test]
 fn set_collection_metadata_should_work() {
 	new_test_ext().execute_with(|| {
-		// Cannot add metadata to unknown asset
+		// Cannot add metadata to unknown item
 		assert_noop!(
 			Uniques::set_collection_metadata(Origin::signed(1), 0, bvec![0u8; 20], false),
 			Error::<Test>::UnknownCollection,
 		);
 		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, false));
-		// Cannot add metadata to unowned asset
+		// Cannot add metadata to unowned item
 		assert_noop!(
 			Uniques::set_collection_metadata(Origin::signed(2), 0, bvec![0u8; 20], false),
 			Error::<Test>::NoPermission,
@@ -338,14 +338,14 @@ fn set_collection_metadata_should_work() {
 }
 
 #[test]
-fn set_asset_metadata_should_work() {
+fn set_item_metadata_should_work() {
 	new_test_ext().execute_with(|| {
 		Balances::make_free_balance_be(&1, 30);
 
-		// Cannot add metadata to unknown asset
+		// Cannot add metadata to unknown item
 		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, false));
 		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 1));
-		// Cannot add metadata to unowned asset
+		// Cannot add metadata to unowned item
 		assert_noop!(
 			Uniques::set_metadata(Origin::signed(2), 0, 42, bvec![0u8; 20], false),
 			Error::<Test>::NoPermission,
@@ -354,7 +354,7 @@ fn set_asset_metadata_should_work() {
 		// Successfully add metadata and take deposit
 		assert_ok!(Uniques::set_metadata(Origin::signed(1), 0, 42, bvec![0u8; 20], false));
 		assert_eq!(Balances::free_balance(&1), 8);
-		assert!(AssetMetadataOf::<Test>::contains_key(0, 42));
+		assert!(ItemMetadataOf::<Test>::contains_key(0, 42));
 
 		// Force origin works, too.
 		assert_ok!(Uniques::set_metadata(Origin::root(), 0, 42, bvec![0u8; 18], false));
@@ -390,7 +390,7 @@ fn set_asset_metadata_should_work() {
 			Error::<Test>::UnknownCollection
 		);
 		assert_ok!(Uniques::clear_metadata(Origin::signed(1), 0, 42));
-		assert!(!AssetMetadataOf::<Test>::contains_key(0, 42));
+		assert!(!ItemMetadataOf::<Test>::contains_key(0, 42));
 	});
 }
 
@@ -472,7 +472,7 @@ fn set_attribute_should_respect_freeze() {
 }
 
 #[test]
-fn force_asset_status_should_work() {
+fn force_item_status_should_work() {
 	new_test_ext().execute_with(|| {
 		Balances::make_free_balance_be(&1, 100);
 
@@ -484,8 +484,8 @@ fn force_asset_status_should_work() {
 		assert_ok!(Uniques::set_metadata(Origin::signed(1), 0, 69, bvec![0; 20], false));
 		assert_eq!(Balances::reserved_balance(1), 65);
 
-		// force asset status to be free holding
-		assert_ok!(Uniques::force_asset_status(Origin::root(), 0, 1, 1, 1, 1, true, false));
+		// force item status to be free holding
+		assert_ok!(Uniques::force_item_status(Origin::root(), 0, 1, 1, 1, 1, true, false));
 		assert_ok!(Uniques::mint(Origin::signed(1), 0, 142, 1));
 		assert_ok!(Uniques::mint(Origin::signed(1), 0, 169, 2));
 		assert_ok!(Uniques::set_metadata(Origin::signed(1), 0, 142, bvec![0; 20], false));
@@ -539,7 +539,7 @@ fn approval_lifecycle_works() {
 		assert_ok!(Uniques::approve_transfer(Origin::signed(2), 0, 42, 3));
 		assert_ok!(Uniques::transfer(Origin::signed(3), 0, 42, 4));
 		assert_noop!(Uniques::transfer(Origin::signed(3), 0, 42, 3), Error::<Test>::NoPermission);
-		assert!(Asset::<Test>::get(0, 42).unwrap().approved.is_none());
+		assert!(Item::<Test>::get(0, 42).unwrap().approved.is_none());
 
 		assert_ok!(Uniques::approve_transfer(Origin::signed(4), 0, 42, 2));
 		assert_ok!(Uniques::transfer(Origin::signed(2), 0, 42, 2));

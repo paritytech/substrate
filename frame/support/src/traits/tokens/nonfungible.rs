@@ -15,9 +15,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Traits for dealing with a single non-fungible assets collection.
+//! Traits for dealing with a single non-fungible items collection.
 //!
-//! This assumes a single level namespace identified by `Inspect::AssetId`, and could
+//! This assumes a single level namespace identified by `Inspect::ItemId`, and could
 //! reasonably be implemented by pallets which wants to expose a single collection of NFT-like
 //! objects.
 //!
@@ -30,88 +30,88 @@ use codec::{Decode, Encode};
 use sp_runtime::TokenError;
 use sp_std::prelude::*;
 
-/// Trait for providing an interface to a read-only NFT-like set of assets.
+/// Trait for providing an interface to a read-only NFT-like set of items.
 pub trait Inspect<AccountId> {
-	/// Type for identifying an asset.
-	type AssetId;
+	/// Type for identifying an item.
+	type ItemId;
 
-	/// Returns the owner of `asset`, or `None` if the asset doesn't exist or has no
+	/// Returns the owner of `item`, or `None` if the item doesn't exist or has no
 	/// owner.
-	fn owner(asset: &Self::AssetId) -> Option<AccountId>;
+	fn owner(item: &Self::ItemId) -> Option<AccountId>;
 
-	/// Returns the attribute value of `asset` corresponding to `key`.
+	/// Returns the attribute value of `item` corresponding to `key`.
 	///
 	/// By default this is `None`; no attributes are defined.
-	fn attribute(_asset: &Self::AssetId, _key: &[u8]) -> Option<Vec<u8>> {
+	fn attribute(_item: &Self::ItemId, _key: &[u8]) -> Option<Vec<u8>> {
 		None
 	}
 
-	/// Returns the strongly-typed attribute value of `asset` corresponding to `key`.
+	/// Returns the strongly-typed attribute value of `item` corresponding to `key`.
 	///
 	/// By default this just attempts to use `attribute`.
-	fn typed_attribute<K: Encode, V: Decode>(asset: &Self::AssetId, key: &K) -> Option<V> {
-		key.using_encoded(|d| Self::attribute(asset, d))
+	fn typed_attribute<K: Encode, V: Decode>(item: &Self::ItemId, key: &K) -> Option<V> {
+		key.using_encoded(|d| Self::attribute(item, d))
 			.and_then(|v| V::decode(&mut &v[..]).ok())
 	}
 
-	/// Returns `true` if the `asset` may be transferred.
+	/// Returns `true` if the `item` may be transferred.
 	///
-	/// Default implementation is that all assets are transferable.
-	fn can_transfer(_asset: &Self::AssetId) -> bool {
+	/// Default implementation is that all items are transferable.
+	fn can_transfer(_item: &Self::ItemId) -> bool {
 		true
 	}
 }
 
-/// Interface for enumerating assets in existence or owned by a given account over a collection
+/// Interface for enumerating items in existence or owned by a given account over a collection
 /// of NFTs.
 pub trait InspectEnumerable<AccountId>: Inspect<AccountId> {
-	/// Returns an iterator of the assets within a `collection` in existence.
-	fn assets() -> Box<dyn Iterator<Item = Self::AssetId>>;
+	/// Returns an iterator of the items within a `collection` in existence.
+	fn items() -> Box<dyn Iterator<Item = Self::ItemId>>;
 
-	/// Returns an iterator of the assets of all collections owned by `who`.
-	fn owned(who: &AccountId) -> Box<dyn Iterator<Item = Self::AssetId>>;
+	/// Returns an iterator of the items of all collections owned by `who`.
+	fn owned(who: &AccountId) -> Box<dyn Iterator<Item = Self::ItemId>>;
 }
 
-/// Trait for providing an interface for NFT-like assets which may be minted, burned and/or have
+/// Trait for providing an interface for NFT-like items which may be minted, burned and/or have
 /// attributes set on them.
 pub trait Mutate<AccountId>: Inspect<AccountId> {
-	/// Mint some `asset` to be owned by `who`.
+	/// Mint some `item` to be owned by `who`.
 	///
 	/// By default, this is not a supported operation.
-	fn mint_into(_asset: &Self::AssetId, _who: &AccountId) -> DispatchResult {
+	fn mint_into(_item: &Self::ItemId, _who: &AccountId) -> DispatchResult {
 		Err(TokenError::Unsupported.into())
 	}
 
-	/// Burn some `asset`.
+	/// Burn some `item`.
 	///
 	/// By default, this is not a supported operation.
-	fn burn(_asset: &Self::AssetId, _maybe_check_owner: Option<&AccountId>) -> DispatchResult {
+	fn burn(_item: &Self::ItemId, _maybe_check_owner: Option<&AccountId>) -> DispatchResult {
 		Err(TokenError::Unsupported.into())
 	}
 
-	/// Set attribute `value` of `asset`'s `key`.
+	/// Set attribute `value` of `item`'s `key`.
 	///
 	/// By default, this is not a supported operation.
-	fn set_attribute(_asset: &Self::AssetId, _key: &[u8], _value: &[u8]) -> DispatchResult {
+	fn set_attribute(_item: &Self::ItemId, _key: &[u8], _value: &[u8]) -> DispatchResult {
 		Err(TokenError::Unsupported.into())
 	}
 
-	/// Attempt to set the strongly-typed attribute `value` of `asset`'s `key`.
+	/// Attempt to set the strongly-typed attribute `value` of `item`'s `key`.
 	///
 	/// By default this just attempts to use `set_attribute`.
 	fn set_typed_attribute<K: Encode, V: Encode>(
-		asset: &Self::AssetId,
+		item: &Self::ItemId,
 		key: &K,
 		value: &V,
 	) -> DispatchResult {
-		key.using_encoded(|k| value.using_encoded(|v| Self::set_attribute(asset, k, v)))
+		key.using_encoded(|k| value.using_encoded(|v| Self::set_attribute(item, k, v)))
 	}
 }
 
-/// Trait for providing a non-fungible set of assets which can only be transferred.
+/// Trait for providing a non-fungible set of items which can only be transferred.
 pub trait Transfer<AccountId>: Inspect<AccountId> {
-	/// Transfer `asset` into `destination` account.
-	fn transfer(asset: &Self::AssetId, destination: &AccountId) -> DispatchResult;
+	/// Transfer `item` into `destination` account.
+	fn transfer(item: &Self::ItemId, destination: &AccountId) -> DispatchResult;
 }
 
 /// Convert a `fungibles` trait implementation into a `fungible` trait implementation by identifying
@@ -128,18 +128,18 @@ impl<
 		AccountId,
 	> Inspect<AccountId> for ItemOf<F, A, AccountId>
 {
-	type AssetId = <F as nonfungibles::Inspect<AccountId>>::AssetId;
-	fn owner(asset: &Self::AssetId) -> Option<AccountId> {
-		<F as nonfungibles::Inspect<AccountId>>::owner(&A::get(), asset)
+	type ItemId = <F as nonfungibles::Inspect<AccountId>>::ItemId;
+	fn owner(item: &Self::ItemId) -> Option<AccountId> {
+		<F as nonfungibles::Inspect<AccountId>>::owner(&A::get(), item)
 	}
-	fn attribute(asset: &Self::AssetId, key: &[u8]) -> Option<Vec<u8>> {
-		<F as nonfungibles::Inspect<AccountId>>::attribute(&A::get(), asset, key)
+	fn attribute(item: &Self::ItemId, key: &[u8]) -> Option<Vec<u8>> {
+		<F as nonfungibles::Inspect<AccountId>>::attribute(&A::get(), item, key)
 	}
-	fn typed_attribute<K: Encode, V: Decode>(asset: &Self::AssetId, key: &K) -> Option<V> {
-		<F as nonfungibles::Inspect<AccountId>>::typed_attribute(&A::get(), asset, key)
+	fn typed_attribute<K: Encode, V: Decode>(item: &Self::ItemId, key: &K) -> Option<V> {
+		<F as nonfungibles::Inspect<AccountId>>::typed_attribute(&A::get(), item, key)
 	}
-	fn can_transfer(asset: &Self::AssetId) -> bool {
-		<F as nonfungibles::Inspect<AccountId>>::can_transfer(&A::get(), asset)
+	fn can_transfer(item: &Self::ItemId) -> bool {
+		<F as nonfungibles::Inspect<AccountId>>::can_transfer(&A::get(), item)
 	}
 }
 
@@ -149,10 +149,10 @@ impl<
 		AccountId,
 	> InspectEnumerable<AccountId> for ItemOf<F, A, AccountId>
 {
-	fn assets() -> Box<dyn Iterator<Item = Self::AssetId>> {
-		<F as nonfungibles::InspectEnumerable<AccountId>>::assets(&A::get())
+	fn items() -> Box<dyn Iterator<Item = Self::ItemId>> {
+		<F as nonfungibles::InspectEnumerable<AccountId>>::items(&A::get())
 	}
-	fn owned(who: &AccountId) -> Box<dyn Iterator<Item = Self::AssetId>> {
+	fn owned(who: &AccountId) -> Box<dyn Iterator<Item = Self::ItemId>> {
 		<F as nonfungibles::InspectEnumerable<AccountId>>::owned_in_collection(&A::get(), who)
 	}
 }
@@ -163,21 +163,21 @@ impl<
 		AccountId,
 	> Mutate<AccountId> for ItemOf<F, A, AccountId>
 {
-	fn mint_into(asset: &Self::AssetId, who: &AccountId) -> DispatchResult {
-		<F as nonfungibles::Mutate<AccountId>>::mint_into(&A::get(), asset, who)
+	fn mint_into(item: &Self::ItemId, who: &AccountId) -> DispatchResult {
+		<F as nonfungibles::Mutate<AccountId>>::mint_into(&A::get(), item, who)
 	}
-	fn burn(asset: &Self::AssetId, maybe_check_owner: Option<&AccountId>) -> DispatchResult {
-		<F as nonfungibles::Mutate<AccountId>>::burn(&A::get(), asset, maybe_check_owner)
+	fn burn(item: &Self::ItemId, maybe_check_owner: Option<&AccountId>) -> DispatchResult {
+		<F as nonfungibles::Mutate<AccountId>>::burn(&A::get(), item, maybe_check_owner)
 	}
-	fn set_attribute(asset: &Self::AssetId, key: &[u8], value: &[u8]) -> DispatchResult {
-		<F as nonfungibles::Mutate<AccountId>>::set_attribute(&A::get(), asset, key, value)
+	fn set_attribute(item: &Self::ItemId, key: &[u8], value: &[u8]) -> DispatchResult {
+		<F as nonfungibles::Mutate<AccountId>>::set_attribute(&A::get(), item, key, value)
 	}
 	fn set_typed_attribute<K: Encode, V: Encode>(
-		asset: &Self::AssetId,
+		item: &Self::ItemId,
 		key: &K,
 		value: &V,
 	) -> DispatchResult {
-		<F as nonfungibles::Mutate<AccountId>>::set_typed_attribute(&A::get(), asset, key, value)
+		<F as nonfungibles::Mutate<AccountId>>::set_typed_attribute(&A::get(), item, key, value)
 	}
 }
 
@@ -187,7 +187,7 @@ impl<
 		AccountId,
 	> Transfer<AccountId> for ItemOf<F, A, AccountId>
 {
-	fn transfer(asset: &Self::AssetId, destination: &AccountId) -> DispatchResult {
-		<F as nonfungibles::Transfer<AccountId>>::transfer(&A::get(), asset, destination)
+	fn transfer(item: &Self::ItemId, destination: &AccountId) -> DispatchResult {
+		<F as nonfungibles::Transfer<AccountId>>::transfer(&A::get(), item, destination)
 	}
 }
