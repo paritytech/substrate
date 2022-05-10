@@ -370,6 +370,8 @@ where
 		config: ClientConfig<Block>,
 	) -> sp_blockchain::Result<Self> {
 		let info = backend.blockchain().info();
+		let mut initial_hash = info.best_hash;
+
 		if info.finalized_state.is_none() {
 			let genesis_storage =
 				build_genesis_storage.build_storage().map_err(sp_blockchain::Error::Storage)?;
@@ -384,6 +386,9 @@ where
 				genesis_block.header().state_root(),
 				genesis_block.header().hash()
 			);
+			if info.best_hash == Default::default() {
+				initial_hash = genesis_block.header().hash();
+			}
 			// Genesis may be written after some blocks have been imported and finalized.
 			// So we only finalize it when the database is empty.
 			let block_state = if info.best_hash == Default::default() {
@@ -407,7 +412,7 @@ where
 			storage_changes_for_keys: parking_lot::Mutex::new(StorageChangesForKeysHub::new(
 				MAXIMUM_PENDING_STORAGE_CHANGE_MESSAGES,
 				prometheus_registry.clone(),
-				info.best_hash,
+				initial_hash,
 			)),
 			all_storage_changes: AllStorageChangesHub::new(prometheus_registry),
 			import_notification_sinks: Default::default(),
