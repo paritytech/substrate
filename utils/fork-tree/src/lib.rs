@@ -251,16 +251,12 @@ where
 		F: Fn(&H, &H) -> Result<bool, E>,
 		P: Fn(&V) -> bool,
 	{
-		self.find_node_index_where(hash, number, is_descendent_of, predicate)
-			.map(|maybe_path| {
-				maybe_path.map(|path| {
-					let children = path
-						.iter()
-						.take(path.len() - 1)
-						.fold(&self.roots, |curr, &i| &curr[i].children);
-					&children[path[path.len() - 1]]
-				})
-			})
+		let maybe_path = self.find_node_index_where(hash, number, is_descendent_of, predicate)?;
+		Ok(maybe_path.map(|path| {
+			let children =
+				path.iter().take(path.len() - 1).fold(&self.roots, |curr, &i| &curr[i].children);
+			&children[path[path.len() - 1]]
+		}))
 	}
 
 	/// Same as [`find_node_where`](ForkTree::find_node_where), but returns mutable reference.
@@ -276,24 +272,22 @@ where
 		F: Fn(&H, &H) -> Result<bool, E>,
 		P: Fn(&V) -> bool,
 	{
-		self.find_node_index_where(hash, number, is_descendent_of, predicate)
-			.map(|maybe_path| {
-				maybe_path.map(|path| {
-					let children = path
-						.iter()
-						.take(path.len() - 1)
-						.fold(&mut self.roots, |curr, &i| &mut curr[i].children);
-					&mut children[path[path.len() - 1]]
-				})
-			})
+		let maybe_path = self.find_node_index_where(hash, number, is_descendent_of, predicate)?;
+		Ok(maybe_path.map(|path| {
+			let children = path
+				.iter()
+				.take(path.len() - 1)
+				.fold(&mut self.roots, |curr, &i| &mut curr[i].children);
+			&mut children[path[path.len() - 1]]
+		}))
 	}
 
 	/// Same as [`find_node_where`](ForkTree::find_node_where), but returns indices.
 	///
 	/// The returned indices represent the full path to reach the matching node starting
-	/// from last to first, i.e. the earliest index in the traverse path goes last, and the final 
-	/// index in the traverse path goes first. If a node is found that matches the predicate
-	/// the returned path should always contain at least one index, otherwise `None` is 
+	/// from first to last, i.e. the earliest index in the traverse path goes first, and the final
+	/// index in the traverse path goes last. If a node is found that matches the predicate
+	/// the returned path should always contain at least one index, otherwise `None` is
 	/// returned.
 	pub fn find_node_index_where<F, E, P>(
 		&self,
