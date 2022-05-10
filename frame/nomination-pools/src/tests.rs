@@ -3648,6 +3648,7 @@ mod update_roles {
 				ConfigOp::Set(6),
 				ConfigOp::Set(7)
 			));
+
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
@@ -3655,6 +3656,20 @@ mod update_roles {
 					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
 					Event::RolesUpdated { root: 5, state_toggler: 7, nominator: 6 }
 				]
+			);
+
+			// also root origin can
+			assert_ok!(Pools::update_roles(
+				Origin::root(),
+				1,
+				ConfigOp::Set(1),
+				ConfigOp::Set(2),
+				ConfigOp::Set(3)
+			));
+
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![Event::RolesUpdated { root: 1, state_toggler: 3, nominator: 2 }]
 			);
 		})
 	}

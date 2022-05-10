@@ -1852,9 +1852,22 @@ pub mod pallet {
 			nominator: ConfigOp<T::AccountId>,
 			state_toggler: ConfigOp<T::AccountId>,
 		) -> DispatchResult {
-			let who = ensure_signed(origin)?;
-			let mut bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
-			ensure!(bonded_pool.roles.root == who, Error::<T>::DoesNotHavePermission);
+			let o1 = origin;
+			let o2 = o1.clone();
+
+			let is_pool_root = || -> Result<BondedPool<T>, sp_runtime::DispatchError> {
+				let who = ensure_signed(o1)?;
+				let bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
+				ensure!(bonded_pool.roles.root == who, Error::<T>::DoesNotHavePermission);
+				Ok(bonded_pool)
+			};
+			let is_root = || -> Result<BondedPool<T>, sp_runtime::DispatchError> {
+				ensure_root(o2)?;
+				let bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
+				Ok(bonded_pool)
+			};
+
+			let mut bonded_pool = is_root().or_else(|_| is_pool_root())?;
 
 			match root {
 				ConfigOp::Noop => (),
@@ -1877,6 +1890,7 @@ pub mod pallet {
 				nominator: bonded_pool.roles.nominator.clone(),
 				state_toggler: bonded_pool.roles.state_toggler.clone(),
 			});
+
 			bonded_pool.put();
 			Ok(())
 		}
