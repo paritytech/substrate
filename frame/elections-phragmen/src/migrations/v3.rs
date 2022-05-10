@@ -68,7 +68,8 @@ type RunnersUp<V, T> = Value<
 #[frame_support::storage_alias]
 type Voting<V, T> = Map<
 	Pallet<T: Config>,
-	(Twox64Concat, T::AccountId),
+	Twox64Concat,
+	<V as V2ToV3>::AccountId,
 	Voter<<V as V2ToV3>::AccountId, <V as V2ToV3>::Balance>,
 >;
 
@@ -85,7 +86,7 @@ pub fn apply<V: V2ToV3, T: Config>(
 	old_voter_bond: V::Balance,
 	old_candidacy_bond: V::Balance,
 ) -> Weight {
-	let storage_version = StorageVersion::get::<T::Pallet>();
+	let storage_version = StorageVersion::get::<Pallet<T>>();
 	log::info!(
 		target: "runtime::elections-phragmen",
 		"Running migration for elections-phragmen with storage version {:?}",
