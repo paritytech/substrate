@@ -245,28 +245,28 @@ pub mod pallet {
 	pub enum Event<T: Config<I>, I: 'static = ()> {
 		/// An assets collection was created.
 		Created { collection: T::CollectionId, creator: T::AccountId, owner: T::AccountId },
-		/// An assets collection was force-created.
+		/// A `collection` was force-created.
 		ForceCreated { collection: T::CollectionId, owner: T::AccountId },
-		/// An asset `collection` was destroyed.
+		/// A `collection` was destroyed.
 		Destroyed { collection: T::CollectionId },
-		/// An asset `asset` was issued.
+		/// An `asset` was issued.
 		Issued { collection: T::CollectionId, asset: T::AssetId, owner: T::AccountId },
-		/// An asset `asset` was transferred.
+		/// An `asset` was transferred.
 		Transferred {
 			collection: T::CollectionId,
 			asset: T::AssetId,
 			from: T::AccountId,
 			to: T::AccountId,
 		},
-		/// An asset `asset` was destroyed.
+		/// An `asset` was destroyed.
 		Burned { collection: T::CollectionId, asset: T::AssetId, owner: T::AccountId },
-		/// Some asset `asset` was frozen.
+		/// Some `asset` was frozen.
 		Frozen { collection: T::CollectionId, asset: T::AssetId },
-		/// Some asset `asset` was thawed.
+		/// Some `asset` was thawed.
 		Thawed { collection: T::CollectionId, asset: T::AssetId },
-		/// Some asset `collection` was frozen.
+		/// Some `collection` was frozen.
 		CollectionFrozen { collection: T::CollectionId },
-		/// Some asset `collection` was thawed.
+		/// Some `collection` was thawed.
 		CollectionThawed { collection: T::CollectionId },
 		/// The owner changed.
 		OwnerChanged { collection: T::CollectionId, new_owner: T::AccountId },
@@ -277,7 +277,7 @@ pub mod pallet {
 			admin: T::AccountId,
 			freezer: T::AccountId,
 		},
-		/// An `asset` of an asset `collection` has been approved by the `owner` for transfer by
+		/// An `asset` of a `collection` has been approved by the `owner` for transfer by
 		/// a `delegate`.
 		ApprovedTransfer {
 			collection: T::CollectionId,
@@ -293,7 +293,7 @@ pub mod pallet {
 			owner: T::AccountId,
 			delegate: T::AccountId,
 		},
-		/// An asset `collection` has had its attributes changed by the `Force` origin.
+		/// A `collection` has had its attributes changed by the `Force` origin.
 		AssetStatusChanged { collection: T::CollectionId },
 		/// New metadata has been set for an assets collection.
 		CollectionMetadataSet {
@@ -450,7 +450,7 @@ pub mod pallet {
 		/// Destroy a collection of fungible assets.
 		///
 		/// The origin must conform to `ForceOrigin` or must be `Signed` and the sender must be the
-		/// owner of the asset `collection`.
+		/// owner of the `collection`.
 		///
 		/// - `collection`: The identifier of the assets collection to be destroyed.
 		/// - `witness`: Information on the assets minted in the assets collection. This must be
@@ -488,7 +488,7 @@ pub mod pallet {
 
 		/// Mint an asset of a particular collection.
 		///
-		/// The origin must be Signed and the sender must be the Issuer of the asset `collection`.
+		/// The origin must be Signed and the sender must be the Issuer of the `collection`.
 		///
 		/// - `collection`: The collection of the asset to be minted.
 		/// - `asset`: The asset value of the asset to be minted.
@@ -515,7 +515,7 @@ pub mod pallet {
 
 		/// Destroy a single asset.
 		///
-		/// Origin must be Signed and the sender should be the Admin of the asset `collection`.
+		/// Origin must be Signed and the sender should be the Admin of the `collection`.
 		///
 		/// - `collection`: The collection of the asset to be burned.
 		/// - `asset`: The asset of the asset to be burned.
@@ -550,9 +550,9 @@ pub mod pallet {
 		/// Move an asset from the sender account to another.
 		///
 		/// Origin must be Signed and the signing account must be either:
-		/// - the Admin of the asset `collection`;
-		/// - the Owner of the asset `asset`;
-		/// - the approved delegate for the asset `asset` (in this case, the approval is reset).
+		/// - the Admin of the `collection`;
+		/// - the Owner of the `asset`;
+		/// - the approved delegate for the `asset` (in this case, the approval is reset).
 		///
 		/// Arguments:
 		/// - `collection`: The collection of the asset to be transferred.
@@ -583,7 +583,7 @@ pub mod pallet {
 
 		/// Reevaluate the deposits on some assets.
 		///
-		/// Origin must be Signed and the sender should be the Owner of the asset `collection`.
+		/// Origin must be Signed and the sender should be the Owner of the `collection`.
 		///
 		/// - `collection`: The collection of the asset to be frozen.
 		/// - `assets`: The assets of the assets collection whose deposits will be reevaluated.
@@ -650,7 +650,7 @@ pub mod pallet {
 
 		/// Disallow further unprivileged transfer of an asset.
 		///
-		/// Origin must be Signed and the sender should be the Freezer of the asset `collection`.
+		/// Origin must be Signed and the sender should be the Freezer of the `collection`.
 		///
 		/// - `collection`: The collection of the asset to be frozen.
 		/// - `asset`: The asset of the asset to be frozen.
@@ -681,7 +681,7 @@ pub mod pallet {
 
 		/// Re-allow unprivileged transfer of an asset.
 		///
-		/// Origin must be Signed and the sender should be the Freezer of the asset `collection`.
+		/// Origin must be Signed and the sender should be the Freezer of the `collection`.
 		///
 		/// - `collection`: The collection of the asset to be thawed.
 		/// - `asset`: The asset of the asset to be thawed.
@@ -712,7 +712,7 @@ pub mod pallet {
 
 		/// Disallow further unprivileged transfers for a whole assets collection.
 		///
-		/// Origin must be Signed and the sender should be the Freezer of the asset `collection`.
+		/// Origin must be Signed and the sender should be the Freezer of the `collection`.
 		///
 		/// - `collection`: The assets collection to be frozen.
 		///
@@ -739,7 +739,7 @@ pub mod pallet {
 
 		/// Re-allow unprivileged transfers for a whole assets collection.
 		///
-		/// Origin must be Signed and the sender should be the Admin of the asset `collection`.
+		/// Origin must be Signed and the sender should be the Admin of the `collection`.
 		///
 		/// - `collection`: The collection to be thawed.
 		///
@@ -766,7 +766,7 @@ pub mod pallet {
 
 		/// Change the Owner of an assets collection.
 		///
-		/// Origin must be Signed and the sender should be the Owner of the asset `collection`.
+		/// Origin must be Signed and the sender should be the Owner of the `collection`.
 		///
 		/// - `collection`: The assets collection whose owner should be changed.
 		/// - `owner`: The new Owner of this assets collection. They must have called
@@ -813,7 +813,7 @@ pub mod pallet {
 
 		/// Change the Issuer, Admin and Freezer of an assets collection.
 		///
-		/// Origin must be Signed and the sender should be the Owner of the asset `collection`.
+		/// Origin must be Signed and the sender should be the Owner of the `collection`.
 		///
 		/// - `collection`: The assets collection whose team should be changed.
 		/// - `issuer`: The new Issuer of this assets collection.
@@ -851,7 +851,7 @@ pub mod pallet {
 
 		/// Approve an asset to be transferred by a delegated third-party account.
 		///
-		/// Origin must be Signed and must be the owner of the asset `asset`.
+		/// Origin must be Signed and must be the owner of the `asset`.
 		///
 		/// - `collection`: The collection of the asset to be approved for delegated transfer.
 		/// - `asset`: The asset of the asset to be approved for delegated transfer.
@@ -901,8 +901,8 @@ pub mod pallet {
 		///
 		/// Origin must be either:
 		/// - the `Force` origin;
-		/// - `Signed` with the signer being the Admin of the asset `collection`;
-		/// - `Signed` with the signer being the Owner of the asset `asset`;
+		/// - `Signed` with the signer being the Admin of the `collection`;
+		/// - `Signed` with the signer being the Owner of the `asset`;
 		///
 		/// Arguments:
 		/// - `collection`: The collection of the asset of whose approval will be cancelled.
@@ -1001,7 +1001,7 @@ pub mod pallet {
 		/// Set an attribute for an assets collection or asset.
 		///
 		/// Origin must be either `ForceOrigin` or Signed and the sender should be the Owner of the
-		/// asset `collection`.
+		/// `collection`.
 		///
 		/// If the origin is Signed, then funds of signer are reserved according to the formula:
 		/// `MetadataDepositBase + DepositPerByte * (key.len + value.len)` taking into
@@ -1066,7 +1066,7 @@ pub mod pallet {
 		/// Clear an attribute for an assets collection or asset.
 		///
 		/// Origin must be either `ForceOrigin` or Signed and the sender should be the Owner of the
-		/// asset `collection`.
+		/// `collection`.
 		///
 		/// Any deposit is freed for the assets collection owner.
 		///
@@ -1112,7 +1112,7 @@ pub mod pallet {
 		/// Set the metadata for an asset.
 		///
 		/// Origin must be either `ForceOrigin` or Signed and the sender should be the Owner of the
-		/// asset `collection`.
+		/// `collection`.
 		///
 		/// If the origin is Signed, then funds of signer are reserved according to the formula:
 		/// `MetadataDepositBase + DepositPerByte * data.len` taking into
@@ -1178,7 +1178,7 @@ pub mod pallet {
 		/// Clear the metadata for an asset.
 		///
 		/// Origin must be either `ForceOrigin` or Signed and the sender should be the Owner of the
-		/// asset `asset`.
+		/// `asset`.
 		///
 		/// Any deposit is freed for the assets collection owner.
 		///
@@ -1224,7 +1224,7 @@ pub mod pallet {
 		/// Set the metadata for an assets collection.
 		///
 		/// Origin must be either `ForceOrigin` or `Signed` and the sender should be the Owner of
-		/// the asset `collection`.
+		/// the `collection`.
 		///
 		/// If the origin is `Signed`, then funds of signer are reserved according to the formula:
 		/// `MetadataDepositBase + DepositPerByte * data.len` taking into
@@ -1285,7 +1285,7 @@ pub mod pallet {
 		/// Clear the metadata for an assets collection.
 		///
 		/// Origin must be either `ForceOrigin` or `Signed` and the sender should be the Owner of
-		/// the asset `collection`.
+		/// the `collection`.
 		///
 		/// Any deposit is freed for the assets collection owner.
 		///

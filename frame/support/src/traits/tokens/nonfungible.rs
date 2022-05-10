@@ -35,7 +35,7 @@ pub trait Inspect<AccountId> {
 	/// Type for identifying an asset.
 	type AssetId;
 
-	/// Returns the owner of asset `asset`, or `None` if the asset doesn't exist or has no
+	/// Returns the owner of `asset`, or `None` if the asset doesn't exist or has no
 	/// owner.
 	fn owner(asset: &Self::AssetId) -> Option<AccountId>;
 
@@ -54,7 +54,7 @@ pub trait Inspect<AccountId> {
 			.and_then(|v| V::decode(&mut &v[..]).ok())
 	}
 
-	/// Returns `true` if the asset `asset` may be transferred.
+	/// Returns `true` if the `asset` may be transferred.
 	///
 	/// Default implementation is that all assets are transferable.
 	fn can_transfer(_asset: &Self::AssetId) -> bool {
@@ -65,7 +65,7 @@ pub trait Inspect<AccountId> {
 /// Interface for enumerating assets in existence or owned by a given account over a collection
 /// of NFTs.
 pub trait InspectEnumerable<AccountId>: Inspect<AccountId> {
-	/// Returns an iterator of the assets of an asset `collection` in existence.
+	/// Returns an iterator of the assets within a `collection` in existence.
 	fn assets() -> Box<dyn Iterator<Item = Self::AssetId>>;
 
 	/// Returns an iterator of the assets of all collections owned by `who`.
@@ -75,21 +75,21 @@ pub trait InspectEnumerable<AccountId>: Inspect<AccountId> {
 /// Trait for providing an interface for NFT-like assets which may be minted, burned and/or have
 /// attributes set on them.
 pub trait Mutate<AccountId>: Inspect<AccountId> {
-	/// Mint some asset `asset` to be owned by `who`.
+	/// Mint some `asset` to be owned by `who`.
 	///
 	/// By default, this is not a supported operation.
 	fn mint_into(_asset: &Self::AssetId, _who: &AccountId) -> DispatchResult {
 		Err(TokenError::Unsupported.into())
 	}
 
-	/// Burn some asset `asset`.
+	/// Burn some `asset`.
 	///
 	/// By default, this is not a supported operation.
 	fn burn(_asset: &Self::AssetId, _maybe_check_owner: Option<&AccountId>) -> DispatchResult {
 		Err(TokenError::Unsupported.into())
 	}
 
-	/// Set attribute `value` of asset `asset`'s `key`.
+	/// Set attribute `value` of `asset`'s `key`.
 	///
 	/// By default, this is not a supported operation.
 	fn set_attribute(_asset: &Self::AssetId, _key: &[u8], _value: &[u8]) -> DispatchResult {
@@ -110,7 +110,7 @@ pub trait Mutate<AccountId>: Inspect<AccountId> {
 
 /// Trait for providing a non-fungible set of assets which can only be transferred.
 pub trait Transfer<AccountId>: Inspect<AccountId> {
-	/// Transfer asset `asset` into `destination` account.
+	/// Transfer `asset` into `destination` account.
 	fn transfer(asset: &Self::AssetId, destination: &AccountId) -> DispatchResult;
 }
 

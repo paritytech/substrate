@@ -75,7 +75,7 @@ impl<T: Config<I>, I: 'static> Inspect<<T as SystemConfig>::AccountId> for Palle
 		}
 	}
 
-	/// Returns `true` if the asset `asset` of `collection` may be transferred.
+	/// Returns `true` if the `asset` of `collection` may be transferred.
 	///
 	/// Default implementation is that all assets are transferable.
 	fn can_transfer(collection: &Self::CollectionId, asset: &Self::AssetId) -> bool {
@@ -163,7 +163,7 @@ impl<T: Config<I>, I: 'static> InspectEnumerable<T::AccountId> for Pallet<T, I> 
 		Box::new(CollectionMetadataOf::<T, I>::iter_keys())
 	}
 
-	/// Returns an iterator of the assets of an asset `collection` in existence.
+	/// Returns an iterator of the assets of a `collection` in existence.
 	///
 	/// NOTE: iterating this list invokes a storage read per item.
 	fn assets(collection: &Self::CollectionId) -> Box<dyn Iterator<Item = Self::AssetId>> {

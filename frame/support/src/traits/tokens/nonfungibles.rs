@@ -41,11 +41,11 @@ pub trait Inspect<AccountId> {
 	/// assets).
 	type CollectionId;
 
-	/// Returns the owner of asset `asset` of `collection`, or `None` if the asset doesn't exist
+	/// Returns the owner of `asset` of `collection`, or `None` if the asset doesn't exist
 	/// (or somehow has no owner).
 	fn owner(collection: &Self::CollectionId, asset: &Self::AssetId) -> Option<AccountId>;
 
-	/// Returns the owner of the asset `collection`, if there is one. For many NFTs this may not
+	/// Returns the owner of the `collection`, if there is one. For many NFTs this may not
 	/// make any sense, so users of this API should not be surprised to find an assets collection
 	/// results in `None` here.
 	fn collection_owner(_collection: &Self::CollectionId) -> Option<AccountId> {
@@ -94,7 +94,7 @@ pub trait Inspect<AccountId> {
 			.and_then(|v| V::decode(&mut &v[..]).ok())
 	}
 
-	/// Returns `true` if the asset `asset` of `collection` may be transferred.
+	/// Returns `true` if the `asset` of `collection` may be transferred.
 	///
 	/// Default implementation is that all assets are transferable.
 	fn can_transfer(_collection: &Self::CollectionId, _asset: &Self::AssetId) -> bool {
@@ -108,7 +108,7 @@ pub trait InspectEnumerable<AccountId>: Inspect<AccountId> {
 	/// Returns an iterator of the assets collections in existence.
 	fn collections() -> Box<dyn Iterator<Item = Self::CollectionId>>;
 
-	/// Returns an iterator of the assets of an asset `collection` in existence.
+	/// Returns an iterator of the assets of a `collection` in existence.
 	fn assets(collection: &Self::CollectionId) -> Box<dyn Iterator<Item = Self::AssetId>>;
 
 	/// Returns an iterator of the assets of all collections owned by `who`.
@@ -159,7 +159,7 @@ pub trait Destroy<AccountId>: Inspect<AccountId> {
 /// Trait for providing an interface for multiple collections of NFT-like assets which may be
 /// minted, burned and/or have attributes set on them.
 pub trait Mutate<AccountId>: Inspect<AccountId> {
-	/// Mint some asset `asset` of `collection` to be owned by `who`.
+	/// Mint some `asset` of `collection` to be owned by `who`.
 	///
 	/// By default, this is not a supported operation.
 	fn mint_into(
@@ -170,7 +170,7 @@ pub trait Mutate<AccountId>: Inspect<AccountId> {
 		Err(TokenError::Unsupported.into())
 	}
 
-	/// Burn some asset `asset` of `collection`.
+	/// Burn some `asset` of `collection`.
 	///
 	/// By default, this is not a supported operation.
 	fn burn(
@@ -181,7 +181,7 @@ pub trait Mutate<AccountId>: Inspect<AccountId> {
 		Err(TokenError::Unsupported.into())
 	}
 
-	/// Set attribute `value` of asset `asset` of `collection`'s `key`.
+	/// Set attribute `value` of `asset` of `collection`'s `key`.
 	///
 	/// By default, this is not a supported operation.
 	fn set_attribute(
@@ -205,7 +205,7 @@ pub trait Mutate<AccountId>: Inspect<AccountId> {
 		key.using_encoded(|k| value.using_encoded(|v| Self::set_attribute(collection, asset, k, v)))
 	}
 
-	/// Set attribute `value` of asset `collection`'s `key`.
+	/// Set attribute `value` of `collection`'s `key`.
 	///
 	/// By default, this is not a supported operation.
 	fn set_collection_attribute(
@@ -232,7 +232,7 @@ pub trait Mutate<AccountId>: Inspect<AccountId> {
 
 /// Trait for providing a non-fungible sets of assets which can only be transferred.
 pub trait Transfer<AccountId>: Inspect<AccountId> {
-	/// Transfer asset `asset` of `collection` into `destination` account.
+	/// Transfer `asset` of `collection` into `destination` account.
 	fn transfer(
 		collection: &Self::CollectionId,
 		asset: &Self::AssetId,
