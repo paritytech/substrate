@@ -19,7 +19,10 @@
 
 use super::*;
 use frame_support::{
-	traits::{tokens::nonfungibles::*, Get},
+	traits::{
+		tokens::nonfungibles::{Create, Destroy, Inspect, InspectEnumerable, Mutate, Transfer},
+		Get,
+	},
 	BoundedSlice,
 };
 use sp_runtime::{DispatchError, DispatchResult};

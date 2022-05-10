@@ -30,6 +30,12 @@ pub(super) type ClassDetailsFor<T, I> =
 	ClassDetails<<T as SystemConfig>::AccountId, DepositBalanceOf<T, I>>;
 pub(super) type InstanceDetailsFor<T, I> =
 	InstanceDetails<<T as SystemConfig>::AccountId, DepositBalanceOf<T, I>>;
+pub(super) type AssetIdOf<T, I = ()> =
+	<<T as Config<I>>::Assets as Inspect<<T as SystemConfig>::AccountId>>::AssetId;
+pub(super) type AssetBalanceOf<T, I = ()> =
+	<<T as Config<I>>::Assets as Inspect<<T as SystemConfig>::AccountId>>::Balance;
+pub(super) type BalanceOrAssetOf<T, I> =
+	BalanceOrAsset<DepositBalanceOf<T, I>, AssetIdOf<T, I>, AssetBalanceOf<T, I>>;
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct ClassDetails<AccountId, DepositBalance> {
@@ -124,4 +130,11 @@ pub struct InstanceMetadata<DepositBalance, StringLimit: Get<u32>> {
 	pub(super) data: BoundedVec<u8, StringLimit>,
 	/// Whether the asset metadata may be changed by a non Force origin.
 	pub(super) is_frozen: bool,
+}
+
+/// Represents either a System currency or a set of fungible assets.
+#[derive(Encode, Decode, Clone, PartialEq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
+pub enum BalanceOrAsset<Balance, AssetId, AssetBalance> {
+	Balance { amount: Balance },
+	Asset { id: AssetId, amount: AssetBalance },
 }

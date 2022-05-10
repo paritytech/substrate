@@ -43,7 +43,10 @@ pub mod weights;
 
 use codec::{Decode, Encode};
 use frame_support::traits::{
-	tokens::Locker, BalanceStatus::Reserved, Currency, EnsureOriginWithArg, ReservableCurrency,
+	fungibles::{Inspect, Transfer},
+	tokens::Locker,
+	BalanceStatus::Reserved,
+	Currency, EnsureOriginWithArg, ReservableCurrency,
 };
 use frame_system::Config as SystemConfig;
 use sp_runtime::{
@@ -150,6 +153,31 @@ pub mod pallet {
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
+
+		/// Fungible assets.
+		type Assets: Inspect<Self::AccountId, AssetId = Self::AssetId, Balance = Self::AssetBalance>
+			+ Transfer<Self::AccountId>;
+
+		/// Fungible asset balance.
+		type AssetBalance: sp_runtime::traits::AtLeast32BitUnsigned
+			+ codec::FullCodec
+			+ Copy
+			+ MaybeSerializeDeserialize
+			+ sp_std::fmt::Debug
+			+ Default
+			+ From<u64>
+			+ TypeInfo
+			+ MaxEncodedLen;
+
+		/// Fungible asset id.
+		type AssetId: Member
+			+ Parameter
+			+ Default
+			+ Copy
+			+ codec::HasCompact
+			+ MaybeSerializeDeserialize
+			+ MaxEncodedLen
+			+ TypeInfo;
 	}
 
 	#[pallet::storage]
@@ -237,6 +265,18 @@ pub mod pallet {
 			NMapKey<Blake2_128Concat, BoundedVec<u8, T::KeyLimit>>,
 		),
 		(BoundedVec<u8, T::ValueLimit>, DepositBalanceOf<T, I>),
+		OptionQuery,
+	>;
+
+	#[pallet::storage]
+	/// Price of an asset instance.
+	pub(super) type InstancePriceOf<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
+		_,
+		Blake2_128Concat,
+		T::ClassId,
+		Blake2_128Concat,
+		T::InstanceId,
+		(BalanceOrAssetOf<T, I>, Option<T::AccountId>),
 		OptionQuery,
 	>;
 
@@ -329,6 +369,13 @@ pub mod pallet {
 		},
 		/// Ownership acceptance has changed for an account.
 		OwnershipAcceptanceChanged { who: T::AccountId, maybe_class: Option<T::ClassId> },
+		/// Price was set for the instance.
+		InstancePriceSet {
+			class: T::ClassId,
+			instance: T::InstanceId,
+			price: Option<BalanceOrAssetOf<T, I>>,
+			buyer: Option<T::AccountId>,
+		},
 	}
 
 	#[pallet::error]
@@ -1336,6 +1383,33 @@ pub mod pallet {
 				OwnershipAcceptance::<T, I>::remove(&who);
 			}
 			Self::deposit_event(Event::OwnershipAcceptanceChanged { who, maybe_class });
+			Ok(())
+		}
+
+		#[pallet::weight(0)]
+		pub fn set_price(
+			origin: OriginFor<T>,
+			class: T::ClassId,
+			instance: T::InstanceId,
+			price: Option<BalanceOrAssetOf<T, I>>,
+			buyer: Option<<T::Lookup as StaticLookup>::Source>,
+		) -> DispatchResult {
+			let origin = ensure_signed(origin)?;
+			let buyer = buyer.map(T::Lookup::lookup).transpose()?;
+
+			Self::do_set_price(class, instance, origin, price, buyer)?;
+			Ok(())
+		}
+
+		#[pallet::weight(0)]
+		pub fn buy_item(
+			origin: OriginFor<T>,
+			class: T::ClassId,
+			instance: T::InstanceId,
+			bid_price: BalanceOrAssetOf<T, I>,
+		) -> DispatchResult {
+			let origin = ensure_signed(origin)?;
+			// Self::do_buy_item(class, instance, config, origin, bid_price)?;
 			Ok(())
 		}
 	}

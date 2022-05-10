@@ -187,4 +187,30 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Self::deposit_event(Event::Burned { class, instance, owner });
 		Ok(())
 	}
+
+	pub fn do_set_price(
+		class: T::ClassId,
+		instance: T::InstanceId,
+		sender: T::AccountId,
+		price: Option<BalanceOrAssetOf<T, I>>,
+		buyer: Option<T::AccountId>,
+	) -> DispatchResult {
+		let class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
+		ensure!(!class_details.is_frozen, Error::<T, I>::Frozen);
+		ensure!(!T::Locker::is_locked(class, instance), Error::<T, I>::Locked);
+
+		let details = Asset::<T, I>::get(&class, &instance).ok_or(Error::<T, I>::UnknownClass)?;
+		ensure!(!details.is_frozen, Error::<T, I>::Frozen);
+		ensure!(details.owner == sender, Error::<T, I>::NoPermission);
+
+		if let Some(ref price) = price {
+			InstancePriceOf::<T, I>::insert(&class, &instance, (price.clone(), buyer.clone()));
+		} else {
+			InstancePriceOf::<T, I>::remove(&class, &instance);
+		}
+
+		Self::deposit_event(Event::InstancePriceSet { class, instance, price, buyer });
+
+		Ok(())
+	}
 }
