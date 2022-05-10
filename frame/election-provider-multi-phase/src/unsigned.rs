@@ -48,6 +48,7 @@ pub(crate) const OFFCHAIN_CACHED_CALL: &[u8] = b"parity/multi-phase-unsigned-ele
 /// voted.
 pub type VoterOf<T> = frame_election_provider_support::VoterOf<<T as Config>::DataProvider>;
 
+/// Same as [`VoterOf`], but parameterized by the `MinerConfig`. 
 pub type MinerVoterOf<T> = frame_election_provider_support::Voter<
 	<T as MinerConfig>::AccountId,
 	<T as MinerConfig>::MaxVotesPerVoter,
