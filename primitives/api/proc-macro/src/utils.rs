@@ -61,12 +61,11 @@ pub fn generate_crate_access(unique_id: &'static str) -> TokenStream {
 		let mod_name = generate_hidden_includes_mod_name(unique_id);
 		quote!( self::#mod_name::sp_api )
 	}
-	.into()
 }
 
 /// Generates the name of the module that contains the trait declaration for the runtime.
 pub fn generate_runtime_mod_name_for_trait(trait_: &Ident) -> Ident {
-	Ident::new(&format!("runtime_decl_for_{}", trait_.to_string()), Span::call_site())
+	Ident::new(&format!("runtime_decl_for_{}", trait_), Span::call_site())
 }
 
 /// Generates a name for a method that needs to be implemented in the runtime for the client side.
@@ -169,17 +168,17 @@ pub fn extract_parameter_names_types_and_borrows(
 
 /// Generates the name for the native call generator function.
 pub fn generate_native_call_generator_fn_name(fn_name: &Ident) -> Ident {
-	Ident::new(&format!("{}_native_call_generator", fn_name.to_string()), Span::call_site())
+	Ident::new(&format!("{}_native_call_generator", fn_name), Span::call_site())
 }
 
 /// Generates the name for the call api at function.
 pub fn generate_call_api_at_fn_name(fn_name: &Ident) -> Ident {
-	Ident::new(&format!("{}_call_api_at", fn_name.to_string()), Span::call_site())
+	Ident::new(&format!("{}_call_api_at", fn_name), Span::call_site())
 }
 
 /// Prefix the given function with the trait name.
 pub fn prefix_function_with_trait<F: ToString>(trait_: &Ident, function: &F) -> String {
-	format!("{}_{}", trait_.to_string(), function.to_string())
+	format!("{}_{}", trait_, function.to_string())
 }
 
 /// Extract all types that appear in signatures in the given `ImplItem`'s.
@@ -250,10 +249,7 @@ pub enum RequireQualifiedTraitPath {
 }
 
 /// Extract the trait that is implemented by the given `ItemImpl`.
-pub fn extract_impl_trait<'a>(
-	impl_: &'a ItemImpl,
-	require: RequireQualifiedTraitPath,
-) -> Result<&'a Path> {
+pub fn extract_impl_trait(impl_: &ItemImpl, require: RequireQualifiedTraitPath) -> Result<&Path> {
 	impl_
 		.trait_
 		.as_ref()

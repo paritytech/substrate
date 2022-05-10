@@ -11,20 +11,19 @@ readme = "README.md"
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"] }
-scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
 log = { version = "0.4.16", default-features = false }
-sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
-sp-io = { version = "6.0.0", default-features = false, path = "../../primitives/io" }
-
-sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
-frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
+scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
+frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "../benchmarking" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
-frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
+frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
+sp-io = { version = "6.0.0", default-features = false, path = "../../primitives/io" }
+sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
 
 [dev-dependencies]
-sp-core = { version = "6.0.0", path = "../../primitives/core", default-features = false }
-substrate-test-utils = { version = "4.0.0-dev", path = "../../test-utils" }
 pallet-preimage = { version = "4.0.0-dev", path = "../preimage" }
+sp-core = { version = "6.0.0", default-features = false, path = "../../primitives/core" }
+substrate-test-utils = { version = "4.0.0-dev", path = "../../test-utils" }
 
 [features]
 default = ["std"]
@@ -35,13 +34,13 @@ runtime-benchmarks = [
 ]
 std = [
 	"codec/std",
-	"scale-info/std",
+	"frame-benchmarking/std",
+	"frame-support/std",
+	"frame-system/std",
 	"log/std",
-	"sp-std/std",
+	"scale-info/std",
 	"sp-io/std",
 	"sp-runtime/std",
-	"frame-system/std",
-	"frame-support/std",
-	"frame-benchmarking/std",
+	"sp-std/std",
 ]
 try-runtime = ["frame-support/try-runtime"]

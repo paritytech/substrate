@@ -16,13 +16,18 @@
 
 //! Helper for handling (i.e. answering) grandpa warp sync requests from a remote peer.
 
-use crate::config::{IncomingRequest, OutgoingResponse, ProtocolId, RequestResponseConfig};
 use codec::{Decode, Encode};
 use futures::{
 	channel::{mpsc, oneshot},
 	stream::StreamExt,
 };
 use log::debug;
+use sc_network_common::{
+	config::ProtocolId,
+	request_responses::{
+		IncomingRequest, OutgoingResponse, ProtocolConfig as RequestResponseConfig,
+	},
+};
 use sp_runtime::traits::Block as BlockT;
 use std::{sync::Arc, time::Duration};
 
@@ -82,11 +87,7 @@ pub fn generate_request_response_config(protocol_id: ProtocolId) -> RequestRespo
 
 /// Generate the grandpa warp sync protocol name from chain specific protocol identifier.
 fn generate_protocol_name(protocol_id: ProtocolId) -> String {
-	let mut s = String::new();
-	s.push_str("/");
-	s.push_str(protocol_id.as_ref());
-	s.push_str("/sync/warp");
-	s
+	format!("/{}/sync/warp", protocol_id.as_ref())
 }
 
 /// Handler for incoming grandpa warp sync requests from a remote peer.

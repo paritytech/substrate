@@ -124,9 +124,9 @@ impl PalletCmd {
 
 		let spec = config.chain_spec;
 		let strategy = self.execution.unwrap_or(ExecutionStrategy::Native);
-		let pallet = self.pallet.clone().unwrap_or_else(|| String::new());
+		let pallet = self.pallet.clone().unwrap_or_default();
 		let pallet = pallet.as_bytes();
-		let extrinsic = self.extrinsic.clone().unwrap_or_else(|| String::new());
+		let extrinsic = self.extrinsic.clone().unwrap_or_default();
 		let extrinsic_split: Vec<&str> = extrinsic.split(',').collect();
 		let extrinsics: Vec<_> = extrinsic_split.iter().map(|x| x.trim().as_bytes()).collect();
 
@@ -156,7 +156,7 @@ impl PalletCmd {
 			extensions.register(OffchainWorkerExt::new(offchain.clone()));
 			extensions.register(OffchainDbExt::new(offchain));
 			extensions.register(TransactionPoolExt::new(pool));
-			return extensions
+			extensions
 		};
 
 		// Get Benchmark List
@@ -340,7 +340,7 @@ impl PalletCmd {
 					batches.extend(batch);
 
 					// Show progress information
-					if let Some(elapsed) = timer.elapsed().ok() {
+					if let Ok(elapsed) = timer.elapsed() {
 						if elapsed >= time::Duration::from_secs(5) {
 							timer = time::SystemTime::now();
 							log::info!(
@@ -402,7 +402,7 @@ impl PalletCmd {
 		batches: &Vec<BenchmarkBatchSplitResults>,
 		storage_info: &Vec<StorageInfo>,
 	) {
-		for batch in batches.into_iter() {
+		for batch in batches.iter() {
 			// Print benchmark metadata
 			println!(
 					"Pallet: {:?}, Extrinsic: {:?}, Lowest values: {:?}, Highest values: {:?}, Steps: {:?}, Repeat: {:?}",
@@ -421,12 +421,12 @@ impl PalletCmd {
 
 			if !self.no_storage_info {
 				let mut comments: Vec<String> = Default::default();
-				writer::add_storage_comments(&mut comments, &batch.db_results, &storage_info);
+				writer::add_storage_comments(&mut comments, &batch.db_results, storage_info);
 				println!("Raw Storage Info\n========");
 				for comment in comments {
 					println!("{}", comment);
 				}
-				println!("");
+				println!();
 			}
 
 			// Conduct analysis.
@@ -447,7 +447,7 @@ impl PalletCmd {
 				{
 					println!("Writes = {:?}", analysis);
 				}
-				println!("");
+				println!();
 			}
 			if !self.no_min_squares {
 				println!("Min Squares Analysis\n========");
@@ -466,7 +466,7 @@ impl PalletCmd {
 				{
 					println!("Writes = {:?}", analysis);
 				}
-				println!("");
+				println!();
 			}
 		}
 	}

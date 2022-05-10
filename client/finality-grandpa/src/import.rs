@@ -439,8 +439,7 @@ where
 			// This code may be removed once warp sync to an old runtime is no longer needed.
 			for prefix in ["GrandpaFinality", "Grandpa"] {
 				let k = [twox_128(prefix.as_bytes()), twox_128(b"CurrentSetId")].concat();
-				if let Ok(Some(id)) =
-					self.inner.storage(&id, &sc_client_api::StorageKey(k.to_vec()))
+				if let Ok(Some(id)) = self.inner.storage(id, &sc_client_api::StorageKey(k.to_vec()))
 				{
 					if let Ok(id) = SetId::decode(&mut id.0.as_ref()) {
 						return Ok(id)
@@ -451,7 +450,7 @@ where
 		} else {
 			self.inner
 				.runtime_api()
-				.current_set_id(&id)
+				.current_set_id(id)
 				.map_err(|e| ConsensusError::ClientImport(e.to_string()))
 		}
 	}
@@ -732,7 +731,7 @@ impl<Backend, Block: BlockT, Client, SC> GrandpaBlockImport<Backend, Block, Clie
 
 			authority_set.pending_standard_changes =
 				authority_set.pending_standard_changes.clone().map(&mut |hash, _, original| {
-					authority_set_hard_forks.get(&hash).cloned().unwrap_or(original)
+					authority_set_hard_forks.get(hash).cloned().unwrap_or(original)
 				});
 		}
 

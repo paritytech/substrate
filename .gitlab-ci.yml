@@ -263,6 +263,21 @@ cargo-clippy:
   script:
     - SKIP_WASM_BUILD=1 env -u RUSTFLAGS cargo +nightly clippy --all-targets
 
+cargo-check-nixos:
+  stage:                           test
+  <<:                              *docker-env
+  <<:                              *test-refs
+  before_script:                   []
+  # Don't use CI_IMAGE here because it breaks nightly checks of paritytech/ci-linux image
+  image:                           nixos/nix
+  variables:
+    SNAP:                          "DUMMY"
+    WS_API:                        "DUMMY"
+  script:
+    - nix-channel --update
+    - nix-shell shell.nix
+    - nix-shell --run "cargo check --workspace --all-targets --all-features"
+
 cargo-check-benches:
   stage:                           test
   <<:                              *docker-env
@@ -468,13 +483,11 @@ cargo-check-macos:
         "--branch=$PIPELINE_SCRIPTS_TAG"
         https://github.com/paritytech/pipeline-scripts
     - ./pipeline-scripts/check_dependent_project.sh
-        paritytech
-        substrate
-        --substrate
-        "$DEPENDENT_REPO"
-        "$GITHUB_PR_TOKEN"
-        "$CARGO_UPDATE_CRATES"
-        "$EXTRA_DEPENDENCIES"
+        --org paritytech
+        --dependent-repo "$DEPENDENT_REPO"
+        --github-api-token "$GITHUB_PR_TOKEN"
+        --extra-dependencies "$EXTRA_DEPENDENCIES"
+        --companion-overrides "$COMPANION_OVERRIDES"
 
 # Individual jobs are set up for each dependent project so that they can be ran in parallel.
 # Arguably we could generate a job for each companion in the PR's description using Gitlab's
@@ -484,14 +497,18 @@ check-dependent-polkadot:
   <<: *check-dependent-project
   variables:
     DEPENDENT_REPO: polkadot
-    CARGO_UPDATE_CRATES: "sp-io"
+    COMPANION_OVERRIDES: |
+      substrate: polkadot-v*
+      polkadot: release-v*
 
 check-dependent-cumulus:
   <<: *check-dependent-project
   variables:
     DEPENDENT_REPO: cumulus
-    CARGO_UPDATE_CRATES: "sp-io polkadot-runtime-common"
     EXTRA_DEPENDENCIES: polkadot
+    COMPANION_OVERRIDES: |
+      substrate: polkadot-v*
+      cumulus: polkadot-v*
 
 
 build-linux-substrate:

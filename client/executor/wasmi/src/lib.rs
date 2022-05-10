@@ -103,7 +103,7 @@ impl<'a> sandbox::SandboxContext for SandboxContext<'a> {
 
 		match result {
 			Ok(Some(RuntimeValue::I64(val))) => Ok(val),
-			Ok(_) => return Err("Supervisor function returned unexpected result!".into()),
+			Ok(_) => Err("Supervisor function returned unexpected result!".into()),
 			Err(err) => Err(Error::Sandbox(err.to_string())),
 		}
 	}
@@ -161,7 +161,7 @@ impl Sandbox for FunctionExecutor {
 			Ok(buffer) => buffer,
 		};
 
-		if let Err(_) = self.memory.set(buf_ptr.into(), &buffer) {
+		if self.memory.set(buf_ptr.into(), &buffer).is_err() {
 			return Ok(sandbox_env::ERR_OUT_OF_BOUNDS)
 		}
 
@@ -185,7 +185,7 @@ impl Sandbox for FunctionExecutor {
 			Ok(buffer) => buffer,
 		};
 
-		if let Err(_) = sandboxed_memory.write_from(Pointer::new(offset as u32), &buffer) {
+		if sandboxed_memory.write_from(Pointer::new(offset as u32), &buffer).is_err() {
 			return Ok(sandbox_env::ERR_OUT_OF_BOUNDS)
 		}
 
@@ -241,9 +241,9 @@ impl Sandbox for FunctionExecutor {
 			Ok(None) => Ok(sandbox_env::ERR_OK),
 			Ok(Some(val)) => {
 				// Serialize return value and write it back into the memory.
-				sp_wasm_interface::ReturnValue::Value(val.into()).using_encoded(|val| {
+				sp_wasm_interface::ReturnValue::Value(val).using_encoded(|val| {
 					if val.len() > return_val_len as usize {
-						Err("Return value buffer is too small")?;
+						return Err("Return value buffer is too small".into())
 					}
 					self.write_memory(return_val, val).map_err(|_| "Return value buffer is OOB")?;
 					Ok(sandbox_env::ERR_OK)
@@ -272,11 +272,11 @@ impl Sandbox for FunctionExecutor {
 			let table = self
 				.table
 				.as_ref()
-				.ok_or_else(|| "Runtime doesn't have a table; sandbox is unavailable")?;
+				.ok_or("Runtime doesn't have a table; sandbox is unavailable")?;
 			table
 				.get(dispatch_thunk_id)
 				.map_err(|_| "dispatch_thunk_idx is out of the table bounds")?
-				.ok_or_else(|| "dispatch_thunk_idx points on an empty table entry")?
+				.ok_or("dispatch_thunk_idx points on an empty table entry")?
 		};
 
 		let guest_env =
@@ -458,9 +458,9 @@ impl wasmi::Externals for FunctionExecutor {
 fn get_mem_instance(module: &ModuleRef) -> Result<MemoryRef, Error> {
 	Ok(module
 		.export_by_name("memory")
-		.ok_or_else(|| Error::InvalidMemoryReference)?
+		.ok_or(Error::InvalidMemoryReference)?
 		.as_memory()
-		.ok_or_else(|| Error::InvalidMemoryReference)?
+		.ok_or(Error::InvalidMemoryReference)?
 		.clone())
 }
 
@@ -469,9 +469,9 @@ fn get_mem_instance(module: &ModuleRef) -> Result<MemoryRef, Error> {
 fn get_heap_base(module: &ModuleRef) -> Result<u32, Error> {
 	let heap_base_val = module
 		.export_by_name("__heap_base")
-		.ok_or_else(|| Error::HeapBaseNotFoundOrInvalid)?
+		.ok_or(Error::HeapBaseNotFoundOrInvalid)?
 		.as_global()
-		.ok_or_else(|| Error::HeapBaseNotFoundOrInvalid)?
+		.ok_or(Error::HeapBaseNotFoundOrInvalid)?
 		.get();
 
 	match heap_base_val {
@@ -564,7 +564,7 @@ fn call_in_wasm_module(
 	match result {
 		Ok(Some(I64(r))) => {
 			let (ptr, length) = unpack_ptr_and_len(r as u64);
-			memory.get(ptr.into(), length as usize).map_err(|_| Error::Runtime)
+			memory.get(ptr, length as usize).map_err(|_| Error::Runtime)
 		},
 		Err(e) => {
 			trace!(
@@ -572,7 +572,7 @@ fn call_in_wasm_module(
 				"Failed to execute code with {} pages",
 				memory.current_size().0,
 			);
-			Err(e.into())
+			Err(e)
 		},
 		_ => Err(Error::InvalidReturn),
 	}

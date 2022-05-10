@@ -195,8 +195,8 @@ impl<M, R> Hub<M, R> {
 		let mut shared_borrowed = shared_locked.borrow_mut();
 		let (registry, sinks) = shared_borrowed.get_mut();
 
-		let dispatch_result = registry.dispatch(trigger, |subs_id, item| {
-			if let Some(tx) = sinks.get_mut(&subs_id) {
+		registry.dispatch(trigger, |subs_id, item| {
+			if let Some(tx) = sinks.get_mut(subs_id) {
 				if let Err(send_err) = tx.unbounded_send(item) {
 					log::warn!("Sink with SubsID = {} failed to perform unbounded_send: {} ({} as Dispatch<{}, Item = {}>::dispatch(...))", subs_id, send_err, std::any::type_name::<R>(),
 					std::any::type_name::<Trigger>(),
@@ -211,9 +211,7 @@ impl<M, R> Hub<M, R> {
 					std::any::type_name::<M>(),
 				);
 			}
-		});
-
-		dispatch_result
+		})
 	}
 }
 

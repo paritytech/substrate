@@ -288,7 +288,7 @@ impl Externalities for BasicExternalities {
 		let empty_hash = empty_child_trie_root::<LayoutV1<Blake2Hasher>>();
 		for (prefixed_storage_key, child_info) in prefixed_keys {
 			let child_root = self.child_storage_root(&child_info, state_version);
-			if &empty_hash[..] == &child_root[..] {
+			if empty_hash[..] == child_root[..] {
 				top.remove(prefixed_storage_key.as_slice());
 			} else {
 				top.insert(prefixed_storage_key.into_inner(), child_root);
