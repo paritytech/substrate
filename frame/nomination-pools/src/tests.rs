@@ -3595,59 +3595,29 @@ mod update_roles {
 
 			// non-existent pools
 			assert_noop!(
-				Pools::update_roles(
-					Origin::signed(1),
-					2,
-					ConfigOp::Set(5),
-					ConfigOp::Set(6),
-					ConfigOp::Set(7)
-				),
+				Pools::update_roles(Origin::signed(1), 2, Some(5), Some(6), Some(7)),
 				Error::<Runtime>::PoolNotFound,
 			);
 
 			// depositor cannot change roles.
 			assert_noop!(
-				Pools::update_roles(
-					Origin::signed(1),
-					1,
-					ConfigOp::Set(5),
-					ConfigOp::Set(6),
-					ConfigOp::Set(7)
-				),
+				Pools::update_roles(Origin::signed(1), 1, Some(5), Some(6), Some(7)),
 				Error::<Runtime>::DoesNotHavePermission,
 			);
 
 			// nominator cannot change roles.
 			assert_noop!(
-				Pools::update_roles(
-					Origin::signed(901),
-					1,
-					ConfigOp::Set(5),
-					ConfigOp::Set(6),
-					ConfigOp::Set(7)
-				),
+				Pools::update_roles(Origin::signed(901), 1, Some(5), Some(6), Some(7)),
 				Error::<Runtime>::DoesNotHavePermission,
 			);
 			// state-toggler
 			assert_noop!(
-				Pools::update_roles(
-					Origin::signed(902),
-					1,
-					ConfigOp::Set(5),
-					ConfigOp::Set(6),
-					ConfigOp::Set(7)
-				),
+				Pools::update_roles(Origin::signed(902), 1, Some(5), Some(6), Some(7)),
 				Error::<Runtime>::DoesNotHavePermission,
 			);
 
 			// but root can
-			assert_ok!(Pools::update_roles(
-				Origin::signed(900),
-				1,
-				ConfigOp::Set(5),
-				ConfigOp::Set(6),
-				ConfigOp::Set(7)
-			));
+			assert_ok!(Pools::update_roles(Origin::signed(900), 1, Some(5), Some(6), Some(7)));
 
 			assert_eq!(
 				pool_events_since_last_call(),
@@ -3657,19 +3627,34 @@ mod update_roles {
 					Event::RolesUpdated { root: 5, state_toggler: 7, nominator: 6 }
 				]
 			);
+			assert_eq!(
+				BondedPools::<Runtime>::get(1).unwrap().roles,
+				PoolRoles { depositor: 10, root: 5, nominator: 6, state_toggler: 7 },
+			);
 
 			// also root origin can
-			assert_ok!(Pools::update_roles(
-				Origin::root(),
-				1,
-				ConfigOp::Set(1),
-				ConfigOp::Set(2),
-				ConfigOp::Set(3)
-			));
+			assert_ok!(Pools::update_roles(Origin::root(), 1, Some(1), Some(2), Some(3)));
 
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![Event::RolesUpdated { root: 1, state_toggler: 3, nominator: 2 }]
+			);
+			assert_eq!(
+				BondedPools::<Runtime>::get(1).unwrap().roles,
+				PoolRoles { depositor: 10, root: 1, nominator: 2, state_toggler: 3 },
+			);
+
+			// None is a noop
+			assert_ok!(Pools::update_roles(Origin::root(), 1, Some(11), None, None));
+
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![Event::RolesUpdated { root: 11, state_toggler: 3, nominator: 2 }]
+			);
+
+			assert_eq!(
+				BondedPools::<Runtime>::get(1).unwrap().roles,
+				PoolRoles { depositor: 10, root: 11, nominator: 2, state_toggler: 3 },
 			);
 		})
 	}

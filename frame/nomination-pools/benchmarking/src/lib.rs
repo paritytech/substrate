@@ -638,9 +638,9 @@ frame_benchmarking::benchmarks! {
 	}:_(
 		Origin::Signed(root.clone()),
 		first_id,
-		ConfigOp::Set(random.clone()),
-		ConfigOp::Set(random.clone()),
-		ConfigOp::Set(random.clone())
+		Some(random.clone()),
+		Some(random.clone()),
+		Some(random.clone())
 	) verify {
 		assert_eq!(
 			pallet_nomination_pools::BondedPools::<T>::get(first_id).unwrap().roles,

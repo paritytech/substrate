@@ -665,6 +665,10 @@ impl<T: Config> BondedPool<T> {
 			.saturating_sub(T::StakingInterface::active_stake(&account).unwrap_or_default())
 	}
 
+	fn can_update_roles(&self, who: &T::AccountId) -> bool {
+		*who == self.roles.root
+	}
+
 	fn can_nominate(&self, who: &T::AccountId) -> bool {
 		*who == self.roles.root || *who == self.roles.nominator
 	}
@@ -1276,8 +1280,6 @@ pub mod pallet {
 		NotEnoughPointsToUnbond,
 		/// Partial unbonding now allowed permissionlessly.
 		PartialUnbondNotAllowedPermissionlessly,
-		/// Cannot remove any of the roles, they can only be set to left unchanged.
-		CannotRemoveRole,
 	}
 
 	#[pallet::call]
@@ -1848,9 +1850,9 @@ pub mod pallet {
 		pub fn update_roles(
 			origin: OriginFor<T>,
 			pool_id: PoolId,
-			root: ConfigOp<T::AccountId>,
-			nominator: ConfigOp<T::AccountId>,
-			state_toggler: ConfigOp<T::AccountId>,
+			root: Option<T::AccountId>,
+			nominator: Option<T::AccountId>,
+			state_toggler: Option<T::AccountId>,
 		) -> DispatchResult {
 			let o1 = origin;
 			let o2 = o1.clone();
@@ -1858,7 +1860,7 @@ pub mod pallet {
 			let mut bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
 			let is_pool_root = || -> Result<(), sp_runtime::DispatchError> {
 				let who = ensure_signed(o1)?;
-				ensure!(bonded_pool.roles.root == who, Error::<T>::DoesNotHavePermission);
+				ensure!(bonded_pool.can_update_roles(&who), Error::<T>::DoesNotHavePermission);
 				Ok(())
 			};
 			let is_root = || -> Result<(), sp_runtime::DispatchError> {
@@ -1869,19 +1871,16 @@ pub mod pallet {
 			let _ = is_root().or_else(|_| is_pool_root())?;
 
 			match root {
-				ConfigOp::Noop => (),
-				ConfigOp::Set(v) => bonded_pool.roles.root = v,
-				ConfigOp::Remove => Err(Error::<T>::CannotRemoveRole)?,
+				None => (),
+				Some(v) => bonded_pool.roles.root = v,
 			};
 			match nominator {
-				ConfigOp::Noop => (),
-				ConfigOp::Set(v) => bonded_pool.roles.nominator = v,
-				ConfigOp::Remove => Err(Error::<T>::CannotRemoveRole)?,
+				None => (),
+				Some(v) => bonded_pool.roles.nominator = v,
 			};
 			match state_toggler {
-				ConfigOp::Noop => (),
-				ConfigOp::Set(v) => bonded_pool.roles.state_toggler = v,
-				ConfigOp::Remove => Err(Error::<T>::CannotRemoveRole)?,
+				None => (),
+				Some(v) => bonded_pool.roles.state_toggler = v,
 			};
 
 			Self::deposit_event(Event::<T>::RolesUpdated {
