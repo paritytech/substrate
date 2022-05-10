@@ -33,6 +33,7 @@ macro_rules! log {
 	};
 }
 
+// This is only useful for a context where a `<T: Config>` is not in scope.
 #[macro_export]
 macro_rules! log_no_system {
 	($level:tt, $pattern:expr $(, $values:expr)* $(,)?) => {
