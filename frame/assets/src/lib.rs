@@ -515,31 +515,7 @@ pub mod pallet {
 			let owner = ensure_signed(origin)?;
 			let admin = T::Lookup::lookup(admin)?;
 
-			ensure!(!Asset::<T, I>::contains_key(id), Error::<T, I>::InUse);
-			ensure!(!min_balance.is_zero(), Error::<T, I>::MinBalanceZero);
-
-			let deposit = T::AssetDeposit::get();
-			T::Currency::reserve(&owner, deposit)?;
-
-			Asset::<T, I>::insert(
-				id,
-				AssetDetails {
-					owner: owner.clone(),
-					issuer: admin.clone(),
-					admin: admin.clone(),
-					freezer: admin.clone(),
-					supply: Zero::zero(),
-					deposit,
-					min_balance,
-					is_sufficient: false,
-					accounts: 0,
-					sufficients: 0,
-					approvals: 0,
-					is_frozen: false,
-				},
-			);
-			Self::deposit_event(Event::Created { asset_id: id, creator: owner, owner: admin });
-			Ok(())
+			Self::do_create(id, min_balance, owner, admin)
 		}
 
 		/// Issue a new class of fungible assets from a privileged origin.

@@ -620,6 +620,59 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok((credit, source_died))
 	}
 
+	/// Issue a new class of fungible assets from a public origin.
+	///
+	/// This new asset class has no assets initially and its owner is the origin.
+	///
+	/// The origin must be Signed and the sender must have sufficient funds free.
+	///
+	/// Funds of sender are reserved by `AssetDeposit`.
+	/// Parameters:
+	/// - `id`: The identifier of the new asset. This must not be currently in use to identify
+	/// an existing asset.
+	/// - `admin`: The admin of this class of assets. The admin is the initial address of each
+	/// member of the asset class's admin team.
+	/// - `min_balance`: The minimum balance of this new asset that any single account must
+	/// have. If an account's balance is reduced below this, then it collapses to zero.
+	///
+	/// Emits `Created` event when successful.
+	///
+	pub(super) fn do_create(
+		id: T::AssetId,
+		min_balance: T::Balance,
+		owner: T::AccountId,
+		admin: T::AccountId,
+
+	) -> DispatchResult {
+
+		ensure!(!Asset::<T, I>::contains_key(id), Error::<T, I>::InUse);
+		ensure!(!min_balance.is_zero(), Error::<T, I>::MinBalanceZero);
+
+		let deposit = T::AssetDeposit::get();
+		T::Currency::reserve(&owner, deposit)?;
+
+		Asset::<T, I>::insert(
+			id,
+			AssetDetails {
+				owner: owner.clone(),
+				issuer: admin.clone(),
+				admin: admin.clone(),
+				freezer: admin.clone(),
+				supply: Zero::zero(),
+				deposit,
+				min_balance,
+				is_sufficient: false,
+				accounts: 0,
+				sufficients: 0,
+				approvals: 0,
+				is_frozen: false,
+			},
+		);
+		Self::deposit_event(Event::Created { asset_id: id, creator: owner, owner: admin });
+		Ok(())
+	}
+
+
 	/// Create a new asset without taking a deposit.
 	///
 	/// * `id`: The `AssetId` you want the new asset to have. Must not already be in use.
