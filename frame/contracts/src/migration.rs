@@ -18,11 +18,8 @@
 use crate::{BalanceOf, CodeHash, Config, Pallet, TrieId, Weight};
 use codec::{Decode, Encode};
 use frame_support::{
-	codec, generate_storage_alias,
-	pallet_prelude::*,
-	storage::migration,
-	traits::{Get, PalletInfoAccess},
-	Identity, Twox64Concat,
+	codec, pallet_prelude::*, storage::migration, storage_alias, traits::Get, Identity,
+	Twox64Concat,
 };
 use sp_std::{marker::PhantomData, prelude::*};
 
@@ -119,15 +116,12 @@ mod v5 {
 		trie_id: TrieId,
 	}
 
-	generate_storage_alias!(
-		Contracts,
-		ContractInfoOf<T: Config> => Map<(Twox64Concat, T::AccountId), ContractInfo<T>>
-	);
+	#[storage_alias]
+	type ContractInfoOf<T> =
+		Map<Pallet<T>, Twox64Concat, <T as Config>::AccountId, ContractInfo<T>>;
 
-	generate_storage_alias!(
-		Contracts,
-		DeletionQueue => Value<Vec<DeletedContract>>
-	);
+	#[storage_alias]
+	type DeletionQueue<T> = Value<Pallet<T>, Vec<DeletedContract>>;
 
 	pub fn migrate<T: Config>() -> Weight {
 		let mut weight: Weight = 0;
@@ -204,20 +198,15 @@ mod v6 {
 
 	type ContractInfo<T> = RawContractInfo<CodeHash<T>, BalanceOf<T>>;
 
-	generate_storage_alias!(
-		Contracts,
-		ContractInfoOf<T: Config> => Map<(Twox64Concat, T::AccountId), ContractInfo<T>>
-	);
+	#[storage_alias]
+	type ContractInfoOf<T> =
+		Map<Pallet<T>, Twox64Concat, <T as Config>::AccountId, ContractInfo<T>>;
 
-	generate_storage_alias!(
-		Contracts,
-		CodeStorage<T: Config> => Map<(Identity, CodeHash<T>), PrefabWasmModule>
-	);
+	#[storage_alias]
+	type CodeStorage<T> = Map<Pallet<T>, Identity, CodeHash<T>, PrefabWasmModule>;
 
-	generate_storage_alias!(
-		Contracts,
-		OwnerInfoOf<T: Config> => Map<(Identity, CodeHash<T>), OwnerInfo<T>>
-	);
+	#[storage_alias]
+	type OwnerInfoOf<T> = Map<Pallet<T>, Identity, CodeHash<T>, OwnerInfo<T>>;
 
 	pub fn migrate<T: Config>() -> Weight {
 		let mut weight: Weight = 0;
@@ -261,14 +250,11 @@ mod v7 {
 	use super::*;
 
 	pub fn migrate<T: Config>() -> Weight {
-		generate_storage_alias!(
-			Contracts,
-			AccountCounter => Value<u64, ValueQuery>
-		);
-		generate_storage_alias!(
-			Contracts,
-			Nonce => Value<u64, ValueQuery>
-		);
+		#[storage_alias]
+		type AccountCounter<T> = Value<Pallet<T: Config>, u64, ValueQuery>;
+		#[storage_alias]
+		type Nonce<T> = Value<Pallet<T: Config>, u64, ValueQuery>;
+
 		Nonce::set(AccountCounter::take());
 		T::DbWeight::get().reads_writes(1, 2)
 	}
