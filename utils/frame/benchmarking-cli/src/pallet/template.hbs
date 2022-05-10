@@ -29,10 +29,10 @@ impl<T: frame_system::Config> {{pallet}}::WeightInfo for WeightInfo<T> {
 		{{~#each benchmark.components as |c| ~}}
 		{{~#if (not c.is_used)}}_{{/if}}{{c.name}}: u32, {{/each~}}
 	) -> Weight {
-		{{weightAsNanoseconds benchmark.base_weight}}
+		({{weightAsNanoseconds benchmark.base_weight}} as Weight).saturating_mul(WEIGHT_PER_NANOS)
 			{{#each benchmark.component_weight as |cw|}}
-			// Standard Error: {{weightAsNanoseconds cw.error}}
-			.saturating_add({{weightAsNanoseconds cw.slope}}.saturating_mul({{cw.name}} as Weight))
+			// Standard Error: {{weightAsNanoseconds cw.error}} NS
+			.saturating_add(({{weightAsNanoseconds cw.slope}} as Weight).saturating_mul(WEIGHT_PER_NANOS).saturating_mul({{cw.name}} as Weight))
 			{{/each}}
 			{{#if (ne benchmark.base_reads "0")}}
 			.saturating_add(T::DbWeight::get().reads({{benchmark.base_reads}} as Weight))

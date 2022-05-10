@@ -67,8 +67,8 @@ where
 	s
 }
 
-/// A Handlebars helper to add an underscore after every 3rd character,then format it,
-/// i.e. a separator for large numbers : 123000000 -> 123_000 * WEIGHT_PER_NANOS.
+/// A Handlebars helper to convert to NS as a unit and add an underscore after every 3rd character,
+/// i.e. a separator for large numbers : 123000000 -> 123_000 NS.
 #[derive(Clone, Copy)]
 pub struct WeightAsNanoseconds;
 
@@ -88,8 +88,8 @@ impl handlebars::HelperDef for WeightAsNanoseconds {
 	}
 }
 
-/// Add an underscore after every 3rd character, then format it, i.e. a separator for large numbers:
-/// 123000000 -> 123_000 * WEIGHT_PER_NANOS.
+/// Convert to NS as a unit and add an underscore after every 3rd character,
+/// i.e. a separator for large numbers: 123000000 -> 123_000 NS.
 fn weight_as_nanoseconds<Number>(i: Number) -> String
 where
 	Number: std::string::ToString,
@@ -106,8 +106,6 @@ where
 		}
 		s.insert(0, val);
 	}
-	s.insert(0, '(');
-	s.push_str(" as Weight).saturating_mul(WEIGHT_PER_NANOS)");
 	s
 }
 
