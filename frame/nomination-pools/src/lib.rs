@@ -1141,7 +1141,7 @@ pub mod pallet {
 	pub type Metadata<T: Config> =
 		CountedStorageMap<_, Twox64Concat, PoolId, BoundedVec<u8, T::MaxMetadataLen>, ValueQuery>;
 
-	/// The last pool id.
+	/// Ever increasing number of all pools created so far.
 	#[pallet::storage]
 	pub type LastPoolId<T: Config> = StorageValue<_, u32, ValueQuery>;
 
