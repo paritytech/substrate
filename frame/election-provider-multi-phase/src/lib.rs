@@ -286,7 +286,8 @@ pub type SolutionVoterIndexOf<T> = <SolutionOf<T> as NposSolution>::VoterIndex;
 /// The target index. Derived from [`SolutionOf`].
 pub type SolutionTargetIndexOf<T> = <SolutionOf<T> as NposSolution>::TargetIndex;
 /// The accuracy of the election, when submitted from offchain. Derived from [`SolutionOf`].
-pub type SolutionAccuracyOf<T> = <SolutionOf<T> as NposSolution>::Accuracy;
+pub type SolutionAccuracyOf<T> =
+	<SolutionOf<<T as crate::Config>::MinerConfig> as NposSolution>::Accuracy;
 /// The fallback election type.
 pub type FallbackErrorOf<T> = <<T as crate::Config>::Fallback as ElectionProvider>::Error;
 
@@ -606,6 +607,10 @@ pub mod pallet {
 		#[pallet::constant]
 		type MinerTxPriority: Get<TransactionPriority>;
 
+		/// Configurations of the embedded miner.
+		///
+		/// Any external software implementing this can use the [`unsigned::Miner`] type provided,
+		/// which can mine new solutions and trim them accordingly.
 		type MinerConfig: crate::unsigned::MinerConfig<
 			AccountId = Self::AccountId,
 			MaxVotesPerVoter = <Self::DataProvider as ElectionDataProvider>::MaxVotesPerVoter,
@@ -813,15 +818,14 @@ pub mod pallet {
 			let max_vote: usize = <SolutionOf<T::MinerConfig> as NposSolution>::LIMIT;
 
 			// 2. Maximum sum of [SolutionAccuracy; 16] must fit into `UpperOf<OffchainAccuracy>`.
-			let maximum_chain_accuracy: Vec<UpperOf<SolutionAccuracyOf<T::MinerConfig>>> = (0..
-				max_vote)
+			let maximum_chain_accuracy: Vec<UpperOf<SolutionAccuracyOf<T>>> = (0..max_vote)
 				.map(|_| {
-					<UpperOf<SolutionAccuracyOf<T::MinerConfig>>>::from(
-						<SolutionAccuracyOf<T::MinerConfig>>::one().deconstruct(),
+					<UpperOf<SolutionAccuracyOf<T>>>::from(
+						<SolutionAccuracyOf<T>>::one().deconstruct(),
 					)
 				})
 				.collect();
-			let _: UpperOf<SolutionAccuracyOf<T::MinerConfig>> = maximum_chain_accuracy
+			let _: UpperOf<SolutionAccuracyOf<T>> = maximum_chain_accuracy
 				.iter()
 				.fold(Zero::zero(), |acc, x| acc.checked_add(x).unwrap());
 

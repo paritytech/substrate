@@ -48,7 +48,7 @@ pub(crate) const OFFCHAIN_CACHED_CALL: &[u8] = b"parity/multi-phase-unsigned-ele
 /// voted.
 pub type VoterOf<T> = frame_election_provider_support::VoterOf<<T as Config>::DataProvider>;
 
-/// Same as [`VoterOf`], but parameterized by the `MinerConfig`. 
+/// Same as [`VoterOf`], but parameterized by the `MinerConfig`.
 pub type MinerVoterOf<T> = frame_election_provider_support::Voter<
 	<T as MinerConfig>::AccountId,
 	<T as MinerConfig>::MaxVotesPerVoter,
@@ -409,6 +409,8 @@ pub trait MinerConfig {
 	/// The weight is computed using `solution_weight`.
 	type MaxWeight: Get<Weight>;
 	/// Something that can compute the weight of a solution.
+	///
+	/// This weight estimate is then used to trim the solution, based on [`MinerConfig::MaxWeight`].
 	fn solution_weight(voters: u32, targets: u32, active_voters: u32, degree: u32) -> Weight;
 }
 
@@ -711,7 +713,6 @@ mod max_weight {
 	#![allow(unused_variables)]
 	use super::*;
 	use crate::mock::{MockWeightInfo, Runtime};
-
 	#[test]
 	fn find_max_voter_binary_search_works() {
 		let w = SolutionOrSnapshotSize { voters: 10, targets: 0 };
