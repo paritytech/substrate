@@ -22,9 +22,8 @@
 
 pub mod error;
 
-use self::error::Result;
 use codec::{Decode, Encode};
-use jsonrpc_derive::rpc;
+use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 
@@ -52,13 +51,13 @@ pub struct BlockStats {
 ///
 /// This API contains unstable and unsafe methods only meant for development nodes. They
 /// are all flagged as unsafe for this reason.
-#[rpc]
+#[rpc(client, server)]
 pub trait DevApi<Hash> {
 	/// Reexecute the specified `block_hash` and gather statistics while doing so.
 	///
 	/// This function requires the specified block and its parent to be available
 	/// at the queried node. If either the specified block or the parent is pruned,
 	/// this function will return `None`.
-	#[rpc(name = "dev_getBlockStats")]
-	fn block_stats(&self, block_hash: Hash) -> Result<Option<BlockStats>>;
+	#[method(name = "dev_getBlockStats")]
+	fn block_stats(&self, block_hash: Hash) -> RpcResult<Option<BlockStats>>;
 }

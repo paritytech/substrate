@@ -14,12 +14,12 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 clap = { version = "3.1.6", features = ["derive"] }
-jsonrpsee = { version = "0.10.1", default-features = false, features = ["ws-client"] }
 log = "0.4.16"
 parity-scale-codec = "3.0.0"
 serde = "1.0.136"
 zstd = { version = "0.10.0", default-features = false }
 remote-externalities = { version = "0.10.0-dev", path = "../../remote-externalities" }
+jsonrpsee = { version = "0.12.0", default-features = false, features = ["ws-client"] }
 sc-chain-spec = { version = "4.0.0-dev", path = "../../../../client/chain-spec" }
 sc-cli = { version = "0.10.0-dev", path = "../../../../client/cli" }
 sc-executor = { version = "0.10.0-dev", path = "../../../../client/executor" }
