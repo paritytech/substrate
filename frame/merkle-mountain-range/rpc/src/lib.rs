@@ -16,14 +16,18 @@
 // limitations under the License.
 
 #![warn(missing_docs)]
+#![warn(unused_crate_dependencies)]
 
 //! Node-specific RPC methods for interaction with Merkle Mountain Range pallet.
 
-use std::sync::Arc;
+use std::{marker::PhantomData, sync::Arc};
 
 use codec::{Codec, Encode};
-use jsonrpc_core::{Error, ErrorCode, Result};
-use jsonrpc_derive::rpc;
+use jsonrpsee::{
+	core::{async_trait, RpcResult},
+	proc_macros::rpc,
+	types::error::{CallError, ErrorObject},
+};
 use serde::{Deserialize, Serialize};
 
 use sp_api::ProvideRuntimeApi;
@@ -33,6 +37,11 @@ use sp_mmr_primitives::{BatchProof, Error as MmrError, LeafIndex, Proof};
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 
 pub use sp_mmr_primitives::MmrApi as MmrRuntimeApi;
+
+const RUNTIME_ERROR: i32 = 8000;
+const MMR_ERROR: i32 = 8010;
+const LEAF_NOT_FOUND_ERROR: i32 = MMR_ERROR + 1;
+const GENERATE_PROOF_ERROR: i32 = MMR_ERROR + 2;
 
 /// Retrieved MMR leaf and its proof.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -86,7 +95,7 @@ impl<BlockHash> LeafBatchProof<BlockHash> {
 }
 
 /// MMR RPC methods.
-#[rpc]
+#[rpc(client, server)]
 pub trait MmrApi<BlockHash> {
 	/// Generate MMR proof for given leaf index.
 	///
@@ -96,12 +105,12 @@ pub trait MmrApi<BlockHash> {
 	///
 	/// Returns the (full) leaf itself and a proof for this leaf (compact encoding, i.e. hash of
 	/// the leaf). Both parameters are SCALE-encoded.
-	#[rpc(name = "mmr_generateProof")]
+	#[method(name = "mmr_generateProof")]
 	fn generate_proof(
 		&self,
 		leaf_index: LeafIndex,
 		at: Option<BlockHash>,
-	) -> Result<LeafProof<BlockHash>>;
+	) -> RpcResult<LeafProof<BlockHash>>;
 
 	/// Generate MMR proof for the given leaf indices.
 	///
@@ -113,43 +122,43 @@ pub trait MmrApi<BlockHash> {
 	/// the leaves). Both parameters are SCALE-encoded.
 	/// The order of entries in the `leaves` field of the returned struct
 	/// is the same as the order of the entries in `leaf_indices` supplied
-	#[rpc(name = "mmr_generateBatchProof")]
+	#[method(name = "mmr_generateBatchProof")]
 	fn generate_batch_proof(
 		&self,
 		leaf_indices: Vec<LeafIndex>,
 		at: Option<BlockHash>,
-	) -> Result<LeafBatchProof<BlockHash>>;
+	) -> RpcResult<LeafBatchProof<BlockHash>>;
 }
 
-/// An implementation of MMR specific RPC methods.
-pub struct Mmr<C, B> {
-	client: Arc<C>,
-	_marker: std::marker::PhantomData<B>,
+/// MMR RPC methods.
+pub struct MmrRpc<Client, Block> {
+	client: Arc<Client>,
+	_marker: PhantomData<Block>,
 }
 
-impl<C, B> Mmr<C, B> {
+impl<C, B> MmrRpc<C, B> {
 	/// Create new `Mmr` with the given reference to the client.
 	pub fn new(client: Arc<C>) -> Self {
 		Self { client, _marker: Default::default() }
 	}
 }
 
-impl<C, Block, MmrHash> MmrApi<<Block as BlockT>::Hash> for Mmr<C, (Block, MmrHash)>
+#[async_trait]
+impl<Client, Block, MmrHash> MmrApiServer<<Block as BlockT>::Hash>
+	for MmrRpc<Client, (Block, MmrHash)>
 where
 	Block: BlockT,
-	C: Send + Sync + 'static + ProvideRuntimeApi<Block> + HeaderBackend<Block>,
-	C::Api: MmrRuntimeApi<Block, MmrHash>,
+	Client: Send + Sync + 'static + ProvideRuntimeApi<Block> + HeaderBackend<Block>,
+	Client::Api: MmrRuntimeApi<Block, MmrHash>,
 	MmrHash: Codec + Send + Sync + 'static,
 {
 	fn generate_proof(
 		&self,
 		leaf_index: LeafIndex,
 		at: Option<<Block as BlockT>::Hash>,
-	) -> Result<LeafProof<<Block as BlockT>::Hash>> {
+	) -> RpcResult<LeafProof<Block::Hash>> {
 		let api = self.client.runtime_api();
-		let block_hash = at.unwrap_or_else(||
-			// If the block hash is not supplied assume the best block.
-			self.client.info().best_hash);
+		let block_hash = at.unwrap_or_else(|| self.client.info().best_hash);
 
 		let (leaf, proof) = api
 			.generate_proof_with_context(
@@ -167,7 +176,7 @@ where
 		&self,
 		leaf_indices: Vec<LeafIndex>,
 		at: Option<<Block as BlockT>::Hash>,
-	) -> Result<LeafBatchProof<<Block as BlockT>::Hash>> {
+	) -> RpcResult<LeafBatchProof<<Block as BlockT>::Hash>> {
 		let api = self.client.runtime_api();
 		let block_hash = at.unwrap_or_else(||
 			// If the block hash is not supplied assume the best block.
@@ -186,37 +195,31 @@ where
 	}
 }
 
-const RUNTIME_ERROR: i64 = 8000;
-const MMR_ERROR: i64 = 8010;
-
-/// Converts a mmr-specific error into an RPC error.
-fn mmr_error_into_rpc_error(err: MmrError) -> Error {
+/// Converts a mmr-specific error into a [`CallError`].
+fn mmr_error_into_rpc_error(err: MmrError) -> CallError {
+	let data = format!("{:?}", err);
 	match err {
-		MmrError::LeafNotFound => Error {
-			code: ErrorCode::ServerError(MMR_ERROR + 1),
-			message: "Leaf was not found".into(),
-			data: Some(format!("{:?}", err).into()),
-		},
-		MmrError::GenerateProof => Error {
-			code: ErrorCode::ServerError(MMR_ERROR + 2),
-			message: "Error while generating the proof".into(),
-			data: Some(format!("{:?}", err).into()),
-		},
-		_ => Error {
-			code: ErrorCode::ServerError(MMR_ERROR),
-			message: "Unexpected MMR error".into(),
-			data: Some(format!("{:?}", err).into()),
-		},
+		MmrError::LeafNotFound => CallError::Custom(ErrorObject::owned(
+			LEAF_NOT_FOUND_ERROR,
+			"Leaf was not found",
+			Some(data),
+		)),
+		MmrError::GenerateProof => CallError::Custom(ErrorObject::owned(
+			GENERATE_PROOF_ERROR,
+			"Error while generating the proof",
+			Some(data),
+		)),
+		_ => CallError::Custom(ErrorObject::owned(MMR_ERROR, "Unexpected MMR error", Some(data))),
 	}
 }
 
-/// Converts a runtime trap into an RPC error.
-fn runtime_error_into_rpc_error(err: impl std::fmt::Display) -> Error {
-	Error {
-		code: ErrorCode::ServerError(RUNTIME_ERROR),
-		message: "Runtime trapped".into(),
-		data: Some(err.to_string().into()),
-	}
+/// Converts a runtime trap into a [`CallError`].
+fn runtime_error_into_rpc_error(err: impl std::fmt::Debug) -> CallError {
+	CallError::Custom(ErrorObject::owned(
+		RUNTIME_ERROR,
+		"Runtime trapped",
+		Some(format!("{:?}", err)),
+	))
 }
 
 #[cfg(test)]
