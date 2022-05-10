@@ -29,6 +29,7 @@ use prometheus_endpoint::Registry;
 use rand::Rng;
 use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider, RecordProof};
 use sc_client_api::{
+	all_storage_changes::{AllStorageChangesHub, AllStorageChangesStream},
 	backend::{
 		self, apply_aux, BlockImportOperation, ClientImportOperation, FinalizeSummary, Finalizer,
 		ImportSummary, LockImportRun, NewBlockState, StorageProvider,
@@ -39,7 +40,7 @@ use sc_client_api::{
 		PreCommitActions, ProvideUncles,
 	},
 	execution_extensions::ExecutionExtensions,
-	notifications::{StorageEventStream, StorageNotifications},
+	storage_changes_for_keys::{StorageChangesForKeysHub, StorageChangesForKeysStream},
 	CallExecutor, ExecutorProvider, KeyIterator, OnFinalityAction, OnImportAction, ProofProvider,
 	UsageProvider,
 };
@@ -100,6 +101,15 @@ use {
 
 type NotificationSinks<T> = Mutex<Vec<TracingUnboundedSender<T>>>;
 
+/// A per-subscriber maximum number of pending storage change messages
+/// when listening to storage changes.
+///
+/// If a given subscriber can't handle its notifications fast enough
+/// and reaches this limit all of its pending notifications will be
+/// replaced with a single fixup notification containing values for all
+/// of the keys it is subscribed for.
+const MAXIMUM_PENDING_STORAGE_CHANGE_MESSAGES: usize = 4;
+
 /// Substrate Client
 pub struct Client<B, E, Block, RA>
 where
@@ -107,7 +117,8 @@ where
 {
 	backend: Arc<B>,
 	executor: E,
-	storage_notifications: StorageNotifications<Block>,
+	storage_changes_for_keys: parking_lot::Mutex<StorageChangesForKeysHub<Block::Hash>>,
+	all_storage_changes: AllStorageChangesHub<Block::Hash>,
 	import_notification_sinks: NotificationSinks<BlockImportNotification<Block>>,
 	finality_notification_sinks: NotificationSinks<FinalityNotification<Block>>,
 	// Collects auxiliary operations to be performed atomically together with
@@ -393,7 +404,12 @@ where
 		Ok(Client {
 			backend,
 			executor,
-			storage_notifications: StorageNotifications::new(prometheus_registry),
+			storage_changes_for_keys: parking_lot::Mutex::new(StorageChangesForKeysHub::new(
+				MAXIMUM_PENDING_STORAGE_CHANGE_MESSAGES,
+				prometheus_registry.clone(),
+				info.best_hash,
+			)),
+			all_storage_changes: AllStorageChangesHub::new(prometheus_registry),
 			import_notification_sinks: Default::default(),
 			finality_notification_sinks: Default::default(),
 			import_actions: Default::default(),
@@ -974,12 +990,15 @@ where
 		};
 
 		if let Some(storage_changes) = storage_changes {
-			// TODO [ToDr] How to handle re-orgs? Should we re-emit all storage changes?
-			self.storage_notifications.trigger(
-				&notification.hash,
-				storage_changes.0.into_iter(),
-				storage_changes.1.into_iter().map(|(sk, v)| (sk, v.into_iter())),
-			);
+			self.all_storage_changes.trigger(&notification.hash, storage_changes.0.clone());
+
+			if notification.is_new_best {
+				self.storage_changes_for_keys.lock().trigger(
+					notification.header.parent_hash(),
+					&notification.hash,
+					storage_changes.0,
+				);
+			}
 		}
 
 		self.import_notification_sinks
@@ -1932,13 +1951,15 @@ where
 		stream
 	}
 
-	/// Get storage changes event stream.
-	fn storage_changes_notification_stream(
+	fn all_storage_changes_stream(&self) -> AllStorageChangesStream<Block::Hash> {
+		self.all_storage_changes.subscribe()
+	}
+
+	fn storage_changes_for_keys_stream(
 		&self,
-		filter_keys: Option<&[StorageKey]>,
-		child_filter_keys: Option<&[(StorageKey, Option<Vec<StorageKey>>)]>,
-	) -> sp_blockchain::Result<StorageEventStream<Block::Hash>> {
-		Ok(self.storage_notifications.listen(filter_keys, child_filter_keys))
+		keys: &[StorageKey],
+	) -> StorageChangesForKeysStream<Block::Hash> {
+		self.storage_changes_for_keys.lock().subscribe(keys)
 	}
 }
 

@@ -51,7 +51,7 @@ use super::{
 };
 use sc_client_api::{
 	Backend, BlockBackend, BlockchainEvents, CallExecutor, ExecutorProvider, ProofProvider,
-	StorageNotification, StorageProvider,
+	StorageProvider,
 };
 use std::marker::PhantomData;
 
@@ -438,48 +438,30 @@ where
 		subscriber: Subscriber<StorageChangeSet<Block::Hash>>,
 		keys: Option<Vec<StorageKey>>,
 	) {
-		let keys = Into::<Option<Vec<_>>>::into(keys);
-		let stream = match self.client.storage_changes_notification_stream(keys.as_deref(), None) {
-			Ok(stream) => stream,
-			Err(err) => {
-				let _ = subscriber.reject(client_err(err).into());
-				return
-			},
-		};
-
-		// initial values
-		let initial = stream::iter(
-			keys.map(|keys| {
-				let block = self.client.info().best_hash;
-				let changes = keys
-					.into_iter()
-					.map(|key| {
-						let v = self.client.storage(&BlockId::Hash(block), &key).ok().flatten();
-						(key, v)
-					})
-					.collect();
-				vec![Ok(Ok(StorageChangeSet { block, changes }))]
-			})
-			.unwrap_or_default(),
-		);
-
-		self.subscriptions.add(subscriber, |sink| {
-			let stream = stream.map(|StorageNotification { block, changes }| {
-				Ok(Ok::<_, rpc::Error>(StorageChangeSet {
-					block,
-					changes: changes
-						.iter()
-						.filter_map(|(o_sk, k, v)| o_sk.is_none().then(|| (k.clone(), v.cloned())))
-						.collect(),
-				}))
+		if let Some(keys) = keys {
+			let stream = self.client.storage_changes_for_keys_stream(&keys);
+			let client = self.client.clone();
+			let stream = stream.filter_map(move |notification| {
+				futures::future::ready(
+					notification
+						.get(&*client)
+						.map(|notification| Ok(Ok::<_, rpc::Error>(notification))),
+				)
 			});
-
-			initial
-				.chain(stream)
-				.forward(sink.sink_map_err(|e| warn!("Error sending notifications: {:?}", e)))
-				// we ignore the resulting Stream (if the first stream is over we are unsubscribed)
-				.map(|_| ())
-		});
+			self.subscriptions.add(subscriber, move |sink| {
+				let sink = sink.sink_map_err(|e| warn!("Error sending notifications: {:?}", e));
+				stream.forward(sink).map(|_| ())
+			});
+		} else {
+			let stream = self
+				.client
+				.all_storage_changes_stream()
+				.map(|notification| Ok(Ok::<_, rpc::Error>(notification)));
+			self.subscriptions.add(subscriber, move |sink| {
+				let sink = sink.sink_map_err(|e| warn!("Error sending notifications: {:?}", e));
+				stream.forward(sink).map(|_| ())
+			});
+		}
 	}
 
 	fn unsubscribe_storage(

@@ -27,7 +27,10 @@ use sp_runtime::{
 };
 use std::{collections::HashSet, fmt, sync::Arc};
 
-use crate::{blockchain::Info, notifications::StorageEventStream, FinalizeSummary, ImportSummary};
+use crate::{
+	all_storage_changes::AllStorageChangesStream, blockchain::Info,
+	storage_changes_for_keys::StorageChangesForKeysStream, FinalizeSummary, ImportSummary,
+};
 
 use sc_transaction_pool_api::ChainEvent;
 use sc_utils::mpsc::TracingUnboundedReceiver;
@@ -67,14 +70,14 @@ pub trait BlockchainEvents<Block: BlockT> {
 	/// finalized block.
 	fn finality_notification_stream(&self) -> FinalityNotifications<Block>;
 
-	/// Get storage changes event stream.
-	///
-	/// Passing `None` as `filter_keys` subscribes to all storage changes.
-	fn storage_changes_notification_stream(
+	/// Get a stream of storage changes for all keys.
+	fn all_storage_changes_stream(&self) -> AllStorageChangesStream<Block::Hash>;
+
+	/// Get a stream of storage changes for given keys.
+	fn storage_changes_for_keys_stream(
 		&self,
-		filter_keys: Option<&[StorageKey]>,
-		child_filter_keys: Option<&[(StorageKey, Option<Vec<StorageKey>>)]>,
-	) -> sp_blockchain::Result<StorageEventStream<Block::Hash>>;
+		keys: &[StorageKey],
+	) -> StorageChangesForKeysStream<Block::Hash>;
 }
 
 /// List of operations to be performed on storage aux data.

@@ -19,19 +19,19 @@
 //! Substrate client interfaces.
 #![warn(missing_docs)]
 
+pub mod all_storage_changes;
 pub mod backend;
 pub mod call_executor;
 pub mod client;
 pub mod execution_extensions;
 pub mod in_mem;
 pub mod leaves;
-pub mod notifications;
 pub mod proof_provider;
+pub mod storage_changes_for_keys;
 
 pub use backend::*;
 pub use call_executor::*;
 pub use client::*;
-pub use notifications::*;
 pub use proof_provider::*;
 pub use sp_blockchain as blockchain;
 pub use sp_blockchain::HeaderBackend;

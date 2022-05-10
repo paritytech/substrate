@@ -431,6 +431,279 @@ fn uncles_with_only_ancestors() {
 	assert_eq!(v, client.uncles(a2.hash(), 3).unwrap());
 }
 
+fn balance_of_key(keyring: AccountKeyring) -> StorageKey {
+	use parity_scale_codec::KeyedVec;
+	use sp_core::blake2_256;
+
+	StorageKey(blake2_256(&keyring.to_account_id().to_keyed_vec(b"balance:")).into())
+}
+
+fn get_balance(value: &sp_storage::StorageData) -> u64 {
+	parity_scale_codec::Decode::decode(&mut value.0.as_slice()).unwrap()
+}
+
+enum IgnoreUnknown {
+	Yes,
+	No,
+}
+
+fn balance_changes(
+	ignore_unknown: IgnoreUnknown,
+	stream: &mut (impl futures::Stream<Item = sp_storage::StorageChangeSet<H256>> + Unpin),
+) -> Vec<(H256, AccountKeyring, Option<u64>)> {
+	use futures::{FutureExt, StreamExt};
+	let mut list = Vec::new();
+	while let Some(notif) = stream.next().now_or_never() {
+		if let Some(notif) = notif {
+			for (key, value) in notif.changes {
+				let keyring = if key == balance_of_key(AccountKeyring::Alice) {
+					AccountKeyring::Alice
+				} else if key == balance_of_key(AccountKeyring::Bob) {
+					AccountKeyring::Bob
+				} else {
+					if matches!(ignore_unknown, IgnoreUnknown::No) {
+						panic!("unknown key: {:?}", key)
+					} else {
+						continue
+					}
+				};
+				list.push((notif.block, keyring, value.map(|value| get_balance(&value))));
+			}
+		}
+	}
+	list
+}
+
+fn import_transfer_block(
+	client: &mut substrate_test_runtime_client::TestClient,
+	parent: &substrate_test_runtime::Block,
+	transfer: Transfer,
+) -> substrate_test_runtime::Block {
+	let mut builder = client
+		.new_block_at(&BlockId::Hash(parent.hash()), Default::default(), false)
+		.unwrap();
+	builder.push_transfer(transfer).unwrap();
+	let block = builder.build().unwrap().block;
+	block_on(client.import(BlockOrigin::Own, block.clone())).unwrap();
+	block
+}
+
+#[test]
+fn storage_subscription() {
+	use futures::StreamExt;
+	let client = Arc::new(parking_lot::Mutex::new(substrate_test_runtime_client::new()));
+
+	macro_rules! balance_stream {
+		($keyring:expr) => {
+			client
+				.lock()
+				.storage_changes_for_keys_stream(&[balance_of_key($keyring)])
+				.filter_map(|notif| futures::future::ready(notif.get(&*client.lock())))
+		};
+	}
+
+	let mut stream = balance_stream!(AccountKeyring::Alice);
+	assert_eq!(balance_changes(IgnoreUnknown::No, &mut stream), vec![]);
+
+	// Final tree after the test:
+	//
+	// A -> B1 -> B2
+	//  \-> C1 -> C2 -> C3
+	//
+
+	// A
+	let a = client.lock().new_block(Default::default()).unwrap().build().unwrap().block;
+	block_on(client.lock().import(BlockOrigin::Own, a.clone())).unwrap();
+
+	assert_eq!(
+		balance_changes(IgnoreUnknown::No, &mut stream),
+		vec![(a.hash(), AccountKeyring::Alice, Some(1000))]
+	);
+
+	{
+		// A new subscription gets sent the current value.
+		let mut stream_2 = balance_stream!(AccountKeyring::Alice);
+		assert_eq!(
+			balance_changes(IgnoreUnknown::No, &mut stream_2),
+			vec![(a.hash(), AccountKeyring::Alice, Some(1000))]
+		);
+	}
+
+	// A -> B1
+	// New best block, so notifications will be sent.
+	let b1 = import_transfer_block(
+		&mut client.lock(),
+		&a,
+		Transfer {
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Bob.into(),
+			amount: 3,
+			nonce: 0,
+		},
+	);
+
+	assert_eq!(
+		balance_changes(IgnoreUnknown::No, &mut stream),
+		vec![(b1.hash(), AccountKeyring::Alice, Some(997))]
+	);
+
+	// B1 -> B2
+	// New best block, so notifications will be sent.
+	let b2 = import_transfer_block(
+		&mut client.lock(),
+		&b1,
+		Transfer {
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Bob.into(),
+			amount: 5,
+			nonce: 1,
+		},
+	);
+
+	assert_eq!(
+		balance_changes(IgnoreUnknown::No, &mut stream),
+		vec![(b2.hash(), AccountKeyring::Alice, Some(992))]
+	);
+
+	// A -> C1
+	// Not a new best block, so no notifications will be sent.
+	let c1 = import_transfer_block(
+		&mut client.lock(),
+		&a,
+		Transfer {
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Bob.into(),
+			amount: 100,
+			nonce: 0,
+		},
+	);
+
+	assert_eq!(balance_changes(IgnoreUnknown::No, &mut stream), vec![]);
+
+	// C1 -> C2
+	// Not a new best block.
+	let c2 = import_transfer_block(
+		&mut client.lock(),
+		&c1,
+		Transfer {
+			from: AccountKeyring::Bob.into(),
+			to: AccountKeyring::Ferdie.into(),
+			amount: 1,
+			nonce: 0,
+		},
+	);
+
+	assert_eq!(balance_changes(IgnoreUnknown::No, &mut stream), vec![]);
+
+	{
+		// A new subscription still gets sent the value from B2 since that's still the best block.
+		let mut stream_2 = balance_stream!(AccountKeyring::Alice);
+		assert_eq!(
+			balance_changes(IgnoreUnknown::No, &mut stream_2),
+			vec![(b2.hash(), AccountKeyring::Alice, Some(992))]
+		);
+	}
+
+	// C2 -> C3
+	// Unrelated transaction; this is the new best block, so the balance from C1 should be sent.
+	let c3 = import_transfer_block(
+		&mut client.lock(),
+		&c2,
+		Transfer {
+			from: AccountKeyring::Bob.into(),
+			to: AccountKeyring::Ferdie.into(),
+			amount: 1,
+			nonce: 1,
+		},
+	);
+
+	assert_eq!(
+		balance_changes(IgnoreUnknown::No, &mut stream),
+		vec![(c3.hash(), AccountKeyring::Alice, Some(900))]
+	);
+}
+
+#[test]
+fn storage_wildcard_subscription() {
+	let mut client = substrate_test_runtime_client::new();
+
+	// Final tree after the test:
+	//
+	// A -> B1 -> B2
+	//  \-> C
+	//
+
+	// A
+	let a = client.new_block(Default::default()).unwrap().build().unwrap().block;
+	block_on(client.import(BlockOrigin::Own, a.clone())).unwrap();
+
+	let mut stream = client.all_storage_changes_stream();
+	assert_eq!(balance_changes(IgnoreUnknown::Yes, &mut stream), vec![]);
+
+	// A -> B1
+	// New best block.
+	let b1 = import_transfer_block(
+		&mut client,
+		&a,
+		Transfer {
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Bob.into(),
+			amount: 3,
+			nonce: 0,
+		},
+	);
+
+	assert_eq!(
+		balance_changes(IgnoreUnknown::Yes, &mut stream),
+		vec![
+			(b1.hash(), AccountKeyring::Bob, Some(1003)),
+			(b1.hash(), AccountKeyring::Alice, Some(997))
+		]
+	);
+
+	// B1 -> B2
+	// New best block.
+	let b2 = import_transfer_block(
+		&mut client,
+		&b1,
+		Transfer {
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Bob.into(),
+			amount: 5,
+			nonce: 1,
+		},
+	);
+
+	assert_eq!(
+		balance_changes(IgnoreUnknown::Yes, &mut stream),
+		vec![
+			(b2.hash(), AccountKeyring::Bob, Some(1008)),
+			(b2.hash(), AccountKeyring::Alice, Some(992))
+		]
+	);
+
+	// A -> C
+	// Not a new best block.
+	let c = import_transfer_block(
+		&mut client,
+		&a,
+		Transfer {
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Bob.into(),
+			amount: 100,
+			nonce: 0,
+		},
+	);
+
+	assert_eq!(
+		balance_changes(IgnoreUnknown::Yes, &mut stream),
+		vec![
+			(c.hash(), AccountKeyring::Bob, Some(1100)),
+			(c.hash(), AccountKeyring::Alice, Some(900))
+		]
+	);
+}
+
 #[test]
 fn uncles_with_multiple_forks() {
 	// block tree:
