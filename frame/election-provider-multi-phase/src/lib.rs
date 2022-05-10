@@ -103,7 +103,7 @@
 //!
 //! Validators will only submit solutions if the one that they have computed is sufficiently better
 //! than the best queued one (see [`pallet::Config::BetterUnsignedThreshold`]) and will limit the
-//! weight of the solution to [`pallet::Config::MinerMaxWeight`].
+//! weight of the solution to [`MinerConfig::MaxWeight`].
 //!
 //! The unsigned phase can be made passive depending on how the previous signed phase went, by
 //! setting the first inner value of [`Phase`] to `false`. For now, the signed phase is always
@@ -628,7 +628,9 @@ pub mod pallet {
 
 		/// Maximum weight of a signed solution.
 		///
-		/// This should probably be similar to [`Config::MinerMaxWeight`].
+		/// If [`Config::MinerConfig`] is being implemented to submit signed solutions (outside of
+		/// this pallet), then [`MinerConfig::solution_weight`] is used to compare against
+		/// this value.
 		#[pallet::constant]
 		type SignedMaxWeight: Get<Weight>;
 
@@ -977,7 +979,7 @@ pub mod pallet {
 			let size = Self::snapshot_metadata().ok_or(Error::<T>::MissingSnapshotMetadata)?;
 
 			ensure!(
-				Self::feasibility_weight_of(&raw_solution, size) < T::SignedMaxWeight::get(),
+				Self::solution_weight_of(&raw_solution, size) < T::SignedMaxWeight::get(),
 				Error::<T>::SignedTooMuchWeight,
 			);
 

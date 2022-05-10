@@ -485,8 +485,8 @@ impl<T: Config> Pallet<T> {
 		T::SlashHandler::on_unbalanced(negative_imbalance);
 	}
 
-	/// The feasibility weight of the given raw solution.
-	pub fn feasibility_weight_of(
+	/// The weight of the given raw solution.
+	pub fn solution_weight_of(
 		raw_solution: &RawSolution<SolutionOf<T::MinerConfig>>,
 		size: SolutionOrSnapshotSize,
 	) -> Weight {
@@ -511,7 +511,7 @@ impl<T: Config> Pallet<T> {
 	) -> BalanceOf<T> {
 		let encoded_len: u32 = raw_solution.encoded_size().saturated_into();
 		let encoded_len: BalanceOf<T> = encoded_len.into();
-		let feasibility_weight = Self::feasibility_weight_of(raw_solution, size);
+		let feasibility_weight = Self::solution_weight_of(raw_solution, size);
 
 		let len_deposit = T::SignedDepositByte::get().saturating_mul(encoded_len);
 		let weight_deposit =

@@ -417,7 +417,7 @@ pub trait MinerConfig {
 /// A base miner, suitable to be used for both signed and unsigned submissions.
 pub struct Miner<T: MinerConfig>(sp_std::marker::PhantomData<T>);
 impl<T: MinerConfig> Miner<T> {
-	/// Same as [`Pallet::miner_solution`], but the input snapshot data must be given.
+	/// Same as [`Pallet::mine_solution`], but the input snapshot data must be given.
 	pub fn mine_solution_with_snapshot<S>(
 		voters: Vec<(T::AccountId, VoteWeight, BoundedVec<T::AccountId, T::MaxVotesPerVoter>)>,
 		targets: Vec<T::AccountId>,
