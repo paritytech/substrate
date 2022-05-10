@@ -898,8 +898,12 @@ pub mod tests {
 
 			/// Some random docs that ensure that docs are accepted
 			#[crate::storage_alias]
-			pub type GenericData<T> =
-				Map<Test2, Blake2_128Concat, <T as Config>::BlockNumber, <T as Config>::BlockNumber>;
+			pub type GenericData<T> = Map<
+				Test2,
+				Blake2_128Concat,
+				<T as Config>::BlockNumber,
+				<T as Config>::BlockNumber,
+			>;
 		});
 	}
 

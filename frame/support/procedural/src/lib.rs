@@ -25,13 +25,13 @@ mod crate_version;
 mod debug_no_bound;
 mod default_no_bound;
 mod dummy_part_checker;
-mod storage_alias;
 mod key_prefix;
 mod match_and_insert;
 mod pallet;
 mod pallet_error;
 mod partial_eq_no_bound;
 mod storage;
+mod storage_alias;
 mod transactional;
 mod tt_macro;
 

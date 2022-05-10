@@ -302,7 +302,17 @@ impl Parse for StorageType {
 		let parse_pallet_generics = |input: ParseStream<'_>| -> Result<Option<SimpleGenerics>> {
 			let lookahead = input.lookahead1();
 			if lookahead.peek(Token![<]) {
-				Some(input.parse()).transpose()
+				let generics = input.parse::<SimpleGenerics>()?;
+
+				if generics.all_have_trait_bounds() {
+					Ok(Some(generics))
+				} else {
+					Err(Error::new_spanned(
+						generics,
+						"The pallet generics require to be bound by the \
+						pallet `Config` trait and optional `Instance` trait.",
+					))
+				}
 			} else if lookahead.peek(Token![,]) {
 				Ok(None)
 			} else {
@@ -429,16 +439,6 @@ impl Parse for Input {
 pub fn storage_alias(input: TokenStream) -> Result<TokenStream> {
 	let input = syn::parse2::<Input>(input)?;
 	let crate_ = generate_crate_access_2018("frame-support")?;
-
-	if let Some(ref generics) = input.storage_generics {
-		if !generics.all_have_trait_bounds() {
-			return Err(Error::new_spanned(
-				generics,
-				"The pallet generics require to be bound by the \
-				 pallet `Config` trait and optional `Instance` trait.",
-			))
-		}
-	}
 
 	let storage_instance = generate_storage_instance(
 		&crate_,
