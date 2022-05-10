@@ -156,10 +156,10 @@ impl<T: Config<I>, I: 'static> Transfer<T::AccountId> for Pallet<T, I> {
 }
 
 impl<T: Config<I>, I: 'static> InspectEnumerable<T::AccountId> for Pallet<T, I> {
-	/// Returns an iterator of the asset collectiones in existence.
+	/// Returns an iterator of the assets collections in existence.
 	///
 	/// NOTE: iterating this list invokes a storage read per item.
-	fn collectiones() -> Box<dyn Iterator<Item = Self::CollectionId>> {
+	fn collections() -> Box<dyn Iterator<Item = Self::CollectionId>> {
 		Box::new(CollectionMetadataOf::<T, I>::iter_keys())
 	}
 

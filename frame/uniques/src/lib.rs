@@ -92,7 +92,7 @@ pub mod pallet {
 		/// Identifier for the collection of asset.
 		type CollectionId: Member + Parameter + MaxEncodedLen + Copy;
 
-		/// The type used to identify a unique asset within an asset collection.
+		/// The type used to identify a unique asset within an assets collection.
 		type InstanceId: Member + Parameter + MaxEncodedLen + Copy;
 
 		/// The currency mechanism, used for paying for reserves.
@@ -113,7 +113,7 @@ pub mod pallet {
 		/// Locker trait to enable Locking mechanism downstream.
 		type Locker: Locker<Self::CollectionId, Self::InstanceId>;
 
-		/// The basic amount of funds that must be reserved for an asset collection.
+		/// The basic amount of funds that must be reserved for an assets collection.
 		#[pallet::constant]
 		type CollectionDeposit: Get<DepositBalanceOf<Self, I>>;
 
@@ -155,7 +155,7 @@ pub mod pallet {
 	}
 
 	#[pallet::storage]
-	/// Details of an asset collection.
+	/// Details of an assets collection.
 	pub(super) type Collection<T: Config<I>, I: 'static = ()> = StorageMap<
 		_,
 		Blake2_128Concat,
@@ -208,7 +208,7 @@ pub mod pallet {
 	>;
 
 	#[pallet::storage]
-	/// Metadata of an asset collection.
+	/// Metadata of an assets collection.
 	pub(super) type CollectionMetadataOf<T: Config<I>, I: 'static = ()> = StorageMap<
 		_,
 		Blake2_128Concat,
@@ -230,7 +230,7 @@ pub mod pallet {
 	>;
 
 	#[pallet::storage]
-	/// Metadata of an asset collection.
+	/// Metadata of an assets collection.
 	pub(super) type Attribute<T: Config<I>, I: 'static = ()> = StorageNMap<
 		_,
 		(
@@ -245,9 +245,9 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
-		/// An asset collection was created.
+		/// An assets collection was created.
 		Created { collection: T::CollectionId, creator: T::AccountId, owner: T::AccountId },
-		/// An asset collection was force-created.
+		/// An assets collection was force-created.
 		ForceCreated { collection: T::CollectionId, owner: T::AccountId },
 		/// An asset `collection` was destroyed.
 		Destroyed { collection: T::CollectionId },
@@ -297,13 +297,13 @@ pub mod pallet {
 		},
 		/// An asset `collection` has had its attributes changed by the `Force` origin.
 		AssetStatusChanged { collection: T::CollectionId },
-		/// New metadata has been set for an asset collection.
+		/// New metadata has been set for an assets collection.
 		CollectionMetadataSet {
 			collection: T::CollectionId,
 			data: BoundedVec<u8, T::StringLimit>,
 			is_frozen: bool,
 		},
-		/// Metadata has been cleared for an asset collection.
+		/// Metadata has been cleared for an assets collection.
 		CollectionMetadataCleared { collection: T::CollectionId },
 		/// New metadata has been set for an asset instance.
 		MetadataSet {
@@ -316,14 +316,14 @@ pub mod pallet {
 		MetadataCleared { collection: T::CollectionId, instance: T::InstanceId },
 		/// Metadata has been cleared for an asset instance.
 		Redeposited { collection: T::CollectionId, successful_instances: Vec<T::InstanceId> },
-		/// New attribute metadata has been set for an asset collection or instance.
+		/// New attribute metadata has been set for an assets collection or instance.
 		AttributeSet {
 			collection: T::CollectionId,
 			maybe_instance: Option<T::InstanceId>,
 			key: BoundedVec<u8, T::KeyLimit>,
 			value: BoundedVec<u8, T::ValueLimit>,
 		},
-		/// Attribute metadata has been cleared for an asset collection or instance.
+		/// Attribute metadata has been cleared for an assets collection or instance.
 		AttributeCleared {
 			collection: T::CollectionId,
 			maybe_instance: Option<T::InstanceId>,
@@ -377,18 +377,18 @@ pub mod pallet {
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Issue a new collection of non-fungible assets from a public origin.
 		///
-		/// This new asset collection has no assets initially and its owner is the origin.
+		/// This new assets collection has no assets initially and its owner is the origin.
 		///
 		/// The origin must be Signed and the sender must have sufficient funds free.
 		///
 		/// `AssetDeposit` funds of sender are reserved.
 		///
 		/// Parameters:
-		/// - `collection`: The identifier of the new asset collection. This must not be currently
+		/// - `collection`: The identifier of the new assets collection. This must not be currently
 		///   in use.
 		/// - `admin`: The admin of this collection of assets. The admin is the initial address of
 		///   each
-		/// member of the asset collection's admin team.
+		/// member of the assets collection's admin team.
 		///
 		/// Emits `Created` event when successful.
 		///
@@ -414,7 +414,7 @@ pub mod pallet {
 
 		/// Issue a new collection of non-fungible assets from a privileged origin.
 		///
-		/// This new asset collection has no assets initially.
+		/// This new assets collection has no assets initially.
 		///
 		/// The origin must conform to `ForceOrigin`.
 		///
@@ -454,8 +454,8 @@ pub mod pallet {
 		/// The origin must conform to `ForceOrigin` or must be `Signed` and the sender must be the
 		/// owner of the asset `collection`.
 		///
-		/// - `collection`: The identifier of the asset collection to be destroyed.
-		/// - `witness`: Information on the instances minted in the asset collection. This must be
+		/// - `collection`: The identifier of the assets collection to be destroyed.
+		/// - `witness`: Information on the instances minted in the assets collection. This must be
 		/// correct.
 		///
 		/// Emits `Destroyed` event when successful.
@@ -588,7 +588,8 @@ pub mod pallet {
 		/// Origin must be Signed and the sender should be the Owner of the asset `collection`.
 		///
 		/// - `collection`: The collection of the asset to be frozen.
-		/// - `instances`: The instances of the asset collection whose deposits will be reevaluated.
+		/// - `instances`: The instances of the assets collection whose deposits will be
+		///   reevaluated.
 		///
 		/// NOTE: This exists as a best-effort function. Any asset instances which are unknown or
 		/// in the case that the owner account does not have reservable funds to pay for a
@@ -712,11 +713,11 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Disallow further unprivileged transfers for a whole asset collection.
+		/// Disallow further unprivileged transfers for a whole assets collection.
 		///
 		/// Origin must be Signed and the sender should be the Freezer of the asset `collection`.
 		///
-		/// - `collection`: The asset collection to be frozen.
+		/// - `collection`: The assets collection to be frozen.
 		///
 		/// Emits `CollectionFrozen`.
 		///
@@ -739,7 +740,7 @@ pub mod pallet {
 			})
 		}
 
-		/// Re-allow unprivileged transfers for a whole asset collection.
+		/// Re-allow unprivileged transfers for a whole assets collection.
 		///
 		/// Origin must be Signed and the sender should be the Admin of the asset `collection`.
 		///
@@ -766,12 +767,12 @@ pub mod pallet {
 			})
 		}
 
-		/// Change the Owner of an asset collection.
+		/// Change the Owner of an assets collection.
 		///
 		/// Origin must be Signed and the sender should be the Owner of the asset `collection`.
 		///
-		/// - `collection`: The asset collection whose owner should be changed.
-		/// - `owner`: The new Owner of this asset collection. They must have called
+		/// - `collection`: The assets collection whose owner should be changed.
+		/// - `owner`: The new Owner of this assets collection. They must have called
 		///   `set_accept_ownership` with `collection` in order for this operation to succeed.
 		///
 		/// Emits `OwnerChanged`.
@@ -813,14 +814,14 @@ pub mod pallet {
 			})
 		}
 
-		/// Change the Issuer, Admin and Freezer of an asset collection.
+		/// Change the Issuer, Admin and Freezer of an assets collection.
 		///
 		/// Origin must be Signed and the sender should be the Owner of the asset `collection`.
 		///
-		/// - `collection`: The asset collection whose team should be changed.
-		/// - `issuer`: The new Issuer of this asset collection.
-		/// - `admin`: The new Admin of this asset collection.
-		/// - `freezer`: The new Freezer of this asset collection.
+		/// - `collection`: The assets collection whose team should be changed.
+		/// - `issuer`: The new Issuer of this assets collection.
+		/// - `admin`: The new Admin of this assets collection.
+		/// - `freezer`: The new Freezer of this assets collection.
 		///
 		/// Emits `TeamChanged`.
 		///
@@ -962,7 +963,7 @@ pub mod pallet {
 		/// - `freezer`: The new Freezer of this asset.
 		/// - `free_holding`: Whether a deposit is taken for holding an instance of this asset
 		///   collection.
-		/// - `is_frozen`: Whether this asset collection is frozen except for permissioned/admin
+		/// - `is_frozen`: Whether this assets collection is frozen except for permissioned/admin
 		/// instructions.
 		///
 		/// Emits `AssetStatusChanged` with the identity of the asset.
@@ -1000,7 +1001,7 @@ pub mod pallet {
 			})
 		}
 
-		/// Set an attribute for an asset collection or instance.
+		/// Set an attribute for an assets collection or instance.
 		///
 		/// Origin must be either `ForceOrigin` or Signed and the sender should be the Owner of the
 		/// asset `collection`.
@@ -1009,7 +1010,8 @@ pub mod pallet {
 		/// `MetadataDepositBase + DepositPerByte * (key.len + value.len)` taking into
 		/// account any already reserved funds.
 		///
-		/// - `collection`: The identifier of the asset collection whose instance's metadata to set.
+		/// - `collection`: The identifier of the assets collection whose instance's metadata to
+		///   set.
 		/// - `maybe_instance`: The identifier of the asset instance whose metadata to set.
 		/// - `key`: The key of the attribute.
 		/// - `value`: The value to which to set the attribute.
@@ -1066,14 +1068,14 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Clear an attribute for an asset collection or instance.
+		/// Clear an attribute for an assets collection or instance.
 		///
 		/// Origin must be either `ForceOrigin` or Signed and the sender should be the Owner of the
 		/// asset `collection`.
 		///
-		/// Any deposit is freed for the asset collection owner.
+		/// Any deposit is freed for the assets collection owner.
 		///
-		/// - `collection`: The identifier of the asset collection whose instance's metadata to
+		/// - `collection`: The identifier of the assets collection whose instance's metadata to
 		///   clear.
 		/// - `maybe_instance`: The identifier of the asset instance whose metadata to clear.
 		/// - `key`: The key of the attribute.
@@ -1124,7 +1126,8 @@ pub mod pallet {
 		/// `MetadataDepositBase + DepositPerByte * data.len` taking into
 		/// account any already reserved funds.
 		///
-		/// - `collection`: The identifier of the asset collection whose instance's metadata to set.
+		/// - `collection`: The identifier of the assets collection whose instance's metadata to
+		///   set.
 		/// - `instance`: The identifier of the asset instance whose metadata to set.
 		/// - `data`: The general information of this asset. Limited in length by `StringLimit`.
 		/// - `is_frozen`: Whether the metadata should be frozen against further changes.
@@ -1186,9 +1189,9 @@ pub mod pallet {
 		/// Origin must be either `ForceOrigin` or Signed and the sender should be the Owner of the
 		/// asset `instance`.
 		///
-		/// Any deposit is freed for the asset collection owner.
+		/// Any deposit is freed for the assets collection owner.
 		///
-		/// - `collection`: The identifier of the asset collection whose instance's metadata to
+		/// - `collection`: The identifier of the assets collection whose instance's metadata to
 		///   clear.
 		/// - `instance`: The identifier of the asset instance whose metadata to clear.
 		///
@@ -1228,7 +1231,7 @@ pub mod pallet {
 			})
 		}
 
-		/// Set the metadata for an asset collection.
+		/// Set the metadata for an assets collection.
 		///
 		/// Origin must be either `ForceOrigin` or `Signed` and the sender should be the Owner of
 		/// the asset `collection`.
@@ -1289,14 +1292,14 @@ pub mod pallet {
 			})
 		}
 
-		/// Clear the metadata for an asset collection.
+		/// Clear the metadata for an assets collection.
 		///
 		/// Origin must be either `ForceOrigin` or `Signed` and the sender should be the Owner of
 		/// the asset `collection`.
 		///
-		/// Any deposit is freed for the asset collection owner.
+		/// Any deposit is freed for the assets collection owner.
 		///
-		/// - `collection`: The identifier of the asset collection whose metadata to clear.
+		/// - `collection`: The identifier of the assets collection whose metadata to clear.
 		///
 		/// Emits `CollectionMetadataCleared`.
 		///
@@ -1332,7 +1335,7 @@ pub mod pallet {
 		/// Origin must be `Signed` and if `maybe_collection` is `Some`, then the signer must have a
 		/// provider reference.
 		///
-		/// - `maybe_collection`: The identifier of the asset collection whose ownership the signer
+		/// - `maybe_collection`: The identifier of the assets collection whose ownership the signer
 		///   is willing to accept, or if `None`, an indication that the signer is willing to accept
 		///   no ownership transferal.
 		///

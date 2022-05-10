@@ -41,16 +41,16 @@ pub struct CollectionDetails<AccountId, DepositBalance> {
 	pub(super) admin: AccountId,
 	/// Can freeze tokens.
 	pub(super) freezer: AccountId,
-	/// The total balance deposited for the all storage associated with this asset collection. Used
-	/// by `destroy`.
+	/// The total balance deposited for the all storage associated with this assets collection.
+	/// Used by `destroy`.
 	pub(super) total_deposit: DepositBalance,
 	/// If `true`, then no deposit is needed to hold instances of this collection.
 	pub(super) free_holding: bool,
-	/// The total number of outstanding instances of this asset collection.
+	/// The total number of outstanding instances of this assets collection.
 	pub(super) instances: u32,
-	/// The total number of outstanding instance metadata of this asset collection.
+	/// The total number of outstanding instance metadata of this assets collection.
 	pub(super) instance_metadatas: u32,
-	/// The total number of attributes for this asset collection.
+	/// The total number of attributes for this assets collection.
 	pub(super) attributes: u32,
 	/// Whether the asset is frozen for non-admin transfers.
 	pub(super) is_frozen: bool,
@@ -59,14 +59,14 @@ pub struct CollectionDetails<AccountId, DepositBalance> {
 /// Witness data for the destroy transactions.
 #[derive(Copy, Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct DestroyWitness {
-	/// The total number of outstanding instances of this asset collection.
+	/// The total number of outstanding instances of this assets collection.
 	#[codec(compact)]
 	pub instances: u32,
-	/// The total number of outstanding instance metadata of this asset collection.
+	/// The total number of outstanding instance metadata of this assets collection.
 	#[codec(compact)]
 	pub instance_metadatas: u32,
 	#[codec(compact)]
-	/// The total number of attributes for this asset collection.
+	/// The total number of attributes for this assets collection.
 	pub attributes: u32,
 }
 

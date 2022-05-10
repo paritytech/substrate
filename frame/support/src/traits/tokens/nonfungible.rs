@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Traits for dealing with a single non-fungible asset collection.
+//! Traits for dealing with a single non-fungible assets collection.
 //!
 //! This assumes a single level namespace identified by `Inspect::InstanceId`, and could
 //! reasonably be implemented by pallets which wants to expose a single collection of NFT-like

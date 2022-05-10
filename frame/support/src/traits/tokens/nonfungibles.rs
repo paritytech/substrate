@@ -37,7 +37,7 @@ pub trait Inspect<AccountId> {
 	/// Type for identifying an asset instance.
 	type InstanceId;
 
-	/// Type for identifying an asset collection (an identifier for an independent collection of
+	/// Type for identifying an assets collection (an identifier for an independent collection of
 	/// asset instances).
 	type CollectionId;
 
@@ -46,7 +46,7 @@ pub trait Inspect<AccountId> {
 	fn owner(collection: &Self::CollectionId, instance: &Self::InstanceId) -> Option<AccountId>;
 
 	/// Returns the owner of the asset `collection`, if there is one. For many NFTs this may not
-	/// make any sense, so users of this API should not be surprised to find an asset collection
+	/// make any sense, so users of this API should not be surprised to find an assets collection
 	/// results in `None` here.
 	fn collection_owner(_collection: &Self::CollectionId) -> Option<AccountId> {
 		None
@@ -105,8 +105,8 @@ pub trait Inspect<AccountId> {
 /// Interface for enumerating assets in existence or owned by a given account over many collections
 /// of NFTs.
 pub trait InspectEnumerable<AccountId>: Inspect<AccountId> {
-	/// Returns an iterator of the asset collectiones in existence.
-	fn collectiones() -> Box<dyn Iterator<Item = Self::CollectionId>>;
+	/// Returns an iterator of the assets collections in existence.
+	fn collections() -> Box<dyn Iterator<Item = Self::CollectionId>>;
 
 	/// Returns an iterator of the instances of an asset `collection` in existence.
 	fn instances(collection: &Self::CollectionId) -> Box<dyn Iterator<Item = Self::InstanceId>>;
