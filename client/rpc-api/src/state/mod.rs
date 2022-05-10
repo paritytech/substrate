@@ -18,161 +18,122 @@
 
 //! Substrate state API.
 
-pub mod error;
-pub mod helpers;
-
-use self::error::FutureResult;
-use jsonrpc_core::Result as RpcResult;
-use jsonrpc_derive::rpc;
-use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
+use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 use sp_core::{
 	storage::{StorageChangeSet, StorageData, StorageKey},
 	Bytes,
 };
 use sp_version::RuntimeVersion;
 
-pub use self::{gen_client::Client as StateClient, helpers::ReadProof};
+pub mod error;
+pub mod helpers;
+
+pub use self::helpers::ReadProof;
 
 /// Substrate state API
-#[rpc]
+#[rpc(client, server)]
 pub trait StateApi<Hash> {
-	/// RPC Metadata
-	type Metadata;
-
 	/// Call a contract at a block's state.
-	#[rpc(name = "state_call", alias("state_callAt"))]
-	fn call(&self, name: String, bytes: Bytes, hash: Option<Hash>) -> FutureResult<Bytes>;
+	#[method(name = "state_call", aliases = ["state_callAt"])]
+	async fn call(&self, name: String, bytes: Bytes, hash: Option<Hash>) -> RpcResult<Bytes>;
 
-	/// DEPRECATED: Please use `state_getKeysPaged` with proper paging support.
 	/// Returns the keys with prefix, leave empty to get all the keys.
-	#[rpc(name = "state_getKeys")]
-	fn storage_keys(&self, prefix: StorageKey, hash: Option<Hash>)
-		-> FutureResult<Vec<StorageKey>>;
-
-	/// Returns the keys with prefix, leave empty to get all the keys
-	#[rpc(name = "state_getPairs")]
-	fn storage_pairs(
+	#[method(name = "state_getKeys")]
+	#[deprecated(since = "2.0.0", note = "Please use `getKeysPaged` with proper paging support")]
+	async fn storage_keys(
 		&self,
 		prefix: StorageKey,
 		hash: Option<Hash>,
-	) -> FutureResult<Vec<(StorageKey, StorageData)>>;
+	) -> RpcResult<Vec<StorageKey>>;
+
+	/// Returns the keys with prefix, leave empty to get all the keys
+	#[method(name = "state_getPairs")]
+	async fn storage_pairs(
+		&self,
+		prefix: StorageKey,
+		hash: Option<Hash>,
+	) -> RpcResult<Vec<(StorageKey, StorageData)>>;
 
 	/// Returns the keys with prefix with pagination support.
 	/// Up to `count` keys will be returned.
 	/// If `start_key` is passed, return next keys in storage in lexicographic order.
-	#[rpc(name = "state_getKeysPaged", alias("state_getKeysPagedAt"))]
-	fn storage_keys_paged(
+	#[method(name = "state_getKeysPaged", aliases = ["state_getKeysPagedAt"])]
+	async fn storage_keys_paged(
 		&self,
 		prefix: Option<StorageKey>,
 		count: u32,
 		start_key: Option<StorageKey>,
 		hash: Option<Hash>,
-	) -> FutureResult<Vec<StorageKey>>;
+	) -> RpcResult<Vec<StorageKey>>;
 
 	/// Returns a storage entry at a specific block's state.
-	#[rpc(name = "state_getStorage", alias("state_getStorageAt"))]
-	fn storage(&self, key: StorageKey, hash: Option<Hash>) -> FutureResult<Option<StorageData>>;
+	#[method(name = "state_getStorage", aliases = ["state_getStorageAt"])]
+	async fn storage(&self, key: StorageKey, hash: Option<Hash>) -> RpcResult<Option<StorageData>>;
 
 	/// Returns the hash of a storage entry at a block's state.
-	#[rpc(name = "state_getStorageHash", alias("state_getStorageHashAt"))]
-	fn storage_hash(&self, key: StorageKey, hash: Option<Hash>) -> FutureResult<Option<Hash>>;
+	#[method(name = "state_getStorageHash", aliases = ["state_getStorageHashAt"])]
+	async fn storage_hash(&self, key: StorageKey, hash: Option<Hash>) -> RpcResult<Option<Hash>>;
 
 	/// Returns the size of a storage entry at a block's state.
-	#[rpc(name = "state_getStorageSize", alias("state_getStorageSizeAt"))]
-	fn storage_size(&self, key: StorageKey, hash: Option<Hash>) -> FutureResult<Option<u64>>;
+	#[method(name = "state_getStorageSize", aliases = ["state_getStorageSizeAt"])]
+	async fn storage_size(&self, key: StorageKey, hash: Option<Hash>) -> RpcResult<Option<u64>>;
 
 	/// Returns the runtime metadata as an opaque blob.
-	#[rpc(name = "state_getMetadata")]
-	fn metadata(&self, hash: Option<Hash>) -> FutureResult<Bytes>;
+	#[method(name = "state_getMetadata")]
+	async fn metadata(&self, hash: Option<Hash>) -> RpcResult<Bytes>;
 
 	/// Get the runtime version.
-	#[rpc(name = "state_getRuntimeVersion", alias("chain_getRuntimeVersion"))]
-	fn runtime_version(&self, hash: Option<Hash>) -> FutureResult<RuntimeVersion>;
+	#[method(name = "state_getRuntimeVersion", aliases = ["chain_getRuntimeVersion"])]
+	async fn runtime_version(&self, hash: Option<Hash>) -> RpcResult<RuntimeVersion>;
 
 	/// Query historical storage entries (by key) starting from a block given as the second
 	/// parameter.
 	///
 	/// NOTE This first returned result contains the initial state of storage for all keys.
 	/// Subsequent values in the vector represent changes to the previous state (diffs).
-	#[rpc(name = "state_queryStorage")]
-	fn query_storage(
+	#[method(name = "state_queryStorage")]
+	async fn query_storage(
 		&self,
 		keys: Vec<StorageKey>,
 		block: Hash,
 		hash: Option<Hash>,
-	) -> FutureResult<Vec<StorageChangeSet<Hash>>>;
+	) -> RpcResult<Vec<StorageChangeSet<Hash>>>;
 
 	/// Query storage entries (by key) starting at block hash given as the second parameter.
-	#[rpc(name = "state_queryStorageAt")]
-	fn query_storage_at(
+	#[method(name = "state_queryStorageAt")]
+	async fn query_storage_at(
 		&self,
 		keys: Vec<StorageKey>,
 		at: Option<Hash>,
-	) -> FutureResult<Vec<StorageChangeSet<Hash>>>;
+	) -> RpcResult<Vec<StorageChangeSet<Hash>>>;
 
 	/// Returns proof of storage entries at a specific block's state.
-	#[rpc(name = "state_getReadProof")]
-	fn read_proof(
+	#[method(name = "state_getReadProof")]
+	async fn read_proof(
 		&self,
 		keys: Vec<StorageKey>,
 		hash: Option<Hash>,
-	) -> FutureResult<ReadProof<Hash>>;
+	) -> RpcResult<ReadProof<Hash>>;
 
 	/// New runtime version subscription
-	#[pubsub(
-		subscription = "state_runtimeVersion",
-		subscribe,
-		name = "state_subscribeRuntimeVersion",
-		alias("chain_subscribeRuntimeVersion")
+	#[subscription(
+		name = "state_subscribeRuntimeVersion" => "state_runtimeVersion",
+		unsubscribe = "state_unsubscribeRuntimeVersion",
+		aliases = ["chain_subscribeRuntimeVersion"],
+		unsubscribe_aliases = ["chain_unsubscribeRuntimeVersion"],
+		item = RuntimeVersion,
 	)]
-	fn subscribe_runtime_version(
-		&self,
-		metadata: Self::Metadata,
-		subscriber: Subscriber<RuntimeVersion>,
-	);
+	fn subscribe_runtime_version(&self);
 
-	/// Unsubscribe from runtime version subscription
-	#[pubsub(
-		subscription = "state_runtimeVersion",
-		unsubscribe,
-		name = "state_unsubscribeRuntimeVersion",
-		alias("chain_unsubscribeRuntimeVersion")
+	/// New storage subscription
+	#[subscription(
+		name = "state_subscribeStorage" => "state_storage",
+		unsubscribe = "state_unsubscribeStorage",
+		item = StorageChangeSet<Hash>,
 	)]
-	fn unsubscribe_runtime_version(
-		&self,
-		metadata: Option<Self::Metadata>,
-		id: SubscriptionId,
-	) -> RpcResult<bool>;
+	fn subscribe_storage(&self, keys: Option<Vec<StorageKey>>);
 
-	/// Subscribe to the changes in the storage.
-	///
-	/// This RPC endpoint has two modes of operation:
-	///   1) When `keys` is not `None` you'll only be informed about the changes
-	///      done to the specified keys; this is RPC-safe.
-	///   2) When `keys` is `None` you'll be informed of *all* of the changes;
-	///      **this is RPC-unsafe**.
-	///
-	/// When subscribed to all of the changes this API will emit every storage
-	/// change for every block that is imported. These changes will only be sent
-	/// after a block is imported. If you require a consistent view across all changes
-	/// of every block, you need to take this into account.
-	#[pubsub(subscription = "state_storage", subscribe, name = "state_subscribeStorage")]
-	fn subscribe_storage(
-		&self,
-		metadata: Self::Metadata,
-		subscriber: Subscriber<StorageChangeSet<Hash>>,
-		keys: Option<Vec<StorageKey>>,
-	);
-
-	/// Unsubscribe from storage subscription
-	#[pubsub(subscription = "state_storage", unsubscribe, name = "state_unsubscribeStorage")]
-	fn unsubscribe_storage(
-		&self,
-		metadata: Option<Self::Metadata>,
-		id: SubscriptionId,
-	) -> RpcResult<bool>;
-
-	/// The `state_traceBlock` RPC provides a way to trace the re-execution of a single
+	/// The `traceBlock` RPC provides a way to trace the re-execution of a single
 	/// block, collecting Spans and Events from both the client and the relevant WASM runtime.
 	/// The Spans and Events are conceptually equivalent to those from the [Tracing][1] crate.
 	///
@@ -323,13 +284,13 @@ pub trait StateApi<Hash> {
 	/// narrow down the traces using a smaller set of targets and/or storage keys.
 	///
 	/// If you are having issues with maximum payload size you can use the flag
-	/// `-lstate_tracing=trace` to get some logging during tracing.
-	#[rpc(name = "state_traceBlock")]
-	fn trace_block(
+	/// `-ltracing=trace` to get some logging during tracing.
+	#[method(name = "state_traceBlock")]
+	async fn trace_block(
 		&self,
 		block: Hash,
 		targets: Option<String>,
 		storage_keys: Option<String>,
 		methods: Option<String>,
-	) -> FutureResult<sp_rpc::tracing::TraceBlockResponse>;
+	) -> RpcResult<sp_rpc::tracing::TraceBlockResponse>;
 }

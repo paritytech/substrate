@@ -22,10 +22,9 @@ wasmtime = ["sc-executor/wasmtime"]
 test-helpers = []
 
 [dependencies]
+jsonrpsee = { version = "0.12.0", features = ["server"] }
 thiserror = "1.0.30"
 futures = "0.3.21"
-jsonrpc-pubsub = "18.0"
-jsonrpc-core = "18.0"
 rand = "0.7.3"
 parking_lot = "0.12.0"
 log = "0.4.16"

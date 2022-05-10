@@ -37,10 +37,15 @@
 //! ```
 //!
 //! If the [`LightSyncStateExtension`] is not added as an extension to the chain spec,
-//! the [`SyncStateRpcHandler`] will fail at instantiation.
+//! the [`SyncStateRpc`] will fail at instantiation.
 
 #![deny(unused_crate_dependencies)]
 
+use jsonrpsee::{
+	core::{Error as JsonRpseeError, RpcResult},
+	proc_macros::rpc,
+	types::{error::CallError, ErrorObject},
+};
 use sc_client_api::StorageData;
 use sp_blockchain::HeaderBackend;
 use sp_runtime::{
@@ -48,8 +53,6 @@ use sp_runtime::{
 	traits::{Block as BlockT, NumberFor},
 };
 use std::sync::Arc;
-
-use jsonrpc_derive::rpc;
 
 type SharedAuthoritySet<TBl> =
 	sc_finality_grandpa::SharedAuthoritySet<<TBl as BlockT>::Hash, NumberFor<TBl>>;
@@ -76,13 +79,13 @@ pub enum Error<Block: BlockT> {
 	LightSyncStateExtensionNotFound,
 }
 
-impl<Block: BlockT> From<Error<Block>> for jsonrpc_core::Error {
+impl<Block: BlockT> From<Error<Block>> for JsonRpseeError {
 	fn from(error: Error<Block>) -> Self {
 		let message = match error {
 			Error::JsonRpc(s) => s,
 			_ => error.to_string(),
 		};
-		jsonrpc_core::Error { message, code: jsonrpc_core::ErrorCode::ServerError(1), data: None }
+		CallError::Custom(ErrorObject::owned(1, message, None::<()>)).into()
 	}
 }
 
@@ -101,7 +104,7 @@ fn serialize_encoded<S: serde::Serializer, T: codec::Encode>(
 /// chain-spec as an extension.
 pub type LightSyncStateExtension = Option<serde_json::Value>;
 
-/// Hardcoded infomation that allows light clients to sync quickly.
+/// Hardcoded information that allows light clients to sync quickly.
 #[derive(serde::Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
@@ -121,30 +124,30 @@ pub struct LightSyncState<Block: BlockT> {
 }
 
 /// An api for sync state RPC calls.
-#[rpc]
+#[rpc(client, server)]
 pub trait SyncStateRpcApi {
-	/// Returns the json-serialized chainspec running the node, with a sync state.
-	#[rpc(name = "sync_state_genSyncSpec", returns = "jsonrpc_core::Value")]
-	fn system_gen_sync_spec(&self, raw: bool) -> jsonrpc_core::Result<jsonrpc_core::Value>;
+	/// Returns the JSON serialized chainspec running the node, with a sync state.
+	#[method(name = "sync_state_genSyncSpec")]
+	fn system_gen_sync_spec(&self, raw: bool) -> RpcResult<String>;
 }
 
-/// The handler for sync state RPC calls.
-pub struct SyncStateRpcHandler<Block: BlockT, Backend> {
+/// An api for sync state RPC calls.
+pub struct SyncStateRpc<Block: BlockT, Client> {
 	chain_spec: Box<dyn sc_chain_spec::ChainSpec>,
-	client: Arc<Backend>,
+	client: Arc<Client>,
 	shared_authority_set: SharedAuthoritySet<Block>,
 	shared_epoch_changes: SharedEpochChanges<Block>,
 }
 
-impl<Block, Backend> SyncStateRpcHandler<Block, Backend>
+impl<Block, Client> SyncStateRpc<Block, Client>
 where
 	Block: BlockT,
-	Backend: HeaderBackend<Block> + sc_client_api::AuxStore + 'static,
+	Client: HeaderBackend<Block> + sc_client_api::AuxStore + 'static,
 {
-	/// Create a new handler.
+	/// Create a new sync state RPC helper.
 	pub fn new(
 		chain_spec: Box<dyn sc_chain_spec::ChainSpec>,
-		client: Arc<Backend>,
+		client: Arc<Client>,
 		shared_authority_set: SharedAuthoritySet<Block>,
 		shared_epoch_changes: SharedEpochChanges<Block>,
 	) -> Result<Self, Error<Block>> {
@@ -177,32 +180,23 @@ where
 	}
 }
 
-impl<Block, Backend> SyncStateRpcApi for SyncStateRpcHandler<Block, Backend>
+impl<Block, Backend> SyncStateRpcApiServer for SyncStateRpc<Block, Backend>
 where
 	Block: BlockT,
 	Backend: HeaderBackend<Block> + sc_client_api::AuxStore + 'static,
 {
-	fn system_gen_sync_spec(&self, raw: bool) -> jsonrpc_core::Result<jsonrpc_core::Value> {
+	fn system_gen_sync_spec(&self, raw: bool) -> RpcResult<String> {
+		let current_sync_state = self.build_sync_state()?;
 		let mut chain_spec = self.chain_spec.cloned_box();
-
-		let sync_state = self.build_sync_state().map_err(map_error::<Block, Error<Block>>)?;
 
 		let extension = sc_chain_spec::get_extension_mut::<LightSyncStateExtension>(
 			chain_spec.extensions_mut(),
 		)
-		.ok_or_else(|| {
-			Error::<Block>::JsonRpc("Could not find `LightSyncState` chain-spec extension!".into())
-		})?;
+		.ok_or(Error::<Block>::LightSyncStateExtensionNotFound)?;
 
-		*extension =
-			Some(serde_json::to_value(&sync_state).map_err(|err| map_error::<Block, _>(err))?);
+		let val = serde_json::to_value(&current_sync_state)?;
+		*extension = Some(val);
 
-		let json_string = chain_spec.as_json(raw).map_err(map_error::<Block, _>)?;
-
-		serde_json::from_str(&json_string).map_err(|err| map_error::<Block, _>(err))
+		chain_spec.as_json(raw).map_err(|e| Error::<Block>::JsonRpc(e).into())
 	}
-}
-
-fn map_error<Block: BlockT, S: ToString>(error: S) -> jsonrpc_core::Error {
-	Error::<Block>::JsonRpc(error.to_string()).into()
 }
