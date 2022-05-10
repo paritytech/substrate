@@ -453,7 +453,7 @@ pub mod pallet {
 			match config {
 				NextConfigDescriptor::V1 { c, allowed_slots } => {
 					ensure!(
-						!(c.0 == 0 && allowed_slots == AllowedSlots::PrimarySlots) && c.1 != 0,
+						(c.0 != 0 || allowed_slots != AllowedSlots::PrimarySlots) && c.1 != 0,
 						Error::<T>::InvalidConfiguration
 					);
 				},
