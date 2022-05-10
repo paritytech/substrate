@@ -69,7 +69,20 @@ fn test_setup_works() {
 		assert_eq!(
 			PoolMembers::<Runtime>::get(10).unwrap(),
 			PoolMember::<Runtime> { pool_id: last_pool, points: 10, ..Default::default() }
-		)
+		);
+
+		let bonded_account = Pools::create_bonded_account(last_pool);
+		let reward_account = Pools::create_reward_account(last_pool);
+
+		// the bonded_account should be bonded by the depositor's funds.
+		assert_eq!(StakingMock::active_stake(&bonded_account).unwrap(), 10);
+		assert_eq!(StakingMock::total_stake(&bonded_account).unwrap(), 10);
+
+		// but not nominating yet.
+		assert!(Nominations::get().is_empty());
+
+		// reward account should have an initial ED in it.
+		assert_eq!(Balances::free_balance(&reward_account), Balances::minimum_balance());
 	})
 }
 
@@ -2082,7 +2095,7 @@ mod unbond {
 	// depositor can unbond inly up to `MinCreateBond`.
 	#[test]
 	fn depositor_permissioned_partial_unbond() {
-		ExtBuilder::default().ed(1).add_members(vec![(100, 100)]).build_and_execute(|| {
+		ExtBuilder::default().ed(1).build_and_execute(|| {
 			// given
 			assert_eq!(MinCreateBond::<Runtime>::get(), 2);
 			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().active_points(), 10);
@@ -2098,12 +2111,12 @@ mod unbond {
 				Pools::unbond(Origin::signed(10), 10, 6),
 				Error::<Runtime>::NotOnlyPoolMember
 			);
+
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
 					Event::Created { depositor: 10, pool_id: 1 },
 					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					Event::Bonded { member: 100, pool_id: 1, bonded: 100, joined: true },
 					Event::Unbonded { member: 10, pool_id: 1, amount: 3 }
 				]
 			);
@@ -2113,7 +2126,7 @@ mod unbond {
 	// same as above, but the pool is slashed and therefore the depositor cannot partially unbond.
 	#[test]
 	fn depositor_permissioned_partial_unbond_slashed() {
-		ExtBuilder::default().ed(1).add_members(vec![(100, 100)]).build_and_execute(|| {
+		ExtBuilder::default().ed(1).build_and_execute(|| {
 			// given
 			assert_eq!(MinCreateBond::<Runtime>::get(), 2);
 			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().active_points(), 10);
@@ -2132,8 +2145,72 @@ mod unbond {
 				vec![
 					Event::Created { depositor: 10, pool_id: 1 },
 					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					Event::Bonded { member: 100, pool_id: 1, bonded: 100, joined: true }
 				]
+			);
+		});
+	}
+
+	#[test]
+	fn every_unbonding_triggers_payout() {
+		ExtBuilder::default().build_and_execute(|| {
+			let initial_reward_account = Balances::free_balance(Pools::create_reward_account(1));
+			assert_eq!(initial_reward_account, Balances::minimum_balance());
+			assert_eq!(initial_reward_account, 5);
+
+			// set the pool to destroying so that depositor can leave.
+			unsafe_set_state(1, PoolState::Destroying).unwrap();
+
+			Balances::make_free_balance_be(
+				&Pools::create_reward_account(1),
+				2 * Balances::minimum_balance(),
+			);
+
+			assert_ok!(Pools::unbond(Origin::signed(10), 10, 2));
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					// exactly equal to ed, all that can be claimed.
+					Event::PaidOut { member: 10, pool_id: 1, payout: 5 },
+					Event::Unbonded { member: 10, pool_id: 1, amount: 2 }
+				]
+			);
+
+			CurrentEra::set(1);
+			Balances::make_free_balance_be(
+				&Pools::create_reward_account(1),
+				2 * Balances::minimum_balance(),
+			);
+
+			assert_ok!(Pools::unbond(Origin::signed(10), 10, 3));
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![
+					// exactly equal to ed, all that can be claimed.
+					Event::PaidOut { member: 10, pool_id: 1, payout: 5 },
+					Event::Unbonded { member: 10, pool_id: 1, amount: 3 }
+				]
+			);
+
+			CurrentEra::set(2);
+			Balances::make_free_balance_be(
+				&Pools::create_reward_account(1),
+				2 * Balances::minimum_balance(),
+			);
+
+			assert_ok!(Pools::unbond(Origin::signed(10), 10, 5));
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![
+					Event::PaidOut { member: 10, pool_id: 1, payout: 5 },
+					Event::Unbonded { member: 10, pool_id: 1, amount: 5 }
+				]
+			);
+
+			assert_eq!(
+				PoolMembers::<Runtime>::get(10).unwrap().unbonding_eras,
+				member_unbonding_eras!(3 => 2, 4 => 3, 5 => 5)
 			);
 		});
 	}
@@ -3500,6 +3577,84 @@ mod bond_extra {
 					Event::PaidOut { member: 20, pool_id: 1, payout: 2 },
 					Event::Bonded { member: 20, pool_id: 1, bonded: 2, joined: false }
 				]
+			);
+		})
+	}
+}
+
+mod update_roles {
+	use super::*;
+
+	#[test]
+	fn update_roles_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert_eq!(
+				BondedPools::<Runtime>::get(1).unwrap().roles,
+				PoolRoles { depositor: 10, root: 900, nominator: 901, state_toggler: 902 },
+			);
+
+			// non-existent pools
+			assert_noop!(
+				Pools::update_roles(Origin::signed(1), 2, Some(5), Some(6), Some(7)),
+				Error::<Runtime>::PoolNotFound,
+			);
+
+			// depositor cannot change roles.
+			assert_noop!(
+				Pools::update_roles(Origin::signed(1), 1, Some(5), Some(6), Some(7)),
+				Error::<Runtime>::DoesNotHavePermission,
+			);
+
+			// nominator cannot change roles.
+			assert_noop!(
+				Pools::update_roles(Origin::signed(901), 1, Some(5), Some(6), Some(7)),
+				Error::<Runtime>::DoesNotHavePermission,
+			);
+			// state-toggler
+			assert_noop!(
+				Pools::update_roles(Origin::signed(902), 1, Some(5), Some(6), Some(7)),
+				Error::<Runtime>::DoesNotHavePermission,
+			);
+
+			// but root can
+			assert_ok!(Pools::update_roles(Origin::signed(900), 1, Some(5), Some(6), Some(7)));
+
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::RolesUpdated { root: 5, state_toggler: 7, nominator: 6 }
+				]
+			);
+			assert_eq!(
+				BondedPools::<Runtime>::get(1).unwrap().roles,
+				PoolRoles { depositor: 10, root: 5, nominator: 6, state_toggler: 7 },
+			);
+
+			// also root origin can
+			assert_ok!(Pools::update_roles(Origin::root(), 1, Some(1), Some(2), Some(3)));
+
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![Event::RolesUpdated { root: 1, state_toggler: 3, nominator: 2 }]
+			);
+			assert_eq!(
+				BondedPools::<Runtime>::get(1).unwrap().roles,
+				PoolRoles { depositor: 10, root: 1, nominator: 2, state_toggler: 3 },
+			);
+
+			// None is a noop
+			assert_ok!(Pools::update_roles(Origin::root(), 1, Some(11), None, None));
+
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![Event::RolesUpdated { root: 11, state_toggler: 3, nominator: 2 }]
+			);
+
+			assert_eq!(
+				BondedPools::<Runtime>::get(1).unwrap().roles,
+				PoolRoles { depositor: 10, root: 11, nominator: 2, state_toggler: 3 },
 			);
 		})
 	}
