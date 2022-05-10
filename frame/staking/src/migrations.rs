@@ -202,7 +202,10 @@ pub mod v6 {
 		log!(info, "QueuedElected.exits()? {:?}", QueuedElected::<T>::exists());
 		log!(info, "QueuedScore.exits()? {:?}", QueuedScore::<T>::exists());
 		// these must exist.
-		assert!(IsCurrentSessionFinal::<T>::exists(), "IsCurrentSessionFinal storage item not found!");
+		assert!(
+			IsCurrentSessionFinal::<T>::exists(),
+			"IsCurrentSessionFinal storage item not found!"
+		);
 		assert!(EraElectionStatus::<T>::exists(), "EraElectionStatus storage item not found!");
 		Ok(())
 	}
