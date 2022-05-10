@@ -288,7 +288,13 @@ where
 			})
 	}
 
-	/// Same as [`find_node_where`](ForkTree::find_node_where), but returns indexes.
+	/// Same as [`find_node_where`](ForkTree::find_node_where), but returns indices.
+	///
+	/// The returned indices represent the full path to reach the matching node starting
+	/// from last to first, i.e. the earliest index in the traverse path goes last, and the final 
+	/// index in the traverse path goes first. If a node is found that matches the predicate
+	/// the returned path should always contain at least one index, otherwise `None` is 
+	/// returned.
 	pub fn find_node_index_where<F, E, P>(
 		&self,
 		hash: &H,
