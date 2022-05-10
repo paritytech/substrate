@@ -40,12 +40,16 @@ pub struct ImportParams {
 	#[clap(flatten)]
 	pub database_params: DatabaseParams,
 
-	/// Force start with unsafe pruning settings.
+	/// THIS IS A DEPRECATED CLI-ARGUMENT.
 	///
-	/// When running as a validator it is highly recommended to disable state
-	/// pruning (i.e. 'archive') which is the default. The node will refuse to
-	/// start as a validator if pruning is enabled unless this option is set.
+	/// It has been preserved in order to not break the compatibility with the existing scripts.
+	/// Enabling this option will lead to a runtime warning.
+	/// In future this option will be removed completely, thus specifying it will lead to a start
+	/// up error.
+	///
+	/// Details: <https://github.com/paritytech/substrate/issues/8103>
 	#[clap(long)]
+	#[deprecated = "According to https://github.com/paritytech/substrate/issues/8103"]
 	pub unsafe_pruning: bool,
 
 	/// Method for executing Wasm runtime code.

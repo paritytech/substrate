@@ -37,11 +37,8 @@ use crate::{
 		NetworkState, NotConnectedPeer as NetworkStateNotConnectedPeer, Peer as NetworkStatePeer,
 	},
 	protocol::{
-		self,
-		event::Event,
-		message::generic::Roles,
-		sync::{Status as SyncStatus, SyncState},
-		NotificationsSink, NotifsHandlerError, PeerInfo, Protocol, Ready,
+		self, event::Event, message::generic::Roles, NotificationsSink, NotifsHandlerError,
+		PeerInfo, Protocol, Ready,
 	},
 	transactions, transport, DhtEvent, ExHashT, NetworkStateInfo, NetworkStatus, ReputationChange,
 };
@@ -63,6 +60,7 @@ use metrics::{Histogram, HistogramVec, MetricSources, Metrics};
 use parking_lot::Mutex;
 use sc_client_api::{BlockBackend, ProofProvider};
 use sc_consensus::{BlockImportError, BlockImportStatus, ImportQueue, Link};
+use sc_network_sync::{Status as SyncStatus, SyncState};
 use sc_peerset::PeersetHandle;
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_blockchain::{HeaderBackend, HeaderMetadata};
@@ -195,7 +193,7 @@ where
 		// Private and public keys configuration.
 		let local_identity = params.network_config.node_key.clone().into_keypair()?;
 		let local_public = local_identity.public();
-		let local_peer_id = local_public.clone().to_peer_id();
+		let local_peer_id = local_public.to_peer_id();
 		info!(
 			target: "sub-libp2p",
 			"🏷  Local node identity is: {}",
@@ -230,12 +228,10 @@ where
 		)?;
 
 		// List of multiaddresses that we know in the network.
-		let mut bootnodes = Vec::new();
 		let mut boot_node_ids = HashSet::new();
 
 		// Process the bootnodes.
 		for bootnode in params.network_config.boot_nodes.iter() {
-			bootnodes.push(bootnode.peer_id);
 			boot_node_ids.insert(bootnode.peer_id);
 			known_addresses.push((bootnode.peer_id, bootnode.multiaddr.clone()));
 		}
@@ -243,12 +239,18 @@ where
 		let boot_node_ids = Arc::new(boot_node_ids);
 
 		// Check for duplicate bootnodes.
-		known_addresses.iter().try_for_each(|(peer_id, addr)| {
-			if let Some(other) = known_addresses.iter().find(|o| o.1 == *addr && o.0 != *peer_id) {
+		params.network_config.boot_nodes.iter().try_for_each(|bootnode| {
+			if let Some(other) = params
+				.network_config
+				.boot_nodes
+				.iter()
+				.filter(|o| o.multiaddr == bootnode.multiaddr)
+				.find(|o| o.peer_id != bootnode.peer_id)
+			{
 				Err(Error::DuplicateBootnode {
-					address: addr.clone(),
-					first_id: *peer_id,
-					second_id: other.0.clone(),
+					address: bootnode.multiaddr.clone(),
+					first_id: bootnode.peer_id,
+					second_id: other.peer_id,
 				})
 			} else {
 				Ok(())
@@ -644,7 +646,7 @@ where
 				.collect()
 		};
 
-		let peer_id = Swarm::<Behaviour<B, Client>>::local_peer_id(&swarm).to_base58();
+		let peer_id = Swarm::<Behaviour<B, Client>>::local_peer_id(swarm).to_base58();
 		let listened_addresses = swarm.listeners().cloned().collect();
 		let external_addresses = swarm.external_addresses().map(|r| &r.addr).cloned().collect();
 
@@ -664,7 +666,7 @@ where
 			.behaviour_mut()
 			.user_protocol_mut()
 			.peers_info()
-			.map(|(id, info)| (id.clone(), info.clone()))
+			.map(|(id, info)| (*id, info.clone()))
 			.collect()
 	}
 
@@ -753,7 +755,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		// `peers_notifications_sinks` mutex as soon as possible.
 		let sink = {
 			let peers_notifications_sinks = self.peers_notifications_sinks.lock();
-			if let Some(sink) = peers_notifications_sinks.get(&(target.clone(), protocol.clone())) {
+			if let Some(sink) = peers_notifications_sinks.get(&(target, protocol.clone())) {
 				sink.clone()
 			} else {
 				// Notification silently discarded, as documented.
@@ -1093,7 +1095,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 
 		let _ = self
 			.to_worker
-			.unbounded_send(ServiceToWorkerMsg::AddKnownAddress(peer_id.clone(), addr));
+			.unbounded_send(ServiceToWorkerMsg::AddKnownAddress(peer_id, addr));
 		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::AddReserved(peer_id));
 		Ok(())
 	}
@@ -1173,7 +1175,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 			if !addr.is_empty() {
 				let _ = self
 					.to_worker
-					.unbounded_send(ServiceToWorkerMsg::AddKnownAddress(peer_id.clone(), addr));
+					.unbounded_send(ServiceToWorkerMsg::AddKnownAddress(peer_id, addr));
 			}
 			let _ = self
 				.to_worker
@@ -1227,7 +1229,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 			if !addr.is_empty() {
 				let _ = self
 					.to_worker
-					.unbounded_send(ServiceToWorkerMsg::AddKnownAddress(peer_id.clone(), addr));
+					.unbounded_send(ServiceToWorkerMsg::AddKnownAddress(peer_id, addr));
 			}
 			let _ = self
 				.to_worker
@@ -1351,9 +1353,7 @@ pub struct NotificationSender {
 impl NotificationSender {
 	/// Returns a future that resolves when the `NotificationSender` is ready to send a
 	/// notification.
-	pub async fn ready<'a>(
-		&'a self,
-	) -> Result<NotificationSenderReady<'a>, NotificationSenderError> {
+	pub async fn ready(&self) -> Result<NotificationSenderReady<'_>, NotificationSenderError> {
 		Ok(NotificationSenderReady {
 			ready: match self.sink.reserve_notification().await {
 				Ok(r) => r,
@@ -1771,7 +1771,7 @@ where
 					if let Some(metrics) = this.metrics.as_ref() {
 						metrics
 							.kademlia_random_queries_total
-							.with_label_values(&[&protocol.as_ref()])
+							.with_label_values(&[protocol.as_ref()])
 							.inc();
 					},
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::NotificationStreamOpened {
@@ -1790,7 +1790,7 @@ where
 					{
 						let mut peers_notifications_sinks = this.peers_notifications_sinks.lock();
 						let _previous_value = peers_notifications_sinks
-							.insert((remote.clone(), protocol.clone()), notifications_sink);
+							.insert((remote, protocol.clone()), notifications_sink);
 						debug_assert!(_previous_value.is_none());
 					}
 					this.event_streams.send(Event::NotificationStreamOpened {
@@ -1848,13 +1848,12 @@ where
 							.inc();
 					}
 					this.event_streams.send(Event::NotificationStreamClosed {
-						remote: remote.clone(),
+						remote,
 						protocol: protocol.clone(),
 					});
 					{
 						let mut peers_notifications_sinks = this.peers_notifications_sinks.lock();
-						let _previous_value =
-							peers_notifications_sinks.remove(&(remote.clone(), protocol));
+						let _previous_value = peers_notifications_sinks.remove(&(remote, protocol));
 						debug_assert!(_previous_value.is_some());
 					}
 				},
@@ -2117,10 +2116,7 @@ where
 				for (lower_ilog2_bucket_bound, num_entries) in buckets {
 					metrics
 						.kbuckets_num_nodes
-						.with_label_values(&[
-							&proto.as_ref(),
-							&lower_ilog2_bucket_bound.to_string(),
-						])
+						.with_label_values(&[proto.as_ref(), &lower_ilog2_bucket_bound.to_string()])
 						.set(num_entries as u64);
 				}
 			}
@@ -2128,7 +2124,7 @@ where
 			{
 				metrics
 					.kademlia_records_count
-					.with_label_values(&[&proto.as_ref()])
+					.with_label_values(&[proto.as_ref()])
 					.set(num_entries as u64);
 			}
 			for (proto, num_entries) in
@@ -2136,7 +2132,7 @@ where
 			{
 				metrics
 					.kademlia_records_sizes_total
-					.with_label_values(&[&proto.as_ref()])
+					.with_label_values(&[proto.as_ref()])
 					.set(num_entries as u64);
 			}
 			metrics
@@ -2211,12 +2207,10 @@ where
 		number: NumberFor<B>,
 		success: bool,
 	) {
-		self.protocol.behaviour_mut().user_protocol_mut().justification_import_result(
-			who,
-			hash.clone(),
-			number,
-			success,
-		);
+		self.protocol
+			.behaviour_mut()
+			.user_protocol_mut()
+			.justification_import_result(who, *hash, number, success);
 	}
 	fn request_justification(&mut self, hash: &B::Hash, number: NumberFor<B>) {
 		self.protocol

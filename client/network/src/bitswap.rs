@@ -65,7 +65,7 @@ const MAX_RESPONSE_QUEUE: usize = 20;
 // Max number of blocks per wantlist
 const MAX_WANTED_BLOCKS: usize = 16;
 
-const PROTOCOL_NAME: &'static [u8] = b"/ipfs/bitswap/1.2.0";
+const PROTOCOL_NAME: &[u8] = b"/ipfs/bitswap/1.2.0";
 
 type FutureResult<T, E> = Pin<Box<dyn Future<Output = Result<T, E>> + Send>>;
 
@@ -167,10 +167,10 @@ impl Prefix {
 		let version = varint_encode::u64(self.version.into(), &mut buf);
 		res.extend_from_slice(version);
 		let mut buf = varint_encode::u64_buffer();
-		let codec = varint_encode::u64(self.codec.into(), &mut buf);
+		let codec = varint_encode::u64(self.codec, &mut buf);
 		res.extend_from_slice(codec);
 		let mut buf = varint_encode::u64_buffer();
-		let mh_type = varint_encode::u64(self.mh_type.into(), &mut buf);
+		let mh_type = varint_encode::u64(self.mh_type, &mut buf);
 		res.extend_from_slice(mh_type);
 		let mut buf = varint_encode::u64_buffer();
 		let mh_len = varint_encode::u64(self.mh_len as u64, &mut buf);

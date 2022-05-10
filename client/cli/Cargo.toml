@@ -21,6 +21,7 @@ hex = "0.4.2"
 libp2p = "0.44.0"
 log = "0.4.16"
 names = { version = "0.13.0", default-features = false }
+parity-scale-codec = "3.0.0"
 rand = "0.7.3"
 regex = "1.5.5"
 rpassword = "5.0.0"
@@ -29,8 +30,6 @@ serde_json = "1.0.79"
 thiserror = "1.0.30"
 tiny-bip39 = "0.8.2"
 tokio = { version = "1.17.0", features = ["signal", "rt-multi-thread", "parking_lot"] }
-
-parity-scale-codec = "3.0.0"
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
 sc-client-db = { version = "0.10.0-dev", path = "../db" }
 sc-keystore = { version = "4.0.0-dev", path = "../keystore" }

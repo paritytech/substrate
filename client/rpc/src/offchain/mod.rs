@@ -21,7 +21,8 @@
 #[cfg(test)]
 mod tests;
 
-use self::error::{Error, Result};
+use self::error::Error;
+use jsonrpsee::core::{async_trait, Error as JsonRpseeError, RpcResult};
 use parking_lot::RwLock;
 /// Re-export the API for backward compatibility.
 pub use sc_rpc_api::offchain::*;
@@ -47,27 +48,27 @@ impl<T: OffchainStorage> Offchain<T> {
 	}
 }
 
-impl<T: OffchainStorage + 'static> OffchainApi for Offchain<T> {
-	/// Set offchain local storage under given key and prefix.
-	fn set_local_storage(&self, kind: StorageKind, key: Bytes, value: Bytes) -> Result<()> {
+#[async_trait]
+impl<T: OffchainStorage + 'static> OffchainApiServer for Offchain<T> {
+	fn set_local_storage(&self, kind: StorageKind, key: Bytes, value: Bytes) -> RpcResult<()> {
 		self.deny_unsafe.check_if_safe()?;
 
 		let prefix = match kind {
 			StorageKind::PERSISTENT => sp_offchain::STORAGE_PREFIX,
-			StorageKind::LOCAL => return Err(Error::UnavailableStorageKind),
+			StorageKind::LOCAL => return Err(JsonRpseeError::from(Error::UnavailableStorageKind)),
 		};
 		self.storage.write().set(prefix, &*key, &*value);
 		Ok(())
 	}
 
-	/// Get offchain local storage under given key and prefix.
-	fn get_local_storage(&self, kind: StorageKind, key: Bytes) -> Result<Option<Bytes>> {
+	fn get_local_storage(&self, kind: StorageKind, key: Bytes) -> RpcResult<Option<Bytes>> {
 		self.deny_unsafe.check_if_safe()?;
 
 		let prefix = match kind {
 			StorageKind::PERSISTENT => sp_offchain::STORAGE_PREFIX,
-			StorageKind::LOCAL => return Err(Error::UnavailableStorageKind),
+			StorageKind::LOCAL => return Err(JsonRpseeError::from(Error::UnavailableStorageKind)),
 		};
+
 		Ok(self.storage.read().get(prefix, &*key).map(Into::into))
 	}
 }

@@ -17,20 +17,20 @@ codec = { package = "parity-scale-codec", version = "3.0.0" }
 futures = "0.3.21"
 futures-timer = "3.0.1"
 log = "0.4.16"
-prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus", version = "0.10.0-dev"}
-sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
-sp-runtime = { version = "6.0.0", path = "../../primitives/runtime" }
-sp-core = { version = "6.0.0", path = "../../primitives/core" }
-sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
+prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.10.0-dev", path = "../../utils/prometheus" }
+sc-block-builder = { version = "0.10.0-dev", path = "../block-builder" }
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
-sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
-sp-inherents = { version = "4.0.0-dev", path = "../../primitives/inherents" }
+sc-proposer-metrics = { version = "0.10.0-dev", path = "../proposer-metrics" }
 sc-telemetry = { version = "4.0.0-dev", path = "../telemetry" }
 sc-transaction-pool-api = { version = "4.0.0-dev", path = "../../client/transaction-pool/api" }
-sc-block-builder = { version = "0.10.0-dev", path = "../block-builder" }
-sc-proposer-metrics = { version = "0.10.0-dev", path = "../proposer-metrics" }
+sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
+sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
+sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
+sp-core = { version = "6.0.0", path = "../../primitives/core" }
+sp-inherents = { version = "4.0.0-dev", path = "../../primitives/inherents" }
+sp-runtime = { version = "6.0.0", path = "../../primitives/runtime" }
 
 [dev-dependencies]
+parking_lot = "0.12.0"
 sc-transaction-pool = { version = "4.0.0-dev", path = "../transaction-pool" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
-parking_lot = "0.12.0"

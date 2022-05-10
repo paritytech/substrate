@@ -18,21 +18,19 @@
 
 //! State RPC errors.
 
-use crate::errors;
-use jsonrpc_core as rpc;
-
+use jsonrpsee::{
+	core::Error as JsonRpseeError,
+	types::error::{CallError, ErrorObject},
+};
 /// State RPC Result type.
 pub type Result<T> = std::result::Result<T, Error>;
-
-/// State RPC future Result type.
-pub type FutureResult<T> = jsonrpc_core::BoxFuture<Result<T>>;
 
 /// State RPC errors.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
 	/// Client error.
 	#[error("Client error: {}", .0)]
-	Client(#[from] Box<dyn std::error::Error + Send>),
+	Client(#[from] Box<dyn std::error::Error + Send + Sync>),
 	/// Provided block range couldn't be resolved to a list of blocks.
 	#[error("Cannot resolve a block range ['{:?}' ... '{:?}]. {}", .from, .to, .details)]
 	InvalidBlockRange {
@@ -57,22 +55,18 @@ pub enum Error {
 }
 
 /// Base code for all state errors.
-const BASE_ERROR: i64 = 4000;
+const BASE_ERROR: i32 = 4000;
 
-impl From<Error> for rpc::Error {
+impl From<Error> for JsonRpseeError {
 	fn from(e: Error) -> Self {
 		match e {
-			Error::InvalidBlockRange { .. } => rpc::Error {
-				code: rpc::ErrorCode::ServerError(BASE_ERROR + 1),
-				message: format!("{}", e),
-				data: None,
-			},
-			Error::InvalidCount { .. } => rpc::Error {
-				code: rpc::ErrorCode::ServerError(BASE_ERROR + 2),
-				message: format!("{}", e),
-				data: None,
-			},
-			e => errors::internal(e),
+			Error::InvalidBlockRange { .. } =>
+				CallError::Custom(ErrorObject::owned(BASE_ERROR + 1, e.to_string(), None::<()>))
+					.into(),
+			Error::InvalidCount { .. } =>
+				CallError::Custom(ErrorObject::owned(BASE_ERROR + 2, e.to_string(), None::<()>))
+					.into(),
+			e => Self::to_call_error(e),
 		}
 	}
 }

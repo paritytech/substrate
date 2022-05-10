@@ -282,7 +282,7 @@ impl core::Benchmark for TrieWriteBenchmark {
 		let mut db = self.database.clone();
 		let kvdb = db.open(self.database_type);
 
-		let mut new_root = self.root.clone();
+		let mut new_root = self.root;
 
 		let mut overlay = HashMap::new();
 		let mut trie = SimpleTrie { db: kvdb.clone(), overlay: &mut overlay };

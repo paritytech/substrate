@@ -499,7 +499,7 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 
 	/// Returns true if state for given block is available.
 	fn have_state_at(&self, hash: &Block::Hash, _number: NumberFor<Block>) -> bool {
-		self.state_at(BlockId::Hash(hash.clone())).is_ok()
+		self.state_at(BlockId::Hash(*hash)).is_ok()
 	}
 
 	/// Returns state backend with post-state of given block.
@@ -546,6 +546,9 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 	/// something that the import of a block would interfere with, e.g. importing
 	/// a new block or calculating the best head.
 	fn get_import_lock(&self) -> &RwLock<()>;
+
+	/// Tells whether the backend requires full-sync mode.
+	fn requires_full_sync(&self) -> bool;
 }
 
 /// Mark for all Backend implementations, that are making use of state data, stored locally.

@@ -92,7 +92,7 @@ pub trait Mutate<AccountId>: Inspect<AccountId> {
 		let extra = Self::can_withdraw(&source, amount).into_result()?;
 		// As we first burn and then mint, we don't need to check if `mint` fits into the supply.
 		// If we can withdraw/burn it, we can also mint it again.
-		Self::can_deposit(&dest, amount.saturating_add(extra), false).into_result()?;
+		Self::can_deposit(dest, amount.saturating_add(extra), false).into_result()?;
 		let actual = Self::burn_from(source, amount)?;
 		debug_assert!(
 			actual == amount.saturating_add(extra),

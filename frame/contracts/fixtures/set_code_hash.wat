@@ -1,7 +1,7 @@
 (module
 	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
 	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
-	(import "__unstable__" "seal_set_code_hash" (func $seal_set_code_hash (param i32) (result i32)))
+	(import "seal0" "seal_set_code_hash" (func $seal_set_code_hash (param i32) (result i32)))
 
 	(import "env" "memory" (memory 1 1))
 
