@@ -1276,7 +1276,7 @@ pub mod pallet {
 		NotEnoughPointsToUnbond,
 		/// Partial unbonding now allowed permissionlessly.
 		PartialUnbondNotAllowedPermissionlessly,
-		/// Cannot remove any of the roles, they can only be set ot left unchanged.
+		/// Cannot remove any of the roles, they can only be set to left unchanged.
 		CannotRemoveRole,
 	}
 
