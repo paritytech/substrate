@@ -414,9 +414,12 @@ where
 	fn subscribe_storage(&self, pending: PendingSubscription, keys: Option<Vec<StorageKey>>) {
 		if let Some(keys) = keys {
 			let stream = self.client.storage_changes_for_keys_stream(&keys);
-			let client = self.client.clone();
-			let stream = stream
-				.filter_map(move |notification| futures::future::ready(notification.get(&*client)));
+			let client = Arc::downgrade(&self.client);
+			let stream = stream.filter_map(move |notification| {
+				futures::future::ready(
+					client.upgrade().and_then(|client| notification.get(&*client)),
+				)
+			});
 
 			let fut = async move {
 				if let Some(mut sink) = pending.accept() {
