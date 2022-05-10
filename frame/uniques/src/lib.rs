@@ -243,7 +243,7 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
-		/// An assets collection was created.
+		/// A `collection` was created.
 		Created { collection: T::CollectionId, creator: T::AccountId, owner: T::AccountId },
 		/// A `collection` was force-created.
 		ForceCreated { collection: T::CollectionId, owner: T::AccountId },
@@ -295,13 +295,13 @@ pub mod pallet {
 		},
 		/// A `collection` has had its attributes changed by the `Force` origin.
 		AssetStatusChanged { collection: T::CollectionId },
-		/// New metadata has been set for an assets collection.
+		/// New metadata has been set for a `collection`.
 		CollectionMetadataSet {
 			collection: T::CollectionId,
 			data: BoundedVec<u8, T::StringLimit>,
 			is_frozen: bool,
 		},
-		/// Metadata has been cleared for an assets collection.
+		/// Metadata has been cleared for a `collection`.
 		CollectionMetadataCleared { collection: T::CollectionId },
 		/// New metadata has been set for an asset.
 		MetadataSet {
@@ -314,14 +314,14 @@ pub mod pallet {
 		MetadataCleared { collection: T::CollectionId, asset: T::AssetId },
 		/// Metadata has been cleared for an asset.
 		Redeposited { collection: T::CollectionId, successful_assets: Vec<T::AssetId> },
-		/// New attribute metadata has been set for an assets collection or asset.
+		/// New attribute metadata has been set for a `collection` or `asset`.
 		AttributeSet {
 			collection: T::CollectionId,
 			maybe_asset: Option<T::AssetId>,
 			key: BoundedVec<u8, T::KeyLimit>,
 			value: BoundedVec<u8, T::ValueLimit>,
 		},
-		/// Attribute metadata has been cleared for an assets collection or asset.
+		/// Attribute metadata has been cleared for a `collection` or `asset`.
 		AttributeCleared {
 			collection: T::CollectionId,
 			maybe_asset: Option<T::AssetId>,
@@ -375,7 +375,7 @@ pub mod pallet {
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Issue a new collection of non-fungible assets from a public origin.
 		///
-		/// This new assets collection has no assets initially and its owner is the origin.
+		/// This new collection has no assets initially and its owner is the origin.
 		///
 		/// The origin must be Signed and the sender must have sufficient funds free.
 		///
@@ -412,7 +412,7 @@ pub mod pallet {
 
 		/// Issue a new collection of non-fungible assets from a privileged origin.
 		///
-		/// This new assets collection has no assets initially.
+		/// This new collection has no assets initially.
 		///
 		/// The origin must conform to `ForceOrigin`.
 		///
