@@ -26,60 +26,60 @@ use sp_runtime::{DispatchError, DispatchResult};
 use sp_std::prelude::*;
 
 impl<T: Config<I>, I: 'static> Inspect<<T as SystemConfig>::AccountId> for Pallet<T, I> {
-	type InstanceId = T::InstanceId;
+	type AssetId = T::AssetId;
 	type CollectionId = T::CollectionId;
 
 	fn owner(
 		collection: &Self::CollectionId,
-		instance: &Self::InstanceId,
+		asset: &Self::AssetId,
 	) -> Option<<T as SystemConfig>::AccountId> {
-		Asset::<T, I>::get(collection, instance).map(|a| a.owner)
+		Asset::<T, I>::get(collection, asset).map(|a| a.owner)
 	}
 
 	fn collection_owner(collection: &Self::CollectionId) -> Option<<T as SystemConfig>::AccountId> {
 		Collection::<T, I>::get(collection).map(|a| a.owner)
 	}
 
-	/// Returns the attribute value of `instance` of `collection` corresponding to `key`.
+	/// Returns the attribute value of `asset` of `collection` corresponding to `key`.
 	///
-	/// When `key` is empty, we return the instance metadata value.
+	/// When `key` is empty, we return the asset metadata value.
 	///
 	/// By default this is `None`; no attributes are defined.
 	fn attribute(
 		collection: &Self::CollectionId,
-		instance: &Self::InstanceId,
+		asset: &Self::AssetId,
 		key: &[u8],
 	) -> Option<Vec<u8>> {
 		if key.is_empty() {
-			// We make the empty key map to the instance metadata value.
-			InstanceMetadataOf::<T, I>::get(collection, instance).map(|m| m.data.into())
+			// We make the empty key map to the asset metadata value.
+			AssetMetadataOf::<T, I>::get(collection, asset).map(|m| m.data.into())
 		} else {
 			let key = BoundedSlice::<_, _>::try_from(key).ok()?;
-			Attribute::<T, I>::get((collection, Some(instance), key)).map(|a| a.0.into())
+			Attribute::<T, I>::get((collection, Some(asset), key)).map(|a| a.0.into())
 		}
 	}
 
-	/// Returns the attribute value of `instance` of `collection` corresponding to `key`.
+	/// Returns the attribute value of `asset` of `collection` corresponding to `key`.
 	///
-	/// When `key` is empty, we return the instance metadata value.
+	/// When `key` is empty, we return the asset metadata value.
 	///
 	/// By default this is `None`; no attributes are defined.
 	fn collection_attribute(collection: &Self::CollectionId, key: &[u8]) -> Option<Vec<u8>> {
 		if key.is_empty() {
-			// We make the empty key map to the instance metadata value.
+			// We make the empty key map to the asset metadata value.
 			CollectionMetadataOf::<T, I>::get(collection).map(|m| m.data.into())
 		} else {
 			let key = BoundedSlice::<_, _>::try_from(key).ok()?;
-			Attribute::<T, I>::get((collection, Option::<T::InstanceId>::None, key))
+			Attribute::<T, I>::get((collection, Option::<T::AssetId>::None, key))
 				.map(|a| a.0.into())
 		}
 	}
 
-	/// Returns `true` if the asset `instance` of `collection` may be transferred.
+	/// Returns `true` if the asset `asset` of `collection` may be transferred.
 	///
 	/// Default implementation is that all assets are transferable.
-	fn can_transfer(collection: &Self::CollectionId, instance: &Self::InstanceId) -> bool {
-		match (Collection::<T, I>::get(collection), Asset::<T, I>::get(collection, instance)) {
+	fn can_transfer(collection: &Self::CollectionId, asset: &Self::AssetId) -> bool {
+		match (Collection::<T, I>::get(collection), Asset::<T, I>::get(collection, asset)) {
 			(Some(cd), Some(id)) if !cd.is_frozen && !id.is_frozen => true,
 			_ => false,
 		}
@@ -123,18 +123,18 @@ impl<T: Config<I>, I: 'static> Destroy<<T as SystemConfig>::AccountId> for Palle
 impl<T: Config<I>, I: 'static> Mutate<<T as SystemConfig>::AccountId> for Pallet<T, I> {
 	fn mint_into(
 		collection: &Self::CollectionId,
-		instance: &Self::InstanceId,
+		asset: &Self::AssetId,
 		who: &T::AccountId,
 	) -> DispatchResult {
-		Self::do_mint(*collection, *instance, who.clone(), |_| Ok(()))
+		Self::do_mint(*collection, *asset, who.clone(), |_| Ok(()))
 	}
 
 	fn burn(
 		collection: &Self::CollectionId,
-		instance: &Self::InstanceId,
+		asset: &Self::AssetId,
 		maybe_check_owner: Option<&T::AccountId>,
 	) -> DispatchResult {
-		Self::do_burn(*collection, *instance, |_, d| {
+		Self::do_burn(*collection, *asset, |_, d| {
 			if let Some(check_owner) = maybe_check_owner {
 				if &d.owner != check_owner {
 					return Err(Error::<T, I>::NoPermission.into())
@@ -148,44 +148,42 @@ impl<T: Config<I>, I: 'static> Mutate<<T as SystemConfig>::AccountId> for Pallet
 impl<T: Config<I>, I: 'static> Transfer<T::AccountId> for Pallet<T, I> {
 	fn transfer(
 		collection: &Self::CollectionId,
-		instance: &Self::InstanceId,
+		asset: &Self::AssetId,
 		destination: &T::AccountId,
 	) -> DispatchResult {
-		Self::do_transfer(*collection, *instance, destination.clone(), |_, _| Ok(()))
+		Self::do_transfer(*collection, *asset, destination.clone(), |_, _| Ok(()))
 	}
 }
 
 impl<T: Config<I>, I: 'static> InspectEnumerable<T::AccountId> for Pallet<T, I> {
-	/// Returns an iterator of the assets collections in existence.
+	/// Returns an iterator of the collections in existence.
 	///
 	/// NOTE: iterating this list invokes a storage read per item.
 	fn collections() -> Box<dyn Iterator<Item = Self::CollectionId>> {
 		Box::new(CollectionMetadataOf::<T, I>::iter_keys())
 	}
 
-	/// Returns an iterator of the instances of an asset `collection` in existence.
+	/// Returns an iterator of the assets of an asset `collection` in existence.
 	///
 	/// NOTE: iterating this list invokes a storage read per item.
-	fn instances(collection: &Self::CollectionId) -> Box<dyn Iterator<Item = Self::InstanceId>> {
-		Box::new(InstanceMetadataOf::<T, I>::iter_key_prefix(collection))
+	fn assets(collection: &Self::CollectionId) -> Box<dyn Iterator<Item = Self::AssetId>> {
+		Box::new(AssetMetadataOf::<T, I>::iter_key_prefix(collection))
 	}
 
-	/// Returns an iterator of the asset instances of all collectiones owned by `who`.
+	/// Returns an iterator of the assets of all collections owned by `who`.
 	///
 	/// NOTE: iterating this list invokes a storage read per item.
-	fn owned(
-		who: &T::AccountId,
-	) -> Box<dyn Iterator<Item = (Self::CollectionId, Self::InstanceId)>> {
+	fn owned(who: &T::AccountId) -> Box<dyn Iterator<Item = (Self::CollectionId, Self::AssetId)>> {
 		Box::new(Account::<T, I>::iter_key_prefix((who,)))
 	}
 
-	/// Returns an iterator of the asset instances of `collection` owned by `who`.
+	/// Returns an iterator of the assets of `collection` owned by `who`.
 	///
 	/// NOTE: iterating this list invokes a storage read per item.
 	fn owned_in_collection(
 		collection: &Self::CollectionId,
 		who: &T::AccountId,
-	) -> Box<dyn Iterator<Item = Self::InstanceId>> {
+	) -> Box<dyn Iterator<Item = Self::AssetId>> {
 		Box::new(Account::<T, I>::iter_key_prefix((who, collection)))
 	}
 }

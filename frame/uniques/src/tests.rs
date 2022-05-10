@@ -42,13 +42,13 @@ fn assets() -> Vec<(u64, u32, u32)> {
 		.flatten()
 	{
 		let details = Collection::<Test>::get(collection).unwrap();
-		let instances = Asset::<Test>::iter_prefix(collection).count() as u32;
-		assert_eq!(details.instances, instances);
+		let assets = Asset::<Test>::iter_prefix(collection).count() as u32;
+		assert_eq!(details.assets, assets);
 	}
 	r
 }
 
-fn collectiones() -> Vec<(u64, u32)> {
+fn collections() -> Vec<(u64, u32)> {
 	let mut r: Vec<_> = CollectionAccount::<Test>::iter().map(|x| (x.0, x.1)).collect();
 	r.sort();
 	let mut s: Vec<_> = Collection::<Test>::iter().map(|x| (x.1.owner, x.0)).collect();
@@ -82,12 +82,12 @@ fn basic_setup_works() {
 fn basic_minting_should_work() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true));
-		assert_eq!(collectiones(), vec![(1, 0)]);
+		assert_eq!(collections(), vec![(1, 0)]);
 		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 1));
 		assert_eq!(assets(), vec![(1, 0, 42)]);
 
 		assert_ok!(Uniques::force_create(Origin::root(), 1, 2, true));
-		assert_eq!(collectiones(), vec![(1, 0), (2, 1)]);
+		assert_eq!(collections(), vec![(1, 0), (2, 1)]);
 		assert_ok!(Uniques::mint(Origin::signed(2), 1, 69, 1));
 		assert_eq!(assets(), vec![(1, 0, 42), (1, 1, 69)]);
 	});
@@ -99,7 +99,7 @@ fn lifecycle_should_work() {
 		Balances::make_free_balance_be(&1, 100);
 		assert_ok!(Uniques::create(Origin::signed(1), 0, 1));
 		assert_eq!(Balances::reserved_balance(&1), 2);
-		assert_eq!(collectiones(), vec![(1, 0)]);
+		assert_eq!(collections(), vec![(1, 0)]);
 		assert_ok!(Uniques::set_collection_metadata(Origin::signed(1), 0, bvec![0, 0], false));
 		assert_eq!(Balances::reserved_balance(&1), 5);
 		assert!(CollectionMetadataOf::<Test>::contains_key(0));
@@ -109,19 +109,19 @@ fn lifecycle_should_work() {
 		assert_ok!(Uniques::mint(Origin::signed(1), 0, 69, 20));
 		assert_eq!(Balances::reserved_balance(&1), 7);
 		assert_eq!(assets(), vec![(10, 0, 42), (20, 0, 69)]);
-		assert_eq!(Collection::<Test>::get(0).unwrap().instances, 2);
-		assert_eq!(Collection::<Test>::get(0).unwrap().instance_metadatas, 0);
+		assert_eq!(Collection::<Test>::get(0).unwrap().assets, 2);
+		assert_eq!(Collection::<Test>::get(0).unwrap().asset_metadatas, 0);
 
 		assert_ok!(Uniques::set_metadata(Origin::signed(1), 0, 42, bvec![42, 42], false));
 		assert_eq!(Balances::reserved_balance(&1), 10);
-		assert!(InstanceMetadataOf::<Test>::contains_key(0, 42));
+		assert!(AssetMetadataOf::<Test>::contains_key(0, 42));
 		assert_ok!(Uniques::set_metadata(Origin::signed(1), 0, 69, bvec![69, 69], false));
 		assert_eq!(Balances::reserved_balance(&1), 13);
-		assert!(InstanceMetadataOf::<Test>::contains_key(0, 69));
+		assert!(AssetMetadataOf::<Test>::contains_key(0, 69));
 
 		let w = Collection::<Test>::get(0).unwrap().destroy_witness();
-		assert_eq!(w.instances, 2);
-		assert_eq!(w.instance_metadatas, 2);
+		assert_eq!(w.assets, 2);
+		assert_eq!(w.asset_metadatas, 2);
 		assert_ok!(Uniques::destroy(Origin::signed(1), 0, w));
 		assert_eq!(Balances::reserved_balance(&1), 0);
 
@@ -129,9 +129,9 @@ fn lifecycle_should_work() {
 		assert!(!Asset::<Test>::contains_key(0, 42));
 		assert!(!Asset::<Test>::contains_key(0, 69));
 		assert!(!CollectionMetadataOf::<Test>::contains_key(0));
-		assert!(!InstanceMetadataOf::<Test>::contains_key(0, 42));
-		assert!(!InstanceMetadataOf::<Test>::contains_key(0, 69));
-		assert_eq!(collectiones(), vec![]);
+		assert!(!AssetMetadataOf::<Test>::contains_key(0, 42));
+		assert!(!AssetMetadataOf::<Test>::contains_key(0, 69));
+		assert_eq!(collections(), vec![]);
 		assert_eq!(assets(), vec![]);
 	});
 }
@@ -154,7 +154,7 @@ fn mint_should_work() {
 		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true));
 		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 1));
 		assert_eq!(Uniques::owner(0, 42).unwrap(), 1);
-		assert_eq!(collectiones(), vec![(1, 0)]);
+		assert_eq!(collections(), vec![(1, 0)]);
 		assert_eq!(assets(), vec![(1, 0, 42)]);
 	});
 }
@@ -220,7 +220,7 @@ fn transfer_owner_should_work() {
 		Balances::make_free_balance_be(&2, 100);
 		Balances::make_free_balance_be(&3, 100);
 		assert_ok!(Uniques::create(Origin::signed(1), 0, 1));
-		assert_eq!(collectiones(), vec![(1, 0)]);
+		assert_eq!(collections(), vec![(1, 0)]);
 		assert_noop!(
 			Uniques::transfer_ownership(Origin::signed(1), 0, 2),
 			Error::<Test>::Unaccepted
@@ -228,7 +228,7 @@ fn transfer_owner_should_work() {
 		assert_ok!(Uniques::set_accept_ownership(Origin::signed(2), Some(0)));
 		assert_ok!(Uniques::transfer_ownership(Origin::signed(1), 0, 2));
 
-		assert_eq!(collectiones(), vec![(2, 0)]);
+		assert_eq!(collections(), vec![(2, 0)]);
 		assert_eq!(Balances::total_balance(&1), 98);
 		assert_eq!(Balances::total_balance(&2), 102);
 		assert_eq!(Balances::reserved_balance(&1), 0);
@@ -246,7 +246,7 @@ fn transfer_owner_should_work() {
 		assert_ok!(Uniques::set_metadata(Origin::signed(2), 0, 42, bvec![0u8; 20], false));
 		assert_ok!(Uniques::set_accept_ownership(Origin::signed(3), Some(0)));
 		assert_ok!(Uniques::transfer_ownership(Origin::signed(2), 0, 3));
-		assert_eq!(collectiones(), vec![(3, 0)]);
+		assert_eq!(collections(), vec![(3, 0)]);
 		assert_eq!(Balances::total_balance(&2), 57);
 		assert_eq!(Balances::total_balance(&3), 145);
 		assert_eq!(Balances::reserved_balance(&2), 0);
@@ -338,7 +338,7 @@ fn set_collection_metadata_should_work() {
 }
 
 #[test]
-fn set_instance_metadata_should_work() {
+fn set_asset_metadata_should_work() {
 	new_test_ext().execute_with(|| {
 		Balances::make_free_balance_be(&1, 30);
 
@@ -354,7 +354,7 @@ fn set_instance_metadata_should_work() {
 		// Successfully add metadata and take deposit
 		assert_ok!(Uniques::set_metadata(Origin::signed(1), 0, 42, bvec![0u8; 20], false));
 		assert_eq!(Balances::free_balance(&1), 8);
-		assert!(InstanceMetadataOf::<Test>::contains_key(0, 42));
+		assert!(AssetMetadataOf::<Test>::contains_key(0, 42));
 
 		// Force origin works, too.
 		assert_ok!(Uniques::set_metadata(Origin::root(), 0, 42, bvec![0u8; 18], false));
@@ -390,7 +390,7 @@ fn set_instance_metadata_should_work() {
 			Error::<Test>::UnknownCollection
 		);
 		assert_ok!(Uniques::clear_metadata(Origin::signed(1), 0, 42));
-		assert!(!InstanceMetadataOf::<Test>::contains_key(0, 42));
+		assert!(!AssetMetadataOf::<Test>::contains_key(0, 42));
 	});
 }
 

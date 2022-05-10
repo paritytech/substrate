@@ -17,7 +17,7 @@
 
 //! Traits for dealing with multiple collections of non-fungible assets.
 //!
-//! This assumes a dual-level namespace identified by `Inspect::InstanceId`, and could
+//! This assumes a dual-level namespace identified by `Inspect::AssetId`, and could
 //! reasonably be implemented by pallets which want to expose multiple independent collections of
 //! NFT-like objects.
 //!
@@ -32,18 +32,18 @@ use codec::{Decode, Encode};
 use sp_runtime::TokenError;
 use sp_std::prelude::*;
 
-/// Trait for providing an interface to many read-only NFT-like sets of asset instances.
+/// Trait for providing an interface to many read-only NFT-like sets of assets.
 pub trait Inspect<AccountId> {
-	/// Type for identifying an asset instance.
-	type InstanceId;
+	/// Type for identifying an asset.
+	type AssetId;
 
 	/// Type for identifying an assets collection (an identifier for an independent collection of
-	/// asset instances).
+	/// assets).
 	type CollectionId;
 
-	/// Returns the owner of asset `instance` of `collection`, or `None` if the asset doesn't exist
+	/// Returns the owner of asset `asset` of `collection`, or `None` if the asset doesn't exist
 	/// (or somehow has no owner).
-	fn owner(collection: &Self::CollectionId, instance: &Self::InstanceId) -> Option<AccountId>;
+	fn owner(collection: &Self::CollectionId, asset: &Self::AssetId) -> Option<AccountId>;
 
 	/// Returns the owner of the asset `collection`, if there is one. For many NFTs this may not
 	/// make any sense, so users of this API should not be surprised to find an assets collection
@@ -52,27 +52,27 @@ pub trait Inspect<AccountId> {
 		None
 	}
 
-	/// Returns the attribute value of `instance` of `collection` corresponding to `key`.
+	/// Returns the attribute value of `asset` of `collection` corresponding to `key`.
 	///
 	/// By default this is `None`; no attributes are defined.
 	fn attribute(
 		_collection: &Self::CollectionId,
-		_instance: &Self::InstanceId,
+		_asset: &Self::AssetId,
 		_key: &[u8],
 	) -> Option<Vec<u8>> {
 		None
 	}
 
-	/// Returns the strongly-typed attribute value of `instance` of `collection` corresponding to
+	/// Returns the strongly-typed attribute value of `asset` of `collection` corresponding to
 	/// `key`.
 	///
 	/// By default this just attempts to use `attribute`.
 	fn typed_attribute<K: Encode, V: Decode>(
 		collection: &Self::CollectionId,
-		instance: &Self::InstanceId,
+		asset: &Self::AssetId,
 		key: &K,
 	) -> Option<V> {
-		key.using_encoded(|d| Self::attribute(collection, instance, d))
+		key.using_encoded(|d| Self::attribute(collection, asset, d))
 			.and_then(|v| V::decode(&mut &v[..]).ok())
 	}
 
@@ -94,10 +94,10 @@ pub trait Inspect<AccountId> {
 			.and_then(|v| V::decode(&mut &v[..]).ok())
 	}
 
-	/// Returns `true` if the asset `instance` of `collection` may be transferred.
+	/// Returns `true` if the asset `asset` of `collection` may be transferred.
 	///
 	/// Default implementation is that all assets are transferable.
-	fn can_transfer(_collection: &Self::CollectionId, _instance: &Self::InstanceId) -> bool {
+	fn can_transfer(_collection: &Self::CollectionId, _asset: &Self::AssetId) -> bool {
 		true
 	}
 }
@@ -108,20 +108,20 @@ pub trait InspectEnumerable<AccountId>: Inspect<AccountId> {
 	/// Returns an iterator of the assets collections in existence.
 	fn collections() -> Box<dyn Iterator<Item = Self::CollectionId>>;
 
-	/// Returns an iterator of the instances of an asset `collection` in existence.
-	fn instances(collection: &Self::CollectionId) -> Box<dyn Iterator<Item = Self::InstanceId>>;
+	/// Returns an iterator of the assets of an asset `collection` in existence.
+	fn assets(collection: &Self::CollectionId) -> Box<dyn Iterator<Item = Self::AssetId>>;
 
-	/// Returns an iterator of the asset instances of all collectiones owned by `who`.
-	fn owned(who: &AccountId) -> Box<dyn Iterator<Item = (Self::CollectionId, Self::InstanceId)>>;
+	/// Returns an iterator of the assets of all collections owned by `who`.
+	fn owned(who: &AccountId) -> Box<dyn Iterator<Item = (Self::CollectionId, Self::AssetId)>>;
 
-	/// Returns an iterator of the asset instances of `collection` owned by `who`.
+	/// Returns an iterator of the assets of `collection` owned by `who`.
 	fn owned_in_collection(
 		collection: &Self::CollectionId,
 		who: &AccountId,
-	) -> Box<dyn Iterator<Item = Self::InstanceId>>;
+	) -> Box<dyn Iterator<Item = Self::AssetId>>;
 }
 
-/// Trait for providing the ability to create collectiones of nonfungible assets.
+/// Trait for providing the ability to create collections of nonfungible assets.
 pub trait Create<AccountId>: Inspect<AccountId> {
 	/// Create a `collection` of nonfungible assets to be owned by `who` and managed by `admin`.
 	fn create_collection(
@@ -131,7 +131,7 @@ pub trait Create<AccountId>: Inspect<AccountId> {
 	) -> DispatchResult;
 }
 
-/// Trait for providing the ability to destroy collectiones of nonfungible assets.
+/// Trait for providing the ability to destroy collections of nonfungible assets.
 pub trait Destroy<AccountId>: Inspect<AccountId> {
 	/// The witness data needed to destroy an asset.
 	type DestroyWitness;
@@ -156,55 +156,53 @@ pub trait Destroy<AccountId>: Inspect<AccountId> {
 	) -> Result<Self::DestroyWitness, DispatchError>;
 }
 
-/// Trait for providing an interface for multiple collectiones of NFT-like assets which may be
+/// Trait for providing an interface for multiple collections of NFT-like assets which may be
 /// minted, burned and/or have attributes set on them.
 pub trait Mutate<AccountId>: Inspect<AccountId> {
-	/// Mint some asset `instance` of `collection` to be owned by `who`.
+	/// Mint some asset `asset` of `collection` to be owned by `who`.
 	///
 	/// By default, this is not a supported operation.
 	fn mint_into(
 		_collection: &Self::CollectionId,
-		_instance: &Self::InstanceId,
+		_asset: &Self::AssetId,
 		_who: &AccountId,
 	) -> DispatchResult {
 		Err(TokenError::Unsupported.into())
 	}
 
-	/// Burn some asset `instance` of `collection`.
+	/// Burn some asset `asset` of `collection`.
 	///
 	/// By default, this is not a supported operation.
 	fn burn(
 		_collection: &Self::CollectionId,
-		_instance: &Self::InstanceId,
+		_asset: &Self::AssetId,
 		_maybe_check_owner: Option<&AccountId>,
 	) -> DispatchResult {
 		Err(TokenError::Unsupported.into())
 	}
 
-	/// Set attribute `value` of asset `instance` of `collection`'s `key`.
+	/// Set attribute `value` of asset `asset` of `collection`'s `key`.
 	///
 	/// By default, this is not a supported operation.
 	fn set_attribute(
 		_collection: &Self::CollectionId,
-		_instance: &Self::InstanceId,
+		_asset: &Self::AssetId,
 		_key: &[u8],
 		_value: &[u8],
 	) -> DispatchResult {
 		Err(TokenError::Unsupported.into())
 	}
 
-	/// Attempt to set the strongly-typed attribute `value` of `instance` of `collection`'s `key`.
+	/// Attempt to set the strongly-typed attribute `value` of `asset` of `collection`'s `key`.
 	///
 	/// By default this just attempts to use `set_attribute`.
 	fn set_typed_attribute<K: Encode, V: Encode>(
 		collection: &Self::CollectionId,
-		instance: &Self::InstanceId,
+		asset: &Self::AssetId,
 		key: &K,
 		value: &V,
 	) -> DispatchResult {
-		key.using_encoded(|k| {
-			value.using_encoded(|v| Self::set_attribute(collection, instance, k, v))
-		})
+		key.using_encoded(|k| value.using_encoded(|v| Self::set_attribute(collection, asset, k, v)))
 	}
 
 	/// Set attribute `value` of asset `collection`'s `key`.
@@ -234,10 +232,10 @@ pub trait Mutate<AccountId>: Inspect<AccountId> {
 
 /// Trait for providing a non-fungible sets of assets which can only be transferred.
 pub trait Transfer<AccountId>: Inspect<AccountId> {
-	/// Transfer asset `instance` of `collection` into `destination` account.
+	/// Transfer asset `asset` of `collection` into `destination` account.
 	fn transfer(
 		collection: &Self::CollectionId,
-		instance: &Self::InstanceId,
+		asset: &Self::AssetId,
 		destination: &AccountId,
 	) -> DispatchResult;
 }

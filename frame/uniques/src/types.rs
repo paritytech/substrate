@@ -28,8 +28,8 @@ pub(super) type DepositBalanceOf<T, I = ()> =
 	<<T as Config<I>>::Currency as Currency<<T as SystemConfig>::AccountId>>::Balance;
 pub(super) type CollectionDetailsFor<T, I> =
 	CollectionDetails<<T as SystemConfig>::AccountId, DepositBalanceOf<T, I>>;
-pub(super) type InstanceDetailsFor<T, I> =
-	InstanceDetails<<T as SystemConfig>::AccountId, DepositBalanceOf<T, I>>;
+pub(super) type AssetDetailsFor<T, I> =
+	AssetDetails<<T as SystemConfig>::AccountId, DepositBalanceOf<T, I>>;
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct CollectionDetails<AccountId, DepositBalance> {
@@ -44,12 +44,12 @@ pub struct CollectionDetails<AccountId, DepositBalance> {
 	/// The total balance deposited for the all storage associated with this assets collection.
 	/// Used by `destroy`.
 	pub(super) total_deposit: DepositBalance,
-	/// If `true`, then no deposit is needed to hold instances of this collection.
+	/// If `true`, then no deposit is needed to hold assets of this collection.
 	pub(super) free_holding: bool,
-	/// The total number of outstanding instances of this assets collection.
-	pub(super) instances: u32,
-	/// The total number of outstanding instance metadata of this assets collection.
-	pub(super) instance_metadatas: u32,
+	/// The total number of outstanding assets of this assets collection.
+	pub(super) assets: u32,
+	/// The total number of outstanding asset metadata of this assets collection.
+	pub(super) asset_metadatas: u32,
 	/// The total number of attributes for this assets collection.
 	pub(super) attributes: u32,
 	/// Whether the asset is frozen for non-admin transfers.
@@ -59,12 +59,12 @@ pub struct CollectionDetails<AccountId, DepositBalance> {
 /// Witness data for the destroy transactions.
 #[derive(Copy, Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct DestroyWitness {
-	/// The total number of outstanding instances of this assets collection.
+	/// The total number of outstanding assets of this assets collection.
 	#[codec(compact)]
-	pub instances: u32,
-	/// The total number of outstanding instance metadata of this assets collection.
+	pub assets: u32,
+	/// The total number of outstanding asset metadata of this assets collection.
 	#[codec(compact)]
-	pub instance_metadatas: u32,
+	pub asset_metadatas: u32,
 	#[codec(compact)]
 	/// The total number of attributes for this assets collection.
 	pub attributes: u32,
@@ -73,8 +73,8 @@ pub struct DestroyWitness {
 impl<AccountId, DepositBalance> CollectionDetails<AccountId, DepositBalance> {
 	pub fn destroy_witness(&self) -> DestroyWitness {
 		DestroyWitness {
-			instances: self.instances,
-			instance_metadatas: self.instance_metadatas,
+			assets: self.assets,
+			asset_metadatas: self.asset_metadatas,
 			attributes: self.attributes,
 		}
 	}
@@ -82,7 +82,7 @@ impl<AccountId, DepositBalance> CollectionDetails<AccountId, DepositBalance> {
 
 /// Information concerning the ownership of a single unique asset.
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default, TypeInfo, MaxEncodedLen)]
-pub struct InstanceDetails<AccountId, DepositBalance> {
+pub struct AssetDetails<AccountId, DepositBalance> {
 	/// The owner of this asset.
 	pub(super) owner: AccountId,
 	/// The approved transferrer of this asset, if one is set.
@@ -113,7 +113,7 @@ pub struct CollectionMetadata<DepositBalance, StringLimit: Get<u32>> {
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default, TypeInfo, MaxEncodedLen)]
 #[scale_info(skip_type_params(StringLimit))]
 #[codec(mel_bound(DepositBalance: MaxEncodedLen))]
-pub struct InstanceMetadata<DepositBalance, StringLimit: Get<u32>> {
+pub struct AssetMetadata<DepositBalance, StringLimit: Get<u32>> {
 	/// The balance deposited for this metadata.
 	///
 	/// This pays for the data stored in this struct.

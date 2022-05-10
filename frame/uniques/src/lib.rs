@@ -67,18 +67,16 @@ pub mod pallet {
 	pub struct Pallet<T, I = ()>(_);
 
 	#[cfg(feature = "runtime-benchmarks")]
-	pub trait BenchmarkHelper<CollectionId, InstanceId> {
+	pub trait BenchmarkHelper<CollectionId, AssetId> {
 		fn collection(i: u16) -> CollectionId;
-		fn instance(i: u16) -> InstanceId;
+		fn asset(i: u16) -> AssetId;
 	}
 	#[cfg(feature = "runtime-benchmarks")]
-	impl<CollectionId: From<u16>, InstanceId: From<u16>> BenchmarkHelper<CollectionId, InstanceId>
-		for ()
-	{
+	impl<CollectionId: From<u16>, AssetId: From<u16>> BenchmarkHelper<CollectionId, AssetId> for () {
 		fn collection(i: u16) -> CollectionId {
 			i.into()
 		}
-		fn instance(i: u16) -> InstanceId {
+		fn asset(i: u16) -> AssetId {
 			i.into()
 		}
 	}
@@ -92,8 +90,8 @@ pub mod pallet {
 		/// Identifier for the collection of asset.
 		type CollectionId: Member + Parameter + MaxEncodedLen + Copy;
 
-		/// The type used to identify a unique asset within an assets collection.
-		type InstanceId: Member + Parameter + MaxEncodedLen + Copy;
+		/// The type used to identify a unique asset within a collection.
+		type AssetId: Member + Parameter + MaxEncodedLen + Copy;
 
 		/// The currency mechanism, used for paying for reserves.
 		type Currency: ReservableCurrency<Self::AccountId>;
@@ -111,15 +109,15 @@ pub mod pallet {
 		>;
 
 		/// Locker trait to enable Locking mechanism downstream.
-		type Locker: Locker<Self::CollectionId, Self::InstanceId>;
+		type Locker: Locker<Self::CollectionId, Self::AssetId>;
 
-		/// The basic amount of funds that must be reserved for an assets collection.
+		/// The basic amount of funds that must be reserved for collection.
 		#[pallet::constant]
 		type CollectionDeposit: Get<DepositBalanceOf<Self, I>>;
 
-		/// The basic amount of funds that must be reserved for an asset instance.
+		/// The basic amount of funds that must be reserved for an asset.
 		#[pallet::constant]
-		type InstanceDeposit: Get<DepositBalanceOf<Self, I>>;
+		type AssetDeposit: Get<DepositBalanceOf<Self, I>>;
 
 		/// The basic amount of funds that must be reserved when adding metadata to your asset.
 		#[pallet::constant]
@@ -148,7 +146,7 @@ pub mod pallet {
 
 		#[cfg(feature = "runtime-benchmarks")]
 		/// A set of helper functions for benchmarking.
-		type Helper: BenchmarkHelper<Self::CollectionId, Self::InstanceId>;
+		type Helper: BenchmarkHelper<Self::CollectionId, Self::AssetId>;
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
@@ -176,14 +174,14 @@ pub mod pallet {
 		(
 			NMapKey<Blake2_128Concat, T::AccountId>, // owner
 			NMapKey<Blake2_128Concat, T::CollectionId>,
-			NMapKey<Blake2_128Concat, T::InstanceId>,
+			NMapKey<Blake2_128Concat, T::AssetId>,
 		),
 		(),
 		OptionQuery,
 	>;
 
 	#[pallet::storage]
-	/// The collectiones owned by any given account; set out this way so that collectiones owned by
+	/// The collections owned by any given account; set out this way so that collections owned by
 	/// a single account can be enumerated.
 	pub(super) type CollectionAccount<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
 		_,
@@ -202,8 +200,8 @@ pub mod pallet {
 		Blake2_128Concat,
 		T::CollectionId,
 		Blake2_128Concat,
-		T::InstanceId,
-		InstanceDetails<T::AccountId, DepositBalanceOf<T, I>>,
+		T::AssetId,
+		AssetDetails<T::AccountId, DepositBalanceOf<T, I>>,
 		OptionQuery,
 	>;
 
@@ -218,14 +216,14 @@ pub mod pallet {
 	>;
 
 	#[pallet::storage]
-	/// Metadata of an asset instance.
-	pub(super) type InstanceMetadataOf<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
+	/// Metadata of an asset.
+	pub(super) type AssetMetadataOf<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
 		_,
 		Blake2_128Concat,
 		T::CollectionId,
 		Blake2_128Concat,
-		T::InstanceId,
-		InstanceMetadata<DepositBalanceOf<T, I>, T::StringLimit>,
+		T::AssetId,
+		AssetMetadata<DepositBalanceOf<T, I>, T::StringLimit>,
 		OptionQuery,
 	>;
 
@@ -235,7 +233,7 @@ pub mod pallet {
 		_,
 		(
 			NMapKey<Blake2_128Concat, T::CollectionId>,
-			NMapKey<Blake2_128Concat, Option<T::InstanceId>>,
+			NMapKey<Blake2_128Concat, Option<T::AssetId>>,
 			NMapKey<Blake2_128Concat, BoundedVec<u8, T::KeyLimit>>,
 		),
 		(BoundedVec<u8, T::ValueLimit>, DepositBalanceOf<T, I>),
@@ -251,21 +249,21 @@ pub mod pallet {
 		ForceCreated { collection: T::CollectionId, owner: T::AccountId },
 		/// An asset `collection` was destroyed.
 		Destroyed { collection: T::CollectionId },
-		/// An asset `instance` was issued.
-		Issued { collection: T::CollectionId, instance: T::InstanceId, owner: T::AccountId },
-		/// An asset `instance` was transferred.
+		/// An asset `asset` was issued.
+		Issued { collection: T::CollectionId, asset: T::AssetId, owner: T::AccountId },
+		/// An asset `asset` was transferred.
 		Transferred {
 			collection: T::CollectionId,
-			instance: T::InstanceId,
+			asset: T::AssetId,
 			from: T::AccountId,
 			to: T::AccountId,
 		},
-		/// An asset `instance` was destroyed.
-		Burned { collection: T::CollectionId, instance: T::InstanceId, owner: T::AccountId },
-		/// Some asset `instance` was frozen.
-		Frozen { collection: T::CollectionId, instance: T::InstanceId },
-		/// Some asset `instance` was thawed.
-		Thawed { collection: T::CollectionId, instance: T::InstanceId },
+		/// An asset `asset` was destroyed.
+		Burned { collection: T::CollectionId, asset: T::AssetId, owner: T::AccountId },
+		/// Some asset `asset` was frozen.
+		Frozen { collection: T::CollectionId, asset: T::AssetId },
+		/// Some asset `asset` was thawed.
+		Thawed { collection: T::CollectionId, asset: T::AssetId },
 		/// Some asset `collection` was frozen.
 		CollectionFrozen { collection: T::CollectionId },
 		/// Some asset `collection` was thawed.
@@ -279,19 +277,19 @@ pub mod pallet {
 			admin: T::AccountId,
 			freezer: T::AccountId,
 		},
-		/// An `instance` of an asset `collection` has been approved by the `owner` for transfer by
+		/// An `asset` of an asset `collection` has been approved by the `owner` for transfer by
 		/// a `delegate`.
 		ApprovedTransfer {
 			collection: T::CollectionId,
-			instance: T::InstanceId,
+			asset: T::AssetId,
 			owner: T::AccountId,
 			delegate: T::AccountId,
 		},
-		/// An approval for a `delegate` account to transfer the `instance` of an asset
+		/// An approval for a `delegate` account to transfer the `asset` of an asset
 		/// `collection` was cancelled by its `owner`.
 		ApprovalCancelled {
 			collection: T::CollectionId,
-			instance: T::InstanceId,
+			asset: T::AssetId,
 			owner: T::AccountId,
 			delegate: T::AccountId,
 		},
@@ -305,28 +303,28 @@ pub mod pallet {
 		},
 		/// Metadata has been cleared for an assets collection.
 		CollectionMetadataCleared { collection: T::CollectionId },
-		/// New metadata has been set for an asset instance.
+		/// New metadata has been set for an asset.
 		MetadataSet {
 			collection: T::CollectionId,
-			instance: T::InstanceId,
+			asset: T::AssetId,
 			data: BoundedVec<u8, T::StringLimit>,
 			is_frozen: bool,
 		},
-		/// Metadata has been cleared for an asset instance.
-		MetadataCleared { collection: T::CollectionId, instance: T::InstanceId },
-		/// Metadata has been cleared for an asset instance.
-		Redeposited { collection: T::CollectionId, successful_instances: Vec<T::InstanceId> },
-		/// New attribute metadata has been set for an assets collection or instance.
+		/// Metadata has been cleared for an asset.
+		MetadataCleared { collection: T::CollectionId, asset: T::AssetId },
+		/// Metadata has been cleared for an asset.
+		Redeposited { collection: T::CollectionId, successful_assets: Vec<T::AssetId> },
+		/// New attribute metadata has been set for an assets collection or asset.
 		AttributeSet {
 			collection: T::CollectionId,
-			maybe_instance: Option<T::InstanceId>,
+			maybe_asset: Option<T::AssetId>,
 			key: BoundedVec<u8, T::KeyLimit>,
 			value: BoundedVec<u8, T::ValueLimit>,
 		},
-		/// Attribute metadata has been cleared for an assets collection or instance.
+		/// Attribute metadata has been cleared for an assets collection or asset.
 		AttributeCleared {
 			collection: T::CollectionId,
-			maybe_instance: Option<T::InstanceId>,
+			maybe_asset: Option<T::AssetId>,
 			key: BoundedVec<u8, T::KeyLimit>,
 		},
 		/// Ownership acceptance has changed for an account.
@@ -339,7 +337,7 @@ pub mod pallet {
 		NoPermission,
 		/// The given asset ID is unknown.
 		UnknownCollection,
-		/// The asset instance ID has already been used for an asset.
+		/// The asset ID has already been used for an asset.
 		AlreadyExists,
 		/// The owner turned out to be different to what was expected.
 		WrongOwner,
@@ -347,7 +345,7 @@ pub mod pallet {
 		BadWitness,
 		/// The asset ID is already taken.
 		InUse,
-		/// The asset instance or collection is frozen.
+		/// The asset or collection is frozen.
 		Frozen,
 		/// The delegate turned out to be different to what was expected.
 		WrongDelegate,
@@ -357,17 +355,17 @@ pub mod pallet {
 		Unapproved,
 		/// The named owner has not signed ownership of the collection is acceptable.
 		Unaccepted,
-		/// The asset instance is locked.
+		/// The asset is locked.
 		Locked,
 	}
 
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
-		/// Get the owner of the asset instance, if the asset exists.
-		pub fn owner(collection: T::CollectionId, instance: T::InstanceId) -> Option<T::AccountId> {
-			Asset::<T, I>::get(collection, instance).map(|i| i.owner)
+		/// Get the owner of the asset, if the asset exists.
+		pub fn owner(collection: T::CollectionId, asset: T::AssetId) -> Option<T::AccountId> {
+			Asset::<T, I>::get(collection, asset).map(|i| i.owner)
 		}
 
-		/// Get the owner of the asset instance, if the asset exists.
+		/// Get the owner of the asset, if the asset exists.
 		pub fn collection_owner(collection: T::CollectionId) -> Option<T::AccountId> {
 			Collection::<T, I>::get(collection).map(|i| i.owner)
 		}
@@ -455,18 +453,18 @@ pub mod pallet {
 		/// owner of the asset `collection`.
 		///
 		/// - `collection`: The identifier of the assets collection to be destroyed.
-		/// - `witness`: Information on the instances minted in the assets collection. This must be
+		/// - `witness`: Information on the assets minted in the assets collection. This must be
 		/// correct.
 		///
 		/// Emits `Destroyed` event when successful.
 		///
 		/// Weight: `O(n + m)` where:
-		/// - `n = witness.instances`
-		/// - `m = witness.instance_metadatas`
+		/// - `n = witness.assets`
+		/// - `m = witness.asset_metadatas`
 		/// - `a = witness.attributes`
 		#[pallet::weight(T::WeightInfo::destroy(
-			witness.instances,
- 			witness.instance_metadatas,
+			witness.assets,
+ 			witness.asset_metadatas,
 			witness.attributes,
  		))]
 		pub fn destroy(
@@ -481,19 +479,19 @@ pub mod pallet {
 			let details = Self::do_destroy_collection(collection, witness, maybe_check_owner)?;
 
 			Ok(Some(T::WeightInfo::destroy(
-				details.instances,
-				details.instance_metadatas,
+				details.assets,
+				details.asset_metadatas,
 				details.attributes,
 			))
 			.into())
 		}
 
-		/// Mint an asset instance of a particular collection.
+		/// Mint an asset of a particular collection.
 		///
 		/// The origin must be Signed and the sender must be the Issuer of the asset `collection`.
 		///
 		/// - `collection`: The collection of the asset to be minted.
-		/// - `instance`: The instance value of the asset to be minted.
+		/// - `asset`: The asset value of the asset to be minted.
 		/// - `beneficiary`: The initial owner of the minted asset.
 		///
 		/// Emits `Issued` event when successful.
@@ -503,24 +501,24 @@ pub mod pallet {
 		pub fn mint(
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
-			instance: T::InstanceId,
+			asset: T::AssetId,
 			owner: <T::Lookup as StaticLookup>::Source,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			let owner = T::Lookup::lookup(owner)?;
 
-			Self::do_mint(collection, instance, owner, |collection_details| {
+			Self::do_mint(collection, asset, owner, |collection_details| {
 				ensure!(collection_details.issuer == origin, Error::<T, I>::NoPermission);
 				Ok(())
 			})
 		}
 
-		/// Destroy a single asset instance.
+		/// Destroy a single asset.
 		///
 		/// Origin must be Signed and the sender should be the Admin of the asset `collection`.
 		///
 		/// - `collection`: The collection of the asset to be burned.
-		/// - `instance`: The instance of the asset to be burned.
+		/// - `asset`: The asset of the asset to be burned.
 		/// - `check_owner`: If `Some` then the operation will fail with `WrongOwner` unless the
 		///   asset is owned by this value.
 		///
@@ -532,13 +530,13 @@ pub mod pallet {
 		pub fn burn(
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
-			instance: T::InstanceId,
+			asset: T::AssetId,
 			check_owner: Option<<T::Lookup as StaticLookup>::Source>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			let check_owner = check_owner.map(T::Lookup::lookup).transpose()?;
 
-			Self::do_burn(collection, instance, |collection_details, details| {
+			Self::do_burn(collection, asset, |collection_details, details| {
 				let is_permitted = collection_details.admin == origin || details.owner == origin;
 				ensure!(is_permitted, Error::<T, I>::NoPermission);
 				ensure!(
@@ -553,12 +551,12 @@ pub mod pallet {
 		///
 		/// Origin must be Signed and the signing account must be either:
 		/// - the Admin of the asset `collection`;
-		/// - the Owner of the asset `instance`;
-		/// - the approved delegate for the asset `instance` (in this case, the approval is reset).
+		/// - the Owner of the asset `asset`;
+		/// - the approved delegate for the asset `asset` (in this case, the approval is reset).
 		///
 		/// Arguments:
 		/// - `collection`: The collection of the asset to be transferred.
-		/// - `instance`: The instance of the asset to be transferred.
+		/// - `asset`: The asset of the asset to be transferred.
 		/// - `dest`: The account to receive ownership of the asset.
 		///
 		/// Emits `Transferred`.
@@ -568,13 +566,13 @@ pub mod pallet {
 		pub fn transfer(
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
-			instance: T::InstanceId,
+			asset: T::AssetId,
 			dest: <T::Lookup as StaticLookup>::Source,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(dest)?;
 
-			Self::do_transfer(collection, instance, dest, |collection_details, details| {
+			Self::do_transfer(collection, asset, dest, |collection_details, details| {
 				if details.owner != origin && collection_details.admin != origin {
 					let approved = details.approved.take().map_or(false, |i| i == origin);
 					ensure!(approved, Error::<T, I>::NoPermission);
@@ -588,24 +586,23 @@ pub mod pallet {
 		/// Origin must be Signed and the sender should be the Owner of the asset `collection`.
 		///
 		/// - `collection`: The collection of the asset to be frozen.
-		/// - `instances`: The instances of the assets collection whose deposits will be
-		///   reevaluated.
+		/// - `assets`: The assets of the assets collection whose deposits will be reevaluated.
 		///
-		/// NOTE: This exists as a best-effort function. Any asset instances which are unknown or
+		/// NOTE: This exists as a best-effort function. Any assets which are unknown or
 		/// in the case that the owner account does not have reservable funds to pay for a
-		/// deposit increase are ignored. Generally the owner isn't going to call this on instances
+		/// deposit increase are ignored. Generally the owner isn't going to call this on assets
 		/// whose existing deposit is less than the refreshed deposit as it would only cost them,
 		/// so it's of little consequence.
 		///
 		/// It will still return an error in the case that the collection is unknown of the signer
 		/// is not permitted to call it.
 		///
-		/// Weight: `O(instances.len())`
-		#[pallet::weight(T::WeightInfo::redeposit(instances.len() as u32))]
+		/// Weight: `O(assets.len())`
+		#[pallet::weight(T::WeightInfo::redeposit(assets.len() as u32))]
 		pub fn redeposit(
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
-			instances: Vec<T::InstanceId>,
+			assets: Vec<T::AssetId>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
@@ -614,12 +611,12 @@ pub mod pallet {
 			ensure!(collection_details.owner == origin, Error::<T, I>::NoPermission);
 			let deposit = match collection_details.free_holding {
 				true => Zero::zero(),
-				false => T::InstanceDeposit::get(),
+				false => T::AssetDeposit::get(),
 			};
 
-			let mut successful = Vec::with_capacity(instances.len());
-			for instance in instances.into_iter() {
-				let mut details = match Asset::<T, I>::get(&collection, &instance) {
+			let mut successful = Vec::with_capacity(assets.len());
+			for asset in assets.into_iter() {
+				let mut details = match Asset::<T, I>::get(&collection, &asset) {
 					Some(x) => x,
 					None => continue,
 				};
@@ -638,25 +635,25 @@ pub mod pallet {
 				collection_details.total_deposit.saturating_accrue(deposit);
 				collection_details.total_deposit.saturating_reduce(old);
 				details.deposit = deposit;
-				Asset::<T, I>::insert(&collection, &instance, &details);
-				successful.push(instance);
+				Asset::<T, I>::insert(&collection, &asset, &details);
+				successful.push(asset);
 			}
 			Collection::<T, I>::insert(&collection, &collection_details);
 
 			Self::deposit_event(Event::<T, I>::Redeposited {
 				collection,
-				successful_instances: successful,
+				successful_assets: successful,
 			});
 
 			Ok(())
 		}
 
-		/// Disallow further unprivileged transfer of an asset instance.
+		/// Disallow further unprivileged transfer of an asset.
 		///
 		/// Origin must be Signed and the sender should be the Freezer of the asset `collection`.
 		///
 		/// - `collection`: The collection of the asset to be frozen.
-		/// - `instance`: The instance of the asset to be frozen.
+		/// - `asset`: The asset of the asset to be frozen.
 		///
 		/// Emits `Frozen`.
 		///
@@ -665,29 +662,29 @@ pub mod pallet {
 		pub fn freeze(
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
-			instance: T::InstanceId,
+			asset: T::AssetId,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
-			let mut details = Asset::<T, I>::get(&collection, &instance)
-				.ok_or(Error::<T, I>::UnknownCollection)?;
+			let mut details =
+				Asset::<T, I>::get(&collection, &asset).ok_or(Error::<T, I>::UnknownCollection)?;
 			let collection_details =
 				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
 			ensure!(collection_details.freezer == origin, Error::<T, I>::NoPermission);
 
 			details.is_frozen = true;
-			Asset::<T, I>::insert(&collection, &instance, &details);
+			Asset::<T, I>::insert(&collection, &asset, &details);
 
-			Self::deposit_event(Event::<T, I>::Frozen { collection, instance });
+			Self::deposit_event(Event::<T, I>::Frozen { collection, asset });
 			Ok(())
 		}
 
-		/// Re-allow unprivileged transfer of an asset instance.
+		/// Re-allow unprivileged transfer of an asset.
 		///
 		/// Origin must be Signed and the sender should be the Freezer of the asset `collection`.
 		///
 		/// - `collection`: The collection of the asset to be thawed.
-		/// - `instance`: The instance of the asset to be thawed.
+		/// - `asset`: The asset of the asset to be thawed.
 		///
 		/// Emits `Thawed`.
 		///
@@ -696,20 +693,20 @@ pub mod pallet {
 		pub fn thaw(
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
-			instance: T::InstanceId,
+			asset: T::AssetId,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
-			let mut details = Asset::<T, I>::get(&collection, &instance)
-				.ok_or(Error::<T, I>::UnknownCollection)?;
+			let mut details =
+				Asset::<T, I>::get(&collection, &asset).ok_or(Error::<T, I>::UnknownCollection)?;
 			let collection_details =
 				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
 			ensure!(collection_details.admin == origin, Error::<T, I>::NoPermission);
 
 			details.is_frozen = false;
-			Asset::<T, I>::insert(&collection, &instance, &details);
+			Asset::<T, I>::insert(&collection, &asset, &details);
 
-			Self::deposit_event(Event::<T, I>::Thawed { collection, instance });
+			Self::deposit_event(Event::<T, I>::Thawed { collection, asset });
 			Ok(())
 		}
 
@@ -852,12 +849,12 @@ pub mod pallet {
 			})
 		}
 
-		/// Approve an instance to be transferred by a delegated third-party account.
+		/// Approve an asset to be transferred by a delegated third-party account.
 		///
-		/// Origin must be Signed and must be the owner of the asset `instance`.
+		/// Origin must be Signed and must be the owner of the asset `asset`.
 		///
 		/// - `collection`: The collection of the asset to be approved for delegated transfer.
-		/// - `instance`: The instance of the asset to be approved for delegated transfer.
+		/// - `asset`: The asset of the asset to be approved for delegated transfer.
 		/// - `delegate`: The account to delegate permission to transfer the asset.
 		///
 		/// Emits `ApprovedTransfer` on success.
@@ -867,7 +864,7 @@ pub mod pallet {
 		pub fn approve_transfer(
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
-			instance: T::InstanceId,
+			asset: T::AssetId,
 			delegate: <T::Lookup as StaticLookup>::Source,
 		) -> DispatchResult {
 			let maybe_check: Option<T::AccountId> = T::ForceOrigin::try_origin(origin)
@@ -878,8 +875,8 @@ pub mod pallet {
 
 			let collection_details =
 				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
-			let mut details = Asset::<T, I>::get(&collection, &instance)
-				.ok_or(Error::<T, I>::UnknownCollection)?;
+			let mut details =
+				Asset::<T, I>::get(&collection, &asset).ok_or(Error::<T, I>::UnknownCollection)?;
 
 			if let Some(check) = maybe_check {
 				let permitted = check == collection_details.admin || check == details.owner;
@@ -887,12 +884,12 @@ pub mod pallet {
 			}
 
 			details.approved = Some(delegate);
-			Asset::<T, I>::insert(&collection, &instance, &details);
+			Asset::<T, I>::insert(&collection, &asset, &details);
 
 			let delegate = details.approved.expect("set as Some above; qed");
 			Self::deposit_event(Event::ApprovedTransfer {
 				collection,
-				instance,
+				asset,
 				owner: details.owner,
 				delegate,
 			});
@@ -905,11 +902,11 @@ pub mod pallet {
 		/// Origin must be either:
 		/// - the `Force` origin;
 		/// - `Signed` with the signer being the Admin of the asset `collection`;
-		/// - `Signed` with the signer being the Owner of the asset `instance`;
+		/// - `Signed` with the signer being the Owner of the asset `asset`;
 		///
 		/// Arguments:
 		/// - `collection`: The collection of the asset of whose approval will be cancelled.
-		/// - `instance`: The instance of the asset of whose approval will be cancelled.
+		/// - `asset`: The asset of the asset of whose approval will be cancelled.
 		/// - `maybe_check_delegate`: If `Some` will ensure that the given account is the one to
 		///   which permission of transfer is delegated.
 		///
@@ -920,7 +917,7 @@ pub mod pallet {
 		pub fn cancel_approval(
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
-			instance: T::InstanceId,
+			asset: T::AssetId,
 			maybe_check_delegate: Option<<T::Lookup as StaticLookup>::Source>,
 		) -> DispatchResult {
 			let maybe_check: Option<T::AccountId> = T::ForceOrigin::try_origin(origin)
@@ -929,8 +926,8 @@ pub mod pallet {
 
 			let collection_details =
 				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
-			let mut details = Asset::<T, I>::get(&collection, &instance)
-				.ok_or(Error::<T, I>::UnknownCollection)?;
+			let mut details =
+				Asset::<T, I>::get(&collection, &asset).ok_or(Error::<T, I>::UnknownCollection)?;
 			if let Some(check) = maybe_check {
 				let permitted = check == collection_details.admin || check == details.owner;
 				ensure!(permitted, Error::<T, I>::NoPermission);
@@ -941,10 +938,10 @@ pub mod pallet {
 				ensure!(check_delegate == old, Error::<T, I>::WrongDelegate);
 			}
 
-			Asset::<T, I>::insert(&collection, &instance, &details);
+			Asset::<T, I>::insert(&collection, &asset, &details);
 			Self::deposit_event(Event::ApprovalCancelled {
 				collection,
-				instance,
+				asset,
 				owner: details.owner,
 				delegate: old,
 			});
@@ -961,7 +958,7 @@ pub mod pallet {
 		/// - `issuer`: The new Issuer of this asset.
 		/// - `admin`: The new Admin of this asset.
 		/// - `freezer`: The new Freezer of this asset.
-		/// - `free_holding`: Whether a deposit is taken for holding an instance of this asset
+		/// - `free_holding`: Whether a deposit is taken for holding an asset of this asset
 		///   collection.
 		/// - `is_frozen`: Whether this assets collection is frozen except for permissioned/admin
 		/// instructions.
@@ -1001,7 +998,7 @@ pub mod pallet {
 			})
 		}
 
-		/// Set an attribute for an assets collection or instance.
+		/// Set an attribute for an assets collection or asset.
 		///
 		/// Origin must be either `ForceOrigin` or Signed and the sender should be the Owner of the
 		/// asset `collection`.
@@ -1010,9 +1007,8 @@ pub mod pallet {
 		/// `MetadataDepositBase + DepositPerByte * (key.len + value.len)` taking into
 		/// account any already reserved funds.
 		///
-		/// - `collection`: The identifier of the assets collection whose instance's metadata to
-		///   set.
-		/// - `maybe_instance`: The identifier of the asset instance whose metadata to set.
+		/// - `collection`: The identifier of the assets collection whose asset's metadata to set.
+		/// - `maybe_asset`: The identifier of the asset whose metadata to set.
 		/// - `key`: The key of the attribute.
 		/// - `value`: The value to which to set the attribute.
 		///
@@ -1023,7 +1019,7 @@ pub mod pallet {
 		pub fn set_attribute(
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
-			maybe_instance: Option<T::InstanceId>,
+			maybe_asset: Option<T::AssetId>,
 			key: BoundedVec<u8, T::KeyLimit>,
 			value: BoundedVec<u8, T::ValueLimit>,
 		) -> DispatchResult {
@@ -1036,14 +1032,13 @@ pub mod pallet {
 			if let Some(check_owner) = &maybe_check_owner {
 				ensure!(check_owner == &collection_details.owner, Error::<T, I>::NoPermission);
 			}
-			let maybe_is_frozen = match maybe_instance {
+			let maybe_is_frozen = match maybe_asset {
 				None => CollectionMetadataOf::<T, I>::get(collection).map(|v| v.is_frozen),
-				Some(instance) =>
-					InstanceMetadataOf::<T, I>::get(collection, instance).map(|v| v.is_frozen),
+				Some(asset) => AssetMetadataOf::<T, I>::get(collection, asset).map(|v| v.is_frozen),
 			};
 			ensure!(!maybe_is_frozen.unwrap_or(false), Error::<T, I>::Frozen);
 
-			let attribute = Attribute::<T, I>::get((collection, maybe_instance, &key));
+			let attribute = Attribute::<T, I>::get((collection, maybe_asset, &key));
 			if attribute.is_none() {
 				collection_details.attributes.saturating_inc();
 			}
@@ -1062,22 +1057,21 @@ pub mod pallet {
 				T::Currency::unreserve(&collection_details.owner, old_deposit - deposit);
 			}
 
-			Attribute::<T, I>::insert((&collection, maybe_instance, &key), (&value, deposit));
+			Attribute::<T, I>::insert((&collection, maybe_asset, &key), (&value, deposit));
 			Collection::<T, I>::insert(collection, &collection_details);
-			Self::deposit_event(Event::AttributeSet { collection, maybe_instance, key, value });
+			Self::deposit_event(Event::AttributeSet { collection, maybe_asset, key, value });
 			Ok(())
 		}
 
-		/// Clear an attribute for an assets collection or instance.
+		/// Clear an attribute for an assets collection or asset.
 		///
 		/// Origin must be either `ForceOrigin` or Signed and the sender should be the Owner of the
 		/// asset `collection`.
 		///
 		/// Any deposit is freed for the assets collection owner.
 		///
-		/// - `collection`: The identifier of the assets collection whose instance's metadata to
-		///   clear.
-		/// - `maybe_instance`: The identifier of the asset instance whose metadata to clear.
+		/// - `collection`: The identifier of the assets collection whose asset's metadata to clear.
+		/// - `maybe_asset`: The identifier of the asset whose metadata to clear.
 		/// - `key`: The key of the attribute.
 		///
 		/// Emits `AttributeCleared`.
@@ -1087,7 +1081,7 @@ pub mod pallet {
 		pub fn clear_attribute(
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
-			maybe_instance: Option<T::InstanceId>,
+			maybe_asset: Option<T::AssetId>,
 			key: BoundedVec<u8, T::KeyLimit>,
 		) -> DispatchResult {
 			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
@@ -1099,25 +1093,23 @@ pub mod pallet {
 			if let Some(check_owner) = &maybe_check_owner {
 				ensure!(check_owner == &collection_details.owner, Error::<T, I>::NoPermission);
 			}
-			let maybe_is_frozen = match maybe_instance {
+			let maybe_is_frozen = match maybe_asset {
 				None => CollectionMetadataOf::<T, I>::get(collection).map(|v| v.is_frozen),
-				Some(instance) =>
-					InstanceMetadataOf::<T, I>::get(collection, instance).map(|v| v.is_frozen),
+				Some(asset) => AssetMetadataOf::<T, I>::get(collection, asset).map(|v| v.is_frozen),
 			};
 			ensure!(!maybe_is_frozen.unwrap_or(false), Error::<T, I>::Frozen);
 
-			if let Some((_, deposit)) = Attribute::<T, I>::take((collection, maybe_instance, &key))
-			{
+			if let Some((_, deposit)) = Attribute::<T, I>::take((collection, maybe_asset, &key)) {
 				collection_details.attributes.saturating_dec();
 				collection_details.total_deposit.saturating_reduce(deposit);
 				T::Currency::unreserve(&collection_details.owner, deposit);
 				Collection::<T, I>::insert(collection, &collection_details);
-				Self::deposit_event(Event::AttributeCleared { collection, maybe_instance, key });
+				Self::deposit_event(Event::AttributeCleared { collection, maybe_asset, key });
 			}
 			Ok(())
 		}
 
-		/// Set the metadata for an asset instance.
+		/// Set the metadata for an asset.
 		///
 		/// Origin must be either `ForceOrigin` or Signed and the sender should be the Owner of the
 		/// asset `collection`.
@@ -1126,9 +1118,8 @@ pub mod pallet {
 		/// `MetadataDepositBase + DepositPerByte * data.len` taking into
 		/// account any already reserved funds.
 		///
-		/// - `collection`: The identifier of the assets collection whose instance's metadata to
-		///   set.
-		/// - `instance`: The identifier of the asset instance whose metadata to set.
+		/// - `collection`: The identifier of the assets collection whose asset's metadata to set.
+		/// - `asset`: The identifier of the asset whose metadata to set.
 		/// - `data`: The general information of this asset. Limited in length by `StringLimit`.
 		/// - `is_frozen`: Whether the metadata should be frozen against further changes.
 		///
@@ -1139,7 +1130,7 @@ pub mod pallet {
 		pub fn set_metadata(
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
-			instance: T::InstanceId,
+			asset: T::AssetId,
 			data: BoundedVec<u8, T::StringLimit>,
 			is_frozen: bool,
 		) -> DispatchResult {
@@ -1154,12 +1145,12 @@ pub mod pallet {
 				ensure!(check_owner == &collection_details.owner, Error::<T, I>::NoPermission);
 			}
 
-			InstanceMetadataOf::<T, I>::try_mutate_exists(collection, instance, |metadata| {
+			AssetMetadataOf::<T, I>::try_mutate_exists(collection, asset, |metadata| {
 				let was_frozen = metadata.as_ref().map_or(false, |m| m.is_frozen);
 				ensure!(maybe_check_owner.is_none() || !was_frozen, Error::<T, I>::Frozen);
 
 				if metadata.is_none() {
-					collection_details.instance_metadatas.saturating_inc();
+					collection_details.asset_metadatas.saturating_inc();
 				}
 				let old_deposit = metadata.take().map_or(Zero::zero(), |m| m.deposit);
 				collection_details.total_deposit.saturating_reduce(old_deposit);
@@ -1176,24 +1167,23 @@ pub mod pallet {
 				}
 				collection_details.total_deposit.saturating_accrue(deposit);
 
-				*metadata = Some(InstanceMetadata { deposit, data: data.clone(), is_frozen });
+				*metadata = Some(AssetMetadata { deposit, data: data.clone(), is_frozen });
 
 				Collection::<T, I>::insert(&collection, &collection_details);
-				Self::deposit_event(Event::MetadataSet { collection, instance, data, is_frozen });
+				Self::deposit_event(Event::MetadataSet { collection, asset, data, is_frozen });
 				Ok(())
 			})
 		}
 
-		/// Clear the metadata for an asset instance.
+		/// Clear the metadata for an asset.
 		///
 		/// Origin must be either `ForceOrigin` or Signed and the sender should be the Owner of the
-		/// asset `instance`.
+		/// asset `asset`.
 		///
 		/// Any deposit is freed for the assets collection owner.
 		///
-		/// - `collection`: The identifier of the assets collection whose instance's metadata to
-		///   clear.
-		/// - `instance`: The identifier of the asset instance whose metadata to clear.
+		/// - `collection`: The identifier of the assets collection whose asset's metadata to clear.
+		/// - `asset`: The identifier of the asset whose metadata to clear.
 		///
 		/// Emits `MetadataCleared`.
 		///
@@ -1202,7 +1192,7 @@ pub mod pallet {
 		pub fn clear_metadata(
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
-			instance: T::InstanceId,
+			asset: T::AssetId,
 		) -> DispatchResult {
 			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
@@ -1214,19 +1204,19 @@ pub mod pallet {
 				ensure!(check_owner == &collection_details.owner, Error::<T, I>::NoPermission);
 			}
 
-			InstanceMetadataOf::<T, I>::try_mutate_exists(collection, instance, |metadata| {
+			AssetMetadataOf::<T, I>::try_mutate_exists(collection, asset, |metadata| {
 				let was_frozen = metadata.as_ref().map_or(false, |m| m.is_frozen);
 				ensure!(maybe_check_owner.is_none() || !was_frozen, Error::<T, I>::Frozen);
 
 				if metadata.is_some() {
-					collection_details.instance_metadatas.saturating_dec();
+					collection_details.asset_metadatas.saturating_dec();
 				}
 				let deposit = metadata.take().ok_or(Error::<T, I>::UnknownCollection)?.deposit;
 				T::Currency::unreserve(&collection_details.owner, deposit);
 				collection_details.total_deposit.saturating_reduce(deposit);
 
 				Collection::<T, I>::insert(&collection, &collection_details);
-				Self::deposit_event(Event::MetadataCleared { collection, instance });
+				Self::deposit_event(Event::MetadataCleared { collection, asset });
 				Ok(())
 			})
 		}

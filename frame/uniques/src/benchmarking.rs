@@ -20,9 +20,7 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
-use frame_benchmarking::{
-	account, benchmarks_instance_pallet, whitelist_account, whitelisted_caller,
-};
+use frame_benchmarking::{account, benchmarks_asset_pallet, whitelist_account, whitelisted_caller};
 use frame_support::{
 	dispatch::UnfilteredDispatchable,
 	traits::{EnsureOrigin, Get},
@@ -69,27 +67,27 @@ fn add_collection_metadata<T: Config<I>, I: 'static>(
 	(caller, caller_lookup)
 }
 
-fn mint_instance<T: Config<I>, I: 'static>(
+fn mint_asset<T: Config<I>, I: 'static>(
 	index: u16,
-) -> (T::InstanceId, T::AccountId, <T::Lookup as StaticLookup>::Source) {
+) -> (T::AssetId, T::AccountId, <T::Lookup as StaticLookup>::Source) {
 	let caller = Collection::<T, I>::get(T::Helper::collection(0)).unwrap().admin;
 	if caller != whitelisted_caller() {
 		whitelist_account!(caller);
 	}
 	let caller_lookup = T::Lookup::unlookup(caller.clone());
-	let instance = T::Helper::instance(index);
+	let asset = T::Helper::asset(index);
 	assert!(Uniques::<T, I>::mint(
 		SystemOrigin::Signed(caller.clone()).into(),
 		T::Helper::collection(0),
-		instance,
+		asset,
 		caller_lookup.clone(),
 	)
 	.is_ok());
-	(instance, caller, caller_lookup)
+	(asset, caller, caller_lookup)
 }
 
-fn add_instance_metadata<T: Config<I>, I: 'static>(
-	instance: T::InstanceId,
+fn add_asset_metadata<T: Config<I>, I: 'static>(
+	asset: T::AssetId,
 ) -> (T::AccountId, <T::Lookup as StaticLookup>::Source) {
 	let caller = Collection::<T, I>::get(T::Helper::collection(0)).unwrap().owner;
 	if caller != whitelisted_caller() {
@@ -99,7 +97,7 @@ fn add_instance_metadata<T: Config<I>, I: 'static>(
 	assert!(Uniques::<T, I>::set_metadata(
 		SystemOrigin::Signed(caller.clone()).into(),
 		T::Helper::collection(0),
-		instance,
+		asset,
 		vec![0; T::StringLimit::get() as usize].try_into().unwrap(),
 		false,
 	)
@@ -107,8 +105,8 @@ fn add_instance_metadata<T: Config<I>, I: 'static>(
 	(caller, caller_lookup)
 }
 
-fn add_instance_attribute<T: Config<I>, I: 'static>(
-	instance: T::InstanceId,
+fn add_asset_attribute<T: Config<I>, I: 'static>(
+	asset: T::AssetId,
 ) -> (BoundedVec<u8, T::KeyLimit>, T::AccountId, <T::Lookup as StaticLookup>::Source) {
 	let caller = Collection::<T, I>::get(T::Helper::collection(0)).unwrap().owner;
 	if caller != whitelisted_caller() {
@@ -119,7 +117,7 @@ fn add_instance_attribute<T: Config<I>, I: 'static>(
 	assert!(Uniques::<T, I>::set_attribute(
 		SystemOrigin::Signed(caller.clone()).into(),
 		T::Helper::collection(0),
-		Some(instance),
+		Some(asset),
 		key.clone(),
 		vec![0; T::ValueLimit::get() as usize].try_into().unwrap(),
 	)
@@ -135,7 +133,7 @@ fn assert_last_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::
 	assert_eq!(event, &system_event);
 }
 
-benchmarks_instance_pallet! {
+benchmarks_asset_pallet! {
 	create {
 		let collection = T::Helper::collection(0);
 		let origin = T::CreateOrigin::successful_origin(&collection);
@@ -165,13 +163,13 @@ benchmarks_instance_pallet! {
 		let (collection, caller, caller_lookup) = create_collection::<T, I>();
 		add_collection_metadata::<T, I>();
 		for i in 0..n {
-			mint_instance::<T, I>(i as u16);
+			mint_asset::<T, I>(i as u16);
 		}
 		for i in 0..m {
-			add_instance_metadata::<T, I>(T::Helper::instance(i as u16));
+			add_asset_metadata::<T, I>(T::Helper::asset(i as u16));
 		}
 		for i in 0..a {
-			add_instance_attribute::<T, I>(T::Helper::instance(i as u16));
+			add_asset_attribute::<T, I>(T::Helper::asset(i as u16));
 		}
 		let witness = Collection::<T, I>::get(collection).unwrap().destroy_witness();
 	}: _(SystemOrigin::Signed(caller), collection, witness)
@@ -181,35 +179,35 @@ benchmarks_instance_pallet! {
 
 	mint {
 		let (collection, caller, caller_lookup) = create_collection::<T, I>();
-		let instance = T::Helper::instance(0);
-	}: _(SystemOrigin::Signed(caller.clone()), collection, instance, caller_lookup)
+		let asset = T::Helper::asset(0);
+	}: _(SystemOrigin::Signed(caller.clone()), collection, asset, caller_lookup)
 	verify {
-		assert_last_event::<T, I>(Event::Issued { collection, instance, owner: caller }.into());
+		assert_last_event::<T, I>(Event::Issued { collection, asset, owner: caller }.into());
 	}
 
 	burn {
 		let (collection, caller, caller_lookup) = create_collection::<T, I>();
-		let (instance, ..) = mint_instance::<T, I>(0);
-	}: _(SystemOrigin::Signed(caller.clone()), collection, instance, Some(caller_lookup))
+		let (asset, ..) = mint_asset::<T, I>(0);
+	}: _(SystemOrigin::Signed(caller.clone()), collection, asset, Some(caller_lookup))
 	verify {
-		assert_last_event::<T, I>(Event::Burned { collection, instance, owner: caller }.into());
+		assert_last_event::<T, I>(Event::Burned { collection, asset, owner: caller }.into());
 	}
 
 	transfer {
 		let (collection, caller, caller_lookup) = create_collection::<T, I>();
-		let (instance, ..) = mint_instance::<T, I>(0);
+		let (asset, ..) = mint_asset::<T, I>(0);
 
 		let target: T::AccountId = account("target", 0, SEED);
 		let target_lookup = T::Lookup::unlookup(target.clone());
-	}: _(SystemOrigin::Signed(caller.clone()), collection, instance, target_lookup)
+	}: _(SystemOrigin::Signed(caller.clone()), collection, asset, target_lookup)
 	verify {
-		assert_last_event::<T, I>(Event::Transferred { collection, instance, from: caller, to: target }.into());
+		assert_last_event::<T, I>(Event::Transferred { collection, asset, from: caller, to: target }.into());
 	}
 
 	redeposit {
 		let i in 0 .. 5_000;
 		let (collection, caller, caller_lookup) = create_collection::<T, I>();
-		let instances = (0..i).map(|x| mint_instance::<T, I>(x as u16).0).collect::<Vec<_>>();
+		let assets = (0..i).map(|x| mint_asset::<T, I>(x as u16).0).collect::<Vec<_>>();
 		Uniques::<T, I>::force_asset_status(
 			SystemOrigin::Root.into(),
 			collection,
@@ -220,30 +218,30 @@ benchmarks_instance_pallet! {
 			true,
 			false,
 		)?;
-	}: _(SystemOrigin::Signed(caller.clone()), collection, instances.clone())
+	}: _(SystemOrigin::Signed(caller.clone()), collection, assets.clone())
 	verify {
-		assert_last_event::<T, I>(Event::Redeposited { collection, successful_instances: instances }.into());
+		assert_last_event::<T, I>(Event::Redeposited { collection, successful_assets: assets }.into());
 	}
 
 	freeze {
 		let (collection, caller, caller_lookup) = create_collection::<T, I>();
-		let (instance, ..) = mint_instance::<T, I>(0);
-	}: _(SystemOrigin::Signed(caller.clone()), T::Helper::collection(0), T::Helper::instance(0))
+		let (asset, ..) = mint_asset::<T, I>(0);
+	}: _(SystemOrigin::Signed(caller.clone()), T::Helper::collection(0), T::Helper::asset(0))
 	verify {
-		assert_last_event::<T, I>(Event::Frozen { collection: T::Helper::collection(0), instance: T::Helper::instance(0) }.into());
+		assert_last_event::<T, I>(Event::Frozen { collection: T::Helper::collection(0), asset: T::Helper::asset(0) }.into());
 	}
 
 	thaw {
 		let (collection, caller, caller_lookup) = create_collection::<T, I>();
-		let (instance, ..) = mint_instance::<T, I>(0);
+		let (asset, ..) = mint_asset::<T, I>(0);
 		Uniques::<T, I>::freeze(
 			SystemOrigin::Signed(caller.clone()).into(),
 			collection,
-			instance,
+			asset,
 		)?;
-	}: _(SystemOrigin::Signed(caller.clone()), collection, instance)
+	}: _(SystemOrigin::Signed(caller.clone()), collection, asset)
 	verify {
-		assert_last_event::<T, I>(Event::Thawed { collection, instance }.into());
+		assert_last_event::<T, I>(Event::Thawed { collection, asset }.into());
 	}
 
 	freeze_collection {
@@ -311,40 +309,40 @@ benchmarks_instance_pallet! {
 		let value: BoundedVec<_, _> = vec![0u8; T::ValueLimit::get() as usize].try_into().unwrap();
 
 		let (collection, caller, _) = create_collection::<T, I>();
-		let (instance, ..) = mint_instance::<T, I>(0);
-		add_instance_metadata::<T, I>(instance);
-	}: _(SystemOrigin::Signed(caller), collection, Some(instance), key.clone(), value.clone())
+		let (asset, ..) = mint_asset::<T, I>(0);
+		add_asset_metadata::<T, I>(asset);
+	}: _(SystemOrigin::Signed(caller), collection, Some(asset), key.clone(), value.clone())
 	verify {
-		assert_last_event::<T, I>(Event::AttributeSet { collection, maybe_instance: Some(instance), key, value }.into());
+		assert_last_event::<T, I>(Event::AttributeSet { collection, maybe_asset: Some(asset), key, value }.into());
 	}
 
 	clear_attribute {
 		let (collection, caller, _) = create_collection::<T, I>();
-		let (instance, ..) = mint_instance::<T, I>(0);
-		add_instance_metadata::<T, I>(instance);
-		let (key, ..) = add_instance_attribute::<T, I>(instance);
-	}: _(SystemOrigin::Signed(caller), collection, Some(instance), key.clone())
+		let (asset, ..) = mint_asset::<T, I>(0);
+		add_asset_metadata::<T, I>(asset);
+		let (key, ..) = add_asset_attribute::<T, I>(asset);
+	}: _(SystemOrigin::Signed(caller), collection, Some(asset), key.clone())
 	verify {
-		assert_last_event::<T, I>(Event::AttributeCleared { collection, maybe_instance: Some(instance), key }.into());
+		assert_last_event::<T, I>(Event::AttributeCleared { collection, maybe_asset: Some(asset), key }.into());
 	}
 
 	set_metadata {
 		let data: BoundedVec<_, _> = vec![0u8; T::StringLimit::get() as usize].try_into().unwrap();
 
 		let (collection, caller, _) = create_collection::<T, I>();
-		let (instance, ..) = mint_instance::<T, I>(0);
-	}: _(SystemOrigin::Signed(caller), collection, instance, data.clone(), false)
+		let (asset, ..) = mint_asset::<T, I>(0);
+	}: _(SystemOrigin::Signed(caller), collection, asset, data.clone(), false)
 	verify {
-		assert_last_event::<T, I>(Event::MetadataSet { collection, instance, data, is_frozen: false }.into());
+		assert_last_event::<T, I>(Event::MetadataSet { collection, asset, data, is_frozen: false }.into());
 	}
 
 	clear_metadata {
 		let (collection, caller, _) = create_collection::<T, I>();
-		let (instance, ..) = mint_instance::<T, I>(0);
-		add_instance_metadata::<T, I>(instance);
-	}: _(SystemOrigin::Signed(caller), collection, instance)
+		let (asset, ..) = mint_asset::<T, I>(0);
+		add_asset_metadata::<T, I>(asset);
+	}: _(SystemOrigin::Signed(caller), collection, asset)
 	verify {
-		assert_last_event::<T, I>(Event::MetadataCleared { collection, instance }.into());
+		assert_last_event::<T, I>(Event::MetadataCleared { collection, asset }.into());
 	}
 
 	set_collection_metadata {
@@ -366,24 +364,24 @@ benchmarks_instance_pallet! {
 
 	approve_transfer {
 		let (collection, caller, _) = create_collection::<T, I>();
-		let (instance, ..) = mint_instance::<T, I>(0);
+		let (asset, ..) = mint_asset::<T, I>(0);
 		let delegate: T::AccountId = account("delegate", 0, SEED);
 		let delegate_lookup = T::Lookup::unlookup(delegate.clone());
-	}: _(SystemOrigin::Signed(caller.clone()), collection, instance, delegate_lookup)
+	}: _(SystemOrigin::Signed(caller.clone()), collection, asset, delegate_lookup)
 	verify {
-		assert_last_event::<T, I>(Event::ApprovedTransfer { collection, instance, owner: caller, delegate }.into());
+		assert_last_event::<T, I>(Event::ApprovedTransfer { collection, asset, owner: caller, delegate }.into());
 	}
 
 	cancel_approval {
 		let (collection, caller, _) = create_collection::<T, I>();
-		let (instance, ..) = mint_instance::<T, I>(0);
+		let (asset, ..) = mint_asset::<T, I>(0);
 		let delegate: T::AccountId = account("delegate", 0, SEED);
 		let delegate_lookup = T::Lookup::unlookup(delegate.clone());
 		let origin = SystemOrigin::Signed(caller.clone()).into();
-		Uniques::<T, I>::approve_transfer(origin, collection, instance, delegate_lookup.clone())?;
-	}: _(SystemOrigin::Signed(caller.clone()), collection, instance, Some(delegate_lookup))
+		Uniques::<T, I>::approve_transfer(origin, collection, asset, delegate_lookup.clone())?;
+	}: _(SystemOrigin::Signed(caller.clone()), collection, asset, Some(delegate_lookup))
 	verify {
-		assert_last_event::<T, I>(Event::ApprovalCancelled { collection, instance, owner: caller, delegate }.into());
+		assert_last_event::<T, I>(Event::ApprovalCancelled { collection, asset, owner: caller, delegate }.into());
 	}
 
 	set_accept_ownership {
