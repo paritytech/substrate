@@ -64,19 +64,19 @@ fn main() {
 				Action::Insert => {
 					if BagsList::on_insert(id, vote_weight).is_err() {
 						// this was a duplicate id, which is ok. We can just update it.
-						BagsList::on_update(&id, vote_weight);
+						BagsList::on_update(&id, vote_weight).unwrap();
 					}
 					assert!(BagsList::contains(&id));
 				},
 				Action::Update => {
 					let already_contains = BagsList::contains(&id);
-					BagsList::on_update(&id, vote_weight);
+					BagsList::on_update(&id, vote_weight).unwrap();
 					if already_contains {
 						assert!(BagsList::contains(&id));
 					}
 				},
 				Action::Remove => {
-					BagsList::on_remove(&id);
+					BagsList::on_remove(&id).unwrap();
 					assert!(!BagsList::contains(&id));
 				},
 			}
