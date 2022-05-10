@@ -1141,7 +1141,7 @@ pub mod pallet {
 	pub type Metadata<T: Config> =
 		CountedStorageMap<_, Twox64Concat, PoolId, BoundedVec<u8, T::MaxMetadataLen>, ValueQuery>;
 
-	/// The last pool id.
+	/// Ever increasing number of all pools created so far.
 	#[pallet::storage]
 	pub type LastPoolId<T: Config> = StorageValue<_, u32, ValueQuery>;
 
@@ -1276,7 +1276,7 @@ pub mod pallet {
 		NotEnoughPointsToUnbond,
 		/// Partial unbonding now allowed permissionlessly.
 		PartialUnbondNotAllowedPermissionlessly,
-		/// Cannot remove any of the roles, they can only be set ot left unchanged.
+		/// Cannot remove any of the roles, they can only be set to left unchanged.
 		CannotRemoveRole,
 	}
 
