@@ -469,6 +469,8 @@ pub enum OldVote {
 
 #[frame_support::pallet]
 pub mod pallet {
+	use frame_support::dispatch::PaysFee;
+
 	use super::*;
 
 	#[pallet::pallet]
@@ -1004,13 +1006,15 @@ pub mod pallet {
 			let mut candidacy = Candidates::<T, I>::get(&candidate).ok_or(Error::<T, I>::NotCandidate)?;
 			let record = Members::<T, I>::get(&voter).ok_or(Error::<T, I>::NotMember)?;
 
-			Votes::<T, I>::mutate(&candidate, &voter, |v| {
+			let first_time = Votes::<T, I>::mutate(&candidate, &voter, |v| {
+				let first_time = v.is_none();
 				*v = Some(Self::do_vote(*v, approve, record.rank, &mut candidacy.tally));
+				first_time
 			});
 
 			Candidates::<T, I>::insert(&candidate, &candidacy);
 			Self::deposit_event(Event::<T, I>::Vote { candidate, voter, vote: approve });
-			Ok(())
+			Ok(if first_time { Pays::No } else { Pays::Yes }.into())
 		}
 
 		/// As a member, vote on the defender.
@@ -1031,13 +1035,15 @@ pub mod pallet {
 			let mut defending = Defending::<T, I>::get().ok_or(Error::<T, I>::NoDefender)?;
 			let record = Members::<T, I>::get(&voter).ok_or(Error::<T, I>::NotMember)?;
 
-			DefenderVotes::<T, I>::mutate(&voter, |v| {
+			let first_time = DefenderVotes::<T, I>::mutate(&voter, |v| {
+				let first_time = v.is_none();
 				*v = Some(Self::do_vote(*v, approve, record.rank, &mut defending.2));
+				first_time
 			});
 
 			Defending::<T, I>::put(defending);
 			Self::deposit_event(Event::<T, I>::DefenderVote { voter, vote: approve });
-			Ok(())
+			Ok(if first_time { Pays::No } else { Pays::Yes }.into())
 		}
 
 		/// Transfer the first matured payout for the sender and remove it from the records.
@@ -1199,7 +1205,7 @@ pub mod pallet {
 
 			SuspendedMembers::<T, I>::remove(&who);
 			Self::deposit_event(Event::<T, I>::SuspendedMemberJudgement { who, judged: forgive });
-			Ok(())
+			Ok(Pays::No)
 		}
 
 		/// Change the maximum number of members in society and the maximum number of new candidates
@@ -1240,9 +1246,9 @@ pub mod pallet {
 			let mut candidacy = Candidates::<T, I>::get(&candidate).ok_or(Error::<T, I>::NotCandidate)?;
 			ensure!(!candidacy.skeptic_struck, Error::<T, I>::AlreadyPunished);
 			ensure!(!Self::in_progress(candidacy.round), Error::<T, I>::InProgress);
-			Self::check_skeptic(&candidate, &mut candidacy);
+			let punished = Self::check_skeptic(&candidate, &mut candidacy);
 			Candidates::<T, I>::insert(&candidate, candidacy);
-			Ok(())
+			Ok(if punished { Pays::No } else { Pays::Yes }.into())
 		}
 
 		/// Transform an approved candidate into a member. Callable only by the
@@ -1253,7 +1259,8 @@ pub mod pallet {
 			let candidacy = Candidates::<T, I>::get(&candidate).ok_or(Error::<T, I>::NotCandidate)?;
 			ensure!(candidacy.tally.clear_approval(), Error::<T, I>::NotApproved);
 			ensure!(!Self::in_progress(candidacy.round), Error::<T, I>::InProgress);
-			Self::induct_member(candidate, candidacy, 0)
+			Self::induct_member(candidate, candidacy, 0)?;
+			Ok(Pays::No.into())
 		}
 
 		/// Transform an approved candidate into a member. Callable only by the Signed origin of the
@@ -1266,7 +1273,8 @@ pub mod pallet {
 			let candidacy = Candidates::<T, I>::get(&candidate).ok_or(Error::<T, I>::NotCandidate)?;
 			ensure!(!candidacy.tally.clear_rejection(), Error::<T, I>::Rejected);
 			ensure!(!Self::in_progress(candidacy.round), Error::<T, I>::InProgress);
-			Self::induct_member(candidate, candidacy, 0)
+			Self::induct_member(candidate, candidacy, 0)?;
+			Ok(Pays::No.into())
 		}
 
 		/// Remove the candidate's application from the society. Callable only by the Signed origin
@@ -1285,7 +1293,7 @@ pub mod pallet {
 			Self::reject_candidate(&candidate, &candidacy.kind);
 			Votes::<T, I>::remove_prefix(&candidate, None);
 			Candidates::<T, I>::remove(&candidate);
-			Ok(())
+			Ok(Pays::No)
 		}
 
 		/// Remove the candidate's application from the society. Callable only by the candidate.
@@ -1301,7 +1309,7 @@ pub mod pallet {
 			Self::reject_candidate(&candidate, &candidacy.kind);
 			Votes::<T, I>::remove_prefix(&candidate, None);
 			Candidates::<T, I>::remove(&candidate);
-			Ok(())
+			Ok(Pays::No)
 		}
 
 		/// Remove a `candidate`'s failed application from the society. Callable by any
@@ -1318,7 +1326,7 @@ pub mod pallet {
 			Self::reject_candidate(&candidate, &candidacy.kind);
 			Votes::<T, I>::remove_prefix(&candidate, None);
 			Candidates::<T, I>::remove(&candidate);
-			Ok(())
+			Ok(Pays::No)
 		}
 	}
 }
@@ -1379,6 +1387,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		target_round == round && matches!(Self::period(), Period::Voting {..})
 	}
 
+	/// Returns the new vote.
 	fn do_vote(maybe_old: Option<Vote>, approve: bool, rank: Rank, tally: &mut Tally) -> Vote {
 		match maybe_old {
 			Some(Vote { approve: true, weight }) => tally.approvals.saturating_reduce(weight),
@@ -1394,7 +1403,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Vote { approve, weight }
 	}
 
-	fn check_skeptic(candidate: &T::AccountId, candidacy: &mut Candidacy<T::AccountId, BalanceOf<T, I>>) {
+	/// Returns `true` if a punishment was given.
+	fn check_skeptic(candidate: &T::AccountId, candidacy: &mut Candidacy<T::AccountId, BalanceOf<T, I>>) -> bool {
 		if RoundCount::<T, I>::get() != candidacy.round || candidacy.skeptic_struck { return }
 		// We expect the skeptic to have voted.
 		let skeptic = match Skeptic::<T, I>::get() { Some(s) => s, None => return };
@@ -1409,9 +1419,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				// Can't do much if the punishment doesn't work out.
 				if Self::strike_member(&skeptic).is_ok() {
 					candidacy.skeptic_struck = true;
+					true
+				} else {
+					false
 				}
 			},
-			_ => {},
+			_ => false,
 		}
 	}
 
