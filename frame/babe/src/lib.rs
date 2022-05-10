@@ -43,8 +43,8 @@ use sp_std::prelude::*;
 
 use sp_consensus_babe::{
 	digests::{NextConfigDescriptor, NextEpochDescriptor, PreDigest},
-	BabeAuthorityWeight, BabeEpochConfiguration, ConsensusLog, Epoch, EquivocationProof, Slot,
-	BABE_ENGINE_ID,
+	AllowedSlots, BabeAuthorityWeight, BabeEpochConfiguration, ConsensusLog, Epoch,
+	EquivocationProof, Slot, BABE_ENGINE_ID,
 };
 use sp_consensus_vrf::schnorrkel;
 
@@ -451,8 +451,11 @@ pub mod pallet {
 		) -> DispatchResult {
 			ensure_root(origin)?;
 			match config {
-				NextConfigDescriptor::V1 { c, allowed_slots: _ } => {
-					ensure!(c.1 != 0, Error::<T>::InvalidConfiguration);
+				NextConfigDescriptor::V1 { c, allowed_slots } => {
+					ensure!(
+						!(c.0 == 0 && allowed_slots == AllowedSlots::PrimarySlots) && c.1 != 0,
+						Error::<T>::InvalidConfiguration
+					);
 				},
 			}
 			PendingEpochConfigChange::<T>::put(config);
