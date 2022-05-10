@@ -24,6 +24,7 @@
 use codec::{Decode, Encode};
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
+	ensure,
 	traits::{
 		ConstU32, DisabledValidators, FindAuthor, Get, KeyOwnerProofSystem, OnTimestampSet,
 		OneSessionHandler,
@@ -185,6 +186,8 @@ pub mod pallet {
 		InvalidKeyOwnershipProof,
 		/// A given equivocation report is valid but already previously reported.
 		DuplicateOffenceReport,
+		/// Submitted configuration is invalid.
+		InvalidConfiguration,
 	}
 
 	/// Current epoch index.
@@ -447,6 +450,11 @@ pub mod pallet {
 			config: NextConfigDescriptor,
 		) -> DispatchResult {
 			ensure_root(origin)?;
+			match config {
+				NextConfigDescriptor::V1 { c, allowed_slots: _ } => {
+					ensure!(c.1 != 0, Error::<T>::InvalidConfiguration);
+				},
+			}
 			PendingEpochConfigChange::<T>::put(config);
 			Ok(())
 		}
