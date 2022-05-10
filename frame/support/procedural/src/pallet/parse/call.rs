@@ -199,15 +199,15 @@ impl CallDef {
 				}
 
 				let (mut weight_attrs, mut call_idx_attrs): (Vec<FunctionAttr>, Vec<FunctionAttr>) =
-					helper::take_item_pallet_attrs(&mut method.attrs)?
-					.into_iter()
-					.partition(|attr| {
-						if let FunctionAttr::Weight(_) = attr {
-							true
-						} else {
-							false
-						}
-					});
+					helper::take_item_pallet_attrs(&mut method.attrs)?.into_iter().partition(
+						|attr| {
+							if let FunctionAttr::Weight(_) = attr {
+								true
+							} else {
+								false
+							}
+						},
+					);
 
 				if weight_attrs.len() != 1 {
 					let msg = if weight_attrs.is_empty() {
