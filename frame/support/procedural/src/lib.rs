@@ -25,6 +25,7 @@ mod crate_version;
 mod debug_no_bound;
 mod default_no_bound;
 mod dummy_part_checker;
+mod storage_alias;
 mod key_prefix;
 mod match_and_insert;
 mod pallet;
@@ -574,4 +575,11 @@ pub fn derive_pallet_error(input: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn __create_tt_macro(input: TokenStream) -> TokenStream {
 	tt_macro::create_tt_return_macro(input)
+}
+
+#[proc_macro_attribute]
+pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
+	storage_alias::storage_alias(input.into())
+		.unwrap_or_else(|r| r.into_compile_error())
+		.into()
 }

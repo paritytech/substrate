@@ -139,10 +139,12 @@ pub mod v8 {
 
 pub mod v7 {
 	use super::*;
-	use frame_support::generate_storage_alias;
+	use frame_support::storage_alias;
 
-	generate_storage_alias!(Staking, CounterForValidators => Value<u32>);
-	generate_storage_alias!(Staking, CounterForNominators => Value<u32>);
+	#[storage_alias]
+	type CounterForValidators<T> = Value<Pallet<T: Config>, u32>;
+	#[storage_alias]
+	type CounterForNominators<T> = Value<Pallet<T: Config>, u32>;
 
 	pub fn pre_migrate<T: Config>() -> Result<(), &'static str> {
 		assert!(
@@ -176,15 +178,21 @@ pub mod v7 {
 
 pub mod v6 {
 	use super::*;
-	use frame_support::{generate_storage_alias, traits::Get, weights::Weight};
+	use frame_support::{storage_alias, traits::Get, weights::Weight};
 
 	// NOTE: value type doesn't matter, we just set it to () here.
-	generate_storage_alias!(Staking, SnapshotValidators => Value<()>);
-	generate_storage_alias!(Staking, SnapshotNominators => Value<()>);
-	generate_storage_alias!(Staking, QueuedElected => Value<()>);
-	generate_storage_alias!(Staking, QueuedScore => Value<()>);
-	generate_storage_alias!(Staking, EraElectionStatus => Value<()>);
-	generate_storage_alias!(Staking, IsCurrentSessionFinal => Value<()>);
+	#[storage_alias]
+	type SnapshotValidators<T> = Value<Pallet<T: Config>, ()>;
+	#[storage_alias]
+	type SnapshotNominators<T> = Value<Pallet<T: Config>, ()>;
+	#[storage_alias]
+	type QueuedElected<T> = Value<Pallet<T: Config>, ()>;
+	#[storage_alias]
+	type QueuedScore<T> = Value<Pallet<T: Config>, ()>;
+	#[storage_alias]
+	type EraElectionStatus<T> = Value<Pallet<T: Config>, ()>;
+	#[storage_alias]
+	type IsCurrentSessionFinal<T> = Value<Pallet<T: Config>, ()>;
 
 	/// check to execute prior to migration.
 	pub fn pre_migrate<T: Config>() -> Result<(), &'static str> {
