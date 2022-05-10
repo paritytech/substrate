@@ -17,7 +17,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 codec = { package = "parity-scale-codec", version = "3.0.0" }
 futures = "0.3.21"
-jsonrpc-client-transports = { version = "18.0.0", features = ["http"] }
+jsonrpsee = { version = "0.12.0", features = ["jsonrpsee-types"] }
 serde = "1"
 frame-support = { version = "4.0.0-dev", path = "../../../../frame/support" }
 sc-rpc-api = { version = "0.10.0-dev", path = "../../../../client/rpc-api" }
@@ -25,5 +25,6 @@ sp-storage = { version = "6.0.0", path = "../../../../primitives/storage" }
 
 [dev-dependencies]
 scale-info = "2.0.1"
+jsonrpsee = { version = "0.12.0", features = ["ws-client", "jsonrpsee-types"] }
 tokio = "1.17.0"
 frame-system = { version = "4.0.0-dev", path = "../../../../frame/system" }
