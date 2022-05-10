@@ -355,7 +355,8 @@ pub mod test {
 	type FooMap = Map<Prefix, Twox128, u32, BoundedBTreeMap<u32, (), ConstU32<7>>>;
 
 	#[crate::storage_alias]
-	type FooDoubleMap = DoubleMap<Prefix, Twox128, u32, Twox128, u32, BoundedBTreeMap<u32, (), ConstU32<7>>>;
+	type FooDoubleMap =
+		DoubleMap<Prefix, Twox128, u32, Twox128, u32, BoundedBTreeMap<u32, (), ConstU32<7>>>;
 
 	fn map_from_keys<K>(keys: &[K]) -> BTreeMap<K, ()>
 	where

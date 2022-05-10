@@ -16,9 +16,7 @@
 // limitations under the License.
 
 use super::{Config, OffenceDetails, Perbill, SessionIndex};
-use frame_support::{
-	storage_alias, pallet_prelude::ValueQuery, traits::Get, weights::Weight,
-};
+use frame_support::{pallet_prelude::ValueQuery, storage_alias, traits::Get, weights::Weight};
 use sp_staking::offence::{DisableStrategy, OnOffenceHandler};
 use sp_std::vec::Vec;
 
