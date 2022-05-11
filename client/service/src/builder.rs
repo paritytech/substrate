@@ -40,11 +40,11 @@ use sc_keystore::LocalKeystore;
 use sc_network::{
 	block_request_handler::{self, BlockRequestHandler},
 	config::{Role, SyncMode},
-	light_client_requests::{self, handler::LightClientRequestHandler},
 	state_request_handler::{self, StateRequestHandler},
 	warp_request_handler::{self, RequestHandler as WarpSyncRequestHandler, WarpSyncProvider},
 	NetworkService,
 };
+use sc_network_light::light_client_requests::{self, handler::LightClientRequestHandler};
 use sc_rpc::{
 	author::AuthorApiServer,
 	chain::ChainApiServer,
