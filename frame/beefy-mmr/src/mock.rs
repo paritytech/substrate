@@ -124,6 +124,7 @@ impl pallet_mmr::Config for Test {
 
 impl pallet_beefy::Config for Test {
 	type BeefyId = BeefyId;
+	type OnNewValidatorSet = BeefyMmr;
 }
 
 parameter_types! {

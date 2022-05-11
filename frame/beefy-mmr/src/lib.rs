@@ -36,8 +36,9 @@
 use sp_runtime::traits::{Convert, Hash, Member};
 use sp_std::prelude::*;
 
-use beefy_primitives::mmr::{
-	BeefyAuthoritySet, BeefyDataProvider, BeefyNextAuthoritySet, MmrLeaf, MmrLeafVersion,
+use beefy_primitives::{
+	mmr::{BeefyAuthoritySet, BeefyDataProvider, BeefyNextAuthoritySet, MmrLeaf, MmrLeafVersion},
+	ValidatorSet as BeefyValidatorSet,
 };
 use pallet_mmr::{LeafDataProvider, ParentNumberAndHash};
 
@@ -126,6 +127,12 @@ pub mod pallet {
 		type BeefyDataProvider: BeefyDataProvider<Self::LeafExtra>;
 	}
 
+	/// Details of current BEEFY authority set.
+	#[pallet::storage]
+	#[pallet::getter(fn beefy_authorities)]
+	pub type BeefyAuthorities<T: Config> =
+		StorageValue<_, BeefyAuthoritySet<MerkleRootOf<T>>, ValueQuery>;
+
 	/// Details of next BEEFY authority set.
 	///
 	/// This storage entry is used as cache for calls to `update_beefy_next_authority_set`.
@@ -151,7 +158,7 @@ where
 			version: T::LeafVersion::get(),
 			parent_number_and_hash: ParentNumberAndHash::<T>::leaf_data(),
 			leaf_extra: T::BeefyDataProvider::extra_data(),
-			beefy_next_authority_set: Pallet::<T>::update_beefy_next_authority_set(),
+			beefy_next_authority_set: Pallet::<T>::beefy_next_authorities(),
 		}
 	}
 }
@@ -165,35 +172,45 @@ where
 	}
 }
 
+impl<T> beefy_primitives::OnNewValidatorSet<<T as pallet_beefy::Config>::BeefyId> for Pallet<T>
+where
+	T: pallet::Config,
+	MerkleRootOf<T>: From<beefy_merkle_tree::Hash> + Into<beefy_merkle_tree::Hash>,
+{
+	/// Compute and cache BEEFY authority sets based on updated BEEFY validator sets.
+	fn on_new_validator_set(
+		current_set: &BeefyValidatorSet<<T as pallet_beefy::Config>::BeefyId>,
+		next_set: &BeefyValidatorSet<<T as pallet_beefy::Config>::BeefyId>,
+	) {
+		let current = Pallet::<T>::compute_authority_set(current_set);
+		let next = Pallet::<T>::compute_authority_set(next_set);
+		// cache the result
+		BeefyAuthorities::<T>::put(&current);
+		BeefyNextAuthorities::<T>::put(&next);
+	}
+}
+
 impl<T: Config> Pallet<T>
 where
 	MerkleRootOf<T>: From<beefy_merkle_tree::Hash> + Into<beefy_merkle_tree::Hash>,
 {
-	/// Returns details of the next BEEFY authority set.
+	/// Returns details of a BEEFY authority set.
 	///
 	/// Details contain authority set id, authority set length and a merkle root,
 	/// constructed from uncompressed secp256k1 public keys converted to Ethereum addresses
 	/// of the next BEEFY authority set.
-	///
-	/// This function will use a storage-cached entry in case the set didn't change, or compute and
-	/// cache new one in case it did.
-	fn update_beefy_next_authority_set() -> BeefyNextAuthoritySet<MerkleRootOf<T>> {
-		let id = pallet_beefy::Pallet::<T>::validator_set_id() + 1;
-		let current_next = Self::beefy_next_authorities();
-		// avoid computing the merkle tree if validator set id didn't change.
-		if id == current_next.id {
-			return current_next
-		}
-
-		let beefy_addresses = pallet_beefy::Pallet::<T>::next_authorities()
+	fn compute_authority_set(
+		validator_set: &BeefyValidatorSet<<T as pallet_beefy::Config>::BeefyId>,
+	) -> BeefyAuthoritySet<MerkleRootOf<T>> {
+		let id = validator_set.id();
+		let beefy_addresses = validator_set
+			.validators()
 			.into_iter()
+			.cloned()
 			.map(T::BeefyAuthorityToMerkleLeaf::convert)
 			.collect::<Vec<_>>();
 		let len = beefy_addresses.len() as u32;
 		let root = beefy_merkle_tree::merkle_root::<Self, _, _>(beefy_addresses).into();
-		let next_set = BeefyNextAuthoritySet { id, len, root };
-		// cache the result
-		BeefyNextAuthorities::<T>::put(&next_set);
-		next_set
+		BeefyAuthoritySet { id, len, root }
 	}
 }
