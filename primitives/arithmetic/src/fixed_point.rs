@@ -1092,11 +1092,9 @@ macro_rules! implement_fixed {
 			fn op_sqrt_works() {
 				for i in 1..1_000i64 {
 					let x = $name::saturating_from_rational(i, 1_000i64);
-					dbg!(i, x, x * x, (x * x).sqrt());
-					assert_eq!((x * x).sqrt(), Some(x));
+					assert_eq!((x * x).try_sqrt(), Some(x));
 					let x = $name::saturating_from_rational(i, 1i64);
-					dbg!(i, x, x * x, (x * x).sqrt());
-					assert_eq!((x * x).sqrt(), Some(x));
+					assert_eq!((x * x).try_sqrt(), Some(x));
 				}
 			}
 
