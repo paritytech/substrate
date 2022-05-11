@@ -88,7 +88,7 @@ fn check_prefix_duplicates(
 	Ok(())
 }
 
-pub struct OnEmptyStructMetadata {
+pub struct ResultOnEmptyStructMetadata {
 	/// The Rust ident that is going to be used as the name of the OnEmpty struct.
 	pub name: syn::Ident,
 	/// The visibility of the OnEmpty struct.
@@ -105,7 +105,7 @@ pub struct OnEmptyStructMetadata {
 /// * if generics are unnamed: replace the first generic `_` by the generated prefix structure
 /// * if generics are named: reorder the generic, remove their name, and add the missing ones.
 /// * Add `#[allow(type_alias_bounds)]`
-pub fn process_generics(def: &mut Def) -> syn::Result<Vec<OnEmptyStructMetadata>> {
+pub fn process_generics(def: &mut Def) -> syn::Result<Vec<ResultOnEmptyStructMetadata>> {
 	let frame_support = &def.frame_support;
 	let mut on_empty_struct_metadata = Vec::new();
 
@@ -140,8 +140,9 @@ pub fn process_generics(def: &mut Def) -> syn::Result<Vec<OnEmptyStructMetadata>
 			syn::parse_quote!(#frame_support::storage::types::OptionQuery);
 		let mut default_on_empty = |value_ty: syn::Type| -> syn::Type {
 			if let Some(QueryKind::ResultQuery(variant_name)) = storage_def.query_kind.as_ref() {
-				let on_empty_ident = quote::format_ident!("Get{}Result", storage_def.ident);
-				on_empty_struct_metadata.push(OnEmptyStructMetadata {
+				let on_empty_ident =
+					quote::format_ident!("__Frame_Internal_Get{}Result", storage_def.ident);
+				on_empty_struct_metadata.push(ResultOnEmptyStructMetadata {
 					name: on_empty_ident.clone(),
 					visibility: storage_def.vis.clone(),
 					value_ty,
@@ -602,7 +603,7 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 
 	let on_empty_structs = on_empty_struct_metadata
 		.into_iter()
-		.map(|OnEmptyStructMetadata { name, visibility, value_ty, variant_name, span }| {
+		.map(|ResultOnEmptyStructMetadata { name, visibility, value_ty, variant_name, span }| {
 			let type_impl_gen = &def.type_impl_generics(span);
 			let type_use_gen = &def.type_use_generics(span);
 			let pallet_error = def.error.as_ref().expect("Checked in process_generics; qed");
