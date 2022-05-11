@@ -82,7 +82,7 @@ where
 		_info: &DispatchInfoOf<Self::Call>,
 		_len: usize,
 	) -> TransactionValidity {
-		if who.using_encoded(|d| d.into_iter().all(|x| *x == 0)) {
+		if who.using_encoded(|d| d.iter().all(|x| *x == 0)) {
 			return Err(TransactionValidityError::Invalid(InvalidTransaction::BadSigner))
 		}
 		Ok(ValidTransaction::default())

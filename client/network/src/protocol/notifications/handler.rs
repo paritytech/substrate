@@ -16,10 +16,10 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! Implementations of the `IntoProtocolsHandler` and `ProtocolsHandler` traits for both incoming
+//! Implementations of the `IntoConnectionHandler` and `ConnectionHandler` traits for both incoming
 //! and outgoing substreams for all gossiping protocols.
 //!
-//! This is the main implementation of `ProtocolsHandler` in this crate, that handles all the
+//! This is the main implementation of `ConnectionHandler` in this crate, that handles all the
 //! gossiping protocols that are Substrate-related and outside of the scope of libp2p.
 //!
 //! # Usage
@@ -74,8 +74,8 @@ use libp2p::{
 		ConnectedPoint, PeerId,
 	},
 	swarm::{
-		IntoProtocolsHandler, KeepAlive, NegotiatedSubstream, ProtocolsHandler,
-		ProtocolsHandlerEvent, ProtocolsHandlerUpgrErr, SubstreamProtocol,
+		ConnectionHandler, ConnectionHandlerEvent, ConnectionHandlerUpgrErr, IntoConnectionHandler,
+		KeepAlive, NegotiatedSubstream, SubstreamProtocol,
 	},
 };
 use log::error;
@@ -107,7 +107,7 @@ const OPEN_TIMEOUT: Duration = Duration::from_secs(10);
 /// open substreams.
 const INITIAL_KEEPALIVE_TIME: Duration = Duration::from_secs(5);
 
-/// Implements the `IntoProtocolsHandler` trait of libp2p.
+/// Implements the `IntoConnectionHandler` trait of libp2p.
 ///
 /// Every time a connection with a remote starts, an instance of this struct is created and
 /// sent to a background task dedicated to this connection. Once the connection is established,
@@ -138,7 +138,7 @@ pub struct NotifsHandler {
 
 	/// Events to return in priority from `poll`.
 	events_queue: VecDeque<
-		ProtocolsHandlerEvent<NotificationsOut, usize, NotifsHandlerOut, NotifsHandlerError>,
+		ConnectionHandlerEvent<NotificationsOut, usize, NotifsHandlerOut, NotifsHandlerError>,
 	>,
 }
 
@@ -225,7 +225,7 @@ enum State {
 	},
 }
 
-impl IntoProtocolsHandler for NotifsHandlerProto {
+impl IntoConnectionHandler for NotifsHandlerProto {
 	type Handler = NotifsHandler;
 
 	fn inbound_protocol(&self) -> UpgradeCollec<NotificationsIn> {
@@ -400,7 +400,7 @@ impl NotificationsSink {
 	/// error to send a notification using an unknown protocol.
 	///
 	/// This method will be removed in a future version.
-	pub fn send_sync_notification<'a>(&'a self, message: impl Into<Vec<u8>>) {
+	pub fn send_sync_notification(&self, message: impl Into<Vec<u8>>) {
 		let mut lock = self.inner.sync_channel.lock();
 
 		if let Some(tx) = lock.as_mut() {
@@ -425,7 +425,7 @@ impl NotificationsSink {
 	///
 	/// The protocol name is expected to be checked ahead of calling this method. It is a logic
 	/// error to send a notification using an unknown protocol.
-	pub async fn reserve_notification<'a>(&'a self) -> Result<Ready<'a>, ()> {
+	pub async fn reserve_notification(&self) -> Result<Ready<'_>, ()> {
 		let mut lock = self.inner.async_channel.lock().await;
 
 		let poll_ready = future::poll_fn(|cx| lock.poll_ready(cx)).await;
@@ -475,7 +475,7 @@ impl NotifsHandlerProto {
 	}
 }
 
-impl ProtocolsHandler for NotifsHandler {
+impl ConnectionHandler for NotifsHandler {
 	type InEvent = NotifsHandlerIn;
 	type OutEvent = NotifsHandlerOut;
 	type Error = NotifsHandlerError;
@@ -505,7 +505,7 @@ impl ProtocolsHandler for NotifsHandler {
 		let mut protocol_info = &mut self.protocols[protocol_index];
 		match protocol_info.state {
 			State::Closed { pending_opening } => {
-				self.events_queue.push_back(ProtocolsHandlerEvent::Custom(
+				self.events_queue.push_back(ConnectionHandlerEvent::Custom(
 					NotifsHandlerOut::OpenDesiredByRemote { protocol_index },
 				));
 
@@ -573,7 +573,7 @@ impl ProtocolsHandler for NotifsHandler {
 					in_substream: in_substream.take(),
 				};
 
-				self.events_queue.push_back(ProtocolsHandlerEvent::Custom(
+				self.events_queue.push_back(ConnectionHandlerEvent::Custom(
 					NotifsHandlerOut::OpenResultOk {
 						protocol_index,
 						negotiated_fallback: new_open.negotiated_fallback,
@@ -601,7 +601,7 @@ impl ProtocolsHandler for NotifsHandler {
 							);
 
 							self.events_queue.push_back(
-								ProtocolsHandlerEvent::OutboundSubstreamRequest {
+								ConnectionHandlerEvent::OutboundSubstreamRequest {
 									protocol: SubstreamProtocol::new(proto, protocol_index)
 										.with_timeout(OPEN_TIMEOUT),
 								},
@@ -622,7 +622,7 @@ impl ProtocolsHandler for NotifsHandler {
 							);
 
 							self.events_queue.push_back(
-								ProtocolsHandlerEvent::OutboundSubstreamRequest {
+								ConnectionHandlerEvent::OutboundSubstreamRequest {
 									protocol: SubstreamProtocol::new(proto, protocol_index)
 										.with_timeout(OPEN_TIMEOUT),
 								},
@@ -660,7 +660,7 @@ impl ProtocolsHandler for NotifsHandler {
 						self.protocols[protocol_index].state =
 							State::Closed { pending_opening: true };
 
-						self.events_queue.push_back(ProtocolsHandlerEvent::Custom(
+						self.events_queue.push_back(ConnectionHandlerEvent::Custom(
 							NotifsHandlerOut::OpenResultErr { protocol_index },
 						));
 					},
@@ -670,7 +670,7 @@ impl ProtocolsHandler for NotifsHandler {
 					State::Closed { .. } => {},
 				}
 
-				self.events_queue.push_back(ProtocolsHandlerEvent::Custom(
+				self.events_queue.push_back(ConnectionHandlerEvent::Custom(
 					NotifsHandlerOut::CloseResult { protocol_index },
 				));
 			},
@@ -680,7 +680,7 @@ impl ProtocolsHandler for NotifsHandler {
 	fn inject_dial_upgrade_error(
 		&mut self,
 		num: usize,
-		_: ProtocolsHandlerUpgrErr<NotificationsHandshakeError>,
+		_: ConnectionHandlerUpgrErr<NotificationsHandshakeError>,
 	) {
 		match self.protocols[num].state {
 			State::Closed { ref mut pending_opening } |
@@ -692,7 +692,7 @@ impl ProtocolsHandler for NotifsHandler {
 			State::Opening { .. } => {
 				self.protocols[num].state = State::Closed { pending_opening: false };
 
-				self.events_queue.push_back(ProtocolsHandlerEvent::Custom(
+				self.events_queue.push_back(ConnectionHandlerEvent::Custom(
 					NotifsHandlerOut::OpenResultErr { protocol_index: num },
 				));
 			},
@@ -717,7 +717,7 @@ impl ProtocolsHandler for NotifsHandler {
 		&mut self,
 		cx: &mut Context,
 	) -> Poll<
-		ProtocolsHandlerEvent<
+		ConnectionHandlerEvent<
 			Self::OutboundProtocol,
 			Self::OutboundOpenInfo,
 			Self::OutEvent,
@@ -741,7 +741,7 @@ impl ProtocolsHandler for NotifsHandler {
 					// a substream is ready to send if there isn't actually something to send.
 					match Pin::new(&mut *notifications_sink_rx).as_mut().poll_peek(cx) {
 						Poll::Ready(Some(&NotificationsSinkMessage::ForceClose)) =>
-							return Poll::Ready(ProtocolsHandlerEvent::Close(
+							return Poll::Ready(ConnectionHandlerEvent::Close(
 								NotifsHandlerError::SyncNotificationsClogged,
 							)),
 						Poll::Ready(Some(&NotificationsSinkMessage::Notification { .. })) => {},
@@ -789,7 +789,7 @@ impl ProtocolsHandler for NotifsHandler {
 						Poll::Ready(Err(_)) => {
 							*out_substream = None;
 							let event = NotifsHandlerOut::CloseDesired { protocol_index };
-							return Poll::Ready(ProtocolsHandlerEvent::Custom(event))
+							return Poll::Ready(ConnectionHandlerEvent::Custom(event))
 						},
 					};
 				},
@@ -815,7 +815,7 @@ impl ProtocolsHandler for NotifsHandler {
 						Poll::Pending => {},
 						Poll::Ready(Some(Ok(message))) => {
 							let event = NotifsHandlerOut::Notification { protocol_index, message };
-							return Poll::Ready(ProtocolsHandlerEvent::Custom(event))
+							return Poll::Ready(ConnectionHandlerEvent::Custom(event))
 						},
 						Poll::Ready(None) | Poll::Ready(Some(Err(_))) => *in_substream = None,
 					},
@@ -827,7 +827,7 @@ impl ProtocolsHandler for NotifsHandler {
 						Poll::Ready(Err(_)) => {
 							self.protocols[protocol_index].state =
 								State::Closed { pending_opening: *pending_opening };
-							return Poll::Ready(ProtocolsHandlerEvent::Custom(
+							return Poll::Ready(ConnectionHandlerEvent::Custom(
 								NotifsHandlerOut::CloseDesired { protocol_index },
 							))
 						},

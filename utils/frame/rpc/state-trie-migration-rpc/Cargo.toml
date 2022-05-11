@@ -16,7 +16,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false }
 serde = { version = "1", features = ["derive"] }
-log = { version = "0.4.14", default-features = false }
+log = { version = "0.4.16", default-features = false }
 
 sp-std = { path = "../../../../primitives/std" }
 sp-io = { path = "../../../../primitives/io" }
@@ -25,9 +25,7 @@ sp-state-machine = { path = "../../../../primitives/state-machine" }
 sp-trie = { path = "../../../../primitives/trie" }
 trie-db = { version = "0.23.1" }
 
-jsonrpc-core = "18.0.0"
-jsonrpc-core-client = "18.0.0"
-jsonrpc-derive = "18.0.0"
+jsonrpsee = { version = "0.13.0", features = ["server", "macros"] }
 
 # Substrate Dependencies
 sc-client-api = { version = "4.0.0-dev", path = "../../../../client/api" }

@@ -14,6 +14,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 codec = { package = "parity-scale-codec", version = "3.0.0" }
 scale-info = { version = "2.0.1", features = ["derive"] }
+frame-benchmarking = { version = "4.0.0-dev", path = "../../../frame/benchmarking" }
 node-primitives = { version = "2.0.0", path = "../primitives" }
 node-runtime = { version = "3.0.0-dev", path = "../runtime" }
 sc-executor = { version = "0.10.0-dev", path = "../../../client/executor" }
@@ -22,10 +23,11 @@ sp-keystore = { version = "0.12.0", path = "../../../primitives/keystore" }
 sp-state-machine = { version = "0.12.0", path = "../../../primitives/state-machine" }
 sp-tracing = { version = "5.0.0", path = "../../../primitives/tracing" }
 sp-trie = { version = "6.0.0", path = "../../../primitives/trie" }
-frame-benchmarking = { version = "4.0.0-dev", path = "../../../frame/benchmarking" }
 
 [dev-dependencies]
 criterion = "0.3.0"
+futures = "0.3.21"
+wat = "1.0"
 frame-support = { version = "4.0.0-dev", path = "../../../frame/support" }
 frame-system = { version = "4.0.0-dev", path = "../../../frame/system" }
 node-testing = { version = "3.0.0-dev", path = "../testing" }
@@ -36,11 +38,9 @@ pallet-timestamp = { version = "4.0.0-dev", path = "../../../frame/timestamp" }
 pallet-treasury = { version = "4.0.0-dev", path = "../../../frame/treasury" }
 sp-application-crypto = { version = "6.0.0", path = "../../../primitives/application-crypto" }
 sp-consensus-babe = { version = "0.10.0-dev", path = "../../../primitives/consensus/babe" }
-sp-runtime = { version = "6.0.0", path = "../../../primitives/runtime" }
 sp-externalities = { version = "0.12.0", path = "../../../primitives/externalities" }
 sp-keyring = { version = "6.0.0", path = "../../../primitives/keyring" }
-wat = "1.0"
-futures = "0.3.21"
+sp-runtime = { version = "6.0.0", path = "../../../primitives/runtime" }
 
 [features]
 wasmtime = ["sc-executor/wasmtime"]

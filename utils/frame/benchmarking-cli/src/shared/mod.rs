@@ -25,6 +25,8 @@ pub use record::BenchRecord;
 pub use stats::{StatSelect, Stats};
 pub use weight_params::WeightParams;
 
+use rand::prelude::*;
+
 /// A Handlebars helper to add an underscore after every 3rd character,
 /// i.e. a separator for large numbers.
 #[derive(Clone, Copy)]
@@ -62,4 +64,28 @@ where
 		s.insert(0, val);
 	}
 	s
+}
+
+/// Returns an rng and the seed that was used to create it.
+///
+/// Uses a random seed if none is provided.
+pub fn new_rng(seed: Option<u64>) -> (impl rand::Rng, u64) {
+	let seed = seed.unwrap_or(rand::thread_rng().gen::<u64>());
+	(rand_pcg::Pcg64::seed_from_u64(seed), seed)
+}
+
+/// Returns an error if a debug profile is detected.
+///
+/// The rust compiler only exposes the binary information whether
+/// or not we are in a `debug` build.
+/// This means that `release` and `production` cannot be told apart.
+/// This function additionally checks for OPT-LEVEL = 3.
+pub fn check_build_profile() -> Result<(), String> {
+	if cfg!(build_profile = "debug") {
+		Err("Detected a `debug` profile".into())
+	} else if !cfg!(build_opt_level = "3") {
+		Err("The optimization level is not set to 3".into())
+	} else {
+		Ok(())
+	}
 }

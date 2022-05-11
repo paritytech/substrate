@@ -30,14 +30,13 @@ pub mod common;
 async fn benchmark_block_works() {
 	let base_dir = tempdir().expect("could not create a temp dir");
 
-	common::run_node_for_a_while(base_dir.path(), &["--dev"]).await;
+	common::run_node_for_a_while(base_dir.path(), &["--dev", "--no-hardware-benchmarks"]).await;
 
 	// Invoke `benchmark block` with all options to make sure that they are valid.
 	let status = Command::new(cargo_bin("substrate"))
 		.args(["benchmark", "block", "--dev"])
 		.arg("-d")
 		.arg(base_dir.path())
-		.args(["--pruning", "archive"])
 		.args(["--from", "1", "--to", "1"])
 		.args(["--repeat", "1"])
 		.args(["--execution", "wasm", "--wasm-execution", "compiled"])

@@ -16,24 +16,60 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-///! Warp sync support.
-pub use super::state::ImportResult;
-use super::state::StateSync;
+//! Warp sync support.
+
 pub use crate::warp_request_handler::{
 	EncodedProof, Request as WarpProofRequest, VerificationResult, WarpSyncProvider,
 };
 use crate::{
-	chain::Client,
 	schema::v1::{StateRequest, StateResponse},
-	WarpSyncPhase, WarpSyncProgress,
+	state::{ImportResult, StateSync},
 };
+use sc_client_api::ProofProvider;
+use sp_blockchain::HeaderBackend;
 use sp_finality_grandpa::{AuthorityList, SetId};
 use sp_runtime::traits::{Block as BlockT, NumberFor, Zero};
-use std::sync::Arc;
+use std::{fmt, sync::Arc};
 
-enum Phase<B: BlockT> {
+enum Phase<B: BlockT, Client> {
 	WarpProof { set_id: SetId, authorities: AuthorityList, last_hash: B::Hash },
-	State(StateSync<B>),
+	State(StateSync<B, Client>),
+}
+
+/// Reported warp sync phase.
+#[derive(Clone, Eq, PartialEq, Debug)]
+pub enum WarpSyncPhase<B: BlockT> {
+	/// Waiting for peers to connect.
+	AwaitingPeers,
+	/// Downloading and verifying grandpa warp proofs.
+	DownloadingWarpProofs,
+	/// Downloading state data.
+	DownloadingState,
+	/// Importing state.
+	ImportingState,
+	/// Downloading block history.
+	DownloadingBlocks(NumberFor<B>),
+}
+
+impl<B: BlockT> fmt::Display for WarpSyncPhase<B> {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		match self {
+			Self::AwaitingPeers => write!(f, "Waiting for peers"),
+			Self::DownloadingWarpProofs => write!(f, "Downloading finality proofs"),
+			Self::DownloadingState => write!(f, "Downloading state"),
+			Self::ImportingState => write!(f, "Importing state"),
+			Self::DownloadingBlocks(n) => write!(f, "Downloading block history (#{})", n),
+		}
+	}
+}
+
+/// Reported warp sync progress.
+#[derive(Clone, Eq, PartialEq, Debug)]
+pub struct WarpSyncProgress<B: BlockT> {
+	/// Estimated download percentage.
+	pub phase: WarpSyncPhase<B>,
+	/// Total bytes downloaded so far.
+	pub total_bytes: u64,
 }
 
 /// Import warp proof result.
@@ -45,19 +81,20 @@ pub enum WarpProofImportResult {
 }
 
 /// Warp sync state machine. Accumulates warp proofs and state.
-pub struct WarpSync<B: BlockT> {
-	phase: Phase<B>,
-	client: Arc<dyn Client<B>>,
+pub struct WarpSync<B: BlockT, Client> {
+	phase: Phase<B, Client>,
+	client: Arc<Client>,
 	warp_sync_provider: Arc<dyn WarpSyncProvider<B>>,
 	total_proof_bytes: u64,
 }
 
-impl<B: BlockT> WarpSync<B> {
+impl<B, Client> WarpSync<B, Client>
+where
+	B: BlockT,
+	Client: HeaderBackend<B> + ProofProvider<B> + 'static,
+{
 	///  Create a new instance.
-	pub fn new(
-		client: Arc<dyn Client<B>>,
-		warp_sync_provider: Arc<dyn WarpSyncProvider<B>>,
-	) -> Self {
+	pub fn new(client: Arc<Client>, warp_sync_provider: Arc<dyn WarpSyncProvider<B>>) -> Self {
 		let last_hash = client.hash(Zero::zero()).unwrap().expect("Genesis header always exists");
 		let phase = Phase::WarpProof {
 			set_id: 0,
@@ -72,7 +109,7 @@ impl<B: BlockT> WarpSync<B> {
 		match &mut self.phase {
 			Phase::WarpProof { .. } => {
 				log::debug!(target: "sync", "Unexpected state response");
-				return ImportResult::BadResponse
+				ImportResult::BadResponse
 			},
 			Phase::State(sync) => sync.import(response),
 		}
@@ -89,13 +126,13 @@ impl<B: BlockT> WarpSync<B> {
 				match self.warp_sync_provider.verify(&response, *set_id, authorities.clone()) {
 					Err(e) => {
 						log::debug!(target: "sync", "Bad warp proof response: {}", e);
-						return WarpProofImportResult::BadResponse
+						WarpProofImportResult::BadResponse
 					},
 					Ok(VerificationResult::Partial(new_set_id, new_authorities, new_last_hash)) => {
 						log::debug!(target: "sync", "Verified partial proof, set_id={:?}", new_set_id);
 						*set_id = new_set_id;
 						*authorities = new_authorities;
-						*last_hash = new_last_hash.clone();
+						*last_hash = new_last_hash;
 						self.total_proof_bytes += response.0.len() as u64;
 						WarpProofImportResult::Success
 					},

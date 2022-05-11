@@ -503,6 +503,9 @@ mod tests {
 		fn contract_info(&mut self) -> &mut crate::ContractInfo<Self::T> {
 			unimplemented!()
 		}
+		fn ecdsa_to_eth_address(&self, _pk: &[u8; 33]) -> Result<[u8; 20], ()> {
+			Ok([2u8; 20])
+		}
 	}
 
 	fn execute<E: BorrowMut<MockExt>>(wat: &str, input_data: Vec<u8>, mut ext: E) -> ExecResult {
@@ -816,13 +819,12 @@ mod tests {
 	}
 
 	#[test]
-	#[cfg(feature = "unstable-interface")]
 	fn contains_storage_works() {
 		const CODE: &str = r#"
 (module
 	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
 	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
-	(import "__unstable__" "seal_contains_storage" (func $seal_contains_storage (param i32) (result i32)))
+	(import "seal0" "seal_contains_storage" (func $seal_contains_storage (param i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; [0, 4) size of input buffer (32 byte as we copy the key here)
@@ -1083,6 +1085,42 @@ mod tests {
 		let mut mock_ext = MockExt::default();
 		assert_ok!(execute(&CODE_ECDSA_RECOVER, vec![], &mut mock_ext));
 		assert_eq!(mock_ext.ecdsa_recover.into_inner(), [([1; 65], [1; 32])]);
+	}
+
+	#[test]
+	#[cfg(feature = "unstable-interface")]
+	fn contract_ecdsa_to_eth_address() {
+		/// calls `seal_ecdsa_to_eth_address` for the contstant and ensures the result equals the
+		/// expected one.
+		const CODE_ECDSA_TO_ETH_ADDRESS: &str = r#"
+(module
+	(import "__unstable__" "seal_ecdsa_to_eth_address" (func $seal_ecdsa_to_eth_address (param i32 i32) (result i32)))
+	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
+	(func (export "call")
+		;; fill the buffer with the eth address.
+		(call $seal_ecdsa_to_eth_address (i32.const 0) (i32.const 0))
+
+		;; Return the contents of the buffer
+		(call $seal_return
+			(i32.const 0)
+			(i32.const 0)
+			(i32.const 20)
+		)
+
+		;; seal_return doesn't return, so this is effectively unreachable.
+		(unreachable)
+	)
+	(func (export "deploy"))
+)
+"#;
+
+		let output = execute(CODE_ECDSA_TO_ETH_ADDRESS, vec![], MockExt::default()).unwrap();
+		assert_eq!(
+			output,
+			ExecReturnValue { flags: ReturnFlags::empty(), data: Bytes([0x02; 20].to_vec()) }
+		);
 	}
 
 	const CODE_GET_STORAGE: &str = r#"
@@ -2124,13 +2162,12 @@ mod tests {
 	}
 
 	#[test]
-	#[cfg(feature = "unstable-interface")]
 	fn set_storage_works() {
 		const CODE: &str = r#"
 (module
 	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
 	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
-	(import "__unstable__" "seal_set_storage" (func $seal_set_storage (param i32 i32 i32) (result i32)))
+	(import "seal1" "seal_set_storage" (func $seal_set_storage (param i32 i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; 0x1000 = 4k in little endian
@@ -2368,12 +2405,11 @@ mod tests {
 	}
 
 	#[test]
-	#[cfg(feature = "unstable-interface")]
 	fn code_hash_works() {
 		/// calls `seal_code_hash` and compares the result with the constant.
 		const CODE_CODE_HASH: &str = r#"
 (module
-	(import "__unstable__" "seal_code_hash" (func $seal_code_hash (param i32 i32 i32) (result i32)))
+	(import "seal0" "seal_code_hash" (func $seal_code_hash (param i32 i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; size of our buffer is 32 bytes
@@ -2421,12 +2457,11 @@ mod tests {
 	}
 
 	#[test]
-	#[cfg(feature = "unstable-interface")]
 	fn own_code_hash_works() {
 		/// calls `seal_own_code_hash` and compares the result with the constant.
 		const CODE_OWN_CODE_HASH: &str = r#"
 (module
-	(import "__unstable__" "seal_own_code_hash" (func $seal_own_code_hash (param i32 i32)))
+	(import "seal0" "seal_own_code_hash" (func $seal_own_code_hash (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; size of our buffer is 32 bytes
@@ -2507,11 +2542,10 @@ mod tests {
 	}
 
 	#[test]
-	#[cfg(feature = "unstable-interface")]
 	fn set_code_hash() {
 		const CODE: &str = r#"
 (module
-	(import "__unstable__" "seal_set_code_hash" (func $seal_set_code_hash (param i32) (result i32)))
+	(import "seal0" "seal_set_code_hash" (func $seal_set_code_hash (param i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 	(func $assert (param i32)
 		(block $ok

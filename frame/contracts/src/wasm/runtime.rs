@@ -71,7 +71,9 @@ pub enum ReturnCode {
 	/// The call dispatched by `seal_call_runtime` was executed but returned an error.
 	#[cfg(feature = "unstable-interface")]
 	CallRuntimeReturnedError = 10,
-	/// ECDSA pubkey recovery failed. Most probably wrong recovery id or signature.
+	/// ECDSA pubkey recovery failed (most probably wrong recovery id or signature), or
+	/// ECDSA compressed pubkey conversion into Ethereum address failed (most probably
+	/// wrong pubkey provided).
 	#[cfg(feature = "unstable-interface")]
 	EcdsaRecoverFailed = 11,
 }
@@ -145,10 +147,8 @@ pub enum RuntimeCosts {
 	/// Weight of calling `seal_is_contract`.
 	IsContract,
 	/// Weight of calling `seal_code_hash`.
-	#[cfg(feature = "unstable-interface")]
 	CodeHash,
 	/// Weight of calling `seal_own_code_hash`.
-	#[cfg(feature = "unstable-interface")]
 	OwnCodeHash,
 	/// Weight of calling `seal_caller_is_origin`.
 	CallerIsOrigin,
@@ -185,7 +185,6 @@ pub enum RuntimeCosts {
 	/// Weight of calling `seal_clear_storage` per cleared byte.
 	ClearStorage(u32),
 	/// Weight of calling `seal_contains_storage` per byte of the checked item.
-	#[cfg(feature = "unstable-interface")]
 	ContainsStorage(u32),
 	/// Weight of calling `seal_get_storage` with the specified size in storage.
 	GetStorage(u32),
@@ -223,8 +222,10 @@ pub enum RuntimeCosts {
 	#[cfg(feature = "unstable-interface")]
 	CallRuntime(Weight),
 	/// Weight of calling `seal_set_code_hash`
-	#[cfg(feature = "unstable-interface")]
 	SetCodeHash,
+	/// Weight of calling `ecdsa_to_eth_address`
+	#[cfg(feature = "unstable-interface")]
+	EcdsaToEthAddress,
 }
 
 impl RuntimeCosts {
@@ -240,9 +241,7 @@ impl RuntimeCosts {
 			CopyToContract(len) => s.input_per_byte.saturating_mul(len.into()),
 			Caller => s.caller,
 			IsContract => s.is_contract,
-			#[cfg(feature = "unstable-interface")]
 			CodeHash => s.code_hash,
-			#[cfg(feature = "unstable-interface")]
 			OwnCodeHash => s.own_code_hash,
 			CallerIsOrigin => s.caller_is_origin,
 			Address => s.address,
@@ -269,7 +268,6 @@ impl RuntimeCosts {
 			ClearStorage(len) => s
 				.clear_storage
 				.saturating_add(s.clear_storage_per_byte.saturating_mul(len.into())),
-			#[cfg(feature = "unstable-interface")]
 			ContainsStorage(len) => s
 				.contains_storage
 				.saturating_add(s.contains_storage_per_byte.saturating_mul(len.into())),
@@ -307,8 +305,9 @@ impl RuntimeCosts {
 
 			#[cfg(feature = "unstable-interface")]
 			CallRuntime(weight) => weight,
-			#[cfg(feature = "unstable-interface")]
 			SetCodeHash => s.set_code_hash,
+			#[cfg(feature = "unstable-interface")]
+			EcdsaToEthAddress => s.ecdsa_to_eth_address,
 		};
 		RuntimeToken {
 			#[cfg(test)]
@@ -453,13 +452,13 @@ where
 			return match trap_reason {
 				// The trap was the result of the execution `return` host function.
 				TrapReason::Return(ReturnData { flags, data }) => {
-					let flags = ReturnFlags::from_bits(flags)
-						.ok_or_else(|| Error::<E::T>::InvalidCallFlags)?;
+					let flags =
+						ReturnFlags::from_bits(flags).ok_or(Error::<E::T>::InvalidCallFlags)?;
 					Ok(ExecReturnValue { flags, data: Bytes(data) })
 				},
 				TrapReason::Termination =>
 					Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: Bytes(Vec::new()) }),
-				TrapReason::SupervisorError(error) => Err(error)?,
+				TrapReason::SupervisorError(error) => return Err(error.into()),
 			}
 		}
 
@@ -473,10 +472,10 @@ where
 			//
 			// Because panics are really undesirable in the runtime code, we treat this as
 			// a trap for now. Eventually, we might want to revisit this.
-			Err(sp_sandbox::Error::Module) => Err("validation error")?,
+			Err(sp_sandbox::Error::Module) => return Err("validation error".into()),
 			// Any other kind of a trap should result in a failure.
 			Err(sp_sandbox::Error::Execution) | Err(sp_sandbox::Error::OutOfBounds) =>
-				Err(Error::<E::T>::ContractTrapped)?,
+				return Err(Error::<E::T>::ContractTrapped.into()),
 		}
 	}
 
@@ -613,7 +612,7 @@ where
 		let len: u32 = self.read_sandbox_memory_as(out_len_ptr)?;
 
 		if len < buf_len {
-			Err(Error::<E::T>::OutputBufferTooSmall)?
+			return Err(Error::<E::T>::OutputBufferTooSmall.into())
 		}
 
 		if let Some(costs) = create_token(buf_len) {
@@ -710,7 +709,7 @@ where
 		let charged = self
 			.charge_gas(RuntimeCosts::SetStorage { new_bytes: value_len, old_bytes: max_size })?;
 		if value_len > max_size {
-			Err(Error::<E::T>::ValueTooLarge)?;
+			return Err(Error::<E::T>::ValueTooLarge.into())
 		}
 		let mut key: StorageKey = [0; 32];
 		self.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
@@ -743,11 +742,11 @@ where
 	) -> Result<ReturnCode, TrapReason> {
 		self.charge_gas(call_type.cost())?;
 		let input_data = if flags.contains(CallFlags::CLONE_INPUT) {
-			let input = self.input_data.as_ref().ok_or_else(|| Error::<E::T>::InputForwarded)?;
+			let input = self.input_data.as_ref().ok_or(Error::<E::T>::InputForwarded)?;
 			charge_gas!(self, RuntimeCosts::CallInputCloned(input.len() as u32))?;
 			input.clone()
 		} else if flags.contains(CallFlags::FORWARD_INPUT) {
-			self.input_data.take().ok_or_else(|| Error::<E::T>::InputForwarded)?
+			self.input_data.take().ok_or(Error::<E::T>::InputForwarded)?
 		} else {
 			self.charge_gas(RuntimeCosts::CopyFromContract(input_data_len))?;
 			self.read_sandbox_memory(input_data_ptr, input_data_len)?
@@ -888,7 +887,7 @@ define_env!(Env, <E: Ext>,
 	//
 	// Returns the size of the pre-existing value at the specified key if any. Otherwise
 	// `SENTINEL` is returned as a sentinel value.
-	[__unstable__] seal_set_storage(ctx, key_ptr: u32, value_ptr: u32, value_len: u32) -> u32 => {
+	[seal1] seal_set_storage(ctx, key_ptr: u32, value_ptr: u32, value_len: u32) -> u32 => {
 		ctx.set_storage(key_ptr, value_ptr, value_len)
 	},
 
@@ -950,7 +949,7 @@ define_env!(Env, <E: Ext>,
 	//
 	// Returns the size of the pre-existing value at the specified key if any. Otherwise
 	// `SENTINEL` is returned as a sentinel value.
-	[__unstable__] seal_contains_storage(ctx, key_ptr: u32) -> u32 => {
+	[seal0] seal_contains_storage(ctx, key_ptr: u32) -> u32 => {
 		let charged = ctx.charge_gas(RuntimeCosts::ContainsStorage(ctx.ext.max_value_size()))?;
 		let mut key: StorageKey = [0; 32];
 		ctx.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
@@ -1101,7 +1100,7 @@ define_env!(Env, <E: Ext>,
 		output_len_ptr: u32
 	) -> ReturnCode => {
 		ctx.call(
-			CallFlags::from_bits(flags).ok_or_else(|| Error::<E::T>::InvalidCallFlags)?,
+			CallFlags::from_bits(flags).ok_or(Error::<E::T>::InvalidCallFlags)?,
 			CallType::Call{callee_ptr, value_ptr, gas},
 			input_data_ptr,
 			input_data_len,
@@ -1144,7 +1143,7 @@ define_env!(Env, <E: Ext>,
 		output_len_ptr: u32
 	) -> ReturnCode => {
 		ctx.call(
-			CallFlags::from_bits(flags).ok_or_else(|| Error::<E::T>::InvalidCallFlags)?,
+			CallFlags::from_bits(flags).ok_or(Error::<E::T>::InvalidCallFlags)?,
 			CallType::DelegateCall{code_hash_ptr},
 			input_data_ptr,
 			input_data_len,
@@ -1394,7 +1393,7 @@ define_env!(Env, <E: Ext>,
 	// # Errors
 	//
 	// `ReturnCode::KeyNotFound`
-	[__unstable__] seal_code_hash(ctx, account_ptr: u32, out_ptr: u32, out_len_ptr: u32) -> ReturnCode => {
+	[seal0] seal_code_hash(ctx, account_ptr: u32, out_ptr: u32, out_len_ptr: u32) -> ReturnCode => {
 		ctx.charge_gas(RuntimeCosts::CodeHash)?;
 		let address: <<E as Ext>::T as frame_system::Config>::AccountId =
 			ctx.read_sandbox_memory_as(account_ptr)?;
@@ -1413,7 +1412,7 @@ define_env!(Env, <E: Ext>,
 	// - `out_ptr`: pointer to the linear memory where the returning value is written to.
 	// - `out_len_ptr`: in-out pointer into linear memory where the buffer length
 	//   is read from and the value length is written to.
-	[__unstable__] seal_own_code_hash(ctx, out_ptr: u32, out_len_ptr: u32) => {
+	[seal0] seal_own_code_hash(ctx, out_ptr: u32, out_len_ptr: u32) => {
 		ctx.charge_gas(RuntimeCosts::OwnCodeHash)?;
 		let code_hash_encoded = &ctx.ext.own_code_hash().encode();
 		Ok(ctx.write_sandbox_output(out_ptr, out_len_ptr, code_hash_encoded, false, already_charged)?)
@@ -1479,7 +1478,7 @@ define_env!(Env, <E: Ext>,
 		ctx.charge_gas(RuntimeCosts::GasLeft)?;
 		let gas_left = &ctx.ext.gas_meter().gas_left().encode();
 		Ok(ctx.write_sandbox_output(
-			out_ptr, out_len_ptr, &gas_left, false, already_charged,
+			out_ptr, out_len_ptr, gas_left, false, already_charged,
 		)?)
 	},
 
@@ -1528,7 +1527,7 @@ define_env!(Env, <E: Ext>,
 	[seal0] seal_random(ctx, subject_ptr: u32, subject_len: u32, out_ptr: u32, out_len_ptr: u32) => {
 		ctx.charge_gas(RuntimeCosts::Random)?;
 		if subject_len > ctx.ext.schedule().limits.subject_len {
-			Err(Error::<E::T>::RandomSubjectTooLong)?;
+			return Err(Error::<E::T>::RandomSubjectTooLong.into());
 		}
 		let subject_buf = ctx.read_sandbox_memory(subject_ptr, subject_len)?;
 		Ok(ctx.write_sandbox_output(
@@ -1560,7 +1559,7 @@ define_env!(Env, <E: Ext>,
 	[seal1] seal_random(ctx, subject_ptr: u32, subject_len: u32, out_ptr: u32, out_len_ptr: u32) => {
 		ctx.charge_gas(RuntimeCosts::Random)?;
 		if subject_len > ctx.ext.schedule().limits.subject_len {
-			Err(Error::<E::T>::RandomSubjectTooLong)?;
+			return Err(Error::<E::T>::RandomSubjectTooLong.into());
 		}
 		let subject_buf = ctx.read_sandbox_memory(subject_ptr, subject_len)?;
 		Ok(ctx.write_sandbox_output(
@@ -1678,13 +1677,13 @@ define_env!(Env, <E: Ext>,
 
 		let num_topic = topics_len
 			.checked_div(sp_std::mem::size_of::<TopicOf<E::T>>() as u32)
-			.ok_or_else(|| "Zero sized topics are not allowed")?;
+			.ok_or("Zero sized topics are not allowed")?;
 		ctx.charge_gas(RuntimeCosts::DepositEvent {
 			num_topic,
 			len: data_len,
 		})?;
 		if data_len > ctx.ext.max_value_size() {
-			Err(Error::<E::T>::ValueTooLarge)?;
+			return Err(Error::<E::T>::ValueTooLarge.into());
 		}
 
 		let mut topics: Vec::<TopicOf<<E as Ext>::T>> = match topics_len {
@@ -1694,14 +1693,14 @@ define_env!(Env, <E: Ext>,
 
 		// If there are more than `event_topics`, then trap.
 		if topics.len() > ctx.ext.schedule().limits.event_topics as usize {
-			Err(Error::<E::T>::TooManyTopics)?;
+			return Err(Error::<E::T>::TooManyTopics.into());
 		}
 
 		// Check for duplicate topics. If there are any, then trap.
 		// Complexity O(n * log(n)) and no additional allocations.
 		// This also sorts the topics.
 		if has_duplicates(&mut topics) {
-			Err(Error::<E::T>::DuplicateTopics)?;
+			return Err(Error::<E::T>::DuplicateTopics.into());
 		}
 
 		let event_data = ctx.read_sandbox_memory(data_ptr, data_len)?;
@@ -1881,7 +1880,7 @@ define_env!(Env, <E: Ext>,
 	) -> u32 => {
 		use crate::chain_extension::{ChainExtension, Environment, RetVal};
 		if !<E::T as Config>::ChainExtension::enabled() {
-			Err(Error::<E::T>::NoChainExtension)?;
+			return Err(Error::<E::T>::NoChainExtension.into());
 		}
 		let env = Environment::new(ctx, input_ptr, input_len, output_ptr, output_len_ptr);
 		match <E::T as Config>::ChainExtension::call(func_id, env)? {
@@ -1984,12 +1983,12 @@ define_env!(Env, <E: Ext>,
 	// # Parameters
 	//
 	// - `signature_ptr`: the pointer into the linear memory where the signature
-	//					  is placed. Should be decodable as a 65 bytes. Traps otherwise.
+	//					 is placed. Should be decodable as a 65 bytes. Traps otherwise.
 	// - `message_hash_ptr`: the pointer into the linear memory where the message
 	// 						 hash is placed. Should be decodable as a 32 bytes. Traps otherwise.
 	// - `output_ptr`: the pointer into the linear memory where the output
-	//                 data is placed. The buffer should be 33 bytes. Traps otherwise.
-	// 				   The function will write the result directly into this buffer.
+	//                 data is placed. The buffer should be 33 bytes. The function
+	// 					will write the result directly into this buffer.
 	//
 	// # Errors
 	//
@@ -2036,12 +2035,12 @@ define_env!(Env, <E: Ext>,
 	//
 	// # Parameters
 	//
-	// - code_hash_ptr: A pointer to the buffer that contains the new code hash.
+	// - `code_hash_ptr`: A pointer to the buffer that contains the new code hash.
 	//
 	// # Errors
 	//
 	// `ReturnCode::CodeNotFound`
-	[__unstable__] seal_set_code_hash(ctx, code_hash_ptr: u32) -> ReturnCode => {
+	[seal0] seal_set_code_hash(ctx, code_hash_ptr: u32) -> ReturnCode => {
 		ctx.charge_gas(RuntimeCosts::SetCodeHash)?;
 		let code_hash: CodeHash<<E as Ext>::T> = ctx.read_sandbox_memory_as(code_hash_ptr)?;
 		match ctx.ext.set_code_hash(code_hash) {
@@ -2050,6 +2049,37 @@ define_env!(Env, <E: Ext>,
 				Ok(code)
 			},
 			Ok(()) => Ok(ReturnCode::Success)
+		}
+	},
+
+	// Calculates Ethereum address from the ECDSA compressed public key and stores
+	// it into the supplied buffer.
+	//
+	// # Parameters
+	//
+	// - `key_ptr`: a pointer to the ECDSA compressed public key. Should be decodable as a 33 bytes value.
+	//		Traps otherwise.
+	// - `out_ptr`: the pointer into the linear memory where the output
+	//                 data is placed. The function will write the result
+	//                 directly into this buffer.
+	//
+	// The value is stored to linear memory at the address pointed to by `out_ptr`.
+	// If the available space at `out_ptr` is less than the size of the value a trap is triggered.
+	//
+	// # Errors
+	//
+	// `ReturnCode::EcdsaRecoverFailed`
+	[__unstable__] seal_ecdsa_to_eth_address(ctx, key_ptr: u32, out_ptr: u32) -> ReturnCode => {
+		ctx.charge_gas(RuntimeCosts::EcdsaToEthAddress)?;
+		let mut compressed_key: [u8; 33] = [0;33];
+		ctx.read_sandbox_memory_into_buf(key_ptr, &mut compressed_key)?;
+		let result = ctx.ext.ecdsa_to_eth_address(&compressed_key);
+		match result {
+			Ok(eth_address) => {
+				ctx.write_sandbox_memory(out_ptr, eth_address.as_ref())?;
+				Ok(ReturnCode::Success)
+			},
+			Err(_) => Ok(ReturnCode::EcdsaRecoverFailed),
 		}
 	},
 );

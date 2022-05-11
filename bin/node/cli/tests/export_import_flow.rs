@@ -79,9 +79,9 @@ impl<'a> ExportImportRevertExecutor<'a> {
 		// Adding "--binary" if need be.
 		let arguments: Vec<&str> = match format_opt {
 			FormatOpt::Binary => {
-				vec![&sub_command_str, "--dev", "--pruning", "archive", "--binary", "-d"]
+				vec![&sub_command_str, "--dev", "--binary", "-d"]
 			},
-			FormatOpt::Json => vec![&sub_command_str, "--dev", "--pruning", "archive", "-d"],
+			FormatOpt::Json => vec![&sub_command_str, "--dev", "-d"],
 		};
 
 		let tmp: TempDir;
@@ -161,7 +161,7 @@ impl<'a> ExportImportRevertExecutor<'a> {
 	/// Runs the `revert` command.
 	fn run_revert(&self) {
 		let output = Command::new(cargo_bin("substrate"))
-			.args(&["revert", "--dev", "--pruning", "archive", "-d"])
+			.args(&["revert", "--dev", "-d"])
 			.arg(&self.base_path.path())
 			.output()
 			.unwrap();

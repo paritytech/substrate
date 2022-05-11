@@ -300,7 +300,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 				for tag in &tx.transaction.transaction.requires {
 					if let Some(hash) = self.provided_tags.get(tag) {
 						if let Some(tx) = ready.get_mut(hash) {
-							remove_item(&mut tx.unlocks, &hash);
+							remove_item(&mut tx.unlocks, hash);
 						}
 					}
 				}
@@ -351,7 +351,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 					let mut ready = self.ready.write();
 					let mut find_previous = |tag| -> Option<Vec<Tag>> {
 						let prev_hash = self.provided_tags.get(tag)?;
-						let tx2 = ready.get_mut(&prev_hash)?;
+						let tx2 = ready.get_mut(prev_hash)?;
 						remove_item(&mut tx2.unlocks, hash);
 						// We eagerly prune previous transactions as well.
 						// But it might not always be good.
@@ -551,7 +551,7 @@ impl<Hash: hash::Hash + Member, Ex> Iterator for BestIterator<Hash, Ex> {
 				continue
 			}
 
-			let ready = match self.all.get(&hash).cloned() {
+			let ready = match self.all.get(hash).cloned() {
 				Some(ready) => ready,
 				// The transaction is not in all, maybe it was removed in the meantime?
 				None => continue,

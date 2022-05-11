@@ -94,7 +94,7 @@ where
 	H::Out: Codec + Ord,
 {
 	fn clone(&self) -> Self {
-		TrieBackend::new(self.backend_storage().clone(), self.root().clone())
+		TrieBackend::new(self.backend_storage().clone(), *self.root())
 	}
 }
 
