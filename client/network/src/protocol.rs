@@ -49,7 +49,7 @@ use sc_client_api::{BlockBackend, HeaderBackend, ProofProvider};
 use sc_consensus::import_queue::{BlockImportError, BlockImportStatus, IncomingBlock, Origin};
 use sc_network_common::{
 	config::ProtocolId,
-	warp_sync_provider::{EncodedProof, WarpProofRequest, WarpSyncProvider},
+	warp_sync::{EncodedProof, WarpProofRequest, WarpSyncProvider},
 };
 use sc_network_sync::{
 	message::{

@@ -23,7 +23,7 @@ use crate::{
 	state::{ImportResult, StateSync},
 };
 use sc_client_api::ProofProvider;
-use sc_network_common::warp_sync_provider::{
+use sc_network_common::warp_sync::{
 	EncodedProof, VerificationResult, WarpProofRequest, WarpSyncProvider,
 };
 use sp_blockchain::HeaderBackend;

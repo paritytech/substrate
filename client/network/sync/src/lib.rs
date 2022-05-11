@@ -52,7 +52,7 @@ use libp2p::PeerId;
 use log::{debug, error, info, trace, warn};
 use sc_client_api::{BlockBackend, ProofProvider};
 use sc_consensus::{BlockImportError, BlockImportStatus, IncomingBlock};
-use sc_network_common::warp_sync_provider::{EncodedProof, WarpProofRequest, WarpSyncProvider};
+use sc_network_common::warp_sync::{EncodedProof, WarpProofRequest, WarpSyncProvider};
 use sp_arithmetic::traits::Saturating;
 use sp_blockchain::{Error as ClientError, HeaderBackend, HeaderMetadata};
 use sp_consensus::{

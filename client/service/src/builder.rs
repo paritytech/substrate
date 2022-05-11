@@ -44,7 +44,7 @@ use sc_network::{
 	warp_request_handler::{self, RequestHandler as WarpSyncRequestHandler},
 	NetworkService,
 };
-use sc_network_common::warp_sync_provider::WarpSyncProvider;
+use sc_network_common::warp_sync::WarpSyncProvider;
 use sc_network_light::light_client_requests::{self, handler::LightClientRequestHandler};
 use sc_rpc::{
 	author::AuthorApiServer,

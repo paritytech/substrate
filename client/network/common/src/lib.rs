@@ -21,4 +21,4 @@
 pub mod config;
 pub mod message;
 pub mod request_responses;
-pub mod warp_sync_provider;
+pub mod warp_sync;
