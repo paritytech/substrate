@@ -706,24 +706,22 @@ impl<T: Config> BondedPool<T> {
 			// We checked for zero above
 			.div(bonded_balance);
 
-		let min_points_to_balance = MinPointsToBalance::<T>::get();
+		let min_points_to_balance = T::MinPointsToBalance::get();
 
 		// Pool points can inflate relative to balance, but only if the pool is slashed.
 		// If we cap the ratio of points:balance so one cannot join a pool that has been slashed
 		// by `min_points_to_balance`%, if not zero.
+		ensure!(
+			points_to_balance_ratio_floor < min_points_to_balance.into(),
+			Error::<T>::OverflowRisk
+		);
+		// while restricting the balance to `min_points_to_balance` of max total issuance,
+		let next_bonded_balance = bonded_balance.saturating_add(new_funds);
+		ensure!(
+			next_bonded_balance < BalanceOf::<T>::max_value().div(min_points_to_balance.into()),
+			Error::<T>::OverflowRisk
+		);
 
-		if !min_points_to_balance.is_zero() {
-			ensure!(
-				points_to_balance_ratio_floor < min_points_to_balance.into(),
-				Error::<T>::OverflowRisk
-			);
-			// while restricting the balance to `min_points_to_balance` of max total issuance,
-			let next_bonded_balance = bonded_balance.saturating_add(new_funds);
-			ensure!(
-				next_bonded_balance < BalanceOf::<T>::max_value().div(min_points_to_balance.into()),
-				Error::<T>::OverflowRisk
-			);
-		}
 		// then we can be decently confident the bonding pool points will not overflow
 		// `BalanceOf<T>`. Note that these are just heuristics.
 
@@ -1071,6 +1069,14 @@ pub mod pallet {
 		#[pallet::constant]
 		type PalletId: Get<frame_support::PalletId>;
 
+		/// The minimum points to balance ratio that must be maintained for the pool to be `open`.
+		/// This is important in the event slashing takes place and the pool points to balance ratio
+		/// becomes disproportional.
+		/// For a value of 10, the threshold would be a pool points to pool balance ratio of 10:1.
+		/// Such a scenario would also be the equivalent of the pool being 90% slashed.
+		#[pallet::constant]
+		type MinPointsToBalance: Get<u32>;
+
 		/// Infallible method for converting `Currency::Balance` to `U256`.
 		type BalanceToU256: Convert<BalanceOf<Self>, U256>;
 
@@ -1144,14 +1150,6 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type SubPoolsStorage<T: Config> = CountedStorageMap<_, Twox64Concat, PoolId, SubPools<T>>;
 
-	/// The minimum points to balance ratio that must be maintained for the pool to be `open`.
-	/// This is important in the event slashing takes place and the pool points to balance ratio
-	/// becomes disproportional.
-	/// For a value of 10, the threshold would be a pool points to pool balance ratio of 10:1.
-	/// Such a scenario would also be the equivalent of the pool being 90% slashed.
-	#[pallet::storage]
-	pub type MinPointsToBalance<T: Config> = StorageValue<_, u32, ValueQuery>;
-
 	/// Metadata for the pool.
 	#[pallet::storage]
 	pub type Metadata<T: Config> =
@@ -1171,7 +1169,6 @@ pub mod pallet {
 		pub max_pools: Option<u32>,
 		pub max_members_per_pool: Option<u32>,
 		pub max_members: Option<u32>,
-		pub min_points_to_balance: u32,
 	}
 
 	#[cfg(feature = "std")]
@@ -1183,7 +1180,6 @@ pub mod pallet {
 				max_pools: Some(16),
 				max_members_per_pool: Some(32),
 				max_members: Some(16 * 32),
-				min_points_to_balance: 10,
 			}
 		}
 	}
@@ -1202,7 +1198,6 @@ pub mod pallet {
 			if let Some(max_members) = self.max_members {
 				MaxPoolMembers::<T>::put(max_members);
 			}
-			MinPointsToBalance::<T>::put(self.min_points_to_balance);
 		}
 	}
 
@@ -1807,7 +1802,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Update configurations for the nomination pools. The origin must for this call must be
+		/// Update configurations for the nomination pools. The origin for this call must be
 		/// Root.
 		///
 		/// # Arguments
@@ -1817,7 +1812,6 @@ pub mod pallet {
 		/// * `max_pools` - Set [`MaxPools`].
 		/// * `max_members` - Set [`MaxPoolMembers`].
 		/// * `max_members_per_pool` - Set [`MaxPoolMembersPerPool`].
-		/// * `min_points_to_balance` - Set [`MinPointsToBalance`],
 		#[pallet::weight(T::WeightInfo::set_configs())]
 		pub fn set_configs(
 			origin: OriginFor<T>,
@@ -1826,7 +1820,6 @@ pub mod pallet {
 			max_pools: ConfigOp<u32>,
 			max_members: ConfigOp<u32>,
 			max_members_per_pool: ConfigOp<u32>,
-			min_points_to_balance: ConfigOp<u32>,
 		) -> DispatchResult {
 			ensure_root(origin)?;
 
@@ -1845,8 +1838,6 @@ pub mod pallet {
 			config_op_exp!(MaxPools::<T>, max_pools);
 			config_op_exp!(MaxPoolMembers::<T>, max_members);
 			config_op_exp!(MaxPoolMembersPerPool::<T>, max_members_per_pool);
-			config_op_exp!(MinPointsToBalance::<T>, min_points_to_balance);
-
 			Ok(())
 		}
 	}
@@ -1854,6 +1845,10 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn integrity_test() {
+			assert!(
+				T::MinPointsToBalance::get() > 0,
+				"Minimum points to balance ratio must be greater than 0"
+			);
 			assert!(
 				sp_std::mem::size_of::<RewardPoints>() >=
 					2 * sp_std::mem::size_of::<BalanceOf<T>>(),
@@ -2217,7 +2212,6 @@ impl<T: Config> Pallet<T> {
 				sum_unbonding_balance
 			);
 		}
-
 		Ok(())
 	}
 

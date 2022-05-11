@@ -186,7 +186,7 @@ mod bonded_pool {
 				},
 			};
 
-			let min_points_to_balance: u128 = MinPointsToBalance::<Runtime>::get().into();
+			let min_points_to_balance: u128 = MinPointsToBalance::get().into();
 
 			// Simulate a 100% slashed pool
 			StakingMock::set_bonded_balance(pool.bonded_account(), 0);
@@ -500,7 +500,7 @@ mod join {
 			);
 
 			// Force the points:balance ratio to `MinPointsToBalance` (100/10)
-			let min_points_to_balance: u128 = MinPointsToBalance::<Runtime>::get().into();
+			let min_points_to_balance: u128 = MinPointsToBalance::get().into();
 
 			StakingMock::set_bonded_balance(
 				Pools::create_bonded_account(123),
@@ -3356,19 +3356,16 @@ mod set_configs {
 				ConfigOp::Set(3u32),
 				ConfigOp::Set(4u32),
 				ConfigOp::Set(5u32),
-				ConfigOp::Set(10u32),
 			));
 			assert_eq!(MinJoinBond::<Runtime>::get(), 1);
 			assert_eq!(MinCreateBond::<Runtime>::get(), 2);
 			assert_eq!(MaxPools::<Runtime>::get(), Some(3));
 			assert_eq!(MaxPoolMembers::<Runtime>::get(), Some(4));
 			assert_eq!(MaxPoolMembersPerPool::<Runtime>::get(), Some(5));
-			assert_eq!(MinPointsToBalance::<Runtime>::get(), 10);
 
 			// Noop does nothing
 			assert_storage_noop!(assert_ok!(Pools::set_configs(
 				Origin::root(),
-				ConfigOp::Noop,
 				ConfigOp::Noop,
 				ConfigOp::Noop,
 				ConfigOp::Noop,
@@ -3379,7 +3376,6 @@ mod set_configs {
 			// Removing works
 			assert_ok!(Pools::set_configs(
 				Origin::root(),
-				ConfigOp::Remove,
 				ConfigOp::Remove,
 				ConfigOp::Remove,
 				ConfigOp::Remove,

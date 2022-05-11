@@ -162,6 +162,7 @@ parameter_types! {
 	pub static MaxMetadataLen: u32 = 2;
 	pub static CheckLevel: u8 = 255;
 	pub const PoolsPalletId: PalletId = PalletId(*b"py/nopls");
+	pub const MinPointsToBalance: u32 = 10;
 }
 impl pools::Config for Runtime {
 	type Event = Event;
@@ -174,6 +175,7 @@ impl pools::Config for Runtime {
 	type PalletId = PoolsPalletId;
 	type MaxMetadataLen = MaxMetadataLen;
 	type MaxUnbonding = MaxUnbonding;
+	type MinPointsToBalance = MinPointsToBalance;
 }
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;
@@ -222,7 +224,6 @@ impl ExtBuilder {
 			max_pools: Some(2),
 			max_members_per_pool: Some(3),
 			max_members: Some(4),
-			min_points_to_balance: 10,
 		}
 		.assimilate_storage(&mut storage);
 
