@@ -39,7 +39,9 @@ use beefy_primitives::{
 	crypto::AuthorityId, BeefyApi, ConsensusLog, MmrRootHash, ValidatorSet, BEEFY_ENGINE_ID,
 	KEY_TYPE as BeefyKeyType,
 };
-use sp_mmr_primitives::{EncodableOpaqueLeaf, Error as MmrError, LeafIndex, MmrApi, Proof};
+use sp_mmr_primitives::{
+	BatchProof, EncodableOpaqueLeaf, Error as MmrError, LeafIndex, MmrApi, Proof,
+};
 
 use sp_api::{ApiRef, ProvideRuntimeApi};
 use sp_consensus::BlockOrigin;
@@ -259,6 +261,22 @@ macro_rules! create_test_api {
 					fn mmr_root() -> Result<MmrRootHash, MmrError> {
 						Ok($mmr_root)
 					}
+
+					fn generate_batch_proof(_leaf_indices: Vec<LeafIndex>) -> Result<(Vec<EncodableOpaqueLeaf>, BatchProof<MmrRootHash>), MmrError> {
+						unimplemented!()
+					}
+
+					fn verify_batch_proof(_leaves: Vec<EncodableOpaqueLeaf>, _proof: BatchProof<MmrRootHash>) -> Result<(), MmrError> {
+						unimplemented!()
+					}
+
+					fn verify_batch_proof_stateless(
+						_root: MmrRootHash,
+						_leaves: Vec<EncodableOpaqueLeaf>,
+						_proof: BatchProof<MmrRootHash>
+					) -> Result<(), MmrError> {
+						unimplemented!()
+					}
 				}
 			}
 		}
@@ -469,8 +487,8 @@ fn finalize_block_and_wait_for_beefy(
 	}
 
 	if expected_beefy.is_empty() {
-		// run for 1 second then verify no new best beefy block available
-		let timeout = Some(Duration::from_millis(500));
+		// run for quarter second then verify no new best beefy block available
+		let timeout = Some(Duration::from_millis(250));
 		streams_empty_after_timeout(best_blocks, &net, runtime, timeout);
 		streams_empty_after_timeout(signed_commitments, &net, runtime, None);
 	} else {
@@ -535,8 +553,8 @@ fn lagging_validators() {
 	let beefy_peers = peers.iter().enumerate().map(|(id, key)| (id, key, api.clone())).collect();
 	runtime.spawn(initialize_beefy(&mut net, beefy_peers, min_block_delta));
 
-	// push 42 blocks including `AuthorityChange` digests every 30 blocks.
-	net.generate_blocks(42, session_len, &validator_set, true);
+	// push 62 blocks including `AuthorityChange` digests every 30 blocks.
+	net.generate_blocks(62, session_len, &validator_set, true);
 	net.block_until_sync();
 
 	let net = Arc::new(Mutex::new(net));
@@ -550,7 +568,7 @@ fn lagging_validators() {
 	let (best_blocks, signed_commitments) = get_beefy_streams(&mut *net.lock(), peers);
 	net.lock().peer(0).client().as_client().finalize_block(finalize, None).unwrap();
 	// verify nothing gets finalized by BEEFY
-	let timeout = Some(Duration::from_millis(500));
+	let timeout = Some(Duration::from_millis(250));
 	streams_empty_after_timeout(best_blocks, &net, &mut runtime, timeout);
 	streams_empty_after_timeout(signed_commitments, &net, &mut runtime, None);
 
@@ -563,6 +581,26 @@ fn lagging_validators() {
 
 	// Both finalize #30 (mandatory session) and #32 -> BEEFY finalize #30 (mandatory), #31, #32
 	finalize_block_and_wait_for_beefy(&net, peers, &mut runtime, &[30, 32], &[30, 31, 32]);
+
+	// Verify that session-boundary votes get buffered by client and only processed once
+	// session-boundary block is GRANDPA-finalized (this guarantees authenticity for the new session
+	// validator set).
+
+	// Alice finalizes session-boundary mandatory block #60, Bob lags behind
+	let (best_blocks, signed_commitments) = get_beefy_streams(&mut *net.lock(), peers);
+	let finalize = BlockId::number(60);
+	net.lock().peer(0).client().as_client().finalize_block(finalize, None).unwrap();
+	// verify nothing gets finalized by BEEFY
+	let timeout = Some(Duration::from_millis(250));
+	streams_empty_after_timeout(best_blocks, &net, &mut runtime, timeout);
+	streams_empty_after_timeout(signed_commitments, &net, &mut runtime, None);
+
+	// Bob catches up and also finalizes #60 (and should have buffered Alice's vote on #60)
+	let (best_blocks, signed_commitments) = get_beefy_streams(&mut *net.lock(), peers);
+	net.lock().peer(1).client().as_client().finalize_block(finalize, None).unwrap();
+	// verify beefy skips intermediary votes, and successfully finalizes mandatory block #40
+	wait_for_best_beefy_blocks(best_blocks, &net, &mut runtime, &[60]);
+	wait_for_beefy_signed_commitments(signed_commitments, &net, &mut runtime, &[60]);
 }
 
 #[test]
@@ -624,7 +662,7 @@ fn correct_beefy_payload() {
 		.unwrap();
 
 	// verify consensus is _not_ reached
-	let timeout = Some(Duration::from_millis(500));
+	let timeout = Some(Duration::from_millis(250));
 	streams_empty_after_timeout(best_blocks, &net, &mut runtime, timeout);
 	streams_empty_after_timeout(signed_commitments, &net, &mut runtime, None);
 

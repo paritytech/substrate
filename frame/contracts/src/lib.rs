@@ -115,9 +115,9 @@ use frame_support::{
 	dispatch::Dispatchable,
 	ensure,
 	traits::{Contains, Currency, Get, Randomness, ReservableCurrency, StorageVersion, Time},
-	weights::{GetDispatchInfo, Pays, PostDispatchInfo, Weight},
+	weights::{DispatchClass, GetDispatchInfo, Pays, PostDispatchInfo, Weight},
 };
-use frame_system::Pallet as System;
+use frame_system::{limits::BlockWeights, Pallet as System};
 use pallet_contracts_primitives::{
 	Code, CodeUploadResult, CodeUploadReturnValue, ContractAccessError, ContractExecResult,
 	ContractInstantiateResult, ExecReturnValue, GetStorageResult, InstantiateReturnValue,
@@ -126,7 +126,7 @@ use pallet_contracts_primitives::{
 use scale_info::TypeInfo;
 use sp_core::{crypto::UncheckedFrom, Bytes};
 use sp_runtime::traits::{Convert, Hash, Saturating, StaticLookup};
-use sp_std::{fmt::Debug, prelude::*};
+use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
 
 type CodeHash<T> = <T as frame_system::Config>::Hash;
 type TrieId = Vec<u8>;
@@ -190,6 +190,29 @@ where
 			.cloned()
 			.collect();
 		UncheckedFrom::unchecked_from(T::Hashing::hash(&buf))
+	}
+}
+
+/// A conservative implementation to be used for [`pallet::Config::ContractAccessWeight`].
+///
+/// This derives the weight from the [`BlockWeights`] passed as `B` and the `maxPovSize` passed
+/// as `P`. The default value for `P` is the `maxPovSize` used by Polkadot and Kusama.
+///
+/// It simply charges from the weight meter pro rata: If loading the contract code would consume
+/// 50% of the max storage proof then this charges 50% of the max block weight.
+pub struct DefaultContractAccessWeight<B: Get<BlockWeights>, const P: u32 = 5_242_880>(
+	PhantomData<B>,
+);
+
+impl<B: Get<BlockWeights>, const P: u32> Get<Weight> for DefaultContractAccessWeight<B, P> {
+	fn get() -> Weight {
+		let block_weights = B::get();
+		block_weights
+			.per_class
+			.get(DispatchClass::Normal)
+			.max_total
+			.unwrap_or(block_weights.max_block) /
+			Weight::from(P)
 	}
 }
 
@@ -296,6 +319,27 @@ pub mod pallet {
 		/// Changing this value for an existing chain might need a storage migration.
 		#[pallet::constant]
 		type DepositPerByte: Get<BalanceOf<Self>>;
+
+		/// The weight per byte of code that is charged when loading a contract from storage.
+		///
+		/// Currently, FRAME only charges fees for computation incurred but not for PoV
+		/// consumption caused for storage access. This is usually not exploitable because
+		/// accessing storage carries some substantial weight costs, too. However in case
+		/// of contract code very much PoV consumption can be caused while consuming very little
+		/// computation. This could be used to keep the chain busy without paying the
+		/// proper fee for it. Until this is resolved we charge from the weight meter for
+		/// contract access.
+		///
+		/// For more information check out: <https://github.com/paritytech/substrate/issues/10301>
+		///
+		/// [`DefaultContractAccessWeight`] is a safe default to be used for polkadot or kusama
+		/// parachains.
+		///
+		/// # Note
+		///
+		/// This is only relevant for parachains. Set to zero in case of a standalone chain.
+		#[pallet::constant]
+		type ContractAccessWeight: Get<Weight>;
 
 		/// The amount of balance a caller has to pay for each storage item.
 		///

@@ -17,34 +17,31 @@ codec = { package = "parity-scale-codec", version = "3.0.0", default-features = 
 	"derive",
 	"max-encoded-len",
 ] }
+impl-trait-for-tuples = "0.2.2"
 scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
 serde = { version = "1.0.136", features = ["derive"], optional = true }
-impl-trait-for-tuples = "0.2.2"
-
-sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
-sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
-
-frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
+frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "../benchmarking" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../balances" }
-
+sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
 
 [dev-dependencies]
-sp-io = { version = "6.0.0", path = "../../primitives/io" }
 sp-core = { version = "6.0.0", path = "../../primitives/core" }
+sp-io = { version = "6.0.0", path = "../../primitives/io" }
 
 [features]
 default = ["std"]
 std = [
 	"codec/std",
-	"scale-info/std",
-	"serde",
-	"sp-std/std",
-	"sp-runtime/std",
 	"frame-support/std",
 	"frame-system/std",
 	"pallet-balances/std",
+	"scale-info/std",
+	"serde",
+	"sp-runtime/std",
+	"sp-std/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",

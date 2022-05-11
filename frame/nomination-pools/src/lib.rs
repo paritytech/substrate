@@ -348,7 +348,7 @@ pub const POINTS_TO_BALANCE_INIT_RATIO: u32 = 1;
 
 /// Possible operations on the configuration values of this pallet.
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebugNoBound, PartialEq, Clone)]
-pub enum ConfigOp<T: Default + Codec + Debug> {
+pub enum ConfigOp<T: Codec + Debug> {
 	/// Don't change.
 	Noop,
 	/// Set the given value.
@@ -403,7 +403,6 @@ pub struct PoolMember<T: Config> {
 }
 
 impl<T: Config> PoolMember<T> {
-	#[cfg(any(test, debug_assertions))]
 	fn total_points(&self) -> BalanceOf<T> {
 		self.active_points().saturating_add(self.unbonding_points())
 	}
@@ -506,11 +505,11 @@ pub enum PoolState {
 /// Pool adminstration roles.
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Clone)]
 pub struct PoolRoles<AccountId> {
-	/// Creates the pool and is the initial member. They can only leave the pool once all
-	/// other members have left. Once they fully leave, the pool is destroyed.
+	/// Creates the pool and is the initial member. They can only leave the pool once all other
+	/// members have left. Once they fully leave, the pool is destroyed.
 	pub depositor: AccountId,
-	/// Can change the nominator, state-toggler, or itself and can perform any of the actions
-	/// the nominator or state-toggler can.
+	/// Can change the nominator, state-toggler, or itself and can perform any of the actions the
+	/// nominator or state-toggler can.
 	pub root: AccountId,
 	/// Can select which validators the pool nominates.
 	pub nominator: AccountId,
@@ -666,6 +665,10 @@ impl<T: Config> BondedPool<T> {
 			.saturating_sub(T::StakingInterface::active_stake(&account).unwrap_or_default())
 	}
 
+	fn can_update_roles(&self, who: &T::AccountId) -> bool {
+		*who == self.roles.root
+	}
+
 	fn can_nominate(&self, who: &T::AccountId) -> bool {
 		*who == self.roles.root || *who == self.roles.nominator
 	}
@@ -739,6 +742,14 @@ impl<T: Config> BondedPool<T> {
 	) -> Result<(), DispatchError> {
 		let is_permissioned = caller == target_account;
 		let is_depositor = *target_account == self.roles.depositor;
+		let is_full_unbond = unbonding_points == target_member.active_points();
+
+		// any partial unbonding is only ever allowed if this unbond is permissioned.
+		ensure!(
+			is_permissioned || is_full_unbond,
+			Error::<T>::PartialUnbondNotAllowedPermissionlessly
+		);
+
 		match (is_permissioned, is_depositor) {
 			// If the pool is blocked, then an admin with kicking permissions can remove a
 			// member. If the pool is being destroyed, anyone can remove a member
@@ -1134,9 +1145,14 @@ pub mod pallet {
 	pub type Metadata<T: Config> =
 		CountedStorageMap<_, Twox64Concat, PoolId, BoundedVec<u8, T::MaxMetadataLen>, ValueQuery>;
 
+	/// Ever increasing number of all pools created so far.
 	#[pallet::storage]
 	pub type LastPoolId<T: Config> = StorageValue<_, u32, ValueQuery>;
 
+	/// A reverse lookup from the pool's account id to its id.
+	///
+	/// This is only used for slashing. In all other instances, the pool id is used, and the
+	/// accounts are deterministically derived from it.
 	#[pallet::storage]
 	pub type ReversePoolIdLookup<T: Config> =
 		CountedStorageMap<_, Twox64Concat, T::AccountId, PoolId, OptionQuery>;
@@ -1198,6 +1214,12 @@ pub mod pallet {
 		Destroyed { pool_id: PoolId },
 		/// The state of a pool has changed
 		StateChanged { pool_id: PoolId, new_state: PoolState },
+		/// A member has been removed from a pool.
+		///
+		/// The removal can be voluntary (withdrawn all unbonded funds) or involuntary (kicked).
+		MemberRemoved { pool_id: PoolId, member: T::AccountId },
+		/// The roles of a pool have been updated to the given new roles.
+		RolesUpdated { root: T::AccountId, state_toggler: T::AccountId, nominator: T::AccountId },
 	}
 
 	#[pallet::error]
@@ -1256,6 +1278,8 @@ pub mod pallet {
 		DefensiveError,
 		/// Not enough points. Ty unbonding less.
 		NotEnoughPointsToUnbond,
+		/// Partial unbonding now allowed permissionlessly.
+		PartialUnbondNotAllowedPermissionlessly,
 	}
 
 	#[pallet::call]
@@ -1423,9 +1447,9 @@ pub mod pallet {
 
 			bonded_pool.ok_to_unbond_with(&caller, &member_account, &member, unbonding_points)?;
 
-			// Claim the the payout prior to unbonding. Once the user is unbonding their points
-			// no longer exist in the bonded pool and thus they can no longer claim their payouts.
-			// It is not strictly necessary to claim the rewards, but we do it here for UX.
+			// Claim the the payout prior to unbonding. Once the user is unbonding their points no
+			// longer exist in the bonded pool and thus they can no longer claim their payouts. It
+			// is not strictly necessary to claim the rewards, but we do it here for UX.
 			Self::do_reward_payout(
 				&member_account,
 				&mut member,
@@ -1595,9 +1619,13 @@ pub mod pallet {
 				amount: balance_to_unbond,
 			});
 
-			let post_info_weight = if member.active_points().is_zero() {
+			let post_info_weight = if member.total_points().is_zero() {
 				// member being reaped.
 				PoolMembers::<T>::remove(&member_account);
+				Self::deposit_event(Event::<T>::MemberRemoved {
+					pool_id: member.pool_id,
+					member: member_account.clone(),
+				});
 
 				if member_account == bonded_pool.roles.depositor {
 					Pallet::<T>::dissolve_pool(bonded_pool);
@@ -1808,6 +1836,60 @@ pub mod pallet {
 			config_op_exp!(MaxPoolMembers::<T>, max_members);
 			config_op_exp!(MaxPoolMembersPerPool::<T>, max_members_per_pool);
 
+			Ok(())
+		}
+
+		/// Update the roles of the pool.
+		///
+		/// The root is the only entity that can change any of the roles, including itself,
+		/// excluding the depositor, who can never change.
+		///
+		/// It emits an event, notifying UIs of the role change. This event is quite relevant to
+		/// most pool members and they should be informed of changes to pool roles.
+		#[pallet::weight(T::WeightInfo::update_roles())]
+		pub fn update_roles(
+			origin: OriginFor<T>,
+			pool_id: PoolId,
+			root: Option<T::AccountId>,
+			nominator: Option<T::AccountId>,
+			state_toggler: Option<T::AccountId>,
+		) -> DispatchResult {
+			let o1 = origin;
+			let o2 = o1.clone();
+
+			let mut bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
+			let is_pool_root = || -> Result<(), sp_runtime::DispatchError> {
+				let who = ensure_signed(o1)?;
+				ensure!(bonded_pool.can_update_roles(&who), Error::<T>::DoesNotHavePermission);
+				Ok(())
+			};
+			let is_root = || -> Result<(), sp_runtime::DispatchError> {
+				ensure_root(o2)?;
+				Ok(())
+			};
+
+			let _ = is_root().or_else(|_| is_pool_root())?;
+
+			match root {
+				None => (),
+				Some(v) => bonded_pool.roles.root = v,
+			};
+			match nominator {
+				None => (),
+				Some(v) => bonded_pool.roles.nominator = v,
+			};
+			match state_toggler {
+				None => (),
+				Some(v) => bonded_pool.roles.state_toggler = v,
+			};
+
+			Self::deposit_event(Event::<T>::RolesUpdated {
+				root: bonded_pool.roles.root.clone(),
+				nominator: bonded_pool.roles.nominator.clone(),
+				state_toggler: bonded_pool.roles.state_toggler.clone(),
+			});
+
+			bonded_pool.put();
 			Ok(())
 		}
 	}
@@ -2043,6 +2125,10 @@ impl<T: Config> Pallet<T> {
 		let was_destroying = bonded_pool.is_destroying();
 
 		let member_payout = Self::calculate_member_payout(member, bonded_pool, reward_pool)?;
+
+		if member_payout.is_zero() {
+			return Ok(member_payout)
+		}
 
 		// Transfer payout to the member.
 		T::Currency::transfer(

@@ -17,21 +17,21 @@
 //! Helper for handling (i.e. answering) state requests from a remote peer via the
 //! `crate::request_responses::RequestResponsesBehaviour`.
 
-use crate::{
-	config::ProtocolId,
-	request_responses::{IncomingRequest, OutgoingResponse, ProtocolConfig},
-	schema::v1::{KeyValueStateEntry, StateEntry, StateRequest, StateResponse},
-	PeerId, ReputationChange,
-};
+use crate::schema::v1::{KeyValueStateEntry, StateEntry, StateRequest, StateResponse};
 use codec::{Decode, Encode};
 use futures::{
 	channel::{mpsc, oneshot},
 	stream::StreamExt,
 };
+use libp2p::PeerId;
 use log::{debug, trace};
 use lru::LruCache;
 use prost::Message;
 use sc_client_api::ProofProvider;
+use sc_network_common::{
+	config::ProtocolId,
+	request_responses::{IncomingRequest, OutgoingResponse, ProtocolConfig},
+};
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 use std::{
 	hash::{Hash, Hasher},
@@ -44,7 +44,7 @@ const MAX_RESPONSE_BYTES: usize = 2 * 1024 * 1024; // Actual reponse may be bigg
 const MAX_NUMBER_OF_SAME_REQUESTS_PER_PEER: usize = 2;
 
 mod rep {
-	use super::ReputationChange as Rep;
+	use sc_peerset::ReputationChange as Rep;
 
 	/// Reputation change when a peer sent us the same request multiple times.
 	pub const SAME_REQUEST: Rep = Rep::new(i32::MIN, "Same state request multiple times");
