@@ -146,6 +146,9 @@ pub trait BlockBackend<Block: BlockT> {
 	fn has_indexed_transaction(&self, hash: &Block::Hash) -> sp_blockchain::Result<bool> {
 		Ok(self.indexed_transaction(hash)?.is_some())
 	}
+
+	/// Tells whether the current client configuration requires full-sync mode.
+	fn requires_full_sync(&self) -> bool;
 }
 
 /// Provide a list of potential uncle headers for a given block.

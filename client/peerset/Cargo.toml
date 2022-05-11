@@ -1,6 +1,6 @@
 [package]
 description = "Connectivity manager based on reputation"
-homepage = "http://parity.io"
+homepage = "https://substrate.io"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 name = "sc-peerset"
 version = "4.0.0-dev"
@@ -16,10 +16,10 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 futures = "0.3.21"
 libp2p = { version = "0.44.0", default-features = false }
-sc-utils = { version = "4.0.0-dev", path = "../utils"}
 log = "0.4.16"
 serde_json = "1.0.79"
 wasm-timer = "0.2"
+sc-utils = { version = "4.0.0-dev", path = "../utils" }
 
 [dev-dependencies]
 rand = "0.7.2"

@@ -147,10 +147,8 @@ pub enum RuntimeCosts {
 	/// Weight of calling `seal_is_contract`.
 	IsContract,
 	/// Weight of calling `seal_code_hash`.
-	#[cfg(feature = "unstable-interface")]
 	CodeHash,
 	/// Weight of calling `seal_own_code_hash`.
-	#[cfg(feature = "unstable-interface")]
 	OwnCodeHash,
 	/// Weight of calling `seal_caller_is_origin`.
 	CallerIsOrigin,
@@ -187,7 +185,6 @@ pub enum RuntimeCosts {
 	/// Weight of calling `seal_clear_storage` per cleared byte.
 	ClearStorage(u32),
 	/// Weight of calling `seal_contains_storage` per byte of the checked item.
-	#[cfg(feature = "unstable-interface")]
 	ContainsStorage(u32),
 	/// Weight of calling `seal_get_storage` with the specified size in storage.
 	GetStorage(u32),
@@ -225,7 +222,6 @@ pub enum RuntimeCosts {
 	#[cfg(feature = "unstable-interface")]
 	CallRuntime(Weight),
 	/// Weight of calling `seal_set_code_hash`
-	#[cfg(feature = "unstable-interface")]
 	SetCodeHash,
 	/// Weight of calling `ecdsa_to_eth_address`
 	#[cfg(feature = "unstable-interface")]
@@ -245,9 +241,7 @@ impl RuntimeCosts {
 			CopyToContract(len) => s.input_per_byte.saturating_mul(len.into()),
 			Caller => s.caller,
 			IsContract => s.is_contract,
-			#[cfg(feature = "unstable-interface")]
 			CodeHash => s.code_hash,
-			#[cfg(feature = "unstable-interface")]
 			OwnCodeHash => s.own_code_hash,
 			CallerIsOrigin => s.caller_is_origin,
 			Address => s.address,
@@ -274,7 +268,6 @@ impl RuntimeCosts {
 			ClearStorage(len) => s
 				.clear_storage
 				.saturating_add(s.clear_storage_per_byte.saturating_mul(len.into())),
-			#[cfg(feature = "unstable-interface")]
 			ContainsStorage(len) => s
 				.contains_storage
 				.saturating_add(s.contains_storage_per_byte.saturating_mul(len.into())),
@@ -312,7 +305,6 @@ impl RuntimeCosts {
 
 			#[cfg(feature = "unstable-interface")]
 			CallRuntime(weight) => weight,
-			#[cfg(feature = "unstable-interface")]
 			SetCodeHash => s.set_code_hash,
 			#[cfg(feature = "unstable-interface")]
 			EcdsaToEthAddress => s.ecdsa_to_eth_address,
@@ -895,7 +887,7 @@ define_env!(Env, <E: Ext>,
 	//
 	// Returns the size of the pre-existing value at the specified key if any. Otherwise
 	// `SENTINEL` is returned as a sentinel value.
-	[__unstable__] seal_set_storage(ctx, key_ptr: u32, value_ptr: u32, value_len: u32) -> u32 => {
+	[seal1] seal_set_storage(ctx, key_ptr: u32, value_ptr: u32, value_len: u32) -> u32 => {
 		ctx.set_storage(key_ptr, value_ptr, value_len)
 	},
 
@@ -957,7 +949,7 @@ define_env!(Env, <E: Ext>,
 	//
 	// Returns the size of the pre-existing value at the specified key if any. Otherwise
 	// `SENTINEL` is returned as a sentinel value.
-	[__unstable__] seal_contains_storage(ctx, key_ptr: u32) -> u32 => {
+	[seal0] seal_contains_storage(ctx, key_ptr: u32) -> u32 => {
 		let charged = ctx.charge_gas(RuntimeCosts::ContainsStorage(ctx.ext.max_value_size()))?;
 		let mut key: StorageKey = [0; 32];
 		ctx.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
@@ -1401,7 +1393,7 @@ define_env!(Env, <E: Ext>,
 	// # Errors
 	//
 	// `ReturnCode::KeyNotFound`
-	[__unstable__] seal_code_hash(ctx, account_ptr: u32, out_ptr: u32, out_len_ptr: u32) -> ReturnCode => {
+	[seal0] seal_code_hash(ctx, account_ptr: u32, out_ptr: u32, out_len_ptr: u32) -> ReturnCode => {
 		ctx.charge_gas(RuntimeCosts::CodeHash)?;
 		let address: <<E as Ext>::T as frame_system::Config>::AccountId =
 			ctx.read_sandbox_memory_as(account_ptr)?;
@@ -1420,7 +1412,7 @@ define_env!(Env, <E: Ext>,
 	// - `out_ptr`: pointer to the linear memory where the returning value is written to.
 	// - `out_len_ptr`: in-out pointer into linear memory where the buffer length
 	//   is read from and the value length is written to.
-	[__unstable__] seal_own_code_hash(ctx, out_ptr: u32, out_len_ptr: u32) => {
+	[seal0] seal_own_code_hash(ctx, out_ptr: u32, out_len_ptr: u32) => {
 		ctx.charge_gas(RuntimeCosts::OwnCodeHash)?;
 		let code_hash_encoded = &ctx.ext.own_code_hash().encode();
 		Ok(ctx.write_sandbox_output(out_ptr, out_len_ptr, code_hash_encoded, false, already_charged)?)
@@ -2048,7 +2040,7 @@ define_env!(Env, <E: Ext>,
 	// # Errors
 	//
 	// `ReturnCode::CodeNotFound`
-	[__unstable__] seal_set_code_hash(ctx, code_hash_ptr: u32) -> ReturnCode => {
+	[seal0] seal_set_code_hash(ctx, code_hash_ptr: u32) -> ReturnCode => {
 		ctx.charge_gas(RuntimeCosts::SetCodeHash)?;
 		let code_hash: CodeHash<<E as Ext>::T> = ctx.read_sandbox_memory_as(code_hash_ptr)?;
 		match ctx.ext.set_code_hash(code_hash) {
