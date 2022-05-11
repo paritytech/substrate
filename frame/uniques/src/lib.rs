@@ -376,6 +376,14 @@ pub mod pallet {
 			price: Option<BalanceOrAssetOf<T, I>>,
 			buyer: Option<T::AccountId>,
 		},
+		/// An item was bought.
+		ItemBought {
+			class: T::ClassId,
+			instance: T::InstanceId,
+			price: BalanceOrAssetOf<T, I>,
+			seller: T::AccountId,
+			buyer: T::AccountId,
+		},
 	}
 
 	#[pallet::error]
@@ -404,6 +412,14 @@ pub mod pallet {
 		Unaccepted,
 		/// The asset instance is locked.
 		Locked,
+		/// The given item ID is unknown.
+		UnknownItem,
+		/// Item is not for sale.
+		NotForSale,
+		/// Wrong currency provided.
+		WrongCurrency,
+		/// Item underpriced.
+		ItemUnderpriced,
 	}
 
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
@@ -1408,7 +1424,7 @@ pub mod pallet {
 			bid_price: BalanceOrAssetOf<T, I>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
-			// Self::do_buy_item(class, instance, config, origin, bid_price)?;
+			Self::do_buy_item(class, instance, origin, bid_price)?;
 			Ok(())
 		}
 	}

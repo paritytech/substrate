@@ -138,3 +138,27 @@ pub enum BalanceOrAsset<Balance, AssetId, AssetBalance> {
 	Balance { amount: Balance },
 	Asset { id: AssetId, amount: AssetBalance },
 }
+
+impl<B, A, AB> BalanceOrAsset<B, A, AB>
+where
+	A: PartialEq,
+	B: PartialOrd,
+	AB: PartialOrd,
+{
+	pub fn is_greater_or_equal(&self, other: &Self) -> bool {
+		use BalanceOrAsset::*;
+		match (self, other) {
+			(Balance { amount: a }, Balance { amount: b }) => a >= b,
+			(Asset { amount: a, .. }, Asset { amount: b, .. }) => a >= b,
+			_ => false,
+		}
+	}
+	pub fn is_same_currency(&self, other: &Self) -> bool {
+		use BalanceOrAsset::*;
+		match (self, other) {
+			(Balance { .. }, Balance { .. }) => true,
+			(Asset { id, .. }, Asset { id: id2, .. }) => id == id2,
+			_ => false,
+		}
+	}
+}

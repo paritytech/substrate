@@ -18,7 +18,10 @@
 //! Various pieces of common functionality.
 
 use super::*;
-use frame_support::{ensure, traits::Get};
+use frame_support::{
+	ensure,
+	traits::{ExistenceRequirement, Get},
+};
 use sp_runtime::{DispatchError, DispatchResult};
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
@@ -202,7 +205,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		ensure!(!class_details.is_frozen, Error::<T, I>::Frozen);
 		ensure!(!T::Locker::is_locked(class, instance), Error::<T, I>::Locked);
 
-		let details = Asset::<T, I>::get(&class, &instance).ok_or(Error::<T, I>::UnknownClass)?;
+		let details = Asset::<T, I>::get(&class, &instance).ok_or(Error::<T, I>::UnknownItem)?;
 		ensure!(!details.is_frozen, Error::<T, I>::Frozen);
 		ensure!(details.owner == sender, Error::<T, I>::NoPermission);
 
@@ -215,5 +218,69 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Self::deposit_event(Event::InstancePriceSet { class, instance, price, buyer });
 
 		Ok(())
+	}
+
+	pub fn do_buy_item(
+		class: T::ClassId,
+		instance: T::InstanceId,
+		buyer: T::AccountId,
+		bid_price: BalanceOrAssetOf<T, I>,
+	) -> DispatchResult {
+		let class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
+		ensure!(!class_details.is_frozen, Error::<T, I>::Frozen);
+		ensure!(!T::Locker::is_locked(class, instance), Error::<T, I>::Locked);
+
+		let details = Asset::<T, I>::get(&class, &instance).ok_or(Error::<T, I>::UnknownItem)?;
+		ensure!(!details.is_frozen, Error::<T, I>::Frozen);
+		ensure!(details.owner != buyer, Error::<T, I>::NoPermission);
+
+		let price_info =
+			InstancePriceOf::<T, I>::get(&class, &instance).ok_or(Error::<T, I>::NotForSale)?;
+
+		ensure!(bid_price.is_same_currency(&price_info.0), Error::<T, I>::WrongCurrency);
+		ensure!(bid_price.is_greater_or_equal(&price_info.0), Error::<T, I>::ItemUnderpriced);
+
+		if let Some(only_buyer) = price_info.1 {
+			ensure!(only_buyer == buyer, Error::<T, I>::NotForSale);
+		}
+
+		Self::transfer_currency(
+			&buyer,
+			&details.owner,
+			bid_price.clone(),
+			ExistenceRequirement::KeepAlive,
+		)?;
+
+		let old_owner = details.owner.clone();
+
+		Self::do_transfer(class, instance, buyer.clone(), |_, _| Ok(()))?;
+
+		Self::deposit_event(Event::ItemBought {
+			class,
+			instance,
+			price: bid_price,
+			seller: old_owner,
+			buyer,
+		});
+
+		Ok(())
+	}
+
+	fn transfer_currency(
+		source: &T::AccountId,
+		dest: &T::AccountId,
+		value: BalanceOrAssetOf<T, I>,
+		existence_requirement: ExistenceRequirement,
+	) -> DispatchResult {
+		use BalanceOrAsset::*;
+
+		match value {
+			Balance { amount } =>
+				return T::Currency::transfer(&source, &dest, amount, existence_requirement),
+			Asset { id, amount } => {
+				let keep_alive = existence_requirement == ExistenceRequirement::KeepAlive;
+				return T::Assets::transfer(id, &source, &dest, amount, keep_alive).map(|_| ())
+			},
+		}
 	}
 }
