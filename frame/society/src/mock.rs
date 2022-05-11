@@ -149,8 +149,8 @@ impl EnvBuilder {
 		pallet_society::GenesisConfig::<Test> {
 			pot: self.pot,
 		}
-		.assimilate_storage(&mut t)
-		.unwrap();
+			.assimilate_storage(&mut t)
+			.unwrap();
 		let mut ext: sp_io::TestExternalities = t.into();
 		ext.execute_with(|| {
 			if self.founded {
@@ -158,7 +158,7 @@ impl EnvBuilder {
 				assert!(Society::found_society(Origin::signed(1), 10, 10, 8, 2, 25, r).is_ok());
 			}
 			let r = f();
-			migrations::assert_internal_consistency();
+			migrations::assert_internal_consistency::<Test, ()>();
 			r
 		})
 	}
@@ -267,6 +267,12 @@ pub fn place_members(members: impl AsRef<[u128]>) {
 pub fn members() -> Vec<u128> {
 	let mut r = Members::<Test>::iter_keys().collect::<Vec<_>>();
 	r.sort();
+	r
+}
+
+pub fn membership() -> Vec<(u128, MemberRecord)> {
+	let mut r = Members::<Test>::iter().collect::<Vec<_>>();
+	r.sort_by_key(|x| x.0);
 	r
 }
 

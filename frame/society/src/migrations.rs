@@ -20,7 +20,7 @@
 use super::*;
 use frame_support::traits::Instance;
 
-mod old {
+pub(crate) mod old {
 	use super::*;
 	use frame_support::storage_alias;
 
@@ -111,7 +111,9 @@ pub fn assert_internal_consistency<T: Config<I>, I: Instance + 'static>() {
 	for (who, record) in members.iter() {
 		assert_eq!(MemberByIndex::<T, I>::get(record.index).as_ref(), Some(who));
 	}
-	assert_eq!(Founder::<T, I>::get().as_ref(), members.first().map(|m| &m.0));
+	if let Some(founder) = Founder::<T, I>::get() {
+		assert_eq!(Members::<T, I>::get(founder).expect("founder is member").index, 0);
+	}
 	if let Some(head) = Head::<T, I>::get() {
 		assert!(Members::<T, I>::contains_key(head));
 	}
@@ -133,10 +135,9 @@ pub fn assert_internal_consistency<T: Config<I>, I: Instance + 'static>() {
 	}
 	// Check all payouts are valid data.
 	for p in Payouts::<T, I>::iter_keys() {
-		let have_value = Payouts::<T, I>::contains_key(&p);
-		let is_non_default_value = Payouts::<T, I>::get(&p) != Default::default();
-		// If we have a value it should not be the default value.
-		assert!(have_value == is_non_default_value);
+		let k = Payouts::<T, I>::hashed_key_for(&p);
+		let v = frame_support::storage::unhashed::get_raw(&k[..]).expect("value is in map");
+		assert!(PayoutRecordFor::<T, I>::decode(&mut &v[..]).is_ok());
 	}
 
 	// We don't use these - make sure they don't exist.
@@ -194,17 +195,14 @@ pub fn from_original<
 	// Migrate Members from old::Members old::Strikes old::Vouching
 	let mut member_count = 0;
 	for member in old::Members::<T, I>::take() {
-		let strikes = old::Strikes::<T, I>::get(&member);
-		let vouching = old::Vouching::<T, I>::get(&member);
-		Members::<T, I>::insert(&member, MemberRecord {
-			index: member_count,
-			rank: 0,
-			strikes,
-			vouching,
-		});
+		let strikes = old::Strikes::<T, I>::take(&member);
+		let vouching = old::Vouching::<T, I>::take(&member);
+		let record = MemberRecord { index: member_count, rank: 0, strikes, vouching };
+		Members::<T, I>::insert(&member, record);
 		MemberByIndex::<T, I>::insert(member_count, &member);
 		member_count.saturating_inc();
 	}
+	MemberCount::<T, I>::put(member_count);
 
 	// Migrate Payouts from: old::Payouts and raw info (needed since we can't query old chain state).
 	past_payouts.sort();
@@ -222,11 +220,16 @@ pub fn from_original<
 		}
 	}
 
+	// Migrate SuspendedMembers from old::SuspendedMembers old::Strikes old::Vouching.
+	for who in old::SuspendedMembers::<T, I>::iter_keys() {
+		let strikes = old::Strikes::<T, I>::take(&who);
+		let vouching = old::Vouching::<T, I>::take(&who);
+		let record = MemberRecord { index: 0, rank: 0, strikes, vouching };
+		SuspendedMembers::<T, I>::insert(&who, record);
+	}
+
 	// Any suspended candidates remaining are rejected.
 	old::SuspendedCandidates::<T, I>::remove_all(None);
-
-	// Any suspended members remaining are given the benefit of the doubt.
-	old::SuspendedMembers::<T, I>::remove_all(None);
 
 	// We give the current defender the benefit of the doubt.
 	old::Defender::<T, I>::kill();
