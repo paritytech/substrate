@@ -18,11 +18,11 @@
 
 //! Wasmi specific impls for sandbox
 
-use codec::{Decode, Encode};
-use sp_core::sandbox::HostError;
-use sp_wasm_interface::{FunctionContext, Pointer, ReturnValue, Value, WordSize};
 use std::rc::Rc;
 
+use codec::{Decode, Encode};
+use sp_sandbox::HostError;
+use sp_wasm_interface::{FunctionContext, Pointer, ReturnValue, Value, WordSize};
 use wasmi::{
 	memory_units::Pages, ImportResolver, MemoryInstance, Module, ModuleInstance, RuntimeArgs,
 	RuntimeValue, Trap, TrapKind,
@@ -78,7 +78,7 @@ impl ImportResolver for Imports {
 		// Here we use inner memory reference only to resolve the imports
 		// without accessing the memory contents. All subsequent memory accesses
 		// should happen through the wrapper, that enforces the memory access protocol.
-		let mem = wrapper.0.clone();
+		let mem = wrapper.0;
 
 		Ok(mem)
 	}
@@ -247,7 +247,7 @@ impl<'a> wasmi::Externals for GuestExternals<'a> {
 				serialized_result_val_ptr,
 				"Can't deallocate memory for dispatch thunk's result",
 			)
-			.and_then(|_| serialized_result_val)
+			.and(serialized_result_val)
 			.and_then(|serialized_result_val| {
 				let result_val = std::result::Result::<ReturnValue, HostError>::decode(&mut serialized_result_val.as_slice())
 					.map_err(|_| trap("Decoding Result<ReturnValue, HostError> failed!"))?;
@@ -320,4 +320,9 @@ pub fn invoke(
 				.map_err(|error| error::Error::Sandbox(error.to_string()))
 		})
 	})
+}
+
+/// Get global value by name
+pub fn get_global(instance: &wasmi::ModuleRef, name: &str) -> Option<Value> {
+	Some(instance.export_by_name(name)?.as_global()?.get().into())
 }

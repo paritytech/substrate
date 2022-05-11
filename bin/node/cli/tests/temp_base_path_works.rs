@@ -43,8 +43,11 @@ async fn temp_base_path_works() {
 			.unwrap(),
 	);
 
+	let mut stderr = child.stderr.take().unwrap();
+	let (ws_url, mut data) = common::find_ws_url_from_output(&mut stderr);
+
 	// Let it produce some blocks.
-	common::wait_n_finalized_blocks(3, 30).await.unwrap();
+	common::wait_n_finalized_blocks(3, 30, &ws_url).await.unwrap();
 	assert!(child.try_wait().unwrap().is_none(), "the process should still be running");
 
 	// Stop the process
@@ -52,10 +55,9 @@ async fn temp_base_path_works() {
 	assert!(common::wait_for(&mut child, 40).map(|x| x.success()).unwrap_or_default());
 
 	// Ensure the database has been deleted
-	let mut stderr = String::new();
-	child.stderr.as_mut().unwrap().read_to_string(&mut stderr).unwrap();
+	stderr.read_to_string(&mut data).unwrap();
 	let re = Regex::new(r"Database: .+ at (\S+)").unwrap();
-	let db_path = PathBuf::from(re.captures(stderr.as_str()).unwrap().get(1).unwrap().as_str());
+	let db_path = PathBuf::from(re.captures(data.as_str()).unwrap().get(1).unwrap().as_str());
 
 	assert!(!db_path.exists());
 }

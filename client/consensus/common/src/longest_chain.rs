@@ -79,12 +79,12 @@ where
 	Block: BlockT,
 {
 	async fn leaves(&self) -> Result<Vec<<Block as BlockT>::Hash>, ConsensusError> {
-		LongestChain::leaves(self).map_err(|e| ConsensusError::ChainLookup(e.to_string()).into())
+		LongestChain::leaves(self).map_err(|e| ConsensusError::ChainLookup(e.to_string()))
 	}
 
 	async fn best_chain(&self) -> Result<<Block as BlockT>::Header, ConsensusError> {
-		LongestChain::best_block_header(&self)
-			.map_err(|e| ConsensusError::ChainLookup(e.to_string()).into())
+		LongestChain::best_block_header(self)
+			.map_err(|e| ConsensusError::ChainLookup(e.to_string()))
 	}
 
 	async fn finality_target(
@@ -97,6 +97,6 @@ where
 			.blockchain()
 			.best_containing(target_hash, maybe_max_number, import_lock)
 			.map(|maybe_hash| maybe_hash.unwrap_or(target_hash))
-			.map_err(|e| ConsensusError::ChainLookup(e.to_string()).into())
+			.map_err(|e| ConsensusError::ChainLookup(e.to_string()))
 	}
 }

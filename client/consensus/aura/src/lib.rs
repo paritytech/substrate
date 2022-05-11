@@ -186,7 +186,7 @@ where
 	Error: std::error::Error + Send + From<sp_consensus::Error> + 'static,
 {
 	let worker = build_aura_worker::<P, _, _, _, _, _, _, _, _>(BuildAuraWorkerParams {
-		client: client.clone(),
+		client,
 		block_import,
 		proposer_factory,
 		keystore,
@@ -459,7 +459,7 @@ where
 	fn proposer(&mut self, block: &B::Header) -> Self::CreateProposer {
 		self.env
 			.init(block)
-			.map_err(|e| sp_consensus::Error::ClientImport(format!("{:?}", e)).into())
+			.map_err(|e| sp_consensus::Error::ClientImport(format!("{:?}", e)))
 			.boxed()
 	}
 
@@ -534,7 +534,7 @@ pub fn find_pre_digest<B: BlockT, Signature: Codec>(header: &B::Header) -> Resul
 	for log in header.digest().logs() {
 		trace!(target: "aura", "Checking log {:?}", log);
 		match (CompatibleDigestItem::<Signature>::as_aura_pre_digest(log), pre_digest.is_some()) {
-			(Some(_), true) => Err(aura_err(Error::MultipleHeaders))?,
+			(Some(_), true) => return Err(aura_err(Error::MultipleHeaders)),
 			(None, _) => trace!(target: "aura", "Ignoring digest not meant for us"),
 			(s, false) => pre_digest = s,
 		}
@@ -553,7 +553,7 @@ where
 		.runtime_api()
 		.authorities(at)
 		.ok()
-		.ok_or_else(|| sp_consensus::Error::InvalidAuthoritiesSet.into())
+		.ok_or(sp_consensus::Error::InvalidAuthoritiesSet)
 }
 
 #[cfg(test)]

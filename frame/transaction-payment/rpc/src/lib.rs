@@ -17,11 +17,14 @@
 
 //! RPC interface for the transaction payment pallet.
 
-pub use self::gen_client::Client as TransactionPaymentClient;
+use std::{convert::TryInto, sync::Arc};
+
 use codec::{Codec, Decode};
-use jsonrpc_core::{Error as RpcError, ErrorCode, Result};
-use jsonrpc_derive::rpc;
-pub use pallet_transaction_payment_rpc_runtime_api::TransactionPaymentApi as TransactionPaymentRuntimeApi;
+use jsonrpsee::{
+	core::{async_trait, Error as JsonRpseeError, RpcResult},
+	proc_macros::rpc,
+	types::error::{CallError, ErrorCode, ErrorObject},
+};
 use pallet_transaction_payment_rpc_runtime_api::{FeeDetails, InclusionFee, RuntimeDispatchInfo};
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
@@ -31,28 +34,31 @@ use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, MaybeDisplay},
 };
-use std::sync::Arc;
 
-#[rpc]
+pub use pallet_transaction_payment_rpc_runtime_api::TransactionPaymentApi as TransactionPaymentRuntimeApi;
+
+#[rpc(client, server)]
 pub trait TransactionPaymentApi<BlockHash, ResponseType> {
-	#[rpc(name = "payment_queryInfo")]
-	fn query_info(&self, encoded_xt: Bytes, at: Option<BlockHash>) -> Result<ResponseType>;
-	#[rpc(name = "payment_queryFeeDetails")]
+	#[method(name = "payment_queryInfo")]
+	fn query_info(&self, encoded_xt: Bytes, at: Option<BlockHash>) -> RpcResult<ResponseType>;
+
+	#[method(name = "payment_queryFeeDetails")]
 	fn query_fee_details(
 		&self,
 		encoded_xt: Bytes,
 		at: Option<BlockHash>,
-	) -> Result<FeeDetails<NumberOrHex>>;
+	) -> RpcResult<FeeDetails<NumberOrHex>>;
 }
 
-/// A struct that implements the [`TransactionPaymentApi`].
-pub struct TransactionPayment<C, P> {
+/// Provides RPC methods to query a dispatchable's class, weight and fee.
+pub struct TransactionPaymentRpc<C, P> {
+	/// Shared reference to the client.
 	client: Arc<C>,
 	_marker: std::marker::PhantomData<P>,
 }
 
-impl<C, P> TransactionPayment<C, P> {
-	/// Create new `TransactionPayment` with the given reference to the client.
+impl<C, P> TransactionPaymentRpc<C, P> {
+	/// Creates a new instance of the TransactionPaymentRpc helper.
 	pub fn new(client: Arc<C>) -> Self {
 		Self { client, _marker: Default::default() }
 	}
@@ -66,8 +72,8 @@ pub enum Error {
 	RuntimeError,
 }
 
-impl From<Error> for i64 {
-	fn from(e: Error) -> i64 {
+impl From<Error> for i32 {
+	fn from(e: Error) -> i32 {
 		match e {
 			Error::RuntimeError => 1,
 			Error::DecodeError => 2,
@@ -75,66 +81,75 @@ impl From<Error> for i64 {
 	}
 }
 
-impl<C, Block, Balance> TransactionPaymentApi<<Block as BlockT>::Hash, RuntimeDispatchInfo<Balance>>
-	for TransactionPayment<C, Block>
+#[async_trait]
+impl<C, Block, Balance>
+	TransactionPaymentApiServer<<Block as BlockT>::Hash, RuntimeDispatchInfo<Balance>>
+	for TransactionPaymentRpc<C, Block>
 where
 	Block: BlockT,
-	C: 'static + ProvideRuntimeApi<Block> + HeaderBackend<Block>,
+	C: ProvideRuntimeApi<Block> + HeaderBackend<Block> + Send + Sync + 'static,
 	C::Api: TransactionPaymentRuntimeApi<Block, Balance>,
-	Balance: Codec + MaybeDisplay + Copy + TryInto<NumberOrHex>,
+	Balance: Codec + MaybeDisplay + Copy + TryInto<NumberOrHex> + Send + Sync + 'static,
 {
 	fn query_info(
 		&self,
 		encoded_xt: Bytes,
-		at: Option<<Block as BlockT>::Hash>,
-	) -> Result<RuntimeDispatchInfo<Balance>> {
+		at: Option<Block::Hash>,
+	) -> RpcResult<RuntimeDispatchInfo<Balance>> {
 		let api = self.client.runtime_api();
-		let at = BlockId::hash(at.unwrap_or_else(||
-			// If the block hash is not supplied assume the best block.
-			self.client.info().best_hash));
+		let at = BlockId::hash(at.unwrap_or_else(|| self.client.info().best_hash));
 
 		let encoded_len = encoded_xt.len() as u32;
 
-		let uxt: Block::Extrinsic = Decode::decode(&mut &*encoded_xt).map_err(|e| RpcError {
-			code: ErrorCode::ServerError(Error::DecodeError.into()),
-			message: "Unable to query dispatch info.".into(),
-			data: Some(format!("{:?}", e).into()),
+		let uxt: Block::Extrinsic = Decode::decode(&mut &*encoded_xt).map_err(|e| {
+			CallError::Custom(ErrorObject::owned(
+				Error::DecodeError.into(),
+				"Unable to query dispatch info.",
+				Some(format!("{:?}", e)),
+			))
 		})?;
-		api.query_info(&at, uxt, encoded_len).map_err(|e| RpcError {
-			code: ErrorCode::ServerError(Error::RuntimeError.into()),
-			message: "Unable to query dispatch info.".into(),
-			data: Some(e.to_string().into()),
+		api.query_info(&at, uxt, encoded_len).map_err(|e| {
+			CallError::Custom(ErrorObject::owned(
+				Error::RuntimeError.into(),
+				"Unable to query dispatch info.",
+				Some(e.to_string()),
+			))
+			.into()
 		})
 	}
 
 	fn query_fee_details(
 		&self,
 		encoded_xt: Bytes,
-		at: Option<<Block as BlockT>::Hash>,
-	) -> Result<FeeDetails<NumberOrHex>> {
+		at: Option<Block::Hash>,
+	) -> RpcResult<FeeDetails<NumberOrHex>> {
 		let api = self.client.runtime_api();
-		let at = BlockId::hash(at.unwrap_or_else(||
-			// If the block hash is not supplied assume the best block.
-			self.client.info().best_hash));
+		let at = BlockId::hash(at.unwrap_or_else(|| self.client.info().best_hash));
 
 		let encoded_len = encoded_xt.len() as u32;
 
-		let uxt: Block::Extrinsic = Decode::decode(&mut &*encoded_xt).map_err(|e| RpcError {
-			code: ErrorCode::ServerError(Error::DecodeError.into()),
-			message: "Unable to query fee details.".into(),
-			data: Some(format!("{:?}", e).into()),
+		let uxt: Block::Extrinsic = Decode::decode(&mut &*encoded_xt).map_err(|e| {
+			CallError::Custom(ErrorObject::owned(
+				Error::DecodeError.into(),
+				"Unable to query fee details.",
+				Some(format!("{:?}", e)),
+			))
 		})?;
-		let fee_details = api.query_fee_details(&at, uxt, encoded_len).map_err(|e| RpcError {
-			code: ErrorCode::ServerError(Error::RuntimeError.into()),
-			message: "Unable to query fee details.".into(),
-			data: Some(e.to_string().into()),
+		let fee_details = api.query_fee_details(&at, uxt, encoded_len).map_err(|e| {
+			CallError::Custom(ErrorObject::owned(
+				Error::RuntimeError.into(),
+				"Unable to query fee details.",
+				Some(e.to_string()),
+			))
 		})?;
 
 		let try_into_rpc_balance = |value: Balance| {
-			value.try_into().map_err(|_| RpcError {
-				code: ErrorCode::InvalidParams,
-				message: format!("{} doesn't fit in NumberOrHex representation", value),
-				data: None,
+			value.try_into().map_err(|_| {
+				JsonRpseeError::Call(CallError::Custom(ErrorObject::owned(
+					ErrorCode::InvalidParams.code(),
+					format!("{} doesn't fit in NumberOrHex representation", value),
+					None::<()>,
+				)))
 			})
 		};
 

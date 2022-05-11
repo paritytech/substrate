@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -16,13 +16,29 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use log::warn;
+//! Configuration of the networking layer.
 
-pub fn internal<E: std::fmt::Display>(e: E) -> jsonrpc_core::Error {
-	warn!("Unknown error: {}", e);
-	jsonrpc_core::Error {
-		code: jsonrpc_core::ErrorCode::InternalError,
-		message: "Unknown error occurred".into(),
-		data: Some(e.to_string().into()),
+use std::{fmt, str};
+
+/// Name of a protocol, transmitted on the wire. Should be unique for each chain. Always UTF-8.
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub struct ProtocolId(smallvec::SmallVec<[u8; 6]>);
+
+impl<'a> From<&'a str> for ProtocolId {
+	fn from(bytes: &'a str) -> ProtocolId {
+		Self(bytes.as_bytes().into())
+	}
+}
+
+impl AsRef<str> for ProtocolId {
+	fn as_ref(&self) -> &str {
+		str::from_utf8(&self.0[..])
+			.expect("the only way to build a ProtocolId is through a UTF-8 String; qed")
+	}
+}
+
+impl fmt::Debug for ProtocolId {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		fmt::Debug::fmt(self.as_ref(), f)
 	}
 }

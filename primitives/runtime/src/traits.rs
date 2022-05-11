@@ -159,7 +159,7 @@ where
 		use sp_application_crypto::IsWrappedBy;
 		let inner: &S = self.as_ref();
 		let inner_pubkey =
-			<<T as AppKey>::Public as sp_application_crypto::AppPublic>::Generic::from_ref(&signer);
+			<<T as AppKey>::Public as sp_application_crypto::AppPublic>::Generic::from_ref(signer);
 		Verify::verify(inner, msg, inner_pubkey)
 	}
 }
@@ -874,12 +874,7 @@ pub trait SignedExtension:
 
 	/// Do any pre-flight stuff for a signed transaction.
 	///
-	/// Note this function by default delegates to `validate`, so that
-	/// all checks performed for the transaction queue are also performed during
-	/// the dispatch phase (applying the extrinsic).
-	///
-	/// If you ever override this function, you need to make sure to always
-	/// perform the same validation as in `validate`.
+	/// Make sure to perform the same checks as in [`Self::validate`].
 	fn pre_dispatch(
 		self,
 		who: &Self::AccountId,
@@ -1284,7 +1279,7 @@ impl<T: Encode + Decode, Id: Encode + Decode + TypeId> AccountIdConversion<T> fo
 
 	fn try_from_sub_account<S: Decode>(x: &T) -> Option<(Self, S)> {
 		x.using_encoded(|d| {
-			if &d[0..4] != Id::TYPE_ID {
+			if d[0..4] != Id::TYPE_ID {
 				return None
 			}
 			let mut cursor = &d[4..];

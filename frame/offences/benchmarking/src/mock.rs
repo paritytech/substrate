@@ -69,9 +69,7 @@ impl frame_system::Config for Test {
 	type OnSetCode = ();
 	type MaxConsumers = frame_support::traits::ConstU32<16>;
 }
-parameter_types! {
-	pub const ExistentialDeposit: Balance = 10;
-}
+
 impl pallet_balances::Config for Test {
 	type MaxLocks = ();
 	type MaxReserves = ();
@@ -79,7 +77,7 @@ impl pallet_balances::Config for Test {
 	type Balance = Balance;
 	type Event = Event;
 	type DustRemoval = ();
-	type ExistentialDeposit = ExistentialDeposit;
+	type ExistentialDeposit = ConstU64<10>;
 	type AccountStore = System;
 	type WeightInfo = ();
 }
@@ -161,6 +159,7 @@ impl onchain::Config for OnChainSeqPhragmen {
 impl pallet_staking::Config for Test {
 	type MaxNominations = ConstU32<16>;
 	type Currency = Balances;
+	type CurrencyBalance = <Self as pallet_balances::Config>::Balance;
 	type UnixTime = pallet_timestamp::Pallet<Self>;
 	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
 	type RewardRemainder = ();
@@ -180,6 +179,7 @@ impl pallet_staking::Config for Test {
 	type GenesisElectionProvider = Self::ElectionProvider;
 	type VoterList = pallet_staking::UseNominatorsAndValidatorsMap<Self>;
 	type MaxUnlockingChunks = ConstU32<32>;
+	type OnStakerSlash = ();
 	type BenchmarkingConfig = pallet_staking::TestBenchmarkingConfig;
 	type WeightInfo = ();
 }

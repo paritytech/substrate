@@ -25,9 +25,9 @@ use sp_runtime::{traits::Block as BlockT, DispatchError};
 use sp_std::{cmp::Ordering, prelude::*};
 
 #[doc(hidden)]
-pub const DEFENSIVE_OP_PUBLIC_ERROR: &'static str = "a defensive failure has been triggered; please report the block number at https://github.com/paritytech/substrate/issues";
+pub const DEFENSIVE_OP_PUBLIC_ERROR: &str = "a defensive failure has been triggered; please report the block number at https://github.com/paritytech/substrate/issues";
 #[doc(hidden)]
-pub const DEFENSIVE_OP_INTERNAL_ERROR: &'static str = "Defensive failure has been triggered!";
+pub const DEFENSIVE_OP_INTERNAL_ERROR: &str = "Defensive failure has been triggered!";
 
 /// Generic function to mark an execution path as ONLY defensive.
 ///
@@ -50,6 +50,16 @@ macro_rules! defensive {
 			$error
 		);
 		debug_assert!(false, "{}: {:?}", $crate::traits::DEFENSIVE_OP_INTERNAL_ERROR, $error);
+	};
+	($error:tt, $proof:tt) => {
+		frame_support::log::error!(
+			target: "runtime",
+			"{}: {:?}: {:?}",
+			$crate::traits::DEFENSIVE_OP_PUBLIC_ERROR,
+			$error,
+			$proof,
+		);
+		debug_assert!(false, "{}: {:?}: {:?}", $crate::traits::DEFENSIVE_OP_INTERNAL_ERROR, $error, $proof);
 	}
 }
 
@@ -102,6 +112,10 @@ pub trait Defensive<T> {
 	/// }
 	/// ```
 	fn defensive(self) -> Self;
+
+	/// Same as [`Defensive::defensive`], but it takes a proof as input, and displays it if the
+	/// defensive operation has been triggered.
+	fn defensive_proof(self, proof: &'static str) -> Self;
 }
 
 /// Subset of methods similar to [`Defensive`] that can only work for a `Result`.
@@ -129,8 +143,12 @@ pub trait DefensiveOption<T> {
 	/// if `None`, which should never happen.
 	fn defensive_map_or_else<U, D: FnOnce() -> U, F: FnOnce(T) -> U>(self, default: D, f: F) -> U;
 
-	/// Defensively transform this option to a result.
+	/// Defensively transform this option to a result, mapping `None` to the return value of an
+	/// error closure.
 	fn defensive_ok_or_else<E, F: FnOnce() -> E>(self, err: F) -> Result<T, E>;
+
+	/// Defensively transform this option to a result, mapping `None` to a default value.
+	fn defensive_ok_or<E>(self, err: E) -> Result<T, E>;
 
 	/// Exactly the same as `map`, but it prints the appropriate warnings if the value being mapped
 	/// is `None`.
@@ -180,6 +198,13 @@ impl<T> Defensive<T> for Option<T> {
 			},
 		}
 	}
+
+	fn defensive_proof(self, proof: &'static str) -> Self {
+		if self.is_none() {
+			defensive!(proof);
+		}
+		self
+	}
 }
 
 impl<T, E: sp_std::fmt::Debug> Defensive<T> for Result<T, E> {
@@ -221,6 +246,16 @@ impl<T, E: sp_std::fmt::Debug> Defensive<T> for Result<T, E> {
 			Ok(inner) => Ok(inner),
 			Err(e) => {
 				defensive!(e);
+				Err(e)
+			},
+		}
+	}
+
+	fn defensive_proof(self, proof: &'static str) -> Self {
+		match self {
+			Ok(inner) => Ok(inner),
+			Err(e) => {
+				defensive!(e, proof);
 				Err(e)
 			},
 		}
@@ -281,6 +316,13 @@ impl<T> DefensiveOption<T> for Option<T> {
 		self.ok_or_else(|| {
 			defensive!();
 			err()
+		})
+	}
+
+	fn defensive_ok_or<E>(self, err: E) -> Result<T, E> {
+		self.ok_or_else(|| {
+			defensive!();
+			err
 		})
 	}
 

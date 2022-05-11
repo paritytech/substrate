@@ -422,7 +422,7 @@ pub trait ConstructRuntimeApi<Block: BlockT, C: CallApiAt<Block>> {
 	type RuntimeApi: ApiExt<Block>;
 
 	/// Construct an instance of the runtime api.
-	fn construct_runtime_api<'a>(call: &'a C) -> ApiRef<'a, Self::RuntimeApi>;
+	fn construct_runtime_api(call: &C) -> ApiRef<Self::RuntimeApi>;
 }
 
 /// Init the [`RuntimeLogger`](sp_runtime::runtime_logger::RuntimeLogger).
@@ -554,12 +554,11 @@ pub trait CallApiAt<Block: BlockT> {
 	/// Calls the given api function with the given encoded arguments at the given block and returns
 	/// the encoded result.
 	fn call_api_at<
-		'a,
 		R: Encode + Decode + PartialEq,
 		NC: FnOnce() -> result::Result<R, ApiError> + UnwindSafe,
 	>(
 		&self,
-		params: CallApiAtParams<'a, Block, NC, Self::StateBackend>,
+		params: CallApiAtParams<Block, NC, Self::StateBackend>,
 	) -> Result<NativeOrEncoded<R>, ApiError>;
 
 	/// Returns the runtime version at the given block.
@@ -604,7 +603,7 @@ pub trait ProvideRuntimeApi<Block: BlockT> {
 	/// call to an api function, will `commit` its changes to an internal buffer. Otherwise,
 	/// the modifications will be `discarded`. The modifications will not be applied to the
 	/// storage, even on a `commit`.
-	fn runtime_api<'a>(&'a self) -> ApiRef<'a, Self::Api>;
+	fn runtime_api(&self) -> ApiRef<Self::Api>;
 }
 
 /// Something that provides information about a runtime api.

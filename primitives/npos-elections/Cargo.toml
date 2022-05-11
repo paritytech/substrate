@@ -15,15 +15,15 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"] }
 scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
-serde = { version = "1.0.136", optional = true, features = ["derive"] }
-sp-std = { version = "4.0.0", default-features = false, path = "../std" }
+serde = { version = "1.0.136", features = ["derive"], optional = true }
 sp-arithmetic = { version = "5.0.0", default-features = false, path = "../arithmetic" }
 sp-core = { version = "6.0.0", default-features = false, path = "../core" }
-sp-runtime = { version = "6.0.0", path = "../runtime", default-features = false }
+sp-runtime = { version = "6.0.0", default-features = false, path = "../runtime" }
+sp-std = { version = "4.0.0", default-features = false, path = "../std" }
 
 [dev-dependencies]
-substrate-test-utils = { version = "4.0.0-dev", path = "../../test-utils" }
 rand = "0.7.3"
+substrate-test-utils = { version = "4.0.0-dev", path = "../../test-utils" }
 
 [features]
 default = ["std"]
@@ -32,8 +32,8 @@ std = [
 	"codec/std",
 	"scale-info/std",
 	"serde",
-	"sp-std/std",
 	"sp-arithmetic/std",
 	"sp-core/std",
 	"sp-runtime/std",
+	"sp-std/std",
 ]
