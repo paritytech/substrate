@@ -631,6 +631,28 @@ frame_benchmarking::benchmarks! {
 		assert_eq!(MaxPoolMembersPerPool::<T>::get(), Some(u32::MAX));
 	}
 
+	update_roles {
+		let first_id = pallet_nomination_pools::LastPoolId::<T>::get() + 1;
+		let (root, _) = create_pool_account::<T>(0, CurrencyOf::<T>::minimum_balance() * 2u32.into());
+		let random: T::AccountId = account("but is anything really random in computers..?", 0, USER_SEED);
+	}:_(
+		Origin::Signed(root.clone()),
+		first_id,
+		Some(random.clone()),
+		Some(random.clone()),
+		Some(random.clone())
+	) verify {
+		assert_eq!(
+			pallet_nomination_pools::BondedPools::<T>::get(first_id).unwrap().roles,
+			pallet_nomination_pools::PoolRoles {
+				depositor: root,
+				nominator: random.clone(),
+				state_toggler: random.clone(),
+				root: random,
+			},
+		)
+	}
+
 	impl_benchmark_test_suite!(
 		Pallet,
 		crate::mock::new_test_ext(),

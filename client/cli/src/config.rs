@@ -359,6 +359,16 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		Ok(None)
 	}
 
+	/// Get maximum RPC request payload size.
+	fn rpc_max_request_size(&self) -> Result<Option<usize>> {
+		Ok(None)
+	}
+
+	/// Get maximum RPC response payload size.
+	fn rpc_max_response_size(&self) -> Result<Option<usize>> {
+		Ok(None)
+	}
+
 	/// Get maximum WS output buffer capacity.
 	fn ws_max_out_buffer_capacity(&self) -> Result<Option<usize>> {
 		Ok(None)
@@ -526,6 +536,10 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			rpc_ws_max_connections: self.rpc_ws_max_connections()?,
 			rpc_cors: self.rpc_cors(is_dev)?,
 			rpc_max_payload: self.rpc_max_payload()?,
+			rpc_max_request_size: self.rpc_max_request_size()?,
+			rpc_max_response_size: self.rpc_max_response_size()?,
+			rpc_id_provider: None,
+			rpc_max_subs_per_conn: None,
 			ws_max_out_buffer_capacity: self.ws_max_out_buffer_capacity()?,
 			prometheus_config: self
 				.prometheus_config(DCV::prometheus_listen_port(), &chain_spec)?,
