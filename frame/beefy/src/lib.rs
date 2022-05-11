@@ -28,7 +28,9 @@ use sp_runtime::{
 };
 use sp_std::prelude::*;
 
-use beefy_primitives::{AuthorityIndex, ConsensusLog, ValidatorSet, BEEFY_ENGINE_ID};
+use beefy_primitives::{
+	AuthorityIndex, ConsensusLog, OnNewValidatorSet, ValidatorSet, BEEFY_ENGINE_ID,
+};
 
 #[cfg(test)]
 mod mock;
@@ -46,8 +48,15 @@ pub mod pallet {
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
-		/// Authority identifier type
+		/// Authority identifier type.
 		type BeefyId: Member + Parameter + RuntimeAppPublic + MaybeSerializeDeserialize;
+
+		/// A hook to act on the new BEEFY validator set.
+		///
+		/// For some applications it might be beneficial to make the BEEFY validator set available
+		/// externally apart from having it in the storage. For instance you might cache a light
+		/// weight MMR root over validators and make it available for Light Clients.
+		type OnNewValidatorSet: OnNewValidatorSet<<Self as Config>::BeefyId>;
 	}
 
 	#[pallet::pallet]
@@ -107,30 +116,52 @@ impl<T: Config> Pallet<T> {
 	fn change_authorities(new: Vec<T::BeefyId>, queued: Vec<T::BeefyId>) {
 		<Authorities<T>>::put(&new);
 
-		let next_id = Self::validator_set_id() + 1u64;
-		<ValidatorSetId<T>>::put(next_id);
-		if let Some(validator_set) = ValidatorSet::<T::BeefyId>::new(new, next_id) {
-			let log = DigestItem::Consensus(
-				BEEFY_ENGINE_ID,
-				ConsensusLog::AuthoritiesChange(validator_set).encode(),
-			);
-			<frame_system::Pallet<T>>::deposit_log(log);
-		}
+		let new_id = Self::validator_set_id() + 1u64;
+		<ValidatorSetId<T>>::put(new_id);
 
 		<NextAuthorities<T>>::put(&queued);
+
+		if let Some(validator_set) = ValidatorSet::<T::BeefyId>::new(new, new_id) {
+			let log = DigestItem::Consensus(
+				BEEFY_ENGINE_ID,
+				ConsensusLog::AuthoritiesChange(validator_set.clone()).encode(),
+			);
+			<frame_system::Pallet<T>>::deposit_log(log);
+
+			let next_id = new_id + 1;
+			if let Some(next_validator_set) = ValidatorSet::<T::BeefyId>::new(queued, next_id) {
+				<T::OnNewValidatorSet as OnNewValidatorSet<_>>::on_new_validator_set(
+					&validator_set,
+					&next_validator_set,
+				);
+			}
+		}
 	}
 
-	fn initialize_authorities(authorities: &[T::BeefyId]) {
+	fn initialize_authorities(authorities: &Vec<T::BeefyId>) {
 		if authorities.is_empty() {
 			return
 		}
 
 		assert!(<Authorities<T>>::get().is_empty(), "Authorities are already initialized!");
 
+		let id = 0;
 		<Authorities<T>>::put(authorities);
-		<ValidatorSetId<T>>::put(0);
+		<ValidatorSetId<T>>::put(id);
 		// Like `pallet_session`, initialize the next validator set as well.
 		<NextAuthorities<T>>::put(authorities);
+
+		if let Some(validator_set) = ValidatorSet::<T::BeefyId>::new(authorities.clone(), id) {
+			let next_id = id + 1;
+			if let Some(next_validator_set) =
+				ValidatorSet::<T::BeefyId>::new(authorities.clone(), next_id)
+			{
+				<T::OnNewValidatorSet as OnNewValidatorSet<_>>::on_new_validator_set(
+					&validator_set,
+					&next_validator_set,
+				);
+			}
+		}
 	}
 }
 

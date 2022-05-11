@@ -36,7 +36,9 @@
 use sp_runtime::traits::{Convert, Hash, Member};
 use sp_std::prelude::*;
 
-use beefy_primitives::mmr::{BeefyDataProvider, BeefyNextAuthoritySet, MmrLeaf, MmrLeafVersion};
+use beefy_primitives::mmr::{
+	BeefyAuthoritySet, BeefyDataProvider, BeefyNextAuthoritySet, MmrLeaf, MmrLeafVersion,
+};
 use pallet_mmr::{LeafDataProvider, ParentNumberAndHash};
 
 use frame_support::{crypto::ecdsa::ECDSAExt, traits::Get};
