@@ -469,7 +469,9 @@ pub enum OldVote {
 
 #[frame_support::pallet]
 pub mod pallet {
-	use super::*;
+	use sp_io::KillStorageResult;
+
+use super::*;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
@@ -593,6 +595,8 @@ pub mod pallet {
 		AlreadyPunished,
 		/// Funds are insufficient to pay off society debts.
 		InsufficientFunds,
+		/// The candidate/defender has no stale votes to remove.
+		NoVotes,
 	}
 
 	#[pallet::event]
@@ -728,14 +732,18 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
+	/// The number of challenge rounds there have been. Used to identify stale DefenderVotes.
+	#[pallet::storage]
+	pub(super) type ChallengeRoundCount<T: Config<I>, I: 'static = ()> = StorageValue<_, RoundIndex, ValueQuery>;
+
 	/// The defending member currently being challenged, along with a running tally of votes.
 	#[pallet::storage]
 	pub(super) type Defending<T: Config<I>, I: 'static = ()> = StorageValue<_, (T::AccountId, T::AccountId, Tally)>;
 
-	/// Votes for the defender.
+	/// Votes for the defender, keyed by challenge round.
 	#[pallet::storage]
 	pub(super) type DefenderVotes<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, T::AccountId, Vote>;
+		StorageDoubleMap<_, Twox64Concat, RoundIndex, Twox64Concat, T::AccountId, Vote>;
 
 	#[pallet::hooks]
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
@@ -985,7 +993,8 @@ pub mod pallet {
 			let mut defending = Defending::<T, I>::get().ok_or(Error::<T, I>::NoDefender)?;
 			let record = Members::<T, I>::get(&voter).ok_or(Error::<T, I>::NotMember)?;
 
-			let first_time = DefenderVotes::<T, I>::mutate(&voter, |v| {
+			let round = ChallengeRoundCount::<T, I>::get();
+			let first_time = DefenderVotes::<T, I>::mutate(round, &voter, |v| {
 				let first_time = v.is_none();
 				*v = Some(Self::do_vote(*v, approve, record.rank, &mut defending.2));
 				first_time
@@ -1241,7 +1250,6 @@ pub mod pallet {
 			ensure!(!candidacy.tally.clear_approval(), Error::<T, I>::Approved);
 			Self::check_skeptic(&candidate, &mut candidacy);
 			Self::reject_candidate(&candidate, &candidacy.kind);
-			Votes::<T, I>::remove_prefix(&candidate, None);
 			Candidates::<T, I>::remove(&candidate);
 			Ok(Pays::No.into())
 		}
@@ -1257,7 +1265,6 @@ pub mod pallet {
 				Self::check_skeptic(&candidate, &mut candidacy);
 			}
 			Self::reject_candidate(&candidate, &candidacy.kind);
-			Votes::<T, I>::remove_prefix(&candidate, None);
 			Candidates::<T, I>::remove(&candidate);
 			Ok(Pays::No.into())
 		}
@@ -1274,9 +1281,41 @@ pub mod pallet {
 			ensure!(candidacy.tally.clear_rejection(), Error::<T, I>::NotRejected);
 			ensure!(RoundCount::<T, I>::get() > candidacy.round + 1, Error::<T, I>::TooEarly);
 			Self::reject_candidate(&candidate, &candidacy.kind);
-			Votes::<T, I>::remove_prefix(&candidate, None);
 			Candidates::<T, I>::remove(&candidate);
 			Ok(Pays::No.into())
+		}
+
+		/// Remove up to `max` stale votes for the given `candidate`.
+		///
+		/// May be called by any Signed origin, but only after the candidate's candidacy is ended.
+		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
+		pub fn cleanup_candidacy(origin: OriginFor<T>, candidate: T::AccountId, max: u32) -> DispatchResultWithPostInfo {
+			ensure_signed(origin)?;
+			ensure!(!Candidates::<T, I>::contains_key(&candidate), Error::<T, I>::InProgress);
+			match Votes::<T, I>::remove_prefix(&candidate, Some(max)) {
+				KillStorageResult::AllRemoved(0) => {
+					dbg!(Votes::<T, I>::iter_prefix(&candidate).collect::<Vec<_>>());
+					Err(Error::<T, I>::NoVotes.into())
+				},
+				_ => Ok(Pays::No.into()),
+			}
+		}
+
+		/// Remove up to `max` stale votes for the defender in the given `challenge_round`.
+		///
+		/// May be called by any Signed origin, but only after the challenge round is ended.
+		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
+		pub fn cleanup_challenge(
+			origin: OriginFor<T>,
+			challenge_round: RoundIndex,
+			max: u32,
+		) -> DispatchResultWithPostInfo {
+			ensure_signed(origin)?;
+			ensure!(challenge_round < ChallengeRoundCount::<T, I>::get(), Error::<T, I>::InProgress);
+			match DefenderVotes::<T, I>::remove_prefix(challenge_round, Some(max)) {
+				KillStorageResult::AllRemoved(0) => Err(Error::<T, I>::NoVotes.into()),
+				_ => Ok(Pays::No.into()),
+			}
 		}
 	}
 }
@@ -1381,6 +1420,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// End the current challenge period and start a new one.
 	fn rotate_challenge(rng: &mut impl RngCore) {
 		let mut next_defender = None;
+		let mut round = ChallengeRoundCount::<T, I>::get();
 
 		// End current defender rotation
 		if let Some((defender, skeptic, tally)) = Defending::<T, I>::get() {
@@ -1392,7 +1432,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			}
 
 			// Check defender skeptic voted and that their vote was with the majority.
-			let skeptic_vote = DefenderVotes::<T, I>::get(&skeptic);
+			let skeptic_vote = DefenderVotes::<T, I>::get(round, &skeptic);
 			match (skeptic_vote, tally.more_approvals(), tally.more_rejections()) {
 				(None, _, _)
 				| (Some(Vote { approve: true, .. }), false, true)
@@ -1408,11 +1448,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				}
 				_ => {}
 			}
-
-			// Clean up all votes.
-			// NOTE: To do lazy removal of this we'll need to store the challenge round so that
-			// voting when there's a stale vote does not lead to incorrect arithmetic.
-			DefenderVotes::<T, I>::remove_all(None);
+			round.saturating_inc();
+			ChallengeRoundCount::<T, I>::put(round);
 		}
 
 		// Avoid challenging if there's only two members since we never challenge the Head or
@@ -1633,7 +1670,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let maturity = now + Self::lock_duration(MemberCount::<T, I>::get());
 		Self::reward_bidder(&candidate, candidacy.bid, candidacy.kind, maturity);
 
-		Votes::<T, I>::remove_prefix(&candidate, None);
 		Candidates::<T, I>::remove(&candidate);
 		Ok(())
 	}

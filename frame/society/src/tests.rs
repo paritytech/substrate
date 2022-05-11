@@ -762,10 +762,10 @@ fn challenges_work() {
 		// Add some members
 		place_members([20, 30, 40]);
 		// Votes are empty
-		assert_eq!(DefenderVotes::<Test>::get(10), None);
-		assert_eq!(DefenderVotes::<Test>::get(20), None);
-		assert_eq!(DefenderVotes::<Test>::get(30), None);
-		assert_eq!(DefenderVotes::<Test>::get(40), None);
+		assert_eq!(DefenderVotes::<Test>::get(0, 10), None);
+		assert_eq!(DefenderVotes::<Test>::get(0, 20), None);
+		assert_eq!(DefenderVotes::<Test>::get(0, 30), None);
+		assert_eq!(DefenderVotes::<Test>::get(0, 40), None);
 		// Check starting point
 		assert_eq!(members(), vec![10, 20, 30, 40]);
 		assert_eq!(Defending::<Test>::get(), None);
@@ -779,6 +779,8 @@ fn challenges_work() {
 		// If no one else votes, nothing happens
 		next_challenge();
 		assert_eq!(members(), vec![10, 20, 30, 40]);
+		// Reset votes for last challenge
+		assert_ok!(Society::cleanup_challenge(Origin::signed(0), 0, 10));
 		// New challenge period
 		assert_eq!(Defending::<Test>::get().unwrap().0, 30);
 		// Non-member cannot vote
@@ -792,11 +794,13 @@ fn challenges_work() {
 		next_challenge();
 		// 30 survives
 		assert_eq!(members(), vec![10, 20, 30, 40]);
+		// Reset votes for last challenge
+		assert_ok!(Society::cleanup_challenge(Origin::signed(0), 1, 10));
 		// Votes are reset
-		assert_eq!(DefenderVotes::<Test>::get(10), None);
-		assert_eq!(DefenderVotes::<Test>::get(20), None);
-		assert_eq!(DefenderVotes::<Test>::get(30), None);
-		assert_eq!(DefenderVotes::<Test>::get(40), None);
+		assert_eq!(DefenderVotes::<Test>::get(0, 10), None);
+		assert_eq!(DefenderVotes::<Test>::get(0, 20), None);
+		assert_eq!(DefenderVotes::<Test>::get(0, 30), None);
+		assert_eq!(DefenderVotes::<Test>::get(0, 40), None);
 
 		// One more time
 		assert_eq!(Defending::<Test>::get().unwrap().0, 30);
@@ -805,8 +809,8 @@ fn challenges_work() {
 		assert_ok!(Society::defender_vote(Origin::signed(20), true));
 		assert_ok!(Society::defender_vote(Origin::signed(30), false));
 		assert_ok!(Society::defender_vote(Origin::signed(40), false));
-		next_challenge();
 
+		next_challenge();
 		// 30 is suspended
 		assert_eq!(members(), vec![10, 20, 40]);
 		assert_eq!(SuspendedMembers::<Test>::get(30), Some(MemberRecord {
@@ -815,14 +819,15 @@ fn challenges_work() {
 			vouching: None,
 			index: 2,
 		}));
-
+		// Reset votes for last challenge
+		assert_ok!(Society::cleanup_challenge(Origin::signed(0), 2, 10));
 		// New defender is chosen
 		assert_eq!(Defending::<Test>::get().unwrap().0, 20);
 		// Votes are reset
-		assert_eq!(DefenderVotes::<Test>::get(10), None);
-		assert_eq!(DefenderVotes::<Test>::get(20), None);
-		assert_eq!(DefenderVotes::<Test>::get(30), None);
-		assert_eq!(DefenderVotes::<Test>::get(40), None);
+		assert_eq!(DefenderVotes::<Test>::get(0, 10), None);
+		assert_eq!(DefenderVotes::<Test>::get(0, 20), None);
+		assert_eq!(DefenderVotes::<Test>::get(0, 30), None);
+		assert_eq!(DefenderVotes::<Test>::get(0, 40), None);
 	});
 }
 
@@ -951,17 +956,20 @@ fn votes_are_working() {
 		// You cannot vote for a non-candidate
 		assert_noop!(Society::vote(Origin::signed(10), 50, true), Error::<Test>::NotCandidate);
 		// Votes are stored
-		assert_eq!(<Votes<Test>>::get(30, 10), Some(Vote { approve: true, weight: 4 }));
-		assert_eq!(<Votes<Test>>::get(30, 20), Some(Vote { approve: true, weight: 1 }));
-		assert_eq!(<Votes<Test>>::get(40, 10), Some(Vote { approve: true, weight: 4 }));
-		assert_eq!(<Votes<Test>>::get(50, 10), None);
+		assert_eq!(Votes::<Test>::get(30, 10), Some(Vote { approve: true, weight: 4 }));
+		assert_eq!(Votes::<Test>::get(30, 20), Some(Vote { approve: true, weight: 1 }));
+		assert_eq!(Votes::<Test>::get(40, 10), Some(Vote { approve: true, weight: 4 }));
+		assert_eq!(Votes::<Test>::get(50, 10), None);
 		conclude_intake(false, None);
+		// Cleanup the candidacy
+		assert_ok!(Society::cleanup_candidacy(Origin::signed(0), 30, 10));
+		assert_ok!(Society::cleanup_candidacy(Origin::signed(0), 40, 10));
 		// Candidates become members after a period rotation
 		assert_eq!(members(), vec![10, 20, 30, 40]);
 		// Votes are cleaned up
-		assert_eq!(<Votes<Test>>::get(30, 10), None);
-		assert_eq!(<Votes<Test>>::get(30, 20), None);
-		assert_eq!(<Votes<Test>>::get(40, 10), None);
+		assert_eq!(Votes::<Test>::get(30, 10), None);
+		assert_eq!(Votes::<Test>::get(30, 20), None);
+		assert_eq!(Votes::<Test>::get(40, 10), None);
 	});
 }
 

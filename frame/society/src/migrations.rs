@@ -122,8 +122,8 @@ pub fn assert_internal_consistency<T: Config<I>, I: Instance + 'static>() {
 		assert!(Votes::<T, I>::get(k1, k2).is_some());
 	}
 	// Check all defender votes are valid data.
-	for k in DefenderVotes::<T, I>::iter_keys() {
-		assert!(DefenderVotes::<T, I>::get(k).is_some());
+	for (k1, k2) in DefenderVotes::<T, I>::iter_keys() {
+		assert!(DefenderVotes::<T, I>::get(k1, k2).is_some());
 	}
 	// Check all candidates are valid data.
 	for k in Candidates::<T, I>::iter_keys() {
