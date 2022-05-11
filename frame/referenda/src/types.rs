@@ -323,7 +323,7 @@ impl Curve {
 	#[cfg(feature = "std")]
 	pub fn info(&self, days: u32, name: impl std::fmt::Display) {
 		let hours = days * 24;
-		println!("Curve {name} := {:?}:", self);
+		println!("Curve {} := {:?}:", name, self);
 		println!("   t + 0h:   {:?}", self.threshold(Perbill::zero()));
 		println!("   t + 1h:   {:?}", self.threshold(Perbill::from_rational(1, hours)));
 		println!("   t + 2h:   {:?}", self.threshold(Perbill::from_rational(2, hours)));
@@ -335,7 +335,7 @@ impl Curve {
 		for &(n, d) in [(1, 12), (1, 8), (1, 4), (1, 2), (3, 4), (1, 1)].iter() {
 			let t = days * n / d;
 			if t != l {
-				println!("   t + {t}d:   {:?}", self.threshold(Perbill::from_rational(t, days)));
+				println!("   t + {}d:   {:?}", t, self.threshold(Perbill::from_rational(t, days)));
 				l = t;
 			}
 		}
