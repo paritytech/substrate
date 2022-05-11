@@ -224,41 +224,48 @@ async fn should_call_contract() {
 }
 
 #[tokio::test]
-async fn should_notify_about_storage_changes() {
+async fn wildcard_subscription_should_notify_about_storage_changes() {
+	let mut client = Arc::new(substrate_test_runtime_client::new());
 	let mut sub = {
-		let mut client = Arc::new(substrate_test_runtime_client::new());
 		let (api, _child) = new_full(client.clone(), test_executor(), DenyUnsafe::No, None);
-
-		let api_rpc = api.into_rpc();
-		let sub = api_rpc.subscribe("state_subscribeStorage", EmptyParams::new()).await.unwrap();
-
-		// Cause a change:
-		let mut builder = client.new_block(Default::default()).unwrap();
-		builder
-			.push_transfer(runtime::Transfer {
-				from: AccountKeyring::Alice.into(),
-				to: AccountKeyring::Ferdie.into(),
-				amount: 42,
-				nonce: 0,
-			})
-			.unwrap();
-		let block = builder.build().unwrap().block;
-		client.import(BlockOrigin::Own, block).await.unwrap();
-
-		sub
+		api.into_rpc()
+			.subscribe("state_subscribeStorage", EmptyParams::new())
+			.await
+			.unwrap()
 	};
 
-	// We should get a message back on our subscription about the storage change:
-	// NOTE: previous versions of the subscription code used to return an empty value for the
-	// "initial" storage change here
+	// Timeout since there are no messages.
+	assert_matches!(timeout_secs(1, sub.next::<StorageChangeSet<H256>>()).await, Err(_));
+
+	// Cause a change:
+	let mut builder = client.new_block(Default::default()).unwrap();
+	builder
+		.push_transfer(runtime::Transfer {
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Ferdie.into(),
+			amount: 42,
+			nonce: 0,
+		})
+		.unwrap();
+	let block = builder.build().unwrap().block;
+	client.import(BlockOrigin::Own, block).await.unwrap();
+
+	// The notification with the transfer.
 	assert_matches!(timeout_secs(1, sub.next::<StorageChangeSet<H256>>()).await, Ok(Some(_)));
+
+	// No more messages to follow.
+	// Timeout since there are no messages and the client's still alive.
+	assert_matches!(timeout_secs(1, sub.next::<StorageChangeSet<H256>>()).await, Err(_));
+
+	std::mem::drop(client);
+	// No timeout since the client was dropped so the stream's now closed.
 	assert_matches!(timeout_secs(1, sub.next::<StorageChangeSet<H256>>()).await, Ok(None));
 }
 
 #[tokio::test]
-async fn should_send_initial_storage_changes_and_notifications() {
+async fn normal_subscription_should_send_initial_storage_changes_and_notifications() {
+	let mut client = Arc::new(substrate_test_runtime_client::new());
 	let mut sub = {
-		let mut client = Arc::new(substrate_test_runtime_client::new());
 		let (api, _child) = new_full(client.clone(), test_executor(), DenyUnsafe::No, None);
 
 		let alice_balance_key =
@@ -285,10 +292,17 @@ async fn should_send_initial_storage_changes_and_notifications() {
 		sub
 	};
 
+	// Initial storage changes.
 	assert_matches!(timeout_secs(1, sub.next::<StorageChangeSet<H256>>()).await, Ok(Some(_)));
+	// The notification with the transfer.
 	assert_matches!(timeout_secs(1, sub.next::<StorageChangeSet<H256>>()).await, Ok(Some(_)));
 
-	// No more messages to follow
+	// No more messages to follow.
+	// Timeout since there are no messages and the client's still alive.
+	assert_matches!(timeout_secs(1, sub.next::<StorageChangeSet<H256>>()).await, Err(_));
+
+	std::mem::drop(client);
+	// No timeout since the client was dropped so the stream's now closed.
 	assert_matches!(timeout_secs(1, sub.next::<StorageChangeSet<H256>>()).await, Ok(None));
 }
 
