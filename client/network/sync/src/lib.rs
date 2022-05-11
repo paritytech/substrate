@@ -30,7 +30,6 @@
 
 pub mod block_request_handler;
 pub mod blocks;
-pub mod message;
 pub mod schema;
 pub mod state;
 pub mod state_request_handler;
@@ -39,10 +38,9 @@ pub mod warp_request_handler;
 
 use crate::{
 	blocks::BlockCollection,
-	message::{BlockAnnounce, BlockAttributes, BlockRequest, BlockResponse},
 	schema::v1::{StateRequest, StateResponse},
-	state::{StateDownloadProgress, StateSync},
-	warp::{WarpProofImportResult, WarpSync, WarpSyncPhase, WarpSyncProgress},
+	state::StateSync,
+	warp::{WarpProofImportResult, WarpSync},
 };
 use codec::Encode;
 use either::Either;
@@ -52,7 +50,15 @@ use libp2p::PeerId;
 use log::{debug, error, info, trace, warn};
 use sc_client_api::{BlockBackend, ProofProvider};
 use sc_consensus::{BlockImportError, BlockImportStatus, IncomingBlock};
-use sc_network_common::warp_sync::{EncodedProof, WarpProofRequest, WarpSyncProvider};
+use sc_network_common::sync::{
+	message::{
+		BlockAnnounce, BlockAttributes, BlockData, BlockRequest, BlockResponse, Direction,
+		FromBlock,
+	},
+	warp::{EncodedProof, WarpProofRequest, WarpSyncPhase, WarpSyncProgress, WarpSyncProvider},
+	BadPeer, Metrics, OnBlockData, OnBlockJustification, OnStateData, PeerInfo,
+	PollBlockAnnounceValidation, SyncState, SyncStatus,
+};
 use sp_arithmetic::traits::Saturating;
 use sp_blockchain::{Error as ClientError, HeaderBackend, HeaderMetadata};
 use sp_consensus::{
@@ -69,7 +75,6 @@ use sp_runtime::{
 };
 use std::{
 	collections::{hash_map::Entry, HashMap, HashSet},
-	fmt,
 	ops::Range,
 	pin::Pin,
 	sync::Arc,
@@ -281,15 +286,6 @@ impl<B: BlockT> PeerSync<B> {
 	}
 }
 
-/// The sync status of a peer we are trying to sync with
-#[derive(Debug)]
-pub struct PeerInfo<B: BlockT> {
-	/// Their best block hash.
-	pub best_hash: B::Hash,
-	/// Their best block number.
-	pub best_number: NumberFor<B>,
-}
-
 struct ForkTarget<B: BlockT> {
 	number: NumberFor<B>,
 	parent_hash: Option<B::Hash>,
@@ -328,108 +324,6 @@ impl<B: BlockT> PeerSyncState<B> {
 	}
 }
 
-/// Reported sync state.
-#[derive(Clone, Eq, PartialEq, Debug)]
-pub enum SyncState {
-	/// Initial sync is complete, keep-up sync is active.
-	Idle,
-	/// Actively catching up with the chain.
-	Downloading,
-}
-
-/// Syncing status and statistics.
-#[derive(Clone)]
-pub struct Status<B: BlockT> {
-	/// Current global sync state.
-	pub state: SyncState,
-	/// Target sync block number.
-	pub best_seen_block: Option<NumberFor<B>>,
-	/// Number of peers participating in syncing.
-	pub num_peers: u32,
-	/// Number of blocks queued for import
-	pub queued_blocks: u32,
-	/// State sync status in progress, if any.
-	pub state_sync: Option<StateDownloadProgress>,
-	/// Warp sync in progress, if any.
-	pub warp_sync: Option<WarpSyncProgress<B>>,
-}
-
-/// A peer did not behave as expected and should be reported.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BadPeer(pub PeerId, pub sc_peerset::ReputationChange);
-
-impl fmt::Display for BadPeer {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(f, "Bad peer {}; Reputation change: {:?}", self.0, self.1)
-	}
-}
-
-impl std::error::Error for BadPeer {}
-
-/// Result of [`ChainSync::on_block_data`].
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum OnBlockData<B: BlockT> {
-	/// The block should be imported.
-	Import(BlockOrigin, Vec<IncomingBlock<B>>),
-	/// A new block request needs to be made to the given peer.
-	Request(PeerId, BlockRequest<B>),
-}
-
-impl<B: BlockT> OnBlockData<B> {
-	/// Returns `self` as request.
-	#[cfg(test)]
-	fn into_request(self) -> Option<(PeerId, BlockRequest<B>)> {
-		if let Self::Request(peer, req) = self {
-			Some((peer, req))
-		} else {
-			None
-		}
-	}
-}
-
-/// Result of [`ChainSync::on_state_data`].
-#[derive(Debug)]
-pub enum OnStateData<B: BlockT> {
-	/// The block and state that should be imported.
-	Import(BlockOrigin, IncomingBlock<B>),
-	/// A new state request needs to be made to the given peer.
-	Continue,
-}
-
-/// Result of [`ChainSync::poll_block_announce_validation`].
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PollBlockAnnounceValidation<H> {
-	/// The announcement failed at validation.
-	///
-	/// The peer reputation should be decreased.
-	Failure {
-		/// Who sent the processed block announcement?
-		who: PeerId,
-		/// Should the peer be disconnected?
-		disconnect: bool,
-	},
-	/// The announcement does not require further handling.
-	Nothing {
-		/// Who sent the processed block announcement?
-		who: PeerId,
-		/// Was this their new best block?
-		is_best: bool,
-		/// The announcement.
-		announce: BlockAnnounce<H>,
-	},
-	/// The announcement header should be imported.
-	ImportHeader {
-		/// Who sent the processed block announcement?
-		who: PeerId,
-		/// Was this their new best block?
-		is_best: bool,
-		/// The announcement.
-		announce: BlockAnnounce<H>,
-	},
-	/// The block announcement should be skipped.
-	Skip,
-}
-
 /// Result of [`ChainSync::block_announce_validation`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum PreValidateBlockAnnounce<H> {
@@ -463,15 +357,6 @@ enum PreValidateBlockAnnounce<H> {
 	/// This should *only* be returned when there wasn't a slot registered
 	/// for this block announcement validation.
 	Skip,
-}
-
-/// Result of [`ChainSync::on_block_justification`].
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum OnBlockJustification<B: BlockT> {
-	/// The justification needs no further handling.
-	Nothing,
-	/// The justification should be imported.
-	Import { peer: PeerId, hash: B::Hash, number: NumberFor<B>, justifications: Justifications },
 }
 
 /// Operation mode.
@@ -575,7 +460,7 @@ where
 	}
 
 	/// Returns the current sync status.
-	pub fn status(&self) -> Status<B> {
+	pub fn status(&self) -> SyncStatus<B> {
 		let best_seen = self.peers.values().map(|p| p.best_number).max();
 		let sync_state = if let Some(n) = best_seen {
 			// A chain is classified as downloading if the provided best block is
@@ -601,7 +486,7 @@ where
 			_ => None,
 		};
 
-		Status {
+		SyncStatus {
 			state: sync_state,
 			best_seen_block: best_seen,
 			num_peers: self.peers.len() as u32,
@@ -843,12 +728,12 @@ where
 						"`Matcher::next` guarantees the `PeerId` comes from the given peers; qed",
 					)
 					.state = PeerSyncState::DownloadingJustification(request.0);
-				let req = message::generic::BlockRequest {
+				let req = BlockRequest::<B> {
 					id: 0,
 					fields: BlockAttributes::JUSTIFICATION,
-					from: message::FromBlock::Hash(request.0),
+					from: FromBlock::Hash(request.0),
 					to: None,
-					direction: message::Direction::Ascending,
+					direction: Direction::Ascending,
 					max: Some(1),
 				};
 				Some((peer, req))
@@ -1064,10 +949,7 @@ where
 		let mut gap = false;
 		let new_blocks: Vec<IncomingBlock<B>> = if let Some(peer) = self.peers.get_mut(who) {
 			let mut blocks = response.blocks;
-			if request
-				.as_ref()
-				.map_or(false, |r| r.direction == message::Direction::Descending)
-			{
+			if request.as_ref().map_or(false, |r| r.direction == Direction::Descending) {
 				trace!(target: "sync", "Reversing incoming block list");
 				blocks.reverse()
 			}
@@ -2171,7 +2053,6 @@ where
 			queued_blocks: self.queue_blocks.len().try_into().unwrap_or(std::u32::MAX),
 			fork_targets: self.fork_targets.len().try_into().unwrap_or(std::u32::MAX),
 			justifications: self.extra_justifications.metrics(),
-			_priv: (),
 		}
 	}
 
@@ -2212,23 +2093,15 @@ fn legacy_justification_mapping(
 	justification.map(|just| (*b"FRNK", just).into())
 }
 
-#[derive(Debug)]
-pub struct Metrics {
-	pub queued_blocks: u32,
-	pub fork_targets: u32,
-	pub justifications: extra_requests::Metrics,
-	_priv: (),
-}
-
 /// Request the ancestry for a block. Sends a request for header and justification for the given
 /// block number. Used during ancestry search.
 fn ancestry_request<B: BlockT>(block: NumberFor<B>) -> BlockRequest<B> {
-	message::generic::BlockRequest {
+	BlockRequest::<B> {
 		id: 0,
 		fields: BlockAttributes::HEADER | BlockAttributes::JUSTIFICATION,
-		from: message::FromBlock::Number(block),
+		from: FromBlock::Number(block),
 		to: None,
-		direction: message::Direction::Ascending,
+		direction: Direction::Ascending,
 		max: Some(1),
 	}
 }
@@ -2306,7 +2179,7 @@ fn peer_block_request<B: BlockT>(
 	id: &PeerId,
 	peer: &PeerSync<B>,
 	blocks: &mut BlockCollection<B>,
-	attrs: message::BlockAttributes,
+	attrs: BlockAttributes,
 	max_parallel_downloads: u32,
 	finalized: NumberFor<B>,
 	best_num: NumberFor<B>,
@@ -2334,17 +2207,17 @@ fn peer_block_request<B: BlockT>(
 	let last = range.end.saturating_sub(One::one());
 
 	let from = if peer.best_number == last {
-		message::FromBlock::Hash(peer.best_hash)
+		FromBlock::Hash(peer.best_hash)
 	} else {
-		message::FromBlock::Number(last)
+		FromBlock::Number(last)
 	};
 
-	let request = message::generic::BlockRequest {
+	let request = BlockRequest::<B> {
 		id: 0,
 		fields: attrs,
 		from,
 		to: None,
-		direction: message::Direction::Descending,
+		direction: Direction::Descending,
 		max: Some((range.end - range.start).saturated_into::<u32>()),
 	};
 
@@ -2356,7 +2229,7 @@ fn peer_gap_block_request<B: BlockT>(
 	id: &PeerId,
 	peer: &PeerSync<B>,
 	blocks: &mut BlockCollection<B>,
-	attrs: message::BlockAttributes,
+	attrs: BlockAttributes,
 	target: NumberFor<B>,
 	common_number: NumberFor<B>,
 ) -> Option<(Range<NumberFor<B>>, BlockRequest<B>)> {
@@ -2371,14 +2244,14 @@ fn peer_gap_block_request<B: BlockT>(
 
 	// The end is not part of the range.
 	let last = range.end.saturating_sub(One::one());
-	let from = message::FromBlock::Number(last);
+	let from = FromBlock::Number(last);
 
-	let request = message::generic::BlockRequest {
+	let request = BlockRequest::<B> {
 		id: 0,
 		fields: attrs,
 		from,
 		to: None,
-		direction: message::Direction::Descending,
+		direction: Direction::Descending,
 		max: Some((range.end - range.start).saturated_into::<u32>()),
 	};
 	Some((range, request))
@@ -2390,7 +2263,7 @@ fn fork_sync_request<B: BlockT>(
 	targets: &mut HashMap<B::Hash, ForkTarget<B>>,
 	best_num: NumberFor<B>,
 	finalized: NumberFor<B>,
-	attributes: message::BlockAttributes,
+	attributes: BlockAttributes,
 	check_block: impl Fn(&B::Hash) -> BlockStatus,
 ) -> Option<(B::Hash, BlockRequest<B>)> {
 	targets.retain(|hash, r| {
@@ -2423,12 +2296,12 @@ fn fork_sync_request<B: BlockT>(
 			trace!(target: "sync", "Downloading requested fork {:?} from {}, {} blocks", hash, id, count);
 			return Some((
 				*hash,
-				message::generic::BlockRequest {
+				BlockRequest::<B> {
 					id: 0,
 					fields: attributes,
-					from: message::FromBlock::Hash(*hash),
+					from: FromBlock::Hash(*hash),
 					to: None,
-					direction: message::Direction::Descending,
+					direction: Direction::Descending,
 					max: Some(count),
 				},
 			))
@@ -2463,7 +2336,7 @@ where
 ///
 /// It is expected that `blocks` are in ascending order.
 fn validate_blocks<Block: BlockT>(
-	blocks: &Vec<message::BlockData<Block>>,
+	blocks: &Vec<BlockData<Block>>,
 	who: &PeerId,
 	request: Option<BlockRequest<Block>>,
 ) -> Result<Option<NumberFor<Block>>, BadPeer> {
@@ -2480,16 +2353,13 @@ fn validate_blocks<Block: BlockT>(
 			return Err(BadPeer(*who, rep::NOT_REQUESTED))
 		}
 
-		let block_header = if request.direction == message::Direction::Descending {
-			blocks.last()
-		} else {
-			blocks.first()
-		}
-		.and_then(|b| b.header.as_ref());
+		let block_header =
+			if request.direction == Direction::Descending { blocks.last() } else { blocks.first() }
+				.and_then(|b| b.header.as_ref());
 
 		let expected_block = block_header.as_ref().map_or(false, |h| match request.from {
-			message::FromBlock::Hash(hash) => h.hash() == hash,
-			message::FromBlock::Number(n) => h.number() == &n,
+			FromBlock::Hash(hash) => h.hash() == hash,
+			FromBlock::Number(n) => h.number() == &n,
 		});
 
 		if !expected_block {
@@ -2503,7 +2373,7 @@ fn validate_blocks<Block: BlockT>(
 			return Err(BadPeer(*who, rep::NOT_REQUESTED))
 		}
 
-		if request.fields.contains(message::BlockAttributes::HEADER) &&
+		if request.fields.contains(BlockAttributes::HEADER) &&
 			blocks.iter().any(|b| b.header.is_none())
 		{
 			trace!(
@@ -2515,8 +2385,7 @@ fn validate_blocks<Block: BlockT>(
 			return Err(BadPeer(*who, rep::BAD_RESPONSE))
 		}
 
-		if request.fields.contains(message::BlockAttributes::BODY) &&
-			blocks.iter().any(|b| b.body.is_none())
+		if request.fields.contains(BlockAttributes::BODY) && blocks.iter().any(|b| b.body.is_none())
 		{
 			trace!(
 				target: "sync",
@@ -2567,13 +2436,10 @@ fn validate_blocks<Block: BlockT>(
 
 #[cfg(test)]
 mod test {
-	use super::{
-		message::{BlockState, FromBlock},
-		*,
-	};
-	use crate::message::BlockData;
+	use super::*;
 	use futures::{executor::block_on, future::poll_fn};
 	use sc_block_builder::BlockBuilderProvider;
+	use sc_network_common::sync::message::{BlockData, BlockState, FromBlock};
 	use sp_blockchain::HeaderBackend;
 	use sp_consensus::block_validation::DefaultBlockAnnounceValidator;
 	use substrate_test_runtime_client::{
@@ -2684,7 +2550,7 @@ mod test {
 		assert!(sync.justification_requests().any(|(p, r)| {
 			p == peer_id3 &&
 				r.fields == BlockAttributes::JUSTIFICATION &&
-				r.from == message::FromBlock::Hash(b1_hash) &&
+				r.from == FromBlock::Hash(b1_hash) &&
 				r.to == None
 		}));
 
@@ -3081,10 +2947,11 @@ mod test {
 			let response = create_block_response(vec![block.clone()]);
 
 			let on_block_data = sync.on_block_data(&peer_id1, Some(request), response).unwrap();
-			request = match on_block_data.into_request() {
-				Some(req) => req.1,
+			request = if let OnBlockData::Request(_peer, request) = on_block_data {
+				request
+			} else {
 				// We found the ancenstor
-				None => break,
+				break
 			};
 
 			log::trace!(target: "sync", "Request: {:?}", request);

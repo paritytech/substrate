@@ -14,11 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Generic data structures for handling (i.e. answering) grandpa warp sync provider.
-
 use codec::{Decode, Encode};
 pub use sp_finality_grandpa::{AuthorityList, SetId};
-use sp_runtime::traits::Block as BlockT;
+use sp_runtime::traits::{Block as BlockT, NumberFor};
+use std::fmt;
 
 /// Scale-encoded warp sync proof response.
 pub struct EncodedProof(pub Vec<u8>);
@@ -56,4 +55,40 @@ pub trait WarpSyncProvider<Block: BlockT>: Send + Sync {
 	/// Get current list of authorities. This is supposed to be genesis authorities when starting
 	/// sync.
 	fn current_authorities(&self) -> AuthorityList;
+}
+
+/// Reported warp sync phase.
+#[derive(Clone, Eq, PartialEq, Debug)]
+pub enum WarpSyncPhase<Block: BlockT> {
+	/// Waiting for peers to connect.
+	AwaitingPeers,
+	/// Downloading and verifying grandpa warp proofs.
+	DownloadingWarpProofs,
+	/// Downloading state data.
+	DownloadingState,
+	/// Importing state.
+	ImportingState,
+	/// Downloading block history.
+	DownloadingBlocks(NumberFor<Block>),
+}
+
+impl<Block: BlockT> fmt::Display for WarpSyncPhase<Block> {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		match self {
+			Self::AwaitingPeers => write!(f, "Waiting for peers"),
+			Self::DownloadingWarpProofs => write!(f, "Downloading finality proofs"),
+			Self::DownloadingState => write!(f, "Downloading state"),
+			Self::ImportingState => write!(f, "Importing state"),
+			Self::DownloadingBlocks(n) => write!(f, "Downloading block history (#{})", n),
+		}
+	}
+}
+
+/// Reported warp sync progress.
+#[derive(Clone, Eq, PartialEq, Debug)]
+pub struct WarpSyncProgress<Block: BlockT> {
+	/// Estimated download percentage.
+	pub phase: WarpSyncPhase<Block>,
+	/// Total bytes downloaded so far.
+	pub total_bytes: u64,
 }

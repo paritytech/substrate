@@ -49,17 +49,17 @@ use sc_client_api::{BlockBackend, HeaderBackend, ProofProvider};
 use sc_consensus::import_queue::{BlockImportError, BlockImportStatus, IncomingBlock, Origin};
 use sc_network_common::{
 	config::ProtocolId,
+	sync::{
+		message::{
+			BlockAnnounce, BlockAttributes, BlockData, BlockRequest, BlockResponse, BlockState,
+			FromBlock,
+		},
+		BadPeer, OnBlockData, OnBlockJustification, OnStateData, PollBlockAnnounceValidation,
+		SyncStatus,
+	},
 	warp_sync::{EncodedProof, WarpProofRequest, WarpSyncProvider},
 };
-use sc_network_sync::{
-	message::{
-		BlockAnnounce, BlockAttributes, BlockData, BlockRequest, BlockResponse, BlockState,
-		FromBlock,
-	},
-	schema::v1::StateResponse,
-	BadPeer, ChainSync, OnBlockData, OnBlockJustification, OnStateData,
-	PollBlockAnnounceValidation, SyncStatus,
-};
+use sc_network_sync::{schema::v1::StateResponse, ChainSync};
 use sp_arithmetic::traits::SaturatedConversion;
 use sp_consensus::{block_validation::BlockAnnounceValidator, BlockOrigin};
 use sp_runtime::{
