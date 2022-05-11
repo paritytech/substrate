@@ -106,7 +106,7 @@ pub struct BeefyAuthoritySet<MerkleRoot> {
 	pub id: crate::ValidatorSetId,
 	/// Number of validators in the set.
 	///
-	/// Some BEEFY Light Clients may use an interactive protocol to verify only subset
+	/// Some BEEFY Light Clients may use an interactive protocol to verify only a subset
 	/// of signatures. We put set length here, so that these clients can verify the minimal
 	/// number of required signatures.
 	pub len: u32,

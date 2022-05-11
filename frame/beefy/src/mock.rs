@@ -86,6 +86,7 @@ impl frame_system::Config for Test {
 
 impl pallet_beefy::Config for Test {
 	type BeefyId = BeefyId;
+	type OnNewValidatorSet = ();
 }
 
 parameter_types! {
