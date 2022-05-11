@@ -503,7 +503,10 @@ fn storage_subscription() {
 	}
 
 	let mut stream = balance_stream!(AccountKeyring::Alice);
-	assert_eq!(balance_changes(IgnoreUnknown::No, &mut stream), vec![]);
+	assert_eq!(
+		balance_changes(IgnoreUnknown::No, &mut stream),
+		vec![(client.lock().chain_info().genesis_hash.clone(), AccountKeyring::Alice, Some(1000))]
+	);
 
 	// Final tree after the test:
 	//
@@ -515,10 +518,7 @@ fn storage_subscription() {
 	let a = client.lock().new_block(Default::default()).unwrap().build().unwrap().block;
 	block_on(client.lock().import(BlockOrigin::Own, a.clone())).unwrap();
 
-	assert_eq!(
-		balance_changes(IgnoreUnknown::No, &mut stream),
-		vec![(a.hash(), AccountKeyring::Alice, Some(1000))]
-	);
+	assert_eq!(balance_changes(IgnoreUnknown::No, &mut stream), vec![]);
 
 	{
 		// A new subscription gets sent the current value.
