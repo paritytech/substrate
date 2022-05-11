@@ -91,6 +91,11 @@ impl<
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
+	fn rejection() -> Self {
+		Self { ayes: Zero::zero(), nays: Total::get(), support: Total::get(), dummy: PhantomData }
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
 	fn from_requirements(support: Perbill, approval: Perbill) -> Self {
 		let support = support.mul_ceil(Total::get());
 		let ayes = approval.mul_ceil(support);

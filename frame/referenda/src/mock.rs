@@ -261,7 +261,11 @@ impl VoteTally<u32> for Tally {
 	}
 
 	fn approval(&self) -> Perbill {
-		Perbill::from_rational(self.ayes, self.ayes + self.nays)
+		if self.ayes + self.nays > 0 {
+			Perbill::from_rational(self.ayes, self.ayes + self.nays)
+		} else {
+			Perbill::zero()
+		}
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
@@ -270,9 +274,14 @@ impl VoteTally<u32> for Tally {
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
+	fn rejection() -> Self {
+		Self { ayes: 0, nays: 100 }
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
 	fn from_requirements(support: Perbill, approval: Perbill) -> Self {
 		let ayes = support.mul_ceil(100u32);
-		let nays = (ayes * 1_000_000_000u64 / approval.deconstruct() as u64) - ayes;
+		let nays = ((ayes as u64) * 1_000_000_000u64 / approval.deconstruct() as u64) as u32 - ayes;
 		Self { ayes, nays }
 	}
 }

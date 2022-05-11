@@ -102,6 +102,8 @@ pub trait VoteTally<Votes> {
 	#[cfg(feature = "runtime-benchmarks")]
 	fn unanimity() -> Self;
 	#[cfg(feature = "runtime-benchmarks")]
+	fn rejection() -> Self;
+	#[cfg(feature = "runtime-benchmarks")]
 	fn from_requirements(support: Perbill, approval: Perbill) -> Self;
 }
 
