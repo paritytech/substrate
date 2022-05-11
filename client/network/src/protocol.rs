@@ -20,7 +20,6 @@ use crate::{
 	config, error,
 	request_responses::RequestFailure,
 	utils::{interval, LruHashSet},
-	warp_request_handler::{EncodedProof, WarpSyncProvider},
 };
 
 use bytes::Bytes;
@@ -48,7 +47,10 @@ use prometheus_endpoint::{register, Gauge, GaugeVec, Opts, PrometheusError, Regi
 use prost::Message as _;
 use sc_client_api::{BlockBackend, HeaderBackend, ProofProvider};
 use sc_consensus::import_queue::{BlockImportError, BlockImportStatus, IncomingBlock, Origin};
-use sc_network_common::config::ProtocolId;
+use sc_network_common::{
+	config::ProtocolId,
+	warp_sync_provider::{EncodedProof, WarpProofRequest, WarpSyncProvider},
+};
 use sc_network_sync::{
 	message::{
 		BlockAnnounce, BlockAttributes, BlockData, BlockRequest, BlockResponse, BlockState,
@@ -56,7 +58,7 @@ use sc_network_sync::{
 	},
 	schema::v1::StateResponse,
 	BadPeer, ChainSync, OnBlockData, OnBlockJustification, OnStateData,
-	PollBlockAnnounceValidation, Status as SyncStatus,
+	PollBlockAnnounceValidation, SyncStatus,
 };
 use sp_arithmetic::traits::SaturatedConversion;
 use sp_consensus::{block_validation::BlockAnnounceValidator, BlockOrigin};
@@ -741,7 +743,7 @@ where
 	pub fn on_warp_sync_response(
 		&mut self,
 		peer_id: PeerId,
-		response: crate::warp_request_handler::EncodedProof,
+		response: EncodedProof,
 	) -> CustomMessageOutcome<B> {
 		match self.sync.on_warp_sync_data(&peer_id, response) {
 			Ok(()) => CustomMessageOutcome::None,
@@ -1305,7 +1307,7 @@ fn prepare_state_request<B: BlockT>(
 fn prepare_warp_sync_request<B: BlockT>(
 	peers: &mut HashMap<PeerId, Peer<B>>,
 	who: PeerId,
-	request: crate::warp_request_handler::Request<B>,
+	request: WarpProofRequest<B>,
 ) -> CustomMessageOutcome<B> {
 	let (tx, rx) = oneshot::channel();
 
@@ -1361,7 +1363,7 @@ pub enum CustomMessageOutcome<B: BlockT> {
 	/// A new warp sync request must be emitted.
 	WarpSyncRequest {
 		target: PeerId,
-		request: crate::warp_request_handler::Request<B>,
+		request: WarpProofRequest<B>,
 		pending_response: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
 	},
 	/// Peer has a reported a new head of chain.

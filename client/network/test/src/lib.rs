@@ -57,6 +57,7 @@ use sc_network::{
 	warp_request_handler, Multiaddr, NetworkService, NetworkWorker,
 };
 pub use sc_network_common::config::ProtocolId;
+use sc_network_common::warp_sync_provider;
 use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
 use sc_service::client::Client;
 use sp_blockchain::{
@@ -638,27 +639,27 @@ impl<B: BlockT> VerifierAdapter<B> {
 
 struct TestWarpSyncProvider<B: BlockT>(Arc<dyn HeaderBackend<B>>);
 
-impl<B: BlockT> warp_request_handler::WarpSyncProvider<B> for TestWarpSyncProvider<B> {
+impl<B: BlockT> warp_sync_provider::WarpSyncProvider<B> for TestWarpSyncProvider<B> {
 	fn generate(
 		&self,
 		_start: B::Hash,
-	) -> Result<warp_request_handler::EncodedProof, Box<dyn std::error::Error + Send + Sync>> {
+	) -> Result<warp_sync_provider::EncodedProof, Box<dyn std::error::Error + Send + Sync>> {
 		let info = self.0.info();
 		let best_header = self.0.header(BlockId::hash(info.best_hash)).unwrap().unwrap();
-		Ok(warp_request_handler::EncodedProof(best_header.encode()))
+		Ok(warp_sync_provider::EncodedProof(best_header.encode()))
 	}
 	fn verify(
 		&self,
-		proof: &warp_request_handler::EncodedProof,
-		_set_id: warp_request_handler::SetId,
-		_authorities: warp_request_handler::AuthorityList,
-	) -> Result<warp_request_handler::VerificationResult<B>, Box<dyn std::error::Error + Send + Sync>>
+		proof: &warp_sync_provider::EncodedProof,
+		_set_id: warp_sync_provider::SetId,
+		_authorities: warp_sync_provider::AuthorityList,
+	) -> Result<warp_sync_provider::VerificationResult<B>, Box<dyn std::error::Error + Send + Sync>>
 	{
-		let warp_request_handler::EncodedProof(encoded) = proof;
+		let warp_sync_provider::EncodedProof(encoded) = proof;
 		let header = B::Header::decode(&mut encoded.as_slice()).unwrap();
-		Ok(warp_request_handler::VerificationResult::Complete(0, Default::default(), header))
+		Ok(warp_sync_provider::VerificationResult::Complete(0, Default::default(), header))
 	}
-	fn current_authorities(&self) -> warp_request_handler::AuthorityList {
+	fn current_authorities(&self) -> warp_sync_provider::AuthorityList {
 		Default::default()
 	}
 }

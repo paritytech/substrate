@@ -18,14 +18,14 @@
 
 //! Warp sync support.
 
-pub use crate::warp_request_handler::{
-	EncodedProof, Request as WarpProofRequest, VerificationResult, WarpSyncProvider,
-};
 use crate::{
 	schema::v1::{StateRequest, StateResponse},
 	state::{ImportResult, StateSync},
 };
 use sc_client_api::ProofProvider;
+use sc_network_common::warp_sync_provider::{
+	EncodedProof, VerificationResult, WarpProofRequest, WarpSyncProvider,
+};
 use sp_blockchain::HeaderBackend;
 use sp_finality_grandpa::{AuthorityList, SetId};
 use sp_runtime::traits::{Block as BlockT, NumberFor, Zero};

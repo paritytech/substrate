@@ -41,9 +41,10 @@ use sc_network::{
 	block_request_handler::{self, BlockRequestHandler},
 	config::{Role, SyncMode},
 	state_request_handler::{self, StateRequestHandler},
-	warp_request_handler::{self, RequestHandler as WarpSyncRequestHandler, WarpSyncProvider},
+	warp_request_handler::{self, RequestHandler as WarpSyncRequestHandler},
 	NetworkService,
 };
+use sc_network_common::warp_sync_provider::WarpSyncProvider;
 use sc_network_light::light_client_requests::{self, handler::LightClientRequestHandler};
 use sc_rpc::{
 	author::AuthorApiServer,

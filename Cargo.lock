@@ -8395,6 +8395,7 @@ dependencies = [
  "sc-consensus",
  "sc-keystore",
  "sc-network",
+ "sc-network-common",
  "sc-network-gossip",
  "sc-network-test",
  "sc-telemetry",
@@ -8544,6 +8545,8 @@ dependencies = [
  "prost-build",
  "sc-peerset",
  "smallvec",
+ "sp-finality-grandpa",
+ "sp-runtime",
 ]
 
 [[package]]

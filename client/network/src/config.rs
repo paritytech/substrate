@@ -26,8 +26,8 @@ pub use sc_network_common::{
 	request_responses::{
 		IncomingRequest, OutgoingResponse, ProtocolConfig as RequestResponseConfig,
 	},
+	warp_sync_provider::WarpSyncProvider,
 };
-pub use sc_network_sync::warp_request_handler::WarpSyncProvider;
 
 pub use libp2p::{build_multiaddr, core::PublicKey, identity};
 
