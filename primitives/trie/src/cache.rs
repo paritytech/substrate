@@ -417,10 +417,6 @@ impl<'a, H: Hasher> trie_db::TrieCache<NodeCodec<H>> for TrieCache<'a, H> {
 		}
 	}
 
-	fn insert_node(&mut self, hash: H::Out, node: NodeOwned<H::Out>) {
-		self.local_cache.insert(hash, node);
-	}
-
 	fn get_node(&mut self, hash: &H::Out) -> Option<&NodeOwned<H::Out>> {
 		if let Some(node) = self.shared_node_cache.get(hash) {
 			self.shared_node_cache_access.insert(*hash);
@@ -496,7 +492,7 @@ mod tests {
 			.peek(&value_cache_get_key(TEST_DATA[0].0, &root))
 			.unwrap()
 			.clone();
-		assert_eq!(Bytes::from(TEST_DATA[0].1.to_vec()), cached_data.data().unwrap());
+		assert_eq!(Bytes::from(TEST_DATA[0].1.to_vec()), cached_data.data().flatten().unwrap());
 
 		let fake_data = Bytes::from(&b"fake_data"[..]);
 
@@ -545,7 +541,7 @@ mod tests {
 			.peek(&value_cache_get_key(&new_key, &new_root))
 			.unwrap()
 			.clone();
-		assert_eq!(Bytes::from(new_value), cached_data.data().unwrap());
+		assert_eq!(Bytes::from(new_value), cached_data.data().flatten().unwrap());
 	}
 
 	#[test]
