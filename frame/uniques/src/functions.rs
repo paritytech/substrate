@@ -211,11 +211,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		if let Some(ref price) = price {
 			InstancePriceOf::<T, I>::insert(&class, &instance, (price.clone(), buyer.clone()));
+			Self::deposit_event(Event::InstancePriceSet { class, instance, price: price.clone(), buyer });
 		} else {
 			InstancePriceOf::<T, I>::remove(&class, &instance);
+			Self::deposit_event(Event::InstancePriceRemoved { class, instance });
 		}
-
-		Self::deposit_event(Event::InstancePriceSet { class, instance, price, buyer });
 
 		Ok(())
 	}

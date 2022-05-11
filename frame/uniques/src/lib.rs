@@ -369,12 +369,17 @@ pub mod pallet {
 		},
 		/// Ownership acceptance has changed for an account.
 		OwnershipAcceptanceChanged { who: T::AccountId, maybe_class: Option<T::ClassId> },
-		/// Price was set for the instance.
+		/// The price was set for the instance.
 		InstancePriceSet {
 			class: T::ClassId,
 			instance: T::InstanceId,
-			price: Option<BalanceOrAssetOf<T, I>>,
+			price: BalanceOrAssetOf<T, I>,
 			buyer: Option<T::AccountId>,
+		},
+		/// The price for the instance was removed.
+		InstancePriceRemoved {
+			class: T::ClassId,
+			instance: T::InstanceId,
 		},
 		/// An item was bought.
 		ItemBought {
