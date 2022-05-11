@@ -45,6 +45,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let origin = details.owner;
 		details.owner = dest;
 		Asset::<T, I>::insert(&class, &instance, &details);
+		InstancePriceOf::<T, I>::remove(&class, &instance);
 
 		Self::deposit_event(Event::Transferred {
 			class,
@@ -109,6 +110,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				Account::<T, I>::remove((&details.owner, &class, &instance));
 			}
 			InstanceMetadataOf::<T, I>::remove_prefix(&class, None);
+			InstancePriceOf::<T, I>::remove_prefix(&class, None);
 			ClassMetadataOf::<T, I>::remove(&class);
 			Attribute::<T, I>::remove_prefix((&class,), None);
 			ClassAccount::<T, I>::remove(&class_details.owner, &class);
@@ -183,6 +185,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		Asset::<T, I>::remove(&class, &instance);
 		Account::<T, I>::remove((&owner, &class, &instance));
+		InstancePriceOf::<T, I>::remove(&class, &instance);
 
 		Self::deposit_event(Event::Burned { class, instance, owner });
 		Ok(())

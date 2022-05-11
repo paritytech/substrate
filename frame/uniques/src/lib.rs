@@ -1396,7 +1396,6 @@ pub mod pallet {
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			let buyer = buyer.map(T::Lookup::lookup).transpose()?;
-
 			Self::do_set_price(class, instance, origin, price, buyer)?;
 			Ok(())
 		}
