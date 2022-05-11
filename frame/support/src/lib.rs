@@ -215,8 +215,8 @@ macro_rules! bounded_btree_map {
 /// // The prefix will then be the pallet name as configured in the runtime through
 /// // `construct_runtime!`.
 ///
-/// # struct Pallet<T: Config>(std::marker::PhantomData<T>);
-/// # impl<T: Config> frame_support::traits::PalletInfoAccess for Pallet<T> {
+/// # struct Pallet<T: Config, I = ()>(std::marker::PhantomData<(T, I)>);
+/// # impl<T: Config, I: 'static> frame_support::traits::PalletInfoAccess for Pallet<T, I> {
 /// # 	fn index() -> usize { 0 }
 /// # 	fn name() -> &'static str { "pallet" }
 /// # 	fn module_name() -> &'static str { "module" }
@@ -224,7 +224,12 @@ macro_rules! bounded_btree_map {
 /// # }
 ///
 /// #[storage_alias]
-/// type SomeValue<T> = Value<Pallet<T: Config>, u64>;
+/// type SomeValue<T: Config> = Value<Pallet<T>, u64>;
+///
+/// // Pallet with instance
+///
+/// #[storage_alias]
+/// type SomeValue2<T: Config, I: 'static> = Value<Pallet<T, I>, u64>;
 ///
 /// # fn main() {}
 /// ```

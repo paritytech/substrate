@@ -25,7 +25,7 @@ use syn::{
 	parenthesized,
 	parse::{Parse, ParseStream},
 	punctuated::Punctuated,
-	token, Attribute, Error, Ident, Result, Token, Type, TypeParam, Visibility,
+	token, Attribute, Error, Ident, Result, Token, Type, TypeParam, Visibility, WhereClause,
 };
 
 /// Represents a path that only consists of [`Ident`] separated by `::`.
@@ -63,6 +63,39 @@ impl ToTokens for SimplePath {
 	}
 }
 
+/// Represents generics which only support [`Ident`] separated by commas as you would pass it to a
+/// type.
+struct TypeGenerics {
+	lt_token: Token![<],
+	params: Punctuated<Ident, token::Comma>,
+	gt_token: Token![>],
+}
+
+impl TypeGenerics {
+	/// Returns the generics for types declarations etc.
+	fn iter(&self) -> impl Iterator<Item = &Ident> {
+		self.params.iter()
+	}
+}
+
+impl Parse for TypeGenerics {
+	fn parse(input: ParseStream<'_>) -> Result<Self> {
+		Ok(Self {
+			lt_token: input.parse()?,
+			params: Punctuated::parse_separated_nonempty(input)?,
+			gt_token: input.parse()?,
+		})
+	}
+}
+
+impl ToTokens for TypeGenerics {
+	fn to_tokens(&self, tokens: &mut TokenStream) {
+		self.lt_token.to_tokens(tokens);
+		self.params.to_tokens(tokens);
+		self.gt_token.to_tokens(tokens);
+	}
+}
+
 /// Represents generics which only support [`TypeParam`] separated by commas.
 struct SimpleGenerics {
 	lt_token: Token![<],
@@ -79,13 +112,6 @@ impl SimpleGenerics {
 	/// Returns the generics for the `impl` block.
 	fn impl_generics(&self) -> impl Iterator<Item = &TypeParam> {
 		self.params.iter()
-	}
-
-	/// Returns `true` if all parameters have at least one trait bound.
-	fn all_have_trait_bounds(&self) -> bool {
-		self.params
-			.iter()
-			.all(|p| p.bounds.iter().any(|b| matches!(b, syn::TypeParamBound::Trait(_))))
 	}
 }
 
@@ -120,7 +146,7 @@ enum StorageType {
 		_kw: storage_types::Value,
 		_lt_token: Token![<],
 		prefix: SimplePath,
-		prefix_generics: Option<SimpleGenerics>,
+		prefix_generics: Option<TypeGenerics>,
 		_value_comma: Token![,],
 		value_ty: Type,
 		query_type: Option<(Token![,], Type)>,
@@ -131,7 +157,7 @@ enum StorageType {
 		_kw: storage_types::Map,
 		_lt_token: Token![<],
 		prefix: SimplePath,
-		prefix_generics: Option<SimpleGenerics>,
+		prefix_generics: Option<TypeGenerics>,
 		_hasher_comma: Token![,],
 		hasher_ty: Type,
 		_key_comma: Token![,],
@@ -146,7 +172,7 @@ enum StorageType {
 		_kw: storage_types::DoubleMap,
 		_lt_token: Token![<],
 		prefix: SimplePath,
-		prefix_generics: Option<SimpleGenerics>,
+		prefix_generics: Option<TypeGenerics>,
 		_hasher1_comma: Token![,],
 		hasher1_ty: Type,
 		_key1_comma: Token![,],
@@ -165,7 +191,7 @@ enum StorageType {
 		_kw: storage_types::NMap,
 		_lt_token: Token![<],
 		prefix: SimplePath,
-		prefix_generics: Option<SimpleGenerics>,
+		prefix_generics: Option<TypeGenerics>,
 		_paren_comma: Token![,],
 		_paren_token: token::Paren,
 		key_types: Punctuated<Type, Token![,]>,
@@ -189,35 +215,33 @@ impl StorageType {
 		attributes: &[Attribute],
 	) -> TokenStream {
 		let storage_instance = &storage_instance.name;
-		let type_generics = self
-			.prefix_generics()
-			.map(|g| {
-				let g = g.type_generics();
-				quote! { <#( #g ),*> }
-			})
-			.unwrap_or_default();
 		let attributes = attributes.iter();
+		let storage_generics = storage_generics.map(|g| {
+			let generics = g.type_generics();
+
+			quote!( < #( #generics ),* > )
+		});
 
 		match self {
-			Self::Value { value_ty, query_type, .. } => {
+			Self::Value { value_ty, query_type, prefix_generics, .. } => {
 				let query_type = query_type.as_ref().map(|(c, t)| quote!(#c #t));
 
 				quote! {
 					#( #attributes )*
 					#visibility type #storage_name #storage_generics = #crate_::storage::types::StorageValue<
-						#storage_instance #type_generics,
+						#storage_instance #prefix_generics,
 						#value_ty
 						#query_type
 					>;
 				}
 			},
-			Self::Map { value_ty, query_type, hasher_ty, key_ty, .. } => {
+			Self::Map { value_ty, query_type, hasher_ty, key_ty, prefix_generics, .. } => {
 				let query_type = query_type.as_ref().map(|(c, t)| quote!(#c #t));
 
 				quote! {
 					#( #attributes )*
 					#visibility type #storage_name #storage_generics = #crate_::storage::types::StorageMap<
-						#storage_instance #type_generics,
+						#storage_instance #prefix_generics,
 						#hasher_ty,
 						#key_ty,
 						#value_ty
@@ -232,6 +256,7 @@ impl StorageType {
 				key1_ty,
 				hasher2_ty,
 				key2_ty,
+				prefix_generics,
 				..
 			} => {
 				let query_type = query_type.as_ref().map(|(c, t)| quote!(#c #t));
@@ -239,7 +264,7 @@ impl StorageType {
 				quote! {
 					#( #attributes )*
 					#visibility type #storage_name #storage_generics = #crate_::storage::types::StorageDoubleMap<
-						#storage_instance #type_generics,
+						#storage_instance #prefix_generics,
 						#hasher1_ty,
 						#key1_ty,
 						#hasher2_ty,
@@ -249,14 +274,14 @@ impl StorageType {
 					>;
 				}
 			},
-			Self::NMap { value_ty, query_type, key_types, .. } => {
+			Self::NMap { value_ty, query_type, key_types, prefix_generics, .. } => {
 				let query_type = query_type.as_ref().map(|(c, t)| quote!(#c #t));
 				let key_types = key_types.iter();
 
 				quote! {
 					#( #attributes )*
 					#visibility type #storage_name #storage_generics = #crate_::storage::types::StorageNMap<
-						#storage_instance #type_generics,
+						#storage_instance #prefix_generics,
 						( #( #key_types ),* ),
 						#value_ty
 						#query_type
@@ -277,7 +302,7 @@ impl StorageType {
 	}
 
 	/// The prefix generics for this storage type.
-	fn prefix_generics(&self) -> Option<&SimpleGenerics> {
+	fn prefix_generics(&self) -> Option<&TypeGenerics> {
 		match self {
 			Self::Value { prefix_generics, .. } |
 			Self::Map { prefix_generics, .. } |
@@ -299,20 +324,10 @@ impl Parse for StorageType {
 			}
 		};
 
-		let parse_pallet_generics = |input: ParseStream<'_>| -> Result<Option<SimpleGenerics>> {
+		let parse_pallet_generics = |input: ParseStream<'_>| -> Result<Option<TypeGenerics>> {
 			let lookahead = input.lookahead1();
 			if lookahead.peek(Token![<]) {
-				let generics = input.parse::<SimpleGenerics>()?;
-
-				if generics.all_have_trait_bounds() {
-					Ok(Some(generics))
-				} else {
-					Err(Error::new_spanned(
-						generics,
-						"The pallet generics require to be bound by the \
-						pallet `Config` trait and optional `Instance` trait.",
-					))
-				}
+				Ok(Some(input.parse()?))
 			} else if lookahead.peek(Token![,]) {
 				Ok(None)
 			} else {
@@ -399,6 +414,7 @@ struct Input {
 	storage_generics: Option<SimpleGenerics>,
 	_equal: Token![=],
 	storage_type: StorageType,
+	where_clause: Option<WhereClause>,
 	_semicolon: Token![;],
 }
 
@@ -420,6 +436,8 @@ impl Parse for Input {
 
 		let storage_type = input.parse()?;
 
+		let where_clause = input.parse()?;
+
 		let _semicolon = input.parse()?;
 
 		Ok(Self {
@@ -430,6 +448,7 @@ impl Parse for Input {
 			storage_generics,
 			_equal,
 			storage_type,
+			where_clause,
 			_semicolon,
 		})
 	}
@@ -443,6 +462,8 @@ pub fn storage_alias(input: TokenStream) -> Result<TokenStream> {
 	let storage_instance = generate_storage_instance(
 		&crate_,
 		&input.storage_name,
+		input.storage_generics.as_ref(),
+		input.where_clause.as_ref(),
 		input.storage_type.prefix(),
 		input.storage_type.prefix_generics(),
 		&input.visibility,
@@ -476,15 +497,21 @@ struct StorageInstance {
 fn generate_storage_instance(
 	crate_: &Ident,
 	storage_name: &Ident,
+	storage_generics: Option<&SimpleGenerics>,
+	storage_where_clause: Option<&WhereClause>,
 	prefix: &SimplePath,
-	prefix_generics: Option<&SimpleGenerics>,
+	prefix_generics: Option<&TypeGenerics>,
 	visibility: &Visibility,
 ) -> Result<StorageInstance> {
 	let (pallet_prefix, impl_generics, type_generics) =
-		if let Some(prefix_generics) = prefix_generics {
-			let type_generics = prefix_generics.type_generics();
-			let type_generics2 = prefix_generics.type_generics();
-			let impl_generics = prefix_generics.impl_generics();
+		if let Some((prefix_generics, storage_generics)) =
+			prefix_generics.and_then(|p| storage_generics.map(|s| (p, s)))
+		{
+			let type_generics = prefix_generics.iter();
+			let type_generics2 = prefix_generics.iter();
+			let impl_generics = storage_generics
+				.impl_generics()
+				.filter(|g| prefix_generics.params.iter().any(|pg| *pg == g.ident));
 
 			(
 				quote! {
@@ -504,14 +531,20 @@ fn generate_storage_instance(
 			))
 		};
 
+	let where_clause = storage_where_clause.map(|w| quote!(#w)).unwrap_or_default();
+
 	let name = Ident::new(&format!("{}_Storage_Instance", storage_name), Span::call_site());
 	let storage_name_str = storage_name.to_string();
 
 	// Implement `StorageInstance` trait.
 	let code = quote! {
-		#visibility struct #name< #impl_generics >(#crate_::sp_std::marker::PhantomData<(#type_generics)>);
+		#visibility struct #name< #impl_generics >(
+			#crate_::sp_std::marker::PhantomData<(#type_generics)>
+		) #where_clause;
 
-		impl<#impl_generics> #crate_::traits::StorageInstance for #name< #type_generics > {
+		impl<#impl_generics> #crate_::traits::StorageInstance
+			for #name< #type_generics > #where_clause
+		{
 			fn pallet_prefix() -> &'static str {
 				#pallet_prefix
 			}

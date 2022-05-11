@@ -117,15 +117,15 @@ mod v5 {
 	}
 
 	#[storage_alias]
-	type ContractInfoOf<T> = Map<
-		Pallet<T: Config>,
+	type ContractInfoOf<T: Config> = Map<
+		Pallet<T>,
 		Twox64Concat,
 		<T as frame_system::Config>::AccountId,
 		ContractInfo<T>,
 	>;
 
 	#[storage_alias]
-	type DeletionQueue<T> = Value<Pallet<T: Config>, Vec<DeletedContract>>;
+	type DeletionQueue<T: Config> = Value<Pallet<T>, Vec<DeletedContract>>;
 
 	pub fn migrate<T: Config>() -> Weight {
 		let mut weight: Weight = 0;
@@ -203,18 +203,18 @@ mod v6 {
 	type ContractInfo<T> = RawContractInfo<CodeHash<T>, BalanceOf<T>>;
 
 	#[storage_alias]
-	type ContractInfoOf<T> = Map<
-		Pallet<T: Config>,
+	type ContractInfoOf<T: Config> = Map<
+		Pallet<T>,
 		Twox64Concat,
 		<T as frame_system::Config>::AccountId,
 		ContractInfo<T>,
 	>;
 
 	#[storage_alias]
-	type CodeStorage<T> = Map<Pallet<T: Config>, Identity, CodeHash<T>, PrefabWasmModule>;
+	type CodeStorage<T: Config> = Map<Pallet<T>, Identity, CodeHash<T>, PrefabWasmModule>;
 
 	#[storage_alias]
-	type OwnerInfoOf<T> = Map<Pallet<T: Config>, Identity, CodeHash<T>, OwnerInfo<T>>;
+	type OwnerInfoOf<T: Config> = Map<Pallet<T>, Identity, CodeHash<T>, OwnerInfo<T>>;
 
 	pub fn migrate<T: Config>() -> Weight {
 		let mut weight: Weight = 0;
@@ -259,9 +259,9 @@ mod v7 {
 
 	pub fn migrate<T: Config>() -> Weight {
 		#[storage_alias]
-		type AccountCounter<T> = Value<Pallet<T: Config>, u64, ValueQuery>;
+		type AccountCounter<T: Config> = Value<Pallet<T>, u64, ValueQuery>;
 		#[storage_alias]
-		type Nonce<T> = Value<Pallet<T: Config>, u64, ValueQuery>;
+		type Nonce<T: Config> = Value<Pallet<T>, u64, ValueQuery>;
 
 		Nonce::<T>::set(AccountCounter::<T>::take());
 		T::DbWeight::get().reads_writes(1, 2)

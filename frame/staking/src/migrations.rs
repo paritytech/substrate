@@ -142,9 +142,9 @@ pub mod v7 {
 	use frame_support::storage_alias;
 
 	#[storage_alias]
-	type CounterForValidators<T> = Value<Pallet<T: Config>, u32>;
+	type CounterForValidators<T: Config> = Value<Pallet<T>, u32>;
 	#[storage_alias]
-	type CounterForNominators<T> = Value<Pallet<T: Config>, u32>;
+	type CounterForNominators<T: Config> = Value<Pallet<T>, u32>;
 
 	pub fn pre_migrate<T: Config>() -> Result<(), &'static str> {
 		assert!(
@@ -182,17 +182,17 @@ pub mod v6 {
 
 	// NOTE: value type doesn't matter, we just set it to () here.
 	#[storage_alias]
-	type SnapshotValidators<T> = Value<Pallet<T: Config>, ()>;
+	type SnapshotValidators<T: Config> = Value<Pallet<T>, ()>;
 	#[storage_alias]
-	type SnapshotNominators<T> = Value<Pallet<T: Config>, ()>;
+	type SnapshotNominators<T: Config> = Value<Pallet<T>, ()>;
 	#[storage_alias]
-	type QueuedElected<T> = Value<Pallet<T: Config>, ()>;
+	type QueuedElected<T: Config> = Value<Pallet<T>, ()>;
 	#[storage_alias]
-	type QueuedScore<T> = Value<Pallet<T: Config>, ()>;
+	type QueuedScore<T: Config> = Value<Pallet<T>, ()>;
 	#[storage_alias]
-	type EraElectionStatus<T> = Value<Pallet<T: Config>, ()>;
+	type EraElectionStatus<T: Config> = Value<Pallet<T>, ()>;
 	#[storage_alias]
-	type IsCurrentSessionFinal<T> = Value<Pallet<T: Config>, ()>;
+	type IsCurrentSessionFinal<T: Config> = Value<Pallet<T>, ()>;
 
 	/// check to execute prior to migration.
 	pub fn pre_migrate<T: Config>() -> Result<(), &'static str> {
