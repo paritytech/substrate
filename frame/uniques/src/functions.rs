@@ -226,12 +226,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		buyer: T::AccountId,
 		bid_price: BalanceOrAssetOf<T, I>,
 	) -> DispatchResult {
-		let class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
-		ensure!(!class_details.is_frozen, Error::<T, I>::Frozen);
-		ensure!(!T::Locker::is_locked(class, instance), Error::<T, I>::Locked);
-
 		let details = Asset::<T, I>::get(&class, &instance).ok_or(Error::<T, I>::UnknownItem)?;
-		ensure!(!details.is_frozen, Error::<T, I>::Frozen);
 		ensure!(details.owner != buyer, Error::<T, I>::NoPermission);
 
 		let price_info =
