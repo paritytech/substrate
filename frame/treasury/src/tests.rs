@@ -437,7 +437,7 @@ fn max_approvals_limited() {
 		Balances::make_free_balance_be(&Treasury::account_id(), u64::MAX);
 		Balances::make_free_balance_be(&0, u64::MAX);
 
-		for _ in 0..MaxApprovals::get() {
+		for _ in 0..<Test as Config>::MaxApprovals::get() {
 			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
 			assert_ok!(Treasury::approve_proposal(Origin::root(), 0));
 		}
