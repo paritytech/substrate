@@ -1854,21 +1854,16 @@ pub mod pallet {
 			nominator: Option<T::AccountId>,
 			state_toggler: Option<T::AccountId>,
 		) -> DispatchResult {
-			let o1 = origin;
-			let o2 = o1.clone();
-
-			let mut bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
-			let is_pool_root = || -> Result<(), sp_runtime::DispatchError> {
-				let who = ensure_signed(o1)?;
-				ensure!(bonded_pool.can_update_roles(&who), Error::<T>::DoesNotHavePermission);
-				Ok(())
+			let mut bonded_pool = match ensure_root(origin.clone()) {
+				Ok(()) => BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?,
+				Err(frame_support::error::BadOrigin) => {
+					let who = ensure_signed(origin)?;
+					let bonded_pool =
+						BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
+					ensure!(bonded_pool.can_update_roles(&who), Error::<T>::DoesNotHavePermission);
+					bonded_pool
+				},
 			};
-			let is_root = || -> Result<(), sp_runtime::DispatchError> {
-				ensure_root(o2)?;
-				Ok(())
-			};
-
-			let _ = is_root().or_else(|_| is_pool_root())?;
 
 			match root {
 				None => (),
