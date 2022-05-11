@@ -469,8 +469,6 @@ pub enum OldVote {
 
 #[frame_support::pallet]
 pub mod pallet {
-	use frame_support::dispatch::PaysFee;
-
 	use super::*;
 
 	#[pallet::pallet]
@@ -594,7 +592,7 @@ pub mod pallet {
 		/// The skeptic has already been punished for this offence.
 		AlreadyPunished,
 		/// Funds are insufficient to pay off society debts.
-		insufficientFunds,
+		InsufficientFunds,
 	}
 
 	#[pallet::event]
@@ -738,54 +736,6 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(super) type DefenderVotes<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, T::AccountId, Vote>;
-
-	mod old {
-		use super::{
-			pallet, StorageMap, StorageValue, StorageDoubleMap, Config, BalanceOf, Twox64Concat,
-			ValueQuery, BidKind, VouchingStatus, StrikeCount, Bid,
-		};
-
-		#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
-		pub enum Vote {
-			Skeptic,
-			Reject,
-			Approve,
-		}
-
-		#[pallet::storage]
-		pub type Bids<T: Config<I>, I: 'static = ()> =
-			StorageValue<_, Vec<Bid<T::AccountId, BalanceOf<T, I>>>, ValueQuery>;
-		#[pallet::storage]
-		pub type Candidates<T: Config<I>, I: 'static = ()> =
-			StorageValue<_, Vec<Bid<T::AccountId, BalanceOf<T, I>>>, ValueQuery>;
-		#[pallet::storage]
-		pub type Votes<T: Config<I>, I: 'static = ()> =
-			StorageDoubleMap<_, Twox64Concat, T::AccountId, Twox64Concat, T::AccountId, Vote>;
-		#[pallet::storage]
-		pub type SuspendedCandidates<T: Config<I>, I: 'static = ()> =
-			StorageMap<_, Twox64Concat, T::AccountId, (BalanceOf<T, I>, BidKind<T::AccountId, BalanceOf<T, I>>)>;
-		#[pallet::storage]
-		pub type Members<T: Config<I>, I: 'static = ()> =
-			StorageValue<_, Vec<T::AccountId>, ValueQuery>;
-		#[pallet::storage]
-		pub type Vouching<T: Config<I>, I: 'static = ()> =
-			StorageMap<_, Twox64Concat, T::AccountId, VouchingStatus>;
-		#[pallet::storage]
-		pub type Strikes<T: Config<I>, I: 'static = ()> =
-			StorageMap<_, Twox64Concat, T::AccountId, StrikeCount, ValueQuery>;
-		#[pallet::storage]
-		pub type Payouts<T: Config<I>, I: 'static = ()> =
-			StorageMap<_, Twox64Concat, T::AccountId, Vec<(T::BlockNumber, BalanceOf<T, I>)>, ValueQuery>;
-		#[pallet::storage]
-		pub type SuspendedMembers<T: Config<I>, I: 'static = ()> =
-			StorageMap<_, Twox64Concat, T::AccountId, bool, ValueQuery>;
-		#[pallet::storage]
-		pub type Defender<T: Config<I>, I: 'static = ()> =
-			StorageValue<_, T::AccountId>;
-		#[pallet::storage]
-		pub type DefenderVotes<T: Config<I>, I: 'static = ()> =
-			StorageMap<_, Twox64Concat, T::AccountId, Vote>;
-	}
 
 	#[pallet::hooks]
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
@@ -999,7 +949,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			candidate: <T::Lookup as StaticLookup>::Source,
 			approve: bool,
-		) -> DispatchResult {
+		) -> DispatchResultWithPostInfo {
 			let voter = ensure_signed(origin)?;
 			let candidate = T::Lookup::lookup(candidate)?;
 
@@ -1029,7 +979,7 @@ pub mod pallet {
 		/// Total Complexity: O(M + logM)
 		/// # </weight>
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
-		pub fn defender_vote(origin: OriginFor<T>, approve: bool) -> DispatchResult {
+		pub fn defender_vote(origin: OriginFor<T>, approve: bool) -> DispatchResultWithPostInfo {
 			let voter = ensure_signed(origin)?;
 
 			let mut defending = Defending::<T, I>::get().ok_or(Error::<T, I>::NoDefender)?;
@@ -1085,10 +1035,10 @@ pub mod pallet {
 			let mut record = Members::<T, I>::get(&who).ok_or(Error::<T, I>::NotMember)?;
 			let mut payout_record = Payouts::<T, I>::get(&who);
 			ensure!(record.rank == 0, Error::<T, I>::AlreadyElevated);
-			ensure!(amount >= payout_record.paid, Error::<T, I>::insufficientFunds);
+			ensure!(amount >= payout_record.paid, Error::<T, I>::InsufficientFunds);
 
 			T::Currency::transfer(&who, &Self::account_id(), payout_record.paid, AllowDeath)?;
-			payout_record.paid = 0;
+			payout_record.paid = Zero::zero();
 			payout_record.payouts.clear();
 			record.rank = 1;
 			Members::<T, I>::insert(&who, record);
@@ -1187,7 +1137,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			who: T::AccountId,
 			forgive: bool,
-		) -> DispatchResult {
+		) -> DispatchResultWithPostInfo {
 			let founder = ensure_signed(origin)?;
 			ensure!(Founder::<T, I>::get() == Some(founder.clone()), Error::<T, I>::NotFounder);
 
@@ -1205,7 +1155,7 @@ pub mod pallet {
 
 			SuspendedMembers::<T, I>::remove(&who);
 			Self::deposit_event(Event::<T, I>::SuspendedMemberJudgement { who, judged: forgive });
-			Ok(Pays::No)
+			Ok(Pays::No.into())
 		}
 
 		/// Change the maximum number of members in society and the maximum number of new candidates
@@ -1241,7 +1191,7 @@ pub mod pallet {
 		/// Punish the skeptic with a strike if they did not vote on a candidate. Callable by the
 		/// candidate.
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
-		pub fn punish_skeptic(origin: OriginFor<T>) -> DispatchResult {
+		pub fn punish_skeptic(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let candidate = ensure_signed(origin)?;
 			let mut candidacy = Candidates::<T, I>::get(&candidate).ok_or(Error::<T, I>::NotCandidate)?;
 			ensure!(!candidacy.skeptic_struck, Error::<T, I>::AlreadyPunished);
@@ -1254,7 +1204,7 @@ pub mod pallet {
 		/// Transform an approved candidate into a member. Callable only by the
 		/// the candidate, and only after the period for voting has ended.
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
-		pub fn claim_membership(origin: OriginFor<T>) -> DispatchResult {
+		pub fn claim_membership(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let candidate = ensure_signed(origin)?;
 			let candidacy = Candidates::<T, I>::get(&candidate).ok_or(Error::<T, I>::NotCandidate)?;
 			ensure!(candidacy.tally.clear_approval(), Error::<T, I>::NotApproved);
@@ -1267,7 +1217,7 @@ pub mod pallet {
 		/// Founder, only after the period for voting has ended and only when the candidate is not
 		/// clearly rejected.
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
-		pub fn bestow_membership(origin: OriginFor<T>, candidate: T::AccountId) -> DispatchResult {
+		pub fn bestow_membership(origin: OriginFor<T>, candidate: T::AccountId) -> DispatchResultWithPostInfo {
 			let founder = ensure_signed(origin)?;
 			ensure!(Founder::<T, I>::get() == Some(founder.clone()), Error::<T, I>::NotFounder);
 			let candidacy = Candidates::<T, I>::get(&candidate).ok_or(Error::<T, I>::NotCandidate)?;
@@ -1283,7 +1233,7 @@ pub mod pallet {
 		///
 		/// Any bid deposit is lost and voucher is banned.
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
-		pub fn kick_candidate(origin: OriginFor<T>, candidate: T::AccountId) -> DispatchResult {
+		pub fn kick_candidate(origin: OriginFor<T>, candidate: T::AccountId) -> DispatchResultWithPostInfo {
 			let founder = ensure_signed(origin)?;
 			ensure!(Founder::<T, I>::get() == Some(founder.clone()), Error::<T, I>::NotFounder);
 			let mut candidacy = Candidates::<T, I>::get(&candidate).ok_or(Error::<T, I>::NotCandidate)?;
@@ -1293,14 +1243,14 @@ pub mod pallet {
 			Self::reject_candidate(&candidate, &candidacy.kind);
 			Votes::<T, I>::remove_prefix(&candidate, None);
 			Candidates::<T, I>::remove(&candidate);
-			Ok(Pays::No)
+			Ok(Pays::No.into())
 		}
 
 		/// Remove the candidate's application from the society. Callable only by the candidate.
 		///
 		/// Any bid deposit is lost and voucher is banned.
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
-		pub fn resign_candidacy(origin: OriginFor<T>) -> DispatchResult {
+		pub fn resign_candidacy(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let candidate = ensure_signed(origin)?;
 			let mut candidacy = Candidates::<T, I>::get(&candidate).ok_or(Error::<T, I>::NotCandidate)?;
 			if !Self::in_progress(candidacy.round) {
@@ -1309,7 +1259,7 @@ pub mod pallet {
 			Self::reject_candidate(&candidate, &candidacy.kind);
 			Votes::<T, I>::remove_prefix(&candidate, None);
 			Candidates::<T, I>::remove(&candidate);
-			Ok(Pays::No)
+			Ok(Pays::No.into())
 		}
 
 		/// Remove a `candidate`'s failed application from the society. Callable by any
@@ -1318,7 +1268,7 @@ pub mod pallet {
 		///
 		/// The bid deposit is lost and the voucher is banned.
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
-		pub fn drop_candidate(origin: OriginFor<T>, candidate: T::AccountId) -> DispatchResult {
+		pub fn drop_candidate(origin: OriginFor<T>, candidate: T::AccountId) -> DispatchResultWithPostInfo {
 			ensure_signed(origin)?;
 			let candidacy = Candidates::<T, I>::get(&candidate).ok_or(Error::<T, I>::NotCandidate)?;
 			ensure!(candidacy.tally.clear_rejection(), Error::<T, I>::NotRejected);
@@ -1326,7 +1276,7 @@ pub mod pallet {
 			Self::reject_candidate(&candidate, &candidacy.kind);
 			Votes::<T, I>::remove_prefix(&candidate, None);
 			Candidates::<T, I>::remove(&candidate);
-			Ok(Pays::No)
+			Ok(Pays::No.into())
 		}
 	}
 }
@@ -1405,9 +1355,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Returns `true` if a punishment was given.
 	fn check_skeptic(candidate: &T::AccountId, candidacy: &mut Candidacy<T::AccountId, BalanceOf<T, I>>) -> bool {
-		if RoundCount::<T, I>::get() != candidacy.round || candidacy.skeptic_struck { return }
+		if RoundCount::<T, I>::get() != candidacy.round || candidacy.skeptic_struck { return false }
 		// We expect the skeptic to have voted.
-		let skeptic = match Skeptic::<T, I>::get() { Some(s) => s, None => return };
+		let skeptic = match Skeptic::<T, I>::get() { Some(s) => s, None => return false };
 		let maybe_vote = Votes::<T, I>::get(&candidate, &skeptic);
 		let approved = candidacy.tally.clear_approval();
 		let rejected = candidacy.tally.clear_rejection();

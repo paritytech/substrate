@@ -1,0 +1,253 @@
+// This file is part of Substrate.
+
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
+
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+//! # Migrations for Society Pallet
+
+use super::*;
+use frame_support::traits::Instance;
+
+mod old {
+	use super::*;
+	use frame_support::storage_alias;
+
+	/// A vote by a member on a candidate application.
+	#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+	pub enum Vote {
+		/// The member has been chosen to be skeptic and has not yet taken any action.
+		Skeptic,
+		/// The member has rejected the candidate's application.
+		Reject,
+		/// The member approves of the candidate's application.
+		Approve,
+	}
+
+	#[storage_alias] pub type Bids<T, I> = Value<
+		pallet::Pallet<T: Config<I>, I: Instance + 'static>,
+		Vec<Bid<<T as frame_system::Config>::AccountId, BalanceOf<T, I>>>,
+		ValueQuery,
+	>;
+	#[storage_alias] pub type Candidates<T, I> = Value<
+		Pallet<T: Config<I>, I: Instance + 'static>,
+		Vec<Bid<<T as frame_system::Config>::AccountId, BalanceOf<T, I>>>,
+		ValueQuery,
+	>;
+	#[storage_alias] pub type Votes<T, I> = DoubleMap<
+		Pallet<T: Config<I>, I: Instance + 'static>,
+		Twox64Concat, <T as frame_system::Config>::AccountId,
+		Twox64Concat, <T as frame_system::Config>::AccountId,
+		Vote,
+	>;
+	#[storage_alias] pub type SuspendedCandidates<T, I> = Map<
+		Pallet<T: Config<I>, I: Instance + 'static>,
+		Twox64Concat, <T as frame_system::Config>::AccountId,
+		(BalanceOf<T, I>, BidKind<<T as frame_system::Config>::AccountId, BalanceOf<T, I>>),
+	>;
+	#[storage_alias] pub type Members<T, I> = Value<
+		Pallet<T: Config<I>, I: Instance + 'static>,
+		Vec<<T as frame_system::Config>::AccountId>,
+		ValueQuery,
+	>;
+	#[storage_alias] pub type Vouching<T, I> = Map<
+		Pallet<T: Config<I>, I: Instance + 'static>,
+		Twox64Concat, <T as frame_system::Config>::AccountId,
+		VouchingStatus,
+	>;
+	#[storage_alias] pub type Strikes<T, I> = Map<
+		Pallet<T: Config<I>, I: Instance + 'static>,
+		Twox64Concat, <T as frame_system::Config>::AccountId,
+		StrikeCount,
+		ValueQuery,
+	>;
+	#[storage_alias] pub type Payouts<T, I> = Map<
+		Pallet<T: Config<I>, I: Instance + 'static>,
+		Twox64Concat, <T as frame_system::Config>::AccountId,
+		Vec<(<T as frame_system::Config>::BlockNumber, BalanceOf<T, I>)>,
+		ValueQuery,
+	>;
+	#[storage_alias] pub type SuspendedMembers<T, I> = Map<
+		Pallet<T: Config<I>, I: Instance + 'static>,
+		Twox64Concat, <T as frame_system::Config>::AccountId,
+		bool,
+		ValueQuery,
+	>;
+	#[storage_alias] pub type Defender<T, I> = Value<
+		Pallet<T: Config<I>, I: Instance + 'static>,
+		<T as frame_system::Config>::AccountId,
+	>;
+	#[storage_alias] pub type DefenderVotes<T, I> = Map<
+		Pallet<T: Config<I>, I: Instance + 'static>,
+		Twox64Concat, <T as frame_system::Config>::AccountId,
+		Vote,
+	>;
+}
+
+pub fn can_migrate<T: Config<I>, I: Instance + 'static>() -> bool {
+	old::Members::<T, I>::exists()
+}
+
+/// Will panic if there are any inconsistencies in the pallet's state or old keys remaining.
+pub fn assert_internal_consistency<T: Config<I>, I: Instance + 'static>() {
+	// Check all members are valid data.
+	let mut members = vec![];
+	for m in Members::<T, I>::iter_keys() {
+		let r = Members::<T, I>::get(&m).expect("Member data must be valid");
+		members.push((m, r));
+	}
+	assert_eq!(MemberCount::<T, I>::get(), members.len() as u32);
+	for (who, record) in members.iter() {
+		assert_eq!(MemberByIndex::<T, I>::get(record.index).as_ref(), Some(who));
+	}
+	assert_eq!(Founder::<T, I>::get().as_ref(), members.first().map(|m| &m.0));
+	if let Some(head) = Head::<T, I>::get() {
+		assert!(Members::<T, I>::contains_key(head));
+	}
+	// Check all votes are valid data.
+	for (k1, k2) in Votes::<T, I>::iter_keys() {
+		assert!(Votes::<T, I>::get(k1, k2).is_some());
+	}
+	// Check all defender votes are valid data.
+	for k in DefenderVotes::<T, I>::iter_keys() {
+		assert!(DefenderVotes::<T, I>::get(k).is_some());
+	}
+	// Check all candidates are valid data.
+	for k in Candidates::<T, I>::iter_keys() {
+		assert!(Candidates::<T, I>::get(k).is_some());
+	}
+	// Check all suspended members are valid data.
+	for m in SuspendedMembers::<T, I>::iter_keys() {
+		assert!(SuspendedMembers::<T, I>::get(m).is_some());
+	}
+	// Check all payouts are valid data.
+	for p in Payouts::<T, I>::iter_keys() {
+		let have_value = Payouts::<T, I>::contains_key(&p);
+		let is_non_default_value = Payouts::<T, I>::get(&p) != Default::default();
+		// If we have a value it should not be the default value.
+		assert!(have_value == is_non_default_value);
+	}
+
+	// We don't use these - make sure they don't exist.
+	assert_eq!(old::SuspendedCandidates::<T, I>::iter().count(), 0);
+	assert_eq!(old::Strikes::<T, I>::iter().count(), 0);
+	assert_eq!(old::Vouching::<T, I>::iter().count(), 0);
+	assert!(!old::Defender::<T, I>::exists());
+	assert!(!old::Members::<T, I>::exists());
+}
+
+pub fn from_original<
+	T: Config<I>,
+	I: Instance + 'static,
+>(
+	past_payouts: &mut [(<T as frame_system::Config>::AccountId, BalanceOf<T, I>)]
+) {
+	// First check that this is the original state layout. This is easy since the original layout
+	// contained the Members value, and this value no longer exists in the new layout.
+	if !old::Members::<T, I>::exists() {
+		// Already migrated or no data to migrate: Bail.
+		return
+	}
+
+	// Migrate Bids from old::Bids (just a trunctation).
+	Bids::<T, I>::put(BoundedVec::<_, T::MaxBids>::truncate_from(old::Bids::<T, I>::take()));
+
+	// Initialise round counter.
+	RoundCount::<T, I>::put(0);
+
+	// Migrate Candidates from old::Candidates
+	for Bid { who: candidate, kind, value } in old::Candidates::<T, I>::take().into_iter() {
+		let mut tally = Tally::default();
+		// Migrate Votes from old::Votes
+		// No need to drain, since we're overwriting values.
+		for (voter, vote) in old::Votes::<T, I>::iter_prefix(&candidate) {
+			Votes::<T, I>::insert(&candidate, &voter, Vote {
+				approve: vote == old::Vote::Approve,
+				weight: 1,
+			});
+			match vote {
+				old::Vote::Approve => tally.approvals.saturating_inc(),
+				old::Vote::Reject => tally.rejections.saturating_inc(),
+				old::Vote::Skeptic => Skeptic::<T, I>::put(&voter),
+			}
+		}
+		Candidates::<T, I>::insert(&candidate, Candidacy {
+			round: 0,
+			kind,
+			tally,
+			skeptic_struck: false,
+			bid: value,
+		});
+	}
+
+	// Migrate Members from old::Members old::Strikes old::Vouching
+	let mut member_count = 0;
+	for member in old::Members::<T, I>::take() {
+		let strikes = old::Strikes::<T, I>::get(&member);
+		let vouching = old::Vouching::<T, I>::get(&member);
+		Members::<T, I>::insert(&member, MemberRecord {
+			index: member_count,
+			rank: 0,
+			strikes,
+			vouching,
+		});
+		MemberByIndex::<T, I>::insert(member_count, &member);
+		member_count.saturating_inc();
+	}
+
+	// Migrate Payouts from: old::Payouts and raw info (needed since we can't query old chain state).
+	past_payouts.sort();
+	for (who, mut payouts) in old::Payouts::<T, I>::iter() {
+		payouts.truncate(T::MaxPayouts::get() as usize);
+		// ^^ Safe since we already truncated.
+		let paid = past_payouts
+			.binary_search_by_key(&&who, |x| &x.0)
+			.ok()
+			.map(|p| past_payouts[p].1)
+			.unwrap_or(Zero::zero());
+		match BoundedVec::try_from(payouts) {
+			Ok(payouts) => Payouts::<T, I>::insert(who, PayoutRecord { paid, payouts }),
+			Err(_) => debug_assert!(false, "Truncation of Payouts ineffective??"),
+		}
+	}
+
+	// Any suspended candidates remaining are rejected.
+	old::SuspendedCandidates::<T, I>::remove_all(None);
+
+	// Any suspended members remaining are given the benefit of the doubt.
+	old::SuspendedMembers::<T, I>::remove_all(None);
+
+	// We give the current defender the benefit of the doubt.
+	old::Defender::<T, I>::kill();
+	old::DefenderVotes::<T, I>::remove_all(None);
+}
+
+pub fn from_raw_past_payouts<
+	T: Config<I>,
+	I: Instance + 'static,
+>(
+	past_payouts_raw: &[(&[u8], u128)]
+) -> Vec<(<T as frame_system::Config>::AccountId, BalanceOf<T, I>)> {
+	past_payouts_raw.iter()
+		.filter_map(|(x, y)| Some((
+			Decode::decode(&mut x.as_ref()).ok()?,
+			(*y).try_into().ok()?,
+		)))
+		.collect()
+}
+
+//	use hex_literal::hex;
+//	let mut past_payouts_raw = vec![
+//		(hex!["1234567890123456789012345678901234567890123456789012345678901234"], 0u128),
+//	];

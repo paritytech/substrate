@@ -21,7 +21,6 @@ sp-std = { version = "4.0.0", default-features = false, path = "../../primitives
 sp-arithmetic = { version = "5.0.0", default-features = false, path = "../../primitives/arithmetic" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
-rand_chacha = { version = "0.2", default-features = false }
 hex-literal = "0.3.4"
 
 [dev-dependencies]
