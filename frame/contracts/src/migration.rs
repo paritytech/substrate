@@ -117,12 +117,8 @@ mod v5 {
 	}
 
 	#[storage_alias]
-	type ContractInfoOf<T: Config> = Map<
-		Pallet<T>,
-		Twox64Concat,
-		<T as frame_system::Config>::AccountId,
-		ContractInfo<T>,
-	>;
+	type ContractInfoOf<T: Config> =
+		Map<Pallet<T>, Twox64Concat, <T as frame_system::Config>::AccountId, ContractInfo<T>>;
 
 	#[storage_alias]
 	type DeletionQueue<T: Config> = Value<Pallet<T>, Vec<DeletedContract>>;
@@ -203,12 +199,8 @@ mod v6 {
 	type ContractInfo<T> = RawContractInfo<CodeHash<T>, BalanceOf<T>>;
 
 	#[storage_alias]
-	type ContractInfoOf<T: Config> = Map<
-		Pallet<T>,
-		Twox64Concat,
-		<T as frame_system::Config>::AccountId,
-		ContractInfo<T>,
-	>;
+	type ContractInfoOf<T: Config> =
+		Map<Pallet<T>, Twox64Concat, <T as frame_system::Config>::AccountId, ContractInfo<T>>;
 
 	#[storage_alias]
 	type CodeStorage<T: Config> = Map<Pallet<T>, Identity, CodeHash<T>, PrefabWasmModule>;
