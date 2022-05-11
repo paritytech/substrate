@@ -1407,6 +1407,17 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Set (or reset) the price for an instance.
+		///
+		/// Origin must be Signed and must be the owner of the asset `instance`.
+		///
+		/// - `class`: The class of the asset.
+		/// - `instance`: The instance of the asset.
+		/// - `price`: The price for the asset. Pass `None`, to reset the price.
+		/// - `buyer`: Restricts the buy operation to a specific account.
+		///
+		/// Emits `InstancePriceSet` on success if the price is not `None`.
+		/// Emits `InstancePriceRemoved` on success if the price is `None`.
 		#[pallet::weight(0)]
 		pub fn set_price(
 			origin: OriginFor<T>,
@@ -1421,6 +1432,15 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Allows to buy an item if it's up for sale.
+		///
+		/// Origin must be Signed and must not be the owner of the asset `instance`.
+		///
+		/// - `class`: The class of the asset.
+		/// - `instance`: The instance of the asset the sender wants to buy.
+		/// - `bid_price`: The price the sender is willing to pay.
+		///
+		/// Emits `ItemBought` on success.
 		#[pallet::weight(0)]
 		pub fn buy_item(
 			origin: OriginFor<T>,
