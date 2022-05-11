@@ -99,7 +99,6 @@ impl<
 	fn from_requirements(support: Perbill, approval: Perbill) -> Self {
 		let support = support.mul_ceil(Total::get());
 		let ayes = approval.mul_ceil(support);
-		// TODO
 		Self { ayes, nays: support - ayes, support, dummy: PhantomData }
 	}
 }
@@ -178,7 +177,6 @@ impl<
 					false => self.nays = self.nays.checked_sub(&votes)?,
 				}
 			},
-			// TODO: abstain.
 			AccountVote::Split { aye, nay } => {
 				let aye = Conviction::None.votes(aye);
 				let nay = Conviction::None.votes(nay);
