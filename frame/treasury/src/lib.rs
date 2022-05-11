@@ -202,7 +202,7 @@ pub mod pallet {
 		/// The origin required for approving spends from the treasury outside of the proposal
 		/// process. The `Success` value is the maximum amount that this origin is allowed to
 		/// spend at a time.
-		type SpendOrigin: EnsureOrigin<Self::Origin, Success=BalanceOf<Self, I>>;
+		type SpendOrigin: EnsureOrigin<Self::Origin, Success = BalanceOf<Self, I>>;
 	}
 
 	/// Number of proposals that have been made.
@@ -281,7 +281,11 @@ pub mod pallet {
 		/// Some funds have been deposited.
 		Deposit { value: BalanceOf<T, I> },
 		/// A new spend proposal has been approved.
-		SpendApproved { proposal_index: ProposalIndex, amount: BalanceOf<T, I>, beneficiary: T::AccountId },
+		SpendApproved {
+			proposal_index: ProposalIndex,
+			amount: BalanceOf<T, I>,
+			beneficiary: T::AccountId,
+		},
 	}
 
 	/// Error for the treasury pallet.
@@ -434,7 +438,7 @@ pub mod pallet {
 			ProposalCount::<T, I>::put(proposal_index + 1);
 
 			Self::deposit_event(Event::SpendApproved { proposal_index, amount, beneficiary });
-			
+
 			Ok(())
 		}
 

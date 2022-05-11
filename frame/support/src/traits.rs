@@ -93,12 +93,12 @@ pub use storage::{
 };
 
 mod dispatch;
+#[allow(deprecated)]
+pub use dispatch::EnsureOneOf;
 pub use dispatch::{
 	AsEnsureOriginWithArg, EitherOf, EitherOfDiverse, EnsureOrigin, EnsureOriginWithArg,
 	OriginTrait, UnfilteredDispatchable,
 };
-#[allow(deprecated)]
-pub use dispatch::EnsureOneOf;
 
 mod voting;
 pub use voting::{

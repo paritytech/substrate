@@ -123,7 +123,11 @@ impl<
 		}
 	}
 
-	pub fn from_parts(ayes_with_conviction: Votes, nays_with_conviction: Votes, ayes: Votes) -> Self {
+	pub fn from_parts(
+		ayes_with_conviction: Votes,
+		nays_with_conviction: Votes,
+		ayes: Votes,
+	) -> Self {
 		Self {
 			ayes: ayes_with_conviction,
 			nays: nays_with_conviction,

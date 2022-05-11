@@ -788,14 +788,13 @@ impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>, Acco
 }
 
 pub struct EnsureRootWithSuccess<AccountId, Success>(
-	sp_std::marker::PhantomData<(AccountId, Success)>
+	sp_std::marker::PhantomData<(AccountId, Success)>,
 );
 impl<
-	O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
-	AccountId,
-	Success: TypedGet,
->
-	EnsureOrigin<O> for EnsureRootWithSuccess<AccountId, Success>
+		O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
+		AccountId,
+		Success: TypedGet,
+	> EnsureOrigin<O> for EnsureRootWithSuccess<AccountId, Success>
 {
 	type Success = Success::Type;
 	fn try_origin(o: O) -> Result<Self::Success, O> {

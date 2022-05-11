@@ -515,7 +515,7 @@ macro_rules! parameter_types {
 				I::from(Self::get())
 			}
 		}
-		
+
 		impl $crate::traits::TypedGet for $name {
 			type Type = $type;
 			fn get() -> $type {

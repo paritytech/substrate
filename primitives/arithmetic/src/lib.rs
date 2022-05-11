@@ -41,7 +41,9 @@ pub mod rational;
 pub mod traits;
 
 pub use fixed_point::{FixedI128, FixedI64, FixedPointNumber, FixedPointOperand, FixedU128};
-pub use per_things::{InnerOf, PerThing, PerU16, Perbill, Percent, Permill, Perquintill, UpperOf, Rounding};
+pub use per_things::{
+	InnerOf, PerThing, PerU16, Perbill, Percent, Permill, Perquintill, Rounding, UpperOf,
+};
 pub use rational::{Rational128, RationalInfinite};
 
 use sp_std::{cmp::Ordering, fmt::Debug, prelude::*};

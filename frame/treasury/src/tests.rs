@@ -24,7 +24,7 @@ use std::cell::RefCell;
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
-	traits::{BlakeTwo256, IdentityLookup, BadOrigin},
+	traits::{BadOrigin, BlakeTwo256, IdentityLookup},
 };
 
 use frame_support::{
@@ -165,10 +165,22 @@ fn spend_origin_permissioning_works() {
 	new_test_ext().execute_with(|| {
 		// Check that accumulate works when we have Some value in Dummy already.
 		assert_noop!(Treasury::spend(Origin::signed(1), 1, 1), BadOrigin);
-		assert_noop!(Treasury::spend(Origin::signed(10), 6, 1), Error::<Test>::InsufficientPermission);
-		assert_noop!(Treasury::spend(Origin::signed(11), 11, 1), Error::<Test>::InsufficientPermission);
-		assert_noop!(Treasury::spend(Origin::signed(12), 21, 1), Error::<Test>::InsufficientPermission);
-		assert_noop!(Treasury::spend(Origin::signed(13), 51, 1), Error::<Test>::InsufficientPermission);
+		assert_noop!(
+			Treasury::spend(Origin::signed(10), 6, 1),
+			Error::<Test>::InsufficientPermission
+		);
+		assert_noop!(
+			Treasury::spend(Origin::signed(11), 11, 1),
+			Error::<Test>::InsufficientPermission
+		);
+		assert_noop!(
+			Treasury::spend(Origin::signed(12), 21, 1),
+			Error::<Test>::InsufficientPermission
+		);
+		assert_noop!(
+			Treasury::spend(Origin::signed(13), 51, 1),
+			Error::<Test>::InsufficientPermission
+		);
 	});
 }
 
