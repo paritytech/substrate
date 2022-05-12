@@ -509,6 +509,33 @@ benchmarks! {
 		assert_matches!(info, ReferendumInfo::Rejected(..));
 	}
 
+	set_metadata {
+		let b in 0 .. T::MetadataLimit::get();
+		let (caller, index) = create_referendum::<T>();
+		let metadata = vec![0u8; b as usize];
+	}: _(RawOrigin::Signed(caller), index, metadata.clone())
+	verify {
+		let final_metadata = ReferendumMetadataFor::<T>::get(index).unwrap();
+		let saved_metadata: Vec<u8> = final_metadata.metadata.into();
+		assert_eq!(metadata, saved_metadata);
+	}
+
+	clear_metadata {
+		let b in 0 .. T::MetadataLimit::get();
+		let (caller, index) = create_referendum::<T>();
+		let metadata = vec![0u8; b as usize];
+		assert_ok!(
+			Pallet::<T>::set_metadata(
+				RawOrigin::Signed(caller.clone()).into(),
+				index,
+				metadata,
+			)
+		);
+	}: _(RawOrigin::Signed(caller), index)
+	verify {
+		assert!(ReferendumMetadataFor::<T>::get(index).is_none());
+	}
+
 	impl_benchmark_test_suite!(
 		Referenda,
 		crate::mock::new_test_ext(),

@@ -71,6 +71,8 @@ pub trait WeightInfo {
 	fn nudge_referendum_continue_confirming() -> Weight;
 	fn nudge_referendum_approved() -> Weight;
 	fn nudge_referendum_rejected() -> Weight;
+	fn set_metadata(b: u32) -> Weight;
+	fn clear_metadata(b: u32) -> Weight;
 }
 
 /// Weights for pallet_referenda using the Substrate node and recommended hardware.
@@ -280,6 +282,12 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
+	fn set_metadata(_b: u32) -> Weight {
+		0
+	}
+	fn clear_metadata(_b: u32) -> Weight {
+		0
+	}
 }
 
 // For backwards compatibility and tests
@@ -487,5 +495,11 @@ impl WeightInfo for () {
 		(32_726_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
+	}
+	fn set_metadata(_b: u32) -> Weight {
+		0
+	}
+	fn clear_metadata(_b: u32) -> Weight {
+		0
 	}
 }

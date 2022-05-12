@@ -221,6 +221,7 @@ impl Config for Test {
 	type UndecidingTimeout = ConstU64<20>;
 	type AlarmInterval = AlarmInterval;
 	type Tracks = TestTracksInfo;
+	type MetadataLimit = ConstU32<1024>;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
