@@ -56,7 +56,7 @@ use crate::{
 use codec::{Decode, Encode};
 use frame_support::{
 	ensure,
-	traits::{Currency, Get, Imbalance, OnUnbalanced},
+	traits::{Currency, Defensive, Get, Imbalance, OnUnbalanced},
 };
 use scale_info::TypeInfo;
 use sp_runtime::{
@@ -389,7 +389,7 @@ fn slash_nominators<T: Config>(
 
 			let mut era_slash =
 				<Pallet<T> as Store>::NominatorSlashInEra::get(&params.slash_era, stash)
-					.unwrap_or_else(|| Zero::zero());
+					.unwrap_or_else(Zero::zero);
 
 			era_slash += own_slash_difference;
 
@@ -600,8 +600,8 @@ pub fn do_slash<T: Config>(
 	slashed_imbalance: &mut NegativeImbalanceOf<T>,
 	slash_era: EraIndex,
 ) {
-	let controller = match <Pallet<T>>::bonded(stash) {
-		None => return, // defensive: should always exist.
+	let controller = match <Pallet<T>>::bonded(stash).defensive() {
+		None => return,
 		Some(c) => c,
 	};
 
@@ -646,7 +646,7 @@ pub(crate) fn apply_slash<T: Config>(
 
 	for &(ref nominator, nominator_slash) in &unapplied_slash.others {
 		do_slash::<T>(
-			&nominator,
+			nominator,
 			nominator_slash,
 			&mut reward_payout,
 			&mut slashed_imbalance,

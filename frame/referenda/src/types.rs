@@ -21,8 +21,8 @@ use super::*;
 use codec::{Decode, Encode, EncodeLike, MaxEncodedLen};
 use frame_support::{traits::schedule::Anon, Parameter};
 use scale_info::TypeInfo;
-use sp_runtime::{RuntimeDebug, PerThing, FixedI64};
 use sp_arithmetic::Rounding::*;
+use sp_runtime::{FixedI64, PerThing, RuntimeDebug};
 use sp_std::fmt::Debug;
 
 pub type BalanceOf<T, I = ()> =
@@ -149,7 +149,7 @@ pub trait TracksInfo<Balance, Moment> {
 
 	/// Return the track info for track `id`, by default this just looks it up in `Self::tracks()`.
 	fn info(id: Self::Id) -> Option<&'static TrackInfo<Balance, Moment>> {
-		Self::tracks().iter().find(|x| &x.0 == &id).map(|x| &x.1)
+		Self::tracks().iter().find(|x| x.0 == id).map(|x| &x.1)
 	}
 }
 
@@ -268,12 +268,7 @@ const fn pos_quad_solution(a: FixedI64, b: FixedI64, c: FixedI64) -> FixedI64 {
 }
 
 impl Curve {
-	pub const fn make_linear(
-		length: u128,
-		period: u128,
-		floor: FixedI64,
-		ceil: FixedI64,
-	) -> Curve {
+	pub const fn make_linear(length: u128, period: u128, floor: FixedI64, ceil: FixedI64) -> Curve {
 		let length = FixedI64::from_rational(length, period).into_perbill();
 		let floor = floor.into_perbill();
 		let ceil = ceil.into_perbill();
@@ -287,15 +282,18 @@ impl Curve {
 		ceil: FixedI64,
 	) -> Curve {
 		let delay = FixedI64::from_rational(delay, period).into_perbill();
-		let mut bounds = ((
-			FixedI64::from_u32(0),
-			Self::reciprocal_from_parts(FixedI64::from_u32(0), floor, ceil),
-			FixedI64::from_inner(i64::max_value()),
-		), (
-			FixedI64::from_u32(1),
-			Self::reciprocal_from_parts(FixedI64::from_u32(1), floor, ceil),
-			FixedI64::from_inner(i64::max_value()),
-		));
+		let mut bounds = (
+			(
+				FixedI64::from_u32(0),
+				Self::reciprocal_from_parts(FixedI64::from_u32(0), floor, ceil),
+				FixedI64::from_inner(i64::max_value()),
+			),
+			(
+				FixedI64::from_u32(1),
+				Self::reciprocal_from_parts(FixedI64::from_u32(1), floor, ceil),
+				FixedI64::from_inner(i64::max_value()),
+			),
+		);
 		const TWO: FixedI64 = FixedI64::from_u32(2);
 		while (bounds.1).0.sub((bounds.0).0).into_inner() > 1 {
 			let factor = (bounds.0).0.add((bounds.1).0).div(TWO);
@@ -325,7 +323,7 @@ impl Curve {
 	#[cfg(feature = "std")]
 	pub fn info(&self, days: u32, name: impl std::fmt::Display) {
 		let hours = days * 24;
-		println!("Curve {name} := {:?}:", self);
+		println!("Curve {} := {:?}:", name, self);
 		println!("   t + 0h:   {:?}", self.threshold(Perbill::zero()));
 		println!("   t + 1h:   {:?}", self.threshold(Perbill::from_rational(1, hours)));
 		println!("   t + 2h:   {:?}", self.threshold(Perbill::from_rational(2, hours)));
@@ -337,7 +335,7 @@ impl Curve {
 		for &(n, d) in [(1, 12), (1, 8), (1, 4), (1, 2), (3, 4), (1, 1)].iter() {
 			let t = days * n / d;
 			if t != l {
-				println!("   t + {t}d:   {:?}", self.threshold(Perbill::from_rational(t, days)));
+				println!("   t + {}d:   {:?}", t, self.threshold(Perbill::from_rational(t, days)));
 				l = t;
 			}
 		}
@@ -367,7 +365,10 @@ impl Curve {
 			println!("   0.1% threshold:  {}", t(self.delay(Perbill::from_rational(1u32, 1_000))));
 			println!("   0.01% threshold: {}", t(self.delay(Perbill::from_rational(1u32, 10_000))));
 		} else {
-			println!("   99.9% threshold: {}", t(self.delay(Perbill::from_rational(999u32, 1_000))));
+			println!(
+				"   99.9% threshold: {}",
+				t(self.delay(Perbill::from_rational(999u32, 1_000)))
+			);
 			println!("   99% threshold:   {}", t(self.delay(Perbill::from_percent(99))));
 			println!("   95% threshold:   {}", t(self.delay(Perbill::from_percent(95))));
 			println!("   90% threshold:   {}", t(self.delay(Perbill::from_percent(90))));
@@ -383,11 +384,10 @@ impl Curve {
 				*ceil - (x.min(*length).saturating_div(*length, Down) * (*ceil - *floor)),
 			Self::SteppedDecreasing { begin, end, step, period } =>
 				(*begin - (step.int_mul(x.int_div(*period))).min(*begin)).max(*end),
-			Self::Reciprocal { factor, x_offset, y_offset } => {
-				factor.checked_rounding_div(FixedI64::from(x) + *x_offset, Down)
-					.map(|yp| (yp + *y_offset).into_clamped_perthing())
-					.unwrap_or_else(Perbill::one)
-			}
+			Self::Reciprocal { factor, x_offset, y_offset } => factor
+				.checked_rounding_div(FixedI64::from(x) + *x_offset, Down)
+				.map(|yp| (yp + *y_offset).into_clamped_perthing())
+				.unwrap_or_else(Perbill::one),
 		}
 	}
 
@@ -401,7 +401,7 @@ impl Curve {
 					Some(yp) => (yp.add(*y_offset)).into_perbill(),
 					None => Perbill::one(),
 				}
-			}
+			},
 			_ => panic!("const_threshold cannot be used on this curve"),
 		}
 	}
@@ -439,7 +439,8 @@ impl Curve {
 			Self::Reciprocal { factor, x_offset, y_offset } => {
 				let y = FixedI64::from(y);
 				let maybe_term = factor.checked_rounding_div(y - *y_offset, Up);
-				maybe_term.and_then(|term| (term - *x_offset).try_into_perthing().ok())
+				maybe_term
+					.and_then(|term| (term - *x_offset).try_into_perthing().ok())
 					.unwrap_or_else(Perbill::one)
 			},
 		}
@@ -459,31 +460,23 @@ impl Debug for Curve {
 				write!(
 					f,
 					"Linear[(0%, {:?}) -> ({:?}, {:?}) -> (100%, {:?})]",
-					ceil,
-					length,
-					floor,
-					floor,
+					ceil, length, floor, floor,
 				)
 			},
 			Self::SteppedDecreasing { begin, end, step, period } => {
 				write!(
 					f,
 					"Stepped[(0%, {:?}) -> (100%, {:?}) by ({:?}, {:?})]",
-					begin,
-					end,
-					period,
-					step,
+					begin, end, period, step,
 				)
 			},
 			Self::Reciprocal { factor, x_offset, y_offset } => {
 				write!(
 					f,
 					"Reciprocal[factor of {:?}, x_offset of {:?}, y_offset of {:?}]",
-					factor,
-					x_offset,
-					y_offset,
+					factor, x_offset, y_offset,
 				)
-			}
+			},
 		}
 	}
 }
@@ -491,8 +484,8 @@ impl Debug for Curve {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sp_runtime::PerThing;
 	use frame_support::traits::ConstU32;
+	use sp_runtime::PerThing;
 
 	const fn percent(x: u128) -> FixedI64 {
 		FixedI64::from_rational(x, 100)
@@ -502,7 +495,8 @@ mod tests {
 	const TIP_SUP: Curve = Curve::make_reciprocal(1, 28, percent(4), percent(0), percent(50));
 	const ROOT_APP: Curve = Curve::make_reciprocal(4, 28, percent(80), percent(50), percent(100));
 	const ROOT_SUP: Curve = Curve::make_linear(28, 28, percent(0), percent(50));
-	const WHITE_APP: Curve = Curve::make_reciprocal(16, 28 * 24, percent(96), percent(50), percent(100));
+	const WHITE_APP: Curve =
+		Curve::make_reciprocal(16, 28 * 24, percent(96), percent(50), percent(100));
 	const WHITE_SUP: Curve = Curve::make_reciprocal(1, 28, percent(20), percent(10), percent(50));
 	const SMALL_APP: Curve = Curve::make_linear(10, 28, percent(50), percent(100));
 	const SMALL_SUP: Curve = Curve::make_reciprocal(8, 28, percent(1), percent(0), percent(50));
@@ -595,12 +589,8 @@ mod tests {
 			Perbill::from_percent(x)
 		}
 
-		let c = Curve::SteppedDecreasing {
-			begin: pc(80),
-			end: pc(30),
-			step: pc(10),
-			period: pc(15),
-		};
+		let c =
+			Curve::SteppedDecreasing { begin: pc(80), end: pc(30), step: pc(10), period: pc(15) };
 
 		for i in 0..9_696_969u32 {
 			let query = Perbill::from_rational(i, 9_696_969);

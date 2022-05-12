@@ -160,7 +160,7 @@ impl<OuterOrigin, L: EnsureOrigin<OuterOrigin>, R: EnsureOrigin<OuterOrigin>>
 	type Success = Either<L::Success, R::Success>;
 	fn try_origin(o: OuterOrigin) -> Result<Self::Success, OuterOrigin> {
 		L::try_origin(o)
-			.map_or_else(|o| R::try_origin(o).map(|o| Either::Right(o)), |o| Ok(Either::Left(o)))
+			.map_or_else(|o| R::try_origin(o).map(Either::Right), |o| Ok(Either::Left(o)))
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
@@ -186,13 +186,15 @@ pub type EnsureOneOf<L, R> = EitherOfDiverse<L, R>;
 /// Successful origin is derived from the left side.
 pub struct EitherOf<L, R>(sp_std::marker::PhantomData<(L, R)>);
 
-impl<OuterOrigin, L: EnsureOrigin<OuterOrigin>, R: EnsureOrigin<OuterOrigin, Success=L::Success>>
-	EnsureOrigin<OuterOrigin> for EitherOf<L, R>
+impl<
+		OuterOrigin,
+		L: EnsureOrigin<OuterOrigin>,
+		R: EnsureOrigin<OuterOrigin, Success = L::Success>,
+	> EnsureOrigin<OuterOrigin> for EitherOf<L, R>
 {
 	type Success = L::Success;
 	fn try_origin(o: OuterOrigin) -> Result<Self::Success, OuterOrigin> {
-		L::try_origin(o)
-			.or_else(|o| R::try_origin(o))
+		L::try_origin(o).or_else(|o| R::try_origin(o))
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
@@ -203,9 +205,9 @@ impl<OuterOrigin, L: EnsureOrigin<OuterOrigin>, R: EnsureOrigin<OuterOrigin, Suc
 
 #[cfg(test)]
 mod tests {
-	use std::marker::PhantomData;
-	use crate::traits::{TypedGet, ConstBool, ConstU8};
 	use super::*;
+	use crate::traits::{ConstBool, ConstU8, TypedGet};
+	use std::marker::PhantomData;
 
 	struct EnsureSuccess<V>(PhantomData<V>);
 	struct EnsureFail<T>(PhantomData<T>);
@@ -242,17 +244,15 @@ mod tests {
 			Some(true)
 		);
 		assert_eq!(
-			EitherOfDiverse::<
-				EnsureSuccess<ConstBool<true>>,
-				EnsureFail<u8>,
-			>::try_origin(()).unwrap().left(),
+			EitherOfDiverse::<EnsureSuccess<ConstBool<true>>, EnsureFail<u8>>::try_origin(())
+				.unwrap()
+				.left(),
 			Some(true)
 		);
 		assert_eq!(
-			EitherOfDiverse::<
-				EnsureFail<bool>,
-				EnsureSuccess<ConstU8<0>>,
-			>::try_origin(()).unwrap().right(),
+			EitherOfDiverse::<EnsureFail<bool>, EnsureSuccess<ConstU8<0>>>::try_origin(())
+				.unwrap()
+				.right(),
 			Some(0u8)
 		);
 		assert!(EitherOfDiverse::<EnsureFail<bool>, EnsureFail<u8>>::try_origin(()).is_err());
@@ -268,17 +268,11 @@ mod tests {
 			true
 		);
 		assert_eq!(
-			EitherOf::<
-				EnsureSuccess<ConstBool<true>>,
-				EnsureFail<bool>,
-			>::try_origin(()).unwrap(),
+			EitherOf::<EnsureSuccess<ConstBool<true>>, EnsureFail<bool>>::try_origin(()).unwrap(),
 			true
 		);
 		assert_eq!(
-			EitherOf::<
-				EnsureFail<bool>,
-				EnsureSuccess<ConstBool<false>>,
-			>::try_origin(()).unwrap(),
+			EitherOf::<EnsureFail<bool>, EnsureSuccess<ConstBool<false>>>::try_origin(()).unwrap(),
 			false
 		);
 		assert!(EitherOf::<EnsureFail<bool>, EnsureFail<bool>>::try_origin(()).is_err());

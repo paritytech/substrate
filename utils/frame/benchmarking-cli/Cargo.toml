@@ -13,50 +13,49 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
+chrono = "0.4"
+clap = { version = "3.1.6", features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "3.0.0" }
+handlebars = "4.2.2"
+hash-db = "0.15.2"
+hex = "0.4.3"
+Inflector = "0.11.4"
+itertools = "0.10.3"
+kvdb = "0.11.0"
+lazy_static = "1.4.0"
+linked-hash-map = "0.5.4"
+log = "0.4.16"
+memory-db = "0.29.0"
+prettytable-rs = "0.8.0"
+rand = { version = "0.8.4", features = ["small_rng"] }
+rand_pcg = "0.3.1"
+serde = "1.0.136"
+serde_json = "1.0.79"
+serde_nanos = "0.1.2"
+tempfile = "3.2.0"
+thiserror = "1.0.30"
+thousands = "0.2.0"
 frame-benchmarking = { version = "4.0.0-dev", path = "../../../frame/benchmarking" }
 frame-support = { version = "4.0.0-dev", path = "../../../frame/support" }
 frame-system = { version = "4.0.0-dev", path = "../../../frame/system" }
-sp-core = { version = "6.0.0", path = "../../../primitives/core" }
 sc-block-builder = { version = "0.10.0-dev", path = "../../../client/block-builder" }
-sc-service = { version = "0.10.0-dev", default-features = false, path = "../../../client/service" }
-sc-client-api = { version = "4.0.0-dev", path = "../../../client/api" }
 sc-cli = { version = "0.10.0-dev", path = "../../../client/cli" }
+sc-client-api = { version = "4.0.0-dev", path = "../../../client/api" }
 sc-client-db = { version = "0.10.0-dev", path = "../../../client/db" }
 sc-executor = { version = "0.10.0-dev", path = "../../../client/executor" }
+sc-service = { version = "0.10.0-dev", default-features = false, path = "../../../client/service" }
 sc-sysinfo = { version = "6.0.0-dev", path = "../../../client/sysinfo" }
-
 sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
-sp-externalities = { version = "0.12.0", path = "../../../primitives/externalities" }
-sp-database = { version = "4.0.0-dev", path = "../../../primitives/database" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
+sp-core = { version = "6.0.0", path = "../../../primitives/core" }
+sp-database = { version = "4.0.0-dev", path = "../../../primitives/database" }
+sp-externalities = { version = "0.12.0", path = "../../../primitives/externalities" }
 sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
 sp-keystore = { version = "0.12.0", path = "../../../primitives/keystore" }
-sp-storage = { version = "6.0.0", path = "../../../primitives/storage" }
 sp-runtime = { version = "6.0.0", path = "../../../primitives/runtime" }
 sp-state-machine = { version = "0.12.0", path = "../../../primitives/state-machine" }
+sp-storage = { version = "6.0.0", path = "../../../primitives/storage" }
 sp-trie = { version = "6.0.0", path = "../../../primitives/trie" }
-codec = { version = "3.0.0", package = "parity-scale-codec" }
-clap = { version = "3.1.6", features = ["derive"] }
-chrono = "0.4"
-serde = "1.0.136"
-serde_json = "1.0.79"
-handlebars = "4.2.2"
-Inflector = "0.11.4"
-linked-hash-map = "0.5.4"
-log = "0.4.16"
-itertools = "0.10.3"
-serde_nanos = "0.1.2"
-kvdb = "0.11.0"
-hash-db = "0.15.2"
-hex = "0.4.3"
-memory-db = "0.29.0"
-rand = { version = "0.8.4", features = ["small_rng"] }
-thousands = "0.2.0"
-prettytable-rs = "0.8.0"
-tempfile = "3.2.0"
-rand_pcg = "0.3.1"
-lazy_static = "1.4.0"
-thiserror = "1.0.30"
 
 [features]
 default = ["db", "sc-client-db/runtime-benchmarks"]

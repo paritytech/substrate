@@ -22,10 +22,10 @@
 //! multiplication implementation provided there.
 
 use crate::{biguint, Rounding};
-use sp_std::convert::TryInto;
 use num_traits::Zero;
 use sp_std::{
 	cmp::{max, min},
+	convert::TryInto,
 	mem,
 };
 
@@ -125,7 +125,7 @@ mod double128 {
 
 	/// Returns the least significant 64 bits of a
 	const fn low_64(a: u128) -> u128 {
-		a & ((1<<64)-1)
+		a & ((1 << 64) - 1)
 	}
 
 	/// Returns the most significant 64 bits of a
@@ -140,7 +140,7 @@ mod double128 {
 
 	/// Returns 2^128 / a
 	const fn div128(a: u128) -> u128 {
-		(neg128(a)/a).wrapping_add(1)
+		(neg128(a) / a).wrapping_add(1)
 	}
 
 	/// Returns 2^128 % a
@@ -163,10 +163,7 @@ mod double128 {
 		}
 
 		pub const fn zero() -> Self {
-			Self {
-				high: 0,
-				low: 0,
-			}
+			Self { high: 0, low: 0 }
 		}
 
 		/// Return a `Double128` value representing the `scaled_value << 64`.
@@ -175,10 +172,7 @@ mod double128 {
 		/// `scaled_value` (in the lower positions) and the upper half of the `low` component will
 		/// be equal to the lower 64-bits of `scaled_value`.
 		pub const fn left_shift_64(scaled_value: u128) -> Self {
-			Self {
-				high: scaled_value >> 64,
-				low: scaled_value << 64,
-			}
+			Self { high: scaled_value >> 64, low: scaled_value << 64 }
 		}
 
 		/// Construct a value from the upper 128 bits only, with the lower being zeroed.
@@ -188,7 +182,7 @@ mod double128 {
 
 		/// Returns the same value ignoring anything in the high 128-bits.
 		pub const fn low_part(self) -> Self {
-			Self { high: 0, .. self }
+			Self { high: 0, ..self }
 		}
 
 		/// Returns a*b (in 256 bits)
@@ -218,14 +212,14 @@ mod double128 {
 
 		pub const fn add(self, b: Self) -> Self {
 			let (low, overflow) = self.low.overflowing_add(b.low);
-			let carry = overflow as u128;		// 1 if true, 0 if false.
+			let carry = overflow as u128; // 1 if true, 0 if false.
 			let high = self.high.wrapping_add(b.high).wrapping_add(carry as u128);
 			Double128 { high, low }
 		}
 
 		pub const fn div(mut self, rhs: u128) -> (Self, u128) {
 			if rhs == 1 {
-				return (self, 0);
+				return (self, 0)
 			}
 
 			// (self === a; rhs === b)
@@ -254,26 +248,39 @@ mod double128 {
 
 /// Returns `a * b / c` and `(a * b) % c` (wrapping to 128 bits) or `None` in the case of
 /// overflow.
-pub const fn multiply_by_rational_with_rounding(a: u128, b: u128, c: u128, r: Rounding) -> Option<u128> {
+pub const fn multiply_by_rational_with_rounding(
+	a: u128,
+	b: u128,
+	c: u128,
+	r: Rounding,
+) -> Option<u128> {
 	use double128::Double128;
 	if c == 0 {
 		panic!("attempt to divide by zero")
 	}
 	let (result, remainder) = Double128::product_of(a, b).div(c);
-	let mut result: u128 = match result.try_into_u128() { Ok(v) => v, Err(_) => return None };
+	let mut result: u128 = match result.try_into_u128() {
+		Ok(v) => v,
+		Err(_) => return None,
+	};
 	if match r {
 		Rounding::Up => remainder > 0,
 		Rounding::Nearest => remainder >= c / 2 + c % 2,
 		Rounding::Down => false,
 	} {
-		result = match result.checked_add(1) { Some(v) => v, None => return None };
+		result = match result.checked_add(1) {
+			Some(v) => v,
+			None => return None,
+		};
 	}
 	Some(result)
 }
 
 pub const fn sqrt(mut n: u128) -> u128 {
 	// Modified from https://github.com/derekdreery/integer-sqrt-rs (Apache/MIT).
-	if n == 0 { return 0 }
+	if n == 0 {
+		return 0
+	}
 
 	// Compute bit, the largest power of 4 <= n
 	let max_shift: u32 = 0u128.leading_zeros() - 1;
@@ -299,9 +306,9 @@ pub const fn sqrt(mut n: u128) -> u128 {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use Rounding::*;
+	use codec::{Decode, Encode};
 	use multiply_by_rational_with_rounding as mulrat;
-	use codec::{Encode, Decode};
+	use Rounding::*;
 
 	const MAX: u128 = u128::max_value();
 
@@ -317,14 +324,14 @@ mod tests {
 
 	#[test]
 	fn rational_multiply_big_number_works() {
-		assert_eq!(mulrat(MAX, MAX-1, MAX, Down), Some(MAX-1));
+		assert_eq!(mulrat(MAX, MAX - 1, MAX, Down), Some(MAX - 1));
 		assert_eq!(mulrat(MAX, 1, MAX, Down), Some(1));
-		assert_eq!(mulrat(MAX, MAX-1, MAX, Up), Some(MAX-1));
+		assert_eq!(mulrat(MAX, MAX - 1, MAX, Up), Some(MAX - 1));
 		assert_eq!(mulrat(MAX, 1, MAX, Up), Some(1));
-		assert_eq!(mulrat(1, MAX-1, MAX, Down), Some(0));
+		assert_eq!(mulrat(1, MAX - 1, MAX, Down), Some(0));
 		assert_eq!(mulrat(1, 1, MAX, Up), Some(1));
-		assert_eq!(mulrat(1, MAX/2, MAX, Nearest), Some(0));
-		assert_eq!(mulrat(1, MAX/2+1, MAX, Nearest), Some(1));
+		assert_eq!(mulrat(1, MAX / 2, MAX, Nearest), Some(0));
+		assert_eq!(mulrat(1, MAX / 2 + 1, MAX, Nearest), Some(1));
 	}
 
 	fn random_u128(seed: u32) -> u128 {

@@ -26,7 +26,7 @@ use std::{
 };
 
 /// default sub directory for the key store
-const DEFAULT_KEYSTORE_CONFIG_PATH: &'static str = "keystore";
+const DEFAULT_KEYSTORE_CONFIG_PATH: &str = "keystore";
 
 /// Parameters of the keystore
 #[derive(Debug, Clone, Args)]

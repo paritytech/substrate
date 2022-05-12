@@ -154,10 +154,10 @@ where
 		let hashed_key = blake2_256(key);
 		let child_trie_info = &child_trie_info(trie_id);
 		let (old_len, old_value) = if take {
-			let val = child::get_raw(&child_trie_info, &hashed_key);
+			let val = child::get_raw(child_trie_info, &hashed_key);
 			(val.as_ref().map(|v| v.len() as u32), val)
 		} else {
-			(child::len(&child_trie_info, &hashed_key), None)
+			(child::len(child_trie_info, &hashed_key), None)
 		};
 
 		if let Some(storage_meter) = storage_meter {
@@ -183,8 +183,8 @@ where
 		}
 
 		match &new_value {
-			Some(new_value) => child::put_raw(&child_trie_info, &hashed_key, new_value),
-			None => child::kill(&child_trie_info, &hashed_key),
+			Some(new_value) => child::put_raw(child_trie_info, &hashed_key, new_value),
+			None => child::kill(child_trie_info, &hashed_key),
 		}
 
 		Ok(match (old_len, old_value) {

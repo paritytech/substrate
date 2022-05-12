@@ -91,10 +91,14 @@ impl<
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
+	fn rejection() -> Self {
+		Self { ayes: Zero::zero(), nays: Total::get(), support: Total::get(), dummy: PhantomData }
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
 	fn from_requirements(support: Perbill, approval: Perbill) -> Self {
 		let support = support.mul_ceil(Total::get());
 		let ayes = approval.mul_ceil(support);
-		// TODO
 		Self { ayes, nays: support - ayes, support, dummy: PhantomData }
 	}
 }
@@ -123,7 +127,11 @@ impl<
 		}
 	}
 
-	pub fn from_parts(ayes_with_conviction: Votes, nays_with_conviction: Votes, ayes: Votes) -> Self {
+	pub fn from_parts(
+		ayes_with_conviction: Votes,
+		nays_with_conviction: Votes,
+		ayes: Votes,
+	) -> Self {
 		Self {
 			ayes: ayes_with_conviction,
 			nays: nays_with_conviction,
@@ -169,7 +177,6 @@ impl<
 					false => self.nays = self.nays.checked_sub(&votes)?,
 				}
 			},
-			// TODO: abstain.
 			AccountVote::Split { aye, nay } => {
 				let aye = Conviction::None.votes(aye);
 				let nay = Conviction::None.votes(nay);

@@ -38,7 +38,7 @@ use crate::{
 use frame_support::{
 	dispatch::{DispatchError, DispatchResult},
 	ensure,
-	traits::ReservableCurrency,
+	traits::{Get, ReservableCurrency},
 };
 use sp_core::crypto::UncheckedFrom;
 use sp_runtime::traits::BadOrigin;
@@ -165,8 +165,7 @@ where
 {
 	let charged = gas_meter.charge(CodeToken::Load(schedule.limits.code_len))?;
 
-	let mut prefab_module =
-		<CodeStorage<T>>::get(code_hash).ok_or_else(|| Error::<T>::CodeNotFound)?;
+	let mut prefab_module = <CodeStorage<T>>::get(code_hash).ok_or(Error::<T>::CodeNotFound)?;
 	gas_meter.adjust_gas(charged, CodeToken::Load(prefab_module.code.len() as u32));
 	prefab_module.code_hash = code_hash;
 
@@ -189,7 +188,7 @@ pub fn reinstrument<T: Config>(
 	schedule: &Schedule<T>,
 ) -> Result<u32, DispatchError> {
 	let original_code =
-		<PristineCode<T>>::get(&prefab_module.code_hash).ok_or_else(|| Error::<T>::CodeNotFound)?;
+		<PristineCode<T>>::get(&prefab_module.code_hash).ok_or(Error::<T>::CodeNotFound)?;
 	let original_code_len = original_code.len();
 	prefab_module.code = prepare::reinstrument_contract::<T>(original_code, schedule)?;
 	prefab_module.instruction_weights_version = schedule.instruction_weights.version;
@@ -217,8 +216,12 @@ impl<T: Config> Token<T> for CodeToken {
 		// size of the contract.
 		match *self {
 			Reinstrument(len) => T::WeightInfo::reinstrument(len),
-			Load(len) => T::WeightInfo::call_with_code_per_byte(len)
-				.saturating_sub(T::WeightInfo::call_with_code_per_byte(0)),
+			Load(len) => {
+				let computation = T::WeightInfo::call_with_code_per_byte(len)
+					.saturating_sub(T::WeightInfo::call_with_code_per_byte(0));
+				let bandwith = T::ContractAccessWeight::get().saturating_mul(len.into());
+				computation.max(bandwith)
+			},
 		}
 	}
 }

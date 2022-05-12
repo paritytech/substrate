@@ -444,9 +444,11 @@ macro_rules! implement_fixed {
 					) {
 						Some(value) => {
 							if value > (u32::max_value() as u128) {
-								panic!("prior logic ensures 0<self.0<DIV; \
+								panic!(
+									"prior logic ensures 0<self.0<DIV; \
 									multiply ensures 0<self.0<1000000000; \
-									qed");
+									qed"
+								);
 							}
 							Perbill::from_parts(value as u32)
 						},
@@ -490,7 +492,11 @@ macro_rules! implement_fixed {
 			}
 
 			/// A version of div with customisable rounding.
-			pub const fn checked_rounding_div(self, other: Self, rounding: Rounding) -> Option<Self> {
+			pub const fn checked_rounding_div(
+				self,
+				other: Self,
+				rounding: Rounding,
+			) -> Option<Self> {
 				if other.0 == 0 {
 					return None
 				}
@@ -538,11 +544,7 @@ macro_rules! implement_fixed {
 				// computing them individually and taking the product at the end. we will lose some
 				// precision though.
 				let maybe_vd = u128::checked_mul(v, $div);
-				let r = if let Some(vd) = maybe_vd {
-					sqrt(vd)
-				} else {
-					sqrt(v) * sqrt($div)
-				};
+				let r = if let Some(vd) = maybe_vd { sqrt(vd) } else { sqrt(v) * sqrt($div) };
 				Some(Self(r as $inner_type))
 			}
 
@@ -610,12 +612,8 @@ macro_rules! implement_fixed {
 				if b == 0 {
 					panic!("attempt to divide by zero in from_rational")
 				}
-				match multiply_by_rational_with_rounding(
-					Self::DIV as u128,
-					a,
-					b,
-					Rounding::Nearest,
-				) {
+				match multiply_by_rational_with_rounding(Self::DIV as u128, a, b, Rounding::Nearest)
+				{
 					Some(value) => match Self::from_i129(I129 { value, negative: false }) {
 						Some(x) => x,
 						None => panic!("overflow in from_rational"),
@@ -1094,11 +1092,9 @@ macro_rules! implement_fixed {
 			fn op_sqrt_works() {
 				for i in 1..1_000i64 {
 					let x = $name::saturating_from_rational(i, 1_000i64);
-					dbg!(i, x, x * x, (x * x).sqrt());
-					assert_eq!((x * x).sqrt(), Some(x));
+					assert_eq!((x * x).try_sqrt(), Some(x));
 					let x = $name::saturating_from_rational(i, 1i64);
-					dbg!(i, x, x * x, (x * x).sqrt());
-					assert_eq!((x * x).sqrt(), Some(x));
+					assert_eq!((x * x).try_sqrt(), Some(x));
 				}
 			}
 

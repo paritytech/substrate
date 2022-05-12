@@ -91,27 +91,35 @@ pub trait PerThing:
 
 	/// Return the next lower value to `self` or `self` if it is already zero.
 	fn less_epsilon(self) -> Self {
-		if self.is_zero() { return self }
+		if self.is_zero() {
+			return self
+		}
 		Self::from_parts(self.deconstruct() - One::one())
 	}
 
 	/// Return the next lower value to `self` or an error with the same value if `self` is already
 	/// zero.
 	fn try_less_epsilon(self) -> Result<Self, Self> {
-		if self.is_zero() { return Err(self) }
+		if self.is_zero() {
+			return Err(self)
+		}
 		Ok(Self::from_parts(self.deconstruct() - One::one()))
 	}
 
 	/// Return the next higher value to `self` or `self` if it is already one.
 	fn plus_epsilon(self) -> Self {
-		if self.is_one() { return self }
+		if self.is_one() {
+			return self
+		}
 		Self::from_parts(self.deconstruct() + One::one())
 	}
 
 	/// Return the next higher value to `self` or an error with the same value if `self` is already
 	/// one.
 	fn try_plus_epsilon(self) -> Result<Self, Self> {
-		if self.is_one() { return Err(self) }
+		if self.is_one() {
+			return Err(self)
+		}
 		Ok(Self::from_parts(self.deconstruct() + One::one()))
 	}
 
@@ -319,7 +327,7 @@ pub trait PerThing:
 			+ Unsigned
 			+ Zero
 			+ One,
-		Self::Inner: Into<N>
+		Self::Inner: Into<N>,
 	{
 		Self::from_rational_with_rounding(p, q, Rounding::Down).unwrap_or_else(|_| Self::one())
 	}
@@ -384,7 +392,6 @@ pub trait PerThing:
 			+ Zero
 			+ One,
 		Self::Inner: Into<N>;
-
 
 	/// Same as `Self::from_rational`.
 	#[deprecated = "Use from_rational instead"]
