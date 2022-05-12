@@ -20,7 +20,7 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
-use frame_benchmarking::{account, benchmarks_item_pallet, whitelist_account, whitelisted_caller};
+use frame_benchmarking::{account, benchmarks_instance_pallet, whitelist_account, whitelisted_caller};
 use frame_support::{
 	dispatch::UnfilteredDispatchable,
 	traits::{EnsureOrigin, Get},
@@ -133,7 +133,7 @@ fn assert_last_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::
 	assert_eq!(event, &system_event);
 }
 
-benchmarks_item_pallet! {
+benchmarks_instance_pallet! {
 	create {
 		let collection = T::Helper::collection(0);
 		let origin = T::CreateOrigin::successful_origin(&collection);
