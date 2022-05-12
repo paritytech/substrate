@@ -612,6 +612,7 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 
 			quote::quote_spanned!(span =>
 				#[doc(hidden)]
+				#[allow(non_camel_case_types)]
 				#visibility struct #name;
 
 				impl<#type_impl_gen> #frame_support::traits::Get<Result<#value_ty, #pallet_error_ident<#type_use_gen>>>
