@@ -326,10 +326,10 @@ where
 				if sids.is_empty() {
 					self.subscriber_ids_for_key.remove(key);
 				}
+			}
 
-				if let Some(m) = self.metrics.as_ref() {
-					m.with_label_values(&["removed"]).inc();
-				}
+			if let Some(m) = self.metrics.as_ref() {
+				m.with_label_values(&["removed"]).inc();
 			}
 		}
 
