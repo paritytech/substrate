@@ -151,20 +151,15 @@ where
 	B: PartialOrd,
 	AB: PartialOrd,
 {
-	pub fn is_greater_or_equal(&self, other: &Self) -> bool {
+	pub fn is_greater_or_equal<T: Config<I>, I: 'static>(
+		&self,
+		other: &Self,
+	) -> Result<bool, sp_runtime::DispatchError> {
 		use BalanceOrAsset::*;
 		match (self, other) {
-			(Balance { amount: a }, Balance { amount: b }) => a >= b,
-			(Asset { amount: a, .. }, Asset { amount: b, .. }) => a >= b,
-			_ => false,
-		}
-	}
-	pub fn is_same_currency(&self, other: &Self) -> bool {
-		use BalanceOrAsset::*;
-		match (self, other) {
-			(Balance { .. }, Balance { .. }) => true,
-			(Asset { id, .. }, Asset { id: id2, .. }) => id == id2,
-			_ => false,
+			(Balance { amount: a }, Balance { amount: b }) => Ok(a >= b),
+			(Asset { amount: a, .. }, Asset { amount: b, .. }) => Ok(a >= b),
+			_ => Err(Error::<T, I>::WrongCurrency.into()),
 		}
 	}
 }
