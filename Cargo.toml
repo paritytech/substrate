@@ -303,8 +303,8 @@ lto = "fat"
 codegen-units = 1
 
 [patch.crates-io]
-trie-db = { path = "../trie/trie-db" }
-hash-db = { path = "../trie/hash-db" }
-memory-db = { path = "../trie/memory-db" }
-trie-root = { path = "../trie/trie-root" }
-trie-bench = { path = "../trie/test-support/trie-bench" }
+trie-db = { git = "https://github.com/paritytech/trie", branch = "bkchr-funny-branch" }
+hash-db = { git = "https://github.com/paritytech/trie", branch = "bkchr-funny-branch" }
+memory-db = { git = "https://github.com/paritytech/trie", branch = "bkchr-funny-branch" }
+trie-root = { git = "https://github.com/paritytech/trie", branch = "bkchr-funny-branch" }
+trie-bench = { git = "https://github.com/paritytech/trie", branch = "bkchr-funny-branch" }
