@@ -3575,7 +3575,8 @@ fn payout_stakers_handles_weight_refund() {
 	// Note: this test relies on the assumption that `payout_stakers_alive_staked` is solely used by
 	// `payout_stakers` to calculate the weight of each payout op.
 	ExtBuilder::default().has_stakers(false).build_and_execute(|| {
-		let max_nom_rewarded = <<Test as Config>::MaxNominatorRewardedPerValidator as Get<_>>::get();
+		let max_nom_rewarded =
+			<<Test as Config>::MaxNominatorRewardedPerValidator as Get<_>>::get();
 		// Make sure the configured value is meaningful for our use.
 		assert!(max_nom_rewarded >= 4);
 		let half_max_nom_rewarded = max_nom_rewarded / 2;
