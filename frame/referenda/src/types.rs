@@ -337,3 +337,11 @@ impl Debug for Curve {
 		}
 	}
 }
+
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+#[codec(mel_bound(Deposit: MaxEncodedLen, BoundedVec<u8, Limit>: MaxEncodedLen))]
+#[scale_info(skip_type_params(Limit))]
+pub struct Metadata<Deposit, Limit: Get<u32>> {
+	pub metadata: BoundedVec<u8, Limit>,
+	pub deposit: Option<Deposit>,
+}

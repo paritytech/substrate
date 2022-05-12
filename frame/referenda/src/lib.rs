@@ -89,9 +89,9 @@ pub use self::{
 	pallet::*,
 	types::{
 		BalanceOf, CallOf, Curve, DecidingStatus, DecidingStatusOf, Deposit, InsertSorted,
-		NegativeImbalanceOf, PalletsOriginOf, ReferendumIndex, ReferendumInfo, ReferendumInfoOf,
-		ReferendumStatus, ReferendumStatusOf, ScheduleAddressOf, TallyOf, TrackIdOf, TrackInfo,
-		TrackInfoOf, TracksInfo, VotesOf,
+		Metadata, NegativeImbalanceOf, PalletsOriginOf, ReferendumIndex, ReferendumInfo,
+		ReferendumInfoOf, ReferendumStatus, ReferendumStatusOf, ScheduleAddressOf, TallyOf,
+		TrackIdOf, TrackInfo, TrackInfoOf, TracksInfo, VotesOf,
 	},
 	weights::WeightInfo,
 };
@@ -177,6 +177,10 @@ pub mod pallet {
 			Self::BlockNumber,
 			Origin = <Self::Origin as OriginTrait>::PalletsOrigin,
 		>;
+
+		/// Maximum length of referendum metadata.
+		#[pallet::constant]
+		type MetadataLimit: Get<u32>;
 	}
 
 	/// The next free referendum index, aka the number of referenda started so far.
@@ -187,6 +191,15 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type ReferendumInfoFor<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Blake2_128Concat, ReferendumIndex, ReferendumInfoOf<T, I>>;
+
+	/// Optional metadata concerning any given referendum.
+	#[pallet::storage]
+	pub type ReferendumMetadataFor<T: Config<I>, I: 'static = ()> = StorageMap<
+		_,
+		Blake2_128Concat,
+		ReferendumIndex,
+		Metadata<Deposit<T::AccountId, BalanceOf<T, I>>, T::MetadataLimit>,
+	>;
 
 	/// The sorted list of referenda ready to be decided but not yet being decided, ordered by
 	/// conviction-weighted approvals.
@@ -302,6 +315,16 @@ pub mod pallet {
 			/// The final tally of votes in this referendum.
 			tally: T::Tally,
 		},
+		/// Metadata for a referendum has been set.
+		MetadataSet {
+			/// Index of the referendum.
+			index: ReferendumIndex,
+		},
+		/// Metadata for a referendum has been cleared.
+		MetadataCleared {
+			/// Index of the referendum.
+			index: ReferendumIndex,
+		},
 	}
 
 	#[pallet::error]
@@ -328,6 +351,8 @@ pub mod pallet {
 		NoPermission,
 		/// The deposit cannot be refunded since none was made.
 		NoDeposit,
+		/// The metadata provided is too large.
+		MetadataLimitExceeded,
 	}
 
 	#[pallet::call]
@@ -464,7 +489,7 @@ pub mod pallet {
 		/// Cancel an ongoing referendum and slash the deposits.
 		///
 		/// - `origin`: must be the `KillOrigin`.
-		/// - `index`: The index of the referendum to be cancelled.
+		/// - `index`: The index of the referendum to be killed.
 		///
 		/// Emits `Killed` and `DepositSlashed`.
 		#[pallet::weight(T::WeightInfo::kill())]
@@ -537,6 +562,52 @@ pub mod pallet {
 					OneFewerDecidingBranch::QueueEmpty
 				};
 			Ok(Some(branch.weight::<T, I>()).into())
+		}
+
+		/// Set the metadata to an ongoing referendum.
+		///
+		/// - `origin`: Must be `Signed`, and the creator of the referendum.
+		/// - `index`: The index of the referendum to add metadata for.
+		/// - `metadata`: An opaque blob representing the metadata for the referendum. Could be
+		///   JSON, a Hash, or raw text. Up to the community to decide how exactly to use this.
+		#[pallet::weight(0)]
+		pub fn set_metadata(
+			origin: OriginFor<T>,
+			index: ReferendumIndex,
+			metadata: Vec<u8>,
+		) -> DispatchResult {
+			let sender = ensure_signed(origin)?;
+			let bounded_metadata: BoundedVec<u8, T::MetadataLimit> =
+				metadata.try_into().map_err(|_| Error::<T, I>::MetadataLimitExceeded)?;
+			let status = Self::ensure_ongoing(index)?;
+			ensure!(status.submission_deposit.who == sender, Error::<T, I>::NoPermission);
+			let final_metadata = Metadata {
+				metadata: bounded_metadata,
+				// The user already placed a deposit for opening the referendum, and this can be
+				// cleaned up at the end. No need to take a further deposit for now.
+				deposit: None,
+			};
+			ReferendumMetadataFor::<T, I>::insert(index, final_metadata);
+			Self::deposit_event(Event::<T, I>::MetadataSet { index });
+			Ok(())
+		}
+
+		/// Clear the metadata to a finished referendum.
+		///
+		/// - `origin`: Must be `Signed`. If the referendum is ongoing, it must also be the creator
+		///   of the referendum.
+		/// - `index`: The index of the referendum to clear metadata for.
+		#[pallet::weight(0)]
+		pub fn clear_metadata(origin: OriginFor<T>, index: ReferendumIndex) -> DispatchResult {
+			let sender = ensure_signed(origin)?;
+			if let Some(status) = Self::ensure_ongoing(index).ok() {
+				ensure!(status.submission_deposit.who == sender, Error::<T, I>::NoPermission);
+			}
+			if let Some(metadata) = ReferendumMetadataFor::<T, I>::take(index) {
+				Self::refund_deposit(metadata.deposit);
+				Self::deposit_event(Event::<T, I>::MetadataCleared { index });
+			}
+			Ok(())
 		}
 	}
 }
