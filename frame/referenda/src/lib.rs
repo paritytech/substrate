@@ -570,7 +570,7 @@ pub mod pallet {
 		/// - `index`: The index of the referendum to add metadata for.
 		/// - `metadata`: An opaque blob representing the metadata for the referendum. Could be
 		///   JSON, a Hash, or raw text. Up to the community to decide how exactly to use this.
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::set_metadata(metadata.len() as u32))]
 		pub fn set_metadata(
 			origin: OriginFor<T>,
 			index: ReferendumIndex,
@@ -597,7 +597,7 @@ pub mod pallet {
 		/// - `origin`: Must be `Signed`. If the referendum is ongoing, it must also be the creator
 		///   of the referendum.
 		/// - `index`: The index of the referendum to clear metadata for.
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::clear_metadata(T::MetadataLimit::get()))]
 		pub fn clear_metadata(origin: OriginFor<T>, index: ReferendumIndex) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			if let Some(status) = Self::ensure_ongoing(index).ok() {
