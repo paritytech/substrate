@@ -20,14 +20,15 @@
 use crate::{
 	helpers, Call, Config, ElectionCompute, Error, FeasibilityError, Pallet, RawSolution,
 	ReadySolution, RoundSnapshot, SolutionAccuracyOf, SolutionOf, SolutionOrSnapshotSize, Weight,
-	WeightInfo,
 };
 use codec::Encode;
-use frame_election_provider_support::{NposSolution, NposSolver, PerThing128};
-use frame_support::{dispatch::DispatchResult, ensure, traits::Get};
+use frame_election_provider_support::{NposSolution, NposSolver, PerThing128, VoteWeight};
+use frame_support::{dispatch::DispatchResult, ensure, traits::Get, BoundedVec};
 use frame_system::offchain::SubmitTransaction;
+use scale_info::TypeInfo;
 use sp_npos_elections::{
 	assignment_ratio_to_staked_normalized, assignment_staked_to_ratio_normalized, ElectionResult,
+	ElectionScore,
 };
 use sp_runtime::{
 	offchain::storage::{MutateStorageError, StorageValueRef},
@@ -47,6 +48,12 @@ pub(crate) const OFFCHAIN_CACHED_CALL: &[u8] = b"parity/multi-phase-unsigned-ele
 /// voted.
 pub type VoterOf<T> = frame_election_provider_support::VoterOf<<T as Config>::DataProvider>;
 
+/// Same as [`VoterOf`], but parameterized by the `MinerConfig`.
+pub type MinerVoterOf<T> = frame_election_provider_support::Voter<
+	<T as MinerConfig>::AccountId,
+	<T as MinerConfig>::MaxVotesPerVoter,
+>;
+
 /// The relative distribution of a voter's stake among the winning targets.
 pub type Assignment<T> =
 	sp_npos_elections::Assignment<<T as frame_system::Config>::AccountId, SolutionAccuracyOf<T>>;
@@ -59,7 +66,7 @@ pub type IndexAssignmentOf<T> = frame_election_provider_support::IndexAssignment
 pub type SolverErrorOf<T> = <<T as Config>::Solver as NposSolver>::Error;
 /// Error type for operations related to the OCW npos solution miner.
 #[derive(frame_support::DebugNoBound, frame_support::PartialEqNoBound)]
-pub enum MinerError<T: Config> {
+pub enum MinerError {
 	/// An internal error in the NPoS elections crate.
 	NposElections(sp_npos_elections::Error),
 	/// Snapshot data was unavailable unexpectedly.
@@ -81,23 +88,23 @@ pub enum MinerError<T: Config> {
 	/// There are no more voters to remove to trim the solution.
 	NoMoreVoters,
 	/// An error from the solver.
-	Solver(SolverErrorOf<T>),
+	Solver,
 }
 
-impl<T: Config> From<sp_npos_elections::Error> for MinerError<T> {
+impl From<sp_npos_elections::Error> for MinerError {
 	fn from(e: sp_npos_elections::Error) -> Self {
 		MinerError::NposElections(e)
 	}
 }
 
-impl<T: Config> From<FeasibilityError> for MinerError<T> {
+impl From<FeasibilityError> for MinerError {
 	fn from(e: FeasibilityError) -> Self {
 		MinerError::Feasibility(e)
 	}
 }
 
 /// Save a given call into OCW storage.
-fn save_solution<T: Config>(call: &Call<T>) -> Result<(), MinerError<T>> {
+fn save_solution<T: Config>(call: &Call<T>) -> Result<(), MinerError> {
 	log!(debug, "saving a call to the offchain storage.");
 	let storage = StorageValueRef::persistent(OFFCHAIN_CACHED_CALL);
 	match storage.mutate::<_, (), _>(|_| Ok(call.clone())) {
@@ -115,7 +122,7 @@ fn save_solution<T: Config>(call: &Call<T>) -> Result<(), MinerError<T>> {
 }
 
 /// Get a saved solution from OCW storage if it exists.
-fn restore_solution<T: Config>() -> Result<Call<T>, MinerError<T>> {
+fn restore_solution<T: Config>() -> Result<Call<T>, MinerError> {
 	StorageValueRef::persistent(OFFCHAIN_CACHED_CALL)
 		.get()
 		.ok()
@@ -146,9 +153,46 @@ fn ocw_solution_exists<T: Config>() -> bool {
 }
 
 impl<T: Config> Pallet<T> {
+	/// Mine a new npos solution.
+	///
+	/// The Npos Solver type, `S`, must have the same AccountId and Error type as the
+	/// [`crate::Config::Solver`] in order to create a unified return type.
+	pub fn mine_solution(
+	) -> Result<(RawSolution<SolutionOf<T::MinerConfig>>, SolutionOrSnapshotSize), MinerError> {
+		let RoundSnapshot { voters, targets } =
+			Self::snapshot().ok_or(MinerError::SnapshotUnAvailable)?;
+		let desired_targets = Self::desired_targets().ok_or(MinerError::SnapshotUnAvailable)?;
+		let (solution, score, size) = Miner::<T::MinerConfig>::mine_solution_with_snapshot::<
+			T::Solver,
+		>(voters, targets, desired_targets)?;
+		let round = Self::round();
+		Ok((RawSolution { solution, score, round }, size))
+	}
+
+	/// Convert a raw solution from [`sp_npos_elections::ElectionResult`] to [`RawSolution`], which
+	/// is ready to be submitted to the chain.
+	///
+	/// Will always reduce the solution as well.
+	pub fn prepare_election_result<Accuracy: PerThing128>(
+		election_result: ElectionResult<T::AccountId, Accuracy>,
+	) -> Result<(RawSolution<SolutionOf<T::MinerConfig>>, SolutionOrSnapshotSize), MinerError> {
+		let RoundSnapshot { voters, targets } =
+			Self::snapshot().ok_or(MinerError::SnapshotUnAvailable)?;
+		let desired_targets = Self::desired_targets().ok_or(MinerError::SnapshotUnAvailable)?;
+		let (solution, score, size) =
+			Miner::<T::MinerConfig>::prepare_election_result_with_snapshot(
+				election_result,
+				voters,
+				targets,
+				desired_targets,
+			)?;
+		let round = Self::round();
+		Ok((RawSolution { solution, score, round }, size))
+	}
+
 	/// Attempt to restore a solution from cache. Otherwise, compute it fresh. Either way, submit
 	/// if our call's score is greater than that of the cached solution.
-	pub fn restore_or_compute_then_maybe_submit() -> Result<(), MinerError<T>> {
+	pub fn restore_or_compute_then_maybe_submit() -> Result<(), MinerError> {
 		log!(debug, "miner attempting to restore or compute an unsigned solution.");
 
 		let call = restore_solution::<T>()
@@ -162,7 +206,7 @@ impl<T: Config> Pallet<T> {
 					Err(MinerError::SolutionCallInvalid)
 				}
 			})
-			.or_else::<MinerError<T>, _>(|error| {
+			.or_else::<MinerError, _>(|error| {
 				log!(debug, "restoring solution failed due to {:?}", error);
 				match error {
 					MinerError::NoStoredSolution => {
@@ -193,7 +237,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Mine a new solution, cache it, and submit it back to the chain as an unsigned transaction.
-	pub fn mine_check_save_submit() -> Result<(), MinerError<T>> {
+	pub fn mine_check_save_submit() -> Result<(), MinerError> {
 		log!(debug, "miner attempting to compute an unsigned solution.");
 
 		let call = Self::mine_checked_call()?;
@@ -202,7 +246,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Mine a new solution as a call. Performs all checks.
-	pub fn mine_checked_call() -> Result<Call<T>, MinerError<T>> {
+	pub fn mine_checked_call() -> Result<Call<T>, MinerError> {
 		// get the solution, with a load of checks to ensure if submitted, IT IS ABSOLUTELY VALID.
 		let (raw_solution, witness) = Self::mine_and_check()?;
 
@@ -219,7 +263,7 @@ impl<T: Config> Pallet<T> {
 		Ok(call)
 	}
 
-	fn submit_call(call: Call<T>) -> Result<(), MinerError<T>> {
+	fn submit_call(call: Call<T>) -> Result<(), MinerError> {
 		log!(debug, "miner submitting a solution as an unsigned transaction");
 
 		SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into())
@@ -230,9 +274,9 @@ impl<T: Config> Pallet<T> {
 	//
 	// Performance: note that it internally clones the provided solution.
 	pub fn basic_checks(
-		raw_solution: &RawSolution<SolutionOf<T>>,
+		raw_solution: &RawSolution<SolutionOf<T::MinerConfig>>,
 		solution_type: &str,
-	) -> Result<(), MinerError<T>> {
+	) -> Result<(), MinerError> {
 		Self::unsigned_pre_dispatch_checks(raw_solution).map_err(|err| {
 			log!(debug, "pre-dispatch checks failed for {} solution: {:?}", solution_type, err);
 			MinerError::PreDispatchChecksFailed(err)
@@ -255,45 +299,155 @@ impl<T: Config> Pallet<T> {
 	/// If you want a checked solution and submit it at the same time, use
 	/// [`Pallet::mine_check_save_submit`].
 	pub fn mine_and_check(
-	) -> Result<(RawSolution<SolutionOf<T>>, SolutionOrSnapshotSize), MinerError<T>> {
-		let (raw_solution, witness) = Self::mine_solution::<T::Solver>()?;
+	) -> Result<(RawSolution<SolutionOf<T::MinerConfig>>, SolutionOrSnapshotSize), MinerError> {
+		let (raw_solution, witness) = Self::mine_solution()?;
 		Self::basic_checks(&raw_solution, "mined")?;
 		Ok((raw_solution, witness))
 	}
 
-	/// Mine a new npos solution.
+	/// Checks if an execution of the offchain worker is permitted at the given block number, or
+	/// not.
 	///
-	/// The Npos Solver type, `S`, must have the same AccountId and Error type as the
-	/// [`crate::Config::Solver`] in order to create a unified return type.
-	pub fn mine_solution<S>(
-	) -> Result<(RawSolution<SolutionOf<T>>, SolutionOrSnapshotSize), MinerError<T>>
-	where
-		S: NposSolver<AccountId = T::AccountId, Error = SolverErrorOf<T>>,
-	{
-		let RoundSnapshot { voters, targets } =
-			Self::snapshot().ok_or(MinerError::SnapshotUnAvailable)?;
-		let desired_targets = Self::desired_targets().ok_or(MinerError::SnapshotUnAvailable)?;
+	/// This makes sure that
+	/// 1. we don't run on previous blocks in case of a re-org
+	/// 2. we don't run twice within a window of length `T::OffchainRepeat`.
+	///
+	/// Returns `Ok(())` if offchain worker limit is respected, `Err(reason)` otherwise. If `Ok()`
+	/// is returned, `now` is written in storage and will be used in further calls as the baseline.
+	pub fn ensure_offchain_repeat_frequency(now: T::BlockNumber) -> Result<(), MinerError> {
+		let threshold = T::OffchainRepeat::get();
+		let last_block = StorageValueRef::persistent(OFFCHAIN_LAST_BLOCK);
 
-		S::solve(desired_targets as usize, targets, voters)
-			.map_err(|e| MinerError::Solver::<T>(e))
-			.and_then(|e| Self::prepare_election_result::<S::Accuracy>(e))
+		let mutate_stat = last_block.mutate::<_, &'static str, _>(
+			|maybe_head: Result<Option<T::BlockNumber>, _>| {
+				match maybe_head {
+					Ok(Some(head)) if now < head => Err("fork."),
+					Ok(Some(head)) if now >= head && now <= head + threshold =>
+						Err("recently executed."),
+					Ok(Some(head)) if now > head + threshold => {
+						// we can run again now. Write the new head.
+						Ok(now)
+					},
+					_ => {
+						// value doesn't exists. Probably this node just booted up. Write, and run
+						Ok(now)
+					},
+				}
+			},
+		);
+
+		match mutate_stat {
+			// all good
+			Ok(_) => Ok(()),
+			// failed to write.
+			Err(MutateStorageError::ConcurrentModification(_)) =>
+				Err(MinerError::Lock("failed to write to offchain db (concurrent modification).")),
+			// fork etc.
+			Err(MutateStorageError::ValueFunctionFailed(why)) => Err(MinerError::Lock(why)),
+		}
 	}
 
-	/// Convert a raw solution from [`sp_npos_elections::ElectionResult`] to [`RawSolution`], which
-	/// is ready to be submitted to the chain.
+	/// Do the basics checks that MUST happen during the validation and pre-dispatch of an unsigned
+	/// transaction.
 	///
-	/// Will always reduce the solution as well.
-	pub fn prepare_election_result<Accuracy: PerThing128>(
+	/// Can optionally also be called during dispatch, if needed.
+	///
+	/// NOTE: Ideally, these tests should move more and more outside of this and more to the miner's
+	/// code, so that we do less and less storage reads here.
+	pub fn unsigned_pre_dispatch_checks(
+		raw_solution: &RawSolution<SolutionOf<T::MinerConfig>>,
+	) -> DispatchResult {
+		// ensure solution is timely. Don't panic yet. This is a cheap check.
+		ensure!(Self::current_phase().is_unsigned_open(), Error::<T>::PreDispatchEarlySubmission);
+
+		// ensure round is current
+		ensure!(Self::round() == raw_solution.round, Error::<T>::OcwCallWrongEra);
+
+		// ensure correct number of winners.
+		ensure!(
+			Self::desired_targets().unwrap_or_default() ==
+				raw_solution.solution.unique_targets().len() as u32,
+			Error::<T>::PreDispatchWrongWinnerCount,
+		);
+
+		// ensure score is being improved. Panic henceforth.
+		ensure!(
+			Self::queued_solution().map_or(true, |q: ReadySolution<_>| raw_solution
+				.score
+				.strict_threshold_better(q.score, T::BetterUnsignedThreshold::get())),
+			Error::<T>::PreDispatchWeakSubmission,
+		);
+
+		Ok(())
+	}
+}
+
+/// Configurations for a miner that comes with this pallet.
+pub trait MinerConfig {
+	/// The account id type.
+	type AccountId: Ord + Clone + codec::Codec + sp_std::fmt::Debug;
+	/// The solution that the miner is mining.
+	type Solution: codec::Codec
+		+ Default
+		+ PartialEq
+		+ Eq
+		+ Clone
+		+ sp_std::fmt::Debug
+		+ Ord
+		+ NposSolution
+		+ TypeInfo;
+	/// Maximum number of votes per voter in the snapshots.
+	type MaxVotesPerVoter;
+	/// Maximum length of the solution that the miner is allowed to generate.
+	///
+	/// Solutions are trimmed to respect this.
+	type MaxLength: Get<u32>;
+	/// Maximum weight of the solution that the miner is allowed to generate.
+	///
+	/// Solutions are trimmed to respect this.
+	///
+	/// The weight is computed using `solution_weight`.
+	type MaxWeight: Get<Weight>;
+	/// Something that can compute the weight of a solution.
+	///
+	/// This weight estimate is then used to trim the solution, based on [`MinerConfig::MaxWeight`].
+	fn solution_weight(voters: u32, targets: u32, active_voters: u32, degree: u32) -> Weight;
+}
+
+/// A base miner, suitable to be used for both signed and unsigned submissions.
+pub struct Miner<T: MinerConfig>(sp_std::marker::PhantomData<T>);
+impl<T: MinerConfig> Miner<T> {
+	/// Same as [`Pallet::mine_solution`], but the input snapshot data must be given.
+	pub fn mine_solution_with_snapshot<S>(
+		voters: Vec<(T::AccountId, VoteWeight, BoundedVec<T::AccountId, T::MaxVotesPerVoter>)>,
+		targets: Vec<T::AccountId>,
+		desired_targets: u32,
+	) -> Result<(SolutionOf<T>, ElectionScore, SolutionOrSnapshotSize), MinerError>
+	where
+		S: NposSolver<AccountId = T::AccountId>,
+	{
+		S::solve(desired_targets as usize, targets.clone(), voters.clone())
+			.map_err(|e| {
+				log_no_system!(error, "solver error: {:?}", e);
+				MinerError::Solver
+			})
+			.and_then(|e| {
+				Self::prepare_election_result_with_snapshot::<S::Accuracy>(
+					e,
+					voters,
+					targets,
+					desired_targets,
+				)
+			})
+	}
+
+	/// Same as [`Pallet::prepare_election_result`], but the input snapshot mut be given as inputs.
+	pub fn prepare_election_result_with_snapshot<Accuracy: PerThing128>(
 		election_result: ElectionResult<T::AccountId, Accuracy>,
-	) -> Result<(RawSolution<SolutionOf<T>>, SolutionOrSnapshotSize), MinerError<T>> {
-		// NOTE: This code path is generally not optimized as it is run offchain. Could use some at
-		// some point though.
-
-		// storage items. Note: we have already read this from storage, they must be in cache.
-		let RoundSnapshot { voters, targets } =
-			Self::snapshot().ok_or(MinerError::SnapshotUnAvailable)?;
-		let desired_targets = Self::desired_targets().ok_or(MinerError::SnapshotUnAvailable)?;
-
+		voters: Vec<(T::AccountId, VoteWeight, BoundedVec<T::AccountId, T::MaxVotesPerVoter>)>,
+		targets: Vec<T::AccountId>,
+		desired_targets: u32,
+	) -> Result<(SolutionOf<T>, ElectionScore, SolutionOrSnapshotSize), MinerError> {
 		// now make some helper closures.
 		let cache = helpers::generate_voter_cache::<T>(&voters);
 		let voter_index = helpers::voter_index_fn::<T>(&cache);
@@ -355,11 +509,11 @@ impl<T: Config> Pallet<T> {
 		Self::trim_assignments_weight(
 			desired_targets,
 			size,
-			T::MinerMaxWeight::get(),
+			T::MaxWeight::get(),
 			&mut index_assignments,
 		);
 		Self::trim_assignments_length(
-			T::MinerMaxLength::get(),
+			T::MaxLength::get(),
 			&mut index_assignments,
 			&encoded_size_of,
 		)?;
@@ -370,43 +524,7 @@ impl<T: Config> Pallet<T> {
 		// re-calc score.
 		let score = solution.clone().score(stake_of, voter_at, target_at)?;
 
-		let round = Self::round();
-		Ok((RawSolution { solution, score, round }, size))
-	}
-
-	/// Greedily reduce the size of the solution to fit into the block w.r.t. weight.
-	///
-	/// The weight of the solution is foremost a function of the number of voters (i.e.
-	/// `assignments.len()`). Aside from this, the other components of the weight are invariant. The
-	/// number of winners shall not be changed (otherwise the solution is invalid) and the
-	/// `ElectionSize` is merely a representation of the total number of stakers.
-	///
-	/// Thus, we reside to stripping away some voters from the `assignments`.
-	///
-	/// Note that the solution is already computed, and the winners are elected based on the merit
-	/// of the entire stake in the system. Nonetheless, some of the voters will be removed further
-	/// down the line.
-	///
-	/// Indeed, the score must be computed **after** this step. If this step reduces the score too
-	/// much or remove a winner, then the solution must be discarded **after** this step.
-	pub fn trim_assignments_weight(
-		desired_targets: u32,
-		size: SolutionOrSnapshotSize,
-		max_weight: Weight,
-		assignments: &mut Vec<IndexAssignmentOf<T>>,
-	) {
-		let maximum_allowed_voters =
-			Self::maximum_voter_for_weight::<T::WeightInfo>(desired_targets, size, max_weight);
-		let removing: usize =
-			assignments.len().saturating_sub(maximum_allowed_voters.saturated_into());
-		log!(
-			debug,
-			"from {} assignments, truncating to {} for weight, removing {}",
-			assignments.len(),
-			maximum_allowed_voters,
-			removing,
-		);
-		assignments.truncate(maximum_allowed_voters as usize);
+		Ok((solution, score, size))
 	}
 
 	/// Greedily reduce the size of the solution to fit into the block w.r.t length.
@@ -427,7 +545,7 @@ impl<T: Config> Pallet<T> {
 		max_allowed_length: u32,
 		assignments: &mut Vec<IndexAssignmentOf<T>>,
 		encoded_size_of: impl Fn(&[IndexAssignmentOf<T>]) -> Result<usize, sp_npos_elections::Error>,
-	) -> Result<(), MinerError<T>> {
+	) -> Result<(), MinerError> {
 		// Perform a binary search for the max subset of which can fit into the allowed
 		// length. Having discovered that, we can truncate efficiently.
 		let max_allowed_length: usize = max_allowed_length.saturated_into();
@@ -470,7 +588,7 @@ impl<T: Config> Pallet<T> {
 		// after this point, we never error.
 		// check before edit.
 
-		log!(
+		log_no_system!(
 			debug,
 			"from {} assignments, truncating to {} for length, removing {}",
 			assignments.len(),
@@ -482,10 +600,45 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
+	/// Greedily reduce the size of the solution to fit into the block w.r.t. weight.
+	///
+	/// The weight of the solution is foremost a function of the number of voters (i.e.
+	/// `assignments.len()`). Aside from this, the other components of the weight are invariant. The
+	/// number of winners shall not be changed (otherwise the solution is invalid) and the
+	/// `ElectionSize` is merely a representation of the total number of stakers.
+	///
+	/// Thus, we reside to stripping away some voters from the `assignments`.
+	///
+	/// Note that the solution is already computed, and the winners are elected based on the merit
+	/// of the entire stake in the system. Nonetheless, some of the voters will be removed further
+	/// down the line.
+	///
+	/// Indeed, the score must be computed **after** this step. If this step reduces the score too
+	/// much or remove a winner, then the solution must be discarded **after** this step.
+	pub fn trim_assignments_weight(
+		desired_targets: u32,
+		size: SolutionOrSnapshotSize,
+		max_weight: Weight,
+		assignments: &mut Vec<IndexAssignmentOf<T>>,
+	) {
+		let maximum_allowed_voters =
+			Self::maximum_voter_for_weight(desired_targets, size, max_weight);
+		let removing: usize =
+			assignments.len().saturating_sub(maximum_allowed_voters.saturated_into());
+		log_no_system!(
+			debug,
+			"from {} assignments, truncating to {} for weight, removing {}",
+			assignments.len(),
+			maximum_allowed_voters,
+			removing,
+		);
+		assignments.truncate(maximum_allowed_voters as usize);
+	}
+
 	/// Find the maximum `len` that a solution can have in order to fit into the block weight.
 	///
 	/// This only returns a value between zero and `size.nominators`.
-	pub fn maximum_voter_for_weight<W: WeightInfo>(
+	pub fn maximum_voter_for_weight(
 		desired_winners: u32,
 		size: SolutionOrSnapshotSize,
 		max_weight: Weight,
@@ -499,7 +652,7 @@ impl<T: Config> Pallet<T> {
 
 		// helper closures.
 		let weight_with = |active_voters: u32| -> Weight {
-			W::submit_unsigned(size.voters, size.targets, active_voters, desired_winners)
+			T::solution_weight(size.voters, size.targets, active_voters, desired_winners)
 		};
 
 		let next_voters = |current_weight: Weight, voters: u32, step: u32| -> Result<u32, ()> {
@@ -553,176 +706,65 @@ impl<T: Config> Pallet<T> {
 		);
 		final_decision
 	}
-
-	/// Checks if an execution of the offchain worker is permitted at the given block number, or
-	/// not.
-	///
-	/// This makes sure that
-	/// 1. we don't run on previous blocks in case of a re-org
-	/// 2. we don't run twice within a window of length `T::OffchainRepeat`.
-	///
-	/// Returns `Ok(())` if offchain worker limit is respected, `Err(reason)` otherwise. If `Ok()`
-	/// is returned, `now` is written in storage and will be used in further calls as the baseline.
-	pub fn ensure_offchain_repeat_frequency(now: T::BlockNumber) -> Result<(), MinerError<T>> {
-		let threshold = T::OffchainRepeat::get();
-		let last_block = StorageValueRef::persistent(OFFCHAIN_LAST_BLOCK);
-
-		let mutate_stat = last_block.mutate::<_, &'static str, _>(
-			|maybe_head: Result<Option<T::BlockNumber>, _>| {
-				match maybe_head {
-					Ok(Some(head)) if now < head => Err("fork."),
-					Ok(Some(head)) if now >= head && now <= head + threshold =>
-						Err("recently executed."),
-					Ok(Some(head)) if now > head + threshold => {
-						// we can run again now. Write the new head.
-						Ok(now)
-					},
-					_ => {
-						// value doesn't exists. Probably this node just booted up. Write, and run
-						Ok(now)
-					},
-				}
-			},
-		);
-
-		match mutate_stat {
-			// all good
-			Ok(_) => Ok(()),
-			// failed to write.
-			Err(MutateStorageError::ConcurrentModification(_)) =>
-				Err(MinerError::Lock("failed to write to offchain db (concurrent modification).")),
-			// fork etc.
-			Err(MutateStorageError::ValueFunctionFailed(why)) => Err(MinerError::Lock(why)),
-		}
-	}
-
-	/// Do the basics checks that MUST happen during the validation and pre-dispatch of an unsigned
-	/// transaction.
-	///
-	/// Can optionally also be called during dispatch, if needed.
-	///
-	/// NOTE: Ideally, these tests should move more and more outside of this and more to the miner's
-	/// code, so that we do less and less storage reads here.
-	pub fn unsigned_pre_dispatch_checks(
-		raw_solution: &RawSolution<SolutionOf<T>>,
-	) -> DispatchResult {
-		// ensure solution is timely. Don't panic yet. This is a cheap check.
-		ensure!(Self::current_phase().is_unsigned_open(), Error::<T>::PreDispatchEarlySubmission);
-
-		// ensure round is current
-		ensure!(Self::round() == raw_solution.round, Error::<T>::OcwCallWrongEra);
-
-		// ensure correct number of winners.
-		ensure!(
-			Self::desired_targets().unwrap_or_default() ==
-				raw_solution.solution.unique_targets().len() as u32,
-			Error::<T>::PreDispatchWrongWinnerCount,
-		);
-
-		// ensure score is being improved. Panic henceforth.
-		ensure!(
-			Self::queued_solution().map_or(true, |q: ReadySolution<_>| raw_solution
-				.score
-				.strict_threshold_better(q.score, T::BetterUnsignedThreshold::get())),
-			Error::<T>::PreDispatchWeakSubmission,
-		);
-
-		Ok(())
-	}
 }
 
 #[cfg(test)]
 mod max_weight {
 	#![allow(unused_variables)]
 	use super::*;
-	use crate::mock::MultiPhase;
-
-	struct TestWeight;
-	impl crate::weights::WeightInfo for TestWeight {
-		fn elect_queued(a: u32, d: u32) -> Weight {
-			unreachable!()
-		}
-		fn create_snapshot_internal(v: u32, t: u32) -> Weight {
-			unreachable!()
-		}
-		fn on_initialize_nothing() -> Weight {
-			unreachable!()
-		}
-		fn on_initialize_open_signed() -> Weight {
-			unreachable!()
-		}
-		fn on_initialize_open_unsigned() -> Weight {
-			unreachable!()
-		}
-		fn finalize_signed_phase_accept_solution() -> Weight {
-			unreachable!()
-		}
-		fn finalize_signed_phase_reject_solution() -> Weight {
-			unreachable!()
-		}
-		fn submit() -> Weight {
-			unreachable!()
-		}
-		fn submit_unsigned(v: u32, t: u32, a: u32, d: u32) -> Weight {
-			(0 * v + 0 * t + 1000 * a + 0 * d) as Weight
-		}
-		fn feasibility_check(v: u32, _t: u32, a: u32, d: u32) -> Weight {
-			unreachable!()
-		}
-	}
-
+	use crate::mock::{MockWeightInfo, Runtime};
 	#[test]
 	fn find_max_voter_binary_search_works() {
 		let w = SolutionOrSnapshotSize { voters: 10, targets: 0 };
-
-		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 0), 0);
-		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 1), 0);
-		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 999), 0);
-		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 1000), 1);
-		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 1001), 1);
-		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 1990), 1);
-		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 1999), 1);
-		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 2000), 2);
-		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 2001), 2);
-		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 2010), 2);
-		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 2990), 2);
-		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 2999), 2);
-		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 3000), 3);
-		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 3333), 3);
-		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 5500), 5);
-		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 7777), 7);
-		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 9999), 9);
-		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 10_000), 10);
-		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 10_999), 10);
-		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 11_000), 10);
-		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 22_000), 10);
+		MockWeightInfo::set(crate::mock::MockedWeightInfo::Complex);
+		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 0), 0);
+		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 1), 0);
+		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 999), 0);
+		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 1000), 1);
+		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 1001), 1);
+		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 1990), 1);
+		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 1999), 1);
+		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 2000), 2);
+		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 2001), 2);
+		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 2010), 2);
+		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 2990), 2);
+		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 2999), 2);
+		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 3000), 3);
+		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 3333), 3);
+		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 5500), 5);
+		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 7777), 7);
+		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 9999), 9);
+		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 10_000), 10);
+		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 10_999), 10);
+		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 11_000), 10);
+		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 22_000), 10);
 
 		let w = SolutionOrSnapshotSize { voters: 1, targets: 0 };
 
-		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 0), 0);
-		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 1), 0);
-		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 999), 0);
-		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 1000), 1);
-		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 1001), 1);
-		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 1990), 1);
-		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 1999), 1);
-		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 2000), 1);
-		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 2001), 1);
-		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 2010), 1);
-		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 3333), 1);
+		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 0), 0);
+		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 1), 0);
+		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 999), 0);
+		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 1000), 1);
+		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 1001), 1);
+		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 1990), 1);
+		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 1999), 1);
+		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 2000), 1);
+		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 2001), 1);
+		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 2010), 1);
+		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 3333), 1);
 
 		let w = SolutionOrSnapshotSize { voters: 2, targets: 0 };
 
-		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 0), 0);
-		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 1), 0);
-		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 999), 0);
-		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 1000), 1);
-		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 1001), 1);
-		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 1999), 1);
-		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 2000), 2);
-		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 2001), 2);
-		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 2010), 2);
-		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 3333), 2);
+		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 0), 0);
+		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 1), 0);
+		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 999), 0);
+		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 1000), 1);
+		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 1001), 1);
+		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 1999), 1);
+		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 2000), 2);
+		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 2001), 2);
+		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 2010), 2);
+		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 3333), 2);
 	}
 }
 
@@ -988,8 +1030,7 @@ mod tests {
 			assert_eq!(MultiPhase::desired_targets().unwrap(), 2);
 
 			// mine seq_phragmen solution with 2 iters.
-			let (solution, witness) =
-				MultiPhase::mine_solution::<<Runtime as Config>::Solver>().unwrap();
+			let (solution, witness) = MultiPhase::mine_solution().unwrap();
 
 			// ensure this solution is valid.
 			assert!(MultiPhase::queued_solution().is_none());
@@ -1002,14 +1043,13 @@ mod tests {
 	fn miner_trims_weight() {
 		ExtBuilder::default()
 			.miner_weight(100)
-			.mock_weight_info(true)
+			.mock_weight_info(crate::mock::MockedWeightInfo::Basic)
 			.build_and_execute(|| {
 				roll_to(25);
 				assert!(MultiPhase::current_phase().is_unsigned());
 
-				let (raw, witness) =
-					MultiPhase::mine_solution::<<Runtime as Config>::Solver>().unwrap();
-				let solution_weight = <Runtime as Config>::WeightInfo::submit_unsigned(
+				let (raw, witness) = MultiPhase::mine_solution().unwrap();
+				let solution_weight = <Runtime as MinerConfig>::solution_weight(
 					witness.voters,
 					witness.targets,
 					raw.solution.voter_count() as u32,
@@ -1022,9 +1062,8 @@ mod tests {
 				// now reduce the max weight
 				<MinerMaxWeight>::set(25);
 
-				let (raw, witness) =
-					MultiPhase::mine_solution::<<Runtime as Config>::Solver>().unwrap();
-				let solution_weight = <Runtime as Config>::WeightInfo::submit_unsigned(
+				let (raw, witness) = MultiPhase::mine_solution().unwrap();
+				let solution_weight = <Runtime as MinerConfig>::solution_weight(
 					witness.voters,
 					witness.targets,
 					raw.solution.voter_count() as u32,
@@ -1044,8 +1083,7 @@ mod tests {
 			assert!(MultiPhase::current_phase().is_unsigned());
 
 			// Force the number of winners to be bigger to fail
-			let (mut solution, _) =
-				MultiPhase::mine_solution::<<Runtime as Config>::Solver>().unwrap();
+			let (mut solution, _) = MultiPhase::mine_solution().unwrap();
 			solution.solution.votes1[0].1 = 4;
 
 			assert_eq!(
@@ -1460,8 +1498,12 @@ mod tests {
 			let solution_clone = solution.clone();
 
 			// when
-			MultiPhase::trim_assignments_length(encoded_len, &mut assignments, encoded_size_of)
-				.unwrap();
+			Miner::<Runtime>::trim_assignments_length(
+				encoded_len,
+				&mut assignments,
+				encoded_size_of,
+			)
+			.unwrap();
 
 			// then
 			let solution = SolutionOf::<Runtime>::try_from(assignments.as_slice()).unwrap();
@@ -1481,7 +1523,7 @@ mod tests {
 			let solution_clone = solution.clone();
 
 			// when
-			MultiPhase::trim_assignments_length(
+			Miner::<Runtime>::trim_assignments_length(
 				encoded_len as u32 - 1,
 				&mut assignments,
 				encoded_size_of,
@@ -1514,8 +1556,12 @@ mod tests {
 				.unwrap();
 
 			// when
-			MultiPhase::trim_assignments_length(encoded_len - 1, &mut assignments, encoded_size_of)
-				.unwrap();
+			Miner::<Runtime>::trim_assignments_length(
+				encoded_len - 1,
+				&mut assignments,
+				encoded_size_of,
+			)
+			.unwrap();
 
 			// then
 			assert_eq!(assignments.len(), count - 1, "we must have removed exactly one assignment");
@@ -1542,11 +1588,11 @@ mod tests {
 			assert_eq!(min_solution_size, SolutionOf::<Runtime>::LIMIT);
 
 			// all of this should not panic.
-			MultiPhase::trim_assignments_length(0, &mut assignments, encoded_size_of.clone())
+			Miner::<Runtime>::trim_assignments_length(0, &mut assignments, encoded_size_of.clone())
 				.unwrap();
-			MultiPhase::trim_assignments_length(1, &mut assignments, encoded_size_of.clone())
+			Miner::<Runtime>::trim_assignments_length(1, &mut assignments, encoded_size_of.clone())
 				.unwrap();
-			MultiPhase::trim_assignments_length(
+			Miner::<Runtime>::trim_assignments_length(
 				min_solution_size as u32,
 				&mut assignments,
 				encoded_size_of,
@@ -1563,7 +1609,7 @@ mod tests {
 
 			// trim to min solution size.
 			let min_solution_size = SolutionOf::<Runtime>::LIMIT as u32;
-			MultiPhase::trim_assignments_length(
+			Miner::<Runtime>::trim_assignments_length(
 				min_solution_size,
 				&mut assignments,
 				encoded_size_of,
@@ -1582,15 +1628,15 @@ mod tests {
 			roll_to(25);
 
 			// how long would the default solution be?
-			let solution = MultiPhase::mine_solution::<<Runtime as Config>::Solver>().unwrap();
-			let max_length = <Runtime as Config>::MinerMaxLength::get();
+			let solution = MultiPhase::mine_solution().unwrap();
+			let max_length = <Runtime as MinerConfig>::MaxLength::get();
 			let solution_size = solution.0.solution.encoded_size();
 			assert!(solution_size <= max_length as usize);
 
 			// now set the max size to less than the actual size and regenerate
-			<Runtime as Config>::MinerMaxLength::set(solution_size as u32 - 1);
-			let solution = MultiPhase::mine_solution::<<Runtime as Config>::Solver>().unwrap();
-			let max_length = <Runtime as Config>::MinerMaxLength::get();
+			<Runtime as MinerConfig>::MaxLength::set(solution_size as u32 - 1);
+			let solution = MultiPhase::mine_solution().unwrap();
+			let max_length = <Runtime as MinerConfig>::MaxLength::get();
 			let solution_size = solution.0.solution.encoded_size();
 			assert!(solution_size <= max_length as usize);
 		});

@@ -1,0 +1,149 @@
+
+# This file is part of .gitlab-ci.yml
+# Here are all jobs that are executed during "publish" stage
+
+.build-push-docker-image:
+  extends:
+    - .build-refs
+    - .kubernetes-env
+  variables:
+    CI_IMAGE:                      quay.io/buildah/stable
+    GIT_STRATEGY:                  none
+    DOCKERFILE:                    $PRODUCT.Dockerfile
+    IMAGE_NAME:                    docker.io/parity/$PRODUCT
+  before_script:
+    - cd ./artifacts/$PRODUCT/
+    - VERSION="$(cat ./VERSION)"
+    - echo "${PRODUCT} version = ${VERSION}"
+    - test -z "${VERSION}" && exit 1
+  script:
+    - test "$Docker_Hub_User_Parity" -a "$Docker_Hub_Pass_Parity" ||
+        ( echo "no docker credentials provided"; exit 1 )
+    - buildah bud
+        --format=docker
+        --build-arg VCS_REF="${CI_COMMIT_SHA}"
+        --build-arg BUILD_DATE="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+        --tag "$IMAGE_NAME:$VERSION"
+        --tag "$IMAGE_NAME:latest"
+        --file "$DOCKERFILE" .
+    - echo "$Docker_Hub_Pass_Parity" |
+        buildah login --username "$Docker_Hub_User_Parity" --password-stdin docker.io
+    - buildah info
+    - buildah push --format=v2s2 "$IMAGE_NAME:$VERSION"
+    - buildah push --format=v2s2 "$IMAGE_NAME:latest"
+  after_script:
+    - buildah logout --all
+    - echo "SUBSTRATE_IMAGE_NAME=${IMAGE_NAME}" | tee -a ./artifacts/$PRODUCT/build.env
+    - IMAGE_TAG="$(cat ./artifacts/$PRODUCT/VERSION)"
+    - echo "SUBSTRATE_IMAGE_TAG=${IMAGE_TAG}"   | tee -a ./artifacts/$PRODUCT/build.env
+    - cat ./artifacts/$PRODUCT/build.env
+
+publish-docker-substrate:
+  stage:                           publish
+  extends:                         .build-push-docker-image
+  needs:
+    - job:                         build-linux-substrate
+      artifacts:                   true
+  variables:
+    PRODUCT:                       substrate
+
+publish-docker-subkey:
+  stage:                           publish
+  extends:                         .build-push-docker-image
+  needs:
+    - job:                         build-subkey-linux
+      artifacts:                   true
+  variables:
+    PRODUCT:                       subkey
+
+publish-s3-release:
+  stage:                           publish
+  extends:
+    - .build-refs
+    - .kubernetes-env
+  needs:
+    - job:                         build-linux-substrate
+      artifacts:                   true
+    - job:                         build-subkey-linux
+      artifacts:                   true
+  image:                           paritytech/awscli:latest
+  variables:
+    GIT_STRATEGY:                  none
+    BUCKET:                        "releases.parity.io"
+    PREFIX:                        "substrate/${ARCH}-${DOCKER_OS}"
+  script:
+    - aws s3 sync ./artifacts/ s3://${BUCKET}/${PREFIX}/$(cat ./artifacts/substrate/VERSION)/
+    - echo "update objects in latest path"
+    - aws s3 sync s3://${BUCKET}/${PREFIX}/$(cat ./artifacts/substrate/VERSION)/ s3://${BUCKET}/${PREFIX}/latest/
+  after_script:
+    - aws s3 ls s3://${BUCKET}/${PREFIX}/latest/
+        --recursive --human-readable --summarize
+
+publish-rustdoc:
+  stage:                           publish
+  extends:                         .kubernetes-env
+  variables:
+    CI_IMAGE:                      node:16
+    GIT_DEPTH:                     100
+    RUSTDOCS_DEPLOY_REFS:          "master"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "pipeline"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_REF_NAME == "master"
+    - if: $CI_COMMIT_REF_NAME == "master"
+    - if: $CI_COMMIT_REF_NAME =~ /^monthly-20[0-9]{2}-[0-9]{2}.*$/  # to support: monthly-2021-09+1
+    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
+  # `needs:` can be removed after CI image gets nonroot. In this case `needs:` stops other
+  # artifacts from being dowloaded by this job.
+  needs:
+    - job:                         build-rustdoc
+      artifacts:                   true
+  script:
+    # If $CI_COMMIT_REF_NAME doesn't match one of $RUSTDOCS_DEPLOY_REFS space-separated values, we
+    # exit immediately.
+    # Putting spaces at the front and back to ensure we are not matching just any substring, but the
+    # whole space-separated value.
+    - '[[ " ${RUSTDOCS_DEPLOY_REFS} " =~ " ${CI_COMMIT_REF_NAME} " ]] || exit 0'
+    # setup ssh
+    - eval $(ssh-agent)
+    - ssh-add - <<< ${GITHUB_SSH_PRIV_KEY}
+    - mkdir ~/.ssh && touch ~/.ssh/known_hosts
+    - ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
+    # Set git config
+    - git config user.email "devops-team@parity.io"
+    - git config user.name "${GITHUB_USER}"
+    - git config remote.origin.url "git@github.com:/paritytech/${CI_PROJECT_NAME}.git"
+    - git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
+    - git fetch origin gh-pages
+    # Save README and docs
+    - cp -r ./crate-docs/ /tmp/doc/
+    - cp README.md /tmp/doc/
+    # we don't need to commit changes because we copy docs to /tmp
+    - git checkout gh-pages --force
+    # Install `index-tpl-crud` and generate index.html based on RUSTDOCS_DEPLOY_REFS
+    - which index-tpl-crud &> /dev/null || yarn global add @substrate/index-tpl-crud
+    - index-tpl-crud upsert ./index.html ${CI_COMMIT_REF_NAME}
+    # Ensure the destination dir doesn't exist.
+    - rm -rf ${CI_COMMIT_REF_NAME}
+    - mv -f /tmp/doc ${CI_COMMIT_REF_NAME}
+    # Upload files
+    - git add --all
+    # `git commit` has an exit code of > 0 if there is nothing to commit.
+    # This causes GitLab to exit immediately and marks this job failed.
+    # We don't want to mark the entire job failed if there's nothing to
+    # publish though, hence the `|| true`.
+    - git commit -m "___Updated docs for ${CI_COMMIT_REF_NAME}___" ||
+        echo "___Nothing to commit___"
+    - git push origin gh-pages --force
+  after_script:
+    - rm -rf .git/ ./*
+
+publish-draft-release:
+  stage:                           publish
+  image:                           paritytech/tools:latest
+  rules:
+    - if: $CI_COMMIT_REF_NAME =~ /^ci-release-.*$/
+    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
+  script:
+    - ./scripts/ci/gitlab/publish_draft_release.sh
+  allow_failure:                   true
