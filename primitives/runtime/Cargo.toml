@@ -13,49 +13,48 @@ readme = "README.md"
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
-
 [dependencies]
-serde = { version = "1.0.136", optional = true, features = ["derive"] }
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive", "max-encoded-len"] }
-scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
-sp-core = { version = "6.0.0", default-features = false, path = "../core" }
-sp-application-crypto = { version = "6.0.0", default-features = false, path = "../application-crypto" }
-sp-arithmetic = { version = "5.0.0", default-features = false, path = "../arithmetic" }
-sp-std = { version = "4.0.0", default-features = false, path = "../std" }
-sp-io = { version = "6.0.0", default-features = false, path = "../io" }
+either = { version = "1.5", default-features = false }
+hash256-std-hasher = { version = "0.15.2", default-features = false }
+impl-trait-for-tuples = "0.2.2"
 log = { version = "0.4.16", default-features = false }
+parity-util-mem = { version = "0.11.0", default-features = false, features = ["primitive-types"] }
 paste = "1.0"
 rand = { version = "0.7.2", optional = true }
-impl-trait-for-tuples = "0.2.2"
-parity-util-mem = { version = "0.11.0", default-features = false, features = ["primitive-types"] }
-hash256-std-hasher = { version = "0.15.2", default-features = false }
-either = { version = "1.5", default-features = false }
+scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
+serde = { version = "1.0.136", features = ["derive"], optional = true }
+sp-application-crypto = { version = "6.0.0", default-features = false, path = "../application-crypto" }
+sp-arithmetic = { version = "5.0.0", default-features = false, path = "../arithmetic" }
+sp-core = { version = "6.0.0", default-features = false, path = "../core" }
+sp-io = { version = "6.0.0", default-features = false, path = "../io" }
+sp-std = { version = "4.0.0", default-features = false, path = "../std" }
 
 [dev-dependencies]
-serde_json = "1.0.79"
 rand = "0.7.2"
-sp-state-machine = { version = "0.12.0", path = "../state-machine" }
-sp-api = { version = "4.0.0-dev", path = "../api" }
-substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
-sp-tracing = { version = "5.0.0", path = "../../primitives/tracing" }
+serde_json = "1.0.79"
 zstd = { version = "0.10.0", default-features = false }
+sp-api = { version = "4.0.0-dev", path = "../api" }
+sp-state-machine = { version = "0.12.0", path = "../state-machine" }
+sp-tracing = { version = "5.0.0", path = "../../primitives/tracing" }
+substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
 
 [features]
 bench = []
 runtime-benchmarks = []
 default = ["std"]
 std = [
+	"codec/std",
+	"either/use_std",
+	"hash256-std-hasher/std",
+	"log/std",
+	"parity-util-mem/std",
+	"rand",
+	"scale-info/std",
+	"serde",
 	"sp-application-crypto/std",
 	"sp-arithmetic/std",
-	"codec/std",
-	"scale-info/std",
-	"log/std",
 	"sp-core/std",
-	"rand",
-	"sp-std/std",
 	"sp-io/std",
-	"serde",
-	"parity-util-mem/std",
-	"hash256-std-hasher/std",
-	"either/use_std",
+	"sp-std/std",
 ]

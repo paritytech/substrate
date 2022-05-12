@@ -15,30 +15,30 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = [
-    "derive",
+	"derive",
 ] }
-sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
-sc-executor = { version = "0.10.0-dev", path = "../executor" }
-sp-externalities = { version = "0.12.0", path = "../../primitives/externalities" }
 fnv = "1.0.6"
 futures = "0.3.21"
 hash-db = { version = "0.15.2", default-features = false }
-sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
 log = "0.4.16"
 parking_lot = "0.12.0"
-sp-database = { version = "4.0.0-dev", path = "../../primitives/database" }
-sp-core = { version = "6.0.0", default-features = false, path = "../../primitives/core" }
-sp-keystore = { version = "0.12.0", default-features = false, path = "../../primitives/keystore" }
-sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
+prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.10.0-dev", path = "../../utils/prometheus" }
+sc-executor = { version = "0.10.0-dev", path = "../executor" }
+sc-transaction-pool-api = { version = "4.0.0-dev", path = "../transaction-pool/api" }
 sc-utils = { version = "4.0.0-dev", path = "../utils" }
+sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
+sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
+sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
+sp-core = { version = "6.0.0", default-features = false, path = "../../primitives/core" }
+sp-database = { version = "4.0.0-dev", path = "../../primitives/database" }
+sp-externalities = { version = "0.12.0", path = "../../primitives/externalities" }
+sp-keystore = { version = "0.12.0", default-features = false, path = "../../primitives/keystore" }
 sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-state-machine = { version = "0.12.0", path = "../../primitives/state-machine" }
-sp-trie = { version = "6.0.0", path = "../../primitives/trie" }
 sp-storage = { version = "6.0.0", path = "../../primitives/storage" }
-sc-transaction-pool-api = { version = "4.0.0-dev", path = "../transaction-pool/api" }
-prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.10.0-dev", path = "../../utils/prometheus" }
+sp-trie = { version = "6.0.0", path = "../../primitives/trie" }
 
 [dev-dependencies]
+thiserror = "1.0.30"
 sp-test-primitives = { version = "2.0.0", path = "../../primitives/test-primitives" }
 substrate-test-runtime = { version = "2.0.0", path = "../../test-utils/runtime" }
-thiserror = "1.0.30"

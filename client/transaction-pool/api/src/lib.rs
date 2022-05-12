@@ -22,15 +22,16 @@
 pub mod error;
 
 use futures::{Future, Stream};
-use serde::{Deserialize, Serialize};
-pub use sp_runtime::transaction_validity::{
-	TransactionLongevity, TransactionPriority, TransactionSource, TransactionTag,
-};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Member, NumberFor},
 };
 use std::{collections::HashMap, hash::Hash, pin::Pin, sync::Arc};
+
+pub use sp_runtime::transaction_validity::{
+	TransactionLongevity, TransactionPriority, TransactionSource, TransactionTag,
+};
 
 /// Transaction pool status.
 #[derive(Debug)]
@@ -177,7 +178,7 @@ pub trait TransactionPool: Send + Sync {
 	/// Block type.
 	type Block: BlockT;
 	/// Transaction hash type.
-	type Hash: Hash + Eq + Member + Serialize;
+	type Hash: Hash + Eq + Member + Serialize + DeserializeOwned;
 	/// In-pool transaction type.
 	type InPoolTransaction: InPoolTransaction<
 		Transaction = TransactionFor<Self>,
@@ -350,7 +351,7 @@ impl<TPool: LocalTransactionPool> OffchainSubmitTransaction<TPool::Block> for TP
 			extrinsic
 		);
 
-		let result = self.submit_local(&at, extrinsic);
+		let result = self.submit_local(at, extrinsic);
 
 		result.map(|_| ()).map_err(|e| {
 			log::warn!(

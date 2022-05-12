@@ -25,9 +25,9 @@ use sp_runtime::{traits::Block as BlockT, DispatchError};
 use sp_std::{cmp::Ordering, prelude::*};
 
 #[doc(hidden)]
-pub const DEFENSIVE_OP_PUBLIC_ERROR: &'static str = "a defensive failure has been triggered; please report the block number at https://github.com/paritytech/substrate/issues";
+pub const DEFENSIVE_OP_PUBLIC_ERROR: &str = "a defensive failure has been triggered; please report the block number at https://github.com/paritytech/substrate/issues";
 #[doc(hidden)]
-pub const DEFENSIVE_OP_INTERNAL_ERROR: &'static str = "Defensive failure has been triggered!";
+pub const DEFENSIVE_OP_INTERNAL_ERROR: &str = "Defensive failure has been triggered!";
 
 /// Generic function to mark an execution path as ONLY defensive.
 ///
@@ -50,6 +50,16 @@ macro_rules! defensive {
 			$error
 		);
 		debug_assert!(false, "{}: {:?}", $crate::traits::DEFENSIVE_OP_INTERNAL_ERROR, $error);
+	};
+	($error:tt, $proof:tt) => {
+		frame_support::log::error!(
+			target: "runtime",
+			"{}: {:?}: {:?}",
+			$crate::traits::DEFENSIVE_OP_PUBLIC_ERROR,
+			$error,
+			$proof,
+		);
+		debug_assert!(false, "{}: {:?}: {:?}", $crate::traits::DEFENSIVE_OP_INTERNAL_ERROR, $error, $proof);
 	}
 }
 
@@ -102,6 +112,10 @@ pub trait Defensive<T> {
 	/// }
 	/// ```
 	fn defensive(self) -> Self;
+
+	/// Same as [`Defensive::defensive`], but it takes a proof as input, and displays it if the
+	/// defensive operation has been triggered.
+	fn defensive_proof(self, proof: &'static str) -> Self;
 }
 
 /// Subset of methods similar to [`Defensive`] that can only work for a `Result`.
@@ -184,6 +198,13 @@ impl<T> Defensive<T> for Option<T> {
 			},
 		}
 	}
+
+	fn defensive_proof(self, proof: &'static str) -> Self {
+		if self.is_none() {
+			defensive!(proof);
+		}
+		self
+	}
 }
 
 impl<T, E: sp_std::fmt::Debug> Defensive<T> for Result<T, E> {
@@ -225,6 +246,16 @@ impl<T, E: sp_std::fmt::Debug> Defensive<T> for Result<T, E> {
 			Ok(inner) => Ok(inner),
 			Err(e) => {
 				defensive!(e);
+				Err(e)
+			},
+		}
+	}
+
+	fn defensive_proof(self, proof: &'static str) -> Self {
+		match self {
+			Ok(inner) => Ok(inner),
+			Err(e) => {
+				defensive!(e, proof);
 				Err(e)
 			},
 		}

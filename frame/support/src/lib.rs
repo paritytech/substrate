@@ -105,7 +105,7 @@ use scale_info::TypeInfo;
 use sp_runtime::TypeId;
 
 /// A unified log target for support operations.
-pub const LOG_TARGET: &'static str = "runtime::frame-support";
+pub const LOG_TARGET: &str = "runtime::frame-support";
 
 /// A type that cannot be instantiated.
 #[derive(Encode, Decode, Debug, PartialEq, Eq, Clone, TypeInfo)]
