@@ -62,8 +62,7 @@ pub use weights::WeightInfo;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::transactional;
-	use frame_support::pallet_prelude::*;
+	use frame_support::{pallet_prelude::*, transactional};
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
@@ -378,10 +377,7 @@ pub mod pallet {
 			whitelisted_buyer: Option<T::AccountId>,
 		},
 		/// The price for the instance was removed.
-		InstancePriceRemoved {
-			class: T::ClassId,
-			instance: T::InstanceId,
-		},
+		InstancePriceRemoved { class: T::ClassId, instance: T::InstanceId },
 		/// An item was bought.
 		ItemBought {
 			class: T::ClassId,

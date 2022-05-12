@@ -684,13 +684,7 @@ fn set_price_should_work() {
 		}));
 
 		// validate we can unset the price
-		assert_ok!(Uniques::set_price(
-			Origin::signed(user_id),
-			collection_id,
-			item_2,
-			None,
-			None
-		));
+		assert_ok!(Uniques::set_price(Origin::signed(user_id), collection_id, item_2, None, None));
 		assert!(events().contains(&Event::<Test>::InstancePriceRemoved {
 			class: collection_id,
 			instance: item_2
