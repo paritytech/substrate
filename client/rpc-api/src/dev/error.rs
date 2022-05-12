@@ -57,6 +57,8 @@ impl From<Error> for JsonRpseeError {
 				CallError::Custom(ErrorObject::owned(BASE_ERROR + 3, msg, None::<()>)),
 			Error::WitnessCompactionFailed =>
 				CallError::Custom(ErrorObject::owned(BASE_ERROR + 4, msg, None::<()>)),
+			Error::ProofExtractionFailed =>
+				CallError::Custom(ErrorObject::owned(BASE_ERROR + 5, msg, None::<()>)),
 			Error::UnsafeRpcCalled(e) => e.into(),
 		}
 		.into()

@@ -35,18 +35,14 @@ sp-state-machine = { version = "0.12.0", path = "../../primitives/state-machine"
 sp-trie = { version = "6.0.0", path = "../../primitives/trie" }
 
 [dev-dependencies]
+criterion = "0.3.3"
 kvdb-rocksdb = "0.15.1"
+rand = "0.8.4"
+tempfile = "3.1.0"
 quickcheck = "1.0.3"
-tempfile = "3"
+node-runtime = { path = "../../bin/node/runtime" }
 sp-tracing = { version = "5.0.0", path = "../../primitives/tracing" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
-quickcheck = "1.0.3"
-kvdb-rocksdb = "0.15.1"
-tempfile = "3.1.0"
-criterion = "0.3.3"
-rand = "0.8.4"
-pprof = { version = "0.6.1", features = ["flamegraph", "criterion"] }
-node-runtime = { path = "../../bin/node/runtime" }
 
 [features]
 default = ["with-parity-db"]

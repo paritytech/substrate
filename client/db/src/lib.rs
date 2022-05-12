@@ -1190,11 +1190,7 @@ impl<Block: BlockT> Backend<Block> {
 						(&r.number, &r.hash)
 					);
 
-<<<<<<< variant A
-					return Err(sp_blockchain::Error::NotInFinalizedChain.into())
->>>>>>> variant B
-					return Err(::sp_blockchain::Error::NotInFinalizedChain)
-======= end
+					return Err(sp_blockchain::Error::NotInFinalizedChain)
 				}
 
 				retracted.push(r.hash);
@@ -1595,16 +1591,8 @@ impl<Block: BlockT> Backend<Block> {
 				let number = header.number();
 				let hash = header.hash();
 
-<<<<<<< variant A
-				self.set_head_with_transaction(
-					&mut transaction,
-					hash.clone(),
-					(number.clone(), hash.clone()),
-				)?;
->>>>>>> variant B
-				let (enacted, retracted) =
-					self.set_head_with_transaction(&mut transaction, hash, (*number, hash))?;
-======= end
+				self.set_head_with_transaction(&mut transaction, hash.clone(), (*number, hash))?;
+
 				meta_updates.push(MetaUpdate {
 					hash,
 					number: *number,
@@ -2213,15 +2201,11 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		};
 		if is_genesis {
 			if let Some(genesis_state) = &*self.genesis_state.read() {
-<<<<<<< variant A
 				let root = genesis_state.root.clone();
 				let db_state = DbStateBuilder::<Block>::new(genesis_state.clone(), root)
 					.with_optional_cache(self.shared_trie_cache.as_ref().map(|c| c.local_cache()))
 					.build();
 
->>>>>>> variant B
-				let db_state = DbState::<Block>::new(genesis_state.clone(), genesis_state.root);
-======= end
 				let state = RefTrackingState::new(db_state, self.storage.clone(), None);
 				return Ok(RecordStatsState::new(state, None, self.state_usage.clone()))
 			}
@@ -2244,28 +2228,13 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 				}
 				if let Ok(()) = self.storage.state_db.pin(&hash) {
 					let root = hdr.state_root;
-<<<<<<< variant A
 					let db_state = DbStateBuilder::<Block>::new(self.storage.clone(), root)
 						.with_optional_cache(
 							self.shared_trie_cache.as_ref().map(|c| c.local_cache()),
 						)
 						.build();
->>>>>>> variant B
-					let db_state = DbState::<Block>::new(self.storage.clone(), root);
-======= end
 					let state = RefTrackingState::new(db_state, self.storage.clone(), Some(hash));
-<<<<<<< variant A
 					Ok(RecordStatsState::new(state, Some(hash), self.state_usage.clone()))
->>>>>>> variant B
-					let caching_state =
-						CachingState::new(state, self.shared_cache.clone(), Some(hash));
-					Ok(SyncingCachingState::new(
-						caching_state,
-						self.state_usage.clone(),
-						self.blockchain.meta.clone(),
-						self.import_lock.clone(),
-					))
-======= end
 				} else {
 					Err(sp_blockchain::Error::UnknownBlock(format!(
 						"State already discarded for {:?}",
@@ -2441,16 +2410,9 @@ pub(crate) mod tests {
 
 		let backend = Backend::<Block>::new(
 			DatabaseSettings {
-<<<<<<< variant A
 				trie_cache_maximum_size: Some(16 * 1024 * 1024),
-				state_pruning: PruningMode::keep_blocks(1),
-				source: DatabaseSource::Custom(backing),
->>>>>>> variant B
-				state_cache_size: 16777216,
-				state_cache_child_ratio: Some((50, 100)),
 				state_pruning: Some(PruningMode::keep_blocks(1)),
 				source: DatabaseSource::Custom { db: backing, require_create_flag: false },
-======= end
 				keep_blocks: KeepBlocks::All,
 			},
 			0,

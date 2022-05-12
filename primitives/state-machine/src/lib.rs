@@ -1974,7 +1974,7 @@ mod tests {
 				backend.extract_proof().ok().flatten().expect("Failed to extract proof");
 			let remote_proof = test_compact(storage_proof, &trie_root);
 			let proof_check =
-				create_proof_check_backend::<BlakeTwo256>(*trie_root, remote_proof).unwrap();
+				create_proof_check_backend::<BlakeTwo256>(trie_root, remote_proof).unwrap();
 
 			for (child_info, key, expected) in queries {
 				assert_eq!(
