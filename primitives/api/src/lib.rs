@@ -506,10 +506,7 @@ pub trait ApiExt<Block: BlockT> {
 	/// This stops the proof recording.
 	///
 	/// If `record_proof` was not called before, this will return `None`.
-	fn extract_proof(
-		&mut self,
-		at: &BlockId<Block>,
-	) -> Result<Option<StorageProof>, ApiError>;
+	fn extract_proof(&mut self, at: &BlockId<Block>) -> Result<Option<StorageProof>, ApiError>;
 
 	/// Returns the current active proof recorder.
 	fn proof_recorder(&self) -> Option<ProofRecorder<Block>>;

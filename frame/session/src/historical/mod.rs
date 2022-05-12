@@ -40,7 +40,7 @@ use sp_staking::SessionIndex;
 use sp_std::prelude::*;
 use sp_trie::{
 	trie_types::{TrieDBBuilder, TrieDBMutBuilderV0},
-	MemoryDB, Recorder, Trie, TrieMut, EMPTY_PREFIX, LayoutV1,
+	LayoutV1, MemoryDB, Recorder, Trie, TrieMut, EMPTY_PREFIX,
 };
 
 use frame_support::{
@@ -280,9 +280,8 @@ impl<T: Config> ProvingTrie<T> {
 	pub fn prove(&self, key_id: KeyTypeId, key_data: &[u8]) -> Option<Vec<Vec<u8>>> {
 		let mut recorder = Recorder::<LayoutV1<_>>::new();
 		{
-			let trie = TrieDBBuilder::new(&self.db, &self.root)
-				.with_recorder(&mut recorder)
-				.build();
+			let trie =
+				TrieDBBuilder::new(&self.db, &self.root).with_recorder(&mut recorder).build();
 			let val_idx = (key_id, key_data).using_encoded(|s| {
 				trie.get(s).ok()?.and_then(|raw| u32::decode(&mut &*raw).ok())
 			})?;

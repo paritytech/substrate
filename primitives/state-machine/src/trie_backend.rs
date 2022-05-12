@@ -29,7 +29,7 @@ use sp_std::vec::Vec;
 use sp_trie::{cache::LocalTrieCache, recorder::Recorder};
 use sp_trie::{MemoryDB, StorageProof};
 
-/// Builder for creating a [`TrieBuilder`].
+/// Builder for creating a [`TrieBackend`].
 pub struct TrieBackendBuilder<S: TrieBackendStorage<H>, H: Hasher> {
 	storage: S,
 	root: H::Out,

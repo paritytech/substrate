@@ -18,7 +18,8 @@
 //! State machine in memory backend.
 
 use crate::{
-	backend::Backend, trie_backend::TrieBackend, StorageCollection, StorageKey, StorageValue, TrieBackendBuilder,
+	backend::Backend, trie_backend::TrieBackend, StorageCollection, StorageKey, StorageValue,
+	TrieBackendBuilder,
 };
 use codec::Codec;
 use hash_db::Hasher;

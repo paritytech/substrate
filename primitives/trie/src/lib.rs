@@ -253,7 +253,7 @@ where
 }
 
 /// Determine a trie root given a hash DB and delta values.
-pub fn delta_trie_root<'a, L: TrieConfiguration, I, A, B, DB, V>(
+pub fn delta_trie_root<L: TrieConfiguration, I, A, B, DB, V>(
 	db: &mut DB,
 	mut root: TrieHash<L>,
 	delta: I,

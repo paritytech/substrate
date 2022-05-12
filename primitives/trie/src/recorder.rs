@@ -148,8 +148,7 @@ impl<H: Hasher> Recorder<H> {
 		recorder
 			.accessed_keys
 			.values_mut()
-			.map(|v| v.values_mut())
-			.flatten()
+			.flat_map(|v| v.values_mut())
 			.for_each(|k| {
 				// Mark all trie nodes as recorded
 				k.trie_nodes_recorded = true;

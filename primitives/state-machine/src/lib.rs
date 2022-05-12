@@ -1924,8 +1924,7 @@ mod tests {
 			let trie: InMemoryBackend<BlakeTwo256> =
 				(storage.clone(), StateVersion::default()).into();
 			let trie_root = trie.root().clone();
-			let backend =
-				TrieBackendBuilder::wrap(&trie).with_recorder(Default::default()).build();
+			let backend = TrieBackendBuilder::wrap(&trie).with_recorder(Default::default()).build();
 			let mut queries = Vec::new();
 			for c in 0..(5 + nb_child_trie / 2) {
 				// random existing query

@@ -33,7 +33,10 @@ use sp_runtime::{
 use sp_state_machine::{
 	backend::Backend as StateBackend, ChildStorageCollection, DBValue, StorageCollection,
 };
-use sp_trie::{prefixed_key, MemoryDB, cache::{SharedTrieCache, Configuration}};
+use sp_trie::{
+	cache::{Configuration, SharedTrieCache},
+	prefixed_key, MemoryDB,
+};
 use std::{
 	cell::{Cell, RefCell},
 	collections::HashMap,
