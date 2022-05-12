@@ -167,7 +167,6 @@ pub fn new_full<BE, Block: BlockT, Client>(
 	client: Arc<Client>,
 	executor: SubscriptionTaskExecutor,
 	deny_unsafe: DenyUnsafe,
-	rpc_max_payload: Option<usize>,
 ) -> (StateApi<Block, Client>, ChildState<Block, Client>)
 where
 	Block: BlockT + 'static,
@@ -187,12 +186,9 @@ where
 		+ 'static,
 	Client::Api: Metadata<Block>,
 {
-	let child_backend = Box::new(self::state_full::FullState::new(
-		client.clone(),
-		executor.clone(),
-		rpc_max_payload,
-	));
-	let backend = Box::new(self::state_full::FullState::new(client, executor, rpc_max_payload));
+	let child_backend =
+		Box::new(self::state_full::FullState::new(client.clone(), executor.clone()));
+	let backend = Box::new(self::state_full::FullState::new(client, executor));
 	(StateApi { backend, deny_unsafe }, ChildState { backend: child_backend })
 }
 
