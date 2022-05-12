@@ -636,15 +636,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// have. If an account's balance is reduced below this, then it collapses to zero.
 	///
 	/// Emits `Created` event when successful.
-	///
 	pub(super) fn do_create(
 		id: T::AssetId,
 		min_balance: T::Balance,
 		owner: T::AccountId,
 		admin: T::AccountId,
-
 	) -> DispatchResult {
-
 		ensure!(!Asset::<T, I>::contains_key(id), Error::<T, I>::InUse);
 		ensure!(!min_balance.is_zero(), Error::<T, I>::MinBalanceZero);
 
@@ -671,7 +668,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Self::deposit_event(Event::Created { asset_id: id, creator: owner, owner: admin });
 		Ok(())
 	}
-
 
 	/// Create a new asset without taking a deposit.
 	///
@@ -872,12 +868,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// - `id`: The identifier of the asset to be frozen.
 	///
 	/// Emits `Frozen`.
-	///
-	pub(super) fn do_freeze_asset(
-		origin:T::AccountId,
-		id:T::AssetId,
-	) -> DispatchResult {
-
+	pub(super) fn do_freeze_asset(origin: T::AccountId, id: T::AssetId) -> DispatchResult {
 		Asset::<T, I>::try_mutate(id, |maybe_details| {
 			let d = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
 			ensure!(origin == d.freezer, Error::<T, I>::NoPermission);
@@ -886,17 +877,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 			Self::deposit_event(Event::<T, I>::AssetFrozen { asset_id: id });
 			Ok(())
-
-	    })
+		})
 	}
 	/// This fn do_tansfer_ownership
 	pub(super) fn do_tansfer_ownership(
 		origin: T::AccountId,
 		id: T::AssetId,
 		owner: T::AccountId,
-
 	) -> DispatchResult {
-
 		Asset::<T, I>::try_mutate(id, |maybe_details| {
 			let details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
 			ensure!(origin == details.owner, Error::<T, I>::NoPermission);
@@ -924,13 +912,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// - `id`: The identifier of the asset to be thawed.
 	///
 	/// Emits `Thawed`.
-	///
-	pub(super) fn do_thaw_asset(
-		origin: T::AccountId,
-		id: T::AssetId,
-
-	) -> DispatchResult {
-
+	pub(super) fn do_thaw_asset(origin: T::AccountId, id: T::AssetId) -> DispatchResult {
 		Asset::<T, I>::try_mutate(id, |maybe_details| {
 			let d = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
 			ensure!(origin == d.admin, Error::<T, I>::NoPermission);
@@ -943,12 +925,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 	/// This fn thaw
 	pub(super) fn do_thaw(
-		origin:T::AccountId,
-		id:T::AssetId,
+		origin: T::AccountId,
+		id: T::AssetId,
 		who: <T::Lookup as StaticLookup>::Source,
-
 	) -> DispatchResult {
-
 		let details = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
 		ensure!(origin == details.admin, Error::<T, I>::NoPermission);
 		let who = T::Lookup::lookup(who)?;
@@ -973,14 +953,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// - `delegate`: The account delegated permission to transfer asset.
 	///
 	/// Emits `ApprovalCancelled` on success.
-	///
 	pub(super) fn do_cancel_approval(
 		owner: T::AccountId,
 		id: T::AssetId,
 		delegate: T::AccountId,
-
 	) -> DispatchResult {
-
 		let mut d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
 		let approval =
 			Approvals::<T, I>::take((id, &owner, &delegate)).ok_or(Error::<T, I>::Unknown)?;
@@ -1002,14 +979,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// - `id`: The identifier of the asset to clear.
 	///
 	/// Emits `MetadataCleared`.
-	///
-	pub(super) fn do_clear_metadata(
-
-		origin: T::AccountId,
-		id: T::AssetId,
-
-	) -> DispatchResult {
-
+	pub(super) fn do_clear_metadata(origin: T::AccountId, id: T::AssetId) -> DispatchResult {
 		let d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
 		ensure!(origin == d.owner, Error::<T, I>::NoPermission);
 
@@ -1031,7 +1001,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// - `freezer`: The new Freezer of this asset.
 	///
 	/// Emits `TeamChanged`.
-	///
 	pub(super) fn do_set_team(
 		origin: T::AccountId,
 		id: T::AssetId,
@@ -1039,7 +1008,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		admin: T::AccountId,
 		freezer: T::AccountId,
 	) -> DispatchResult {
-
 		Asset::<T, I>::try_mutate(id, |maybe_details| {
 			let details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
 			ensure!(origin == details.owner, Error::<T, I>::NoPermission);
@@ -1061,14 +1029,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// - `who`: The account to be frozen.
 	///
 	/// Emits `Frozen`.
-	///
 	pub(super) fn do_freeze(
 		origin: T::AccountId,
-		id:T::AssetId,
+		id: T::AssetId,
 		who: <T::Lookup as StaticLookup>::Source,
-
-	)-> DispatchResult {
-
+	) -> DispatchResult {
 		let d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
 		ensure!(origin == d.freezer, Error::<T, I>::NoPermission);
 		let who = T::Lookup::lookup(who)?;

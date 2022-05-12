@@ -764,7 +764,6 @@ pub mod pallet {
 			let origin = ensure_signed(origin)?;
 
 			Self::do_freeze(origin, id, who)
-
 		}
 
 		/// Allow unprivileged transfers from an account again.
@@ -786,7 +785,6 @@ pub mod pallet {
 			let origin = ensure_signed(origin)?;
 
 			Self::do_thaw(origin, id, who)
-
 		}
 
 		/// Disallow further unprivileged transfers for the asset class.
@@ -805,8 +803,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
-			Self::do_freeze_asset(origin,id)
-
+			Self::do_freeze_asset(origin, id)
 		}
 
 		/// Allow unprivileged transfers for the asset again.
@@ -1114,7 +1111,6 @@ pub mod pallet {
 			let delegate = T::Lookup::lookup(delegate)?;
 
 			Self::do_cancel_approval(owner, id, delegate)
-
 		}
 
 		/// Cancel all of some asset approved for delegated transfer by a third-party account.
