@@ -247,8 +247,8 @@ where
 
 		Self::execute_checked_extrinsics_with_book_keeping(checked_extrinsics, *header.number());
 
-		#[cfg(feature = "background-signature-verification")]
 		// ensure that all background checks have been completed successfully.
+		#[cfg(feature = "background-signature-verification")]
 		if !signature_batching.verify() {
 			panic!("Signature verification failed.");
 		}
@@ -370,16 +370,13 @@ where
 	) -> impl Iterator<Item = (CheckedOf<Block::Extrinsic, Context>, Vec<u8>)> {
 		extrinsics.into_iter().map(|extrinsic| {
 			let encoded = extrinsic.encode();
+
 			#[cfg(feature = "background-signature-verification")]
-			match extrinsic.background_check(&Default::default()) {
-				Ok(checked_extrinsic) => (checked_extrinsic, encoded),
-				Err(e) => {
-					let err: &'static str = e.into();
-					panic!("{}", err)
-				},
-			}
+			let checked_extrinsic = extrinsic.background_check(&Default::default());
 			#[cfg(not(feature = "background-signature-verification"))]
-			match extrinsic.check(&Default::default()) {
+			let checked_extrinsic = extrinsic.check(&Default::default());
+
+			match checked_extrinsic {
 				Ok(checked_extrinsic) => (checked_extrinsic, encoded),
 				Err(e) => {
 					let err: &'static str = e.into();
@@ -410,8 +407,8 @@ where
 			// execute extrinsics
 			Self::execute_checked_extrinsics_with_book_keeping(checked_extrinsics, *header.number());
 
-			#[cfg(feature = "background-signature-verification")]
 			// ensure that all background checks have been completed successfully.
+			#[cfg(feature = "background-signature-verification")]
 			if !signature_batching.verify() {
 				panic!("Signature verification failed.");
 			}
