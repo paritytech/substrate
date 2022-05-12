@@ -13,34 +13,33 @@ readme = "README.md"
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
-
 [dependencies]
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = [
 	"derive",
 	"max-encoded-len",
 ] }
-scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
 integer-sqrt = "0.1.2"
-static_assertions = "1.1.0"
 num-traits = { version = "0.2.8", default-features = false }
-sp-std = { version = "4.0.0", default-features = false, path = "../std" }
-serde = { version = "1.0.136", optional = true, features = ["derive"] }
+scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
+serde = { version = "1.0.136", features = ["derive"], optional = true }
+static_assertions = "1.1.0"
 sp-debug-derive = { version = "4.0.0", default-features = false, path = "../debug-derive" }
+sp-std = { version = "4.0.0", default-features = false, path = "../std" }
 
 [dev-dependencies]
-rand = "0.7.2"
 criterion = "0.3"
 primitive-types = "0.11.1"
+rand = "0.7.2"
 
 [features]
 default = ["std"]
 std = [
 	"codec/std",
-	"scale-info/std",
 	"num-traits/std",
-	"sp-std/std",
+	"scale-info/std",
 	"serde",
 	"sp-debug-derive/std",
+	"sp-std/std",
 ]
 
 [[bench]]

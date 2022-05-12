@@ -38,12 +38,12 @@ mod prometheus_future;
 mod tests;
 
 /// Default task group name.
-pub const DEFAULT_GROUP_NAME: &'static str = "default";
+pub const DEFAULT_GROUP_NAME: &str = "default";
 
 /// The name of a group a task belongs to.
 ///
 /// This name is passed belong-side the task name to the prometheus metrics and can be used
-/// to group tasks.  
+/// to group tasks.
 pub enum GroupName {
 	/// Sets the group name to `default`.
 	Default,

@@ -83,7 +83,7 @@ pub trait Currency<AccountId> {
 	/// This is just the same as burning and issuing the same amount and has no effect on the
 	/// total issuance.
 	fn pair(amount: Self::Balance) -> (Self::PositiveImbalance, Self::NegativeImbalance) {
-		(Self::burn(amount.clone()), Self::issue(amount))
+		(Self::burn(amount), Self::issue(amount))
 	}
 
 	/// The 'free' balance of a given account.

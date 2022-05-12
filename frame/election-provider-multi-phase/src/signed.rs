@@ -18,9 +18,9 @@
 //! The signed phase implementation.
 
 use crate::{
-	Config, ElectionCompute, Pallet, QueuedSolution, RawSolution, ReadySolution,
-	SignedSubmissionIndices, SignedSubmissionNextIndex, SignedSubmissionsMap, SolutionOf,
-	SolutionOrSnapshotSize, Weight, WeightInfo,
+	unsigned::MinerConfig, Config, ElectionCompute, Pallet, QueuedSolution, RawSolution,
+	ReadySolution, SignedSubmissionIndices, SignedSubmissionNextIndex, SignedSubmissionsMap,
+	SolutionOf, SolutionOrSnapshotSize, Weight, WeightInfo,
 };
 use codec::{Decode, Encode, HasCompact};
 use frame_election_provider_support::NposSolution;
@@ -38,6 +38,7 @@ use sp_std::{
 	cmp::Ordering,
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
 	ops::Deref,
+	vec::Vec,
 };
 
 /// A raw, unchecked signed submission.
@@ -51,8 +52,8 @@ pub struct SignedSubmission<AccountId, Balance: HasCompact, Solution> {
 	pub deposit: Balance,
 	/// The raw solution itself.
 	pub raw_solution: RawSolution<Solution>,
-	/// The reward that should potentially be paid for this solution, if accepted.
-	pub reward: Balance,
+	// The estimated fee `who` paid to submit the solution.
+	pub call_fee: Balance,
 }
 
 impl<AccountId, Balance, Solution> Ord for SignedSubmission<AccountId, Balance, Solution>
@@ -92,8 +93,11 @@ pub type PositiveImbalanceOf<T> = <<T as Config>::Currency as Currency<
 pub type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
 	<T as frame_system::Config>::AccountId,
 >>::NegativeImbalance;
-pub type SignedSubmissionOf<T> =
-	SignedSubmission<<T as frame_system::Config>::AccountId, BalanceOf<T>, SolutionOf<T>>;
+pub type SignedSubmissionOf<T> = SignedSubmission<
+	<T as frame_system::Config>::AccountId,
+	BalanceOf<T>,
+	<<T as crate::Config>::MinerConfig as MinerConfig>::Solution,
+>;
 
 pub type SubmissionIndicesOf<T> =
 	BoundedBTreeMap<ElectionScore, u32, <T as Config>::SignedMaxSubmissions>;
@@ -235,20 +239,33 @@ impl<T: Config> SignedSubmissions<T> {
 	}
 
 	/// Empty the set of signed submissions, returning an iterator of signed submissions in
-	/// arbitrary order.
+	/// order of submission.
 	///
 	/// Note that if the iterator is dropped without consuming all elements, not all may be removed
 	/// from the underlying `SignedSubmissionsMap`, putting the storages into an invalid state.
 	///
 	/// Note that, like `put`, this function consumes `Self` and modifies storage.
-	fn drain(mut self) -> impl Iterator<Item = SignedSubmissionOf<T>> {
+	fn drain_submitted_order(mut self) -> impl Iterator<Item = SignedSubmissionOf<T>> {
+		let mut keys = SignedSubmissionsMap::<T>::iter_keys()
+			.filter(|k| {
+				if self.deletion_overlay.contains(k) {
+					// Remove submissions that should be deleted.
+					SignedSubmissionsMap::<T>::remove(k);
+					false
+				} else {
+					true
+				}
+			})
+			.chain(self.insertion_overlay.keys().copied())
+			.collect::<Vec<_>>();
+		keys.sort();
+
 		SignedSubmissionIndices::<T>::kill();
 		SignedSubmissionNextIndex::<T>::kill();
-		let insertion_overlay = sp_std::mem::take(&mut self.insertion_overlay);
-		SignedSubmissionsMap::<T>::drain()
-			.filter(move |(k, _v)| !self.deletion_overlay.contains(k))
-			.map(|(_k, v)| v)
-			.chain(insertion_overlay.into_iter().map(|(_k, v)| v))
+
+		keys.into_iter().filter_map(move |index| {
+			SignedSubmissionsMap::<T>::take(index).or_else(|| self.insertion_overlay.remove(&index))
+		})
 	}
 
 	/// Decode the length of the signed submissions without actually reading the entire struct into
@@ -291,7 +308,7 @@ impl<T: Config> SignedSubmissions<T> {
 					None => return InsertResult::NotInserted,
 					Some((score, _)) => *score,
 				};
-				let threshold = T::SolutionImprovementThreshold::get();
+				let threshold = T::BetterSignedThreshold::get();
 
 				// if we haven't improved on the weakest score, don't change anything.
 				if !insert_score.strict_threshold_better(weakest_score, threshold) {
@@ -362,7 +379,7 @@ impl<T: Config> Pallet<T> {
 			Self::snapshot_metadata().unwrap_or_default();
 
 		while let Some(best) = all_submissions.pop_last() {
-			let SignedSubmission { raw_solution, who, deposit, reward } = best;
+			let SignedSubmission { raw_solution, who, deposit, call_fee } = best;
 			let active_voters = raw_solution.solution.voter_count() as u32;
 			let feasibility_weight = {
 				// defensive only: at the end of signed phase, snapshot will exits.
@@ -377,7 +394,7 @@ impl<T: Config> Pallet<T> {
 						ready_solution,
 						&who,
 						deposit,
-						reward,
+						call_fee,
 					);
 					found_solution = true;
 
@@ -396,10 +413,23 @@ impl<T: Config> Pallet<T> {
 		// Any unprocessed solution is pointless to even consider. Feasible or malicious,
 		// they didn't end up being used. Unreserve the bonds.
 		let discarded = all_submissions.len();
-		for SignedSubmission { who, deposit, .. } in all_submissions.drain() {
+		let mut refund_count = 0;
+		let max_refunds = T::SignedMaxRefunds::get();
+
+		for SignedSubmission { who, deposit, call_fee, .. } in
+			all_submissions.drain_submitted_order()
+		{
+			if refund_count < max_refunds {
+				// Refund fee
+				let positive_imbalance = T::Currency::deposit_creating(&who, call_fee);
+				T::RewardHandler::on_unbalanced(positive_imbalance);
+				refund_count += 1;
+			}
+
+			// Unreserve deposit
 			let _remaining = T::Currency::unreserve(&who, deposit);
-			weight = weight.saturating_add(T::DbWeight::get().writes(1));
 			debug_assert!(_remaining.is_zero());
+			weight = weight.saturating_add(T::DbWeight::get().reads_writes(1, 2));
 		}
 
 		debug_assert!(!SignedSubmissionIndices::<T>::exists());
@@ -424,20 +454,22 @@ impl<T: Config> Pallet<T> {
 		ready_solution: ReadySolution<T::AccountId>,
 		who: &T::AccountId,
 		deposit: BalanceOf<T>,
-		reward: BalanceOf<T>,
+		call_fee: BalanceOf<T>,
 	) {
 		// write this ready solution.
 		<QueuedSolution<T>>::put(ready_solution);
 
+		let reward = T::SignedRewardBase::get();
 		// emit reward event
 		Self::deposit_event(crate::Event::Rewarded { account: who.clone(), value: reward });
 
-		// unreserve deposit.
+		// Unreserve deposit.
 		let _remaining = T::Currency::unreserve(who, deposit);
 		debug_assert!(_remaining.is_zero());
 
-		// Reward.
-		let positive_imbalance = T::Currency::deposit_creating(who, reward);
+		// Reward and refund the call fee.
+		let positive_imbalance =
+			T::Currency::deposit_creating(who, reward.saturating_add(call_fee));
 		T::RewardHandler::on_unbalanced(positive_imbalance);
 	}
 
@@ -453,12 +485,12 @@ impl<T: Config> Pallet<T> {
 		T::SlashHandler::on_unbalanced(negative_imbalance);
 	}
 
-	/// The feasibility weight of the given raw solution.
-	pub fn feasibility_weight_of(
-		raw_solution: &RawSolution<SolutionOf<T>>,
+	/// The weight of the given raw solution.
+	pub fn solution_weight_of(
+		raw_solution: &RawSolution<SolutionOf<T::MinerConfig>>,
 		size: SolutionOrSnapshotSize,
 	) -> Weight {
-		T::WeightInfo::feasibility_check(
+		T::MinerConfig::solution_weight(
 			size.voters,
 			size.targets,
 			raw_solution.solution.voter_count() as u32,
@@ -474,12 +506,12 @@ impl<T: Config> Pallet<T> {
 	/// 2. a per-byte deposit, for renting the state usage.
 	/// 3. a per-weight deposit, for the potential weight usage in an upcoming on_initialize
 	pub fn deposit_for(
-		raw_solution: &RawSolution<SolutionOf<T>>,
+		raw_solution: &RawSolution<SolutionOf<T::MinerConfig>>,
 		size: SolutionOrSnapshotSize,
 	) -> BalanceOf<T> {
 		let encoded_len: u32 = raw_solution.encoded_size().saturated_into();
 		let encoded_len: BalanceOf<T> = encoded_len.into();
-		let feasibility_weight = Self::feasibility_weight_of(raw_solution, size);
+		let feasibility_weight = Self::solution_weight_of(raw_solution, size);
 
 		let len_deposit = T::SignedDepositByte::get().saturating_mul(encoded_len);
 		let weight_deposit =
@@ -496,10 +528,10 @@ mod tests {
 	use super::*;
 	use crate::{
 		mock::{
-			balances, raw_solution, roll_to, ExtBuilder, MultiPhase, Origin, Runtime,
-			SignedMaxSubmissions, SignedMaxWeight,
+			balances, raw_solution, roll_to, Balances, ExtBuilder, MockedWeightInfo, MultiPhase,
+			Origin, Runtime, SignedMaxRefunds, SignedMaxSubmissions, SignedMaxWeight,
 		},
-		Error, Phase,
+		Error, Perbill, Phase,
 	};
 	use frame_support::{assert_noop, assert_ok, assert_storage_noop};
 
@@ -599,8 +631,8 @@ mod tests {
 
 			// 99 is rewarded.
 			assert_eq!(balances(&99), (100 + 7 + 8, 0));
-			// 999 gets everything back.
-			assert_eq!(balances(&999), (100, 0));
+			// 999 gets everything back, including the call fee.
+			assert_eq!(balances(&999), (100 + 8, 0));
 		})
 	}
 
@@ -633,18 +665,107 @@ mod tests {
 	}
 
 	#[test]
+	fn call_fee_refund_is_limited_by_signed_max_refunds() {
+		ExtBuilder::default().build_and_execute(|| {
+			roll_to(15);
+			assert!(MultiPhase::current_phase().is_signed());
+			assert_eq!(SignedMaxRefunds::get(), 1);
+			assert!(SignedMaxSubmissions::get() > 2);
+
+			for s in 0..SignedMaxSubmissions::get() {
+				let account = 99 + s as u64;
+				Balances::make_free_balance_be(&account, 100);
+				// score is always decreasing
+				let mut solution = raw_solution();
+				solution.score.minimal_stake -= s as u128;
+
+				assert_ok!(MultiPhase::submit(Origin::signed(account), Box::new(solution)));
+				assert_eq!(balances(&account), (95, 5));
+			}
+
+			assert!(MultiPhase::finalize_signed_phase());
+
+			for s in 0..SignedMaxSubmissions::get() {
+				let account = 99 + s as u64;
+				// lower accounts have higher scores
+				if s == 0 {
+					// winning solution always gets call fee + reward
+					assert_eq!(balances(&account), (100 + 8 + 7, 0))
+				} else if s == 1 {
+					// 1 runner up gets their call fee refunded
+					assert_eq!(balances(&account), (100 + 8, 0))
+				} else {
+					// all other solutions don't get a call fee refund
+					assert_eq!(balances(&account), (100, 0));
+				}
+			}
+		});
+	}
+
+	#[test]
+	fn cannot_submit_worse_with_full_queue_depends_on_threshold() {
+		ExtBuilder::default()
+			.signed_max_submission(1)
+			.better_signed_threshold(Perbill::from_percent(20))
+			.build_and_execute(|| {
+				roll_to(15);
+				assert!(MultiPhase::current_phase().is_signed());
+
+				let mut solution = RawSolution {
+					score: ElectionScore {
+						minimal_stake: 5u128,
+						sum_stake: 0u128,
+						sum_stake_squared: 10u128,
+					},
+					..Default::default()
+				};
+				assert_ok!(MultiPhase::submit(Origin::signed(99), Box::new(solution)));
+
+				// This is 10% better, so does not meet the 20% threshold and is therefore rejected.
+				solution = RawSolution {
+					score: ElectionScore {
+						minimal_stake: 5u128,
+						sum_stake: 0u128,
+						sum_stake_squared: 9u128,
+					},
+					..Default::default()
+				};
+
+				assert_noop!(
+					MultiPhase::submit(Origin::signed(99), Box::new(solution)),
+					Error::<Runtime>::SignedQueueFull,
+				);
+
+				// This is however 30% better and should therefore be accepted.
+				solution = RawSolution {
+					score: ElectionScore {
+						minimal_stake: 5u128,
+						sum_stake: 0u128,
+						sum_stake_squared: 7u128,
+					},
+					..Default::default()
+				};
+
+				assert_ok!(MultiPhase::submit(Origin::signed(99), Box::new(solution)));
+			})
+	}
+
+	#[test]
 	fn weakest_is_removed_if_better_provided() {
 		ExtBuilder::default().build_and_execute(|| {
 			roll_to(15);
 			assert!(MultiPhase::current_phase().is_signed());
 
 			for s in 0..SignedMaxSubmissions::get() {
+				let account = 99 + s as u64;
+				Balances::make_free_balance_be(&account, 100);
 				// score is always getting better
 				let solution = RawSolution {
 					score: ElectionScore { minimal_stake: (5 + s).into(), ..Default::default() },
 					..Default::default()
 				};
-				assert_ok!(MultiPhase::submit(Origin::signed(99), Box::new(solution)));
+				assert_ok!(MultiPhase::submit(Origin::signed(account), Box::new(solution)));
+				assert_eq!(balances(&account), (95, 5));
 			}
 
 			assert_eq!(
@@ -660,7 +781,7 @@ mod tests {
 				score: ElectionScore { minimal_stake: 20, ..Default::default() },
 				..Default::default()
 			};
-			assert_ok!(MultiPhase::submit(Origin::signed(99), Box::new(solution)));
+			assert_ok!(MultiPhase::submit(Origin::signed(999), Box::new(solution)));
 
 			// the one with score 5 was rejected, the new one inserted.
 			assert_eq!(
@@ -670,6 +791,9 @@ mod tests {
 					.collect::<Vec<_>>(),
 				vec![6, 7, 8, 9, 20]
 			);
+
+			// the submitter of the ejected solution does *not* get a call fee refund
+			assert_eq!(balances(&(99 + 0)), (100, 0));
 		})
 	}
 
@@ -825,8 +949,8 @@ mod tests {
 			assert_eq!(balances(&99), (100 + 7 + 8, 0));
 			// 999 is slashed.
 			assert_eq!(balances(&999), (95, 0));
-			// 9999 gets everything back.
-			assert_eq!(balances(&9999), (100, 0));
+			// 9999 gets everything back, including the call fee.
+			assert_eq!(balances(&9999), (100 + 8, 0));
 		})
 	}
 
@@ -834,14 +958,13 @@ mod tests {
 	fn cannot_consume_too_much_future_weight() {
 		ExtBuilder::default()
 			.signed_weight(40)
-			.mock_weight_info(true)
+			.mock_weight_info(MockedWeightInfo::Basic)
 			.build_and_execute(|| {
 				roll_to(15);
 				assert!(MultiPhase::current_phase().is_signed());
 
-				let (raw, witness) =
-					MultiPhase::mine_solution::<<Runtime as Config>::Solver>().unwrap();
-				let solution_weight = <Runtime as Config>::WeightInfo::feasibility_check(
+				let (raw, witness) = MultiPhase::mine_solution().unwrap();
+				let solution_weight = <Runtime as MinerConfig>::solution_weight(
 					witness.voters,
 					witness.targets,
 					raw.solution.voter_count() as u32,

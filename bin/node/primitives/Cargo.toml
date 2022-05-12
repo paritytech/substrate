@@ -24,8 +24,8 @@ sp-runtime = { version = "6.0.0", default-features = false, path = "../../../pri
 default = ["std"]
 std = [
 	"codec/std",
-	"scale-info/std",
 	"frame-system/std",
+	"scale-info/std",
 	"sp-application-crypto/std",
 	"sp-core/std",
 	"sp-runtime/std",

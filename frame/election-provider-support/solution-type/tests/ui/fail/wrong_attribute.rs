@@ -5,6 +5,7 @@ generate_solution_type!(
 		VoterIndex = u8,
 		TargetIndex = u16,
 		Accuracy = Perbill,
+		MaxVoters = ConstU32::<10>,
 	>(8)
 );
 

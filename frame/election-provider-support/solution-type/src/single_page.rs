@@ -28,11 +28,12 @@ pub(crate) fn generate(def: crate::SolutionDef) -> Result<TokenStream2> {
 		voter_type,
 		target_type,
 		weight_type,
+		max_voters,
 		compact_encoding,
 	} = def;
 
 	if count <= 2 {
-		Err(syn_err("cannot build solution struct with capacity less than 3."))?
+		return Err(syn_err("cannot build solution struct with capacity less than 3."))
 	}
 
 	let single = {
@@ -123,6 +124,11 @@ pub(crate) fn generate(def: crate::SolutionDef) -> Result<TokenStream2> {
 					for<'r> FV: Fn(&'r A) -> Option<Self::VoterIndex>,
 					for<'r> FT: Fn(&'r A) -> Option<Self::TargetIndex>,
 			{
+				// Make sure that the voter bound is binding.
+				// `assignments.len()` actually represents the number of voters
+				if assignments.len() as u32 > <#max_voters as _feps::Get<u32>>::get() {
+					return Err(_feps::Error::TooManyVoters);
+				}
 				let mut #struct_name: #ident = Default::default();
 				for _feps::Assignment { who, distribution } in assignments {
 					match distribution.len() {
@@ -133,6 +139,7 @@ pub(crate) fn generate(def: crate::SolutionDef) -> Result<TokenStream2> {
 						}
 					}
 				};
+
 				Ok(#struct_name)
 			}
 
@@ -178,6 +185,27 @@ pub(crate) fn generate(def: crate::SolutionDef) -> Result<TokenStream2> {
 			<#ident as _feps::NposSolution>::TargetIndex,
 			<#ident as _feps::NposSolution>::Accuracy,
 		>;
+		impl _feps::codec::MaxEncodedLen for #ident {
+			fn max_encoded_len() -> usize {
+				use frame_support::traits::Get;
+				use _feps::codec::Encode;
+				let s: u32 = #max_voters::get();
+				let max_element_size =
+					// the first voter..
+					#voter_type::max_encoded_len()
+					// #count - 1 tuples..
+					.saturating_add(
+						(#count - 1).saturating_mul(
+							#target_type::max_encoded_len().saturating_add(#weight_type::max_encoded_len())))
+					// and the last target.
+					.saturating_add(#target_type::max_encoded_len());
+				// The assumption is that it contains #count-1 empty elements
+				// and then last element with full size
+				#count
+					.saturating_mul(_feps::codec::Compact(0u32).encoded_size())
+					.saturating_add((s as usize).saturating_mul(max_element_size))
+			}
+		}
 		impl<'a> _feps::sp_std::convert::TryFrom<&'a [__IndexAssignment]> for #ident {
 			type Error = _feps::Error;
 			fn try_from(index_assignments: &'a [__IndexAssignment]) -> Result<Self, Self::Error> {

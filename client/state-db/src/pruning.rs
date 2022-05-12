@@ -76,7 +76,7 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 		db: &D,
 		count_insertions: bool,
 	) -> Result<RefWindow<BlockHash, Key>, Error<D::Error>> {
-		let last_pruned = db.get_meta(&to_meta_key(LAST_PRUNED, &())).map_err(|e| Error::Db(e))?;
+		let last_pruned = db.get_meta(&to_meta_key(LAST_PRUNED, &())).map_err(Error::Db)?;
 		let pending_number: u64 = match last_pruned {
 			Some(buffer) => u64::decode(&mut buffer.as_slice())? + 1,
 			None => 0,
@@ -94,7 +94,7 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 		trace!(target: "state-db", "Reading pruning journal. Pending #{}", pending_number);
 		loop {
 			let journal_key = to_journal_key(block);
-			match db.get_meta(&journal_key).map_err(|e| Error::Db(e))? {
+			match db.get_meta(&journal_key).map_err(Error::Db)? {
 				Some(record) => {
 					let record: JournalRecord<BlockHash, Key> =
 						Decode::decode(&mut record.as_slice())?;
@@ -208,7 +208,7 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 			trace!(target: "state-db", "Applying pruning {:?} ({} deleted)", pruned.hash, pruned.deleted.len());
 			if self.count_insertions {
 				for k in pruned.deleted.iter() {
-					self.death_index.remove(&k);
+					self.death_index.remove(k);
 				}
 			}
 			self.pending_number += 1;

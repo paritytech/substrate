@@ -556,7 +556,7 @@ mod tests {
 				for (x, y) in input.iter().rev() {
 					t.insert(x, y).unwrap();
 				}
-				t.root().clone()
+				*t.root()
 			};
 			assert_eq!(closed_form, persistent);
 		}
@@ -750,7 +750,7 @@ mod tests {
 			memtrie.commit();
 			if *memtrie.root() != real {
 				println!("TRIE MISMATCH");
-				println!("");
+				println!();
 				println!("{:?} vs {:?}", memtrie.root(), real);
 				for i in &x {
 					println!("{:#x?} -> {:#x?}", i.0, i.1);
@@ -762,7 +762,7 @@ mod tests {
 			let hashed_null_node = hashed_null_node::<L>();
 			if *memtrie.root() != hashed_null_node {
 				println!("- TRIE MISMATCH");
-				println!("");
+				println!();
 				println!("{:?} vs {:?}", memtrie.root(), hashed_null_node);
 				for i in &x {
 					println!("{:#x?} -> {:#x?}", i.0, i.1);

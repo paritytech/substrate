@@ -76,7 +76,7 @@ pub struct SharedParams {
 	pub tracing_targets: Option<String>,
 
 	/// Receiver to process tracing messages.
-	#[clap(long, value_name = "RECEIVER", arg_enum, ignore_case = true, default_value = "Log")]
+	#[clap(long, value_name = "RECEIVER", arg_enum, ignore_case = true, default_value = "log")]
 	pub tracing_receiver: TracingReceiver,
 }
 
@@ -126,7 +126,7 @@ impl SharedParams {
 
 	/// Receiver to process tracing messages.
 	pub fn tracing_receiver(&self) -> sc_service::TracingReceiver {
-		self.tracing_receiver.clone().into()
+		self.tracing_receiver.into()
 	}
 
 	/// Comma separated list of targets for tracing.

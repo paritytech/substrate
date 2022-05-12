@@ -96,7 +96,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 		let mut state = BenchmarkingState {
 			state: RefCell::new(None),
 			db: Cell::new(None),
-			root: Cell::new(root.clone()),
+			root: Cell::new(root),
 			genesis: Default::default(),
 			genesis_root: Default::default(),
 			record: Default::default(),
@@ -104,7 +104,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 			child_key_tracker: Default::default(),
 			whitelist: Default::default(),
 			proof_recorder: record_proof.then(Default::default),
-			proof_recorder_root: Cell::new(root.clone()),
+			proof_recorder_root: Cell::new(root),
 			enable_tracking,
 			// Enable the cache, but do not sync anything to the shared state.
 			shared_trie_cache: SharedTrieCache::new(Configuration { maximum_size_in_bytes: 0 }),
@@ -126,7 +126,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 				state_version,
 			);
 		state.genesis = transaction.clone().drain();
-		state.genesis_root = root.clone();
+		state.genesis_root = root;
 		state.commit(root, transaction, Vec::new(), Vec::new())?;
 		state.record.take();
 		Ok(state)
@@ -181,9 +181,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 		let mut main_key_tracker = self.main_key_tracker.borrow_mut();
 
 		let key_tracker = if let Some(childtrie) = childtrie {
-			child_key_tracker
-				.entry(childtrie.to_vec())
-				.or_insert_with(|| LinkedHashMap::new())
+			child_key_tracker.entry(childtrie.to_vec()).or_insert_with(LinkedHashMap::new)
 		} else {
 			&mut main_key_tracker
 		};
@@ -224,9 +222,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 		let mut main_key_tracker = self.main_key_tracker.borrow_mut();
 
 		let key_tracker = if let Some(childtrie) = childtrie {
-			child_key_tracker
-				.entry(childtrie.to_vec())
-				.or_insert_with(|| LinkedHashMap::new())
+			child_key_tracker.entry(childtrie.to_vec()).or_insert_with(LinkedHashMap::new)
 		} else {
 			&mut main_key_tracker
 		};
@@ -497,7 +493,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 			self.db.set(Some(db));
 		}
 
-		self.root.set(self.genesis_root.clone());
+		self.root.set(self.genesis_root);
 		self.reopen()?;
 		self.wipe_tracker();
 		Ok(())

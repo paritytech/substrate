@@ -154,7 +154,7 @@ pub mod registration {
 		B: BlockT,
 		C: IndexedBody<B>,
 	{
-		let parent_number = client.number(parent.clone())?.unwrap_or(Zero::zero());
+		let parent_number = client.number(*parent)?.unwrap_or(Zero::zero());
 		let number = parent_number
 			.saturating_add(One::one())
 			.saturating_sub(DEFAULT_STORAGE_PERIOD.into());
@@ -214,10 +214,10 @@ pub mod registration {
 				trie.commit();
 			}
 			if target_chunk.is_some() && target_root == Default::default() {
-				target_root = transaction_root.clone();
+				target_root = transaction_root;
 				chunk_proof = sp_trie::generate_trie_proof::<TrieLayout, _, _, _>(
 					&db,
-					transaction_root.clone(),
+					transaction_root,
 					&[target_chunk_key.clone()],
 				)
 				.map_err(|e| Error::Application(Box::new(e)))?;

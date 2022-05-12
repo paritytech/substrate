@@ -119,12 +119,14 @@ pub enum Error {
 	SolutionTargetOverflow,
 	/// One of the index functions returned none.
 	SolutionInvalidIndex,
-	/// One of the page indices was invalid
+	/// One of the page indices was invalid.
 	SolutionInvalidPageIndex,
 	/// An error occurred in some arithmetic operation.
 	ArithmeticError(&'static str),
 	/// The data provided to create support map was invalid.
 	InvalidSupportEdge,
+	/// The number of voters is bigger than the `MaxVoters` bound.
+	TooManyVoters,
 }
 
 /// A type which is used in the API of this crate as a numeric weight of a vote, most often the
@@ -454,8 +456,8 @@ pub fn to_support_map<AccountId: IdentifierT>(
 	let mut supports = <BTreeMap<AccountId, Support<AccountId>>>::new();
 
 	// build support struct.
-	for StakedAssignment { who, distribution } in assignments.into_iter() {
-		for (c, weight_extended) in distribution.into_iter() {
+	for StakedAssignment { who, distribution } in assignments.iter() {
+		for (c, weight_extended) in distribution.iter() {
 			let mut support = supports.entry(c.clone()).or_default();
 			support.total = support.total.saturating_add(*weight_extended);
 			support.voters.push((who.clone(), *weight_extended));

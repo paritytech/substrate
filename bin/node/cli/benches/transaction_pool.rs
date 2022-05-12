@@ -64,7 +64,7 @@ fn new_node(tokio_handle: Handle) -> node_cli::service::NewFullBase {
 		keystore_remote: Default::default(),
 		database: DatabaseSource::RocksDb { path: root.join("db"), cache_size: 128 },
 		trie_cache_maximum_size: Some(64 * 1024 * 1024),
-		state_pruning: PruningMode::ArchiveAll,
+		state_pruning: Some(PruningMode::ArchiveAll),
 		keep_blocks: KeepBlocks::All,
 		chain_spec: spec,
 		wasm_method: WasmExecutionMethod::Interpreted,
@@ -83,6 +83,10 @@ fn new_node(tokio_handle: Handle) -> node_cli::service::NewFullBase {
 		rpc_cors: None,
 		rpc_methods: Default::default(),
 		rpc_max_payload: None,
+		rpc_max_request_size: None,
+		rpc_max_response_size: None,
+		rpc_id_provider: None,
+		rpc_max_subs_per_conn: None,
 		ws_max_out_buffer_capacity: None,
 		prometheus_config: None,
 		telemetry_endpoints: None,
@@ -101,7 +105,7 @@ fn new_node(tokio_handle: Handle) -> node_cli::service::NewFullBase {
 		wasm_runtime_overrides: None,
 	};
 
-	node_cli::service::new_full_base(config, |_, _| ()).expect("Creates node")
+	node_cli::service::new_full_base(config, false, |_, _| ()).expect("Creates node")
 }
 
 fn create_accounts(num: usize) -> Vec<sr25519::Pair> {
@@ -125,7 +129,7 @@ fn create_account_extrinsics(
 	accounts
 		.iter()
 		.enumerate()
-		.map(|(i, a)| {
+		.flat_map(|(i, a)| {
 			vec![
 				// Reset the nonce by removing any funds
 				create_extrinsic(
@@ -161,7 +165,6 @@ fn create_account_extrinsics(
 				),
 			]
 		})
-		.flatten()
 		.map(OpaqueExtrinsic::from)
 		.collect()
 }
@@ -173,7 +176,7 @@ fn create_benchmark_extrinsics(
 ) -> Vec<OpaqueExtrinsic> {
 	accounts
 		.iter()
-		.map(|account| {
+		.flat_map(|account| {
 			(0..extrinsics_per_account).map(move |nonce| {
 				create_extrinsic(
 					client,
@@ -186,7 +189,6 @@ fn create_benchmark_extrinsics(
 				)
 			})
 		})
-		.flatten()
 		.map(OpaqueExtrinsic::from)
 		.collect()
 }

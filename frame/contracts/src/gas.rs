@@ -114,7 +114,7 @@ where
 		if self.gas_left < amount {
 			Err(<Error<T>>::OutOfGas.into())
 		} else {
-			self.gas_left = self.gas_left - amount;
+			self.gas_left -= amount;
 			Ok(GasMeter::new(amount))
 		}
 	}

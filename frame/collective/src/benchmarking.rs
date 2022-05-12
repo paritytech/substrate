@@ -250,7 +250,7 @@ benchmarks_instance_pallet! {
 			let approve = true;
 			Collective::<T, I>::vote(
 				SystemOrigin::Signed(voter.clone()).into(),
-				last_hash.clone(),
+				last_hash,
 				index,
 				approve,
 			)?;
@@ -259,7 +259,7 @@ benchmarks_instance_pallet! {
 		let approve = true;
 		Collective::<T, I>::vote(
 			SystemOrigin::Signed(voter.clone()).into(),
-			last_hash.clone(),
+			last_hash,
 			index,
 			approve,
 		)?;
@@ -272,7 +272,7 @@ benchmarks_instance_pallet! {
 		// Whitelist voter account from further DB operations.
 		let voter_key = frame_system::Account::<T>::hashed_key_for(&voter);
 		frame_benchmarking::benchmarking::add_to_whitelist(voter_key.into());
-	}: _(SystemOrigin::Signed(voter), last_hash.clone(), index, approve)
+	}: _(SystemOrigin::Signed(voter), last_hash, index, approve)
 	verify {
 		// All proposals exist and the last proposal has just been updated.
 		assert_eq!(Collective::<T, I>::proposals().len(), p as usize);
@@ -327,7 +327,7 @@ benchmarks_instance_pallet! {
 			let approve = true;
 			Collective::<T, I>::vote(
 				SystemOrigin::Signed(voter.clone()).into(),
-				last_hash.clone(),
+				last_hash,
 				index,
 				approve,
 			)?;
@@ -336,7 +336,7 @@ benchmarks_instance_pallet! {
 		let approve = true;
 		Collective::<T, I>::vote(
 			SystemOrigin::Signed(voter.clone()).into(),
-			last_hash.clone(),
+			last_hash,
 			index,
 			approve,
 		)?;
@@ -347,7 +347,7 @@ benchmarks_instance_pallet! {
 		let approve = false;
 		Collective::<T, I>::vote(
 			SystemOrigin::Signed(voter.clone()).into(),
-			last_hash.clone(),
+			last_hash,
 			index,
 			approve,
 		)?;
@@ -355,7 +355,7 @@ benchmarks_instance_pallet! {
 		// Whitelist voter account from further DB operations.
 		let voter_key = frame_system::Account::<T>::hashed_key_for(&voter);
 		frame_benchmarking::benchmarking::add_to_whitelist(voter_key.into());
-	}: close(SystemOrigin::Signed(voter), last_hash.clone(), index, Weight::max_value(), bytes_in_storage)
+	}: close(SystemOrigin::Signed(voter), last_hash, index, Weight::max_value(), bytes_in_storage)
 	verify {
 		// The last proposal is removed.
 		assert_eq!(Collective::<T, I>::proposals().len(), (p - 1) as usize);
@@ -400,7 +400,7 @@ benchmarks_instance_pallet! {
 		// Caller switches vote to nay on their own proposal, allowing them to be the deciding approval vote
 		Collective::<T, I>::vote(
 			SystemOrigin::Signed(caller.clone()).into(),
-			last_hash.clone(),
+			last_hash,
 			p - 1,
 			false,
 		)?;
@@ -411,7 +411,7 @@ benchmarks_instance_pallet! {
 			let approve = false;
 			Collective::<T, I>::vote(
 				SystemOrigin::Signed(voter.clone()).into(),
-				last_hash.clone(),
+				last_hash,
 				p - 1,
 				approve,
 			)?;
@@ -420,7 +420,7 @@ benchmarks_instance_pallet! {
 		// Member zero is the first aye
 		Collective::<T, I>::vote(
 			SystemOrigin::Signed(members[0].clone()).into(),
-			last_hash.clone(),
+			last_hash,
 			p - 1,
 			true,
 		)?;
@@ -432,11 +432,11 @@ benchmarks_instance_pallet! {
 		let approve = true;
 		Collective::<T, I>::vote(
 			SystemOrigin::Signed(caller.clone()).into(),
-			last_hash.clone(),
+			last_hash,
 			index, approve,
 		)?;
 
-	}: close(SystemOrigin::Signed(caller), last_hash.clone(), index, Weight::max_value(), bytes_in_storage)
+	}: close(SystemOrigin::Signed(caller), last_hash, index, Weight::max_value(), bytes_in_storage)
 	verify {
 		// The last proposal is removed.
 		assert_eq!(Collective::<T, I>::proposals().len(), (p - 1) as usize);
@@ -493,7 +493,7 @@ benchmarks_instance_pallet! {
 			let approve = true;
 			Collective::<T, I>::vote(
 				SystemOrigin::Signed(voter.clone()).into(),
-				last_hash.clone(),
+				last_hash,
 				index,
 				approve,
 			)?;
@@ -502,7 +502,7 @@ benchmarks_instance_pallet! {
 		// caller is prime, prime votes nay
 		Collective::<T, I>::vote(
 			SystemOrigin::Signed(caller.clone()).into(),
-			last_hash.clone(),
+			last_hash,
 			index,
 			false,
 		)?;
@@ -560,7 +560,7 @@ benchmarks_instance_pallet! {
 		// The prime member votes aye, so abstentions default to aye.
 		Collective::<T, _>::vote(
 			SystemOrigin::Signed(caller.clone()).into(),
-			last_hash.clone(),
+			last_hash,
 			p - 1,
 			true // Vote aye.
 		)?;
@@ -572,7 +572,7 @@ benchmarks_instance_pallet! {
 			let approve = false;
 			Collective::<T, I>::vote(
 				SystemOrigin::Signed(voter.clone()).into(),
-				last_hash.clone(),
+				last_hash,
 				p - 1,
 				approve
 			)?;

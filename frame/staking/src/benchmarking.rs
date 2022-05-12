@@ -49,7 +49,7 @@ type MaxNominators<T> = <<T as Config>::BenchmarkingConfig as BenchmarkingConfig
 
 // Add slashing spans to a user account. Not relevant for actual use, only to benchmark
 // read and write operations.
-fn add_slashing_spans<T: Config>(who: &T::AccountId, spans: u32) {
+pub fn add_slashing_spans<T: Config>(who: &T::AccountId, spans: u32) {
 	if spans == 0 {
 		return
 	}
@@ -155,8 +155,8 @@ impl<T: Config> ListScenario<T> {
 	/// - the destination bag has at least one node, which will need its next pointer updated.
 	///
 	/// NOTE: while this scenario specifically targets a worst case for the bags-list, it should
-	/// also elicit a worst case for other known `SortedListProvider` implementations; although
-	/// this may not be true against unknown `SortedListProvider` implementations.
+	/// also elicit a worst case for other known `VoterList` implementations; although
+	/// this may not be true against unknown `VoterList` implementations.
 	fn new(origin_weight: BalanceOf<T>, is_increase: bool) -> Result<Self, &'static str> {
 		ensure!(!origin_weight.is_zero(), "origin weight must be greater than 0");
 
@@ -183,13 +183,13 @@ impl<T: Config> ListScenario<T> {
 			Default::default(),
 		)?;
 		Staking::<T>::nominate(
-			RawOrigin::Signed(origin_controller2.clone()).into(),
-			vec![T::Lookup::unlookup(account("random_validator", 0, SEED))].clone(),
+			RawOrigin::Signed(origin_controller2).into(),
+			vec![T::Lookup::unlookup(account("random_validator", 0, SEED))],
 		)?;
 
 		// find a destination weight that will trigger the worst case scenario
 		let dest_weight_as_vote =
-			T::SortedListProvider::score_update_worst_case(&origin_stash1, is_increase);
+			T::VoterList::score_update_worst_case(&origin_stash1, is_increase);
 
 		let total_issuance = T::Currency::total_issuance();
 
@@ -239,10 +239,10 @@ benchmarks! {
 		// the weight the nominator will start at.
 		let scenario = ListScenario::<T>::new(origin_weight, true)?;
 
-		let max_additional = scenario.dest_weight.clone() - origin_weight;
+		let max_additional = scenario.dest_weight - origin_weight;
 
 		let stash = scenario.origin_stash1.clone();
-		let controller = scenario.origin_controller1.clone();
+		let controller = scenario.origin_controller1;
 		let original_bonded: BalanceOf<T>
 			= Ledger::<T>::get(&controller).map(|l| l.active).ok_or("ledger not created after")?;
 
@@ -271,7 +271,7 @@ benchmarks! {
 
 		let stash = scenario.origin_stash1.clone();
 		let controller = scenario.origin_controller1.clone();
-		let amount = origin_weight - scenario.dest_weight.clone();
+		let amount = origin_weight - scenario.dest_weight;
 		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created before")?;
 		let original_bonded: BalanceOf<T> = ledger.active;
 
@@ -315,8 +315,8 @@ benchmarks! {
 		// destination position because we are doing a removal from the list but no insert.
 		let scenario = ListScenario::<T>::new(origin_weight, true)?;
 		let controller = scenario.origin_controller1.clone();
-		let stash = scenario.origin_stash1.clone();
-		assert!(T::SortedListProvider::contains(&stash));
+		let stash = scenario.origin_stash1;
+		assert!(T::VoterList::contains(&stash));
 
 		let ed = T::Currency::minimum_balance();
 		let mut ledger = Ledger::<T>::get(&controller).unwrap();
@@ -328,28 +328,24 @@ benchmarks! {
 	}: withdraw_unbonded(RawOrigin::Signed(controller.clone()), s)
 	verify {
 		assert!(!Ledger::<T>::contains_key(controller));
-		assert!(!T::SortedListProvider::contains(&stash));
+		assert!(!T::VoterList::contains(&stash));
 	}
 
 	validate {
-		// clean up any existing state.
-		clear_validators_and_nominators::<T>();
-
-		let origin_weight = MinNominatorBond::<T>::get().max(T::Currency::minimum_balance());
-
-		// setup a worst case scenario where the user calling validate was formerly a nominator so
-		// they must be removed from the list.
-		let scenario = ListScenario::<T>::new(origin_weight, true)?;
-		let controller = scenario.origin_controller1.clone();
-		let stash = scenario.origin_stash1.clone();
-		assert!(T::SortedListProvider::contains(&stash));
+		let (stash, controller) = create_stash_controller::<T>(
+			T::MaxNominations::get() - 1,
+			100,
+			Default::default(),
+		)?;
+		// because it is chilled.
+		assert!(!T::VoterList::contains(&stash));
 
 		let prefs = ValidatorPrefs::default();
 		whitelist_account!(controller);
 	}: _(RawOrigin::Signed(controller), prefs)
 	verify {
 		assert!(Validators::<T>::contains_key(&stash));
-		assert!(!T::SortedListProvider::contains(&stash));
+		assert!(T::VoterList::contains(&stash));
 	}
 
 	kick {
@@ -434,14 +430,14 @@ benchmarks! {
 		).unwrap();
 
 		assert!(!Nominators::<T>::contains_key(&stash));
-		assert!(!T::SortedListProvider::contains(&stash));
+		assert!(!T::VoterList::contains(&stash));
 
 		let validators = create_validators::<T>(n, 100).unwrap();
 		whitelist_account!(controller);
 	}: _(RawOrigin::Signed(controller), validators)
 	verify {
 		assert!(Nominators::<T>::contains_key(&stash));
-		assert!(T::SortedListProvider::contains(&stash))
+		assert!(T::VoterList::contains(&stash))
 	}
 
 	chill {
@@ -454,13 +450,13 @@ benchmarks! {
 		// destination position because we are doing a removal from the list but no insert.
 		let scenario = ListScenario::<T>::new(origin_weight, true)?;
 		let controller = scenario.origin_controller1.clone();
-		let stash = scenario.origin_stash1.clone();
-		assert!(T::SortedListProvider::contains(&stash));
+		let stash = scenario.origin_stash1;
+		assert!(T::VoterList::contains(&stash));
 
 		whitelist_account!(controller);
 	}: _(RawOrigin::Signed(controller))
 	verify {
-		assert!(!T::SortedListProvider::contains(&stash));
+		assert!(!T::VoterList::contains(&stash));
 	}
 
 	set_payee {
@@ -522,14 +518,14 @@ benchmarks! {
 		// destination position because we are doing a removal from the list but no insert.
 		let scenario = ListScenario::<T>::new(origin_weight, true)?;
 		let controller = scenario.origin_controller1.clone();
-		let stash = scenario.origin_stash1.clone();
-		assert!(T::SortedListProvider::contains(&stash));
+		let stash = scenario.origin_stash1;
+		assert!(T::VoterList::contains(&stash));
 		add_slashing_spans::<T>(&stash, s);
 
 	}: _(RawOrigin::Root, stash.clone(), s)
 	verify {
 		assert!(!Ledger::<T>::contains_key(&controller));
-		assert!(!T::SortedListProvider::contains(&stash));
+		assert!(!T::VoterList::contains(&stash));
 	}
 
 	cancel_deferred_slash {
@@ -565,10 +561,10 @@ benchmarks! {
 		let validator_controller = <Bonded<T>>::get(&validator).unwrap();
 		let balance_before = T::Currency::free_balance(&validator_controller);
 		for (_, controller) in &nominators {
-			let balance = T::Currency::free_balance(&controller);
+			let balance = T::Currency::free_balance(controller);
 			ensure!(balance.is_zero(), "Controller has balance, but should be dead.");
 		}
-	}: payout_stakers(RawOrigin::Signed(caller), validator.clone(), current_era)
+	}: payout_stakers(RawOrigin::Signed(caller), validator, current_era)
 	verify {
 		let balance_after = T::Currency::free_balance(&validator_controller);
 		ensure!(
@@ -576,7 +572,7 @@ benchmarks! {
 			"Balance of validator controller should have increased after payout.",
 		);
 		for (_, controller) in &nominators {
-			let balance = T::Currency::free_balance(&controller);
+			let balance = T::Currency::free_balance(controller);
 			ensure!(!balance.is_zero(), "Payout not given to controller.");
 		}
 	}
@@ -598,7 +594,7 @@ benchmarks! {
 		let balance_before = T::Currency::free_balance(&validator);
 		let mut nominator_balances_before = Vec::new();
 		for (stash, _) in &nominators {
-			let balance = T::Currency::free_balance(&stash);
+			let balance = T::Currency::free_balance(stash);
 			nominator_balances_before.push(balance);
 		}
 	}: payout_stakers(RawOrigin::Signed(caller), validator.clone(), current_era)
@@ -609,7 +605,7 @@ benchmarks! {
 			"Balance of validator stash should have increased after payout.",
 		);
 		for ((stash, _), balance_before) in nominators.iter().zip(nominator_balances_before.iter()) {
-			let balance_after = T::Currency::free_balance(&stash);
+			let balance_after = T::Currency::free_balance(stash);
 			ensure!(
 				balance_before < &balance_after,
 				"Balance of nominator stash should have increased after payout.",
@@ -630,7 +626,7 @@ benchmarks! {
 
 		// setup a worst case list scenario.
 		let scenario = ListScenario::<T>::new(origin_weight, true)?;
-		let dest_weight = scenario.dest_weight.clone();
+		let dest_weight = scenario.dest_weight;
 
 		// rebond an amount that will give the user dest_weight
 		let rebond_amount = dest_weight - origin_weight;
@@ -648,7 +644,7 @@ benchmarks! {
 		};
 
 		let stash = scenario.origin_stash1.clone();
-		let controller = scenario.origin_controller1.clone();
+		let controller = scenario.origin_controller1;
 		let mut staking_ledger = Ledger::<T>::get(controller.clone()).unwrap();
 
 		for _ in 0 .. l {
@@ -695,7 +691,7 @@ benchmarks! {
 		// destination position because we are doing a removal from the list but no insert.
 		let scenario = ListScenario::<T>::new(origin_weight, true)?;
 		let controller = scenario.origin_controller1.clone();
-		let stash = scenario.origin_stash1.clone();
+		let stash = scenario.origin_stash1;
 
 		add_slashing_spans::<T>(&stash, s);
 		let l = StakingLedger {
@@ -708,13 +704,13 @@ benchmarks! {
 		Ledger::<T>::insert(&controller, l);
 
 		assert!(Bonded::<T>::contains_key(&stash));
-		assert!(T::SortedListProvider::contains(&stash));
+		assert!(T::VoterList::contains(&stash));
 
 		whitelist_account!(controller);
 	}: _(RawOrigin::Signed(controller), stash.clone(), s)
 	verify {
 		assert!(!Bonded::<T>::contains_key(&stash));
-		assert!(!T::SortedListProvider::contains(&stash));
+		assert!(!T::VoterList::contains(&stash));
 	}
 
 	new_era {
@@ -806,7 +802,8 @@ benchmarks! {
 			&stash,
 			slash_amount,
 			&mut BalanceOf::<T>::zero(),
-			&mut NegativeImbalanceOf::<T>::zero()
+			&mut NegativeImbalanceOf::<T>::zero(),
+			EraIndex::zero()
 		);
 	} verify {
 		let balance_after = T::Currency::free_balance(&stash);
@@ -898,8 +895,8 @@ benchmarks! {
 		// destination position because we are doing a removal from the list but no insert.
 		let scenario = ListScenario::<T>::new(origin_weight, true)?;
 		let controller = scenario.origin_controller1.clone();
-		let stash = scenario.origin_stash1.clone();
-		assert!(T::SortedListProvider::contains(&stash));
+		let stash = scenario.origin_stash1;
+		assert!(T::VoterList::contains(&stash));
 
 		Staking::<T>::set_staking_configs(
 			RawOrigin::Root.into(),
@@ -912,9 +909,9 @@ benchmarks! {
 		)?;
 
 		let caller = whitelisted_caller();
-	}: _(RawOrigin::Signed(caller), controller.clone())
+	}: _(RawOrigin::Signed(caller), controller)
 	verify {
-		assert!(!T::SortedListProvider::contains(&stash));
+		assert!(!T::VoterList::contains(&stash));
 	}
 
 	force_apply_min_commission {

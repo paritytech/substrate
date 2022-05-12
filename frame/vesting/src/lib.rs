@@ -74,7 +74,7 @@ use sp_runtime::{
 	},
 	RuntimeDebug,
 };
-use sp_std::{convert::TryInto, fmt::Debug, prelude::*};
+use sp_std::{fmt::Debug, prelude::*};
 pub use vesting_info::*;
 pub use weights::WeightInfo;
 
@@ -121,10 +121,10 @@ impl VestingAction {
 	}
 
 	/// Pick the schedules that this action dictates should continue vesting undisturbed.
-	fn pick_schedules<'a, T: Config>(
-		&'a self,
+	fn pick_schedules<T: Config>(
+		&self,
 		schedules: Vec<VestingInfo<BalanceOf<T>, T::BlockNumber>>,
-	) -> impl Iterator<Item = VestingInfo<BalanceOf<T>, T::BlockNumber>> + 'a {
+	) -> impl Iterator<Item = VestingInfo<BalanceOf<T>, T::BlockNumber>> + '_ {
 		schedules.into_iter().enumerate().filter_map(move |(index, schedule)| {
 			if self.should_remove(index) {
 				None
@@ -710,7 +710,7 @@ where
 		let (schedules, locked_now) =
 			Self::exec_action(schedules.to_vec(), VestingAction::Passive)?;
 
-		Self::write_vesting(&who, schedules)?;
+		Self::write_vesting(who, schedules)?;
 		Self::write_lock(who, locked_now);
 
 		Ok(())
@@ -744,7 +744,7 @@ where
 
 		let (schedules, locked_now) = Self::exec_action(schedules.to_vec(), remove_action)?;
 
-		Self::write_vesting(&who, schedules)?;
+		Self::write_vesting(who, schedules)?;
 		Self::write_lock(who, locked_now);
 		Ok(())
 	}

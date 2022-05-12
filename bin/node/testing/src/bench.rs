@@ -280,8 +280,7 @@ impl<'a> BlockContentIterator<'a> {
 		let genesis_hash = client
 			.block_hash(Zero::zero())
 			.expect("Database error?")
-			.expect("Genesis block always exists; qed")
-			.into();
+			.expect("Genesis block always exists; qed");
 
 		BlockContentIterator { iteration: 0, content, keyring, runtime_version, genesis_hash }
 	}
@@ -389,7 +388,7 @@ impl BenchDb {
 	) -> (Client, std::sync::Arc<Backend>, TaskExecutor) {
 		let db_config = sc_client_db::DatabaseSettings {
 			trie_cache_maximum_size: Some(16 * 1024 * 1024),
-			state_pruning: PruningMode::ArchiveAll,
+			state_pruning: Some(PruningMode::ArchiveAll),
 			source: database_type.into_settings(dir.into()),
 			keep_blocks: sc_client_db::KeepBlocks::All,
 		};
@@ -568,15 +567,13 @@ impl BenchKeyring {
 					genesis_hash,
 				);
 				let key = self.accounts.get(&signed).expect("Account id not found in keyring");
-				let signature = payload
-					.using_encoded(|b| {
-						if b.len() > 256 {
-							key.sign(&sp_io::hashing::blake2_256(b))
-						} else {
-							key.sign(b)
-						}
-					})
-					.into();
+				let signature = payload.using_encoded(|b| {
+					if b.len() > 256 {
+						key.sign(&sp_io::hashing::blake2_256(b))
+					} else {
+						key.sign(b)
+					}
+				});
 				UncheckedExtrinsic {
 					signature: Some((sp_runtime::MultiAddress::Id(signed), signature, extra)),
 					function: payload.0,

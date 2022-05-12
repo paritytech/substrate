@@ -21,7 +21,7 @@ use frame_election_provider_support::ScoreProvider;
 use sp_std::prelude::*;
 
 /// A common log target to use.
-pub const LOG_TARGET: &'static str = "runtime::bags-list::remote-tests";
+pub const LOG_TARGET: &str = "runtime::bags-list::remote-tests";
 
 pub mod migration;
 pub mod sanity_check;
@@ -48,7 +48,7 @@ pub fn display_and_check_bags<Runtime: RuntimeT>(currency_unit: u64, currency_na
 	let min_nominator_bond = <pallet_staking::MinNominatorBond<Runtime>>::get();
 	log::info!(target: LOG_TARGET, "min nominator bond is {:?}", min_nominator_bond);
 
-	let voter_list_count = <Runtime as pallet_staking::Config>::SortedListProvider::count();
+	let voter_list_count = <Runtime as pallet_staking::Config>::VoterList::count();
 
 	// go through every bag to track the total number of voters within bags and log some info about
 	// how voters are distributed within the bags.

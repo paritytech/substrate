@@ -317,11 +317,11 @@ where
 		WasmExecutionMethod::Compiled => sc_executor_wasmtime::create_runtime::<H>(
 			blob,
 			sc_executor_wasmtime::Config {
-				heap_pages,
 				max_memory_size: None,
 				allow_missing_func_imports,
 				cache_path: cache_path.map(ToOwned::to_owned),
 				semantics: sc_executor_wasmtime::Semantics {
+					extra_heap_pages: heap_pages,
 					fast_instance_reuse: true,
 					deterministic_stack_limit: None,
 					canonicalize_nans: false,
@@ -368,7 +368,7 @@ pub fn read_embedded_version(blob: &RuntimeBlob) -> Result<Option<RuntimeVersion
 			.transpose()?
 			.map(Into::into);
 
-		let core_version = apis.as_ref().and_then(|apis| sp_version::core_version_from_apis(apis));
+		let core_version = apis.as_ref().and_then(sp_version::core_version_from_apis);
 		// We do not use `RuntimeVersion::decode` here because that `decode_version` relies on
 		// presence of a special API in the `apis` field to treat the input as a non-legacy version.
 		// However the structure found in the `runtime_version` always contain an empty `apis`
@@ -403,7 +403,7 @@ where
 {
 	// The incoming code may be actually compressed. We decompress it here and then work with
 	// the uncompressed code from now on.
-	let blob = sc_executor_common::runtime_blob::RuntimeBlob::uncompress_if_needed(&code)?;
+	let blob = sc_executor_common::runtime_blob::RuntimeBlob::uncompress_if_needed(code)?;
 
 	// Use the runtime blob to scan if there is any metadata embedded into the wasm binary
 	// pertaining to runtime version. We do it before consuming the runtime blob for creating the

@@ -49,13 +49,9 @@ where
 	for<'r> FS: Fn(&'r A) -> VoteWeight,
 {
 	let mut staked = assignment_ratio_to_staked(ratio, &stake_of);
-	staked
-		.iter_mut()
-		.map(|a| {
-			a.try_normalize(stake_of(&a.who).into())
-				.map_err(|err| Error::ArithmeticError(err))
-		})
-		.collect::<Result<_, _>>()?;
+	staked.iter_mut().try_for_each(|a| {
+		a.try_normalize(stake_of(&a.who).into()).map_err(Error::ArithmeticError)
+	})?;
 	Ok(staked)
 }
 
@@ -74,7 +70,7 @@ pub fn assignment_staked_to_ratio_normalized<A: IdentifierT, P: PerThing128>(
 ) -> Result<Vec<Assignment<A, P>>, Error> {
 	let mut ratio = staked.into_iter().map(|a| a.into_assignment()).collect::<Vec<_>>();
 	for assignment in ratio.iter_mut() {
-		assignment.try_normalize().map_err(|err| Error::ArithmeticError(err))?;
+		assignment.try_normalize().map_err(Error::ArithmeticError)?;
 	}
 	Ok(ratio)
 }

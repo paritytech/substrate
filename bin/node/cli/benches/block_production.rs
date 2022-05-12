@@ -73,7 +73,7 @@ fn new_node(tokio_handle: Handle) -> node_cli::service::NewFullBase {
 		keystore_remote: Default::default(),
 		database: DatabaseSource::RocksDb { path: root.join("db"), cache_size: 128 },
 		trie_cache_maximum_size: Some(64 * 1024 * 1024),
-		state_pruning: PruningMode::ArchiveAll,
+		state_pruning: Some(PruningMode::ArchiveAll),
 		keep_blocks: KeepBlocks::All,
 		chain_spec: spec,
 		wasm_method: WasmExecutionMethod::Compiled,
@@ -91,6 +91,10 @@ fn new_node(tokio_handle: Handle) -> node_cli::service::NewFullBase {
 		rpc_cors: None,
 		rpc_methods: Default::default(),
 		rpc_max_payload: None,
+		rpc_max_request_size: None,
+		rpc_max_response_size: None,
+		rpc_id_provider: None,
+		rpc_max_subs_per_conn: None,
 		ws_max_out_buffer_capacity: None,
 		prometheus_config: None,
 		telemetry_endpoints: None,
@@ -109,7 +113,8 @@ fn new_node(tokio_handle: Handle) -> node_cli::service::NewFullBase {
 		wasm_runtime_overrides: None,
 	};
 
-	node_cli::service::new_full_base(config, |_, _| ()).expect("creating a full node doesn't fail")
+	node_cli::service::new_full_base(config, false, |_, _| ())
+		.expect("creating a full node doesn't fail")
 }
 
 fn extrinsic_set_time(now: u64) -> OpaqueExtrinsic {

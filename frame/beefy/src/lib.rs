@@ -105,20 +105,16 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn change_authorities(new: Vec<T::BeefyId>, queued: Vec<T::BeefyId>) {
-		// As in GRANDPA, we trigger a validator set change only if the the validator
-		// set has actually changed.
-		if new != Self::authorities() {
-			<Authorities<T>>::put(&new);
+		<Authorities<T>>::put(&new);
 
-			let next_id = Self::validator_set_id() + 1u64;
-			<ValidatorSetId<T>>::put(next_id);
-			if let Some(validator_set) = ValidatorSet::<T::BeefyId>::new(new, next_id) {
-				let log = DigestItem::Consensus(
-					BEEFY_ENGINE_ID,
-					ConsensusLog::AuthoritiesChange(validator_set).encode(),
-				);
-				<frame_system::Pallet<T>>::deposit_log(log);
-			}
+		let next_id = Self::validator_set_id() + 1u64;
+		<ValidatorSetId<T>>::put(next_id);
+		if let Some(validator_set) = ValidatorSet::<T::BeefyId>::new(new, next_id) {
+			let log = DigestItem::Consensus(
+				BEEFY_ENGINE_ID,
+				ConsensusLog::AuthoritiesChange(validator_set).encode(),
+			);
+			<frame_system::Pallet<T>>::deposit_log(log);
 		}
 
 		<NextAuthorities<T>>::put(&queued);
@@ -153,16 +149,16 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 		Self::initialize_authorities(&authorities);
 	}
 
-	fn on_new_session<'a, I: 'a>(changed: bool, validators: I, queued_validators: I)
+	fn on_new_session<'a, I: 'a>(_changed: bool, validators: I, queued_validators: I)
 	where
 		I: Iterator<Item = (&'a T::AccountId, T::BeefyId)>,
 	{
-		if changed {
-			let next_authorities = validators.map(|(_, k)| k).collect::<Vec<_>>();
-			let next_queued_authorities = queued_validators.map(|(_, k)| k).collect::<Vec<_>>();
+		let next_authorities = validators.map(|(_, k)| k).collect::<Vec<_>>();
+		let next_queued_authorities = queued_validators.map(|(_, k)| k).collect::<Vec<_>>();
 
-			Self::change_authorities(next_authorities, next_queued_authorities);
-		}
+		// Always issue a change on each `session`, even if validator set hasn't changed.
+		// We want to have at least one BEEFY mandatory block per session.
+		Self::change_authorities(next_authorities, next_queued_authorities);
 	}
 
 	fn on_disabled(i: u32) {
