@@ -57,7 +57,6 @@ sp-arithmetic = { version = "5.0.0", path = "../../primitives/arithmetic" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
 sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
 sp-core = { version = "6.0.0", path = "../../primitives/core" }
-sp-finality-grandpa = { version = "4.0.0-dev", path = "../../primitives/finality-grandpa" }
 sp-runtime = { version = "6.0.0", path = "../../primitives/runtime" }
 
 [dev-dependencies]

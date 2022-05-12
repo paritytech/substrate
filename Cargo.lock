@@ -8521,7 +8521,6 @@ dependencies = [
  "sp-blockchain",
  "sp-consensus",
  "sp-core",
- "sp-finality-grandpa",
  "sp-runtime",
  "sp-test-primitives",
  "sp-tracing",
