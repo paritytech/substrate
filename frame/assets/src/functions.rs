@@ -865,6 +865,223 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
+	/// Disallow further unprivileged transfers for the asset class.
+	///
+	/// Origin must be Signed and the sender should be the Freezer of the asset `id`.
+	///
+	/// - `id`: The identifier of the asset to be frozen.
+	///
+	/// Emits `Frozen`.
+	///
+	pub(super) fn do_freeze_asset(
+		origin:T::AccountId,
+		id:T::AssetId,
+	) -> DispatchResult {
+
+		Asset::<T, I>::try_mutate(id, |maybe_details| {
+			let d = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
+			ensure!(origin == d.freezer, Error::<T, I>::NoPermission);
+
+			d.is_frozen = true;
+
+			Self::deposit_event(Event::<T, I>::AssetFrozen { asset_id: id });
+			Ok(())
+
+	    })
+	}
+	/// This fn do_tansfer_ownership
+	pub(super) fn do_tansfer_ownership(
+		origin: T::AccountId,
+		id: T::AssetId,
+		owner: T::AccountId,
+
+	) -> DispatchResult {
+
+		Asset::<T, I>::try_mutate(id, |maybe_details| {
+			let details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
+			ensure!(origin == details.owner, Error::<T, I>::NoPermission);
+			if details.owner == owner {
+				return Ok(())
+			}
+
+			let metadata_deposit = Metadata::<T, I>::get(id).deposit;
+			let deposit = details.deposit + metadata_deposit;
+
+			// Move the deposit to the new owner.
+			T::Currency::repatriate_reserved(&details.owner, &owner, deposit, Reserved)?;
+
+			details.owner = owner.clone();
+
+			Self::deposit_event(Event::OwnerChanged { asset_id: id, owner });
+			Ok(())
+		})
+	}
+
+	/// Allow unprivileged transfers for the asset again.
+	///
+	/// Origin must be Signed and the sender should be the Admin of the asset `id`.
+	///
+	/// - `id`: The identifier of the asset to be thawed.
+	///
+	/// Emits `Thawed`.
+	///
+	pub(super) fn do_thaw_asset(
+		origin: T::AccountId,
+		id: T::AssetId,
+
+	) -> DispatchResult {
+
+		Asset::<T, I>::try_mutate(id, |maybe_details| {
+			let d = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
+			ensure!(origin == d.admin, Error::<T, I>::NoPermission);
+
+			d.is_frozen = false;
+
+			Self::deposit_event(Event::<T, I>::AssetThawed { asset_id: id });
+			Ok(())
+		})
+	}
+	/// This fn thaw
+	pub(super) fn do_thaw(
+		origin:T::AccountId,
+		id:T::AssetId,
+		who: <T::Lookup as StaticLookup>::Source,
+
+	) -> DispatchResult {
+
+		let details = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
+		ensure!(origin == details.admin, Error::<T, I>::NoPermission);
+		let who = T::Lookup::lookup(who)?;
+
+		Account::<T, I>::try_mutate(id, &who, |maybe_account| -> DispatchResult {
+			maybe_account.as_mut().ok_or(Error::<T, I>::NoAccount)?.is_frozen = false;
+			Ok(())
+		})?;
+
+		Self::deposit_event(Event::<T, I>::Thawed { asset_id: id, who });
+		Ok(())
+	}
+
+	/// Cancel all of some asset approved for delegated transfer by a third-party account.
+	///
+	/// Origin must be Signed and there must be an approval in place between signer and
+	/// `delegate`.
+	///
+	/// Unreserves any deposit previously reserved by `approve_transfer` for the approval.
+	///
+	/// - `id`: The identifier of the asset.
+	/// - `delegate`: The account delegated permission to transfer asset.
+	///
+	/// Emits `ApprovalCancelled` on success.
+	///
+	pub(super) fn do_cancel_approval(
+		owner: T::AccountId,
+		id: T::AssetId,
+		delegate: T::AccountId,
+
+	) -> DispatchResult {
+
+		let mut d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
+		let approval =
+			Approvals::<T, I>::take((id, &owner, &delegate)).ok_or(Error::<T, I>::Unknown)?;
+		T::Currency::unreserve(&owner, approval.deposit);
+
+		d.approvals.saturating_dec();
+		Asset::<T, I>::insert(id, d);
+
+		Self::deposit_event(Event::ApprovalCancelled { asset_id: id, owner, delegate });
+		Ok(())
+	}
+
+	/// Clear the metadata for an asset.
+	///
+	/// Origin must be Signed and the sender should be the Owner of the asset `id`.
+	///
+	/// Any deposit is freed for the asset owner.
+	///
+	/// - `id`: The identifier of the asset to clear.
+	///
+	/// Emits `MetadataCleared`.
+	///
+	pub(super) fn do_clear_metadata(
+
+		origin: T::AccountId,
+		id: T::AssetId,
+
+	) -> DispatchResult {
+
+		let d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
+		ensure!(origin == d.owner, Error::<T, I>::NoPermission);
+
+		Metadata::<T, I>::try_mutate_exists(id, |metadata| {
+			let deposit = metadata.take().ok_or(Error::<T, I>::Unknown)?.deposit;
+			T::Currency::unreserve(&d.owner, deposit);
+			Self::deposit_event(Event::MetadataCleared { asset_id: id });
+			Ok(())
+		})
+	}
+
+	/// Change the Issuer, Admin and Freezer of an asset.
+	///
+	/// Origin must be Signed and the sender should be the Owner of the asset `id`.
+	///
+	/// - `id`: The identifier of the asset to be frozen.
+	/// - `issuer`: The new Issuer of this asset.
+	/// - `admin`: The new Admin of this asset.
+	/// - `freezer`: The new Freezer of this asset.
+	///
+	/// Emits `TeamChanged`.
+	///
+	pub(super) fn do_set_team(
+		origin: T::AccountId,
+		id: T::AssetId,
+		issuer: T::AccountId,
+		admin: T::AccountId,
+		freezer: T::AccountId,
+	) -> DispatchResult {
+
+		Asset::<T, I>::try_mutate(id, |maybe_details| {
+			let details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
+			ensure!(origin == details.owner, Error::<T, I>::NoPermission);
+
+			details.issuer = issuer.clone();
+			details.admin = admin.clone();
+			details.freezer = freezer.clone();
+
+			Self::deposit_event(Event::TeamChanged { asset_id: id, issuer, admin, freezer });
+			Ok(())
+		})
+	}
+
+	/// Disallow further unprivileged transfers from an account.
+	///
+	/// Origin must be Signed and the sender should be the Freezer of the asset `id`.
+	///
+	/// - `id`: The identifier of the asset to be frozen.
+	/// - `who`: The account to be frozen.
+	///
+	/// Emits `Frozen`.
+	///
+	pub(super) fn do_freeze(
+		origin: T::AccountId,
+		id:T::AssetId,
+		who: <T::Lookup as StaticLookup>::Source,
+
+	)-> DispatchResult {
+
+		let d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
+		ensure!(origin == d.freezer, Error::<T, I>::NoPermission);
+		let who = T::Lookup::lookup(who)?;
+
+		Account::<T, I>::try_mutate(id, &who, |maybe_account| -> DispatchResult {
+			maybe_account.as_mut().ok_or(Error::<T, I>::NoAccount)?.is_frozen = true;
+			Ok(())
+		})?;
+
+		Self::deposit_event(Event::<T, I>::Frozen { asset_id: id, who });
+		Ok(())
+	}
+
 	/// Do set metadata
 	pub(super) fn do_set_metadata(
 		id: T::AssetId,

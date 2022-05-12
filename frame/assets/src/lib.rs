@@ -763,17 +763,8 @@ pub mod pallet {
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
-			let d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
-			ensure!(origin == d.freezer, Error::<T, I>::NoPermission);
-			let who = T::Lookup::lookup(who)?;
+			Self::do_freeze(origin, id, who)
 
-			Account::<T, I>::try_mutate(id, &who, |maybe_account| -> DispatchResult {
-				maybe_account.as_mut().ok_or(Error::<T, I>::NoAccount)?.is_frozen = true;
-				Ok(())
-			})?;
-
-			Self::deposit_event(Event::<T, I>::Frozen { asset_id: id, who });
-			Ok(())
 		}
 
 		/// Allow unprivileged transfers from an account again.
@@ -794,17 +785,8 @@ pub mod pallet {
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
-			let details = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
-			ensure!(origin == details.admin, Error::<T, I>::NoPermission);
-			let who = T::Lookup::lookup(who)?;
+			Self::do_thaw(origin, id, who)
 
-			Account::<T, I>::try_mutate(id, &who, |maybe_account| -> DispatchResult {
-				maybe_account.as_mut().ok_or(Error::<T, I>::NoAccount)?.is_frozen = false;
-				Ok(())
-			})?;
-
-			Self::deposit_event(Event::<T, I>::Thawed { asset_id: id, who });
-			Ok(())
 		}
 
 		/// Disallow further unprivileged transfers for the asset class.
@@ -823,15 +805,8 @@ pub mod pallet {
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
-			Asset::<T, I>::try_mutate(id, |maybe_details| {
-				let d = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
-				ensure!(origin == d.freezer, Error::<T, I>::NoPermission);
+			Self::do_freeze_asset(origin,id)
 
-				d.is_frozen = true;
-
-				Self::deposit_event(Event::<T, I>::AssetFrozen { asset_id: id });
-				Ok(())
-			})
 		}
 
 		/// Allow unprivileged transfers for the asset again.
@@ -850,15 +825,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
-			Asset::<T, I>::try_mutate(id, |maybe_details| {
-				let d = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
-				ensure!(origin == d.admin, Error::<T, I>::NoPermission);
-
-				d.is_frozen = false;
-
-				Self::deposit_event(Event::<T, I>::AssetThawed { asset_id: id });
-				Ok(())
-			})
+			Self::do_thaw_asset(origin, id)
 		}
 
 		/// Change the Owner of an asset.
@@ -880,24 +847,7 @@ pub mod pallet {
 			let origin = ensure_signed(origin)?;
 			let owner = T::Lookup::lookup(owner)?;
 
-			Asset::<T, I>::try_mutate(id, |maybe_details| {
-				let details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
-				ensure!(origin == details.owner, Error::<T, I>::NoPermission);
-				if details.owner == owner {
-					return Ok(())
-				}
-
-				let metadata_deposit = Metadata::<T, I>::get(id).deposit;
-				let deposit = details.deposit + metadata_deposit;
-
-				// Move the deposit to the new owner.
-				T::Currency::repatriate_reserved(&details.owner, &owner, deposit, Reserved)?;
-
-				details.owner = owner.clone();
-
-				Self::deposit_event(Event::OwnerChanged { asset_id: id, owner });
-				Ok(())
-			})
+			Self::do_tansfer_ownership(origin, id, owner)
 		}
 
 		/// Change the Issuer, Admin and Freezer of an asset.
@@ -925,17 +875,7 @@ pub mod pallet {
 			let admin = T::Lookup::lookup(admin)?;
 			let freezer = T::Lookup::lookup(freezer)?;
 
-			Asset::<T, I>::try_mutate(id, |maybe_details| {
-				let details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
-				ensure!(origin == details.owner, Error::<T, I>::NoPermission);
-
-				details.issuer = issuer.clone();
-				details.admin = admin.clone();
-				details.freezer = freezer.clone();
-
-				Self::deposit_event(Event::TeamChanged { asset_id: id, issuer, admin, freezer });
-				Ok(())
-			})
+			Self::do_set_team(origin, id, issuer, admin, freezer)
 		}
 
 		/// Set the metadata for an asset.
@@ -984,15 +924,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
-			let d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
-			ensure!(origin == d.owner, Error::<T, I>::NoPermission);
-
-			Metadata::<T, I>::try_mutate_exists(id, |metadata| {
-				let deposit = metadata.take().ok_or(Error::<T, I>::Unknown)?.deposit;
-				T::Currency::unreserve(&d.owner, deposit);
-				Self::deposit_event(Event::MetadataCleared { asset_id: id });
-				Ok(())
-			})
+			Self::do_clear_metadata(origin, id)
 		}
 
 		/// Force the metadata for an asset to some value.
@@ -1180,16 +1112,9 @@ pub mod pallet {
 		) -> DispatchResult {
 			let owner = ensure_signed(origin)?;
 			let delegate = T::Lookup::lookup(delegate)?;
-			let mut d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
-			let approval =
-				Approvals::<T, I>::take((id, &owner, &delegate)).ok_or(Error::<T, I>::Unknown)?;
-			T::Currency::unreserve(&owner, approval.deposit);
 
-			d.approvals.saturating_dec();
-			Asset::<T, I>::insert(id, d);
+			Self::do_cancel_approval(owner, id, delegate)
 
-			Self::deposit_event(Event::ApprovalCancelled { asset_id: id, owner, delegate });
-			Ok(())
 		}
 
 		/// Cancel all of some asset approved for delegated transfer by a third-party account.
