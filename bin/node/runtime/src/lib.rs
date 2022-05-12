@@ -831,6 +831,7 @@ impl pallet_referenda::Config for Runtime {
 	type UndecidingTimeout = UndecidingTimeout;
 	type AlarmInterval = AlarmInterval;
 	type Tracks = TracksInfo;
+	type MetadataLimit = ConstU32<1024>;
 }
 
 impl pallet_remark::Config for Runtime {
@@ -897,6 +898,7 @@ impl pallet_democracy::Config for Runtime {
 	type MaxVotes = ConstU32<100>;
 	type WeightInfo = pallet_democracy::weights::SubstrateWeight<Runtime>;
 	type MaxProposals = MaxProposals;
+	type MetadataLimit = ConstU32<1024>;
 }
 
 parameter_types! {
