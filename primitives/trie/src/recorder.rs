@@ -30,6 +30,8 @@ use std::{
 };
 use trie_db::{DBValue, KeyTrieAccessValue, TrieAccess};
 
+const LOG_TARGET: &str = "trie-recorder";
+
 /// Combines information about an accessed key.
 #[derive(Clone, Debug)]
 struct AccessedKey {
@@ -156,6 +158,12 @@ impl<H: Hasher> Recorder<H> {
 		hash_db: &dyn HashDBRef<H, DBValue>,
 		mut cache: Option<&mut TrieCache<H>>,
 	) -> Result<(), crate::Error<H::Out>> {
+		tracing::trace!(
+			target: LOG_TARGET,
+			storage_root = ?root,
+			"Recording accessed keys"
+		);
+
 		let mut trie_recorder = TrieRecorder::<H, _> {
 			inner,
 			storage_root: *root,
@@ -215,6 +223,12 @@ impl<H: Hasher, I: DerefMut<Target = RecorderInner<H::Out>>> trie_db::TrieRecord
 
 		match access {
 			TrieAccess::Key { key, value } => {
+				tracing::trace!(
+					target: LOG_TARGET,
+					key = ?sp_core::hexdisplay::HexDisplay::from(&key),
+					"Recording key",
+				);
+
 				self.inner
 					.accessed_keys
 					.entry(self.storage_root)
@@ -245,6 +259,12 @@ impl<H: Hasher, I: DerefMut<Target = RecorderInner<H::Out>>> trie_db::TrieRecord
 					});
 			},
 			TrieAccess::NodeOwned { hash, node_owned } => {
+				tracing::trace!(
+					target: LOG_TARGET,
+					hash = ?hash,
+					"Recording node",
+				);
+
 				self.inner.accessed_nodes.entry(hash).or_insert_with(|| {
 					let node = node_owned.to_encoded::<NodeCodec<H>>();
 
@@ -254,6 +274,12 @@ impl<H: Hasher, I: DerefMut<Target = RecorderInner<H::Out>>> trie_db::TrieRecord
 				});
 			},
 			TrieAccess::EncodedNode { hash, encoded_node } => {
+				tracing::trace!(
+					target: LOG_TARGET,
+					hash = ?hash,
+					"Recording node",
+				);
+
 				self.inner.accessed_nodes.entry(hash).or_insert_with(|| {
 					let node = encoded_node.into_owned();
 
@@ -263,6 +289,13 @@ impl<H: Hasher, I: DerefMut<Target = RecorderInner<H::Out>>> trie_db::TrieRecord
 				});
 			},
 			TrieAccess::Value { hash, value, full_key } => {
+				tracing::trace!(
+					target: LOG_TARGET,
+					hash = ?hash,
+					key = ?sp_core::hexdisplay::HexDisplay::from(&full_key),
+					"Recording value",
+				);
+
 				self.inner.accessed_nodes.entry(hash).or_insert_with(|| {
 					let value = value.into_owned();
 

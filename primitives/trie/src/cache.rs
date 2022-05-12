@@ -50,6 +50,8 @@ use std::{
 };
 use trie_db::{node::NodeOwned, CachedValue};
 
+const LOG_TARGET: &str = "trie-cache";
+
 /// No hashing [`lru::LruCache`].
 ///
 /// The key is an `u64` that is expected to be unique.
@@ -404,33 +406,70 @@ impl<'a, H: Hasher> trie_db::TrieCache<NodeCodec<H>> for TrieCache<'a, H> {
 		fetch_node: &mut dyn FnMut() -> trie_db::Result<NodeOwned<H::Out>, H::Out, Error<H::Out>>,
 	) -> trie_db::Result<&NodeOwned<H::Out>, H::Out, Error<H::Out>> {
 		if let Some(res) = self.shared_node_cache.get(&hash) {
+			tracing::trace!(target: LOG_TARGET, ?hash, "Serving node from shared cache");
 			self.shared_node_cache_access.insert(hash);
 			return Ok(res)
 		}
 
 		match self.local_cache.entry(hash) {
-			Entry::Occupied(res) => Ok(res.into_mut()),
+			Entry::Occupied(res) => {
+				tracing::trace!(target: LOG_TARGET, ?hash, "Serving node from local cache");
+				Ok(res.into_mut())
+			},
 			Entry::Vacant(vacant) => {
-				let node = (*fetch_node)()?;
-				Ok(vacant.insert(node))
+				let node = (*fetch_node)();
+
+				tracing::trace!(
+					target: LOG_TARGET,
+					?hash,
+					fetch_successful = node.is_ok(),
+					"Node not found, needed to fetch it."
+				);
+
+				Ok(vacant.insert(node?))
 			},
 		}
 	}
 
 	fn get_node(&mut self, hash: &H::Out) -> Option<&NodeOwned<H::Out>> {
 		if let Some(node) = self.shared_node_cache.get(hash) {
+			tracing::trace!(target: LOG_TARGET, ?hash, "Getting node from shared cache");
 			self.shared_node_cache_access.insert(*hash);
 			return Some(node)
 		}
 
-		self.local_cache.get(hash)
+		let res = self.local_cache.get(hash);
+
+		tracing::trace!(
+			target: LOG_TARGET,
+			?hash,
+			found = res.is_some(),
+			"Getting node from local cache"
+		);
+
+		res
 	}
 
 	fn lookup_value_for_key(&mut self, key: &[u8]) -> Option<&CachedValue<H::Out>> {
-		self.value_cache.get(key)
+		let res = self.value_cache.get(key);
+
+		tracing::trace!(
+			target: LOG_TARGET,
+			key = ?sp_core::hexdisplay::HexDisplay::from(&key),
+			found = res.is_some(),
+			"Looked up value for key",
+		);
+
+		res
 	}
 
 	fn cache_value_for_key(&mut self, key: &[u8], data: CachedValue<H::Out>) {
+		tracing::trace!(
+			target: LOG_TARGET,
+			key = ?sp_core::hexdisplay::HexDisplay::from(&key),
+			"Caching value for key",
+		);
+
 		self.value_cache.insert(key.into(), data);
 	}
 }

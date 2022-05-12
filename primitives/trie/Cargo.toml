@@ -28,6 +28,7 @@ trie-root = { version = "0.17.0", default-features = false }
 memory-db = { version = "0.29.0", default-features = false }
 parking_lot = "0.11.1"
 thiserror = { version = "1.0.30", optional = true }
+tracing = { version = "0.1.29", optional = true }
 nohash-hasher = "0.2.0"
 lru = "0.7.5"
 
@@ -50,5 +51,6 @@ std = [
 	"trie-root/std",
 	"sp-core/std",
 	"thiserror",
+	"tracing",
 ]
 memory-tracker = []
