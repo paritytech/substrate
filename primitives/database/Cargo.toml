@@ -11,6 +11,5 @@ documentation = "https://docs.rs/sp-database"
 readme = "README.md"
 
 [dependencies]
-parking_lot = "0.12.0"
 kvdb = "0.11.0"
-
+parking_lot = "0.12.0"

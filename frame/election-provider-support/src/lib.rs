@@ -170,8 +170,8 @@ pub mod onchain;
 pub mod traits;
 #[cfg(feature = "std")]
 use codec::{Decode, Encode};
-use frame_support::{BoundedVec, RuntimeDebug};
-use sp_runtime::traits::Bounded;
+use frame_support::{weights::Weight, BoundedVec, RuntimeDebug};
+use sp_runtime::traits::{Bounded, Saturating, Zero};
 use sp_std::{fmt::Debug, prelude::*};
 
 /// Re-export the solution generation macro.
@@ -194,6 +194,9 @@ pub use scale_info;
 pub use sp_arithmetic;
 #[doc(hidden)]
 pub use sp_std;
+
+pub mod weights;
+pub use weights::WeightInfo;
 
 #[cfg(test)]
 mod mock;
@@ -241,7 +244,7 @@ impl<VoterIndex, TargetIndex, P: PerThing> IndexAssignment<VoterIndex, TargetInd
 			distribution: assignment
 				.distribution
 				.iter()
-				.map(|(target, proportion)| Some((target_index(target)?, proportion.clone())))
+				.map(|(target, proportion)| Some((target_index(target)?, *proportion)))
 				.collect::<Option<Vec<_>>>()
 				.or_invalid_index()?,
 		})
@@ -436,7 +439,7 @@ pub trait SortedListProvider<AccountId> {
 	type Error: sp_std::fmt::Debug;
 
 	/// The type used by the list to compare nodes for ordering.
-	type Score: Bounded;
+	type Score: Bounded + Saturating + Zero;
 
 	/// An iterator over the list, which can have `take` called on it.
 	fn iter() -> Box<dyn Iterator<Item = AccountId>>;
@@ -453,13 +456,21 @@ pub trait SortedListProvider<AccountId> {
 	fn contains(id: &AccountId) -> bool;
 
 	/// Hook for inserting a new id.
+	///
+	/// Implementation should return an error if duplicate item is being inserted.
 	fn on_insert(id: AccountId, score: Self::Score) -> Result<(), Self::Error>;
 
 	/// Hook for updating a single id.
-	fn on_update(id: &AccountId, score: Self::Score);
+	///
+	/// The `new` score is given.
+	///
+	/// Returns `Ok(())` iff it successfully updates an item, an `Err(_)` otherwise.
+	fn on_update(id: &AccountId, score: Self::Score) -> Result<(), Self::Error>;
 
 	/// Hook for removing am id from the list.
-	fn on_remove(id: &AccountId);
+	///
+	/// Returns `Ok(())` iff it successfully removes an item, an `Err(_)` otherwise.
+	fn on_remove(id: &AccountId) -> Result<(), Self::Error>;
 
 	/// Regenerate this list from scratch. Returns the count of items inserted.
 	///
@@ -523,6 +534,12 @@ pub trait NposSolver {
 		targets: Vec<Self::AccountId>,
 		voters: Vec<(Self::AccountId, VoteWeight, impl IntoIterator<Item = Self::AccountId>)>,
 	) -> Result<ElectionResult<Self::AccountId, Self::Accuracy>, Self::Error>;
+
+	/// Measure the weight used in the calculation of the solver.
+	/// - `voters` is the number of voters.
+	/// - `targets` is the number of targets.
+	/// - `vote_degree` is the degree ie the maximum numbers of votes per voter.
+	fn weight<T: WeightInfo>(voters: u32, targets: u32, vote_degree: u32) -> Weight;
 }
 
 /// A wrapper for [`sp_npos_elections::seq_phragmen`] that implements [`NposSolver`]. See the
@@ -547,6 +564,10 @@ impl<
 	) -> Result<ElectionResult<Self::AccountId, Self::Accuracy>, Self::Error> {
 		sp_npos_elections::seq_phragmen(winners, targets, voters, Balancing::get())
 	}
+
+	fn weight<T: WeightInfo>(voters: u32, targets: u32, vote_degree: u32) -> Weight {
+		T::phragmen(voters, targets, vote_degree)
+	}
 }
 
 /// A wrapper for [`sp_npos_elections::phragmms()`] that implements [`NposSolver`]. See the
@@ -570,6 +591,10 @@ impl<
 		voters: Vec<(Self::AccountId, VoteWeight, impl IntoIterator<Item = Self::AccountId>)>,
 	) -> Result<ElectionResult<Self::AccountId, Self::Accuracy>, Self::Error> {
 		sp_npos_elections::phragmms(winners, targets, voters, Balancing::get())
+	}
+
+	fn weight<T: WeightInfo>(voters: u32, targets: u32, vote_degree: u32) -> Weight {
+		T::phragmms(voters, targets, vote_degree)
 	}
 }
 

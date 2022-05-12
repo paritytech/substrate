@@ -28,10 +28,10 @@ use std::{env, fs, path::PathBuf};
 
 use crate::{
 	overhead::{bench::BenchmarkType, cmd::OverheadParams},
-	storage::record::Stats,
+	shared::{Stats, UnderscoreHelper},
 };
 
-static VERSION: &'static str = env!("CARGO_PKG_VERSION");
+static VERSION: &str = env!("CARGO_PKG_VERSION");
 static TEMPLATE: &str = include_str!("./weights.hbs");
 
 /// Data consumed by Handlebar to fill out the `weights.hbs` template.
@@ -85,7 +85,7 @@ impl TemplateData {
 	pub fn write(&self, path: &Option<PathBuf>) -> Result<()> {
 		let mut handlebars = Handlebars::new();
 		// Format large integers with underscores.
-		handlebars.register_helper("underscore", Box::new(crate::writer::UnderscoreHelper));
+		handlebars.register_helper("underscore", Box::new(UnderscoreHelper));
 		// Don't HTML escape any characters.
 		handlebars.register_escape_fn(|s| -> String { s.to_string() });
 
@@ -93,13 +93,13 @@ impl TemplateData {
 		let mut fd = fs::File::create(&out_path)?;
 		info!("Writing weights to {:?}", fs::canonicalize(&out_path)?);
 		handlebars
-			.render_template_to_write(&TEMPLATE, &self, &mut fd)
+			.render_template_to_write(TEMPLATE, &self, &mut fd)
 			.map_err(|e| format!("HBS template write: {:?}", e).into())
 	}
 
 	/// Build a path for the weight file.
 	fn build_path(&self, weight_out: &Option<PathBuf>) -> Result<PathBuf> {
-		let mut path = weight_out.clone().unwrap_or(PathBuf::from("."));
+		let mut path = weight_out.clone().unwrap_or_else(|| PathBuf::from("."));
 
 		if !path.is_dir() {
 			return Err("Need directory as --weight-path".into())

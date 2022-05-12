@@ -37,9 +37,10 @@ crate-type = ["cdylib", "rlib"]
 clap = { version = "3.1.6", features = ["derive"], optional = true }
 codec = { package = "parity-scale-codec", version = "3.0.0" }
 serde = { version = "1.0.136", features = ["derive"] }
+jsonrpsee = { version = "0.13.0", features = ["server"] }
 futures = "0.3.21"
 hex-literal = "0.3.4"
-log = "0.4.8"
+log = "0.4.16"
 rand = "0.8"
 
 # primitives
@@ -76,6 +77,7 @@ sc-telemetry = { version = "4.0.0-dev", path = "../../../client/telemetry" }
 sc-executor = { version = "0.10.0-dev", path = "../../../client/executor" }
 sc-authority-discovery = { version = "0.10.0-dev", path = "../../../client/authority-discovery" }
 sc-sync-state-rpc = { version = "0.10.0-dev", path = "../../../client/sync-state-rpc" }
+sc-sysinfo = { version = "6.0.0-dev", path = "../../../client/sysinfo" }
 
 # frame dependencies
 frame-system = { version = "4.0.0-dev", path = "../../../frame/system" }
@@ -95,6 +97,7 @@ sc-cli = { version = "0.10.0-dev", optional = true, path = "../../../client/cli"
 frame-benchmarking-cli = { version = "4.0.0-dev", optional = true, path = "../../../utils/frame/benchmarking-cli" }
 node-inspect = { version = "0.9.0-dev", optional = true, path = "../inspect" }
 try-runtime-cli = { version = "0.10.0-dev", optional = true, path = "../../../utils/frame/try-runtime/cli" }
+serde_json = "1.0.79"
 
 [target.'cfg(any(target_arch="x86_64", target_arch="aarch64"))'.dependencies]
 node-executor = { version = "3.0.0-dev", path = "../executor", features = ["wasmtime"] }
@@ -123,11 +126,10 @@ nix = "0.23"
 serde_json = "1.0"
 regex = "1.5.5"
 platforms = "2.0"
-async-std = { version = "1.10.0", features = ["attributes"] }
-soketto = "0.4.2"
+async-std = { version = "1.11.0", features = ["attributes"] }
+soketto = "0.7.1"
 criterion = { version = "0.3.5", features = ["async_tokio"] }
 tokio = { version = "1.17.0", features = ["macros", "time", "parking_lot"] }
-jsonrpsee-ws-client = "0.4.1"
 wait-timeout = "0.2"
 remote-externalities = { path = "../../../utils/frame/remote-externalities" }
 pallet-timestamp = { version = "4.0.0-dev", path = "../../../frame/timestamp" }

@@ -13,20 +13,19 @@ readme = "README.md"
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
-
 [dependencies]
+ahash = "0.7.6"
 futures = "0.3.21"
 futures-timer = "3.0.1"
-libp2p = { version = "0.40.0", default-features = false }
-log = "0.4.8"
-lru = "0.7.3"
-ahash = "0.7.6"
+libp2p = { version = "0.44.0", default-features = false }
+log = "0.4.16"
+lru = "0.7.5"
+tracing = "0.1.29"
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.10.0-dev", path = "../../utils/prometheus" }
 sc-network = { version = "0.10.0-dev", path = "../network" }
 sp-runtime = { version = "6.0.0", path = "../../primitives/runtime" }
-tracing = "0.1.29"
 
 [dev-dependencies]
-async-std = "1.10.0"
+async-std = "1.11.0"
 quickcheck = "1.0.3"
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }

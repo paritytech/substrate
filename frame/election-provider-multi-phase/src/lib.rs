@@ -102,8 +102,8 @@
 //! valid if propagated, and it acts similar to an inherent.
 //!
 //! Validators will only submit solutions if the one that they have computed is sufficiently better
-//! than the best queued one (see [`pallet::Config::SolutionImprovementThreshold`]) and will limit
-//! the weight of the solution to [`pallet::Config::MinerMaxWeight`].
+//! than the best queued one (see [`pallet::Config::BetterUnsignedThreshold`]) and will limit the
+//! weight of the solution to [`MinerConfig::MaxWeight`].
 //!
 //! The unsigned phase can be made passive depending on how the previous signed phase went, by
 //! setting the first inner value of [`Phase`] to `false`. For now, the signed phase is always
@@ -242,7 +242,7 @@ use frame_support::{
 use frame_system::{ensure_none, offchain::SendTransactionTypes};
 use scale_info::TypeInfo;
 use sp_arithmetic::{
-	traits::{Bounded, CheckedAdd, Saturating, Zero},
+	traits::{Bounded, CheckedAdd, Zero},
 	UpperOf,
 };
 use sp_npos_elections::{
@@ -264,7 +264,7 @@ mod mock;
 #[macro_use]
 pub mod helpers;
 
-const LOG_TARGET: &'static str = "runtime::election-provider";
+const LOG_TARGET: &str = "runtime::election-provider";
 
 pub mod signed;
 pub mod unsigned;
@@ -276,16 +276,18 @@ pub use signed::{
 	BalanceOf, NegativeImbalanceOf, PositiveImbalanceOf, SignedSubmission, SignedSubmissionOf,
 	SignedSubmissions, SubmissionIndicesOf,
 };
+pub use unsigned::{Miner, MinerConfig};
 
 /// The solution type used by this crate.
-pub type SolutionOf<T> = <T as Config>::Solution;
+pub type SolutionOf<T> = <T as MinerConfig>::Solution;
 
 /// The voter index. Derived from [`SolutionOf`].
 pub type SolutionVoterIndexOf<T> = <SolutionOf<T> as NposSolution>::VoterIndex;
 /// The target index. Derived from [`SolutionOf`].
 pub type SolutionTargetIndexOf<T> = <SolutionOf<T> as NposSolution>::TargetIndex;
 /// The accuracy of the election, when submitted from offchain. Derived from [`SolutionOf`].
-pub type SolutionAccuracyOf<T> = <SolutionOf<T> as NposSolution>::Accuracy;
+pub type SolutionAccuracyOf<T> =
+	<SolutionOf<<T as crate::Config>::MinerConfig> as NposSolution>::Accuracy;
 /// The fallback election type.
 pub type FallbackErrorOf<T> = <<T as crate::Config>::Fallback as ElectionProvider>::Error;
 
@@ -488,7 +490,7 @@ pub enum ElectionError<T: Config> {
 	/// An error happened in the feasibility check sub-system.
 	Feasibility(FeasibilityError),
 	/// An error in the miner (offchain) sub-system.
-	Miner(unsigned::MinerError<T>),
+	Miner(unsigned::MinerError),
 	/// An error happened in the data provider.
 	DataProvider(&'static str),
 	/// An error nested in the fallback.
@@ -520,8 +522,8 @@ impl<T: Config> From<FeasibilityError> for ElectionError<T> {
 	}
 }
 
-impl<T: Config> From<unsigned::MinerError<T>> for ElectionError<T> {
-	fn from(e: unsigned::MinerError<T>) -> Self {
+impl<T: Config> From<unsigned::MinerError> for ElectionError<T> {
+	fn from(e: unsigned::MinerError) -> Self {
 		ElectionError::Miner(e)
 	}
 }
@@ -585,9 +587,14 @@ pub mod pallet {
 		type SignedPhase: Get<Self::BlockNumber>;
 
 		/// The minimum amount of improvement to the solution score that defines a solution as
-		/// "better" (in any phase).
+		/// "better" in the Signed phase.
 		#[pallet::constant]
-		type SolutionImprovementThreshold: Get<Perbill>;
+		type BetterSignedThreshold: Get<Perbill>;
+
+		/// The minimum amount of improvement to the solution score that defines a solution as
+		/// "better" in the Unsigned phase.
+		#[pallet::constant]
+		type BetterUnsignedThreshold: Get<Perbill>;
 
 		/// The repeat threshold of the offchain worker.
 		///
@@ -600,12 +607,14 @@ pub mod pallet {
 		#[pallet::constant]
 		type MinerTxPriority: Get<TransactionPriority>;
 
-		/// Maximum weight that the miner should consume.
+		/// Configurations of the embedded miner.
 		///
-		/// The miner will ensure that the total weight of the unsigned solution will not exceed
-		/// this value, based on [`WeightInfo::submit_unsigned`].
-		#[pallet::constant]
-		type MinerMaxWeight: Get<Weight>;
+		/// Any external software implementing this can use the [`unsigned::Miner`] type provided,
+		/// which can mine new solutions and trim them accordingly.
+		type MinerConfig: crate::unsigned::MinerConfig<
+			AccountId = Self::AccountId,
+			MaxVotesPerVoter = <Self::DataProvider as ElectionDataProvider>::MaxVotesPerVoter,
+		>;
 
 		/// Maximum number of signed submissions that can be queued.
 		///
@@ -619,9 +628,15 @@ pub mod pallet {
 
 		/// Maximum weight of a signed solution.
 		///
-		/// This should probably be similar to [`Config::MinerMaxWeight`].
+		/// If [`Config::MinerConfig`] is being implemented to submit signed solutions (outside of
+		/// this pallet), then [`MinerConfig::solution_weight`] is used to compare against
+		/// this value.
 		#[pallet::constant]
 		type SignedMaxWeight: Get<Weight>;
+
+		/// The maximum amount of unchecked solutions to refund the call fee for.
+		#[pallet::constant]
+		type SignedMaxRefunds: Get<u32>;
 
 		/// Base reward for a signed solution
 		#[pallet::constant]
@@ -643,11 +658,11 @@ pub mod pallet {
 		/// are only over a single block, but once multi-block elections are introduced they will
 		/// take place over multiple blocks.
 		#[pallet::constant]
-		type MaxElectingVoters: Get<SolutionVoterIndexOf<Self>>;
+		type MaxElectingVoters: Get<SolutionVoterIndexOf<Self::MinerConfig>>;
 
 		/// The maximum number of electable targets to put in the snapshot.
 		#[pallet::constant]
-		type MaxElectableTargets: Get<SolutionTargetIndexOf<Self>>;
+		type MaxElectableTargets: Get<SolutionTargetIndexOf<Self::MinerConfig>>;
 
 		/// Handler for the slashed deposits.
 		type SlashHandler: OnUnbalanced<NegativeImbalanceOf<Self>>;
@@ -655,29 +670,11 @@ pub mod pallet {
 		/// Handler for the rewards.
 		type RewardHandler: OnUnbalanced<PositiveImbalanceOf<Self>>;
 
-		/// Maximum length (bytes) that the mined solution should consume.
-		///
-		/// The miner will ensure that the total length of the unsigned solution will not exceed
-		/// this value.
-		#[pallet::constant]
-		type MinerMaxLength: Get<u32>;
-
 		/// Something that will provide the election data.
 		type DataProvider: ElectionDataProvider<
 			AccountId = Self::AccountId,
 			BlockNumber = Self::BlockNumber,
 		>;
-
-		/// The solution type.
-		type Solution: codec::Codec
-			+ Default
-			+ PartialEq
-			+ Eq
-			+ Clone
-			+ sp_std::fmt::Debug
-			+ Ord
-			+ NposSolution
-			+ TypeInfo;
 
 		/// Configuration for the fallback.
 		type Fallback: InstantElectionProvider<
@@ -815,12 +812,12 @@ pub mod pallet {
 			use sp_std::mem::size_of;
 			// The index type of both voters and targets need to be smaller than that of usize (very
 			// unlikely to be the case, but anyhow)..
-			assert!(size_of::<SolutionVoterIndexOf<T>>() <= size_of::<usize>());
-			assert!(size_of::<SolutionTargetIndexOf<T>>() <= size_of::<usize>());
+			assert!(size_of::<SolutionVoterIndexOf<T::MinerConfig>>() <= size_of::<usize>());
+			assert!(size_of::<SolutionTargetIndexOf<T::MinerConfig>>() <= size_of::<usize>());
 
 			// ----------------------------
 			// Based on the requirements of [`sp_npos_elections::Assignment::try_normalize`].
-			let max_vote: usize = <SolutionOf<T> as NposSolution>::LIMIT;
+			let max_vote: usize = <SolutionOf<T::MinerConfig> as NposSolution>::LIMIT;
 
 			// 2. Maximum sum of [SolutionAccuracy; 16] must fit into `UpperOf<OffchainAccuracy>`.
 			let maximum_chain_accuracy: Vec<UpperOf<SolutionAccuracyOf<T>>> = (0..max_vote)
@@ -841,8 +838,13 @@ pub mod pallet {
 			// solution cannot represent any voters more than `LIMIT` anyhow.
 			assert_eq!(
 				<T::DataProvider as ElectionDataProvider>::MaxVotesPerVoter::get(),
-				<SolutionOf<T> as NposSolution>::LIMIT as u32,
+				<SolutionOf<T::MinerConfig> as NposSolution>::LIMIT as u32,
 			);
+
+			// While it won't cause any failures, setting `SignedMaxRefunds` gt
+			// `SignedMaxSubmissions` is a red flag that the developer does not understand how to
+			// configure this pallet.
+			assert!(T::SignedMaxSubmissions::get() >= T::SignedMaxRefunds::get());
 		}
 	}
 
@@ -873,7 +875,7 @@ pub mod pallet {
 		))]
 		pub fn submit_unsigned(
 			origin: OriginFor<T>,
-			raw_solution: Box<RawSolution<SolutionOf<T>>>,
+			raw_solution: Box<RawSolution<SolutionOf<T::MinerConfig>>>,
 			witness: SolutionOrSnapshotSize,
 		) -> DispatchResultWithPostInfo {
 			ensure_none(origin)?;
@@ -962,7 +964,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::submit())]
 		pub fn submit(
 			origin: OriginFor<T>,
-			raw_solution: Box<RawSolution<SolutionOf<T>>>,
+			raw_solution: Box<RawSolution<SolutionOf<T::MinerConfig>>>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
@@ -977,20 +979,23 @@ pub mod pallet {
 			let size = Self::snapshot_metadata().ok_or(Error::<T>::MissingSnapshotMetadata)?;
 
 			ensure!(
-				Self::feasibility_weight_of(&raw_solution, size) < T::SignedMaxWeight::get(),
+				Self::solution_weight_of(&raw_solution, size) < T::SignedMaxWeight::get(),
 				Error::<T>::SignedTooMuchWeight,
 			);
 
 			// create the submission
 			let deposit = Self::deposit_for(&raw_solution, size);
-			let reward = {
+			let call_fee = {
 				let call = Call::submit { raw_solution: raw_solution.clone() };
-				let call_fee = T::EstimateCallFee::estimate_call_fee(&call, None.into());
-				T::SignedRewardBase::get().saturating_add(call_fee)
+				T::EstimateCallFee::estimate_call_fee(&call, None.into())
 			};
 
-			let submission =
-				SignedSubmission { who: who.clone(), deposit, raw_solution: *raw_solution, reward };
+			let submission = SignedSubmission {
+				who: who.clone(),
+				deposit,
+				raw_solution: *raw_solution,
+				call_fee,
+			};
 
 			// insert the submission if the queue has space or it's better than the weakest
 			// eject the weakest if the queue was full
@@ -1412,7 +1417,7 @@ impl<T: Config> Pallet<T> {
 
 	/// Checks the feasibility of a solution.
 	pub fn feasibility_check(
-		raw_solution: RawSolution<SolutionOf<T>>,
+		raw_solution: RawSolution<SolutionOf<T::MinerConfig>>,
 		compute: ElectionCompute,
 	) -> Result<ReadySolution<T::AccountId>, FeasibilityError> {
 		let RawSolution { solution, score, round } = raw_solution;
@@ -1429,7 +1434,7 @@ impl<T: Config> Pallet<T> {
 		ensure!(winners.len() as u32 == desired_targets, FeasibilityError::WrongWinnerCount);
 
 		// Ensure that the solution's score can pass absolute min-score.
-		let submitted_score = raw_solution.score.clone();
+		let submitted_score = raw_solution.score;
 		ensure!(
 			Self::minimum_untrusted_score().map_or(true, |min_score| {
 				submitted_score.strict_threshold_better(min_score, Perbill::zero())
@@ -1442,10 +1447,10 @@ impl<T: Config> Pallet<T> {
 			Self::snapshot().ok_or(FeasibilityError::SnapshotUnavailable)?;
 
 		// ----- Start building. First, we need some closures.
-		let cache = helpers::generate_voter_cache::<T>(&snapshot_voters);
-		let voter_at = helpers::voter_at_fn::<T>(&snapshot_voters);
-		let target_at = helpers::target_at_fn::<T>(&snapshot_targets);
-		let voter_index = helpers::voter_index_fn_usize::<T>(&cache);
+		let cache = helpers::generate_voter_cache::<T::MinerConfig>(&snapshot_voters);
+		let voter_at = helpers::voter_at_fn::<T::MinerConfig>(&snapshot_voters);
+		let target_at = helpers::target_at_fn::<T::MinerConfig>(&snapshot_targets);
+		let voter_index = helpers::voter_index_fn_usize::<T::MinerConfig>(&cache);
 
 		// Then convert solution -> assignment. This will fail if any of the indices are gibberish,
 		// namely any of the voters or targets.
@@ -1454,32 +1459,29 @@ impl<T: Config> Pallet<T> {
 			.map_err::<FeasibilityError, _>(Into::into)?;
 
 		// Ensure that assignments is correct.
-		let _ = assignments
-			.iter()
-			.map(|ref assignment| {
-				// Check that assignment.who is actually a voter (defensive-only).
-				// NOTE: while using the index map from `voter_index` is better than a blind linear
-				// search, this *still* has room for optimization. Note that we had the index when
-				// we did `solution -> assignment` and we lost it. Ideal is to keep the index
-				// around.
+		let _ = assignments.iter().try_for_each(|assignment| {
+			// Check that assignment.who is actually a voter (defensive-only).
+			// NOTE: while using the index map from `voter_index` is better than a blind linear
+			// search, this *still* has room for optimization. Note that we had the index when
+			// we did `solution -> assignment` and we lost it. Ideal is to keep the index
+			// around.
 
-				// Defensive-only: must exist in the snapshot.
-				let snapshot_index =
-					voter_index(&assignment.who).ok_or(FeasibilityError::InvalidVoter)?;
-				// Defensive-only: index comes from the snapshot, must exist.
-				let (_voter, _stake, targets) =
-					snapshot_voters.get(snapshot_index).ok_or(FeasibilityError::InvalidVoter)?;
+			// Defensive-only: must exist in the snapshot.
+			let snapshot_index =
+				voter_index(&assignment.who).ok_or(FeasibilityError::InvalidVoter)?;
+			// Defensive-only: index comes from the snapshot, must exist.
+			let (_voter, _stake, targets) =
+				snapshot_voters.get(snapshot_index).ok_or(FeasibilityError::InvalidVoter)?;
 
-				// Check that all of the targets are valid based on the snapshot.
-				if assignment.distribution.iter().any(|(d, _)| !targets.contains(d)) {
-					return Err(FeasibilityError::InvalidVote)
-				}
-				Ok(())
-			})
-			.collect::<Result<(), FeasibilityError>>()?;
+			// Check that all of the targets are valid based on the snapshot.
+			if assignment.distribution.iter().any(|(d, _)| !targets.contains(d)) {
+				return Err(FeasibilityError::InvalidVote)
+			}
+			Ok(())
+		})?;
 
 		// ----- Start building support. First, we need one more closure.
-		let stake_of = helpers::stake_of_fn::<T>(&snapshot_voters, &cache);
+		let stake_of = helpers::stake_of_fn::<T::MinerConfig>(&snapshot_voters, &cache);
 
 		// This might fail if the normalization fails. Very unlikely. See `integrity_test`.
 		let staked_assignments = assignment_ratio_to_staked_normalized(assignments, stake_of)
@@ -1789,8 +1791,8 @@ mod tests {
 	use super::*;
 	use crate::{
 		mock::{
-			multi_phase_events, roll_to, AccountId, ExtBuilder, MockWeightInfo, MultiPhase,
-			Runtime, SignedMaxSubmissions, System, TargetIndex, Targets,
+			multi_phase_events, roll_to, AccountId, ExtBuilder, MockWeightInfo, MockedWeightInfo,
+			MultiPhase, Runtime, SignedMaxSubmissions, System, TargetIndex, Targets,
 		},
 		Phase,
 	};
@@ -2109,7 +2111,7 @@ mod tests {
 			// set the solution balancing to get the desired score.
 			crate::mock::Balancing::set(Some((2, 0)));
 
-			let (solution, _) = MultiPhase::mine_solution::<<Runtime as Config>::Solver>().unwrap();
+			let (solution, _) = MultiPhase::mine_solution().unwrap();
 			// Default solution's score.
 			assert!(matches!(solution.score, ElectionScore { minimal_stake: 50, .. }));
 
@@ -2133,7 +2135,7 @@ mod tests {
 	#[test]
 	fn number_of_voters_allowed_2sec_block() {
 		// Just a rough estimate with the substrate weights.
-		assert!(!MockWeightInfo::get());
+		assert_eq!(MockWeightInfo::get(), MockedWeightInfo::Real);
 
 		let all_voters: u32 = 10_000;
 		let all_targets: u32 = 5_000;

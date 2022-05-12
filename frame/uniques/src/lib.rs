@@ -43,7 +43,7 @@ pub mod weights;
 
 use codec::{Decode, Encode};
 use frame_support::traits::{
-	BalanceStatus::Reserved, Currency, EnsureOriginWithArg, ReservableCurrency,
+	tokens::Locker, BalanceStatus::Reserved, Currency, EnsureOriginWithArg, ReservableCurrency,
 };
 use frame_system::Config as SystemConfig;
 use sp_runtime::{
@@ -107,6 +107,9 @@ pub mod pallet {
 			Self::Origin,
 			Self::ClassId,
 		>;
+
+		/// Locker trait to enable Locking mechanism downstream.
+		type Locker: Locker<Self::ClassId, Self::InstanceId>;
 
 		/// The basic amount of funds that must be reserved for an asset class.
 		#[pallet::constant]
@@ -352,6 +355,8 @@ pub mod pallet {
 		Unapproved,
 		/// The named owner has not signed ownership of the class is acceptable.
 		Unaccepted,
+		/// The asset instance is locked.
+		Locked,
 	}
 
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
@@ -715,7 +720,7 @@ pub mod pallet {
 
 			Class::<T, I>::try_mutate(class, |maybe_details| {
 				let details = maybe_details.as_mut().ok_or(Error::<T, I>::UnknownClass)?;
-				ensure!(&origin == &details.freezer, Error::<T, I>::NoPermission);
+				ensure!(origin == details.freezer, Error::<T, I>::NoPermission);
 
 				details.is_frozen = true;
 
@@ -739,7 +744,7 @@ pub mod pallet {
 
 			Class::<T, I>::try_mutate(class, |maybe_details| {
 				let details = maybe_details.as_mut().ok_or(Error::<T, I>::UnknownClass)?;
-				ensure!(&origin == &details.admin, Error::<T, I>::NoPermission);
+				ensure!(origin == details.admin, Error::<T, I>::NoPermission);
 
 				details.is_frozen = false;
 
@@ -773,7 +778,7 @@ pub mod pallet {
 
 			Class::<T, I>::try_mutate(class, |maybe_details| {
 				let details = maybe_details.as_mut().ok_or(Error::<T, I>::UnknownClass)?;
-				ensure!(&origin == &details.owner, Error::<T, I>::NoPermission);
+				ensure!(origin == details.owner, Error::<T, I>::NoPermission);
 				if details.owner == owner {
 					return Ok(())
 				}
@@ -822,7 +827,7 @@ pub mod pallet {
 
 			Class::<T, I>::try_mutate(class, |maybe_details| {
 				let details = maybe_details.as_mut().ok_or(Error::<T, I>::UnknownClass)?;
-				ensure!(&origin == &details.owner, Error::<T, I>::NoPermission);
+				ensure!(origin == details.owner, Error::<T, I>::NoPermission);
 
 				details.issuer = issuer.clone();
 				details.admin = admin.clone();
@@ -862,7 +867,7 @@ pub mod pallet {
 				Asset::<T, I>::get(&class, &instance).ok_or(Error::<T, I>::UnknownClass)?;
 
 			if let Some(check) = maybe_check {
-				let permitted = &check == &class_details.admin || &check == &details.owner;
+				let permitted = check == class_details.admin || check == details.owner;
 				ensure!(permitted, Error::<T, I>::NoPermission);
 			}
 
@@ -911,7 +916,7 @@ pub mod pallet {
 			let mut details =
 				Asset::<T, I>::get(&class, &instance).ok_or(Error::<T, I>::UnknownClass)?;
 			if let Some(check) = maybe_check {
-				let permitted = &check == &class_details.admin || &check == &details.owner;
+				let permitted = check == class_details.admin || check == details.owner;
 				ensure!(permitted, Error::<T, I>::NoPermission);
 			}
 			let maybe_check_delegate = maybe_check_delegate.map(T::Lookup::lookup).transpose()?;

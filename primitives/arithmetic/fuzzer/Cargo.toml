@@ -14,10 +14,10 @@ publish = false
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sp-arithmetic = { version = "5.0.0", path = ".." }
 honggfuzz = "0.5.49"
-primitive-types = "0.11.1"
 num-bigint = "0.2"
+primitive-types = "0.11.1"
+sp-arithmetic = { version = "5.0.0", path = ".." }
 
 [[bin]]
 name = "biguint"

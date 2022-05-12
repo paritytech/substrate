@@ -1,0 +1,32 @@
+[
+	{
+		"metric": "Blake2256",
+		"minimum": {
+			"MiBs": 1029.0
+		}
+	},
+	{
+		"metric": "Sr25519Verify",
+		"minimum": {
+			"KiBs": 666.0
+		}
+	},
+	{
+		"metric": "MemCopy",
+		"minimum": {
+			"GiBs": 14.323
+		}
+	},
+	{
+		"metric": "DiskSeqWrite",
+		"minimum": {
+			"MiBs": 450.0
+		}
+	},
+	{
+		"metric": "DiskRndWrite",
+		"minimum": {
+			"MiBs": 200.0
+		}
+	}
+]

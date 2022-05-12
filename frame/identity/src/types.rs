@@ -53,6 +53,12 @@ pub enum Data {
 	ShaThree256([u8; 32]),
 }
 
+impl Data {
+	pub fn is_none(&self) -> bool {
+		self == &Data::None
+	}
+}
+
 impl Decode for Data {
 	fn decode<I: codec::Input>(input: &mut I) -> sp_std::result::Result<Self, codec::Error> {
 		let b = input.read_byte()?;
@@ -211,20 +217,14 @@ impl<Balance: Encode + Decode + MaxEncodedLen + Copy + Clone + Debug + Eq + Part
 	/// Returns `true` if this judgement is indicative of a deposit being currently held. This means
 	/// it should not be cleared or replaced except by an operation which utilizes the deposit.
 	pub(crate) fn has_deposit(&self) -> bool {
-		match self {
-			Judgement::FeePaid(_) => true,
-			_ => false,
-		}
+		matches!(self, Judgement::FeePaid(_))
 	}
 
 	/// Returns `true` if this judgement is one that should not be generally be replaced outside
 	/// of specialized handlers. Examples include "malicious" judgements and deposit-holding
 	/// judgements.
 	pub(crate) fn is_sticky(&self) -> bool {
-		match self {
-			Judgement::FeePaid(_) | Judgement::Erroneous => true,
-			_ => false,
-		}
+		matches!(self, Judgement::FeePaid(_) | Judgement::Erroneous)
 	}
 }
 
@@ -331,6 +331,37 @@ pub struct IdentityInfo<FieldLimit: Get<u32>> {
 
 	/// The Twitter identity. The leading `@` character may be elided.
 	pub twitter: Data,
+}
+
+impl<FieldLimit: Get<u32>> IdentityInfo<FieldLimit> {
+	pub(crate) fn fields(&self) -> IdentityFields {
+		let mut res = <BitFlags<IdentityField>>::empty();
+		if !self.display.is_none() {
+			res.insert(IdentityField::Display);
+		}
+		if !self.legal.is_none() {
+			res.insert(IdentityField::Legal);
+		}
+		if !self.web.is_none() {
+			res.insert(IdentityField::Web);
+		}
+		if !self.riot.is_none() {
+			res.insert(IdentityField::Riot);
+		}
+		if !self.email.is_none() {
+			res.insert(IdentityField::Email);
+		}
+		if self.pgp_fingerprint.is_some() {
+			res.insert(IdentityField::PgpFingerprint);
+		}
+		if !self.image.is_none() {
+			res.insert(IdentityField::Image);
+		}
+		if !self.twitter.is_none() {
+			res.insert(IdentityField::Twitter);
+		}
+		IdentityFields(res)
+	}
 }
 
 /// Information concerning the identity of the controller of an account.

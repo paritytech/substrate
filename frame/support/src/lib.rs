@@ -64,6 +64,7 @@ pub mod event;
 pub mod inherent;
 #[macro_use]
 pub mod error;
+pub mod crypto;
 pub mod instances;
 pub mod migrations;
 pub mod traits;
@@ -86,6 +87,8 @@ pub use self::{
 		StorageHasher, Twox128, Twox256, Twox64Concat,
 	},
 	storage::{
+		bounded_btree_map::BoundedBTreeMap,
+		bounded_btree_set::BoundedBTreeSet,
 		bounded_vec::{BoundedSlice, BoundedVec},
 		migration,
 		weak_bounded_vec::WeakBoundedVec,
@@ -102,7 +105,7 @@ use scale_info::TypeInfo;
 use sp_runtime::TypeId;
 
 /// A unified log target for support operations.
-pub const LOG_TARGET: &'static str = "runtime::frame-support";
+pub const LOG_TARGET: &str = "runtime::frame-support";
 
 /// A type that cannot be instantiated.
 #[derive(Encode, Decode, Debug, PartialEq, Eq, Clone, TypeInfo)]
@@ -135,6 +138,25 @@ macro_rules! bounded_vec {
 			$crate::sp_std::vec![$value ; $repetition].try_into().unwrap()
 		}
 	}
+}
+
+/// Build a bounded btree-map from the given literals.
+///
+/// The type of the outcome must be known.
+///
+/// Will not handle any errors and just panic if the given literals cannot fit in the corresponding
+/// bounded vec type. Thus, this is only suitable for testing and non-consensus code.
+#[macro_export]
+#[cfg(feature = "std")]
+macro_rules! bounded_btree_map {
+	($ ( $key:expr => $value:expr ),* $(,)?) => {
+		{
+			$crate::traits::TryCollect::<$crate::BoundedBTreeMap<_, _, _>>::try_collect(
+				$crate::sp_std::vec![$(($key, $value)),*].into_iter()
+			).unwrap()
+		}
+	};
+
 }
 
 /// Generate a new type alias for [`storage::types::StorageValue`],
