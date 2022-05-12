@@ -270,7 +270,6 @@ pub use sc_network_common::sync::{
 	warp::{WarpSyncPhase, WarpSyncProgress},
 	StateDownloadProgress, SyncState,
 };
-pub use sc_network_sync::{block_request_handler, state_request_handler, warp_request_handler};
 pub use service::{
 	DecodingError, IfDisconnected, KademliaKey, Keypair, NetworkService, NetworkWorker,
 	NotificationSender, NotificationSenderReady, OutboundFailure, PublicKey, RequestFailure,

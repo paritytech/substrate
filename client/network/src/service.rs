@@ -61,7 +61,6 @@ use parking_lot::Mutex;
 use sc_client_api::{BlockBackend, ProofProvider};
 use sc_consensus::{BlockImportError, BlockImportStatus, ImportQueue, Link};
 use sc_network_common::sync::{SyncMode, SyncState, SyncStatus};
-use sc_network_sync::ChainSync;
 use sc_peerset::PeersetHandle;
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_blockchain::{HeaderBackend, HeaderMetadata};
@@ -208,7 +207,7 @@ where
 			None => (None, None),
 		};
 
-		let chain_sync = ChainSync::new(
+		let chain_sync = (params.create_chain_sync)(
 			if params.role.is_light() {
 				SyncMode::Light
 			} else {
@@ -220,11 +219,8 @@ where
 				}
 			},
 			params.chain.clone(),
-			params.block_announce_validator,
-			params.network_config.max_parallel_downloads,
 			warp_sync_provider,
-		)
-		.map_err(Box::new)?;
+		)?;
 		let (protocol, peerset_handle, mut known_addresses) = Protocol::new(
 			From::from(&params.role),
 			params.chain.clone(),
@@ -237,7 +233,7 @@ where
 				)
 				.collect(),
 			params.metrics_registry.as_ref(),
-			Box::new(chain_sync),
+			chain_sync,
 		)?;
 
 		// List of multiaddresses that we know in the network.

@@ -41,7 +41,7 @@ use libp2p::{
 };
 use prometheus_endpoint::Registry;
 use sc_consensus::ImportQueue;
-use sp_consensus::block_validation::BlockAnnounceValidator;
+use sc_network_common::sync::ChainSync;
 use sp_runtime::traits::Block as BlockT;
 use std::{
 	borrow::Cow,
@@ -96,8 +96,14 @@ where
 	/// valid.
 	pub import_queue: Box<dyn ImportQueue<B>>,
 
-	/// Type to check incoming block announcements.
-	pub block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>,
+	/// Factory function that creates a new instance of chain sync.
+	pub create_chain_sync: Box<
+		dyn FnOnce(
+			sc_network_common::sync::SyncMode,
+			Arc<Client>,
+			Option<Arc<dyn WarpSyncProvider<B>>>,
+		) -> crate::error::Result<Box<dyn ChainSync<B>>>,
+	>,
 
 	/// Registry for recording prometheus metrics to.
 	pub metrics_registry: Option<Registry>,

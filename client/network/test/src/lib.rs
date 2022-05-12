@@ -48,17 +48,19 @@ use sc_consensus::{
 };
 pub use sc_network::config::EmptyTransactionPool;
 use sc_network::{
-	block_request_handler::BlockRequestHandler,
 	config::{
 		MultiaddrWithPeerId, NetworkConfiguration, NonDefaultSetConfig, NonReservedPeerMode, Role,
 		SyncMode, TransportConfig,
 	},
-	state_request_handler::StateRequestHandler,
-	warp_request_handler, Multiaddr, NetworkService, NetworkWorker,
+	Multiaddr, NetworkService, NetworkWorker,
 };
 pub use sc_network_common::config::ProtocolId;
 use sc_network_common::warp_sync;
 use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
+use sc_network_sync::{
+	block_request_handler::BlockRequestHandler, state_request_handler::StateRequestHandler,
+	warp_request_handler, ChainSync,
+};
 use sc_service::client::Client;
 use sp_blockchain::{
 	well_known_cache_keys::{self, Id as CacheKeyId},
@@ -829,6 +831,10 @@ where
 			protocol_config
 		};
 
+		let max_parallel_downloads = network_config.max_parallel_downloads;
+		let block_announce_validator = config
+			.block_announce_validator
+			.unwrap_or_else(|| Box::new(DefaultBlockAnnounceValidator));
 		let network = NetworkWorker::new(sc_network::config::Params {
 			role: if config.is_authority { Role::Authority } else { Role::Full },
 			executor: None,
@@ -840,9 +846,18 @@ where
 			transaction_pool: Arc::new(EmptyTransactionPool),
 			protocol_id,
 			import_queue,
-			block_announce_validator: config
-				.block_announce_validator
-				.unwrap_or_else(|| Box::new(DefaultBlockAnnounceValidator)),
+			create_chain_sync: Box::new(move |sync_mode, chain, warp_sync_provider| {
+				match ChainSync::new(
+					sync_mode,
+					chain,
+					block_announce_validator,
+					max_parallel_downloads,
+					warp_sync_provider,
+				) {
+					Ok(chain_sync) => Ok(Box::new(chain_sync)),
+					Err(error) => Err(Box::new(error).into()),
+				}
+			}),
 			metrics_registry: None,
 			block_request_protocol_config,
 			state_request_protocol_config,
