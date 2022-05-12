@@ -158,7 +158,12 @@ where
 		use BalanceOrAsset::*;
 		match (self, other) {
 			(Balance { amount: a }, Balance { amount: b }) => Ok(a >= b),
-			(Asset { amount: a, .. }, Asset { amount: b, .. }) => Ok(a >= b),
+			(Asset { id, amount: a }, Asset { id: id2, amount: b, .. }) =>
+				if id != id2 {
+					Err(Error::<T, I>::WrongCurrency.into())
+				} else {
+					Ok(a >= b)
+				},
 			_ => Err(Error::<T, I>::WrongCurrency.into()),
 		}
 	}
