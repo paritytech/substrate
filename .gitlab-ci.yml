@@ -419,7 +419,7 @@ test-frame-executive-features-compile-to-wasm:
     RUST_BACKTRACE: 1
   script:
     - cd ./frame/executive
-    - cargo +nightly build --target=wasm32-unknown-unknown --no-default-features --features background-signature-verification
+    - cargo test --no-default-features --features background-signature-verification
     - sccache -s
 
 test-linux-stable-int:

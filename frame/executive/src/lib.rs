@@ -367,29 +367,26 @@ where
 
 	fn check_extrinsics(
 		extrinsics: Vec<Block::Extrinsic>,
-	) -> Vec<(CheckedOf<Block::Extrinsic, Context>, Vec<u8>)> {
-		extrinsics
-			.into_iter()
-			.map(|extrinsic| {
-				let encoded = extrinsic.encode();
-				#[cfg(feature = "background-signature-verification")]
-				match extrinsic.background_check(&Default::default()) {
-					Ok(checked_extrinsic) => (checked_extrinsic, encoded),
-					Err(e) => {
-						let err: &'static str = e.into();
-						panic!("{}", err)
-					},
-				}
-				#[cfg(not(feature = "background-signature-verification"))]
-				match extrinsic.check(&Default::default()) {
-					Ok(checked_extrinsic) => (checked_extrinsic, encoded),
-					Err(e) => {
-						let err: &'static str = e.into();
-						panic!("{}", err)
-					},
-				}
-			})
-			.collect()
+	) -> impl Iterator<Item = (CheckedOf<Block::Extrinsic, Context>, Vec<u8>)> {
+		extrinsics.into_iter().map(|extrinsic| {
+			let encoded = extrinsic.encode();
+			#[cfg(feature = "background-signature-verification")]
+			match extrinsic.background_check(&Default::default()) {
+				Ok(checked_extrinsic) => (checked_extrinsic, encoded),
+				Err(e) => {
+					let err: &'static str = e.into();
+					panic!("{}", err)
+				},
+			}
+			#[cfg(not(feature = "background-signature-verification"))]
+			match extrinsic.check(&Default::default()) {
+				Ok(checked_extrinsic) => (checked_extrinsic, encoded),
+				Err(e) => {
+					let err: &'static str = e.into();
+					panic!("{}", err)
+				},
+			}
+		})
 	}
 
 	/// Actually execute all transitions for `block`.
@@ -426,19 +423,17 @@ where
 
 	/// Execute given checked extrinsics and take care of post-extrinsics book-keeping.
 	fn execute_checked_extrinsics_with_book_keeping(
-		checked_extrinsics: Vec<(CheckedOf<Block::Extrinsic, Context>, Vec<u8>)>,
+		checked_extrinsics: impl Iterator<Item = (CheckedOf<Block::Extrinsic, Context>, Vec<u8>)>,
 		block_number: NumberFor<Block>,
 	) {
-		checked_extrinsics.into_iter().for_each(
-			|(checked_extrinsic, unchecked_extrinsic_encoded)| {
-				if let Err(e) =
-					Self::apply_extrinsic_with_len(checked_extrinsic, unchecked_extrinsic_encoded)
-				{
-					let err: &'static str = e.into();
-					panic!("{}", err)
-				}
-			},
-		);
+		checked_extrinsics.for_each(|(checked_extrinsic, unchecked_extrinsic_encoded)| {
+			if let Err(e) =
+				Self::apply_extrinsic_with_len(checked_extrinsic, unchecked_extrinsic_encoded)
+			{
+				let err: &'static str = e.into();
+				panic!("{}", err)
+			}
+		});
 
 		// post-extrinsics book-keeping
 		<frame_system::Pallet<System>>::note_finished_extrinsics();
