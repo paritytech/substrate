@@ -24,8 +24,8 @@ use crate::{
 	storage::Storage,
 	wasm::{PrefabWasmModule, ReturnCode as RuntimeReturnCode},
 	weights::WeightInfo,
-	BalanceOf, Code, CodeStorage, Config, ContractInfoOf, DefaultAddressGenerator, DeletionQueue,
-	DefaultContractAccessWeight, Error, Pallet, Schedule,
+	BalanceOf, Code, CodeStorage, Config, ContractInfoOf, DefaultAddressGenerator,
+	DefaultContractAccessWeight, DeletionQueue, Error, Pallet, Schedule,
 };
 use assert_matches::assert_matches;
 use codec::Encode;
