@@ -47,14 +47,14 @@ fn funded_account<T: Config>(name: &'static str, index: u32) -> T::AccountId {
 	caller
 }
 
-fn add_proposal<T: Config>(n: u32) -> Result<T::Hash, &'static str> {
+fn add_proposal<T: Config>(n: u32) -> Result<(T::Hash, T::AccountId), &'static str> {
 	let other = funded_account::<T>("proposer", n);
 	let value = T::MinimumDeposit::get();
 	let proposal_hash: T::Hash = T::Hashing::hash_of(&n);
 
-	Democracy::<T>::propose(RawOrigin::Signed(other).into(), proposal_hash, value)?;
+	Democracy::<T>::propose(RawOrigin::Signed(other.clone()).into(), proposal_hash, value)?;
 
-	Ok(proposal_hash)
+	Ok((proposal_hash, other))
 }
 
 fn add_referendum<T: Config>(n: u32) -> Result<ReferendumIndex, &'static str> {
@@ -107,7 +107,7 @@ benchmarks! {
 		let s in 0 .. MAX_SECONDERS;
 
 		let caller = funded_account::<T>("caller", 0);
-		let proposal_hash = add_proposal::<T>(s)?;
+		let (proposal_hash, _) = add_proposal::<T>(s)?;
 
 		// Create s existing "seconds"
 		for i in 0 .. s {
@@ -806,6 +806,33 @@ benchmarks! {
 				.dispatch_bypass_filter(origin),
 			Err(Error::<T>::PreimageInvalid.into())
 		);
+	}
+
+	set_metadata {
+		let b in 0 .. T::MetadataLimit::get();
+		let (hash, proposer) = add_proposal::<T>(0)?;
+		let metadata = vec![0u8; b as usize];
+	}: _(RawOrigin::Signed(proposer), hash, metadata.clone())
+	verify {
+		let final_metadata = ProposalMetadataOf::<T>::get(hash).unwrap();
+		let saved_metadata: Vec<u8> = final_metadata.metadata.into();
+		assert_eq!(metadata, saved_metadata);
+	}
+
+	clear_metadata {
+		let b in 0 .. T::MetadataLimit::get();
+		let (hash, proposer) = add_proposal::<T>(0)?;
+		let metadata = vec![0u8; b as usize];
+		assert_ok!(
+			Pallet::<T>::set_metadata(
+				RawOrigin::Signed(proposer.clone()).into(),
+				hash,
+				metadata,
+			)
+		);
+	}: _(RawOrigin::Signed(proposer), hash)
+	verify {
+		assert!(ProposalMetadataOf::<T>::get(hash).is_none());
 	}
 
 	impl_benchmark_test_suite!(

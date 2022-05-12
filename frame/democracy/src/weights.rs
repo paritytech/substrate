@@ -72,6 +72,8 @@ pub trait WeightInfo {
 	fn unlock_set(r: u32, ) -> Weight;
 	fn remove_vote(r: u32, ) -> Weight;
 	fn remove_other_vote(r: u32, ) -> Weight;
+	fn set_metadata(b: u32) -> Weight;
+	fn clear_metadata(b: u32) -> Weight;
 }
 
 /// Weights for pallet_democracy using the Substrate node and recommended hardware.
@@ -310,6 +312,12 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
+	fn set_metadata(_b: u32) -> Weight {
+		0
+	}
+	fn clear_metadata(_b: u32) -> Weight {
+		0
+	}
 }
 
 // For backwards compatibility and tests
@@ -546,5 +554,11 @@ impl WeightInfo for () {
 			.saturating_add((122_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
+	}
+	fn set_metadata(_b: u32) -> Weight {
+		0
+	}
+	fn clear_metadata(_b: u32) -> Weight {
+		0
 	}
 }

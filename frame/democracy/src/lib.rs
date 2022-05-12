@@ -1306,8 +1306,7 @@ pub mod pallet {
 		/// - `proposal_hash`: The proposal hash to add metadata for.
 		/// - `metadata`: An opaque blob representing the metadata for the proposal. Could be JSON,
 		///   a Hash, or raw text. Up to the community to decide how exactly to use this.
-		//#[pallet::weight(T::WeightInfo::set_metadata(metadata.len() as u32))]
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::set_metadata(metadata.len() as u32))]
 		pub fn set_metadata(
 			origin: OriginFor<T>,
 			proposal_hash: T::Hash,
@@ -1347,8 +1346,7 @@ pub mod pallet {
 		/// - `origin`: Must be `Signed`. If the proposal is ongoing, it must also be the creator of
 		///   the proposal.
 		/// - `proposal_hash`: The proposal hash to clear metadata for.
-		//#[pallet::weight(T::WeightInfo::clear_metadata(T::MetadataLimit::get()))]
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::clear_metadata(T::MetadataLimit::get()))]
 		pub fn clear_metadata(origin: OriginFor<T>, proposal_hash: T::Hash) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			let public_props = PublicProps::<T>::get();
