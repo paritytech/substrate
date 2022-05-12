@@ -23,10 +23,10 @@ use crate::{
 	chain_extension::ChainExtension,
 	storage::meter::Diff,
 	wasm::{env_def::ImportSatisfyCheck, OwnerInfo, PrefabWasmModule},
-	AccountIdOf, Config, Schedule,
+	AccountIdOf, CodeVec, Config, Error, Schedule,
 };
 use codec::{Encode, MaxEncodedLen};
-use sp_runtime::traits::Hash;
+use sp_runtime::{traits::Hash, DispatchError};
 use sp_std::prelude::*;
 use wasm_instrument::parity_wasm::elements::{
 	self, External, Internal, MemoryType, Type, ValueType,
@@ -404,16 +404,18 @@ fn do_preparation<C: ImportSatisfyCheck, T: Config>(
 	original_code: Vec<u8>,
 	schedule: &Schedule<T>,
 	owner: AccountIdOf<T>,
-) -> Result<PrefabWasmModule<T>, &'static str> {
-	let (code, (initial, maximum)) =
-		check_and_instrument::<C, T>(original_code.as_ref(), schedule)?;
+) -> Result<PrefabWasmModule<T>, (DispatchError, &'static str)> {
+	let original_code: CodeVec<T> =
+		original_code.try_into().map_err(|_| (<Error<T>>::CodeTooLarge.into(), ""))?;
+	let (code, (initial, maximum)) = check_and_instrument::<C, T>(original_code.as_ref(), schedule)
+		.map_err(|msg| (<Error<T>>::CodeRejected.into(), msg))?;
 	let original_code_len = original_code.len();
 
 	let mut module = PrefabWasmModule {
 		instruction_weights_version: schedule.instruction_weights.version,
 		initial,
 		maximum,
-		code,
+		code: code.try_into().map_err(|_| (<Error<T>>::CodeTooLarge.into(), ""))?,
 		code_hash: T::Hashing::hash(&original_code),
 		original_code: Some(original_code),
 		owner_info: None,
@@ -449,7 +451,7 @@ pub fn prepare_contract<T: Config>(
 	original_code: Vec<u8>,
 	schedule: &Schedule<T>,
 	owner: AccountIdOf<T>,
-) -> Result<PrefabWasmModule<T>, &'static str> {
+) -> Result<PrefabWasmModule<T>, (DispatchError, &'static str)> {
 	do_preparation::<super::runtime::Env, T>(original_code, schedule, owner)
 }
 
@@ -459,10 +461,10 @@ pub fn prepare_contract<T: Config>(
 ///
 /// Use this when an existing contract should be re-instrumented with a newer schedule version.
 pub fn reinstrument_contract<T: Config>(
-	original_code: Vec<u8>,
+	original_code: &[u8],
 	schedule: &Schedule<T>,
 ) -> Result<Vec<u8>, &'static str> {
-	Ok(check_and_instrument::<super::runtime::Env, T>(&original_code, schedule)?.0)
+	Ok(check_and_instrument::<super::runtime::Env, T>(original_code, schedule)?.0)
 }
 
 /// Alternate (possibly unsafe) preparation functions used only for benchmarking.
@@ -493,9 +495,12 @@ pub mod benchmarking {
 			instruction_weights_version: schedule.instruction_weights.version,
 			initial: memory_limits.0,
 			maximum: memory_limits.1,
-			code: contract_module.into_wasm_code()?,
 			code_hash: T::Hashing::hash(&original_code),
-			original_code: Some(original_code),
+			original_code: Some(original_code.try_into().map_err(|_| "Original code too large")?),
+			code: contract_module
+				.into_wasm_code()?
+				.try_into()
+				.map_err(|_| "Instrumented code too large")?,
 			owner_info: Some(OwnerInfo {
 				owner,
 				// this is a helper function for benchmarking which skips deposit collection
@@ -559,7 +564,7 @@ mod tests {
 					.. Default::default()
 				};
 				let r = do_preparation::<env::Test, Test>(wasm, &schedule, ALICE);
-				assert_matches::assert_matches!(r, $($expected)*);
+				assert_matches::assert_matches!(r.map_err(|(_, msg)| msg), $($expected)*);
 			}
 		};
 	}
