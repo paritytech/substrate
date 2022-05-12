@@ -31,11 +31,6 @@ pub use sc_network_common::{
 
 pub use libp2p::{build_multiaddr, core::PublicKey, identity};
 
-// Note: this re-export shouldn't be part of the public API of the crate and will be removed in
-// the future.
-#[doc(hidden)]
-pub use crate::protocol::ProtocolConfig;
-
 use crate::ExHashT;
 
 use core::{fmt, iter};

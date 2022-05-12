@@ -50,8 +50,8 @@ pub use sc_network::config::EmptyTransactionPool;
 use sc_network::{
 	block_request_handler::BlockRequestHandler,
 	config::{
-		MultiaddrWithPeerId, NetworkConfiguration, NonDefaultSetConfig, NonReservedPeerMode,
-		ProtocolConfig, Role, SyncMode, TransportConfig,
+		MultiaddrWithPeerId, NetworkConfiguration, NonDefaultSetConfig, NonReservedPeerMode, Role,
+		SyncMode, TransportConfig,
 	},
 	state_request_handler::StateRequestHandler,
 	warp_request_handler, Multiaddr, NetworkService, NetworkWorker,
@@ -686,7 +686,7 @@ pub struct FullPeerConfig {
 	pub storage_chain: bool,
 }
 
-pub trait TestNetFactory: Sized
+pub trait TestNetFactory: Default + Sized
 where
 	<Self::BlockImport as BlockImport<Block>>::Transaction: Send,
 {
@@ -694,14 +694,8 @@ where
 	type BlockImport: BlockImport<Block, Error = ConsensusError> + Clone + Send + Sync + 'static;
 	type PeerData: Default;
 
-	/// These two need to be implemented!
-	fn from_config(config: &ProtocolConfig) -> Self;
-	fn make_verifier(
-		&self,
-		client: PeersClient,
-		config: &ProtocolConfig,
-		peer_data: &Self::PeerData,
-	) -> Self::Verifier;
+	/// This one needs to be implemented!
+	fn make_verifier(&self, client: PeersClient, peer_data: &Self::PeerData) -> Self::Verifier;
 
 	/// Get reference to peer.
 	fn peer(&mut self, i: usize) -> &mut Peer<Self::PeerData, Self::BlockImport>;
@@ -721,15 +715,10 @@ where
 		Self::PeerData,
 	);
 
-	fn default_config() -> ProtocolConfig {
-		ProtocolConfig::default()
-	}
-
 	/// Create new test network with this many peers.
 	fn new(n: usize) -> Self {
 		trace!(target: "test_network", "Creating test network");
-		let config = Self::default_config();
-		let mut net = Self::from_config(&config);
+		let mut net = Self::default();
 
 		for i in 0..n {
 			trace!(target: "test_network", "Adding peer {}", i);
@@ -765,11 +754,8 @@ where
 		let (block_import, justification_import, data) = self
 			.make_block_import(PeersClient { client: client.clone(), backend: backend.clone() });
 
-		let verifier = self.make_verifier(
-			PeersClient { client: client.clone(), backend: backend.clone() },
-			&Default::default(),
-			&data,
-		);
+		let verifier = self
+			.make_verifier(PeersClient { client: client.clone(), backend: backend.clone() }, &data);
 		let verifier = VerifierAdapter::new(verifier);
 
 		let import_queue = Box::new(BasicQueue::new(
@@ -1010,6 +996,7 @@ where
 	}
 }
 
+#[derive(Default)]
 pub struct TestNet {
 	peers: Vec<Peer<(), PeersClient>>,
 }
@@ -1019,17 +1006,7 @@ impl TestNetFactory for TestNet {
 	type PeerData = ();
 	type BlockImport = PeersClient;
 
-	/// Create new test network with peers and given config.
-	fn from_config(_config: &ProtocolConfig) -> Self {
-		TestNet { peers: Vec::new() }
-	}
-
-	fn make_verifier(
-		&self,
-		_client: PeersClient,
-		_config: &ProtocolConfig,
-		_peer_data: &(),
-	) -> Self::Verifier {
+	fn make_verifier(&self, _client: PeersClient, _peer_data: &()) -> Self::Verifier {
 		PassThroughVerifier::new(false)
 	}
 
@@ -1079,6 +1056,7 @@ impl JustificationImport<Block> for ForceFinalized {
 	}
 }
 
+#[derive(Default)]
 pub struct JustificationTestNet(TestNet);
 
 impl TestNetFactory for JustificationTestNet {
@@ -1086,17 +1064,8 @@ impl TestNetFactory for JustificationTestNet {
 	type PeerData = ();
 	type BlockImport = PeersClient;
 
-	fn from_config(config: &ProtocolConfig) -> Self {
-		JustificationTestNet(TestNet::from_config(config))
-	}
-
-	fn make_verifier(
-		&self,
-		client: PeersClient,
-		config: &ProtocolConfig,
-		peer_data: &(),
-	) -> Self::Verifier {
-		self.0.make_verifier(client, config, peer_data)
+	fn make_verifier(&self, client: PeersClient, peer_data: &()) -> Self::Verifier {
+		self.0.make_verifier(client, peer_data)
 	}
 
 	fn peer(&mut self, i: usize) -> &mut Peer<Self::PeerData, Self::BlockImport> {

@@ -20,7 +20,6 @@ prost-build = "0.9"
 codec = { package = "parity-scale-codec", version = "3.0.0", features = [
 	"derive",
 ] }
-either = "1.5.3"
 futures = "0.3.21"
 libp2p = "0.44.0"
 log = "0.4.16"

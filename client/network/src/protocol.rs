@@ -54,14 +54,13 @@ use sc_network_common::{
 			BlockAnnounce, BlockAttributes, BlockData, BlockRequest, BlockResponse, BlockState,
 			FromBlock,
 		},
-		BadPeer, OnBlockData, OnBlockJustification, OnStateData, PollBlockAnnounceValidation,
-		SyncStatus,
+		BadPeer, ChainSync, OnBlockData, OnBlockJustification, OnStateData,
+		PollBlockAnnounceValidation, SyncStatus,
 	},
-	warp_sync::{EncodedProof, WarpProofRequest, WarpSyncProvider},
+	warp_sync::{EncodedProof, WarpProofRequest},
 };
-use sc_network_sync::{schema::v1::StateResponse, ChainSync};
 use sp_arithmetic::traits::SaturatedConversion;
-use sp_consensus::{block_validation::BlockAnnounceValidator, BlockOrigin};
+use sp_consensus::BlockOrigin;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, CheckedSub, Header as HeaderT, NumberFor, Zero},
@@ -172,11 +171,18 @@ pub struct Protocol<B: BlockT, Client> {
 	tick_timeout: Pin<Box<dyn Stream<Item = ()> + Send>>,
 	/// Pending list of messages to return from `poll` as a priority.
 	pending_messages: VecDeque<CustomMessageOutcome<B>>,
-	config: ProtocolConfig,
+	/// Assigned roles.
+	roles: Roles,
 	genesis_hash: B::Hash,
 	/// State machine that handles the list of in-progress requests. Only full node peers are
 	/// registered.
-	sync: ChainSync<B, Client>,
+	chain_sync: Box<
+		dyn ChainSync<
+			B,
+			sc_network_sync::schema::v1::StateRequest,
+			sc_network_sync::schema::v1::StateResponse,
+		>,
+	>,
 	// All connected peers. Contains both full and light node peers.
 	peers: HashMap<PeerId, Peer<B>>,
 	chain: Arc<Client>,
@@ -236,38 +242,6 @@ pub struct PeerInfo<B: BlockT> {
 	pub best_number: <B::Header as HeaderT>::Number,
 }
 
-/// Configuration for the Substrate-specific part of the networking layer.
-#[derive(Clone)]
-pub struct ProtocolConfig {
-	/// Assigned roles.
-	pub roles: Roles,
-	/// Maximum number of peers to ask the same blocks in parallel.
-	pub max_parallel_downloads: u32,
-	/// Enable state sync.
-	pub sync_mode: config::SyncMode,
-}
-
-impl ProtocolConfig {
-	fn sync_mode(&self) -> sc_network_sync::SyncMode {
-		if self.roles.is_light() {
-			sc_network_sync::SyncMode::Light
-		} else {
-			match self.sync_mode {
-				config::SyncMode::Full => sc_network_sync::SyncMode::Full,
-				config::SyncMode::Fast { skip_proofs, storage_chain_mode } =>
-					sc_network_sync::SyncMode::LightState { skip_proofs, storage_chain_mode },
-				config::SyncMode::Warp => sc_network_sync::SyncMode::Warp,
-			}
-		}
-	}
-}
-
-impl Default for ProtocolConfig {
-	fn default() -> ProtocolConfig {
-		Self { roles: Roles::FULL, max_parallel_downloads: 5, sync_mode: config::SyncMode::Full }
-	}
-}
-
 /// Handshake sent when we open a block announces substream.
 #[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
 struct BlockAnnouncesHandshake<B: BlockT> {
@@ -283,12 +257,12 @@ struct BlockAnnouncesHandshake<B: BlockT> {
 
 impl<B: BlockT> BlockAnnouncesHandshake<B> {
 	fn build(
-		protocol_config: &ProtocolConfig,
+		roles: Roles,
 		best_number: NumberFor<B>,
 		best_hash: B::Hash,
 		genesis_hash: B::Hash,
 	) -> Self {
-		Self { genesis_hash, roles: protocol_config.roles, best_number, best_hash }
+		Self { genesis_hash, roles, best_number, best_hash }
 	}
 }
 
@@ -305,24 +279,21 @@ where
 {
 	/// Create a new instance.
 	pub fn new(
-		config: ProtocolConfig,
+		roles: Roles,
 		chain: Arc<Client>,
 		protocol_id: ProtocolId,
 		network_config: &config::NetworkConfiguration,
 		notifications_protocols_handshakes: Vec<Vec<u8>>,
-		block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>,
 		metrics_registry: Option<&Registry>,
-		warp_sync_provider: Option<Arc<dyn WarpSyncProvider<B>>>,
+		chain_sync: Box<
+			dyn ChainSync<
+				B,
+				sc_network_sync::schema::v1::StateRequest,
+				sc_network_sync::schema::v1::StateResponse,
+			>,
+		>,
 	) -> error::Result<(Protocol<B, Client>, sc_peerset::PeersetHandle, Vec<(PeerId, Multiaddr)>)> {
 		let info = chain.info();
-		let sync = ChainSync::new(
-			config.sync_mode(),
-			chain.clone(),
-			block_announce_validator,
-			config.max_parallel_downloads,
-			warp_sync_provider,
-		)
-		.map_err(Box::new)?;
 
 		let boot_node_ids = {
 			let mut list = HashSet::new();
@@ -410,7 +381,7 @@ where
 			let genesis_hash = info.genesis_hash;
 
 			let block_announces_handshake =
-				BlockAnnouncesHandshake::<B>::build(&config, best_number, best_hash, genesis_hash)
+				BlockAnnouncesHandshake::<B>::build(roles, best_number, best_hash, genesis_hash)
 					.encode();
 
 			let sync_protocol_config = notifications::ProtocolConfig {
@@ -443,11 +414,11 @@ where
 		let protocol = Self {
 			tick_timeout: Box::pin(interval(TICK_TIMEOUT)),
 			pending_messages: VecDeque::new(),
-			config,
+			roles,
 			peers: HashMap::new(),
 			chain,
 			genesis_hash: info.genesis_hash,
-			sync,
+			chain_sync,
 			important_peers,
 			default_peers_set_num_full: network_config.default_peers_set_num_full as usize,
 			default_peers_set_num_light: {
@@ -515,49 +486,49 @@ where
 
 	/// Current global sync state.
 	pub fn sync_state(&self) -> SyncStatus<B> {
-		self.sync.status()
+		self.chain_sync.status()
 	}
 
 	/// Target sync block number.
 	pub fn best_seen_block(&self) -> Option<NumberFor<B>> {
-		self.sync.status().best_seen_block
+		self.chain_sync.status().best_seen_block
 	}
 
 	/// Number of peers participating in syncing.
 	pub fn num_sync_peers(&self) -> u32 {
-		self.sync.status().num_peers
+		self.chain_sync.status().num_peers
 	}
 
 	/// Number of blocks in the import queue.
 	pub fn num_queued_blocks(&self) -> u32 {
-		self.sync.status().queued_blocks
+		self.chain_sync.status().queued_blocks
 	}
 
 	/// Number of downloaded blocks.
 	pub fn num_downloaded_blocks(&self) -> usize {
-		self.sync.num_downloaded_blocks()
+		self.chain_sync.num_downloaded_blocks()
 	}
 
 	/// Number of active sync requests.
 	pub fn num_sync_requests(&self) -> usize {
-		self.sync.num_sync_requests()
+		self.chain_sync.num_sync_requests()
 	}
 
 	/// Inform sync about new best imported block.
 	pub fn new_best_block_imported(&mut self, hash: B::Hash, number: NumberFor<B>) {
 		debug!(target: "sync", "New best block imported {:?}/#{}", hash, number);
 
-		self.sync.update_chain_info(&hash, number);
+		self.chain_sync.update_chain_info(&hash, number);
 
 		self.behaviour.set_notif_protocol_handshake(
 			HARDCODED_PEERSETS_SYNC,
-			BlockAnnouncesHandshake::<B>::build(&self.config, number, hash, self.genesis_hash)
+			BlockAnnouncesHandshake::<B>::build(self.roles, number, hash, self.genesis_hash)
 				.encode(),
 		);
 	}
 
 	fn update_peer_info(&mut self, who: &PeerId) {
-		if let Some(info) = self.sync.peer_info(who) {
+		if let Some(info) = self.chain_sync.peer_info(who) {
 			if let Some(ref mut peer) = self.peers.get_mut(who) {
 				peer.info.best_hash = info.best_hash;
 				peer.info.best_number = info.best_number;
@@ -589,7 +560,9 @@ where
 		}
 
 		if let Some(_peer_data) = self.peers.remove(&peer) {
-			if let Some(OnBlockData::Import(origin, blocks)) = self.sync.peer_disconnected(&peer) {
+			if let Some(OnBlockData::Import(origin, blocks)) =
+				self.chain_sync.peer_disconnected(&peer)
+			{
 				self.pending_messages
 					.push_back(CustomMessageOutcome::BlockImport(origin, blocks));
 			}
@@ -695,7 +668,7 @@ where
 		);
 
 		if request.fields == BlockAttributes::JUSTIFICATION {
-			match self.sync.on_block_justification(peer_id, block_response) {
+			match self.chain_sync.on_block_justification(peer_id, block_response) {
 				Ok(OnBlockJustification::Nothing) => CustomMessageOutcome::None,
 				Ok(OnBlockJustification::Import { peer, hash, number, justifications }) =>
 					CustomMessageOutcome::JustificationImport(peer, hash, number, justifications),
@@ -706,7 +679,7 @@ where
 				},
 			}
 		} else {
-			match self.sync.on_block_data(&peer_id, Some(request), block_response) {
+			match self.chain_sync.on_block_data(&peer_id, Some(request), block_response) {
 				Ok(OnBlockData::Import(origin, blocks)) =>
 					CustomMessageOutcome::BlockImport(origin, blocks),
 				Ok(OnBlockData::Request(peer, req)) => self.prepare_block_request(peer, req),
@@ -724,9 +697,9 @@ where
 	pub fn on_state_response(
 		&mut self,
 		peer_id: PeerId,
-		response: StateResponse,
+		response: sc_network_sync::schema::v1::StateResponse,
 	) -> CustomMessageOutcome<B> {
-		match self.sync.on_state_data(&peer_id, response) {
+		match self.chain_sync.on_state_data(&peer_id, response) {
 			Ok(OnStateData::Import(origin, block)) =>
 				CustomMessageOutcome::BlockImport(origin, vec![block]),
 			Ok(OnStateData::Continue) => CustomMessageOutcome::None,
@@ -745,7 +718,7 @@ where
 		peer_id: PeerId,
 		response: EncodedProof,
 	) -> CustomMessageOutcome<B> {
-		match self.sync.on_warp_sync_data(&peer_id, response) {
+		match self.chain_sync.on_warp_sync_data(&peer_id, response) {
 			Ok(()) => CustomMessageOutcome::None,
 			Err(BadPeer(id, repu)) => {
 				self.behaviour.disconnect_peer(&id, HARDCODED_PEERSETS_SYNC);
@@ -803,7 +776,7 @@ where
 			return Err(())
 		}
 
-		if self.config.roles.is_light() {
+		if self.roles.is_light() {
 			// we're not interested in light peers
 			if status.roles.is_light() {
 				debug!(target: "sync", "Peer {} is unable to serve light requests", who);
@@ -826,14 +799,15 @@ where
 			}
 		}
 
-		if status.roles.is_full() && self.sync.num_peers() >= self.default_peers_set_num_full {
+		if status.roles.is_full() && self.chain_sync.num_peers() >= self.default_peers_set_num_full
+		{
 			debug!(target: "sync", "Too many full nodes, rejecting {}", who);
 			self.behaviour.disconnect_peer(&who, HARDCODED_PEERSETS_SYNC);
 			return Err(())
 		}
 
 		if status.roles.is_light() &&
-			(self.peers.len() - self.sync.num_peers()) >= self.default_peers_set_num_light
+			(self.peers.len() - self.chain_sync.num_peers()) >= self.default_peers_set_num_light
 		{
 			// Make sure that not all slots are occupied by light clients.
 			debug!(target: "sync", "Too many light nodes, rejecting {}", who);
@@ -854,7 +828,7 @@ where
 		};
 
 		let req = if peer.info.roles.is_full() {
-			match self.sync.new_peer(who, peer.info.best_hash, peer.info.best_number) {
+			match self.chain_sync.new_peer(who, peer.info.best_hash, peer.info.best_number) {
 				Ok(req) => req,
 				Err(BadPeer(id, repu)) => {
 					self.behaviour.disconnect_peer(&id, HARDCODED_PEERSETS_SYNC);
@@ -958,7 +932,7 @@ where
 		};
 
 		if peer.info.roles.is_full() {
-			self.sync.push_block_announce_validation(who, hash, announce, is_best);
+			self.chain_sync.push_block_announce_validation(who, hash, announce, is_best);
 		}
 	}
 
@@ -1015,7 +989,7 @@ where
 
 		// to import header from announced block let's construct response to request that normally
 		// would have been sent over network (but it is not in our case)
-		let blocks_to_import = self.sync.on_block_data(
+		let blocks_to_import = self.chain_sync.on_block_data(
 			&who,
 			None,
 			BlockResponse::<B> {
@@ -1052,7 +1026,7 @@ where
 	/// Call this when a block has been finalized. The sync layer may have some additional
 	/// requesting to perform.
 	pub fn on_block_finalized(&mut self, hash: B::Hash, header: &B::Header) {
-		self.sync.on_block_finalized(&hash, *header.number())
+		self.chain_sync.on_block_finalized(&hash, *header.number())
 	}
 
 	/// Request a justification for the given block.
@@ -1060,12 +1034,12 @@ where
 	/// Uses `protocol` to queue a new justification request and tries to dispatch all pending
 	/// requests.
 	pub fn request_justification(&mut self, hash: &B::Hash, number: NumberFor<B>) {
-		self.sync.request_justification(hash, number)
+		self.chain_sync.request_justification(hash, number)
 	}
 
 	/// Clear all pending justification requests.
 	pub fn clear_justification_requests(&mut self) {
-		self.sync.clear_justification_requests();
+		self.chain_sync.clear_justification_requests();
 	}
 
 	/// Request syncing for the given block from given set of peers.
@@ -1077,7 +1051,7 @@ where
 		hash: &B::Hash,
 		number: NumberFor<B>,
 	) {
-		self.sync.set_sync_fork_request(peers, hash, number)
+		self.chain_sync.set_sync_fork_request(peers, hash, number)
 	}
 
 	/// A batch of blocks have been processed, with or without errors.
@@ -1089,7 +1063,7 @@ where
 		count: usize,
 		results: Vec<(Result<BlockImportStatus<NumberFor<B>>, BlockImportError>, B::Hash)>,
 	) {
-		let results = self.sync.on_blocks_processed(imported, count, results);
+		let results = self.chain_sync.on_blocks_processed(imported, count, results);
 		for result in results {
 			match result {
 				Ok((id, req)) => {
@@ -1116,7 +1090,7 @@ where
 		number: NumberFor<B>,
 		success: bool,
 	) {
-		self.sync.on_justification_import(hash, number, success);
+		self.chain_sync.on_justification_import(hash, number, success);
 		if !success {
 			info!("💔 Invalid justification provided by {} for #{}", who, hash);
 			self.behaviour.disconnect_peer(&who, HARDCODED_PEERSETS_SYNC);
@@ -1238,7 +1212,7 @@ where
 			let n = u64::try_from(self.peers.len()).unwrap_or(std::u64::MAX);
 			metrics.peers.set(n);
 
-			let m = self.sync.metrics();
+			let m = self.chain_sync.metrics();
 
 			metrics.fork_targets.set(m.fork_targets.into());
 			metrics.queued_blocks.set(m.queued_blocks.into());
@@ -1577,25 +1551,25 @@ where
 			self.tick();
 		}
 
-		for (id, request) in self.sync.block_requests() {
+		for (id, request) in self.chain_sync.block_requests() {
 			let event = prepare_block_request(&mut self.peers, *id, request);
 			self.pending_messages.push_back(event);
 		}
-		if let Some((id, request)) = self.sync.state_request() {
+		if let Some((id, request)) = self.chain_sync.state_request() {
 			let event = prepare_state_request(&mut self.peers, id, request);
 			self.pending_messages.push_back(event);
 		}
-		for (id, request) in self.sync.justification_requests() {
+		for (id, request) in self.chain_sync.justification_requests() {
 			let event = prepare_block_request(&mut self.peers, id, request);
 			self.pending_messages.push_back(event);
 		}
-		if let Some((id, request)) = self.sync.warp_sync_request() {
+		if let Some((id, request)) = self.chain_sync.warp_sync_request() {
 			let event = prepare_warp_sync_request(&mut self.peers, id, request);
 			self.pending_messages.push_back(event);
 		}
 
 		// Check if there is any block announcement validation finished.
-		while let Poll::Ready(result) = self.sync.poll_block_announce_validation(cx) {
+		while let Poll::Ready(result) = self.chain_sync.poll_block_announce_validation(cx) {
 			match self.process_block_announce_validation_result(result) {
 				CustomMessageOutcome::None => {},
 				outcome => self.pending_messages.push_back(outcome),
@@ -1776,7 +1750,8 @@ where
 
 						// Make sure that the newly added block announce validation future was
 						// polled once to be registered in the task.
-						if let Poll::Ready(res) = self.sync.poll_block_announce_validation(cx) {
+						if let Poll::Ready(res) = self.chain_sync.poll_block_announce_validation(cx)
+						{
 							self.process_block_announce_validation_result(res)
 						} else {
 							CustomMessageOutcome::None

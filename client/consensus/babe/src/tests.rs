@@ -18,9 +18,6 @@
 
 //! BABE testsuite
 
-// FIXME #2532: need to allow deprecated until refactor is done
-// https://github.com/paritytech/substrate/issues/2532
-#![allow(deprecated)]
 use super::*;
 use authorship::claim_slot;
 use futures::executor::block_on;
@@ -32,7 +29,6 @@ use sc_client_api::{backend::TransactionFor, BlockchainEvents, Finalizer};
 use sc_consensus::{BoxBlockImport, BoxJustificationImport};
 use sc_consensus_slots::BackoffAuthoringOnFinalizedHeadLagging;
 use sc_keystore::LocalKeystore;
-use sc_network::config::ProtocolConfig;
 use sc_network_test::{Block as TestBlock, *};
 use sp_application_crypto::key_types::BABE;
 use sp_consensus::{AlwaysCanAuthor, DisableProofRecording, NoNetwork as DummyOracle, Proposal};
@@ -223,6 +219,7 @@ where
 
 type BabePeer = Peer<Option<PeerData>, BabeBlockImport>;
 
+#[derive(Default)]
 pub struct BabeTestNet {
 	peers: Vec<BabePeer>,
 }
@@ -281,12 +278,6 @@ impl TestNetFactory for BabeTestNet {
 	type PeerData = Option<PeerData>;
 	type BlockImport = BabeBlockImport;
 
-	/// Create new test network with peers and given config.
-	fn from_config(_config: &ProtocolConfig) -> Self {
-		debug!(target: "babe", "Creating test network from config");
-		BabeTestNet { peers: Vec::new() }
-	}
-
 	fn make_block_import(
 		&self,
 		client: PeersClient,
@@ -312,12 +303,7 @@ impl TestNetFactory for BabeTestNet {
 		)
 	}
 
-	fn make_verifier(
-		&self,
-		client: PeersClient,
-		_cfg: &ProtocolConfig,
-		maybe_link: &Option<PeerData>,
-	) -> Self::Verifier {
+	fn make_verifier(&self, client: PeersClient, maybe_link: &Option<PeerData>) -> Self::Verifier {
 		use substrate_test_runtime_client::DefaultTestClientBuilderExt;
 
 		let client = client.as_client();

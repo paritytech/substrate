@@ -155,6 +155,19 @@ pub enum PollBlockAnnounceValidation<H> {
 	Skip,
 }
 
+/// Operation mode.
+#[derive(Debug, PartialEq, Eq)]
+pub enum SyncMode {
+	// Sync headers only
+	Light,
+	// Sync headers and block bodies
+	Full,
+	// Sync headers and the last finalied state
+	LightState { storage_chain_mode: bool, skip_proofs: bool },
+	// Warp sync mode.
+	Warp,
+}
+
 #[derive(Debug)]
 pub struct Metrics {
 	pub queued_blocks: u32,
@@ -164,7 +177,7 @@ pub struct Metrics {
 
 // TODO: Make concrete types for `StateRequest` and `StateResponse` that can be converted to network
 //  messages from scheme later
-pub trait ChainSync<Block: BlockT, StateRequest, StateResponse> {
+pub trait ChainSync<Block: BlockT, StateRequest, StateResponse>: Send {
 	/// Returns the state of the sync of the given peer.
 	///
 	/// Returns `None` if the peer is unknown.

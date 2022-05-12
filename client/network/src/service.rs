@@ -30,7 +30,7 @@
 use crate::{
 	behaviour::{self, Behaviour, BehaviourOut},
 	bitswap::Bitswap,
-	config::{parse_str_addr, Params, TransportConfig},
+	config::{self, parse_str_addr, Params, TransportConfig},
 	discovery::DiscoveryConfig,
 	error::Error,
 	network_state::{
@@ -60,7 +60,8 @@ use metrics::{Histogram, HistogramVec, MetricSources, Metrics};
 use parking_lot::Mutex;
 use sc_client_api::{BlockBackend, ProofProvider};
 use sc_consensus::{BlockImportError, BlockImportStatus, ImportQueue, Link};
-use sc_network_common::sync::{SyncState, SyncStatus};
+use sc_network_common::sync::{SyncMode, SyncState, SyncStatus};
+use sc_network_sync::ChainSync;
 use sc_peerset::PeersetHandle;
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_blockchain::{HeaderBackend, HeaderMetadata};
@@ -207,12 +208,25 @@ where
 			None => (None, None),
 		};
 
-		let (protocol, peerset_handle, mut known_addresses) = Protocol::new(
-			protocol::ProtocolConfig {
-				roles: From::from(&params.role),
-				max_parallel_downloads: params.network_config.max_parallel_downloads,
-				sync_mode: params.network_config.sync_mode.clone(),
+		let chain_sync = ChainSync::new(
+			if params.role.is_light() {
+				SyncMode::Light
+			} else {
+				match params.network_config.sync_mode {
+					config::SyncMode::Full => SyncMode::Full,
+					config::SyncMode::Fast { skip_proofs, storage_chain_mode } =>
+						SyncMode::LightState { skip_proofs, storage_chain_mode },
+					config::SyncMode::Warp => SyncMode::Warp,
+				}
 			},
+			params.chain.clone(),
+			params.block_announce_validator,
+			params.network_config.max_parallel_downloads,
+			warp_sync_provider,
+		)
+		.map_err(Box::new)?;
+		let (protocol, peerset_handle, mut known_addresses) = Protocol::new(
+			From::from(&params.role),
 			params.chain.clone(),
 			params.protocol_id.clone(),
 			&params.network_config,
@@ -222,9 +236,8 @@ where
 						.map(|_| default_notif_handshake_message.clone()),
 				)
 				.collect(),
-			params.block_announce_validator,
 			params.metrics_registry.as_ref(),
-			warp_sync_provider,
+			Box::new(chain_sync),
 		)?;
 
 		// List of multiaddresses that we know in the network.
