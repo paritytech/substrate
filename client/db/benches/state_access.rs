@@ -17,7 +17,6 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
-use pprof::criterion::{Output, PProfProfiler};
 use rand::{distributions::Uniform, rngs::StdRng, Rng, SeedableRng};
 use sc_client_api::{Backend as _, BlockImportOperation, NewBlockState, StateBackend};
 use sc_client_db::{Backend, DatabaseSettings, DatabaseSource, KeepBlocks, PruningMode};
@@ -121,7 +120,7 @@ fn create_backend(config: BenchmarkConfig, temp_dir: &TempDir) -> Backend<Block>
 
 	let settings = DatabaseSettings {
 		trie_cache_maximum_size,
-		state_pruning: PruningMode::ArchiveAll,
+		state_pruning: Some(PruningMode::ArchiveAll),
 		source: DatabaseSource::ParityDb { path },
 		keep_blocks: KeepBlocks::All,
 	};
@@ -309,8 +308,5 @@ fn state_access_benchmarks(c: &mut Criterion) {
 	group.finish();
 }
 
-criterion_group! {
-	name = benches;
-	targets = state_access_benchmarks
-}
+criterion_group!(benches, state_access_benchmarks);
 criterion_main!(benches);
