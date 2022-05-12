@@ -680,7 +680,7 @@ fn set_price_should_work() {
 			class: collection_id,
 			instance: item_1,
 			price: 1.into(),
-			buyer: None,
+			whitelisted_buyer: None,
 		}));
 
 		// validate we can unset the price
@@ -776,7 +776,7 @@ fn buy_item_should_work() {
 		// can't buy for less
 		assert_noop!(
 			Uniques::buy_item(Origin::signed(user_2), collection_id, item_1, 1.into()),
-			Error::<Test>::ItemUnderpriced
+			Error::<Test>::BidTooLow
 		);
 
 		// validate the currency
@@ -809,10 +809,10 @@ fn buy_item_should_work() {
 			Error::<Test>::NoPermission
 		);
 
-		// can't buy when the item is listed for specified buyer
+		// can't buy when the item is listed for a specific buyer
 		assert_noop!(
 			Uniques::buy_item(Origin::signed(user_2), collection_id, item_2, price_2.into()),
-			Error::<Test>::NotForSale
+			Error::<Test>::NoPermission
 		);
 
 		// can buy when I'm a whitelisted buyer

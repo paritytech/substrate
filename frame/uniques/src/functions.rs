@@ -199,7 +199,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		instance: T::InstanceId,
 		sender: T::AccountId,
 		price: Option<BalanceOrAssetOf<T, I>>,
-		buyer: Option<T::AccountId>,
+		whitelisted_buyer: Option<T::AccountId>,
 	) -> DispatchResult {
 		let class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
 		ensure!(!class_details.is_frozen, Error::<T, I>::Frozen);
@@ -210,8 +210,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		ensure!(details.owner == sender, Error::<T, I>::NoPermission);
 
 		if let Some(ref price) = price {
-			InstancePriceOf::<T, I>::insert(&class, &instance, (price.clone(), buyer.clone()));
-			Self::deposit_event(Event::InstancePriceSet { class, instance, price: price.clone(), buyer });
+			InstancePriceOf::<T, I>::insert(&class, &instance, (price.clone(), whitelisted_buyer.clone()));
+			Self::deposit_event(Event::InstancePriceSet { class, instance, price: price.clone(), whitelisted_buyer });
 		} else {
 			InstancePriceOf::<T, I>::remove(&class, &instance);
 			Self::deposit_event(Event::InstancePriceRemoved { class, instance });
@@ -233,10 +233,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			InstancePriceOf::<T, I>::get(&class, &instance).ok_or(Error::<T, I>::NotForSale)?;
 
 		ensure!(bid_price.is_same_currency(&price_info.0), Error::<T, I>::WrongCurrency);
-		ensure!(bid_price.is_greater_or_equal(&price_info.0), Error::<T, I>::ItemUnderpriced);
+		ensure!(bid_price.is_greater_or_equal(&price_info.0), Error::<T, I>::BidTooLow);
 
 		if let Some(only_buyer) = price_info.1 {
-			ensure!(only_buyer == buyer, Error::<T, I>::NotForSale);
+			ensure!(only_buyer == buyer, Error::<T, I>::NoPermission);
 		}
 
 		Self::transfer_currency(
@@ -271,7 +271,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		match value {
 			Balance { amount } =>
-				return T::Currency::transfer(&source, &dest, amount, existence_requirement),
+				T::Currency::transfer(&source, &dest, amount, existence_requirement),
 			Asset { id, amount } => {
 				let keep_alive = existence_requirement == ExistenceRequirement::KeepAlive;
 				return T::Assets::transfer(id, &source, &dest, amount, keep_alive).map(|_| ())

@@ -62,6 +62,7 @@ pub use weights::WeightInfo;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
+	use frame_support::transactional;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 
@@ -374,7 +375,7 @@ pub mod pallet {
 			class: T::ClassId,
 			instance: T::InstanceId,
 			price: BalanceOrAssetOf<T, I>,
-			buyer: Option<T::AccountId>,
+			whitelisted_buyer: Option<T::AccountId>,
 		},
 		/// The price for the instance was removed.
 		InstancePriceRemoved {
@@ -423,8 +424,8 @@ pub mod pallet {
 		NotForSale,
 		/// Wrong currency provided.
 		WrongCurrency,
-		/// Item underpriced.
-		ItemUnderpriced,
+		/// The provided bid is too low.
+		BidTooLow,
 	}
 
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
@@ -1419,17 +1420,17 @@ pub mod pallet {
 		/// Emits `InstancePriceSet` on success if the price is not `None`.
 		/// Emits `InstancePriceRemoved` on success if the price is `None`.
 		#[pallet::weight(0)]
+		#[transactional]
 		pub fn set_price(
 			origin: OriginFor<T>,
 			class: T::ClassId,
 			instance: T::InstanceId,
 			price: Option<BalanceOrAssetOf<T, I>>,
-			buyer: Option<<T::Lookup as StaticLookup>::Source>,
+			whitelisted_buyer: Option<<T::Lookup as StaticLookup>::Source>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
-			let buyer = buyer.map(T::Lookup::lookup).transpose()?;
-			Self::do_set_price(class, instance, origin, price, buyer)?;
-			Ok(())
+			let whitelisted_buyer = whitelisted_buyer.map(T::Lookup::lookup).transpose()?;
+			Self::do_set_price(class, instance, origin, price, whitelisted_buyer)
 		}
 
 		/// Allows to buy an item if it's up for sale.
@@ -1442,6 +1443,7 @@ pub mod pallet {
 		///
 		/// Emits `ItemBought` on success.
 		#[pallet::weight(0)]
+		#[transactional]
 		pub fn buy_item(
 			origin: OriginFor<T>,
 			class: T::ClassId,
@@ -1449,8 +1451,7 @@ pub mod pallet {
 			bid_price: BalanceOrAssetOf<T, I>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
-			Self::do_buy_item(class, instance, origin, bid_price)?;
-			Ok(())
+			Self::do_buy_item(class, instance, origin, bid_price)
 		}
 	}
 }
