@@ -30,7 +30,7 @@ use sp_runtime::{
 	traits::{Block as BlockT, NumberFor},
 	Justifications,
 };
-use std::{fmt, task::Poll};
+use std::{any::Any, fmt, fmt::Formatter, task::Poll};
 use warp::{EncodedProof, WarpProofRequest, WarpSyncProgress};
 
 /// The sync status of a peer we are trying to sync with
@@ -175,9 +175,29 @@ pub struct Metrics {
 	pub justifications: extra_requests::Metrics,
 }
 
-// TODO: Make concrete types for `StateRequest` and `StateResponse` that can be converted to network
-//  messages from scheme later
-pub trait ChainSync<Block: BlockT, StateRequest, StateResponse>: Send {
+/// Wrapper for implementation-specific state request.
+///
+/// NOTE: Implementation must be able to encode and decode it for network purposes.
+pub struct OpaqueStateRequest(pub Box<dyn Any + Send>);
+
+impl fmt::Debug for OpaqueStateRequest {
+	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+		f.debug_struct("OpaqueStateRequest").finish()
+	}
+}
+
+/// Wrapper for implementation-specific state response.
+///
+/// NOTE: Implementation must be able to encode and decode it for network purposes.
+pub struct OpaqueStateResponse(pub Box<dyn Any + Send>);
+
+impl fmt::Debug for OpaqueStateResponse {
+	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+		f.debug_struct("OpaqueStateResponse").finish()
+	}
+}
+
+pub trait ChainSync<Block: BlockT>: Send {
 	/// Returns the state of the sync of the given peer.
 	///
 	/// Returns `None` if the peer is unknown.
@@ -234,7 +254,7 @@ pub trait ChainSync<Block: BlockT, StateRequest, StateResponse>: Send {
 	fn block_requests(&mut self) -> Box<dyn Iterator<Item = (&PeerId, BlockRequest<Block>)> + '_>;
 
 	/// Get a state request, if any.
-	fn state_request(&mut self) -> Option<(PeerId, StateRequest)>;
+	fn state_request(&mut self) -> Option<(PeerId, OpaqueStateRequest)>;
 
 	/// Get a warp sync request, if any.
 	fn warp_sync_request(&mut self) -> Option<(PeerId, WarpProofRequest<Block>)>;
@@ -259,7 +279,7 @@ pub trait ChainSync<Block: BlockT, StateRequest, StateResponse>: Send {
 	fn on_state_data(
 		&mut self,
 		who: &PeerId,
-		response: StateResponse,
+		response: OpaqueStateResponse,
 	) -> Result<OnStateData<Block>, BadPeer>;
 
 	/// Handle a response from the remote to a warp proof request that we made.
@@ -337,4 +357,10 @@ pub trait ChainSync<Block: BlockT, StateRequest, StateResponse>: Send {
 
 	/// Return some key metrics.
 	fn metrics(&self) -> Metrics;
+
+	/// Encode implementation-specific state request.
+	fn encode_state_request(&self, request: &OpaqueStateRequest) -> Result<Vec<u8>, String>;
+
+	/// Decode implementation-specific state response.
+	fn decode_state_response(&self, response: &[u8]) -> Result<OpaqueStateResponse, String>;
 }

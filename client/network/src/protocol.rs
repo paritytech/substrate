@@ -83,6 +83,7 @@ pub mod event;
 pub mod message;
 
 pub use notifications::{NotificationsSink, NotifsHandlerError, Ready};
+use sc_network_common::sync::{OpaqueStateRequest, OpaqueStateResponse};
 use sp_blockchain::HeaderMetadata;
 
 /// Interval at which we perform time based maintenance
@@ -176,13 +177,7 @@ pub struct Protocol<B: BlockT, Client> {
 	genesis_hash: B::Hash,
 	/// State machine that handles the list of in-progress requests. Only full node peers are
 	/// registered.
-	chain_sync: Box<
-		dyn ChainSync<
-			B,
-			sc_network_sync::schema::v1::StateRequest,
-			sc_network_sync::schema::v1::StateResponse,
-		>,
-	>,
+	chain_sync: Box<dyn ChainSync<B>>,
 	// All connected peers. Contains both full and light node peers.
 	peers: HashMap<PeerId, Peer<B>>,
 	chain: Arc<Client>,
@@ -285,14 +280,8 @@ where
 		network_config: &config::NetworkConfiguration,
 		notifications_protocols_handshakes: Vec<Vec<u8>>,
 		metrics_registry: Option<&Registry>,
-		chain_sync: Box<
-			dyn ChainSync<
-				B,
-				sc_network_sync::schema::v1::StateRequest,
-				sc_network_sync::schema::v1::StateResponse,
-			>,
-		>,
-	) -> error::Result<(Protocol<B, Client>, sc_peerset::PeersetHandle, Vec<(PeerId, Multiaddr)>)> {
+		chain_sync: Box<dyn ChainSync<B>>,
+	) -> error::Result<(Self, sc_peerset::PeersetHandle, Vec<(PeerId, Multiaddr)>)> {
 		let info = chain.info();
 
 		let boot_node_ids = {
@@ -541,14 +530,6 @@ where
 		self.peers.iter().map(|(id, peer)| (id, &peer.info))
 	}
 
-	fn prepare_block_request(
-		&mut self,
-		who: PeerId,
-		request: BlockRequest<B>,
-	) -> CustomMessageOutcome<B> {
-		prepare_block_request::<B>(&mut self.peers, who, request)
-	}
-
 	/// Called by peer when it is disconnecting.
 	///
 	/// Returns a result if the handshake of this peer was indeed accepted.
@@ -682,7 +663,8 @@ where
 			match self.chain_sync.on_block_data(&peer_id, Some(request), block_response) {
 				Ok(OnBlockData::Import(origin, blocks)) =>
 					CustomMessageOutcome::BlockImport(origin, blocks),
-				Ok(OnBlockData::Request(peer, req)) => self.prepare_block_request(peer, req),
+				Ok(OnBlockData::Request(peer, req)) =>
+					prepare_block_request(&mut self.peers, peer, req),
 				Err(BadPeer(id, repu)) => {
 					self.behaviour.disconnect_peer(&id, HARDCODED_PEERSETS_SYNC);
 					self.peerset_handle.report_peer(id, repu);
@@ -697,7 +679,7 @@ where
 	pub fn on_state_response(
 		&mut self,
 		peer_id: PeerId,
-		response: sc_network_sync::schema::v1::StateResponse,
+		response: OpaqueStateResponse,
 	) -> CustomMessageOutcome<B> {
 		match self.chain_sync.on_state_data(&peer_id, response) {
 			Ok(OnStateData::Import(origin, block)) =>
@@ -847,8 +829,8 @@ where
 			.push_back(CustomMessageOutcome::PeerNewBest(who, status.best_number));
 
 		if let Some(req) = req {
-			let event = self.prepare_block_request(who, req);
-			self.pending_messages.push_back(event);
+			self.pending_messages
+				.push_back(prepare_block_request(&mut self.peers, who, req));
 		}
 
 		Ok(())
@@ -1014,7 +996,8 @@ where
 		match blocks_to_import {
 			Ok(OnBlockData::Import(origin, blocks)) =>
 				CustomMessageOutcome::BlockImport(origin, blocks),
-			Ok(OnBlockData::Request(peer, req)) => self.prepare_block_request(peer, req),
+			Ok(OnBlockData::Request(peer, req)) =>
+				prepare_block_request(&mut self.peers, peer, req),
 			Err(BadPeer(id, repu)) => {
 				self.behaviour.disconnect_peer(&id, HARDCODED_PEERSETS_SYNC);
 				self.peerset_handle.report_peer(id, repu);
@@ -1207,6 +1190,11 @@ where
 		}
 	}
 
+	/// Encode implementation-specific state request.
+	pub fn encode_state_request(&self, request: &OpaqueStateRequest) -> Result<Vec<u8>, String> {
+		self.chain_sync.encode_state_request(request)
+	}
+
 	fn report_metrics(&self) {
 		if let Some(metrics) = &self.metrics {
 			let n = u64::try_from(self.peers.len()).unwrap_or(std::u64::MAX);
@@ -1268,7 +1256,7 @@ fn prepare_block_request<B: BlockT>(
 fn prepare_state_request<B: BlockT>(
 	peers: &mut HashMap<PeerId, Peer<B>>,
 	who: PeerId,
-	request: sc_network_sync::schema::v1::StateRequest,
+	request: OpaqueStateRequest,
 ) -> CustomMessageOutcome<B> {
 	let (tx, rx) = oneshot::channel();
 
@@ -1331,7 +1319,7 @@ pub enum CustomMessageOutcome<B: BlockT> {
 	/// A new storage request must be emitted.
 	StateRequest {
 		target: PeerId,
-		request: sc_network_sync::schema::v1::StateRequest,
+		request: OpaqueStateRequest,
 		pending_response: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
 	},
 	/// A new warp sync request must be emitted.
@@ -1456,10 +1444,8 @@ where
 								finished_block_requests.push((*id, req, protobuf_response));
 							},
 							PeerRequest::State => {
-								let protobuf_response =
-									match sc_network_sync::schema::v1::StateResponse::decode(
-										&resp[..],
-									) {
+								let response =
+									match self.chain_sync.decode_state_response(&resp[..]) {
 										Ok(proto) => proto,
 										Err(e) => {
 											debug!(
@@ -1475,7 +1461,7 @@ where
 										},
 									};
 
-								finished_state_requests.push((*id, protobuf_response));
+								finished_state_requests.push((*id, response));
 							},
 							PeerRequest::WarpProof => {
 								finished_warp_sync_requests.push((*id, resp));

@@ -47,6 +47,7 @@ use extra_requests::ExtraRequests;
 use futures::{stream::FuturesUnordered, task::Poll, Future, FutureExt, StreamExt};
 use libp2p::PeerId;
 use log::{debug, error, info, trace, warn};
+use prost::Message;
 use sc_client_api::{BlockBackend, ProofProvider};
 use sc_consensus::{BlockImportError, BlockImportStatus, IncomingBlock};
 use sc_network_common::sync::{
@@ -56,7 +57,8 @@ use sc_network_common::sync::{
 	},
 	warp::{EncodedProof, WarpProofRequest, WarpSyncPhase, WarpSyncProgress, WarpSyncProvider},
 	BadPeer, ChainSync as ChainSyncT, Metrics, OnBlockData, OnBlockJustification, OnStateData,
-	PeerInfo, PollBlockAnnounceValidation, SyncMode, SyncState, SyncStatus,
+	OpaqueStateRequest, OpaqueStateResponse, PeerInfo, PollBlockAnnounceValidation, SyncMode,
+	SyncState, SyncStatus,
 };
 use sp_arithmetic::traits::Saturating;
 use sp_blockchain::{Error as ClientError, HeaderBackend, HeaderMetadata};
@@ -368,7 +370,7 @@ enum HasSlotForBlockAnnounceValidation {
 	MaximumPeerSlotsReached,
 }
 
-impl<B, Client> ChainSyncT<B, StateRequest, StateResponse> for ChainSync<B, Client>
+impl<B, Client> ChainSyncT<B> for ChainSync<B, Client>
 where
 	B: BlockT,
 	Client: HeaderBackend<B>
@@ -764,7 +766,7 @@ where
 		Box::new(iter)
 	}
 
-	fn state_request(&mut self) -> Option<(PeerId, StateRequest)> {
+	fn state_request(&mut self) -> Option<(PeerId, OpaqueStateRequest)> {
 		if self.allowed_requests.is_empty() {
 			return None
 		}
@@ -785,7 +787,7 @@ where
 					let request = sync.next_request();
 					trace!(target: "sync", "New StateRequest for {}: {:?}", id, request);
 					self.allowed_requests.clear();
-					return Some((*id, request))
+					return Some((*id, OpaqueStateRequest(Box::new(request))))
 				}
 			}
 		}
@@ -801,7 +803,7 @@ where
 						trace!(target: "sync", "New StateRequest for {}: {:?}", id, request);
 						peer.state = PeerSyncState::DownloadingState;
 						self.allowed_requests.clear();
-						return Some((*id, request))
+						return Some((*id, OpaqueStateRequest(Box::new(request))))
 					}
 				}
 			}
@@ -1067,8 +1069,17 @@ where
 	fn on_state_data(
 		&mut self,
 		who: &PeerId,
-		response: StateResponse,
+		response: OpaqueStateResponse,
 	) -> Result<OnStateData<B>, BadPeer> {
+		let response: Box<StateResponse> = response.0.downcast().map_err(|_error| {
+			error!(
+				target: "sync",
+				"Failed to downcast opaque state response, this is an implementation bug."
+			);
+
+			BadPeer(*who, rep::BAD_RESPONSE)
+		})?;
+
 		if let Some(peer) = self.peers.get_mut(who) {
 			if let PeerSyncState::DownloadingState = peer.state {
 				peer.state = PeerSyncState::Available;
@@ -1083,7 +1094,7 @@ where
 				response.entries.len(),
 				response.proof.len(),
 			);
-			sync.import(response)
+			sync.import(*response)
 		} else if let Some(sync) = &mut self.warp_sync {
 			debug!(
 				target: "sync",
@@ -1092,7 +1103,7 @@ where
 				response.entries.len(),
 				response.proof.len(),
 			);
-			sync.import_state(response)
+			sync.import_state(*response)
 		} else {
 			debug!(target: "sync", "Ignored obsolete state response from {}", who);
 			return Err(BadPeer(*who, rep::NOT_REQUESTED))
@@ -1543,11 +1554,28 @@ where
 			justifications: self.extra_justifications.metrics(),
 		}
 	}
+
+	fn encode_state_request(&self, request: &OpaqueStateRequest) -> Result<Vec<u8>, String> {
+		let request: &StateRequest = request.0.downcast_ref().ok_or_else(|| {
+			"Failed to downcast opaque state response during encoding, this is an \
+				implementation bug."
+				.to_string()
+		})?;
+
+		Ok(request.encode_to_vec())
+	}
+
+	fn decode_state_response(&self, response: &[u8]) -> Result<OpaqueStateResponse, String> {
+		let response = StateResponse::decode(response)
+			.map_err(|error| format!("Failed to decode state response: {error}"))?;
+
+		Ok(OpaqueStateResponse(Box::new(response)))
+	}
 }
 
 impl<B, Client> ChainSync<B, Client>
 where
-	Self: ChainSyncT<B, StateRequest, StateResponse>,
+	Self: ChainSyncT<B>,
 	B: BlockT,
 	Client: HeaderBackend<B>
 		+ BlockBackend<B>

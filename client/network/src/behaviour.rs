@@ -401,23 +401,24 @@ where
 				);
 			},
 			CustomMessageOutcome::StateRequest { target, request, pending_response } => {
-				let mut buf = Vec::with_capacity(request.encoded_len());
-				if let Err(err) = request.encode(&mut buf) {
-					log::warn!(
-						target: "sync",
-						"Failed to encode state request {:?}: {:?}",
-						request, err
-					);
-					return
+				match self.substrate.encode_state_request(&request) {
+					Ok(data) => {
+						self.request_responses.send_request(
+							&target,
+							&self.state_request_protocol_name,
+							data,
+							pending_response,
+							IfDisconnected::ImmediateError,
+						);
+					},
+					Err(err) => {
+						log::warn!(
+							target: "sync",
+							"Failed to encode state request {:?}: {:?}",
+							request, err
+						);
+					},
 				}
-
-				self.request_responses.send_request(
-					&target,
-					&self.state_request_protocol_name,
-					buf,
-					pending_response,
-					IfDisconnected::ImmediateError,
-				);
 			},
 			CustomMessageOutcome::WarpSyncRequest { target, request, pending_response } =>
 				match &self.warp_sync_protocol_name {

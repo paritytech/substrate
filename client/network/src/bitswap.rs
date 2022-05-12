@@ -118,8 +118,7 @@ where
 
 	fn upgrade_outbound(self, mut socket: TSocket, _info: Self::Info) -> Self::Future {
 		Box::pin(async move {
-			let mut data = Vec::with_capacity(self.encoded_len());
-			self.encode(&mut data)?;
+			let data = self.encode_to_vec();
 			upgrade::write_length_prefixed(&mut socket, data).await
 		})
 	}
