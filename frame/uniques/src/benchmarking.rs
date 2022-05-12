@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Items pallet benchmarking.
+//! Uniques pallet benchmarking.
 
 #![cfg(feature = "runtime-benchmarks")]
 
