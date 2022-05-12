@@ -122,7 +122,7 @@ impl<H: ExHashT> Future for PendingTransaction<H> {
 
 		if let Poll::Ready(import_result) = Pin::new(&mut this.validation).poll_unpin(cx) {
 			let is_from_mixnet = this.mixnet.is_some();
-			if let Some((mut reply, surbs)) =
+			if let Some((mut reply, surb)) =
 				this.mixnet.as_mut().map(|reply| reply.take()).flatten()
 			{
 				trace!(target: "mixnet", "Import result from mixnet tx {:?}", import_result);
@@ -134,9 +134,9 @@ impl<H: ExHashT> Future for PendingTransaction<H> {
 					TransactionImport::None => MixnetImportResult::Skipped,
 				};
 				if let Err(e) =
-					reply.start_send(MixnetCommand::TransactionImportResult(surbs, import_result))
+					reply.start_send(MixnetCommand::TransactionImportResult(surb, import_result))
 				{
-					trace!(target: "mixnet", "Channel issue could not report error in surbs {:?}", &e);
+					trace!(target: "mixnet", "Channel issue could not report error in surb {:?}", &e);
 				}
 			}
 			return Poll::Ready((this.tx_hash.clone(), import_result, is_from_mixnet))
@@ -413,7 +413,7 @@ impl<B: BlockT + 'static, H: ExHashT> TransactionsHandler<B, H> {
 	}
 
 	// same as inject transaction but do not penalize peer and allow replying
-	// from surbs.
+	// from surb.
 	fn inject_transaction_mixnet(
 		&mut self,
 		kind: mixnet::MessageType,
@@ -431,10 +431,10 @@ impl<B: BlockT + 'static, H: ExHashT> TransactionsHandler<B, H> {
 
 			for t in transactions {
 				let hash = self.transaction_pool.hash_of(&t);
-				let mixnet_reply = if let Some(surbs) = kind.clone().surbs() {
+				let mixnet_reply = if let Some(surb) = kind.clone().surb() {
 					// note that only first reply will pass (other will be blocked by replay
 					// protection. TODO consider single transaction only
-					reply.clone().map(move |r| (r, surbs))
+					reply.clone().map(move |r| (r, surb))
 				} else {
 					None
 				};
@@ -446,13 +446,13 @@ impl<B: BlockT + 'static, H: ExHashT> TransactionsHandler<B, H> {
 			}
 		} else {
 			warn!(target: "sub-libp2p", "Failed to decode transactions list from mixnet");
-			if let Some(surbs) = kind.surbs() {
+			if let Some(surb) = kind.surb() {
 				if let Some(mut reply) = reply {
 					if let Err(e) = reply.start_send(MixnetCommand::TransactionImportResult(
-						surbs,
+						surb,
 						MixnetImportResult::BadEncoding,
 					)) {
-						trace!(target: "mixnet", "Channel issue could not report error in surbs {:?}", e);
+						trace!(target: "mixnet", "Channel issue could not report error in surb {:?}", e);
 					}
 				}
 			}

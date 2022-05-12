@@ -46,7 +46,7 @@ pub use sp_finality_grandpa::{AuthorityId, AuthorityList, SetId};
 use sp_runtime::traits::{Block as BlockT, Header, NumberFor};
 use sp_session::SessionKeys;
 use std::{
-	collections::{BTreeSet, HashMap, HashSet, VecDeque},
+	collections::{BTreeSet, BTreeMap, HashMap, HashSet, VecDeque},
 	pin::Pin,
 	sync::Arc,
 	time::Duration,
@@ -106,7 +106,7 @@ enum State {
 
 /// Build mixnet config.
 /// TODO this is not needed anymore (just add to worker build).
-pub fn config(local_identity: &libp2p::core::identity::Keypair) -> Option<mixnet::Config> {
+fn config(local_identity: &libp2p::core::identity::Keypair) -> Option<mixnet::Config> {
 	if let libp2p::core::identity::Keypair::Ed25519(kp) = local_identity {
 		let local_public_key = local_identity.public();
 		Some(mixnet::Config::new_with_ed25519_keypair(kp, local_public_key.clone().into()))
@@ -123,7 +123,7 @@ pub fn new_channels(
 	let (command_sink, command_stream) = tracing_unbounded("mpsc_mixnet_commands");
 	(
 		(
-			(Box::pin(from_worker_sink), Box::pin(to_worker_stream)),
+			(Box::new(from_worker_sink), Box::new(to_worker_stream)),
 			command_sink.clone(),
 			command_stream,
 		),
@@ -139,7 +139,7 @@ where
 {
 	pub fn new(
 		inner_channels: WorkerChannels,
-		mixnet_config: mixnet::Config,
+		local_identity: &libp2p::core::identity::Keypair,
 		client: Arc<C>,
 		shared_authority_set: sc_finality_grandpa::SharedAuthoritySet<
 			<B as BlockT>::Hash,
@@ -151,7 +151,12 @@ where
 		key_store: Arc<dyn SyncCryptoStore>,
 		//authority-discovery which is slow).
 		//key_store: &dyn SyncCryptoStore,
-	) -> Self {
+	) -> Option<Self> {
+		let mixnet_config = if let Some(config) = config(local_identity) {
+			config
+		} else {
+			return None;
+		};
 		let finality_stream = client.finality_notification_stream();
 		// TODO read validator from session
 		// TODO is this node part of session (role means nothing).
@@ -182,7 +187,7 @@ where
 		//			let encoded_connection_info =
 		// AuthorityStar::encoded_connection_info(&connection_info);
 		let state = State::Synching;
-		MixnetWorker {
+		Some(MixnetWorker {
 			authority_id: None,
 			worker,
 			finality_stream,
@@ -198,7 +203,7 @@ where
 			key_store,
 			default_limit_config,
 			//connection_info,
-		}
+		})
 		//encoded_connection_info,
 	}
 
@@ -298,7 +303,7 @@ where
 				if let Some(a) = self.authority_queries.pop_front() {
 					self.authority_queries.push_back(a);
 				}
-				if let Some(a) = self.authority_replies.pop_front() {
+				if let Some(_) = self.authority_replies.pop_front() {
 					self.authority_replies.push_back(None);
 				}
 			}
@@ -356,14 +361,14 @@ where
 			MixnetCommand::AuthorityId(authority_id, authority_discovery_id, peer_id) => {
 				if &peer_id == self.worker.local_id() {
 					self.authority_id = Some(authority_id.clone());
-					let topology = &mut self.worker.mixnet.topology;
+					let topology = &mut self.worker.mixnet_mut().topology;
 					if topology.current_authorities.contains_key(&authority_id) {
 						debug!(target: "mixnet", "Routing active.");
 						topology.routing = true;
 						topology.current_authorities.insert(authority_id, Some(peer_id));
 					}
 				} else {
-					self.worker.mixnet.topology.add_authority_peer_id(
+					self.worker.mixnet_mut().topology.add_authority_peer_id(
 						authority_id,
 						authority_discovery_id,
 						peer_id,
@@ -374,10 +379,10 @@ where
 					self.update_state(false);
 				}
 			},
-			MixnetCommand::TransactionImportResult(surbs, result) => {
+			MixnetCommand::TransactionImportResult(surb, result) => {
 				debug!(target: "mixnet", "Mixnet, received transaction import result.");
-				if let Err(e) = self.worker.mixnet.register_surbs(result.encode(), surbs) {
-					error!(target: "mixnet", "Could not register surbs {:?}", e);
+				if let Err(e) = self.worker.mixnet_mut().register_surb(result.encode(), surb) {
+					error!(target: "mixnet", "Could not register surb {:?}", e);
 				}
 			},
 		}
@@ -390,7 +395,7 @@ where
 		self.update_own_public_key_within_authority_set(&set);
 		let mut remove_limit = Vec::new();
 		let mut restore_limit = Vec::new();
-		let topology = &mut self.worker.mixnet.topology;
+		let topology = &mut self.worker.mixnet_mut().topology;
 		debug!(target: "mixnet", "Change authorities {:?}", set);
 		let old_authority = std::mem::take(&mut topology.current_authorities);
 		topology.routing_nodes.clear();
@@ -422,12 +427,12 @@ where
 				};
 			let mut auth_peer_id = None;
 			if let Some(node_id) = topology.connected_authorities.get(&auth) {
-				if let Some(NodeInfo { authority_id, .. }) =
+				if let Some(NodeInfo { authority_id, public_key, .. }) =
 					topology.connected_nodes.get_mut(node_id)
 				{
 					*authority_id =
 						Some(AuthorityInfo { grandpa_id: auth.clone(), authority_discovery_id });
-					topology.routing_nodes.insert(node_id.clone());
+					topology.routing_nodes.insert(node_id.clone(), public_key.clone());
 					auth_peer_id = Some(node_id.clone());
 				} else {
 					unreachable!();
@@ -526,7 +531,7 @@ where
 			},
 		};
 		debug!(target: "mixnet", "Fetched session keys {:?}, at {:?}", sessions, block_id);
-		self.worker.mixnet.topology.sessions = sessions
+		self.worker.mixnet_mut().topology.sessions = sessions
 			.into_iter()
 			.flat_map(|(_, keys)| {
 				let mut grandpa = None;
@@ -572,7 +577,7 @@ where
 	fn fetch_auth_peer_id(&mut self) {
 		let mut to_fetch = Vec::new();
 		let mut nb_fetched = 0;
-		let t = &mut self.worker.mixnet.topology;
+		let t = &mut self.worker.mixnet_mut().topology;
 		for (auth, id) in t.current_authorities.iter() {
 			if id.is_none() {
 				if !self.authority_queries.iter().any(|a| &a.grandpa_id == auth) {
@@ -610,16 +615,16 @@ where
 	fn update_state(&mut self, synched: bool) {
 		match &self.state {
 			State::Running =>
-				if !self.worker.mixnet.topology.has_enough_nodes() {
+				if !self.worker.mixnet().topology.has_enough_nodes() {
 					self.state = State::WaitingMorePeers;
 				},
 			State::WaitingMorePeers =>
-				if self.worker.mixnet.topology.has_enough_nodes() {
+				if self.worker.mixnet().topology.has_enough_nodes() {
 					debug!(target: "mixnet", "Running.");
 					self.state = State::Running;
 				},
 			State::Synching if synched =>
-				if self.worker.mixnet.topology.has_enough_nodes() {
+				if self.worker.mixnet().topology.has_enough_nodes() {
 					debug!(target: "mixnet", "Running.");
 					self.state = State::Running;
 				} else {
@@ -652,7 +657,7 @@ pub struct AuthorityStar {
 
 	routing: bool,
 	current_authorities: HashMap<AuthorityId, Option<MixPeerId>>,
-	routing_nodes: BTreeSet<MixPeerId>,
+	routing_nodes: BTreeMap<MixPeerId, MixPublicKey>,
 }
 
 #[derive(Clone)]
@@ -679,7 +684,7 @@ impl AuthorityStar {
 			current_authorities: HashMap::new(),
 			connected_nodes: HashMap::new(),
 			connected_authorities: HashMap::new(),
-			routing_nodes: BTreeSet::new(),
+			routing_nodes: BTreeMap::new(),
 			unconnected_authorities: HashMap::new(),
 			sessions: HashMap::new(),
 			routing: false,
@@ -709,7 +714,7 @@ impl AuthorityStar {
 		let authority_id = self.unconnected_authorities.remove(&peer_id);
 		if let Some(authority_id) = authority_id.as_ref() {
 			if self.current_authorities.contains_key(&authority_id.grandpa_id) {
-				self.routing_nodes.insert(peer_id.clone());
+				self.routing_nodes.insert(peer_id.clone(), key.clone());
 			}
 		}
 
@@ -755,7 +760,7 @@ impl AuthorityStar {
 
 		if let Some(infos) = self.connected_nodes.get_mut(&peer_id) {
 			if is_routing {
-				self.routing_nodes.insert(peer_id.clone());
+				self.routing_nodes.insert(peer_id.clone(), infos.public_key.clone());
 			}
 			self.connected_authorities.insert(authority_id.clone(), peer_id);
 			infos.authority_id =
@@ -779,7 +784,7 @@ pub struct ConnectionInfo {
 }
 */
 impl AuthorityStar {
-	fn random_connected(&self, skip: impl Fn(&MixPeerId) -> bool) -> Option<MixPeerId> {
+	fn random_connected(&self, skip: impl Fn(&MixPeerId) -> bool) -> Option<(MixPeerId, MixPublicKey)> {
 		use rand::RngCore;
 		if !self.has_enough_nodes() {
 			debug!(target: "mixnet", "Not enough routing nodes for path.");
@@ -801,9 +806,9 @@ impl AuthorityStar {
 		};
 		debug!(target: "mixnet", "routing {:?}, ix {:?}", self.routing_nodes, ix);
 		for key in self.routing_nodes.range(ix..) {
-			if !skip(key) {
+			if !skip(&key.0) {
 				debug!(target: "mixnet", "Random route node");
-				return Some(key.clone())
+				return Some((key.0.clone(), key.1.clone()))
 			}
 			/*			if let Some(info) = self.connected_nodes.get(key) {
 				debug!(target: "mixnet", "Random route node");
@@ -813,9 +818,9 @@ impl AuthorityStar {
 			}*/
 		}
 		for key in self.routing_nodes.range(..ix).rev() {
-			if !skip(key) {
+			if !skip(&key.0) {
 				debug!(target: "mixnet", "Random route node");
-				return Some(key.clone())
+				return Some((key.0.clone(), key.1.clone()))
 			}
 		}
 		None
@@ -823,13 +828,24 @@ impl AuthorityStar {
 }
 
 impl Topology for AuthorityStar {
+	fn first_hop_nodes(&self) -> Vec<(MixPeerId, MixPublicKey)> {
+		self.routing_nodes.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+	}
+	fn first_hop_nodes_external(&self, _from: &MixPeerId) -> Vec<(MixPeerId, MixPublicKey)> {
+		// allow for all
+		self.first_hop_nodes()
+	}
+	fn is_first_node(&self, id: &MixPeerId) -> bool {
+		// allow for all
+		self.is_routing(id)
+	}
 	//type ConnectionInfo = ConnectionInfo;
 	// TODO consider authority still only when really authority: but signing is awkward.
 	// Probably consumer will not stay connected and rely only on auth discovery dht.
 	// Gossip can be ok though: may be of use in gossip system (attach the neighbor too).
 	// DHT is kind of gossip though.
 
-	fn random_recipient(&self) -> Option<MixPeerId> {
+	fn random_recipient(&self, local_id: &MixPeerId) -> Option<(MixPeerId, MixPublicKey)> {
 		self.random_connected(|_| false)
 	}
 
@@ -839,17 +855,18 @@ impl Topology for AuthorityStar {
 	/// external hop for latest (see gen_path function). Then last hop will expose
 	/// a new connection, so it need to be an additional hop (if possible).
 	fn neighbors(&self, from: &MixPeerId) -> Option<Vec<(MixPeerId, MixPublicKey)>> {
-		if self.routing_nodes.contains(from) || (&self.node_id == from && self.routing) {
+		if self.routing_nodes.contains_key(from) || (&self.node_id == from && self.routing) {
 			Some(
 				self.routing_nodes
 					.iter()
 					.filter_map(|id| {
-						if id == from {
+						if id.0 == from {
 							None
 						} else {
 							Some((
-								id.clone(),
-								self.connected_nodes.get(id).unwrap().public_key.clone(),
+								id.0.clone(),
+								id.1.clone(),
+//								self.connected_nodes.get(&id.0).unwrap().public_key.clone(),
 							))
 						}
 					})
@@ -860,37 +877,62 @@ impl Topology for AuthorityStar {
 		}
 	}
 
+	fn routing_to(&self, from: &MixPeerId, to: &MixPeerId) -> bool {
+		self.routing_nodes.contains_key(from)
+			// && self.routing_nodes.contains_key(to) // allow external
+	}
+
 	fn random_path(
 		&self,
-		start: &MixPeerId,
-		recipient: &MixPeerId,
+		start_node: (&MixPeerId, Option<&MixPublicKey>),
+		recipient_node: (&MixPeerId, Option<&MixPublicKey>),
 		count: usize,
 		num_hops: usize,
 		max_hops: usize,
+		last_query_if_surb: Option<&Vec<(MixPeerId, MixPublicKey)>>,
 	) -> Result<Vec<Vec<(MixPeerId, MixPublicKey)>>, Error> {
 		// Diverging from default implementation (random from all possible paths) as `neighbor`
 		// return same result for all routing peer (minus self).
 
-		let num_hops = if !(self.routing_nodes.contains(start) ||
-			(self.routing() && &self.node_id == start))
-		{
-			// num hops is between routing, last one is not receiving covers.
-			num_hops + 1
+		let mut add_start = None;
+		let mut add_end = None;
+		let start = if self.is_first_node(start_node.0) {
+			start_node.0.clone()
 		} else {
-			num_hops
-		};
-		let num_hops = if !(self.routing_nodes.contains(recipient) ||
-			(self.routing() && &self.node_id == recipient))
-		{
-			// num hops is between routing, last one is not receiving covers.
-			num_hops + 1
-		} else {
-			num_hops
+			if num_hops + 1 > max_hops {
+				return Err(Error::TooManyHops)
+			}
+
+			let firsts = self.first_hop_nodes_external(start_node.0);
+			if firsts.len() == 0 {
+				return Err(Error::NoPath(Some(recipient_node.0.clone())))
+			}
+			let mut rng = rand::thread_rng();
+			use rand::Rng;
+			let n: usize = rng.gen_range(0, firsts.len());
+			add_start = Some(firsts[n].clone());
+			firsts[n].0.clone()
 		};
 
-		if num_hops > max_hops {
-			return Err(Error::TooManyHops)
-		}
+		let recipient = if self.is_routing(recipient_node.0) {
+			recipient_node.0.clone()
+		} else {
+			if num_hops + 1 > max_hops {
+				return Err(Error::TooManyHops)
+			}
+
+			if let Some(query) = last_query_if_surb {
+				// reuse a node that was recently connected.
+				if let Some(rec) = query.get(0) {
+					add_end = Some(recipient_node);
+					rec.0.clone()
+				} else {
+					return Err(Error::NoPath(Some(recipient_node.0.clone())))
+				}
+			} else {
+				return Err(Error::NoPath(Some(recipient_node.0.clone())))
+			}
+		};
 		debug!(target: "mixnet", "nb_hop: {:?}", num_hops);
 		let mut result = Vec::with_capacity(count);
 		while result.len() < count {
@@ -900,16 +942,20 @@ impl Topology for AuthorityStar {
 			while ids.len() - 2 < num_hops - 1 {
 				if let Some(key) = self.random_connected(|k| ids.contains(k)) {
 					debug!(target: "mixnet", "Add hop {:?}.", key);
-					ids.insert(key);
+					ids.insert(key.0);
 				} else {
 					debug!(target: "mixnet", "No random connected {:?}.", ids.len() - 2);
 					return Err(Error::NotEnoughRoutingPeers)
 				}
 			}
 
-			let mut path = Vec::with_capacity(num_hops);
-			ids.remove(start);
-			ids.remove(recipient);
+			let mut path = Vec::with_capacity(num_hops + 1);
+			if let Some((peer, key)) = add_start {
+				path.push((peer.clone(), key.clone()));
+			}
+	
+			ids.remove(&start);
+			ids.remove(&recipient);
 			for peer_id in ids.into_iter() {
 				if let Some(info) = self.connected_nodes.get(&peer_id) {
 					path.push((peer_id, info.public_key.clone()));
@@ -918,26 +964,37 @@ impl Topology for AuthorityStar {
 					unreachable!("node in routing_nodes must also be in connected_nodes");
 				}
 			}
-			if let Some(info) = self.connected_nodes.get(recipient) {
+			if let Some(info) = self.connected_nodes.get(&recipient) {
 				path.push((recipient.clone(), info.public_key.clone()));
 			} else {
-				if &self.node_id == recipient {
-					// surbs reply
+				if self.node_id == recipient {
+					// surb reply
 					path.push((self.node_id.clone(), self.node_public_key.clone()));
 				} else {
 					error!(target: "mixnet", "Unknown recipient");
 					return Err(Error::NotEnoughRoutingPeers)
 				}
 			}
-
+ 
+			if let Some((peer, key)) = add_end {
+				if let Some(key) = key {
+					path.push((peer.clone(), key.clone()));
+				} else {
+					return Err(Error::NoPath(Some(recipient_node.0.clone())))
+				}
+			}
 			result.push(path);
 		}
 		debug!(target: "mixnet", "Path: {:?}", result);
 		Ok(result)
 	}
 
-	fn routing(&self) -> bool {
-		self.routing
+	fn is_routing(&self, id: &MixPeerId) -> bool {
+		if id == &self.node_id {
+			self.routing
+		} else {
+			self.routing_nodes.contains_key(id)
+		}
 	}
 
 	fn connected(&mut self, peer_id: MixPeerId, key: MixPublicKey) {
@@ -949,6 +1006,11 @@ impl Topology for AuthorityStar {
 	fn disconnect(&mut self, peer_id: &MixPeerId) {
 		debug!(target: "mixnet", "Disconnected from internal");
 		self.add_disconnected_peer(&peer_id);
+	}
+
+	fn allow_external(&mut self, _id: &MixPeerId) -> Option<(usize, usize)> {
+		// 10% TODO limit nb connection
+		Some((1, 10))
 	}
 }
 /*
@@ -986,7 +1048,7 @@ impl<F: futures::Future + Unpin> futures::Future for OptionFuture2<F> {
 const PEER_ID_PREFIX: [u8; 6] = [0, 36, 8, 1, 18, 32];
 #[test]
 fn test_random_route() {
-	let mut routing_nodes: BTreeSet<MixPeerId> = Default::default();
+	let mut routing_nodes: BTreeMap<MixPeerId> = Default::default();
 	for _ in 0..6 {
 		let config = sc_network::config::Secret::New;
 		let config = sc_network::config::NodeKeyConfig::Ed25519(config);

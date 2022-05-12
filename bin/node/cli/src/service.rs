@@ -355,15 +355,11 @@ pub fn new_full_base(
 	let mut mixnet_channels = None;
 	let mut mixnet_worker = None;
 	if config.mixnet {
+		let (worker_inner, (worker_in, worker_out, command_sender)) = sc_mixnet::new_channels();
+		mixnet_channels = Some((worker_in, worker_out, command_sender));
 		let local_id = config.network.node_key.clone().into_keypair()?;
-		if let Some(config) = sc_mixnet::config(&local_id) {
-			let (worker_inner, (worker_in, worker_out, command_sender)) = sc_mixnet::new_channels();
-			mixnet_channels = Some((worker_in, worker_out, command_sender));
-			let authority_set = import_setup.1.shared_authority_set().clone();
-			mixnet_worker = Some((authority_set, worker_inner, config));
-		} else {
-			return Err(ServiceError::Other("Cannot start mixnet.".to_string()))
-		}
+		let authority_set = import_setup.1.shared_authority_set().clone();
+		mixnet_worker = Some((authority_set, worker_inner, local_id));
 	}
 
 	let (network, system_rpc_tx, mixnet_tx, network_starter) =
@@ -522,19 +518,21 @@ pub fn new_full_base(
 			Some("networking"),
 			authority_discovery_worker.run(),
 		);
-		if let Some((authority_set, inner_channels, config)) = mixnet_worker {
-			let mixnet_worker = sc_mixnet::MixnetWorker::new(
-				inner_channels,
-				config,
-				client.clone(),
-				authority_set,
-				service,
-				keystore_container.sync_keystore(),
-			);
-
-			task_manager
-				.spawn_handle()
-				.spawn("mixnet-worker", Some("mixnet"), mixnet_worker.run());
+		if let Some((authority_set, inner_channels, local_id)) = mixnet_worker {
+			if let Some(mixnet_worker) = sc_mixnet::MixnetWorker::new(
+					inner_channels,
+					&local_id,
+					client.clone(),
+					authority_set,
+					service,
+					keystore_container.sync_keystore(),
+				) {
+				task_manager
+					.spawn_handle()
+					.spawn("mixnet-worker", Some("mixnet"), mixnet_worker.run());
+			} else {
+				return Err(ServiceError::Other("Cannot start mixnet.".to_string()))
+			}
 		}
 	}
 

@@ -60,8 +60,7 @@ use std::{
 pub use crate::request_responses::{
 	IfDisconnected, InboundFailure, OutboundFailure, RequestFailure, RequestId, ResponseFailure,
 };
-use crate::Mixnet;
-use mixnet::MixPeerId;
+use mixnet::{MixnetBehaviour, MixPeerId};
 use sc_utils::mpsc::TracingUnboundedSender;
 
 /// Command for the mixnet worker.
@@ -70,11 +69,11 @@ pub enum MixnetCommand {
 	/// New authority id from session grandpa session change.
 	/// TODO remove
 	AuthorityId(sp_finality_grandpa::AuthorityId, sp_core::crypto::CryptoTypePublicPair, MixPeerId),
-	/// Received transaction is invalid with a surbs reply.
+	/// Received transaction is invalid with a surb reply.
 	TransactionImportResult(mixnet::SurbsPayload, MixnetImportResult),
 }
 
-/// Result reported in surbs for a transaction imported from a mixnet.
+/// Result reported in surb for a transaction imported from a mixnet.
 #[derive(Debug, Encode, Decode)]
 pub enum MixnetImportResult {
 	/// Succesfully managed transaction.
@@ -113,7 +112,7 @@ where
 	/// Bitswap server for blockchain data.
 	bitswap: Toggle<Bitswap<B, Client>>,
 	/// Mixnet handler.
-	mixnet: Toggle<Mixnet>,
+	mixnet: Toggle<MixnetBehaviour>,
 	/// Mixnet command sender if mixnet is enabled.
 	#[behaviour(ignore)]
 	mixnet_command_sender: Option<TracingUnboundedSender<MixnetCommand>>,
@@ -265,7 +264,7 @@ where
 		state_request_protocol_config: request_responses::ProtocolConfig,
 		warp_sync_protocol_config: Option<request_responses::ProtocolConfig>,
 		bitswap: Option<Bitswap<B, Client>>,
-		mixnet: Option<(Mixnet, TracingUnboundedSender<MixnetCommand>)>,
+		mixnet: Option<(MixnetBehaviour, TracingUnboundedSender<MixnetCommand>)>,
 		light_client_request_protocol_config: request_responses::ProtocolConfig,
 		// All remaining request protocol configs.
 		mut request_response_protocols: Vec<request_responses::ProtocolConfig>,
@@ -318,7 +317,7 @@ where
 		&mut self,
 		encoded_tx: Vec<u8>,
 		num_hop: usize,
-		surbs_reply: bool,
+		surb_reply: bool,
 	) -> Result<(), String> {
 		if let Some(mixnet) = self.mixnet.as_mut() {
 			if let Ok(decoded) = <B::Extrinsic as Decode>::decode(&mut encoded_tx.as_ref()) {
@@ -326,7 +325,7 @@ where
 				mixnet
 					.send_to_random_recipient(
 						message.encode(),
-						mixnet::SendOptions { num_hop: Some(num_hop), with_surbs: surbs_reply },
+						mixnet::SendOptions { num_hop: Some(num_hop), with_surb: surb_reply },
 					)
 					.map_err(|e| e.to_string())
 			} else {
@@ -675,16 +674,16 @@ where
 				// only one of a kind for query or reply.
 				match message.kind {
 					mixnet::MessageType::FromSurbs(_query) => {
-						trace!(target: "mixnet", "Got surbs reply");
+						trace!(target: "mixnet", "Got surb reply");
 
 						// TODO send in some client notification (keep query in worker?).
 						// Also attach query to FromSurbs??
 						let result = MixnetImportResult::decode(&mut message.message.as_ref());
-						info!(target: "mixnet", "Received from surbs {:?}", result);
+						info!(target: "mixnet", "Received from surb {:?}", result);
 					},
 					kind => {
 						trace!(target: "mixnet", "Got query");
-						let reply = if kind.with_surbs() {
+						let reply = if kind.with_surb() {
 							self.mixnet_command_sender.clone()
 						} else {
 							None
