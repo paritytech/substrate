@@ -196,7 +196,7 @@ pub mod pallet {
 	>;
 
 	#[pallet::storage]
-	#[pallet::storage_prefix = "Instance"]
+	#[pallet::storage_prefix = "Asset"]
 	/// The items in existence and their ownership details.
 	pub(super) type Item<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
 		_,
