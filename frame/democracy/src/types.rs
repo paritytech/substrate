@@ -17,8 +17,9 @@
 
 //! Miscellaneous additional datatypes.
 
-use crate::{AccountVote, Conviction, Vote, VoteThreshold};
-use codec::{Decode, Encode};
+use crate::{AccountVote, Conviction, Get, Vote, VoteThreshold};
+use codec::{Decode, Encode, MaxEncodedLen};
+use frame_support::BoundedVec;
 use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{Bounded, CheckedAdd, CheckedDiv, CheckedMul, CheckedSub, Saturating, Zero},
@@ -203,4 +204,18 @@ pub enum UnvoteScope {
 	Any,
 	/// Permitted to do only the changes that do not need the owner's permission.
 	OnlyExpired,
+}
+
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+pub struct Deposit<AccountId, Balance> {
+	pub(crate) who: AccountId,
+	pub(crate) amount: Balance,
+}
+
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+#[codec(mel_bound(Deposit: MaxEncodedLen, BoundedVec<u8, Limit>: MaxEncodedLen))]
+#[scale_info(skip_type_params(Limit))]
+pub struct Metadata<Deposit, Limit: Get<u32>> {
+	pub metadata: BoundedVec<u8, Limit>,
+	pub deposit: Option<Deposit>,
 }

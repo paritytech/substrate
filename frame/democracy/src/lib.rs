@@ -177,7 +177,9 @@ mod vote_threshold;
 pub mod weights;
 pub use conviction::Conviction;
 pub use pallet::*;
-pub use types::{Delegations, ReferendumInfo, ReferendumStatus, Tally, UnvoteScope};
+pub use types::{
+	Delegations, Deposit, Metadata, ReferendumInfo, ReferendumStatus, Tally, UnvoteScope,
+};
 pub use vote::{AccountVote, Vote, Voting};
 pub use vote_threshold::{Approved, VoteThreshold};
 pub use weights::WeightInfo;
@@ -368,6 +370,9 @@ pub mod pallet {
 		/// The maximum number of public proposals that can exist at any time.
 		#[pallet::constant]
 		type MaxProposals: Get<u32>;
+
+		#[pallet::constant]
+		type MetadataLimit: Get<u32>;
 	}
 
 	// TODO: Refactor public proposal queue into its own pallet.
@@ -424,6 +429,15 @@ pub mod pallet {
 		Twox64Concat,
 		ReferendumIndex,
 		ReferendumInfo<T::BlockNumber, T::Hash, BalanceOf<T>>,
+	>;
+
+	/// Metadata concerning any given proposal hash.
+	#[pallet::storage]
+	pub type ProposalMetadataOf<T: Config> = StorageMap<
+		_,
+		Blake2_128Concat,
+		T::Hash,
+		Metadata<Deposit<T::AccountId, BalanceOf<T>>, T::MetadataLimit>,
 	>;
 
 	/// All votes for a particular voter. We store the balance for the number of votes that we
@@ -537,6 +551,10 @@ pub mod pallet {
 		Voted { voter: T::AccountId, ref_index: ReferendumIndex, vote: AccountVote<BalanceOf<T>> },
 		/// An account has secconded a proposal
 		Seconded { seconder: T::AccountId, prop_index: PropIndex },
+		/// Metadata for a proposal hash has been set.
+		MetadataSet { proposal_hash: T::Hash },
+		/// Metadata for a proposal hash has been cleared.
+		MetadataCleared { proposal_hash: T::Hash },
 	}
 
 	#[pallet::error]
@@ -598,6 +616,8 @@ pub mod pallet {
 		MaxVotesReached,
 		/// Maximum number of proposals reached.
 		TooManyProposals,
+		/// The metadata provided is too large.
+		MetadataLimitExceeded,
 	}
 
 	#[pallet::hooks]
@@ -1279,6 +1299,78 @@ pub mod pallet {
 
 			Ok(())
 		}
+
+		/// Set the metadata to a proposal hash.
+		///
+		/// - `origin`: Must be `Signed`, and the creator of the proposal.
+		/// - `proposal_hash`: The proposal hash to add metadata for.
+		/// - `metadata`: An opaque blob representing the metadata for the proposal. Could be JSON,
+		///   a Hash, or raw text. Up to the community to decide how exactly to use this.
+		//#[pallet::weight(T::WeightInfo::set_metadata(metadata.len() as u32))]
+		#[pallet::weight(0)]
+		pub fn set_metadata(
+			origin: OriginFor<T>,
+			proposal_hash: T::Hash,
+			metadata: Vec<u8>,
+		) -> DispatchResult {
+			if let Some(sender) = ensure_signed(origin.clone()).ok() {
+				// If it is a signed origin, check that the prop is in the public
+				// queue, and that the sender was the proposer of the proposition.
+				let public_props = PublicProps::<T>::get();
+				let (_, _, proposer) = public_props
+					.into_iter()
+					.find(|(_, hash, _)| hash == &proposal_hash)
+					.ok_or(Error::<T>::ProposalMissing)?;
+				ensure!(proposer == sender, Error::<T>::NoPermission);
+			} else {
+				// Otherwise, check that this is the external origin, and the hash is for the
+				// next external proposal.
+				T::ExternalOrigin::ensure_origin(origin)?;
+				let (hash, _) = NextExternal::<T>::get().ok_or(Error::<T>::ProposalMissing)?;
+				ensure!(hash == proposal_hash, Error::<T>::ProposalMissing);
+			}
+			let bounded_metadata: BoundedVec<u8, T::MetadataLimit> =
+				metadata.try_into().map_err(|_| Error::<T>::MetadataLimitExceeded)?;
+			let final_metadata = Metadata {
+				metadata: bounded_metadata,
+				// The user already placed a deposit for opening the proposal, and this can be
+				// cleaned up at the end. No need to take a further deposit for now.
+				deposit: None,
+			};
+			ProposalMetadataOf::<T>::insert(proposal_hash, final_metadata);
+			Self::deposit_event(Event::<T>::MetadataSet { proposal_hash });
+			Ok(())
+		}
+
+		/// Clear the metadata to a proposal hash.
+		///
+		/// - `origin`: Must be `Signed`. If the proposal is ongoing, it must also be the creator of
+		///   the proposal.
+		/// - `proposal_hash`: The proposal hash to clear metadata for.
+		//#[pallet::weight(T::WeightInfo::clear_metadata(T::MetadataLimit::get()))]
+		#[pallet::weight(0)]
+		pub fn clear_metadata(origin: OriginFor<T>, proposal_hash: T::Hash) -> DispatchResult {
+			let sender = ensure_signed(origin)?;
+			let public_props = PublicProps::<T>::get();
+			// This logic checks that the proposal hash to be cleared is not in the public queue or
+			// external queue.
+			if let Some((_, _, proposer)) =
+				public_props.into_iter().find(|(_, hash, _)| hash == &proposal_hash)
+			{
+				// If it is in the public queue, then it must be the proposer who wants to clear the
+				// metadata.
+				ensure!(proposer == sender, Error::<T>::NoPermission);
+			} else {
+				if let Some((hash, _)) = NextExternal::<T>::get() {
+					ensure!(hash != proposal_hash, Error::<T>::NoPermission);
+				}
+			}
+			if let Some(metadata) = ProposalMetadataOf::<T>::take(proposal_hash) {
+				Self::refund_deposit(metadata.deposit);
+				Self::deposit_event(Event::<T>::MetadataCleared { proposal_hash });
+			}
+			Ok(())
+		}
 	}
 }
 
@@ -1919,6 +2011,13 @@ impl<T: Config> Pallet<T> {
 		Self::deposit_event(Event::<T>::PreimageNoted { proposal_hash, who, deposit: free });
 
 		Ok(())
+	}
+
+	/// Return a deposit, if `Some`.
+	fn refund_deposit(deposit: Option<Deposit<T::AccountId, BalanceOf<T>>>) {
+		if let Some(Deposit { who, amount }) = deposit {
+			T::Currency::unreserve(&who, amount);
+		}
 	}
 }
 
