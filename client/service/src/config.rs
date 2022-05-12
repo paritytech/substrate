@@ -100,6 +100,18 @@ pub struct Configuration {
 	pub rpc_methods: RpcMethods,
 	/// Maximum payload of rpc request/responses.
 	pub rpc_max_payload: Option<usize>,
+	/// Maximum payload of a rpc request
+	pub rpc_max_request_size: Option<usize>,
+	/// Maximum payload of a rpc request
+	pub rpc_max_response_size: Option<usize>,
+	/// Custom JSON-RPC subscription ID provider.
+	///
+	/// Default: [`crate::RandomStringSubscriptionId`].
+	pub rpc_id_provider: Option<Box<dyn crate::RpcSubscriptionIdProvider>>,
+	/// Maximum allowed subscriptions per rpc connection
+	///
+	/// Default: 1024.
+	pub rpc_max_subs_per_conn: Option<usize>,
 	/// Maximum size of the output buffer capacity for websocket connections.
 	pub ws_max_out_buffer_capacity: Option<usize>,
 	/// Prometheus endpoint configuration. `None` if disabled.
