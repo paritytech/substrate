@@ -20,7 +20,9 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
-use frame_benchmarking::{account, benchmarks_instance_pallet, whitelist_account, whitelisted_caller};
+use frame_benchmarking::{
+	account, benchmarks_instance_pallet, whitelist_account, whitelisted_caller,
+};
 use frame_support::{
 	dispatch::UnfilteredDispatchable,
 	traits::{EnsureOrigin, Get},
