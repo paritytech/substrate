@@ -43,6 +43,18 @@ pub trait EnsureOrigin<OuterOrigin> {
 	fn successful_origin() -> OuterOrigin;
 }
 
+pub struct NeverEnsureOrigin<Success>(sp_std::marker::PhantomData<Success>);
+impl<OO, Success> EnsureOrigin<OO> for NeverEnsureOrigin<Success> {
+	type Success = Success;
+	fn try_origin(o: OO) -> Result<Success, OO> {
+		Err(o)
+	}
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> OO {
+		panic!("No `successful_origin` possible for `NeverEnsureOrigin`")
+	}
+}
+
 /// Some sort of check on the origin is performed by this object.
 pub trait EnsureOriginWithArg<OuterOrigin, Argument> {
 	/// A return type.

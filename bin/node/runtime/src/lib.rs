@@ -773,12 +773,14 @@ impl pallet_referenda::TracksInfo<Balance, BlockNumber> for TracksInfo {
 				confirm_period: 2,
 				min_enactment_period: 4,
 				min_approval: pallet_referenda::Curve::LinearDecreasing {
-					begin: Perbill::from_percent(100),
-					delta: Perbill::from_percent(50),
+					length: Perbill::from_percent(100),
+					floor: Perbill::from_percent(50),
+					ceil: Perbill::from_percent(100),
 				},
 				min_support: pallet_referenda::Curve::LinearDecreasing {
-					begin: Perbill::from_percent(100),
-					delta: Perbill::from_percent(100),
+					length: Perbill::from_percent(100),
+					floor: Perbill::from_percent(0),
+					ceil: Perbill::from_percent(100),
 				},
 			},
 		)];
@@ -1004,7 +1006,7 @@ impl pallet_treasury::Config for Runtime {
 	type SpendFunds = Bounties;
 	type WeightInfo = pallet_treasury::weights::SubstrateWeight<Runtime>;
 	type MaxApprovals = MaxApprovals;
-	type SpendOrigin = ();
+	type SpendOrigin = frame_support::traits::NeverEnsureOrigin<u128>;
 }
 
 parameter_types! {

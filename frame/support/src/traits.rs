@@ -97,7 +97,7 @@ mod dispatch;
 pub use dispatch::EnsureOneOf;
 pub use dispatch::{
 	AsEnsureOriginWithArg, EitherOf, EitherOfDiverse, EnsureOrigin, EnsureOriginWithArg,
-	OriginTrait, UnfilteredDispatchable,
+	OriginTrait, UnfilteredDispatchable, NeverEnsureOrigin,
 };
 
 mod voting;
