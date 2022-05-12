@@ -15,6 +15,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Trie recorder
+//!
+//! Provides an implementation of the [`TrieRecorder`](trie_db::TrieRecorder) trait. It can be used
+//! to record storage accesses to the state to generate a [`StorageProof`].
+
 use crate::{cache::TrieCache, Error, NodeCodec, StorageProof, TrieDBBuilder};
 use codec::Encode;
 use hash_db::{HashDBRef, Hasher};
@@ -104,6 +109,9 @@ impl<H: Hasher> Recorder<H> {
 	/// It requires the `root` and the `hash_db` to lookup values that we served from the `cache`
 	/// and hadn't recorded the trie nodes. It will lookup these values and ensure to record the
 	/// trie nodes to include them in the final [`StorageProof`].
+	///
+	/// While a recorder can be cloned, all share the same internal state. After calling this
+	/// function, all other instances will have their internal state reset as well.
 	///
 	/// Returns the [`StorageProof`] or an error if one of lookups in the trie failed.
 	pub fn into_storage_proof(
