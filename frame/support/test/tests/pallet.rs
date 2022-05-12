@@ -289,7 +289,7 @@ pub mod pallet {
 
 	#[pallet::storage]
 	pub type Map3<T> =
-		StorageMap<_, Blake2_128Concat, u32, u64, ResultQuery<NonExistentStorageValue>>;
+		StorageMap<_, Blake2_128Concat, u32, u64, ResultQuery<Error::<T>::NonExistentStorageValue>>;
 
 	#[pallet::storage]
 	pub type DoubleMap<T> = StorageDoubleMap<_, Blake2_128Concat, u8, Twox64Concat, u16, u32>;
@@ -312,7 +312,7 @@ pub mod pallet {
 		Twox64Concat,
 		u64,
 		u128,
-		ResultQuery<NonExistentStorageValue>,
+		ResultQuery<Error<T>::NonExistentStorageValue>,
 	>;
 
 	#[pallet::storage]
@@ -333,7 +333,7 @@ pub mod pallet {
 		_,
 		(NMapKey<Blake2_128Concat, u8>, NMapKey<Twox64Concat, u16>),
 		u128,
-		ResultQuery<NonExistentStorageValue>,
+		ResultQuery<Error<T>::NonExistentStorageValue>,
 	>;
 
 	#[pallet::storage]

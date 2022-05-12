@@ -1,4 +1,4 @@
-error: Invalid pallet::storage, unexpected generic argument kind, expected 1 ident representing a pallet enum error variant name, found `'static`
+error: Invalid pallet::storage, unexpected generic argument kind, expected a type path to a `PalletError` enum variant, found `'static`
   --> tests/pallet_ui/storage_result_query_wrong_generic_kind.rs:18:56
    |
 18 |     type Foo<T: Config> = StorageValue<_, u8, ResultQuery<'static>>;

@@ -91,6 +91,8 @@ fn check_prefix_duplicates(
 pub struct ResultOnEmptyStructMetadata {
 	/// The Rust ident that is going to be used as the name of the OnEmpty struct.
 	pub name: syn::Ident,
+	/// The path to the error type being returned by the ResultQuery.
+	pub error_path: syn::Path,
 	/// The visibility of the OnEmpty struct.
 	pub visibility: syn::Visibility,
 	/// The type of the storage item.
@@ -139,13 +141,16 @@ pub fn process_generics(def: &mut Def) -> syn::Result<Vec<ResultOnEmptyStructMet
 		let default_query_kind: syn::Type =
 			syn::parse_quote!(#frame_support::storage::types::OptionQuery);
 		let mut default_on_empty = |value_ty: syn::Type| -> syn::Type {
-			if let Some(QueryKind::ResultQuery(variant_name)) = storage_def.query_kind.as_ref() {
+			if let Some(QueryKind::ResultQuery(error_path, variant_name)) =
+				storage_def.query_kind.as_ref()
+			{
 				let on_empty_ident =
 					quote::format_ident!("__Frame_Internal_Get{}Result", storage_def.ident);
 				on_empty_struct_metadata.push(ResultOnEmptyStructMetadata {
 					name: on_empty_ident.clone(),
 					visibility: storage_def.vis.clone(),
 					value_ty,
+					error_path: error_path.clone(),
 					variant_name: variant_name.clone(),
 					span: storage_def.attr_span,
 				});
@@ -156,20 +161,7 @@ pub fn process_generics(def: &mut Def) -> syn::Result<Vec<ResultOnEmptyStructMet
 		let default_max_values: syn::Type = syn::parse_quote!(#frame_support::traits::GetDefault);
 
 		let set_result_query_type_parameter = |query_type: &mut syn::Type| -> syn::Result<()> {
-			if let Some(QueryKind::ResultQuery(_)) = storage_def.query_kind.as_ref() {
-				let pallet_error = match def.error.as_ref() {
-					Some(err_def) => {
-						let error_ident = &err_def.error;
-						let ty: syn::Type = syn::parse_quote!(#error_ident<#type_use_gen>);
-						ty
-					},
-					None => {
-						let msg = "Invalid pallet::storage, ResultQuery requires a defined \
-							pallet::error";
-						return Err(syn::Error::new(storage_def.ident.span(), msg))
-					},
-				};
-
+			if let Some(QueryKind::ResultQuery(error_path, _)) = storage_def.query_kind.as_ref() {
 				if let syn::Type::Path(syn::TypePath { path: syn::Path { segments, .. }, .. }) =
 					query_type
 				{
@@ -179,13 +171,13 @@ pub fn process_generics(def: &mut Def) -> syn::Result<Vec<ResultOnEmptyStructMet
 						) = &mut seg.arguments
 						{
 							args.clear();
-							args.push(syn::GenericArgument::Type(pallet_error));
+							args.push(syn::GenericArgument::Type(syn::parse_quote!(#error_path)));
 						}
 					}
 				} else {
 					let msg = format!(
-						"Invalid pallet::storage, unexpected type for query, expected \
-						ResultQuery with 1 type parameter, found `{}`",
+						"Invalid pallet::storage, unexpected type for query, expected ResultQuery \
+						with 1 type parameter, found `{}`",
 						query_type.to_token_stream().to_string()
 					);
 					return Err(syn::Error::new(query_type.span(), msg))
@@ -288,27 +280,16 @@ pub fn process_generics(def: &mut Def) -> syn::Result<Vec<ResultOnEmptyStructMet
 				if let syn::GenericArgument::Type(query_kind) = args.args.index_mut(query_idx) {
 					set_result_query_type_parameter(query_kind)?;
 				}
-			} else if let Some(QueryKind::ResultQuery(_)) = storage_def.query_kind.as_ref() {
-				let pallet_error = match def.error.as_ref() {
-					Some(err_def) => {
-						let error_ident = &err_def.error;
-						let ty: syn::Type = syn::parse_quote!(#error_ident<#type_use_gen>);
-						ty
-					},
-					None => {
-						let msg = "Invalid pallet::storage, ResultQuery requires a defined \
-							pallet::error";
-						return Err(syn::Error::new(storage_def.ident.span(), msg))
-					},
-				};
-
-				args.args.push(syn::GenericArgument::Type(pallet_error))
+			} else if let Some(QueryKind::ResultQuery(error_path, _)) =
+				storage_def.query_kind.as_ref()
+			{
+				args.args.push(syn::GenericArgument::Type(syn::parse_quote!(#error_path)))
 			}
 
 			// Here, we only need to check if OnEmpty is *not* specified, and if so, then we have to
 			// generate a default OnEmpty struct for it.
 			if on_empty_idx >= args.args.len() &&
-				matches!(storage_def.query_kind.as_ref(), Some(QueryKind::ResultQuery(_)))
+				matches!(storage_def.query_kind.as_ref(), Some(QueryKind::ResultQuery(_, _)))
 			{
 				let value_ty = match args.args[value_idx].clone() {
 					syn::GenericArgument::Type(ty) => ty,
@@ -389,13 +370,6 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 			let type_use_gen = &def.type_use_generics(storage.attr_span);
 			let full_ident = quote::quote_spanned!(storage.attr_span => #ident<#gen> );
 
-			let pallet_error = def.error.as_ref().map(|err_def| {
-				let error_ident = &err_def.error;
-				quote::quote_spanned!(err_def.attr_span =>
-					#error_ident<#type_use_gen>
-				)
-			});
-
 			let cfg_attrs = &storage.cfg_attrs;
 
 			match &storage.metadata {
@@ -404,9 +378,10 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 						QueryKind::OptionQuery => quote::quote_spanned!(storage.attr_span =>
 							Option<#value>
 						),
-						QueryKind::ResultQuery(_) => quote::quote_spanned!(storage.attr_span =>
-							Result<#value, #pallet_error>
-						),
+						QueryKind::ResultQuery(error_path, _) =>
+							quote::quote_spanned!(storage.attr_span =>
+								Result<#value, #error_path>
+							),
 						QueryKind::ValueQuery => quote::quote!(#value),
 					};
 					quote::quote_spanned!(storage.attr_span =>
@@ -426,9 +401,10 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 						QueryKind::OptionQuery => quote::quote_spanned!(storage.attr_span =>
 							Option<#value>
 						),
-						QueryKind::ResultQuery(_) => quote::quote_spanned!(storage.attr_span =>
-							Result<#value, #pallet_error>
-						),
+						QueryKind::ResultQuery(error_path, _) =>
+							quote::quote_spanned!(storage.attr_span =>
+								Result<#value, #error_path>
+							),
 						QueryKind::ValueQuery => quote::quote!(#value),
 					};
 					quote::quote_spanned!(storage.attr_span =>
@@ -450,9 +426,10 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 						QueryKind::OptionQuery => quote::quote_spanned!(storage.attr_span =>
 							Option<#value>
 						),
-						QueryKind::ResultQuery(_) => quote::quote_spanned!(storage.attr_span =>
-							Result<#value, #pallet_error>
-						),
+						QueryKind::ResultQuery(error_path, _) =>
+							quote::quote_spanned!(storage.attr_span =>
+								Result<#value, #error_path>
+							),
 						QueryKind::ValueQuery => quote::quote!(#value),
 					};
 					quote::quote_spanned!(storage.attr_span =>
@@ -474,9 +451,10 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 						QueryKind::OptionQuery => quote::quote_spanned!(storage.attr_span =>
 							Option<#value>
 						),
-						QueryKind::ResultQuery(_) => quote::quote_spanned!(storage.attr_span =>
-							Result<#value, #pallet_error>
-						),
+						QueryKind::ResultQuery(error_path, _) =>
+							quote::quote_spanned!(storage.attr_span =>
+								Result<#value, #error_path>
+							),
 						QueryKind::ValueQuery => quote::quote!(#value),
 					};
 					quote::quote_spanned!(storage.attr_span =>
@@ -500,9 +478,10 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 						QueryKind::OptionQuery => quote::quote_spanned!(storage.attr_span =>
 							Option<#value>
 						),
-						QueryKind::ResultQuery(_) => quote::quote_spanned!(storage.attr_span =>
-							Result<#value, #pallet_error>
-						),
+						QueryKind::ResultQuery(error_path, _) =>
+							quote::quote_spanned!(storage.attr_span =>
+								Result<#value, #error_path>
+							),
 						QueryKind::ValueQuery => quote::quote!(#value),
 					};
 					quote::quote_spanned!(storage.attr_span =>
@@ -601,13 +580,42 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 		)
 	});
 
-	let on_empty_structs = on_empty_struct_metadata
-		.into_iter()
-		.map(|ResultOnEmptyStructMetadata { name, visibility, value_ty, variant_name, span }| {
-			let type_impl_gen = &def.type_impl_generics(span);
-			let type_use_gen = &def.type_use_generics(span);
-			let pallet_error = def.error.as_ref().expect("Checked in process_generics; qed");
-			let pallet_error_ident = &pallet_error.error;
+	let on_empty_structs = on_empty_struct_metadata.into_iter().map(
+		|ResultOnEmptyStructMetadata {
+			name,
+			visibility,
+			value_ty,
+			error_path,
+			variant_name,
+			span,
+		}| {
+			use crate::pallet::parse::GenericKind;
+			use syn::{GenericArgument, Path, PathArguments, PathSegment, Type, TypePath};
+
+			let generic_kind = match error_path.segments.last() {
+				Some(PathSegment { arguments: PathArguments::AngleBracketed(args), .. }) => {
+					let (has_config, has_instance) =
+						args.args.iter().fold((false, false), |(has_config, has_instance), arg| {
+							match arg {
+								GenericArgument::Type(Type::Path(TypePath {
+									path: Path { segments, .. },
+									..
+								})) => {
+									let maybe_config =
+										segments.first().map_or(false, |seg| seg.ident == "T");
+									let maybe_instance =
+										segments.first().map_or(false, |seg| seg.ident == "I");
+
+									(has_config || maybe_config, has_instance || maybe_instance)
+								},
+								_ => (has_config, has_instance),
+							}
+						});
+					GenericKind::from_gens(has_config, has_instance).unwrap_or(GenericKind::None)
+				},
+				_ => GenericKind::None,
+			};
+			let type_impl_gen = generic_kind.type_impl_gen(proc_macro2::Span::call_site());
 			let config_where_clause = &def.config.where_clause;
 
 			quote::quote_spanned!(span =>
@@ -615,16 +623,17 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 				#[allow(non_camel_case_types)]
 				#visibility struct #name;
 
-				impl<#type_impl_gen> #frame_support::traits::Get<Result<#value_ty, #pallet_error_ident<#type_use_gen>>>
+				impl<#type_impl_gen> #frame_support::traits::Get<Result<#value_ty, #error_path>>
 					for #name
 					#config_where_clause
 				{
-					fn get() -> Result<#value_ty, #pallet_error_ident<#type_use_gen>> {
-						Err(#pallet_error_ident::<#type_use_gen>::#variant_name)
+					fn get() -> Result<#value_ty, #error_path> {
+						Err(<#error_path>::#variant_name)
 					}
 				}
 			)
-		});
+		},
+	);
 
 	let mut where_clauses = vec![&def.config.where_clause];
 	where_clauses.extend(def.storages.iter().map(|storage| &storage.where_clause));

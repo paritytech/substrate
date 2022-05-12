@@ -16,7 +16,7 @@ mod pallet {
 	}
 
 	#[pallet::storage]
-	type Foo<T: Config> = StorageValue<_, u8, ResultQuery<NonExistentValue, SomeOtherError>>;
+	type Foo<T: Config> = StorageValue<_, u8, ResultQuery<Error<T>::NonExistentValue, SomeOtherError>>;
 }
 
 fn main() {

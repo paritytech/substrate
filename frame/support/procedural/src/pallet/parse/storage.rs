@@ -130,7 +130,7 @@ pub enum Metadata {
 
 pub enum QueryKind {
 	OptionQuery,
-	ResultQuery(syn::Ident),
+	ResultQuery(syn::Path, syn::Ident),
 	ValueQuery,
 }
 
@@ -723,8 +723,8 @@ impl StorageDef {
 								if args.len() != 1 {
 									let msg = format!(
 										"Invalid pallet::storage, unexpected number of generic \
-										arguments for ResultQuery, expected 1 ident representing a \
-										pallet enum error variant name, found {}",
+										arguments for ResultQuery, expected 1 type argument, found \
+										{}",
 										args.len(),
 									);
 									return Err(syn::Error::new(args.span(), msg))
@@ -732,28 +732,42 @@ impl StorageDef {
 
 								match &args[0] {
 									GenericArgument::Type(Type::Path(TypePath {
-										path: Path { segments: err_variant, .. },
+										path: Path { segments: err_variant, leading_colon },
 										..
 									})) => {
-										if err_variant.len() != 1 {
+										if err_variant.len() < 2 {
 											let msg = format!(
 												"Invalid pallet::storage, unexpected number of \
 												path segments for the generics in ResultQuery, \
-												expected 1 ident representing a pallet enum error \
-												variant name, found {}",
+												expected a path with at least 2 segments, found {}",
 												err_variant.len(),
 											);
 											return Err(syn::Error::new(err_variant.span(), msg))
 										}
+										let mut error = err_variant.clone();
+										let err_variant = error
+											.pop()
+											.expect("Checked to have at least 2; qed")
+											.into_value()
+											.ident;
+
+										// Necessary here to eliminate the last double colon
+										let last = error.pop().expect("Checked to have at least 2; qed").into_value();
+										error.push_value(last);
+
 										Ok(Some(QueryKind::ResultQuery(
-											err_variant[0].ident.clone(),
+											syn::Path {
+												leading_colon: leading_colon.clone(),
+												segments: error,
+											},
+											err_variant,
 										)))
 									},
 									gen_arg => {
 										let msg = format!(
 											"Invalid pallet::storage, unexpected generic argument \
-											kind, expected 1 ident representing a pallet enum \
-											error variant name, found `{}`",
+											kind, expected a type path to a `PalletError` enum \
+											variant, found `{}`",
 											gen_arg.to_token_stream().to_string(),
 										);
 										Err(syn::Error::new(gen_arg.span(), msg))
