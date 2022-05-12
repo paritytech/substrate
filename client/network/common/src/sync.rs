@@ -23,7 +23,7 @@ pub mod message;
 pub mod warp;
 
 use libp2p::PeerId;
-use message::{BlockAnnounce, BlockRequest, BlockResponse};
+use message::{BlockAnnounce, BlockData, BlockRequest, BlockResponse};
 use sc_consensus::{BlockImportError, BlockImportStatus, IncomingBlock};
 use sp_consensus::BlockOrigin;
 use sp_runtime::{
@@ -197,6 +197,28 @@ impl fmt::Debug for OpaqueStateResponse {
 	}
 }
 
+/// Wrapper for implementation-specific block request.
+///
+/// NOTE: Implementation must be able to encode and decode it for network purposes.
+pub struct OpaqueBlockRequest(pub Box<dyn Any + Send>);
+
+impl fmt::Debug for OpaqueBlockRequest {
+	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+		f.debug_struct("OpaqueBlockRequest").finish()
+	}
+}
+
+/// Wrapper for implementation-specific block response.
+///
+/// NOTE: Implementation must be able to encode and decode it for network purposes.
+pub struct OpaqueBlockResponse(pub Box<dyn Any + Send>);
+
+impl fmt::Debug for OpaqueBlockResponse {
+	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+		f.debug_struct("OpaqueBlockResponse").finish()
+	}
+}
+
 pub trait ChainSync<Block: BlockT>: Send {
 	/// Returns the state of the sync of the given peer.
 	///
@@ -357,6 +379,22 @@ pub trait ChainSync<Block: BlockT>: Send {
 
 	/// Return some key metrics.
 	fn metrics(&self) -> Metrics;
+
+	/// Create implementation-specific block request.
+	fn create_opaque_block_request(&self, request: &BlockRequest<Block>) -> OpaqueBlockRequest;
+
+	/// Encode implementation-specific block request.
+	fn encode_block_request(&self, request: &OpaqueBlockRequest) -> Result<Vec<u8>, String>;
+
+	/// Decode implementation-specific block response.
+	fn decode_block_response(&self, response: &[u8]) -> Result<OpaqueBlockResponse, String>;
+
+	/// Access blocks from implementation-specific block response.
+	fn block_response_into_blocks(
+		&self,
+		request: &BlockRequest<Block>,
+		response: OpaqueBlockResponse,
+	) -> Result<Vec<BlockData<Block>>, String>;
 
 	/// Encode implementation-specific state request.
 	fn encode_state_request(&self, request: &OpaqueStateRequest) -> Result<Vec<u8>, String>;

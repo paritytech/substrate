@@ -30,7 +30,7 @@
 
 pub mod block_request_handler;
 pub mod blocks;
-pub mod schema;
+mod schema;
 pub mod state;
 pub mod state_request_handler;
 pub mod warp;
@@ -42,7 +42,7 @@ use crate::{
 	state::StateSync,
 	warp::{WarpProofImportResult, WarpSync},
 };
-use codec::Encode;
+use codec::{Decode, DecodeAll, Encode};
 use extra_requests::ExtraRequests;
 use futures::{stream::FuturesUnordered, task::Poll, Future, FutureExt, StreamExt};
 use libp2p::PeerId;
@@ -57,8 +57,8 @@ use sc_network_common::sync::{
 	},
 	warp::{EncodedProof, WarpProofRequest, WarpSyncPhase, WarpSyncProgress, WarpSyncProvider},
 	BadPeer, ChainSync as ChainSyncT, Metrics, OnBlockData, OnBlockJustification, OnStateData,
-	OpaqueStateRequest, OpaqueStateResponse, PeerInfo, PollBlockAnnounceValidation, SyncMode,
-	SyncState, SyncStatus,
+	OpaqueBlockRequest, OpaqueBlockResponse, OpaqueStateRequest, OpaqueStateResponse, PeerInfo,
+	PollBlockAnnounceValidation, SyncMode, SyncState, SyncStatus,
 };
 use sp_arithmetic::traits::Saturating;
 use sp_blockchain::{Error as ClientError, HeaderBackend, HeaderMetadata};
@@ -1553,6 +1553,105 @@ where
 			fork_targets: self.fork_targets.len().try_into().unwrap_or(std::u32::MAX),
 			justifications: self.extra_justifications.metrics(),
 		}
+	}
+
+	/// Create implementation-specific block request.
+	fn create_opaque_block_request(&self, request: &BlockRequest<B>) -> OpaqueBlockRequest {
+		OpaqueBlockRequest(Box::new(schema::v1::BlockRequest {
+			fields: request.fields.to_be_u32(),
+			from_block: match request.from {
+				FromBlock::Hash(h) => Some(schema::v1::block_request::FromBlock::Hash(h.encode())),
+				FromBlock::Number(n) =>
+					Some(schema::v1::block_request::FromBlock::Number(n.encode())),
+			},
+			to_block: request.to.map(|h| h.encode()).unwrap_or_default(),
+			direction: request.direction as i32,
+			max_blocks: request.max.unwrap_or(0),
+			support_multiple_justifications: true,
+		}))
+	}
+
+	fn encode_block_request(&self, request: &OpaqueBlockRequest) -> Result<Vec<u8>, String> {
+		let request: &schema::v1::BlockRequest = request.0.downcast_ref().ok_or_else(|| {
+			"Failed to downcast opaque block response during encoding, this is an \
+				implementation bug."
+				.to_string()
+		})?;
+
+		Ok(request.encode_to_vec())
+	}
+
+	fn decode_block_response(&self, response: &[u8]) -> Result<OpaqueBlockResponse, String> {
+		let response = schema::v1::BlockResponse::decode(response)
+			.map_err(|error| format!("Failed to decode block response: {error}"))?;
+
+		Ok(OpaqueBlockResponse(Box::new(response)))
+	}
+
+	fn block_response_into_blocks(
+		&self,
+		request: &BlockRequest<B>,
+		response: OpaqueBlockResponse,
+	) -> Result<Vec<BlockData<B>>, String> {
+		let response: Box<schema::v1::BlockResponse> = response.0.downcast().map_err(|_error| {
+			"Failed to downcast opaque block response during encoding, this is an \
+				implementation bug."
+				.to_string()
+		})?;
+
+		response
+			.blocks
+			.into_iter()
+			.map(|block_data| {
+				Ok(BlockData::<B> {
+					hash: Decode::decode(&mut block_data.hash.as_ref())?,
+					header: if !block_data.header.is_empty() {
+						Some(Decode::decode(&mut block_data.header.as_ref())?)
+					} else {
+						None
+					},
+					body: if request.fields.contains(BlockAttributes::BODY) {
+						Some(
+							block_data
+								.body
+								.iter()
+								.map(|body| Decode::decode(&mut body.as_ref()))
+								.collect::<Result<Vec<_>, _>>()?,
+						)
+					} else {
+						None
+					},
+					indexed_body: if request.fields.contains(BlockAttributes::INDEXED_BODY) {
+						Some(block_data.indexed_body)
+					} else {
+						None
+					},
+					receipt: if !block_data.receipt.is_empty() {
+						Some(block_data.receipt)
+					} else {
+						None
+					},
+					message_queue: if !block_data.message_queue.is_empty() {
+						Some(block_data.message_queue)
+					} else {
+						None
+					},
+					justification: if !block_data.justification.is_empty() {
+						Some(block_data.justification)
+					} else if block_data.is_empty_justification {
+						Some(Vec::new())
+					} else {
+						None
+					},
+					justifications: if !block_data.justifications.is_empty() {
+						Some(DecodeAll::decode_all(&mut block_data.justifications.as_ref())?)
+					} else {
+						None
+					},
+				})
+			})
+			.collect::<Result<_, _>>()
+			.map_err(|error: codec::Error| error.to_string())
 	}
 
 	fn encode_state_request(&self, request: &OpaqueStateRequest) -> Result<Vec<u8>, String> {

@@ -44,7 +44,6 @@ use message::{
 };
 use notifications::{Notifications, NotificationsOut};
 use prometheus_endpoint::{register, Gauge, GaugeVec, Opts, PrometheusError, Registry, U64};
-use prost::Message as _;
 use sc_client_api::{BlockBackend, HeaderBackend, ProofProvider};
 use sc_consensus::import_queue::{BlockImportError, BlockImportStatus, IncomingBlock, Origin};
 use sc_network_common::{
@@ -52,14 +51,15 @@ use sc_network_common::{
 	sync::{
 		message::{
 			BlockAnnounce, BlockAttributes, BlockData, BlockRequest, BlockResponse, BlockState,
-			FromBlock,
 		},
-		BadPeer, ChainSync, OnBlockData, OnBlockJustification, OnStateData,
-		PollBlockAnnounceValidation, SyncStatus,
+		BadPeer, ChainSync, OnBlockData, OnBlockJustification, OnStateData, OpaqueBlockRequest,
+		OpaqueBlockResponse, OpaqueStateRequest, OpaqueStateResponse, PollBlockAnnounceValidation,
+		SyncStatus,
 	},
 	warp_sync::{EncodedProof, WarpProofRequest},
 };
 use sp_arithmetic::traits::SaturatedConversion;
+use sp_blockchain::HeaderMetadata;
 use sp_consensus::BlockOrigin;
 use sp_runtime::{
 	generic::BlockId,
@@ -83,8 +83,6 @@ pub mod event;
 pub mod message;
 
 pub use notifications::{NotificationsSink, NotifsHandlerError, Ready};
-use sc_network_common::sync::{OpaqueStateRequest, OpaqueStateResponse};
-use sp_blockchain::HeaderMetadata;
 
 /// Interval at which we perform time based maintenance
 const TICK_TIMEOUT: time::Duration = time::Duration::from_millis(1100);
@@ -564,62 +562,9 @@ where
 		&mut self,
 		peer_id: PeerId,
 		request: BlockRequest<B>,
-		response: sc_network_sync::schema::v1::BlockResponse,
+		response: OpaqueBlockResponse,
 	) -> CustomMessageOutcome<B> {
-		let blocks = response
-			.blocks
-			.into_iter()
-			.map(|block_data| {
-				Ok(BlockData::<B> {
-					hash: Decode::decode(&mut block_data.hash.as_ref())?,
-					header: if !block_data.header.is_empty() {
-						Some(Decode::decode(&mut block_data.header.as_ref())?)
-					} else {
-						None
-					},
-					body: if request.fields.contains(BlockAttributes::BODY) {
-						Some(
-							block_data
-								.body
-								.iter()
-								.map(|body| Decode::decode(&mut body.as_ref()))
-								.collect::<Result<Vec<_>, _>>()?,
-						)
-					} else {
-						None
-					},
-					indexed_body: if request.fields.contains(BlockAttributes::INDEXED_BODY) {
-						Some(block_data.indexed_body)
-					} else {
-						None
-					},
-					receipt: if !block_data.receipt.is_empty() {
-						Some(block_data.receipt)
-					} else {
-						None
-					},
-					message_queue: if !block_data.message_queue.is_empty() {
-						Some(block_data.message_queue)
-					} else {
-						None
-					},
-					justification: if !block_data.justification.is_empty() {
-						Some(block_data.justification)
-					} else if block_data.is_empty_justification {
-						Some(Vec::new())
-					} else {
-						None
-					},
-					justifications: if !block_data.justifications.is_empty() {
-						Some(DecodeAll::decode_all(&mut block_data.justifications.as_ref())?)
-					} else {
-						None
-					},
-				})
-			})
-			.collect::<Result<Vec<_>, codec::Error>>();
-
-		let blocks = match blocks {
+		let blocks = match self.chain_sync.block_response_into_blocks(&request, response) {
 			Ok(blocks) => blocks,
 			Err(err) => {
 				debug!(target: "sync", "Failed to decode block response from {}: {}", peer_id, err);
@@ -664,7 +609,7 @@ where
 				Ok(OnBlockData::Import(origin, blocks)) =>
 					CustomMessageOutcome::BlockImport(origin, blocks),
 				Ok(OnBlockData::Request(peer, req)) =>
-					prepare_block_request(&mut self.peers, peer, req),
+					prepare_block_request(self.chain_sync.as_ref(), &mut self.peers, peer, req),
 				Err(BadPeer(id, repu)) => {
 					self.behaviour.disconnect_peer(&id, HARDCODED_PEERSETS_SYNC);
 					self.peerset_handle.report_peer(id, repu);
@@ -829,8 +774,12 @@ where
 			.push_back(CustomMessageOutcome::PeerNewBest(who, status.best_number));
 
 		if let Some(req) = req {
-			self.pending_messages
-				.push_back(prepare_block_request(&mut self.peers, who, req));
+			self.pending_messages.push_back(prepare_block_request(
+				self.chain_sync.as_ref(),
+				&mut self.peers,
+				who,
+				req,
+			));
 		}
 
 		Ok(())
@@ -997,7 +946,7 @@ where
 			Ok(OnBlockData::Import(origin, blocks)) =>
 				CustomMessageOutcome::BlockImport(origin, blocks),
 			Ok(OnBlockData::Request(peer, req)) =>
-				prepare_block_request(&mut self.peers, peer, req),
+				prepare_block_request(self.chain_sync.as_ref(), &mut self.peers, peer, req),
 			Err(BadPeer(id, repu)) => {
 				self.behaviour.disconnect_peer(&id, HARDCODED_PEERSETS_SYNC);
 				self.peerset_handle.report_peer(id, repu);
@@ -1051,6 +1000,7 @@ where
 			match result {
 				Ok((id, req)) => {
 					self.pending_messages.push_back(prepare_block_request(
+						self.chain_sync.as_ref(),
 						&mut self.peers,
 						id,
 						req,
@@ -1190,6 +1140,11 @@ where
 		}
 	}
 
+	/// Encode implementation-specific block request.
+	pub fn encode_block_request(&self, request: &OpaqueBlockRequest) -> Result<Vec<u8>, String> {
+		self.chain_sync.encode_block_request(request)
+	}
+
 	/// Encode implementation-specific state request.
 	pub fn encode_state_request(&self, request: &OpaqueStateRequest) -> Result<Vec<u8>, String> {
 		self.chain_sync.encode_state_request(request)
@@ -1226,6 +1181,7 @@ where
 }
 
 fn prepare_block_request<B: BlockT>(
+	chain_sync: &dyn ChainSync<B>,
 	peers: &mut HashMap<PeerId, Peer<B>>,
 	who: PeerId,
 	request: BlockRequest<B>,
@@ -1236,19 +1192,7 @@ fn prepare_block_request<B: BlockT>(
 		peer.request = Some((PeerRequest::Block(request.clone()), rx));
 	}
 
-	let request = sc_network_sync::schema::v1::BlockRequest {
-		fields: request.fields.to_be_u32(),
-		from_block: match request.from {
-			FromBlock::Hash(h) =>
-				Some(sc_network_sync::schema::v1::block_request::FromBlock::Hash(h.encode())),
-			FromBlock::Number(n) =>
-				Some(sc_network_sync::schema::v1::block_request::FromBlock::Number(n.encode())),
-		},
-		to_block: request.to.map(|h| h.encode()).unwrap_or_default(),
-		direction: request.direction as i32,
-		max_blocks: request.max.unwrap_or(0),
-		support_multiple_justifications: true,
-	};
+	let request = chain_sync.create_opaque_block_request(&request);
 
 	CustomMessageOutcome::BlockRequest { target: who, request, pending_response: tx }
 }
@@ -1313,7 +1257,7 @@ pub enum CustomMessageOutcome<B: BlockT> {
 	/// A new block request must be emitted.
 	BlockRequest {
 		target: PeerId,
-		request: sc_network_sync::schema::v1::BlockRequest,
+		request: OpaqueBlockRequest,
 		pending_response: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
 	},
 	/// A new storage request must be emitted.
@@ -1422,10 +1366,8 @@ where
 						let (req, _) = peer.request.take().unwrap();
 						match req {
 							PeerRequest::Block(req) => {
-								let protobuf_response =
-									match sc_network_sync::schema::v1::BlockResponse::decode(
-										&resp[..],
-									) {
+								let response =
+									match self.chain_sync.decode_block_response(&resp[..]) {
 										Ok(proto) => proto,
 										Err(e) => {
 											debug!(
@@ -1441,7 +1383,7 @@ where
 										},
 									};
 
-								finished_block_requests.push((*id, req, protobuf_response));
+								finished_block_requests.push((*id, req, response));
 							},
 							PeerRequest::State => {
 								let response =
@@ -1520,12 +1462,12 @@ where
 				}
 			}
 		}
-		for (id, req, protobuf_response) in finished_block_requests {
-			let ev = self.on_block_response(id, req, protobuf_response);
+		for (id, req, response) in finished_block_requests {
+			let ev = self.on_block_response(id, req, response);
 			self.pending_messages.push_back(ev);
 		}
-		for (id, protobuf_response) in finished_state_requests {
-			let ev = self.on_state_response(id, protobuf_response);
+		for (id, response) in finished_state_requests {
+			let ev = self.on_state_response(id, response);
 			self.pending_messages.push_back(ev);
 		}
 		for (id, response) in finished_warp_sync_requests {
@@ -1537,16 +1479,23 @@ where
 			self.tick();
 		}
 
-		for (id, request) in self.chain_sync.block_requests() {
-			let event = prepare_block_request(&mut self.peers, *id, request);
+		for (id, request) in self
+			.chain_sync
+			.block_requests()
+			.map(|(peer_id, request)| (*peer_id, request))
+			.collect::<Vec<_>>()
+		{
+			let event =
+				prepare_block_request(self.chain_sync.as_ref(), &mut self.peers, id, request);
 			self.pending_messages.push_back(event);
 		}
 		if let Some((id, request)) = self.chain_sync.state_request() {
 			let event = prepare_state_request(&mut self.peers, id, request);
 			self.pending_messages.push_back(event);
 		}
-		for (id, request) in self.chain_sync.justification_requests() {
-			let event = prepare_block_request(&mut self.peers, id, request);
+		for (id, request) in self.chain_sync.justification_requests().collect::<Vec<_>>() {
+			let event =
+				prepare_block_request(self.chain_sync.as_ref(), &mut self.peers, id, request);
 			self.pending_messages.push_back(event);
 		}
 		if let Some((id, request)) = self.chain_sync.warp_sync_request() {
