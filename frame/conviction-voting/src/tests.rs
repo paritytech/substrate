@@ -271,19 +271,19 @@ fn basic_voting_works() {
 		assert_ok!(Voting::vote(Origin::signed(1), 3, aye(2, 5)));
 		assert_eq!(tally(3), Tally::from_parts(10, 0, 2));
 		assert_ok!(Voting::vote(Origin::signed(1), 3, nay(2, 5)));
-		assert_eq!(tally(3), Tally::from_parts(0, 10, 2));
+		assert_eq!(tally(3), Tally::from_parts(0, 10, 0));
 		assert_eq!(Balances::usable_balance(1), 8);
 
 		assert_ok!(Voting::vote(Origin::signed(1), 3, aye(5, 1)));
 		assert_eq!(tally(3), Tally::from_parts(5, 0, 5));
 		assert_ok!(Voting::vote(Origin::signed(1), 3, nay(5, 1)));
-		assert_eq!(tally(3), Tally::from_parts(0, 5, 5));
+		assert_eq!(tally(3), Tally::from_parts(0, 5, 0));
 		assert_eq!(Balances::usable_balance(1), 5);
 
 		assert_ok!(Voting::vote(Origin::signed(1), 3, aye(10, 0)));
 		assert_eq!(tally(3), Tally::from_parts(1, 0, 10));
 		assert_ok!(Voting::vote(Origin::signed(1), 3, nay(10, 0)));
-		assert_eq!(tally(3), Tally::from_parts(0, 1, 10));
+		assert_eq!(tally(3), Tally::from_parts(0, 1, 0));
 		assert_eq!(Balances::usable_balance(1), 0);
 
 		assert_ok!(Voting::remove_vote(Origin::signed(1), None, 3));
@@ -300,19 +300,19 @@ fn voting_balance_gets_locked() {
 		assert_ok!(Voting::vote(Origin::signed(1), 3, aye(2, 5)));
 		assert_eq!(tally(3), Tally::from_parts(10, 0, 2));
 		assert_ok!(Voting::vote(Origin::signed(1), 3, nay(2, 5)));
-		assert_eq!(tally(3), Tally::from_parts(0, 10, 2));
+		assert_eq!(tally(3), Tally::from_parts(0, 10, 0));
 		assert_eq!(Balances::usable_balance(1), 8);
 
 		assert_ok!(Voting::vote(Origin::signed(1), 3, aye(5, 1)));
 		assert_eq!(tally(3), Tally::from_parts(5, 0, 5));
 		assert_ok!(Voting::vote(Origin::signed(1), 3, nay(5, 1)));
-		assert_eq!(tally(3), Tally::from_parts(0, 5, 5));
+		assert_eq!(tally(3), Tally::from_parts(0, 5, 0));
 		assert_eq!(Balances::usable_balance(1), 5);
 
 		assert_ok!(Voting::vote(Origin::signed(1), 3, aye(10, 0)));
 		assert_eq!(tally(3), Tally::from_parts(1, 0, 10));
 		assert_ok!(Voting::vote(Origin::signed(1), 3, nay(10, 0)));
-		assert_eq!(tally(3), Tally::from_parts(0, 1, 10));
+		assert_eq!(tally(3), Tally::from_parts(0, 1, 0));
 		assert_eq!(Balances::usable_balance(1), 0);
 
 		assert_ok!(Voting::remove_vote(Origin::signed(1), None, 3));
@@ -403,9 +403,9 @@ fn classwise_delegation_works() {
 		assert_eq!(
 			Polls::get(),
 			vec![
-				(0, Ongoing(Tally::from_parts(6, 2, 35), 0)),
-				(1, Ongoing(Tally::from_parts(6, 2, 35), 1)),
-				(2, Ongoing(Tally::from_parts(6, 2, 35), 2)),
+				(0, Ongoing(Tally::from_parts(6, 2, 15), 0)),
+				(1, Ongoing(Tally::from_parts(6, 2, 15), 1)),
+				(2, Ongoing(Tally::from_parts(6, 2, 15), 2)),
 				(3, Ongoing(Tally::from_parts(0, 0, 0), 2)),
 			]
 			.into_iter()
@@ -417,10 +417,10 @@ fn classwise_delegation_works() {
 		assert_eq!(
 			Polls::get(),
 			vec![
-				(0, Ongoing(Tally::from_parts(6, 2, 35), 0)),
-				(1, Ongoing(Tally::from_parts(6, 2, 35), 1)),
-				(2, Ongoing(Tally::from_parts(6, 2, 35), 2)),
-				(3, Ongoing(Tally::from_parts(0, 6, 15), 2)),
+				(0, Ongoing(Tally::from_parts(6, 2, 15), 0)),
+				(1, Ongoing(Tally::from_parts(6, 2, 15), 1)),
+				(2, Ongoing(Tally::from_parts(6, 2, 15), 2)),
+				(3, Ongoing(Tally::from_parts(0, 6, 0), 2)),
 			]
 			.into_iter()
 			.collect()
@@ -432,10 +432,10 @@ fn classwise_delegation_works() {
 		assert_eq!(
 			Polls::get(),
 			vec![
-				(0, Ongoing(Tally::from_parts(6, 2, 35), 0)),
-				(1, Ongoing(Tally::from_parts(6, 2, 35), 1)),
-				(2, Ongoing(Tally::from_parts(1, 7, 35), 2)),
-				(3, Ongoing(Tally::from_parts(0, 1, 10), 2)),
+				(0, Ongoing(Tally::from_parts(6, 2, 15), 0)),
+				(1, Ongoing(Tally::from_parts(6, 2, 15), 1)),
+				(2, Ongoing(Tally::from_parts(1, 7, 10), 2)),
+				(3, Ongoing(Tally::from_parts(0, 1, 0), 2)),
 			]
 			.into_iter()
 			.collect()
@@ -451,10 +451,10 @@ fn classwise_delegation_works() {
 		assert_eq!(
 			Polls::get(),
 			vec![
-				(0, Ongoing(Tally::from_parts(4, 2, 33), 0)),
-				(1, Ongoing(Tally::from_parts(4, 2, 33), 1)),
-				(2, Ongoing(Tally::from_parts(4, 2, 33), 2)),
-				(3, Ongoing(Tally::from_parts(0, 4, 13), 2)),
+				(0, Ongoing(Tally::from_parts(4, 2, 13), 0)),
+				(1, Ongoing(Tally::from_parts(4, 2, 13), 1)),
+				(2, Ongoing(Tally::from_parts(4, 2, 13), 2)),
+				(3, Ongoing(Tally::from_parts(0, 4, 0), 2)),
 			]
 			.into_iter()
 			.collect()
@@ -483,10 +483,10 @@ fn classwise_delegation_works() {
 		assert_eq!(
 			Polls::get(),
 			vec![
-				(0, Ongoing(Tally::from_parts(7, 2, 36), 0)),
-				(1, Ongoing(Tally::from_parts(8, 2, 37), 1)),
-				(2, Ongoing(Tally::from_parts(9, 2, 38), 2)),
-				(3, Ongoing(Tally::from_parts(0, 9, 18), 2)),
+				(0, Ongoing(Tally::from_parts(7, 2, 16), 0)),
+				(1, Ongoing(Tally::from_parts(8, 2, 17), 1)),
+				(2, Ongoing(Tally::from_parts(9, 2, 18), 2)),
+				(3, Ongoing(Tally::from_parts(0, 9, 0), 2)),
 			]
 			.into_iter()
 			.collect()
