@@ -324,11 +324,26 @@ use sp_runtime::traits::{AccountIdConversion, Bounded, CheckedSub, Convert, Satu
 use sp_staking::{EraIndex, OnStakerSlash, StakingInterface};
 use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, ops::Div, vec::Vec};
 
+/// The log target of this pallet.
+pub const LOG_TARGET: &'static str = "runtime::nomination-pools";
+
+// syntactic sugar for logging.
+#[macro_export]
+macro_rules! log {
+	($level:tt, $patter:expr $(, $values:expr)* $(,)?) => {
+		log::$level!(
+			target: crate::LOG_TARGET,
+			concat!("[{:?}] 🏊‍♂️ ", $patter), <frame_system::Pallet<T>>::block_number() $(, $values)*
+		)
+	};
+}
+
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
 mod tests;
 
+pub mod migration;
 pub mod weights;
 
 pub use pallet::*;
@@ -1061,11 +1076,15 @@ impl<T: Config> Get<u32> for TotalUnbondingPools<T> {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::transactional;
+	use frame_support::{traits::StorageVersion, transactional};
 	use frame_system::{ensure_signed, pallet_prelude::*};
+
+	/// The current storage version.
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(crate) trait Store)]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
