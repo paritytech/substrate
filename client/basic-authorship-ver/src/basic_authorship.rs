@@ -412,7 +412,6 @@ where
 		let block_timer = time::Instant::now();
 		let mut skipped = 0;
 		let mut unqueue_invalid = Vec::new();
-		block_builder.apply_previous_block_extrinsics(seed.clone());
 
 		let mut t1 = self.transaction_pool.ready_at(self.parent_number).fuse();
 		// NOTE reduce deadline by half ('/16' instead of '/8') as we want to avoid situation where
@@ -420,6 +419,8 @@ where
 		// one
 		let mut t2 =
 			futures_timer::Delay::new(deadline.saturating_duration_since((self.now)()) / 16).fuse();
+
+		block_builder.apply_previous_block_extrinsics(seed.clone());
 
 		let mut pending_iterator = select! {
 			res = t1 => res,
