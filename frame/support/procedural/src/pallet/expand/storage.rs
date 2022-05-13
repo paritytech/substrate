@@ -578,60 +578,60 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 		)
 	});
 
-	let on_empty_structs = on_empty_struct_metadata.into_iter().map(
-		|ResultOnEmptyStructMetadata {
+	let on_empty_structs = on_empty_struct_metadata.into_iter().map(|metadata| {
+		use crate::pallet::parse::GenericKind;
+		use syn::{GenericArgument, Path, PathArguments, PathSegment, Type, TypePath};
+
+		let ResultOnEmptyStructMetadata {
 			name,
 			visibility,
 			value_ty,
 			error_path,
 			variant_name,
 			span,
-		}| {
-			use crate::pallet::parse::GenericKind;
-			use syn::{GenericArgument, Path, PathArguments, PathSegment, Type, TypePath};
+		} = metadata;
 
-			let generic_kind = match error_path.segments.last() {
-				Some(PathSegment { arguments: PathArguments::AngleBracketed(args), .. }) => {
-					let (has_config, has_instance) =
-						args.args.iter().fold((false, false), |(has_config, has_instance), arg| {
-							match arg {
-								GenericArgument::Type(Type::Path(TypePath {
-									path: Path { segments, .. },
-									..
-								})) => {
-									let maybe_config =
-										segments.first().map_or(false, |seg| seg.ident == "T");
-									let maybe_instance =
-										segments.first().map_or(false, |seg| seg.ident == "I");
+		let generic_kind = match error_path.segments.last() {
+			Some(PathSegment { arguments: PathArguments::AngleBracketed(args), .. }) => {
+				let (has_config, has_instance) =
+					args.args.iter().fold((false, false), |(has_config, has_instance), arg| {
+						match arg {
+							GenericArgument::Type(Type::Path(TypePath {
+								path: Path { segments, .. },
+								..
+							})) => {
+								let maybe_config =
+									segments.first().map_or(false, |seg| seg.ident == "T");
+								let maybe_instance =
+									segments.first().map_or(false, |seg| seg.ident == "I");
 
-									(has_config || maybe_config, has_instance || maybe_instance)
-								},
-								_ => (has_config, has_instance),
-							}
-						});
-					GenericKind::from_gens(has_config, has_instance).unwrap_or(GenericKind::None)
-				},
-				_ => GenericKind::None,
-			};
-			let type_impl_gen = generic_kind.type_impl_gen(proc_macro2::Span::call_site());
-			let config_where_clause = &def.config.where_clause;
+								(has_config || maybe_config, has_instance || maybe_instance)
+							},
+							_ => (has_config, has_instance),
+						}
+					});
+				GenericKind::from_gens(has_config, has_instance).unwrap_or(GenericKind::None)
+			},
+			_ => GenericKind::None,
+		};
+		let type_impl_gen = generic_kind.type_impl_gen(proc_macro2::Span::call_site());
+		let config_where_clause = &def.config.where_clause;
 
-			quote::quote_spanned!(span =>
-				#[doc(hidden)]
-				#[allow(non_camel_case_types)]
-				#visibility struct #name;
+		quote::quote_spanned!(span =>
+			#[doc(hidden)]
+			#[allow(non_camel_case_types)]
+			#visibility struct #name;
 
-				impl<#type_impl_gen> #frame_support::traits::Get<Result<#value_ty, #error_path>>
-					for #name
-					#config_where_clause
-				{
-					fn get() -> Result<#value_ty, #error_path> {
-						Err(<#error_path>::#variant_name)
-					}
+			impl<#type_impl_gen> #frame_support::traits::Get<Result<#value_ty, #error_path>>
+				for #name
+				#config_where_clause
+			{
+				fn get() -> Result<#value_ty, #error_path> {
+					Err(<#error_path>::#variant_name)
 				}
-			)
-		},
-	);
+			}
+		)
+	});
 
 	let mut where_clauses = vec![&def.config.where_clause];
 	where_clauses.extend(def.storages.iter().map(|storage| &storage.where_clause));

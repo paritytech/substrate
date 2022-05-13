@@ -754,7 +754,10 @@ impl StorageDef {
 											.ident;
 
 										// Necessary here to eliminate the last double colon
-										let last = error.pop().expect("Checked to have at least 2; qed").into_value();
+										let last = error
+											.pop()
+											.expect("Checked to have at least 2; qed")
+											.into_value();
 										error.push_value(last);
 
 										Ok(Some(QueryKind::ResultQuery(
