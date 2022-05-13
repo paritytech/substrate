@@ -294,7 +294,7 @@ where
 	}
 }
 
-/// Create a backend used for checking the proof., using `H` as hasher.
+/// Create a backend used for checking the proof, using `H` as hasher.
 ///
 /// `proof` and `root` must match, i.e. `root` must be the correct root of `proof` nodes.
 #[cfg(feature = "std")]
