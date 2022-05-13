@@ -57,8 +57,8 @@ pub mod weights;
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
+	dispatch::{DispatchError, DispatchResult},
 	ensure,
-	dispatch::{DispatchResult, DispatchError},
 	storage::bounded_vec::BoundedVec,
 	traits::{
 		Currency, ExistenceRequirement, Get, LockIdentifier, LockableCurrency, VestingSchedule,
@@ -74,7 +74,7 @@ use sp_runtime::{
 	},
 	RuntimeDebug,
 };
-use sp_std::{fmt::Debug, prelude::*, marker::PhantomData};
+use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
 
 pub use pallet::*;
 pub use vesting_info::*;
@@ -148,8 +148,8 @@ impl<T: Config> Get<u32> for MaxVestingSchedulesGet<T> {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_system::pallet_prelude::*;
 	use frame_support::pallet_prelude::*;
+	use frame_system::pallet_prelude::*;
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
