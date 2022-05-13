@@ -17,21 +17,21 @@
 //! Helper for handling (i.e. answering) state requests from a remote peer via the
 //! `crate::request_responses::RequestResponsesBehaviour`.
 
-use crate::{
-	chain::Client,
-	config::ProtocolId,
-	request_responses::{IncomingRequest, OutgoingResponse, ProtocolConfig},
-	schema::v1::{KeyValueStateEntry, StateEntry, StateRequest, StateResponse},
-	PeerId, ReputationChange,
-};
+use crate::schema::v1::{KeyValueStateEntry, StateEntry, StateRequest, StateResponse};
 use codec::{Decode, Encode};
 use futures::{
 	channel::{mpsc, oneshot},
 	stream::StreamExt,
 };
+use libp2p::PeerId;
 use log::{debug, trace};
 use lru::LruCache;
 use prost::Message;
+use sc_client_api::ProofProvider;
+use sc_network_common::{
+	config::ProtocolId,
+	request_responses::{IncomingRequest, OutgoingResponse, ProtocolConfig},
+};
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 use std::{
 	hash::{Hash, Hasher},
@@ -44,7 +44,7 @@ const MAX_RESPONSE_BYTES: usize = 2 * 1024 * 1024; // Actual reponse may be bigg
 const MAX_NUMBER_OF_SAME_REQUESTS_PER_PEER: usize = 2;
 
 mod rep {
-	use super::ReputationChange as Rep;
+	use sc_peerset::ReputationChange as Rep;
 
 	/// Reputation change when a peer sent us the same request multiple times.
 	pub const SAME_REQUEST: Rep = Rep::new(i32::MIN, "Same state request multiple times");
@@ -63,11 +63,7 @@ pub fn generate_protocol_config(protocol_id: &ProtocolId) -> ProtocolConfig {
 
 /// Generate the state protocol name from chain specific protocol identifier.
 fn generate_protocol_name(protocol_id: &ProtocolId) -> String {
-	let mut s = String::new();
-	s.push_str("/");
-	s.push_str(protocol_id.as_ref());
-	s.push_str("/state/2");
-	s
+	format!("/{}/state/2", protocol_id.as_ref())
 }
 
 /// The key of [`BlockRequestHandler::seen_requests`].
@@ -96,8 +92,8 @@ enum SeenRequestsValue {
 }
 
 /// Handler for incoming block requests from a remote peer.
-pub struct StateRequestHandler<B: BlockT> {
-	client: Arc<dyn Client<B>>,
+pub struct StateRequestHandler<B: BlockT, Client> {
+	client: Arc<Client>,
 	request_receiver: mpsc::Receiver<IncomingRequest>,
 	/// Maps from request to number of times we have seen this request.
 	///
@@ -105,11 +101,15 @@ pub struct StateRequestHandler<B: BlockT> {
 	seen_requests: LruCache<SeenRequestsKey<B>, SeenRequestsValue>,
 }
 
-impl<B: BlockT> StateRequestHandler<B> {
+impl<B, Client> StateRequestHandler<B, Client>
+where
+	B: BlockT,
+	Client: ProofProvider<B> + Send + Sync + 'static,
+{
 	/// Create a new [`StateRequestHandler`].
 	pub fn new(
 		protocol_id: &ProtocolId,
-		client: Arc<dyn Client<B>>,
+		client: Arc<Client>,
 		num_peer_hint: usize,
 	) -> (Self, ProtocolConfig) {
 		// Reserve enough request slots for one request per peer when we are at the maximum
@@ -148,8 +148,7 @@ impl<B: BlockT> StateRequestHandler<B> {
 		let request = StateRequest::decode(&payload[..])?;
 		let block: B::Hash = Decode::decode(&mut request.block.as_ref())?;
 
-		let key =
-			SeenRequestsKey { peer: *peer, block: block.clone(), start: request.start.clone() };
+		let key = SeenRequestsKey { peer: *peer, block, start: request.start.clone() };
 
 		let mut reputation_changes = Vec::new();
 

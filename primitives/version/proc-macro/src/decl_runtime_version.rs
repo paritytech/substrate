@@ -105,7 +105,7 @@ impl ParseRuntimeVersion {
 			parser: impl FnOnce(&Expr) -> Result<T>,
 		) -> Result<()> {
 			if value.is_some() {
-				return Err(Error::new(field.span(), "field is already initialized before"))
+				Err(Error::new(field.span(), "field is already initialized before"))
 			} else {
 				*value = Some(parser(&field.expr)?);
 				Ok(())

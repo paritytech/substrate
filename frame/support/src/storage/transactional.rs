@@ -30,11 +30,11 @@ use sp_io::storage::{commit_transaction, rollback_transaction, start_transaction
 use sp_runtime::{DispatchError, TransactionOutcome, TransactionalError};
 
 /// The type that is being used to store the current number of active layers.
-type Layer = u32;
+pub type Layer = u32;
 /// The key that is holds the current number of active layers.
-const TRANSACTION_LEVEL_KEY: &[u8] = b":transaction_level:";
+pub const TRANSACTION_LEVEL_KEY: &[u8] = b":transaction_level:";
 /// The maximum number of nested layers.
-const TRANSACTIONAL_LIMIT: Layer = 255;
+pub const TRANSACTIONAL_LIMIT: Layer = 255;
 
 /// Returns the current number of nested transactional layers.
 fn get_transaction_level() -> Layer {

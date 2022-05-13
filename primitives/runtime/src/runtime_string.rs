@@ -98,8 +98,8 @@ impl std::ops::Deref for RuntimeString {
 
 	fn deref(&self) -> &str {
 		match self {
-			Self::Borrowed(val) => &val,
-			Self::Owned(val) => &val,
+			Self::Borrowed(val) => val,
+			Self::Owned(val) => val,
 		}
 	}
 }

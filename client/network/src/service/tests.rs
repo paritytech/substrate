@@ -17,13 +17,14 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::{
-	block_request_handler::BlockRequestHandler, config,
-	light_client_requests::handler::LightClientRequestHandler,
+	config, light_client_requests::handler::LightClientRequestHandler,
 	state_request_handler::StateRequestHandler, Event, NetworkService, NetworkWorker,
 };
 
 use futures::prelude::*;
 use libp2p::PeerId;
+use sc_network_common::config::ProtocolId;
+use sc_network_sync::block_request_handler::BlockRequestHandler;
 use sp_runtime::traits::{Block as BlockT, Header as _};
 use std::{borrow::Cow, sync::Arc, time::Duration};
 use substrate_test_runtime_client::{TestClientBuilder, TestClientBuilderExt as _};
@@ -87,7 +88,7 @@ fn build_test_full_node(
 		None,
 	));
 
-	let protocol_id = config::ProtocolId::from("/test-protocol-name");
+	let protocol_id = ProtocolId::from("/test-protocol-name");
 
 	let block_request_protocol_config = {
 		let (handler, protocol_config) = BlockRequestHandler::new(&protocol_id, client.clone(), 50);

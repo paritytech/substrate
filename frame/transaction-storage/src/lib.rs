@@ -192,8 +192,8 @@ pub mod pallet {
 			let root = sp_io::trie::blake2_256_ordered_root(chunks, sp_runtime::StateVersion::V1);
 
 			let content_hash = sp_io::hashing::blake2_256(&data);
-			let extrinsic_index = <frame_system::Pallet<T>>::extrinsic_index()
-				.ok_or_else(|| Error::<T>::BadContext)?;
+			let extrinsic_index =
+				<frame_system::Pallet<T>>::extrinsic_index().ok_or(Error::<T>::BadContext)?;
 			sp_io::transaction_index::index(extrinsic_index, data.len() as u32, content_hash);
 
 			let mut index = 0;
@@ -287,13 +287,12 @@ pub mod pallet {
 						Ok(index) => index,
 						Err(index) => index,
 					};
-					let info =
-						infos.get(index).ok_or_else(|| Error::<T>::MissingStateData)?.clone();
+					let info = infos.get(index).ok_or(Error::<T>::MissingStateData)?.clone();
 					let chunks = num_chunks(info.size);
 					let prev_chunks = info.block_chunks - chunks;
 					(info, selected_chunk_index - prev_chunks)
 				},
-				None => Err(Error::<T>::MissingStateData)?,
+				None => return Err(Error::<T>::MissingStateData.into()),
 			};
 			ensure!(
 				sp_io::trie::blake2_256_verify_proof(

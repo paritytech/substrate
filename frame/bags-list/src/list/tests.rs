@@ -21,7 +21,7 @@ use crate::{
 	ListBags, ListNodes,
 };
 use frame_election_provider_support::{SortedListProvider, VoteWeight};
-use frame_support::{assert_ok, assert_storage_noop};
+use frame_support::{assert_noop, assert_ok, assert_storage_noop};
 
 #[test]
 fn basic_setup_works() {
@@ -98,7 +98,7 @@ fn remove_last_node_in_bags_cleans_bag() {
 		assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4])]);
 
 		// bump 1 to a bigger bag
-		List::<Runtime>::remove(&1);
+		List::<Runtime>::remove(&1).unwrap();
 		assert_ok!(List::<Runtime>::insert(1, 10_000));
 
 		// then the bag with bound 10 is wiped from storage.
@@ -265,10 +265,10 @@ mod list {
 		ExtBuilder::default().build_and_execute(|| {
 			// removing a non-existent id is a noop
 			assert!(!ListNodes::<Runtime>::contains_key(42));
-			assert_storage_noop!(List::<Runtime>::remove(&42));
+			assert_noop!(List::<Runtime>::remove(&42), ListError::NodeNotFound);
 
 			// when removing a node from a bag with multiple nodes:
-			List::<Runtime>::remove(&2);
+			List::<Runtime>::remove(&2).unwrap();
 
 			// then
 			assert_eq!(get_list_as_ids(), vec![3, 4, 1]);
@@ -276,7 +276,7 @@ mod list {
 			ensure_left(2, 3);
 
 			// when removing a node from a bag with only one node:
-			List::<Runtime>::remove(&1);
+			List::<Runtime>::remove(&1).unwrap();
 
 			// then
 			assert_eq!(get_list_as_ids(), vec![3, 4]);
@@ -286,11 +286,11 @@ mod list {
 			assert!(!ListBags::<Runtime>::contains_key(10));
 
 			// remove remaining ids to make sure storage cleans up as expected
-			List::<Runtime>::remove(&3);
+			List::<Runtime>::remove(&3).unwrap();
 			ensure_left(3, 1);
 			assert_eq!(get_list_as_ids(), vec![4]);
 
-			List::<Runtime>::remove(&4);
+			List::<Runtime>::remove(&4).unwrap();
 			ensure_left(4, 0);
 			assert_eq!(get_list_as_ids(), Vec::<AccountId>::new());
 
@@ -573,7 +573,7 @@ mod bags {
 				});
 
 			// when we make a pre-existing bag empty
-			List::<Runtime>::remove(&1);
+			List::<Runtime>::remove(&1).unwrap();
 
 			// then
 			assert_eq!(Bag::<Runtime>::get(10), None)

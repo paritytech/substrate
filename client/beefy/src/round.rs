@@ -73,7 +73,6 @@ pub(crate) struct Rounds<Payload, B: Block> {
 	best_done: Option<NumberFor<B>>,
 	session_start: NumberFor<B>,
 	validator_set: ValidatorSet<Public>,
-	prev_validator_set: ValidatorSet<Public>,
 }
 
 impl<P, B> Rounds<P, B>
@@ -81,18 +80,8 @@ where
 	P: Ord + Hash + Clone,
 	B: Block,
 {
-	pub(crate) fn new(
-		session_start: NumberFor<B>,
-		validator_set: ValidatorSet<Public>,
-		prev_validator_set: ValidatorSet<Public>,
-	) -> Self {
-		Rounds {
-			rounds: BTreeMap::new(),
-			best_done: None,
-			session_start,
-			validator_set,
-			prev_validator_set,
-		}
+	pub(crate) fn new(session_start: NumberFor<B>, validator_set: ValidatorSet<Public>) -> Self {
+		Rounds { rounds: BTreeMap::new(), best_done: None, session_start, validator_set }
 	}
 }
 
@@ -101,24 +90,12 @@ where
 	P: Ord + Hash + Clone,
 	B: Block,
 {
-	pub(crate) fn validator_set_id_for(&self, block_number: NumberFor<B>) -> ValidatorSetId {
-		if block_number > self.session_start {
-			self.validator_set.id()
-		} else {
-			self.prev_validator_set.id()
-		}
+	pub(crate) fn validator_set_id(&self) -> ValidatorSetId {
+		self.validator_set.id()
 	}
 
-	pub(crate) fn validators_for(&self, block_number: NumberFor<B>) -> &[Public] {
-		if block_number > self.session_start {
-			self.validator_set.validators()
-		} else {
-			self.prev_validator_set.validators()
-		}
-	}
-
-	pub(crate) fn validator_set(&self) -> &ValidatorSet<Public> {
-		&self.validator_set
+	pub(crate) fn validators(&self) -> &[Public] {
+		self.validator_set.validators()
 	}
 
 	pub(crate) fn session_start(&self) -> &NumberFor<B> {
@@ -143,7 +120,7 @@ where
 				round.1
 			);
 			false
-		} else if !self.validator_set.validators().iter().any(|id| vote.0 == *id) {
+		} else if !self.validators().iter().any(|id| vote.0 == *id) {
 			debug!(
 				target: "beefy",
 				"🥩 received vote {:?} from validator that is not in the validator set, ignoring",
@@ -170,12 +147,11 @@ where
 			// remove this and older (now stale) rounds
 			let signatures = self.rounds.remove(round)?.votes;
 			self.rounds.retain(|&(_, number), _| number > round.1);
-			self.best_done = self.best_done.clone().max(Some(round.1.clone()));
+			self.best_done = self.best_done.max(Some(round.1));
 			debug!(target: "beefy", "🥩 Concluded round #{}", round.1);
 
 			Some(
-				self.validator_set
-					.validators()
+				self.validators()
 					.iter()
 					.map(|authority_id| signatures.get(authority_id).cloned())
 					.collect(),
@@ -247,13 +223,13 @@ mod tests {
 		.unwrap();
 
 		let session_start = 1u64.into();
-		let rounds = Rounds::<H256, Block>::new(session_start, validators.clone(), validators);
+		let rounds = Rounds::<H256, Block>::new(session_start, validators);
 
-		assert_eq!(42, rounds.validator_set_id_for(session_start));
+		assert_eq!(42, rounds.validator_set_id());
 		assert_eq!(1, *rounds.session_start());
 		assert_eq!(
 			&vec![Keyring::Alice.public(), Keyring::Bob.public(), Keyring::Charlie.public()],
-			rounds.validators_for(session_start)
+			rounds.validators()
 		);
 	}
 
@@ -274,7 +250,7 @@ mod tests {
 		let round = (H256::from_low_u64_le(1), 1);
 
 		let session_start = 1u64.into();
-		let mut rounds = Rounds::<H256, Block>::new(session_start, validators.clone(), validators);
+		let mut rounds = Rounds::<H256, Block>::new(session_start, validators);
 
 		// no self vote yet, should self vote
 		assert!(rounds.should_self_vote(&round));
@@ -347,7 +323,7 @@ mod tests {
 		.unwrap();
 
 		let session_start = 1u64.into();
-		let mut rounds = Rounds::<H256, Block>::new(session_start, validators.clone(), validators);
+		let mut rounds = Rounds::<H256, Block>::new(session_start, validators);
 
 		// round 1
 		assert!(rounds.add_vote(

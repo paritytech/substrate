@@ -88,8 +88,7 @@ impl<'g, 'p, B: BlockT> ValidatorContext<B> for NetworkContext<'g, 'p, B> {
 
 	/// Send addressed message to a peer.
 	fn send_message(&mut self, who: &PeerId, message: Vec<u8>) {
-		self.network
-			.write_notification(who.clone(), self.gossip.protocol.clone(), message);
+		self.network.write_notification(*who, self.gossip.protocol.clone(), message);
 	}
 
 	/// Send all messages with given topic to a peer.
@@ -116,13 +115,13 @@ where
 		for (message_hash, topic, message) in messages.clone() {
 			let intent = match intent {
 				MessageIntent::Broadcast { .. } =>
-					if peer.known_messages.contains(&message_hash) {
+					if peer.known_messages.contains(message_hash) {
 						continue
 					} else {
 						MessageIntent::Broadcast
 					},
 				MessageIntent::PeriodicRebroadcast => {
-					if peer.known_messages.contains(&message_hash) {
+					if peer.known_messages.contains(message_hash) {
 						MessageIntent::PeriodicRebroadcast
 					} else {
 						// peer doesn't know message, so the logic should treat it as an
@@ -133,11 +132,11 @@ where
 				other => other,
 			};
 
-			if !message_allowed(id, intent, &topic, &message) {
+			if !message_allowed(id, intent, topic, message) {
 				continue
 			}
 
-			peer.known_messages.insert(message_hash.clone());
+			peer.known_messages.insert(*message_hash);
 
 			tracing::trace!(
 				target: "gossip",
@@ -146,7 +145,7 @@ where
 				?message,
 				"Propagating message",
 			);
-			network.write_notification(id.clone(), protocol.clone(), message.clone());
+			network.write_notification(*id, protocol.clone(), message.clone());
 		}
 	}
 }
@@ -198,8 +197,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 			?role,
 			"Registering peer",
 		);
-		self.peers
-			.insert(who.clone(), PeerConsensus { known_messages: Default::default() });
+		self.peers.insert(who, PeerConsensus { known_messages: Default::default() });
 
 		let validator = self.validator.clone();
 		let mut context = NetworkContext { gossip: self, network };
@@ -213,7 +211,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 		message: Vec<u8>,
 		sender: Option<PeerId>,
 	) {
-		if self.known_messages.put(message_hash.clone(), ()).is_none() {
+		if self.known_messages.put(message_hash, ()).is_none() {
 			self.messages.push(MessageEntry { message_hash, topic, message, sender });
 
 			if let Some(ref metrics) = self.metrics {
@@ -319,10 +317,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 		self.messages
 			.iter()
 			.filter(move |e| e.topic == topic)
-			.map(|entry| TopicNotification {
-				message: entry.message.clone(),
-				sender: entry.sender.clone(),
-			})
+			.map(|entry| TopicNotification { message: entry.message.clone(), sender: entry.sender })
 	}
 
 	/// Register incoming messages and return the ones that are new and valid (according to a gossip
@@ -355,7 +350,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 					protocol = %self.protocol,
 					"Ignored already known message",
 				);
-				network.report_peer(who.clone(), rep::DUPLICATE_GOSSIP);
+				network.report_peer(who, rep::DUPLICATE_GOSSIP);
 				continue
 			}
 
@@ -393,15 +388,13 @@ impl<B: BlockT> ConsensusGossip<B> {
 				},
 			};
 
-			network.report_peer(who.clone(), rep::GOSSIP_SUCCESS);
+			network.report_peer(who, rep::GOSSIP_SUCCESS);
 			peer.known_messages.insert(message_hash);
-			to_forward.push((
-				topic,
-				TopicNotification { message: message.clone(), sender: Some(who.clone()) },
-			));
+			to_forward
+				.push((topic, TopicNotification { message: message.clone(), sender: Some(who) }));
 
 			if keep {
-				self.register_message_hashed(message_hash, topic, message, Some(who.clone()));
+				self.register_message_hashed(message_hash, topic, message, Some(who));
 			}
 		}
 
@@ -431,7 +424,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 					continue
 				}
 
-				peer.known_messages.insert(entry.message_hash.clone());
+				peer.known_messages.insert(entry.message_hash);
 
 				tracing::trace!(
 					target: "gossip",
@@ -440,11 +433,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 					?entry.message,
 					"Sending topic message",
 				);
-				network.write_notification(
-					who.clone(),
-					self.protocol.clone(),
-					entry.message.clone(),
-				);
+				network.write_notification(*who, self.protocol.clone(), entry.message.clone());
 			}
 		}
 	}
@@ -489,7 +478,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 		);
 
 		peer.known_messages.insert(message_hash);
-		network.write_notification(who.clone(), self.protocol.clone(), message);
+		network.write_notification(*who, self.protocol.clone(), message);
 	}
 }
 

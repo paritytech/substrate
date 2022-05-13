@@ -49,7 +49,7 @@ impl GenesisConfigDef {
 		let mut instances = vec![];
 		// NOTE: GenesisConfig is not allowed to be only generic on I because it is not supported
 		// by construct_runtime.
-		if let Some(u) = helper::check_type_def_optional_gen(&generics, ident.span())? {
+		if let Some(u) = helper::check_type_def_optional_gen(generics, ident.span())? {
 			instances.push(u);
 		}
 
