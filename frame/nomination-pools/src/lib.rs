@@ -1073,10 +1073,10 @@ pub mod pallet {
 		#[pallet::constant]
 		type PalletId: Get<frame_support::PalletId>;
 
-		/// The minimum points to balance ratio that must be maintained for the pool to be `open`.
-		/// This is important in the event slashing takes place and the pool points to balance ratio
-		/// becomes disproportional.
-		/// For a value of 10, the threshold would be a pool points to pool balance ratio of 10:1.
+		/// The minimum pool points-to-balance ratio that must be maintained for it to be `open`.
+		/// This is important in the event slashing takes place and the pool's points-to-balance
+		/// ratio becomes disproportional.
+		/// For a value of 10, the threshold would be a pool points-to-balance ratio of 10:1.
 		/// Such a scenario would also be the equivalent of the pool being 90% slashed.
 		#[pallet::constant]
 		type MinPointsToBalance: Get<u32>;
