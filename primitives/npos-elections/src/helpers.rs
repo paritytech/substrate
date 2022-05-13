@@ -94,9 +94,8 @@ pub(crate) fn voter_candidate_to_election_result<AccountId: IdentifierT, P: PerT
 		voters.into_iter().filter_map(|v| v.into_assignment()).collect::<Vec<_>>();
 	let _ = assignments
 		.iter_mut()
-		.map(|a| a.try_normalize())
-		.collect::<Result<(), _>>()
-		.map_err(|e| crate::Error::ArithmeticError(e))?;
+		.try_for_each(|a| a.try_normalize())
+		.map_err(crate::Error::ArithmeticError)?;
 	let winners = winners
 		.into_iter()
 		.map(|w_ptr| (w_ptr.borrow().who.clone(), w_ptr.borrow().backed_stake))
