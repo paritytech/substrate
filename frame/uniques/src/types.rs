@@ -102,11 +102,11 @@ pub struct CollectionMetadata<DepositBalance, StringLimit: Get<u32>> {
 	///
 	/// This pays for the data stored in this struct.
 	pub(super) deposit: DepositBalance,
-	/// General information concerning this item. Limited in length by `StringLimit`. This will
-	/// generally be either a JSON dump or the hash of some JSON which can be found on a
+	/// General information concerning this collection. Limited in length by `StringLimit`. This
+	/// will generally be either a JSON dump or the hash of some JSON which can be found on a
 	/// hash-addressable global publication system such as IPFS.
 	pub(super) data: BoundedVec<u8, StringLimit>,
-	/// Whether the item metadata may be changed by a non Force origin.
+	/// Whether the collection's metadata may be changed by a non Force origin.
 	pub(super) is_frozen: bool,
 }
 

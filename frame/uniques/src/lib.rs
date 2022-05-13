@@ -154,7 +154,7 @@ pub mod pallet {
 
 	#[pallet::storage]
 	#[pallet::storage_prefix = "Class"]
-	/// Details of an items collection.
+	/// Details of a collection.
 	pub(super) type Collection<T: Config<I>, I: 'static = ()> = StorageMap<
 		_,
 		Blake2_128Concat,
@@ -210,7 +210,7 @@ pub mod pallet {
 
 	#[pallet::storage]
 	#[pallet::storage_prefix = "ClassMetadataOf"]
-	/// Metadata of an items collection.
+	/// Metadata of a collection.
 	pub(super) type CollectionMetadataOf<T: Config<I>, I: 'static = ()> = StorageMap<
 		_,
 		Blake2_128Concat,
@@ -233,7 +233,7 @@ pub mod pallet {
 	>;
 
 	#[pallet::storage]
-	/// Metadata of an items collection.
+	/// Attributes of a collection.
 	pub(super) type Attribute<T: Config<I>, I: 'static = ()> = StorageNMap<
 		_,
 		(
@@ -387,11 +387,9 @@ pub mod pallet {
 		/// `ItemDeposit` funds of sender are reserved.
 		///
 		/// Parameters:
-		/// - `collection`: The identifier of the new items collection. This must not be currently
-		///   in use.
-		/// - `admin`: The admin of this collection of items. The admin is the initial address of
-		///   each
-		/// member of the items collection's admin team.
+		/// - `collection`: The identifier of the new collection. This must not be currently in use.
+		/// - `admin`: The admin of this collection. The admin is the initial address of each
+		/// member of the collection's admin team.
 		///
 		/// Emits `Created` event when successful.
 		///
@@ -457,8 +455,8 @@ pub mod pallet {
 		/// The origin must conform to `ForceOrigin` or must be `Signed` and the sender must be the
 		/// owner of the `collection`.
 		///
-		/// - `collection`: The identifier of the items collection to be destroyed.
-		/// - `witness`: Information on the items minted in the items collection. This must be
+		/// - `collection`: The identifier of the collection to be destroyed.
+		/// - `witness`: Information on the items minted in the collection. This must be
 		/// correct.
 		///
 		/// Emits `Destroyed` event when successful.
@@ -590,8 +588,8 @@ pub mod pallet {
 		///
 		/// Origin must be Signed and the sender should be the Owner of the `collection`.
 		///
-		/// - `collection`: The collection of the item to be frozen.
-		/// - `items`: The items of the items collection whose deposits will be reevaluated.
+		/// - `collection`: The collection to be frozen.
+		/// - `items`: The items of the collection whose deposits will be reevaluated.
 		///
 		/// NOTE: This exists as a best-effort function. Any items which are unknown or
 		/// in the case that the owner account does not have reservable funds to pay for a
@@ -715,11 +713,11 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Disallow further unprivileged transfers for a whole items collection.
+		/// Disallow further unprivileged transfers for a whole collection.
 		///
 		/// Origin must be Signed and the sender should be the Freezer of the `collection`.
 		///
-		/// - `collection`: The items collection to be frozen.
+		/// - `collection`: The collection to be frozen.
 		///
 		/// Emits `CollectionFrozen`.
 		///
@@ -742,7 +740,7 @@ pub mod pallet {
 			})
 		}
 
-		/// Re-allow unprivileged transfers for a whole items collection.
+		/// Re-allow unprivileged transfers for a whole collection.
 		///
 		/// Origin must be Signed and the sender should be the Admin of the `collection`.
 		///
@@ -769,12 +767,12 @@ pub mod pallet {
 			})
 		}
 
-		/// Change the Owner of an items collection.
+		/// Change the Owner of a collection.
 		///
 		/// Origin must be Signed and the sender should be the Owner of the `collection`.
 		///
-		/// - `collection`: The items collection whose owner should be changed.
-		/// - `owner`: The new Owner of this items collection. They must have called
+		/// - `collection`: The collection whose owner should be changed.
+		/// - `owner`: The new Owner of this collection. They must have called
 		///   `set_accept_ownership` with `collection` in order for this operation to succeed.
 		///
 		/// Emits `OwnerChanged`.
@@ -816,14 +814,14 @@ pub mod pallet {
 			})
 		}
 
-		/// Change the Issuer, Admin and Freezer of an items collection.
+		/// Change the Issuer, Admin and Freezer of a collection.
 		///
 		/// Origin must be Signed and the sender should be the Owner of the `collection`.
 		///
-		/// - `collection`: The items collection whose team should be changed.
-		/// - `issuer`: The new Issuer of this items collection.
-		/// - `admin`: The new Admin of this items collection.
-		/// - `freezer`: The new Freezer of this items collection.
+		/// - `collection`: The collection whose team should be changed.
+		/// - `issuer`: The new Issuer of this collection.
+		/// - `admin`: The new Admin of this collection.
+		/// - `freezer`: The new Freezer of this collection.
 		///
 		/// Emits `TeamChanged`.
 		///
@@ -963,9 +961,8 @@ pub mod pallet {
 		/// - `issuer`: The new Issuer of this item.
 		/// - `admin`: The new Admin of this item.
 		/// - `freezer`: The new Freezer of this item.
-		/// - `free_holding`: Whether a deposit is taken for holding an item of this item
-		///   collection.
-		/// - `is_frozen`: Whether this items collection is frozen except for permissioned/admin
+		/// - `free_holding`: Whether a deposit is taken for holding an item of this collection.
+		/// - `is_frozen`: Whether this collection is frozen except for permissioned/admin
 		/// instructions.
 		///
 		/// Emits `ItemStatusChanged` with the identity of the item.
@@ -1003,7 +1000,7 @@ pub mod pallet {
 			})
 		}
 
-		/// Set an attribute for an items collection or item.
+		/// Set an attribute for a collection or item.
 		///
 		/// Origin must be either `ForceOrigin` or Signed and the sender should be the Owner of the
 		/// `collection`.
@@ -1012,7 +1009,7 @@ pub mod pallet {
 		/// `MetadataDepositBase + DepositPerByte * (key.len + value.len)` taking into
 		/// account any already reserved funds.
 		///
-		/// - `collection`: The identifier of the items collection whose item's metadata to set.
+		/// - `collection`: The identifier of the collection whose item's metadata to set.
 		/// - `maybe_item`: The identifier of the item whose metadata to set.
 		/// - `key`: The key of the attribute.
 		/// - `value`: The value to which to set the attribute.
@@ -1068,14 +1065,14 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Clear an attribute for an items collection or item.
+		/// Clear an attribute for a collection or item.
 		///
 		/// Origin must be either `ForceOrigin` or Signed and the sender should be the Owner of the
 		/// `collection`.
 		///
-		/// Any deposit is freed for the items collection owner.
+		/// Any deposit is freed for the collection's owner.
 		///
-		/// - `collection`: The identifier of the items collection whose item's metadata to clear.
+		/// - `collection`: The identifier of the collection whose item's metadata to clear.
 		/// - `maybe_item`: The identifier of the item whose metadata to clear.
 		/// - `key`: The key of the attribute.
 		///
@@ -1123,7 +1120,7 @@ pub mod pallet {
 		/// `MetadataDepositBase + DepositPerByte * data.len` taking into
 		/// account any already reserved funds.
 		///
-		/// - `collection`: The identifier of the items collection whose item's metadata to set.
+		/// - `collection`: The identifier of the collection whose item's metadata to set.
 		/// - `item`: The identifier of the item whose metadata to set.
 		/// - `data`: The general information of this item. Limited in length by `StringLimit`.
 		/// - `is_frozen`: Whether the metadata should be frozen against further changes.
@@ -1185,9 +1182,9 @@ pub mod pallet {
 		/// Origin must be either `ForceOrigin` or Signed and the sender should be the Owner of the
 		/// `item`.
 		///
-		/// Any deposit is freed for the items collection owner.
+		/// Any deposit is freed for the collection's owner.
 		///
-		/// - `collection`: The identifier of the items collection whose item's metadata to clear.
+		/// - `collection`: The identifier of the collection whose item's metadata to clear.
 		/// - `item`: The identifier of the item whose metadata to clear.
 		///
 		/// Emits `MetadataCleared`.
@@ -1226,7 +1223,7 @@ pub mod pallet {
 			})
 		}
 
-		/// Set the metadata for an items collection.
+		/// Set the metadata for a collection.
 		///
 		/// Origin must be either `ForceOrigin` or `Signed` and the sender should be the Owner of
 		/// the `collection`.
@@ -1287,14 +1284,14 @@ pub mod pallet {
 			})
 		}
 
-		/// Clear the metadata for an items collection.
+		/// Clear the metadata for a collection.
 		///
 		/// Origin must be either `ForceOrigin` or `Signed` and the sender should be the Owner of
 		/// the `collection`.
 		///
-		/// Any deposit is freed for the items collection owner.
+		/// Any deposit is freed for the collection's owner.
 		///
-		/// - `collection`: The identifier of the items collection whose metadata to clear.
+		/// - `collection`: The identifier of the collection whose metadata to clear.
 		///
 		/// Emits `CollectionMetadataCleared`.
 		///
@@ -1330,9 +1327,9 @@ pub mod pallet {
 		/// Origin must be `Signed` and if `maybe_collection` is `Some`, then the signer must have a
 		/// provider reference.
 		///
-		/// - `maybe_collection`: The identifier of the items collection whose ownership the signer
-		///   is willing to accept, or if `None`, an indication that the signer is willing to accept
-		///   no ownership transferal.
+		/// - `maybe_collection`: The identifier of the collection whose ownership the signer is
+		///   willing to accept, or if `None`, an indication that the signer is willing to accept no
+		///   ownership transferal.
 		///
 		/// Emits `OwnershipAcceptanceChanged`.
 		#[pallet::weight(T::WeightInfo::set_accept_ownership())]
