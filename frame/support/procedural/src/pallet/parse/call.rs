@@ -18,6 +18,7 @@
 use super::helper;
 use frame_support_procedural_tools::get_doc_literals;
 use quote::ToTokens;
+use std::collections::HashMap;
 use syn::spanned::Spanned;
 
 /// List of additional token to be used for parsing.
@@ -160,6 +161,7 @@ impl CallDef {
 		}
 
 		let mut methods = vec![];
+		let mut indices = HashMap::new();
 		let mut last_index: Option<u8> = None;
 		for impl_item in &mut item.items {
 			if let syn::ImplItem::Method(method) = impl_item {
@@ -231,9 +233,25 @@ impl CallDef {
 					_ => unreachable!("checked during creation of the let binding"),
 				});
 
-				let final_index =
-					call_index.unwrap_or_else(|| last_index.map(|idx| idx + 1).unwrap_or(0));
+				let final_index = match call_index {
+					Some(i) => i,
+					None =>
+						last_index.map_or(Some(0), |idx| idx.checked_add(1)).ok_or_else(|| {
+							let msg = "Call index doesn't fit into u8, index is 256";
+							syn::Error::new(method.sig.span(), msg)
+						})?,
+				};
 				last_index = Some(final_index);
+
+				if let Some(used_fn) = indices.insert(final_index, method.sig.ident.clone()) {
+					let msg = format!(
+						"Call indices are conflicting: Both functions {} and {} are at index {}",
+						used_fn, method.sig.ident, final_index,
+					);
+					let mut err = syn::Error::new(used_fn.span(), &msg);
+					err.combine(syn::Error::new(method.sig.ident.span(), msg));
+					return Err(err)
+				}
 
 				let mut args = vec![];
 				for arg in method.sig.inputs.iter_mut().skip(1) {
