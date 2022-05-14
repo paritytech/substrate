@@ -8509,6 +8509,7 @@ dependencies = [
  "sc-client-api",
  "sc-consensus",
  "sc-network-common",
+ "sc-network-light",
  "sc-network-sync",
  "sc-peerset",
  "sc-utils",
@@ -8562,6 +8563,25 @@ dependencies = [
  "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
  "tracing",
+]
+
+[[package]]
+name = "sc-network-light"
+version = "0.10.0-dev"
+dependencies = [
+ "futures",
+ "libp2p",
+ "log",
+ "parity-scale-codec",
+ "prost",
+ "prost-build",
+ "sc-client-api",
+ "sc-network-common",
+ "sc-peerset",
+ "sp-blockchain",
+ "sp-core",
+ "sp-runtime",
+ "thiserror",
 ]
 
 [[package]]
