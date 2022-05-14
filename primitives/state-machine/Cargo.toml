@@ -32,7 +32,7 @@ sp-trie = { version = "6.0.0", default-features = false, path = "../trie" }
 
 [dev-dependencies]
 hex-literal = "0.3.4"
-pretty_assertions = "1.0.0"
+pretty_assertions = "1.2.1"
 rand = "0.7.2"
 sp-runtime = { version = "6.0.0", path = "../runtime" }
 
