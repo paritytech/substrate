@@ -47,7 +47,7 @@ pub mod pallet {
 		traits::{OnUnbalanced, ReservableCurrency},
 	};
 	use frame_system::pallet_prelude::*;
-	use sp_runtime::traits::Convert;
+	use sp_runtime::traits::{Convert, Zero};
 	use sp_std::vec::Vec;
 
 	// The struct on which we build all of our Pallet logic.
@@ -467,6 +467,22 @@ pub mod pallet {
 			let bounded_text = text.try_into().map_err(|()| Error::<T>::NameTooLong)?;
 			T::NameServiceResolver::set_text(name_hash, bounded_text, sender)?;
 			Ok(())
+		}
+	}
+
+	#[pallet::hooks]
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn integrity_test() {
+			// registration fee per block cannot be zero
+			assert!(T::RegistrationFeePerBlock::get() > BalanceOf::<T>::zero());
+			// max name length cannot be zero
+			assert!(T::MaxNameLength::get() > 0);
+			// max text length cannot be zero
+			assert!(!T::MaxTextLength::get() > 0);
+			// three letter tier fee must be larger than four letter tier fee
+			assert!(T::TierThreeLetters::get() > BalanceOf::<T>::zero());
+			// four letter tier fee must be larger than default tier fee
+			assert!(T::TierFourLetters::get() > BalanceOf::<T>::zero());
 		}
 	}
 }
