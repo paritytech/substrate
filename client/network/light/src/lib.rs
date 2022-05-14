@@ -16,8 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! Include sources generated from protobuf definitions.
+//! Light client data structures of the networking layer.
 
-pub mod bitswap {
-	include!(concat!(env!("OUT_DIR"), "/bitswap.message.rs"));
-}
+pub mod light_client_requests;
+mod schema;

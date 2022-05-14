@@ -18,6 +18,8 @@
 
 //! Include sources generated from protobuf definitions.
 
-pub mod bitswap {
-	include!(concat!(env!("OUT_DIR"), "/bitswap.message.rs"));
+pub(crate) mod v1 {
+	pub(crate) mod light {
+		include!(concat!(env!("OUT_DIR"), "/api.v1.light.rs"));
+	}
 }
