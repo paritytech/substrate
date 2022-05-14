@@ -115,26 +115,26 @@ where
 	/// block requests, if enabled.
 	///
 	/// Can be constructed either via
-	/// [`sc_network_sync::block_request_handler::generate_protocol_config`] allowing outgoing but
-	/// not incoming requests, or constructed via [`sc_network_sync::block_request_handler::
-	/// BlockRequestHandler::new`] allowing both outgoing and incoming requests.
+	/// `sc_network_sync::block_request_handler::generate_protocol_config` allowing outgoing but
+	/// not incoming requests, or constructed via `sc_network_sync::block_request_handler::
+	/// BlockRequestHandler::new` allowing both outgoing and incoming requests.
 	pub block_request_protocol_config: RequestResponseConfig,
 
 	/// Request response configuration for the light client request protocol.
 	///
 	/// Can be constructed either via
-	/// [`sc_network_light::light_client_requests::generate_protocol_config`] allowing outgoing but
+	/// `sc_network_light::light_client_requests::generate_protocol_config` allowing outgoing but
 	/// not incoming requests, or constructed via
-	/// [`sc_network_light::light_client_requests::handler::LightClientRequestHandler::new`]
+	/// `sc_network_light::light_client_requests::handler::LightClientRequestHandler::new`
 	/// allowing both outgoing and incoming requests.
 	pub light_client_request_protocol_config: RequestResponseConfig,
 
 	/// Request response configuration for the state request protocol.
 	///
 	/// Can be constructed either via
-	/// [`sc_network_sync::block_request_handler::generate_protocol_config`] allowing outgoing but
+	/// `sc_network_sync::state_request_handler::generate_protocol_config` allowing outgoing but
 	/// not incoming requests, or constructed via
-	/// [`crate::state_request_handler::StateRequestHandler::new`] allowing
+	/// `sc_network_sync::state_request_handler::StateRequestHandler::new` allowing
 	/// both outgoing and incoming requests.
 	pub state_request_protocol_config: RequestResponseConfig,
 
