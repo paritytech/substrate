@@ -63,7 +63,10 @@ pub mod v1 {
 					translated.saturating_inc();
 					Some(old_value.migrate_to_v1())
 				});
+
 				current.put::<Pallet<T>>();
+
+				log!(info, "Upgraded storage to version {:?}", current);
 
 				T::DbWeight::get().reads_writes(translated, translated)
 			} else {
@@ -73,6 +76,10 @@ pub mod v1 {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn post_upgrade() -> Result<(), &'static str> {}
+		fn post_upgrade() -> Result<(), &'static str> {
+			// new version must be set.
+			assert_eq!(Pallet::<T>::on_chain_storage_version(), 1);
+			Ok(())
+		}
 	}
 }
