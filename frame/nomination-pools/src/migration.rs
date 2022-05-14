@@ -1,3 +1,20 @@
+// This file is part of Substrate.
+
+// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
+
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 use super::*;
 
 pub mod v1 {
@@ -43,6 +60,9 @@ pub mod v1 {
 		}
 	}
 
+	/// Trivial migration which makes the roles of each pool optional.
+	///
+	/// Note: The depositor is not optional since he can never change.
 	pub struct MigrateToV1<T>(sp_std::marker::PhantomData<T>);
 	impl<T: Config> OnRuntimeUpgrade for MigrateToV1<T> {
 		fn on_runtime_upgrade() -> Weight {
@@ -66,9 +86,9 @@ pub mod v1 {
 
 				current.put::<Pallet<T>>();
 
-				log!(info, "Upgraded storage to version {:?}", current);
+				log!(info, "Upgraded {} pools, storage to version {:?}", translated, current);
 
-				T::DbWeight::get().reads_writes(translated, translated)
+				T::DbWeight::get().reads_writes(translated + 1, translated + 1)
 			} else {
 				log!(info, "Migration did not executed. This probably should be removed");
 				T::DbWeight::get().reads(1)
