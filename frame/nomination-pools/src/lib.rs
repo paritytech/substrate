@@ -1276,8 +1276,6 @@ pub mod pallet {
 		/// An account is already delegating in another pool. An account may only belong to one
 		/// pool at a time.
 		AccountBelongsToOtherPool,
-		/// The pool has insufficient balance to bond as a nominator.
-		InsufficientBond,
 		/// The member is already unbonding in this era.
 		AlreadyUnbonding,
 		/// The member is fully unbonded (and thus cannot access the bonded and reward pool
@@ -1784,6 +1782,13 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Nominate on behalf of the pool.
+		///
+		/// The dispatch origin of this call must be signed by the pool nominator or the the pool
+		/// root role.
+		///
+		/// This directly forward the call to the staking pallet, on behalf of the pool bonded
+		/// account.
 		#[pallet::weight(T::WeightInfo::nominate(validators.len() as u32))]
 		pub fn nominate(
 			origin: OriginFor<T>,
@@ -1793,10 +1798,28 @@ pub mod pallet {
 			let who = ensure_signed(origin)?;
 			let bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
 			ensure!(bonded_pool.can_nominate(&who), Error::<T>::NotNominator);
-			T::StakingInterface::nominate(bonded_pool.bonded_account(), validators)?;
-			Ok(())
+			T::StakingInterface::nominate(bonded_pool.bonded_account(), validators)
 		}
 
+		/// Nominate on behalf of the pool.
+		///
+		/// The dispatch origin of this call must be signed by the pool nominator or the the pool
+		/// root role, same as [`Pallet::nominate`].
+		///
+		/// This directly forward the call to the staking pallet, on behalf of the pool bonded
+		/// account.
+		#[pallet::weight(T::WeightInfo::chill())]
+		pub fn chill(origin: OriginFor<T>, pool_id: PoolId) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			let bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
+			ensure!(bonded_pool.can_nominate(&who), Error::<T>::NotNominator);
+			T::StakingInterface::chill(bonded_pool.bonded_account())
+		}
+
+		/// Set a new state for the pool.
+		///
+		/// The dispatch origin of this call must be signed by the state toggler, or the root role
+		/// of the pool.
 		#[pallet::weight(T::WeightInfo::set_state())]
 		pub fn set_state(
 			origin: OriginFor<T>,
@@ -1823,6 +1846,10 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Set a new metadata for the pool.
+		///
+		/// The dispatch origin of this call must be signed by the state toggler, or the root role
+		/// of the pool.
 		#[pallet::weight(T::WeightInfo::set_metadata(metadata.len() as u32))]
 		pub fn set_metadata(
 			origin: OriginFor<T>,

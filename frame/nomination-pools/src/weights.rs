@@ -1,3 +1,4 @@
+
 // This file is part of Substrate.
 
 // Copyright (C) 2022 Parity Technologies (UK) Ltd.
@@ -54,7 +55,8 @@ pub trait WeightInfo {
 	fn withdraw_unbonded_update(s: u32, ) -> Weight;
 	fn withdraw_unbonded_kill(s: u32, ) -> Weight;
 	fn create() -> Weight;
-	fn nominate(n: u32, ) -> Weight;
+	fn nominate(n: u32) -> Weight;
+	fn chill() -> Weight;
 	fn set_state() -> Weight;
 	fn set_metadata(n: u32, ) -> Weight;
 	fn set_configs() -> Weight;
@@ -243,6 +245,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(12 as Weight))
 			.saturating_add(T::DbWeight::get().reads((1 as Weight).saturating_mul(n as Weight)))
 			.saturating_add(T::DbWeight::get().writes(5 as Weight))
+	}
+	fn chill() -> Weight {
+		0
 	}
 	// Storage: NominationPools BondedPools (r:1 w:1)
 	// Storage: Staking Ledger (r:1 w:0)
@@ -459,6 +464,9 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(12 as Weight))
 			.saturating_add(RocksDbWeight::get().reads((1 as Weight).saturating_mul(n as Weight)))
 			.saturating_add(RocksDbWeight::get().writes(5 as Weight))
+	}
+	fn chill() -> Weight {
+		0
 	}
 	// Storage: NominationPools BondedPools (r:1 w:1)
 	// Storage: Staking Ledger (r:1 w:0)
