@@ -1648,11 +1648,11 @@ pub mod pallet_prelude {
 /// Each dispatchable may also be annotated with the `#[pallet::call_index($idx)]` attribute,
 /// which defines and sets the codec index for the dispatchable function in the `Call` enum.
 ///
-/// All call indexes start from 0, until it encounters a dispatchable function with a defined call
-/// index. The dispatchable function that lexically follows the function with a defined call index
-/// will have that call index, but incremented by 1, e.g. if there are 3 dispatchable functions
-/// `fn foo`, `fn bar` and `fn qux` in that order, and only `fn bar` has a call index of 10, then
-/// `fn qux` will have an index of 11, instead of 1.
+/// All call indexes start from 0, until it encounters a dispatchable function with a defined
+/// call index. The dispatchable function that lexically follows the function with a defined
+/// call index will have that call index, but incremented by 1, e.g. if there are 3
+/// dispatchable functions `fn foo`, `fn bar` and `fn qux` in that order, and only `fn bar` has
+/// a call index of 10, then `fn qux` will have an index of 11, instead of 1.
 ///
 /// All arguments must implement `Debug`, `PartialEq`, `Eq`, `Decode`, `Encode`, `Clone`. For
 /// ease of use, bound the trait `Member` available in frame_support::pallet_prelude.
