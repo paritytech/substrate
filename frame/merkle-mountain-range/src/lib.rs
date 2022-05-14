@@ -84,7 +84,6 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
-	#[pallet::without_storage_info]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	/// This pallet's configuration trait
@@ -126,7 +125,8 @@ pub mod pallet {
 			+ Default
 			+ codec::Codec
 			+ codec::EncodeLike
-			+ scale_info::TypeInfo;
+			+ scale_info::TypeInfo
+			+ MaxEncodedLen;
 
 		/// Data stored in the leaf nodes.
 		///

@@ -212,7 +212,7 @@ impl<'de> Deserialize<'de> for Public {
 ///
 /// Instead of importing it for the local module, alias it to be available as a public type
 #[cfg_attr(feature = "full_crypto", derive(Hash))]
-#[derive(Encode, Decode, PassByInner, TypeInfo, PartialEq, Eq)]
+#[derive(Encode, Decode, MaxEncodedLen, PassByInner, TypeInfo, PartialEq, Eq)]
 pub struct Signature(pub [u8; 64]);
 
 impl sp_std::convert::TryFrom<&[u8]> for Signature {

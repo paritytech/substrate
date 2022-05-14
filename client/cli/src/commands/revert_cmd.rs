@@ -21,25 +21,25 @@ use crate::{
 	params::{GenericNumber, PruningParams, SharedParams},
 	CliConfiguration,
 };
+use clap::Parser;
 use sc_client_api::{Backend, UsageProvider};
 use sc_service::chain_ops::revert_chain;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use std::{fmt::Debug, str::FromStr, sync::Arc};
-use structopt::StructOpt;
 
 /// The `revert` command used revert the chain to a previous state.
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Parser)]
 pub struct RevertCmd {
 	/// Number of blocks to revert.
-	#[structopt(default_value = "256")]
+	#[clap(default_value = "256")]
 	pub num: GenericNumber,
 
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	pub shared_params: SharedParams,
 
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	pub pruning_params: PruningParams,
 }
 

@@ -25,7 +25,7 @@ use sp_io::{
 	hashing::{blake2_128, twox_128, twox_64},
 	TestExternalities,
 };
-use sp_runtime::DispatchError;
+use sp_runtime::{DispatchError, ModuleError};
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -341,7 +341,11 @@ fn error_expand() {
 	);
 	assert_eq!(
 		DispatchError::from(pallet::Error::<Runtime>::InsufficientProposersBalance),
-		DispatchError::Module { index: 1, error: 0, message: Some("InsufficientProposersBalance") },
+		DispatchError::Module(ModuleError {
+			index: 1,
+			error: 0,
+			message: Some("InsufficientProposersBalance")
+		}),
 	);
 
 	assert_eq!(
@@ -358,7 +362,11 @@ fn error_expand() {
 		DispatchError::from(
 			pallet::Error::<Runtime, pallet::Instance1>::InsufficientProposersBalance
 		),
-		DispatchError::Module { index: 2, error: 0, message: Some("InsufficientProposersBalance") },
+		DispatchError::Module(ModuleError {
+			index: 2,
+			error: 0,
+			message: Some("InsufficientProposersBalance")
+		}),
 	);
 }
 

@@ -20,10 +20,10 @@ scale-info = { version = "1.0", default-features = false, features = ["derive"] 
 
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../../system" }
-sp-core = { version = "4.1.0-dev", default-features = false, path = "../../../primitives/core" }
-sp-io = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/io" }
-sp-keystore = { version = "0.10.0", path = "../../../primitives/keystore", optional = true }
-sp-runtime = { version = "4.1.0-dev", default-features = false, path = "../../../primitives/runtime" }
+sp-core = { version = "5.0.0", default-features = false, path = "../../../primitives/core" }
+sp-io = { version = "5.0.0", default-features = false, path = "../../../primitives/io" }
+sp-keystore = { version = "0.11.0", path = "../../../primitives/keystore", optional = true }
+sp-runtime = { version = "5.0.0", default-features = false, path = "../../../primitives/runtime" }
 sp-std = { version = "4.0.0", default-features = false, path = "../../../primitives/std" }
 
 [features]

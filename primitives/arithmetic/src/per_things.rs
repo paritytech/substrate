@@ -22,7 +22,7 @@ use crate::traits::{
 	BaseArithmetic, Bounded, CheckedAdd, CheckedMul, CheckedSub, One, SaturatedConversion,
 	Saturating, UniqueSaturatedInto, Unsigned, Zero,
 };
-use codec::{CompactAs, Encode, MaxEncodedLen};
+use codec::{CompactAs, Encode};
 use num_traits::{Pow, SaturatingAdd, SaturatingSub};
 use sp_debug_derive::RuntimeDebug;
 use sp_std::{
@@ -425,15 +425,8 @@ macro_rules! implement_per_thing {
 		///
 		#[doc = $title]
 		#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-		#[derive(Encode, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, RuntimeDebug, scale_info::TypeInfo)]
+		#[derive(Encode, Copy, Clone, PartialEq, Eq, codec::MaxEncodedLen, PartialOrd, Ord, RuntimeDebug, scale_info::TypeInfo)]
 		pub struct $name($type);
-
-		impl MaxEncodedLen for $name{
-			fn max_encoded_len() -> usize {
-				// a bit too much but solves problems in parachain_staking
-				<$type>::max_encoded_len()
-			}
-		}
 
 		/// Implementation makes any compact encoding of `PerThing::Inner` valid,
 		/// when decoding it will saturate up to `PerThing::ACCURACY`.
@@ -910,6 +903,15 @@ macro_rules! implement_per_thing {
 					let per_thingy: $name = decoded.into();
 					assert_eq!(per_thingy, $name(n));
 				}
+			}
+
+			#[test]
+			fn has_max_encoded_len() {
+				struct AsMaxEncodedLen<T: codec::MaxEncodedLen> {
+					_data: T,
+				}
+
+				let _ = AsMaxEncodedLen { _data: $name(1) };
 			}
 
 			#[test]

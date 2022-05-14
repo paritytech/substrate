@@ -26,25 +26,25 @@ use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use std::{fmt::Debug, str::FromStr};
 
 /// Configurations of the [`Command::ExecuteBlock`].
-#[derive(Debug, Clone, structopt::StructOpt)]
+#[derive(Debug, Clone, clap::Parser)]
 pub struct ExecuteBlockCmd {
 	/// Overwrite the wasm code in state or not.
-	#[structopt(long)]
+	#[clap(long)]
 	overwrite_wasm_code: bool,
 
 	/// If set, then the state root check is disabled by the virtue of calling into
 	/// `TryRuntime_execute_block_no_check` instead of
 	/// `Core_execute_block`.
-	#[structopt(long)]
+	#[clap(long)]
 	no_check: bool,
 
 	/// The block hash at which to fetch the block.
 	///
 	/// If the `live` state type is being used, then this can be omitted, and is equal to whatever
 	/// the `state::at` is. Only use this (with care) when combined with a snapshot.
-	#[structopt(
+	#[clap(
 		long,
-		multiple = false,
+		multiple_values = false,
 		parse(try_from_str = crate::parse::hash)
 	)]
 	block_at: Option<String>,
@@ -53,9 +53,9 @@ pub struct ExecuteBlockCmd {
 	///
 	/// If the `live` state type is being used, then this can be omitted, and is equal to whatever
 	/// the `state::uri` is. Only use this (with care) when combined with a snapshot.
-	#[structopt(
+	#[clap(
 		long,
-		multiple = false,
+		multiple_values = false,
 		parse(try_from_str = crate::parse::url)
 	)]
 	block_ws_uri: Option<String>,
@@ -65,7 +65,7 @@ pub struct ExecuteBlockCmd {
 	/// For this command only, if the `live` is used, then state of the parent block is fetched.
 	///
 	/// If `block_at` is provided, then the [`State::Live::at`] is being ignored.
-	#[structopt(subcommand)]
+	#[clap(subcommand)]
 	state: State,
 }
 

@@ -491,7 +491,6 @@ version = "4.0.0-dev"
 dependencies = [
  "beefy-gadget",
  "beefy-primitives",
- "derive_more",
  "futures 0.3.21",
  "jsonrpc-core",
  "jsonrpc-core-client",
@@ -934,13 +933,39 @@ version = "2.34.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a0610544180c38b88101fecf2dd634b174a62eef6946f84dfc6a7127512b381c"
 dependencies = [
- "ansi_term",
+ "bitflags",
+ "textwrap 0.11.0",
+ "unicode-width",
+]
+
+[[package]]
+name = "clap"
+version = "3.0.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "12e8611f9ae4e068fa3e56931fded356ff745e70987ff76924a6e0ab1c8ef2e3"
+dependencies = [
  "atty",
  "bitflags",
+ "clap_derive",
+ "indexmap",
+ "lazy_static",
+ "os_str_bytes",
  "strsim",
- "textwrap",
- "unicode-width",
- "vec_map",
+ "termcolor",
+ "textwrap 0.14.2",
+]
+
+[[package]]
+name = "clap_derive"
+version = "3.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "41a0645a430ec9136d2d701e54a95d557de12649a9dd7109ced3187e648ac824"
+dependencies = [
+ "heck 0.4.0",
+ "proc-macro-error",
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -1187,7 +1212,7 @@ checksum = "1604dafd25fba2fe2d5895a9da139f8dc9b319a5fe5354ca137cbbce4e178d10"
 dependencies = [
  "atty",
  "cast",
- "clap",
+ "clap 2.34.0",
  "criterion-plot",
  "csv",
  "itertools",
@@ -1334,7 +1359,7 @@ version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c1a816186fa68d9e426e3cb4ae4dff1fcd8e4a2c34b781bf7a822574a0d0aac8"
 dependencies = [
- "sct",
+ "sct 0.6.1",
 ]
 
 [[package]]
@@ -1668,7 +1693,7 @@ version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7c5f0096a91d210159eceb2ff5e1c4da18388a170e1e3ce948aac9c8fdbbf595"
 dependencies = [
- "heck",
+ "heck 0.3.3",
  "proc-macro2",
  "quote",
  "syn",
@@ -1933,6 +1958,7 @@ dependencies = [
  "parity-scale-codec",
  "paste 1.0.6",
  "scale-info",
+ "serde",
  "sp-api",
  "sp-application-crypto",
  "sp-io",
@@ -1949,6 +1975,7 @@ version = "4.0.0-dev"
 dependencies = [
  "Inflector",
  "chrono",
+ "clap 3.0.7",
  "frame-benchmarking",
  "frame-support",
  "handlebars",
@@ -1960,12 +1987,12 @@ dependencies = [
  "sc-executor",
  "sc-service",
  "serde",
+ "serde_json",
  "sp-core",
  "sp-externalities",
  "sp-keystore",
  "sp-runtime",
  "sp-state-machine",
- "structopt",
 ]
 
 [[package]]
@@ -2321,8 +2348,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3a1387e07917c711fb4ee4f48ea0adb04a3c9739e53ef85bf43ae1edc2937a8b"
 dependencies = [
  "futures-io",
- "rustls",
- "webpki",
+ "rustls 0.19.1",
+ "webpki 0.21.4",
 ]
 
 [[package]]
@@ -2552,6 +2579,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "heck"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2540771e65fc8cb83cd6e8a237f70c319bd5c29f78ed1084ba5d50eeac86f7f9"
+
+[[package]]
 name = "hermit-abi"
 version = "0.1.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2724,11 +2757,11 @@ dependencies = [
  "futures-util",
  "hyper 0.14.17",
  "log 0.4.14",
- "rustls",
- "rustls-native-certs",
+ "rustls 0.19.1",
+ "rustls-native-certs 0.5.0",
  "tokio",
- "tokio-rustls",
- "webpki",
+ "tokio-rustls 0.22.0",
+ "webpki 0.21.4",
 ]
 
 [[package]]
@@ -3090,19 +3123,73 @@ version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6373a33d987866ccfe1af4bc11b089dce941764313f9fd8b7cf13fcb51b72dc5"
 dependencies = [
- "jsonrpsee-proc-macros",
- "jsonrpsee-types",
+ "jsonrpsee-types 0.4.1",
  "jsonrpsee-utils",
- "jsonrpsee-ws-client",
+ "jsonrpsee-ws-client 0.4.1",
+]
+
+[[package]]
+name = "jsonrpsee"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "05fd8cd6c6b1bbd06881d2cf88f1fc83cc36c98f2219090f839115fb4a956cb9"
+dependencies = [
+ "jsonrpsee-core",
+ "jsonrpsee-proc-macros",
+ "jsonrpsee-types 0.8.0",
+ "jsonrpsee-ws-client 0.8.0",
+]
+
+[[package]]
+name = "jsonrpsee-client-transport"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3303cdf246e6ab76e2866fb3d9acb6c76a068b1b28bd923a1b7a8122257ad7b5"
+dependencies = [
+ "futures 0.3.21",
+ "http",
+ "jsonrpsee-core",
+ "jsonrpsee-types 0.8.0",
+ "pin-project 1.0.10",
+ "rustls-native-certs 0.6.1",
+ "soketto",
+ "thiserror",
+ "tokio",
+ "tokio-rustls 0.23.2",
+ "tokio-util",
+ "tracing",
+ "webpki-roots 0.22.2",
+]
+
+[[package]]
+name = "jsonrpsee-core"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f220b5a238dc7992b90f1144fbf6eaa585872c9376afe6fe6863ffead6191bf3"
+dependencies = [
+ "anyhow",
+ "arrayvec 0.7.2",
+ "async-trait",
+ "beef",
+ "futures-channel",
+ "futures-util",
+ "hyper 0.14.17",
+ "jsonrpsee-types 0.8.0",
+ "rustc-hash",
+ "serde",
+ "serde_json",
+ "soketto",
+ "thiserror",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
 name = "jsonrpsee-proc-macros"
-version = "0.4.1"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d802063f7a3c867456955f9d2f15eb3ee0edb5ec9ec2b5526324756759221c0f"
+checksum = "4299ebf790ea9de1cb72e73ff2ae44c723ef264299e5e2d5ef46a371eb3ac3d8"
 dependencies = [
- "log 0.4.14",
  "proc-macro-crate 1.1.3",
  "proc-macro2",
  "quote",
@@ -3129,6 +3216,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "jsonrpsee-types"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c1b3f601bbbe45cd63f5407b6f7d7950e08a7d4f82aa699ff41a4a5e9e54df58"
+dependencies = [
+ "anyhow",
+ "beef",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tracing",
+]
+
+[[package]]
 name = "jsonrpsee-utils"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3136,7 +3237,7 @@ checksum = "0109c4f972058f3b1925b73a17210aff7b63b65967264d0045d15ee88fe84f0c"
 dependencies = [
  "arrayvec 0.7.2",
  "beef",
- "jsonrpsee-types",
+ "jsonrpsee-types 0.4.1",
 ]
 
 [[package]]
@@ -3150,17 +3251,28 @@ dependencies = [
  "fnv",
  "futures 0.3.21",
  "http",
- "jsonrpsee-types",
+ "jsonrpsee-types 0.4.1",
  "log 0.4.14",
  "pin-project 1.0.10",
- "rustls-native-certs",
+ "rustls-native-certs 0.5.0",
  "serde",
  "serde_json",
  "soketto",
  "thiserror",
  "tokio",
- "tokio-rustls",
+ "tokio-rustls 0.22.0",
  "tokio-util",
+]
+
+[[package]]
+name = "jsonrpsee-ws-client"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aff425cee7c779e33920913bc695447416078ee6d119f443f3060feffa4e86b5"
+dependencies = [
+ "jsonrpsee-client-transport",
+ "jsonrpsee-core",
+ "jsonrpsee-types 0.8.0",
 ]
 
 [[package]]
@@ -3761,7 +3873,7 @@ dependencies = [
  "rw-stream-sink",
  "soketto",
  "url 2.2.2",
- "webpki-roots",
+ "webpki-roots 0.21.1",
 ]
 
 [[package]]
@@ -4378,7 +4490,7 @@ dependencies = [
 
 [[package]]
 name = "node-template-runtime"
-version = "3.0.0"
+version = "4.0.0-dev"
 dependencies = [
  "frame-benchmarking",
  "frame-executive",
@@ -4621,7 +4733,7 @@ dependencies = [
 [[package]]
 name = "orml-tokens"
 version = "0.4.1-dev"
-source = "git+https://github.com/mangata-finance//open-runtime-module-library?branch=mangata-dev#85cdfe18378625fdc64b522248119d8495c3b405"
+source = "git+https://github.com/mangata-finance//open-runtime-module-library?branch=mangata-dev#2ddfbf11da62ac89ea7f12926b96fcd367a548f1"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
@@ -4638,7 +4750,7 @@ dependencies = [
 [[package]]
 name = "orml-traits"
 version = "0.4.1-dev"
-source = "git+https://github.com/mangata-finance//open-runtime-module-library?branch=mangata-dev#85cdfe18378625fdc64b522248119d8495c3b405"
+source = "git+https://github.com/mangata-finance//open-runtime-module-library?branch=mangata-dev#2ddfbf11da62ac89ea7f12926b96fcd367a548f1"
 dependencies = [
  "frame-support",
  "impl-trait-for-tuples",
@@ -4656,7 +4768,7 @@ dependencies = [
 [[package]]
 name = "orml-utilities"
 version = "0.4.1-dev"
-source = "git+https://github.com/mangata-finance//open-runtime-module-library?branch=mangata-dev#85cdfe18378625fdc64b522248119d8495c3b405"
+source = "git+https://github.com/mangata-finance//open-runtime-module-library?branch=mangata-dev#2ddfbf11da62ac89ea7f12926b96fcd367a548f1"
 dependencies = [
  "frame-support",
  "parity-scale-codec",
@@ -4665,6 +4777,15 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-std",
+]
+
+[[package]]
+name = "os_str_bytes"
+version = "6.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8e22443d1643a904602595ba1cd8f7d896afe56d26712531c5ff73a15b2fbf64"
+dependencies = [
+ "memchr",
 ]
 
 [[package]]
@@ -4850,7 +4971,6 @@ dependencies = [
 name = "pallet-bags-list-remote-tests"
 version = "4.0.0-dev"
 dependencies = [
- "clap",
  "frame-election-provider-support",
  "frame-support",
  "frame-system",
@@ -4863,7 +4983,6 @@ dependencies = [
  "sp-std",
  "sp-storage",
  "sp-tracing",
- "structopt",
  "tokio",
 ]
 
@@ -5019,7 +5138,7 @@ dependencies = [
 
 [[package]]
 name = "pallet-contracts-primitives"
-version = "4.0.0-dev"
+version = "5.0.0"
 dependencies = [
  "bitflags",
  "parity-scale-codec",
@@ -5072,6 +5191,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-conviction-voting"
+version = "4.0.0-dev"
+dependencies = [
+ "assert_matches",
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "pallet-balances",
+ "pallet-scheduler",
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-democracy"
 version = "4.0.0-dev"
 dependencies = [
@@ -5112,7 +5250,6 @@ dependencies = [
  "sp-tracing",
  "static_assertions",
  "strum",
- "strum_macros 0.23.1",
 ]
 
 [[package]]
@@ -5497,6 +5634,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-referenda"
+version = "4.0.0-dev"
+dependencies = [
+ "assert_matches",
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "pallet-balances",
+ "pallet-preimage",
+ "pallet-scheduler",
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-scheduler"
 version = "4.0.0-dev"
 dependencies = [
@@ -5654,7 +5811,7 @@ dependencies = [
 
 [[package]]
 name = "pallet-template"
-version = "3.0.0"
+version = "4.0.0-dev"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
@@ -6427,7 +6584,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "62941722fb675d463659e49c4f3fe1fe792ff24fe5bbaa9c08cd3b98a1c354f5"
 dependencies = [
  "bytes 1.1.0",
- "heck",
+ "heck 0.3.3",
  "itertools",
  "lazy_static",
  "log 0.4.14",
@@ -6878,7 +7035,7 @@ version = "0.10.0-dev"
 dependencies = [
  "env_logger 0.9.0",
  "frame-support",
- "jsonrpsee",
+ "jsonrpsee 0.8.0",
  "log 0.4.14",
  "pallet-elections-phragmen",
  "parity-scale-codec",
@@ -7019,8 +7176,20 @@ dependencies = [
  "base64 0.13.0",
  "log 0.4.14",
  "ring",
- "sct",
- "webpki",
+ "sct 0.6.1",
+ "webpki 0.21.4",
+]
+
+[[package]]
+name = "rustls"
+version = "0.20.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d37e5e2290f3e040b594b1a9e04377c2c671f1a1cfd9bfdef82106ac1c113f84"
+dependencies = [
+ "log 0.4.14",
+ "ring",
+ "sct 0.7.0",
+ "webpki 0.22.0",
 ]
 
 [[package]]
@@ -7030,9 +7199,30 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5a07b7c1885bd8ed3831c289b7870b13ef46fe0e856d288c30d9cc17d75a2092"
 dependencies = [
  "openssl-probe",
- "rustls",
+ "rustls 0.19.1",
  "schannel",
  "security-framework",
+]
+
+[[package]]
+name = "rustls-native-certs"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5ca9ebdfa27d3fc180e42879037b5338ab1c040c06affd00d8338598e7800943"
+dependencies = [
+ "openssl-probe",
+ "rustls-pemfile",
+ "schannel",
+ "security-framework",
+]
+
+[[package]]
+name = "rustls-pemfile"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5eebeaeb360c87bfb72e84abdb3447159c0eaececf1bef2aecd65a8be949d1c9"
+dependencies = [
+ "base64 0.13.0",
 ]
 
 [[package]]
@@ -7106,7 +7296,6 @@ name = "sc-authority-discovery"
 version = "0.10.0-dev"
 dependencies = [
  "async-trait",
- "derive_more",
  "futures 0.3.21",
  "futures-timer",
  "ip_network",
@@ -7128,6 +7317,7 @@ dependencies = [
  "sp-tracing",
  "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
+ "thiserror",
 ]
 
 [[package]]
@@ -7250,6 +7440,7 @@ name = "sc-cli"
 version = "0.10.0-dev"
 dependencies = [
  "chrono",
+ "clap 3.0.7",
  "fdlimit",
  "futures 0.3.21",
  "hex",
@@ -7276,7 +7467,6 @@ dependencies = [
  "sp-panic-handler",
  "sp-runtime",
  "sp-version",
- "structopt",
  "tempfile",
  "thiserror",
  "tiny-bip39",
@@ -7370,7 +7560,6 @@ name = "sc-consensus-aura"
 version = "0.10.0-dev"
 dependencies = [
  "async-trait",
- "derive_more",
  "futures 0.3.21",
  "getrandom 0.2.5",
  "log 0.4.14",
@@ -7401,6 +7590,7 @@ dependencies = [
  "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
  "tempfile",
+ "thiserror",
 ]
 
 [[package]]
@@ -7408,7 +7598,6 @@ name = "sc-consensus-babe"
 version = "0.10.0-dev"
 dependencies = [
  "async-trait",
- "derive_more",
  "fork-tree",
  "futures 0.3.21",
  "log 0.4.14",
@@ -7451,13 +7640,13 @@ dependencies = [
  "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
  "tempfile",
+ "thiserror",
 ]
 
 [[package]]
 name = "sc-consensus-babe-rpc"
 version = "0.10.0-dev"
 dependencies = [
- "derive_more",
  "futures 0.3.21",
  "jsonrpc-core",
  "jsonrpc-core-client",
@@ -7480,6 +7669,7 @@ dependencies = [
  "sp-runtime",
  "substrate-test-runtime-client",
  "tempfile",
+ "thiserror",
 ]
 
 [[package]]
@@ -7500,7 +7690,6 @@ version = "0.10.0-dev"
 dependencies = [
  "assert_matches",
  "async-trait",
- "derive_more",
  "futures 0.3.21",
  "jsonrpc-core",
  "jsonrpc-core-client",
@@ -7530,6 +7719,7 @@ dependencies = [
  "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
  "substrate-test-runtime-transaction-pool",
+ "thiserror",
  "tokio",
 ]
 
@@ -7538,7 +7728,6 @@ name = "sc-consensus-pow"
 version = "0.10.0-dev"
 dependencies = [
  "async-trait",
- "derive_more",
  "futures 0.3.21",
  "futures-timer",
  "log 0.4.14",
@@ -7555,6 +7744,7 @@ dependencies = [
  "sp-inherents",
  "sp-runtime",
  "substrate-prometheus-endpoint",
+ "thiserror",
 ]
 
 [[package]]
@@ -7638,7 +7828,6 @@ dependencies = [
 name = "sc-executor-common"
 version = "0.10.0-dev"
 dependencies = [
- "derive_more",
  "environmental",
  "parity-scale-codec",
  "sc-allocator",
@@ -7694,7 +7883,6 @@ version = "0.10.0-dev"
 dependencies = [
  "assert_matches",
  "async-trait",
- "derive_more",
  "dyn-clone",
  "finality-grandpa",
  "fork-tree",
@@ -7729,6 +7917,7 @@ dependencies = [
  "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
  "tempfile",
+ "thiserror",
  "tokio",
 ]
 
@@ -7753,7 +7942,6 @@ name = "sc-keystore"
 version = "4.0.0-dev"
 dependencies = [
  "async-trait",
- "derive_more",
  "hex",
  "parking_lot 0.11.2",
  "serde_json",
@@ -7761,6 +7949,7 @@ dependencies = [
  "sp-core",
  "sp-keystore",
  "tempfile",
+ "thiserror",
 ]
 
 [[package]]
@@ -7774,7 +7963,6 @@ dependencies = [
  "bitflags",
  "bytes 1.1.0",
  "cid",
- "derive_more",
  "either",
  "fnv",
  "fork-tree",
@@ -8248,7 +8436,6 @@ dependencies = [
 name = "sc-transaction-pool-api"
 version = "4.0.0-dev"
 dependencies = [
- "derive_more",
  "futures 0.3.21",
  "log 0.4.14",
  "serde",
@@ -8340,6 +8527,16 @@ name = "sct"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b362b83898e0e69f38515b82ee15aa80636befe47c3b6d3d89a911e78fc228ce"
+dependencies = [
+ "ring",
+ "untrusted",
+]
+
+[[package]]
+name = "sct"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d53dcdb7c9f8158937a7981b48accfd39a43af418591a5d008c7b22b5e1b7ca4"
 dependencies = [
  "ring",
  "untrusted",
@@ -8751,7 +8948,7 @@ dependencies = [
 
 [[package]]
 name = "sp-application-crypto"
-version = "4.0.0"
+version = "5.0.0"
 dependencies = [
  "parity-scale-codec",
  "scale-info",
@@ -8944,7 +9141,7 @@ dependencies = [
 
 [[package]]
 name = "sp-core"
-version = "4.1.0-dev"
+version = "5.0.0"
 dependencies = [
  "base58",
  "bitflags",
@@ -9035,7 +9232,7 @@ dependencies = [
 
 [[package]]
 name = "sp-externalities"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "environmental",
  "parity-scale-codec",
@@ -9076,7 +9273,7 @@ dependencies = [
 
 [[package]]
 name = "sp-io"
-version = "4.0.0"
+version = "5.0.0"
 dependencies = [
  "futures 0.3.21",
  "hash-db",
@@ -9099,7 +9296,7 @@ dependencies = [
 
 [[package]]
 name = "sp-keyring"
-version = "4.1.0-dev"
+version = "5.0.0"
 dependencies = [
  "lazy_static",
  "sp-core",
@@ -9109,10 +9306,9 @@ dependencies = [
 
 [[package]]
 name = "sp-keystore"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "async-trait",
- "derive_more",
  "futures 0.3.21",
  "merlin",
  "parity-scale-codec",
@@ -9123,12 +9319,14 @@ dependencies = [
  "serde",
  "sp-core",
  "sp-externalities",
+ "thiserror",
 ]
 
 [[package]]
 name = "sp-maybe-compressed-blob"
 version = "4.1.0-dev"
 dependencies = [
+ "thiserror",
  "zstd",
 ]
 
@@ -9152,13 +9350,13 @@ dependencies = [
 name = "sp-npos-elections-fuzzer"
 version = "2.0.0-alpha.5"
 dependencies = [
+ "clap 3.0.7",
  "honggfuzz",
  "parity-scale-codec",
- "rand 0.7.3",
+ "rand 0.8.5",
  "scale-info",
  "sp-npos-elections",
  "sp-runtime",
- "structopt",
 ]
 
 [[package]]
@@ -9196,7 +9394,7 @@ dependencies = [
 
 [[package]]
 name = "sp-rpc"
-version = "4.0.0-dev"
+version = "5.0.0"
 dependencies = [
  "rustc-hash",
  "serde",
@@ -9206,7 +9404,7 @@ dependencies = [
 
 [[package]]
 name = "sp-runtime"
-version = "4.1.0-dev"
+version = "5.0.0"
 dependencies = [
  "either",
  "hash256-std-hasher",
@@ -9233,7 +9431,7 @@ dependencies = [
 
 [[package]]
 name = "sp-runtime-interface"
-version = "4.1.0-dev"
+version = "5.0.0"
 dependencies = [
  "impl-trait-for-tuples",
  "parity-scale-codec",
@@ -9350,7 +9548,7 @@ dependencies = [
 
 [[package]]
 name = "sp-state-machine"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "hash-db",
  "hex-literal",
@@ -9379,7 +9577,7 @@ version = "4.0.0"
 
 [[package]]
 name = "sp-storage"
-version = "4.0.0"
+version = "5.0.0"
 dependencies = [
  "impl-serde",
  "parity-scale-codec",
@@ -9465,7 +9663,7 @@ dependencies = [
 
 [[package]]
 name = "sp-trie"
-version = "4.0.0"
+version = "5.0.0"
 dependencies = [
  "criterion",
  "hash-db",
@@ -9525,7 +9723,7 @@ dependencies = [
 
 [[package]]
 name = "sp-wasm-interface"
-version = "4.1.0-dev"
+version = "5.0.0"
 dependencies = [
  "impl-trait-for-tuples",
  "log 0.4.14",
@@ -9582,53 +9780,17 @@ dependencies = [
 
 [[package]]
 name = "strsim"
-version = "0.8.0"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ea5119cdb4c55b55d432abb513a0429384878c15dde60cc77b1c99de1a95a6a"
-
-[[package]]
-name = "structopt"
-version = "0.3.26"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0c6b5c64445ba8094a6ab0c3cd2ad323e07171012d9c98b0b15651daf1787a10"
-dependencies = [
- "clap",
- "lazy_static",
- "structopt-derive",
-]
-
-[[package]]
-name = "structopt-derive"
-version = "0.4.18"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dcb5ae327f9cc13b68763b5749770cb9e048a99bd9dfdfa58d0cf05d5f64afe0"
-dependencies = [
- "heck",
- "proc-macro-error",
- "proc-macro2",
- "quote",
- "syn",
-]
+checksum = "73473c0e59e6d5812c5dfe2a064a6444949f089e20eec9a2e5506596494e4623"
 
 [[package]]
 name = "strum"
-version = "0.22.0"
+version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f7ac893c7d471c8a21f31cfe213ec4f6d9afeed25537c772e08ef3f005f8729e"
+checksum = "cae14b91c7d11c9a851d3fbc80a963198998c2a64eec840477fa92d8ce9b70bb"
 dependencies = [
- "strum_macros 0.22.0",
-]
-
-[[package]]
-name = "strum_macros"
-version = "0.22.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "339f799d8b549e3744c7ac7feb216383e4005d94bdb22561b3ab8f3b808ae9fb"
-dependencies = [
- "heck",
- "proc-macro2",
- "quote",
- "syn",
+ "strum_macros",
 ]
 
 [[package]]
@@ -9637,7 +9799,7 @@ version = "0.23.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5bb0dc7ee9c15cea6199cde9a127fa16a4c5819af85395457ad72d68edc85a38"
 dependencies = [
- "heck",
+ "heck 0.3.3",
  "proc-macro2",
  "quote",
  "rustversion",
@@ -9668,12 +9830,12 @@ dependencies = [
 name = "substrate-frame-cli"
 version = "4.0.0-dev"
 dependencies = [
+ "clap 3.0.7",
  "frame-support",
  "frame-system",
  "sc-cli",
  "sp-core",
  "sp-runtime",
- "structopt",
 ]
 
 [[package]]
@@ -9721,11 +9883,11 @@ name = "substrate-prometheus-endpoint"
 version = "0.10.0-dev"
 dependencies = [
  "async-std",
- "derive_more",
  "futures-util",
  "hyper 0.14.17",
  "log 0.4.14",
  "prometheus",
+ "thiserror",
  "tokio",
 ]
 
@@ -9825,7 +9987,6 @@ dependencies = [
 name = "substrate-test-runtime-transaction-pool"
 version = "2.0.0"
 dependencies = [
- "derive_more",
  "futures 0.3.21",
  "parity-scale-codec",
  "parking_lot 0.11.2",
@@ -9834,6 +9995,7 @@ dependencies = [
  "sp-blockchain",
  "sp-runtime",
  "substrate-test-runtime-client",
+ "thiserror",
 ]
 
 [[package]]
@@ -9874,6 +10036,7 @@ dependencies = [
  "build-helper",
  "cargo_metadata",
  "sp-maybe-compressed-blob",
+ "strum",
  "tempfile",
  "toml",
  "walkdir",
@@ -9958,6 +10121,12 @@ checksum = "d326610f408c7a4eb6f51c37c330e496b08506c9457c9d34287ecc38809fb060"
 dependencies = [
  "unicode-width",
 ]
+
+[[package]]
+name = "textwrap"
+version = "0.14.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0066c8d12af8b5acd21e00547c3797fde4e8677254a7ee429176ccebbe93dd80"
 
 [[package]]
 name = "thiserror"
@@ -10159,9 +10328,20 @@ version = "0.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bc6844de72e57df1980054b38be3a9f4702aba4858be64dd700181a8a6d0e1b6"
 dependencies = [
- "rustls",
+ "rustls 0.19.1",
  "tokio",
- "webpki",
+ "webpki 0.21.4",
+]
+
+[[package]]
+name = "tokio-rustls"
+version = "0.23.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a27d5f2b839802bd8267fa19b0530f5a08b9c08cd417976be2a65d130fe1c11b"
+dependencies = [
+ "rustls 0.20.2",
+ "tokio",
+ "webpki 0.22.0",
 ]
 
 [[package]]
@@ -10447,7 +10627,8 @@ checksum = "59547bce71d9c38b83d9c0e92b6066c4253371f15005def0c30d9657f50c7642"
 name = "try-runtime-cli"
 version = "0.10.0-dev"
 dependencies = [
- "jsonrpsee",
+ "clap 3.0.7",
+ "jsonrpsee 0.4.1",
  "log 0.4.14",
  "parity-scale-codec",
  "remote-externalities",
@@ -10463,7 +10644,6 @@ dependencies = [
  "sp-runtime",
  "sp-state-machine",
  "sp-version",
- "structopt",
  "zstd",
 ]
 
@@ -10671,12 +10851,6 @@ name = "vcpkg"
 version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
-
-[[package]]
-name = "vec_map"
-version = "0.8.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f1bddf1187be692e79c5ffeab891132dfb0f236ed36a43c7ed39f1165ee20191"
 
 [[package]]
 name = "ver-api"
@@ -11276,12 +11450,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "webpki"
+version = "0.22.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f095d78192e208183081cc07bc5515ef55216397af48b873e5edcd72637fa1bd"
+dependencies = [
+ "ring",
+ "untrusted",
+]
+
+[[package]]
 name = "webpki-roots"
 version = "0.21.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aabe153544e473b775453675851ecc86863d2a81d786d741f6b76778f2a48940"
 dependencies = [
- "webpki",
+ "webpki 0.21.4",
+]
+
+[[package]]
+name = "webpki-roots"
+version = "0.22.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "552ceb903e957524388c4d3475725ff2c8b7960922063af6ce53c9a43da07449"
+dependencies = [
+ "webpki 0.22.0",
 ]
 
 [[package]]
@@ -11562,9 +11755,8 @@ dependencies = [
 ]
 
 [[patch.unused]]
-name = "pallet-crowdloan-rewards"
-version = "0.6.0"
-source = "git+https://github.com/mangata-finance//crowdloan-rewards?branch=mangata-dev#4bc8ce1cdb006d32d73b5f540f414fea54f66940"
+name = "sc-finality-grandpa-rpc"
+version = "0.10.0-dev"
 
 [[patch.unused]]
 name = "cumulus-client-cli"
@@ -11670,6 +11862,61 @@ source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev#851
 name = "parachain-info"
 version = "0.1.0"
 source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev#8511ab82995eb6325e9bdd8c5da7ab0c85c23028"
+
+[[patch.unused]]
+name = "orml-unknown-tokens"
+version = "0.4.1-dev"
+source = "git+https://github.com/mangata-finance//open-runtime-module-library?branch=mangata-dev#2ddfbf11da62ac89ea7f12926b96fcd367a548f1"
+
+[[patch.unused]]
+name = "orml-xcm"
+version = "0.4.1-dev"
+source = "git+https://github.com/mangata-finance//open-runtime-module-library?branch=mangata-dev#2ddfbf11da62ac89ea7f12926b96fcd367a548f1"
+
+[[patch.unused]]
+name = "orml-xcm-support"
+version = "0.4.1-dev"
+source = "git+https://github.com/mangata-finance//open-runtime-module-library?branch=mangata-dev#2ddfbf11da62ac89ea7f12926b96fcd367a548f1"
+
+[[patch.unused]]
+name = "orml-xtokens"
+version = "0.4.1-dev"
+source = "git+https://github.com/mangata-finance//open-runtime-module-library?branch=mangata-dev#2ddfbf11da62ac89ea7f12926b96fcd367a548f1"
+
+[[patch.unused]]
+name = "artemis-asset"
+version = "0.1.1"
+source = "git+https://github.com/mangata-finance//snowbridge?branch=mangata-dev#75dbf4481fa21e183f851bfabb60cda388dc9e76"
+
+[[patch.unused]]
+name = "artemis-core"
+version = "0.1.1"
+source = "git+https://github.com/mangata-finance//snowbridge?branch=mangata-dev#75dbf4481fa21e183f851bfabb60cda388dc9e76"
+
+[[patch.unused]]
+name = "artemis-erc20-app"
+version = "0.1.1"
+source = "git+https://github.com/mangata-finance//snowbridge?branch=mangata-dev#75dbf4481fa21e183f851bfabb60cda388dc9e76"
+
+[[patch.unused]]
+name = "artemis-eth-app"
+version = "0.1.1"
+source = "git+https://github.com/mangata-finance//snowbridge?branch=mangata-dev#75dbf4481fa21e183f851bfabb60cda388dc9e76"
+
+[[patch.unused]]
+name = "artemis-ethereum"
+version = "0.1.0"
+source = "git+https://github.com/mangata-finance//snowbridge?branch=mangata-dev#75dbf4481fa21e183f851bfabb60cda388dc9e76"
+
+[[patch.unused]]
+name = "pallet-bridge"
+version = "0.1.1"
+source = "git+https://github.com/mangata-finance//snowbridge?branch=mangata-dev#75dbf4481fa21e183f851bfabb60cda388dc9e76"
+
+[[patch.unused]]
+name = "pallet-verifier"
+version = "0.1.1"
+source = "git+https://github.com/mangata-finance//snowbridge?branch=mangata-dev#75dbf4481fa21e183f851bfabb60cda388dc9e76"
 
 [[patch.unused]]
 name = "metered-channel"
@@ -11927,59 +12174,264 @@ version = "0.9.16"
 source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
 
 [[patch.unused]]
-name = "orml-unknown-tokens"
-version = "0.4.1-dev"
-source = "git+https://github.com/mangata-finance//open-runtime-module-library?branch=mangata-dev#85cdfe18378625fdc64b522248119d8495c3b405"
+name = "metered-channel"
+version = "0.9.16"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
 
 [[patch.unused]]
-name = "orml-xcm"
-version = "0.4.1-dev"
-source = "git+https://github.com/mangata-finance//open-runtime-module-library?branch=mangata-dev#85cdfe18378625fdc64b522248119d8495c3b405"
+name = "pallet-xcm"
+version = "0.9.16"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
 
 [[patch.unused]]
-name = "orml-xcm-support"
-version = "0.4.1-dev"
-source = "git+https://github.com/mangata-finance//open-runtime-module-library?branch=mangata-dev#85cdfe18378625fdc64b522248119d8495c3b405"
+name = "polkadot-approval-distribution"
+version = "0.9.16"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
 
 [[patch.unused]]
-name = "orml-xtokens"
-version = "0.4.1-dev"
-source = "git+https://github.com/mangata-finance//open-runtime-module-library?branch=mangata-dev#85cdfe18378625fdc64b522248119d8495c3b405"
+name = "polkadot-availability-bitfield-distribution"
+version = "0.9.16"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
 
 [[patch.unused]]
-name = "artemis-asset"
-version = "0.1.1"
-source = "git+https://github.com/mangata-finance//snowbridge?branch=mangata-dev#75dbf4481fa21e183f851bfabb60cda388dc9e76"
+name = "polkadot-availability-distribution"
+version = "0.9.16"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
 
 [[patch.unused]]
-name = "artemis-core"
-version = "0.1.1"
-source = "git+https://github.com/mangata-finance//snowbridge?branch=mangata-dev#75dbf4481fa21e183f851bfabb60cda388dc9e76"
+name = "polkadot-availability-recovery"
+version = "0.9.16"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
 
 [[patch.unused]]
-name = "artemis-erc20-app"
-version = "0.1.1"
-source = "git+https://github.com/mangata-finance//snowbridge?branch=mangata-dev#75dbf4481fa21e183f851bfabb60cda388dc9e76"
+name = "polkadot-cli"
+version = "0.9.16"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
 
 [[patch.unused]]
-name = "artemis-eth-app"
-version = "0.1.1"
-source = "git+https://github.com/mangata-finance//snowbridge?branch=mangata-dev#75dbf4481fa21e183f851bfabb60cda388dc9e76"
+name = "polkadot-client"
+version = "0.9.16"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
 
 [[patch.unused]]
-name = "artemis-ethereum"
-version = "0.1.0"
-source = "git+https://github.com/mangata-finance//snowbridge?branch=mangata-dev#75dbf4481fa21e183f851bfabb60cda388dc9e76"
+name = "polkadot-collator-protocol"
+version = "0.9.16"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
 
 [[patch.unused]]
-name = "pallet-bridge"
-version = "0.1.1"
-source = "git+https://github.com/mangata-finance//snowbridge?branch=mangata-dev#75dbf4481fa21e183f851bfabb60cda388dc9e76"
+name = "polkadot-core-primitives"
+version = "0.9.16"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
 
 [[patch.unused]]
-name = "pallet-verifier"
-version = "0.1.1"
-source = "git+https://github.com/mangata-finance//snowbridge?branch=mangata-dev#75dbf4481fa21e183f851bfabb60cda388dc9e76"
+name = "polkadot-dispute-distribution"
+version = "0.9.16"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
+
+[[patch.unused]]
+name = "polkadot-erasure-coding"
+version = "0.9.16"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
+
+[[patch.unused]]
+name = "polkadot-gossip-support"
+version = "0.9.16"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
+
+[[patch.unused]]
+name = "polkadot-network-bridge"
+version = "0.9.16"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
+
+[[patch.unused]]
+name = "polkadot-node-collation-generation"
+version = "0.9.16"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
+
+[[patch.unused]]
+name = "polkadot-node-core-approval-voting"
+version = "0.9.16"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
+
+[[patch.unused]]
+name = "polkadot-node-core-av-store"
+version = "0.9.16"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
+
+[[patch.unused]]
+name = "polkadot-node-core-backing"
+version = "0.9.16"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
+
+[[patch.unused]]
+name = "polkadot-node-core-bitfield-signing"
+version = "0.9.16"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
+
+[[patch.unused]]
+name = "polkadot-node-core-candidate-validation"
+version = "0.9.16"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
+
+[[patch.unused]]
+name = "polkadot-node-core-chain-api"
+version = "0.9.16"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
+
+[[patch.unused]]
+name = "polkadot-node-core-chain-selection"
+version = "0.9.16"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
+
+[[patch.unused]]
+name = "polkadot-node-core-dispute-coordinator"
+version = "0.9.16"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
+
+[[patch.unused]]
+name = "polkadot-node-core-parachains-inherent"
+version = "0.9.16"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
+
+[[patch.unused]]
+name = "polkadot-node-core-provisioner"
+version = "0.9.16"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
+
+[[patch.unused]]
+name = "polkadot-node-core-pvf"
+version = "0.9.16"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
+
+[[patch.unused]]
+name = "polkadot-node-core-runtime-api"
+version = "0.9.16"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
+
+[[patch.unused]]
+name = "polkadot-node-jaeger"
+version = "0.9.16"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
+
+[[patch.unused]]
+name = "polkadot-node-metrics"
+version = "0.9.16"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
+
+[[patch.unused]]
+name = "polkadot-node-network-protocol"
+version = "0.9.16"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
+
+[[patch.unused]]
+name = "polkadot-node-primitives"
+version = "0.9.16"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
+
+[[patch.unused]]
+name = "polkadot-node-subsystem"
+version = "0.9.16"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
+
+[[patch.unused]]
+name = "polkadot-node-subsystem-types"
+version = "0.9.16"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
+
+[[patch.unused]]
+name = "polkadot-node-subsystem-util"
+version = "0.9.16"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
+
+[[patch.unused]]
+name = "polkadot-overseer"
+version = "0.9.16"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
+
+[[patch.unused]]
+name = "polkadot-overseer-gen"
+version = "0.9.16"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
+
+[[patch.unused]]
+name = "polkadot-overseer-gen-proc-macro"
+version = "0.9.16"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
+
+[[patch.unused]]
+name = "polkadot-parachain"
+version = "0.9.16"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
+
+[[patch.unused]]
+name = "polkadot-primitives"
+version = "0.9.16"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
+
+[[patch.unused]]
+name = "polkadot-rpc"
+version = "0.9.16"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
+
+[[patch.unused]]
+name = "polkadot-runtime"
+version = "0.9.16"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
+
+[[patch.unused]]
+name = "polkadot-runtime-common"
+version = "0.9.16"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
+
+[[patch.unused]]
+name = "polkadot-runtime-parachains"
+version = "0.9.16"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
+
+[[patch.unused]]
+name = "polkadot-service"
+version = "0.9.16"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
+
+[[patch.unused]]
+name = "polkadot-statement-distribution"
+version = "0.9.16"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
+
+[[patch.unused]]
+name = "polkadot-statement-table"
+version = "0.9.16"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
+
+[[patch.unused]]
+name = "polkadot-test-runtime"
+version = "0.9.16"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
+
+[[patch.unused]]
+name = "polkadot-test-service"
+version = "0.9.16"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
+
+[[patch.unused]]
+name = "slot-range-helper"
+version = "0.9.16"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
+
+[[patch.unused]]
+name = "xcm-builder"
+version = "0.9.16"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
+
+[[patch.unused]]
+name = "xcm-executor"
+version = "0.9.16"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
+
+[[patch.unused]]
+name = "pallet-crowdloan-rewards"
+version = "0.6.0"
+source = "git+https://github.com/mangata-finance//crowdloan-rewards?branch=mangata-dev#4bc8ce1cdb006d32d73b5f540f414fea54f66940"
 
 [[patch.unused]]
 name = "sc-finality-grandpa-rpc"
@@ -12098,262 +12550,3 @@ source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev#851
 [[patch.unused]]
 name = "sc-finality-grandpa-rpc"
 version = "0.10.0-dev"
-
-[[patch.unused]]
-name = "sc-finality-grandpa-rpc"
-version = "0.10.0-dev"
-
-[[patch.unused]]
-name = "metered-channel"
-version = "0.9.16"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
-
-[[patch.unused]]
-name = "pallet-xcm"
-version = "0.9.16"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
-
-[[patch.unused]]
-name = "polkadot-approval-distribution"
-version = "0.9.16"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
-
-[[patch.unused]]
-name = "polkadot-availability-bitfield-distribution"
-version = "0.9.16"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
-
-[[patch.unused]]
-name = "polkadot-availability-distribution"
-version = "0.9.16"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
-
-[[patch.unused]]
-name = "polkadot-availability-recovery"
-version = "0.9.16"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
-
-[[patch.unused]]
-name = "polkadot-cli"
-version = "0.9.16"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
-
-[[patch.unused]]
-name = "polkadot-client"
-version = "0.9.16"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
-
-[[patch.unused]]
-name = "polkadot-collator-protocol"
-version = "0.9.16"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
-
-[[patch.unused]]
-name = "polkadot-core-primitives"
-version = "0.9.16"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
-
-[[patch.unused]]
-name = "polkadot-dispute-distribution"
-version = "0.9.16"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
-
-[[patch.unused]]
-name = "polkadot-erasure-coding"
-version = "0.9.16"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
-
-[[patch.unused]]
-name = "polkadot-gossip-support"
-version = "0.9.16"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
-
-[[patch.unused]]
-name = "polkadot-network-bridge"
-version = "0.9.16"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
-
-[[patch.unused]]
-name = "polkadot-node-collation-generation"
-version = "0.9.16"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
-
-[[patch.unused]]
-name = "polkadot-node-core-approval-voting"
-version = "0.9.16"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
-
-[[patch.unused]]
-name = "polkadot-node-core-av-store"
-version = "0.9.16"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
-
-[[patch.unused]]
-name = "polkadot-node-core-backing"
-version = "0.9.16"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
-
-[[patch.unused]]
-name = "polkadot-node-core-bitfield-signing"
-version = "0.9.16"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
-
-[[patch.unused]]
-name = "polkadot-node-core-candidate-validation"
-version = "0.9.16"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
-
-[[patch.unused]]
-name = "polkadot-node-core-chain-api"
-version = "0.9.16"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
-
-[[patch.unused]]
-name = "polkadot-node-core-chain-selection"
-version = "0.9.16"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
-
-[[patch.unused]]
-name = "polkadot-node-core-dispute-coordinator"
-version = "0.9.16"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
-
-[[patch.unused]]
-name = "polkadot-node-core-parachains-inherent"
-version = "0.9.16"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
-
-[[patch.unused]]
-name = "polkadot-node-core-provisioner"
-version = "0.9.16"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
-
-[[patch.unused]]
-name = "polkadot-node-core-pvf"
-version = "0.9.16"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
-
-[[patch.unused]]
-name = "polkadot-node-core-runtime-api"
-version = "0.9.16"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
-
-[[patch.unused]]
-name = "polkadot-node-jaeger"
-version = "0.9.16"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
-
-[[patch.unused]]
-name = "polkadot-node-metrics"
-version = "0.9.16"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
-
-[[patch.unused]]
-name = "polkadot-node-network-protocol"
-version = "0.9.16"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
-
-[[patch.unused]]
-name = "polkadot-node-primitives"
-version = "0.9.16"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
-
-[[patch.unused]]
-name = "polkadot-node-subsystem"
-version = "0.9.16"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
-
-[[patch.unused]]
-name = "polkadot-node-subsystem-types"
-version = "0.9.16"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
-
-[[patch.unused]]
-name = "polkadot-node-subsystem-util"
-version = "0.9.16"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
-
-[[patch.unused]]
-name = "polkadot-overseer"
-version = "0.9.16"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
-
-[[patch.unused]]
-name = "polkadot-overseer-gen"
-version = "0.9.16"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
-
-[[patch.unused]]
-name = "polkadot-overseer-gen-proc-macro"
-version = "0.9.16"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
-
-[[patch.unused]]
-name = "polkadot-parachain"
-version = "0.9.16"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
-
-[[patch.unused]]
-name = "polkadot-primitives"
-version = "0.9.16"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
-
-[[patch.unused]]
-name = "polkadot-rpc"
-version = "0.9.16"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
-
-[[patch.unused]]
-name = "polkadot-runtime"
-version = "0.9.16"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
-
-[[patch.unused]]
-name = "polkadot-runtime-common"
-version = "0.9.16"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
-
-[[patch.unused]]
-name = "polkadot-runtime-parachains"
-version = "0.9.16"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
-
-[[patch.unused]]
-name = "polkadot-service"
-version = "0.9.16"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
-
-[[patch.unused]]
-name = "polkadot-statement-distribution"
-version = "0.9.16"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
-
-[[patch.unused]]
-name = "polkadot-statement-table"
-version = "0.9.16"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
-
-[[patch.unused]]
-name = "polkadot-test-runtime"
-version = "0.9.16"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
-
-[[patch.unused]]
-name = "polkadot-test-service"
-version = "0.9.16"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
-
-[[patch.unused]]
-name = "slot-range-helper"
-version = "0.9.16"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
-
-[[patch.unused]]
-name = "xcm-builder"
-version = "0.9.16"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"
-
-[[patch.unused]]
-name = "xcm-executor"
-version = "0.9.16"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev#ea984ce62a9b9fee49a14840f819467191ffed95"

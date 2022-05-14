@@ -344,7 +344,7 @@ pub(crate) fn run_and_compare<Output: PerThing128, FS>(
 	FS: Fn(&AccountId) -> VoteWeight,
 {
 	// run fixed point code.
-	let ElectionResult { winners, assignments } = seq_phragmen::<_, Output>(
+	let ElectionResult::<_, Output> { winners, assignments } = seq_phragmen(
 		to_elect,
 		candidates.clone(),
 		voters

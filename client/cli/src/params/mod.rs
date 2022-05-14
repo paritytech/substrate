@@ -26,13 +26,13 @@ mod shared_params;
 mod transaction_pool_params;
 
 use crate::arg_enums::{CryptoScheme, OutputType};
+use clap::Args;
 use sp_core::crypto::Ss58AddressFormat;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, NumberFor},
 };
 use std::{convert::TryFrom, fmt::Debug, str::FromStr};
-use structopt::StructOpt;
 
 pub use crate::params::{
 	database_params::*, import_params::*, keystore_params::*, network_params::*,
@@ -115,44 +115,32 @@ impl BlockNumberOrHash {
 }
 
 /// Optional flag for specifying crypto algorithm
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, Clone, Args)]
 pub struct CryptoSchemeFlag {
 	/// cryptography scheme
-	#[structopt(
-		long,
-		value_name = "SCHEME",
-		possible_values = &CryptoScheme::variants(),
-		case_insensitive = true,
-		default_value = "Sr25519"
-	)]
+	#[clap(long, value_name = "SCHEME", arg_enum, ignore_case = true, default_value = "Sr25519")]
 	pub scheme: CryptoScheme,
 }
 
 /// Optional flag for specifying output type
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, Clone, Args)]
 pub struct OutputTypeFlag {
 	/// output format
-	#[structopt(
-		long,
-		value_name = "FORMAT",
-		possible_values = &OutputType::variants(),
-		case_insensitive = true,
-		default_value = "Text"
-	)]
+	#[clap(long, value_name = "FORMAT", arg_enum, ignore_case = true, default_value = "Text")]
 	pub output_type: OutputType,
 }
 
 /// Optional flag for specifying network scheme
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, Clone, Args)]
 pub struct NetworkSchemeFlag {
 	/// network address format
-	#[structopt(
+	#[clap(
+		short = 'n',
 		long,
 		value_name = "NETWORK",
-		short = "n",
 		possible_values = &Ss58AddressFormat::all_names()[..],
+		ignore_case = true,
 		parse(try_from_str = Ss58AddressFormat::try_from),
-		case_insensitive = true,
 	)]
 	pub network: Option<Ss58AddressFormat>,
 }

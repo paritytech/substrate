@@ -118,7 +118,7 @@ where
 				pre_digest.slot(),
 			)
 			.map_err(|e| format!("failed to fetch epoch_descriptor: {}", e))?
-			.ok_or_else(|| format!("{:?}", sp_consensus::Error::InvalidAuthoritiesSet))?;
+			.ok_or_else(|| format!("{}", sp_consensus::Error::InvalidAuthoritiesSet))?;
 		// drop the lock
 		drop(epoch_changes);
 

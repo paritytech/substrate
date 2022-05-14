@@ -164,6 +164,10 @@ struct ClientSpec<E> {
 	boot_nodes: Vec<MultiaddrWithPeerId>,
 	telemetry_endpoints: Option<TelemetryEndpoints>,
 	protocol_id: Option<String>,
+	/// Arbitrary string. Nodes will only synchronize with other nodes that have the same value
+	/// in their `fork_id`. This can be used in order to segregate nodes in cases when multiple
+	/// chains have the same genesis hash.
+	#[serde(default = "Default::default", skip_serializing_if = "Option::is_none")]
 	fork_id: Option<String>,
 	properties: Option<Properties>,
 	#[serde(flatten)]

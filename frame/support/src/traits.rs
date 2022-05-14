@@ -23,7 +23,7 @@ pub mod tokens;
 pub use tokens::{
 	currency::{
 		Currency, LockIdentifier, LockableCurrency, NamedReservableCurrency, ReservableCurrency,
-		VestingSchedule,
+		TotalIssuanceOf, VestingSchedule,
 	},
 	fungible, fungibles,
 	imbalance::{Imbalance, OnUnbalanced, SignedImbalance},
@@ -50,12 +50,13 @@ pub use filter::{ClearFilterGuard, FilterStack, FilterStackGuard, InstanceFilter
 
 mod misc;
 pub use misc::{
+	defensive_prelude::{self, *},
 	Backing, ConstBool, ConstI128, ConstI16, ConstI32, ConstI64, ConstI8, ConstU128, ConstU16,
-	ConstU32, ConstU64, ConstU8, EnsureInherentsAreFirst, EqualPrivilegeOnly, EstimateCallFee,
-	ExecuteBlock, ExtrinsicCall, Get, GetBacking, GetDefault, HandleLifetime, IsSubType, IsType,
-	Len, OffchainWorker, OnKilledAccount, OnNewAccount, PreimageProvider, PreimageRecipient,
-	PrivilegeCmp, SameOrOther, Time, TryCollect, TryDrop, UnixTime, WrapperKeepOpaque,
-	WrapperOpaque,
+	ConstU32, ConstU64, ConstU8, DefensiveSaturating, EnsureInherentsAreFirst, EqualPrivilegeOnly,
+	EstimateCallFee, ExecuteBlock, ExtrinsicCall, Get, GetBacking, GetDefault, HandleLifetime,
+	IsSubType, IsType, Len, OffchainWorker, OnKilledAccount, OnNewAccount, PreimageProvider,
+	PreimageRecipient, PrivilegeCmp, SameOrOther, Time, TryCollect, TryDrop, UnixTime,
+	WrapperKeepOpaque, WrapperOpaque,
 };
 
 mod stored_map;
@@ -89,4 +90,6 @@ mod dispatch;
 pub use dispatch::{EnsureOneOf, EnsureOrigin, OriginTrait, UnfilteredDispatchable};
 
 mod voting;
-pub use voting::{CurrencyToVote, SaturatingCurrencyToVote, U128CurrencyToVote};
+pub use voting::{
+	CurrencyToVote, PollStatus, Polling, SaturatingCurrencyToVote, U128CurrencyToVote, VoteTally,
+};

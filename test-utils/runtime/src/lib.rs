@@ -426,7 +426,7 @@ impl GetRuntimeBlockType for Runtime {
 	type RuntimeBlock = Block;
 }
 
-#[derive(Clone, RuntimeDebug)]
+#[derive(Clone, RuntimeDebug, Encode, Decode, PartialEq, Eq, TypeInfo)]
 pub struct Origin;
 
 impl From<frame_system::Origin<Runtime>> for Origin {
@@ -701,7 +701,7 @@ cfg_if! {
 					None
 				}
 
-				fn is_new_session(_: <<Block as BlockT>::Header as HeaderT>::Number) -> bool{
+				fn is_storage_migration_scheduled() -> bool{
 					false
 				}
 

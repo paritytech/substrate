@@ -40,18 +40,13 @@ use substrate_test_runtime_client::{
 };
 
 /// Error type used by [`TestApi`].
-#[derive(Debug, derive_more::From, derive_more::Display)]
-pub struct Error(sc_transaction_pool_api::error::Error);
+#[derive(Debug, thiserror::Error)]
+#[error(transparent)]
+pub struct Error(#[from] sc_transaction_pool_api::error::Error);
 
 impl sc_transaction_pool_api::error::IntoPoolError for Error {
 	fn into_pool_error(self) -> Result<sc_transaction_pool_api::error::Error, Self> {
 		Ok(self.0)
-	}
-}
-
-impl std::error::Error for Error {
-	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-		Some(&self.0)
 	}
 }
 

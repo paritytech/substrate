@@ -27,7 +27,7 @@ use sp_core::{sr25519, H256};
 use sp_runtime::{
 	generic,
 	traits::{BlakeTwo256, Verify},
-	DispatchError,
+	DispatchError, ModuleError,
 };
 use sp_std::cell::RefCell;
 
@@ -363,47 +363,47 @@ mod origin_test {
 fn check_modules_error_type() {
 	assert_eq!(
 		Module1_1::fail(system::Origin::<Runtime>::Root.into()),
-		Err(DispatchError::Module { index: 31, error: 0, message: Some("Something") }),
+		Err(DispatchError::Module(ModuleError { index: 31, error: 0, message: Some("Something") })),
 	);
 	assert_eq!(
 		Module2::fail(system::Origin::<Runtime>::Root.into()),
-		Err(DispatchError::Module { index: 32, error: 0, message: Some("Something") }),
+		Err(DispatchError::Module(ModuleError { index: 32, error: 0, message: Some("Something") })),
 	);
 	assert_eq!(
 		Module1_2::fail(system::Origin::<Runtime>::Root.into()),
-		Err(DispatchError::Module { index: 33, error: 0, message: Some("Something") }),
+		Err(DispatchError::Module(ModuleError { index: 33, error: 0, message: Some("Something") })),
 	);
 	assert_eq!(
 		NestedModule3::fail(system::Origin::<Runtime>::Root.into()),
-		Err(DispatchError::Module { index: 34, error: 0, message: Some("Something") }),
+		Err(DispatchError::Module(ModuleError { index: 34, error: 0, message: Some("Something") })),
 	);
 	assert_eq!(
 		Module1_3::fail(system::Origin::<Runtime>::Root.into()),
-		Err(DispatchError::Module { index: 6, error: 0, message: Some("Something") }),
+		Err(DispatchError::Module(ModuleError { index: 6, error: 0, message: Some("Something") })),
 	);
 	assert_eq!(
 		Module1_4::fail(system::Origin::<Runtime>::Root.into()),
-		Err(DispatchError::Module { index: 3, error: 0, message: Some("Something") }),
+		Err(DispatchError::Module(ModuleError { index: 3, error: 0, message: Some("Something") })),
 	);
 	assert_eq!(
 		Module1_5::fail(system::Origin::<Runtime>::Root.into()),
-		Err(DispatchError::Module { index: 4, error: 0, message: Some("Something") }),
+		Err(DispatchError::Module(ModuleError { index: 4, error: 0, message: Some("Something") })),
 	);
 	assert_eq!(
 		Module1_6::fail(system::Origin::<Runtime>::Root.into()),
-		Err(DispatchError::Module { index: 1, error: 0, message: Some("Something") }),
+		Err(DispatchError::Module(ModuleError { index: 1, error: 0, message: Some("Something") })),
 	);
 	assert_eq!(
 		Module1_7::fail(system::Origin::<Runtime>::Root.into()),
-		Err(DispatchError::Module { index: 2, error: 0, message: Some("Something") }),
+		Err(DispatchError::Module(ModuleError { index: 2, error: 0, message: Some("Something") })),
 	);
 	assert_eq!(
 		Module1_8::fail(system::Origin::<Runtime>::Root.into()),
-		Err(DispatchError::Module { index: 12, error: 0, message: Some("Something") }),
+		Err(DispatchError::Module(ModuleError { index: 12, error: 0, message: Some("Something") })),
 	);
 	assert_eq!(
 		Module1_9::fail(system::Origin::<Runtime>::Root.into()),
-		Err(DispatchError::Module { index: 13, error: 0, message: Some("Something") }),
+		Err(DispatchError::Module(ModuleError { index: 13, error: 0, message: Some("Something") })),
 	);
 }
 

@@ -70,14 +70,26 @@ pub struct ImportSummary<Block: BlockT> {
 	pub tree_route: Option<sp_blockchain::TreeRoute<Block>>,
 }
 
-/// Import operation wrapper
+/// Finalization operation summary.
+///
+/// Contains information about the block that just got finalized,
+/// including tree heads that became stale at the moment of finalization.
+pub struct FinalizeSummary<Block: BlockT> {
+	/// Blocks that were finalized.
+	/// The last entry is the one that has been explicitly finalized.
+	pub finalized: Vec<Block::Hash>,
+	/// Heads that became stale during this finalization operation.
+	pub stale_heads: Vec<Block::Hash>,
+}
+
+/// Import operation wrapper.
 pub struct ClientImportOperation<Block: BlockT, B: Backend<Block>> {
 	/// DB Operation.
 	pub op: B::BlockImportOperation,
 	/// Summary of imported block.
 	pub notify_imported: Option<ImportSummary<Block>>,
-	/// A list of hashes of blocks that got finalized.
-	pub notify_finalized: Vec<Block::Hash>,
+	/// Summary of finalized block.
+	pub notify_finalized: Option<FinalizeSummary<Block>>,
 }
 
 /// Helper function to apply auxiliary data insertion into an operation.

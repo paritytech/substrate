@@ -21,13 +21,13 @@ use crate::{
 	utils::{self, print_from_public, print_from_uri},
 	with_crypto_scheme, CryptoSchemeFlag, Error, KeystoreParams, NetworkSchemeFlag, OutputTypeFlag,
 };
+use clap::Parser;
 use sp_core::crypto::{ExposeSecret, SecretString, SecretUri, Ss58Codec};
 use std::str::FromStr;
-use structopt::StructOpt;
 
 /// The `inspect` command
-#[derive(Debug, StructOpt)]
-#[structopt(
+#[derive(Debug, Parser)]
+#[clap(
 	name = "inspect",
 	about = "Gets a public key and a SS58 address from the provided Secret URI"
 )]
@@ -44,23 +44,23 @@ pub struct InspectKeyCmd {
 	uri: Option<String>,
 
 	/// Is the given `uri` a hex encoded public key?
-	#[structopt(long)]
+	#[clap(long)]
 	public: bool,
 
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	pub keystore_params: KeystoreParams,
 
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	pub network_scheme: NetworkSchemeFlag,
 
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	pub output_scheme: OutputTypeFlag,
 
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	pub crypto_scheme: CryptoSchemeFlag,
 
 	/// Expect that `--uri` has the given public key/account-id.
@@ -72,7 +72,7 @@ pub struct InspectKeyCmd {
 	///
 	/// If there is no derivation in `--uri`, the public key will be checked against the public key
 	/// of `--uri` directly.
-	#[structopt(long, conflicts_with = "public")]
+	#[clap(long, conflicts_with = "public")]
 	pub expect_public: Option<String>,
 }
 
@@ -158,7 +158,6 @@ mod tests {
 	use super::*;
 	use sp_core::crypto::{ByteArray, Pair};
 	use sp_runtime::traits::IdentifyAccount;
-	use structopt::StructOpt;
 
 	#[test]
 	fn inspect() {
@@ -166,10 +165,10 @@ mod tests {
 			"remember fiber forum demise paper uniform squirrel feel access exclude casual effort";
 		let seed = "0xad1fb77243b536b90cfe5f0d351ab1b1ac40e3890b41dc64f766ee56340cfca5";
 
-		let inspect = InspectKeyCmd::from_iter(&["inspect-key", words, "--password", "12345"]);
+		let inspect = InspectKeyCmd::parse_from(&["inspect-key", words, "--password", "12345"]);
 		assert!(inspect.run().is_ok());
 
-		let inspect = InspectKeyCmd::from_iter(&["inspect-key", seed]);
+		let inspect = InspectKeyCmd::parse_from(&["inspect-key", seed]);
 		assert!(inspect.run().is_ok());
 	}
 
@@ -177,14 +176,14 @@ mod tests {
 	fn inspect_public_key() {
 		let public = "0x12e76e0ae8ce41b6516cce52b3f23a08dcb4cfeed53c6ee8f5eb9f7367341069";
 
-		let inspect = InspectKeyCmd::from_iter(&["inspect-key", "--public", public]);
+		let inspect = InspectKeyCmd::parse_from(&["inspect-key", "--public", public]);
 		assert!(inspect.run().is_ok());
 	}
 
 	#[test]
 	fn inspect_with_expected_public_key() {
 		let check_cmd = |seed, expected_public, success| {
-			let inspect = InspectKeyCmd::from_iter(&[
+			let inspect = InspectKeyCmd::parse_from(&[
 				"inspect-key",
 				"--expect-public",
 				expected_public,

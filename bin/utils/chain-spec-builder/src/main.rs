@@ -23,8 +23,8 @@ use std::{
 };
 
 use ansi_term::Style;
+use clap::Parser;
 use rand::{distributions::Alphanumeric, rngs::OsRng, Rng};
-use structopt::StructOpt;
 
 use node_cli::chain_spec::{self, AccountId};
 use sc_keystore::LocalKeystore;
@@ -36,52 +36,52 @@ use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 
 /// A utility to easily create a testnet chain spec definition with a given set
 /// of authorities and endowed accounts and/or generate random accounts.
-#[derive(StructOpt)]
-#[structopt(rename_all = "kebab-case")]
+#[derive(Parser)]
+#[clap(rename_all = "kebab-case")]
 enum ChainSpecBuilder {
 	/// Create a new chain spec with the given authorities, endowed and sudo
 	/// accounts.
 	New {
 		/// Authority key seed.
-		#[structopt(long, short, required = true)]
+		#[clap(long, short, required = true)]
 		authority_seeds: Vec<String>,
 		/// Active nominators (SS58 format), each backing a random subset of the aforementioned
 		/// authorities.
-		#[structopt(long, short, default_value = "0")]
+		#[clap(long, short, default_value = "0")]
 		nominator_accounts: Vec<String>,
 		/// Endowed account address (SS58 format).
-		#[structopt(long, short)]
+		#[clap(long, short)]
 		endowed_accounts: Vec<String>,
 		/// Sudo account address (SS58 format).
-		#[structopt(long, short)]
+		#[clap(long, short)]
 		sudo_account: String,
 		/// The path where the chain spec should be saved.
-		#[structopt(long, short, default_value = "./chain_spec.json")]
+		#[clap(long, short, default_value = "./chain_spec.json")]
 		chain_spec_path: PathBuf,
 	},
 	/// Create a new chain spec with the given number of authorities and endowed
 	/// accounts. Random keys will be generated as required.
 	Generate {
 		/// The number of authorities.
-		#[structopt(long, short)]
+		#[clap(long, short)]
 		authorities: usize,
 		/// The number of nominators backing the aforementioned authorities.
 		///
 		/// Will nominate a random subset of `authorities`.
-		#[structopt(long, short, default_value = "0")]
+		#[clap(long, short, default_value = "0")]
 		nominators: usize,
 		/// The number of endowed accounts.
-		#[structopt(long, short, default_value = "0")]
+		#[clap(long, short, default_value = "0")]
 		endowed: usize,
 		/// The path where the chain spec should be saved.
-		#[structopt(long, short, default_value = "./chain_spec.json")]
+		#[clap(long, short, default_value = "./chain_spec.json")]
 		chain_spec_path: PathBuf,
 		/// Path to use when saving generated keystores for each authority.
 		///
 		/// At this path, a new folder will be created for each authority's
 		/// keystore named `auth-$i` where `i` is the authority index, i.e.
 		/// `auth-0`, `auth-1`, etc.
-		#[structopt(long, short)]
+		#[clap(long, short)]
 		keystore_path: Option<PathBuf>,
 	},
 }
@@ -236,13 +236,15 @@ fn main() -> Result<(), String> {
 		 the chain spec builder binary in `--release` mode.\n",
 	);
 
-	let builder = ChainSpecBuilder::from_args();
+	let builder = ChainSpecBuilder::parse();
 	let chain_spec_path = builder.chain_spec_path().to_path_buf();
 
 	let (authority_seeds, nominator_accounts, endowed_accounts, sudo_account) = match builder {
 		ChainSpecBuilder::Generate { authorities, nominators, endowed, keystore_path, .. } => {
 			let authorities = authorities.max(1);
-			let rand_str = || -> String { OsRng.sample_iter(&Alphanumeric).take(32).collect() };
+			let rand_str = || -> String {
+				OsRng.sample_iter(&Alphanumeric).take(32).map(char::from).collect()
+			};
 
 			let authority_seeds = (0..authorities).map(|_| rand_str()).collect::<Vec<_>>();
 			let nominator_seeds = (0..nominators).map(|_| rand_str()).collect::<Vec<_>>();

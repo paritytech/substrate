@@ -20,7 +20,7 @@ jsonrpc-client-transports = { version = "18.0.0", features = ["http"] }
 codec = { package = "parity-scale-codec", version = "2.0.0" }
 serde = "1"
 frame-support = { version = "4.0.0-dev", path = "../../../../frame/support" }
-sp-storage = { version = "4.0.0", path = "../../../../primitives/storage" }
+sp-storage = { version = "5.0.0", path = "../../../../primitives/storage" }
 sc-rpc-api = { version = "0.10.0-dev", path = "../../../../client/rpc-api" }
 
 [dev-dependencies]

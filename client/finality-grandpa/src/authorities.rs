@@ -32,23 +32,22 @@ use sp_finality_grandpa::{AuthorityId, AuthorityList};
 use crate::SetId;
 
 /// Error type returned on operations on the `AuthoritySet`.
-#[derive(Debug, derive_more::Display)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error<N, E> {
-	#[display(fmt = "Invalid authority set, either empty or with an authority weight set to 0.")]
+	#[error("Invalid authority set, either empty or with an authority weight set to 0.")]
 	InvalidAuthoritySet,
-	#[display(fmt = "Client error during ancestry lookup: {}", _0)]
+	#[error("Client error during ancestry lookup: {0}")]
 	Client(E),
-	#[display(fmt = "Duplicate authority set change.")]
+	#[error("Duplicate authority set change.")]
 	DuplicateAuthoritySetChange,
-	#[display(fmt = "Multiple pending forced authority set changes are not allowed.")]
+	#[error("Multiple pending forced authority set changes are not allowed.")]
 	MultiplePendingForcedAuthoritySetChanges,
-	#[display(
-		fmt = "A pending forced authority set change could not be applied since it must be applied \
-		after the pending standard change at #{}",
-		_0
+	#[error(
+		"A pending forced authority set change could not be applied since it must be applied \
+		after the pending standard change at #{0}"
 	)]
 	ForcedAuthoritySetChangeDependencyUnsatisfied(N),
-	#[display(fmt = "Invalid operation in the pending changes tree: {}", _0)]
+	#[error("Invalid operation in the pending changes tree: {0}")]
 	ForkTree(fork_tree::Error<E>),
 }
 

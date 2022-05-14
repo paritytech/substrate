@@ -203,7 +203,7 @@ where
 	);
 
 	let observer_work = observer_work.map_ok(|_| ()).map_err(|e| {
-		warn!("GRANDPA Observer failed: {:?}", e);
+		warn!("GRANDPA Observer failed: {}", e);
 	});
 
 	Ok(observer_work.map(drop))

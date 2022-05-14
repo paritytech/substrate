@@ -17,7 +17,7 @@
 
 //! An implementation of [`ElectionProvider`] that does an on-chain sequential phragmen.
 
-use crate::{ElectionDataProvider, ElectionProvider};
+use crate::{ElectionDataProvider, ElectionProvider, InstantElectionProvider};
 use frame_support::{traits::Get, weights::DispatchClass};
 use sp_npos_elections::*;
 use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData, prelude::*};
@@ -47,8 +47,14 @@ impl From<sp_npos_elections::Error> for Error {
 /// implementation ignores the additional data of the election data provider and gives no insight on
 /// how much weight was consumed.
 ///
-/// Finally, this implementation does not impose any limits on the number of voters and targets that
-/// are provided.
+/// Finally, the [`ElectionProvider`] implementation of this type does not impose any limits on the
+/// number of voters and targets that are fetched. This could potentially make this unsuitable for
+/// execution onchain. On the other hand, the [`InstantElectionProvider`] implementation does limit
+/// these inputs.
+///
+/// It is advisable to use the former ([`ElectionProvider::elect`]) only at genesis, or for testing,
+/// the latter [`InstantElectionProvider::instant_elect`] for onchain operations, with thoughtful
+/// bounds.
 pub struct OnChainSequentialPhragmen<T: Config>(PhantomData<T>);
 
 /// Configuration trait of [`OnChainSequentialPhragmen`].
@@ -68,16 +74,17 @@ pub trait Config: frame_system::Config {
 	>;
 }
 
-impl<T: Config> ElectionProvider for OnChainSequentialPhragmen<T> {
-	type AccountId = T::AccountId;
-	type BlockNumber = T::BlockNumber;
-	type Error = Error;
-	type DataProvider = T::DataProvider;
-
-	fn elect() -> Result<Supports<T::AccountId>, Self::Error> {
-		let voters = Self::DataProvider::voters(None).map_err(Error::DataProvider)?;
-		let targets = Self::DataProvider::targets(None).map_err(Error::DataProvider)?;
-		let desired_targets = Self::DataProvider::desired_targets().map_err(Error::DataProvider)?;
+impl<T: Config> OnChainSequentialPhragmen<T> {
+	fn elect_with(
+		maybe_max_voters: Option<usize>,
+		maybe_max_targets: Option<usize>,
+	) -> Result<Supports<T::AccountId>, Error> {
+		let voters = <Self as ElectionProvider>::DataProvider::voters(maybe_max_voters)
+			.map_err(Error::DataProvider)?;
+		let targets = <Self as ElectionProvider>::DataProvider::targets(maybe_max_targets)
+			.map_err(Error::DataProvider)?;
+		let desired_targets = <Self as ElectionProvider>::DataProvider::desired_targets()
+			.map_err(Error::DataProvider)?;
 
 		let stake_map: BTreeMap<T::AccountId, VoteWeight> = voters
 			.iter()
@@ -87,9 +94,8 @@ impl<T: Config> ElectionProvider for OnChainSequentialPhragmen<T> {
 		let stake_of =
 			|w: &T::AccountId| -> VoteWeight { stake_map.get(w).cloned().unwrap_or_default() };
 
-		let ElectionResult { winners: _, assignments } =
-			seq_phragmen::<_, T::Accuracy>(desired_targets as usize, targets, voters, None)
-				.map_err(Error::from)?;
+		let ElectionResult::<_, T::Accuracy> { winners: _, assignments } =
+			seq_phragmen(desired_targets as usize, targets, voters, None).map_err(Error::from)?;
 
 		let staked = assignment_ratio_to_staked_normalized(assignments, &stake_of)?;
 
@@ -100,6 +106,26 @@ impl<T: Config> ElectionProvider for OnChainSequentialPhragmen<T> {
 		);
 
 		Ok(to_supports(&staked))
+	}
+}
+
+impl<T: Config> ElectionProvider for OnChainSequentialPhragmen<T> {
+	type AccountId = T::AccountId;
+	type BlockNumber = T::BlockNumber;
+	type Error = Error;
+	type DataProvider = T::DataProvider;
+
+	fn elect() -> Result<Supports<T::AccountId>, Self::Error> {
+		Self::elect_with(None, None)
+	}
+}
+
+impl<T: Config> InstantElectionProvider for OnChainSequentialPhragmen<T> {
+	fn instant_elect(
+		maybe_max_voters: Option<usize>,
+		maybe_max_targets: Option<usize>,
+	) -> Result<Supports<Self::AccountId>, Self::Error> {
+		Self::elect_with(maybe_max_voters, maybe_max_targets)
 	}
 }
 
@@ -161,18 +187,22 @@ mod tests {
 	type OnChainPhragmen = OnChainSequentialPhragmen<Runtime>;
 
 	mod mock_data_provider {
+		use frame_support::{bounded_vec, traits::ConstU32};
+
 		use super::*;
-		use crate::data_provider;
+		use crate::{data_provider, VoterOf};
 
 		pub struct DataProvider;
 		impl ElectionDataProvider for DataProvider {
 			type AccountId = AccountId;
 			type BlockNumber = BlockNumber;
-			const MAXIMUM_VOTES_PER_VOTER: u32 = 2;
-			fn voters(
-				_: Option<usize>,
-			) -> data_provider::Result<Vec<(AccountId, VoteWeight, Vec<AccountId>)>> {
-				Ok(vec![(1, 10, vec![10, 20]), (2, 20, vec![30, 20]), (3, 30, vec![10, 30])])
+			type MaxVotesPerVoter = ConstU32<2>;
+			fn voters(_: Option<usize>) -> data_provider::Result<Vec<VoterOf<Self>>> {
+				Ok(vec![
+					(1, 10, bounded_vec![10, 20]),
+					(2, 20, bounded_vec![30, 20]),
+					(3, 30, bounded_vec![10, 30]),
+				])
 			}
 
 			fn targets(_: Option<usize>) -> data_provider::Result<Vec<AccountId>> {

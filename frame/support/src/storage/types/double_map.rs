@@ -264,6 +264,8 @@ where
 	}
 
 	/// Mutate the item, only if an `Ok` value is returned. Deletes the item if mutated to a `None`.
+	/// `f` will always be called with an option representing if the storage item exists (`Some<V>`)
+	/// or if the storage item does not exist (`None`), independent of the `QueryType`.
 	pub fn try_mutate_exists<KArg1, KArg2, R, E, F>(k1: KArg1, k2: KArg2, f: F) -> Result<R, E>
 	where
 		KArg1: EncodeLike<Key1>,

@@ -212,7 +212,7 @@ impl<'de> Deserialize<'de> for Public {
 
 /// A signature (a 512-bit value).
 #[cfg_attr(feature = "full_crypto", derive(Hash))]
-#[derive(Encode, Decode, PassByInner, TypeInfo, PartialEq, Eq)]
+#[derive(Encode, Decode, MaxEncodedLen, PassByInner, TypeInfo, PartialEq, Eq)]
 pub struct Signature(pub [u8; 64]);
 
 impl sp_std::convert::TryFrom<&[u8]> for Signature {

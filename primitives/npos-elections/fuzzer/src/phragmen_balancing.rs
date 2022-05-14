@@ -24,7 +24,7 @@ use honggfuzz::fuzz;
 use rand::{self, SeedableRng};
 use sp_npos_elections::{
 	assignment_ratio_to_staked_normalized, is_score_better, seq_phragmen, to_supports,
-	EvaluateSupport, VoteWeight,
+	ElectionResult, EvaluateSupport, VoteWeight,
 };
 use sp_runtime::Perbill;
 
@@ -68,13 +68,8 @@ fn main() {
 			};
 
 			if iterations > 0 {
-				let balanced = seq_phragmen::<AccountId, sp_runtime::Perbill>(
-					to_elect,
-					candidates,
-					voters,
-					Some((iterations, 0)),
-				)
-				.unwrap();
+				let balanced: ElectionResult<AccountId, sp_runtime::Perbill> =
+					seq_phragmen(to_elect, candidates, voters, Some((iterations, 0))).unwrap();
 
 				let balanced_score = {
 					let staked = assignment_ratio_to_staked_normalized(

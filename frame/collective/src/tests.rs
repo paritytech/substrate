@@ -175,7 +175,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 }
 
 fn make_proposal(value: u64) -> Call {
-	Call::System(frame_system::Call::remark { remark: value.encode() })
+	Call::System(frame_system::Call::remark_with_event { remark: value.to_be_bytes().to_vec() })
 }
 
 fn record(event: Event) -> EventRecord<Event, H256> {

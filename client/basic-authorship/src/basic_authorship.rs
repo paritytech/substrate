@@ -47,7 +47,7 @@ use sp_runtime::{
 use std::{marker::PhantomData, pin::Pin, sync::Arc, time};
 
 use prometheus_endpoint::Registry as PrometheusRegistry;
-use sc_proposer_metrics::MetricsLink as PrometheusMetrics;
+use sc_proposer_metrics::{EndProposingReason, MetricsLink as PrometheusMetrics};
 
 /// Default block size limit in bytes used by [`Proposer`].
 ///
@@ -412,16 +412,21 @@ where
 		debug!("Attempting to push transactions from the pool.");
 		debug!("Pool status: {:?}", self.transaction_pool.status());
 		let mut transaction_pushed = false;
-		let mut hit_block_size_limit = false;
 
-		while let Some(pending_tx) = pending_iterator.next() {
+		let end_reason = loop {
+			let pending_tx = if let Some(pending_tx) = pending_iterator.next() {
+				pending_tx
+			} else {
+				break EndProposingReason::NoMoreTransactions
+			};
+
 			let now = (self.now)();
 			if now > deadline {
 				debug!(
 					"Consensus deadline reached when pushing block transactions, \
 					proceeding with proposing."
 				);
-				break
+				break EndProposingReason::HitDeadline
 			}
 
 			let pending_tx_data = pending_tx.data().clone();
@@ -448,8 +453,7 @@ where
 					continue
 				} else {
 					debug!("Reached block size limit, proceeding with proposing.");
-					hit_block_size_limit = true;
-					break
+					break EndProposingReason::HitBlockSizeLimit
 				}
 			}
 
@@ -473,8 +477,8 @@ where
 							 so we will try a bit more before quitting."
 						);
 					} else {
-						debug!("Block is full, proceed with proposing.");
-						break
+						debug!("Reached block weight limit, proceeding with proposing.");
+						break EndProposingReason::HitBlockWeightLimit
 					}
 				},
 				Err(e) if skipped > 0 => {
@@ -491,9 +495,9 @@ where
 					unqueue_invalid.push(pending_tx_hash);
 				},
 			}
-		}
+		};
 
-		if hit_block_size_limit && !transaction_pushed {
+		if matches!(end_reason, EndProposingReason::HitBlockSizeLimit) && !transaction_pushed {
 			warn!(
 				"Hit block size limit of `{}` without including any transaction!",
 				block_size_limit,
@@ -507,6 +511,8 @@ where
 		self.metrics.report(|metrics| {
 			metrics.number_of_transactions.set(block.extrinsics().len() as u64);
 			metrics.block_constructed.observe(block_timer.elapsed().as_secs_f64());
+
+			metrics.report_end_proposing_reason(end_reason);
 		});
 
 		info!(
@@ -518,7 +524,7 @@ where
 			block.extrinsics().len(),
 			block.extrinsics()
 				.iter()
-				.map(|xt| format!("{}", BlakeTwo256::hash_of(xt)))
+				.map(|xt| BlakeTwo256::hash_of(xt).to_string())
 				.collect::<Vec<_>>()
 				.join(", ")
 		);

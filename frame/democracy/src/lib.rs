@@ -156,6 +156,7 @@ use codec::{Decode, Encode, Input};
 use frame_support::{
 	ensure,
 	traits::{
+		defensive_prelude::*,
 		schedule::{DispatchTime, Named as ScheduleNamed},
 		BalanceStatus, Currency, Get, LockIdentifier, LockableCurrency, OnUnbalanced,
 		ReservableCurrency, WithdrawReasons,
@@ -437,14 +438,6 @@ pub mod pallet {
 		Voting<BalanceOf<T>, T::AccountId, T::BlockNumber>,
 		ValueQuery,
 	>;
-
-	/// Accounts for which there are locks in action which may be removed at some point in the
-	/// future. The value is the block number at which the lock expires and may be removed.
-	///
-	/// TWOX-NOTE: OK ― `AccountId` is a secure hash.
-	#[pallet::storage]
-	#[pallet::getter(fn locks)]
-	pub type Locks<T: Config> = StorageMap<_, Twox64Concat, T::AccountId, T::BlockNumber>;
 
 	/// True if the last referendum tabled was submitted externally. False if it was a public
 	/// proposal.
@@ -849,7 +842,12 @@ pub mod pallet {
 
 			<NextExternal<T>>::kill();
 			let now = <frame_system::Pallet<T>>::block_number();
-			Self::inject_referendum(now + voting_period, proposal_hash, threshold, delay);
+			Self::inject_referendum(
+				now.saturating_add(voting_period),
+				proposal_hash,
+				threshold,
+				delay,
+			);
 			Ok(())
 		}
 
@@ -878,7 +876,8 @@ pub mod pallet {
 				existing_vetoers.binary_search(&who).err().ok_or(Error::<T>::AlreadyVetoed)?;
 
 			existing_vetoers.insert(insert_position, who.clone());
-			let until = <frame_system::Pallet<T>>::block_number() + T::CooloffPeriod::get();
+			let until =
+				<frame_system::Pallet<T>>::block_number().saturating_add(T::CooloffPeriod::get());
 			<Blacklist<T>>::insert(&proposal_hash, (until, existing_vetoers));
 
 			Self::deposit_event(Event::<T>::Vetoed { who, proposal_hash, until });
@@ -1096,7 +1095,10 @@ pub mod pallet {
 			let now = <frame_system::Pallet<T>>::block_number();
 			let (voting, enactment) = (T::VotingPeriod::get(), T::EnactmentPeriod::get());
 			let additional = if who == provider { Zero::zero() } else { enactment };
-			ensure!(now >= since + voting + additional, Error::<T>::TooEarly);
+			ensure!(
+				now >= since.saturating_add(voting).saturating_add(additional),
+				Error::<T>::TooEarly
+			);
 			ensure!(expiry.map_or(true, |e| now > e), Error::<T>::Imminent);
 
 			let res =
@@ -1289,7 +1291,7 @@ impl<T: Config> Pallet<T> {
 	/// Get the amount locked in support of `proposal`; `None` if proposal isn't a valid proposal
 	/// index.
 	pub fn backing_for(proposal: PropIndex) -> Option<BalanceOf<T>> {
-		Self::deposit_of(proposal).map(|(l, d)| d * (l.len() as u32).into())
+		Self::deposit_of(proposal).map(|(l, d)| d.saturating_mul((l.len() as u32).into()))
 	}
 
 	/// Get all referenda ready for tally at block `n`.
@@ -1325,7 +1327,7 @@ impl<T: Config> Pallet<T> {
 		delay: T::BlockNumber,
 	) -> ReferendumIndex {
 		<Pallet<T>>::inject_referendum(
-			<frame_system::Pallet<T>>::block_number() + T::VotingPeriod::get(),
+			<frame_system::Pallet<T>>::block_number().saturating_add(T::VotingPeriod::get()),
 			proposal_hash,
 			threshold,
 			delay,
@@ -1431,7 +1433,9 @@ impl<T: Config> Pallet<T> {
 					},
 					Some(ReferendumInfo::Finished { end, approved }) => {
 						if let Some((lock_periods, balance)) = votes[i].1.locked_if(approved) {
-							let unlock_at = end + T::VoteLockingPeriod::get() * lock_periods.into();
+							let unlock_at = end.saturating_add(
+								T::VoteLockingPeriod::get().saturating_mul(lock_periods.into()),
+							);
 							let now = frame_system::Pallet::<T>::block_number();
 							if now < unlock_at {
 								ensure!(
@@ -1520,9 +1524,16 @@ impl<T: Config> Pallet<T> {
 			};
 			sp_std::mem::swap(&mut old, voting);
 			match old {
-				Voting::Delegating { balance, target, conviction, delegations, prior, .. } => {
+				Voting::Delegating {
+					balance, target, conviction, delegations, mut prior, ..
+				} => {
 					// remove any delegation votes to our current target.
 					Self::reduce_upstream_delegation(&target, conviction.votes(balance));
+					let now = frame_system::Pallet::<T>::block_number();
+					let lock_periods = conviction.lock_periods().into();
+					let unlock_block = now
+						.saturating_add(T::VoteLockingPeriod::get().saturating_mul(lock_periods));
+					prior.accumulate(unlock_block, balance);
 					voting.set_common(delegations, prior);
 				},
 				Voting::Direct { votes, delegations, prior } => {
@@ -1555,7 +1566,9 @@ impl<T: Config> Pallet<T> {
 						Self::reduce_upstream_delegation(&target, conviction.votes(balance));
 					let now = frame_system::Pallet::<T>::block_number();
 					let lock_periods = conviction.lock_periods().into();
-					prior.accumulate(now + T::VoteLockingPeriod::get() * lock_periods, balance);
+					let unlock_block = now
+						.saturating_add(T::VoteLockingPeriod::get().saturating_mul(lock_periods));
+					prior.accumulate(unlock_block, balance);
 					voting.set_common(delegations, prior);
 
 					Ok(votes)
@@ -1614,7 +1627,7 @@ impl<T: Config> Pallet<T> {
 			LastTabledWasExternal::<T>::put(true);
 			Self::deposit_event(Event::<T>::ExternalTabled);
 			Self::inject_referendum(
-				now + T::VotingPeriod::get(),
+				now.saturating_add(T::VotingPeriod::get()),
 				proposal,
 				threshold,
 				T::EnactmentPeriod::get(),
@@ -1630,7 +1643,7 @@ impl<T: Config> Pallet<T> {
 		let mut public_props = Self::public_props();
 		if let Some((winner_index, _)) = public_props.iter().enumerate().max_by_key(
 			// defensive only: All current public proposals have an amount locked
-			|x| Self::backing_for((x.1).0).unwrap_or_else(Zero::zero),
+			|x| Self::backing_for((x.1).0).defensive_unwrap_or_else(Zero::zero),
 		) {
 			let (prop_index, proposal, _) = public_props.swap_remove(winner_index);
 			<PublicProps<T>>::put(public_props);
@@ -1646,7 +1659,7 @@ impl<T: Config> Pallet<T> {
 					depositors,
 				});
 				Self::inject_referendum(
-					now + T::VotingPeriod::get(),
+					now.saturating_add(T::VotingPeriod::get()),
 					proposal,
 					VoteThreshold::SuperMajorityApprove,
 					T::EnactmentPeriod::get(),
@@ -1700,7 +1713,7 @@ impl<T: Config> Pallet<T> {
 			if status.delay.is_zero() {
 				let _ = Self::do_enact_proposal(status.proposal_hash, index);
 			} else {
-				let when = now + status.delay;
+				let when = now.saturating_add(status.delay);
 				// Note that we need the preimage now.
 				Preimages::<T>::mutate_exists(
 					&status.proposal_hash,

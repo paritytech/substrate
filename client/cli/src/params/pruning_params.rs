@@ -17,23 +17,23 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::error;
+use clap::Args;
 use sc_service::{KeepBlocks, PruningMode, Role};
-use structopt::StructOpt;
 
 /// Parameters to define the pruning mode
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, Clone, Args)]
 pub struct PruningParams {
 	/// Specify the state pruning mode, a number of blocks to keep or 'archive'.
 	///
 	/// Default is to keep all block states if the node is running as a
 	/// validator (i.e. 'archive'), otherwise state is only kept for the last
 	/// 256 blocks.
-	#[structopt(long = "pruning", value_name = "PRUNING_MODE")]
+	#[clap(long, value_name = "PRUNING_MODE")]
 	pub pruning: Option<String>,
 	/// Specify the number of finalized blocks to keep in the database.
 	///
 	/// Default is to keep all blocks.
-	#[structopt(long, value_name = "COUNT")]
+	#[clap(long, value_name = "COUNT")]
 	pub keep_blocks: Option<u32>,
 }
 
