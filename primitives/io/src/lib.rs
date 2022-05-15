@@ -202,7 +202,7 @@ pub trait Storage {
 	/// The hashing algorithm is defined by the `Block`.
 	///
 	/// Returns a `Vec<u8>` that holds the SCALE encoded hash.
-	#[version(2, register_only)]
+	#[version(2)]
 	fn root(&mut self, version: StateVersion) -> Vec<u8> {
 		self.storage_root(version)
 	}
@@ -394,7 +394,7 @@ pub trait DefaultChildStorage {
 	/// The hashing algorithm is defined by the `Block`.
 	///
 	/// Returns a `Vec<u8>` that holds the SCALE encoded hash.
-	#[version(2, register_only)]
+	#[version(2)]
 	fn root(&mut self, storage_key: &[u8], version: StateVersion) -> Vec<u8> {
 		let child_info = ChildInfo::new_default(storage_key);
 		self.child_storage_root(&child_info, version)
@@ -418,7 +418,7 @@ pub trait Trie {
 	}
 
 	/// A trie root formed from the iterated items.
-	#[version(2, register_only)]
+	#[version(2)]
 	fn blake2_256_root(input: Vec<(Vec<u8>, Vec<u8>)>, version: StateVersion) -> H256 {
 		match version {
 			StateVersion::V0 => LayoutV0::<sp_core::Blake2Hasher>::trie_root(input),
@@ -432,7 +432,7 @@ pub trait Trie {
 	}
 
 	/// A trie root formed from the enumerated items.
-	#[version(2, register_only)]
+	#[version(2)]
 	fn blake2_256_ordered_root(input: Vec<Vec<u8>>, version: StateVersion) -> H256 {
 		match version {
 			StateVersion::V0 => LayoutV0::<sp_core::Blake2Hasher>::ordered_trie_root(input),
@@ -446,7 +446,7 @@ pub trait Trie {
 	}
 
 	/// A trie root formed from the iterated items.
-	#[version(2, register_only)]
+	#[version(2)]
 	fn keccak_256_root(input: Vec<(Vec<u8>, Vec<u8>)>, version: StateVersion) -> H256 {
 		match version {
 			StateVersion::V0 => LayoutV0::<sp_core::KeccakHasher>::trie_root(input),
@@ -460,7 +460,7 @@ pub trait Trie {
 	}
 
 	/// A trie root formed from the enumerated items.
-	#[version(2, register_only)]
+	#[version(2)]
 	fn keccak_256_ordered_root(input: Vec<Vec<u8>>, version: StateVersion) -> H256 {
 		match version {
 			StateVersion::V0 => LayoutV0::<sp_core::KeccakHasher>::ordered_trie_root(input),
@@ -479,7 +479,7 @@ pub trait Trie {
 	}
 
 	/// Verify trie proof
-	#[version(2, register_only)]
+	#[version(2)]
 	fn blake2_256_verify_proof(
 		root: H256,
 		proof: &[Vec<u8>],
@@ -516,7 +516,7 @@ pub trait Trie {
 	}
 
 	/// Verify trie proof
-	#[version(2, register_only)]
+	#[version(2)]
 	fn keccak_256_verify_proof(
 		root: H256,
 		proof: &[Vec<u8>],

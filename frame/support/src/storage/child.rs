@@ -168,9 +168,9 @@ pub fn put_raw(child_info: &ChildInfo, key: &[u8], value: &[u8]) {
 }
 
 /// Calculate current child root value.
-pub fn root(child_info: &ChildInfo, _: StateVersion) -> Vec<u8> {
+pub fn root(child_info: &ChildInfo, version: StateVersion) -> Vec<u8> {
 	match child_info.child_type() {
-		ChildType::ParentKeyId => sp_io::default_child_storage::root(child_info.storage_key()),
+		ChildType::ParentKeyId => sp_io::default_child_storage::root(child_info.storage_key(), version),
 	}
 }
 
