@@ -324,11 +324,26 @@ use sp_runtime::traits::{AccountIdConversion, Bounded, CheckedSub, Convert, Satu
 use sp_staking::{EraIndex, OnStakerSlash, StakingInterface};
 use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, ops::Div, vec::Vec};
 
+/// The log target of this pallet.
+pub const LOG_TARGET: &'static str = "runtime::nomination-pools";
+
+// syntactic sugar for logging.
+#[macro_export]
+macro_rules! log {
+	($level:tt, $patter:expr $(, $values:expr)* $(,)?) => {
+		log::$level!(
+			target: crate::LOG_TARGET,
+			concat!("[{:?}] 🏊‍♂️ ", $patter), <frame_system::Pallet<T>>::block_number() $(, $values)*
+		)
+	};
+}
+
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
 mod tests;
 
+pub mod migration;
 pub mod weights;
 
 pub use pallet::*;
@@ -502,7 +517,11 @@ pub enum PoolState {
 	Destroying,
 }
 
-/// Pool adminstration roles.
+/// Pool administration roles.
+///
+/// Any pool has a depositor, which can never change. But, all the other roles are optional, and
+/// cannot exist. Note that if `root` is set to `None`, it basically means that the roles of this
+/// pool can never change again (except via governance).
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Clone)]
 pub struct PoolRoles<AccountId> {
 	/// Creates the pool and is the initial member. They can only leave the pool once all other
@@ -510,11 +529,11 @@ pub struct PoolRoles<AccountId> {
 	pub depositor: AccountId,
 	/// Can change the nominator, state-toggler, or itself and can perform any of the actions the
 	/// nominator or state-toggler can.
-	pub root: AccountId,
+	pub root: Option<AccountId>,
 	/// Can select which validators the pool nominates.
-	pub nominator: AccountId,
+	pub nominator: Option<AccountId>,
 	/// Can change the pools state and kick members if the pool is blocked.
-	pub state_toggler: AccountId,
+	pub state_toggler: Option<AccountId>,
 }
 
 /// Pool permissions and state
@@ -665,25 +684,36 @@ impl<T: Config> BondedPool<T> {
 			.saturating_sub(T::StakingInterface::active_stake(&account).unwrap_or_default())
 	}
 
+	fn is_root(&self, who: &T::AccountId) -> bool {
+		self.roles.root.as_ref().map_or(false, |root| root == who)
+	}
+
+	fn is_state_toggler(&self, who: &T::AccountId) -> bool {
+		self.roles
+			.state_toggler
+			.as_ref()
+			.map_or(false, |state_toggler| state_toggler == who)
+	}
+
 	fn can_update_roles(&self, who: &T::AccountId) -> bool {
-		*who == self.roles.root
+		self.is_root(who)
 	}
 
 	fn can_nominate(&self, who: &T::AccountId) -> bool {
-		*who == self.roles.root || *who == self.roles.nominator
+		self.is_root(who) ||
+			self.roles.nominator.as_ref().map_or(false, |nominator| nominator == who)
 	}
 
 	fn can_kick(&self, who: &T::AccountId) -> bool {
-		(*who == self.roles.root || *who == self.roles.state_toggler) &&
-			self.state == PoolState::Blocked
+		self.state == PoolState::Blocked && (self.is_root(who) || self.is_state_toggler(who))
 	}
 
 	fn can_toggle_state(&self, who: &T::AccountId) -> bool {
-		(*who == self.roles.root || *who == self.roles.state_toggler) && !self.is_destroying()
+		(self.is_root(who) || self.is_state_toggler(who)) && !self.is_destroying()
 	}
 
 	fn can_set_metadata(&self, who: &T::AccountId) -> bool {
-		*who == self.roles.root || *who == self.roles.state_toggler
+		self.is_root(who) || self.is_state_toggler(who)
 	}
 
 	fn is_destroying(&self) -> bool {
@@ -987,11 +1017,12 @@ impl<T: Config> SubPools<T> {
 	///
 	/// This is often used whilst getting the sub-pool from storage, thus it consumes and returns
 	/// `Self` for ergonomic purposes.
-	fn maybe_merge_pools(mut self, unbond_era: EraIndex) -> Self {
+	fn maybe_merge_pools(mut self, current_era: EraIndex) -> Self {
 		// Ex: if `TotalUnbondingPools` is 5 and current era is 10, we only want to retain pools
 		// 6..=10. Note that in the first few eras where `checked_sub` is `None`, we don't remove
 		// anything.
-		if let Some(newest_era_to_remove) = unbond_era.checked_sub(TotalUnbondingPools::<T>::get())
+		if let Some(newest_era_to_remove) =
+			current_era.checked_sub(T::PostUnbondingPoolsWindow::get())
 		{
 			self.with_era.retain(|k, v| {
 				if *k > newest_era_to_remove {
@@ -1045,11 +1076,15 @@ impl<T: Config> Get<u32> for TotalUnbondingPools<T> {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::transactional;
+	use frame_support::{traits::StorageVersion, transactional};
 	use frame_system::{ensure_signed, pallet_prelude::*};
+
+	/// The current storage version.
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(crate) trait Store)]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
@@ -1218,8 +1253,13 @@ pub mod pallet {
 		///
 		/// The removal can be voluntary (withdrawn all unbonded funds) or involuntary (kicked).
 		MemberRemoved { pool_id: PoolId, member: T::AccountId },
-		/// The roles of a pool have been updated to the given new roles.
-		RolesUpdated { root: T::AccountId, state_toggler: T::AccountId, nominator: T::AccountId },
+		/// The roles of a pool have been updated to the given new roles. Note that the depositor
+		/// can never change.
+		RolesUpdated {
+			root: Option<T::AccountId>,
+			state_toggler: Option<T::AccountId>,
+			nominator: Option<T::AccountId>,
+		},
 	}
 
 	#[pallet::error]
@@ -1470,7 +1510,7 @@ pub mod pallet {
 			// Note that we lazily create the unbonding pools here if they don't already exist
 			let mut sub_pools = SubPoolsStorage::<T>::get(member.pool_id)
 				.unwrap_or_default()
-				.maybe_merge_pools(unbond_era);
+				.maybe_merge_pools(current_era);
 
 			// Update the unbond pool associated with the current era with the unbonded funds. Note
 			// that we lazily create the unbond pool if it does not yet exist.
@@ -1693,7 +1733,12 @@ pub mod pallet {
 			});
 			let mut bonded_pool = BondedPool::<T>::new(
 				pool_id,
-				PoolRoles { root, nominator, state_toggler, depositor: who.clone() },
+				PoolRoles {
+					root: Some(root),
+					nominator: Some(nominator),
+					state_toggler: Some(state_toggler),
+					depositor: who.clone(),
+				},
 			);
 
 			bonded_pool.try_inc_members()?;
@@ -1850,9 +1895,9 @@ pub mod pallet {
 		pub fn update_roles(
 			origin: OriginFor<T>,
 			pool_id: PoolId,
-			root: Option<T::AccountId>,
-			nominator: Option<T::AccountId>,
-			state_toggler: Option<T::AccountId>,
+			new_root: ConfigOp<T::AccountId>,
+			new_nominator: ConfigOp<T::AccountId>,
+			new_state_toggler: ConfigOp<T::AccountId>,
 		) -> DispatchResult {
 			let mut bonded_pool = match ensure_root(origin.clone()) {
 				Ok(()) => BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?,
@@ -1865,17 +1910,20 @@ pub mod pallet {
 				},
 			};
 
-			match root {
-				None => (),
-				Some(v) => bonded_pool.roles.root = v,
+			match new_root {
+				ConfigOp::Noop => (),
+				ConfigOp::Remove => bonded_pool.roles.root = None,
+				ConfigOp::Set(v) => bonded_pool.roles.root = Some(v),
 			};
-			match nominator {
-				None => (),
-				Some(v) => bonded_pool.roles.nominator = v,
+			match new_nominator {
+				ConfigOp::Noop => (),
+				ConfigOp::Remove => bonded_pool.roles.nominator = None,
+				ConfigOp::Set(v) => bonded_pool.roles.nominator = Some(v),
 			};
-			match state_toggler {
-				None => (),
-				Some(v) => bonded_pool.roles.state_toggler = v,
+			match new_state_toggler {
+				ConfigOp::Noop => (),
+				ConfigOp::Remove => bonded_pool.roles.state_toggler = None,
+				ConfigOp::Set(v) => bonded_pool.roles.state_toggler = Some(v),
 			};
 
 			Self::deposit_event(Event::<T>::RolesUpdated {
@@ -2282,7 +2330,7 @@ impl<T: Config> OnStakerSlash<T::AccountId, BalanceOf<T>> for Pallet<T> {
 		_slashed_bonded: BalanceOf<T>,
 		slashed_unlocking: &BTreeMap<EraIndex, BalanceOf<T>>,
 	) {
-		if let Some(pool_id) = ReversePoolIdLookup::<T>::get(pool_account) {
+		if let Some(pool_id) = ReversePoolIdLookup::<T>::get(pool_account).defensive() {
 			let mut sub_pools = match SubPoolsStorage::<T>::get(pool_id).defensive() {
 				Some(sub_pools) => sub_pools,
 				None => return,
