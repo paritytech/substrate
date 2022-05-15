@@ -23,7 +23,7 @@
 use super::{InherentDataProviderExt, Slot};
 use sp_consensus::{Error, SelectChain};
 use sp_inherents::{CreateInherentDataProviders, InherentData, InherentDataProvider};
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
+use sp_runtime::traits::Block as BlockT;
 
 use futures_timer::Delay;
 use std::time::{Duration, Instant};
@@ -91,20 +91,20 @@ impl<B: BlockT> SlotInfo<B> {
 }
 
 /// A stream that returns every time there is a new slot.
-pub(crate) struct Slots<Block, SC, IDP> {
+pub(crate) struct Slots<Block, SC, CIDP> {
 	last_slot: Slot,
 	slot_duration: Duration,
 	inner_delay: Option<Delay>,
-	create_inherent_data_providers: IDP,
+	create_inherent_data_providers: CIDP,
 	select_chain: SC,
 	_phantom: std::marker::PhantomData<Block>,
 }
 
-impl<Block, SC, IDP> Slots<Block, SC, IDP> {
+impl<Block, SC, CIDP> Slots<Block, SC, CIDP> {
 	/// Create a new `Slots` stream.
 	pub fn new(
 		slot_duration: Duration,
-		create_inherent_data_providers: IDP,
+		create_inherent_data_providers: CIDP,
 		select_chain: SC,
 	) -> Self {
 		Slots {
@@ -118,12 +118,12 @@ impl<Block, SC, IDP> Slots<Block, SC, IDP> {
 	}
 }
 
-impl<Block, SC, IDP> Slots<Block, SC, IDP>
+impl<Block, SC, CIDP> Slots<Block, SC, CIDP>
 where
 	Block: BlockT,
 	SC: SelectChain<Block>,
-	IDP: CreateInherentDataProviders<Block, ()>,
-	IDP::InherentDataProviders: crate::InherentDataProviderExt,
+	CIDP: CreateInherentDataProviders<Block, ()>,
+	CIDP::InherentDataProviders: crate::InherentDataProviderExt,
 {
 	/// Returns a future that fires when the next slot starts.
 	pub async fn next_slot(&mut self) -> Result<SlotInfo<Block>, Error> {
@@ -165,7 +165,7 @@ where
 
 			let inherent_data_providers = self
 				.create_inherent_data_providers
-				.create_inherent_data_providers(chain_head.hash(), ())
+				.create_inherent_data_providers(chain_head.clone(), ())
 				.await?;
 
 			if Instant::now() > ends_at {

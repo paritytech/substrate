@@ -108,7 +108,7 @@ pub async fn seal_block<B, BI, SC, C, E, TP, CIDP>(
 		};
 
 		let inherent_data_providers = create_inherent_data_providers
-			.create_inherent_data_providers(parent.hash(), ())
+			.create_inherent_data_providers(parent.clone(), ())
 			.await
 			.map_err(|e| Error::Other(e))?;
 

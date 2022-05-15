@@ -432,12 +432,13 @@ pub fn new_full_base(
 			block_import,
 			sync_oracle: network.clone(),
 			justification_sync_link: network.clone(),
-			create_inherent_data_providers: move |parent, ()| {
+			create_inherent_data_providers: move |parent_header: <Block as BlockT>::Header, ()| {
 				let client_clone = client_clone.clone();
+				let parent_hash = parent_header.hash();
 				async move {
 					let uncles = sc_consensus_uncles::create_uncles_inherent_data_provider(
 						&*client_clone,
-						parent,
+						parent_hash,
 					)?;
 
 					let timestamp = sp_timestamp::InherentDataProvider::from_system_time();
@@ -451,7 +452,7 @@ pub fn new_full_base(
 					let storage_proof =
 						sp_transaction_storage_proof::registration::new_data_provider(
 							&*client_clone,
-							&parent,
+							&parent_hash,
 						)?;
 
 					Ok((timestamp, slot, uncles, storage_proof))

@@ -34,7 +34,7 @@ pub trait CreateInherentDataProviders<Block: BlockT, ExtraArgs>: Send + Sync {
 	/// Create the inherent data providers at the given `parent` block using the given `extra_args`.
 	async fn create_inherent_data_providers(
 		&self,
-		parent: Block::Hash,
+		parent: Block::Header,
 		extra_args: ExtraArgs,
 	) -> Result<Self::InherentDataProviders, Box<dyn std::error::Error + Send + Sync>>;
 }
@@ -43,7 +43,7 @@ pub trait CreateInherentDataProviders<Block: BlockT, ExtraArgs>: Send + Sync {
 impl<F, Block, IDP, ExtraArgs, Fut> CreateInherentDataProviders<Block, ExtraArgs> for F
 where
 	Block: BlockT,
-	F: Fn(Block::Hash, ExtraArgs) -> Fut + Sync + Send,
+	F: Fn(Block::Header, ExtraArgs) -> Fut + Sync + Send,
 	Fut: std::future::Future<Output = Result<IDP, Box<dyn std::error::Error + Send + Sync>>>
 		+ Send
 		+ 'static,
@@ -54,7 +54,7 @@ where
 
 	async fn create_inherent_data_providers(
 		&self,
-		parent: Block::Hash,
+		parent: Block::Header,
 		extra_args: ExtraArgs,
 	) -> Result<Self::InherentDataProviders, Box<dyn std::error::Error + Send + Sync>> {
 		(*self)(parent, extra_args).await
@@ -70,7 +70,7 @@ impl<Block: BlockT, ExtraArgs: Send, IDPS: InherentDataProvider>
 
 	async fn create_inherent_data_providers(
 		&self,
-		parent: Block::Hash,
+		parent: Block::Header,
 		extra_args: ExtraArgs,
 	) -> Result<Self::InherentDataProviders, Box<dyn std::error::Error + Send + Sync>> {
 		(**self).create_inherent_data_providers(parent, extra_args).await

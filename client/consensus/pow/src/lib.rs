@@ -364,7 +364,7 @@ where
 				check_block.clone(),
 				BlockId::Hash(parent_hash),
 				self.create_inherent_data_providers
-					.create_inherent_data_providers(parent_hash, ())
+					.create_inherent_data_providers(block.header.clone(), ())
 					.await?,
 				block.origin.into(),
 			)
@@ -604,7 +604,7 @@ where
 			};
 
 			let inherent_data_providers = match create_inherent_data_providers
-				.create_inherent_data_providers(best_hash, ())
+				.create_inherent_data_providers(best_header.clone(), ())
 				.await
 			{
 				Ok(x) => x,

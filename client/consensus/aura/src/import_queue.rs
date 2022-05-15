@@ -209,7 +209,7 @@ where
 
 		let create_inherent_data_providers = self
 			.create_inherent_data_providers
-			.create_inherent_data_providers(parent_hash, ())
+			.create_inherent_data_providers(block.header.clone(), ())
 			.await
 			.map_err(|e| Error::<B>::Client(sp_blockchain::Error::Application(e)))?;
 
