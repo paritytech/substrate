@@ -16,7 +16,7 @@
 // limitations under the License.
 
 use frame_election_provider_support::VoteWeight;
-use frame_support::{pallet_prelude::*, parameter_types, traits::ConstU64, PalletId};
+use frame_support::{assert_ok, pallet_prelude::*, parameter_types, traits::ConstU64, PalletId};
 use sp_runtime::traits::{Convert, IdentityLookup};
 
 type AccountId = u128;
@@ -214,6 +214,17 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	ext.execute_with(|| {
 		// for events to be deposited.
 		frame_system::Pallet::<Runtime>::set_block_number(1);
+
+		// set some limit for nominations.
+		assert_ok!(Staking::set_staking_configs(
+			Origin::root(),
+			pallet_staking::ConfigOp::Set(10), // minimum nominator bond
+			pallet_staking::ConfigOp::Noop,
+			pallet_staking::ConfigOp::Noop,
+			pallet_staking::ConfigOp::Noop,
+			pallet_staking::ConfigOp::Noop,
+			pallet_staking::ConfigOp::Noop,
+		));
 	});
 
 	ext

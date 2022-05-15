@@ -631,7 +631,7 @@ impl<T: Config> BondedPool<T> {
 	fn points_to_balance(&self, points: BalanceOf<T>) -> BalanceOf<T> {
 		let bonded_balance =
 			T::StakingInterface::active_stake(&self.bonded_account()).unwrap_or(Zero::zero());
-		Pallet::<T>::point_to_balance(bonded_balance, self.points, points)
+		Pallet::<T>::point_to_balance(dbg!(bonded_balance), dbg!(self.points), points)
 	}
 
 	/// Issue points to [`Self`] for `new_funds`.
@@ -827,15 +827,10 @@ impl<T: Config> BondedPool<T> {
 		&self,
 		caller: &T::AccountId,
 		target_account: &T::AccountId,
-		target_member: &PoolMember<T>,
-		sub_pools: &SubPools<T>,
+		bonded_pool: &BondedPool<T>,
 	) -> Result<(), DispatchError> {
 		if *target_account == self.roles.depositor {
-			ensure!(
-				sub_pools.sum_unbonding_points() == target_member.unbonding_points(),
-				Error::<T>::NotOnlyPoolMember
-			);
-			debug_assert_eq!(self.member_counter, 1, "only member must exist at this point");
+			ensure!(bonded_pool.member_counter == 1, Error::<T>::NotOnlyPoolMember);
 			Ok(())
 		} else {
 			// This isn't a depositor
@@ -983,9 +978,13 @@ impl<T: Config> UnbondPool<T> {
 	}
 
 	/// Issue points and update the balance given `new_balance`.
-	fn issue(&mut self, new_funds: BalanceOf<T>) {
-		self.points = self.points.saturating_add(self.balance_to_point(new_funds));
+	///
+	/// Returns the actual amounts of points issued.
+	fn issue(&mut self, new_funds: BalanceOf<T>) -> BalanceOf<T> {
+		let new_points = self.balance_to_point(new_funds);
+		self.points = self.points.saturating_add(new_points);
 		self.balance = self.balance.saturating_add(new_funds);
+		new_points
 	}
 
 	/// Dissolve some points from the unbonding pool, reducing the balance of the pool
@@ -1512,6 +1511,7 @@ pub mod pallet {
 			let unbond_era = T::StakingInterface::bonding_duration().saturating_add(current_era);
 
 			// Try and unbond in the member map.
+			// TODO: this is wrong, we should use `actual_unbonding_points`.
 			member.try_unbond(unbonding_points, unbond_era)?;
 
 			// Unbond in the actual underlying nominator.
@@ -1534,7 +1534,7 @@ pub mod pallet {
 					.defensive_map_err(|_| Error::<T>::DefensiveError)?;
 			}
 
-			sub_pools
+			let actual_unbonding_points = sub_pools
 				.with_era
 				.get_mut(&unbond_era)
 				// The above check ensures the pool exists.
@@ -1614,12 +1614,7 @@ pub mod pallet {
 			let mut sub_pools = SubPoolsStorage::<T>::get(member.pool_id)
 				.defensive_ok_or_else(|| Error::<T>::SubPoolsNotFound)?;
 
-			bonded_pool.ok_to_withdraw_unbonded_with(
-				&caller,
-				&member_account,
-				&member,
-				&sub_pools,
-			)?;
+			bonded_pool.ok_to_withdraw_unbonded_with(&caller, &member_account, &bonded_pool)?;
 
 			// NOTE: must do this after we have done the `ok_to_withdraw_unbonded_other_with` check.
 			let withdrawn_points = member.withdraw_unlocked(current_era);
