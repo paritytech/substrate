@@ -140,7 +140,7 @@ use codec::{Decode, Encode};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
-use smallvec::{smallvec, SmallVec};
+use smallvec::SmallVec;
 use sp_arithmetic::{
 	traits::{BaseArithmetic, Saturating, Unsigned},
 	Perbill,
@@ -625,7 +625,7 @@ impl RuntimeDbWeight {
 	}
 }
 
-/// One coefficient and its position in the `WeightToFeePolynomial`.
+/// One coefficient and its position in the `WeightToFee`.
 ///
 /// One term of polynomial is calculated as:
 ///
@@ -650,6 +650,15 @@ pub struct WeightToFeeCoefficient<Balance> {
 /// A list of coefficients that represent one polynomial.
 pub type WeightToFeeCoefficients<T> = SmallVec<[WeightToFeeCoefficient<T>; 4]>;
 
+/// A trait that describes the weight to fee calculation.
+pub trait WeightToFee {
+	/// The type that is returned as result from calculation.
+	type Balance: BaseArithmetic + From<u32> + Copy + Unsigned;
+
+	/// Calculates the fee from the passed `weight`.
+	fn calc(weight: &Weight) -> Self::Balance;
+}
+
 /// A trait that describes the weight to fee calculation as polynomial.
 ///
 /// An implementor should only implement the `polynomial` function.
@@ -664,6 +673,13 @@ pub trait WeightToFeePolynomial {
 	/// that the order of coefficients is important as putting the negative coefficients
 	/// first will most likely saturate the result to zero mid evaluation.
 	fn polynomial() -> WeightToFeeCoefficients<Self::Balance>;
+}
+
+impl<T> WeightToFee for T
+where
+	T: WeightToFeePolynomial,
+{
+	type Balance = <Self as WeightToFeePolynomial>::Balance;
 
 	/// Calculates the fee from the passed `weight` according to the `polynomial`.
 	///
@@ -693,30 +709,21 @@ pub trait WeightToFeePolynomial {
 	}
 }
 
-/// Implementor of `WeightToFeePolynomial` that maps one unit of weight to one unit of fee.
+/// Implementor of `WeightToFee` that maps one unit of weight to one unit of fee.
 pub struct IdentityFee<T>(sp_std::marker::PhantomData<T>);
 
-impl<T> WeightToFeePolynomial for IdentityFee<T>
+impl<T> WeightToFee for IdentityFee<T>
 where
 	T: BaseArithmetic + From<u32> + Copy + Unsigned,
 {
 	type Balance = T;
-
-	fn polynomial() -> WeightToFeeCoefficients<Self::Balance> {
-		smallvec!(WeightToFeeCoefficient {
-			coeff_integer: 1u32.into(),
-			coeff_frac: Perbill::zero(),
-			negative: false,
-			degree: 1,
-		})
-	}
 
 	fn calc(weight: &Weight) -> Self::Balance {
 		Self::Balance::saturated_from(*weight)
 	}
 }
 
-/// Implementor of [`WeightToFeePolynomial`] that uses a constant multiplier.
+/// Implementor of [`WeightToFee`] that uses a constant multiplier.
 /// # Example
 ///
 /// ```
@@ -727,21 +734,12 @@ where
 /// ```
 pub struct ConstantMultiplier<T, M>(sp_std::marker::PhantomData<(T, M)>);
 
-impl<T, M> WeightToFeePolynomial for ConstantMultiplier<T, M>
+impl<T, M> WeightToFee for ConstantMultiplier<T, M>
 where
 	T: BaseArithmetic + From<u32> + Copy + Unsigned,
 	M: Get<T>,
 {
 	type Balance = T;
-
-	fn polynomial() -> WeightToFeeCoefficients<Self::Balance> {
-		smallvec!(WeightToFeeCoefficient {
-			coeff_integer: M::get(),
-			coeff_frac: Perbill::zero(),
-			negative: false,
-			degree: 1,
-		})
-	}
 
 	fn calc(weight: &Weight) -> Self::Balance {
 		Self::Balance::saturated_from(*weight).saturating_mul(M::get())
@@ -834,6 +832,7 @@ impl PerDispatchClass<Weight> {
 mod tests {
 	use super::*;
 	use crate::{decl_module, parameter_types, traits::Get};
+	use smallvec::smallvec;
 
 	pub trait Config: 'static {
 		type Origin;

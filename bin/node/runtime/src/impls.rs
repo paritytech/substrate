@@ -59,7 +59,7 @@ mod multiplier_tests {
 		AdjustmentVariable, MinimumMultiplier, Runtime, RuntimeBlockWeights as BlockWeights,
 		System, TargetBlockFullness, TransactionPayment,
 	};
-	use frame_support::weights::{DispatchClass, Weight, WeightToFeePolynomial};
+	use frame_support::weights::{DispatchClass, Weight, WeightToFee};
 
 	fn max_normal() -> Weight {
 		BlockWeights::get()

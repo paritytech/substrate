@@ -18,9 +18,7 @@
 use codec::{Encode, Joiner};
 use frame_support::{
 	traits::Currency,
-	weights::{
-		constants::ExtrinsicBaseWeight, GetDispatchInfo, IdentityFee, WeightToFeePolynomial,
-	},
+	weights::{constants::ExtrinsicBaseWeight, GetDispatchInfo, IdentityFee, WeightToFee},
 };
 use node_primitives::Balance;
 use node_runtime::{
