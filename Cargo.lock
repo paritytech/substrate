@@ -2522,7 +2522,7 @@ dependencies = [
  "indexmap",
  "slab",
  "tokio",
- "tokio-util 0.7.1",
+ "tokio-util 0.7.2",
  "tracing",
 ]
 
@@ -10439,9 +10439,9 @@ dependencies = [
 
 [[package]]
 name = "tokio-util"
-version = "0.7.1"
+version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0edfdeb067411dba2044da6d1cb2df793dd35add7888d73c16e3381ded401764"
+checksum = "f988a1a1adc2fb21f9c12aa96441da33a1728193ae0b95d2be22dbd17fcb4e5c"
 dependencies = [
  "bytes 1.1.0",
  "futures-core",
@@ -11708,7 +11708,7 @@ dependencies = [
 [[package]]
 name = "xcm"
 version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
 dependencies = [
  "derivative",
  "impl-trait-for-tuples",
@@ -11721,7 +11721,7 @@ dependencies = [
 [[package]]
 name = "xcm-procedural"
 version = "0.1.0"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
 dependencies = [
  "Inflector",
  "proc-macro2",
@@ -11794,742 +11794,264 @@ dependencies = [
 ]
 
 [[patch.unused]]
-name = "sc-finality-grandpa-rpc"
-version = "0.10.0-dev"
+name = "metered-channel"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "pallet-xcm"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-approval-distribution"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-availability-bitfield-distribution"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-availability-distribution"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-availability-recovery"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-cli"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-client"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-collator-protocol"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-core-primitives"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-dispute-distribution"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-erasure-coding"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-gossip-support"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-network-bridge"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-node-collation-generation"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-node-core-approval-voting"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-node-core-av-store"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-node-core-backing"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-node-core-bitfield-signing"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-node-core-candidate-validation"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-node-core-chain-api"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-node-core-chain-selection"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-node-core-dispute-coordinator"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-node-core-parachains-inherent"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-node-core-provisioner"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-node-core-pvf"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-node-core-runtime-api"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-node-jaeger"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-node-metrics"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-node-network-protocol"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-node-primitives"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-node-subsystem"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-node-subsystem-types"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-node-subsystem-util"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-overseer"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-overseer-gen"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-overseer-gen-proc-macro"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-parachain"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-primitives"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-rpc"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-runtime"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-runtime-common"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-runtime-parachains"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-service"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-statement-distribution"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-statement-table"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-test-runtime"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-test-service"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "slot-range-helper"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "xcm-builder"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "xcm-executor"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
 
 [[patch.unused]]
 name = "pallet-crowdloan-rewards"
 version = "0.6.0"
 source = "git+https://github.com/mangata-finance//crowdloan-rewards?branch=mangata-dev-v0.9.17#11ddb08214b2c708e25a5d6021d8e44a3e732762"
-
-[[patch.unused]]
-name = "parachain-staking"
-version = "3.0.0"
-source = "git+https://github.com/mangata-finance//moonbeam?branch=mangata-dev-v0.9.17#6ec6df328e423d95bccf580a77ff16c7116f8669"
-
-[[patch.unused]]
-name = "metered-channel"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "pallet-xcm"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-approval-distribution"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-availability-bitfield-distribution"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-availability-distribution"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-availability-recovery"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-cli"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-client"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-collator-protocol"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-core-primitives"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-dispute-distribution"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-erasure-coding"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-gossip-support"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-network-bridge"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-node-collation-generation"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-node-core-approval-voting"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-node-core-av-store"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-node-core-backing"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-node-core-bitfield-signing"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-node-core-candidate-validation"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-node-core-chain-api"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-node-core-chain-selection"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-node-core-dispute-coordinator"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-node-core-parachains-inherent"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-node-core-provisioner"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-node-core-pvf"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-node-core-runtime-api"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-node-jaeger"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-node-metrics"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-node-network-protocol"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-node-primitives"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-node-subsystem"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-node-subsystem-types"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-node-subsystem-util"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-overseer"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-overseer-gen"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-overseer-gen-proc-macro"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-parachain"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-primitives"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-rpc"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-runtime"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-runtime-common"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-runtime-parachains"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-service"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-statement-distribution"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-statement-table"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-test-runtime"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-test-service"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "slot-range-helper"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "xcm-builder"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "xcm-executor"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "cumulus-client-cli"
-version = "0.1.0"
-source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#db3905821e0d508d5783346a3414d0a92aac4106"
-
-[[patch.unused]]
-name = "cumulus-client-collator"
-version = "0.1.0"
-source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#db3905821e0d508d5783346a3414d0a92aac4106"
-
-[[patch.unused]]
-name = "cumulus-client-consensus-aura"
-version = "0.1.0"
-source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#db3905821e0d508d5783346a3414d0a92aac4106"
-
-[[patch.unused]]
-name = "cumulus-client-consensus-common"
-version = "0.1.0"
-source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#db3905821e0d508d5783346a3414d0a92aac4106"
-
-[[patch.unused]]
-name = "cumulus-client-network"
-version = "0.1.0"
-source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#db3905821e0d508d5783346a3414d0a92aac4106"
-
-[[patch.unused]]
-name = "cumulus-client-pov-recovery"
-version = "0.1.0"
-source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#db3905821e0d508d5783346a3414d0a92aac4106"
-
-[[patch.unused]]
-name = "cumulus-client-service"
-version = "0.1.0"
-source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#db3905821e0d508d5783346a3414d0a92aac4106"
-
-[[patch.unused]]
-name = "cumulus-pallet-aura-ext"
-version = "0.1.0"
-source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#db3905821e0d508d5783346a3414d0a92aac4106"
-
-[[patch.unused]]
-name = "cumulus-pallet-dmp-queue"
-version = "0.1.0"
-source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#db3905821e0d508d5783346a3414d0a92aac4106"
-
-[[patch.unused]]
-name = "cumulus-pallet-parachain-system"
-version = "0.1.0"
-source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#db3905821e0d508d5783346a3414d0a92aac4106"
-
-[[patch.unused]]
-name = "cumulus-pallet-parachain-system-proc-macro"
-version = "0.1.0"
-source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#db3905821e0d508d5783346a3414d0a92aac4106"
-
-[[patch.unused]]
-name = "cumulus-pallet-xcm"
-version = "0.1.0"
-source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#db3905821e0d508d5783346a3414d0a92aac4106"
-
-[[patch.unused]]
-name = "cumulus-pallet-xcmp-queue"
-version = "0.1.0"
-source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#db3905821e0d508d5783346a3414d0a92aac4106"
-
-[[patch.unused]]
-name = "cumulus-primitives-core"
-version = "0.1.0"
-source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#db3905821e0d508d5783346a3414d0a92aac4106"
-
-[[patch.unused]]
-name = "cumulus-primitives-parachain-inherent"
-version = "0.1.0"
-source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#db3905821e0d508d5783346a3414d0a92aac4106"
-
-[[patch.unused]]
-name = "cumulus-primitives-timestamp"
-version = "0.1.0"
-source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#db3905821e0d508d5783346a3414d0a92aac4106"
-
-[[patch.unused]]
-name = "cumulus-primitives-utility"
-version = "0.1.0"
-source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#db3905821e0d508d5783346a3414d0a92aac4106"
-
-[[patch.unused]]
-name = "cumulus-relay-chain-interface"
-version = "0.1.0"
-source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#db3905821e0d508d5783346a3414d0a92aac4106"
-
-[[patch.unused]]
-name = "cumulus-relay-chain-local"
-version = "0.1.0"
-source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#db3905821e0d508d5783346a3414d0a92aac4106"
-
-[[patch.unused]]
-name = "cumulus-test-relay-sproof-builder"
-version = "0.1.0"
-source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#db3905821e0d508d5783346a3414d0a92aac4106"
-
-[[patch.unused]]
-name = "parachain-info"
-version = "0.1.0"
-source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#db3905821e0d508d5783346a3414d0a92aac4106"
-
-[[patch.unused]]
-name = "cumulus-client-cli"
-version = "0.1.0"
-source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#db3905821e0d508d5783346a3414d0a92aac4106"
-
-[[patch.unused]]
-name = "cumulus-client-collator"
-version = "0.1.0"
-source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#db3905821e0d508d5783346a3414d0a92aac4106"
-
-[[patch.unused]]
-name = "cumulus-client-consensus-aura"
-version = "0.1.0"
-source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#db3905821e0d508d5783346a3414d0a92aac4106"
-
-[[patch.unused]]
-name = "cumulus-client-consensus-common"
-version = "0.1.0"
-source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#db3905821e0d508d5783346a3414d0a92aac4106"
-
-[[patch.unused]]
-name = "cumulus-client-network"
-version = "0.1.0"
-source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#db3905821e0d508d5783346a3414d0a92aac4106"
-
-[[patch.unused]]
-name = "cumulus-client-pov-recovery"
-version = "0.1.0"
-source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#db3905821e0d508d5783346a3414d0a92aac4106"
-
-[[patch.unused]]
-name = "cumulus-client-service"
-version = "0.1.0"
-source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#db3905821e0d508d5783346a3414d0a92aac4106"
-
-[[patch.unused]]
-name = "cumulus-pallet-aura-ext"
-version = "0.1.0"
-source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#db3905821e0d508d5783346a3414d0a92aac4106"
-
-[[patch.unused]]
-name = "cumulus-pallet-dmp-queue"
-version = "0.1.0"
-source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#db3905821e0d508d5783346a3414d0a92aac4106"
-
-[[patch.unused]]
-name = "cumulus-pallet-parachain-system"
-version = "0.1.0"
-source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#db3905821e0d508d5783346a3414d0a92aac4106"
-
-[[patch.unused]]
-name = "cumulus-pallet-parachain-system-proc-macro"
-version = "0.1.0"
-source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#db3905821e0d508d5783346a3414d0a92aac4106"
-
-[[patch.unused]]
-name = "cumulus-pallet-xcm"
-version = "0.1.0"
-source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#db3905821e0d508d5783346a3414d0a92aac4106"
-
-[[patch.unused]]
-name = "cumulus-pallet-xcmp-queue"
-version = "0.1.0"
-source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#db3905821e0d508d5783346a3414d0a92aac4106"
-
-[[patch.unused]]
-name = "cumulus-primitives-core"
-version = "0.1.0"
-source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#db3905821e0d508d5783346a3414d0a92aac4106"
-
-[[patch.unused]]
-name = "cumulus-primitives-parachain-inherent"
-version = "0.1.0"
-source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#db3905821e0d508d5783346a3414d0a92aac4106"
-
-[[patch.unused]]
-name = "cumulus-primitives-timestamp"
-version = "0.1.0"
-source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#db3905821e0d508d5783346a3414d0a92aac4106"
-
-[[patch.unused]]
-name = "cumulus-primitives-utility"
-version = "0.1.0"
-source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#db3905821e0d508d5783346a3414d0a92aac4106"
-
-[[patch.unused]]
-name = "cumulus-relay-chain-interface"
-version = "0.1.0"
-source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#db3905821e0d508d5783346a3414d0a92aac4106"
-
-[[patch.unused]]
-name = "cumulus-relay-chain-local"
-version = "0.1.0"
-source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#db3905821e0d508d5783346a3414d0a92aac4106"
-
-[[patch.unused]]
-name = "cumulus-test-relay-sproof-builder"
-version = "0.1.0"
-source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#db3905821e0d508d5783346a3414d0a92aac4106"
-
-[[patch.unused]]
-name = "parachain-info"
-version = "0.1.0"
-source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#db3905821e0d508d5783346a3414d0a92aac4106"
-
-[[patch.unused]]
-name = "sc-finality-grandpa-rpc"
-version = "0.10.0-dev"
-
-[[patch.unused]]
-name = "metered-channel"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "pallet-xcm"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-approval-distribution"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-availability-bitfield-distribution"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-availability-distribution"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-availability-recovery"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-cli"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-client"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-collator-protocol"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-core-primitives"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-dispute-distribution"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-erasure-coding"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-gossip-support"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-network-bridge"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-node-collation-generation"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-node-core-approval-voting"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-node-core-av-store"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-node-core-backing"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-node-core-bitfield-signing"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-node-core-candidate-validation"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-node-core-chain-api"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-node-core-chain-selection"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-node-core-dispute-coordinator"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-node-core-parachains-inherent"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-node-core-provisioner"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-node-core-pvf"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-node-core-runtime-api"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-node-jaeger"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-node-metrics"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-node-network-protocol"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-node-primitives"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-node-subsystem"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-node-subsystem-types"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-node-subsystem-util"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-overseer"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-overseer-gen"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-overseer-gen-proc-macro"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-parachain"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-primitives"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-rpc"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-runtime"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-runtime-common"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-runtime-parachains"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-service"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-statement-distribution"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-statement-table"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-test-runtime"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "polkadot-test-service"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "slot-range-helper"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "xcm-builder"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
-
-[[patch.unused]]
-name = "xcm-executor"
-version = "0.9.17"
-source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#5c57190b3c09e0955cefc882688429aba2a633f9"
 
 [[patch.unused]]
 name = "sc-finality-grandpa-rpc"
@@ -12554,6 +12076,261 @@ source = "git+https://github.com/mangata-finance//open-runtime-module-library?br
 name = "orml-xtokens"
 version = "0.4.1-dev"
 source = "git+https://github.com/mangata-finance//open-runtime-module-library?branch=mangata-dev-v0.9.17#e4b3614c21b80ea8ad2089ad2e470ee05a66232d"
+
+[[patch.unused]]
+name = "metered-channel"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "pallet-xcm"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-approval-distribution"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-availability-bitfield-distribution"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-availability-distribution"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-availability-recovery"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-cli"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-client"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-collator-protocol"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-core-primitives"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-dispute-distribution"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-erasure-coding"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-gossip-support"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-network-bridge"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-node-collation-generation"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-node-core-approval-voting"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-node-core-av-store"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-node-core-backing"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-node-core-bitfield-signing"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-node-core-candidate-validation"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-node-core-chain-api"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-node-core-chain-selection"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-node-core-dispute-coordinator"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-node-core-parachains-inherent"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-node-core-provisioner"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-node-core-pvf"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-node-core-runtime-api"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-node-jaeger"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-node-metrics"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-node-network-protocol"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-node-primitives"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-node-subsystem"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-node-subsystem-types"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-node-subsystem-util"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-overseer"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-overseer-gen"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-overseer-gen-proc-macro"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-parachain"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-primitives"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-rpc"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-runtime"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-runtime-common"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-runtime-parachains"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-service"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-statement-distribution"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-statement-table"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-test-runtime"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "polkadot-test-service"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "slot-range-helper"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "xcm-builder"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
+
+[[patch.unused]]
+name = "xcm-executor"
+version = "0.9.17"
+source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.17#561f65877dc6c7016ecaaeeb855ec65e1b1af62f"
 
 [[patch.unused]]
 name = "artemis-asset"
@@ -12589,3 +12366,226 @@ source = "git+https://github.com/mangata-finance//snowbridge?branch=mangata-dev-
 name = "pallet-verifier"
 version = "0.1.1"
 source = "git+https://github.com/mangata-finance//snowbridge?branch=mangata-dev-v0.9.17#b4a8a77714e566b5b48d412b7219346a4a363c64"
+
+[[patch.unused]]
+name = "cumulus-client-cli"
+version = "0.1.0"
+source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#1df213e49065eedba447838b14c6820bbb3a6ca0"
+
+[[patch.unused]]
+name = "cumulus-client-collator"
+version = "0.1.0"
+source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#1df213e49065eedba447838b14c6820bbb3a6ca0"
+
+[[patch.unused]]
+name = "cumulus-client-consensus-aura"
+version = "0.1.0"
+source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#1df213e49065eedba447838b14c6820bbb3a6ca0"
+
+[[patch.unused]]
+name = "cumulus-client-consensus-common"
+version = "0.1.0"
+source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#1df213e49065eedba447838b14c6820bbb3a6ca0"
+
+[[patch.unused]]
+name = "cumulus-client-network"
+version = "0.1.0"
+source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#1df213e49065eedba447838b14c6820bbb3a6ca0"
+
+[[patch.unused]]
+name = "cumulus-client-pov-recovery"
+version = "0.1.0"
+source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#1df213e49065eedba447838b14c6820bbb3a6ca0"
+
+[[patch.unused]]
+name = "cumulus-client-service"
+version = "0.1.0"
+source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#1df213e49065eedba447838b14c6820bbb3a6ca0"
+
+[[patch.unused]]
+name = "cumulus-pallet-aura-ext"
+version = "0.1.0"
+source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#1df213e49065eedba447838b14c6820bbb3a6ca0"
+
+[[patch.unused]]
+name = "cumulus-pallet-dmp-queue"
+version = "0.1.0"
+source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#1df213e49065eedba447838b14c6820bbb3a6ca0"
+
+[[patch.unused]]
+name = "cumulus-pallet-parachain-system"
+version = "0.1.0"
+source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#1df213e49065eedba447838b14c6820bbb3a6ca0"
+
+[[patch.unused]]
+name = "cumulus-pallet-parachain-system-proc-macro"
+version = "0.1.0"
+source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#1df213e49065eedba447838b14c6820bbb3a6ca0"
+
+[[patch.unused]]
+name = "cumulus-pallet-xcm"
+version = "0.1.0"
+source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#1df213e49065eedba447838b14c6820bbb3a6ca0"
+
+[[patch.unused]]
+name = "cumulus-pallet-xcmp-queue"
+version = "0.1.0"
+source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#1df213e49065eedba447838b14c6820bbb3a6ca0"
+
+[[patch.unused]]
+name = "cumulus-primitives-core"
+version = "0.1.0"
+source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#1df213e49065eedba447838b14c6820bbb3a6ca0"
+
+[[patch.unused]]
+name = "cumulus-primitives-parachain-inherent"
+version = "0.1.0"
+source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#1df213e49065eedba447838b14c6820bbb3a6ca0"
+
+[[patch.unused]]
+name = "cumulus-primitives-timestamp"
+version = "0.1.0"
+source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#1df213e49065eedba447838b14c6820bbb3a6ca0"
+
+[[patch.unused]]
+name = "cumulus-primitives-utility"
+version = "0.1.0"
+source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#1df213e49065eedba447838b14c6820bbb3a6ca0"
+
+[[patch.unused]]
+name = "cumulus-relay-chain-interface"
+version = "0.1.0"
+source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#1df213e49065eedba447838b14c6820bbb3a6ca0"
+
+[[patch.unused]]
+name = "cumulus-relay-chain-local"
+version = "0.1.0"
+source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#1df213e49065eedba447838b14c6820bbb3a6ca0"
+
+[[patch.unused]]
+name = "cumulus-test-relay-sproof-builder"
+version = "0.1.0"
+source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#1df213e49065eedba447838b14c6820bbb3a6ca0"
+
+[[patch.unused]]
+name = "parachain-info"
+version = "0.1.0"
+source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#1df213e49065eedba447838b14c6820bbb3a6ca0"
+
+[[patch.unused]]
+name = "sc-finality-grandpa-rpc"
+version = "0.10.0-dev"
+
+[[patch.unused]]
+name = "sc-finality-grandpa-rpc"
+version = "0.10.0-dev"
+
+[[patch.unused]]
+name = "cumulus-client-cli"
+version = "0.1.0"
+source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#1df213e49065eedba447838b14c6820bbb3a6ca0"
+
+[[patch.unused]]
+name = "cumulus-client-collator"
+version = "0.1.0"
+source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#1df213e49065eedba447838b14c6820bbb3a6ca0"
+
+[[patch.unused]]
+name = "cumulus-client-consensus-aura"
+version = "0.1.0"
+source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#1df213e49065eedba447838b14c6820bbb3a6ca0"
+
+[[patch.unused]]
+name = "cumulus-client-consensus-common"
+version = "0.1.0"
+source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#1df213e49065eedba447838b14c6820bbb3a6ca0"
+
+[[patch.unused]]
+name = "cumulus-client-network"
+version = "0.1.0"
+source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#1df213e49065eedba447838b14c6820bbb3a6ca0"
+
+[[patch.unused]]
+name = "cumulus-client-pov-recovery"
+version = "0.1.0"
+source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#1df213e49065eedba447838b14c6820bbb3a6ca0"
+
+[[patch.unused]]
+name = "cumulus-client-service"
+version = "0.1.0"
+source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#1df213e49065eedba447838b14c6820bbb3a6ca0"
+
+[[patch.unused]]
+name = "cumulus-pallet-aura-ext"
+version = "0.1.0"
+source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#1df213e49065eedba447838b14c6820bbb3a6ca0"
+
+[[patch.unused]]
+name = "cumulus-pallet-dmp-queue"
+version = "0.1.0"
+source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#1df213e49065eedba447838b14c6820bbb3a6ca0"
+
+[[patch.unused]]
+name = "cumulus-pallet-parachain-system"
+version = "0.1.0"
+source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#1df213e49065eedba447838b14c6820bbb3a6ca0"
+
+[[patch.unused]]
+name = "cumulus-pallet-parachain-system-proc-macro"
+version = "0.1.0"
+source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#1df213e49065eedba447838b14c6820bbb3a6ca0"
+
+[[patch.unused]]
+name = "cumulus-pallet-xcm"
+version = "0.1.0"
+source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#1df213e49065eedba447838b14c6820bbb3a6ca0"
+
+[[patch.unused]]
+name = "cumulus-pallet-xcmp-queue"
+version = "0.1.0"
+source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#1df213e49065eedba447838b14c6820bbb3a6ca0"
+
+[[patch.unused]]
+name = "cumulus-primitives-core"
+version = "0.1.0"
+source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#1df213e49065eedba447838b14c6820bbb3a6ca0"
+
+[[patch.unused]]
+name = "cumulus-primitives-parachain-inherent"
+version = "0.1.0"
+source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#1df213e49065eedba447838b14c6820bbb3a6ca0"
+
+[[patch.unused]]
+name = "cumulus-primitives-timestamp"
+version = "0.1.0"
+source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#1df213e49065eedba447838b14c6820bbb3a6ca0"
+
+[[patch.unused]]
+name = "cumulus-primitives-utility"
+version = "0.1.0"
+source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#1df213e49065eedba447838b14c6820bbb3a6ca0"
+
+[[patch.unused]]
+name = "cumulus-relay-chain-interface"
+version = "0.1.0"
+source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#1df213e49065eedba447838b14c6820bbb3a6ca0"
+
+[[patch.unused]]
+name = "cumulus-relay-chain-local"
+version = "0.1.0"
+source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#1df213e49065eedba447838b14c6820bbb3a6ca0"
+
+[[patch.unused]]
+name = "cumulus-test-relay-sproof-builder"
+version = "0.1.0"
+source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#1df213e49065eedba447838b14c6820bbb3a6ca0"
+
+[[patch.unused]]
+name = "parachain-info"
+version = "0.1.0"
+source = "git+https://github.com/mangata-finance//cumulus?branch=mangata-dev-v0.9.17#1df213e49065eedba447838b14c6820bbb3a6ca0"
+
+[[patch.unused]]
+name = "parachain-staking"
+version = "3.0.0"
+source = "git+https://github.com/mangata-finance//moonbeam?branch=mangata-dev-v0.9.17#71a33b95e59d2845420d7636ce89436f0d153e27"
