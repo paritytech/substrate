@@ -25,7 +25,7 @@ use sc_client_api::execution_extensions::ExecutionStrategies;
 use sc_service::{
 	config::{
 		DatabaseSource, KeepBlocks, KeystoreConfig, NetworkConfiguration, OffchainWorkerConfig,
-		PruningMode, TransactionPoolOptions, TransactionStorageMode, WasmExecutionMethod,
+		PruningMode, TransactionPoolOptions, WasmExecutionMethod,
 	},
 	BasePath, Configuration, Role,
 };
@@ -67,7 +67,6 @@ fn new_node(tokio_handle: Handle) -> node_cli::service::NewFullBase {
 		state_cache_child_ratio: None,
 		state_pruning: PruningMode::ArchiveAll,
 		keep_blocks: KeepBlocks::All,
-		transaction_storage: TransactionStorageMode::BlockBody,
 		chain_spec: spec,
 		wasm_method: WasmExecutionMethod::Interpreted,
 		// NOTE: we enforce the use of the native runtime to make the errors more debuggable
@@ -103,7 +102,7 @@ fn new_node(tokio_handle: Handle) -> node_cli::service::NewFullBase {
 		wasm_runtime_overrides: None,
 	};
 
-	node_cli::service::new_full_base(config, |_, _| ()).expect("Creates node")
+	node_cli::service::new_full_base(config, false, |_, _| ()).expect("Creates node")
 }
 
 fn create_accounts(num: usize) -> Vec<sr25519::Pair> {
@@ -127,7 +126,7 @@ fn create_account_extrinsics(
 	accounts
 		.iter()
 		.enumerate()
-		.map(|(i, a)| {
+		.flat_map(|(i, a)| {
 			vec![
 				// Reset the nonce by removing any funds
 				create_extrinsic(
@@ -163,7 +162,6 @@ fn create_account_extrinsics(
 				),
 			]
 		})
-		.flatten()
 		.map(OpaqueExtrinsic::from)
 		.collect()
 }
@@ -175,7 +173,7 @@ fn create_benchmark_extrinsics(
 ) -> Vec<OpaqueExtrinsic> {
 	accounts
 		.iter()
-		.map(|account| {
+		.flat_map(|account| {
 			(0..extrinsics_per_account).map(move |nonce| {
 				create_extrinsic(
 					client,
@@ -188,7 +186,6 @@ fn create_benchmark_extrinsics(
 				)
 			})
 		})
-		.flatten()
 		.map(OpaqueExtrinsic::from)
 		.collect()
 }

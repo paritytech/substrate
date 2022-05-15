@@ -38,7 +38,7 @@ pub use secrecy::SecretString;
 use sp_runtime_interface::pass_by::PassByInner;
 #[doc(hidden)]
 pub use sp_std::ops::Deref;
-use sp_std::{convert::TryFrom, hash::Hash, str, vec::Vec};
+use sp_std::{hash::Hash, str, vec::Vec};
 /// Trait to zeroize a memory buffer.
 pub use zeroize::Zeroize;
 
@@ -535,7 +535,7 @@ impl From<[u8; 32]> for AccountId32 {
 	}
 }
 
-impl<'a> sp_std::convert::TryFrom<&'a [u8]> for AccountId32 {
+impl<'a> TryFrom<&'a [u8]> for AccountId32 {
 	type Error = ();
 	fn try_from(x: &'a [u8]) -> Result<AccountId32, ()> {
 		if x.len() == 32 {
@@ -1172,7 +1172,7 @@ mod tests {
 	impl ByteArray for TestPublic {
 		const LEN: usize = 0;
 		fn from_slice(bytes: &[u8]) -> Result<Self, ()> {
-			if bytes.len() == 0 {
+			if bytes.is_empty() {
 				Ok(Self)
 			} else {
 				Err(())

@@ -401,15 +401,22 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	}
 }
 
+/// A type that implements [`SlotWorker`] for a type that implements [`SimpleSlotWorker`].
+///
+/// This is basically a workaround for Rust not supporting specialization. Otherwise we could
+/// implement [`SlotWorker`] for any `T` that implements [`SimpleSlotWorker`], but currently
+/// that would prevent downstream users to implement [`SlotWorker`] for their own types.
+pub struct SimpleSlotWorkerToSlotWorker<T>(pub T);
+
 #[async_trait::async_trait]
-impl<B: BlockT, T: SimpleSlotWorker<B> + Send + Sync>
-	SlotWorker<B, <T::Proposer as Proposer<B>>::Proof> for T
+impl<T: SimpleSlotWorker<B> + Send + Sync, B: BlockT>
+	SlotWorker<B, <T::Proposer as Proposer<B>>::Proof> for SimpleSlotWorkerToSlotWorker<T>
 {
 	async fn on_slot(
 		&mut self,
 		slot_info: SlotInfo<B>,
 	) -> Option<SlotResult<B, <T::Proposer as Proposer<B>>::Proof>> {
-		SimpleSlotWorker::on_slot(self, slot_info).await
+		self.0.on_slot(slot_info).await
 	}
 }
 
@@ -599,7 +606,7 @@ pub fn proposing_remaining_duration<Block: BlockT>(
 		// if we defined a maximum portion of the slot for proposal then we must make sure the
 		// lenience doesn't go over it
 		let lenient_proposing_duration =
-			if let Some(ref max_block_proposal_slot_portion) = max_block_proposal_slot_portion {
+			if let Some(max_block_proposal_slot_portion) = max_block_proposal_slot_portion {
 				std::cmp::min(
 					lenient_proposing_duration,
 					slot_info.duration.mul_f32(max_block_proposal_slot_portion.get()),

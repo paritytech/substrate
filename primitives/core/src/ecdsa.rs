@@ -34,12 +34,14 @@ use crate::{
 };
 #[cfg(feature = "std")]
 use bip39::{Language, Mnemonic, MnemonicType};
-#[cfg(feature = "full_crypto")]
-use core::convert::TryFrom;
+#[cfg(all(feature = "full_crypto", not(feature = "std")))]
+use secp256k1::Secp256k1;
+#[cfg(feature = "std")]
+use secp256k1::SECP256K1;
 #[cfg(feature = "full_crypto")]
 use secp256k1::{
 	ecdsa::{RecoverableSignature, RecoveryId},
-	Message, PublicKey, SecretKey, SECP256K1,
+	Message, PublicKey, SecretKey,
 };
 #[cfg(feature = "std")]
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
@@ -135,7 +137,7 @@ impl AsMut<[u8]> for Public {
 	}
 }
 
-impl sp_std::convert::TryFrom<&[u8]> for Public {
+impl TryFrom<&[u8]> for Public {
 	type Error = ();
 
 	fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
@@ -207,7 +209,7 @@ impl<'de> Deserialize<'de> for Public {
 #[derive(Encode, Decode, MaxEncodedLen, PassByInner, TypeInfo, PartialEq, Eq)]
 pub struct Signature(pub [u8; 65]);
 
-impl sp_std::convert::TryFrom<&[u8]> for Signature {
+impl TryFrom<&[u8]> for Signature {
 	type Error = ();
 
 	fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
@@ -334,7 +336,13 @@ impl Signature {
 		let rid = RecoveryId::from_i32(self.0[64] as i32).ok()?;
 		let sig = RecoverableSignature::from_compact(&self.0[..64], rid).ok()?;
 		let message = Message::from_slice(message).expect("Message is 32 bytes; qed");
-		SECP256K1
+
+		#[cfg(feature = "std")]
+		let context = SECP256K1;
+		#[cfg(not(feature = "std"))]
+		let context = Secp256k1::verification_only();
+
+		context
 			.recover_ecdsa(&message, &sig)
 			.ok()
 			.map(|pubkey| Public(pubkey.serialize()))
@@ -356,7 +364,7 @@ impl From<RecoverableSignature> for Signature {
 /// Derive a single hard junction.
 #[cfg(feature = "full_crypto")]
 fn derive_hard_junction(secret_seed: &Seed, cc: &[u8; 32]) -> Seed {
-	("Secp256k1HDKD", secret_seed, cc).using_encoded(|data| sp_core_hashing::blake2_256(data))
+	("Secp256k1HDKD", secret_seed, cc).using_encoded(sp_core_hashing::blake2_256)
 }
 
 /// An error when deriving a key.
@@ -425,7 +433,13 @@ impl TraitPair for Pair {
 	fn from_seed_slice(seed_slice: &[u8]) -> Result<Pair, SecretStringError> {
 		let secret =
 			SecretKey::from_slice(seed_slice).map_err(|_| SecretStringError::InvalidSeedLength)?;
-		let public = PublicKey::from_secret_key(SECP256K1, &secret);
+
+		#[cfg(feature = "std")]
+		let context = SECP256K1;
+		#[cfg(not(feature = "std"))]
+		let context = Secp256k1::signing_only();
+
+		let public = PublicKey::from_secret_key(&context, &secret);
 		let public = Public(public.serialize());
 		Ok(Pair { public, secret })
 	}
@@ -503,7 +517,13 @@ impl Pair {
 	/// Sign a pre-hashed message
 	pub fn sign_prehashed(&self, message: &[u8; 32]) -> Signature {
 		let message = Message::from_slice(message).expect("Message is 32 bytes; qed");
-		SECP256K1.sign_ecdsa_recoverable(&message, &self.secret).into()
+
+		#[cfg(feature = "std")]
+		let context = SECP256K1;
+		#[cfg(not(feature = "std"))]
+		let context = Secp256k1::signing_only();
+
+		context.sign_ecdsa_recoverable(&message, &self.secret).into()
 	}
 
 	/// Verify a signature on a pre-hashed message. Return `true` if the signature is valid
@@ -743,12 +763,12 @@ mod test {
 			set_default_ss58_version(Ss58AddressFormat::custom(200));
 			// custom addr encoded by version 200
 			let addr = "4pbsSkWcBaYoFHrKJZp5fDVUKbqSYD9dhZZGvpp3vQ5ysVs5ybV";
-			Public::from_ss58check(&addr).unwrap();
+			Public::from_ss58check(addr).unwrap();
 
 			set_default_ss58_version(default_format);
 			// set current ss58 version to default version
 			let addr = "KWAfgC2aRG5UVD6CpbPQXCx4YZZUhvWqqAJE6qcYc9Rtr6g5C";
-			Public::from_ss58check(&addr).unwrap();
+			Public::from_ss58check(addr).unwrap();
 
 			println!("CUSTOM_FORMAT_SUCCESSFUL");
 		} else {

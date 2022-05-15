@@ -161,7 +161,7 @@ impl sp_std::cmp::Ord for CrateVersion {
 
 impl sp_std::cmp::PartialOrd for CrateVersion {
 	fn partial_cmp(&self, other: &Self) -> Option<sp_std::cmp::Ordering> {
-		Some(<Self as Ord>::cmp(&self, other))
+		Some(<Self as Ord>::cmp(self, other))
 	}
 }
 

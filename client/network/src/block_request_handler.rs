@@ -18,7 +18,6 @@
 //! `crate::request_responses::RequestResponsesBehaviour`.
 
 use crate::{
-	chain::Client,
 	config::ProtocolId,
 	protocol::message::BlockAttributes,
 	request_responses::{IncomingRequest, OutgoingResponse, ProtocolConfig},
@@ -33,6 +32,8 @@ use futures::{
 use log::debug;
 use lru::LruCache;
 use prost::Message;
+use sc_client_api::BlockBackend;
+use sp_blockchain::HeaderBackend;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Header, One, Zero},
@@ -54,6 +55,10 @@ mod rep {
 
 	/// Reputation change when a peer sent us the same request multiple times.
 	pub const SAME_REQUEST: Rep = Rep::new_fatal("Same block request multiple times");
+
+	/// Reputation change when a peer sent us the same "small" request multiple times.
+	pub const SAME_SMALL_REQUEST: Rep =
+		Rep::new(-(1 << 10), "same small block request multiple times");
 }
 
 /// Generates a [`ProtocolConfig`] for the block request protocol, refusing incoming requests.
@@ -109,8 +114,8 @@ enum SeenRequestsValue {
 }
 
 /// Handler for incoming block requests from a remote peer.
-pub struct BlockRequestHandler<B: BlockT> {
-	client: Arc<dyn Client<B>>,
+pub struct BlockRequestHandler<B: BlockT, Client> {
+	client: Arc<Client>,
 	request_receiver: mpsc::Receiver<IncomingRequest>,
 	/// Maps from request to number of times we have seen this request.
 	///
@@ -118,11 +123,15 @@ pub struct BlockRequestHandler<B: BlockT> {
 	seen_requests: LruCache<SeenRequestsKey<B>, SeenRequestsValue>,
 }
 
-impl<B: BlockT> BlockRequestHandler<B> {
+impl<B, Client> BlockRequestHandler<B, Client>
+where
+	B: BlockT,
+	Client: HeaderBackend<B> + BlockBackend<B> + Send + Sync + 'static,
+{
 	/// Create a new [`BlockRequestHandler`].
 	pub fn new(
 		protocol_id: &ProtocolId,
-		client: Arc<dyn Client<B>>,
+		client: Arc<Client>,
 		num_peer_hint: usize,
 	) -> (Self, ProtocolConfig) {
 		// Reserve enough request slots for one request per peer when we are at the maximum
@@ -188,7 +197,7 @@ impl<B: BlockT> BlockRequestHandler<B> {
 			peer: *peer,
 			max_blocks,
 			direction,
-			from: from_block_id.clone(),
+			from: from_block_id,
 			attributes,
 			support_multiple_justifications,
 		};
@@ -200,8 +209,16 @@ impl<B: BlockT> BlockRequestHandler<B> {
 			Some(SeenRequestsValue::Fulfilled(ref mut requests)) => {
 				*requests = requests.saturating_add(1);
 
+				let small_request = attributes
+					.difference(BlockAttributes::HEADER | BlockAttributes::JUSTIFICATION)
+					.is_empty();
+
 				if *requests > MAX_NUMBER_OF_SAME_REQUESTS_PER_PEER {
-					reputation_change = Some(rep::SAME_REQUEST);
+					reputation_change = Some(if small_request {
+						rep::SAME_SMALL_REQUEST
+					} else {
+						rep::SAME_REQUEST
+					});
 				}
 			},
 			None => {

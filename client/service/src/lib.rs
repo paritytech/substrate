@@ -39,8 +39,10 @@ use std::{collections::HashMap, io, net::SocketAddr, pin::Pin};
 use codec::{Decode, Encode};
 use futures::{Future, FutureExt, StreamExt};
 use log::{debug, error, warn};
+use sc_client_api::{BlockBackend, ProofProvider};
 use sc_network::PeerId;
 use sc_utils::mpsc::TracingUnboundedReceiver;
+use sp_blockchain::HeaderMetadata;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Header as HeaderT},
@@ -58,7 +60,6 @@ pub use self::{
 };
 pub use config::{
 	BasePath, Configuration, DatabaseSource, KeepBlocks, PruningMode, Role, RpcMethods, TaskType,
-	TransactionStorageMode,
 };
 pub use sc_chain_spec::{
 	ChainSpec, ChainType, Extension as ChainSpecExtension, GenericChainSpec, NoExtension,
@@ -136,11 +137,18 @@ pub struct PartialComponents<Client, Backend, SelectChain, ImportQueue, Transact
 /// The `status_sink` contain a list of senders to send a periodic network status to.
 async fn build_network_future<
 	B: BlockT,
-	C: BlockchainEvents<B> + HeaderBackend<B>,
+	C: BlockchainEvents<B>
+		+ HeaderBackend<B>
+		+ BlockBackend<B>
+		+ HeaderMetadata<B, Error = sp_blockchain::Error>
+		+ ProofProvider<B>
+		+ Send
+		+ Sync
+		+ 'static,
 	H: sc_network::ExHashT,
 >(
 	role: Role,
-	mut network: sc_network::NetworkWorker<B, H>,
+	mut network: sc_network::NetworkWorker<B, H, C>,
 	client: Arc<C>,
 	mut rpc_rx: TracingUnboundedReceiver<sc_rpc::system::Request<B>>,
 	should_have_peers: bool,
@@ -172,7 +180,7 @@ async fn build_network_future<
 				if notification.is_new_best {
 					network.service().new_best_block_imported(
 						notification.hash,
-						notification.header.number().clone(),
+						*notification.header.number(),
 					);
 				}
 			}
@@ -196,7 +204,7 @@ async fn build_network_future<
 						let _ = sender.send(network.local_peer_id().to_base58());
 					},
 					sc_rpc::system::Request::LocalListenAddresses(sender) => {
-						let peer_id = network.local_peer_id().clone().into();
+						let peer_id = (*network.local_peer_id()).into();
 						let p2p_proto_suffix = sc_network::multiaddr::Protocol::P2p(peer_id);
 						let addresses = network.listen_addresses()
 							.map(|addr| addr.clone().with(p2p_proto_suffix.clone()).to_string())
@@ -214,7 +222,7 @@ async fn build_network_future<
 						).collect());
 					}
 					sc_rpc::system::Request::NetworkState(sender) => {
-						if let Some(network_state) = serde_json::to_value(&network.network_state()).ok() {
+						if let Ok(network_state) = serde_json::to_value(&network.network_state()) {
 							let _ = sender.send(network_state);
 						}
 					}
@@ -257,7 +265,7 @@ async fn build_network_future<
 						use sc_rpc::system::SyncState;
 
 						let _ = sender.send(SyncState {
-							starting_block: starting_block,
+							starting_block,
 							current_block: client.info().best_number,
 							highest_block: network.best_seen_block(),
 						});
@@ -377,7 +385,7 @@ fn start_rpc_servers<
 				address,
 				config.rpc_cors.as_ref(),
 				gen_handler(
-					deny_unsafe(&address, &config.rpc_methods),
+					deny_unsafe(address, &config.rpc_methods),
 					sc_rpc_server::RpcMiddleware::new(
 						rpc_metrics.clone(),
 						rpc_method_names.clone(),
@@ -396,7 +404,7 @@ fn start_rpc_servers<
 				config.rpc_ws_max_connections,
 				config.rpc_cors.as_ref(),
 				gen_handler(
-					deny_unsafe(&address, &config.rpc_methods),
+					deny_unsafe(address, &config.rpc_methods),
 					sc_rpc_server::RpcMiddleware::new(
 						rpc_metrics.clone(),
 						rpc_method_names.clone(),
@@ -462,7 +470,13 @@ where
 
 impl<B, H, C, Pool, E> sc_network::config::TransactionPool<H, B> for TransactionPoolAdapter<C, Pool>
 where
-	C: sc_network::config::Client<B> + Send + Sync,
+	C: HeaderBackend<B>
+		+ BlockBackend<B>
+		+ HeaderMetadata<B, Error = sp_blockchain::Error>
+		+ ProofProvider<B>
+		+ Send
+		+ Sync
+		+ 'static,
 	Pool: 'static + TransactionPool<Block = B, Hash = H, Error = E>,
 	B: BlockT,
 	H: std::hash::Hash + Eq + sp_runtime::traits::Member + sp_runtime::traits::MaybeSerialize,

@@ -158,9 +158,7 @@ pub trait Storage {
 	/// The limit can be used to partially delete a prefix storage in case it is too large
 	/// to delete in one go (block).
 	///
-	/// It returns a boolean false iff some keys are remaining in
-	/// the prefix after the functions returns. Also returns a `u32` with
-	/// the number of keys removed from the process.
+	/// Returns [`KillStorageResult`] to inform about the result.
 	///
 	/// # Note
 	///
@@ -171,8 +169,10 @@ pub trait Storage {
 	///
 	/// Calling this function multiple times per block for the same `prefix` does
 	/// not make much sense because it is not cumulative when called inside the same block.
-	/// Use this function to distribute the deletion of a single child trie across multiple
-	/// blocks.
+	/// The deletion would always start from `prefix` resulting in the same keys being deleted
+	/// every time this function is called with the exact same arguments per block. This happens
+	/// because the keys in the overlay are not taken into account when deleting keys in the
+	/// backend.
 	#[version(2)]
 	fn clear_prefix(&mut self, prefix: &[u8], limit: Option<u32>) -> KillStorageResult {
 		let (all_removed, num_removed) = Externalities::clear_prefix(*self, prefix, limit);
@@ -220,7 +220,7 @@ pub trait Storage {
 
 	/// Get the next key in storage after the given one in lexicographic order.
 	fn next_key(&mut self, key: &[u8]) -> Option<Vec<u8>> {
-		self.next_storage_key(&key)
+		self.next_storage_key(key)
 	}
 
 	/// Start a new nested transaction.
@@ -629,7 +629,7 @@ pub trait Crypto {
 	///
 	/// Returns the public key.
 	fn ed25519_generate(&mut self, id: KeyTypeId, seed: Option<Vec<u8>>) -> ed25519::Public {
-		let seed = seed.as_ref().map(|s| std::str::from_utf8(&s).expect("Seed is valid utf8!"));
+		let seed = seed.as_ref().map(|s| std::str::from_utf8(s).expect("Seed is valid utf8!"));
 		let keystore = &***self
 			.extension::<KeystoreExt>()
 			.expect("No `keystore` associated for the current context!");
@@ -678,7 +678,7 @@ pub trait Crypto {
 		pub_key: &ed25519::Public,
 	) -> bool {
 		self.extension::<VerificationExt>()
-			.map(|extension| extension.push_ed25519(sig.clone(), pub_key.clone(), msg.to_vec()))
+			.map(|extension| extension.push_ed25519(sig.clone(), *pub_key, msg.to_vec()))
 			.unwrap_or_else(|| ed25519_verify(sig, msg, pub_key))
 	}
 
@@ -705,7 +705,7 @@ pub trait Crypto {
 		pub_key: &sr25519::Public,
 	) -> bool {
 		self.extension::<VerificationExt>()
-			.map(|extension| extension.push_sr25519(sig.clone(), pub_key.clone(), msg.to_vec()))
+			.map(|extension| extension.push_sr25519(sig.clone(), *pub_key, msg.to_vec()))
 			.unwrap_or_else(|| sr25519_verify(sig, msg, pub_key))
 	}
 
@@ -753,7 +753,7 @@ pub trait Crypto {
 	///
 	/// Returns the public key.
 	fn sr25519_generate(&mut self, id: KeyTypeId, seed: Option<Vec<u8>>) -> sr25519::Public {
-		let seed = seed.as_ref().map(|s| std::str::from_utf8(&s).expect("Seed is valid utf8!"));
+		let seed = seed.as_ref().map(|s| std::str::from_utf8(s).expect("Seed is valid utf8!"));
 		let keystore = &***self
 			.extension::<KeystoreExt>()
 			.expect("No `keystore` associated for the current context!");
@@ -803,7 +803,7 @@ pub trait Crypto {
 	///
 	/// Returns the public key.
 	fn ecdsa_generate(&mut self, id: KeyTypeId, seed: Option<Vec<u8>>) -> ecdsa::Public {
-		let seed = seed.as_ref().map(|s| std::str::from_utf8(&s).expect("Seed is valid utf8!"));
+		let seed = seed.as_ref().map(|s| std::str::from_utf8(s).expect("Seed is valid utf8!"));
 		let keystore = &***self
 			.extension::<KeystoreExt>()
 			.expect("No `keystore` associated for the current context!");
@@ -888,7 +888,7 @@ pub trait Crypto {
 		pub_key: &ecdsa::Public,
 	) -> bool {
 		self.extension::<VerificationExt>()
-			.map(|extension| extension.push_ecdsa(sig.clone(), pub_key.clone(), msg.to_vec()))
+			.map(|extension| extension.push_ecdsa(sig.clone(), *pub_key, msg.to_vec()))
 			.unwrap_or_else(|| ecdsa_verify(sig, msg, pub_key))
 	}
 
@@ -1504,14 +1504,7 @@ pub trait Sandbox {
 		state_ptr: Pointer<u8>,
 	) -> u32 {
 		self.sandbox()
-			.invoke(
-				instance_idx,
-				&function,
-				&args,
-				return_val_ptr,
-				return_val_len,
-				state_ptr.into(),
-			)
+			.invoke(instance_idx, function, args, return_val_ptr, return_val_len, state_ptr.into())
 			.expect("Failed to invoke function with sandbox")
 	}
 

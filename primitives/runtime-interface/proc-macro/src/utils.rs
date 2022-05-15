@@ -65,13 +65,11 @@ impl RuntimeInterfaceFunction {
 			}
 		});
 
-		if should_trap_on_return {
-			if !matches!(item.sig.output, syn::ReturnType::Default) {
-				return Err(Error::new(
-					item.sig.ident.span(),
-					"Methods marked as #[trap_on_return] cannot return anything",
-				))
-			}
+		if should_trap_on_return && !matches!(item.sig.output, syn::ReturnType::Default) {
+			return Err(Error::new(
+				item.sig.ident.span(),
+				"Methods marked as #[trap_on_return] cannot return anything",
+			))
 		}
 
 		Ok(Self { item, should_trap_on_return })
@@ -212,7 +210,7 @@ pub fn create_function_ident_with_version(name: &Ident, version: u32) -> Ident {
 }
 
 /// Returns the function arguments of the given `Signature`, minus any `self` arguments.
-pub fn get_function_arguments<'a>(sig: &'a Signature) -> impl Iterator<Item = PatType> + 'a {
+pub fn get_function_arguments(sig: &Signature) -> impl Iterator<Item = PatType> + '_ {
 	sig.inputs
 		.iter()
 		.filter_map(|a| match a {
@@ -234,20 +232,20 @@ pub fn get_function_arguments<'a>(sig: &'a Signature) -> impl Iterator<Item = Pa
 }
 
 /// Returns the function argument names of the given `Signature`, minus any `self`.
-pub fn get_function_argument_names<'a>(sig: &'a Signature) -> impl Iterator<Item = Box<Pat>> + 'a {
+pub fn get_function_argument_names(sig: &Signature) -> impl Iterator<Item = Box<Pat>> + '_ {
 	get_function_arguments(sig).map(|pt| pt.pat)
 }
 
 /// Returns the function argument types of the given `Signature`, minus any `Self` type.
-pub fn get_function_argument_types<'a>(sig: &'a Signature) -> impl Iterator<Item = Box<Type>> + 'a {
+pub fn get_function_argument_types(sig: &Signature) -> impl Iterator<Item = Box<Type>> + '_ {
 	get_function_arguments(sig).map(|pt| pt.ty)
 }
 
 /// Returns the function argument types, minus any `Self` type. If any of the arguments
 /// is a reference, the underlying type without the ref is returned.
-pub fn get_function_argument_types_without_ref<'a>(
-	sig: &'a Signature,
-) -> impl Iterator<Item = Box<Type>> + 'a {
+pub fn get_function_argument_types_without_ref(
+	sig: &Signature,
+) -> impl Iterator<Item = Box<Type>> + '_ {
 	get_function_arguments(sig).map(|pt| pt.ty).map(|ty| match *ty {
 		Type::Reference(type_ref) => type_ref.elem,
 		_ => ty,
@@ -256,9 +254,9 @@ pub fn get_function_argument_types_without_ref<'a>(
 
 /// Returns the function argument names and types, minus any `self`. If any of the arguments
 /// is a reference, the underlying type without the ref is returned.
-pub fn get_function_argument_names_and_types_without_ref<'a>(
-	sig: &'a Signature,
-) -> impl Iterator<Item = (Box<Pat>, Box<Type>)> + 'a {
+pub fn get_function_argument_names_and_types_without_ref(
+	sig: &Signature,
+) -> impl Iterator<Item = (Box<Pat>, Box<Type>)> + '_ {
 	get_function_arguments(sig).map(|pt| match *pt.ty {
 		Type::Reference(type_ref) => (pt.pat, type_ref.elem),
 		_ => (pt.pat, pt.ty),
@@ -267,9 +265,9 @@ pub fn get_function_argument_names_and_types_without_ref<'a>(
 
 /// Returns the `&`/`&mut` for all function argument types, minus the `self` arg. If a function
 /// argument is not a reference, `None` is returned.
-pub fn get_function_argument_types_ref_and_mut<'a>(
-	sig: &'a Signature,
-) -> impl Iterator<Item = Option<(token::And, Option<token::Mut>)>> + 'a {
+pub fn get_function_argument_types_ref_and_mut(
+	sig: &Signature,
+) -> impl Iterator<Item = Option<(token::And, Option<token::Mut>)>> + '_ {
 	get_function_arguments(sig).map(|pt| pt.ty).map(|ty| match *ty {
 		Type::Reference(type_ref) => Some((type_ref.and_token, type_ref.mutability)),
 		_ => None,
@@ -277,7 +275,7 @@ pub fn get_function_argument_types_ref_and_mut<'a>(
 }
 
 /// Returns an iterator over all trait methods for the given trait definition.
-fn get_trait_methods<'a>(trait_def: &'a ItemTrait) -> impl Iterator<Item = &'a TraitItemMethod> {
+fn get_trait_methods(trait_def: &ItemTrait) -> impl Iterator<Item = &TraitItemMethod> {
 	trait_def.items.iter().filter_map(|i| match i {
 		TraitItem::Method(ref method) => Some(method),
 		_ => None,

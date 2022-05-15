@@ -253,7 +253,7 @@ where
 		wasm_code: &[u8],
 		ext: &mut dyn Externalities,
 	) -> std::result::Result<Vec<u8>, String> {
-		let runtime_blob = RuntimeBlob::uncompress_if_needed(&wasm_code)
+		let runtime_blob = RuntimeBlob::uncompress_if_needed(wasm_code)
 			.map_err(|e| format!("Failed to create runtime blob: {:?}", e))?;
 
 		if let Some(version) = crate::wasm_runtime::read_embedded_version(&runtime_blob)
@@ -462,8 +462,9 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 					// https://github.com/paritytech/substrate/issues/7354
 					let mut instance = match module.new_instance() {
 						Ok(instance) => instance,
-						Err(error) =>
-							panic!("failed to create new instance from module: {}", error),
+						Err(error) => {
+							panic!("failed to create new instance from module: {}", error)
+						},
 					};
 
 					match instance
@@ -492,8 +493,7 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 
 	fn join(&self, handle: u64) -> Vec<u8> {
 		let receiver = self.tasks.lock().remove(&handle).expect("No task for the handle");
-		let output = receiver.recv().expect("Spawned task panicked for the handle");
-		output
+		receiver.recv().expect("Spawned task panicked for the handle")
 	}
 }
 

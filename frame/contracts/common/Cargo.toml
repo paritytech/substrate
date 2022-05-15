@@ -1,6 +1,6 @@
 [package]
 name = "pallet-contracts-primitives"
-version = "5.0.0"
+version = "6.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
 license = "Apache-2.0"
@@ -19,10 +19,10 @@ scale-info = { version = "2.0.0", default-features = false, features = ["derive"
 serde = { version = "1", features = ["derive"], optional = true }
 
 # Substrate Dependencies (This crate should not rely on frame)
-sp-core = { version = "5.0.0", path = "../../../primitives/core", default-features = false }
+sp-core = { version = "6.0.0", path = "../../../primitives/core", default-features = false }
 sp-std = { version = "4.0.0", default-features = false, path = "../../../primitives/std" }
-sp-rpc = { version = "5.0.0", path = "../../../primitives/rpc", optional = true }
-sp-runtime = { version = "5.0.0", default-features = false, path = "../../../primitives/runtime" }
+sp-rpc = { version = "6.0.0", path = "../../../primitives/rpc", optional = true }
+sp-runtime = { version = "6.0.0", default-features = false, path = "../../../primitives/runtime" }
 
 [features]
 default = ["std"]

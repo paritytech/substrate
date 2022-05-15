@@ -23,7 +23,6 @@
 //! [`LightClientRequestHandler`](handler::LightClientRequestHandler).
 
 use crate::{
-	chain::Client,
 	config::ProtocolId,
 	request_responses::{IncomingRequest, OutgoingResponse, ProtocolConfig},
 	schema, PeerId,
@@ -32,27 +31,32 @@ use codec::{self, Decode, Encode};
 use futures::{channel::mpsc, prelude::*};
 use log::{debug, trace};
 use prost::Message;
-use sc_client_api::StorageProof;
+use sc_client_api::{ProofProvider, StorageProof};
 use sc_peerset::ReputationChange;
 use sp_core::{
 	hexdisplay::HexDisplay,
 	storage::{ChildInfo, ChildType, PrefixedStorageKey},
 };
 use sp_runtime::{generic::BlockId, traits::Block};
-use std::sync::Arc;
+use std::{marker::PhantomData, sync::Arc};
 
 const LOG_TARGET: &str = "light-client-request-handler";
 
 /// Handler for incoming light client requests from a remote peer.
-pub struct LightClientRequestHandler<B: Block> {
+pub struct LightClientRequestHandler<B, Client> {
 	request_receiver: mpsc::Receiver<IncomingRequest>,
 	/// Blockchain client.
-	client: Arc<dyn Client<B>>,
+	client: Arc<Client>,
+	_block: PhantomData<B>,
 }
 
-impl<B: Block> LightClientRequestHandler<B> {
+impl<B, Client> LightClientRequestHandler<B, Client>
+where
+	B: Block,
+	Client: ProofProvider<B> + Send + Sync + 'static,
+{
 	/// Create a new [`crate::block_request_handler::BlockRequestHandler`].
-	pub fn new(protocol_id: &ProtocolId, client: Arc<dyn Client<B>>) -> (Self, ProtocolConfig) {
+	pub fn new(protocol_id: &ProtocolId, client: Arc<Client>) -> (Self, ProtocolConfig) {
 		// For now due to lack of data on light client request handling in production systems, this
 		// value is chosen to match the block request limit.
 		let (tx, request_receiver) = mpsc::channel(20);
@@ -60,7 +64,7 @@ impl<B: Block> LightClientRequestHandler<B> {
 		let mut protocol_config = super::generate_protocol_config(protocol_id);
 		protocol_config.inbound_queue = Some(tx);
 
-		(Self { client, request_receiver }, protocol_config)
+		(Self { client, request_receiver, _block: PhantomData::default() }, protocol_config)
 	}
 
 	/// Run [`LightClientRequestHandler`].

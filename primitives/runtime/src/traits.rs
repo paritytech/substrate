@@ -37,13 +37,7 @@ pub use sp_arithmetic::traits::{
 	UniqueSaturatedFrom, UniqueSaturatedInto, Zero,
 };
 use sp_core::{self, storage::StateVersion, Hasher, RuntimeDebug, TypeId};
-use sp_std::{
-	self,
-	convert::{TryFrom, TryInto},
-	fmt::Debug,
-	marker::PhantomData,
-	prelude::*,
-};
+use sp_std::{self, fmt::Debug, marker::PhantomData, prelude::*};
 #[cfg(feature = "std")]
 use std::fmt::Display;
 #[cfg(feature = "std")]
@@ -165,7 +159,7 @@ where
 		use sp_application_crypto::IsWrappedBy;
 		let inner: &S = self.as_ref();
 		let inner_pubkey =
-			<<T as AppKey>::Public as sp_application_crypto::AppPublic>::Generic::from_ref(&signer);
+			<<T as AppKey>::Public as sp_application_crypto::AppPublic>::Generic::from_ref(signer);
 		Verify::verify(inner, msg, inner_pubkey)
 	}
 }
@@ -1290,7 +1284,7 @@ impl<T: Encode + Decode, Id: Encode + Decode + TypeId> AccountIdConversion<T> fo
 
 	fn try_from_sub_account<S: Decode>(x: &T) -> Option<(Self, S)> {
 		x.using_encoded(|d| {
-			if &d[0..4] != Id::TYPE_ID {
+			if d[0..4] != Id::TYPE_ID {
 				return None
 			}
 			let mut cursor = &d[4..];
@@ -1551,6 +1545,12 @@ impl Printable for u64 {
 impl Printable for &[u8] {
 	fn print(&self) {
 		sp_io::misc::print_hex(self);
+	}
+}
+
+impl<const N: usize> Printable for [u8; N] {
+	fn print(&self) {
+		sp_io::misc::print_hex(&self[..]);
 	}
 }
 

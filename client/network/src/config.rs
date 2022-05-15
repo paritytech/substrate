@@ -22,7 +22,6 @@
 //! See the documentation of [`Params`].
 
 pub use crate::{
-	chain::Client,
 	request_responses::{
 		IncomingRequest, OutgoingResponse, ProtocolConfig as RequestResponseConfig,
 	},
@@ -50,7 +49,6 @@ use sp_runtime::traits::Block as BlockT;
 use std::{
 	borrow::Cow,
 	collections::HashMap,
-	convert::TryFrom,
 	error::Error,
 	fs,
 	future::Future,
@@ -65,7 +63,11 @@ use std::{
 use zeroize::Zeroize;
 
 /// Network initialization parameters.
-pub struct Params<B: BlockT, H: ExHashT> {
+pub struct Params<B, H, Client>
+where
+	B: BlockT + 'static,
+	H: ExHashT,
+{
 	/// Assigned role for our node (full, light, ...).
 	pub role: Role,
 
@@ -80,7 +82,7 @@ pub struct Params<B: BlockT, H: ExHashT> {
 	pub network_config: NetworkConfiguration,
 
 	/// Client that contains the blockchain.
-	pub chain: Arc<dyn Client<B>>,
+	pub chain: Arc<Client>,
 
 	/// Pool of transactions.
 	///
@@ -377,8 +379,8 @@ impl From<multiaddr::Error> for ParseErr {
 	}
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
 /// Sync operation mode.
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum SyncMode {
 	/// Full block download and verification.
 	Full,
@@ -391,6 +393,18 @@ pub enum SyncMode {
 	},
 	/// Warp sync - verify authority set transitions and the latest state.
 	Warp,
+}
+
+impl SyncMode {
+	/// Returns if `self` is [`Self::Warp`].
+	pub fn is_warp(&self) -> bool {
+		matches!(self, Self::Warp)
+	}
+
+	/// Returns if `self` is [`Self::Fast`].
+	pub fn is_fast(&self) -> bool {
+		matches!(self, Self::Fast { .. })
+	}
 }
 
 impl Default for SyncMode {
@@ -568,7 +582,7 @@ pub struct NonDefaultSetConfig {
 	/// considered established once this protocol is open.
 	///
 	/// > **Note**: This field isn't present for the default set, as this is handled internally
-	/// >           by the networking code.
+	/// > by the networking code.
 	pub notifications_protocol: Cow<'static, str>,
 	/// If the remote reports that it doesn't support the protocol indicated in the
 	/// `notifications_protocol` field, then each of these fallback names will be tried one by

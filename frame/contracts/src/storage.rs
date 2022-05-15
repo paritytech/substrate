@@ -154,10 +154,10 @@ where
 		let hashed_key = blake2_256(key);
 		let child_trie_info = &child_trie_info(trie_id);
 		let (old_len, old_value) = if take {
-			let val = child::get_raw(&child_trie_info, &hashed_key);
+			let val = child::get_raw(child_trie_info, &hashed_key);
 			(val.as_ref().map(|v| v.len() as u32), val)
 		} else {
-			(child::len(&child_trie_info, &hashed_key), None)
+			(child::len(child_trie_info, &hashed_key), None)
 		};
 
 		if let Some(storage_meter) = storage_meter {
@@ -183,8 +183,8 @@ where
 		}
 
 		match &new_value {
-			Some(new_value) => child::put_raw(&child_trie_info, &hashed_key, new_value),
-			None => child::kill(&child_trie_info, &hashed_key),
+			Some(new_value) => child::put_raw(child_trie_info, &hashed_key, new_value),
+			None => child::kill(child_trie_info, &hashed_key),
 		}
 
 		Ok(match (old_len, old_value) {
@@ -290,10 +290,9 @@ where
 		weight_limit.saturating_sub(weight_per_key.saturating_mul(remaining_key_budget as Weight))
 	}
 
-	/// This generator uses inner counter for account id and applies the hash over `AccountId +
-	/// accountid_counter`.
-	pub fn generate_trie_id(account_id: &AccountIdOf<T>, seed: u64) -> TrieId {
-		let buf: Vec<_> = account_id.as_ref().iter().chain(&seed.to_le_bytes()).cloned().collect();
+	/// Generates a unique trie id by returning  `hash(account_id ++ nonce)`.
+	pub fn generate_trie_id(account_id: &AccountIdOf<T>, nonce: u64) -> TrieId {
+		let buf: Vec<_> = account_id.as_ref().iter().chain(&nonce.to_le_bytes()).cloned().collect();
 		T::Hashing::hash(&buf).as_ref().into()
 	}
 

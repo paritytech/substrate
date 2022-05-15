@@ -134,7 +134,7 @@ impl<'a> Subscribe<SubscribeOp<'a>> for Registry {
 		});
 
 		if let Some(m) = self.metrics.as_ref() {
-			m.with_label_values(&[&"added"]).inc();
+			m.with_label_values(&["added"]).inc();
 		}
 
 		if self
@@ -195,7 +195,7 @@ impl Registry {
 			let k = StorageKey(k);
 			let listeners = self.listeners.get(&k);
 
-			if let Some(ref listeners) = listeners {
+			if let Some(listeners) = listeners {
 				subscribers.extend(listeners.iter());
 			}
 
@@ -211,7 +211,7 @@ impl Registry {
 					let k = StorageKey(k);
 					let listeners = cl.get(&k);
 
-					if let Some(ref listeners) = listeners {
+					if let Some(listeners) = listeners {
 						subscribers.extend(listeners.iter());
 					}
 
@@ -268,22 +268,22 @@ impl Registry {
 		);
 		if let Some(child_filters) = &sink.child_keys {
 			for (c_key, filters) in child_filters {
-				if let Some((listeners, wildcards)) = self.child_listeners.get_mut(&c_key) {
+				if let Some((listeners, wildcards)) = self.child_listeners.get_mut(c_key) {
 					Self::remove_subscriber_from(
 						subscriber,
-						&filters,
+						filters,
 						&mut *listeners,
 						&mut *wildcards,
 					);
 
 					if listeners.is_empty() && wildcards.is_empty() {
-						self.child_listeners.remove(&c_key);
+						self.child_listeners.remove(c_key);
 					}
 				}
 			}
 		}
 		if let Some(m) = self.metrics.as_ref() {
-			m.with_label_values(&[&"removed"]).inc();
+			m.with_label_values(&["removed"]).inc();
 		}
 
 		Some((sink.keys.clone(), sink.child_keys.clone()))

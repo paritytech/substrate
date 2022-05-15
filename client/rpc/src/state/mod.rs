@@ -332,7 +332,15 @@ where
 		subscriber: Subscriber<StorageChangeSet<Block::Hash>>,
 		keys: Option<Vec<StorageKey>>,
 	) {
-		self.backend.subscribe_storage(meta, subscriber, keys);
+		if keys.is_none() {
+			if let Err(err) = self.deny_unsafe.check_if_safe() {
+				subscriber.reject(err.into())
+				    .expect("subscription rejection can only fail if it's been already rejected, and we're rejecting it for the first time; qed");
+				return
+			}
+		}
+
+		self.backend.subscribe_storage(meta, subscriber, keys)
 	}
 
 	fn unsubscribe_storage(

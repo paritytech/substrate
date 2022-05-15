@@ -202,15 +202,15 @@ pub fn claim_slot_using_keys(
 	keystore: &SyncCryptoStorePtr,
 	keys: &[(AuthorityId, usize)],
 ) -> Option<(PreDigest, AuthorityId)> {
-	claim_primary_slot(slot, epoch, epoch.config.c, keystore, &keys).or_else(|| {
+	claim_primary_slot(slot, epoch, epoch.config.c, keystore, keys).or_else(|| {
 		if epoch.config.allowed_slots.is_secondary_plain_slots_allowed() ||
 			epoch.config.allowed_slots.is_secondary_vrf_slots_allowed()
 		{
 			claim_secondary_slot(
 				slot,
-				&epoch,
+				epoch,
 				keys,
-				&keystore,
+				keystore,
 				epoch.config.allowed_slots.is_secondary_vrf_slots_allowed(),
 			)
 		} else {
