@@ -66,7 +66,7 @@ struct VersionedRuntimeId {
 }
 
 /// A Wasm runtime object along with its cached runtime version.
-struct VersionedRuntime {
+pub(crate) struct VersionedRuntime {
 	/// Shared runtime that can spawn instances.
 	module: Arc<dyn WasmModule>,
 	/// Runtime version according to `Core_version` if any.
@@ -222,6 +222,77 @@ impl RuntimeCache {
 		default_heap_pages: u64,
 		allow_missing_func_imports: bool,
 		f: F,
+	) -> Result<Result<R, Error>, Error>
+	where
+		H: HostFunctions,
+		F: FnOnce(
+			&Arc<dyn WasmModule>,
+			&mut dyn WasmInstance,
+			Option<&RuntimeVersion>,
+			&mut dyn Externalities,
+		) -> Result<R, Error>,
+	{
+		let code_hash = &runtime_code.hash;
+		let heap_pages = runtime_code.heap_pages.unwrap_or(default_heap_pages);
+
+		let versioned_runtime_id =
+			VersionedRuntimeId { code_hash: code_hash.clone(), heap_pages, wasm_method };
+
+		let mut runtimes = self.runtimes.lock(); // this must be released prior to calling f
+		let versioned_runtime = if let Some(versioned_runtime) = runtimes.get(&versioned_runtime_id)
+		{
+			versioned_runtime.clone()
+		} else {
+			let code = runtime_code.fetch_runtime_code().ok_or(WasmError::CodeNotFound)?;
+
+			let time = std::time::Instant::now();
+
+			let result = create_versioned_wasm_runtime::<H>(
+				&code,
+				ext,
+				wasm_method,
+				heap_pages,
+				allow_missing_func_imports,
+				self.max_runtime_instances,
+				self.cache_path.as_deref(),
+			);
+
+			match result {
+				Ok(ref result) => {
+					tracing::debug!(
+						target: "wasm-runtime",
+						"Prepared new runtime version {:?} in {} ms.",
+						result.version,
+						time.elapsed().as_millis(),
+					);
+				},
+				Err(ref err) => {
+					tracing::warn!(target: "wasm-runtime", error = ?err, "Cannot create a runtime");
+				},
+			}
+
+			let versioned_runtime = Arc::new(result?);
+
+			// Save new versioned wasm runtime in cache
+			runtimes.put(versioned_runtime_id, versioned_runtime.clone());
+
+			versioned_runtime
+		};
+
+		// Lock must be released prior to calling f
+		drop(runtimes);
+
+		Ok(versioned_runtime.with_instance(ext, f))
+	}
+
+
+	fn pin_runtime<'c, H, R, F>(
+		&self,
+		fetch_runtime_code: impl FnOnce() -> Result<Vec<u8>, Box<std::error::Error + Send + Sync>>,
+		ext: &mut dyn Externalities,
+		wasm_method: WasmExecutionMethod,
+		default_heap_pages: u64,
+		allow_missing_func_imports: bool,
 	) -> Result<Result<R, Error>, Error>
 	where
 		H: HostFunctions,

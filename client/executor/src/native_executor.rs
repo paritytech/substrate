@@ -19,7 +19,7 @@
 use crate::{
 	error::{Error, Result},
 	wasm_runtime::{RuntimeCache, WasmExecutionMethod},
-	RuntimeVersionOf,
+	CodeExecutor, PinnedRuntime, RuntimeVersionOf,
 };
 
 use std::{
@@ -27,6 +27,7 @@ use std::{
 	marker::PhantomData,
 	panic::{AssertUnwindSafe, UnwindSafe},
 	path::PathBuf,
+	pin::Pin,
 	result,
 	sync::{
 		atomic::{AtomicU64, Ordering},
@@ -40,7 +41,7 @@ use sc_executor_common::{
 	wasm_runtime::{InvokeMethod, WasmInstance, WasmModule},
 };
 use sp_core::{
-	traits::{CodeExecutor, Externalities, RuntimeCode, RuntimeSpawn, RuntimeSpawnExt},
+	traits::{Externalities, RuntimeCode, RuntimeSpawn, RuntimeSpawnExt},
 	NativeOrEncoded,
 };
 use sp_externalities::ExternalitiesExt as _;
@@ -287,6 +288,18 @@ where
 	H: HostFunctions,
 {
 	type Error = Error;
+
+	fn pin_runtime(
+		&self,
+		heap_pages: Option<u64>,
+		code_hash: &[u8],
+		fetch_runtime_code: impl FnOnce() -> result::Result<
+			Vec<u8>,
+			Box<dyn std::error::Error + Send + Sync>,
+		>,
+	) -> PinnedRuntime {
+
+	}
 
 	fn call<
 		R: Decode + Encode + PartialEq,

@@ -25,26 +25,6 @@ use std::{
 
 pub use sp_externalities::{Externalities, ExternalitiesExt};
 
-/// Code execution engine.
-pub trait CodeExecutor: Sized + Send + Sync + ReadRuntimeVersion + Clone + 'static {
-	/// Externalities error type.
-	type Error: Display + Debug + Send + Sync + 'static;
-
-	/// Call a given method in the runtime. Returns a tuple of the result (either the output data
-	/// or an execution error) together with a `bool`, which is true if native execution was used.
-	fn call<
-		R: codec::Codec + PartialEq,
-		NC: FnOnce() -> Result<R, Box<dyn std::error::Error + Send + Sync>> + UnwindSafe,
-	>(
-		&self,
-		ext: &mut dyn Externalities,
-		runtime_code: &RuntimeCode,
-		method: &str,
-		data: &[u8],
-		use_native: bool,
-		native_call: Option<NC>,
-	) -> (Result<crate::NativeOrEncoded<R>, Self::Error>, bool);
-}
 
 /// Something that can fetch the runtime `:code`.
 pub trait FetchRuntimeCode {
