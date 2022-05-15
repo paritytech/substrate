@@ -473,16 +473,20 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn integrity_test() {
-			// registration fee per block cannot be zero
-			assert!(T::RegistrationFeePerBlock::get() > BalanceOf::<T>::zero());
-			// max name length cannot be zero
-			assert!(T::MaxNameLength::get() > 0);
-			// max text length cannot be zero
-			assert!(!T::MaxTextLength::get() > 0);
-			// three letter tier fee must be larger than four letter tier fee
-			assert!(T::TierThreeLetters::get() > BalanceOf::<T>::zero());
-			// four letter tier fee must be larger than default tier fee
-			assert!(T::TierFourLetters::get() > BalanceOf::<T>::zero());
+			assert!(
+				T::RegistrationFeePerBlock::get() > BalanceOf::<T>::zero(),
+				"Registration fee per block cannot be zero"
+			);
+			assert!(T::MaxNameLength::get() > 0, "Max name length cannot be zero");
+			assert!(T::MaxTextLength::get() > 0, "Max text length cannot be zero");
+			assert!(
+				T::TierThreeLetters::get() > BalanceOf::<T>::zero(),
+				"Three letter tier fee must be larger than four letter tier fee"
+			);
+			assert!(
+				T::TierFourLetters::get() > BalanceOf::<T>::zero(),
+				"Four letter tier fee must be larger than default tier fee"
+			);
 		}
 	}
 }
