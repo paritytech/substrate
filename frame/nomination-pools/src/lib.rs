@@ -721,9 +721,13 @@ impl<T: Config> BondedPool<T> {
 	}
 
 	fn is_destroying_and_only_depositor(&self, alleged_depositor_points: BalanceOf<T>) -> bool {
-		// NOTE: if we add `&& self.member_counter == 1`, then this becomes even more strict and
-		// ensures that there are no unbonding members hanging around either.
-		self.is_destroying() && self.points == alleged_depositor_points
+		// we need to ensure that `self.member_counter == 1` as well, because the depositor's
+		// initial `MinCreateBond` (or more) is what guarantees that the ledger of the pool does not
+		// get killed in the staking system, and that it does not fall below `MinimumNominatorBond`,
+		// which could prevent other non-depositor members from fully leaving. Thus, all members
+		// must withdraw, then depositor can unbond, and finally withdraw after waiting another
+		// cycle.
+		self.is_destroying() && self.points == alleged_depositor_points && self.member_counter == 1
 	}
 
 	/// Whether or not the pool is ok to be in `PoolSate::Open`. If this returns an `Err`, then the
@@ -1136,6 +1140,15 @@ pub mod pallet {
 	///
 	/// This is the amount that the depositor must put as their initial stake in the pool, as an
 	/// indication of "skin in the game".
+	///
+	/// This is the value that will always exist in the staking ledger of the pool bonded account
+	/// while all other accounts leave.
+	///
+	/// A sane configuration should thus ensure that this value is large enough such that it is more
+	/// than `MinimumNominatorBond` and `ExistentialDeposit`. The pool's bonded account's stash
+	/// falling behind `MinimumNominatorBond` it cannot call unbond, and the pool bonded account's
+	/// stash falling below `ExistentialDeposit` means the ledger can be killed prematurely in a
+	/// call to `T::StakingInterface::withdraw_unbonded`.
 	#[pallet::storage]
 	pub type MinCreateBond<T: Config> = StorageValue<_, BalanceOf<T>, ValueQuery>;
 
@@ -1614,7 +1627,7 @@ pub mod pallet {
 
 			// Before calculate the `balance_to_unbond`, with call withdraw unbonded to ensure the
 			// `transferrable_balance` is correct.
-			T::StakingInterface::withdraw_unbonded(
+			let destroyed = T::StakingInterface::withdraw_unbonded(
 				bonded_pool.bonded_account(),
 				num_slashing_spans,
 			)?;
@@ -2264,6 +2277,7 @@ impl<T: Config> Pallet<T> {
 		if level.is_zero() {
 			return Ok(())
 		}
+
 		// note: while a bit wacky, since they have the same key, even collecting to vec should
 		// result in the same set of keys, in the same order.
 		let bonded_pools = BondedPools::<T>::iter_keys().collect::<Vec<_>>();

@@ -128,8 +128,10 @@ pub trait StakingInterface {
 	fn unbond(stash: Self::AccountId, value: Self::Balance) -> DispatchResult;
 
 	/// Unlock any funds schedule to unlock before or at the current era.
+	///
+	/// Returns whether the stash was killed because of this withdraw or not.
 	fn withdraw_unbonded(
 		stash: Self::AccountId,
 		num_slashing_spans: u32,
-	) -> Result<u64, DispatchError>;
+	) -> Result<bool, DispatchError>;
 }

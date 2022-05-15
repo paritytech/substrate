@@ -81,11 +81,11 @@ impl sp_staking::StakingInterface for StakingMock {
 		Ok(())
 	}
 
-	fn withdraw_unbonded(who: Self::AccountId, _: u32) -> Result<u64, DispatchError> {
+	fn withdraw_unbonded(who: Self::AccountId, _: u32) -> Result<bool, DispatchError> {
 		// Simulates removing unlocking chunks and only having the bonded balance locked
 		let _maybe_new_free = UNBONDING_BALANCE_MAP.with(|m| m.borrow_mut().remove(&who));
 
-		Ok(100)
+		Ok(UnbondingBalanceMap::get().is_empty())
 	}
 
 	fn bond(

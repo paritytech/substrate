@@ -18,12 +18,13 @@
 use frame_election_provider_support::VoteWeight;
 use frame_support::{pallet_prelude::*, parameter_types, traits::ConstU64, PalletId};
 use sp_runtime::traits::{Convert, IdentityLookup};
-use sp_staking::SessionIndex;
 
 type AccountId = u128;
 type AccountIndex = u32;
 type BlockNumber = u64;
 type Balance = u128;
+
+pub(crate) const POOL1_BONDED: AccountId = 20318131474730217858575332831085u128;
 
 impl frame_system::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;
@@ -60,7 +61,7 @@ impl pallet_timestamp::Config for Runtime {
 }
 
 parameter_types! {
-	pub static ExistentialDeposit: Balance = 10;
+	pub static ExistentialDeposit: Balance = 5;
 }
 
 impl pallet_balances::Config for Runtime {
@@ -88,6 +89,7 @@ pallet_staking_reward_curve::build! {
 
 parameter_types! {
 	pub const RewardCurve: &'static sp_runtime::curve::PiecewiseLinear<'static> = &I_NPOS;
+	pub static BondingDuration: u32 = 3;
 }
 
 impl pallet_staking::Config for Runtime {
@@ -103,7 +105,7 @@ impl pallet_staking::Config for Runtime {
 	type SessionsPerEra = ();
 	type SlashDeferDuration = ();
 	type SlashCancelOrigin = frame_system::EnsureRoot<Self::AccountId>;
-	type BondingDuration = ConstU32<3>;
+	type BondingDuration = BondingDuration;
 	type SessionInterface = ();
 	type EraPayout = pallet_staking::ConvertCurve<RewardCurve>;
 	type NextNewSession = ();
@@ -198,6 +200,48 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 		max_members_per_pool: Some(3),
 		max_members: Some(3 * 3),
 	}
-	.assimilate_storage(&mut storage);
-	sp_io::TestExternalities::from(storage)
+	.assimilate_storage(&mut storage)
+	.unwrap();
+
+	let _ = pallet_balances::GenesisConfig::<Runtime> {
+		balances: vec![(10, 100), (20, 100), (21, 100)],
+	}
+	.assimilate_storage(&mut storage)
+	.unwrap();
+
+	let mut ext = sp_io::TestExternalities::from(storage);
+
+	ext.execute_with(|| {
+		// for events to be deposited.
+		frame_system::Pallet::<Runtime>::set_block_number(1);
+	});
+
+	ext
+}
+
+parameter_types! {
+	static ObservedEventsPools: usize = 0;
+	static ObservedEventsStaking: usize = 0;
+}
+
+pub(crate) fn pool_events_since_last_call() -> Vec<pallet_nomination_pools::Event<Runtime>> {
+	let events = System::events()
+		.into_iter()
+		.map(|r| r.event)
+		.filter_map(|e| if let Event::Pools(inner) = e { Some(inner) } else { None })
+		.collect::<Vec<_>>();
+	let already_seen = ObservedEventsPools::get();
+	ObservedEventsPools::set(events.len());
+	events.into_iter().skip(already_seen).collect()
+}
+
+pub(crate) fn staking_events_since_last_call() -> Vec<pallet_staking::Event<Runtime>> {
+	let events = System::events()
+		.into_iter()
+		.map(|r| r.event)
+		.filter_map(|e| if let Event::Staking(inner) = e { Some(inner) } else { None })
+		.collect::<Vec<_>>();
+	let already_seen = ObservedEventsStaking::get();
+	ObservedEventsStaking::set(events.len());
+	events.into_iter().skip(already_seen).collect()
 }

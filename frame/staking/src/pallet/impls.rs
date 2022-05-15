@@ -1409,14 +1409,10 @@ impl<T: Config> StakingInterface for Pallet<T> {
 	fn withdraw_unbonded(
 		stash: Self::AccountId,
 		num_slashing_spans: u32,
-	) -> Result<u64, DispatchError> {
-		Self::withdraw_unbonded(RawOrigin::Signed(stash).into(), num_slashing_spans)
-			.map(|post_info| {
-				post_info
-					.actual_weight
-					.unwrap_or(T::WeightInfo::withdraw_unbonded_kill(num_slashing_spans))
-			})
-			.map_err(|err_with_post_info| err_with_post_info.error)
+	) -> Result<bool, DispatchError> {
+		Self::withdraw_unbonded(RawOrigin::Signed(stash.clone()).into(), num_slashing_spans)
+			.map(|_| Ledger::<T>::contains_key(&stash))
+			.map_err(|with_post| with_post.error)
 	}
 
 	fn bond(
