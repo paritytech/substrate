@@ -21,7 +21,7 @@ codec = { package = "parity-scale-codec", version = "3.0.0", default-features = 
 scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
 static_assertions = "1.1.0"
 hex-literal = { version = "0.3.4", optional = true }
-log = { version = "0.4.16", default-features = false }
+log = { version = "0.4.17", default-features = false }
 
 # primitives
 sp-authority-discovery = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/authority-discovery" }
