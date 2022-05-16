@@ -116,23 +116,25 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use crate::traits::AtLeast32BitUnsigned;
 use codec::{Codec, Encode};
 use frame_support::{
 	dispatch::PostDispatchInfo,
 	traits::{
-		EnsureInherentsAreFirst, ExecuteBlock, OffchainWorker, OnFinalize, OnIdle, OnInitialize,
-		OnRuntimeUpgrade,
+		EnsureInherentsAreFirst, ExecuteBlock, Get, OffchainWorker, OnFinalize, OnIdle,
+		OnInitialize, OnRuntimeUpgrade,
 	},
 	weights::{DispatchClass, DispatchInfo, GetDispatchInfo},
 };
+use schnorrkel::vrf::{VRFOutput, VRFProof};
 use sp_runtime::{
 	generic::Digest,
 	traits::{
-		self, Applyable, CheckEqual, Checkable, Dispatchable, Header, NumberFor, One, Saturating,
-		ValidateUnsigned, Zero,
+		self, Applyable, CheckEqual, Checkable, Dispatchable, Extrinsic, Header,
+		IdentifyAccountWithLookup, NumberFor, One, Saturating, ValidateUnsigned, Zero,
 	},
 	transaction_validity::{TransactionSource, TransactionValidity},
-	ApplyExtrinsicResult,
+	ApplyExtrinsicResult, SaturatedConversion,
 };
 use sp_std::{marker::PhantomData, prelude::*};
 
@@ -183,13 +185,17 @@ impl<
 > ExecuteBlock<Block>
 for Executive<System, Block, Context, UnsignedValidator, AllPalletsWithSystem, COnRuntimeUpgrade>
 	where
-		Block::Extrinsic: Checkable<Context> + Codec,
+		Block::Extrinsic: IdentifyAccountWithLookup<Context, AccountId = System::AccountId>
+		+ Checkable<Context>
+		+ Codec
+		+ GetDispatchInfo,
 		CheckedOf<Block::Extrinsic, Context>: Applyable + GetDispatchInfo,
 		CallOf<Block::Extrinsic, Context>:
 		Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
 		OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
 		UnsignedValidator: ValidateUnsigned<Call = CallOf<Block::Extrinsic, Context>>,
 {
+	// for backward compatibility
 	fn execute_block(block: Block) {
 		Executive::<
 			System,
@@ -199,6 +205,17 @@ for Executive<System, Block, Context, UnsignedValidator, AllPalletsWithSystem, C
 			AllPalletsWithSystem,
 			COnRuntimeUpgrade,
 		>::execute_block(block);
+	}
+
+	fn execute_block_ver(block: Block, public: Vec<u8>) {
+		Executive::<
+			System,
+			Block,
+			Context,
+			UnsignedValidator,
+			AllPalletsWithSystem,
+			COnRuntimeUpgrade,
+		>::execute_block_ver_impl(block, public);
 	}
 }
 
@@ -215,7 +232,11 @@ impl<
 	COnRuntimeUpgrade: OnRuntimeUpgrade,
 > Executive<System, Block, Context, UnsignedValidator, AllPalletsWithSystem, COnRuntimeUpgrade>
 	where
-		Block::Extrinsic: Checkable<Context> + Codec,
+		<System as frame_system::Config>::BlockNumber: AtLeast32BitUnsigned,
+		Block::Extrinsic: IdentifyAccountWithLookup<Context, AccountId = System::AccountId>
+		+ Checkable<Context>
+		+ Codec
+		+ GetDispatchInfo,
 		CheckedOf<Block::Extrinsic, Context>: Applyable + GetDispatchInfo,
 		CallOf<Block::Extrinsic, Context>:
 		Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
@@ -333,6 +354,27 @@ impl<
 		}
 	}
 
+	fn ver_checks(block: &Block, public_key: Vec<u8>) {
+		// Check that `parent_hash` is correct.
+		sp_tracing::enter_span!(sp_tracing::Level::TRACE, "ver checks");
+		let header = block.header();
+		// Check that shuffling seedght is generated properly
+		let new_seed = VRFOutput::from_bytes(&header.seed().seed.as_bytes())
+			.expect("cannot parse shuffling seed");
+
+		let proof = VRFProof::from_bytes(&header.seed().proof.as_bytes())
+			.expect("cannot parse shuffling seed proof");
+		let prev_seed = <frame_system::Pallet<System>>::block_seed();
+
+		let mut transcript = merlin::Transcript::new(b"shuffling_seed");
+		transcript.append_message(b"prev_seed", prev_seed.as_bytes());
+
+		let pub_key = schnorrkel::PublicKey::from_bytes(&public_key).expect("cannot build public");
+		pub_key
+			.vrf_verify(transcript, &new_seed, &proof)
+			.expect("shuffling seed verification failed");
+	}
+
 	fn initial_checks(block: &Block) {
 		sp_tracing::enter_span!(sp_tracing::Level::TRACE, "initial_checks");
 		let header = block.header();
@@ -349,6 +391,11 @@ impl<
 		if let Err(i) = System::ensure_inherents_are_first(block) {
 			panic!("Invalid inherent position for extrinsic at index {}", i);
 		}
+
+		// Check that transaction trie root represents the transactions.
+		let xts_root = frame_system::extrinsics_root::<System::Hashing, _>(&block.extrinsics());
+		header.extrinsics_root().check_equal(&xts_root);
+		assert!(header.extrinsics_root() == &xts_root, "Transaction trie root must be valid.");
 	}
 
 	/// Actually execute all transitions for `block`.
@@ -366,7 +413,67 @@ impl<
 
 			// execute extrinsics
 			let (header, extrinsics) = block.deconstruct();
+
 			Self::execute_extrinsics_with_book_keeping(extrinsics, *header.number());
+
+			if !signature_batching.verify() {
+				panic!("Signature verification failed.");
+			}
+
+			// any final checks
+			Self::final_checks(&header);
+		}
+	}
+
+	/// Actually execute all transitions for `block`.
+	pub fn execute_block_ver_impl(block: Block, public: Vec<u8>) {
+		sp_io::init_tracing();
+		sp_tracing::within_span! {
+			sp_tracing::info_span!("execute_block", ?block);
+
+			Self::initialize_block(block.header());
+
+
+			// any initial checks
+			Self::ver_checks(&block, public);
+			<frame_system::Pallet<System>>::set_block_seed(&block.header().seed().seed);
+			Self::initial_checks(&block);
+
+			let signature_batching = sp_runtime::SignatureBatching::start();
+
+			let (header, extrinsics) = block.deconstruct();
+			let count: usize = header.count().clone().saturated_into::<usize>();
+
+			assert!(extrinsics.len() >= count);
+
+			let curr_block_txs = extrinsics.iter().take(count);
+			let prev_block_txs = extrinsics.iter().skip(count);
+
+			// verify that all extrinsics can be executed in single block
+			let max = System::BlockWeights::get();
+			let mut all: frame_system::ConsumedWeight = Default::default();
+			for tx in extrinsics.iter() {
+				let info = tx.clone().get_dispatch_info();
+				all = frame_system::calculate_consumed_weight::<CallOf<Block::Extrinsic, Context>>(max.clone(), all, &info)
+					.expect("sum of extrinsics should fit into single block");
+			}
+
+			let curr_block_inherents = curr_block_txs.clone().filter(|e| !e.is_signed().unwrap());
+
+			let curr_block_txs_count = curr_block_txs.count();
+			let curr_block_inherents_count = curr_block_inherents.clone().count();
+			let prev_block_extrinsics = prev_block_txs.filter(|e| e.is_signed().unwrap());
+			let tx_to_be_executed = curr_block_inherents.chain(prev_block_extrinsics).cloned().collect::<Vec<_>>();
+
+			let extrinsics_with_author: Vec<(_,_)> = tx_to_be_executed.into_iter().map(|e|
+					(
+						// its safe to panic here
+						(e.get_account_id(&Default::default()).unwrap(), e)
+					)
+			).collect();
+			let shuffled_extrinsics = extrinsic_shuffler::shuffle_using_seed(extrinsics_with_author, &header.seed().seed);
+
+			Self::execute_extrinsics_impl(shuffled_extrinsics, *header.number());
 
 			if !signature_batching.verify() {
 				panic!("Signature verification failed.");
@@ -383,6 +490,28 @@ impl<
 		block_number: NumberFor<Block>,
 	) {
 		extrinsics.into_iter().for_each(|e| {
+			if let Err(e) = Self::apply_extrinsic(e) {
+				let err: &'static str = e.into();
+				panic!("{}", err)
+			}
+		});
+
+		// post-extrinsics book-keeping
+		<frame_system::Pallet<System>>::note_finished_extrinsics();
+
+		Self::idle_and_finalize_hook(block_number);
+	}
+
+	#[cfg(not(feature = "disable-execution"))]
+	/// regular impl execute inherents & extrinsics
+	fn execute_extrinsics_impl(extrinsics: Vec<Block::Extrinsic>, block_number: NumberFor<Block>) {
+		Self::execute_extrinsics_with_book_keeping(extrinsics, block_number)
+	}
+
+	#[cfg(feature = "disable-execution")]
+	/// impl for benchmark -  execute inherents only
+	fn execute_extrinsics_impl(extrinsics: Vec<Block::Extrinsic>, block_number: NumberFor<Block>) {
+		extrinsics.into_iter().filter(|e| !e.is_signed().unwrap()).for_each(|e| {
 			if let Err(e) = Self::apply_extrinsic(e) {
 				let err: &'static str = e.into();
 				panic!("{}", err)
@@ -486,11 +615,6 @@ impl<
 		let storage_root = new_header.state_root();
 		header.state_root().check_equal(&storage_root);
 		assert!(header.state_root() == storage_root, "Storage root must match that calculated.");
-
-		assert!(
-			header.extrinsics_root() == new_header.extrinsics_root(),
-			"Transaction trie root must be valid.",
-		);
 	}
 
 	/// Check a given signed transaction for validity. This doesn't execute any
@@ -559,10 +683,11 @@ mod tests {
 
 	use hex_literal::hex;
 
-	use sp_core::H256;
+	use sp_core::{sr25519, testing::SR25519, Pair, ShufflingSeed, H256};
+	use sp_keystore::vrf::{VRFTranscriptData, VRFTranscriptValue};
 	use sp_runtime::{
 		generic::{DigestItem, Era},
-		testing::{Block, Digest, Header},
+		testing::{BlockVer as Block, Digest, HeaderVer as Header},
 		traits::{BlakeTwo256, Block as BlockT, Header as HeaderT, IdentityLookup},
 		transaction_validity::{
 			InvalidTransaction, TransactionValidityError, UnknownTransaction, ValidTransaction,
@@ -581,6 +706,7 @@ mod tests {
 	use frame_system::{Call as SystemCall, ChainContext, LastRuntimeUpgradeInfo};
 	use pallet_balances::Call as BalancesCall;
 	use pallet_transaction_payment::CurrencyAdapter;
+	use sp_keystore::SyncCryptoStore;
 
 	const TEST_KEY: &[u8] = &*b":test:key:";
 
@@ -904,11 +1030,11 @@ mod tests {
 	fn block_import_works() {
 		block_import_works_inner(
 			new_test_ext_v0(1),
-			hex!("1039e1a4bd0cf5deefe65f313577e70169c41c7773d6acf31ca8d671397559f5").into(),
+			hex!("2aaebbb0ef77452cf561abc6f738c33299c09b121fc3aa2ac388ccb878a2ea10").into(),
 		);
 		block_import_works_inner(
 			new_test_ext(1),
-			hex!("75e7d8f360d375bbe91bcf8019c01ab6362448b4a89e3b329717eb9d910340e5").into(),
+			hex!("e5c485cf9d53f651188469fabd91bc765ee1d6ddf17a96533b6b7acb60f697ea").into(),
 		);
 	}
 	fn block_import_works_inner(mut ext: sp_io::TestExternalities, state_root: H256) {
@@ -923,6 +1049,8 @@ mod tests {
 					)
 						.into(),
 					digest: Digest { logs: vec![] },
+					count: 0,
+					seed: Default::default(),
 				},
 				extrinsics: vec![],
 			});
@@ -943,6 +1071,8 @@ mod tests {
 					)
 						.into(),
 					digest: Digest { logs: vec![] },
+					count: 0,
+					seed: Default::default(),
 				},
 				extrinsics: vec![],
 			});
@@ -963,6 +1093,8 @@ mod tests {
 						.into(),
 					extrinsics_root: [0u8; 32].into(),
 					digest: Digest { logs: vec![] },
+					count: 0,
+					seed: Default::default(),
 				},
 				extrinsics: vec![],
 			});
@@ -1498,6 +1630,116 @@ mod tests {
 
 		new_test_ext(1).execute_with(|| {
 			Executive::execute_block(Block::new(header, vec![xt1, xt2]));
+		});
+	}
+
+	#[test]
+	#[should_panic(expected = "cannot build public")]
+	fn ver_block_import_panic_due_to_lack_of_public_key() {
+		new_test_ext(1).execute_with(|| {
+			Executive::execute_block_ver(
+				Block {
+					header: Header {
+						parent_hash: [69u8; 32].into(),
+						number: 1,
+						state_root: hex!(
+							"58e5aca3629754c5185b50dd676053c5b9466c18488bb1f4c6138a46885cd79d"
+						)
+							.into(),
+						extrinsics_root: hex!(
+							"03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314"
+						)
+							.into(),
+						digest: Digest { logs: vec![] },
+						count: 0,
+						seed: Default::default(),
+					},
+					extrinsics: vec![],
+				},
+				vec![],
+			);
+		});
+	}
+
+	#[should_panic(expected = "shuffling seed verification failed")]
+	#[test]
+	fn ver_block_import_panic_due_to_wrong_signature() {
+		new_test_ext(1).execute_with(|| {
+			Executive::execute_block_ver(
+				Block {
+					header: Header {
+						parent_hash: [69u8; 32].into(),
+						number: 1,
+						state_root: hex!(
+							"58e5aca3629754c5185b50dd676053c5b9466c18488bb1f4c6138a46885cd79d"
+						)
+							.into(),
+						extrinsics_root: hex!(
+							"03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314"
+						)
+							.into(),
+						digest: Digest { logs: vec![] },
+						count: 0,
+						seed: Default::default(),
+					},
+					extrinsics: vec![],
+				},
+				vec![0; 32],
+			);
+		});
+	}
+
+	#[test]
+	fn ver_block_import_works() {
+		new_test_ext(1).execute_with(|| {
+			let prev_seed = vec![0u8; 32];
+			let secret_uri = "//Alice";
+			let keystore = sp_keystore::testing::KeyStore::new();
+
+			let key_pair =
+				sr25519::Pair::from_string(secret_uri, None).expect("Generates key pair");
+			keystore
+				.insert_unknown(SR25519, secret_uri, key_pair.public().as_ref())
+				.expect("Inserts unknown key");
+
+			let transcript = VRFTranscriptData {
+				label: b"shuffling_seed",
+				items: vec![("prev_seed", VRFTranscriptValue::Bytes(prev_seed))],
+			};
+
+			let signature = keystore
+				.sr25519_vrf_sign(SR25519, &key_pair.public(), transcript.clone())
+				.unwrap()
+				.unwrap();
+
+			let pub_key_bytes = AsRef::<[u8; 32]>::as_ref(&key_pair.public())
+				.iter()
+				.cloned()
+				.collect::<Vec<_>>();
+			Executive::execute_block_ver(
+				Block {
+					header: Header {
+						parent_hash: [69u8; 32].into(),
+						number: 1,
+						state_root: hex!(
+							"a37408819189bd873665cfb3b7ac54ec63b4eaa56077198fff637fe3aacb2461"
+						)
+							.into(),
+						extrinsics_root: hex!(
+							"03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314"
+						)
+							.into(),
+						digest: Digest { logs: vec![] },
+						count: 0,
+						seed: ShufflingSeed {
+							seed: signature.output.to_bytes().into(),
+							proof: signature.proof.to_bytes().into(),
+						},
+					},
+					extrinsics: vec![],
+				},
+				pub_key_bytes,
+			);
 		});
 	}
 }
