@@ -452,16 +452,18 @@ impl<T: Config> PoolMember<T> {
 	/// Returns `Ok(())` and updates `unbonding_eras` and `points` if success, `Err(_)` otherwise.
 	fn try_unbond(
 		&mut self,
-		points: BalanceOf<T>,
+		points_dissolved: BalanceOf<T>,
+		points_issued: BalanceOf<T>,
 		unbonding_era: EraIndex,
 	) -> Result<(), Error<T>> {
-		if let Some(new_points) = self.points.checked_sub(&points) {
+		if let Some(new_points) = self.points.checked_sub(&points_dissolved) {
 			match self.unbonding_eras.get_mut(&unbonding_era) {
 				Some(already_unbonding_points) =>
-					*already_unbonding_points = already_unbonding_points.saturating_add(points),
+					*already_unbonding_points =
+						already_unbonding_points.saturating_add(points_issued),
 				None => self
 					.unbonding_eras
-					.try_insert(unbonding_era, points)
+					.try_insert(unbonding_era, points_issued)
 					.map(|old| {
 						if old.is_some() {
 							defensive!("value checked to not exist in the map; qed");
@@ -631,7 +633,7 @@ impl<T: Config> BondedPool<T> {
 	fn points_to_balance(&self, points: BalanceOf<T>) -> BalanceOf<T> {
 		let bonded_balance =
 			T::StakingInterface::active_stake(&self.bonded_account()).unwrap_or(Zero::zero());
-		Pallet::<T>::point_to_balance(dbg!(bonded_balance), dbg!(self.points), points)
+		Pallet::<T>::point_to_balance(bonded_balance, self.points, points)
 	}
 
 	/// Issue points to [`Self`] for `new_funds`.
@@ -827,10 +829,15 @@ impl<T: Config> BondedPool<T> {
 		&self,
 		caller: &T::AccountId,
 		target_account: &T::AccountId,
-		bonded_pool: &BondedPool<T>,
+		target_member: &PoolMember<T>,
+		sub_pools: &SubPools<T>,
 	) -> Result<(), DispatchError> {
 		if *target_account == self.roles.depositor {
-			ensure!(bonded_pool.member_counter == 1, Error::<T>::NotOnlyPoolMember);
+			ensure!(
+				sub_pools.sum_unbonding_points() == target_member.unbonding_points(),
+				Error::<T>::NotOnlyPoolMember
+			);
+			debug_assert_eq!(self.member_counter, 1, "only member must exist at this point");
 			Ok(())
 		} else {
 			// This isn't a depositor
@@ -1254,9 +1261,33 @@ pub mod pallet {
 		/// A payout has been made to a member.
 		PaidOut { member: T::AccountId, pool_id: PoolId, payout: BalanceOf<T> },
 		/// A member has unbonded from their pool.
-		Unbonded { member: T::AccountId, pool_id: PoolId, amount: BalanceOf<T> },
+		///
+		/// - `balance` is the corresponding balance of the number of points that have been
+		///   requested to be unbonded (the argument of the `unbond` transaction) from the bonded
+		///   pool.
+		/// - `points` is the number of points that are issued as a result of
+		/// `balance` into the corresponding unbonding pool.
+		///
+		/// In the absence of slashing, these values will match. In the presence of slashing, the
+		/// number of points that are issued in the unbonding pool will be less than the amount
+		/// requested to be unbonded.
+		Unbonded {
+			member: T::AccountId,
+			pool_id: PoolId,
+			balance: BalanceOf<T>,
+			points: BalanceOf<T>,
+		},
 		/// A member has withdrawn from their pool.
-		Withdrawn { member: T::AccountId, pool_id: PoolId, amount: BalanceOf<T> },
+		///
+		/// The given number of `points` have been dissolved in return of `balance`.
+		///
+		/// Similar to `Unbonded` event, in the absence of slashing, these values will match.
+		Withdrawn {
+			member: T::AccountId,
+			pool_id: PoolId,
+			balance: BalanceOf<T>,
+			points: BalanceOf<T>,
+		},
 		/// A pool has been destroyed.
 		Destroyed { pool_id: PoolId },
 		/// The state of a pool has changed
@@ -1510,10 +1541,6 @@ pub mod pallet {
 			let current_era = T::StakingInterface::current_era();
 			let unbond_era = T::StakingInterface::bonding_duration().saturating_add(current_era);
 
-			// Try and unbond in the member map.
-			// TODO: this is wrong, we should use `actual_unbonding_points`.
-			member.try_unbond(unbonding_points, unbond_era)?;
-
 			// Unbond in the actual underlying nominator.
 			let unbonding_balance = bonded_pool.dissolve(unbonding_points);
 			T::StakingInterface::unbond(bonded_pool.bonded_account(), unbonding_balance)?;
@@ -1541,10 +1568,14 @@ pub mod pallet {
 				.defensive_ok_or_else(|| Error::<T>::DefensiveError)?
 				.issue(unbonding_balance);
 
+			// Try and unbond in the member map.
+			member.try_unbond(unbonding_points, actual_unbonding_points, unbond_era)?;
+
 			Self::deposit_event(Event::<T>::Unbonded {
 				member: member_account.clone(),
 				pool_id: member.pool_id,
-				amount: unbonding_balance,
+				points: actual_unbonding_points,
+				balance: unbonding_balance,
 			});
 
 			// Now that we know everything has worked write the items to storage.
@@ -1614,7 +1645,12 @@ pub mod pallet {
 			let mut sub_pools = SubPoolsStorage::<T>::get(member.pool_id)
 				.defensive_ok_or_else(|| Error::<T>::SubPoolsNotFound)?;
 
-			bonded_pool.ok_to_withdraw_unbonded_with(&caller, &member_account, &bonded_pool)?;
+			bonded_pool.ok_to_withdraw_unbonded_with(
+				&caller,
+				&member_account,
+				&member,
+				&sub_pools,
+			)?;
 
 			// NOTE: must do this after we have done the `ok_to_withdraw_unbonded_other_with` check.
 			let withdrawn_points = member.withdraw_unlocked(current_era);
@@ -1627,9 +1663,11 @@ pub mod pallet {
 				num_slashing_spans,
 			)?;
 
+			let mut sum_unlocked_points: BalanceOf<T> = Zero::zero();
 			let balance_to_unbond = withdrawn_points
 				.iter()
 				.fold(BalanceOf::<T>::zero(), |accumulator, (era, unlocked_points)| {
+					sum_unlocked_points = sum_unlocked_points.saturating_add(*unlocked_points);
 					if let Some(era_pool) = sub_pools.with_era.get_mut(&era) {
 						let balance_to_unbond = era_pool.dissolve(*unlocked_points);
 						if era_pool.points.is_zero() {
@@ -1662,7 +1700,8 @@ pub mod pallet {
 			Self::deposit_event(Event::<T>::Withdrawn {
 				member: member_account.clone(),
 				pool_id: member.pool_id,
-				amount: balance_to_unbond,
+				points: sum_unlocked_points,
+				balance: balance_to_unbond,
 			});
 
 			let post_info_weight = if member.total_points().is_zero() {

@@ -21,6 +21,7 @@ use frame_support::{
 	assert_noop, assert_ok, assert_storage_noop, bounded_btree_map,
 	storage::{with_transaction, TransactionOutcome},
 };
+use pallet_balances::Event as BEvent;
 
 macro_rules! unbonding_pools_with_era {
 	($($k:expr => $v:expr),* $(,)?) => {{
@@ -90,100 +91,104 @@ mod bonded_pool {
 	use super::*;
 	#[test]
 	fn points_to_issue_works() {
-		let mut bonded_pool = BondedPool::<Runtime> {
-			id: 123123,
-			inner: BondedPoolInner {
-				state: PoolState::Open,
-				points: 100,
-				member_counter: 1,
-				roles: DEFAULT_ROLES,
-			},
-		};
+		ExtBuilder::default().build_and_execute(|| {
+			let mut bonded_pool = BondedPool::<Runtime> {
+				id: 123123,
+				inner: BondedPoolInner {
+					state: PoolState::Open,
+					points: 100,
+					member_counter: 1,
+					roles: DEFAULT_ROLES,
+				},
+			};
 
-		// 1 points : 1 balance ratio
-		StakingMock::set_bonded_balance(bonded_pool.bonded_account(), 100);
-		assert_eq!(bonded_pool.balance_to_point(10), 10);
-		assert_eq!(bonded_pool.balance_to_point(0), 0);
+			// 1 points : 1 balance ratio
+			StakingMock::set_bonded_balance(bonded_pool.bonded_account(), 100);
+			assert_eq!(bonded_pool.balance_to_point(10), 10);
+			assert_eq!(bonded_pool.balance_to_point(0), 0);
 
-		// 2 points : 1 balance ratio
-		StakingMock::set_bonded_balance(bonded_pool.bonded_account(), 50);
-		assert_eq!(bonded_pool.balance_to_point(10), 20);
+			// 2 points : 1 balance ratio
+			StakingMock::set_bonded_balance(bonded_pool.bonded_account(), 50);
+			assert_eq!(bonded_pool.balance_to_point(10), 20);
 
-		// 1 points : 2 balance ratio
-		StakingMock::set_bonded_balance(bonded_pool.bonded_account(), 100);
-		bonded_pool.points = 50;
-		assert_eq!(bonded_pool.balance_to_point(10), 5);
+			// 1 points : 2 balance ratio
+			StakingMock::set_bonded_balance(bonded_pool.bonded_account(), 100);
+			bonded_pool.points = 50;
+			assert_eq!(bonded_pool.balance_to_point(10), 5);
 
-		// 100 points : 0 balance ratio
-		StakingMock::set_bonded_balance(bonded_pool.bonded_account(), 0);
-		bonded_pool.points = 100;
-		assert_eq!(bonded_pool.balance_to_point(10), 100 * 10);
+			// 100 points : 0 balance ratio
+			StakingMock::set_bonded_balance(bonded_pool.bonded_account(), 0);
+			bonded_pool.points = 100;
+			assert_eq!(bonded_pool.balance_to_point(10), 100 * 10);
 
-		// 0 points : 100 balance
-		StakingMock::set_bonded_balance(bonded_pool.bonded_account(), 100);
-		bonded_pool.points = 100;
-		assert_eq!(bonded_pool.balance_to_point(10), 10);
+			// 0 points : 100 balance
+			StakingMock::set_bonded_balance(bonded_pool.bonded_account(), 100);
+			bonded_pool.points = 100;
+			assert_eq!(bonded_pool.balance_to_point(10), 10);
 
-		// 10 points : 3 balance ratio
-		StakingMock::set_bonded_balance(bonded_pool.bonded_account(), 30);
-		assert_eq!(bonded_pool.balance_to_point(10), 33);
+			// 10 points : 3 balance ratio
+			StakingMock::set_bonded_balance(bonded_pool.bonded_account(), 30);
+			assert_eq!(bonded_pool.balance_to_point(10), 33);
 
-		// 2 points : 3 balance ratio
-		StakingMock::set_bonded_balance(bonded_pool.bonded_account(), 300);
-		bonded_pool.points = 200;
-		assert_eq!(bonded_pool.balance_to_point(10), 6);
+			// 2 points : 3 balance ratio
+			StakingMock::set_bonded_balance(bonded_pool.bonded_account(), 300);
+			bonded_pool.points = 200;
+			assert_eq!(bonded_pool.balance_to_point(10), 6);
 
-		// 4 points : 9 balance ratio
-		StakingMock::set_bonded_balance(bonded_pool.bonded_account(), 900);
-		bonded_pool.points = 400;
-		assert_eq!(bonded_pool.balance_to_point(90), 40);
+			// 4 points : 9 balance ratio
+			StakingMock::set_bonded_balance(bonded_pool.bonded_account(), 900);
+			bonded_pool.points = 400;
+			assert_eq!(bonded_pool.balance_to_point(90), 40);
+		})
 	}
 
 	#[test]
 	fn balance_to_unbond_works() {
-		// 1 balance : 1 points ratio
-		let mut bonded_pool = BondedPool::<Runtime> {
-			id: 123123,
-			inner: BondedPoolInner {
-				state: PoolState::Open,
-				points: 100,
-				member_counter: 1,
-				roles: DEFAULT_ROLES,
-			},
-		};
+		ExtBuilder::default().build_and_execute(|| {
+			// 1 balance : 1 points ratio
+			let mut bonded_pool = BondedPool::<Runtime> {
+				id: 123123,
+				inner: BondedPoolInner {
+					state: PoolState::Open,
+					points: 100,
+					member_counter: 1,
+					roles: DEFAULT_ROLES,
+				},
+			};
 
-		StakingMock::set_bonded_balance(bonded_pool.bonded_account(), 100);
-		assert_eq!(bonded_pool.points_to_balance(10), 10);
-		assert_eq!(bonded_pool.points_to_balance(0), 0);
+			StakingMock::set_bonded_balance(bonded_pool.bonded_account(), 100);
+			assert_eq!(bonded_pool.points_to_balance(10), 10);
+			assert_eq!(bonded_pool.points_to_balance(0), 0);
 
-		// 2 balance : 1 points ratio
-		bonded_pool.points = 50;
-		assert_eq!(bonded_pool.points_to_balance(10), 20);
+			// 2 balance : 1 points ratio
+			bonded_pool.points = 50;
+			assert_eq!(bonded_pool.points_to_balance(10), 20);
 
-		// 100 balance : 0 points ratio
-		StakingMock::set_bonded_balance(bonded_pool.bonded_account(), 0);
-		bonded_pool.points = 0;
-		assert_eq!(bonded_pool.points_to_balance(10), 0);
+			// 100 balance : 0 points ratio
+			StakingMock::set_bonded_balance(bonded_pool.bonded_account(), 0);
+			bonded_pool.points = 0;
+			assert_eq!(bonded_pool.points_to_balance(10), 0);
 
-		// 0 balance : 100 points ratio
-		StakingMock::set_bonded_balance(bonded_pool.bonded_account(), 0);
-		bonded_pool.points = 100;
-		assert_eq!(bonded_pool.points_to_balance(10), 0);
+			// 0 balance : 100 points ratio
+			StakingMock::set_bonded_balance(bonded_pool.bonded_account(), 0);
+			bonded_pool.points = 100;
+			assert_eq!(bonded_pool.points_to_balance(10), 0);
 
-		// 10 balance : 3 points ratio
-		StakingMock::set_bonded_balance(bonded_pool.bonded_account(), 100);
-		bonded_pool.points = 30;
-		assert_eq!(bonded_pool.points_to_balance(10), 33);
+			// 10 balance : 3 points ratio
+			StakingMock::set_bonded_balance(bonded_pool.bonded_account(), 100);
+			bonded_pool.points = 30;
+			assert_eq!(bonded_pool.points_to_balance(10), 33);
 
-		// 2 balance : 3 points ratio
-		StakingMock::set_bonded_balance(bonded_pool.bonded_account(), 200);
-		bonded_pool.points = 300;
-		assert_eq!(bonded_pool.points_to_balance(10), 6);
+			// 2 balance : 3 points ratio
+			StakingMock::set_bonded_balance(bonded_pool.bonded_account(), 200);
+			bonded_pool.points = 300;
+			assert_eq!(bonded_pool.points_to_balance(10), 6);
 
-		// 4 balance : 9 points ratio
-		StakingMock::set_bonded_balance(bonded_pool.bonded_account(), 400);
-		bonded_pool.points = 900;
-		assert_eq!(bonded_pool.points_to_balance(90), 40);
+			// 4 balance : 9 points ratio
+			StakingMock::set_bonded_balance(bonded_pool.bonded_account(), 400);
+			bonded_pool.points = 900;
+			assert_eq!(bonded_pool.points_to_balance(90), 40);
+		})
 	}
 
 	#[test]
@@ -255,38 +260,40 @@ mod unbond_pool {
 
 	#[test]
 	fn points_to_issue_works() {
-		// 1 points : 1 balance ratio
-		let unbond_pool = UnbondPool::<Runtime> { points: 100, balance: 100 };
-		assert_eq!(unbond_pool.balance_to_point(10), 10);
-		assert_eq!(unbond_pool.balance_to_point(0), 0);
+		ExtBuilder::default().build_and_execute(|| {
+			// 1 points : 1 balance ratio
+			let unbond_pool = UnbondPool::<Runtime> { points: 100, balance: 100 };
+			assert_eq!(unbond_pool.balance_to_point(10), 10);
+			assert_eq!(unbond_pool.balance_to_point(0), 0);
 
-		// 2 points : 1 balance ratio
-		let unbond_pool = UnbondPool::<Runtime> { points: 100, balance: 50 };
-		assert_eq!(unbond_pool.balance_to_point(10), 20);
+			// 2 points : 1 balance ratio
+			let unbond_pool = UnbondPool::<Runtime> { points: 100, balance: 50 };
+			assert_eq!(unbond_pool.balance_to_point(10), 20);
 
-		// 1 points : 2 balance ratio
-		let unbond_pool = UnbondPool::<Runtime> { points: 50, balance: 100 };
-		assert_eq!(unbond_pool.balance_to_point(10), 5);
+			// 1 points : 2 balance ratio
+			let unbond_pool = UnbondPool::<Runtime> { points: 50, balance: 100 };
+			assert_eq!(unbond_pool.balance_to_point(10), 5);
 
-		// 100 points : 0 balance ratio
-		let unbond_pool = UnbondPool::<Runtime> { points: 100, balance: 0 };
-		assert_eq!(unbond_pool.balance_to_point(10), 100 * 10);
+			// 100 points : 0 balance ratio
+			let unbond_pool = UnbondPool::<Runtime> { points: 100, balance: 0 };
+			assert_eq!(unbond_pool.balance_to_point(10), 100 * 10);
 
-		// 0 points : 100 balance
-		let unbond_pool = UnbondPool::<Runtime> { points: 0, balance: 100 };
-		assert_eq!(unbond_pool.balance_to_point(10), 10);
+			// 0 points : 100 balance
+			let unbond_pool = UnbondPool::<Runtime> { points: 0, balance: 100 };
+			assert_eq!(unbond_pool.balance_to_point(10), 10);
 
-		// 10 points : 3 balance ratio
-		let unbond_pool = UnbondPool::<Runtime> { points: 100, balance: 30 };
-		assert_eq!(unbond_pool.balance_to_point(10), 33);
+			// 10 points : 3 balance ratio
+			let unbond_pool = UnbondPool::<Runtime> { points: 100, balance: 30 };
+			assert_eq!(unbond_pool.balance_to_point(10), 33);
 
-		// 2 points : 3 balance ratio
-		let unbond_pool = UnbondPool::<Runtime> { points: 200, balance: 300 };
-		assert_eq!(unbond_pool.balance_to_point(10), 6);
+			// 2 points : 3 balance ratio
+			let unbond_pool = UnbondPool::<Runtime> { points: 200, balance: 300 };
+			assert_eq!(unbond_pool.balance_to_point(10), 6);
 
-		// 4 points : 9 balance ratio
-		let unbond_pool = UnbondPool::<Runtime> { points: 400, balance: 900 };
-		assert_eq!(unbond_pool.balance_to_point(90), 40);
+			// 4 points : 9 balance ratio
+			let unbond_pool = UnbondPool::<Runtime> { points: 400, balance: 900 };
+			assert_eq!(unbond_pool.balance_to_point(90), 40);
+		})
 	}
 
 	#[test]
@@ -946,7 +953,7 @@ mod claim_payout {
 					Event::Created { depositor: 10, pool_id: 1 },
 					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
 					Event::Bonded { member: 11, pool_id: 1, bonded: 11, joined: true },
-					Event::Unbonded { member: 11, pool_id: 1, amount: 11 }
+					Event::Unbonded { member: 11, pool_id: 1, points: 11, balance: 11 }
 				]
 			);
 		});
@@ -1588,14 +1595,14 @@ mod unbond {
 						Event::Bonded { member: 40, pool_id: 1, bonded: 40, joined: true },
 						Event::Bonded { member: 550, pool_id: 1, bonded: 550, joined: true },
 						Event::PaidOut { member: 40, pool_id: 1, payout: 40 },
-						Event::Unbonded { member: 40, pool_id: 1, amount: 6 }
+						Event::Unbonded { member: 40, pool_id: 1, points: 6, balance: 6 }
 					]
 				);
 
 				assert_eq!(StakingMock::active_stake(&default_bonded_account()).unwrap(), 94);
 				assert_eq!(
 					PoolMembers::<Runtime>::get(40).unwrap().unbonding_eras,
-					member_unbonding_eras!(0 + 3 => 40)
+					member_unbonding_eras!(0 + 3 => 6)
 				);
 				assert_eq!(Balances::free_balance(&40), 40 + 40); // We claim rewards when unbonding
 
@@ -1623,14 +1630,14 @@ mod unbond {
 				assert_eq!(StakingMock::active_stake(&default_bonded_account()).unwrap(), 2);
 				assert_eq!(
 					PoolMembers::<Runtime>::get(550).unwrap().unbonding_eras,
-					member_unbonding_eras!(0 + 3 => 550)
+					member_unbonding_eras!(0 + 3 => 92)
 				);
 				assert_eq!(Balances::free_balance(&550), 550 + 550);
 				assert_eq!(
 					pool_events_since_last_call(),
 					vec![
 						Event::PaidOut { member: 550, pool_id: 1, payout: 550 },
-						Event::Unbonded { member: 550, pool_id: 1, amount: 92 }
+						Event::Unbonded { member: 550, pool_id: 1, points: 92, balance: 92 }
 					]
 				);
 
@@ -1659,16 +1666,16 @@ mod unbond {
 				);
 				assert_eq!(StakingMock::active_stake(&default_bonded_account()).unwrap(), 0);
 
-				assert_eq!(Balances::free_balance(&550), 550 + 550 + 550);
+				assert_eq!(Balances::free_balance(&550), 550 + 550 + 92);
 				assert_eq!(
 					pool_events_since_last_call(),
 					vec![
-						Event::Withdrawn { member: 40, pool_id: 1, amount: 40 },
+						Event::Withdrawn { member: 40, pool_id: 1, points: 6, balance: 6 },
 						Event::MemberRemoved { pool_id: 1, member: 40 },
-						Event::Withdrawn { member: 550, pool_id: 1, amount: 550 },
+						Event::Withdrawn { member: 550, pool_id: 1, points: 92, balance: 92 },
 						Event::MemberRemoved { pool_id: 1, member: 550 },
 						Event::PaidOut { member: 10, pool_id: 1, payout: 10 },
-						Event::Unbonded { member: 10, pool_id: 1, amount: 2 },
+						Event::Unbonded { member: 10, pool_id: 1, points: 2, balance: 2 }
 					]
 				);
 			});
@@ -1714,7 +1721,7 @@ mod unbond {
 				vec![
 					Event::Created { depositor: 10, pool_id: 1 },
 					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					Event::Unbonded { member: 10, pool_id: 1, amount: 10 }
+					Event::Unbonded { member: 10, pool_id: 1, points: 10, balance: 10 }
 				]
 			);
 		});
@@ -1749,7 +1756,7 @@ mod unbond {
 						Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
 						Event::Bonded { member: 100, pool_id: 1, bonded: 100, joined: true },
 						Event::Bonded { member: 200, pool_id: 1, bonded: 200, joined: true },
-						Event::Unbonded { member: 100, pool_id: 1, amount: 100 },
+						Event::Unbonded { member: 100, pool_id: 1, points: 100, balance: 100 },
 					]
 				);
 
@@ -1758,7 +1765,7 @@ mod unbond {
 
 				assert_eq!(
 					pool_events_since_last_call(),
-					vec![Event::Unbonded { member: 200, pool_id: 1, amount: 200 }]
+					vec![Event::Unbonded { member: 200, pool_id: 1, points: 200, balance: 200 }]
 				);
 
 				assert_eq!(
@@ -1784,8 +1791,7 @@ mod unbond {
 					}
 				);
 				assert_eq!(
-					UNBONDING_BALANCE_MAP
-						.with(|m| *m.borrow_mut().get(&default_bonded_account()).unwrap()),
+					*UnbondingBalanceMap::get().get(&default_bonded_account()).unwrap(),
 					100 + 200
 				);
 			});
@@ -1827,7 +1833,7 @@ mod unbond {
 					Event::Created { depositor: 10, pool_id: 1 },
 					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
 					Event::Bonded { member: 100, pool_id: 1, bonded: 100, joined: true },
-					Event::Unbonded { member: 100, pool_id: 1, amount: 100 }
+					Event::Unbonded { member: 100, pool_id: 1, points: 100, balance: 100 }
 				]
 			);
 
@@ -1879,11 +1885,7 @@ mod unbond {
 				}
 			);
 			assert_eq!(StakingMock::active_stake(&default_bonded_account()).unwrap(), 0);
-			assert_eq!(
-				UNBONDING_BALANCE_MAP
-					.with(|m| *m.borrow_mut().get(&default_bonded_account()).unwrap()),
-				10
-			);
+			assert_eq!(*UnbondingBalanceMap::get().get(&default_bonded_account()).unwrap(), 10);
 		});
 	}
 
@@ -1971,7 +1973,7 @@ mod unbond {
 				vec![
 					Event::Created { depositor: 10, pool_id: 1 },
 					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					Event::Unbonded { member: 10, pool_id: 1, amount: 1 }
+					Event::Unbonded { member: 10, pool_id: 1, points: 1, balance: 1 }
 				]
 			);
 
@@ -1997,7 +1999,7 @@ mod unbond {
 			);
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![Event::Unbonded { member: 10, pool_id: 1, amount: 5 }]
+				vec![Event::Unbonded { member: 10, pool_id: 1, points: 5, balance: 5 }]
 			);
 
 			// when: casual further unbond, next era.
@@ -2024,7 +2026,7 @@ mod unbond {
 			);
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![Event::Unbonded { member: 10, pool_id: 1, amount: 1 }]
+				vec![Event::Unbonded { member: 10, pool_id: 1, points: 1, balance: 1 }]
 			);
 
 			// when: unbonding more than our active: error
@@ -2055,7 +2057,7 @@ mod unbond {
 			);
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![Event::Unbonded { member: 10, pool_id: 1, amount: 3 }]
+				vec![Event::Unbonded { member: 10, pool_id: 1, points: 3, balance: 3 }]
 			);
 		});
 	}
@@ -2095,9 +2097,9 @@ mod unbond {
 				vec![
 					Event::Created { depositor: 10, pool_id: 1 },
 					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					Event::Unbonded { member: 10, pool_id: 1, amount: 2 },
-					Event::Unbonded { member: 10, pool_id: 1, amount: 3 },
-					Event::Unbonded { member: 10, pool_id: 1, amount: 1 }
+					Event::Unbonded { member: 10, pool_id: 1, points: 2, balance: 2 },
+					Event::Unbonded { member: 10, pool_id: 1, points: 3, balance: 3 },
+					Event::Unbonded { member: 10, pool_id: 1, points: 1, balance: 1 }
 				]
 			);
 		})
@@ -2128,7 +2130,7 @@ mod unbond {
 				vec![
 					Event::Created { depositor: 10, pool_id: 1 },
 					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					Event::Unbonded { member: 10, pool_id: 1, amount: 3 }
+					Event::Unbonded { member: 10, pool_id: 1, points: 3, balance: 3 }
 				]
 			);
 		});
@@ -2184,7 +2186,7 @@ mod unbond {
 					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
 					// exactly equal to ed, all that can be claimed.
 					Event::PaidOut { member: 10, pool_id: 1, payout: 5 },
-					Event::Unbonded { member: 10, pool_id: 1, amount: 2 }
+					Event::Unbonded { member: 10, pool_id: 1, points: 2, balance: 2 }
 				]
 			);
 
@@ -2200,7 +2202,7 @@ mod unbond {
 				vec![
 					// exactly equal to ed, all that can be claimed.
 					Event::PaidOut { member: 10, pool_id: 1, payout: 5 },
-					Event::Unbonded { member: 10, pool_id: 1, amount: 3 }
+					Event::Unbonded { member: 10, pool_id: 1, points: 3, balance: 3 }
 				]
 			);
 
@@ -2215,7 +2217,7 @@ mod unbond {
 				pool_events_since_last_call(),
 				vec![
 					Event::PaidOut { member: 10, pool_id: 1, payout: 5 },
-					Event::Unbonded { member: 10, pool_id: 1, amount: 5 }
+					Event::Unbonded { member: 10, pool_id: 1, points: 5, balance: 5 }
 				]
 			);
 
@@ -2260,6 +2262,9 @@ mod withdraw_unbonded {
 		ExtBuilder::default()
 			.add_members(vec![(40, 40), (550, 550)])
 			.build_and_execute(|| {
+				// reduce the noise a bit.
+				let _ = balances_events_since_last_call();
+
 				// Given
 				assert_eq!(StakingMock::bonding_duration(), 3);
 				assert_ok!(Pools::fully_unbond(Origin::signed(550), 550));
@@ -2276,15 +2281,22 @@ mod withdraw_unbonded {
 
 				// Simulate a slash to the pool with_era(current_era), decreasing the balance by
 				// half
-				unbond_pool.balance /= 2; // 295
-				SubPoolsStorage::<Runtime>::insert(1, sub_pools);
-				// Update the equivalent of the unbonding chunks for the `StakingMock`
-				UNBONDING_BALANCE_MAP
-					.with(|m| *m.borrow_mut().get_mut(&default_bonded_account()).unwrap() /= 5);
-				Balances::make_free_balance_be(
-					&default_bonded_account(),
-					Balances::free_balance(&default_bonded_account()) / 2, // 300
-				);
+				{
+					unbond_pool.balance /= 2; // 295
+					SubPoolsStorage::<Runtime>::insert(1, sub_pools);
+					// Update the equivalent of the unbonding chunks for the `StakingMock`
+					let mut x = UnbondingBalanceMap::get();
+					*x.get_mut(&default_bonded_account()).unwrap() /= 5;
+					UnbondingBalanceMap::set(&x);
+					Balances::make_free_balance_be(
+						&default_bonded_account(),
+						Balances::free_balance(&default_bonded_account()) / 2, // 300
+					);
+					StakingMock::set_bonded_balance(
+						default_bonded_account(),
+						StakingMock::active_stake(&default_bonded_account()).unwrap() / 2,
+					);
+				};
 
 				// Advance the current_era to ensure all `with_era` pools will be merged into
 				// `no_era` pool
@@ -2296,6 +2308,7 @@ mod withdraw_unbonded {
 				let sub_pools =
 					SubPoolsStorage::<Runtime>::get(1).unwrap().maybe_merge_pools(current_era);
 				SubPoolsStorage::<Runtime>::insert(1, sub_pools);
+
 				assert_eq!(
 					SubPoolsStorage::<Runtime>::get(1).unwrap(),
 					SubPools {
@@ -2311,9 +2324,17 @@ mod withdraw_unbonded {
 						Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
 						Event::Bonded { member: 40, pool_id: 1, bonded: 40, joined: true },
 						Event::Bonded { member: 550, pool_id: 1, bonded: 550, joined: true },
-						Event::Unbonded { member: 550, pool_id: 1, amount: 550 },
-						Event::Unbonded { member: 40, pool_id: 1, amount: 40 },
+						Event::Unbonded { member: 550, pool_id: 1, points: 550, balance: 550 },
+						Event::Unbonded { member: 40, pool_id: 1, points: 40, balance: 40 },
 					]
+				);
+				assert_eq!(
+					balances_events_since_last_call(),
+					vec![BEvent::BalanceSet {
+						who: default_bonded_account(),
+						free: 300,
+						reserved: 0
+					}]
 				);
 
 				// When
@@ -2324,14 +2345,16 @@ mod withdraw_unbonded {
 					SubPoolsStorage::<Runtime>::get(1).unwrap().no_era,
 					UnbondPool { points: 40, balance: 20 }
 				);
-				assert_eq!(Balances::free_balance(&550), 550 + 550 / 2);
-				assert_eq!(Balances::free_balance(&default_bonded_account()), (40 + 10) / 2);
 				assert_eq!(
 					pool_events_since_last_call(),
 					vec![
-						Event::Withdrawn { member: 550, pool_id: 1, amount: 275 },
+						Event::Withdrawn { member: 550, pool_id: 1, balance: 275, points: 550 },
 						Event::MemberRemoved { pool_id: 1, member: 550 }
 					]
+				);
+				assert_eq!(
+					balances_events_since_last_call(),
+					vec![BEvent::Transfer { from: default_bonded_account(), to: 550, amount: 275 }]
 				);
 
 				// When
@@ -2342,16 +2365,17 @@ mod withdraw_unbonded {
 					SubPoolsStorage::<Runtime>::get(1).unwrap().no_era,
 					UnbondPool { points: 0, balance: 0 }
 				);
-				// 40 gets even less than half back, because being diluted in the no-era pool.
-				assert_eq!(Balances::free_balance(&40), 40 + 15);
-				assert_eq!(Balances::free_balance(&default_bonded_account()), 25 - 15);
 				assert!(!PoolMembers::<Runtime>::contains_key(40));
 				assert_eq!(
 					pool_events_since_last_call(),
 					vec![
-						Event::Withdrawn { member: 40, pool_id: 1, amount: 15 },
-						Event::MemberRemoved { pool_id: 1, member: 40 },
+						Event::Withdrawn { member: 40, pool_id: 1, balance: 20, points: 40 },
+						Event::MemberRemoved { pool_id: 1, member: 40 }
 					]
+				);
+				assert_eq!(
+					balances_events_since_last_call(),
+					vec![BEvent::Transfer { from: default_bonded_account(), to: 40, amount: 20 }]
 				);
 
 				// now, finally, the depositor can take out its share.
@@ -2363,62 +2387,46 @@ mod withdraw_unbonded {
 
 				// when
 				assert_ok!(Pools::withdraw_unbonded(Origin::signed(10), 10, 0));
-
-				// then
-				assert_eq!(Balances::free_balance(&10), 20);
-				assert_eq!(Balances::free_balance(&default_bonded_account()), 0);
-
-				// in this test, 10 actually gets their full share back because they were only in
-				// the bonded pool and we didn't slash the bonded pool.
 				assert_eq!(
 					pool_events_since_last_call(),
 					vec![
-						Event::Unbonded { member: 10, pool_id: 1, amount: 10 },
-						Event::Withdrawn { member: 10, pool_id: 1, amount: 10 },
+						Event::Unbonded { member: 10, pool_id: 1, balance: 5, points: 5 },
+						Event::Withdrawn { member: 10, pool_id: 1, balance: 5, points: 5 },
 						Event::MemberRemoved { pool_id: 1, member: 10 },
-						Event::Destroyed { pool_id: 1 },
+						Event::Destroyed { pool_id: 1 }
+					]
+				);
+				assert_eq!(
+					balances_events_since_last_call(),
+					vec![
+						BEvent::Transfer { from: default_bonded_account(), to: 10, amount: 5 },
+						BEvent::Transfer { from: default_reward_account(), to: 10, amount: 5 }
 					]
 				);
 			});
 	}
 
-	// This test also documents the case when the pools free balance goes below ED before all
-	// members have unbonded.
 	#[test]
 	fn withdraw_unbonded_works_against_slashed_with_era_sub_pools() {
 		ExtBuilder::default()
 			.add_members(vec![(40, 40), (550, 550)])
 			.build_and_execute(|| {
+				let _ = balances_events_since_last_call();
+
 				// Given
-				// current bond is 500, we slash it all to 250.
-				StakingMock::set_bonded_balance(default_bonded_account(), 250);
-				Balances::make_free_balance_be(&default_bonded_account(), 250);
-				assert_eq!(StakingMock::total_stake(&default_bonded_account()), Some(250));
+				// current bond is 600, we slash it all to 300.
+				StakingMock::set_bonded_balance(default_bonded_account(), 300);
+				Balances::make_free_balance_be(&default_bonded_account(), 300);
+				assert_eq!(StakingMock::total_stake(&default_bonded_account()), Some(300));
 
-				assert_ok!(Pools::fully_unbond(Origin::signed(40), 40));
-				assert_ok!(Pools::fully_unbond(Origin::signed(550), 550));
+				assert_ok!(fully_unbond_permissioned(40));
+				assert_ok!(fully_unbond_permissioned(550));
 
-				SubPoolsStorage::<Runtime>::insert(
-					1,
-					SubPools {
-						no_era: Default::default(),
-						with_era: unbonding_pools_with_era! {
-							3 => UnbondPool { points: 550 + 40, balance: 275 + 20 }
-						},
-					},
-				);
-				CurrentEra::set(StakingMock::bonding_duration());
-
-				// When
-				assert_ok!(Pools::withdraw_unbonded(Origin::signed(40), 40, 0));
-
-				// Then
 				assert_eq!(
 					SubPoolsStorage::<Runtime>::get(&1).unwrap().with_era,
-					unbonding_pools_with_era! {  3 => UnbondPool { points: 550, balance: 275 }}
+					unbonding_pools_with_era! { 3 => UnbondPool { points: 550 / 2 + 40 / 2, balance: 550 / 2 + 40 / 2 }}
 				);
-				assert_eq!(Balances::free_balance(&40), 40 + 20);
-				assert_eq!(Balances::free_balance(&default_bonded_account()), 250 - 20);
+
 				assert_eq!(
 					pool_events_since_last_call(),
 					vec![
@@ -2426,32 +2434,58 @@ mod withdraw_unbonded {
 						Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
 						Event::Bonded { member: 40, pool_id: 1, bonded: 40, joined: true },
 						Event::Bonded { member: 550, pool_id: 1, bonded: 550, joined: true },
-						Event::Unbonded { member: 40, pool_id: 1, amount: 16 },
-						Event::Unbonded { member: 550, pool_id: 1, amount: 229 }, /* TODO: these
-						                                                           * values should
-						                                                           * prob. be points,
-						                                                           * not unbonding
-						                                                           * balance. */
-						Event::Withdrawn { member: 40, pool_id: 1, amount: 20 },
+						Event::Unbonded { member: 40, pool_id: 1, balance: 20, points: 20 },
+						Event::Unbonded { member: 550, pool_id: 1, balance: 275, points: 275 },
+					]
+				);
+				assert_eq!(
+					balances_events_since_last_call(),
+					vec![BEvent::BalanceSet {
+						who: default_bonded_account(),
+						free: 300,
+						reserved: 0
+					},]
+				);
+
+				CurrentEra::set(StakingMock::bonding_duration());
+
+				// When
+				assert_ok!(Pools::withdraw_unbonded(Origin::signed(40), 40, 0));
+
+				// Then
+				assert_eq!(
+					balances_events_since_last_call(),
+					vec![BEvent::Transfer { from: default_bonded_account(), to: 40, amount: 20 },]
+				);
+				assert_eq!(
+					pool_events_since_last_call(),
+					vec![
+						Event::Withdrawn { member: 40, pool_id: 1, balance: 20, points: 20 },
 						Event::MemberRemoved { pool_id: 1, member: 40 }
 					]
+				);
+
+				assert_eq!(
+					SubPoolsStorage::<Runtime>::get(&1).unwrap().with_era,
+					unbonding_pools_with_era! { 3 => UnbondPool { points: 550 / 2, balance: 550 / 2 }}
 				);
 
 				// When
 				assert_ok!(Pools::withdraw_unbonded(Origin::signed(550), 550, 0));
 
 				// Then
-				assert!(SubPoolsStorage::<Runtime>::get(&1).unwrap().with_era.is_empty());
-				assert_eq!(Balances::free_balance(&550), 550 + 225);
-				// The account was dusted because it went below ED(5)
-				assert_eq!(Balances::free_balance(&default_bonded_account()), 5);
+				assert_eq!(
+					balances_events_since_last_call(),
+					vec![BEvent::Transfer { from: default_bonded_account(), to: 550, amount: 275 },]
+				);
 				assert_eq!(
 					pool_events_since_last_call(),
 					vec![
-						Event::Withdrawn { member: 550, pool_id: 1, amount: 225 },
+						Event::Withdrawn { member: 550, pool_id: 1, balance: 275, points: 275 },
 						Event::MemberRemoved { pool_id: 1, member: 550 }
 					]
 				);
+				assert!(SubPoolsStorage::<Runtime>::get(&1).unwrap().with_era.is_empty());
 
 				// now, finally, the depositor can take out its share.
 				unsafe_set_state(1, PoolState::Destroying).unwrap();
@@ -2477,10 +2511,17 @@ mod withdraw_unbonded {
 				assert_eq!(
 					pool_events_since_last_call(),
 					vec![
-						Event::Unbonded { member: 10, pool_id: 1, amount: 5 },
-						Event::Withdrawn { member: 10, pool_id: 1, amount: 5 },
+						Event::Unbonded { member: 10, pool_id: 1, points: 5, balance: 5 },
+						Event::Withdrawn { member: 10, pool_id: 1, points: 5, balance: 5 },
 						Event::MemberRemoved { pool_id: 1, member: 10 },
 						Event::Destroyed { pool_id: 1 }
+					]
+				);
+				assert_eq!(
+					balances_events_since_last_call(),
+					vec![
+						BEvent::Transfer { from: default_bonded_account(), to: 10, amount: 5 },
+						BEvent::Transfer { from: default_reward_account(), to: 10, amount: 5 }
 					]
 				);
 			});
@@ -2584,8 +2625,8 @@ mod withdraw_unbonded {
 						Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
 						Event::Bonded { member: 100, pool_id: 1, bonded: 100, joined: true },
 						Event::Bonded { member: 200, pool_id: 1, bonded: 200, joined: true },
-						Event::Unbonded { member: 100, pool_id: 1, amount: 100 },
-						Event::Unbonded { member: 200, pool_id: 1, amount: 200 }
+						Event::Unbonded { member: 100, pool_id: 1, points: 100, balance: 100 },
+						Event::Unbonded { member: 200, pool_id: 1, points: 200, balance: 200 }
 					]
 				);
 
@@ -2612,9 +2653,9 @@ mod withdraw_unbonded {
 				assert_eq!(
 					pool_events_since_last_call(),
 					vec![
-						Event::Withdrawn { member: 100, pool_id: 1, amount: 100 },
+						Event::Withdrawn { member: 100, pool_id: 1, points: 100, balance: 100 },
 						Event::MemberRemoved { pool_id: 1, member: 100 },
-						Event::Withdrawn { member: 200, pool_id: 1, amount: 200 },
+						Event::Withdrawn { member: 200, pool_id: 1, points: 200, balance: 200 },
 						Event::MemberRemoved { pool_id: 1, member: 200 }
 					]
 				);
@@ -2662,207 +2703,9 @@ mod withdraw_unbonded {
 					Event::Created { depositor: 10, pool_id: 1 },
 					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
 					Event::Bonded { member: 100, pool_id: 1, bonded: 100, joined: true },
-					Event::Unbonded { member: 100, pool_id: 1, amount: 100 },
-					Event::Withdrawn { member: 100, pool_id: 1, amount: 100 },
+					Event::Unbonded { member: 100, pool_id: 1, points: 100, balance: 100 },
+					Event::Withdrawn { member: 100, pool_id: 1, points: 100, balance: 100 },
 					Event::MemberRemoved { pool_id: 1, member: 100 }
-				]
-			);
-		});
-	}
-
-	#[test]
-	#[ignore]
-	fn withdraw_unbonded_depositor_with_era_pool() {
-		ExtBuilder::default()
-			.add_members(vec![(100, 100), (200, 200)])
-			.build_and_execute(|| {
-				// Given
-				assert_ok!(Pools::fully_unbond(Origin::signed(100), 100));
-
-				assert_eq!(
-					pool_events_since_last_call(),
-					vec![
-						Event::Created { depositor: 10, pool_id: 1 },
-						Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-						Event::Bonded { member: 100, pool_id: 1, bonded: 100, joined: true },
-						Event::Bonded { member: 200, pool_id: 1, bonded: 200, joined: true },
-						Event::Unbonded { member: 100, pool_id: 1, amount: 100 }
-					]
-				);
-
-				let mut current_era = 1;
-				CurrentEra::set(current_era);
-
-				assert_ok!(Pools::fully_unbond(Origin::signed(200), 200));
-
-				assert_eq!(
-					pool_events_since_last_call(),
-					vec![Event::Unbonded { member: 200, pool_id: 1, amount: 200 }]
-				);
-
-				unsafe_set_state(1, PoolState::Destroying).unwrap();
-				assert_ok!(Pools::fully_unbond(Origin::signed(10), 10));
-
-				assert_eq!(
-					pool_events_since_last_call(),
-					vec![Event::Unbonded { member: 10, pool_id: 1, amount: 10 }]
-				);
-
-				assert_eq!(
-					SubPoolsStorage::<Runtime>::get(1).unwrap(),
-					SubPools {
-						no_era: Default::default(),
-						with_era: unbonding_pools_with_era! {
-							0 + 3 => UnbondPool { points: 100, balance: 100},
-							1 + 3 => UnbondPool { points: 200 + 10, balance: 200 + 10 }
-						}
-					}
-				);
-
-				// Skip ahead eras to where its valid for the members to withdraw
-				current_era += StakingMock::bonding_duration();
-				CurrentEra::set(current_era);
-
-				// Cannot withdraw the depositor if their is a member in another `with_era` pool.
-				assert_noop!(
-					Pools::withdraw_unbonded(Origin::signed(420), 10, 0),
-					Error::<Runtime>::NotOnlyPoolMember
-				);
-
-				// Given
-				assert_ok!(Pools::withdraw_unbonded(Origin::signed(420), 100, 0));
-
-				assert_eq!(
-					pool_events_since_last_call(),
-					vec![
-						Event::Withdrawn { member: 100, pool_id: 1, amount: 100 },
-						Event::MemberRemoved { pool_id: 1, member: 100 }
-					]
-				);
-
-				assert_eq!(
-					SubPoolsStorage::<Runtime>::get(1).unwrap(),
-					SubPools {
-						no_era: Default::default(),
-						with_era: unbonding_pools_with_era! {
-							// Note that era 0+3 unbond pool is destroyed because points went to 0
-							1 + 3 => UnbondPool { points: 200 + 10, balance: 200 + 10 }
-						}
-					}
-				);
-
-				// Cannot withdraw the depositor if their is a member in another `with_era` pool.
-				assert_noop!(
-					Pools::withdraw_unbonded(Origin::signed(420), 10, 0),
-					Error::<Runtime>::NotOnlyPoolMember
-				);
-
-				// Given
-				assert_ok!(Pools::withdraw_unbonded(Origin::signed(420), 200, 0));
-
-				assert_eq!(
-					pool_events_since_last_call(),
-					vec![
-						Event::Withdrawn { member: 200, pool_id: 1, amount: 200 },
-						Event::MemberRemoved { pool_id: 1, member: 200 }
-					]
-				);
-
-				assert_eq!(
-					SubPoolsStorage::<Runtime>::get(1).unwrap(),
-					SubPools {
-						no_era: Default::default(),
-						with_era: unbonding_pools_with_era! {
-							1 + 3 => UnbondPool { points: 10, balance: 10 }
-						}
-					}
-				);
-
-				// The depositor can withdraw
-				assert_ok!(Pools::withdraw_unbonded(Origin::signed(420), 10, 0));
-
-				assert_eq!(
-					pool_events_since_last_call(),
-					vec![
-						Event::Withdrawn { member: 10, pool_id: 1, amount: 10 },
-						Event::MemberRemoved { pool_id: 1, member: 10 },
-						Event::Destroyed { pool_id: 1 }
-					]
-				);
-
-				assert!(!PoolMembers::<Runtime>::contains_key(10));
-				assert_eq!(Balances::free_balance(10), 10 + 10);
-				// Pools are removed from storage because the depositor left
-				assert!(!SubPoolsStorage::<Runtime>::contains_key(1));
-				assert!(!RewardPools::<Runtime>::contains_key(1));
-				assert!(!BondedPools::<Runtime>::contains_key(1));
-			});
-	}
-
-	#[test]
-	#[ignore]
-	fn withdraw_unbonded_depositor_no_era_pool() {
-		ExtBuilder::default().add_members(vec![(100, 100)]).build_and_execute(|| {
-			// Given
-			assert_ok!(Pools::fully_unbond(Origin::signed(100), 100));
-			unsafe_set_state(1, PoolState::Destroying).unwrap();
-
-			assert_ok!(Pools::fully_unbond(Origin::signed(10), 10));
-			// Skip ahead to an era where the `with_era` pools can get merged into the `no_era`
-			// pool.
-			let current_era = TotalUnbondingPools::<Runtime>::get();
-			CurrentEra::set(current_era);
-
-			// Simulate some other withdraw that caused the pool to merge
-			let sub_pools =
-				SubPoolsStorage::<Runtime>::get(1).unwrap().maybe_merge_pools(current_era + 3);
-			SubPoolsStorage::<Runtime>::insert(1, sub_pools);
-			assert_eq!(
-				SubPoolsStorage::<Runtime>::get(1).unwrap(),
-				SubPools {
-					no_era: UnbondPool { points: 100 + 10, balance: 100 + 10 },
-					with_era: Default::default(),
-				}
-			);
-
-			// Cannot withdraw depositor with another member in the `no_era` pool
-			assert_noop!(
-				Pools::withdraw_unbonded(Origin::signed(420), 10, 0),
-				Error::<Runtime>::NotOnlyPoolMember
-			);
-
-			// Given
-			assert_ok!(Pools::withdraw_unbonded(Origin::signed(420), 100, 0));
-			assert_eq!(
-				SubPoolsStorage::<Runtime>::get(1).unwrap(),
-				SubPools {
-					no_era: UnbondPool { points: 10, balance: 10 },
-					with_era: Default::default(),
-				}
-			);
-
-			// The depositor can withdraw
-			assert_ok!(Pools::withdraw_unbonded(Origin::signed(420), 10, 0));
-			assert!(!PoolMembers::<Runtime>::contains_key(10));
-			assert_eq!(Balances::free_balance(10), 10 + 10);
-			// Pools are removed from storage because the depositor left
-			assert!(!SubPoolsStorage::<Runtime>::contains_key(1));
-			assert!(!RewardPools::<Runtime>::contains_key(1));
-			assert!(!BondedPools::<Runtime>::contains_key(1));
-
-			assert_eq!(
-				pool_events_since_last_call(),
-				vec![
-					Event::Created { depositor: 10, pool_id: 1 },
-					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					Event::Bonded { member: 100, pool_id: 1, bonded: 100, joined: true },
-					Event::Unbonded { member: 100, pool_id: 1, amount: 100 },
-					Event::Unbonded { member: 10, pool_id: 1, amount: 10 },
-					Event::Withdrawn { member: 100, pool_id: 1, amount: 100 },
-					Event::MemberRemoved { pool_id: 1, member: 100 },
-					Event::Withdrawn { member: 10, pool_id: 1, amount: 10 },
-					Event::MemberRemoved { pool_id: 1, member: 10 },
-					Event::Destroyed { pool_id: 1 }
 				]
 			);
 		});
@@ -2899,8 +2742,8 @@ mod withdraw_unbonded {
 				vec![
 					Event::Created { depositor: 10, pool_id: 1 },
 					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					Event::Unbonded { member: 10, pool_id: 1, amount: 6 },
-					Event::Unbonded { member: 10, pool_id: 1, amount: 1 }
+					Event::Unbonded { member: 10, pool_id: 1, points: 6, balance: 6 },
+					Event::Unbonded { member: 10, pool_id: 1, points: 1, balance: 1 }
 				]
 			);
 
@@ -2931,7 +2774,7 @@ mod withdraw_unbonded {
 			);
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![Event::Withdrawn { member: 10, pool_id: 1, amount: 6 }]
+				vec![Event::Withdrawn { member: 10, pool_id: 1, points: 6, balance: 6 }]
 			);
 
 			// when
@@ -2946,7 +2789,7 @@ mod withdraw_unbonded {
 			assert_eq!(SubPoolsStorage::<Runtime>::get(1).unwrap(), Default::default());
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![Event::Withdrawn { member: 10, pool_id: 1, amount: 1 },]
+				vec![Event::Withdrawn { member: 10, pool_id: 1, points: 1, balance: 1 },]
 			);
 
 			// when repeating:
@@ -2986,8 +2829,8 @@ mod withdraw_unbonded {
 					Event::Created { depositor: 10, pool_id: 1 },
 					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
 					Event::Bonded { member: 11, pool_id: 1, bonded: 10, joined: true },
-					Event::Unbonded { member: 11, pool_id: 1, amount: 6 },
-					Event::Unbonded { member: 11, pool_id: 1, amount: 1 }
+					Event::Unbonded { member: 11, pool_id: 1, points: 6, balance: 6 },
+					Event::Unbonded { member: 11, pool_id: 1, points: 1, balance: 1 }
 				]
 			);
 
@@ -3018,7 +2861,7 @@ mod withdraw_unbonded {
 			);
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![Event::Withdrawn { member: 11, pool_id: 1, amount: 6 }]
+				vec![Event::Withdrawn { member: 11, pool_id: 1, points: 6, balance: 6 }]
 			);
 
 			// when
@@ -3033,7 +2876,7 @@ mod withdraw_unbonded {
 			assert_eq!(SubPoolsStorage::<Runtime>::get(1).unwrap(), Default::default());
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![Event::Withdrawn { member: 11, pool_id: 1, amount: 1 }]
+				vec![Event::Withdrawn { member: 11, pool_id: 1, points: 1, balance: 1 }]
 			);
 
 			// when repeating:
@@ -3076,9 +2919,9 @@ mod withdraw_unbonded {
 					Event::Created { depositor: 10, pool_id: 1 },
 					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
 					Event::Bonded { member: 100, pool_id: 1, bonded: 100, joined: true },
-					Event::Unbonded { member: 100, pool_id: 1, amount: 75 },
-					Event::Unbonded { member: 100, pool_id: 1, amount: 25 },
-					Event::Withdrawn { member: 100, pool_id: 1, amount: 75 },
+					Event::Unbonded { member: 100, pool_id: 1, points: 75, balance: 75 },
+					Event::Unbonded { member: 100, pool_id: 1, points: 25, balance: 25 },
+					Event::Withdrawn { member: 100, pool_id: 1, points: 75, balance: 75 },
 				]
 			);
 			assert_eq!(
@@ -3092,7 +2935,7 @@ mod withdraw_unbonded {
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
-					Event::Withdrawn { member: 100, pool_id: 1, amount: 25 },
+					Event::Withdrawn { member: 100, pool_id: 1, points: 25, balance: 25 },
 					Event::MemberRemoved { pool_id: 1, member: 100 }
 				]
 			);
@@ -3127,9 +2970,9 @@ mod withdraw_unbonded {
 				vec![
 					Event::Created { depositor: 10, pool_id: 1 },
 					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					Event::Unbonded { member: 10, pool_id: 1, amount: 7 },
-					Event::Unbonded { member: 10, pool_id: 1, amount: 3 },
-					Event::Withdrawn { member: 10, pool_id: 1, amount: 7 }
+					Event::Unbonded { member: 10, pool_id: 1, points: 7, balance: 7 },
+					Event::Unbonded { member: 10, pool_id: 1, points: 3, balance: 3 },
+					Event::Withdrawn { member: 10, pool_id: 1, points: 7, balance: 7 }
 				]
 			);
 			assert_eq!(
@@ -3143,7 +2986,7 @@ mod withdraw_unbonded {
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
-					Event::Withdrawn { member: 10, pool_id: 1, amount: 3 },
+					Event::Withdrawn { member: 10, pool_id: 1, points: 3, balance: 3 },
 					Event::MemberRemoved { pool_id: 1, member: 10 },
 					// the pool is also destroyed now.
 					Event::Destroyed { pool_id: 1 },

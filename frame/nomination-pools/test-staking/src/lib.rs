@@ -93,8 +93,8 @@ fn pool_lifecycle_e2e() {
 			pool_events_since_last_call(),
 			vec![
 				PoolsEvent::StateChanged { pool_id: 1, new_state: PoolState::Destroying },
-				PoolsEvent::Unbonded { member: 20, pool_id: 1, amount: 10 },
-				PoolsEvent::Unbonded { member: 21, pool_id: 1, amount: 10 },
+				PoolsEvent::Unbonded { member: 20, pool_id: 1, points: 10, balance: 10 },
+				PoolsEvent::Unbonded { member: 21, pool_id: 1, points: 10, balance: 10 },
 			]
 		);
 
@@ -134,9 +134,9 @@ fn pool_lifecycle_e2e() {
 		assert_eq!(
 			pool_events_since_last_call(),
 			vec![
-				PoolsEvent::Withdrawn { member: 20, pool_id: 1, amount: 10 },
+				PoolsEvent::Withdrawn { member: 20, pool_id: 1, points: 10, balance: 10 },
 				PoolsEvent::MemberRemoved { pool_id: 1, member: 20 },
-				PoolsEvent::Withdrawn { member: 21, pool_id: 1, amount: 10 },
+				PoolsEvent::Withdrawn { member: 21, pool_id: 1, points: 10, balance: 10 },
 				PoolsEvent::MemberRemoved { pool_id: 1, member: 21 },
 			]
 		);
@@ -157,7 +157,7 @@ fn pool_lifecycle_e2e() {
 		);
 		assert_eq!(
 			pool_events_since_last_call(),
-			vec![PoolsEvent::Unbonded { member: 10, pool_id: 1, amount: 50 }]
+			vec![PoolsEvent::Unbonded { member: 10, pool_id: 1, points: 50, balance: 50 }]
 		);
 
 		// waiting another bonding duration:
@@ -172,7 +172,7 @@ fn pool_lifecycle_e2e() {
 		assert_eq!(
 			pool_events_since_last_call(),
 			vec![
-				PoolsEvent::Withdrawn { member: 10, pool_id: 1, amount: 50 },
+				PoolsEvent::Withdrawn { member: 10, pool_id: 1, points: 50, balance: 50 },
 				PoolsEvent::MemberRemoved { pool_id: 1, member: 10 },
 				PoolsEvent::Destroyed { pool_id: 1 }
 			]
