@@ -25,6 +25,7 @@ type BlockNumber = u64;
 type Balance = u128;
 
 pub(crate) const POOL1_BONDED: AccountId = 20318131474730217858575332831085u128;
+pub(crate) const POOL1_REWARD: AccountId = 20397359637244482196168876781421u128;
 
 impl frame_system::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;
@@ -204,7 +205,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	.unwrap();
 
 	let _ = pallet_balances::GenesisConfig::<Runtime> {
-		balances: vec![(10, 100), (20, 100), (21, 100)],
+		balances: vec![(10, 100), (20, 100), (21, 100), (22, 100)],
 	}
 	.assimilate_storage(&mut storage)
 	.unwrap();
@@ -233,6 +234,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 parameter_types! {
 	static ObservedEventsPools: usize = 0;
 	static ObservedEventsStaking: usize = 0;
+	static ObservedEventsBalances: usize = 0;
 }
 
 pub(crate) fn pool_events_since_last_call() -> Vec<pallet_nomination_pools::Event<Runtime>> {

@@ -1303,6 +1303,10 @@ pub mod pallet {
 			state_toggler: Option<T::AccountId>,
 			nominator: Option<T::AccountId>,
 		},
+		/// The active balance of pool `pool_id` has been slashed to `balance`.
+		PoolSlashed { pool_id: PoolId, balance: BalanceOf<T> },
+		/// The unbond pool at `era` of pool `pool_id` has been slashed to `balance`.
+		UnbondingPoolSlashed { pool_id: PoolId, era: EraIndex, balance: BalanceOf<T> },
 	}
 
 	#[pallet::error]
@@ -2412,9 +2416,16 @@ impl<T: Config> OnStakerSlash<T::AccountId, BalanceOf<T>> for Pallet<T> {
 			};
 			for (era, slashed_balance) in slashed_unlocking.iter() {
 				if let Some(pool) = sub_pools.with_era.get_mut(era) {
-					pool.balance = *slashed_balance
+					pool.balance = *slashed_balance;
+					Self::deposit_event(Event::<T>::UnbondingPoolSlashed {
+						era: *era,
+						pool_id,
+						balance: *slashed_balance,
+					});
 				}
 			}
+
+			Self::deposit_event(Event::<T>::PoolSlashed { pool_id, balance: _slashed_bonded });
 			SubPoolsStorage::<T>::insert(pool_id, sub_pools);
 		}
 	}

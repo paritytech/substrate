@@ -539,7 +539,7 @@ impl<T: Config> StakingLedger<T> {
 	///
 	/// This calls `Config::OnStakerSlash::on_slash` with information as to how the slash was
 	/// applied.
-	fn slash(
+	pub fn slash(
 		&mut self,
 		slash_amount: BalanceOf<T>,
 		minimum_balance: BalanceOf<T>,
@@ -607,12 +607,12 @@ impl<T: Config> StakingLedger<T> {
 		let mut slashed_unlocking = BTreeMap::<_, _>::new();
 		for i in slash_chunks_priority {
 			if let Some(chunk) = self.unlocking.get_mut(i).defensive() {
-				slash_out_of(&mut chunk.value, &mut remaining_slash);
-				// write the new slashed value of this chunk to the map.
-				slashed_unlocking.insert(chunk.era, chunk.value);
 				if remaining_slash.is_zero() {
 					break
 				}
+				slash_out_of(&mut chunk.value, &mut remaining_slash);
+				// write the new slashed value of this chunk to the map.
+				slashed_unlocking.insert(chunk.era, chunk.value);
 			} else {
 				break
 			}
