@@ -19,11 +19,15 @@
 //! RPC API for GRANDPA.
 #![warn(missing_docs)]
 
-use futures::{task::Spawn, FutureExt, SinkExt, StreamExt, TryFutureExt};
-use jsonrpc_derive::rpc;
-use jsonrpc_pubsub::{manager::SubscriptionManager, typed::Subscriber, SubscriptionId};
+use futures::{FutureExt, StreamExt};
 use log::warn;
 use std::sync::Arc;
+
+use jsonrpsee::{
+	core::{async_trait, RpcResult},
+	proc_macros::rpc,
+	PendingSubscription,
+};
 
 mod error;
 mod finality;
@@ -31,155 +35,121 @@ mod notification;
 mod report;
 
 use sc_finality_grandpa::GrandpaJustificationStream;
+use sc_rpc::SubscriptionTaskExecutor;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 
 use finality::{EncodedFinalityProof, RpcFinalityProofProvider};
 use notification::JustificationNotification;
 use report::{ReportAuthoritySet, ReportVoterState, ReportedRoundStates};
 
-type FutureResult<T> = jsonrpc_core::BoxFuture<Result<T, jsonrpc_core::Error>>;
-
 /// Provides RPC methods for interacting with GRANDPA.
-#[rpc]
+#[rpc(client, server)]
 pub trait GrandpaApi<Notification, Hash, Number> {
-	/// RPC Metadata
-	type Metadata;
-
 	/// Returns the state of the current best round state as well as the
 	/// ongoing background rounds.
-	#[rpc(name = "grandpa_roundState")]
-	fn round_state(&self) -> FutureResult<ReportedRoundStates>;
+	#[method(name = "grandpa_roundState")]
+	async fn round_state(&self) -> RpcResult<ReportedRoundStates>;
 
 	/// Returns the block most recently finalized by Grandpa, alongside
 	/// side its justification.
-	#[pubsub(
-		subscription = "grandpa_justifications",
-		subscribe,
-		name = "grandpa_subscribeJustifications"
+	#[subscription(
+		name = "grandpa_subscribeJustifications" => "grandpa_justifications",
+		unsubscribe = "grandpa_unsubscribeJustifications",
+		item = Notification
 	)]
-	fn subscribe_justifications(
-		&self,
-		metadata: Self::Metadata,
-		subscriber: Subscriber<Notification>,
-	);
-
-	/// Unsubscribe from receiving notifications about recently finalized blocks.
-	#[pubsub(
-		subscription = "grandpa_justifications",
-		unsubscribe,
-		name = "grandpa_unsubscribeJustifications"
-	)]
-	fn unsubscribe_justifications(
-		&self,
-		metadata: Option<Self::Metadata>,
-		id: SubscriptionId,
-	) -> jsonrpc_core::Result<bool>;
+	fn subscribe_justifications(&self);
 
 	/// Prove finality for the given block number by returning the Justification for the last block
 	/// in the set and all the intermediary headers to link them together.
-	#[rpc(name = "grandpa_proveFinality")]
-	fn prove_finality(&self, block: Number) -> FutureResult<Option<EncodedFinalityProof>>;
+	#[method(name = "grandpa_proveFinality")]
+	async fn prove_finality(&self, block: Number) -> RpcResult<Option<EncodedFinalityProof>>;
 }
 
-/// Implements the GrandpaApi RPC trait for interacting with GRANDPA.
-pub struct GrandpaRpcHandler<AuthoritySet, VoterState, Block: BlockT, ProofProvider> {
+/// Provides RPC methods for interacting with GRANDPA.
+pub struct GrandpaRpc<AuthoritySet, VoterState, Block: BlockT, ProofProvider> {
+	executor: SubscriptionTaskExecutor,
 	authority_set: AuthoritySet,
 	voter_state: VoterState,
 	justification_stream: GrandpaJustificationStream<Block>,
-	manager: SubscriptionManager,
 	finality_proof_provider: Arc<ProofProvider>,
 }
-
 impl<AuthoritySet, VoterState, Block: BlockT, ProofProvider>
-	GrandpaRpcHandler<AuthoritySet, VoterState, Block, ProofProvider>
+	GrandpaRpc<AuthoritySet, VoterState, Block, ProofProvider>
 {
-	/// Creates a new GrandpaRpcHandler instance.
-	pub fn new<E>(
+	/// Prepare a new [`GrandpaRpc`]
+	pub fn new(
+		executor: SubscriptionTaskExecutor,
 		authority_set: AuthoritySet,
 		voter_state: VoterState,
 		justification_stream: GrandpaJustificationStream<Block>,
-		executor: E,
 		finality_proof_provider: Arc<ProofProvider>,
-	) -> Self
-	where
-		E: Spawn + Sync + Send + 'static,
-	{
-		let manager = SubscriptionManager::new(Arc::new(executor));
-		Self { authority_set, voter_state, justification_stream, manager, finality_proof_provider }
+	) -> Self {
+		Self { executor, authority_set, voter_state, justification_stream, finality_proof_provider }
 	}
 }
 
+#[async_trait]
 impl<AuthoritySet, VoterState, Block, ProofProvider>
-	GrandpaApi<JustificationNotification, Block::Hash, NumberFor<Block>>
-	for GrandpaRpcHandler<AuthoritySet, VoterState, Block, ProofProvider>
+	GrandpaApiServer<JustificationNotification, Block::Hash, NumberFor<Block>>
+	for GrandpaRpc<AuthoritySet, VoterState, Block, ProofProvider>
 where
 	VoterState: ReportVoterState + Send + Sync + 'static,
 	AuthoritySet: ReportAuthoritySet + Send + Sync + 'static,
 	Block: BlockT,
 	ProofProvider: RpcFinalityProofProvider<Block> + Send + Sync + 'static,
 {
-	type Metadata = sc_rpc::Metadata;
-
-	fn round_state(&self) -> FutureResult<ReportedRoundStates> {
-		let round_states = ReportedRoundStates::from(&self.authority_set, &self.voter_state);
-		let future = async move { round_states }.boxed();
-		future.map_err(jsonrpc_core::Error::from).boxed()
+	async fn round_state(&self) -> RpcResult<ReportedRoundStates> {
+		ReportedRoundStates::from(&self.authority_set, &self.voter_state).map_err(Into::into)
 	}
 
-	fn subscribe_justifications(
-		&self,
-		_metadata: Self::Metadata,
-		subscriber: Subscriber<JustificationNotification>,
-	) {
-		let stream = self
-			.justification_stream
-			.subscribe()
-			.map(|x| Ok(Ok::<_, jsonrpc_core::Error>(JustificationNotification::from(x))));
+	fn subscribe_justifications(&self, pending: PendingSubscription) {
+		let stream = self.justification_stream.subscribe().map(
+			|x: sc_finality_grandpa::GrandpaJustification<Block>| {
+				JustificationNotification::from(x)
+			},
+		);
 
-		self.manager.add(subscriber, |sink| {
-			stream
-				.forward(sink.sink_map_err(|e| warn!("Error sending notifications: {:?}", e)))
-				.map(|_| ())
-		});
+		let fut = async move {
+			if let Some(mut sink) = pending.accept() {
+				sink.pipe_from_stream(stream).await;
+			}
+		}
+		.boxed();
+
+		self.executor
+			.spawn("substrate-rpc-subscription", Some("rpc"), fut.map(drop).boxed());
 	}
 
-	fn unsubscribe_justifications(
-		&self,
-		_metadata: Option<Self::Metadata>,
-		id: SubscriptionId,
-	) -> jsonrpc_core::Result<bool> {
-		Ok(self.manager.cancel(id))
-	}
-
-	fn prove_finality(
+	async fn prove_finality(
 		&self,
 		block: NumberFor<Block>,
-	) -> FutureResult<Option<EncodedFinalityProof>> {
-		let result = self.finality_proof_provider.rpc_prove_finality(block);
-		let future = async move { result }.boxed();
-		future
+	) -> RpcResult<Option<EncodedFinalityProof>> {
+		self.finality_proof_provider
+			.rpc_prove_finality(block)
 			.map_err(|e| {
 				warn!("Error proving finality: {}", e);
 				error::Error::ProveFinalityFailed(e)
 			})
-			.map_err(jsonrpc_core::Error::from)
-			.boxed()
+			.map_err(Into::into)
 	}
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use jsonrpc_core::{types::Params, Notification, Output};
-	use std::{collections::HashSet, sync::Arc};
+	use std::{collections::HashSet, convert::TryInto, sync::Arc};
 
+	use jsonrpsee::{
+		types::{EmptyParams, SubscriptionId},
+		RpcModule,
+	};
 	use parity_scale_codec::{Decode, Encode};
 	use sc_block_builder::{BlockBuilder, RecordProof};
 	use sc_finality_grandpa::{
 		report, AuthorityId, FinalityProof, GrandpaJustification, GrandpaJustificationSender,
 	};
 	use sp_blockchain::HeaderBackend;
-	use sp_core::crypto::ByteArray;
+	use sp_core::{crypto::ByteArray, testing::TaskExecutor};
 	use sp_keyring::Ed25519Keyring;
 	use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 	use substrate_test_runtime_client::{
@@ -274,7 +244,10 @@ mod tests {
 
 	fn setup_io_handler<VoterState>(
 		voter_state: VoterState,
-	) -> (jsonrpc_core::MetaIoHandler<sc_rpc::Metadata>, GrandpaJustificationSender<Block>)
+	) -> (
+		RpcModule<GrandpaRpc<TestAuthoritySet, VoterState, Block, TestFinalityProofProvider>>,
+		GrandpaJustificationSender<Block>,
+	)
 	where
 		VoterState: ReportVoterState + Send + Sync + 'static,
 	{
@@ -284,120 +257,107 @@ mod tests {
 	fn setup_io_handler_with_finality_proofs<VoterState>(
 		voter_state: VoterState,
 		finality_proof: Option<FinalityProof<Header>>,
-	) -> (jsonrpc_core::MetaIoHandler<sc_rpc::Metadata>, GrandpaJustificationSender<Block>)
+	) -> (
+		RpcModule<GrandpaRpc<TestAuthoritySet, VoterState, Block, TestFinalityProofProvider>>,
+		GrandpaJustificationSender<Block>,
+	)
 	where
 		VoterState: ReportVoterState + Send + Sync + 'static,
 	{
 		let (justification_sender, justification_stream) = GrandpaJustificationStream::channel();
 		let finality_proof_provider = Arc::new(TestFinalityProofProvider { finality_proof });
+		let executor = Arc::new(TaskExecutor::default());
 
-		let handler = GrandpaRpcHandler::new(
+		let rpc = GrandpaRpc::new(
+			executor,
 			TestAuthoritySet,
 			voter_state,
 			justification_stream,
-			sc_rpc::testing::TaskExecutor,
 			finality_proof_provider,
-		);
+		)
+		.into_rpc();
 
-		let mut io = jsonrpc_core::MetaIoHandler::default();
-		io.extend_with(GrandpaApi::to_delegate(handler));
-
-		(io, justification_sender)
+		(rpc, justification_sender)
 	}
 
-	#[test]
-	fn uninitialized_rpc_handler() {
-		let (io, _) = setup_io_handler(EmptyVoterState);
+	#[tokio::test]
+	async fn uninitialized_rpc_handler() {
+		let (rpc, _) = setup_io_handler(EmptyVoterState);
+		let expected_response = r#"{"jsonrpc":"2.0","error":{"code":1,"message":"GRANDPA RPC endpoint not ready"},"id":0}"#.to_string();
+		let request = r#"{"jsonrpc":"2.0","method":"grandpa_roundState","params":[],"id":0}"#;
+		let (result, _) = rpc.raw_json_request(&request).await.unwrap();
 
-		let request = r#"{"jsonrpc":"2.0","method":"grandpa_roundState","params":[],"id":1}"#;
-		let response = r#"{"jsonrpc":"2.0","error":{"code":1,"message":"GRANDPA RPC endpoint not ready"},"id":1}"#;
-
-		let meta = sc_rpc::Metadata::default();
-		assert_eq!(Some(response.into()), io.handle_request_sync(request, meta));
+		assert_eq!(expected_response, result,);
 	}
 
-	#[test]
-	fn working_rpc_handler() {
-		let (io, _) = setup_io_handler(TestVoterState);
-
-		let request = r#"{"jsonrpc":"2.0","method":"grandpa_roundState","params":[],"id":1}"#;
-		let response = "{\"jsonrpc\":\"2.0\",\"result\":{\
-			\"background\":[{\
-				\"precommits\":{\"currentWeight\":100,\"missing\":[]},\
-				\"prevotes\":{\"currentWeight\":100,\"missing\":[]},\
-				\"round\":1,\"thresholdWeight\":67,\"totalWeight\":100\
-			}],\
+	#[tokio::test]
+	async fn working_rpc_handler() {
+		let (rpc, _) = setup_io_handler(TestVoterState);
+		let expected_response = "{\"jsonrpc\":\"2.0\",\"result\":{\
+			\"setId\":1,\
 			\"best\":{\
-				\"precommits\":{\"currentWeight\":0,\"missing\":[\"5C62Ck4UrFPiBtoCmeSrgF7x9yv9mn38446dhCpsi2mLHiFT\",\"5C7LYpP2ZH3tpKbvVvwiVe54AapxErdPBbvkYhe6y9ZBkqWt\"]},\
+				\"round\":2,\"totalWeight\":100,\"thresholdWeight\":67,\
 				\"prevotes\":{\"currentWeight\":50,\"missing\":[\"5C7LYpP2ZH3tpKbvVvwiVe54AapxErdPBbvkYhe6y9ZBkqWt\"]},\
-				\"round\":2,\"thresholdWeight\":67,\"totalWeight\":100\
+				\"precommits\":{\"currentWeight\":0,\"missing\":[\"5C62Ck4UrFPiBtoCmeSrgF7x9yv9mn38446dhCpsi2mLHiFT\",\"5C7LYpP2ZH3tpKbvVvwiVe54AapxErdPBbvkYhe6y9ZBkqWt\"]}\
 			},\
-			\"setId\":1\
-		},\"id\":1}";
+				\"background\":[{\
+				\"round\":1,\"totalWeight\":100,\"thresholdWeight\":67,\
+				\"prevotes\":{\"currentWeight\":100,\"missing\":[]},\
+				\"precommits\":{\"currentWeight\":100,\"missing\":[]}\
+			}]\
+		},\"id\":0}".to_string();
 
-		let meta = sc_rpc::Metadata::default();
-		assert_eq!(io.handle_request_sync(request, meta), Some(response.into()));
+		let request = r#"{"jsonrpc":"2.0","method":"grandpa_roundState","params":[],"id":0}"#;
+		let (result, _) = rpc.raw_json_request(&request).await.unwrap();
+		assert_eq!(expected_response, result);
 	}
 
-	fn setup_session() -> (sc_rpc::Metadata, futures::channel::mpsc::UnboundedReceiver<String>) {
-		let (tx, rx) = futures::channel::mpsc::unbounded();
-		let meta = sc_rpc::Metadata::new(tx);
-		(meta, rx)
-	}
+	#[tokio::test]
+	async fn subscribe_and_unsubscribe_to_justifications() {
+		let (rpc, _) = setup_io_handler(TestVoterState);
+		// Subscribe call.
+		let sub = rpc
+			.subscribe("grandpa_subscribeJustifications", EmptyParams::new())
+			.await
+			.unwrap();
 
-	#[test]
-	fn subscribe_and_unsubscribe_to_justifications() {
-		let (io, _) = setup_io_handler(TestVoterState);
-		let (meta, _) = setup_session();
-
-		// Subscribe
-		let sub_request =
-			r#"{"jsonrpc":"2.0","method":"grandpa_subscribeJustifications","params":[],"id":1}"#;
-		let resp = io.handle_request_sync(sub_request, meta.clone());
-		let resp: Output = serde_json::from_str(&resp.unwrap()).unwrap();
-
-		let sub_id = match resp {
-			Output::Success(success) => success.result,
-			_ => panic!(),
-		};
+		let ser_id = serde_json::to_string(sub.subscription_id()).unwrap();
 
 		// Unsubscribe
 		let unsub_req = format!(
 			"{{\"jsonrpc\":\"2.0\",\"method\":\"grandpa_unsubscribeJustifications\",\"params\":[{}],\"id\":1}}",
-			sub_id
+			ser_id
 		);
-		assert_eq!(
-			io.handle_request_sync(&unsub_req, meta.clone()),
-			Some(r#"{"jsonrpc":"2.0","result":true,"id":1}"#.into()),
-		);
+		let (response, _) = rpc.raw_json_request(&unsub_req).await.unwrap();
+
+		assert_eq!(response, r#"{"jsonrpc":"2.0","result":true,"id":1}"#);
 
 		// Unsubscribe again and fail
-		assert_eq!(
-			io.handle_request_sync(&unsub_req, meta),
-			Some("{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32602,\"message\":\"Invalid subscription id.\"},\"id\":1}".into()),
-		);
+		let (response, _) = rpc.raw_json_request(&unsub_req).await.unwrap();
+		let expected = r#"{"jsonrpc":"2.0","result":false,"id":1}"#;
+
+		assert_eq!(response, expected);
 	}
 
-	#[test]
-	fn subscribe_and_unsubscribe_with_wrong_id() {
-		let (io, _) = setup_io_handler(TestVoterState);
-		let (meta, _) = setup_session();
-
-		// Subscribe
-		let sub_request =
-			r#"{"jsonrpc":"2.0","method":"grandpa_subscribeJustifications","params":[],"id":1}"#;
-		let resp = io.handle_request_sync(sub_request, meta.clone());
-		let resp: Output = serde_json::from_str(&resp.unwrap()).unwrap();
-		assert!(matches!(resp, Output::Success(_)));
+	#[tokio::test]
+	async fn subscribe_and_unsubscribe_with_wrong_id() {
+		let (rpc, _) = setup_io_handler(TestVoterState);
+		// Subscribe call.
+		let _sub = rpc
+			.subscribe("grandpa_subscribeJustifications", EmptyParams::new())
+			.await
+			.unwrap();
 
 		// Unsubscribe with wrong ID
-		assert_eq!(
-			io.handle_request_sync(
+		let (response, _) = rpc
+			.raw_json_request(
 				r#"{"jsonrpc":"2.0","method":"grandpa_unsubscribeJustifications","params":["FOO"],"id":1}"#,
-				meta.clone()
-			),
-			Some("{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32602,\"message\":\"Invalid subscription id.\"},\"id\":1}".into())
-		);
+			)
+			.await
+			.unwrap();
+		let expected = r#"{"jsonrpc":"2.0","result":false,"id":1}"#;
+
+		assert_eq!(response, expected);
 	}
 
 	fn create_justification() -> GrandpaJustification<Block> {
@@ -454,60 +414,41 @@ mod tests {
 		justification
 	}
 
-	#[test]
-	fn subscribe_and_listen_to_one_justification() {
-		let (io, justification_sender) = setup_io_handler(TestVoterState);
-		let (meta, receiver) = setup_session();
+	#[tokio::test]
+	async fn subscribe_and_listen_to_one_justification() {
+		let (rpc, justification_sender) = setup_io_handler(TestVoterState);
 
-		// Subscribe
-		let sub_request =
-			r#"{"jsonrpc":"2.0","method":"grandpa_subscribeJustifications","params":[],"id":1}"#;
-
-		let resp = io.handle_request_sync(sub_request, meta.clone());
-		let mut resp: serde_json::Value = serde_json::from_str(&resp.unwrap()).unwrap();
-		let sub_id: String = serde_json::from_value(resp["result"].take()).unwrap();
+		let mut sub = rpc
+			.subscribe("grandpa_subscribeJustifications", EmptyParams::new())
+			.await
+			.unwrap();
 
 		// Notify with a header and justification
 		let justification = create_justification();
 		justification_sender.notify(|| Ok::<_, ()>(justification.clone())).unwrap();
 
 		// Inspect what we received
-		let recv = futures::executor::block_on(receiver.take(1).collect::<Vec<_>>());
-		let recv: Notification = serde_json::from_str(&recv[0]).unwrap();
-		let mut json_map = match recv.params {
-			Params::Map(json_map) => json_map,
-			_ => panic!(),
-		};
-
-		let recv_sub_id: String = serde_json::from_value(json_map["subscription"].take()).unwrap();
-		let recv_justification: sp_core::Bytes =
-			serde_json::from_value(json_map["result"].take()).unwrap();
+		let (recv_justification, recv_sub_id): (sp_core::Bytes, SubscriptionId) =
+			sub.next().await.unwrap().unwrap();
 		let recv_justification: GrandpaJustification<Block> =
 			Decode::decode(&mut &recv_justification[..]).unwrap();
 
-		assert_eq!(recv.method, "grandpa_justifications");
-		assert_eq!(recv_sub_id, sub_id);
+		assert_eq!(&recv_sub_id, sub.subscription_id());
 		assert_eq!(recv_justification, justification);
 	}
 
-	#[test]
-	fn prove_finality_with_test_finality_proof_provider() {
+	#[tokio::test]
+	async fn prove_finality_with_test_finality_proof_provider() {
 		let finality_proof = FinalityProof {
 			block: header(42).hash(),
 			justification: create_justification().encode(),
 			unknown_headers: vec![header(2)],
 		};
-		let (io, _) =
+		let (rpc, _) =
 			setup_io_handler_with_finality_proofs(TestVoterState, Some(finality_proof.clone()));
 
-		let request =
-			"{\"jsonrpc\":\"2.0\",\"method\":\"grandpa_proveFinality\",\"params\":[42],\"id\":1}";
-
-		let meta = sc_rpc::Metadata::default();
-		let resp = io.handle_request_sync(request, meta);
-		let mut resp: serde_json::Value = serde_json::from_str(&resp.unwrap()).unwrap();
-		let result: sp_core::Bytes = serde_json::from_value(resp["result"].take()).unwrap();
-		let finality_proof_rpc: FinalityProof<Header> = Decode::decode(&mut &result[..]).unwrap();
+		let bytes: sp_core::Bytes = rpc.call("grandpa_proveFinality", [42]).await.unwrap();
+		let finality_proof_rpc: FinalityProof<Header> = Decode::decode(&mut &bytes[..]).unwrap();
 		assert_eq!(finality_proof_rpc, finality_proof);
 	}
 }

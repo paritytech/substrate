@@ -34,13 +34,15 @@ mod client;
 mod metrics;
 mod task_manager;
 
-use std::{collections::HashMap, io, net::SocketAddr, pin::Pin};
+use std::{collections::HashMap, net::SocketAddr};
 
 use codec::{Decode, Encode};
-use futures::{Future, FutureExt, StreamExt};
+use futures::{channel::mpsc, FutureExt, StreamExt};
+use jsonrpsee::{core::Error as JsonRpseeError, RpcModule};
 use log::{debug, error, warn};
-use sc_client_api::{BlockBackend, ProofProvider};
+use sc_client_api::{blockchain::HeaderBackend, BlockBackend, BlockchainEvents, ProofProvider};
 use sc_network::PeerId;
+use sc_rpc_server::WsConfig;
 use sc_utils::mpsc::TracingUnboundedReceiver;
 use sp_blockchain::HeaderMetadata;
 use sp_runtime::{
@@ -52,8 +54,7 @@ pub use self::{
 	builder::{
 		build_network, build_offchain_workers, new_client, new_db_backend, new_full_client,
 		new_full_parts, spawn_tasks, BuildNetworkParams, KeystoreContainer, NetworkStarter,
-		NoopRpcExtensionBuilder, RpcExtensionBuilder, SpawnTasksParams, TFullBackend,
-		TFullCallExecutor, TFullClient,
+		SpawnTasksParams, TFullBackend, TFullCallExecutor, TFullClient,
 	},
 	client::{ClientConfig, LocalCallExecutor},
 	error::Error,
@@ -65,12 +66,14 @@ pub use sc_chain_spec::{
 	ChainSpec, ChainType, Extension as ChainSpecExtension, GenericChainSpec, NoExtension,
 	Properties, RuntimeGenesis,
 };
-use sc_client_api::{blockchain::HeaderBackend, BlockchainEvents};
+
 pub use sc_consensus::ImportQueue;
 pub use sc_executor::NativeExecutionDispatch;
 #[doc(hidden)]
 pub use sc_network::config::{TransactionImport, TransactionImportFuture};
-pub use sc_rpc::Metadata as RpcMetadata;
+pub use sc_rpc::{
+	RandomIntegerSubscriptionId, RandomStringSubscriptionId, RpcSubscriptionIdProvider,
+};
 pub use sc_tracing::TracingReceiver;
 pub use sc_transaction_pool::Options as TransactionPoolOptions;
 pub use sc_transaction_pool_api::{error::IntoPoolError, InPoolTransaction, TransactionPool};
@@ -82,32 +85,27 @@ const DEFAULT_PROTOCOL_ID: &str = "sup";
 
 /// RPC handlers that can perform RPC queries.
 #[derive(Clone)]
-pub struct RpcHandlers(
-	Arc<jsonrpc_core::MetaIoHandler<sc_rpc::Metadata, sc_rpc_server::RpcMiddleware>>,
-);
+pub struct RpcHandlers(Arc<RpcModule<()>>);
 
 impl RpcHandlers {
 	/// Starts an RPC query.
 	///
-	/// The query is passed as a string and must be a JSON text similar to what an HTTP client
-	/// would for example send.
+	/// The query is passed as a string and must be valid JSON-RPC request object.
 	///
-	/// Returns a `Future` that contains the optional response.
+	/// Returns a response and a stream if the call successful, fails if the
+	/// query could not be decoded as a JSON-RPC request object.
 	///
-	/// If the request subscribes you to events, the `Sender` in the `RpcSession` object is used to
-	/// send back spontaneous events.
-	pub fn rpc_query(
+	/// If the request subscribes you to events, the `stream` can be used to
+	/// retrieve the events.
+	pub async fn rpc_query(
 		&self,
-		mem: &RpcSession,
-		request: &str,
-	) -> Pin<Box<dyn Future<Output = Option<String>> + Send>> {
-		self.0.handle_request(request, mem.metadata.clone()).boxed()
+		json_query: &str,
+	) -> Result<(String, mpsc::UnboundedReceiver<String>), JsonRpseeError> {
+		self.0.raw_json_request(json_query).await
 	}
 
-	/// Provides access to the underlying `MetaIoHandler`
-	pub fn io_handler(
-		&self,
-	) -> Arc<jsonrpc_core::MetaIoHandler<sc_rpc::Metadata, sc_rpc_server::RpcMiddleware>> {
+	/// Provides access to the underlying `RpcModule`
+	pub fn handle(&self) -> Arc<RpcModule<()>> {
 		self.0.clone()
 	}
 }
@@ -284,74 +282,41 @@ async fn build_network_future<
 // Wrapper for HTTP and WS servers that makes sure they are properly shut down.
 mod waiting {
 	pub struct HttpServer(pub Option<sc_rpc_server::HttpServer>);
+
 	impl Drop for HttpServer {
 		fn drop(&mut self) {
 			if let Some(server) = self.0.take() {
-				server.close_handle().close();
-				server.wait();
-			}
-		}
-	}
-
-	pub struct IpcServer(pub Option<sc_rpc_server::IpcServer>);
-	impl Drop for IpcServer {
-		fn drop(&mut self) {
-			if let Some(server) = self.0.take() {
-				server.close_handle().close();
-				let _ = server.wait();
+				// This doesn't not wait for the server to be stopped but fires the signal.
+				let _ = server.stop();
 			}
 		}
 	}
 
 	pub struct WsServer(pub Option<sc_rpc_server::WsServer>);
+
 	impl Drop for WsServer {
 		fn drop(&mut self) {
 			if let Some(server) = self.0.take() {
-				server.close_handle().close();
-				let _ = server.wait();
+				// This doesn't not wait for the server to be stopped but fires the signal.
+				let _ = server.stop();
 			}
 		}
 	}
 }
 
-/// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them
-/// alive.
-fn start_rpc_servers<
-	H: FnMut(
-		sc_rpc::DenyUnsafe,
-		sc_rpc_server::RpcMiddleware,
-	) -> Result<sc_rpc_server::RpcHandler<sc_rpc::Metadata>, Error>,
->(
+/// Starts RPC servers.
+fn start_rpc_servers<R>(
 	config: &Configuration,
-	mut gen_handler: H,
-	rpc_metrics: Option<sc_rpc_server::RpcMetrics>,
-	server_metrics: sc_rpc_server::ServerMetrics,
-) -> Result<Box<dyn std::any::Any + Send>, Error> {
-	fn maybe_start_server<T, F>(
-		address: Option<SocketAddr>,
-		mut start: F,
-	) -> Result<Option<T>, Error>
-	where
-		F: FnMut(&SocketAddr) -> Result<T, Error>,
-	{
-		address
-			.map(|mut address| {
-				start(&address).or_else(|e| match e {
-					Error::Io(e) => match e.kind() {
-						io::ErrorKind::AddrInUse | io::ErrorKind::PermissionDenied => {
-							warn!("Unable to bind RPC server to {}. Trying random port.", address);
-							address.set_port(0);
-							start(&address)
-						},
-						_ => Err(e.into()),
-					},
-					e => Err(e),
-				})
-			})
-			.transpose()
-	}
+	gen_rpc_module: R,
+	rpc_id_provider: Option<Box<dyn RpcSubscriptionIdProvider>>,
+) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error>
+where
+	R: Fn(sc_rpc::DenyUnsafe) -> Result<RpcModule<()>, Error>,
+{
+	let (max_request_size, ws_max_response_size, http_max_response_size) =
+		legacy_cli_parsing(config);
 
-	fn deny_unsafe(addr: &SocketAddr, methods: &RpcMethods) -> sc_rpc::DenyUnsafe {
+	fn deny_unsafe(addr: SocketAddr, methods: &RpcMethods) -> sc_rpc::DenyUnsafe {
 		let is_exposed_addr = !addr.ip().is_loopback();
 		match (is_exposed_addr, methods) {
 			| (_, RpcMethods::Unsafe) | (false, RpcMethods::Auto) => sc_rpc::DenyUnsafe::No,
@@ -359,85 +324,54 @@ fn start_rpc_servers<
 		}
 	}
 
-	let rpc_method_names = sc_rpc_server::method_names(|m| gen_handler(sc_rpc::DenyUnsafe::No, m))?;
-	Ok(Box::new((
-		config
-			.rpc_ipc
-			.as_ref()
-			.map(|path| {
-				sc_rpc_server::start_ipc(
-					&*path,
-					gen_handler(
-						sc_rpc::DenyUnsafe::No,
-						sc_rpc_server::RpcMiddleware::new(
-							rpc_metrics.clone(),
-							rpc_method_names.clone(),
-							"ipc",
-						),
-					)?,
-					server_metrics.clone(),
-				)
-				.map_err(Error::from)
-			})
-			.transpose()?,
-		maybe_start_server(config.rpc_http, |address| {
-			sc_rpc_server::start_http(
-				address,
-				config.rpc_cors.as_ref(),
-				gen_handler(
-					deny_unsafe(address, &config.rpc_methods),
-					sc_rpc_server::RpcMiddleware::new(
-						rpc_metrics.clone(),
-						rpc_method_names.clone(),
-						"http",
-					),
-				)?,
-				config.rpc_max_payload,
-				config.tokio_handle.clone(),
-			)
-			.map_err(Error::from)
-		})?
-		.map(|s| waiting::HttpServer(Some(s))),
-		maybe_start_server(config.rpc_ws, |address| {
-			sc_rpc_server::start_ws(
-				address,
-				config.rpc_ws_max_connections,
-				config.rpc_cors.as_ref(),
-				gen_handler(
-					deny_unsafe(address, &config.rpc_methods),
-					sc_rpc_server::RpcMiddleware::new(
-						rpc_metrics.clone(),
-						rpc_method_names.clone(),
-						"ws",
-					),
-				)?,
-				config.rpc_max_payload,
-				config.ws_max_out_buffer_capacity,
-				server_metrics.clone(),
-				config.tokio_handle.clone(),
-			)
-			.map_err(Error::from)
-		})?
-		.map(|s| waiting::WsServer(Some(s))),
-	)))
-}
+	let random_port = |mut addr: SocketAddr| {
+		addr.set_port(0);
+		addr
+	};
 
-/// An RPC session. Used to perform in-memory RPC queries (ie. RPC queries that don't go through
-/// the HTTP or WebSockets server).
-#[derive(Clone)]
-pub struct RpcSession {
-	metadata: sc_rpc::Metadata,
-}
+	let ws_addr = config
+		.rpc_ws
+		.unwrap_or_else(|| "127.0.0.1:9944".parse().expect("valid sockaddr; qed"));
+	let ws_addr2 = random_port(ws_addr);
+	let http_addr = config
+		.rpc_http
+		.unwrap_or_else(|| "127.0.0.1:9933".parse().expect("valid sockaddr; qed"));
+	let http_addr2 = random_port(http_addr);
 
-impl RpcSession {
-	/// Creates an RPC session.
-	///
-	/// The `sender` is stored inside the `RpcSession` and is used to communicate spontaneous JSON
-	/// messages.
-	///
-	/// The `RpcSession` must be kept alive in order to receive messages on the sender.
-	pub fn new(sender: futures::channel::mpsc::UnboundedSender<String>) -> RpcSession {
-		RpcSession { metadata: sender.into() }
+	let metrics = sc_rpc_server::RpcMetrics::new(config.prometheus_registry())?;
+
+	let http_fut = sc_rpc_server::start_http(
+		[http_addr, http_addr2],
+		config.rpc_cors.as_ref(),
+		max_request_size,
+		http_max_response_size,
+		metrics.clone(),
+		gen_rpc_module(deny_unsafe(ws_addr, &config.rpc_methods))?,
+		config.tokio_handle.clone(),
+	);
+
+	let ws_config = WsConfig {
+		max_connections: config.rpc_ws_max_connections,
+		max_payload_in_mb: max_request_size,
+		max_payload_out_mb: ws_max_response_size,
+		max_subs_per_conn: config.rpc_max_subs_per_conn,
+	};
+
+	let ws_fut = sc_rpc_server::start_ws(
+		[ws_addr, ws_addr2],
+		config.rpc_cors.as_ref(),
+		ws_config,
+		metrics,
+		gen_rpc_module(deny_unsafe(http_addr, &config.rpc_methods))?,
+		config.tokio_handle.clone(),
+		rpc_id_provider,
+	);
+
+	match tokio::task::block_in_place(|| {
+		config.tokio_handle.block_on(futures::future::try_join(http_fut, ws_fut))
+	}) {
+		Ok((http, ws)) => Ok(Box::new((http, ws))),
+		Err(e) => Err(Error::Application(e)),
 	}
 }
 
@@ -543,6 +477,44 @@ where
 			|tx| if tx.is_propagable() { Some(tx.data().clone()) } else { None },
 		)
 	}
+}
+
+fn legacy_cli_parsing(config: &Configuration) -> (Option<usize>, Option<usize>, Option<usize>) {
+	let ws_max_response_size = config.ws_max_out_buffer_capacity.map(|max| {
+		eprintln!("DEPRECATED: `--ws_max_out_buffer_capacity` has been removed use `rpc-max-response-size or rpc-max-request-size` instead");
+		eprintln!("Setting WS `rpc-max-response-size` to `max(ws_max_out_buffer_capacity, rpc_max_response_size)`");
+		std::cmp::max(max, config.rpc_max_response_size.unwrap_or(0))
+	});
+
+	let max_request_size = match (config.rpc_max_payload, config.rpc_max_request_size) {
+		(Some(legacy_max), max) => {
+			eprintln!("DEPRECATED: `--rpc_max_payload` has been removed use `rpc-max-response-size or rpc-max-request-size` instead");
+			eprintln!(
+				"Setting `rpc-max-response-size` to `max(rpc_max_payload, rpc_max_request_size)`"
+			);
+			Some(std::cmp::max(legacy_max, max.unwrap_or(0)))
+		},
+		(None, Some(max)) => Some(max),
+		(None, None) => None,
+	};
+
+	let http_max_response_size = match (config.rpc_max_payload, config.rpc_max_request_size) {
+		(Some(legacy_max), max) => {
+			eprintln!("DEPRECATED: `--rpc_max_payload` has been removed use `rpc-max-response-size or rpc-max-request-size` instead");
+			eprintln!(
+				"Setting HTTP `rpc-max-response-size` to `max(rpc_max_payload, rpc_max_response_size)`"
+			);
+			Some(std::cmp::max(legacy_max, max.unwrap_or(0)))
+		},
+		(None, Some(max)) => Some(max),
+		(None, None) => None,
+	};
+
+	if config.rpc_ipc.is_some() {
+		eprintln!("DEPRECATED: `--ipc-path` has no effect anymore IPC support has been removed");
+	}
+
+	(max_request_size, ws_max_response_size, http_max_response_size)
 }
 
 #[cfg(test)]
