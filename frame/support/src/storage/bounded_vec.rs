@@ -98,7 +98,9 @@ where
 		}
 
 		let visitor: VecVisitor<T, S> = VecVisitor(PhantomData);
-		deserializer.deserialize_seq(visitor).map(|v| BoundedVec::<T, S>::try_from(v).map_err(|_| Err(Error::custom("out of bounds"))))?
+		deserializer.deserialize_seq(visitor).map(|v| {
+			BoundedVec::<T, S>::try_from(v).map_err(|_| Err(Error::custom("out of bounds")))
+		})?
 	}
 }
 
