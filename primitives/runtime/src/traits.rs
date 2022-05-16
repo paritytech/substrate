@@ -1275,9 +1275,9 @@ pub trait AccountIdConversion<AccountId>: Sized {
 	/// non-unique accounts.
 	fn into_sub_account_truncating<S: Encode>(&self, sub: S) -> AccountId;
 
-	/// Same as `into_sub_account_truncating`, but ensuring that all bytes of the account's seed are used when
-	/// generating an account. This can help guarantee that different accounts are unique, besides
-	/// types which encode the same as noted above.
+	/// Same as `into_sub_account_truncating`, but ensuring that all bytes of the account's seed are
+	/// used when generating an account. This can help guarantee that different accounts are unique,
+	/// besides types which encode the same as noted above.
 	fn try_into_sub_account<S: Encode>(&self, sub: S) -> Option<AccountId>;
 
 	/// Try to convert an account ID into this type. Might not succeed.
@@ -1286,9 +1286,7 @@ pub trait AccountIdConversion<AccountId>: Sized {
 
 /// Format is TYPE_ID ++ encode(sub-seed) ++ 00.... where 00... is indefinite trailing zeroes to
 /// fill AccountId.
-impl<T: Encode + Decode, Id: Encode + Decode + TypeId> AccountIdConversion<T>
-	for Id
-{
+impl<T: Encode + Decode, Id: Encode + Decode + TypeId> AccountIdConversion<T> for Id {
 	// Take the `sub` seed, and put as much of it as possible into the generated account, but
 	// allowing truncation of the seed if it would not fit into the account id in full. This can
 	// lead to two different `sub` seeds with the same account generated.
@@ -1302,7 +1300,7 @@ impl<T: Encode + Decode, Id: Encode + Decode + TypeId> AccountIdConversion<T>
 	fn try_into_sub_account<S: Encode>(&self, sub: S) -> Option<T> {
 		let encoded_seed = (Id::TYPE_ID, self, sub).encode();
 		let account = T::decode(&mut TrailingZeroInput(&encoded_seed))
-				.expect("All byte sequences are valid `AccountIds`; qed");
+			.expect("All byte sequences are valid `AccountIds`; qed");
 		// If the `account` generated has less bytes than the `encoded_seed`, then we know that
 		// bytes were truncated, and we return `None`.
 		if encoded_seed.len() <= account.encode().len() {
