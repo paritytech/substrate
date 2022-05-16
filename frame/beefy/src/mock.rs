@@ -122,9 +122,12 @@ impl pallet_session::SessionManager<u64> for MockSessionManager {
 
 // Note, that we can't use `UintAuthorityId` here. Reason is that the implementation
 // of `to_public_key()` assumes, that a public key is 32 bytes long. This is true for
-// ed25519 and sr25519 but *not* for ecdsa. An ecdsa public key is 33 bytes.
+// ed25519 and sr25519 but *not* for ecdsa. A compressed ecdsa public key is 33 bytes,
+// with the first one containing information to reconstruct the uncompressed key.
 pub fn mock_beefy_id(id: u8) -> BeefyId {
-	let buf: [u8; 33] = [id; 33];
+	let mut buf: [u8; 33] = [id; 33];
+	// Set to something valid.
+	buf[0] = 0x02;
 	let pk = Public::from_raw(buf);
 	BeefyId::from(pk)
 }
@@ -142,8 +145,7 @@ pub fn new_test_ext_raw_authorities(authorities: Vec<(u64, BeefyId)>) -> TestExt
 
 	let session_keys: Vec<_> = authorities
 		.iter()
-		.enumerate()
-		.map(|(_, id)| (id.0 as u64, id.0 as u64, MockSessionKeys { dummy: id.1.clone() }))
+		.map(|id| (id.0 as u64, id.0 as u64, MockSessionKeys { dummy: id.1.clone() }))
 		.collect();
 
 	BasicExternalities::execute_with_storage(&mut t, || {

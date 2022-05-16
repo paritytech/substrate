@@ -84,24 +84,24 @@ pub enum Error<B: BlockT> {
 	FailedPreliminaryVerify,
 	#[error("Rejecting block too far in future")]
 	TooFarInFuture,
-	#[error("Fetching best header failed using select chain: {0:?}")]
+	#[error("Fetching best header failed using select chain: {0}")]
 	BestHeaderSelectChain(ConsensusError),
-	#[error("Fetching best header failed: {0:?}")]
+	#[error("Fetching best header failed: {0}")]
 	BestHeader(sp_blockchain::Error),
 	#[error("Best header does not exist")]
 	NoBestHeader,
-	#[error("Block proposing error: {0:?}")]
+	#[error("Block proposing error: {0}")]
 	BlockProposingError(String),
-	#[error("Fetch best hash failed via select chain: {0:?}")]
+	#[error("Fetch best hash failed via select chain: {0}")]
 	BestHashSelectChain(ConsensusError),
-	#[error("Error with block built on {0:?}: {1:?}")]
+	#[error("Error with block built on {0:?}: {1}")]
 	BlockBuiltError(B::Hash, ConsensusError),
 	#[error("Creating inherents failed: {0}")]
 	CreateInherents(sp_inherents::Error),
 	#[error("Checking inherents failed: {0}")]
 	CheckInherents(sp_inherents::Error),
 	#[error(
-		"Checking inherents unknown error for identifier: {:?}",
+		"Checking inherents unknown error for identifier: {}",
 		String::from_utf8_lossy(.0)
 	)]
 	CheckInherentsUnknownError(sp_inherents::InherentIdentifier),
@@ -119,13 +119,13 @@ pub enum Error<B: BlockT> {
 	Other(String),
 }
 
-impl<B: BlockT> std::convert::From<Error<B>> for String {
+impl<B: BlockT> From<Error<B>> for String {
 	fn from(error: Error<B>) -> String {
 		error.to_string()
 	}
 }
 
-impl<B: BlockT> std::convert::From<Error<B>> for ConsensusError {
+impl<B: BlockT> From<Error<B>> for ConsensusError {
 	fn from(error: Error<B>) -> ConsensusError {
 		ConsensusError::ClientImport(error.to_string())
 	}
@@ -234,7 +234,7 @@ impl<B: BlockT, I: Clone, C, S: Clone, Algorithm: Clone, CAW: Clone, CIDP> Clone
 			select_chain: self.select_chain.clone(),
 			client: self.client.clone(),
 			create_inherent_data_providers: self.create_inherent_data_providers.clone(),
-			check_inherents_after: self.check_inherents_after.clone(),
+			check_inherents_after: self.check_inherents_after,
 			can_author_with: self.can_author_with.clone(),
 		}
 	}
@@ -350,7 +350,7 @@ where
 			.select_chain
 			.best_chain()
 			.await
-			.map_err(|e| format!("Fetch best chain failed via select chain: {:?}", e))?;
+			.map_err(|e| format!("Fetch best chain failed via select chain: {}", e))?;
 		let best_hash = best_header.hash();
 
 		let parent_hash = *block.header.parent_hash();
@@ -565,7 +565,7 @@ where
 					warn!(
 						target: "pow",
 						"Unable to pull new block for authoring. \
-						 Select best chain error: {:?}",
+						 Select best chain error: {}",
 						err
 					);
 					continue
@@ -596,7 +596,7 @@ where
 					warn!(
 						target: "pow",
 						"Unable to propose new block for authoring. \
-						 Fetch difficulty failed: {:?}",
+						 Fetch difficulty failed: {}",
 						err,
 					);
 					continue
@@ -612,7 +612,7 @@ where
 					warn!(
 						target: "pow",
 						"Unable to propose new block for authoring. \
-						 Creating inherent data providers failed: {:?}",
+						 Creating inherent data providers failed: {}",
 						err,
 					);
 					continue
@@ -625,7 +625,7 @@ where
 					warn!(
 						target: "pow",
 						"Unable to propose new block for authoring. \
-						 Creating inherent data failed: {:?}",
+						 Creating inherent data failed: {}",
 						e,
 					);
 					continue
@@ -652,21 +652,19 @@ where
 				},
 			};
 
-			let proposal = match proposer
-				.propose(inherent_data, inherent_digest, build_time.clone(), None)
-				.await
-			{
-				Ok(x) => x,
-				Err(err) => {
-					warn!(
-						target: "pow",
-						"Unable to propose new block for authoring. \
-						 Creating proposal failed: {:?}",
-						err,
-					);
-					continue
-				},
-			};
+			let proposal =
+				match proposer.propose(inherent_data, inherent_digest, build_time, None).await {
+					Ok(x) => x,
+					Err(err) => {
+						warn!(
+							target: "pow",
+							"Unable to propose new block for authoring. \
+							 Creating proposal failed: {}",
+							err,
+						);
+						continue
+					},
+				};
 
 			let build = MiningBuild::<Block, Algorithm, C, _> {
 				metadata: MiningMetadata {
@@ -710,8 +708,8 @@ fn fetch_seal<B: BlockT>(digest: Option<&DigestItem>, hash: B::Hash) -> Result<V
 			if id == &POW_ENGINE_ID {
 				Ok(seal.clone())
 			} else {
-				return Err(Error::<B>::WrongEngine(*id).into())
+				Err(Error::<B>::WrongEngine(*id))
 			},
-		_ => return Err(Error::<B>::HeaderUnsealed(hash).into()),
+		_ => Err(Error::<B>::HeaderUnsealed(hash)),
 	}
 }

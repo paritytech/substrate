@@ -68,7 +68,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 				.args
 				.iter()
 				.map(|(_, name, _)| {
-					syn::Ident::new(&name.to_string().trim_start_matches('_'), name.span())
+					syn::Ident::new(name.to_string().trim_start_matches('_'), name.span())
 				})
 				.collect::<Vec<_>>()
 		})
@@ -178,7 +178,10 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 			#(
 				#( #[doc = #fn_doc] )*
 				#fn_name {
-					#( #args_compact_attr #args_name_stripped: #args_type ),*
+					#(
+						#[allow(missing_docs)]
+						#args_compact_attr #args_name_stripped: #args_type
+					),*
 				},
 			)*
 		}

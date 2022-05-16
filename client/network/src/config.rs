@@ -21,13 +21,14 @@
 //! The [`Params`] struct is the struct that must be passed in order to initialize the networking.
 //! See the documentation of [`Params`].
 
-pub use crate::{
-	chain::Client,
+pub use sc_network_common::{
+	config::ProtocolId,
 	request_responses::{
 		IncomingRequest, OutgoingResponse, ProtocolConfig as RequestResponseConfig,
 	},
-	warp_request_handler::WarpSyncProvider,
 };
+pub use sc_network_sync::warp_request_handler::WarpSyncProvider;
+
 pub use libp2p::{build_multiaddr, core::PublicKey, identity};
 
 // Note: this re-export shouldn't be part of the public API of the crate and will be removed in
@@ -50,7 +51,6 @@ use sp_runtime::traits::Block as BlockT;
 use std::{
 	borrow::Cow,
 	collections::HashMap,
-	convert::TryFrom,
 	error::Error,
 	fs,
 	future::Future,
@@ -65,7 +65,11 @@ use std::{
 use zeroize::Zeroize;
 
 /// Network initialization parameters.
-pub struct Params<B: BlockT, H: ExHashT> {
+pub struct Params<B, H, Client>
+where
+	B: BlockT + 'static,
+	H: ExHashT,
+{
 	/// Assigned role for our node (full, light, ...).
 	pub role: Role,
 
@@ -80,7 +84,7 @@ pub struct Params<B: BlockT, H: ExHashT> {
 	pub network_config: NetworkConfiguration,
 
 	/// Client that contains the blockchain.
-	pub chain: Arc<dyn Client<B>>,
+	pub chain: Arc<Client>,
 
 	/// Pool of transactions.
 	///
@@ -109,26 +113,26 @@ pub struct Params<B: BlockT, H: ExHashT> {
 	/// protocol name. In addition all of [`RequestResponseConfig`] is used to handle incoming
 	/// block requests, if enabled.
 	///
-	/// Can be constructed either via [`crate::block_request_handler::generate_protocol_config`]
-	/// allowing outgoing but not incoming requests, or constructed via
-	/// [`crate::block_request_handler::BlockRequestHandler::new`] allowing both outgoing and
-	/// incoming requests.
+	/// Can be constructed either via
+	/// [`sc_network_sync::block_request_handler::generate_protocol_config`] allowing outgoing but
+	/// not incoming requests, or constructed via [`sc_network_sync::block_request_handler::
+	/// BlockRequestHandler::new`] allowing both outgoing and incoming requests.
 	pub block_request_protocol_config: RequestResponseConfig,
 
 	/// Request response configuration for the light client request protocol.
 	///
 	/// Can be constructed either via
-	/// [`crate::light_client_requests::generate_protocol_config`] allowing outgoing but not
-	/// incoming requests, or constructed via
-	/// [`crate::light_client_requests::handler::LightClientRequestHandler::new`] allowing
-	/// both outgoing and incoming requests.
+	/// [`sc_network_light::light_client_requests::generate_protocol_config`] allowing outgoing but
+	/// not incoming requests, or constructed via
+	/// [`sc_network_light::light_client_requests::handler::LightClientRequestHandler::new`]
+	/// allowing both outgoing and incoming requests.
 	pub light_client_request_protocol_config: RequestResponseConfig,
 
 	/// Request response configuration for the state request protocol.
 	///
 	/// Can be constructed either via
-	/// [`crate::block_request_handler::generate_protocol_config`] allowing outgoing but not
-	/// incoming requests, or constructed via
+	/// [`sc_network_sync::block_request_handler::generate_protocol_config`] allowing outgoing but
+	/// not incoming requests, or constructed via
 	/// [`crate::state_request_handler::StateRequestHandler::new`] allowing
 	/// both outgoing and incoming requests.
 	pub state_request_protocol_config: RequestResponseConfig,
@@ -230,29 +234,6 @@ impl<H: ExHashT + Default, B: BlockT> TransactionPool<H, B> for EmptyTransaction
 	}
 }
 
-/// Name of a protocol, transmitted on the wire. Should be unique for each chain. Always UTF-8.
-#[derive(Clone, PartialEq, Eq, Hash)]
-pub struct ProtocolId(smallvec::SmallVec<[u8; 6]>);
-
-impl<'a> From<&'a str> for ProtocolId {
-	fn from(bytes: &'a str) -> ProtocolId {
-		Self(bytes.as_bytes().into())
-	}
-}
-
-impl AsRef<str> for ProtocolId {
-	fn as_ref(&self) -> &str {
-		str::from_utf8(&self.0[..])
-			.expect("the only way to build a ProtocolId is through a UTF-8 String; qed")
-	}
-}
-
-impl fmt::Debug for ProtocolId {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		fmt::Debug::fmt(self.as_ref(), f)
-	}
-}
-
 /// Parses a string address and splits it into Multiaddress and PeerId, if
 /// valid.
 ///
@@ -295,7 +276,7 @@ pub fn parse_addr(mut addr: Multiaddr) -> Result<(PeerId, Multiaddr), ParseErr> 
 /// assert_eq!(addr.peer_id.to_base58(), "QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV");
 /// assert_eq!(addr.multiaddr.to_string(), "/ip4/198.51.100.19/tcp/30333");
 /// ```
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
 #[serde(try_from = "String", into = "String")]
 pub struct MultiaddrWithPeerId {
 	/// Address of the node.
@@ -377,8 +358,8 @@ impl From<multiaddr::Error> for ParseErr {
 	}
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
 /// Sync operation mode.
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum SyncMode {
 	/// Full block download and verification.
 	Full,
@@ -391,6 +372,18 @@ pub enum SyncMode {
 	},
 	/// Warp sync - verify authority set transitions and the latest state.
 	Warp,
+}
+
+impl SyncMode {
+	/// Returns if `self` is [`Self::Warp`].
+	pub fn is_warp(&self) -> bool {
+		matches!(self, Self::Warp)
+	}
+
+	/// Returns if `self` is [`Self::Fast`].
+	pub fn is_fast(&self) -> bool {
+		matches!(self, Self::Fast { .. })
+	}
 }
 
 impl Default for SyncMode {
@@ -568,7 +561,7 @@ pub struct NonDefaultSetConfig {
 	/// considered established once this protocol is open.
 	///
 	/// > **Note**: This field isn't present for the default set, as this is handled internally
-	/// >           by the networking code.
+	/// > by the networking code.
 	pub notifications_protocol: Cow<'static, str>,
 	/// If the remote reports that it doesn't support the protocol indicated in the
 	/// `notifications_protocol` field, then each of these fallback names will be tried one by

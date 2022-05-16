@@ -100,7 +100,7 @@ where
 				// previously we only supported at most one pending change per fork
 				&|_, _| Ok(false),
 			) {
-				warn!(target: "afg", "Error migrating pending authority set change: {:?}.", err);
+				warn!(target: "afg", "Error migrating pending authority set change: {}", err);
 				warn!(target: "afg", "Node is in a potentially inconsistent state.");
 			}
 		}
@@ -430,7 +430,7 @@ where
 		// reset.
 		let set_state = VoterSetState::<Block>::live(
 			new_set.set_id,
-			&set,
+			set,
 			(new_set.canon_hash, new_set.canon_number),
 		);
 		let encoded = set_state.encode();

@@ -104,9 +104,9 @@ impl<Balance> ExistenceReason<Balance> {
 		if let ExistenceReason::DepositHeld(deposit) =
 			sp_std::mem::replace(self, ExistenceReason::DepositRefunded)
 		{
-			return Some(deposit)
+			Some(deposit)
 		} else {
-			return None
+			None
 		}
 	}
 }
@@ -172,13 +172,9 @@ pub trait FrozenBalance<AssetId, AccountId, Balance> {
 	/// If `None` is returned, then nothing special is enforced.
 	fn frozen_balance(asset: AssetId, who: &AccountId) -> Option<Balance>;
 
-	/// Called when an account has been removed.
+	/// Called after an account has been removed.
 	///
-	/// # Warning
-	///
-	/// This function must never access storage of pallet asset. This function is called while some
-	/// change are pending. Calling into the pallet asset in this function can result in unexpected
-	/// state.
+	/// NOTE: It is possible that the asset does no longer exist when this hook is called.
 	fn died(asset: AssetId, who: &AccountId);
 }
 

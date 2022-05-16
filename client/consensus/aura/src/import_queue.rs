@@ -68,7 +68,7 @@ where
 	C: sc_client_api::backend::AuxStore,
 	P::Public: Encode + Decode + PartialEq + Clone,
 {
-	let seal = header.digest_mut().pop().ok_or_else(|| Error::HeaderUnsealed(hash))?;
+	let seal = header.digest_mut().pop().ok_or(Error::HeaderUnsealed(hash))?;
 
 	let sig = seal.as_aura_seal().ok_or_else(|| aura_err(Error::HeaderBadSeal(hash)))?;
 
@@ -81,7 +81,7 @@ where
 		// check the signature is valid under the expected authority and
 		// chain state.
 		let expected_author =
-			slot_author::<P>(slot, &authorities).ok_or_else(|| Error::SlotAuthorNotFound)?;
+			slot_author::<P>(slot, authorities).ok_or(Error::SlotAuthorNotFound)?;
 
 		let pre_hash = header.hash();
 
@@ -205,7 +205,7 @@ where
 		let hash = block.header.hash();
 		let parent_hash = *block.header.parent_hash();
 		let authorities = authorities(self.client.as_ref(), &BlockId::Hash(parent_hash))
-			.map_err(|e| format!("Could not fetch authorities at {:?}: {:?}", parent_hash, e))?;
+			.map_err(|e| format!("Could not fetch authorities at {:?}: {}", parent_hash, e))?;
 
 		let create_inherent_data_providers = self
 			.create_inherent_data_providers
@@ -249,7 +249,7 @@ where
 							&BlockId::Hash(parent_hash),
 							|v| v >= 2,
 						)
-						.map_err(|e| format!("{:?}", e))?
+						.map_err(|e| e.to_string())?
 					{
 						self.check_inherents(
 							new_block.clone(),
@@ -360,7 +360,7 @@ pub struct ImportQueueParams<'a, Block, I, C, S, CAW, CIDP> {
 }
 
 /// Start an import queue for the Aura consensus algorithm.
-pub fn import_queue<'a, P, Block, I, C, S, CAW, CIDP>(
+pub fn import_queue<P, Block, I, C, S, CAW, CIDP>(
 	ImportQueueParams {
 		block_import,
 		justification_import,
@@ -371,7 +371,7 @@ pub fn import_queue<'a, P, Block, I, C, S, CAW, CIDP>(
 		can_author_with,
 		check_for_equivocation,
 		telemetry,
-	}: ImportQueueParams<'a, Block, I, C, S, CAW, CIDP>,
+	}: ImportQueueParams<Block, I, C, S, CAW, CIDP>,
 ) -> Result<DefaultImportQueue<Block, C>, sp_consensus::Error>
 where
 	Block: BlockT,

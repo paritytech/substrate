@@ -97,3 +97,11 @@ macro_rules! metric_inc {
 		}
 	}};
 }
+
+#[cfg(test)]
+#[macro_export]
+macro_rules! metric_get {
+	($self:ident, $m:ident) => {{
+		$self.metrics.as_ref().map(|metrics| metrics.$m.clone())
+	}};
+}

@@ -67,7 +67,13 @@
 #![warn(missing_docs)]
 
 use std::{
-	borrow::Cow, collections::HashMap, convert::TryInto, pin::Pin, sync::Arc, time::Duration, u64,
+	borrow::Cow,
+	collections::{HashMap, HashSet},
+	future::Future,
+	pin::Pin,
+	sync::Arc,
+	task::{Context, Poll},
+	time::Duration,
 };
 
 use codec::{Decode, Encode};
@@ -84,7 +90,10 @@ use prometheus_endpoint::Registry;
 use retain_mut::RetainMut;
 use schnorrkel::SignatureError;
 
-use sc_client_api::{backend::AuxStore, BlockchainEvents, ProvideUncles, UsageProvider};
+use sc_client_api::{
+	backend::AuxStore, AuxDataOperations, Backend as BackendT, BlockchainEvents,
+	FinalityNotification, PreCommitActions, ProvideUncles, UsageProvider,
+};
 use sc_consensus::{
 	block_import::{
 		BlockCheckParams, BlockImport, BlockImportParams, ForkChoiceStrategy, ImportResult,
@@ -100,22 +109,24 @@ use sc_consensus_slots::{
 	SlotInfo, StorageChanges,
 };
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_TRACE};
-use sp_api::{ApiExt, NumberFor, ProvideRuntimeApi};
+use sp_api::{ApiExt, ProvideRuntimeApi};
 use sp_application_crypto::AppKey;
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
-use sp_blockchain::{Error as ClientError, HeaderBackend, HeaderMetadata, Result as ClientResult};
+use sp_blockchain::{
+	Backend as _, Error as ClientError, HeaderBackend, HeaderMetadata, Result as ClientResult,
+};
 use sp_consensus::{
 	BlockOrigin, CacheKeyId, CanAuthorWith, Environment, Error as ConsensusError, Proposer,
-	SelectChain, SlotData,
+	SelectChain,
 };
 use sp_consensus_babe::inherents::BabeInherentData;
-use sp_consensus_slots::Slot;
+use sp_consensus_slots::{Slot, SlotDuration};
 use sp_core::{crypto::ByteArray, ExecutionContext};
 use sp_inherents::{CreateInherentDataProviders, InherentData, InherentDataProvider};
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::{
 	generic::{BlockId, OpaqueDigestItemId},
-	traits::{Block as BlockT, Header, Zero},
+	traits::{Block as BlockT, Header, NumberFor, One, SaturatedConversion, Saturating, Zero},
 	DigestItem,
 };
 
@@ -232,7 +243,7 @@ pub enum Error<B: BlockT> {
 	#[error("Multiple BABE config change digests, rejecting!")]
 	MultipleConfigChangeDigests,
 	/// Could not extract timestamp and slot
-	#[error("Could not extract timestamp and slot: {0:?}")]
+	#[error("Could not extract timestamp and slot: {0}")]
 	Extraction(sp_consensus::Error),
 	/// Could not fetch epoch
 	#[error("Could not fetch epoch at {0:?}")]
@@ -274,7 +285,7 @@ pub enum Error<B: BlockT> {
 	#[error("VRF verification failed: {0:?}")]
 	VRFVerificationFailed(SignatureError),
 	/// Could not fetch parent header
-	#[error("Could not fetch parent header: {0:?}")]
+	#[error("Could not fetch parent header: {0}")]
 	FetchParentHeader(sp_blockchain::Error),
 	/// Expected epoch change to happen.
 	#[error("Expected epoch change to happen at {0:?}, s{1}")]
@@ -308,7 +319,7 @@ pub enum Error<B: BlockT> {
 	ForkTree(Box<fork_tree::Error<sp_blockchain::Error>>),
 }
 
-impl<B: BlockT> std::convert::From<Error<B>> for String {
+impl<B: BlockT> From<Error<B>> for String {
 	fn from(error: Error<B>) -> String {
 		error.to_string()
 	}
@@ -328,17 +339,15 @@ pub struct BabeIntermediate<B: BlockT> {
 /// Intermediate key for Babe engine.
 pub static INTERMEDIATE_KEY: &[u8] = b"babe1";
 
-/// A slot duration.
-///
-/// Create with [`Self::get`].
-// FIXME: Once Rust has higher-kinded types, the duplication between this
-// and `super::babe::Config` can be eliminated.
-// https://github.com/paritytech/substrate/issues/2434
+/// Configuration for BABE used for defining block verification parameters as
+/// well as authoring (e.g. the slot duration).
 #[derive(Clone)]
-pub struct Config(sc_consensus_slots::SlotDuration<BabeGenesisConfiguration>);
+pub struct Config {
+	genesis_config: BabeGenesisConfiguration,
+}
 
 impl Config {
-	/// Fetch the config from the runtime.
+	/// Create a new config by reading the genesis configuration from the runtime.
 	pub fn get<B: BlockT, C>(client: &C) -> ClientResult<Self>
 	where
 		C: AuxStore + ProvideRuntimeApi<B> + UsageProvider<B>,
@@ -355,7 +364,7 @@ impl Config {
 
 		let version = runtime_api.api_version::<dyn BabeApi<B>>(&best_block_id)?;
 
-		let slot_duration = if version == Some(1) {
+		let genesis_config = if version == Some(1) {
 			#[allow(deprecated)]
 			{
 				runtime_api.configuration_before_version_2(&best_block_id)?.into()
@@ -368,20 +377,17 @@ impl Config {
 			))
 		};
 
-		Ok(Self(sc_consensus_slots::SlotDuration::new(slot_duration)))
+		Ok(Config { genesis_config })
 	}
 
-	/// Get the inner slot duration
-	pub fn slot_duration(&self) -> Duration {
-		self.0.slot_duration()
+	/// Get the genesis configuration.
+	pub fn genesis_config(&self) -> &BabeGenesisConfiguration {
+		&self.genesis_config
 	}
-}
 
-impl std::ops::Deref for Config {
-	type Target = BabeGenesisConfiguration;
-
-	fn deref(&self) -> &BabeGenesisConfiguration {
-		&*self.0
+	/// Get the slot duration defined in the genesis configuration.
+	pub fn slot_duration(&self) -> SlotDuration {
+		SlotDuration::from_millis(self.genesis_config.slot_duration)
 	}
 }
 
@@ -465,6 +471,7 @@ where
 	C: ProvideRuntimeApi<B>
 		+ ProvideUncles<B>
 		+ BlockchainEvents<B>
+		+ PreCommitActions<B>
 		+ HeaderBackend<B>
 		+ HeaderMetadata<B, Error = ClientError>
 		+ Send
@@ -488,7 +495,6 @@ where
 {
 	const HANDLE_BUFFER_SIZE: usize = 1024;
 
-	let config = babe_link.config;
 	let slot_notification_sinks = Arc::new(Mutex::new(Vec::new()));
 
 	let worker = BabeSlotWorker {
@@ -502,17 +508,18 @@ where
 		keystore,
 		epoch_changes: babe_link.epoch_changes.clone(),
 		slot_notification_sinks: slot_notification_sinks.clone(),
-		config: config.clone(),
+		config: babe_link.config.clone(),
 		block_proposal_slot_portion,
 		max_block_proposal_slot_portion,
 		telemetry,
 	};
 
 	info!(target: "babe", "👶 Starting BABE Authorship worker");
-	let inner = sc_consensus_slots::start_slot_worker(
-		config.0.clone(),
+
+	let slot_worker = sc_consensus_slots::start_slot_worker(
+		babe_link.config.slot_duration(),
 		select_chain,
-		worker,
+		sc_consensus_slots::SimpleSlotWorkerToSlotWorker(worker),
 		sync_oracle,
 		create_inherent_data_providers,
 		can_author_with,
@@ -521,17 +528,91 @@ where
 	let (worker_tx, worker_rx) = channel(HANDLE_BUFFER_SIZE);
 
 	let answer_requests =
-		answer_requests(worker_rx, config.0, client, babe_link.epoch_changes.clone());
+		answer_requests(worker_rx, babe_link.config, client, babe_link.epoch_changes);
+
+	let inner = future::select(Box::pin(slot_worker), Box::pin(answer_requests));
 	Ok(BabeWorker {
-		inner: Box::pin(future::join(inner, answer_requests).map(|_| ())),
+		inner: Box::pin(inner.map(|_| ())),
 		slot_notification_sinks,
 		handle: BabeWorkerHandle(worker_tx),
 	})
 }
 
+// Remove obsolete block's weight data by leveraging finality notifications.
+// This includes data for all finalized blocks (excluding the most recent one)
+// and all stale branches.
+fn aux_storage_cleanup<C: HeaderMetadata<Block> + HeaderBackend<Block>, Block: BlockT>(
+	client: &C,
+	notification: &FinalityNotification<Block>,
+) -> AuxDataOperations {
+	let mut aux_keys = HashSet::new();
+
+	let first = notification.tree_route.first().unwrap_or(&notification.hash);
+	match client.header_metadata(*first) {
+		Ok(meta) => {
+			aux_keys.insert(aux_schema::block_weight_key(meta.parent));
+		},
+		Err(err) => warn!(
+			target: "babe",
+			"Failed to lookup metadata for block `{:?}`: {}",
+			first,
+			err,
+		),
+	}
+
+	// Cleans data for finalized block's ancestors
+	aux_keys.extend(
+		notification
+			.tree_route
+			.iter()
+			// Ensure we don't prune latest finalized block.
+			// This should not happen, but better be safe than sorry!
+			.filter(|h| **h != notification.hash)
+			.map(aux_schema::block_weight_key),
+	);
+
+	// Cleans data for stale branches.
+
+	for head in notification.stale_heads.iter() {
+		let mut hash = *head;
+		// Insert stale blocks hashes until canonical chain is reached.
+		// If we reach a block that is already part of the `aux_keys` we can stop the processing the
+		// head.
+		while aux_keys.insert(aux_schema::block_weight_key(hash)) {
+			match client.header_metadata(hash) {
+				Ok(meta) => {
+					hash = meta.parent;
+
+					// If the parent is part of the canonical chain or there doesn't exist a block
+					// hash for the parent number (bug?!), we can abort adding blocks.
+					if client
+						.hash(meta.number.saturating_sub(1u32.into()))
+						.ok()
+						.flatten()
+						.map_or(true, |h| h == hash)
+					{
+						break
+					}
+				},
+				Err(err) => {
+					warn!(
+						target: "babe",
+						"Header lookup fail while cleaning data for block {:?}: {}",
+						hash,
+						err,
+					);
+					break
+				},
+			}
+		}
+	}
+
+	aux_keys.into_iter().map(|val| (val, None)).collect()
+}
+
 async fn answer_requests<B: BlockT, C>(
 	mut request_rx: Receiver<BabeRequest<B>>,
-	genesis_config: sc_consensus_slots::SlotDuration<BabeGenesisConfiguration>,
+	config: Config,
 	client: Arc<C>,
 	epoch_changes: SharedEpochChanges<B, Epoch>,
 ) where
@@ -557,13 +638,13 @@ async fn answer_requests<B: BlockT, C>(
 							slot_number,
 						)
 						.map_err(|e| Error::<B>::ForkTree(Box::new(e)))?
-						.ok_or_else(|| Error::<B>::FetchEpoch(parent_hash))?;
+						.ok_or(Error::<B>::FetchEpoch(parent_hash))?;
 
 					let viable_epoch = epoch_changes
 						.viable_epoch(&epoch_descriptor, |slot| {
-							Epoch::genesis(&genesis_config, slot)
+							Epoch::genesis(&config.genesis_config, slot)
 						})
-						.ok_or_else(|| Error::<B>::FetchEpoch(parent_hash))?;
+						.ok_or(Error::<B>::FetchEpoch(parent_hash))?;
 
 					Ok(sp_consensus_babe::Epoch {
 						epoch_index: viable_epoch.as_ref().epoch_index,
@@ -611,7 +692,7 @@ impl<B: BlockT> BabeWorkerHandle<B> {
 /// Worker for Babe which implements `Future<Output=()>`. This must be polled.
 #[must_use]
 pub struct BabeWorker<B: BlockT> {
-	inner: Pin<Box<dyn futures::Future<Output = ()> + Send + 'static>>,
+	inner: Pin<Box<dyn Future<Output = ()> + Send + 'static>>,
 	slot_notification_sinks: SlotNotificationSinks<B>,
 	handle: BabeWorkerHandle<B>,
 }
@@ -635,13 +716,10 @@ impl<B: BlockT> BabeWorker<B> {
 	}
 }
 
-impl<B: BlockT> futures::Future for BabeWorker<B> {
+impl<B: BlockT> Future for BabeWorker<B> {
 	type Output = ();
 
-	fn poll(
-		mut self: Pin<&mut Self>,
-		cx: &mut futures::task::Context,
-	) -> futures::task::Poll<Self::Output> {
+	fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
 		self.inner.as_mut().poll(cx)
 	}
 }
@@ -710,17 +788,19 @@ where
 			.epoch_descriptor_for_child_of(
 				descendent_query(&*self.client),
 				&parent.hash(),
-				parent.number().clone(),
+				*parent.number(),
 				slot,
 			)
-			.map_err(|e| ConsensusError::ChainLookup(format!("{:?}", e)))?
+			.map_err(|e| ConsensusError::ChainLookup(e.to_string()))?
 			.ok_or(sp_consensus::Error::InvalidAuthoritiesSet)
 	}
 
 	fn authorities_len(&self, epoch_descriptor: &Self::EpochData) -> Option<usize> {
 		self.epoch_changes
 			.shared_data()
-			.viable_epoch(&epoch_descriptor, |slot| Epoch::genesis(&self.config, slot))
+			.viable_epoch(epoch_descriptor, |slot| {
+				Epoch::genesis(&self.config.genesis_config, slot)
+			})
 			.map(|epoch| epoch.as_ref().authorities.len())
 	}
 
@@ -735,7 +815,9 @@ where
 			slot,
 			self.epoch_changes
 				.shared_data()
-				.viable_epoch(&epoch_descriptor, |slot| Epoch::genesis(&self.config, slot))?
+				.viable_epoch(epoch_descriptor, |slot| {
+					Epoch::genesis(&self.config.genesis_config, slot)
+				})?
 				.as_ref(),
 			&self.keystore,
 		);
@@ -753,7 +835,7 @@ where
 		slot: Slot,
 		epoch_descriptor: &ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>,
 	) {
-		self.slot_notification_sinks.lock().retain_mut(|sink| {
+		RetainMut::retain_mut(&mut *self.slot_notification_sinks.lock(), |sink| {
 			match sink.try_send((slot, epoch_descriptor.clone())) {
 				Ok(()) => true,
 				Err(e) =>
@@ -804,7 +886,7 @@ where
 			.clone()
 			.try_into()
 			.map_err(|_| sp_consensus::Error::InvalidSignature(signature, public))?;
-		let digest_item = <DigestItem as CompatibleDigestItem>::babe_seal(signature.into());
+		let digest_item = <DigestItem as CompatibleDigestItem>::babe_seal(signature);
 
 		let mut import_block = BlockImportParams::new(BlockOrigin::Own, header);
 		import_block.post_digests.push(digest_item);
@@ -860,7 +942,7 @@ where
 		self.telemetry.clone()
 	}
 
-	fn proposing_remaining_duration(&self, slot_info: &SlotInfo<B>) -> std::time::Duration {
+	fn proposing_remaining_duration(&self, slot_info: &SlotInfo<B>) -> Duration {
 		let parent_slot = find_pre_digest::<B>(&slot_info.chain_head).ok().map(|d| d.slot());
 
 		sc_consensus_slots::proposing_remaining_duration(
@@ -1163,10 +1245,12 @@ where
 					pre_digest.slot(),
 				)
 				.map_err(|e| Error::<Block>::ForkTree(Box::new(e)))?
-				.ok_or_else(|| Error::<Block>::FetchEpoch(parent_hash))?;
+				.ok_or(Error::<Block>::FetchEpoch(parent_hash))?;
 			let viable_epoch = epoch_changes
-				.viable_epoch(&epoch_descriptor, |slot| Epoch::genesis(&self.config, slot))
-				.ok_or_else(|| Error::<Block>::FetchEpoch(parent_hash))?;
+				.viable_epoch(&epoch_descriptor, |slot| {
+					Epoch::genesis(&self.config.genesis_config, slot)
+				})
+				.ok_or(Error::<Block>::FetchEpoch(parent_hash))?;
 
 			// We add one to the current slot to allow for some small drift.
 			// FIXME #1019 in the future, alter this queue to allow deferring of headers
@@ -1201,7 +1285,7 @@ where
 					)
 					.await
 				{
-					warn!(target: "babe", "Error checking/reporting BABE equivocation: {:?}", err);
+					warn!(target: "babe", "Error checking/reporting BABE equivocation: {}", err);
 				}
 
 				// if the body is passed through, we need to use the runtime
@@ -1498,7 +1582,9 @@ where
 				old_epoch_changes = Some((*epoch_changes).clone());
 
 				let viable_epoch = epoch_changes
-					.viable_epoch(&epoch_descriptor, |slot| Epoch::genesis(&self.config, slot))
+					.viable_epoch(&epoch_descriptor, |slot| {
+						Epoch::genesis(&self.config.genesis_config, slot)
+					})
 					.ok_or_else(|| {
 						ConsensusError::ClientImport(Error::<Block>::FetchEpoch(parent_hash).into())
 					})?;
@@ -1551,7 +1637,7 @@ where
 						)
 						.map_err(|e| {
 							ConsensusError::ClientImport(format!(
-								"Error importing epoch changes: {:?}",
+								"Error importing epoch changes: {}",
 								e
 							))
 						})?;
@@ -1559,7 +1645,7 @@ where
 				};
 
 				if let Err(e) = prune_and_import() {
-					debug!(target: "babe", "Failed to launch next epoch: {:?}", e);
+					debug!(target: "babe", "Failed to launch next epoch: {}", e);
 					*epoch_changes =
 						old_epoch_changes.expect("set `Some` above and not taken; qed");
 					return Err(e)
@@ -1590,7 +1676,7 @@ where
 					parent_weight
 				} else {
 					aux_schema::load_block_weight(&*self.client, last_best)
-						.map_err(|e| ConsensusError::ChainLookup(format!("{:?}", e)))?
+						.map_err(|e| ConsensusError::ChainLookup(e.to_string()))?
 						.ok_or_else(|| {
 							ConsensusError::ChainLookup(
 								"No block weight for parent header.".to_string(),
@@ -1649,7 +1735,7 @@ where
 	let finalized_slot = {
 		let finalized_header = client
 			.header(BlockId::Hash(info.finalized_hash))
-			.map_err(|e| ConsensusError::ClientImport(format!("{:?}", e)))?
+			.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
 			.expect(
 				"best finalized hash was given by client; finalized headers must exist in db; qed",
 			);
@@ -1666,7 +1752,7 @@ where
 			info.finalized_number,
 			finalized_slot,
 		)
-		.map_err(|e| ConsensusError::ClientImport(format!("{:?}", e)))?;
+		.map_err(|e| ConsensusError::ClientImport(e.to_string()))?;
 
 	Ok(())
 }
@@ -1682,15 +1768,30 @@ pub fn block_import<Client, Block: BlockT, I>(
 	client: Arc<Client>,
 ) -> ClientResult<(BabeBlockImport<Block, Client, I>, BabeLink<Block>)>
 where
-	Client: AuxStore + HeaderBackend<Block> + HeaderMetadata<Block, Error = sp_blockchain::Error>,
+	Client: AuxStore
+		+ HeaderBackend<Block>
+		+ HeaderMetadata<Block, Error = sp_blockchain::Error>
+		+ PreCommitActions<Block>
+		+ 'static,
 {
-	let epoch_changes = aux_schema::load_epoch_changes::<Block, _>(&*client, &config)?;
+	let epoch_changes =
+		aux_schema::load_epoch_changes::<Block, _>(&*client, &config.genesis_config)?;
 	let link = BabeLink { epoch_changes: epoch_changes.clone(), config: config.clone() };
 
 	// NOTE: this isn't entirely necessary, but since we didn't use to prune the
 	// epoch tree it is useful as a migration, so that nodes prune long trees on
 	// startup rather than waiting until importing the next epoch change block.
 	prune_finalized(client.clone(), &mut epoch_changes.shared_data())?;
+
+	let client_weak = Arc::downgrade(&client);
+	let on_finality = move |summary: &FinalityNotification<Block>| {
+		if let Some(client) = client_weak.upgrade() {
+			aux_storage_cleanup(client.as_ref(), summary)
+		} else {
+			Default::default()
+		}
+	};
+	client.register_finality_action(Box::new(on_finality));
 
 	let import = BabeBlockImport::new(client, epoch_changes, wrapped_block_import, config);
 
@@ -1750,4 +1851,77 @@ where
 	};
 
 	Ok(BasicQueue::new(verifier, Box::new(block_import), justification_import, spawner, registry))
+}
+
+/// Reverts protocol aux data to at most the last finalized block.
+/// In particular, epoch-changes and block weights announced after the revert
+/// point are removed.
+pub fn revert<Block, Client, Backend>(
+	client: Arc<Client>,
+	backend: Arc<Backend>,
+	blocks: NumberFor<Block>,
+) -> ClientResult<()>
+where
+	Block: BlockT,
+	Client: AuxStore
+		+ HeaderMetadata<Block, Error = sp_blockchain::Error>
+		+ HeaderBackend<Block>
+		+ ProvideRuntimeApi<Block>
+		+ UsageProvider<Block>,
+	Client::Api: BabeApi<Block>,
+	Backend: BackendT<Block>,
+{
+	let best_number = client.info().best_number;
+	let finalized = client.info().finalized_number;
+	let revertible = blocks.min(best_number - finalized);
+
+	let number = best_number - revertible;
+	let hash = client
+		.block_hash_from_id(&BlockId::Number(number))?
+		.ok_or(ClientError::Backend(format!(
+			"Unexpected hash lookup failure for block number: {}",
+			number
+		)))?;
+
+	// Revert epoch changes tree.
+
+	let config = Config::get(&*client)?;
+	let epoch_changes =
+		aux_schema::load_epoch_changes::<Block, Client>(&*client, config.genesis_config())?;
+	let mut epoch_changes = epoch_changes.shared_data();
+
+	if number == Zero::zero() {
+		// Special case, no epoch changes data were present on genesis.
+		*epoch_changes = EpochChangesFor::<Block, Epoch>::default();
+	} else {
+		epoch_changes.revert(descendent_query(&*client), hash, number);
+	}
+
+	// Remove block weights added after the revert point.
+
+	let mut weight_keys = HashSet::with_capacity(revertible.saturated_into());
+	let leaves = backend.blockchain().leaves()?.into_iter().filter(|&leaf| {
+		sp_blockchain::tree_route(&*client, hash, leaf)
+			.map(|route| route.retracted().is_empty())
+			.unwrap_or_default()
+	});
+	for leaf in leaves {
+		let mut hash = leaf;
+		// Insert parent after parent until we don't hit an already processed
+		// branch or we reach a direct child of the rollback point.
+		while weight_keys.insert(aux_schema::block_weight_key(hash)) {
+			let meta = client.header_metadata(hash)?;
+			if meta.number <= number + One::one() {
+				// We've reached a child of the revert point, stop here.
+				break
+			}
+			hash = client.header_metadata(hash)?.parent;
+		}
+	}
+	let weight_keys: Vec<_> = weight_keys.iter().map(|val| val.as_slice()).collect();
+
+	// Write epoch changes and remove weights in one shot.
+	aux_schema::write_epoch_changes::<Block, _, _>(&epoch_changes, |values| {
+		client.insert_aux(values, weight_keys.iter())
+	})
 }

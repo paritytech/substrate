@@ -101,9 +101,6 @@ parameter_types! {
 	pub const ProposalBond: Permill = Permill::from_percent(5);
 	pub const Burn: Permill = Permill::from_percent(50);
 	pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
-	pub const BountyUpdatePeriod: u32 = 20;
-	pub const BountyCuratorDeposit: Permill = Permill::from_percent(50);
-	pub const BountyValueMinimum: u64 = 1;
 	pub const MaxApprovals: u32 = 100;
 }
 impl Config for Test {
@@ -121,7 +118,7 @@ impl Config for Test {
 	type BurnDestination = (); // Just gets burned.
 	type WeightInfo = ();
 	type SpendFunds = ();
-	type MaxApprovals = MaxApprovals;
+	type MaxApprovals = ConstU32<100>;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
@@ -385,6 +382,24 @@ fn max_approvals_limited() {
 		assert_noop!(
 			Treasury::approve_proposal(Origin::root(), 0),
 			Error::<Test, _>::TooManyApprovals
+		);
+	});
+}
+
+#[test]
+fn remove_already_removed_approval_fails() {
+	new_test_ext().execute_with(|| {
+		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+
+		assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
+		assert_ok!(Treasury::approve_proposal(Origin::root(), 0));
+		assert_eq!(Treasury::approvals(), vec![0]);
+		assert_ok!(Treasury::remove_approval(Origin::root(), 0));
+		assert_eq!(Treasury::approvals(), vec![]);
+
+		assert_noop!(
+			Treasury::remove_approval(Origin::root(), 0),
+			Error::<Test, _>::ProposalNotApproved
 		);
 	});
 }

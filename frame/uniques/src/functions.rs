@@ -31,10 +31,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			&mut InstanceDetailsFor<T, I>,
 		) -> DispatchResult,
 	) -> DispatchResult {
-		let class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::Unknown)?;
+		let class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
 		ensure!(!class_details.is_frozen, Error::<T, I>::Frozen);
+		ensure!(!T::Locker::is_locked(class, instance), Error::<T, I>::Locked);
 
-		let mut details = Asset::<T, I>::get(&class, &instance).ok_or(Error::<T, I>::Unknown)?;
+		let mut details =
+			Asset::<T, I>::get(&class, &instance).ok_or(Error::<T, I>::UnknownClass)?;
 		ensure!(!details.is_frozen, Error::<T, I>::Frozen);
 		with_details(&class_details, &mut details)?;
 
@@ -71,7 +73,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				owner: owner.clone(),
 				issuer: admin.clone(),
 				admin: admin.clone(),
-				freezer: admin.clone(),
+				freezer: admin,
 				total_deposit: deposit,
 				free_holding,
 				instances: 0,
@@ -92,7 +94,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		maybe_check_owner: Option<T::AccountId>,
 	) -> Result<DestroyWitness, DispatchError> {
 		Class::<T, I>::try_mutate_exists(class, |maybe_details| {
-			let class_details = maybe_details.take().ok_or(Error::<T, I>::Unknown)?;
+			let class_details = maybe_details.take().ok_or(Error::<T, I>::UnknownClass)?;
 			if let Some(check_owner) = maybe_check_owner {
 				ensure!(class_details.owner == check_owner, Error::<T, I>::NoPermission);
 			}
@@ -131,9 +133,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		ensure!(!Asset::<T, I>::contains_key(class, instance), Error::<T, I>::AlreadyExists);
 
 		Class::<T, I>::try_mutate(&class, |maybe_class_details| -> DispatchResult {
-			let class_details = maybe_class_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
+			let class_details = maybe_class_details.as_mut().ok_or(Error::<T, I>::UnknownClass)?;
 
-			with_details(&class_details)?;
+			with_details(class_details)?;
 
 			let instances =
 				class_details.instances.checked_add(1).ok_or(ArithmeticError::Overflow)?;
@@ -165,10 +167,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let owner = Class::<T, I>::try_mutate(
 			&class,
 			|maybe_class_details| -> Result<T::AccountId, DispatchError> {
-				let class_details = maybe_class_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
+				let class_details =
+					maybe_class_details.as_mut().ok_or(Error::<T, I>::UnknownClass)?;
 				let details =
-					Asset::<T, I>::get(&class, &instance).ok_or(Error::<T, I>::Unknown)?;
-				with_details(&class_details, &details)?;
+					Asset::<T, I>::get(&class, &instance).ok_or(Error::<T, I>::UnknownClass)?;
+				with_details(class_details, &details)?;
 
 				// Return the deposit.
 				T::Currency::unreserve(&class_details.owner, details.deposit);

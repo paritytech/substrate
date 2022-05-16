@@ -39,8 +39,6 @@ use syn::{
 
 use std::collections::HashMap;
 
-use blake2_rfc;
-
 /// The ident used for the block generic parameter.
 const BLOCK_GENERIC_IDENT: &str = "Block";
 
@@ -183,14 +181,14 @@ fn generate_native_call_generators(decl: &ItemTrait) -> Result<TokenStream> {
 		{
 			<R as #crate_::DecodeLimit>::decode_with_depth_limit(
 				#crate_::MAX_EXTRINSIC_DEPTH,
-				&#crate_::Encode::encode(input)[..],
+				&mut &#crate_::Encode::encode(input)[..],
 			).map_err(map_error)
 		}
 	));
 
 	// Generate a native call generator for each function of the given trait.
 	for fn_ in fns {
-		let params = extract_parameter_names_types_and_borrows(&fn_, AllowSelfRefInParameters::No)?;
+		let params = extract_parameter_names_types_and_borrows(fn_, AllowSelfRefInParameters::No)?;
 		let trait_fn_name = &fn_.ident;
 		let function_name_str = fn_.ident.to_string();
 		let fn_name = generate_native_call_generator_fn_name(&fn_.ident);
@@ -338,7 +336,7 @@ fn generate_call_api_at_calls(decl: &ItemTrait) -> Result<TokenStream> {
 	// Generate a native call generator for each function of the given trait.
 	for (attrs, fn_) in fns {
 		let trait_name = &decl.ident;
-		let trait_fn_name = prefix_function_with_trait(&trait_name, &fn_.ident);
+		let trait_fn_name = prefix_function_with_trait(trait_name, &fn_.ident);
 		let fn_name = generate_call_api_at_fn_name(&fn_.ident);
 
 		let attrs = remove_supported_attributes(&mut attrs.clone());
@@ -362,7 +360,7 @@ fn generate_call_api_at_calls(decl: &ItemTrait) -> Result<TokenStream> {
 		let mut renames = Vec::new();
 		if let Some((_, a)) = attrs.iter().find(|a| a.0 == &RENAMED_ATTRIBUTE) {
 			let (old_name, version) = parse_renamed_attribute(a)?;
-			renames.push((version, prefix_function_with_trait(&trait_name, &old_name)));
+			renames.push((version, prefix_function_with_trait(trait_name, &old_name)));
 		}
 
 		renames.sort_by(|l, r| r.cmp(l));
@@ -380,21 +378,21 @@ fn generate_call_api_at_calls(decl: &ItemTrait) -> Result<TokenStream> {
 			#[cfg(any(feature = "std", test))]
 			#[allow(clippy::too_many_arguments)]
 			pub fn #fn_name<
-				R: #crate_::Encode + #crate_::Decode + PartialEq,
+				R: #crate_::Encode + #crate_::Decode + std::cmp::PartialEq,
 				NC: FnOnce() -> std::result::Result<R, #crate_::ApiError> + std::panic::UnwindSafe,
 				Block: #crate_::BlockT,
 				T: #crate_::CallApiAt<Block>,
 			>(
 				call_runtime_at: &T,
 				at: &#crate_::BlockId<Block>,
-				args: Vec<u8>,
+				args: std::vec::Vec<u8>,
 				changes: &std::cell::RefCell<#crate_::OverlayedChanges>,
 				storage_transaction_cache: &std::cell::RefCell<
 					#crate_::StorageTransactionCache<Block, T::StateBackend>
 				>,
-				native_call: Option<NC>,
+				native_call: std::option::Option<NC>,
 				context: #crate_::ExecutionContext,
-				recorder: &Option<#crate_::ProofRecorder<Block>>,
+				recorder: &std::option::Option<#crate_::ProofRecorder<Block>>,
 			) -> std::result::Result<#crate_::NativeOrEncoded<R>, #crate_::ApiError> {
 				let version = call_runtime_at.runtime_version_at(at)?;
 
@@ -414,7 +412,7 @@ fn generate_call_api_at_calls(decl: &ItemTrait) -> Result<TokenStream> {
 							recorder,
 						};
 
-						let ret = call_runtime_at.call_api_at(params)?;
+						let ret = #crate_::CallApiAt::<Block>::call_api_at(call_runtime_at, params)?;
 
 						return Ok(ret)
 					}
@@ -431,7 +429,7 @@ fn generate_call_api_at_calls(decl: &ItemTrait) -> Result<TokenStream> {
 					recorder,
 				};
 
-				call_runtime_at.call_api_at(params)
+				#crate_::CallApiAt::<Block>::call_api_at(call_runtime_at, params)
 			}
 		));
 	}
@@ -584,7 +582,7 @@ impl<'a> ToClientSideDecl<'a> {
 					Vec::new()
 				},
 			};
-		let name = generate_method_runtime_api_impl_name(&self.trait_, &method.sig.ident);
+		let name = generate_method_runtime_api_impl_name(self.trait_, &method.sig.ident);
 		let block_id = self.block_id;
 		let crate_ = self.crate_;
 
@@ -621,9 +619,9 @@ impl<'a> ToClientSideDecl<'a> {
 		let params2 = params.clone();
 		let ret_type = return_type_extract_type(&method.sig.output);
 
-		fold_fn_decl_for_client_side(&mut method.sig, &self.block_id, &self.crate_);
+		fold_fn_decl_for_client_side(&mut method.sig, self.block_id, self.crate_);
 
-		let name_impl = generate_method_runtime_api_impl_name(&self.trait_, &method.sig.ident);
+		let name_impl = generate_method_runtime_api_impl_name(self.trait_, &method.sig.ident);
 		let crate_ = self.crate_;
 
 		let found_attributes = remove_supported_attributes(&mut method.attrs);
@@ -632,7 +630,7 @@ impl<'a> ToClientSideDecl<'a> {
 		let (native_handling, param_tuple) = match get_changed_in(&found_attributes) {
 			Ok(Some(version)) => {
 				// Make sure that the `changed_in` version is at least the current `api_version`.
-				if get_api_version(&self.found_attributes).ok() < Some(version) {
+				if get_api_version(self.found_attributes).ok() < Some(version) {
 					self.errors.push(
 						Error::new(
 							method.span(),
@@ -679,13 +677,13 @@ impl<'a> ToClientSideDecl<'a> {
 							#native_handling
 						},
 						#crate_::NativeOrEncoded::Encoded(r) => {
-							<#ret_type as #crate_::Decode>::decode(&mut &r[..])
-								.map_err(|err|
-									#crate_::ApiError::FailedToDecodeReturnValue {
-										function: #function_name,
-										error: err,
-									}
-								)
+							std::result::Result::map_err(
+								<#ret_type as #crate_::Decode>::decode(&mut &r[..]),
+								|err| #crate_::ApiError::FailedToDecodeReturnValue {
+									function: #function_name,
+									error: err,
+								}
+							)
 						}
 					}
 				)
@@ -750,8 +748,10 @@ fn parse_runtime_api_version(version: &Attribute) -> Result<u64> {
 /// Generates the identifier as const variable for the given `trait_name`
 /// by hashing the `trait_name`.
 fn generate_runtime_api_id(trait_name: &str) -> TokenStream {
+	use blake2::digest::{consts::U8, Digest};
+
 	let mut res = [0; 8];
-	res.copy_from_slice(blake2_rfc::blake2b::blake2b(8, &[], trait_name.as_bytes()).as_bytes());
+	res.copy_from_slice(blake2::Blake2b::<U8>::digest(trait_name).as_slice());
 
 	quote!( const ID: [u8; 8] = [ #( #res ),* ]; )
 }
@@ -972,7 +972,7 @@ pub fn decl_runtime_apis_impl(input: proc_macro::TokenStream) -> proc_macro::Tok
 }
 
 fn decl_runtime_apis_impl_inner(api_decls: &[ItemTrait]) -> Result<TokenStream> {
-	check_trait_decls(&api_decls)?;
+	check_trait_decls(api_decls)?;
 
 	let hidden_includes = generate_hidden_includes(HIDDEN_INCLUDES_ID);
 	let runtime_decls = generate_runtime_decls(api_decls)?;

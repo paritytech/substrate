@@ -113,6 +113,8 @@
 //! well with try-runtime's expensive RPC queries:
 //!
 //! - set `--rpc-max-payload 1000` to ensure large RPC queries can work.
+//! - set `--ws-max-out-buffer-capacity 1000` to ensure the websocket connection can handle large
+//!   RPC queries.
 //! - set `--rpc-cors all` to ensure ws connections can come through.
 //!
 //! Note that *none* of the try-runtime operations need unsafe RPCs.
@@ -141,7 +143,9 @@
 //!
 //! These hooks allow you to execute some code, only within the `on-runtime-upgrade` command, before
 //! and after the migration. If any data needs to be temporarily stored between the pre/post
-//! migration hooks, `OnRuntimeUpgradeHelpersExt` can help with that.
+//! migration hooks, `OnRuntimeUpgradeHelpersExt` can help with that. Note that you should be
+//! mindful with any mutable storage ops in the pre/post migration checks, as you almost certainly
+//! will not want to mutate any of the storage that is to be migrated.
 //!
 //! #### Logging
 //!
@@ -266,7 +270,9 @@ use remote_externalities::{
 	Builder, Mode, OfflineConfig, OnlineConfig, SnapshotConfig, TestExternalities,
 };
 use sc_chain_spec::ChainSpec;
-use sc_cli::{CliConfiguration, ExecutionStrategy, WasmExecutionMethod};
+use sc_cli::{
+	CliConfiguration, ExecutionStrategy, WasmExecutionMethod, DEFAULT_WASM_EXECUTION_METHOD,
+};
 use sc_executor::NativeElseWasmExecutor;
 use sc_service::{Configuration, NativeExecutionDispatch};
 use sp_core::{
@@ -290,7 +296,7 @@ use std::{fmt::Debug, path::PathBuf, str::FromStr};
 
 mod commands;
 pub(crate) mod parse;
-pub(crate) const LOG_TARGET: &'static str = "try-runtime::cli";
+pub(crate) const LOG_TARGET: &str = "try-runtime::cli";
 
 /// Possible commands of `try-runtime`.
 #[derive(Debug, Clone, clap::Subcommand)]
@@ -381,7 +387,7 @@ pub struct SharedParams {
 	pub shared_params: sc_cli::SharedParams,
 
 	/// The execution strategy that should be used.
-	#[clap(long, value_name = "STRATEGY", arg_enum, ignore_case = true, default_value = "Wasm")]
+	#[clap(long, value_name = "STRATEGY", arg_enum, ignore_case = true, default_value = "wasm")]
 	pub execution: ExecutionStrategy,
 
 	/// Type of wasm execution used.
@@ -390,7 +396,7 @@ pub struct SharedParams {
 		value_name = "METHOD",
 		possible_values = WasmExecutionMethod::variants(),
 		ignore_case = true,
-		default_value = "Compiled"
+		default_value = DEFAULT_WASM_EXECUTION_METHOD,
 	)]
 	pub wasm_method: WasmExecutionMethod,
 
@@ -454,15 +460,15 @@ pub enum State {
 		snapshot_path: Option<PathBuf>,
 
 		/// The pallets to scrape. If empty, entire chain state will be scraped.
-		#[clap(short, long, require_delimiter = true)]
-		pallets: Option<Vec<String>>,
+		#[clap(short, long, multiple_values = true)]
+		pallets: Vec<String>,
 
 		/// Fetch the child-keys as well.
 		///
-		/// Default is `false`, if specific `pallets` are specified, true otherwise. In other
+		/// Default is `false`, if specific `--pallets` are specified, `true` otherwise. In other
 		/// words, if you scrape the whole state the child tree data is included out of the box.
 		/// Otherwise, it must be enabled explicitly using this flag.
-		#[clap(long, require_delimiter = true)]
+		#[clap(long)]
 		child_tree: bool,
 	},
 }
@@ -488,7 +494,8 @@ impl State {
 					.mode(Mode::Online(OnlineConfig {
 						transport: uri.to_owned().into(),
 						state_snapshot: snapshot_path.as_ref().map(SnapshotConfig::new),
-						pallets: pallets.clone().unwrap_or_default(),
+						pallets: pallets.clone(),
+						scrape_children: true,
 						at,
 					}))
 					.inject_hashed_key(
@@ -612,7 +619,7 @@ pub(crate) async fn ensure_matching_spec<Block: BlockT + serde::de::DeserializeO
 	{
 		Ok((name, version)) => {
 			// first, deal with spec name
-			if expected_spec_name == name {
+			if expected_spec_name.to_lowercase() == name {
 				log::info!(target: LOG_TARGET, "found matching spec name: {:?}", name);
 			} else {
 				let msg = format!(
@@ -703,7 +710,7 @@ pub(crate) fn state_machine_call<Block: BlockT, D: NativeExecutionDispatch + 'st
 		sp_core::testing::TaskExecutor::new(),
 	)
 	.execute(execution.into())
-	.map_err(|e| format!("failed to execute 'TryRuntime_on_runtime_upgrade': {:?}", e))
+	.map_err(|e| format!("failed to execute 'TryRuntime_on_runtime_upgrade': {}", e))
 	.map_err::<sc_cli::Error, _>(Into::into)?;
 
 	Ok((changes, encoded_results))
@@ -731,7 +738,7 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, D: NativeExecutionDis
 	let runtime_code_backend = sp_state_machine::backend::BackendRuntimeCode::new(&proving_backend);
 	let runtime_code = runtime_code_backend.runtime_code()?;
 
-	let pre_root = backend.root().clone();
+	let pre_root = *backend.root();
 
 	let encoded_results = StateMachine::new(
 		&proving_backend,
@@ -744,7 +751,7 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, D: NativeExecutionDis
 		sp_core::testing::TaskExecutor::new(),
 	)
 	.execute(execution.into())
-	.map_err(|e| format!("failed to execute {}: {:?}", method, e))
+	.map_err(|e| format!("failed to execute {}: {}", method, e))
 	.map_err::<sc_cli::Error, _>(Into::into)?;
 
 	let proof = proving_backend.extract_proof();
@@ -794,8 +801,8 @@ pub(crate) fn local_spec<Block: BlockT, D: NativeExecutionDispatch + 'static>(
 	executor: &NativeElseWasmExecutor<D>,
 ) -> (String, u32, sp_core::storage::StateVersion) {
 	let (_, encoded) = state_machine_call::<Block, D>(
-		&ext,
-		&executor,
+		ext,
+		executor,
 		sc_cli::ExecutionStrategy::NativeElseWasm,
 		"Core_version",
 		&[],

@@ -47,7 +47,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 
 use sp_runtime::{
@@ -186,10 +186,8 @@ where
 
 		let weights = T::BlockWeights::get();
 		// the computed ratio is only among the normal class.
-		let normal_max_weight = weights
-			.get(DispatchClass::Normal)
-			.max_total
-			.unwrap_or_else(|| weights.max_block);
+		let normal_max_weight =
+			weights.get(DispatchClass::Normal).max_total.unwrap_or(weights.max_block);
 		let current_block_weight = <frame_system::Pallet<T>>::block_weight();
 		let normal_block_weight =
 			*current_block_weight.get(DispatchClass::Normal).min(&normal_max_weight);
@@ -226,7 +224,7 @@ where
 }
 
 /// Storage releases of the pallet.
-#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 enum Releases {
 	/// Original version of the pallet.
 	V1Ancient,
@@ -248,7 +246,6 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
-	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
@@ -260,10 +257,6 @@ pub mod pallet {
 		/// transaction weight is lower than expected, parts of the transaction fee
 		/// might be refunded. In the end the fees can be deposited.
 		type OnChargeTransaction: OnChargeTransaction<Self>;
-
-		/// The fee to be paid for making a transaction; the per-byte portion.
-		#[pallet::constant]
-		type TransactionByteFee: Get<BalanceOf<Self>>;
 
 		/// A fee mulitplier for `Operational` extrinsics to compute "virtual tip" to boost their
 		/// `priority`
@@ -292,17 +285,25 @@ pub mod pallet {
 		/// Convert a weight value into a deductible fee based on the currency type.
 		type WeightToFee: WeightToFeePolynomial<Balance = BalanceOf<Self>>;
 
+		/// Convert a length value into a deductible fee based on the currency type.
+		type LengthToFee: WeightToFeePolynomial<Balance = BalanceOf<Self>>;
+
 		/// Update the multiplier of the next block, based on the previous block's weight.
 		type FeeMultiplierUpdate: MultiplierUpdate;
 	}
 
 	#[pallet::extra_constants]
 	impl<T: Config> Pallet<T> {
-		// TODO: rename to snake case after https://github.com/paritytech/substrate/issues/8826 fixed.
-		#[allow(non_snake_case)]
+		#[pallet::constant_name(WeightToFee)]
 		/// The polynomial that is applied in order to derive fee from weight.
-		fn WeightToFee() -> Vec<WeightToFeeCoefficient<BalanceOf<T>>> {
+		fn weight_to_fee_polynomial() -> Vec<WeightToFeeCoefficient<BalanceOf<T>>> {
 			T::WeightToFee::polynomial().to_vec()
+		}
+
+		/// The polynomial that is applied in order to derive fee from length.
+		#[pallet::constant_name(LengthToFee)]
+		fn length_to_fee_polynomial() -> Vec<WeightToFeeCoefficient<BalanceOf<T>>> {
+			T::LengthToFee::polynomial().to_vec()
 		}
 	}
 
@@ -350,7 +351,7 @@ pub mod pallet {
 			// loss.
 			assert!(
 				<Multiplier as sp_runtime::traits::Bounded>::max_value() >=
-					Multiplier::checked_from_integer(
+					Multiplier::checked_from_integer::<u128>(
 						T::BlockWeights::get().max_block.try_into().unwrap()
 					)
 					.unwrap(),
@@ -512,30 +513,27 @@ where
 		class: DispatchClass,
 	) -> FeeDetails<BalanceOf<T>> {
 		if pays_fee == Pays::Yes {
-			let len = <BalanceOf<T>>::from(len);
-			let per_byte = T::TransactionByteFee::get();
-
-			// length fee. this is not adjusted.
-			let fixed_len_fee = per_byte.saturating_mul(len);
-
 			// the adjustable part of the fee.
 			let unadjusted_weight_fee = Self::weight_to_fee(weight);
 			let multiplier = Self::next_fee_multiplier();
 			// final adjusted weight fee.
 			let adjusted_weight_fee = multiplier.saturating_mul_int(unadjusted_weight_fee);
 
+			// length fee. this is adjusted via `LengthToFee`.
+			let len_fee = Self::length_to_fee(len);
+
 			let base_fee = Self::weight_to_fee(T::BlockWeights::get().get(class).base_extrinsic);
 			FeeDetails {
-				inclusion_fee: Some(InclusionFee {
-					base_fee,
-					len_fee: fixed_len_fee,
-					adjusted_weight_fee,
-				}),
+				inclusion_fee: Some(InclusionFee { base_fee, len_fee, adjusted_weight_fee }),
 				tip,
 			}
 		} else {
 			FeeDetails { inclusion_fee: None, tip }
 		}
+	}
+
+	fn length_to_fee(length: u32) -> BalanceOf<T> {
+		T::LengthToFee::calc(&(length as Weight))
 	}
 
 	fn weight_to_fee(weight: Weight) -> BalanceOf<T> {
@@ -837,8 +835,8 @@ mod tests {
 	}
 
 	parameter_types! {
-		pub static TransactionByteFee: u64 = 1;
 		pub static WeightToFee: u64 = 1;
+		pub static TransactionByteFee: u64 = 1;
 		pub static OperationalFeeMultiplier: u8 = 5;
 	}
 
@@ -894,6 +892,19 @@ mod tests {
 		}
 	}
 
+	impl WeightToFeePolynomial for TransactionByteFee {
+		type Balance = u64;
+
+		fn polynomial() -> WeightToFeeCoefficients<Self::Balance> {
+			smallvec![WeightToFeeCoefficient {
+				degree: 1,
+				coeff_frac: Perbill::zero(),
+				coeff_integer: TRANSACTION_BYTE_FEE.with(|v| *v.borrow()),
+				negative: false,
+			}]
+		}
+	}
+
 	thread_local! {
 		static TIP_UNBALANCED_AMOUNT: RefCell<u64> = RefCell::new(0);
 		static FEE_UNBALANCED_AMOUNT: RefCell<u64> = RefCell::new(0);
@@ -915,9 +926,9 @@ mod tests {
 
 	impl Config for Runtime {
 		type OnChargeTransaction = CurrencyAdapter<Balances, DealWithFees>;
-		type TransactionByteFee = TransactionByteFee;
 		type OperationalFeeMultiplier = OperationalFeeMultiplier;
 		type WeightToFee = WeightToFee;
+		type LengthToFee = TransactionByteFee;
 		type FeeMultiplierUpdate = ();
 	}
 

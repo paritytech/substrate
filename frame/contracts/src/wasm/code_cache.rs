@@ -38,7 +38,7 @@ use crate::{
 use frame_support::{
 	dispatch::{DispatchError, DispatchResult},
 	ensure,
-	traits::ReservableCurrency,
+	traits::{Get, ReservableCurrency},
 };
 use sp_core::crypto::UncheckedFrom;
 use sp_runtime::traits::BadOrigin;
@@ -108,13 +108,28 @@ where
 ///
 /// A contract whose refcount dropped to zero isn't automatically removed. A `remove_code`
 /// transaction must be submitted by the original uploader to do so.
-pub fn decrement_refcount<T: Config>(code_hash: CodeHash<T>) -> Result<(), DispatchError> {
+pub fn decrement_refcount<T: Config>(code_hash: CodeHash<T>) {
 	<OwnerInfoOf<T>>::mutate(code_hash, |existing| {
 		if let Some(info) = existing {
 			info.refcount = info.refcount.saturating_sub(1);
 		}
 	});
-	Ok(())
+}
+
+/// Increment the refcount of a code in-storage by one.
+///
+/// # Errors
+///
+/// [`Error::CodeNotFound`] is returned if the specified `code_hash` does not exist.
+pub fn increment_refcount<T: Config>(code_hash: CodeHash<T>) -> Result<(), DispatchError> {
+	<OwnerInfoOf<T>>::mutate(code_hash, |existing| -> Result<(), DispatchError> {
+		if let Some(info) = existing {
+			info.refcount = info.refcount.saturating_add(1);
+			Ok(())
+		} else {
+			Err(Error::<T>::CodeNotFound.into())
+		}
+	})
 }
 
 /// Try to remove code together with all associated information.
@@ -150,8 +165,7 @@ where
 {
 	let charged = gas_meter.charge(CodeToken::Load(schedule.limits.code_len))?;
 
-	let mut prefab_module =
-		<CodeStorage<T>>::get(code_hash).ok_or_else(|| Error::<T>::CodeNotFound)?;
+	let mut prefab_module = <CodeStorage<T>>::get(code_hash).ok_or(Error::<T>::CodeNotFound)?;
 	gas_meter.adjust_gas(charged, CodeToken::Load(prefab_module.code.len() as u32));
 	prefab_module.code_hash = code_hash;
 
@@ -174,7 +188,7 @@ pub fn reinstrument<T: Config>(
 	schedule: &Schedule<T>,
 ) -> Result<u32, DispatchError> {
 	let original_code =
-		<PristineCode<T>>::get(&prefab_module.code_hash).ok_or_else(|| Error::<T>::CodeNotFound)?;
+		<PristineCode<T>>::get(&prefab_module.code_hash).ok_or(Error::<T>::CodeNotFound)?;
 	let original_code_len = original_code.len();
 	prefab_module.code = prepare::reinstrument_contract::<T>(original_code, schedule)?;
 	prefab_module.instruction_weights_version = schedule.instruction_weights.version;
@@ -201,9 +215,13 @@ impl<T: Config> Token<T> for CodeToken {
 		// point because when charging the general weight for calling the contract we not know the
 		// size of the contract.
 		match *self {
-			Reinstrument(len) => T::WeightInfo::reinstrument(len / 1024),
-			Load(len) => T::WeightInfo::call_with_code_kb(len / 1024)
-				.saturating_sub(T::WeightInfo::call_with_code_kb(0)),
+			Reinstrument(len) => T::WeightInfo::reinstrument(len),
+			Load(len) => {
+				let computation = T::WeightInfo::call_with_code_per_byte(len)
+					.saturating_sub(T::WeightInfo::call_with_code_per_byte(0));
+				let bandwith = T::ContractAccessWeight::get().saturating_mul(len.into());
+				computation.max(bandwith)
+			},
 		}
 	}
 }

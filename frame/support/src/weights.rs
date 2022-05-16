@@ -127,7 +127,15 @@
 //! - Ubuntu 19.10 (GNU/Linux 5.3.0-18-generic x86_64)
 //! - rustc 1.42.0 (b8cedc004 2020-03-09)
 
-use crate::dispatch::{DispatchError, DispatchErrorWithPostInfo, DispatchResultWithPostInfo};
+mod block_weights;
+mod extrinsic_weights;
+mod paritydb_weights;
+mod rocksdb_weights;
+
+use crate::{
+	dispatch::{DispatchError, DispatchErrorWithPostInfo, DispatchResultWithPostInfo},
+	traits::Get,
+};
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
@@ -152,32 +160,23 @@ pub type Weight = u64;
 /// These constants are specific to FRAME, and the current implementation of its various components.
 /// For example: FRAME System, FRAME Executive, our FRAME support libraries, etc...
 pub mod constants {
-	use super::{RuntimeDbWeight, Weight};
-	use crate::parameter_types;
+	use super::Weight;
 
 	pub const WEIGHT_PER_SECOND: Weight = 1_000_000_000_000;
 	pub const WEIGHT_PER_MILLIS: Weight = WEIGHT_PER_SECOND / 1000; // 1_000_000_000
 	pub const WEIGHT_PER_MICROS: Weight = WEIGHT_PER_MILLIS / 1000; // 1_000_000
 	pub const WEIGHT_PER_NANOS: Weight = WEIGHT_PER_MICROS / 1000; // 1_000
 
-	parameter_types! {
-		/// Importing a block with 0 txs takes ~5 ms
-		pub const BlockExecutionWeight: Weight = 5 * WEIGHT_PER_MILLIS;
-		/// Executing 10,000 System remarks (no-op) txs takes ~1.26 seconds -> ~125 µs per tx
-		pub const ExtrinsicBaseWeight: Weight = 125 * WEIGHT_PER_MICROS;
-		/// By default, Substrate uses RocksDB, so this will be the weight used throughout
-		/// the runtime.
-		pub const RocksDbWeight: RuntimeDbWeight = RuntimeDbWeight {
-			read: 25 * WEIGHT_PER_MICROS,   // ~25 µs @ 200,000 items
-			write: 100 * WEIGHT_PER_MICROS, // ~100 µs @ 200,000 items
-		};
-		/// ParityDB can be enabled with a feature flag, but is still experimental. These weights
-		/// are available for brave runtime engineers who may want to try this out as default.
-		pub const ParityDbWeight: RuntimeDbWeight = RuntimeDbWeight {
-			read: 8 * WEIGHT_PER_MICROS,   // ~8 µs @ 200,000 items
-			write: 50 * WEIGHT_PER_MICROS, // ~50 µs @ 200,000 items
-		};
-	}
+	// Expose the Block and Extrinsic base weights.
+	pub use super::{
+		block_weights::constants::BlockExecutionWeight,
+		extrinsic_weights::constants::ExtrinsicBaseWeight,
+	};
+
+	// Expose the DB weights.
+	pub use super::{
+		paritydb_weights::constants::ParityDbWeight, rocksdb_weights::constants::RocksDbWeight,
+	};
 }
 
 /// Means of weighing some particular kind of data (`T`).
@@ -356,7 +355,7 @@ impl PostDispatchInfo {
 /// Extract the actual weight from a dispatch result if any or fall back to the default weight.
 pub fn extract_actual_weight(result: &DispatchResultWithPostInfo, info: &DispatchInfo) -> Weight {
 	match result {
-		Ok(post_info) => &post_info,
+		Ok(post_info) => post_info,
 		Err(err) => &err.post_info,
 	}
 	.calc_actual_weight(info)
@@ -433,7 +432,7 @@ where
 
 impl<T> WeighData<T> for Weight {
 	fn weigh_data(&self, _: T) -> Weight {
-		return *self
+		*self
 	}
 }
 
@@ -451,7 +450,7 @@ impl<T> PaysFee<T> for Weight {
 
 impl<T> WeighData<T> for (Weight, DispatchClass, Pays) {
 	fn weigh_data(&self, _: T) -> Weight {
-		return self.0
+		self.0
 	}
 }
 
@@ -469,7 +468,7 @@ impl<T> PaysFee<T> for (Weight, DispatchClass, Pays) {
 
 impl<T> WeighData<T> for (Weight, DispatchClass) {
 	fn weigh_data(&self, _: T) -> Weight {
-		return self.0
+		self.0
 	}
 }
 
@@ -487,7 +486,7 @@ impl<T> PaysFee<T> for (Weight, DispatchClass) {
 
 impl<T> WeighData<T> for (Weight, Pays) {
 	fn weigh_data(&self, _: T) -> Weight {
-		return self.0
+		self.0
 	}
 }
 
@@ -710,6 +709,42 @@ where
 			negative: false,
 			degree: 1,
 		})
+	}
+
+	fn calc(weight: &Weight) -> Self::Balance {
+		Self::Balance::saturated_from(*weight)
+	}
+}
+
+/// Implementor of [`WeightToFeePolynomial`] that uses a constant multiplier.
+/// # Example
+///
+/// ```
+/// # use frame_support::traits::ConstU128;
+/// # use frame_support::weights::ConstantMultiplier;
+/// // Results in a multiplier of 10 for each unit of weight (or length)
+/// type LengthToFee = ConstantMultiplier::<u128, ConstU128<10u128>>;
+/// ```
+pub struct ConstantMultiplier<T, M>(sp_std::marker::PhantomData<(T, M)>);
+
+impl<T, M> WeightToFeePolynomial for ConstantMultiplier<T, M>
+where
+	T: BaseArithmetic + From<u32> + Copy + Unsigned,
+	M: Get<T>,
+{
+	type Balance = T;
+
+	fn polynomial() -> WeightToFeeCoefficients<Self::Balance> {
+		smallvec!(WeightToFeeCoefficient {
+			coeff_integer: M::get(),
+			coeff_frac: Perbill::zero(),
+			negative: false,
+			degree: 1,
+		})
+	}
+
+	fn calc(weight: &Weight) -> Self::Balance {
+		Self::Balance::saturated_from(*weight).saturating_mul(M::get())
 	}
 }
 
@@ -986,5 +1021,14 @@ mod tests {
 		assert_eq!(IdentityFee::<Balance>::calc(&0), 0);
 		assert_eq!(IdentityFee::<Balance>::calc(&50), 50);
 		assert_eq!(IdentityFee::<Balance>::calc(&Weight::max_value()), Balance::max_value());
+	}
+
+	#[test]
+	fn constant_fee_works() {
+		use crate::traits::ConstU128;
+		assert_eq!(ConstantMultiplier::<u128, ConstU128<100u128>>::calc(&0), 0);
+		assert_eq!(ConstantMultiplier::<u128, ConstU128<10u128>>::calc(&50), 500);
+		assert_eq!(ConstantMultiplier::<u128, ConstU128<1024u128>>::calc(&16), 16384);
+		assert_eq!(ConstantMultiplier::<u128, ConstU128<{ u128::MAX }>>::calc(&2), u128::MAX);
 	}
 }

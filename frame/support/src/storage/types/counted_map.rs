@@ -190,6 +190,8 @@ where
 	}
 
 	/// Mutate the item, only if an `Ok` value is returned. Deletes the item if mutated to a `None`.
+	/// `f` will always be called with an option representing if the storage item exists (`Some<V>`)
+	/// or if the storage item does not exist (`None`), independent of the `QueryType`.
 	pub fn try_mutate_exists<KeyArg, R, E, F>(key: KeyArg, f: F) -> Result<R, E>
 	where
 		KeyArg: EncodeLike<Key> + Clone,
@@ -215,8 +217,7 @@ where
 
 	/// Take the value under a key.
 	pub fn take<KeyArg: EncodeLike<Key> + Clone>(key: KeyArg) -> QueryKind::Query {
-		let removed_value =
-			<Self as MapWrapper>::Map::mutate_exists(key, |value| core::mem::replace(value, None));
+		let removed_value = <Self as MapWrapper>::Map::mutate_exists(key, |value| value.take());
 		if removed_value.is_some() {
 			CounterFor::<Prefix>::mutate(|value| value.saturating_dec());
 		}
@@ -427,7 +428,7 @@ where
 			if cfg!(feature = "no-metadata-docs") {
 				vec![]
 			} else {
-				vec![&"Counter for the related counted storage map"]
+				vec!["Counter for the related counted storage map"]
 			},
 			entries,
 		);

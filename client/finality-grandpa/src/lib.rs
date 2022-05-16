@@ -63,6 +63,7 @@ use parking_lot::RwLock;
 use prometheus_endpoint::{PrometheusError, Registry};
 use sc_client_api::{
 	backend::{AuxStore, Backend},
+	utils::is_descendent_of,
 	BlockchainEvents, CallExecutor, ExecutionStrategy, ExecutorProvider, Finalizer, LockImportRun,
 	StorageProvider, TransactionFor,
 };
@@ -71,7 +72,7 @@ use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_INFO};
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
 use sp_api::ProvideRuntimeApi;
 use sp_application_crypto::AppKey;
-use sp_blockchain::{Error as ClientError, HeaderBackend, HeaderMetadata};
+use sp_blockchain::{Error as ClientError, HeaderBackend, HeaderMetadata, Result as ClientResult};
 use sp_consensus::SelectChain;
 use sp_core::crypto::ByteArray;
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
@@ -275,36 +276,39 @@ impl Config {
 }
 
 /// Errors that can occur while voting in GRANDPA.
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
 	/// An error within grandpa.
-	Grandpa(GrandpaError),
+	#[error("grandpa error: {0}")]
+	Grandpa(#[from] GrandpaError),
+
 	/// A network error.
+	#[error("network error: {0}")]
 	Network(String),
+
 	/// A blockchain error.
+	#[error("blockchain error: {0}")]
 	Blockchain(String),
+
 	/// Could not complete a round on disk.
-	Client(ClientError),
+	#[error("could not complete a round on disk: {0}")]
+	Client(#[from] ClientError),
+
 	/// Could not sign outgoing message
+	#[error("could not sign outgoing message: {0}")]
 	Signing(String),
+
 	/// An invariant has been violated (e.g. not finalizing pending change blocks in-order)
+	#[error("safety invariant has been violated: {0}")]
 	Safety(String),
+
 	/// A timer failed to fire.
+	#[error("a timer failed to fire: {0}")]
 	Timer(io::Error),
+
 	/// A runtime api request failed.
+	#[error("runtime API request failed: {0}")]
 	RuntimeApi(sp_api::ApiError),
-}
-
-impl From<GrandpaError> for Error {
-	fn from(e: GrandpaError) -> Self {
-		Error::Grandpa(e)
-	}
-}
-
-impl From<ClientError> for Error {
-	fn from(e: ClientError) -> Self {
-		Error::Client(e)
-	}
 }
 
 /// Something which can determine if a block is known.
@@ -322,7 +326,7 @@ where
 {
 	fn block_number(&self, hash: Block::Hash) -> Result<Option<NumberFor<Block>>, Error> {
 		self.block_number_from_id(&BlockId::Hash(hash))
-			.map_err(|e| Error::Blockchain(format!("{:?}", e)))
+			.map_err(|e| Error::Blockchain(e.to_string()))
 	}
 }
 
@@ -459,7 +463,7 @@ impl<H: fmt::Debug, N: fmt::Debug> ::std::error::Error for CommandOrError<H, N> 
 impl<H, N> fmt::Display for CommandOrError<H, N> {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match *self {
-			CommandOrError::Error(ref e) => write!(f, "{:?}", e),
+			CommandOrError::Error(ref e) => write!(f, "{}", e),
 			CommandOrError::VoterCommand(ref cmd) => write!(f, "{}", cmd),
 		}
 	}
@@ -838,7 +842,7 @@ where
 		Ok(()) => error!(target: "afg",
 			"GRANDPA voter future has concluded naturally, this should be unreachable."
 		),
-		Err(e) => error!(target: "afg", "GRANDPA voter error: {:?}", e),
+		Err(e) => error!(target: "afg", "GRANDPA voter error: {}", e),
 	});
 
 	// Make sure that `telemetry_task` doesn't accidentally finish and kill grandpa.
@@ -1157,5 +1161,48 @@ fn local_authority_id(
 				SyncCryptoStore::has_keys(&**keystore, &[(p.to_raw_vec(), AuthorityId::ID)])
 			})
 			.map(|(p, _)| p.clone())
+	})
+}
+
+/// Reverts protocol aux data to at most the last finalized block.
+/// In particular, standard and forced authority set changes announced after the
+/// revert point are removed.
+pub fn revert<Block, Client>(client: Arc<Client>, blocks: NumberFor<Block>) -> ClientResult<()>
+where
+	Block: BlockT,
+	Client: AuxStore + HeaderMetadata<Block, Error = sp_blockchain::Error> + HeaderBackend<Block>,
+{
+	let best_number = client.info().best_number;
+	let finalized = client.info().finalized_number;
+	let revertible = blocks.min(best_number - finalized);
+
+	let number = best_number - revertible;
+	let hash = client
+		.block_hash_from_id(&BlockId::Number(number))?
+		.ok_or(ClientError::Backend(format!(
+			"Unexpected hash lookup failure for block number: {}",
+			number
+		)))?;
+
+	let info = client.info();
+	let persistent_data: PersistentData<Block> =
+		aux_schema::load_persistent(&*client, info.genesis_hash, Zero::zero(), || unreachable!())?;
+
+	let shared_authority_set = persistent_data.authority_set;
+	let mut authority_set = shared_authority_set.inner();
+
+	let is_descendent_of = is_descendent_of(&*client, None);
+	authority_set.revert(hash, number, &is_descendent_of);
+
+	// The following has the side effect to properly reset the current voter state.
+	let (set_id, set_ref) = authority_set.current();
+	let new_set = Some(NewAuthoritySet {
+		canon_hash: info.finalized_hash,
+		canon_number: info.finalized_number,
+		set_id,
+		authorities: set_ref.to_vec(),
+	});
+	aux_schema::update_authority_set::<Block, _, _>(&authority_set, new_set.as_ref(), |values| {
+		client.insert_aux(values, None)
 	})
 }

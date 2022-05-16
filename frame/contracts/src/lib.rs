@@ -115,9 +115,9 @@ use frame_support::{
 	dispatch::Dispatchable,
 	ensure,
 	traits::{Contains, Currency, Get, Randomness, ReservableCurrency, StorageVersion, Time},
-	weights::{GetDispatchInfo, Pays, PostDispatchInfo, Weight},
+	weights::{DispatchClass, GetDispatchInfo, Pays, PostDispatchInfo, Weight},
 };
-use frame_system::Pallet as System;
+use frame_system::{limits::BlockWeights, Pallet as System};
 use pallet_contracts_primitives::{
 	Code, CodeUploadResult, CodeUploadReturnValue, ContractAccessError, ContractExecResult,
 	ContractInstantiateResult, ExecReturnValue, GetStorageResult, InstantiateReturnValue,
@@ -126,7 +126,7 @@ use pallet_contracts_primitives::{
 use scale_info::TypeInfo;
 use sp_core::{crypto::UncheckedFrom, Bytes};
 use sp_runtime::traits::{Convert, Hash, Saturating, StaticLookup};
-use sp_std::{fmt::Debug, prelude::*};
+use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
 
 type CodeHash<T> = <T as frame_system::Config>::Hash;
 type TrieId = Vec<u8>;
@@ -134,7 +134,7 @@ type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
 /// The current storage version.
-const STORAGE_VERSION: StorageVersion = StorageVersion::new(6);
+const STORAGE_VERSION: StorageVersion = StorageVersion::new(7);
 
 /// Used as a sentinel value when reading and writing contract memory.
 ///
@@ -190,6 +190,29 @@ where
 			.cloned()
 			.collect();
 		UncheckedFrom::unchecked_from(T::Hashing::hash(&buf))
+	}
+}
+
+/// A conservative implementation to be used for [`pallet::Config::ContractAccessWeight`].
+///
+/// This derives the weight from the [`BlockWeights`] passed as `B` and the `maxPovSize` passed
+/// as `P`. The default value for `P` is the `maxPovSize` used by Polkadot and Kusama.
+///
+/// It simply charges from the weight meter pro rata: If loading the contract code would consume
+/// 50% of the max storage proof then this charges 50% of the max block weight.
+pub struct DefaultContractAccessWeight<B: Get<BlockWeights>, const P: u32 = 5_242_880>(
+	PhantomData<B>,
+);
+
+impl<B: Get<BlockWeights>, const P: u32> Get<Weight> for DefaultContractAccessWeight<B, P> {
+	fn get() -> Weight {
+		let block_weights = B::get();
+		block_weights
+			.per_class
+			.get(DispatchClass::Normal)
+			.max_total
+			.unwrap_or(block_weights.max_block) /
+			Weight::from(P)
 	}
 }
 
@@ -296,6 +319,27 @@ pub mod pallet {
 		/// Changing this value for an existing chain might need a storage migration.
 		#[pallet::constant]
 		type DepositPerByte: Get<BalanceOf<Self>>;
+
+		/// The weight per byte of code that is charged when loading a contract from storage.
+		///
+		/// Currently, FRAME only charges fees for computation incurred but not for PoV
+		/// consumption caused for storage access. This is usually not exploitable because
+		/// accessing storage carries some substantial weight costs, too. However in case
+		/// of contract code very much PoV consumption can be caused while consuming very little
+		/// computation. This could be used to keep the chain busy without paying the
+		/// proper fee for it. Until this is resolved we charge from the weight meter for
+		/// contract access.
+		///
+		/// For more information check out: <https://github.com/paritytech/substrate/issues/10301>
+		///
+		/// [`DefaultContractAccessWeight`] is a safe default to be used for polkadot or kusama
+		/// parachains.
+		///
+		/// # Note
+		///
+		/// This is only relevant for parachains. Set to zero in case of a standalone chain.
+		#[pallet::constant]
+		type ContractAccessWeight: Get<Weight>;
 
 		/// The amount of balance a caller has to pay for each storage item.
 		///
@@ -410,10 +454,7 @@ pub mod pallet {
 		/// - The `value` is transferred to the new account.
 		/// - The `deploy` function is executed in the context of the newly-created account.
 		#[pallet::weight(
-			T::WeightInfo::instantiate_with_code(
-				code.len() as u32 / 1024,
-				salt.len() as u32 / 1024,
-			)
+			T::WeightInfo::instantiate_with_code(code.len() as u32, salt.len() as u32)
 			.saturating_add(*gas_limit)
 		)]
 		pub fn instantiate_with_code(
@@ -445,7 +486,7 @@ pub mod pallet {
 			}
 			output.gas_meter.into_dispatch_result(
 				output.result.map(|(_address, result)| result),
-				T::WeightInfo::instantiate_with_code(code_len / 1024, salt_len / 1024),
+				T::WeightInfo::instantiate_with_code(code_len, salt_len),
 			)
 		}
 
@@ -455,7 +496,7 @@ pub mod pallet {
 		/// code deployment step. Instead, the `code_hash` of an on-chain deployed wasm binary
 		/// must be supplied.
 		#[pallet::weight(
-			T::WeightInfo::instantiate(salt.len() as u32 / 1024).saturating_add(*gas_limit)
+			T::WeightInfo::instantiate(salt.len() as u32).saturating_add(*gas_limit)
 		)]
 		pub fn instantiate(
 			origin: OriginFor<T>,
@@ -485,7 +526,7 @@ pub mod pallet {
 			}
 			output.gas_meter.into_dispatch_result(
 				output.result.map(|(_address, output)| output),
-				T::WeightInfo::instantiate(salt_len / 1024),
+				T::WeightInfo::instantiate(salt_len),
 			)
 		}
 
@@ -505,7 +546,7 @@ pub mod pallet {
 		/// To avoid this situation a constructor could employ access control so that it can
 		/// only be instantiated by permissioned entities. The same is true when uploading
 		/// through [`Self::instantiate_with_code`].
-		#[pallet::weight(T::WeightInfo::upload_code(code.len() as u32 / 1024))]
+		#[pallet::weight(T::WeightInfo::upload_code(code.len() as u32))]
 		pub fn upload_code(
 			origin: OriginFor<T>,
 			code: Vec<u8>,
@@ -564,12 +605,24 @@ pub mod pallet {
 
 		/// A code with the specified hash was removed.
 		CodeRemoved { code_hash: T::Hash },
+
+		/// A contract's code was updated.
+		ContractCodeUpdated {
+			/// The contract that has been updated.
+			contract: T::AccountId,
+			/// New code hash that was set for the contract.
+			new_code_hash: T::Hash,
+			/// Previous code hash of the contract.
+			old_code_hash: T::Hash,
+		},
 	}
 
 	#[pallet::error]
 	pub enum Error<T> {
 		/// A new schedule must have a greater version than the current one.
 		InvalidScheduleVersion,
+		/// Invalid combination of flags supplied to `seal_call` or `seal_delegate_call`.
+		InvalidCallFlags,
 		/// The executed contract exhausted its gas limit.
 		OutOfGas,
 		/// The output buffer supplied to a contract API call was too small.
@@ -656,9 +709,30 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(crate) type OwnerInfoOf<T: Config> = StorageMap<_, Identity, CodeHash<T>, OwnerInfo<T>>;
 
-	/// The subtrie counter.
+	/// This is a **monotonic** counter incremented on contract instantiation.
+	///
+	/// This is used in order to generate unique trie ids for contracts.
+	/// The trie id of a new contract is calculated from hash(account_id, nonce).
+	/// The nonce is required because otherwise the following sequence would lead to
+	/// a possible collision of storage:
+	///
+	/// 1. Create a new contract.
+	/// 2. Terminate the contract.
+	/// 3. Immediately recreate the contract with the same account_id.
+	///
+	/// This is bad because the contents of a trie are deleted lazily and there might be
+	/// storage of the old instantiation still in it when the new contract is created. Please
+	/// note that we can't replace the counter by the block number because the sequence above
+	/// can happen in the same block. We also can't keep the account counter in memory only
+	/// because storage is the only way to communicate across different extrinsics in the
+	/// same block.
+	///
+	/// # Note
+	///
+	/// Do not use it to determine the number of contracts. It won't be decremented if
+	/// a contract is destroyed.
 	#[pallet::storage]
-	pub(crate) type AccountCounter<T: Config> = StorageValue<_, u64, ValueQuery>;
+	pub(crate) type Nonce<T: Config> = StorageValue<_, u64, ValueQuery>;
 
 	/// The code associated with a given account.
 	///

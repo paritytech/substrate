@@ -37,13 +37,7 @@ pub use sp_arithmetic::traits::{
 	UniqueSaturatedFrom, UniqueSaturatedInto, Zero,
 };
 use sp_core::{self, storage::StateVersion, Hasher, RuntimeDebug, TypeId};
-use sp_std::{
-	self,
-	convert::{TryFrom, TryInto},
-	fmt::Debug,
-	marker::PhantomData,
-	prelude::*,
-};
+use sp_std::{self, fmt::Debug, marker::PhantomData, prelude::*};
 #[cfg(feature = "std")]
 use std::fmt::Display;
 #[cfg(feature = "std")]
@@ -165,7 +159,7 @@ where
 		use sp_application_crypto::IsWrappedBy;
 		let inner: &S = self.as_ref();
 		let inner_pubkey =
-			<<T as AppKey>::Public as sp_application_crypto::AppPublic>::Generic::from_ref(&signer);
+			<<T as AppKey>::Public as sp_application_crypto::AppPublic>::Generic::from_ref(signer);
 		Verify::verify(inner, msg, inner_pubkey)
 	}
 }
@@ -748,7 +742,9 @@ pub trait Extrinsic: Sized + MaybeMallocSizeOf {
 
 /// Implementor is an [`Extrinsic`] and provides metadata about this extrinsic.
 pub trait ExtrinsicMetadata {
-	/// The version of the `Extrinsic`.
+	/// The format version of the `Extrinsic`.
+	///
+	/// By format is meant the encoded representation of the `Extrinsic`.
 	const VERSION: u8;
 
 	/// Signed extensions attached to this `Extrinsic`.
@@ -878,12 +874,7 @@ pub trait SignedExtension:
 
 	/// Do any pre-flight stuff for a signed transaction.
 	///
-	/// Note this function by default delegates to `validate`, so that
-	/// all checks performed for the transaction queue are also performed during
-	/// the dispatch phase (applying the extrinsic).
-	///
-	/// If you ever override this function, you need to make sure to always
-	/// perform the same validation as in `validate`.
+	/// Make sure to perform the same checks as in [`Self::validate`].
 	fn pre_dispatch(
 		self,
 		who: &Self::AccountId,
@@ -1321,7 +1312,7 @@ impl<T: Encode + Decode + MaxEncodedLen, Id: Encode + Decode + TypeId> AccountId
 
 	fn try_from_sub_account<S: Decode>(x: &T) -> Option<(Self, S)> {
 		x.using_encoded(|d| {
-			if &d[0..4] != Id::TYPE_ID {
+			if d[0..4] != Id::TYPE_ID {
 				return None
 			}
 			let mut cursor = &d[4..];
@@ -1585,6 +1576,12 @@ impl Printable for &[u8] {
 	}
 }
 
+impl<const N: usize> Printable for [u8; N] {
+	fn print(&self) {
+		sp_io::misc::print_hex(&self[..]);
+	}
+}
+
 impl Printable for &str {
 	fn print(&self) {
 		sp_io::misc::print_utf8(self.as_bytes());
@@ -1618,7 +1615,7 @@ impl Printable for Tuple {
 #[cfg(feature = "std")]
 pub trait BlockIdTo<Block: self::Block> {
 	/// The error type that will be returned by the functions.
-	type Error: std::fmt::Debug;
+	type Error: std::error::Error;
 
 	/// Convert the given `block_id` to the corresponding block hash.
 	fn to_hash(
