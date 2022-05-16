@@ -1641,7 +1641,7 @@ fn assert_type_all_pallets_without_system_reversed_is_correct() {
 fn test_storage_alias() {
 	#[frame_support::storage_alias]
 	type Value<T: pallet::Config> =
-		Value<pallet::Pallet<T>, u32, ValueQuery>
+		StorageValue<pallet::Pallet<T>, u32, ValueQuery>
 			where <T as frame_system::Config>::AccountId: From<SomeType1> + SomeAssociation1;
 
 	TestExternalities::default().execute_with(|| {

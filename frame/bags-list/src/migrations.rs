@@ -31,7 +31,7 @@ impl<T: crate::Config> OnRuntimeUpgrade for CheckCounterPrefix<T> {
 		use frame_support::ensure;
 		// The old explicit storage item.
 		#[frame_support::storage_alias]
-		type CounterForListNodes<T> = Value<crate::Pallet<T: crate::Config>, u32>;
+		type CounterForListNodes<T> = StorageValue<crate::Pallet<T: crate::Config>, u32>;
 
 		// ensure that a value exists in the counter struct.
 		ensure!(

@@ -370,7 +370,7 @@ mod list {
 			// not exposed as mutable in any sense.
 			#[frame_support::storage_alias]
 			type CounterForListNodes<T: Config> =
-				Value<crate::Pallet<T>, u32, frame_support::pallet_prelude::ValueQuery>;
+				StorageValue<crate::Pallet<T>, u32, frame_support::pallet_prelude::ValueQuery>;
 			CounterForListNodes::<Runtime>::mutate(|counter| *counter += 1);
 			assert_eq!(crate::ListNodes::<Runtime>::count(), 5);
 

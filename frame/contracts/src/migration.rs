@@ -117,11 +117,15 @@ mod v5 {
 	}
 
 	#[storage_alias]
-	type ContractInfoOf<T: Config> =
-		Map<Pallet<T>, Twox64Concat, <T as frame_system::Config>::AccountId, ContractInfo<T>>;
+	type ContractInfoOf<T: Config> = StorageMap<
+		Pallet<T>,
+		Twox64Concat,
+		<T as frame_system::Config>::AccountId,
+		ContractInfo<T>,
+	>;
 
 	#[storage_alias]
-	type DeletionQueue<T: Config> = Value<Pallet<T>, Vec<DeletedContract>>;
+	type DeletionQueue<T: Config> = StorageValue<Pallet<T>, Vec<DeletedContract>>;
 
 	pub fn migrate<T: Config>() -> Weight {
 		let mut weight: Weight = 0;
@@ -199,14 +203,18 @@ mod v6 {
 	type ContractInfo<T> = RawContractInfo<CodeHash<T>, BalanceOf<T>>;
 
 	#[storage_alias]
-	type ContractInfoOf<T: Config> =
-		Map<Pallet<T>, Twox64Concat, <T as frame_system::Config>::AccountId, ContractInfo<T>>;
+	type ContractInfoOf<T: Config> = StorageMap<
+		Pallet<T>,
+		Twox64Concat,
+		<T as frame_system::Config>::AccountId,
+		ContractInfo<T>,
+	>;
 
 	#[storage_alias]
-	type CodeStorage<T: Config> = Map<Pallet<T>, Identity, CodeHash<T>, PrefabWasmModule>;
+	type CodeStorage<T: Config> = StorageMap<Pallet<T>, Identity, CodeHash<T>, PrefabWasmModule>;
 
 	#[storage_alias]
-	type OwnerInfoOf<T: Config> = Map<Pallet<T>, Identity, CodeHash<T>, OwnerInfo<T>>;
+	type OwnerInfoOf<T: Config> = StorageMap<Pallet<T>, Identity, CodeHash<T>, OwnerInfo<T>>;
 
 	pub fn migrate<T: Config>() -> Weight {
 		let mut weight: Weight = 0;
@@ -251,9 +259,9 @@ mod v7 {
 
 	pub fn migrate<T: Config>() -> Weight {
 		#[storage_alias]
-		type AccountCounter<T: Config> = Value<Pallet<T>, u64, ValueQuery>;
+		type AccountCounter<T: Config> = StorageValue<Pallet<T>, u64, ValueQuery>;
 		#[storage_alias]
-		type Nonce<T: Config> = Value<Pallet<T>, u64, ValueQuery>;
+		type Nonce<T: Config> = StorageValue<Pallet<T>, u64, ValueQuery>;
 
 		Nonce::<T>::set(AccountCounter::<T>::take());
 		T::DbWeight::get().reads_writes(1, 2)

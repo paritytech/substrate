@@ -1546,7 +1546,7 @@ mod test {
 		TestExternalities::default().execute_with(|| {
 			use crate::{hash::Identity, storage::generator::map::StorageMap};
 			#[crate::storage_alias]
-			type MyStorageMap = Map<MyModule, Identity, u64, u64>;
+			type MyStorageMap = StorageMap<MyModule, Identity, u64, u64>;
 
 			MyStorageMap::insert(1, 10);
 			MyStorageMap::insert(2, 20);
@@ -1662,11 +1662,12 @@ mod test {
 	}
 
 	#[crate::storage_alias]
-	type Foo = Value<Prefix, WeakBoundedVec<u32, ConstU32<7>>>;
+	type Foo = StorageValue<Prefix, WeakBoundedVec<u32, ConstU32<7>>>;
 	#[crate::storage_alias]
-	type FooMap = Map<Prefix, Twox128, u32, BoundedVec<u32, ConstU32<7>>>;
+	type FooMap = StorageMap<Prefix, Twox128, u32, BoundedVec<u32, ConstU32<7>>>;
 	#[crate::storage_alias]
-	type FooDoubleMap = DoubleMap<Prefix, Twox128, u32, Twox128, u32, BoundedVec<u32, ConstU32<7>>>;
+	type FooDoubleMap =
+		StorageDoubleMap<Prefix, Twox128, u32, Twox128, u32, BoundedVec<u32, ConstU32<7>>>;
 
 	#[test]
 	fn try_append_works() {

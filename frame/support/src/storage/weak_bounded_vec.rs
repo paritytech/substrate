@@ -322,12 +322,12 @@ pub mod test {
 	use sp_io::TestExternalities;
 
 	#[crate::storage_alias]
-	type Foo = Value<Prefix, WeakBoundedVec<u32, ConstU32<7>>>;
+	type Foo = StorageValue<Prefix, WeakBoundedVec<u32, ConstU32<7>>>;
 	#[crate::storage_alias]
-	type FooMap = Map<Prefix, Twox128, u32, WeakBoundedVec<u32, ConstU32<7>>>;
+	type FooMap = StorageMap<Prefix, Twox128, u32, WeakBoundedVec<u32, ConstU32<7>>>;
 	#[crate::storage_alias]
 	type FooDoubleMap =
-		DoubleMap<Prefix, Twox128, u32, Twox128, u32, WeakBoundedVec<u32, ConstU32<7>>>;
+		StorageDoubleMap<Prefix, Twox128, u32, Twox128, u32, WeakBoundedVec<u32, ConstU32<7>>>;
 
 	#[test]
 	fn bound_returns_correct_value() {

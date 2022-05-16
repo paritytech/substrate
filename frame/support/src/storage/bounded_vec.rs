@@ -610,13 +610,14 @@ pub mod test {
 	use sp_io::TestExternalities;
 
 	#[crate::storage_alias]
-	type Foo = Value<Prefix, BoundedVec<u32, ConstU32<7>>>;
+	type Foo = StorageValue<Prefix, BoundedVec<u32, ConstU32<7>>>;
 
 	#[crate::storage_alias]
-	type FooMap = Map<Prefix, Twox128, u32, BoundedVec<u32, ConstU32<7>>>;
+	type FooMap = StorageMap<Prefix, Twox128, u32, BoundedVec<u32, ConstU32<7>>>;
 
 	#[crate::storage_alias]
-	type FooDoubleMap = DoubleMap<Prefix, Twox128, u32, Twox128, u32, BoundedVec<u32, ConstU32<7>>>;
+	type FooDoubleMap =
+		StorageDoubleMap<Prefix, Twox128, u32, Twox128, u32, BoundedVec<u32, ConstU32<7>>>;
 
 	#[test]
 	fn slide_works() {

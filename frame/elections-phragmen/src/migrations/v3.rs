@@ -49,18 +49,24 @@ pub trait V2ToV3 {
 
 #[frame_support::storage_alias]
 type Candidates<V, T: Config> =
-	Value<Pallet<T>, Vec<(<V as V2ToV3>::AccountId, <V as V2ToV3>::Balance)>, ValueQuery>;
+	StorageValue<Pallet<T>, Vec<(<V as V2ToV3>::AccountId, <V as V2ToV3>::Balance)>, ValueQuery>;
 
 #[frame_support::storage_alias]
-type Members<V, T: Config> =
-	Value<Pallet<T>, Vec<SeatHolder<<V as V2ToV3>::AccountId, <V as V2ToV3>::Balance>>, ValueQuery>;
+type Members<V, T: Config> = StorageValue<
+	Pallet<T>,
+	Vec<SeatHolder<<V as V2ToV3>::AccountId, <V as V2ToV3>::Balance>>,
+	ValueQuery,
+>;
 
 #[frame_support::storage_alias]
-type RunnersUp<V, T: Config> =
-	Value<Pallet<T>, Vec<SeatHolder<<V as V2ToV3>::AccountId, <V as V2ToV3>::Balance>>, ValueQuery>;
+type RunnersUp<V, T: Config> = StorageValue<
+	Pallet<T>,
+	Vec<SeatHolder<<V as V2ToV3>::AccountId, <V as V2ToV3>::Balance>>,
+	ValueQuery,
+>;
 
 #[frame_support::storage_alias]
-type Voting<V, T: Config> = Map<
+type Voting<V, T: Config> = StorageMap<
 	Pallet<T>,
 	Twox64Concat,
 	<V as V2ToV3>::AccountId,

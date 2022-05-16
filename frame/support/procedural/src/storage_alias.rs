@@ -134,16 +134,16 @@ impl ToTokens for SimpleGenerics {
 }
 
 mod storage_types {
-	syn::custom_keyword!(Value);
-	syn::custom_keyword!(Map);
-	syn::custom_keyword!(DoubleMap);
-	syn::custom_keyword!(NMap);
+	syn::custom_keyword!(StorageValue);
+	syn::custom_keyword!(StorageMap);
+	syn::custom_keyword!(StorageDoubleMap);
+	syn::custom_keyword!(StorageNMap);
 }
 
 /// The supported storage types
 enum StorageType {
 	Value {
-		_kw: storage_types::Value,
+		_kw: storage_types::StorageValue,
 		_lt_token: Token![<],
 		prefix: SimplePath,
 		prefix_generics: Option<TypeGenerics>,
@@ -154,7 +154,7 @@ enum StorageType {
 		_gt_token: Token![>],
 	},
 	Map {
-		_kw: storage_types::Map,
+		_kw: storage_types::StorageMap,
 		_lt_token: Token![<],
 		prefix: SimplePath,
 		prefix_generics: Option<TypeGenerics>,
@@ -169,7 +169,7 @@ enum StorageType {
 		_gt_token: Token![>],
 	},
 	DoubleMap {
-		_kw: storage_types::DoubleMap,
+		_kw: storage_types::StorageDoubleMap,
 		_lt_token: Token![<],
 		prefix: SimplePath,
 		prefix_generics: Option<TypeGenerics>,
@@ -188,7 +188,7 @@ enum StorageType {
 		_gt_token: Token![>],
 	},
 	NMap {
-		_kw: storage_types::NMap,
+		_kw: storage_types::StorageNMap,
 		_lt_token: Token![<],
 		prefix: SimplePath,
 		prefix_generics: Option<TypeGenerics>,
@@ -335,7 +335,7 @@ impl Parse for StorageType {
 			}
 		};
 
-		if lookahead.peek(storage_types::Value) {
+		if lookahead.peek(storage_types::StorageValue) {
 			Ok(Self::Value {
 				_kw: input.parse()?,
 				_lt_token: input.parse()?,
@@ -347,7 +347,7 @@ impl Parse for StorageType {
 				_trailing_comma: input.peek(Token![,]).then(|| input.parse()).transpose()?,
 				_gt_token: input.parse()?,
 			})
-		} else if lookahead.peek(storage_types::Map) {
+		} else if lookahead.peek(storage_types::StorageMap) {
 			Ok(Self::Map {
 				_kw: input.parse()?,
 				_lt_token: input.parse()?,
@@ -363,7 +363,7 @@ impl Parse for StorageType {
 				_trailing_comma: input.peek(Token![,]).then(|| input.parse()).transpose()?,
 				_gt_token: input.parse()?,
 			})
-		} else if lookahead.peek(storage_types::DoubleMap) {
+		} else if lookahead.peek(storage_types::StorageDoubleMap) {
 			Ok(Self::DoubleMap {
 				_kw: input.parse()?,
 				_lt_token: input.parse()?,
@@ -383,7 +383,7 @@ impl Parse for StorageType {
 				_trailing_comma: input.peek(Token![,]).then(|| input.parse()).transpose()?,
 				_gt_token: input.parse()?,
 			})
-		} else if lookahead.peek(storage_types::NMap) {
+		} else if lookahead.peek(storage_types::StorageNMap) {
 			let content;
 			Ok(Self::NMap {
 				_kw: input.parse()?,

@@ -526,7 +526,7 @@ mod test_iterators {
 		sp_io::TestExternalities::default().execute_with(|| {
 			use crate::hash::Identity;
 			#[crate::storage_alias]
-			type MyDoubleMap = DoubleMap<MyModule, Identity, u64, Identity, u64, u64>;
+			type MyDoubleMap = StorageDoubleMap<MyModule, Identity, u64, Identity, u64, u64>;
 
 			MyDoubleMap::insert(1, 10, 100);
 			MyDoubleMap::insert(1, 21, 201);

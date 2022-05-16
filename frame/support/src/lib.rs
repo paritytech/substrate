@@ -171,12 +171,12 @@ macro_rules! bounded_btree_map {
 /// use frame_support::Twox64Concat;
 /// // generate a storage value with type u32.
 /// #[storage_alias]
-/// type StorageName = Value<Prefix, u32>;
+/// type StorageName = StorageValue<Prefix, u32>;
 ///
 /// // generate a double map from `(u32, u32)` (with hashers `Twox64Concat` for each key)
 /// // to `Vec<u8>`
 /// #[storage_alias]
-/// type OtherStorageName = DoubleMap<
+/// type OtherStorageName = StorageDoubleMap<
 /// 	OtherPrefix,
 /// 	Twox64Concat,
 /// 	u32,
@@ -188,9 +188,9 @@ macro_rules! bounded_btree_map {
 /// // optionally specify the query type
 /// use frame_support::pallet_prelude::{ValueQuery, OptionQuery};
 /// #[storage_alias]
-/// type ValueName = Value<Prefix, u32, OptionQuery>;
+/// type ValueName = StorageValue<Prefix, u32, OptionQuery>;
 /// #[storage_alias]
-/// type SomeStorageName = Map<
+/// type SomeStorageName = StorageMap<
 /// 	Prefix,
 /// 	Twox64Concat,
 /// 	u32,
@@ -201,13 +201,13 @@ macro_rules! bounded_btree_map {
 /// // generate a map from `Config::AccountId` (with hasher `Twox64Concat`) to `Vec<u8>`
 /// trait Config { type AccountId: codec::FullCodec; }
 /// #[storage_alias]
-/// type GenericStorage<T> = Map<Prefix, Twox64Concat, <T as Config>::AccountId, Vec<u8>>;
+/// type GenericStorage<T> = StorageMap<Prefix, Twox64Concat, <T as Config>::AccountId, Vec<u8>>;
 ///
 /// // It also supports NMap
 /// use frame_support::storage::types::Key as NMapKey;
 ///
 /// #[storage_alias]
-/// type SomeNMap = NMap<Prefix, (NMapKey<Twox64Concat, u32>, NMapKey<Twox64Concat, u64>), Vec<u8>>;
+/// type SomeNMap = StorageNMap<Prefix, (NMapKey<Twox64Concat, u32>, NMapKey<Twox64Concat, u64>), Vec<u8>>;
 ///
 /// // Using pallet name as prefix.
 /// //
@@ -224,12 +224,12 @@ macro_rules! bounded_btree_map {
 /// # }
 ///
 /// #[storage_alias]
-/// type SomeValue<T: Config> = Value<Pallet<T>, u64>;
+/// type SomeValue<T: Config> = StorageValue<Pallet<T>, u64>;
 ///
 /// // Pallet with instance
 ///
 /// #[storage_alias]
-/// type SomeValue2<T: Config, I: 'static> = Value<Pallet<T, I>, u64>;
+/// type SomeValue2<T: Config, I: 'static> = StorageValue<Pallet<T, I>, u64>;
 ///
 /// # fn main() {}
 /// ```
@@ -894,8 +894,12 @@ pub mod tests {
 	fn storage_alias_works() {
 		new_test_ext().execute_with(|| {
 			#[crate::storage_alias]
-			type GenericData2<T> =
-				Map<Test, Blake2_128Concat, <T as Config>::BlockNumber, <T as Config>::BlockNumber>;
+			type GenericData2<T> = StorageMap<
+				Test,
+				Blake2_128Concat,
+				<T as Config>::BlockNumber,
+				<T as Config>::BlockNumber,
+			>;
 
 			assert_eq!(Module::<Test>::generic_data2(5), None);
 			GenericData2::<Test>::insert(5, 5);
@@ -903,7 +907,7 @@ pub mod tests {
 
 			/// Some random docs that ensure that docs are accepted
 			#[crate::storage_alias]
-			pub type GenericData<T> = Map<
+			pub type GenericData<T> = StorageMap<
 				Test2,
 				Blake2_128Concat,
 				<T as Config>::BlockNumber,

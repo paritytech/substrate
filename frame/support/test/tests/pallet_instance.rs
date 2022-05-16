@@ -826,7 +826,8 @@ fn test_pallet_info_access() {
 #[test]
 fn test_storage_alias() {
 	#[frame_support::storage_alias]
-	type Value<T: pallet::Config<I>, I: 'static> = Value<pallet::Pallet<T, I>, u32, ValueQuery>;
+	type Value<T: pallet::Config<I>, I: 'static> =
+		StorageValue<pallet::Pallet<T, I>, u32, ValueQuery>;
 
 	TestExternalities::default().execute_with(|| {
 		pallet::Value::<Runtime, pallet::Instance1>::put(10);
