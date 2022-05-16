@@ -2296,6 +2296,7 @@ dependencies = [
  "pretty_assertions",
  "scale-info",
  "serde",
+ "serde_json",
  "smallvec",
  "sp-arithmetic",
  "sp-core",
