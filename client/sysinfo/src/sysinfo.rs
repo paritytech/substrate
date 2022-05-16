@@ -450,26 +450,27 @@ mod tests {
 
 	#[test]
 	fn test_benchmark_cpu() {
-		assert_ne!(benchmark_cpu(), 0);
+		assert!(benchmark_cpu(DEFAULT_CPU_EXECUTION_LIMIT) > 0.0);
 	}
 
 	#[test]
 	fn test_benchmark_memory() {
-		assert_ne!(benchmark_memory(), 0);
+		assert!(benchmark_memory(DEFAULT_MEMORY_EXECUTION_LIMIT) > 0.0);
 	}
 
 	#[test]
 	fn test_benchmark_disk_sequential_writes() {
 		assert!(
 			benchmark_disk_sequential_writes(DEFAULT_DISK_EXECUTION_LIMIT, "./".as_ref()).unwrap() >
-				0
+				0.0
 		);
 	}
 
 	#[test]
 	fn test_benchmark_disk_random_writes() {
 		assert!(
-			benchmark_disk_random_writes(DEFAULT_DISK_EXECUTION_LIMIT, "./".as_ref()).unwrap() > 0
+			benchmark_disk_random_writes(DEFAULT_DISK_EXECUTION_LIMIT, "./".as_ref()).unwrap() >
+				0.0
 		);
 	}
 
