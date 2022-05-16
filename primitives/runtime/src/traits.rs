@@ -1303,7 +1303,7 @@ impl<T: Encode + Decode, Id: Encode + Decode + TypeId> AccountIdConversion<T> fo
 			.expect("All byte sequences are valid `AccountIds`; qed");
 		// If the `account` generated has less bytes than the `encoded_seed`, then we know that
 		// bytes were truncated, and we return `None`.
-		if encoded_seed.len() <= account.encode().len() {
+		if encoded_seed.len() <= account.encoded_size() {
 			Some(account)
 		} else {
 			None
