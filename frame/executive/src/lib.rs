@@ -1299,7 +1299,7 @@ mod tests {
 					sp_version::RuntimeVersion { spec_version: 1, ..Default::default() }
 			});
 
-			// set block number to non zero so events are not exlcuded
+			// set block number to non zero so events are not excluded
 			System::set_block_number(1);
 
 			Executive::initialize_block(&Header::new(

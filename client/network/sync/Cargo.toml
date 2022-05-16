@@ -24,7 +24,7 @@ codec = { package = "parity-scale-codec", version = "3.0.0", features = [
 either = "1.5.3"
 futures = "0.3.21"
 libp2p = "0.44.0"
-log = "0.4.16"
+log = "0.4.17"
 lru = "0.7.5"
 prost = "0.9"
 smallvec = "1.8.0"
