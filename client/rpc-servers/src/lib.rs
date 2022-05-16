@@ -103,6 +103,7 @@ pub async fn start_http<M: Send + Sync + 'static>(
 		.max_request_body_size(max_payload_in as u32)
 		.max_response_body_size(max_payload_out as u32)
 		.set_access_control(acl.build())
+		.health_api("/health", "system_health")
 		.custom_tokio_runtime(rt);
 
 	let rpc_api = build_rpc_api(rpc_api);

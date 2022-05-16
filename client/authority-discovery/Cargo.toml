@@ -23,7 +23,7 @@ futures = "0.3.21"
 futures-timer = "3.0.1"
 ip_network = "0.4.1"
 libp2p = { version = "0.44.0", default-features = false, features = ["kad"] }
-log = "0.4.16"
+log = "0.4.17"
 prost = "0.9"
 rand = "0.7.2"
 thiserror = "1.0"

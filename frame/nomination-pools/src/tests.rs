@@ -38,7 +38,7 @@ macro_rules! member_unbonding_eras {
 }
 
 pub const DEFAULT_ROLES: PoolRoles<AccountId> =
-	PoolRoles { depositor: 10, root: 900, nominator: 901, state_toggler: 902 };
+	PoolRoles { depositor: 10, root: Some(900), nominator: Some(901), state_toggler: Some(902) };
 
 #[test]
 fn test_setup_works() {
@@ -333,6 +333,8 @@ mod sub_pools {
 	fn maybe_merge_pools_works() {
 		ExtBuilder::default().build_and_execute(|| {
 			assert_eq!(TotalUnbondingPools::<Runtime>::get(), 5);
+			assert_eq!(BondingDuration::get(), 3);
+			assert_eq!(PostUnbondingPoolsWindow::get(), 2);
 
 			// Given
 			let mut sub_pool_0 = SubPools::<Runtime> {
@@ -347,19 +349,19 @@ mod sub_pools {
 			};
 
 			// When `current_era < TotalUnbondingPools`,
-			let sub_pool_1 = sub_pool_0.clone().maybe_merge_pools(3);
+			let sub_pool_1 = sub_pool_0.clone().maybe_merge_pools(0);
 
 			// Then it exits early without modifications
 			assert_eq!(sub_pool_1, sub_pool_0);
 
 			// When `current_era == TotalUnbondingPools`,
-			let sub_pool_1 = sub_pool_1.maybe_merge_pools(4);
+			let sub_pool_1 = sub_pool_1.maybe_merge_pools(1);
 
 			// Then it exits early without modifications
 			assert_eq!(sub_pool_1, sub_pool_0);
 
 			// When  `current_era - TotalUnbondingPools == 0`,
-			let mut sub_pool_1 = sub_pool_1.maybe_merge_pools(5);
+			let mut sub_pool_1 = sub_pool_1.maybe_merge_pools(2);
 
 			// Then era 0 is merged into the `no_era` pool
 			sub_pool_0.no_era = sub_pool_0.with_era.remove(&0).unwrap();
@@ -376,7 +378,7 @@ mod sub_pools {
 				.unwrap();
 
 			// When `current_era - TotalUnbondingPools == 1`
-			let sub_pool_2 = sub_pool_1.maybe_merge_pools(6);
+			let sub_pool_2 = sub_pool_1.maybe_merge_pools(3);
 			let era_1_pool = sub_pool_0.with_era.remove(&1).unwrap();
 
 			// Then era 1 is merged into the `no_era` pool
@@ -385,7 +387,7 @@ mod sub_pools {
 			assert_eq!(sub_pool_2, sub_pool_0);
 
 			// When `current_era - TotalUnbondingPools == 5`, so all pools with era <= 4 are removed
-			let sub_pool_3 = sub_pool_2.maybe_merge_pools(10);
+			let sub_pool_3 = sub_pool_2.maybe_merge_pools(7);
 
 			// Then all eras <= 5 are merged into the `no_era` pool
 			for era in 2..=5 {
@@ -1723,9 +1725,9 @@ mod unbond {
 				// Given
 				unsafe_set_state(1, PoolState::Blocked).unwrap();
 				let bonded_pool = BondedPool::<Runtime>::get(1).unwrap();
-				assert_eq!(bonded_pool.roles.root, 900);
-				assert_eq!(bonded_pool.roles.nominator, 901);
-				assert_eq!(bonded_pool.roles.state_toggler, 902);
+				assert_eq!(bonded_pool.roles.root.unwrap(), 900);
+				assert_eq!(bonded_pool.roles.nominator.unwrap(), 901);
+				assert_eq!(bonded_pool.roles.state_toggler.unwrap(), 902);
 
 				// When the nominator tries to kick, then its a noop
 				assert_noop!(
@@ -3143,9 +3145,9 @@ mod create {
 						state: PoolState::Open,
 						roles: PoolRoles {
 							depositor: 11,
-							root: 123,
-							nominator: 456,
-							state_toggler: 789
+							root: Some(123),
+							nominator: Some(456),
+							state_toggler: Some(789)
 						}
 					}
 				}
@@ -3590,71 +3592,164 @@ mod update_roles {
 		ExtBuilder::default().build_and_execute(|| {
 			assert_eq!(
 				BondedPools::<Runtime>::get(1).unwrap().roles,
-				PoolRoles { depositor: 10, root: 900, nominator: 901, state_toggler: 902 },
+				PoolRoles {
+					depositor: 10,
+					root: Some(900),
+					nominator: Some(901),
+					state_toggler: Some(902)
+				},
 			);
 
 			// non-existent pools
 			assert_noop!(
-				Pools::update_roles(Origin::signed(1), 2, Some(5), Some(6), Some(7)),
+				Pools::update_roles(
+					Origin::signed(1),
+					2,
+					ConfigOp::Set(5),
+					ConfigOp::Set(6),
+					ConfigOp::Set(7)
+				),
 				Error::<Runtime>::PoolNotFound,
 			);
 
 			// depositor cannot change roles.
 			assert_noop!(
-				Pools::update_roles(Origin::signed(1), 1, Some(5), Some(6), Some(7)),
+				Pools::update_roles(
+					Origin::signed(1),
+					1,
+					ConfigOp::Set(5),
+					ConfigOp::Set(6),
+					ConfigOp::Set(7)
+				),
 				Error::<Runtime>::DoesNotHavePermission,
 			);
 
 			// nominator cannot change roles.
 			assert_noop!(
-				Pools::update_roles(Origin::signed(901), 1, Some(5), Some(6), Some(7)),
+				Pools::update_roles(
+					Origin::signed(901),
+					1,
+					ConfigOp::Set(5),
+					ConfigOp::Set(6),
+					ConfigOp::Set(7)
+				),
 				Error::<Runtime>::DoesNotHavePermission,
 			);
 			// state-toggler
 			assert_noop!(
-				Pools::update_roles(Origin::signed(902), 1, Some(5), Some(6), Some(7)),
+				Pools::update_roles(
+					Origin::signed(902),
+					1,
+					ConfigOp::Set(5),
+					ConfigOp::Set(6),
+					ConfigOp::Set(7)
+				),
 				Error::<Runtime>::DoesNotHavePermission,
 			);
 
 			// but root can
-			assert_ok!(Pools::update_roles(Origin::signed(900), 1, Some(5), Some(6), Some(7)));
+			assert_ok!(Pools::update_roles(
+				Origin::signed(900),
+				1,
+				ConfigOp::Set(5),
+				ConfigOp::Set(6),
+				ConfigOp::Set(7)
+			));
 
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
 					Event::Created { depositor: 10, pool_id: 1 },
 					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					Event::RolesUpdated { root: 5, state_toggler: 7, nominator: 6 }
+					Event::RolesUpdated {
+						root: Some(5),
+						state_toggler: Some(7),
+						nominator: Some(6)
+					}
 				]
 			);
 			assert_eq!(
 				BondedPools::<Runtime>::get(1).unwrap().roles,
-				PoolRoles { depositor: 10, root: 5, nominator: 6, state_toggler: 7 },
+				PoolRoles {
+					depositor: 10,
+					root: Some(5),
+					nominator: Some(6),
+					state_toggler: Some(7)
+				},
 			);
 
 			// also root origin can
-			assert_ok!(Pools::update_roles(Origin::root(), 1, Some(1), Some(2), Some(3)));
+			assert_ok!(Pools::update_roles(
+				Origin::root(),
+				1,
+				ConfigOp::Set(1),
+				ConfigOp::Set(2),
+				ConfigOp::Set(3)
+			));
 
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![Event::RolesUpdated { root: 1, state_toggler: 3, nominator: 2 }]
+				vec![Event::RolesUpdated {
+					root: Some(1),
+					state_toggler: Some(3),
+					nominator: Some(2)
+				}]
 			);
 			assert_eq!(
 				BondedPools::<Runtime>::get(1).unwrap().roles,
-				PoolRoles { depositor: 10, root: 1, nominator: 2, state_toggler: 3 },
+				PoolRoles {
+					depositor: 10,
+					root: Some(1),
+					nominator: Some(2),
+					state_toggler: Some(3)
+				},
 			);
 
-			// None is a noop
-			assert_ok!(Pools::update_roles(Origin::root(), 1, Some(11), None, None));
+			// Noop works
+			assert_ok!(Pools::update_roles(
+				Origin::root(),
+				1,
+				ConfigOp::Set(11),
+				ConfigOp::Noop,
+				ConfigOp::Noop
+			));
 
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![Event::RolesUpdated { root: 11, state_toggler: 3, nominator: 2 }]
+				vec![Event::RolesUpdated {
+					root: Some(11),
+					state_toggler: Some(3),
+					nominator: Some(2)
+				}]
 			);
 
 			assert_eq!(
 				BondedPools::<Runtime>::get(1).unwrap().roles,
-				PoolRoles { depositor: 10, root: 11, nominator: 2, state_toggler: 3 },
+				PoolRoles {
+					depositor: 10,
+					root: Some(11),
+					nominator: Some(2),
+					state_toggler: Some(3)
+				},
+			);
+
+			// Remove works
+			assert_ok!(Pools::update_roles(
+				Origin::root(),
+				1,
+				ConfigOp::Set(69),
+				ConfigOp::Remove,
+				ConfigOp::Remove
+			));
+
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![Event::RolesUpdated { root: Some(69), state_toggler: None, nominator: None }]
+			);
+
+			assert_eq!(
+				BondedPools::<Runtime>::get(1).unwrap().roles,
+				PoolRoles { depositor: 10, root: Some(69), nominator: None, state_toggler: None },
 			);
 		})
 	}

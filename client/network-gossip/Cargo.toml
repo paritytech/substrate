@@ -18,7 +18,7 @@ ahash = "0.7.6"
 futures = "0.3.21"
 futures-timer = "3.0.1"
 libp2p = { version = "0.44.0", default-features = false }
-log = "0.4.16"
+log = "0.4.17"
 lru = "0.7.5"
 tracing = "0.1.29"
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.10.0-dev", path = "../../utils/prometheus" }
