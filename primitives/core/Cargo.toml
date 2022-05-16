@@ -17,7 +17,7 @@ codec = { package = "parity-scale-codec", version = "3.0.0", default-features = 
 	"derive",
 	"max-encoded-len",
 ] }
-scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
+scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
 log = { version = "0.4.17", default-features = false }
 serde = { version = "1.0.136", optional = true, features = ["derive"] }
 byteorder = { version = "1.3.2", default-features = false }

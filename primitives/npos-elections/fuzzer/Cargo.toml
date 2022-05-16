@@ -18,7 +18,7 @@ clap = { version = "3.1.18", features = ["derive"] }
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"] }
 honggfuzz = "0.5"
 rand = { version = "0.8", features = ["std", "small_rng"] }
-scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
+scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
 sp-npos-elections = { version = "4.0.0-dev", path = ".." }
 sp-runtime = { version = "6.0.0", path = "../../runtime" }
 
