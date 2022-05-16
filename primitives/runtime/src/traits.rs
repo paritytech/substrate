@@ -1284,7 +1284,7 @@ pub trait AccountIdConversion<AccountId>: Sized {
 	/// non-unique accounts.
 	fn into_sub_account_truncating<S: Encode>(&self, sub: S) -> AccountId;
 
-	/// Same as `into_sub_account`, but ensuring that all bytes of the account's seed are used when
+	/// Same as `into_sub_account_truncating`, but ensuring that all bytes of the account's seed are used when
 	/// generating an account. This can help guarantee that different accounts are unique, besides
 	/// types which encode the same as noted above.
 	fn try_into_sub_account<S: Encode>(&self, sub: S) -> Option<AccountId>;
