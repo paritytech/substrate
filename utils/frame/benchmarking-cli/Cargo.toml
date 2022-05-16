@@ -24,7 +24,7 @@ itertools = "0.10.3"
 kvdb = "0.11.0"
 lazy_static = "1.4.0"
 linked-hash-map = "0.5.4"
-log = "0.4.16"
+log = "0.4.17"
 memory-db = "0.29.0"
 prettytable-rs = "0.8.0"
 rand = { version = "0.8.4", features = ["small_rng"] }
