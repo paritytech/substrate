@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Various basic types for use in the items pallet.
+//! Various basic types for use in the Uniques pallet.
 
 use super::*;
 use frame_support::{
@@ -52,7 +52,7 @@ pub struct CollectionDetails<AccountId, DepositBalance> {
 	pub(super) item_metadatas: u32,
 	/// The total number of attributes for this collection.
 	pub(super) attributes: u32,
-	/// Whether the item is frozen for non-admin transfers.
+	/// Whether the collection is frozen for non-admin transfers.
 	pub(super) is_frozen: bool,
 }
 
@@ -62,7 +62,7 @@ pub struct DestroyWitness {
 	/// The total number of outstanding items of this collection.
 	#[codec(compact)]
 	pub items: u32,
-	/// The total number of outstanding item metadata of this collection.
+	/// The total number of items in this collection that have outstanding item metadata.
 	#[codec(compact)]
 	pub item_metadatas: u32,
 	#[codec(compact)]
