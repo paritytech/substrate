@@ -38,7 +38,7 @@ use crate::{
 use frame_support::{
 	dispatch::{DispatchError, DispatchResult},
 	ensure,
-	traits::ReservableCurrency,
+	traits::{Get, ReservableCurrency},
 };
 use sp_core::crypto::UncheckedFrom;
 use sp_runtime::traits::BadOrigin;
@@ -216,8 +216,12 @@ impl<T: Config> Token<T> for CodeToken {
 		// size of the contract.
 		match *self {
 			Reinstrument(len) => T::WeightInfo::reinstrument(len),
-			Load(len) => T::WeightInfo::call_with_code_per_byte(len)
-				.saturating_sub(T::WeightInfo::call_with_code_per_byte(0)),
+			Load(len) => {
+				let computation = T::WeightInfo::call_with_code_per_byte(len)
+					.saturating_sub(T::WeightInfo::call_with_code_per_byte(0));
+				let bandwith = T::ContractAccessWeight::get().saturating_mul(len.into());
+				computation.max(bandwith)
+			},
 		}
 	}
 }
