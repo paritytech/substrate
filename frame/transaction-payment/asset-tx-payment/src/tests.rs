@@ -128,7 +128,7 @@ impl pallet_balances::Config for Runtime {
 impl WeightToFeeT for WeightToFee {
 	type Balance = u64;
 
-	fn calc(weight: &Weight) -> Self::Balance {
+	fn wight_to_fee(weight: &Weight) -> Self::Balance {
 		Self::Balance::saturated_from(*weight).saturating_mul(WEIGHT_TO_FEE.with(|v| *v.borrow()))
 	}
 }
@@ -136,7 +136,7 @@ impl WeightToFeeT for WeightToFee {
 impl WeightToFeeT for TransactionByteFee {
 	type Balance = u64;
 
-	fn calc(weight: &Weight) -> Self::Balance {
+	fn wight_to_fee(weight: &Weight) -> Self::Balance {
 		Self::Balance::saturated_from(*weight)
 			.saturating_mul(TRANSACTION_BYTE_FEE.with(|v| *v.borrow()))
 	}

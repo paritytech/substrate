@@ -517,14 +517,14 @@ where
 	}
 
 	fn length_to_fee(length: u32) -> BalanceOf<T> {
-		T::LengthToFee::calc(&(length as Weight))
+		T::LengthToFee::wight_to_fee(&(length as Weight))
 	}
 
 	fn weight_to_fee(weight: Weight) -> BalanceOf<T> {
 		// cap the weight to the maximum defined in runtime, otherwise it will be the
 		// `Bounded` maximum of its data type, which is not desired.
 		let capped_weight = weight.min(T::BlockWeights::get().max_block);
-		T::WeightToFee::calc(&capped_weight)
+		T::WeightToFee::wight_to_fee(&capped_weight)
 	}
 }
 
@@ -864,7 +864,7 @@ mod tests {
 	impl WeightToFeeT for WeightToFee {
 		type Balance = u64;
 
-		fn calc(weight: &Weight) -> Self::Balance {
+		fn wight_to_fee(weight: &Weight) -> Self::Balance {
 			Self::Balance::saturated_from(*weight)
 				.saturating_mul(WEIGHT_TO_FEE.with(|v| *v.borrow()))
 		}
@@ -873,7 +873,7 @@ mod tests {
 	impl WeightToFeeT for TransactionByteFee {
 		type Balance = u64;
 
-		fn calc(weight: &Weight) -> Self::Balance {
+		fn wight_to_fee(weight: &Weight) -> Self::Balance {
 			Self::Balance::saturated_from(*weight)
 				.saturating_mul(TRANSACTION_BYTE_FEE.with(|v| *v.borrow()))
 		}

@@ -656,7 +656,7 @@ pub trait WeightToFee {
 	type Balance: BaseArithmetic + From<u32> + Copy + Unsigned;
 
 	/// Calculates the fee from the passed `weight`.
-	fn calc(weight: &Weight) -> Self::Balance;
+	fn wight_to_fee(weight: &Weight) -> Self::Balance;
 }
 
 /// A trait that describes the weight to fee calculation as polynomial.
@@ -685,7 +685,7 @@ where
 	///
 	/// This should not be overriden in most circumstances. Calculation is done in the
 	/// `Balance` type and never overflows. All evaluation is saturating.
-	fn calc(weight: &Weight) -> Self::Balance {
+	fn wight_to_fee(weight: &Weight) -> Self::Balance {
 		Self::polynomial()
 			.iter()
 			.fold(Self::Balance::saturated_from(0u32), |mut acc, args| {
@@ -718,7 +718,7 @@ where
 {
 	type Balance = T;
 
-	fn calc(weight: &Weight) -> Self::Balance {
+	fn wight_to_fee(weight: &Weight) -> Self::Balance {
 		Self::Balance::saturated_from(*weight)
 	}
 }
@@ -741,7 +741,7 @@ where
 {
 	type Balance = T;
 
-	fn calc(weight: &Weight) -> Self::Balance {
+	fn wight_to_fee(weight: &Weight) -> Self::Balance {
 		Self::Balance::saturated_from(*weight).saturating_mul(M::get())
 	}
 }
@@ -999,35 +999,41 @@ mod tests {
 	#[test]
 	fn polynomial_works() {
 		// 100^3/2=500000 100^2*(2+1/3)=23333 700 -10000
-		assert_eq!(Poly::calc(&100), 514033);
+		assert_eq!(Poly::wight_to_fee(&100), 514033);
 		// 10123^3/2=518677865433 10123^2*(2+1/3)=239108634 70861 -10000
-		assert_eq!(Poly::calc(&10_123), 518917034928);
+		assert_eq!(Poly::wight_to_fee(&10_123), 518917034928);
 	}
 
 	#[test]
 	fn polynomial_does_not_underflow() {
-		assert_eq!(Poly::calc(&0), 0);
-		assert_eq!(Poly::calc(&10), 0);
+		assert_eq!(Poly::wight_to_fee(&0), 0);
+		assert_eq!(Poly::wight_to_fee(&10), 0);
 	}
 
 	#[test]
 	fn polynomial_does_not_overflow() {
-		assert_eq!(Poly::calc(&Weight::max_value()), Balance::max_value() - 10_000);
+		assert_eq!(Poly::wight_to_fee(&Weight::max_value()), Balance::max_value() - 10_000);
 	}
 
 	#[test]
 	fn identity_fee_works() {
-		assert_eq!(IdentityFee::<Balance>::calc(&0), 0);
-		assert_eq!(IdentityFee::<Balance>::calc(&50), 50);
-		assert_eq!(IdentityFee::<Balance>::calc(&Weight::max_value()), Balance::max_value());
+		assert_eq!(IdentityFee::<Balance>::wight_to_fee(&0), 0);
+		assert_eq!(IdentityFee::<Balance>::wight_to_fee(&50), 50);
+		assert_eq!(
+			IdentityFee::<Balance>::wight_to_fee(&Weight::max_value()),
+			Balance::max_value()
+		);
 	}
 
 	#[test]
 	fn constant_fee_works() {
 		use crate::traits::ConstU128;
-		assert_eq!(ConstantMultiplier::<u128, ConstU128<100u128>>::calc(&0), 0);
-		assert_eq!(ConstantMultiplier::<u128, ConstU128<10u128>>::calc(&50), 500);
-		assert_eq!(ConstantMultiplier::<u128, ConstU128<1024u128>>::calc(&16), 16384);
-		assert_eq!(ConstantMultiplier::<u128, ConstU128<{ u128::MAX }>>::calc(&2), u128::MAX);
+		assert_eq!(ConstantMultiplier::<u128, ConstU128<100u128>>::wight_to_fee(&0), 0);
+		assert_eq!(ConstantMultiplier::<u128, ConstU128<10u128>>::wight_to_fee(&50), 500);
+		assert_eq!(ConstantMultiplier::<u128, ConstU128<1024u128>>::wight_to_fee(&16), 16384);
+		assert_eq!(
+			ConstantMultiplier::<u128, ConstU128<{ u128::MAX }>>::wight_to_fee(&2),
+			u128::MAX
+		);
 	}
 }
