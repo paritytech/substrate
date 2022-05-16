@@ -59,7 +59,7 @@ where
 	where
 		D: Deserializer<'de>,
 	{
-		struct VecVisitor<T, S: Get<u32>>(PhantomData<T>, PhantomData<S>);
+		struct VecVisitor<T, S: Get<u32>>(PhantomData<(T, S)>);
 
 		impl<'de, T, S: Get<u32>> Visitor<'de> for VecVisitor<T, S>
 		where
@@ -97,14 +97,8 @@ where
 			}
 		}
 
-		let visitor: VecVisitor<T, S> = VecVisitor(PhantomData, PhantomData);
-		match deserializer.deserialize_seq(visitor) {
-			Ok(v) => match BoundedVec::<T, S>::try_from(v) {
-				Ok(r) => Ok(r),
-				Err(_) => Err(Error::custom("out of bounds")),
-			},
-			Err(e) => Err(e),
-		}
+		let visitor: VecVisitor<T, S> = VecVisitor(PhantomData);
+		deserializer.deserialize_seq(visitor).map(|v| BoundedVec::<T, S>::try_from(v).map_err(|_| Err(Error::custom("out of bounds"))))?
 	}
 }
 
