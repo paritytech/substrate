@@ -57,7 +57,7 @@ hex = { version = "0.4", default-features = false, optional = true }
 libsecp256k1 = { version = "0.7", default-features = false, features = ["static-context"], optional = true }
 merlin = { version = "2.0", default-features = false, optional = true }
 secp256k1 = { version = "0.21.2", default-features = false, features = ["recovery", "alloc"], optional = true }
-ss58-registry = { version = "1.17.0", default-features = false }
+ss58-registry = { version = "1.18.0", default-features = false }
 sp-core-hashing = { version = "4.0.0", path = "./hashing", default-features = false, optional = true }
 sp-runtime-interface = { version = "6.0.0", default-features = false, path = "../runtime-interface" }
 
