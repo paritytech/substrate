@@ -1640,9 +1640,10 @@ fn assert_type_all_pallets_without_system_reversed_is_correct() {
 #[test]
 fn test_storage_alias() {
 	#[frame_support::storage_alias]
-	type Value<T: pallet::Config> =
-		StorageValue<pallet::Pallet<T>, u32, ValueQuery>
-			where <T as frame_system::Config>::AccountId: From<SomeType1> + SomeAssociation1;
+	type Value<T: pallet::Config>
+	where
+		<T as frame_system::Config>::AccountId: From<SomeType1> + SomeAssociation1,
+	= StorageValue<pallet::Pallet<T>, u32, ValueQuery>;
 
 	TestExternalities::default().execute_with(|| {
 		pallet::Value::<Runtime>::put(10);

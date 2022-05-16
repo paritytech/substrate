@@ -412,9 +412,9 @@ struct Input {
 	_type: Token![type],
 	storage_name: Ident,
 	storage_generics: Option<SimpleGenerics>,
+	where_clause: Option<WhereClause>,
 	_equal: Token![=],
 	storage_type: StorageType,
-	where_clause: Option<WhereClause>,
 	_semicolon: Token![;],
 }
 
@@ -426,17 +426,26 @@ impl Parse for Input {
 		let storage_name = input.parse()?;
 
 		let lookahead = input.lookahead1();
-		let (storage_generics, _equal) = if lookahead.peek(Token![<]) {
-			(Some(input.parse()?), input.parse()?)
+		let storage_generics = if lookahead.peek(Token![<]) {
+			Some(input.parse()?)
 		} else if lookahead.peek(Token![=]) {
-			(None, input.parse()?)
+			None
 		} else {
 			return Err(lookahead.error())
 		};
 
-		let storage_type = input.parse()?;
+		let lookahead = input.lookahead1();
+		let where_clause = if lookahead.peek(Token![where]) {
+			Some(input.parse()?)
+		} else if lookahead.peek(Token![=]) {
+			None
+		} else {
+			return Err(lookahead.error())
+		};
 
-		let where_clause = input.parse()?;
+		let _equal = input.parse()?;
+
+		let storage_type = input.parse()?;
 
 		let _semicolon = input.parse()?;
 
