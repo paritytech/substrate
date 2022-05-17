@@ -30,7 +30,7 @@ use sp_runtime::generic::{Digest, DigestItem};
 use sp_std::prelude::*;
 
 pub use self::{
-	transactional::{with_transaction, with_transaction_unchecked},
+	transactional::{with_transaction, with_transaction_unchecked, at_least_one_transaction},
 	types::StorageEntryMetadataBuilder,
 };
 pub use sp_runtime::TransactionOutcome;
