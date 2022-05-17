@@ -373,6 +373,8 @@ pub mod pallet {
 		MaxSupplyReached,
 		/// The max supply has already been set.
 		MaxSupplyAlreadySet,
+		/// The provided max supply is less to the amount of items a collection already has.
+		MaxSupplyTooSmall,
 	}
 
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
@@ -1400,7 +1402,7 @@ pub mod pallet {
 				ensure!(check_owner == &details.owner, Error::<T, I>::NoPermission);
 			}
 
-			ensure!(details.items <= max_supply, Error::<T, I>::NoPermission);
+			ensure!(details.items <= max_supply, Error::<T, I>::MaxSupplyTooSmall);
 
 			CollectionMaxSupply::<T, I>::insert(&collection, max_supply);
 			Self::deposit_event(Event::CollectionMaxSupplySet { collection, max_supply });
