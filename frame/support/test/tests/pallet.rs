@@ -96,13 +96,9 @@ impl SomeAssociation2 for u64 {
 
 #[frame_support::pallet]
 pub mod pallet {
-	use super::{
-		SomeAssociation1, SomeAssociation2, SomeType1, SomeType2, SomeType3, SomeType4, SomeType5,
-		SomeType6, SomeType7, StorageVersion,
-	};
+	use super::*;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
-	use scale_info::TypeInfo;
 
 	type BalanceOf<T> = <T as Config>::Balance;
 

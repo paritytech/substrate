@@ -28,8 +28,6 @@ use sp_std::{marker::PhantomData, prelude::*};
 
 /// Wrapper for all migrations of this pallet, based on `StorageVersion`.
 pub fn migrate<T: Config>() -> Weight {
-	use frame_support::traits::StorageVersion;
-
 	let version = StorageVersion::get::<Pallet<T>>();
 	let mut weight: Weight = 0;
 
