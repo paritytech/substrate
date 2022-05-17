@@ -197,9 +197,7 @@ where
 		let val = serde_json::to_value(&current_sync_state)?;
 		*extension = Some(val);
 
-		chain_spec
-			.as_json(raw)
-			.map(Into::into)
-			.map_err(|e| Error::<Block>::JsonRpc(e).into())
+		let json_str = chain_spec.as_json(raw).map_err(|e| Error::<Block>::JsonRpc(e))?;
+		serde_json::from_str(&json_str).map_err(Into::into)
 	}
 }
