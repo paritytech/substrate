@@ -428,17 +428,11 @@ pub fn pallet(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// }
 /// ```
 #[proc_macro_attribute]
-#[deprecated(
-	note = "All extrinsic dispatch is now executed in a storage layer (transactional). This tag is not needed anymore."
-)]
 pub fn transactional(attr: TokenStream, input: TokenStream) -> TokenStream {
 	transactional::transactional(attr, input).unwrap_or_else(|e| e.to_compile_error().into())
 }
 
 #[proc_macro_attribute]
-#[deprecated(
-	note = "All extrinsic dispatch is now executed in a storage layer (transactional). This tag is not needed anymore."
-)]
 pub fn require_transactional(attr: TokenStream, input: TokenStream) -> TokenStream {
 	transactional::require_transactional(attr, input)
 		.unwrap_or_else(|e| e.to_compile_error().into())
