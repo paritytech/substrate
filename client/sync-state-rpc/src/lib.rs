@@ -52,6 +52,7 @@ use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, NumberFor},
 };
+
 use std::sync::Arc;
 
 type SharedAuthoritySet<TBl> =
@@ -132,7 +133,8 @@ pub trait SyncStateRpcApi {
 }
 
 /// An api for sync state RPC calls.
-pub struct SyncStateRpc<Block: BlockT, Client> {
+pub struct SyncStateRpc<Block: BlockT, Client>
+{
 	chain_spec: Box<dyn sc_chain_spec::ChainSpec>,
 	client: Arc<Client>,
 	shared_authority_set: SharedAuthoritySet<Block>,
@@ -199,5 +201,123 @@ where
 
 		let json_str = chain_spec.as_json(raw).map_err(|e| Error::<Block>::JsonRpc(e))?;
 		serde_json::from_str(&json_str).map_err(Into::into)
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	use std::sync::Arc;
+
+	use codec::Decode;
+	use sc_block_builder::BlockBuilderProvider;
+	use sc_client_api::BlockchainEvents;
+	use sc_consensus_babe::Epoch as BabeEpoch;
+	use sc_consensus_epochs::EpochChangesFor;
+	use sc_finality_grandpa::AuthoritySet;
+	use serde::{Deserialize, Serialize};
+	use sp_runtime::{traits::Block as BlockT, BuildStorage, Storage};
+	use substrate_test_runtime_client::{
+		prelude::*,
+		runtime::{Block, BlockNumber, Hash, Transfer},
+		sp_consensus::BlockOrigin,
+	};
+
+	// TODO: better mock of `SharedAuthoritySet` how?!.
+	fn empty_authority_set() -> SharedAuthoritySet<Block> {
+		let authority_set: AuthoritySet<Hash, BlockNumber> =
+			Decode::decode(&mut [0_u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0].as_slice()).unwrap();
+		authority_set.into()
+	}
+
+	// TODO: better mock of `SharedEpochChange` how?!.
+	fn empty_epoch() -> SharedEpochChanges<Block> {
+		let changes: EpochChangesFor<Block, BabeEpoch> =
+			Decode::decode(&mut [0_u8, 0, 0, 0].as_slice()).unwrap();
+
+		SharedEpochChanges::<Block>::new(changes)
+	}
+
+	#[derive(Debug, Serialize, Deserialize)]
+	struct Genesis(std::collections::BTreeMap<String, String>);
+
+	impl BuildStorage for Genesis {
+		fn assimilate_storage(&self, storage: &mut Storage) -> Result<(), String> {
+			storage.top.extend(
+				self.0.iter().map(|(a, b)| (a.clone().into_bytes(), b.clone().into_bytes())),
+			);
+			Ok(())
+		}
+	}
+
+	#[derive(Default, Clone, Serialize, Deserialize, sc_chain_spec::ChainSpecExtension)]
+	#[serde(rename_all = "camelCase")]
+	pub struct Extensions {
+		/// The light sync state extension used by the sync-state rpc.
+		pub light_sync_state: LightSyncStateExtension,
+	}
+
+	type ChainSpec = sc_chain_spec::GenericChainSpec<Genesis, Extensions>;
+
+	const CHAIN_SPEC: &str = r#"
+	{
+		"name": "Flaming Fir",
+		"id": "flaming-fir",
+		"properties": {
+			"tokenDecimals": 15,
+			"tokenSymbol": "FIR"
+		},
+		"bootNodes": [
+			"/ip4/35.246.224.91/tcp/30333/p2p/QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV"
+		],
+		"telemetryEndpoints": [
+			["wss://telemetry.polkadot.io/submit/", 0]
+		],
+		"protocolId": "fir",
+		"genesis": {
+			"raw": [
+				{
+					"0xb2029f8665aac509629f2d28cea790a3": "0x10f26cdb14b5aec7b2789fd5ca80f979cef3761897ae1f37ffb3e154cbcc1c26633919132b851ef0fd2dae42a7e734fe547af5a6b809006100f48944d7fae8e8ef00299981a2b92f878baaf5dbeba5c18d4e70f2a1fcd9c61b32ea18daf38f437800299981a2b92f878baaf5dbeba5c18d4e70f2a1fcd9c61b32ea18daf38f4378547ff0ab649283a7ae01dbc2eb73932eba2fb09075e9485ff369082a2ff38d655633b70b80a6c8bb16270f82cca6d56b27ed7b76c8fd5af2986a25a4788ce440482a3389a6cf42d8ed83888cfd920fec738ea30f97e44699ada7323f08c3380a482a3389a6cf42d8ed83888cfd920fec738ea30f97e44699ada7323f08c3380a68655684472b743e456907b398d3a44c113f189e56d1bbfd55e889e295dfde787932cff431e748892fa48e10c63c17d30f80ca42e4de3921e641249cd7fa3c2f482dbd7297a39fa145c570552249c2ca9dd47e281f0c500c971b59c9dcdcd82e482dbd7297a39fa145c570552249c2ca9dd47e281f0c500c971b59c9dcdcd82e9c7a2ee14e565db0c69f78c7b4cd839fbf52b607d867e9e9c5a79042898a0d129becad03e6dcac03cee07edebca5475314861492cdfc96a2144a67bbe96993326e7e4eb42cbd2e0ab4cae8708ce5509580b8c04d11f6758dbf686d50fe9f91066e7e4eb42cbd2e0ab4cae8708ce5509580b8c04d11f6758dbf686d50fe9f9106"
+				},
+				{}
+			]
+		}
+	}"#;
+
+	#[tokio::test]
+	async fn test_it_works() {
+		let mut client = Arc::new(substrate_test_runtime_client::new());
+
+		let mut builder = client.new_block(Default::default()).unwrap();
+
+		builder
+			.push_transfer(Transfer {
+				from: AccountKeyring::Alice.into(),
+				to: AccountKeyring::Ferdie.into(),
+				amount: 42,
+				nonce: 0,
+			})
+			.unwrap();
+
+		let block = builder.build().unwrap().block;
+		let block_hash = block.hash();
+		client.import(BlockOrigin::Own, block).await.unwrap();
+		client.finalize_block(BlockId::Hash(block_hash), None).unwrap();
+
+		println!("{:?}", client.info().finalized_hash);
+
+		let chain_spec = Box::new(ChainSpec::from_json_bytes(CHAIN_SPEC.as_bytes()).unwrap());
+
+		let serialized_chain_spec: serde_json::Value =
+			serde_json::from_str(&chain_spec.as_json(false).unwrap()).unwrap();
+
+		let api = SyncStateRpc::new(chain_spec, client, empty_authority_set(), empty_epoch())
+			.unwrap()
+			.into_rpc();
+
+		let res: serde_json::Value = api.call("sync_state_genSyncSpec", [false]).await.unwrap();
+
+		assert!(res.get("lightChainSpec").is_some());
 	}
 }
