@@ -63,8 +63,16 @@ pub struct MachineCmd {
 	pub tolerance: f64,
 
 	/// Time limit for the verification benchmark.
-	#[clap(long, default_value = "2.0", value_name = "SECONDS")]
+	#[clap(long, default_value = "5.0", value_name = "SECONDS")]
 	pub verify_duration: f32,
+
+	/// Time limit for the hash function benchmark.
+	#[clap(long, default_value = "5.0", value_name = "SECONDS")]
+	pub hash_duration: f32,
+
+	/// Time limit for the memory benchmark.
+	#[clap(long, default_value = "5.0", value_name = "SECONDS")]
+	pub memory_duration: f32,
 
 	/// Time limit for each disk benchmark.
 	#[clap(long, default_value = "5.0", value_name = "SECONDS")]
@@ -134,11 +142,13 @@ impl MachineCmd {
 	fn measure(&self, metric: &Metric, dir: &Path) -> Result<Throughput> {
 		let verify_limit = ExecutionLimit::from_secs_f32(self.verify_duration);
 		let disk_limit = ExecutionLimit::from_secs_f32(self.disk_duration);
+		let hash_limit = ExecutionLimit::from_secs_f32(self.hash_duration);
+		let memory_limit = ExecutionLimit::from_secs_f32(self.memory_duration);
 
 		let score = match metric {
-			Metric::Blake2256 => Throughput::MiBs(benchmark_cpu() as f64),
+			Metric::Blake2256 => Throughput::MiBs(benchmark_cpu(hash_limit) as f64),
 			Metric::Sr25519Verify => Throughput::MiBs(benchmark_sr25519_verify(verify_limit)),
-			Metric::MemCopy => Throughput::MiBs(benchmark_memory() as f64),
+			Metric::MemCopy => Throughput::MiBs(benchmark_memory(memory_limit) as f64),
 			Metric::DiskSeqWrite =>
 				Throughput::MiBs(benchmark_disk_sequential_writes(disk_limit, dir)? as f64),
 			Metric::DiskRndWrite =>
