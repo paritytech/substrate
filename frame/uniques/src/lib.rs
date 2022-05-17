@@ -1375,7 +1375,7 @@ pub mod pallet {
 		/// Origin must be either `ForceOrigin` or `Signed` and the sender should be the Owner of
 		/// the `collection`.
 		///
-		/// Note: it's a one-time call method.
+		/// Note: This function can only succeed once per collection.
 		///
 		/// - `collection`: The identifier of the collection to change.
 		/// - `max_supply`: The maximum amount of items a collection could have.
