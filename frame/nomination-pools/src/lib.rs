@@ -2018,14 +2018,14 @@ impl<T: Config> Pallet<T> {
 
 	/// Create the main, bonded account of a pool with the given id.
 	pub fn create_bonded_account(id: PoolId) -> T::AccountId {
-		T::PalletId::get().into_sub_account((AccountType::Bonded, id))
+		T::PalletId::get().into_sub_account_truncating((AccountType::Bonded, id))
 	}
 
 	/// Create the reward account of a pool with the given id.
 	pub fn create_reward_account(id: PoolId) -> T::AccountId {
 		// NOTE: in order to have a distinction in the test account id type (u128), we put
 		// account_type first so it does not get truncated out.
-		T::PalletId::get().into_sub_account((AccountType::Reward, id))
+		T::PalletId::get().into_sub_account_truncating((AccountType::Reward, id))
 	}
 
 	/// Get the member with their associated bonded and reward pool.
