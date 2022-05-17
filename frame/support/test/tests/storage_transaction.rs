@@ -15,6 +15,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Transactional has been deprecated. While this file sticks around, we need this.
+#![allow(deprecated)]
+
 use frame_support::{
 	assert_noop, assert_ok, assert_storage_noop,
 	dispatch::{DispatchError, DispatchResult},

@@ -208,8 +208,7 @@ pub mod pallet {
 
 		/// Doc comment put in metadata
 		#[pallet::weight(1)]
-		#[frame_support::transactional]
-		pub fn foo_transactional(
+		pub fn foo_storage_layer(
 			_origin: OriginFor<T>,
 			#[pallet::compact] foo: u32,
 		) -> DispatchResultWithPostInfo {
@@ -376,7 +375,7 @@ pub mod pallet {
 		fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
 			let _ = T::AccountId::from(SomeType1); // Test for where clause
 			let _ = T::AccountId::from(SomeType5); // Test for where clause
-			if matches!(call, Call::foo_transactional { .. }) {
+			if matches!(call, Call::foo_storage_layer { .. }) {
 				return Ok(ValidTransaction::default())
 			}
 			Err(TransactionValidityError::Invalid(InvalidTransaction::Call))
@@ -614,13 +613,13 @@ fn transactional_works() {
 	TestExternalities::default().execute_with(|| {
 		frame_system::Pallet::<Runtime>::set_block_number(1);
 
-		pallet::Call::<Runtime>::foo_transactional { foo: 0 }
+		pallet::Call::<Runtime>::foo_storage_layer { foo: 0 }
 			.dispatch_bypass_filter(None.into())
 			.err()
 			.unwrap();
 		assert!(frame_system::Pallet::<Runtime>::events().is_empty());
 
-		pallet::Call::<Runtime>::foo_transactional { foo: 1 }
+		pallet::Call::<Runtime>::foo_storage_layer { foo: 1 }
 			.dispatch_bypass_filter(None.into())
 			.unwrap();
 		assert_eq!(
@@ -643,7 +642,7 @@ fn call_expand() {
 	assert_eq!(call_foo.get_call_name(), "foo");
 	assert_eq!(
 		pallet::Call::<Runtime>::get_call_names(),
-		&["foo", "foo_transactional", "foo_no_post_info"],
+		&["foo", "foo_storage_layer", "foo_no_post_info"],
 	);
 }
 
@@ -747,7 +746,7 @@ fn inherent_expand() {
 			Digest::default(),
 		),
 		vec![UncheckedExtrinsic {
-			function: Call::Example(pallet::Call::foo_transactional { foo: 0 }),
+			function: Call::Example(pallet::Call::foo_storage_layer { foo: 0 }),
 			signature: None,
 		}],
 	);
@@ -788,7 +787,7 @@ fn inherent_expand() {
 				signature: None,
 			},
 			UncheckedExtrinsic {
-				function: Call::Example(pallet::Call::foo_transactional { foo: 0 }),
+				function: Call::Example(pallet::Call::foo_storage_layer { foo: 0 }),
 				signature: None,
 			},
 		],
@@ -810,7 +809,7 @@ fn inherent_expand() {
 				signature: None,
 			},
 			UncheckedExtrinsic {
-				function: Call::Example(pallet::Call::foo_transactional { foo: 0 }),
+				function: Call::Example(pallet::Call::foo_storage_layer { foo: 0 }),
 				signature: None,
 			},
 			UncheckedExtrinsic {
@@ -860,7 +859,7 @@ fn validate_unsigned_expand() {
 	let validity = pallet::Pallet::validate_unsigned(TransactionSource::Local, &call).unwrap_err();
 	assert_eq!(validity, TransactionValidityError::Invalid(InvalidTransaction::Call));
 
-	let call = pallet::Call::<Runtime>::foo_transactional { foo: 0 };
+	let call = pallet::Call::<Runtime>::foo_storage_layer { foo: 0 };
 
 	let validity = pallet::Pallet::validate_unsigned(TransactionSource::External, &call).unwrap();
 	assert_eq!(validity, ValidTransaction::default());
