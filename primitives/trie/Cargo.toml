@@ -21,7 +21,7 @@ harness = false
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false }
 hash-db = { version = "0.15.2", default-features = false }
 memory-db = { version = "0.29.0", default-features = false }
-scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
+scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
 thiserror = { version = "1.0.30", optional = true }
 trie-db = { version = "0.23.1", default-features = false }
 trie-root = { version = "0.17.0", default-features = false }
