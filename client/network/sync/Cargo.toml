@@ -26,7 +26,7 @@ futures = "0.3.21"
 libp2p = "0.44.0"
 log = "0.4.17"
 lru = "0.7.5"
-prost = "0.9"
+prost = "0.10"
 smallvec = "1.8.0"
 thiserror = "1.0"
 fork-tree = { version = "3.0.0", path = "../../../utils/fork-tree" }
