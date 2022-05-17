@@ -158,9 +158,24 @@ pub fn with_transaction_unchecked<R>(f: impl FnOnce() -> TransactionOutcome<R>) 
 	}
 }
 
-/// Execute the supplied function, ensuring we are at least in one transactional layer.
-/// If we are already in a transactional layer, this function is a noop.
-pub fn at_least_one_transaction<T, E>(f: impl FnOnce() -> Result<T, E>) -> Result<T, E>
+/// Execute the supplied function, adding a new storage layer.
+pub fn with_storage_layer<T, E>(f: impl FnOnce() -> Result<T, E>) -> Result<T, E>
+where
+	E: From<DispatchError>,
+{
+	with_transaction(|| {
+		let r = f();
+		if r.is_ok() {
+			TransactionOutcome::Commit(r)
+		} else {
+			TransactionOutcome::Rollback(r)
+		}
+	})
+}
+
+/// Execute the supplied function, ensuring we are at least in one storage layer.
+/// If we are already in a storage layer, we just execute the provided closure.
+pub fn in_storage_layer<T, E>(f: impl FnOnce() -> Result<T, E>) -> Result<T, E>
 where
 	E: From<DispatchError>,
 {
