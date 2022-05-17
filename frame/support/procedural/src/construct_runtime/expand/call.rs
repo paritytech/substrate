@@ -127,6 +127,20 @@ pub fn expand_outer_dispatch(
 				}
 			}
 		}
+		impl #scrate::traits::DispatchableWithStorageLayer for Call {
+			type Origin = Origin;
+			fn dispatch_with_storage_layer(self, origin: Origin) -> #scrate::dispatch::DispatchResultWithPostInfo {
+				use #scrate::storage::{with_transaction, TransactionOutcome};
+				with_transaction(|| {
+					let r = #scrate::dispatch::Dispatchable::dispatch(self, origin);
+					if r.is_ok() {
+						TransactionOutcome::Commit(r)
+					} else {
+						TransactionOutcome::Rollback(r)
+					}
+				})
+			}
+		}
 
 		#(
 			impl #scrate::traits::IsSubType<#scrate::dispatch::CallableCallFor<#pallet_names, #runtime>> for Call {
