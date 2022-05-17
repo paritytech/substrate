@@ -1381,7 +1381,7 @@ pub mod pallet {
 		/// - `max_supply`: The maximum amount of items a collection could have.
 		///
 		/// Emits `CollectionMaxSupplySet` event when successful.
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::set_collection_max_supply())]
 		pub fn set_collection_max_supply(
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
