@@ -172,28 +172,28 @@ pub struct Executive<
 );
 
 impl<
-	System: frame_system::Config + EnsureInherentsAreFirst<Block>,
-	Block: traits::Block<Header = System::Header, Hash = System::Hash>,
-	Context: Default,
-	UnsignedValidator,
-	AllPalletsWithSystem: OnRuntimeUpgrade
-	+ OnInitialize<System::BlockNumber>
-	+ OnIdle<System::BlockNumber>
-	+ OnFinalize<System::BlockNumber>
-	+ OffchainWorker<System::BlockNumber>,
-	COnRuntimeUpgrade: OnRuntimeUpgrade,
-> ExecuteBlock<Block>
-for Executive<System, Block, Context, UnsignedValidator, AllPalletsWithSystem, COnRuntimeUpgrade>
-	where
-		Block::Extrinsic: IdentifyAccountWithLookup<Context, AccountId = System::AccountId>
+		System: frame_system::Config + EnsureInherentsAreFirst<Block>,
+		Block: traits::Block<Header = System::Header, Hash = System::Hash>,
+		Context: Default,
+		UnsignedValidator,
+		AllPalletsWithSystem: OnRuntimeUpgrade
+			+ OnInitialize<System::BlockNumber>
+			+ OnIdle<System::BlockNumber>
+			+ OnFinalize<System::BlockNumber>
+			+ OffchainWorker<System::BlockNumber>,
+		COnRuntimeUpgrade: OnRuntimeUpgrade,
+	> ExecuteBlock<Block>
+	for Executive<System, Block, Context, UnsignedValidator, AllPalletsWithSystem, COnRuntimeUpgrade>
+where
+	Block::Extrinsic: IdentifyAccountWithLookup<Context, AccountId = System::AccountId>
 		+ Checkable<Context>
 		+ Codec
 		+ GetDispatchInfo,
-		CheckedOf<Block::Extrinsic, Context>: Applyable + GetDispatchInfo,
-		CallOf<Block::Extrinsic, Context>:
+	CheckedOf<Block::Extrinsic, Context>: Applyable + GetDispatchInfo,
+	CallOf<Block::Extrinsic, Context>:
 		Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
-		OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
-		UnsignedValidator: ValidateUnsigned<Call = CallOf<Block::Extrinsic, Context>>,
+	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
+	UnsignedValidator: ValidateUnsigned<Call = CallOf<Block::Extrinsic, Context>>,
 {
 	// for backward compatibility
 	fn execute_block(block: Block) {
@@ -220,28 +220,28 @@ for Executive<System, Block, Context, UnsignedValidator, AllPalletsWithSystem, C
 }
 
 impl<
-	System: frame_system::Config + EnsureInherentsAreFirst<Block>,
-	Block: traits::Block<Header = System::Header, Hash = System::Hash>,
-	Context: Default,
-	UnsignedValidator,
-	AllPalletsWithSystem: OnRuntimeUpgrade
-	+ OnInitialize<System::BlockNumber>
-	+ OnIdle<System::BlockNumber>
-	+ OnFinalize<System::BlockNumber>
-	+ OffchainWorker<System::BlockNumber>,
-	COnRuntimeUpgrade: OnRuntimeUpgrade,
-> Executive<System, Block, Context, UnsignedValidator, AllPalletsWithSystem, COnRuntimeUpgrade>
-	where
-		<System as frame_system::Config>::BlockNumber: AtLeast32BitUnsigned,
-		Block::Extrinsic: IdentifyAccountWithLookup<Context, AccountId = System::AccountId>
+		System: frame_system::Config + EnsureInherentsAreFirst<Block>,
+		Block: traits::Block<Header = System::Header, Hash = System::Hash>,
+		Context: Default,
+		UnsignedValidator,
+		AllPalletsWithSystem: OnRuntimeUpgrade
+			+ OnInitialize<System::BlockNumber>
+			+ OnIdle<System::BlockNumber>
+			+ OnFinalize<System::BlockNumber>
+			+ OffchainWorker<System::BlockNumber>,
+		COnRuntimeUpgrade: OnRuntimeUpgrade,
+	> Executive<System, Block, Context, UnsignedValidator, AllPalletsWithSystem, COnRuntimeUpgrade>
+where
+	<System as frame_system::Config>::BlockNumber: AtLeast32BitUnsigned,
+	Block::Extrinsic: IdentifyAccountWithLookup<Context, AccountId = System::AccountId>
 		+ Checkable<Context>
 		+ Codec
 		+ GetDispatchInfo,
-		CheckedOf<Block::Extrinsic, Context>: Applyable + GetDispatchInfo,
-		CallOf<Block::Extrinsic, Context>:
+	CheckedOf<Block::Extrinsic, Context>: Applyable + GetDispatchInfo,
+	CallOf<Block::Extrinsic, Context>:
 		Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
-		OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
-		UnsignedValidator: ValidateUnsigned<Call = CallOf<Block::Extrinsic, Context>>,
+	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
+	UnsignedValidator: ValidateUnsigned<Call = CallOf<Block::Extrinsic, Context>>,
 {
 	/// Execute all `OnRuntimeUpgrade` of this runtime, and return the aggregate weight.
 	pub fn execute_on_runtime_upgrade() -> frame_support::weights::Weight {
@@ -1047,7 +1047,7 @@ mod tests {
 					extrinsics_root: hex!(
 						"03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314"
 					)
-						.into(),
+					.into(),
 					digest: Digest { logs: vec![] },
 					count: 0,
 					seed: Default::default(),
@@ -1069,7 +1069,7 @@ mod tests {
 					extrinsics_root: hex!(
 						"03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314"
 					)
-						.into(),
+					.into(),
 					digest: Digest { logs: vec![] },
 					count: 0,
 					seed: Default::default(),
@@ -1090,7 +1090,7 @@ mod tests {
 					state_root: hex!(
 						"75e7d8f360d375bbe91bcf8019c01ab6362448b4a89e3b329717eb9d910340e5"
 					)
-						.into(),
+					.into(),
 					extrinsics_root: [0u8; 32].into(),
 					digest: Digest { logs: vec![] },
 					count: 0,
@@ -1645,11 +1645,11 @@ mod tests {
 						state_root: hex!(
 							"58e5aca3629754c5185b50dd676053c5b9466c18488bb1f4c6138a46885cd79d"
 						)
-							.into(),
+						.into(),
 						extrinsics_root: hex!(
 							"03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314"
 						)
-							.into(),
+						.into(),
 						digest: Digest { logs: vec![] },
 						count: 0,
 						seed: Default::default(),
@@ -1673,11 +1673,11 @@ mod tests {
 						state_root: hex!(
 							"58e5aca3629754c5185b50dd676053c5b9466c18488bb1f4c6138a46885cd79d"
 						)
-							.into(),
+						.into(),
 						extrinsics_root: hex!(
 							"03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314"
 						)
-							.into(),
+						.into(),
 						digest: Digest { logs: vec![] },
 						count: 0,
 						seed: Default::default(),
@@ -1724,11 +1724,11 @@ mod tests {
 						state_root: hex!(
 							"a37408819189bd873665cfb3b7ac54ec63b4eaa56077198fff637fe3aacb2461"
 						)
-							.into(),
+						.into(),
 						extrinsics_root: hex!(
 							"03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314"
 						)
-							.into(),
+						.into(),
 						digest: Digest { logs: vec![] },
 						count: 0,
 						seed: ShufflingSeed {

@@ -206,8 +206,8 @@ pub fn finalize_block() -> Header {
 
 	// This MUST come after all changes to storage are done. Otherwise we will fail the
 	// “Storage root does not match that calculated” assertion.
-	let storage_root =
-		Hash::decode(&mut &storage_root(StateVersion::V1)[..]).expect("`storage_root` is a valid hash");
+	let storage_root = Hash::decode(&mut &storage_root(StateVersion::V1)[..])
+		.expect("`storage_root` is a valid hash");
 
 	if let Some(new_authorities) = o_new_authorities {
 		digest.push(generic::DigestItem::Consensus(*b"aura", new_authorities.encode()));

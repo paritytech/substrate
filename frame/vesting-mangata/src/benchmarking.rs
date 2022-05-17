@@ -25,7 +25,7 @@ use frame_system::{Pallet as System, RawOrigin};
 use sp_runtime::traits::{Bounded, CheckedDiv, CheckedMul};
 
 use super::*;
-use crate::{Pallet as Vesting, BalanceOf, TokenIdOf};
+use crate::{BalanceOf, Pallet as Vesting, TokenIdOf};
 
 const SEED: u32 = 0;
 const NATIVE_CURRENCY_ID: u32 = 0;
@@ -51,7 +51,11 @@ fn add_vesting_schedules<T: Config>(
 
 	let source: T::AccountId = account("source", 0, SEED);
 	let source_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(source.clone());
-	T::Tokens::make_free_balance_be(NATIVE_CURRENCY_ID.into(), &source, BalanceOf::<T>::max_value());
+	T::Tokens::make_free_balance_be(
+		NATIVE_CURRENCY_ID.into(),
+		&source,
+		BalanceOf::<T>::max_value(),
+	);
 
 	System::<T>::set_block_number(T::BlockNumber::zero());
 
@@ -68,7 +72,11 @@ fn add_vesting_schedules<T: Config>(
 		));
 
 		// Top up to guarantee we can always transfer another schedule.
-		T::Tokens::make_free_balance_be(NATIVE_CURRENCY_ID.into(), &source, BalanceOf::<T>::max_value());
+		T::Tokens::make_free_balance_be(
+			NATIVE_CURRENCY_ID.into(),
+			&source,
+			BalanceOf::<T>::max_value(),
+		);
 	}
 
 	Ok(total_locked)
