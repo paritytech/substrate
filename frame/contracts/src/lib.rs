@@ -114,7 +114,7 @@ use codec::{Encode, HasCompact};
 use frame_support::{
 	dispatch::Dispatchable,
 	ensure,
-	traits::{Contains, Currency, Get, Randomness, ReservableCurrency, StorageVersion, Time},
+	traits::{Contains, Currency, Get, Randomness, ReservableCurrency, Time},
 	weights::{DispatchClass, GetDispatchInfo, Pays, PostDispatchInfo, Weight},
 };
 use frame_system::{limits::BlockWeights, Pallet as System};
@@ -132,9 +132,6 @@ type CodeHash<T> = <T as frame_system::Config>::Hash;
 type TrieId = Vec<u8>;
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
-
-/// The current storage version.
-const STORAGE_VERSION: StorageVersion = StorageVersion::new(7);
 
 /// Used as a sentinel value when reading and writing contract memory.
 ///
@@ -221,6 +218,14 @@ pub mod pallet {
 	use super::*;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
+
+	/// The current storage version.
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(7);
+
+	#[pallet::pallet]
+	#[pallet::storage_version(STORAGE_VERSION)]
+	#[pallet::without_storage_info]
+	pub struct Pallet<T>(PhantomData<T>);
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
@@ -352,11 +357,6 @@ pub mod pallet {
 		/// The address generator used to generate the addresses of contracts.
 		type AddressGenerator: AddressGenerator<Self>;
 	}
-
-	#[pallet::pallet]
-	#[pallet::storage_version(STORAGE_VERSION)]
-	#[pallet::without_storage_info]
-	pub struct Pallet<T>(PhantomData<T>);
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T>
