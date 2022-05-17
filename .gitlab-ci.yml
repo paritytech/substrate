@@ -212,6 +212,12 @@ cancel-pipeline:
   needs:
     - job:                         test-linux-stable
       artifacts:                   false
+    - job:                         test-linux-stable-int
+      artifacts:                   false
+    - job:                         cargo-check-subkey
+      artifacts:                   false
+    - job:                         cargo-check-benches
+      artifacts:                   false
   rules:
     - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
       when: on_failure
