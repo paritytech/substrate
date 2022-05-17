@@ -20,17 +20,18 @@
 
 pub mod hardware;
 
+use std::{boxed::Box, fs, path::Path};
+
+use clap::Parser;
+use comfy_table::{Row, Table};
+use log::{error, info, warn};
+
 use sc_cli::{CliConfiguration, Result, SharedParams};
 use sc_service::Configuration;
 use sc_sysinfo::{
 	benchmark_cpu, benchmark_disk_random_writes, benchmark_disk_sequential_writes,
 	benchmark_memory, benchmark_sr25519_verify, ExecutionLimit,
 };
-
-use clap::Parser;
-use log::{error, info, warn};
-use prettytable::{cell, row, table};
-use std::{boxed::Box, fmt::Debug, fs, path::Path};
 
 use crate::shared::check_build_profile;
 pub use hardware::{Metric, Requirement, Requirements, Throughput, SUBSTRATE_REFERENCE_HARDWARE};
@@ -160,7 +161,8 @@ impl MachineCmd {
 	/// Prints a human-readable summary.
 	fn print_summary(&self, requirements: Requirements, results: Vec<BenchResult>) -> Result<()> {
 		// Use a table for nicer console output.
-		let mut table = table!(["Category", "Function", "Score", "Minimum", "Result"]);
+		let mut table = Table::new();
+		table.set_header(["Category", "Function", "Score", "Minimum", "Result"]);
 		// Count how many passed and how many failed.
 		let (mut passed, mut failed) = (0, 0);
 		for (requirement, result) in requirements.0.iter().zip(results.iter()) {
@@ -217,15 +219,16 @@ impl MachineCmd {
 
 impl BenchResult {
 	/// Format [`Self`] as row that can be printed in a table.
-	fn to_row(&self, req: &Requirement) -> prettytable::Row {
+	fn to_row(&self, req: &Requirement) -> Row {
 		let passed = if self.passed { "✅ Pass" } else { "❌ Fail" };
-		row![
-			req.metric.category(),
-			req.metric.name(),
+		vec![
+			req.metric.category().into(),
+			req.metric.name().into(),
 			format!("{}", self.score),
 			format!("{}", req.minimum),
-			format!("{} ({: >5.1?} %)", passed, self.rel_score * 100.0)
+			format!("{} ({: >5.1?} %)", passed, self.rel_score * 100.0),
 		]
+		.into()
 	}
 }
 
