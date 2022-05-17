@@ -31,6 +31,7 @@ mod pallet;
 mod pallet_error;
 mod partial_eq_no_bound;
 mod storage;
+mod storage_alias;
 mod transactional;
 mod tt_macro;
 
@@ -574,4 +575,11 @@ pub fn derive_pallet_error(input: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn __create_tt_macro(input: TokenStream) -> TokenStream {
 	tt_macro::create_tt_return_macro(input)
+}
+
+#[proc_macro_attribute]
+pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
+	storage_alias::storage_alias(input.into())
+		.unwrap_or_else(|r| r.into_compile_error())
+		.into()
 }

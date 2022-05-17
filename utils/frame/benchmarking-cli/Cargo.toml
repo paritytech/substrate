@@ -16,6 +16,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 chrono = "0.4"
 clap = { version = "3.1.18", features = ["derive"] }
 codec = { package = "parity-scale-codec", version = "3.0.0" }
+comfy-table = { version = "5.0.1", default-features = false }
 handlebars = "4.2.2"
 hash-db = "0.15.2"
 hex = "0.4.3"
@@ -26,7 +27,6 @@ lazy_static = "1.4.0"
 linked-hash-map = "0.5.4"
 log = "0.4.17"
 memory-db = "0.29.0"
-prettytable-rs = "0.8.0"
 rand = { version = "0.8.4", features = ["small_rng"] }
 rand_pcg = "0.3.1"
 serde = "1.0.136"
