@@ -129,7 +129,11 @@ where
 		schedule: &Schedule<T>,
 		owner: AccountIdOf<T>,
 	) -> Result<Self, (DispatchError, &'static str)> {
-		let module = prepare::prepare_contract(original_code, schedule, owner)?;
+		let module = prepare::prepare_contract(
+			original_code.try_into().map_err(|_| (<Error<T>>::CodeTooLarge.into(), ""))?,
+			schedule,
+			owner,
+		)?;
 		// When instrumenting a new code we apply a stricter limit than enforced by the
 		// `RelaxedCodeVec` in order to leave some headroom for reinstrumentation.
 		ensure!(

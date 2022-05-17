@@ -401,12 +401,10 @@ fn check_and_instrument<C: ImportSatisfyCheck, T: Config>(
 }
 
 fn do_preparation<C: ImportSatisfyCheck, T: Config>(
-	original_code: Vec<u8>,
+	original_code: CodeVec<T>,
 	schedule: &Schedule<T>,
 	owner: AccountIdOf<T>,
 ) -> Result<PrefabWasmModule<T>, (DispatchError, &'static str)> {
-	let original_code: CodeVec<T> =
-		original_code.try_into().map_err(|_| (<Error<T>>::CodeTooLarge.into(), ""))?;
 	let (code, (initial, maximum)) = check_and_instrument::<C, T>(original_code.as_ref(), schedule)
 		.map_err(|msg| (<Error<T>>::CodeRejected.into(), msg))?;
 	let original_code_len = original_code.len();
@@ -448,7 +446,7 @@ fn do_preparation<C: ImportSatisfyCheck, T: Config>(
 ///
 /// The preprocessing includes injecting code for gas metering and metering the height of stack.
 pub fn prepare_contract<T: Config>(
-	original_code: Vec<u8>,
+	original_code: CodeVec<T>,
 	schedule: &Schedule<T>,
 	owner: AccountIdOf<T>,
 ) -> Result<PrefabWasmModule<T>, (DispatchError, &'static str)> {
@@ -551,7 +549,7 @@ mod tests {
 		($name:ident, $wat:expr, $($expected:tt)*) => {
 			#[test]
 			fn $name() {
-				let wasm = wat::parse_str($wat).unwrap();
+				let wasm = wat::parse_str($wat).unwrap().try_into().unwrap();
 				let schedule = Schedule {
 					limits: Limits {
 						globals: 3,
