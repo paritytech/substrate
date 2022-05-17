@@ -101,6 +101,16 @@ pub trait UnfilteredDispatchable {
 	fn dispatch_bypass_filter(self, origin: Self::Origin) -> DispatchResultWithPostInfo;
 }
 
+/// Type that can be dispatched with an additional storage layer which is used to execute the call.
+pub trait DispatchableWithStorageLayer {
+	/// The origin type of the runtime, (i.e. `frame_system::Config::Origin`).
+	type Origin;
+
+	/// Same as `dispatch` from the `Dispatchable` trait, but specifically spawns a new storage
+	/// layer to execute the call inside of.
+	fn dispatch_with_storage_layer(self, origin: Self::Origin) -> DispatchResultWithPostInfo;
+}
+
 /// Methods available on `frame_system::Config::Origin`.
 pub trait OriginTrait: Sized {
 	/// Runtime call type, as in `frame_system::Config::Call`
