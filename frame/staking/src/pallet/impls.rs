@@ -1386,32 +1386,32 @@ impl<T: Config> StakingInterface for Pallet<T> {
 		Self::current_era().unwrap_or(Zero::zero())
 	}
 
-	fn active_stake(stash: &Self::AccountId) -> Option<Self::Balance> {
-		Self::ledger(stash).map(|l| l.active)
+	fn active_stake(controller: &Self::AccountId) -> Option<Self::Balance> {
+		Self::ledger(controller).map(|l| l.active)
 	}
 
-	fn total_stake(stash: &Self::AccountId) -> Option<Self::Balance> {
-		Self::ledger(stash).map(|l| l.total)
+	fn total_stake(controller: &Self::AccountId) -> Option<Self::Balance> {
+		Self::ledger(controller).map(|l| l.total)
 	}
 
 	fn bond_extra(stash: Self::AccountId, extra: Self::Balance) -> DispatchResult {
 		Self::bond_extra(RawOrigin::Signed(stash).into(), extra)
 	}
 
-	fn unbond(stash: Self::AccountId, value: Self::Balance) -> DispatchResult {
-		Self::unbond(RawOrigin::Signed(stash).into(), value)
+	fn unbond(controller: Self::AccountId, value: Self::Balance) -> DispatchResult {
+		Self::unbond(RawOrigin::Signed(controller).into(), value)
 	}
 
-	fn chill(stash: Self::AccountId) -> DispatchResult {
-		Self::chill(RawOrigin::Signed(stash).into())
+	fn chill(controller: Self::AccountId) -> DispatchResult {
+		Self::chill(RawOrigin::Signed(controller).into())
 	}
 
 	fn withdraw_unbonded(
-		stash: Self::AccountId,
+		controller: Self::AccountId,
 		num_slashing_spans: u32,
 	) -> Result<bool, DispatchError> {
-		Self::withdraw_unbonded(RawOrigin::Signed(stash.clone()).into(), num_slashing_spans)
-			.map(|_| Ledger::<T>::contains_key(&stash))
+		Self::withdraw_unbonded(RawOrigin::Signed(controller.clone()).into(), num_slashing_spans)
+			.map(|_| !Ledger::<T>::contains_key(&controller))
 			.map_err(|with_post| with_post.error)
 	}
 

@@ -447,7 +447,11 @@ impl<T: Config> PoolMember<T> {
 			.fold(BalanceOf::<T>::zero(), |acc, (_, v)| acc.saturating_add(*v))
 	}
 
-	/// Try and unbond `points` from self, with the given target unbonding era.
+	/// Try and unbond `points_dissolved` from self, and in return mint `points_issued` into the
+	/// corresponding `era`.
+	///
+	/// In the absence of slashing, these two points are always the same. In the presence of
+	/// slashing, the value of points in different pools varies.
 	///
 	/// Returns `Ok(())` and updates `unbonding_eras` and `points` if success, `Err(_)` otherwise.
 	fn try_unbond(
@@ -1309,6 +1313,8 @@ pub mod pallet {
 		UnbondingPoolSlashed { pool_id: PoolId, era: EraIndex, balance: BalanceOf<T> },
 	}
 
+	#[cfg_attr(test, derive(PartialEq))]
+	pub enum InnerError {}
 	#[pallet::error]
 	#[cfg_attr(test, derive(PartialEq))]
 	pub enum Error<T> {
@@ -1562,6 +1568,7 @@ pub mod pallet {
 					.try_insert(unbond_era, UnbondPool::default())
 					// The above call to `maybe_merge_pools` should ensure there is
 					// always enough space to insert.
+					// TODO: make this visible and transparent #11439
 					.defensive_map_err(|_| Error::<T>::DefensiveError)?;
 			}
 
@@ -1666,6 +1673,13 @@ pub mod pallet {
 				bonded_pool.bonded_account(),
 				num_slashing_spans,
 			)?;
+
+			// defensive-only: the depositor puts enough funds into the stash so that it will only
+			// be destroyed when they are leaving.
+			ensure!(
+				!destroyed || caller == bonded_pool.roles.depositor,
+				Error::<T>::DefensiveError
+			);
 
 			let mut sum_unlocked_points: BalanceOf<T> = Zero::zero();
 			let balance_to_unbond = withdrawn_points

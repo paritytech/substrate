@@ -93,7 +93,7 @@ impl sp_staking::StakingInterface for StakingMock {
 		x.remove(&who);
 		UnbondingBalanceMap::set(&x);
 
-		Ok(UnbondingBalanceMap::get().is_empty())
+		Ok(UnbondingBalanceMap::get().is_empty() && BondedBalanceMap::get().is_empty())
 	}
 
 	fn bond(

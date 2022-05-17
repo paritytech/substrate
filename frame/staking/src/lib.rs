@@ -539,7 +539,7 @@ impl<T: Config> StakingLedger<T> {
 	///
 	/// This calls `Config::OnStakerSlash::on_slash` with information as to how the slash was
 	/// applied.
-	pub fn slash(
+	fn slash(
 		&mut self,
 		slash_amount: BalanceOf<T>,
 		minimum_balance: BalanceOf<T>,
@@ -608,6 +608,7 @@ impl<T: Config> StakingLedger<T> {
 		for i in slash_chunks_priority {
 			if let Some(chunk) = self.unlocking.get_mut(i).defensive() {
 				if remaining_slash.is_zero() {
+					// TODO: test for this fix in the staking pallet.
 					break
 				}
 				slash_out_of(&mut chunk.value, &mut remaining_slash);

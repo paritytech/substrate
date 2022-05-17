@@ -104,12 +104,12 @@ pub trait StakingInterface {
 
 	/// Have `stash` nominate `validators`.
 	fn nominate(
-		stash: Self::AccountId,
+		controller: Self::AccountId,
 		validators: sp_std::vec::Vec<Self::AccountId>,
 	) -> DispatchResult;
 
 	/// Chill `stash`.
-	fn chill(stash: Self::AccountId) -> DispatchResult;
+	fn chill(controller: Self::AccountId) -> DispatchResult;
 
 	/// Bond some extra amount in the _Stash_'s free balance against the active bonded balance of
 	/// the account. The amount extra actually bonded will never be more than the _Stash_'s free
