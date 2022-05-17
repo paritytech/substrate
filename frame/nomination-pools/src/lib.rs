@@ -740,16 +740,22 @@ impl<T: Config> BondedPool<T> {
 			// We checked for zero above
 			.div(bonded_balance);
 
+		let min_points_to_balance = T::MinPointsToBalance::get();
+
 		// Pool points can inflate relative to balance, but only if the pool is slashed.
 		// If we cap the ratio of points:balance so one cannot join a pool that has been slashed
-		// 90%,
-		ensure!(points_to_balance_ratio_floor < 10u32.into(), Error::<T>::OverflowRisk);
-		// while restricting the balance to 1/10th of max total issuance,
-		let next_bonded_balance = bonded_balance.saturating_add(new_funds);
+		// by `min_points_to_balance`%, if not zero.
 		ensure!(
-			next_bonded_balance < BalanceOf::<T>::max_value().div(10u32.into()),
+			points_to_balance_ratio_floor < min_points_to_balance.into(),
 			Error::<T>::OverflowRisk
 		);
+		// while restricting the balance to `min_points_to_balance` of max total issuance,
+		let next_bonded_balance = bonded_balance.saturating_add(new_funds);
+		ensure!(
+			next_bonded_balance < BalanceOf::<T>::max_value().div(min_points_to_balance.into()),
+			Error::<T>::OverflowRisk
+		);
+
 		// then we can be decently confident the bonding pool points will not overflow
 		// `BalanceOf<T>`. Note that these are just heuristics.
 
@@ -1101,6 +1107,14 @@ pub mod pallet {
 		/// The nomination pool's pallet id.
 		#[pallet::constant]
 		type PalletId: Get<frame_support::PalletId>;
+
+		/// The minimum pool points-to-balance ratio that must be maintained for it to be `open`.
+		/// This is important in the event slashing takes place and the pool's points-to-balance
+		/// ratio becomes disproportional.
+		/// For a value of 10, the threshold would be a pool points-to-balance ratio of 10:1.
+		/// Such a scenario would also be the equivalent of the pool being 90% slashed.
+		#[pallet::constant]
+		type MinPointsToBalance: Get<u32>;
 
 		/// Infallible method for converting `Currency::Balance` to `U256`.
 		type BalanceToU256: Convert<BalanceOf<Self>, U256>;
@@ -1844,7 +1858,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Update configurations for the nomination pools. The origin must for this call must be
+		/// Update configurations for the nomination pools. The origin for this call must be
 		/// Root.
 		///
 		/// # Arguments
@@ -1880,7 +1894,6 @@ pub mod pallet {
 			config_op_exp!(MaxPools::<T>, max_pools);
 			config_op_exp!(MaxPoolMembers::<T>, max_members);
 			config_op_exp!(MaxPoolMembersPerPool::<T>, max_members_per_pool);
-
 			Ok(())
 		}
 
@@ -1941,11 +1954,14 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn integrity_test() {
 			assert!(
+				T::MinPointsToBalance::get() > 0,
+				"Minimum points to balance ratio must be greater than 0"
+			);
+			assert!(
 				sp_std::mem::size_of::<RewardPoints>() >=
 					2 * sp_std::mem::size_of::<BalanceOf<T>>(),
 				"bit-length of the reward points must be at least twice as much as balance"
 			);
-
 			assert!(
 				T::StakingInterface::bonding_duration() < TotalUnbondingPools::<T>::get(),
 				"There must be more unbonding pools then the bonding duration /
@@ -2304,7 +2320,6 @@ impl<T: Config> Pallet<T> {
 				sum_unbonding_balance
 			);
 		}
-
 		Ok(())
 	}
 
