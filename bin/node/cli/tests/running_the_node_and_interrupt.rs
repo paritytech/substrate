@@ -25,7 +25,7 @@ use nix::{
 	},
 	unistd::Pid,
 };
-use std::process::{Child, Command};
+use std::process::{self, Child, Command};
 use tempfile::tempdir;
 
 pub mod common;
@@ -36,6 +36,8 @@ async fn running_the_node_works_and_can_be_interrupted() {
 		let base_path = tempdir().expect("could not create a temp dir");
 		let mut cmd = common::KillChildOnDrop(
 			Command::new(cargo_bin("substrate"))
+				.stdout(process::Stdio::piped())
+				.stderr(process::Stdio::piped())
 				.args(&["--dev", "-d"])
 				.arg(base_path.path())
 				.arg("--db=paritydb")
@@ -44,7 +46,13 @@ async fn running_the_node_works_and_can_be_interrupted() {
 				.unwrap(),
 		);
 
-		common::wait_n_finalized_blocks(3, 30).await.unwrap();
+		let stderr = cmd.stderr.take().unwrap();
+
+		let (ws_url, _) = common::find_ws_url_from_output(stderr);
+
+		common::wait_n_finalized_blocks(3, 30, &ws_url)
+			.await
+			.expect("Blocks are produced in time");
 		assert!(cmd.try_wait().unwrap().is_none(), "the process should still be running");
 		kill(Pid::from_raw(cmd.id().try_into().unwrap()), signal).unwrap();
 		assert_eq!(
@@ -69,6 +77,8 @@ async fn running_the_node_works_and_can_be_interrupted() {
 async fn running_two_nodes_with_the_same_ws_port_should_work() {
 	fn start_node() -> Child {
 		Command::new(cargo_bin("substrate"))
+			.stdout(process::Stdio::piped())
+			.stderr(process::Stdio::piped())
 			.args(&["--dev", "--tmp", "--ws-port=45789", "--no-hardware-benchmarks"])
 			.spawn()
 			.unwrap()
@@ -77,7 +87,10 @@ async fn running_two_nodes_with_the_same_ws_port_should_work() {
 	let mut first_node = common::KillChildOnDrop(start_node());
 	let mut second_node = common::KillChildOnDrop(start_node());
 
-	let _ = common::wait_n_finalized_blocks(3, 30).await;
+	let stderr = first_node.stderr.take().unwrap();
+	let (ws_url, _) = common::find_ws_url_from_output(stderr);
+
+	common::wait_n_finalized_blocks(3, 30, &ws_url).await.unwrap();
 
 	assert!(first_node.try_wait().unwrap().is_none(), "The first node should still be running");
 	assert!(second_node.try_wait().unwrap().is_none(), "The second node should still be running");
