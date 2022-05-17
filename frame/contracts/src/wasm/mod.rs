@@ -129,17 +129,7 @@ where
 		schedule: &Schedule<T>,
 		owner: AccountIdOf<T>,
 	) -> Result<Self, (DispatchError, &'static str)> {
-		let module =
-			prepare::prepare_contract(original_code, schedule, owner).map_err(|(err, msg)| {
-				if !msg.is_empty() {
-					log::debug!(
-						target: "runtime::contracts",
-						"CodeRejected: {}",
-						msg,
-					);
-				}
-				(err, msg)
-			})?;
+		let module = prepare::prepare_contract(original_code, schedule, owner)?;
 		// When instrumenting a new code we apply a stricter limit than enforced by the
 		// `RelaxedCodeVec` in order to leave some headroom for reinstrumentation.
 		ensure!(
