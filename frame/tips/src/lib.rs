@@ -70,7 +70,7 @@ use codec::{Decode, Encode};
 use frame_support::{
 	traits::{
 		ContainsLengthBound, Currency, EnsureOrigin, ExistenceRequirement::KeepAlive, Get,
-		OnUnbalanced, ReservableCurrency, SortedMembers, StorageVersion,
+		OnUnbalanced, ReservableCurrency, SortedMembers,
 	},
 	Parameter,
 };
