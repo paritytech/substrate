@@ -20,7 +20,7 @@ codec = { package = "parity-scale-codec", version = "3.0.0", default-features = 
 fnv = "1.0.6"
 futures = "0.3.21"
 hash-db = { version = "0.15.2", default-features = false }
-log = "0.4.16"
+log = "0.4.17"
 parking_lot = "0.12.0"
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.10.0-dev", path = "../../utils/prometheus" }
 sc-executor = { version = "0.10.0-dev", path = "../executor" }

@@ -23,168 +23,174 @@ use sp_runtime::{DispatchError, DispatchResult};
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub fn do_transfer(
-		class: T::ClassId,
-		instance: T::InstanceId,
+		collection: T::CollectionId,
+		item: T::ItemId,
 		dest: T::AccountId,
 		with_details: impl FnOnce(
-			&ClassDetailsFor<T, I>,
-			&mut InstanceDetailsFor<T, I>,
+			&CollectionDetailsFor<T, I>,
+			&mut ItemDetailsFor<T, I>,
 		) -> DispatchResult,
 	) -> DispatchResult {
-		let class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
-		ensure!(!class_details.is_frozen, Error::<T, I>::Frozen);
-		ensure!(!T::Locker::is_locked(class, instance), Error::<T, I>::Locked);
+		let collection_details =
+			Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
+		ensure!(!collection_details.is_frozen, Error::<T, I>::Frozen);
+		ensure!(!T::Locker::is_locked(collection, item), Error::<T, I>::Locked);
 
 		let mut details =
-			Asset::<T, I>::get(&class, &instance).ok_or(Error::<T, I>::UnknownClass)?;
+			Item::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::UnknownCollection)?;
 		ensure!(!details.is_frozen, Error::<T, I>::Frozen);
-		with_details(&class_details, &mut details)?;
+		with_details(&collection_details, &mut details)?;
 
-		Account::<T, I>::remove((&details.owner, &class, &instance));
-		Account::<T, I>::insert((&dest, &class, &instance), ());
+		Account::<T, I>::remove((&details.owner, &collection, &item));
+		Account::<T, I>::insert((&dest, &collection, &item), ());
 		let origin = details.owner;
 		details.owner = dest;
-		Asset::<T, I>::insert(&class, &instance, &details);
+		Item::<T, I>::insert(&collection, &item, &details);
 
 		Self::deposit_event(Event::Transferred {
-			class,
-			instance,
+			collection,
+			item,
 			from: origin,
 			to: details.owner,
 		});
 		Ok(())
 	}
 
-	pub fn do_create_class(
-		class: T::ClassId,
+	pub fn do_create_collection(
+		collection: T::CollectionId,
 		owner: T::AccountId,
 		admin: T::AccountId,
 		deposit: DepositBalanceOf<T, I>,
 		free_holding: bool,
 		event: Event<T, I>,
 	) -> DispatchResult {
-		ensure!(!Class::<T, I>::contains_key(class), Error::<T, I>::InUse);
+		ensure!(!Collection::<T, I>::contains_key(collection), Error::<T, I>::InUse);
 
 		T::Currency::reserve(&owner, deposit)?;
 
-		Class::<T, I>::insert(
-			class,
-			ClassDetails {
+		Collection::<T, I>::insert(
+			collection,
+			CollectionDetails {
 				owner: owner.clone(),
 				issuer: admin.clone(),
 				admin: admin.clone(),
 				freezer: admin,
 				total_deposit: deposit,
 				free_holding,
-				instances: 0,
-				instance_metadatas: 0,
+				items: 0,
+				item_metadatas: 0,
 				attributes: 0,
 				is_frozen: false,
 			},
 		);
 
-		ClassAccount::<T, I>::insert(&owner, &class, ());
+		CollectionAccount::<T, I>::insert(&owner, &collection, ());
 		Self::deposit_event(event);
 		Ok(())
 	}
 
-	pub fn do_destroy_class(
-		class: T::ClassId,
+	pub fn do_destroy_collection(
+		collection: T::CollectionId,
 		witness: DestroyWitness,
 		maybe_check_owner: Option<T::AccountId>,
 	) -> Result<DestroyWitness, DispatchError> {
-		Class::<T, I>::try_mutate_exists(class, |maybe_details| {
-			let class_details = maybe_details.take().ok_or(Error::<T, I>::UnknownClass)?;
+		Collection::<T, I>::try_mutate_exists(collection, |maybe_details| {
+			let collection_details =
+				maybe_details.take().ok_or(Error::<T, I>::UnknownCollection)?;
 			if let Some(check_owner) = maybe_check_owner {
-				ensure!(class_details.owner == check_owner, Error::<T, I>::NoPermission);
+				ensure!(collection_details.owner == check_owner, Error::<T, I>::NoPermission);
 			}
-			ensure!(class_details.instances == witness.instances, Error::<T, I>::BadWitness);
+			ensure!(collection_details.items == witness.items, Error::<T, I>::BadWitness);
 			ensure!(
-				class_details.instance_metadatas == witness.instance_metadatas,
+				collection_details.item_metadatas == witness.item_metadatas,
 				Error::<T, I>::BadWitness
 			);
-			ensure!(class_details.attributes == witness.attributes, Error::<T, I>::BadWitness);
+			ensure!(collection_details.attributes == witness.attributes, Error::<T, I>::BadWitness);
 
-			for (instance, details) in Asset::<T, I>::drain_prefix(&class) {
-				Account::<T, I>::remove((&details.owner, &class, &instance));
+			for (item, details) in Item::<T, I>::drain_prefix(&collection) {
+				Account::<T, I>::remove((&details.owner, &collection, &item));
 			}
-			InstanceMetadataOf::<T, I>::remove_prefix(&class, None);
-			ClassMetadataOf::<T, I>::remove(&class);
-			Attribute::<T, I>::remove_prefix((&class,), None);
-			ClassAccount::<T, I>::remove(&class_details.owner, &class);
-			T::Currency::unreserve(&class_details.owner, class_details.total_deposit);
+			ItemMetadataOf::<T, I>::remove_prefix(&collection, None);
+			CollectionMetadataOf::<T, I>::remove(&collection);
+			Attribute::<T, I>::remove_prefix((&collection,), None);
+			CollectionAccount::<T, I>::remove(&collection_details.owner, &collection);
+			T::Currency::unreserve(&collection_details.owner, collection_details.total_deposit);
 
-			Self::deposit_event(Event::Destroyed { class });
+			Self::deposit_event(Event::Destroyed { collection });
 
 			Ok(DestroyWitness {
-				instances: class_details.instances,
-				instance_metadatas: class_details.instance_metadatas,
-				attributes: class_details.attributes,
+				items: collection_details.items,
+				item_metadatas: collection_details.item_metadatas,
+				attributes: collection_details.attributes,
 			})
 		})
 	}
 
 	pub fn do_mint(
-		class: T::ClassId,
-		instance: T::InstanceId,
+		collection: T::CollectionId,
+		item: T::ItemId,
 		owner: T::AccountId,
-		with_details: impl FnOnce(&ClassDetailsFor<T, I>) -> DispatchResult,
+		with_details: impl FnOnce(&CollectionDetailsFor<T, I>) -> DispatchResult,
 	) -> DispatchResult {
-		ensure!(!Asset::<T, I>::contains_key(class, instance), Error::<T, I>::AlreadyExists);
+		ensure!(!Item::<T, I>::contains_key(collection, item), Error::<T, I>::AlreadyExists);
 
-		Class::<T, I>::try_mutate(&class, |maybe_class_details| -> DispatchResult {
-			let class_details = maybe_class_details.as_mut().ok_or(Error::<T, I>::UnknownClass)?;
+		Collection::<T, I>::try_mutate(
+			&collection,
+			|maybe_collection_details| -> DispatchResult {
+				let collection_details =
+					maybe_collection_details.as_mut().ok_or(Error::<T, I>::UnknownCollection)?;
 
-			with_details(class_details)?;
+				with_details(collection_details)?;
 
-			let instances =
-				class_details.instances.checked_add(1).ok_or(ArithmeticError::Overflow)?;
-			class_details.instances = instances;
+				let items =
+					collection_details.items.checked_add(1).ok_or(ArithmeticError::Overflow)?;
+				collection_details.items = items;
 
-			let deposit = match class_details.free_holding {
-				true => Zero::zero(),
-				false => T::InstanceDeposit::get(),
-			};
-			T::Currency::reserve(&class_details.owner, deposit)?;
-			class_details.total_deposit += deposit;
+				let deposit = match collection_details.free_holding {
+					true => Zero::zero(),
+					false => T::ItemDeposit::get(),
+				};
+				T::Currency::reserve(&collection_details.owner, deposit)?;
+				collection_details.total_deposit += deposit;
 
-			let owner = owner.clone();
-			Account::<T, I>::insert((&owner, &class, &instance), ());
-			let details = InstanceDetails { owner, approved: None, is_frozen: false, deposit };
-			Asset::<T, I>::insert(&class, &instance, details);
-			Ok(())
-		})?;
+				let owner = owner.clone();
+				Account::<T, I>::insert((&owner, &collection, &item), ());
+				let details = ItemDetails { owner, approved: None, is_frozen: false, deposit };
+				Item::<T, I>::insert(&collection, &item, details);
+				Ok(())
+			},
+		)?;
 
-		Self::deposit_event(Event::Issued { class, instance, owner });
+		Self::deposit_event(Event::Issued { collection, item, owner });
 		Ok(())
 	}
 
 	pub fn do_burn(
-		class: T::ClassId,
-		instance: T::InstanceId,
-		with_details: impl FnOnce(&ClassDetailsFor<T, I>, &InstanceDetailsFor<T, I>) -> DispatchResult,
+		collection: T::CollectionId,
+		item: T::ItemId,
+		with_details: impl FnOnce(&CollectionDetailsFor<T, I>, &ItemDetailsFor<T, I>) -> DispatchResult,
 	) -> DispatchResult {
-		let owner = Class::<T, I>::try_mutate(
-			&class,
-			|maybe_class_details| -> Result<T::AccountId, DispatchError> {
-				let class_details =
-					maybe_class_details.as_mut().ok_or(Error::<T, I>::UnknownClass)?;
-				let details =
-					Asset::<T, I>::get(&class, &instance).ok_or(Error::<T, I>::UnknownClass)?;
-				with_details(class_details, &details)?;
+		let owner = Collection::<T, I>::try_mutate(
+			&collection,
+			|maybe_collection_details| -> Result<T::AccountId, DispatchError> {
+				let collection_details =
+					maybe_collection_details.as_mut().ok_or(Error::<T, I>::UnknownCollection)?;
+				let details = Item::<T, I>::get(&collection, &item)
+					.ok_or(Error::<T, I>::UnknownCollection)?;
+				with_details(collection_details, &details)?;
 
 				// Return the deposit.
-				T::Currency::unreserve(&class_details.owner, details.deposit);
-				class_details.total_deposit.saturating_reduce(details.deposit);
-				class_details.instances.saturating_dec();
+				T::Currency::unreserve(&collection_details.owner, details.deposit);
+				collection_details.total_deposit.saturating_reduce(details.deposit);
+				collection_details.items.saturating_dec();
 				Ok(details.owner)
 			},
 		)?;
 
-		Asset::<T, I>::remove(&class, &instance);
-		Account::<T, I>::remove((&owner, &class, &instance));
+		Item::<T, I>::remove(&collection, &item);
+		Account::<T, I>::remove((&owner, &collection, &item));
 
-		Self::deposit_event(Event::Burned { class, instance, owner });
+		Self::deposit_event(Event::Burned { collection, item, owner });
 		Ok(())
 	}
 }

@@ -2788,6 +2788,80 @@ fn deferred_slashes_are_deferred() {
 }
 
 #[test]
+fn staker_cannot_bail_deferred_slash() {
+	// as long as SlashDeferDuration is less than BondingDuration, this should not be possible.
+	ExtBuilder::default().slash_defer_duration(2).build_and_execute(|| {
+		mock::start_active_era(1);
+
+		assert_eq!(Balances::free_balance(11), 1000);
+		assert_eq!(Balances::free_balance(101), 2000);
+
+		let exposure = Staking::eras_stakers(active_era(), 11);
+		let nominated_value = exposure.others.iter().find(|o| o.who == 101).unwrap().value;
+
+		on_offence_now(
+			&[OffenceDetails {
+				offender: (11, Staking::eras_stakers(active_era(), 11)),
+				reporters: vec![],
+			}],
+			&[Perbill::from_percent(10)],
+		);
+
+		// now we chill
+		assert_ok!(Staking::chill(Origin::signed(100)));
+		assert_ok!(Staking::unbond(Origin::signed(100), 500));
+
+		assert_eq!(Staking::current_era().unwrap(), 1);
+		assert_eq!(active_era(), 1);
+
+		assert_eq!(
+			Ledger::<Test>::get(100).unwrap(),
+			StakingLedger {
+				active: 0,
+				total: 500,
+				stash: 101,
+				claimed_rewards: Default::default(),
+				unlocking: bounded_vec![UnlockChunk { era: 4u32, value: 500 }],
+			}
+		);
+
+		// no slash yet.
+		assert_eq!(Balances::free_balance(11), 1000);
+		assert_eq!(Balances::free_balance(101), 2000);
+
+		// no slash yet.
+		mock::start_active_era(2);
+		assert_eq!(Balances::free_balance(11), 1000);
+		assert_eq!(Balances::free_balance(101), 2000);
+		assert_eq!(Staking::current_era().unwrap(), 2);
+		assert_eq!(active_era(), 2);
+
+		// no slash yet.
+		mock::start_active_era(3);
+		assert_eq!(Balances::free_balance(11), 1000);
+		assert_eq!(Balances::free_balance(101), 2000);
+		assert_eq!(Staking::current_era().unwrap(), 3);
+		assert_eq!(active_era(), 3);
+
+		// and cannot yet unbond:
+		assert_storage_noop!(assert!(Staking::withdraw_unbonded(Origin::signed(100), 0).is_ok()));
+		assert_eq!(
+			Ledger::<Test>::get(100).unwrap().unlocking.into_inner(),
+			vec![UnlockChunk { era: 4u32, value: 500 as Balance }],
+		);
+
+		// at the start of era 4, slashes from era 1 are processed,
+		// after being deferred for at least 2 full eras.
+		mock::start_active_era(4);
+
+		assert_eq!(Balances::free_balance(11), 900);
+		assert_eq!(Balances::free_balance(101), 2000 - (nominated_value / 10));
+
+		// and the leftover of the funds can now be unbonded.
+	})
+}
+
+#[test]
 fn remove_deferred() {
 	ExtBuilder::default().slash_defer_duration(2).build_and_execute(|| {
 		mock::start_active_era(1);
@@ -4856,7 +4930,7 @@ fn force_apply_min_commission_works() {
 }
 
 #[test]
-fn ledger_slash_works() {
+fn proportional_ledger_slash_works() {
 	let c = |era, value| UnlockChunk::<Balance> { era, value };
 	// Given
 	let mut ledger = StakingLedger::<Test> {

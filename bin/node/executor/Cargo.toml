@@ -13,7 +13,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "3.0.0" }
-scale-info = { version = "2.0.1", features = ["derive"] }
+scale-info = { version = "2.1.1", features = ["derive"] }
 frame-benchmarking = { version = "4.0.0-dev", path = "../../../frame/benchmarking" }
 node-primitives = { version = "2.0.0", path = "../primitives" }
 node-runtime = { version = "3.0.0-dev", path = "../runtime" }
