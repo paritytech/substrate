@@ -166,178 +166,74 @@ macro_rules! bounded_btree_map {
 /// Useful for creating a *storage-like* struct for test and migrations.
 ///
 /// ```
-/// # use frame_support::generate_storage_alias;
+/// # use frame_support::storage_alias;
 /// use frame_support::codec;
 /// use frame_support::Twox64Concat;
 /// // generate a storage value with type u32.
-/// generate_storage_alias!(Prefix, StorageName => Value<u32>);
+/// #[storage_alias]
+/// type StorageName = StorageValue<Prefix, u32>;
 ///
 /// // generate a double map from `(u32, u32)` (with hashers `Twox64Concat` for each key)
 /// // to `Vec<u8>`
-/// generate_storage_alias!(
-/// 	OtherPrefix, OtherStorageName => DoubleMap<
-/// 		(Twox64Concat, u32),
-/// 		(Twox64Concat, u32),
-/// 		Vec<u8>
-/// 	>
-/// );
+/// #[storage_alias]
+/// type OtherStorageName = StorageDoubleMap<
+/// 	OtherPrefix,
+/// 	Twox64Concat,
+/// 	u32,
+/// 	Twox64Concat,
+/// 	u32,
+/// 	Vec<u8>,
+/// >;
 ///
 /// // optionally specify the query type
 /// use frame_support::pallet_prelude::{ValueQuery, OptionQuery};
-/// generate_storage_alias!(Prefix, ValueName => Value<u32, OptionQuery>);
-/// generate_storage_alias!(
-/// 	Prefix, SomeStorageName => DoubleMap<
-/// 		(Twox64Concat, u32),
-/// 		(Twox64Concat, u32),
-/// 		Vec<u8>,
-/// 		ValueQuery
-/// 	>
-/// );
+/// #[storage_alias]
+/// type ValueName = StorageValue<Prefix, u32, OptionQuery>;
+/// #[storage_alias]
+/// type SomeStorageName = StorageMap<
+/// 	Prefix,
+/// 	Twox64Concat,
+/// 	u32,
+/// 	Vec<u8>,
+/// 	ValueQuery,
+/// >;
 ///
 /// // generate a map from `Config::AccountId` (with hasher `Twox64Concat`) to `Vec<u8>`
 /// trait Config { type AccountId: codec::FullCodec; }
-/// generate_storage_alias!(
-/// 	Prefix, GenericStorage<T: Config> => Map<(Twox64Concat, T::AccountId), Vec<u8>>
-/// );
+/// #[storage_alias]
+/// type GenericStorage<T> = StorageMap<Prefix, Twox64Concat, <T as Config>::AccountId, Vec<u8>>;
+///
+/// // It also supports NMap
+/// use frame_support::storage::types::Key as NMapKey;
+///
+/// #[storage_alias]
+/// type SomeNMap = StorageNMap<Prefix, (NMapKey<Twox64Concat, u32>, NMapKey<Twox64Concat, u64>), Vec<u8>>;
+///
+/// // Using pallet name as prefix.
+/// //
+/// // When the first generic argument is taking generic arguments it is expected to be a pallet.
+/// // The prefix will then be the pallet name as configured in the runtime through
+/// // `construct_runtime!`.
+///
+/// # struct Pallet<T: Config, I = ()>(std::marker::PhantomData<(T, I)>);
+/// # impl<T: Config, I: 'static> frame_support::traits::PalletInfoAccess for Pallet<T, I> {
+/// # 	fn index() -> usize { 0 }
+/// # 	fn name() -> &'static str { "pallet" }
+/// # 	fn module_name() -> &'static str { "module" }
+/// # 	fn crate_version() -> frame_support::traits::CrateVersion { unimplemented!() }
+/// # }
+///
+/// #[storage_alias]
+/// type SomeValue<T: Config> = StorageValue<Pallet<T>, u64>;
+///
+/// // Pallet with instance
+///
+/// #[storage_alias]
+/// type SomeValue2<T: Config, I: 'static> = StorageValue<Pallet<T, I>, u64>;
+///
 /// # fn main() {}
 /// ```
-#[macro_export]
-macro_rules! generate_storage_alias {
-	// without generic for $name.
-	($pallet:ident, $name:ident => Map<($hasher:ty, $key:ty), $value:ty $(, $querytype:ty)?>) => {
-		$crate::paste::paste! {
-			$crate::generate_storage_alias!(@GENERATE_INSTANCE_STRUCT $pallet, $name);
-			type $name = $crate::storage::types::StorageMap<
-				[<$name Instance>],
-				$hasher,
-				$key,
-				$value,
-				$( $querytype )?
-			>;
-		}
-	};
-	(
-		$pallet:ident,
-		$name:ident
-		=> DoubleMap<($hasher1:ty, $key1:ty), ($hasher2:ty, $key2:ty), $value:ty $(, $querytype:ty)?>
-	) => {
-		$crate::paste::paste! {
-			$crate::generate_storage_alias!(@GENERATE_INSTANCE_STRUCT $pallet, $name);
-			type $name = $crate::storage::types::StorageDoubleMap<
-				[<$name Instance>],
-				$hasher1,
-				$key1,
-				$hasher2,
-				$key2,
-				$value,
-				$( $querytype )?
-			>;
-		}
-	};
-	(
-		$pallet:ident,
-		$name:ident
-		=> NMap<Key<$(($hasher:ty, $key:ty)),+>, $value:ty $(, $querytype:ty)?>
-	) => {
-		$crate::paste::paste! {
-			$crate::generate_storage_alias!(@GENERATE_INSTANCE_STRUCT $pallet, $name);
-			type $name = $crate::storage::types::StorageNMap<
-				[<$name Instance>],
-				(
-					$( $crate::storage::types::Key<$hasher, $key>, )+
-				),
-				$value,
-				$( $querytype )?
-			>;
-		}
-	};
-	($pallet:ident, $name:ident => Value<$value:ty $(, $querytype:ty)?>) => {
-		$crate::paste::paste! {
-			$crate::generate_storage_alias!(@GENERATE_INSTANCE_STRUCT $pallet, $name);
-			type $name = $crate::storage::types::StorageValue<
-				[<$name Instance>],
-				$value,
-				$( $querytype )?
-			>;
-		}
-	};
-	// with generic for $name.
-	(
-		$pallet:ident,
-		$name:ident<$t:ident : $bounds:tt>
-		=> Map<($hasher:ty, $key:ty), $value:ty $(, $querytype:ty)?>
-	) => {
-		$crate::paste::paste! {
-			$crate::generate_storage_alias!(@GENERATE_INSTANCE_STRUCT $pallet, $name);
-			#[allow(type_alias_bounds)]
-			type $name<$t : $bounds> = $crate::storage::types::StorageMap<
-				[<$name Instance>],
-				$hasher,
-				$key,
-				$value,
-				$( $querytype )?
-			>;
-		}
-	};
-	(
-		$pallet:ident,
-		$name:ident<$t:ident : $bounds:tt>
-		=> DoubleMap<($hasher1:ty, $key1:ty), ($hasher2:ty, $key2:ty), $value:ty $(, $querytype:ty)?>
-	) => {
-		$crate::paste::paste! {
-			$crate::generate_storage_alias!(@GENERATE_INSTANCE_STRUCT $pallet, $name);
-			#[allow(type_alias_bounds)]
-			type $name<$t : $bounds> = $crate::storage::types::StorageDoubleMap<
-				[<$name Instance>],
-				$hasher1,
-				$key1,
-				$hasher2,
-				$key2,
-				$value,
-				$( $querytype )?
-			>;
-		}
-	};
-	(
-		$pallet:ident,
-		$name:ident<$t:ident : $bounds:tt>
-		=> NMap<$(($hasher:ty, $key:ty),)+ $value:ty $(, $querytype:ty)?>
-	) => {
-		$crate::paste::paste! {
-			$crate::generate_storage_alias!(@GENERATE_INSTANCE_STRUCT $pallet, $name);
-			#[allow(type_alias_bounds)]
-			type $name<$t : $bounds> = $crate::storage::types::StorageNMap<
-				[<$name Instance>],
-				(
-					$( $crate::storage::types::Key<$hasher, $key>, )+
-				),
-				$value,
-				$( $querytype )?
-			>;
-		}
-	};
-	($pallet:ident, $name:ident<$t:ident : $bounds:tt> => Value<$value:ty $(, $querytype:ty)?>) => {
-		$crate::paste::paste! {
-			$crate::generate_storage_alias!(@GENERATE_INSTANCE_STRUCT $pallet, $name);
-			#[allow(type_alias_bounds)]
-			type $name<$t : $bounds> = $crate::storage::types::StorageValue<
-				[<$name Instance>],
-				$value,
-				$( $querytype )?
-			>;
-		}
-	};
-	// helper used in all arms.
-	(@GENERATE_INSTANCE_STRUCT $pallet:ident, $name:ident) => {
-		$crate::paste::paste! {
-			struct [<$name Instance>];
-			impl $crate::traits::StorageInstance for [<$name Instance>] {
-				fn pallet_prefix() -> &'static str { stringify!($pallet) }
-				const STORAGE_PREFIX: &'static str = stringify!($name);
-			}
-		}
-	};
-}
+pub use frame_support_procedural::storage_alias;
 
 /// Create new implementations of the [`Get`](crate::traits::Get) trait.
 ///
@@ -995,16 +891,28 @@ pub mod tests {
 	}
 
 	#[test]
-	fn generate_storage_alias_works() {
+	fn storage_alias_works() {
 		new_test_ext().execute_with(|| {
-			generate_storage_alias!(
+			#[crate::storage_alias]
+			type GenericData2<T> = StorageMap<
 				Test,
-				GenericData2<T: Config> => Map<(Blake2_128Concat, T::BlockNumber), T::BlockNumber>
-			);
+				Blake2_128Concat,
+				<T as Config>::BlockNumber,
+				<T as Config>::BlockNumber,
+			>;
 
 			assert_eq!(Module::<Test>::generic_data2(5), None);
 			GenericData2::<Test>::insert(5, 5);
 			assert_eq!(Module::<Test>::generic_data2(5), Some(5));
+
+			/// Some random docs that ensure that docs are accepted
+			#[crate::storage_alias]
+			pub type GenericData<T> = StorageMap<
+				Test2,
+				Blake2_128Concat,
+				<T as Config>::BlockNumber,
+				<T as Config>::BlockNumber,
+			>;
 		});
 	}
 

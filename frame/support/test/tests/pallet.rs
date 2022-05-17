@@ -17,6 +17,7 @@
 
 use frame_support::{
 	dispatch::{Parameter, UnfilteredDispatchable},
+	pallet_prelude::ValueQuery,
 	storage::unhashed,
 	traits::{
 		ConstU32, GetCallName, GetStorageVersion, OnFinalize, OnGenesis, OnInitialize,
@@ -1630,4 +1631,18 @@ fn assert_type_all_pallets_without_system_reversed_is_correct() {
 	fn _b(t: (Example4, (Example2, (Example,)))) {
 		_a(t)
 	}
+}
+
+#[test]
+fn test_storage_alias() {
+	#[frame_support::storage_alias]
+	type Value<T: pallet::Config>
+	where
+		<T as frame_system::Config>::AccountId: From<SomeType1> + SomeAssociation1,
+	= StorageValue<pallet::Pallet<T>, u32, ValueQuery>;
+
+	TestExternalities::default().execute_with(|| {
+		pallet::Value::<Runtime>::put(10);
+		assert_eq!(10, Value::<Runtime>::get());
+	})
 }
