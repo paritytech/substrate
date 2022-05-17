@@ -948,6 +948,11 @@ pub mod pallet {
 				compute: ElectionCompute::Emergency,
 			};
 
+			Self::deposit_event(Event::SolutionStored {
+				election_compute: ElectionCompute::Emergency,
+				prev_ejected: Self::queued_solution().is_some(),
+			});
+
 			<QueuedSolution<T>>::put(solution);
 			Ok(())
 		}
@@ -1056,6 +1061,11 @@ pub mod pallet {
 				score: Default::default(),
 				compute: ElectionCompute::Fallback,
 			};
+
+			Self::deposit_event(Event::SolutionStored {
+				election_compute: ElectionCompute::Fallback,
+				prev_ejected: Self::queued_solution().is_some(),
+			});
 
 			<QueuedSolution<T>>::put(solution);
 			Ok(())
