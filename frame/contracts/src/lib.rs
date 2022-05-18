@@ -114,9 +114,7 @@ use codec::{Encode, HasCompact};
 use frame_support::{
 	dispatch::Dispatchable,
 	ensure,
-	traits::{
-		ConstU32, Contains, Currency, Get, Randomness, ReservableCurrency, StorageVersion, Time,
-	},
+	traits::{ConstU32, Contains, Currency, Get, Randomness, ReservableCurrency, Time},
 	weights::{DispatchClass, GetDispatchInfo, Pays, PostDispatchInfo, Weight},
 	BoundedVec,
 };
@@ -137,9 +135,6 @@ type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 type CodeVec<T> = BoundedVec<u8, <T as Config>::MaxCodeLen>;
 type RelaxedCodeVec<T> = BoundedVec<u8, <T as Config>::RelaxedMaxCodeLen>;
-
-/// The current storage version.
-const STORAGE_VERSION: StorageVersion = StorageVersion::new(7);
 
 /// Used as a sentinel value when reading and writing contract memory.
 ///
@@ -226,6 +221,13 @@ pub mod pallet {
 	use super::*;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
+
+	/// The current storage version.
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(7);
+
+	#[pallet::pallet]
+	#[pallet::storage_version(STORAGE_VERSION)]
+	pub struct Pallet<T>(PhantomData<T>);
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
@@ -371,10 +373,6 @@ pub mod pallet {
 		/// inaccessible until rectified by another runtime upgrade.
 		type RelaxedMaxCodeLen: Get<u32>;
 	}
-
-	#[pallet::pallet]
-	#[pallet::storage_version(STORAGE_VERSION)]
-	pub struct Pallet<T>(PhantomData<T>);
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T>
