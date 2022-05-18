@@ -464,8 +464,9 @@ where
 		}
 
 		self.mark_dirty();
-		self.overlay.clear_prefix(prefix);
-		self.limit_remove_from_backend(None, Some(prefix), limit)
+		let overlay_count = self.overlay.clear_prefix(prefix);
+		let (all, count) = self.limit_remove_from_backend(None, Some(prefix), limit);
+		(all, count + overlay_count)
 	}
 
 	fn clear_child_prefix(
