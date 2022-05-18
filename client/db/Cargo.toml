@@ -36,7 +36,7 @@ sp-trie = { version = "6.0.0", path = "../../primitives/trie" }
 
 [dev-dependencies]
 kvdb-rocksdb = "0.15.1"
-quickcheck = "1.0.3"
+quickcheck = { version = "1.0.3", default-features = false }
 tempfile = "3"
 sp-tracing = { version = "5.0.0", path = "../../primitives/tracing" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }

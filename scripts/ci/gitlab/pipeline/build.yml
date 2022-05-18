@@ -32,14 +32,15 @@ check-dependent-polkadot:
       substrate: polkadot-v*
       polkadot: release-v*
 
-check-dependent-cumulus:
-  extends:                         .check-dependent-project
-  variables:
-    DEPENDENT_REPO:                cumulus
-    EXTRA_DEPENDENCIES:            polkadot
-    COMPANION_OVERRIDES: |
-      substrate: polkadot-v*
-      polkadot: release-v*
+# TODO: Re-enable after https://github.com/paritytech/pipeline-scripts/issues/44
+#check-dependent-cumulus:
+#  extends:                         .check-dependent-project
+#  variables:
+#    DEPENDENT_REPO:                cumulus
+#    EXTRA_DEPENDENCIES:            polkadot
+#    COMPANION_OVERRIDES: |
+#      substrate: polkadot-v*
+#      polkadot: release-v*
 
 build-linux-substrate:
   stage:                           build
