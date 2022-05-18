@@ -586,6 +586,42 @@ pub mod pallet {
 			// we waive the fee because removing unused code is beneficial
 			Ok(Pays::No.into())
 		}
+
+		/// Privileged function that changes the code of an existing contract.
+		///
+		/// This takes care of updating refcounts and all other necessary operations. Returns
+		/// an error if either the `code_hash` or `dest` do not exist.
+		///
+		/// # Note
+		///
+		/// This does **not** change the address of the contract in question. This means
+		/// that the contract address is no longer derived from its code hash after calling
+		/// this dispatchable.
+		#[pallet::weight(T::WeightInfo::set_code())]
+		pub fn set_code(
+			origin: OriginFor<T>,
+			dest: <T::Lookup as StaticLookup>::Source,
+			code_hash: CodeHash<T>,
+		) -> DispatchResult {
+			ensure_root(origin)?;
+			let dest = T::Lookup::lookup(dest)?;
+			<ContractInfoOf<T>>::try_mutate(&dest, |contract| {
+				let contract = if let Some(contract) = contract {
+					contract
+				} else {
+					return Err(<Error<T>>::ContractNotFound.into())
+				};
+				<PrefabWasmModule<T>>::add_user(code_hash)?;
+				<PrefabWasmModule<T>>::remove_user(contract.code_hash);
+				Self::deposit_event(Event::ContractCodeUpdated {
+					contract: dest.clone(),
+					new_code_hash: code_hash,
+					old_code_hash: contract.code_hash,
+				});
+				contract.code_hash = code_hash;
+				Ok(())
+			})
+		}
 	}
 
 	#[pallet::event]
