@@ -19,9 +19,9 @@
 //! This is a generalization of the *overhead* benchmark which can only measure `System::Remark`
 //! extrinsics.
 
+pub mod bench;
 pub mod cmd;
 pub mod extrinsic_factory;
-pub mod bench;
 
 pub use cmd::ExtrinsicCmd;
 pub use extrinsic_factory::{ExtrinsicBuilder, ExtrinsicFactory};

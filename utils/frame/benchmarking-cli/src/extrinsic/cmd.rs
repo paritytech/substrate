@@ -15,10 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use sc_cli::CliConfiguration;
-use sc_cli::{ImportParams, SharedParams};
 use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider};
-use sc_cli::{Result};
+use sc_cli::{CliConfiguration, ImportParams, Result, SharedParams};
 use sc_client_api::Backend as ClientBackend;
 use sp_api::{ApiExt, ProvideRuntimeApi};
 use sp_runtime::{traits::Block as BlockT, OpaqueExtrinsic};
@@ -28,10 +26,18 @@ use log::info;
 use serde::Serialize;
 use std::{fmt::Debug, sync::Arc};
 
-use super::bench::Benchmark;
-use super::bench::BenchmarkParams;
-use super::extrinsic_factory::ExtrinsicFactory;
+use super::{
+	bench::{Benchmark, BenchmarkParams},
+	extrinsic_factory::ExtrinsicFactory,
+};
 
+/// Benchmark the execution time of different extrinsics.
+///
+/// This is calculated by filling a block with a specific extrinsic and executing the block.
+/// The result time is then divided by the number of extrinsics in that block.
+///
+/// NOTE: The [`frame_support::BlockExecutionWeight`] is ignored
+/// in this case since it is very small compared to the total block execution time.
 #[derive(Debug, Parser)]
 pub struct ExtrinsicCmd {
 	#[allow(missing_docs)]
@@ -47,21 +53,25 @@ pub struct ExtrinsicCmd {
 	pub params: ExtrinsicParams,
 }
 
+/// The params for the [`ExtrinsicCmd`].
 #[derive(Debug, Default, Serialize, Clone, PartialEq, Args)]
 pub struct ExtrinsicParams {
 	#[clap(flatten)]
 	pub bench: BenchmarkParams,
 
 	/// Pallet name of the extrinsic.
-	#[clap(short, long, value_name = "PALLET", index = 1)]
+	#[clap(value_name = "PALLET", index = 1)]
 	pub pallet: String,
 
 	/// Extrinsic name.
-	#[clap(short, long, value_name = "EXTRINSIC", index = 2)]
+	#[clap(value_name = "EXTRINSIC", index = 2)]
 	pub extrinsic: String,
 }
 
 impl ExtrinsicCmd {
+	/// Benchmark the execution time of a specific type of extrinsic.
+	///
+	/// The output will be printed to console.
 	pub fn run<Block, BA, C>(
 		&self,
 		client: Arc<C>,
@@ -74,7 +84,8 @@ impl ExtrinsicCmd {
 		C: BlockBuilderProvider<BA, Block, C> + ProvideRuntimeApi<Block>,
 		C::Api: ApiExt<Block, StateBackend = BA::State> + BlockBuilderApi<Block>,
 	{
-		let ext_builder = ext_factory.try_get(&self.params.pallet, &self.params.extrinsic).expect("TODO");
+		let ext_builder =
+			ext_factory.try_get(&self.params.pallet, &self.params.extrinsic).expect("TODO");
 		let bench = Benchmark::new(client, self.params.bench.clone(), inherent_data);
 
 		let stats = bench.bench(Some(ext_builder))?;

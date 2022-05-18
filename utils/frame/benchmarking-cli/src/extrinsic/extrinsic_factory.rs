@@ -16,28 +16,22 @@
 // limitations under the License.
 
 //! Provides the [`ExtrinsicFactory`] and the [`ExtrinsicBuilder`] types.
-//! Is used by the *overhead* and *extrinsic* benchmarking to build extrinsics.
+//! Is used by the *overhead* and *extrinsic* benchmarks to build extrinsics.
 
 use sp_runtime::OpaqueExtrinsic;
 
-#[derive(Default)]
 /// Helper to manage [`ExtrinsicBuilder`] instances.
+#[derive(Default)]
 pub struct ExtrinsicFactory(pub Vec<Box<dyn ExtrinsicBuilder>>);
 
 impl ExtrinsicFactory {
-	/// Adds a builder to the list and consumes [`Self`].
-	pub fn with_builder(mut self, builder: Box<dyn ExtrinsicBuilder>) -> Self {
-		self.0.push(builder);
-		self
-	}
-
-	/// Returns an optional builder for an extrinsic.
+	/// Returns a builder for an extrinsic.
+	///
+	/// Is case in-sensitive.
 	pub fn try_get(&self, pallet: &str, extrinsic: &str) -> Option<&dyn ExtrinsicBuilder> {
 		self.0
 			.iter()
-			.find(|b| {
-				b.pallet() == pallet.to_lowercase() && b.extrinsic() == extrinsic.to_lowercase()
-			})
+			.find(|b| b.name() == (&pallet.to_lowercase(), &extrinsic.to_lowercase()))
 			.map(|b| b.as_ref())
 	}
 
@@ -52,11 +46,10 @@ impl ExtrinsicFactory {
 /// The built extrinsics only need to be valid in the first block
 /// who's parent block is the genesis block.
 /// This assumption simplifies the generation of the extrinsics.
+/// The signer should be one of the pre-funded dev accounts.
 pub trait ExtrinsicBuilder {
 	/// Pallet of the extrinsic.
-	fn pallet(&self) -> &'static str;
-	/// Name of the extrinsic.
-	fn extrinsic(&self) -> &'static str;
+	fn name(&self /* TODO self not needed… */) -> (&str, &str);
 
 	/// Builds an extrinsic.
 	///
@@ -65,7 +58,9 @@ pub trait ExtrinsicBuilder {
 }
 
 impl std::fmt::Display for &dyn ExtrinsicBuilder {
+	/// Formats the builder in the standard `Pallet::Extrinsic` scheme.
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-		write!(f, "{}::{}", self.pallet().to_uppercase(), self.extrinsic().to_uppercase())
+		let (pallet, extrinsic) = self.name();
+		write!(f, "{}::{}", pallet.to_uppercase(), extrinsic.to_uppercase())
 	}
 }

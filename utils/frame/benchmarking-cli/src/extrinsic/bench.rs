@@ -36,8 +36,8 @@ use log::info;
 use serde::Serialize;
 use std::{marker::PhantomData, sync::Arc, time::Instant};
 
-use crate::shared::Stats;
 use super::ExtrinsicBuilder;
+use crate::shared::Stats;
 
 /// Parameters to configure an *overhead* benchmark.
 #[derive(Debug, Default, Serialize, Clone, PartialEq, Args)]
@@ -91,11 +91,15 @@ where
 		Stats::new(&record)
 	}
 
-	/// Builds a block for the given benchmark type.
+	/// Builds a block which with some optional extrinsics.
 	///
 	/// Returns the block and the number of extrinsics in the block
 	/// that are not inherents.
-	fn build_block(&self, ext_builder: Option<&dyn ExtrinsicBuilder>) -> Result<(Block, Option<u64>)> {
+	/// Returns a block with only inherents if `ext_builder` is `None`.
+	fn build_block(
+		&self,
+		ext_builder: Option<&dyn ExtrinsicBuilder>,
+	) -> Result<(Block, Option<u64>)> {
 		let mut builder = self.client.new_block(Default::default())?;
 		// Create and insert the inherents.
 		let inherents = builder.create_inherents(self.inherent_data.clone())?;
@@ -103,10 +107,10 @@ where
 			builder.push(inherent)?;
 		}
 
+		// Return early if `ext_builder` is `None`.
 		let ext_builder = if let Some(ext_builder) = ext_builder {
 			ext_builder
 		} else {
-			// Return early if we just want a block with inherents and no additional extrinsics.
 			return Ok((builder.build()?.block, None))
 		};
 
@@ -134,14 +138,10 @@ where
 	}
 
 	/// Measures the time that it take to execute a block or an extrinsic.
-	fn measure_block(
-		&self,
-		block: &Block,
-		num_ext: Option<u64>,
-	) -> Result<BenchRecord> {
+	fn measure_block(&self, block: &Block, num_ext: Option<u64>) -> Result<BenchRecord> {
 		let mut record = BenchRecord::new();
 		if num_ext == Some(0) {
-			return Err("Cannot divide by zero".into())
+			return Err("Num extrinsics was zero".into())
 		}
 		let genesis = BlockId::Number(Zero::zero());
 

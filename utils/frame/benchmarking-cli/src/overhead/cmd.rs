@@ -31,12 +31,12 @@ use serde::Serialize;
 use std::{fmt::Debug, sync::Arc};
 
 use crate::{
-	extrinsic::bench::{Benchmark, BenchmarkParams},
-	overhead::{
-		template::TemplateData,
+	extrinsic::{
+		bench::{Benchmark, BenchmarkParams as ExtrinsicBenchmarkParams},
+		ExtrinsicBuilder,
 	},
-	extrinsic::ExtrinsicFactory,
-	shared::{ WeightParams},
+	overhead::template::TemplateData,
+	shared::WeightParams,
 };
 
 /// Benchmark the execution overhead per-block and per-extrinsic.
@@ -64,7 +64,7 @@ pub struct OverheadParams {
 
 	#[allow(missing_docs)]
 	#[clap(flatten)]
-	pub bench: BenchmarkParams,
+	pub bench: ExtrinsicBenchmarkParams,
 }
 
 /// Type of a benchmark.
@@ -86,7 +86,7 @@ impl OverheadCmd {
 		cfg: Configuration,
 		client: Arc<C>,
 		inherent_data: sp_inherents::InherentData,
-		ext_factory: &ExtrinsicFactory,
+		ext_builder: &dyn ExtrinsicBuilder,
 	) -> Result<()>
 	where
 		Block: BlockT<Extrinsic = OpaqueExtrinsic>,
@@ -94,7 +94,9 @@ impl OverheadCmd {
 		C: BlockBuilderProvider<BA, Block, C> + ProvideRuntimeApi<Block>,
 		C::Api: ApiExt<Block, StateBackend = BA::State> + BlockBuilderApi<Block>,
 	{
-		let ext_builder = ext_factory.try_get("system", "remark").expect("TODO");
+		if ext_builder.name() != ("system", "remark") {
+			panic!("The extrinsic builder is required to build `System::Remark` extrinsics instead of {}", &ext_builder);
+		}
 		let bench = Benchmark::new(client, self.params.bench.clone(), inherent_data);
 
 		// per-block execution overhead
