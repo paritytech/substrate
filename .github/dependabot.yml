@@ -5,3 +5,7 @@ updates:
     labels: ["A2-insubstantial", "B0-silent", "C1-low 📌"]
     schedule:
       interval: "daily"
+  - package-ecosystem: github-actions
+    directory: '/'
+    schedule:
+      interval: daily
