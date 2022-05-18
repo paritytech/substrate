@@ -245,6 +245,11 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
+	#[pallet::storage]
+	/// Keeps track of the number of items a collection might have.
+	pub(super) type CollectionMaxSupply<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Blake2_128Concat, T::CollectionId, u32, OptionQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
@@ -334,6 +339,8 @@ pub mod pallet {
 		},
 		/// Ownership acceptance has changed for an account.
 		OwnershipAcceptanceChanged { who: T::AccountId, maybe_collection: Option<T::CollectionId> },
+		/// Max supply has been set for a collection.
+		CollectionMaxSupplySet { collection: T::CollectionId, max_supply: u32 },
 	}
 
 	#[pallet::error]
@@ -362,6 +369,12 @@ pub mod pallet {
 		Unaccepted,
 		/// The item is locked.
 		Locked,
+		/// All items have been minted.
+		MaxSupplyReached,
+		/// The max supply has already been set.
+		MaxSupplyAlreadySet,
+		/// The provided max supply is less to the amount of items a collection already has.
+		MaxSupplyTooSmall,
 	}
 
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
@@ -1354,6 +1367,45 @@ pub mod pallet {
 				OwnershipAcceptance::<T, I>::remove(&who);
 			}
 			Self::deposit_event(Event::OwnershipAcceptanceChanged { who, maybe_collection });
+			Ok(())
+		}
+
+		/// Set the maximum amount of items a collection could have.
+		///
+		/// Origin must be either `ForceOrigin` or `Signed` and the sender should be the Owner of
+		/// the `collection`.
+		///
+		/// Note: This function can only succeed once per collection.
+		///
+		/// - `collection`: The identifier of the collection to change.
+		/// - `max_supply`: The maximum amount of items a collection could have.
+		///
+		/// Emits `CollectionMaxSupplySet` event when successful.
+		#[pallet::weight(T::WeightInfo::set_collection_max_supply())]
+		pub fn set_collection_max_supply(
+			origin: OriginFor<T>,
+			collection: T::CollectionId,
+			max_supply: u32,
+		) -> DispatchResult {
+			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
+				.map(|_| None)
+				.or_else(|origin| ensure_signed(origin).map(Some))?;
+
+			ensure!(
+				!CollectionMaxSupply::<T, I>::contains_key(&collection),
+				Error::<T, I>::MaxSupplyAlreadySet
+			);
+
+			let details =
+				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
+			if let Some(check_owner) = &maybe_check_owner {
+				ensure!(check_owner == &details.owner, Error::<T, I>::NoPermission);
+			}
+
+			ensure!(details.items <= max_supply, Error::<T, I>::MaxSupplyTooSmall);
+
+			CollectionMaxSupply::<T, I>::insert(&collection, max_supply);
+			Self::deposit_event(Event::CollectionMaxSupplySet { collection, max_supply });
 			Ok(())
 		}
 	}
