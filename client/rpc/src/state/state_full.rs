@@ -190,7 +190,7 @@ where
 		+ 'static,
 	Client::Api: Metadata<Block>,
 {
-	async fn call(
+	fn call(
 		&self,
 		block: Option<Block::Hash>,
 		method: String,
@@ -222,7 +222,7 @@ where
 			.map_err(client_err)
 	}
 
-	async fn storage_pairs(
+	fn storage_pairs(
 		&self,
 		block: Option<Block::Hash>,
 		prefix: StorageKey,
@@ -232,7 +232,7 @@ where
 			.map_err(client_err)
 	}
 
-	async fn storage_keys_paged(
+	fn storage_keys_paged(
 		&self,
 		block: Option<Block::Hash>,
 		prefix: Option<StorageKey>,
@@ -251,7 +251,7 @@ where
 			.map_err(client_err)
 	}
 
-	async fn storage(
+	fn storage(
 		&self,
 		block: Option<Block::Hash>,
 		key: StorageKey,
@@ -261,7 +261,7 @@ where
 			.map_err(client_err)
 	}
 
-	async fn storage_size(
+	fn storage_size(
 		&self,
 		block: Option<Block::Hash>,
 		key: StorageKey,
@@ -290,7 +290,7 @@ where
 			.map_err(client_err)
 	}
 
-	async fn storage_hash(
+	fn storage_hash(
 		&self,
 		block: Option<Block::Hash>,
 		key: StorageKey,
@@ -300,7 +300,7 @@ where
 			.map_err(client_err)
 	}
 
-	async fn metadata(&self, block: Option<Block::Hash>) -> std::result::Result<Bytes, Error> {
+	fn metadata(&self, block: Option<Block::Hash>) -> std::result::Result<Bytes, Error> {
 		self.block_or_best(block).map_err(client_err).and_then(|block| {
 			self.client
 				.runtime_api()
@@ -310,7 +310,7 @@ where
 		})
 	}
 
-	async fn runtime_version(
+	fn runtime_version(
 		&self,
 		block: Option<Block::Hash>,
 	) -> std::result::Result<RuntimeVersion, Error> {
@@ -321,7 +321,7 @@ where
 		})
 	}
 
-	async fn query_storage(
+	fn query_storage(
 		&self,
 		from: Block::Hash,
 		to: Option<Block::Hash>,
@@ -337,16 +337,16 @@ where
 		call_fn()
 	}
 
-	async fn query_storage_at(
+	fn query_storage_at(
 		&self,
 		keys: Vec<StorageKey>,
 		at: Option<Block::Hash>,
 	) -> std::result::Result<Vec<StorageChangeSet<Block::Hash>>, Error> {
 		let at = at.unwrap_or_else(|| self.client.info().best_hash);
-		self.query_storage(at, Some(at), keys).await
+		self.query_storage(at, Some(at), keys)
 	}
 
-	async fn read_proof(
+	fn read_proof(
 		&self,
 		block: Option<Block::Hash>,
 		keys: Vec<StorageKey>,
@@ -458,7 +458,7 @@ where
 			.spawn("substrate-rpc-subscription", Some("rpc"), fut.map(drop).boxed());
 	}
 
-	async fn trace_block(
+	fn trace_block(
 		&self,
 		block: Block::Hash,
 		targets: Option<String>,

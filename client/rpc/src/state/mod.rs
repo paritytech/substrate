@@ -60,7 +60,7 @@ where
 	Client: Send + Sync + 'static,
 {
 	/// Call runtime method at given block.
-	async fn call(
+	fn call(
 		&self,
 		block: Option<Block::Hash>,
 		method: String,
@@ -75,14 +75,14 @@ where
 	) -> Result<Vec<StorageKey>, Error>;
 
 	/// Returns the keys with prefix along with their values, leave empty to get all the pairs.
-	async fn storage_pairs(
+	fn storage_pairs(
 		&self,
 		block: Option<Block::Hash>,
 		prefix: StorageKey,
 	) -> Result<Vec<(StorageKey, StorageData)>, Error>;
 
 	/// Returns the keys with prefix with pagination support.
-	async fn storage_keys_paged(
+	fn storage_keys_paged(
 		&self,
 		block: Option<Block::Hash>,
 		prefix: Option<StorageKey>,
@@ -91,14 +91,14 @@ where
 	) -> Result<Vec<StorageKey>, Error>;
 
 	/// Returns a storage entry at a specific block's state.
-	async fn storage(
+	fn storage(
 		&self,
 		block: Option<Block::Hash>,
 		key: StorageKey,
 	) -> Result<Option<StorageData>, Error>;
 
 	/// Returns the hash of a storage entry at a block's state.
-	async fn storage_hash(
+	fn storage_hash(
 		&self,
 		block: Option<Block::Hash>,
 		key: StorageKey,
@@ -108,24 +108,24 @@ where
 	///
 	/// If data is available at `key`, it is returned. Else, the sum of values who's key has `key`
 	/// prefix is returned, i.e. all the storage (double) maps that have this prefix.
-	async fn storage_size(
+	fn storage_size(
 		&self,
 		block: Option<Block::Hash>,
 		key: StorageKey,
 	) -> Result<Option<u64>, Error>;
 
 	/// Returns the runtime metadata as an opaque blob.
-	async fn metadata(&self, block: Option<Block::Hash>) -> Result<Bytes, Error>;
+	fn metadata(&self, block: Option<Block::Hash>) -> Result<Bytes, Error>;
 
 	/// Get the runtime version.
-	async fn runtime_version(&self, block: Option<Block::Hash>) -> Result<RuntimeVersion, Error>;
+	fn runtime_version(&self, block: Option<Block::Hash>) -> Result<RuntimeVersion, Error>;
 
 	/// Query historical storage entries (by key) starting from a block given as the second
 	/// parameter.
 	///
 	/// NOTE This first returned result contains the initial state of storage for all keys.
 	/// Subsequent values in the vector represent changes to the previous state (diffs).
-	async fn query_storage(
+	fn query_storage(
 		&self,
 		from: Block::Hash,
 		to: Option<Block::Hash>,
@@ -133,21 +133,21 @@ where
 	) -> Result<Vec<StorageChangeSet<Block::Hash>>, Error>;
 
 	/// Query storage entries (by key) starting at block hash given as the second parameter.
-	async fn query_storage_at(
+	fn query_storage_at(
 		&self,
 		keys: Vec<StorageKey>,
 		at: Option<Block::Hash>,
 	) -> Result<Vec<StorageChangeSet<Block::Hash>>, Error>;
 
 	/// Returns proof of storage entries at a specific block's state.
-	async fn read_proof(
+	fn read_proof(
 		&self,
 		block: Option<Block::Hash>,
 		keys: Vec<StorageKey>,
 	) -> Result<ReadProof<Block::Hash>, Error>;
 
 	/// Trace storage changes for block
-	async fn trace_block(
+	fn trace_block(
 		&self,
 		block: Block::Hash,
 		targets: Option<String>,
@@ -209,13 +209,8 @@ where
 	Block: BlockT + 'static,
 	Client: Send + Sync + 'static,
 {
-	async fn call(
-		&self,
-		method: String,
-		data: Bytes,
-		block: Option<Block::Hash>,
-	) -> RpcResult<Bytes> {
-		self.backend.call(block, method, data).await.map_err(Into::into)
+	fn call(&self, method: String, data: Bytes, block: Option<Block::Hash>) -> RpcResult<Bytes> {
+		self.backend.call(block, method, data).map_err(Into::into)
 	}
 
 	fn storage_keys(
@@ -226,16 +221,16 @@ where
 		self.backend.storage_keys(block, key_prefix).map_err(Into::into)
 	}
 
-	async fn storage_pairs(
+	fn storage_pairs(
 		&self,
 		key_prefix: StorageKey,
 		block: Option<Block::Hash>,
 	) -> RpcResult<Vec<(StorageKey, StorageData)>> {
 		self.deny_unsafe.check_if_safe()?;
-		self.backend.storage_pairs(block, key_prefix).await.map_err(Into::into)
+		self.backend.storage_pairs(block, key_prefix).map_err(Into::into)
 	}
 
-	async fn storage_keys_paged(
+	fn storage_keys_paged(
 		&self,
 		prefix: Option<StorageKey>,
 		count: u32,
@@ -250,66 +245,61 @@ where
 		}
 		self.backend
 			.storage_keys_paged(block, prefix, count, start_key)
-			.await
 			.map_err(Into::into)
 	}
 
-	async fn storage(
+	fn storage(
 		&self,
 		key: StorageKey,
 		block: Option<Block::Hash>,
 	) -> RpcResult<Option<StorageData>> {
-		self.backend.storage(block, key).await.map_err(Into::into)
+		self.backend.storage(block, key).map_err(Into::into)
 	}
 
-	async fn storage_hash(
+	fn storage_hash(
 		&self,
 		key: StorageKey,
 		block: Option<Block::Hash>,
 	) -> RpcResult<Option<Block::Hash>> {
-		self.backend.storage_hash(block, key).await.map_err(Into::into)
+		self.backend.storage_hash(block, key).map_err(Into::into)
 	}
 
-	async fn storage_size(
-		&self,
-		key: StorageKey,
-		block: Option<Block::Hash>,
-	) -> RpcResult<Option<u64>> {
-		self.backend.storage_size(block, key).await.map_err(Into::into)
+	fn storage_size(&self, key: StorageKey, block: Option<Block::Hash>) -> RpcResult<Option<u64>> {
+		self.backend.storage_size(block, key).map_err(Into::into)
 	}
 
-	async fn metadata(&self, block: Option<Block::Hash>) -> RpcResult<Bytes> {
-		self.backend.metadata(block).await.map_err(Into::into)
+	fn metadata(&self, block: Option<Block::Hash>) -> RpcResult<Bytes> {
+		self.backend.metadata(block).map_err(Into::into)
 	}
 
-	async fn runtime_version(&self, at: Option<Block::Hash>) -> RpcResult<RuntimeVersion> {
-		self.backend.runtime_version(at).await.map_err(Into::into)
+	fn runtime_version(&self, at: Option<Block::Hash>) -> RpcResult<RuntimeVersion> {
+		self.backend.runtime_version(at).map_err(Into::into)
 	}
 
-	async fn query_storage(
+	fn query_storage(
 		&self,
 		keys: Vec<StorageKey>,
 		from: Block::Hash,
 		to: Option<Block::Hash>,
 	) -> RpcResult<Vec<StorageChangeSet<Block::Hash>>> {
 		self.deny_unsafe.check_if_safe()?;
-		self.backend.query_storage(from, to, keys).await.map_err(Into::into)
+		self.backend.query_storage(from, to, keys).map_err(Into::into)
 	}
 
-	async fn query_storage_at(
+	fn query_storage_at(
 		&self,
 		keys: Vec<StorageKey>,
 		at: Option<Block::Hash>,
 	) -> RpcResult<Vec<StorageChangeSet<Block::Hash>>> {
-		self.backend.query_storage_at(keys, at).await.map_err(Into::into)
+		self.backend.query_storage_at(keys, at).map_err(Into::into)
 	}
 
-	async fn read_proof(
+	fn read_proof(
 		&self,
 		keys: Vec<StorageKey>,
 		block: Option<Block::Hash>,
 	) -> RpcResult<ReadProof<Block::Hash>> {
-		self.backend.read_proof(block, keys).await.map_err(Into::into)
+		self.backend.read_proof(block, keys).map_err(Into::into)
 	}
 
 	/// Re-execute the given block with the tracing targets given in `targets`
@@ -317,7 +307,7 @@ where
 	///
 	/// Note: requires the node to run with `--rpc-methods=Unsafe`.
 	/// Note: requires runtimes compiled with wasm tracing support, `--features with-tracing`.
-	async fn trace_block(
+	fn trace_block(
 		&self,
 		block: Block::Hash,
 		targets: Option<String>,
@@ -327,7 +317,6 @@ where
 		self.deny_unsafe.check_if_safe()?;
 		self.backend
 			.trace_block(block, targets, storage_keys, methods)
-			.await
 			.map_err(Into::into)
 	}
 
