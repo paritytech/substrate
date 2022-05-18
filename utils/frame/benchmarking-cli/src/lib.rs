@@ -18,6 +18,7 @@
 //! Contains the root [`BenchmarkCmd`] command and exports its sub-commands.
 
 mod block;
+mod extrinsic;
 mod machine;
 mod overhead;
 mod pallet;
@@ -25,8 +26,9 @@ mod shared;
 mod storage;
 
 pub use block::BlockCmd;
+pub use extrinsic::ExtrinsicCmd;
 pub use machine::{MachineCmd, Requirements, SUBSTRATE_REFERENCE_HARDWARE};
-pub use overhead::{ExtrinsicBuilder, OverheadCmd};
+pub use overhead::OverheadCmd;
 pub use pallet::PalletCmd;
 pub use storage::StorageCmd;
 
