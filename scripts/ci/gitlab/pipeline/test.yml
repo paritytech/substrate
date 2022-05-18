@@ -30,6 +30,10 @@ cargo-fmt:
 
 cargo-clippy:
   stage:                           test
+  # this is an artificial job dependency, for pipeline optimization using GitLab's DAGs
+  needs:
+    - job:                         cargo-fmt
+      artifacts:                   false
   extends:
     - .docker-env
     - .test-refs
@@ -38,6 +42,10 @@ cargo-clippy:
 
 cargo-check-nixos:
   stage:                           test
+  # this is an artificial job dependency, for pipeline optimization using GitLab's DAGs
+  needs:
+    - job:                         cargo-clippy
+      artifacts:                   false
   extends:
     - .docker-env
     - .test-refs
@@ -117,6 +125,10 @@ cargo-check-subkey:
 
 cargo-check-try-runtime:
   stage:                           test
+  # this is an artificial job dependency, for pipeline optimization using GitLab's DAGs
+  needs:
+    - job:                         cargo-check-subkey
+      artifacts:                   false
   extends:
     - .docker-env
     - .test-refs
@@ -125,6 +137,10 @@ cargo-check-try-runtime:
 
 cargo-check-wasmer-sandbox:
   stage:                           test
+  # this is an artificial job dependency, for pipeline optimization using GitLab's DAGs
+  needs:
+    - job:                         cargo-check-try-runtime
+      artifacts:                   false
   extends:
     - .docker-env
     - .test-refs
@@ -133,6 +149,10 @@ cargo-check-wasmer-sandbox:
 
 test-deterministic-wasm:
   stage:                           test
+  # this is an artificial job dependency, for pipeline optimization using GitLab's DAGs
+  needs:
+    - job:                         cargo-check-wasmer-sandbox
+      artifacts:                   false
   extends:
     - .docker-env
     - .test-refs
@@ -217,6 +237,10 @@ test-linux-stable-int:
 
 check-tracing:
   stage:                           test
+  # this is an artificial job dependency, for pipeline optimization using GitLab's DAGs
+  needs:
+    - job:                         test-linux-stable-int
+      artifacts:                   false
   extends:
     - .docker-env
     - .test-refs
@@ -227,6 +251,10 @@ check-tracing:
 
 test-full-crypto-feature:
   stage:                           test
+  # this is an artificial job dependency, for pipeline optimization using GitLab's DAGs
+  needs:
+    - job:                         check-tracing
+      artifacts:                   false
   extends:
     - .docker-env
     - .test-refs
