@@ -64,10 +64,10 @@ where
 	}
 
 	/// Get header of a relay chain block.
-	async fn header(&self, hash: Option<Block::Hash>) -> Result<Option<Block::Header>, Error>;
+	fn header(&self, hash: Option<Block::Hash>) -> Result<Option<Block::Header>, Error>;
 
 	/// Get header and body of a relay chain block.
-	async fn block(&self, hash: Option<Block::Hash>) -> Result<Option<SignedBlock<Block>>, Error>;
+	fn block(&self, hash: Option<Block::Hash>) -> Result<Option<SignedBlock<Block>>, Error>;
 
 	/// Get hash of the n-th block in the canon chain.
 	///
@@ -134,12 +134,12 @@ where
 	Block::Header: Unpin,
 	Client: HeaderBackend<Block> + BlockchainEvents<Block> + 'static,
 {
-	async fn header(&self, hash: Option<Block::Hash>) -> RpcResult<Option<Block::Header>> {
-		self.backend.header(hash).await.map_err(Into::into)
+	fn header(&self, hash: Option<Block::Hash>) -> RpcResult<Option<Block::Header>> {
+		self.backend.header(hash).map_err(Into::into)
 	}
 
-	async fn block(&self, hash: Option<Block::Hash>) -> RpcResult<Option<SignedBlock<Block>>> {
-		self.backend.block(hash).await.map_err(Into::into)
+	fn block(&self, hash: Option<Block::Hash>) -> RpcResult<Option<SignedBlock<Block>>> {
+		self.backend.block(hash).map_err(Into::into)
 	}
 
 	fn block_hash(

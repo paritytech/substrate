@@ -27,11 +27,11 @@ pub mod error;
 pub trait ChainApi<Number, Hash, Header, SignedBlock> {
 	/// Get header.
 	#[method(name = "chain_getHeader")]
-	async fn header(&self, hash: Option<Hash>) -> RpcResult<Option<Header>>;
+	fn header(&self, hash: Option<Hash>) -> RpcResult<Option<Header>>;
 
 	/// Get header and body of a relay chain block.
 	#[method(name = "chain_getBlock")]
-	async fn block(&self, hash: Option<Hash>) -> RpcResult<Option<SignedBlock>>;
+	fn block(&self, hash: Option<Hash>) -> RpcResult<Option<SignedBlock>>;
 
 	/// Get hash of the n-th block in the canon chain.
 	///
