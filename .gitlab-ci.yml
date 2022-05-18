@@ -98,7 +98,9 @@ default:
     - rusty-cachier snapshot destroy
 
 .docker-env:
-  image:                           "${CI_IMAGE}"
+  image:
+    name:                          "${CI_IMAGE}"
+    entrypoint:                    ['bash', '-c', 'exec unshare -m -r bash']
   before_script:
     - !reference [.rust-info-script, script]
     - !reference [.rusty-cachier, before_script]
