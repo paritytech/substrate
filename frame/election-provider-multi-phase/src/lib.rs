@@ -1116,6 +1116,10 @@ pub mod pallet {
 		OcwCallWrongEra,
 		/// Snapshot metadata should exist but didn't.
 		MissingSnapshotMetadata,
+		/// Snapshot should exist but didn't.
+		MissingSnapshot,
+		/// Codec error.
+		Codec,
 		/// `Self::insert_submission` returned an invalid index.
 		InvalidSubmissionIndex,
 		/// The call is not allowed at this point.
@@ -1454,7 +1458,8 @@ impl<T: Config> Pallet<T> {
 
 		// Read the entire snapshot.
 		let RoundSnapshot { voters: snapshot_voters, targets: snapshot_targets } =
-			Self::snapshot().ok_or(FeasibilityError::SnapshotUnavailable)?;
+			Self::read_snapshot_with_preallocate()
+				.map_err(|_| FeasibilityError::SnapshotUnavailable)?;
 
 		// ----- Start building. First, we need some closures.
 		let cache = helpers::generate_voter_cache::<T::MinerConfig>(&snapshot_voters);
@@ -1503,6 +1508,27 @@ impl<T: Config> Pallet<T> {
 		ensure!(known_score == score, FeasibilityError::InvalidScore);
 
 		Ok(ReadySolution { supports, compute, score })
+	}
+
+	/// Should be used instead of the getter of `Snapshot` in memory-bounded code paths.
+	fn read_snapshot_with_preallocate() -> Result<RoundSnapshot<T>, Error<T>> {
+		use codec::MaxEncodedLen;
+		let snap = Self::snapshot_metadata().ok_or(Error::<T>::MissingSnapshot)?;
+		let voters_size = snap.voters as usize * <VoterOf<T>>::max_encoded_len();
+		let targets_size = snap.targets as usize * T::AccountId::max_encoded_len();
+
+		// we want to decode two vecs, which need two u32s at most for their size.
+		let initial_capacity = voters_size + targets_size + 4 + 4;
+		let mut buffer = Vec::<u8>::with_capacity(initial_capacity);
+
+		// fill this whole buffer, and decode into it.
+		buffer.resize(buffer.capacity(), 0);
+		let _leftover = sp_io::storage::read(&<Snapshot<T>>::hashed_key(), &mut buffer, 0)
+			.ok_or(Error::<T>::MissingSnapshot)?;
+
+		// buffer should have not re-allocated
+		debug_assert!(buffer.capacity() == initial_capacity);
+		<RoundSnapshot<T> as codec::Decode>::decode(&mut &*buffer).map_err(|_| Error::<T>::Codec)
 	}
 
 	/// Perform the tasks to be done after a new `elect` has been triggered:

@@ -160,32 +160,11 @@ impl<T: Config> Pallet<T> {
 	pub fn mine_solution(
 	) -> Result<(RawSolution<SolutionOf<T::MinerConfig>>, SolutionOrSnapshotSize), MinerError> {
 		let RoundSnapshot { voters, targets } =
-			Self::snapshot().ok_or(MinerError::SnapshotUnAvailable)?;
+			Self::read_snapshot_with_preallocate().map_err(|_| MinerError::SnapshotUnAvailable)?;
 		let desired_targets = Self::desired_targets().ok_or(MinerError::SnapshotUnAvailable)?;
 		let (solution, score, size) = Miner::<T::MinerConfig>::mine_solution_with_snapshot::<
 			T::Solver,
 		>(voters, targets, desired_targets)?;
-		let round = Self::round();
-		Ok((RawSolution { solution, score, round }, size))
-	}
-
-	/// Convert a raw solution from [`sp_npos_elections::ElectionResult`] to [`RawSolution`], which
-	/// is ready to be submitted to the chain.
-	///
-	/// Will always reduce the solution as well.
-	pub fn prepare_election_result<Accuracy: PerThing128>(
-		election_result: ElectionResult<T::AccountId, Accuracy>,
-	) -> Result<(RawSolution<SolutionOf<T::MinerConfig>>, SolutionOrSnapshotSize), MinerError> {
-		let RoundSnapshot { voters, targets } =
-			Self::snapshot().ok_or(MinerError::SnapshotUnAvailable)?;
-		let desired_targets = Self::desired_targets().ok_or(MinerError::SnapshotUnAvailable)?;
-		let (solution, score, size) =
-			Miner::<T::MinerConfig>::prepare_election_result_with_snapshot(
-				election_result,
-				voters,
-				targets,
-				desired_targets,
-			)?;
 		let round = Self::round();
 		Ok((RawSolution { solution, score, round }, size))
 	}
@@ -441,7 +420,10 @@ impl<T: MinerConfig> Miner<T> {
 			})
 	}
 
-	/// Same as [`Pallet::prepare_election_result`], but the input snapshot mut be given as inputs.
+	/// Convert a raw solution from [`sp_npos_elections::ElectionResult`] to [`RawSolution`], which
+	/// is ready to be submitted to the chain.
+	///
+	/// Will always reduce the solution as well.
 	pub fn prepare_election_result_with_snapshot<Accuracy: PerThing128>(
 		election_result: ElectionResult<T::AccountId, Accuracy>,
 		voters: Vec<(T::AccountId, VoteWeight, BoundedVec<T::AccountId, T::MaxVotesPerVoter>)>,
@@ -463,7 +445,7 @@ impl<T: MinerConfig> Miner<T> {
 			SolutionOf::<T>::try_from(assignments).map(|s| s.encoded_size())
 		};
 
-		let ElectionResult { assignments, winners: _ } = election_result;
+		let ElectionResult { assignments, winners: _w } = election_result;
 
 		// Reduce (requires round-trip to staked form)
 		let sorted_assignments = {
@@ -1118,7 +1100,19 @@ mod tests {
 						distribution: vec![(10, PerU16::one())],
 					}],
 				};
-				let (solution, witness) = MultiPhase::prepare_election_result(result).unwrap();
+
+				let RoundSnapshot { voters, targets } = MultiPhase::snapshot().unwrap();
+				let desired_targets = MultiPhase::desired_targets().unwrap();
+
+				let (raw, score, witness) =
+					Miner::<Runtime>::prepare_election_result_with_snapshot(
+						result,
+						voters.clone(),
+						targets.clone(),
+						desired_targets,
+					)
+					.unwrap();
+				let solution = RawSolution { solution: raw, score, round: MultiPhase::round() };
 				assert_ok!(MultiPhase::unsigned_pre_dispatch_checks(&solution));
 				assert_ok!(MultiPhase::submit_unsigned(
 					Origin::none(),
@@ -1139,7 +1133,14 @@ mod tests {
 						},
 					],
 				};
-				let (solution, _) = MultiPhase::prepare_election_result(result).unwrap();
+				let (raw, score, _) = Miner::<Runtime>::prepare_election_result_with_snapshot(
+					result,
+					voters.clone(),
+					targets.clone(),
+					desired_targets,
+				)
+				.unwrap();
+				let solution = RawSolution { solution: raw, score, round: MultiPhase::round() };
 				// 12 is not 50% more than 10
 				assert_eq!(solution.score.minimal_stake, 12);
 				assert_noop!(
@@ -1161,7 +1162,15 @@ mod tests {
 						},
 					],
 				};
-				let (solution, witness) = MultiPhase::prepare_election_result(result).unwrap();
+				let (raw, score, witness) =
+					Miner::<Runtime>::prepare_election_result_with_snapshot(
+						result,
+						voters.clone(),
+						targets.clone(),
+						desired_targets,
+					)
+					.unwrap();
+				let solution = RawSolution { solution: raw, score, round: MultiPhase::round() };
 				assert_eq!(solution.score.minimal_stake, 17);
 
 				// and it is fine
