@@ -191,8 +191,6 @@ impl RuntimeCache {
 	/// This uses internal cache to find available instance or create a new one.
 	/// # Parameters
 	///
-	/// `code` - Provides external code or tells the executor to fetch it from storage.
-	///
 	/// `runtime_code` - The runtime wasm code used setup the runtime.
 	///
 	/// `default_heap_pages` - Number of 64KB pages to allocate for Wasm execution.
@@ -201,8 +199,6 @@ impl RuntimeCache {
 	///
 	/// `allow_missing_func_imports` - Ignore missing function imports.
 	///
-	/// `max_runtime_instances` - The size of the instances cache.
-	///
 	/// `f` - Function to execute.
 	///
 	/// `H` - A compile-time list of host functions to expose to the runtime.
@@ -210,7 +206,7 @@ impl RuntimeCache {
 	/// # Returns result of `f` wrapped in an additional result.
 	/// In case of failure one of two errors can be returned:
 	///
-	/// `Err::InvalidCode` is returned for runtime code issues.
+	/// `Err::RuntimeConstruction` is returned for runtime construction issues.
 	///
 	/// `Error::InvalidMemoryReference` is returned if no memory export with the
 	/// identifier `memory` can be found in the runtime.

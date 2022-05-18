@@ -147,8 +147,7 @@ fn subscribe_headers<Block, Client, F, G, S>(
 		if let Some(mut sink) = pending.accept() {
 			sink.pipe_from_stream(stream).await;
 		}
-	}
-	.boxed();
+	};
 
-	executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.map(drop).boxed());
+	executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
 }

@@ -45,7 +45,7 @@ use sp_trie::{
 
 use frame_support::{
 	print,
-	traits::{KeyOwnerProofSystem, StorageVersion, ValidatorSet, ValidatorSetWithIdentification},
+	traits::{KeyOwnerProofSystem, ValidatorSet, ValidatorSetWithIdentification},
 	Parameter,
 };
 
