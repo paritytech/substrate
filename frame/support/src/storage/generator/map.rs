@@ -384,7 +384,8 @@ mod test_iterators {
 	fn map_iter_from() {
 		sp_io::TestExternalities::default().execute_with(|| {
 			use crate::hash::Identity;
-			crate::generate_storage_alias!(MyModule, MyMap => Map<(Identity, u64), u64>);
+			#[crate::storage_alias]
+			type MyMap = StorageMap<MyModule, Identity, u64, u64>;
 
 			MyMap::insert(1, 10);
 			MyMap::insert(2, 20);
