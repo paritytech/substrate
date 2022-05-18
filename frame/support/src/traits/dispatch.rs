@@ -43,7 +43,7 @@ pub trait EnsureOrigin<OuterOrigin> {
 	fn successful_origin() -> OuterOrigin;
 }
 
-/// `EnsureOrigin` implementation that always fails. 
+/// `EnsureOrigin` implementation that always fails.
 pub struct NeverEnsureOrigin<Success>(sp_std::marker::PhantomData<Success>);
 impl<OO, Success> EnsureOrigin<OO> for NeverEnsureOrigin<Success> {
 	type Success = Success;
