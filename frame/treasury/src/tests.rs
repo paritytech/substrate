@@ -163,7 +163,6 @@ fn genesis_config_works() {
 #[test]
 fn spend_origin_permissioning_works() {
 	new_test_ext().execute_with(|| {
-		// Check that accumulate works when we have Some value in Dummy already.
 		assert_noop!(Treasury::spend(Origin::signed(1), 1, 1), BadOrigin);
 		assert_noop!(
 			Treasury::spend(Origin::signed(10), 6, 1),
