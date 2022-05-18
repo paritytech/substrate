@@ -2041,6 +2041,26 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
+	seal_reentrant_count {
+		let r in 0 .. API_BENCHMARK_BATCHES;
+		let code = WasmModule::<T>::from(ModuleDefinition {
+			memory: Some(ImportedMemory::max::<T>()),
+			imported_functions: vec![ImportedFunction {
+				module: "__unstable__",
+				name: "seal_reentrant_count",
+				params: vec![],
+				return_type: Some(ValueType::I32),
+			}],
+			call_body: Some(body::repeated(r * API_BENCHMARK_BATCH_SIZE, &[
+				Instruction::Call(0),
+				Instruction::Drop,
+			])),
+			.. Default::default()
+		});
+		let instance = Contract::<T>::new(code, vec![])?;
+		let origin = RawOrigin::Signed(instance.caller.clone());
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
+
 	// We make the assumption that pushing a constant and dropping a value takes roughly
 	// the same amount of time. We follow that `t.load` and `drop` both have the weight
 	// of this benchmark / 2. We need to make this assumption because there is no way

@@ -242,6 +242,10 @@ pub trait Ext: sealing::Sealed {
 
 	/// Sets new code hash for existing contract.
 	fn set_code_hash(&mut self, hash: CodeHash<Self::T>) -> Result<(), DispatchError>;
+
+	/// Returns how often the currently executing contract exists on the call stack
+	/// in addition to the calling instance. So a value of 0 means no reentrancy.
+	fn reentrant_count(&mut self) -> u32;
 }
 
 /// Describes the different functions that can be exported by an [`Executable`].
@@ -1229,6 +1233,11 @@ where
 			old_code_hash: prev_hash,
 		});
 		Ok(())
+	}
+
+	fn reentrant_count(&mut self) -> u32 {
+		let id: &AccountIdOf<Self::T> = &self.top_frame().account_id;
+		(self.frames().filter_map(|f| Some(f.delegate_caller.is_none() && &f.account_id == id)).count() - 1).try_into().unwrap()
 	}
 }
 

@@ -230,6 +230,9 @@ pub enum RuntimeCosts {
 	/// Weight of calling `ecdsa_to_eth_address`
 	#[cfg(feature = "unstable-interface")]
 	EcdsaToEthAddress,
+	/// Weight of calling `seal_reentrant_count`
+	#[cfg(feature = "unstable-interface")]
+	ReentrantCount,
 }
 
 impl RuntimeCosts {
@@ -316,6 +319,8 @@ impl RuntimeCosts {
 			SetCodeHash => s.set_code_hash,
 			#[cfg(feature = "unstable-interface")]
 			EcdsaToEthAddress => s.ecdsa_to_eth_address,
+			#[cfg(feature = "unstable-interface")]
+			ReentrantCount => s.reentrant_count,
 		};
 		RuntimeToken {
 			#[cfg(test)]
@@ -2089,5 +2094,12 @@ define_env!(Env, <E: Ext>,
 			},
 			Err(_) => Ok(ReturnCode::EcdsaRecoverFailed),
 		}
+	},
+
+	// Returns how often the currently executing contract exists on the call stack in addition
+	// to the calling instance. A value of 0 means no reentrancy.
+	[__unstable__] seal_reentrant_count(ctx) -> u32 => {
+		ctx.charge_gas(RuntimeCosts::ReentrantCount)?;
+		Ok(ctx.ext.reentrant_count() as u32)
 	},
 );

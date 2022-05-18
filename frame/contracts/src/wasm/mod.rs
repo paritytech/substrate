@@ -327,6 +327,7 @@ mod tests {
 		debug_buffer: Vec<u8>,
 		ecdsa_recover: RefCell<Vec<([u8; 65], [u8; 32])>>,
 		code_hashes: Vec<CodeHash<Test>>,
+		reentrant_count: Vec<u8>,
 	}
 
 	/// The call is mocked and just returns this hardcoded value.
@@ -350,6 +351,7 @@ mod tests {
 				gas_meter: GasMeter::new(10_000_000_000),
 				debug_buffer: Default::default(),
 				ecdsa_recover: Default::default(),
+				reentrant_count: vec![],
 			}
 		}
 	}
@@ -505,6 +507,10 @@ mod tests {
 		}
 		fn ecdsa_to_eth_address(&self, _pk: &[u8; 33]) -> Result<[u8; 20], ()> {
 			Ok([2u8; 20])
+		}
+		fn reentrant_count(&mut self) -> u32 {
+			self.reentrant_count.push(12u8);
+			12
 		}
 	}
 
@@ -2584,5 +2590,40 @@ mod tests {
 		execute(CODE, [0u8; 32].encode(), &mut mock_ext).unwrap();
 
 		assert_eq!(mock_ext.code_hashes.pop().unwrap(), H256::from_slice(&[17u8; 32]));
+	}
+
+	#[test]
+	#[cfg(feature = "unstable-interface")]
+	fn reentrant_count() {
+		const CODE: &str = r#"
+(module
+	(import "__unstable__" "seal_reentrant_count" (func $seal_reentrant_count (result i32)))
+	(import "env" "memory" (memory 1 1))
+	(func $assert (param i32)
+		(block $ok
+			(br_if $ok
+				(get_local 0)
+			)
+			(unreachable)
+		)
+	)
+	(func (export "call")
+		(local $exit_code i32)
+		(set_local $exit_code
+			(call $seal_reentrant_count)
+		)
+		(call $assert
+			(i32.eq (get_local $exit_code) (i32.const 12))
+		)
+	)
+
+	(func (export "deploy"))
+)
+"#;
+
+		let mut mock_ext = MockExt::default();
+		execute(CODE, vec![], &mut mock_ext).unwrap();
+
+		assert_eq!(mock_ext.reentrant_count.pop().unwrap(), 12u8);
 	}
 }
