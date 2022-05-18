@@ -20,10 +20,7 @@
 use codec::{Decode, Encode};
 use core::marker::PhantomData;
 use frame_election_provider_support::ScoreProvider;
-use frame_support::{
-	storage::migration,
-	traits::{OnRuntimeUpgrade, PalletInfo},
-};
+use frame_support::traits::OnRuntimeUpgrade;
 use sp_runtime::traits::Zero;
 
 #[cfg(feature = "try-runtime")]
@@ -59,37 +56,55 @@ impl<T: crate::Config<I>, I: 'static> OnRuntimeUpgrade for CheckCounterPrefix<T,
 	}
 }
 
-#[derive(Encode, Decode)]
-struct PreScoreNode<T: crate::Config<I>, I: 'static = ()> {
-	pub id: T::AccountId,
-	pub prev: Option<T::AccountId>,
-	pub next: Option<T::AccountId>,
-	pub bag_upper: T::Score,
-	#[codec(skip)]
-	pub _phantom: PhantomData<I>,
+mod old {
+	use super::*;
+	use frame_support::pallet_prelude::*;
+
+	#[derive(Encode, Decode)]
+	pub struct PreScoreNode<T: crate::Config<I>, I: 'static = ()> {
+		pub id: T::AccountId,
+		pub prev: Option<T::AccountId>,
+		pub next: Option<T::AccountId>,
+		pub bag_upper: T::Score,
+		#[codec(skip)]
+		pub _phantom: PhantomData<I>,
+	}
+
+	#[frame_support::storage_alias]
+	pub type ListNodes<T: crate::Config<I>, I: 'static> = StorageMap<
+		crate::Pallet<T, I>,
+		Twox64Concat,
+		<T as frame_system::Config>::AccountId,
+		PreScoreNode<T, I>,
+	>;
+
+	#[frame_support::storage_alias]
+	pub type CounterForListNodes<T: crate::Config<I>, I: 'static> =
+		StorageValue<crate::Pallet<T, I>, u32, ValueQuery>;
+
+	#[frame_support::storage_alias]
+	pub type TempStorage<T: crate::Config<I>, I: 'static> =
+		StorageValue<crate::Pallet<T, I>, u32, ValueQuery>;
 }
 
-#[cfg(feature = "try-runtime")]
-const TEMP_STORAGE: &[u8] = b"upgrade_bags_list_score";
-
 /// A struct that migrates all bags lists to contain a score value.
-pub struct AddScore<T: crate::Config<I>, I: 'static>(sp_std::marker::PhantomData<(T, I)>);
+pub struct AddScore<T: crate::Config<I>, I: 'static = ()>(sp_std::marker::PhantomData<(T, I)>);
 impl<T: crate::Config<I>, I: 'static> OnRuntimeUpgrade for AddScore<T, I> {
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<(), &'static str> {
-		let node_count: u32 = crate::ListNodes::<T, I>::iter().count() as u32;
-		frame_support::storage::unhashed::put(TEMP_STORAGE, &node_count);
-		crate::log!(info, "number of nodes before: {:?}", node_count);
+		// The list node data should be corrupt at this point, so this is zero.
+		ensure!(crate::ListNodes::<T, I>::iter().count() == 0, "list node data is not corrupt");
+		// We can use the helper `old::ListNode` to get the existing data.
+		let iter_node_count: u32 = old::ListNodes::<T, I>::iter().count() as u32;
+		let tracked_node_count: u32 = old::CounterForListNodes::<T, I>::get();
+		crate::log!(info, "number of nodes before: {:?} {:?}", iter_node_count, tracked_node_count);
+		ensure!(iter_node_count == tracked_node_count, "Node count is wrong.");
+		old::TempStorage::<T, I>::put(iter_node_count);
 		Ok(())
 	}
 
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
-		let pallet_name = <T as frame_system::Config>::PalletInfo::name::<crate::Pallet<T, I>>()
-			.unwrap()
-			.as_bytes();
-		let old_nodes = migration::storage_iter::<PreScoreNode<T, I>>(pallet_name, b"ListNodes");
-
-		for (_key, node) in old_nodes.drain() {
+		for (_key, node) in old::ListNodes::<T, I>::iter() {
 			let score = T::ScoreProvider::score(&node.id);
 
 			let new_node = crate::Node {
@@ -109,14 +124,18 @@ impl<T: crate::Config<I>, I: 'static> OnRuntimeUpgrade for AddScore<T, I> {
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade() -> Result<(), &'static str> {
-		let node_count_before: u32 =
-			frame_support::storage::unhashed::take(TEMP_STORAGE).unwrap_or_default();
-		let node_count_after: u32 = crate::ListNodes::<T, I>::iter().count() as u32;
-		crate::log!(info, "number of nodes after: {:?}", node_count_after);
-		ensure!(node_count_after == node_count_before, "Not all nodes were migrated.");
-		for (_id, node) in crate::ListNodes::<T, I>::iter() {
-			ensure!(!node.score.is_zero(), "Score should be greater than zero");
-		}
+		let node_count_before = old::TempStorage::<T, I>::take();
+		// Now, the list node data is not corrupt anymore.
+		let iter_node_count_after: u32 = crate::ListNodes::<T, I>::iter().count() as u32;
+		let tracked_node_count_after: u32 = crate::ListNodes::<T, I>::count();
+		crate::log!(
+			info,
+			"number of nodes after: {:?} {:?}",
+			iter_node_count_after,
+			tracked_node_count_after,
+		);
+		ensure!(iter_node_count_after == node_count_before, "Not all nodes were migrated.");
+		ensure!(tracked_node_count_after == iter_node_count_after, "Node count is wrong.");
 		Ok(())
 	}
 }
