@@ -1064,7 +1064,7 @@ pub mod pallet {
 
 			Self::deposit_event(Event::SolutionStored {
 				election_compute: ElectionCompute::Fallback,
-				prev_ejected: Self::queued_solution().is_some(),
+				prev_ejected: QueuedSolution::<T>::exists(),
 			});
 
 			<QueuedSolution<T>>::put(solution);
