@@ -27,6 +27,7 @@ use sp_core::storage::{ChildInfo, StateVersion, TrackedStorageKey};
 #[cfg(feature = "std")]
 use sp_core::traits::RuntimeCode;
 use sp_std::vec::Vec;
+use sp_trie::cache::{LocalTrieCache};
 
 /// A state backend is used to read state data and can have changes committed
 /// to it.
@@ -268,11 +269,11 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 	}
 }
 
-pub trait AsTrieBackend<H: Hasher> {
+pub trait AsTrieBackend<H: Hasher, C = LocalTrieCache<H>> {
 	/// Type of trie backend storage.
 	type TrieBackendStorage: TrieBackendStorage<H>;
 
-	fn as_trie_backend(&self) -> &TrieBackend<Self::TrieBackendStorage, H>;
+	fn as_trie_backend(&self) -> &TrieBackend<Self::TrieBackendStorage, H, C>;
 }
 
 /// Trait that allows consolidate two transactions together.

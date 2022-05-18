@@ -18,7 +18,9 @@
 //! Trie-based state machine backend essence used to read values
 //! from storage.
 
-use crate::{backend::Consolidate, debug, warn, StorageKey, StorageValue};
+use crate::{
+	backend::Consolidate, debug, trie_backend::AsLocalTrieCache, warn, StorageKey, StorageValue,
+};
 use codec::Codec;
 use hash_db::{self, AsHashDB, HashDB, HashDBRef, Hasher, Prefix};
 #[cfg(feature = "std")]
@@ -73,19 +75,19 @@ impl<H> Cache<H> {
 }
 
 /// Patricia trie-based pairs storage essence.
-pub struct TrieBackendEssence<S: TrieBackendStorage<H>, H: Hasher> {
+pub struct TrieBackendEssence<S: TrieBackendStorage<H>, H: Hasher, C> {
 	storage: S,
 	root: H::Out,
 	empty: H::Out,
 	#[cfg(feature = "std")]
 	pub(crate) cache: Arc<RwLock<Cache<H::Out>>>,
 	#[cfg(feature = "std")]
-	pub(crate) trie_node_cache: Option<sp_trie::cache::LocalTrieCache<H>>,
+	pub(crate) trie_node_cache: Option<C>,
 	#[cfg(feature = "std")]
 	pub(crate) recorder: Option<Recorder<H>>,
 }
 
-impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> {
+impl<S: TrieBackendStorage<H>, H: Hasher, C> TrieBackendEssence<S, H, C> {
 	/// Create new trie-based backend.
 	pub fn new(storage: S, root: H::Out) -> Self {
 		TrieBackendEssence {
@@ -106,7 +108,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> {
 	pub fn new_with_cache_and_recorder(
 		storage: S,
 		root: H::Out,
-		cache: Option<sp_trie::cache::LocalTrieCache<H>>,
+		cache: Option<C>,
 		recorder: Option<Recorder<H>>,
 	) -> Self {
 		TrieBackendEssence {
@@ -154,7 +156,9 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> {
 	pub fn into_storage(self) -> S {
 		self.storage
 	}
+}
 
+impl<S: TrieBackendStorage<H>, H: Hasher, C: AsLocalTrieCache<H>> TrieBackendEssence<S, H, C> {
 	/// Call the given closure passing it the recorder and the cache.
 	///
 	/// If the given `storage_root` is `None`, `self.root` will be used.
@@ -171,7 +175,10 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> {
 		let mut recorder = self.recorder.as_ref().map(|r| r.as_trie_recorder(storage_root));
 		let recorder = recorder.as_mut().map(|r| r as _);
 
-		let mut cache = self.trie_node_cache.as_ref().map(|c| c.as_trie_db_cache(storage_root));
+		let mut cache = self
+			.trie_node_cache
+			.as_ref()
+			.map(|c| c.as_local_trie_cache().as_trie_db_cache(storage_root));
 		let cache = cache.as_mut().map(|c| c as _);
 
 		callback(recorder, cache)
@@ -208,12 +215,12 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> {
 		let recorder = recorder.as_mut().map(|r| r as _);
 
 		let result = if let Some(local_cache) = self.trie_node_cache.as_ref() {
-			let mut cache = local_cache.as_trie_db_mut_cache();
+			let mut cache = local_cache.as_local_trie_cache().as_trie_db_mut_cache();
 
 			let (new_root, r) = callback(recorder, Some(&mut cache));
 
 			if let Some(new_root) = new_root {
-				cache.merge_into(local_cache, new_root);
+				cache.merge_into(local_cache.as_local_trie_cache(), new_root);
 			}
 
 			r
@@ -237,7 +244,8 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> {
 	}
 }
 
-impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H>
+impl<S: TrieBackendStorage<H>, H: Hasher, C: AsLocalTrieCache<H> + Send + Sync>
+	TrieBackendEssence<S, H, C>
 where
 	H::Out: Codec + Ord,
 {
@@ -832,7 +840,9 @@ where
 	}
 }
 
-impl<S: TrieBackendStorage<H>, H: Hasher> AsHashDB<H, DBValue> for TrieBackendEssence<S, H> {
+impl<S: TrieBackendStorage<H>, H: Hasher, C: AsLocalTrieCache<H> + Send + Sync>
+	AsHashDB<H, DBValue> for TrieBackendEssence<S, H, C>
+{
 	fn as_hash_db<'b>(&'b self) -> &'b (dyn HashDB<H, DBValue> + 'b) {
 		self
 	}
@@ -841,7 +851,9 @@ impl<S: TrieBackendStorage<H>, H: Hasher> AsHashDB<H, DBValue> for TrieBackendEs
 	}
 }
 
-impl<S: TrieBackendStorage<H>, H: Hasher> HashDB<H, DBValue> for TrieBackendEssence<S, H> {
+impl<S: TrieBackendStorage<H>, H: Hasher, C: AsLocalTrieCache<H> + Send + Sync> HashDB<H, DBValue>
+	for TrieBackendEssence<S, H, C>
+{
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Option<DBValue> {
 		if *key == self.empty {
 			return Some([0u8].to_vec())
@@ -872,7 +884,9 @@ impl<S: TrieBackendStorage<H>, H: Hasher> HashDB<H, DBValue> for TrieBackendEsse
 	}
 }
 
-impl<S: TrieBackendStorage<H>, H: Hasher> HashDBRef<H, DBValue> for TrieBackendEssence<S, H> {
+impl<S: TrieBackendStorage<H>, H: Hasher, C: AsLocalTrieCache<H> + Send + Sync>
+	HashDBRef<H, DBValue> for TrieBackendEssence<S, H, C>
+{
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Option<DBValue> {
 		HashDB::get(self, key, prefix)
 	}
@@ -887,8 +901,8 @@ mod test {
 	use super::*;
 	use sp_core::{Blake2Hasher, H256};
 	use sp_trie::{
-		trie_types::TrieDBMutBuilderV1 as TrieDBMutBuilder, KeySpacedDBMut, PrefixedMemoryDB,
-		TrieMut,
+		cache::LocalTrieCache, trie_types::TrieDBMutBuilderV1 as TrieDBMutBuilder, KeySpacedDBMut,
+		PrefixedMemoryDB, TrieMut,
 	};
 
 	#[test]
@@ -922,7 +936,7 @@ mod test {
 				.expect("insert failed");
 		};
 
-		let essence_1 = TrieBackendEssence::new(mdb, root_1);
+		let essence_1 = TrieBackendEssence::<_, _, LocalTrieCache<_>>::new(mdb, root_1);
 
 		assert_eq!(essence_1.next_storage_key(b"2"), Ok(Some(b"3".to_vec())));
 		assert_eq!(essence_1.next_storage_key(b"3"), Ok(Some(b"4".to_vec())));
@@ -931,7 +945,7 @@ mod test {
 		assert_eq!(essence_1.next_storage_key(b"6"), Ok(None));
 
 		let mdb = essence_1.backend_storage().clone();
-		let essence_2 = TrieBackendEssence::new(mdb, root_2);
+		let essence_2 = TrieBackendEssence::<_, _, LocalTrieCache<_>>::new(mdb, root_2);
 
 		assert_eq!(essence_2.next_child_storage_key(child_info, b"2"), Ok(Some(b"3".to_vec())));
 		assert_eq!(essence_2.next_child_storage_key(child_info, b"3"), Ok(Some(b"4".to_vec())));
