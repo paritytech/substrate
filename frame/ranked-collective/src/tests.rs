@@ -184,6 +184,14 @@ fn next_block() {
 	System::set_block_number(System::block_number() + 1);
 }
 
+fn member_count() -> MemberIndex {
+	MemberCount::<Test>::get().0
+}
+
+fn max_turnout() -> Votes {
+	MemberCount::<Test>::get().1
+}
+
 #[allow(dead_code)]
 fn run_to(n: u64) {
 	while System::block_number() < n {
@@ -221,21 +229,21 @@ fn membership_works() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(Club::add_member(Origin::signed(1), 1, 1), DispatchError::BadOrigin);
 		assert_ok!(Club::add_member(Origin::root(), 1, 1));
-		assert_eq!(Club::member_count(), 1);
-		assert_eq!(Club::max_turnout(), 1);
+		assert_eq!(member_count(), 1);
+		assert_eq!(max_turnout(), 1);
 
 		assert_ok!(Club::add_member(Origin::root(), 2, 4));
-		assert_eq!(Club::member_count(), 2);
-		assert_eq!(Club::max_turnout(), 11);
+		assert_eq!(member_count(), 2);
+		assert_eq!(max_turnout(), 11);
 
 		assert_ok!(Club::set_member_rank(Origin::root(), 1, 4));
-		assert_eq!(Club::member_count(), 2);
-		assert_eq!(Club::max_turnout(), 20);
+		assert_eq!(member_count(), 2);
+		assert_eq!(max_turnout(), 20);
 
 		assert_noop!(Club::remove_member(Origin::signed(1), 1), DispatchError::BadOrigin);
 		assert_ok!(Club::remove_member(Origin::root(), 1));
-		assert_eq!(Club::member_count(), 1);
-		assert_eq!(Club::max_turnout(), 10);
+		assert_eq!(member_count(), 1);
+		assert_eq!(max_turnout(), 10);
 	});
 }
 
@@ -280,8 +288,8 @@ fn cleanup_works() {
 				.into_iter()
 				.collect(),
 		);
+		assert_ok!(Club::cleanup_poll(Origin::signed(4), 3, 10));
 		// NOTE: This will fail until #10016 is merged.
-		//		assert_ok!(Club::cleanup_poll(Origin::signed(4), 3, 10));
-		assert_noop!(Club::cleanup_poll(Origin::signed(4), 3, 10), Error::<Test>::NoneRemaining);
+//		assert_noop!(Club::cleanup_poll(Origin::signed(4), 3, 10), Error::<Test>::NoneRemaining);
 	});
 }

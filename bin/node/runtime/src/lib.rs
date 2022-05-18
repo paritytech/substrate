@@ -20,7 +20,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 // `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256.
-#![recursion_limit = "256"]
+#![recursion_limit = "512"]
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_election_provider_support::{
@@ -837,6 +837,31 @@ impl pallet_referenda::Config for Runtime {
 	type Tracks = TracksInfo;
 }
 
+impl pallet_referenda::Config<pallet_referenda::Instance2> for Runtime {
+	type WeightInfo = pallet_referenda::weights::SubstrateWeight<Self>;
+	type Call = Call;
+	type Event = Event;
+	type Scheduler = Scheduler;
+	type Currency = pallet_balances::Pallet<Self>;
+	type CancelOrigin = EnsureRoot<AccountId>;
+	type KillOrigin = EnsureRoot<AccountId>;
+	type Slash = ();
+	type Votes = pallet_ranked_collective::Votes;
+	type Tally = pallet_ranked_collective::TallyOf<Runtime>;
+	type SubmissionDeposit = SubmissionDeposit;
+	type MaxQueued = ConstU32<100>;
+	type UndecidingTimeout = UndecidingTimeout;
+	type AlarmInterval = AlarmInterval;
+	type Tracks = TracksInfo;
+}
+
+impl pallet_ranked_collective::Config for Runtime {
+	type WeightInfo = pallet_ranked_collective::weights::SubstrateWeight<Self>;
+	type Event = Event;
+	type AdminOrigin = EnsureRoot<AccountId>;
+	type Polls = RankedPolls;
+}
+
 impl pallet_remark::Config for Runtime {
 	type WeightInfo = pallet_remark::weights::SubstrateWeight<Self>;
 	type Event = Event;
@@ -1534,6 +1559,8 @@ construct_runtime!(
 		ConvictionVoting: pallet_conviction_voting,
 		Whitelist: pallet_whitelist,
 		NominationPools: pallet_nomination_pools,
+		RankedPolls: pallet_referenda::<Instance2>,
+		RankedCollective: pallet_ranked_collective,
 	}
 );
 
@@ -1622,6 +1649,7 @@ mod benches {
 		[pallet_offences, OffencesBench::<Runtime>]
 		[pallet_preimage, Preimage]
 		[pallet_proxy, Proxy]
+		[pallet_ranked_collective, RankedCollective]
 		[pallet_referenda, Referenda]
 		[pallet_recovery, Recovery]
 		[pallet_remark, Remark]
