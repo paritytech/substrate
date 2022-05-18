@@ -351,7 +351,7 @@ where
 	/// order.
 	///
 	/// If you alter the map while doing this, you'll get undefined results.
-	pub fn iter_keys_from_from(starting_key: impl EncodeLike<Key>) -> crate::storage::KeyPrefixIterator<Key> {
+	pub fn iter_keys_from_key(starting_key: impl EncodeLike<Key>) -> crate::storage::KeyPrefixIterator<Key> {
 		Self::iter_keys_from(Self::hashed_key_for(starting_key))
 	}
 
