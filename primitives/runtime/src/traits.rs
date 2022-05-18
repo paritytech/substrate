@@ -1243,9 +1243,16 @@ impl<'a> codec::Input for TrailingZeroInput<'a> {
 
 /// This type can be converted into and possibly from an AccountId (which itself is generic).
 pub trait AccountIdConversion<AccountId>: Sized {
-	/// Convert into an account ID. This is infallible.
-	fn into_account(&self) -> AccountId {
-		self.into_sub_account(&())
+	/// Convert into an account ID. This is infallible, and may truncate bytes to provide a result.
+	/// This may lead to duplicate accounts if the size of `AccountId` is less than the seed.
+	fn into_account_truncating(&self) -> AccountId {
+		self.into_sub_account_truncating(&())
+	}
+
+	/// Convert into an account ID, checking that all bytes of the seed are being used in the final
+	/// `AccountId` generated. If any bytes are dropped, this returns `None`.
+	fn try_into_account(&self) -> Option<AccountId> {
+		self.try_into_sub_account(&())
 	}
 
 	/// Try to convert an account ID into this type. Might not succeed.
@@ -1253,8 +1260,8 @@ pub trait AccountIdConversion<AccountId>: Sized {
 		Self::try_from_sub_account::<()>(a).map(|x| x.0)
 	}
 
-	/// Convert this value amalgamated with the a secondary "sub" value into an account ID. This is
-	/// infallible.
+	/// Convert this value amalgamated with the a secondary "sub" value into an account ID,
+	/// truncating any unused bytes. This is infallible.
 	///
 	/// NOTE: The account IDs from this and from `into_account` are *not* guaranteed to be distinct
 	/// for any given value of `self`, nor are different invocations to this with different types
@@ -1262,19 +1269,45 @@ pub trait AccountIdConversion<AccountId>: Sized {
 	/// - `self.into_sub_account(0u32)`
 	/// - `self.into_sub_account(vec![0u8; 0])`
 	/// - `self.into_account()`
-	fn into_sub_account<S: Encode>(&self, sub: S) -> AccountId;
+	///
+	/// Also, if the seed provided to this function is greater than the number of bytes which fit
+	/// into this `AccountId` type, then it will lead to truncation of the seed, and potentially
+	/// non-unique accounts.
+	fn into_sub_account_truncating<S: Encode>(&self, sub: S) -> AccountId;
+
+	/// Same as `into_sub_account_truncating`, but ensuring that all bytes of the account's seed are
+	/// used when generating an account. This can help guarantee that different accounts are unique,
+	/// besides types which encode the same as noted above.
+	fn try_into_sub_account<S: Encode>(&self, sub: S) -> Option<AccountId>;
 
 	/// Try to convert an account ID into this type. Might not succeed.
 	fn try_from_sub_account<S: Decode>(x: &AccountId) -> Option<(Self, S)>;
 }
 
-/// Format is TYPE_ID ++ encode(parachain ID) ++ 00.... where 00... is indefinite trailing zeroes to
+/// Format is TYPE_ID ++ encode(sub-seed) ++ 00.... where 00... is indefinite trailing zeroes to
 /// fill AccountId.
 impl<T: Encode + Decode, Id: Encode + Decode + TypeId> AccountIdConversion<T> for Id {
-	fn into_sub_account<S: Encode>(&self, sub: S) -> T {
+	// Take the `sub` seed, and put as much of it as possible into the generated account, but
+	// allowing truncation of the seed if it would not fit into the account id in full. This can
+	// lead to two different `sub` seeds with the same account generated.
+	fn into_sub_account_truncating<S: Encode>(&self, sub: S) -> T {
 		(Id::TYPE_ID, self, sub)
 			.using_encoded(|b| T::decode(&mut TrailingZeroInput(b)))
-			.expect("`AccountId` type is never greater than 32 bytes; qed")
+			.expect("All byte sequences are valid `AccountIds`; qed")
+	}
+
+	// Same as `into_sub_account_truncating`, but returns `None` if any bytes would be truncated.
+	fn try_into_sub_account<S: Encode>(&self, sub: S) -> Option<T> {
+		let encoded_seed = (Id::TYPE_ID, self, sub).encode();
+		let account = T::decode(&mut TrailingZeroInput(&encoded_seed))
+			.expect("All byte sequences are valid `AccountIds`; qed");
+		// If the `account` generated has less bytes than the `encoded_seed`, then we know that
+		// bytes were truncated, and we return `None`.
+		if encoded_seed.len() <= account.encoded_size() {
+			Some(account)
+		} else {
+			None
+		}
 	}
 
 	fn try_from_sub_account<S: Decode>(x: &T) -> Option<(Self, S)> {
@@ -1653,6 +1686,13 @@ mod tests {
 	}
 
 	#[derive(Encode, Decode, Default, PartialEq, Debug)]
+	struct U128Value(u128);
+	impl super::TypeId for U128Value {
+		const TYPE_ID: [u8; 4] = [0x0d, 0xf0, 0x0d, 0xf0];
+	}
+	// f00df00d
+
+	#[derive(Encode, Decode, Default, PartialEq, Debug)]
 	struct U32Value(u32);
 	impl super::TypeId for U32Value {
 		const TYPE_ID: [u8; 4] = [0x0d, 0xf0, 0xfe, 0xca];
@@ -1669,9 +1709,19 @@ mod tests {
 	type AccountId = u64;
 
 	#[test]
-	fn into_account_should_work() {
-		let r: AccountId = U32Value::into_account(&U32Value(0xdeadbeef));
+	fn into_account_truncating_should_work() {
+		let r: AccountId = U32Value::into_account_truncating(&U32Value(0xdeadbeef));
 		assert_eq!(r, 0x_deadbeef_cafef00d);
+	}
+
+	#[test]
+	fn try_into_account_should_work() {
+		let r: AccountId = U32Value::try_into_account(&U32Value(0xdeadbeef)).unwrap();
+		assert_eq!(r, 0x_deadbeef_cafef00d);
+
+		// u128 is bigger than u64 would fit
+		let maybe: Option<AccountId> = U128Value::try_into_account(&U128Value(u128::MAX));
+		assert!(maybe.is_none());
 	}
 
 	#[test]
@@ -1681,9 +1731,22 @@ mod tests {
 	}
 
 	#[test]
-	fn into_account_with_fill_should_work() {
-		let r: AccountId = U16Value::into_account(&U16Value(0xc0da));
+	fn into_account_truncating_with_fill_should_work() {
+		let r: AccountId = U16Value::into_account_truncating(&U16Value(0xc0da));
 		assert_eq!(r, 0x_0000_c0da_f00dcafe);
+	}
+
+	#[test]
+	fn try_into_sub_account_should_work() {
+		let r: AccountId = U16Value::try_into_account(&U16Value(0xc0da)).unwrap();
+		assert_eq!(r, 0x_0000_c0da_f00dcafe);
+
+		let maybe: Option<AccountId> = U16Value::try_into_sub_account(
+			&U16Value(0xc0da),
+			"a really large amount of additional encoded information which will certainly overflow the account id type ;)"
+		);
+
+		assert!(maybe.is_none())
 	}
 
 	#[test]
