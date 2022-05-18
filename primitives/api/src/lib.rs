@@ -99,8 +99,8 @@ pub use sp_runtime::{
 #[doc(hidden)]
 #[cfg(feature = "std")]
 pub use sp_state_machine::{
-	Backend as StateBackend, InMemoryBackend, OverlayedChanges, StorageProof, TrieBackend,
-	TrieBackendBuilder, backend::AsTrieBackend,
+	backend::AsTrieBackend, Backend as StateBackend, InMemoryBackend, OverlayedChanges,
+	StorageProof, TrieBackend, TrieBackendBuilder,
 };
 #[cfg(feature = "std")]
 use sp_std::result;

@@ -81,7 +81,6 @@ pub struct TrieBackendEssence<S: TrieBackendStorage<H>, H: Hasher, C> {
 	empty: H::Out,
 	#[cfg(feature = "std")]
 	pub(crate) cache: Arc<RwLock<Cache<H::Out>>>,
-	#[cfg(feature = "std")]
 	pub(crate) trie_node_cache: Option<C>,
 	#[cfg(feature = "std")]
 	pub(crate) recorder: Option<Recorder<H>>,
@@ -96,7 +95,6 @@ impl<S: TrieBackendStorage<H>, H: Hasher, C> TrieBackendEssence<S, H, C> {
 			empty: H::hash(&[0u8]),
 			#[cfg(feature = "std")]
 			cache: Arc::new(RwLock::new(Cache::new())),
-			#[cfg(feature = "std")]
 			trie_node_cache: None,
 			#[cfg(feature = "std")]
 			recorder: None,
@@ -840,8 +838,8 @@ where
 	}
 }
 
-impl<S: TrieBackendStorage<H>, H: Hasher, C: AsLocalTrieCache<H> + Send + Sync>
-	AsHashDB<H, DBValue> for TrieBackendEssence<S, H, C>
+impl<S: TrieBackendStorage<H>, H: Hasher, C: AsLocalTrieCache<H> + Send + Sync> AsHashDB<H, DBValue>
+	for TrieBackendEssence<S, H, C>
 {
 	fn as_hash_db<'b>(&'b self) -> &'b (dyn HashDB<H, DBValue> + 'b) {
 		self

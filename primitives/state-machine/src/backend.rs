@@ -27,7 +27,6 @@ use sp_core::storage::{ChildInfo, StateVersion, TrackedStorageKey};
 #[cfg(feature = "std")]
 use sp_core::traits::RuntimeCode;
 use sp_std::vec::Vec;
-use sp_trie::cache::{LocalTrieCache};
 
 /// A state backend is used to read state data and can have changes committed
 /// to it.
@@ -269,10 +268,13 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 	}
 }
 
-pub trait AsTrieBackend<H: Hasher, C = LocalTrieCache<H>> {
+/// Something that can be converted into a [`TrieBackend`].
+#[cfg(feature = "std")]
+pub trait AsTrieBackend<H: Hasher, C = sp_trie::cache::LocalTrieCache<H>> {
 	/// Type of trie backend storage.
 	type TrieBackendStorage: TrieBackendStorage<H>;
 
+	/// Return the type as [`TrieBackend`].
 	fn as_trie_backend(&self) -> &TrieBackend<Self::TrieBackendStorage, H, C>;
 }
 

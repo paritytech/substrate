@@ -28,8 +28,8 @@ use sp_core::{
 use sp_externalities::Extensions;
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 use sp_state_machine::{
-	self, backend::Backend as _, ExecutionManager, ExecutionStrategy, Ext, OverlayedChanges,
-	StateMachine, StorageProof, backend::AsTrieBackend,
+	backend::AsTrieBackend, ExecutionManager, ExecutionStrategy, Ext, OverlayedChanges,
+	StateMachine, StorageProof,
 };
 use std::{cell::RefCell, panic::UnwindSafe, result, sync::Arc};
 

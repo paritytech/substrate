@@ -31,7 +31,7 @@ use sp_core::{
 	storage::{ChildInfo, ChildType, PrefixedStorageKey},
 	Hasher,
 };
-use sp_state_machine::{backend::AsTrieBackend, Backend};
+use sp_state_machine::backend::AsTrieBackend;
 use sp_trie::{
 	trie_types::{TrieDB, TrieDBBuilder},
 	KeySpacedDB, Trie,

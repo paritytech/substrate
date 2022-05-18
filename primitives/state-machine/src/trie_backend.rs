@@ -17,8 +17,9 @@
 
 //! Trie-based state machine backend.
 
+#[cfg(feature = "std")]
+use crate::backend::AsTrieBackend;
 use crate::{
-	backend::AsTrieBackend,
 	trie_backend_essence::{TrieBackendEssence, TrieBackendStorage},
 	Backend, ExecutionError, StorageKey, StorageValue,
 };
@@ -30,20 +31,45 @@ use sp_std::vec::Vec;
 use sp_trie::{cache::LocalTrieCache, recorder::Recorder};
 use sp_trie::{MemoryDB, StorageProof};
 
-pub trait AsLocalTrieCache<H: Hasher> {
+/// Dummy type to be used in `no_std`.
+///
+/// This is required to have the type available for [`TrieBackendBuilder`] and [`TrieBackend`].
+#[cfg(not(feature = "std"))]
+pub struct LocalTrieCache<H>(sp_std::marker::PhantomData<H>);
+
+/// Special trait to support taking the [`LocalTrieCache`] by value or by reference.
+///
+/// This trait is internal use only and to emphasize this, the trait is sealed.
+pub trait AsLocalTrieCache<H: Hasher>: sealed::Sealed {
+	/// Returns `self` as [`LocalTrieCache`].
+	#[cfg(feature = "std")]
 	fn as_local_trie_cache(&self) -> &LocalTrieCache<H>;
 }
 
 impl<H: Hasher> AsLocalTrieCache<H> for LocalTrieCache<H> {
+	#[cfg(feature = "std")]
 	fn as_local_trie_cache(&self) -> &LocalTrieCache<H> {
 		self
 	}
 }
 
+#[cfg(feature = "std")]
 impl<H: Hasher> AsLocalTrieCache<H> for &LocalTrieCache<H> {
 	fn as_local_trie_cache(&self) -> &LocalTrieCache<H> {
 		*self
 	}
+}
+
+/// Special module that contains the `Sealed` trait.
+mod sealed {
+	use super::*;
+
+	/// A special trait which prevents externals to implement the [`AsLocalTrieCache`] outside
+	/// of this crate.
+	pub trait Sealed {}
+
+	impl<H: Hasher> Sealed for LocalTrieCache<H> {}
+	impl<H: Hasher> Sealed for &LocalTrieCache<H> {}
 }
 
 /// Builder for creating a [`TrieBackend`].
@@ -52,7 +78,6 @@ pub struct TrieBackendBuilder<S: TrieBackendStorage<H>, H: Hasher, C = LocalTrie
 	root: H::Out,
 	#[cfg(feature = "std")]
 	recorder: Option<Recorder<H>>,
-	#[cfg(feature = "std")]
 	cache: Option<C>,
 }
 
@@ -68,7 +93,6 @@ where
 			root,
 			#[cfg(feature = "std")]
 			recorder: None,
-			#[cfg(feature = "std")]
 			cache: None,
 		}
 	}
@@ -94,6 +118,8 @@ where
 			recorder: None,
 			#[cfg(feature = "std")]
 			cache: other.essence.trie_node_cache.as_ref(),
+			#[cfg(not(feature = "std"))]
+			cache: None,
 		}
 	}
 
@@ -156,8 +182,7 @@ pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher, C = LocalTrieCache<H
 	pub(crate) essence: TrieBackendEssence<S, H, C>,
 }
 
-impl<S: TrieBackendStorage<H>, H: Hasher, C: AsLocalTrieCache<H> + Send + Sync>
-	TrieBackend<S, H, C>
+impl<S: TrieBackendStorage<H>, H: Hasher, C: AsLocalTrieCache<H> + Send + Sync> TrieBackend<S, H, C>
 where
 	H::Out: Codec,
 {
@@ -192,8 +217,11 @@ where
 
 		recorder
 			.map(|r| {
-				let mut cache =
-					self.essence.trie_node_cache.as_ref().map(|c| c.as_local_trie_cache().as_trie_db_cache(*root));
+				let mut cache = self
+					.essence
+					.trie_node_cache
+					.as_ref()
+					.map(|c| c.as_local_trie_cache().as_trie_db_cache(*root));
 
 				r.into_storage_proof(root, essence, cache.as_mut())
 			})
@@ -327,9 +355,8 @@ where
 	}
 }
 
-impl<S: TrieBackendStorage<H>, H: Hasher, C> AsTrieBackend<H, C>
-	for TrieBackend<S, H, C>
-{
+#[cfg(feature = "std")]
+impl<S: TrieBackendStorage<H>, H: Hasher, C> AsTrieBackend<H, C> for TrieBackend<S, H, C> {
 	type TrieBackendStorage = S;
 
 	fn as_trie_backend(&self) -> &TrieBackend<S, H, C> {

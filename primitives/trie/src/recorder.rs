@@ -145,14 +145,10 @@ impl<H: Hasher> Recorder<H> {
 		let mut recorder = self.inner.lock();
 		let accessed_keys = recorder.accessed_keys.clone();
 		Self::record_accessed_keys(&mut *recorder, accessed_keys, root, hash_db, cache)?;
-		recorder
-			.accessed_keys
-			.values_mut()
-			.flat_map(|v| v.values_mut())
-			.for_each(|k| {
-				// Mark all trie nodes as recorded
-				k.trie_nodes_recorded = true;
-			});
+		recorder.accessed_keys.values_mut().flat_map(|v| v.values_mut()).for_each(|k| {
+			// Mark all trie nodes as recorded
+			k.trie_nodes_recorded = true;
+		});
 
 		Ok(StorageProof::new(recorder.accessed_nodes.iter().map(|(_, v)| v.clone())))
 	}
