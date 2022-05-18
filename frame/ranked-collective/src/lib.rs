@@ -55,6 +55,7 @@ use frame_support::{
 	dispatch::{DispatchError, DispatchResultWithPostInfo},
 	ensure,
 	traits::{EnsureOrigin, Get, PollStatus, Polling, VoteTally},
+	weights::PostDispatchInfo,
 	CloneNoBound, DefaultNoBound, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
 };
 
@@ -251,7 +252,7 @@ pub mod pallet {
 		/// - `rank`: The rank to give the new member.
 		///
 		/// Weight: `O(1)`
-		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
+		#[pallet::weight(T::WeightInfo::add_member())]
 		pub fn add_member(origin: OriginFor<T>, who: T::AccountId, rank: Rank) -> DispatchResult {
 			T::AdminOrigin::ensure_origin(origin)?;
 			ensure!(!Members::<T, I>::contains_key(&who), Error::<T, I>::AlreadyMember);
@@ -274,7 +275,7 @@ pub mod pallet {
 		/// - `rank`: The new rank to give the member.
 		///
 		/// Weight: `O(1)`
-		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
+		#[pallet::weight(T::WeightInfo::set_member_rank())]
 		pub fn set_member_rank(
 			origin: OriginFor<T>,
 			who: T::AccountId,
@@ -303,7 +304,7 @@ pub mod pallet {
 		/// - `who`: Account of existing member to be removed.
 		///
 		/// Weight: `O(1)`, less if the member's index is highest.
-		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
+		#[pallet::weight(T::WeightInfo::remove_member())]
 		pub fn remove_member(origin: OriginFor<T>, who: T::AccountId) -> DispatchResult {
 			T::AdminOrigin::ensure_origin(origin)?;
 			let record = Self::ensure_member(&who)?;
@@ -340,7 +341,7 @@ pub mod pallet {
 		/// fee.
 		///
 		/// Weight: `O(1)`, less if there was no previous vote on the poll by the member.
-		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
+		#[pallet::weight(T::WeightInfo::vote())]
 		pub fn vote(
 			origin: OriginFor<T>,
 			poll: PollIndexOf<T, I>,
@@ -353,7 +354,7 @@ pub mod pallet {
 			let vote = VoteRecord::from((aye, votes));
 			let mut pays = Pays::Yes;
 
-			T::Polls::try_access_poll(poll, |mut status| -> DispatchResult {
+			let tally = T::Polls::try_access_poll(poll, |mut status| -> Result<TallyOf<T, I>, DispatchError> {
 				match status {
 					PollStatus::None | PollStatus::Completed(..) => Err(Error::<T, I>::NotPolling)?,
 					PollStatus::Ongoing(ref mut tally, _) => {
@@ -367,11 +368,11 @@ pub mod pallet {
 							false => tally.nays.saturating_accrue(votes),
 						}
 						Voting::<T, I>::insert(&poll, &who, &vote);
-						Self::deposit_event(Event::Voted { who, poll, vote, tally: tally.clone() });
-						Ok(())
+						Ok(tally.clone())
 					},
 				}
 			})?;
+			Self::deposit_event(Event::Voted { who, poll, vote, tally });
 			Ok(pays.into())
 		}
 
@@ -385,7 +386,7 @@ pub mod pallet {
 		/// Transaction fees are waived if the operation is successful.
 		///
 		/// Weight `O(max)` (less if there are fewer items to remove than `max`).
-		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
+		#[pallet::weight(T::WeightInfo::cleanup_poll(*max))]
 		pub fn cleanup_poll(
 			origin: OriginFor<T>,
 			poll_index: PollIndexOf<T, I>,
@@ -395,12 +396,15 @@ pub mod pallet {
 			ensure!(T::Polls::as_ongoing(poll_index).is_none(), Error::<T, I>::Ongoing);
 
 			use sp_io::KillStorageResult::*;
-			let _count = match Voting::<T, I>::remove_prefix(poll_index, Some(max)) {
-				AllRemoved(0) => Err(Error::<T, I>::NoneRemaining)?,
+			let count = match Voting::<T, I>::remove_prefix(poll_index, Some(max)) {
+//				AllRemoved(0) => Err(Error::<T, I>::NoneRemaining)?,
+				AllRemoved(0) => return Ok(Pays::Yes.into()),
 				AllRemoved(n) | SomeRemaining(n) => n,
 			};
-			// TODO: weight from count.
-			Ok(Pays::No.into())
+			Ok(PostDispatchInfo {
+				actual_weight: Some(T::WeightInfo::cleanup_poll(count)),
+				pays_fee: Pays::No,
+			})
 		}
 	}
 
@@ -412,14 +416,6 @@ pub mod pallet {
 		fn rank_to_votes(r: Rank) -> Votes {
 			let r = r as Votes;
 			r * (r + 1) / 2
-		}
-
-		pub(crate) fn member_count() -> MemberIndex {
-			MemberCount::<T, I>::get().0
-		}
-
-		pub(crate) fn max_turnout() -> Votes {
-			MemberCount::<T, I>::get().1
 		}
 	}
 

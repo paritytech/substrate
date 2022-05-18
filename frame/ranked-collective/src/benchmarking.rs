@@ -18,18 +18,14 @@
 //! Staking pallet benchmarking.
 
 use super::*;
-use crate::Pallet as Collective;
-
-use sp_runtime::traits::Bounded;
-use sp_std::mem::size_of;
+#[allow(unused_imports)]
+use crate::Pallet as RankedCollective;
 
 use frame_benchmarking::{account, benchmarks_instance_pallet, whitelisted_caller};
 use frame_support::{assert_ok, dispatch::UnfilteredDispatchable};
-use frame_system::{Call as SystemCall, Pallet as System, RawOrigin as SystemOrigin};
+use frame_system::RawOrigin as SystemOrigin;
 
 const SEED: u32 = 0;
-
-const MAX_BYTES: u32 = 1_024;
 
 fn assert_last_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::Event) {
 	frame_system::Pallet::<T>::assert_last_event(generic_event.into());
@@ -84,7 +80,7 @@ benchmarks_instance_pallet! {
 	vote {
 		let rank = 1;
 		let caller: T::AccountId = whitelisted_caller();
-		Pallet::<T, I>::add_member(T::AdminOrigin::successful_origin(), caller.clone(), rank);
+		assert_ok!(Pallet::<T, I>::add_member(T::AdminOrigin::successful_origin(), caller.clone(), rank));
 		// Create a poll
 		let class = T::Polls::classes().into_iter().next().expect("Must always be at least one class");
 		let poll = T::Polls::create_ongoing(class).expect("Must always be able to create a poll");
@@ -102,7 +98,6 @@ benchmarks_instance_pallet! {
 		let rank = 1;
 		let n in 1 .. 100;
 
-		dbg!(n);
 		// Create a poll
 		let class = T::Polls::classes().into_iter().next().expect("Must always be at least one class");
 		let poll = T::Polls::create_ongoing(class).expect("Must always be able to create a poll");
@@ -117,11 +112,10 @@ benchmarks_instance_pallet! {
 		T::Polls::end_ongoing(poll, false).expect("Must always be able to end a poll");
 
 		assert_eq!(Voting::<T, I>::iter_prefix(poll).count(), n as usize);
-		dbg!(Voting::<T, I>::iter_prefix(poll).count());
 	}: _(SystemOrigin::Signed(whitelisted_caller()), poll, n)
 	verify {
 		assert_eq!(Voting::<T, I>::iter().count(), 0);
 	}
 
-	impl_benchmark_test_suite!(Collective, crate::tests::new_test_ext(), crate::tests::Test);
+	impl_benchmark_test_suite!(RankedCollective, crate::tests::new_test_ext(), crate::tests::Test);
 }

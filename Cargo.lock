@@ -4755,6 +4755,7 @@ dependencies = [
  "pallet-preimage",
  "pallet-proxy",
  "pallet-randomness-collective-flip",
+ "pallet-ranked-collective",
  "pallet-recovery",
  "pallet-referenda",
  "pallet-remark",
