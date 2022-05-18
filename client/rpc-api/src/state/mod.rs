@@ -38,13 +38,9 @@ pub trait StateApi<Hash> {
 	async fn call(&self, name: String, bytes: Bytes, hash: Option<Hash>) -> RpcResult<Bytes>;
 
 	/// Returns the keys with prefix, leave empty to get all the keys.
-	#[method(name = "state_getKeys")]
+	#[method(name = "state_getKeys", blocking)]
 	#[deprecated(since = "2.0.0", note = "Please use `getKeysPaged` with proper paging support")]
-	async fn storage_keys(
-		&self,
-		prefix: StorageKey,
-		hash: Option<Hash>,
-	) -> RpcResult<Vec<StorageKey>>;
+	fn storage_keys(&self, prefix: StorageKey, hash: Option<Hash>) -> RpcResult<Vec<StorageKey>>;
 
 	/// Returns the keys with prefix, leave empty to get all the keys
 	#[method(name = "state_getPairs")]

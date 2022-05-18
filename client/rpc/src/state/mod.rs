@@ -68,7 +68,7 @@ where
 	) -> Result<Bytes, Error>;
 
 	/// Returns the keys with prefix, leave empty to get all the keys.
-	async fn storage_keys(
+	fn storage_keys(
 		&self,
 		block: Option<Block::Hash>,
 		prefix: StorageKey,
@@ -218,12 +218,12 @@ where
 		self.backend.call(block, method, data).await.map_err(Into::into)
 	}
 
-	async fn storage_keys(
+	fn storage_keys(
 		&self,
 		key_prefix: StorageKey,
 		block: Option<Block::Hash>,
 	) -> RpcResult<Vec<StorageKey>> {
-		self.backend.storage_keys(block, key_prefix).await.map_err(Into::into)
+		self.backend.storage_keys(block, key_prefix).map_err(Into::into)
 	}
 
 	async fn storage_pairs(

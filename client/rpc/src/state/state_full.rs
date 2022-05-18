@@ -212,7 +212,7 @@ where
 			.map_err(client_err)
 	}
 
-	async fn storage_keys(
+	fn storage_keys(
 		&self,
 		block: Option<Block::Hash>,
 		prefix: StorageKey,
