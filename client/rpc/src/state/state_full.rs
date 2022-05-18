@@ -497,7 +497,7 @@ where
 		+ 'static,
 	Client::Api: Metadata<Block>,
 {
-	async fn read_child_proof(
+	fn read_child_proof(
 		&self,
 		block: Option<Block::Hash>,
 		storage_key: PrefixedStorageKey,
@@ -522,7 +522,7 @@ where
 			.map_err(client_err)
 	}
 
-	async fn storage_keys(
+	fn storage_keys(
 		&self,
 		block: Option<Block::Hash>,
 		storage_key: PrefixedStorageKey,
@@ -540,7 +540,7 @@ where
 			.map_err(client_err)
 	}
 
-	async fn storage_keys_paged(
+	fn storage_keys_paged(
 		&self,
 		block: Option<Block::Hash>,
 		storage_key: PrefixedStorageKey,
@@ -566,7 +566,7 @@ where
 			.map_err(client_err)
 	}
 
-	async fn storage(
+	fn storage(
 		&self,
 		block: Option<Block::Hash>,
 		storage_key: PrefixedStorageKey,
@@ -584,7 +584,7 @@ where
 			.map_err(client_err)
 	}
 
-	async fn storage_entries(
+	fn storage_entries(
 		&self,
 		block: Option<Block::Hash>,
 		storage_key: PrefixedStorageKey,
@@ -599,18 +599,20 @@ where
 		};
 		let block = self.block_or_best(block).map_err(client_err)?;
 		let client = self.client.clone();
-		future::try_join_all(keys.into_iter().map(move |key| {
-			let res = client
-				.clone()
-				.child_storage(&BlockId::Hash(block), &child_info, &key)
-				.map_err(client_err);
 
-			async move { res }
-		}))
-		.await
+		keys.into_iter()
+			.map(move |key| {
+				let res = client
+					.clone()
+					.child_storage(&BlockId::Hash(block), &child_info, &key)
+					.map_err(client_err);
+
+				res
+			})
+			.collect()
 	}
 
-	async fn storage_hash(
+	fn storage_hash(
 		&self,
 		block: Option<Block::Hash>,
 		storage_key: PrefixedStorageKey,

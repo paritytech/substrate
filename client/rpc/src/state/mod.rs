@@ -344,7 +344,7 @@ where
 	Client: Send + Sync + 'static,
 {
 	/// Returns proof of storage for a child key entries at a specific block's state.
-	async fn read_child_proof(
+	fn read_child_proof(
 		&self,
 		block: Option<Block::Hash>,
 		storage_key: PrefixedStorageKey,
@@ -353,7 +353,7 @@ where
 
 	/// Returns the keys with prefix from a child storage,
 	/// leave prefix empty to get all the keys.
-	async fn storage_keys(
+	fn storage_keys(
 		&self,
 		block: Option<Block::Hash>,
 		storage_key: PrefixedStorageKey,
@@ -361,7 +361,7 @@ where
 	) -> Result<Vec<StorageKey>, Error>;
 
 	/// Returns the keys with prefix from a child storage with pagination support.
-	async fn storage_keys_paged(
+	fn storage_keys_paged(
 		&self,
 		block: Option<Block::Hash>,
 		storage_key: PrefixedStorageKey,
@@ -371,7 +371,7 @@ where
 	) -> Result<Vec<StorageKey>, Error>;
 
 	/// Returns a child storage entry at a specific block's state.
-	async fn storage(
+	fn storage(
 		&self,
 		block: Option<Block::Hash>,
 		storage_key: PrefixedStorageKey,
@@ -379,7 +379,7 @@ where
 	) -> Result<Option<StorageData>, Error>;
 
 	/// Returns child storage entries at a specific block's state.
-	async fn storage_entries(
+	fn storage_entries(
 		&self,
 		block: Option<Block::Hash>,
 		storage_key: PrefixedStorageKey,
@@ -387,7 +387,7 @@ where
 	) -> Result<Vec<Option<StorageData>>, Error>;
 
 	/// Returns the hash of a child storage entry at a block's state.
-	async fn storage_hash(
+	fn storage_hash(
 		&self,
 		block: Option<Block::Hash>,
 		storage_key: PrefixedStorageKey,
@@ -395,13 +395,13 @@ where
 	) -> Result<Option<Block::Hash>, Error>;
 
 	/// Returns the size of a child storage entry at a block's state.
-	async fn storage_size(
+	fn storage_size(
 		&self,
 		block: Option<Block::Hash>,
 		storage_key: PrefixedStorageKey,
 		key: StorageKey,
 	) -> Result<Option<u64>, Error> {
-		self.storage(block, storage_key, key).await.map(|x| x.map(|x| x.0.len() as u64))
+		self.storage(block, storage_key, key).map(|x| x.map(|x| x.0.len() as u64))
 	}
 }
 
@@ -416,19 +416,16 @@ where
 	Block: BlockT + 'static,
 	Client: Send + Sync + 'static,
 {
-	async fn storage_keys(
+	fn storage_keys(
 		&self,
 		storage_key: PrefixedStorageKey,
 		key_prefix: StorageKey,
 		block: Option<Block::Hash>,
 	) -> RpcResult<Vec<StorageKey>> {
-		self.backend
-			.storage_keys(block, storage_key, key_prefix)
-			.await
-			.map_err(Into::into)
+		self.backend.storage_keys(block, storage_key, key_prefix).map_err(Into::into)
 	}
 
-	async fn storage_keys_paged(
+	fn storage_keys_paged(
 		&self,
 		storage_key: PrefixedStorageKey,
 		prefix: Option<StorageKey>,
@@ -438,47 +435,46 @@ where
 	) -> RpcResult<Vec<StorageKey>> {
 		self.backend
 			.storage_keys_paged(block, storage_key, prefix, count, start_key)
-			.await
 			.map_err(Into::into)
 	}
 
-	async fn storage(
+	fn storage(
 		&self,
 		storage_key: PrefixedStorageKey,
 		key: StorageKey,
 		block: Option<Block::Hash>,
 	) -> RpcResult<Option<StorageData>> {
-		self.backend.storage(block, storage_key, key).await.map_err(Into::into)
+		self.backend.storage(block, storage_key, key).map_err(Into::into)
 	}
 
-	async fn storage_entries(
+	fn storage_entries(
 		&self,
 		storage_key: PrefixedStorageKey,
 		keys: Vec<StorageKey>,
 		block: Option<Block::Hash>,
 	) -> RpcResult<Vec<Option<StorageData>>> {
-		self.backend.storage_entries(block, storage_key, keys).await.map_err(Into::into)
+		self.backend.storage_entries(block, storage_key, keys).map_err(Into::into)
 	}
 
-	async fn storage_hash(
+	fn storage_hash(
 		&self,
 		storage_key: PrefixedStorageKey,
 		key: StorageKey,
 		block: Option<Block::Hash>,
 	) -> RpcResult<Option<Block::Hash>> {
-		self.backend.storage_hash(block, storage_key, key).await.map_err(Into::into)
+		self.backend.storage_hash(block, storage_key, key).map_err(Into::into)
 	}
 
-	async fn storage_size(
+	fn storage_size(
 		&self,
 		storage_key: PrefixedStorageKey,
 		key: StorageKey,
 		block: Option<Block::Hash>,
 	) -> RpcResult<Option<u64>> {
-		self.backend.storage_size(block, storage_key, key).await.map_err(Into::into)
+		self.backend.storage_size(block, storage_key, key).map_err(Into::into)
 	}
 
-	async fn read_child_proof(
+	fn read_child_proof(
 		&self,
 		child_storage_key: PrefixedStorageKey,
 		keys: Vec<StorageKey>,
@@ -486,7 +482,6 @@ where
 	) -> RpcResult<ReadProof<Block::Hash>> {
 		self.backend
 			.read_child_proof(block, child_storage_key, keys)
-			.await
 			.map_err(Into::into)
 	}
 }
