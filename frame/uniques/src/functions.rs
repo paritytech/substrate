@@ -142,6 +142,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 				with_details(collection_details)?;
 
+				if let Ok(max_supply) = CollectionMaxSupply::<T, I>::try_get(&collection) {
+					ensure!(collection_details.items < max_supply, Error::<T, I>::MaxSupplyReached);
+				}
+
 				let items =
 					collection_details.items.checked_add(1).ok_or(ArithmeticError::Overflow)?;
 				collection_details.items = items;
