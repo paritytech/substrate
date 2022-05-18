@@ -17,8 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use assert_cmd::cargo::cargo_bin;
-use std::process::Command;
-use std::path::Path;
+use std::{path::Path, process::Command};
 use tempfile::tempdir;
 
 /// Tests that the `benchmark extrinsic` command works for
