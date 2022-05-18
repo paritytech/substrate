@@ -100,7 +100,7 @@ pub use sp_runtime::{
 #[cfg(feature = "std")]
 pub use sp_state_machine::{
 	Backend as StateBackend, InMemoryBackend, OverlayedChanges, StorageProof, TrieBackend,
-	TrieBackendBuilder,
+	TrieBackendBuilder, backend::AsTrieBackend,
 };
 #[cfg(feature = "std")]
 use sp_std::result;
@@ -552,7 +552,7 @@ pub struct CallApiAtParams<'a, Block: BlockT, NC, Backend: StateBackend<HashFor<
 #[cfg(feature = "std")]
 pub trait CallApiAt<Block: BlockT> {
 	/// The state backend that is used to store the block states.
-	type StateBackend: StateBackend<HashFor<Block>>;
+	type StateBackend: StateBackend<HashFor<Block>> + AsTrieBackend<HashFor<Block>>;
 
 	/// Calls the given api function with the given encoded arguments at the given block and returns
 	/// the encoded result.

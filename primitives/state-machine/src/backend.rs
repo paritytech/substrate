@@ -174,10 +174,6 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 		all
 	}
 
-	/// Try convert into trie backend.
-	fn as_trie_backend(&self) -> Option<&TrieBackend<Self::TrieBackendStorage, H>> {
-		None
-	}
 	/// Calculate the storage root, with given delta over what is already stored
 	/// in the backend, and produce a "transaction" that can be used to commit.
 	/// Does include child storage updates.
@@ -270,6 +266,13 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 	fn get_read_and_written_keys(&self) -> Vec<(Vec<u8>, u32, u32, bool)> {
 		unimplemented!()
 	}
+}
+
+pub trait AsTrieBackend<H: Hasher> {
+	/// Type of trie backend storage.
+	type TrieBackendStorage: TrieBackendStorage<H>;
+
+	fn as_trie_backend(&self) -> &TrieBackend<Self::TrieBackendStorage, H>;
 }
 
 /// Trait that allows consolidate two transactions together.

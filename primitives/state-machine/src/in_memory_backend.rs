@@ -184,7 +184,7 @@ where
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::backend::Backend;
+	use crate::backend::{AsTrieBackend, Backend};
 	use sp_core::storage::StateVersion;
 	use sp_runtime::traits::BlakeTwo256;
 
@@ -199,7 +199,7 @@ mod tests {
 			vec![(Some(child_info.clone()), vec![(b"2".to_vec(), Some(b"3".to_vec()))])],
 			state_version,
 		);
-		let trie_backend = storage.as_trie_backend().unwrap();
+		let trie_backend = storage.as_trie_backend();
 		assert_eq!(trie_backend.child_storage(child_info, b"2").unwrap(), Some(b"3".to_vec()));
 		let storage_key = child_info.prefixed_storage_key();
 		assert!(trie_backend.storage(storage_key.as_slice()).unwrap().is_some());

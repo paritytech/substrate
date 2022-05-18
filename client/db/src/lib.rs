@@ -85,8 +85,9 @@ use sp_runtime::{
 	Justification, Justifications, StateVersion, Storage,
 };
 use sp_state_machine::{
-	backend::Backend as StateBackend, ChildStorageCollection, DBValue, IndexOperation,
-	OffchainChangesCollection, StateMachineStats, StorageCollection, UsageInfo as StateUsageInfo,
+	backend::{AsTrieBackend, Backend as StateBackend},
+	ChildStorageCollection, DBValue, IndexOperation, OffchainChangesCollection, StateMachineStats,
+	StorageCollection, UsageInfo as StateUsageInfo,
 };
 use sp_trie::{cache::SharedTrieCache, prefixed_key, MemoryDB, PrefixedMemoryDB};
 
@@ -278,18 +279,22 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 		self.state.child_keys(child_info, prefix)
 	}
 
-	fn as_trie_backend(
-		&self,
-	) -> Option<&sp_state_machine::TrieBackend<Self::TrieBackendStorage, HashFor<B>>> {
-		self.state.as_trie_backend()
-	}
-
 	fn register_overlay_stats(&self, stats: &StateMachineStats) {
 		self.state.register_overlay_stats(stats);
 	}
 
 	fn usage_info(&self) -> StateUsageInfo {
 		self.state.usage_info()
+	}
+}
+
+impl<B: BlockT> AsTrieBackend<HashFor<B>> for RefTrackingState<B> {
+	type TrieBackendStorage = <DbState<B> as StateBackend<HashFor<B>>>::TrieBackendStorage;
+
+	fn as_trie_backend(
+		&self,
+	) -> &sp_state_machine::TrieBackend<Self::TrieBackendStorage, HashFor<B>> {
+		&self.state.as_trie_backend()
 	}
 }
 

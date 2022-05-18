@@ -19,7 +19,7 @@
 
 use crate::{
 	trie_backend_essence::{TrieBackendEssence, TrieBackendStorage},
-	Backend, ExecutionError, StorageKey, StorageValue,
+	Backend, ExecutionError, StorageKey, StorageValue, backend::AsTrieBackend,
 };
 use codec::Codec;
 use hash_db::{HashDBRef, Hasher, EMPTY_PREFIX};
@@ -279,10 +279,6 @@ where
 		self.essence.child_storage_root(child_info, delta, state_version)
 	}
 
-	fn as_trie_backend(&self) -> Option<&TrieBackend<Self::TrieBackendStorage, H>> {
-		Some(self)
-	}
-
 	fn register_overlay_stats(&self, _stats: &crate::stats::StateMachineStats) {}
 
 	fn usage_info(&self) -> crate::UsageInfo {
@@ -291,6 +287,14 @@ where
 
 	fn wipe(&self) -> Result<(), Self::Error> {
 		Ok(())
+	}
+}
+
+impl<S: TrieBackendStorage<H>, H: Hasher> AsTrieBackend<H> for TrieBackend<S, H> {
+	type TrieBackendStorage = S;
+
+	fn as_trie_backend(&self) -> &TrieBackend<S, H> {
+		self
 	}
 }
 
@@ -677,7 +681,7 @@ pub mod tests {
 			assert_eq!(in_memory.storage(&[i]).unwrap().unwrap(), vec![i; size_content])
 		});
 
-		let trie = in_memory.as_trie_backend().unwrap();
+		let trie = in_memory.as_trie_backend();
 		let trie_root = trie.storage_root(std::iter::empty(), state_version).0;
 		assert_eq!(in_memory_root, trie_root);
 		value_range
@@ -723,7 +727,7 @@ pub mod tests {
 				(0..64)
 					.for_each(|i| assert_eq!(in_memory.storage(&[i]).unwrap().unwrap(), vec![i]));
 
-				let trie = in_memory.as_trie_backend().unwrap();
+				let trie = in_memory.as_trie_backend();
 				let trie_root = trie.storage_root(std::iter::empty(), state_version).0;
 				assert_eq!(in_memory_root, trie_root);
 				(0..64).for_each(|i| assert_eq!(trie.storage(&[i]).unwrap().unwrap(), vec![i]));
@@ -789,7 +793,7 @@ pub mod tests {
 			for i in 0..3 {
 				eprintln!("Running with cache {}, iteration {}", cache.is_some(), i);
 
-				let trie = in_memory.as_trie_backend().unwrap();
+				let trie = in_memory.as_trie_backend();
 				let trie_root = trie.storage_root(std::iter::empty(), state_version).0;
 				assert_eq!(in_memory_root, trie_root);
 				(0..64).for_each(|i| assert_eq!(trie.storage(&[i]).unwrap().unwrap(), vec![i]));

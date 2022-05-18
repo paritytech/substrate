@@ -31,7 +31,8 @@ use sp_runtime::{
 	StateVersion, Storage,
 };
 use sp_state_machine::{
-	backend::Backend as StateBackend, ChildStorageCollection, DBValue, StorageCollection,
+	backend::{AsTrieBackend, Backend as StateBackend},
+	ChildStorageCollection, DBValue, StorageCollection,
 };
 use sp_trie::{
 	cache::{Configuration, SharedTrieCache},
@@ -588,7 +589,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 		self.proof_recorder.as_ref().and_then(|p| state.as_ref().map(|s| (p, s))).map(
 			|(recorder, state)| {
 				let proof_size = recorder.estimate_encoded_size() as u32;
-				let trie_backend = state.as_trie_backend().expect("State is a trie backend; qed");
+				let trie_backend = state.as_trie_backend();
 
 				let proof = recorder
 					.to_storage_proof(&self.root.get(), trie_backend.essence(), None)

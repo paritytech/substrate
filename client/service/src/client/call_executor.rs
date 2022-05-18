@@ -29,7 +29,7 @@ use sp_externalities::Extensions;
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 use sp_state_machine::{
 	self, backend::Backend as _, ExecutionManager, ExecutionStrategy, Ext, OverlayedChanges,
-	StateMachine, StorageProof,
+	StateMachine, StorageProof, backend::AsTrieBackend,
 };
 use std::{cell::RefCell, panic::UnwindSafe, result, sync::Arc};
 
@@ -224,10 +224,7 @@ where
 
 		match recorder {
 			Some(recorder) => {
-				let trie_state = state.as_trie_backend().ok_or_else(|| {
-					Box::new(sp_state_machine::ExecutionError::UnableToGenerateProof)
-						as Box<dyn sp_state_machine::Error>
-				})?;
+				let trie_state = state.as_trie_backend();
 
 				let backend = sp_state_machine::TrieBackendBuilder::wrap(&trie_state)
 					.with_recorder(recorder.clone())
@@ -293,10 +290,7 @@ where
 	) -> sp_blockchain::Result<(Vec<u8>, StorageProof)> {
 		let state = self.backend.state_at(*at)?;
 
-		let trie_backend = state.as_trie_backend().ok_or_else(|| {
-			Box::new(sp_state_machine::ExecutionError::UnableToGenerateProof)
-				as Box<dyn sp_state_machine::Error>
-		})?;
+		let trie_backend = state.as_trie_backend();
 
 		let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(trie_backend);
 		let runtime_code =

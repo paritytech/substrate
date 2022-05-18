@@ -31,7 +31,7 @@ use sp_core::{
 	storage::{ChildInfo, ChildType, PrefixedStorageKey},
 	Hasher,
 };
-use sp_state_machine::Backend;
+use sp_state_machine::{backend::AsTrieBackend, Backend};
 use sp_trie::{
 	trie_types::{TrieDB, TrieDBBuilder},
 	KeySpacedDB, Trie,
@@ -71,13 +71,9 @@ pub fn migration_status<H, B>(backend: &B) -> std::result::Result<(u64, u64), St
 where
 	H: Hasher,
 	H::Out: codec::Codec,
-	B: Backend<H>,
+	B: AsTrieBackend<H>,
 {
-	let trie_backend = if let Some(backend) = backend.as_trie_backend() {
-		backend
-	} else {
-		return Err("No access to trie from backend.".to_string())
-	};
+	let trie_backend = backend.as_trie_backend();
 	let essence = trie_backend.essence();
 	let (nb_to_migrate, trie) = count_migrate(essence, essence.root())?;
 

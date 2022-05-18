@@ -10303,7 +10303,7 @@ dependencies = [
  "memory-db",
  "nohash-hasher",
  "parity-scale-codec",
- "parking_lot 0.11.2",
+ "parking_lot 0.12.0",
  "scale-info",
  "sp-core",
  "sp-runtime",

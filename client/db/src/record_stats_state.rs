@@ -24,7 +24,10 @@ use sp_runtime::{
 	traits::{Block as BlockT, HashFor},
 	StateVersion,
 };
-use sp_state_machine::{backend::Backend as StateBackend, TrieBackend};
+use sp_state_machine::{
+	backend::{AsTrieBackend, Backend as StateBackend},
+	TrieBackend,
+};
 use std::sync::Arc;
 
 /// State abstraction for recording stats about state access.
@@ -196,10 +199,6 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Record
 		self.state.child_keys(child_info, prefix)
 	}
 
-	fn as_trie_backend(&self) -> Option<&TrieBackend<Self::TrieBackendStorage, HashFor<B>>> {
-		self.state.as_trie_backend()
-	}
-
 	fn register_overlay_stats(&self, stats: &sp_state_machine::StateMachineStats) {
 		self.overlay_stats.add(stats);
 	}
@@ -208,5 +207,15 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Record
 		let mut info = self.usage.take();
 		info.include_state_machine_states(&self.overlay_stats);
 		info
+	}
+}
+
+impl<S: StateBackend<HashFor<B>> + AsTrieBackend<HashFor<B>>, B: BlockT> AsTrieBackend<HashFor<B>>
+	for RecordStatsState<S, B>
+{
+	type TrieBackendStorage = <S as AsTrieBackend<HashFor<B>>>::TrieBackendStorage;
+
+	fn as_trie_backend(&self) -> &TrieBackend<Self::TrieBackendStorage, HashFor<B>> {
+		self.state.as_trie_backend()
 	}
 }

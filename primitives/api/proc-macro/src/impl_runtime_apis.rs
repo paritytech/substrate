@@ -284,9 +284,9 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 				let res = std::option::Option::map(recorder, |recorder| {
 					let backend = #crate_::CallApiAt::<Block>::state_at(self.call, at)?;
 					let trie_backend =
-						#crate_::StateBackend::<#crate_::HashFor<Block>>::as_trie_backend(
+						#crate_::AsTrieBackend::<#crate_::HashFor<Block>>::as_trie_backend(
 							&backend,
-						).ok_or(#crate_::ApiError::StateBackendIsNotTrie)?;
+						);
 
 					let builder = #crate_::TrieBackendBuilder::wrap(&trie_backend);
 					let builder = #crate_::TrieBackendBuilder::with_recorder(builder, recorder);
