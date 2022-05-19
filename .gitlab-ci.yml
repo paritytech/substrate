@@ -200,9 +200,10 @@ build-rustdoc:
     - rusty-cachier snapshot create
     - time cargo +nightly doc --workspace --all-features --verbose
     - rm -f /cargo_target_dir/doc/.lock
-    - sleep 3600
+    # - sleep 3600
     - mv /cargo_target_dir/doc ./crate-docs
     # FIXME: remove me after CI image gets nonroot
-    - chown -R nonroot:nonroot ./crate-docs
+    - sleep 10
+    - chown -vR nonroot:nonroot ./crate-docs
     - echo "<meta http-equiv=refresh content=0;url=${DOC_INDEX_PAGE}>" > ./crate-docs/index.html
     - rusty-cachier cache upload
