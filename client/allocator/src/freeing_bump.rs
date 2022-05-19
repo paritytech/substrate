@@ -216,7 +216,7 @@ impl Link {
 /// |            0 | next element link |
 /// +--------------+-------------------+
 /// ```
-/// 
+///
 /// ## Occupied header
 /// ```ignore
 /// 64             32                  0
@@ -414,7 +414,7 @@ impl FreeingBumpHeapAllocator {
 		Header::Occupied(order).write_into(mem, header_ptr)?;
 		self.total_size += order.size() + HEADER_SIZE;
 
-		if order.size() + HEADER_SIZE > 8 * 1024 * 1024 {
+		if order.size() + HEADER_SIZE > 2 * 1024 * 1024 {
 			log::warn!(
 				target: LOG_TARGET,
 				"large allocation of {} detected, after allocation, total_size = {}, bumper = {}.",

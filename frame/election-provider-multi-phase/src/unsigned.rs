@@ -162,6 +162,7 @@ impl<T: Config> Pallet<T> {
 		let RoundSnapshot { voters, targets } =
 			Self::read_snapshot_with_preallocate().map_err(|_| MinerError::SnapshotUnAvailable)?;
 		let desired_targets = Self::desired_targets().ok_or(MinerError::SnapshotUnAvailable)?;
+		log!(debug, "read-snapshot");
 		let (solution, score, size) = Miner::<T::MinerConfig>::mine_solution_with_snapshot::<
 			T::Solver,
 		>(voters, targets, desired_targets)?;
@@ -405,6 +406,7 @@ impl<T: MinerConfig> Miner<T> {
 	where
 		S: NposSolver<AccountId = T::AccountId>,
 	{
+		log_no_system!(debug, "solving..");
 		S::solve(desired_targets as usize, targets.clone(), voters.clone())
 			.map_err(|e| {
 				log_no_system!(error, "solver error: {:?}", e);
@@ -430,6 +432,7 @@ impl<T: MinerConfig> Miner<T> {
 		targets: Vec<T::AccountId>,
 		desired_targets: u32,
 	) -> Result<(SolutionOf<T>, ElectionScore, SolutionOrSnapshotSize), MinerError> {
+		log_no_system!(debug, "preparing..");
 		// now make some helper closures.
 		let cache = helpers::generate_voter_cache::<T>(&voters);
 		let voter_index = helpers::voter_index_fn::<T>(&cache);
