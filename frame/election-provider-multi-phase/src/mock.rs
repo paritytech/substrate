@@ -18,7 +18,9 @@
 use super::*;
 use crate::{self as multi_phase, unsigned::MinerConfig};
 use frame_election_provider_support::{
-	data_provider, onchain, ElectionDataProvider, NposSolution, SequentialPhragmen,
+	data_provider,
+	onchain::{self, UnboundedExecution},
+	ElectionDataProvider, NposSolution, SequentialPhragmen,
 };
 pub use frame_support::{assert_noop, assert_ok, pallet_prelude::GetDefault};
 use frame_support::{
@@ -379,7 +381,7 @@ impl crate::Config for Runtime {
 	type WeightInfo = ();
 	type BenchmarkingConfig = TestBenchmarkingConfig;
 	type Fallback = MockFallback;
-	type GovernanceFallback = NoFallback<Self>;
+	type GovernanceFallback = UnboundedExecution<OnChainSeqPhragmen>;
 	type ForceOrigin = frame_system::EnsureRoot<AccountId>;
 	type MaxElectingVoters = MaxElectingVoters;
 	type MaxElectableTargets = MaxElectableTargets;
