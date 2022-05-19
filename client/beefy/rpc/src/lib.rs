@@ -100,13 +100,13 @@ pub trait BeefyApi<Notification, Hash> {
 }
 
 /// Implements the BeefyApi RPC trait for interacting with BEEFY.
-pub struct BeefyRpcHandler<Block: BlockT> {
+pub struct BeefyRpc<Block: BlockT> {
 	signed_commitment_stream: BeefySignedCommitmentStream<Block>,
 	beefy_best_block: Arc<RwLock<Option<Block::Hash>>>,
 	executor: SubscriptionTaskExecutor,
 }
 
-impl<Block> BeefyRpcHandler<Block>
+impl<Block> BeefyRpc<Block>
 where
 	Block: BlockT,
 {
@@ -131,8 +131,7 @@ where
 }
 
 #[async_trait]
-impl<Block> BeefyApiServer<notification::EncodedSignedCommitment, Block::Hash>
-	for BeefyRpcHandler<Block>
+impl<Block> BeefyApiServer<notification::EncodedSignedCommitment, Block::Hash> for BeefyRpc<Block>
 where
 	Block: BlockT,
 {
@@ -174,24 +173,20 @@ mod tests {
 	use sp_runtime::traits::{BlakeTwo256, Hash};
 	use substrate_test_runtime_client::runtime::Block;
 
-	fn setup_io_handler() -> (RpcModule<BeefyRpcHandler<Block>>, BeefySignedCommitmentSender<Block>)
-	{
+	fn setup_io_handler() -> (RpcModule<BeefyRpc<Block>>, BeefySignedCommitmentSender<Block>) {
 		let (_, stream) = BeefyBestBlockStream::<Block>::channel();
 		setup_io_handler_with_best_block_stream(stream)
 	}
 
 	fn setup_io_handler_with_best_block_stream(
 		best_block_stream: BeefyBestBlockStream<Block>,
-	) -> (RpcModule<BeefyRpcHandler<Block>>, BeefySignedCommitmentSender<Block>) {
+	) -> (RpcModule<BeefyRpc<Block>>, BeefySignedCommitmentSender<Block>) {
 		let (commitment_sender, commitment_stream) =
 			BeefySignedCommitmentStream::<Block>::channel();
 
-		let handler = BeefyRpcHandler::new(
-			commitment_stream,
-			best_block_stream,
-			sc_rpc::testing::test_executor(),
-		)
-		.expect("Setting up the BEEFY RPC handler works");
+		let handler =
+			BeefyRpc::new(commitment_stream, best_block_stream, sc_rpc::testing::test_executor())
+				.expect("Setting up the BEEFY RPC handler works");
 
 		(handler.into_rpc(), commitment_sender)
 	}
@@ -203,7 +198,7 @@ mod tests {
 		let expected_response = r#"{"jsonrpc":"2.0","error":{"code":1,"message":"BEEFY RPC endpoint not ready"},"id":1}"#.to_string();
 		let (result, _) = rpc.raw_json_request(&request).await.unwrap();
 
-		assert_eq!(expected_response, result,);
+		assert_eq!(expected_response, result);
 	}
 
 	#[tokio::test]

@@ -37,12 +37,10 @@ use jsonrpsee::RpcModule;
 use node_primitives::{AccountId, Balance, Block, BlockNumber, Hash, Index};
 use sc_client_api::AuxStore;
 use sc_consensus_babe::{Config, Epoch};
-use sc_consensus_babe_rpc::BabeRpc;
 use sc_consensus_epochs::SharedEpochChanges;
 use sc_finality_grandpa::{
 	FinalityProofProvider, GrandpaJustificationStream, SharedAuthoritySet, SharedVoterState,
 };
-use sc_finality_grandpa_rpc::GrandpaRpc;
 use sc_rpc::SubscriptionTaskExecutor;
 pub use sc_rpc_api::DenyUnsafe;
 use sc_transaction_pool_api::TransactionPool;
@@ -123,12 +121,12 @@ where
 	use pallet_contracts_rpc::{ContractsApiServer, ContractsRpc};
 	use pallet_mmr_rpc::{MmrApiServer, MmrRpc};
 	use pallet_transaction_payment_rpc::{TransactionPaymentApiServer, TransactionPaymentRpc};
-	use sc_consensus_babe_rpc::BabeApiServer;
-	use sc_finality_grandpa_rpc::GrandpaApiServer;
+	use sc_consensus_babe_rpc::{BabeApiServer, BabeRpc};
+	use sc_finality_grandpa_rpc::{GrandpaApiServer, GrandpaRpc};
 	use sc_rpc::dev::{Dev, DevApiServer};
-	use sc_sync_state_rpc::{SyncStateRpc, SyncStateRpcApiServer};
+	use sc_sync_state_rpc::{SyncStateApiServer, SyncStateRpc};
 	use substrate_frame_rpc_system::{SystemApiServer, SystemRpc};
-	use substrate_state_trie_migration_rpc::StateMigrationApiServer;
+	use substrate_state_trie_migration_rpc::{StateMigrationApiServer, StateMigrationRpc};
 
 	let mut io = RpcModule::new(());
 	let FullDeps { client, pool, select_chain, chain_spec, deny_unsafe, babe, grandpa } = deps;
@@ -176,10 +174,7 @@ where
 			.into_rpc(),
 	)?;
 
-	io.merge(
-		substrate_state_trie_migration_rpc::MigrationRpc::new(client.clone(), backend, deny_unsafe)
-			.into_rpc(),
-	)?;
+	io.merge(StateMigrationRpc::new(client.clone(), backend, deny_unsafe).into_rpc())?;
 	io.merge(Dev::new(client, deny_unsafe).into_rpc())?;
 
 	Ok(io)

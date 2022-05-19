@@ -42,7 +42,7 @@
 #![deny(unused_crate_dependencies)]
 
 use jsonrpsee::{
-	core::{Error as JsonRpseeError, RpcResult},
+	core::{Error as RpcError, RpcResult},
 	proc_macros::rpc,
 	types::{error::CallError, ErrorObject},
 };
@@ -79,7 +79,7 @@ pub enum Error<Block: BlockT> {
 	LightSyncStateExtensionNotFound,
 }
 
-impl<Block: BlockT> From<Error<Block>> for JsonRpseeError {
+impl<Block: BlockT> From<Error<Block>> for RpcError {
 	fn from(error: Error<Block>) -> Self {
 		let message = match error {
 			Error::JsonRpc(s) => s,
@@ -125,7 +125,7 @@ pub struct LightSyncState<Block: BlockT> {
 
 /// An api for sync state RPC calls.
 #[rpc(client, server)]
-pub trait SyncStateRpcApi {
+pub trait SyncStateApi {
 	/// Returns the JSON serialized chainspec running the node, with a sync state.
 	#[method(name = "sync_state_genSyncSpec")]
 	fn system_gen_sync_spec(&self, raw: bool) -> RpcResult<serde_json::Value>;
@@ -180,7 +180,7 @@ where
 	}
 }
 
-impl<Block, Backend> SyncStateRpcApiServer for SyncStateRpc<Block, Backend>
+impl<Block, Backend> SyncStateApiServer for SyncStateRpc<Block, Backend>
 where
 	Block: BlockT,
 	Backend: HeaderBackend<Block> + sc_client_api::AuxStore + 'static,
