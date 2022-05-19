@@ -608,7 +608,6 @@ impl<T: Config> StakingLedger<T> {
 		for i in slash_chunks_priority {
 			if let Some(chunk) = self.unlocking.get_mut(i).defensive() {
 				if remaining_slash.is_zero() {
-					// TODO: test for this fix in the staking pallet.
 					break
 				}
 				slash_out_of(&mut chunk.value, &mut remaining_slash);
@@ -619,9 +618,13 @@ impl<T: Config> StakingLedger<T> {
 			}
 		}
 
+		// clear leftover chunks..
 		self.unlocking.retain(|c| !c.value.is_zero());
+		// report this slash..
 		T::OnStakerSlash::on_slash(&self.stash, self.active, &slashed_unlocking);
-		pre_slash_total.saturating_sub(self.total)
+		// and report the final grand total slash amount.
+		let final_effective_slash = pre_slash_total.saturating_sub(self.total);
+		final_effective_slash
 	}
 }
 

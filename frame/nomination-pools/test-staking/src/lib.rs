@@ -24,7 +24,7 @@ use mock::*;
 use pallet_nomination_pools::{
 	Error as PoolsError, Event as PoolsEvent, LastPoolId, PoolMember, PoolMembers, PoolState,
 };
-use pallet_staking::{CurrentEra, Event as StakingEvent, Ledger, Payee, RewardDestination};
+use pallet_staking::{CurrentEra, Event as StakingEvent, Payee, RewardDestination};
 
 #[test]
 fn pool_lifecycle_e2e() {
