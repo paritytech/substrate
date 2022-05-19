@@ -46,7 +46,10 @@ pub enum WasmExecutionMethod {
 	Interpreted,
 	/// Uses the Wasmtime compiled runtime.
 	#[cfg(feature = "wasmtime")]
-	Compiled,
+	Compiled {
+		/// The instantiation strategy to use.
+		instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy,
+	},
 }
 
 impl Default for WasmExecutionMethod {
@@ -71,6 +74,9 @@ struct VersionedRuntime {
 	module: Arc<dyn WasmModule>,
 	/// Runtime version according to `Core_version` if any.
 	version: Option<RuntimeVersion>,
+
+	// TODO: Remove this once the legacy instance reuse instantiation strategy
+	//       for `wasmtime` is gone, as this only makes sense with that particular strategy.
 	/// Cached instance pool.
 	instances: Arc<Vec<Mutex<Option<Box<dyn WasmInstance>>>>>,
 }
@@ -310,22 +316,23 @@ where
 			.map(|runtime| -> Arc<dyn WasmModule> { Arc::new(runtime) })
 		},
 		#[cfg(feature = "wasmtime")]
-		WasmExecutionMethod::Compiled => sc_executor_wasmtime::create_runtime::<H>(
-			blob,
-			sc_executor_wasmtime::Config {
-				max_memory_size: None,
-				allow_missing_func_imports,
-				cache_path: cache_path.map(ToOwned::to_owned),
-				semantics: sc_executor_wasmtime::Semantics {
-					extra_heap_pages: heap_pages,
-					fast_instance_reuse: true,
-					deterministic_stack_limit: None,
-					canonicalize_nans: false,
-					parallel_compilation: true,
+		WasmExecutionMethod::Compiled { instantiation_strategy } =>
+			sc_executor_wasmtime::create_runtime::<H>(
+				blob,
+				sc_executor_wasmtime::Config {
+					allow_missing_func_imports,
+					cache_path: cache_path.map(ToOwned::to_owned),
+					semantics: sc_executor_wasmtime::Semantics {
+						extra_heap_pages: heap_pages,
+						instantiation_strategy,
+						deterministic_stack_limit: None,
+						canonicalize_nans: false,
+						parallel_compilation: true,
+						max_memory_size: None,
+					},
 				},
-			},
-		)
-		.map(|runtime| -> Arc<dyn WasmModule> { Arc::new(runtime) }),
+			)
+			.map(|runtime| -> Arc<dyn WasmModule> { Arc::new(runtime) }),
 	}
 }
 
