@@ -2082,8 +2082,8 @@ mod tests {
 					Event::SignedPhaseStarted { round: 1 },
 					Event::UnsignedPhaseStarted { round: 1 },
 					Event::ElectionFinalized { election_compute: None },
-					Event::SolutionStored { election_compute: Fallback, prev_ejected: false },
-					Event::ElectionFinalized { election_compute: Some(Fallback) }
+					Event::SolutionStored { election_compute: ElectionCompute::Fallback, prev_ejected: false },
+					Event::ElectionFinalized { election_compute: Some(ElectionCompute::Fallback) }
 				]
 			);
 		})
