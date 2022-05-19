@@ -79,11 +79,8 @@ pub struct MixnetWorker<B: BlockT, C> {
 	client: Arc<C>,
 	state: State,
 	//	connection_info: ConnectionInfo,
-	authority_discovery_service: sc_authority_discovery::Service,
 	command_sink: TracingUnboundedSender<MixnetCommand>,
 	command_stream: TracingUnboundedReceiver<MixnetCommand>,
-	authority_replies: VecDeque<Option<AuthorityRx>>,
-	authority_queries: VecDeque<AuthorityInfo>,
 	key_store: Arc<dyn SyncCryptoStore>,
 	default_limit_config: Option<u32>,
 }
@@ -135,7 +132,6 @@ where
 			NumberFor<B>,
 		>,
 		//		role: sc_network::config::Role,
-		authority_discovery_service: sc_authority_discovery::Service,
 		//authority_id: Option<AuthorityId>,
 		key_store: Arc<dyn SyncCryptoStore>,
 		//authority-discovery which is slow).
@@ -240,11 +236,8 @@ where
 			session: None,
 			client,
 			state,
-			authority_discovery_service,
 			command_sink: inner_channels.1,
 			command_stream: inner_channels.2,
-			authority_queries: VecDeque::new(),
-			authority_replies: VecDeque::new(),
 			key_store,
 			default_limit_config,
 			//connection_info,
@@ -269,39 +262,11 @@ where
 		loop {
 			let mut pop_auth_query = false;
 			let mut err_auth_query = false;
-			let auth_poll = self.authority_replies.get_mut(0).map(Option::as_mut).flatten();
-			let auth_poll = OptionFuture2(auth_poll);
 			//future::poll_fn(|cx| auth_poll.map(|a|
 			// Pin::new(a).poll(cx)).unwrap_or(futures::task::Poll::Pending)); TODO consider
 			// stream_select
 			futures::select! {
 							// TODO poll more than first??
-							auth_address = auth_poll.fuse() => {
-								debug!(target: "mixnet", "Received auth reply {:?}.", auth_address);
-								match auth_address {
-									Ok(Some(addresses)) => {
-									let auth_id = self.authority_queries.get(0).unwrap().clone();
-									for addr in addresses {
-										match sc_network::config::parse_addr(addr) {
-											Ok((address, _)) => {
-												// TODO MixnetCommand useless?
-												// TODO same as this authority id will be new session key.
-			//									self.handle_command(MixnetCommand::AuthorityId(auth_id.grandpa_id.clone(), auth_id.authority_discovery_id.clone(), address));
-											},
-											Err(_) => continue,
-										};
-									}
-									pop_auth_query = true; // TODO same for Ok(None)?
-								},
-								Ok(None) => {
-									pop_auth_query = true; // TODO same for Ok(None)?
-								},
-								Err(e) => {
-									// TODO trace
-									err_auth_query = true;
-								},
-								}
-							},
 							notif = self.finality_stream.next() => {
 								if let Some(notif) = notif {
 									delay_finalized.reset(Duration::from_secs(DELAY_NO_FINALISATION_S));
@@ -336,31 +301,6 @@ where
 							},
 						}
 
-			if pop_auth_query {
-				self.authority_queries.pop_front();
-				self.authority_replies.pop_front();
-			} else if err_auth_query {
-				if let Some(a) = self.authority_queries.pop_front() {
-					self.authority_queries.push_back(a);
-				}
-				if let Some(_) = self.authority_replies.pop_front() {
-					self.authority_replies.push_back(None);
-				}
-			}
-			if self.authority_replies.get_mut(0).map(Option::as_mut).flatten().is_none() {
-				if let Some(info) = self.authority_queries.get_mut(0) {
-					if let Ok(auth_public) = info.authority_discovery_id.1.as_slice().try_into() {
-						if let Some(rx) = self
-							.authority_discovery_service
-							.get_addresses_by_authority_id_callback(auth_public)
-						{
-							self.authority_replies[0] = Some(rx);
-						} else {
-							debug!(target: "mixnet", "Query authority full channel.");
-						}
-					}
-				}
-			}
 		}
 	}
 
@@ -423,14 +363,10 @@ where
 		topology.unconnected_authorities.clear(); // TODO could keep for a few session
 										  // TODO also remove authorty disocvery query??
 
-		while let Some(i) = self.authority_replies.iter().rev().position(|v| v.is_none()) {
-			self.authority_replies.remove(i);
-			self.authority_queries.remove(i);
-		}
-
 		topology.routing = false;
 
 		for (auth, _) in set.into_iter() {
+			use sp_application_crypto::Public;
 			let auth_pub_pair = auth.clone().to_public_crypto_pair(); // TODO change key type in map?
 			if let Some(key) = topology.sessions2.get(&auth_pub_pair) {
 				let mut peer_id = [0u8; 32];
@@ -461,66 +397,6 @@ where
 			} else {
 				error!(target: "mixnet", "Missing imonline key for authority {:?}, not adding it to topology.", auth);
 			}
-
-			// TODO rem all bellow
-			if self.authority_id.as_ref() == Some(&auth) {
-				debug!(target: "mixnet", "In new authority set, routing.");
-				// TODO EME check session key or grandpa key is right over sessions2 else restart
-				topology.routing = true;
-				topology.current_authorities2.insert(auth, Some(local_id));
-
-				continue
-			}
-
-			// TODO EME update topology from sessions2 joined authority.
-
-			// TODO rem all bellow
-			use sp_application_crypto::Public;
-			let authority_discovery_id =
-				if let Some(id) = topology.sessions3.get(&auth.clone().to_public_crypto_pair()) {
-					id.clone()
-				} else {
-					warn!(target: "mixnet", "Skipped authority {:?}, no session key", auth);
-					continue
-				};
-			let mut auth_peer_id = None;
-			if let Some(node_id) = topology.connected_authorities.get(&auth) {
-				if let Some(NodeInfo { authority_id, public_key, .. }) =
-					topology.connected_nodes.get_mut(node_id)
-				{
-					*authority_id =
-						Some(AuthorityInfo { grandpa_id: auth.clone(), authority_discovery_id });
-					topology.routing_nodes.insert(node_id.clone(), public_key.clone());
-					auth_peer_id = Some(node_id.clone());
-				} else {
-					unreachable!();
-				}
-			} else {
-				if let Ok(auth_public) = authority_discovery_id.1.as_slice().try_into() {
-					self.authority_queries.push_back(AuthorityInfo {
-						grandpa_id: auth.clone(),
-						authority_discovery_id,
-					});
-
-					if let Some(rx) = self
-						.authority_discovery_service
-						.get_addresses_by_authority_id_callback(auth_public)
-					{
-						self.authority_replies.push_back(Some(rx));
-					} else {
-						debug!(target: "mixnet", "Query authority full channel.");
-						self.authority_replies.push_back(None);
-					}
-				} else {
-					error!(target: "mixnet", "Invalid authority discovery key {:?}", authority_discovery_id);
-					continue
-				}
-			}
-			if let Some(peer) = auth_peer_id.clone() {
-				remove_limit.push(peer);
-			}
-			topology.current_authorities2.insert(auth, auth_peer_id);
-
 		}
 		self.update_state(false);
 		for peer in remove_limit.into_iter() {
@@ -582,19 +458,19 @@ where
 			},
 		};
 		debug!(target: "mixnet", "Fetched session keys {:?}, at {:?}", sessions, block_id);
-		self.worker.mixnet_mut().topology.sessions3 = sessions
+		self.worker.mixnet_mut().topology.sessions2 = sessions
 			.into_iter()
 			.flat_map(|(_, keys)| {
 				let mut grandpa = None;
-				let mut auth_disc = None;
+				let mut imonline = None;
 				for pair in keys {
 					if pair.0 == sp_application_crypto::key_types::GRANDPA {
 						grandpa = Some(pair.1);
-					} else if pair.0 == sp_application_crypto::key_types::AUTHORITY_DISCOVERY {
-						auth_disc = Some(pair.1);
+					} else if pair.0 == sp_application_crypto::key_types::IM_ONLINE {
+						imonline = Some(pair.1);
 					}
 				}
-				if let (Some(g), Some(a)) = (grandpa, auth_disc) {
+				if let (Some(g), Some(a)) = (grandpa, imonline) {
 					Some((g, a))
 				} else {
 					None
@@ -677,9 +553,6 @@ pub struct AuthorityStar {
 	// TODO remove all fields bellow
 	connected_authorities: HashMap<AuthorityId, MixPeerId>,
 	unconnected_authorities: HashMap<MixPeerId, AuthorityInfo>,
-	// Grandpa -> AuthDisc
-	sessions3: HashMap<CryptoTypePublicPair, CryptoTypePublicPair>,
-
 	current_authorities2: HashMap<AuthorityId, Option<MixPeerId>>,
 	routing_nodes: BTreeMap<MixPeerId, MixPublicKey>,
 }
@@ -724,7 +597,6 @@ impl AuthorityStar {
 			routing_nodes: BTreeMap::new(),
 			unconnected_authorities: HashMap::new(),
 			sessions2: HashMap::new(),
-			sessions3: HashMap::new(),
 			routing: false,
 			key_store,
 		}
