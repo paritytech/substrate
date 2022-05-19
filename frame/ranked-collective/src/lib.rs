@@ -45,7 +45,7 @@
 use scale_info::TypeInfo;
 use sp_arithmetic::traits::Saturating;
 use sp_runtime::{
-	ArithmeticError::{Overflow, Underflow},
+	ArithmeticError::Overflow,
 	Perbill, RuntimeDebug,
 };
 use sp_std::{marker::PhantomData, prelude::*};
@@ -152,8 +152,6 @@ impl<M: GetMaxVoters> VoteTally<Votes, Rank> for Tally<M> {
 /// Record needed for every member.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
 pub struct MemberRecord {
-	/// The index of the member.
-	index: MemberIndex,
 	/// The rank of the member.
 	rank: Rank,
 }
@@ -213,11 +211,16 @@ pub mod pallet {
 	pub type Members<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, T::AccountId, MemberRecord>;
 
+	/// The index of each ranks's member into the group of members who have at least that rank.
+	#[pallet::storage]
+	pub type IdToIndex<T: Config<I>, I: 'static = ()> =
+		StorageDoubleMap<_, Twox64Concat, Rank, Twox64Concat, T::AccountId, MemberIndex>;
+
 	/// The members in the collective by index. All indices in the range `0..MemberCount` will
 	/// return `Some`, however a member's index is not guaranteed to remain unchanged over time.
 	#[pallet::storage]
-	pub type MemberByIndex<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, MemberIndex, T::AccountId>;
+	pub type IndexToId<T: Config<I>, I: 'static = ()> =
+		StorageDoubleMap<_, Twox64Concat, Rank, Twox64Concat, MemberIndex, T::AccountId>;
 
 	/// Votes on a given proposal, if it is ongoing.
 	#[pallet::storage]
@@ -233,14 +236,14 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
-		/// A member has been added.
+		/// A member `who` has been added.
 		MemberAdded { who: T::AccountId },
-		/// A member's rank has been changed.
+		/// The member `who`'s rank has been changed to the given `rank`.
 		RankChanged { who: T::AccountId, rank: Rank },
-		/// A member has been removed.
-		MemberRemoved { who: T::AccountId },
-		/// A motion (given hash) has been voted on by given account, leaving
-		/// a tally (yes votes and no votes given respectively as `MemberIndex`).
+		/// The member `who` of given `rank` has been removed from the collective.
+		MemberRemoved { who: T::AccountId, rank: Rank },
+		/// The member `who` has voted for the `poll` with the given `vote` leading to an updated
+		/// `tally`.
 		Voted { who: T::AccountId, poll: PollIndexOf<T, I>, vote: VoteRecord, tally: TallyOf<T, I> },
 	}
 
@@ -260,9 +263,8 @@ pub mod pallet {
 		Corruption,
 		/// The member's rank is too low to vote.
 		RankTooLow,
-		/// The member's rank is too high to be removed.
-		RankTooHigh,
-
+		/// The information provided is incorrect.
+		InvalidWitness,
 	}
 
 	#[pallet::call]
@@ -281,8 +283,9 @@ pub mod pallet {
 			let index = MemberCount::<T, I>::get(0);
 			let count = index.checked_add(1).ok_or(Overflow)?;
 
-			Members::<T, I>::insert(&who, MemberRecord { rank: 0, index });
-			MemberByIndex::<T, I>::insert(index, &who);
+			Members::<T, I>::insert(&who, MemberRecord { rank: 0 });
+			IdToIndex::<T, I>::insert(0, &who, index);
+			IndexToId::<T, I>::insert(0, index, &who);
 			MemberCount::<T, I>::insert(0, count);
 			Self::deposit_event(Event::MemberAdded { who });
 
@@ -295,71 +298,82 @@ pub mod pallet {
 		/// - `who`: Account of existing member.
 		///
 		/// Weight: `O(1)`
-		#[pallet::weight(T::WeightInfo::set_member_rank())]
-		pub fn promote(
+		#[pallet::weight(T::WeightInfo::promote_member(0))]
+		pub fn promote_member(
 			origin: OriginFor<T>,
 			who: T::AccountId,
 		) -> DispatchResult {
 			T::AdminOrigin::ensure_origin(origin)?;
-			let mut record = Self::ensure_member(&who)?;
-			record.rank = record.rank.checked_add(1).ok_or(Overflow)?;
-			MemberCount::<T, I>::mutate(record.rank, |r| r.saturating_inc());
-			Members::<T, I>::insert(&who, &record);
-			Self::deposit_event(Event::RankChanged { who, rank: record.rank });
+			let record = Self::ensure_member(&who)?;
+			let rank = record.rank.checked_add(1).ok_or(Overflow)?;
+			let index = MemberCount::<T, I>::get(rank);
+			MemberCount::<T, I>::insert(rank, index.checked_add(1).ok_or(Overflow)?);
+			IdToIndex::<T, I>::insert(rank, &who, index);
+			IndexToId::<T, I>::insert(rank, index, &who);
+			Members::<T, I>::insert(&who, MemberRecord { rank, .. record });
+			Self::deposit_event(Event::RankChanged { who, rank });
 
 			Ok(())
 		}
 
-		/// Decrement the rank of an existing member by one.
+		/// Decrement the rank of an existing member by one. If the member is already at rank zero,
+		/// then they are removed entirely.
 		///
 		/// - `origin`: Must be the `AdminOrigin`.
 		/// - `who`: Account of existing member of rank greater than zero.
 		///
-		/// Weight: `O(1)`
-		#[pallet::weight(T::WeightInfo::set_member_rank())]
-		pub fn demote(
+		/// Weight: `O(1)`, less if the member's index is highest in its rank.
+		#[pallet::weight(T::WeightInfo::demote_member(0))]
+		pub fn demote_member(
 			origin: OriginFor<T>,
 			who: T::AccountId,
 		) -> DispatchResult {
 			T::AdminOrigin::ensure_origin(origin)?;
 			let mut record = Self::ensure_member(&who)?;
-			record.rank = record.rank.checked_sub(1).ok_or(Underflow)?;
-			MemberCount::<T, I>::mutate(record.rank + 1, |r| r.saturating_dec());
-			Members::<T, I>::insert(&who, &record);
-			Self::deposit_event(Event::RankChanged { who, rank: record.rank });
+			let rank = record.rank;
 
+			Self::remove_from_rank(&who, rank)?;
+			let maybe_rank = rank.checked_sub(1);
+			match maybe_rank {
+				None => {
+					Members::<T, I>::remove(&who);
+					Self::deposit_event(Event::MemberRemoved { who, rank: 0 });
+				}
+				Some(rank) => {
+					record.rank = rank;
+					Members::<T, I>::insert(&who, &record);
+					Self::deposit_event(Event::RankChanged { who, rank });
+				}
+			}
 			Ok(())
 		}
 
-		/// Remove a member.
+		/// Remove the member entirely.
 		///
 		/// - `origin`: Must be the `AdminOrigin`.
-		/// - `who`: Account of existing member to be removed.
+		/// - `who`: Account of existing member of rank greater than zero.
+		/// - `rank`: The rank of the member.
 		///
-		/// Weight: `O(1)`, less if the member's index is highest.
-		#[pallet::weight(T::WeightInfo::remove_member())]
-		pub fn remove_member(origin: OriginFor<T>, who: T::AccountId) -> DispatchResult {
+		/// Weight: `O(rank)`.
+		#[pallet::weight(T::WeightInfo::remove_member(*min_rank as u32))]
+		pub fn remove_member(
+			origin: OriginFor<T>,
+			who: T::AccountId,
+			min_rank: Rank,
+		) -> DispatchResultWithPostInfo {
 			T::AdminOrigin::ensure_origin(origin)?;
-			let record = Self::ensure_member(&who)?;
-			ensure!(record.rank == 0, Error::<T, I>::RankTooHigh);
+			let MemberRecord { rank, .. } = Self::ensure_member(&who)?;
+			ensure!(min_rank >= rank, Error::<T, I>::InvalidWitness);
 
-			let last_index = MemberCount::<T, I>::get(0).saturating_sub(1);
-			let index = record.index;
-			if index != last_index {
-				let last = MemberByIndex::<T, I>::get(last_index).ok_or(Error::<T, I>::Corruption)?;
-				Members::<T, I>::mutate(&last, |r| {
-					if let Some(ref mut r) = r {
-						r.index = index
-					}
-				});
-				MemberByIndex::<T, I>::insert(index, &last);
+			for r in 0..=rank {
+				Self::remove_from_rank(&who, r)?;
 			}
-			MemberCount::<T, I>::insert(0, last_index);
-			MemberByIndex::<T, I>::remove(last_index);
 			Members::<T, I>::remove(&who);
-			Self::deposit_event(Event::MemberRemoved { who });
-
-			Ok(())
+			Self::deposit_event(Event::MemberRemoved { who, rank });
+			Ok(PostDispatchInfo {
+				actual_weight: Some(T::WeightInfo::remove_member(rank as u32)),
+				pays_fee: Pays::Yes,
+			})
 		}
 
 		/// Add an aye or nay vote for the sender to the given proposal.
@@ -455,6 +469,18 @@ pub mod pallet {
 			let excess = rank.checked_sub(min).ok_or(Error::<T, I>::RankTooLow)?;
 			let v = (excess + 1) as Votes;
 			Ok(v * (v + 1) / 2)
+		}
+
+		fn remove_from_rank(who: &T::AccountId, rank: Rank) -> DispatchResult {
+			let last_index = MemberCount::<T, I>::get(rank).saturating_sub(1);
+			let index = IdToIndex::<T, I>::get(rank, &who).ok_or(Error::<T, I>::Corruption)?;
+			if index != last_index {
+				let last = IndexToId::<T, I>::get(rank, last_index).ok_or(Error::<T, I>::Corruption)?;
+				IdToIndex::<T, I>::insert(rank, &last, index);
+				IndexToId::<T, I>::insert(rank, index, &last);
+			}
+			MemberCount::<T, I>::mutate(rank, |r| r.saturating_dec());
+			Ok(())
 		}
 	}
 

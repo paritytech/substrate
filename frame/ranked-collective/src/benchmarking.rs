@@ -35,13 +35,9 @@ fn make_member<T: Config<I>, I: 'static>(rank: Rank) -> T::AccountId {
 	let who = account::<T::AccountId>("member", MemberCount::<T, I>::get(0), SEED);
 	assert_ok!(Pallet::<T, I>::add_member(T::AdminOrigin::successful_origin(), who.clone()));
 	for _ in 0..rank {
-		promote_member::<T, I>(&who);
+		assert_ok!(Pallet::<T, I>::promote_member(T::AdminOrigin::successful_origin(), who.clone()));
 	}
 	who
-}
-
-fn promote_member<T: Config<I>, I: 'static>(who: &T::AccountId) {
-	assert_ok!(Pallet::<T, I>::promote(T::AdminOrigin::successful_origin(), who.clone()));
 }
 
 benchmarks_instance_pallet! {
@@ -56,37 +52,53 @@ benchmarks_instance_pallet! {
 	}
 
 	remove_member {
-		let first = make_member::<T, I>(0);
-		let who = make_member::<T, I>(0);
-		let last = make_member::<T, I>(0);
-		let last_index = Members::<T, I>::get(&last).unwrap().index;
+		let r in 0 .. 10;
+		let rank = r as u16;
+		let first = make_member::<T, I>(rank);
+		let who = make_member::<T, I>(rank);
+		let last = make_member::<T, I>(rank);
+		let last_index = (0..=rank).map(|r| IdToIndex::<T, I>::get(r, &last).unwrap()).collect::<Vec<_>>();
 		let origin = T::AdminOrigin::successful_origin();
-		let call = Call::<T, I>::remove_member { who: who.clone() };
+		let call = Call::<T, I>::remove_member { who: who.clone(), min_rank: rank };
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
-		assert_eq!(MemberCount::<T, I>::get(0), 2);
-		assert_ne!(last_index, Members::<T, I>::get(&last).unwrap().index);
-		assert_last_event::<T, I>(Event::MemberRemoved { who }.into());
+		for r in 0..=rank {
+			assert_eq!(MemberCount::<T, I>::get(r), 2);
+			assert_ne!(last_index[r as usize], IdToIndex::<T, I>::get(r, &last).unwrap());
+		}
+		assert_last_event::<T, I>(Event::MemberRemoved { who, rank }.into());
 	}
 
-	promote {
-		let who = make_member::<T, I>(0);
+	promote_member {
+		let r in 0 .. 10;
+		let rank = r as u16;
+		let who = make_member::<T, I>(rank);
 		let origin = T::AdminOrigin::successful_origin();
-		let call = Call::<T, I>::promote { who: who.clone() };
+		let call = Call::<T, I>::promote_member { who: who.clone() };
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
-		assert_eq!(Members::<T, I>::get(&who).unwrap().rank, 1);
-		assert_last_event::<T, I>(Event::RankChanged { who, rank: 1 }.into());
+		assert_eq!(Members::<T, I>::get(&who).unwrap().rank, rank + 1);
+		assert_last_event::<T, I>(Event::RankChanged { who, rank: rank + 1 }.into());
 	}
 
-	demote {
-		let who = make_member::<T, I>(1);
+	demote_member {
+		let r in 0 .. 10;
+		let rank = r as u16;
+		let first = make_member::<T, I>(rank);
+		let who = make_member::<T, I>(rank);
+		let last = make_member::<T, I>(rank);
+		let last_index = IdToIndex::<T, I>::get(rank, &last).unwrap();
 		let origin = T::AdminOrigin::successful_origin();
-		let call = Call::<T, I>::demote { who: who.clone() };
+		let call = Call::<T, I>::demote_member { who: who.clone() };
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
-		assert_eq!(Members::<T, I>::get(&who).unwrap().rank, 0);
-		assert_last_event::<T, I>(Event::RankChanged { who, rank: 0 }.into());
+		assert_eq!(Members::<T, I>::get(&who).map(|x| x.rank), rank.checked_sub(1));
+		assert_eq!(MemberCount::<T, I>::get(rank), 2);
+		assert_ne!(last_index, IdToIndex::<T, I>::get(rank, &last).unwrap());
+		assert_last_event::<T, I>(match rank {
+			0 => Event::MemberRemoved { who, rank: 0 },
+			r => Event::RankChanged { who, rank: r - 1 },
+		}.into());
 	}
 
 	vote {

@@ -780,11 +780,11 @@ parameter_types! {
 
 pub struct TracksInfo;
 impl pallet_referenda::TracksInfo<Balance, BlockNumber> for TracksInfo {
-	type Id = u8;
+	type Id = u16;
 	type Origin = <Origin as frame_support::traits::OriginTrait>::PalletsOrigin;
 	fn tracks() -> &'static [(Self::Id, pallet_referenda::TrackInfo<Balance, BlockNumber>)] {
-		static DATA: [(u8, pallet_referenda::TrackInfo<Balance, BlockNumber>); 1] = [(
-			0u8,
+		static DATA: [(u16, pallet_referenda::TrackInfo<Balance, BlockNumber>); 1] = [(
+			0u16,
 			pallet_referenda::TrackInfo {
 				name: "root",
 				max_deciding: 1,
