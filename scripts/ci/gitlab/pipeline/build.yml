@@ -57,7 +57,7 @@ build-linux-substrate:
   script:
     - rusty-cachier snapshot create
     - WASM_BUILD_NO_COLOR=1 time cargo build --release --verbose
-    - mv ./target/release/substrate ./artifacts/substrate/.
+    - mv /cargo_target_dir/release/substrate ./artifacts/substrate/.
     - echo -n "Substrate version = "
     - if [ "${CI_COMMIT_TAG}" ]; then
         echo "${CI_COMMIT_TAG}" | tee ./artifacts/substrate/VERSION;
@@ -88,7 +88,7 @@ build-linux-substrate:
     - cd ./bin/utils/subkey
     - SKIP_WASM_BUILD=1 time cargo build --release --verbose
     - cd -
-    - mv ./target/release/subkey ./artifacts/subkey/.
+    - mv /cargo_target_dir/release/subkey ./artifacts/subkey/.
     - echo -n "Subkey version = "
     - ./artifacts/subkey/subkey --version |
         sed -n -E 's/^subkey ([0-9.]+.*)/\1/p' |
