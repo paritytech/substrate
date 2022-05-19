@@ -31,10 +31,15 @@ use crate::{
 	exec::{ExecResult, Executable, ExportedFunction, Ext},
 	gas::GasMeter,
 	wasm::env_def::FunctionImplProvider,
-	AccountIdOf, BalanceOf, CodeHash, CodeStorage, Config, Schedule,
+	AccountIdOf, BalanceOf, CodeHash, CodeStorage, CodeVec, Config, Error, RelaxedCodeVec,
+	Schedule,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
-use frame_support::dispatch::{DispatchError, DispatchResult};
+use frame_support::{
+	dispatch::{DispatchError, DispatchResult},
+	ensure,
+	traits::Get,
+};
 use sp_core::crypto::UncheckedFrom;
 use sp_sandbox::{SandboxEnvironmentBuilder, SandboxInstance, SandboxMemory};
 use sp_std::prelude::*;
@@ -50,7 +55,8 @@ pub use tests::MockExt;
 /// `instruction_weights_version` and `code` change when a contract with an outdated instrumentation
 /// is called. Therefore one must be careful when holding any in-memory representation of this
 /// type while calling into a contract as those fields can get out of date.
-#[derive(Clone, Encode, Decode, scale_info::TypeInfo)]
+#[derive(Clone, Encode, Decode, scale_info::TypeInfo, MaxEncodedLen)]
+#[codec(mel_bound())]
 #[scale_info(skip_type_params(T))]
 pub struct PrefabWasmModule<T: Config> {
 	/// Version of the instruction weights with which the code was instrumented.
@@ -63,14 +69,14 @@ pub struct PrefabWasmModule<T: Config> {
 	#[codec(compact)]
 	maximum: u32,
 	/// Code instrumented with the latest schedule.
-	code: Vec<u8>,
+	code: RelaxedCodeVec<T>,
 	/// The uninstrumented, pristine version of the code.
 	///
 	/// It is not stored because the pristine code has its own storage item. The value
 	/// is only `Some` when this module was created from an `original_code` and `None` if
 	/// it was loaded from storage.
 	#[codec(skip)]
-	original_code: Option<Vec<u8>>,
+	original_code: Option<CodeVec<T>>,
 	/// The code hash of the stored code which is defined as the hash over the `original_code`.
 	///
 	/// As the map key there is no need to store the hash in the value, too. It is set manually
@@ -122,8 +128,19 @@ where
 		original_code: Vec<u8>,
 		schedule: &Schedule<T>,
 		owner: AccountIdOf<T>,
-	) -> Result<Self, &'static str> {
-		prepare::prepare_contract(original_code, schedule, owner)
+	) -> Result<Self, (DispatchError, &'static str)> {
+		let module = prepare::prepare_contract(
+			original_code.try_into().map_err(|_| (<Error<T>>::CodeTooLarge.into(), ""))?,
+			schedule,
+			owner,
+		)?;
+		// When instrumenting a new code we apply a stricter limit than enforced by the
+		// `RelaxedCodeVec` in order to leave some headroom for reinstrumentation.
+		ensure!(
+			module.code.len() as u32 <= T::MaxCodeLen::get(),
+			(<Error<T>>::CodeTooLarge.into(), ""),
+		);
+		Ok(module)
 	}
 
 	/// Store the code without instantiating it.

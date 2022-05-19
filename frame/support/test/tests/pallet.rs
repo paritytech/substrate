@@ -17,6 +17,7 @@
 
 use frame_support::{
 	dispatch::{Parameter, UnfilteredDispatchable},
+	pallet_prelude::ValueQuery,
 	storage::unhashed,
 	traits::{
 		ConstU32, GetCallName, GetStorageVersion, OnFinalize, OnGenesis, OnInitialize,
@@ -96,13 +97,9 @@ impl SomeAssociation2 for u64 {
 
 #[frame_support::pallet]
 pub mod pallet {
-	use super::{
-		SomeAssociation1, SomeAssociation2, SomeType1, SomeType2, SomeType3, SomeType4, SomeType5,
-		SomeType6, SomeType7, StorageVersion,
-	};
+	use super::*;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
-	use scale_info::TypeInfo;
 
 	type BalanceOf<T> = <T as Config>::Balance;
 
@@ -1634,4 +1631,18 @@ fn assert_type_all_pallets_without_system_reversed_is_correct() {
 	fn _b(t: (Example4, (Example2, (Example,)))) {
 		_a(t)
 	}
+}
+
+#[test]
+fn test_storage_alias() {
+	#[frame_support::storage_alias]
+	type Value<T: pallet::Config>
+	where
+		<T as frame_system::Config>::AccountId: From<SomeType1> + SomeAssociation1,
+	= StorageValue<pallet::Pallet<T>, u32, ValueQuery>;
+
+	TestExternalities::default().execute_with(|| {
+		pallet::Value::<Runtime>::put(10);
+		assert_eq!(10, Value::<Runtime>::get());
+	})
 }

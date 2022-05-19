@@ -30,11 +30,12 @@ impl<T: crate::Config> OnRuntimeUpgrade for CheckCounterPrefix<T> {
 	fn pre_upgrade() -> Result<(), &'static str> {
 		use frame_support::ensure;
 		// The old explicit storage item.
-		frame_support::generate_storage_alias!(BagsList, CounterForListNodes => Value<u32>);
+		#[frame_support::storage_alias]
+		type CounterForListNodes<T: crate::Config> = StorageValue<crate::Pallet<T>, u32>;
 
 		// ensure that a value exists in the counter struct.
 		ensure!(
-			crate::ListNodes::<T>::count() == CounterForListNodes::get().unwrap(),
+			crate::ListNodes::<T>::count() == CounterForListNodes::<T>::get().unwrap(),
 			"wrong list node counter"
 		);
 
