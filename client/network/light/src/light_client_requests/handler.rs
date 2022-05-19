@@ -22,16 +22,17 @@
 //! `crate::request_responses::RequestResponsesBehaviour` with
 //! [`LightClientRequestHandler`](handler::LightClientRequestHandler).
 
-use crate::{
-	config::ProtocolId,
-	request_responses::{IncomingRequest, OutgoingResponse, ProtocolConfig},
-	schema, PeerId,
-};
+use crate::schema;
 use codec::{self, Decode, Encode};
 use futures::{channel::mpsc, prelude::*};
+use libp2p::PeerId;
 use log::{debug, trace};
 use prost::Message;
 use sc_client_api::{ProofProvider, StorageProof};
+use sc_network_common::{
+	config::ProtocolId,
+	request_responses::{IncomingRequest, OutgoingResponse, ProtocolConfig},
+};
 use sc_peerset::ReputationChange;
 use sp_core::{
 	hexdisplay::HexDisplay,
@@ -55,7 +56,7 @@ where
 	B: Block,
 	Client: ProofProvider<B> + Send + Sync + 'static,
 {
-	/// Create a new [`crate::block_request_handler::BlockRequestHandler`].
+	/// Create a new [`LightClientRequestHandler`].
 	pub fn new(protocol_id: &ProtocolId, client: Arc<Client>) -> (Self, ProtocolConfig) {
 		// For now due to lack of data on light client request handling in production systems, this
 		// value is chosen to match the block request limit.

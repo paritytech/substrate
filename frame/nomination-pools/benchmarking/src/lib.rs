@@ -526,9 +526,9 @@ frame_benchmarking::benchmarks! {
 				member_counter: 1,
 				roles: PoolRoles {
 					depositor: depositor.clone(),
-					root: depositor.clone(),
-					nominator: depositor.clone(),
-					state_toggler: depositor.clone(),
+					root: Some(depositor.clone()),
+					nominator: Some(depositor.clone()),
+					state_toggler: Some(depositor.clone()),
 				},
 			}
 		);
@@ -567,9 +567,9 @@ frame_benchmarking::benchmarks! {
 				member_counter: 1,
 				roles: PoolRoles {
 					depositor: depositor.clone(),
-					root: depositor.clone(),
-					nominator: depositor.clone(),
-					state_toggler: depositor.clone(),
+					root: Some(depositor.clone()),
+					nominator: Some(depositor.clone()),
+					state_toggler: Some(depositor.clone()),
 				}
 			}
 		);
@@ -629,6 +629,28 @@ frame_benchmarking::benchmarks! {
 		assert_eq!(MaxPools::<T>::get(), Some(u32::MAX));
 		assert_eq!(MaxPoolMembers::<T>::get(), Some(u32::MAX));
 		assert_eq!(MaxPoolMembersPerPool::<T>::get(), Some(u32::MAX));
+	}
+
+	update_roles {
+		let first_id = pallet_nomination_pools::LastPoolId::<T>::get() + 1;
+		let (root, _) = create_pool_account::<T>(0, CurrencyOf::<T>::minimum_balance() * 2u32.into());
+		let random: T::AccountId = account("but is anything really random in computers..?", 0, USER_SEED);
+	}:_(
+		Origin::Signed(root.clone()),
+		first_id,
+		ConfigOp::Set(random.clone()),
+		ConfigOp::Set(random.clone()),
+		ConfigOp::Set(random.clone())
+	) verify {
+		assert_eq!(
+			pallet_nomination_pools::BondedPools::<T>::get(first_id).unwrap().roles,
+			pallet_nomination_pools::PoolRoles {
+				depositor: root,
+				nominator: Some(random.clone()),
+				state_toggler: Some(random.clone()),
+				root: Some(random),
+			},
+		)
 	}
 
 	impl_benchmark_test_suite!(

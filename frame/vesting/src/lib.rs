@@ -57,15 +57,15 @@ pub mod weights;
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
+	dispatch::{DispatchError, DispatchResult},
 	ensure,
-	pallet_prelude::*,
+	storage::bounded_vec::BoundedVec,
 	traits::{
 		Currency, ExistenceRequirement, Get, LockIdentifier, LockableCurrency, VestingSchedule,
 		WithdrawReasons,
 	},
+	weights::Weight,
 };
-use frame_system::{ensure_root, ensure_signed, pallet_prelude::*};
-pub use pallet::*;
 use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{
@@ -74,7 +74,9 @@ use sp_runtime::{
 	},
 	RuntimeDebug,
 };
-use sp_std::{fmt::Debug, prelude::*};
+use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
+
+pub use pallet::*;
 pub use vesting_info::*;
 pub use weights::WeightInfo;
 
@@ -121,10 +123,10 @@ impl VestingAction {
 	}
 
 	/// Pick the schedules that this action dictates should continue vesting undisturbed.
-	fn pick_schedules<'a, T: Config>(
-		&'a self,
+	fn pick_schedules<T: Config>(
+		&self,
 		schedules: Vec<VestingInfo<BalanceOf<T>, T::BlockNumber>>,
-	) -> impl Iterator<Item = VestingInfo<BalanceOf<T>, T::BlockNumber>> + 'a {
+	) -> impl Iterator<Item = VestingInfo<BalanceOf<T>, T::BlockNumber>> + '_ {
 		schedules.into_iter().enumerate().filter_map(move |(index, schedule)| {
 			if self.should_remove(index) {
 				None
@@ -146,6 +148,8 @@ impl<T: Config> Get<u32> for MaxVestingSchedulesGet<T> {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
+	use frame_support::pallet_prelude::*;
+	use frame_system::pallet_prelude::*;
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
@@ -710,7 +714,7 @@ where
 		let (schedules, locked_now) =
 			Self::exec_action(schedules.to_vec(), VestingAction::Passive)?;
 
-		Self::write_vesting(&who, schedules)?;
+		Self::write_vesting(who, schedules)?;
 		Self::write_lock(who, locked_now);
 
 		Ok(())
@@ -744,7 +748,7 @@ where
 
 		let (schedules, locked_now) = Self::exec_action(schedules.to_vec(), remove_action)?;
 
-		Self::write_vesting(&who, schedules)?;
+		Self::write_vesting(who, schedules)?;
 		Self::write_lock(who, locked_now);
 		Ok(())
 	}

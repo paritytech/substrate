@@ -53,7 +53,7 @@ const AVG_SPAN: usize = 100 * 8;
 // are used for the RPC Id this may need to be adjusted. Note: The base payload
 // does not include the RPC result.
 //
-// The estimate is based on the JSONRPC response message which has the following format:
+// The estimate is based on the JSON-RPC response message which has the following format:
 // `{"jsonrpc":"2.0","result":[],"id":18446744073709551615}`.
 //
 // We care about the total size of the payload because jsonrpc-server will simply ignore
@@ -108,7 +108,7 @@ impl BlockSubscriber {
 
 impl Subscriber for BlockSubscriber {
 	fn enabled(&self, metadata: &tracing::Metadata<'_>) -> bool {
-		if !metadata.is_span() && !metadata.fields().field(REQUIRED_EVENT_FIELD).is_some() {
+		if !metadata.is_span() && metadata.fields().field(REQUIRED_EVENT_FIELD).is_none() {
 			return false
 		}
 		for (target, level) in &self.targets {
@@ -221,12 +221,12 @@ where
 		let mut header = self
 			.client
 			.header(id)
-			.map_err(|e| Error::InvalidBlockId(e))?
+			.map_err(Error::InvalidBlockId)?
 			.ok_or_else(|| Error::MissingBlockComponent("Header not found".to_string()))?;
 		let extrinsics = self
 			.client
 			.block_body(&id)
-			.map_err(|e| Error::InvalidBlockId(e))?
+			.map_err(Error::InvalidBlockId)?
 			.ok_or_else(|| Error::MissingBlockComponent("Extrinsics not found".to_string()))?;
 		tracing::debug!(target: "state_tracing", "Found {} extrinsics", extrinsics.len());
 		let parent_hash = *header.parent_hash();
@@ -252,16 +252,18 @@ where
 				let _enter = span.enter();
 				self.client.runtime_api().execute_block(&parent_id, block)
 			}) {
-				return Err(Error::Dispatch(
-					format!("Failed to collect traces and execute block: {}", e).to_string(),
-				))
+				return Err(Error::Dispatch(format!(
+					"Failed to collect traces and execute block: {}",
+					e
+				)))
 			}
 		}
 
-		let block_subscriber =
-			dispatch.downcast_ref::<BlockSubscriber>().ok_or(Error::Dispatch(
+		let block_subscriber = dispatch.downcast_ref::<BlockSubscriber>().ok_or_else(|| {
+			Error::Dispatch(
 				"Cannot downcast Dispatch to BlockSubscriber after tracing block".to_string(),
-			))?;
+			)
+		})?;
 		let spans: Vec<_> = block_subscriber
 			.spans
 			.lock()

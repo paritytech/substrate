@@ -62,21 +62,28 @@ fn main() {
 
 			match action {
 				Action::Insert => {
-					if BagsList::on_insert(id.clone(), vote_weight).is_err() {
+					if BagsList::on_insert(id, vote_weight).is_err() {
 						// this was a duplicate id, which is ok. We can just update it.
-						BagsList::on_update(&id, vote_weight);
+						BagsList::on_update(&id, vote_weight).unwrap();
 					}
 					assert!(BagsList::contains(&id));
 				},
 				Action::Update => {
 					let already_contains = BagsList::contains(&id);
-					BagsList::on_update(&id, vote_weight);
 					if already_contains {
+						BagsList::on_update(&id, vote_weight).unwrap();
 						assert!(BagsList::contains(&id));
+					} else {
+						BagsList::on_update(&id, vote_weight).unwrap_err();
 					}
 				},
 				Action::Remove => {
-					BagsList::on_remove(&id);
+					let already_contains = BagsList::contains(&id);
+					if already_contains {
+						BagsList::on_remove(&id).unwrap();
+					} else {
+						BagsList::on_remove(&id).unwrap_err();
+					}
 					assert!(!BagsList::contains(&id));
 				},
 			}

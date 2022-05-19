@@ -50,7 +50,7 @@ pub fn get<T: Decode + Sized>(child_info: &ChildInfo, key: &[u8]) -> Option<T> {
 /// Return the value of the item in storage under `key`, or the type's default if there is no
 /// explicit entry.
 pub fn get_or_default<T: Decode + Sized + Default>(child_info: &ChildInfo, key: &[u8]) -> T {
-	get(child_info, key).unwrap_or_else(Default::default)
+	get(child_info, key).unwrap_or_default()
 }
 
 /// Return the value of the item in storage under `key`, or `default_value` if there is no
@@ -90,7 +90,7 @@ pub fn take<T: Decode + Sized>(child_info: &ChildInfo, key: &[u8]) -> Option<T> 
 /// Remove `key` from storage, returning its value, or, if there was no explicit entry in storage,
 /// the default for its type.
 pub fn take_or_default<T: Codec + Sized + Default>(child_info: &ChildInfo, key: &[u8]) -> T {
-	take(child_info, key).unwrap_or_else(Default::default)
+	take(child_info, key).unwrap_or_default()
 }
 
 /// Return the value of the item in storage under `key`, or `default_value` if there is no

@@ -16,9 +16,7 @@
 // limitations under the License.
 
 use super::{Config, OffenceDetails, Perbill, SessionIndex};
-use frame_support::{
-	generate_storage_alias, pallet_prelude::ValueQuery, traits::Get, weights::Weight,
-};
+use frame_support::{pallet_prelude::ValueQuery, storage_alias, traits::Get, weights::Weight};
 use sp_staking::offence::{DisableStrategy, OnOffenceHandler};
 use sp_std::vec::Vec;
 
@@ -31,10 +29,9 @@ type DeferredOffenceOf<T> = (
 
 // Deferred reports that have been rejected by the offence handler and need to be submitted
 // at a later time.
-generate_storage_alias!(
-	Offences,
-	DeferredOffences<T: Config> => Value<Vec<DeferredOffenceOf<T>>, ValueQuery>
-);
+#[storage_alias]
+type DeferredOffences<T: Config> =
+	StorageValue<crate::Pallet<T>, Vec<DeferredOffenceOf<T>>, ValueQuery>;
 
 pub fn remove_deferred_storage<T: Config>() -> Weight {
 	let mut weight = T::DbWeight::get().reads_writes(1, 1);
@@ -42,8 +39,8 @@ pub fn remove_deferred_storage<T: Config>() -> Weight {
 	log::info!(target: "runtime::offences", "have {} deferred offences, applying.", deferred.len());
 	for (offences, perbill, session) in deferred.iter() {
 		let consumed = T::OnOffenceHandler::on_offence(
-			&offences,
-			&perbill,
+			offences,
+			perbill,
 			*session,
 			DisableStrategy::WhenSlashed,
 		);

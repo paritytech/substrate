@@ -18,21 +18,23 @@
 //! `crate::request_responses::RequestResponsesBehaviour`.
 
 use crate::{
-	config::ProtocolId,
-	protocol::message::BlockAttributes,
-	request_responses::{IncomingRequest, OutgoingResponse, ProtocolConfig},
+	message::BlockAttributes,
 	schema::v1::{block_request::FromBlock, BlockResponse, Direction},
-	PeerId, ReputationChange,
 };
 use codec::{Decode, Encode};
 use futures::{
 	channel::{mpsc, oneshot},
 	stream::StreamExt,
 };
+use libp2p::PeerId;
 use log::debug;
 use lru::LruCache;
 use prost::Message;
 use sc_client_api::BlockBackend;
+use sc_network_common::{
+	config::ProtocolId,
+	request_responses::{IncomingRequest, OutgoingResponse, ProtocolConfig},
+};
 use sp_blockchain::HeaderBackend;
 use sp_runtime::{
 	generic::BlockId,
@@ -51,7 +53,7 @@ const MAX_BODY_BYTES: usize = 8 * 1024 * 1024;
 const MAX_NUMBER_OF_SAME_REQUESTS_PER_PEER: usize = 2;
 
 mod rep {
-	use super::ReputationChange as Rep;
+	use sc_peerset::ReputationChange as Rep;
 
 	/// Reputation change when a peer sent us the same request multiple times.
 	pub const SAME_REQUEST: Rep = Rep::new_fatal("Same block request multiple times");
@@ -73,9 +75,7 @@ pub fn generate_protocol_config(protocol_id: &ProtocolId) -> ProtocolConfig {
 }
 
 /// Generate the block protocol name from chain specific protocol identifier.
-// Visibility `pub(crate)` to allow `crate::light_client_requests::sender` to generate block request
-// protocol name and send block requests.
-pub(crate) fn generate_protocol_name(protocol_id: &ProtocolId) -> String {
+fn generate_protocol_name(protocol_id: &ProtocolId) -> String {
 	format!("/{}/sync/2", protocol_id.as_ref())
 }
 
@@ -197,21 +197,21 @@ where
 			peer: *peer,
 			max_blocks,
 			direction,
-			from: from_block_id.clone(),
+			from: from_block_id,
 			attributes,
 			support_multiple_justifications,
 		};
 
 		let mut reputation_change = None;
 
+		let small_request = attributes
+			.difference(BlockAttributes::HEADER | BlockAttributes::JUSTIFICATION)
+			.is_empty();
+
 		match self.seen_requests.get_mut(&key) {
 			Some(SeenRequestsValue::First) => {},
 			Some(SeenRequestsValue::Fulfilled(ref mut requests)) => {
 				*requests = requests.saturating_add(1);
-
-				let small_request = attributes
-					.difference(BlockAttributes::HEADER | BlockAttributes::JUSTIFICATION)
-					.is_empty();
 
 				if *requests > MAX_NUMBER_OF_SAME_REQUESTS_PER_PEER {
 					reputation_change = Some(if small_request {
@@ -237,7 +237,7 @@ where
 			attributes,
 		);
 
-		let result = if reputation_change.is_none() {
+		let result = if reputation_change.is_none() || small_request {
 			let block_response = self.get_block_response(
 				attributes,
 				from_block_id,

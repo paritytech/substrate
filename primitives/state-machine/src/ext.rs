@@ -316,8 +316,8 @@ where
 		match (&next_backend_key, overlay_changes.peek()) {
 			(_, None) => next_backend_key,
 			(Some(_), Some(_)) => {
-				while let Some(overlay_key) = overlay_changes.next() {
-					let cmp = next_backend_key.as_deref().map(|v| v.cmp(&overlay_key.0));
+				for overlay_key in overlay_changes {
+					let cmp = next_backend_key.as_deref().map(|v| v.cmp(overlay_key.0));
 
 					// If `backend_key` is less than the `overlay_key`, we found out next key.
 					if cmp == Some(Ordering::Less) {
@@ -332,7 +332,7 @@ where
 						// this key.
 						next_backend_key = self
 							.backend
-							.next_storage_key(&overlay_key.0)
+							.next_storage_key(overlay_key.0)
 							.expect(EXT_NOT_ALLOWED_TO_FAIL);
 					}
 				}
@@ -357,8 +357,8 @@ where
 		match (&next_backend_key, overlay_changes.peek()) {
 			(_, None) => next_backend_key,
 			(Some(_), Some(_)) => {
-				while let Some(overlay_key) = overlay_changes.next() {
-					let cmp = next_backend_key.as_deref().map(|v| v.cmp(&overlay_key.0));
+				for overlay_key in overlay_changes {
+					let cmp = next_backend_key.as_deref().map(|v| v.cmp(overlay_key.0));
 
 					// If `backend_key` is less than the `overlay_key`, we found out next key.
 					if cmp == Some(Ordering::Less) {
@@ -373,7 +373,7 @@ where
 						// this key.
 						next_backend_key = self
 							.backend
-							.next_child_storage_key(child_info, &overlay_key.0)
+							.next_child_storage_key(child_info, overlay_key.0)
 							.expect(EXT_NOT_ALLOWED_TO_FAIL);
 					}
 				}
@@ -546,7 +546,7 @@ where
 				.storage(prefixed_storage_key.as_slice())
 				.and_then(|k| Decode::decode(&mut &k[..]).ok())
 				// V1 is equivalent to V0 on empty root.
-				.unwrap_or_else(|| empty_child_trie_root::<LayoutV1<H>>());
+				.unwrap_or_else(empty_child_trie_root::<LayoutV1<H>>);
 			trace!(
 				target: "state",
 				method = "ChildStorageRoot",
@@ -593,7 +593,7 @@ where
 					.storage(prefixed_storage_key.as_slice())
 					.and_then(|k| Decode::decode(&mut &k[..]).ok())
 					// V1 is equivalent to V0 on empty root.
-					.unwrap_or_else(|| empty_child_trie_root::<LayoutV1<H>>());
+					.unwrap_or_else(empty_child_trie_root::<LayoutV1<H>>);
 
 				trace!(
 					target: "state",

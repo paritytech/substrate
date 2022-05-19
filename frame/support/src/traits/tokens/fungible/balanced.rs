@@ -165,7 +165,7 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 	) -> Result<Self::Balance, DispatchError> {
 		let old_balance = Self::balance(who);
 		let (mut new_balance, mut amount) = if old_balance < amount {
-			Err(TokenError::NoFunds)?
+			return Err(TokenError::NoFunds.into())
 		} else {
 			(old_balance - amount, amount)
 		};
@@ -225,7 +225,7 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 		let old_balance = Self::balance(who);
 		let new_balance = old_balance.checked_add(&amount).ok_or(ArithmeticError::Overflow)?;
 		if new_balance < Self::minimum_balance() {
-			Err(TokenError::BelowMinimum)?
+			return Err(TokenError::BelowMinimum.into())
 		}
 		if old_balance != new_balance {
 			Self::set_balance(who, new_balance)?;

@@ -80,10 +80,10 @@ pub trait StakingInterface {
 	/// This should be the latest planned era that the staking system knows about.
 	fn current_era() -> EraIndex;
 
-	/// The amount of active stake that `controller` has in the staking system.
-	fn active_stake(controller: &Self::AccountId) -> Option<Self::Balance>;
+	/// The amount of active stake that `stash` has in the staking system.
+	fn active_stake(stash: &Self::AccountId) -> Option<Self::Balance>;
 
-	/// The total stake that `controller` has in the staking system. This includes the
+	/// The total stake that `stash` has in the staking system. This includes the
 	/// [`Self::active_stake`], and any funds currently in the process of unbonding via
 	/// [`Self::unbond`].
 	///
@@ -91,7 +91,7 @@ pub trait StakingInterface {
 	///
 	/// This is only guaranteed to reflect the amount locked by the staking system. If there are
 	/// non-staking locks on the bonded pair's balance this may not be accurate.
-	fn total_stake(controller: &Self::AccountId) -> Option<Self::Balance>;
+	fn total_stake(stash: &Self::AccountId) -> Option<Self::Balance>;
 
 	/// Bond (lock) `value` of `stash`'s balance. `controller` will be set as the account
 	/// controlling `stash`. This creates what is referred to as "bonded pair".
@@ -111,7 +111,7 @@ pub trait StakingInterface {
 	/// Bond some extra amount in the _Stash_'s free balance against the active bonded balance of
 	/// the account. The amount extra actually bonded will never be more than the _Stash_'s free
 	/// balance.
-	fn bond_extra(controller: Self::AccountId, extra: Self::Balance) -> DispatchResult;
+	fn bond_extra(stash: Self::AccountId, extra: Self::Balance) -> DispatchResult;
 
 	/// Schedule a portion of the active bonded balance to be unlocked at era
 	/// [Self::current_era] + [`Self::bonding_duration`].
@@ -122,11 +122,11 @@ pub trait StakingInterface {
 	/// The amount of times this can be successfully called is limited based on how many distinct
 	/// eras funds are schedule to unlock in. Calling [`Self::withdraw_unbonded`] after some unlock
 	/// schedules have reached their unlocking era should allow more calls to this function.
-	fn unbond(controller: Self::AccountId, value: Self::Balance) -> DispatchResult;
+	fn unbond(stash: Self::AccountId, value: Self::Balance) -> DispatchResult;
 
 	/// Unlock any funds schedule to unlock before or at the current era.
 	fn withdraw_unbonded(
-		controller: Self::AccountId,
+		stash: Self::AccountId,
 		num_slashing_spans: u32,
 	) -> Result<u64, DispatchError>;
 }
