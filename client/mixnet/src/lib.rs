@@ -357,11 +357,8 @@ where
 		let current_public_key = self.worker.public_key().clone();
 		let topology = &mut self.worker.mixnet_mut().topology;
 		debug!(target: "mixnet", "Change authorities {:?}", set);
-		let old_authority = std::mem::take(&mut topology.current_authorities2);
 		let mut old_authority2 = std::mem::take(&mut topology.authorities);
 		topology.routing_nodes.clear();
-		topology.unconnected_authorities.clear(); // TODO could keep for a few session
-										  // TODO also remove authorty disocvery query??
 
 		topology.routing = false;
 
@@ -551,9 +548,6 @@ pub struct AuthorityStar {
 	sessions2: HashMap<CryptoTypePublicPair, CryptoTypePublicPair>,
 
 	// TODO remove all fields bellow
-	connected_authorities: HashMap<AuthorityId, MixPeerId>,
-	unconnected_authorities: HashMap<MixPeerId, AuthorityInfo>,
-	current_authorities2: HashMap<AuthorityId, Option<MixPeerId>>,
 	routing_nodes: BTreeMap<MixPeerId, MixPublicKey>,
 }
 
@@ -591,11 +585,8 @@ impl AuthorityStar {
 			network_id,
 			node_public_key,
 			authorities: HashMap::new(),
-			current_authorities2: HashMap::new(),
 			connected_nodes: HashMap::new(),
-			connected_authorities: HashMap::new(),
 			routing_nodes: BTreeMap::new(),
-			unconnected_authorities: HashMap::new(),
 			sessions2: HashMap::new(),
 			routing: false,
 			key_store,
@@ -629,15 +620,7 @@ impl AuthorityStar {
 
 	fn add_disconnected_peer(&mut self, peer_id: &MixPeerId) {
 		debug!(target: "mixnet", "Disconnected from mixnet {:?}", peer_id);
-		self.routing_nodes.remove(peer_id);
-		if let Some(NodeInfo { authority_id: Some(authority_id), .. }) =
-			self.connected_nodes.remove(peer_id)
-		{
-			if let Some(_peer_id) = self.connected_authorities.remove(&authority_id.grandpa_id) {
-				debug_assert!(&_peer_id == peer_id);
-				self.unconnected_authorities.insert(peer_id.clone(), authority_id);
-			}
-		}
+		let _ = self.connected_nodes.remove(peer_id);
 	}
 }
 
@@ -954,22 +937,6 @@ struct SessionCache {
 	// node_id: AccountId32
 }
 
-struct OptionFuture2<F>(Option<F>);
-// TODO find something doing it
-impl<F: futures::Future + Unpin> futures::Future for OptionFuture2<F> {
-	type Output = F::Output;
-
-	fn poll(
-		self: Pin<&mut Self>,
-		cx: &mut futures::task::Context<'_>,
-	) -> futures::task::Poll<Self::Output> {
-		match self.get_mut().0.as_mut() {
-			Some(x) => x.poll_unpin(cx),
-			// Do not try to wakeup cx: in a select and handled by a Delay.
-			None => futures::task::Poll::Pending,
-		}
-	}
-}
 //const PEER_ID_PREFIX: [u8; 6] = [0, 36, 8, 1, 18, 32];
 const PEER_ID_PREFIX: [u8; 0] = [];
 /*#[test]
