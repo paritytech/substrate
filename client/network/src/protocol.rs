@@ -17,13 +17,10 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::{
-	chain::Client,
-	config::{self, ProtocolId, WarpSyncProvider},
-	error,
+	config, error,
 	request_responses::RequestFailure,
-	schema::v1::StateResponse,
 	utils::{interval, LruHashSet},
-	warp_request_handler::EncodedProof,
+	warp_request_handler::{EncodedProof, WarpSyncProvider},
 };
 
 use bytes::Bytes;
@@ -36,20 +33,31 @@ use libp2p::{
 	},
 	request_response::OutboundFailure,
 	swarm::{
-		IntoProtocolsHandler, NetworkBehaviour, NetworkBehaviourAction, PollParameters,
-		ProtocolsHandler,
+		ConnectionHandler, IntoConnectionHandler, NetworkBehaviour, NetworkBehaviourAction,
+		PollParameters,
 	},
 	Multiaddr, PeerId,
 };
 use log::{debug, error, info, log, trace, warn, Level};
 use message::{
 	generic::{Message as GenericMessage, Roles},
-	BlockAnnounce, Message,
+	Message,
 };
 use notifications::{Notifications, NotificationsOut};
 use prometheus_endpoint::{register, Gauge, GaugeVec, Opts, PrometheusError, Registry, U64};
 use prost::Message as _;
+use sc_client_api::{BlockBackend, HeaderBackend, ProofProvider};
 use sc_consensus::import_queue::{BlockImportError, BlockImportStatus, IncomingBlock, Origin};
+use sc_network_common::config::ProtocolId;
+use sc_network_sync::{
+	message::{
+		BlockAnnounce, BlockAttributes, BlockData, BlockRequest, BlockResponse, BlockState,
+		FromBlock,
+	},
+	schema::v1::StateResponse,
+	BadPeer, ChainSync, OnBlockData, OnBlockJustification, OnStateData,
+	PollBlockAnnounceValidation, Status as SyncStatus,
+};
 use sp_arithmetic::traits::SaturatedConversion;
 use sp_consensus::{block_validation::BlockAnnounceValidator, BlockOrigin};
 use sp_runtime::{
@@ -67,15 +75,14 @@ use std::{
 	task::Poll,
 	time,
 };
-use sync::{ChainSync, Status as SyncStatus};
 
 mod notifications;
 
 pub mod event;
 pub mod message;
-pub mod sync;
 
 pub use notifications::{NotificationsSink, NotifsHandlerError, Ready};
+use sp_blockchain::HeaderMetadata;
 
 /// Interval at which we perform time based maintenance
 const TICK_TIMEOUT: time::Duration = time::Duration::from_millis(1100);
@@ -158,7 +165,7 @@ impl Metrics {
 }
 
 // Lock must always be taken in order declared here.
-pub struct Protocol<B: BlockT> {
+pub struct Protocol<B: BlockT, Client> {
 	/// Interval at which we call `tick`.
 	tick_timeout: Pin<Box<dyn Stream<Item = ()> + Send>>,
 	/// Pending list of messages to return from `poll` as a priority.
@@ -167,10 +174,10 @@ pub struct Protocol<B: BlockT> {
 	genesis_hash: B::Hash,
 	/// State machine that handles the list of in-progress requests. Only full node peers are
 	/// registered.
-	sync: ChainSync<B>,
+	sync: ChainSync<B, Client>,
 	// All connected peers. Contains both full and light node peers.
 	peers: HashMap<PeerId, Peer<B>>,
-	chain: Arc<dyn Client<B>>,
+	chain: Arc<Client>,
 	/// List of nodes for which we perform additional logging because they are important for the
 	/// user.
 	important_peers: HashSet<PeerId>,
@@ -201,7 +208,7 @@ pub struct Protocol<B: BlockT> {
 
 #[derive(Debug)]
 enum PeerRequest<B: BlockT> {
-	Block(message::BlockRequest<B>),
+	Block(BlockRequest<B>),
 	State,
 	WarpProof,
 }
@@ -239,15 +246,15 @@ pub struct ProtocolConfig {
 }
 
 impl ProtocolConfig {
-	fn sync_mode(&self) -> sync::SyncMode {
+	fn sync_mode(&self) -> sc_network_sync::SyncMode {
 		if self.roles.is_light() {
-			sync::SyncMode::Light
+			sc_network_sync::SyncMode::Light
 		} else {
 			match self.sync_mode {
-				config::SyncMode::Full => sync::SyncMode::Full,
+				config::SyncMode::Full => sc_network_sync::SyncMode::Full,
 				config::SyncMode::Fast { skip_proofs, storage_chain_mode } =>
-					sync::SyncMode::LightState { skip_proofs, storage_chain_mode },
-				config::SyncMode::Warp => sync::SyncMode::Warp,
+					sc_network_sync::SyncMode::LightState { skip_proofs, storage_chain_mode },
+				config::SyncMode::Warp => sc_network_sync::SyncMode::Warp,
 			}
 		}
 	}
@@ -283,18 +290,28 @@ impl<B: BlockT> BlockAnnouncesHandshake<B> {
 	}
 }
 
-impl<B: BlockT> Protocol<B> {
+impl<B, Client> Protocol<B, Client>
+where
+	B: BlockT,
+	Client: HeaderBackend<B>
+		+ BlockBackend<B>
+		+ HeaderMetadata<B, Error = sp_blockchain::Error>
+		+ ProofProvider<B>
+		+ Send
+		+ Sync
+		+ 'static,
+{
 	/// Create a new instance.
 	pub fn new(
 		config: ProtocolConfig,
-		chain: Arc<dyn Client<B>>,
+		chain: Arc<Client>,
 		protocol_id: ProtocolId,
 		network_config: &config::NetworkConfiguration,
 		notifications_protocols_handshakes: Vec<Vec<u8>>,
 		block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>,
 		metrics_registry: Option<&Registry>,
 		warp_sync_provider: Option<Arc<dyn WarpSyncProvider<B>>>,
-	) -> error::Result<(Protocol<B>, sc_peerset::PeersetHandle, Vec<(PeerId, Multiaddr)>)> {
+	) -> error::Result<(Protocol<B, Client>, sc_peerset::PeersetHandle, Vec<(PeerId, Multiaddr)>)> {
 		let info = chain.info();
 		let sync = ChainSync::new(
 			config.sync_mode(),
@@ -339,13 +356,15 @@ impl<B: BlockT> Protocol<B> {
 			let mut default_sets_reserved = HashSet::new();
 			for reserved in network_config.default_peers_set.reserved_nodes.iter() {
 				default_sets_reserved.insert(reserved.peer_id);
-				known_addresses.push((reserved.peer_id, reserved.multiaddr.clone()));
+
+				if !reserved.multiaddr.is_empty() {
+					known_addresses.push((reserved.peer_id, reserved.multiaddr.clone()));
+				}
 			}
 
 			let mut bootnodes = Vec::with_capacity(network_config.boot_nodes.len());
 			for bootnode in network_config.boot_nodes.iter() {
 				bootnodes.push(bootnode.peer_id);
-				known_addresses.push((bootnode.peer_id, bootnode.multiaddr.clone()));
 			}
 
 			// Set number 0 is used for block announces.
@@ -380,13 +399,8 @@ impl<B: BlockT> Protocol<B> {
 			sc_peerset::Peerset::from_config(sc_peerset::PeersetConfig { sets })
 		};
 
-		let block_announces_protocol: Cow<'static, str> = Cow::from({
-			let mut proto = String::new();
-			proto.push_str("/");
-			proto.push_str(protocol_id.as_ref());
-			proto.push_str("/block-announces/1");
-			proto
-		});
+		let block_announces_protocol: Cow<'static, str> =
+			format!("/{}/block-announces/1", protocol_id.as_ref()).into();
 
 		let behaviour = {
 			let best_number = info.best_number;
@@ -557,7 +571,7 @@ impl<B: BlockT> Protocol<B> {
 	fn prepare_block_request(
 		&mut self,
 		who: PeerId,
-		request: message::BlockRequest<B>,
+		request: BlockRequest<B>,
 	) -> CustomMessageOutcome<B> {
 		prepare_block_request::<B>(&mut self.peers, who, request)
 	}
@@ -573,9 +587,7 @@ impl<B: BlockT> Protocol<B> {
 		}
 
 		if let Some(_peer_data) = self.peers.remove(&peer) {
-			if let Some(sync::OnBlockData::Import(origin, blocks)) =
-				self.sync.peer_disconnected(&peer)
-			{
+			if let Some(OnBlockData::Import(origin, blocks)) = self.sync.peer_disconnected(&peer) {
 				self.pending_messages
 					.push_back(CustomMessageOutcome::BlockImport(origin, blocks));
 			}
@@ -595,21 +607,21 @@ impl<B: BlockT> Protocol<B> {
 	pub fn on_block_response(
 		&mut self,
 		peer_id: PeerId,
-		request: message::BlockRequest<B>,
-		response: crate::schema::v1::BlockResponse,
+		request: BlockRequest<B>,
+		response: sc_network_sync::schema::v1::BlockResponse,
 	) -> CustomMessageOutcome<B> {
 		let blocks = response
 			.blocks
 			.into_iter()
 			.map(|block_data| {
-				Ok(message::BlockData::<B> {
+				Ok(BlockData::<B> {
 					hash: Decode::decode(&mut block_data.hash.as_ref())?,
 					header: if !block_data.header.is_empty() {
 						Some(Decode::decode(&mut block_data.header.as_ref())?)
 					} else {
 						None
 					},
-					body: if request.fields.contains(message::BlockAttributes::BODY) {
+					body: if request.fields.contains(BlockAttributes::BODY) {
 						Some(
 							block_data
 								.body
@@ -620,8 +632,7 @@ impl<B: BlockT> Protocol<B> {
 					} else {
 						None
 					},
-					indexed_body: if request.fields.contains(message::BlockAttributes::INDEXED_BODY)
-					{
+					indexed_body: if request.fields.contains(BlockAttributes::INDEXED_BODY) {
 						Some(block_data.indexed_body)
 					} else {
 						None
@@ -661,7 +672,7 @@ impl<B: BlockT> Protocol<B> {
 			},
 		};
 
-		let block_response = message::BlockResponse::<B> { id: request.id, blocks };
+		let block_response = BlockResponse::<B> { id: request.id, blocks };
 
 		let blocks_range = || match (
 			block_response
@@ -681,12 +692,12 @@ impl<B: BlockT> Protocol<B> {
 			blocks_range(),
 		);
 
-		if request.fields == message::BlockAttributes::JUSTIFICATION {
+		if request.fields == BlockAttributes::JUSTIFICATION {
 			match self.sync.on_block_justification(peer_id, block_response) {
-				Ok(sync::OnBlockJustification::Nothing) => CustomMessageOutcome::None,
-				Ok(sync::OnBlockJustification::Import { peer, hash, number, justifications }) =>
+				Ok(OnBlockJustification::Nothing) => CustomMessageOutcome::None,
+				Ok(OnBlockJustification::Import { peer, hash, number, justifications }) =>
 					CustomMessageOutcome::JustificationImport(peer, hash, number, justifications),
-				Err(sync::BadPeer(id, repu)) => {
+				Err(BadPeer(id, repu)) => {
 					self.behaviour.disconnect_peer(&id, HARDCODED_PEERSETS_SYNC);
 					self.peerset_handle.report_peer(id, repu);
 					CustomMessageOutcome::None
@@ -694,10 +705,10 @@ impl<B: BlockT> Protocol<B> {
 			}
 		} else {
 			match self.sync.on_block_data(&peer_id, Some(request), block_response) {
-				Ok(sync::OnBlockData::Import(origin, blocks)) =>
+				Ok(OnBlockData::Import(origin, blocks)) =>
 					CustomMessageOutcome::BlockImport(origin, blocks),
-				Ok(sync::OnBlockData::Request(peer, req)) => self.prepare_block_request(peer, req),
-				Err(sync::BadPeer(id, repu)) => {
+				Ok(OnBlockData::Request(peer, req)) => self.prepare_block_request(peer, req),
+				Err(BadPeer(id, repu)) => {
 					self.behaviour.disconnect_peer(&id, HARDCODED_PEERSETS_SYNC);
 					self.peerset_handle.report_peer(id, repu);
 					CustomMessageOutcome::None
@@ -714,10 +725,10 @@ impl<B: BlockT> Protocol<B> {
 		response: StateResponse,
 	) -> CustomMessageOutcome<B> {
 		match self.sync.on_state_data(&peer_id, response) {
-			Ok(sync::OnStateData::Import(origin, block)) =>
+			Ok(OnStateData::Import(origin, block)) =>
 				CustomMessageOutcome::BlockImport(origin, vec![block]),
-			Ok(sync::OnStateData::Continue) => CustomMessageOutcome::None,
-			Err(sync::BadPeer(id, repu)) => {
+			Ok(OnStateData::Continue) => CustomMessageOutcome::None,
+			Err(BadPeer(id, repu)) => {
 				self.behaviour.disconnect_peer(&id, HARDCODED_PEERSETS_SYNC);
 				self.peerset_handle.report_peer(id, repu);
 				CustomMessageOutcome::None
@@ -734,7 +745,7 @@ impl<B: BlockT> Protocol<B> {
 	) -> CustomMessageOutcome<B> {
 		match self.sync.on_warp_sync_data(&peer_id, response) {
 			Ok(()) => CustomMessageOutcome::None,
-			Err(sync::BadPeer(id, repu)) => {
+			Err(BadPeer(id, repu)) => {
 				self.behaviour.disconnect_peer(&id, HARDCODED_PEERSETS_SYNC);
 				self.peerset_handle.report_peer(id, repu);
 				CustomMessageOutcome::None
@@ -843,7 +854,7 @@ impl<B: BlockT> Protocol<B> {
 		let req = if peer.info.roles.is_full() {
 			match self.sync.new_peer(who, peer.info.best_hash, peer.info.best_number) {
 				Ok(req) => req,
-				Err(sync::BadPeer(id, repu)) => {
+				Err(BadPeer(id, repu)) => {
 					self.behaviour.disconnect_peer(&id, HARDCODED_PEERSETS_SYNC);
 					self.peerset_handle.report_peer(id, repu);
 					return Err(())
@@ -900,13 +911,9 @@ impl<B: BlockT> Protocol<B> {
 			let inserted = peer.known_blocks.insert(hash);
 			if inserted {
 				trace!(target: "sync", "Announcing block {:?} to {}", hash, who);
-				let message = message::BlockAnnounce {
+				let message = BlockAnnounce {
 					header: header.clone(),
-					state: if is_best {
-						Some(message::BlockState::Best)
-					} else {
-						Some(message::BlockState::Normal)
-					},
+					state: if is_best { Some(BlockState::Best) } else { Some(BlockState::Normal) },
 					data: Some(data.clone()),
 				};
 
@@ -941,11 +948,11 @@ impl<B: BlockT> Protocol<B> {
 			},
 		};
 
-		peer.known_blocks.insert(hash.clone());
+		peer.known_blocks.insert(hash);
 
-		let is_best = match announce.state.unwrap_or(message::BlockState::Best) {
-			message::BlockState::Best => true,
-			message::BlockState::Normal => false,
+		let is_best = match announce.state.unwrap_or(BlockState::Best) {
+			BlockState::Best => true,
+			BlockState::Normal => false,
 		};
 
 		if peer.info.roles.is_full() {
@@ -956,11 +963,11 @@ impl<B: BlockT> Protocol<B> {
 	/// Process the result of the block announce validation.
 	fn process_block_announce_validation_result(
 		&mut self,
-		validation_result: sync::PollBlockAnnounceValidation<B::Header>,
+		validation_result: PollBlockAnnounceValidation<B::Header>,
 	) -> CustomMessageOutcome<B> {
 		let (header, is_best, who) = match validation_result {
-			sync::PollBlockAnnounceValidation::Skip => return CustomMessageOutcome::None,
-			sync::PollBlockAnnounceValidation::Nothing { is_best, who, announce } => {
+			PollBlockAnnounceValidation::Skip => return CustomMessageOutcome::None,
+			PollBlockAnnounceValidation::Nothing { is_best, who, announce } => {
 				self.update_peer_info(&who);
 
 				if let Some(data) = announce.data {
@@ -981,7 +988,7 @@ impl<B: BlockT> Protocol<B> {
 					return CustomMessageOutcome::None
 				}
 			},
-			sync::PollBlockAnnounceValidation::ImportHeader { announce, is_best, who } => {
+			PollBlockAnnounceValidation::ImportHeader { announce, is_best, who } => {
 				self.update_peer_info(&who);
 
 				if let Some(data) = announce.data {
@@ -992,7 +999,7 @@ impl<B: BlockT> Protocol<B> {
 
 				(announce.header, is_best, who)
 			},
-			sync::PollBlockAnnounceValidation::Failure { who, disconnect } => {
+			PollBlockAnnounceValidation::Failure { who, disconnect } => {
 				if disconnect {
 					self.behaviour.disconnect_peer(&who, HARDCODED_PEERSETS_SYNC);
 				}
@@ -1009,9 +1016,9 @@ impl<B: BlockT> Protocol<B> {
 		let blocks_to_import = self.sync.on_block_data(
 			&who,
 			None,
-			message::generic::BlockResponse {
+			BlockResponse::<B> {
 				id: 0,
-				blocks: vec![message::generic::BlockData {
+				blocks: vec![BlockData::<B> {
 					hash: header.hash(),
 					header: Some(header),
 					body: None,
@@ -1029,10 +1036,10 @@ impl<B: BlockT> Protocol<B> {
 		}
 
 		match blocks_to_import {
-			Ok(sync::OnBlockData::Import(origin, blocks)) =>
+			Ok(OnBlockData::Import(origin, blocks)) =>
 				CustomMessageOutcome::BlockImport(origin, blocks),
-			Ok(sync::OnBlockData::Request(peer, req)) => self.prepare_block_request(peer, req),
-			Err(sync::BadPeer(id, repu)) => {
+			Ok(OnBlockData::Request(peer, req)) => self.prepare_block_request(peer, req),
+			Err(BadPeer(id, repu)) => {
 				self.behaviour.disconnect_peer(&id, HARDCODED_PEERSETS_SYNC);
 				self.peerset_handle.report_peer(id, repu);
 				CustomMessageOutcome::None
@@ -1051,7 +1058,7 @@ impl<B: BlockT> Protocol<B> {
 	/// Uses `protocol` to queue a new justification request and tries to dispatch all pending
 	/// requests.
 	pub fn request_justification(&mut self, hash: &B::Hash, number: NumberFor<B>) {
-		self.sync.request_justification(&hash, number)
+		self.sync.request_justification(hash, number)
 	}
 
 	/// Clear all pending justification requests.
@@ -1090,7 +1097,7 @@ impl<B: BlockT> Protocol<B> {
 						req,
 					));
 				},
-				Err(sync::BadPeer(id, repu)) => {
+				Err(BadPeer(id, repu)) => {
 					self.behaviour.disconnect_peer(&id, HARDCODED_PEERSETS_SYNC);
 					self.peerset_handle.report_peer(id, repu)
 				},
@@ -1257,7 +1264,7 @@ impl<B: BlockT> Protocol<B> {
 fn prepare_block_request<B: BlockT>(
 	peers: &mut HashMap<PeerId, Peer<B>>,
 	who: PeerId,
-	request: message::BlockRequest<B>,
+	request: BlockRequest<B>,
 ) -> CustomMessageOutcome<B> {
 	let (tx, rx) = oneshot::channel();
 
@@ -1265,13 +1272,13 @@ fn prepare_block_request<B: BlockT>(
 		peer.request = Some((PeerRequest::Block(request.clone()), rx));
 	}
 
-	let request = crate::schema::v1::BlockRequest {
+	let request = sc_network_sync::schema::v1::BlockRequest {
 		fields: request.fields.to_be_u32(),
 		from_block: match request.from {
-			message::FromBlock::Hash(h) =>
-				Some(crate::schema::v1::block_request::FromBlock::Hash(h.encode())),
-			message::FromBlock::Number(n) =>
-				Some(crate::schema::v1::block_request::FromBlock::Number(n.encode())),
+			FromBlock::Hash(h) =>
+				Some(sc_network_sync::schema::v1::block_request::FromBlock::Hash(h.encode())),
+			FromBlock::Number(n) =>
+				Some(sc_network_sync::schema::v1::block_request::FromBlock::Number(n.encode())),
 		},
 		to_block: request.to.map(|h| h.encode()).unwrap_or_default(),
 		direction: request.direction as i32,
@@ -1285,7 +1292,7 @@ fn prepare_block_request<B: BlockT>(
 fn prepare_state_request<B: BlockT>(
 	peers: &mut HashMap<PeerId, Peer<B>>,
 	who: PeerId,
-	request: crate::schema::v1::StateRequest,
+	request: sc_network_sync::schema::v1::StateRequest,
 ) -> CustomMessageOutcome<B> {
 	let (tx, rx) = oneshot::channel();
 
@@ -1342,13 +1349,13 @@ pub enum CustomMessageOutcome<B: BlockT> {
 	/// A new block request must be emitted.
 	BlockRequest {
 		target: PeerId,
-		request: crate::schema::v1::BlockRequest,
+		request: sc_network_sync::schema::v1::BlockRequest,
 		pending_response: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
 	},
 	/// A new storage request must be emitted.
 	StateRequest {
 		target: PeerId,
-		request: crate::schema::v1::StateRequest,
+		request: sc_network_sync::schema::v1::StateRequest,
 		pending_response: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
 	},
 	/// A new warp sync request must be emitted.
@@ -1366,11 +1373,21 @@ pub enum CustomMessageOutcome<B: BlockT> {
 	None,
 }
 
-impl<B: BlockT> NetworkBehaviour for Protocol<B> {
-	type ProtocolsHandler = <Notifications as NetworkBehaviour>::ProtocolsHandler;
+impl<B, Client> NetworkBehaviour for Protocol<B, Client>
+where
+	B: BlockT,
+	Client: HeaderBackend<B>
+		+ BlockBackend<B>
+		+ HeaderMetadata<B, Error = sp_blockchain::Error>
+		+ ProofProvider<B>
+		+ Send
+		+ Sync
+		+ 'static,
+{
+	type ConnectionHandler = <Notifications as NetworkBehaviour>::ConnectionHandler;
 	type OutEvent = CustomMessageOutcome<B>;
 
-	fn new_handler(&mut self) -> Self::ProtocolsHandler {
+	fn new_handler(&mut self) -> Self::ConnectionHandler {
 		self.behaviour.new_handler()
 	}
 
@@ -1384,9 +1401,15 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 		conn: &ConnectionId,
 		endpoint: &ConnectedPoint,
 		failed_addresses: Option<&Vec<Multiaddr>>,
+		other_established: usize,
 	) {
-		self.behaviour
-			.inject_connection_established(peer_id, conn, endpoint, failed_addresses)
+		self.behaviour.inject_connection_established(
+			peer_id,
+			conn,
+			endpoint,
+			failed_addresses,
+			other_established,
+		)
 	}
 
 	fn inject_connection_closed(
@@ -1394,24 +1417,23 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 		peer_id: &PeerId,
 		conn: &ConnectionId,
 		endpoint: &ConnectedPoint,
-		handler: <Self::ProtocolsHandler as IntoProtocolsHandler>::Handler,
+		handler: <Self::ConnectionHandler as IntoConnectionHandler>::Handler,
+		remaining_established: usize,
 	) {
-		self.behaviour.inject_connection_closed(peer_id, conn, endpoint, handler)
-	}
-
-	fn inject_connected(&mut self, peer_id: &PeerId) {
-		self.behaviour.inject_connected(peer_id)
-	}
-
-	fn inject_disconnected(&mut self, peer_id: &PeerId) {
-		self.behaviour.inject_disconnected(peer_id)
+		self.behaviour.inject_connection_closed(
+			peer_id,
+			conn,
+			endpoint,
+			handler,
+			remaining_established,
+		)
 	}
 
 	fn inject_event(
 		&mut self,
 		peer_id: PeerId,
 		connection: ConnectionId,
-		event: <<Self::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::OutEvent,
+		event: <<Self::ConnectionHandler as IntoConnectionHandler>::Handler as ConnectionHandler>::OutEvent,
 	) {
 		self.behaviour.inject_event(peer_id, connection, event)
 	}
@@ -1420,7 +1442,7 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 		&mut self,
 		cx: &mut std::task::Context,
 		params: &mut impl PollParameters,
-	) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ProtocolsHandler>> {
+	) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>> {
 		if let Some(message) = self.pending_messages.pop_front() {
 			return Poll::Ready(NetworkBehaviourAction::GenerateEvent(message))
 		}
@@ -1437,7 +1459,9 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 						match req {
 							PeerRequest::Block(req) => {
 								let protobuf_response =
-									match crate::schema::v1::BlockResponse::decode(&resp[..]) {
+									match sc_network_sync::schema::v1::BlockResponse::decode(
+										&resp[..],
+									) {
 										Ok(proto) => proto,
 										Err(e) => {
 											debug!(
@@ -1453,11 +1477,13 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 										},
 									};
 
-								finished_block_requests.push((id.clone(), req, protobuf_response));
+								finished_block_requests.push((*id, req, protobuf_response));
 							},
 							PeerRequest::State => {
 								let protobuf_response =
-									match crate::schema::v1::StateResponse::decode(&resp[..]) {
+									match sc_network_sync::schema::v1::StateResponse::decode(
+										&resp[..],
+									) {
 										Ok(proto) => proto,
 										Err(e) => {
 											debug!(
@@ -1550,7 +1576,7 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 		}
 
 		for (id, request) in self.sync.block_requests() {
-			let event = prepare_block_request(&mut self.peers, id.clone(), request);
+			let event = prepare_block_request(&mut self.peers, *id, request);
 			self.pending_messages.push_back(event);
 		}
 		if let Some((id, request)) = self.sync.state_request() {
@@ -1581,10 +1607,8 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 		let event = match self.behaviour.poll(cx, params) {
 			Poll::Pending => return Poll::Pending,
 			Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev)) => ev,
-			Poll::Ready(NetworkBehaviourAction::DialAddress { address, handler }) =>
-				return Poll::Ready(NetworkBehaviourAction::DialAddress { address, handler }),
-			Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id, condition, handler }) =>
-				return Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id, condition, handler }),
+			Poll::Ready(NetworkBehaviourAction::Dial { opts, handler }) =>
+				return Poll::Ready(NetworkBehaviourAction::Dial { opts, handler }),
 			Poll::Ready(NetworkBehaviourAction::NotifyHandler { peer_id, handler, event }) =>
 				return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
 					peer_id,
@@ -1703,9 +1727,9 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 				}
 			},
 			NotificationsOut::CustomProtocolReplaced { peer_id, notifications_sink, set_id } =>
-				if set_id == HARDCODED_PEERSETS_SYNC {
-					CustomMessageOutcome::None
-				} else if self.bad_handshake_substreams.contains(&(peer_id, set_id)) {
+				if set_id == HARDCODED_PEERSETS_SYNC ||
+					self.bad_handshake_substreams.contains(&(peer_id, set_id))
+				{
 					CustomMessageOutcome::None
 				} else {
 					CustomMessageOutcome::NotificationStreamReplaced {
@@ -1745,7 +1769,7 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 			},
 			NotificationsOut::Notification { peer_id, set_id, message } => match set_id {
 				HARDCODED_PEERSETS_SYNC if self.peers.contains_key(&peer_id) => {
-					if let Ok(announce) = message::BlockAnnounce::decode(&mut message.as_ref()) {
+					if let Ok(announce) = BlockAnnounce::decode(&mut message.as_ref()) {
 						self.push_block_announce_validation(peer_id, announce);
 
 						// Make sure that the newly added block announce validation future was
@@ -1800,7 +1824,7 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 	fn inject_dial_failure(
 		&mut self,
 		peer_id: Option<PeerId>,
-		handler: Self::ProtocolsHandler,
+		handler: Self::ConnectionHandler,
 		error: &libp2p::swarm::DialError,
 	) {
 		self.behaviour.inject_dial_failure(peer_id, handler, error);

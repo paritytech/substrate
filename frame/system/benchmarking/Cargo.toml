@@ -14,13 +14,13 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false }
-scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
-sp-std = { version = "4.0.0", default-features = false, path = "../../../primitives/std" }
-sp-runtime = { version = "6.0.0", default-features = false, path = "../../../primitives/runtime" }
+scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../../benchmarking" }
-frame-system = { version = "4.0.0-dev", default-features = false, path = "../../system" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../../support" }
+frame-system = { version = "4.0.0-dev", default-features = false, path = "../../system" }
 sp-core = { version = "6.0.0", default-features = false, path = "../../../primitives/core" }
+sp-runtime = { version = "6.0.0", default-features = false, path = "../../../primitives/runtime" }
+sp-std = { version = "4.0.0", default-features = false, path = "../../../primitives/std" }
 
 [dev-dependencies]
 sp-io = { version = "6.0.0", path = "../../../primitives/io" }
@@ -29,11 +29,11 @@ sp-io = { version = "6.0.0", path = "../../../primitives/io" }
 default = ["std"]
 std = [
 	"codec/std",
+	"frame-benchmarking/std",
+	"frame-support/std",
+	"frame-system/std",
 	"scale-info/std",
+	"sp-core/std",
 	"sp-runtime/std",
 	"sp-std/std",
-	"frame-benchmarking/std",
-	"frame-system/std",
-	"frame-support/std",
-	"sp-core/std",
 ]

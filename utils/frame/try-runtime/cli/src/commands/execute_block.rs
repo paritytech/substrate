@@ -76,12 +76,12 @@ impl ExecuteBlockCmd {
 		<Block::Hash as FromStr>::Err: Debug,
 	{
 		match (&self.block_at, &self.state) {
-			(Some(block_at), State::Snap { .. }) => hash_of::<Block>(&block_at),
+			(Some(block_at), State::Snap { .. }) => hash_of::<Block>(block_at),
 			(Some(block_at), State::Live { .. }) => {
 				log::warn!(target: LOG_TARGET, "--block-at is provided while state type is live. the `Live::at` will be ignored");
-				hash_of::<Block>(&block_at)
+				hash_of::<Block>(block_at)
 			},
-			(None, State::Live { at: Some(at), .. }) => hash_of::<Block>(&at),
+			(None, State::Live { at: Some(at), .. }) => hash_of::<Block>(at),
 			_ => {
 				panic!("either `--block-at` must be provided, or state must be `live with a proper `--at``");
 			},

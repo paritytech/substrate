@@ -453,22 +453,9 @@ where
 
 	/// Returns all keys that start with the given `prefix`.
 	pub fn keys(&self, prefix: &[u8]) -> Vec<StorageKey> {
-		let collect_all = || -> sp_std::result::Result<_, Box<TrieError<H::Out>>> {
-			let trie = TrieDB::<H>::new(self, &self.root)?;
-			let mut v = Vec::new();
-			for x in trie.iter()? {
-				let (key, _) = x?;
-				if key.starts_with(prefix) {
-					v.push(key.to_vec());
-				}
-			}
-
-			Ok(v)
-		};
-
-		collect_all()
-			.map_err(|e| debug!(target: "trie", "Error extracting trie keys: {}", e))
-			.unwrap_or_default()
+		let mut keys = Vec::new();
+		self.for_keys_with_prefix(prefix, |k| keys.push(k.to_vec()));
+		keys
 	}
 
 	/// Return the storage root after applying the given `delta`.
@@ -521,7 +508,7 @@ where
 			Ok(None) => default_root,
 			Err(e) => {
 				warn!(target: "trie", "Failed to read child storage root: {}", e);
-				default_root.clone()
+				default_root
 			},
 		};
 
@@ -580,16 +567,12 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> hash_db::HashDB<H, DBValue>
 	for Ephemeral<'a, S, H>
 {
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Option<DBValue> {
-		match HashDB::get(self.overlay, key, prefix) {
-			Some(val) => Some(val),
-			None => match self.storage.get(&key, prefix) {
-				Ok(x) => x,
-				Err(e) => {
-					warn!(target: "trie", "Failed to read from DB: {}", e);
-					None
-				},
-			},
-		}
+		HashDB::get(self.overlay, key, prefix).or_else(|| {
+			self.storage.get(key, prefix).unwrap_or_else(|e| {
+				warn!(target: "trie", "Failed to read from DB: {}", e);
+				None
+			})
+		})
 	}
 
 	fn contains(&self, key: &H::Out, prefix: Prefix) -> bool {
@@ -664,7 +647,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> HashDB<H, DBValue> for TrieBackendEsse
 		if *key == self.empty {
 			return Some([0u8].to_vec())
 		}
-		match self.storage.get(&key, prefix) {
+		match self.storage.get(key, prefix) {
 			Ok(x) => x,
 			Err(e) => {
 				warn!(target: "trie", "Failed to read from DB: {}", e);

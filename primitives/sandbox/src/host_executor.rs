@@ -17,11 +17,12 @@
 
 //! A WASM executor utilizing the sandbox runtime interface of the host.
 
-use super::{Error, HostFuncType, ReturnValue, Value};
 use codec::{Decode, Encode};
-use sp_core::sandbox as sandbox_primitives;
+
 use sp_io::sandbox;
 use sp_std::{marker, mem, prelude::*, rc::Rc, slice, vec};
+
+use crate::{env, Error, HostFuncType, ReturnValue, Value};
 
 mod ffi {
 	use super::HostFuncType;
@@ -68,11 +69,10 @@ pub struct Memory {
 
 impl super::SandboxMemory for Memory {
 	fn new(initial: u32, maximum: Option<u32>) -> Result<Memory, Error> {
-		let maximum =
-			if let Some(maximum) = maximum { maximum } else { sandbox_primitives::MEM_UNLIMITED };
+		let maximum = if let Some(maximum) = maximum { maximum } else { env::MEM_UNLIMITED };
 
 		match sandbox::memory_new(initial, maximum) {
-			sandbox_primitives::ERR_MODULE => Err(Error::Module),
+			env::ERR_MODULE => Err(Error::Module),
 			memory_idx => Ok(Memory { handle: Rc::new(MemoryHandle { memory_idx }) }),
 		}
 	}
@@ -81,8 +81,8 @@ impl super::SandboxMemory for Memory {
 		let result =
 			sandbox::memory_get(self.handle.memory_idx, offset, buf.as_mut_ptr(), buf.len() as u32);
 		match result {
-			sandbox_primitives::ERR_OK => Ok(()),
-			sandbox_primitives::ERR_OUT_OF_BOUNDS => Err(Error::OutOfBounds),
+			env::ERR_OK => Ok(()),
+			env::ERR_OUT_OF_BOUNDS => Err(Error::OutOfBounds),
 			_ => unreachable!(),
 		}
 	}
@@ -95,8 +95,8 @@ impl super::SandboxMemory for Memory {
 			val.len() as u32,
 		);
 		match result {
-			sandbox_primitives::ERR_OK => Ok(()),
-			sandbox_primitives::ERR_OUT_OF_BOUNDS => Err(Error::OutOfBounds),
+			env::ERR_OK => Ok(()),
+			env::ERR_OUT_OF_BOUNDS => Err(Error::OutOfBounds),
 			_ => unreachable!(),
 		}
 	}
@@ -104,22 +104,18 @@ impl super::SandboxMemory for Memory {
 
 /// A builder for the environment of the sandboxed WASM module.
 pub struct EnvironmentDefinitionBuilder<T> {
-	env_def: sandbox_primitives::EnvironmentDefinition,
+	env_def: env::EnvironmentDefinition,
 	retained_memories: Vec<Memory>,
 	_marker: marker::PhantomData<T>,
 }
 
 impl<T> EnvironmentDefinitionBuilder<T> {
-	fn add_entry<N1, N2>(
-		&mut self,
-		module: N1,
-		field: N2,
-		extern_entity: sandbox_primitives::ExternEntity,
-	) where
+	fn add_entry<N1, N2>(&mut self, module: N1, field: N2, extern_entity: env::ExternEntity)
+	where
 		N1: Into<Vec<u8>>,
 		N2: Into<Vec<u8>>,
 	{
-		let entry = sandbox_primitives::Entry {
+		let entry = env::Entry {
 			module_name: module.into(),
 			field_name: field.into(),
 			entity: extern_entity,
@@ -131,7 +127,7 @@ impl<T> EnvironmentDefinitionBuilder<T> {
 impl<T> super::SandboxEnvironmentBuilder<T, Memory> for EnvironmentDefinitionBuilder<T> {
 	fn new() -> EnvironmentDefinitionBuilder<T> {
 		EnvironmentDefinitionBuilder {
-			env_def: sandbox_primitives::EnvironmentDefinition { entries: Vec::new() },
+			env_def: env::EnvironmentDefinition { entries: Vec::new() },
 			retained_memories: Vec::new(),
 			_marker: marker::PhantomData::<T>,
 		}
@@ -142,7 +138,7 @@ impl<T> super::SandboxEnvironmentBuilder<T, Memory> for EnvironmentDefinitionBui
 		N1: Into<Vec<u8>>,
 		N2: Into<Vec<u8>>,
 	{
-		let f = sandbox_primitives::ExternEntity::Function(f as u32);
+		let f = env::ExternEntity::Function(f as u32);
 		self.add_entry(module, field, f);
 	}
 
@@ -154,7 +150,7 @@ impl<T> super::SandboxEnvironmentBuilder<T, Memory> for EnvironmentDefinitionBui
 		// We need to retain memory to keep it alive while the EnvironmentDefinitionBuilder alive.
 		self.retained_memories.push(mem.clone());
 
-		let mem = sandbox_primitives::ExternEntity::Memory(mem.handle.memory_idx as u32);
+		let mem = env::ExternEntity::Memory(mem.handle.memory_idx as u32);
 		self.add_entry(module, field, mem);
 	}
 }
@@ -228,8 +224,8 @@ impl<T> super::SandboxInstance<T> for Instance<T> {
 		);
 
 		let instance_idx = match result {
-			sandbox_primitives::ERR_MODULE => return Err(Error::Module),
-			sandbox_primitives::ERR_EXECUTION => return Err(Error::Execution),
+			env::ERR_MODULE => return Err(Error::Module),
+			env::ERR_EXECUTION => return Err(Error::Execution),
 			instance_idx => instance_idx,
 		};
 
@@ -256,12 +252,12 @@ impl<T> super::SandboxInstance<T> for Instance<T> {
 		);
 
 		match result {
-			sandbox_primitives::ERR_OK => {
+			env::ERR_OK => {
 				let return_val =
 					ReturnValue::decode(&mut &return_val[..]).map_err(|_| Error::Execution)?;
 				Ok(return_val)
 			},
-			sandbox_primitives::ERR_EXECUTION => Err(Error::Execution),
+			env::ERR_EXECUTION => Err(Error::Execution),
 			_ => unreachable!(),
 		}
 	}

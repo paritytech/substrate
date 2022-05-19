@@ -13,36 +13,36 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sp-application-crypto = { version = "6.0.0", path = "../../../primitives/application-crypto" }
-sp-consensus-aura = { version = "0.10.0-dev", path = "../../../primitives/consensus/aura" }
-sp-block-builder = { version = "4.0.0-dev", path = "../../../primitives/block-builder" }
+async-trait = "0.1.50"
+codec = { package = "parity-scale-codec", version = "3.0.0" }
+futures = "0.3.21"
+log = "0.4.17"
+thiserror = "1.0"
+prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.10.0-dev", path = "../../../utils/prometheus" }
 sc-block-builder = { version = "0.10.0-dev", path = "../../block-builder" }
 sc-client-api = { version = "4.0.0-dev", path = "../../api" }
-codec = { package = "parity-scale-codec", version = "3.0.0" }
-sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
 sc-consensus = { version = "0.10.0-dev", path = "../../../client/consensus/common" }
-sp-consensus-slots = { version = "0.10.0-dev", path = "../../../primitives/consensus/slots" }
-thiserror = "1.0"
-futures = "0.3.21"
-sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
-log = "0.4.8"
-sp-core = { version = "6.0.0", path = "../../../primitives/core" }
-sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
 sc-consensus-slots = { version = "0.10.0-dev", path = "../slots" }
-sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
-sp-runtime = { version = "6.0.0", path = "../../../primitives/runtime" }
-sp-keystore = { version = "0.12.0", path = "../../../primitives/keystore" }
 sc-telemetry = { version = "4.0.0-dev", path = "../../telemetry" }
-prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../../utils/prometheus", version = "0.10.0-dev" }
-async-trait = "0.1.50"
+sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
+sp-application-crypto = { version = "6.0.0", path = "../../../primitives/application-crypto" }
+sp-block-builder = { version = "4.0.0-dev", path = "../../../primitives/block-builder" }
+sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
+sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
+sp-consensus-aura = { version = "0.10.0-dev", path = "../../../primitives/consensus/aura" }
+sp-consensus-slots = { version = "0.10.0-dev", path = "../../../primitives/consensus/slots" }
+sp-core = { version = "6.0.0", path = "../../../primitives/core" }
+sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
+sp-keystore = { version = "0.12.0", path = "../../../primitives/keystore" }
+sp-runtime = { version = "6.0.0", path = "../../../primitives/runtime" }
 
 [dev-dependencies]
-sp-timestamp = { version = "4.0.0-dev", path = "../../../primitives/timestamp" }
-sp-keyring = { version = "6.0.0", path = "../../../primitives/keyring" }
-sp-tracing = { version = "5.0.0", path = "../../../primitives/tracing" }
+parking_lot = "0.12.0"
+tempfile = "3.1.0"
 sc-keystore = { version = "4.0.0-dev", path = "../../keystore" }
 sc-network = { version = "0.10.0-dev", path = "../../network" }
 sc-network-test = { version = "0.8.0", path = "../../network/test" }
+sp-keyring = { version = "6.0.0", path = "../../../primitives/keyring" }
+sp-timestamp = { version = "4.0.0-dev", path = "../../../primitives/timestamp" }
+sp-tracing = { version = "5.0.0", path = "../../../primitives/tracing" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }
-tempfile = "3.1.0"
-parking_lot = "0.12.0"

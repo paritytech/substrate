@@ -456,8 +456,8 @@ pub fn to_support_map<AccountId: IdentifierT>(
 	let mut supports = <BTreeMap<AccountId, Support<AccountId>>>::new();
 
 	// build support struct.
-	for StakedAssignment { who, distribution } in assignments.into_iter() {
-		for (c, weight_extended) in distribution.into_iter() {
+	for StakedAssignment { who, distribution } in assignments.iter() {
+		for (c, weight_extended) in distribution.iter() {
 			let mut support = supports.entry(c.clone()).or_default();
 			support.total = support.total.saturating_add(*weight_extended);
 			support.voters.push((who.clone(), *weight_extended));

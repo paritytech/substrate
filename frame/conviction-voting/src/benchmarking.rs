@@ -44,7 +44,7 @@ fn fill_voting<T: Config>() -> (ClassOf<T>, BTreeMap<ClassOf<T>, Vec<IndexOf<T>>
 			}
 		}
 	}
-	let c = r.iter().max_by_key(|(_, ref v)| v.len()).unwrap().0.clone();
+	let c = r.iter().max_by_key(|(_, v)| v.len()).unwrap().0.clone();
 	(c, r)
 }
 
@@ -73,7 +73,7 @@ benchmarks! {
 		let r = polls.len() - 1;
 		// We need to create existing votes
 		for i in polls.iter().skip(1) {
-			ConvictionVoting::<T>::vote(RawOrigin::Signed(caller.clone()).into(), *i, account_vote.clone())?;
+			ConvictionVoting::<T>::vote(RawOrigin::Signed(caller.clone()).into(), *i, account_vote)?;
 		}
 		let votes = match VotingFor::<T>::get(&caller, &class) {
 			Voting::Casting(Casting { votes, .. }) => votes,
@@ -100,7 +100,7 @@ benchmarks! {
 		let r = polls.len();
 		// We need to create existing votes
 		for i in polls.iter() {
-			ConvictionVoting::<T>::vote(RawOrigin::Signed(caller.clone()).into(), *i, old_account_vote.clone())?;
+			ConvictionVoting::<T>::vote(RawOrigin::Signed(caller.clone()).into(), *i, old_account_vote)?;
 		}
 		let votes = match VotingFor::<T>::get(&caller, &class) {
 			Voting::Casting(Casting { votes, .. }) => votes,
@@ -128,7 +128,7 @@ benchmarks! {
 		let r = polls.len();
 		// We need to create existing votes
 		for i in polls.iter() {
-			ConvictionVoting::<T>::vote(RawOrigin::Signed(caller.clone()).into(), *i, old_account_vote.clone())?;
+			ConvictionVoting::<T>::vote(RawOrigin::Signed(caller.clone()).into(), *i, old_account_vote)?;
 		}
 		let votes = match VotingFor::<T>::get(&caller, &class) {
 			Voting::Casting(Casting { votes, .. }) => votes,
@@ -156,7 +156,7 @@ benchmarks! {
 		let r = polls.len();
 		// We need to create existing votes
 		for i in polls.iter() {
-			ConvictionVoting::<T>::vote(RawOrigin::Signed(voter.clone()).into(), *i, old_account_vote.clone())?;
+			ConvictionVoting::<T>::vote(RawOrigin::Signed(voter.clone()).into(), *i, old_account_vote)?;
 		}
 		let votes = match VotingFor::<T>::get(&caller, &class) {
 			Voting::Casting(Casting { votes, .. }) => votes,
@@ -189,14 +189,14 @@ benchmarks! {
 
 		// We need to create existing delegations
 		for i in polls.iter().take(r as usize) {
-			ConvictionVoting::<T>::vote(RawOrigin::Signed(voter.clone()).into(), *i, delegate_vote.clone())?;
+			ConvictionVoting::<T>::vote(RawOrigin::Signed(voter.clone()).into(), *i, delegate_vote)?;
 		}
 		assert_matches!(
 			VotingFor::<T>::get(&voter, &class),
 			Voting::Casting(Casting { votes, .. }) if votes.len() == r as usize
 		);
 
-	}: _(RawOrigin::Signed(caller.clone()), class.clone(), voter.clone(), Conviction::Locked1x, delegated_balance)
+	}: _(RawOrigin::Signed(caller.clone()), class.clone(), voter, Conviction::Locked1x, delegated_balance)
 	verify {
 		assert_matches!(VotingFor::<T>::get(&caller, &class), Voting::Delegating(_));
 	}
@@ -224,7 +224,7 @@ benchmarks! {
 
 		// We need to create delegations
 		for i in polls.iter().take(r as usize) {
-			ConvictionVoting::<T>::vote(RawOrigin::Signed(voter.clone()).into(), *i, delegate_vote.clone())?;
+			ConvictionVoting::<T>::vote(RawOrigin::Signed(voter.clone()).into(), *i, delegate_vote)?;
 		}
 		assert_matches!(
 			VotingFor::<T>::get(&voter, &class),
@@ -248,7 +248,7 @@ benchmarks! {
 		for (class, polls) in all_polls.iter() {
 			assert!(polls.len() > 0);
 			for i in polls.iter() {
-				ConvictionVoting::<T>::vote(RawOrigin::Signed(caller.clone()).into(), *i, normal_account_vote.clone())?;
+				ConvictionVoting::<T>::vote(RawOrigin::Signed(caller.clone()).into(), *i, normal_account_vote)?;
 			}
 		}
 
@@ -257,7 +257,7 @@ benchmarks! {
 
 		// Vote big on the class with the most ongoing votes of them to bump the lock and make it
 		// hard to recompute when removed.
-		ConvictionVoting::<T>::vote(RawOrigin::Signed(caller.clone()).into(), polls[0], big_account_vote.clone())?;
+		ConvictionVoting::<T>::vote(RawOrigin::Signed(caller.clone()).into(), polls[0], big_account_vote)?;
 		let now_usable = <T::Currency as fungible::Inspect<T::AccountId>>::reducible_balance(&caller, false);
 		assert_eq!(orig_usable - now_usable, 100u32.into());
 
