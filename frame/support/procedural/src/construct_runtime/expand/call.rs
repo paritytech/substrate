@@ -134,6 +134,11 @@ pub fn expand_outer_dispatch(
 					#scrate::dispatch::Dispatchable::dispatch(self, origin)
 				})
 			}
+			fn dispatch_bypass_filter_with_storage_layer(self, origin: Origin) -> #scrate::dispatch::DispatchResultWithPostInfo {
+				#scrate::storage::with_storage_layer(|| {
+					#scrate::traits::UnfilteredDispatchable::dispatch_bypass_filter(self, origin)
+				})
+			}
 		}
 
 		#(
