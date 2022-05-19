@@ -45,6 +45,7 @@
 use scale_info::TypeInfo;
 use sp_arithmetic::traits::Saturating;
 use sp_runtime::{
+	traits::Convert,
 	ArithmeticError::Overflow,
 	Perbill, RuntimeDebug,
 };
@@ -174,6 +175,45 @@ impl From<(bool, Votes)> for VoteRecord {
 	}
 }
 
+/// Vote-weight scheme where all voters get one vote regardless of rank.
+pub struct Unit;
+impl Convert<Rank, Votes> for Unit {
+	fn convert(_: Rank) -> Votes {
+		1
+	}
+}
+
+/// Vote-weight scheme where all voters get one vote plus an additional vote for every excess rank
+/// they have. I.e.:
+///
+/// - Each member with no excess rank gets 1 vote;
+/// - ...with an excess rank of 1 gets 2 votes;
+/// - ...with an excess rank of 2 gets 2 votes;
+/// - ...with an excess rank of 3 gets 3 votes;
+/// - ...with an excess rank of 4 gets 4 votes.
+pub struct Linear;
+impl Convert<Rank, Votes> for Linear {
+	fn convert(r: Rank) -> Votes {
+		(r + 1) as Votes
+	}
+}
+
+/// Vote-weight scheme where all voters get one vote plus additional votes for every excess rank
+/// they have incrementing by one vote for each excess rank. I.e.:
+///
+/// - Each member with no excess rank gets 1 vote;
+/// - ...with an excess rank of 1 gets 2 votes;
+/// - ...with an excess rank of 2 gets 3 votes;
+/// - ...with an excess rank of 3 gets 6 votes;
+/// - ...with an excess rank of 4 gets 10 votes.
+pub struct Geometric;
+impl Convert<Rank, Votes> for Geometric {
+	fn convert(r: Rank) -> Votes {
+		let v = (r + 1) as Votes;
+		v * (v + 1) / 2
+	}
+}
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -198,6 +238,12 @@ pub mod pallet {
 
 		/// The polling system used for our voting.
 		type Polls: Polling<TallyOf<Self, I>, Votes = Votes, Class = Rank, Moment = Self::BlockNumber>;
+
+		/// Convert a rank_delta into a number of votes the rank gets.
+		///
+		/// Rank_delta is defined as the number of ranks above the minimum required to take part
+		/// in the poll.
+		type VoteWeight: Convert<Rank, Votes>;
 	}
 
 	/// The number of members in the collective who have at least the rank according to the index
@@ -467,8 +513,7 @@ pub mod pallet {
 
 		fn rank_to_votes(rank: Rank, min: Rank) -> Result<Votes, DispatchError> {
 			let excess = rank.checked_sub(min).ok_or(Error::<T, I>::RankTooLow)?;
-			let v = (excess + 1) as Votes;
-			Ok(v * (v + 1) / 2)
+			Ok(T::VoteWeight::convert(excess))
 		}
 
 		fn remove_from_rank(who: &T::AccountId, rank: Rank) -> DispatchResult {
