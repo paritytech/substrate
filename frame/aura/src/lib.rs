@@ -146,7 +146,7 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
-	fn change_authorities(new: WeakBoundedVec<T::AuthorityId, T::MaxAuthorities>) {
+	pub fn change_authorities(new: WeakBoundedVec<T::AuthorityId, T::MaxAuthorities>) {
 		<Authorities<T>>::put(&new);
 
 		let log = DigestItem::Consensus(
@@ -156,7 +156,7 @@ impl<T: Config> Pallet<T> {
 		<frame_system::Pallet<T>>::deposit_log(log);
 	}
 
-	fn initialize_authorities(authorities: &[T::AuthorityId]) {
+	pub fn initialize_authorities(authorities: &[T::AuthorityId]) {
 		if !authorities.is_empty() {
 			assert!(<Authorities<T>>::get().is_empty(), "Authorities are already initialized!");
 			let bounded = <BoundedSlice<'_, _, T::MaxAuthorities>>::try_from(authorities)
