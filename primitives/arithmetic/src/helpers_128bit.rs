@@ -265,7 +265,9 @@ pub const fn multiply_by_rational_with_rounding(
 	};
 	if match r {
 		Rounding::Up => remainder > 0,
-		Rounding::Nearest => remainder >= c / 2 + c % 2,
+		// cannot be `(c + 1) / 2` since `c` might be `max_value` and overflow.
+		Rounding::NearestPrefUp => remainder >= c / 2 + c % 2,
+		Rounding::NearestPrefDown => remainder > c / 2,
 		Rounding::Down => false,
 	} {
 		result = match result.checked_add(1) {
@@ -316,10 +318,14 @@ mod tests {
 	fn rational_multiply_basic_rounding_works() {
 		assert_eq!(mulrat(1, 1, 1, Up), Some(1));
 		assert_eq!(mulrat(3, 1, 3, Up), Some(1));
-		assert_eq!(mulrat(1, 2, 3, Down), Some(0));
 		assert_eq!(mulrat(1, 1, 3, Up), Some(1));
-		assert_eq!(mulrat(1, 2, 3, Nearest), Some(1));
-		assert_eq!(mulrat(1, 1, 3, Nearest), Some(0));
+		assert_eq!(mulrat(1, 2, 3, Down), Some(0));
+		assert_eq!(mulrat(1, 1, 3, NearestPrefDown), Some(0));
+		assert_eq!(mulrat(1, 1, 2, NearestPrefDown), Some(0));
+		assert_eq!(mulrat(1, 2, 3, NearestPrefDown), Some(1));
+		assert_eq!(mulrat(1, 1, 3, NearestPrefUp), Some(0));
+		assert_eq!(mulrat(1, 1, 2, NearestPrefUp), Some(1));
+		assert_eq!(mulrat(1, 2, 3, NearestPrefUp), Some(1));
 	}
 
 	#[test]
@@ -330,8 +336,18 @@ mod tests {
 		assert_eq!(mulrat(MAX, 1, MAX, Up), Some(1));
 		assert_eq!(mulrat(1, MAX - 1, MAX, Down), Some(0));
 		assert_eq!(mulrat(1, 1, MAX, Up), Some(1));
-		assert_eq!(mulrat(1, MAX / 2, MAX, Nearest), Some(0));
-		assert_eq!(mulrat(1, MAX / 2 + 1, MAX, Nearest), Some(1));
+		assert_eq!(mulrat(1, MAX / 2, MAX, NearestPrefDown), Some(0));
+		assert_eq!(mulrat(1, MAX / 2 + 1, MAX, NearestPrefDown), Some(1));
+		assert_eq!(mulrat(1, MAX / 2, MAX, NearestPrefUp), Some(0));
+		assert_eq!(mulrat(1, MAX / 2 + 1, MAX, NearestPrefUp), Some(1));
+	}
+
+	#[test]
+	fn sqrt_works() {
+		for i in 0..100_000u32 {
+			let a = sqrt(random_u128(i));
+			assert_eq!(sqrt(a * a), a);
+		}
 	}
 
 	fn random_u128(seed: u32) -> u128 {
@@ -344,7 +360,7 @@ mod tests {
 			let a = random_u128(i);
 			let b = random_u128(i + 1 << 30);
 			let c = random_u128(i + 1 << 31);
-			let x = mulrat(a, b, c, Nearest);
+			let x = mulrat(a, b, c, NearestPrefDown);
 			let y = multiply_by_rational(a, b, c).ok();
 			assert_eq!(x.is_some(), y.is_some());
 			let x = x.unwrap_or(0);

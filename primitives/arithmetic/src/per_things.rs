@@ -222,7 +222,7 @@ pub trait PerThing:
 			+ Unsigned,
 		Self::Inner: Into<N>,
 	{
-		saturating_reciprocal_mul::<N, Self>(b, self.deconstruct(), Rounding::Nearest)
+		saturating_reciprocal_mul::<N, Self>(b, self.deconstruct(), Rounding::NearestPrefUp)
 	}
 
 	/// Saturating multiplication by the reciprocal of `self`.	The result is rounded down to the
@@ -351,11 +351,19 @@ pub trait PerThing:
 	/// 	Percent::from_parts(98),
 	/// );
 	/// assert_eq!(
-	/// 	Percent::from_rational_with_rounding(984u64, 1000, Nearest).unwrap(),
+	/// 	Percent::from_rational_with_rounding(984u64, 1000, NearestPrefUp).unwrap(),
 	/// 	Percent::from_parts(98),
 	/// );
 	/// assert_eq!(
-	/// 	Percent::from_rational_with_rounding(985u64, 1000, Nearest).unwrap(),
+	/// 	Percent::from_rational_with_rounding(985u64, 1000, NearestPrefDown).unwrap(),
+	/// 	Percent::from_parts(98),
+	/// );
+	/// assert_eq!(
+	/// 	Percent::from_rational_with_rounding(985u64, 1000, NearestPrefUp).unwrap(),
+	/// 	Percent::from_parts(99),
+	/// );
+	/// assert_eq!(
+	/// 	Percent::from_rational_with_rounding(986u64, 1000, NearestPrefDown).unwrap(),
 	/// 	Percent::from_parts(99),
 	/// );
 	/// assert_eq!(
@@ -414,15 +422,52 @@ pub trait PerThing:
 	}
 }
 
-/// The rounding method to use.
-///
-/// `PerThing`s are unsigned so `Up` means towards infinity and `Down` means towards zero.
-/// `Nearest` will round an exact half down.
+/// The rounding method to use for unsigned quantities.
 #[derive(sp_std::fmt::Debug)]
 pub enum Rounding {
+	// Towards infinity.
 	Up,
+	// Towards zero.
 	Down,
-	Nearest,
+	// Nearest integer, rounding as `Up` when equidistant.
+	NearestPrefUp,
+	// Nearest integer, rounding as `Down` when equidistant.
+	NearestPrefDown,
+}
+
+/// The rounding method to use.
+#[derive(sp_std::fmt::Debug)]
+pub enum SignedRounding {
+	// Towards positive infinity.
+	High,
+	// Towards negative infinity.
+	Low,
+	// Nearest integer, rounding as `High` when exactly equidistant.
+	NearestPrefHigh,
+	// Nearest integer, rounding as `Low` when exactly equidistant.
+	NearestPrefLow,
+	// Away from zero (up when positive, down when negative). When positive, equivalent to `High`.
+	Major,
+	// Towards zero (down when positive, up when negative). When positive, equivalent to `Low`.
+	Minor,
+	// Nearest integer, rounding as `Major` when exactly equidistant.
+	NearestPrefMajor,
+	// Nearest integer, rounding as `Minor` when exactly equidistant.
+	NearestPrefMinor,
+}
+
+impl Rounding {
+	/// Returns the value for `Rounding` which would give the same result ignorant of the sign.
+	pub const fn from_signed(rounding: SignedRounding, negative: bool) -> Self {
+		use SignedRounding::*;
+		use Rounding::*;
+		match (rounding, negative) {
+			(Low, true) | (Major, _) | (High, false) => Up,
+			(High, true) | (Minor, _) | (Low, false) => Down,
+			(NearestPrefMajor, _) | (NearestPrefHigh, false) | (NearestPrefLow, true) => NearestPrefUp,
+			(NearestPrefMinor, _) | (NearestPrefLow, false) | (NearestPrefHigh, true) => NearestPrefDown,
+		}
+	}
 }
 
 /// Saturating reciprocal multiplication. Compute `x / self`, saturating at the numeric
@@ -500,14 +545,15 @@ where
 				rem_mul_div_inner += 1.into();
 			}
 		},
-		// Round up if the fractional part of the result is greater than a half. An exact half is
-		// rounded down.
-		Rounding::Nearest => {
-			if rem_mul_upper % denom_upper > denom_upper / 2.into() {
+		Rounding::NearestPrefDown => if rem_mul_upper % denom_upper > denom_upper / 2.into() {
+			// `rem * numer / denom` is less than `numer`, so this will not overflow.
+			rem_mul_div_inner += 1.into();
+		},
+		Rounding::NearestPrefUp =>
+			if rem_mul_upper % denom_upper >= denom_upper / 2.into() + denom_upper % 2.into() {
 				// `rem * numer / denom` is less than `numer`, so this will not overflow.
 				rem_mul_div_inner += 1.into();
-			}
-		},
+			},
 	}
 	rem_mul_div_inner.into()
 }
@@ -642,7 +688,8 @@ macro_rules! implement_per_thing {
 					let mut o = n.clone() / d.clone();
 					if match r {
 						Rounding::Up => { !((n % d).is_zero()) },
-						Rounding::Nearest => { let rem = n % d.clone(); rem.clone() + rem >= d },
+						Rounding::NearestPrefDown => { let rem = n % d.clone(); rem.clone() + rem > d },
+						Rounding::NearestPrefUp => { let rem = n % d.clone(); rem.clone() + rem >= d },
 						Rounding::Down => false,
 					} {
 						o += N::one()
@@ -680,7 +727,8 @@ macro_rules! implement_per_thing {
 				let mut part = n / d;
 				if match r {
 					Rounding::Up => { !((n % d).is_zero()) },
-					Rounding::Nearest => { let r = n % d; r + r >= d },
+					Rounding::NearestPrefDown => { let r = n % d; r + r > d },
+					Rounding::NearestPrefUp => { let r = n % d; r + r >= d },
 					Rounding::Down => false,
 				} {
 					part += 1 as $upper_type
@@ -993,7 +1041,7 @@ macro_rules! implement_per_thing {
 		{
 			type Output = N;
 			fn mul(self, b: N) -> Self::Output {
-				overflow_prune_mul::<N, Self>(b, self.deconstruct(), Rounding::Nearest)
+				overflow_prune_mul::<N, Self>(b, self.deconstruct(), Rounding::NearestPrefDown)
 			}
 		}
 
@@ -1277,10 +1325,10 @@ macro_rules! implement_per_thing {
 
 			#[test]
 			fn per_thing_mul_rounds_to_nearest_number() {
-				assert_eq!($name::from_float(0.33) * 10u64, 3);
-				assert_eq!($name::from_float(0.34) * 10u64, 3);
-				assert_eq!($name::from_float(0.35) * 10u64, 3);
-				assert_eq!($name::from_float(0.36) * 10u64, 4);
+				assert_eq!($name::from_percent(33) * 10u64, 3);
+				assert_eq!($name::from_percent(34) * 10u64, 3);
+				assert_eq!($name::from_percent(35) * 10u64, 3);
+				assert_eq!($name::from_percent(36) * 10u64, 4);
 			}
 
 			#[test]
@@ -1588,7 +1636,7 @@ macro_rules! implement_per_thing {
 						<$type>::max_value(),
 						<$type>::max_value(),
 						<$type>::max_value(),
-						super::Rounding::Nearest,
+						super::Rounding::NearestPrefDown,
 					),
 					0,
 				);
@@ -1597,7 +1645,7 @@ macro_rules! implement_per_thing {
 						<$type>::max_value() - 1,
 						<$type>::max_value(),
 						<$type>::max_value(),
-						super::Rounding::Nearest,
+						super::Rounding::NearestPrefDown,
 					),
 					<$type>::max_value() - 1,
 				);
@@ -1606,7 +1654,7 @@ macro_rules! implement_per_thing {
 						((<$type>::max_value() - 1) as $upper_type).pow(2),
 						<$type>::max_value(),
 						<$type>::max_value(),
-						super::Rounding::Nearest,
+						super::Rounding::NearestPrefDown,
 					),
 					1,
 				);
@@ -1616,7 +1664,7 @@ macro_rules! implement_per_thing {
 						(<$type>::max_value() as $upper_type).pow(2) - 1,
 						<$type>::max_value(),
 						<$type>::max_value(),
-						super::Rounding::Nearest,
+						super::Rounding::NearestPrefDown,
 					),
 					<$upper_type>::from((<$type>::max_value() - 1)),
 				);
@@ -1626,7 +1674,7 @@ macro_rules! implement_per_thing {
 						(<$type>::max_value() as $upper_type).pow(2),
 						<$type>::max_value(),
 						2 as $type,
-						super::Rounding::Nearest,
+						super::Rounding::NearestPrefDown,
 					),
 					<$type>::max_value() as $upper_type / 2,
 				);
@@ -1636,7 +1684,7 @@ macro_rules! implement_per_thing {
 						(<$type>::max_value() as $upper_type).pow(2) - 1,
 						2 as $type,
 						<$type>::max_value(),
-						super::Rounding::Nearest,
+						super::Rounding::NearestPrefDown,
 					),
 					2,
 				);
