@@ -289,6 +289,10 @@ where
 	/// index in the traverse path goes last. If a node is found that matches the predicate
 	/// the returned path should always contain at least one index, otherwise `None` is
 	/// returned.
+	// WARNING: some users of this method (i.e. Babe epoch changes tree) currently silently
+	// rely on a **post-order DFS** traversal of the tree. In particular via the
+	// `is_descendent_of` that when used after a warp-sync may query the backend for a
+	// root that is not present.
 	pub fn find_node_index_where<F, E, P>(
 		&self,
 		hash: &H,
