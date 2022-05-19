@@ -858,6 +858,7 @@ impl pallet_ranked_collective::Config for Runtime {
 	type Event = Event;
 	type AdminOrigin = EnsureRoot<AccountId>;
 	type Polls = RankedPolls;
+	type VoteWeight = pallet_ranked_collective::Geometric;
 }
 
 impl pallet_remark::Config for Runtime {

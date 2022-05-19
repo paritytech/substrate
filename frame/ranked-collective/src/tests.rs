@@ -171,6 +171,7 @@ impl Config for Test {
 	type Event = Event;
 	type AdminOrigin = frame_system::EnsureRoot<Self::AccountId>;
 	type Polls = TestPolls;
+	type VoteWeight = Geometric;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
