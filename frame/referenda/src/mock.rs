@@ -245,22 +245,26 @@ pub fn new_test_ext_execute_with_cond(execute: impl FnOnce(bool) -> () + Clone) 
 	new_test_ext().execute_with(|| execute(true));
 }
 
-#[derive(Encode, Debug, Decode, TypeInfo, Eq, PartialEq, Clone, Default, MaxEncodedLen)]
+#[derive(Encode, Debug, Decode, TypeInfo, Eq, PartialEq, Clone, MaxEncodedLen)]
 pub struct Tally {
 	pub ayes: u32,
 	pub nays: u32,
 }
 
-impl VoteTally<u32> for Tally {
-	fn ayes(&self) -> u32 {
+impl<Class> VoteTally<u32, Class> for Tally {
+	fn new(_: Class) -> Self {
+		Self { ayes: 0, nays: 0 }
+	}
+
+	fn ayes(&self, _: Class) -> u32 {
 		self.ayes
 	}
 
-	fn support(&self) -> Perbill {
+	fn support(&self, _: Class) -> Perbill {
 		Perbill::from_percent(self.ayes)
 	}
 
-	fn approval(&self) -> Perbill {
+	fn approval(&self, _: Class) -> Perbill {
 		if self.ayes + self.nays > 0 {
 			Perbill::from_rational(self.ayes, self.ayes + self.nays)
 		} else {
@@ -269,17 +273,17 @@ impl VoteTally<u32> for Tally {
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn unanimity() -> Self {
+	fn unanimity(_: Class) -> Self {
 		Self { ayes: 100, nays: 0 }
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn rejection() -> Self {
+	fn rejection(_: Class) -> Self {
 		Self { ayes: 0, nays: 100 }
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn from_requirements(support: Perbill, approval: Perbill) -> Self {
+	fn from_requirements(support: Perbill, approval: Perbill, _: Class) -> Self {
 		let ayes = support.mul_ceil(100u32);
 		let nays = ((ayes as u64) * 1_000_000_000u64 / approval.deconstruct() as u64) as u32 - ayes;
 		Self { ayes, nays }

@@ -152,7 +152,7 @@ pub mod pallet {
 		/// The counting type for votes. Usually just balance.
 		type Votes: AtLeast32BitUnsigned + Copy + Parameter + Member;
 		/// The tallying type.
-		type Tally: VoteTally<Self::Votes> + Default + Clone + Codec + Eq + Debug + TypeInfo;
+		type Tally: VoteTally<Self::Votes, TrackIdOf<Self, I>> + Clone + Codec + Eq + Debug + TypeInfo;
 
 		// Constants
 		/// The minimum amount to be used as a deposit for a public referendum proposal.
@@ -373,7 +373,7 @@ pub mod pallet {
 				submission_deposit,
 				decision_deposit: None,
 				deciding: None,
-				tally: Default::default(),
+				tally: TallyOf::<T, I>::new(track),
 				in_queue: false,
 				alarm: Self::set_alarm(nudge_call, now.saturating_add(T::UndecidingTimeout::get())),
 			};
@@ -729,6 +729,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			track.decision_period,
 			&track.min_support,
 			&track.min_approval,
+			status.track,
 		);
 		status.in_queue = false;
 		Self::deposit_event(Event::<T, I>::DecisionStarted {
@@ -744,7 +745,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			None
 		};
 		let deciding_status = DecidingStatus { since: now, confirming };
-		let alarm = Self::decision_time(&deciding_status, &status.tally, track);
+		let alarm = Self::decision_time(&deciding_status, &status.tally, status.track, track);
 		status.deciding = Some(deciding_status);
 		let branch =
 			if is_passing { BeginDecidingBranch::Passing } else { BeginDecidingBranch::Failing };
@@ -769,7 +770,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			(r.0, r.1.into())
 		} else {
 			// Add to queue.
-			let item = (index, status.tally.ayes());
+			let item = (index, status.tally.ayes(status.track));
 			status.in_queue = true;
 			TrackQueue::<T, I>::mutate(status.track, |q| q.insert_sorted_by_key(item, |x| x.1));
 			(None, ServiceBranch::Queued)
@@ -876,7 +877,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				// Are we already queued for deciding?
 				if status.in_queue {
 					// Does our position in the queue need updating?
-					let ayes = status.tally.ayes();
+					let ayes = status.tally.ayes(status.track);
 					let mut queue = TrackQueue::<T, I>::get(status.track);
 					let maybe_old_pos = queue.iter().position(|(x, _)| *x == index);
 					let new_pos = queue.binary_search_by_key(&ayes, |x| x.1).unwrap_or_else(|x| x);
@@ -936,6 +937,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					track.decision_period,
 					&track.min_support,
 					&track.min_approval,
+					status.track,
 				);
 				branch = if is_passing {
 					match deciding.confirming {
@@ -1000,7 +1002,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						ServiceBranch::ContinueNotConfirming
 					}
 				};
-				alarm = Self::decision_time(deciding, &status.tally, track);
+				alarm = Self::decision_time(deciding, &status.tally, status.track, track);
 			},
 		}
 
@@ -1013,12 +1015,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn decision_time(
 		deciding: &DecidingStatusOf<T>,
 		tally: &T::Tally,
+		track_id: TrackIdOf<T, I>,
 		track: &TrackInfoOf<T, I>,
 	) -> T::BlockNumber {
 		deciding.confirming.unwrap_or_else(|| {
 			// Set alarm to the point where the current voting would make it pass.
-			let approval = tally.approval();
-			let support = tally.support();
+			let approval = tally.approval(track_id);
+			let support = tally.support(track_id);
 			let until_approval = track.min_approval.delay(approval);
 			let until_support = track.min_support.delay(support);
 			let offset = until_support.max(until_approval);
@@ -1074,8 +1077,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		period: T::BlockNumber,
 		support_needed: &Curve,
 		approval_needed: &Curve,
+		id: TrackIdOf<T, I>,
 	) -> bool {
 		let x = Perbill::from_rational(elapsed.min(period), period);
-		support_needed.passing(x, tally.support()) && approval_needed.passing(x, tally.approval())
+		support_needed.passing(x, tally.support(id)) && approval_needed.passing(x, tally.approval(id))
 	}
 }

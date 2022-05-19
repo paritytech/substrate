@@ -21,7 +21,7 @@ use std::collections::BTreeMap;
 
 use frame_support::{
 	assert_noop, assert_ok, parameter_types,
-	traits::{ConstU32, ConstU64, Contains, Polling},
+	traits::{ConstU32, ConstU64, Contains, Polling, VoteTally},
 };
 use sp_core::H256;
 use sp_runtime::{
@@ -166,7 +166,7 @@ impl Polling<TallyOf<Test>> for TestPolls {
 	fn create_ongoing(class: Self::Class) -> Result<Self::Index, ()> {
 		let mut polls = Polls::get();
 		let i = polls.keys().rev().next().map_or(0, |x| x + 1);
-		polls.insert(i, Ongoing(Tally::default(), class));
+		polls.insert(i, Ongoing(Tally::new(0), class));
 		Polls::set(polls);
 		Ok(i)
 	}
@@ -376,10 +376,10 @@ fn classwise_delegation_works() {
 	new_test_ext().execute_with(|| {
 		Polls::set(
 			vec![
-				(0, Ongoing(Tally::default(), 0)),
-				(1, Ongoing(Tally::default(), 1)),
-				(2, Ongoing(Tally::default(), 2)),
-				(3, Ongoing(Tally::default(), 2)),
+				(0, Ongoing(Tally::new(0), 0)),
+				(1, Ongoing(Tally::new(0), 1)),
+				(2, Ongoing(Tally::new(0), 2)),
+				(3, Ongoing(Tally::new(0), 2)),
 			]
 			.into_iter()
 			.collect(),
@@ -497,7 +497,7 @@ fn classwise_delegation_works() {
 #[test]
 fn redelegation_after_vote_ending_should_keep_lock() {
 	new_test_ext().execute_with(|| {
-		Polls::set(vec![(0, Ongoing(Tally::default(), 0))].into_iter().collect());
+		Polls::set(vec![(0, Ongoing(Tally::new(0), 0))].into_iter().collect());
 		assert_ok!(Voting::delegate(Origin::signed(1), 0, 2, Conviction::Locked1x, 5));
 		assert_ok!(Voting::vote(Origin::signed(2), 0, aye(10, 1)));
 		Polls::set(vec![(0, Completed(1, true))].into_iter().collect());
@@ -515,9 +515,9 @@ fn lock_amalgamation_valid_with_multiple_removed_votes() {
 	new_test_ext().execute_with(|| {
 		Polls::set(
 			vec![
-				(0, Ongoing(Tally::default(), 0)),
-				(1, Ongoing(Tally::default(), 0)),
-				(2, Ongoing(Tally::default(), 0)),
+				(0, Ongoing(Tally::new(0), 0)),
+				(1, Ongoing(Tally::new(0), 0)),
+				(2, Ongoing(Tally::new(0), 0)),
 			]
 			.into_iter()
 			.collect(),
@@ -587,7 +587,7 @@ fn lock_amalgamation_valid_with_multiple_delegations() {
 #[test]
 fn lock_amalgamation_valid_with_move_roundtrip_to_delegation() {
 	new_test_ext().execute_with(|| {
-		Polls::set(vec![(0, Ongoing(Tally::default(), 0))].into_iter().collect());
+		Polls::set(vec![(0, Ongoing(Tally::new(0), 0))].into_iter().collect());
 		assert_ok!(Voting::vote(Origin::signed(1), 0, aye(5, 1)));
 		Polls::set(vec![(0, Completed(1, true))].into_iter().collect());
 		assert_ok!(Voting::remove_vote(Origin::signed(1), Some(0), 0));
@@ -599,7 +599,7 @@ fn lock_amalgamation_valid_with_move_roundtrip_to_delegation() {
 		assert_ok!(Voting::unlock(Origin::signed(1), 0, 1));
 		assert_eq!(Balances::usable_balance(1), 0);
 
-		Polls::set(vec![(1, Ongoing(Tally::default(), 0))].into_iter().collect());
+		Polls::set(vec![(1, Ongoing(Tally::new(0), 0))].into_iter().collect());
 		assert_ok!(Voting::vote(Origin::signed(1), 1, aye(5, 2)));
 		Polls::set(vec![(1, Completed(1, true))].into_iter().collect());
 		assert_ok!(Voting::remove_vote(Origin::signed(1), Some(0), 1));
@@ -627,7 +627,7 @@ fn lock_amalgamation_valid_with_move_roundtrip_to_casting() {
 		assert_ok!(Voting::unlock(Origin::signed(1), 0, 1));
 		assert_eq!(Balances::usable_balance(1), 5);
 
-		Polls::set(vec![(0, Ongoing(Tally::default(), 0))].into_iter().collect());
+		Polls::set(vec![(0, Ongoing(Tally::new(0), 0))].into_iter().collect());
 		assert_ok!(Voting::vote(Origin::signed(1), 0, aye(10, 1)));
 		Polls::set(vec![(0, Completed(1, true))].into_iter().collect());
 		assert_ok!(Voting::remove_vote(Origin::signed(1), Some(0), 0));
@@ -688,9 +688,9 @@ fn lock_aggregation_over_different_classes_with_casting_works() {
 	new_test_ext().execute_with(|| {
 		Polls::set(
 			vec![
-				(0, Ongoing(Tally::default(), 0)),
-				(1, Ongoing(Tally::default(), 1)),
-				(2, Ongoing(Tally::default(), 2)),
+				(0, Ongoing(Tally::new(0), 0)),
+				(1, Ongoing(Tally::new(0), 1)),
+				(2, Ongoing(Tally::new(0), 2)),
 			]
 			.into_iter()
 			.collect(),
@@ -747,10 +747,10 @@ fn errors_with_vote_work() {
 		assert_ok!(Voting::undelegate(Origin::signed(1), 0));
 		Polls::set(
 			vec![
-				(0, Ongoing(Tally::default(), 0)),
-				(1, Ongoing(Tally::default(), 0)),
-				(2, Ongoing(Tally::default(), 0)),
-				(3, Ongoing(Tally::default(), 0)),
+				(0, Ongoing(Tally::new(0), 0)),
+				(1, Ongoing(Tally::new(0), 0)),
+				(2, Ongoing(Tally::new(0), 0)),
+				(3, Ongoing(Tally::new(0), 0)),
 			]
 			.into_iter()
 			.collect(),

@@ -17,11 +17,10 @@
 
 //! Miscellaneous additional datatypes.
 
-use sp_std::marker::PhantomData;
-
+use sp_std::{marker::PhantomData, fmt::Debug};
 use codec::{Codec, Decode, Encode, MaxEncodedLen};
 use frame_support::{
-	traits::VoteTally, CloneNoBound, DefaultNoBound, EqNoBound, PartialEqNoBound,
+	traits::VoteTally, CloneNoBound, EqNoBound, PartialEqNoBound,
 	RuntimeDebugNoBound,
 };
 use scale_info::TypeInfo;
@@ -36,7 +35,6 @@ use crate::{AccountVote, Conviction, Vote};
 /// Info regarding an ongoing referendum.
 #[derive(
 	CloneNoBound,
-	DefaultNoBound,
 	PartialEqNoBound,
 	EqNoBound,
 	RuntimeDebugNoBound,
@@ -46,10 +44,7 @@ use crate::{AccountVote, Conviction, Vote};
 	MaxEncodedLen,
 )]
 #[scale_info(skip_type_params(Total))]
-pub struct Tally<
-	Votes: Clone + Default + PartialEq + Eq + sp_std::fmt::Debug + TypeInfo + Codec,
-	Total,
-> {
+pub struct Tally<Votes: Clone + PartialEq + Eq + Debug + TypeInfo + Codec, Total> {
 	/// The number of aye votes, expressed in terms of post-conviction lock-vote.
 	pub ayes: Votes,
 	/// The number of nay votes, expressed in terms of post-conviction lock-vote.
@@ -65,38 +60,43 @@ impl<
 			+ Default
 			+ PartialEq
 			+ Eq
-			+ sp_std::fmt::Debug
+			+ Debug
 			+ Copy
 			+ AtLeast32BitUnsigned
 			+ TypeInfo
 			+ Codec,
 		Total: Get<Votes>,
-	> VoteTally<Votes> for Tally<Votes, Total>
+		Class,
+	> VoteTally<Votes, Class> for Tally<Votes, Total>
 {
-	fn ayes(&self) -> Votes {
+	fn new(_: Class) -> Self {
+		Self { ayes: Zero::zero(), nays: Zero::zero(), support: Zero::zero(), dummy: PhantomData }
+	}
+
+	fn ayes(&self, _: Class) -> Votes {
 		self.ayes
 	}
 
-	fn support(&self) -> Perbill {
+	fn support(&self, _: Class) -> Perbill {
 		Perbill::from_rational(self.support, Total::get())
 	}
 
-	fn approval(&self) -> Perbill {
+	fn approval(&self, _: Class) -> Perbill {
 		Perbill::from_rational(self.ayes, self.ayes.saturating_add(self.nays))
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn unanimity() -> Self {
+	fn unanimity(_: Class) -> Self {
 		Self { ayes: Total::get(), nays: Zero::zero(), support: Total::get(), dummy: PhantomData }
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn rejection() -> Self {
+	fn rejection(_: Class) -> Self {
 		Self { ayes: Zero::zero(), nays: Total::get(), support: Total::get(), dummy: PhantomData }
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn from_requirements(support: Perbill, approval: Perbill) -> Self {
+	fn from_requirements(support: Perbill, approval: Perbill, _: Class) -> Self {
 		let support = support.mul_ceil(Total::get());
 		let ayes = approval.mul_ceil(support);
 		Self { ayes, nays: support - ayes, support, dummy: PhantomData }
@@ -108,7 +108,7 @@ impl<
 			+ Default
 			+ PartialEq
 			+ Eq
-			+ sp_std::fmt::Debug
+			+ Debug
 			+ Copy
 			+ AtLeast32BitUnsigned
 			+ TypeInfo
@@ -117,7 +117,7 @@ impl<
 	> Tally<Votes, Total>
 {
 	/// Create a new tally.
-	pub fn new(vote: Vote, balance: Votes) -> Self {
+	pub fn from_vote(vote: Vote, balance: Votes) -> Self {
 		let Delegations { votes, capital } = vote.conviction.votes(balance);
 		Self {
 			ayes: if vote.aye { votes } else { Zero::zero() },
