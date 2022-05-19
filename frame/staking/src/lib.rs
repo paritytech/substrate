@@ -618,13 +618,9 @@ impl<T: Config> StakingLedger<T> {
 			}
 		}
 
-		// clear leftover chunks..
 		self.unlocking.retain(|c| !c.value.is_zero());
-		// report this slash..
 		T::OnStakerSlash::on_slash(&self.stash, self.active, &slashed_unlocking);
-		// and report the final grand total slash amount.
-		let final_effective_slash = pre_slash_total.saturating_sub(self.total);
-		final_effective_slash
+		pre_slash_total.saturating_sub(self.total)
 	}
 }
 

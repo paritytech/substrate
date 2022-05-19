@@ -93,7 +93,7 @@ pub trait StakingInterface {
 	/// non-staking locks on the bonded pair's balance this may not be accurate.
 	fn total_stake(stash: &Self::AccountId) -> Option<Self::Balance>;
 
-	/// Bond (lock) `value` of `stash`'s balance. `stash` will be set as the account
+	/// Bond (lock) `value` of `stash`'s balance. `controller` will be set as the account
 	/// controlling `stash`. This creates what is referred to as "bonded pair".
 	fn bond(
 		stash: Self::AccountId,
@@ -102,7 +102,7 @@ pub trait StakingInterface {
 		payee: Self::AccountId,
 	) -> DispatchResult;
 
-	/// Have `stash` nominate `validators`.
+	/// Have `controller` nominate `validators`.
 	fn nominate(
 		controller: Self::AccountId,
 		validators: sp_std::vec::Vec<Self::AccountId>,

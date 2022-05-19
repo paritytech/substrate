@@ -448,7 +448,7 @@ impl<T: Config> PoolMember<T> {
 	}
 
 	/// Try and unbond `points_dissolved` from self, and in return mint `points_issued` into the
-	/// corresponding `era`.
+	/// corresponding `era`'s unlock schedule.
 	///
 	/// In the absence of slashing, these two points are always the same. In the presence of
 	/// slashing, the value of points in different pools varies.
@@ -988,7 +988,7 @@ impl<T: Config> UnbondPool<T> {
 		Pallet::<T>::point_to_balance(self.balance, self.points, points)
 	}
 
-	/// Issue points and update the balance given `new_balance`.
+	/// Issue the equivalent points of `new_funds` into self.
 	///
 	/// Returns the actual amounts of points issued.
 	fn issue(&mut self, new_funds: BalanceOf<T>) -> BalanceOf<T> {
@@ -1153,12 +1153,6 @@ pub mod pallet {
 	///
 	/// This is the value that will always exist in the staking ledger of the pool bonded account
 	/// while all other accounts leave.
-	///
-	/// A sane configuration should thus ensure that this value is large enough such that it is more
-	/// than `MinimumNominatorBond` and `ExistentialDeposit`. The pool's bonded account's stash
-	/// falling behind `MinimumNominatorBond` it cannot call unbond, and the pool bonded account's
-	/// stash falling below `ExistentialDeposit` means the ledger can be killed prematurely in a
-	/// call to `T::StakingInterface::withdraw_unbonded`.
 	#[pallet::storage]
 	pub type MinCreateBond<T: Config> = StorageValue<_, BalanceOf<T>, ValueQuery>;
 
@@ -1266,11 +1260,10 @@ pub mod pallet {
 		PaidOut { member: T::AccountId, pool_id: PoolId, payout: BalanceOf<T> },
 		/// A member has unbonded from their pool.
 		///
-		/// - `balance` is the corresponding balance of the number of points that have been
-		///   requested to be unbonded (the argument of the `unbond` transaction) from the bonded
-		///   pool.
-		/// - `points` is the number of points that are issued as a result of
-		/// `balance` into the corresponding unbonding pool.
+		/// - `balance` is the corresponding balance of the number of points that has been requested
+		///   to be unbonded (the argument of the `unbond` transaction) from the bonded pool.
+		/// - `points` is the number of points that are issued as a result of `balance` being
+		/// dissolved into the corresponding unbonding pool.
 		///
 		/// In the absence of slashing, these values will match. In the presence of slashing, the
 		/// number of points that are issued in the unbonding pool will be less than the amount
@@ -1285,7 +1278,8 @@ pub mod pallet {
 		///
 		/// The given number of `points` have been dissolved in return of `balance`.
 		///
-		/// Similar to `Unbonded` event, in the absence of slashing, these values will match.
+		/// Similar to `Unbonded` event, in the absence of slashing, the ratio of point to balance
+		/// will be 1.
 		Withdrawn {
 			member: T::AccountId,
 			pool_id: PoolId,
@@ -1313,8 +1307,6 @@ pub mod pallet {
 		UnbondingPoolSlashed { pool_id: PoolId, era: EraIndex, balance: BalanceOf<T> },
 	}
 
-	#[cfg_attr(test, derive(PartialEq))]
-	pub enum InnerError {}
 	#[pallet::error]
 	#[cfg_attr(test, derive(PartialEq))]
 	pub enum Error<T> {
@@ -1329,8 +1321,6 @@ pub mod pallet {
 		/// An account is already delegating in another pool. An account may only belong to one
 		/// pool at a time.
 		AccountBelongsToOtherPool,
-		/// The member is already unbonding in this era.
-		AlreadyUnbonding,
 		/// The member is fully unbonded (and thus cannot access the bonded and reward pool
 		/// anymore to, for example, collect rewards).
 		FullyUnbonding,
@@ -1499,7 +1489,7 @@ pub mod pallet {
 
 		/// Unbond up to `unbonding_points` of the `member_account`'s funds from the pool. It
 		/// implicitly collects the rewards one last time, since not doing so would mean some
-		/// rewards would go forfeited.
+		/// rewards would be forfeited.
 		///
 		/// Under certain conditions, this call can be dispatched permissionlessly (i.e. by any
 		/// account).
@@ -1568,11 +1558,11 @@ pub mod pallet {
 					.try_insert(unbond_era, UnbondPool::default())
 					// The above call to `maybe_merge_pools` should ensure there is
 					// always enough space to insert.
-					// TODO: make this visible and transparent #11439
+					// TODO: make this error type transparent #11439
 					.defensive_map_err(|_| Error::<T>::DefensiveError)?;
 			}
 
-			let actual_unbonding_points = sub_pools
+			let points_unbonded = sub_pools
 				.with_era
 				.get_mut(&unbond_era)
 				// The above check ensures the pool exists.
@@ -1580,12 +1570,12 @@ pub mod pallet {
 				.issue(unbonding_balance);
 
 			// Try and unbond in the member map.
-			member.try_unbond(unbonding_points, actual_unbonding_points, unbond_era)?;
+			member.try_unbond(unbonding_points, points_unbonded, unbond_era)?;
 
 			Self::deposit_event(Event::<T>::Unbonded {
 				member: member_account.clone(),
 				pool_id: member.pool_id,
-				points: actual_unbonding_points,
+				points: points_unbonded,
 				balance: unbonding_balance,
 			});
 
@@ -2329,7 +2319,6 @@ impl<T: Config> Pallet<T> {
 		if level.is_zero() {
 			return Ok(())
 		}
-
 		// note: while a bit wacky, since they have the same key, even collecting to vec should
 		// result in the same set of keys, in the same order.
 		let bonded_pools = BondedPools::<T>::iter_keys().collect::<Vec<_>>();
