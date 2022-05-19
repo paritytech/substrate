@@ -119,6 +119,18 @@ impl<H: Hasher> SharedNodeCache<H> {
 		added: impl IntoIterator<Item = (H::Out, NodeOwned<H::Out>)>,
 		accessed: impl IntoIterator<Item = H::Out>,
 	) {
+		let update_size_in_bytes =
+			|size_in_bytes: &mut usize, key: &H::Out, node: &NodeOwned<H::Out>| {
+				if let Some(new_size_in_bytes) =
+					size_in_bytes.checked_sub(key.as_ref().len() + node.size_in_bytes())
+				{
+					*size_in_bytes = new_size_in_bytes;
+				} else {
+					*size_in_bytes = 0;
+					tracing::error!(target: LOG_TARGET, "Trie cache underflow detected!",);
+				}
+			};
+
 		accessed.into_iter().for_each(|key| {
 			// Access every node in the lru to put it to the front.
 			self.lru.get(&key);
@@ -127,17 +139,14 @@ impl<H: Hasher> SharedNodeCache<H> {
 			self.size_in_bytes += key.as_ref().len() + node.size_in_bytes();
 
 			if let Some((r_key, r_node)) = self.lru.push(key, node) {
-				self.size_in_bytes = self
-					.size_in_bytes
-					.saturating_sub(r_key.as_ref().len() + r_node.size_in_bytes());
+				update_size_in_bytes(&mut self.size_in_bytes, &r_key, &r_node);
 			}
 		});
 
 		while self.size_in_bytes > self.maximum_size_in_bytes {
 			// This should always be `Some(_)`, otherwise something is wrong!
 			if let Some((key, node)) = self.lru.pop_lru() {
-				self.size_in_bytes =
-					self.size_in_bytes.saturating_sub(key.as_ref().len() + node.size_in_bytes());
+				update_size_in_bytes(&mut self.size_in_bytes, &key, &node);
 			}
 		}
 	}
