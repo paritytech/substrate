@@ -190,8 +190,8 @@ pub mod tests {
 	use sp_core::H256;
 	use sp_runtime::traits::BlakeTwo256;
 	use sp_trie::{
-		trie_types::{TrieDBMutV0, TrieDBMutV1},
-		KeySpacedDBMut, PrefixedMemoryDB, TrieMut,
+		trie_types::{TrieDB, TrieDBMutV0, TrieDBMutV1},
+		KeySpacedDBMut, PrefixedMemoryDB, Trie, TrieMut,
 	};
 	use std::{collections::HashSet, iter};
 
@@ -368,5 +368,25 @@ pub mod tests {
 		expected.insert(b"value1".to_vec());
 		expected.insert(b"value2".to_vec());
 		assert_eq!(seen, expected);
+	}
+
+	#[test]
+	fn keys_with_empty_prefix_returns_all_keys() {
+		keys_with_empty_prefix_returns_all_keys_inner(StateVersion::V0);
+		keys_with_empty_prefix_returns_all_keys_inner(StateVersion::V1);
+	}
+	fn keys_with_empty_prefix_returns_all_keys_inner(state_version: StateVersion) {
+		let (test_db, test_root) = test_db(state_version);
+		let expected = TrieDB::new(&test_db, &test_root)
+			.unwrap()
+			.iter()
+			.unwrap()
+			.map(|d| d.unwrap().0.to_vec())
+			.collect::<Vec<_>>();
+
+		let trie = test_trie(state_version);
+		let keys = trie.keys(&[]);
+
+		assert_eq!(expected, keys);
 	}
 }

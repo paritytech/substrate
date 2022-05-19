@@ -398,5 +398,15 @@ benchmarks_instance_pallet! {
 		}.into());
 	}
 
+	set_collection_max_supply {
+		let (collection, caller, _) = create_collection::<T, I>();
+	}: _(SystemOrigin::Signed(caller.clone()), collection, u32::MAX)
+	verify {
+		assert_last_event::<T, I>(Event::CollectionMaxSupplySet {
+			collection,
+			max_supply: u32::MAX,
+		}.into());
+	}
+
 	impl_benchmark_test_suite!(Uniques, crate::mock::new_test_ext(), crate::mock::Test);
 }
