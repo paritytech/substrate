@@ -358,7 +358,6 @@ where
 		let topology = &mut self.worker.mixnet_mut().topology;
 		debug!(target: "mixnet", "Change authorities {:?}", set);
 		let mut old_authority2 = std::mem::take(&mut topology.authorities);
-		topology.routing_nodes.clear();
 
 		topology.routing = false;
 
@@ -387,10 +386,11 @@ where
 							"TODO restart node setting local id and public / private key"
 						);
 					}
+				} else {
+					topology
+						.authorities
+						.insert(peer_id, NodeInfo2 { authority_id: auth.clone(), public_key });
 				}
-				topology
-					.authorities
-					.insert(peer_id, NodeInfo2 { authority_id: auth.clone(), public_key });
 			} else {
 				error!(target: "mixnet", "Missing imonline key for authority {:?}, not adding it to topology.", auth);
 			}
@@ -540,15 +540,12 @@ pub struct AuthorityStar {
 	// true when we are in authorities set.
 	routing: bool,
 	// All authorities are considered connected (when building message except first hop).
-	authorities: HashMap<MixPeerId, NodeInfo2>,
+	authorities: BTreeMap<MixPeerId, NodeInfo2>,
 	// The connected nodes (for first hop use `authorities` joined `connected_nodes`).
 	connected_nodes: HashMap<MixPeerId, NodeInfo>, // TODO only MixPubKey as value
 	// Grandpa -> IMonline TODO rename session after removing session3 and authdisc
 	// TODO this is what is a bit redundant with authorities
 	sessions2: HashMap<CryptoTypePublicPair, CryptoTypePublicPair>,
-
-	// TODO remove all fields bellow
-	routing_nodes: BTreeMap<MixPeerId, MixPublicKey>,
 }
 
 #[derive(Clone)]
@@ -566,10 +563,10 @@ pub struct NodeInfo {
 	authority_id: Option<AuthorityInfo>, // TODO not opti
 	public_key: MixPublicKey,
 }
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct NodeInfo2 {
-	authority_id: AuthorityId,
-	public_key: MixPublicKey,
+	authority_id2: AuthorityId,
+	public_key: ,
 }
 
 impl AuthorityStar {
@@ -584,9 +581,8 @@ impl AuthorityStar {
 			node_id,
 			network_id,
 			node_public_key,
-			authorities: HashMap::new(),
+			authorities: BTreeMap::new(),
 			connected_nodes: HashMap::new(),
-			routing_nodes: BTreeMap::new(),
 			sessions2: HashMap::new(),
 			routing: false,
 			key_store,
@@ -603,7 +599,7 @@ impl AuthorityStar {
 	*/
 
 	fn has_enough_nodes(&self) -> bool {
-		self.routing_nodes.len() >= LOW_MIXNET_THRESHOLD
+		self.authorities.len() >= LOW_MIXNET_THRESHOLD
 	}
 
 	fn add_connected_peer(&mut self, peer_id: MixPeerId, key: MixPublicKey) {
@@ -657,11 +653,11 @@ impl AuthorityStar {
 				return None
 			},
 		};*/
-		debug!(target: "mixnet", "routing {:?}, ix {:?}", self.routing_nodes, ix);
-		for key in self.routing_nodes.range(ix..) {
+		debug!(target: "mixnet", "routing {:?}, ix {:?}", self.authorities, ix);
+		for key in self.authorities.range(ix..) {
 			if !skip(&key.0) {
 				debug!(target: "mixnet", "Random route node");
-				return Some((key.0.clone(), key.1.clone()))
+				return Some((key.0.clone(), key.1.public_key.clone()))
 			}
 			/*			if let Some(info) = self.connected_nodes.get(key) {
 				debug!(target: "mixnet", "Random route node");
@@ -670,10 +666,10 @@ impl AuthorityStar {
 				unreachable!()
 			}*/
 		}
-		for key in self.routing_nodes.range(..ix).rev() {
+		for key in self.authorities.range(..ix).rev() {
 			if !skip(&key.0) {
 				debug!(target: "mixnet", "Random route node");
-				return Some((key.0.clone(), key.1.clone()))
+				return Some((key.0.clone(), key.1.public_key.clone()))
 			}
 		}
 		None
@@ -682,11 +678,11 @@ impl AuthorityStar {
 
 impl Topology for AuthorityStar {
 	fn first_hop_nodes(&self) -> Vec<(MixPeerId, MixPublicKey)> {
-		self.routing_nodes.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+		self.authorities.iter().map(|(k, v)| (k.clone(), v.public_key.clone())).collect()
 	}
 	fn first_hop_nodes_external(&self, _from: &MixPeerId) -> Vec<(MixPeerId, MixPublicKey)> {
 		// allow for all
-		self.first_hop_nodes()
+		self.first_hop_nodes().into_iter().filter(|(id, key)| self.connected_nodes.contains_key(id)).collect()
 	}
 	fn is_first_node(&self, id: &MixPeerId) -> bool {
 		// allow for all
@@ -708,9 +704,9 @@ impl Topology for AuthorityStar {
 	/// external hop for latest (see gen_path function). Then last hop will expose
 	/// a new connection, so it need to be an additional hop (if possible).
 	fn neighbors(&self, from: &MixPeerId) -> Option<Vec<(MixPeerId, MixPublicKey)>> {
-		if self.routing_nodes.contains_key(from) || (&self.node_id == from && self.routing) {
+		if self.authorities.contains_key(from) || (&self.node_id == from && self.routing) {
 			Some(
-				self.routing_nodes
+				self.authorities
 					.iter()
 					.filter_map(|id| {
 						if id.0 == from {
@@ -718,7 +714,7 @@ impl Topology for AuthorityStar {
 						} else {
 							Some((
 								id.0.clone(),
-								id.1.clone(),
+								id.1.public_key.clone(),
 								//								self.connected_nodes.get(&id.0).unwrap().public_key.clone(),
 							))
 						}
@@ -731,8 +727,8 @@ impl Topology for AuthorityStar {
 	}
 
 	fn routing_to(&self, from: &MixPeerId, to: &MixPeerId) -> bool {
-		self.routing_nodes.contains_key(from)
-		// && self.routing_nodes.contains_key(to) // allow external
+		self.authorities.contains_key(from)
+		// && self.authorities.contains_key(to) // allow any number of external.
 	}
 
 	fn random_path(
@@ -846,13 +842,12 @@ impl Topology for AuthorityStar {
 		if id == &self.node_id {
 			self.routing
 		} else {
-			self.routing_nodes.contains_key(id)
+			self.authorities.contains_key(id)
 		}
 	}
 
 	fn connected(&mut self, peer_id: MixPeerId, key: MixPublicKey) {
 		debug!(target: "mixnet", "Connected from internal");
-
 		self.add_connected_peer(peer_id, key)
 	}
 
@@ -920,21 +915,6 @@ impl Topology for AuthorityStar {
 		log::error!(target: "mixnet", "No imonline key error"); // TODO rem
 		None
 	}
-}
-/*
-fn event_filter(event: &Event) -> bool {
-	match event {
-		Event::NotificationStreamOpened { .. } | Event::NotificationStreamClosed { .. } => true,
-		_ => false,
-	}
-}*/
-
-/// Cache current session key on the chain.
-/// TODO could be useful, here we just query again at each session.
-struct SessionCache {
-	//fn session_index() -> sp_staking::SessionIndex {
-	//fn queued_keys() -> Vec<(Vec<u8>, Vec<sp_core::crypto::CryptoTypePublicPair>)> {
-	// node_id: AccountId32
 }
 
 //const PEER_ID_PREFIX: [u8; 6] = [0, 36, 8, 1, 18, 32];
