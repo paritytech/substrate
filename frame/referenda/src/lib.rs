@@ -152,7 +152,12 @@ pub mod pallet {
 		/// The counting type for votes. Usually just balance.
 		type Votes: AtLeast32BitUnsigned + Copy + Parameter + Member;
 		/// The tallying type.
-		type Tally: VoteTally<Self::Votes, TrackIdOf<Self, I>> + Clone + Codec + Eq + Debug + TypeInfo;
+		type Tally: VoteTally<Self::Votes, TrackIdOf<Self, I>>
+			+ Clone
+			+ Codec
+			+ Eq
+			+ Debug
+			+ TypeInfo;
 
 		// Constants
 		/// The minimum amount to be used as a deposit for a public referendum proposal.
@@ -1080,6 +1085,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		id: TrackIdOf<T, I>,
 	) -> bool {
 		let x = Perbill::from_rational(elapsed.min(period), period);
-		support_needed.passing(x, tally.support(id)) && approval_needed.passing(x, tally.approval(id))
+		support_needed.passing(x, tally.support(id)) &&
+			approval_needed.passing(x, tally.approval(id))
 	}
 }

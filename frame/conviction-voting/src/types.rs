@@ -17,17 +17,16 @@
 
 //! Miscellaneous additional datatypes.
 
-use sp_std::{marker::PhantomData, fmt::Debug};
 use codec::{Codec, Decode, Encode, MaxEncodedLen};
 use frame_support::{
-	traits::VoteTally, CloneNoBound, EqNoBound, PartialEqNoBound,
-	RuntimeDebugNoBound,
+	traits::VoteTally, CloneNoBound, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
 };
 use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{Saturating, Zero},
 	RuntimeDebug,
 };
+use sp_std::{fmt::Debug, marker::PhantomData};
 
 use super::*;
 use crate::{AccountVote, Conviction, Vote};
@@ -56,15 +55,7 @@ pub struct Tally<Votes: Clone + PartialEq + Eq + Debug + TypeInfo + Codec, Total
 }
 
 impl<
-		Votes: Clone
-			+ Default
-			+ PartialEq
-			+ Eq
-			+ Debug
-			+ Copy
-			+ AtLeast32BitUnsigned
-			+ TypeInfo
-			+ Codec,
+		Votes: Clone + Default + PartialEq + Eq + Debug + Copy + AtLeast32BitUnsigned + TypeInfo + Codec,
 		Total: Get<Votes>,
 		Class,
 	> VoteTally<Votes, Class> for Tally<Votes, Total>
@@ -104,15 +95,7 @@ impl<
 }
 
 impl<
-		Votes: Clone
-			+ Default
-			+ PartialEq
-			+ Eq
-			+ Debug
-			+ Copy
-			+ AtLeast32BitUnsigned
-			+ TypeInfo
-			+ Codec,
+		Votes: Clone + Default + PartialEq + Eq + Debug + Copy + AtLeast32BitUnsigned + TypeInfo + Codec,
 		Total: Get<Votes>,
 	> Tally<Votes, Total>
 {
