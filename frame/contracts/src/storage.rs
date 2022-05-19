@@ -33,7 +33,7 @@ use frame_support::{
 };
 use scale_info::TypeInfo;
 use sp_core::crypto::UncheckedFrom;
-use sp_io::hashing::blake2_256;
+use sp_io::hashing::{blake2_256;
 use sp_runtime::{
 	traits::{Hash, Zero},
 	RuntimeDebug,
@@ -126,7 +126,12 @@ where
 	/// The read is performed from the `trie_id` only. The `address` is not necessary. If the
 	/// contract doesn't store under the given `key` `None` is returned.
 	pub fn read(trie_id: &TrieId, key: &StorageKey) -> Option<Vec<u8>> {
-		child::get_raw(&child_trie_info(trie_id), &blake2_256(key))
+		match key {
+			StorageKey::FixedSizedKey(k) =>
+				child::get_raw(&child_trie_info(trie_id), &blake2_256(k)),
+			StorageKey::VariableSizedKey(k) =>
+				child::get_raw(&child_trie_info(trie_id), &blake2_128_concat(k)),
+		}
 	}
 
 	/// Returns `Some(len)` (in bytes) if a storage item exists at `key`.
@@ -134,7 +139,11 @@ where
 	/// Returns `None` if the `key` wasn't previously set by `set_storage` or
 	/// was deleted.
 	pub fn size(trie_id: &TrieId, key: &StorageKey) -> Option<u32> {
-		child::len(&child_trie_info(trie_id), &blake2_256(key))
+		match key {
+			StorageKey::FixedSizedKey(k) => child::len(&child_trie_info(trie_id), &blake2_256(key)),
+			StorageKey::VariableSizedKey(k) =>
+				child::len(&child_trie_info(trie_id), &blake2_128_concat(key)),
+		}
 	}
 
 	/// Update a storage entry into a contract's kv storage.
@@ -151,7 +160,11 @@ where
 		storage_meter: Option<&mut meter::NestedMeter<T>>,
 		take: bool,
 	) -> Result<WriteOutcome, DispatchError> {
-		let hashed_key = blake2_256(key);
+		let hashed_key = match key {
+			StorageKey::FixedSizedKey(k) => blake2_256(k),
+			StorageKey::VariableSizedKey(k) => blake2_128_concat(k),
+		};
+
 		let child_trie_info = &child_trie_info(trie_id);
 		let (old_len, old_value) = if take {
 			let val = child::get_raw(child_trie_info, &hashed_key);

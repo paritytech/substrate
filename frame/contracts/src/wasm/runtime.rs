@@ -701,7 +701,9 @@ where
 
 	fn set_storage(
 		&mut self,
+		key_type: &StorageKey,
 		key_ptr: u32,
+		key_len: u32,
 		value_ptr: u32,
 		value_len: u32,
 	) -> Result<u32, TrapReason> {
@@ -711,10 +713,20 @@ where
 		if value_len > max_size {
 			return Err(Error::<E::T>::ValueTooLarge.into())
 		}
-		let mut key: StorageKey = [0; 32];
+		let mut key = match key_type {
+			FixedSizedKey(_) => [0; 32],
+			VariableSizedKey(_) => &[u8],
+		};
+
 		self.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
+
+		let key_typed = match key_type {
+			FixedSizedKey(_) => FixedSizedKey(key),
+			VariableSizedKey(_) => VariableSizedKey(key.try_into()),
+		};
+
 		let value = Some(self.read_sandbox_memory(value_ptr, value_len)?);
-		let write_outcome = self.ext.set_storage(key, value, false)?;
+		let write_outcome = self.ext.set_storage(key_typed, value, false)?;
 		self.adjust_gas(
 			charged,
 			RuntimeCosts::SetStorage { new_bytes: value_len, old_bytes: write_outcome.old_len() },
@@ -722,11 +734,19 @@ where
 		Ok(write_outcome.old_len_with_sentinel())
 	}
 
-	fn clear_storage(&mut self, key_ptr: u32) -> Result<u32, TrapReason> {
+	fn clear_storage(&mut self, key_type: &StorageKey, key_ptr: u32) -> Result<u32, TrapReason> {
 		let charged = self.charge_gas(RuntimeCosts::ClearStorage(self.ext.max_value_size()))?;
-		let mut key: StorageKey = [0; 32];
+		let mut key = match key_type {
+			FixedSizedKey(_) => [0; 32],
+			VariableSizedKey(_) => [0; key_len].into_vec(),
+		};
 		self.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
-		let outcome = self.ext.set_storage(key, None, false)?;
+
+		let key_typed = match key_type {
+			FixedSizedKey(_) => FixedSizedKey(key),
+			VariableSizedKey(_) => VariableSizedKey(key),
+		};
+		let outcome = self.ext.set_storage(key_typed, None, false)?;
 		self.adjust_gas(charged, RuntimeCosts::ClearStorage(outcome.old_len()));
 		Ok(outcome.old_len_with_sentinel())
 	}
@@ -927,9 +947,10 @@ define_env!(Env, <E: Ext>,
 	// `ReturnCode::KeyNotFound`
 	[seal0] seal_get_storage(ctx, key_ptr: u32, out_ptr: u32, out_len_ptr: u32) -> ReturnCode => {
 		let charged = ctx.charge_gas(RuntimeCosts::GetStorage(ctx.ext.max_value_size()))?;
-		let mut key: StorageKey = [0; 32];
+		let mut key = [0; 32];
 		ctx.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
-		if let Some(value) = ctx.ext.get_storage(&key) {
+		let key_typed = StorageKey::FixSizedKey(key);
+		if let Some(value) = ctx.ext.get_storage(&key_typed) {
 			ctx.adjust_gas(charged, RuntimeCosts::GetStorage(value.len() as u32));
 			ctx.write_sandbox_output(out_ptr, out_len_ptr, &value, false, already_charged)?;
 			Ok(ReturnCode::Success)
@@ -951,9 +972,10 @@ define_env!(Env, <E: Ext>,
 	// `SENTINEL` is returned as a sentinel value.
 	[seal0] seal_contains_storage(ctx, key_ptr: u32) -> u32 => {
 		let charged = ctx.charge_gas(RuntimeCosts::ContainsStorage(ctx.ext.max_value_size()))?;
-		let mut key: StorageKey = [0; 32];
+		let mut key = [0; 32];
 		ctx.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
-		if let Some(len) = ctx.ext.get_storage_size(&key) {
+				let key_typed = StorageKey::FixSizedKey(key);
+		if let Some(len) = ctx.ext.get_storage_size(&key_typed) {
 			ctx.adjust_gas(charged, RuntimeCosts::ContainsStorage(len));
 			Ok(len)
 		} else {
@@ -976,9 +998,10 @@ define_env!(Env, <E: Ext>,
 	// `ReturnCode::KeyNotFound`
 	[__unstable__] seal_take_storage(ctx, key_ptr: u32, out_ptr: u32, out_len_ptr: u32) -> ReturnCode => {
 		let charged = ctx.charge_gas(RuntimeCosts::TakeStorage(ctx.ext.max_value_size()))?;
-		let mut key: StorageKey = [0; 32];
+		let mut key = [0; 32];
 		ctx.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
-		if let crate::storage::WriteOutcome::Taken(value) = ctx.ext.set_storage(key, None, true)? {
+		let key_typed = StorageKey::FixSizedKey(key);
+		if let crate::storage::WriteOutcome::Taken(value) = ctx.ext.set_storage(key_typed, None, true)? {
 			ctx.adjust_gas(charged, RuntimeCosts::TakeStorage(value.len() as u32));
 			ctx.write_sandbox_output(out_ptr, out_len_ptr, &value, false, already_charged)?;
 			Ok(ReturnCode::Success)
