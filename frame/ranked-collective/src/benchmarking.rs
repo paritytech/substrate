@@ -32,79 +32,89 @@ fn assert_last_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::
 }
 
 fn make_member<T: Config<I>, I: 'static>(rank: Rank) -> T::AccountId {
-	let who = account::<T::AccountId>("member", MemberCount::<T, I>::get().0, SEED);
-	assert_ok!(Pallet::<T, I>::add_member(T::AdminOrigin::successful_origin(), who.clone(), rank));
+	let who = account::<T::AccountId>("member", MemberCount::<T, I>::get(0), SEED);
+	assert_ok!(Pallet::<T, I>::add_member(T::AdminOrigin::successful_origin(), who.clone()));
+	for _ in 0..rank {
+		promote_member::<T, I>(&who);
+	}
 	who
+}
+
+fn promote_member<T: Config<I>, I: 'static>(who: &T::AccountId) {
+	assert_ok!(Pallet::<T, I>::promote(T::AdminOrigin::successful_origin(), who.clone()));
 }
 
 benchmarks_instance_pallet! {
 	add_member {
-		let old = MemberCount::<T, I>::get().0;
 		let who = account::<T::AccountId>("member", 0, SEED);
-		let rank = 1;
 		let origin = T::AdminOrigin::successful_origin();
-		let call = Call::<T, I>::add_member { who: who.clone(), rank };
+		let call = Call::<T, I>::add_member { who: who.clone() };
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
-		assert_eq!(MemberCount::<T, I>::get().0, old + 1);
-		assert_last_event::<T, I>(Event::MemberAdded { who, rank }.into());
+		assert_eq!(MemberCount::<T, I>::get(0), 1);
+		assert_last_event::<T, I>(Event::MemberAdded { who }.into());
 	}
 
 	remove_member {
-		let rank = 1;
-		let who = make_member::<T, I>(rank);
-		let other = make_member::<T, I>(rank);
-		let old = MemberCount::<T, I>::get().0;
-		let other_index = Members::<T, I>::get(&other).unwrap().index;
+		let first = make_member::<T, I>(0);
+		let who = make_member::<T, I>(0);
+		let last = make_member::<T, I>(0);
+		let last_index = Members::<T, I>::get(&last).unwrap().index;
 		let origin = T::AdminOrigin::successful_origin();
 		let call = Call::<T, I>::remove_member { who: who.clone() };
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
-		assert_eq!(MemberCount::<T, I>::get().0, old - 1);
-		assert_ne!(other_index, Members::<T, I>::get(&other).unwrap().index);
+		assert_eq!(MemberCount::<T, I>::get(0), 2);
+		assert_ne!(last_index, Members::<T, I>::get(&last).unwrap().index);
 		assert_last_event::<T, I>(Event::MemberRemoved { who }.into());
 	}
 
-	set_member_rank {
-		let old_rank = 1;
-		let rank = 2;
-		let who = make_member::<T, I>(old_rank);
+	promote {
+		let who = make_member::<T, I>(0);
 		let origin = T::AdminOrigin::successful_origin();
-		let call = Call::<T, I>::set_member_rank { who: who.clone(), rank };
+		let call = Call::<T, I>::promote { who: who.clone() };
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
-		assert_eq!(Members::<T, I>::get(&who).unwrap().rank, rank);
-		assert_last_event::<T, I>(Event::RankChanged { who, rank }.into());
+		assert_eq!(Members::<T, I>::get(&who).unwrap().rank, 1);
+		assert_last_event::<T, I>(Event::RankChanged { who, rank: 1 }.into());
+	}
+
+	demote {
+		let who = make_member::<T, I>(1);
+		let origin = T::AdminOrigin::successful_origin();
+		let call = Call::<T, I>::demote { who: who.clone() };
+	}: { call.dispatch_bypass_filter(origin)? }
+	verify {
+		assert_eq!(Members::<T, I>::get(&who).unwrap().rank, 0);
+		assert_last_event::<T, I>(Event::RankChanged { who, rank: 0 }.into());
 	}
 
 	vote {
-		let rank = 1;
 		let caller: T::AccountId = whitelisted_caller();
-		assert_ok!(Pallet::<T, I>::add_member(T::AdminOrigin::successful_origin(), caller.clone(), rank));
+		assert_ok!(Pallet::<T, I>::add_member(T::AdminOrigin::successful_origin(), caller.clone()));
 		// Create a poll
-		let class = T::Polls::classes().into_iter().next().expect("Must always be at least one class");
-		let poll = T::Polls::create_ongoing(class).expect("Must always be able to create a poll");
+		let class = 0;
+		let poll = T::Polls::create_ongoing(class).expect("Must always be able to create a poll for rank 0");
 
 		// Vote once.
 		assert_ok!(Pallet::<T, I>::vote(SystemOrigin::Signed(caller.clone()).into(), poll, true));
 	}: _(SystemOrigin::Signed(caller.clone()), poll, false)
 	verify {
-		let tally = Tally::from_parts(0, 1);
+		let tally = Tally::from_parts(0, 0, 1);
 		let ev = Event::Voted { who: caller, poll, vote: VoteRecord::Nay(1), tally };
 		assert_last_event::<T, I>(ev.into());
 	}
 
 	cleanup_poll {
-		let rank = 1;
 		let n in 1 .. 100;
 
 		// Create a poll
-		let class = T::Polls::classes().into_iter().next().expect("Must always be at least one class");
+		let class = 0;
 		let poll = T::Polls::create_ongoing(class).expect("Must always be able to create a poll");
 
 		// Vote in the poll by each of `n` members
 		for i in 0..n {
-			let who = make_member::<T, I>(rank);
+			let who = make_member::<T, I>(0);
 			assert_ok!(Pallet::<T, I>::vote(SystemOrigin::Signed(who).into(), poll, true));
 		}
 

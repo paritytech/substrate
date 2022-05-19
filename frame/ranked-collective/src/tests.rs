@@ -79,7 +79,7 @@ impl frame_system::Config for Test {
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum TestPollState {
-	Ongoing(TallyOf<Test>, u8),
+	Ongoing(TallyOf<Test>, Rank),
 	Completed(u64, bool),
 }
 use TestPollState::*;
@@ -88,7 +88,7 @@ parameter_types! {
 	pub static Polls: BTreeMap<u8, TestPollState> = vec![
 		(1, Completed(1, true)),
 		(2, Completed(2, false)),
-		(3, Ongoing(Tally::from_parts(0, 0), 0)),
+		(3, Ongoing(Tally::from_parts(0, 0, 0), 1)),
 	].into_iter().collect();
 }
 
@@ -97,8 +97,8 @@ impl Polling<TallyOf<Test>> for TestPolls {
 	type Index = u8;
 	type Votes = Votes;
 	type Moment = u64;
-	type Class = u8;
-	fn classes() -> Vec<u8> {
+	type Class = Rank;
+	fn classes() -> Vec<Self::Class> {
 		vec![0, 1, 2]
 	}
 	fn as_ongoing(index: u8) -> Option<(TallyOf<Test>, Self::Class)> {
@@ -147,7 +147,7 @@ impl Polling<TallyOf<Test>> for TestPolls {
 	fn create_ongoing(class: Self::Class) -> Result<Self::Index, ()> {
 		let mut polls = Polls::get();
 		let i = polls.keys().rev().next().map_or(0, |x| x + 1);
-		polls.insert(i, Ongoing(Tally::default(), class));
+		polls.insert(i, Ongoing(Tally::new(class), class));
 		Polls::set(polls);
 		Ok(i)
 	}
@@ -184,12 +184,8 @@ fn next_block() {
 	System::set_block_number(System::block_number() + 1);
 }
 
-fn member_count() -> MemberIndex {
-	MemberCount::<Test>::get().0
-}
-
-fn max_turnout() -> Votes {
-	MemberCount::<Test>::get().1
+fn member_count(r: Rank) -> MemberIndex {
+	MemberCount::<Test>::get(r)
 }
 
 #[allow(dead_code)]
@@ -220,63 +216,128 @@ fn completed_poll_should_panic() {
 #[test]
 fn basic_stuff() {
 	new_test_ext().execute_with(|| {
-		assert_eq!(tally(3), Tally::from_parts(0, 0));
+		assert_eq!(tally(3), Tally::from_parts(0, 0, 0));
+	});
+}
+
+
+#[test]
+fn member_lifecycle_works() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Club::add_member(Origin::root(), 1));
+		assert_ok!(Club::promote(Origin::root(), 1));
+		assert_ok!(Club::demote(Origin::root(), 1));
+		assert_ok!(Club::remove_member(Origin::root(), 1));
+		assert_eq!(member_count(0), 0);
+		assert_eq!(member_count(1), 0);
 	});
 }
 
 #[test]
-fn membership_works() {
+fn add_remove_works() {
 	new_test_ext().execute_with(|| {
-		assert_noop!(Club::add_member(Origin::signed(1), 1, 1), DispatchError::BadOrigin);
-		assert_ok!(Club::add_member(Origin::root(), 1, 1));
-		assert_eq!(member_count(), 1);
-		assert_eq!(max_turnout(), 1);
+		assert_noop!(Club::add_member(Origin::signed(1), 1), DispatchError::BadOrigin);
+		assert_ok!(Club::add_member(Origin::root(), 1));
+		assert_eq!(member_count(0), 1);
 
-		assert_ok!(Club::add_member(Origin::root(), 2, 4));
-		assert_eq!(member_count(), 2);
-		assert_eq!(max_turnout(), 11);
+		assert_ok!(Club::remove_member(Origin::root(), 1));
+		assert_eq!(member_count(0), 0);
 
-		assert_ok!(Club::set_member_rank(Origin::root(), 1, 4));
-		assert_eq!(member_count(), 2);
-		assert_eq!(max_turnout(), 20);
+		assert_ok!(Club::add_member(Origin::root(), 1));
+		assert_eq!(member_count(0), 1);
+
+		assert_ok!(Club::add_member(Origin::root(), 2));
+		assert_eq!(member_count(0), 2);
+
+		assert_ok!(Club::add_member(Origin::root(), 3));
+		assert_eq!(member_count(0), 3);
+
+		assert_ok!(Club::remove_member(Origin::root(), 3));
+		assert_eq!(member_count(0), 2);
+
+		assert_ok!(Club::remove_member(Origin::root(), 1));
+		assert_eq!(member_count(0), 1);
+
+		assert_ok!(Club::remove_member(Origin::root(), 2));
+		assert_eq!(member_count(0), 0);
+	});
+}
+
+#[test]
+fn promote_demote_works() {
+	new_test_ext().execute_with(|| {
+		assert_noop!(Club::add_member(Origin::signed(1), 1), DispatchError::BadOrigin);
+		assert_ok!(Club::add_member(Origin::root(), 1));
+		assert_eq!(member_count(0), 1);
+		assert_eq!(member_count(1), 0);
+
+		assert_ok!(Club::add_member(Origin::root(), 2));
+		assert_eq!(member_count(0), 2);
+		assert_eq!(member_count(1), 0);
+
+		assert_ok!(Club::promote(Origin::root(), 1));
+		assert_eq!(member_count(0), 2);
+		assert_eq!(member_count(1), 1);
+
+		assert_ok!(Club::promote(Origin::root(), 2));
+		assert_eq!(member_count(0), 2);
+		assert_eq!(member_count(1), 2);
+
+		assert_ok!(Club::demote(Origin::root(), 1));
+		assert_eq!(member_count(0), 2);
+		assert_eq!(member_count(1), 1);
 
 		assert_noop!(Club::remove_member(Origin::signed(1), 1), DispatchError::BadOrigin);
+		assert_noop!(Club::remove_member(Origin::root(), 2), Error::<Test>::RankTooHigh);
 		assert_ok!(Club::remove_member(Origin::root(), 1));
-		assert_eq!(member_count(), 1);
-		assert_eq!(max_turnout(), 10);
+		assert_eq!(member_count(0), 1);
+		assert_eq!(member_count(1), 1);
 	});
 }
 
 #[test]
 fn voting_works() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Club::add_member(Origin::root(), 1, 1));
-		assert_ok!(Club::add_member(Origin::root(), 2, 2));
-		assert_ok!(Club::add_member(Origin::root(), 3, 3));
+		assert_ok!(Club::add_member(Origin::root(), 0));
+		assert_ok!(Club::add_member(Origin::root(), 1));
+		assert_ok!(Club::promote(Origin::root(), 1));
+		assert_ok!(Club::add_member(Origin::root(), 2));
+		assert_ok!(Club::promote(Origin::root(), 2));
+		assert_ok!(Club::promote(Origin::root(), 2));
+		assert_ok!(Club::add_member(Origin::root(), 3));
+		assert_ok!(Club::promote(Origin::root(), 3));
+		assert_ok!(Club::promote(Origin::root(), 3));
+		assert_ok!(Club::promote(Origin::root(), 3));
+
+		assert_noop!(Club::vote(Origin::signed(0), 3, true), Error::<Test>::RankTooLow);
+		assert_eq!(tally(3), Tally::from_parts(0, 0, 0));
 
 		assert_ok!(Club::vote(Origin::signed(1), 3, true));
-		assert_eq!(tally(3), Tally::from_parts(1, 0));
+		assert_eq!(tally(3), Tally::from_parts(1, 1, 0));
 		assert_ok!(Club::vote(Origin::signed(1), 3, false));
-		assert_eq!(tally(3), Tally::from_parts(0, 1));
+		assert_eq!(tally(3), Tally::from_parts(0, 0, 1));
 
 		assert_ok!(Club::vote(Origin::signed(2), 3, true));
-		assert_eq!(tally(3), Tally::from_parts(3, 1));
+		assert_eq!(tally(3), Tally::from_parts(1, 3, 1));
 		assert_ok!(Club::vote(Origin::signed(2), 3, false));
-		assert_eq!(tally(3), Tally::from_parts(0, 4));
+		assert_eq!(tally(3), Tally::from_parts(0, 0, 4));
 
 		assert_ok!(Club::vote(Origin::signed(3), 3, true));
-		assert_eq!(tally(3), Tally::from_parts(6, 4));
+		assert_eq!(tally(3), Tally::from_parts(1, 6, 4));
 		assert_ok!(Club::vote(Origin::signed(3), 3, false));
-		assert_eq!(tally(3), Tally::from_parts(0, 10));
+		assert_eq!(tally(3), Tally::from_parts(0, 0, 10));
 	});
 }
 
 #[test]
 fn cleanup_works() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Club::add_member(Origin::root(), 1, 1));
-		assert_ok!(Club::add_member(Origin::root(), 2, 2));
-		assert_ok!(Club::add_member(Origin::root(), 3, 3));
+		assert_ok!(Club::add_member(Origin::root(), 1));
+		assert_ok!(Club::promote(Origin::root(), 1));
+		assert_ok!(Club::add_member(Origin::root(), 2));
+		assert_ok!(Club::promote(Origin::root(), 2));
+		assert_ok!(Club::add_member(Origin::root(), 3));
+		assert_ok!(Club::promote(Origin::root(), 3));
 
 		assert_ok!(Club::vote(Origin::signed(1), 3, true));
 		assert_ok!(Club::vote(Origin::signed(2), 3, false));

@@ -54,9 +54,9 @@ use frame_support::{
 	codec::{Decode, Encode, MaxEncodedLen},
 	dispatch::{DispatchError, DispatchResultWithPostInfo},
 	ensure,
-	traits::{EnsureOrigin, Get, PollStatus, Polling, VoteTally},
+	traits::{EnsureOrigin, PollStatus, Polling, VoteTally},
 	weights::PostDispatchInfo,
-	CloneNoBound, DefaultNoBound, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
+	CloneNoBound, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
 };
 
 #[cfg(test)]
@@ -81,7 +81,6 @@ pub type Votes = u32;
 /// Aggregated votes for an ongoing poll.
 #[derive(
 	CloneNoBound,
-	DefaultNoBound,
 	PartialEqNoBound,
 	EqNoBound,
 	RuntimeDebugNoBound,
@@ -91,45 +90,62 @@ pub type Votes = u32;
 	MaxEncodedLen,
 )]
 #[scale_info(skip_type_params(M))]
-pub struct Tally<M: Get<Votes>> {
+pub struct Tally<M: GetMaxVoters> {
+	bare_ayes: MemberIndex,
 	ayes: Votes,
 	nays: Votes,
 	dummy: PhantomData<M>,
 }
 
-impl<M: Get<Votes>> Tally<M> {
-	fn from_parts(ayes: Votes, nays: Votes) -> Self {
-		Tally { ayes, nays, dummy: PhantomData }
+impl<M: GetMaxVoters> Tally<M> {
+	fn from_parts(bare_ayes: MemberIndex, ayes: Votes, nays: Votes) -> Self {
+		Tally { bare_ayes, ayes, nays, dummy: PhantomData }
 	}
 }
+
+// Use (non-rank-weighted) ayes for calculating support.
+// Allow only promotion/demotion by one rank only.
+// Allow removal of member with rank zero only.
+// This keeps everything O(1) while still allowing arbitrary number of ranks.
+
+// All functions of VoteTally now include the class as a param.
+// TODO: ** BEFORE COMMIT ** split and move into gg2t branch.
 
 pub type TallyOf<T, I = ()> = Tally<Pallet<T, I>>;
 pub type PollIndexOf<T, I = ()> = <<T as Config<I>>::Polls as Polling<TallyOf<T, I>>>::Index;
 
-impl<M: Get<Votes>> VoteTally<Votes> for Tally<M> {
-	fn ayes(&self) -> Votes {
-		self.ayes
+impl<M: GetMaxVoters> VoteTally<Votes, Rank> for Tally<M> {
+	fn new(_: Rank) -> Self {
+		Self { bare_ayes: 0, ayes: 0, nays: 0, dummy: PhantomData }
 	}
-	fn support(&self) -> Perbill {
-		Perbill::from_rational(self.ayes, M::get())
+	fn ayes(&self, _: Rank) -> Votes {
+		self.bare_ayes
 	}
-	fn approval(&self) -> Perbill {
+	fn support(&self, class: Rank) -> Perbill {
+		Perbill::from_rational(self.bare_ayes, M::get_max_voters(class))
+	}
+	fn approval(&self, _: Rank) -> Perbill {
 		Perbill::from_rational(self.ayes, 1.max(self.ayes + self.nays))
 	}
 	#[cfg(feature = "runtime-benchmarks")]
-	fn unanimity() -> Self {
-		Self { ayes: M::get(), nays: 0, dummy: PhantomData }
+	fn unanimity(class: Rank) -> Self {
+		Self {
+			bare_ayes: M::get_max_voters(class),
+			ayes: M::get_max_voters(class),
+			nays: 0,
+			dummy: PhantomData,
+		}
 	}
 	#[cfg(feature = "runtime-benchmarks")]
-	fn rejection() -> Self {
-		Self { ayes: 0, nays: M::get(), dummy: PhantomData }
+	fn rejection(class: Rank) -> Self {
+		Self { bare_ayes: 0, ayes: 0, nays: M::get_max_voters(class), dummy: PhantomData }
 	}
 	#[cfg(feature = "runtime-benchmarks")]
-	fn from_requirements(support: Perbill, approval: Perbill) -> Self {
-		let c = M::get();
+	fn from_requirements(support: Perbill, approval: Perbill, class: Rank) -> Self {
+		let c = M::get_max_voters(class);
 		let ayes = support * c;
 		let nays = ((ayes as u64) * 1_000_000_000u64 / approval.deconstruct() as u64) as u32 - ayes;
-		Self { ayes, nays, dummy: PhantomData }
+		Self { bare_ayes: ayes, ayes, nays, dummy: PhantomData }
 	}
 }
 
@@ -183,13 +199,14 @@ pub mod pallet {
 		type AdminOrigin: EnsureOrigin<Self::Origin>;
 
 		/// The polling system used for our voting.
-		type Polls: Polling<TallyOf<Self, I>, Votes = Votes, Moment = Self::BlockNumber>;
+		type Polls: Polling<TallyOf<Self, I>, Votes = Votes, Class = Rank, Moment = Self::BlockNumber>;
 	}
 
-	/// The number of members in the collective.
+	/// The number of members in the collective who have at least the rank according to the index
+	/// of the vec.
 	#[pallet::storage]
 	pub type MemberCount<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, (MemberIndex, Votes), ValueQuery>;
+		StorageMap<_, Twox64Concat, Rank, MemberIndex, ValueQuery>;
 
 	/// The current members of the collective.
 	#[pallet::storage]
@@ -217,7 +234,7 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
 		/// A member has been added.
-		MemberAdded { who: T::AccountId, rank: Rank },
+		MemberAdded { who: T::AccountId },
 		/// A member's rank has been changed.
 		RankChanged { who: T::AccountId, rank: Rank },
 		/// A member has been removed.
@@ -241,6 +258,11 @@ pub mod pallet {
 		NoneRemaining,
 		/// Unexpected error in state.
 		Corruption,
+		/// The member's rank is too low to vote.
+		RankTooLow,
+		/// The member's rank is too high to be removed.
+		RankTooHigh,
+
 	}
 
 	#[pallet::call]
@@ -253,47 +275,58 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::add_member())]
-		pub fn add_member(origin: OriginFor<T>, who: T::AccountId, rank: Rank) -> DispatchResult {
+		pub fn add_member(origin: OriginFor<T>, who: T::AccountId) -> DispatchResult {
 			T::AdminOrigin::ensure_origin(origin)?;
 			ensure!(!Members::<T, I>::contains_key(&who), Error::<T, I>::AlreadyMember);
-			let (index, mut votes) = MemberCount::<T, I>::get();
+			let index = MemberCount::<T, I>::get(0);
 			let count = index.checked_add(1).ok_or(Overflow)?;
-			votes = votes.checked_add(Self::rank_to_votes(rank)).ok_or(Overflow)?;
 
-			Members::<T, I>::insert(&who, MemberRecord { rank, index });
+			Members::<T, I>::insert(&who, MemberRecord { rank: 0, index });
 			MemberByIndex::<T, I>::insert(index, &who);
-			MemberCount::<T, I>::put((count, votes));
-			Self::deposit_event(Event::MemberAdded { who, rank });
+			MemberCount::<T, I>::insert(0, count);
+			Self::deposit_event(Event::MemberAdded { who });
 
 			Ok(())
 		}
 
-		/// Alter the rank of an existing member.
+		/// Increment the rank of an existing member by one.
 		///
 		/// - `origin`: Must be the `AdminOrigin`.
 		/// - `who`: Account of existing member.
-		/// - `rank`: The new rank to give the member.
 		///
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::set_member_rank())]
-		pub fn set_member_rank(
+		pub fn promote(
 			origin: OriginFor<T>,
 			who: T::AccountId,
-			rank: Rank,
 		) -> DispatchResult {
 			T::AdminOrigin::ensure_origin(origin)?;
 			let mut record = Self::ensure_member(&who)?;
-			let (count, mut votes) = MemberCount::<T, I>::get();
-			votes = votes
-				.checked_sub(Self::rank_to_votes(record.rank))
-				.ok_or(Underflow)?
-				.checked_add(Self::rank_to_votes(rank))
-				.ok_or(Overflow)?;
-			record.rank = rank;
+			record.rank = record.rank.checked_add(1).ok_or(Overflow)?;
+			MemberCount::<T, I>::mutate(record.rank, |r| r.saturating_inc());
+			Members::<T, I>::insert(&who, &record);
+			Self::deposit_event(Event::RankChanged { who, rank: record.rank });
 
-			MemberCount::<T, I>::put((count, votes));
-			Members::<T, I>::insert(&who, record);
-			Self::deposit_event(Event::RankChanged { who, rank });
+			Ok(())
+		}
+
+		/// Decrement the rank of an existing member by one.
+		///
+		/// - `origin`: Must be the `AdminOrigin`.
+		/// - `who`: Account of existing member of rank greater than zero.
+		///
+		/// Weight: `O(1)`
+		#[pallet::weight(T::WeightInfo::set_member_rank())]
+		pub fn demote(
+			origin: OriginFor<T>,
+			who: T::AccountId,
+		) -> DispatchResult {
+			T::AdminOrigin::ensure_origin(origin)?;
+			let mut record = Self::ensure_member(&who)?;
+			record.rank = record.rank.checked_sub(1).ok_or(Underflow)?;
+			MemberCount::<T, I>::mutate(record.rank + 1, |r| r.saturating_dec());
+			Members::<T, I>::insert(&who, &record);
+			Self::deposit_event(Event::RankChanged { who, rank: record.rank });
 
 			Ok(())
 		}
@@ -308,13 +341,12 @@ pub mod pallet {
 		pub fn remove_member(origin: OriginFor<T>, who: T::AccountId) -> DispatchResult {
 			T::AdminOrigin::ensure_origin(origin)?;
 			let record = Self::ensure_member(&who)?;
-			let (count, votes) = MemberCount::<T, I>::get();
-			let count = count.checked_sub(1).ok_or(Underflow)?;
-			let votes = votes.checked_sub(Self::rank_to_votes(record.rank)).ok_or(Underflow)?;
+			ensure!(record.rank == 0, Error::<T, I>::RankTooHigh);
 
+			let last_index = MemberCount::<T, I>::get(0).saturating_sub(1);
 			let index = record.index;
-			if index != count {
-				let last = MemberByIndex::<T, I>::get(count).ok_or(Error::<T, I>::Corruption)?;
+			if index != last_index {
+				let last = MemberByIndex::<T, I>::get(last_index).ok_or(Error::<T, I>::Corruption)?;
 				Members::<T, I>::mutate(&last, |r| {
 					if let Some(ref mut r) = r {
 						r.index = index
@@ -322,9 +354,9 @@ pub mod pallet {
 				});
 				MemberByIndex::<T, I>::insert(index, &last);
 			}
-			MemberByIndex::<T, I>::remove(count);
+			MemberCount::<T, I>::insert(0, last_index);
+			MemberByIndex::<T, I>::remove(last_index);
 			Members::<T, I>::remove(&who);
-			MemberCount::<T, I>::put((count, votes));
 			Self::deposit_event(Event::MemberRemoved { who });
 
 			Ok(())
@@ -350,25 +382,31 @@ pub mod pallet {
 			let who = ensure_signed(origin)?;
 			let record = Self::ensure_member(&who)?;
 			use VoteRecord::*;
-			let votes = Self::rank_to_votes(record.rank);
-			let vote = VoteRecord::from((aye, votes));
 			let mut pays = Pays::Yes;
 
-			let tally = T::Polls::try_access_poll(poll, |mut status| -> Result<TallyOf<T, I>, DispatchError> {
+			let (tally, vote) = T::Polls::try_access_poll(poll, |mut status| -> Result<(TallyOf<T, I>, VoteRecord), DispatchError> {
 				match status {
 					PollStatus::None | PollStatus::Completed(..) => Err(Error::<T, I>::NotPolling)?,
-					PollStatus::Ongoing(ref mut tally, _) => {
+					PollStatus::Ongoing(ref mut tally, min_rank) => {
 						match Voting::<T, I>::get(&poll, &who) {
-							Some(Aye(votes)) => tally.ayes.saturating_reduce(votes),
+							Some(Aye(votes)) => {
+								tally.bare_ayes.saturating_dec();
+								tally.ayes.saturating_reduce(votes);
+							},
 							Some(Nay(votes)) => tally.nays.saturating_reduce(votes),
 							None => pays = Pays::No,
 						}
+						let votes = Self::rank_to_votes(record.rank, min_rank)?;
+						let vote = VoteRecord::from((aye, votes));
 						match aye {
-							true => tally.ayes.saturating_accrue(votes),
+							true => {
+								tally.bare_ayes.saturating_inc();
+								tally.ayes.saturating_accrue(votes);
+							},
 							false => tally.nays.saturating_accrue(votes),
 						}
 						Voting::<T, I>::insert(&poll, &who, &vote);
-						Ok(tally.clone())
+						Ok((tally.clone(), vote))
 					},
 				}
 			})?;
@@ -413,15 +451,19 @@ pub mod pallet {
 			Members::<T, I>::get(who).ok_or(Error::<T, I>::NotMember.into())
 		}
 
-		fn rank_to_votes(r: Rank) -> Votes {
-			let r = r as Votes;
-			r * (r + 1) / 2
+		fn rank_to_votes(rank: Rank, min: Rank) -> Result<Votes, DispatchError> {
+			let excess = rank.checked_sub(min).ok_or(Error::<T, I>::RankTooLow)?;
+			let v = (excess + 1) as Votes;
+			Ok(v * (v + 1) / 2)
 		}
 	}
 
-	impl<T: Config<I>, I: 'static> Get<Votes> for Pallet<T, I> {
-		fn get() -> Votes {
-			MemberCount::<T, I>::get().1
+	pub trait GetMaxVoters {
+		fn get_max_voters(r: Rank) -> MemberIndex;
+	}
+	impl<T: Config<I>, I: 'static> GetMaxVoters for Pallet<T, I> {
+		fn get_max_voters(r: Rank) -> MemberIndex {
+			MemberCount::<T, I>::get(r)
 		}
 	}
 }
