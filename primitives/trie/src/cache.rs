@@ -41,7 +41,7 @@ use nohash_hasher::{BuildNoHashHasher, IntMap, IntSet};
 use parking_lot::{Mutex, MutexGuard, RwLock, RwLockReadGuard};
 use std::{
 	collections::{hash_map::Entry, HashMap, HashSet},
-	hash::Hasher as _,
+	hash::{BuildHasher, Hasher as _},
 	mem,
 	sync::Arc,
 };
@@ -58,14 +58,23 @@ lazy_static::lazy_static! {
 /// The key is an `u64` that is expected to be unique.
 type NoHashingLruCache<T> = lru::LruCache<u64, T, BuildNoHashHasher<u64>>;
 
+/// Returns a hasher prepared to build the final value cache key.
+///
+/// To build the final hash the storage key still needs to be added to the hasher.
+/// If you are only interested in the full value cache key, you can directly use
+/// [`value_cache_get_key`].
+fn value_cache_partial_hash(storage_root: &impl AsRef<[u8]>) -> impl std::hash::Hasher + Clone {
+	let mut hasher = RANDOM_STATE.build_hasher();
+	hasher.write(storage_root.as_ref());
+	hasher
+}
+
 /// Get the key for the value cache.
 ///
 /// The key is build by hashing the actual storage `key` and the `storage_root`.
 fn value_cache_get_key(key: &[u8], storage_root: &impl AsRef<[u8]>) -> u64 {
-	use std::hash::BuildHasher;
-	let mut hasher = RANDOM_STATE.build_hasher();
+	let mut hasher = value_cache_partial_hash(storage_root);
 	hasher.write(key);
-	hasher.write(storage_root.as_ref());
 	hasher.finish()
 }
 
@@ -375,12 +384,21 @@ impl<'a, H: Hasher> TrieCache<'a, H> {
 		let cache = if let ValueCache::Fresh(cache) = self.value_cache { cache } else { return };
 
 		let mut value_cache = local.shared.value_cache.write();
-		cache
-			.into_iter()
-			.map(|(k, v)| (value_cache_get_key(&k, &storage_root), v))
-			.for_each(|(k, v)| {
-				value_cache.push(k, v);
-			});
+
+		if !cache.is_empty() {
+			let hasher = value_cache_partial_hash(&storage_root);
+
+			cache
+				.into_iter()
+				.map(|(k, v)| {
+					let mut hasher = hasher.clone();
+					hasher.write(&k);
+					(hasher.finish(), v)
+				})
+				.for_each(|(k, v)| {
+					value_cache.push(k, v);
+				});
+		}
 	}
 }
 
