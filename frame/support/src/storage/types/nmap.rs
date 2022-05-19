@@ -544,7 +544,7 @@ mod test {
 	use crate::{
 		hash::{StorageHasher as _, *},
 		metadata::{StorageEntryModifier, StorageHasher},
-		storage::types::{Key, ValueQuery},
+		storage::types::{Key, Key as NMapKey, ValueQuery},
 	};
 	use sp_io::{hashing::twox_128, TestExternalities};
 
