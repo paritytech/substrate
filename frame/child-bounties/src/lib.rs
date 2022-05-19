@@ -56,33 +56,33 @@ mod benchmarking;
 mod tests;
 pub mod weights;
 
-use sp_std::prelude::*;
-
-use frame_support::traits::{
-	Currency,
-	ExistenceRequirement::{AllowDeath, KeepAlive},
-	Get, OnUnbalanced, ReservableCurrency, WithdrawReasons,
+use codec::{Decode, Encode, MaxEncodedLen};
+use frame_support::{
+	dispatch::{DispatchError, DispatchResult},
+	traits::{
+		Currency,
+		ExistenceRequirement::{AllowDeath, KeepAlive},
+		Get, OnUnbalanced, ReservableCurrency, WithdrawReasons,
+	},
+	BoundedVec,
 };
-
-use sp_runtime::{
-	traits::{AccountIdConversion, BadOrigin, CheckedSub, Saturating, StaticLookup, Zero},
-	DispatchResult, RuntimeDebug,
-};
-
-use frame_support::pallet_prelude::*;
-use frame_system::pallet_prelude::*;
 use pallet_bounties::BountyStatus;
 use scale_info::TypeInfo;
-pub use weights::WeightInfo;
+use sp_runtime::{
+	traits::{AccountIdConversion, BadOrigin, CheckedSub, Saturating, StaticLookup, Zero},
+	RuntimeDebug,
+};
+use sp_std::prelude::*;
 
 pub use pallet::*;
+pub use weights::WeightInfo;
 
-type BalanceOf<T> = pallet_treasury::BalanceOf<T>;
-type BountiesError<T> = pallet_bounties::Error<T>;
+type BalanceOf<T, I = ()> = pallet_treasury::BalanceOf<T, I>;
+type BountiesError<T, I = ()> = pallet_bounties::Error<T, I>;
 type BountyIndex = pallet_bounties::BountyIndex;
 
 /// A child bounty proposal.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+#[derive(Clone, PartialEq, Eq, RuntimeDebug, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub struct ChildBounty<AccountId, Balance, BlockNumber> {
 	/// The parent of this child-bounty.
 	parent_bounty: BountyIndex,
@@ -97,7 +97,7 @@ pub struct ChildBounty<AccountId, Balance, BlockNumber> {
 }
 
 /// The status of a child-bounty.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+#[derive(Clone, PartialEq, Eq, RuntimeDebug, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub enum ChildBountyStatus<AccountId, BlockNumber> {
 	/// The child-bounty is added and waiting for curator assignment.
 	Added,
@@ -125,34 +125,35 @@ pub enum ChildBountyStatus<AccountId, BlockNumber> {
 
 #[frame_support::pallet]
 pub mod pallet {
-
 	use super::*;
+	use frame_support::pallet_prelude::*;
+	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
-	pub struct Pallet<T>(_);
+	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	#[pallet::config]
-	pub trait Config:
-		frame_system::Config + pallet_treasury::Config + pallet_bounties::Config
+	pub trait Config<I: 'static = ()>:
+		frame_system::Config + pallet_treasury::Config<I> + pallet_bounties::Config<I>
 	{
+		/// The overarching event type.
+		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
+
 		/// Maximum number of child bounties that can be added to a parent bounty.
 		#[pallet::constant]
 		type MaxActiveChildBountyCount: Get<u32>;
 
 		/// Minimum value for a child-bounty.
 		#[pallet::constant]
-		type ChildBountyValueMinimum: Get<BalanceOf<Self>>;
-
-		/// The overarching event type.
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type ChildBountyValueMinimum: Get<BalanceOf<Self, I>>;
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::error]
-	pub enum Error<T> {
+	pub enum Error<T, I = ()> {
 		/// The parent bounty is not in active state.
 		ParentBountyNotActive,
 		/// The bounty balance is not enough to add new child-bounty.
@@ -163,7 +164,7 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum Event<T: Config> {
+	pub enum Event<T: Config<I>, I: 'static = ()> {
 		/// A child-bounty is added.
 		Added { index: BountyIndex, child_index: BountyIndex },
 		/// A child-bounty is awarded to a beneficiary.
@@ -172,7 +173,7 @@ pub mod pallet {
 		Claimed {
 			index: BountyIndex,
 			child_index: BountyIndex,
-			payout: BalanceOf<T>,
+			payout: BalanceOf<T, I>,
 			beneficiary: T::AccountId,
 		},
 		/// A child-bounty is cancelled.
@@ -182,41 +183,42 @@ pub mod pallet {
 	/// Number of total child bounties.
 	#[pallet::storage]
 	#[pallet::getter(fn child_bounty_count)]
-	pub type ChildBountyCount<T: Config> = StorageValue<_, BountyIndex, ValueQuery>;
+	pub type ChildBountyCount<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, BountyIndex, ValueQuery>;
 
 	/// Number of child bounties per parent bounty.
 	/// Map of parent bounty index to number of child bounties.
 	#[pallet::storage]
 	#[pallet::getter(fn parent_child_bounties)]
-	pub type ParentChildBounties<T: Config> =
+	pub type ParentChildBounties<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, BountyIndex, u32, ValueQuery>;
 
 	/// Child bounties that have been added.
 	#[pallet::storage]
 	#[pallet::getter(fn child_bounties)]
-	pub type ChildBounties<T: Config> = StorageDoubleMap<
+	pub type ChildBounties<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
 		_,
 		Twox64Concat,
 		BountyIndex,
 		Twox64Concat,
 		BountyIndex,
-		ChildBounty<T::AccountId, BalanceOf<T>, T::BlockNumber>,
+		ChildBounty<T::AccountId, BalanceOf<T, I>, T::BlockNumber>,
 	>;
 
 	/// The description of each child-bounty.
 	#[pallet::storage]
 	#[pallet::getter(fn child_bounty_descriptions)]
-	pub type ChildBountyDescriptions<T: Config> =
+	pub type ChildBountyDescriptions<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, BountyIndex, BoundedVec<u8, T::MaximumReasonLength>>;
 
 	/// The cumulative child-bounty curator fee for each parent bounty.
 	#[pallet::storage]
 	#[pallet::getter(fn children_curator_fees)]
-	pub type ChildrenCuratorFees<T: Config> =
-		StorageMap<_, Twox64Concat, BountyIndex, BalanceOf<T>, ValueQuery>;
+	pub type ChildrenCuratorFees<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, BountyIndex, BalanceOf<T, I>, ValueQuery>;
 
 	#[pallet::call]
-	impl<T: Config> Pallet<T> {
+	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Add a new child-bounty.
 		///
 		/// The dispatch origin for this call must be the curator of parent
@@ -236,37 +238,40 @@ pub mod pallet {
 		/// - `parent_bounty_id`: Index of parent bounty for which child-bounty is being added.
 		/// - `value`: Value for executing the proposal.
 		/// - `description`: Text description for the child-bounty.
-		#[pallet::weight(<T as Config>::WeightInfo::add_child_bounty(description.len() as u32))]
+		#[pallet::weight(<T as Config<I>>::WeightInfo::add_child_bounty(description.len() as u32))]
 		pub fn add_child_bounty(
 			origin: OriginFor<T>,
 			#[pallet::compact] parent_bounty_id: BountyIndex,
-			#[pallet::compact] value: BalanceOf<T>,
+			#[pallet::compact] value: BalanceOf<T, I>,
 			description: Vec<u8>,
 		) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
 
 			// Verify the arguments.
 			let bounded_description =
-				description.try_into().map_err(|_| BountiesError::<T>::ReasonTooBig)?;
-			ensure!(value >= T::ChildBountyValueMinimum::get(), BountiesError::<T>::InvalidValue);
+				description.try_into().map_err(|_| BountiesError::<T, I>::ReasonTooBig)?;
+			ensure!(
+				value >= T::ChildBountyValueMinimum::get(),
+				BountiesError::<T, I>::InvalidValue
+			);
 			ensure!(
 				Self::parent_child_bounties(parent_bounty_id) <=
 					T::MaxActiveChildBountyCount::get() as u32,
-				Error::<T>::TooManyChildBounties,
+				Error::<T, I>::TooManyChildBounties,
 			);
 
 			let (curator, _) = Self::ensure_bounty_active(parent_bounty_id)?;
-			ensure!(signer == curator, BountiesError::<T>::RequireCurator);
+			ensure!(signer == curator, BountiesError::<T, I>::RequireCurator);
 
 			// Read parent bounty account info.
 			let parent_bounty_account =
-				pallet_bounties::Pallet::<T>::bounty_account_id(parent_bounty_id);
+				pallet_bounties::Pallet::<T, I>::bounty_account_id(parent_bounty_id);
 
 			// Ensure parent bounty has enough balance after adding child-bounty.
 			let bounty_balance = T::Currency::free_balance(&parent_bounty_account);
 			let new_bounty_balance = bounty_balance
 				.checked_sub(&value)
-				.ok_or(Error::<T>::InsufficientBountyBalance)?;
+				.ok_or(Error::<T, I>::InsufficientBountyBalance)?;
 			T::Currency::ensure_can_withdraw(
 				&parent_bounty_account,
 				value,
@@ -282,8 +287,8 @@ pub mod pallet {
 			T::Currency::transfer(&parent_bounty_account, &child_bounty_account, value, KeepAlive)?;
 
 			// Increment the active child-bounty count.
-			<ParentChildBounties<T>>::mutate(parent_bounty_id, |count| count.saturating_inc());
-			<ChildBountyCount<T>>::put(child_bounty_id.saturating_add(1));
+			<ParentChildBounties<T, I>>::mutate(parent_bounty_id, |count| count.saturating_inc());
+			<ChildBountyCount<T, I>>::put(child_bounty_id.saturating_add(1));
 
 			// Create child-bounty instance.
 			Self::create_child_bounty(
@@ -310,41 +315,41 @@ pub mod pallet {
 		/// - `child_bounty_id`: Index of child bounty.
 		/// - `curator`: Address of child-bounty curator.
 		/// - `fee`: payment fee to child-bounty curator for execution.
-		#[pallet::weight(<T as Config>::WeightInfo::propose_curator())]
+		#[pallet::weight(<T as Config<I>>::WeightInfo::propose_curator())]
 		pub fn propose_curator(
 			origin: OriginFor<T>,
 			#[pallet::compact] parent_bounty_id: BountyIndex,
 			#[pallet::compact] child_bounty_id: BountyIndex,
 			curator: <T::Lookup as StaticLookup>::Source,
-			#[pallet::compact] fee: BalanceOf<T>,
+			#[pallet::compact] fee: BalanceOf<T, I>,
 		) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
 			let child_bounty_curator = T::Lookup::lookup(curator)?;
 
 			let (curator, _) = Self::ensure_bounty_active(parent_bounty_id)?;
-			ensure!(signer == curator, BountiesError::<T>::RequireCurator);
+			ensure!(signer == curator, BountiesError::<T, I>::RequireCurator);
 
 			// Mutate the child-bounty instance.
-			ChildBounties::<T>::try_mutate_exists(
+			ChildBounties::<T, I>::try_mutate_exists(
 				parent_bounty_id,
 				child_bounty_id,
 				|maybe_child_bounty| -> DispatchResult {
 					let mut child_bounty =
-						maybe_child_bounty.as_mut().ok_or(BountiesError::<T>::InvalidIndex)?;
+						maybe_child_bounty.as_mut().ok_or(BountiesError::<T, I>::InvalidIndex)?;
 
 					// Ensure child-bounty is in expected state.
 					ensure!(
 						child_bounty.status == ChildBountyStatus::Added,
-						BountiesError::<T>::UnexpectedStatus,
+						BountiesError::<T, I>::UnexpectedStatus,
 					);
 
 					// Ensure child-bounty curator fee is less than child-bounty value.
-					ensure!(fee < child_bounty.value, BountiesError::<T>::InvalidFee);
+					ensure!(fee < child_bounty.value, BountiesError::<T, I>::InvalidFee);
 
 					// Add child-bounty curator fee to the cumulative sum. To be
 					// subtracted from the parent bounty curator when claiming
 					// bounty.
-					ChildrenCuratorFees::<T>::mutate(parent_bounty_id, |value| {
+					ChildrenCuratorFees::<T, I>::mutate(parent_bounty_id, |value| {
 						*value = value.saturating_add(fee)
 					});
 
@@ -379,7 +384,7 @@ pub mod pallet {
 		///
 		/// - `parent_bounty_id`: Index of parent bounty.
 		/// - `child_bounty_id`: Index of child bounty.
-		#[pallet::weight(<T as Config>::WeightInfo::accept_curator())]
+		#[pallet::weight(<T as Config<I>>::WeightInfo::accept_curator())]
 		pub fn accept_curator(
 			origin: OriginFor<T>,
 			#[pallet::compact] parent_bounty_id: BountyIndex,
@@ -389,17 +394,17 @@ pub mod pallet {
 
 			let (parent_curator, _) = Self::ensure_bounty_active(parent_bounty_id)?;
 			// Mutate child-bounty.
-			ChildBounties::<T>::try_mutate_exists(
+			ChildBounties::<T, I>::try_mutate_exists(
 				parent_bounty_id,
 				child_bounty_id,
 				|maybe_child_bounty| -> DispatchResult {
 					let mut child_bounty =
-						maybe_child_bounty.as_mut().ok_or(BountiesError::<T>::InvalidIndex)?;
+						maybe_child_bounty.as_mut().ok_or(BountiesError::<T, I>::InvalidIndex)?;
 
 					// Ensure child-bounty is in expected state.
 					if let ChildBountyStatus::CuratorProposed { ref curator } = child_bounty.status
 					{
-						ensure!(signer == *curator, BountiesError::<T>::RequireCurator);
+						ensure!(signer == *curator, BountiesError::<T, I>::RequireCurator);
 
 						// Reserve child-bounty curator deposit.
 						let deposit = Self::calculate_curator_deposit(
@@ -415,7 +420,7 @@ pub mod pallet {
 							ChildBountyStatus::Active { curator: curator.clone() };
 						Ok(())
 					} else {
-						Err(BountiesError::<T>::UnexpectedStatus.into())
+						Err(BountiesError::<T, I>::UnexpectedStatus.into())
 					}
 				},
 			)
@@ -455,7 +460,7 @@ pub mod pallet {
 		///
 		/// - `parent_bounty_id`: Index of parent bounty.
 		/// - `child_bounty_id`: Index of child bounty.
-		#[pallet::weight(<T as Config>::WeightInfo::unassign_curator())]
+		#[pallet::weight(<T as Config<I>>::WeightInfo::unassign_curator())]
 		pub fn unassign_curator(
 			origin: OriginFor<T>,
 			#[pallet::compact] parent_bounty_id: BountyIndex,
@@ -465,24 +470,25 @@ pub mod pallet {
 				.map(Some)
 				.or_else(|_| T::RejectOrigin::ensure_origin(origin).map(|_| None))?;
 
-			ChildBounties::<T>::try_mutate_exists(
+			ChildBounties::<T, I>::try_mutate_exists(
 				parent_bounty_id,
 				child_bounty_id,
 				|maybe_child_bounty| -> DispatchResult {
 					let mut child_bounty =
-						maybe_child_bounty.as_mut().ok_or(BountiesError::<T>::InvalidIndex)?;
+						maybe_child_bounty.as_mut().ok_or(BountiesError::<T, I>::InvalidIndex)?;
 
-					let slash_curator = |curator: &T::AccountId,
-					                     curator_deposit: &mut BalanceOf<T>| {
-						let imbalance = T::Currency::slash_reserved(curator, *curator_deposit).0;
-						T::OnSlash::on_unbalanced(imbalance);
-						*curator_deposit = Zero::zero();
-					};
+					let slash_curator =
+						|curator: &T::AccountId, curator_deposit: &mut BalanceOf<T, I>| {
+							let imbalance =
+								T::Currency::slash_reserved(curator, *curator_deposit).0;
+							T::OnSlash::on_unbalanced(imbalance);
+							*curator_deposit = Zero::zero();
+						};
 
 					match child_bounty.status {
 						ChildBountyStatus::Added => {
 							// No curator to unassign at this point.
-							return Err(BountiesError::<T>::UnexpectedStatus.into())
+							return Err(BountiesError::<T, I>::UnexpectedStatus.into())
 						},
 						ChildBountyStatus::CuratorProposed { ref curator } => {
 							// A child-bounty curator has been proposed, but not accepted yet.
@@ -530,7 +536,7 @@ pub mod pallet {
 									// Continue to change bounty status below.
 									} else {
 										// Curator has more time to give an update.
-										return Err(BountiesError::<T>::Premature.into())
+										return Err(BountiesError::<T, I>::Premature.into())
 									}
 								},
 							}
@@ -569,7 +575,7 @@ pub mod pallet {
 		/// - `parent_bounty_id`: Index of parent bounty.
 		/// - `child_bounty_id`: Index of child bounty.
 		/// - `beneficiary`: Beneficiary account.
-		#[pallet::weight(<T as Config>::WeightInfo::award_child_bounty())]
+		#[pallet::weight(<T as Config<I>>::WeightInfo::award_child_bounty())]
 		pub fn award_child_bounty(
 			origin: OriginFor<T>,
 			#[pallet::compact] parent_bounty_id: BountyIndex,
@@ -582,18 +588,18 @@ pub mod pallet {
 			// Ensure parent bounty exists, and is active.
 			let (parent_curator, _) = Self::ensure_bounty_active(parent_bounty_id)?;
 
-			ChildBounties::<T>::try_mutate_exists(
+			ChildBounties::<T, I>::try_mutate_exists(
 				parent_bounty_id,
 				child_bounty_id,
 				|maybe_child_bounty| -> DispatchResult {
 					let mut child_bounty =
-						maybe_child_bounty.as_mut().ok_or(BountiesError::<T>::InvalidIndex)?;
+						maybe_child_bounty.as_mut().ok_or(BountiesError::<T, I>::InvalidIndex)?;
 
 					// Ensure child-bounty is in active state.
 					if let ChildBountyStatus::Active { ref curator } = child_bounty.status {
 						ensure!(
 							signer == *curator || signer == parent_curator,
-							BountiesError::<T>::RequireCurator,
+							BountiesError::<T, I>::RequireCurator,
 						);
 						// Move the child-bounty state to pending payout.
 						child_bounty.status = ChildBountyStatus::PendingPayout {
@@ -604,13 +610,13 @@ pub mod pallet {
 						};
 						Ok(())
 					} else {
-						Err(BountiesError::<T>::UnexpectedStatus.into())
+						Err(BountiesError::<T, I>::UnexpectedStatus.into())
 					}
 				},
 			)?;
 
 			// Trigger the event Awarded.
-			Self::deposit_event(Event::<T>::Awarded {
+			Self::deposit_event(Event::<T, I>::Awarded {
 				index: parent_bounty_id,
 				child_index: child_bounty_id,
 				beneficiary,
@@ -635,7 +641,7 @@ pub mod pallet {
 		///
 		/// - `parent_bounty_id`: Index of parent bounty.
 		/// - `child_bounty_id`: Index of child bounty.
-		#[pallet::weight(<T as Config>::WeightInfo::claim_child_bounty())]
+		#[pallet::weight(<T as Config<I>>::WeightInfo::claim_child_bounty())]
 		pub fn claim_child_bounty(
 			origin: OriginFor<T>,
 			#[pallet::compact] parent_bounty_id: BountyIndex,
@@ -644,12 +650,12 @@ pub mod pallet {
 			let _ = ensure_signed(origin)?;
 
 			// Ensure child-bounty is in expected state.
-			ChildBounties::<T>::try_mutate_exists(
+			ChildBounties::<T, I>::try_mutate_exists(
 				parent_bounty_id,
 				child_bounty_id,
 				|maybe_child_bounty| -> DispatchResult {
 					let child_bounty =
-						maybe_child_bounty.as_mut().ok_or(BountiesError::<T>::InvalidIndex)?;
+						maybe_child_bounty.as_mut().ok_or(BountiesError::<T, I>::InvalidIndex)?;
 
 					if let ChildBountyStatus::PendingPayout {
 						ref curator,
@@ -661,7 +667,7 @@ pub mod pallet {
 						// claim.
 						ensure!(
 							frame_system::Pallet::<T>::block_number() >= *unlock_at,
-							BountiesError::<T>::Premature,
+							BountiesError::<T, I>::Premature,
 						);
 
 						// Make curator fee payment.
@@ -696,7 +702,7 @@ pub mod pallet {
 						debug_assert!(payout_transfer_result.is_ok());
 
 						// Trigger the Claimed event.
-						Self::deposit_event(Event::<T>::Claimed {
+						Self::deposit_event(Event::<T, I>::Claimed {
 							index: parent_bounty_id,
 							child_index: child_bounty_id,
 							payout,
@@ -704,19 +710,19 @@ pub mod pallet {
 						});
 
 						// Update the active child-bounty tracking count.
-						<ParentChildBounties<T>>::mutate(parent_bounty_id, |count| {
+						<ParentChildBounties<T, I>>::mutate(parent_bounty_id, |count| {
 							count.saturating_dec()
 						});
 
 						// Remove the child-bounty description.
-						<ChildBountyDescriptions<T>>::remove(child_bounty_id);
+						<ChildBountyDescriptions<T, I>>::remove(child_bounty_id);
 
 						// Remove the child-bounty instance from the state.
 						*maybe_child_bounty = None;
 
 						Ok(())
 					} else {
-						Err(BountiesError::<T>::UnexpectedStatus.into())
+						Err(BountiesError::<T, I>::UnexpectedStatus.into())
 					}
 				},
 			)
@@ -744,8 +750,8 @@ pub mod pallet {
 		///
 		/// - `parent_bounty_id`: Index of parent bounty.
 		/// - `child_bounty_id`: Index of child bounty.
-		#[pallet::weight(<T as Config>::WeightInfo::close_child_bounty_added()
-			.max(<T as Config>::WeightInfo::close_child_bounty_active()))]
+		#[pallet::weight(<T as Config<I>>::WeightInfo::close_child_bounty_added()
+			.max(<T as Config<I>>::WeightInfo::close_child_bounty_active()))]
 		pub fn close_child_bounty(
 			origin: OriginFor<T>,
 			#[pallet::compact] parent_bounty_id: BountyIndex,
@@ -766,19 +772,19 @@ pub mod pallet {
 	}
 }
 
-impl<T: Config> Pallet<T> {
+impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	// This function will calculate the deposit of a curator.
 	fn calculate_curator_deposit(
 		parent_curator: &T::AccountId,
 		child_curator: &T::AccountId,
-		bounty_fee: &BalanceOf<T>,
-	) -> BalanceOf<T> {
+		bounty_fee: &BalanceOf<T, I>,
+	) -> BalanceOf<T, I> {
 		if parent_curator == child_curator {
 			return Zero::zero()
 		}
 
 		// We just use the same logic from the parent bounties pallet.
-		pallet_bounties::Pallet::<T>::calculate_curator_deposit(bounty_fee)
+		pallet_bounties::Pallet::<T, I>::calculate_curator_deposit(bounty_fee)
 	}
 
 	/// The account ID of a child-bounty account.
@@ -792,7 +798,7 @@ impl<T: Config> Pallet<T> {
 	fn create_child_bounty(
 		parent_bounty_id: BountyIndex,
 		child_bounty_id: BountyIndex,
-		child_bounty_value: BalanceOf<T>,
+		child_bounty_value: BalanceOf<T, I>,
 		description: BoundedVec<u8, T::MaximumReasonLength>,
 	) {
 		let child_bounty = ChildBounty {
@@ -802,20 +808,23 @@ impl<T: Config> Pallet<T> {
 			curator_deposit: 0u32.into(),
 			status: ChildBountyStatus::Added,
 		};
-		ChildBounties::<T>::insert(parent_bounty_id, child_bounty_id, &child_bounty);
-		ChildBountyDescriptions::<T>::insert(child_bounty_id, description);
-		Self::deposit_event(Event::Added { index: parent_bounty_id, child_index: child_bounty_id });
+		ChildBounties::<T, I>::insert(parent_bounty_id, child_bounty_id, &child_bounty);
+		ChildBountyDescriptions::<T, I>::insert(child_bounty_id, description);
+		Self::deposit_event(Event::<T, I>::Added {
+			index: parent_bounty_id,
+			child_index: child_bounty_id,
+		});
 	}
 
 	fn ensure_bounty_active(
 		bounty_id: BountyIndex,
 	) -> Result<(T::AccountId, T::BlockNumber), DispatchError> {
-		let parent_bounty = pallet_bounties::Pallet::<T>::bounties(bounty_id)
-			.ok_or(BountiesError::<T>::InvalidIndex)?;
+		let parent_bounty = pallet_bounties::Pallet::<T, I>::bounties(bounty_id)
+			.ok_or(BountiesError::<T, I>::InvalidIndex)?;
 		if let BountyStatus::Active { curator, update_due } = parent_bounty.get_status() {
 			Ok((curator, update_due))
 		} else {
-			Err(Error::<T>::ParentBountyNotActive.into())
+			Err(Error::<T, I>::ParentBountyNotActive.into())
 		}
 	}
 
@@ -823,12 +832,12 @@ impl<T: Config> Pallet<T> {
 		parent_bounty_id: BountyIndex,
 		child_bounty_id: BountyIndex,
 	) -> DispatchResult {
-		ChildBounties::<T>::try_mutate_exists(
+		ChildBounties::<T, I>::try_mutate_exists(
 			parent_bounty_id,
 			child_bounty_id,
 			|maybe_child_bounty| -> DispatchResult {
 				let child_bounty =
-					maybe_child_bounty.as_mut().ok_or(BountiesError::<T>::InvalidIndex)?;
+					maybe_child_bounty.as_mut().ok_or(BountiesError::<T, I>::InvalidIndex)?;
 
 				match &child_bounty.status {
 					ChildBountyStatus::Added | ChildBountyStatus::CuratorProposed { .. } => {
@@ -846,22 +855,22 @@ impl<T: Config> Pallet<T> {
 						// child-bounty, it should mean the child-bounty curator
 						// was acting maliciously. So first unassign the
 						// child-bounty curator, slashing their deposit.
-						return Err(BountiesError::<T>::PendingPayout.into())
+						return Err(BountiesError::<T, I>::PendingPayout.into())
 					},
 				}
 
 				// Revert the curator fee back to parent bounty curator &
 				// reduce the active child-bounty count.
-				ChildrenCuratorFees::<T>::mutate(parent_bounty_id, |value| {
+				ChildrenCuratorFees::<T, I>::mutate(parent_bounty_id, |value| {
 					*value = value.saturating_sub(child_bounty.fee)
 				});
-				<ParentChildBounties<T>>::mutate(parent_bounty_id, |count| {
+				<ParentChildBounties<T, I>>::mutate(parent_bounty_id, |count| {
 					*count = count.saturating_sub(1)
 				});
 
 				// Transfer fund from child-bounty to parent bounty.
 				let parent_bounty_account =
-					pallet_bounties::Pallet::<T>::bounty_account_id(parent_bounty_id);
+					pallet_bounties::Pallet::<T, I>::bounty_account_id(parent_bounty_id);
 				let child_bounty_account = Self::child_bounty_account_id(child_bounty_id);
 				let balance = T::Currency::free_balance(&child_bounty_account);
 				let transfer_result = T::Currency::transfer(
@@ -873,11 +882,11 @@ impl<T: Config> Pallet<T> {
 				debug_assert!(transfer_result.is_ok());
 
 				// Remove the child-bounty description.
-				<ChildBountyDescriptions<T>>::remove(child_bounty_id);
+				<ChildBountyDescriptions<T, I>>::remove(child_bounty_id);
 
 				*maybe_child_bounty = None;
 
-				Self::deposit_event(Event::<T>::Canceled {
+				Self::deposit_event(Event::<T, I>::Canceled {
 					index: parent_bounty_id,
 					child_index: child_bounty_id,
 				});
@@ -890,18 +899,20 @@ impl<T: Config> Pallet<T> {
 // Implement ChildBountyManager to connect with the bounties pallet. This is
 // where we pass the active child bounties and child curator fees to the parent
 // bounty.
-impl<T: Config> pallet_bounties::ChildBountyManager<BalanceOf<T>> for Pallet<T> {
+impl<T: Config<I>, I: 'static> pallet_bounties::ChildBountyManager<BalanceOf<T, I>>
+	for Pallet<T, I>
+{
 	fn child_bounties_count(
 		bounty_id: pallet_bounties::BountyIndex,
 	) -> pallet_bounties::BountyIndex {
 		Self::parent_child_bounties(bounty_id)
 	}
 
-	fn children_curator_fees(bounty_id: pallet_bounties::BountyIndex) -> BalanceOf<T> {
+	fn children_curator_fees(bounty_id: pallet_bounties::BountyIndex) -> BalanceOf<T, I> {
 		// This is asked for when the parent bounty is being claimed. No use of
 		// keeping it in state after that. Hence removing.
 		let children_fee_total = Self::children_curator_fees(bounty_id);
-		<ChildrenCuratorFees<T>>::remove(bounty_id);
+		<ChildrenCuratorFees<T, I>>::remove(bounty_id);
 		children_fee_total
 	}
 }
