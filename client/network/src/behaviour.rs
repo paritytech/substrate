@@ -66,9 +66,6 @@ use sc_utils::mpsc::TracingUnboundedSender;
 /// Command for the mixnet worker.
 /// TODO become a bit useless (just transaction import result).
 pub enum MixnetCommand {
-	/// New authority id from session grandpa session change.
-	/// TODO remove
-	AuthorityId(sp_finality_grandpa::AuthorityId, sp_core::crypto::CryptoTypePublicPair, MixPeerId),
 	/// Received transaction is invalid with a surb reply.
 	TransactionImportResult(mixnet::SurbsPayload, MixnetImportResult),
 }

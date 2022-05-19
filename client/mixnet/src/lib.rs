@@ -263,9 +263,7 @@ where
 			self.handle_new_authority(authority_set, session, info.finalized_number);
 			// TODO this need to run when genesis built: on block import 1 or 0
 		}
-		let mut delay_poll_auth = Delay::new(Duration::from_millis(DELAY_CHECK_AUTHORITY_MS));
 		let mut delay_finalized = Delay::new(Duration::from_secs(DELAY_NO_FINALISATION_S));
-		let delay_poll_auth = &mut delay_poll_auth;
 		let delay_finalized = &mut delay_finalized;
 		// TODO change in crate to use directly as a future..
 		loop {
@@ -331,10 +329,6 @@ where
 									debug!(target: "mixnet", "Mixnet, shutdown.");
 									return;
 								}
-							},
-							_ = delay_poll_auth.fuse() => {
-								self.fetch_auth_peer_id();
-								delay_poll_auth.reset(Duration::from_millis(DELAY_CHECK_AUTHORITY_MS)); // TODO tokio interval instead?
 							},
 							_ = delay_finalized.fuse() => {
 								self.state = State::Synching;
@@ -404,27 +398,6 @@ where
 
 	fn handle_command(&mut self, command: MixnetCommand) {
 		match command {
-			MixnetCommand::AuthorityId(authority_id, authority_discovery_id, peer_id) => {
-				if &peer_id == self.worker.local_id() {
-					self.authority_id = Some(authority_id.clone());
-					let topology = &mut self.worker.mixnet_mut().topology;
-					if topology.current_authorities2.contains_key(&authority_id) {
-						debug!(target: "mixnet", "Routing active.");
-						topology.routing = true;
-						topology.current_authorities2.insert(authority_id, Some(peer_id));
-					}
-				} else {
-					self.worker.mixnet_mut().topology.add_authority_peer_id(
-						authority_id,
-						authority_discovery_id,
-						peer_id,
-					);
-					debug!(target: "mixnet", "Removing limit for {:?}.", peer_id);
-					self.worker.change_peer_limit_window(&peer_id, None);
-
-					self.update_state(false);
-				}
-			},
 			MixnetCommand::TransactionImportResult(surb, result) => {
 				debug!(target: "mixnet", "Mixnet, received transaction import result.");
 				if let Err(e) = self.worker.mixnet_mut().register_surb(result.encode(), surb) {
@@ -440,11 +413,12 @@ where
 		let new_session = self.fetch_new_session_keys(at, session);
 		self.update_own_public_key_within_authority_set(&set);
 		let mut remove_limit = Vec::new();
-		let mut restore_limit = Vec::new();
+		let current_local_id = self.worker.local_id().clone();
+		let current_public_key = self.worker.public_key().clone();
 		let topology = &mut self.worker.mixnet_mut().topology;
 		debug!(target: "mixnet", "Change authorities {:?}", set);
 		let old_authority = std::mem::take(&mut topology.current_authorities2);
-		let old_authority2 = std::mem::take(&mut topology.authorities);
+		let mut old_authority2 = std::mem::take(&mut topology.authorities);
 		topology.routing_nodes.clear();
 		topology.unconnected_authorities.clear(); // TODO could keep for a few session
 										  // TODO also remove authorty disocvery query??
@@ -465,6 +439,7 @@ where
 				let public_key = if let Some(info) = old_authority2.remove(&peer_id) {
 					info.public_key
 				} else {
+					remove_limit.push(peer_id.clone());
 					let mut p = [0u8; 32];
 					p.copy_from_slice(auth.as_ref());
 					mixnet::public_from_ed25519(p)
@@ -473,7 +448,7 @@ where
 				if self.authority_id.as_ref() == Some(&auth) {
 					debug!(target: "mixnet", "In new authority set, routing.");
 					topology.routing = true;
-					if self.worker.local_id() != &peer_id || self.worker.public_key() != &public_key
+					if current_local_id != peer_id || current_public_key != public_key
 					{
 						unimplemented!(
 							"TODO restart node setting local id and public / private key"
@@ -482,7 +457,7 @@ where
 				}
 				topology
 					.authorities
-					.insert(peer_id, NodeInfo2 { authority_id: auth, public_key });
+					.insert(peer_id, NodeInfo2 { authority_id: auth.clone(), public_key });
 			} else {
 				error!(target: "mixnet", "Missing imonline key for authority {:?}, not adding it to topology.", auth);
 			}
@@ -546,23 +521,13 @@ where
 			}
 			topology.current_authorities2.insert(auth, auth_peer_id);
 
-			for (auth, peer) in old_authority.iter() {
-				if !topology.current_authorities.contains_key(&auth) {
-					if let Some(peer) = peer.clone() {
-						restore_limit.push(peer);
-					}
-				}
-			}
-			for (peer, _) in old_authority2.into_iter() {
-				restore_limit.push(peer);
-			}
 		}
 		self.update_state(false);
 		for peer in remove_limit.into_iter() {
 			debug!(target: "mixnet", "Remove limit for {:?}.", peer);
 			self.worker.change_peer_limit_window(&peer, None);
 		}
-		for peer in restore_limit.into_iter() {
+		for (peer, _) in old_authority2.into_iter() {
 			debug!(target: "mixnet", "Restore limit for {:?}.", peer);
 			self.worker.change_peer_limit_window(&peer, self.default_limit_config.clone());
 		}
@@ -617,25 +582,6 @@ where
 			},
 		};
 		debug!(target: "mixnet", "Fetched session keys {:?}, at {:?}", sessions, block_id);
-		self.worker.mixnet_mut().topology.sessions2 = sessions
-			.into_iter()
-			.flat_map(|(_, keys)| {
-				let mut grandpa = None;
-				let mut imonline = None;
-				for pair in keys {
-					if pair.0 == sp_application_crypto::key_types::GRANDPA {
-						grandpa = Some(pair.1);
-					} else if pair.0 == sp_application_crypto::key_types::IM_ONLINE {
-						imonline = Some(pair.1);
-					}
-				}
-				if let (Some(g), Some(a)) = (grandpa, imonline) {
-					Some((g, a))
-				} else {
-					None
-				}
-			})
-			.collect();
 		self.worker.mixnet_mut().topology.sessions3 = sessions
 			.into_iter()
 			.flat_map(|(_, keys)| {
@@ -677,44 +623,6 @@ where
 				return
 			}
 		}
-	}
-
-	fn fetch_auth_peer_id(&mut self) {
-		let mut to_fetch = Vec::new();
-		let mut nb_fetched = 0;
-		let t = &mut self.worker.mixnet_mut().topology;
-		for (auth, id) in t.current_authorities.iter() {
-			if id.is_none() {
-				if !self.authority_queries.iter().any(|a| &a.grandpa_id == auth) {
-					to_fetch.push(auth.clone());
-				}
-			}
-		}
-		for auth in to_fetch.iter() {
-			use sp_application_crypto::Public;
-			if let Some(authority_discovery_id) =
-				t.sessions3.get(&auth.to_public_crypto_pair()).cloned()
-			{
-				if let Ok(auth_public) = authority_discovery_id.1.as_slice().try_into() {
-					nb_fetched += 1;
-					self.authority_queries.push_back(AuthorityInfo {
-						grandpa_id: auth.clone(),
-						authority_discovery_id,
-					});
-
-					if let Some(rx) = self
-						.authority_discovery_service
-						.get_addresses_by_authority_id_callback(auth_public)
-					{
-						self.authority_replies.push_back(Some(rx));
-					} else {
-						debug!(target: "mixnet", "Query authority full channel.");
-						self.authority_replies.push_back(None);
-					}
-				}
-			}
-		}
-		debug!(target: "mixnet", "refetched queried {:?} authorities out of {:?}", nb_fetched, to_fetch.len());
 	}
 
 	fn update_state(&mut self, synched: bool) {
@@ -761,7 +669,7 @@ pub struct AuthorityStar {
 	// All authorities are considered connected (when building message except first hop).
 	authorities: HashMap<MixPeerId, NodeInfo2>,
 	// The connected nodes (for first hop use `authorities` joined `connected_nodes`).
-	connected_nodes: HashMap<MixPeerId, NodeInfo>,
+	connected_nodes: HashMap<MixPeerId, NodeInfo>, // TODO only MixPubKey as value
 	// Grandpa -> IMonline TODO rename session after removing session3 and authdisc
 	// TODO this is what is a bit redundant with authorities
 	sessions2: HashMap<CryptoTypePublicPair, CryptoTypePublicPair>,
@@ -842,13 +750,7 @@ impl AuthorityStar {
 			return
 		}
 
-		let authority_id = self.unconnected_authorities.remove(&peer_id);
-		if let Some(authority_id) = authority_id.as_ref() {
-			if self.current_authorities.contains_key(&authority_id.grandpa_id) {
-				self.routing_nodes.insert(peer_id.clone(), key.clone());
-			}
-		}
-
+		let authority_id = None;
 		self.connected_nodes
 			.insert(peer_id, NodeInfo { id: peer_id, authority_id, public_key: key });
 	}
@@ -863,44 +765,6 @@ impl AuthorityStar {
 				debug_assert!(&_peer_id == peer_id);
 				self.unconnected_authorities.insert(peer_id.clone(), authority_id);
 			}
-		}
-	}
-
-	fn add_authority_peer_id(
-		&mut self,
-		authority_id: AuthorityId,
-		authority_discovery_id: CryptoTypePublicPair,
-		peer_id: MixPeerId,
-	) {
-		debug!(target: "mixnet", "Add authority {:?} {:?}", authority_id, peer_id);
-		let is_routing = match self.current_authorities.get_mut(&authority_id) {
-			Some(old_id) => {
-				if let Some(old_id) = old_id.as_ref() {
-					if old_id != &peer_id {
-						if let Some(mut infos) = self.connected_nodes.get_mut(old_id) {
-							infos.authority_id = None;
-						}
-						self.routing_nodes.remove(old_id);
-					}
-				}
-				*old_id = Some(peer_id.clone());
-				true
-			},
-			_ => false,
-		};
-
-		if let Some(infos) = self.connected_nodes.get_mut(&peer_id) {
-			if is_routing {
-				self.routing_nodes.insert(peer_id.clone(), infos.public_key.clone());
-			}
-			self.connected_authorities.insert(authority_id.clone(), peer_id);
-			infos.authority_id =
-				Some(AuthorityInfo { grandpa_id: authority_id, authority_discovery_id });
-		} else {
-			self.unconnected_authorities.insert(
-				peer_id,
-				AuthorityInfo { grandpa_id: authority_id, authority_discovery_id },
-			);
 		}
 	}
 }
