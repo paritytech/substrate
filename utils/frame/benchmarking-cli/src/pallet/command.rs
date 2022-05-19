@@ -23,7 +23,9 @@ use frame_benchmarking::{
 };
 use frame_support::traits::StorageInfo;
 use linked_hash_map::LinkedHashMap;
-use sc_cli::{CliConfiguration, ExecutionStrategy, Result, SharedParams};
+use sc_cli::{
+	execution_method_from_cli, CliConfiguration, ExecutionStrategy, Result, SharedParams,
+};
 use sc_client_db::BenchmarkingState;
 use sc_executor::NativeElseWasmExecutor;
 use sc_service::{Configuration, NativeExecutionDispatch};
@@ -121,7 +123,6 @@ impl PalletCmd {
 		}
 
 		let spec = config.chain_spec;
-		let wasm_method = self.wasm_method.into();
 		let strategy = self.execution.unwrap_or(ExecutionStrategy::Native);
 		let pallet = self.pallet.clone().unwrap_or_default();
 		let pallet = pallet.as_bytes();
@@ -141,7 +142,7 @@ impl PalletCmd {
 		let state_without_tracking =
 			BenchmarkingState::<BB>::new(genesis_storage, cache_size, self.record_proof, false)?;
 		let executor = NativeElseWasmExecutor::<ExecDispatch>::new(
-			wasm_method,
+			execution_method_from_cli(self.wasm_method, self.wasmtime_instantiation_strategy),
 			self.heap_pages,
 			2, // The runtime instances cache size.
 			2, // The runtime cache size
