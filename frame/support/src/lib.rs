@@ -1119,7 +1119,7 @@ pub mod tests {
 			DoubleMap::insert(&(key1 + 1), &(key2 + 1), &4u64);
 			assert!(matches!(
 				DoubleMap::remove_prefix(&key1, None),
-				sp_io::KillStorageResult::AllRemoved(0), // all in overlay
+				sp_io::KillStorageResult::AllRemoved(2),
 			));
 			assert_eq!(DoubleMap::get(&key1, &key2), 0u64);
 			assert_eq!(DoubleMap::get(&key1, &(key2 + 1)), 0u64);
