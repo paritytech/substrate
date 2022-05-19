@@ -209,6 +209,9 @@ pub trait CryptoStore: Send + Sync {
 	) -> Result<Option<ecdsa::Signature>, Error>;
 }
 
+/// Secret that can be derived for using with mixnet.
+pub type MixnetSecret = x25519_dalek::StaticSecret;
+
 /// Sync version of the CryptoStore
 ///
 /// Some parts of Substrate still rely on a sync version of the `CryptoStore`.
@@ -245,6 +248,16 @@ pub trait SyncCryptoStore: CryptoStore + Send + Sync {
 		id: KeyTypeId,
 		seed: Option<&str>,
 	) -> Result<ed25519::Public, Error>;
+
+	/// Construct a Montgomery curve25519 private key from an Ed25519 secret key.
+	///
+	/// This function is only temporary until DH could be defined at keystore level
+	/// or mixnet publish their own keys.
+	fn mixnet_secret_from_ed25519(
+		&self,
+		id: KeyTypeId,
+		key: &ed25519::Public,
+	) -> Result<MixnetSecret, Error>;
 
 	/// Returns all ecdsa public keys for the given key type.
 	fn ecdsa_public_keys(&self, id: KeyTypeId) -> Vec<ecdsa::Public>;

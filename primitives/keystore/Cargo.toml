@@ -24,6 +24,8 @@ schnorrkel = { version = "0.9.1", features = ["preaudit_deprecated", "u64_backen
 merlin = { version = "2.0", default-features = false }
 sp-core = { version = "6.0.0", path = "../core" }
 sp-externalities = { version = "0.12.0", path = "../externalities", default-features = false }
+x25519-dalek = { version = "1.1.0", default-features = false }
+sha2 = { version = "0.9.5", default-features = false }
 
 [dev-dependencies]
 rand = "0.7.2"
@@ -34,4 +36,6 @@ default = ["std"]
 std = [
 	"serde",
 	"schnorrkel/std",
+	"x25519-dalek/std",
+	"sha2/std",
 ]

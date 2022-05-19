@@ -60,7 +60,7 @@ use std::{
 pub use crate::request_responses::{
 	IfDisconnected, InboundFailure, OutboundFailure, RequestFailure, RequestId, ResponseFailure,
 };
-use mixnet::{MixnetBehaviour, MixPeerId};
+use mixnet::{MixPeerId, MixnetBehaviour};
 use sc_utils::mpsc::TracingUnboundedSender;
 
 /// Command for the mixnet worker.
@@ -236,7 +236,7 @@ pub enum BehaviourOut<B: BlockT> {
 
 	/// Messages coming from the mix network.
 	MixnetMessage(
-		PeerId,
+		MixPeerId,
 		Vec<u8>,
 		mixnet::MessageType,
 		Option<TracingUnboundedSender<MixnetCommand>>,
@@ -697,8 +697,7 @@ where
 					},
 				}
 			},
-			mixnet::NetworkEvent::Connected(_peer_id, _pub_key) => {
-			},
+			mixnet::NetworkEvent::Connected(_peer_id, _pub_key) => {},
 			mixnet::NetworkEvent::CloseStream => {
 				log::error!(target: "mixnet", "Stream close, no message incomming.");
 			},

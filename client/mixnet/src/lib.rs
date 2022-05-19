@@ -38,7 +38,7 @@ use futures::{
 use futures_timer::Delay;
 use log::{debug, error, warn};
 use sc_client_api::{BlockchainEvents, FinalityNotification, UsageProvider};
-use sc_network::MixnetCommand;
+use sc_network::{MixnetCommand, PeerId};
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_api::{ApiExt, ProvideRuntimeApi};
 use sp_core::crypto::CryptoTypePublicPair;
@@ -46,7 +46,7 @@ pub use sp_finality_grandpa::{AuthorityId, AuthorityList, SetId};
 use sp_runtime::traits::{Block as BlockT, Header, NumberFor};
 use sp_session::SessionKeys;
 use std::{
-	collections::{BTreeSet, BTreeMap, HashMap, HashSet, VecDeque},
+	collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
 	pin::Pin,
 	sync::Arc,
 	time::Duration,
@@ -104,17 +104,6 @@ enum State {
 	Running,
 }
 
-/// Build mixnet config.
-/// TODO this is not needed anymore (just add to worker build).
-fn config(local_identity: &libp2p::core::identity::Keypair) -> Option<mixnet::Config> {
-	if let libp2p::core::identity::Keypair::Ed25519(kp) = local_identity {
-		let local_public_key = local_identity.public();
-		Some(mixnet::Config::new_with_ed25519_keypair(kp, local_public_key.clone().into()))
-	} else {
-		None
-	}
-}
-
 /// Instantiate channels needed to spawn and communicate with the mixnet worker.
 pub fn new_channels(
 ) -> (WorkerChannels, (WorkerSink, WorkerStream, TracingUnboundedSender<MixnetCommand>)) {
@@ -139,7 +128,7 @@ where
 {
 	pub fn new(
 		inner_channels: WorkerChannels,
-		local_identity: &libp2p::core::identity::Keypair,
+		network_identity: &libp2p::core::identity::Keypair,
 		client: Arc<C>,
 		shared_authority_set: sc_finality_grandpa::SharedAuthoritySet<
 			<B as BlockT>::Hash,
@@ -152,21 +141,77 @@ where
 		//authority-discovery which is slow).
 		//key_store: &dyn SyncCryptoStore,
 	) -> Option<Self> {
-		let mixnet_config = if let Some(config) = config(local_identity) {
-			config
+		let mut local_public_key = None;
+		// get the peer id
+		for key in SyncCryptoStore::sr25519_public_keys(&*key_store, key_types::IM_ONLINE)
+			.into_iter()
+			.rev()
+		{
+			if SyncCryptoStore::has_keys(&*key_store, &[(key.0.into(), key_types::IM_ONLINE)]) {
+				local_public_key = Some(key);
+				break
+			} else {
+				log::error!(target: "mixnet", "No private key for imonline key");
+			}
+		}
+
+		let local_public_key: [u8; 32] = if let Some(key) = local_public_key {
+			key.0
 		} else {
-			return None;
+			// TODO switch to trace
+			log::error!(target: "mixnet", "Generating new ImOnline key.");
+			SyncCryptoStore::sr25519_generate_new(&*key_store, key_types::IM_ONLINE, None)
+				.ok()?
+				.0
 		};
-		let finality_stream = client.finality_notification_stream();
-		// TODO read validator from session
-		// TODO is this node part of session (role means nothing).
-		let topology =
-			AuthorityStar::new(mixnet_config.local_id.clone(), mixnet_config.public_key.clone());
-		let default_limit_config = mixnet_config.limit_per_window.clone();
+
+		let mut grandpa_key = None;
+		for key in SyncCryptoStore::ed25519_public_keys(&*key_store, key_types::GRANDPA)
+			.into_iter()
+			.rev()
+		{
+			if SyncCryptoStore::has_keys(&*key_store, &[(key.0.into(), key_types::GRANDPA)]) {
+				grandpa_key = Some(key);
+				break
+			} else {
+				log::error!(target: "mixnet", "No private key for grandpa key");
+			}
+		}
 		/*						let commands =
 		crate::mixnet::AuthorityStar::command_stream(&mut event_streams);*/
-		let worker = mixnet::MixnetWorker::new(mixnet_config, topology, inner_channels.0);
+		let mixnet_config = if let Some(grandpa_key) = grandpa_key {
+			let mut p = [0u8; 32];
+			p.copy_from_slice(grandpa_key.as_ref());
+			let pub_key = mixnet::public_from_ed25519(p);
 
+			log::error!(target: "mixnet", "Gr pub"); // TODO rem
+			let priv_key = SyncCryptoStore::mixnet_secret_from_ed25519(
+				&*key_store,
+				key_types::GRANDPA,
+				&grandpa_key,
+			)
+			.ok()?;
+			log::error!(target: "mixnet", "Gr pri"); // TODO rem
+
+			mixnet::Config::new_with_keys(local_public_key, pub_key, priv_key)
+		} else {
+			log::error!(target: "mixnet", "Not using grandpa key");
+			mixnet::Config::new(local_public_key)
+		};
+
+		let finality_stream = client.finality_notification_stream();
+
+		// TODO read validator from session
+		// TODO is this node part of session (role means nothing).
+		let topology = AuthorityStar::new(
+			mixnet_config.local_id.clone(),
+			network_identity.public().into(),
+			mixnet_config.public_key.clone(),
+			key_store.clone(),
+		);
+		let default_limit_config = mixnet_config.limit_per_window.clone();
+
+		let worker = mixnet::MixnetWorker::new(mixnet_config, topology, inner_channels.0);
 		/*			let connection_info = if let Some(authority_id) = authority_id {
 			use sp_application_crypto::Public;
 			// TODO does the key changes between slot?
@@ -232,69 +277,70 @@ where
 			// Pin::new(a).poll(cx)).unwrap_or(futures::task::Poll::Pending)); TODO consider
 			// stream_select
 			futures::select! {
-				// TODO poll more than first??
-				auth_address = auth_poll.fuse() => {
-					debug!(target: "mixnet", "Received auth reply {:?}.", auth_address);
-					match auth_address {
-						Ok(Some(addresses)) => {
-						let auth_id = self.authority_queries.get(0).unwrap().clone();
-						for addr in addresses {
-							match sc_network::config::parse_addr(addr) {
-								Ok((address, _)) => {
-									// TODO MixnetCommand useless?
-									self.handle_command(MixnetCommand::AuthorityId(auth_id.grandpa_id.clone(), auth_id.authority_discovery_id.clone(), address));
+							// TODO poll more than first??
+							auth_address = auth_poll.fuse() => {
+								debug!(target: "mixnet", "Received auth reply {:?}.", auth_address);
+								match auth_address {
+									Ok(Some(addresses)) => {
+									let auth_id = self.authority_queries.get(0).unwrap().clone();
+									for addr in addresses {
+										match sc_network::config::parse_addr(addr) {
+											Ok((address, _)) => {
+												// TODO MixnetCommand useless?
+												// TODO same as this authority id will be new session key.
+			//									self.handle_command(MixnetCommand::AuthorityId(auth_id.grandpa_id.clone(), auth_id.authority_discovery_id.clone(), address));
+											},
+											Err(_) => continue,
+										};
+									}
+									pop_auth_query = true; // TODO same for Ok(None)?
 								},
-								Err(_) => continue,
-							};
+								Ok(None) => {
+									pop_auth_query = true; // TODO same for Ok(None)?
+								},
+								Err(e) => {
+									// TODO trace
+									err_auth_query = true;
+								},
+								}
+							},
+							notif = self.finality_stream.next() => {
+								if let Some(notif) = notif {
+									delay_finalized.reset(Duration::from_secs(DELAY_NO_FINALISATION_S));
+									self.handle_new_finalize_block(notif);
+								} else {
+									// This point is reached if the other component did shutdown.
+									// Shutdown as well.
+									debug!(target: "mixnet", "Mixnet, shutdown.");
+									return;
+								}
+							},
+							command = self.command_stream.next() => {
+								if let Some(command) = command {
+									self.handle_command(command);
+								} else {
+									// This point is reached if the other component did shutdown.
+									// Shutdown as well.
+									// TODO actually having an instance of sink it will never happen.
+									debug!(target: "mixnet", "Mixnet, shutdown.");
+									return;
+								}
+							},
+							success = future::poll_fn(|cx| self.worker.poll(cx)).fuse() => {
+								if !success {
+									debug!(target: "mixnet", "Mixnet, shutdown.");
+									return;
+								}
+							},
+							_ = delay_poll_auth.fuse() => {
+								self.fetch_auth_peer_id();
+								delay_poll_auth.reset(Duration::from_millis(DELAY_CHECK_AUTHORITY_MS)); // TODO tokio interval instead?
+							},
+							_ = delay_finalized.fuse() => {
+								self.state = State::Synching;
+								delay_finalized.reset(Duration::from_secs(DELAY_NO_FINALISATION_S));
+							},
 						}
-						pop_auth_query = true; // TODO same for Ok(None)?
-					},
-					Ok(None) => {
-						pop_auth_query = true; // TODO same for Ok(None)?
-					},
-					Err(e) => {
-						// TODO trace
-						err_auth_query = true;
-					},
-					}
-				},
-				notif = self.finality_stream.next() => {
-					if let Some(notif) = notif {
-						delay_finalized.reset(Duration::from_secs(DELAY_NO_FINALISATION_S));
-						self.handle_new_finalize_block(notif);
-					} else {
-						// This point is reached if the other component did shutdown.
-						// Shutdown as well.
-						debug!(target: "mixnet", "Mixnet, shutdown.");
-						return;
-					}
-				},
-				command = self.command_stream.next() => {
-					if let Some(command) = command {
-						self.handle_command(command);
-					} else {
-						// This point is reached if the other component did shutdown.
-						// Shutdown as well.
-						// TODO actually having an instance of sink it will never happen.
-						debug!(target: "mixnet", "Mixnet, shutdown.");
-						return;
-					}
-				},
-				success = future::poll_fn(|cx| self.worker.poll(cx)).fuse() => {
-					if !success {
-						debug!(target: "mixnet", "Mixnet, shutdown.");
-						return;
-					}
-				},
-				_ = delay_poll_auth.fuse() => {
-					self.fetch_auth_peer_id();
-					delay_poll_auth.reset(Duration::from_millis(DELAY_CHECK_AUTHORITY_MS)); // TODO tokio interval instead?
-				},
-				_ = delay_finalized.fuse() => {
-					self.state = State::Synching;
-					delay_finalized.reset(Duration::from_secs(DELAY_NO_FINALISATION_S));
-				},
-			}
 
 			if pop_auth_query {
 				self.authority_queries.pop_front();
@@ -362,10 +408,10 @@ where
 				if &peer_id == self.worker.local_id() {
 					self.authority_id = Some(authority_id.clone());
 					let topology = &mut self.worker.mixnet_mut().topology;
-					if topology.current_authorities.contains_key(&authority_id) {
+					if topology.current_authorities2.contains_key(&authority_id) {
 						debug!(target: "mixnet", "Routing active.");
 						topology.routing = true;
-						topology.current_authorities.insert(authority_id, Some(peer_id));
+						topology.current_authorities2.insert(authority_id, Some(peer_id));
 					}
 				} else {
 					self.worker.mixnet_mut().topology.add_authority_peer_id(
@@ -397,7 +443,8 @@ where
 		let mut restore_limit = Vec::new();
 		let topology = &mut self.worker.mixnet_mut().topology;
 		debug!(target: "mixnet", "Change authorities {:?}", set);
-		let old_authority = std::mem::take(&mut topology.current_authorities);
+		let old_authority = std::mem::take(&mut topology.current_authorities2);
+		let old_authority2 = std::mem::take(&mut topology.authorities);
 		topology.routing_nodes.clear();
 		topology.unconnected_authorities.clear(); // TODO could keep for a few session
 										  // TODO also remove authorty disocvery query??
@@ -410,16 +457,52 @@ where
 		topology.routing = false;
 
 		for (auth, _) in set.into_iter() {
+			let auth_pub_pair = auth.clone().to_public_crypto_pair(); // TODO change key type in map?
+			if let Some(key) = topology.sessions2.get(&auth_pub_pair) {
+				let mut peer_id = [0u8; 32];
+				peer_id.copy_from_slice(&key.1[..]);
+				// derive from grandpa one
+				let public_key = if let Some(info) = old_authority2.remove(&peer_id) {
+					info.public_key
+				} else {
+					let mut p = [0u8; 32];
+					p.copy_from_slice(auth.as_ref());
+					mixnet::public_from_ed25519(p)
+				};
+
+				if self.authority_id.as_ref() == Some(&auth) {
+					debug!(target: "mixnet", "In new authority set, routing.");
+					topology.routing = true;
+					if self.worker.local_id() != &peer_id || self.worker.public_key() != &public_key
+					{
+						unimplemented!(
+							"TODO restart node setting local id and public / private key"
+						);
+					}
+				}
+				topology
+					.authorities
+					.insert(peer_id, NodeInfo2 { authority_id: auth, public_key });
+			} else {
+				error!(target: "mixnet", "Missing imonline key for authority {:?}, not adding it to topology.", auth);
+			}
+
+			// TODO rem all bellow
 			if self.authority_id.as_ref() == Some(&auth) {
 				debug!(target: "mixnet", "In new authority set, routing.");
+				// TODO EME check session key or grandpa key is right over sessions2 else restart
 				topology.routing = true;
-				topology.current_authorities.insert(auth, Some(local_id));
+				topology.current_authorities2.insert(auth, Some(local_id));
+
 				continue
 			}
 
+			// TODO EME update topology from sessions2 joined authority.
+
+			// TODO rem all bellow
 			use sp_application_crypto::Public;
 			let authority_discovery_id =
-				if let Some(id) = topology.sessions.get(&auth.clone().to_public_crypto_pair()) {
+				if let Some(id) = topology.sessions3.get(&auth.clone().to_public_crypto_pair()) {
 					id.clone()
 				} else {
 					warn!(target: "mixnet", "Skipped authority {:?}, no session key", auth);
@@ -461,7 +544,7 @@ where
 			if let Some(peer) = auth_peer_id.clone() {
 				remove_limit.push(peer);
 			}
-			topology.current_authorities.insert(auth, auth_peer_id);
+			topology.current_authorities2.insert(auth, auth_peer_id);
 
 			for (auth, peer) in old_authority.iter() {
 				if !topology.current_authorities.contains_key(&auth) {
@@ -469,6 +552,9 @@ where
 						restore_limit.push(peer);
 					}
 				}
+			}
+			for (peer, _) in old_authority2.into_iter() {
+				restore_limit.push(peer);
 			}
 		}
 		self.update_state(false);
@@ -531,7 +617,26 @@ where
 			},
 		};
 		debug!(target: "mixnet", "Fetched session keys {:?}, at {:?}", sessions, block_id);
-		self.worker.mixnet_mut().topology.sessions = sessions
+		self.worker.mixnet_mut().topology.sessions2 = sessions
+			.into_iter()
+			.flat_map(|(_, keys)| {
+				let mut grandpa = None;
+				let mut imonline = None;
+				for pair in keys {
+					if pair.0 == sp_application_crypto::key_types::GRANDPA {
+						grandpa = Some(pair.1);
+					} else if pair.0 == sp_application_crypto::key_types::IM_ONLINE {
+						imonline = Some(pair.1);
+					}
+				}
+				if let (Some(g), Some(a)) = (grandpa, imonline) {
+					Some((g, a))
+				} else {
+					None
+				}
+			})
+			.collect();
+		self.worker.mixnet_mut().topology.sessions3 = sessions
 			.into_iter()
 			.flat_map(|(_, keys)| {
 				let mut grandpa = None;
@@ -588,7 +693,7 @@ where
 		for auth in to_fetch.iter() {
 			use sp_application_crypto::Public;
 			if let Some(authority_discovery_id) =
-				t.sessions.get(&auth.to_public_crypto_pair()).cloned()
+				t.sessions3.get(&auth.to_public_crypto_pair()).cloned()
 			{
 				if let Ok(auth_public) = authority_discovery_id.1.as_slice().try_into() {
 					nb_fetched += 1;
@@ -648,15 +753,26 @@ where
 /// TODO node with only mix component (proxying transaction and query).
 pub struct AuthorityStar {
 	node_id: MixPeerId,
+	network_id: PeerId,
 	node_public_key: MixPublicKey,
-
+	key_store: Arc<dyn SyncCryptoStore>,
+	// true when we are in authorities set.
+	routing: bool,
+	// All authorities are considered connected (when building message except first hop).
+	authorities: HashMap<MixPeerId, NodeInfo2>,
+	// The connected nodes (for first hop use `authorities` joined `connected_nodes`).
 	connected_nodes: HashMap<MixPeerId, NodeInfo>,
+	// Grandpa -> IMonline TODO rename session after removing session3 and authdisc
+	// TODO this is what is a bit redundant with authorities
+	sessions2: HashMap<CryptoTypePublicPair, CryptoTypePublicPair>,
+
+	// TODO remove all fields bellow
 	connected_authorities: HashMap<AuthorityId, MixPeerId>,
 	unconnected_authorities: HashMap<MixPeerId, AuthorityInfo>,
-	sessions: HashMap<CryptoTypePublicPair, CryptoTypePublicPair>,
+	// Grandpa -> AuthDisc
+	sessions3: HashMap<CryptoTypePublicPair, CryptoTypePublicPair>,
 
-	routing: bool,
-	current_authorities: HashMap<AuthorityId, Option<MixPeerId>>,
+	current_authorities2: HashMap<AuthorityId, Option<MixPeerId>>,
 	routing_nodes: BTreeMap<MixPeerId, MixPublicKey>,
 }
 
@@ -669,25 +785,40 @@ pub struct AuthorityInfo {
 /// Information related to a peer in the mixnet topology.
 #[derive(Clone)]
 pub struct NodeInfo {
-	id: MixPeerId,
+	// TODO remove
+	id: MixPeerId, // Im online key shared on handshake
 	// associated public pair is the authority discovery one.
-	authority_id: Option<AuthorityInfo>,
+	authority_id: Option<AuthorityInfo>, // TODO not opti
+	public_key: MixPublicKey,
+}
+#[derive(Clone)]
+pub struct NodeInfo2 {
+	authority_id: AuthorityId,
 	public_key: MixPublicKey,
 }
 
 impl AuthorityStar {
 	/// Instantiate a new topology.
-	pub fn new(node_id: MixPeerId, node_public_key: MixPublicKey) -> Self {
+	pub fn new(
+		node_id: MixPeerId,
+		network_id: PeerId,
+		node_public_key: MixPublicKey,
+		key_store: Arc<dyn SyncCryptoStore>,
+	) -> Self {
 		AuthorityStar {
 			node_id,
+			network_id,
 			node_public_key,
-			current_authorities: HashMap::new(),
+			authorities: HashMap::new(),
+			current_authorities2: HashMap::new(),
 			connected_nodes: HashMap::new(),
 			connected_authorities: HashMap::new(),
 			routing_nodes: BTreeMap::new(),
 			unconnected_authorities: HashMap::new(),
-			sessions: HashMap::new(),
+			sessions2: HashMap::new(),
+			sessions3: HashMap::new(),
 			routing: false,
+			key_store,
 		}
 	}
 
@@ -784,26 +915,29 @@ pub struct ConnectionInfo {
 }
 */
 impl AuthorityStar {
-	fn random_connected(&self, skip: impl Fn(&MixPeerId) -> bool) -> Option<(MixPeerId, MixPublicKey)> {
+	fn random_connected(
+		&self,
+		skip: impl Fn(&MixPeerId) -> bool,
+	) -> Option<(MixPeerId, MixPublicKey)> {
 		use rand::RngCore;
 		if !self.has_enough_nodes() {
 			debug!(target: "mixnet", "Not enough routing nodes for path.");
 			return None
 		}
 		// Warning this assume that PeerId is a random value.
-		// This is currently the case (sha256 of encoded ed25519 key).
+		// TODO switched to session public key which should be?? TODO check it is public byte of sr
 		let mut ix = [0u8; 32 + PEER_ID_PREFIX.len()];
 		rand::thread_rng().fill_bytes(&mut ix[PEER_ID_PREFIX.len()..]); // TODO can less than 32 bytes.
 		ix[..PEER_ID_PREFIX.len()].copy_from_slice(&PEER_ID_PREFIX[..]);
 
-		let ix = match MixPeerId::from_bytes(&ix[..]) {
+		/*		let ix = match MixPeerId::from_bytes(&ix[..]) {
 			Ok(ix) => ix,
 			Err(err) => {
 				error!(target: "mixnet", "Invalid key for mixnet random selection {:?}", err);
 				// TODO error here is "InvalidSize(1320524)"
 				return None
 			},
-		};
+		};*/
 		debug!(target: "mixnet", "routing {:?}, ix {:?}", self.routing_nodes, ix);
 		for key in self.routing_nodes.range(ix..) {
 			if !skip(&key.0) {
@@ -866,7 +1000,7 @@ impl Topology for AuthorityStar {
 							Some((
 								id.0.clone(),
 								id.1.clone(),
-//								self.connected_nodes.get(&id.0).unwrap().public_key.clone(),
+								//								self.connected_nodes.get(&id.0).unwrap().public_key.clone(),
 							))
 						}
 					})
@@ -879,7 +1013,7 @@ impl Topology for AuthorityStar {
 
 	fn routing_to(&self, from: &MixPeerId, to: &MixPeerId) -> bool {
 		self.routing_nodes.contains_key(from)
-			// && self.routing_nodes.contains_key(to) // allow external
+		// && self.routing_nodes.contains_key(to) // allow external
 	}
 
 	fn random_path(
@@ -953,7 +1087,7 @@ impl Topology for AuthorityStar {
 			if let Some((peer, key)) = add_start {
 				path.push((peer.clone(), key.clone()));
 			}
-	
+
 			ids.remove(&start);
 			ids.remove(&recipient);
 			for peer_id in ids.into_iter() {
@@ -975,7 +1109,7 @@ impl Topology for AuthorityStar {
 					return Err(Error::NotEnoughRoutingPeers)
 				}
 			}
- 
+
 			if let Some((peer, key)) = add_end {
 				if let Some(key) = key {
 					path.push((peer.clone(), key.clone()));
@@ -1012,6 +1146,61 @@ impl Topology for AuthorityStar {
 		// 10% TODO limit nb connection
 		Some((1, 10))
 	}
+
+	fn handshake_size(&self) -> usize {
+		32 + 32 + 64
+	}
+	fn check_handshake(
+		&mut self,
+		payload: &[u8],
+		from: &PeerId,
+	) -> Option<(MixPeerId, MixPublicKey)> {
+		let mut peer_id = [0u8; 32];
+		peer_id.copy_from_slice(&payload[0..32]);
+		//		let peer_id = mixnet::to_sphinx_id(&payload[0..32]).ok()?;
+		let mut pk = [0u8; 32];
+		pk.copy_from_slice(&payload[32..64]);
+		let mut signature = [0u8; 64];
+		signature.copy_from_slice(&payload[64..]);
+		let signature = sp_application_crypto::sr25519::Signature(signature);
+		let mut message = self.network_id.to_bytes().to_vec();
+		message.extend_from_slice(&pk[..]);
+		let key = sp_application_crypto::sr25519::Public(self.node_id.clone()); // TODO check if stored as Public instead?
+		use sp_application_crypto::RuntimePublic;
+		if key.verify(&message, &signature) {
+			let pk = MixPublicKey::from(pk);
+			Some((peer_id, pk))
+		} else {
+			None
+		}
+	}
+
+	fn handshake(&mut self, with: &PeerId, public_key: &MixPublicKey) -> Option<Vec<u8>> {
+		let mut result = self.node_id.to_vec();
+		// TODO need to sign public key with local id
+		result.extend_from_slice(&public_key.as_bytes()[..]);
+		// TODO force the session one if existing TODO store the public key !!!! in topo
+		let mut message = with.to_bytes().to_vec();
+		message.extend_from_slice(&public_key.as_bytes()[..]);
+		match SyncCryptoStore::sign_with(
+			&*self.key_store,
+			key_types::IM_ONLINE,
+			&CryptoTypePublicPair(sp_core::sr25519::CRYPTO_ID, self.node_id.to_vec()),
+			&message[..],
+		) {
+			Ok(Some(signature)) => {
+				result.extend_from_slice(&signature[..]);
+				log::error!(target: "mixnet", "hanshake size: {:?}", result.len());
+				return Some(result)
+			},
+			Err(e) => {
+				log::error!(target: "mixnet", "hanshake signing error: {:?}", e);
+			},
+			_ => (),
+		}
+		log::error!(target: "mixnet", "No imonline key error"); // TODO rem
+		None
+	}
 }
 /*
 fn event_filter(event: &Event) -> bool {
@@ -1045,8 +1234,9 @@ impl<F: futures::Future + Unpin> futures::Future for OptionFuture2<F> {
 		}
 	}
 }
-const PEER_ID_PREFIX: [u8; 6] = [0, 36, 8, 1, 18, 32];
-#[test]
+//const PEER_ID_PREFIX: [u8; 6] = [0, 36, 8, 1, 18, 32];
+const PEER_ID_PREFIX: [u8; 0] = [];
+/*#[test]
 fn test_random_route() {
 	let mut routing_nodes: BTreeMap<MixPeerId> = Default::default();
 	for _ in 0..6 {
@@ -1065,4 +1255,4 @@ fn test_random_route() {
 	ix[..PEER_ID_PREFIX.len()].copy_from_slice(&PEER_ID_PREFIX[..]);
 	let ix = MixPeerId::from_bytes(&ix[..]).unwrap();
 	routing_nodes.range(ix..).next();
-}
+}*/

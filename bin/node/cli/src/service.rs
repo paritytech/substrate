@@ -520,16 +520,18 @@ pub fn new_full_base(
 		);
 		if let Some((authority_set, inner_channels, local_id)) = mixnet_worker {
 			if let Some(mixnet_worker) = sc_mixnet::MixnetWorker::new(
-					inner_channels,
-					&local_id,
-					client.clone(),
-					authority_set,
-					service,
-					keystore_container.sync_keystore(),
-				) {
-				task_manager
-					.spawn_handle()
-					.spawn("mixnet-worker", Some("mixnet"), mixnet_worker.run());
+				inner_channels,
+				&local_id,
+				client.clone(),
+				authority_set,
+				service,
+				keystore_container.sync_keystore(),
+			) {
+				task_manager.spawn_handle().spawn(
+					"mixnet-worker",
+					Some("mixnet"),
+					mixnet_worker.run(),
+				);
 			} else {
 				return Err(ServiceError::Other("Cannot start mixnet.".to_string()))
 			}

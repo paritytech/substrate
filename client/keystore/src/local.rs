@@ -350,6 +350,32 @@ impl SyncCryptoStore for LocalKeystore {
 
 		pair.map(|k| k.sign_prehashed(msg)).map(Ok).transpose()
 	}
+
+	fn mixnet_secret_from_ed25519(
+		&self,
+		id: KeyTypeId,
+		key: &ed25519::Public,
+	) -> std::result::Result<sp_keystore::MixnetSecret, TraitError> {
+		if let Some(key_pair) = self
+			.0
+			.read()
+			.key_pair_by_type::<ed25519::Pair>(key, id)
+			.map_err(TraitError::from)?
+		{
+			let ed25519_sk = key_pair.seed();
+
+			// An Ed25519 public key is derived off the left half of the SHA512 of the
+			// secret scalar, hence a matching conversion of the secret key must do
+			// the same to yield a Curve25519 keypair with the same public key.
+			// let ed25519_sk = ed25519::SecretKey::from(ed);
+			let mut curve25519_sk = [0; 32];
+			let hash = <sha2::Sha512 as sha2::Digest>::digest(ed25519_sk);
+			curve25519_sk.copy_from_slice(&hash[..32]);
+			Ok(curve25519_sk.into())
+		} else {
+			Err(TraitError::Other("Missing pair in keystore.".into()))
+		}
+	}
 }
 
 impl Into<SyncCryptoStorePtr> for LocalKeystore {
