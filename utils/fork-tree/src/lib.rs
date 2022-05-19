@@ -301,30 +301,49 @@ where
 		F: Fn(&H, &H) -> Result<bool, E>,
 		P: Fn(&V) -> bool,
 	{
-		let mut path = vec![];
-		let mut children = &self.roots;
-		let mut i = 0;
-		let mut best_depth = 0;
+		let mut stack = vec![];
+		let mut root_idx = 0;
+		let mut found = false;
+		let mut is_descendent = false;
 
-		while i < children.len() {
-			let node = &children[i];
-			if node.number < *number && is_descendent_of(&node.hash, hash)? {
-				path.push(i);
-				if predicate(&node.data) {
-					best_depth = path.len();
+		while root_idx < self.roots.len() {
+			// The second element in the tuple tracks what is the next children index
+			// to search into. Once all the children are processed we check the node.
+			// We stop searching into alternative children as soon as we have found
+			// ancestor of the node we're looking for
+			stack.push((&self.roots[root_idx], 0));
+			while let Some((node, i)) = stack.pop() {
+				if i < node.children.len() && !is_descendent {
+					stack.push((node, i + 1));
+					stack.push((&node.children[i], 0));
+				} else if node.number < *number &&
+					(is_descendent || is_descendent_of(&node.hash, hash)?)
+				{
+					is_descendent = true;
+					if predicate(&node.data) {
+						found = true;
+						break
+					}
 				}
-				i = 0;
-				children = &node.children;
-			} else {
-				i += 1;
 			}
+
+			// If the node we are looking for is found to be a descendent of the current
+			// root then we can stop searching under the other roots.
+			if is_descendent {
+				break
+			}
+			root_idx += 1;
 		}
 
-		Ok(if best_depth == 0 {
-			None
-		} else {
-			path.truncate(best_depth);
+		Ok(if found {
+			// The path is the root index followed by the indices of all the children
+			// we were processing when we found the element (remember the stack
+			// contains the index of the **next** children to process).
+			let path: Vec<_> =
+				std::iter::once(root_idx).chain(stack.iter().map(|(_, i)| *i - 1)).collect();
 			Some(path)
+		} else {
+			None
 		})
 	}
 
@@ -1467,6 +1486,9 @@ mod test {
 	#[test]
 	fn find_node_works() {
 		let (tree, is_descendent_of) = test_fork_tree();
+
+		let node = tree.find_node_where(&"B", &2, &is_descendent_of, &|_| true).unwrap().unwrap();
+		assert_eq!((node.hash, node.number), ("A", 1));
 
 		let node = tree.find_node_where(&"D", &4, &is_descendent_of, &|_| true).unwrap().unwrap();
 		assert_eq!((node.hash, node.number), ("C", 3));
