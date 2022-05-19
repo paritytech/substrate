@@ -487,7 +487,9 @@ pub fn new_full_base(
 	}
 
 	// Spawn authority discovery module.
-	if role.is_authority() || mixnet_worker.is_some() {
+	//if role.is_authority() || mixnet_worker.is_some() { TODO no auth disco for external: might be
+	//forced to get more validator connection when using mixnet
+	if role.is_authority() {
 		let authority_discovery_role = if role.is_authority() {
 			sc_authority_discovery::Role::PublishAndDiscover(keystore_container.keystore())
 		} else {
@@ -500,7 +502,7 @@ pub fn new_full_base(
 					_ => None,
 				}
 			});
-		let (authority_discovery_worker, service) =
+		let (authority_discovery_worker, _service) =
 			sc_authority_discovery::new_worker_and_service_with_config(
 				sc_authority_discovery::WorkerConfig {
 					publish_non_global_ips: auth_disc_publish_non_global_ips,
@@ -518,24 +520,6 @@ pub fn new_full_base(
 			Some("networking"),
 			authority_discovery_worker.run(),
 		);
-		if let Some((authority_set, inner_channels, local_id)) = mixnet_worker {
-			if let Some(mixnet_worker) = sc_mixnet::MixnetWorker::new(
-				inner_channels,
-				&local_id,
-				client.clone(),
-				authority_set,
-				service,
-				keystore_container.sync_keystore(),
-			) {
-				task_manager.spawn_handle().spawn(
-					"mixnet-worker",
-					Some("mixnet"),
-					mixnet_worker.run(),
-				);
-			} else {
-				return Err(ServiceError::Other("Cannot start mixnet.".to_string()))
-			}
-		}
 	}
 
 	// if the node isn't actively participating in consensus then it doesn't
@@ -579,6 +563,23 @@ pub fn new_full_base(
 			None,
 			grandpa::run_grandpa_voter(grandpa_config)?,
 		);
+	}
+
+	// warn need to start after grandpa or imonline to access key.
+	if let Some((authority_set, inner_channels, local_id)) = mixnet_worker {
+		if let Some(mixnet_worker) = sc_mixnet::MixnetWorker::new(
+			inner_channels,
+			&local_id,
+			client.clone(),
+			authority_set,
+			keystore_container.sync_keystore(),
+		) {
+			task_manager
+				.spawn_handle()
+				.spawn("mixnet-worker", Some("mixnet"), mixnet_worker.run());
+		} else {
+			return Err(ServiceError::Other("Cannot start mixnet.".to_string()))
+		}
 	}
 
 	network_starter.start_network();

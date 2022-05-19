@@ -46,7 +46,7 @@ pub use sp_finality_grandpa::{AuthorityId, AuthorityList, SetId};
 use sp_runtime::traits::{Block as BlockT, Header, NumberFor};
 use sp_session::SessionKeys;
 use std::{
-	collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
+	collections::{BTreeMap, BTreeSet, HashMap, HashSet},
 	pin::Pin,
 	sync::Arc,
 	time::Duration,
@@ -59,8 +59,6 @@ const LOW_MIXNET_THRESHOLD: usize = 5;
 /// A number of block where we are still considered as synched
 /// (do not turn mixnet off every time we are a few block late).
 const UNSYNCH_FINALIZED_MARGIN: u32 = 10;
-
-const DELAY_CHECK_AUTHORITY_MS: u64 = 5_000;
 
 // If delay pass without finalization, just go back to synching state.
 // TODO need to be configurable (chain specific).
@@ -91,8 +89,6 @@ type WorkerChannels = (
 	TracingUnboundedSender<MixnetCommand>,
 	TracingUnboundedReceiver<MixnetCommand>,
 );
-
-type AuthorityRx = oneshot::Receiver<Option<HashSet<sc_network::Multiaddr>>>;
 
 #[derive(PartialEq, Eq)]
 enum State {
@@ -143,6 +139,7 @@ where
 			.into_iter()
 			.rev()
 		{
+			log::error!(target: "mixnet", "A imonline key");
 			if SyncCryptoStore::has_keys(&*key_store, &[(key.0.into(), key_types::IM_ONLINE)]) {
 				local_public_key = Some(key);
 				break
@@ -166,6 +163,7 @@ where
 			.into_iter()
 			.rev()
 		{
+			log::error!(target: "mixnet", "A grandpa key");
 			if SyncCryptoStore::has_keys(&*key_store, &[(key.0.into(), key_types::GRANDPA)]) {
 				grandpa_key = Some(key);
 				break
@@ -258,49 +256,51 @@ where
 		}
 		let mut delay_finalized = Delay::new(Duration::from_secs(DELAY_NO_FINALISATION_S));
 		let delay_finalized = &mut delay_finalized;
+		let mut nb_poll = 0u128;
 		// TODO change in crate to use directly as a future..
 		loop {
-			let mut pop_auth_query = false;
-			let mut err_auth_query = false;
 			//future::poll_fn(|cx| auth_poll.map(|a|
 			// Pin::new(a).poll(cx)).unwrap_or(futures::task::Poll::Pending)); TODO consider
 			// stream_select
 			futures::select! {
-							// TODO poll more than first??
-							notif = self.finality_stream.next() => {
-								if let Some(notif) = notif {
-									delay_finalized.reset(Duration::from_secs(DELAY_NO_FINALISATION_S));
-									self.handle_new_finalize_block(notif);
-								} else {
-									// This point is reached if the other component did shutdown.
-									// Shutdown as well.
-									debug!(target: "mixnet", "Mixnet, shutdown.");
-									return;
-								}
-							},
-							command = self.command_stream.next() => {
-								if let Some(command) = command {
-									self.handle_command(command);
-								} else {
-									// This point is reached if the other component did shutdown.
-									// Shutdown as well.
-									// TODO actually having an instance of sink it will never happen.
-									debug!(target: "mixnet", "Mixnet, shutdown.");
-									return;
-								}
-							},
-							success = future::poll_fn(|cx| self.worker.poll(cx)).fuse() => {
-								if !success {
-									debug!(target: "mixnet", "Mixnet, shutdown.");
-									return;
-								}
-							},
-							_ = delay_finalized.fuse() => {
-								self.state = State::Synching;
-								delay_finalized.reset(Duration::from_secs(DELAY_NO_FINALISATION_S));
-							},
-						}
-
+				// TODO poll more than first??
+				notif = self.finality_stream.next() => {
+					if let Some(notif) = notif {
+						delay_finalized.reset(Duration::from_secs(DELAY_NO_FINALISATION_S));
+						self.handle_new_finalize_block(notif);
+					} else {
+						// This point is reached if the other component did shutdown.
+						// Shutdown as well.
+						debug!(target: "mixnet", "Mixnet, shutdown.");
+						return;
+					}
+				},
+				command = self.command_stream.next() => {
+					if let Some(command) = command {
+						self.handle_command(command);
+					} else {
+						// This point is reached if the other component did shutdown.
+						// Shutdown as well.
+						// TODO actually having an instance of sink it will never happen.
+						debug!(target: "mixnet", "Mixnet, shutdown.");
+						return;
+					}
+				},
+				success = future::poll_fn(|cx| self.worker.poll(cx)).fuse() => {
+					nb_poll += 1;
+					if nb_poll % 10 == 0 {
+						debug!(target: "mixnet", "Polling ok");
+					}
+					if !success {
+						debug!(target: "mixnet", "Mixnet, shutdown.");
+						return;
+					}
+				},
+				_ = delay_finalized.fuse() => {
+					self.state = State::Synching;
+					delay_finalized.reset(Duration::from_secs(DELAY_NO_FINALISATION_S));
+				},
+			}
 		}
 	}
 
@@ -349,8 +349,7 @@ where
 
 	fn handle_new_authority(&mut self, set: AuthorityList, session: SetId, at: NumberFor<B>) {
 		self.session = Some(session);
-		let local_id = self.worker.local_id().clone();
-		let new_session = self.fetch_new_session_keys(at, session);
+		self.fetch_new_session_keys(at, session);
 		self.update_own_public_key_within_authority_set(&set);
 		let mut remove_limit = Vec::new();
 		let current_local_id = self.worker.local_id().clone();
@@ -368,8 +367,8 @@ where
 				let mut peer_id = [0u8; 32];
 				peer_id.copy_from_slice(&key.1[..]);
 				// derive from grandpa one
-				let public_key = if let Some(info) = old_authority2.remove(&peer_id) {
-					info.public_key
+				let public_key = if let Some(key) = old_authority2.remove(&peer_id) {
+					key
 				} else {
 					remove_limit.push(peer_id.clone());
 					let mut p = [0u8; 32];
@@ -380,16 +379,15 @@ where
 				if self.authority_id.as_ref() == Some(&auth) {
 					debug!(target: "mixnet", "In new authority set, routing.");
 					topology.routing = true;
-					if current_local_id != peer_id || current_public_key != public_key
-					{
+					if current_local_id != peer_id || current_public_key != public_key {
 						unimplemented!(
 							"TODO restart node setting local id and public / private key"
 						);
 					}
 				} else {
-					topology
-						.authorities
-						.insert(peer_id, NodeInfo2 { authority_id: auth.clone(), public_key });
+
+				error!(target: "mixnet", "Insert auth {:?}", peer_id);
+					topology.authorities.insert(peer_id, public_key);
 				}
 			} else {
 				error!(target: "mixnet", "Missing imonline key for authority {:?}, not adding it to topology.", auth);
@@ -540,9 +538,9 @@ pub struct AuthorityStar {
 	// true when we are in authorities set.
 	routing: bool,
 	// All authorities are considered connected (when building message except first hop).
-	authorities: BTreeMap<MixPeerId, NodeInfo2>,
+	authorities: BTreeMap<MixPeerId, MixPublicKey>,
 	// The connected nodes (for first hop use `authorities` joined `connected_nodes`).
-	connected_nodes: HashMap<MixPeerId, NodeInfo>, // TODO only MixPubKey as value
+	connected_nodes: HashMap<MixPeerId, MixPublicKey>,
 	// Grandpa -> IMonline TODO rename session after removing session3 and authdisc
 	// TODO this is what is a bit redundant with authorities
 	sessions2: HashMap<CryptoTypePublicPair, CryptoTypePublicPair>,
@@ -552,21 +550,6 @@ pub struct AuthorityStar {
 pub struct AuthorityInfo {
 	pub grandpa_id: AuthorityId,
 	pub authority_discovery_id: CryptoTypePublicPair,
-}
-
-/// Information related to a peer in the mixnet topology.
-#[derive(Clone)]
-pub struct NodeInfo {
-	// TODO remove
-	id: MixPeerId, // Im online key shared on handshake
-	// associated public pair is the authority discovery one.
-	authority_id: Option<AuthorityInfo>, // TODO not opti
-	public_key: MixPublicKey,
-}
-#[derive(Clone, Debug)]
-pub struct NodeInfo2 {
-	authority_id2: AuthorityId,
-	public_key: ,
 }
 
 impl AuthorityStar {
@@ -604,14 +587,12 @@ impl AuthorityStar {
 
 	fn add_connected_peer(&mut self, peer_id: MixPeerId, key: MixPublicKey) {
 		debug!(target: "mixnet", "Connected to mixnet {:?} {:?}", peer_id, key);
-		if let Some(mut infos) = self.connected_nodes.get_mut(&peer_id) {
-			infos.public_key = key;
+		if let Some(public_key) = self.connected_nodes.get_mut(&peer_id) {
+			*public_key = key;
 			return
 		}
 
-		let authority_id = None;
-		self.connected_nodes
-			.insert(peer_id, NodeInfo { id: peer_id, authority_id, public_key: key });
+		self.connected_nodes.insert(peer_id, key);
 	}
 
 	fn add_disconnected_peer(&mut self, peer_id: &MixPeerId) {
@@ -657,7 +638,7 @@ impl AuthorityStar {
 		for key in self.authorities.range(ix..) {
 			if !skip(&key.0) {
 				debug!(target: "mixnet", "Random route node");
-				return Some((key.0.clone(), key.1.public_key.clone()))
+				return Some((key.0.clone(), key.1.clone()))
 			}
 			/*			if let Some(info) = self.connected_nodes.get(key) {
 				debug!(target: "mixnet", "Random route node");
@@ -669,7 +650,7 @@ impl AuthorityStar {
 		for key in self.authorities.range(..ix).rev() {
 			if !skip(&key.0) {
 				debug!(target: "mixnet", "Random route node");
-				return Some((key.0.clone(), key.1.public_key.clone()))
+				return Some((key.0.clone(), key.1.clone()))
 			}
 		}
 		None
@@ -678,11 +659,14 @@ impl AuthorityStar {
 
 impl Topology for AuthorityStar {
 	fn first_hop_nodes(&self) -> Vec<(MixPeerId, MixPublicKey)> {
-		self.authorities.iter().map(|(k, v)| (k.clone(), v.public_key.clone())).collect()
+		self.authorities.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
 	}
 	fn first_hop_nodes_external(&self, _from: &MixPeerId) -> Vec<(MixPeerId, MixPublicKey)> {
 		// allow for all
-		self.first_hop_nodes().into_iter().filter(|(id, key)| self.connected_nodes.contains_key(id)).collect()
+		self.first_hop_nodes()
+			.into_iter()
+			.filter(|(id, _key)| self.connected_nodes.contains_key(id))
+			.collect()
 	}
 	fn is_first_node(&self, id: &MixPeerId) -> bool {
 		// allow for all
@@ -694,7 +678,7 @@ impl Topology for AuthorityStar {
 	// Gossip can be ok though: may be of use in gossip system (attach the neighbor too).
 	// DHT is kind of gossip though.
 
-	fn random_recipient(&self, local_id: &MixPeerId) -> Option<(MixPeerId, MixPublicKey)> {
+	fn random_recipient(&self, _from: &MixPeerId) -> Option<(MixPeerId, MixPublicKey)> {
 		self.random_connected(|_| false)
 	}
 
@@ -714,7 +698,7 @@ impl Topology for AuthorityStar {
 						} else {
 							Some((
 								id.0.clone(),
-								id.1.public_key.clone(),
+								id.1.clone(),
 								//								self.connected_nodes.get(&id.0).unwrap().public_key.clone(),
 							))
 						}
@@ -726,7 +710,7 @@ impl Topology for AuthorityStar {
 		}
 	}
 
-	fn routing_to(&self, from: &MixPeerId, to: &MixPeerId) -> bool {
+	fn routing_to(&self, from: &MixPeerId, _to: &MixPeerId) -> bool {
 		self.authorities.contains_key(from)
 		// && self.authorities.contains_key(to) // allow any number of external.
 	}
@@ -806,15 +790,15 @@ impl Topology for AuthorityStar {
 			ids.remove(&start);
 			ids.remove(&recipient);
 			for peer_id in ids.into_iter() {
-				if let Some(info) = self.connected_nodes.get(&peer_id) {
-					path.push((peer_id, info.public_key.clone()));
+				if let Some(public_key) = self.authorities.get(&peer_id) {
+					path.push((peer_id, public_key.clone()));
 				} else {
 					error!(target: "mixnet", "node in routing_nodes must also be in connected_nodes");
 					unreachable!("node in routing_nodes must also be in connected_nodes");
 				}
 			}
-			if let Some(info) = self.connected_nodes.get(&recipient) {
-				path.push((recipient.clone(), info.public_key.clone()));
+			if let Some(public_key) = self.connected_nodes.get(&recipient) {
+				path.push((recipient.clone(), public_key.clone()));
 			} else {
 				if self.node_id == recipient {
 					// surb reply
@@ -867,7 +851,7 @@ impl Topology for AuthorityStar {
 	fn check_handshake(
 		&mut self,
 		payload: &[u8],
-		from: &PeerId,
+		_from: &PeerId,
 	) -> Option<(MixPeerId, MixPublicKey)> {
 		let mut peer_id = [0u8; 32];
 		peer_id.copy_from_slice(&payload[0..32]);
@@ -879,7 +863,8 @@ impl Topology for AuthorityStar {
 		let signature = sp_application_crypto::sr25519::Signature(signature);
 		let mut message = self.network_id.to_bytes().to_vec();
 		message.extend_from_slice(&pk[..]);
-		let key = sp_application_crypto::sr25519::Public(self.node_id.clone()); // TODO check if stored as Public instead?
+		let key = sp_application_crypto::sr25519::Public(peer_id.clone());
+		error!(target: "mixnet", "check handshake: {:?}, {:?}, {:?} from {:?}", peer_id, message, signature, _from);
 		use sp_application_crypto::RuntimePublic;
 		if key.verify(&message, &signature) {
 			let pk = MixPublicKey::from(pk);
@@ -904,6 +889,7 @@ impl Topology for AuthorityStar {
 		) {
 			Ok(Some(signature)) => {
 				result.extend_from_slice(&signature[..]);
+				error!(target: "mixnet", "create handshake: {:?}, {:?}, {:?} with {:?}", self.node_id, message, signature, with);
 				log::error!(target: "mixnet", "hanshake size: {:?}", result.len());
 				return Some(result)
 			},
