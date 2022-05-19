@@ -225,9 +225,9 @@ fn basic_stuff() {
 fn member_lifecycle_works() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Club::add_member(Origin::root(), 1));
-		assert_ok!(Club::promote(Origin::root(), 1));
-		assert_ok!(Club::demote(Origin::root(), 1));
-		assert_ok!(Club::remove_member(Origin::root(), 1));
+		assert_ok!(Club::promote_member(Origin::root(), 1));
+		assert_ok!(Club::demote_member(Origin::root(), 1));
+		assert_ok!(Club::demote_member(Origin::root(), 1));
 		assert_eq!(member_count(0), 0);
 		assert_eq!(member_count(1), 0);
 	});
@@ -240,7 +240,7 @@ fn add_remove_works() {
 		assert_ok!(Club::add_member(Origin::root(), 1));
 		assert_eq!(member_count(0), 1);
 
-		assert_ok!(Club::remove_member(Origin::root(), 1));
+		assert_ok!(Club::demote_member(Origin::root(), 1));
 		assert_eq!(member_count(0), 0);
 
 		assert_ok!(Club::add_member(Origin::root(), 1));
@@ -252,13 +252,13 @@ fn add_remove_works() {
 		assert_ok!(Club::add_member(Origin::root(), 3));
 		assert_eq!(member_count(0), 3);
 
-		assert_ok!(Club::remove_member(Origin::root(), 3));
+		assert_ok!(Club::demote_member(Origin::root(), 3));
 		assert_eq!(member_count(0), 2);
 
-		assert_ok!(Club::remove_member(Origin::root(), 1));
+		assert_ok!(Club::demote_member(Origin::root(), 1));
 		assert_eq!(member_count(0), 1);
 
-		assert_ok!(Club::remove_member(Origin::root(), 2));
+		assert_ok!(Club::demote_member(Origin::root(), 2));
 		assert_eq!(member_count(0), 0);
 	});
 }
@@ -275,21 +275,20 @@ fn promote_demote_works() {
 		assert_eq!(member_count(0), 2);
 		assert_eq!(member_count(1), 0);
 
-		assert_ok!(Club::promote(Origin::root(), 1));
+		assert_ok!(Club::promote_member(Origin::root(), 1));
 		assert_eq!(member_count(0), 2);
 		assert_eq!(member_count(1), 1);
 
-		assert_ok!(Club::promote(Origin::root(), 2));
+		assert_ok!(Club::promote_member(Origin::root(), 2));
 		assert_eq!(member_count(0), 2);
 		assert_eq!(member_count(1), 2);
 
-		assert_ok!(Club::demote(Origin::root(), 1));
+		assert_ok!(Club::demote_member(Origin::root(), 1));
 		assert_eq!(member_count(0), 2);
 		assert_eq!(member_count(1), 1);
 
-		assert_noop!(Club::remove_member(Origin::signed(1), 1), DispatchError::BadOrigin);
-		assert_noop!(Club::remove_member(Origin::root(), 2), Error::<Test>::RankTooHigh);
-		assert_ok!(Club::remove_member(Origin::root(), 1));
+		assert_noop!(Club::demote_member(Origin::signed(1), 1), DispatchError::BadOrigin);
+		assert_ok!(Club::demote_member(Origin::root(), 1));
 		assert_eq!(member_count(0), 1);
 		assert_eq!(member_count(1), 1);
 	});
@@ -300,14 +299,14 @@ fn voting_works() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Club::add_member(Origin::root(), 0));
 		assert_ok!(Club::add_member(Origin::root(), 1));
-		assert_ok!(Club::promote(Origin::root(), 1));
+		assert_ok!(Club::promote_member(Origin::root(), 1));
 		assert_ok!(Club::add_member(Origin::root(), 2));
-		assert_ok!(Club::promote(Origin::root(), 2));
-		assert_ok!(Club::promote(Origin::root(), 2));
+		assert_ok!(Club::promote_member(Origin::root(), 2));
+		assert_ok!(Club::promote_member(Origin::root(), 2));
 		assert_ok!(Club::add_member(Origin::root(), 3));
-		assert_ok!(Club::promote(Origin::root(), 3));
-		assert_ok!(Club::promote(Origin::root(), 3));
-		assert_ok!(Club::promote(Origin::root(), 3));
+		assert_ok!(Club::promote_member(Origin::root(), 3));
+		assert_ok!(Club::promote_member(Origin::root(), 3));
+		assert_ok!(Club::promote_member(Origin::root(), 3));
 
 		assert_noop!(Club::vote(Origin::signed(0), 3, true), Error::<Test>::RankTooLow);
 		assert_eq!(tally(3), Tally::from_parts(0, 0, 0));
@@ -333,11 +332,11 @@ fn voting_works() {
 fn cleanup_works() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Club::add_member(Origin::root(), 1));
-		assert_ok!(Club::promote(Origin::root(), 1));
+		assert_ok!(Club::promote_member(Origin::root(), 1));
 		assert_ok!(Club::add_member(Origin::root(), 2));
-		assert_ok!(Club::promote(Origin::root(), 2));
+		assert_ok!(Club::promote_member(Origin::root(), 2));
 		assert_ok!(Club::add_member(Origin::root(), 3));
-		assert_ok!(Club::promote(Origin::root(), 3));
+		assert_ok!(Club::promote_member(Origin::root(), 3));
 
 		assert_ok!(Club::vote(Origin::signed(1), 3, true));
 		assert_ok!(Club::vote(Origin::signed(2), 3, false));
