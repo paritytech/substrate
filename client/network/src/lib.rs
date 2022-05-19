@@ -257,7 +257,6 @@ mod utils;
 pub mod bitswap;
 pub mod config;
 pub mod error;
-pub mod light_client_requests;
 pub mod network_state;
 pub mod transactions;
 
@@ -267,6 +266,7 @@ pub use protocol::{
 	event::{DhtEvent, Event, ObservedRole},
 	PeerInfo,
 };
+pub use sc_network_light::light_client_requests;
 pub use sc_network_sync::{
 	block_request_handler,
 	state::StateDownloadProgress,

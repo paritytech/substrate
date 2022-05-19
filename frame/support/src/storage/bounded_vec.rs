@@ -28,6 +28,11 @@ use core::{
 	ops::{Deref, Index, IndexMut, RangeBounds},
 	slice::SliceIndex,
 };
+#[cfg(feature = "std")]
+use serde::{
+	de::{Error, SeqAccess, Visitor},
+	Deserialize, Deserializer, Serialize,
+};
 use sp_std::{marker::PhantomData, prelude::*};
 
 /// A bounded vector.
@@ -37,9 +42,67 @@ use sp_std::{marker::PhantomData, prelude::*};
 ///
 /// As the name suggests, the length of the queue is always bounded. All internal operations ensure
 /// this bound is respected.
+#[cfg_attr(feature = "std", derive(Serialize), serde(transparent))]
 #[derive(Encode, scale_info::TypeInfo)]
 #[scale_info(skip_type_params(S))]
-pub struct BoundedVec<T, S>(Vec<T>, PhantomData<S>);
+pub struct BoundedVec<T, S>(
+	Vec<T>,
+	#[cfg_attr(feature = "std", serde(skip_serializing))] PhantomData<S>,
+);
+
+#[cfg(feature = "std")]
+impl<'de, T, S: Get<u32>> Deserialize<'de> for BoundedVec<T, S>
+where
+	T: Deserialize<'de>,
+{
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+	where
+		D: Deserializer<'de>,
+	{
+		struct VecVisitor<T, S: Get<u32>>(PhantomData<(T, S)>);
+
+		impl<'de, T, S: Get<u32>> Visitor<'de> for VecVisitor<T, S>
+		where
+			T: Deserialize<'de>,
+		{
+			type Value = Vec<T>;
+
+			fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+				formatter.write_str("a sequence")
+			}
+
+			fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+			where
+				A: SeqAccess<'de>,
+			{
+				let size = seq.size_hint().unwrap_or(0);
+				let max = match usize::try_from(S::get()) {
+					Ok(n) => n,
+					Err(_) => return Err(A::Error::custom("can't convert to usize")),
+				};
+				if size > max {
+					Err(A::Error::custom("out of bounds"))
+				} else {
+					let mut values = Vec::with_capacity(size);
+
+					while let Some(value) = seq.next_element()? {
+						values.push(value);
+						if values.len() > max {
+							return Err(A::Error::custom("out of bounds"))
+						}
+					}
+
+					Ok(values)
+				}
+			}
+		}
+
+		let visitor: VecVisitor<T, S> = VecVisitor(PhantomData);
+		deserializer
+			.deserialize_seq(visitor)
+			.map(|v| BoundedVec::<T, S>::try_from(v).map_err(|_| Error::custom("out of bounds")))?
+	}
+}
 
 /// A bounded slice.
 ///
@@ -907,5 +970,32 @@ pub mod test {
 		let mut b: BoundedVec<u32, ConstU32<5>> = bounded_vec![1, 2, 3];
 		assert!(b.try_extend(vec![4, 5, 6].into_iter()).is_err());
 		assert_eq!(*b, vec![1, 2, 3]);
+	}
+
+	#[test]
+	fn test_serializer() {
+		let c: BoundedVec<u32, ConstU32<6>> = bounded_vec![0, 1, 2];
+		assert_eq!(serde_json::json!(&c).to_string(), r#"[0,1,2]"#);
+	}
+
+	#[test]
+	fn test_deserializer() {
+		let c: BoundedVec<u32, ConstU32<6>> = serde_json::from_str(r#"[0,1,2]"#).unwrap();
+
+		assert_eq!(c.len(), 3);
+		assert_eq!(c[0], 0);
+		assert_eq!(c[1], 1);
+		assert_eq!(c[2], 2);
+	}
+
+	#[test]
+	fn test_deserializer_failed() {
+		let c: Result<BoundedVec<u32, ConstU32<4>>, serde_json::error::Error> =
+			serde_json::from_str(r#"[0,1,2,3,4,5]"#);
+
+		match c {
+			Err(msg) => assert_eq!(msg.to_string(), "out of bounds at line 1 column 11"),
+			_ => unreachable!("deserializer must raise error"),
+		}
 	}
 }

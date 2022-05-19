@@ -18,9 +18,6 @@
 
 //! BABE testsuite
 
-// FIXME #2532: need to allow deprecated until refactor is done
-// https://github.com/paritytech/substrate/issues/2532
-#![allow(deprecated)]
 use super::*;
 use authorship::claim_slot;
 use futures::executor::block_on;
