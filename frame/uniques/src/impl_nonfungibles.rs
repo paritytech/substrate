@@ -26,59 +26,59 @@ use sp_runtime::{DispatchError, DispatchResult};
 use sp_std::prelude::*;
 
 impl<T: Config<I>, I: 'static> Inspect<<T as SystemConfig>::AccountId> for Pallet<T, I> {
-	type InstanceId = T::InstanceId;
-	type ClassId = T::ClassId;
+	type ItemId = T::ItemId;
+	type CollectionId = T::CollectionId;
 
 	fn owner(
-		class: &Self::ClassId,
-		instance: &Self::InstanceId,
+		collection: &Self::CollectionId,
+		item: &Self::ItemId,
 	) -> Option<<T as SystemConfig>::AccountId> {
-		Asset::<T, I>::get(class, instance).map(|a| a.owner)
+		Item::<T, I>::get(collection, item).map(|a| a.owner)
 	}
 
-	fn class_owner(class: &Self::ClassId) -> Option<<T as SystemConfig>::AccountId> {
-		Class::<T, I>::get(class).map(|a| a.owner)
+	fn collection_owner(collection: &Self::CollectionId) -> Option<<T as SystemConfig>::AccountId> {
+		Collection::<T, I>::get(collection).map(|a| a.owner)
 	}
 
-	/// Returns the attribute value of `instance` of `class` corresponding to `key`.
+	/// Returns the attribute value of `item` of `collection` corresponding to `key`.
 	///
-	/// When `key` is empty, we return the instance metadata value.
+	/// When `key` is empty, we return the item metadata value.
 	///
 	/// By default this is `None`; no attributes are defined.
 	fn attribute(
-		class: &Self::ClassId,
-		instance: &Self::InstanceId,
+		collection: &Self::CollectionId,
+		item: &Self::ItemId,
 		key: &[u8],
 	) -> Option<Vec<u8>> {
 		if key.is_empty() {
-			// We make the empty key map to the instance metadata value.
-			InstanceMetadataOf::<T, I>::get(class, instance).map(|m| m.data.into())
+			// We make the empty key map to the item metadata value.
+			ItemMetadataOf::<T, I>::get(collection, item).map(|m| m.data.into())
 		} else {
 			let key = BoundedSlice::<_, _>::try_from(key).ok()?;
-			Attribute::<T, I>::get((class, Some(instance), key)).map(|a| a.0.into())
+			Attribute::<T, I>::get((collection, Some(item), key)).map(|a| a.0.into())
 		}
 	}
 
-	/// Returns the attribute value of `instance` of `class` corresponding to `key`.
+	/// Returns the attribute value of `item` of `collection` corresponding to `key`.
 	///
-	/// When `key` is empty, we return the instance metadata value.
+	/// When `key` is empty, we return the item metadata value.
 	///
 	/// By default this is `None`; no attributes are defined.
-	fn class_attribute(class: &Self::ClassId, key: &[u8]) -> Option<Vec<u8>> {
+	fn collection_attribute(collection: &Self::CollectionId, key: &[u8]) -> Option<Vec<u8>> {
 		if key.is_empty() {
-			// We make the empty key map to the instance metadata value.
-			ClassMetadataOf::<T, I>::get(class).map(|m| m.data.into())
+			// We make the empty key map to the item metadata value.
+			CollectionMetadataOf::<T, I>::get(collection).map(|m| m.data.into())
 		} else {
 			let key = BoundedSlice::<_, _>::try_from(key).ok()?;
-			Attribute::<T, I>::get((class, Option::<T::InstanceId>::None, key)).map(|a| a.0.into())
+			Attribute::<T, I>::get((collection, Option::<T::ItemId>::None, key)).map(|a| a.0.into())
 		}
 	}
 
-	/// Returns `true` if the asset `instance` of `class` may be transferred.
+	/// Returns `true` if the `item` of `collection` may be transferred.
 	///
-	/// Default implementation is that all assets are transferable.
-	fn can_transfer(class: &Self::ClassId, instance: &Self::InstanceId) -> bool {
-		match (Class::<T, I>::get(class), Asset::<T, I>::get(class, instance)) {
+	/// Default implementation is that all items are transferable.
+	fn can_transfer(collection: &Self::CollectionId, item: &Self::ItemId) -> bool {
+		match (Collection::<T, I>::get(collection), Item::<T, I>::get(collection, item)) {
 			(Some(cd), Some(id)) if !cd.is_frozen && !id.is_frozen => true,
 			_ => false,
 		}
@@ -86,19 +86,19 @@ impl<T: Config<I>, I: 'static> Inspect<<T as SystemConfig>::AccountId> for Palle
 }
 
 impl<T: Config<I>, I: 'static> Create<<T as SystemConfig>::AccountId> for Pallet<T, I> {
-	/// Create a `class` of nonfungible assets to be owned by `who` and managed by `admin`.
-	fn create_class(
-		class: &Self::ClassId,
+	/// Create a `collection` of nonfungible items to be owned by `who` and managed by `admin`.
+	fn create_collection(
+		collection: &Self::CollectionId,
 		who: &T::AccountId,
 		admin: &T::AccountId,
 	) -> DispatchResult {
-		Self::do_create_class(
-			*class,
+		Self::do_create_collection(
+			*collection,
 			who.clone(),
 			admin.clone(),
-			T::ClassDeposit::get(),
+			T::CollectionDeposit::get(),
 			false,
-			Event::Created { class: *class, creator: who.clone(), owner: admin.clone() },
+			Event::Created { collection: *collection, creator: who.clone(), owner: admin.clone() },
 		)
 	}
 }
@@ -106,34 +106,34 @@ impl<T: Config<I>, I: 'static> Create<<T as SystemConfig>::AccountId> for Pallet
 impl<T: Config<I>, I: 'static> Destroy<<T as SystemConfig>::AccountId> for Pallet<T, I> {
 	type DestroyWitness = DestroyWitness;
 
-	fn get_destroy_witness(class: &Self::ClassId) -> Option<DestroyWitness> {
-		Class::<T, I>::get(class).map(|a| a.destroy_witness())
+	fn get_destroy_witness(collection: &Self::CollectionId) -> Option<DestroyWitness> {
+		Collection::<T, I>::get(collection).map(|a| a.destroy_witness())
 	}
 
 	fn destroy(
-		class: Self::ClassId,
+		collection: Self::CollectionId,
 		witness: Self::DestroyWitness,
 		maybe_check_owner: Option<T::AccountId>,
 	) -> Result<Self::DestroyWitness, DispatchError> {
-		Self::do_destroy_class(class, witness, maybe_check_owner)
+		Self::do_destroy_collection(collection, witness, maybe_check_owner)
 	}
 }
 
 impl<T: Config<I>, I: 'static> Mutate<<T as SystemConfig>::AccountId> for Pallet<T, I> {
 	fn mint_into(
-		class: &Self::ClassId,
-		instance: &Self::InstanceId,
+		collection: &Self::CollectionId,
+		item: &Self::ItemId,
 		who: &T::AccountId,
 	) -> DispatchResult {
-		Self::do_mint(*class, *instance, who.clone(), |_| Ok(()))
+		Self::do_mint(*collection, *item, who.clone(), |_| Ok(()))
 	}
 
 	fn burn(
-		class: &Self::ClassId,
-		instance: &Self::InstanceId,
+		collection: &Self::CollectionId,
+		item: &Self::ItemId,
 		maybe_check_owner: Option<&T::AccountId>,
 	) -> DispatchResult {
-		Self::do_burn(*class, *instance, |_, d| {
+		Self::do_burn(*collection, *item, |_, d| {
 			if let Some(check_owner) = maybe_check_owner {
 				if &d.owner != check_owner {
 					return Err(Error::<T, I>::NoPermission.into())
@@ -146,43 +146,43 @@ impl<T: Config<I>, I: 'static> Mutate<<T as SystemConfig>::AccountId> for Pallet
 
 impl<T: Config<I>, I: 'static> Transfer<T::AccountId> for Pallet<T, I> {
 	fn transfer(
-		class: &Self::ClassId,
-		instance: &Self::InstanceId,
+		collection: &Self::CollectionId,
+		item: &Self::ItemId,
 		destination: &T::AccountId,
 	) -> DispatchResult {
-		Self::do_transfer(*class, *instance, destination.clone(), |_, _| Ok(()))
+		Self::do_transfer(*collection, *item, destination.clone(), |_, _| Ok(()))
 	}
 }
 
 impl<T: Config<I>, I: 'static> InspectEnumerable<T::AccountId> for Pallet<T, I> {
-	/// Returns an iterator of the asset classes in existence.
+	/// Returns an iterator of the collections in existence.
 	///
 	/// NOTE: iterating this list invokes a storage read per item.
-	fn classes() -> Box<dyn Iterator<Item = Self::ClassId>> {
-		Box::new(ClassMetadataOf::<T, I>::iter_keys())
+	fn collections() -> Box<dyn Iterator<Item = Self::CollectionId>> {
+		Box::new(CollectionMetadataOf::<T, I>::iter_keys())
 	}
 
-	/// Returns an iterator of the instances of an asset `class` in existence.
+	/// Returns an iterator of the items of a `collection` in existence.
 	///
 	/// NOTE: iterating this list invokes a storage read per item.
-	fn instances(class: &Self::ClassId) -> Box<dyn Iterator<Item = Self::InstanceId>> {
-		Box::new(InstanceMetadataOf::<T, I>::iter_key_prefix(class))
+	fn items(collection: &Self::CollectionId) -> Box<dyn Iterator<Item = Self::ItemId>> {
+		Box::new(ItemMetadataOf::<T, I>::iter_key_prefix(collection))
 	}
 
-	/// Returns an iterator of the asset instances of all classes owned by `who`.
+	/// Returns an iterator of the items of all collections owned by `who`.
 	///
 	/// NOTE: iterating this list invokes a storage read per item.
-	fn owned(who: &T::AccountId) -> Box<dyn Iterator<Item = (Self::ClassId, Self::InstanceId)>> {
+	fn owned(who: &T::AccountId) -> Box<dyn Iterator<Item = (Self::CollectionId, Self::ItemId)>> {
 		Box::new(Account::<T, I>::iter_key_prefix((who,)))
 	}
 
-	/// Returns an iterator of the asset instances of `class` owned by `who`.
+	/// Returns an iterator of the items of `collection` owned by `who`.
 	///
 	/// NOTE: iterating this list invokes a storage read per item.
-	fn owned_in_class(
-		class: &Self::ClassId,
+	fn owned_in_collection(
+		collection: &Self::CollectionId,
 		who: &T::AccountId,
-	) -> Box<dyn Iterator<Item = Self::InstanceId>> {
-		Box::new(Account::<T, I>::iter_key_prefix((who, class)))
+	) -> Box<dyn Iterator<Item = Self::ItemId>> {
+		Box::new(Account::<T, I>::iter_key_prefix((who, collection)))
 	}
 }

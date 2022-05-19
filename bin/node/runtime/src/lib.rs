@@ -1414,12 +1414,12 @@ parameter_types! {
 
 impl pallet_uniques::Config for Runtime {
 	type Event = Event;
-	type ClassId = u32;
-	type InstanceId = u32;
+	type CollectionId = u32;
+	type ItemId = u32;
 	type Currency = Balances;
 	type ForceOrigin = frame_system::EnsureRoot<AccountId>;
-	type ClassDeposit = ClassDeposit;
-	type InstanceDeposit = InstanceDeposit;
+	type CollectionDeposit = ClassDeposit;
+	type ItemDeposit = InstanceDeposit;
 	type MetadataDepositBase = MetadataDepositBase;
 	type AttributeDepositBase = MetadataDepositBase;
 	type DepositPerByte = MetadataDepositPerByte;

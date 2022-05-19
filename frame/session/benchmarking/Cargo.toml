@@ -25,7 +25,7 @@ sp-std = { version = "4.0.0", default-features = false, path = "../../../primiti
 
 [dev-dependencies]
 codec = { package = "parity-scale-codec", version = "3.0.0", features = ["derive"] }
-scale-info = "2.0.1"
+scale-info = "2.1.1"
 frame-election-provider-support = { version = "4.0.0-dev", path = "../../election-provider-support" }
 pallet-balances = { version = "4.0.0-dev", path = "../../balances" }
 pallet-staking-reward-curve = { version = "4.0.0-dev", path = "../../staking/reward-curve" }

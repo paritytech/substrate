@@ -122,10 +122,10 @@ where
 	/// Request response configuration for the light client request protocol.
 	///
 	/// Can be constructed either via
-	/// [`crate::light_client_requests::generate_protocol_config`] allowing outgoing but not
-	/// incoming requests, or constructed via
-	/// [`crate::light_client_requests::handler::LightClientRequestHandler::new`] allowing
-	/// both outgoing and incoming requests.
+	/// [`sc_network_light::light_client_requests::generate_protocol_config`] allowing outgoing but
+	/// not incoming requests, or constructed via
+	/// [`sc_network_light::light_client_requests::handler::LightClientRequestHandler::new`]
+	/// allowing both outgoing and incoming requests.
 	pub light_client_request_protocol_config: RequestResponseConfig,
 
 	/// Request response configuration for the state request protocol.
