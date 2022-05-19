@@ -617,7 +617,7 @@ impl<T: Config<I>, I: 'static> Polling<T::Tally> for Pallet<T, I> {
 			submission_deposit: Deposit { who: dummy_account_id, amount: Zero::zero() },
 			decision_deposit: None,
 			deciding: None,
-			tally: Default::default(),
+			tally: TallyOf::<T, I>::new(class),
 			in_queue: false,
 			alarm: None,
 		};
