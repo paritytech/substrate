@@ -204,14 +204,14 @@ where
 
 		let mut reputation_change = None;
 
+		let small_request = attributes
+			.difference(BlockAttributes::HEADER | BlockAttributes::JUSTIFICATION)
+			.is_empty();
+
 		match self.seen_requests.get_mut(&key) {
 			Some(SeenRequestsValue::First) => {},
 			Some(SeenRequestsValue::Fulfilled(ref mut requests)) => {
 				*requests = requests.saturating_add(1);
-
-				let small_request = attributes
-					.difference(BlockAttributes::HEADER | BlockAttributes::JUSTIFICATION)
-					.is_empty();
 
 				if *requests > MAX_NUMBER_OF_SAME_REQUESTS_PER_PEER {
 					reputation_change = Some(if small_request {
@@ -237,7 +237,7 @@ where
 			attributes,
 		);
 
-		let result = if reputation_change.is_none() {
+		let result = if reputation_change.is_none() || small_request {
 			let block_response = self.get_block_response(
 				attributes,
 				from_block_id,

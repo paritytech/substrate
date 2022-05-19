@@ -19,18 +19,20 @@
 use codec::{Decode as _, Encode as _};
 use sc_executor_common::{error::Error, runtime_blob::RuntimeBlob, wasm_runtime::WasmModule};
 use sc_runtime_test::wasm_binary_unwrap;
-use std::sync::Arc;
+
+use crate::InstantiationStrategy;
 
 type HostFunctions = sp_io::SubstrateHostFunctions;
 
 struct RuntimeBuilder {
 	code: Option<String>,
-	fast_instance_reuse: bool,
+	instantiation_strategy: InstantiationStrategy,
 	canonicalize_nans: bool,
 	deterministic_stack: bool,
 	extra_heap_pages: u64,
 	max_memory_size: Option<usize>,
 	precompile_runtime: bool,
+	tmpdir: Option<tempfile::TempDir>,
 }
 
 impl RuntimeBuilder {
@@ -39,41 +41,42 @@ impl RuntimeBuilder {
 	fn new_on_demand() -> Self {
 		Self {
 			code: None,
-			fast_instance_reuse: false,
+			instantiation_strategy: InstantiationStrategy::RecreateInstance,
 			canonicalize_nans: false,
 			deterministic_stack: false,
 			extra_heap_pages: 1024,
 			max_memory_size: None,
 			precompile_runtime: false,
+			tmpdir: None,
 		}
 	}
 
-	fn use_wat(&mut self, code: String) -> &mut Self {
+	fn use_wat(mut self, code: String) -> Self {
 		self.code = Some(code);
 		self
 	}
 
-	fn canonicalize_nans(&mut self, canonicalize_nans: bool) -> &mut Self {
+	fn canonicalize_nans(mut self, canonicalize_nans: bool) -> Self {
 		self.canonicalize_nans = canonicalize_nans;
 		self
 	}
 
-	fn deterministic_stack(&mut self, deterministic_stack: bool) -> &mut Self {
+	fn deterministic_stack(mut self, deterministic_stack: bool) -> Self {
 		self.deterministic_stack = deterministic_stack;
 		self
 	}
 
-	fn precompile_runtime(&mut self, precompile_runtime: bool) -> &mut Self {
+	fn precompile_runtime(mut self, precompile_runtime: bool) -> Self {
 		self.precompile_runtime = precompile_runtime;
 		self
 	}
 
-	fn max_memory_size(&mut self, max_memory_size: Option<usize>) -> &mut Self {
+	fn max_memory_size(mut self, max_memory_size: Option<usize>) -> Self {
 		self.max_memory_size = max_memory_size;
 		self
 	}
 
-	fn build(&mut self) -> Arc<dyn WasmModule> {
+	fn build<'a>(&'a mut self) -> impl WasmModule + 'a {
 		let blob = {
 			let wasm: Vec<u8>;
 
@@ -90,11 +93,10 @@ impl RuntimeBuilder {
 		};
 
 		let config = crate::Config {
-			max_memory_size: self.max_memory_size,
 			allow_missing_func_imports: true,
 			cache_path: None,
 			semantics: crate::Semantics {
-				fast_instance_reuse: self.fast_instance_reuse,
+				instantiation_strategy: self.instantiation_strategy,
 				deterministic_stack_limit: match self.deterministic_stack {
 					true => Some(crate::DeterministicStackLimit {
 						logical_max: 65536,
@@ -105,24 +107,31 @@ impl RuntimeBuilder {
 				canonicalize_nans: self.canonicalize_nans,
 				parallel_compilation: true,
 				extra_heap_pages: self.extra_heap_pages,
+				max_memory_size: self.max_memory_size,
 			},
 		};
 
-		let rt = if self.precompile_runtime {
+		if self.precompile_runtime {
+			let dir = tempfile::tempdir().unwrap();
+			let path = dir.path().join("runtime.bin");
+
+			// Delay the removal of the temporary directory until we're dropped.
+			self.tmpdir = Some(dir);
+
 			let artifact = crate::prepare_runtime_artifact(blob, &config.semantics).unwrap();
-			unsafe { crate::create_runtime_from_artifact::<HostFunctions>(&artifact, config) }
+			std::fs::write(&path, artifact).unwrap();
+			unsafe { crate::create_runtime_from_artifact::<HostFunctions>(&path, config) }
 		} else {
 			crate::create_runtime::<HostFunctions>(blob, config)
 		}
-		.expect("cannot create runtime");
-
-		Arc::new(rt) as Arc<dyn WasmModule>
+		.expect("cannot create runtime")
 	}
 }
 
 #[test]
 fn test_nan_canonicalization() {
-	let runtime = RuntimeBuilder::new_on_demand().canonicalize_nans(true).build();
+	let mut builder = RuntimeBuilder::new_on_demand().canonicalize_nans(true);
+	let runtime = builder.build();
 
 	let mut instance = runtime.new_instance().expect("failed to instantiate a runtime");
 
@@ -161,10 +170,11 @@ fn test_nan_canonicalization() {
 fn test_stack_depth_reaching() {
 	const TEST_GUARD_PAGE_SKIP: &str = include_str!("test-guard-page-skip.wat");
 
-	let runtime = RuntimeBuilder::new_on_demand()
+	let mut builder = RuntimeBuilder::new_on_demand()
 		.use_wat(TEST_GUARD_PAGE_SKIP.to_string())
-		.deterministic_stack(true)
-		.build();
+		.deterministic_stack(true);
+
+	let runtime = builder.build();
 	let mut instance = runtime.new_instance().expect("failed to instantiate a runtime");
 
 	match instance.call_export("test-many-locals", &[]).unwrap_err() {
@@ -202,11 +212,12 @@ fn test_max_memory_pages(import_memory: bool, precompile_runtime: bool) {
 		wat: String,
 		precompile_runtime: bool,
 	) -> Result<(), Box<dyn std::error::Error>> {
-		let runtime = RuntimeBuilder::new_on_demand()
+		let mut builder = RuntimeBuilder::new_on_demand()
 			.use_wat(wat)
 			.max_memory_size(max_memory_size)
-			.precompile_runtime(precompile_runtime)
-			.build();
+			.precompile_runtime(precompile_runtime);
+
+		let runtime = builder.build();
 		let mut instance = runtime.new_instance()?;
 		let _ = instance.call_export("main", &[])?;
 		Ok(())
@@ -377,15 +388,15 @@ fn test_instances_without_reuse_are_not_leaked() {
 	let runtime = crate::create_runtime::<HostFunctions>(
 		RuntimeBlob::uncompress_if_needed(wasm_binary_unwrap()).unwrap(),
 		crate::Config {
-			max_memory_size: None,
 			allow_missing_func_imports: true,
 			cache_path: None,
 			semantics: crate::Semantics {
-				fast_instance_reuse: false,
+				instantiation_strategy: InstantiationStrategy::RecreateInstance,
 				deterministic_stack_limit: None,
 				canonicalize_nans: false,
 				parallel_compilation: true,
 				extra_heap_pages: 2048,
+				max_memory_size: None,
 			},
 		},
 	)

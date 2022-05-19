@@ -23,9 +23,7 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use frame_support::traits::{
-	ChangeMembers, Contains, Get, InitializeMembers, SortedMembers, StorageVersion,
-};
+use frame_support::traits::{ChangeMembers, Contains, Get, InitializeMembers, SortedMembers};
 use sp_std::prelude::*;
 
 pub mod migrations;
@@ -507,7 +505,7 @@ mod tests {
 
 	use frame_support::{
 		assert_noop, assert_ok, ord_parameter_types, parameter_types,
-		traits::{ConstU32, ConstU64, GenesisBuild},
+		traits::{ConstU32, ConstU64, GenesisBuild, StorageVersion},
 	};
 	use frame_system::EnsureSignedBy;
 

@@ -475,10 +475,12 @@ mod test_iterators {
 	fn n_map_iter_from() {
 		sp_io::TestExternalities::default().execute_with(|| {
 			use crate::{hash::Identity, storage::Key as NMapKey};
-			crate::generate_storage_alias!(
+			#[crate::storage_alias]
+			type MyNMap = StorageNMap<
 				MyModule,
-				MyNMap => NMap<Key<(Identity, u64), (Identity, u64), (Identity, u64)>, u64>
-			);
+				(NMapKey<Identity, u64>, NMapKey<Identity, u64>, NMapKey<Identity, u64>),
+				u64,
+			>;
 
 			MyNMap::insert((1, 1, 1), 11);
 			MyNMap::insert((1, 1, 2), 21);
@@ -518,11 +520,15 @@ mod test_iterators {
 			let key_hash = NMap::hashed_key_for((1, 2));
 
 			{
-				crate::generate_storage_alias!(Test, NMap => DoubleMap<
-					(crate::Blake2_128Concat, u16),
-					(crate::Twox64Concat, u32),
-					u64
-				>);
+				#[crate::storage_alias]
+				type NMap = StorageDoubleMap<
+					Test,
+					crate::Blake2_128Concat,
+					u16,
+					crate::Twox64Concat,
+					u32,
+					u64,
+				>;
 
 				let value = NMap::get(1, 2).unwrap();
 				assert_eq!(value, 50);

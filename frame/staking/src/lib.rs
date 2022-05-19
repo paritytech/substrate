@@ -369,9 +369,9 @@ pub struct ActiveEraInfo {
 #[derive(PartialEq, Encode, Decode, RuntimeDebug, TypeInfo)]
 pub struct EraRewardPoints<AccountId: Ord> {
 	/// Total number of points. Equals the sum of reward points for each validator.
-	total: RewardPoint,
+	pub total: RewardPoint,
 	/// The reward points earned by a given validator.
-	individual: BTreeMap<AccountId, RewardPoint>,
+	pub individual: BTreeMap<AccountId, RewardPoint>,
 }
 
 impl<AccountId: Ord> Default for EraRewardPoints<AccountId> {

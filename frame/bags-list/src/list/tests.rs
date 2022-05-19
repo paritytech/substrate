@@ -368,12 +368,10 @@ mod list {
 			assert_eq!(crate::ListNodes::<Runtime>::count(), 4);
 			// we do some wacky stuff here to get access to the counter, since it is (reasonably)
 			// not exposed as mutable in any sense.
-			frame_support::generate_storage_alias!(
-				BagsList,
-				CounterForListNodes
-				=> Value<u32, frame_support::pallet_prelude::ValueQuery>
-			);
-			CounterForListNodes::mutate(|counter| *counter += 1);
+			#[frame_support::storage_alias]
+			type CounterForListNodes<T: Config> =
+				StorageValue<crate::Pallet<T>, u32, frame_support::pallet_prelude::ValueQuery>;
+			CounterForListNodes::<Runtime>::mutate(|counter| *counter += 1);
 			assert_eq!(crate::ListNodes::<Runtime>::count(), 5);
 
 			assert_eq!(List::<Runtime>::sanity_check(), Err("iter_count != stored_count"));
