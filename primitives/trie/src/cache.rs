@@ -40,10 +40,7 @@ use lru::LruCache;
 use nohash_hasher::{BuildNoHashHasher, IntMap, IntSet};
 use parking_lot::{Mutex, MutexGuard, RwLock, RwLockReadGuard};
 use std::{
-	collections::{
-		hash_map::{DefaultHasher, Entry},
-		HashMap, HashSet,
-	},
+	collections::{hash_map::Entry, HashMap, HashSet},
 	hash::Hasher as _,
 	mem,
 	sync::Arc,
@@ -51,6 +48,10 @@ use std::{
 use trie_db::{node::NodeOwned, CachedValue};
 
 const LOG_TARGET: &str = "trie-cache";
+
+lazy_static::lazy_static! {
+	static ref RANDOM_STATE: ahash::RandomState = ahash::RandomState::default();
+}
 
 /// No hashing [`lru::LruCache`].
 ///
@@ -61,7 +62,8 @@ type NoHashingLruCache<T> = lru::LruCache<u64, T, BuildNoHashHasher<u64>>;
 ///
 /// The key is build by hashing the actual storage `key` and the `storage_root`.
 fn value_cache_get_key(key: &[u8], storage_root: &impl AsRef<[u8]>) -> u64 {
-	let mut hasher = DefaultHasher::default();
+	use std::hash::BuildHasher;
+	let mut hasher = RANDOM_STATE.build_hasher();
 	hasher.write(key);
 	hasher.write(storage_root.as_ref());
 	hasher.finish()

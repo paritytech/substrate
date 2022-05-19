@@ -10193,9 +10193,11 @@ dependencies = [
 name = "sp-trie"
 version = "6.0.0"
 dependencies = [
+ "ahash",
  "criterion",
  "hash-db",
  "hex-literal",
+ "lazy_static",
  "lru",
  "memory-db",
  "nohash-hasher",
