@@ -290,10 +290,10 @@ where
 	/// the returned path should always contain at least one index, otherwise `None` is
 	/// returned.
 	// WARNING: some users of this method (i.e. consensus epoch changes tree) currently silently
-	// rely on a **DFS** traversal. If we are using instead a top-down traversal method then
-	// the `is_descendent_of` closure, when used after a warp-sync, will end up querying the
-	// backend for a block (the one corresponding to the root) that is not present and thus
-	// will return a wrong result. Here we are implementing a post-order DFS.
+	// rely on a **post-order DFS** traversal. If we are using instead a top-down traversal method
+	// then the `is_descendent_of` closure, when used after a warp-sync, will end up querying the
+	// backend for a block (the one corresponding to the root) that is not present and thus will
+	// return a wrong result. Here we are implementing a post-order DFS.
 	pub fn find_node_index_where<F, E, P>(
 		&self,
 		hash: &H,
