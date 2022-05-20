@@ -459,13 +459,15 @@ pub enum SignedRounding {
 impl Rounding {
 	/// Returns the value for `Rounding` which would give the same result ignorant of the sign.
 	pub const fn from_signed(rounding: SignedRounding, negative: bool) -> Self {
-		use SignedRounding::*;
 		use Rounding::*;
+		use SignedRounding::*;
 		match (rounding, negative) {
 			(Low, true) | (Major, _) | (High, false) => Up,
 			(High, true) | (Minor, _) | (Low, false) => Down,
-			(NearestPrefMajor, _) | (NearestPrefHigh, false) | (NearestPrefLow, true) => NearestPrefUp,
-			(NearestPrefMinor, _) | (NearestPrefLow, false) | (NearestPrefHigh, true) => NearestPrefDown,
+			(NearestPrefMajor, _) | (NearestPrefHigh, false) | (NearestPrefLow, true) =>
+				NearestPrefUp,
+			(NearestPrefMinor, _) | (NearestPrefLow, false) | (NearestPrefHigh, true) =>
+				NearestPrefDown,
 		}
 	}
 }
@@ -545,10 +547,11 @@ where
 				rem_mul_div_inner += 1.into();
 			}
 		},
-		Rounding::NearestPrefDown => if rem_mul_upper % denom_upper > denom_upper / 2.into() {
-			// `rem * numer / denom` is less than `numer`, so this will not overflow.
-			rem_mul_div_inner += 1.into();
-		},
+		Rounding::NearestPrefDown =>
+			if rem_mul_upper % denom_upper > denom_upper / 2.into() {
+				// `rem * numer / denom` is less than `numer`, so this will not overflow.
+				rem_mul_div_inner += 1.into();
+			},
 		Rounding::NearestPrefUp =>
 			if rem_mul_upper % denom_upper >= denom_upper / 2.into() + denom_upper % 2.into() {
 				// `rem * numer / denom` is less than `numer`, so this will not overflow.

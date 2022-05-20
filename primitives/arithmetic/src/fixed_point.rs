@@ -594,8 +594,7 @@ macro_rules! implement_fixed {
 				if b == 0 {
 					panic!("attempt to divide by zero in from_rational")
 				}
-				match multiply_by_rational_with_rounding(Self::DIV as u128, a, b, rounding)
-				{
+				match multiply_by_rational_with_rounding(Self::DIV as u128, a, b, rounding) {
 					Some(value) => match Self::from_i129(I129 { value, negative: false }) {
 						Some(x) => x,
 						None => panic!("overflow in from_rational"),
@@ -608,7 +607,11 @@ macro_rules! implement_fixed {
 				self.const_checked_mul_with_rounding(other, SignedRounding::NearestPrefLow)
 			}
 
-			pub const fn const_checked_mul_with_rounding(self, other: Self, rounding: SignedRounding) -> Option<Self> {
+			pub const fn const_checked_mul_with_rounding(
+				self,
+				other: Self,
+				rounding: SignedRounding,
+			) -> Option<Self> {
 				let lhs = self.into_i129();
 				let rhs = other.into_i129();
 				let negative = lhs.negative != rhs.negative;
