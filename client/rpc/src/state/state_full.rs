@@ -28,10 +28,7 @@ use super::{
 use crate::SubscriptionTaskExecutor;
 
 use futures::{future, stream, FutureExt, StreamExt};
-use jsonrpsee::{
-	core::{async_trait, Error as JsonRpseeError},
-	PendingSubscription,
-};
+use jsonrpsee::{core::Error as JsonRpseeError, PendingSubscription};
 use sc_client_api::{
 	Backend, BlockBackend, BlockchainEvents, CallExecutor, ExecutorProvider, ProofProvider,
 	StorageProvider,
@@ -170,7 +167,6 @@ where
 	}
 }
 
-#[async_trait]
 impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Client>
 where
 	Block: BlockT + 'static,
@@ -474,7 +470,6 @@ where
 	}
 }
 
-#[async_trait]
 impl<BE, Block, Client> ChildStateBackend<Block, Client> for FullState<BE, Block, Client>
 where
 	Block: BlockT + 'static,

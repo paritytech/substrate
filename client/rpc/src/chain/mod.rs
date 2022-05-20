@@ -27,10 +27,7 @@ use std::sync::Arc;
 
 use crate::SubscriptionTaskExecutor;
 
-use jsonrpsee::{
-	core::{async_trait, RpcResult},
-	PendingSubscription,
-};
+use jsonrpsee::{core::RpcResult, PendingSubscription};
 use sc_client_api::BlockchainEvents;
 use sp_rpc::{list::ListOrValue, number::NumberOrHex};
 use sp_runtime::{
@@ -45,7 +42,6 @@ pub use sc_rpc_api::chain::*;
 use sp_blockchain::HeaderBackend;
 
 /// Blockchain backend API
-#[async_trait]
 trait ChainBackend<Client, Block: BlockT>: Send + Sync + 'static
 where
 	Block: BlockT + 'static,
@@ -126,7 +122,6 @@ pub struct Chain<Block: BlockT, Client> {
 	backend: Box<dyn ChainBackend<Client, Block>>,
 }
 
-#[async_trait]
 impl<Block, Client> ChainApiServer<NumberFor<Block>, Block::Hash, Block::Header, SignedBlock<Block>>
 	for Chain<Block, Client>
 where
