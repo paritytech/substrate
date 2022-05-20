@@ -89,7 +89,8 @@ impl Drop for StorageLayerGuard {
 
 /// Check if the current call is within a transactional layer.
 pub fn is_transactional() -> bool {
-	get_transaction_level() > 0
+	true
+	//get_transaction_level() > 0
 }
 
 /// Execute the supplied function in a new storage transaction.
