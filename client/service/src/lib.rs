@@ -427,7 +427,7 @@ where
 	fn import(&self, transaction: B::Extrinsic) -> TransactionImportFuture {
 		if !self.imports_external_transactions {
 			debug!("Transaction rejected");
-			return Box::pin(futures::future::ready(TransactionImport::None))
+			return Box::pin(futures::future::ready(TransactionImport::None));
 		}
 
 		let encoded = transaction.encode();
@@ -435,7 +435,7 @@ where
 			Ok(uxt) => uxt,
 			Err(e) => {
 				debug!("Transaction invalid: {:?}", e);
-				return Box::pin(futures::future::ready(TransactionImport::Bad))
+				return Box::pin(futures::future::ready(TransactionImport::Bad));
 			},
 		};
 
@@ -450,8 +450,9 @@ where
 			match import_future.await {
 				Ok(_) => TransactionImport::NewGood,
 				Err(e) => match e.into_pool_error() {
-					Ok(sc_transaction_pool_api::error::Error::AlreadyImported(_)) =>
-						TransactionImport::KnownGood,
+					Ok(sc_transaction_pool_api::error::Error::AlreadyImported(_)) => {
+						TransactionImport::KnownGood
+					},
 					Ok(e) => {
 						debug!("Error adding transaction to the pool: {:?}", e);
 						TransactionImport::Bad
@@ -484,14 +485,13 @@ fn legacy_cli_parsing(config: &Configuration) -> (Option<usize>, Option<usize>, 
 		config.ws_max_out_buffer_capacity,
 		config.rpc_max_response_size,
 	) {
-		(Some(m1), Some(m2)) => {
+		(Some(legacy_max), max) => {
 			eprintln!("DEPRECATED: `--ws_max_out_buffer_capacity` has been removed use `rpc-max-response-size or rpc-max-request-size` instead");
 			eprintln!("Setting WS `rpc-max-response-size` to `max(ws_max_out_buffer_capacity, rpc_max_response_size)`");
-			Some(std::cmp::max(m1, m2))
+			Some(std::cmp::max(legacy_max, max.unwrap_or(0)))
 		},
-		(Some(m), None) => Some(m),
 		(None, Some(m)) => Some(m),
-		_ => None,
+		(None, None) => None,
 	};
 
 	let max_request_size = match (config.rpc_max_payload, config.rpc_max_request_size) {
@@ -506,7 +506,7 @@ fn legacy_cli_parsing(config: &Configuration) -> (Option<usize>, Option<usize>, 
 		(None, None) => None,
 	};
 
-	let http_max_response_size = match (config.rpc_max_payload, config.rpc_max_request_size) {
+	let http_max_response_size = match (config.rpc_max_payload, config.rpc_max_response_size) {
 		(Some(legacy_max), max) => {
 			eprintln!("DEPRECATED: `--rpc_max_payload` has been removed use `rpc-max-response-size or rpc-max-request-size` instead");
 			eprintln!(
