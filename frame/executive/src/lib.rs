@@ -459,10 +459,11 @@ where
 		// Decode parameters and dispatch
 		let dispatch_info = xt.get_dispatch_info();
 
-		frame_support::storage::track_transaction_level(|| {
-			let r = Applyable::apply::<UnsignedValidator>(xt, &dispatch_info, encoded_len)?;
-			<frame_system::Pallet<System>>::note_applied_extrinsic(&r, dispatch_info);
-		});
+		let r = frame_support::storage::transactional::track_transaction_level(|| {
+			Applyable::apply::<UnsignedValidator>(xt, &dispatch_info, encoded_len)
+		})?;
+
+		<frame_system::Pallet<System>>::note_applied_extrinsic(&r, dispatch_info);
 
 		Ok(r.map(|_| ()).map_err(|e| e.error))
 	}
@@ -672,6 +673,24 @@ mod tests {
 				let root = sp_io::storage::root(sp_runtime::StateVersion::V1);
 				sp_io::storage::set("storage_root".as_bytes(), &root);
 				Ok(())
+			}
+
+			#[pallet::weight(0)]
+			pub fn recursive(_origin: OriginFor<T>, depth: u32) -> DispatchResult {
+				Self::recursive_storage_layer(depth)?;
+				Ok(())
+			}
+		}
+
+		impl<T> Pallet<T> {
+			fn recursive_storage_layer(num: u32) -> DispatchResult {
+				if num == 0 {
+					return Ok(())
+				}
+
+				frame_support::storage::with_storage_layer(|| -> DispatchResult {
+					Self::recursive_storage_layer(num - 1)
+				})
 			}
 		}
 
@@ -1467,6 +1486,38 @@ mod tests {
 
 			Executive::apply_extrinsic(xt1.clone()).unwrap().unwrap();
 			Executive::apply_extrinsic(xt2.clone()).unwrap().unwrap();
+
+			Executive::finalize_block()
+		});
+
+		new_test_ext(1).execute_with(|| {
+			Executive::execute_block(Block::new(header, vec![xt1, xt2]));
+		});
+	}
+
+	#[test]
+	fn storage_layer_limit_enforced() {
+		let xt1 =
+			TestXt::new(Call::Custom(custom::Call::recursive { depth: 2 }), sign_extra(1, 0, 0));
+		let xt2 =
+			TestXt::new(Call::Custom(custom::Call::recursive { depth: 256 }), sign_extra(1, 1, 0));
+
+		let header = new_test_ext(1).execute_with(|| {
+			// Let's build some fake block.
+			Executive::initialize_block(&Header::new(
+				1,
+				H256::default(),
+				H256::default(),
+				[69u8; 32].into(),
+				Digest::default(),
+			));
+
+			Executive::apply_extrinsic(xt1.clone()).unwrap().unwrap();
+			// Transactional limit should be reached.
+			assert_err!(
+				Executive::apply_extrinsic(xt2.clone()).unwrap(),
+				sp_runtime::TransactionalError::LimitReached
+			);
 
 			Executive::finalize_block()
 		});
