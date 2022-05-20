@@ -128,7 +128,7 @@ impl<'a, H: Hasher, B: 'a + Backend<H>> Externalities for ReadOnlyExternalities<
 		unimplemented!("kill_child_storage is not supported in ReadOnlyExternalities")
 	}
 
-	fn clear_prefix(&mut self, _prefix: &[u8], _limit: Option<u32>) -> (bool, u32) {
+	fn clear_prefix(&mut self, _prefix: &[u8], _limit: Option<u32>) -> (bool, u32, u32) {
 		unimplemented!("clear_prefix is not supported in ReadOnlyExternalities")
 	}
 
@@ -137,7 +137,7 @@ impl<'a, H: Hasher, B: 'a + Backend<H>> Externalities for ReadOnlyExternalities<
 		_child_info: &ChildInfo,
 		_prefix: &[u8],
 		_limit: Option<u32>,
-	) -> (bool, u32) {
+	) -> (bool, u32, u32) {
 		unimplemented!("clear_child_prefix is not supported in ReadOnlyExternalities")
 	}
 

@@ -229,11 +229,31 @@ where
 	/// Calling this multiple times per block with a `limit` set leads always to the same keys being
 	/// removed and the same result being returned. This happens because the keys to delete in the
 	/// overlay are not taken into account when deleting keys in the backend.
+	#[deprecated = "Use `clear_prefix` instead"]
 	pub fn remove_prefix<KArg1>(k1: KArg1, limit: Option<u32>) -> sp_io::KillStorageResult
 	where
 		KArg1: ?Sized + EncodeLike<Key1>,
 	{
-		<Self as crate::storage::StorageDoubleMap<Key1, Key2, Value>>::remove_prefix(k1, limit)
+		Self::clear_prefix(k1, limit).into()
+	}
+
+	/// Remove all values under `k1` in the overlay and up to `limit` in the
+	/// backend.
+	///
+	/// All values in the client overlay will be deleted, if there is some `limit` then up to
+	/// `limit` values are deleted from the client backend, if `limit` is none then all values in
+	/// the client backend are deleted.
+	///
+	/// # Note
+	///
+	/// Calling this multiple times per block with a `limit` set leads always to the same keys being
+	/// removed and the same result being returned. This happens because the keys to delete in the
+	/// overlay are not taken into account when deleting keys in the backend.
+	pub fn clear_prefix<KArg1>(k1: KArg1, limit: Option<u32>) -> sp_io::ClearPrefixResult
+	where
+		KArg1: ?Sized + EncodeLike<Key1>,
+	{
+		<Self as crate::storage::StorageDoubleMap<Key1, Key2, Value>>::clear_prefix(k1, limit)
 	}
 
 	/// Iterate over values that share the first key.
@@ -359,8 +379,24 @@ where
 	/// Calling this multiple times per block with a `limit` set leads always to the same keys being
 	/// removed and the same result being returned. This happens because the keys to delete in the
 	/// overlay are not taken into account when deleting keys in the backend.
+	#[deprecated = "Use `clear` instead"]
 	pub fn remove_all(limit: Option<u32>) -> sp_io::KillStorageResult {
-		<Self as crate::storage::StoragePrefixedMap<Value>>::remove_all(limit)
+		Self::clear(limit).into()
+	}
+
+	/// Remove all values in the overlay and up to `limit` in the backend.
+	///
+	/// All values in the client overlay will be deleted, if there is some `limit` then up to
+	/// `limit` values are deleted from the client backend, if `limit` is none then all values in
+	/// the client backend are deleted.
+	///
+	/// # Note
+	///
+	/// Calling this multiple times per block with a `limit` set leads always to the same keys being
+	/// removed and the same result being returned. This happens because the keys to delete in the
+	/// overlay are not taken into account when deleting keys in the backend.
+	pub fn clear(limit: Option<u32>) -> sp_io::ClearPrefixResult {
+		<Self as crate::storage::StoragePrefixedMap<Value>>::clear(limit)
 	}
 
 	/// Iter over all value of the storage.
@@ -768,7 +804,7 @@ mod test {
 
 			A::insert(3, 30, 10);
 			A::insert(4, 40, 10);
-			A::remove_all(None);
+			A::clear(None);
 			assert_eq!(A::contains_key(3, 30), false);
 			assert_eq!(A::contains_key(4, 40), false);
 
@@ -829,7 +865,7 @@ mod test {
 				]
 			);
 
-			WithLen::remove_all(None);
+			WithLen::clear(None);
 			assert_eq!(WithLen::decode_len(3, 30), None);
 			WithLen::append(0, 100, 10);
 			assert_eq!(WithLen::decode_len(0, 100), Some(1));
@@ -843,7 +879,7 @@ mod test {
 			assert_eq!(A::iter_prefix_values(4).collect::<Vec<_>>(), vec![13, 14]);
 			assert_eq!(A::iter_prefix(4).collect::<Vec<_>>(), vec![(40, 13), (41, 14)]);
 
-			A::remove_prefix(3, None);
+			A::clear_prefix(3, None);
 			assert_eq!(A::iter_prefix(3).collect::<Vec<_>>(), vec![]);
 			assert_eq!(A::iter_prefix(4).collect::<Vec<_>>(), vec![(40, 13), (41, 14)]);
 

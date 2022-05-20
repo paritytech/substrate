@@ -1596,7 +1596,7 @@ mod tests {
 		{
 			let mut cache = StorageTransactionCache::default();
 			let mut ext = Ext::new(&mut overlay, &mut cache, backend, None);
-			assert_eq!((false, 1), ext.clear_prefix(b"ab", Some(1)));
+			assert_eq!((false, 1, 3), ext.clear_prefix(b"ab", Some(1)));
 		}
 		overlay.commit_transaction().unwrap();
 
@@ -1678,7 +1678,7 @@ mod tests {
 		// Only 3 items remaining to remove
 		assert_eq!(ext.kill_child_storage(&child_info, Some(4)), (true, 3));
 	}
-
+	
 	#[test]
 	fn limited_child_kill_off_by_one_works_without_limit() {
 		let child_info = ChildInfo::new_default(b"sub1");

@@ -31,6 +31,7 @@ use crate::{
 	Never,
 };
 use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen, Ref};
+use sp_io::ClearPrefixResult;
 use sp_runtime::traits::Saturating;
 use sp_std::prelude::*;
 
@@ -274,12 +275,18 @@ where
 	}
 
 	/// Remove all value of the storage.
+	#[deprecated = "Use `clear` instead"]
 	pub fn remove_all() {
+		Self::clear(None);
+	}
+
+	/// Remove all value of the storage.
+	pub fn clear(limit: Option<u32>) -> ClearPrefixResult {
 		// NOTE: it is not possible to remove up to some limit because
 		// `sp_io::storage::clear_prefix` and `StorageMap::remove_all` don't give the number of
 		// value removed from the overlay.
 		CounterFor::<Prefix>::set(0u32);
-		<Self as MapWrapper>::Map::remove_all(None);
+		<Self as MapWrapper>::Map::clear(limit)
 	}
 
 	/// Iter over all value of the storage.
@@ -691,7 +698,7 @@ mod test {
 			assert_eq!(A::count(), 2);
 
 			// Remove all.
-			A::remove_all();
+			A::clear(None);
 
 			assert_eq!(A::count(), 0);
 			assert_eq!(A::initialize_counter(), 0);
@@ -922,7 +929,7 @@ mod test {
 			assert_eq!(B::count(), 2);
 
 			// Remove all.
-			B::remove_all();
+			B::clear(None);
 
 			assert_eq!(B::count(), 0);
 			assert_eq!(B::initialize_counter(), 0);

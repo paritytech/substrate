@@ -261,7 +261,7 @@ pub fn remove_storage_prefix(module: &[u8], item: &[u8], hash: &[u8]) {
 	let storage_prefix = storage_prefix(module, item);
 	key[0..32].copy_from_slice(&storage_prefix);
 	key[32..].copy_from_slice(hash);
-	frame_support::storage::unhashed::kill_prefix(&key, None);
+	frame_support::storage::unhashed::clear_prefix(&key, None);
 }
 
 /// Take a particular item in storage by the `module`, the map's `item` name and the key `hash`.

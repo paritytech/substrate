@@ -514,7 +514,24 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 	/// Calling this multiple times per block with a `limit` set leads always to the same keys being
 	/// removed and the same result being returned. This happens because the keys to delete in the
 	/// overlay are not taken into account when deleting keys in the backend.
+	#[deprecated = "Use `clear_prefix` instead"]
 	fn remove_prefix<KArg1>(k1: KArg1, limit: Option<u32>) -> sp_io::KillStorageResult
+	where
+		KArg1: ?Sized + EncodeLike<K1>;
+
+	/// Remove all values under the first key `k1` in the overlay and up to `limit` in the
+	/// backend.
+	///
+	/// All values in the client overlay will be deleted, if there is some `limit` then up to
+	/// `limit` values are deleted from the client backend, if `limit` is none then all values in
+	/// the client backend are deleted.
+	///
+	/// # Note
+	///
+	/// Calling this multiple times per block with a `limit` set leads always to the same keys being
+	/// removed and the same result being returned. This happens because the keys to delete in the
+	/// overlay are not taken into account when deleting keys in the backend.
+	fn clear_prefix<KArg1>(k1: KArg1, limit: Option<u32>) -> sp_io::ClearPrefixResult
 	where
 		KArg1: ?Sized + EncodeLike<K1>;
 
@@ -655,7 +672,24 @@ pub trait StorageNMap<K: KeyGenerator, V: FullCodec> {
 	/// Calling this multiple times per block with a `limit` set leads always to the same keys being
 	/// removed and the same result being returned. This happens because the keys to delete in the
 	/// overlay are not taken into account when deleting keys in the backend.
+	#[deprecated = "Use `clear_prefix` instead"]
 	fn remove_prefix<KP>(partial_key: KP, limit: Option<u32>) -> sp_io::KillStorageResult
+	where
+		K: HasKeyPrefix<KP>;
+
+	/// Remove all values starting with `partial_key` in the overlay and up to `limit` in the
+	/// backend.
+	///
+	/// All values in the client overlay will be deleted, if there is some `limit` then up to
+	/// `limit` values are deleted from the client backend, if `limit` is none then all values in
+	/// the client backend are deleted.
+	///
+	/// # Note
+	///
+	/// Calling this multiple times per block with a `limit` set leads always to the same keys being
+	/// removed and the same result being returned. This happens because the keys to delete in the
+	/// overlay are not taken into account when deleting keys in the backend.
+	fn clear_prefix<KP>(partial_key: KP, limit: Option<u32>) -> sp_io::ClearPrefixResult
 	where
 		K: HasKeyPrefix<KP>;
 
@@ -1109,7 +1143,23 @@ pub trait StoragePrefixedMap<Value: FullCodec> {
 	/// Calling this multiple times per block with a `limit` set leads always to the same keys being
 	/// removed and the same result being returned. This happens because the keys to delete in the
 	/// overlay are not taken into account when deleting keys in the backend.
+	#[deprecated = "Use `clear` instead"]
 	fn remove_all(limit: Option<u32>) -> sp_io::KillStorageResult {
+		Self::clear(limit).into()
+	}
+
+	/// Remove all values in the overlay and up to `limit` in the backend.
+	///
+	/// All values in the client overlay will be deleted, if there is some `limit` then up to
+	/// `limit` values are deleted from the client backend, if `limit` is none then all values in
+	/// the client backend are deleted.
+	///
+	/// # Note
+	///
+	/// Calling this multiple times per block with a `limit` set leads always to the same keys being
+	/// removed and the same result being returned. This happens because the keys to delete in the
+	/// overlay are not taken into account when deleting keys in the backend.
+	fn clear(limit: Option<u32>) -> sp_io::ClearPrefixResult {
 		sp_io::storage::clear_prefix(&Self::final_prefix(), limit)
 	}
 
@@ -1425,7 +1475,7 @@ mod test {
 			assert_eq!(MyStorage::iter_values().collect::<Vec<_>>(), vec![1, 2, 3, 4]);
 
 			// test removal
-			MyStorage::remove_all(None);
+			MyStorage::clear(None);
 			assert!(MyStorage::iter_values().collect::<Vec<_>>().is_empty());
 
 			// test migration
@@ -1435,7 +1485,7 @@ mod test {
 			assert!(MyStorage::iter_values().collect::<Vec<_>>().is_empty());
 			MyStorage::translate_values(|v: u32| Some(v as u64));
 			assert_eq!(MyStorage::iter_values().collect::<Vec<_>>(), vec![1, 2]);
-			MyStorage::remove_all(None);
+			MyStorage::clear(None);
 
 			// test migration 2
 			unhashed::put(&[&k[..], &vec![1][..]].concat(), &1u128);
@@ -1447,7 +1497,7 @@ mod test {
 			assert_eq!(MyStorage::iter_values().collect::<Vec<_>>(), vec![1, 2, 3]);
 			MyStorage::translate_values(|v: u128| Some(v as u64));
 			assert_eq!(MyStorage::iter_values().collect::<Vec<_>>(), vec![1, 2, 3]);
-			MyStorage::remove_all(None);
+			MyStorage::clear(None);
 
 			// test that other values are not modified.
 			assert_eq!(unhashed::get(&key_before[..]), Some(32u64));

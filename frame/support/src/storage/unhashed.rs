@@ -96,7 +96,13 @@ pub fn kill(key: &[u8]) {
 }
 
 /// Ensure keys with the given `prefix` have no entries in storage.
+#[deprecated = "Use `clear_prefix` instead"]
 pub fn kill_prefix(prefix: &[u8], limit: Option<u32>) -> sp_io::KillStorageResult {
+	clear_prefix(prefix, limit).into()
+}
+
+/// Ensure keys with the given `prefix` have no entries in storage.
+pub fn clear_prefix(prefix: &[u8], limit: Option<u32>) -> sp_io::ClearPrefixResult {
 	sp_io::storage::clear_prefix(prefix, limit)
 }
 

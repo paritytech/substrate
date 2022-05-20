@@ -185,11 +185,31 @@ where
 	/// Calling this multiple times per block with a `limit` set leads always to the same keys being
 	/// removed and the same result being returned. This happens because the keys to delete in the
 	/// overlay are not taken into account when deleting keys in the backend.
+	#[deprecated = "Use `clear_prefix` instead"]
 	pub fn remove_prefix<KP>(partial_key: KP, limit: Option<u32>) -> sp_io::KillStorageResult
 	where
 		Key: HasKeyPrefix<KP>,
 	{
-		<Self as crate::storage::StorageNMap<Key, Value>>::remove_prefix(partial_key, limit)
+		Self::clear_prefix(partial_key, limit).into()
+	}
+
+	/// Remove all values starting with `partial_key` in the overlay and up to `limit` in the
+	/// backend.
+	///
+	/// All values in the client overlay will be deleted, if there is some `limit` then up to
+	/// `limit` values are deleted from the client backend, if `limit` is none then all values in
+	/// the client backend are deleted.
+	///
+	/// # Note
+	///
+	/// Calling this multiple times per block with a `limit` set leads always to the same keys being
+	/// removed and the same result being returned. This happens because the keys to delete in the
+	/// overlay are not taken into account when deleting keys in the backend.
+	pub fn clear_prefix<KP>(partial_key: KP, limit: Option<u32>) -> sp_io::ClearPrefixResult
+	where
+		Key: HasKeyPrefix<KP>,
+	{
+		<Self as crate::storage::StorageNMap<Key, Value>>::clear_prefix(partial_key, limit)
 	}
 
 	/// Iterate over values that share the first key.
@@ -299,8 +319,24 @@ where
 	/// Calling this multiple times per block with a `limit` set leads always to the same keys being
 	/// removed and the same result being returned. This happens because the keys to delete in the
 	/// overlay are not taken into account when deleting keys in the backend.
+	#[deprecated = "Use `clear` instead"]
 	pub fn remove_all(limit: Option<u32>) -> sp_io::KillStorageResult {
-		<Self as crate::storage::StoragePrefixedMap<Value>>::remove_all(limit)
+		Self::clear(limit).into()
+	}
+
+	/// Remove all values in the overlay and up to `limit` in the backend.
+	///
+	/// All values in the client overlay will be deleted, if there is some `limit` then up to
+	/// `limit` values are deleted from the client backend, if `limit` is none then all values in
+	/// the client backend are deleted.
+	///
+	/// # Note
+	///
+	/// Calling this multiple times per block with a `limit` set leads always to the same keys being
+	/// removed and the same result being returned. This happens because the keys to delete in the
+	/// overlay are not taken into account when deleting keys in the backend.
+	pub fn clear(limit: Option<u32>) -> sp_io::ClearPrefixResult {
+		<Self as crate::storage::StoragePrefixedMap<Value>>::clear(limit)
 	}
 
 	/// Iter over all value of the storage.
@@ -684,7 +720,7 @@ mod test {
 
 			A::insert((3,), 10);
 			A::insert((4,), 10);
-			A::remove_all(None);
+			A::clear(None);
 			assert_eq!(A::contains_key((3,)), false);
 			assert_eq!(A::contains_key((4,)), false);
 
@@ -739,7 +775,7 @@ mod test {
 				]
 			);
 
-			WithLen::remove_all(None);
+			WithLen::clear(None);
 			assert_eq!(WithLen::decode_len((3,)), None);
 			WithLen::append((0,), 10);
 			assert_eq!(WithLen::decode_len((0,)), Some(1));
@@ -877,7 +913,7 @@ mod test {
 
 			A::insert((3, 30), 10);
 			A::insert((4, 40), 10);
-			A::remove_all(None);
+			A::clear(None);
 			assert_eq!(A::contains_key((3, 30)), false);
 			assert_eq!(A::contains_key((4, 40)), false);
 
@@ -938,7 +974,7 @@ mod test {
 				]
 			);
 
-			WithLen::remove_all(None);
+			WithLen::clear(None);
 			assert_eq!(WithLen::decode_len((3, 30)), None);
 			WithLen::append((0, 100), 10);
 			assert_eq!(WithLen::decode_len((0, 100)), Some(1));
@@ -1093,7 +1129,7 @@ mod test {
 
 			A::insert((3, 30, 300), 10);
 			A::insert((4, 40, 400), 10);
-			A::remove_all(None);
+			A::clear(None);
 			assert_eq!(A::contains_key((3, 30, 300)), false);
 			assert_eq!(A::contains_key((4, 40, 400)), false);
 
@@ -1161,7 +1197,7 @@ mod test {
 				]
 			);
 
-			WithLen::remove_all(None);
+			WithLen::clear(None);
 			assert_eq!(WithLen::decode_len((3, 30, 300)), None);
 			WithLen::append((0, 100, 1000), 10);
 			assert_eq!(WithLen::decode_len((0, 100, 1000)), Some(1));

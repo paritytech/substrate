@@ -206,7 +206,14 @@ where
 	where
 		KArg1: EncodeLike<K1>,
 	{
-		unhashed::kill_prefix(Self::storage_double_map_final_key1(k1).as_ref(), limit)
+		Self::clear_prefix(k1, limit).into()
+	}
+
+	fn clear_prefix<KArg1>(k1: KArg1, limit: Option<u32>) -> sp_io::ClearPrefixResult
+	where
+		KArg1: EncodeLike<K1>,
+	{
+		unhashed::clear_prefix(Self::storage_double_map_final_key1(k1).as_ref(), limit)
 	}
 
 	fn iter_prefix_values<KArg1>(k1: KArg1) -> storage::PrefixIterator<V>

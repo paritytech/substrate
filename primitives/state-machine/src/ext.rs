@@ -446,7 +446,7 @@ where
 		self.limit_remove_from_backend(Some(child_info), None, limit)
 	}
 
-	fn clear_prefix(&mut self, prefix: &[u8], limit: Option<u32>) -> (bool, u32) {
+	fn clear_prefix(&mut self, prefix: &[u8], limit: Option<u32>) -> (bool, u32, u32) {
 		trace!(
 			target: "state",
 			method = "ClearPrefix",
@@ -460,14 +460,13 @@ where
 				target: "trie",
 				"Refuse to directly clear prefix that is part or contains of child storage key",
 			);
-			return (false, 0)
+			return (false, 0, 0)
 		}
 
 		self.mark_dirty();
-		// In the future, we should report this back to the caller.
-		let _overlay_count = self.overlay.clear_prefix(prefix);
+		let overlay_count = self.overlay.clear_prefix(prefix);
 		let (all, count) = self.limit_remove_from_backend(None, Some(prefix), limit);
-		(all, count)
+		(all, count, count + overlay_count)
 	}
 
 	fn clear_child_prefix(
@@ -475,7 +474,7 @@ where
 		child_info: &ChildInfo,
 		prefix: &[u8],
 		limit: Option<u32>,
-	) -> (bool, u32) {
+	) -> (bool, u32, u32) {
 		trace!(
 			target: "state",
 			method = "ChildClearPrefix",
@@ -486,10 +485,9 @@ where
 		let _guard = guard();
 
 		self.mark_dirty();
-		// In the future, we should report this back to the caller.
-		let _overlay_count = self.overlay.clear_child_prefix(child_info, prefix);
+		let overlay_count = self.overlay.clear_child_prefix(child_info, prefix);
 		let (all, count) = self.limit_remove_from_backend(Some(child_info), Some(prefix), limit);
-		(all, count)
+		(all, count, count + overlay_count)
 	}
 
 	fn storage_append(&mut self, key: Vec<u8>, value: Vec<u8>) {

@@ -219,13 +219,13 @@ impl Externalities for BasicExternalities {
 		(true, num_removed as u32)
 	}
 
-	fn clear_prefix(&mut self, prefix: &[u8], _limit: Option<u32>) -> (bool, u32) {
+	fn clear_prefix(&mut self, prefix: &[u8], _limit: Option<u32>) -> (bool, u32, u32) {
 		if is_child_storage_key(prefix) {
 			warn!(
 				target: "trie",
 				"Refuse to clear prefix that is part of child storage key via main storage"
 			);
-			return (false, 0)
+			return (false, 0, 0)
 		}
 
 		let to_remove = self
@@ -241,7 +241,7 @@ impl Externalities for BasicExternalities {
 		for key in to_remove {
 			self.inner.top.remove(&key);
 		}
-		(true, num_removed as u32)
+		(true, num_removed as u32, num_removed as u32)
 	}
 
 	fn clear_child_prefix(
@@ -249,7 +249,7 @@ impl Externalities for BasicExternalities {
 		child_info: &ChildInfo,
 		prefix: &[u8],
 		_limit: Option<u32>,
-	) -> (bool, u32) {
+	) -> (bool, u32, u32) {
 		if let Some(child) = self.inner.children_default.get_mut(child_info.storage_key()) {
 			let to_remove = child
 				.data
@@ -263,9 +263,9 @@ impl Externalities for BasicExternalities {
 			for key in to_remove {
 				child.data.remove(&key);
 			}
-			(true, num_removed as u32)
+			(true, num_removed as u32, num_removed as u32)
 		} else {
-			(true, 0)
+			(true, 0, 0)
 		}
 	}
 

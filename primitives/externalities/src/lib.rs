@@ -133,7 +133,7 @@ pub trait Externalities: ExtensionStore {
 	/// Clear storage entries which keys are start with the given prefix.
 	///
 	/// `limit` and result works as for `kill_child_storage`.
-	fn clear_prefix(&mut self, prefix: &[u8], limit: Option<u32>) -> (bool, u32);
+	fn clear_prefix(&mut self, prefix: &[u8], limit: Option<u32>) -> (bool, u32, u32);
 
 	/// Clear child storage entries which keys are start with the given prefix.
 	///
@@ -143,7 +143,7 @@ pub trait Externalities: ExtensionStore {
 		child_info: &ChildInfo,
 		prefix: &[u8],
 		limit: Option<u32>,
-	) -> (bool, u32);
+	) -> (bool, u32, u32);
 
 	/// Set or clear a storage entry (`key`) of current contract being called (effective
 	/// immediately).

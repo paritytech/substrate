@@ -475,7 +475,7 @@ pub mod pallet {
 			_subkeys: u32,
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
-			storage::unhashed::kill_prefix(&prefix, None);
+			storage::unhashed::clear_prefix(&prefix, None);
 			Ok(().into())
 		}
 
@@ -1427,7 +1427,7 @@ impl<T: Config> Pallet<T> {
 	pub fn reset_events() {
 		<Events<T>>::kill();
 		EventCount::<T>::kill();
-		<EventTopics<T>>::remove_all(None);
+		<EventTopics<T>>::clear(None);
 	}
 
 	/// Assert the given `event` exists.
