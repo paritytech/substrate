@@ -465,7 +465,7 @@ where
 
 		self.mark_dirty();
 		let _overlay_count = self.overlay.clear_prefix(prefix);
-//, Some(&self.overlay.changes)
+		//, Some(&self.overlay.changes)
 		let (all, count) = self.limit_remove_from_backend(None, Some(prefix), limit);
 		(all, count)
 	}
@@ -487,7 +487,7 @@ where
 
 		self.mark_dirty();
 		let _overlay_count = self.overlay.clear_child_prefix(child_info, prefix);
-//, Some(&self.overlay.changes)
+		//, Some(&self.overlay.changes)
 		let (all, count) = self.limit_remove_from_backend(Some(child_info), Some(prefix), limit);
 		(all, count)
 	}
@@ -750,7 +750,7 @@ where
 					None => self.overlay.storage(key),
 				} {
 					// already deleted.
-					return true;
+					return true
 				}
 				if let Some(num) = num_deleted.checked_add(1) {
 					num_deleted = num;
@@ -773,7 +773,7 @@ where
 					None => self.overlay.storage(key),
 				} {
 					// already deleted.
-					return true;
+					return true
 				}
 				num_deleted = num_deleted.saturating_add(1);
 				if let Some(child_info) = child_info {
