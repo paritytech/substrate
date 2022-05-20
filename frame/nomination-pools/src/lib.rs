@@ -1274,8 +1274,9 @@ pub mod pallet {
 		PaidOut { member: T::AccountId, pool_id: PoolId, payout: BalanceOf<T> },
 		/// A member has unbonded from their pool.
 		///
-		/// - `balance` is the corresponding balance of the number of points that has been requested
-		///   to be unbonded (the argument of the `unbond` transaction) from the bonded pool.
+		/// - `balance` is the corresponding balance of the number of points that has been
+		///   requested to be unbonded (the argument of the `unbond` transaction) from the bonded
+		///   pool.
 		/// - `points` is the number of points that are issued as a result of `balance` being
 		/// dissolved into the corresponding unbonding pool.
 		///
