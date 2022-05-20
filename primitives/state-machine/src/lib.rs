@@ -1675,11 +1675,25 @@ mod tests {
 		let mut ext = Ext::new(&mut overlay, &mut cache, &backend, None);
 		assert_eq!(ext.kill_child_storage(&child_info, Some(0)), (false, 0));
 		assert_eq!(ext.kill_child_storage(&child_info, Some(1)), (false, 1));
-		assert_eq!(ext.kill_child_storage(&child_info, Some(2)), (false, 2));
-		assert_eq!(ext.kill_child_storage(&child_info, Some(3)), (false, 3));
-		assert_eq!(ext.kill_child_storage(&child_info, Some(4)), (true, 4));
-		// Only 4 items to remove
-		assert_eq!(ext.kill_child_storage(&child_info, Some(5)), (true, 4));
+		// Only 3 items remaining to remove
+		assert_eq!(ext.kill_child_storage(&child_info, Some(4)), (true, 3));
+	}
+
+	#[test]
+	fn limited_child_kill_off_by_one_works_without_limit() {
+		let child_info = ChildInfo::new_default(b"sub1");
+		let initial: HashMap<_, BTreeMap<_, _>> = map![
+			Some(child_info.clone()) => map![
+				b"a".to_vec() => b"0".to_vec(),
+				b"b".to_vec() => b"1".to_vec(),
+				b"c".to_vec() => b"2".to_vec(),
+				b"d".to_vec() => b"3".to_vec()
+			],
+		];
+		let backend = InMemoryBackend::<BlakeTwo256>::from((initial, StateVersion::default()));
+		let mut overlay = OverlayedChanges::default();
+		let mut cache = StorageTransactionCache::default();
+		let mut ext = Ext::new(&mut overlay, &mut cache, &backend, None);
 		assert_eq!(ext.kill_child_storage(&child_info, None), (true, 4));
 	}
 
