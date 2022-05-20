@@ -28,7 +28,7 @@ use std::sync::Arc;
 use crate::SubscriptionTaskExecutor;
 
 use jsonrpsee::{
-	core::{async_trait, Error as JsonRpseeError, RpcResult},
+	core::{Error as JsonRpseeError, RpcResult},
 	ws_server::PendingSubscription,
 };
 
