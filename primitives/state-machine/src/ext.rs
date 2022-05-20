@@ -464,9 +464,9 @@ where
 		}
 
 		self.mark_dirty();
-		let overlay_count = self.overlay.clear_prefix(prefix);
+		let _overlay_count = self.overlay.clear_prefix(prefix);
 		let (all, count) = self.limit_remove_from_backend(None, Some(prefix), limit);
-		(all, count + overlay_count)
+		(all, count)
 	}
 
 	fn clear_child_prefix(
@@ -485,8 +485,9 @@ where
 		let _guard = guard();
 
 		self.mark_dirty();
-		self.overlay.clear_child_prefix(child_info, prefix);
-		self.limit_remove_from_backend(Some(child_info), Some(prefix), limit)
+		let _overlay_count = self.overlay.clear_child_prefix(child_info, prefix);
+		let (all, count) = self.limit_remove_from_backend(Some(child_info), Some(prefix), limit);
+		(all, count)
 	}
 
 	fn storage_append(&mut self, key: Vec<u8>, value: Vec<u8>) {
