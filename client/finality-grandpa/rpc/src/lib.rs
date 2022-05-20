@@ -76,7 +76,7 @@ pub struct Grandpa<AuthoritySet, VoterState, Block: BlockT, ProofProvider> {
 impl<AuthoritySet, VoterState, Block: BlockT, ProofProvider>
 	Grandpa<AuthoritySet, VoterState, Block, ProofProvider>
 {
-	/// Prepare a new [`GrandpaRpc`]
+	/// Prepare a new [`Grandpa`] Rpc handler.
 	pub fn new(
 		executor: SubscriptionTaskExecutor,
 		authority_set: AuthoritySet,

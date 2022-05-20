@@ -37,12 +37,12 @@
 //! ```
 //!
 //! If the [`LightSyncStateExtension`] is not added as an extension to the chain spec,
-//! the [`SyncStateRpc`] will fail at instantiation.
+//! the [`SyncState`] will fail at instantiation.
 
 #![deny(unused_crate_dependencies)]
 
 use jsonrpsee::{
-	core::{Error as RpcError, RpcResult},
+	core::{Error as JsonRpseeError, RpcResult},
 	proc_macros::rpc,
 	types::{error::CallError, ErrorObject},
 };
@@ -79,7 +79,7 @@ pub enum Error<Block: BlockT> {
 	LightSyncStateExtensionNotFound,
 }
 
-impl<Block: BlockT> From<Error<Block>> for RpcError {
+impl<Block: BlockT> From<Error<Block>> for JsonRpseeError {
 	fn from(error: Error<Block>) -> Self {
 		let message = match error {
 			Error::JsonRpc(s) => s,

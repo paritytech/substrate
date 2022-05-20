@@ -110,7 +110,7 @@ impl<Block> Beefy<Block>
 where
 	Block: BlockT,
 {
-	/// Creates a new BeefyRpcHandler instance.
+	/// Creates a new Beefy Rpc handler instance.
 	pub fn new(
 		signed_commitment_stream: BeefySignedCommitmentStream<Block>,
 		best_block_stream: BeefyBestBlockStream<Block>,
@@ -198,7 +198,7 @@ mod tests {
 		let expected_response = r#"{"jsonrpc":"2.0","error":{"code":1,"message":"BEEFY RPC endpoint not ready"},"id":1}"#.to_string();
 		let (result, _) = rpc.raw_json_request(&request).await.unwrap();
 
-		assert_eq!(expected_response, result);
+		assert_eq!(expected_response, result,);
 	}
 
 	#[tokio::test]

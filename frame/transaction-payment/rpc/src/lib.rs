@@ -58,7 +58,7 @@ pub struct TransactionPayment<C, P> {
 }
 
 impl<C, P> TransactionPayment<C, P> {
-	/// Creates a new instance of the TransactionPaymentRpc helper.
+	/// Creates a new instance of the TransactionPayment Rpc helper.
 	pub fn new(client: Arc<C>) -> Self {
 		Self { client, _marker: Default::default() }
 	}

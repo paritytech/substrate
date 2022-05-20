@@ -65,7 +65,7 @@ pub struct Babe<B: BlockT, C, SC> {
 }
 
 impl<B: BlockT, C, SC> Babe<B, C, SC> {
-	/// Creates a new instance of the BabeRpc handler.
+	/// Creates a new instance of the Babe Rpc handler.
 	pub fn new(
 		client: Arc<C>,
 		shared_epoch_changes: SharedEpochChanges<B, Epoch>,
