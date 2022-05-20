@@ -1098,7 +1098,11 @@ pub mod tests {
 			DoubleMap::insert(&(key1 + 1), &(key2 + 1), &4u64);
 			assert!(matches!(
 				DoubleMap::clear_prefix(&key1, None),
-				sp_io::ClearPrefixResult::NoneLeft { db: 0, total: 2 },
+				// Note this is the incorrect answer (for now), since we are using v2 of
+				// `clear_prefix`.
+				// When we switch to v3, then this will become:
+				//   sp_io::ClearPrefixResult::NoneLeft { db: 0, total: 2 },
+				sp_io::ClearPrefixResult::NoneLeft { db: 0, total: 0 },
 			));
 			assert_eq!(DoubleMap::get(&key1, &key2), 0u64);
 			assert_eq!(DoubleMap::get(&key1, &(key2 + 1)), 0u64);

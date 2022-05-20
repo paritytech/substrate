@@ -110,6 +110,7 @@ pub fn clear_prefix(prefix: &[u8], limit: Option<u32>) -> sp_io::ClearPrefixResu
 	// enabled.
 	// sp_io::storage::clear_prefix(prefix, limit)
 	use sp_io::{KillStorageResult::*, ClearPrefixResult::*};
+	#[allow(deprecated)]
 	match kill_prefix(prefix, limit) {
 		AllRemoved(db) => NoneLeft { db, total: db },
 		SomeRemaining(db) => SomeLeft { db, total: db },
