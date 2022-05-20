@@ -5130,7 +5130,7 @@ dependencies = [
  "frame-system",
  "hex",
  "hex-literal",
- "log 0.4.16",
+ "log",
  "pallet-balances",
  "pallet-collective",
  "pallet-identity",
