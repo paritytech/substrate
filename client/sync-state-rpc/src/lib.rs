@@ -132,14 +132,14 @@ pub trait SyncStateApi {
 }
 
 /// An api for sync state RPC calls.
-pub struct SyncStateRpc<Block: BlockT, Client> {
+pub struct SyncState<Block: BlockT, Client> {
 	chain_spec: Box<dyn sc_chain_spec::ChainSpec>,
 	client: Arc<Client>,
 	shared_authority_set: SharedAuthoritySet<Block>,
 	shared_epoch_changes: SharedEpochChanges<Block>,
 }
 
-impl<Block, Client> SyncStateRpc<Block, Client>
+impl<Block, Client> SyncState<Block, Client>
 where
 	Block: BlockT,
 	Client: HeaderBackend<Block> + sc_client_api::AuxStore + 'static,
@@ -180,7 +180,7 @@ where
 	}
 }
 
-impl<Block, Backend> SyncStateApiServer for SyncStateRpc<Block, Backend>
+impl<Block, Backend> SyncStateApiServer for SyncState<Block, Backend>
 where
 	Block: BlockT,
 	Backend: HeaderBackend<Block> + sc_client_api::AuxStore + 'static,

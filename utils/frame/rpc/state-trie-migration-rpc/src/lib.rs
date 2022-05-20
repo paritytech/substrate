@@ -122,21 +122,21 @@ pub trait StateMigrationApi<BlockHash> {
 }
 
 /// An implementation of state migration specific RPC methods.
-pub struct StateMigrationRpc<C, B, BA> {
+pub struct StateMigration<C, B, BA> {
 	client: Arc<C>,
 	backend: Arc<BA>,
 	deny_unsafe: DenyUnsafe,
 	_marker: std::marker::PhantomData<(B, BA)>,
 }
 
-impl<C, B, BA> StateMigrationRpc<C, B, BA> {
+impl<C, B, BA> StateMigration<C, B, BA> {
 	/// Create new state migration rpc for the given reference to the client.
 	pub fn new(client: Arc<C>, backend: Arc<BA>, deny_unsafe: DenyUnsafe) -> Self {
-		StateMigrationRpc { client, backend, deny_unsafe, _marker: Default::default() }
+		StateMigration { client, backend, deny_unsafe, _marker: Default::default() }
 	}
 }
 
-impl<C, B, BA> StateMigrationApiServer<<B as BlockT>::Hash> for StateMigrationRpc<C, B, BA>
+impl<C, B, BA> StateMigrationApiServer<<B as BlockT>::Hash> for StateMigration<C, B, BA>
 where
 	B: BlockT,
 	C: Send + Sync + 'static + sc_client_api::HeaderBackend<B>,

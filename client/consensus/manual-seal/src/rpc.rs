@@ -86,7 +86,7 @@ pub trait ManualSealApi<Hash> {
 }
 
 /// A struct that implements the [`ManualSealApiServer`].
-pub struct ManualSealRpc<Hash> {
+pub struct ManualSeal<Hash> {
 	import_block_channel: mpsc::Sender<EngineCommand<Hash>>,
 }
 
@@ -99,7 +99,7 @@ pub struct CreatedBlock<Hash> {
 	pub aux: ImportedAux,
 }
 
-impl<Hash> ManualSealRpc<Hash> {
+impl<Hash> ManualSeal<Hash> {
 	/// Create new `ManualSeal` with the given reference to the client.
 	pub fn new(import_block_channel: mpsc::Sender<EngineCommand<Hash>>) -> Self {
 		Self { import_block_channel }
@@ -107,7 +107,7 @@ impl<Hash> ManualSealRpc<Hash> {
 }
 
 #[async_trait]
-impl<Hash: Send + 'static> ManualSealApiServer<Hash> for ManualSealRpc<Hash> {
+impl<Hash: Send + 'static> ManualSealApiServer<Hash> for ManualSeal<Hash> {
 	async fn create_block(
 		&self,
 		create_empty: bool,

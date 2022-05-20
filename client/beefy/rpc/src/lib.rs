@@ -100,13 +100,13 @@ pub trait BeefyApi<Notification, Hash> {
 }
 
 /// Implements the BeefyApi RPC trait for interacting with BEEFY.
-pub struct BeefyRpc<Block: BlockT> {
+pub struct Beefy<Block: BlockT> {
 	signed_commitment_stream: BeefySignedCommitmentStream<Block>,
 	beefy_best_block: Arc<RwLock<Option<Block::Hash>>>,
 	executor: SubscriptionTaskExecutor,
 }
 
-impl<Block> BeefyRpc<Block>
+impl<Block> Beefy<Block>
 where
 	Block: BlockT,
 {
@@ -131,7 +131,7 @@ where
 }
 
 #[async_trait]
-impl<Block> BeefyApiServer<notification::EncodedSignedCommitment, Block::Hash> for BeefyRpc<Block>
+impl<Block> BeefyApiServer<notification::EncodedSignedCommitment, Block::Hash> for Beefy<Block>
 where
 	Block: BlockT,
 {
@@ -173,19 +173,19 @@ mod tests {
 	use sp_runtime::traits::{BlakeTwo256, Hash};
 	use substrate_test_runtime_client::runtime::Block;
 
-	fn setup_io_handler() -> (RpcModule<BeefyRpc<Block>>, BeefySignedCommitmentSender<Block>) {
+	fn setup_io_handler() -> (RpcModule<Beefy<Block>>, BeefySignedCommitmentSender<Block>) {
 		let (_, stream) = BeefyBestBlockStream::<Block>::channel();
 		setup_io_handler_with_best_block_stream(stream)
 	}
 
 	fn setup_io_handler_with_best_block_stream(
 		best_block_stream: BeefyBestBlockStream<Block>,
-	) -> (RpcModule<BeefyRpc<Block>>, BeefySignedCommitmentSender<Block>) {
+	) -> (RpcModule<Beefy<Block>>, BeefySignedCommitmentSender<Block>) {
 		let (commitment_sender, commitment_stream) =
 			BeefySignedCommitmentStream::<Block>::channel();
 
 		let handler =
-			BeefyRpc::new(commitment_stream, best_block_stream, sc_rpc::testing::test_executor())
+			Beefy::new(commitment_stream, best_block_stream, sc_rpc::testing::test_executor())
 				.expect("Setting up the BEEFY RPC handler works");
 
 		(handler.into_rpc(), commitment_sender)
