@@ -786,7 +786,7 @@ impl<T: Config> Pallet<T> {
 		// This function is taken from the parent (bounties) pallet, but the
 		// prefix is changed to have different AccountId when the index of
 		// parent and child is same.
-		T::PalletId::get().into_sub_account(("cb", id))
+		T::PalletId::get().into_sub_account_truncating(("cb", id))
 	}
 
 	fn create_child_bounty(

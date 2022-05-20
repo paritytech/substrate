@@ -113,11 +113,9 @@ where
 			if let Some(mut sink) = pending.accept() {
 				sink.pipe_from_stream(stream).await;
 			}
-		}
-		.boxed();
+		};
 
-		self.executor
-			.spawn("substrate-rpc-subscription", Some("rpc"), fut.map(drop).boxed());
+		self.executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
 	}
 
 	async fn prove_finality(
