@@ -39,4 +39,4 @@ jobs:
       - name: pr-custom-review
         uses: paritytech/pr-custom-review@v2
         with:
-          token: ${{ secrets.PRCR_TOKEN }}
+          checks-reviews-api: http://pcr.parity-prod.parity.io/api/v1/check_reviews
