@@ -141,14 +141,16 @@ impl<H: Hasher> SharedNodeCache<H> {
 			if let Some((r_key, r_node)) = self.lru.push(key, node) {
 				update_size_in_bytes(&mut self.size_in_bytes, &r_key, &r_node);
 			}
-		});
 
-		while self.size_in_bytes > self.maximum_size_in_bytes {
-			// This should always be `Some(_)`, otherwise something is wrong!
-			if let Some((key, node)) = self.lru.pop_lru() {
-				update_size_in_bytes(&mut self.size_in_bytes, &key, &node);
+			// Directly ensure that we respect the maximum size. By doing it directly here we ensure
+			// that the internal map of the [`LruCache`] doesn't grow too much.
+			while self.size_in_bytes > self.maximum_size_in_bytes {
+				// This should always be `Some(_)`, otherwise something is wrong!
+				if let Some((key, node)) = self.lru.pop_lru() {
+					update_size_in_bytes(&mut self.size_in_bytes, &key, &node);
+				}
 			}
-		}
+		});
 	}
 }
 
