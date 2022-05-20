@@ -437,8 +437,10 @@ macro_rules! benchmarks_iter {
 					>::decode(&mut &__benchmarked_call_encoded[..])
 						.expect("call is encoded above, encoding must be correct");
 					let __origin = $crate::to_origin!($origin $(, $origin_type)?);
-					<Call<T $(, $instance)? > as $crate::frame_support::traits::UnfilteredDispatchable
-						>::dispatch_bypass_filter(__call_decoded, __origin)?;
+					$crate::frame_support::storage::transactional::track_transaction_level(|| {
+						<Call<T $(, $instance)? > as $crate::frame_support::traits::UnfilteredDispatchable
+							>::dispatch_bypass_filter(__call_decoded, __origin)
+					})?;
 				}
 				verify $postcode
 				$( $rest )*

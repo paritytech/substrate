@@ -67,6 +67,24 @@ mod pallet_test {
 		pub fn always_error(_origin: OriginFor<T>) -> DispatchResult {
 			return Err("I always fail".into())
 		}
+
+		#[pallet::weight(0)]
+		pub fn recursive(_origin: OriginFor<T>, depth: u32) -> DispatchResult {
+			Self::recursive_storage_layer(depth)?;
+			Ok(())
+		}
+	}
+
+	impl<T> Pallet<T> {
+		fn recursive_storage_layer(num: u32) -> DispatchResult {
+			if num == 0 {
+				return Ok(())
+			}
+
+			frame_support::storage::with_storage_layer(|| -> DispatchResult {
+				Self::recursive_storage_layer(num - 1)
+			})
+		}
 	}
 }
 
@@ -227,6 +245,14 @@ mod benchmarks {
 			// This should never be reached.
 			assert!(value > 100);
 		}
+
+		storage_layer_allowed {
+			let storage_layer_limit = 255;
+		}: recursive(RawOrigin::Root, storage_layer_limit - 1)
+
+		storage_layer_limit_enforced {
+			let storage_layer_limit = 255;
+		}: recursive(RawOrigin::Root, storage_layer_limit)
 	}
 
 	#[test]
@@ -347,7 +373,12 @@ mod benchmarks {
 				Pallet::<Test>::test_benchmark_override_benchmark(),
 				Err(BenchmarkError::Override(_)),
 			));
-			assert_eq!(Pallet::<Test>::test_benchmark_skip_benchmark(), Err(BenchmarkError::Skip),);
+			assert_eq!(Pallet::<Test>::test_benchmark_skip_benchmark(), Err(BenchmarkError::Skip));
+			assert_ok!(Pallet::<Test>::test_benchmark_storage_layer_allowed());
+			assert_err!(
+				Pallet::<Test>::test_benchmark_storage_layer_limit_enforced(),
+				"Too many transactional layers have been spawned",
+			);
 		});
 	}
 }
