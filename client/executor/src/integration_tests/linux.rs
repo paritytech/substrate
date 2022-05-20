@@ -47,7 +47,10 @@ fn memory_consumption_interpreted() {
 #[cfg(feature = "wasmtime")]
 fn memory_consumption_compiled() {
 	if std::env::var("RUN_TEST").is_ok() {
-		memory_consumption(WasmExecutionMethod::Compiled);
+		memory_consumption(WasmExecutionMethod::Compiled {
+			instantiation_strategy:
+				sc_executor_wasmtime::InstantiationStrategy::LegacyInstanceReuse,
+		});
 	} else {
 		// We need to run the test in isolation, to not getting interfered by the other tests.
 		let executable = std::env::current_exe().unwrap();
@@ -67,13 +70,7 @@ fn memory_consumption(wasm_method: WasmExecutionMethod) {
 	// For that we make a series of runtime calls, probing the RSS for the VMA matching the linear
 	// memory. After the call we expect RSS to be equal to 0.
 
-	let runtime = mk_test_runtime(
-		WasmExecutionMethod::Compiled {
-			instantiation_strategy:
-				sc_executor_wasmtime::InstantiationStrategy::LegacyInstanceReuse,
-		},
-		1024,
-	);
+	let runtime = mk_test_runtime(wasm_method, 1024);
 
 	let mut instance = runtime.new_instance().unwrap();
 	let heap_base = instance

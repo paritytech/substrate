@@ -32,8 +32,7 @@ use sc_executor_common::{
 use sp_sandbox::env as sandbox_env;
 use sp_wasm_interface::{FunctionContext, MemoryId, Pointer, Sandbox, WordSize};
 
-use crate::{runtime::StoreData, util};
-use crate::{instance_wrapper::MemoryWrapper};
+use crate::{instance_wrapper::MemoryWrapper, runtime::StoreData, util};
 
 // The sandbox store is inside of a Option<Box<..>>> so that we can temporarily borrow it.
 struct SandboxStore(Option<Box<sandbox::Store<Func>>>);
@@ -47,7 +46,7 @@ unsafe impl Send for SandboxStore {}
 /// many different host calls that must share state.
 pub struct HostState {
 	sandbox_store: SandboxStore,
-	allocator: FreeingBumpHeapAllocator,
+	allocator: Option<FreeingBumpHeapAllocator>,
 	panic_message: Option<String>,
 }
 
@@ -58,7 +57,7 @@ impl HostState {
 			sandbox_store: SandboxStore(Some(Box::new(sandbox::Store::new(
 				sandbox::SandboxBackend::TryWasmer,
 			)))),
-			allocator,
+			allocator: Some(allocator),
 			panic_message: None,
 		}
 	}
