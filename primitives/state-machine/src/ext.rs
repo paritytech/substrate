@@ -464,8 +464,8 @@ where
 		}
 
 		self.mark_dirty();
+		// In the future, we should report this back to the caller.
 		let _overlay_count = self.overlay.clear_prefix(prefix);
-		//, Some(&self.overlay.changes)
 		let (all, count) = self.limit_remove_from_backend(None, Some(prefix), limit);
 		(all, count)
 	}
@@ -486,8 +486,8 @@ where
 		let _guard = guard();
 
 		self.mark_dirty();
+		// In the future, we should report this back to the caller.
 		let _overlay_count = self.overlay.clear_child_prefix(child_info, prefix);
-		//, Some(&self.overlay.changes)
 		let (all, count) = self.limit_remove_from_backend(Some(child_info), Some(prefix), limit);
 		(all, count)
 	}
