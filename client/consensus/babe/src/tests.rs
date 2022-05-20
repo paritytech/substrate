@@ -18,9 +18,6 @@
 
 //! BABE testsuite
 
-// FIXME #2532: need to allow deprecated until refactor is done
-// https://github.com/paritytech/substrate/issues/2532
-#![allow(deprecated)]
 use super::*;
 use authorship::claim_slot;
 use futures::executor::block_on;
@@ -1041,6 +1038,15 @@ fn obsolete_blocks_aux_data_cleanup() {
 	assert!(aux_data_check(&fork1_hashes[2..], true));
 	// Wiped: B3, B4
 	assert!(aux_data_check(&fork2_hashes, false));
+	// Present C4, C5
+	assert!(aux_data_check(&fork3_hashes, true));
+
+	client.finalize_block(BlockId::Number(4), None, true).unwrap();
+
+	// Wiped: A3
+	assert!(aux_data_check(&fork1_hashes[2..3], false));
+	// Present: A4
+	assert!(aux_data_check(&fork1_hashes[3..], true));
 	// Present C4, C5
 	assert!(aux_data_check(&fork3_hashes, true));
 }

@@ -15,36 +15,36 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 bytes = "1.1"
 codec = { package = "parity-scale-codec", version = "3.0.0", features = ["derive"] }
-hex = "0.4"
 fnv = "1.0.6"
 futures = "0.3.21"
 futures-timer = "3.0.2"
+hex = "0.4"
+hyper = { version = "0.14.16", features = ["stream", "http2"] }
+hyper-rustls = { version = "0.23.0", features = ["http2"] }
 num_cpus = "1.13"
+once_cell = "1.8"
 parking_lot = "0.12.0"
 rand = "0.7.2"
+threadpool = "1.7"
+tracing = "0.1.29"
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
 sc-network = { version = "0.10.0-dev", path = "../network" }
+sc-utils = { version = "4.0.0-dev", path = "../utils" }
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
 sp-core = { version = "6.0.0", path = "../../primitives/core" }
 sp-offchain = { version = "4.0.0-dev", path = "../../primitives/offchain" }
 sp-runtime = { version = "6.0.0", path = "../../primitives/runtime" }
-sc-utils = { version = "4.0.0-dev", path = "../utils" }
-threadpool = "1.7"
-hyper = { version = "0.14.16", features = ["stream", "http2"] }
-hyper-rustls = "0.22.1"
-once_cell = "1.8"
-tracing = "0.1.29"
 
 [dev-dependencies]
-sc-client-db = { version = "0.10.0-dev", default-features = true, path = "../db" }
+lazy_static = "1.4.0"
+tokio = "1.17.0"
 sc-block-builder = { version = "0.10.0-dev", path = "../block-builder" }
+sc-client-db = { version = "0.10.0-dev", default-features = true, path = "../db" }
 sc-transaction-pool = { version = "4.0.0-dev", path = "../transaction-pool" }
 sc-transaction-pool-api = { version = "4.0.0-dev", path = "../transaction-pool/api" }
-sp-tracing = { version = "5.0.0", path = "../../primitives/tracing" }
 sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
+sp-tracing = { version = "5.0.0", path = "../../primitives/tracing" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
-tokio = "1.17.0"
-lazy_static = "1.4.0"
 
 [features]
 default = []

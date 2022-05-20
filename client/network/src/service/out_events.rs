@@ -197,9 +197,9 @@ fn format_label(prefix: &str, protocol: &str, callback: impl FnOnce(&str)) {
 		label_buffer.clear();
 		label_buffer.reserve(prefix.len() + protocol.len() + 2);
 		label_buffer.push_str(prefix);
-		label_buffer.push_str("\"");
+		label_buffer.push('"');
 		label_buffer.push_str(protocol);
-		label_buffer.push_str("\"");
+		label_buffer.push('"');
 		callback(&label_buffer);
 	});
 }
@@ -249,14 +249,14 @@ impl Metrics {
 					.inc_by(num);
 			},
 			Event::NotificationStreamOpened { protocol, .. } => {
-				format_label("notif-open-", &protocol, |protocol_label| {
+				format_label("notif-open-", protocol, |protocol_label| {
 					self.events_total
 						.with_label_values(&[protocol_label, "sent", name])
 						.inc_by(num);
 				});
 			},
 			Event::NotificationStreamClosed { protocol, .. } => {
-				format_label("notif-closed-", &protocol, |protocol_label| {
+				format_label("notif-closed-", protocol, |protocol_label| {
 					self.events_total
 						.with_label_values(&[protocol_label, "sent", name])
 						.inc_by(num);
@@ -264,7 +264,7 @@ impl Metrics {
 			},
 			Event::NotificationsReceived { messages, .. } =>
 				for (protocol, message) in messages {
-					format_label("notif-", &protocol, |protocol_label| {
+					format_label("notif-", protocol, |protocol_label| {
 						self.events_total
 							.with_label_values(&[protocol_label, "sent", name])
 							.inc_by(num);
@@ -290,24 +290,24 @@ impl Metrics {
 					.inc();
 			},
 			Event::NotificationStreamOpened { protocol, .. } => {
-				format_label("notif-open-", &protocol, |protocol_label| {
+				format_label("notif-open-", protocol, |protocol_label| {
 					self.events_total.with_label_values(&[protocol_label, "received", name]).inc();
 				});
 			},
 			Event::NotificationStreamClosed { protocol, .. } => {
-				format_label("notif-closed-", &protocol, |protocol_label| {
+				format_label("notif-closed-", protocol, |protocol_label| {
 					self.events_total.with_label_values(&[protocol_label, "received", name]).inc();
 				});
 			},
 			Event::NotificationsReceived { messages, .. } =>
 				for (protocol, message) in messages {
-					format_label("notif-", &protocol, |protocol_label| {
+					format_label("notif-", protocol, |protocol_label| {
 						self.events_total
 							.with_label_values(&[protocol_label, "received", name])
 							.inc();
 					});
 					self.notifications_sizes
-						.with_label_values(&[&protocol, "received", name])
+						.with_label_values(&[protocol, "received", name])
 						.inc_by(u64::try_from(message.len()).unwrap_or(u64::MAX));
 				},
 		}

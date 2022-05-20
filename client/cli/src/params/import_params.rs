@@ -18,10 +18,11 @@
 
 use crate::{
 	arg_enums::{
-		ExecutionStrategy, WasmExecutionMethod, DEFAULT_EXECUTION_BLOCK_CONSTRUCTION,
-		DEFAULT_EXECUTION_IMPORT_BLOCK, DEFAULT_EXECUTION_IMPORT_BLOCK_VALIDATOR,
-		DEFAULT_EXECUTION_OFFCHAIN_WORKER, DEFAULT_EXECUTION_OTHER, DEFAULT_EXECUTION_SYNCING,
-		DEFAULT_WASM_EXECUTION_METHOD,
+		ExecutionStrategy, WasmExecutionMethod, WasmtimeInstantiationStrategy,
+		DEFAULT_EXECUTION_BLOCK_CONSTRUCTION, DEFAULT_EXECUTION_IMPORT_BLOCK,
+		DEFAULT_EXECUTION_IMPORT_BLOCK_VALIDATOR, DEFAULT_EXECUTION_OFFCHAIN_WORKER,
+		DEFAULT_EXECUTION_OTHER, DEFAULT_EXECUTION_SYNCING,
+		DEFAULT_WASMTIME_INSTANTIATION_STRATEGY, DEFAULT_WASM_EXECUTION_METHOD,
 	},
 	params::{DatabaseParams, PruningParams},
 };
@@ -40,12 +41,16 @@ pub struct ImportParams {
 	#[clap(flatten)]
 	pub database_params: DatabaseParams,
 
-	/// Force start with unsafe pruning settings.
+	/// THIS IS A DEPRECATED CLI-ARGUMENT.
 	///
-	/// When running as a validator it is highly recommended to disable state
-	/// pruning (i.e. 'archive') which is the default. The node will refuse to
-	/// start as a validator if pruning is enabled unless this option is set.
+	/// It has been preserved in order to not break the compatibility with the existing scripts.
+	/// Enabling this option will lead to a runtime warning.
+	/// In future this option will be removed completely, thus specifying it will lead to a start
+	/// up error.
+	///
+	/// Details: <https://github.com/paritytech/substrate/issues/8103>
 	#[clap(long)]
+	#[deprecated = "According to https://github.com/paritytech/substrate/issues/8103"]
 	pub unsafe_pruning: bool,
 
 	/// Method for executing Wasm runtime code.
@@ -57,6 +62,27 @@ pub struct ImportParams {
 		default_value = DEFAULT_WASM_EXECUTION_METHOD,
 	)]
 	pub wasm_method: WasmExecutionMethod,
+
+	/// The WASM instantiation method to use.
+	///
+	/// Only has an effect when `wasm-execution` is set to `compiled`.
+	///
+	/// The copy-on-write strategies are only supported on Linux.
+	/// If the copy-on-write variant of a strategy is unsupported
+	/// the executor will fall back to the non-CoW equivalent.
+	///
+	/// The fastest (and the default) strategy available is `pooling-copy-on-write`.
+	///
+	/// The `legacy-instance-reuse` strategy is deprecated and will
+	/// be removed in the future. It should only be used in case of
+	/// issues with the default instantiation strategy.
+	#[clap(
+		long,
+		value_name = "STRATEGY",
+		default_value_t = DEFAULT_WASMTIME_INSTANTIATION_STRATEGY,
+		arg_enum,
+	)]
+	pub wasmtime_instantiation_strategy: WasmtimeInstantiationStrategy,
 
 	/// Specify the path where local WASM runtimes are stored.
 	///
@@ -81,7 +107,7 @@ impl ImportParams {
 
 	/// Get the WASM execution method from the parameters
 	pub fn wasm_method(&self) -> sc_service::config::WasmExecutionMethod {
-		self.wasm_method.into()
+		crate::execution_method_from_cli(self.wasm_method, self.wasmtime_instantiation_strategy)
 	}
 
 	/// Enable overriding on-chain WASM with locally-stored WASM

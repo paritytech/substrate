@@ -614,7 +614,7 @@ where
 		debug_message: Option<&'a mut Vec<u8>>,
 	) -> Result<(Self, E), ExecError> {
 		let (first_frame, executable, nonce) =
-			Self::new_frame(args, value, gas_meter, storage_meter, 0, &schedule)?;
+			Self::new_frame(args, value, gas_meter, storage_meter, 0, schedule)?;
 		let stack = Self {
 			origin,
 			schedule,
@@ -664,13 +664,10 @@ where
 				},
 				FrameArgs::Instantiate { sender, nonce, executable, salt } => {
 					let account_id =
-						<Contracts<T>>::contract_address(&sender, executable.code_hash(), &salt);
+						<Contracts<T>>::contract_address(&sender, executable.code_hash(), salt);
 					let trie_id = Storage::<T>::generate_trie_id(&account_id, nonce);
-					let contract = Storage::<T>::new_contract(
-						&account_id,
-						trie_id,
-						executable.code_hash().clone(),
-					)?;
+					let contract =
+						Storage::<T>::new_contract(&account_id, trie_id, *executable.code_hash())?;
 					(
 						account_id,
 						contract,
@@ -746,7 +743,7 @@ where
 				top_frame.nested_storage.charge_instantiate(
 					&self.origin,
 					&top_frame.account_id,
-					&mut top_frame.contract_info.get(&top_frame.account_id),
+					top_frame.contract_info.get(&top_frame.account_id),
 				)?;
 			}
 
@@ -1024,11 +1021,11 @@ where
 		code_hash: CodeHash<Self::T>,
 		input_data: Vec<u8>,
 	) -> Result<ExecReturnValue, ExecError> {
-		let executable = E::from_storage(code_hash, &self.schedule, self.gas_meter())?;
+		let executable = E::from_storage(code_hash, self.schedule, self.gas_meter())?;
 		let top_frame = self.top_frame_mut();
 		let contract_info = top_frame.contract_info().clone();
 		let account_id = top_frame.account_id.clone();
-		let value = top_frame.value_transferred.clone();
+		let value = top_frame.value_transferred;
 		let executable = self.push_frame(
 			FrameArgs::Call {
 				dest: account_id,
@@ -1049,7 +1046,7 @@ where
 		input_data: Vec<u8>,
 		salt: &[u8],
 	) -> Result<(AccountIdOf<T>, ExecReturnValue), ExecError> {
-		let executable = E::from_storage(code_hash, &self.schedule, self.gas_meter())?;
+		let executable = E::from_storage(code_hash, self.schedule, self.gas_meter())?;
 		let nonce = self.next_nonce();
 		let executable = self.push_frame(
 			FrameArgs::Instantiate {
@@ -1122,7 +1119,7 @@ where
 
 	fn caller(&self) -> &T::AccountId {
 		if let Some(caller) = &self.top_frame().delegate_caller {
-			&caller
+			caller
 		} else {
 			self.frames().nth(1).map(|f| &f.account_id).unwrap_or(&self.origin)
 		}
@@ -1184,7 +1181,7 @@ where
 	}
 
 	fn schedule(&self) -> &Schedule<Self::T> {
-		&self.schedule
+		self.schedule
 	}
 
 	fn gas_meter(&mut self) -> &mut GasMeter<Self::T> {
@@ -1209,7 +1206,7 @@ where
 	}
 
 	fn ecdsa_recover(&self, signature: &[u8; 65], message_hash: &[u8; 32]) -> Result<[u8; 33], ()> {
-		secp256k1_ecdsa_recover_compressed(&signature, &message_hash).map_err(|_| ())
+		secp256k1_ecdsa_recover_compressed(signature, message_hash).map_err(|_| ())
 	}
 
 	fn ecdsa_to_eth_address(&self, pk: &[u8; 33]) -> Result<[u8; 20], ()> {
@@ -1224,8 +1221,8 @@ where
 	fn set_code_hash(&mut self, hash: CodeHash<Self::T>) -> Result<(), DispatchError> {
 		E::add_user(hash)?;
 		let top_frame = self.top_frame_mut();
-		let prev_hash = top_frame.contract_info().code_hash.clone();
-		E::remove_user(prev_hash.clone());
+		let prev_hash = top_frame.contract_info().code_hash;
+		E::remove_user(prev_hash);
 		top_frame.contract_info().code_hash = hash;
 		Contracts::<Self::T>::deposit_event(Event::ContractCodeUpdated {
 			contract: top_frame.account_id.clone(),

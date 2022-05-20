@@ -14,12 +14,12 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"] }
-scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
+scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../api" }
 sp-core = { version = "6.0.0", default-features = false, path = "../core" }
-sp-std = { version = "4.0.0", default-features = false, path = "../std" }
-sp-staking = { version = "4.0.0-dev", default-features = false, path = "../staking" }
 sp-runtime = { version = "6.0.0", optional = true, path = "../runtime" }
+sp-staking = { version = "4.0.0-dev", default-features = false, path = "../staking" }
+sp-std = { version = "4.0.0", default-features = false, path = "../std" }
 
 [features]
 default = [ "std" ]
@@ -28,7 +28,7 @@ std = [
 	"scale-info/std",
 	"sp-api/std",
 	"sp-core/std",
-	"sp-std/std",
-	"sp-staking/std",
 	"sp-runtime/std",
+	"sp-staking/std",
+	"sp-std/std",
 ]

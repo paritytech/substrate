@@ -37,7 +37,6 @@ async fn benchmark_block_works() {
 		.args(["benchmark", "block", "--dev"])
 		.arg("-d")
 		.arg(base_dir.path())
-		.args(["--pruning", "archive"])
 		.args(["--from", "1", "--to", "1"])
 		.args(["--repeat", "1"])
 		.args(["--execution", "wasm", "--wasm-execution", "compiled"])

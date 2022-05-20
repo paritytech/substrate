@@ -14,10 +14,9 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false }
-log = { version = "0.4.14", default-features = false }
-scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
-
-frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../../benchmarking", optional = true }
+log = { version = "0.4.17", default-features = false }
+scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
+frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "../../benchmarking" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../../system" }
 pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../../balances" }
@@ -26,7 +25,7 @@ sp-runtime = { version = "6.0.0", default-features = false, path = "../../../pri
 sp-std = { version = "4.0.0", default-features = false, path = "../../../primitives/std" }
 
 [dev-dependencies]
-sp-core = { version = "6.0.0", path = "../../../primitives/core", default-features = false }
+sp-core = { version = "6.0.0", default-features = false, path = "../../../primitives/core" }
 
 [features]
 default = ["std"]
@@ -40,7 +39,7 @@ std = [
 	"scale-info/std",
 	"sp-io/std",
 	"sp-runtime/std",
-	"sp-std/std"
+	"sp-std/std",
 ]
 runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks"]
 try-runtime = ["frame-support/try-runtime"]

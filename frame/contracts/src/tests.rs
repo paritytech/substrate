@@ -24,8 +24,8 @@ use crate::{
 	storage::Storage,
 	wasm::{PrefabWasmModule, ReturnCode as RuntimeReturnCode},
 	weights::WeightInfo,
-	BalanceOf, Code, CodeStorage, Config, ContractInfoOf, DefaultAddressGenerator, Error, Pallet,
-	Schedule,
+	BalanceOf, Code, CodeStorage, Config, ContractInfoOf, DefaultAddressGenerator,
+	DefaultContractAccessWeight, Error, Pallet, Schedule,
 };
 use assert_matches::assert_matches;
 use codec::Encode;
@@ -40,7 +40,7 @@ use frame_support::{
 	weights::{constants::WEIGHT_PER_SECOND, DispatchClass, PostDispatchInfo, Weight},
 };
 use frame_system::{self as system, EventRecord, Phase};
-use pretty_assertions::assert_eq;
+use pretty_assertions::{assert_eq, assert_ne};
 use sp_core::Bytes;
 use sp_io::hashing::blake2_256;
 use sp_keystore::{testing::KeyStore, KeystoreExt};
@@ -234,9 +234,6 @@ impl pallet_utility::Config for Test {
 	type WeightInfo = ();
 }
 parameter_types! {
-	pub const MaxValueSize: u32 = 16_384;
-	pub const DeletionWeightLimit: Weight = 500_000_000_000;
-	pub const MaxCodeSize: u32 = 2 * 1024;
 	pub MySchedule: Schedule<Test> = {
 		let mut schedule = <Schedule<Test>>::default();
 		// We want stack height to be always enabled for tests so that this
@@ -244,7 +241,6 @@ parameter_types! {
 		schedule.limits.stack_height = Some(512);
 		schedule
 	};
-	pub const TransactionByteFee: u64 = 0;
 	pub static DepositPerByte: BalanceOf<Test> = 1;
 	pub const DepositPerItem: BalanceOf<Test> = 2;
 }
@@ -286,11 +282,14 @@ impl Config for Test {
 	type WeightInfo = ();
 	type ChainExtension = TestExtension;
 	type DeletionQueueDepth = ConstU32<1024>;
-	type DeletionWeightLimit = DeletionWeightLimit;
+	type DeletionWeightLimit = ConstU64<500_000_000_000>;
 	type Schedule = MySchedule;
 	type DepositPerByte = DepositPerByte;
 	type DepositPerItem = DepositPerItem;
 	type AddressGenerator = DefaultAddressGenerator;
+	type ContractAccessWeight = DefaultContractAccessWeight<BlockWeights>;
+	type MaxCodeLen = ConstU32<{ 128 * 1024 }>;
+	type RelaxedMaxCodeLen = ConstU32<{ 256 * 1024 }>;
 }
 
 pub const ALICE: AccountId32 = AccountId32::new([1u8; 32]);
@@ -2278,7 +2277,6 @@ fn gas_estimation_call_runtime() {
 }
 
 #[test]
-#[cfg(feature = "unstable-interface")]
 fn ecdsa_recover() {
 	let (wasm, code_hash) = compile_module::<Test>("ecdsa_recover").unwrap();
 
@@ -2864,6 +2862,86 @@ fn storage_deposit_works() {
 }
 
 #[test]
+fn set_code_extrinsic() {
+	let (wasm, code_hash) = compile_module::<Test>("dummy").unwrap();
+	let (new_wasm, new_code_hash) = compile_module::<Test>("crypto_hashes").unwrap();
+
+	assert_ne!(code_hash, new_code_hash);
+
+	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
+		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+
+		assert_ok!(Contracts::instantiate_with_code(
+			Origin::signed(ALICE),
+			0,
+			GAS_LIMIT,
+			None,
+			wasm,
+			vec![],
+			vec![],
+		));
+		let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
+
+		assert_ok!(Contracts::upload_code(Origin::signed(ALICE), new_wasm, None,));
+
+		// Drop previous events
+		initialize_block(2);
+
+		assert_eq!(<ContractInfoOf<Test>>::get(&addr).unwrap().code_hash, code_hash);
+		assert_refcount!(&code_hash, 1);
+		assert_refcount!(&new_code_hash, 0);
+
+		// only root can execute this extrinsic
+		assert_noop!(
+			Contracts::set_code(Origin::signed(ALICE), addr.clone(), new_code_hash),
+			sp_runtime::traits::BadOrigin,
+		);
+		assert_eq!(<ContractInfoOf<Test>>::get(&addr).unwrap().code_hash, code_hash);
+		assert_refcount!(&code_hash, 1);
+		assert_refcount!(&new_code_hash, 0);
+		assert_eq!(System::events(), vec![],);
+
+		// contract must exist
+		assert_noop!(
+			Contracts::set_code(Origin::root(), BOB, new_code_hash),
+			<Error<Test>>::ContractNotFound,
+		);
+		assert_eq!(<ContractInfoOf<Test>>::get(&addr).unwrap().code_hash, code_hash);
+		assert_refcount!(&code_hash, 1);
+		assert_refcount!(&new_code_hash, 0);
+		assert_eq!(System::events(), vec![],);
+
+		// new code hash must exist
+		assert_noop!(
+			Contracts::set_code(Origin::root(), addr.clone(), Default::default()),
+			<Error<Test>>::CodeNotFound,
+		);
+		assert_eq!(<ContractInfoOf<Test>>::get(&addr).unwrap().code_hash, code_hash);
+		assert_refcount!(&code_hash, 1);
+		assert_refcount!(&new_code_hash, 0);
+		assert_eq!(System::events(), vec![],);
+
+		// successful call
+		assert_ok!(Contracts::set_code(Origin::root(), addr.clone(), new_code_hash));
+		assert_eq!(<ContractInfoOf<Test>>::get(&addr).unwrap().code_hash, new_code_hash);
+		assert_refcount!(&code_hash, 0);
+		assert_refcount!(&new_code_hash, 1);
+		assert_eq!(
+			System::events(),
+			vec![EventRecord {
+				phase: Phase::Initialization,
+				event: Event::Contracts(pallet_contracts::Event::ContractCodeUpdated {
+					contract: addr,
+					new_code_hash,
+					old_code_hash: code_hash,
+				}),
+				topics: vec![],
+			},]
+		);
+	});
+}
+
+#[test]
 fn call_after_killed_account_needs_funding() {
 	let (wasm, code_hash) = compile_module::<Test>("dummy").unwrap();
 	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
@@ -3092,7 +3170,6 @@ fn code_rejected_error_works() {
 }
 
 #[test]
-#[cfg(feature = "unstable-interface")]
 fn set_code_hash() {
 	let (wasm, code_hash) = compile_module::<Test>("set_code_hash").unwrap();
 	let (new_wasm, new_code_hash) = compile_module::<Test>("new_set_code_hash_contract").unwrap();

@@ -553,7 +553,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					}),
 				);
 				match old {
-					Voting::Delegating(Delegating { .. }) => Err(Error::<T, I>::AlreadyDelegating)?,
+					Voting::Delegating(Delegating { .. }) =>
+						return Err(Error::<T, I>::AlreadyDelegating.into()),
 					Voting::Casting(Casting { votes, delegations, prior }) => {
 						// here we just ensure that we're currently idling with no votes recorded.
 						ensure!(votes.is_empty(), Error::<T, I>::AlreadyVoting);

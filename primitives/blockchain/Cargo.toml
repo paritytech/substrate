@@ -14,14 +14,14 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-log = "0.4.11"
+codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"] }
+futures = "0.3.21"
+log = "0.4.17"
 lru = "0.7.5"
 parking_lot = "0.12.0"
 thiserror = "1.0.30"
-futures = "0.3.21"
-codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"] }
+sp-api = { version = "4.0.0-dev", path = "../api" }
 sp-consensus = { version = "0.10.0-dev", path = "../consensus/common" }
+sp-database = { version = "4.0.0-dev", path = "../database" }
 sp-runtime = { version = "6.0.0", path = "../runtime" }
 sp-state-machine = { version = "0.12.0", path = "../state-machine" }
-sp-database = { version = "4.0.0-dev", path = "../database" }
-sp-api = { version = "4.0.0-dev", path = "../api" }

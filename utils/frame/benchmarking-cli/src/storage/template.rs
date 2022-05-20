@@ -25,7 +25,7 @@ use std::{env, fs, path::PathBuf};
 use super::cmd::StorageParams;
 use crate::shared::{Stats, UnderscoreHelper};
 
-static VERSION: &'static str = env!("CARGO_PKG_VERSION");
+static VERSION: &str = env!("CARGO_PKG_VERSION");
 static TEMPLATE: &str = include_str!("./weights.hbs");
 
 /// Data consumed by Handlebar to fill out the `weights.hbs` template.

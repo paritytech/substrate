@@ -9,8 +9,8 @@ license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-clap = { version = "3.1.6", features = ["derive"] }
-log = "0.4.8"
+clap = { version = "3.1.18", features = ["derive"] }
+log = "0.4.17"
 node-primitives = { version = "2.0.0", path = "../primitives" }
 node-testing = { version = "3.0.0-dev", path = "../testing" }
 node-runtime = { version = "3.0.0-dev", path = "../runtime" }
@@ -19,7 +19,7 @@ sp-runtime = { version = "6.0.0", path = "../../../primitives/runtime" }
 sp-state-machine = { version = "0.12.0", path = "../../../primitives/state-machine" }
 serde = "1.0.136"
 serde_json = "1.0.79"
-derive_more = "0.99.16"
+derive_more = { version = "0.99.17", default-features = false, features = ["display"] }
 kvdb = "0.11.0"
 kvdb-rocksdb = "0.15.1"
 sp-trie = { version = "6.0.0", path = "../../../primitives/trie" }

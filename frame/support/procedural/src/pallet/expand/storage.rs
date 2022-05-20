@@ -74,9 +74,7 @@ fn check_prefix_duplicates(
 			),
 		);
 
-		if let Some(other_dup_err) =
-			used_prefixes.insert(counter_prefix.clone(), counter_dup_err.clone())
-		{
+		if let Some(other_dup_err) = used_prefixes.insert(counter_prefix, counter_dup_err.clone()) {
 			let mut err = counter_dup_err;
 			err.combine(other_dup_err);
 			return Err(err)
@@ -113,7 +111,7 @@ pub fn process_generics(def: &mut Def) -> syn::Result<()> {
 			_ => unreachable!("Checked by def"),
 		};
 
-		let prefix_ident = prefix_ident(&storage_def);
+		let prefix_ident = prefix_ident(storage_def);
 		let type_use_gen = if def.config.has_instance {
 			quote::quote_spanned!(storage_def.attr_span => T, I)
 		} else {
@@ -215,7 +213,7 @@ pub fn process_generics(def: &mut Def) -> syn::Result<()> {
 /// * generate metadatas
 pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 	if let Err(e) = process_generics(def) {
-		return e.into_compile_error().into()
+		return e.into_compile_error()
 	}
 
 	// Check for duplicate prefixes
@@ -393,7 +391,7 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 	let prefix_structs = def.storages.iter().map(|storage_def| {
 		let type_impl_gen = &def.type_impl_generics(storage_def.attr_span);
 		let type_use_gen = &def.type_use_generics(storage_def.attr_span);
-		let prefix_struct_ident = prefix_ident(&storage_def);
+		let prefix_struct_ident = prefix_ident(storage_def);
 		let prefix_struct_vis = &storage_def.vis;
 		let prefix_struct_const = storage_def.prefix();
 		let config_where_clause = &def.config.where_clause;

@@ -87,15 +87,15 @@ impl InspectKeyCmd {
 				self.crypto_scheme.scheme,
 				print_from_public(
 					&uri,
-					self.network_scheme.network.clone(),
-					self.output_scheme.output_type.clone(),
+					self.network_scheme.network,
+					self.output_scheme.output_type,
 				)
 			)?;
 		} else {
 			if let Some(ref expect_public) = self.expect_public {
 				with_crypto_scheme!(
 					self.crypto_scheme.scheme,
-					expect_public_from_phrase(&&expect_public, &uri, password.as_ref(),)
+					expect_public_from_phrase(expect_public, &uri, password.as_ref())
 				)?;
 			}
 
@@ -104,8 +104,8 @@ impl InspectKeyCmd {
 				print_from_uri(
 					&uri,
 					password,
-					self.network_scheme.network.clone(),
-					self.output_scheme.output_type.clone(),
+					self.network_scheme.network,
+					self.output_scheme.output_type,
 				)
 			);
 		}
