@@ -30,7 +30,7 @@ use sp_core::{
 	Blake2Hasher,
 };
 use sp_externalities::{Extension, Extensions};
-use sp_trie::{empty_child_trie_root, LayoutV0, LayoutV1, TrieConfiguration, HashKey};
+use sp_trie::{empty_child_trie_root, HashKey, LayoutV0, LayoutV1, TrieConfiguration};
 use std::{
 	any::{Any, TypeId},
 	collections::BTreeMap,
