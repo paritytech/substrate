@@ -1123,9 +1123,7 @@ impl<Block: BlockT> Backend<Block> {
 			keep_blocks: config.keep_blocks,
 			genesis_state: RwLock::new(None),
 			shared_trie_cache: config.trie_cache_maximum_size.map(|maximum_size| {
-				SharedTrieCache::new(sp_trie::cache::Configuration {
-					maximum_size_in_bytes: maximum_size,
-				})
+				SharedTrieCache::new(sp_trie::cache::CacheSize::Maximum(maximum_size))
 			}),
 		};
 

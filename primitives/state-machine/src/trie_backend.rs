@@ -394,7 +394,7 @@ pub mod tests {
 	use sp_core::H256;
 	use sp_runtime::traits::BlakeTwo256;
 	use sp_trie::{
-		cache::{Configuration, SharedTrieCache},
+		cache::{CacheSize, SharedTrieCache},
 		trie_types::{TrieDBMutBuilderV0, TrieDBMutBuilderV1},
 		KeySpacedDBMut, PrefixedMemoryDB, TrieCache, TrieMut,
 	};
@@ -412,35 +412,19 @@ pub mod tests {
 			fn $name() {
 				let parameters = vec![
 					(StateVersion::V0, None, None),
-					(
-						StateVersion::V0,
-						Some(SharedCache::new(Configuration {
-							maximum_size_in_bytes: 1024 * 1024,
-						})),
-						None,
-					),
+					(StateVersion::V0, Some(SharedCache::new(CacheSize::Unlimited)), None),
 					(StateVersion::V0, None, Some(Recorder::default())),
 					(
 						StateVersion::V0,
-						Some(SharedCache::new(Configuration {
-							maximum_size_in_bytes: 1024 * 1024,
-						})),
+						Some(SharedCache::new(CacheSize::Unlimited)),
 						Some(Recorder::default()),
 					),
 					(StateVersion::V1, None, None),
-					(
-						StateVersion::V1,
-						Some(SharedCache::new(Configuration {
-							maximum_size_in_bytes: 1024 * 1024,
-						})),
-						None,
-					),
+					(StateVersion::V1, Some(SharedCache::new(CacheSize::Unlimited)), None),
 					(StateVersion::V1, None, Some(Recorder::default())),
 					(
 						StateVersion::V1,
-						Some(SharedCache::new(Configuration {
-							maximum_size_in_bytes: 1024 * 1024,
-						})),
+						Some(SharedCache::new(CacheSize::Unlimited)),
 						Some(Recorder::default()),
 					),
 				];
@@ -754,9 +738,7 @@ pub mod tests {
 			.clone()
 			.for_each(|i| assert_eq!(trie.storage(&[i]).unwrap().unwrap(), vec![i; size_content]));
 
-		for cache in
-			[Some(SharedTrieCache::new(Configuration { maximum_size_in_bytes: 1024 * 1024 })), None]
-		{
+		for cache in [Some(SharedTrieCache::new(CacheSize::Unlimited)), None] {
 			// Run multiple times to have a filled cache.
 			for _ in 0..3 {
 				let proving = TrieBackendBuilder::wrap(&trie)
@@ -781,9 +763,7 @@ pub mod tests {
 		proof_record_works_with_iter_inner(StateVersion::V1);
 	}
 	fn proof_record_works_with_iter_inner(state_version: StateVersion) {
-		for cache in
-			[Some(SharedTrieCache::new(Configuration { maximum_size_in_bytes: 1024 * 1024 })), None]
-		{
+		for cache in [Some(SharedTrieCache::new(CacheSize::Unlimited)), None] {
 			// Run multiple times to have a filled cache.
 			for _ in 0..3 {
 				let contents = (0..64).map(|i| (vec![i], Some(vec![i]))).collect::<Vec<_>>();
@@ -852,9 +832,7 @@ pub mod tests {
 			assert_eq!(in_memory.child_storage(child_info_2, &[i]).unwrap().unwrap(), vec![i])
 		});
 
-		for cache in
-			[Some(SharedTrieCache::new(Configuration { maximum_size_in_bytes: 1024 * 1024 })), None]
-		{
+		for cache in [Some(SharedTrieCache::new(CacheSize::Unlimited)), None] {
 			// Run multiple times to have a filled cache.
 			for i in 0..3 {
 				eprintln!("Running with cache {}, iteration {}", cache.is_some(), i);
@@ -956,8 +934,7 @@ pub mod tests {
 
 	#[test]
 	fn new_data_is_added_to_the_cache() {
-		let shared_cache =
-			SharedTrieCache::new(Configuration { maximum_size_in_bytes: 1024 * 1024 });
+		let shared_cache = SharedTrieCache::new(CacheSize::Unlimited);
 		let new_data = vec![
 			(&b"new_data0"[..], Some(&b"0"[..])),
 			(&b"new_data1"[..], Some(&b"1"[..])),

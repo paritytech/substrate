@@ -87,14 +87,14 @@ struct SharedNodeCache<H: Hasher> {
 	lru: LruCache<H::Out, NodeOwned<H::Out>>,
 	/// The size of [`Self::lru`] in bytes.
 	size_in_bytes: usize,
-	/// The maximum size in bytes of [`Self::lru`].
-	maximum_size_in_bytes: usize,
+	/// The maximum cache size of [`Self::lru`].
+	cache_size: CacheSize,
 }
 
 impl<H: Hasher> SharedNodeCache<H> {
 	/// Create a new instance.
-	fn new(maximum_size_in_bytes: usize) -> Self {
-		Self { lru: LruCache::unbounded(), size_in_bytes: 0, maximum_size_in_bytes }
+	fn new(cache_size: CacheSize) -> Self {
+		Self { lru: LruCache::unbounded(), size_in_bytes: 0, cache_size }
 	}
 
 	/// Get the node for `key`.
@@ -144,7 +144,7 @@ impl<H: Hasher> SharedNodeCache<H> {
 
 			// Directly ensure that we respect the maximum size. By doing it directly here we ensure
 			// that the internal map of the [`LruCache`] doesn't grow too much.
-			while self.size_in_bytes > self.maximum_size_in_bytes {
+			while self.cache_size.exceeds(self.size_in_bytes) {
 				// This should always be `Some(_)`, otherwise something is wrong!
 				if let Some((key, node)) = self.lru.pop_lru() {
 					update_size_in_bytes(&mut self.size_in_bytes, &key, &node);
@@ -154,18 +154,30 @@ impl<H: Hasher> SharedNodeCache<H> {
 	}
 }
 
-/// Configuration of the [`SharedTrieCache`].
-#[derive(Debug, Clone)]
-pub struct Configuration {
-	/// The maximum size in bytes the cache should use.
-	pub maximum_size_in_bytes: usize,
+/// The size of the cache.
+#[derive(Debug, Clone, Copy)]
+pub enum CacheSize {
+	/// Do not limit the cache size.
+	Unlimited,
+	/// Let the cache in maximum use the given amount of bytes.
+	Maximum(usize),
+}
+
+impl CacheSize {
+	/// Returns `true` if the `current_size` exceeds the allowed size.
+	fn exceeds(&self, current_size: usize) -> bool {
+		match self {
+			Self::Unlimited => false,
+			Self::Maximum(max) => *max < current_size,
+		}
+	}
 }
 
 /// The shared trie cache.
 ///
 /// It should be instantiated once per node. It will hold the trie nodes and values of all
 /// operations to the state. To not use all available memory it will ensure to stay in the
-/// bounds given via the [`Configuration`] at startup.
+/// bounds given via the [`CacheSize`] at startup.
 ///
 /// The instance of this object can be shared between multiple threads.
 pub struct SharedTrieCache<H: Hasher> {
@@ -187,19 +199,28 @@ impl<H: Hasher> SharedTrieCache<H> {
 	}
 
 	/// Create a new [`SharedTrieCache`].
-	pub fn new(config: Configuration) -> Self {
-		// The value cache element size isn't that huge, roughly around 50 bytes (mainly depending
-		// on the hash size). Thus, we only give it 5% of the overall cache size.
-		let value_cache_size_in_bytes = (config.maximum_size_in_bytes as f32 * 0.05) as usize;
+	pub fn new(cache_size: CacheSize) -> Self {
+		let (node_cache_size, value_cache) = match cache_size {
+			CacheSize::Maximum(max) => {
+				// The value cache element size isn't that huge, roughly around 50 bytes (mainly
+				// depending on the hash size). Thus, we only give it 5% of the overall cache size.
+				let value_cache_size_in_bytes = (max as f32 * 0.05) as usize;
+
+				(
+					CacheSize::Maximum(max - value_cache_size_in_bytes),
+					NoHashingLruCache::with_hasher(
+						value_cache_size_in_bytes / Self::value_cache_element_size(),
+						Default::default(),
+					),
+				)
+			},
+			CacheSize::Unlimited =>
+				(CacheSize::Unlimited, NoHashingLruCache::unbounded_with_hasher(Default::default())),
+		};
 
 		Self {
-			node_cache: Arc::new(RwLock::new(SharedNodeCache::new(
-				config.maximum_size_in_bytes - value_cache_size_in_bytes,
-			))),
-			value_cache: Arc::new(RwLock::new(NoHashingLruCache::with_hasher(
-				value_cache_size_in_bytes / Self::value_cache_element_size(),
-				Default::default(),
-			))),
+			node_cache: Arc::new(RwLock::new(SharedNodeCache::new(node_cache_size))),
+			value_cache: Arc::new(RwLock::new(value_cache)),
 		}
 	}
 
@@ -500,7 +521,8 @@ mod tests {
 
 	const TEST_DATA: &[(&[u8], &[u8])] =
 		&[(b"key1", b"val1"), (b"key2", &[2; 64]), (b"key3", b"val3"), (b"key4", &[4; 64])];
-	const CACHE_CONFIG: Configuration = Configuration { maximum_size_in_bytes: 1024 * 10 };
+	const CACHE_SIZE_RAW: usize = 1024 * 10;
+	const CACHE_SIZE: CacheSize = CacheSize::Maximum(CACHE_SIZE_RAW);
 
 	fn create_trie() -> (MemoryDB, TrieHash<Layout>) {
 		let mut db = MemoryDB::default();
@@ -520,7 +542,7 @@ mod tests {
 	fn basic_cache_works() {
 		let (db, root) = create_trie();
 
-		let shared_cache = Cache::new(CACHE_CONFIG);
+		let shared_cache = Cache::new(CACHE_SIZE);
 		let local_cache = shared_cache.local_cache();
 
 		{
@@ -570,7 +592,7 @@ mod tests {
 		// Use some long value to not have it inlined
 		let new_value = vec![23; 64];
 
-		let shared_cache = Cache::new(CACHE_CONFIG);
+		let shared_cache = Cache::new(CACHE_SIZE);
 		let local_cache = shared_cache.local_cache();
 
 		let mut new_root = root;
@@ -599,7 +621,7 @@ mod tests {
 	fn trie_db_cache_and_recorder_work_together() {
 		let (db, root) = create_trie();
 
-		let shared_cache = Cache::new(CACHE_CONFIG);
+		let shared_cache = Cache::new(CACHE_SIZE);
 		let local_cache = shared_cache.local_cache();
 
 		// Run this twice so that we use the data cache in the second run.
@@ -640,7 +662,7 @@ mod tests {
 
 		let (db, root) = create_trie();
 
-		let shared_cache = Cache::new(CACHE_CONFIG);
+		let shared_cache = Cache::new(CACHE_SIZE);
 		let local_cache = shared_cache.local_cache();
 
 		// Run this twice so that we use the data cache in the second run.
@@ -686,7 +708,7 @@ mod tests {
 	fn cache_lru_works() {
 		let (db, root) = create_trie();
 
-		let shared_cache = Cache::new(CACHE_CONFIG);
+		let shared_cache = Cache::new(CACHE_SIZE);
 
 		{
 			let local_cache = shared_cache.local_cache();
@@ -766,7 +788,7 @@ mod tests {
 	fn cache_respects_bounds() {
 		let (mut db, root) = create_trie();
 
-		let shared_cache = Cache::new(CACHE_CONFIG);
+		let shared_cache = Cache::new(CACHE_SIZE);
 		{
 			let local_cache = shared_cache.local_cache();
 
@@ -782,7 +804,7 @@ mod tests {
 
 					let value = vec![10u8; 100];
 					// Ensure we add enough data that would overflow the cache.
-					for i in 0..CACHE_CONFIG.maximum_size_in_bytes / 100 * 2 {
+					for i in 0..CACHE_SIZE_RAW / 100 * 2 {
 						trie.insert(format!("key{}", i).as_bytes(), &value).unwrap();
 					}
 				}
@@ -801,6 +823,6 @@ mod tests {
 		let value_cache_size = shared_cache.value_cache.read().len() *
 			(mem::size_of::<u64>() + mem::size_of::<CachedValue<sp_core::H256>>());
 
-		assert!(node_cache_size + value_cache_size < CACHE_CONFIG.maximum_size_in_bytes);
+		assert!(node_cache_size + value_cache_size < CACHE_SIZE_RAW);
 	}
 }
