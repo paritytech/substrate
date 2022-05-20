@@ -204,7 +204,8 @@ mod bonded_pool {
 				},
 			};
 
-			let min_points_to_balance: u128 = MinPointsToBalance::get().into();
+			let min_points_to_balance: u128 =
+				<<Runtime as Config>::MinPointsToBalance as Get<u32>>::get().into();
 
 			// Simulate a 100% slashed pool
 			StakingMock::set_bonded_balance(pool.bonded_account(), 0);
@@ -522,7 +523,8 @@ mod join {
 			);
 
 			// Force the points:balance ratio to `MinPointsToBalance` (100/10)
-			let min_points_to_balance: u128 = MinPointsToBalance::get().into();
+			let min_points_to_balance: u128 =
+				<<Runtime as Config>::MinPointsToBalance as Get<u32>>::get().into();
 
 			StakingMock::set_bonded_balance(
 				Pools::create_bonded_account(123),

@@ -174,7 +174,6 @@ parameter_types! {
 	pub static MaxMetadataLen: u32 = 2;
 	pub static CheckLevel: u8 = 255;
 	pub const PoolsPalletId: PalletId = PalletId(*b"py/nopls");
-	pub const MinPointsToBalance: u32 = 10;
 }
 impl pools::Config for Runtime {
 	type Event = Event;
@@ -187,7 +186,7 @@ impl pools::Config for Runtime {
 	type PalletId = PoolsPalletId;
 	type MaxMetadataLen = MaxMetadataLen;
 	type MaxUnbonding = MaxUnbonding;
-	type MinPointsToBalance = MinPointsToBalance;
+	type MinPointsToBalance = frame_support::traits::ConstU32<10>;
 }
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;

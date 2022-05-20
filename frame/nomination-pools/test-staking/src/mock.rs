@@ -163,6 +163,7 @@ impl pallet_nomination_pools::Config for Runtime {
 	type PostUnbondingPoolsWindow = PostUnbondingPoolsWindow;
 	type MaxMetadataLen = ConstU32<256>;
 	type MaxUnbonding = ConstU32<8>;
+	type MinPointsToBalance = ConstU32<10>;
 	type PalletId = PoolsPalletId;
 }
 
