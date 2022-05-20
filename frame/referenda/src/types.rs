@@ -21,7 +21,7 @@ use super::*;
 use codec::{Decode, Encode, EncodeLike, MaxEncodedLen};
 use frame_support::{traits::schedule::Anon, Parameter};
 use scale_info::TypeInfo;
-use sp_arithmetic::Rounding::*;
+use sp_arithmetic::{Rounding::*, SignedRounding::*};
 use sp_runtime::{FixedI64, PerThing, RuntimeDebug};
 use sp_std::fmt::Debug;
 
@@ -385,7 +385,7 @@ impl Curve {
 			Self::SteppedDecreasing { begin, end, step, period } =>
 				(*begin - (step.int_mul(x.int_div(*period))).min(*begin)).max(*end),
 			Self::Reciprocal { factor, x_offset, y_offset } => factor
-				.checked_rounding_div(FixedI64::from(x) + *x_offset, Down)
+				.checked_rounding_div(FixedI64::from(x) + *x_offset, Low)
 				.map(|yp| (yp + *y_offset).into_clamped_perthing())
 				.unwrap_or_else(Perbill::one),
 		}
@@ -397,7 +397,7 @@ impl Curve {
 	const fn const_threshold(&self, x: Perbill) -> Perbill {
 		match self {
 			Self::Reciprocal { factor, x_offset, y_offset } => {
-				match factor.checked_rounding_div(FixedI64::from_perbill(x).add(*x_offset), Down) {
+				match factor.checked_rounding_div(FixedI64::from_perbill(x).add(*x_offset), Low) {
 					Some(yp) => (yp.add(*y_offset)).into_perbill(),
 					None => Perbill::one(),
 				}
@@ -438,7 +438,7 @@ impl Curve {
 				},
 			Self::Reciprocal { factor, x_offset, y_offset } => {
 				let y = FixedI64::from(y);
-				let maybe_term = factor.checked_rounding_div(y - *y_offset, Up);
+				let maybe_term = factor.checked_rounding_div(y - *y_offset, High);
 				maybe_term
 					.and_then(|term| (term - *x_offset).try_into_perthing().ok())
 					.unwrap_or_else(Perbill::one)

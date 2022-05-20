@@ -688,6 +688,7 @@ macro_rules! implement_per_thing {
 					let mut o = n.clone() / d.clone();
 					if match r {
 						Rounding::Up => { !((n % d).is_zero()) },
+						// TODO: check `rem` can never be big enough to make this overflow. e.g. (u16::max_value() - 1 / u16::max_value())
 						Rounding::NearestPrefDown => { let rem = n % d.clone(); rem.clone() + rem > d },
 						Rounding::NearestPrefUp => { let rem = n % d.clone(); rem.clone() + rem >= d },
 						Rounding::Down => false,
