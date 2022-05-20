@@ -2277,7 +2277,6 @@ fn gas_estimation_call_runtime() {
 }
 
 #[test]
-#[cfg(feature = "unstable-interface")]
 fn ecdsa_recover() {
 	let (wasm, code_hash) = compile_module::<Test>("ecdsa_recover").unwrap();
 
