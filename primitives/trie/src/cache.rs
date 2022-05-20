@@ -171,26 +171,25 @@ pub struct Configuration {
 pub struct SharedTrieCache<H: Hasher> {
 	node_cache: Arc<RwLock<SharedNodeCache<H>>>,
 	value_cache: Arc<RwLock<NoHashingLruCache<CachedValue<H::Out>>>>,
-	value_cache_element_size: usize,
 }
 
 impl<H: Hasher> Clone for SharedTrieCache<H> {
 	fn clone(&self) -> Self {
-		Self {
-			node_cache: self.node_cache.clone(),
-			value_cache: self.value_cache.clone(),
-			value_cache_element_size: self.value_cache_element_size,
-		}
+		Self { node_cache: self.node_cache.clone(), value_cache: self.value_cache.clone() }
 	}
 }
 
 impl<H: Hasher> SharedTrieCache<H> {
+	/// Returns the size of one element in the value cache.
+	const fn value_cache_element_size() -> usize {
+		// key + value
+		mem::size_of::<u64>() + mem::size_of::<CachedValue<H::Out>>()
+	}
+
 	/// Create a new [`SharedTrieCache`].
 	pub fn new(config: Configuration) -> Self {
 		// The value cache element size isn't that huge, roughly around 50 bytes (mainly depending
 		// on the hash size). Thus, we only give it 5% of the overall cache size.
-		let value_cache_element_size =
-			mem::size_of::<u64>() + mem::size_of::<CachedValue<H::Out>>();
 		let value_cache_size_in_bytes = (config.maximum_size_in_bytes as f32 * 0.05) as usize;
 
 		Self {
@@ -198,10 +197,9 @@ impl<H: Hasher> SharedTrieCache<H> {
 				config.maximum_size_in_bytes - value_cache_size_in_bytes,
 			))),
 			value_cache: Arc::new(RwLock::new(NoHashingLruCache::with_hasher(
-				value_cache_size_in_bytes / value_cache_element_size,
+				value_cache_size_in_bytes / Self::value_cache_element_size(),
 				Default::default(),
 			))),
-			value_cache_element_size,
 		}
 	}
 
@@ -218,7 +216,7 @@ impl<H: Hasher> SharedTrieCache<H> {
 
 	/// Returns the used memory size of this cache in bytes.
 	pub fn used_memory_size(&self) -> usize {
-		let value_cache_size = self.value_cache.read().len() * self.value_cache_element_size;
+		let value_cache_size = self.value_cache.read().len() * Self::value_cache_element_size();
 		let node_cache_size = self.node_cache.read().size_in_bytes;
 
 		node_cache_size + value_cache_size
