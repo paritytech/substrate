@@ -74,7 +74,6 @@ pub enum ReturnCode {
 	/// ECDSA pubkey recovery failed (most probably wrong recovery id or signature), or
 	/// ECDSA compressed pubkey conversion into Ethereum address failed (most probably
 	/// wrong pubkey provided).
-	#[cfg(feature = "unstable-interface")]
 	EcdsaRecoverFailed = 11,
 }
 
@@ -214,7 +213,6 @@ pub enum RuntimeCosts {
 	/// Weight of calling `seal_hash_blake2_128` for the given input size.
 	HashBlake128(u32),
 	/// Weight of calling `seal_ecdsa_recover`.
-	#[cfg(feature = "unstable-interface")]
 	EcdsaRecovery,
 	/// Weight charged by a chain extension through `seal_call_chain_extension`.
 	ChainExtension(u64),
@@ -224,7 +222,6 @@ pub enum RuntimeCosts {
 	/// Weight of calling `seal_set_code_hash`
 	SetCodeHash,
 	/// Weight of calling `ecdsa_to_eth_address`
-	#[cfg(feature = "unstable-interface")]
 	EcdsaToEthAddress,
 }
 
@@ -299,14 +296,11 @@ impl RuntimeCosts {
 			HashBlake128(len) => s
 				.hash_blake2_128
 				.saturating_add(s.hash_blake2_128_per_byte.saturating_mul(len.into())),
-			#[cfg(feature = "unstable-interface")]
 			EcdsaRecovery => s.ecdsa_recover,
 			ChainExtension(amount) => amount,
-
 			#[cfg(feature = "unstable-interface")]
 			CallRuntime(weight) => weight,
 			SetCodeHash => s.set_code_hash,
-			#[cfg(feature = "unstable-interface")]
 			EcdsaToEthAddress => s.ecdsa_to_eth_address,
 		};
 		RuntimeToken {
@@ -1993,7 +1987,7 @@ define_env!(Env, <E: Ext>,
 	// # Errors
 	//
 	// `ReturnCode::EcdsaRecoverFailed`
-	[__unstable__] seal_ecdsa_recover(ctx, signature_ptr: u32, message_hash_ptr: u32, output_ptr: u32) -> ReturnCode => {
+	[seal0] seal_ecdsa_recover(ctx, signature_ptr: u32, message_hash_ptr: u32, output_ptr: u32) -> ReturnCode => {
 		ctx.charge_gas(RuntimeCosts::EcdsaRecovery)?;
 
 		let mut signature: [u8; 65] = [0; 65];
@@ -2069,7 +2063,7 @@ define_env!(Env, <E: Ext>,
 	// # Errors
 	//
 	// `ReturnCode::EcdsaRecoverFailed`
-	[__unstable__] seal_ecdsa_to_eth_address(ctx, key_ptr: u32, out_ptr: u32) -> ReturnCode => {
+	[seal0] seal_ecdsa_to_eth_address(ctx, key_ptr: u32, out_ptr: u32) -> ReturnCode => {
 		ctx.charge_gas(RuntimeCosts::EcdsaToEthAddress)?;
 		let mut compressed_key: [u8; 33] = [0;33];
 		ctx.read_sandbox_memory_into_buf(key_ptr, &mut compressed_key)?;
