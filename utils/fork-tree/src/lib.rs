@@ -289,10 +289,11 @@ where
 	/// index in the traverse path goes last. If a node is found that matches the predicate
 	/// the returned path should always contain at least one index, otherwise `None` is
 	/// returned.
-	// WARNING: some users of this method (i.e. Babe epoch changes tree) currently silently
-	// rely on a **post-order DFS** traversal of the tree. In particular via the
-	// `is_descendent_of` that when used after a warp-sync may query the backend for a
-	// root that is not present.
+	// WARNING: some users of this method (i.e. consensus epoch changes tree) currently silently
+	// rely on a **DFS** traversal. If we are using instead a top-down traversal method then
+	// the `is_descendent_of` closure, when used after a warp-sync, will end up querying the
+	// backend for a block (the one corresponding to the root) that is not present and thus
+	// will return a wrong result. Here we are implementing a post-order DFS.
 	pub fn find_node_index_where<F, E, P>(
 		&self,
 		hash: &H,
@@ -311,18 +312,21 @@ where
 		let mut is_descendent = false;
 
 		while root_idx < self.roots.len() {
-			// The second element in the tuple tracks what is the next children index
-			// to search into. Once all the children are processed we check the node.
-			// We stop searching into alternative children as soon as we have found
-			// ancestor of the node we're looking for
+			if *number <= self.roots[root_idx].number {
+				root_idx += 1;
+				continue
+			}
+			// The second element in the stack tuple tracks what is the **next** children
+			// index to search into. If we find an ancestor then we stop searching into
+			// alternative branches and we focus on the current path up to the root.
 			stack.push((&self.roots[root_idx], 0));
 			while let Some((node, i)) = stack.pop() {
 				if i < node.children.len() && !is_descendent {
 					stack.push((node, i + 1));
-					stack.push((&node.children[i], 0));
-				} else if node.number < *number &&
-					(is_descendent || is_descendent_of(&node.hash, hash)?)
-				{
+					if node.children[i].number < *number {
+						stack.push((&node.children[i], 0));
+					}
+				} else if is_descendent || is_descendent_of(&node.hash, hash)? {
 					is_descendent = true;
 					if predicate(&node.data) {
 						found = true;
@@ -331,8 +335,8 @@ where
 				}
 			}
 
-			// If the node we are looking for is found to be a descendent of the current
-			// root then we can stop searching under the other roots.
+			// If the element we are looking for is a descendent of the current root
+			// then we can stop the search.
 			if is_descendent {
 				break
 			}
