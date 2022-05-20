@@ -61,31 +61,23 @@ async fn should_return_storage() {
 	assert_eq!(
 		client
 			.storage(key.clone(), Some(genesis_hash).into())
-			.await
 			.map(|x| x.map(|x| x.0.len()))
 			.unwrap()
 			.unwrap() as usize,
 		VALUE.len(),
 	);
 	assert_matches!(
-		client
-			.storage_hash(key.clone(), Some(genesis_hash).into())
-			.await
-			.map(|x| x.is_some()),
+		client.storage_hash(key.clone(), Some(genesis_hash).into()).map(|x| x.is_some()),
 		Ok(true)
 	);
+	assert_eq!(client.storage_size(key.clone(), None).unwrap().unwrap() as usize, VALUE.len(),);
 	assert_eq!(
-		client.storage_size(key.clone(), None).await.unwrap().unwrap() as usize,
-		VALUE.len(),
-	);
-	assert_eq!(
-		client.storage_size(StorageKey(b":map".to_vec()), None).await.unwrap().unwrap() as usize,
+		client.storage_size(StorageKey(b":map".to_vec()), None).unwrap().unwrap() as usize,
 		2 + 3,
 	);
 	assert_eq!(
 		child
 			.storage(prefixed_storage_key(), key, Some(genesis_hash).into())
-			.await
 			.map(|x| x.map(|x| x.0.len()))
 			.unwrap()
 			.unwrap() as usize,
@@ -114,7 +106,6 @@ async fn should_return_storage_entries() {
 	assert_eq!(
 		child
 			.storage_entries(prefixed_storage_key(), keys.to_vec(), Some(genesis_hash).into())
-			.await
 			.map(|x| x.into_iter().map(|x| x.map(|x| x.0.len()).unwrap()).sum::<usize>())
 			.unwrap(),
 		CHILD_VALUE1.len() + CHILD_VALUE2.len()
@@ -126,7 +117,6 @@ async fn should_return_storage_entries() {
 	assert_matches!(
 		child
 			.storage_entries(prefixed_storage_key(), failing_keys, Some(genesis_hash).into())
-			.await
 			.map(|x| x.iter().all(|x| x.is_some())),
 		Ok(false)
 	);
@@ -150,17 +140,16 @@ async fn should_return_child_storage() {
 			child_key.clone(),
 			key.clone(),
 			Some(genesis_hash).into(),
-		).await,
+		),
 		Ok(Some(StorageData(ref d))) if d[0] == 42 && d.len() == 1
 	);
 	assert_matches!(
 		child
 			.storage_hash(child_key.clone(), key.clone(), Some(genesis_hash).into(),)
-			.await
 			.map(|x| x.is_some()),
 		Ok(true)
 	);
-	assert_matches!(child.storage_size(child_key.clone(), key.clone(), None).await, Ok(Some(1)));
+	assert_matches!(child.storage_size(child_key.clone(), key.clone(), None), Ok(Some(1)));
 }
 
 #[tokio::test]
@@ -179,7 +168,6 @@ async fn should_return_child_storage_entries() {
 
 	let res = child
 		.storage_entries(child_key.clone(), keys.clone(), Some(genesis_hash).into())
-		.await
 		.unwrap();
 
 	assert_matches!(
@@ -193,18 +181,12 @@ async fn should_return_child_storage_entries() {
 			if d[0] == 43 && d[1] == 44 && d.len() == 2
 	);
 	assert_matches!(
-		executor::block_on(child.storage_hash(
-			child_key.clone(),
-			keys[0].clone(),
-			Some(genesis_hash).into()
-		))
-		.map(|x| x.is_some()),
+		child
+			.storage_hash(child_key.clone(), keys[0].clone(), Some(genesis_hash).into())
+			.map(|x| x.is_some()),
 		Ok(true)
 	);
-	assert_matches!(
-		child.storage_size(child_key.clone(), keys[0].clone(), None).await,
-		Ok(Some(1))
-	);
+	assert_matches!(child.storage_size(child_key.clone(), keys[0].clone(), None), Ok(Some(1)));
 }
 
 #[tokio::test]
@@ -216,9 +198,7 @@ async fn should_call_contract() {
 	use jsonrpsee::{core::Error, types::error::CallError};
 
 	assert_matches!(
-		client
-			.call("balanceOf".into(), Bytes(vec![1, 2, 3]), Some(genesis_hash).into())
-			.await,
+		client.call("balanceOf".into(), Bytes(vec![1, 2, 3]), Some(genesis_hash).into()),
 		Err(Error::Call(CallError::Failed(_)))
 	)
 }
@@ -347,7 +327,7 @@ async fn should_query_storage() {
 		let keys = (1..6).map(|k| StorageKey(vec![k])).collect::<Vec<_>>();
 		let result = api.query_storage(keys.clone(), genesis_hash, Some(block1_hash).into());
 
-		assert_eq!(result.await.unwrap(), expected);
+		assert_eq!(result.unwrap(), expected);
 
 		// Query all changes
 		let result = api.query_storage(keys.clone(), genesis_hash, None.into());
@@ -360,18 +340,18 @@ async fn should_query_storage() {
 				(StorageKey(vec![5]), Some(StorageData(vec![1]))),
 			],
 		});
-		assert_eq!(result.await.unwrap(), expected);
+		assert_eq!(result.unwrap(), expected);
 
 		// Query changes up to block2.
 		let result = api.query_storage(keys.clone(), genesis_hash, Some(block2_hash));
 
-		assert_eq!(result.await.unwrap(), expected);
+		assert_eq!(result.unwrap(), expected);
 
 		// Inverted range.
 		let result = api.query_storage(keys.clone(), block1_hash, Some(genesis_hash));
 
 		assert_eq!(
-			result.await.map_err(|e| e.to_string()),
+			result.map_err(|e| e.to_string()),
 			Err(RpcError::Call(RpcCallError::Custom(ErrorObject::owned(
 				4001,
 				Error::InvalidBlockRange {
@@ -392,7 +372,7 @@ async fn should_query_storage() {
 		let result = api.query_storage(keys.clone(), genesis_hash, Some(random_hash1));
 
 		assert_eq!(
-			result.await.map_err(|e| e.to_string()),
+			result.map_err(|e| e.to_string()),
 			Err(RpcError::Call(RpcCallError::Custom(ErrorObject::owned(
 				4001,
 				Error::InvalidBlockRange {
@@ -413,7 +393,7 @@ async fn should_query_storage() {
 		let result = api.query_storage(keys.clone(), random_hash1, Some(genesis_hash));
 
 		assert_eq!(
-			result.await.map_err(|e| e.to_string()),
+			result.map_err(|e| e.to_string()),
 			Err(RpcError::Call(RpcCallError::Custom(ErrorObject::owned(
 				4001,
 				Error::InvalidBlockRange {
@@ -434,7 +414,7 @@ async fn should_query_storage() {
 		let result = api.query_storage(keys.clone(), random_hash1, None);
 
 		assert_eq!(
-			result.await.map_err(|e| e.to_string()),
+			result.map_err(|e| e.to_string()),
 			Err(RpcError::Call(RpcCallError::Custom(ErrorObject::owned(
 				4001,
 				Error::InvalidBlockRange {
@@ -455,7 +435,7 @@ async fn should_query_storage() {
 		let result = api.query_storage(keys.clone(), random_hash1, Some(random_hash2));
 
 		assert_eq!(
-			result.await.map_err(|e| e.to_string()),
+			result.map_err(|e| e.to_string()),
 			Err(RpcError::Call(RpcCallError::Custom(ErrorObject::owned(
 				4001,
 				Error::InvalidBlockRange {
@@ -476,7 +456,7 @@ async fn should_query_storage() {
 		let result = api.query_storage_at(keys.clone(), Some(block1_hash));
 
 		assert_eq!(
-			result.await.unwrap(),
+			result.unwrap(),
 			vec![StorageChangeSet {
 				block: block1_hash,
 				changes: vec![
@@ -506,7 +486,7 @@ async fn should_return_runtime_version() {
 		[\"0xf78b278be53f454c\",2],[\"0xab3c0572291feb8b\",1],[\"0xbc9d89904f5b923f\",1]],\
 		\"transactionVersion\":1,\"stateVersion\":1}";
 
-	let runtime_version = api.runtime_version(None.into()).await.unwrap();
+	let runtime_version = api.runtime_version(None.into()).unwrap();
 	let serialized = serde_json::to_string(&runtime_version).unwrap();
 	assert_eq!(serialized, result);
 
