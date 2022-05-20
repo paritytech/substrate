@@ -102,7 +102,7 @@ frame_support::construct_runtime!(
 );
 
 #[test]
-fn storage_transaction_basic_commit() {
+fn storage_layer_basic_commit() {
 	TestExternalities::default().execute_with(|| {
 		assert_eq!(Value::<Runtime>::get(), 0);
 		assert!(!Map::<Runtime>::contains_key(0));
@@ -121,7 +121,7 @@ fn storage_transaction_basic_commit() {
 }
 
 #[test]
-fn storage_transaction_basic_rollback() {
+fn storage_layer_basic_rollback() {
 	TestExternalities::default().execute_with(|| {
 		assert_eq!(Value::<Runtime>::get(), 0);
 		assert_eq!(Map::<Runtime>::get(0), 0);
@@ -143,7 +143,7 @@ fn storage_transaction_basic_rollback() {
 }
 
 #[test]
-fn storage_transaction_rollback_then_commit() {
+fn storage_layer_rollback_then_commit() {
 	TestExternalities::default().execute_with(|| {
 		Value::<Runtime>::set(1);
 		Map::<Runtime>::insert(1, 1);
@@ -186,7 +186,7 @@ fn storage_transaction_rollback_then_commit() {
 }
 
 #[test]
-fn storage_transaction_commit_then_rollback() {
+fn storage_layer_commit_then_rollback() {
 	TestExternalities::default().execute_with(|| {
 		Value::<Runtime>::set(1);
 		Map::<Runtime>::insert(1, 1);
