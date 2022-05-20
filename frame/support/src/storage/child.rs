@@ -21,7 +21,7 @@
 // NOTE: could replace unhashed by having only one kind of storage (top trie being the child info
 // of null length parent storage key).
 
-pub use crate::sp_io::{KillStorageResult, ClearPrefixResult};
+pub use crate::sp_io::{ClearPrefixResult, KillStorageResult};
 use crate::sp_std::prelude::*;
 use codec::{Codec, Decode, Encode};
 pub use sp_core::storage::{ChildInfo, ChildType, StateVersion};
