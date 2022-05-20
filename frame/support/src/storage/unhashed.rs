@@ -98,12 +98,22 @@ pub fn kill(key: &[u8]) {
 /// Ensure keys with the given `prefix` have no entries in storage.
 #[deprecated = "Use `clear_prefix` instead"]
 pub fn kill_prefix(prefix: &[u8], limit: Option<u32>) -> sp_io::KillStorageResult {
-	clear_prefix(prefix, limit).into()
+	// TODO: Once the network has upgraded to include the new host functions, this code can be
+	// enabled.
+	// clear_prefix(prefix, limit).into()
+	sp_io::storage::clear_prefix(prefix, limit)
 }
 
 /// Ensure keys with the given `prefix` have no entries in storage.
 pub fn clear_prefix(prefix: &[u8], limit: Option<u32>) -> sp_io::ClearPrefixResult {
-	sp_io::storage::clear_prefix(prefix, limit)
+	// TODO: Once the network has upgraded to include the new host functions, this code can be
+	// enabled.
+	// sp_io::storage::clear_prefix(prefix, limit)
+	use sp_io::{KillStorageResult::*, ClearPrefixResult::*};
+	match kill_prefix(prefix, limit) {
+		AllRemoved(db) => NoneLeft { db, total: db },
+		SomeRemaining(db) => SomeLeft { db, total: db },
+	}
 }
 
 /// Get a Vec of bytes from storage.

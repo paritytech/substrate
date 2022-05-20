@@ -236,7 +236,7 @@ pub trait Storage {
 	/// every time this function is called with the exact same arguments per block. This happens
 	/// because the keys in the overlay are not taken into account when deleting keys in the
 	/// backend.
-	#[version(3)]
+	#[version(3, register_only)]
 	fn clear_prefix(&mut self, prefix: &[u8], limit: Option<u32>) -> ClearPrefixResult {
 		let (all_removed, db, total) = Externalities::clear_prefix(*self, prefix, limit);
 		match all_removed {

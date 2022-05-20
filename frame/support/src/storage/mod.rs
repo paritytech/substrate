@@ -1160,7 +1160,7 @@ pub trait StoragePrefixedMap<Value: FullCodec> {
 	/// removed and the same result being returned. This happens because the keys to delete in the
 	/// overlay are not taken into account when deleting keys in the backend.
 	fn clear(limit: Option<u32>) -> sp_io::ClearPrefixResult {
-		sp_io::storage::clear_prefix(&Self::final_prefix(), limit)
+		unhashed::clear_prefix(&Self::final_prefix(), limit)
 	}
 
 	/// Iter over all value of the storage.
