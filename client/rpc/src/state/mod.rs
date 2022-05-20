@@ -202,7 +202,6 @@ pub struct State<Block, Client> {
 	deny_unsafe: DenyUnsafe,
 }
 
-#[async_trait]
 impl<Block, Client> StateApiServer<Block::Hash> for State<Block, Client>
 where
 	Block: BlockT + 'static,
