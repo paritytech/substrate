@@ -1766,6 +1766,11 @@ mod tests {
 			assert!(storage::get(b":abdd").is_some());
 			assert!(storage::get(b":abcd").is_none());
 			assert!(storage::get(b":abc").is_none());
+
+			assert!(matches!(
+				storage::clear_prefix(b":abc", None),
+				KillStorageResult::AllRemoved(0)
+			));
 		});
 	}
 
