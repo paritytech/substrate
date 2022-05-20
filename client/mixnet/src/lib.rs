@@ -158,35 +158,7 @@ where
 				.0
 		};
 
-		let mut grandpa_key = None;
-		for key in SyncCryptoStore::ed25519_public_keys(&*key_store, key_types::GRANDPA)
-			.into_iter()
-			.rev()
-		{
-			log::error!(target: "mixnet", "A grandpa key");
-			if SyncCryptoStore::has_keys(&*key_store, &[(key.0.into(), key_types::GRANDPA)]) {
-				grandpa_key = Some(key);
-				break
-			} else {
-				log::error!(target: "mixnet", "No private key for grandpa key");
-			}
-		}
-		/*						let commands =
-		crate::mixnet::AuthorityStar::command_stream(&mut event_streams);*/
-		let mixnet_config = if let Some(grandpa_key) = grandpa_key {
-			let mut p = [0u8; 32];
-			p.copy_from_slice(grandpa_key.as_ref());
-			let pub_key = mixnet::public_from_ed25519(p);
-
-			log::error!(target: "mixnet", "Gr pub"); // TODO rem
-			let priv_key = SyncCryptoStore::mixnet_secret_from_ed25519(
-				&*key_store,
-				key_types::GRANDPA,
-				&grandpa_key,
-			)
-			.ok()?;
-			log::error!(target: "mixnet", "Gr pri"); // TODO rem
-
+		let mixnet_config = if let Some((pub_key, priv_key)) = Self::get_mixnet_keys(&*key_store) {
 			mixnet::Config::new_with_keys(local_public_key, pub_key, priv_key)
 		} else {
 			log::error!(target: "mixnet", "Not using grandpa key");
@@ -241,6 +213,42 @@ where
 			//connection_info,
 		})
 		//encoded_connection_info,
+	}
+
+	fn get_mixnet_keys(
+		key_store: &dyn SyncCryptoStore,
+	) -> Option<(MixPublicKey, mixnet::MixSecretKey)> {
+		let mut grandpa_key = None;
+		for key in SyncCryptoStore::ed25519_public_keys(&*key_store, key_types::GRANDPA)
+			.into_iter()
+			.rev()
+		{
+			log::error!(target: "mixnet", "A grandpa key");
+			if SyncCryptoStore::has_keys(&*key_store, &[(key.0.into(), key_types::GRANDPA)]) {
+				grandpa_key = Some(key);
+				break
+			} else {
+				log::error!(target: "mixnet", "No private key for grandpa key");
+			}
+		}
+
+		if let Some(grandpa_key) = grandpa_key {
+			let mut p = [0u8; 32];
+			p.copy_from_slice(grandpa_key.as_ref());
+			let pub_key = mixnet::public_from_ed25519(p);
+
+			log::error!(target: "mixnet", "Gr pub"); // TODO rem
+			let priv_key = SyncCryptoStore::mixnet_secret_from_ed25519(
+				&*key_store,
+				key_types::GRANDPA,
+				&grandpa_key,
+			)
+			.ok()?;
+			log::error!(target: "mixnet", "Gr pri"); // TODO rem
+			Some((pub_key, priv_key))
+		} else {
+			None
+		}
 	}
 
 	pub async fn run(mut self) {
@@ -360,38 +368,52 @@ where
 
 		topology.routing = false;
 
+		let mut restart = None;
 		for (auth, _) in set.into_iter() {
 			use sp_application_crypto::Public;
 			let auth_pub_pair = auth.clone().to_public_crypto_pair(); // TODO change key type in map?
 			if let Some(key) = topology.sessions2.get(&auth_pub_pair) {
 				let mut peer_id = [0u8; 32];
 				peer_id.copy_from_slice(&key.1[..]);
-				// derive from grandpa one
-				let public_key = if let Some(key) = old_authority2.remove(&peer_id) {
-					key
-				} else {
+				if old_authority2.remove(&peer_id).is_some() {
 					remove_limit.push(peer_id.clone());
-					let mut p = [0u8; 32];
-					p.copy_from_slice(auth.as_ref());
-					mixnet::public_from_ed25519(p)
-				};
+				}
+				// derive from grandpa one
+				let mut p = [0u8; 32];
+				p.copy_from_slice(auth.as_ref());
+				let public_key = mixnet::public_from_ed25519(p);
 
 				if self.authority_id.as_ref() == Some(&auth) {
 					debug!(target: "mixnet", "In new authority set, routing.");
 					topology.routing = true;
-					if current_local_id != peer_id || current_public_key != public_key {
-						unimplemented!(
-							"TODO restart node setting local id and public / private key"
-						);
+					let new_id = (current_local_id != peer_id).then(|| {
+						topology.node_id = peer_id.clone();
+						peer_id.clone()
+					});
+					let new_key = (current_public_key != public_key).then(|| {
+						let secret_key = SyncCryptoStore::mixnet_secret_from_ed25519(
+							&*self.key_store,
+							key_types::GRANDPA,
+							&auth.into(),
+						)
+						.ok()?;
+						topology.node_public_key = public_key.clone();
+
+						Some((public_key.clone(), secret_key))
+					}).flatten();
+					if new_id.is_some() || new_key.is_some() {
+						restart = Some((new_id, new_key));
 					}
 				} else {
-
-				error!(target: "mixnet", "Insert auth {:?}", peer_id);
+					error!(target: "mixnet", "Insert auth {:?}", peer_id);
 					topology.authorities.insert(peer_id, public_key);
 				}
 			} else {
 				error!(target: "mixnet", "Missing imonline key for authority {:?}, not adding it to topology.", auth);
 			}
+		}
+		if let Some((id, key)) = restart {
+			self.worker.restart(id, key);
 		}
 		self.update_state(false);
 		for peer in remove_limit.into_iter() {
@@ -710,9 +732,9 @@ impl Topology for AuthorityStar {
 		}
 	}
 
-	fn routing_to(&self, from: &MixPeerId, _to: &MixPeerId) -> bool {
-		self.authorities.contains_key(from)
-		// && self.authorities.contains_key(to) // allow any number of external.
+	fn routing_to(&self, from: &MixPeerId, to: &MixPeerId) -> bool {
+		(self.authorities.contains_key(from) || (&self.node_id == from && self.routing)) &&
+			(self.authorities.contains_key(to) || (&self.node_id == to && self.routing))
 	}
 
 	fn random_path(
@@ -840,8 +862,13 @@ impl Topology for AuthorityStar {
 		self.add_disconnected_peer(&peer_id);
 	}
 
-	fn allow_external(&mut self, _id: &MixPeerId) -> Option<(usize, usize)> {
+	fn allowed_external(&self, _id: &MixPeerId) -> Option<(usize, usize)> {
 		// 10% TODO limit nb connection
+		Some((1, 10))
+	}
+
+	fn allow_external(&mut self, _id: &MixPeerId) -> Option<(usize, usize)> {
+		// 10% TODO limit nb connection (in handshake)
 		Some((1, 10))
 	}
 
