@@ -27,7 +27,7 @@ use crate::{
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	dispatch::{DispatchError, DispatchResult},
-	storage::child::{self, ChildInfo, KillStorageResult},
+	storage::child::{self, ChildInfo, ClearPrefixResult},
 	weights::Weight,
 };
 use scale_info::TypeInfo;
@@ -270,12 +270,12 @@ where
 				child::kill_storage(&child_trie_info(&trie.trie_id), Some(remaining_key_budget));
 			let keys_removed = match outcome {
 				// This happens when our budget wasn't large enough to remove all keys.
-				KillStorageResult::SomeRemaining(count) => count,
-				KillStorageResult::AllRemoved(count) => {
+				ClearPrefixResult::SomeLeft { db, .. } => db,
+				ClearPrefixResult::NoneLeft { db, .. } => {
 					// We do not care to preserve order. The contract is deleted already and
 					// no one waits for the trie to be deleted.
 					queue.swap_remove(0);
-					count
+					db
 				},
 			};
 			remaining_key_budget = remaining_key_budget.saturating_sub(keys_removed);

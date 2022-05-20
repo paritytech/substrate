@@ -21,7 +21,7 @@
 // NOTE: could replace unhashed by having only one kind of storage (top trie being the child info
 // of null length parent storage key).
 
-pub use crate::sp_io::KillStorageResult;
+pub use crate::sp_io::{KillStorageResult, ClearPrefixResult};
 use crate::sp_std::prelude::*;
 use codec::{Codec, Decode, Encode};
 pub use sp_core::storage::{ChildInfo, ChildType, StateVersion};
@@ -136,10 +136,42 @@ pub fn exists(child_info: &ChildInfo, key: &[u8]) -> bool {
 /// not make much sense because it is not cumulative when called inside the same block.
 /// Use this function to distribute the deletion of a single child trie across multiple
 /// blocks.
+#[deprecated = "Use `clear_storage` instead"]
 pub fn kill_storage(child_info: &ChildInfo, limit: Option<u32>) -> KillStorageResult {
 	match child_info.child_type() {
 		ChildType::ParentKeyId =>
 			sp_io::default_child_storage::storage_kill(child_info.storage_key(), limit),
+	}
+}
+
+/// Remove all `storage_key` key/values
+///
+/// Deletes all keys from the overlay and up to `limit` keys from the backend if
+/// it is set to `Some`. No limit is applied when `limit` is set to `None`.
+///
+/// The limit can be used to partially delete a child trie in case it is too large
+/// to delete in one go (block).
+///
+/// # Note
+///
+/// Please note that keys that are residing in the overlay for that child trie when
+/// issuing this call are all deleted without counting towards the `limit`. Only keys
+/// written during the current block are part of the overlay. Deleting with a `limit`
+/// mostly makes sense with an empty overlay for that child trie.
+///
+/// Calling this function multiple times per block for the same `storage_key` does
+/// not make much sense because it is not cumulative when called inside the same block.
+/// Use this function to distribute the deletion of a single child trie across multiple
+/// blocks.
+pub fn clear_storage(child_info: &ChildInfo, limit: Option<u32>) -> ClearPrefixResult {
+	let r = match child_info.child_type() {
+		ChildType::ParentKeyId =>
+			sp_io::default_child_storage::storage_kill(child_info.storage_key(), limit),
+	};
+	use sp_io::{ClearPrefixResult::*, KillStorageResult::*};
+	match r {
+		AllRemoved(db) => NoneLeft { db, total: db },
+		SomeRemaining(db) => SomeLeft { db, total: db },
 	}
 }
 
