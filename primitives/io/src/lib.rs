@@ -114,8 +114,7 @@ impl From<ClearPrefixResult> for KillStorageResult {
 	}
 }
 
-/// The outcome of calling `clear_prefix`. Returned value is the number of storage items
-/// removed from the backend from making the `storage_kill` call.
+/// The outcome of calling `clear_prefix` or some function which uses it.
 #[derive(PassByCodec, Encode, Decode)]
 pub enum ClearPrefixResult {
 	/// All keys to be removed were removed.
