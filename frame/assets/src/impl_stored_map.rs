@@ -42,7 +42,7 @@ impl<T: Config<I>, I: 'static> StoredMap<(T::AssetId, T::AccountId), T::Extra> f
 				if let Some(ref mut account) = maybe_account {
 					account.extra = extra;
 				} else {
-					Err(DispatchError::NoProviders)?;
+					return Err(DispatchError::NoProviders.into())
 				}
 			} else {
 				// They want to delete it. Let this pass if the item never existed anyway.

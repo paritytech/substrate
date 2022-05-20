@@ -191,8 +191,6 @@ impl RuntimeCache {
 	/// This uses internal cache to find available instance or create a new one.
 	/// # Parameters
 	///
-	/// `code` - Provides external code or tells the executor to fetch it from storage.
-	///
 	/// `runtime_code` - The runtime wasm code used setup the runtime.
 	///
 	/// `default_heap_pages` - Number of 64KB pages to allocate for Wasm execution.
@@ -201,8 +199,6 @@ impl RuntimeCache {
 	///
 	/// `allow_missing_func_imports` - Ignore missing function imports.
 	///
-	/// `max_runtime_instances` - The size of the instances cache.
-	///
 	/// `f` - Function to execute.
 	///
 	/// `H` - A compile-time list of host functions to expose to the runtime.
@@ -210,7 +206,7 @@ impl RuntimeCache {
 	/// # Returns result of `f` wrapped in an additional result.
 	/// In case of failure one of two errors can be returned:
 	///
-	/// `Err::InvalidCode` is returned for runtime code issues.
+	/// `Err::RuntimeConstruction` is returned for runtime construction issues.
 	///
 	/// `Error::InvalidMemoryReference` is returned if no memory export with the
 	/// identifier `memory` can be found in the runtime.
@@ -368,7 +364,7 @@ pub fn read_embedded_version(blob: &RuntimeBlob) -> Result<Option<RuntimeVersion
 			.transpose()?
 			.map(Into::into);
 
-		let core_version = apis.as_ref().and_then(|apis| sp_version::core_version_from_apis(apis));
+		let core_version = apis.as_ref().and_then(sp_version::core_version_from_apis);
 		// We do not use `RuntimeVersion::decode` here because that `decode_version` relies on
 		// presence of a special API in the `apis` field to treat the input as a non-legacy version.
 		// However the structure found in the `runtime_version` always contain an empty `apis`
@@ -403,7 +399,7 @@ where
 {
 	// The incoming code may be actually compressed. We decompress it here and then work with
 	// the uncompressed code from now on.
-	let blob = sc_executor_common::runtime_blob::RuntimeBlob::uncompress_if_needed(&code)?;
+	let blob = sc_executor_common::runtime_blob::RuntimeBlob::uncompress_if_needed(code)?;
 
 	// Use the runtime blob to scan if there is any metadata embedded into the wasm binary
 	// pertaining to runtime version. We do it before consuming the runtime blob for creating the

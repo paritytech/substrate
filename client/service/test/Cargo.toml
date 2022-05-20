@@ -12,33 +12,33 @@ repository = "https://github.com/paritytech/substrate/"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
+fdlimit = "0.2.1"
+futures = "0.3.21"
 hex = "0.4"
 hex-literal = "0.3.4"
+log = "0.4.17"
+parity-scale-codec = "3.0.0"
+parking_lot = "0.12.0"
 tempfile = "3.1.0"
 tokio = { version = "1.17.0", features = ["time"] }
-log = "0.4.8"
-fdlimit = "0.2.1"
-parking_lot = "0.12.0"
-sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
-sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
-sp-state-machine = { version = "0.12.0", path = "../../../primitives/state-machine" }
-sp-externalities = { version = "0.12.0", path = "../../../primitives/externalities" }
-sp-trie = { version = "6.0.0", path = "../../../primitives/trie" }
-sp-storage = { version = "6.0.0", path = "../../../primitives/storage" }
+sc-block-builder = { version = "0.10.0-dev", path = "../../block-builder" }
+sc-client-api = { version = "4.0.0-dev", path = "../../api" }
 sc-client-db = { version = "0.10.0-dev", default-features = false, path = "../../db" }
-futures = "0.3.21"
-sc-service = { version = "0.10.0-dev", features = ["test-helpers"], path = "../../service" }
-sc-network = { version = "0.10.0-dev", path = "../../network" }
-sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
 sc-consensus = { version = "0.10.0-dev", path = "../../../client/consensus/common" }
-sp-runtime = { version = "6.0.0", path = "../../../primitives/runtime" }
-sp-core = { version = "6.0.0", path = "../../../primitives/core" }
+sc-executor = { version = "0.10.0-dev", path = "../../executor" }
+sc-network = { version = "0.10.0-dev", path = "../../network" }
+sc-service = { version = "0.10.0-dev", features = ["test-helpers"], path = "../../service" }
 sc-transaction-pool-api = { version = "4.0.0-dev", path = "../../../client/transaction-pool/api" }
+sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
+sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
+sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
+sp-core = { version = "6.0.0", path = "../../../primitives/core" }
+sp-externalities = { version = "0.12.0", path = "../../../primitives/externalities" }
+sp-panic-handler = { version = "4.0.0", path = "../../../primitives/panic-handler" }
+sp-runtime = { version = "6.0.0", path = "../../../primitives/runtime" }
+sp-state-machine = { version = "0.12.0", path = "../../../primitives/state-machine" }
+sp-storage = { version = "6.0.0", path = "../../../primitives/storage" }
+sp-tracing = { version = "5.0.0", path = "../../../primitives/tracing" }
+sp-trie = { version = "6.0.0", path = "../../../primitives/trie" }
 substrate-test-runtime = { version = "2.0.0", path = "../../../test-utils/runtime" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }
-sc-client-api = { version = "4.0.0-dev", path = "../../api" }
-sc-block-builder = { version = "0.10.0-dev", path = "../../block-builder" }
-sc-executor = { version = "0.10.0-dev", path = "../../executor" }
-sp-panic-handler = { version = "4.0.0", path = "../../../primitives/panic-handler" }
-parity-scale-codec = "3.0.0"
-sp-tracing = { version = "5.0.0", path = "../../../primitives/tracing" }

@@ -146,6 +146,9 @@ pub trait BlockBackend<Block: BlockT> {
 	fn has_indexed_transaction(&self, hash: &Block::Hash) -> sp_blockchain::Result<bool> {
 		Ok(self.indexed_transaction(hash)?.is_some())
 	}
+
+	/// Tells whether the current client configuration requires full-sync mode.
+	fn requires_full_sync(&self) -> bool;
 }
 
 /// Provide a list of potential uncle headers for a given block.
@@ -308,7 +311,7 @@ pub struct FinalityNotification<Block: BlockT> {
 	pub header: Block::Header,
 	/// Path from the old finalized to new finalized parent (implicitly finalized blocks).
 	///
-	/// This maps to the range `(old_finalized, new_finalized]`.
+	/// This maps to the range `(old_finalized, new_finalized)`.
 	pub tree_route: Arc<[Block::Hash]>,
 	/// Stale branches heads.
 	pub stale_heads: Arc<[Block::Hash]>,

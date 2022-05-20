@@ -13,19 +13,19 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sp-authority-discovery = { version = "4.0.0-dev", default-features = false, path = "../../primitives/authority-discovery" }
-sp-application-crypto = { version = "6.0.0", default-features = false, path = "../../primitives/application-crypto" }
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = [
 	"derive",
 ] }
-scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
-sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
-pallet-session = { version = "4.0.0-dev", features = [
-	"historical",
-], path = "../session", default-features = false }
-sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
+scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
+pallet-session = { version = "4.0.0-dev", default-features = false, features = [
+	"historical",
+], path = "../session" }
+sp-application-crypto = { version = "6.0.0", default-features = false, path = "../../primitives/application-crypto" }
+sp-authority-discovery = { version = "4.0.0-dev", default-features = false, path = "../../primitives/authority-discovery" }
+sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
 
 [dev-dependencies]
 sp-core = { version = "6.0.0", path = "../../primitives/core" }
@@ -34,14 +34,14 @@ sp-io = { version = "6.0.0", path = "../../primitives/io" }
 [features]
 default = ["std"]
 std = [
-	"sp-application-crypto/std",
-	"sp-authority-discovery/std",
 	"codec/std",
-	"scale-info/std",
-	"sp-std/std",
-	"pallet-session/std",
-	"sp-runtime/std",
 	"frame-support/std",
 	"frame-system/std",
+	"pallet-session/std",
+	"scale-info/std",
+	"sp-application-crypto/std",
+	"sp-authority-discovery/std",
+	"sp-runtime/std",
+	"sp-std/std",
 ]
 try-runtime = ["frame-support/try-runtime"]

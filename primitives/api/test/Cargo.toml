@@ -21,13 +21,13 @@ sp-consensus = { version = "0.10.0-dev", path = "../../consensus/common" }
 sc-block-builder = { version = "0.10.0-dev", path = "../../../client/block-builder" }
 codec = { package = "parity-scale-codec", version = "3.0.0" }
 sp-state-machine = { version = "0.12.0", path = "../../state-machine" }
-trybuild = "1.0.53"
+trybuild = "1.0.60"
 rustversion = "1.0.6"
 
 [dev-dependencies]
 criterion = "0.3.0"
 futures = "0.3.21"
-log = "0.4.14"
+log = "0.4.17"
 sp-core = { version = "6.0.0", path = "../../core" }
 
 [[bench]]

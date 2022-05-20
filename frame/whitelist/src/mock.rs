@@ -22,7 +22,7 @@
 use crate as pallet_whitelist;
 
 use frame_support::{
-	parameter_types,
+	construct_runtime, parameter_types,
 	traits::{ConstU32, ConstU64, Nothing},
 };
 use frame_system::EnsureRoot;
@@ -36,7 +36,7 @@ use sp_runtime::{
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
-frame_support::construct_runtime!(
+construct_runtime!(
 	pub enum Test where
 		Block = Block,
 		NodeBlock = Block,
@@ -49,7 +49,7 @@ frame_support::construct_runtime!(
 	}
 );
 
-frame_support::parameter_types! {
+parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(1024);
 }
@@ -92,16 +92,11 @@ impl pallet_balances::Config for Test {
 	type WeightInfo = ();
 }
 
-parameter_types! {
-	// Taken from Polkadot as reference.
-	pub const PreimageMaxSize: u32 = 4096 * 1024;
-}
-
 impl pallet_preimage::Config for Test {
 	type Event = Event;
 	type Currency = Balances;
 	type ManagerOrigin = EnsureRoot<Self::AccountId>;
-	type MaxSize = PreimageMaxSize;
+	type MaxSize = ConstU32<{ 4096 * 1024 }>; // PreimageMaxSize Taken from Polkadot as reference.
 	type BaseDeposit = ConstU64<1>;
 	type ByteDeposit = ConstU64<1>;
 	type WeightInfo = ();
