@@ -134,14 +134,21 @@ type NegativeImbalanceOf<T, I> = <<T as Config<I>>::Currency as Currency<
 	<T as frame_system::Config>::AccountId,
 >>::NegativeImbalance;
 
+/// Interface required for identity verification.
 pub trait IdentityVerifier<AccountId> {
+	/// Function that returns whether an account has an identity registered with the identity
+	/// provider.
 	fn has_identity(who: &AccountId, fields: u64) -> bool;
 
+	/// Whether an account has been deemed "good" by the provider.
 	fn has_good_judgement(who: &AccountId) -> bool;
 
+	/// If the identity provider allows sub-accounts, provide the super of an account. Should
+	/// return `None` if the provider does not allow sub-accounts or if the account is not a sub.
 	fn super_account_id(who: &AccountId) -> Option<AccountId>;
 }
 
+/// The non-provider. Imposes no restrictions on account identity.
 impl<AccountId> IdentityVerifier<AccountId> for () {
 	fn has_identity(_who: &AccountId, _fields: u64) -> bool {
 		true
@@ -156,6 +163,7 @@ impl<AccountId> IdentityVerifier<AccountId> for () {
 	}
 }
 
+/// The provider of a collective action interface, for example an instance of `pallet-collective`.
 pub trait ProposalProvider<AccountId, Hash, Proposal> {
 	fn propose_proposal(
 		who: AccountId,
