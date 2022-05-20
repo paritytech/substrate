@@ -678,7 +678,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		proposal: Box<<T as Config<I>>::Proposal>,
 		length_bound: MemberCount,
 	) -> Result<(u32, DispatchResultWithPostInfo), DispatchError> {
-		let proposal_len = proposal.using_encoded(|x| x.len());
+		let proposal_len = proposal.encoded_size();
 		ensure!(proposal_len <= length_bound as usize, Error::<T, I>::WrongProposalLength);
 
 		let proposal_hash = T::Hashing::hash_of(&proposal);
@@ -700,7 +700,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		proposal: Box<<T as Config<I>>::Proposal>,
 		length_bound: MemberCount,
 	) -> Result<(u32, u32), DispatchError> {
-		let proposal_len = proposal.using_encoded(|x| x.len());
+		let proposal_len = proposal.encoded_size();
 		ensure!(proposal_len <= length_bound as usize, Error::<T, I>::WrongProposalLength);
 
 		let proposal_hash = T::Hashing::hash_of(&proposal);
