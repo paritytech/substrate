@@ -29,7 +29,7 @@ use std::collections::{BTreeMap, HashMap};
 /// Create a new empty instance of in-memory backend.
 ///
 /// It will use [`HashKey`] to store the keys internally.
-pub fn new_in_mem_hash_key<H: Hasher>() -> TrieBackend<MemoryDB<H>, H>
+pub fn new_in_mem_hash_key<H>() -> TrieBackend<MemoryDB<H>, H>
 where
 	H: Hasher,
 	H::Out: Codec + Ord,
