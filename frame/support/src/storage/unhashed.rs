@@ -109,7 +109,7 @@ pub fn clear_prefix(prefix: &[u8], limit: Option<u32>) -> sp_io::ClearPrefixResu
 	// TODO: Once the network has upgraded to include the new host functions, this code can be
 	// enabled.
 	// sp_io::storage::clear_prefix(prefix, limit)
-	use sp_io::{KillStorageResult::*, ClearPrefixResult::*};
+	use sp_io::{ClearPrefixResult::*, KillStorageResult::*};
 	#[allow(deprecated)]
 	match kill_prefix(prefix, limit) {
 		AllRemoved(db) => NoneLeft { db, total: db },
