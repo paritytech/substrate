@@ -448,7 +448,7 @@ pub trait DefaultChildStorage {
 	/// Clear the child storage of each key-value pair where the key starts with the given `prefix`.
 	///
 	/// See `Storage` module `clear_prefix` documentation for `limit` usage.
-	#[version(3)]
+	#[version(3, register_only)]
 	fn clear_prefix(
 		&mut self,
 		storage_key: &[u8],
