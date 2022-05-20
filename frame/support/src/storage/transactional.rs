@@ -31,24 +31,21 @@ use sp_runtime::{DispatchError, TransactionOutcome, TransactionalError};
 
 /// The type that is being used to store the current number of active layers.
 pub type Layer = u32;
-/// The key that is holds the current number of active layers.
-pub const TRANSACTION_LEVEL_KEY: &[u8] = b":transaction_level:";
 /// The maximum number of nested layers.
 pub const TRANSACTIONAL_LIMIT: Layer = 255;
 
-/// Returns the current number of nested transactional layers.
+environmental!(transaction_level_env: u32);
+pub fn track_transaction_level<R, F: FnOnce() -> R>(f: F) -> R {
+	let mut default = 0u32;
+	transaction_level_env::using(&mut default, f)
+}
+
 fn get_transaction_level() -> Layer {
-	crate::storage::unhashed::get_or_default::<Layer>(TRANSACTION_LEVEL_KEY)
+	transaction_level_env::with(|v| v.clone()).unwrap_or_default()
 }
 
-/// Set the current number of nested transactional layers.
 fn set_transaction_level(level: Layer) {
-	crate::storage::unhashed::put::<Layer>(TRANSACTION_LEVEL_KEY, &level);
-}
-
-/// Kill the transactional layers storage.
-fn kill_transaction_level() {
-	crate::storage::unhashed::kill(TRANSACTION_LEVEL_KEY);
+	let _ = transaction_level_env::with(|v| *v = level);
 }
 
 /// Increments the transaction level. Returns an error if levels go past the limit.
@@ -68,11 +65,8 @@ fn dec_transaction_level() {
 	let existing_levels = get_transaction_level();
 	if existing_levels == 0 {
 		log::warn!(
-				"We are underflowing with calculating transactional levels. Not great, but let's not panic...",
-			);
-	} else if existing_levels == 1 {
-		// Don't leave any trace of this storage item.
-		kill_transaction_level();
+			"We are underflowing with calculating transactional levels. Not great, but let's not panic...",
+		);
 	} else {
 		// Cannot underflow because of checks above.
 		set_transaction_level(existing_levels - 1);
@@ -89,8 +83,7 @@ impl Drop for StorageLayerGuard {
 
 /// Check if the current call is within a transactional layer.
 pub fn is_transactional() -> bool {
-	true
-	//get_transaction_level() > 0
+	get_transaction_level() > 0
 }
 
 /// Execute the supplied function in a new storage transaction.
@@ -209,19 +202,21 @@ mod tests {
 
 	#[test]
 	fn is_transactional_should_not_error_in_with_transaction() {
-		TestExternalities::default().execute_with(|| {
-			assert_ok!(with_transaction(|| -> TransactionOutcome<DispatchResult> {
-				assert!(is_transactional());
-				TransactionOutcome::Commit(Ok(()))
-			}));
-
-			assert_noop!(
-				with_transaction(|| -> TransactionOutcome<DispatchResult> {
+		track_transaction_level(|| {
+			TestExternalities::default().execute_with(|| {
+				assert_ok!(with_transaction(|| -> TransactionOutcome<DispatchResult> {
 					assert!(is_transactional());
-					TransactionOutcome::Rollback(Err("revert".into()))
-				}),
-				"revert"
-			);
+					TransactionOutcome::Commit(Ok(()))
+				}));
+
+				assert_noop!(
+					with_transaction(|| -> TransactionOutcome<DispatchResult> {
+						assert!(is_transactional());
+						TransactionOutcome::Rollback(Err("revert".into()))
+					}),
+					"revert"
+				);
+			});
 		});
 	}
 
@@ -238,59 +233,63 @@ mod tests {
 
 	#[test]
 	fn transaction_limit_should_work() {
-		TestExternalities::default().execute_with(|| {
-			assert_eq!(get_transaction_level(), 0);
+		track_transaction_level(|| {
+			TestExternalities::default().execute_with(|| {
+				assert_eq!(get_transaction_level(), 0);
 
-			assert_ok!(with_transaction(|| -> TransactionOutcome<DispatchResult> {
-				assert_eq!(get_transaction_level(), 1);
-				TransactionOutcome::Commit(Ok(()))
-			}));
-
-			assert_ok!(with_transaction(|| -> TransactionOutcome<DispatchResult> {
-				assert_eq!(get_transaction_level(), 1);
-				let res = with_transaction(|| -> TransactionOutcome<DispatchResult> {
-					assert_eq!(get_transaction_level(), 2);
+				assert_ok!(with_transaction(|| -> TransactionOutcome<DispatchResult> {
+					assert_eq!(get_transaction_level(), 1);
 					TransactionOutcome::Commit(Ok(()))
-				});
-				TransactionOutcome::Commit(res)
-			}));
+				}));
 
-			assert_ok!(recursive_transactional(255));
-			assert_noop!(
-				recursive_transactional(256),
-				sp_runtime::TransactionalError::LimitReached
-			);
+				assert_ok!(with_transaction(|| -> TransactionOutcome<DispatchResult> {
+					assert_eq!(get_transaction_level(), 1);
+					let res = with_transaction(|| -> TransactionOutcome<DispatchResult> {
+						assert_eq!(get_transaction_level(), 2);
+						TransactionOutcome::Commit(Ok(()))
+					});
+					TransactionOutcome::Commit(res)
+				}));
 
-			assert_eq!(get_transaction_level(), 0);
+				assert_ok!(recursive_transactional(255));
+				assert_noop!(
+					recursive_transactional(256),
+					sp_runtime::TransactionalError::LimitReached
+				);
+
+				assert_eq!(get_transaction_level(), 0);
+			});
 		});
 	}
 
 	#[test]
 	fn in_storage_layer_works() {
-		TestExternalities::default().execute_with(|| {
-			assert_eq!(get_transaction_level(), 0);
+		track_transaction_level(|| {
+			TestExternalities::default().execute_with(|| {
+				assert_eq!(get_transaction_level(), 0);
 
-			let res = in_storage_layer(|| -> DispatchResult {
-				assert_eq!(get_transaction_level(), 1);
-				in_storage_layer(|| -> DispatchResult {
-					// We are still in the same layer :)
+				let res = in_storage_layer(|| -> DispatchResult {
 					assert_eq!(get_transaction_level(), 1);
-					Ok(())
-				})
-			});
+					in_storage_layer(|| -> DispatchResult {
+						// We are still in the same layer :)
+						assert_eq!(get_transaction_level(), 1);
+						Ok(())
+					})
+				});
 
-			assert_ok!(res);
+				assert_ok!(res);
 
-			let res = in_storage_layer(|| -> DispatchResult {
-				assert_eq!(get_transaction_level(), 1);
-				in_storage_layer(|| -> DispatchResult {
-					// We are still in the same layer :)
+				let res = in_storage_layer(|| -> DispatchResult {
 					assert_eq!(get_transaction_level(), 1);
-					Err("epic fail".into())
-				})
-			});
+					in_storage_layer(|| -> DispatchResult {
+						// We are still in the same layer :)
+						assert_eq!(get_transaction_level(), 1);
+						Err("epic fail".into())
+					})
+				});
 
-			assert_noop!(res, "epic fail");
+				assert_noop!(res, "epic fail");
+			});
 		});
 	}
 }

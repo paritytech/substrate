@@ -22,6 +22,9 @@
 /// Export ourself as `frame_support` to make tests happy.
 extern crate self as frame_support;
 
+#[macro_use]
+extern crate environmental;
+
 #[doc(hidden)]
 pub use sp_tracing;
 

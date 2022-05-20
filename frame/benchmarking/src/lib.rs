@@ -1021,11 +1021,6 @@ macro_rules! impl_benchmark {
 						$crate::whitelisted_caller::<T::AccountId>()
 					);
 				whitelist.push(whitelisted_caller_key.into());
-				// Whitelist the transactional layer.
-				let transactional_layer_key = $crate::TrackedStorageKey::new(
-					$crate::frame_support::storage::transactional::TRANSACTION_LEVEL_KEY.into()
-				);
-				whitelist.push(transactional_layer_key);
 
 				$crate::benchmarking::set_whitelist(whitelist);
 

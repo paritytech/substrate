@@ -52,6 +52,24 @@ pub mod pallet {
 			ensure!(value != 1, Error::<T>::Revert);
 			Ok(())
 		}
+
+		#[pallet::weight(1)]
+		pub fn recursive(_origin: OriginFor<T>, depth: u32) -> DispatchResult {
+			Self::recursive_storage_layer(depth)?;
+			Ok(())
+		}
+	}
+
+	impl<T> Pallet<T> {
+		fn recursive_storage_layer(num: u32) -> DispatchResult {
+			if num == 0 {
+				return Ok(())
+			}
+
+			frame_support::storage::with_storage_layer(|| -> DispatchResult {
+				Self::recursive_storage_layer(num - 1)
+			})
+		}
 	}
 }
 
@@ -102,7 +120,7 @@ frame_support::construct_runtime!(
 );
 
 #[test]
-fn storage_transaction_basic_commit() {
+fn storage_layer_basic_commit() {
 	TestExternalities::default().execute_with(|| {
 		assert_eq!(Value::<Runtime>::get(), 0);
 		assert!(!Map::<Runtime>::contains_key(0));
@@ -121,7 +139,7 @@ fn storage_transaction_basic_commit() {
 }
 
 #[test]
-fn storage_transaction_basic_rollback() {
+fn storage_layer_basic_rollback() {
 	TestExternalities::default().execute_with(|| {
 		assert_eq!(Value::<Runtime>::get(), 0);
 		assert_eq!(Map::<Runtime>::get(0), 0);
@@ -143,7 +161,7 @@ fn storage_transaction_basic_rollback() {
 }
 
 #[test]
-fn storage_transaction_rollback_then_commit() {
+fn storage_layer_rollback_then_commit() {
 	TestExternalities::default().execute_with(|| {
 		Value::<Runtime>::set(1);
 		Map::<Runtime>::insert(1, 1);
@@ -186,7 +204,7 @@ fn storage_transaction_rollback_then_commit() {
 }
 
 #[test]
-fn storage_transaction_commit_then_rollback() {
+fn storage_layer_commit_then_rollback() {
 	TestExternalities::default().execute_with(|| {
 		Value::<Runtime>::set(1);
 		Map::<Runtime>::insert(1, 1);
@@ -229,7 +247,7 @@ fn storage_transaction_commit_then_rollback() {
 }
 
 #[test]
-fn storage_layer_in_decl_module() {
+fn storage_layer_in_pallet_macros() {
 	TestExternalities::default().execute_with(|| {
 		use sp_runtime::traits::Dispatchable;
 		let call1 = Call::MyPallet(pallet::Call::set_value { value: 2 });
@@ -238,5 +256,19 @@ fn storage_layer_in_decl_module() {
 
 		let call2 = Call::MyPallet(pallet::Call::set_value { value: 1 });
 		assert_noop!(call2.dispatch(Origin::signed(0)), Error::<Runtime>::Revert);
+	});
+}
+
+#[test]
+fn storage_layer_limit() {
+	frame_support::storage::transactional::track_transaction_level(|| {
+		TestExternalities::default().execute_with(|| {
+			use sp_runtime::{traits::Dispatchable, TransactionalError};
+			let call1 = Call::MyPallet(pallet::Call::recursive { depth: 2 });
+			assert_ok!(call1.dispatch(Origin::signed(0)));
+
+			let call1 = Call::MyPallet(pallet::Call::recursive { depth: 300 });
+			assert_noop!(call1.dispatch(Origin::signed(0)), TransactionalError::LimitReached);
+		});
 	});
 }
