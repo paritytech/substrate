@@ -53,7 +53,7 @@ pub trait StateApi<Hash> {
 	/// Returns the keys with prefix with pagination support.
 	/// Up to `count` keys will be returned.
 	/// If `start_key` is passed, return next keys in storage in lexicographic order.
-	#[method(name = "state_getKeysPaged", aliases = ["state_getKeysPagedAt"])]
+	#[method(name = "state_getKeysPaged", aliases = ["state_getKeysPagedAt"], blocking)]
 	fn storage_keys_paged(
 		&self,
 		prefix: Option<StorageKey>,
