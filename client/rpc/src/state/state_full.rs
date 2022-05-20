@@ -602,12 +602,10 @@ where
 
 		keys.into_iter()
 			.map(move |key| {
-				let res = client
+				client
 					.clone()
 					.child_storage(&BlockId::Hash(block), &child_info, &key)
-					.map_err(client_err);
-
-				res
+					.map_err(client_err)
 			})
 			.collect()
 	}
