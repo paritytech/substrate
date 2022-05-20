@@ -53,7 +53,6 @@ use sp_blockchain::{HeaderBackend, HeaderMetadata};
 const STORAGE_KEYS_PAGED_MAX_COUNT: u32 = 1000;
 
 /// State backend API.
-#[async_trait]
 pub trait StateBackend<Block: BlockT, Client>: Send + Sync + 'static
 where
 	Block: BlockT + 'static,
@@ -203,7 +202,6 @@ pub struct StateApi<Block, Client> {
 	deny_unsafe: DenyUnsafe,
 }
 
-#[async_trait]
 impl<Block, Client> StateApiServer<Block::Hash> for StateApi<Block, Client>
 where
 	Block: BlockT + 'static,
@@ -337,7 +335,6 @@ where
 }
 
 /// Child state backend API.
-#[async_trait]
 pub trait ChildStateBackend<Block: BlockT, Client>: Send + Sync + 'static
 where
 	Block: BlockT + 'static,
@@ -410,7 +407,6 @@ pub struct ChildState<Block, Client> {
 	backend: Box<dyn ChildStateBackend<Block, Client>>,
 }
 
-#[async_trait]
 impl<Block, Client> ChildStateApiServer<Block::Hash> for ChildState<Block, Client>
 where
 	Block: BlockT + 'static,
