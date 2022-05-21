@@ -116,21 +116,15 @@ impl From<ClearPrefixResult> for KillStorageResult {
 
 /// The outcome of calling `clear_prefix` or some function which uses it.
 #[derive(PassByCodec, Encode, Decode)]
-pub enum ClearPrefixResult {
-	/// All keys to be removed were removed.
-	NoneLeft {
-		/// The number of keys removed from persistent storage.
-		db: u32,
-		/// The number of keys removed in total (including non-persistent storage).
-		total: u32,
-	},
-	/// Not all keys to be removed were removed.
-	SomeLeft {
-		/// The number of keys removed from persistent storage.
-		db: u32,
-		/// The number of keys removed in total (including non-persistent storage).
-		total: u32,
-	},
+pub struct ClearPrefixResult {
+	/// The number of keys removed from persistent storage. This is what is relevant for weight
+	/// calculation.
+	db: u32,
+	/// The number of keys removed in total (including from non-persistent storage).
+	total: u32,
+	/// `None` if all keys to be removed were removed; `Some` if some keys are remaining, in which
+	/// case, the following call should pass this value in as the cursor.
+	maybe_cursor: Option<Vec<u8>>,
 }
 
 /// Interface for accessing the storage from within the runtime.
@@ -236,12 +230,19 @@ pub trait Storage {
 	/// because the keys in the overlay are not taken into account when deleting keys in the
 	/// backend.
 	#[version(3, register_only)]
-	fn clear_prefix(&mut self, prefix: &[u8], limit: Option<u32>) -> ClearPrefixResult {
-		let (all_removed, db, total) = Externalities::clear_prefix(*self, prefix, limit);
-		match all_removed {
-			true => ClearPrefixResult::NoneLeft { db, total },
-			false => ClearPrefixResult::SomeLeft { db, total },
-		}
+	fn clear_prefix(
+		&mut self,
+		maybe_prefix: &[u8],
+		maybe_limit: Option<u32>,
+		maybe_cursor: Option<&[u8]>,
+	) -> ClearPrefixResult {
+		let (maybe_cursor, db, total) = Externalities::clear_prefix(
+			*self,
+			maybe_prefix,
+			maybe_limit,
+			maybe_cursor,
+		);
+		ClearPrefixResult { db, total, maybe_cursor }
 	}
 
 	/// Append the encoded `value` to the storage item at `key`.
@@ -453,14 +454,12 @@ pub trait DefaultChildStorage {
 		&mut self,
 		storage_key: &[u8],
 		prefix: &[u8],
-		limit: Option<u32>,
+		maybe_limit: Option<u32>,
+		maybe_cursor: Option<&[u8]>,
 	) -> ClearPrefixResult {
 		let child_info = ChildInfo::new_default(storage_key);
-		let (all_removed, db, total) = self.clear_child_prefix(&child_info, prefix, limit);
-		match all_removed {
-			true => ClearPrefixResult::NoneLeft { db, total },
-			false => ClearPrefixResult::SomeLeft { db, total },
-		}
+		let (maybe_cursor, db, total) = self.clear_child_prefix(&child_info, prefix, maybe_limit, maybe_cursor);
+		ClearPrefixResult { db, total, maybe_cursor }
 	}
 
 	/// Default child root calculation.

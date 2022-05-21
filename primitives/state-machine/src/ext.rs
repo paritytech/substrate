@@ -443,10 +443,15 @@ where
 		let _guard = guard();
 		self.mark_dirty();
 		self.overlay.clear_child_storage(child_info);
-		self.limit_remove_from_backend(Some(child_info), None, limit)
+		self.limit_remove_from_backend(Some(child_info), None, limit, None)
 	}
 
-	fn clear_prefix(&mut self, prefix: &[u8], limit: Option<u32>) -> (bool, u32, u32) {
+	fn clear_prefix(
+		&mut self,
+		prefix: &[u8],
+		maybe_limit: Option<u32>,
+		maybe_cursor: Option<&[u8]>,
+	) -> (Option<Vec<u8>>, u32, u32) {
 		trace!(
 			target: "state",
 			method = "ClearPrefix",
@@ -460,21 +465,22 @@ where
 				target: "trie",
 				"Refuse to directly clear prefix that is part or contains of child storage key",
 			);
-			return (false, 0, 0)
+			return (None, 0, 0)
 		}
 
 		self.mark_dirty();
 		let overlay_count = self.overlay.clear_prefix(prefix);
-		let (all, count) = self.limit_remove_from_backend(None, Some(prefix), limit);
-		(all, count, count + overlay_count)
+		let (next_cursor, backend_count) = self.limit_remove_from_backend(None, Some(prefix), maybe_limit, maybe_cursor);
+		(next_cursor, backend_count, overlay_count + backend_count)
 	}
 
 	fn clear_child_prefix(
 		&mut self,
 		child_info: &ChildInfo,
 		prefix: &[u8],
-		limit: Option<u32>,
-	) -> (bool, u32, u32) {
+		maybe_limit: Option<u32>,
+		maybe_cursor: Option<&[u8]>,
+	) -> (Option<Vec<u8>>, u32, u32) {
 		trace!(
 			target: "state",
 			method = "ChildClearPrefix",
@@ -486,8 +492,8 @@ where
 
 		self.mark_dirty();
 		let overlay_count = self.overlay.clear_child_prefix(child_info, prefix);
-		let (all, count) = self.limit_remove_from_backend(Some(child_info), Some(prefix), limit);
-		(all, count, count + overlay_count)
+		let (next_cursor, backend_count) = self.limit_remove_from_backend(Some(child_info), Some(prefix), maybe_limit, maybe_cursor);
+		(next_cursor, backend_count, backend_count + overlay_count)
 	}
 
 	fn storage_append(&mut self, key: Vec<u8>, value: Vec<u8>) {
@@ -730,59 +736,36 @@ where
 {
 	fn limit_remove_from_backend(
 		&mut self,
-		child_info: Option<&ChildInfo>,
-		prefix: Option<&[u8]>,
-		limit: Option<u32>,
-	) -> (bool, u32) {
-		let mut num_deleted: u32 = 0;
-
-		if let Some(limit) = limit {
-			let mut all_deleted = true;
-			self.backend.apply_to_keys_while(child_info, prefix, None, |key| {
-				if num_deleted == limit {
-					all_deleted = false;
-					return false
-				}
-				if let Some(None) = match child_info {
-					Some(child_info) => self.overlay.child_storage(child_info, key),
-					None => self.overlay.storage(key),
-				} {
-					// already deleted.
-					return true
-				}
-				if let Some(num) = num_deleted.checked_add(1) {
-					num_deleted = num;
-				} else {
-					all_deleted = false;
-					return false
-				}
-				if let Some(child_info) = child_info {
-					self.overlay.set_child_storage(child_info, key.to_vec(), None);
-				} else {
-					self.overlay.set_storage(key.to_vec(), None);
-				}
-				true
-			});
-			(all_deleted, num_deleted)
-		} else {
-			self.backend.apply_to_keys_while(child_info, prefix, None, |key| {
-				if let Some(None) = match child_info {
-					Some(child_info) => self.overlay.child_storage(child_info, key),
-					None => self.overlay.storage(key),
-				} {
-					// already deleted.
-					return true
-				}
-				num_deleted = num_deleted.saturating_add(1);
-				if let Some(child_info) = child_info {
-					self.overlay.set_child_storage(child_info, key.to_vec(), None);
-				} else {
-					self.overlay.set_storage(key.to_vec(), None);
-				}
-				true
-			});
-			(true, num_deleted)
-		}
+		maybe_child: Option<&ChildInfo>,
+		maybe_prefix: Option<&[u8]>,
+		maybe_limit: Option<u32>,
+		maybe_cursor: Option<&[u8]>,
+	) -> (Option<Vec<u8>>, u32) {
+		let mut delete_count: u32 = 0;
+		let mut loop_count: u32 = 0;
+		let mut maybe_next_key = None;
+		self.backend.apply_to_keys_while(maybe_child, maybe_prefix, maybe_cursor, |key| {
+			if maybe_limit.map_or(false, |limit| limit == loop_count) {
+				maybe_next_key = Some(key.to_vec());
+				return false
+			}
+			if let Some(None) = match maybe_child {
+				Some(child_info) => self.overlay.child_storage(child_info, key),
+				None => self.overlay.storage(key),
+			} {
+				// already pending deletion from the backend - no need to count it again.
+				return true
+			}
+			delete_count = delete_count.saturating_add(1);
+			loop_count = loop_count.saturating_add(1);
+			if let Some(child_info) = maybe_child {
+				self.overlay.set_child_storage(child_info, key.to_vec(), None);
+			} else {
+				self.overlay.set_storage(key.to_vec(), None);
+			}
+			true
+		});
+		(maybe_next_key, delete_count)
 	}
 }
 

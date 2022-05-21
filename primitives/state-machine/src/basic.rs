@@ -209,23 +209,33 @@ impl Externalities for BasicExternalities {
 		}
 	}
 
-	fn kill_child_storage(&mut self, child_info: &ChildInfo, _limit: Option<u32>) -> (bool, u32) {
+	fn kill_child_storage(
+		&mut self,
+		child_info: &ChildInfo,
+		_maybe_limit: Option<u32>,
+		_maybe_cursor: Option<&[u8]>,
+	) -> (Option<Vec<u8>>, u32) {
 		let num_removed = self
 			.inner
 			.children_default
 			.remove(child_info.storage_key())
 			.map(|c| c.data.len())
 			.unwrap_or(0);
-		(true, num_removed as u32)
+		(None, num_removed as u32)
 	}
 
-	fn clear_prefix(&mut self, prefix: &[u8], _limit: Option<u32>) -> (bool, u32, u32) {
+	fn clear_prefix(
+		&mut self,
+		prefix: &[u8],
+		_maybe_limit: Option<u32>,
+		_maybe_cursor: Option<&[u8]>,
+	) -> (Option<Vec<u8>>, u32, u32) {
 		if is_child_storage_key(prefix) {
 			warn!(
 				target: "trie",
 				"Refuse to clear prefix that is part of child storage key via main storage"
 			);
-			return (false, 0, 0)
+			return (Some(prefix.to_vec()), 0, 0)
 		}
 
 		let to_remove = self
@@ -241,15 +251,16 @@ impl Externalities for BasicExternalities {
 		for key in to_remove {
 			self.inner.top.remove(&key);
 		}
-		(true, num_removed as u32, num_removed as u32)
+		(None, num_removed as u32, num_removed as u32)
 	}
 
 	fn clear_child_prefix(
 		&mut self,
 		child_info: &ChildInfo,
 		prefix: &[u8],
-		_limit: Option<u32>,
-	) -> (bool, u32, u32) {
+		_maybe_limit: Option<u32>,
+		_maybe_cursor: Option<&[u8]>,
+	) -> (Option<Vec<u8>>, u32, u32) {
 		if let Some(child) = self.inner.children_default.get_mut(child_info.storage_key()) {
 			let to_remove = child
 				.data
@@ -263,9 +274,9 @@ impl Externalities for BasicExternalities {
 			for key in to_remove {
 				child.data.remove(&key);
 			}
-			(true, num_removed as u32, num_removed as u32)
+			(None, num_removed as u32, num_removed as u32)
 		} else {
-			(true, 0, 0)
+			(None, 0, 0)
 		}
 	}
 
