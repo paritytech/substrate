@@ -23,7 +23,7 @@
 
 use codec::Decode;
 use frame_benchmarking::{benchmarks, Vec};
-use frame_election_provider_support::{ExtendedBalance, NposSolver, PhragMMS, SequentialPhragmen};
+use frame_election_provider_support::{NposSolver, PhragMMS, SequentialPhragmen};
 
 pub struct Pallet<T: Config>(frame_system::Pallet<T>);
 pub trait Config: frame_system::Config {}
