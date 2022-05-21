@@ -485,7 +485,7 @@ fn legacy_cli_parsing(config: &Configuration) -> (Option<usize>, Option<usize>, 
 		config.rpc_max_response_size,
 	) {
 		(Some(legacy_max), max) => {
-			eprintln!("DEPRECATED: `--ws_max_out_buffer_capacity` has been removed use `rpc-max-response-size or rpc-max-request-size` instead");
+			eprintln!("DEPRECATED: `--ws_max_out_buffer_capacity` has been removed; use `rpc-max-response-size or rpc-max-request-size` instead");
 			eprintln!("Setting WS `rpc-max-response-size` to `max(ws_max_out_buffer_capacity, rpc_max_response_size)`");
 			Some(std::cmp::max(legacy_max, max.unwrap_or(0)))
 		},
