@@ -30,7 +30,7 @@ set -x
 # Should be run on a reference machine to gain accurate benchmarks
 # current reference machine: https://github.com/paritytech/substrate/pull/5848
 
-if [ "$1" != "skip-build" ]
+if [ "${1-default}" != "skip-build" ]
 then
   echo "[+] Compiling Substrate benchmarks..."
   cargo +nightly build --profile production --locked --features=runtime-benchmarks
