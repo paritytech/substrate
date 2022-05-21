@@ -701,18 +701,6 @@ pub mod pallet {
 			BlockNumber = Self::BlockNumber,
 		>;
 
-		/// The solution type.
-		type Solution: codec::Codec
-			+ Default
-			+ PartialEq
-			+ Eq
-			+ Clone
-			+ sp_std::fmt::Debug
-			+ Ord
-			+ NposSolution
-			+ TypeInfo
-			+ MaxEncodedLen;
-
 		/// Configuration for the fallback.
 		type Fallback: InstantElectionProvider<
 			AccountId = Self::AccountId,

@@ -19,7 +19,7 @@
 
 use crate::{
 	unsigned::MinerConfig, Config, ElectionCompute, Pallet, QueuedSolution, RawSolution,
-	ReadySolutionOf, SignedSubmissionIndices, SignedSubmissionNextIndex, SignedSubmissionsMap,
+	ReadySolution, SignedSubmissionIndices, SignedSubmissionNextIndex, SignedSubmissionsMap,
 	SolutionOf, SolutionOrSnapshotSize, Weight, WeightInfo,
 };
 use codec::{Decode, Encode, HasCompact, MaxEncodedLen};

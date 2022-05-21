@@ -18,8 +18,8 @@
 //! Implementations for the Staking FRAME Pallet.
 
 use frame_election_provider_support::{
-	data_provider, BoundedSupportsOf, ElectionDataProvider, ElectionProvider, PageIndex,
-	ScoreProvider, SortedListProvider, VoteWeight, VoterOf,
+	data_provider, BoundedSupportsOf, ElectionDataProvider, ElectionProvider, ScoreProvider,
+	SortedListProvider, VoteWeight, VoterOf,
 };
 use frame_support::{
 	pallet_prelude::*,
