@@ -427,7 +427,7 @@ where
 	fn import(&self, transaction: B::Extrinsic) -> TransactionImportFuture {
 		if !self.imports_external_transactions {
 			debug!("Transaction rejected");
-			return Box::pin(futures::future::ready(TransactionImport::None));
+			return Box::pin(futures::future::ready(TransactionImport::None))
 		}
 
 		let encoded = transaction.encode();
@@ -435,7 +435,7 @@ where
 			Ok(uxt) => uxt,
 			Err(e) => {
 				debug!("Transaction invalid: {:?}", e);
-				return Box::pin(futures::future::ready(TransactionImport::Bad));
+				return Box::pin(futures::future::ready(TransactionImport::Bad))
 			},
 		};
 
@@ -450,9 +450,8 @@ where
 			match import_future.await {
 				Ok(_) => TransactionImport::NewGood,
 				Err(e) => match e.into_pool_error() {
-					Ok(sc_transaction_pool_api::error::Error::AlreadyImported(_)) => {
-						TransactionImport::KnownGood
-					},
+					Ok(sc_transaction_pool_api::error::Error::AlreadyImported(_)) =>
+						TransactionImport::KnownGood,
 					Ok(e) => {
 						debug!("Error adding transaction to the pool: {:?}", e);
 						TransactionImport::Bad
