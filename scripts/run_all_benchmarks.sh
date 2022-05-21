@@ -25,8 +25,8 @@ while read -r line; do
   # '!' has the side effect of bypassing errexit / set -e
   ! ./target/production/substrate benchmark pallet \
     --chain=dev \
-    --steps=1 \
-    --repeat=1 \
+    --steps=50 \
+    --repeat=20 \
     --pallet="$pallet" \
     --extrinsic="*" \
     --execution=wasm \
