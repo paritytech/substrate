@@ -480,11 +480,18 @@ where
 }
 
 fn legacy_cli_parsing(config: &Configuration) -> (Option<usize>, Option<usize>, Option<usize>) {
-	let ws_max_response_size = config.ws_max_out_buffer_capacity.map(|max| {
-		eprintln!("DEPRECATED: `--ws_max_out_buffer_capacity` has been removed use `rpc-max-response-size or rpc-max-request-size` instead");
-		eprintln!("Setting WS `rpc-max-response-size` to `max(ws_max_out_buffer_capacity, rpc_max_response_size)`");
-		std::cmp::max(max, config.rpc_max_response_size.unwrap_or(0))
-	});
+	let ws_max_response_size = match (
+		config.ws_max_out_buffer_capacity,
+		config.rpc_max_response_size,
+	) {
+		(Some(legacy_max), max) => {
+			eprintln!("DEPRECATED: `--ws_max_out_buffer_capacity` has been removed; use `rpc-max-response-size or rpc-max-request-size` instead");
+			eprintln!("Setting WS `rpc-max-response-size` to `max(ws_max_out_buffer_capacity, rpc_max_response_size)`");
+			Some(std::cmp::max(legacy_max, max.unwrap_or(0)))
+		},
+		(None, Some(m)) => Some(m),
+		(None, None) => None,
+	};
 
 	let max_request_size = match (config.rpc_max_payload, config.rpc_max_request_size) {
 		(Some(legacy_max), max) => {
@@ -498,7 +505,7 @@ fn legacy_cli_parsing(config: &Configuration) -> (Option<usize>, Option<usize>, 
 		(None, None) => None,
 	};
 
-	let http_max_response_size = match (config.rpc_max_payload, config.rpc_max_request_size) {
+	let http_max_response_size = match (config.rpc_max_payload, config.rpc_max_response_size) {
 		(Some(legacy_max), max) => {
 			eprintln!("DEPRECATED: `--rpc_max_payload` has been removed use `rpc-max-response-size or rpc-max-request-size` instead");
 			eprintln!(
