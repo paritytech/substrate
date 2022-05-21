@@ -7,7 +7,6 @@ sub-system. Notable implementation include:
 - [`phragmms`]: Implements a hybrid approach inspired by Phragmén which is executed faster but
   it can achieve a constant factor approximation of the maximin problem, similar to that of the
   MMS algorithm.
-- [`mms`]: Implements the MMS algorithm.
 - [`balance_solution`]: Implements the star balancing algorithm. This iterative process can push
   a solution toward being more `balanced`, which in turn can increase its score.
 

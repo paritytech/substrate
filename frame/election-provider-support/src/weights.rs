@@ -22,7 +22,7 @@
 //! EXECUTION: Some(Wasm), WASM-EXECUTION: Compiled, CHAIN: Some("dev"), DB CACHE: 1024
 
 // Executed Command:
-// target/debug/substrate
+// target/release/substrate
 // benchmark
 // pallet
 // --chain=dev
@@ -47,56 +47,49 @@ use sp_std::marker::PhantomData;
 pub trait WeightInfo {
 	fn phragmen(v: u32, t: u32, d: u32, ) -> Weight;
 	fn phragmms(v: u32, t: u32, d: u32, ) -> Weight;
-	fn mms(v: u32, t: u32, d: u32, ) -> Weight;
 }
 
 /// Weights for pallet_election_provider_support_benchmarking using the Substrate node and recommended hardware.
 pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
-	fn phragmen(_v: u32, _t: u32, d: u32, ) -> Weight {
-		(27_347_667_000 as Weight)
-			// Standard Error: 26_390_000
-			.saturating_add((378_333_000 as Weight).saturating_mul(d as Weight))
+	fn phragmen(v: u32, t: u32, d: u32, ) -> Weight {
+		(0 as Weight)
+			// Standard Error: 667_000
+			.saturating_add((32_973_000 as Weight).saturating_mul(v as Weight))
+			// Standard Error: 1_334_000
+			.saturating_add((1_334_000 as Weight).saturating_mul(t as Weight))
+			// Standard Error: 60_644_000
+			.saturating_add((2_636_364_000 as Weight).saturating_mul(d as Weight))
 	}
 	fn phragmms(v: u32, t: u32, d: u32, ) -> Weight {
 		(0 as Weight)
-			// Standard Error: 135_372_000
-			.saturating_add((58_667_000 as Weight).saturating_mul(v as Weight))
-			// Standard Error: 135_372_000
-			.saturating_add((152_667_000 as Weight).saturating_mul(t as Weight))
-			// Standard Error: 135_372_000
-			.saturating_add((781_667_000 as Weight).saturating_mul(d as Weight))
-	}
-	fn mms(v: u32, _t: u32, d: u32, ) -> Weight {
-		(0 as Weight)
-			// Standard Error: 8_206_601_000
-			.saturating_add((1_018_000_000 as Weight).saturating_mul(v as Weight))
-			// Standard Error: 8_206_601_000
-			.saturating_add((334_355_000_000 as Weight).saturating_mul(d as Weight))
+			// Standard Error: 73_000
+			.saturating_add((21_073_000 as Weight).saturating_mul(v as Weight))
+			// Standard Error: 146_000
+			.saturating_add((65_000 as Weight).saturating_mul(t as Weight))
+			// Standard Error: 6_649_000
+			.saturating_add((1_711_424_000 as Weight).saturating_mul(d as Weight))
 	}
 }
 
 // For backwards compatibility and tests
 impl WeightInfo for () {
-	fn phragmen(_v: u32, _t: u32, d: u32, ) -> Weight {
-		(27_347_667_000 as Weight)
-			// Standard Error: 26_390_000
-			.saturating_add((378_333_000 as Weight).saturating_mul(d as Weight))
+	fn phragmen(v: u32, t: u32, d: u32, ) -> Weight {
+		(0 as Weight)
+			// Standard Error: 667_000
+			.saturating_add((32_973_000 as Weight).saturating_mul(v as Weight))
+			// Standard Error: 1_334_000
+			.saturating_add((1_334_000 as Weight).saturating_mul(t as Weight))
+			// Standard Error: 60_644_000
+			.saturating_add((2_636_364_000 as Weight).saturating_mul(d as Weight))
 	}
 	fn phragmms(v: u32, t: u32, d: u32, ) -> Weight {
 		(0 as Weight)
-			// Standard Error: 135_372_000
-			.saturating_add((58_667_000 as Weight).saturating_mul(v as Weight))
-			// Standard Error: 135_372_000
-			.saturating_add((152_667_000 as Weight).saturating_mul(t as Weight))
-			// Standard Error: 135_372_000
-			.saturating_add((781_667_000 as Weight).saturating_mul(d as Weight))
-	}
-	fn mms(v: u32, _t: u32, d: u32, ) -> Weight {
-		(0 as Weight)
-			// Standard Error: 8_206_601_000
-			.saturating_add((1_018_000_000 as Weight).saturating_mul(v as Weight))
-			// Standard Error: 8_206_601_000
-			.saturating_add((334_355_000_000 as Weight).saturating_mul(d as Weight))
+			// Standard Error: 73_000
+			.saturating_add((21_073_000 as Weight).saturating_mul(v as Weight))
+			// Standard Error: 146_000
+			.saturating_add((65_000 as Weight).saturating_mul(t as Weight))
+			// Standard Error: 6_649_000
+			.saturating_add((1_711_424_000 as Weight).saturating_mul(d as Weight))
 	}
 }

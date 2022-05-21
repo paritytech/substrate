@@ -21,7 +21,6 @@
 //! - [`phragmms`](phragmms::phragmms): Implements a hybrid approach inspired by Phragmén which is
 //!   executed faster but it can achieve a constant factor approximation of the maximin problem,
 //!   similar to that of the MMS algorithm.
-//! - [`mms`](mms::mms): Implements the MMS algorithm.
 //! - [`balance`](balancing::balance): Implements the star balancing algorithm. This iterative
 //!   process can push a solution toward being more "balanced", which in turn can increase its
 //!   score.
@@ -94,7 +93,6 @@ mod tests;
 mod assignments;
 pub mod balancing;
 pub mod helpers;
-pub mod mms;
 pub mod node;
 pub mod phragmen;
 pub mod phragmms;
@@ -105,7 +103,6 @@ pub mod traits;
 pub use assignments::{Assignment, StakedAssignment};
 pub use balancing::*;
 pub use helpers::*;
-pub use mms::*;
 pub use phragmen::*;
 pub use phragmms::*;
 pub use pjr::*;
@@ -130,10 +127,6 @@ pub enum Error {
 	InvalidSupportEdge,
 	/// The number of voters is bigger than the `MaxVoters` bound.
 	TooManyVoters,
-	/// No candidates passed for the election.
-	NoCandidates,
-	/// Balancing parameters missing for `MMS` which requires them.
-	MissingBalancingParams,
 }
 
 /// A type which is used in the API of this crate as a numeric weight of a vote, most often the

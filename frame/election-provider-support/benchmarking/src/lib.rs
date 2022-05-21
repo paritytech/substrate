@@ -24,7 +24,7 @@
 use codec::Decode;
 use frame_benchmarking::{benchmarks, Vec};
 use frame_election_provider_support::{
-	ExtendedBalance, Get, NposSolver, PhragMMS, SequentialPhragmen, MMS,
+	ExtendedBalance, Get, NposSolver, PhragMMS, SequentialPhragmen,
 };
 
 pub struct Pallet<T: Config>(frame_system::Pallet<T>);
@@ -39,7 +39,7 @@ fn set_up_voters_targets<AccountId: Decode + Clone>(
 	voters_len: u32,
 	targets_len: u32,
 	degree: usize,
-) -> (Vec<(AccountId, u64, Vec<AccountId>)>, Vec<AccountId>) {
+) -> (Vec<(AccountId, u64, impl IntoIterator<Item = AccountId>)>, Vec<AccountId>) {
 	// fill targets.
 	let mut targets = (0..targets_len)
 		.map(|i| frame_benchmarking::account::<AccountId>("Target", i, SEED))
@@ -94,22 +94,6 @@ benchmarks! {
 	}: {
 		assert!(
 			PhragMMS::<T::AccountId, sp_runtime::Perbill>
-				::solve(d as usize, targets, voters).is_ok()
-		);
-	}
-
-	mms {
-		// number of votes in snapshot.
-		let v in (VOTERS[0]) .. VOTERS[1];
-		// number of targets in snapshot.
-		let t in (TARGETS[0]) .. TARGETS[1];
-		// number of votes per voter (ie the degree).
-		let d in (VOTES_PER_VOTER[0]) .. VOTES_PER_VOTER[1];
-
-		let (voters, targets) = set_up_voters_targets::<T::AccountId>(v, t, d as usize);
-	}: {
-		assert!(
-			MMS::<T::AccountId, sp_runtime::Perbill, GetBalancing>
 				::solve(d as usize, targets, voters).is_ok()
 		);
 	}
