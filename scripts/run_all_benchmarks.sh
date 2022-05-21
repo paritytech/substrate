@@ -47,7 +47,7 @@ EXCLUDED_PALLETS=(
   "pallet_baba"
   "pallet_grandpa"
   "pallet_mmr"
-  "pallet_offenes"
+  "pallet_offences"
 )
 
 # Load all pallet names in an array.
