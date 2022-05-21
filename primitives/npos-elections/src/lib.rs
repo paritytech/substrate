@@ -218,6 +218,7 @@ impl sp_std::cmp::PartialOrd for ElectionScore {
 }
 
 /// Utility struct to group parameters for the balancing algorithm.
+#[derive(Clone)]
 pub struct BalancingConfig {
 	pub iterations: usize,
 	pub tolerance: ExtendedBalance,

@@ -23,9 +23,7 @@
 
 use codec::Decode;
 use frame_benchmarking::{benchmarks, Vec};
-use frame_election_provider_support::{
-	ExtendedBalance, Get, NposSolver, PhragMMS, SequentialPhragmen,
-};
+use frame_election_provider_support::{ExtendedBalance, NposSolver, PhragMMS, SequentialPhragmen};
 
 pub struct Pallet<T: Config>(frame_system::Pallet<T>);
 pub trait Config: frame_system::Config {}
@@ -56,13 +54,6 @@ fn set_up_voters_targets<AccountId: Decode + Clone>(
 		.collect::<Vec<_>>();
 
 	(voters, targets)
-}
-
-struct GetBalancing;
-impl Get<Option<(usize, ExtendedBalance)>> for GetBalancing {
-	fn get() -> Option<(usize, ExtendedBalance)> {
-		Some((10, 0))
-	}
 }
 
 benchmarks! {
