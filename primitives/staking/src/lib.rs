@@ -72,7 +72,7 @@ pub trait StakingInterface {
 	///
 	/// # Note
 	///
-	/// This must be strictly greater than the staking systems slash deffer duration.
+	/// This must be strictly greater than the staking systems slash defer duration.
 	fn bonding_duration() -> EraIndex;
 
 	/// The current era index.

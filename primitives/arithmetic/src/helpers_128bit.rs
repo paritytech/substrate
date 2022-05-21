@@ -65,7 +65,7 @@ pub fn to_big_uint(x: u128) -> biguint::BigUint {
 ///     be safely casted back to u128.
 ///
 /// Invariant: c must be greater than or equal to 1.
-pub fn multiply_by_rational(mut a: u128, mut b: u128, mut c: u128) -> Result<u128, &'static str> {
+pub fn multiply_by_rational_with_rounding(mut a: u128, mut b: u128, mut c: u128) -> Result<u128, &'static str> {
 	if a.is_zero() || b.is_zero() {
 		return Ok(Zero::zero())
 	}

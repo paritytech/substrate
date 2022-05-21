@@ -149,7 +149,7 @@ impl Rational128 {
 		if den == self.1 {
 			Ok(self)
 		} else {
-			helpers_128bit::multiply_by_rational(self.0, den, self.1).map(|n| Self(n, den))
+			helpers_128bit::multiply_by_rational_with_rounding(self.0, den, self.1).map(|n| Self(n, den))
 		}
 	}
 
@@ -163,7 +163,7 @@ impl Rational128 {
 			return Ok(self.1)
 		}
 		let g = helpers_128bit::gcd(self.1, other.1);
-		helpers_128bit::multiply_by_rational(self.1, other.1, g)
+		helpers_128bit::multiply_by_rational_with_rounding(self.1, other.1, g)
 	}
 
 	/// A saturating add that assumes `self` and `other` have the same denominator.
@@ -408,52 +408,52 @@ mod tests {
 	}
 
 	#[test]
-	fn multiply_by_rational_works() {
-		assert_eq!(multiply_by_rational(7, 2, 3).unwrap(), 7 * 2 / 3);
-		assert_eq!(multiply_by_rational(7, 20, 30).unwrap(), 7 * 2 / 3);
-		assert_eq!(multiply_by_rational(20, 7, 30).unwrap(), 7 * 2 / 3);
+	fn multiply_by_rational_with_rounding_works() {
+		assert_eq!(multiply_by_rational_with_rounding(7, 2, 3).unwrap(), 7 * 2 / 3);
+		assert_eq!(multiply_by_rational_with_rounding(7, 20, 30).unwrap(), 7 * 2 / 3);
+		assert_eq!(multiply_by_rational_with_rounding(20, 7, 30).unwrap(), 7 * 2 / 3);
 
 		assert_eq!(
 			// MAX128 % 3 == 0
-			multiply_by_rational(MAX128, 2, 3).unwrap(),
+			multiply_by_rational_with_rounding(MAX128, 2, 3).unwrap(),
 			MAX128 / 3 * 2,
 		);
 		assert_eq!(
 			// MAX128 % 7 == 3
-			multiply_by_rational(MAX128, 5, 7).unwrap(),
+			multiply_by_rational_with_rounding(MAX128, 5, 7).unwrap(),
 			(MAX128 / 7 * 5) + (3 * 5 / 7),
 		);
 		assert_eq!(
 			// MAX128 % 7 == 3
-			multiply_by_rational(MAX128, 11, 13).unwrap(),
+			multiply_by_rational_with_rounding(MAX128, 11, 13).unwrap(),
 			(MAX128 / 13 * 11) + (8 * 11 / 13),
 		);
 		assert_eq!(
 			// MAX128 % 1000 == 455
-			multiply_by_rational(MAX128, 555, 1000).unwrap(),
+			multiply_by_rational_with_rounding(MAX128, 555, 1000).unwrap(),
 			(MAX128 / 1000 * 555) + (455 * 555 / 1000),
 		);
 
-		assert_eq!(multiply_by_rational(2 * MAX64 - 1, MAX64, MAX64).unwrap(), 2 * MAX64 - 1);
-		assert_eq!(multiply_by_rational(2 * MAX64 - 1, MAX64 - 1, MAX64).unwrap(), 2 * MAX64 - 3);
+		assert_eq!(multiply_by_rational_with_rounding(2 * MAX64 - 1, MAX64, MAX64).unwrap(), 2 * MAX64 - 1);
+		assert_eq!(multiply_by_rational_with_rounding(2 * MAX64 - 1, MAX64 - 1, MAX64).unwrap(), 2 * MAX64 - 3);
 
 		assert_eq!(
-			multiply_by_rational(MAX64 + 100, MAX64_2, MAX64_2 / 2).unwrap(),
+			multiply_by_rational_with_rounding(MAX64 + 100, MAX64_2, MAX64_2 / 2).unwrap(),
 			(MAX64 + 100) * 2,
 		);
 		assert_eq!(
-			multiply_by_rational(MAX64 + 100, MAX64_2 / 100, MAX64_2 / 200).unwrap(),
+			multiply_by_rational_with_rounding(MAX64 + 100, MAX64_2 / 100, MAX64_2 / 200).unwrap(),
 			(MAX64 + 100) * 2,
 		);
 
 		assert_eq!(
-			multiply_by_rational(2u128.pow(66) - 1, 2u128.pow(65) - 1, 2u128.pow(65)).unwrap(),
+			multiply_by_rational_with_rounding(2u128.pow(66) - 1, 2u128.pow(65) - 1, 2u128.pow(65)).unwrap(),
 			73786976294838206461,
 		);
-		assert_eq!(multiply_by_rational(1_000_000_000, MAX128 / 8, MAX128 / 2).unwrap(), 250000000);
+		assert_eq!(multiply_by_rational_with_rounding(1_000_000_000, MAX128 / 8, MAX128 / 2).unwrap(), 250000000);
 
 		assert_eq!(
-			multiply_by_rational(
+			multiply_by_rational_with_rounding(
 				29459999999999999988000u128,
 				1000000000000000000u128,
 				10000000000000000000u128
@@ -464,16 +464,16 @@ mod tests {
 	}
 
 	#[test]
-	fn multiply_by_rational_a_b_are_interchangeable() {
-		assert_eq!(multiply_by_rational(10, MAX128, MAX128 / 2), Ok(20));
-		assert_eq!(multiply_by_rational(MAX128, 10, MAX128 / 2), Ok(20));
+	fn multiply_by_rational_with_rounding_a_b_are_interchangeable() {
+		assert_eq!(multiply_by_rational_with_rounding(10, MAX128, MAX128 / 2), Ok(20));
+		assert_eq!(multiply_by_rational_with_rounding(MAX128, 10, MAX128 / 2), Ok(20));
 	}
 
 	#[test]
 	#[ignore]
-	fn multiply_by_rational_fuzzed_equation() {
+	fn multiply_by_rational_with_rounding_fuzzed_equation() {
 		assert_eq!(
-			multiply_by_rational(154742576605164960401588224, 9223376310179529214, 549756068598),
+			multiply_by_rational_with_rounding(154742576605164960401588224, 9223376310179529214, 549756068598),
 			Ok(2596149632101417846585204209223679)
 		);
 	}

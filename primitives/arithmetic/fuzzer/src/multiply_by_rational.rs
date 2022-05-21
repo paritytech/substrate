@@ -16,19 +16,19 @@
 // limitations under the License.
 
 //! # Running
-//! Running this fuzzer can be done with `cargo hfuzz run multiply_by_rational`. `honggfuzz` CLI
+//! Running this fuzzer can be done with `cargo hfuzz run multiply_by_rational_with_rounding`. `honggfuzz` CLI
 //! options can be used by setting `HFUZZ_RUN_ARGS`, such as `-n 4` to use 4 threads.
 //!
 //! # Debugging a panic
 //! Once a panic is found, it can be debugged with
-//! `cargo hfuzz run-debug multiply_by_rational hfuzz_workspace/multiply_by_rational/*.fuzz`.
+//! `cargo hfuzz run-debug multiply_by_rational_with_rounding hfuzz_workspace/multiply_by_rational_with_rounding/*.fuzz`.
 //!
 //! # More information
 //! More information about `honggfuzz` can be found
 //! [here](https://docs.rs/honggfuzz/).
 
 use honggfuzz::fuzz;
-use sp_arithmetic::{helpers_128bit::multiply_by_rational, traits::Zero};
+use sp_arithmetic::{helpers_128bit::multiply_by_rational_with_rounding, traits::Zero};
 
 fn main() {
 	loop {
@@ -42,9 +42,9 @@ fn main() {
 
 			println!("++ Equation: {} * {} / {}", a, b, c);
 
-			// The point of this fuzzing is to make sure that `multiply_by_rational` is 100%
+			// The point of this fuzzing is to make sure that `multiply_by_rational_with_rounding` is 100%
 			// accurate as long as the value fits in a u128.
-			if let Ok(result) = multiply_by_rational(a, b, c) {
+			if let Ok(result) = multiply_by_rational_with_rounding(a, b, c) {
 				let truth = mul_div(a, b, c);
 
 				if result != truth && result != truth + 1 {

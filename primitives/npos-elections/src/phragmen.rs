@@ -25,7 +25,7 @@ use crate::{
 	PerThing128, VoteWeight, Voter,
 };
 use sp_arithmetic::{
-	helpers_128bit::multiply_by_rational,
+	helpers_128bit::multiply_by_rational_with_rounding,
 	traits::{Bounded, Zero},
 	Rational128,
 };
@@ -143,7 +143,7 @@ pub fn seq_phragmen_core<AccountId: IdentifierT>(
 			for edge in &voter.edges {
 				let mut candidate = edge.candidate.borrow_mut();
 				if !candidate.elected && !candidate.approval_stake.is_zero() {
-					let temp_n = multiply_by_rational(
+					let temp_n = multiply_by_rational_with_rounding(
 						voter.load.n(),
 						voter.budget,
 						candidate.approval_stake,
@@ -184,7 +184,7 @@ pub fn seq_phragmen_core<AccountId: IdentifierT>(
 		for edge in &mut voter.edges {
 			if edge.candidate.borrow().elected {
 				// update internal state.
-				edge.weight = multiply_by_rational(voter.budget, edge.load.n(), voter.load.n())
+				edge.weight = multiply_by_rational_with_rounding(voter.budget, edge.load.n(), voter.load.n())
 					// If result cannot fit in u128. Not much we can do about it.
 					.unwrap_or(Bounded::max_value());
 			} else {
