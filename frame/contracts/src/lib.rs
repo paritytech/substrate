@@ -128,6 +128,8 @@ use sp_core::{crypto::UncheckedFrom, Bytes};
 use sp_runtime::traits::{Convert, Hash, Saturating, StaticLookup};
 use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
 
+use crate::exec::StorageHash;
+
 type CodeHash<T> = <T as frame_system::Config>::Hash;
 type TrieId = Vec<u8>;
 type BalanceOf<T> =
@@ -876,11 +878,11 @@ where
 	}
 
 	/// Query storage of a specified contract under a specified key.
-	pub fn get_storage(address: T::AccountId, key: [u8; 32]) -> GetStorageResult {
+	pub fn get_storage<K: StorageHash>(address: T::AccountId, key: K) -> GetStorageResult {
 		let contract_info =
 			ContractInfoOf::<T>::get(&address).ok_or(ContractAccessError::DoesntExist)?;
 
-		let maybe_value = Storage::<T>::read(&contract_info.trie_id, &key);
+		let maybe_value = Storage::<T>::read(&contract_info.trie_id, key);
 		Ok(maybe_value)
 	}
 

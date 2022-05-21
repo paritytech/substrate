@@ -258,7 +258,8 @@ mod tests {
 	use super::*;
 	use crate::{
 		exec::{
-			AccountIdOf, BlockNumberOf, ErrorOrigin, ExecError, Executable, Ext, SeedOf, StorageKey,
+			AccountIdOf, BlockNumberOf, ErrorOrigin, ExecError, Executable, Ext, FixedSizedKey,
+			SeedOf, VariableSizedKey,
 		},
 		gas::GasMeter,
 		storage::WriteOutcome,
@@ -313,7 +314,7 @@ mod tests {
 	}
 
 	pub struct MockExt {
-		storage: HashMap<StorageKey, Vec<u8>>,
+		storage: HashMap<Vec<u8>, Vec<u8>>,
 		instantiates: Vec<InstantiateEntry>,
 		terminations: Vec<TerminationEntry>,
 		calls: Vec<CallEntry>,
@@ -408,19 +409,25 @@ mod tests {
 			self.terminations.push(TerminationEntry { beneficiary: beneficiary.clone() });
 			Ok(())
 		}
-		fn get_storage(&mut self, key: &StorageKey) -> Option<Vec<u8>> {
-			self.storage.get(key).cloned()
+		fn get_storage(&mut self, key: FixedSizedKey) -> Option<Vec<u8>> {
+			self.storage.get(&key.to_vec()).cloned()
 		}
-		fn get_storage_size(&mut self, key: &StorageKey) -> Option<u32> {
-			self.storage.get(key).map(|val| val.len() as u32)
+		fn get_storage_transparent(&mut self, key: VariableSizedKey) -> Option<Vec<u8>> {
+			self.storage.get(&key.to_vec()).cloned()
+		}
+		fn get_storage_size(&mut self, key: FixedSizedKey) -> Option<u32> {
+			self.storage.get(&key.to_vec()).map(|val| val.len() as u32)
+		}
+		fn get_storage_size_transparent(&mut self, key: VariableSizedKey) -> Option<u32> {
+			self.storage.get(&key.to_vec()).map(|val| val.len() as u32)
 		}
 		fn set_storage(
 			&mut self,
-			key: StorageKey,
+			key: FixedSizedKey,
 			value: Option<Vec<u8>>,
 			take_old: bool,
 		) -> Result<WriteOutcome, DispatchError> {
-			let entry = self.storage.entry(key);
+			let entry = self.storage.entry(key.to_vec());
 			let result = match (entry, take_old) {
 				(Entry::Vacant(_), _) => WriteOutcome::New,
 				(Entry::Occupied(entry), false) =>
@@ -428,7 +435,25 @@ mod tests {
 				(Entry::Occupied(entry), true) => WriteOutcome::Taken(entry.remove()),
 			};
 			if let Some(value) = value {
-				self.storage.insert(key, value);
+				self.storage.insert(key.to_vec(), value);
+			}
+			Ok(result)
+		}
+		fn set_storage_transparent(
+			&mut self,
+			key: VariableSizedKey,
+			value: Option<Vec<u8>>,
+			take_old: bool,
+		) -> Result<WriteOutcome, DispatchError> {
+			let entry = self.storage.entry(key.to_vec());
+			let result = match (entry, take_old) {
+				(Entry::Vacant(_), _) => WriteOutcome::New,
+				(Entry::Occupied(entry), false) =>
+					WriteOutcome::Overwritten(entry.remove().len() as u32),
+				(Entry::Occupied(entry), true) => WriteOutcome::Taken(entry.remove()),
+			};
+			if let Some(value) = value {
+				self.storage.insert(key.to_vec(), value);
 			}
 			Ok(result)
 		}
@@ -862,8 +887,8 @@ mod tests {
 
 		let mut ext = MockExt::default();
 
-		ext.storage.insert([1u8; 32], vec![42u8]);
-		ext.storage.insert([2u8; 32], vec![]);
+		ext.storage.insert(vec![1u8; 32], vec![42u8]);
+		ext.storage.insert(vec![2u8; 32], vec![]);
 
 		// value does not exist -> sentinel value returned
 		let result = execute(CODE, [3u8; 32].encode(), &mut ext).unwrap();
@@ -1190,7 +1215,7 @@ mod tests {
 	#[test]
 	fn get_storage_puts_data_into_buf() {
 		let mut mock_ext = MockExt::default();
-		mock_ext.storage.insert([0x11; 32], [0x22; 32].to_vec());
+		mock_ext.storage.insert([0x11; 32].to_vec(), [0x22; 32].to_vec());
 
 		let output = execute(CODE_GET_STORAGE, vec![], mock_ext).unwrap();
 
@@ -2208,19 +2233,19 @@ mod tests {
 		let input = ([1u8; 32], [42u8, 48]).encode();
 		let result = execute(CODE, input, &mut ext).unwrap();
 		assert_eq!(u32::from_le_bytes(result.data.0.try_into().unwrap()), crate::SENTINEL);
-		assert_eq!(ext.storage.get(&[1u8; 32]).unwrap(), &[42u8, 48]);
+		assert_eq!(ext.storage.get(&[1u8; 32].to_vec()).unwrap(), &[42u8, 48]);
 
 		// value do exist -> length of old value returned
 		let input = ([1u8; 32], [0u8; 0]).encode();
 		let result = execute(CODE, input, &mut ext).unwrap();
 		assert_eq!(u32::from_le_bytes(result.data.0.try_into().unwrap()), 2);
-		assert_eq!(ext.storage.get(&[1u8; 32]).unwrap(), &[0u8; 0]);
+		assert_eq!(ext.storage.get(&[1u8; 32].to_vec()).unwrap(), &[0u8; 0]);
 
 		// value do exist -> length of old value returned (test for zero sized val)
 		let input = ([1u8; 32], [99u8]).encode();
 		let result = execute(CODE, input, &mut ext).unwrap();
 		assert_eq!(u32::from_le_bytes(result.data.0.try_into().unwrap()), 0);
-		assert_eq!(ext.storage.get(&[1u8; 32]).unwrap(), &[99u8]);
+		assert_eq!(ext.storage.get(&[1u8; 32].to_vec()).unwrap(), &[99u8]);
 	}
 
 	#[test]

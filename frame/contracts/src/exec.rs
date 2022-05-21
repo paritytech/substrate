@@ -24,15 +24,17 @@ use crate::{
 use frame_support::{
 	crypto::ecdsa::ECDSAExt,
 	dispatch::{DispatchError, DispatchResult, DispatchResultWithPostInfo, Dispatchable},
+	pallet_prelude::ConstU32,
 	storage::{with_transaction, TransactionOutcome},
 	traits::{Contains, Currency, ExistenceRequirement, OriginTrait, Randomness, Time},
 	weights::Weight,
+	Blake2_128Concat, BoundedVec, StorageHasher,
 };
 use frame_system::RawOrigin;
 use pallet_contracts_primitives::ExecReturnValue;
 use smallvec::{Array, SmallVec};
 use sp_core::{crypto::UncheckedFrom, ecdsa::Public as ECDSAPublic};
-use sp_io::crypto::secp256k1_ecdsa_recover_compressed;
+use sp_io::{crypto::secp256k1_ecdsa_recover_compressed, hashing::blake2_256};
 use sp_runtime::traits::Convert;
 use sp_std::{marker::PhantomData, mem, prelude::*};
 
@@ -45,9 +47,24 @@ pub type ExecResult = Result<ExecReturnValue, ExecError>;
 /// A type that represents a topic of an event. At the moment a hash is used.
 pub type TopicOf<T> = <T as frame_system::Config>::Hash;
 
-pub enum StorageKey {
-	FixedSizedKey([u8; 32]),
-	VariableSizedKey(Vec<u8>),
+pub type FixedSizedKey = [u8; 32];
+pub type VariableSizedKey = BoundedVec<u8, ConstU32<128>>; // TODO: length to Config Get param
+
+pub trait StorageHash {
+	fn hash(self) -> Vec<u8>;
+}
+
+// TODO: think how DYI: take StorageHasher impl from frame_support without copy-pasting
+impl StorageHash for FixedSizedKey {
+	fn hash(self) -> Vec<u8> {
+		blake2_256(self.as_slice()).to_vec()
+	}
+}
+
+impl StorageHash for VariableSizedKey {
+	fn hash(self) -> Vec<u8> {
+		Blake2_128Concat::hash(self.as_slice())
+	}
 }
 
 /// Origin of the error.
@@ -144,19 +161,33 @@ pub trait Ext: sealing::Sealed {
 	///
 	/// Returns `None` if the `key` wasn't previously set by `set_storage` or
 	/// was deleted.
-	fn get_storage(&mut self, key: &StorageKey) -> Option<Vec<u8>>;
+	fn get_storage(&mut self, key: FixedSizedKey) -> Option<Vec<u8>>;
+
+	///
+	fn get_storage_transparent(&mut self, key: VariableSizedKey) -> Option<Vec<u8>>;
 
 	/// Returns `Some(len)` (in bytes) if a storage item exists at `key`.
 	///
 	/// Returns `None` if the `key` wasn't previously set by `set_storage` or
 	/// was deleted.
-	fn get_storage_size(&mut self, key: &StorageKey) -> Option<u32>;
+	fn get_storage_size(&mut self, key: FixedSizedKey) -> Option<u32>;
+
+	///
+	fn get_storage_size_transparent(&mut self, key: VariableSizedKey) -> Option<u32>;
 
 	/// Sets the storage entry by the given key to the specified value. If `value` is `None` then
 	/// the storage entry is deleted.
 	fn set_storage(
 		&mut self,
-		key: StorageKey,
+		key: FixedSizedKey,
+		value: Option<Vec<u8>>,
+		take_old: bool,
+	) -> Result<WriteOutcome, DispatchError>;
+
+	///
+	fn set_storage_transparent(
+		&mut self,
+		key: VariableSizedKey,
 		value: Option<Vec<u8>>,
 		take_old: bool,
 	) -> Result<WriteOutcome, DispatchError>;
@@ -1089,24 +1120,48 @@ where
 		Self::transfer(ExistenceRequirement::KeepAlive, &self.top_frame().account_id, to, value)
 	}
 
-	fn get_storage(&mut self, key: &StorageKey) -> Option<Vec<u8>> {
+	fn get_storage(&mut self, key: FixedSizedKey) -> Option<Vec<u8>> {
 		Storage::<T>::read(&self.top_frame_mut().contract_info().trie_id, key)
 	}
 
-	fn get_storage_size(&mut self, key: &StorageKey) -> Option<u32> {
+	fn get_storage_transparent(&mut self, key: VariableSizedKey) -> Option<Vec<u8>> {
+		Storage::<T>::read(&self.top_frame_mut().contract_info().trie_id, key)
+	}
+
+	fn get_storage_size(&mut self, key: FixedSizedKey) -> Option<u32> {
+		Storage::<T>::size(&self.top_frame_mut().contract_info().trie_id, key)
+	}
+
+	fn get_storage_size_transparent(&mut self, key: VariableSizedKey) -> Option<u32> {
 		Storage::<T>::size(&self.top_frame_mut().contract_info().trie_id, key)
 	}
 
 	fn set_storage(
 		&mut self,
-		key: StorageKey,
+		key: FixedSizedKey,
 		value: Option<Vec<u8>>,
 		take_old: bool,
 	) -> Result<WriteOutcome, DispatchError> {
 		let frame = self.top_frame_mut();
 		Storage::<T>::write(
 			&frame.contract_info.get(&frame.account_id).trie_id,
-			&key,
+			key,
+			value,
+			Some(&mut frame.nested_storage),
+			take_old,
+		)
+	}
+
+	fn set_storage_transparent(
+		&mut self,
+		key: VariableSizedKey,
+		value: Option<Vec<u8>>,
+		take_old: bool,
+	) -> Result<WriteOutcome, DispatchError> {
+		let frame = self.top_frame_mut();
+		Storage::<T>::write(
+			&frame.contract_info.get(&frame.account_id).trie_id,
+			key,
 			value,
 			Some(&mut frame.nested_storage),
 			take_old,
@@ -2702,9 +2757,9 @@ mod tests {
 				Ok(WriteOutcome::New)
 			);
 			assert_eq!(ctx.ext.set_storage([2; 32], Some(vec![]), false), Ok(WriteOutcome::New));
-			assert_eq!(ctx.ext.get_storage_size(&[1; 32]), Some(3));
-			assert_eq!(ctx.ext.get_storage_size(&[2; 32]), Some(0));
-			assert_eq!(ctx.ext.get_storage_size(&[3; 32]), None);
+			assert_eq!(ctx.ext.get_storage_size([1; 32]), Some(3));
+			assert_eq!(ctx.ext.get_storage_size([2; 32]), Some(0));
+			assert_eq!(ctx.ext.get_storage_size([3; 32]), None);
 
 			exec_success()
 		});

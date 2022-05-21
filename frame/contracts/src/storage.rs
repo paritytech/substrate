@@ -20,7 +20,7 @@
 pub mod meter;
 
 use crate::{
-	exec::{AccountIdOf, StorageKey},
+	exec::{AccountIdOf, StorageHash},
 	weights::WeightInfo,
 	BalanceOf, CodeHash, Config, ContractInfoOf, DeletionQueue, Error, TrieId, SENTINEL,
 };
@@ -33,7 +33,6 @@ use frame_support::{
 };
 use scale_info::TypeInfo;
 use sp_core::crypto::UncheckedFrom;
-use sp_io::hashing::{blake2_256;
 use sp_runtime::{
 	traits::{Hash, Zero},
 	RuntimeDebug,
@@ -125,25 +124,16 @@ where
 	///
 	/// The read is performed from the `trie_id` only. The `address` is not necessary. If the
 	/// contract doesn't store under the given `key` `None` is returned.
-	pub fn read(trie_id: &TrieId, key: &StorageKey) -> Option<Vec<u8>> {
-		match key {
-			StorageKey::FixedSizedKey(k) =>
-				child::get_raw(&child_trie_info(trie_id), &blake2_256(k)),
-			StorageKey::VariableSizedKey(k) =>
-				child::get_raw(&child_trie_info(trie_id), &blake2_128_concat(k)),
-		}
+	pub fn read<K: StorageHash>(trie_id: &TrieId, key: K) -> Option<Vec<u8>> {
+		child::get_raw(&child_trie_info(trie_id), key.hash().as_slice())
 	}
 
 	/// Returns `Some(len)` (in bytes) if a storage item exists at `key`.
 	///
 	/// Returns `None` if the `key` wasn't previously set by `set_storage` or
 	/// was deleted.
-	pub fn size(trie_id: &TrieId, key: &StorageKey) -> Option<u32> {
-		match key {
-			StorageKey::FixedSizedKey(k) => child::len(&child_trie_info(trie_id), &blake2_256(key)),
-			StorageKey::VariableSizedKey(k) =>
-				child::len(&child_trie_info(trie_id), &blake2_128_concat(key)),
-		}
+	pub fn size<K: StorageHash>(trie_id: &TrieId, key: K) -> Option<u32> {
+		child::len(&child_trie_info(trie_id), key.hash().as_slice())
 	}
 
 	/// Update a storage entry into a contract's kv storage.
@@ -153,19 +143,15 @@ where
 	///
 	/// This function also records how much storage was created or removed if a `storage_meter`
 	/// is supplied. It should only be absent for testing or benchmarking code.
-	pub fn write(
+	pub fn write<K: StorageHash>(
 		trie_id: &TrieId,
-		key: &StorageKey,
+		key: K,
 		new_value: Option<Vec<u8>>,
 		storage_meter: Option<&mut meter::NestedMeter<T>>,
 		take: bool,
 	) -> Result<WriteOutcome, DispatchError> {
-		let hashed_key = match key {
-			StorageKey::FixedSizedKey(k) => blake2_256(k),
-			StorageKey::VariableSizedKey(k) => blake2_128_concat(k),
-		};
-
 		let child_trie_info = &child_trie_info(trie_id);
+		let hashed_key = key.hash();
 		let (old_len, old_value) = if take {
 			let val = child::get_raw(child_trie_info, &hashed_key);
 			(val.as_ref().map(|v| v.len() as u32), val)

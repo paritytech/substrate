@@ -18,12 +18,13 @@
 //! Environment definition of the wasm smart-contract runtime.
 
 use crate::{
-	exec::{ExecError, ExecResult, Ext, StorageKey, TopicOf},
+	exec::{ExecError, ExecResult, Ext, FixedSizedKey, TopicOf, VariableSizedKey},
 	gas::{ChargedAmount, Token},
 	schedule::HostFnWeights,
 	wasm::env_def::ConvertibleToWasm,
 	BalanceOf, CodeHash, Config, Error, SENTINEL,
 };
+
 use bitflags::bitflags;
 use codec::{Decode, DecodeAll, Encode, MaxEncodedLen};
 use frame_support::{dispatch::DispatchError, ensure, weights::Weight};
@@ -34,6 +35,11 @@ use sp_runtime::traits::{Bounded, Zero};
 use sp_sandbox::SandboxMemory;
 use sp_std::prelude::*;
 use wasm_instrument::parity_wasm::elements::ValueType;
+
+enum KeyType {
+	Fixed,
+	Transparent,
+}
 
 /// Every error that can be returned to a contract when it calls any of the host functions.
 ///
@@ -701,7 +707,7 @@ where
 
 	fn set_storage(
 		&mut self,
-		key_type: &StorageKey,
+		key_type: KeyType,
 		key_ptr: u32,
 		key_len: u32,
 		value_ptr: u32,
@@ -713,20 +719,22 @@ where
 		if value_len > max_size {
 			return Err(Error::<E::T>::ValueTooLarge.into())
 		}
-		let mut key = match key_type {
-			FixedSizedKey(_) => [0; 32],
-			VariableSizedKey(_) => &[u8],
-		};
 
+		let mut key = vec![0; key_len.try_into().expect("key length error")];
 		self.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
 
-		let key_typed = match key_type {
-			FixedSizedKey(_) => FixedSizedKey(key),
-			VariableSizedKey(_) => VariableSizedKey(key.try_into()),
+		let value = Some(self.read_sandbox_memory(value_ptr, value_len)?);
+		let write_outcome = match key_type {
+			KeyType::Fixed => {
+				let k: FixedSizedKey = key.try_into().expect("asda");
+				self.ext.set_storage(k, value, false)?
+			},
+			KeyType::Transparent => {
+				let k: VariableSizedKey = key.try_into().expect("asda");
+				self.ext.set_storage_transparent(k, value, false)?
+			},
 		};
 
-		let value = Some(self.read_sandbox_memory(value_ptr, value_len)?);
-		let write_outcome = self.ext.set_storage(key_typed, value, false)?;
 		self.adjust_gas(
 			charged,
 			RuntimeCosts::SetStorage { new_bytes: value_len, old_bytes: write_outcome.old_len() },
@@ -734,19 +742,28 @@ where
 		Ok(write_outcome.old_len_with_sentinel())
 	}
 
-	fn clear_storage(&mut self, key_type: &StorageKey, key_ptr: u32) -> Result<u32, TrapReason> {
+	fn clear_storage(
+		&mut self,
+		key_type: KeyType,
+		key_ptr: u32,
+		key_len: u32,
+	) -> Result<u32, TrapReason> {
 		let charged = self.charge_gas(RuntimeCosts::ClearStorage(self.ext.max_value_size()))?;
-		let mut key = match key_type {
-			FixedSizedKey(_) => [0; 32],
-			VariableSizedKey(_) => [0; key_len].into_vec(),
-		};
+
+		let mut key = vec![0; key_len.try_into().expect("pp[s")];
 		self.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
 
-		let key_typed = match key_type {
-			FixedSizedKey(_) => FixedSizedKey(key),
-			VariableSizedKey(_) => VariableSizedKey(key),
+		let outcome = match key_type {
+			KeyType::Fixed => {
+				let k: FixedSizedKey = key.try_into().expect("asda");
+				self.ext.set_storage(k, None, false)?
+			},
+			KeyType::Transparent => {
+				let k: VariableSizedKey = key.try_into().expect("asda");
+				self.ext.set_storage_transparent(k, None, false)?
+			},
 		};
-		let outcome = self.ext.set_storage(key_typed, None, false)?;
+
 		self.adjust_gas(charged, RuntimeCosts::ClearStorage(outcome.old_len()));
 		Ok(outcome.old_len_with_sentinel())
 	}
@@ -889,7 +906,7 @@ define_env!(Env, <E: Ext>,
 	// Equivalent to the newer version of `seal_set_storage` with the exception of the return
 	// type. Still a valid thing to call when not interested in the return value.
 	[seal0] seal_set_storage(ctx, key_ptr: u32, value_ptr: u32, value_len: u32) => {
-		ctx.set_storage(key_ptr, value_ptr, value_len).map(|_| ())
+		ctx.set_storage(KeyType::Fixed, key_ptr, 32u32, value_ptr, value_len).map(|_| ())
 	},
 
 	// Set the value at the given key in the contract storage.
@@ -908,7 +925,7 @@ define_env!(Env, <E: Ext>,
 	// Returns the size of the pre-existing value at the specified key if any. Otherwise
 	// `SENTINEL` is returned as a sentinel value.
 	[seal1] seal_set_storage(ctx, key_ptr: u32, value_ptr: u32, value_len: u32) -> u32 => {
-		ctx.set_storage(key_ptr, value_ptr, value_len)
+		ctx.set_storage(KeyType::Fixed, key_ptr, 32u32, value_ptr, value_len)
 	},
 
 	// Clear the value at the given key in the contract storage.
@@ -916,7 +933,7 @@ define_env!(Env, <E: Ext>,
 	// Equivalent to the newer version of `seal_clear_storage` with the exception of the return
 	// type. Still a valid thing to call when not interested in the return value.
 	[seal0] seal_clear_storage(ctx, key_ptr: u32) => {
-		ctx.clear_storage(key_ptr).map(|_| ()).map_err(Into::into)
+		ctx.clear_storage(KeyType::Fixed, key_ptr, 32u32).map(|_| ()).map_err(Into::into)
 	},
 
 	// Clear the value at the given key in the contract storage.
@@ -947,10 +964,9 @@ define_env!(Env, <E: Ext>,
 	// `ReturnCode::KeyNotFound`
 	[seal0] seal_get_storage(ctx, key_ptr: u32, out_ptr: u32, out_len_ptr: u32) -> ReturnCode => {
 		let charged = ctx.charge_gas(RuntimeCosts::GetStorage(ctx.ext.max_value_size()))?;
-		let mut key = [0; 32];
+		let mut key: FixedSizedKey = [0; 32];
 		ctx.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
-		let key_typed = StorageKey::FixSizedKey(key);
-		if let Some(value) = ctx.ext.get_storage(&key_typed) {
+		if let Some(value) = ctx.ext.get_storage(key) {
 			ctx.adjust_gas(charged, RuntimeCosts::GetStorage(value.len() as u32));
 			ctx.write_sandbox_output(out_ptr, out_len_ptr, &value, false, already_charged)?;
 			Ok(ReturnCode::Success)
@@ -972,10 +988,9 @@ define_env!(Env, <E: Ext>,
 	// `SENTINEL` is returned as a sentinel value.
 	[seal0] seal_contains_storage(ctx, key_ptr: u32) -> u32 => {
 		let charged = ctx.charge_gas(RuntimeCosts::ContainsStorage(ctx.ext.max_value_size()))?;
-		let mut key = [0; 32];
+		let mut key: FixedSizedKey = [0; 32];
 		ctx.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
-				let key_typed = StorageKey::FixSizedKey(key);
-		if let Some(len) = ctx.ext.get_storage_size(&key_typed) {
+		if let Some(len) = ctx.ext.get_storage_size(key) {
 			ctx.adjust_gas(charged, RuntimeCosts::ContainsStorage(len));
 			Ok(len)
 		} else {
@@ -1000,7 +1015,7 @@ define_env!(Env, <E: Ext>,
 		let charged = ctx.charge_gas(RuntimeCosts::TakeStorage(ctx.ext.max_value_size()))?;
 		let mut key = [0; 32];
 		ctx.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
-		let key_typed = StorageKey::FixSizedKey(key);
+		let key_typed = StorageKey::FixedSizedKey(key);
 		if let crate::storage::WriteOutcome::Taken(value) = ctx.ext.set_storage(key_typed, None, true)? {
 			ctx.adjust_gas(charged, RuntimeCosts::TakeStorage(value.len() as u32));
 			ctx.write_sandbox_output(out_ptr, out_len_ptr, &value, false, already_charged)?;

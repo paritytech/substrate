@@ -20,7 +20,7 @@ use crate::{
 		ChainExtension, Environment, Ext, InitState, Result as ExtensionResult, RetVal,
 		ReturnFlags, SysConfig, UncheckedFrom,
 	},
-	exec::Frame,
+	exec::{FixedSizedKey, Frame},
 	storage::Storage,
 	wasm::{PrefabWasmModule, ReturnCode as RuntimeReturnCode},
 	weights::WeightInfo,
@@ -1701,8 +1701,14 @@ fn lazy_removal_partial_remove_works() {
 
 		// Put value into the contracts child trie
 		for val in &vals {
-			Storage::<Test>::write(&info.trie_id, &val.0, Some(val.2.clone()), None, false)
-				.unwrap();
+			Storage::<Test>::write(
+				&info.trie_id,
+				val.0 as FixedSizedKey,
+				Some(val.2.clone()),
+				None,
+				false,
+			)
+			.unwrap();
 		}
 		<ContractInfoOf<Test>>::insert(&addr, info.clone());
 
@@ -1786,8 +1792,14 @@ fn lazy_removal_does_no_run_on_full_block() {
 
 		// Put value into the contracts child trie
 		for val in &vals {
-			Storage::<Test>::write(&info.trie_id, &val.0, Some(val.2.clone()), None, false)
-				.unwrap();
+			Storage::<Test>::write(
+				&info.trie_id,
+				val.0 as FixedSizedKey,
+				Some(val.2.clone()),
+				None,
+				false,
+			)
+			.unwrap();
 		}
 		<ContractInfoOf<Test>>::insert(&addr, info.clone());
 
@@ -1870,8 +1882,14 @@ fn lazy_removal_does_not_use_all_weight() {
 
 		// Put value into the contracts child trie
 		for val in &vals {
-			Storage::<Test>::write(&info.trie_id, &val.0, Some(val.2.clone()), None, false)
-				.unwrap();
+			Storage::<Test>::write(
+				&info.trie_id,
+				val.0 as FixedSizedKey,
+				Some(val.2.clone()),
+				None,
+				false,
+			)
+			.unwrap();
 		}
 		<ContractInfoOf<Test>>::insert(&addr, info.clone());
 
