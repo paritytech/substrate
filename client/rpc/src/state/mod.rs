@@ -167,7 +167,7 @@ pub fn new_full<BE, Block: BlockT, Client>(
 	executor: SubscriptionTaskExecutor,
 	deny_unsafe: DenyUnsafe,
 	rpc_max_payload: Option<usize>,
-) -> (StateApi<Block, Client>, ChildState<Block, Client>)
+) -> (State<Block, Client>, ChildState<Block, Client>)
 where
 	Block: BlockT + 'static,
 	Block::Hash: Unpin,
@@ -192,17 +192,17 @@ where
 		rpc_max_payload,
 	));
 	let backend = Box::new(self::state_full::FullState::new(client, executor, rpc_max_payload));
-	(StateApi { backend, deny_unsafe }, ChildState { backend: child_backend })
+	(State { backend, deny_unsafe }, ChildState { backend: child_backend })
 }
 
 /// State API with subscriptions support.
-pub struct StateApi<Block, Client> {
+pub struct State<Block, Client> {
 	backend: Box<dyn StateBackend<Block, Client>>,
 	/// Whether to deny unsafe calls
 	deny_unsafe: DenyUnsafe,
 }
 
-impl<Block, Client> StateApiServer<Block::Hash> for StateApi<Block, Client>
+impl<Block, Client> StateApiServer<Block::Hash> for State<Block, Client>
 where
 	Block: BlockT + 'static,
 	Client: Send + Sync + 'static,
