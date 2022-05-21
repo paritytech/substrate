@@ -681,11 +681,7 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxElectableTargets: Get<SolutionTargetIndexOf<Self::MinerConfig>>;
 
-		/// Maximum number of backers that a single winner may have in the election.
-		///
-		/// By "backer per winner", this interface means "all backers in all pages" per winner.
-		/// Thus, hypothetically, a user of an election provider should be able to safely aggregate
-		/// all backers of each winner in a bounded vector with this bound.
+		/// Check [`ElectionProvider::MaxBackersPerWinner`] for more information.
 		#[pallet::constant]
 		type MaxBackersPerWinner: Get<u32>;
 
