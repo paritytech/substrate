@@ -149,7 +149,8 @@ impl Rational128 {
 		if den == self.1 {
 			Ok(self)
 		} else {
-			helpers_128bit::multiply_by_rational_with_rounding(self.0, den, self.1).map(|n| Self(n, den))
+			helpers_128bit::multiply_by_rational_with_rounding(self.0, den, self.1)
+				.map(|n| Self(n, den))
 		}
 	}
 
@@ -434,8 +435,14 @@ mod tests {
 			(MAX128 / 1000 * 555) + (455 * 555 / 1000),
 		);
 
-		assert_eq!(multiply_by_rational_with_rounding(2 * MAX64 - 1, MAX64, MAX64).unwrap(), 2 * MAX64 - 1);
-		assert_eq!(multiply_by_rational_with_rounding(2 * MAX64 - 1, MAX64 - 1, MAX64).unwrap(), 2 * MAX64 - 3);
+		assert_eq!(
+			multiply_by_rational_with_rounding(2 * MAX64 - 1, MAX64, MAX64).unwrap(),
+			2 * MAX64 - 1
+		);
+		assert_eq!(
+			multiply_by_rational_with_rounding(2 * MAX64 - 1, MAX64 - 1, MAX64).unwrap(),
+			2 * MAX64 - 3
+		);
 
 		assert_eq!(
 			multiply_by_rational_with_rounding(MAX64 + 100, MAX64_2, MAX64_2 / 2).unwrap(),
@@ -447,10 +454,14 @@ mod tests {
 		);
 
 		assert_eq!(
-			multiply_by_rational_with_rounding(2u128.pow(66) - 1, 2u128.pow(65) - 1, 2u128.pow(65)).unwrap(),
+			multiply_by_rational_with_rounding(2u128.pow(66) - 1, 2u128.pow(65) - 1, 2u128.pow(65))
+				.unwrap(),
 			73786976294838206461,
 		);
-		assert_eq!(multiply_by_rational_with_rounding(1_000_000_000, MAX128 / 8, MAX128 / 2).unwrap(), 250000000);
+		assert_eq!(
+			multiply_by_rational_with_rounding(1_000_000_000, MAX128 / 8, MAX128 / 2).unwrap(),
+			250000000
+		);
 
 		assert_eq!(
 			multiply_by_rational_with_rounding(
@@ -473,7 +484,11 @@ mod tests {
 	#[ignore]
 	fn multiply_by_rational_with_rounding_fuzzed_equation() {
 		assert_eq!(
-			multiply_by_rational_with_rounding(154742576605164960401588224, 9223376310179529214, 549756068598),
+			multiply_by_rational_with_rounding(
+				154742576605164960401588224,
+				9223376310179529214,
+				549756068598
+			),
 			Ok(2596149632101417846585204209223679)
 		);
 	}
