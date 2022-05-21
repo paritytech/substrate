@@ -44,7 +44,7 @@ EXCLUDED_PALLETS=(
   # Helper pallets
   "pallet_election_provider_support_benchmarking"
   # Pallets without automatic benchmarking
-  "pallet_baba"
+  "pallet_babe"
   "pallet_grandpa"
   "pallet_mmr"
   "pallet_offences"
