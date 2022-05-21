@@ -716,10 +716,10 @@ impl<AccountId: Eq + Clone + Debug, MaxVoters: Get<u32>> From<BoundedSupport<Acc
 pub type BoundedSupports<AccountId, MaxWinnersPerPage, MaxBackersPerWinner> =
 	BoundedVec<(AccountId, BoundedSupport<AccountId, MaxBackersPerWinner>), MaxWinnersPerPage>;
 /// A specialization of [`BoundedSupports`] for a type implementing [`ElectionProvider`].
-pub type BoundedSupportsOf<T> = BoundedSupports<
-	<T as ElectionProvider>::AccountId,
-	<T as ElectionProvider>::MaxWinnersPerPage,
-	<T as ElectionProvider>::MaxBackersPerWinner,
+pub type BoundedSupportsOf<E> = BoundedSupports<
+	<E as ElectionProvider>::AccountId,
+	<E as ElectionProvider>::MaxWinnersPerPage,
+	<E as ElectionProvider>::MaxBackersPerWinner,
 >;
 
 /// Extension trait to convert from [`sp_npos_elections::Supports<AccountId>`] to `BoundedSupports`.
