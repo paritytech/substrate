@@ -8,7 +8,7 @@ set -e
 
 echo "[+] Running all benchmarks for Substrate"
 
-if [ $1 = "skip-build" ]
+if [ $1 != "skip-build" ]
 then
   cargo +nightly build --profile production --locked --features=runtime-benchmarks
 fi
