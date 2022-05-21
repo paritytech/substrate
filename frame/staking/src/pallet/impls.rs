@@ -585,9 +585,9 @@ impl<T: Config> Pallet<T> {
 
 	/// Clear all era information for given era.
 	pub(crate) fn clear_era_information(era_index: EraIndex) {
-		<ErasStakers<T>>::remove_prefix(era_index, None);
-		<ErasStakersClipped<T>>::remove_prefix(era_index, None);
-		<ErasValidatorPrefs<T>>::remove_prefix(era_index, None);
+		<ErasStakers<T>>::clear_prefix(era_index, None);
+		<ErasStakersClipped<T>>::clear_prefix(era_index, None);
+		<ErasValidatorPrefs<T>>::clear_prefix(era_index, None);
 		<ErasValidatorReward<T>>::remove(era_index);
 		<ErasRewardPoints<T>>::remove(era_index);
 		<ErasTotalStake<T>>::remove(era_index);
@@ -984,10 +984,10 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn clear() {
-		<Bonded<T>>::remove_all(None);
-		<Ledger<T>>::remove_all(None);
-		<Validators<T>>::remove_all();
-		<Nominators<T>>::remove_all();
+		<Bonded<T>>::clear(None);
+		<Ledger<T>>::clear(None);
+		<Validators<T>>::clear(None);
+		<Nominators<T>>::clear(None);
 
 		T::VoterList::unsafe_clear();
 	}
@@ -1368,8 +1368,8 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsAndValidatorsM
 	fn unsafe_clear() {
 		// NOTE: Caller must ensure this doesn't lead to too many storage accesses. This is a
 		// condition of SortedListProvider::unsafe_clear.
-		Nominators::<T>::remove_all();
-		Validators::<T>::remove_all();
+		Nominators::<T>::clear(None);
+		Validators::<T>::clear(None);
 	}
 }
 

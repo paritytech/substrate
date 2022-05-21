@@ -274,19 +274,21 @@ where
 		<Self as MapWrapper>::Map::migrate_key::<OldHasher, _>(key)
 	}
 
-	/// Remove all value of the storage.
+	/// Remove all values in the map.
 	#[deprecated = "Use `clear` instead"]
 	pub fn remove_all() {
-		Self::clear(None);
+		Self::clear();
 	}
 
-	/// Remove all value of the storage.
-	pub fn clear(limit: Option<u32>) -> ClearPrefixResult {
-		// NOTE: it is not possible to remove up to some limit because
-		// `sp_io::storage::clear_prefix` and `StorageMap::remove_all` don't give the number of
-		// value removed from the overlay.
+	/// Remove all values in the map.
+	pub fn clear() {
+/*		match <Self as MapWrapper>::Map::clear(limit) {
+			ClearPrefixResult::NoneLeft { .. } => CounterFor::<Prefix>::set(0u32),
+			ClearPrefixResult::SomeLeft { total, .. } =>
+				CounterFor::<Prefix>::mutate(|x| x.saturating_reduce(total)),
+		}*/
 		CounterFor::<Prefix>::set(0u32);
-		<Self as MapWrapper>::Map::clear(limit)
+		<Self as MapWrapper>::Map::clear(None);
 	}
 
 	/// Iter over all value of the storage.
