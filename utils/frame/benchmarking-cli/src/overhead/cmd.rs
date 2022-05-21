@@ -52,6 +52,10 @@ pub struct OverheadCmd {
 	#[allow(missing_docs)]
 	#[clap(flatten)]
 	pub params: OverheadParams,
+
+	/// Add a header file to your outputted benchmarks.
+	#[clap(long)]
+	pub header: Option<PathBuf>,
 }
 
 /// Configures the benchmark, the post-processing and weight generation.
