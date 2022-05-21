@@ -8,7 +8,7 @@ set -e
 
 echo "[+] Running all benchmarks for Substrate"
 
-# cargo +nightly build --profile production --locked --features=runtime-benchmarks
+cargo +nightly build --profile production --locked --features=runtime-benchmarks
 
 ./target/production/substrate benchmark pallet \
     --chain=dev \
