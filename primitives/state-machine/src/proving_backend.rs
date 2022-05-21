@@ -288,9 +288,10 @@ where
 		&self,
 		child_info: Option<&ChildInfo>,
 		prefix: Option<&[u8]>,
+		start_at: Option<&[u8]>,
 		f: F,
 	) {
-		self.0.apply_to_keys_while(child_info, prefix, f)
+		self.0.apply_to_keys_while(child_info, prefix, start_at, f)
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {

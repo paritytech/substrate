@@ -738,7 +738,7 @@ where
 
 		if let Some(limit) = limit {
 			let mut all_deleted = true;
-			self.backend.apply_to_keys_while(child_info, prefix, |key| {
+			self.backend.apply_to_keys_while(child_info, prefix, None, |key| {
 				if num_deleted == limit {
 					all_deleted = false;
 					return false
@@ -765,7 +765,7 @@ where
 			});
 			(all_deleted, num_deleted)
 		} else {
-			self.backend.apply_to_keys_while(child_info, prefix, |key| {
+			self.backend.apply_to_keys_while(child_info, prefix, None, |key| {
 				if let Some(None) = match child_info {
 					Some(child_info) => self.overlay.child_storage(child_info, key),
 					None => self.overlay.storage(key),
