@@ -318,6 +318,7 @@ use frame_support::{
 	},
 	CloneNoBound, DefaultNoBound, PartialEqNoBound, RuntimeDebugNoBound,
 };
+use frame_system::{ensure_root, ensure_signed, pallet_prelude::OriginFor};
 use scale_info::TypeInfo;
 use sp_core::U256;
 use sp_runtime::traits::{AccountIdConversion, Bounded, CheckedSub, Convert, Saturating, Zero};
@@ -1274,6 +1275,8 @@ pub mod pallet {
 			state_toggler: Option<T::AccountId>,
 			nominator: Option<T::AccountId>,
 		},
+		/// A pool nominated the given set of validators.
+		Nominated { pool_id: PoolId, validators: Vec<T::AccountId> },
 	}
 
 	#[pallet::error]
@@ -1799,67 +1802,117 @@ pub mod pallet {
 		}
 
 		#[pallet::weight(T::WeightInfo::nominate(validators.len() as u32))]
+		#[transactional]
 		pub fn nominate(
 			origin: OriginFor<T>,
 			pool_id: PoolId,
 			validators: Vec<T::AccountId>,
 		) -> DispatchResult {
-			let who = ensure_signed(origin)?;
-			let bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
-			ensure!(bonded_pool.can_nominate(&who), Error::<T>::NotNominator);
-			T::StakingInterface::nominate(bonded_pool.bonded_account(), validators)?;
+			let bonded_account = Self::ensure_signed_or_root(
+				origin,
+				|who| {
+					let bonded_pool =
+						BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
+					ensure!(bonded_pool.can_nominate(&who), Error::<T>::NotNominator);
+					Ok(bonded_pool.bonded_account())
+				},
+				|| {
+					let bonded_pool =
+						BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
+					Ok(bonded_pool.bonded_account())
+				},
+			)?;
+
+			T::StakingInterface::nominate(bonded_account, validators.clone())?;
+			Self::deposit_event(Event::<T>::Nominated { pool_id, validators });
+
 			Ok(())
 		}
 
+		/// Set the metadata of a pool.
+		///
+		/// Dispatch origin of this call must be signed by the root or state-toggler roles of the
+		/// pool, or be the (holy) root origin.
 		#[pallet::weight(T::WeightInfo::set_state())]
 		pub fn set_state(
 			origin: OriginFor<T>,
 			pool_id: PoolId,
 			state: PoolState,
 		) -> DispatchResult {
-			let who = ensure_signed(origin)?;
-			let mut bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
-			ensure!(bonded_pool.state != PoolState::Destroying, Error::<T>::CanNotChangeState);
-
-			if bonded_pool.can_toggle_state(&who) {
-				bonded_pool.set_state(state);
-			} else if bonded_pool.ok_to_be_open(Zero::zero()).is_err() &&
-				state == PoolState::Destroying
-			{
-				// If the pool has bad properties, then anyone can set it as destroying
-				bonded_pool.set_state(PoolState::Destroying);
-			} else {
-				Err(Error::<T>::CanNotChangeState)?;
-			}
+			let bonded_pool = Self::ensure_signed_or_root(
+				origin,
+				|who| {
+					let mut bonded_pool =
+						BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
+					if bonded_pool.ok_to_be_open(Zero::zero()).is_err() &&
+						state == PoolState::Destroying
+					{
+						// if the pool is in a bad state, we force set it to `Destroying`..
+						bonded_pool.set_state(PoolState::Destroying);
+					} else {
+						// else we set it to whatever the call wanted.
+						ensure!(
+							bonded_pool.state != PoolState::Destroying &&
+								bonded_pool.can_toggle_state(&who),
+							Error::<T>::CanNotChangeState
+						);
+						bonded_pool.set_state(state);
+					}
+					Ok(bonded_pool)
+				},
+				|| {
+					let mut bonded_pool =
+						BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
+					ensure!(
+						bonded_pool.state != PoolState::Destroying,
+						Error::<T>::CanNotChangeState
+					);
+					bonded_pool.set_state(state);
+					Ok(bonded_pool)
+				},
+			)?;
 
 			bonded_pool.put();
-
 			Ok(())
 		}
 
+		/// Set the metadata of a pool.
+		///
+		/// Dispatch origin of this call must be signed by the root or state-toggler roles of the
+		/// pool, or be the (holy) root origin.
 		#[pallet::weight(T::WeightInfo::set_metadata(metadata.len() as u32))]
 		pub fn set_metadata(
 			origin: OriginFor<T>,
 			pool_id: PoolId,
 			metadata: Vec<u8>,
 		) -> DispatchResult {
-			let who = ensure_signed(origin)?;
+			Self::ensure_signed_or_root(
+				origin,
+				|who| {
+					ensure!(
+						BondedPool::<T>::get(pool_id)
+							.ok_or(Error::<T>::PoolNotFound)?
+							.can_set_metadata(&who),
+						Error::<T>::DoesNotHavePermission
+					);
+					Ok(())
+				},
+				|| {
+					BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
+					Ok(())
+				},
+			)?;
+
 			let metadata: BoundedVec<_, _> =
 				metadata.try_into().map_err(|_| Error::<T>::MetadataExceedsMaxLen)?;
-			ensure!(
-				BondedPool::<T>::get(pool_id)
-					.ok_or(Error::<T>::PoolNotFound)?
-					.can_set_metadata(&who),
-				Error::<T>::DoesNotHavePermission
-			);
-
 			Metadata::<T>::mutate(pool_id, |pool_meta| *pool_meta = metadata);
 
 			Ok(())
 		}
 
-		/// Update configurations for the nomination pools. The origin for this call must be
-		/// Root.
+		/// Update configurations for the nomination pools. The origin for this call must be Root.
+		///
+		/// Dispatch origin of this call must be the (holy) root origin.
 		///
 		/// # Arguments
 		///
@@ -1899,8 +1952,8 @@ pub mod pallet {
 
 		/// Update the roles of the pool.
 		///
-		/// The root is the only entity that can change any of the roles, including itself,
-		/// excluding the depositor, who can never change.
+		/// Dispatch origin of this call must be signed by the root role of the pool, or be the
+		/// (holy) root origin.
 		///
 		/// It emits an event, notifying UIs of the role change. This event is quite relevant to
 		/// most pool members and they should be informed of changes to pool roles.
@@ -1912,16 +1965,20 @@ pub mod pallet {
 			new_nominator: ConfigOp<T::AccountId>,
 			new_state_toggler: ConfigOp<T::AccountId>,
 		) -> DispatchResult {
-			let mut bonded_pool = match ensure_root(origin.clone()) {
-				Ok(()) => BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?,
-				Err(frame_support::error::BadOrigin) => {
-					let who = ensure_signed(origin)?;
+			let mut bonded_pool = Self::ensure_signed_or_root(
+				origin,
+				|who| {
 					let bonded_pool =
 						BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
 					ensure!(bonded_pool.can_update_roles(&who), Error::<T>::DoesNotHavePermission);
-					bonded_pool
+					Ok(bonded_pool)
 				},
-			};
+				|| {
+					let bonded_pool =
+						BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
+					Ok(bonded_pool)
+				},
+			)?;
 
 			match new_root {
 				ConfigOp::Noop => (),
@@ -1973,6 +2030,29 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
+	/// Slightly more customizable version of [`frame_system::ensure_signed_or_root`].
+	// Do not forget to finish a call to this function with `?`, especially if `Ret` is `()`!
+	fn ensure_signed_or_root<
+		Ret,
+		SignedCondition: FnOnce(T::AccountId) -> Result<Ret, DispatchError>,
+		RootCondition: FnOnce() -> Result<Ret, DispatchError>,
+	>(
+		origin: OriginFor<T>,
+		signed_condition: SignedCondition,
+		root_condition: RootCondition,
+	) -> Result<Ret, DispatchError> {
+		ensure_signed(origin.clone())
+			.map_err(Into::into)
+			.and_then(|x| signed_condition(x))
+			.or_else(|e| {
+				if matches!(e, DispatchError::BadOrigin) {
+					ensure_root(origin).map_err(Into::into).and_then(|_| root_condition())
+				} else {
+					Err(e)
+				}
+			})
+	}
+
 	/// Remove everything related to the given bonded pool.
 	///
 	/// All sub-pools are also deleted. All accounts are dusted and the leftover of the reward

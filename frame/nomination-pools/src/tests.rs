@@ -41,6 +41,78 @@ pub const DEFAULT_ROLES: PoolRoles<AccountId> =
 	PoolRoles { depositor: 10, root: Some(900), nominator: Some(901), state_toggler: Some(902) };
 
 #[test]
+fn ensure_signed_or_root_works() {
+	ExtBuilder::default().build_and_execute(|| {
+		// correct signed origin with successful data mapping
+		assert_eq!(
+			Pools::ensure_signed_or_root(
+				Origin::signed(10),
+				|who| {
+					ensure!(who == 10, "foo");
+					Ok(6u128)
+				},
+				|| { Ok(7u128) }
+			),
+			Ok(6)
+		);
+
+		// correct signed origin with unsuccessful data mapping
+		assert_eq!(
+			Pools::ensure_signed_or_root(
+				Origin::signed(10),
+				|who| {
+					ensure!(who == 11, "foo");
+					Ok(10u128)
+				},
+				|| { Ok(11u128) }
+			),
+			Err("foo".into())
+		);
+
+		// unsigned origin: BadOrigin, tries root, will fail with BadOrigin
+		assert_eq!(
+			Pools::ensure_signed_or_root(
+				Origin::none(),
+				|who| {
+					ensure!(who == 11, "foo");
+					Ok(10u128)
+				},
+				|| { Ok(11u128) }
+			),
+			Err(DispatchError::BadOrigin)
+		);
+
+		// correct root origin with successful data mapping
+		assert_eq!(
+			Pools::ensure_signed_or_root(
+				Origin::root(),
+				|who| {
+					ensure!(who == 10, "foo");
+					Ok(6u128)
+				},
+				|| { Ok(7u128) }
+			),
+			Ok(7)
+		);
+		// correct root origin with unsuccessful data mapping
+		assert_eq!(
+			Pools::ensure_signed_or_root(
+				Origin::root(),
+				|who| {
+					ensure!(who == 10, "foo");
+					Ok(6u128)
+				},
+				|| {
+					ensure!(false, "foo");
+					Ok(7u128)
+				}
+			),
+			Err("foo".into())
+		);
+	})
+}
+
+#[test]
 fn test_setup_works() {
 	ExtBuilder::default().build_and_execute(|| {
 		assert_eq!(BondedPools::<Runtime>::count(), 1);
@@ -3285,14 +3357,41 @@ mod nominate {
 			// Root can nominate
 			assert_ok!(Pools::nominate(Origin::signed(900), 1, vec![21]));
 			assert_eq!(Nominations::get(), vec![21]);
+			assert_eq!(
+				pool_events_since_last_call().last().unwrap(),
+				&Event::Nominated { pool_id: 1, validators: vec![21] }
+			);
 
 			// Nominator can nominate
 			assert_ok!(Pools::nominate(Origin::signed(901), 1, vec![31]));
 			assert_eq!(Nominations::get(), vec![31]);
+			assert_eq!(
+				pool_events_since_last_call().last().unwrap(),
+				&Event::Nominated { pool_id: 1, validators: vec![31] }
+			);
 
 			// Can't nominate for a pool that doesn't exist
 			assert_noop!(
 				Pools::nominate(Origin::signed(902), 123, vec![21]),
+				Error::<Runtime>::PoolNotFound
+			);
+		});
+	}
+
+	#[test]
+	fn holy_root_nominate_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			// holy root can nominate for the default pool
+			assert_ok!(Pools::nominate(Origin::root(), 1, vec![21]));
+			assert_eq!(
+				pool_events_since_last_call().last().unwrap(),
+				&Event::Nominated { pool_id: 1, validators: vec![21] }
+			);
+			assert_eq!(Nominations::get(), vec![21]);
+
+			// holy root cannot nominate for non-existing pool
+			assert_noop!(
+				Pools::nominate(Origin::root(), 123, vec![21]),
 				Error::<Runtime>::PoolNotFound
 			);
 		});
@@ -3384,6 +3483,31 @@ mod set_state {
 			);
 		});
 	}
+
+	#[test]
+	fn holy_root_set_state_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert_ok!(BondedPool::<Runtime>::get(1).unwrap().ok_to_be_open(0));
+
+			// holy root can set state.
+			assert_ok!(Pools::set_state(Origin::root(), 1, PoolState::Blocked),);
+			assert_eq!(BondedPool::<Runtime>::get(1).unwrap().state, PoolState::Blocked);
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::StateChanged { pool_id: 1, new_state: PoolState::Blocked },
+				]
+			);
+
+			// holy root cannot set state of a wrong pool
+			assert_noop!(
+				Pools::set_state(Origin::root(), 2, PoolState::Destroying),
+				Error::<Runtime>::PoolNotFound
+			);
+		});
+	}
 }
 
 mod set_metadata {
@@ -3415,6 +3539,27 @@ mod set_metadata {
 			// Metadata cannot be longer than `MaxMetadataLen`
 			assert_noop!(
 				Pools::set_metadata(Origin::signed(900), 1, vec![1, 1, 1]),
+				Error::<Runtime>::MetadataExceedsMaxLen
+			);
+		});
+	}
+
+	#[test]
+	fn holy_root_set_metadata_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			// Root can set metadata
+			assert_ok!(Pools::set_metadata(Origin::root(), 1, vec![1, 1]));
+			assert_eq!(Metadata::<Runtime>::get(1), vec![1, 1]);
+
+			// Root can not set metadata of non pool
+			assert_noop!(
+				Pools::set_metadata(Origin::root(), 2, vec![1, 1]),
+				Error::<Runtime>::PoolNotFound,
+			);
+
+			// Metadata cannot be longer than `MaxMetadataLen`
+			assert_noop!(
+				Pools::set_metadata(Origin::root(), 1, vec![1, 1, 1]),
 				Error::<Runtime>::MetadataExceedsMaxLen
 			);
 		});
