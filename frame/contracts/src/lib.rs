@@ -114,8 +114,9 @@ use codec::{Encode, HasCompact};
 use frame_support::{
 	dispatch::Dispatchable,
 	ensure,
-	traits::{Contains, Currency, Get, Randomness, ReservableCurrency, StorageVersion, Time},
+	traits::{ConstU32, Contains, Currency, Get, Randomness, ReservableCurrency, Time},
 	weights::{DispatchClass, GetDispatchInfo, Pays, PostDispatchInfo, Weight},
+	BoundedVec,
 };
 use frame_system::{limits::BlockWeights, Pallet as System};
 use pallet_contracts_primitives::{
@@ -131,12 +132,11 @@ use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
 use crate::exec::StorageHash;
 
 type CodeHash<T> = <T as frame_system::Config>::Hash;
-type TrieId = Vec<u8>;
+type TrieId = BoundedVec<u8, ConstU32<128>>;
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
-
-/// The current storage version.
-const STORAGE_VERSION: StorageVersion = StorageVersion::new(7);
+type CodeVec<T> = BoundedVec<u8, <T as Config>::MaxCodeLen>;
+type RelaxedCodeVec<T> = BoundedVec<u8, <T as Config>::RelaxedMaxCodeLen>;
 
 /// Used as a sentinel value when reading and writing contract memory.
 ///
@@ -223,6 +223,13 @@ pub mod pallet {
 	use super::*;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
+
+	/// The current storage version.
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(7);
+
+	#[pallet::pallet]
+	#[pallet::storage_version(STORAGE_VERSION)]
+	pub struct Pallet<T>(PhantomData<T>);
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
@@ -353,12 +360,21 @@ pub mod pallet {
 
 		/// The address generator used to generate the addresses of contracts.
 		type AddressGenerator: AddressGenerator<Self>;
-	}
 
-	#[pallet::pallet]
-	#[pallet::storage_version(STORAGE_VERSION)]
-	#[pallet::without_storage_info]
-	pub struct Pallet<T>(PhantomData<T>);
+		/// The maximum length of a contract code in bytes. This limit applies to the instrumented
+		/// version of the code. Therefore `instantiate_with_code` can fail even when supplying
+		/// a wasm binary below this maximum size.
+		type MaxCodeLen: Get<u32>;
+
+		/// The maximum length of a contract code after reinstrumentation.
+		///
+		/// When uploading a new contract the size defined by [`Self::MaxCodeLen`] is used for both
+		/// the pristine **and** the instrumented version. When a existing contract needs to be
+		/// reinstrumented after a runtime upgrade we apply this bound. The reason is that if the
+		/// new instrumentation increases the size beyond the limit it would make that contract
+		/// inaccessible until rectified by another runtime upgrade.
+		type RelaxedMaxCodeLen: Get<u32>;
+	}
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T>
@@ -572,6 +588,42 @@ pub mod pallet {
 			// we waive the fee because removing unused code is beneficial
 			Ok(Pays::No.into())
 		}
+
+		/// Privileged function that changes the code of an existing contract.
+		///
+		/// This takes care of updating refcounts and all other necessary operations. Returns
+		/// an error if either the `code_hash` or `dest` do not exist.
+		///
+		/// # Note
+		///
+		/// This does **not** change the address of the contract in question. This means
+		/// that the contract address is no longer derived from its code hash after calling
+		/// this dispatchable.
+		#[pallet::weight(T::WeightInfo::set_code())]
+		pub fn set_code(
+			origin: OriginFor<T>,
+			dest: <T::Lookup as StaticLookup>::Source,
+			code_hash: CodeHash<T>,
+		) -> DispatchResult {
+			ensure_root(origin)?;
+			let dest = T::Lookup::lookup(dest)?;
+			<ContractInfoOf<T>>::try_mutate(&dest, |contract| {
+				let contract = if let Some(contract) = contract {
+					contract
+				} else {
+					return Err(<Error<T>>::ContractNotFound.into())
+				};
+				<PrefabWasmModule<T>>::add_user(code_hash)?;
+				<PrefabWasmModule<T>>::remove_user(contract.code_hash);
+				Self::deposit_event(Event::ContractCodeUpdated {
+					contract: dest.clone(),
+					new_code_hash: code_hash,
+					old_code_hash: contract.code_hash,
+				});
+				contract.code_hash = code_hash;
+				Ok(())
+			})
+		}
 	}
 
 	#[pallet::event]
@@ -700,7 +752,7 @@ pub mod pallet {
 
 	/// A mapping from an original code hash to the original code, untouched by instrumentation.
 	#[pallet::storage]
-	pub(crate) type PristineCode<T: Config> = StorageMap<_, Identity, CodeHash<T>, Vec<u8>>;
+	pub(crate) type PristineCode<T: Config> = StorageMap<_, Identity, CodeHash<T>, CodeVec<T>>;
 
 	/// A mapping between an original code hash and instrumented wasm code, ready for execution.
 	#[pallet::storage]
@@ -748,7 +800,8 @@ pub mod pallet {
 	/// Child trie deletion is a heavy operation depending on the amount of storage items
 	/// stored in said trie. Therefore this operation is performed lazily in `on_initialize`.
 	#[pallet::storage]
-	pub(crate) type DeletionQueue<T: Config> = StorageValue<_, Vec<DeletedContract>, ValueQuery>;
+	pub(crate) type DeletionQueue<T: Config> =
+		StorageValue<_, BoundedVec<DeletedContract, T::DeletionQueueDepth>, ValueQuery>;
 }
 
 /// Return type of the private [`Pallet::internal_call`] function.
@@ -866,8 +919,8 @@ where
 		storage_deposit_limit: Option<BalanceOf<T>>,
 	) -> CodeUploadResult<CodeHash<T>, BalanceOf<T>> {
 		let schedule = T::Schedule::get();
-		let module = PrefabWasmModule::from_code(code, &schedule, origin)
-			.map_err(|_| <Error<T>>::CodeRejected)?;
+		let module =
+			PrefabWasmModule::from_code(code, &schedule, origin).map_err(|(err, _)| err)?;
 		let deposit = module.open_deposit();
 		if let Some(storage_deposit_limit) = storage_deposit_limit {
 			ensure!(storage_deposit_limit >= deposit, <Error<T>>::StorageDepositLimitExhausted);
@@ -973,19 +1026,11 @@ where
 			let schedule = T::Schedule::get();
 			let (extra_deposit, executable) = match code {
 				Code::Upload(Bytes(binary)) => {
-					ensure!(
-						binary.len() as u32 <= schedule.limits.code_len,
-						<Error<T>>::CodeTooLarge
-					);
 					let executable = PrefabWasmModule::from_code(binary, &schedule, origin.clone())
-						.map_err(|msg| {
+						.map_err(|(err, msg)| {
 							debug_message.as_mut().map(|buffer| buffer.extend(msg.as_bytes()));
-							<Error<T>>::CodeRejected
+							err
 						})?;
-					ensure!(
-						executable.code_len() <= schedule.limits.code_len,
-						<Error<T>>::CodeTooLarge
-					);
 					// The open deposit will be charged during execution when the
 					// uploaded module does not already exist. This deposit is not part of the
 					// storage meter because it is not transfered to the contract but
