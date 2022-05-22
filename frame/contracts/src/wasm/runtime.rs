@@ -36,9 +36,13 @@ use sp_sandbox::SandboxMemory;
 use sp_std::prelude::*;
 use wasm_instrument::parity_wasm::elements::ValueType;
 
+/// Type of storage key.
+/// FixSized is old fashioned [0;32].
+/// VarSized is a key used for transparent hashing, which is a u8 vector maximum length of
+/// MaxStorageKeyLen.
 enum KeyType {
-	Fixed,
-	Transparent,
+	FixSized,
+	VarSized,
 }
 
 /// Every error that can be returned to a contract when it calls any of the host functions.
@@ -714,19 +718,21 @@ where
 			return Err(Error::<E::T>::ValueTooLarge.into())
 		}
 
-		let mut key = vec![0; key_len.try_into().expect("key length error")];
+		let mut key = vec![0; key_len.try_into().map_err(|_| Error::<E::T>::ValueTooLarge)?];
 		self.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
 
 		let value = Some(self.read_sandbox_memory(value_ptr, value_len)?);
 		let write_outcome = match key_type {
-			KeyType::Fixed => {
-				let k: FixSizedKey = key.try_into().expect("asda");
-				self.ext.set_storage(k, value, false)?
-			},
-			KeyType::Transparent => {
-				let k: VarSizedKey = key.try_into().expect("asda");
-				self.ext.set_storage_transparent(k, value, false)?
-			},
+			KeyType::FixSized => self.ext.set_storage(
+				FixSizedKey::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?,
+				value,
+				false,
+			)?,
+			KeyType::VarSized => self.ext.set_storage_transparent(
+				VarSizedKey::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?,
+				value,
+				false,
+			)?,
 		};
 
 		self.adjust_gas(
@@ -744,18 +750,20 @@ where
 	) -> Result<u32, TrapReason> {
 		let charged = self.charge_gas(RuntimeCosts::ClearStorage(self.ext.max_value_size()))?;
 
-		let mut key = vec![0; key_len.try_into().expect("pp[s")];
+		let mut key = vec![0; key_len.try_into().map_err(|_| Error::<E::T>::ValueTooLarge)?];
 		self.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
 
 		let outcome = match key_type {
-			KeyType::Fixed => {
-				let k: FixSizedKey = key.try_into().expect("asda");
-				self.ext.set_storage(k, None, false)?
-			},
-			KeyType::Transparent => {
-				let k: VarSizedKey = key.try_into().expect("asda");
-				self.ext.set_storage_transparent(k, None, false)?
-			},
+			KeyType::FixSized => self.ext.set_storage(
+				FixSizedKey::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?,
+				None,
+				false,
+			)?,
+			KeyType::VarSized => self.ext.set_storage_transparent(
+				VarSizedKey::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?,
+				None,
+				false,
+			)?,
 		};
 
 		self.adjust_gas(charged, RuntimeCosts::ClearStorage(outcome.old_len()));
@@ -900,7 +908,7 @@ define_env!(Env, <E: Ext>,
 	// Equivalent to the newer version of `seal_set_storage` with the exception of the return
 	// type. Still a valid thing to call when not interested in the return value.
 	[seal0] seal_set_storage(ctx, key_ptr: u32, value_ptr: u32, value_len: u32) => {
-		ctx.set_storage(KeyType::Fixed, key_ptr, 32u32, value_ptr, value_len).map(|_| ())
+		ctx.set_storage(KeyType::FixSized, key_ptr, 32u32, value_ptr, value_len).map(|_| ())
 	},
 
 	// Set the value at the given key in the contract storage.
@@ -919,7 +927,7 @@ define_env!(Env, <E: Ext>,
 	// Returns the size of the pre-existing value at the specified key if any. Otherwise
 	// `SENTINEL` is returned as a sentinel value.
 	[seal1] seal_set_storage(ctx, key_ptr: u32, value_ptr: u32, value_len: u32) -> u32 => {
-		ctx.set_storage(KeyType::Fixed, key_ptr, 32u32, value_ptr, value_len)
+		ctx.set_storage(KeyType::FixSized, key_ptr, 32u32, value_ptr, value_len)
 	},
 
 	// Clear the value at the given key in the contract storage.
@@ -927,7 +935,7 @@ define_env!(Env, <E: Ext>,
 	// Equivalent to the newer version of `seal_clear_storage` with the exception of the return
 	// type. Still a valid thing to call when not interested in the return value.
 	[seal0] seal_clear_storage(ctx, key_ptr: u32) => {
-		ctx.clear_storage(KeyType::Fixed, key_ptr, 32u32).map(|_| ()).map_err(Into::into)
+		ctx.clear_storage(KeyType::FixSized, key_ptr, 32u32).map(|_| ()).map_err(Into::into)
 	},
 
 	// Clear the value at the given key in the contract storage.
