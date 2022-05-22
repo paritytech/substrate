@@ -949,7 +949,7 @@ define_env!(Env, <E: Ext>,
 	// Returns the size of the pre-existing value at the specified key if any. Otherwise
 	// `SENTINEL` is returned as a sentinel value.
 	[__unstable__] seal_clear_storage(ctx, key_ptr: u32) -> u32 => {
-		ctx.clear_storage(key_ptr).map_err(Into::into)
+		ctx.clear_storage(KeyType::FixSized, key_ptr, 32u32).map_err(Into::into)
 	},
 
 	// Retrieve the value under the given key from storage.
@@ -1015,10 +1015,9 @@ define_env!(Env, <E: Ext>,
 	// `ReturnCode::KeyNotFound`
 	[__unstable__] seal_take_storage(ctx, key_ptr: u32, out_ptr: u32, out_len_ptr: u32) -> ReturnCode => {
 		let charged = ctx.charge_gas(RuntimeCosts::TakeStorage(ctx.ext.max_value_size()))?;
-		let mut key = [0; 32];
+		let mut key = FixSizedKey::default();
 		ctx.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
-		let key_typed = StorageKey::FixSizedKey(key);
-		if let crate::storage::WriteOutcome::Taken(value) = ctx.ext.set_storage(key_typed, None, true)? {
+		if let crate::storage::WriteOutcome::Taken(value) = ctx.ext.set_storage(key, None, true)? {
 			ctx.adjust_gas(charged, RuntimeCosts::TakeStorage(value.len() as u32));
 			ctx.write_sandbox_output(out_ptr, out_len_ptr, &value, false, already_charged)?;
 			Ok(ReturnCode::Success)

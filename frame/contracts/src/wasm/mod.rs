@@ -2301,23 +2301,23 @@ mod tests {
 
 		let mut ext = MockExt::default();
 
-		ext.storage.insert([1u8; 32], vec![42u8]);
-		ext.storage.insert([2u8; 32], vec![]);
+		ext.storage.insert([1u8; 32].to_vec(), vec![42u8]);
+		ext.storage.insert([2u8; 32].to_vec(), vec![]);
 
 		// value does not exist -> sentinel returned
 		let result = execute(CODE, [3u8; 32].encode(), &mut ext).unwrap();
 		assert_eq!(u32::from_le_bytes(result.data.0.try_into().unwrap()), crate::SENTINEL);
-		assert_eq!(ext.storage.get(&[3u8; 32]), None);
+		assert_eq!(ext.storage.get(&[3u8; 32].to_vec()), None);
 
 		// value did exist -> length returned
 		let result = execute(CODE, [1u8; 32].encode(), &mut ext).unwrap();
 		assert_eq!(u32::from_le_bytes(result.data.0.try_into().unwrap()), 1);
-		assert_eq!(ext.storage.get(&[1u8; 32]), None);
+		assert_eq!(ext.storage.get(&[1u8; 32].to_vec()), None);
 
 		// value did exist -> length returned (test for 0 sized)
 		let result = execute(CODE, [2u8; 32].encode(), &mut ext).unwrap();
 		assert_eq!(u32::from_le_bytes(result.data.0.try_into().unwrap()), 0);
-		assert_eq!(ext.storage.get(&[2u8; 32]), None);
+		assert_eq!(ext.storage.get(&[2u8; 32].to_vec()), None);
 	}
 
 	#[test]
@@ -2374,8 +2374,8 @@ mod tests {
 
 		let mut ext = MockExt::default();
 
-		ext.storage.insert([1u8; 32], vec![42u8]);
-		ext.storage.insert([2u8; 32], vec![]);
+		ext.storage.insert([1u8; 32].to_vec(), vec![42u8]);
+		ext.storage.insert([2u8; 32].to_vec(), vec![]);
 
 		// value does not exist -> error returned
 		let result = execute(CODE, [3u8; 32].encode(), &mut ext).unwrap();
@@ -2390,7 +2390,7 @@ mod tests {
 			u32::from_le_bytes(result.data.0[0..4].try_into().unwrap()),
 			ReturnCode::Success as u32
 		);
-		assert_eq!(ext.storage.get(&[1u8; 32]), None);
+		assert_eq!(ext.storage.get(&[1u8; 32].to_vec()), None);
 		assert_eq!(&result.data.0[4..], &[42u8]);
 
 		// value did exist -> length returned (test for 0 sized)
@@ -2399,7 +2399,7 @@ mod tests {
 			u32::from_le_bytes(result.data.0[0..4].try_into().unwrap()),
 			ReturnCode::Success as u32
 		);
-		assert_eq!(ext.storage.get(&[2u8; 32]), None);
+		assert_eq!(ext.storage.get(&[2u8; 32].to_vec()), None);
 		assert_eq!(&result.data.0[4..], &[0u8; 0]);
 	}
 

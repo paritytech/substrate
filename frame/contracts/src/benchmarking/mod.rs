@@ -30,7 +30,7 @@ use self::{
 	sandbox::Sandbox,
 };
 use crate::{
-	exec::{AccountIdOf, StorageKey},
+	exec::{AccountIdOf, FixSizedKey},
 	schedule::{API_BENCHMARK_BATCH_SIZE, INSTR_BENCHMARK_BATCH_SIZE},
 	storage::Storage,
 	wasm::CallFlags,
@@ -132,7 +132,7 @@ where
 	}
 
 	/// Store the supplied storage items into this contracts storage.
-	fn store(&self, items: &Vec<(StorageKey, Vec<u8>)>) -> Result<(), &'static str> {
+	fn store(&self, items: &Vec<(FixedSizedKey, Vec<u8>)>) -> Result<(), &'static str> {
 		let info = self.info()?;
 		for item in items {
 			Storage::<T>::write(&info.trie_id, &item.0, Some(item.1.clone()), None, false)
