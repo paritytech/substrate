@@ -27,10 +27,7 @@ use std::sync::Arc;
 
 use crate::SubscriptionTaskExecutor;
 
-use jsonrpsee::{
-	core::{async_trait, RpcResult},
-	PendingSubscription,
-};
+use jsonrpsee::{core::RpcResult, PendingSubscription};
 use sc_client_api::BlockchainEvents;
 use sp_rpc::{list::ListOrValue, number::NumberOrHex};
 use sp_runtime::{
@@ -45,7 +42,6 @@ pub use sc_rpc_api::chain::*;
 use sp_blockchain::HeaderBackend;
 
 /// Blockchain backend API
-#[async_trait]
 trait ChainBackend<Client, Block: BlockT>: Send + Sync + 'static
 where
 	Block: BlockT + 'static,
@@ -64,10 +60,10 @@ where
 	}
 
 	/// Get header of a relay chain block.
-	async fn header(&self, hash: Option<Block::Hash>) -> Result<Option<Block::Header>, Error>;
+	fn header(&self, hash: Option<Block::Hash>) -> Result<Option<Block::Header>, Error>;
 
 	/// Get header and body of a relay chain block.
-	async fn block(&self, hash: Option<Block::Hash>) -> Result<Option<SignedBlock<Block>>, Error>;
+	fn block(&self, hash: Option<Block::Hash>) -> Result<Option<SignedBlock<Block>>, Error>;
 
 	/// Get hash of the n-th block in the canon chain.
 	///
@@ -126,7 +122,6 @@ pub struct Chain<Block: BlockT, Client> {
 	backend: Box<dyn ChainBackend<Client, Block>>,
 }
 
-#[async_trait]
 impl<Block, Client> ChainApiServer<NumberFor<Block>, Block::Hash, Block::Header, SignedBlock<Block>>
 	for Chain<Block, Client>
 where
@@ -134,12 +129,12 @@ where
 	Block::Header: Unpin,
 	Client: HeaderBackend<Block> + BlockchainEvents<Block> + 'static,
 {
-	async fn header(&self, hash: Option<Block::Hash>) -> RpcResult<Option<Block::Header>> {
-		self.backend.header(hash).await.map_err(Into::into)
+	fn header(&self, hash: Option<Block::Hash>) -> RpcResult<Option<Block::Header>> {
+		self.backend.header(hash).map_err(Into::into)
 	}
 
-	async fn block(&self, hash: Option<Block::Hash>) -> RpcResult<Option<SignedBlock<Block>>> {
-		self.backend.block(hash).await.map_err(Into::into)
+	fn block(&self, hash: Option<Block::Hash>) -> RpcResult<Option<SignedBlock<Block>>> {
+		self.backend.block(hash).map_err(Into::into)
 	}
 
 	fn block_hash(

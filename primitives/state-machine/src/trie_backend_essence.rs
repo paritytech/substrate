@@ -625,28 +625,9 @@ where
 
 	/// Returns all keys that start with the given `prefix`.
 	pub fn keys(&self, prefix: &[u8]) -> Vec<StorageKey> {
-		let collect_all = || -> sp_std::result::Result<_, Box<TrieError<H::Out>>> {
-			self.with_recorder_and_cache(None, |recorder, cache| {
-				let trie = TrieDBBuilder::<H>::new(self, self.root())
-					.with_optional_cache(cache)
-					.with_optional_recorder(recorder)
-					.build();
-
-				let mut v = Vec::new();
-				for x in trie.iter()? {
-					let (key, _) = x?;
-					if key.starts_with(prefix) {
-						v.push(key.to_vec());
-					}
-				}
-
-				Ok(v)
-			})
-		};
-
-		collect_all()
-			.map_err(|e| debug!(target: "trie", "Error extracting trie keys: {}", e))
-			.unwrap_or_default()
+		let mut keys = Vec::new();
+		self.for_keys_with_prefix(prefix, |k| keys.push(k.to_vec()));
+		keys
 	}
 
 	/// Return the storage root after applying the given `delta`.
