@@ -23,12 +23,12 @@ use sc_cli::{CliConfiguration, ImportParams, Result, SharedParams};
 use sc_client_api::Backend as ClientBackend;
 use sc_service::Configuration;
 use sp_api::{ApiExt, ProvideRuntimeApi};
-use sp_runtime::{traits::Block as BlockT, OpaqueExtrinsic};
+use sp_runtime::{traits::{ Block as BlockT, Header as HeaderT}, OpaqueExtrinsic};
 
 use clap::{Args, Parser};
 use log::info;
 use serde::Serialize;
-use std::{fmt::Debug, sync::Arc};
+use std::{fmt::Debug, sync::Arc, path::PathBuf};
 
 use crate::{
 	overhead::{
@@ -96,21 +96,28 @@ impl OverheadCmd {
 		BA: ClientBackend<Block>,
 		C: BlockBuilderProvider<BA, Block, C> + ProvideRuntimeApi<Block>,
 		C::Api: ApiExt<Block, StateBackend = BA::State> + BlockBuilderApi<Block>,
+		<<<Block as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
 	{
+		if let Some(header_file) = &self.header {
+			if !header_file.is_file() {
+				return Err("Header file is invalid!".into())
+			};
+		}
+
 		let bench = Benchmark::new(client, self.params.bench.clone(), inherent_data, ext_builder);
 
 		// per-block execution overhead
 		{
 			let stats = bench.bench(BenchmarkType::Block)?;
 			info!("Per-block execution overhead [ns]:\n{:?}", stats);
-			let template = TemplateData::new(BenchmarkType::Block, &cfg, &self.params, &stats)?;
+			let template = TemplateData::new(BenchmarkType::Block, &cfg, &self, &stats)?;
 			template.write(&self.params.weight.weight_path)?;
 		}
 		// per-extrinsic execution overhead
 		{
 			let stats = bench.bench(BenchmarkType::Extrinsic)?;
 			info!("Per-extrinsic execution overhead [ns]:\n{:?}", stats);
-			let template = TemplateData::new(BenchmarkType::Extrinsic, &cfg, &self.params, &stats)?;
+			let template = TemplateData::new(BenchmarkType::Extrinsic, &cfg, &self, &stats)?;
 			template.write(&self.params.weight.weight_path)?;
 		}
 

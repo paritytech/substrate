@@ -26,10 +26,7 @@ use log::info;
 use serde::Serialize;
 use std::{env, fs, path::PathBuf};
 
-use crate::{
-	overhead::{bench::BenchmarkType, cmd::OverheadParams},
-	shared::{Stats, UnderscoreHelper},
-};
+use crate::{overhead::{bench::BenchmarkType, cmd::OverheadParams}, OverheadCmd, shared::{Stats, UnderscoreHelper}};
 
 static VERSION: &str = env!("CARGO_PKG_VERSION");
 static TEMPLATE: &str = include_str!("./weights.hbs");
@@ -55,6 +52,8 @@ pub(crate) struct TemplateData {
 	stats: Stats,
 	/// The resulting weight in ns.
 	weight: u64,
+	/// Contents of the header file provided in the params of the executed command
+	header: String,
 }
 
 impl TemplateData {
@@ -62,10 +61,19 @@ impl TemplateData {
 	pub(crate) fn new(
 		t: BenchmarkType,
 		cfg: &Configuration,
-		params: &OverheadParams,
+		cmd: &OverheadCmd,
 		stats: &Stats,
 	) -> Result<Self> {
+		let params = &cmd.params;
 		let weight = params.weight.calc_weight(stats)?;
+
+		let header_text = match &cmd.header {
+			Some(header_file) => {
+				let text = fs::read_to_string(header_file)?;
+				text
+			},
+			None => String::new(),
+		};
 
 		Ok(TemplateData {
 			short_name: t.short_name().into(),
@@ -77,6 +85,7 @@ impl TemplateData {
 			params: params.clone(),
 			stats: stats.clone(),
 			weight,
+			header: header_text.clone()
 		})
 	}
 
