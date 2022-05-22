@@ -52,8 +52,10 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
+        Treasury: pallet_treasury::{Pallet, Call, Storage, Config, Event<T>},
 		Treasury1: pallet_treasury::<Instance1>::{Pallet, Call, Storage, Config, Event<T>},
         Treasury2: pallet_treasury::<Instance2>::{Pallet, Call, Storage, Config, Event<T>},
+        Tips: pallet_tips::{Pallet, Call, Storage, Event<T>},
         Tips1: pallet_tips::<Instance1>::{Pallet, Call, Storage, Event<T>},
         Tips2: pallet_tips::<Instance2>::{Pallet, Call, Storage, Event<T>},
 	}
@@ -130,6 +132,24 @@ parameter_types! {
 	pub const Burn: Permill = Permill::from_percent(50);
 	pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
 }
+impl pallet_treasury::Config for Test {
+    type PalletId = TreasuryPalletId;
+    type Currency = pallet_balances::Pallet<Test>;
+    type ApproveOrigin = frame_system::EnsureRoot<u128>;
+    type RejectOrigin = frame_system::EnsureRoot<u128>;
+    type Event = Event;
+    type OnSlash = ();
+    type ProposalBond = ProposalBond;
+    type ProposalBondMinimum = ConstU64<1>;
+    type ProposalBondMaximum = ();
+    type SpendPeriod = ConstU64<2>;
+    type Burn = Burn;
+    type BurnDestination = (); // Just gets burned.
+    type WeightInfo = ();
+    type SpendFunds = ();
+    type MaxApprovals = ConstU32<100>;
+}
+
 impl pallet_treasury::Config<Instance1> for Test {
 	type PalletId = TreasuryPalletId;
 	type Currency = pallet_balances::Pallet<Test>;
@@ -169,6 +189,17 @@ impl pallet_treasury::Config<Instance2> for Test {
 parameter_types! {
 	pub const TipFindersFee: Percent = Percent::from_percent(20);
 }
+impl Config for Test {
+    type MaximumReasonLength = ConstU32<16384>;
+    type Tippers = TenToFourteen;
+    type TipCountdown = ConstU64<1>;
+    type TipFindersFee = TipFindersFee;
+    type TipReportDepositBase = ConstU64<1>;
+    type DataDepositPerByte = ConstU64<1>;
+    type Event = Event;
+    type WeightInfo = ();
+}
+
 impl Config<Instance1> for Test {
 	type MaximumReasonLength = ConstU32<16384>;
 	type Tippers = TenToFourteen;
@@ -191,7 +222,7 @@ impl Config<Instance2> for Test {
     type WeightInfo = ();
 }
 
-pub const INITIAL_FUNDING: u64 = 100;
+pub const INITIAL_FUNDING: u64 = 150;
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut ext: sp_io::TestExternalities = GenesisConfig {
@@ -199,6 +230,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
         balances: pallet_balances::GenesisConfig {
             balances: vec![(0, 100), (1, 98), (2, 1)],
         },
+        treasury: Default::default(),
         treasury_1: Default::default(),
         treasury_2: Default::default(),
 	}
@@ -213,8 +245,9 @@ pub fn genesis_test_ext() -> sp_io::TestExternalities {
     let mut ext: sp_io::TestExternalities = GenesisConfig {
         system: frame_system::GenesisConfig::default(),
         balances: pallet_balances::GenesisConfig {
-            balances: vec![(0, 100), (Treasury1::account_id(), INITIAL_FUNDING)],
+            balances: vec![(0, 100), (Treasury::account_id(), INITIAL_FUNDING)],
         },
+        treasury: Default::default(),
         treasury_1: Default::default(),
         treasury_2: Default::default(),
     }
@@ -570,7 +603,6 @@ fn test_last_reward_migration() {
 	});
 }
 
-/*
 #[test]
 fn test_migration_v4() {
 	let reason1 = BlakeTwo256::hash(b"reason1");
@@ -597,7 +629,7 @@ fn test_migration_v4() {
 	sp_io::TestExternalities::new(s).execute_with(|| {
 		use frame_support::traits::PalletInfoAccess;
 
-		let old_pallet = "Treasury";
+		let old_pallet = "Treasury1";
 		let new_pallet = <Tips1 as PalletInfoAccess>::name();
 		frame_support::storage::migration::move_pallet(
 			new_pallet.as_bytes(),
@@ -613,7 +645,7 @@ fn test_migration_v4() {
 	sp_io::TestExternalities::new(Storage::default()).execute_with(|| {
 		use frame_support::traits::PalletInfoAccess;
 
-		let old_pallet = "Treasury";
+		let old_pallet = "Treasury1";
 		let new_pallet = <Tips1 as PalletInfoAccess>::name();
 		frame_support::storage::migration::move_pallet(
 			new_pallet.as_bytes(),
@@ -626,15 +658,14 @@ fn test_migration_v4() {
 		crate::migrations::v4::post_migrate::<Test, Tips1, _>(old_pallet);
 	});
 }
-*/
 
 #[test]
 fn genesis_funding_works() {
 	genesis_test_ext().execute_with(|| {
-		assert_eq!(Balances::free_balance(Treasury1::account_id()), INITIAL_FUNDING);
+		assert_eq!(Balances::free_balance(Treasury1::account_id()), 150);
 		assert_eq!(Treasury1::pot(), INITIAL_FUNDING - Balances::minimum_balance());
 
-        assert_eq!(Balances::free_balance(Treasury2::account_id()), INITIAL_FUNDING);
+        assert_eq!(Balances::free_balance(Treasury2::account_id()), 150);
         assert_eq!(Treasury2::pot(), INITIAL_FUNDING - Balances::minimum_balance());
 	});
 }

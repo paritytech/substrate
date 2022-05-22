@@ -51,8 +51,10 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
+        Bounties: pallet_bounties::{Pallet, Call, Storage, Event<T>},
 		Bounties1: pallet_bounties::<Instance1>::{Pallet, Call, Storage, Event<T>},
         Bounties2: pallet_bounties::<Instance2>::{Pallet, Call, Storage, Event<T>},
+        Treasury: pallet_treasury::{Pallet, Call, Storage, Config, Event<T>},
 		Treasury1: pallet_treasury::<Instance1>::{Pallet, Call, Storage, Config, Event<T>},
         Treasury2: pallet_treasury::<Instance2>::{Pallet, Call, Storage, Config, Event<T>},
 	}
@@ -112,6 +114,24 @@ parameter_types! {
 }
 
 // impl pallet_treasury::Config for Test {
+impl pallet_treasury::Config for Test {
+    type PalletId = TreasuryPalletId;
+    type Currency = pallet_balances::Pallet<Test>;
+    type ApproveOrigin = frame_system::EnsureRoot<u128>;
+    type RejectOrigin = frame_system::EnsureRoot<u128>;
+    type Event = Event;
+    type OnSlash = ();
+    type ProposalBond = ProposalBond;
+    type ProposalBondMinimum = ConstU64<1>;
+    type ProposalBondMaximum = ();
+    type SpendPeriod = ConstU64<2>;
+    type Burn = Burn;
+    type BurnDestination = (); // Just gets burned.
+    type WeightInfo = ();
+    type SpendFunds = Bounties;
+    type MaxApprovals = ConstU32<100>;
+}
+
 impl pallet_treasury::Config<Instance1> for Test {
 	type PalletId = TreasuryPalletId;
 	type Currency = pallet_balances::Pallet<Test>;
@@ -156,6 +176,21 @@ parameter_types! {
 
 }
 
+impl Config for Test {
+    type Event = Event;
+    type BountyDepositBase = ConstU64<80>;
+    type BountyDepositPayoutDelay = ConstU64<3>;
+    type BountyUpdatePeriod = ConstU64<20>;
+    type CuratorDepositMultiplier = CuratorDepositMultiplier;
+    type CuratorDepositMax = CuratorDepositMax;
+    type CuratorDepositMin = CuratorDepositMin;
+    type BountyValueMinimum = ConstU64<1>;
+    type DataDepositPerByte = ConstU64<1>;
+    type MaximumReasonLength = ConstU32<16384>;
+    type WeightInfo = ();
+    type ChildBountyManager = ();
+}
+
 impl Config<Instance1> for Test {
 	type Event = Event;
 	type BountyDepositBase = ConstU64<80>;
@@ -194,6 +229,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
         balances: pallet_balances::GenesisConfig {
             balances: vec![(0, 100), (1, 98), (2, 1)],
         },
+        treasury: Default::default(),
         treasury_1: Default::default(),
         treasury_2: Default::default(),
     }
@@ -210,6 +246,7 @@ pub fn genesis_test_ext() -> sp_io::TestExternalities {
         balances: pallet_balances::GenesisConfig {
             balances: vec![(0, 100), (Treasury1::account_id(), INITIAL_FUNDING)],
         },
+        treasury: Default::default(),
         treasury_1: Default::default(),
         treasury_2: Default::default(),
     }
@@ -1020,7 +1057,6 @@ fn extend_expiry() {
 	});
 }
 
-/*
 #[test]
 fn test_migration_v4() {
 	let mut s = Storage::default();
@@ -1062,7 +1098,6 @@ fn test_migration_v4() {
 		);
 	});
 }
-*/
 
 #[test]
 fn genesis_funding_works() {
