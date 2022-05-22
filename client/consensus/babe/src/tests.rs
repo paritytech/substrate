@@ -815,7 +815,7 @@ fn revert_prunes_epoch_changes_and_removes_weights() {
 }
 
 #[test]
-fn revert_not_allowed_below_finalized() {
+fn revert_not_allowed_for_finalized() {
 	let mut net = BabeTestNet::new(1);
 
 	let peer = net.peer(0);
