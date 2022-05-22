@@ -18,7 +18,7 @@
 //! Environment definition of the wasm smart-contract runtime.
 
 use crate::{
-	exec::{ExecError, ExecResult, Ext, FixedSizedKey, TopicOf, VariableSizedKey},
+	exec::{ExecError, ExecResult, Ext, FixSizedKey, TopicOf, VarSizedKey},
 	gas::{ChargedAmount, Token},
 	schedule::HostFnWeights,
 	wasm::env_def::ConvertibleToWasm,
@@ -726,11 +726,11 @@ where
 		let value = Some(self.read_sandbox_memory(value_ptr, value_len)?);
 		let write_outcome = match key_type {
 			KeyType::Fixed => {
-				let k: FixedSizedKey = key.try_into().expect("asda");
+				let k: FixSizedKey = key.try_into().expect("asda");
 				self.ext.set_storage(k, value, false)?
 			},
 			KeyType::Transparent => {
-				let k: VariableSizedKey = key.try_into().expect("asda");
+				let k: VarSizedKey = key.try_into().expect("asda");
 				self.ext.set_storage_transparent(k, value, false)?
 			},
 		};
@@ -755,11 +755,11 @@ where
 
 		let outcome = match key_type {
 			KeyType::Fixed => {
-				let k: FixedSizedKey = key.try_into().expect("asda");
+				let k: FixSizedKey = key.try_into().expect("asda");
 				self.ext.set_storage(k, None, false)?
 			},
 			KeyType::Transparent => {
-				let k: VariableSizedKey = key.try_into().expect("asda");
+				let k: VarSizedKey = key.try_into().expect("asda");
 				self.ext.set_storage_transparent(k, None, false)?
 			},
 		};
@@ -964,7 +964,7 @@ define_env!(Env, <E: Ext>,
 	// `ReturnCode::KeyNotFound`
 	[seal0] seal_get_storage(ctx, key_ptr: u32, out_ptr: u32, out_len_ptr: u32) -> ReturnCode => {
 		let charged = ctx.charge_gas(RuntimeCosts::GetStorage(ctx.ext.max_value_size()))?;
-		let mut key: FixedSizedKey = [0; 32];
+		let mut key: FixSizedKey = [0; 32];
 		ctx.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
 		if let Some(value) = ctx.ext.get_storage(key) {
 			ctx.adjust_gas(charged, RuntimeCosts::GetStorage(value.len() as u32));
@@ -988,7 +988,7 @@ define_env!(Env, <E: Ext>,
 	// `SENTINEL` is returned as a sentinel value.
 	[seal0] seal_contains_storage(ctx, key_ptr: u32) -> u32 => {
 		let charged = ctx.charge_gas(RuntimeCosts::ContainsStorage(ctx.ext.max_value_size()))?;
-		let mut key: FixedSizedKey = [0; 32];
+		let mut key: FixSizedKey = [0; 32];
 		ctx.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
 		if let Some(len) = ctx.ext.get_storage_size(key) {
 			ctx.adjust_gas(charged, RuntimeCosts::ContainsStorage(len));
@@ -1015,7 +1015,7 @@ define_env!(Env, <E: Ext>,
 		let charged = ctx.charge_gas(RuntimeCosts::TakeStorage(ctx.ext.max_value_size()))?;
 		let mut key = [0; 32];
 		ctx.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
-		let key_typed = StorageKey::FixedSizedKey(key);
+		let key_typed = StorageKey::FixSizedKey(key);
 		if let crate::storage::WriteOutcome::Taken(value) = ctx.ext.set_storage(key_typed, None, true)? {
 			ctx.adjust_gas(charged, RuntimeCosts::TakeStorage(value.len() as u32));
 			ctx.write_sandbox_output(out_ptr, out_len_ptr, &value, false, already_charged)?;

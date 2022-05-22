@@ -47,21 +47,20 @@ pub type ExecResult = Result<ExecReturnValue, ExecError>;
 /// A type that represents a topic of an event. At the moment a hash is used.
 pub type TopicOf<T> = <T as frame_system::Config>::Hash;
 
-pub type FixedSizedKey = [u8; 32];
-pub type VariableSizedKey = BoundedVec<u8, ConstU32<128>>; // TODO: length to Config Get param
+pub type FixSizedKey = [u8; 32];
+pub type VarSizedKey = BoundedVec<u8, ConstU32<128>>; // TODO: length to Config Get param
 
 pub trait StorageHash {
 	fn hash(self) -> Vec<u8>;
 }
 
-// TODO: think how DYI: take StorageHasher impl from frame_support without copy-pasting
-impl StorageHash for FixedSizedKey {
+impl StorageHash for FixSizedKey {
 	fn hash(self) -> Vec<u8> {
 		blake2_256(self.as_slice()).to_vec()
 	}
 }
 
-impl StorageHash for VariableSizedKey {
+impl StorageHash for VarSizedKey {
 	fn hash(self) -> Vec<u8> {
 		Blake2_128Concat::hash(self.as_slice())
 	}
@@ -161,25 +160,25 @@ pub trait Ext: sealing::Sealed {
 	///
 	/// Returns `None` if the `key` wasn't previously set by `set_storage` or
 	/// was deleted.
-	fn get_storage(&mut self, key: FixedSizedKey) -> Option<Vec<u8>>;
+	fn get_storage(&mut self, key: FixSizedKey) -> Option<Vec<u8>>;
 
 	///
-	fn get_storage_transparent(&mut self, key: VariableSizedKey) -> Option<Vec<u8>>;
+	fn get_storage_transparent(&mut self, key: VarSizedKey) -> Option<Vec<u8>>;
 
 	/// Returns `Some(len)` (in bytes) if a storage item exists at `key`.
 	///
 	/// Returns `None` if the `key` wasn't previously set by `set_storage` or
 	/// was deleted.
-	fn get_storage_size(&mut self, key: FixedSizedKey) -> Option<u32>;
+	fn get_storage_size(&mut self, key: FixSizedKey) -> Option<u32>;
 
 	///
-	fn get_storage_size_transparent(&mut self, key: VariableSizedKey) -> Option<u32>;
+	fn get_storage_size_transparent(&mut self, key: VarSizedKey) -> Option<u32>;
 
 	/// Sets the storage entry by the given key to the specified value. If `value` is `None` then
 	/// the storage entry is deleted.
 	fn set_storage(
 		&mut self,
-		key: FixedSizedKey,
+		key: FixSizedKey,
 		value: Option<Vec<u8>>,
 		take_old: bool,
 	) -> Result<WriteOutcome, DispatchError>;
@@ -187,7 +186,7 @@ pub trait Ext: sealing::Sealed {
 	///
 	fn set_storage_transparent(
 		&mut self,
-		key: VariableSizedKey,
+		key: VarSizedKey,
 		value: Option<Vec<u8>>,
 		take_old: bool,
 	) -> Result<WriteOutcome, DispatchError>;
@@ -1120,25 +1119,25 @@ where
 		Self::transfer(ExistenceRequirement::KeepAlive, &self.top_frame().account_id, to, value)
 	}
 
-	fn get_storage(&mut self, key: FixedSizedKey) -> Option<Vec<u8>> {
+	fn get_storage(&mut self, key: FixSizedKey) -> Option<Vec<u8>> {
 		Storage::<T>::read(&self.top_frame_mut().contract_info().trie_id, key)
 	}
 
-	fn get_storage_transparent(&mut self, key: VariableSizedKey) -> Option<Vec<u8>> {
+	fn get_storage_transparent(&mut self, key: VarSizedKey) -> Option<Vec<u8>> {
 		Storage::<T>::read(&self.top_frame_mut().contract_info().trie_id, key)
 	}
 
-	fn get_storage_size(&mut self, key: FixedSizedKey) -> Option<u32> {
+	fn get_storage_size(&mut self, key: FixSizedKey) -> Option<u32> {
 		Storage::<T>::size(&self.top_frame_mut().contract_info().trie_id, key)
 	}
 
-	fn get_storage_size_transparent(&mut self, key: VariableSizedKey) -> Option<u32> {
+	fn get_storage_size_transparent(&mut self, key: VarSizedKey) -> Option<u32> {
 		Storage::<T>::size(&self.top_frame_mut().contract_info().trie_id, key)
 	}
 
 	fn set_storage(
 		&mut self,
-		key: FixedSizedKey,
+		key: FixSizedKey,
 		value: Option<Vec<u8>>,
 		take_old: bool,
 	) -> Result<WriteOutcome, DispatchError> {
@@ -1154,7 +1153,7 @@ where
 
 	fn set_storage_transparent(
 		&mut self,
-		key: VariableSizedKey,
+		key: VarSizedKey,
 		value: Option<Vec<u8>>,
 		take_old: bool,
 	) -> Result<WriteOutcome, DispatchError> {

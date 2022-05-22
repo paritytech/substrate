@@ -258,8 +258,8 @@ mod tests {
 	use super::*;
 	use crate::{
 		exec::{
-			AccountIdOf, BlockNumberOf, ErrorOrigin, ExecError, Executable, Ext, FixedSizedKey,
-			SeedOf, VariableSizedKey,
+			AccountIdOf, BlockNumberOf, ErrorOrigin, ExecError, Executable, Ext, FixSizedKey,
+			SeedOf, VarSizedKey,
 		},
 		gas::GasMeter,
 		storage::WriteOutcome,
@@ -409,21 +409,21 @@ mod tests {
 			self.terminations.push(TerminationEntry { beneficiary: beneficiary.clone() });
 			Ok(())
 		}
-		fn get_storage(&mut self, key: FixedSizedKey) -> Option<Vec<u8>> {
+		fn get_storage(&mut self, key: FixSizedKey) -> Option<Vec<u8>> {
 			self.storage.get(&key.to_vec()).cloned()
 		}
-		fn get_storage_transparent(&mut self, key: VariableSizedKey) -> Option<Vec<u8>> {
+		fn get_storage_transparent(&mut self, key: VarSizedKey) -> Option<Vec<u8>> {
 			self.storage.get(&key.to_vec()).cloned()
 		}
-		fn get_storage_size(&mut self, key: FixedSizedKey) -> Option<u32> {
+		fn get_storage_size(&mut self, key: FixSizedKey) -> Option<u32> {
 			self.storage.get(&key.to_vec()).map(|val| val.len() as u32)
 		}
-		fn get_storage_size_transparent(&mut self, key: VariableSizedKey) -> Option<u32> {
+		fn get_storage_size_transparent(&mut self, key: VarSizedKey) -> Option<u32> {
 			self.storage.get(&key.to_vec()).map(|val| val.len() as u32)
 		}
 		fn set_storage(
 			&mut self,
-			key: FixedSizedKey,
+			key: FixSizedKey,
 			value: Option<Vec<u8>>,
 			take_old: bool,
 		) -> Result<WriteOutcome, DispatchError> {
@@ -441,7 +441,7 @@ mod tests {
 		}
 		fn set_storage_transparent(
 			&mut self,
-			key: VariableSizedKey,
+			key: VarSizedKey,
 			value: Option<Vec<u8>>,
 			take_old: bool,
 		) -> Result<WriteOutcome, DispatchError> {

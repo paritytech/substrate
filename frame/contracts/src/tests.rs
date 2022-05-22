@@ -20,7 +20,7 @@ use crate::{
 		ChainExtension, Environment, Ext, InitState, Result as ExtensionResult, RetVal,
 		ReturnFlags, SysConfig, UncheckedFrom,
 	},
-	exec::{FixedSizedKey, Frame},
+	exec::{FixSizedKey, Frame},
 	storage::Storage,
 	wasm::{PrefabWasmModule, ReturnCode as RuntimeReturnCode},
 	weights::WeightInfo,
@@ -1703,7 +1703,7 @@ fn lazy_removal_partial_remove_works() {
 		for val in &vals {
 			Storage::<Test>::write(
 				&info.trie_id,
-				val.0 as FixedSizedKey,
+				val.0 as FixSizedKey,
 				Some(val.2.clone()),
 				None,
 				false,
@@ -1794,7 +1794,7 @@ fn lazy_removal_does_no_run_on_full_block() {
 		for val in &vals {
 			Storage::<Test>::write(
 				&info.trie_id,
-				val.0 as FixedSizedKey,
+				val.0 as FixSizedKey,
 				Some(val.2.clone()),
 				None,
 				false,
@@ -1884,7 +1884,7 @@ fn lazy_removal_does_not_use_all_weight() {
 		for val in &vals {
 			Storage::<Test>::write(
 				&info.trie_id,
-				val.0 as FixedSizedKey,
+				val.0 as FixSizedKey,
 				Some(val.2.clone()),
 				None,
 				false,
