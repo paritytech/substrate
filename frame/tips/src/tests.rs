@@ -629,7 +629,7 @@ fn test_migration_v4() {
 	sp_io::TestExternalities::new(s).execute_with(|| {
 		use frame_support::traits::PalletInfoAccess;
 
-		let old_pallet = "Treasury1";
+		let old_pallet = "OldTreasury1";
 		let new_pallet = <Tips1 as PalletInfoAccess>::name();
 		frame_support::storage::migration::move_pallet(
 			new_pallet.as_bytes(),
@@ -645,7 +645,7 @@ fn test_migration_v4() {
 	sp_io::TestExternalities::new(Storage::default()).execute_with(|| {
 		use frame_support::traits::PalletInfoAccess;
 
-		let old_pallet = "Treasury1";
+		let old_pallet = "OldTreasury1";
 		let new_pallet = <Tips1 as PalletInfoAccess>::name();
 		frame_support::storage::migration::move_pallet(
 			new_pallet.as_bytes(),
