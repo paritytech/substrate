@@ -1912,8 +1912,7 @@ where
 		let mut hash = leaf;
 		loop {
 			let meta = client.header_metadata(hash)?;
-			if hash == revert_hash ||
-				meta.number <= revert_number ||
+			if meta.number <= revert_number ||
 				!weight_keys.insert(aux_schema::block_weight_key(hash))
 			{
 				// We've reached the revert point or an already processed branch, stop here.
