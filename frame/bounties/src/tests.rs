@@ -35,7 +35,7 @@ use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BadOrigin, BlakeTwo256, IdentityLookup},
-	Perbill, Storage, BuildStorage,
+	BuildStorage, Perbill, Storage,
 };
 
 use super::Event as BountiesEvent;
@@ -51,12 +51,12 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-        Bounties: pallet_bounties::{Pallet, Call, Storage, Event<T>},
+		Bounties: pallet_bounties::{Pallet, Call, Storage, Event<T>},
 		Bounties1: pallet_bounties::<Instance1>::{Pallet, Call, Storage, Event<T>},
-        Bounties2: pallet_bounties::<Instance2>::{Pallet, Call, Storage, Event<T>},
-        Treasury: pallet_treasury::{Pallet, Call, Storage, Config, Event<T>},
+		Bounties2: pallet_bounties::<Instance2>::{Pallet, Call, Storage, Event<T>},
+		Treasury: pallet_treasury::{Pallet, Call, Storage, Config, Event<T>},
 		Treasury1: pallet_treasury::<Instance1>::{Pallet, Call, Storage, Config, Event<T>},
-        Treasury2: pallet_treasury::<Instance2>::{Pallet, Call, Storage, Config, Event<T>},
+		Treasury2: pallet_treasury::<Instance2>::{Pallet, Call, Storage, Config, Event<T>},
 	}
 );
 
@@ -115,21 +115,21 @@ parameter_types! {
 
 // impl pallet_treasury::Config for Test {
 impl pallet_treasury::Config for Test {
-    type PalletId = TreasuryPalletId;
-    type Currency = pallet_balances::Pallet<Test>;
-    type ApproveOrigin = frame_system::EnsureRoot<u128>;
-    type RejectOrigin = frame_system::EnsureRoot<u128>;
-    type Event = Event;
-    type OnSlash = ();
-    type ProposalBond = ProposalBond;
-    type ProposalBondMinimum = ConstU64<1>;
-    type ProposalBondMaximum = ();
-    type SpendPeriod = ConstU64<2>;
-    type Burn = Burn;
-    type BurnDestination = (); // Just gets burned.
-    type WeightInfo = ();
-    type SpendFunds = Bounties;
-    type MaxApprovals = ConstU32<100>;
+	type PalletId = TreasuryPalletId;
+	type Currency = pallet_balances::Pallet<Test>;
+	type ApproveOrigin = frame_system::EnsureRoot<u128>;
+	type RejectOrigin = frame_system::EnsureRoot<u128>;
+	type Event = Event;
+	type OnSlash = ();
+	type ProposalBond = ProposalBond;
+	type ProposalBondMinimum = ConstU64<1>;
+	type ProposalBondMaximum = ();
+	type SpendPeriod = ConstU64<2>;
+	type Burn = Burn;
+	type BurnDestination = (); // Just gets burned.
+	type WeightInfo = ();
+	type SpendFunds = Bounties;
+	type MaxApprovals = ConstU32<100>;
 }
 
 impl pallet_treasury::Config<Instance1> for Test {
@@ -151,21 +151,21 @@ impl pallet_treasury::Config<Instance1> for Test {
 }
 
 impl pallet_treasury::Config<Instance2> for Test {
-    type PalletId = TreasuryPalletId;
-    type Currency = pallet_balances::Pallet<Test>;
-    type ApproveOrigin = frame_system::EnsureRoot<u128>;
-    type RejectOrigin = frame_system::EnsureRoot<u128>;
-    type Event = Event;
-    type OnSlash = ();
-    type ProposalBond = ProposalBond;
-    type ProposalBondMinimum = ConstU64<1>;
-    type ProposalBondMaximum = ();
-    type SpendPeriod = ConstU64<2>;
-    type Burn = Burn;
-    type BurnDestination = (); // Just gets burned.
-    type WeightInfo = ();
-    type SpendFunds = Bounties2;
-    type MaxApprovals = ConstU32<100>;
+	type PalletId = TreasuryPalletId;
+	type Currency = pallet_balances::Pallet<Test>;
+	type ApproveOrigin = frame_system::EnsureRoot<u128>;
+	type RejectOrigin = frame_system::EnsureRoot<u128>;
+	type Event = Event;
+	type OnSlash = ();
+	type ProposalBond = ProposalBond;
+	type ProposalBondMinimum = ConstU64<1>;
+	type ProposalBondMaximum = ();
+	type SpendPeriod = ConstU64<2>;
+	type Burn = Burn;
+	type BurnDestination = (); // Just gets burned.
+	type WeightInfo = ();
+	type SpendFunds = Bounties2;
+	type MaxApprovals = ConstU32<100>;
 }
 
 parameter_types! {
@@ -177,18 +177,18 @@ parameter_types! {
 }
 
 impl Config for Test {
-    type Event = Event;
-    type BountyDepositBase = ConstU64<80>;
-    type BountyDepositPayoutDelay = ConstU64<3>;
-    type BountyUpdatePeriod = ConstU64<20>;
-    type CuratorDepositMultiplier = CuratorDepositMultiplier;
-    type CuratorDepositMax = CuratorDepositMax;
-    type CuratorDepositMin = CuratorDepositMin;
-    type BountyValueMinimum = ConstU64<1>;
-    type DataDepositPerByte = ConstU64<1>;
-    type MaximumReasonLength = ConstU32<16384>;
-    type WeightInfo = ();
-    type ChildBountyManager = ();
+	type Event = Event;
+	type BountyDepositBase = ConstU64<80>;
+	type BountyDepositPayoutDelay = ConstU64<3>;
+	type BountyUpdatePeriod = ConstU64<20>;
+	type CuratorDepositMultiplier = CuratorDepositMultiplier;
+	type CuratorDepositMax = CuratorDepositMax;
+	type CuratorDepositMin = CuratorDepositMin;
+	type BountyValueMinimum = ConstU64<1>;
+	type DataDepositPerByte = ConstU64<1>;
+	type MaximumReasonLength = ConstU32<16384>;
+	type WeightInfo = ();
+	type ChildBountyManager = ();
 }
 
 impl Config<Instance1> for Test {
@@ -207,54 +207,52 @@ impl Config<Instance1> for Test {
 }
 
 impl Config<Instance2> for Test {
-    type Event = Event;
-    type BountyDepositBase = ConstU64<80>;
-    type BountyDepositPayoutDelay = ConstU64<3>;
-    type BountyUpdatePeriod = ConstU64<20>;
-    type CuratorDepositMultiplier = CuratorDepositMultiplier;
-    type CuratorDepositMax = CuratorDepositMax;
-    type CuratorDepositMin = CuratorDepositMin;
-    type BountyValueMinimum = ConstU64<1>;
-    type DataDepositPerByte = ConstU64<1>;
-    type MaximumReasonLength = ConstU32<16384>;
-    type WeightInfo = ();
-    type ChildBountyManager = ();
+	type Event = Event;
+	type BountyDepositBase = ConstU64<80>;
+	type BountyDepositPayoutDelay = ConstU64<3>;
+	type BountyUpdatePeriod = ConstU64<20>;
+	type CuratorDepositMultiplier = CuratorDepositMultiplier;
+	type CuratorDepositMax = CuratorDepositMax;
+	type CuratorDepositMin = CuratorDepositMin;
+	type BountyValueMinimum = ConstU64<1>;
+	type DataDepositPerByte = ConstU64<1>;
+	type MaximumReasonLength = ConstU32<16384>;
+	type WeightInfo = ();
+	type ChildBountyManager = ();
 }
 
 pub const INITIAL_FUNDING: u64 = 100;
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
-    let mut ext: sp_io::TestExternalities = GenesisConfig {
-        system: frame_system::GenesisConfig::default(),
-        balances: pallet_balances::GenesisConfig {
-            balances: vec![(0, 100), (1, 98), (2, 1)],
-        },
-        treasury: Default::default(),
-        treasury_1: Default::default(),
-        treasury_2: Default::default(),
-    }
-    .build_storage()
-    .unwrap()
-    .into();
-    ext.execute_with(|| System::set_block_number(1));
-    ext
+	let mut ext: sp_io::TestExternalities = GenesisConfig {
+		system: frame_system::GenesisConfig::default(),
+		balances: pallet_balances::GenesisConfig { balances: vec![(0, 100), (1, 98), (2, 1)] },
+		treasury: Default::default(),
+		treasury_1: Default::default(),
+		treasury_2: Default::default(),
+	}
+	.build_storage()
+	.unwrap()
+	.into();
+	ext.execute_with(|| System::set_block_number(1));
+	ext
 }
 
 pub fn genesis_test_ext() -> sp_io::TestExternalities {
-    let mut ext: sp_io::TestExternalities = GenesisConfig {
-        system: frame_system::GenesisConfig::default(),
-        balances: pallet_balances::GenesisConfig {
-            balances: vec![(0, 100), (Treasury1::account_id(), INITIAL_FUNDING)],
-        },
-        treasury: Default::default(),
-        treasury_1: Default::default(),
-        treasury_2: Default::default(),
-    }
-    .build_storage()
-    .unwrap()
-    .into();
-    ext.execute_with(|| System::set_block_number(1));
-    ext
+	let mut ext: sp_io::TestExternalities = GenesisConfig {
+		system: frame_system::GenesisConfig::default(),
+		balances: pallet_balances::GenesisConfig {
+			balances: vec![(0, 100), (Treasury1::account_id(), INITIAL_FUNDING)],
+		},
+		treasury: Default::default(),
+		treasury_1: Default::default(),
+		treasury_2: Default::default(),
+	}
+	.build_storage()
+	.unwrap()
+	.into();
+	ext.execute_with(|| System::set_block_number(1));
+	ext
 }
 
 fn last_event() -> BountiesEvent<Test, Instance1> {
@@ -272,8 +270,8 @@ fn genesis_config_works() {
 		assert_eq!(Treasury1::pot(), 0);
 		assert_eq!(Treasury1::proposal_count(), 0);
 
-        assert_eq!(Treasury2::pot(), 0);
-        assert_eq!(Treasury2::proposal_count(), 0);
+		assert_eq!(Treasury2::pot(), 0);
+		assert_eq!(Treasury2::proposal_count(), 0);
 	});
 }
 
@@ -284,8 +282,8 @@ fn minting_works() {
 		Balances::make_free_balance_be(&Treasury1::account_id(), 101);
 		assert_eq!(Treasury1::pot(), 100);
 
-        Balances::make_free_balance_be(&Treasury2::account_id(), 253);
-        assert_eq!(Treasury2::pot(), 252);
+		Balances::make_free_balance_be(&Treasury2::account_id(), 253);
+		assert_eq!(Treasury2::pot(), 252);
 	});
 }
 
@@ -296,9 +294,9 @@ fn spend_proposal_takes_min_deposit() {
 		assert_eq!(Balances::free_balance(0), 99);
 		assert_eq!(Balances::reserved_balance(0), 1);
 
-        assert_ok!(Treasury2::propose_spend(Origin::signed(1), 3, 6));
-        assert_eq!(Balances::free_balance(1), 97);
-        assert_eq!(Balances::reserved_balance(1), 1);
+		assert_ok!(Treasury2::propose_spend(Origin::signed(1), 3, 6));
+		assert_eq!(Balances::free_balance(1), 97);
+		assert_eq!(Balances::reserved_balance(1), 1);
 	});
 }
 
@@ -309,9 +307,9 @@ fn spend_proposal_takes_proportional_deposit() {
 		assert_eq!(Balances::free_balance(0), 95);
 		assert_eq!(Balances::reserved_balance(0), 5);
 
-        assert_ok!(Treasury2::propose_spend(Origin::signed(1), 98, 3));
-        assert_eq!(Balances::free_balance(1), 93);
-        assert_eq!(Balances::reserved_balance(1), 5);
+		assert_ok!(Treasury2::propose_spend(Origin::signed(1), 98, 3));
+		assert_eq!(Balances::free_balance(1), 93);
+		assert_eq!(Balances::reserved_balance(1), 5);
 	});
 }
 
@@ -322,9 +320,10 @@ fn spend_proposal_fails_when_proposer_poor() {
 			Treasury1::propose_spend(Origin::signed(2), 100, 3),
 			pallet_treasury::Error::<Test, Instance1>::InsufficientProposersBalance,
 		);
-        assert_noop!(
-            Treasury2::propose_spend(Origin::signed(2), 200, 6), pallet_treasury::Error::<Test, Instance2>::InsufficientProposersBalance,
-        );
+		assert_noop!(
+			Treasury2::propose_spend(Origin::signed(2), 200, 6),
+			pallet_treasury::Error::<Test, Instance2>::InsufficientProposersBalance,
+		);
 	});
 }
 
@@ -376,7 +375,10 @@ fn reject_already_rejected_spend_proposal_fails() {
 
 		assert_ok!(Treasury1::propose_spend(Origin::signed(0), 100, 3));
 		assert_ok!(Treasury1::reject_proposal(Origin::root(), 0));
-		assert_noop!(Treasury1::reject_proposal(Origin::root(), 0), pallet_treasury::Error::<Test, Instance1>::InvalidIndex);
+		assert_noop!(
+			Treasury1::reject_proposal(Origin::root(), 0),
+			pallet_treasury::Error::<Test, Instance1>::InvalidIndex
+		);
 	});
 }
 
@@ -393,7 +395,10 @@ fn reject_non_existent_spend_proposal_fails() {
 #[test]
 fn accept_non_existent_spend_proposal_fails() {
 	new_test_ext().execute_with(|| {
-		assert_noop!(Treasury1::approve_proposal(Origin::root(), 0), pallet_treasury::Error::<Test, Instance1>::InvalidIndex);
+		assert_noop!(
+			Treasury1::approve_proposal(Origin::root(), 0),
+			pallet_treasury::Error::<Test, Instance1>::InvalidIndex
+		);
 	});
 }
 
@@ -404,7 +409,10 @@ fn accept_already_rejected_spend_proposal_fails() {
 
 		assert_ok!(Treasury1::propose_spend(Origin::signed(0), 100, 3));
 		assert_ok!(Treasury1::reject_proposal(Origin::root(), 0));
-		assert_noop!(Treasury1::approve_proposal(Origin::root(), 0), pallet_treasury::Error::<Test, Instance1>::InvalidIndex);
+		assert_noop!(
+			Treasury1::approve_proposal(Origin::root(), 0),
+			pallet_treasury::Error::<Test, Instance1>::InvalidIndex
+		);
 	});
 }
 
@@ -564,7 +572,10 @@ fn close_bounty_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		Balances::make_free_balance_be(&Treasury1::account_id(), 101);
-		assert_noop!(Bounties1::close_bounty(Origin::root(), 0), Error::<Test, Instance1>::InvalidIndex);
+		assert_noop!(
+			Bounties1::close_bounty(Origin::root(), 0),
+			Error::<Test, Instance1>::InvalidIndex
+		);
 
 		assert_ok!(Bounties1::propose_bounty(Origin::signed(0), 10, b"12345".to_vec()));
 
@@ -589,7 +600,10 @@ fn approve_bounty_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		Balances::make_free_balance_be(&Treasury1::account_id(), 101);
-		assert_noop!(Bounties1::approve_bounty(Origin::root(), 0), Error::<Test, Instance1>::InvalidIndex);
+		assert_noop!(
+			Bounties1::approve_bounty(Origin::root(), 0),
+			Error::<Test, Instance1>::InvalidIndex
+		);
 
 		assert_ok!(Bounties1::propose_bounty(Origin::signed(0), 50, b"12345".to_vec()));
 
@@ -610,7 +624,10 @@ fn approve_bounty_works() {
 		);
 		assert_eq!(Bounties1::bounty_approvals(), vec![0]);
 
-		assert_noop!(Bounties1::close_bounty(Origin::root(), 0), Error::<Test, Instance1>::UnexpectedStatus);
+		assert_noop!(
+			Bounties1::close_bounty(Origin::root(), 0),
+			Error::<Test, Instance1>::UnexpectedStatus
+		);
 
 		// deposit not returned yet
 		assert_eq!(Balances::reserved_balance(0), deposit);
@@ -677,7 +694,10 @@ fn assign_curator_works() {
 			}
 		);
 
-		assert_noop!(Bounties1::accept_curator(Origin::signed(1), 0), Error::<Test, Instance1>::RequireCurator);
+		assert_noop!(
+			Bounties1::accept_curator(Origin::signed(1), 0),
+			Error::<Test, Instance1>::RequireCurator
+		);
 		assert_noop!(
 			Bounties1::accept_curator(Origin::signed(4), 0),
 			pallet_balances::Error::<Test, _>::InsufficientBalance
@@ -798,7 +818,10 @@ fn award_and_claim_bounty_works() {
 			}
 		);
 
-		assert_noop!(Bounties1::claim_bounty(Origin::signed(1), 0), Error::<Test, Instance1>::Premature);
+		assert_noop!(
+			Bounties1::claim_bounty(Origin::signed(1), 0),
+			Error::<Test, Instance1>::Premature
+		);
 
 		System::set_block_number(5);
 		<Treasury1 as OnInitialize<u64>>::on_initialize(5);
@@ -923,7 +946,10 @@ fn award_and_cancel() {
 		assert_ok!(Bounties1::award_bounty(Origin::signed(0), 0, 3));
 
 		// Cannot close bounty directly when payout is happening...
-		assert_noop!(Bounties1::close_bounty(Origin::root(), 0), Error::<Test, Instance1>::PendingPayout);
+		assert_noop!(
+			Bounties1::close_bounty(Origin::root(), 0),
+			Error::<Test, Instance1>::PendingPayout
+		);
 
 		// Instead unassign the curator to slash them and then close.
 		assert_ok!(Bounties1::unassign_curator(Origin::root(), 0));
@@ -963,7 +989,10 @@ fn expire_and_unassign() {
 		System::set_block_number(22);
 		<Treasury1 as OnInitialize<u64>>::on_initialize(22);
 
-		assert_noop!(Bounties1::unassign_curator(Origin::signed(0), 0), Error::<Test, Instance1>::Premature);
+		assert_noop!(
+			Bounties1::unassign_curator(Origin::signed(0), 0),
+			Error::<Test, Instance1>::Premature
+		);
 
 		System::set_block_number(23);
 		<Treasury1 as OnInitialize<u64>>::on_initialize(23);
@@ -1049,7 +1078,10 @@ fn extend_expiry() {
 		System::set_block_number(25);
 		<Treasury1 as OnInitialize<u64>>::on_initialize(25);
 
-		assert_noop!(Bounties1::unassign_curator(Origin::signed(0), 0), Error::<Test, Instance1>::Premature);
+		assert_noop!(
+			Bounties1::unassign_curator(Origin::signed(0), 0),
+			Error::<Test, Instance1>::Premature
+		);
 		assert_ok!(Bounties1::unassign_curator(Origin::signed(4), 0));
 
 		assert_eq!(Balances::free_balance(4), 10); // not slashed
@@ -1073,8 +1105,14 @@ fn test_migration_v4() {
 	};
 
 	let data = vec![
-		(pallet_bounties::BountyCount::<Test, Instance1>::hashed_key().to_vec(), 10.encode().to_vec()),
-		(pallet_bounties::Bounties::<Test, Instance1>::hashed_key_for(index), bounty.encode().to_vec()),
+		(
+			pallet_bounties::BountyCount::<Test, Instance1>::hashed_key().to_vec(),
+			10.encode().to_vec(),
+		),
+		(
+			pallet_bounties::Bounties::<Test, Instance1>::hashed_key_for(index),
+			bounty.encode().to_vec(),
+		),
 		(pallet_bounties::BountyDescriptions::<Test, Instance1>::hashed_key_for(index), vec![0, 0]),
 		(
 			pallet_bounties::BountyApprovals::<Test, Instance1>::hashed_key().to_vec(),
@@ -1090,7 +1128,10 @@ fn test_migration_v4() {
 			.expect("Bounties is part of runtime, so it has a name; qed");
 		let new_pallet_name = "NewBounties";
 
-		crate::migrations::v4::pre_migration::<Test, Bounties1, _>(old_pallet_name, new_pallet_name);
+		crate::migrations::v4::pre_migration::<Test, Bounties1, _>(
+			old_pallet_name,
+			new_pallet_name,
+		);
 		crate::migrations::v4::migrate::<Test, Bounties1, _>(old_pallet_name, new_pallet_name);
 		crate::migrations::v4::post_migration::<Test, Bounties1, _>(
 			old_pallet_name,
@@ -1101,10 +1142,10 @@ fn test_migration_v4() {
 
 #[test]
 fn genesis_funding_works() {
-    genesis_test_ext().execute_with(|| {
-        assert_eq!(Balances::free_balance(Treasury1::account_id()), INITIAL_FUNDING);
-        assert_eq!(Treasury1::pot(), INITIAL_FUNDING - Balances::minimum_balance());
-    });
+	genesis_test_ext().execute_with(|| {
+		assert_eq!(Balances::free_balance(Treasury1::account_id()), INITIAL_FUNDING);
+		assert_eq!(Treasury1::pot(), INITIAL_FUNDING - Balances::minimum_balance());
+	});
 }
 
 #[test]

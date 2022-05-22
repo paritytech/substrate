@@ -25,7 +25,7 @@ use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BadOrigin, BlakeTwo256, IdentityLookup},
-	Perbill, Permill, BuildStorage,
+	BuildStorage, Perbill, Permill,
 };
 use sp_storage::Storage;
 
@@ -52,12 +52,12 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-        Treasury: pallet_treasury::{Pallet, Call, Storage, Config, Event<T>},
+		Treasury: pallet_treasury::{Pallet, Call, Storage, Config, Event<T>},
 		Treasury1: pallet_treasury::<Instance1>::{Pallet, Call, Storage, Config, Event<T>},
-        Treasury2: pallet_treasury::<Instance2>::{Pallet, Call, Storage, Config, Event<T>},
-        Tips: pallet_tips::{Pallet, Call, Storage, Event<T>},
-        Tips1: pallet_tips::<Instance1>::{Pallet, Call, Storage, Event<T>},
-        Tips2: pallet_tips::<Instance2>::{Pallet, Call, Storage, Event<T>},
+		Treasury2: pallet_treasury::<Instance2>::{Pallet, Call, Storage, Config, Event<T>},
+		Tips: pallet_tips::{Pallet, Call, Storage, Event<T>},
+		Tips1: pallet_tips::<Instance1>::{Pallet, Call, Storage, Event<T>},
+		Tips2: pallet_tips::<Instance2>::{Pallet, Call, Storage, Event<T>},
 	}
 );
 
@@ -133,21 +133,21 @@ parameter_types! {
 	pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
 }
 impl pallet_treasury::Config for Test {
-    type PalletId = TreasuryPalletId;
-    type Currency = pallet_balances::Pallet<Test>;
-    type ApproveOrigin = frame_system::EnsureRoot<u128>;
-    type RejectOrigin = frame_system::EnsureRoot<u128>;
-    type Event = Event;
-    type OnSlash = ();
-    type ProposalBond = ProposalBond;
-    type ProposalBondMinimum = ConstU64<1>;
-    type ProposalBondMaximum = ();
-    type SpendPeriod = ConstU64<2>;
-    type Burn = Burn;
-    type BurnDestination = (); // Just gets burned.
-    type WeightInfo = ();
-    type SpendFunds = ();
-    type MaxApprovals = ConstU32<100>;
+	type PalletId = TreasuryPalletId;
+	type Currency = pallet_balances::Pallet<Test>;
+	type ApproveOrigin = frame_system::EnsureRoot<u128>;
+	type RejectOrigin = frame_system::EnsureRoot<u128>;
+	type Event = Event;
+	type OnSlash = ();
+	type ProposalBond = ProposalBond;
+	type ProposalBondMinimum = ConstU64<1>;
+	type ProposalBondMaximum = ();
+	type SpendPeriod = ConstU64<2>;
+	type Burn = Burn;
+	type BurnDestination = (); // Just gets burned.
+	type WeightInfo = ();
+	type SpendFunds = ();
+	type MaxApprovals = ConstU32<100>;
 }
 
 impl pallet_treasury::Config<Instance1> for Test {
@@ -169,35 +169,35 @@ impl pallet_treasury::Config<Instance1> for Test {
 }
 
 impl pallet_treasury::Config<Instance2> for Test {
-    type PalletId = TreasuryPalletId;
-    type Currency = pallet_balances::Pallet<Test>;
-    type ApproveOrigin = frame_system::EnsureRoot<u128>;
-    type RejectOrigin = frame_system::EnsureRoot<u128>;
-    type Event = Event;
-    type OnSlash = ();
-    type ProposalBond = ProposalBond;
-    type ProposalBondMinimum = ConstU64<1>;
-    type ProposalBondMaximum = ();
-    type SpendPeriod = ConstU64<2>;
-    type Burn = Burn;
-    type BurnDestination = (); // Just gets burned.
-    type WeightInfo = ();
-    type SpendFunds = ();
-    type MaxApprovals = ConstU32<100>;
+	type PalletId = TreasuryPalletId;
+	type Currency = pallet_balances::Pallet<Test>;
+	type ApproveOrigin = frame_system::EnsureRoot<u128>;
+	type RejectOrigin = frame_system::EnsureRoot<u128>;
+	type Event = Event;
+	type OnSlash = ();
+	type ProposalBond = ProposalBond;
+	type ProposalBondMinimum = ConstU64<1>;
+	type ProposalBondMaximum = ();
+	type SpendPeriod = ConstU64<2>;
+	type Burn = Burn;
+	type BurnDestination = (); // Just gets burned.
+	type WeightInfo = ();
+	type SpendFunds = ();
+	type MaxApprovals = ConstU32<100>;
 }
 
 parameter_types! {
 	pub const TipFindersFee: Percent = Percent::from_percent(20);
 }
 impl Config for Test {
-    type MaximumReasonLength = ConstU32<16384>;
-    type Tippers = TenToFourteen;
-    type TipCountdown = ConstU64<1>;
-    type TipFindersFee = TipFindersFee;
-    type TipReportDepositBase = ConstU64<1>;
-    type DataDepositPerByte = ConstU64<1>;
-    type Event = Event;
-    type WeightInfo = ();
+	type MaximumReasonLength = ConstU32<16384>;
+	type Tippers = TenToFourteen;
+	type TipCountdown = ConstU64<1>;
+	type TipFindersFee = TipFindersFee;
+	type TipReportDepositBase = ConstU64<1>;
+	type DataDepositPerByte = ConstU64<1>;
+	type Event = Event;
+	type WeightInfo = ();
 }
 
 impl Config<Instance1> for Test {
@@ -212,27 +212,25 @@ impl Config<Instance1> for Test {
 }
 
 impl Config<Instance2> for Test {
-    type MaximumReasonLength = ConstU32<16384>;
-    type Tippers = TenToFourteen;
-    type TipCountdown = ConstU64<1>;
-    type TipFindersFee = TipFindersFee;
-    type TipReportDepositBase = ConstU64<1>;
-    type DataDepositPerByte = ConstU64<1>;
-    type Event = Event;
-    type WeightInfo = ();
+	type MaximumReasonLength = ConstU32<16384>;
+	type Tippers = TenToFourteen;
+	type TipCountdown = ConstU64<1>;
+	type TipFindersFee = TipFindersFee;
+	type TipReportDepositBase = ConstU64<1>;
+	type DataDepositPerByte = ConstU64<1>;
+	type Event = Event;
+	type WeightInfo = ();
 }
 
 pub const INITIAL_FUNDING: u64 = 150;
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut ext: sp_io::TestExternalities = GenesisConfig {
-        system: frame_system::GenesisConfig::default(),
-        balances: pallet_balances::GenesisConfig {
-            balances: vec![(0, 100), (1, 98), (2, 1)],
-        },
-        treasury: Default::default(),
-        treasury_1: Default::default(),
-        treasury_2: Default::default(),
+		system: frame_system::GenesisConfig::default(),
+		balances: pallet_balances::GenesisConfig { balances: vec![(0, 100), (1, 98), (2, 1)] },
+		treasury: Default::default(),
+		treasury_1: Default::default(),
+		treasury_2: Default::default(),
 	}
 	.build_storage()
 	.unwrap()
@@ -242,20 +240,20 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 }
 
 pub fn genesis_test_ext() -> sp_io::TestExternalities {
-    let mut ext: sp_io::TestExternalities = GenesisConfig {
-        system: frame_system::GenesisConfig::default(),
-        balances: pallet_balances::GenesisConfig {
-            balances: vec![(0, 100), (Treasury::account_id(), INITIAL_FUNDING)],
-        },
-        treasury: Default::default(),
-        treasury_1: Default::default(),
-        treasury_2: Default::default(),
-    }
-    .build_storage()
-    .unwrap()
-    .into();
-    ext.execute_with(|| System::set_block_number(1));
-    ext
+	let mut ext: sp_io::TestExternalities = GenesisConfig {
+		system: frame_system::GenesisConfig::default(),
+		balances: pallet_balances::GenesisConfig {
+			balances: vec![(0, 100), (Treasury::account_id(), INITIAL_FUNDING)],
+		},
+		treasury: Default::default(),
+		treasury_1: Default::default(),
+		treasury_2: Default::default(),
+	}
+	.build_storage()
+	.unwrap()
+	.into();
+	ext.execute_with(|| System::set_block_number(1));
+	ext
 }
 
 fn last_event() -> TipEvent<Test, Instance1> {
@@ -273,8 +271,8 @@ fn genesis_config_works() {
 		assert_eq!(Treasury1::pot(), 0);
 		assert_eq!(Treasury1::proposal_count(), 0);
 
-        assert_eq!(Treasury2::pot(), 0);
-        assert_eq!(Treasury2::proposal_count(), 0);
+		assert_eq!(Treasury2::pot(), 0);
+		assert_eq!(Treasury2::proposal_count(), 0);
 	});
 }
 
@@ -286,17 +284,20 @@ fn tip_hash() -> H256 {
 fn tip_new_cannot_be_used_twice() {
 	new_test_ext().execute_with(|| {
 		Balances::make_free_balance_be(&Treasury1::account_id(), 101);
-        assert_eq!(Balances::free_balance(&Treasury1::account_id()), 101);
+		assert_eq!(Balances::free_balance(&Treasury1::account_id()), 101);
 		assert_ok!(Tips1::tip_new(Origin::signed(10), b"awesome.dot".to_vec(), 3, 10));
 		assert_noop!(
 			Tips1::tip_new(Origin::signed(11), b"awesome.dot".to_vec(), 3, 10),
 			Error::<Test, Instance1>::AlreadyKnown
 		);
 
-        Balances::make_free_balance_be(&Treasury2::account_id(), 202);
-        assert_eq!(Balances::free_balance(&Treasury2::account_id()), 202);
-        assert_ok!(Tips2::tip_new(Origin::signed(12), b"awesome.dot".to_vec(), 3, 10));
-        assert_noop!(Tips2::tip_new(Origin::signed(10), b"awesome.dot".to_vec(), 3, 10), Error::<Test, Instance2>::AlreadyKnown);
+		Balances::make_free_balance_be(&Treasury2::account_id(), 202);
+		assert_eq!(Balances::free_balance(&Treasury2::account_id()), 202);
+		assert_ok!(Tips2::tip_new(Origin::signed(12), b"awesome.dot".to_vec(), 3, 10));
+		assert_noop!(
+			Tips2::tip_new(Origin::signed(10), b"awesome.dot".to_vec(), 3, 10),
+			Error::<Test, Instance2>::AlreadyKnown
+		);
 	});
 }
 
@@ -325,27 +326,27 @@ fn report_awesome_and_tip_works() {
 		assert_eq!(Balances::free_balance(0), 102);
 		assert_eq!(Balances::free_balance(3), 8);
 
-        Balances::make_free_balance_be(&Treasury2::account_id(), 111);
-        assert_ok!(Tips2::report_awesome(Origin::signed(0), b"awesome.dot".to_vec(), 3));
-        assert_eq!(Balances::reserved_balance(0), 12);
-        assert_eq!(Balances::free_balance(0), 90);
+		Balances::make_free_balance_be(&Treasury2::account_id(), 111);
+		assert_ok!(Tips2::report_awesome(Origin::signed(0), b"awesome.dot".to_vec(), 3));
+		assert_eq!(Balances::reserved_balance(0), 12);
+		assert_eq!(Balances::free_balance(0), 90);
 
-        // other reports don't count.
-        assert_noop!(
-            Tips2::report_awesome(Origin::signed(1), b"awesome.dot".to_vec(), 3),
-            Error::<Test, Instance2>::AlreadyKnown
-        );
+		// other reports don't count.
+		assert_noop!(
+			Tips2::report_awesome(Origin::signed(1), b"awesome.dot".to_vec(), 3),
+			Error::<Test, Instance2>::AlreadyKnown
+		);
 
-        let h = tip_hash();
-        assert_ok!(Tips2::tip(Origin::signed(10), h.clone(), 10));
-        assert_ok!(Tips2::tip(Origin::signed(11), h.clone(), 10));
-        assert_ok!(Tips2::tip(Origin::signed(12), h.clone(), 10));
-        assert_noop!(Tips2::tip(Origin::signed(9), h.clone(), 10), BadOrigin);
-        System::set_block_number(3);
-        assert_ok!(Tips2::close_tip(Origin::signed(100), h.into()));
-        assert_eq!(Balances::reserved_balance(0), 0);
-        assert_eq!(Balances::free_balance(0), 104);
-        assert_eq!(Balances::free_balance(3), 16);
+		let h = tip_hash();
+		assert_ok!(Tips2::tip(Origin::signed(10), h.clone(), 10));
+		assert_ok!(Tips2::tip(Origin::signed(11), h.clone(), 10));
+		assert_ok!(Tips2::tip(Origin::signed(12), h.clone(), 10));
+		assert_noop!(Tips2::tip(Origin::signed(9), h.clone(), 10), BadOrigin);
+		System::set_block_number(3);
+		assert_ok!(Tips2::close_tip(Origin::signed(100), h.into()));
+		assert_eq!(Balances::reserved_balance(0), 0);
+		assert_eq!(Balances::free_balance(0), 104);
+		assert_eq!(Balances::free_balance(3), 16);
 	});
 }
 
@@ -365,18 +366,18 @@ fn report_awesome_from_beneficiary_and_tip_works() {
 		assert_eq!(Balances::reserved_balance(0), 0);
 		assert_eq!(Balances::free_balance(0), 110);
 
-        Balances::make_free_balance_be(&Treasury2::account_id(), 111);
-        assert_ok!(Tips2::report_awesome(Origin::signed(0), b"awesome.dot".to_vec(), 0));
-        assert_eq!(Balances::reserved_balance(0), 12);
-        assert_eq!(Balances::free_balance(0), 98);
-        let h = BlakeTwo256::hash_of(&(BlakeTwo256::hash(b"awesome.dot"), 0u128));
-        assert_ok!(Tips2::tip(Origin::signed(10), h.clone(), 10));
-        assert_ok!(Tips2::tip(Origin::signed(11), h.clone(), 10));
-        assert_ok!(Tips2::tip(Origin::signed(12), h.clone(), 10));
-        System::set_block_number(3);
-        assert_ok!(Tips2::close_tip(Origin::signed(100), h.into()));
-        assert_eq!(Balances::reserved_balance(0), 0);
-        assert_eq!(Balances::free_balance(0), 120);
+		Balances::make_free_balance_be(&Treasury2::account_id(), 111);
+		assert_ok!(Tips2::report_awesome(Origin::signed(0), b"awesome.dot".to_vec(), 0));
+		assert_eq!(Balances::reserved_balance(0), 12);
+		assert_eq!(Balances::free_balance(0), 98);
+		let h = BlakeTwo256::hash_of(&(BlakeTwo256::hash(b"awesome.dot"), 0u128));
+		assert_ok!(Tips2::tip(Origin::signed(10), h.clone(), 10));
+		assert_ok!(Tips2::tip(Origin::signed(11), h.clone(), 10));
+		assert_ok!(Tips2::tip(Origin::signed(12), h.clone(), 10));
+		System::set_block_number(3);
+		assert_ok!(Tips2::close_tip(Origin::signed(100), h.into()));
+		assert_eq!(Balances::reserved_balance(0), 0);
+		assert_eq!(Balances::free_balance(0), 120);
 	});
 }
 
@@ -396,13 +397,19 @@ fn close_tip_works() {
 
 		assert_ok!(Tips1::tip(Origin::signed(11), h.clone(), 10));
 
-		assert_noop!(Tips1::close_tip(Origin::signed(0), h.into()), Error::<Test, Instance1>::StillOpen);
+		assert_noop!(
+			Tips1::close_tip(Origin::signed(0), h.into()),
+			Error::<Test, Instance1>::StillOpen
+		);
 
 		assert_ok!(Tips1::tip(Origin::signed(12), h.clone(), 10));
 
 		assert_eq!(last_event(), TipEvent::TipClosing { tip_hash: h });
 
-		assert_noop!(Tips1::close_tip(Origin::signed(0), h.into()), Error::<Test, Instance1>::Premature);
+		assert_noop!(
+			Tips1::close_tip(Origin::signed(0), h.into()),
+			Error::<Test, Instance1>::Premature
+		);
 
 		System::set_block_number(2);
 		assert_noop!(Tips1::close_tip(Origin::none(), h.into()), BadOrigin);
@@ -411,14 +418,15 @@ fn close_tip_works() {
 
 		assert_eq!(last_event(), TipEvent::TipClosed { tip_hash: h, who: 3, payout: 10 });
 
-		assert_noop!(Tips1::close_tip(Origin::signed(100), h.into()), Error::<Test, Instance1>::UnknownTip);
+		assert_noop!(
+			Tips1::close_tip(Origin::signed(100), h.into()),
+			Error::<Test, Instance1>::UnknownTip
+		);
 
-        Balances::make_free_balance_be(&Treasury1::account_id(), 201);
-        assert_eq!(Treasury1::pot(), 200);
+		Balances::make_free_balance_be(&Treasury1::account_id(), 201);
+		assert_eq!(Treasury1::pot(), 200);
 
-        assert_ok!(Tips1::tip_new(Origin::signed(10), b"awesome.dot".to_vec(), 3, 10));
-
-
+		assert_ok!(Tips1::tip_new(Origin::signed(10), b"awesome.dot".to_vec(), 3, 10));
 	});
 }
 
@@ -463,10 +471,16 @@ fn retract_tip_works() {
 		assert_ok!(Tips1::tip(Origin::signed(10), h.clone(), 10));
 		assert_ok!(Tips1::tip(Origin::signed(11), h.clone(), 10));
 		assert_ok!(Tips1::tip(Origin::signed(12), h.clone(), 10));
-		assert_noop!(Tips1::retract_tip(Origin::signed(10), h.clone()), Error::<Test, Instance1>::NotFinder);
+		assert_noop!(
+			Tips1::retract_tip(Origin::signed(10), h.clone()),
+			Error::<Test, Instance1>::NotFinder
+		);
 		assert_ok!(Tips1::retract_tip(Origin::signed(0), h.clone()));
 		System::set_block_number(2);
-		assert_noop!(Tips1::close_tip(Origin::signed(0), h.into()), Error::<Test, Instance1>::UnknownTip);
+		assert_noop!(
+			Tips1::close_tip(Origin::signed(0), h.into()),
+			Error::<Test, Instance1>::UnknownTip
+		);
 
 		// with tip new
 		Balances::make_free_balance_be(&Treasury1::account_id(), 101);
@@ -474,10 +488,16 @@ fn retract_tip_works() {
 		let h = tip_hash();
 		assert_ok!(Tips1::tip(Origin::signed(11), h.clone(), 10));
 		assert_ok!(Tips1::tip(Origin::signed(12), h.clone(), 10));
-		assert_noop!(Tips1::retract_tip(Origin::signed(0), h.clone()), Error::<Test, Instance1>::NotFinder);
+		assert_noop!(
+			Tips1::retract_tip(Origin::signed(0), h.clone()),
+			Error::<Test, Instance1>::NotFinder
+		);
 		assert_ok!(Tips1::retract_tip(Origin::signed(10), h.clone()));
 		System::set_block_number(2);
-		assert_noop!(Tips1::close_tip(Origin::signed(10), h.into()), Error::<Test, Instance1>::UnknownTip);
+		assert_noop!(
+			Tips1::close_tip(Origin::signed(10), h.into()),
+			Error::<Test, Instance1>::UnknownTip
+		);
 	});
 }
 
@@ -562,8 +582,14 @@ fn test_last_reward_migration() {
 	};
 
 	let data = vec![
-		(pallet_tips::Tips::<Test, Instance1>::hashed_key_for(hash1), old_tip_finder.encode().to_vec()),
-		(pallet_tips::Tips::<Test, Instance1>::hashed_key_for(hash2), old_tip_no_finder.encode().to_vec()),
+		(
+			pallet_tips::Tips::<Test, Instance1>::hashed_key_for(hash1),
+			old_tip_finder.encode().to_vec(),
+		),
+		(
+			pallet_tips::Tips::<Test, Instance1>::hashed_key_for(hash2),
+			old_tip_no_finder.encode().to_vec(),
+		),
 	];
 
 	s.top = data.into_iter().collect();
@@ -665,7 +691,7 @@ fn genesis_funding_works() {
 		assert_eq!(Balances::free_balance(Treasury1::account_id()), 150);
 		assert_eq!(Treasury1::pot(), INITIAL_FUNDING - Balances::minimum_balance());
 
-        assert_eq!(Balances::free_balance(Treasury2::account_id()), 150);
-        assert_eq!(Treasury2::pot(), INITIAL_FUNDING - Balances::minimum_balance());
+		assert_eq!(Balances::free_balance(Treasury2::account_id()), 150);
+		assert_eq!(Treasury2::pot(), INITIAL_FUNDING - Balances::minimum_balance());
 	});
 }

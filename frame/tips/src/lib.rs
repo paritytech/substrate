@@ -178,7 +178,8 @@ pub mod pallet {
 	/// insecure enumerable hash since the key is guaranteed to be the result of a secure hash.
 	#[pallet::storage]
 	#[pallet::getter(fn reasons)]
-	pub type Reasons<T: Config<I>, I: 'static = ()> = StorageMap<_, Identity, T::Hash, Vec<u8>, OptionQuery>;
+	pub type Reasons<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Identity, T::Hash, Vec<u8>, OptionQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
