@@ -132,11 +132,17 @@ where
 	}
 
 	/// Store the supplied storage items into this contracts storage.
-	fn store(&self, items: &Vec<(FixedSizedKey, Vec<u8>)>) -> Result<(), &'static str> {
+	fn store(&self, items: &Vec<(FixSizedKey, Vec<u8>)>) -> Result<(), &'static str> {
 		let info = self.info()?;
 		for item in items {
-			Storage::<T>::write(&info.trie_id, &item.0, Some(item.1.clone()), None, false)
-				.map_err(|_| "Failed to write storage to restoration dest")?;
+			Storage::<T>::write(
+				&info.trie_id,
+				item.0 as FixSizedKey,
+				Some(item.1.clone()),
+				None,
+				false,
+			)
+			.map_err(|_| "Failed to write storage to restoration dest")?;
 		}
 		<ContractInfoOf<T>>::insert(&self.account_id, info);
 		Ok(())
@@ -935,7 +941,7 @@ benchmarks! {
 		for key in keys {
 			Storage::<T>::write(
 				&info.trie_id,
-				key.as_slice().try_into().map_err(|e| "Key has wrong length")?,
+				FixSizedKey::try_from(key).map_err(|e| "Key has wrong length")?,
 				Some(vec![]),
 				None,
 				false,
@@ -981,7 +987,7 @@ benchmarks! {
 		for key in keys {
 			Storage::<T>::write(
 				&info.trie_id,
-				key.as_slice().try_into().map_err(|e| "Key has wrong length")?,
+				FixSizedKey::try_from(key).map_err(|e| "Key has wrong length")?,
 				Some(vec![]),
 				None,
 				false,
@@ -1027,7 +1033,7 @@ benchmarks! {
 		for key in keys {
 			Storage::<T>::write(
 				&info.trie_id,
-				key.as_slice().try_into().map_err(|e| "Key has wrong length")?,
+				FixSizedKey::try_from(key).map_err(|e| "Key has wrong length")?,
 				Some(vec![42u8; (n * 1024) as usize]),
 				None,
 				false,
@@ -1074,7 +1080,7 @@ benchmarks! {
 		for key in keys {
 			Storage::<T>::write(
 				&info.trie_id,
-				key.as_slice().try_into().map_err(|e| "Key has wrong length")?,
+				FixSizedKey::try_from(key).map_err(|e| "Key has wrong length")?,
 				Some(vec![]),
 				None,
 				false,
@@ -1119,7 +1125,7 @@ benchmarks! {
 		for key in keys {
 			Storage::<T>::write(
 				&info.trie_id,
-				key.as_slice().try_into().map_err(|e| "Key has wrong length")?,
+				FixSizedKey::try_from(key).map_err(|e| "Key has wrong length")?,
 				Some(vec![42u8; (n * 1024) as usize]),
 				None,
 				false,
@@ -1171,7 +1177,7 @@ benchmarks! {
 		for key in keys {
 			Storage::<T>::write(
 				&info.trie_id,
-				key.as_slice().try_into().map_err(|e| "Key has wrong length")?,
+				FixSizedKey::try_from(key).map_err(|e| "Key has wrong length")?,
 				Some(vec![]),
 				None,
 				false,
@@ -1223,7 +1229,7 @@ benchmarks! {
 		for key in keys {
 			Storage::<T>::write(
 				&info.trie_id,
-				key.as_slice().try_into().map_err(|e| "Key has wrong length")?,
+				FixSizedKey::try_from(key).map_err(|e| "Key has wrong length")?,
 				Some(vec![42u8; (n * 1024) as usize]),
 				None,
 				false,
@@ -1270,7 +1276,7 @@ benchmarks! {
 		for key in keys {
 			Storage::<T>::write(
 				&info.trie_id,
-				key.as_slice().try_into().map_err(|e| "Key has wrong length")?,
+				FixSizedKey::try_from(key).map_err(|e| "Key has wrong length")?,
 				Some(vec![]),
 				None,
 				false,
@@ -1315,7 +1321,7 @@ benchmarks! {
 		for key in keys {
 			Storage::<T>::write(
 				&info.trie_id,
-				key.as_slice().try_into().map_err(|e| "Key has wrong length")?,
+				FixSizedKey::try_from(key).map_err(|e| "Key has wrong length")?,
 				Some(vec![42u8; (n * 1024) as usize]),
 				None,
 				false,
@@ -1367,7 +1373,7 @@ benchmarks! {
 		for key in keys {
 			Storage::<T>::write(
 				&info.trie_id,
-				key.as_slice().try_into().map_err(|e| "Key has wrong length")?,
+				FixSizedKey::try_from(key).map_err(|e| "Key has wrong length")?,
 				Some(vec![]),
 				None,
 				false,
@@ -1419,7 +1425,7 @@ benchmarks! {
 		for key in keys {
 			Storage::<T>::write(
 				&info.trie_id,
-				key.as_slice().try_into().map_err(|e| "Key has wrong length")?,
+				FixSizedKey::try_from(key).map_err(|e| "Key has wrong length")?,
 				Some(vec![42u8; (n * 1024) as usize]),
 				None,
 				false,
