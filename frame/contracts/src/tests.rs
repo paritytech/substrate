@@ -290,6 +290,7 @@ impl Config for Test {
 	type ContractAccessWeight = DefaultContractAccessWeight<BlockWeights>;
 	type MaxCodeLen = ConstU32<{ 128 * 1024 }>;
 	type RelaxedMaxCodeLen = ConstU32<{ 256 * 1024 }>;
+	type MaxStorageKeyLen = ConstU32<128>;
 }
 
 pub const ALICE: AccountId32 = AccountId32::new([1u8; 32]);

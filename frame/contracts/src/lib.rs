@@ -374,6 +374,9 @@ pub mod pallet {
 		/// new instrumentation increases the size beyond the limit it would make that contract
 		/// inaccessible until rectified by another runtime upgrade.
 		type RelaxedMaxCodeLen: Get<u32>;
+
+		/// The maximum length of veriable sized key used on storage with transparent hasing.
+		type MaxStorageKeyLen: Get<u32>;
 	}
 
 	#[pallet::hooks]
