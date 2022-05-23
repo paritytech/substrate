@@ -395,8 +395,8 @@ pub mod tests {
 	use sp_runtime::traits::BlakeTwo256;
 	use sp_trie::{
 		cache::{CacheSize, SharedTrieCache},
-		trie_types::{TrieDBMutBuilderV0, TrieDBMutBuilderV1},
-		KeySpacedDBMut, PrefixedMemoryDB, TrieCache, TrieMut,
+		trie_types::{TrieDBBuilder, TrieDBMutBuilderV0, TrieDBMutBuilderV1},
+		KeySpacedDBMut, PrefixedMemoryDB, Trie, TrieCache, TrieMut,
 	};
 	use std::{collections::HashSet, iter};
 
@@ -646,13 +646,16 @@ pub mod tests {
 		assert_eq!(seen, expected);
 	}
 
-
 	parameterized_test!(
 		keys_with_empty_prefix_returns_all_keys,
 		keys_with_empty_prefix_returns_all_keys_inner
 	);
-	fn keys_with_empty_prefix_returns_all_keys_inner(state_version: StateVersion, cache: Option<Cache>, recorder: Option<Recorder>) {
-		let (test_db, test_root) = test_db(state_version, cache, recorder);
+	fn keys_with_empty_prefix_returns_all_keys_inner(
+		state_version: StateVersion,
+		cache: Option<Cache>,
+		recorder: Option<Recorder>,
+	) {
+		let (test_db, test_root) = test_db(state_version);
 		let expected = TrieDBBuilder::new(&test_db, &test_root)
 			.build()
 			.iter()
@@ -660,7 +663,7 @@ pub mod tests {
 			.map(|d| d.unwrap().0.to_vec())
 			.collect::<Vec<_>>();
 
-		let trie = test_trie(state_version);
+		let trie = test_trie(state_version, cache, recorder);
 		let keys = trie.keys(&[]);
 
 		assert_eq!(expected, keys);
@@ -743,11 +746,7 @@ pub mod tests {
 		let contents = value_range
 			.clone()
 			.map(|i| (vec![i], Some(vec![i; size_content])))
->>>>>>> variant B
-			.map(|d| d.unwrap().0.to_vec())
-======= end
 			.collect::<Vec<_>>();
-<<<<<<< variant A
 		let in_memory = InMemoryBackend::<BlakeTwo256>::default();
 		let in_memory = in_memory.update(vec![(None, contents)], state_version);
 		let in_memory_root = in_memory.storage_root(std::iter::empty(), state_version).0;
@@ -940,10 +939,7 @@ pub mod tests {
 				assert_eq!(storage_proof_size, estimation);
 			}
 		}
->>>>>>> variant B
-======= end
 
-<<<<<<< variant A
 		for n in 0..keys.len() {
 			let backend = TrieBackendBuilder::wrap(&trie_backend)
 				.with_recorder(Recorder::default())
@@ -958,12 +954,7 @@ pub mod tests {
 			check_estimation(backend, has_cache);
 		}
 	}
->>>>>>> variant B
-		let trie = test_trie(state_version);
-		let keys = trie.keys(&[]);
-======= end
 
-<<<<<<< variant A
 	#[test]
 	fn new_data_is_added_to_the_cache() {
 		let shared_cache = SharedTrieCache::new(CacheSize::Unlimited);
@@ -989,8 +980,5 @@ pub mod tests {
 				cache.lookup_value_for_key(key).unwrap().data().flatten().unwrap().as_ref()
 			);
 		}
->>>>>>> variant B
-		assert_eq!(expected, keys);
-======= end
 	}
 }
