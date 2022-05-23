@@ -217,11 +217,19 @@ where
 	/// passed once (in the initial call) for any given storage map and `partial_key`. Subsequent
 	/// calls operating on the same map/`partial_key` should always pass `Some`, and this should be
 	/// equal to the previous call result's `maybe_cursor` field.
-	pub fn clear_prefix<KP>(partial_key: KP, limit: u32, maybe_cursor: Option<&[u8]>) -> sp_io::ClearPrefixResult
+	pub fn clear_prefix<KP>(
+		partial_key: KP,
+		limit: u32,
+		maybe_cursor: Option<&[u8]>,
+	) -> sp_io::ClearPrefixResult
 	where
 		Key: HasKeyPrefix<KP>,
 	{
-		<Self as crate::storage::StorageNMap<Key, Value>>::clear_prefix(partial_key, limit, maybe_cursor)
+		<Self as crate::storage::StorageNMap<Key, Value>>::clear_prefix(
+			partial_key,
+			limit,
+			maybe_cursor,
+		)
 	}
 
 	/// Iterate over values that share the first key.

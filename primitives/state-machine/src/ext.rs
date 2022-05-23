@@ -449,7 +449,7 @@ where
 		self.mark_dirty();
 		let overlay_count = self.overlay.clear_child_storage(child_info);
 		let (next_cursor, backend_count, iterations) =
-		self.limit_remove_from_backend(Some(child_info), None, maybe_limit, maybe_cursor);
+			self.limit_remove_from_backend(Some(child_info), None, maybe_limit, maybe_cursor);
 		(next_cursor, backend_count, overlay_count + backend_count, iterations)
 	}
 
@@ -500,8 +500,12 @@ where
 
 		self.mark_dirty();
 		let overlay_count = self.overlay.clear_child_prefix(child_info, prefix);
-		let (next_cursor, backend_count, iterations) =
-		self.limit_remove_from_backend(Some(child_info), Some(prefix), maybe_limit, maybe_cursor);
+		let (next_cursor, backend_count, iterations) = self.limit_remove_from_backend(
+			Some(child_info),
+			Some(prefix),
+			maybe_limit,
+			maybe_cursor,
+		);
 		(next_cursor, backend_count, backend_count + overlay_count, iterations)
 	}
 
@@ -753,27 +757,28 @@ where
 		let mut delete_count: u32 = 0;
 		let mut loop_count: u32 = 0;
 		let mut maybe_next_key = None;
-		self.backend.apply_to_keys_while(maybe_child, maybe_prefix, maybe_cursor, |key| {
-			if maybe_limit.map_or(false, |limit| loop_count == limit) {
-				maybe_next_key = Some(key.to_vec());
-				return false
-			}
-			let overlay = match maybe_child {
-				Some(child_info) => self.overlay.child_storage(child_info, key),
-				None => self.overlay.storage(key),
-			};
-			if !matches!(overlay, Some(None)) {
-				// already pending deletion from the backend - no need to delete it again.
-				if let Some(child_info) = maybe_child {
-					self.overlay.set_child_storage(child_info, key.to_vec(), None);
-				} else {
-					self.overlay.set_storage(key.to_vec(), None);
+		self.backend
+			.apply_to_keys_while(maybe_child, maybe_prefix, maybe_cursor, |key| {
+				if maybe_limit.map_or(false, |limit| loop_count == limit) {
+					maybe_next_key = Some(key.to_vec());
+					return false
 				}
-				delete_count = delete_count.saturating_add(1);
-			}
-			loop_count = loop_count.saturating_add(1);
-			true
-		});
+				let overlay = match maybe_child {
+					Some(child_info) => self.overlay.child_storage(child_info, key),
+					None => self.overlay.storage(key),
+				};
+				if !matches!(overlay, Some(None)) {
+					// already pending deletion from the backend - no need to delete it again.
+					if let Some(child_info) = maybe_child {
+						self.overlay.set_child_storage(child_info, key.to_vec(), None);
+					} else {
+						self.overlay.set_storage(key.to_vec(), None);
+					}
+					delete_count = delete_count.saturating_add(1);
+				}
+				loop_count = loop_count.saturating_add(1);
+				true
+			});
 		(maybe_next_key, delete_count, loop_count)
 	}
 }

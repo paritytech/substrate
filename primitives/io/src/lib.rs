@@ -200,7 +200,8 @@ pub trait Storage {
 	/// backend.
 	#[version(2)]
 	fn clear_prefix(&mut self, prefix: &[u8], limit: Option<u32>) -> KillStorageResult {
-		let (maybe_cursor, num_removed, ..) = Externalities::clear_prefix(*self, prefix, limit, None);
+		let (maybe_cursor, num_removed, ..) =
+			Externalities::clear_prefix(*self, prefix, limit, None);
 		match maybe_cursor {
 			None => KillStorageResult::AllRemoved(num_removed),
 			Some(_) => KillStorageResult::SomeRemaining(num_removed),
@@ -243,7 +244,7 @@ pub trait Storage {
 		&mut self,
 		maybe_prefix: &[u8],
 		maybe_limit: Option<u32>,
-		maybe_cursor: Option<Vec<u8>>,	//< TODO Make work or just Option<Vec<u8>>?
+		maybe_cursor: Option<Vec<u8>>, //< TODO Make work or just Option<Vec<u8>>?
 	) -> ClearPrefixResult {
 		let (maybe_cursor, db, total, loops) = Externalities::clear_prefix(
 			*self,
@@ -425,12 +426,17 @@ pub trait DefaultChildStorage {
 	///
 	/// See `Storage` module `clear_prefix` documentation for `limit` usage.
 	#[version(4, register_only)]
-	fn storage_kill(&mut self, storage_key: &[u8], maybe_limit: Option<u32>, maybe_cursor: Option<Vec<u8>>) -> ClearPrefixResult {
+	fn storage_kill(
+		&mut self,
+		storage_key: &[u8],
+		maybe_limit: Option<u32>,
+		maybe_cursor: Option<Vec<u8>>,
+	) -> ClearPrefixResult {
 		let child_info = ChildInfo::new_default(storage_key);
 		let (maybe_cursor, db, total, loops) = self.kill_child_storage(
 			&child_info,
 			maybe_limit,
-			maybe_cursor.as_ref().map(|x| &x[..])
+			maybe_cursor.as_ref().map(|x| &x[..]),
 		);
 		ClearPrefixResult { maybe_cursor, db, total, loops }
 	}
@@ -462,7 +468,8 @@ pub trait DefaultChildStorage {
 		limit: Option<u32>,
 	) -> KillStorageResult {
 		let child_info = ChildInfo::new_default(storage_key);
-		let (maybe_cursor, num_removed, ..) = self.clear_child_prefix(&child_info, prefix, limit, None);
+		let (maybe_cursor, num_removed, ..) =
+			self.clear_child_prefix(&child_info, prefix, limit, None);
 		match maybe_cursor {
 			None => KillStorageResult::AllRemoved(num_removed),
 			Some(..) => KillStorageResult::SomeRemaining(num_removed),

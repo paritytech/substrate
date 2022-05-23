@@ -1348,6 +1348,7 @@ mod execution {
 mod tests {
 	use super::{ext::Ext, *};
 	use crate::execution::CallResult;
+	use assert_matches::assert_matches;
 	use codec::{Decode, Encode};
 	use sp_core::{
 		map,
@@ -1357,7 +1358,6 @@ mod tests {
 		NativeOrEncoded, NeverNativeValue,
 	};
 	use sp_runtime::traits::BlakeTwo256;
-	use assert_matches::assert_matches;
 	use std::{
 		collections::{BTreeMap, HashMap},
 		panic::UnwindSafe,

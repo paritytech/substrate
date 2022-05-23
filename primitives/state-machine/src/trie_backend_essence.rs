@@ -342,7 +342,8 @@ where
 			let trie = TrieDB::<H>::new(db, root)?;
 			let prefix = maybe_prefix.unwrap_or(&[]);
 			let iter = match maybe_start_at {
-				Some(start_at) => TrieDBKeyIterator::new_prefixed_then_seek(&trie, prefix, start_at),
+				Some(start_at) =>
+					TrieDBKeyIterator::new_prefixed_then_seek(&trie, prefix, start_at),
 				None => TrieDBKeyIterator::new_prefixed(&trie, prefix),
 			}?;
 

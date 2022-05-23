@@ -285,7 +285,7 @@ pub fn clear_storage_prefix(
 	item: &[u8],
 	hash: &[u8],
 	maybe_limit: Option<u32>,
-	maybe_cursor: Option<&[u8]>
+	maybe_cursor: Option<&[u8]>,
 ) -> sp_io::ClearPrefixResult {
 	let mut key = vec![0u8; 32 + hash.len()];
 	let storage_prefix = storage_prefix(module, item);

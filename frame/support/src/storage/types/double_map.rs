@@ -261,11 +261,19 @@ where
 	/// passed once (in the initial call) for any given storage map and `first_key`. Subsequent
 	/// calls operating on the same map/`first_key` should always pass `Some`, and this should be
 	/// equal to the previous call result's `maybe_cursor` field.
-	pub fn clear_prefix<KArg1>(first_key: KArg1, limit: u32, maybe_cursor: Option<&[u8]>) -> sp_io::ClearPrefixResult
+	pub fn clear_prefix<KArg1>(
+		first_key: KArg1,
+		limit: u32,
+		maybe_cursor: Option<&[u8]>,
+	) -> sp_io::ClearPrefixResult
 	where
 		KArg1: ?Sized + EncodeLike<Key1>,
 	{
-		<Self as crate::storage::StorageDoubleMap<Key1, Key2, Value>>::clear_prefix(first_key, limit, maybe_cursor)
+		<Self as crate::storage::StorageDoubleMap<Key1, Key2, Value>>::clear_prefix(
+			first_key,
+			limit,
+			maybe_cursor,
+		)
 	}
 
 	/// Iterate over values that share the first key.

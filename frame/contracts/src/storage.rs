@@ -267,8 +267,7 @@ where
 			// Cannot panic due to loop condition
 			let trie = &mut queue[0];
 			#[allow(deprecated)]
-			let outcome =
-				child::kill_storage(&child_trie_info(&trie.trie_id), Some(remaining_key_budget));
+			let outcome = child::kill_storage(&child_trie_info(&trie.trie_id), Some(remaining_key_budget));
 			let keys_removed = match outcome {
 				// This happens when our budget wasn't large enough to remove all keys.
 				KillStorageResult::SomeRemaining(c) => c,
