@@ -1067,7 +1067,8 @@ pub mod pallet {
 			Founder::<T, I>::kill();
 			Rules::<T, I>::kill();
 			Candidates::<T, I>::kill();
-			SuspendedCandidates::<T, I>::clear(None);
+			#[allow(deprecated)]
+			SuspendedCandidates::<T, I>::remove_all(None);
 			Self::deposit_event(Event::<T, I>::Unfounded { founder });
 			Ok(())
 		}
@@ -1511,7 +1512,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				.collect::<Vec<_>>();
 
 			// Clean up all votes.
-			<Votes<T, I>>::clear(None);
+			#[allow(deprecated)]
+			<Votes<T, I>>::remove_all(None);
 
 			// Reward one of the voters who voted the right way.
 			if !total_slash.is_zero() {
@@ -1695,7 +1697,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				}
 
 				// Clean up all votes.
-				<DefenderVotes<T, I>>::clear(None);
+				#[allow(deprecated)]
+				<DefenderVotes<T, I>>::remove_all(None);
 			}
 
 			// Avoid challenging if there's only two members since we never challenge the Head or
