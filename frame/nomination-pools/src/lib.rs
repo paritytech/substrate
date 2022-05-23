@@ -1871,7 +1871,7 @@ pub mod pallet {
 			T::StakingInterface::nominate(bonded_pool.bonded_account(), validators)
 		}
 
-		/// Nominate on behalf of the pool.
+		/// Chill on behalf of the pool.
 		///
 		/// The dispatch origin of this call must be signed by the pool nominator or the pool
 		/// root role, same as [`Pallet::nominate`].
