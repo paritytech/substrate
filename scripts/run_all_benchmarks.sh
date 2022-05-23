@@ -15,7 +15,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Runs all benchmarks for all pallets, for the Substrate node.
+# This script has three parts which all use the Substrate runtime:
+# - Pallet benchmarking to update the pallet weights
+# - Overhead benchmarking for the Extrinsic and Block weights
+# - Machine benchmarking
+#
 # Should be run on a reference machine to gain accurate benchmarks
 # current reference machine: https://github.com/paritytech/substrate/pull/5848
 
