@@ -8667,6 +8667,7 @@ dependencies = [
  "parity-scale-codec",
  "parking_lot 0.12.0",
  "sc-chain-spec",
+ "sc-network",
  "sc-transaction-pool-api",
  "scale-info",
  "serde",

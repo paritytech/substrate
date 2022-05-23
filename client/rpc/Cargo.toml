@@ -37,6 +37,7 @@ sp-rpc = { version = "6.0.0", path = "../../primitives/rpc" }
 sp-runtime = { version = "6.0.0", path = "../../primitives/runtime" }
 sp-session = { version = "4.0.0-dev", path = "../../primitives/session" }
 sp-version = { version = "5.0.0", path = "../../primitives/version" }
+sc-network = { version = "0.10.0-dev", path = "../network" }
 
 tokio = { version = "1.17.0", optional = true }
 

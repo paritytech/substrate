@@ -44,6 +44,7 @@ use crate::{
 };
 
 use codec::Encode as _;
+use crate::config::MultiaddrWithPeerId;
 use futures::{channel::oneshot, prelude::*};
 use libp2p::{
 	core::{either::EitherError, upgrade, ConnectedPoint, Executor},
@@ -677,7 +678,7 @@ where
 
 	/// Adds a `PeerId` and its address as reserved. The string should encode the address
 	/// and peer ID of the remote node.
-	pub fn add_reserved_peer(&self, peer: String) -> Result<(), String> {
+	pub fn add_reserved_peer(&self, peer: MultiaddrWithPeerId) -> Result<(), String> {
 		self.service.add_reserved_peer(peer)
 	}
 
@@ -1086,17 +1087,17 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	///
 	/// Returns an `Err` if the given string is not a valid multiaddress
 	/// or contains an invalid peer ID (which includes the local peer ID).
-	pub fn add_reserved_peer(&self, peer: String) -> Result<(), String> {
-		let (peer_id, addr) = parse_str_addr(&peer).map_err(|e| format!("{:?}", e))?;
+	pub fn add_reserved_peer(&self, peer: MultiaddrWithPeerId) -> Result<(), String> {
+		//let (peer_id, addr) = parse_str_addr(&peer).map_err(|e| format!("{:?}", e))?;
 		// Make sure the local peer ID is never added to the PSM.
-		if peer_id == self.local_peer_id {
+		if peer.peer_id == self.local_peer_id {
 			return Err("Local peer ID cannot be added as a reserved peer.".to_string())
 		}
 
 		let _ = self
 			.to_worker
-			.unbounded_send(ServiceToWorkerMsg::AddKnownAddress(peer_id, addr));
-		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::AddReserved(peer_id));
+			.unbounded_send(ServiceToWorkerMsg::AddKnownAddress(peer.peer_id, peer.multiaddr));
+		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::AddReserved(peer.peer_id));
 		Ok(())
 	}
 

@@ -24,6 +24,7 @@ use jsonrpsee::{
 };
 
 pub use self::helpers::{Health, NodeRole, PeerInfo, SyncState, SystemInfo};
+use sc_network::config::MultiaddrWithPeerId;
 
 pub mod error;
 pub mod helpers;
@@ -89,7 +90,7 @@ pub trait SystemApi<Hash, Number> {
 	/// `/ip4/198.51.100.19/tcp/30333/p2p/QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV`
 	/// is an example of a valid, passing multiaddr with PeerId attached.
 	#[method(name = "system_addReservedPeer")]
-	async fn system_add_reserved_peer(&self, peer: String) -> RpcResult<()>;
+	async fn system_add_reserved_peer(&self, peer: MultiaddrWithPeerId) -> RpcResult<()>;
 
 	/// Remove a reserved peer. Returns the empty string or an error. The string
 	/// should encode only the PeerId e.g. `QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV`.

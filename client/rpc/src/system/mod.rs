@@ -26,6 +26,7 @@ use jsonrpsee::{
 	core::{async_trait, error::Error as JsonRpseeError, JsonValue, RpcResult},
 	types::error::{CallError, ErrorCode, ErrorObject},
 };
+use sc_network::config::MultiaddrWithPeerId;
 use sc_rpc_api::DenyUnsafe;
 use sc_tracing::logging;
 use sc_utils::mpsc::TracingUnboundedSender;
@@ -57,7 +58,7 @@ pub enum Request<B: traits::Block> {
 	/// Must return the state of the network.
 	NetworkState(oneshot::Sender<serde_json::Value>),
 	/// Must return any potential parse error.
-	NetworkAddReservedPeer(String, oneshot::Sender<Result<()>>),
+	NetworkAddReservedPeer(MultiaddrWithPeerId, oneshot::Sender<Result<()>>),
 	/// Must return any potential parse error.
 	NetworkRemoveReservedPeer(String, oneshot::Sender<Result<()>>),
 	/// Must return the list of reserved peers
@@ -138,7 +139,7 @@ impl<B: traits::Block> SystemApiServer<B::Hash, <B::Header as HeaderT>::Number> 
 		rx.await.map_err(|e| JsonRpseeError::to_call_error(e))
 	}
 
-	async fn system_add_reserved_peer(&self, peer: String) -> RpcResult<()> {
+	async fn system_add_reserved_peer(&self, peer: MultiaddrWithPeerId) -> RpcResult<()> {
 		self.deny_unsafe.check_if_safe()?;
 		let (tx, rx) = oneshot::channel();
 		let _ = self.send_back.unbounded_send(Request::NetworkAddReservedPeer(peer, tx));
