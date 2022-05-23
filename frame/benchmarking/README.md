@@ -155,7 +155,7 @@ cargo build --profile=production --features runtime-benchmarks
 
 The production profile applies various compiler optimizations.  
 These optimizations slow down the compilation process *a lot*.  
-If you are just testing things out and don't need final numbers, use `--release` instead.
+If you are just testing things out and don't need final numbers, don't include `--profile=production`.
 
 ## Running Benchmarks
 
