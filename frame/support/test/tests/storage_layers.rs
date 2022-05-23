@@ -229,7 +229,7 @@ fn storage_layer_commit_then_rollback() {
 }
 
 #[test]
-fn storage_layer_in_decl_module() {
+fn storage_layer_in_pallet_call() {
 	TestExternalities::default().execute_with(|| {
 		use sp_runtime::traits::Dispatchable;
 		let call1 = Call::MyPallet(pallet::Call::set_value { value: 2 });
