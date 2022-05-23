@@ -68,8 +68,11 @@ mod test_weights {
 		let w = super::ExtrinsicBaseWeight::get();
 
 		// At least 10 µs.
-		assert!(w >= 10 * constants::WEIGHT_PER_MICROS, "Weight should be at least 10 µs.");
+		assert!(
+			w.computation() >= 10 * constants::WEIGHT_PER_MICROS,
+			"Weight should be at least 10 µs."
+		);
 		// At most 1 ms.
-		assert!(w <= constants::WEIGHT_PER_MILLIS, "Weight should be at most 1 ms.");
+		assert!(w.computation() <= constants::WEIGHT_PER_MILLIS, "Weight should be at most 1 ms.");
 	}
 }

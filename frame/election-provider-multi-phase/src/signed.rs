@@ -973,7 +973,7 @@ mod tests {
 					raw.solution.unique_targets().len() as u32,
 				);
 				// default solution will have 5 edges (5 * 5 + 10)
-				assert_eq!(solution_weight, 35);
+				assert_eq!(solution_weight.computation(), 35);
 				assert_eq!(raw.solution.voter_count(), 5);
 				assert_eq!(<Runtime as Config>::SignedMaxWeight::get().computation(), 40);
 

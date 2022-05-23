@@ -351,13 +351,15 @@ impl MinerConfig for Runtime {
 	type Solution = TestNposSolution;
 
 	fn solution_weight(v: u32, t: u32, a: u32, d: u32) -> Weight {
-		match MockWeightInfo::get() {
-			MockedWeightInfo::Basic =>
-				(10 as Weight).saturating_add((5 as Weight).saturating_mul(a as Weight)),
-			MockedWeightInfo::Complex => (0 * v + 0 * t + 1000 * a + 0 * d) as Weight,
+		let computation_weight = match MockWeightInfo::get() {
+			MockedWeightInfo::Basic => (10 as ComputationWeight)
+				.saturating_add((5 as ComputationWeight).saturating_mul(a as ComputationWeight)),
+			MockedWeightInfo::Complex => (0 * v + 0 * t + 1000 * a + 0 * d) as ComputationWeight,
 			MockedWeightInfo::Real =>
 				<() as multi_phase::weights::WeightInfo>::feasibility_check(v, t, a, d),
-		}
+		};
+
+		Weight::from_computation(computation_weight)
 	}
 }
 

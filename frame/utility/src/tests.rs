@@ -620,7 +620,7 @@ fn force_batch_works() {
 			Origin::signed(1),
 			vec![
 				call_transfer(2, 5),
-				call_foobar(true, 75, None),
+				call_foobar(true, Weight::from_computation(75), None),
 				call_transfer(2, 10),
 				call_transfer(2, 5),
 			]
