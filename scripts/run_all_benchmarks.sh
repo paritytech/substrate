@@ -74,7 +74,7 @@ EXCLUDED_PALLETS=(
 
 # Load all pallet names in an array.
 ALL_PALLETS=($(
-  $SUBSTRATE benchmark pallet --list --dev |\
+  $SUBSTRATE benchmark pallet --list --chain=dev |\
     tail -n+2 |\
     cut -d',' -f1 |\
     sort |\
@@ -102,7 +102,7 @@ for PALLET in "${PALLETS[@]}"; do
   echo "Pallet: $PALLET, Weight file: $WEIGHT_FILE";
 
   $SUBSTRATE benchmark pallet \
-    --dev \
+    --chain=dev \
     --steps=50 \
     --repeat=20 \
     --pallet="$PALLET" \
@@ -116,7 +116,7 @@ done
 # Update the block and extrinsic overhead weights.
 echo "[+] Benchmarking block and extrinsic overheads..."
 $SUBSTRATE benchmark overhead \
-  --dev \
+  --chain=dev \
   --execution=wasm \
   --wasm-execution=compiled \
   --weight-path="./frame/support/src/weights/" \
@@ -124,4 +124,4 @@ $SUBSTRATE benchmark overhead \
   --repeat=100
 
 echo "[+] Benchmarking the machine..."
-$SUBSTRATE benchmark machine --dev
+$SUBSTRATE benchmark machine --chain=dev
