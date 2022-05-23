@@ -90,7 +90,7 @@ fn test_setup_works() {
 mod bonded_pool {
 	use super::*;
 	#[test]
-	fn points_to_issue_works() {
+	fn balance_to_point_works() {
 		ExtBuilder::default().build_and_execute(|| {
 			let mut bonded_pool = BondedPool::<Runtime> {
 				id: 123123,
@@ -123,11 +123,12 @@ mod bonded_pool {
 
 			// 0 points : 100 balance
 			StakingMock::set_bonded_balance(bonded_pool.bonded_account(), 100);
-			bonded_pool.points = 100;
+			bonded_pool.points = 0;
 			assert_eq!(bonded_pool.balance_to_point(10), 10);
 
 			// 10 points : 3 balance ratio
 			StakingMock::set_bonded_balance(bonded_pool.bonded_account(), 30);
+			bonded_pool.points = 100;
 			assert_eq!(bonded_pool.balance_to_point(10), 33);
 
 			// 2 points : 3 balance ratio
@@ -143,7 +144,7 @@ mod bonded_pool {
 	}
 
 	#[test]
-	fn balance_to_unbond_works() {
+	fn points_to_balance_works() {
 		ExtBuilder::default().build_and_execute(|| {
 			// 1 balance : 1 points ratio
 			let mut bonded_pool = BondedPool::<Runtime> {
@@ -165,7 +166,7 @@ mod bonded_pool {
 			assert_eq!(bonded_pool.points_to_balance(10), 20);
 
 			// 100 balance : 0 points ratio
-			StakingMock::set_bonded_balance(bonded_pool.bonded_account(), 0);
+			StakingMock::set_bonded_balance(bonded_pool.bonded_account(), 100);
 			bonded_pool.points = 0;
 			assert_eq!(bonded_pool.points_to_balance(10), 0);
 
