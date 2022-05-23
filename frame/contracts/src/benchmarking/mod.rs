@@ -2075,6 +2075,39 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
+	seal_account_entrance_count {
+		let r in 0 .. API_BENCHMARK_BATCHES;
+		let dummy_code = WasmModule::<T>::dummy_with_bytes(0);
+		let accounts = (0..r * API_BENCHMARK_BATCH_SIZE)
+			.map(|i| Contract::with_index(i + 1, dummy_code.clone(), vec![]))
+			.collect::<Result<Vec<_>, _>>()?;
+		let account_id_len = accounts.get(0).map(|i| i.account_id.encode().len()).unwrap_or(0);
+		let account_id_bytes = accounts.iter().flat_map(|x| x.account_id.encode()).collect();
+		let code = WasmModule::<T>::from(ModuleDefinition {
+			memory: Some(ImportedMemory::max::<T>()),
+			imported_functions: vec![ImportedFunction {
+				module: "__unstable__",
+				name: "seal_account_entrance_count",
+				params: vec![ValueType::I32],
+				return_type: Some(ValueType::I32),
+			}],
+			data_segments: vec![
+				DataSegment {
+					offset: 0,
+					value: account_id_bytes,
+				},
+			],
+			call_body: Some(body::repeated_dyn(r * API_BENCHMARK_BATCH_SIZE, vec![
+				Counter(0 as u32, account_id_len as u32), // account_ptr
+				Regular(Instruction::Call(0)),
+				Regular(Instruction::Drop),
+			])),
+			.. Default::default()
+		});
+		let instance = Contract::<T>::new(code, vec![])?;
+		let origin = RawOrigin::Signed(instance.caller.clone());
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
+
 	// We make the assumption that pushing a constant and dropping a value takes roughly
 	// the same amount of time. We follow that `t.load` and `drop` both have the weight
 	// of this benchmark / 2. We need to make this assumption because there is no way

@@ -529,6 +529,7 @@ mod tests {
 			self.reentrant_count.push(12u8);
 			12
 		}
+		fn account_entrance_count(&mut self, _account_id: AccountIdOf<Self::T>) -> u32 { unimplemented!() }
 	}
 
 	fn execute<E: BorrowMut<MockExt>>(wat: &str, input_data: Vec<u8>, mut ext: E) -> ExecResult {

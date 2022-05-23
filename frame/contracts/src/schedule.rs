@@ -419,6 +419,9 @@ pub struct HostFnWeights<T: Config> {
 	/// Weight of calling `seal_reentrant_count`.
 	pub reentrant_count: Weight,
 
+	/// Weight of calling `seal_account_entrance_count`.
+	pub account_entrance_count: Weight,
+
 	/// The type parameter is used in the default implementation.
 	#[codec(skip)]
 	pub _phantom: PhantomData<T>,
@@ -655,6 +658,7 @@ impl<T: Config> Default for HostFnWeights<T> {
 			ecdsa_recover: cost_batched!(seal_ecdsa_recover),
 			ecdsa_to_eth_address: cost_batched!(seal_ecdsa_to_eth_address),
 			reentrant_count: cost_batched!(seal_reentrant_count),
+			account_entrance_count: cost_batched!(seal_account_entrance_count),
 			_phantom: PhantomData,
 		}
 	}

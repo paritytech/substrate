@@ -226,6 +226,9 @@ pub enum RuntimeCosts {
 	/// Weight of calling `seal_reentrant_count`
 	#[cfg(feature = "unstable-interface")]
 	ReentrantCount,
+	/// Weight of calling `seal_account_entrance_count`
+	#[cfg(feature = "unstable-interface")]
+	AccountEntranceCount,
 }
 
 impl RuntimeCosts {
@@ -307,6 +310,8 @@ impl RuntimeCosts {
 			EcdsaToEthAddress => s.ecdsa_to_eth_address,
 			#[cfg(feature = "unstable-interface")]
 			ReentrantCount => s.reentrant_count,
+			#[cfg(feature = "unstable-interface")]
+			AccountEntranceCount => s.account_entrance_count,
 		};
 		RuntimeToken {
 			#[cfg(test)]
@@ -2082,10 +2087,19 @@ define_env!(Env, <E: Ext>,
 		}
 	},
 
-	// Returns how often the currently executing contract exists on the call stack in addition
+	// Returns then number of times currently executing contract exists on the call stack in addition
 	// to the calling instance. A value of 0 means no reentrancy.
 	[__unstable__] seal_reentrant_count(ctx) -> u32 => {
 		ctx.charge_gas(RuntimeCosts::ReentrantCount)?;
 		Ok(ctx.ext.reentrant_count() as u32)
+	},
+
+	// Returns the number of times specified contract exists on the call stack. Delegated calls are
+	// not calculated as separate calls.
+	// A value of 0 means it does not exist on the stack.
+	[__unstable__] seal_account_entrance_count(ctx, account_ptr: u32) -> u32 => {
+		ctx.charge_gas(RuntimeCosts::AccountEntranceCount)?;
+		let account_id: <<E as Ext>::T as frame_system::Config>::AccountId = ctx.read_sandbox_memory_as(account_ptr)?;
+		Ok(ctx.ext.account_entrance_count(account_id) as u32)
 	},
 );

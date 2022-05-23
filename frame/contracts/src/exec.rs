@@ -243,9 +243,14 @@ pub trait Ext: sealing::Sealed {
 	/// Sets new code hash for existing contract.
 	fn set_code_hash(&mut self, hash: CodeHash<Self::T>) -> Result<(), DispatchError>;
 
-	/// Returns how often the currently executing contract exists on the call stack
-	/// in addition to the calling instance. So a value of 0 means no reentrancy.
+	/// Returns then number of times currently executing contract exists on the call stack in addition
+	/// to the calling instance. A value of 0 means no reentrancy.
 	fn reentrant_count(&mut self) -> u32;
+
+	/// Returns the number of times specified contract exists on the call stack. Delegated calls are not
+	/// calculated as separate entrance.
+	/// A value of 0 means it does not exist on the call stack.
+	fn account_entrance_count(&mut self, account_id: AccountIdOf<Self::T>) -> u32;
 }
 
 /// Describes the different functions that can be exported by an [`Executable`].
@@ -1233,8 +1238,12 @@ where
 	}
 
 	fn reentrant_count(&mut self) -> u32 {
-		let id: &AccountIdOf<Self::T> = &self.top_frame().account_id;
-		(self.frames().filter_map(|f| Some(f.delegate_caller.is_none() && &f.account_id == id)).count() - 1).try_into().unwrap()
+		let id: AccountIdOf<Self::T> = self.top_frame().account_id.clone();
+		self.account_entrance_count(id) - 1u32
+	}
+
+	fn account_entrance_count(&mut self, account_id: AccountIdOf<Self::T>) -> u32 {
+		self.frames().filter_map(|f| Some(f.delegate_caller.is_none() && &f.account_id == &account_id)).count() as u32
 	}
 }
 

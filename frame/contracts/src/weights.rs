@@ -108,6 +108,7 @@ pub trait WeightInfo {
 	fn seal_ecdsa_to_eth_address(r: u32, ) -> Weight;
 	fn seal_set_code_hash(r: u32, ) -> Weight;
 	fn seal_reentrant_count(r: u32, ) -> Weight;
+	fn seal_account_entrance_count(r: u32, ) -> Weight;
 	fn instr_i64const(r: u32, ) -> Weight;
 	fn instr_i64load(r: u32, ) -> Weight;
 	fn instr_i64store(r: u32, ) -> Weight;
@@ -848,6 +849,17 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add((24_064_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
+	}
+	// Storage: System Account (r:1 w:0)
+	// Storage: Contracts ContractInfoOf (r:1 w:1)
+	// Storage: Contracts CodeStorage (r:1 w:0)
+	// Storage: Timestamp Now (r:1 w:0)
+	fn seal_account_entrance_count(r: u32, ) -> Weight {
+		(179_313_000 as Weight)
+			// Standard Error: 610_000
+			.saturating_add((63_085_000 as Weight).saturating_mul(r as Weight))
+			.saturating_add(T::DbWeight::get().reads(4 as Weight))
+			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	fn instr_i64const(r: u32, ) -> Weight {
 		(74_627_000 as Weight)
@@ -1792,6 +1804,17 @@ impl WeightInfo for () {
 			.saturating_add((24_064_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
+	}
+	// Storage: System Account (r:1 w:0)
+	// Storage: Contracts ContractInfoOf (r:1 w:1)
+	// Storage: Contracts CodeStorage (r:1 w:0)
+	// Storage: Timestamp Now (r:1 w:0)
+	fn seal_account_entrance_count(r: u32, ) -> Weight {
+		(179_313_000 as Weight)
+			// Standard Error: 610_000
+			.saturating_add((63_085_000 as Weight).saturating_mul(r as Weight))
+			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
+			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	fn instr_i64const(r: u32, ) -> Weight {
 		(74_627_000 as Weight)
