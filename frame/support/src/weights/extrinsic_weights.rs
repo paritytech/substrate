@@ -43,13 +43,13 @@ parameter_types! {
 	/// Time to execute a NO-OP extrinsic, for example `System::remark`.
 	/// Calculated by multiplying the *Average* with `1` and adding `0`.
 	///
-	/// Stats [NS]:
+	/// Stats nanoseconds:
 	///   Min, Max: 85_423, 86_142
 	///   Average:  85_795
 	///   Median:   85_790
 	///   Std-Dev:  162.37
 	///
-	/// Percentiles [NS]:
+	/// Percentiles nanoseconds:
 	///   99th: 86_115
 	///   95th: 86_069
 	///   75th: 85_937
