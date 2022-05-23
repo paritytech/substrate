@@ -1875,14 +1875,10 @@ where
 	let finalized = client.info().finalized_number;
 	let revertible = blocks.min(best_number - finalized);
 
-	let revert_number = best_number - revertible;
-	let revert_hash =
-		client
-			.block_hash_from_id(&BlockId::Number(revert_number))?
-			.ok_or(ClientError::Backend(format!(
-				"Unexpected hash lookup failure for block number: {}",
-				revert_number
-			)))?;
+	let revert_up_to_number = best_number - revertible;
+	let revert_up_to_hash = client.hash(revert_up_to_number)?.ok_or(ClientError::Backend(
+		format!("Unexpected hash lookup failure for block number: {}", revert_up_to_number),
+	))?;
 
 	// Revert epoch changes tree.
 
@@ -1891,11 +1887,11 @@ where
 		aux_schema::load_epoch_changes::<Block, Client>(&*client, config.genesis_config())?;
 	let mut epoch_changes = epoch_changes.shared_data();
 
-	if revert_number == Zero::zero() {
+	if revert_up_to_number == Zero::zero() {
 		// Special case, no epoch changes data were present on genesis.
 		*epoch_changes = EpochChangesFor::<Block, Epoch>::default();
 	} else {
-		epoch_changes.revert(descendent_query(&*client), revert_hash, revert_number);
+		epoch_changes.revert(descendent_query(&*client), revert_up_to_hash, revert_up_to_number);
 	}
 
 	// Remove block weights added after the revert point.
@@ -1903,7 +1899,7 @@ where
 	let mut weight_keys = HashSet::with_capacity(revertible.saturated_into());
 
 	let leaves = backend.blockchain().leaves()?.into_iter().filter(|&leaf| {
-		sp_blockchain::tree_route(&*client, revert_hash, leaf)
+		sp_blockchain::tree_route(&*client, revert_up_to_hash, leaf)
 			.map(|route| route.retracted().is_empty())
 			.unwrap_or_default()
 	});
@@ -1912,7 +1908,7 @@ where
 		let mut hash = leaf;
 		loop {
 			let meta = client.header_metadata(hash)?;
-			if meta.number <= revert_number ||
+			if meta.number <= revert_up_to_number ||
 				!weight_keys.insert(aux_schema::block_weight_key(hash))
 			{
 				// We've reached the revert point or an already processed branch, stop here.
