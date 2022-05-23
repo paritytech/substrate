@@ -1148,9 +1148,7 @@ mod mock {
 		}
 
 		sp_tracing::try_init_simple();
-		let mut ext: sp_io::TestExternalities = (custom_storage, version).into();
-
-		ext
+		(custom_storage, version).into()
 	}
 
 	pub(crate) fn run_to_block(n: u32) -> (H256, u64) {
