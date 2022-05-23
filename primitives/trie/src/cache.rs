@@ -152,6 +152,12 @@ impl<H: Hasher> SharedNodeCache<H> {
 			}
 		});
 	}
+
+	/// Reset the cache.
+	fn reset(&mut self) {
+		self.size_in_bytes = 0;
+		self.lru.clear();
+	}
 }
 
 /// The size of the cache.
@@ -241,6 +247,22 @@ impl<H: Hasher> SharedTrieCache<H> {
 		let node_cache_size = self.node_cache.read().size_in_bytes;
 
 		node_cache_size + value_cache_size
+	}
+
+	/// Reset the node cache.
+	pub fn reset_node_cache(&self) {
+		self.node_cache.write().reset();
+	}
+
+	/// Reset the value cache.
+	pub fn reset_value_cache(&self) {
+		self.value_cache.write().clear();
+	}
+
+	/// Reset the entire cache.
+	pub fn reset(&self) {
+		self.reset_node_cache();
+		self.reset_value_cache();
 	}
 }
 
@@ -622,10 +644,16 @@ mod tests {
 		let (db, root) = create_trie();
 
 		let shared_cache = Cache::new(CACHE_SIZE);
-		let local_cache = shared_cache.local_cache();
 
-		// Run this twice so that we use the data cache in the second run.
-		for _ in 0..2 {
+		for i in 0..5 {
+			// Clear some of the caches.
+			if i == 2 {
+				shared_cache.node_cache.write().reset();
+			} else if i == 3 {
+				shared_cache.value_cache.write().clear();
+			}
+
+			let local_cache = shared_cache.local_cache();
 			let recorder = Recorder::default();
 
 			{
@@ -663,11 +691,18 @@ mod tests {
 		let (db, root) = create_trie();
 
 		let shared_cache = Cache::new(CACHE_SIZE);
-		let local_cache = shared_cache.local_cache();
 
 		// Run this twice so that we use the data cache in the second run.
-		for _ in 0..2 {
+		for i in 0..5 {
+			// Clear some of the caches.
+			if i == 2 {
+				shared_cache.node_cache.write().reset();
+			} else if i == 3 {
+				shared_cache.value_cache.write().clear();
+			}
+
 			let recorder = Recorder::default();
+			let local_cache = shared_cache.local_cache();
 			let mut new_root = root;
 
 			{

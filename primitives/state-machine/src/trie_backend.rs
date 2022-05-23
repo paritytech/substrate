@@ -387,7 +387,7 @@ where
 
 #[cfg(test)]
 pub mod tests {
-	use crate::InMemoryBackend;
+	use crate::{new_in_mem, InMemoryBackend};
 
 	use super::*;
 	use codec::Encode;
@@ -396,7 +396,7 @@ pub mod tests {
 	use sp_trie::{
 		cache::{CacheSize, SharedTrieCache},
 		trie_types::{TrieDBBuilder, TrieDBMutBuilderV0, TrieDBMutBuilderV1},
-		KeySpacedDBMut, PrefixedMemoryDB, Trie, TrieCache, TrieMut,
+		KeySpacedDBMut, PrefixedKey, PrefixedMemoryDB, Trie, TrieCache, TrieMut,
 	};
 	use std::{collections::HashSet, iter};
 
@@ -762,8 +762,16 @@ pub mod tests {
 			.for_each(|i| assert_eq!(trie.storage(&[i]).unwrap().unwrap(), vec![i; size_content]));
 
 		for cache in [Some(SharedTrieCache::new(CacheSize::Unlimited)), None] {
-			// Run multiple times to have a filled cache.
-			for _ in 0..3 {
+			// Run multiple times to have a different cache conditions.
+			for i in 0..5 {
+				if let Some(cache) = &cache {
+					if i == 2 {
+						cache.reset_node_cache();
+					} else if i == 3 {
+						cache.reset_value_cache();
+					}
+				}
+
 				let proving = TrieBackendBuilder::wrap(&trie)
 					.with_recorder(Recorder::default())
 					.with_optional_cache(cache.as_ref().map(|c| c.local_cache()))
@@ -787,8 +795,16 @@ pub mod tests {
 	}
 	fn proof_record_works_with_iter_inner(state_version: StateVersion) {
 		for cache in [Some(SharedTrieCache::new(CacheSize::Unlimited)), None] {
-			// Run multiple times to have a filled cache.
-			for _ in 0..3 {
+			// Run multiple times to have a different cache conditions.
+			for i in 0..5 {
+				if let Some(cache) = &cache {
+					if i == 2 {
+						cache.reset_node_cache();
+					} else if i == 3 {
+						cache.reset_value_cache();
+					}
+				}
+
 				let contents = (0..64).map(|i| (vec![i], Some(vec![i]))).collect::<Vec<_>>();
 				let in_memory = InMemoryBackend::<BlakeTwo256>::default();
 				let in_memory = in_memory.update(vec![(None, contents)], state_version);
@@ -837,7 +853,7 @@ pub mod tests {
 			(Some(child_info_1.clone()), (28..65).map(|i| (vec![i], Some(vec![i]))).collect()),
 			(Some(child_info_2.clone()), (10..15).map(|i| (vec![i], Some(vec![i]))).collect()),
 		];
-		let in_memory = InMemoryBackend::<BlakeTwo256>::default();
+		let in_memory = new_in_mem::<BlakeTwo256, PrefixedKey<BlakeTwo256>>();
 		let in_memory = in_memory.update(contents, state_version);
 		let child_storage_keys = vec![child_info_1.to_owned(), child_info_2.to_owned()];
 		let in_memory_root = in_memory
@@ -856,9 +872,17 @@ pub mod tests {
 		});
 
 		for cache in [Some(SharedTrieCache::new(CacheSize::Unlimited)), None] {
-			// Run multiple times to have a filled cache.
-			for i in 0..3 {
+			// Run multiple times to have a different cache conditions.
+			for i in 0..5 {
 				eprintln!("Running with cache {}, iteration {}", cache.is_some(), i);
+
+				if let Some(cache) = &cache {
+					if i == 2 {
+						cache.reset_node_cache();
+					} else if i == 3 {
+						cache.reset_value_cache();
+					}
+				}
 
 				let trie = in_memory.as_trie_backend();
 				let trie_root = trie.storage_root(std::iter::empty(), state_version).0;
