@@ -399,6 +399,7 @@ pub mod tests {
 		KeySpacedDBMut, PrefixedKey, PrefixedMemoryDB, Trie, TrieCache, TrieMut,
 	};
 	use std::{collections::HashSet, iter};
+	use trie_db::NodeCodec;
 
 	const CHILD_KEY_1: &[u8] = b"sub1";
 
@@ -911,6 +912,9 @@ pub mod tests {
 					.with_optional_cache(cache.as_ref().map(|c| c.local_cache()))
 					.build();
 				assert_eq!(proving.child_storage(child_info_1, &[64]), Ok(Some(vec![64])));
+				assert_eq!(proving.child_storage(child_info_1, &[25]), Ok(None));
+				assert_eq!(proving.child_storage(child_info_2, &[14]), Ok(Some(vec![14])));
+				assert_eq!(proving.child_storage(child_info_2, &[25]), Ok(None));
 
 				let proof = proving.extract_proof().unwrap().unwrap();
 				let proof_check =
@@ -920,7 +924,74 @@ pub mod tests {
 					proof_check.child_storage(child_info_1, &[64]).unwrap().unwrap(),
 					vec![64]
 				);
+				assert_eq!(proof_check.child_storage(child_info_1, &[25]).unwrap(), None);
+
+				assert_eq!(
+					proof_check.child_storage(child_info_2, &[14]).unwrap().unwrap(),
+					vec![14]
+				);
+				assert_eq!(proof_check.child_storage(child_info_2, &[25]).unwrap(), None);
 			}
+		}
+
+		let child_1_root =
+			in_memory.child_storage_root(child_info_1, std::iter::empty(), state_version).0;
+		let trie = in_memory.as_trie_backend();
+		let nodes = {
+			let backend = TrieBackendBuilder::wrap(trie).with_recorder(Default::default()).build();
+			assert_eq!(backend.child_storage(child_info_1, &[40]).unwrap().unwrap(), vec![40]);
+
+			let proof = backend.extract_proof().unwrap().unwrap();
+
+			let mut nodes = Vec::new();
+			for node in proof.iter_nodes() {
+				let hash = BlakeTwo256::hash(&node);
+
+				if hash != child_1_root {
+					nodes.push((
+						hash,
+						sp_trie::NodeCodec::<BlakeTwo256>::decode(&node)
+							.unwrap()
+							.to_owned_node::<sp_trie::LayoutV1<BlakeTwo256>>()
+							.unwrap(),
+					))
+				}
+			}
+
+			nodes
+		};
+
+		let cache = SharedTrieCache::<BlakeTwo256>::new(CacheSize::Unlimited);
+		{
+			let local_cache = cache.local_cache();
+			let mut trie_cache = local_cache.as_trie_db_cache(child_1_root);
+
+			for (hash, node) in nodes {
+				trie_cache.get_or_insert_node(hash, &mut || Ok(node.clone())).unwrap();
+
+				if let Some(data) = node.data() {
+					if data == &[40] {
+						eprintln!("insert");
+						trie_cache.cache_value_for_key(
+							&[40],
+							(data.clone(), BlakeTwo256::hash(&data)).into(),
+						);
+					}
+				}
+			}
+		}
+
+		{
+			let proving = TrieBackendBuilder::wrap(&trie)
+				.with_recorder(Recorder::default())
+				.with_cache(cache.local_cache())
+				.build();
+			assert_eq!(proving.child_storage(child_info_1, &[40]), Ok(Some(vec![40])));
+
+			let proof = proving.extract_proof().unwrap().unwrap();
+			let proof_check =
+				create_proof_check_backend::<BlakeTwo256>(in_memory_root.into(), proof).unwrap();
+			assert_eq!(proof_check.child_storage(child_info_1, &[40]).unwrap().unwrap(), vec![40]);
 		}
 	}
 
