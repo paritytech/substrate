@@ -65,7 +65,7 @@ impl IdentityVerifier<AccountId> for AllianceIdentityVerifier {
 		{
 			judgements
 				.iter()
-				.any(|(_, &j)| matches!(j, Judgement::KnownGood | Judgement::Reasonable))
+				.any(|(_, j)| matches!(j, Judgement::KnownGood | Judgement::Reasonable))
 		} else {
 			false
 		}
