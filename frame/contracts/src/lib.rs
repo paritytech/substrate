@@ -128,6 +128,7 @@ use scale_info::TypeInfo;
 use sp_core::{crypto::UncheckedFrom, Bytes};
 use sp_runtime::traits::{Convert, Hash, Saturating, StaticLookup};
 use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
+use frame_support::weights::ComputationWeight;
 
 type CodeHash<T> = <T as frame_system::Config>::Hash;
 type TrieId = BoundedVec<u8, ConstU32<128>>;
@@ -212,7 +213,7 @@ impl<B: Get<BlockWeights>, const P: u32> Get<Weight> for DefaultContractAccessWe
 			.get(DispatchClass::Normal)
 			.max_total
 			.unwrap_or(block_weights.max_block) /
-			Weight::from(P)
+			(P as ComputationWeight)
 	}
 }
 

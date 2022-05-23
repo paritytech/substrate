@@ -24,6 +24,7 @@ use crate::{
 use codec::Encode;
 use frame_election_provider_support::{NposSolution, NposSolver, PerThing128, VoteWeight};
 use frame_support::{dispatch::DispatchResult, ensure, traits::Get, BoundedVec};
+use frame_support::weights::ComputationWeight;
 use frame_system::offchain::SubmitTransaction;
 use scale_info::TypeInfo;
 use sp_npos_elections::{
@@ -509,7 +510,7 @@ impl<T: MinerConfig> Miner<T> {
 		Self::trim_assignments_weight(
 			desired_targets,
 			size,
-			T::MaxWeight::get().computation(),
+			T::MaxWeight::get(),
 			&mut index_assignments,
 		);
 		Self::trim_assignments_length(
@@ -622,7 +623,7 @@ impl<T: MinerConfig> Miner<T> {
 		assignments: &mut Vec<IndexAssignmentOf<T>>,
 	) {
 		let maximum_allowed_voters =
-			Self::maximum_voter_for_weight(desired_targets, size, max_weight);
+			Self::maximum_voter_for_weight(desired_targets, size, max_weight.computation());
 		let removing: usize =
 			assignments.len().saturating_sub(maximum_allowed_voters.saturated_into());
 		log_no_system!(
@@ -652,7 +653,7 @@ impl<T: MinerConfig> Miner<T> {
 
 		// helper closures.
 		let weight_with = |active_voters: u32| -> ComputationWeight {
-			T::solution_weight(size.voters, size.targets, active_voters, desired_winners)
+			T::solution_weight(size.voters, size.targets, active_voters, desired_winners).computation()
 		};
 
 		let next_voters =

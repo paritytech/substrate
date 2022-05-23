@@ -416,8 +416,8 @@ pub mod pallet {
 			let dispatch_infos = calls.iter().map(|call| call.get_dispatch_info()).collect::<Vec<_>>();
 			let dispatch_weight = dispatch_infos.iter()
 				.map(|di| di.weight)
-				.fold(0, |total: Weight, weight: Weight| total.saturating_add(weight))
-				.saturating_add(T::WeightInfo::force_batch(calls.len() as u32));
+				.fold(Zero::zero(), |total: Weight, weight: Weight| (total.saturating_add(weight)))
+				.saturating_add(Weight::from_computation(T::WeightInfo::force_batch(calls.len() as u32)));
 			let dispatch_class = {
 				let all_operational = dispatch_infos.iter()
 					.map(|di| di.class)
@@ -439,7 +439,7 @@ pub mod pallet {
 			ensure!(calls_len <= Self::batched_calls_limit() as usize, Error::<T>::TooManyCalls);
 
 			// Track the actual weight of each of the batch calls.
-			let mut weight: Weight = 0;
+			let mut weight = Weight::zero();
 			// Track failed dispatch occur.
 			let mut has_error: bool = false;
 			for call in calls.into_iter() {
@@ -464,7 +464,7 @@ pub mod pallet {
 			} else {
 				Self::deposit_event(Event::BatchCompleted);
 			}
-			let base_weight = T::WeightInfo::batch(calls_len as u32);
+			let base_weight = Weight::from_computation(T::WeightInfo::batch(calls_len as u32));
 			Ok(Some(base_weight + weight).into())
 		}
 	}

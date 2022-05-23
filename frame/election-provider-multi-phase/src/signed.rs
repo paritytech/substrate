@@ -496,7 +496,7 @@ impl<T: Config> Pallet<T> {
 			size.targets,
 			raw_solution.solution.voter_count() as u32,
 			raw_solution.solution.unique_targets().len() as u32,
-		)
+		).computation()
 	}
 
 	/// Collect a sufficient deposit to store this solution.

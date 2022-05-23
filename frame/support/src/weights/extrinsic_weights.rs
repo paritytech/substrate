@@ -53,7 +53,7 @@ parameter_types! {
 	///   99th: 86_115
 	///   95th: 86_069
 	///   75th: 85_937
-	pub const ExtrinsicBaseWeight: Weight = 85_795 * WEIGHT_PER_NANOS;
+	pub const ExtrinsicBaseWeight: Weight = Weight::from_computation(85_795 * WEIGHT_PER_NANOS);
 }
 
 #[cfg(test)]
