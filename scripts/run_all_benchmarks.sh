@@ -90,12 +90,17 @@ PALLETS=($({ printf '%s\n' "${ALL_PALLETS[@]}" "${EXCLUDED_PALLETS[@]}"; } | sor
 
 echo "[+] Benchmarking ${#PALLETS[@]} Substrate pallets by excluding ${#EXCLUDED_PALLETS[@]} from ${#ALL_PALLETS[@]}."
 
+# Define the error file.
+ERR_FILE="benchmarking_errors.txt"
+# Delete the error file before each run.
+rm -f $ERR_FILE
+
 # Benchmark each pallet.
 for PALLET in "${PALLETS[@]}"; do
   # If `-p` is used, skip benchmarks until the start pallet.
   if [ ! -z "$start_pallet" ] && [ "$start_pallet" != "$PALLET" ]
   then
-    echo "Skipping ${PALLET}..."
+    echo "[+] Skipping ${PALLET}..."
     continue
   else
     unset start_pallet
@@ -103,9 +108,10 @@ for PALLET in "${PALLETS[@]}"; do
 
   FOLDER="$(echo "${PALLET#*_}" | tr '_' '-')";
   WEIGHT_FILE="./frame/${FOLDER}/src/weights.rs"
-  echo "Pallet: $PALLET, Weight file: $WEIGHT_FILE";
+  echo "[+] Benchmarking $PALLET with weight file $WEIGHT_FILE";
 
-  $SUBSTRATE benchmark pallet \
+  OUTPUT=$(
+    $SUBSTRATE benchmark pallet \
     --chain=dev \
     --steps=50 \
     --repeat=20 \
@@ -114,18 +120,44 @@ for PALLET in "${PALLETS[@]}"; do
     --execution=wasm \
     --wasm-execution=compiled \
     --template=./.maintain/frame-weight-template.hbs \
-    --output="$WEIGHT_FILE"
+    --output="$WEIGHT_FILE" 2>&1
+  )
+  if [ $? -ne 0 ]; then
+    echo "$OUTPUT" >> "$ERR_FILE"
+    echo "[-] Failed to benchmark $PALLET. Error written to $ERR_FILE; continuing..."
+  fi
 done
 
 # Update the block and extrinsic overhead weights.
 echo "[+] Benchmarking block and extrinsic overheads..."
-$SUBSTRATE benchmark overhead \
+OUTPUT=$(
+  $SUBSTRATE benchmark overhead \
   --chain=dev \
   --execution=wasm \
   --wasm-execution=compiled \
   --weight-path="./frame/support/src/weights/" \
   --warmup=10 \
-  --repeat=100
+  --repeat=100 2>&1
+)
+if [ $? -ne 0 ]; then
+  echo "$OUTPUT" >> "$ERR_FILE"
+  echo "[-] Failed to benchmark the block and extrinsic overheads. Error written to $ERR_FILE; continuing..."
+fi
 
 echo "[+] Benchmarking the machine..."
-$SUBSTRATE benchmark machine --chain=dev
+OUTPUT=$(
+  $SUBSTRATE benchmark machine --chain=dev 2>&1
+)
+if [ $? -ne 0 ]; then
+  # Do not write the error to the error file since it is not a benchmarking error.
+  echo "[-] Failed the machine benchmark:\n$OUTPUT"
+fi
+
+# Check if the error file exists.
+if [ -f "$ERR_FILE" ]; then
+  echo "[-] Some benchmarks failed. See: $ERR_FILE"
+  exit 1
+else
+  echo "[+] All benchmarks passed."
+  exit 0
+fi
