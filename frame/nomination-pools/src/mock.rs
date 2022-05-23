@@ -292,7 +292,7 @@ pub(crate) fn pool_events_since_last_call() -> Vec<super::Event<Runtime>> {
 	events.into_iter().skip(already_seen).collect()
 }
 
-/// All events of this pallet.
+/// All events of the `Balances` pallet.
 pub(crate) fn balances_events_since_last_call() -> Vec<pallet_balances::Event<Runtime>> {
 	let events = System::events()
 		.into_iter()
