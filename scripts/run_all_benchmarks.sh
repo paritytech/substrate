@@ -15,22 +15,44 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Fail if any sub-command fails.
-set -e
-# Fail if any sub-command in a pipe fails, not just the last one.
-set -o pipefail
-# Fail on undeclared variables.
-set -u
-# Fail on traps.
-set -E
-# Echo all executed commands.
-set -x
-
 # Runs all benchmarks for all pallets, for the Substrate node.
 # Should be run on a reference machine to gain accurate benchmarks
 # current reference machine: https://github.com/paritytech/substrate/pull/5848
 
-if [ "${1-default}" != "skip-build" ]
+while getopts 'bfp:v' flag; do
+  case "${flag}" in
+    b)
+      # Skip build.
+      skip_build='true'
+      ;;
+    f)
+      # Fail if any sub-command in a pipe fails, not just the last one.
+      set -o pipefail
+      # Fail on undeclared variables.
+      set -u
+      # Fail if any sub-command fails.
+      set -e
+      # Fail on traps.
+      set -E
+      ;;
+    p)
+      # Start at pallet
+      start_pallet="${OPTARG}"
+      ;;
+    v)
+      # Echo all executed commands.
+      set -x
+      ;;
+    *)
+      # Exit early.
+      echo "Bad options. Check Script."
+      exit 1
+      ;;
+  esac
+done
+
+
+if [ "$skip_build" != true ]
 then
   echo "[+] Compiling Substrate benchmarks..."
   cargo +nightly build --profile production --locked --features=runtime-benchmarks
@@ -66,6 +88,15 @@ echo "[+] Benchmarking ${#PALLETS[@]} Substrate pallets by excluding ${#EXCLUDED
 
 # Benchmark each pallet.
 for PALLET in "${PALLETS[@]}"; do
+  # If `-p` is used, skip benchmarks until the start pallet.
+  if [ ! -z "$start_pallet" ] && [ "$start_pallet" != "$PALLET" ]
+  then
+    echo "Skipping ${PALLET}..."
+    continue
+  else
+    unset start_pallet
+  fi
+
   FOLDER="$(echo "${PALLET#*_}" | tr '_' '-')";
   WEIGHT_FILE="./frame/${FOLDER}/src/weights.rs"
   echo "Pallet: $PALLET, Weight file: $WEIGHT_FILE";
