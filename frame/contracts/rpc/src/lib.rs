@@ -173,12 +173,12 @@ where
 }
 
 /// Contracts RPC methods.
-pub struct ContractsRpc<Client, Block> {
+pub struct Contracts<Client, Block> {
 	client: Arc<Client>,
 	_marker: PhantomData<Block>,
 }
 
-impl<Client, Block> ContractsRpc<Client, Block> {
+impl<Client, Block> Contracts<Client, Block> {
 	/// Create new `Contracts` with the given reference to the client.
 	pub fn new(client: Arc<Client>) -> Self {
 		Self { client, _marker: Default::default() }
@@ -193,7 +193,7 @@ impl<Client, Block, AccountId, Balance, Hash>
 		AccountId,
 		Balance,
 		Hash,
-	> for ContractsRpc<Client, Block>
+	> for Contracts<Client, Block>
 where
 	Block: BlockT,
 	Client: Send + Sync + 'static + ProvideRuntimeApi<Block> + HeaderBackend<Block>,

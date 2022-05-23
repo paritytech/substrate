@@ -49,7 +49,7 @@ pub trait BabeApi {
 }
 
 /// Provides RPC methods for interacting with Babe.
-pub struct BabeRpc<B: BlockT, C, SC> {
+pub struct Babe<B: BlockT, C, SC> {
 	/// shared reference to the client.
 	client: Arc<C>,
 	/// shared reference to EpochChanges
@@ -64,8 +64,8 @@ pub struct BabeRpc<B: BlockT, C, SC> {
 	deny_unsafe: DenyUnsafe,
 }
 
-impl<B: BlockT, C, SC> BabeRpc<B, C, SC> {
-	/// Creates a new instance of the BabeRpc handler.
+impl<B: BlockT, C, SC> Babe<B, C, SC> {
+	/// Creates a new instance of the Babe Rpc handler.
 	pub fn new(
 		client: Arc<C>,
 		shared_epoch_changes: SharedEpochChanges<B, Epoch>,
@@ -79,7 +79,7 @@ impl<B: BlockT, C, SC> BabeRpc<B, C, SC> {
 }
 
 #[async_trait]
-impl<B: BlockT, C, SC> BabeApiServer for BabeRpc<B, C, SC>
+impl<B: BlockT, C, SC> BabeApiServer for Babe<B, C, SC>
 where
 	B: BlockT,
 	C: ProvideRuntimeApi<B>
@@ -239,7 +239,7 @@ mod tests {
 
 	fn test_babe_rpc_module(
 		deny_unsafe: DenyUnsafe,
-	) -> BabeRpc<Block, TestClient, sc_consensus::LongestChain<Backend, Block>> {
+	) -> Babe<Block, TestClient, sc_consensus::LongestChain<Backend, Block>> {
 		let builder = TestClientBuilder::new();
 		let (client, longest_chain) = builder.build_with_longest_chain();
 		let client = Arc::new(client);
@@ -250,7 +250,7 @@ mod tests {
 		let epoch_changes = link.epoch_changes().clone();
 		let keystore = create_temp_keystore::<AuthorityPair>(Sr25519Keyring::Alice).0;
 
-		BabeRpc::new(client.clone(), epoch_changes, keystore, config, longest_chain, deny_unsafe)
+		Babe::new(client.clone(), epoch_changes, keystore, config, longest_chain, deny_unsafe)
 	}
 
 	#[tokio::test]
