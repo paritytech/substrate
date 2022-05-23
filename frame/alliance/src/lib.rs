@@ -948,7 +948,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Ok(())
 		})?;
 
-		if role == MemberRole::Founder || role == MemberRole::Fellow {
+		if matches!(role, MemberRole::Founder | MemberRole::Fellow) {
 			let members = Self::votable_members_sorted();
 			T::MembershipChanged::change_members_sorted(&[], &[who.clone()], &members[..]);
 		}
