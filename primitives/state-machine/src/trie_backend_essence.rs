@@ -268,7 +268,7 @@ where
 		child_info: Option<&ChildInfo>,
 		prefix: Option<&[u8]>,
 		start_at: Option<&[u8]>,
-		mut f: F,
+		f: F,
 	) {
 		let root = if let Some(child_info) = child_info.as_ref() {
 			match self.child_root(child_info) {

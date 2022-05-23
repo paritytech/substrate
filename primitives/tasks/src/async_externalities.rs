@@ -105,11 +105,21 @@ impl Externalities for AsyncExternalities {
 		panic!("`place_child_storage`: should not be used in async externalities!")
 	}
 
-	fn kill_child_storage(&mut self, _child_info: &ChildInfo, _limit: Option<u32>) -> (bool, u32) {
+	fn kill_child_storage(
+		&mut self,
+		_child_info: &ChildInfo,
+		_maybe_limit: Option<u32>,
+		_maybe_cursor: Option<&[u8]>,
+	) -> (Option<Vec<u8>>, u32, u32, u32) {
 		panic!("`kill_child_storage`: should not be used in async externalities!")
 	}
 
-	fn clear_prefix(&mut self, _prefix: &[u8], _limit: Option<u32>) -> (bool, u32, u32) {
+	fn clear_prefix(
+		&mut self,
+		_prefix: &[u8],
+		_maybe_limit: Option<u32>,
+		_maybe_cursor: Option<&[u8]>,
+	) -> (Option<Vec<u8>>, u32, u32, u32) {
 		panic!("`clear_prefix`: should not be used in async externalities!")
 	}
 
@@ -117,8 +127,9 @@ impl Externalities for AsyncExternalities {
 		&mut self,
 		_child_info: &ChildInfo,
 		_prefix: &[u8],
-		_limit: Option<u32>,
-	) -> (bool, u32, u32) {
+		_maybe_limit: Option<u32>,
+		_maybe_cursor: Option<&[u8]>,
+	) -> (Option<Vec<u8>>, u32, u32, u32) {
 		panic!("`clear_child_prefix`: should not be used in async externalities!")
 	}
 

@@ -214,14 +214,14 @@ impl Externalities for BasicExternalities {
 		child_info: &ChildInfo,
 		_maybe_limit: Option<u32>,
 		_maybe_cursor: Option<&[u8]>,
-	) -> (Option<Vec<u8>>, u32) {
+	) -> (Option<Vec<u8>>, u32, u32, u32) {
 		let num_removed = self
 			.inner
 			.children_default
 			.remove(child_info.storage_key())
 			.map(|c| c.data.len())
-			.unwrap_or(0);
-		(None, num_removed as u32)
+			.unwrap_or(0) as u32;
+		(None, num_removed, num_removed, num_removed)
 	}
 
 	fn clear_prefix(
@@ -229,13 +229,13 @@ impl Externalities for BasicExternalities {
 		prefix: &[u8],
 		_maybe_limit: Option<u32>,
 		_maybe_cursor: Option<&[u8]>,
-	) -> (Option<Vec<u8>>, u32, u32) {
+	) -> (Option<Vec<u8>>, u32, u32, u32) {
 		if is_child_storage_key(prefix) {
 			warn!(
 				target: "trie",
 				"Refuse to clear prefix that is part of child storage key via main storage"
 			);
-			return (Some(prefix.to_vec()), 0, 0)
+			return (Some(prefix.to_vec()), 0, 0, 0)
 		}
 
 		let to_remove = self
@@ -247,11 +247,11 @@ impl Externalities for BasicExternalities {
 			.cloned()
 			.collect::<Vec<_>>();
 
-		let num_removed = to_remove.len();
+		let num_removed = to_remove.len() as u32;
 		for key in to_remove {
 			self.inner.top.remove(&key);
 		}
-		(None, num_removed as u32, num_removed as u32)
+		(None, num_removed, num_removed, num_removed)
 	}
 
 	fn clear_child_prefix(
@@ -260,7 +260,7 @@ impl Externalities for BasicExternalities {
 		prefix: &[u8],
 		_maybe_limit: Option<u32>,
 		_maybe_cursor: Option<&[u8]>,
-	) -> (Option<Vec<u8>>, u32, u32) {
+	) -> (Option<Vec<u8>>, u32, u32, u32) {
 		if let Some(child) = self.inner.children_default.get_mut(child_info.storage_key()) {
 			let to_remove = child
 				.data
@@ -270,13 +270,13 @@ impl Externalities for BasicExternalities {
 				.cloned()
 				.collect::<Vec<_>>();
 
-			let num_removed = to_remove.len();
+			let num_removed = to_remove.len() as u32;
 			for key in to_remove {
 				child.data.remove(&key);
 			}
-			(None, num_removed as u32, num_removed as u32)
+			(None, num_removed, num_removed, num_removed)
 		} else {
-			(None, 0, 0)
+			(None, 0, 0, 0)
 		}
 	}
 
@@ -445,7 +445,7 @@ mod tests {
 		ext.clear_child_storage(child_info, b"dog");
 		assert_eq!(ext.child_storage(child_info, b"dog"), None);
 
-		ext.kill_child_storage(child_info, None);
+		ext.kill_child_storage(child_info, None, None);
 		assert_eq!(ext.child_storage(child_info, b"doe"), None);
 	}
 
@@ -467,8 +467,8 @@ mod tests {
 			],
 		});
 
-		let res = ext.kill_child_storage(child_info, None);
-		assert_eq!(res, (true, 3));
+		let res = ext.kill_child_storage(child_info, None, None);
+		assert_eq!(res, (None, 3, 3, 3));
 	}
 
 	#[test]

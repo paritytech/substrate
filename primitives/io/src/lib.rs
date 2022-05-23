@@ -108,8 +108,8 @@ pub enum KillStorageResult {
 impl From<ClearPrefixResult> for KillStorageResult {
 	fn from(r: ClearPrefixResult) -> Self {
 		match r {
-			ClearPrefixResult::NoneLeft { db, .. } => Self::AllRemoved(db),
-			ClearPrefixResult::SomeLeft { db, .. } => Self::SomeRemaining(db),
+			ClearPrefixResult { maybe_cursor: None, db, .. } => Self::AllRemoved(db),
+			ClearPrefixResult { maybe_cursor: Some(..), db, .. } => Self::SomeRemaining(db),
 		}
 	}
 }
@@ -122,6 +122,8 @@ pub struct ClearPrefixResult {
 	db: u32,
 	/// The number of keys removed in total (including from non-persistent storage).
 	total: u32,
+	/// The number of backend iterations done for this operation.
+	loops: u32,
 	/// `None` if all keys to be removed were removed; `Some` if some keys are remaining, in which
 	/// case, the following call should pass this value in as the cursor.
 	maybe_cursor: Option<Vec<u8>>,
@@ -167,7 +169,7 @@ pub trait Storage {
 
 	/// Clear the storage of each key-value pair where the key starts with the given `prefix`.
 	fn clear_prefix(&mut self, prefix: &[u8]) {
-		let _ = Externalities::clear_prefix(*self, prefix, None);
+		let _ = Externalities::clear_prefix(*self, prefix, None, None);
 	}
 
 	/// Clear the storage of each key-value pair where the key starts with the given `prefix`.
@@ -197,10 +199,10 @@ pub trait Storage {
 	/// backend.
 	#[version(2)]
 	fn clear_prefix(&mut self, prefix: &[u8], limit: Option<u32>) -> KillStorageResult {
-		let (all_removed, num_removed, _) = Externalities::clear_prefix(*self, prefix, limit);
-		match all_removed {
-			true => KillStorageResult::AllRemoved(num_removed),
-			false => KillStorageResult::SomeRemaining(num_removed),
+		let (maybe_cursor, num_removed, ..) = Externalities::clear_prefix(*self, prefix, limit, None);
+		match maybe_cursor {
+			None => KillStorageResult::AllRemoved(num_removed),
+			Some(_) => KillStorageResult::SomeRemaining(num_removed),
 		}
 	}
 
@@ -234,15 +236,15 @@ pub trait Storage {
 		&mut self,
 		maybe_prefix: &[u8],
 		maybe_limit: Option<u32>,
-		maybe_cursor: Option<&[u8]>,
+		maybe_cursor: Option<Vec<u8>>,	//< TODO Make work or just Option<Vec<u8>>?
 	) -> ClearPrefixResult {
-		let (maybe_cursor, db, total) = Externalities::clear_prefix(
+		let (maybe_cursor, db, total, loops) = Externalities::clear_prefix(
 			*self,
 			maybe_prefix,
 			maybe_limit,
-			maybe_cursor,
+			maybe_cursor.as_ref().map(|x| &x[..]),
 		);
-		ClearPrefixResult { db, total, maybe_cursor }
+		ClearPrefixResult { db, total, loops, maybe_cursor }
 	}
 
 	/// Append the encoded `value` to the storage item at `key`.
@@ -386,7 +388,7 @@ pub trait DefaultChildStorage {
 	/// is removed.
 	fn storage_kill(&mut self, storage_key: &[u8]) {
 		let child_info = ChildInfo::new_default(storage_key);
-		self.kill_child_storage(&child_info, None);
+		self.kill_child_storage(&child_info, None, None);
 	}
 
 	/// Clear a child storage key.
@@ -395,8 +397,8 @@ pub trait DefaultChildStorage {
 	#[version(2)]
 	fn storage_kill(&mut self, storage_key: &[u8], limit: Option<u32>) -> bool {
 		let child_info = ChildInfo::new_default(storage_key);
-		let (all_removed, _num_removed) = self.kill_child_storage(&child_info, limit);
-		all_removed
+		let (maybe_cursor, ..) = self.kill_child_storage(&child_info, limit, None);
+		maybe_cursor.is_none()
 	}
 
 	/// Clear a child storage key.
@@ -405,11 +407,25 @@ pub trait DefaultChildStorage {
 	#[version(3)]
 	fn storage_kill(&mut self, storage_key: &[u8], limit: Option<u32>) -> KillStorageResult {
 		let child_info = ChildInfo::new_default(storage_key);
-		let (all_removed, num_removed) = self.kill_child_storage(&child_info, limit);
-		match all_removed {
-			true => KillStorageResult::AllRemoved(num_removed),
-			false => KillStorageResult::SomeRemaining(num_removed),
+		let (maybe_cursor, num_removed, ..) = self.kill_child_storage(&child_info, limit, None);
+		match maybe_cursor {
+			None => KillStorageResult::AllRemoved(num_removed),
+			Some(..) => KillStorageResult::SomeRemaining(num_removed),
 		}
+	}
+
+	/// Clear a child storage key.
+	///
+	/// See `Storage` module `clear_prefix` documentation for `limit` usage.
+	#[version(4, register_only)]
+	fn storage_kill(&mut self, storage_key: &[u8], maybe_limit: Option<u32>, maybe_cursor: Option<Vec<u8>>) -> ClearPrefixResult {
+		let child_info = ChildInfo::new_default(storage_key);
+		let (maybe_cursor, db, total, loops) = self.kill_child_storage(
+			&child_info,
+			maybe_limit,
+			maybe_cursor.as_ref().map(|x| &x[..])
+		);
+		ClearPrefixResult { maybe_cursor, db, total, loops }
 	}
 
 	/// Check a child storage key.
@@ -425,7 +441,7 @@ pub trait DefaultChildStorage {
 	/// Clear the child storage of each key-value pair where the key starts with the given `prefix`.
 	fn clear_prefix(&mut self, storage_key: &[u8], prefix: &[u8]) {
 		let child_info = ChildInfo::new_default(storage_key);
-		let _ = self.clear_child_prefix(&child_info, prefix, None);
+		let _ = self.clear_child_prefix(&child_info, prefix, None, None);
 	}
 
 	/// Clear the child storage of each key-value pair where the key starts with the given `prefix`.
@@ -439,10 +455,10 @@ pub trait DefaultChildStorage {
 		limit: Option<u32>,
 	) -> KillStorageResult {
 		let child_info = ChildInfo::new_default(storage_key);
-		let (all_removed, num_removed, ..) = self.clear_child_prefix(&child_info, prefix, limit);
-		match all_removed {
-			true => KillStorageResult::AllRemoved(num_removed),
-			false => KillStorageResult::SomeRemaining(num_removed),
+		let (maybe_cursor, num_removed, ..) = self.clear_child_prefix(&child_info, prefix, limit, None);
+		match maybe_cursor {
+			None => KillStorageResult::AllRemoved(num_removed),
+			Some(..) => KillStorageResult::SomeRemaining(num_removed),
 		}
 	}
 
@@ -455,11 +471,16 @@ pub trait DefaultChildStorage {
 		storage_key: &[u8],
 		prefix: &[u8],
 		maybe_limit: Option<u32>,
-		maybe_cursor: Option<&[u8]>,
+		maybe_cursor: Option<Vec<u8>>,
 	) -> ClearPrefixResult {
 		let child_info = ChildInfo::new_default(storage_key);
-		let (maybe_cursor, db, total) = self.clear_child_prefix(&child_info, prefix, maybe_limit, maybe_cursor);
-		ClearPrefixResult { db, total, maybe_cursor }
+		let (maybe_cursor, db, total, loops) = self.clear_child_prefix(
+			&child_info,
+			prefix,
+			maybe_limit,
+			maybe_cursor.as_ref().map(|x| &x[..]),
+		);
+		ClearPrefixResult { db, total, maybe_cursor, loops }
 	}
 
 	/// Default child root calculation.

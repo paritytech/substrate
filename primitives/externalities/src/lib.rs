@@ -118,32 +118,48 @@ pub trait Externalities: ExtensionStore {
 
 	/// Clear an entire child storage.
 	///
-	/// Deletes all keys from the overlay and up to `limit` keys from the backend. No
-	/// limit is applied if `limit` is `None`. Returned boolean is `true` if the child trie was
-	/// removed completely and `false` if there are remaining keys after the function
-	/// returns. Returned `u32` is the number of keys that was removed at the end of the
-	/// operation.
+	/// Deletes all keys from the overlay and up to `maybe_limit` keys from the backend. No
+	/// limit is applied if `maybe_limit` is `None`. Returns the cursor for the next call as `Some`
+	/// if the child trie deletion operation is incomplete. In this case, it should be passed into
+	/// the next call to avoid unaccounted iterations on the backend. Returns also the the number
+	/// of keys that were removed from the backend, the number of unique keys removed in total
+	/// (including from the overlay) and the number of backend iterations done.
+	///
+	/// As long as `maybe_cursor` is passed from the result of the previous call, then the number of
+	/// iterations done will only ever be one more than the number of keys removed.
+	/// than `maybe_limit` (if `Some`).
 	///
 	/// # Note
 	///
 	/// An implementation is free to delete more keys than the specified limit as long as
 	/// it is able to do that in constant time.
-	fn kill_child_storage(&mut self, child_info: &ChildInfo, limit: Option<u32>) -> (bool, u32);
+	fn kill_child_storage(
+		&mut self,
+		child_info: &ChildInfo,
+		maybe_limit: Option<u32>,
+		maybe_cursor: Option<&[u8]>,
+	) -> (Option<Vec<u8>>, u32, u32, u32);
 
 	/// Clear storage entries which keys are start with the given prefix.
 	///
-	/// `limit` and result works as for `kill_child_storage`.
-	fn clear_prefix(&mut self, prefix: &[u8], limit: Option<u32>) -> (bool, u32, u32);
+	/// `maybe_limit`, `maybe_cursor` and result works as for `kill_child_storage`.
+	fn clear_prefix(
+		&mut self,
+		prefix: &[u8],
+		maybe_limit: Option<u32>,
+		maybe_cursor: Option<&[u8]>,
+	) -> (Option<Vec<u8>>, u32, u32, u32);
 
 	/// Clear child storage entries which keys are start with the given prefix.
 	///
-	/// `limit` and result works as for `kill_child_storage`.
+	/// `maybe_limit`, `maybe_cursor` and result works as for `kill_child_storage`.
 	fn clear_child_prefix(
 		&mut self,
 		child_info: &ChildInfo,
 		prefix: &[u8],
-		limit: Option<u32>,
-	) -> (bool, u32, u32);
+		maybe_limit: Option<u32>,
+		maybe_cursor: Option<&[u8]>,
+	) -> (Option<Vec<u8>>, u32, u32, u32);
 
 	/// Set or clear a storage entry (`key`) of current contract being called (effective
 	/// immediately).
