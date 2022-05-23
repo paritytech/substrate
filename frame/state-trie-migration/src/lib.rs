@@ -848,6 +848,8 @@ mod benchmarks {
 			// function.
 			let null = MigrationLimits::default();
 			let caller = frame_benchmarking::whitelisted_caller();
+			// Allow signed migrations.
+			SignedMigrationMaxLimits::<T>::put(MigrationLimits { size: 1024, item: 5 });
 		}: _(frame_system::RawOrigin::Signed(caller), null, 0, StateTrieMigration::<T>::migration_process())
 		verify {
 			assert_eq!(StateTrieMigration::<T>::migration_process(), Default::default())
@@ -1146,14 +1148,7 @@ mod mock {
 		}
 
 		sp_tracing::try_init_simple();
-		let mut ext: sp_io::TestExternalities = (custom_storage, version).into();
-
-		// set some genesis values for this pallet as well.
-		ext.execute_with(|| {
-			SignedMigrationMaxLimits::<Test>::put(MigrationLimits { size: 1024, item: 5 });
-		});
-
-		ext
+		(custom_storage, version).into()
 	}
 
 	pub(crate) fn run_to_block(n: u32) -> (H256, u64) {
@@ -1291,6 +1286,9 @@ mod test {
 	fn signed_migrate_works() {
 		new_test_ext(StateVersion::V0, true, None, None).execute_with(|| {
 			assert_eq!(MigrationProcess::<Test>::get(), Default::default());
+
+			// Allow signed migrations.
+			SignedMigrationMaxLimits::<Test>::put(MigrationLimits { size: 1024, item: 5 });
 
 			// can't submit if limit is too high.
 			frame_support::assert_err!(

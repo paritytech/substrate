@@ -28,10 +28,7 @@ use super::{
 use crate::SubscriptionTaskExecutor;
 
 use futures::{future, stream, FutureExt, StreamExt};
-use jsonrpsee::{
-	core::{async_trait, Error as JsonRpseeError},
-	PendingSubscription,
-};
+use jsonrpsee::{core::Error as JsonRpseeError, PendingSubscription};
 use sc_client_api::{
 	Backend, BlockBackend, BlockchainEvents, CallExecutor, ExecutorProvider, ProofProvider,
 	StorageProvider,
@@ -170,7 +167,6 @@ where
 	}
 }
 
-#[async_trait]
 impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Client>
 where
 	Block: BlockT + 'static,
@@ -190,7 +186,7 @@ where
 		+ 'static,
 	Client::Api: Metadata<Block>,
 {
-	async fn call(
+	fn call(
 		&self,
 		block: Option<Block::Hash>,
 		method: String,
@@ -212,7 +208,7 @@ where
 			.map_err(client_err)
 	}
 
-	async fn storage_keys(
+	fn storage_keys(
 		&self,
 		block: Option<Block::Hash>,
 		prefix: StorageKey,
@@ -222,7 +218,7 @@ where
 			.map_err(client_err)
 	}
 
-	async fn storage_pairs(
+	fn storage_pairs(
 		&self,
 		block: Option<Block::Hash>,
 		prefix: StorageKey,
@@ -232,7 +228,7 @@ where
 			.map_err(client_err)
 	}
 
-	async fn storage_keys_paged(
+	fn storage_keys_paged(
 		&self,
 		block: Option<Block::Hash>,
 		prefix: Option<StorageKey>,
@@ -251,7 +247,7 @@ where
 			.map_err(client_err)
 	}
 
-	async fn storage(
+	fn storage(
 		&self,
 		block: Option<Block::Hash>,
 		key: StorageKey,
@@ -261,7 +257,7 @@ where
 			.map_err(client_err)
 	}
 
-	async fn storage_size(
+	fn storage_size(
 		&self,
 		block: Option<Block::Hash>,
 		key: StorageKey,
@@ -290,7 +286,7 @@ where
 			.map_err(client_err)
 	}
 
-	async fn storage_hash(
+	fn storage_hash(
 		&self,
 		block: Option<Block::Hash>,
 		key: StorageKey,
@@ -300,7 +296,7 @@ where
 			.map_err(client_err)
 	}
 
-	async fn metadata(&self, block: Option<Block::Hash>) -> std::result::Result<Bytes, Error> {
+	fn metadata(&self, block: Option<Block::Hash>) -> std::result::Result<Bytes, Error> {
 		self.block_or_best(block).map_err(client_err).and_then(|block| {
 			self.client
 				.runtime_api()
@@ -310,7 +306,7 @@ where
 		})
 	}
 
-	async fn runtime_version(
+	fn runtime_version(
 		&self,
 		block: Option<Block::Hash>,
 	) -> std::result::Result<RuntimeVersion, Error> {
@@ -321,7 +317,7 @@ where
 		})
 	}
 
-	async fn query_storage(
+	fn query_storage(
 		&self,
 		from: Block::Hash,
 		to: Option<Block::Hash>,
@@ -337,16 +333,16 @@ where
 		call_fn()
 	}
 
-	async fn query_storage_at(
+	fn query_storage_at(
 		&self,
 		keys: Vec<StorageKey>,
 		at: Option<Block::Hash>,
 	) -> std::result::Result<Vec<StorageChangeSet<Block::Hash>>, Error> {
 		let at = at.unwrap_or_else(|| self.client.info().best_hash);
-		self.query_storage(at, Some(at), keys).await
+		self.query_storage(at, Some(at), keys)
 	}
 
-	async fn read_proof(
+	fn read_proof(
 		&self,
 		block: Option<Block::Hash>,
 		keys: Vec<StorageKey>,
@@ -454,7 +450,7 @@ where
 		self.executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
 	}
 
-	async fn trace_block(
+	fn trace_block(
 		&self,
 		block: Block::Hash,
 		targets: Option<String>,
@@ -474,7 +470,6 @@ where
 	}
 }
 
-#[async_trait]
 impl<BE, Block, Client> ChildStateBackend<Block, Client> for FullState<BE, Block, Client>
 where
 	Block: BlockT + 'static,
@@ -493,7 +488,7 @@ where
 		+ 'static,
 	Client::Api: Metadata<Block>,
 {
-	async fn read_child_proof(
+	fn read_child_proof(
 		&self,
 		block: Option<Block::Hash>,
 		storage_key: PrefixedStorageKey,
@@ -518,7 +513,7 @@ where
 			.map_err(client_err)
 	}
 
-	async fn storage_keys(
+	fn storage_keys(
 		&self,
 		block: Option<Block::Hash>,
 		storage_key: PrefixedStorageKey,
@@ -536,7 +531,7 @@ where
 			.map_err(client_err)
 	}
 
-	async fn storage_keys_paged(
+	fn storage_keys_paged(
 		&self,
 		block: Option<Block::Hash>,
 		storage_key: PrefixedStorageKey,
@@ -562,7 +557,7 @@ where
 			.map_err(client_err)
 	}
 
-	async fn storage(
+	fn storage(
 		&self,
 		block: Option<Block::Hash>,
 		storage_key: PrefixedStorageKey,
@@ -580,7 +575,7 @@ where
 			.map_err(client_err)
 	}
 
-	async fn storage_entries(
+	fn storage_entries(
 		&self,
 		block: Option<Block::Hash>,
 		storage_key: PrefixedStorageKey,
@@ -595,18 +590,18 @@ where
 		};
 		let block = self.block_or_best(block).map_err(client_err)?;
 		let client = self.client.clone();
-		future::try_join_all(keys.into_iter().map(move |key| {
-			let res = client
-				.clone()
-				.child_storage(&BlockId::Hash(block), &child_info, &key)
-				.map_err(client_err);
 
-			async move { res }
-		}))
-		.await
+		keys.into_iter()
+			.map(move |key| {
+				client
+					.clone()
+					.child_storage(&BlockId::Hash(block), &child_info, &key)
+					.map_err(client_err)
+			})
+			.collect()
 	}
 
-	async fn storage_hash(
+	fn storage_hash(
 		&self,
 		block: Option<Block::Hash>,
 		storage_key: PrefixedStorageKey,

@@ -15,25 +15,51 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Fail if any sub-command fails.
-set -e
-# Fail if any sub-command in a pipe fails, not just the last one.
-set -o pipefail
-# Fail on undeclared variables.
-set -u
-# Fail on traps.
-set -E
-# Echo all executed commands.
-set -x
-
-# Runs all benchmarks for all pallets, for the Substrate node.
+# This script has three parts which all use the Substrate runtime:
+# - Pallet benchmarking to update the pallet weights
+# - Overhead benchmarking for the Extrinsic and Block weights
+# - Machine benchmarking
+#
 # Should be run on a reference machine to gain accurate benchmarks
 # current reference machine: https://github.com/paritytech/substrate/pull/5848
 
-if [ "$1" != "skip-build" ]
+while getopts 'bfp:v' flag; do
+  case "${flag}" in
+    b)
+      # Skip build.
+      skip_build='true'
+      ;;
+    f)
+      # Fail if any sub-command in a pipe fails, not just the last one.
+      set -o pipefail
+      # Fail on undeclared variables.
+      set -u
+      # Fail if any sub-command fails.
+      set -e
+      # Fail on traps.
+      set -E
+      ;;
+    p)
+      # Start at pallet
+      start_pallet="${OPTARG}"
+      ;;
+    v)
+      # Echo all executed commands.
+      set -x
+      ;;
+    *)
+      # Exit early.
+      echo "Bad options. Check Script."
+      exit 1
+      ;;
+  esac
+done
+
+
+if [ "$skip_build" != true ]
 then
   echo "[+] Compiling Substrate benchmarks..."
-  cargo +nightly build --profile production --locked --features=runtime-benchmarks
+  cargo build --profile=production --locked --features=runtime-benchmarks
 fi
 
 # The executable to use.
@@ -44,7 +70,7 @@ EXCLUDED_PALLETS=(
   # Helper pallets
   "pallet_election_provider_support_benchmarking"
   # Pallets without automatic benchmarking
-  "pallet_baba"
+  "pallet_babe"
   "pallet_grandpa"
   "pallet_mmr"
   "pallet_offences"
@@ -52,7 +78,7 @@ EXCLUDED_PALLETS=(
 
 # Load all pallet names in an array.
 ALL_PALLETS=($(
-  $SUBSTRATE benchmark pallet --list --dev |\
+  $SUBSTRATE benchmark pallet --list --chain=dev |\
     tail -n+2 |\
     cut -d',' -f1 |\
     sort |\
@@ -64,14 +90,29 @@ PALLETS=($({ printf '%s\n' "${ALL_PALLETS[@]}" "${EXCLUDED_PALLETS[@]}"; } | sor
 
 echo "[+] Benchmarking ${#PALLETS[@]} Substrate pallets by excluding ${#EXCLUDED_PALLETS[@]} from ${#ALL_PALLETS[@]}."
 
+# Define the error file.
+ERR_FILE="benchmarking_errors.txt"
+# Delete the error file before each run.
+rm -f $ERR_FILE
+
 # Benchmark each pallet.
 for PALLET in "${PALLETS[@]}"; do
+  # If `-p` is used, skip benchmarks until the start pallet.
+  if [ ! -z "$start_pallet" ] && [ "$start_pallet" != "$PALLET" ]
+  then
+    echo "[+] Skipping ${PALLET}..."
+    continue
+  else
+    unset start_pallet
+  fi
+
   FOLDER="$(echo "${PALLET#*_}" | tr '_' '-')";
   WEIGHT_FILE="./frame/${FOLDER}/src/weights.rs"
-  echo "Pallet: $PALLET, Weight file: $WEIGHT_FILE";
+  echo "[+] Benchmarking $PALLET with weight file $WEIGHT_FILE";
 
-  $SUBSTRATE benchmark pallet \
-    --dev \
+  OUTPUT=$(
+    $SUBSTRATE benchmark pallet \
+    --chain=dev \
     --steps=50 \
     --repeat=20 \
     --pallet="$PALLET" \
@@ -79,18 +120,44 @@ for PALLET in "${PALLETS[@]}"; do
     --execution=wasm \
     --wasm-execution=compiled \
     --template=./.maintain/frame-weight-template.hbs \
-    --output="$WEIGHT_FILE"
+    --output="$WEIGHT_FILE" 2>&1
+  )
+  if [ $? -ne 0 ]; then
+    echo "$OUTPUT" >> "$ERR_FILE"
+    echo "[-] Failed to benchmark $PALLET. Error written to $ERR_FILE; continuing..."
+  fi
 done
 
 # Update the block and extrinsic overhead weights.
 echo "[+] Benchmarking block and extrinsic overheads..."
-$SUBSTRATE benchmark overhead \
-  --dev \
+OUTPUT=$(
+  $SUBSTRATE benchmark overhead \
+  --chain=dev \
   --execution=wasm \
   --wasm-execution=compiled \
   --weight-path="./frame/support/src/weights/" \
   --warmup=10 \
-  --repeat=100
+  --repeat=100 2>&1
+)
+if [ $? -ne 0 ]; then
+  echo "$OUTPUT" >> "$ERR_FILE"
+  echo "[-] Failed to benchmark the block and extrinsic overheads. Error written to $ERR_FILE; continuing..."
+fi
 
 echo "[+] Benchmarking the machine..."
-$SUBSTRATE benchmark machine --dev
+OUTPUT=$(
+  $SUBSTRATE benchmark machine --chain=dev 2>&1
+)
+if [ $? -ne 0 ]; then
+  # Do not write the error to the error file since it is not a benchmarking error.
+  echo "[-] Failed the machine benchmark:\n$OUTPUT"
+fi
+
+# Check if the error file exists.
+if [ -f "$ERR_FILE" ]; then
+  echo "[-] Some benchmarks failed. See: $ERR_FILE"
+  exit 1
+else
+  echo "[+] All benchmarks passed."
+  exit 0
+fi

@@ -115,6 +115,11 @@ pub struct RunCmd {
 	#[clap(long)]
 	pub rpc_max_response_size: Option<usize>,
 
+	/// Set the the maximum concurrent subscriptions per connection.
+	/// Default is 1024.
+	#[clap(long)]
+	pub rpc_max_subscriptions_per_connection: Option<usize>,
+
 	/// Expose Prometheus exporter on all interfaces.
 	///
 	/// Default is local.
@@ -457,6 +462,18 @@ impl CliConfiguration for RunCmd {
 
 	fn rpc_max_payload(&self) -> Result<Option<usize>> {
 		Ok(self.rpc_max_payload)
+	}
+
+	fn rpc_max_request_size(&self) -> Result<Option<usize>> {
+		Ok(self.rpc_max_request_size)
+	}
+
+	fn rpc_max_response_size(&self) -> Result<Option<usize>> {
+		Ok(self.rpc_max_response_size)
+	}
+
+	fn rpc_max_subscriptions_per_connection(&self) -> Result<Option<usize>> {
+		Ok(self.rpc_max_subscriptions_per_connection)
 	}
 
 	fn ws_max_out_buffer_capacity(&self) -> Result<Option<usize>> {
