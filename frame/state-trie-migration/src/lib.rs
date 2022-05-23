@@ -849,7 +849,7 @@ mod benchmarks {
 			let null = MigrationLimits::default();
 			let caller = frame_benchmarking::whitelisted_caller();
 			// Allow signed migrations.
-			SignedMigrationMaxLimits::<Test>::put(MigrationLimits { size: 1024, item: 5 });
+			SignedMigrationMaxLimits::<T>::put(MigrationLimits { size: 1024, item: 5 });
 		}: _(frame_system::RawOrigin::Signed(caller), null, 0, StateTrieMigration::<T>::migration_process())
 		verify {
 			assert_eq!(StateTrieMigration::<T>::migration_process(), Default::default())
