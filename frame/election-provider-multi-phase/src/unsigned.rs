@@ -23,8 +23,9 @@ use crate::{
 };
 use codec::Encode;
 use frame_election_provider_support::{NposSolution, NposSolver, PerThing128, VoteWeight};
-use frame_support::{dispatch::DispatchResult, ensure, traits::Get, BoundedVec};
-use frame_support::weights::ComputationWeight;
+use frame_support::{
+	dispatch::DispatchResult, ensure, traits::Get, weights::ComputationWeight, BoundedVec,
+};
 use frame_system::offchain::SubmitTransaction;
 use scale_info::TypeInfo;
 use sp_npos_elections::{
@@ -653,7 +654,8 @@ impl<T: MinerConfig> Miner<T> {
 
 		// helper closures.
 		let weight_with = |active_voters: u32| -> ComputationWeight {
-			T::solution_weight(size.voters, size.targets, active_voters, desired_winners).computation()
+			T::solution_weight(size.voters, size.targets, active_voters, desired_winners)
+				.computation()
 		};
 
 		let next_voters =

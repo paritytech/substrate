@@ -88,7 +88,9 @@ pub mod v1 {
 
 				log!(info, "Upgraded {} pools, storage to version {:?}", translated, current);
 
-				Weight::from_computation(T::DbWeight::get().reads_writes(translated + 1, translated + 1))
+				Weight::from_computation(
+					T::DbWeight::get().reads_writes(translated + 1, translated + 1),
+				)
 			} else {
 				log!(info, "Migration did not executed. This probably should be removed");
 				Weight::from_computation(T::DbWeight::get().reads(1))

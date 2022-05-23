@@ -19,11 +19,11 @@
 
 use crate::{Config, Pallet};
 use codec::{Decode, Encode, FullCodec};
+use frame_benchmarking::Zero;
 use frame_support::{
 	pallet_prelude::ValueQuery, traits::StorageVersion, weights::Weight, RuntimeDebug, Twox64Concat,
 };
 use sp_std::prelude::*;
-use frame_benchmarking::Zero;
 
 #[derive(Encode, Decode, Clone, Default, RuntimeDebug, PartialEq)]
 struct SeatHolder<AccountId, Balance> {

@@ -115,7 +115,7 @@ use frame_support::{
 	dispatch::Dispatchable,
 	ensure,
 	traits::{ConstU32, Contains, Currency, Get, Randomness, ReservableCurrency, Time},
-	weights::{DispatchClass, GetDispatchInfo, Pays, PostDispatchInfo, Weight},
+	weights::{ComputationWeight, DispatchClass, GetDispatchInfo, Pays, PostDispatchInfo, Weight},
 	BoundedVec,
 };
 use frame_system::{limits::BlockWeights, Pallet as System};
@@ -128,7 +128,6 @@ use scale_info::TypeInfo;
 use sp_core::{crypto::UncheckedFrom, Bytes};
 use sp_runtime::traits::{Convert, Hash, Saturating, StaticLookup};
 use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
-use frame_support::weights::ComputationWeight;
 
 type CodeHash<T> = <T as frame_system::Config>::Hash;
 type TrieId = BoundedVec<u8, ConstU32<128>>;

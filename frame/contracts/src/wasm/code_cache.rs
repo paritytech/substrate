@@ -223,7 +223,8 @@ impl<T: Config> Token<T> for CodeToken {
 			Load(len) => {
 				let computation = T::WeightInfo::call_with_code_per_byte(len)
 					.saturating_sub(T::WeightInfo::call_with_code_per_byte(0));
-				let bandwith = T::ContractAccessWeight::get().computation().saturating_mul(len.into());
+				let bandwith =
+					T::ContractAccessWeight::get().computation().saturating_mul(len.into());
 				computation.max(bandwith)
 			},
 		};
