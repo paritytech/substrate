@@ -218,7 +218,7 @@ impl sp_std::cmp::PartialOrd for ElectionScore {
 }
 
 /// Utility struct to group parameters for the balancing algorithm.
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct BalancingConfig {
 	pub iterations: usize,
 	pub tolerance: ExtendedBalance,
@@ -347,33 +347,6 @@ impl<AccountId: IdentifierT> Voter<AccountId> {
 
 		if distribution.len() > 0 {
 			Some(Assignment { who, distribution })
-		} else {
-			None
-		}
-	}
-
-	/// Returns none if this voter does not have any non-zero distributions.
-	///
-	/// Note that this might create _un-normalized_ assignments, due to accuracy loss of `P`. Call
-	/// site might compensate by calling `normalize()` on the returned `StakedAssignment` as a
-	/// post-processing.
-	pub fn into_staked_assignment(self) -> Option<StakedAssignment<AccountId>> {
-		let who = self.who;
-		let distribution = self
-			.edges
-			.into_iter()
-			.filter_map(|e| {
-				// trim zero edges.
-				if e.weight.is_zero() {
-					None
-				} else {
-					Some((e.who, e.weight))
-				}
-			})
-			.collect::<Vec<_>>();
-
-		if distribution.len() > 0 {
-			Some(StakedAssignment { who, distribution })
 		} else {
 			None
 		}
