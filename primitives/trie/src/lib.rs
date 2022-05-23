@@ -31,9 +31,8 @@ pub use error::Error;
 /// Various re-exports from the `hash-db` crate.
 pub use hash_db::{HashDB as HashDBT, EMPTY_PREFIX};
 use hash_db::{Hasher, Prefix};
-pub use memory_db::prefixed_key;
 /// Various re-exports from the `memory-db` crate.
-pub use memory_db::KeyFunction;
+pub use memory_db::{prefixed_key, HashKey, KeyFunction, PrefixedKey};
 /// The Substrate format implementation of `NodeCodec`.
 pub use node_codec::NodeCodec;
 use sp_std::{borrow::Borrow, boxed::Box, marker::PhantomData, vec::Vec};

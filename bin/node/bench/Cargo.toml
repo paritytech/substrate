@@ -19,7 +19,7 @@ sp-runtime = { version = "6.0.0", path = "../../../primitives/runtime" }
 sp-state-machine = { version = "0.12.0", path = "../../../primitives/state-machine" }
 serde = "1.0.136"
 serde_json = "1.0.79"
-derive_more = "0.99.16"
+derive_more = { version = "0.99.17", default-features = false, features = ["display"] }
 kvdb = "0.11.0"
 kvdb-rocksdb = "0.15.1"
 sp-trie = { version = "6.0.0", path = "../../../primitives/trie" }
