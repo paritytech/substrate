@@ -183,14 +183,14 @@ where
 	where
 		K: HasKeyPrefix<KP>,
 	{
-		Self::clear_prefix(partial_key, limit).into()
+		unhashed::clear_prefix(&Self::storage_n_map_partial_key(partial_key), limit, None).into()
 	}
 
-	fn clear_prefix<KP>(partial_key: KP, limit: Option<u32>) -> sp_io::ClearPrefixResult
+	fn clear_prefix<KP>(partial_key: KP, limit: u32, maybe_cursor: Option<&[u8]>) -> sp_io::ClearPrefixResult
 	where
 		K: HasKeyPrefix<KP>,
 	{
-		unhashed::clear_prefix(&Self::storage_n_map_partial_key(partial_key), limit)
+		unhashed::clear_prefix(&Self::storage_n_map_partial_key(partial_key), Some(limit), maybe_cursor)
 	}
 
 	fn iter_prefix_values<KP>(partial_key: KP) -> PrefixIterator<V>

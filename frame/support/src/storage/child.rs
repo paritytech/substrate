@@ -144,34 +144,51 @@ pub fn kill_storage(child_info: &ChildInfo, limit: Option<u32>) -> KillStorageRe
 	}
 }
 
-/// Remove all `storage_key` key/values
+/// Partially clear the child storage of each key-value pair.
 ///
-/// Deletes all keys from the overlay and up to `limit` keys from the backend if
-/// it is set to `Some`. No limit is applied when `limit` is set to `None`.
+/// # Limit
 ///
-/// The limit can be used to partially delete a child trie in case it is too large
-/// to delete in one go (block).
+/// A *limit* should always be provided through `maybe_limit`. This is one fewer than the
+/// maximum number of backend iterations which may be done by this operation and as such
+/// represents the maximum number of backend deletions which may happen. A *limit* of zero
+/// implies that no keys will be deleted, through there may be a single iteration done.
+///
+/// The limit can be used to partially delete storage items in case it is too large or costly
+/// to delete all in a single operation.
+///
+/// # Cursor
+///
+/// A *cursor* may be passed in to this operation with `maybe_cursor`. `None` should only be
+/// passed once (in the initial call) for any attempt to clear storage. Subsequent calls
+/// operating on the same prefix should always pass `Some`, and this should be equal to the
+/// previous call result's `maybe_prefix` field.
+///
+/// Returns [`ClearPrefixResult`] to inform about the result. Once the resultant `maybe_prefix`
+/// field is `None`, then no further items remain to be deleted.
+///
+/// NOTE: After the initial call for any given child storage, it is important that no keys further
+/// keys are inserted. If so, then they may or may not be deleted by subsequent calls.
 ///
 /// # Note
 ///
-/// Please note that keys that are residing in the overlay for that child trie when
-/// issuing this call are all deleted without counting towards the `limit`. Only keys
-/// written during the current block are part of the overlay. Deleting with a `limit`
-/// mostly makes sense with an empty overlay for that child trie.
-///
-/// Calling this function multiple times per block for the same `storage_key` does
-/// not make much sense because it is not cumulative when called inside the same block.
-/// Use this function to distribute the deletion of a single child trie across multiple
-/// blocks.
-pub fn clear_storage(child_info: &ChildInfo, limit: Option<u32>) -> ClearPrefixResult {
+/// Please note that keys which are residing in the overlay for the child are deleted without
+/// counting towards the `limit`.
+pub fn clear_storage(
+	child_info: &ChildInfo,
+	maybe_limit: Option<u32>,
+	_maybe_cursor: Option<&[u8]>,
+) -> ClearPrefixResult {
+	// TODO: Once the network has upgraded to include the new host functions, this code can be
+	// enabled.
+	// sp_io::default_child_storage::storage_kill(prefix, maybe_limit, maybe_cursor)
 	let r = match child_info.child_type() {
 		ChildType::ParentKeyId =>
-			sp_io::default_child_storage::storage_kill(child_info.storage_key(), limit),
+			sp_io::default_child_storage::storage_kill(child_info.storage_key(), maybe_limit),
 	};
-	use sp_io::{ClearPrefixResult::*, KillStorageResult::*};
+	use sp_io::KillStorageResult::*;
 	match r {
-		AllRemoved(db) => NoneLeft { db, total: db },
-		SomeRemaining(db) => SomeLeft { db, total: db },
+		AllRemoved(db) => ClearPrefixResult { maybe_cursor: None, db, total: db, loops: db },
+		SomeRemaining(db) => ClearPrefixResult { maybe_cursor: None, db, total: db, loops: db },
 	}
 }
 

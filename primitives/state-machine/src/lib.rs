@@ -1357,8 +1357,8 @@ mod tests {
 		NativeOrEncoded, NeverNativeValue,
 	};
 	use sp_runtime::traits::BlakeTwo256;
-	use core::assert_matches;
-use std::{
+	use assert_matches::assert_matches;
+	use std::{
 		collections::{BTreeMap, HashMap},
 		panic::UnwindSafe,
 		result,
@@ -1573,7 +1573,7 @@ use std::{
 		{
 			let mut cache = StorageTransactionCache::default();
 			let mut ext = Ext::new(&mut overlay, &mut cache, backend, None);
-			ext.clear_prefix(b"ab", None);
+			ext.clear_prefix(b"ab", None, None);
 		}
 		overlay.commit_transaction().unwrap();
 
@@ -1597,7 +1597,7 @@ use std::{
 		{
 			let mut cache = StorageTransactionCache::default();
 			let mut ext = Ext::new(&mut overlay, &mut cache, backend, None);
-			assert_eq!((false, 1, 3), ext.clear_prefix(b"ab", Some(1)));
+			assert_matches!(ext.clear_prefix(b"ab", Some(1), None), (Some(_), 1, 3, 1));
 		}
 		overlay.commit_transaction().unwrap();
 
@@ -1639,7 +1639,7 @@ use std::{
 		{
 			let mut cache = StorageTransactionCache::default();
 			let mut ext = Ext::new(&mut overlay, &mut cache, &backend, None);
-			assert_eq!(ext.kill_child_storage(&child_info, Some(2)), (false, 2));
+			assert_matches!(ext.kill_child_storage(&child_info, Some(2), None), (Some(_), 2, 6, 2));
 		}
 
 		assert_eq!(
@@ -1675,14 +1675,14 @@ use std::{
 		let mut cache = StorageTransactionCache::default();
 		let mut ext = Ext::new(&mut overlay, &mut cache, &backend, None);
 		let r = ext.kill_child_storage(&child_info, Some(0), None);
-		assert_matches!(r, (0, 0, 1, Some(_)));
-		let r = ext.kill_child_storage(&child_info, Some(1), r.3);
-		assert_matches!(r, (1, 1, 2, Some(_)));
-		let r = ext.kill_child_storage(&child_info, Some(4), r.3);
+		assert_matches!(r, (Some(_), 0, 0, 0));
+		let r = ext.kill_child_storage(&child_info, Some(1), r.0.as_ref().map(|x| &x[..]));
+		assert_matches!(r, (Some(_), 1, 1, 1));
+		let r = ext.kill_child_storage(&child_info, Some(4), r.0.as_ref().map(|x| &x[..]));
 		// Only 3 items remaining to remove
-		assert_matches!(r, (3, 3, 4, None));
+		assert_matches!(r, (None, 3, 3, 3));
 		let r = ext.kill_child_storage(&child_info, Some(1), None);
-		assert_matches!(r, (0, 0, 1, None));
+		assert_matches!(r, (Some(_), 0, 0, 1));
 	}
 
 	#[test]
@@ -1700,7 +1700,7 @@ use std::{
 		let mut overlay = OverlayedChanges::default();
 		let mut cache = StorageTransactionCache::default();
 		let mut ext = Ext::new(&mut overlay, &mut cache, &backend, None);
-		assert_eq!(ext.kill_child_storage(&child_info, None, None), (None, 4, 4, 5));
+		assert_eq!(ext.kill_child_storage(&child_info, None, None), (None, 4, 4, 4));
 	}
 
 	#[test]

@@ -104,17 +104,50 @@ pub fn kill_prefix(prefix: &[u8], limit: Option<u32>) -> sp_io::KillStorageResul
 	sp_io::storage::clear_prefix(prefix, limit)
 }
 
-/// Ensure keys with the given `prefix` have no entries in storage.
-pub fn clear_prefix(prefix: &[u8], limit: Option<u32>) -> sp_io::ClearPrefixResult {
+/// Partially clear the storage of all keys under a common `prefix`.
+///
+/// # Limit
+///
+/// A *limit* should always be provided through `maybe_limit`. This is one fewer than the
+/// maximum number of backend iterations which may be done by this operation and as such
+/// represents the maximum number of backend deletions which may happen. A *limit* of zero
+/// implies that no keys will be deleted, through there may be a single iteration done.
+///
+/// The limit can be used to partially delete storage items in case it is too large or costly
+/// to delete all in a single operation.
+///
+/// # Cursor
+///
+/// A *cursor* may be passed in to this operation with `maybe_cursor`. `None` should only be
+/// passed once (in the initial call) for any attempt to clear storage. Subsequent calls
+/// operating on the same prefix should always pass `Some`, and this should be equal to the
+/// previous call result's `maybe_prefix` field.
+///
+/// Returns [`ClearPrefixResult`] to inform about the result. Once the resultant `maybe_prefix`
+/// field is `None`, then no further items remain to be deleted.
+///
+/// NOTE: After the initial call for any given child storage, it is important that no keys further
+/// keys are inserted. If so, then they may or may not be deleted by subsequent calls.
+///
+/// # Note
+///
+/// Please note that keys which are residing in the overlay for the child are deleted without
+/// counting towards the `limit`.
+pub fn clear_prefix(
+	prefix: &[u8],
+	maybe_limit: Option<u32>,
+	_maybe_cursor: Option<&[u8]>,
+) -> sp_io::ClearPrefixResult {
 	// TODO: Once the network has upgraded to include the new host functions, this code can be
 	// enabled.
-	// sp_io::storage::clear_prefix(prefix, limit)
-	use sp_io::{ClearPrefixResult::*, KillStorageResult::*};
+	// sp_io::storage::clear_prefix(prefix, maybe_limit, maybe_cursor)
+	use sp_io::{ClearPrefixResult, KillStorageResult::*};
 	#[allow(deprecated)]
-	match kill_prefix(prefix, limit) {
-		AllRemoved(db) => NoneLeft { db, total: db },
-		SomeRemaining(db) => SomeLeft { db, total: db },
-	}
+	let (maybe_cursor, i) = match kill_prefix(prefix, maybe_limit) {
+		AllRemoved(i) => (None, i),
+		SomeRemaining(i) => (Some(prefix.to_vec()), i),
+	};
+	ClearPrefixResult { maybe_cursor, db: i, total: i, loops: i }
 }
 
 /// Get a Vec of bytes from storage.

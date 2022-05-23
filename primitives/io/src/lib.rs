@@ -116,17 +116,18 @@ impl From<ClearPrefixResult> for KillStorageResult {
 
 /// The outcome of calling `clear_prefix` or some function which uses it.
 #[derive(PassByCodec, Encode, Decode)]
+#[must_use]
 pub struct ClearPrefixResult {
 	/// The number of keys removed from persistent storage. This is what is relevant for weight
 	/// calculation.
-	db: u32,
+	pub db: u32,
 	/// The number of keys removed in total (including from non-persistent storage).
-	total: u32,
+	pub total: u32,
 	/// The number of backend iterations done for this operation.
-	loops: u32,
+	pub loops: u32,
 	/// `None` if all keys to be removed were removed; `Some` if some keys are remaining, in which
 	/// case, the following call should pass this value in as the cursor.
-	maybe_cursor: Option<Vec<u8>>,
+	pub maybe_cursor: Option<Vec<u8>>,
 }
 
 /// Interface for accessing the storage from within the runtime.
@@ -206,31 +207,37 @@ pub trait Storage {
 		}
 	}
 
-	/// Clear the storage of each key-value pair where the key starts with the given `prefix`.
+	/// Partially clear the storage of each key-value pair where the key starts with the given
+	/// prefix.
 	///
 	/// # Limit
 	///
-	/// Deletes all keys from the overlay and up to `limit` keys from the backend if
-	/// it is set to `Some`. No limit is applied when `limit` is set to `None`.
+	/// A *limit* should always be provided through `maybe_limit`. This is one fewer than the
+	/// maximum number of backend iterations which may be done by this operation and as such
+	/// represents the maximum number of backend deletions which may happen. A *limit* of zero
+	/// implies that no keys will be deleted, through there may be a single iteration done.
 	///
-	/// The limit can be used to partially delete a prefix storage in case it is too large
-	/// to delete in one go (block).
+	/// The limit can be used to partially delete a prefix storage in case it is too large or costly
+	/// to delete in a single operation.
 	///
-	/// Returns [`KillStorageResult`] to inform about the result.
+	/// # Cursor
+	///
+	/// A *cursor* may be passed in to this operation with `maybe_cursor`. `None` should only be
+	/// passed once (in the initial call) for any given `maybe_prefix` value. Subsequent calls
+	/// operating on the same prefix should always pass `Some`, and this should be equal to the
+	/// previous call result's `maybe_prefix` field.
+	///
+	/// Returns [`ClearPrefixResult`] to inform about the result. Once the resultant `maybe_prefix`
+	/// field is `None`, then no further items remain to be deleted.
+	///
+	/// NOTE: After the initial call for any given prefix, it is important that no keys further
+	/// keys under the same prefix are inserted. If so, then they may or may not be deleted by
+	/// subsequent calls.
 	///
 	/// # Note
 	///
-	/// Please note that keys that are residing in the overlay for that prefix when
-	/// issuing this call are all deleted without counting towards the `limit`. Only keys
-	/// written during the current block are part of the overlay. Deleting with a `limit`
-	/// mostly makes sense with an empty overlay for that prefix.
-	///
-	/// Calling this function multiple times per block for the same `prefix` does
-	/// not make much sense because it is not cumulative when called inside the same block.
-	/// The deletion would always start from `prefix` resulting in the same keys being deleted
-	/// every time this function is called with the exact same arguments per block. This happens
-	/// because the keys in the overlay are not taken into account when deleting keys in the
-	/// backend.
+	/// Please note that keys which are residing in the overlay for that prefix when
+	/// issuing this call are deleted without counting towards the `limit`.
 	#[version(3, register_only)]
 	fn clear_prefix(
 		&mut self,
