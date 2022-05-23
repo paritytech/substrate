@@ -1873,7 +1873,7 @@ pub mod pallet {
 
 		/// Nominate on behalf of the pool.
 		///
-		/// The dispatch origin of this call must be signed by the pool nominator or the the pool
+		/// The dispatch origin of this call must be signed by the pool nominator or the pool
 		/// root role, same as [`Pallet::nominate`].
 		///
 		/// This directly forward the call to the staking pallet, on behalf of the pool bonded
