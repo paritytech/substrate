@@ -1116,10 +1116,6 @@ pub mod pallet {
 		OcwCallWrongEra,
 		/// Snapshot metadata should exist but didn't.
 		MissingSnapshotMetadata,
-		/// Snapshot should exist but didn't.
-		MissingSnapshot,
-		/// Codec error.
-		Codec,
 		/// `Self::insert_submission` returned an invalid index.
 		InvalidSubmissionIndex,
 		/// The call is not allowed at this point.
