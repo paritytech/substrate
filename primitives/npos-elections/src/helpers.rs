@@ -17,10 +17,7 @@
 
 //! Helper methods for npos-elections.
 
-use crate::{
-	Assignment, CandidatePtr, ElectionResult, Error, IdentifierT, PerThing128, StakedAssignment,
-	VoteWeight, Voter,
-};
+use crate::{Assignment, Error, IdentifierT, PerThing128, StakedAssignment, VoteWeight};
 use sp_arithmetic::PerThing;
 use sp_std::prelude::*;
 
