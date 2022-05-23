@@ -169,8 +169,8 @@ pub mod constants {
 
 	// Expose the Block and Extrinsic base weights.
 	pub use super::{
-		block_weights::constants::BlockExecutionWeight,
-		extrinsic_weights::constants::ExtrinsicBaseWeight,
+		block_weights::BlockExecutionWeight,
+		extrinsic_weights::ExtrinsicBaseWeight,
 	};
 
 	// Expose the DB weights.
