@@ -282,10 +282,10 @@ pub mod pallet {
 		/// - `action`: Action defined in the swap, it must match the entry in blockchain. Otherwise
 		///   the operation fails. This is used for weight calculation.
 		#[pallet::weight({
-			let v1_weight = T::DbWeight::get().reads_writes(1, 1)
+			let computation_weight = T::DbWeight::get().reads_writes(1, 1)
 				.saturating_add(40_000_000)
 				.saturating_add((proof.len() as u64).saturating_mul(100));
-			Weight::from_computation(v1_weight).saturating_add(action.weight())
+			Weight::from_computation(computation_weight).saturating_add(action.weight())
 		})]
 		pub fn claim_swap(
 			origin: OriginFor<T>,

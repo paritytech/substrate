@@ -21,7 +21,6 @@
 use crate::{weights::WeightInfo, Config};
 
 use codec::{Decode, Encode};
-// TODO SHAWN HACK FIX
 use frame_support::{weights::ComputationWeight as Weight, DefaultNoBound};
 use pallet_contracts_proc_macro::{ScheduleDebug, WeightDebug};
 use scale_info::TypeInfo;

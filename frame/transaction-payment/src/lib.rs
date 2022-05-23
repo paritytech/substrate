@@ -195,7 +195,6 @@ where
 		let s = S::get();
 		let v = V::get();
 
-		// TODO SHAWN: only factors computation weight.
 		let normal_max_weight = normal_max_weight.computation();
 		let normal_block_weight = normal_block_weight.computation();
 		let target_weight = (s * normal_max_weight) as u128;
@@ -435,7 +434,6 @@ where
 
 		let DispatchInfo { weight, class, .. } = dispatch_info;
 
-		// TODO SHAWN: Only uses computation weight
 		RuntimeDispatchInfo { weight, class, partial_fee }
 	}
 
