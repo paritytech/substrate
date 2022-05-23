@@ -145,8 +145,7 @@ impl IdentityVerifier<u64> for AllianceIdentityVerifier {
 		{
 			judgements
 				.iter()
-				.filter(|(_, j)| Judgement::KnownGood == *j || Judgement::Reasonable == *j)
-				.count() > 0
+				.any(|(_, j)| matches!(j, Judgement::KnownGood | Judgement::Reasonable))
 		} else {
 			false
 		}

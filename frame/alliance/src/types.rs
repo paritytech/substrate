@@ -84,7 +84,7 @@ impl Cid {
 		const SHA2_256: u64 = 0x12;
 
 		let digest = sha2_256_digest.into();
-		assert!(digest.len() == 32);
+		assert_eq!(digest.len(), 32);
 
 		Self {
 			version: Version::V0,
