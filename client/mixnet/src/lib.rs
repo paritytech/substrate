@@ -24,7 +24,7 @@
 
 use mixnet::{Error, MixPeerId, MixPublicKey, Topology};
 
-pub use mixnet::{Config, WorkerSink, WorkerStream};
+pub use mixnet::{Config, SinkToWorker, StreamFromWorker};
 use sp_application_crypto::key_types;
 use sp_keystore::SyncCryptoStore;
 
@@ -99,7 +99,7 @@ enum State {
 
 /// Instantiate channels needed to spawn and communicate with the mixnet worker.
 pub fn new_channels(
-) -> (WorkerChannels, (WorkerSink, WorkerStream, TracingUnboundedSender<MixnetCommand>)) {
+) -> (WorkerChannels, (SinkToWorker, StreamFromWorker, TracingUnboundedSender<MixnetCommand>)) {
 	let (to_worker_sink, to_worker_stream) = tracing_unbounded("mpsc_mixnet_in");
 	let (from_worker_sink, from_worker_stream) = tracing_unbounded("mpsc_mixnet_out");
 	let (command_sink, command_stream) = tracing_unbounded("mpsc_mixnet_commands");

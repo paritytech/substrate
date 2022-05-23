@@ -60,7 +60,7 @@ use std::{
 pub use crate::request_responses::{
 	IfDisconnected, InboundFailure, OutboundFailure, RequestFailure, RequestId, ResponseFailure,
 };
-use mixnet::{MixPeerId, MixnetBehaviour};
+use mixnet::{MixPeerId, MixnetBehaviour, MixnetEvent};
 use sc_utils::mpsc::TracingUnboundedSender;
 
 /// Command for the mixnet worker.
@@ -653,7 +653,7 @@ where
 	}
 }
 
-impl<B, Client> NetworkBehaviourEventProcess<mixnet::NetworkEvent> for Behaviour<B, Client>
+impl<B, Client> NetworkBehaviourEventProcess<MixnetEvent> for Behaviour<B, Client>
 where
 	B: BlockT,
 	Client: HeaderBackend<B>
@@ -664,9 +664,9 @@ where
 		+ Sync
 		+ 'static,
 {
-	fn inject_event(&mut self, event: mixnet::NetworkEvent) {
+	fn inject_event(&mut self, event: MixnetEvent) {
 		match event {
-			mixnet::NetworkEvent::Message(message) => {
+			MixnetEvent::Message(message) => {
 				// TODO could write specifically a message type here, but currently
 				// only one of a kind for query or reply.
 				match message.kind {
@@ -694,8 +694,9 @@ where
 					},
 				}
 			},
-			mixnet::NetworkEvent::Connected(_peer_id, _pub_key) => {},
-			mixnet::NetworkEvent::CloseStream => {
+			MixnetEvent::Connected(_peer_id, _pub_key) => {},
+			MixnetEvent::Disconnected(_peer_id) => {},
+			MixnetEvent::CloseStream => {
 				log::error!(target: "mixnet", "Stream close, no message incomming.");
 			},
 		}

@@ -754,8 +754,8 @@ pub struct BuildNetworkParams<'a, TBl: BlockT, TExPool, TImpQu, TCl> {
 	/// Mixnet worker access if running.
 	/// TODO type instead of tuple.
 	pub mixnet: Option<(
-		sc_mixnet::WorkerSink,
-		sc_mixnet::WorkerStream,
+		sc_mixnet::SinkToWorker,
+		sc_mixnet::StreamFromWorker,
 		TracingUnboundedSender<sc_network::MixnetCommand>,
 	)>,
 }

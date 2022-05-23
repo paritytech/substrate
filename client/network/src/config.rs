@@ -141,8 +141,8 @@ where
 
 	/// Mixnet worker access if running.
 	pub mixnet: Option<(
-		mixnet::WorkerSink,
-		mixnet::WorkerStream,
+		mixnet::SinkToWorker,
+		mixnet::StreamFromWorker,
 		TracingUnboundedSender<crate::MixnetCommand>,
 	)>,
 }
