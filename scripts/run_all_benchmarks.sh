@@ -59,7 +59,7 @@ done
 if [ "$skip_build" != true ]
 then
   echo "[+] Compiling Substrate benchmarks..."
-  cargo +nightly build --profile production --locked --features=runtime-benchmarks
+  cargo build --profile=production --locked --features=runtime-benchmarks
 fi
 
 # The executable to use.
