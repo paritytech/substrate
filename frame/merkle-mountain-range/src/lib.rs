@@ -71,6 +71,7 @@ mod tests;
 
 pub use pallet::*;
 pub use sp_mmr_primitives::{self as primitives, Error, LeafDataProvider, LeafIndex, NodeIndex};
+use sp_std::prelude::*;
 
 /// The most common use case for MMRs is to store historical block hashes,
 /// so that any point in time in the future we can receive a proof about some past
@@ -228,22 +229,23 @@ type LeafOf<T, I> = <<T as Config<I>>::LeafData as primitives::LeafDataProvider>
 /// Hashing used for the pallet.
 pub(crate) type HashingOf<T, I> = <T as Config<I>>::Hashing;
 
-/// Stateless MMR proof verification.
+/// Stateless MMR proof verification for batch of leaves.
 ///
-/// This function can be used to verify received MMR proof (`proof`)
-/// for given leaf data (`leaf`) against a known MMR root hash (`root`).
-///
-/// The verification does not require any storage access.
-pub fn verify_leaf_proof<H, L>(
+/// This function can be used to verify received MMR [primitives::BatchProof] (`proof`)
+/// for given leaves set (`leaves`) against a known MMR root hash (`root`).
+/// Note, the leaves should be sorted such that corresponding leaves and leaf indices have the
+/// same position in both the `leaves` vector and the `leaf_indices` vector contained in the
+/// [primitives::BatchProof].
+pub fn verify_leaves_proof<H, L>(
 	root: H::Output,
-	leaf: mmr::Node<H, L>,
-	proof: primitives::Proof<H::Output>,
+	leaves: Vec<mmr::Node<H, L>>,
+	proof: primitives::BatchProof<H::Output>,
 ) -> Result<(), primitives::Error>
 where
 	H: traits::Hash,
 	L: primitives::FullLeaf,
 {
-	let is_valid = mmr::verify_leaf_proof::<H, L>(root, leaf, proof)?;
+	let is_valid = mmr::verify_leaves_proof::<H, L>(root, leaves, proof)?;
 	if is_valid {
 		Ok(())
 	} else {
@@ -255,29 +257,36 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn offchain_key(pos: NodeIndex) -> sp_std::prelude::Vec<u8> {
 		(T::INDEXING_PREFIX, pos).encode()
 	}
-
-	/// Generate a MMR proof for the given `leaf_index`.
+	/// Generate a MMR proof for the given `leaf_indices`.
 	///
 	/// Note this method can only be used from an off-chain context
 	/// (Offchain Worker or Runtime API call), since it requires
 	/// all the leaves to be present.
 	/// It may return an error or panic if used incorrectly.
-	pub fn generate_proof(
-		leaf_index: LeafIndex,
-	) -> Result<(LeafOf<T, I>, primitives::Proof<<T as Config<I>>::Hash>), primitives::Error> {
+	pub fn generate_batch_proof(
+		leaf_indices: Vec<NodeIndex>,
+	) -> Result<
+		(Vec<LeafOf<T, I>>, primitives::BatchProof<<T as Config<I>>::Hash>),
+		primitives::Error,
+	> {
 		let mmr: ModuleMmr<mmr::storage::OffchainStorage, T, I> = mmr::Mmr::new(Self::mmr_leaves());
-		mmr.generate_proof(leaf_index)
+		mmr.generate_batch_proof(leaf_indices)
 	}
 
-	/// Verify MMR proof for given `leaf`.
+	/// Return the on-chain MMR root hash.
+	pub fn mmr_root() -> <T as Config<I>>::Hash {
+		Self::mmr_root_hash()
+	}
+
+	/// Verify MMR proof for given `leaves`.
 	///
 	/// This method is safe to use within the runtime code.
 	/// It will return `Ok(())` if the proof is valid
 	/// and an `Err(..)` if MMR is inconsistent (some leaves are missing)
 	/// or the proof is invalid.
-	pub fn verify_leaf(
-		leaf: LeafOf<T, I>,
-		proof: primitives::Proof<<T as Config<I>>::Hash>,
+	pub fn verify_leaves(
+		leaves: Vec<LeafOf<T, I>>,
+		proof: primitives::BatchProof<<T as Config<I>>::Hash>,
 	) -> Result<(), primitives::Error> {
 		if proof.leaf_count > Self::mmr_leaves() ||
 			proof.leaf_count == 0 ||
@@ -288,16 +297,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 
 		let mmr: ModuleMmr<mmr::storage::OffchainStorage, T, I> = mmr::Mmr::new(proof.leaf_count);
-		let is_valid = mmr.verify_leaf_proof(leaf, proof)?;
+		let is_valid = mmr.verify_leaves_proof(leaves, proof)?;
 		if is_valid {
 			Ok(())
 		} else {
 			Err(primitives::Error::Verify.log_debug("The proof is incorrect."))
 		}
-	}
-
-	/// Return the on-chain MMR root hash.
-	pub fn mmr_root() -> <T as Config<I>>::Hash {
-		Self::mmr_root_hash()
 	}
 }

@@ -16,9 +16,11 @@
 // limitations under the License.
 
 use super::*;
-use crate as multi_phase;
+use crate::{self as multi_phase, unsigned::MinerConfig};
 use frame_election_provider_support::{
-	data_provider, onchain, ElectionDataProvider, NposSolution, SequentialPhragmen,
+	data_provider,
+	onchain::{self, UnboundedExecution},
+	ElectionDataProvider, NposSolution, SequentialPhragmen,
 };
 pub use frame_support::{assert_noop, assert_ok, pallet_prelude::GetDefault};
 use frame_support::{
@@ -242,6 +244,13 @@ impl pallet_balances::Config for Runtime {
 	type WeightInfo = ();
 }
 
+#[derive(Eq, PartialEq, Debug, Clone, Copy)]
+pub enum MockedWeightInfo {
+	Basic,
+	Complex,
+	Real,
+}
+
 parameter_types! {
 	pub static Targets: Vec<AccountId> = vec![10, 20, 30, 40];
 	pub static Voters: Vec<VoterOf<Runtime>> = vec![
@@ -272,7 +281,7 @@ parameter_types! {
 	pub static OffchainRepeat: BlockNumber = 5;
 	pub static MinerMaxWeight: Weight = SystemBlockWeights::get().max_block;
 	pub static MinerMaxLength: u32 = 256;
-	pub static MockWeightInfo: bool = false;
+	pub static MockWeightInfo: MockedWeightInfo = MockedWeightInfo::Real;
 	pub static MaxElectingVoters: VoterIndex = u32::max_value();
 	pub static MaxElectableTargets: TargetIndex = TargetIndex::max_value();
 
@@ -317,87 +326,6 @@ impl InstantElectionProvider for MockFallback {
 	}
 }
 
-// Hopefully this won't be too much of a hassle to maintain.
-pub struct DualMockWeightInfo;
-impl multi_phase::weights::WeightInfo for DualMockWeightInfo {
-	fn on_initialize_nothing() -> ComputationWeight {
-		if MockWeightInfo::get() {
-			Zero::zero()
-		} else {
-			<() as multi_phase::weights::WeightInfo>::on_initialize_nothing()
-		}
-	}
-	fn create_snapshot_internal(v: u32, t: u32) -> ComputationWeight {
-		if MockWeightInfo::get() {
-			Zero::zero()
-		} else {
-			<() as multi_phase::weights::WeightInfo>::create_snapshot_internal(v, t)
-		}
-	}
-	fn on_initialize_open_signed() -> ComputationWeight {
-		if MockWeightInfo::get() {
-			Zero::zero()
-		} else {
-			<() as multi_phase::weights::WeightInfo>::on_initialize_open_signed()
-		}
-	}
-	fn on_initialize_open_unsigned() -> ComputationWeight {
-		if MockWeightInfo::get() {
-			Zero::zero()
-		} else {
-			<() as multi_phase::weights::WeightInfo>::on_initialize_open_unsigned()
-		}
-	}
-	fn elect_queued(a: u32, d: u32) -> ComputationWeight {
-		if MockWeightInfo::get() {
-			Zero::zero()
-		} else {
-			<() as multi_phase::weights::WeightInfo>::elect_queued(a, d)
-		}
-	}
-	fn finalize_signed_phase_accept_solution() -> ComputationWeight {
-		if MockWeightInfo::get() {
-			Zero::zero()
-		} else {
-			<() as multi_phase::weights::WeightInfo>::finalize_signed_phase_accept_solution()
-		}
-	}
-	fn finalize_signed_phase_reject_solution() -> ComputationWeight {
-		if MockWeightInfo::get() {
-			Zero::zero()
-		} else {
-			<() as multi_phase::weights::WeightInfo>::finalize_signed_phase_reject_solution()
-		}
-	}
-	fn submit() -> ComputationWeight {
-		if MockWeightInfo::get() {
-			Zero::zero()
-		} else {
-			<() as multi_phase::weights::WeightInfo>::submit()
-		}
-	}
-	fn submit_unsigned(v: u32, t: u32, a: u32, d: u32) -> ComputationWeight {
-		if MockWeightInfo::get() {
-			// 10 base
-			// 5 per edge.
-			(10 as ComputationWeight)
-				.saturating_add((5 as ComputationWeight).saturating_mul(a as ComputationWeight))
-		} else {
-			<() as multi_phase::weights::WeightInfo>::submit_unsigned(v, t, a, d)
-		}
-	}
-	fn feasibility_check(v: u32, t: u32, a: u32, d: u32) -> ComputationWeight {
-		if MockWeightInfo::get() {
-			// 10 base
-			// 5 per edge.
-			(10 as ComputationWeight)
-				.saturating_add((5 as ComputationWeight).saturating_mul(a as ComputationWeight))
-		} else {
-			<() as multi_phase::weights::WeightInfo>::feasibility_check(v, t, a, d)
-		}
-	}
-}
-
 parameter_types! {
 	pub static Balancing: Option<(usize, ExtendedBalance)> = Some((0, 0));
 }
@@ -415,6 +343,24 @@ impl BenchmarkingConfig for TestBenchmarkingConfig {
 	const MAXIMUM_TARGETS: u32 = 200;
 }
 
+impl MinerConfig for Runtime {
+	type AccountId = AccountId;
+	type MaxLength = MinerMaxLength;
+	type MaxWeight = MinerMaxWeight;
+	type MaxVotesPerVoter = <StakingMock as ElectionDataProvider>::MaxVotesPerVoter;
+	type Solution = TestNposSolution;
+
+	fn solution_weight(v: u32, t: u32, a: u32, d: u32) -> Weight {
+		match MockWeightInfo::get() {
+			MockedWeightInfo::Basic =>
+				(10 as Weight).saturating_add((5 as Weight).saturating_mul(a as Weight)),
+			MockedWeightInfo::Complex => (0 * v + 0 * t + 1000 * a + 0 * d) as Weight,
+			MockedWeightInfo::Real =>
+				<() as multi_phase::weights::WeightInfo>::feasibility_check(v, t, a, d),
+		}
+	}
+}
+
 impl crate::Config for Runtime {
 	type Event = Event;
 	type Currency = Balances;
@@ -424,8 +370,6 @@ impl crate::Config for Runtime {
 	type BetterUnsignedThreshold = BetterUnsignedThreshold;
 	type BetterSignedThreshold = BetterSignedThreshold;
 	type OffchainRepeat = OffchainRepeat;
-	type MinerMaxWeight = MinerMaxWeight;
-	type MinerMaxLength = MinerMaxLength;
 	type MinerTxPriority = MinerTxPriority;
 	type SignedRewardBase = SignedRewardBase;
 	type SignedDepositBase = SignedDepositBase;
@@ -437,14 +381,14 @@ impl crate::Config for Runtime {
 	type SlashHandler = ();
 	type RewardHandler = ();
 	type DataProvider = StakingMock;
-	type WeightInfo = DualMockWeightInfo;
+	type WeightInfo = ();
 	type BenchmarkingConfig = TestBenchmarkingConfig;
 	type Fallback = MockFallback;
-	type GovernanceFallback = NoFallback<Self>;
+	type GovernanceFallback = UnboundedExecution<OnChainSeqPhragmen>;
 	type ForceOrigin = frame_system::EnsureRoot<AccountId>;
-	type Solution = TestNposSolution;
 	type MaxElectingVoters = MaxElectingVoters;
 	type MaxElectableTargets = MaxElectableTargets;
+	type MinerConfig = Self;
 	type Solver = SequentialPhragmen<AccountId, SolutionAccuracyOf<Runtime>, Balancing>;
 }
 
@@ -567,7 +511,7 @@ impl ExtBuilder {
 		<MinerMaxWeight>::set(Weight::from_computation(weight));
 		self
 	}
-	pub fn mock_weight_info(self, mock: bool) -> Self {
+	pub fn mock_weight_info(self, mock: MockedWeightInfo) -> Self {
 		<MockWeightInfo>::set(mock);
 		self
 	}

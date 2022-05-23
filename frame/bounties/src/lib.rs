@@ -799,14 +799,14 @@ impl<T: Config> Pallet<T> {
 	/// This actually does computation. If you need to keep using it, then make sure you cache the
 	/// value and only call this once.
 	pub fn account_id() -> T::AccountId {
-		T::PalletId::get().into_account()
+		T::PalletId::get().into_account_truncating()
 	}
 
 	/// The account ID of a bounty account
 	pub fn bounty_account_id(id: BountyIndex) -> T::AccountId {
 		// only use two byte prefix to support 16 byte account id (used by test)
 		// "modl" ++ "py/trsry" ++ "bt" is 14 bytes, and two bytes remaining for bounty index
-		T::PalletId::get().into_sub_account(("bt", id))
+		T::PalletId::get().into_sub_account_truncating(("bt", id))
 	}
 
 	fn create_bounty(

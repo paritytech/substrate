@@ -1545,10 +1545,8 @@ mod test {
 	fn prefix_iterator_pagination_works() {
 		TestExternalities::default().execute_with(|| {
 			use crate::{hash::Identity, storage::generator::map::StorageMap};
-			crate::generate_storage_alias! {
-				MyModule,
-				MyStorageMap => Map<(Identity, u64), u64>
-			}
+			#[crate::storage_alias]
+			type MyStorageMap = StorageMap<MyModule, Identity, u64, u64>;
 
 			MyStorageMap::insert(1, 10);
 			MyStorageMap::insert(2, 20);
@@ -1663,12 +1661,13 @@ mod test {
 		});
 	}
 
-	crate::generate_storage_alias! { Prefix, Foo => Value<WeakBoundedVec<u32, ConstU32<7>>> }
-	crate::generate_storage_alias! { Prefix, FooMap => Map<(Twox128, u32), BoundedVec<u32, ConstU32<7>>> }
-	crate::generate_storage_alias! {
-		Prefix,
-		FooDoubleMap => DoubleMap<(Twox128, u32), (Twox128, u32), BoundedVec<u32, ConstU32<7>>>
-	}
+	#[crate::storage_alias]
+	type Foo = StorageValue<Prefix, WeakBoundedVec<u32, ConstU32<7>>>;
+	#[crate::storage_alias]
+	type FooMap = StorageMap<Prefix, Twox128, u32, BoundedVec<u32, ConstU32<7>>>;
+	#[crate::storage_alias]
+	type FooDoubleMap =
+		StorageDoubleMap<Prefix, Twox128, u32, Twox128, u32, BoundedVec<u32, ConstU32<7>>>;
 
 	#[test]
 	fn try_append_works() {

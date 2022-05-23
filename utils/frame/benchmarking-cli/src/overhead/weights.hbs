@@ -41,13 +41,13 @@ parameter_types! {
 	{{/if}}
 	/// Calculated by multiplying the *{{params.weight.weight_metric}}* with `{{params.weight.weight_mul}}` and adding `{{params.weight.weight_add}}`.
 	///
-	/// Stats [NS]:
+	/// Stats nanoseconds:
 	///   Min, Max: {{underscore stats.min}}, {{underscore stats.max}}
 	///   Average:  {{underscore stats.avg}}
 	///   Median:   {{underscore stats.median}}
 	///   Std-Dev:  {{stats.stddev}}
 	///
-	/// Percentiles [NS]:
+	/// Percentiles nanoseconds:
 	///   99th: {{underscore stats.p99}}
 	///   95th: {{underscore stats.p95}}
 	///   75th: {{underscore stats.p75}}

@@ -51,9 +51,7 @@ use frame_support::{
 	codec::{Decode, Encode},
 	dispatch::{DispatchError, DispatchResultWithPostInfo, Dispatchable, PostDispatchInfo},
 	ensure,
-	traits::{
-		Backing, ChangeMembers, EnsureOrigin, Get, GetBacking, InitializeMembers, StorageVersion,
-	},
+	traits::{Backing, ChangeMembers, EnsureOrigin, Get, GetBacking, InitializeMembers},
 	weights::{GetDispatchInfo, Weight},
 };
 

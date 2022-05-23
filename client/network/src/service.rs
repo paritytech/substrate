@@ -37,11 +37,8 @@ use crate::{
 		NetworkState, NotConnectedPeer as NetworkStateNotConnectedPeer, Peer as NetworkStatePeer,
 	},
 	protocol::{
-		self,
-		event::Event,
-		message::generic::Roles,
-		sync::{Status as SyncStatus, SyncState},
-		NotificationsSink, NotifsHandlerError, PeerInfo, Protocol, Ready,
+		self, event::Event, message::generic::Roles, NotificationsSink, NotifsHandlerError,
+		PeerInfo, Protocol, Ready,
 	},
 	transactions, transport, DhtEvent, ExHashT, NetworkStateInfo, NetworkStatus, ReputationChange,
 };
@@ -63,6 +60,7 @@ use metrics::{Histogram, HistogramVec, MetricSources, Metrics};
 use parking_lot::Mutex;
 use sc_client_api::{BlockBackend, ProofProvider};
 use sc_consensus::{BlockImportError, BlockImportStatus, ImportQueue, Link};
+use sc_network_sync::{Status as SyncStatus, SyncState};
 use sc_peerset::PeersetHandle;
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_blockchain::{HeaderBackend, HeaderMetadata};
@@ -230,12 +228,10 @@ where
 		)?;
 
 		// List of multiaddresses that we know in the network.
-		let mut bootnodes = Vec::new();
 		let mut boot_node_ids = HashSet::new();
 
 		// Process the bootnodes.
 		for bootnode in params.network_config.boot_nodes.iter() {
-			bootnodes.push(bootnode.peer_id);
 			boot_node_ids.insert(bootnode.peer_id);
 			known_addresses.push((bootnode.peer_id, bootnode.multiaddr.clone()));
 		}
@@ -243,12 +239,18 @@ where
 		let boot_node_ids = Arc::new(boot_node_ids);
 
 		// Check for duplicate bootnodes.
-		known_addresses.iter().try_for_each(|(peer_id, addr)| {
-			if let Some(other) = known_addresses.iter().find(|o| o.1 == *addr && o.0 != *peer_id) {
+		params.network_config.boot_nodes.iter().try_for_each(|bootnode| {
+			if let Some(other) = params
+				.network_config
+				.boot_nodes
+				.iter()
+				.filter(|o| o.multiaddr == bootnode.multiaddr)
+				.find(|o| o.peer_id != bootnode.peer_id)
+			{
 				Err(Error::DuplicateBootnode {
-					address: addr.clone(),
-					first_id: *peer_id,
-					second_id: other.0,
+					address: bootnode.multiaddr.clone(),
+					first_id: bootnode.peer_id,
+					second_id: other.peer_id,
 				})
 			} else {
 				Ok(())
