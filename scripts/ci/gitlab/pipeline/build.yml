@@ -11,8 +11,8 @@
   script:
     - git clone
         --depth=1
-        "--branch=$PIPELINE_SCRIPTS_TAG"
-        https://github.com/paritytech/pipeline-scripts
+        --branch=handle-extra-dependencies
+        https://github.com/joao-paulo-parity/pipeline-scripts
     - ./pipeline-scripts/check_dependent_project.sh
         --org paritytech
         --dependent-repo "$DEPENDENT_REPO"
