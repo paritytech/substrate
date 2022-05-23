@@ -1063,11 +1063,6 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add((1_319_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64sub(r: u32, ) -> Weight {
-		(74_214_000 as Weight)
-			// Standard Error: 2_000
-			.saturating_add((1_321_000 as Weight).saturating_mul(r as Weight))
-	}
-	fn instr_i64sub(r: u32, ) -> Weight {
 		(74_312_000 as Weight)
 			// Standard Error: 2_000
 			.saturating_add((1_339_000 as Weight).saturating_mul(r as Weight))
@@ -2039,11 +2034,6 @@ impl WeightInfo for () {
 		(74_305_000 as Weight)
 			// Standard Error: 1_000
 			.saturating_add((1_319_000 as Weight).saturating_mul(r as Weight))
-	}
-	fn instr_i64sub(r: u32, ) -> Weight {
-		(74_214_000 as Weight)
-			// Standard Error: 2_000
-			.saturating_add((1_321_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64sub(r: u32, ) -> Weight {
 		(74_312_000 as Weight)
