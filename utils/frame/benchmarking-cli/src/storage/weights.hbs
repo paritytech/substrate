@@ -49,13 +49,13 @@ pub mod constants {
 			/// Time to read one storage item.
 			/// Calculated by multiplying the *{{params.weight_params.weight_metric}}* of all values with `{{params.weight_params.weight_mul}}` and adding `{{params.weight_params.weight_add}}`.
 			///
-			/// Stats [NS]:
+			/// Stats nanoseconds:
 			///   Min, Max: {{underscore read.0.min}}, {{underscore read.0.max}}
 			///   Average:  {{underscore read.0.avg}}
 			///   Median:   {{underscore read.0.median}}
 			///   Std-Dev:  {{read.0.stddev}}
 			///
-			/// Percentiles [NS]:
+			/// Percentiles nanoseconds:
 			///   99th: {{underscore read.0.p99}}
 			///   95th: {{underscore read.0.p95}}
 			///   75th: {{underscore read.0.p75}}
@@ -64,13 +64,13 @@ pub mod constants {
 			/// Time to write one storage item.
 			/// Calculated by multiplying the *{{params.weight_params.weight_metric}}* of all values with `{{params.weight_params.weight_mul}}` and adding `{{params.weight_params.weight_add}}`.
 			///
-			/// Stats [NS]:
+			/// Stats nanoseconds:
 			///   Min, Max: {{underscore write.0.min}}, {{underscore write.0.max}}
 			///   Average:  {{underscore write.0.avg}}
 			///   Median:   {{underscore write.0.median}}
 			///   Std-Dev:  {{write.0.stddev}}
 			///
-			/// Percentiles [NS]:
+			/// Percentiles nanoseconds:
 			///   99th: {{underscore write.0.p99}}
 			///   95th: {{underscore write.0.p95}}
 			///   75th: {{underscore write.0.p75}}
