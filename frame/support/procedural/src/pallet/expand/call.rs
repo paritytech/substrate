@@ -42,6 +42,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 	let pallet_ident = &def.pallet_struct.pallet;
 
 	let fn_name = methods.iter().map(|method| &method.name).collect::<Vec<_>>();
+	let call_index = methods.iter().map(|method| method.call_index).collect::<Vec<_>>();
 	let new_call_variant_fn_name = fn_name
 		.iter()
 		.map(|fn_name| quote::format_ident!("new_call_variant_{}", fn_name))
@@ -177,6 +178,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 			),
 			#(
 				#( #[doc = #fn_doc] )*
+				#[codec(index = #call_index)]
 				#fn_name {
 					#(
 						#[allow(missing_docs)]

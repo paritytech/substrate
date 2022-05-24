@@ -37,3 +37,4 @@ wat = "1.0"
 sc-runtime-test = { version = "2.0.0", path = "../runtime-test" }
 sp-io = { version = "6.0.0", path = "../../../primitives/io" }
 tempfile = "3.3.0"
+paste = "1.0"
