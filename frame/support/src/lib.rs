@@ -1087,15 +1087,16 @@ pub mod tests {
 	}
 
 	#[test]
-	fn double_map_basic_insert_remove_remove_prefix_should_work() {
-		new_test_ext().execute_with(|| {
-			type DoubleMap = DataDM;
+	fn double_map_basic_insert_remove_remove_prefix_with_commit_should_work() {
+		let key1 = 17u32;
+		let key2 = 18u32;
+		type DoubleMap = DataDM;
+		let mut e = new_test_ext();
+		e.execute_with(|| {
 			// initialized during genesis
 			assert_eq!(DoubleMap::get(&15u32, &16u32), 42u64);
 
 			// get / insert / take
-			let key1 = 17u32;
-			let key2 = 18u32;
 			assert_eq!(DoubleMap::get(&key1, &key2), 0u64);
 			DoubleMap::insert(&key1, &key2, &4u64);
 			assert_eq!(DoubleMap::get(&key1, &key2), 4u64);
@@ -1103,9 +1104,7 @@ pub mod tests {
 			assert_eq!(DoubleMap::get(&key1, &key2), 0u64);
 
 			// mutate
-			DoubleMap::mutate(&key1, &key2, |val| {
-				*val = 15;
-			});
+			DoubleMap::mutate(&key1, &key2, |val| *val = 15);
 			assert_eq!(DoubleMap::get(&key1, &key2), 15u64);
 
 			// remove
@@ -1117,10 +1116,50 @@ pub mod tests {
 			DoubleMap::insert(&key1, &(key2 + 1), &4u64);
 			DoubleMap::insert(&(key1 + 1), &key2, &4u64);
 			DoubleMap::insert(&(key1 + 1), &(key2 + 1), &4u64);
-			assert!(matches!(
-				DoubleMap::remove_prefix(&key1, None),
-				sp_io::KillStorageResult::AllRemoved(2),
-			));
+		});
+		e.commit_all().unwrap();
+		e.execute_with(|| {
+			let r = DoubleMap::remove_prefix(&key1, None);
+			assert!(matches!(r, sp_io::KillStorageResult::AllRemoved(2)));
+			assert_eq!(DoubleMap::get(&key1, &key2), 0u64);
+			assert_eq!(DoubleMap::get(&key1, &(key2 + 1)), 0u64);
+			assert_eq!(DoubleMap::get(&(key1 + 1), &key2), 4u64);
+			assert_eq!(DoubleMap::get(&(key1 + 1), &(key2 + 1)), 4u64);
+		});
+	}
+
+	#[test]
+	fn double_map_basic_insert_remove_remove_prefix_should_work() {
+		new_test_ext().execute_with(|| {
+			let key1 = 17u32;
+			let key2 = 18u32;
+			type DoubleMap = DataDM;
+
+			// initialized during genesis
+			assert_eq!(DoubleMap::get(&15u32, &16u32), 42u64);
+
+			// get / insert / take
+			assert_eq!(DoubleMap::get(&key1, &key2), 0u64);
+			DoubleMap::insert(&key1, &key2, &4u64);
+			assert_eq!(DoubleMap::get(&key1, &key2), 4u64);
+			assert_eq!(DoubleMap::take(&key1, &key2), 4u64);
+			assert_eq!(DoubleMap::get(&key1, &key2), 0u64);
+
+			// mutate
+			DoubleMap::mutate(&key1, &key2, |val| *val = 15);
+			assert_eq!(DoubleMap::get(&key1, &key2), 15u64);
+
+			// remove
+			DoubleMap::remove(&key1, &key2);
+			assert_eq!(DoubleMap::get(&key1, &key2), 0u64);
+
+			// remove prefix
+			DoubleMap::insert(&key1, &key2, &4u64);
+			DoubleMap::insert(&key1, &(key2 + 1), &4u64);
+			DoubleMap::insert(&(key1 + 1), &key2, &4u64);
+			DoubleMap::insert(&(key1 + 1), &(key2 + 1), &4u64);
+			let r = DoubleMap::remove_prefix(&key1, None);
+			assert!(matches!(r, sp_io::KillStorageResult::AllRemoved(0)));	// all in overlay
 			assert_eq!(DoubleMap::get(&key1, &key2), 0u64);
 			assert_eq!(DoubleMap::get(&key1, &(key2 + 1)), 0u64);
 			assert_eq!(DoubleMap::get(&(key1 + 1), &key2), 4u64);
