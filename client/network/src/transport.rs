@@ -20,16 +20,43 @@ use libp2p::{
 	bandwidth,
 	core::{
 		self,
-		either::EitherTransport,
+		either::{EitherOutput, EitherTransport},
 		muxing::StreamMuxerBox,
-		transport::{Boxed, OptionalTransport},
+		transport::{Boxed, OptionalTransport, OrTransport},
 		upgrade,
 	},
-	dns, identity, mplex, noise, tcp, websocket, PeerId, Transport,
+	dns, identity, mplex, noise,
+	quic::{Config as QuicConfig, QuicTransport},
+	tcp, websocket, PeerId, Transport,
 };
-use std::{sync::Arc, time::Duration};
+use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 pub use self::bandwidth::BandwidthSinks;
+
+/// Builds the QUIC transport
+///
+/// Returns None if socket is empty or any error occurred while building the transport.
+fn build_quic_transport(
+	keypair: &identity::Keypair,
+	quic_socket: Option<SocketAddr>,
+) -> Option<QuicTransport> {
+	let quic_socket = quic_socket?;
+
+	let addr = libp2p::Multiaddr::empty()
+		.with(quic_socket.ip().into())
+		.with(libp2p::multiaddr::Protocol::Udp(quic_socket.port()))
+		.with(libp2p::multiaddr::Protocol::Quic);
+
+	let config = QuicConfig::new(&keypair, addr)
+		.map_err(|e| log::error!("Failed to create QUIC config: {}", e))
+		.ok()?;
+
+	let endpoint = libp2p::quic::Endpoint::new(config)
+		.map_err(|e| log::error!("Failed to start QUIC endpoint: {}", e))
+		.ok()?;
+
+	Some(QuicTransport::new(endpoint))
+}
 
 /// Builds the transport that serves as a common ground for all connections.
 ///
@@ -51,6 +78,7 @@ pub fn build_transport(
 	memory_only: bool,
 	yamux_window_size: Option<u32>,
 	yamux_maximum_buffer_size: usize,
+	quic_socket: Option<SocketAddr>,
 ) -> (Boxed<(PeerId, StreamMuxerBox)>, Arc<BandwidthSinks>) {
 	// Build the base layer of the transport.
 	let transport = if !memory_only {
@@ -108,11 +136,22 @@ pub fn build_transport(
 		core::upgrade::SelectUpgrade::new(yamux_config, mplex_config)
 	};
 
-	let transport = transport
+	let tcp_transport = transport
 		.upgrade(upgrade::Version::V1Lazy)
 		.authenticate(authentication_config)
 		.multiplex(multiplexing_config)
-		.timeout(Duration::from_secs(20))
+		.timeout(Duration::from_secs(20));
+
+	let quic_transport = match build_quic_transport(&keypair, quic_socket) {
+		Some(t) => OptionalTransport::some(t),
+		None => OptionalTransport::none(),
+	};
+
+	let transport = OrTransport::new(quic_transport, tcp_transport)
+		.map(|either_output, _| match either_output {
+			EitherOutput::First((peer_id, muxer)) => (peer_id, StreamMuxerBox::new(muxer)),
+			EitherOutput::Second((peer_id, muxer)) => (peer_id, StreamMuxerBox::new(muxer)),
+		})
 		.boxed();
 
 	(transport, bandwidth)

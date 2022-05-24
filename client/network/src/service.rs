@@ -343,6 +343,7 @@ where
 					config_mem,
 					params.network_config.yamux_window_size,
 					yamux_maximum_buffer_size,
+					None, // TODO
 				)
 			};
 
