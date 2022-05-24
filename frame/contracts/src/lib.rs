@@ -104,7 +104,7 @@ pub use crate::{
 	schedule::{HostFnWeights, InstructionWeights, Limits, Schedule},
 };
 use crate::{
-	exec::{AccountIdOf, ExecError, Executable, Stack as ExecStack},
+	exec::{AccountIdOf, ExecError, Executable, Stack as ExecStack, StorageHash},
 	gas::GasMeter,
 	storage::{meter::Meter as StorageMeter, ContractInfo, DeletedContract, Storage},
 	wasm::{OwnerInfo, PrefabWasmModule},
@@ -128,8 +128,6 @@ use scale_info::TypeInfo;
 use sp_core::{crypto::UncheckedFrom, Bytes};
 use sp_runtime::traits::{Convert, Hash, Saturating, StaticLookup};
 use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
-
-use crate::exec::StorageHash;
 
 type CodeHash<T> = <T as frame_system::Config>::Hash;
 type TrieId = BoundedVec<u8, ConstU32<128>>;

@@ -162,7 +162,12 @@ pub trait Ext: sealing::Sealed {
 	/// was deleted.
 	fn get_storage(&mut self, key: FixSizedKey) -> Option<Vec<u8>>;
 
+	/// This is a variation of `get_storage()` to be used with transparent hashing.
+	/// These two will be merged into a single function after some refactoring is done.
+	/// Returns the storage entry of the executing account by the given `key`.
 	///
+	/// Returns `None` if the `key` wasn't previously set by `set_storage` or
+	/// was deleted.
 	fn get_storage_transparent(&mut self, key: VarSizedKey) -> Option<Vec<u8>>;
 
 	/// Returns `Some(len)` (in bytes) if a storage item exists at `key`.
@@ -171,7 +176,12 @@ pub trait Ext: sealing::Sealed {
 	/// was deleted.
 	fn get_storage_size(&mut self, key: FixSizedKey) -> Option<u32>;
 
+	/// This is a variation of `get_storage_size()` to be used with transparent hashing.
+	/// These two will be merged into a single function after some refactoring is done.
+	/// Returns `Some(len)` (in bytes) if a storage item exists at `key`.
 	///
+	/// Returns `None` if the `key` wasn't previously set by `set_storage` or
+	/// was deleted.
 	fn get_storage_size_transparent(&mut self, key: VarSizedKey) -> Option<u32>;
 
 	/// Sets the storage entry by the given key to the specified value. If `value` is `None` then
