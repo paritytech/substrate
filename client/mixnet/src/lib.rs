@@ -80,7 +80,7 @@ pub struct MixnetWorker<B: BlockT, C> {
 	command_sink: TracingUnboundedSender<MixnetCommand>,
 	command_stream: TracingUnboundedReceiver<MixnetCommand>,
 	key_store: Arc<dyn SyncCryptoStore>,
-	default_limit_config: Option<u32>,
+	default_limit_config: Option<usize>,
 }
 
 // TODO consider restoring a command support in mixnet
@@ -894,6 +894,9 @@ impl Topology for AuthorityStar {
 		error!(target: "mixnet", "check handshake: {:?}, {:?}, {:?} from {:?}", peer_id, message, signature, _from);
 		use sp_application_crypto::RuntimePublic;
 		if key.verify(&message, &signature) {
+			if !self.accept_peer(&self.node_id, &peer_id) {
+				return None
+			}
 			let pk = MixPublicKey::from(pk);
 			Some((peer_id, pk))
 		} else {
