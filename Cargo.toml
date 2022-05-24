@@ -302,3 +302,6 @@ inherits = "release"
 lto = "fat"
 # https://doc.rust-lang.org/rustc/codegen-options/index.html#codegen-units
 codegen-units = 1
+
+[patch.crates-io]
+libp2p = { git = "https://github.com/kpp/rust-libp2p.git", branch = "libp2p-quic" }
