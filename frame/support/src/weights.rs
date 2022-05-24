@@ -168,10 +168,7 @@ pub mod constants {
 	pub const WEIGHT_PER_NANOS: Weight = WEIGHT_PER_MICROS / 1000; // 1_000
 
 	// Expose the Block and Extrinsic base weights.
-	pub use super::{
-		block_weights::constants::BlockExecutionWeight,
-		extrinsic_weights::constants::ExtrinsicBaseWeight,
-	};
+	pub use super::{block_weights::BlockExecutionWeight, extrinsic_weights::ExtrinsicBaseWeight};
 
 	// Expose the DB weights.
 	pub use super::{

@@ -17,6 +17,7 @@
 
 use frame_support::{
 	dispatch::UnfilteredDispatchable,
+	pallet_prelude::ValueQuery,
 	storage::unhashed,
 	traits::{ConstU32, GetCallName, OnFinalize, OnGenesis, OnInitialize, OnRuntimeUpgrade},
 	weights::{DispatchClass, DispatchInfo, GetDispatchInfo, Pays},
@@ -820,4 +821,16 @@ fn test_pallet_info_access() {
 	assert_eq!(<Instance1Example as frame_support::traits::PalletInfoAccess>::index(), 2);
 	assert_eq!(<Example2 as frame_support::traits::PalletInfoAccess>::index(), 3);
 	assert_eq!(<Instance1Example2 as frame_support::traits::PalletInfoAccess>::index(), 4);
+}
+
+#[test]
+fn test_storage_alias() {
+	#[frame_support::storage_alias]
+	type Value<T: pallet::Config<I>, I: 'static> =
+		StorageValue<pallet::Pallet<T, I>, u32, ValueQuery>;
+
+	TestExternalities::default().execute_with(|| {
+		pallet::Value::<Runtime, pallet::Instance1>::put(10);
+		assert_eq!(10, Value::<Runtime, pallet::Instance1>::get());
+	})
 }

@@ -31,15 +31,18 @@ check-dependent-polkadot:
     COMPANION_OVERRIDES: |
       substrate: polkadot-v*
       polkadot: release-v*
+  rules:
+    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/  #PRs
 
-check-dependent-cumulus:
-  extends:                         .check-dependent-project
-  variables:
-    DEPENDENT_REPO:                cumulus
-    EXTRA_DEPENDENCIES:            polkadot
-    COMPANION_OVERRIDES: |
-      substrate: polkadot-v*
-      polkadot: release-v*
+# TODO: Re-enable after https://github.com/paritytech/pipeline-scripts/issues/44
+#check-dependent-cumulus:
+#  extends:                         .check-dependent-project
+#  variables:
+#    DEPENDENT_REPO:                cumulus
+#    EXTRA_DEPENDENCIES:            polkadot
+#    COMPANION_OVERRIDES: |
+#      substrate: polkadot-v*
+#      polkadot: release-v*
 
 build-linux-substrate:
   stage:                           build
