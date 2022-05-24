@@ -1949,7 +1949,7 @@ benchmarks! {
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
-				module: "__unstable__",
+				module: "seal0",
 				name: "seal_ecdsa_recover",
 				params: vec![ValueType::I32, ValueType::I32, ValueType::I32],
 				return_type: Some(ValueType::I32),
@@ -1992,7 +1992,7 @@ benchmarks! {
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
-				module: "__unstable__",
+				module: "seal0",
 				name: "seal_ecdsa_to_eth_address",
 				params: vec![ValueType::I32, ValueType::I32],
 				return_type: Some(ValueType::I32),
