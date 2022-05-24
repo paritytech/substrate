@@ -48,7 +48,7 @@ pub type ExecResult = Result<ExecReturnValue, ExecError>;
 pub type TopicOf<T> = <T as frame_system::Config>::Hash;
 
 pub type FixSizedKey = [u8; 32];
-pub type VarSizedKey = BoundedVec<u8, ConstU32<128>>; // TODO: length to Config Get param
+pub type VarSizedKey<T> = BoundedVec<u8, <T as Config>::MaxStorageKeyLen>;
 
 pub trait StorageHash {
 	fn hash(self) -> Vec<u8>;
