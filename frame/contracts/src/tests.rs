@@ -1793,8 +1793,8 @@ fn lazy_removal_does_no_run_on_full_queue_and_full_block() {
 		// to clear the queue
 		Storage::<Test>::fill_queue_with_dummies();
 
-		// Run the lazy removal without any limit so that all keys would be removed if there
-		// had been some weight left in the block.
+		// Check that on_initialize() tries to perform lazy removal but removes nothing
+		//  as no more weight is left for that.
 		let weight_used = Contracts::on_initialize(System::block_number());
 		let base = <<Test as Config>::WeightInfo as WeightInfo>::on_process_deletion_queue_batch();
 		assert_eq!(weight_used, base);
