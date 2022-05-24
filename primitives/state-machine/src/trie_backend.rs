@@ -933,28 +933,71 @@ pub mod tests {
 				assert_eq!(proof_check.child_storage(child_info_2, &[25]).unwrap(), None);
 			}
 		}
+	}
+
+	/// This tests an edge case when recording a child trie access with a cache.
+	///
+	/// The accessed value/node is in the cache, but not the nodes to get to this value. So,
+	/// the recorder will need to traverse the trie to access these nodes from the backend when the
+	/// storage proof is generated.
+	#[test]
+	fn child_proof_recording_with_edge_cases_works() {
+		child_proof_recording_with_edge_cases_works_inner(StateVersion::V0);
+		child_proof_recording_with_edge_cases_works_inner(StateVersion::V1);
+	}
+	fn child_proof_recording_with_edge_cases_works_inner(state_version: StateVersion) {
+		let child_info_1 = ChildInfo::new_default(b"sub1");
+		let child_info_1 = &child_info_1;
+		let contents = vec![
+			(None, (0..64).map(|i| (vec![i], Some(vec![i]))).collect::<Vec<_>>()),
+			(
+				Some(child_info_1.clone()),
+				(28..65)
+					.map(|i| (vec![i], Some(vec![i])))
+					// Some big value to ensure we get a new node
+					.chain(std::iter::once((vec![65], Some(vec![65; 128]))))
+					.collect(),
+			),
+		];
+		let in_memory = new_in_mem::<BlakeTwo256, PrefixedKey<BlakeTwo256>>();
+		let in_memory = in_memory.update(contents, state_version);
+		let child_storage_keys = vec![child_info_1.to_owned()];
+		let in_memory_root = in_memory
+			.full_storage_root(
+				std::iter::empty(),
+				child_storage_keys.iter().map(|k| (k, std::iter::empty())),
+				state_version,
+			)
+			.0;
 
 		let child_1_root =
 			in_memory.child_storage_root(child_info_1, std::iter::empty(), state_version).0;
 		let trie = in_memory.as_trie_backend();
 		let nodes = {
 			let backend = TrieBackendBuilder::wrap(trie).with_recorder(Default::default()).build();
-			assert_eq!(backend.child_storage(child_info_1, &[40]).unwrap().unwrap(), vec![40]);
+			let value = backend.child_storage(child_info_1, &[65]).unwrap().unwrap();
+			let value_hash = BlakeTwo256::hash(&value);
+			assert_eq!(value, vec![65; 128]);
 
 			let proof = backend.extract_proof().unwrap().unwrap();
 
 			let mut nodes = Vec::new();
 			for node in proof.iter_nodes() {
 				let hash = BlakeTwo256::hash(&node);
+				// Only insert the node/value that contains the important data.
+				if hash != value_hash {
+					let node = sp_trie::NodeCodec::<BlakeTwo256>::decode(&node)
+						.unwrap()
+						.to_owned_node::<sp_trie::LayoutV1<BlakeTwo256>>()
+						.unwrap();
 
-				if hash != child_1_root {
-					nodes.push((
-						hash,
-						sp_trie::NodeCodec::<BlakeTwo256>::decode(&node)
-							.unwrap()
-							.to_owned_node::<sp_trie::LayoutV1<BlakeTwo256>>()
-							.unwrap(),
-					))
+					if let Some(data) = node.data() {
+						if data == &vec![65; 128] {
+							nodes.push((hash, node));
+						}
+					}
+				} else if hash == value_hash {
+					nodes.push((hash, trie_db::node::NodeOwned::Value(node.into(), hash)));
 				}
 			}
 
@@ -966,32 +1009,32 @@ pub mod tests {
 			let local_cache = cache.local_cache();
 			let mut trie_cache = local_cache.as_trie_db_cache(child_1_root);
 
+			// Put the value/node into the cache.
 			for (hash, node) in nodes {
 				trie_cache.get_or_insert_node(hash, &mut || Ok(node.clone())).unwrap();
 
 				if let Some(data) = node.data() {
-					if data == &[40] {
-						eprintln!("insert");
-						trie_cache.cache_value_for_key(
-							&[40],
-							(data.clone(), BlakeTwo256::hash(&data)).into(),
-						);
-					}
+					trie_cache.cache_value_for_key(&[65], (data.clone(), hash).into());
 				}
 			}
 		}
 
 		{
+			// Record the access
 			let proving = TrieBackendBuilder::wrap(&trie)
 				.with_recorder(Recorder::default())
 				.with_cache(cache.local_cache())
 				.build();
-			assert_eq!(proving.child_storage(child_info_1, &[40]), Ok(Some(vec![40])));
+			assert_eq!(proving.child_storage(child_info_1, &[65]), Ok(Some(vec![65; 128])));
 
 			let proof = proving.extract_proof().unwrap().unwrap();
+			// And check that we have a correct proof.
 			let proof_check =
 				create_proof_check_backend::<BlakeTwo256>(in_memory_root.into(), proof).unwrap();
-			assert_eq!(proof_check.child_storage(child_info_1, &[40]).unwrap().unwrap(), vec![40]);
+			assert_eq!(
+				proof_check.child_storage(child_info_1, &[65]).unwrap().unwrap(),
+				vec![65; 128]
+			);
 		}
 	}
 
