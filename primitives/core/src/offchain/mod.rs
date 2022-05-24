@@ -185,7 +185,7 @@ impl TryFrom<u32> for HttpRequestStatus {
 /// A blob to hold information about the local node's network state
 /// without committing to its format.
 #[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, PassByCodec, TypeInfo)]
-#[cfg_attr(feature = "std", derive(Default))]
+#[cfg_attr(feature = "std", derive(Default, serde::Serialize, serde::Deserialize))]
 pub struct OpaqueNetworkState {
 	/// PeerId of the local node in SCALE encoded.
 	pub peer_id: OpaquePeerId,
@@ -195,6 +195,7 @@ pub struct OpaqueNetworkState {
 
 /// Simple blob to hold a `Multiaddr` without committing to its format.
 #[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, PassByInner, TypeInfo)]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub struct OpaqueMultiaddr(pub Vec<u8>);
 
 impl OpaqueMultiaddr {
@@ -208,12 +209,14 @@ impl OpaqueMultiaddr {
 #[derive(
 	Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Default, RuntimeDebug, PassByInner, Encode, Decode,
 )]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub struct Timestamp(u64);
 
 /// Duration type
 #[derive(
 	Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Default, RuntimeDebug, PassByInner, Encode, Decode,
 )]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub struct Duration(u64);
 
 impl Duration {
