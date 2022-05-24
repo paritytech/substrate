@@ -543,17 +543,17 @@ impl<T: Config> Pallet<T> {
 
 #[derive(Encode, Decode, Clone, PartialEq, RuntimeDebug, TypeInfo)]
 #[codec(dumb_trait_bound)]
-pub struct ForwardedCall<Index, BlockNumber, Call, AccountId> {
-	pub nonce: Index,
+pub struct ForwardedCall<Nonce, BlockNumber, Call, AccountId> {
+	pub nonce: Nonce,
 	pub deadline: BlockNumber,
-	pub call: Call,
+	pub call: Box<Call>,
 	pub signer: MultiSigner,
 	pub whitelisted_forwarder: Option<AccountId>,
 }
 
-impl<Index, BlockNumber, Call, AccountId> ForwardedCall<Index, BlockNumber, Call, AccountId>
+impl<Nonce, BlockNumber, Call, AccountId> ForwardedCall<Nonce, BlockNumber, Call, AccountId>
 where
-	ForwardedCall<Index, BlockNumber, Call, AccountId>: Encode,
+	ForwardedCall<Nonce, BlockNumber, Call, AccountId>: Encode,
 {
 	/// Returns whether a `signature` is a valid signature of this struct
 	/// and was created by the `signer`.
