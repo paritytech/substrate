@@ -407,6 +407,8 @@ impl_runtime_apis! {
 		fn configuration() -> sp_consensus_sassafras::SassafrasGenesisConfiguration {
 			sp_consensus_sassafras::SassafrasGenesisConfiguration {
 				slot_duration: Sassafras::slot_duration(),
+				epoch_length: EpochDuration::get(),
+				genesis_authorities: Sassafras::authorities().to_vec(),
 			}
 		}
 

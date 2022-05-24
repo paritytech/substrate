@@ -31,10 +31,13 @@ use scale_codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
+use sp_runtime::{ConsensusEngineId, RuntimeDebug};
+use sp_std::vec::Vec;
+
+pub use sp_consensus_slots::{Slot, SlotDuration};
 pub use sp_consensus_vrf::schnorrkel::{
 	Randomness, RANDOMNESS_LENGTH, VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH,
 };
-use sp_runtime::{ConsensusEngineId, RuntimeDebug};
 
 /// Key type for Sassafras module.
 pub const KEY_TYPE: sp_core::crypto::KeyTypeId = sp_application_crypto::key_types::SASSAFRAS;
@@ -43,6 +46,13 @@ mod app {
 	use sp_application_crypto::{app_crypto, key_types::SASSAFRAS, sr25519};
 	app_crypto!(sr25519, SASSAFRAS);
 }
+
+/// The index of an authority.
+pub type AuthorityIndex = u32;
+
+// TODO-SASS
+// /// An epoch number.
+//pub type EpochNumber = u64;
 
 /// Sassafras authority keypair. Necessarily equivalent to the schnorrkel public key used in
 /// the main Sassafras module. If that ever changes, then this must, too.
@@ -62,27 +72,27 @@ pub const SASSAFRAS_ENGINE_ID: ConsensusEngineId = *b"SASS";
 /// The length of the public key
 pub const PUBLIC_KEY_LENGTH: usize = 32;
 
-pub use sp_consensus_slots::{Slot, SlotDuration};
-
 /// The weight of an authority.
 // NOTE: we use a unique name for the weight to avoid conflicts with other
 // `Weight` types, since the metadata isn't able to disambiguate.
 pub type SassafrasAuthorityWeight = u64;
+
+/// Weight of a Sassafras block.
+/// Primary blocks have a weight of 1 whereas secondary blocks have a weight of 0.
+pub type SassafrasBlockWeight = u32;
 
 /// Configuration data used by the Sassafras consensus engine.
 #[derive(Clone, Encode, Decode, RuntimeDebug, PartialEq, Eq)]
 pub struct SassafrasGenesisConfiguration {
 	/// The slot duration in milliseconds for Sassafras.
 	pub slot_duration: u64,
+	/// The duration of epochs in slots.
+	pub epoch_length: u64,
+	/// The authorities for the genesis epoch.
+	pub genesis_authorities: Vec<(AuthorityId, SassafrasAuthorityWeight)>,
 	// TODO-SASS
-	// /// The duration of epochs in slots.
-	// pub epoch_length: u64,
-	// /// The authorities for the genesis epoch.
-	// pub genesis_authorities: Vec<(AuthorityId, SassafrasAuthorityWeight)>,
 	// /// The randomness for the genesis epoch.
 	// pub randomness: Randomness,
-	// /// Whether secondary pre-digest is accepted.
-	// pub secondary_slots: bool,
 }
 
 /// Configuration data used by the Sassafras consensus engine that can be modified on epoch change.

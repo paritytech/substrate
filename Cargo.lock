@@ -8280,8 +8280,10 @@ dependencies = [
  "sp-consensus-slots",
  "sp-core",
  "sp-inherents",
+ "sp-keystore",
  "sp-runtime",
  "substrate-prometheus-endpoint",
+ "thiserror",
 ]
 
 [[package]]

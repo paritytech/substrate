@@ -488,7 +488,7 @@ pub async fn start_slot_worker<B, C, W, SO, CIDP, CAW, Proof>(
 			Ok(r) => r,
 			Err(e) => {
 				warn!(target: "slots", "Error while polling for next slot: {}", e);
-				return
+				break
 			},
 		};
 

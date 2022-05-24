@@ -275,6 +275,7 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 
 		let sassafras_config = sc_consensus_sassafras::SassafrasParams {
 			client: client.clone(),
+			keystore: keystore_container.sync_keystore(),
 			select_chain,
 			env: proposer,
 			block_import,

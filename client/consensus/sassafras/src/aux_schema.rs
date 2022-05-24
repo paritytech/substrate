@@ -53,8 +53,8 @@ pub fn load_epoch_changes<B: BlockT, AS: AuxStore>(
 	let epoch_changes =
 		SharedEpochChanges::<B, Epoch>::new(maybe_epoch_changes.unwrap_or_else(|| {
 			info!(
-				target: "babe",
-				"👶 Creating empty BABE epoch changes on what appears to be first startup.",
+				target: "sassafras",
+				"🍁 Creating empty Sassafras epoch changes on what appears to be first startup.",
 			);
 			EpochChangesFor::<B, Epoch>::default()
 		}));

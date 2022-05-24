@@ -78,6 +78,7 @@ use sp_consensus_sassafras::inherents::SassafrasInherentData;
 use sp_consensus_slots::{Slot, SlotDuration};
 use sp_core::traits::SpawnEssentialNamed;
 use sp_inherents::{CreateInherentDataProviders, InherentData, InherentDataProvider};
+use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::{
 	generic::{BlockId, OpaqueDigestItemId},
 	traits::{Block as BlockT, Header, NumberFor, One, SaturatedConversion, Saturating, Zero},
@@ -86,20 +87,27 @@ use sp_runtime::{
 
 pub use sp_consensus::SyncOracle;
 pub use sp_consensus_sassafras::{
-	digests::{NextEpochDescriptor, PreDigest},
-	AuthorityId, AuthorityPair, AuthoritySignature, SassafrasApi, SassafrasEpochConfiguration,
-	SassafrasGenesisConfiguration,
+	digests::{
+		CompatibleDigestItem, NextEpochDescriptor, PreDigest, PrimaryPreDigest, SecondaryPreDigest,
+	},
+	AuthorityId, AuthorityPair, AuthoritySignature, SassafrasApi, SassafrasAuthorityWeight,
+	SassafrasEpochConfiguration, SassafrasGenesisConfiguration,
 };
 
+pub mod authorship;
 pub mod aux_schema;
 
 /// Sassafras epoch information
 #[derive(Decode, Encode, PartialEq, Eq, Clone, Debug)]
 pub struct Epoch {
+	/// The epoch index.
+	pub epoch_index: u64,
 	/// The starting slot of the epoch.
 	pub start_slot: Slot,
 	/// The duration of this epoch.
 	pub duration: u64,
+	/// The authorities and their weights.
+	pub authorities: Vec<(AuthorityId, SassafrasAuthorityWeight)>,
 	// TODO-SASS
 }
 
@@ -107,9 +115,14 @@ impl EpochT for Epoch {
 	type NextEpochDescriptor = NextEpochDescriptor;
 	type Slot = Slot;
 
-	fn increment(&self, _descriptor: NextEpochDescriptor) -> Epoch {
+	fn increment(&self, descriptor: NextEpochDescriptor) -> Epoch {
 		// TODO-SASS
-		Epoch { start_slot: self.start_slot + self.duration, duration: self.duration }
+		Epoch {
+			epoch_index: self.epoch_index + 1,
+			start_slot: self.start_slot + self.duration,
+			duration: self.duration,
+			authorities: descriptor.authorities,
+		}
 	}
 
 	fn start_slot(&self) -> Slot {
@@ -119,6 +132,117 @@ impl EpochT for Epoch {
 	fn end_slot(&self) -> Slot {
 		self.start_slot + self.duration
 	}
+}
+
+impl Epoch {
+	/// Create the genesis epoch (epoch #0). This is defined to start at the slot of
+	/// the first block, so that has to be provided.
+	pub fn genesis(genesis_config: &SassafrasGenesisConfiguration, slot: Slot) -> Epoch {
+		Epoch {
+			epoch_index: 0,
+			start_slot: slot,
+			duration: genesis_config.epoch_length,
+			authorities: genesis_config.genesis_authorities.clone(),
+		}
+	}
+}
+
+/// Errors encountered by the Sassafras authorship task.
+/// TODO-SASS: these are BABE errors...
+#[derive(Debug, thiserror::Error)]
+pub enum Error<B: BlockT> {
+	/// Multiple BABE pre-runtime digests
+	#[error("Multiple BABE pre-runtime digests, rejecting!")]
+	MultiplePreRuntimeDigests,
+	/// No BABE pre-runtime digest found
+	#[error("No BABE pre-runtime digest found")]
+	NoPreRuntimeDigest,
+	/// Multiple BABE epoch change digests
+	#[error("Multiple BABE epoch change digests, rejecting!")]
+	MultipleEpochChangeDigests,
+	/// Multiple BABE config change digests
+	#[error("Multiple BABE config change digests, rejecting!")]
+	MultipleConfigChangeDigests,
+	/// Could not extract timestamp and slot
+	#[error("Could not extract timestamp and slot: {0}")]
+	Extraction(sp_consensus::Error),
+	/// Could not fetch epoch
+	#[error("Could not fetch epoch at {0:?}")]
+	FetchEpoch(B::Hash),
+	/// Header rejected: too far in the future
+	#[error("Header {0:?} rejected: too far in the future")]
+	TooFarInFuture(B::Hash),
+	/// Parent unavailable. Cannot import
+	#[error("Parent ({0}) of {1} unavailable. Cannot import")]
+	ParentUnavailable(B::Hash, B::Hash),
+	/// Slot number must increase
+	#[error("Slot number must increase: parent slot: {0}, this slot: {1}")]
+	SlotMustIncrease(Slot, Slot),
+	/// Header has a bad seal
+	#[error("Header {0:?} has a bad seal")]
+	HeaderBadSeal(B::Hash),
+	/// Header is unsealed
+	#[error("Header {0:?} is unsealed")]
+	HeaderUnsealed(B::Hash),
+	/// Slot author not found
+	#[error("Slot author not found")]
+	SlotAuthorNotFound,
+	/// Secondary slot assignments are disabled for the current epoch.
+	#[error("Secondary slot assignments are disabled for the current epoch.")]
+	SecondarySlotAssignmentsDisabled,
+	/// Bad signature
+	#[error("Bad signature on {0:?}")]
+	BadSignature(B::Hash),
+	/// Invalid author: Expected secondary author
+	#[error("Invalid author: Expected secondary author: {0:?}, got: {1:?}.")]
+	InvalidAuthor(AuthorityId, AuthorityId),
+	/// No secondary author expected.
+	#[error("No secondary author expected.")]
+	NoSecondaryAuthorExpected,
+	/// VRF verification of block by author failed
+	#[error("VRF verification of block by author {0:?} failed: threshold {1} exceeded")]
+	VRFVerificationOfBlockFailed(AuthorityId, u128),
+	// /// VRF verification failed
+	// #[error("VRF verification failed: {0:?}")]
+	// VRFVerificationFailed(SignatureError),
+	/// Could not fetch parent header
+	#[error("Could not fetch parent header: {0}")]
+	FetchParentHeader(sp_blockchain::Error),
+	/// Expected epoch change to happen.
+	#[error("Expected epoch change to happen at {0:?}, s{1}")]
+	ExpectedEpochChange(B::Hash, Slot),
+	/// Unexpected config change.
+	#[error("Unexpected config change")]
+	UnexpectedConfigChange,
+	/// Unexpected epoch change
+	#[error("Unexpected epoch change")]
+	UnexpectedEpochChange,
+	/// Parent block has no associated weight
+	#[error("Parent block of {0} has no associated weight")]
+	ParentBlockNoAssociatedWeight(B::Hash),
+	/// Check inherents error
+	#[error("Checking inherents failed: {0}")]
+	CheckInherents(sp_inherents::Error),
+	/// Unhandled check inherents error
+	#[error("Checking inherents unhandled error: {}", String::from_utf8_lossy(.0))]
+	CheckInherentsUnhandled(sp_inherents::InherentIdentifier),
+	/// Create inherents error.
+	#[error("Creating inherents failed: {0}")]
+	CreateInherents(sp_inherents::Error),
+	/// Client error
+	#[error(transparent)]
+	Client(sp_blockchain::Error),
+	/// Runtime Api error.
+	#[error(transparent)]
+	RuntimeApi(sp_api::ApiError),
+	// /// Fork tree error
+	// #[error(transparent)]
+	// ForkTree(Box<fork_tree::Error<sp_blockchain::Error>>),
+}
+
+fn sassafras_err<B: BlockT>(error: Error<B>) -> Error<B> {
+	debug!(target: "sassafras", "{}", error);
+	error
 }
 
 /// Configuration for Sassafras used for defining block verification parameters as
@@ -135,8 +259,6 @@ impl Config {
 		C: AuxStore + ProvideRuntimeApi<B> + UsageProvider<B>,
 		C::Api: SassafrasApi<B>,
 	{
-		trace!(target: "sassafras", "Getting configuration");
-
 		let mut best_block_id = BlockId::Hash(client.usage_info().chain.best_hash);
 		if client.usage_info().chain.finalized_state.is_none() {
 			debug!(target: "sassafras", "No finalized state is available. Reading config from genesis");
@@ -163,22 +285,33 @@ impl Config {
 pub struct SassafrasParams<B: BlockT, C, SC, EN, I, SO, L, CIDP, CAW> {
 	/// The client to use
 	pub client: Arc<C>,
+
+	/// The keystore that manages the keys of the node.
+	pub keystore: SyncCryptoStorePtr,
+
 	/// The chain selection strategy
 	pub select_chain: SC,
+
 	/// The environment we are producing blocks for.
 	pub env: EN,
+
 	/// The underlying block-import object to supply our produced blocks to.
 	/// This must be a `SassafrasBlockImport` or a wrapper of it, otherwise
 	/// critical consensus logic will be omitted.
 	pub block_import: I,
+
 	/// The source of timestamps for relative slots
 	pub sassafras_link: SassafrasLink<B>,
+
 	/// A sync oracle
 	pub sync_oracle: SO,
+
 	/// Hook into the sync module to control the justification sync process.
 	pub justification_sync_link: L,
+
 	/// Something that can create the inherent data providers.
 	pub create_inherent_data_providers: CIDP,
+
 	/// Checks if the current native implementation can author with a runtime at a given block.
 	pub can_author_with: CAW,
 	// TODO-SASS
@@ -188,6 +321,7 @@ pub struct SassafrasParams<B: BlockT, C, SC, EN, I, SO, L, CIDP, CAW> {
 pub fn start_sassafras<B, C, SC, EN, I, SO, CIDP, CAW, L, ER>(
 	SassafrasParams {
 		client,
+		keystore,
 		select_chain,
 		env,
 		block_import,
@@ -224,6 +358,8 @@ where
 	CAW: CanAuthorWith<B> + Send + Sync + 'static,
 	ER: std::error::Error + Send + From<ConsensusError> + From<I::Error> + 'static,
 {
+	const HANDLE_BUFFER_SIZE: usize = 1024;
+
 	info!(target: "sassafras", "🍁 Starting Sassafras Authorship worker");
 
 	let slot_notification_sinks = Arc::new(Mutex::new(Vec::new()));
@@ -234,6 +370,7 @@ where
 		env,
 		sync_oracle: sync_oracle.clone(),
 		justification_sync_link,
+		keystore,
 		epoch_changes: sassafras_link.epoch_changes.clone(),
 		slot_notification_sinks: slot_notification_sinks.clone(),
 		config: sassafras_link.config.clone(),
@@ -249,14 +386,66 @@ where
 	);
 
 	// TODO-SASS: proper handler for inbound requests
-	let answer_requests = answer_requests();
+	let (worker_tx, worker_rx) = channel(HANDLE_BUFFER_SIZE);
+	let answer_requests = answer_requests(
+		worker_rx,
+		sassafras_link.config,
+		client.clone(),
+		sassafras_link.epoch_changes,
+	);
 
 	let inner = future::select(Box::pin(slot_worker), Box::pin(answer_requests));
-	Ok(SassafrasWorker { inner: Box::pin(inner.map(|_| ())), slot_notification_sinks })
+	Ok(SassafrasWorker {
+		inner: Box::pin(inner.map(|_| ())),
+		slot_notification_sinks,
+		handle: SassafrasWorkerHandle(worker_tx),
+	})
 }
 
-async fn answer_requests() {
-	futures::pending!()
+/// Requests to the BABE service.
+#[non_exhaustive]
+pub enum SassafrasRequest<B: BlockT> {
+	/// Request the epoch that a child of the given block, with the given slot number would have.
+	///
+	/// The parent block is identified by its hash and number.
+	EpochForChild(B::Hash, NumberFor<B>, Slot, oneshot::Sender<Result<Epoch, Error<B>>>),
+}
+
+async fn answer_requests<B: BlockT, C>(
+	mut request_rx: Receiver<SassafrasRequest<B>>,
+	_config: Config,
+	_client: Arc<C>,
+	_epoch_changes: SharedEpochChanges<B, Epoch>,
+) where
+	C: ProvideRuntimeApi<B>
+		+ ProvideUncles<B>
+		+ BlockchainEvents<B>
+		+ HeaderBackend<B>
+		+ HeaderMetadata<B, Error = ClientError>
+		+ Send
+		+ Sync
+		+ 'static,
+{
+	while let Some(request) = request_rx.next().await {
+		match request {
+			SassafrasRequest::EpochForChild(..) => {
+				debug!(target: "sassafras", "Received `EpochForChild` request");
+			},
+		}
+	}
+}
+
+/// A handle to the Sassafras worker for issuing requests.
+#[derive(Clone)]
+pub struct SassafrasWorkerHandle<B: BlockT>(Sender<SassafrasRequest<B>>);
+
+impl<B: BlockT> SassafrasWorkerHandle<B> {
+	/// Send a request to the BABE service.
+	pub async fn send(&mut self, request: SassafrasRequest<B>) {
+		// Failure to send means that the service is down.
+		// This will manifest as the receiver of the request being dropped.
+		let _ = self.0.send(request).await;
+	}
 }
 
 /// Worker for Sassafras which implements `Future<Output=()>`. This must be polled.
@@ -264,6 +453,7 @@ async fn answer_requests() {
 pub struct SassafrasWorker<B: BlockT> {
 	inner: Pin<Box<dyn Future<Output = ()> + Send + 'static>>,
 	slot_notification_sinks: SlotNotificationSinks<B>,
+	handle: SassafrasWorkerHandle<B>,
 }
 
 impl<B: BlockT> Future for SassafrasWorker<B> {
@@ -285,6 +475,7 @@ struct SassafrasSlotWorker<B: BlockT, C, E, I, SO, L> {
 	env: E,
 	sync_oracle: SO,
 	justification_sync_link: L,
+	keystore: SyncCryptoStorePtr,
 	epoch_changes: SharedEpochChanges<B, Epoch>,
 	slot_notification_sinks: SlotNotificationSinks<B>,
 	// TODO-SASS (will be used by authorities_len method)
@@ -355,11 +546,25 @@ where
 		&self,
 		_parent_header: &B::Header,
 		slot: Slot,
-		_epoch_descriptor: &ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>,
+		epoch_descriptor: &ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>,
 	) -> Option<Self::Claim> {
 		debug!(target: "sassafras", "Attempting to claim slot {}", slot);
-		// TODO-SASS
-		None
+		let s = authorship::claim_slot(
+			slot,
+			self.epoch_changes
+				.shared_data()
+				.viable_epoch(epoch_descriptor, |slot| {
+					Epoch::genesis(&self.config.genesis_config, slot)
+				})?
+				.as_ref(),
+			&self.keystore,
+		);
+
+		if s.is_some() {
+			debug!(target: "sassafras", "Claimed slot {}", slot);
+		}
+
+		s
 	}
 
 	fn notify_slot(
@@ -484,21 +689,42 @@ where
 		None
 	}
 
-	fn proposing_remaining_duration(&self, _slot_info: &SlotInfo<B>) -> Duration {
-		// TODO-SASS
-		// let parent_slot = find_pre_digest::<B>(&slot_info.chain_head).ok().map(|d| d.slot());
-		//
-		// sc_consensus_slots::proposing_remaining_duration(
-		// 	parent_slot,
-		// 	slot_info,
-		// 	&self.block_proposal_slot_portion,
-		// 	self.max_block_proposal_slot_portion.as_ref(),
-		// 	sc_consensus_slots::SlotLenienceType::Exponential,
-		// 	self.logging_target(),
-		// )
+	fn proposing_remaining_duration(&self, slot_info: &SlotInfo<B>) -> Duration {
+		let parent_slot = find_pre_digest::<B>(&slot_info.chain_head).ok().map(|d| d.slot());
 
-		Duration::default()
+		// TODO-SASS : clarify this field. In Sassafras this is part of 'self'
+		let block_proposal_slot_portion = sc_consensus_slots::SlotProportion::new(0.5);
+
+		sc_consensus_slots::proposing_remaining_duration(
+			parent_slot,
+			slot_info,
+			&block_proposal_slot_portion,
+			None,
+			sc_consensus_slots::SlotLenienceType::Exponential,
+			self.logging_target(),
+		)
 	}
+}
+
+/// Extract the Sassafras pre digest from the given header. Pre-runtime digests are
+/// mandatory, the function will return `Err` if none is found.
+pub fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<PreDigest, Error<B>> {
+	// genesis block doesn't contain a pre digest so let's generate a
+	// dummy one to not break any invariants in the rest of the code
+	if header.number().is_zero() {
+		return Ok(PreDigest::Secondary(SecondaryPreDigest { authority_index: 0, slot: 0.into() }))
+	}
+
+	let mut pre_digest: Option<_> = None;
+	for log in header.digest().logs() {
+		trace!(target: "sassafras", "Checking log {:?}, looking for pre runtime digest", log);
+		match (log.as_sassafras_pre_digest(), pre_digest.is_some()) {
+			(Some(_), true) => return Err(sassafras_err(Error::MultiplePreRuntimeDigests)),
+			(None, _) => trace!(target: "sassafras", "Ignoring digest not meant for us"),
+			(s, false) => pre_digest = s,
+		}
+	}
+	pre_digest.ok_or_else(|| sassafras_err(Error::NoPreRuntimeDigest))
 }
 
 /// State that must be shared between the import queue and the authoring logic.
