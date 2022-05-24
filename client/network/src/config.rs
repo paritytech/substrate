@@ -56,6 +56,7 @@ use std::{
 	future::Future,
 	io::{self, Write},
 	net::Ipv4Addr,
+	net::SocketAddr,
 	path::{Path, PathBuf},
 	pin::Pin,
 	str,
@@ -461,6 +462,11 @@ pub struct NetworkConfiguration {
 	/// a modification of the way the implementation works. Different nodes with different
 	/// configured values remain compatible with each other.
 	pub yamux_window_size: Option<u32>,
+	/// If `Some`, open a UDP socket dedicated to QUIC connections using the given address. This
+	/// UDP socket is necessary for both incoming and outgoing QUIC connections. Incoming
+	/// connections won't be accepted unless a QUIC `Multiaddr` is passed as part of
+	/// `listen_addresses`.
+	pub quic_socket: Option<SocketAddr>,
 }
 
 impl NetworkConfiguration {
@@ -492,6 +498,7 @@ impl NetworkConfiguration {
 			kademlia_disjoint_query_paths: false,
 			yamux_window_size: None,
 			ipfs_server: false,
+			quic_socket: None,
 		}
 	}
 
