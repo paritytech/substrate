@@ -62,10 +62,15 @@ use frame_support::{
 	traits::{IsSubType, OriginTrait, UnfilteredDispatchable},
 	transactional,
 	weights::{extract_actual_weight, GetDispatchInfo},
+	RuntimeDebug,
 };
+use scale_info::TypeInfo;
 use sp_core::TypeId;
 use sp_io::hashing::blake2_256;
-use sp_runtime::traits::{Dispatchable, TrailingZeroInput};
+use sp_runtime::{
+	traits::{Dispatchable, IdentifyAccount, TrailingZeroInput, Verify},
+	AccountId32, MultiSignature, MultiSigner,
+};
 use sp_std::prelude::*;
 pub use weights::WeightInfo;
 
@@ -75,7 +80,7 @@ pub use pallet::*;
 pub mod pallet {
 	use super::*;
 	use frame_support::pallet_prelude::*;
-	use frame_system::pallet_prelude::*;
+	use frame_system::{pallet_prelude::*, Account};
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
@@ -126,7 +131,7 @@ pub mod pallet {
 	// Align the call size to 1KB. As we are currently compiling the runtime for native/wasm
 	// the `size_of` of the `Call` can be different. To ensure that this don't leads to
 	// mismatches between native/wasm or to different metadata for the same runtime, we
-	// algin the call size. The value is choosen big enough to hopefully never reach it.
+	// align the call size. The value is chosen big enough to hopefully never reach it.
 	const CALL_ALIGN: u32 = 1024;
 
 	#[pallet::extra_constants]
@@ -159,7 +164,24 @@ pub mod pallet {
 	pub enum Error<T> {
 		/// Too many calls batched.
 		TooManyCalls,
+		/// Authorization to submit the call on user's behalf has expired.
+		AuthorizationExpired,
+		/// The signature provided is not valid.
+		InvalidSignature,
+		/// The nonce provided is not valid.
+		InvalidNonce,
+		/// Unable to convert AccountId32 into AccountId.
+		ErrorConvertingToAccountId,
+		/// Extrinsic could be forwarded by a specified forwarder only.
+		WrongForwarder,
 	}
+
+	pub type ForwardedCallOf<T> = ForwardedCall<
+		<T as frame_system::Config>::Index,
+		<T as frame_system::Config>::BlockNumber,
+		<T as Config>::Call,
+		<T as frame_system::Config>::AccountId,
+	>;
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
@@ -459,6 +481,46 @@ pub mod pallet {
 			let base_weight = T::WeightInfo::batch(calls_len as u32);
 			Ok(Some(base_weight + weight).into())
 		}
+
+		#[pallet::weight(0)]
+		pub fn submit_call_on_behalf_of(
+			origin: OriginFor<T>,
+			forwarded_call: ForwardedCallOf<T>,
+			signature: MultiSignature,
+		) -> DispatchResultWithPostInfo {
+			let sender = ensure_signed(origin.clone())?;
+			ensure!(forwarded_call.verify(&signature), Error::<T>::InvalidSignature);
+
+			let ForwardedCall { signer: who, deadline, call, whitelisted_forwarder, nonce } =
+				forwarded_call;
+
+			if let Some(forwarder) = whitelisted_forwarder {
+				ensure!(forwarder == sender, Error::<T>::WrongForwarder);
+			}
+
+			// validate deadline
+			let now = frame_system::Pallet::<T>::block_number();
+			ensure!(deadline >= now, Error::<T>::AuthorizationExpired);
+
+			// convert AccountId32 to AccountId
+			let who = who.into_account();
+			let who = T::AccountId::decode(&mut AccountId32::as_ref(&who))
+				.map_err(|_| Error::<T>::ErrorConvertingToAccountId)?;
+
+			// validate nonce
+			let account = Account::<T>::get(&who);
+			if nonce != account.nonce {
+				return Err(Error::<T>::InvalidNonce.into())
+			}
+
+			// substitute caller
+			let mut origin = origin;
+			origin.set_caller_from(frame_system::RawOrigin::Signed(who));
+
+			// TODO: we need to save the origin, so the further methods would know it
+
+			call.dispatch(origin)
+		}
 	}
 }
 
@@ -476,5 +538,27 @@ impl<T: Config> Pallet<T> {
 		let entropy = (b"modlpy/utilisuba", who, index).using_encoded(blake2_256);
 		Decode::decode(&mut TrailingZeroInput::new(entropy.as_ref()))
 			.expect("infinite length input; no invalid inputs for type; qed")
+	}
+}
+
+#[derive(Encode, Decode, Clone, PartialEq, RuntimeDebug, TypeInfo)]
+#[codec(dumb_trait_bound)]
+pub struct ForwardedCall<Index, BlockNumber, Call, AccountId> {
+	pub nonce: Index,
+	pub deadline: BlockNumber,
+	pub call: Call,
+	pub signer: MultiSigner,
+	pub whitelisted_forwarder: Option<AccountId>,
+}
+
+impl<Index, BlockNumber, Call, AccountId> ForwardedCall<Index, BlockNumber, Call, AccountId>
+where
+	ForwardedCall<Index, BlockNumber, Call, AccountId>: Encode,
+{
+	/// Returns whether a `signature` is a valid signature of this struct
+	/// and was created by the `signer`.
+	pub fn verify(&self, signature: &MultiSignature) -> bool {
+		let data = Encode::encode(&self);
+		signature.verify(&*data, &self.signer.clone().into_account())
 	}
 }
