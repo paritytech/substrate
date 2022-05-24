@@ -221,7 +221,6 @@ fn basic_stuff() {
 	});
 }
 
-
 #[test]
 fn member_lifecycle_works() {
 	new_test_ext().execute_with(|| {
@@ -351,6 +350,6 @@ fn cleanup_works() {
 		);
 		assert_ok!(Club::cleanup_poll(Origin::signed(4), 3, 10));
 		// NOTE: This will fail until #10016 is merged.
-//		assert_noop!(Club::cleanup_poll(Origin::signed(4), 3, 10), Error::<Test>::NoneRemaining);
+		//		assert_noop!(Club::cleanup_poll(Origin::signed(4), 3, 10), Error::<Test>::NoneRemaining);
 	});
 }

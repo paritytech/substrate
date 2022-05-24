@@ -35,7 +35,10 @@ fn make_member<T: Config<I>, I: 'static>(rank: Rank) -> T::AccountId {
 	let who = account::<T::AccountId>("member", MemberCount::<T, I>::get(0), SEED);
 	assert_ok!(Pallet::<T, I>::add_member(T::AdminOrigin::successful_origin(), who.clone()));
 	for _ in 0..rank {
-		assert_ok!(Pallet::<T, I>::promote_member(T::AdminOrigin::successful_origin(), who.clone()));
+		assert_ok!(Pallet::<T, I>::promote_member(
+			T::AdminOrigin::successful_origin(),
+			who.clone()
+		));
 	}
 	who
 }

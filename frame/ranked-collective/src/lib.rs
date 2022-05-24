@@ -44,11 +44,7 @@
 
 use scale_info::TypeInfo;
 use sp_arithmetic::traits::Saturating;
-use sp_runtime::{
-	traits::Convert,
-	ArithmeticError::Overflow,
-	Perbill, RuntimeDebug,
-};
+use sp_runtime::{traits::Convert, ArithmeticError::Overflow, Perbill, RuntimeDebug};
 use sp_std::{marker::PhantomData, prelude::*};
 
 use frame_support::{
@@ -237,7 +233,12 @@ pub mod pallet {
 		type AdminOrigin: EnsureOrigin<Self::Origin>;
 
 		/// The polling system used for our voting.
-		type Polls: Polling<TallyOf<Self, I>, Votes = Votes, Class = Rank, Moment = Self::BlockNumber>;
+		type Polls: Polling<
+			TallyOf<Self, I>,
+			Votes = Votes,
+			Class = Rank,
+			Moment = Self::BlockNumber,
+		>;
 
 		/// Convert a rank_delta into a number of votes the rank gets.
 		///
@@ -345,10 +346,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::promote_member(0))]
-		pub fn promote_member(
-			origin: OriginFor<T>,
-			who: T::AccountId,
-		) -> DispatchResult {
+		pub fn promote_member(origin: OriginFor<T>, who: T::AccountId) -> DispatchResult {
 			T::AdminOrigin::ensure_origin(origin)?;
 			let record = Self::ensure_member(&who)?;
 			let rank = record.rank.checked_add(1).ok_or(Overflow)?;
@@ -356,7 +354,7 @@ pub mod pallet {
 			MemberCount::<T, I>::insert(rank, index.checked_add(1).ok_or(Overflow)?);
 			IdToIndex::<T, I>::insert(rank, &who, index);
 			IndexToId::<T, I>::insert(rank, index, &who);
-			Members::<T, I>::insert(&who, MemberRecord { rank, .. record });
+			Members::<T, I>::insert(&who, MemberRecord { rank, ..record });
 			Self::deposit_event(Event::RankChanged { who, rank });
 
 			Ok(())
@@ -370,10 +368,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`, less if the member's index is highest in its rank.
 		#[pallet::weight(T::WeightInfo::demote_member(0))]
-		pub fn demote_member(
-			origin: OriginFor<T>,
-			who: T::AccountId,
-		) -> DispatchResult {
+		pub fn demote_member(origin: OriginFor<T>, who: T::AccountId) -> DispatchResult {
 			T::AdminOrigin::ensure_origin(origin)?;
 			let mut record = Self::ensure_member(&who)?;
 			let rank = record.rank;
@@ -384,12 +379,12 @@ pub mod pallet {
 				None => {
 					Members::<T, I>::remove(&who);
 					Self::deposit_event(Event::MemberRemoved { who, rank: 0 });
-				}
+				},
 				Some(rank) => {
 					record.rank = rank;
 					Members::<T, I>::insert(&who, &record);
 					Self::deposit_event(Event::RankChanged { who, rank });
-				}
+				},
 			}
 			Ok(())
 		}
@@ -444,32 +439,36 @@ pub mod pallet {
 			use VoteRecord::*;
 			let mut pays = Pays::Yes;
 
-			let (tally, vote) = T::Polls::try_access_poll(poll, |mut status| -> Result<(TallyOf<T, I>, VoteRecord), DispatchError> {
-				match status {
-					PollStatus::None | PollStatus::Completed(..) => Err(Error::<T, I>::NotPolling)?,
-					PollStatus::Ongoing(ref mut tally, min_rank) => {
-						match Voting::<T, I>::get(&poll, &who) {
-							Some(Aye(votes)) => {
-								tally.bare_ayes.saturating_dec();
-								tally.ayes.saturating_reduce(votes);
-							},
-							Some(Nay(votes)) => tally.nays.saturating_reduce(votes),
-							None => pays = Pays::No,
-						}
-						let votes = Self::rank_to_votes(record.rank, min_rank)?;
-						let vote = VoteRecord::from((aye, votes));
-						match aye {
-							true => {
-								tally.bare_ayes.saturating_inc();
-								tally.ayes.saturating_accrue(votes);
-							},
-							false => tally.nays.saturating_accrue(votes),
-						}
-						Voting::<T, I>::insert(&poll, &who, &vote);
-						Ok((tally.clone(), vote))
-					},
-				}
-			})?;
+			let (tally, vote) = T::Polls::try_access_poll(
+				poll,
+				|mut status| -> Result<(TallyOf<T, I>, VoteRecord), DispatchError> {
+					match status {
+						PollStatus::None | PollStatus::Completed(..) =>
+							Err(Error::<T, I>::NotPolling)?,
+						PollStatus::Ongoing(ref mut tally, min_rank) => {
+							match Voting::<T, I>::get(&poll, &who) {
+								Some(Aye(votes)) => {
+									tally.bare_ayes.saturating_dec();
+									tally.ayes.saturating_reduce(votes);
+								},
+								Some(Nay(votes)) => tally.nays.saturating_reduce(votes),
+								None => pays = Pays::No,
+							}
+							let votes = Self::rank_to_votes(record.rank, min_rank)?;
+							let vote = VoteRecord::from((aye, votes));
+							match aye {
+								true => {
+									tally.bare_ayes.saturating_inc();
+									tally.ayes.saturating_accrue(votes);
+								},
+								false => tally.nays.saturating_accrue(votes),
+							}
+							Voting::<T, I>::insert(&poll, &who, &vote);
+							Ok((tally.clone(), vote))
+						},
+					}
+				},
+			)?;
 			Self::deposit_event(Event::Voted { who, poll, vote, tally });
 			Ok(pays.into())
 		}
@@ -495,7 +494,7 @@ pub mod pallet {
 
 			use sp_io::KillStorageResult::*;
 			let count = match Voting::<T, I>::remove_prefix(poll_index, Some(max)) {
-//				AllRemoved(0) => Err(Error::<T, I>::NoneRemaining)?,
+				//				AllRemoved(0) => Err(Error::<T, I>::NoneRemaining)?,
 				AllRemoved(0) => return Ok(Pays::Yes.into()),
 				AllRemoved(n) | SomeRemaining(n) => n,
 			};
@@ -520,7 +519,8 @@ pub mod pallet {
 			let last_index = MemberCount::<T, I>::get(rank).saturating_sub(1);
 			let index = IdToIndex::<T, I>::get(rank, &who).ok_or(Error::<T, I>::Corruption)?;
 			if index != last_index {
-				let last = IndexToId::<T, I>::get(rank, last_index).ok_or(Error::<T, I>::Corruption)?;
+				let last =
+					IndexToId::<T, I>::get(rank, last_index).ok_or(Error::<T, I>::Corruption)?;
 				IdToIndex::<T, I>::insert(rank, &last, index);
 				IndexToId::<T, I>::insert(rank, index, &last);
 			}
