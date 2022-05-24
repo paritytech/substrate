@@ -20,10 +20,11 @@
 //! Provides an implementation of the [`TrieRecorder`](trie_db::TrieRecorder) trait. It can be used
 //! to record storage accesses to the state to generate a [`StorageProof`].
 
-use crate::{cache::TrieCache, Error, NodeCodec, StorageProof, TrieDBBuilder};
+use crate::{cache::TrieCache, Error, KeySpacedDB, NodeCodec, StorageProof, TrieDBBuilder};
 use codec::Encode;
 use hash_db::{HashDBRef, Hasher};
 use parking_lot::Mutex;
+use sp_core::storage::ChildInfo;
 use std::{
 	collections::HashMap,
 	mem,
@@ -46,13 +47,22 @@ struct AccessedKey {
 	exists: bool,
 }
 
+/// Contains all accessed keys per storage root.
+#[derive(Debug, Clone)]
+struct AccessedKeys {
+	/// The accessed keys.
+	keys: HashMap<Vec<u8>, AccessedKey>,
+	/// Optional [`ChildInfo`].
+	child_info: Option<ChildInfo>,
+}
+
 /// The internals of [`Recorder`].
 struct RecorderInner<H> {
 	/// If we are recording while a cache is enabled, we may don't access all nodes because some
 	/// data is already cached. Thus, we will only be informed about the key that was accessed. We
 	/// will use these keys when building the [`StorageProof`] to traverse the trie again and
 	/// collecting the required trie nodes for accessing the data.
-	accessed_keys: HashMap<H, HashMap<Vec<u8>, AccessedKey>>,
+	accessed_keys: HashMap<H, AccessedKeys>,
 	/// The encoded nodes we accessed while recording.
 	accessed_nodes: HashMap<H, Vec<u8>>,
 }
@@ -96,11 +106,13 @@ impl<H: Hasher> Recorder<H> {
 	pub fn as_trie_recorder(
 		&self,
 		storage_root: H::Out,
+		child_info: Option<ChildInfo>,
 	) -> impl trie_db::TrieRecorder<H::Out> + '_ {
 		TrieRecorder::<H, _> {
 			inner: self.inner.lock(),
 			storage_root,
 			encoded_size_estimation: self.encoded_size_estimation.clone(),
+			child_info,
 		}
 	}
 
@@ -145,10 +157,14 @@ impl<H: Hasher> Recorder<H> {
 		let mut recorder = self.inner.lock();
 		let accessed_keys = recorder.accessed_keys.clone();
 		Self::record_accessed_keys(&mut *recorder, accessed_keys, root, hash_db, cache)?;
-		recorder.accessed_keys.values_mut().flat_map(|v| v.values_mut()).for_each(|k| {
-			// Mark all trie nodes as recorded
-			k.trie_nodes_recorded = true;
-		});
+		recorder
+			.accessed_keys
+			.values_mut()
+			.flat_map(|v| v.keys.values_mut())
+			.for_each(|k| {
+				// Mark all trie nodes as recorded
+				k.trie_nodes_recorded = true;
+			});
 
 		Ok(StorageProof::new(recorder.accessed_nodes.iter().map(|(_, v)| v.clone())))
 	}
@@ -156,7 +172,7 @@ impl<H: Hasher> Recorder<H> {
 	/// Record the trie nodes for the accessed keys.
 	fn record_accessed_keys(
 		inner: &mut RecorderInner<H::Out>,
-		accessed_keys: HashMap<H::Out, HashMap<Vec<u8>, AccessedKey>>,
+		accessed_keys: HashMap<H::Out, AccessedKeys>,
 		root: &H::Out,
 		hash_db: &dyn HashDBRef<H, DBValue>,
 		mut cache: Option<&mut TrieCache<H>>,
@@ -171,24 +187,36 @@ impl<H: Hasher> Recorder<H> {
 			inner,
 			storage_root: *root,
 			encoded_size_estimation: Default::default(),
+			child_info: None,
 		};
 
-		accessed_keys.into_iter().try_for_each(|(root, keys)| {
+		accessed_keys.into_iter().try_for_each(|(root, info)| {
+			let keyspace_db;
+			let db = if let Some(child_info) = &info.child_info {
+				keyspace_db = KeySpacedDB::new(hash_db, child_info.keyspace());
+				(&keyspace_db) as _
+			} else {
+				hash_db
+			};
+
 			// For reading the trie the layout is compatible
-			let trie = TrieDBBuilder::<crate::LayoutV1<H>>::new(hash_db, &root)
+			let trie = TrieDBBuilder::<crate::LayoutV1<H>>::new(db, &root)
 				.with_recorder(&mut trie_recorder)
 				.with_optional_cache(cache.as_mut().map(|c| *c as _))
 				.build();
 
 			// For all keys we don't have recorded the trie nodes, we need to traverse
 			// the trie to record all required nodes.
-			keys.into_iter().filter(|(_, v)| !v.trie_nodes_recorded).try_for_each(|(k, v)| {
-				if trie.traverse_to(&k)? != v.exists {
-					Err(Error::InvalidRecording(k, v.exists))
-				} else {
-					Ok(())
-				}
-			})
+			info.keys
+				.into_iter()
+				.filter(|(_, v)| !v.trie_nodes_recorded)
+				.try_for_each(|(k, v)| {
+					if trie.traverse_to(&k)? != v.exists {
+						Err(Error::InvalidRecording(k, v.exists))
+					} else {
+						Ok(())
+					}
+				})
 		})
 	}
 
@@ -216,6 +244,7 @@ struct TrieRecorder<H: Hasher, I> {
 	inner: I,
 	storage_root: H::Out,
 	encoded_size_estimation: Arc<AtomicUsize>,
+	child_info: Option<ChildInfo>,
 }
 
 impl<H: Hasher, I: DerefMut<Target = RecorderInner<H::Out>>> trie_db::TrieRecorder<H::Out>
@@ -235,7 +264,11 @@ impl<H: Hasher, I: DerefMut<Target = RecorderInner<H::Out>>> trie_db::TrieRecord
 				self.inner
 					.accessed_keys
 					.entry(self.storage_root)
-					.or_default()
+					.or_insert_with(|| AccessedKeys {
+						keys: Default::default(),
+						child_info: self.child_info.clone(),
+					})
+					.keys
 					.entry(key.into())
 					// If the value is served from the data cache, we need to ensure
 					// that we traverse the trie when building the proof to record this
@@ -310,7 +343,11 @@ impl<H: Hasher, I: DerefMut<Target = RecorderInner<H::Out>>> trie_db::TrieRecord
 				self.inner
 					.accessed_keys
 					.entry(self.storage_root)
-					.or_default()
+					.or_insert_with(|| AccessedKeys {
+						keys: Default::default(),
+						child_info: self.child_info.clone(),
+					})
+					.keys
 					.entry(full_key.into())
 					// Insert the full key into the accessed keys map, but inform
 					// us that we already have recorded all the trie nodes for this.
@@ -356,7 +393,7 @@ mod tests {
 		let recorder = Recorder::default();
 
 		{
-			let mut trie_recorder = recorder.as_trie_recorder(root);
+			let mut trie_recorder = recorder.as_trie_recorder(root, None);
 			let trie = TrieDBBuilder::<Layout>::new(&db, &root)
 				.with_recorder(&mut trie_recorder)
 				.build();

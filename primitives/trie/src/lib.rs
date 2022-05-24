@@ -409,13 +409,13 @@ where
 
 /// `HashDB` implementation that append a encoded prefix (unique id bytes) in addition to the
 /// prefix of every key value.
-pub struct KeySpacedDB<'a, DB, H>(&'a DB, &'a [u8], PhantomData<H>);
+pub struct KeySpacedDB<'a, DB: ?Sized, H>(&'a DB, &'a [u8], PhantomData<H>);
 
 /// `HashDBMut` implementation that append a encoded prefix (unique id bytes) in addition to the
 /// prefix of every key value.
 ///
 /// Mutable variant of `KeySpacedDB`, see [`KeySpacedDB`].
-pub struct KeySpacedDBMut<'a, DB, H>(&'a mut DB, &'a [u8], PhantomData<H>);
+pub struct KeySpacedDBMut<'a, DB: ?Sized, H>(&'a mut DB, &'a [u8], PhantomData<H>);
 
 /// Utility function used to merge some byte data (keyspace) and `prefix` data
 /// before calling key value database primitives.
@@ -426,20 +426,14 @@ fn keyspace_as_prefix_alloc(ks: &[u8], prefix: Prefix) -> (Vec<u8>, Option<u8>) 
 	(result, prefix.1)
 }
 
-impl<'a, DB, H> KeySpacedDB<'a, DB, H>
-where
-	H: Hasher,
-{
+impl<'a, DB: ?Sized, H> KeySpacedDB<'a, DB, H> {
 	/// instantiate new keyspaced db
 	pub fn new(db: &'a DB, ks: &'a [u8]) -> Self {
 		KeySpacedDB(db, ks, PhantomData)
 	}
 }
 
-impl<'a, DB, H> KeySpacedDBMut<'a, DB, H>
-where
-	H: Hasher,
-{
+impl<'a, DB: ?Sized, H> KeySpacedDBMut<'a, DB, H> {
 	/// instantiate new keyspaced db
 	pub fn new(db: &'a mut DB, ks: &'a [u8]) -> Self {
 		KeySpacedDBMut(db, ks, PhantomData)
@@ -448,7 +442,7 @@ where
 
 impl<'a, DB, H, T> hash_db::HashDBRef<H, T> for KeySpacedDB<'a, DB, H>
 where
-	DB: hash_db::HashDBRef<H, T>,
+	DB: hash_db::HashDBRef<H, T> + ?Sized,
 	H: Hasher,
 	T: From<&'static [u8]>,
 {
