@@ -375,7 +375,7 @@ pub mod pallet {
 		/// inaccessible until rectified by another runtime upgrade.
 		type RelaxedMaxCodeLen: Get<u32>;
 
-		/// The maximum length of veriable sized key used on storage with transparent hasing.
+		/// The maximum allowable length in bytes for storage keys.
 		type MaxStorageKeyLen: Get<u32>;
 	}
 

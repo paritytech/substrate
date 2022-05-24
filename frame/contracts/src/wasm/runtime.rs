@@ -41,8 +41,8 @@ use wasm_instrument::parity_wasm::elements::ValueType;
 /// VarSized is a key used for transparent hashing, which is a u8 vector maximum length of
 /// MaxStorageKeyLen.
 enum KeyType {
-	FixSized,
-	VarSized,
+	Fixed,
+	Variable(u32),
 }
 
 /// Every error that can be returned to a contract when it calls any of the host functions.
@@ -718,8 +718,8 @@ where
 			return Err(Error::<E::T>::ValueTooLarge.into())
 		}
 
-		let mut key = vec![0; key_len.try_into().map_err(|_| Error::<E::T>::ValueTooLarge)?];
-		self.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
+                ensure!(key_len <= <E::T>::MaxStorageKeyLen, Error::<E::T>::DecodingFailed);
+		let key = self.read_sandbox_memory(key_ptr, key_len)?
 
 		let value = Some(self.read_sandbox_memory(value_ptr, value_len)?);
 		let write_outcome = match key_type {
