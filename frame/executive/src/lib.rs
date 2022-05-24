@@ -452,7 +452,7 @@ where
 			// verify that all extrinsics can be executed in single block
 			let max = System::BlockWeights::get();
 			let mut all: frame_system::ConsumedWeight = Default::default();
-			for tx in extrinsics.iter() {
+			for tx in curr_block_txs.clone() {
 				let info = tx.clone().get_dispatch_info();
 				all = frame_system::calculate_consumed_weight::<CallOf<Block::Extrinsic, Context>>(max.clone(), all, &info)
 					.expect("sum of extrinsics should fit into single block");
@@ -460,8 +460,6 @@ where
 
 			let curr_block_inherents = curr_block_txs.clone().filter(|e| !e.is_signed().unwrap());
 
-			let curr_block_txs_count = curr_block_txs.count();
-			let curr_block_inherents_count = curr_block_inherents.clone().count();
 			let prev_block_extrinsics = prev_block_txs.filter(|e| e.is_signed().unwrap());
 			let tx_to_be_executed = curr_block_inherents.chain(prev_block_extrinsics).cloned().collect::<Vec<_>>();
 
