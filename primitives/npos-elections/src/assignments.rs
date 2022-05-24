@@ -120,18 +120,17 @@ impl<AccountId> StakedAssignment<AccountId> {
 		AccountId: IdentifierT,
 	{
 		let stake = self.total();
-		let distribution = self
-			.distribution
-			.into_iter()
-			.filter_map(|(target, w)| {
-				let per_thing = P::from_rational(w, stake);
-				if per_thing == Bounded::min_value() {
-					None
-				} else {
-					Some((target, per_thing))
-				}
-			})
-			.collect::<Vec<(AccountId, P)>>();
+		// most likely, the size of the staked assignment and normal assignments will be the same,
+		// so we pre-allocate it to prevent a sudden 2x allocation. `filter_map` starts with a size
+		// of 0 by default.
+		// https://www.reddit.com/r/rust/comments/3spfh1/does_collect_allocate_more_than_once_while/
+		let mut distribution = Vec::<(AccountId, P)>::with_capacity(self.distribution.len());
+		self.distribution.into_iter().for_each(|(target, w)| {
+			let per_thing = P::from_rational(w, stake);
+			if per_thing != Bounded::min_value() {
+				distribution.push((target, per_thing));
+			}
+		});
 
 		Assignment { who: self.who, distribution }
 	}
