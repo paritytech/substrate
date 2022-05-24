@@ -2051,18 +2051,6 @@ pub mod pallet {
 				so a slash can be applied to relevant unboding pools. (We assume /
 				the bonding duration > slash deffer duration.",
 			);
-			// check genesis value of `MinCreateBond`: it should be more than staking's minimum
-			// bond.
-			sp_std::if_std! {
-				sp_io::TestExternalities::new_empty().execute_with(||
-					assert!(
-						MinCreateBond::<T>::get() >= T::StakingInterface::minimum_bond(),
-						"MinCreateBond ({:?}) should be more than staking's minimum_bond ({:?})",
-						MinCreateBond::<T>::get(),
-						T::StakingInterface::minimum_bond()
-					)
-				);
-			}
 		}
 	}
 }
