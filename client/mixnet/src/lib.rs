@@ -243,15 +243,7 @@ where
 						return;
 					}
 				},
-				success = future::poll_fn(|cx| {
-					if self.state == State::Running {
-						self.worker.poll(cx)
-					} else {
-						// state change is linked to finalized stream
-						// which will wake up context.
-						std::task::Poll::Pending
-					}
-				}).fuse() => {
+				success = future::poll_fn(|cx| self.worker.poll(cx)).fuse() => {
 					if !success {
 						debug!(target: "mixnet", "Mixnet, shutdown.");
 						return;
