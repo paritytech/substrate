@@ -544,7 +544,7 @@ mod test {
 	use crate::{
 		hash::{StorageHasher as _, *},
 		metadata::{StorageEntryModifier, StorageHasher},
-		storage::types::{Key, Key as NMapKey, ValueQuery},
+		storage::types::{Key, ValueQuery},
 	};
 	use sp_io::{hashing::twox_128, TestExternalities};
 
@@ -590,7 +590,7 @@ mod test {
 
 			{
 				#[crate::storage_alias]
-				type Foo = StorageNMap<test, (NMapKey<Blake2_128Concat, u16>), u32>;
+				type Foo = StorageNMap<test, (Key<Blake2_128Concat, u16>), u32>;
 
 				assert_eq!(Foo::contains_key((3,)), true);
 				assert_eq!(Foo::get((3,)), Some(10));
