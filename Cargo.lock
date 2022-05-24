@@ -8278,6 +8278,7 @@ dependencies = [
  "log",
  "parity-scale-codec",
  "parity-wasm 0.42.2",
+ "paste 1.0.6",
  "sc-allocator",
  "sc-executor-common",
  "sc-runtime-test",
