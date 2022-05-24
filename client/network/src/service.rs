@@ -700,10 +700,14 @@ where
 		tx: Vec<u8>,
 		num_hop: usize,
 		surbs_reply: bool,
+		reply: oneshot::Sender<Result<(), mixnet::Error>>,
 	) -> Result<(), String> {
-		self.network_service
-			.behaviour_mut()
-			.send_transaction_to_mixnet(tx, num_hop, surbs_reply)
+		self.network_service.behaviour_mut().send_transaction_to_mixnet(
+			tx,
+			num_hop,
+			surbs_reply,
+			reply,
+		)
 	}
 }
 

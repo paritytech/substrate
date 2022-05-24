@@ -38,6 +38,7 @@ hash-db = { version = "0.15.2", default-features = false }
 parking_lot = "0.12.0"
 lazy_static = { version = "1.4.0", optional = true }
 sc-transaction-pool-api = { version = "4.0.0-dev", path = "../transaction-pool/api" }
+mixnet = { git = "https://github.com/paritytech/mixnet" }
 
 [dev-dependencies]
 assert_matches = "1.3.0"

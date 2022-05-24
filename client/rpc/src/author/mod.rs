@@ -59,7 +59,7 @@ pub struct SendToMixnet {
 	/// Reply to message if needed.
 	pub surbs_reply: bool,
 	/// Rpc error reply channel.
-	pub reply: oneshot::Sender<Result<()>>,
+	pub reply: oneshot::Sender<std::result::Result<(), mixnet::Error>>,
 }
 
 /// Authoring API

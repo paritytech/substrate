@@ -29,10 +29,7 @@ use sp_application_crypto::key_types;
 use sp_keystore::SyncCryptoStore;
 
 use codec::Encode;
-use futures::{
-	future,
-	FutureExt, StreamExt,
-};
+use futures::{future, FutureExt, StreamExt};
 use futures_timer::Delay;
 use log::{debug, error, warn};
 use sc_client_api::{BlockchainEvents, FinalityNotification, UsageProvider};
@@ -297,6 +294,25 @@ where
 					error!(target: "mixnet", "Could not register surb {:?}", e);
 				}
 			},
+			MixnetCommand::SendTransaction(message, send_options, reply) =>
+				if self.is_ready() {
+					match self.worker.mixnet_mut().register_message(
+						None,
+						None,
+						message,
+						send_options,
+					) {
+						Ok(()) => {
+							let _ = reply.send(Ok(()));
+						},
+						Err(e) => {
+							error!(target: "mixnet", "Could send transaction in mixnet {:?}", e);
+							let _ = reply.send(Err(e));
+						},
+					}
+				} else {
+					let _ = reply.send(Err(mixnet::Error::NotReady));
+				},
 		}
 	}
 

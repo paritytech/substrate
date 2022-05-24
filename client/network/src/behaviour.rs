@@ -67,6 +67,8 @@ use sc_utils::mpsc::TracingUnboundedSender;
 pub enum MixnetCommand {
 	/// Result of transaction to send back in mixnet.
 	TransactionImportResult(Box<mixnet::SurbsPayload>, MixnetImportResult),
+	/// Result of transaction to send back in mixnet.
+	SendTransaction(Vec<u8>, mixnet::SendOptions, oneshot::Sender<Result<(), mixnet::Error>>),
 }
 
 /// Result reported in surb for a transaction imported from a mixnet.
@@ -314,20 +316,26 @@ where
 		encoded_tx: Vec<u8>,
 		num_hop: usize,
 		surb_reply: bool,
+		reply: oneshot::Sender<Result<(), mixnet::Error>>,
 	) -> Result<(), String> {
-		if let Some(mixnet) = self.mixnet.as_mut() {
+		if let Some(mixnet) = self.mixnet_command_sender.as_mut() {
 			if let Ok(decoded) = <B::Extrinsic as Decode>::decode(&mut encoded_tx.as_ref()) {
 				let message = crate::protocol::message::Message::<B>::Transactions(vec![decoded]);
+				let send_options =
+					mixnet::SendOptions { num_hop: Some(num_hop), with_surb: surb_reply };
 				mixnet
-					.send_to_random_recipient(
+					.start_send(MixnetCommand::SendTransaction(
 						message.encode(),
-						mixnet::SendOptions { num_hop: Some(num_hop), with_surb: surb_reply },
-					)
+						send_options,
+						reply,
+					))
 					.map_err(|e| e.to_string())
 			} else {
+				let _ = reply.send(Err(mixnet::Error::Other("Invalid transaction".into())));
 				Err("Invalid transaction".into())
 			}
 		} else {
+			let _ = reply.send(Err(mixnet::Error::NotReady));
 			Err("Mixnet protocol is disabled".into())
 		}
 	}

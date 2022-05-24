@@ -9300,6 +9300,7 @@ dependencies = [
  "jsonrpc-pubsub",
  "lazy_static",
  "log 0.4.16",
+ "mixnet",
  "parity-scale-codec",
  "parking_lot 0.12.0",
  "sc-block-builder",
