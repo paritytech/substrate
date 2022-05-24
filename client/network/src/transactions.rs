@@ -111,7 +111,7 @@ struct PendingTransaction<H> {
 	#[pin]
 	validation: TransactionImportFuture,
 	tx_hash: H,
-	mixnet: Option<Option<(TracingUnboundedSender<MixnetCommand>, mixnet::SurbsPayload)>>,
+	mixnet: Option<Option<(TracingUnboundedSender<MixnetCommand>, Box<mixnet::SurbsPayload>)>>,
 }
 
 impl<H: ExHashT> Future for PendingTransaction<H> {

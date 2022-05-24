@@ -64,10 +64,9 @@ use mixnet::{MixPeerId, MixnetBehaviour, MixnetEvent};
 use sc_utils::mpsc::TracingUnboundedSender;
 
 /// Command for the mixnet worker.
-/// TODO become a bit useless (just transaction import result).
 pub enum MixnetCommand {
-	/// Received transaction is invalid with a surb reply.
-	TransactionImportResult(mixnet::SurbsPayload, MixnetImportResult),
+	/// Result of transaction to send back in mixnet.
+	TransactionImportResult(Box<mixnet::SurbsPayload>, MixnetImportResult),
 }
 
 /// Result reported in surb for a transaction imported from a mixnet.

@@ -4762,6 +4762,7 @@ dependencies = [
  "rand 0.8.4",
  "rand_distr",
  "sha2 0.10.2",
+ "static_assertions",
  "subtle 2.4.1",
  "void",
  "x25519-dalek",

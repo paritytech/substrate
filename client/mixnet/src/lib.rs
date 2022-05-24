@@ -28,67 +28,59 @@ pub use mixnet::{Config, SinkToWorker, StreamFromWorker};
 use sp_application_crypto::key_types;
 use sp_keystore::SyncCryptoStore;
 
-use codec::{Decode, Encode};
+use codec::Encode;
 use futures::{
-	channel::{mpsc::SendError, oneshot},
 	future,
-	future::OptionFuture,
-	FutureExt, Stream, StreamExt,
+	FutureExt, StreamExt,
 };
 use futures_timer::Delay;
 use log::{debug, error, warn};
 use sc_client_api::{BlockchainEvents, FinalityNotification, UsageProvider};
 use sc_network::{MixnetCommand, PeerId};
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
-use sp_api::{ApiExt, ProvideRuntimeApi};
+use sp_api::ProvideRuntimeApi;
 use sp_core::crypto::CryptoTypePublicPair;
 pub use sp_finality_grandpa::{AuthorityId, AuthorityList, SetId};
 use sp_runtime::traits::{Block as BlockT, Header, NumberFor};
 use sp_session::SessionKeys;
 use std::{
 	collections::{BTreeMap, BTreeSet, HashMap, HashSet},
-	pin::Pin,
 	sync::Arc,
 	time::Duration,
 };
 
-// TODO could be a ratio with the number of hop
-// require.
+// Minimal number of node for accepting to add new message.
 const LOW_MIXNET_THRESHOLD: usize = 5;
 
-/// A number of block where we are still considered as synched
+/// Number of blocks before seen as synched
 /// (do not turn mixnet off every time we are a few block late).
 const UNSYNCH_FINALIZED_MARGIN: u32 = 10;
 
-// If delay pass without finalization, just go back to synching state.
-// TODO need to be configurable (chain specific).
+/// Delay in seconds after which if no finalization occurs,
+/// we switch back to synching state.
 const DELAY_NO_FINALISATION_S: u64 = 60;
 
 /// Mixnet running worker.
 pub struct MixnetWorker<B: BlockT, C> {
-	// current node authority_id
+	// current node authority_id if validating.
 	authority_id: Option<AuthorityId>,
 	worker: mixnet::MixnetWorker<AuthorityStar>,
-	// TODO use OnFinalityAction instead and update some shared cache.
+	// Finality notification stream, for each new final block
+	// we look for an authority set update.
 	finality_stream: sc_client_api::FinalityNotifications<B>,
 	shared_authority_set:
 		sc_finality_grandpa::SharedAuthoritySet<<B as BlockT>::Hash, NumberFor<B>>,
+	// last set id form shared authority set.
 	session: Option<u64>,
 	client: Arc<C>,
 	state: State,
-	//	connection_info: ConnectionInfo,
-	command_sink: TracingUnboundedSender<MixnetCommand>,
+	// External command.
 	command_stream: TracingUnboundedReceiver<MixnetCommand>,
 	key_store: Arc<dyn SyncCryptoStore>,
 	default_limit_config: Option<usize>,
 }
 
-// TODO consider restoring a command support in mixnet
-type WorkerChannels = (
-	mixnet::WorkerChannels,
-	TracingUnboundedSender<MixnetCommand>,
-	TracingUnboundedReceiver<MixnetCommand>,
-);
+type WorkerChannels = (mixnet::WorkerChannels, TracingUnboundedReceiver<MixnetCommand>);
 
 #[derive(PartialEq, Eq)]
 enum State {
@@ -104,11 +96,7 @@ pub fn new_channels(
 	let (from_worker_sink, from_worker_stream) = tracing_unbounded("mpsc_mixnet_out");
 	let (command_sink, command_stream) = tracing_unbounded("mpsc_mixnet_commands");
 	(
-		(
-			(Box::new(from_worker_sink), Box::new(to_worker_stream)),
-			command_sink.clone(),
-			command_stream,
-		),
+		((Box::new(from_worker_sink), Box::new(to_worker_stream)), command_stream),
 		(Box::new(to_worker_sink), Box::new(from_worker_stream), command_sink),
 	)
 }
@@ -119,6 +107,8 @@ where
 	C: UsageProvider<B> + BlockchainEvents<B> + ProvideRuntimeApi<B>,
 	C::Api: SessionKeys<B>,
 {
+	/// Instantiate worker. Should be call after imonline and
+	/// grandpa as it reads their keystore.
 	pub fn new(
 		inner_channels: WorkerChannels,
 		network_identity: &libp2p::core::identity::Keypair,
@@ -127,19 +117,15 @@ where
 			<B as BlockT>::Hash,
 			NumberFor<B>,
 		>,
-		//		role: sc_network::config::Role,
-		//authority_id: Option<AuthorityId>,
 		key_store: Arc<dyn SyncCryptoStore>,
-		//authority-discovery which is slow).
-		//key_store: &dyn SyncCryptoStore,
 	) -> Option<Self> {
 		let mut local_public_key = None;
-		// get the peer id
+		// get the peer id, could be another one than the one define in session: in this
+		// case node will restart.
 		for key in SyncCryptoStore::sr25519_public_keys(&*key_store, key_types::IM_ONLINE)
 			.into_iter()
 			.rev()
 		{
-			log::error!(target: "mixnet", "A imonline key");
 			if SyncCryptoStore::has_keys(&*key_store, &[(key.0.into(), key_types::IM_ONLINE)]) {
 				local_public_key = Some(key);
 				break
@@ -151,8 +137,7 @@ where
 		let local_public_key: [u8; 32] = if let Some(key) = local_public_key {
 			key.0
 		} else {
-			// TODO switch to trace
-			log::error!(target: "mixnet", "Generating new ImOnline key.");
+			log::trace!(target: "mixnet", "Generating new ImOnline key.");
 			SyncCryptoStore::sr25519_generate_new(&*key_store, key_types::IM_ONLINE, None)
 				.ok()?
 				.0
@@ -167,8 +152,6 @@ where
 
 		let finality_stream = client.finality_notification_stream();
 
-		// TODO read validator from session
-		// TODO is this node part of session (role means nothing).
 		let topology = AuthorityStar::new(
 			mixnet_config.local_id.clone(),
 			network_identity.public().into(),
@@ -178,25 +161,6 @@ where
 		let default_limit_config = mixnet_config.limit_per_window.clone();
 
 		let worker = mixnet::MixnetWorker::new(mixnet_config, topology, inner_channels.0);
-		/*			let connection_info = if let Some(authority_id) = authority_id {
-			use sp_application_crypto::Public;
-			// TODO does the key changes between slot?
-			if let Ok(Some(signature)) = SyncCryptoStore::sign_with(
-				key_store,
-				key_types::AUTHORITY_DISCOVERY,
-				&authority_id.to_public_crypto_pair(),
-				local_public_key.to_protobuf_encoding().as_slice(),
-			) {
-				ConnectionInfo { authority_id: Some((authority_id, signature)) }
-			} else {
-				log::error!(target: "mixnet", "Cannot sign handshake, mixnet routing disabled.");
-				ConnectionInfo { authority_id: None }
-			}
-		} else {
-			ConnectionInfo { authority_id: None }
-		};*/
-		//			let encoded_connection_info =
-		// AuthorityStar::encoded_connection_info(&connection_info);
 		let state = State::Synching;
 		Some(MixnetWorker {
 			authority_id: None,
@@ -206,24 +170,22 @@ where
 			session: None,
 			client,
 			state,
-			command_sink: inner_channels.1,
-			command_stream: inner_channels.2,
+			command_stream: inner_channels.1,
 			key_store,
 			default_limit_config,
-			//connection_info,
 		})
-		//encoded_connection_info,
 	}
 
 	fn get_mixnet_keys(
 		key_store: &dyn SyncCryptoStore,
 	) -> Option<(MixPublicKey, mixnet::MixSecretKey)> {
+		// get last key, if it is not the right one, node will restart on next
+		// handle_new_authority call.
 		let mut grandpa_key = None;
 		for key in SyncCryptoStore::ed25519_public_keys(&*key_store, key_types::GRANDPA)
 			.into_iter()
 			.rev()
 		{
-			log::error!(target: "mixnet", "A grandpa key");
 			if SyncCryptoStore::has_keys(&*key_store, &[(key.0.into(), key_types::GRANDPA)]) {
 				grandpa_key = Some(key);
 				break
@@ -237,14 +199,12 @@ where
 			p.copy_from_slice(grandpa_key.as_ref());
 			let pub_key = mixnet::public_from_ed25519(p);
 
-			log::error!(target: "mixnet", "Gr pub"); // TODO rem
 			let priv_key = SyncCryptoStore::mixnet_secret_from_ed25519(
 				&*key_store,
 				key_types::GRANDPA,
 				&grandpa_key,
 			)
 			.ok()?;
-			log::error!(target: "mixnet", "Gr pri"); // TODO rem
 			Some((pub_key, priv_key))
 		} else {
 			None
@@ -254,31 +214,21 @@ where
 	pub async fn run(mut self) {
 		let info = self.client.usage_info().chain;
 		if info.finalized_number == 0u32.into() {
-			// TODO this can be rather racy (init with genesis set then start synch and break on
-			// first notification -> TODO remove, convenient for testing though (no need to way
-			// first finality notification)
 			let authority_set = self.shared_authority_set.current_authority_list();
 			let session = self.shared_authority_set.set_id();
 			self.handle_new_authority(authority_set, session, info.finalized_number);
-			// TODO this need to run when genesis built: on block import 1 or 0
 		}
 		let mut delay_finalized = Delay::new(Duration::from_secs(DELAY_NO_FINALISATION_S));
 		let delay_finalized = &mut delay_finalized;
-		let mut nb_poll = 0u128;
-		// TODO change in crate to use directly as a future..
 		loop {
-			//future::poll_fn(|cx| auth_poll.map(|a|
-			// Pin::new(a).poll(cx)).unwrap_or(futures::task::Poll::Pending)); TODO consider
-			// stream_select
 			futures::select! {
-				// TODO poll more than first??
 				notif = self.finality_stream.next() => {
+					// TODO try accessing last of finality stream (possibly skipping some block)
 					if let Some(notif) = notif {
 						delay_finalized.reset(Duration::from_secs(DELAY_NO_FINALISATION_S));
 						self.handle_new_finalize_block(notif);
 					} else {
 						// This point is reached if the other component did shutdown.
-						// Shutdown as well.
 						debug!(target: "mixnet", "Mixnet, shutdown.");
 						return;
 					}
@@ -289,16 +239,19 @@ where
 					} else {
 						// This point is reached if the other component did shutdown.
 						// Shutdown as well.
-						// TODO actually having an instance of sink it will never happen.
 						debug!(target: "mixnet", "Mixnet, shutdown.");
 						return;
 					}
 				},
-				success = future::poll_fn(|cx| self.worker.poll(cx)).fuse() => {
-					nb_poll += 1;
-					if nb_poll % 10 == 0 {
-						debug!(target: "mixnet", "Polling ok");
+				success = future::poll_fn(|cx| {
+					if self.state == State::Running {
+						self.worker.poll(cx)
+					} else {
+						// state change is linked to finalized stream
+						// which will wake up context.
+						std::task::Poll::Pending
 					}
+				}).fuse() => {
 					if !success {
 						debug!(target: "mixnet", "Mixnet, shutdown.");
 						return;
@@ -348,7 +301,7 @@ where
 		match command {
 			MixnetCommand::TransactionImportResult(surb, result) => {
 				debug!(target: "mixnet", "Mixnet, received transaction import result.");
-				if let Err(e) = self.worker.mixnet_mut().register_surb(result.encode(), surb) {
+				if let Err(e) = self.worker.mixnet_mut().register_surb(result.encode(), *surb) {
 					error!(target: "mixnet", "Could not register surb {:?}", e);
 				}
 			},
@@ -390,17 +343,19 @@ where
 						topology.node_id = peer_id.clone();
 						peer_id.clone()
 					});
-					let new_key = (current_public_key != public_key).then(|| {
-						let secret_key = SyncCryptoStore::mixnet_secret_from_ed25519(
-							&*self.key_store,
-							key_types::GRANDPA,
-							&auth.into(),
-						)
-						.ok()?;
-						topology.node_public_key = public_key.clone();
+					let new_key = (current_public_key != public_key)
+						.then(|| {
+							let secret_key = SyncCryptoStore::mixnet_secret_from_ed25519(
+								&*self.key_store,
+								key_types::GRANDPA,
+								&auth.into(),
+							)
+							.ok()?;
+							topology.node_public_key = public_key.clone();
 
-						Some((public_key.clone(), secret_key))
-					}).flatten();
+							Some((public_key.clone(), secret_key))
+						})
+						.flatten();
 					if new_id.is_some() || new_key.is_some() {
 						restart = Some((new_id, new_key));
 					}
