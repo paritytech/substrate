@@ -12,6 +12,8 @@ members = [
 	"bin/node/rpc",
 	"bin/node/runtime",
 	"bin/node/testing",
+	"bin/node-sassafras/node",
+	"bin/node-sassafras/runtime",
 	"bin/utils/chain-spec-builder",
 	"bin/utils/subkey",
 	"client/api",

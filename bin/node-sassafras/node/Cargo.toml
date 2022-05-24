@@ -1,0 +1,72 @@
+[package]
+name = "node-sassafras"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+description = "Node testbed for Sassafras consensus."
+homepage = "https://substrate.io/"
+edition = "2021"
+license = "Unlicense"
+publish = false
+build = "build.rs"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[[bin]]
+name = "node-sassafras"
+
+[dependencies]
+clap = { version = "3.1.18", features = ["derive"] }
+
+sc-cli = { version = "0.10.0-dev", path = "../../../client/cli", features = ["wasmtime"] }
+sp-core = { version = "6.0.0", path = "../../../primitives/core" }
+sc-executor = { version = "0.10.0-dev", path = "../../../client/executor", features = ["wasmtime"] }
+sc-service = { version = "0.10.0-dev", path = "../../../client/service", features = ["wasmtime"] }
+sc-telemetry = { version = "4.0.0-dev", path = "../../../client/telemetry" }
+sc-keystore = { version = "4.0.0-dev", path = "../../../client/keystore" }
+sc-transaction-pool = { version = "4.0.0-dev", path = "../../../client/transaction-pool" }
+sc-transaction-pool-api = { version = "4.0.0-dev", path = "../../../client/transaction-pool/api" }
+sc-consensus-sassafras = { version = "0.0.1", path = "../../../client/consensus/sassafras" }
+sp-consensus-sassafras = { version = "0.0.1", path = "../../../primitives/consensus/sassafras" }
+sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
+sc-consensus = { version = "0.10.0-dev", path = "../../../client/consensus/common" }
+sc-finality-grandpa = { version = "0.10.0-dev", path = "../../../client/finality-grandpa" }
+sp-finality-grandpa = { version = "4.0.0-dev", path = "../../../primitives/finality-grandpa" }
+sc-client-api = { version = "4.0.0-dev", path = "../../../client/api" }
+sp-runtime = { version = "6.0.0", path = "../../../primitives/runtime" }
+sp-timestamp = { version = "4.0.0-dev", path = "../../../primitives/timestamp" }
+sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
+sp-keyring = { version = "6.0.0", path = "../../../primitives/keyring" }
+frame-system = { version = "4.0.0-dev", path = "../../../frame/system" }
+pallet-transaction-payment = { version = "4.0.0-dev", default-features = false, path = "../../../frame/transaction-payment" }
+
+# These dependencies are used for the node template's RPCs
+jsonrpsee = { version = "0.13.0", features = ["server"] }
+sc-rpc = { version = "4.0.0-dev", path = "../../../client/rpc" }
+sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
+sc-rpc-api = { version = "0.10.0-dev", path = "../../../client/rpc-api" }
+sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
+sp-block-builder = { version = "4.0.0-dev", path = "../../../primitives/block-builder" }
+sc-basic-authorship = { version = "0.10.0-dev", path = "../../../client/basic-authorship" }
+substrate-frame-rpc-system = { version = "4.0.0-dev", path = "../../../utils/frame/rpc/system" }
+pallet-transaction-payment-rpc = { version = "4.0.0-dev", path = "../../../frame/transaction-payment/rpc/" }
+
+# These dependencies are used for runtime benchmarking
+frame-benchmarking = { version = "4.0.0-dev", path = "../../../frame/benchmarking" }
+frame-benchmarking-cli = { version = "4.0.0-dev", path = "../../../utils/frame/benchmarking-cli" }
+
+# Local Dependencies
+node-sassafras-runtime = { version = "0.1.0", path = "../runtime" }
+
+# CLI-specific dependencies
+try-runtime-cli = { version = "0.10.0-dev", optional = true, path = "../../../utils/frame/try-runtime/cli" }
+
+[build-dependencies]
+substrate-build-script-utils = { version = "3.0.0", path = "../../../utils/build-script-utils" }
+
+[features]
+default = []
+runtime-benchmarks = ["node-sassafras-runtime/runtime-benchmarks"]
+# Enable features that allow the runtime to be tried and debugged. Name might be subject to change
+# in the near future.
+try-runtime = ["node-sassafras-runtime/try-runtime", "try-runtime-cli"]
