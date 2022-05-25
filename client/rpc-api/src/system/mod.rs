@@ -84,11 +84,7 @@ pub trait SystemApi<Hash, Number> {
 	#[method(name = "system_unstable_networkState")]
 	async fn system_network_state(&self) -> RpcResult<JsonValue>;
 
-	/// Adds a reserved peer. Returns the empty string or an error. The string
-	/// parameter should encode a `p2p` multiaddr.
-	///
-	/// `/ip4/198.51.100.19/tcp/30333/p2p/QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV`
-	/// is an example of a valid, passing multiaddr with PeerId attached.
+	/// Adds a reserved peer. Returns the empty string or an error. 
 	#[method(name = "system_addReservedPeer")]
 	async fn system_add_reserved_peer(&self, peer: MultiaddrWithPeerId) -> RpcResult<()>;
 

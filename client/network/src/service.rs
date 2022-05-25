@@ -30,7 +30,7 @@
 use crate::{
 	behaviour::{self, Behaviour, BehaviourOut},
 	bitswap::Bitswap,
-	config::{parse_str_addr, Params, TransportConfig},
+	config::{MultiaddrWithPeerId, Params, TransportConfig},
 	discovery::DiscoveryConfig,
 	error::Error,
 	network_state::{
@@ -44,7 +44,6 @@ use crate::{
 };
 
 use codec::Encode as _;
-use crate::config::MultiaddrWithPeerId;
 use futures::{channel::oneshot, prelude::*};
 use libp2p::{
 	core::{either::EitherError, upgrade, ConnectedPoint, Executor},
@@ -676,8 +675,7 @@ where
 		self.service.remove_reserved_peer(peer);
 	}
 
-	/// Adds a `PeerId` and its address as reserved. The string should encode the address
-	/// and peer ID of the remote node.
+	/// Adds a `PeerId` and its address as reserved. 
 	pub fn add_reserved_peer(&self, peer: MultiaddrWithPeerId) -> Result<(), String> {
 		self.service.add_reserved_peer(peer)
 	}
@@ -1082,13 +1080,10 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::SetReservedOnly(true));
 	}
 
-	/// Adds a `PeerId` and its address as reserved. The string should encode the address
-	/// and peer ID of the remote node.
+	/// Adds a `PeerId` and its address as reserved.
 	///
-	/// Returns an `Err` if the given string is not a valid multiaddress
-	/// or contains an invalid peer ID (which includes the local peer ID).
+	/// Returns an `Err` if peer ID of given peer is the local peer ID).
 	pub fn add_reserved_peer(&self, peer: MultiaddrWithPeerId) -> Result<(), String> {
-		//let (peer_id, addr) = parse_str_addr(&peer).map_err(|e| format!("{:?}", e))?;
 		// Make sure the local peer ID is never added to the PSM.
 		if peer.peer_id == self.local_peer_id {
 			return Err("Local peer ID cannot be added as a reserved peer.".to_string())
