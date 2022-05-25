@@ -564,7 +564,6 @@ impl<T: Config> Pallet<T> {
 }
 
 #[derive(Encode, Decode, Clone, PartialEq, RuntimeDebug, TypeInfo)]
-#[codec(dumb_trait_bound)]
 pub struct ForwardedCall<Nonce, BlockNumber, Call, AccountId> {
 	pub nonce: Nonce,
 	pub deadline: BlockNumber,
