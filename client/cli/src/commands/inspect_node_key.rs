@@ -62,8 +62,11 @@ impl InspectNodeKeyCmd {
 			// With hex input, give to the user a bit of tolerance about whitespaces
 			let is_not_ascii_whitespace = |c: &u8| !c.is_ascii_whitespace();
 			let beg = file_data.iter().position(is_not_ascii_whitespace).unwrap_or_default();
-			let end =
-				file_data.iter().rposition(is_not_ascii_whitespace).unwrap_or(file_data.len()) + 1;
+			let end = file_data
+				.iter()
+				.rposition(is_not_ascii_whitespace)
+				.map(|off| off + 1)
+				.unwrap_or_default();
 			file_data =
 				hex::decode(&file_data[beg..end]).map_err(|_| "failed to decode secret as hex")?;
 		}
