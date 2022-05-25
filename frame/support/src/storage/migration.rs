@@ -269,8 +269,9 @@ pub fn remove_storage_prefix(module: &[u8], item: &[u8], hash: &[u8]) {
 /// the key `hash`.
 ///
 /// All values in the client overlay will be deleted, if `maybe_limit` is `Some` then up to
-/// that number of values are deleted from the client backend, otherwise all values in the
-/// client backend are deleted.
+/// that number of values are deleted from the client backend by seeking and reading that number of
+/// storage values plus one. If `maybe_limit` is `None` then all values in the client backend are
+/// deleted. This is potentially unsafe since it's an unbounded operation.
 ///
 /// ## Cursors
 ///
