@@ -302,3 +302,6 @@ inherits = "release"
 lto = "fat"
 # https://doc.rust-lang.org/rustc/codegen-options/index.html#codegen-units
 codegen-units = 1
+
+[patch.crates-io]
+parity-scale-codec = { git = "https://github.com/koute/parity-scale-codec.git", branch = "master_bytes_deserialization" }
