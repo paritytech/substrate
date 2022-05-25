@@ -30,10 +30,13 @@ use frame_support::{
 	weights::{Pays, Weight},
 };
 use sp_core::H256;
+use sp_io::hashing::blake2_256;
+use sp_keystore::{testing::KeyStore, KeystoreExt};
 use sp_runtime::{
 	testing::Header,
-	traits::{BlakeTwo256, IdentityLookup},
+	traits::{BlakeTwo256, IdentityLookup, One, Zero},
 };
+use std::sync::Arc;
 
 // example module to test behaviors.
 #[frame_support::pallet]
@@ -92,7 +95,7 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-		Utility: utility::{Pallet, Call, Event},
+		Utility: utility::{Pallet, Call, Event<T>},
 		Example: example::{Pallet, Call},
 	}
 );
@@ -182,7 +185,9 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	}
 	.assimilate_storage(&mut t)
 	.unwrap();
+	let keystore = KeyStore::new();
 	let mut ext = sp_io::TestExternalities::new(t);
+	ext.register_extension(KeystoreExt(Arc::new(keystore)));
 	ext.execute_with(|| System::set_block_number(1));
 	ext
 }
@@ -193,6 +198,31 @@ fn call_transfer(dest: u64, value: u64) -> Call {
 
 fn call_foobar(err: bool, start_weight: u64, end_weight: Option<u64>) -> Call {
 	Call::Example(ExampleCall::foobar { err, start_weight, end_weight })
+}
+
+fn signer_to_account_id(signer: &MultiSigner) -> <Test as frame_system::Config>::AccountId {
+	<Test as frame_system::Config>::AccountId::decode(&mut AccountId32::as_ref(
+		&signer.clone().into_account(),
+	))
+	.unwrap()
+}
+
+#[cfg(test)]
+mod crypto {
+	use sp_core::ed25519;
+	use sp_io::crypto::{ed25519_generate, ed25519_sign};
+	use sp_runtime::{MultiSignature, MultiSigner};
+	use sp_std::vec::Vec;
+
+	pub fn create_ed25519_pubkey(seed: Vec<u8>) -> MultiSigner {
+		ed25519_generate(0.into(), Some(seed)).into()
+	}
+
+	pub fn create_ed25519_signature(payload: &[u8], pubkey: MultiSigner) -> MultiSignature {
+		let edpubkey = ed25519::Public::try_from(pubkey).unwrap();
+		let edsig = ed25519_sign(0.into(), &edpubkey, payload).unwrap();
+		edsig.into()
+	}
 }
 
 #[test]
@@ -636,5 +666,94 @@ fn force_batch_works() {
 
 		assert_ok!(Utility::force_batch(Origin::signed(1), vec![call_transfer(2, 50),]),);
 		System::assert_last_event(utility::Event::BatchCompletedWithErrors.into());
+	});
+}
+
+#[test]
+fn submit_call_on_behalf_of_works() {
+	new_test_ext().execute_with(|| {
+		let signer = crypto::create_ed25519_pubkey(b"//verifier".to_vec());
+		let signer_id = signer_to_account_id(&signer.clone());
+		let call = Box::new(Call::System(SystemCall::remark { remark: vec![] }));
+
+		use frame_system::{Account, AccountInfo};
+		Account::<Test>::insert(signer_id, AccountInfo::default());
+
+		let forwarded_call = ForwardedCall {
+			nonce: <Test as frame_system::Config>::Index::zero(),
+			deadline: 1,
+			call: call.clone(),
+			signer: signer.clone(),
+			whitelisted_forwarder: None,
+		};
+		let signature =
+			crypto::create_ed25519_signature(&Encode::encode(&forwarded_call), signer.clone());
+
+		assert_ok!(Utility::submit_call_on_behalf_of(
+			Origin::signed(1),
+			forwarded_call.clone(),
+			signature.clone()
+		));
+
+		// validate event
+		System::assert_last_event(
+			utility::Event::CallForwarded {
+				forwarder: 1,
+				new_origin: signer_id,
+				call_hash: blake2_256(&Encode::encode(&call)),
+			}
+			.into(),
+		);
+
+		{
+			// validate deadline
+			let forwarded_call = ForwardedCall { deadline: 0, ..forwarded_call.clone() };
+			let signature =
+				crypto::create_ed25519_signature(&Encode::encode(&forwarded_call), signer.clone());
+			assert_noop!(
+				Utility::submit_call_on_behalf_of(Origin::signed(1), forwarded_call, signature),
+				Error::<Test>::AuthorizationExpired
+			);
+		}
+
+		{
+			// validate nonce
+			let forwarded_call = ForwardedCall {
+				nonce: <Test as frame_system::Config>::Index::one(),
+				..forwarded_call.clone()
+			};
+			let signature =
+				crypto::create_ed25519_signature(&Encode::encode(&forwarded_call), signer.clone());
+			assert_noop!(
+				Utility::submit_call_on_behalf_of(Origin::signed(1), forwarded_call, signature),
+				Error::<Test>::InvalidNonce
+			);
+		}
+
+		{
+			// validate signature
+			let invalid_signature =
+				MultiSignature::decode(&mut TrailingZeroInput::zeroes()).unwrap();
+			assert_noop!(
+				Utility::submit_call_on_behalf_of(
+					Origin::signed(1),
+					forwarded_call.clone(),
+					invalid_signature
+				),
+				Error::<Test>::InvalidSignature
+			);
+		}
+
+		{
+			// validate whitelisted forwarder
+			let forwarded_call =
+				ForwardedCall { whitelisted_forwarder: Some(2), ..forwarded_call.clone() };
+			let signature =
+				crypto::create_ed25519_signature(&Encode::encode(&forwarded_call), signer.clone());
+			assert_noop!(
+				Utility::submit_call_on_behalf_of(Origin::signed(1), forwarded_call, signature),
+				Error::<Test>::WrongForwarder
+			);
+		}
 	});
 }
