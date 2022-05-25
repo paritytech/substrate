@@ -68,7 +68,10 @@ pub struct MultiRemovalResults {
 }
 
 impl MultiRemovalResults {
-	pub fn decon(self) -> (Option<Vec<u8>>, u32, u32, u32) {
+	/// Deconstruct into the internal components.
+	///
+	/// Returns `(maybe_cursor, backend, unique, loops)`.
+	pub fn deconstruct(self) -> (Option<Vec<u8>>, u32, u32, u32) {
 		(self.maybe_cursor, self.backend, self.unique, self.loops)
 	}
 }
