@@ -469,7 +469,7 @@ mod tests {
 		});
 
 		let res = ext.kill_child_storage(child_info, None, None);
-		assert_eq!(res.decon(), (None, 3, 3, 3));
+		assert_eq!(res.deconstruct(), (None, 3, 3, 3));
 	}
 
 	#[test]
