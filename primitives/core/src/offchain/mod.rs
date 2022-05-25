@@ -196,7 +196,7 @@ pub struct OpaqueNetworkState {
 /// Simple blob to hold a `Multiaddr` without committing to its format.
 #[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, PassByInner, TypeInfo)]
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-pub struct OpaqueMultiaddr(pub Vec<u8>);
+pub struct OpaqueMultiaddr(pub crate::Bytes);
 
 impl OpaqueMultiaddr {
 	/// Create new `OpaqueMultiaddr`
