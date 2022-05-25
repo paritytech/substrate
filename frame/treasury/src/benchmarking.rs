@@ -22,7 +22,11 @@
 use super::{Pallet as Treasury, *};
 
 use frame_benchmarking::{account, benchmarks_instance_pallet};
-use frame_support::{ensure, traits::{OnInitialize, EnsureOrigin}, dispatch::UnfilteredDispatchable};
+use frame_support::{
+	dispatch::UnfilteredDispatchable,
+	ensure,
+	traits::{EnsureOrigin, OnInitialize},
+};
 use frame_system::RawOrigin;
 
 const SEED: u32 = 0;

@@ -26,7 +26,7 @@ use codec::{CompactAs, Encode};
 use num_traits::{Pow, SaturatingAdd, SaturatingSub};
 use sp_std::{
 	fmt, ops,
-	ops::{Add, Sub, Div, Rem, AddAssign},
+	ops::{Add, AddAssign, Div, Rem, Sub},
 	prelude::*,
 };
 
@@ -562,16 +562,31 @@ where
 }
 
 /// Just a simple generic integer divide with custom rounding.
-fn div_rounded<N>(n: N, d: N, r: Rounding) -> N where
-	N: Clone + Eq + Ord + Zero + One + AddAssign + Add<Output=N> + Rem<Output=N> + Div<Output=N>
+fn div_rounded<N>(n: N, d: N, r: Rounding) -> N
+where
+	N: Clone
+		+ Eq
+		+ Ord
+		+ Zero
+		+ One
+		+ AddAssign
+		+ Add<Output = N>
+		+ Rem<Output = N>
+		+ Div<Output = N>,
 {
 	let mut o = n.clone() / d.clone();
 	use Rounding::*;
 	let two = || N::one() + N::one();
 	if match r {
-		Up => { !((n % d).is_zero()) },
-		NearestPrefDown => { let rem = n % d.clone(); rem > d / two() },
-		NearestPrefUp => { let rem = n % d.clone(); rem >= d.clone() / two() + d % two() },
+		Up => !((n % d).is_zero()),
+		NearestPrefDown => {
+			let rem = n % d.clone();
+			rem > d / two()
+		},
+		NearestPrefUp => {
+			let rem = n % d.clone();
+			rem >= d.clone() / two() + d % two()
+		},
 		Down => false,
 	} {
 		o += N::one()
