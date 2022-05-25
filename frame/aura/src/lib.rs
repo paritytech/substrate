@@ -164,7 +164,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// The storage will be applied immediately.
 	///
-	/// The authorities length must be equal or less than [`T::MaxAuthorities`].
+	/// The authorities length must be equal or less than T::MaxAuthorities.
 	pub fn initialize_authorities(authorities: &[T::AuthorityId]) {
 		if !authorities.is_empty() {
 			assert!(<Authorities<T>>::get().is_empty(), "Authorities are already initialized!");
