@@ -341,6 +341,21 @@ fn common_config(semantics: &Semantics) -> std::result::Result<wasmtime::Config,
 	);
 
 	if use_pooling {
+		const WASM_PAGE_SIZE: u64 = 65536;
+		const MAX_WASM_PAGES: u64 = 0x10000;
+
+		let memory_pages = if let Some(max_memory_size) = semantics.max_memory_size {
+			let max_memory_size = max_memory_size as u64;
+			let mut pages = max_memory_size / WASM_PAGE_SIZE;
+			if max_memory_size % WASM_PAGE_SIZE != 0 {
+				pages += 1;
+			}
+
+			std::cmp::min(MAX_WASM_PAGES, pages)
+		} else {
+			MAX_WASM_PAGES
+		};
+
 		config.allocation_strategy(wasmtime::InstanceAllocationStrategy::Pooling {
 			strategy: wasmtime::PoolingAllocationStrategy::ReuseAffinity,
 
@@ -353,7 +368,7 @@ fn common_config(semantics: &Semantics) -> std::result::Result<wasmtime::Config,
 				//   memory_pages: 2070
 				size: 64 * 1024,
 				table_elements: 2048,
-				memory_pages: 4096,
+				memory_pages,
 
 				// We can only have a single of those.
 				tables: 1,

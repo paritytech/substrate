@@ -382,7 +382,7 @@ pub trait DefaultChildStorage {
 	/// is removed.
 	fn storage_kill(&mut self, storage_key: &[u8]) {
 		let child_info = ChildInfo::new_default(storage_key);
-		self.kill_child_storage(&child_info, None, None);
+		let _ = self.kill_child_storage(&child_info, None, None);
 	}
 
 	/// Clear a child storage key.
