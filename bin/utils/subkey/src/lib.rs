@@ -30,8 +30,8 @@ use sc_cli::{
 	version
 )]
 pub enum Subkey {
-	/// Generate a random node key, write it to a file or stdout and write the corresponding
-	/// peer-id to stderr
+	/// Generate a random node key, write it to a file or stdout and write the
+	/// corresponding peer-id to stderr
 	GenerateNodeKey(GenerateNodeKeyCmd),
 
 	/// Generate a random account
