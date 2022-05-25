@@ -1597,7 +1597,10 @@ mod tests {
 		{
 			let mut cache = StorageTransactionCache::default();
 			let mut ext = Ext::new(&mut overlay, &mut cache, backend, None);
-			assert_matches!(ext.clear_prefix(b"ab", Some(1), None).deconstruct(), (Some(_), 1, 3, 1));
+			assert_matches!(
+				ext.clear_prefix(b"ab", Some(1), None).deconstruct(),
+				(Some(_), 1, 3, 1)
+			);
 		}
 		overlay.commit_transaction().unwrap();
 

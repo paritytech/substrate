@@ -613,7 +613,7 @@ mod test {
 	use crate::{
 		hash::{StorageHasher as _, *},
 		metadata::{StorageEntryModifier, StorageHasher},
-		storage::types::{Key, Key as NMapKey, ValueQuery},
+		storage::types::{Key as NMapKey, ValueQuery},
 	};
 	use sp_io::{hashing::twox_128, TestExternalities};
 
@@ -634,12 +634,12 @@ mod test {
 
 	#[test]
 	fn test_1_key() {
-		type A = StorageNMap<Prefix, Key<Blake2_128Concat, u16>, u32, OptionQuery>;
+		type A = StorageNMap<Prefix, NMapKey<Blake2_128Concat, u16>, u32, OptionQuery>;
 		type AValueQueryWithAnOnEmpty =
-			StorageNMap<Prefix, Key<Blake2_128Concat, u16>, u32, ValueQuery, ADefault>;
-		type B = StorageNMap<Prefix, Key<Blake2_256, u16>, u32, ValueQuery>;
-		type C = StorageNMap<Prefix, Key<Blake2_128Concat, u16>, u8, ValueQuery>;
-		type WithLen = StorageNMap<Prefix, Key<Blake2_128Concat, u16>, Vec<u32>>;
+			StorageNMap<Prefix, NMapKey<Blake2_128Concat, u16>, u32, ValueQuery, ADefault>;
+		type B = StorageNMap<Prefix, NMapKey<Blake2_256, u16>, u32, ValueQuery>;
+		type C = StorageNMap<Prefix, NMapKey<Blake2_128Concat, u16>, u8, ValueQuery>;
+		type WithLen = StorageNMap<Prefix, NMapKey<Blake2_128Concat, u16>, Vec<u32>>;
 
 		TestExternalities::default().execute_with(|| {
 			let mut k: Vec<u8> = vec![];
