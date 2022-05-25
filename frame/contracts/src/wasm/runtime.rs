@@ -27,7 +27,7 @@ use crate::{
 
 use bitflags::bitflags;
 use codec::{Decode, DecodeAll, Encode, MaxEncodedLen};
-use frame_support::{dispatch::DispatchError, ensure, weights::Weight};
+use frame_support::{dispatch::DispatchError, ensure, traits::Get, weights::Weight};
 use pallet_contracts_primitives::{ExecReturnValue, ReturnFlags};
 use sp_core::{crypto::UncheckedFrom, Bytes};
 use sp_io::hashing::{blake2_128, blake2_256, keccak_256, sha2_256};
@@ -41,7 +41,7 @@ use wasm_instrument::parity_wasm::elements::ValueType;
 /// VarSized is a key used for transparent hashing, which is a u8 vector maximum length of
 /// MaxStorageKeyLen.
 enum KeyType {
-	Fixed,
+	Fix,
 	Variable(u32),
 }
 
@@ -707,7 +707,6 @@ where
 		&mut self,
 		key_type: KeyType,
 		key_ptr: u32,
-		key_len: u32,
 		value_ptr: u32,
 		value_len: u32,
 	) -> Result<u32, TrapReason> {
@@ -717,19 +716,26 @@ where
 		if value_len > max_size {
 			return Err(Error::<E::T>::ValueTooLarge.into())
 		}
-
-                ensure!(key_len <= <E::T>::MaxStorageKeyLen, Error::<E::T>::DecodingFailed);
-		let key = self.read_sandbox_memory(key_ptr, key_len)?
-
+		let key_len = match key_type {
+			KeyType::Fix => 32u32,
+			KeyType::Variable(len) => {
+				ensure!(
+					len <= <E::T as Config>::MaxStorageKeyLen::get(),
+					Error::<E::T>::DecodingFailed
+				);
+				len
+			},
+		};
+		let key = self.read_sandbox_memory(key_ptr, key_len)?;
 		let value = Some(self.read_sandbox_memory(value_ptr, value_len)?);
 		let write_outcome = match key_type {
-			KeyType::FixSized => self.ext.set_storage(
+			KeyType::Fix => self.ext.set_storage(
 				FixSizedKey::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?,
 				value,
 				false,
 			)?,
-			KeyType::VarSized => self.ext.set_storage_transparent(
-				VarSizedKey::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?,
+			KeyType::Variable(_) => self.ext.set_storage_transparent(
+				VarSizedKey::<E::T>::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?,
 				value,
 				false,
 			)?,
@@ -742,25 +748,27 @@ where
 		Ok(write_outcome.old_len_with_sentinel())
 	}
 
-	fn clear_storage(
-		&mut self,
-		key_type: KeyType,
-		key_ptr: u32,
-		key_len: u32,
-	) -> Result<u32, TrapReason> {
+	fn clear_storage(&mut self, key_type: KeyType, key_ptr: u32) -> Result<u32, TrapReason> {
 		let charged = self.charge_gas(RuntimeCosts::ClearStorage(self.ext.max_value_size()))?;
-
-		let mut key = vec![0; key_len.try_into().map_err(|_| Error::<E::T>::ValueTooLarge)?];
-		self.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
-
+		let key_len = match key_type {
+			KeyType::Fix => 32u32,
+			KeyType::Variable(len) => {
+				ensure!(
+					len <= <E::T as Config>::MaxStorageKeyLen::get(),
+					Error::<E::T>::DecodingFailed
+				);
+				len
+			},
+		};
+		let key = self.read_sandbox_memory(key_ptr, key_len)?;
 		let outcome = match key_type {
-			KeyType::FixSized => self.ext.set_storage(
+			KeyType::Fix => self.ext.set_storage(
 				FixSizedKey::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?,
 				None,
 				false,
 			)?,
-			KeyType::VarSized => self.ext.set_storage_transparent(
-				VarSizedKey::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?,
+			KeyType::Variable(_) => self.ext.set_storage_transparent(
+				VarSizedKey::<E::T>::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?,
 				None,
 				false,
 			)?,
@@ -908,7 +916,7 @@ define_env!(Env, <E: Ext>,
 	// Equivalent to the newer version of `seal_set_storage` with the exception of the return
 	// type. Still a valid thing to call when not interested in the return value.
 	[seal0] seal_set_storage(ctx, key_ptr: u32, value_ptr: u32, value_len: u32) => {
-		ctx.set_storage(KeyType::FixSized, key_ptr, 32u32, value_ptr, value_len).map(|_| ())
+		ctx.set_storage(KeyType::Fix, key_ptr, value_ptr, value_len).map(|_| ())
 	},
 
 	// Set the value at the given key in the contract storage.
@@ -927,7 +935,7 @@ define_env!(Env, <E: Ext>,
 	// Returns the size of the pre-existing value at the specified key if any. Otherwise
 	// `SENTINEL` is returned as a sentinel value.
 	[seal1] seal_set_storage(ctx, key_ptr: u32, value_ptr: u32, value_len: u32) -> u32 => {
-		ctx.set_storage(KeyType::FixSized, key_ptr, 32u32, value_ptr, value_len)
+		ctx.set_storage(KeyType::Fix, key_ptr, value_ptr, value_len)
 	},
 
 	// Clear the value at the given key in the contract storage.
@@ -935,21 +943,22 @@ define_env!(Env, <E: Ext>,
 	// Equivalent to the newer version of `seal_clear_storage` with the exception of the return
 	// type. Still a valid thing to call when not interested in the return value.
 	[seal0] seal_clear_storage(ctx, key_ptr: u32) => {
-		ctx.clear_storage(KeyType::FixSized, key_ptr, 32u32).map(|_| ()).map_err(Into::into)
+		ctx.clear_storage(KeyType::Fix, key_ptr).map(|_| ()).map_err(Into::into)
 	},
 
 	// Clear the value at the given key in the contract storage.
 	//
 	// # Parameters
 	//
-	// - `key_ptr`: pointer into the linear memory where the location to clear the value is placed.
+	// - `key_ptr`: pointer into the linear memory where the key is placed.
+	// - `key_len`: the length of the key in bytes.
 	//
 	// # Return Value
 	//
 	// Returns the size of the pre-existing value at the specified key if any. Otherwise
 	// `SENTINEL` is returned as a sentinel value.
-	[__unstable__] seal_clear_storage(ctx, key_ptr: u32) -> u32 => {
-		ctx.clear_storage(KeyType::FixSized, key_ptr, 32u32).map_err(Into::into)
+	[__unstable__] seal_clear_storage(ctx, key_ptr: u32, key_len: u32) -> u32 => {
+		ctx.clear_storage(KeyType::Variable(key_len), key_ptr).map_err(Into::into)
 	},
 
 	// Retrieve the value under the given key from storage.
@@ -1006,6 +1015,7 @@ define_env!(Env, <E: Ext>,
 	// # Parameters
 	//
 	// - `key_ptr`: pointer into the linear memory where the key of the requested value is placed.
+	// - `key_len`: the length of the key in bytes.
 	// - `out_ptr`: pointer to the linear memory where the value is written to.
 	// - `out_len_ptr`: in-out pointer into linear memory where the buffer length
 	//   is read from and the value length is written to.
@@ -1013,10 +1023,9 @@ define_env!(Env, <E: Ext>,
 	// # Errors
 	//
 	// `ReturnCode::KeyNotFound`
-	[__unstable__] seal_take_storage(ctx, key_ptr: u32, out_ptr: u32, out_len_ptr: u32) -> ReturnCode => {
+	[__unstable__] seal_take_storage(ctx, key_ptr: u32, key_len: u32, out_ptr: u32, out_len_ptr: u32) -> ReturnCode => {
 		let charged = ctx.charge_gas(RuntimeCosts::TakeStorage(ctx.ext.max_value_size()))?;
-		let mut key = FixSizedKey::default();
-		ctx.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
+		let key = ctx.read_sandbox_memory(key_ptr, key_len)?;
 		if let crate::storage::WriteOutcome::Taken(value) = ctx.ext.set_storage(key, None, true)? {
 			ctx.adjust_gas(charged, RuntimeCosts::TakeStorage(value.len() as u32));
 			ctx.write_sandbox_output(out_ptr, out_len_ptr, &value, false, already_charged)?;

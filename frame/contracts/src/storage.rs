@@ -123,7 +123,7 @@ where
 	///
 	/// The read is performed from the `trie_id` only. The `address` is not necessary. If the
 	/// contract doesn't store under the given `key` `None` is returned.
-	pub fn read<K: StorageHash>(trie_id: &TrieId, key: K) -> Option<Vec<u8>> {
+	pub fn read<K: StorageHash<T>>(trie_id: &TrieId, key: K) -> Option<Vec<u8>> {
 		child::get_raw(&child_trie_info(trie_id), key.hash().as_slice())
 	}
 
@@ -131,7 +131,7 @@ where
 	///
 	/// Returns `None` if the `key` wasn't previously set by `set_storage` or
 	/// was deleted.
-	pub fn size<K: StorageHash>(trie_id: &TrieId, key: K) -> Option<u32> {
+	pub fn size<K: StorageHash<T>>(trie_id: &TrieId, key: K) -> Option<u32> {
 		child::len(&child_trie_info(trie_id), key.hash().as_slice())
 	}
 
@@ -142,7 +142,7 @@ where
 	///
 	/// This function also records how much storage was created or removed if a `storage_meter`
 	/// is supplied. It should only be absent for testing or benchmarking code.
-	pub fn write<K: StorageHash>(
+	pub fn write<K: StorageHash<T>>(
 		trie_id: &TrieId,
 		key: K,
 		new_value: Option<Vec<u8>>,
