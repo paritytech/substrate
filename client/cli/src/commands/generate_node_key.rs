@@ -20,14 +20,20 @@
 use crate::Error;
 use clap::Parser;
 use libp2p::identity::{ed25519 as libp2p_ed25519, PublicKey};
-use std::{fs, path::PathBuf};
+use sp_core::hexdisplay::AsBytesRef;
+use std::{
+	borrow::Cow,
+	fs,
+	io::{self, Write},
+	path::PathBuf,
+};
 
 /// The `generate-node-key` command
 #[derive(Debug, Parser)]
 #[clap(
 	name = "generate-node-key",
-	about = "Generate a random node libp2p key, save it to \
-			 file or print it to stdout and print its peer ID to stderr"
+	about = "Generate a random node key, write it to a file or stdout
+             and write the corresponding peer-id to stderr"
 )]
 pub struct GenerateNodeKeyCmd {
 	/// Name of file to save secret key to.
@@ -35,22 +41,34 @@ pub struct GenerateNodeKeyCmd {
 	/// If not given, the secret key is printed to stdout.
 	#[clap(long)]
 	file: Option<PathBuf>,
+
+	/// The output is in raw binary format.
+	///
+	/// If not given, the output is written as an hex encoded string.
+	#[clap(long)]
+	bin: bool,
 }
 
 impl GenerateNodeKeyCmd {
 	/// Run the command
 	pub fn run(&self) -> Result<(), Error> {
 		let keypair = libp2p_ed25519::Keypair::generate();
+
 		let secret = keypair.secret();
-		let peer_id = PublicKey::Ed25519(keypair.public()).to_peer_id();
-		let secret_hex = hex::encode(secret.as_ref());
+
+		let file_data = if self.bin {
+			Cow::Borrowed(secret.as_ref())
+		} else {
+			Cow::Owned(hex::encode(secret.as_ref()).into_bytes())
+		};
 
 		match &self.file {
-			Some(file) => fs::write(file, secret_hex)?,
-			None => print!("{}", secret_hex),
+			Some(file) => fs::write(file, file_data)?,
+			None => io::stdout().write_all(file_data.as_bytes_ref())?,
 		}
 
-		eprintln!("{}", peer_id);
+		let peer_id = PublicKey::Ed25519(keypair.public()).to_peer_id();
+		eprintln!("Peer-ID: {}", peer_id);
 
 		Ok(())
 	}
