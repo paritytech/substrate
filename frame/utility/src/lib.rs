@@ -482,7 +482,22 @@ pub mod pallet {
 			Ok(Some(base_weight + weight).into())
 		}
 
-		#[pallet::weight(0)]
+		/// Forwards a pre-signed function call.
+		///
+		/// # <weight>
+		/// - O(1).
+		/// - Limited storage reads.
+		/// - One DB write (event).
+		/// - Weight of derivative `call` execution + T::WeightInfo::dispatch_as().
+		/// # </weight>
+		#[pallet::weight({
+			let dispatch_info = call.get_dispatch_info();
+			(
+				T::WeightInfo::dispatch_as()
+					.saturating_add(dispatch_info.weight),
+				dispatch_info.class,
+			)
+		})]
 		pub fn submit_call_on_behalf_of(
 			origin: OriginFor<T>,
 			forwarded_call: ForwardedCallOf<T>,
