@@ -110,7 +110,7 @@ pub struct Deposit<AccountId, Balance> {
 
 #[derive(Clone, Encode, TypeInfo)]
 pub struct TrackInfo<Balance, Moment> {
-	/// Name of this track. TODO was &'static str
+	/// Name of this track.
 	pub name: &'static str,
 	/// A limit for the number of referenda on this track that can be being decided at once.
 	/// For Root origin this should generally be just one.
