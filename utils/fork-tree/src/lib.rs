@@ -1441,20 +1441,34 @@ mod test {
 			.unwrap()
 			.unwrap();
 		assert_eq!(path, [0, 1, 0, 0, 0]);
+
+		// Test for the post-order DFS requirement as specified by the `find_node_index_where`
+		// comment. Once (and if) post-order traversal requirement is removed, then this test
+		// can be removed as well. In practice this test should fail with a pre-order DFS.
+		let is_descendent_of_for_post_order = |parent: &&str, child: &&str| {
+			if *parent == "A" {
+				Err(TestError)
+			} else {
+				is_descendent_of(parent, child)
+			}
+		};
+		let path = tree
+			.find_node_index_where(&"N", &6, &is_descendent_of_for_post_order, &|_| true)
+			.unwrap()
+			.unwrap();
+		assert_eq!(path, [0, 1, 0, 0, 0]);
 	}
 
 	#[test]
 	fn find_node_index_with_predicate_works() {
-		fn is_descendent_of(parent: &char, child: &char) -> Result<bool, std::convert::Infallible> {
-			match *parent {
-				'A' => Ok(['B', 'C', 'D', 'E', 'F'].contains(child)),
-				'B' => Ok(['C', 'D'].contains(child)),
-				'C' => Ok(['D'].contains(child)),
-				'E' => Ok(['F'].contains(child)),
-				'D' | 'F' => Ok(false),
-				_ => unreachable!(),
-			}
-		}
+		let is_descendent_of = |parent: &char, child: &char| match *parent {
+			'A' => Ok(['B', 'C', 'D', 'E', 'F'].contains(child)),
+			'B' => Ok(['C', 'D'].contains(child)),
+			'C' => Ok(['D'].contains(child)),
+			'E' => Ok(['F'].contains(child)),
+			'D' | 'F' => Ok(false),
+			_ => Err(TestError),
+		};
 
 		// A(t) --- B(f) --- C(t) --- D(f)
 		//      \-- E(t) --- F(f)
