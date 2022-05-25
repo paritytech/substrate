@@ -30,7 +30,7 @@ use self::{
 	sandbox::Sandbox,
 };
 use crate::{
-	exec::{AccountIdOf, FixSizedKey},
+	exec::{AccountIdOf, FixSizedKey, VarSizedKey},
 	schedule::{API_BENCHMARK_BATCH_SIZE, INSTR_BENCHMARK_BATCH_SIZE},
 	storage::Storage,
 	wasm::CallFlags,
@@ -1050,7 +1050,7 @@ benchmarks! {
 	seal_clear_storage {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let max_key_len = T::MaxStorageKeyLen::get();
-		let keys = (0 .. r * API_BENCHMARK_BATCH_SIZE)
+		let keys = (0 .. r * 10) // TODO: GOTTA calc new value here to keep Original Code inside boundary size
 				.map(|n| { let mut h = T::Hashing::hash_of(&n).as_ref().to_vec();
 					   h.resize(max_key_len.try_into().unwrap(), n.to_le_bytes()[0]); h })
 		.collect::<Vec<_>>();
@@ -1086,7 +1086,7 @@ benchmarks! {
 		for key in keys {
 			Storage::<T>::write(
 				&info.trie_id,
-				FixSizedKey::try_from(key).map_err(|e| "Key has wrong length")?,
+				VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
 				Some(vec![]),
 				None,
 				false,
