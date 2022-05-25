@@ -111,7 +111,8 @@ impl From<MultiRemovalResults> for KillStorageResult {
 	fn from(r: MultiRemovalResults) -> Self {
 		match r {
 			MultiRemovalResults { maybe_cursor: None, backend, .. } => Self::AllRemoved(backend),
-			MultiRemovalResults { maybe_cursor: Some(..), backend, .. } => Self::SomeRemaining(backend),
+			MultiRemovalResults { maybe_cursor: Some(..), backend, .. } =>
+				Self::SomeRemaining(backend),
 		}
 	}
 }
