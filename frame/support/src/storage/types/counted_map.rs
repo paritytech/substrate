@@ -31,7 +31,7 @@ use crate::{
 	Never,
 };
 use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen, Ref};
-use sp_io::ClearPrefixResult;
+use sp_io::MultiRemovalResults;
 use sp_runtime::traits::Saturating;
 use sp_std::prelude::*;
 
@@ -284,8 +284,8 @@ where
 
 	/// Attempt to remove all items from the map.
 	///
-	/// Returns [`ClearPrefixResult`] to inform about the result. Once the resultant `maybe_cursor`
-	/// field is `None`, then no further items remain to be deleted.
+	/// Returns [`MultiRemovalResults`](sp_io::MultiRemovalResults) to inform about the result. Once
+	/// the resultant `maybe_cursor` field is `None`, then no further items remain to be deleted.
 	///
 	/// NOTE: After the initial call for any given map, it is important that no further items
 	/// are inserted into the map. If so, then the map may not be empty when the resultant
@@ -305,11 +305,11 @@ where
 	/// passed once (in the initial call) for any given storage map. Subsequent calls
 	/// operating on the same map should always pass `Some`, and this should be equal to the
 	/// previous call result's `maybe_cursor` field.
-	pub fn clear(limit: u32, maybe_cursor: Option<&[u8]>) -> ClearPrefixResult {
+	pub fn clear(limit: u32, maybe_cursor: Option<&[u8]>) -> MultiRemovalResults {
 		let result = <Self as MapWrapper>::Map::clear(limit, maybe_cursor);
 		match result.maybe_cursor {
 			None => CounterFor::<Prefix>::kill(),
-			Some(_) => CounterFor::<Prefix>::mutate(|x| x.saturating_reduce(result.total)),
+			Some(_) => CounterFor::<Prefix>::mutate(|x| x.saturating_reduce(result.unique)),
 		}
 		result
 	}

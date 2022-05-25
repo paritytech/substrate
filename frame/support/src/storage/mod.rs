@@ -538,7 +538,7 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 		k1: KArg1,
 		limit: u32,
 		maybe_cursor: Option<&[u8]>,
-	) -> sp_io::ClearPrefixResult
+	) -> sp_io::MultiRemovalResults
 	where
 		KArg1: ?Sized + EncodeLike<K1>;
 
@@ -686,8 +686,8 @@ pub trait StorageNMap<K: KeyGenerator, V: FullCodec> {
 
 	/// Attempt to remove items from the map matching a `partial_key` prefix.
 	///
-	/// Returns [`ClearPrefixResult`] to inform about the result. Once the resultant `maybe_cursor`
-	/// field is `None`, then no further items remain to be deleted.
+	/// Returns [`MultiRemovalResults`](sp_io::MultiRemovalResults) to inform about the result. Once
+	/// the resultant `maybe_cursor` field is `None`, then no further items remain to be deleted.
 	///
 	/// NOTE: After the initial call for any given map, it is important that no further items
 	/// are inserted into the map which match the `partial key`. If so, then the map may not be
@@ -711,7 +711,7 @@ pub trait StorageNMap<K: KeyGenerator, V: FullCodec> {
 		partial_key: KP,
 		limit: u32,
 		maybe_cursor: Option<&[u8]>,
-	) -> sp_io::ClearPrefixResult
+	) -> sp_io::MultiRemovalResults
 	where
 		K: HasKeyPrefix<KP>;
 
@@ -1172,8 +1172,8 @@ pub trait StoragePrefixedMap<Value: FullCodec> {
 
 	/// Attempt to remove all items from the map.
 	///
-	/// Returns [`ClearPrefixResult`] to inform about the result. Once the resultant `maybe_cursor`
-	/// field is `None`, then no further items remain to be deleted.
+	/// Returns [`MultiRemovalResults`](sp_io::MultiRemovalResults) to inform about the result. Once
+	/// the resultant `maybe_cursor` field is `None`, then no further items remain to be deleted.
 	///
 	/// NOTE: After the initial call for any given map, it is important that no further items
 	/// are inserted into the map. If so, then the map may not be empty when the resultant
@@ -1193,7 +1193,7 @@ pub trait StoragePrefixedMap<Value: FullCodec> {
 	/// passed once (in the initial call) for any given storage map. Subsequent calls
 	/// operating on the same map should always pass `Some`, and this should be equal to the
 	/// previous call result's `maybe_cursor` field.
-	fn clear(limit: u32, maybe_cursor: Option<&[u8]>) -> sp_io::ClearPrefixResult {
+	fn clear(limit: u32, maybe_cursor: Option<&[u8]>) -> sp_io::MultiRemovalResults {
 		unhashed::clear_prefix(&Self::final_prefix(), Some(limit), maybe_cursor)
 	}
 

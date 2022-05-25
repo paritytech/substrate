@@ -21,7 +21,7 @@
 // NOTE: could replace unhashed by having only one kind of storage (top trie being the child info
 // of null length parent storage key).
 
-pub use crate::sp_io::{ClearPrefixResult, KillStorageResult};
+pub use crate::sp_io::{KillStorageResult, MultiRemovalResults};
 use crate::sp_std::prelude::*;
 use codec::{Codec, Decode, Encode};
 pub use sp_core::storage::{ChildInfo, ChildType, StateVersion};
@@ -166,8 +166,8 @@ pub fn kill_storage(child_info: &ChildInfo, limit: Option<u32>) -> KillStorageRe
 /// cursor need not be passed in an a `None` may be passed instead. This exception may be useful
 /// then making this call solely from a block-hook such as `on_initialize`.
 ///
-/// Returns [`ClearPrefixResult`] to inform about the result. Once the resultant `maybe_cursor`
-/// field is `None`, then no further items remain to be deleted.
+/// Returns [`MultiRemovalResults`](sp_io::MultiRemovalResults) to inform about the result. Once the
+/// resultant `maybe_cursor` field is `None`, then no further items remain to be deleted.
 ///
 /// NOTE: After the initial call for any given child storage, it is important that no keys further
 /// keys are inserted. If so, then they may or may not be deleted by subsequent calls.
@@ -180,7 +180,7 @@ pub fn clear_storage(
 	child_info: &ChildInfo,
 	maybe_limit: Option<u32>,
 	_maybe_cursor: Option<&[u8]>,
-) -> ClearPrefixResult {
+) -> MultiRemovalResults {
 	// TODO: Once the network has upgraded to include the new host functions, this code can be
 	// enabled.
 	// sp_io::default_child_storage::storage_kill(prefix, maybe_limit, maybe_cursor)
@@ -189,11 +189,11 @@ pub fn clear_storage(
 			sp_io::default_child_storage::storage_kill(child_info.storage_key(), maybe_limit),
 	};
 	use sp_io::KillStorageResult::*;
-	let (maybe_cursor, db) = match r {
+	let (maybe_cursor, backend) = match r {
 		AllRemoved(db) => (None, db),
 		SomeRemaining(db) => (Some(child_info.storage_key().to_vec()), db),
 	};
-	ClearPrefixResult { maybe_cursor, db, total: db, loops: db }
+	MultiRemovalResults { maybe_cursor, backend, unique: backend, loops: backend }
 }
 
 /// Ensure `key` has no explicit entry in storage.

@@ -190,7 +190,7 @@ where
 		partial_key: KP,
 		limit: u32,
 		maybe_cursor: Option<&[u8]>,
-	) -> sp_io::ClearPrefixResult
+	) -> sp_io::MultiRemovalResults
 	where
 		K: HasKeyPrefix<KP>,
 	{

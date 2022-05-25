@@ -1677,9 +1677,13 @@ mod tests {
 		let mut ext = Ext::new(&mut overlay, &mut cache, &backend, None);
 		let r = ext.kill_child_storage(&child_info, Some(0), None).decon();
 		assert_matches!(r, (Some(_), 0, 0, 0));
-		let r = ext.kill_child_storage(&child_info, Some(1), r.0.as_ref().map(|x| &x[..])).decon();
+		let r = ext
+			.kill_child_storage(&child_info, Some(1), r.0.as_ref().map(|x| &x[..]))
+			.decon();
 		assert_matches!(r, (Some(_), 1, 1, 1));
-		let r = ext.kill_child_storage(&child_info, Some(4), r.0.as_ref().map(|x| &x[..])).decon();
+		let r = ext
+			.kill_child_storage(&child_info, Some(4), r.0.as_ref().map(|x| &x[..]))
+			.decon();
 		// Only 3 items remaining to remove
 		assert_matches!(r, (None, 3, 3, 3));
 		let r = ext.kill_child_storage(&child_info, Some(1), None).decon();

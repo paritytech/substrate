@@ -255,8 +255,8 @@ where
 
 	/// Attempt to remove all items from the map.
 	///
-	/// Returns [`ClearPrefixResult`] to inform about the result. Once the resultant `maybe_cursor`
-	/// field is `None`, then no further items remain to be deleted.
+	/// Returns [`MultiRemovalResults`](sp_io::MultiRemovalResults) to inform about the result. Once
+	/// the resultant `maybe_cursor` field is `None`, then no further items remain to be deleted.
 	///
 	/// NOTE: After the initial call for any given map, it is important that no further items
 	/// are inserted into the map. If so, then the map may not be empty when the resultant
@@ -276,7 +276,7 @@ where
 	/// passed once (in the initial call) for any given storage map. Subsequent calls
 	/// operating on the same map should always pass `Some`, and this should be equal to the
 	/// previous call result's `maybe_cursor` field.
-	pub fn clear(limit: u32, maybe_cursor: Option<&[u8]>) -> sp_io::ClearPrefixResult {
+	pub fn clear(limit: u32, maybe_cursor: Option<&[u8]>) -> sp_io::MultiRemovalResults {
 		<Self as crate::storage::StoragePrefixedMap<Value>>::clear(limit, maybe_cursor)
 	}
 

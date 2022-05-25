@@ -44,7 +44,6 @@ use sp_core::{
 };
 #[cfg(feature = "std")]
 use sp_keystore::{KeystoreExt, SyncCryptoStore};
-use sp_externalities::MultiRemovalResults;
 
 use sp_core::{
 	crypto::KeyTypeId,
@@ -82,6 +81,8 @@ mod batch_verifier;
 #[cfg(feature = "std")]
 use batch_verifier::BatchVerifier;
 
+pub use sp_externalities::MultiRemovalResults;
+
 #[cfg(feature = "std")]
 const LOG_TARGET: &str = "runtime::io";
 
@@ -106,38 +107,11 @@ pub enum KillStorageResult {
 	SomeRemaining(u32),
 }
 
-impl From<ClearPrefixResult> for KillStorageResult {
-	fn from(r: ClearPrefixResult) -> Self {
-		match r {
-			ClearPrefixResult { maybe_cursor: None, db, .. } => Self::AllRemoved(db),
-			ClearPrefixResult { maybe_cursor: Some(..), db, .. } => Self::SomeRemaining(db),
-		}
-	}
-}
-
-/// The outcome of calling `clear_prefix` or some function which uses it.
-#[derive(PassByCodec, Encode, Decode)]
-#[must_use]
-pub struct ClearPrefixResult {
-	/// The number of keys removed from persistent storage. This is what is relevant for weight
-	/// calculation.
-	pub db: u32,
-	/// The number of keys removed in total (including from non-persistent storage).
-	pub total: u32,
-	/// The number of backend iterations done for this operation.
-	pub loops: u32,
-	/// `None` if all keys to be removed were removed; `Some` if some keys are remaining, in which
-	/// case, the following call should pass this value in as the cursor.
-	pub maybe_cursor: Option<Vec<u8>>,
-}
-
-impl From<MultiRemovalResults> for ClearPrefixResult {
+impl From<MultiRemovalResults> for KillStorageResult {
 	fn from(r: MultiRemovalResults) -> Self {
-		Self {
-			db: r.backend,
-			total: r.unique,
-			loops: r.loops,
-			maybe_cursor: r.maybe_cursor,
+		match r {
+			MultiRemovalResults { maybe_cursor: None, backend, .. } => Self::AllRemoved(backend),
+			MultiRemovalResults { maybe_cursor: Some(..), backend, .. } => Self::SomeRemaining(backend),
 		}
 	}
 }
@@ -239,8 +213,8 @@ pub trait Storage {
 	/// operating on the same prefix should always pass `Some`, and this should be equal to the
 	/// previous call result's `maybe_cursor` field.
 	///
-	/// Returns [`ClearPrefixResult`] to inform about the result. Once the resultant `maybe_cursor`
-	/// field is `None`, then no further items remain to be deleted.
+	/// Returns [`MultiRemovalResults`](sp_io::MultiRemovalResults) to inform about the result. Once
+	/// the resultant `maybe_cursor` field is `None`, then no further items remain to be deleted.
 	///
 	/// NOTE: After the initial call for any given prefix, it is important that no keys further
 	/// keys under the same prefix are inserted. If so, then they may or may not be deleted by
@@ -256,13 +230,14 @@ pub trait Storage {
 		maybe_prefix: &[u8],
 		maybe_limit: Option<u32>,
 		maybe_cursor: Option<Vec<u8>>, //< TODO Make work or just Option<Vec<u8>>?
-	) -> ClearPrefixResult {
+	) -> MultiRemovalResults {
 		Externalities::clear_prefix(
 			*self,
 			maybe_prefix,
 			maybe_limit,
 			maybe_cursor.as_ref().map(|x| &x[..]),
-		).into()
+		)
+		.into()
 	}
 
 	/// Append the encoded `value` to the storage item at `key`.
@@ -441,13 +416,10 @@ pub trait DefaultChildStorage {
 		storage_key: &[u8],
 		maybe_limit: Option<u32>,
 		maybe_cursor: Option<Vec<u8>>,
-	) -> ClearPrefixResult {
+	) -> MultiRemovalResults {
 		let child_info = ChildInfo::new_default(storage_key);
-		self.kill_child_storage(
-			&child_info,
-			maybe_limit,
-			maybe_cursor.as_ref().map(|x| &x[..]),
-		).into()
+		self.kill_child_storage(&child_info, maybe_limit, maybe_cursor.as_ref().map(|x| &x[..]))
+			.into()
 	}
 
 	/// Check a child storage key.
@@ -494,14 +466,15 @@ pub trait DefaultChildStorage {
 		prefix: &[u8],
 		maybe_limit: Option<u32>,
 		maybe_cursor: Option<Vec<u8>>,
-	) -> ClearPrefixResult {
+	) -> MultiRemovalResults {
 		let child_info = ChildInfo::new_default(storage_key);
 		self.clear_child_prefix(
 			&child_info,
 			prefix,
 			maybe_limit,
 			maybe_cursor.as_ref().map(|x| &x[..]),
-		).into()
+		)
+		.into()
 	}
 
 	/// Default child root calculation.
@@ -1881,7 +1854,7 @@ mod tests {
 			// We can switch to this once we enable v3 of the `clear_prefix`.
 			//assert!(matches!(
 			//	storage::clear_prefix(b":abc", None),
-			//	ClearPrefixResult::NoneLeft { db: 2, total: 2 }
+			//	MultiRemovalResults::NoneLeft { db: 2, total: 2 }
 			//));
 			assert!(matches!(
 				storage::clear_prefix(b":abc", None),
@@ -1896,7 +1869,7 @@ mod tests {
 			// We can switch to this once we enable v3 of the `clear_prefix`.
 			//assert!(matches!(
 			//	storage::clear_prefix(b":abc", None),
-			//	ClearPrefixResult::NoneLeft { db: 0, total: 0 }
+			//	MultiRemovalResults::NoneLeft { db: 0, total: 0 }
 			//));
 			assert!(matches!(
 				storage::clear_prefix(b":abc", None),

@@ -287,7 +287,7 @@ pub fn clear_storage_prefix(
 	hash: &[u8],
 	maybe_limit: Option<u32>,
 	maybe_cursor: Option<&[u8]>,
-) -> sp_io::ClearPrefixResult {
+) -> sp_io::MultiRemovalResults {
 	let mut key = vec![0u8; 32 + hash.len()];
 	let storage_prefix = storage_prefix(module, item);
 	key[0..32].copy_from_slice(&storage_prefix);

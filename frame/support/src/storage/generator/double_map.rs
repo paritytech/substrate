@@ -214,7 +214,7 @@ where
 		k1: KArg1,
 		limit: u32,
 		maybe_cursor: Option<&[u8]>,
-	) -> sp_io::ClearPrefixResult
+	) -> sp_io::MultiRemovalResults
 	where
 		KArg1: EncodeLike<K1>,
 	{

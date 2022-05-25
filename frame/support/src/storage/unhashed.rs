@@ -126,8 +126,8 @@ pub fn kill_prefix(prefix: &[u8], limit: Option<u32>) -> sp_io::KillStorageResul
 /// cursor need not be passed in an a `None` may be passed instead. This exception may be useful
 /// then making this call solely from a block-hook such as `on_initialize`.
 ///
-/// Returns [`ClearPrefixResult`] to inform about the result. Once the resultant `maybe_cursor`
-/// field is `None`, then no further items remain to be deleted.
+/// Returns [`MultiRemovalResults`](sp_io::MultiRemovalResults) to inform about the result. Once the
+/// resultant `maybe_cursor` field is `None`, then no further items remain to be deleted.
 ///
 /// NOTE: After the initial call for any given child storage, it is important that no keys further
 /// keys are inserted. If so, then they may or may not be deleted by subsequent calls.
@@ -140,17 +140,17 @@ pub fn clear_prefix(
 	prefix: &[u8],
 	maybe_limit: Option<u32>,
 	_maybe_cursor: Option<&[u8]>,
-) -> sp_io::ClearPrefixResult {
+) -> sp_io::MultiRemovalResults {
 	// TODO: Once the network has upgraded to include the new host functions, this code can be
 	// enabled.
 	// sp_io::storage::clear_prefix(prefix, maybe_limit, maybe_cursor)
-	use sp_io::{ClearPrefixResult, KillStorageResult::*};
+	use sp_io::{KillStorageResult::*, MultiRemovalResults};
 	#[allow(deprecated)]
 	let (maybe_cursor, i) = match kill_prefix(prefix, maybe_limit) {
 		AllRemoved(i) => (None, i),
 		SomeRemaining(i) => (Some(prefix.to_vec()), i),
 	};
-	ClearPrefixResult { maybe_cursor, db: i, total: i, loops: i }
+	MultiRemovalResults { maybe_cursor, backend: i, unique: i, loops: i }
 }
 
 /// Get a Vec of bytes from storage.
