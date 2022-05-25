@@ -1082,7 +1082,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 
 	/// Adds a `PeerId` and its address as reserved.
 	///
-	/// Returns an `Err` if peer ID of given peer is the local peer ID).
+	/// Returns an `Err` if peer ID of given peer is the local peer ID.
 	pub fn add_reserved_peer(&self, peer: MultiaddrWithPeerId) -> Result<(), String> {
 		// Make sure the local peer ID is never added to the PSM.
 		if peer.peer_id == self.local_peer_id {
