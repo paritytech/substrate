@@ -1444,7 +1444,7 @@ mod test {
 
 		// Test for the post-order DFS requirement as specified by the `find_node_index_where`
 		// comment. Once (and if) post-order traversal requirement is removed, then this test
-		// can be removed as well. In practice this test with a pre-order DFS.
+		// can be removed as well. In practice this test should fail with a pre-order DFS.
 		let is_descendent_of_for_post_order = |parent: &&str, child: &&str| {
 			if *parent == "A" {
 				Err(TestError)
