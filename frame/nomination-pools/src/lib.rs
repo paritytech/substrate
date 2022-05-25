@@ -1871,21 +1871,6 @@ pub mod pallet {
 			T::StakingInterface::nominate(bonded_pool.bonded_account(), validators)
 		}
 
-		/// Chill on behalf of the pool.
-		///
-		/// The dispatch origin of this call must be signed by the pool nominator or the pool
-		/// root role, same as [`Pallet::nominate`].
-		///
-		/// This directly forward the call to the staking pallet, on behalf of the pool bonded
-		/// account.
-		#[pallet::weight(T::WeightInfo::chill())]
-		pub fn chill(origin: OriginFor<T>, pool_id: PoolId) -> DispatchResult {
-			let who = ensure_signed(origin)?;
-			let bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
-			ensure!(bonded_pool.can_nominate(&who), Error::<T>::NotNominator);
-			T::StakingInterface::chill(bonded_pool.bonded_account())
-		}
-
 		/// Set a new state for the pool.
 		///
 		/// The dispatch origin of this call must be signed by the state toggler, or the root role
@@ -2030,6 +2015,21 @@ pub mod pallet {
 
 			bonded_pool.put();
 			Ok(())
+		}
+
+		/// Chill on behalf of the pool.
+		///
+		/// The dispatch origin of this call must be signed by the pool nominator or the pool
+		/// root role, same as [`Pallet::nominate`].
+		///
+		/// This directly forward the call to the staking pallet, on behalf of the pool bonded
+		/// account.
+		#[pallet::weight(T::WeightInfo::chill())]
+		pub fn chill(origin: OriginFor<T>, pool_id: PoolId) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			let bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
+			ensure!(bonded_pool.can_nominate(&who), Error::<T>::NotNominator);
+			T::StakingInterface::chill(bonded_pool.bonded_account())
 		}
 	}
 
@@ -2425,7 +2425,7 @@ impl<T: Config> OnStakerSlash<T::AccountId, BalanceOf<T>> for Pallet<T> {
 		pool_account: &T::AccountId,
 		// Bonded balance is always read directly from staking, therefore we need not update
 		// anything here.
-		_slashed_bonded: BalanceOf<T>,
+		slashed_bonded: BalanceOf<T>,
 		slashed_unlocking: &BTreeMap<EraIndex, BalanceOf<T>>,
 	) {
 		if let Some(pool_id) = ReversePoolIdLookup::<T>::get(pool_account).defensive() {
@@ -2444,7 +2444,7 @@ impl<T: Config> OnStakerSlash<T::AccountId, BalanceOf<T>> for Pallet<T> {
 				}
 			}
 
-			Self::deposit_event(Event::<T>::PoolSlashed { pool_id, balance: _slashed_bonded });
+			Self::deposit_event(Event::<T>::PoolSlashed { pool_id, balance: slashed_bonded });
 			SubPoolsStorage::<T>::insert(pool_id, sub_pools);
 		}
 	}
