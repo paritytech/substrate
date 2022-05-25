@@ -1038,6 +1038,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmake"
+version = "0.1.46"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b7b858541263efe664aead4a5209a4ae5c5d2811167d4ed4ee0944503f8d2089"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "comfy-table"
 version = "5.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3470,7 +3479,7 @@ dependencies = [
  "libp2p-swarm",
  "log",
  "prost 0.9.0",
- "prost-build",
+ "prost-build 0.9.0",
  "rand 0.8.4",
 ]
 
@@ -3497,7 +3506,7 @@ dependencies = [
  "parking_lot 0.12.0",
  "pin-project 1.0.10",
  "prost 0.9.0",
- "prost-build",
+ "prost-build 0.9.0",
  "rand 0.8.4",
  "ring",
  "rw-stream-sink",
@@ -3547,7 +3556,7 @@ dependencies = [
  "libp2p-swarm",
  "log",
  "prost 0.9.0",
- "prost-build",
+ "prost-build 0.9.0",
  "rand 0.7.3",
  "smallvec",
 ]
@@ -3571,7 +3580,7 @@ dependencies = [
  "log",
  "prometheus-client",
  "prost 0.9.0",
- "prost-build",
+ "prost-build 0.9.0",
  "rand 0.7.3",
  "regex",
  "sha2 0.10.2",
@@ -3593,7 +3602,7 @@ dependencies = [
  "log",
  "lru",
  "prost 0.9.0",
- "prost-build",
+ "prost-build 0.9.0",
  "smallvec",
 ]
 
@@ -3615,7 +3624,7 @@ dependencies = [
  "libp2p-swarm",
  "log",
  "prost 0.9.0",
- "prost-build",
+ "prost-build 0.9.0",
  "rand 0.7.3",
  "sha2 0.10.2",
  "smallvec",
@@ -3693,7 +3702,7 @@ dependencies = [
  "libp2p-core",
  "log",
  "prost 0.9.0",
- "prost-build",
+ "prost-build 0.9.0",
  "rand 0.8.4",
  "sha2 0.10.2",
  "snow",
@@ -3730,7 +3739,7 @@ dependencies = [
  "libp2p-core",
  "log",
  "prost 0.9.0",
- "prost-build",
+ "prost-build 0.9.0",
  "unsigned-varint",
  "void",
 ]
@@ -3766,7 +3775,7 @@ dependencies = [
  "log",
  "pin-project 1.0.10",
  "prost 0.9.0",
- "prost-build",
+ "prost-build 0.9.0",
  "rand 0.8.4",
  "smallvec",
  "static_assertions",
@@ -3790,7 +3799,7 @@ dependencies = [
  "libp2p-swarm",
  "log",
  "prost 0.9.0",
- "prost-build",
+ "prost-build 0.9.0",
  "rand 0.8.4",
  "sha2 0.10.2",
  "thiserror",
@@ -5134,7 +5143,6 @@ dependencies = [
  "scale-info",
  "serde",
  "serde_json",
- "smallvec",
  "sp-core",
  "sp-io",
  "sp-runtime",
@@ -6285,7 +6293,6 @@ dependencies = [
  "scale-info",
  "serde",
  "serde_json",
- "smallvec",
  "sp-core",
  "sp-io",
  "sp-runtime",
@@ -6989,7 +6996,29 @@ dependencies = [
  "multimap",
  "petgraph",
  "prost 0.9.0",
- "prost-types",
+ "prost-types 0.9.0",
+ "regex",
+ "tempfile",
+ "which",
+]
+
+[[package]]
+name = "prost-build"
+version = "0.10.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8ae5a4388762d5815a9fc0dea33c56b021cdc8dde0c55e0c9ca57197254b0cab"
+dependencies = [
+ "bytes",
+ "cfg-if 1.0.0",
+ "cmake",
+ "heck 0.4.0",
+ "itertools",
+ "lazy_static",
+ "log",
+ "multimap",
+ "petgraph",
+ "prost 0.10.3",
+ "prost-types 0.10.1",
  "regex",
  "tempfile",
  "which",
@@ -7029,6 +7058,16 @@ checksum = "534b7a0e836e3c482d2693070f982e39e7611da9695d4d1f5a4b186b51faef0a"
 dependencies = [
  "bytes",
  "prost 0.9.0",
+]
+
+[[package]]
+name = "prost-types"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2d0a014229361011dc8e69c8a1ec6c2e8d0f2af7c91e3ea3f5b2170298461e68"
+dependencies = [
+ "bytes",
+ "prost 0.10.3",
 ]
 
 [[package]]
@@ -7769,7 +7808,7 @@ dependencies = [
  "log",
  "parity-scale-codec",
  "prost 0.10.3",
- "prost-build",
+ "prost-build 0.10.4",
  "quickcheck",
  "rand 0.7.3",
  "sc-client-api",
@@ -8421,7 +8460,7 @@ dependencies = [
  "parking_lot 0.12.0",
  "pin-project 1.0.10",
  "prost 0.10.3",
- "prost-build",
+ "prost-build 0.10.4",
  "rand 0.7.3",
  "sc-block-builder",
  "sc-client-api",
@@ -8459,7 +8498,7 @@ dependencies = [
  "futures",
  "libp2p",
  "parity-scale-codec",
- "prost-build",
+ "prost-build 0.10.4",
  "sc-peerset",
  "smallvec",
 ]
@@ -8492,7 +8531,7 @@ dependencies = [
  "log",
  "parity-scale-codec",
  "prost 0.10.3",
- "prost-build",
+ "prost-build 0.10.4",
  "sc-client-api",
  "sc-network-common",
  "sc-peerset",
@@ -8515,7 +8554,7 @@ dependencies = [
  "lru",
  "parity-scale-codec",
  "prost 0.10.3",
- "prost-build",
+ "prost-build 0.10.4",
  "quickcheck",
  "sc-block-builder",
  "sc-client-api",
