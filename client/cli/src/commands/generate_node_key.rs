@@ -32,8 +32,8 @@ use std::{
 #[derive(Debug, Parser)]
 #[clap(
 	name = "generate-node-key",
-	about = "Generate a random node key, write it to a file or stdout
-             and write the corresponding peer-id to stderr"
+	about = "Generate a random node key, write it to a file or stdout \
+		 	and write the corresponding peer-id to stderr"
 )]
 pub struct GenerateNodeKeyCmd {
 	/// Name of file to save secret key to.
@@ -64,7 +64,7 @@ impl GenerateNodeKeyCmd {
 
 		match &self.file {
 			Some(file) => fs::write(file, file_data)?,
-			None => io::stdout().write_all(file_data.as_bytes_ref())?,
+			None => io::stdout().lock().write_all(file_data.as_bytes_ref())?,
 		}
 
 		let peer_id = PublicKey::Ed25519(keypair.public()).to_peer_id();
