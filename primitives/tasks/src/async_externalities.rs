@@ -22,7 +22,7 @@ use sp_core::{
 	storage::{ChildInfo, StateVersion, TrackedStorageKey},
 	traits::{Externalities, RuntimeSpawn, RuntimeSpawnExt, SpawnNamed, TaskExecutorExt},
 };
-use sp_externalities::{Extensions, ExternalitiesExt as _};
+use sp_externalities::{Extensions, ExternalitiesExt as _, MultiRemovalResults};
 use std::any::{Any, TypeId};
 
 /// Simple state-less externalities for use in async context.
