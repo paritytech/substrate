@@ -665,7 +665,7 @@ mod test {
 				assert_eq!(Foo::get((3,)), Some(10));
 			}
 
-			A::swap::<Key<Blake2_128Concat, u16>, _, _>((3,), (2,));
+			A::swap::<NMapKey<Blake2_128Concat, u16>, _, _>((3,), (2,));
 			assert_eq!(A::contains_key((3,)), false);
 			assert_eq!(A::contains_key((2,)), true);
 			assert_eq!(A::get((3,)), None);
@@ -819,26 +819,26 @@ mod test {
 	fn test_2_keys() {
 		type A = StorageNMap<
 			Prefix,
-			(Key<Blake2_128Concat, u16>, Key<Twox64Concat, u8>),
+			(NMapKey<Blake2_128Concat, u16>, NMapKey<Twox64Concat, u8>),
 			u32,
 			OptionQuery,
 		>;
 		type AValueQueryWithAnOnEmpty = StorageNMap<
 			Prefix,
-			(Key<Blake2_128Concat, u16>, Key<Twox64Concat, u8>),
+			(NMapKey<Blake2_128Concat, u16>, NMapKey<Twox64Concat, u8>),
 			u32,
 			ValueQuery,
 			ADefault,
 		>;
-		type B = StorageNMap<Prefix, (Key<Blake2_256, u16>, Key<Twox128, u8>), u32, ValueQuery>;
+		type B = StorageNMap<Prefix, (NMapKey<Blake2_256, u16>, NMapKey<Twox128, u8>), u32, ValueQuery>;
 		type C = StorageNMap<
 			Prefix,
-			(Key<Blake2_128Concat, u16>, Key<Twox64Concat, u8>),
+			(NMapKey<Blake2_128Concat, u16>, NMapKey<Twox64Concat, u8>),
 			u8,
 			ValueQuery,
 		>;
 		type WithLen =
-			StorageNMap<Prefix, (Key<Blake2_128Concat, u16>, Key<Twox64Concat, u8>), Vec<u32>>;
+			StorageNMap<Prefix, (NMapKey<Blake2_128Concat, u16>, NMapKey<Twox64Concat, u8>), Vec<u32>>;
 
 		TestExternalities::default().execute_with(|| {
 			let mut k: Vec<u8> = vec![];
@@ -857,7 +857,7 @@ mod test {
 			assert_eq!(A::get((3, 30)), Some(10));
 			assert_eq!(AValueQueryWithAnOnEmpty::get((3, 30)), 10);
 
-			A::swap::<(Key<Blake2_128Concat, u16>, Key<Twox64Concat, u8>), _, _>((3, 30), (2, 20));
+			A::swap::<(NMapKey<Blake2_128Concat, u16>, NMapKey<Twox64Concat, u8>), _, _>((3, 30), (2, 20));
 			assert_eq!(A::contains_key((3, 30)), false);
 			assert_eq!(A::contains_key((2, 20)), true);
 			assert_eq!(A::get((3, 30)), None);
@@ -1025,32 +1025,32 @@ mod test {
 	fn test_3_keys() {
 		type A = StorageNMap<
 			Prefix,
-			(Key<Blake2_128Concat, u16>, Key<Blake2_128Concat, u16>, Key<Twox64Concat, u16>),
+			(NMapKey<Blake2_128Concat, u16>, NMapKey<Blake2_128Concat, u16>, NMapKey<Twox64Concat, u16>),
 			u32,
 			OptionQuery,
 		>;
 		type AValueQueryWithAnOnEmpty = StorageNMap<
 			Prefix,
-			(Key<Blake2_128Concat, u16>, Key<Blake2_128Concat, u16>, Key<Twox64Concat, u16>),
+			(NMapKey<Blake2_128Concat, u16>, NMapKey<Blake2_128Concat, u16>, NMapKey<Twox64Concat, u16>),
 			u32,
 			ValueQuery,
 			ADefault,
 		>;
 		type B = StorageNMap<
 			Prefix,
-			(Key<Blake2_256, u16>, Key<Blake2_256, u16>, Key<Twox128, u16>),
+			(NMapKey<Blake2_256, u16>, NMapKey<Blake2_256, u16>, NMapKey<Twox128, u16>),
 			u32,
 			ValueQuery,
 		>;
 		type C = StorageNMap<
 			Prefix,
-			(Key<Blake2_128Concat, u16>, Key<Blake2_128Concat, u16>, Key<Twox64Concat, u16>),
+			(NMapKey<Blake2_128Concat, u16>, NMapKey<Blake2_128Concat, u16>, NMapKey<Twox64Concat, u16>),
 			u8,
 			ValueQuery,
 		>;
 		type WithLen = StorageNMap<
 			Prefix,
-			(Key<Blake2_128Concat, u16>, Key<Blake2_128Concat, u16>, Key<Twox64Concat, u16>),
+			(NMapKey<Blake2_128Concat, u16>, NMapKey<Blake2_128Concat, u16>, NMapKey<Twox64Concat, u16>),
 			Vec<u32>,
 		>;
 
@@ -1073,7 +1073,7 @@ mod test {
 			assert_eq!(AValueQueryWithAnOnEmpty::get((1, 10, 100)), 30);
 
 			A::swap::<
-				(Key<Blake2_128Concat, u16>, Key<Blake2_128Concat, u16>, Key<Twox64Concat, u16>),
+				(NMapKey<Blake2_128Concat, u16>, NMapKey<Blake2_128Concat, u16>, NMapKey<Twox64Concat, u16>),
 				_,
 				_,
 			>((1, 10, 100), (2, 20, 200));
