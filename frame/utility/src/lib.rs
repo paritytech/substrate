@@ -90,7 +90,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
-		type Event: From<Event> + IsType<<Self as frame_system::Config>::Event>;
+		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// The overarching call type.
 		type Call: Parameter
@@ -112,7 +112,7 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum Event {
+	pub enum Event<T: Config> {
 		/// Batch of dispatches did not complete fully. Index of first failing dispatch given, as
 		/// well as the error.
 		BatchInterrupted { index: u32, error: DispatchError },
@@ -126,6 +126,8 @@ pub mod pallet {
 		ItemFailed { error: DispatchError },
 		/// A call was dispatched.
 		DispatchedAs { result: DispatchResult },
+		/// A call was forwarded.
+		CallForwarded { forwarder: T::AccountId, new_origin: T::AccountId, call_hash: [u8; 32] },
 	}
 
 	// Align the call size to 1KB. As we are currently compiling the runtime for native/wasm
@@ -528,13 +530,15 @@ pub mod pallet {
 				return Err(Error::<T>::InvalidNonce.into())
 			}
 
-			// substitute caller
-			let mut origin = origin;
-			origin.set_caller_from(frame_system::RawOrigin::Signed(who));
-
-			// TODO: we need to save the origin, so the further methods would know it
-
-			call.dispatch(origin)
+			// emit event and dispatch call
+			let call_hash = blake2_256(&Encode::encode(&call));
+			Self::deposit_event(Event::CallForwarded {
+				forwarder: sender,
+				new_origin: who.clone(),
+				call_hash,
+			});
+			let new_origin = frame_system::RawOrigin::Signed(who);
+			call.dispatch(new_origin.into())
 		}
 	}
 }
