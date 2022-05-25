@@ -22,11 +22,37 @@
 use super::*;
 use frame_benchmarking::{account, benchmarks, whitelisted_caller};
 use frame_system::RawOrigin;
+use sp_runtime::traits::Bounded;
 
 const SEED: u32 = 0;
 
 fn assert_last_event<T: Config>(generic_event: <T as Config>::Event) {
 	frame_system::Pallet::<T>::assert_last_event(generic_event.into());
+}
+
+mod crypto {
+	use codec::Decode;
+	use sp_core::{crypto::AccountId32, ed25519};
+	use sp_io::crypto::{ed25519_generate, ed25519_sign};
+	use sp_runtime::{traits::IdentifyAccount, MultiSignature, MultiSigner};
+	use sp_std::vec::Vec;
+
+	pub fn create_ed25519_pubkey(seed: Vec<u8>) -> MultiSigner {
+		ed25519_generate(0.into(), Some(seed)).into()
+	}
+
+	pub fn create_ed25519_signature(payload: &[u8], pubkey: MultiSigner) -> MultiSignature {
+		let edpubkey = ed25519::Public::try_from(pubkey).unwrap();
+		let edsig = ed25519_sign(0.into(), &edpubkey, payload).unwrap();
+		edsig.into()
+	}
+
+	pub fn signer_to_account_id<T: crate::Config>(
+		signer: &MultiSigner,
+	) -> Result<T::AccountId, &'static str> {
+		T::AccountId::decode(&mut AccountId32::as_ref(&signer.clone().into_account()))
+			.map_err(|_| "Could not convert multisigner to account id")
+	}
 }
 
 benchmarks! {
@@ -84,6 +110,34 @@ benchmarks! {
 	}: _(RawOrigin::Signed(caller), calls)
 	verify {
 		assert_last_event::<T>(Event::BatchCompleted.into())
+	}
+
+	submit_call_on_behalf_of {
+		let caller: T::AccountId = account("caller", SEED, SEED);
+		let call = Box::new(frame_system::Call::remark { remark: vec![] }.into());
+		let call_hash = blake2_256(&Encode::encode(&call));
+		let signer = crypto::create_ed25519_pubkey(b"//forwarder".to_vec());
+		let forwarded_call = ForwardedCall {
+			nonce: Default::default(),
+			deadline: T::BlockNumber::max_value(),
+			call: call,
+			signer: signer.clone(),
+			whitelisted_forwarder: None,
+		};
+
+		let signer_id = crypto::signer_to_account_id::<T>(&signer)?;
+
+		let signature = crypto::create_ed25519_signature(&forwarded_call.encode(), signer);
+	}: _(RawOrigin::Signed(caller.clone()), forwarded_call, signature)
+	verify {
+		assert_last_event::<T>(
+			Event::CallForwarded {
+				forwarder: caller,
+				new_origin: signer_id,
+				call_hash,
+			}
+			.into(),
+		);
 	}
 
 	impl_benchmark_test_suite!(Pallet, crate::tests::new_test_ext(), crate::tests::Test);
