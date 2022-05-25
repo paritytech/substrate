@@ -146,6 +146,10 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
+	/// Change authorities.
+	///
+	/// The storage will be applied immediately.
+	/// And aura consensus log will be appended to block's log.
 	pub fn change_authorities(new: WeakBoundedVec<T::AuthorityId, T::MaxAuthorities>) {
 		<Authorities<T>>::put(&new);
 
@@ -156,6 +160,11 @@ impl<T: Config> Pallet<T> {
 		<frame_system::Pallet<T>>::deposit_log(log);
 	}
 
+	/// Initial authorities.
+	///
+	/// The storage will be applied immediately.
+	///
+	/// The authorities length must be equal or less than [`T::MaxAuthorities`].
 	pub fn initialize_authorities(authorities: &[T::AuthorityId]) {
 		if !authorities.is_empty() {
 			assert!(<Authorities<T>>::get().is_empty(), "Authorities are already initialized!");
