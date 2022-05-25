@@ -52,6 +52,25 @@ pub enum Error {
 	StorageUpdateFailed(&'static str),
 }
 
+/// Results concerning an operation to remove many keys.
+pub struct MultiRemovalResults {
+	/// A continuation cursor which, if `Some` must be provided to the subsequent removal call.
+	/// If `None` then all removals are complete and no further calls are needed.
+	pub maybe_cursor: Option<Vec<u8>>,
+	/// The number of items removed from the backend database.
+	pub backend: u32,
+	/// The number of unique keys removed, taking into account both the backend and the overlay.
+	pub unique: u32,
+	/// The number of iterations (each requiring a storage seek/read) which were done.
+	pub loops: u32,
+}
+
+impl MultiRemovalResults {
+	pub fn decon(self) -> (Option<Vec<u8>>, u32, u32, u32) {
+		(self.maybe_cursor, self.backend, self.unique, self.loops)
+	}
+}
+
 /// The Substrate externalities.
 ///
 /// Provides access to the storage and to other registered extensions.
@@ -127,7 +146,6 @@ pub trait Externalities: ExtensionStore {
 	///
 	/// As long as `maybe_cursor` is passed from the result of the previous call, then the number of
 	/// iterations done will only ever be one more than the number of keys removed.
-	/// than `maybe_limit` (if `Some`).
 	///
 	/// # Note
 	///
@@ -138,7 +156,7 @@ pub trait Externalities: ExtensionStore {
 		child_info: &ChildInfo,
 		maybe_limit: Option<u32>,
 		maybe_cursor: Option<&[u8]>,
-	) -> (Option<Vec<u8>>, u32, u32, u32);
+	) -> MultiRemovalResults;
 
 	/// Clear storage entries which keys are start with the given prefix.
 	///
@@ -148,7 +166,7 @@ pub trait Externalities: ExtensionStore {
 		prefix: &[u8],
 		maybe_limit: Option<u32>,
 		maybe_cursor: Option<&[u8]>,
-	) -> (Option<Vec<u8>>, u32, u32, u32);
+	) -> MultiRemovalResults;
 
 	/// Clear child storage entries which keys are start with the given prefix.
 	///
@@ -159,7 +177,7 @@ pub trait Externalities: ExtensionStore {
 		prefix: &[u8],
 		maybe_limit: Option<u32>,
 		maybe_cursor: Option<&[u8]>,
-	) -> (Option<Vec<u8>>, u32, u32, u32);
+	) -> MultiRemovalResults;
 
 	/// Set or clear a storage entry (`key`) of current contract being called (effective
 	/// immediately).

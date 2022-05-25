@@ -25,6 +25,7 @@ use sp_core::{
 	traits::Externalities,
 	Blake2Hasher,
 };
+use sp_externalities::MultiRemovalResults;
 use std::{
 	any::{Any, TypeId},
 	marker::PhantomData,
@@ -129,7 +130,7 @@ impl<'a, H: Hasher, B: 'a + Backend<H>> Externalities for ReadOnlyExternalities<
 		_child_info: &ChildInfo,
 		_maybe_limit: Option<u32>,
 		_maybe_cursor: Option<&[u8]>,
-	) -> (Option<Vec<u8>>, u32, u32, u32) {
+	) -> MultiRemovalResults {
 		unimplemented!("kill_child_storage is not supported in ReadOnlyExternalities")
 	}
 
@@ -138,7 +139,7 @@ impl<'a, H: Hasher, B: 'a + Backend<H>> Externalities for ReadOnlyExternalities<
 		_prefix: &[u8],
 		_maybe_limit: Option<u32>,
 		_maybe_cursor: Option<&[u8]>,
-	) -> (Option<Vec<u8>>, u32, u32, u32) {
+	) -> MultiRemovalResults {
 		unimplemented!("clear_prefix is not supported in ReadOnlyExternalities")
 	}
 
@@ -148,7 +149,7 @@ impl<'a, H: Hasher, B: 'a + Backend<H>> Externalities for ReadOnlyExternalities<
 		_prefix: &[u8],
 		_maybe_limit: Option<u32>,
 		_maybe_cursor: Option<&[u8]>,
-	) -> (Option<Vec<u8>>, u32, u32, u32) {
+	) -> MultiRemovalResults {
 		unimplemented!("clear_child_prefix is not supported in ReadOnlyExternalities")
 	}
 

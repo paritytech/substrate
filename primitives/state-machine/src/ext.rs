@@ -27,7 +27,7 @@ use sp_core::hexdisplay::HexDisplay;
 use sp_core::storage::{
 	well_known_keys::is_child_storage_key, ChildInfo, StateVersion, TrackedStorageKey,
 };
-use sp_externalities::{Extension, ExtensionStore, Externalities};
+use sp_externalities::{Extension, ExtensionStore, Externalities, MultiRemovalResults};
 use sp_trie::{empty_child_trie_root, LayoutV1};
 
 use crate::{log_error, trace, warn, StorageTransactionCache};
@@ -438,7 +438,7 @@ where
 		child_info: &ChildInfo,
 		maybe_limit: Option<u32>,
 		maybe_cursor: Option<&[u8]>,
-	) -> (Option<Vec<u8>>, u32, u32, u32) {
+	) -> MultiRemovalResults {
 		trace!(
 			target: "state",
 			method = "ChildKill",
@@ -447,10 +447,10 @@ where
 		);
 		let _guard = guard();
 		self.mark_dirty();
-		let overlay_count = self.overlay.clear_child_storage(child_info);
-		let (next_cursor, backend_count, iterations) =
+		let overlay = self.overlay.clear_child_storage(child_info);
+		let (maybe_cursor, backend, loops) =
 			self.limit_remove_from_backend(Some(child_info), None, maybe_limit, maybe_cursor);
-		(next_cursor, backend_count, overlay_count + backend_count, iterations)
+		MultiRemovalResults { maybe_cursor, backend, unique: overlay + backend, loops }
 	}
 
 	fn clear_prefix(
@@ -458,7 +458,7 @@ where
 		prefix: &[u8],
 		maybe_limit: Option<u32>,
 		maybe_cursor: Option<&[u8]>,
-	) -> (Option<Vec<u8>>, u32, u32, u32) {
+	) -> MultiRemovalResults {
 		trace!(
 			target: "state",
 			method = "ClearPrefix",
@@ -472,14 +472,14 @@ where
 				target: "trie",
 				"Refuse to directly clear prefix that is part or contains of child storage key",
 			);
-			return (None, 0, 0, 0)
+			return MultiRemovalResults { maybe_cursor: None, backend: 0, unique: 0, loops: 0 }
 		}
 
 		self.mark_dirty();
-		let overlay_count = self.overlay.clear_prefix(prefix);
-		let (next_cursor, backend_count, iterations) =
+		let overlay = self.overlay.clear_prefix(prefix);
+		let (maybe_cursor, backend, loops) =
 			self.limit_remove_from_backend(None, Some(prefix), maybe_limit, maybe_cursor);
-		(next_cursor, backend_count, overlay_count + backend_count, iterations)
+		MultiRemovalResults { maybe_cursor, backend, unique: overlay + backend, loops }
 	}
 
 	fn clear_child_prefix(
@@ -488,7 +488,7 @@ where
 		prefix: &[u8],
 		maybe_limit: Option<u32>,
 		maybe_cursor: Option<&[u8]>,
-	) -> (Option<Vec<u8>>, u32, u32, u32) {
+	) -> MultiRemovalResults {
 		trace!(
 			target: "state",
 			method = "ChildClearPrefix",
@@ -499,14 +499,14 @@ where
 		let _guard = guard();
 
 		self.mark_dirty();
-		let overlay_count = self.overlay.clear_child_prefix(child_info, prefix);
-		let (next_cursor, backend_count, iterations) = self.limit_remove_from_backend(
+		let overlay = self.overlay.clear_child_prefix(child_info, prefix);
+		let (maybe_cursor, backend, loops) = self.limit_remove_from_backend(
 			Some(child_info),
 			Some(prefix),
 			maybe_limit,
 			maybe_cursor,
 		);
-		(next_cursor, backend_count, backend_count + overlay_count, iterations)
+		MultiRemovalResults { maybe_cursor, backend, unique: overlay + backend, loops }
 	}
 
 	fn storage_append(&mut self, key: Vec<u8>, value: Vec<u8>) {
@@ -768,7 +768,7 @@ where
 					None => self.overlay.storage(key),
 				};
 				if !matches!(overlay, Some(None)) {
-					// already pending deletion from the backend - no need to delete it again.
+					// not pending deletion from the backend - delete it.
 					if let Some(child_info) = maybe_child {
 						self.overlay.set_child_storage(child_info, key.to_vec(), None);
 					} else {

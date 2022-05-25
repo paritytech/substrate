@@ -151,7 +151,7 @@ pub fn kill_storage(child_info: &ChildInfo, limit: Option<u32>) -> KillStorageRe
 /// A *limit* should always be provided through `maybe_limit`. This is one fewer than the
 /// maximum number of backend iterations which may be done by this operation and as such
 /// represents the maximum number of backend deletions which may happen. A *limit* of zero
-/// implies that no keys will be deleted, through there may be a single iteration done.
+/// implies that no keys will be deleted, though there may be a single iteration done.
 ///
 /// The limit can be used to partially delete storage items in case it is too large or costly
 /// to delete all in a single operation.
@@ -159,11 +159,14 @@ pub fn kill_storage(child_info: &ChildInfo, limit: Option<u32>) -> KillStorageRe
 /// # Cursor
 ///
 /// A *cursor* may be passed in to this operation with `maybe_cursor`. `None` should only be
-/// passed once (in the initial call) for any attempt to clear storage. Subsequent calls
-/// operating on the same prefix should always pass `Some`, and this should be equal to the
-/// previous call result's `maybe_prefix` field.
+/// passed once (in the initial call) for any attempt to clear storage. In general, subsequent calls
+/// operating on the same prefix should pass `Some` and this value should be equal to the
+/// previous call result's `maybe_cursor` field. The only exception to this is when you can
+/// guarantee that the subsequent call is in a new block; in this case the previous call's result
+/// cursor need not be passed in an a `None` may be passed instead. This exception may be useful
+/// then making this call solely from a block-hook such as `on_initialize`.
 ///
-/// Returns [`ClearPrefixResult`] to inform about the result. Once the resultant `maybe_prefix`
+/// Returns [`ClearPrefixResult`] to inform about the result. Once the resultant `maybe_cursor`
 /// field is `None`, then no further items remain to be deleted.
 ///
 /// NOTE: After the initial call for any given child storage, it is important that no keys further
@@ -186,10 +189,11 @@ pub fn clear_storage(
 			sp_io::default_child_storage::storage_kill(child_info.storage_key(), maybe_limit),
 	};
 	use sp_io::KillStorageResult::*;
-	match r {
-		AllRemoved(db) => ClearPrefixResult { maybe_cursor: None, db, total: db, loops: db },
-		SomeRemaining(db) => ClearPrefixResult { maybe_cursor: None, db, total: db, loops: db },
-	}
+	let (maybe_cursor, db) = match r {
+		AllRemoved(db) => (None, db),
+		SomeRemaining(db) => (Some(child_info.storage_key().to_vec()), db),
+	};
+	ClearPrefixResult { maybe_cursor, db, total: db, loops: db }
 }
 
 /// Ensure `key` has no explicit entry in storage.

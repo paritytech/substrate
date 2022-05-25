@@ -29,7 +29,7 @@ use sp_core::{
 	traits::Externalities,
 	Blake2Hasher,
 };
-use sp_externalities::{Extension, Extensions};
+use sp_externalities::{Extension, Extensions, MultiRemovalResults};
 use sp_trie::{empty_child_trie_root, HashKey, LayoutV0, LayoutV1, TrieConfiguration};
 use std::{
 	any::{Any, TypeId},
@@ -214,14 +214,14 @@ impl Externalities for BasicExternalities {
 		child_info: &ChildInfo,
 		_maybe_limit: Option<u32>,
 		_maybe_cursor: Option<&[u8]>,
-	) -> (Option<Vec<u8>>, u32, u32, u32) {
-		let num_removed = self
+	) -> MultiRemovalResults {
+		let count = self
 			.inner
 			.children_default
 			.remove(child_info.storage_key())
 			.map(|c| c.data.len())
 			.unwrap_or(0) as u32;
-		(None, num_removed, num_removed, num_removed)
+		MultiRemovalResults { maybe_cursor: None, backend: count, unique: count, loops: count }
 	}
 
 	fn clear_prefix(
@@ -229,13 +229,14 @@ impl Externalities for BasicExternalities {
 		prefix: &[u8],
 		_maybe_limit: Option<u32>,
 		_maybe_cursor: Option<&[u8]>,
-	) -> (Option<Vec<u8>>, u32, u32, u32) {
+	) -> MultiRemovalResults {
 		if is_child_storage_key(prefix) {
 			warn!(
 				target: "trie",
 				"Refuse to clear prefix that is part of child storage key via main storage"
 			);
-			return (Some(prefix.to_vec()), 0, 0, 0)
+			let maybe_cursor = Some(prefix.to_vec());
+			return MultiRemovalResults { maybe_cursor, backend: 0, unique: 0, loops: 0 }
 		}
 
 		let to_remove = self
@@ -247,11 +248,11 @@ impl Externalities for BasicExternalities {
 			.cloned()
 			.collect::<Vec<_>>();
 
-		let num_removed = to_remove.len() as u32;
+		let count = to_remove.len() as u32;
 		for key in to_remove {
 			self.inner.top.remove(&key);
 		}
-		(None, num_removed, num_removed, num_removed)
+		MultiRemovalResults { maybe_cursor: None, backend: count, unique: count, loops: count }
 	}
 
 	fn clear_child_prefix(
@@ -260,7 +261,7 @@ impl Externalities for BasicExternalities {
 		prefix: &[u8],
 		_maybe_limit: Option<u32>,
 		_maybe_cursor: Option<&[u8]>,
-	) -> (Option<Vec<u8>>, u32, u32, u32) {
+	) -> MultiRemovalResults {
 		if let Some(child) = self.inner.children_default.get_mut(child_info.storage_key()) {
 			let to_remove = child
 				.data
@@ -270,13 +271,13 @@ impl Externalities for BasicExternalities {
 				.cloned()
 				.collect::<Vec<_>>();
 
-			let num_removed = to_remove.len() as u32;
+			let count = to_remove.len() as u32;
 			for key in to_remove {
 				child.data.remove(&key);
 			}
-			(None, num_removed, num_removed, num_removed)
+			MultiRemovalResults { maybe_cursor: None, backend: count, unique: count, loops: count }
 		} else {
-			(None, 0, 0, 0)
+			MultiRemovalResults { maybe_cursor: None, backend: 0, unique: 0, loops: 0 }
 		}
 	}
 
@@ -468,7 +469,7 @@ mod tests {
 		});
 
 		let res = ext.kill_child_storage(child_info, None, None);
-		assert_eq!(res, (None, 3, 3, 3));
+		assert_eq!(res.decon(), (None, 3, 3, 3));
 	}
 
 	#[test]

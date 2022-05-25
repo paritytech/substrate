@@ -265,7 +265,7 @@ pub fn remove_storage_prefix(module: &[u8], item: &[u8], hash: &[u8]) {
 	let _ = frame_support::storage::unhashed::clear_prefix(&key, None, None);
 }
 
-/// Attmept to remove all values under a storage prefix by the `module`, the map's `item` name and
+/// Attempt to remove all values under a storage prefix by the `module`, the map's `item` name and
 /// the key `hash`.
 ///
 /// All values in the client overlay will be deleted, if `maybe_limit` is `Some` then up to

@@ -1597,7 +1597,7 @@ mod tests {
 		{
 			let mut cache = StorageTransactionCache::default();
 			let mut ext = Ext::new(&mut overlay, &mut cache, backend, None);
-			assert_matches!(ext.clear_prefix(b"ab", Some(1), None), (Some(_), 1, 3, 1));
+			assert_matches!(ext.clear_prefix(b"ab", Some(1), None).decon(), (Some(_), 1, 3, 1));
 		}
 		overlay.commit_transaction().unwrap();
 
@@ -1639,7 +1639,8 @@ mod tests {
 		{
 			let mut cache = StorageTransactionCache::default();
 			let mut ext = Ext::new(&mut overlay, &mut cache, &backend, None);
-			assert_matches!(ext.kill_child_storage(&child_info, Some(2), None), (Some(_), 2, 6, 2));
+			let r = ext.kill_child_storage(&child_info, Some(2), None);
+			assert_matches!(r.decon(), (Some(_), 2, 6, 2));
 		}
 
 		assert_eq!(
@@ -1674,14 +1675,14 @@ mod tests {
 		let mut overlay = OverlayedChanges::default();
 		let mut cache = StorageTransactionCache::default();
 		let mut ext = Ext::new(&mut overlay, &mut cache, &backend, None);
-		let r = ext.kill_child_storage(&child_info, Some(0), None);
+		let r = ext.kill_child_storage(&child_info, Some(0), None).decon();
 		assert_matches!(r, (Some(_), 0, 0, 0));
-		let r = ext.kill_child_storage(&child_info, Some(1), r.0.as_ref().map(|x| &x[..]));
+		let r = ext.kill_child_storage(&child_info, Some(1), r.0.as_ref().map(|x| &x[..])).decon();
 		assert_matches!(r, (Some(_), 1, 1, 1));
-		let r = ext.kill_child_storage(&child_info, Some(4), r.0.as_ref().map(|x| &x[..]));
+		let r = ext.kill_child_storage(&child_info, Some(4), r.0.as_ref().map(|x| &x[..])).decon();
 		// Only 3 items remaining to remove
 		assert_matches!(r, (None, 3, 3, 3));
-		let r = ext.kill_child_storage(&child_info, Some(1), None);
+		let r = ext.kill_child_storage(&child_info, Some(1), None).decon();
 		assert_matches!(r, (Some(_), 0, 0, 1));
 	}
 
@@ -1700,7 +1701,7 @@ mod tests {
 		let mut overlay = OverlayedChanges::default();
 		let mut cache = StorageTransactionCache::default();
 		let mut ext = Ext::new(&mut overlay, &mut cache, &backend, None);
-		assert_eq!(ext.kill_child_storage(&child_info, None, None), (None, 4, 4, 4));
+		assert_eq!(ext.kill_child_storage(&child_info, None, None).decon(), (None, 4, 4, 4));
 	}
 
 	#[test]

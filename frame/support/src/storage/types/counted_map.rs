@@ -293,11 +293,11 @@ where
 	///
 	/// # Limit
 	///
-	/// A *limit* should always be provided through `maybe_limit` in order to cap the maximum
+	/// A `limit` must always be provided through in order to cap the maximum
 	/// amount of deletions done in a single call. This is one fewer than the
 	/// maximum number of backend iterations which may be done by this operation and as such
-	/// represents the maximum number of backend deletions which may happen. A *limit* of zero
-	/// implies that no keys will be deleted, through there may be a single iteration done.
+	/// represents the maximum number of backend deletions which may happen. A `limit` of zero
+	/// implies that no keys will be deleted, though there may be a single iteration done.
 	///
 	/// # Cursor
 	///

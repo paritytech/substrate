@@ -110,7 +110,7 @@ impl Externalities for AsyncExternalities {
 		_child_info: &ChildInfo,
 		_maybe_limit: Option<u32>,
 		_maybe_cursor: Option<&[u8]>,
-	) -> (Option<Vec<u8>>, u32, u32, u32) {
+	) -> MultiRemovalResults {
 		panic!("`kill_child_storage`: should not be used in async externalities!")
 	}
 
@@ -119,7 +119,7 @@ impl Externalities for AsyncExternalities {
 		_prefix: &[u8],
 		_maybe_limit: Option<u32>,
 		_maybe_cursor: Option<&[u8]>,
-	) -> (Option<Vec<u8>>, u32, u32, u32) {
+	) -> MultiRemovalResults {
 		panic!("`clear_prefix`: should not be used in async externalities!")
 	}
 
@@ -129,7 +129,7 @@ impl Externalities for AsyncExternalities {
 		_prefix: &[u8],
 		_maybe_limit: Option<u32>,
 		_maybe_cursor: Option<&[u8]>,
-	) -> (Option<Vec<u8>>, u32, u32, u32) {
+	) -> MultiRemovalResults {
 		panic!("`clear_child_prefix`: should not be used in async externalities!")
 	}
 

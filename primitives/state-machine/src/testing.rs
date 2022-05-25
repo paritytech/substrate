@@ -382,7 +382,7 @@ mod tests {
 			let mut ext = ext.ext();
 
 			assert!(
-				ext.kill_child_storage(&child_info, Some(2), None).0.is_some(),
+				ext.kill_child_storage(&child_info, Some(2), None).maybe_cursor.is_some(),
 				"Should not delete all keys"
 			);
 
