@@ -26,7 +26,7 @@ use codec::{CompactAs, Encode};
 use num_traits::{Pow, SaturatingAdd, SaturatingSub};
 use sp_std::{
 	fmt, ops,
-	ops::{Add, Sub},
+	ops::{Add, Sub, Div, Rem, AddAssign},
 	prelude::*,
 };
 
@@ -423,7 +423,7 @@ pub trait PerThing:
 }
 
 /// The rounding method to use for unsigned quantities.
-#[derive(sp_std::fmt::Debug)]
+#[derive(Copy, Clone, sp_std::fmt::Debug)]
 pub enum Rounding {
 	// Towards infinity.
 	Up,
@@ -436,7 +436,7 @@ pub enum Rounding {
 }
 
 /// The rounding method to use.
-#[derive(sp_std::fmt::Debug)]
+#[derive(Copy, Clone, sp_std::fmt::Debug)]
 pub enum SignedRounding {
 	// Towards positive infinity.
 	High,
@@ -561,6 +561,24 @@ where
 	rem_mul_div_inner.into()
 }
 
+/// Just a simple generic integer divide with custom rounding.
+fn div_rounded<N>(n: N, d: N, r: Rounding) -> N where
+	N: Clone + Eq + Ord + Zero + One + AddAssign + Add<Output=N> + Rem<Output=N> + Div<Output=N>
+{
+	let mut o = n.clone() / d.clone();
+	use Rounding::*;
+	let two = || N::one() + N::one();
+	if match r {
+		Up => { !((n % d).is_zero()) },
+		NearestPrefDown => { let rem = n % d.clone(); rem > d / two() },
+		NearestPrefUp => { let rem = n % d.clone(); rem >= d.clone() / two() + d % two() },
+		Down => false,
+	} {
+		o += N::one()
+	}
+	o
+}
+
 macro_rules! implement_per_thing {
 	(
 		$name:ident,
@@ -679,44 +697,22 @@ macro_rules! implement_per_thing {
 					+ One,
 				Self::Inner: Into<N>
 			{
-				let div_ceil = |x: N, f: N| -> N {
-					let mut o = x.clone() / f.clone();
-					let r = x % f;
-					if !r.is_zero() {
-						o += N::one();
-					}
-					o
-				};
-				let div_rounded = |n: N, d: N| -> N {
-					let mut o = n.clone() / d.clone();
-					if match r {
-						Rounding::Up => { !((n % d).is_zero()) },
-						// TODO: check `rem` can never be big enough to make this overflow. e.g. (u16::max_value() - 1 / u16::max_value())
-						Rounding::NearestPrefDown => { let rem = n % d.clone(); rem.clone() + rem > d },
-						Rounding::NearestPrefUp => { let rem = n % d.clone(); rem.clone() + rem >= d },
-						Rounding::Down => false,
-					} {
-						o += N::one()
-					}
-					o
-				};
-
 				// q cannot be zero.
 				if q.is_zero() { return Err(()) }
 				// p should not be bigger than q.
 				if p > q { return Err(()) }
 
-				let factor: N = div_ceil(q.clone(), $max.into()).max(One::one());
+				let factor = div_rounded::<N>(q.clone(), $max.into(), Rounding::Up).max(One::one());
 
 				// q cannot overflow: (q / (q/$max)) < $max. p < q hence p also cannot overflow.
-				let q_reduce: $type = div_rounded(q, factor.clone())
+				let q_reduce: $type = div_rounded(q, factor.clone(), r)
 					.try_into()
 					.map_err(|_| "Failed to convert")
 					.expect(
 						"`q / ceil(q/$max) < $max`; macro prevents any type being created that \
 						does not satisfy this; qed"
 					);
-				let p_reduce: $type = div_rounded(p, factor)
+				let p_reduce: $type = div_rounded(p, factor, r)
 					.try_into()
 					.map_err(|_| "Failed to convert")
 					.expect(
@@ -728,16 +724,7 @@ macro_rules! implement_per_thing {
 				// `$max` will always fit in `$upper_type`. This is guaranteed by the macro tests.
 				let n = p_reduce as $upper_type * <$upper_type>::from($max);
 				let d = q_reduce as $upper_type;
-				let mut part = n / d;
-				if match r {
-					Rounding::Up => { !((n % d).is_zero()) },
-					Rounding::NearestPrefDown => { let r = n % d; r + r > d },
-					Rounding::NearestPrefUp => { let r = n % d; r + r >= d },
-					Rounding::Down => false,
-				} {
-					part += 1 as $upper_type
-				}
-
+				let part = div_rounded(n, d, r);
 				Ok($name(part as Self::Inner))
 			}
 		}
@@ -1190,6 +1177,11 @@ macro_rules! implement_per_thing {
 					let per_thingy: $name = decoded.into();
 					assert_eq!(per_thingy, $name(n));
 				}
+			}
+
+			#[test]
+			fn from_parts_cannot_overflow() {
+				assert_eq!(<$name>::from_parts($max.saturating_add(1)), <$name>::one());
 			}
 
 			#[test]
@@ -1872,6 +1864,33 @@ macro_rules! implement_per_thing_with_perthousand {
 				const C1: $name = $name::from_perthousand(500);
 			}
 		}
+	}
+}
+
+#[test]
+fn from_rational_with_rounding_works_in_extreme_case() {
+	use Rounding::*;
+	for &r in [Down, NearestPrefDown, NearestPrefUp, Up].iter() {
+		Percent::from_rational_with_rounding(1, u64::max_value(), r).unwrap();
+		Percent::from_rational_with_rounding(1, u32::max_value(), r).unwrap();
+		Percent::from_rational_with_rounding(1, u16::max_value(), r).unwrap();
+		Percent::from_rational_with_rounding(u64::max_value() - 1, u64::max_value(), r).unwrap();
+		Percent::from_rational_with_rounding(u32::max_value() - 1, u32::max_value(), r).unwrap();
+		Percent::from_rational_with_rounding(u16::max_value() - 1, u16::max_value(), r).unwrap();
+		PerU16::from_rational_with_rounding(1, u64::max_value(), r).unwrap();
+		PerU16::from_rational_with_rounding(1, u32::max_value(), r).unwrap();
+		PerU16::from_rational_with_rounding(1, u16::max_value(), r).unwrap();
+		PerU16::from_rational_with_rounding(u64::max_value() - 1, u64::max_value(), r).unwrap();
+		PerU16::from_rational_with_rounding(u32::max_value() - 1, u32::max_value(), r).unwrap();
+		PerU16::from_rational_with_rounding(u16::max_value() - 1, u16::max_value(), r).unwrap();
+		Permill::from_rational_with_rounding(1, u64::max_value(), r).unwrap();
+		Permill::from_rational_with_rounding(1, u32::max_value(), r).unwrap();
+		Permill::from_rational_with_rounding(u64::max_value() - 1, u64::max_value(), r).unwrap();
+		Permill::from_rational_with_rounding(u32::max_value() - 1, u32::max_value(), r).unwrap();
+		Perbill::from_rational_with_rounding(1, u64::max_value(), r).unwrap();
+		Perbill::from_rational_with_rounding(1, u32::max_value(), r).unwrap();
+		Perbill::from_rational_with_rounding(u64::max_value() - 1, u64::max_value(), r).unwrap();
+		Perbill::from_rational_with_rounding(u32::max_value() - 1, u32::max_value(), r).unwrap();
 	}
 }
 
