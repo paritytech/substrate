@@ -406,30 +406,40 @@ macro_rules! implement_fixed {
 		}
 
 		impl $name {
-			/// const version of `FixedPointNumber::from_inner`.
+			/// Create a new instance from the given `inner` value.
+			///
+			/// `const` version of `FixedPointNumber::from_inner`.
 			pub const fn from_inner(inner: $inner_type) -> Self {
 				Self(inner)
 			}
 
-			/// const version of `FixedPointNumber::into_inner`.
+			/// Return the instance's inner value.
+			///
+			/// `const` version of `FixedPointNumber::into_inner`.
 			pub const fn into_inner(self) -> $inner_type {
 				self.0
 			}
 
 			/// Creates self from a `u32`.
+			///
+			/// WARNING: This is a `const` function designed for convenient use at build time and
+			/// will panic on overflow. Ensure that any inputs are sensible.
 			pub const fn from_u32(n: u32) -> Self {
 				Self::from_inner((n as $inner_type) * $div)
 			}
 
+			/// Convert from a `float` value.
 			#[cfg(any(feature = "std", test))]
 			pub fn from_float(x: f64) -> Self {
 				Self((x * (<Self as FixedPointNumber>::DIV as f64)) as $inner_type)
 			}
 
+			/// Convert from a `Perbill` value.
 			pub const fn from_perbill(n: Perbill) -> Self {
 				Self::from_rational(n.deconstruct() as u128, 1_000_000_000)
 			}
 
+			/// Convert into a `Perbill` value. Will saturate if above one or below zero.
 			pub const fn into_perbill(self) -> Perbill {
 				if self.0 <= 0 {
 					Perbill::zero()
@@ -457,6 +467,7 @@ macro_rules! implement_fixed {
 				}
 			}
 
+			/// Convert into a `float` value.
 			#[cfg(any(feature = "std", test))]
 			pub fn to_float(self) -> f64 {
 				self.0 as f64 / <Self as FixedPointNumber>::DIV as f64
@@ -487,10 +498,18 @@ macro_rules! implement_fixed {
 				}
 			}
 
+			/// Negate the value.
+			///
+			/// WARNING: This is a `const` function designed for convenient use at build time and
+			/// will panic on overflow. Ensure that any inputs are sensible.
 			pub const fn neg(self) -> Self {
 				Self(0 - self.0)
 			}
 
+			/// Take the square root of a positive value.
+			///
+			/// WARNING: This is a `const` function designed for convenient use at build time and
+			/// will panic on overflow. Ensure that any inputs are sensible.
 			pub const fn sqrt(self) -> Self {
 				match self.try_sqrt() {
 					Some(v) => v,
@@ -523,14 +542,29 @@ macro_rules! implement_fixed {
 				Some(Self(r as $inner_type))
 			}
 
+			/// Add a value and return the result.
+			///
+			/// WARNING: This is a `const` function designed for convenient use at build time and
+			/// will panic on overflow. Ensure that any inputs are sensible.
 			pub const fn add(self, rhs: Self) -> Self {
 				Self(self.0 + rhs.0)
 			}
 
+			/// Subtract a value and return the result.
+			///
+			/// WARNING: This is a `const` function designed for convenient use at build time and
+			/// will panic on overflow. Ensure that any inputs are sensible.
 			pub const fn sub(self, rhs: Self) -> Self {
 				Self(self.0 - rhs.0)
 			}
 
+			/// Multiply by a value and return the result.
+			///
+			/// Result will be rounded to the nearest representable value, rounding down if it is
+			/// equidistant between two neighbours.
+			///
+			/// WARNING: This is a `const` function designed for convenient use at build time and
+			/// will panic on overflow. Ensure that any inputs are sensible.
 			pub const fn mul(self, rhs: Self) -> Self {
 				match $name::const_checked_mul(self, rhs) {
 					Some(v) => v,
@@ -538,6 +572,13 @@ macro_rules! implement_fixed {
 				}
 			}
 
+			/// Divide by a value and return the result.
+			///
+			/// Result will be rounded to the nearest representable value, rounding down if it is
+			/// equidistant between two neighbours.
+			///
+			/// WARNING: This is a `const` function designed for convenient use at build time and
+			/// will panic on overflow. Ensure that any inputs are sensible.
 			pub const fn div(self, rhs: Self) -> Self {
 				match $name::const_checked_div(self, rhs) {
 					Some(v) => v,
@@ -545,6 +586,10 @@ macro_rules! implement_fixed {
 				}
 			}
 
+			/// Convert into an `I129` format value.
+			///
+			/// WARNING: This is a `const` function designed for convenient use at build time and
+			/// will panic on overflow. Ensure that any inputs are sensible.
 			const fn into_i129(self) -> I129 {
 				#[allow(unused_comparisons)]
 				if self.0 < 0 {
@@ -558,6 +603,10 @@ macro_rules! implement_fixed {
 				}
 			}
 
+			/// Convert from an `I129` format value.
+			///
+			/// WARNING: This is a `const` function designed for convenient use at build time and
+			/// will panic on overflow. Ensure that any inputs are sensible.
 			const fn from_i129(n: I129) -> Option<Self> {
 				let max_plus_one = u128::saturating_add(<$inner_type>::max_value() as u128, 1);
 				#[allow(unused_comparisons)]
@@ -580,16 +629,21 @@ macro_rules! implement_fixed {
 				Some(Self(inner))
 			}
 
-			/// Const function for getting an (approximate) value from a rational.
+			/// Calculate an approximation of a rational.
 			///
-			/// It is designed to be used in const expressions. This will panic if the input is bad.
+			/// Result will be rounded to the nearest representable value, rounding down if it is
+			/// equidistant between two neighbours.
+			///
+			/// WARNING: This is a `const` function designed for convenient use at build time and
+			/// will panic on overflow. Ensure that any inputs are sensible.
 			pub const fn from_rational(a: u128, b: u128) -> Self {
 				Self::from_rational_with_rounding(a, b, Rounding::NearestPrefDown)
 			}
 
-			/// Const function for getting an (approximate) value from a rational.
+			/// Calculate an approximation of a rational with custom rounding.
 			///
-			/// It is designed to be used in const expressions. This will panic if the input is bad.
+			/// WARNING: This is a `const` function designed for convenient use at build time and
+			/// will panic on overflow. Ensure that any inputs are sensible.
 			pub const fn from_rational_with_rounding(a: u128, b: u128, rounding: Rounding) -> Self {
 				if b == 0 {
 					panic!("attempt to divide by zero in from_rational")
@@ -603,10 +657,19 @@ macro_rules! implement_fixed {
 				}
 			}
 
+			/// Multiply by another value, returning `None` in the case of an error.
+			///
+			/// Result will be rounded to the nearest representable value, rounding down if it is
+			/// equidistant between two neighbours.
 			pub const fn const_checked_mul(self, other: Self) -> Option<Self> {
 				self.const_checked_mul_with_rounding(other, SignedRounding::NearestPrefLow)
 			}
 
+			/// Multiply by another value with custom rounding, returning `None` in the case of an
+			/// error.
+			///
+			/// Result will be rounded to the nearest representable value, rounding down if it is
+			/// equidistant between two neighbours.
 			pub const fn const_checked_mul_with_rounding(
 				self,
 				other: Self,
@@ -627,11 +690,19 @@ macro_rules! implement_fixed {
 				}
 			}
 
+			/// Divide by another value, returning `None` in the case of an error.
+			///
+			/// Result will be rounded to the nearest representable value, rounding down if it is
+			/// equidistant between two neighbours.
 			pub const fn const_checked_div(self, other: Self) -> Option<Self> {
 				self.checked_rounding_div(other, SignedRounding::NearestPrefLow)
 			}
 
-			/// A version of div with customisable rounding.
+			/// Divide by another value with custom rounding, returning `None` in the case of an
+			/// error.
+			///
+			/// Result will be rounded to the nearest representable value, rounding down if it is
+			/// equidistant between two neighbours.
 			pub const fn checked_rounding_div(
 				self,
 				other: Self,
