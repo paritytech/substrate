@@ -109,8 +109,8 @@ pub enum KillStorageResult {
 #[runtime_interface]
 pub trait Storage {
 	/// Returns the data for `key` in the storage or `None` if the key can not be found.
-	fn get(&self, key: &[u8]) -> Option<Vec<u8>> {
-		self.storage(key).map(|s| s.to_vec())
+	fn get(&self, key: &[u8]) -> Option<bytes::Bytes> {
+		self.storage(key).map(|s| bytes::Bytes::from(s.to_vec()))
 	}
 
 	/// Get `key` from storage, placing the value into `value_out` and return the number of

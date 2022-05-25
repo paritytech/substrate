@@ -102,7 +102,7 @@ pub fn kill_prefix(prefix: &[u8], limit: Option<u32>) -> sp_io::KillStorageResul
 
 /// Get a Vec of bytes from storage.
 pub fn get_raw(key: &[u8]) -> Option<Vec<u8>> {
-	sp_io::storage::get(key)
+	sp_io::storage::get(key).map(|value| value.to_vec())
 }
 
 /// Put a raw byte slice into storage.
