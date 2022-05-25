@@ -914,11 +914,11 @@ macro_rules! implement_per_thing {
 			/// 	pc(66),
 			/// );
 			/// assert_eq!(
-			/// 	pc(1).saturating_div(pc(3), Nearest),
+			/// 	pc(1).saturating_div(pc(3), NearestPrefUp),
 			/// 	pc(33),
 			/// );
 			/// assert_eq!(
-			/// 	pc(2).saturating_div(pc(3), Nearest),
+			/// 	pc(2).saturating_div(pc(3), NearestPrefDown),
 			/// 	pc(67),
 			/// );
 			/// assert_eq!(
