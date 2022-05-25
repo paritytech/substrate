@@ -101,9 +101,9 @@ pub enum EcdsaVerifyError {
 /// removed from the backend from making the `storage_kill` call.
 #[derive(PassByCodec, Encode, Decode)]
 pub enum KillStorageResult {
-	/// All keys to remove were removed, return number of key removed from backend.
+	/// All keys to remove were removed, return number of iterations performed during the operation.
 	AllRemoved(u32),
-	/// Not all key to remove were removed, return number of key removed from backend.
+	/// Not all key to remove were removed, return number of iterations performed during the operation.
 	SomeRemaining(u32),
 }
 
