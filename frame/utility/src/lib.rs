@@ -486,16 +486,19 @@ pub mod pallet {
 
 		/// Forwards a pre-signed function call.
 		///
-		/// # <weight>
-		/// - O(1).
-		/// - Limited storage reads.
-		/// - One DB write (event).
-		/// - Weight of derivative `call` execution + T::WeightInfo::dispatch_as().
-		/// # </weight>
+		/// This method allows to dispatch the pre-signed call by relayer on user's behalf
+		///
+		/// - `forwarded_call`: A struct that consists:
+		/// 	- `call`: the call to be forwarded
+		/// 	- `nonce`: a nonce of the account that signed the call
+		/// 	- `deadline`: a block number this call is valid until
+		/// 	- `signer`: an account that signed the `call`
+		/// 	- `whitelisted_forwarder`: who could forward the call (optionally)
+		/// - `signature`: a signature of the `forwarded_call` struct
 		#[pallet::weight({
-			let dispatch_info = call.get_dispatch_info();
+			let dispatch_info = forwarded_call.call.get_dispatch_info();
 			(
-				T::WeightInfo::dispatch_as()
+				T::WeightInfo::submit_call_on_behalf_of()
 					.saturating_add(dispatch_info.weight),
 				dispatch_info.class,
 			)
