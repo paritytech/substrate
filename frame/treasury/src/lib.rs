@@ -415,7 +415,7 @@ pub mod pallet {
 		///
 		/// NOTE: For record-keeping purposes, the proposer is deemed to be equivalent to the
 		/// beneficiary.
-		#[pallet::weight(T::WeightInfo::propose_spend())]
+		#[pallet::weight(T::WeightInfo::spend())]
 		pub fn spend(
 			origin: OriginFor<T>,
 			#[pallet::compact] amount: BalanceOf<T, I>,
