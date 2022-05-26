@@ -292,4 +292,33 @@ mod tests {
 			});
 		});
 	}
+
+	#[test]
+	fn in_storage_layer_works() {
+		TestExternalities::default().execute_with(|| {
+			assert_eq!(get_transaction_level(), 0);
+
+			let res = in_storage_layer(|| -> DispatchResult {
+				assert_eq!(get_transaction_level(), 1);
+				in_storage_layer(|| -> DispatchResult {
+					// We are still in the same layer :)
+					assert_eq!(get_transaction_level(), 1);
+					Ok(())
+				})
+			});
+
+			assert_ok!(res);
+
+			let res = in_storage_layer(|| -> DispatchResult {
+				assert_eq!(get_transaction_level(), 1);
+				in_storage_layer(|| -> DispatchResult {
+					// We are still in the same layer :)
+					assert_eq!(get_transaction_level(), 1);
+					Err("epic fail".into())
+				})
+			});
+
+			assert_noop!(res, "epic fail");
+		});
+	}
 }

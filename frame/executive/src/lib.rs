@@ -579,9 +579,7 @@ mod tests {
 			ConstU32, ConstU64, ConstU8, Currency, LockIdentifier, LockableCurrency,
 			WithdrawReasons,
 		},
-		weights::{
-			ConstantMultiplier, IdentityFee, RuntimeDbWeight, Weight, WeightToFeePolynomial,
-		},
+		weights::{ConstantMultiplier, IdentityFee, RuntimeDbWeight, Weight, WeightToFee},
 	};
 	use frame_system::{Call as SystemCall, ChainContext, LastRuntimeUpgradeInfo};
 	use pallet_balances::Call as BalancesCall;
@@ -887,7 +885,7 @@ mod tests {
 				.get(DispatchClass::Normal)
 				.base_extrinsic;
 		let fee: Balance =
-			<Runtime as pallet_transaction_payment::Config>::WeightToFee::calc(&weight);
+			<Runtime as pallet_transaction_payment::Config>::WeightToFee::weight_to_fee(&weight);
 		let mut t = sp_io::TestExternalities::new(t);
 		t.execute_with(|| {
 			Executive::initialize_block(&Header::new(
@@ -1174,7 +1172,9 @@ mod tests {
 						.get(DispatchClass::Normal)
 						.base_extrinsic;
 				let fee: Balance =
-					<Runtime as pallet_transaction_payment::Config>::WeightToFee::calc(&weight);
+					<Runtime as pallet_transaction_payment::Config>::WeightToFee::weight_to_fee(
+						&weight,
+					);
 				Executive::initialize_block(&Header::new(
 					1,
 					H256::default(),
