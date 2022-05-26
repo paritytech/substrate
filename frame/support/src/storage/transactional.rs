@@ -251,9 +251,9 @@ mod tests {
 					TransactionOutcome::Commit(res)
 				}));
 
-				assert_ok!(recursive_transactional(255));
+				assert_ok!(recursive_transactional(TRANSACTIONAL_LIMIT));
 				assert_noop!(
-					recursive_transactional(256),
+					recursive_transactional(TRANSACTIONAL_LIMIT + 1),
 					sp_runtime::TransactionalError::LimitReached
 				);
 

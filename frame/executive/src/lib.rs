@@ -1497,10 +1497,12 @@ mod tests {
 
 	#[test]
 	fn storage_layer_limit_enforced() {
+		use frame_support::storage::transactional::TRANSACTIONAL_LIMIT;
+
 		let xt1 =
-			TestXt::new(Call::Custom(custom::Call::recursive { depth: 2 }), sign_extra(1, 0, 0));
+			TestXt::new(Call::Custom(custom::Call::recursive { depth: TRANSACTIONAL_LIMIT }), sign_extra(1, 0, 0));
 		let xt2 =
-			TestXt::new(Call::Custom(custom::Call::recursive { depth: 256 }), sign_extra(1, 1, 0));
+			TestXt::new(Call::Custom(custom::Call::recursive { depth: TRANSACTIONAL_LIMIT + 1 }), sign_extra(1, 1, 0));
 
 		let header = new_test_ext(1).execute_with(|| {
 			// Let's build some fake block.

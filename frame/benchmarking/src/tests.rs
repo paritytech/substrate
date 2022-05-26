@@ -149,6 +149,7 @@ mod benchmarks {
 	use frame_support::{assert_err, assert_ok, ensure, traits::Get};
 	use frame_system::RawOrigin;
 	use sp_std::prelude::*;
+	use frame_support::storage::transactional::TRANSACTIONAL_LIMIT;
 
 	// Additional used internally by the benchmark macro.
 	use super::pallet_test::{Call, Config, Pallet};
@@ -247,11 +248,11 @@ mod benchmarks {
 		}
 
 		storage_layer_allowed {
-			let storage_layer_limit = 255;
+			let storage_layer_limit = TRANSACTIONAL_LIMIT;
 		}: recursive(RawOrigin::Root, storage_layer_limit - 1)
 
 		storage_layer_limit_enforced {
-			let storage_layer_limit = 255;
+			let storage_layer_limit = TRANSACTIONAL_LIMIT;
 		}: recursive(RawOrigin::Root, storage_layer_limit)
 	}
 

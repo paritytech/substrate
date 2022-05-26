@@ -299,13 +299,14 @@ fn storage_layer_in_decl_pallet_call() {
 
 #[test]
 fn storage_layer_limit() {
+	use frame_support::storage::transactional::TRANSACTIONAL_LIMIT;
 	frame_support::storage::transactional::track_transaction_level(|| {
 		TestExternalities::default().execute_with(|| {
 			use sp_runtime::{traits::Dispatchable, TransactionalError};
-			let call1 = Call::MyPallet(pallet::Call::recursive { depth: 254 });
+			let call1 = Call::MyPallet(pallet::Call::recursive { depth: TRANSACTIONAL_LIMIT - 1 });
 			assert_ok!(call1.dispatch(Origin::signed(0)));
 
-			let call1 = Call::MyPallet(pallet::Call::recursive { depth: 255 });
+			let call1 = Call::MyPallet(pallet::Call::recursive { depth: TRANSACTIONAL_LIMIT });
 			assert_noop!(call1.dispatch(Origin::signed(0)), TransactionalError::LimitReached);
 		});
 	})
