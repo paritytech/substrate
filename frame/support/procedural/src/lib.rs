@@ -433,6 +433,12 @@ pub fn transactional(attr: TokenStream, input: TokenStream) -> TokenStream {
 	transactional::transactional(attr, input).unwrap_or_else(|e| e.to_compile_error().into())
 }
 
+#[proc_macro_attribute]
+pub fn require_transactional(attr: TokenStream, input: TokenStream) -> TokenStream {
+	transactional::require_transactional(attr, input)
+		.unwrap_or_else(|e| e.to_compile_error().into())
+}
+
 /// Derive [`Clone`] but do not bound any generic. Docs are at `frame_support::CloneNoBound`.
 #[proc_macro_derive(CloneNoBound)]
 pub fn derive_clone_no_bound(input: TokenStream) -> TokenStream {
@@ -508,12 +514,6 @@ pub fn derive_eq_no_bound(input: TokenStream) -> TokenStream {
 #[proc_macro_derive(DefaultNoBound)]
 pub fn derive_default_no_bound(input: TokenStream) -> TokenStream {
 	default_no_bound::derive_default_no_bound(input)
-}
-
-#[proc_macro_attribute]
-pub fn require_transactional(attr: TokenStream, input: TokenStream) -> TokenStream {
-	transactional::require_transactional(attr, input)
-		.unwrap_or_else(|e| e.to_compile_error().into())
 }
 
 #[proc_macro]
