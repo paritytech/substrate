@@ -290,7 +290,8 @@ lto = "fat"
 codegen-units = 1
 
 [patch.crates-io]
-bls-like = {git = "https://github.com/w3f/bls", branch = "skalman-hash-to-curve-wb"}
+#bls-like = {git = "https://github.com/w3f/bls", branch = "skalman-hash-to-curve-wb"}
+bls-like = {path = "../bls"}
 ark-ec = { git = "https://github.com/w3f/arkworks-algebra", branch = 'ietf-hasher'}
 ark-ff = { git = "https://github.com/w3f/arkworks-algebra", branch = 'ietf-hasher'}
 ark-std = { git = "https://github.com/arkworks-rs/std"}

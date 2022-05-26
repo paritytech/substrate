@@ -42,7 +42,7 @@ use bip39::{Language, Mnemonic, MnemonicType};
 use core::convert::TryFrom;
 #[cfg(feature = "full_crypto")]
 use bls_like::{
-    BLS377, EngineBLS, Keypair, Signed,pop::{ProofOfPossessionGenerator, ProofOfPossessionVerifier}, pop::BatchAssumingProofsOfPossession, 
+    BLS377, EngineBLS, Keypair, Message, Signature as BLSSignature, pop::{ProofOfPossessionGenerator, ProofOfPossessionVerifier}, pop::BatchAssumingProofsOfPossession, SecretKey, SerializableToBytes
 };
 #[cfg(feature = "std")]
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
@@ -58,7 +58,7 @@ pub const CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"bls7");
 /// of the key pair (yeah, dumb); as such we're forced to remember the seed manually if we
 /// will need it later (such as for HDKD).
 #[cfg(feature = "full_crypto")]
-type Seed = [u8; BLS377::PUBLICKEY_SERIALIZED_SIZE];
+type Seed = [u8; BLS377::SECRET_KEY_SIZE];
 
 /// A public key.
 #[cfg_attr(feature = "full_crypto", derive(Hash))]
@@ -397,7 +397,7 @@ impl From<&Public> for CryptoTypePublicPair {
 #[cfg(feature = "full_crypto")]
 fn derive_hard_junction(secret_seed: &Seed, cc: &[u8; 32]) -> Seed {
 	("BLS12377HDKD", secret_seed, cc).using_encoded(|data| {
-		let mut res = [0u8; BLS377::PUBLICKEY_SERIALIZED_SIZE];
+		let mut res = [0u8; BLS377::SECRET_KEY_SIZE];
 		res.copy_from_slice(blake2_rfc::blake2b::blake2b(BLS377::PUBLICKEY_SERIALIZED_SIZE, &[], data).as_bytes());
 		res
 	})
@@ -459,9 +459,12 @@ impl TraitPair for Pair {
 	///
 	/// You should never need to use this; generate(), generate_with_phrase
 	fn from_seed_slice(seed_slice: &[u8]) -> Result<Pair, SecretStringError> {
-		let secret = bls_like::SecretKey::from_bytes(seed_slice)
+        if seed_slice.len() != BLS377::SECRET_KEY_SIZE {
+            return Err(SecretStringError::InvalidSeedLength);
+        }        
+		let secret = bls_like::SecretKey::from_bytes(seed_slice.try_into().expect("we already checked its length Q.E.D"))
 			.map_err(|_| SecretStringError::InvalidSeedLength)?;
-		let public = bls_like::PublicKey::from(&secret);
+		let public = secret.into_public();
 		Ok(Pair(bls_like::Keypair { secret, public }))
 	}
 
@@ -484,14 +487,15 @@ impl TraitPair for Pair {
 	/// Get the public key.
 	fn public(&self) -> Public {
 		let mut r = [0u8; BLS377::PUBLICKEY_SERIALIZED_SIZE];
-		let pk = self.0.public.as_bytes();
-		r.copy_from_slice(pk);
+		let pk = self.0.public.to_bytes();
+		r.copy_from_slice(pk.as_slice());
 		Public(r)
 	}
 
 	/// Sign a message.
 	fn sign(&self, message: &[u8]) -> Signature {
-		let r = self.0.sign(message).to_bytes();
+        let mut mutable_self = self.clone();
+		let r = mutable_self.0.sign(Message::new(b"", message)).to_bytes();
 		Signature::from_raw(r)
 	}
 
@@ -505,17 +509,25 @@ impl TraitPair for Pair {
 	/// This doesn't use the type system to ensure that `sig` and `pubkey` are the correct
 	/// size. Use it only if you're coming from byte buffers and need the speed.
 	fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(sig: &[u8], message: M, pubkey: P) -> bool {
-		let public_key = match ed25519_dalek::PublicKey::from_bytes(pubkey.as_ref()) {
+        let pubkey_array : [u8; BLS377::PUBLICKEY_SERIALIZED_SIZE]  = match pubkey.as_ref().try_into() {
+			Ok(pk) => pk,
+			Err(_) => return false,
+        };        
+		let public_key = match bls_like::PublicKey::<BLS377>::from_bytes(&pubkey_array) {
 			Ok(pk) => pk,
 			Err(_) => return false,
 		};
-
-		let sig = match ed25519_dalek::Signature::try_from(sig) {
+        
+        let sig_array  = match sig.try_into() {
+			Ok(s) => s,
+			Err(_) => return false,
+		};
+		let sig = match bls_like::Signature::from_bytes(sig_array) {
 			Ok(s) => s,
 			Err(_) => return false,
 		};
 
-		public_key.verify(message.as_ref(), &sig).is_ok()
+		sig.verify(Message::new(b"", message.as_ref()), &public_key)
 	}
 
 	/// Return a vec filled with raw data.
@@ -527,8 +539,8 @@ impl TraitPair for Pair {
 #[cfg(feature = "full_crypto")]
 impl Pair {
 	/// Get the seed for this key.
-	pub fn seed(&self) -> &Seed {
-		self.0.secret.as_bytes()
+	pub fn seed(&self) -> Seed {
+        self.0.secret.to_bytes()
 	}
 
 	/// Exactly as `from_string` except that if no matches are found then, the the first 32
