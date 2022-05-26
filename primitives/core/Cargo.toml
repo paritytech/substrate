@@ -1,6 +1,6 @@
 [package]
 name = "sp-core"
-version = "5.0.0"
+version = "6.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
 license = "Apache-2.0"
@@ -13,15 +13,15 @@ documentation = "https://docs.rs/sp-core"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "2.2.0", default-features = false, features = [
+codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = [
 	"derive",
 	"max-encoded-len",
 ] }
-scale-info = { version = "1.0", default-features = false, features = ["derive"] }
+scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
 log = { version = "0.4.11", default-features = false }
 serde = { version = "1.0.136", optional = true, features = ["derive"] }
 byteorder = { version = "1.3.2", default-features = false }
-primitive-types = { version = "0.10.1", default-features = false, features = ["codec", "scale-info"] }
+primitive-types = { version = "0.11.1", default-features = false, features = ["codec", "scale-info"] }
 impl-serde = { version = "0.3.0", optional = true }
 wasmi = { version = "0.9.1", optional = true }
 hash-db = { version = "0.15.2", default-features = false }
@@ -35,13 +35,13 @@ num-traits = { version = "0.2.8", default-features = false }
 zeroize = { version = "1.4.3", default-features = false }
 secrecy = { version = "0.8.0", default-features = false }
 lazy_static = { version = "1.4.0", default-features = false, optional = true }
-parking_lot = { version = "0.11.2", optional = true }
+parking_lot = { version = "0.12.0", optional = true }
 sp-std = { version = "4.0.0", default-features = false, path = "../std" }
 sp-debug-derive = { version = "4.0.0", default-features = false, path = "../debug-derive" }
-sp-storage = { version = "5.0.0", default-features = false, path = "../storage" }
-sp-externalities = { version = "0.11.0", optional = true, path = "../externalities" }
-parity-util-mem = { version = "0.10.2", default-features = false, features = ["primitive-types"] }
-futures = { version = "0.3.1", optional = true }
+sp-storage = { version = "6.0.0", default-features = false, path = "../storage" }
+sp-externalities = { version = "0.12.0", optional = true, path = "../externalities" }
+parity-util-mem = { version = "0.11.0", default-features = false, features = ["primitive-types"] }
+futures = { version = "0.3.19", optional = true }
 dyn-clonable = { version = "0.9.0", optional = true }
 thiserror = { version = "1.0.30", optional = true }
 bitflags = "1.3"
@@ -49,19 +49,17 @@ bitflags = "1.3"
 # full crypto
 ed25519-dalek = { version = "1.0.1", default-features = false, features = ["u64_backend", "alloc"], optional = true }
 blake2-rfc = { version = "0.2.18", default-features = false, optional = true }
-tiny-keccak = { version = "2.0.1", features = ["keccak"], optional = true }
 schnorrkel = { version = "0.9.1", features = [
 	"preaudit_deprecated",
 	"u64_backend",
 ], default-features = false, optional = true }
-sha2 = { version = "0.10.0", default-features = false, optional = true }
 hex = { version = "0.4", default-features = false, optional = true }
-twox-hash = { version = "1.6.2", default-features = false, optional = true }
-libsecp256k1 = { version = "0.7", default-features = false, features = ["hmac", "static-context"], optional = true }
+libsecp256k1 = { version = "0.7", default-features = false, features = ["static-context"], optional = true }
 merlin = { version = "2.0", default-features = false, optional = true }
+secp256k1 = { version = "0.21.2", default-features = false, features = ["recovery", "global-context"], optional = true }
 ss58-registry = { version = "1.11.0", default-features = false }
 sp-core-hashing = { version = "4.0.0", path = "./hashing", default-features = false, optional = true }
-sp-runtime-interface = { version = "5.0.0", default-features = false, path = "../runtime-interface" }
+sp-runtime-interface = { version = "6.0.0", default-features = false, path = "../runtime-interface" }
 
 [dev-dependencies]
 sp-serializer = { version = "4.0.0-dev", path = "../serializer" }
@@ -69,7 +67,7 @@ hex-literal = "0.3.4"
 rand = "0.7.2"
 criterion = "0.3.3"
 serde_json = "1.0"
-sp-core-hashing-proc-macro = { version = "4.0.0-dev", path = "./hashing/proc-macro" }
+sp-core-hashing-proc-macro = { version = "5.0.0", path = "./hashing/proc-macro" }
 
 [[bench]]
 name = "bench"
@@ -98,7 +96,6 @@ std = [
 	"hash-db/std",
 	"sp-std/std",
 	"serde",
-	"twox-hash/std",
 	"blake2-rfc/std",
 	"ed25519-dalek/std",
 	"hex/std",
@@ -107,11 +104,10 @@ std = [
 	"tiny-bip39",
 	"byteorder/std",
 	"rand",
-	"sha2/std",
 	"schnorrkel/std",
 	"regex",
 	"num-traits/std",
-	"tiny-keccak",
+	"secp256k1/std",
 	"sp-core-hashing/std",
 	"sp-debug-derive/std",
 	"sp-externalities",
@@ -132,12 +128,10 @@ std = [
 full_crypto = [
 	"ed25519-dalek",
 	"blake2-rfc",
-	"tiny-keccak",
 	"schnorrkel",
 	"hex",
-	"sha2",
-	"twox-hash",
 	"libsecp256k1",
+	"secp256k1",
 	"sp-core-hashing",
 	"sp-runtime-interface/disable_target_static_assertions",
 	"merlin",

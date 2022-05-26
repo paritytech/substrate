@@ -62,7 +62,7 @@ pub mod ed25519 {
 	pub type AuthorityId = app_ed25519::Public;
 }
 
-pub use sp_consensus_slots::Slot;
+pub use sp_consensus_slots::{Slot, SlotDuration};
 
 /// The `ConsensusEngineId` of AuRa.
 pub const AURA_ENGINE_ID: ConsensusEngineId = [b'a', b'u', b'r', b'a'];
@@ -91,30 +91,5 @@ sp_api::decl_runtime_apis! {
 
 		// Return the current set of authorities.
 		fn authorities() -> Vec<AuthorityId>;
-	}
-}
-
-/// Aura slot duration.
-///
-/// Internally stored as milliseconds.
-#[derive(sp_runtime::RuntimeDebug, Encode, Decode, PartialEq, Clone, Copy)]
-pub struct SlotDuration(u64);
-
-impl SlotDuration {
-	/// Initialize from the given milliseconds.
-	pub fn from_millis(val: u64) -> Self {
-		Self(val)
-	}
-
-	/// Returns the slot duration in milli seconds.
-	pub fn get(&self) -> u64 {
-		self.0
-	}
-}
-
-#[cfg(feature = "std")]
-impl sp_consensus::SlotData for SlotDuration {
-	fn slot_duration(&self) -> std::time::Duration {
-		std::time::Duration::from_millis(self.0)
 	}
 }

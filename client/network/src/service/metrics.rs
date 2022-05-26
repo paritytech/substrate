@@ -69,7 +69,6 @@ pub struct Metrics {
 	pub notifications_streams_closed_total: CounterVec<U64>,
 	pub notifications_streams_opened_total: CounterVec<U64>,
 	pub peerset_num_discovered: Gauge<U64>,
-	pub peerset_num_requested: Gauge<U64>,
 	pub pending_connections: Gauge<U64>,
 	pub pending_connections_errors_total: CounterVec<U64>,
 	pub requests_in_failure_total: CounterVec<U64>,
@@ -203,10 +202,6 @@ impl Metrics {
 			peerset_num_discovered: prometheus::register(Gauge::new(
 				"substrate_sub_libp2p_peerset_num_discovered",
 				"Number of nodes stored in the peerset manager",
-			)?, registry)?,
-			peerset_num_requested: prometheus::register(Gauge::new(
-				"substrate_sub_libp2p_peerset_num_requested",
-				"Number of nodes that the peerset manager wants us to be connected to",
 			)?, registry)?,
 			pending_connections: prometheus::register(Gauge::new(
 				"substrate_sub_libp2p_pending_connections",

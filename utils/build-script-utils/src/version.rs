@@ -20,21 +20,23 @@ use std::{borrow::Cow, process::Command};
 
 /// Generate the `cargo:` key output
 pub fn generate_cargo_keys() {
-	let output = Command::new("git").args(&["rev-parse", "--short", "HEAD"]).output();
-
-	let commit = match output {
-		Ok(o) if o.status.success() => {
-			let sha = String::from_utf8_lossy(&o.stdout).trim().to_owned();
-			Cow::from(sha)
-		},
-		Ok(o) => {
-			println!("cargo:warning=Git command failed with status: {}", o.status);
-			Cow::from("unknown")
-		},
-		Err(err) => {
-			println!("cargo:warning=Failed to execute git command: {}", err);
-			Cow::from("unknown")
-		},
+	let commit = if let Ok(hash) = std::env::var("SUBSTRATE_CLI_GIT_COMMIT_HASH") {
+		Cow::from(hash.trim().to_owned())
+	} else {
+		match Command::new("git").args(&["rev-parse", "--short", "HEAD"]).output() {
+			Ok(o) if o.status.success() => {
+				let sha = String::from_utf8_lossy(&o.stdout).trim().to_owned();
+				Cow::from(sha)
+			},
+			Ok(o) => {
+				println!("cargo:warning=Git command failed with status: {}", o.status);
+				Cow::from("unknown")
+			},
+			Err(err) => {
+				println!("cargo:warning=Failed to execute git command: {}", err);
+				Cow::from("unknown")
+			},
+		}
 	};
 
 	println!("cargo:rustc-env=SUBSTRATE_CLI_IMPL_VERSION={}", get_version(&commit))
