@@ -55,6 +55,26 @@ pub mod pallet {
 	}
 }
 
+pub mod decl_pallet {
+	pub trait Config: frame_system::Config {}
+
+	frame_support::decl_module! {
+		pub struct Module<T: Config> for enum Call where origin: T::Origin {
+			#[weight = 0]
+			pub fn set_value(_origin, value: u32) {
+				DeclValue::put(value);
+				frame_support::ensure!(value != 1, "Revert!");
+			}
+		}
+	}
+
+	frame_support::decl_storage! {
+		trait Store for Module<T: Config> as StorageTransactions {
+			pub DeclValue: u32;
+		}
+	}
+}
+
 pub type BlockNumber = u64;
 pub type Index = u64;
 pub type Header = sp_runtime::generic::Header<u32, sp_runtime::traits::BlakeTwo256>;
@@ -90,6 +110,8 @@ impl frame_system::Config for Runtime {
 
 impl pallet::Config for Runtime {}
 
+impl decl_pallet::Config for Runtime {}
+
 frame_support::construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
@@ -98,6 +120,7 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system,
 		MyPallet: pallet,
+		DeclPallet: decl_pallet::{Call, Storage},
 	}
 );
 
@@ -238,5 +261,20 @@ fn storage_layer_in_pallet_call() {
 
 		let call2 = Call::MyPallet(pallet::Call::set_value { value: 1 });
 		assert_noop!(call2.dispatch(Origin::signed(0)), Error::<Runtime>::Revert);
+	});
+}
+
+#[test]
+fn storage_layer_in_decl_pallet_call() {
+	TestExternalities::default().execute_with(|| {
+		use frame_support::StorageValue;
+		use sp_runtime::traits::Dispatchable;
+
+		let call1 = Call::DeclPallet(decl_pallet::Call::set_value { value: 2 });
+		assert_ok!(call1.dispatch(Origin::signed(0)));
+		assert_eq!(decl_pallet::DeclValue::get(), 2);
+
+		let call2 = Call::DeclPallet(decl_pallet::Call::set_value { value: 1 });
+		assert_noop!(call2.dispatch(Origin::signed(0)), "Revert!");
 	});
 }
