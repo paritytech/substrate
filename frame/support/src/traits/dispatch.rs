@@ -106,7 +106,7 @@ pub trait DispatchableWithStorageLayer {
 	/// The origin type of the runtime, (i.e. `frame_system::Config::Origin`).
 	type Origin;
 
-	/// Same as `dispatch` from the `Dispatchable` trait, but specifically spawns a new storage
+	/// Same as `dispatch` from the [`frame_support::dispatch::Dispatchable`] trait, but specifically spawns a new storage
 	/// layer to execute the call inside of.
 	fn dispatch_with_storage_layer(self, origin: Self::Origin) -> DispatchResultWithPostInfo;
 
