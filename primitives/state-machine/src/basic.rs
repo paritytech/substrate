@@ -446,7 +446,7 @@ mod tests {
 		ext.clear_child_storage(child_info, b"dog");
 		assert_eq!(ext.child_storage(child_info, b"dog"), None);
 
-		ext.kill_child_storage(child_info, None, None);
+		let _ = ext.kill_child_storage(child_info, None, None);
 		assert_eq!(ext.child_storage(child_info, b"doe"), None);
 	}
 

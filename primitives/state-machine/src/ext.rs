@@ -1098,14 +1098,14 @@ mod tests {
 		not_under_prefix.extend(b"path");
 		ext.set_storage(not_under_prefix.clone(), vec![10]);
 
-		ext.clear_prefix(&[], None, None);
-		ext.clear_prefix(&well_known_keys::CHILD_STORAGE_KEY_PREFIX[..4], None, None);
+		let _ = ext.clear_prefix(&[], None, None);
+		let _ = ext.clear_prefix(&well_known_keys::CHILD_STORAGE_KEY_PREFIX[..4], None, None);
 		let mut under_prefix = well_known_keys::CHILD_STORAGE_KEY_PREFIX.to_vec();
 		under_prefix.extend(b"path");
-		ext.clear_prefix(&well_known_keys::CHILD_STORAGE_KEY_PREFIX[..4], None, None);
+		let _ = ext.clear_prefix(&well_known_keys::CHILD_STORAGE_KEY_PREFIX[..4], None, None);
 		assert_eq!(ext.child_storage(child_info, &[30]), Some(vec![40]));
 		assert_eq!(ext.storage(not_under_prefix.as_slice()), Some(vec![10]));
-		ext.clear_prefix(&not_under_prefix[..5], None, None);
+		let _ = ext.clear_prefix(&not_under_prefix[..5], None, None);
 		assert_eq!(ext.storage(not_under_prefix.as_slice()), None);
 	}
 

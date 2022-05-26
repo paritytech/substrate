@@ -1573,7 +1573,7 @@ mod tests {
 		{
 			let mut cache = StorageTransactionCache::default();
 			let mut ext = Ext::new(&mut overlay, &mut cache, backend, None);
-			ext.clear_prefix(b"ab", None, None);
+			let _ = ext.clear_prefix(b"ab", None, None);
 		}
 		overlay.commit_transaction().unwrap();
 
@@ -1723,7 +1723,7 @@ mod tests {
 
 		ext.set_child_storage(child_info, b"abc".to_vec(), b"def".to_vec());
 		assert_eq!(ext.child_storage(child_info, b"abc"), Some(b"def".to_vec()));
-		ext.kill_child_storage(child_info, None, None);
+		let _ = ext.kill_child_storage(child_info, None, None);
 		assert_eq!(ext.child_storage(child_info, b"abc"), None);
 	}
 
