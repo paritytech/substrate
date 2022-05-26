@@ -1329,11 +1329,19 @@ pub mod pallet {
 		MetadataExceedsMaxLen,
 		/// Some error occurred that should never happen. This should be reported to the
 		/// maintainers.
-		DefensiveError,
+		Defensive(DefensiveError),
 		/// Not enough points. Ty unbonding less.
 		NotEnoughPointsToUnbond,
 		/// Partial unbonding now allowed permissionlessly.
 		PartialUnbondNotAllowedPermissionlessly,
+	}
+
+	#[derive(Encode, Decode, PartialEq, TypeInfo, frame_support::PalletError)]
+	pub enum DefensiveError {
+		/// There isn't enough space in the unbond pool.
+		NotEnoughSpaceInUnbondPool,
+		/// A (bonded) pool id does not exist.
+		PoolNotFound,
 	}
 
 	#[pallet::call]
@@ -1534,14 +1542,16 @@ pub mod pallet {
 					.try_insert(unbond_era, UnbondPool::default())
 					// The above call to `maybe_merge_pools` should ensure there is
 					// always enough space to insert.
-					.defensive_map_err(|_| Error::<T>::DefensiveError)?;
+					.defensive_map_err(|_| {
+						Error::<T>::Defensive(DefensiveError::NotEnoughSpaceInUnbondPool)
+					})?;
 			}
 
 			sub_pools
 				.with_era
 				.get_mut(&unbond_era)
 				// The above check ensures the pool exists.
-				.defensive_ok_or_else(|| Error::<T>::DefensiveError)?
+				.defensive_ok_or_else(|| Error::<T>::Defensive(DefensiveError::PoolNotFound))?
 				.issue(unbonding_balance);
 
 			Self::deposit_event(Event::<T>::Unbonded {
