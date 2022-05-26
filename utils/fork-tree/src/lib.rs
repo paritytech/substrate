@@ -143,29 +143,20 @@ where
 			}
 		}
 
-		let mut children = &mut self.roots;
-		let mut i = 0;
-		while i < children.len() {
-			let child = &children[i];
-			if child.hash == hash {
-				return Err(Error::Duplicate)
-			}
-			if child.number < number && is_descendent_of(&child.hash, &hash)? {
-				children = &mut children[i].children;
-				i = 0;
-			} else {
-				i += 1;
-			}
+		let (children, is_root) =
+			match self.find_node_where_mut(&hash, &number, is_descendent_of, &|_| true)? {
+				Some(parent) => (&mut parent.children, false),
+				None => (&mut self.roots, true),
+			};
+
+		if children.iter().any(|elem| elem.hash == hash) {
+			return Err(Error::Duplicate)
 		}
 
-		let is_first = children.is_empty();
 		children.push(Node { data, hash, number, children: Default::default() });
 
-		// Quick way to check if the pushed node is a root
-		let is_root = children.as_ptr() == self.roots.as_ptr();
-
-		if is_first {
-			// Rebalance is required only if we've extended the branch depth.
+		if children.len() == 1 {
+			// Rebalance may be required only if we've extended the branch depth.
 			self.rebalance();
 		}
 
