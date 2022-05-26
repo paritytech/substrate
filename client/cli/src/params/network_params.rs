@@ -168,7 +168,7 @@ impl NetworkParams {
 		let quic_socket = self.quic_port.map(|port| {
 			use std::net::{IpAddr::V6, Ipv6Addr, SocketAddr};
 
-			let addr = Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0);
+			let addr = Ipv6Addr::UNSPECIFIED;
 			SocketAddr::new(V6(addr), port)
 		});
 
