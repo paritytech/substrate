@@ -143,7 +143,7 @@ mod std_reexport {
 	pub use crate::{
 		basic::BasicExternalities,
 		error::{Error, ExecutionError},
-		in_memory_backend::new_in_mem,
+		in_memory_backend::{new_in_mem, new_in_mem_hash_key},
 		proving_backend::{
 			create_proof_check_backend, ProofRecorder, ProvingBackend, ProvingBackendRecorder,
 		},
@@ -1347,7 +1347,7 @@ mod execution {
 #[cfg(test)]
 mod tests {
 	use super::{ext::Ext, *};
-	use crate::execution::CallResult;
+	use crate::{execution::CallResult, in_memory_backend::new_in_mem_hash_key};
 	use codec::{Decode, Encode};
 	use sp_core::{
 		map,
@@ -1687,7 +1687,7 @@ mod tests {
 	fn set_child_storage_works() {
 		let child_info = ChildInfo::new_default(b"sub1");
 		let child_info = &child_info;
-		let state = new_in_mem::<BlakeTwo256>();
+		let state = new_in_mem_hash_key::<BlakeTwo256>();
 		let backend = state.as_trie_backend().unwrap();
 		let mut overlay = OverlayedChanges::default();
 		let mut cache = StorageTransactionCache::default();
@@ -1703,7 +1703,7 @@ mod tests {
 	fn append_storage_works() {
 		let reference_data = vec![b"data1".to_vec(), b"2".to_vec(), b"D3".to_vec(), b"d4".to_vec()];
 		let key = b"key".to_vec();
-		let state = new_in_mem::<BlakeTwo256>();
+		let state = new_in_mem_hash_key::<BlakeTwo256>();
 		let backend = state.as_trie_backend().unwrap();
 		let mut overlay = OverlayedChanges::default();
 		let mut cache = StorageTransactionCache::default();
@@ -1740,7 +1740,7 @@ mod tests {
 
 		let key = b"events".to_vec();
 		let mut cache = StorageTransactionCache::default();
-		let state = new_in_mem::<BlakeTwo256>();
+		let state = new_in_mem_hash_key::<BlakeTwo256>();
 		let backend = state.as_trie_backend().unwrap();
 		let mut overlay = OverlayedChanges::default();
 

@@ -43,10 +43,11 @@ use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	pallet_prelude::Get,
 	storage,
-	traits::{KeyOwnerProofSystem, OneSessionHandler, StorageVersion},
+	traits::{KeyOwnerProofSystem, OneSessionHandler},
 	weights::{Pays, Weight},
 	WeakBoundedVec,
 };
+use scale_info::TypeInfo;
 use sp_runtime::{generic::DigestItem, traits::Zero, DispatchResult, KeyTypeId};
 use sp_session::{GetSessionNumber, GetValidatorCount};
 use sp_staking::SessionIndex;
@@ -69,16 +70,14 @@ pub use equivocation::{
 
 pub use pallet::*;
 
-use scale_info::TypeInfo;
-
-/// The current storage version.
-const STORAGE_VERSION: StorageVersion = StorageVersion::new(4);
-
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
 	use frame_support::{dispatch::DispatchResult, pallet_prelude::*};
 	use frame_system::pallet_prelude::*;
+
+	/// The current storage version.
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(4);
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]

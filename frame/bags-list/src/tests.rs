@@ -35,8 +35,10 @@ mod pallet {
 			);
 
 			// when increasing score to the level of non-existent bag
+			assert_eq!(List::<Runtime>::get_score(&42).unwrap(), 20);
 			StakingMock::set_score_of(&42, 2_000);
 			assert_ok!(BagsList::rebag(Origin::signed(0), 42));
+			assert_eq!(List::<Runtime>::get_score(&42).unwrap(), 2_000);
 
 			// then a new bag is created and the id moves into it
 			assert_eq!(
@@ -53,6 +55,8 @@ mod pallet {
 				List::<Runtime>::get_bags(),
 				vec![(10, vec![1]), (1_000, vec![2, 3, 4]), (2_000, vec![42])]
 			);
+			// but the score is updated
+			assert_eq!(List::<Runtime>::get_score(&42).unwrap(), 1_001);
 
 			// when reducing score to the level of a non-existent bag
 			StakingMock::set_score_of(&42, 30);
@@ -63,6 +67,7 @@ mod pallet {
 				List::<Runtime>::get_bags(),
 				vec![(10, vec![1]), (30, vec![42]), (1_000, vec![2, 3, 4])]
 			);
+			assert_eq!(List::<Runtime>::get_score(&42).unwrap(), 30);
 
 			// when increasing score to the level of a pre-existing bag
 			StakingMock::set_score_of(&42, 500);
@@ -73,6 +78,7 @@ mod pallet {
 				List::<Runtime>::get_bags(),
 				vec![(10, vec![1]), (1_000, vec![2, 3, 4, 42])]
 			);
+			assert_eq!(List::<Runtime>::get_score(&42).unwrap(), 500);
 		});
 	}
 
@@ -145,21 +151,20 @@ mod pallet {
 	}
 
 	#[test]
-	fn wrong_rebag_is_noop() {
+	fn wrong_rebag_errs() {
 		ExtBuilder::default().build_and_execute(|| {
 			let node_3 = list::Node::<Runtime>::get(&3).unwrap();
-			// when account 3 is _not_ misplaced with weight 500
+			// when account 3 is _not_ misplaced with score 500
 			NextVoteWeight::set(500);
 			assert!(!node_3.is_misplaced(500));
 
-			// then calling rebag on account 3 with weight 500 is a noop
+			// then calling rebag on account 3 with score 500 is a noop
 			assert_storage_noop!(assert_eq!(BagsList::rebag(Origin::signed(0), 3), Ok(())));
 
 			// when account 42 is not in the list
 			assert!(!BagsList::contains(&42));
-
-			// then rebag-ing account 42 is a noop
-			assert_storage_noop!(assert_eq!(BagsList::rebag(Origin::signed(0), 42), Ok(())));
+			// then rebag-ing account 42 is an error
+			assert_storage_noop!(assert!(matches!(BagsList::rebag(Origin::signed(0), 42), Err(_))));
 		});
 	}
 
@@ -182,7 +187,6 @@ mod pallet {
 	#[test]
 	fn empty_threshold_works() {
 		BagThresholds::set(Default::default()); // which is the same as passing `()` to `Get<_>`.
-
 		ExtBuilder::default().build_and_execute(|| {
 			// everyone in the same bag.
 			assert_eq!(List::<Runtime>::get_bags(), vec![(VoteWeight::MAX, vec![1, 2, 3, 4])]);
@@ -196,8 +200,7 @@ mod pallet {
 			);
 
 			// any rebag is noop.
-			assert_storage_noop!(assert!(BagsList::rebag(Origin::signed(0), 1).is_ok()));
-			assert_storage_noop!(assert!(BagsList::rebag(Origin::signed(0), 10).is_ok()));
+			assert_storage_noop!(assert_eq!(BagsList::rebag(Origin::signed(0), 1), Ok(())));
 		})
 	}
 

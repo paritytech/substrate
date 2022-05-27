@@ -70,7 +70,7 @@ use codec::{Decode, Encode};
 use frame_support::{
 	traits::{
 		ContainsLengthBound, Currency, EnsureOrigin, ExistenceRequirement::KeepAlive, Get,
-		OnUnbalanced, ReservableCurrency, SortedMembers, StorageVersion,
+		OnUnbalanced, ReservableCurrency, SortedMembers,
 	},
 	Parameter,
 };
@@ -468,7 +468,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// This actually does computation. If you need to keep using it, then make sure you cache the
 	/// value and only call this once.
 	pub fn account_id() -> T::AccountId {
-		T::PalletId::get().into_account()
+		T::PalletId::get().into_account_truncating()
 	}
 
 	/// Given a mutable reference to an `OpenTip`, insert the tip into it and check whether it
