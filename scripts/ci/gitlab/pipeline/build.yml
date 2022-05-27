@@ -11,7 +11,7 @@
   script:
     - git clone
         --depth=1
-        "--branch=$PIPELINE_SCRIPTS_TAG"
+        --branch="$PIPELINE_SCRIPTS_TAG"
         https://github.com/paritytech/pipeline-scripts
     - ./pipeline-scripts/check_dependent_project.sh
         --org paritytech
