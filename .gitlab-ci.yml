@@ -181,7 +181,7 @@ include:
   # check jobs
   #- scripts/ci/gitlab/pipeline/check.yml
   # tests jobs
-  #- scripts/ci/gitlab/pipeline/test.yml
+  - scripts/ci/gitlab/pipeline/test.yml
   # build jobs
   - scripts/ci/gitlab/pipeline/build.yml
   # publish jobs
