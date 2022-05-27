@@ -346,7 +346,8 @@ where
 			};
 
 			let behaviour = {
-				// let bitswap = params.network_config.ipfs_server.then(|| Bitswap::new(client));
+				let bitswap =
+					params.network_config.ipfs_server.then(|| Bitswap::new(params.chain.clone()));
 				let result = Behaviour::new(
 					protocol,
 					user_agent,
@@ -355,7 +356,7 @@ where
 					params.block_request_protocol_config,
 					params.state_request_protocol_config,
 					warp_sync_protocol_config,
-					None,
+					bitswap,
 					params.light_client_request_protocol_config,
 					params.network_config.request_response_protocols,
 					peerset_handle.clone(),
