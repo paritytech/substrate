@@ -580,7 +580,7 @@ fn approve_bounty_works() {
 fn assign_curator_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+		Balances::make_free_balance_be(&Treasury1::account_id(), 101);
 
 		assert_noop!(
 			Bounties::propose_curator(Origin::root(), 0, 4, 4),
@@ -1170,20 +1170,49 @@ fn accept_curator_handles_different_deposit_calculations() {
 }
 
 #[test]
-fn propose_bounty_works_second_instance() {
+fn approve_bounty_works_second_instance() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
+		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+		Balances::make_free_balance_be(&Treasury1::account_id(), 201);
+		assert_noop!(
+			Bounties1::approve_bounty(Origin::root(), 0),
+			Error::<Test, Instance1>::InvalidIndex
+		);
 
-		Balances::make_free_balance_be(&Treasury1::account_id(), 101);
-		assert_eq!(Treasury1::pot(), 100);
+		assert_ok!(Bounties1::propose_bounty(Origin::signed(0), 50, b"12345".to_vec()));
 
-		assert_ok!(Bounties1::propose_bounty(Origin::signed(0), 10, b"1234567890".to_vec()));
+		assert_ok!(Bounties1::approve_bounty(Origin::root(), 0));
 
-		assert_eq!(last_event_second_instance(), BountiesEvent::BountyProposed { index: 0 });
+		let deposit: u64 = 80 + 5;
 
-		let deposit: u64 = 85 + 5;
+		assert_eq!(
+			Bounties1::bounties(0).unwrap(),
+			Bounty {
+				proposer: 0,
+				fee: 0,
+				value: 50,
+				curator_deposit: 0,
+				bond: deposit,
+				status: BountyStatus::Approved,
+			}
+		);
+		assert_eq!(Bounties1::bounty_approvals(), vec![0]);
+
+		assert_noop!(
+			Bounties1::close_bounty(Origin::root(), 0),
+			Error::<Test, Instance1>::UnexpectedStatus
+		);
+
+		// deposit not returned yet
 		assert_eq!(Balances::reserved_balance(0), deposit);
 		assert_eq!(Balances::free_balance(0), 100 - deposit);
+
+		<Treasury1 as OnInitialize<u64>>::on_initialize(2);
+
+		// return deposit
+		assert_eq!(Balances::reserved_balance(0), 0);
+		assert_eq!(Balances::free_balance(0), 100);
 
 		assert_eq!(
 			Bounties1::bounties(0).unwrap(),
@@ -1191,14 +1220,14 @@ fn propose_bounty_works_second_instance() {
 				proposer: 0,
 				fee: 0,
 				curator_deposit: 0,
-				value: 10,
+				value: 50,
 				bond: deposit,
-				status: BountyStatus::Proposed,
+				status: BountyStatus::Funded,
 			}
 		);
 
-		assert_eq!(Bounties1::bounty_descriptions(0).unwrap(), b"1234567890".to_vec());
-
-		assert_eq!(Bounties1::bounty_count(), 1);
+		assert_eq!(Treasury1::pot(), 200 - 50 - 75); // burn 75
+		assert_eq!(Balances::free_balance(Bounties1::bounty_account_id(0)), 50);
+		assert_eq!(Balances::free_balance(&Treasury::account_id()), 76);
 	});
 }
