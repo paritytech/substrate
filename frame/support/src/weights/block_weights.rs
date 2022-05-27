@@ -16,7 +16,7 @@
 // limitations under the License.
 
 //! THIS FILE WAS AUTO-GENERATED USING THE SUBSTRATE BENCHMARK CLI VERSION 4.0.0-dev
-//! DATE: 2022-05-23 (Y/M/D)
+//! DATE: 2022-05-24 (Y/M/D)
 //!
 //! SHORT-NAME: `block`, LONG-NAME: `BlockExecution`, RUNTIME: `Development`
 //! WARMUPS: `10`, REPEAT: `100`
@@ -27,7 +27,7 @@
 //   ./target/production/substrate
 //   benchmark
 //   overhead
-//   --dev
+//   --chain=dev
 //   --execution=wasm
 //   --wasm-execution=compiled
 //   --weight-path=./frame/support/src/weights/
@@ -44,16 +44,16 @@ parameter_types! {
 	/// Calculated by multiplying the *Average* with `1` and adding `0`.
 	///
 	/// Stats nanoseconds:
-	///   Min, Max: 5_295_788, 5_473_440
-	///   Average:  5_343_308
-	///   Median:   5_323_240
-	///   Std-Dev:  38368.68
+	///   Min, Max: 5_303_128, 5_507_784
+	///   Average:  5_346_284
+	///   Median:   5_328_139
+	///   Std-Dev:  41749.5
 	///
 	/// Percentiles nanoseconds:
-	///   99th: 5_470_141
-	///   95th: 5_418_269
-	///   75th: 5_355_579
-	pub const BlockExecutionWeight: Weight = 5_343_308 * WEIGHT_PER_NANOS;
+	///   99th: 5_489_273
+	///   95th: 5_433_314
+	///   75th: 5_354_812
+	pub const BlockExecutionWeight: Weight = 5_346_284 * WEIGHT_PER_NANOS;
 }
 
 #[cfg(test)]

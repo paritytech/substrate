@@ -93,8 +93,7 @@ pub mod pallet {
 
 		/// Doc comment put in metadata
 		#[pallet::weight(1)]
-		#[frame_support::transactional]
-		pub fn foo_transactional(
+		pub fn foo_storage_layer(
 			origin: OriginFor<T>,
 			#[pallet::compact] _foo: u32,
 		) -> DispatchResultWithPostInfo {
@@ -316,7 +315,7 @@ fn call_expand() {
 		DispatchInfo { weight: 3, class: DispatchClass::Normal, pays_fee: Pays::Yes }
 	);
 	assert_eq!(call_foo.get_call_name(), "foo");
-	assert_eq!(pallet::Call::<Runtime>::get_call_names(), &["foo", "foo_transactional"]);
+	assert_eq!(pallet::Call::<Runtime>::get_call_names(), &["foo", "foo_storage_layer"]);
 
 	let call_foo = pallet::Call::<Runtime, pallet::Instance1>::foo { foo: 3 };
 	assert_eq!(
@@ -326,7 +325,7 @@ fn call_expand() {
 	assert_eq!(call_foo.get_call_name(), "foo");
 	assert_eq!(
 		pallet::Call::<Runtime, pallet::Instance1>::get_call_names(),
-		&["foo", "foo_transactional"],
+		&["foo", "foo_storage_layer"],
 	);
 }
 
