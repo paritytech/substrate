@@ -177,6 +177,16 @@ default:
 # Arguably we could generate a job for each companion in the PR's description using Gitlab's
 # parent-child pipelines but that's more complicated.
 
+include:
+  # check jobs
+  #- scripts/ci/gitlab/pipeline/check.yml
+  # tests jobs
+  #- scripts/ci/gitlab/pipeline/test.yml
+  # build jobs
+  - scripts/ci/gitlab/pipeline/build.yml
+  # publish jobs
+  #- scripts/ci/gitlab/pipeline/publish.yml
+
 check-dependent-polkadot:
   extends:                         .check-dependent-project
   variables:
