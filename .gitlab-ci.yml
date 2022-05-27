@@ -156,11 +156,6 @@ default:
 
 #### stage:                       .pre
 
-<<<<<<< HEAD
-include:
-  # check jobs
-  #- scripts/ci/gitlab/pipeline/check.yml
-=======
 skip-if-draft:
   extends:                         .kubernetes-env
   variables:
@@ -177,15 +172,11 @@ skip-if-draft:
 include:
   # check jobs
   - scripts/ci/gitlab/pipeline/check.yml
->>>>>>> parent of dcf4ae8d842 (temporary: trim CI)
   # tests jobs
   - scripts/ci/gitlab/pipeline/test.yml
   # build jobs
   - scripts/ci/gitlab/pipeline/build.yml
   # publish jobs
-<<<<<<< HEAD
-  #- scripts/ci/gitlab/pipeline/publish.yml
-=======
   - scripts/ci/gitlab/pipeline/publish.yml
 
 
@@ -236,4 +227,3 @@ cancel-pipeline:
     PROJECT_ID:                    "${CI_PROJECT_ID}"
     PIPELINE_ID:                   "${CI_PIPELINE_ID}"
   trigger:                         "parity/infrastructure/ci_cd/pipeline-stopper"
->>>>>>> parent of dcf4ae8d842 (temporary: trim CI)
