@@ -1046,6 +1046,9 @@ define_env!(Env, <E: Ext>,
 
 	// Checks whether there is a value stored under the given key.
 	//
+	// This version is to be used with a fixed sized storage key. For runtimes supporting transparent
+	// hashing, please use the newer version of this function.
+	//
 	// # Parameters
 	//
 	// - `key_ptr`: pointer into the linear memory where the key of the requested value is placed.
@@ -1059,6 +1062,31 @@ define_env!(Env, <E: Ext>,
 		let mut key: FixSizedKey = [0; 32];
 		ctx.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
 		if let Some(len) = ctx.ext.get_storage_size(key) {
+			ctx.adjust_gas(charged, RuntimeCosts::ContainsStorage(len));
+			Ok(len)
+		} else {
+			ctx.adjust_gas(charged, RuntimeCosts::ContainsStorage(0));
+			Ok(SENTINEL)
+		}
+	},
+
+	// Checks whether there is a value stored under the given key.
+	//
+	// The key length must not exceed the maximum defined by the contracts module parameter.
+	//
+	// # Parameters
+	//
+	// - `key_ptr`: pointer into the linear memory where the key of the requested value is placed.
+	// - `key_len`: the length of the key in bytes.
+	//
+	// # Return Value
+	//
+	// Returns the size of the pre-existing value at the specified key if any. Otherwise
+	// `SENTINEL` is returned as a sentinel value.
+	[__unstable__] seal_contains_storage(ctx, key_ptr: u32, key_len: u32) -> u32 => {
+		let charged = ctx.charge_gas(RuntimeCosts::ContainsStorage(ctx.ext.max_value_size()))?;
+		let key = ctx.read_sandbox_memory(key_ptr, key_len)?;
+		if let Some(len) = ctx.ext.get_storage_size_transparent(VarSizedKey::<E::T>::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?) {
 			ctx.adjust_gas(charged, RuntimeCosts::ContainsStorage(len));
 			Ok(len)
 		} else {
