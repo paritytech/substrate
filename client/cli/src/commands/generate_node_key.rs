@@ -20,9 +20,7 @@
 use crate::Error;
 use clap::Parser;
 use libp2p::identity::{ed25519 as libp2p_ed25519, PublicKey};
-use sp_core::hexdisplay::AsBytesRef;
 use std::{
-	borrow::Cow,
 	fs,
 	io::{self, Write},
 	path::PathBuf,
@@ -57,14 +55,14 @@ impl GenerateNodeKeyCmd {
 		let secret = keypair.secret();
 
 		let file_data = if self.bin {
-			Cow::Borrowed(secret.as_ref())
+			secret.as_ref().to_owned()
 		} else {
-			Cow::Owned(hex::encode(secret.as_ref()).into_bytes())
+			hex::encode(secret.as_ref()).into_bytes()
 		};
 
 		match &self.file {
 			Some(file) => fs::write(file, file_data)?,
-			None => io::stdout().lock().write_all(file_data.as_bytes_ref())?,
+			None => io::stdout().lock().write_all(&file_data)?,
 		}
 
 		let peer_id = PublicKey::Ed25519(keypair.public()).to_peer_id();
