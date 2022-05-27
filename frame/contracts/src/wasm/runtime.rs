@@ -37,6 +37,7 @@ use sp_std::prelude::*;
 use wasm_instrument::parity_wasm::elements::ValueType;
 
 /// Type of a storage key.
+#[allow(dead_code)]
 enum KeyType {
 	/// Deprecated fix sized key [0;32].
 	Fix,
