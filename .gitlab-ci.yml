@@ -156,27 +156,6 @@ default:
 
 #### stage:                       .pre
 
-.check-dependent-project:
-  stage:                           build
-  extends:
-    - .docker-env
-    - .test-refs-no-trigger-prs-only
-  script:
-    - git clone
-        --depth=1
-        --branch=handle-extra-dependencies
-        https://github.com/joao-paulo-parity/pipeline-scripts
-    - ./pipeline-scripts/check_dependent_project.sh
-        --org paritytech
-        --dependent-repo "$DEPENDENT_REPO"
-        --github-api-token "$GITHUB_PR_TOKEN"
-        --extra-dependencies "$EXTRA_DEPENDENCIES"
-        --companion-overrides "$COMPANION_OVERRIDES"
-
-# Individual jobs are set up for each dependent project so that they can be ran in parallel.
-# Arguably we could generate a job for each companion in the PR's description using Gitlab's
-# parent-child pipelines but that's more complicated.
-
 include:
   # check jobs
   #- scripts/ci/gitlab/pipeline/check.yml
@@ -186,20 +165,3 @@ include:
   - scripts/ci/gitlab/pipeline/build.yml
   # publish jobs
   #- scripts/ci/gitlab/pipeline/publish.yml
-
-check-dependent-polkadot:
-  extends:                         .check-dependent-project
-  variables:
-    DEPENDENT_REPO:                polkadot
-    COMPANION_OVERRIDES: |
-      substrate: polkadot-v*
-      polkadot: release-v*
-
-check-dependent-cumulus:
-  extends:                         .check-dependent-project
-  variables:
-    DEPENDENT_REPO:                cumulus
-    EXTRA_DEPENDENCIES:            polkadot
-    COMPANION_OVERRIDES: |
-      substrate: polkadot-v*
-      polkadot: release-v*
