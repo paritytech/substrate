@@ -40,9 +40,7 @@ use codec::{Decode, Encode};
 use futures::{channel::mpsc, FutureExt, StreamExt};
 use jsonrpsee::{core::Error as JsonRpseeError, RpcModule};
 use log::{debug, error, warn};
-use sc_client_api::{
-	blockchain::HeaderBackend, BlockBackend, BlockchainEvents, BlockchainRPCEvents, ProofProvider,
-};
+use sc_client_api::{blockchain::HeaderBackend, BlockBackend, BlockchainEvents, ProofProvider};
 use sc_network::PeerId;
 use sc_rpc_server::WsConfig;
 use sc_utils::mpsc::TracingUnboundedReceiver;
@@ -287,148 +285,16 @@ async fn build_network_future<
 /// The `status_sink` contain a list of senders to send a periodic network status to.
 async fn build_network_collator_future<
 	B: BlockT,
-	C: BlockchainRPCEvents<B>
-		+ HeaderBackend<B>
+	C: HeaderBackend<B>
 		+ ProofProvider<B>
 		+ HeaderMetadata<B, Error = sp_blockchain::Error>
 		+ BlockBackend<B>,
 	H: sc_network::ExHashT,
 >(
-	role: Role,
 	mut network: sc_network::NetworkWorker<B, H, C>,
-	client: Arc<C>,
-	mut rpc_rx: TracingUnboundedReceiver<sc_rpc::system::Request<B>>,
-	should_have_peers: bool,
-	announce_imported_blocks: bool,
 ) {
-	let mut imported_blocks_stream = client.import_notification_stream().fuse();
-
-	// Current best block at initialization, to report to the RPC layer.
-	let starting_block = client.info().best_number;
-
-	// Stream of finalized blocks reported by the client.
-	let mut finality_notification_stream = client.finality_notification_stream().fuse();
-	let mut new_best_notification_stream = client.best_head_stream().fuse();
-
 	loop {
 		futures::select! {
-			// List of blocks that the client has imported.
-			notification = imported_blocks_stream.next() => {
-				let notification = match notification {
-					Some(n) => n,
-					// If this stream is shut down, that means the client has shut down, and the
-					// most appropriate thing to do for the network future is to shut down too.
-					None => return,
-				};
-
-				// TODO skunert No need to announce anything
-				if announce_imported_blocks {
-					network.service().announce_block(notification.hash(), None);
-				}
-			}
-
-			notification = new_best_notification_stream.next() => {
-				let notification = match notification {
-					Some(n) => n,
-					// If this stream is shut down, that means the client has shut down, and the
-					// most appropriate thing to do for the network future is to shut down too.
-					None => return,
-				};
-
-					network.service().new_best_block_imported(
-						notification.hash(),
-						notification.number().clone(),
-					);
-			}
-
-			// List of blocks that the client has finalized.
-			notification = finality_notification_stream.select_next_some() => {
-				network.on_block_finalized(notification.hash(), notification);
-			}
-
-			// Answer incoming RPC requests.
-			request = rpc_rx.select_next_some() => {
-				match request {
-					sc_rpc::system::Request::Health(sender) => {
-						let _ = sender.send(sc_rpc::system::Health {
-							peers: network.peers_debug_info().len(),
-							is_syncing: network.service().is_major_syncing(),
-							should_have_peers,
-						});
-					},
-					sc_rpc::system::Request::LocalPeerId(sender) => {
-						let _ = sender.send(network.local_peer_id().to_base58());
-					},
-					sc_rpc::system::Request::LocalListenAddresses(sender) => {
-						let peer_id = network.local_peer_id().clone().into();
-						let p2p_proto_suffix = sc_network::multiaddr::Protocol::P2p(peer_id);
-						let addresses = network.listen_addresses()
-							.map(|addr| addr.clone().with(p2p_proto_suffix.clone()).to_string())
-							.collect();
-						let _ = sender.send(addresses);
-					},
-					sc_rpc::system::Request::Peers(sender) => {
-						let _ = sender.send(network.peers_debug_info().into_iter().map(|(peer_id, p)|
-							sc_rpc::system::PeerInfo {
-								peer_id: peer_id.to_base58(),
-								roles: format!("{:?}", p.roles),
-								best_hash: p.best_hash,
-								best_number: p.best_number,
-							}
-						).collect());
-					}
-					sc_rpc::system::Request::NetworkState(sender) => {
-						if let Some(network_state) = serde_json::to_value(&network.network_state()).ok() {
-							let _ = sender.send(network_state);
-						}
-					}
-					sc_rpc::system::Request::NetworkAddReservedPeer(peer_addr, sender) => {
-						let x = network.add_reserved_peer(peer_addr)
-							.map_err(sc_rpc::system::error::Error::MalformattedPeerArg);
-						let _ = sender.send(x);
-					}
-					sc_rpc::system::Request::NetworkRemoveReservedPeer(peer_id, sender) => {
-						let _ = match peer_id.parse::<PeerId>() {
-							Ok(peer_id) => {
-								network.remove_reserved_peer(peer_id);
-								sender.send(Ok(()))
-							}
-							Err(e) => sender.send(Err(sc_rpc::system::error::Error::MalformattedPeerArg(
-								e.to_string(),
-							))),
-						};
-					}
-					sc_rpc::system::Request::NetworkReservedPeers(sender) => {
-						let reserved_peers = network.reserved_peers();
-						let reserved_peers = reserved_peers
-							.map(|peer_id| peer_id.to_base58())
-							.collect();
-
-						let _ = sender.send(reserved_peers);
-					}
-					sc_rpc::system::Request::NodeRoles(sender) => {
-						use sc_rpc::system::NodeRole;
-
-						let node_role = match role {
-							Role::Authority { .. } => NodeRole::Authority,
-							Role::Light => NodeRole::LightClient,
-							Role::Full => NodeRole::Full,
-						};
-
-						let _ = sender.send(vec![node_role]);
-					}
-					sc_rpc::system::Request::SyncState(sender) => {
-						use sc_rpc::system::SyncState;
-
-						let _ = sender.send(SyncState {
-							starting_block: starting_block,
-							current_block: client.info().best_number,
-							highest_block: network.best_seen_block(),
-						});
-					}
-				}
-			}
-
 			// The network worker has done something. Nothing special to do, but could be
 			// used in the future to perform actions in response of things that happened on
 			// the network.

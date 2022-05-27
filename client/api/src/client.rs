@@ -57,13 +57,6 @@ pub trait BlockOf {
 	type Type: BlockT;
 }
 
-pub trait BlockchainRPCEvents<Block: BlockT> {
-	fn finality_notification_stream(&self) -> Pin<Box<dyn Stream<Item = Block::Header> + Send>>;
-
-	fn import_notification_stream(&self) -> Pin<Box<dyn Stream<Item = Block::Header> + Send>>;
-
-	fn best_head_stream(&self) -> Pin<Box<dyn Stream<Item = Block::Header> + Send>>;
-}
 /// A source of blockchain events.
 pub trait BlockchainEvents<Block: BlockT> {
 	/// Get block import event stream. Not guaranteed to be fired for every

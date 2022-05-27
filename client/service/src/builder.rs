@@ -31,8 +31,7 @@ use prometheus_endpoint::Registry;
 use sc_chain_spec::get_extension;
 use sc_client_api::{
 	execution_extensions::ExecutionExtensions, proof_provider::ProofProvider, BadBlocks,
-	BlockBackend, BlockchainEvents, BlockchainRPCEvents, ExecutorProvider, ForkBlocks,
-	StorageProvider, UsageProvider,
+	BlockBackend, BlockchainEvents, ExecutorProvider, ForkBlocks, StorageProvider, UsageProvider,
 };
 use sc_client_db::{Backend, DatabaseSettings};
 use sc_consensus::import_queue::ImportQueue;
@@ -695,14 +694,7 @@ pub struct BuildCollatorNetworkParams<'a, TImpQu, TCl> {
 /// Build the network service, the network status sinks and an RPC sender.
 pub fn build_collator_network<TBl, TImpQu, TCl>(
 	params: BuildCollatorNetworkParams<TImpQu, TCl>,
-) -> Result<
-	(
-		Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
-		TracingUnboundedSender<sc_rpc::system::Request<TBl>>,
-		NetworkStarter,
-	),
-	Error,
->
+) -> Result<(Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>, NetworkStarter), Error>
 where
 	TBl: BlockT,
 	TCl: HeaderMetadata<TBl, Error = sp_blockchain::Error>
@@ -711,7 +703,7 @@ where
 		+ BlockIdTo<TBl, Error = sp_blockchain::Error>
 		+ ProofProvider<TBl>
 		+ HeaderBackend<TBl>
-		+ BlockchainRPCEvents<TBl>
+		+ BlockchainEvents<TBl>
 		+ 'static,
 	TImpQu: ImportQueue<TBl> + 'static,
 {
@@ -723,62 +715,14 @@ where
 
 	let block_announce_validator = Box::new(DefaultBlockAnnounceValidator);
 
-	// TODO [skunert] Shortcut: Check if okay to refuse incoming connections
 	let block_request_protocol_config =
 		block_request_handler::generate_protocol_config(&protocol_id);
-	// let block_request_protocol_config = {
-	// 	if matches!(config.role, Role::Light) {
-	// 		// Allow outgoing requests but deny incoming requests.
-	// 		block_request_handler::generate_protocol_config(&protocol_id)
-	// 	} else {
-	// 		// Allow both outgoing and incoming requests.
-	// 		let (handler, protocol_config) = BlockRequestHandler::new(
-	// 			&protocol_id,
-	// 			client.clone(),
-	// 			config.network.default_peers_set.in_peers as usize +
-	// 				config.network.default_peers_set.out_peers as usize,
-	// 		);
-	// 		spawn_handle.spawn("block-request-handler", Some("networking"), handler.run());
-	// 		protocol_config
-	// 	}
-	// };
 
-	// TODO [skunert] Shortcut: Check if okay to refuse incoming connections
 	let state_request_protocol_config =
 		state_request_handler::generate_protocol_config(&protocol_id);
-	// let state_request_protocol_config = {
-	// 	if matches!(config.role, Role::Light) {
-	// 		// Allow outgoing requests but deny incoming requests.
-	// 		state_request_handler::generate_protocol_config(&protocol_id)
-	// 	} else {
-	// 		// Allow both outgoing and incoming requests.
-	// 		let (handler, protocol_config) = StateRequestHandler::new(
-	// 			&protocol_id,
-	// 			client.clone(),
-	// 			config.network.default_peers_set_num_full as usize,
-	// 		);
-	// 		spawn_handle.spawn("state-request-handler", Some("networking"), handler.run());
-	// 		protocol_config
-	// 	}
-	// };
 
-	let warp_sync_params = None;
-
-	// TODO [skunert] Shortcut: Check if okay to refuse incoming connections
 	let light_client_request_protocol_config =
 		light_client_requests::generate_protocol_config(&protocol_id);
-	// let light_client_request_protocol_config = {
-	// 	if matches!(config.role, Role::Light) {
-	// 		// Allow outgoing requests but deny incoming requests.
-	// 		light_client_requests::generate_protocol_config(&protocol_id)
-	// 	} else {
-	// 		// Allow both outgoing and incoming requests.
-	// 		let (handler, protocol_config) =
-	// 			LightClientRequestHandler::new(&protocol_id, client.clone());
-	// 		spawn_handle.spawn("light-client-request-handler", Some("networking"), handler.run());
-	// 		protocol_config
-	// 	}
-	// };
 
 	let mut network_params = sc_network::config::Params {
 		role: config.role.clone(),
@@ -803,25 +747,16 @@ where
 		metrics_registry: config.prometheus_config.as_ref().map(|config| config.registry.clone()),
 		block_request_protocol_config,
 		state_request_protocol_config,
-		warp_sync: warp_sync_params,
+		warp_sync: None,
 		light_client_request_protocol_config,
 	};
 
-	let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();
 	let network_mut = sc_network::NetworkWorker::new(network_params)?;
 	let network = network_mut.service().clone();
 
-	let (system_rpc_tx, system_rpc_rx) = tracing_unbounded("mpsc_system_rpc");
+	let future = build_network_collator_future(network_mut);
 
-	let future = build_network_collator_future(
-		config.role.clone(),
-		network_mut,
-		client,
-		system_rpc_rx,
-		has_bootnodes,
-		config.announce_block,
-	);
-
+	// TODO: [skunert] Remove this comment
 	// TODO: Normally, one is supposed to pass a list of notifications protocols supported by the
 	// node through the `NetworkConfiguration` struct. But because this function doesn't know in
 	// advance which components, such as GrandPa or Polkadot, will be plugged on top of the
@@ -858,7 +793,7 @@ where
 		future.await
 	});
 
-	Ok((network, system_rpc_tx, NetworkStarter(network_start_tx)))
+	Ok((network, NetworkStarter(network_start_tx)))
 }
 
 /// Build the network service, the network status sinks and an RPC sender.
