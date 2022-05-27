@@ -36,12 +36,12 @@ use sp_sandbox::SandboxMemory;
 use sp_std::prelude::*;
 use wasm_instrument::parity_wasm::elements::ValueType;
 
-/// Type of storage key.
-/// FixSized is old fashioned [0;32].
-/// VarSized is a key used for transparent hashing, which is a u8 vector maximum length of
-/// MaxStorageKeyLen.
+/// Type of a storage key.
 enum KeyType {
+	/// Deprecated fix sized key [0;32].
 	Fix,
+	/// Variable sized key used in transparent hashing,
+	/// cannot be larger than MaxStorageKeyLen.
 	Variable(u32),
 }
 
@@ -936,6 +936,13 @@ define_env!(Env, <E: Ext>,
 	// `SENTINEL` is returned as a sentinel value.
 	[seal1] seal_set_storage(ctx, key_ptr: u32, value_ptr: u32, value_len: u32) -> u32 => {
 		ctx.set_storage(KeyType::Fix, key_ptr, value_ptr, value_len)
+	},
+
+	// Set the value at the given key in the contract storage.
+	//
+	// Equivalent to `[seal1] seal_set_storage` to be used with transparent hashing.
+	[__unstable__] seal_set_storage(ctx, key_ptr: u32, key_len: u32, value_ptr: u32, value_len: u32) -> u32 => {
+		ctx.set_storage(KeyType::Variable(key_len), key_ptr, value_ptr, value_len).map_err(Into::into)
 	},
 
 	// Clear the value at the given key in the contract storage.
