@@ -101,9 +101,10 @@ pub fn is_transactional() -> bool {
 /// error.
 ///
 /// Commits happen to the parent transaction.
-pub fn with_transaction<T, E>(f: impl FnOnce() -> TransactionOutcome<Result<T, E>>) -> Result<T, E>
+pub fn with_transaction<T, E, F>(f: F) -> Result<T, E>
 where
 	E: From<DispatchError>,
+	F: FnOnce() -> TransactionOutcome<Result<T, E>>,
 {
 	// This needs to happen before `start_transaction` below.
 	// Otherwise we may rollback the increase, then decrease as the guard goes out of scope
