@@ -211,15 +211,6 @@ fn last_event() -> BountiesEvent<Test> {
 		.unwrap()
 }
 
-fn last_event_second_instance() -> BountiesEvent<Test, Instance1> {
-	System::events()
-		.into_iter()
-		.map(|r| r.event)
-		.filter_map(|e| if let Event::Bounties1(inner) = e { Some(inner) } else { None })
-		.last()
-		.unwrap()
-}
-
 #[test]
 fn genesis_config_works() {
 	new_test_ext().execute_with(|| {
