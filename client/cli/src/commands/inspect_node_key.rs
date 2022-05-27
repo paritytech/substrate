@@ -44,6 +44,11 @@ pub struct InspectNodeKeyCmd {
 	/// If not given, the input is read as an hex encoded string.
 	#[clap(long)]
 	bin: bool,
+
+	/// This argument is deprecated and has no effect for this command.
+	#[deprecated(note = "Network identifier is not used for node-key inspection")]
+	#[clap(short = 'n', long = "network", value_name = "NETWORK", ignore_case = true)]
+	pub network_scheme: Option<String>,
 }
 
 impl InspectNodeKeyCmd {
@@ -60,15 +65,8 @@ impl InspectNodeKeyCmd {
 
 		if !self.bin {
 			// With hex input, give to the user a bit of tolerance about whitespaces
-			let is_not_ascii_whitespace = |c: &u8| !c.is_ascii_whitespace();
-			let beg = file_data.iter().position(is_not_ascii_whitespace).unwrap_or_default();
-			let end = file_data
-				.iter()
-				.rposition(is_not_ascii_whitespace)
-				.map(|off| off + 1)
-				.unwrap_or_default();
-			file_data =
-				hex::decode(&file_data[beg..end]).map_err(|_| "failed to decode secret as hex")?;
+			let keyhex = String::from_utf8_lossy(&file_data);
+			file_data = hex::decode(keyhex.trim()).map_err(|_| "failed to decode secret as hex")?;
 		}
 
 		let secret =
@@ -76,8 +74,7 @@ impl InspectNodeKeyCmd {
 
 		let keypair = ed25519::Keypair::from(secret);
 
-		let peer_id = PublicKey::Ed25519(keypair.public()).to_peer_id();
-		println!("Peer-ID: {}", peer_id);
+		println!("{}", PublicKey::Ed25519(keypair.public()).to_peer_id());
 
 		Ok(())
 	}

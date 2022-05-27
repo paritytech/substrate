@@ -65,8 +65,7 @@ impl GenerateNodeKeyCmd {
 			None => io::stdout().lock().write_all(&file_data)?,
 		}
 
-		let peer_id = PublicKey::Ed25519(keypair.public()).to_peer_id();
-		eprintln!("Peer-ID: {}", peer_id);
+		eprintln!("{}", PublicKey::Ed25519(keypair.public()).to_peer_id());
 
 		Ok(())
 	}
