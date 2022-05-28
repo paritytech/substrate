@@ -25,9 +25,9 @@ use sc_service::{KeepBlocks, PruningMode};
 pub struct PruningParams {
 	/// Specify the state pruning mode, a number of blocks to keep or 'archive'.
 	///
-	/// Default is to keep all block states if the node is running as a
-	/// validator (i.e. 'archive'), otherwise state is only kept for the last
-	/// 256 blocks.
+	/// Default is to keep only the last 256 blocks,
+	/// otherwise, the state can be kept for all of the blocks (i.e 'archive'),
+	/// or for all of the canonical blocks (i.e 'archive-canonical').
 	#[clap(long, value_name = "PRUNING_MODE")]
 	pub pruning: Option<String>,
 	/// Specify the number of finalized blocks to keep in the database.
