@@ -571,7 +571,7 @@ fn approve_bounty_works() {
 fn assign_curator_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Balances::make_free_balance_be(&Treasury1::account_id(), 101);
+		Balances::make_free_balance_be(&Treasury::account_id(), 101);
 
 		assert_noop!(
 			Bounties::propose_curator(Origin::root(), 0, 4, 4),

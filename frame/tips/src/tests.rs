@@ -230,7 +230,6 @@ fn tip_hash() -> H256 {
 fn tip_new_cannot_be_used_twice() {
 	new_test_ext().execute_with(|| {
 		Balances::make_free_balance_be(&Treasury::account_id(), 101);
-		assert_eq!(Balances::free_balance(&Treasury::account_id()), 101);
 		assert_ok!(Tips::tip_new(Origin::signed(10), b"awesome.dot".to_vec(), 3, 10));
 		assert_noop!(
 			Tips::tip_new(Origin::signed(11), b"awesome.dot".to_vec(), 3, 10),
@@ -263,7 +262,6 @@ fn report_awesome_and_tip_works() {
 		assert_eq!(Balances::reserved_balance(0), 0);
 		assert_eq!(Balances::free_balance(0), 102);
 		assert_eq!(Balances::free_balance(3), 8);
-		assert_eq!(Balances::free_balance(&Treasury::account_id()), 91);
 	});
 }
 
@@ -581,7 +579,6 @@ fn report_awesome_and_tip_works_second_instance() {
 	new_test_ext().execute_with(|| {
 		Balances::make_free_balance_be(&Treasury::account_id(), 101);
 		Balances::make_free_balance_be(&Treasury1::account_id(), 210);
-		// Balances::make_free_balance_be(&Treasury::account_id(), 101);
 		assert_ok!(Tips1::report_awesome(Origin::signed(0), b"awesome.dot".to_vec(), 3));
 		assert_eq!(Balances::reserved_balance(0), 12);
 		assert_eq!(Balances::free_balance(0), 88);
