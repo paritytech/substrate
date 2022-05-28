@@ -220,8 +220,11 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		let rocksdb_path = base_path.join("db").join(role_dir);
 		let paritydb_path = base_path.join("paritydb").join(role_dir);
 		Ok(match database {
+			#[cfg(feature = "with-rocks-db")]
 			Database::RocksDb => DatabaseSource::RocksDb { path: rocksdb_path, cache_size },
+			#[cfg(feature = "with-parity-db")]
 			Database::ParityDb => DatabaseSource::ParityDb { path: paritydb_path },
+			#[cfg(feature = "with-parity-db")]
 			Database::ParityDbDeprecated => {
 				eprintln!(
 					"WARNING: \"paritydb-experimental\" database setting is deprecated and will be removed in future releases. \
@@ -500,7 +503,16 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		let net_config_dir = config_dir.join(DEFAULT_NETWORK_CONFIG_PATH);
 		let client_id = C::client_id();
 		let database_cache_size = self.database_cache_size()?.unwrap_or(1024);
-		let database = self.database()?.unwrap_or(Database::RocksDb);
+		let database = self.database()?.unwrap_or(
+			#[cfg(feature = "with-rocks-db")]
+			{
+				Database::RocksDb
+			},
+			#[cfg(all(feature = "with-parity-db", not(feature = "with-rocks-db")))]
+			{
+				Database::ParityDb
+			},
+		);
 		let node_key = self.node_key(&net_config_dir)?;
 		let role = self.role(is_dev)?;
 		let max_runtime_instances = self.max_runtime_instances()?.unwrap_or(8);

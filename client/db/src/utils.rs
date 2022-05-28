@@ -197,7 +197,9 @@ fn open_database_at<Block: BlockT>(
 	create: bool,
 ) -> OpenDbResult {
 	let db: Arc<dyn Database<DbHash>> = match &db_source {
+		#[cfg(feature = "with-parity-db")]
 		DatabaseSource::ParityDb { path } => open_parity_db::<Block>(path, db_type, create)?,
+		#[cfg(feature = "with-kvdb-rocksdb")]
 		DatabaseSource::RocksDb { path, cache_size } =>
 			open_kvdb_rocksdb::<Block>(path, db_type, create, *cache_size)?,
 		DatabaseSource::Custom { db, require_create_flag } => {

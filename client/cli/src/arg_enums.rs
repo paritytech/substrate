@@ -237,13 +237,16 @@ impl Into<sc_service::config::RpcMethods> for RpcMethods {
 /// Database backend
 #[derive(Debug, Clone, PartialEq, Copy)]
 pub enum Database {
+	#[cfg(feature = "with-rocks-db")]
 	/// Facebooks RocksDB
 	RocksDb,
+	#[cfg(feature = "with-parity-db")]
 	/// ParityDb. <https://github.com/paritytech/parity-db/>
 	ParityDb,
 	/// Detect whether there is an existing database. Use it, if there is, if not, create new
 	/// instance of ParityDb
 	Auto,
+	#[cfg(feature = "with-parity-db")]
 	/// ParityDb. <https://github.com/paritytech/parity-db/>
 	ParityDbDeprecated,
 }
@@ -252,13 +255,17 @@ impl std::str::FromStr for Database {
 	type Err = String;
 
 	fn from_str(s: &str) -> Result<Self, String> {
+		#[cfg(feature = "with-rocks-db")]
 		if s.eq_ignore_ascii_case("rocksdb") {
-			Ok(Self::RocksDb)
-		} else if s.eq_ignore_ascii_case("paritydb-experimental") {
-			Ok(Self::ParityDbDeprecated)
+			return Ok(Self::RocksDb)
+		}
+		#[cfg(feature = "with-parity-db")]
+		if s.eq_ignore_ascii_case("paritydb-experimental") {
+			return Ok(Self::ParityDbDeprecated)
 		} else if s.eq_ignore_ascii_case("paritydb") {
-			Ok(Self::ParityDb)
-		} else if s.eq_ignore_ascii_case("auto") {
+			return Ok(Self::ParityDb)
+		}
+		if s.eq_ignore_ascii_case("auto") {
 			Ok(Self::Auto)
 		} else {
 			Err(format!("Unknown variant `{}`, known variants: {:?}", s, Self::variants()))
@@ -268,8 +275,16 @@ impl std::str::FromStr for Database {
 
 impl Database {
 	/// Returns all the variants of this enum to be shown in the cli.
-	pub fn variants() -> &'static [&'static str] {
-		&["rocksdb", "paritydb", "paritydb-experimental", "auto"]
+	pub const fn variants() -> &'static [&'static str] {
+		&[
+			#[cfg(feature = "with-rocks-db")]
+			"rocksdb",
+			#[cfg(feature = "with-parity-db")]
+			"paritydb",
+			#[cfg(feature = "with-parity-db")]
+			"paritydb-experimental",
+			"auto",
+		]
 	}
 }
 
