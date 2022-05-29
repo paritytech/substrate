@@ -38,7 +38,7 @@ use log::{debug, info, warn};
 use sc_consensus::{BlockImport, JustificationSyncLink};
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_INFO, CONSENSUS_WARN};
 use sp_arithmetic::traits::BaseArithmetic;
-use sp_consensus::{CanAuthorWith, Proposer, SelectChain, SlotData, SyncOracle};
+use sp_consensus::{CanAuthorWith, Proposer, SelectChain, SyncOracle};
 use sp_consensus_slots::{Slot, SlotDuration};
 use sp_core::{crypto::key_types::AURA, sr25519, ShufflingSeed};
 use sp_inherents::{CreateInherentDataProviders, InherentDataProvider};
