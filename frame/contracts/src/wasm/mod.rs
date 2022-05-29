@@ -344,7 +344,6 @@ mod tests {
 		debug_buffer: Vec<u8>,
 		ecdsa_recover: RefCell<Vec<([u8; 65], [u8; 32])>>,
 		code_hashes: Vec<CodeHash<Test>>,
-		reentrant_count: Vec<u8>,
 	}
 
 	/// The call is mocked and just returns this hardcoded value.
@@ -368,7 +367,6 @@ mod tests {
 				gas_meter: GasMeter::new(10_000_000_000),
 				debug_buffer: Default::default(),
 				ecdsa_recover: Default::default(),
-				reentrant_count: vec![],
 			}
 		}
 	}
@@ -525,11 +523,8 @@ mod tests {
 		fn ecdsa_to_eth_address(&self, _pk: &[u8; 33]) -> Result<[u8; 20], ()> {
 			Ok([2u8; 20])
 		}
-		fn reentrant_count(&mut self) -> u32 {
-			self.reentrant_count.push(12u8);
-			12
-		}
-		fn account_entrance_count(&mut self, _account_id: AccountIdOf<Self::T>) -> u32 { unimplemented!() }
+		fn reentrant_count(&self) -> u32 { 12 }
+		fn account_entrance_count(&self, _account_id: &AccountIdOf<Self::T>) -> u32 { unimplemented!() }
 	}
 
 	fn execute<E: BorrowMut<MockExt>>(wat: &str, input_data: Vec<u8>, mut ext: E) -> ExecResult {
