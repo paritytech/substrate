@@ -2,10 +2,10 @@
 
 The Contract module provides functionality for the runtime to deploy and execute WebAssembly smart-contracts.
 
-- [`Call`](https://docs.rs/pallet-contracts/latest/pallet_contracts/enum.Call.html)
-- [`Config`](https://docs.rs/pallet-contracts/latest/pallet_contracts/trait.Config.html)
-- [`Error`](https://docs.rs/pallet-contracts/latest/pallet_contracts/enum.Error.html)
-- [`Event`](https://docs.rs/pallet-contracts/latest/pallet_contracts/enum.Event.html)
+- [`Call`](https://paritytech.github.io/substrate/master/pallet_contracts/pallet/enum.Call.html)
+- [`Config`](https://paritytech.github.io/substrate/master/pallet_contracts/pallet/trait.Config.html)
+- [`Error`](https://paritytech.github.io/substrate/master/pallet_contracts/pallet/enum.Error.html)
+- [`Event`](https://paritytech.github.io/substrate/master/pallet_contracts/pallet/enum.Error.html)
 
 ## Overview
 
@@ -47,7 +47,7 @@ fails, A can decide how to handle that failure, either proceeding or reverting A
 
 ### Dispatchable functions
 
-Those are documented in the [reference documentation](https://docs.rs/pallet-contracts/latest/pallet_contracts/#dispatchable-functions).
+Those are documented in the [reference documentation](https://paritytech.github.io/substrate/master/pallet_contracts/index.html#dispatchable-functions).
 
 ### Interface exposed to contracts
 
@@ -89,7 +89,7 @@ writing WebAssembly based smart contracts in the Rust programming language.
 
 Contracts can emit messages to the client when called as RPC through the `seal_debug_message`
 API. This is exposed in ink! via
-[`ink_env::debug_println()`](https://docs.rs/ink_env/latest/ink_env/fn.debug_println.html).
+[`ink_env::debug_message()`](https://paritytech.github.io/ink/ink_env/fn.debug_message.html).
 
 Those messages are gathered into an internal buffer and send to the RPC client.
 It is up the the individual client if and how those messages are presented to the user.
