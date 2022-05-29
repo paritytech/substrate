@@ -815,6 +815,44 @@ fn revert_prunes_epoch_changes_and_removes_weights() {
 }
 
 #[test]
+fn revert_not_allowed_for_finalized() {
+	let mut net = BabeTestNet::new(1);
+
+	let peer = net.peer(0);
+	let data = peer.data.as_ref().expect("babe link set up during initialization");
+
+	let client = peer.client().as_client();
+	let backend = peer.client().as_backend();
+	let mut block_import = data.block_import.lock().take().expect("import set up during init");
+
+	let mut proposer_factory = DummyFactory {
+		client: client.clone(),
+		config: data.link.config.clone(),
+		epoch_changes: data.link.epoch_changes.clone(),
+		mutator: Arc::new(|_, _| ()),
+	};
+
+	let mut propose_and_import_blocks_wrap = |parent_id, n| {
+		propose_and_import_blocks(&client, &mut proposer_factory, &mut block_import, parent_id, n)
+	};
+
+	let canon = propose_and_import_blocks_wrap(BlockId::Number(0), 3);
+
+	// Finalize best block
+	client.finalize_block(BlockId::Hash(canon[2]), None, false).unwrap();
+
+	// Revert canon chain to last finalized block
+	revert(client.clone(), backend, 100).expect("revert should work for baked test scenario");
+
+	let weight_data_check = |hashes: &[Hash], expected: bool| {
+		hashes.iter().all(|hash| {
+			aux_schema::load_block_weight(&*client, hash).unwrap().is_some() == expected
+		})
+	};
+	assert!(weight_data_check(&canon, true));
+}
+
+#[test]
 fn importing_epoch_change_block_prunes_tree() {
 	let mut net = BabeTestNet::new(1);
 

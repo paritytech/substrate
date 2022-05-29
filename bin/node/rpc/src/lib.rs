@@ -37,12 +37,10 @@ use jsonrpsee::RpcModule;
 use node_primitives::{AccountId, Balance, Block, BlockNumber, Hash, Index};
 use sc_client_api::AuxStore;
 use sc_consensus_babe::{Config, Epoch};
-use sc_consensus_babe_rpc::BabeRpc;
 use sc_consensus_epochs::SharedEpochChanges;
 use sc_finality_grandpa::{
 	FinalityProofProvider, GrandpaJustificationStream, SharedAuthoritySet, SharedVoterState,
 };
-use sc_finality_grandpa_rpc::GrandpaRpc;
 use sc_rpc::SubscriptionTaskExecutor;
 pub use sc_rpc_api::DenyUnsafe;
 use sc_transaction_pool_api::TransactionPool;
@@ -120,15 +118,15 @@ where
 	B: sc_client_api::Backend<Block> + Send + Sync + 'static,
 	B::State: sc_client_api::backend::StateBackend<sp_runtime::traits::HashFor<Block>>,
 {
-	use pallet_contracts_rpc::{ContractsApiServer, ContractsRpc};
-	use pallet_mmr_rpc::{MmrApiServer, MmrRpc};
-	use pallet_transaction_payment_rpc::{TransactionPaymentApiServer, TransactionPaymentRpc};
-	use sc_consensus_babe_rpc::BabeApiServer;
-	use sc_finality_grandpa_rpc::GrandpaApiServer;
+	use pallet_contracts_rpc::{Contracts, ContractsApiServer};
+	use pallet_mmr_rpc::{Mmr, MmrApiServer};
+	use pallet_transaction_payment_rpc::{TransactionPayment, TransactionPaymentApiServer};
+	use sc_consensus_babe_rpc::{Babe, BabeApiServer};
+	use sc_finality_grandpa_rpc::{Grandpa, GrandpaApiServer};
 	use sc_rpc::dev::{Dev, DevApiServer};
-	use sc_sync_state_rpc::{SyncStateRpc, SyncStateRpcApiServer};
-	use substrate_frame_rpc_system::{SystemApiServer, SystemRpc};
-	use substrate_state_trie_migration_rpc::StateMigrationApiServer;
+	use sc_sync_state_rpc::{SyncState, SyncStateApiServer};
+	use substrate_frame_rpc_system::{System, SystemApiServer};
+	use substrate_state_trie_migration_rpc::{StateMigration, StateMigrationApiServer};
 
 	let mut io = RpcModule::new(());
 	let FullDeps { client, pool, select_chain, chain_spec, deny_unsafe, babe, grandpa } = deps;
@@ -142,15 +140,15 @@ where
 		finality_provider,
 	} = grandpa;
 
-	io.merge(SystemRpc::new(client.clone(), pool, deny_unsafe).into_rpc())?;
+	io.merge(System::new(client.clone(), pool, deny_unsafe).into_rpc())?;
 	// Making synchronous calls in light client freezes the browser currently,
 	// more context: https://github.com/paritytech/substrate/pull/3480
 	// These RPCs should use an asynchronous caller instead.
-	io.merge(ContractsRpc::new(client.clone()).into_rpc())?;
-	io.merge(MmrRpc::new(client.clone()).into_rpc())?;
-	io.merge(TransactionPaymentRpc::new(client.clone()).into_rpc())?;
+	io.merge(Contracts::new(client.clone()).into_rpc())?;
+	io.merge(Mmr::new(client.clone()).into_rpc())?;
+	io.merge(TransactionPayment::new(client.clone()).into_rpc())?;
 	io.merge(
-		BabeRpc::new(
+		Babe::new(
 			client.clone(),
 			shared_epoch_changes.clone(),
 			keystore,
@@ -161,7 +159,7 @@ where
 		.into_rpc(),
 	)?;
 	io.merge(
-		GrandpaRpc::new(
+		Grandpa::new(
 			subscription_executor,
 			shared_authority_set.clone(),
 			shared_voter_state,
@@ -172,14 +170,11 @@ where
 	)?;
 
 	io.merge(
-		SyncStateRpc::new(chain_spec, client.clone(), shared_authority_set, shared_epoch_changes)?
+		SyncState::new(chain_spec, client.clone(), shared_authority_set, shared_epoch_changes)?
 			.into_rpc(),
 	)?;
 
-	io.merge(
-		substrate_state_trie_migration_rpc::MigrationRpc::new(client.clone(), backend, deny_unsafe)
-			.into_rpc(),
-	)?;
+	io.merge(StateMigration::new(client.clone(), backend, deny_unsafe).into_rpc())?;
 	io.merge(Dev::new(client, deny_unsafe).into_rpc())?;
 
 	Ok(io)

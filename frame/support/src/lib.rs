@@ -1160,6 +1160,14 @@ pub mod tests {
 			DoubleMap::insert(&(key1 + 1), &(key2 + 1), &4u64);
 			let r = DoubleMap::remove_prefix(&key1, None);
 			assert!(matches!(r, sp_io::KillStorageResult::AllRemoved(0))); // all in overlay
+			assert!(matches!(
+				DoubleMap::clear_prefix(&key1, u32::max_value(), None),
+				// Note this is the incorrect answer (for now), since we are using v2 of
+				// `clear_prefix`.
+				// When we switch to v3, then this will become:
+				//   sp_io::MultiRemovalResults::NoneLeft { db: 0, total: 2 },
+				sp_io::MultiRemovalResults { maybe_cursor: None, backend: 0, unique: 0, loops: 0 },
+			));
 			assert_eq!(DoubleMap::get(&key1, &key2), 0u64);
 			assert_eq!(DoubleMap::get(&key1, &(key2 + 1)), 0u64);
 			assert_eq!(DoubleMap::get(&(key1 + 1), &key2), 4u64);
@@ -1613,6 +1621,15 @@ pub mod pallet_prelude {
 /// used using `#[pallet::compact]`, function must return `DispatchResultWithPostInfo` or
 /// `DispatchResult`.
 ///
+/// Each dispatchable may also be annotated with the `#[pallet::call_index($idx)]` attribute,
+/// which defines and sets the codec index for the dispatchable function in the `Call` enum.
+///
+/// All call indexes start from 0, until it encounters a dispatchable function with a defined
+/// call index. The dispatchable function that lexically follows the function with a defined
+/// call index will have that call index, but incremented by 1, e.g. if there are 3
+/// dispatchable functions `fn foo`, `fn bar` and `fn qux` in that order, and only `fn bar` has
+/// a call index of 10, then `fn qux` will have an index of 11, instead of 1.
+///
 /// All arguments must implement `Debug`, `PartialEq`, `Eq`, `Decode`, `Encode`, `Clone`. For
 /// ease of use, bound the trait `Member` available in frame_support::pallet_prelude.
 ///
@@ -1626,16 +1643,18 @@ pub mod pallet_prelude {
 /// **WARNING**: modifying dispatchables, changing their order, removing some must be done with
 /// care. Indeed this will change the outer runtime call type (which is an enum with one
 /// variant per pallet), this outer runtime call can be stored on-chain (e.g. in
-/// pallet-scheduler). Thus migration might be needed.
+/// pallet-scheduler). Thus migration might be needed. To mitigate against some of this, the
+/// `#[pallet::call_index($idx)]` attribute can be used to fix the order of the dispatchable so
+/// that the `Call` enum encoding does not change after modification.
 ///
 /// ### Macro expansion
 ///
-/// The macro create an enum `Call` with one variant per dispatchable. This enum implements:
+/// The macro creates an enum `Call` with one variant per dispatchable. This enum implements:
 /// `Clone`, `Eq`, `PartialEq`, `Debug` (with stripped implementation in `not("std")`),
 /// `Encode`, `Decode`, `GetDispatchInfo`, `GetCallName`, `UnfilteredDispatchable`.
 ///
-/// The macro implement on `Pallet`, the `Callable` trait and a function `call_functions` which
-/// returns the dispatchable metadatas.
+/// The macro implement the `Callable` trait on `Pallet` and a function `call_functions` which
+/// returns the dispatchable metadata.
 ///
 /// # Extra constants: `#[pallet::extra_constants]` optional
 ///
