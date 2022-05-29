@@ -10070,6 +10070,7 @@ dependencies = [
 name = "sp-state-machine"
 version = "0.12.0"
 dependencies = [
+ "assert_matches",
  "hash-db",
  "hex-literal",
  "log",
