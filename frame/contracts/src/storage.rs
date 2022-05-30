@@ -27,12 +27,12 @@ use crate::{
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	dispatch::{DispatchError, DispatchResult},
-	storage::child::{self, ChildInfo, KillStorageResult},
+	storage::child::{self, ChildInfo},
 	weights::Weight,
 };
 use scale_info::TypeInfo;
 use sp_core::crypto::UncheckedFrom;
-use sp_io::hashing::blake2_256;
+use sp_io::{hashing::blake2_256, KillStorageResult};
 use sp_runtime::{
 	traits::{Hash, Zero},
 	RuntimeDebug,
@@ -266,16 +266,16 @@ where
 		while !queue.is_empty() && remaining_key_budget > 0 {
 			// Cannot panic due to loop condition
 			let trie = &mut queue[0];
-			let outcome =
-				child::kill_storage(&child_trie_info(&trie.trie_id), Some(remaining_key_budget));
+			#[allow(deprecated)]
+			let outcome = child::kill_storage(&child_trie_info(&trie.trie_id), Some(remaining_key_budget));
 			let keys_removed = match outcome {
 				// This happens when our budget wasn't large enough to remove all keys.
-				KillStorageResult::SomeRemaining(count) => count,
-				KillStorageResult::AllRemoved(count) => {
+				KillStorageResult::SomeRemaining(c) => c,
+				KillStorageResult::AllRemoved(c) => {
 					// We do not care to preserve order. The contract is deleted already and
 					// no one waits for the trie to be deleted.
 					queue.swap_remove(0);
-					count
+					c
 				},
 			};
 			remaining_key_budget = remaining_key_budget.saturating_sub(keys_removed);

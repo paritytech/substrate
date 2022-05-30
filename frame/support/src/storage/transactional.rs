@@ -158,6 +158,40 @@ pub fn with_transaction_unchecked<R>(f: impl FnOnce() -> TransactionOutcome<R>) 
 	}
 }
 
+/// Execute the supplied function, adding a new storage layer.
+///
+/// This is the same as `with_transaction`, but assuming that any function returning
+/// an `Err` should rollback, and any function returning `Ok` should commit. This
+/// provides a cleaner API to the developer who wants this behavior.
+pub fn with_storage_layer<T, E>(f: impl FnOnce() -> Result<T, E>) -> Result<T, E>
+where
+	E: From<DispatchError>,
+{
+	with_transaction(|| {
+		let r = f();
+		if r.is_ok() {
+			TransactionOutcome::Commit(r)
+		} else {
+			TransactionOutcome::Rollback(r)
+		}
+	})
+}
+
+/// Execute the supplied function, ensuring we are at least in one storage layer.
+///
+/// If we are already in a storage layer, we just execute the provided closure.
+/// If we are not, we execute the closure within a [`with_storage_layer`].
+pub fn in_storage_layer<T, E>(f: impl FnOnce() -> Result<T, E>) -> Result<T, E>
+where
+	E: From<DispatchError>,
+{
+	if is_transactional() {
+		f()
+	} else {
+		with_storage_layer(f)
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -227,6 +261,35 @@ mod tests {
 			);
 
 			assert_eq!(get_transaction_level(), 0);
+		});
+	}
+
+	#[test]
+	fn in_storage_layer_works() {
+		TestExternalities::default().execute_with(|| {
+			assert_eq!(get_transaction_level(), 0);
+
+			let res = in_storage_layer(|| -> DispatchResult {
+				assert_eq!(get_transaction_level(), 1);
+				in_storage_layer(|| -> DispatchResult {
+					// We are still in the same layer :)
+					assert_eq!(get_transaction_level(), 1);
+					Ok(())
+				})
+			});
+
+			assert_ok!(res);
+
+			let res = in_storage_layer(|| -> DispatchResult {
+				assert_eq!(get_transaction_level(), 1);
+				in_storage_layer(|| -> DispatchResult {
+					// We are still in the same layer :)
+					assert_eq!(get_transaction_level(), 1);
+					Err("epic fail".into())
+				})
+			});
+
+			assert_noop!(res, "epic fail");
 		});
 	}
 }

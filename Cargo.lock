@@ -5157,7 +5157,6 @@ dependencies = [
  "scale-info",
  "serde",
  "serde_json",
- "smallvec",
  "sp-core",
  "sp-io",
  "sp-runtime",
@@ -6308,7 +6307,6 @@ dependencies = [
  "scale-info",
  "serde",
  "serde_json",
- "smallvec",
  "sp-core",
  "sp-io",
  "sp-runtime",
@@ -10095,6 +10093,7 @@ dependencies = [
 name = "sp-state-machine"
 version = "0.12.0"
 dependencies = [
+ "assert_matches",
  "hash-db",
  "hex-literal",
  "log",
