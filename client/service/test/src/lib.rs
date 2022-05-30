@@ -246,6 +246,10 @@ fn node_config<
 		rpc_cors: None,
 		rpc_methods: Default::default(),
 		rpc_max_payload: None,
+		rpc_max_request_size: None,
+		rpc_max_response_size: None,
+		rpc_id_provider: None,
+		rpc_max_subs_per_conn: None,
 		ws_max_out_buffer_capacity: None,
 		prometheus_config: None,
 		telemetry_endpoints: None,
@@ -261,6 +265,7 @@ fn node_config<
 		base_path: Some(BasePath::new(root)),
 		informant_output_format: Default::default(),
 		runtime_cache_size: 2,
+		mixnet: false,
 	}
 }
 

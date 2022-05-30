@@ -16,6 +16,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+//! State sync support.
+
 use crate::schema::v1::{StateEntry, StateRequest, StateResponse};
 use codec::{Decode, Encode};
 use log::debug;
@@ -25,8 +27,6 @@ use smallvec::SmallVec;
 use sp_core::storage::well_known_keys;
 use sp_runtime::traits::{Block as BlockT, Header, NumberFor};
 use std::{collections::HashMap, sync::Arc};
-
-/// State sync support.
 
 /// State sync state machine. Accumulates partial state data until it
 /// is ready to be imported.

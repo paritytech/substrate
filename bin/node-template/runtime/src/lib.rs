@@ -409,6 +409,14 @@ impl_runtime_apis! {
 		) -> Option<Vec<(Vec<u8>, KeyTypeId)>> {
 			opaque::SessionKeys::decode_into_raw_public_keys(&encoded)
 		}
+
+		fn session_index() -> sp_session::SessionIndex {
+			unimplemented!("No session pallet for runtime")
+		}
+
+		fn queued_keys() -> Vec<(Vec<u8>, Vec<(KeyTypeId, sp_core::crypto::CryptoTypePublicPair)>)> {
+			unimplemented!("No session pallet for runtime")
+		}
 	}
 
 	impl fg_primitives::GrandpaApi<Block> for Runtime {

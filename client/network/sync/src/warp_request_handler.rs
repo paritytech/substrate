@@ -16,13 +16,18 @@
 
 //! Helper for handling (i.e. answering) grandpa warp sync requests from a remote peer.
 
-use crate::config::{IncomingRequest, OutgoingResponse, ProtocolId, RequestResponseConfig};
 use codec::{Decode, Encode};
 use futures::{
 	channel::{mpsc, oneshot},
 	stream::StreamExt,
 };
 use log::debug;
+use sc_network_common::{
+	config::ProtocolId,
+	request_responses::{
+		IncomingRequest, OutgoingResponse, ProtocolConfig as RequestResponseConfig,
+	},
+};
 use sp_runtime::traits::Block as BlockT;
 use std::{sync::Arc, time::Duration};
 

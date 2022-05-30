@@ -27,7 +27,7 @@ use sp_api::ProvideRuntimeApi;
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 
 use sp_core::{crypto::KeyTypeId, RuntimeDebug};
-use sp_staking::SessionIndex;
+pub use sp_staking::SessionIndex;
 use sp_std::vec::Vec;
 
 sp_api::decl_runtime_apis! {

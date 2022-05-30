@@ -19,33 +19,33 @@ harness = false
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false }
-scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
-sp-std = { version = "4.0.0", default-features = false, path = "../std" }
 hash-db = { version = "0.15.2", default-features = false }
+memory-db = { version = "0.29.0", default-features = false }
+scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
+thiserror = { version = "1.0.30", optional = true }
 trie-db = { version = "0.23.1", default-features = false }
 trie-root = { version = "0.17.0", default-features = false }
-memory-db = { version = "0.29.0", default-features = false }
 sp-core = { version = "6.0.0", default-features = false, path = "../core" }
-thiserror = { version = "1.0.30", optional = true }
+sp-std = { version = "4.0.0", default-features = false, path = "../std" }
 
 [dev-dependencies]
-trie-bench = "0.30.0"
-trie-standardmap = "0.15.2"
 criterion = "0.3.3"
 hex-literal = "0.3.4"
+trie-bench = "0.30.0"
+trie-standardmap = "0.15.2"
 sp-runtime = { version = "6.0.0", path = "../runtime" }
 
 [features]
 default = ["std"]
 std = [
-	"sp-std/std",
 	"codec/std",
-	"scale-info/std",
 	"hash-db/std",
 	"memory-db/std",
+	"scale-info/std",
+	"sp-core/std",
+	"sp-std/std",
+	"thiserror",
 	"trie-db/std",
 	"trie-root/std",
-	"sp-core/std",
-	"thiserror",
 ]
 memory-tracker = []

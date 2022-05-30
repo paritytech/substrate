@@ -176,6 +176,19 @@ impl serde::Serialize for Extrinsic {
 	}
 }
 
+// rustc can't deduce this trait bound https://github.com/rust-lang/rust/issues/48214
+#[cfg(feature = "std")]
+impl<'a> serde::Deserialize<'a> for Extrinsic {
+	fn deserialize<D>(de: D) -> Result<Self, D::Error>
+	where
+		D: serde::Deserializer<'a>,
+	{
+		let r = sp_core::bytes::deserialize(de)?;
+		Decode::decode(&mut &r[..])
+			.map_err(|e| serde::de::Error::custom(format!("Decode error: {}", e)))
+	}
+}
+
 impl BlindCheckable for Extrinsic {
 	type Checked = Self;
 
@@ -896,6 +909,14 @@ cfg_if! {
 				) -> Option<Vec<(Vec<u8>, sp_core::crypto::KeyTypeId)>> {
 					SessionKeys::decode_into_raw_public_keys(&encoded)
 				}
+
+				fn session_index() -> sp_session::SessionIndex {
+					unimplemented!()
+				}
+
+				fn queued_keys() -> Vec<(Vec<u8>, Vec<(KeyTypeId, sp_core::crypto::CryptoTypePublicPair)>)> {
+					unimplemented!()
+				}
 			}
 
 			impl sp_finality_grandpa::GrandpaApi<Block> for Runtime {
@@ -1159,6 +1180,14 @@ cfg_if! {
 					encoded: Vec<u8>,
 				) -> Option<Vec<(Vec<u8>, sp_core::crypto::KeyTypeId)>> {
 					SessionKeys::decode_into_raw_public_keys(&encoded)
+				}
+
+				fn session_index() -> sp_session::SessionIndex {
+					unimplemented!()
+				}
+
+				fn queued_keys() -> Vec<(Vec<u8>, Vec<(KeyTypeId, sp_core::crypto::CryptoTypePublicPair)>)> {
+					unimplemented!()
 				}
 			}
 

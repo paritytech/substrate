@@ -34,7 +34,7 @@ use frame_support::{
 	pallet_prelude::GenesisBuild,
 	parameter_types,
 	storage::StoragePrefixedMap,
-	traits::{ConstU32, ConstU64, SortedMembers},
+	traits::{ConstU32, ConstU64, SortedMembers, StorageVersion},
 	PalletId,
 };
 

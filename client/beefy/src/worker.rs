@@ -16,7 +16,13 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use std::{collections::BTreeSet, fmt::Debug, marker::PhantomData, sync::Arc, time::Duration};
+use std::{
+	collections::{BTreeMap, BTreeSet},
+	fmt::Debug,
+	marker::PhantomData,
+	sync::Arc,
+	time::Duration,
+};
 
 use codec::{Codec, Decode, Encode};
 use futures::{future, FutureExt, StreamExt};
@@ -27,7 +33,7 @@ use sc_client_api::{Backend, FinalityNotification, FinalityNotifications};
 use sc_network_gossip::GossipEngine;
 
 use sp_api::{BlockId, ProvideRuntimeApi};
-use sp_arithmetic::traits::AtLeast32Bit;
+use sp_arithmetic::traits::{AtLeast32Bit, Saturating};
 use sp_consensus::SyncOracle;
 use sp_mmr_primitives::MmrApi;
 use sp_runtime::{
@@ -80,6 +86,8 @@ pub(crate) struct BeefyWorker<B: Block, BE, C, R, SO> {
 	min_block_delta: u32,
 	metrics: Option<Metrics>,
 	rounds: Option<Rounds<Payload, B>>,
+	/// Buffer holding votes for blocks that the client hasn't seen finality for.
+	pending_votes: BTreeMap<NumberFor<B>, Vec<VoteMessage<NumberFor<B>, AuthorityId, Signature>>>,
 	finality_notifications: FinalityNotifications<B>,
 	/// Best block we received a GRANDPA notification for
 	best_grandpa_block_header: <B as Block>::Header,
@@ -141,6 +149,7 @@ where
 			min_block_delta: min_block_delta.max(1),
 			metrics,
 			rounds: None,
+			pending_votes: BTreeMap::new(),
 			finality_notifications: client.finality_notification_stream(),
 			best_grandpa_block_header: last_finalized_header,
 			best_beefy_block: None,
@@ -238,7 +247,11 @@ where
 	}
 
 	/// Handle session changes by starting new voting round for mandatory blocks.
-	fn init_session_at(&mut self, active: ValidatorSet<AuthorityId>, session_start: NumberFor<B>) {
+	fn init_session_at(
+		&mut self,
+		active: ValidatorSet<AuthorityId>,
+		new_session_start: NumberFor<B>,
+	) {
 		debug!(target: "beefy", "🥩 New active validator set: {:?}", active);
 		metric_set!(self, beefy_validator_set_id, active.id());
 		// BEEFY should produce a signed commitment for each session
@@ -246,23 +259,22 @@ where
 			active.id() != GENESIS_AUTHORITY_SET_ID &&
 			self.last_signed_id != 0
 		{
+			debug!(
+				target: "beefy", "🥩 Detected skipped session: active-id {:?}, last-signed-id {:?}",
+				active.id(),
+				self.last_signed_id,
+			);
 			metric_inc!(self, beefy_skipped_sessions);
 		}
 
 		if log_enabled!(target: "beefy", log::Level::Debug) {
 			// verify the new validator set - only do it if we're also logging the warning
-			let _ = self.verify_validator_set(&session_start, &active);
+			let _ = self.verify_validator_set(&new_session_start, &active);
 		}
 
-		let prev_validator_set = if let Some(r) = &self.rounds {
-			r.validator_set().clone()
-		} else {
-			// no previous rounds present use new validator set instead (genesis case)
-			active.clone()
-		};
 		let id = active.id();
-		self.rounds = Some(Rounds::new(session_start, active, prev_validator_set));
-		info!(target: "beefy", "🥩 New Rounds for validator set id: {:?} with session_start {:?}", id, session_start);
+		self.rounds = Some(Rounds::new(new_session_start, active));
+		info!(target: "beefy", "🥩 New Rounds for validator set id: {:?} with session_start {:?}", id, new_session_start);
 	}
 
 	fn handle_finality_notification(&mut self, notification: &FinalityNotification<B>) {
@@ -287,9 +299,33 @@ where
 			self.init_session_at(new_validator_set, *header.number());
 		}
 
+		// Handle any pending votes for now finalized blocks.
+		self.check_pending_votes();
+
 		// Vote if there's now a new vote target.
 		if let Some(target_number) = self.current_vote_target() {
 			self.do_vote(target_number);
+		}
+	}
+
+	// Handles all buffered votes for now finalized blocks.
+	fn check_pending_votes(&mut self) {
+		let not_finalized = self.best_grandpa_block_header.number().saturating_add(1u32.into());
+		let still_pending = self.pending_votes.split_off(&not_finalized);
+		let votes_to_handle = std::mem::replace(&mut self.pending_votes, still_pending);
+		for (num, votes) in votes_to_handle.into_iter() {
+			if Some(num) > self.best_beefy_block {
+				debug!(target: "beefy", "🥩 Handling buffered votes for now GRANDPA finalized block: {:?}.", num);
+				for v in votes.into_iter() {
+					self.handle_vote(
+						(v.commitment.payload, v.commitment.block_number),
+						(v.id, v.signature),
+						false,
+					);
+				}
+			} else {
+				debug!(target: "beefy", "🥩 Dropping outdated buffered votes for now BEEFY finalized block: {:?}.", num);
+			}
 		}
 	}
 
@@ -313,7 +349,7 @@ where
 				self.gossip_validator.conclude_round(round.1);
 
 				// id is stored for skipped session metric calculation
-				self.last_signed_id = rounds.validator_set_id_for(round.1);
+				self.last_signed_id = rounds.validator_set_id();
 
 				let block_num = round.1;
 				let commitment = Commitment {
@@ -390,7 +426,7 @@ where
 				debug!(target: "beefy", "🥩 Don't double vote for block number: {:?}", target_number);
 				return
 			}
-			(rounds.validators_for(target_number), rounds.validator_set_id_for(target_number))
+			(rounds.validators(), rounds.validator_set_id())
 		} else {
 			debug!(target: "beefy", "🥩 Missing validator set - can't vote for: {:?}", target_hash);
 			return
@@ -506,11 +542,23 @@ where
 				},
 				vote = votes.next().fuse() => {
 					if let Some(vote) = vote {
-						self.handle_vote(
-							(vote.commitment.payload, vote.commitment.block_number),
-							(vote.id, vote.signature),
-							false
-						);
+						let block_num = vote.commitment.block_number;
+						if block_num > *self.best_grandpa_block_header.number() {
+							// Only handle votes for blocks we _know_ have been finalized.
+							// Buffer vote to be handled later.
+							debug!(
+								target: "beefy",
+								"🥩 Buffering vote for not (yet) finalized block: {:?}.",
+								block_num
+							);
+							self.pending_votes.entry(block_num).or_default().push(vote);
+						} else {
+							self.handle_vote(
+								(vote.commitment.payload, vote.commitment.block_number),
+								(vote.id, vote.signature),
+								false
+							);
+						}
 					} else {
 						return;
 					}
@@ -854,8 +902,7 @@ pub(crate) mod tests {
 			worker.best_grandpa_block_header = grandpa_header;
 			worker.best_beefy_block = best_beefy;
 			worker.min_block_delta = min_delta;
-			worker.rounds =
-				Some(Rounds::new(session_start, validator_set.clone(), validator_set.clone()));
+			worker.rounds = Some(Rounds::new(session_start, validator_set.clone()));
 		};
 
 		// under min delta
@@ -970,11 +1017,10 @@ pub(crate) mod tests {
 		worker.init_session_at(validator_set.clone(), 1);
 
 		let worker_rounds = worker.rounds.as_ref().unwrap();
-		assert_eq!(worker_rounds.validator_set(), &validator_set);
 		assert_eq!(worker_rounds.session_start(), &1);
 		// in genesis case both current and prev validator sets are the same
-		assert_eq!(worker_rounds.validator_set_id_for(1), validator_set.id());
-		assert_eq!(worker_rounds.validator_set_id_for(2), validator_set.id());
+		assert_eq!(worker_rounds.validators(), validator_set.validators());
+		assert_eq!(worker_rounds.validator_set_id(), validator_set.id());
 
 		// new validator set
 		let keys = &[Keyring::Bob];
@@ -984,11 +1030,8 @@ pub(crate) mod tests {
 		worker.init_session_at(new_validator_set.clone(), 11);
 
 		let worker_rounds = worker.rounds.as_ref().unwrap();
-		assert_eq!(worker_rounds.validator_set(), &new_validator_set);
 		assert_eq!(worker_rounds.session_start(), &11);
-		// mandatory block gets prev set, further blocks get new set
-		assert_eq!(worker_rounds.validator_set_id_for(11), validator_set.id());
-		assert_eq!(worker_rounds.validator_set_id_for(12), new_validator_set.id());
-		assert_eq!(worker_rounds.validator_set_id_for(13), new_validator_set.id());
+		assert_eq!(worker_rounds.validators(), new_validator_set.validators());
+		assert_eq!(worker_rounds.validator_set_id(), new_validator_set.id());
 	}
 }

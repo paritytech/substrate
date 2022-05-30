@@ -31,7 +31,7 @@ use sp_keystore::SyncCryptoStore;
 use codec::Encode;
 use futures::{future, FutureExt, StreamExt};
 use futures_timer::Delay;
-use log::{trace, debug, error, warn};
+use log::{debug, error, trace, warn};
 use sc_client_api::{BlockchainEvents, FinalityNotification, UsageProvider};
 use sc_network::{MixnetCommand, PeerId};
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};

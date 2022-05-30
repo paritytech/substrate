@@ -28,7 +28,7 @@
 
 use crate::{
 	behaviour::{MixnetCommand, MixnetImportResult},
-	config::{self, ProtocolId, TransactionImport, TransactionImportFuture, TransactionPool},
+	config::{self, TransactionImport, TransactionImportFuture, TransactionPool},
 	error,
 	protocol::message,
 	service::NetworkService,
@@ -41,6 +41,7 @@ use futures::{channel::mpsc, prelude::*, stream::FuturesUnordered};
 use libp2p::{multiaddr, PeerId};
 use log::{debug, trace, warn};
 use prometheus_endpoint::{register, Counter, PrometheusError, Registry, U64};
+use sc_network_common::config::ProtocolId;
 use sc_utils::mpsc::TracingUnboundedSender;
 use sp_runtime::traits::Block as BlockT;
 use std::{
