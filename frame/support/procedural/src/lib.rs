@@ -412,7 +412,6 @@ pub fn pallet(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// The return type of the annotated function must be `Result`. All changes to storage performed
 /// by the annotated function are discarded if it returns `Err`, or committed if `Ok`.
-/// Deprecated since it is the default behaviour now.
 ///
 /// # Example
 ///
