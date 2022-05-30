@@ -191,11 +191,7 @@ pub trait Storage {
 	/// backend.
 	#[version(2)]
 	fn clear_prefix(&mut self, prefix: &[u8], limit: Option<u32>) -> KillStorageResult {
-		let r = Externalities::clear_prefix(*self, prefix, limit, None);
-		match r.maybe_cursor {
-			None => KillStorageResult::AllRemoved(r.loops),
-			Some(_) => KillStorageResult::SomeRemaining(r.loops),
-		}
+		Externalities::clear_prefix(*self, prefix, limit, None).into()
 	}
 
 	/// Partially clear the storage of each key-value pair where the key starts with the given
@@ -405,11 +401,7 @@ pub trait DefaultChildStorage {
 	#[version(3)]
 	fn storage_kill(&mut self, storage_key: &[u8], limit: Option<u32>) -> KillStorageResult {
 		let child_info = ChildInfo::new_default(storage_key);
-		let r = self.kill_child_storage(&child_info, limit, None);
-		match r.maybe_cursor {
-			None => KillStorageResult::AllRemoved(r.loops),
-			Some(..) => KillStorageResult::SomeRemaining(r.loops),
-		}
+		self.kill_child_storage(&child_info, limit, None).into()
 	}
 
 	/// Clear a child storage key.
@@ -454,11 +446,7 @@ pub trait DefaultChildStorage {
 		limit: Option<u32>,
 	) -> KillStorageResult {
 		let child_info = ChildInfo::new_default(storage_key);
-		let r = self.clear_child_prefix(&child_info, prefix, limit, None);
-		match r.maybe_cursor {
-			None => KillStorageResult::AllRemoved(r.loops),
-			Some(..) => KillStorageResult::SomeRemaining(r.loops),
-		}
+		self.clear_child_prefix(&child_info, prefix, limit, None).into()
 	}
 
 	/// Clear the child storage of each key-value pair where the key starts with the given `prefix`.
