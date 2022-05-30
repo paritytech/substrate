@@ -111,10 +111,12 @@ pub enum KillStorageResult {
 
 impl From<MultiRemovalResults> for KillStorageResult {
 	fn from(r: MultiRemovalResults) -> Self {
-		match r {
-			MultiRemovalResults { maybe_cursor: None, backend, .. } => Self::AllRemoved(backend),
-			MultiRemovalResults { maybe_cursor: Some(..), backend, .. } =>
-				Self::SomeRemaining(backend),
+		// We use `loops` here rather than `backend` because that's the same as the original
+		// functionality pre-#11490. This won't matter once we switch to the new host function
+		// since we won't be using the `KillStorageResult` type in the runtime any more.
+		match r.maybe_cursor {
+			None => Self::AllRemoved(r.loops),
+			Some(..) => Self::SomeRemaining(r.loops),
 		}
 	}
 }
