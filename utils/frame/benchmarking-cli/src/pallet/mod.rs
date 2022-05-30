@@ -18,7 +18,10 @@
 mod command;
 mod writer;
 
-use sc_cli::{ExecutionStrategy, WasmExecutionMethod, DEFAULT_WASM_EXECUTION_METHOD};
+use sc_cli::{
+	ExecutionStrategy, WasmExecutionMethod, WasmtimeInstantiationStrategy,
+	DEFAULT_WASMTIME_INSTANTIATION_STRATEGY, DEFAULT_WASM_EXECUTION_METHOD,
+};
 use std::{fmt::Debug, path::PathBuf};
 
 // Add a more relaxed parsing for pallet names by allowing pallet directory names with `-` to be
@@ -130,6 +133,17 @@ pub struct PalletCmd {
 		default_value = DEFAULT_WASM_EXECUTION_METHOD,
 	)]
 	pub wasm_method: WasmExecutionMethod,
+
+	/// The WASM instantiation method to use.
+	///
+	/// Only has an effect when `wasm-execution` is set to `compiled`.
+	#[clap(
+		long = "wasm-instantiation-strategy",
+		value_name = "STRATEGY",
+		default_value_t = DEFAULT_WASMTIME_INSTANTIATION_STRATEGY,
+		arg_enum,
+	)]
+	pub wasmtime_instantiation_strategy: WasmtimeInstantiationStrategy,
 
 	/// Limit the memory the database cache can use.
 	#[clap(long = "db-cache", value_name = "MiB", default_value = "1024")]

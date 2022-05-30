@@ -231,7 +231,7 @@ benchmarks! {
 	// first time after a new schedule was deployed: For every new schedule a contract needs
 	// to re-run the instrumentation once.
 	reinstrument {
-		let c in 0 .. T::Schedule::get().limits.code_len;
+		let c in 0 .. Perbill::from_percent(49).mul_ceil(T::MaxCodeLen::get());
 		let WasmModule { code, hash, .. } = WasmModule::<T>::sized(c, Location::Call);
 		Contracts::<T>::store_code_raw(code, whitelisted_caller())?;
 		let schedule = T::Schedule::get();
@@ -247,7 +247,7 @@ benchmarks! {
 	// which is in the wasm module but not executed on `call`.
 	// The results are supposed to be used as `call_with_code_kb(c) - call_with_code_kb(0)`.
 	call_with_code_per_byte {
-		let c in 0 .. T::Schedule::get().limits.code_len;
+		let c in 0 .. T::MaxCodeLen::get();
 		let instance = Contract::<T>::with_caller(
 			whitelisted_caller(), WasmModule::sized(c, Location::Deploy), vec![],
 		)?;
@@ -271,7 +271,7 @@ benchmarks! {
 	// We cannot let `c` grow to the maximum code size because the code is not allowed
 	// to be larger than the maximum size **after instrumentation**.
 	instantiate_with_code {
-		let c in 0 .. Perbill::from_percent(49).mul_ceil(T::Schedule::get().limits.code_len);
+		let c in 0 .. Perbill::from_percent(49).mul_ceil(T::MaxCodeLen::get());
 		let s in 0 .. code::max_pages::<T>() * 64 * 1024;
 		let salt = vec![42u8; s as usize];
 		let value = T::Currency::minimum_balance();
@@ -360,7 +360,7 @@ benchmarks! {
 	// We cannot let `c` grow to the maximum code size because the code is not allowed
 	// to be larger than the maximum size **after instrumentation**.
 	upload_code {
-		let c in 0 .. Perbill::from_percent(50).mul_ceil(T::Schedule::get().limits.code_len);
+		let c in 0 .. Perbill::from_percent(49).mul_ceil(T::MaxCodeLen::get());
 		let caller = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, caller_funding::<T>());
 		let WasmModule { code, hash, .. } = WasmModule::<T>::sized(c, Location::Call);
@@ -389,6 +389,20 @@ benchmarks! {
 		// removing the code should have unreserved the deposit
 		assert_eq!(T::Currency::reserved_balance(&caller), 0u32.into());
 		assert!(<Contract<T>>::code_removed(&hash));
+	}
+
+	set_code {
+		let instance = <Contract<T>>::with_caller(
+			whitelisted_caller(), WasmModule::dummy(), vec![],
+		)?;
+		// we just add some bytes so that the code hash is different
+		let WasmModule { code, hash, .. } = <WasmModule<T>>::dummy_with_bytes(128);
+		<Contracts<T>>::store_code_raw(code, instance.caller.clone())?;
+		let callee = instance.addr.clone();
+		assert_ne!(instance.info()?.code_hash, hash);
+	}: _(RawOrigin::Root, callee, hash)
+	verify {
+		assert_eq!(instance.info()?.code_hash, hash);
 	}
 
 	seal_caller {
@@ -1935,7 +1949,7 @@ benchmarks! {
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
-				module: "__unstable__",
+				module: "seal0",
 				name: "seal_ecdsa_recover",
 				params: vec![ValueType::I32, ValueType::I32, ValueType::I32],
 				return_type: Some(ValueType::I32),
@@ -1978,7 +1992,7 @@ benchmarks! {
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
-				module: "__unstable__",
+				module: "seal0",
 				name: "seal_ecdsa_to_eth_address",
 				params: vec![ValueType::I32, ValueType::I32],
 				return_type: Some(ValueType::I32),

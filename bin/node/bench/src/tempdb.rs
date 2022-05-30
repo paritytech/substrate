@@ -20,7 +20,7 @@ use kvdb::{DBTransaction, KeyValueDB};
 use kvdb_rocksdb::{Database, DatabaseConfig};
 use std::{io, path::PathBuf, sync::Arc};
 
-#[derive(Debug, Clone, Copy, derive_more::Display)]
+#[derive(Clone, Copy, Debug)]
 pub enum DatabaseType {
 	RocksDb,
 	ParityDb,
