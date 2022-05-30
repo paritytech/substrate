@@ -538,6 +538,7 @@ mod test {
 				test_data(b"second", b"first", BenchmarkParameter::c, 3, 4),
 			],
 			&[],
+			&Default::default(),
 			&AnalysisChoice::default(),
 		)
 		.unwrap();
