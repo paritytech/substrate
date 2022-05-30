@@ -375,6 +375,10 @@ pub mod pallet {
 		MaxSupplyAlreadySet,
 		/// The provided max supply is less to the amount of items a collection already has.
 		MaxSupplyTooSmall,
+		/// The provided key is out of bounds
+		KeyTooLong,
+		/// The provided value is out of bounds
+		ValueTooLong,
 	}
 
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {

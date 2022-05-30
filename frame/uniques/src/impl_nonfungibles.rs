@@ -20,7 +20,7 @@
 use super::*;
 use frame_support::{
 	traits::{tokens::nonfungibles::*, Get},
-	BoundedSlice,
+	BoundedSlice, BoundedVec,
 };
 use sp_runtime::{DispatchError, DispatchResult};
 use sp_std::prelude::*;
@@ -141,6 +141,31 @@ impl<T: Config<I>, I: 'static> Mutate<<T as SystemConfig>::AccountId> for Pallet
 			}
 			Ok(())
 		})
+	}
+
+	fn set_collection_attribute(
+		collection: &Self::CollectionId,
+		key: &[u8],
+		value: &[u8],
+	) -> DispatchResult {
+		let bounded_key: BoundedVec<u8, T::KeyLimit> =
+			key.clone().to_vec().try_into().map_err(|_| Error::<T, I>::KeyTooLong)?;
+		let bounded_value: BoundedVec<u8, T::ValueLimit> =
+			value.clone().to_vec().try_into().map_err(|_| Error::<T, I>::ValueTooLong)?;
+		Self::do_set_attribute(None, *collection, None, bounded_key, bounded_value)
+	}
+
+	fn set_attribute(
+		collection: &Self::CollectionId,
+		item: &Self::ItemId,
+		key: &[u8],
+		value: &[u8],
+	) -> DispatchResult {
+		let bounded_key: BoundedVec<u8, T::KeyLimit> =
+			key.clone().to_vec().try_into().map_err(|_| Error::<T, I>::KeyTooLong)?;
+		let bounded_value: BoundedVec<u8, T::ValueLimit> =
+			value.clone().to_vec().try_into().map_err(|_| Error::<T, I>::ValueTooLong)?;
+		Self::do_set_attribute(None, *collection, Some(*item), bounded_key, bounded_value)
 	}
 }
 
