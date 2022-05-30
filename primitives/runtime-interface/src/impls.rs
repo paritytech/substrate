@@ -548,3 +548,7 @@ impl PassBy for sp_storage::TrackedStorageKey {
 impl PassBy for sp_storage::StateVersion {
 	type PassBy = Enum<Self>;
 }
+
+impl PassBy for sp_externalities::MultiRemovalResults {
+	type PassBy = Codec<Self>;
+}

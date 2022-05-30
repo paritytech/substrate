@@ -185,11 +185,51 @@ where
 	/// Calling this multiple times per block with a `limit` set leads always to the same keys being
 	/// removed and the same result being returned. This happens because the keys to delete in the
 	/// overlay are not taken into account when deleting keys in the backend.
+	#[deprecated = "Use `clear_prefix` instead"]
 	pub fn remove_prefix<KP>(partial_key: KP, limit: Option<u32>) -> sp_io::KillStorageResult
 	where
 		Key: HasKeyPrefix<KP>,
 	{
+		#[allow(deprecated)]
 		<Self as crate::storage::StorageNMap<Key, Value>>::remove_prefix(partial_key, limit)
+	}
+
+	/// Attempt to remove items from the map matching a `partial_key` prefix.
+	///
+	/// Returns [`MultiRemovalResults`](sp_io::MultiRemovalResults) to inform about the result. Once
+	/// the resultant `maybe_cursor` field is `None`, then no further items remain to be deleted.
+	///
+	/// NOTE: After the initial call for any given map, it is important that no further items
+	/// are inserted into the map which match the `partial key`. If so, then the map may not be
+	/// empty when the resultant `maybe_cursor` is `None`.
+	///
+	/// # Limit
+	///
+	/// A `limit` must be provided in order to cap the maximum
+	/// amount of deletions done in a single call. This is one fewer than the
+	/// maximum number of backend iterations which may be done by this operation and as such
+	/// represents the maximum number of backend deletions which may happen. A `limit` of zero
+	/// implies that no keys will be deleted, though there may be a single iteration done.
+	///
+	/// # Cursor
+	///
+	/// A *cursor* may be passed in to this operation with `maybe_cursor`. `None` should only be
+	/// passed once (in the initial call) for any given storage map and `partial_key`. Subsequent
+	/// calls operating on the same map/`partial_key` should always pass `Some`, and this should be
+	/// equal to the previous call result's `maybe_cursor` field.
+	pub fn clear_prefix<KP>(
+		partial_key: KP,
+		limit: u32,
+		maybe_cursor: Option<&[u8]>,
+	) -> sp_io::MultiRemovalResults
+	where
+		Key: HasKeyPrefix<KP>,
+	{
+		<Self as crate::storage::StorageNMap<Key, Value>>::clear_prefix(
+			partial_key,
+			limit,
+			maybe_cursor,
+		)
 	}
 
 	/// Iterate over values that share the first key.
@@ -299,8 +339,37 @@ where
 	/// Calling this multiple times per block with a `limit` set leads always to the same keys being
 	/// removed and the same result being returned. This happens because the keys to delete in the
 	/// overlay are not taken into account when deleting keys in the backend.
+	#[deprecated = "Use `clear` instead"]
 	pub fn remove_all(limit: Option<u32>) -> sp_io::KillStorageResult {
-		<Self as crate::storage::StoragePrefixedMap<Value>>::remove_all(limit)
+		#[allow(deprecated)]
+		<Self as crate::storage::StoragePrefixedMap<Value>>::remove_all(limit).into()
+	}
+
+	/// Attempt to remove all items from the map.
+	///
+	/// Returns [`MultiRemovalResults`](sp_io::MultiRemovalResults) to inform about the result. Once
+	/// the resultant `maybe_cursor` field is `None`, then no further items remain to be deleted.
+	///
+	/// NOTE: After the initial call for any given map, it is important that no further items
+	/// are inserted into the map. If so, then the map may not be empty when the resultant
+	/// `maybe_cursor` is `None`.
+	///
+	/// # Limit
+	///
+	/// A `limit` must always be provided through in order to cap the maximum
+	/// amount of deletions done in a single call. This is one fewer than the
+	/// maximum number of backend iterations which may be done by this operation and as such
+	/// represents the maximum number of backend deletions which may happen. A `limit` of zero
+	/// implies that no keys will be deleted, though there may be a single iteration done.
+	///
+	/// # Cursor
+	///
+	/// A *cursor* may be passed in to this operation with `maybe_cursor`. `None` should only be
+	/// passed once (in the initial call) for any given storage map. Subsequent calls
+	/// operating on the same map should always pass `Some`, and this should be equal to the
+	/// previous call result's `maybe_cursor` field.
+	pub fn clear(limit: u32, maybe_cursor: Option<&[u8]>) -> sp_io::MultiRemovalResults {
+		<Self as crate::storage::StoragePrefixedMap<Value>>::clear(limit, maybe_cursor)
 	}
 
 	/// Iter over all value of the storage.
@@ -544,7 +613,7 @@ mod test {
 	use crate::{
 		hash::{StorageHasher as _, *},
 		metadata::{StorageEntryModifier, StorageHasher},
-		storage::types::{Key, ValueQuery},
+		storage::types::{Key as NMapKey, ValueQuery},
 	};
 	use sp_io::{hashing::twox_128, TestExternalities};
 
@@ -565,12 +634,12 @@ mod test {
 
 	#[test]
 	fn test_1_key() {
-		type A = StorageNMap<Prefix, Key<Blake2_128Concat, u16>, u32, OptionQuery>;
+		type A = StorageNMap<Prefix, NMapKey<Blake2_128Concat, u16>, u32, OptionQuery>;
 		type AValueQueryWithAnOnEmpty =
-			StorageNMap<Prefix, Key<Blake2_128Concat, u16>, u32, ValueQuery, ADefault>;
-		type B = StorageNMap<Prefix, Key<Blake2_256, u16>, u32, ValueQuery>;
-		type C = StorageNMap<Prefix, Key<Blake2_128Concat, u16>, u8, ValueQuery>;
-		type WithLen = StorageNMap<Prefix, Key<Blake2_128Concat, u16>, Vec<u32>>;
+			StorageNMap<Prefix, NMapKey<Blake2_128Concat, u16>, u32, ValueQuery, ADefault>;
+		type B = StorageNMap<Prefix, NMapKey<Blake2_256, u16>, u32, ValueQuery>;
+		type C = StorageNMap<Prefix, NMapKey<Blake2_128Concat, u16>, u8, ValueQuery>;
+		type WithLen = StorageNMap<Prefix, NMapKey<Blake2_128Concat, u16>, Vec<u32>>;
 
 		TestExternalities::default().execute_with(|| {
 			let mut k: Vec<u8> = vec![];
@@ -590,13 +659,13 @@ mod test {
 
 			{
 				#[crate::storage_alias]
-				type Foo = StorageNMap<test, (Key<Blake2_128Concat, u16>), u32>;
+				type Foo = StorageNMap<test, (NMapKey<Blake2_128Concat, u16>), u32>;
 
 				assert_eq!(Foo::contains_key((3,)), true);
 				assert_eq!(Foo::get((3,)), Some(10));
 			}
 
-			A::swap::<Key<Blake2_128Concat, u16>, _, _>((3,), (2,));
+			A::swap::<NMapKey<Blake2_128Concat, u16>, _, _>((3,), (2,));
 			assert_eq!(A::contains_key((3,)), false);
 			assert_eq!(A::contains_key((2,)), true);
 			assert_eq!(A::get((3,)), None);
@@ -684,7 +753,7 @@ mod test {
 
 			A::insert((3,), 10);
 			A::insert((4,), 10);
-			A::remove_all(None);
+			let _ = A::clear(u32::max_value(), None);
 			assert_eq!(A::contains_key((3,)), false);
 			assert_eq!(A::contains_key((4,)), false);
 
@@ -739,7 +808,7 @@ mod test {
 				]
 			);
 
-			WithLen::remove_all(None);
+			let _ = WithLen::clear(u32::max_value(), None);
 			assert_eq!(WithLen::decode_len((3,)), None);
 			WithLen::append((0,), 10);
 			assert_eq!(WithLen::decode_len((0,)), Some(1));
@@ -750,26 +819,30 @@ mod test {
 	fn test_2_keys() {
 		type A = StorageNMap<
 			Prefix,
-			(Key<Blake2_128Concat, u16>, Key<Twox64Concat, u8>),
+			(NMapKey<Blake2_128Concat, u16>, NMapKey<Twox64Concat, u8>),
 			u32,
 			OptionQuery,
 		>;
 		type AValueQueryWithAnOnEmpty = StorageNMap<
 			Prefix,
-			(Key<Blake2_128Concat, u16>, Key<Twox64Concat, u8>),
+			(NMapKey<Blake2_128Concat, u16>, NMapKey<Twox64Concat, u8>),
 			u32,
 			ValueQuery,
 			ADefault,
 		>;
-		type B = StorageNMap<Prefix, (Key<Blake2_256, u16>, Key<Twox128, u8>), u32, ValueQuery>;
+		type B =
+			StorageNMap<Prefix, (NMapKey<Blake2_256, u16>, NMapKey<Twox128, u8>), u32, ValueQuery>;
 		type C = StorageNMap<
 			Prefix,
-			(Key<Blake2_128Concat, u16>, Key<Twox64Concat, u8>),
+			(NMapKey<Blake2_128Concat, u16>, NMapKey<Twox64Concat, u8>),
 			u8,
 			ValueQuery,
 		>;
-		type WithLen =
-			StorageNMap<Prefix, (Key<Blake2_128Concat, u16>, Key<Twox64Concat, u8>), Vec<u32>>;
+		type WithLen = StorageNMap<
+			Prefix,
+			(NMapKey<Blake2_128Concat, u16>, NMapKey<Twox64Concat, u8>),
+			Vec<u32>,
+		>;
 
 		TestExternalities::default().execute_with(|| {
 			let mut k: Vec<u8> = vec![];
@@ -788,7 +861,10 @@ mod test {
 			assert_eq!(A::get((3, 30)), Some(10));
 			assert_eq!(AValueQueryWithAnOnEmpty::get((3, 30)), 10);
 
-			A::swap::<(Key<Blake2_128Concat, u16>, Key<Twox64Concat, u8>), _, _>((3, 30), (2, 20));
+			A::swap::<(NMapKey<Blake2_128Concat, u16>, NMapKey<Twox64Concat, u8>), _, _>(
+				(3, 30),
+				(2, 20),
+			);
 			assert_eq!(A::contains_key((3, 30)), false);
 			assert_eq!(A::contains_key((2, 20)), true);
 			assert_eq!(A::get((3, 30)), None);
@@ -877,7 +953,7 @@ mod test {
 
 			A::insert((3, 30), 10);
 			A::insert((4, 40), 10);
-			A::remove_all(None);
+			let _ = A::clear(u32::max_value(), None);
 			assert_eq!(A::contains_key((3, 30)), false);
 			assert_eq!(A::contains_key((4, 40)), false);
 
@@ -938,7 +1014,7 @@ mod test {
 				]
 			);
 
-			WithLen::remove_all(None);
+			let _ = WithLen::clear(u32::max_value(), None);
 			assert_eq!(WithLen::decode_len((3, 30)), None);
 			WithLen::append((0, 100), 10);
 			assert_eq!(WithLen::decode_len((0, 100)), Some(1));
@@ -956,32 +1032,48 @@ mod test {
 	fn test_3_keys() {
 		type A = StorageNMap<
 			Prefix,
-			(Key<Blake2_128Concat, u16>, Key<Blake2_128Concat, u16>, Key<Twox64Concat, u16>),
+			(
+				NMapKey<Blake2_128Concat, u16>,
+				NMapKey<Blake2_128Concat, u16>,
+				NMapKey<Twox64Concat, u16>,
+			),
 			u32,
 			OptionQuery,
 		>;
 		type AValueQueryWithAnOnEmpty = StorageNMap<
 			Prefix,
-			(Key<Blake2_128Concat, u16>, Key<Blake2_128Concat, u16>, Key<Twox64Concat, u16>),
+			(
+				NMapKey<Blake2_128Concat, u16>,
+				NMapKey<Blake2_128Concat, u16>,
+				NMapKey<Twox64Concat, u16>,
+			),
 			u32,
 			ValueQuery,
 			ADefault,
 		>;
 		type B = StorageNMap<
 			Prefix,
-			(Key<Blake2_256, u16>, Key<Blake2_256, u16>, Key<Twox128, u16>),
+			(NMapKey<Blake2_256, u16>, NMapKey<Blake2_256, u16>, NMapKey<Twox128, u16>),
 			u32,
 			ValueQuery,
 		>;
 		type C = StorageNMap<
 			Prefix,
-			(Key<Blake2_128Concat, u16>, Key<Blake2_128Concat, u16>, Key<Twox64Concat, u16>),
+			(
+				NMapKey<Blake2_128Concat, u16>,
+				NMapKey<Blake2_128Concat, u16>,
+				NMapKey<Twox64Concat, u16>,
+			),
 			u8,
 			ValueQuery,
 		>;
 		type WithLen = StorageNMap<
 			Prefix,
-			(Key<Blake2_128Concat, u16>, Key<Blake2_128Concat, u16>, Key<Twox64Concat, u16>),
+			(
+				NMapKey<Blake2_128Concat, u16>,
+				NMapKey<Blake2_128Concat, u16>,
+				NMapKey<Twox64Concat, u16>,
+			),
 			Vec<u32>,
 		>;
 
@@ -1004,7 +1096,11 @@ mod test {
 			assert_eq!(AValueQueryWithAnOnEmpty::get((1, 10, 100)), 30);
 
 			A::swap::<
-				(Key<Blake2_128Concat, u16>, Key<Blake2_128Concat, u16>, Key<Twox64Concat, u16>),
+				(
+					NMapKey<Blake2_128Concat, u16>,
+					NMapKey<Blake2_128Concat, u16>,
+					NMapKey<Twox64Concat, u16>,
+				),
 				_,
 				_,
 			>((1, 10, 100), (2, 20, 200));
@@ -1093,7 +1189,7 @@ mod test {
 
 			A::insert((3, 30, 300), 10);
 			A::insert((4, 40, 400), 10);
-			A::remove_all(None);
+			let _ = A::clear(u32::max_value(), None);
 			assert_eq!(A::contains_key((3, 30, 300)), false);
 			assert_eq!(A::contains_key((4, 40, 400)), false);
 
@@ -1161,7 +1257,7 @@ mod test {
 				]
 			);
 
-			WithLen::remove_all(None);
+			let _ = WithLen::clear(u32::max_value(), None);
 			assert_eq!(WithLen::decode_len((3, 30, 300)), None);
 			WithLen::append((0, 100, 1000), 10);
 			assert_eq!(WithLen::decode_len((0, 100, 1000)), Some(1));
