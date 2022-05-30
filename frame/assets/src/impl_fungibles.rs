@@ -221,7 +221,7 @@ impl<T: Config<I>, I: 'static> fungibles::metadata::Mutate<<T as SystemConfig>::
 		symbol: Vec<u8>,
 		decimals: u8,
 	) -> DispatchResult {
-		Self::do_set_metadata(asset, from, name, symbol, decimals)
+		Self::do_set_metadata(asset, from, name, symbol, decimals, false)
 	}
 }
 

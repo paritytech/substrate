@@ -819,6 +819,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		name: Vec<u8>,
 		symbol: Vec<u8>,
 		decimals: u8,
+		pays_deposit: bool,
 	) -> DispatchResult {
 		let bounded_name: BoundedVec<u8, T::StringLimit> =
 			name.clone().try_into().map_err(|_| Error::<T, I>::BadMetadata)?;
@@ -831,15 +832,19 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Metadata::<T, I>::try_mutate_exists(id, |metadata| {
 			ensure!(metadata.as_ref().map_or(true, |m| !m.is_frozen), Error::<T, I>::NoPermission);
 
-			let old_deposit = metadata.take().map_or(Zero::zero(), |m| m.deposit);
-			let new_deposit = T::MetadataDepositPerByte::get()
-				.saturating_mul(((name.len() + symbol.len()) as u32).into())
-				.saturating_add(T::MetadataDepositBase::get());
+			let mut new_deposit = Zero::zero();
 
-			if new_deposit > old_deposit {
-				T::Currency::reserve(from, new_deposit - old_deposit)?;
-			} else {
-				T::Currency::unreserve(from, old_deposit - new_deposit);
+			if pays_deposit {
+				let old_deposit = metadata.take().map_or(Zero::zero(), |m| m.deposit);
+				new_deposit = T::MetadataDepositPerByte::get()
+					.saturating_mul(((name.len() + symbol.len()) as u32).into())
+					.saturating_add(T::MetadataDepositBase::get());
+
+				if new_deposit > old_deposit {
+					T::Currency::reserve(from, new_deposit - old_deposit)?;
+				} else {
+					T::Currency::unreserve(from, old_deposit - new_deposit);
+				}
 			}
 
 			*metadata = Some(AssetMetadata {

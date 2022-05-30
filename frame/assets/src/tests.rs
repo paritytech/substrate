@@ -977,3 +977,24 @@ fn transfer_large_asset() {
 		assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, amount - 1));
 	})
 }
+
+#[test]
+fn fungibles_can_set_metadata_without_deposit() {
+	new_test_ext().execute_with(|| {
+		use frame_support::traits::tokens::fungibles::metadata::Inspect;
+		assert_eq!(Balances::free_balance(99), 0);
+		// create assets without deposit
+		assert_ok!(
+			<Assets as fungibles::Create<<Test as frame_system::Config>::AccountId>>::create(
+				0, 99, true, 1
+			)
+		);
+		// set metadata without deposit
+		assert_ok!(<Assets as fungibles::metadata::Mutate<
+			<Test as frame_system::Config>::AccountId,
+		>>::set(0, &99, vec![0u8; 10], vec![1u8; 10], 12));
+		assert_eq!(Assets::name(0), vec![0u8; 10]);
+		assert_eq!(Assets::symbol(0), vec![1u8; 10]);
+		assert_eq!(Assets::decimals(0), 12);
+	})
+}

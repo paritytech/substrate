@@ -987,7 +987,7 @@ pub mod pallet {
 			decimals: u8,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
-			Self::do_set_metadata(id, &origin, name, symbol, decimals)
+			Self::do_set_metadata(id, &origin, name, symbol, decimals, true)
 		}
 
 		/// Clear the metadata for an asset.
