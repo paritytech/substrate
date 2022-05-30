@@ -2276,7 +2276,7 @@ mod tests {
 	;; [0, 4) size of input buffer (128+32 = 160 bits = 0xA0)
 	(data (i32.const 0) "\A0")
 
-	;; [4, 160) input buffer
+	;; [4, 164) input buffer
 
 	(func (export "call")
 		;; Receive key
@@ -2355,42 +2355,43 @@ mod tests {
 (module
 	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
 	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
-	(import "__unstable__" "seal_take_storage" (func $seal_take_storage (param i32 i32 i32) (result i32)))
+	(import "__unstable__" "seal_take_storage" (func $seal_take_storage (param i32 i32 i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 
-	;; [0, 32) size of input buffer (32 byte as we copy the key here)
-	(data (i32.const 0) "\20")
+	;; [0, 4) size of input buffer (160 Bits as we copy the key+len here)
+	(data (i32.const 0) "\A0")
 
-	;; [32, 64) size of output buffer
+	;; [4, 8) size of output buffer
 	;; 4k in little endian
-	(data (i32.const 32) "\00\10")
+	(data (i32.const 4) "\00\10")
 
-	;; [64, 96) input buffer
+	;; [8, 168) input buffer
 
-	;; [96, inf) output buffer
+	;; [168, 4264) output buffer
 
 	(func (export "call")
 		;; Receive key
 		(call $seal_input
-			(i32.const 64)	;; Pointer to the input buffer
+			(i32.const 8)	;; Pointer to the input buffer
 			(i32.const 0)	;; Size of the length buffer
 		)
 
 		;; Load a storage value and result of this call into the output buffer
-		(i32.store (i32.const 96)
+		(i32.store (i32.const 168)
 			(call $seal_take_storage
-				(i32.const 64)		;; The pointer to the storage key to fetch
-				(i32.const 100)		;; Pointer to the output buffer
-				(i32.const 32)		;; Pointer to the size of the buffer
+				(i32.const 12)			;; key_ptr
+				(i32.load (i32.const 8))	;; key_len
+				(i32.const 172)			;; Pointer to the output buffer
+				(i32.const 4)			;; Pointer to the size of the buffer
 			)
 		)
 
 		;; Return the contents of the buffer
 		(call $seal_return
 			(i32.const 0)					;; flags
-			(i32.const 96)					;; output buffer ptr
-			(i32.add						;; length: storage size + 4 (retval)
-				(i32.load (i32.const 32))
+			(i32.const 168)					;; output buffer ptr
+			(i32.add					;; length: storage size + 4 (retval)
+				(i32.load (i32.const 4))
 				(i32.const 4)
 			)
 		)
@@ -2402,32 +2403,46 @@ mod tests {
 
 		let mut ext = MockExt::default();
 
-		ext.storage.insert([1u8; 32].to_vec(), vec![42u8]);
-		ext.storage.insert([2u8; 32].to_vec(), vec![]);
+		ext.set_storage_transparent(
+			VarSizedKey::<Test>::try_from([1u8; 64].to_vec()).unwrap(),
+			Some(vec![42u8]),
+			false,
+		)
+		.unwrap();
+
+		ext.set_storage_transparent(
+			VarSizedKey::<Test>::try_from([2u8; 19].to_vec()).unwrap(),
+			Some(vec![]),
+			false,
+		)
+		.unwrap();
 
 		// value does not exist -> error returned
-		let result = execute(CODE, [3u8; 32].encode(), &mut ext).unwrap();
+		let input = (63, [1u8; 64]).encode();
+		let result = execute(CODE, input, &mut ext).unwrap();
 		assert_eq!(
 			u32::from_le_bytes(result.data.0[0..4].try_into().unwrap()),
 			ReturnCode::KeyNotFound as u32
 		);
 
 		// value did exist -> value returned
-		let result = execute(CODE, [1u8; 32].encode(), &mut ext).unwrap();
+		let input = (64, [1u8; 64]).encode();
+		let result = execute(CODE, input, &mut ext).unwrap();
 		assert_eq!(
 			u32::from_le_bytes(result.data.0[0..4].try_into().unwrap()),
 			ReturnCode::Success as u32
 		);
-		assert_eq!(ext.storage.get(&[1u8; 32].to_vec()), None);
+		assert_eq!(ext.storage.get(&[1u8; 64].to_vec()), None);
 		assert_eq!(&result.data.0[4..], &[42u8]);
 
 		// value did exist -> length returned (test for 0 sized)
-		let result = execute(CODE, [2u8; 32].encode(), &mut ext).unwrap();
+		let input = (19, [2u8; 19]).encode();
+		let result = execute(CODE, input, &mut ext).unwrap();
 		assert_eq!(
 			u32::from_le_bytes(result.data.0[0..4].try_into().unwrap()),
 			ReturnCode::Success as u32
 		);
-		assert_eq!(ext.storage.get(&[2u8; 32].to_vec()), None);
+		assert_eq!(ext.storage.get(&[2u8; 19].to_vec()), None);
 		assert_eq!(&result.data.0[4..], &[0u8; 0]);
 	}
 
