@@ -1342,6 +1342,16 @@ pub mod pallet {
 		NotEnoughSpaceInUnbondPool,
 		/// A (bonded) pool id does not exist.
 		PoolNotFound,
+		/// A reward pool does not exist. In all cases this is a system logic error.
+		RewardPoolNotFound,
+		/// A sub pool does not exist.
+		SubPoolsNotFound,
+	}
+
+	impl<T> From<DefensiveError> for Error<T> {
+		fn from(e: DefensiveError) -> Error<T> {
+			Error::<T>::Defensive(e)
+		}
 	}
 
 	#[pallet::call]
@@ -1374,8 +1384,10 @@ pub mod pallet {
 
 			// We just need its total earnings at this point in time, but we don't need to write it
 			// because we are not adjusting its points (all other values can calculated virtual).
-			let reward_pool = RewardPool::<T>::get_and_update(pool_id)
-				.defensive_ok_or_else(|| Error::<T>::RewardPoolNotFound)?;
+			let reward_pool =
+				RewardPool::<T>::get_and_update(pool_id).defensive_ok_or_else(|| -> Error<T> {
+					DefensiveError::RewardPoolNotFound.into()
+				})?;
 
 			bonded_pool.try_inc_members()?;
 			let points_issued = bonded_pool.try_bond_funds(&who, amount, BondType::Later)?;
@@ -1542,8 +1554,8 @@ pub mod pallet {
 					.try_insert(unbond_era, UnbondPool::default())
 					// The above call to `maybe_merge_pools` should ensure there is
 					// always enough space to insert.
-					.defensive_map_err(|_| {
-						Error::<T>::Defensive(DefensiveError::NotEnoughSpaceInUnbondPool)
+					.defensive_map_err(|_| -> Error<T> {
+						DefensiveError::NotEnoughSpaceInUnbondPool.into()
 					})?;
 			}
 
@@ -1551,7 +1563,7 @@ pub mod pallet {
 				.with_era
 				.get_mut(&unbond_era)
 				// The above check ensures the pool exists.
-				.defensive_ok_or_else(|| Error::<T>::Defensive(DefensiveError::PoolNotFound))?
+				.defensive_ok_or_else(|| -> Error<T> { DefensiveError::PoolNotFound.into() })?
 				.issue(unbonding_balance);
 
 			Self::deposit_event(Event::<T>::Unbonded {
@@ -1623,9 +1635,9 @@ pub mod pallet {
 			let current_era = T::StakingInterface::current_era();
 
 			let bonded_pool = BondedPool::<T>::get(member.pool_id)
-				.defensive_ok_or_else(|| Error::<T>::PoolNotFound)?;
+				.defensive_ok_or_else(|| -> Error<T> { DefensiveError::PoolNotFound.into() })?;
 			let mut sub_pools = SubPoolsStorage::<T>::get(member.pool_id)
-				.defensive_ok_or_else(|| Error::<T>::SubPoolsNotFound)?;
+				.defensive_ok_or_else(|| -> Error<T> { DefensiveError::SubPoolsNotFound.into() })?;
 
 			bonded_pool.ok_to_withdraw_unbonded_with(
 				&caller,
@@ -2043,10 +2055,10 @@ impl<T: Config> Pallet<T> {
 		who: &T::AccountId,
 	) -> Result<(PoolMember<T>, BondedPool<T>, RewardPool<T>), Error<T>> {
 		let member = PoolMembers::<T>::get(&who).ok_or(Error::<T>::PoolMemberNotFound)?;
-		let bonded_pool =
-			BondedPool::<T>::get(member.pool_id).defensive_ok_or(Error::<T>::PoolNotFound)?;
-		let reward_pool =
-			RewardPools::<T>::get(member.pool_id).defensive_ok_or(Error::<T>::PoolNotFound)?;
+		let err1: Error<T> = DefensiveError::PoolNotFound.into();
+		let err2: Error<T> = DefensiveError::PoolNotFound.into();
+		let bonded_pool = BondedPool::<T>::get(member.pool_id).defensive_ok_or(err1)?;
+		let reward_pool = RewardPools::<T>::get(member.pool_id).defensive_ok_or(err2)?;
 		Ok((member, bonded_pool, reward_pool))
 	}
 
