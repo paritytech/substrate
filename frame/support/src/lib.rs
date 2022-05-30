@@ -826,7 +826,7 @@ pub mod tests {
 	};
 	use codec::{Codec, EncodeLike};
 	use frame_support::traits::CrateVersion;
-	use sp_io::{TestExternalities, MultiRemovalResults};
+	use sp_io::{MultiRemovalResults, TestExternalities};
 	use sp_std::result;
 
 	/// A PalletInfo implementation which just panics.
@@ -1120,7 +1120,10 @@ pub mod tests {
 		e.commit_all().unwrap();
 		e.execute_with(|| {
 			let r = DoubleMap::clear_prefix(&key1, u32::max_value(), None);
-			assert!(matches!(r, MultiRemovalResults { maybe_cursor: None, backend: 2, unique: 2, loops: 2 }));
+			assert!(matches!(
+				r,
+				MultiRemovalResults { maybe_cursor: None, backend: 2, unique: 2, loops: 2 }
+			));
 			assert_eq!(DoubleMap::get(&key1, &key2), 0u64);
 			assert_eq!(DoubleMap::get(&key1, &(key2 + 1)), 0u64);
 			assert_eq!(DoubleMap::get(&(key1 + 1), &key2), 4u64);
@@ -1159,14 +1162,20 @@ pub mod tests {
 			DoubleMap::insert(&(key1 + 1), &key2, &4u64);
 			DoubleMap::insert(&(key1 + 1), &(key2 + 1), &4u64);
 			let r = DoubleMap::clear_prefix(&key1, u32::max_value(), None);
-			 // all in overlay
-			assert!(matches!(r, MultiRemovalResults { maybe_cursor: None, backend: 0, unique: 0, loops: 0 }));
+			// all in overlay
+			assert!(matches!(
+				r,
+				MultiRemovalResults { maybe_cursor: None, backend: 0, unique: 0, loops: 0 }
+			));
 			let r = DoubleMap::clear_prefix(&key1, u32::max_value(), None);
 			// Note this is the incorrect answer (for now), since we are using v2 of
 			// `clear_prefix`.
 			// When we switch to v3, then this will become:
 			//   MultiRemovalResults:: { maybe_cursor: None, backend: 0, unique: 2, loops: 2 },
-			assert!(matches!(r, MultiRemovalResults { maybe_cursor: None, backend: 0, unique: 0, loops: 0 }));
+			assert!(matches!(
+				r,
+				MultiRemovalResults { maybe_cursor: None, backend: 0, unique: 0, loops: 0 }
+			));
 			assert_eq!(DoubleMap::get(&key1, &key2), 0u64);
 			assert_eq!(DoubleMap::get(&key1, &(key2 + 1)), 0u64);
 			assert_eq!(DoubleMap::get(&(key1 + 1), &key2), 4u64);
