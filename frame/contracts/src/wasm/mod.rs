@@ -869,7 +869,7 @@ mod tests {
 	(import "seal0" "seal_contains_storage" (func $seal_contains_storage (param i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 
-	;; [0, 4) size of input buffer (32 byte as we copy the key here)
+	;; [0, 4) size of input buffer (32 bits as we copy the key here)
 	(data (i32.const 0) "\20")
 
 	;; [4, 36) input buffer
@@ -2269,23 +2269,26 @@ mod tests {
 (module
 	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
 	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
-	(import "__unstable__" "seal_clear_storage" (func $seal_clear_storage (param i32) (result i32)))
+	(import "__unstable__" "seal_clear_storage" (func $seal_clear_storage (param i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 
-	;; 0x1000 = 4k in little endian
 	;; size of input buffer
-	(data (i32.const 0) "\00\10")
+	;; [0, 4) size of input buffer (128+32 = 160 bits = 0xA0)
+	(data (i32.const 0) "\A0")
+
+	;; [4, 160) input buffer
 
 	(func (export "call")
 		;; Receive key
 		(call $seal_input
-			(i32.const 4)	;; Pointer to the input buffer
-			(i32.const 0)	;; Size of the length buffer
+			(i32.const 4)	;; Where we take input and store it
+			(i32.const 0)	;; Where we take and store the length of the taken data
 		)
-		;; Store the passed value to the passed key and store result to memory
+		;; Call seal_clear_storage and save what it returns at 0
 		(i32.store (i32.const 0)
 			(call $seal_clear_storage
-				(i32.const 4)				;; key_ptr
+				(i32.const 8)			;; key_ptr
+				(i32.load (i32.const 4))	;; key_len
 			)
 		)
 		(call $seal_return
@@ -2301,23 +2304,48 @@ mod tests {
 
 		let mut ext = MockExt::default();
 
-		ext.storage.insert([1u8; 32].to_vec(), vec![42u8]);
-		ext.storage.insert([2u8; 32].to_vec(), vec![]);
+		ext.set_storage_transparent(
+			VarSizedKey::<Test>::try_from([1u8; 64].to_vec()).unwrap(),
+			Some(vec![42u8]),
+			false,
+		)
+		.unwrap();
+		ext.set_storage_transparent(
+			VarSizedKey::<Test>::try_from([2u8; 19].to_vec()).unwrap(),
+			Some(vec![]),
+			false,
+		)
+		.unwrap();
 
-		// value does not exist -> sentinel returned
-		let result = execute(CODE, [3u8; 32].encode(), &mut ext).unwrap();
+		// value did not exist
+		let input = (32, [3u8; 32]).encode();
+		let result = execute(CODE, input, &mut ext).unwrap();
+		// sentinel returned
 		assert_eq!(u32::from_le_bytes(result.data.0.try_into().unwrap()), crate::SENTINEL);
 		assert_eq!(ext.storage.get(&[3u8; 32].to_vec()), None);
 
-		// value did exist -> length returned
-		let result = execute(CODE, [1u8; 32].encode(), &mut ext).unwrap();
+		// value did exist
+		let input = (64, [1u8; 64]).encode();
+		let result = execute(CODE, input, &mut ext).unwrap();
+		// length returned
 		assert_eq!(u32::from_le_bytes(result.data.0.try_into().unwrap()), 1);
-		assert_eq!(ext.storage.get(&[1u8; 32].to_vec()), None);
+		// value cleared
+		assert_eq!(ext.storage.get(&[1u8; 64].to_vec()), None);
 
-		// value did exist -> length returned (test for 0 sized)
-		let result = execute(CODE, [2u8; 32].encode(), &mut ext).unwrap();
+		//value did not exist (wrong key length)
+		let input = (63, [1u8; 64]).encode();
+		let result = execute(CODE, input, &mut ext).unwrap();
+		// sentinel returned
+		assert_eq!(u32::from_le_bytes(result.data.0.try_into().unwrap()), crate::SENTINEL);
+		assert_eq!(ext.storage.get(&[1u8; 64].to_vec()), None);
+
+		// value exists
+		let input = (19, [2u8; 19]).encode();
+		let result = execute(CODE, input, &mut ext).unwrap();
+		// length returned (test for 0 sized)
 		assert_eq!(u32::from_le_bytes(result.data.0.try_into().unwrap()), 0);
-		assert_eq!(ext.storage.get(&[2u8; 32].to_vec()), None);
+		// value cleared
+		assert_eq!(ext.storage.get(&[2u8; 19].to_vec()), None);
 	}
 
 	#[test]
