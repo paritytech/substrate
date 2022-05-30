@@ -354,7 +354,10 @@ pub fn new_full_base(
 
 	let mut mixnet_channels = None;
 	let mut mixnet_worker = None;
-	if config.mixnet {
+	let role = config.role.clone();
+
+	// mixnet is optional for non validator node, mandatory for validator.
+	if config.mixnet || role.is_authority() {
 		let (worker_inner, (worker_in, worker_out, command_sender)) = sc_mixnet::new_channels();
 		mixnet_channels = Some((worker_in, worker_out, command_sender));
 		let local_id = config.network.node_key.clone().into_keypair()?;
@@ -383,7 +386,6 @@ pub fn new_full_base(
 		);
 	}
 
-	let role = config.role.clone();
 	let force_authoring = config.force_authoring;
 	let backoff_authoring_blocks =
 		Some(sc_consensus_slots::BackoffAuthoringOnFinalizedHeadLagging::default());
@@ -487,8 +489,6 @@ pub fn new_full_base(
 	}
 
 	// Spawn authority discovery module.
-	//if role.is_authority() || mixnet_worker.is_some() { TODO no auth disco for external: might be
-	//forced to get more validator connection when using mixnet
 	if role.is_authority() {
 		let authority_discovery_role = if role.is_authority() {
 			sc_authority_discovery::Role::PublishAndDiscover(keystore_container.keystore())
