@@ -34,12 +34,6 @@ use sp_trie::DBValue;
 
 /// Number of columns in the db. Must be the same for both full && light dbs.
 /// Otherwise RocksDb will fail to open database && check its type.
-#[cfg(any(
-	feature = "with-kvdb-rocksdb",
-	feature = "with-parity-db",
-	feature = "test-helpers",
-	test
-))]
 pub const NUM_COLUMNS: u32 = 13;
 /// Meta column. The set of keys in the column is shared by full && light storages.
 pub const COLUMN_META: u32 = 0;
@@ -197,7 +191,6 @@ fn open_database_at<Block: BlockT>(
 	create: bool,
 ) -> OpenDbResult {
 	let db: Arc<dyn Database<DbHash>> = match &db_source {
-		#[cfg(feature = "with-parity-db")]
 		DatabaseSource::ParityDb { path } => open_parity_db::<Block>(path, db_type, create)?,
 		#[cfg(feature = "with-kvdb-rocksdb")]
 		DatabaseSource::RocksDb { path, cache_size } =>
@@ -268,7 +261,6 @@ impl From<OpenDbError> for sp_blockchain::Error {
 	}
 }
 
-#[cfg(feature = "with-parity-db")]
 impl From<parity_db::Error> for OpenDbError {
 	fn from(err: parity_db::Error) -> Self {
 		if matches!(err, parity_db::Error::DatabaseNotFound) {
@@ -289,7 +281,6 @@ impl From<io::Error> for OpenDbError {
 	}
 }
 
-#[cfg(feature = "with-parity-db")]
 fn open_parity_db<Block: BlockT>(path: &Path, db_type: DatabaseType, create: bool) -> OpenDbResult {
 	match crate::parity_db::open(path, db_type, create, false) {
 		Ok(db) => Ok(db),
@@ -300,15 +291,6 @@ fn open_parity_db<Block: BlockT>(path: &Path, db_type: DatabaseType, create: boo
 		},
 		Err(e) => Err(e.into()),
 	}
-}
-
-#[cfg(not(feature = "with-parity-db"))]
-fn open_parity_db<Block: BlockT>(
-	_path: &Path,
-	_db_type: DatabaseType,
-	_create: bool,
-) -> OpenDbResult {
-	Err(OpenDbError::NotEnabled("with-parity-db"))
 }
 
 #[cfg(any(feature = "with-kvdb-rocksdb", test))]
@@ -641,7 +623,6 @@ mod tests {
 			"db_version",
 		);
 
-		#[cfg(feature = "with-parity-db")]
 		check_dir_for_db_type(
 			DatabaseType::Full,
 			DatabaseSource::ParityDb { path: PathBuf::new() },
@@ -704,8 +685,6 @@ mod tests {
 		assert_eq!(joined.remaining_len().unwrap(), Some(0));
 	}
 
-	#[cfg(feature = "with-parity-db")]
-	#[cfg(any(feature = "with-kvdb-rocksdb", test))]
 	#[test]
 	fn test_open_database_auto_new() {
 		let db_dir = tempfile::TempDir::new().unwrap();
@@ -751,8 +730,6 @@ mod tests {
 		}
 	}
 
-	#[cfg(feature = "with-parity-db")]
-	#[cfg(any(feature = "with-kvdb-rocksdb", test))]
 	#[test]
 	fn test_open_database_rocksdb_new() {
 		let db_dir = tempfile::TempDir::new().unwrap();
@@ -803,8 +780,6 @@ mod tests {
 		}
 	}
 
-	#[cfg(feature = "with-parity-db")]
-	#[cfg(any(feature = "with-kvdb-rocksdb", test))]
 	#[test]
 	fn test_open_database_paritydb_new() {
 		let db_dir = tempfile::TempDir::new().unwrap();

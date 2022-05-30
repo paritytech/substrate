@@ -222,9 +222,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		Ok(match database {
 			#[cfg(feature = "with-rocks-db")]
 			Database::RocksDb => DatabaseSource::RocksDb { path: rocksdb_path, cache_size },
-			#[cfg(feature = "with-parity-db")]
 			Database::ParityDb => DatabaseSource::ParityDb { path: paritydb_path },
-			#[cfg(feature = "with-parity-db")]
 			Database::ParityDbDeprecated => {
 				eprintln!(
 					"WARNING: \"paritydb-experimental\" database setting is deprecated and will be removed in future releases. \
@@ -508,7 +506,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			{
 				Database::RocksDb
 			},
-			#[cfg(all(feature = "with-parity-db", not(feature = "with-rocks-db")))]
+			#[cfg(not(feature = "with-rocks-db"))]
 			{
 				Database::ParityDb
 			},

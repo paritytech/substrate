@@ -237,16 +237,14 @@ impl Into<sc_service::config::RpcMethods> for RpcMethods {
 /// Database backend
 #[derive(Debug, Clone, PartialEq, Copy)]
 pub enum Database {
-	#[cfg(feature = "with-rocks-db")]
 	/// Facebooks RocksDB
+	#[cfg(feature = "with-rocks-db")]
 	RocksDb,
-	#[cfg(feature = "with-parity-db")]
 	/// ParityDb. <https://github.com/paritytech/parity-db/>
 	ParityDb,
 	/// Detect whether there is an existing database. Use it, if there is, if not, create new
 	/// instance of ParityDb
 	Auto,
-	#[cfg(feature = "with-parity-db")]
 	/// ParityDb. <https://github.com/paritytech/parity-db/>
 	ParityDbDeprecated,
 }
@@ -259,7 +257,6 @@ impl std::str::FromStr for Database {
 		if s.eq_ignore_ascii_case("rocksdb") {
 			return Ok(Self::RocksDb)
 		}
-		#[cfg(feature = "with-parity-db")]
 		if s.eq_ignore_ascii_case("paritydb-experimental") {
 			return Ok(Self::ParityDbDeprecated)
 		} else if s.eq_ignore_ascii_case("paritydb") {
@@ -279,9 +276,7 @@ impl Database {
 		&[
 			#[cfg(feature = "with-rocks-db")]
 			"rocksdb",
-			#[cfg(feature = "with-parity-db")]
 			"paritydb",
-			#[cfg(feature = "with-parity-db")]
 			"paritydb-experimental",
 			"auto",
 		]

@@ -30,11 +30,9 @@
 
 pub mod offchain;
 
-#[cfg(any(feature = "with-parity-db", feature = "with-kvdb-rocksdb", test))]
 pub mod bench;
 
 mod children;
-#[cfg(feature = "with-parity-db")]
 mod parity_db;
 mod stats;
 mod storage_cache;
@@ -94,7 +92,6 @@ use sp_trie::{prefixed_key, MemoryDB, PrefixedMemoryDB};
 pub use sc_state_db::PruningMode;
 pub use sp_database::Database;
 
-#[cfg(any(feature = "with-parity-db", feature = "with-kvdb-rocksdb", test))]
 pub use bench::BenchmarkingState;
 
 const CACHE_HEADERS: usize = 8;
@@ -106,7 +103,6 @@ const DEFAULT_CHILD_RATIO: (usize, usize) = (1, 10);
 pub type DbState<B> =
 	sp_state_machine::TrieBackend<Arc<dyn sp_state_machine::Storage<HashFor<B>>>, HashFor<B>>;
 
-#[cfg(feature = "with-parity-db")]
 /// Length of a [`DbHash`].
 const DB_HASH_LEN: usize = 32;
 
@@ -336,7 +332,6 @@ pub enum DatabaseSource {
 	},
 
 	/// Load a ParityDb database from a given path.
-	#[cfg(feature = "with-parity-db")]
 	ParityDb {
 		/// Path to the database.
 		path: PathBuf,
@@ -363,7 +358,6 @@ impl DatabaseSource {
 			DatabaseSource::Auto { paritydb_path, .. } => Some(paritydb_path),
 			#[cfg(feature = "with-kvdb-rocksdb")]
 			DatabaseSource::RocksDb { path, .. } => Some(path),
-			#[cfg(feature = "with-parity-db")]
 			DatabaseSource::ParityDb { path } => Some(path),
 			DatabaseSource::Custom { .. } => None,
 		}
@@ -381,7 +375,6 @@ impl DatabaseSource {
 				*path = p.into();
 				true
 			},
-			#[cfg(feature = "with-parity-db")]
 			DatabaseSource::ParityDb { ref mut path } => {
 				*path = p.into();
 				true
@@ -397,7 +390,6 @@ impl std::fmt::Display for DatabaseSource {
 			DatabaseSource::Auto { .. } => "Auto",
 			#[cfg(feature = "with-kvdb-rocksdb")]
 			DatabaseSource::RocksDb { .. } => "RocksDb",
-			#[cfg(feature = "with-parity-db")]
 			DatabaseSource::ParityDb { .. } => "ParityDb",
 			DatabaseSource::Custom { .. } => "Custom",
 		};
