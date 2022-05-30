@@ -261,6 +261,10 @@ pub enum Curve {
 	Reciprocal { factor: FixedI64, x_offset: FixedI64, y_offset: FixedI64 },
 }
 
+/// Calculate the quadratic solution for the given curve.
+///
+/// WARNING: This is a `const` function designed for convenient use at build time and
+/// will panic on overflow. Ensure that any inputs are sensible.
 const fn pos_quad_solution(a: FixedI64, b: FixedI64, c: FixedI64) -> FixedI64 {
 	const TWO: FixedI64 = FixedI64::from_u32(2);
 	const FOUR: FixedI64 = FixedI64::from_u32(4);
@@ -268,12 +272,21 @@ const fn pos_quad_solution(a: FixedI64, b: FixedI64, c: FixedI64) -> FixedI64 {
 }
 
 impl Curve {
+	/// Create a `Curve::Linear` instance from a high-level description.
+	///
+	/// WARNING: This is a `const` function designed for convenient use at build time and
+	/// will panic on overflow. Ensure that any inputs are sensible.
 	pub const fn make_linear(length: u128, period: u128, floor: FixedI64, ceil: FixedI64) -> Curve {
 		let length = FixedI64::from_rational(length, period).into_perbill();
 		let floor = floor.into_perbill();
 		let ceil = ceil.into_perbill();
 		Curve::LinearDecreasing { length, floor, ceil }
 	}
+
+	/// Create a `Curve::Reciprocal` instance from a high-level description.
+	///
+	/// WARNING: This is a `const` function designed for convenient use at build time and
+	/// will panic on overflow. Ensure that any inputs are sensible.
 	pub const fn make_reciprocal(
 		delay: u128,
 		period: u128,
@@ -312,9 +325,13 @@ impl Curve {
 		}
 	}
 
+	/// Create a `Curve::Reciprocal` instance from basic parameters.
+	///
+	/// WARNING: This is a `const` function designed for convenient use at build time and
+	/// will panic on overflow. Ensure that any inputs are sensible.
 	const fn reciprocal_from_parts(factor: FixedI64, floor: FixedI64, ceil: FixedI64) -> Self {
-		let one_minus_floor = ceil.sub(floor);
-		let x_offset = pos_quad_solution(one_minus_floor, one_minus_floor, factor.neg());
+		let delta = ceil.sub(floor);
+		let x_offset = pos_quad_solution(delta, delta, factor.neg());
 		let y_offset = floor.sub(factor.div(FixedI64::from_u32(1).add(x_offset)));
 		Curve::Reciprocal { factor, x_offset, y_offset }
 	}
@@ -428,7 +445,7 @@ impl Curve {
 				} else if y > *ceil {
 					Perbill::zero()
 				} else {
-					(*ceil - y).saturating_div(*ceil - *floor, Up) * *length
+					(*ceil - y).saturating_div(*ceil - *floor, Up).saturating_mul(*length)
 				},
 			Self::SteppedDecreasing { begin, end, step, period } =>
 				if y < *end {
