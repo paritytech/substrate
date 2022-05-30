@@ -412,6 +412,7 @@ pub fn pallet(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// The return type of the annotated function must be `Result`. All changes to storage performed
 /// by the annotated function are discarded if it returns `Err`, or committed if `Ok`.
+/// Deprecated since it is the default behaviour now.
 ///
 /// # Example
 ///
@@ -429,6 +430,7 @@ pub fn pallet(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// }
 /// ```
 #[proc_macro_attribute]
+#[deprecated(note = "This is now the default behaviour for all extrinsics.")]
 pub fn transactional(attr: TokenStream, input: TokenStream) -> TokenStream {
 	transactional::transactional(attr, input).unwrap_or_else(|e| e.to_compile_error().into())
 }
