@@ -18,7 +18,7 @@
 //! Various pieces of common functionality.
 
 use super::*;
-use frame_support::{ensure, traits::Get};
+use frame_support::{ensure, traits::Get, BoundedVec};
 use sp_runtime::{DispatchError, DispatchResult};
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
@@ -197,6 +197,49 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Account::<T, I>::remove((&owner, &collection, &item));
 
 		Self::deposit_event(Event::Burned { collection, item, owner });
+		Ok(())
+	}
+
+	pub fn do_set_attribute(
+		maybe_check_owner: Option<T::AccountId>,
+		collection: T::CollectionId,
+		maybe_item: Option<T::ItemId>,
+		key: BoundedVec<u8, T::KeyLimit>,
+		value: BoundedVec<u8, T::ValueLimit>,
+	) -> DispatchResult {
+		let mut collection_details =
+			Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
+		if let Some(check_owner) = &maybe_check_owner {
+			ensure!(check_owner == &collection_details.owner, Error::<T, I>::NoPermission);
+		}
+		let maybe_is_frozen = match maybe_item {
+			None => CollectionMetadataOf::<T, I>::get(collection).map(|v| v.is_frozen),
+			Some(item) => ItemMetadataOf::<T, I>::get(collection, item).map(|v| v.is_frozen),
+		};
+		ensure!(!maybe_is_frozen.unwrap_or(false), Error::<T, I>::Frozen);
+
+		let attribute = Attribute::<T, I>::get((collection, maybe_item, &key));
+		if attribute.is_none() {
+			collection_details.attributes.saturating_inc();
+		}
+		let old_deposit = attribute.map_or(Zero::zero(), |m| m.1);
+		collection_details.total_deposit.saturating_reduce(old_deposit);
+		let mut deposit = Zero::zero();
+		if !collection_details.free_holding && maybe_check_owner.is_some() {
+			deposit = T::DepositPerByte::get()
+				.saturating_mul(((key.len() + value.len()) as u32).into())
+				.saturating_add(T::AttributeDepositBase::get());
+		}
+		collection_details.total_deposit.saturating_accrue(deposit);
+		if deposit > old_deposit {
+			T::Currency::reserve(&collection_details.owner, deposit - old_deposit)?;
+		} else if deposit < old_deposit {
+			T::Currency::unreserve(&collection_details.owner, old_deposit - deposit);
+		}
+
+		Attribute::<T, I>::insert((&collection, maybe_item, &key), (&value, deposit));
+		Collection::<T, I>::insert(collection, &collection_details);
+		Self::deposit_event(Event::AttributeSet { collection, maybe_item, key, value });
 		Ok(())
 	}
 }
