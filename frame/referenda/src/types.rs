@@ -428,7 +428,7 @@ impl Curve {
 				} else if y > *ceil {
 					Perbill::zero()
 				} else {
-					(*ceil - y).saturating_div(*ceil - *floor, Up) * *length
+					(*ceil - y).saturating_div(*ceil - *floor, Up).saturating_mul(*length)
 				},
 			Self::SteppedDecreasing { begin, end, step, period } =>
 				if y < *end {
