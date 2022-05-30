@@ -1119,9 +1119,8 @@ pub mod tests {
 		});
 		e.commit_all().unwrap();
 		e.execute_with(|| {
-			let r = DoubleMap::clear_prefix(&key1, u32::max_value(), None);
 			assert!(matches!(
-				r,
+				DoubleMap::clear_prefix(&key1, u32::max_value(), None),
 				MultiRemovalResults { maybe_cursor: None, backend: 2, unique: 2, loops: 2 }
 			));
 			assert_eq!(DoubleMap::get(&key1, &key2), 0u64);
