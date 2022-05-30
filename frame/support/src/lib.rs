@@ -1119,6 +1119,7 @@ pub mod tests {
 		});
 		e.commit_all().unwrap();
 		e.execute_with(|| {
+			#[allow(deprecated)]
 			let r = DoubleMap::remove_prefix(&key1, None);
 			assert!(matches!(r, sp_io::KillStorageResult::AllRemoved(2)));
 			assert_eq!(DoubleMap::get(&key1, &key2), 0u64);
@@ -1158,6 +1159,7 @@ pub mod tests {
 			DoubleMap::insert(&key1, &(key2 + 1), &4u64);
 			DoubleMap::insert(&(key1 + 1), &key2, &4u64);
 			DoubleMap::insert(&(key1 + 1), &(key2 + 1), &4u64);
+			#[allow(deprecated)]
 			let r = DoubleMap::remove_prefix(&key1, None);
 			assert!(matches!(r, sp_io::KillStorageResult::AllRemoved(0))); // all in overlay
 			assert!(matches!(
