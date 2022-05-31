@@ -72,6 +72,7 @@ use sp_runtime::{
 		self, AtLeast32Bit, AtLeast32BitUnsigned, BadOrigin, BlockNumberProvider, Bounded,
 		CheckEqual, Dispatchable, Hash, Lookup, LookupError, MaybeDisplay, MaybeMallocSizeOf,
 		MaybeSerializeDeserialize, Member, One, Saturating, SimpleBitOps, StaticLookup, Zero,
+		TrailingZeroInput,
 	},
 	DispatchError, Perbill, RuntimeDebug,
 };
@@ -782,8 +783,8 @@ impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>, Acco
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> O {
-		O::from(RawOrigin::Root)
+	fn try_successful_origin() -> Result<O, ()> {
+		Ok(O::from(RawOrigin::Root))
 	}
 }
 
@@ -805,8 +806,8 @@ impl<
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> O {
-		O::from(RawOrigin::Root)
+	fn try_successful_origin() -> Result<O, ()> {
+		Ok(O::from(RawOrigin::Root))
 	}
 }
 
@@ -823,11 +824,10 @@ impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>, Acco
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> O {
+	fn try_successful_origin() -> Result<O, ()> {
 		let zero_account_id =
-			AccountId::decode(&mut sp_runtime::traits::TrailingZeroInput::zeroes())
-				.expect("infinite length input; no invalid inputs for type; qed");
-		O::from(RawOrigin::Signed(zero_account_id))
+			AccountId::decode(&mut TrailingZeroInput::zeroes()).map_err(|_| ())?;
+		Ok(O::from(RawOrigin::Signed(zero_account_id)))
 	}
 }
 
@@ -847,16 +847,15 @@ impl<
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> O {
+	fn try_successful_origin() -> Result<O, ()> {
 		let zero_account_id =
-			AccountId::decode(&mut sp_runtime::traits::TrailingZeroInput::zeroes())
-				.expect("infinite length input; no invalid inputs for type; qed");
+			AccountId::decode(&mut TrailingZeroInput::zeroes()).map_err(|_| ())?;
 		let members = Who::sorted_members();
 		let first_member = match members.get(0) {
 			Some(account) => account.clone(),
 			None => zero_account_id,
 		};
-		O::from(RawOrigin::Signed(first_member))
+		Ok(O::from(RawOrigin::Signed(first_member)))
 	}
 }
 
@@ -873,8 +872,8 @@ impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>, Acco
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> O {
-		O::from(RawOrigin::None)
+	fn try_successful_origin() -> Result<O, ()> {
+		Ok(O::from(RawOrigin::None))
 	}
 }
 
@@ -886,8 +885,8 @@ impl<O, T> EnsureOrigin<O> for EnsureNever<T> {
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> O {
-		unimplemented!()
+	fn try_successful_origin() -> Result<O, ()> {
+		Err(())
 	}
 }
 
