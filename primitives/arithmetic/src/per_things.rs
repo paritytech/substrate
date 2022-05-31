@@ -639,8 +639,9 @@ macro_rules! implement_per_thing {
 					write!(fmt, "{:.2}% ({}/{})", pc, self.0, $max)
 				} else {
 					// A power of ten: calculate exact percent
-					let units = self.0 / ($max / 100);
-					let rest = self.0 % ($max / 100);
+					let divisor = $max / 100;
+					let units = self.0 / divisor;
+					let rest = self.0 % divisor;
 					write!(fmt, "{}", units)?;
 					if rest > 0 {
 						write!(fmt, ".")?;
