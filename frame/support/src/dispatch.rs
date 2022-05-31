@@ -200,6 +200,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug + 
 ///
 /// Transactional function discards all changes to storage if it returns `Err`, or commits if
 /// `Ok`, via the #\[transactional\] attribute. Note the attribute must be after #\[weight\].
+/// The #\[transactional\] attribute is deprecated since it is the default behaviour.
 ///
 /// ```
 /// # #[macro_use]
