@@ -116,8 +116,8 @@ impl frame_support::traits::EnsureOrigin<Origin> for TestSpendOrigin {
 		})
 	}
 	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> Origin {
-		Origin::root()
+	fn try_successful_origin() -> Result<Origin, ()> {
+		Ok(Origin::root())
 	}
 }
 
