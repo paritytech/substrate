@@ -579,18 +579,14 @@ where
 	/// Returns the best seen block.
 	fn best_seen(&self) -> Option<NumberFor<B>> {
 		let mut best_seens = self.peers.values().map(|p| p.best_number).collect::<Vec<_>>();
-		best_seens.sort_unstable();
 
 		if best_seens.is_empty() {
 			None
 		} else {
-			let len = best_seens.len();
+			let middle = best_seens.len() / 2;
 
-			if len % 2 == 0 {
-				Some((best_seens[len / 2] + best_seens[len / 2 - 1]) / 2u32.into())
-			} else {
-				Some(best_seens[len / 2])
-			}
+			// Not the "perfect median" when we have an even number of peers.
+			Some(*best_seens.select_nth_unstable(middle).1)
 		}
 	}
 
