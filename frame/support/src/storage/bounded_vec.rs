@@ -47,9 +47,7 @@ use sp_std::{marker::PhantomData, prelude::*};
 #[scale_info(skip_type_params(S))]
 pub struct BoundedVec<T, S>(
 	Vec<T>,
-	#[cfg_attr(feature = "std", serde(skip_serializing))]
-	#[codec(skip)]
-	PhantomData<S>,
+	#[cfg_attr(feature = "std", serde(skip_serializing))] PhantomData<S>,
 );
 
 #[cfg(feature = "std")]
