@@ -66,18 +66,17 @@
 
 #[cfg(feature = "std")]
 use serde::Serialize;
+#[cfg(feature = "runtime-benchmarks")]
+use sp_runtime::traits::TrailingZeroInput;
 use sp_runtime::{
 	generic,
 	traits::{
 		self, AtLeast32Bit, AtLeast32BitUnsigned, BadOrigin, BlockNumberProvider, Bounded,
 		CheckEqual, Dispatchable, Hash, Lookup, LookupError, MaybeDisplay, MaybeMallocSizeOf,
-		MaybeSerializeDeserialize, Member, One, Saturating, SimpleBitOps, StaticLookup,
-		Zero,
+		MaybeSerializeDeserialize, Member, One, Saturating, SimpleBitOps, StaticLookup, Zero,
 	},
 	DispatchError, Perbill, RuntimeDebug,
 };
-#[cfg(feature = "runtime-benchmarks")]
-use sp_runtime::traits::TrailingZeroInput;
 #[cfg(any(feature = "std", test))]
 use sp_std::map;
 use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};

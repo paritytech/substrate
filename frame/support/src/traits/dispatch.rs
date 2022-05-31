@@ -17,13 +17,13 @@
 
 //! Traits for dealing with dispatching calls and the origin from which they are dispatched.
 
-use sp_std::marker::PhantomData;
 use crate::dispatch::{DispatchResultWithPostInfo, Parameter, RawOrigin};
-use sp_arithmetic::traits::{Zero, CheckedSub};
+use sp_arithmetic::traits::{CheckedSub, Zero};
 use sp_runtime::{
 	traits::{BadOrigin, Member, Morph, TryMorph},
 	Either,
 };
+use sp_std::marker::PhantomData;
 
 use super::TypedGet;
 
