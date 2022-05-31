@@ -20,8 +20,10 @@
 use std::collections::BTreeMap;
 
 use frame_support::{
-	assert_noop, assert_ok, parameter_types,
-	traits::{ConstU32, ConstU64, Everything, Polling, ConstU16, EitherOf, MapSuccess, ReduceBy}, error::BadOrigin,
+	assert_noop, assert_ok,
+	error::BadOrigin,
+	parameter_types,
+	traits::{ConstU16, ConstU32, ConstU64, EitherOf, Everything, MapSuccess, Polling, ReduceBy},
 };
 use sp_core::H256;
 use sp_runtime::{
@@ -172,12 +174,12 @@ impl Config for Test {
 	type PromoteOrigin = EitherOf<
 		// Members can promote up to the rank of 2 below them.
 		MapSuccess<EnsureRanked<Test, (), 2>, ReduceBy<ConstU16<2>>>,
-		frame_system::EnsureRootWithSuccess<Self::AccountId, ConstU16<65535>>
+		frame_system::EnsureRootWithSuccess<Self::AccountId, ConstU16<65535>>,
 	>;
 	type DemoteOrigin = EitherOf<
 		// Members can demote up to the rank of 3 below them.
 		MapSuccess<EnsureRanked<Test, (), 3>, ReduceBy<ConstU16<3>>>,
-		frame_system::EnsureRootWithSuccess<Self::AccountId, ConstU16<65535>>
+		frame_system::EnsureRootWithSuccess<Self::AccountId, ConstU16<65535>>,
 	>;
 	type Polls = TestPolls;
 	type MinRankOfClass = Identity;
@@ -308,7 +310,9 @@ fn promote_demote_works() {
 fn promote_demote_by_rank_works() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Club::add_member(Origin::root(), 1));
-		for _ in 0..7 { assert_ok!(Club::promote_member(Origin::root(), 1)); };
+		for _ in 0..7 {
+			assert_ok!(Club::promote_member(Origin::root(), 1));
+		}
 
 		// #1 can add #2 and promote to rank 1
 		assert_ok!(Club::add_member(Origin::signed(1), 2));
@@ -449,4 +453,3 @@ fn ensure_ranked_works() {
 		assert_eq!(Rank4::try_origin(Origin::signed(3)).unwrap_err().as_signed().unwrap(), 3);
 	});
 }
-

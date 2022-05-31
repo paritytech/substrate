@@ -292,7 +292,6 @@ impl<T> Morph<T> for Identity {
 	}
 }
 
-
 /// Extensible conversion trait. Generic over only source type, with destination type being
 /// associated.
 pub trait TryMorph<A> {
