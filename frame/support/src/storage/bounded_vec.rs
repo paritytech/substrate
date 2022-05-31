@@ -47,7 +47,9 @@ use sp_std::{marker::PhantomData, prelude::*};
 #[scale_info(skip_type_params(S))]
 pub struct BoundedVec<T, S>(
 	Vec<T>,
-	#[cfg_attr(feature = "std", serde(skip_serializing))] PhantomData<S>,
+	#[cfg_attr(feature = "std", serde(skip_serializing))]
+	#[codec(skip)]
+	PhantomData<S>,
 );
 
 #[cfg(feature = "std")]
@@ -284,6 +286,12 @@ impl<T, S: Get<u32>> BoundedVec<T, S> {
 	/// Allocate self with the maximum possible capacity.
 	pub fn with_max_capacity() -> Self {
 		Self::with_bounded_capacity(Self::bound())
+	}
+
+	/// Consume and truncate the vector `v` in order to create a new instance of `Self` from it.
+	pub fn truncate_from(mut v: Vec<T>) -> Self {
+		v.truncate(Self::bound());
+		Self::unchecked_from(v)
 	}
 
 	/// Get the bound of the type in `usize`.

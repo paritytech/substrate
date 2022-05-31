@@ -15,29 +15,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Ranked collective system: Members of a set of account IDs can make their collective feelings
-//! known through dispatched calls from one of two specialized origins.
+//! Ranked collective system.
 //!
-//! The membership can be provided in one of two ways: either directly, using the Root-dispatchable
-//! function `set_members`, or indirectly, through implementing the `ChangeMembers`.
-//! The pallet assumes that the amount of members stays at or below `MaxMembers` for its weight
-//! calculations, but enforces this neither in `set_members` nor in `change_members_sorted`.
+//! This is a membership pallet providing a `Tally` implementation ready for use with polling
+//! systems such as the Referenda pallet. Members each have a rank, with zero being the lowest.
+//! There is no complexity limitation on either the number of members at a rank or the number of
+//! ranks in the system thus allowing potentially public membership. A member of at least a given
+//! rank can be selected at random in O(1) time, allowing for various games to constructed using
+//! this as a primitive. Members may only be promoted and demoted by one rank at a time, however
+//! all operations (save one) are O(1) in complexity. The only operation which is not O(1) is the
+//! `remove_member` since they must be removed from all ranks from the present down to zero.
 //!
-//! A "prime" member may be set to help determine the default vote behavior based on chain
-//! config. If `PrimeDefaultVote` is used, the prime vote acts as the default vote in case of any
-//! abstentions after the voting period. If `MoreThanMajorityThenPrimeDefaultVote` is used, then
-//! abstentions will first follow the majority of the collective voting, and then the prime
-//! member.
+//! Different ranks have different voting power, and are able to vote in different polls. In general
+//! rank privileges are cumulative. Higher ranks are able to vote in any polls open to lower ranks.
+//! Similarly, higher ranks always have at least as much voting power in any given poll as lower
+//! ranks.
 //!
-//! Voting happens through motions comprising a proposal (i.e. a curried dispatchable) plus a
-//! number of approvals required for it to pass and be called. Motions are open for members to
-//! vote on for a minimum period given by `MotionDuration`. As soon as the needed number of
-//! approvals is given, the motion is closed and executed. If the number of approvals is not reached
-//! during the voting period, then `close` may be called by any account in order to force the end
-//! the motion explicitly. If a prime member is defined then their vote is used in place of any
-//! abstentions and the proposal is executed if there are enough approvals counting the new votes.
+//! Two `Config` trait items control these "rank privileges": `MinRankOfClass` and `VoteWeight`.
+//! The first controls which ranks are allowed to vote on a particular class of poll. The second
+//! controls the weight of a vote given the voters rank compared to the minimum rank of the poll.
 //!
-//! If there are not, or if no prime is set, then the motion is dropped without being executed.
+//! An origin control, `EnsureRank`, ensures that the origin is a member of the collective of at
+//! least a particular rank.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![recursion_limit = "128"]
@@ -51,7 +50,7 @@ use frame_support::{
 	codec::{Decode, Encode, MaxEncodedLen},
 	dispatch::{DispatchError, DispatchResultWithPostInfo},
 	ensure,
-	traits::{EnsureOrigin, PollStatus, Polling, VoteTally},
+	traits::{EnsureOrigin, OriginTrait, PollStatus, Polling, VoteTally},
 	weights::PostDispatchInfo,
 	CloneNoBound, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
 };
@@ -106,7 +105,6 @@ impl<M: GetMaxVoters> Tally<M> {
 // This keeps everything O(1) while still allowing arbitrary number of ranks.
 
 // All functions of VoteTally now include the class as a param.
-// TODO: ** BEFORE COMMIT ** split and move into gg2t branch.
 
 pub type TallyOf<T, I = ()> = Tally<Pallet<T, I>>;
 pub type PollIndexOf<T, I = ()> = <<T as Config<I>>::Polls as Polling<TallyOf<T, I>>>::Index;
@@ -210,10 +208,43 @@ impl Convert<Rank, Votes> for Geometric {
 	}
 }
 
+pub trait GetMaxVoters {
+	fn get_max_voters(r: Rank) -> MemberIndex;
+}
+impl<T: Config<I>, I: 'static> GetMaxVoters for Pallet<T, I> {
+	fn get_max_voters(r: Rank) -> MemberIndex {
+		MemberCount::<T, I>::get(r)
+	}
+}
+
+pub struct EnsureRanked<T, I, const MinRank: u16>(PhantomData<(T, I)>);
+impl<
+	T: Config<I>,
+	I: 'static,
+	const MinRank: u16,
+> EnsureOrigin<T::Origin> for EnsureRanked<T, I, MinRank> {
+	type Success = T::AccountId;
+
+	fn try_origin(o: T::Origin) -> Result<Self::Success, T::Origin> {
+		let who = frame_system::EnsureSigned::try_origin(o)?;
+		match Members::<T, I>::get(&who) {
+			Some(MemberRecord { rank, .. }) if rank >= MinRank => Ok(who),
+			_ => Err(frame_system::RawOrigin::Signed(who).into()),
+		}
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> T::Origin {
+		let who = IndexToId::<T, I>::get(MinRank, 0)
+			.expect("Must be at least one member at rank for a successful origin");
+		frame_system::RawOrigin::Signed(who).into()
+	}
+}
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::pallet_prelude::*;
+	use frame_support::{pallet_prelude::*, storage::KeyLenOf};
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
@@ -236,15 +267,22 @@ pub mod pallet {
 		type Polls: Polling<
 			TallyOf<Self, I>,
 			Votes = Votes,
-			Class = Rank,
 			Moment = Self::BlockNumber,
 		>;
+
+		/// Convert the tally class into the minimum rank required to vote on the poll. If
+		/// `Polls::Class` is the same type as `Rank`, then `Identity` can be used here to mean
+		/// "a rank of at least the poll class".
+		type MinRankOfClass: Convert<<Self::Polls as Polling<TallyOf<Self, I>>>::Class, Rank>;
 
 		/// Convert a rank_delta into a number of votes the rank gets.
 		///
 		/// Rank_delta is defined as the number of ranks above the minimum required to take part
 		/// in the poll.
 		type VoteWeight: Convert<Rank, Votes>;
+
+		/// Dummy Get impl.
+		type TestGetter: Get<u32>;
 	}
 
 	/// The number of members in the collective who have at least the rank according to the index
@@ -278,6 +316,14 @@ pub mod pallet {
 		Twox64Concat,
 		T::AccountId,
 		VoteRecord,
+	>;
+
+	#[pallet::storage]
+	pub type VotingCleanup<T: Config<I>, I: 'static = ()> = StorageMap<
+		_,
+		Blake2_128Concat,
+		PollIndexOf<T, I>,
+		BoundedVec<u8, frame_support::storage::KeyLenOf<Voting<T, I>> >,
 	>;
 
 	#[pallet::event]
@@ -445,7 +491,7 @@ pub mod pallet {
 					match status {
 						PollStatus::None | PollStatus::Completed(..) =>
 							Err(Error::<T, I>::NotPolling)?,
-						PollStatus::Ongoing(ref mut tally, min_rank) => {
+						PollStatus::Ongoing(ref mut tally, class) => {
 							match Voting::<T, I>::get(&poll, &who) {
 								Some(Aye(votes)) => {
 									tally.bare_ayes.saturating_dec();
@@ -454,6 +500,7 @@ pub mod pallet {
 								Some(Nay(votes)) => tally.nays.saturating_reduce(votes),
 								None => pays = Pays::No,
 							}
+							let min_rank = T::MinRankOfClass::convert(class);
 							let votes = Self::rank_to_votes(record.rank, min_rank)?;
 							let vote = VoteRecord::from((aye, votes));
 							match aye {
@@ -492,14 +539,16 @@ pub mod pallet {
 			ensure_signed(origin)?;
 			ensure!(T::Polls::as_ongoing(poll_index).is_none(), Error::<T, I>::Ongoing);
 
-			use sp_io::KillStorageResult::*;
-			let count = match Voting::<T, I>::remove_prefix(poll_index, Some(max)) {
-				//				AllRemoved(0) => Err(Error::<T, I>::NoneRemaining)?,
-				AllRemoved(0) => return Ok(Pays::Yes.into()),
-				AllRemoved(n) | SomeRemaining(n) => n,
-			};
+			let r = Voting::<T, I>::clear_prefix(poll_index, max, VotingCleanup::<T, I>::take(poll_index).as_ref().map(|c| &c[..]));
+			if r.unique == 0 {
+				// return Err(Error::<T, I>::NoneRemaining)
+				return Ok(Pays::Yes.into())
+			}
+			if let Some(cursor) = r.maybe_cursor {
+				VotingCleanup::<T, I>::insert(poll_index, BoundedVec::truncate_from(cursor));
+			}
 			Ok(PostDispatchInfo {
-				actual_weight: Some(T::WeightInfo::cleanup_poll(count)),
+				actual_weight: Some(T::WeightInfo::cleanup_poll(r.unique)),
 				pays_fee: Pays::No,
 			})
 		}
@@ -526,15 +575,6 @@ pub mod pallet {
 			}
 			MemberCount::<T, I>::mutate(rank, |r| r.saturating_dec());
 			Ok(())
-		}
-	}
-
-	pub trait GetMaxVoters {
-		fn get_max_voters(r: Rank) -> MemberIndex;
-	}
-	impl<T: Config<I>, I: 'static> GetMaxVoters for Pallet<T, I> {
-		fn get_max_voters(r: Rank) -> MemberIndex {
-			MemberCount::<T, I>::get(r)
 		}
 	}
 }

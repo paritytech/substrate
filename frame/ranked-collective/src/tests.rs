@@ -26,7 +26,7 @@ use frame_support::{
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
-	traits::{BlakeTwo256, IdentityLookup},
+	traits::{BlakeTwo256, IdentityLookup, Identity},
 };
 
 use super::*;
@@ -171,7 +171,9 @@ impl Config for Test {
 	type Event = Event;
 	type AdminOrigin = frame_system::EnsureRoot<Self::AccountId>;
 	type Polls = TestPolls;
+	type MinRankOfClass = Identity;
 	type VoteWeight = Geometric;
+	type TestGetter = frame_support::storage::KeyLenOf<Voting<Test>>;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
