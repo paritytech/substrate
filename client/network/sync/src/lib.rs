@@ -576,16 +576,27 @@ where
 			.map(|p| PeerInfo { best_hash: p.best_hash, best_number: p.best_number })
 	}
 
-	/// Returns the current sync status.
-	pub fn status(&self) -> Status<B> {
-		let best_seen = if self.peers.is_empty() {
+	/// Returns the best seen block.
+	fn best_seen(&self) -> Option<NumberFor<B>> {
+		let mut best_seens = self.peers.values().map(|p| p.best_number).collect::<Vec<_>>();
+		best_seens.sort_unstable();
+
+		if best_seens.is_empty() {
 			None
 		} else {
-			Some(
-				self.peers.values().fold(NumberFor::<B>::from(0u32), |c, p| c + p.best_number) /
-					self.peers.len().saturated_into::<u32>().into(),
-			)
-		};
+			let len = best_seens.len();
+
+			if len % 2 == 0 {
+				Some((best_seens[len / 2] + best_seens[len / 2 - 1]) / 2u32.into())
+			} else {
+				Some(best_seens[len / 2])
+			}
+		}
+	}
+
+	/// Returns the current sync status.
+	pub fn status(&self) -> Status<B> {
+		let best_seen = self.best_seen();
 		let sync_state = if let Some(n) = best_seen {
 			// A chain is classified as downloading if the provided best block is
 			// more than `MAJOR_SYNC_BLOCKS` behind the best block.
