@@ -55,9 +55,11 @@ build-linux-substrate:
       artifacts:                   false
   before_script:
     - mkdir -p ./artifacts/substrate/
+    - !reference [.rusty-cachier, before_script]
   script:
+    - rusty-cachier snapshot create
     - WASM_BUILD_NO_COLOR=1 time cargo build --release --verbose
-    - mv ./target/release/substrate ./artifacts/substrate/.
+    - mv /cargo_target_dir/release/substrate ./artifacts/substrate/.
     - echo -n "Substrate version = "
     - if [ "${CI_COMMIT_TAG}" ]; then
         echo "${CI_COMMIT_TAG}" | tee ./artifacts/substrate/VERSION;
@@ -69,6 +71,7 @@ build-linux-substrate:
     - cp -r ./scripts/ci/docker/substrate.Dockerfile ./artifacts/substrate/
     - printf '\n# building node-template\n\n'
     - ./scripts/ci/node-template-release.sh ./artifacts/substrate/substrate-node-template.tar.gz
+    - rusty-cachier cache upload
 
 .build-subkey:
   stage:                           build
@@ -79,6 +82,30 @@ build-linux-substrate:
   needs:
     - job:                         cargo-check-subkey
       artifacts:                   false
+  before_script:
+    - mkdir -p ./artifacts/subkey
+    - !reference [.rusty-cachier, before_script]
+  script:
+    - rusty-cachier snapshot create
+    - cd ./bin/utils/subkey
+    - SKIP_WASM_BUILD=1 time cargo build --release --verbose
+    - cd -
+    - mv /cargo_target_dir/release/subkey ./artifacts/subkey/.
+    - echo -n "Subkey version = "
+    - ./artifacts/subkey/subkey --version |
+        sed -n -E 's/^subkey ([0-9.]+.*)/\1/p' |
+          tee ./artifacts/subkey/VERSION;
+    - sha256sum ./artifacts/subkey/subkey | tee ./artifacts/subkey/subkey.sha256
+    - cp -r ./scripts/ci/docker/subkey.Dockerfile ./artifacts/subkey/
+    - rusty-cachier cache upload
+
+build-subkey-linux:
+  extends:                         .build-subkey
+
+build-subkey-macos:
+  extends:                         .build-subkey
+  # duplicating before_script & script sections from .build-subkey hidden job
+  # to overwrite rusty-cachier integration as it doesn't work on macos
   before_script:
     - mkdir -p ./artifacts/subkey
   script:
@@ -92,12 +119,6 @@ build-linux-substrate:
           tee ./artifacts/subkey/VERSION;
     - sha256sum ./artifacts/subkey/subkey | tee ./artifacts/subkey/subkey.sha256
     - cp -r ./scripts/ci/docker/subkey.Dockerfile ./artifacts/subkey/
-
-build-subkey-linux:
-  extends:                         .build-subkey
-
-build-subkey-macos:
-  extends:                         .build-subkey
   tags:
     - osx
 
@@ -109,6 +130,7 @@ build-rustdoc:
   variables:
     SKIP_WASM_BUILD:               1
     DOC_INDEX_PAGE:                "sc_service/index.html" # default redirected page
+    RUSTY_CACHIER_TOOLCHAIN:       nightly
   artifacts:
     name:                          "${CI_JOB_NAME}_${CI_COMMIT_REF_NAME}-doc"
     when:                          on_success
@@ -116,9 +138,11 @@ build-rustdoc:
     paths:
     - ./crate-docs/
   script:
+    - rusty-cachier snapshot create
     - time cargo +nightly doc --workspace --all-features --verbose
-    - rm -f ./target/doc/.lock
-    - mv ./target/doc ./crate-docs
+    - rm -f /cargo_target_dir/doc/.lock
+    - mv /cargo_target_dir/doc ./crate-docs
     # FIXME: remove me after CI image gets nonroot
     - chown -R nonroot:nonroot ./crate-docs
     - echo "<meta http-equiv=refresh content=0;url=${DOC_INDEX_PAGE}>" > ./crate-docs/index.html
+    - rusty-cachier cache upload
