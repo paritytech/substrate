@@ -375,9 +375,9 @@ pub mod pallet {
 		MaxSupplyAlreadySet,
 		/// The provided max supply is less to the amount of items a collection already has.
 		MaxSupplyTooSmall,
-		/// The provided key is out of bounds
+		/// The provided key is too long
 		KeyTooLong,
-		/// The provided value is out of bounds
+		/// The provided value is too long
 		ValueTooLong,
 	}
 

@@ -686,3 +686,53 @@ fn max_supply_should_work() {
 		);
 	});
 }
+
+#[test]
+fn non_fungibles_set_attribute_works() {
+	new_test_ext().execute_with(|| {
+		use frame_support::traits::tokens::nonfungibles::Mutate;
+		Balances::make_free_balance_be(&1, 100);
+
+		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, false));
+
+		// should fail with key is too long - limit is 50
+		assert_noop!(
+			Uniques::set_collection_attribute(&0, &[1_u8; 51], &[1_u8; 1]),
+			Error::<Test>::KeyTooLong
+		);
+		assert_noop!(
+			<Uniques as Mutate<<Test as frame_system::Config>::AccountId>>::set_attribute(
+				&0,
+				&0,
+				&[1_u8; 51],
+				&[1_u8; 1]
+			),
+			Error::<Test>::KeyTooLong
+		);
+
+		// should fail when value is too long - limit is 50
+		assert_noop!(
+			Uniques::set_collection_attribute(&0, &[1_u8; 1], &[1_u8; 51]),
+			Error::<Test>::ValueTooLong
+		);
+		assert_noop!(
+			<Uniques as Mutate<<Test as frame_system::Config>::AccountId>>::set_attribute(
+				&0,
+				&0,
+				&[1_u8; 1],
+				&[1_u8; 51]
+			),
+			Error::<Test>::ValueTooLong
+		);
+
+		// confirm values have been set correctly
+		assert_ok!(Uniques::set_collection_attribute(&0, &[1_u8; 1], &[1_u8; 1]));
+		assert_ok!(<Uniques as Mutate<<Test as frame_system::Config>::AccountId>>::set_attribute(
+			&0, &0, &[1_u8; 1], &[1_u8; 1]
+		));
+		assert_eq!(attributes(0), vec![(None, bvec![1], bvec![1]), (Some(0), bvec![1], bvec![1]),]);
+
+		// Balance is not reserved when calling trait functions
+		assert_eq!(Balances::reserved_balance(1), 0);
+	});
+}
