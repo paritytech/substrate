@@ -18,10 +18,14 @@
 //! Traits for dealing with dispatching calls and the origin from which they are dispatched.
 
 use crate::dispatch::{DispatchResultWithPostInfo, Parameter, RawOrigin};
+use sp_arithmetic::traits::{CheckedSub, Zero};
 use sp_runtime::{
-	traits::{BadOrigin, Member},
+	traits::{BadOrigin, Member, Morph, TryMorph},
 	Either,
 };
+use sp_std::marker::PhantomData;
+
+use super::TypedGet;
 
 /// Some sort of check on the origin is performed by this object.
 pub trait EnsureOrigin<OuterOrigin> {
@@ -38,9 +42,23 @@ pub trait EnsureOrigin<OuterOrigin> {
 
 	/// Returns an outer origin capable of passing `try_origin` check.
 	///
+	/// NOTE: This should generally *NOT* be reimplemented. Instead implement
+	/// `try_successful_origin`.
+	///
 	/// ** Should be used for benchmarking only!!! **
 	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> OuterOrigin;
+	fn successful_origin() -> OuterOrigin {
+		Self::try_successful_origin().expect("No origin exists which can satisfy the guard")
+	}
+
+	/// Attept to get an outer origin capable of passing `try_origin` check. May return `Err` if it
+	/// is impossible. Default implementation just uses `successful_origin()`.
+	///
+	/// ** Should be used for benchmarking only!!! **
+	#[cfg(feature = "runtime-benchmarks")]
+	fn try_successful_origin() -> Result<OuterOrigin, ()> {
+		Ok(Self::successful_origin())
+	}
 }
 
 /// `EnsureOrigin` implementation that always fails.
@@ -51,8 +69,8 @@ impl<OO, Success> EnsureOrigin<OO> for NeverEnsureOrigin<Success> {
 		Err(o)
 	}
 	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> OO {
-		panic!("No `successful_origin` possible for `NeverEnsureOrigin`")
+	fn try_successful_origin() -> Result<OO, ()> {
+		Err(())
 	}
 }
 
@@ -71,9 +89,23 @@ pub trait EnsureOriginWithArg<OuterOrigin, Argument> {
 
 	/// Returns an outer origin capable of passing `try_origin` check.
 	///
+	/// NOTE: This should generally *NOT* be reimplemented. Instead implement
+	/// `try_successful_origin`.
+	///
 	/// ** Should be used for benchmarking only!!! **
 	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin(a: &Argument) -> OuterOrigin;
+	fn successful_origin(a: &Argument) -> OuterOrigin {
+		Self::try_successful_origin(a).expect("No origin exists which can satisfy the guard")
+	}
+
+	/// Attept to get an outer origin capable of passing `try_origin` check. May return `Err` if it
+	/// is impossible. Default implementation just uses `successful_origin()`.
+	///
+	/// ** Should be used for benchmarking only!!! **
+	#[cfg(feature = "runtime-benchmarks")]
+	fn try_successful_origin(a: &Argument) -> Result<OuterOrigin, ()> {
+		Ok(Self::successful_origin(a))
+	}
 }
 
 pub struct AsEnsureOriginWithArg<EO>(sp_std::marker::PhantomData<EO>);
@@ -97,8 +129,121 @@ impl<OuterOrigin, Argument, EO: EnsureOrigin<OuterOrigin>>
 	///
 	/// ** Should be used for benchmarking only!!! **
 	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin(_: &Argument) -> OuterOrigin {
-		EO::successful_origin()
+	fn try_successful_origin(_: &Argument) -> Result<OuterOrigin, ()> {
+		EO::try_successful_origin()
+	}
+}
+
+/// A derivative `EnsureOrigin` implementation. It mutates the `Success` result of an `Original`
+/// implementation with a given `Mutator`.
+pub struct MapSuccess<Original, Mutator>(PhantomData<(Original, Mutator)>);
+impl<O, Original: EnsureOrigin<O>, Mutator: Morph<Original::Success>> EnsureOrigin<O>
+	for MapSuccess<Original, Mutator>
+{
+	type Success = Mutator::Outcome;
+	fn try_origin(o: O) -> Result<Mutator::Outcome, O> {
+		Ok(Mutator::morph(Original::try_origin(o)?))
+	}
+	#[cfg(feature = "runtime-benchmarks")]
+	fn try_successful_origin() -> Result<O, ()> {
+		Original::try_successful_origin()
+	}
+}
+
+/// A derivative `EnsureOrigin` implementation. It mutates the `Success` result of an `Original`
+/// implementation with a given `Mutator`, allowing the possibility of an error to be returned
+/// from the mutator.
+///
+/// NOTE: This is strictly worse performance than `MapSuccess` since it clones the original origin
+/// value. If possible, use `MapSuccess` instead.
+pub struct TryMapSuccess<Orig, Mutator>(PhantomData<(Orig, Mutator)>);
+impl<O: Clone, Original: EnsureOrigin<O>, Mutator: TryMorph<Original::Success>> EnsureOrigin<O>
+	for TryMapSuccess<Original, Mutator>
+{
+	type Success = Mutator::Outcome;
+	fn try_origin(o: O) -> Result<Mutator::Outcome, O> {
+		let orig = o.clone();
+		Mutator::try_morph(Original::try_origin(o)?).map_err(|()| orig)
+	}
+	#[cfg(feature = "runtime-benchmarks")]
+	fn try_successful_origin() -> Result<O, ()> {
+		Original::try_successful_origin()
+	}
+}
+
+/// "OR gate" implementation of `EnsureOrigin` allowing for different `Success` types for `L`
+/// and `R`, with them combined using an `Either` type.
+///
+/// Origin check will pass if `L` or `R` origin check passes. `L` is tested first.
+///
+/// Successful origin is derived from the left side.
+pub struct EitherOfDiverse<L, R>(sp_std::marker::PhantomData<(L, R)>);
+impl<OuterOrigin, L: EnsureOrigin<OuterOrigin>, R: EnsureOrigin<OuterOrigin>>
+	EnsureOrigin<OuterOrigin> for EitherOfDiverse<L, R>
+{
+	type Success = Either<L::Success, R::Success>;
+	fn try_origin(o: OuterOrigin) -> Result<Self::Success, OuterOrigin> {
+		L::try_origin(o)
+			.map_or_else(|o| R::try_origin(o).map(Either::Right), |o| Ok(Either::Left(o)))
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn try_successful_origin() -> Result<OuterOrigin, ()> {
+		L::try_successful_origin().or_else(|()| R::try_successful_origin())
+	}
+}
+
+/// "OR gate" implementation of `EnsureOrigin` allowing for different `Success` types for `L`
+/// and `R`, with them combined using an `Either` type.
+///
+/// Origin check will pass if `L` or `R` origin check passes. `L` is tested first.
+///
+/// Successful origin is derived from the left side.
+#[deprecated = "Use `EitherOfDiverse` instead"]
+pub type EnsureOneOf<L, R> = EitherOfDiverse<L, R>;
+
+/// "OR gate" implementation of `EnsureOrigin`, `Success` type for both `L` and `R` must
+/// be equal.
+///
+/// Origin check will pass if `L` or `R` origin check passes. `L` is tested first.
+///
+/// Successful origin is derived from the left side.
+pub struct EitherOf<L, R>(sp_std::marker::PhantomData<(L, R)>);
+impl<
+		OuterOrigin,
+		L: EnsureOrigin<OuterOrigin>,
+		R: EnsureOrigin<OuterOrigin, Success = L::Success>,
+	> EnsureOrigin<OuterOrigin> for EitherOf<L, R>
+{
+	type Success = L::Success;
+	fn try_origin(o: OuterOrigin) -> Result<Self::Success, OuterOrigin> {
+		L::try_origin(o).or_else(|o| R::try_origin(o))
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn try_successful_origin() -> Result<OuterOrigin, ()> {
+		L::try_successful_origin().or_else(|()| R::try_successful_origin())
+	}
+}
+
+/// Mutator which reduces a scalar by a particular amount.
+pub struct ReduceBy<N>(PhantomData<N>);
+impl<N: TypedGet> TryMorph<N::Type> for ReduceBy<N>
+where
+	N::Type: CheckedSub,
+{
+	type Outcome = N::Type;
+	fn try_morph(r: N::Type) -> Result<N::Type, ()> {
+		r.checked_sub(&N::get()).ok_or(())
+	}
+}
+impl<N: TypedGet> Morph<N::Type> for ReduceBy<N>
+where
+	N::Type: CheckedSub + Zero,
+{
+	type Outcome = N::Type;
+	fn morph(r: N::Type) -> N::Type {
+		r.checked_sub(&N::get()).unwrap_or(Zero::zero())
 	}
 }
 
@@ -176,63 +321,6 @@ pub trait OriginTrait: Sized {
 	fn signed(by: Self::AccountId) -> Self;
 }
 
-/// "OR gate" implementation of `EnsureOrigin` allowing for different `Success` types for `L`
-/// and `R`, with them combined using an `Either` type.
-///
-/// Origin check will pass if `L` or `R` origin check passes. `L` is tested first.
-///
-/// Successful origin is derived from the left side.
-pub struct EitherOfDiverse<L, R>(sp_std::marker::PhantomData<(L, R)>);
-
-impl<OuterOrigin, L: EnsureOrigin<OuterOrigin>, R: EnsureOrigin<OuterOrigin>>
-	EnsureOrigin<OuterOrigin> for EitherOfDiverse<L, R>
-{
-	type Success = Either<L::Success, R::Success>;
-	fn try_origin(o: OuterOrigin) -> Result<Self::Success, OuterOrigin> {
-		L::try_origin(o)
-			.map_or_else(|o| R::try_origin(o).map(Either::Right), |o| Ok(Either::Left(o)))
-	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> OuterOrigin {
-		L::successful_origin()
-	}
-}
-
-/// "OR gate" implementation of `EnsureOrigin` allowing for different `Success` types for `L`
-/// and `R`, with them combined using an `Either` type.
-///
-/// Origin check will pass if `L` or `R` origin check passes. `L` is tested first.
-///
-/// Successful origin is derived from the left side.
-#[deprecated = "Use `EitherOfDiverse` instead"]
-pub type EnsureOneOf<L, R> = EitherOfDiverse<L, R>;
-
-/// "OR gate" implementation of `EnsureOrigin`, `Success` type for both `L` and `R` must
-/// be equal.
-///
-/// Origin check will pass if `L` or `R` origin check passes. `L` is tested first.
-///
-/// Successful origin is derived from the left side.
-pub struct EitherOf<L, R>(sp_std::marker::PhantomData<(L, R)>);
-
-impl<
-		OuterOrigin,
-		L: EnsureOrigin<OuterOrigin>,
-		R: EnsureOrigin<OuterOrigin, Success = L::Success>,
-	> EnsureOrigin<OuterOrigin> for EitherOf<L, R>
-{
-	type Success = L::Success;
-	fn try_origin(o: OuterOrigin) -> Result<Self::Success, OuterOrigin> {
-		L::try_origin(o).or_else(|o| R::try_origin(o))
-	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> OuterOrigin {
-		L::successful_origin()
-	}
-}
-
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -248,8 +336,8 @@ mod tests {
 			Ok(V::get())
 		}
 		#[cfg(feature = "runtime-benchmarks")]
-		fn successful_origin() -> () {
-			()
+		fn try_successful_origin() -> Result<(), ()> {
+			Ok(())
 		}
 	}
 
@@ -259,8 +347,8 @@ mod tests {
 			Err(())
 		}
 		#[cfg(feature = "runtime-benchmarks")]
-		fn successful_origin() -> () {
-			()
+		fn try_successful_origin() -> Result<(), ()> {
+			Err(())
 		}
 	}
 
