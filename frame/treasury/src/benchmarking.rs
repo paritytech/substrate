@@ -66,14 +66,22 @@ fn assert_last_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::
 }
 
 benchmarks_instance_pallet! {
+	// This benchmark is short-circuited if `SpendOrigin` cannot provide
+	// a successful origin, in which case `spend` is un-callable and can use weight=0.
 	spend {
 		let (_, value, beneficiary_lookup) = setup_proposal::<T, _>(SEED);
-		let origin = T::SpendOrigin::successful_origin();
+		let origin = T::SpendOrigin::try_successful_origin();
 		let beneficiary = T::Lookup::lookup(beneficiary_lookup.clone()).unwrap();
 		let call = Call::<T, I>::spend { amount: value, beneficiary: beneficiary_lookup };
-	}: { call.dispatch_bypass_filter(origin)? }
+	}: {
+		if let Ok(origin) = origin.clone() {
+			call.dispatch_bypass_filter(origin)?;
+		}
+	}
 	verify {
-		assert_last_event::<T, I>(Event::SpendApproved { proposal_index: 0, amount: value, beneficiary }.into())
+		if origin.is_ok() {
+			assert_last_event::<T, I>(Event::SpendApproved { proposal_index: 0, amount: value, beneficiary }.into())
+		}
 	}
 
 	propose_spend {
