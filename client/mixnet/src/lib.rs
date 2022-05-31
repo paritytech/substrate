@@ -364,7 +364,7 @@ where
 						restart = Some((new_id, new_key));
 					}
 				} else {
-					error!(target: "mixnet", "Insert auth {:?}", peer_id);
+					debug!(target: "mixnet", "Insert auth {:?}", peer_id);
 					topology.authorities.insert(peer_id, public_key);
 				}
 			} else {
