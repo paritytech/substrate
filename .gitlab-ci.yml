@@ -98,7 +98,7 @@ default:
     - rusty-cachier snapshot destroy
 
 .docker-env:
-  image:                          "${CI_IMAGE}"
+  image:                           "${CI_IMAGE}"
   before_script:
     - !reference [.rust-info-script, script]
     - !reference [.rusty-cachier, before_script]
