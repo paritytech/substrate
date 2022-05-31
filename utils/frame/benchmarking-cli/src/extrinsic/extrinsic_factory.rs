@@ -25,19 +25,17 @@ use sp_runtime::OpaqueExtrinsic;
 pub struct ExtrinsicFactory(pub Vec<Box<dyn ExtrinsicBuilder>>);
 
 impl ExtrinsicFactory {
-	/// Returns a builder for an extrinsic.
+	/// Returns a builder for a pallet and extrinsic name.
 	///
 	/// Is case in-sensitive.
 	pub fn try_get(&self, pallet: &str, extrinsic: &str) -> Option<&dyn ExtrinsicBuilder> {
 		self.0
 			.iter()
-			.find(|b| b.name() == (&pallet.to_lowercase(), &extrinsic.to_lowercase()))
+			.find(|b| {
+				b.pallet().to_lowercase() == pallet.to_lowercase() &&
+					b.extrinsic().to_lowercase() == extrinsic.to_lowercase()
+			})
 			.map(|b| b.as_ref())
-	}
-
-	/// Formats the builders in the standard `Pallet::Extrinsic` scheme.
-	pub fn as_str_vec(&self) -> Vec<String> {
-		self.0.iter().map(|b| format!("{}", b.as_ref())).collect()
 	}
 }
 
@@ -48,8 +46,14 @@ impl ExtrinsicFactory {
 /// This assumption simplifies the generation of the extrinsics.
 /// The signer should be one of the pre-funded dev accounts.
 pub trait ExtrinsicBuilder {
-	/// Pallet of the extrinsic.
-	fn name(&self /* TODO self not needed… */) -> (&str, &str);
+	/// Name of the pallet this builder is for.
+	///
+	/// Should be all lowercase.
+	fn pallet(&self) -> &str;
+	/// Name of the extrinsic this builder is for.
+	///
+	/// Should be all lowercase.
+	fn extrinsic(&self) -> &str;
 
 	/// Builds an extrinsic.
 	///
@@ -57,10 +61,9 @@ pub trait ExtrinsicBuilder {
 	fn build(&self, nonce: u32) -> std::result::Result<OpaqueExtrinsic, &'static str>;
 }
 
-impl std::fmt::Display for &dyn ExtrinsicBuilder {
-	/// Formats the builder in the standard `Pallet::Extrinsic` scheme.
-	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-		let (pallet, extrinsic) = self.name();
-		write!(f, "{}::{}", pallet.to_uppercase(), extrinsic.to_uppercase())
+impl dyn ExtrinsicBuilder + '_ {
+	/// Name of this builder in CSV format `pallet, extrinsic`.
+	pub fn name(&self) -> String {
+		format!("{}, {}", self.pallet(), self.extrinsic())
 	}
 }

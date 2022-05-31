@@ -94,8 +94,8 @@ impl OverheadCmd {
 		C: BlockBuilderProvider<BA, Block, C> + ProvideRuntimeApi<Block>,
 		C::Api: ApiExt<Block, StateBackend = BA::State> + BlockBuilderApi<Block>,
 	{
-		if ext_builder.name() != ("system", "remark") {
-			panic!("The extrinsic builder is required to build `System::Remark` extrinsics instead of {}", &ext_builder);
+		if ext_builder.pallet() != "system" || ext_builder.extrinsic() != "remark" {
+			return Err(format!("The extrinsic builder is required to build `System::Remark` extrinsics but builds `{}` extrinsics instead", ext_builder.name()).into());
 		}
 		let bench = Benchmark::new(client, self.params.bench.clone(), inherent_data);
 

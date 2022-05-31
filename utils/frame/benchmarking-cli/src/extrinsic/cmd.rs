@@ -59,13 +59,19 @@ pub struct ExtrinsicParams {
 	#[clap(flatten)]
 	pub bench: BenchmarkParams,
 
-	/// Pallet name of the extrinsic.
-	#[clap(value_name = "PALLET", index = 1)]
-	pub pallet: String,
+	/// List all available pallets and extrinsics.
+	///
+	/// The format is CSV with header `pallet, extrinsic`.
+	#[clap(long)]
+	pub list: bool,
 
-	/// Extrinsic name.
-	#[clap(value_name = "EXTRINSIC", index = 2)]
-	pub extrinsic: String,
+	/// Pallet name of the extrinsic to benchmark.
+	#[clap(long, value_name = "PALLET", required_unless_present = "list")]
+	pub pallet: Option<String>,
+
+	/// Extrinsic to benchmark.
+	#[clap(long, value_name = "EXTRINSIC", required_unless_present = "list")]
+	pub extrinsic: Option<String>,
 }
 
 impl ExtrinsicCmd {
@@ -84,12 +90,33 @@ impl ExtrinsicCmd {
 		C: BlockBuilderProvider<BA, Block, C> + ProvideRuntimeApi<Block>,
 		C::Api: ApiExt<Block, StateBackend = BA::State> + BlockBuilderApi<Block>,
 	{
-		let ext_builder =
-			ext_factory.try_get(&self.params.pallet, &self.params.extrinsic).expect("TODO");
-		let bench = Benchmark::new(client, self.params.bench.clone(), inherent_data);
+		// Short circuit if --list was specified.
+		if self.params.list {
+			let list: Vec<String> = ext_factory.0.iter().map(|b| b.name()).collect();
+			info!(
+				"Listing available extrinsics ({}):\npallet, extrinsic\n{}",
+				list.len(),
+				list.join("\n")
+			);
+			return Ok(())
+		}
 
+		let pallet = self.params.pallet.clone().unwrap_or_default();
+		let extrinsic = self.params.extrinsic.clone().unwrap_or_default();
+		let ext_builder = match ext_factory.try_get(&pallet, &extrinsic) {
+			Some(ext_builder) => ext_builder,
+			None =>
+				return Err("Unknown pallet or extrinsic. Use --list for a complete list.".into()),
+		};
+
+		let bench = Benchmark::new(client, self.params.bench.clone(), inherent_data);
 		let stats = bench.bench(Some(ext_builder))?;
-		info!("Executing a {} extrinsic takes[ns]:\n{:?}", &ext_builder, stats);
+		info!(
+			"Executing a {}::{} extrinsic takes[ns]:\n{:?}",
+			ext_builder.pallet(),
+			ext_builder.extrinsic(),
+			stats
+		);
 
 		Ok(())
 	}

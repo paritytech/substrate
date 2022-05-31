@@ -64,8 +64,12 @@ impl TransferKeepAliveBuilder {
 }
 
 impl frame_benchmarking_cli::ExtrinsicBuilder for RemarkBuilder {
-	fn name(&self) -> (&str, &str) {
-		("system", "remark")
+	fn pallet(&self) -> &str {
+		"system"
+	}
+
+	fn extrinsic(&self) -> &str {
+		"remark"
 	}
 
 	fn build(&self, nonce: u32) -> std::result::Result<OpaqueExtrinsic, &'static str> {
@@ -83,8 +87,12 @@ impl frame_benchmarking_cli::ExtrinsicBuilder for RemarkBuilder {
 }
 
 impl frame_benchmarking_cli::ExtrinsicBuilder for TransferKeepAliveBuilder {
-	fn name(&self) -> (&str, &str) {
-		("balances", "transfer_keep_alive")
+	fn pallet(&self) -> &str {
+		"balances"
+	}
+
+	fn extrinsic(&self) -> &str {
+		"transfer_keep_alive"
 	}
 
 	fn build(&self, nonce: u32) -> std::result::Result<OpaqueExtrinsic, &'static str> {
