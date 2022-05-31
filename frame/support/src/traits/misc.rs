@@ -387,6 +387,16 @@ where
 	}
 }
 
+/// A trait for querying a single value from a type defined in the trait.
+///
+/// It is not required that the value is constant.
+pub trait TypedGet {
+	/// The type which is returned.
+	type Type;
+	/// Return the current value.
+	fn get() -> Self::Type;
+}
+
 /// A trait for querying a single value from a type.
 ///
 /// It is not required that the value is constant.
@@ -421,6 +431,12 @@ macro_rules! impl_const_get {
 		impl<const T: $t> Get<Option<$t>> for $name<T> {
 			fn get() -> Option<$t> {
 				Some(T)
+			}
+		}
+		impl<const T: $t> TypedGet for $name<T> {
+			type Type = $t;
+			fn get() -> $t {
+				T
 			}
 		}
 	};

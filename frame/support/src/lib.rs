@@ -350,6 +350,13 @@ macro_rules! parameter_types {
 				I::from(Self::get())
 			}
 		}
+
+		impl $crate::traits::TypedGet for $name {
+			type Type = $type;
+			fn get() -> $type {
+				Self::get()
+			}
+		}
 	};
 	(IMPL $name:ident, $type:ty, $value:expr) => {
 		impl $name {
@@ -362,6 +369,13 @@ macro_rules! parameter_types {
 		impl<I: From<$type>> $crate::traits::Get<I> for $name {
 			fn get() -> I {
 				I::from(Self::get())
+			}
+		}
+
+		impl $crate::traits::TypedGet for $name {
+			type Type = $type;
+			fn get() -> $type {
+				Self::get()
 			}
 		}
 	};
@@ -395,6 +409,13 @@ macro_rules! parameter_types {
 		impl<I: From<$type>> $crate::traits::Get<I> for $name {
 			fn get() -> I {
 				I::from(Self::get())
+			}
+		}
+
+		impl $crate::traits::TypedGet for $name {
+			type Type = $type;
+			fn get() -> $type {
+				Self::get()
 			}
 		}
 	};
@@ -805,7 +826,7 @@ pub mod tests {
 	};
 	use codec::{Codec, EncodeLike};
 	use frame_support::traits::CrateVersion;
-	use sp_io::TestExternalities;
+	use sp_io::{MultiRemovalResults, TestExternalities};
 	use sp_std::result;
 
 	/// A PalletInfo implementation which just panics.
@@ -1066,15 +1087,16 @@ pub mod tests {
 	}
 
 	#[test]
-	fn double_map_basic_insert_remove_remove_prefix_should_work() {
-		new_test_ext().execute_with(|| {
-			type DoubleMap = DataDM;
+	fn double_map_basic_insert_remove_remove_prefix_with_commit_should_work() {
+		let key1 = 17u32;
+		let key2 = 18u32;
+		type DoubleMap = DataDM;
+		let mut e = new_test_ext();
+		e.execute_with(|| {
 			// initialized during genesis
 			assert_eq!(DoubleMap::get(&15u32, &16u32), 42u64);
 
 			// get / insert / take
-			let key1 = 17u32;
-			let key2 = 18u32;
 			assert_eq!(DoubleMap::get(&key1, &key2), 0u64);
 			DoubleMap::insert(&key1, &key2, &4u64);
 			assert_eq!(DoubleMap::get(&key1, &key2), 4u64);
@@ -1082,9 +1104,7 @@ pub mod tests {
 			assert_eq!(DoubleMap::get(&key1, &key2), 0u64);
 
 			// mutate
-			DoubleMap::mutate(&key1, &key2, |val| {
-				*val = 15;
-			});
+			DoubleMap::mutate(&key1, &key2, |val| *val = 15);
 			assert_eq!(DoubleMap::get(&key1, &key2), 15u64);
 
 			// remove
@@ -1096,13 +1116,62 @@ pub mod tests {
 			DoubleMap::insert(&key1, &(key2 + 1), &4u64);
 			DoubleMap::insert(&(key1 + 1), &key2, &4u64);
 			DoubleMap::insert(&(key1 + 1), &(key2 + 1), &4u64);
+		});
+		e.commit_all().unwrap();
+		e.execute_with(|| {
 			assert!(matches!(
 				DoubleMap::clear_prefix(&key1, u32::max_value(), None),
-				// Note this is the incorrect answer (for now), since we are using v2 of
-				// `clear_prefix`.
-				// When we switch to v3, then this will become:
-				//   sp_io::MultiRemovalResults::NoneLeft { db: 0, total: 2 },
-				sp_io::MultiRemovalResults { maybe_cursor: None, backend: 0, unique: 0, loops: 0 },
+				MultiRemovalResults { maybe_cursor: None, backend: 2, unique: 2, loops: 2 }
+			));
+			assert_eq!(DoubleMap::get(&key1, &key2), 0u64);
+			assert_eq!(DoubleMap::get(&key1, &(key2 + 1)), 0u64);
+			assert_eq!(DoubleMap::get(&(key1 + 1), &key2), 4u64);
+			assert_eq!(DoubleMap::get(&(key1 + 1), &(key2 + 1)), 4u64);
+		});
+	}
+
+	#[test]
+	fn double_map_basic_insert_remove_remove_prefix_should_work() {
+		new_test_ext().execute_with(|| {
+			let key1 = 17u32;
+			let key2 = 18u32;
+			type DoubleMap = DataDM;
+
+			// initialized during genesis
+			assert_eq!(DoubleMap::get(&15u32, &16u32), 42u64);
+
+			// get / insert / take
+			assert_eq!(DoubleMap::get(&key1, &key2), 0u64);
+			DoubleMap::insert(&key1, &key2, &4u64);
+			assert_eq!(DoubleMap::get(&key1, &key2), 4u64);
+			assert_eq!(DoubleMap::take(&key1, &key2), 4u64);
+			assert_eq!(DoubleMap::get(&key1, &key2), 0u64);
+
+			// mutate
+			DoubleMap::mutate(&key1, &key2, |val| *val = 15);
+			assert_eq!(DoubleMap::get(&key1, &key2), 15u64);
+
+			// remove
+			DoubleMap::remove(&key1, &key2);
+			assert_eq!(DoubleMap::get(&key1, &key2), 0u64);
+
+			// remove prefix
+			DoubleMap::insert(&key1, &key2, &4u64);
+			DoubleMap::insert(&key1, &(key2 + 1), &4u64);
+			DoubleMap::insert(&(key1 + 1), &key2, &4u64);
+			DoubleMap::insert(&(key1 + 1), &(key2 + 1), &4u64);
+			// all in overlay
+			assert!(matches!(
+				DoubleMap::clear_prefix(&key1, u32::max_value(), None),
+				MultiRemovalResults { maybe_cursor: None, backend: 0, unique: 0, loops: 0 }
+			));
+			// Note this is the incorrect answer (for now), since we are using v2 of
+			// `clear_prefix`.
+			// When we switch to v3, then this will become:
+			//   MultiRemovalResults:: { maybe_cursor: None, backend: 0, unique: 2, loops: 2 },
+			assert!(matches!(
+				DoubleMap::clear_prefix(&key1, u32::max_value(), None),
+				MultiRemovalResults { maybe_cursor: None, backend: 0, unique: 0, loops: 0 }
 			));
 			assert_eq!(DoubleMap::get(&key1, &key2), 0u64);
 			assert_eq!(DoubleMap::get(&key1, &(key2 + 1)), 0u64);
@@ -1321,7 +1390,7 @@ pub mod pallet_prelude {
 		},
 		traits::{
 			ConstU32, EnsureOrigin, Get, GetDefault, GetStorageVersion, Hooks, IsType,
-			PalletInfoAccess, StorageInfoTrait, StorageVersion,
+			PalletInfoAccess, StorageInfoTrait, StorageVersion, TypedGet,
 		},
 		weights::{DispatchClass, Pays, Weight},
 		Blake2_128, Blake2_128Concat, Blake2_256, CloneNoBound, DebugNoBound, EqNoBound, Identity,

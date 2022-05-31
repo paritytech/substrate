@@ -22,7 +22,11 @@
 use super::{Pallet as Treasury, *};
 
 use frame_benchmarking::{account, benchmarks_instance_pallet};
-use frame_support::{ensure, traits::OnInitialize};
+use frame_support::{
+	dispatch::UnfilteredDispatchable,
+	ensure,
+	traits::{EnsureOrigin, OnInitialize},
+};
 use frame_system::RawOrigin;
 
 const SEED: u32 = 0;
@@ -57,7 +61,21 @@ fn setup_pot_account<T: Config<I>, I: 'static>() {
 	let _ = T::Currency::make_free_balance_be(&pot_account, value);
 }
 
+fn assert_last_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::Event) {
+	frame_system::Pallet::<T>::assert_last_event(generic_event.into());
+}
+
 benchmarks_instance_pallet! {
+	spend {
+		let (_, value, beneficiary_lookup) = setup_proposal::<T, _>(SEED);
+		let origin = T::SpendOrigin::successful_origin();
+		let beneficiary = T::Lookup::lookup(beneficiary_lookup.clone()).unwrap();
+		let call = Call::<T, I>::spend { amount: value, beneficiary: beneficiary_lookup };
+	}: { call.dispatch_bypass_filter(origin)? }
+	verify {
+		assert_last_event::<T, I>(Event::SpendApproved { proposal_index: 0, amount: value, beneficiary }.into())
+	}
+
 	propose_spend {
 		let (caller, value, beneficiary_lookup) = setup_proposal::<T, _>(SEED);
 		// Whitelist caller account from further DB operations.
