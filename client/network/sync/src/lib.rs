@@ -578,12 +578,19 @@ where
 
 	/// Returns the current sync status.
 	pub fn status(&self) -> Status<B> {
-		let best_seen = self.peers.values().map(|p| p.best_number).max();
+		let best_seen = if self.peers.is_empty() {
+			None
+		} else {
+			Some(
+				self.peers.values().fold(NumberFor::<B>::from(0u32), |c, p| c + p.best_number) /
+					self.peers.len().saturated_into::<u32>().into(),
+			)
+		};
 		let sync_state = if let Some(n) = best_seen {
 			// A chain is classified as downloading if the provided best block is
-			// more than `MAJOR_SYNC_BLOCKS` behind the best queued block.
-			if n > self.best_queued_number && n - self.best_queued_number > MAJOR_SYNC_BLOCKS.into()
-			{
+			// more than `MAJOR_SYNC_BLOCKS` behind the best block.
+			let best_block = self.client.info().best_number;
+			if n > best_block && n - best_block > MAJOR_SYNC_BLOCKS.into() {
 				SyncState::Downloading
 			} else {
 				SyncState::Idle
