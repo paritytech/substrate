@@ -2526,7 +2526,7 @@ mod tests {
 		;; Receive key
 		(call $seal_input
 			(i32.const 4)	;; Where we take input and store it
-			(i32.const 0)	;; Where we take and store the length of the taken data
+			(i32.const 0)	;; Where we take and store the length of thedata
 		)
 		;; Call seal_clear_storage and save what it returns at 0
 		(i32.store (i32.const 0)
@@ -2631,14 +2631,13 @@ mod tests {
 
 		;; Return the contents of the buffer
 		(call $seal_return
-			(i32.const 0)					;; flags
-			(i32.const 168)					;; output buffer ptr
-			(i32.add					;; length: storage size + 4 (retval)
+			(i32.const 0)				;; flags
+			(i32.const 168)				;; output buffer ptr
+			(i32.add				;; length: storage size + 4 (retval)
 				(i32.load (i32.const 4))
 				(i32.const 4)
 			)
 		)
-	)
 	)
 
 	(func (export "deploy"))
