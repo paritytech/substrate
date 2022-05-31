@@ -142,17 +142,17 @@ pub mod v7 {
 	use frame_support::storage_alias;
 
 	#[storage_alias]
-	type CounterForValidators<T> = Value<Pallet<T: Config>, u32>;
+	type CounterForValidators<T: Config> = StorageValue<Pallet<T>, u32>;
 	#[storage_alias]
-	type CounterForNominators<T> = Value<Pallet<T: Config>, u32>;
+	type CounterForNominators<T: Config> = StorageValue<Pallet<T>, u32>;
 
 	pub fn pre_migrate<T: Config>() -> Result<(), &'static str> {
 		assert!(
-			CounterForValidators::get().unwrap().is_zero(),
+			CounterForValidators::<T>::get().unwrap().is_zero(),
 			"CounterForValidators already set."
 		);
 		assert!(
-			CounterForNominators::get().unwrap().is_zero(),
+			CounterForNominators::<T>::get().unwrap().is_zero(),
 			"CounterForNominators already set."
 		);
 		assert!(Validators::<T>::count().is_zero(), "Validators already set.");
@@ -166,8 +166,8 @@ pub mod v7 {
 		let validator_count = Validators::<T>::iter().count() as u32;
 		let nominator_count = Nominators::<T>::iter().count() as u32;
 
-		CounterForValidators::put(validator_count);
-		CounterForNominators::put(nominator_count);
+		CounterForValidators::<T>::put(validator_count);
+		CounterForNominators::<T>::put(nominator_count);
 
 		StorageVersion::<T>::put(Releases::V7_0_0);
 		log!(info, "Completed staking migration to Releases::V7_0_0");
@@ -182,28 +182,31 @@ pub mod v6 {
 
 	// NOTE: value type doesn't matter, we just set it to () here.
 	#[storage_alias]
-	type SnapshotValidators<T> = Value<Pallet<T: Config>, ()>;
+	type SnapshotValidators<T: Config> = StorageValue<Pallet<T>, ()>;
 	#[storage_alias]
-	type SnapshotNominators<T> = Value<Pallet<T: Config>, ()>;
+	type SnapshotNominators<T: Config> = StorageValue<Pallet<T>, ()>;
 	#[storage_alias]
-	type QueuedElected<T> = Value<Pallet<T: Config>, ()>;
+	type QueuedElected<T: Config> = StorageValue<Pallet<T>, ()>;
 	#[storage_alias]
-	type QueuedScore<T> = Value<Pallet<T: Config>, ()>;
+	type QueuedScore<T: Config> = StorageValue<Pallet<T>, ()>;
 	#[storage_alias]
-	type EraElectionStatus<T> = Value<Pallet<T: Config>, ()>;
+	type EraElectionStatus<T: Config> = StorageValue<Pallet<T>, ()>;
 	#[storage_alias]
-	type IsCurrentSessionFinal<T> = Value<Pallet<T: Config>, ()>;
+	type IsCurrentSessionFinal<T: Config> = StorageValue<Pallet<T>, ()>;
 
 	/// check to execute prior to migration.
 	pub fn pre_migrate<T: Config>() -> Result<(), &'static str> {
 		// these may or may not exist.
-		log!(info, "SnapshotValidators.exits()? {:?}", SnapshotValidators::exists());
-		log!(info, "SnapshotNominators.exits()? {:?}", SnapshotNominators::exists());
-		log!(info, "QueuedElected.exits()? {:?}", QueuedElected::exists());
-		log!(info, "QueuedScore.exits()? {:?}", QueuedScore::exists());
+		log!(info, "SnapshotValidators.exits()? {:?}", SnapshotValidators::<T>::exists());
+		log!(info, "SnapshotNominators.exits()? {:?}", SnapshotNominators::<T>::exists());
+		log!(info, "QueuedElected.exits()? {:?}", QueuedElected::<T>::exists());
+		log!(info, "QueuedScore.exits()? {:?}", QueuedScore::<T>::exists());
 		// these must exist.
-		assert!(IsCurrentSessionFinal::exists(), "IsCurrentSessionFinal storage item not found!");
-		assert!(EraElectionStatus::exists(), "EraElectionStatus storage item not found!");
+		assert!(
+			IsCurrentSessionFinal::<T>::exists(),
+			"IsCurrentSessionFinal storage item not found!"
+		);
+		assert!(EraElectionStatus::<T>::exists(), "EraElectionStatus storage item not found!");
 		Ok(())
 	}
 
@@ -211,12 +214,12 @@ pub mod v6 {
 	pub fn migrate<T: Config>() -> Weight {
 		log!(info, "Migrating staking to Releases::V6_0_0");
 
-		SnapshotValidators::kill();
-		SnapshotNominators::kill();
-		QueuedElected::kill();
-		QueuedScore::kill();
-		EraElectionStatus::kill();
-		IsCurrentSessionFinal::kill();
+		SnapshotValidators::<T>::kill();
+		SnapshotNominators::<T>::kill();
+		QueuedElected::<T>::kill();
+		QueuedScore::<T>::kill();
+		EraElectionStatus::<T>::kill();
+		IsCurrentSessionFinal::<T>::kill();
 
 		StorageVersion::<T>::put(Releases::V6_0_0);
 		log!(info, "Done.");

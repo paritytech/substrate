@@ -413,6 +413,9 @@ impl OverlayedChangeSet {
 	) -> u32 {
 		let mut count = 0;
 		for (key, val) in self.changes.iter_mut().filter(|(k, v)| predicate(k, v)) {
+			if val.value_ref().is_some() {
+				count += 1;
+			}
 			val.set(None, insert_dirty(&mut self.dirty_keys, key.clone()), at_extrinsic);
 			count += 1;
 		}

@@ -171,12 +171,12 @@ macro_rules! bounded_btree_map {
 /// use frame_support::Twox64Concat;
 /// // generate a storage value with type u32.
 /// #[storage_alias]
-/// type StorageName = Value<Prefix, u32>;
+/// type StorageName = StorageValue<Prefix, u32>;
 ///
 /// // generate a double map from `(u32, u32)` (with hashers `Twox64Concat` for each key)
 /// // to `Vec<u8>`
 /// #[storage_alias]
-/// type OtherStorageName = DoubleMap<
+/// type OtherStorageName = StorageDoubleMap<
 /// 	OtherPrefix,
 /// 	Twox64Concat,
 /// 	u32,
@@ -188,9 +188,9 @@ macro_rules! bounded_btree_map {
 /// // optionally specify the query type
 /// use frame_support::pallet_prelude::{ValueQuery, OptionQuery};
 /// #[storage_alias]
-/// type ValueName = Value<Prefix, u32, OptionQuery>;
+/// type ValueName = StorageValue<Prefix, u32, OptionQuery>;
 /// #[storage_alias]
-/// type SomeStorageName = Map<
+/// type SomeStorageName = StorageMap<
 /// 	Prefix,
 /// 	Twox64Concat,
 /// 	u32,
@@ -201,13 +201,13 @@ macro_rules! bounded_btree_map {
 /// // generate a map from `Config::AccountId` (with hasher `Twox64Concat`) to `Vec<u8>`
 /// trait Config { type AccountId: codec::FullCodec; }
 /// #[storage_alias]
-/// type GenericStorage<T> = Map<Prefix, Twox64Concat, <T as Config>::AccountId, Vec<u8>>;
+/// type GenericStorage<T> = StorageMap<Prefix, Twox64Concat, <T as Config>::AccountId, Vec<u8>>;
 ///
 /// // It also supports NMap
 /// use frame_support::storage::types::Key as NMapKey;
 ///
 /// #[storage_alias]
-/// type SomeNMap = NMap<Prefix, (NMapKey<Twox64Concat, u32>, NMapKey<Twox64Concat, u64>), Vec<u8>>;
+/// type SomeNMap = StorageNMap<Prefix, (NMapKey<Twox64Concat, u32>, NMapKey<Twox64Concat, u64>), Vec<u8>>;
 ///
 /// // Using pallet name as prefix.
 /// //
@@ -215,8 +215,8 @@ macro_rules! bounded_btree_map {
 /// // The prefix will then be the pallet name as configured in the runtime through
 /// // `construct_runtime!`.
 ///
-/// # struct Pallet<T: Config>(std::marker::PhantomData<T>);
-/// # impl<T: Config> frame_support::traits::PalletInfoAccess for Pallet<T> {
+/// # struct Pallet<T: Config, I = ()>(std::marker::PhantomData<(T, I)>);
+/// # impl<T: Config, I: 'static> frame_support::traits::PalletInfoAccess for Pallet<T, I> {
 /// # 	fn index() -> usize { 0 }
 /// # 	fn name() -> &'static str { "pallet" }
 /// # 	fn module_name() -> &'static str { "module" }
@@ -224,7 +224,12 @@ macro_rules! bounded_btree_map {
 /// # }
 ///
 /// #[storage_alias]
-/// type SomeValue<T> = Value<Pallet<T: Config>, u64>;
+/// type SomeValue<T: Config> = StorageValue<Pallet<T>, u64>;
+///
+/// // Pallet with instance
+///
+/// #[storage_alias]
+/// type SomeValue2<T: Config, I: 'static> = StorageValue<Pallet<T, I>, u64>;
 ///
 /// # fn main() {}
 /// ```
@@ -345,6 +350,13 @@ macro_rules! parameter_types {
 				I::from(Self::get())
 			}
 		}
+
+		impl $crate::traits::TypedGet for $name {
+			type Type = $type;
+			fn get() -> $type {
+				Self::get()
+			}
+		}
 	};
 	(IMPL $name:ident, $type:ty, $value:expr) => {
 		impl $name {
@@ -357,6 +369,13 @@ macro_rules! parameter_types {
 		impl<I: From<$type>> $crate::traits::Get<I> for $name {
 			fn get() -> I {
 				I::from(Self::get())
+			}
+		}
+
+		impl $crate::traits::TypedGet for $name {
+			type Type = $type;
+			fn get() -> $type {
+				Self::get()
 			}
 		}
 	};
@@ -390,6 +409,13 @@ macro_rules! parameter_types {
 		impl<I: From<$type>> $crate::traits::Get<I> for $name {
 			fn get() -> I {
 				I::from(Self::get())
+			}
+		}
+
+		impl $crate::traits::TypedGet for $name {
+			type Type = $type;
+			fn get() -> $type {
+				Self::get()
 			}
 		}
 	};
@@ -800,7 +826,7 @@ pub mod tests {
 	};
 	use codec::{Codec, EncodeLike};
 	use frame_support::traits::CrateVersion;
-	use sp_io::TestExternalities;
+	use sp_io::{MultiRemovalResults, TestExternalities};
 	use sp_std::result;
 
 	/// A PalletInfo implementation which just panics.
@@ -889,8 +915,12 @@ pub mod tests {
 	fn storage_alias_works() {
 		new_test_ext().execute_with(|| {
 			#[crate::storage_alias]
-			type GenericData2<T> =
-				Map<Test, Blake2_128Concat, <T as Config>::BlockNumber, <T as Config>::BlockNumber>;
+			type GenericData2<T> = StorageMap<
+				Test,
+				Blake2_128Concat,
+				<T as Config>::BlockNumber,
+				<T as Config>::BlockNumber,
+			>;
 
 			assert_eq!(Module::<Test>::generic_data2(5), None);
 			GenericData2::<Test>::insert(5, 5);
@@ -898,7 +928,7 @@ pub mod tests {
 
 			/// Some random docs that ensure that docs are accepted
 			#[crate::storage_alias]
-			pub type GenericData<T> = Map<
+			pub type GenericData<T> = StorageMap<
 				Test2,
 				Blake2_128Concat,
 				<T as Config>::BlockNumber,
@@ -1057,15 +1087,16 @@ pub mod tests {
 	}
 
 	#[test]
-	fn double_map_basic_insert_remove_remove_prefix_should_work() {
-		new_test_ext().execute_with(|| {
-			type DoubleMap = DataDM;
+	fn double_map_basic_insert_remove_remove_prefix_with_commit_should_work() {
+		let key1 = 17u32;
+		let key2 = 18u32;
+		type DoubleMap = DataDM;
+		let mut e = new_test_ext();
+		e.execute_with(|| {
 			// initialized during genesis
 			assert_eq!(DoubleMap::get(&15u32, &16u32), 42u64);
 
 			// get / insert / take
-			let key1 = 17u32;
-			let key2 = 18u32;
 			assert_eq!(DoubleMap::get(&key1, &key2), 0u64);
 			DoubleMap::insert(&key1, &key2, &4u64);
 			assert_eq!(DoubleMap::get(&key1, &key2), 4u64);
@@ -1073,9 +1104,7 @@ pub mod tests {
 			assert_eq!(DoubleMap::get(&key1, &key2), 0u64);
 
 			// mutate
-			DoubleMap::mutate(&key1, &key2, |val| {
-				*val = 15;
-			});
+			DoubleMap::mutate(&key1, &key2, |val| *val = 15);
 			assert_eq!(DoubleMap::get(&key1, &key2), 15u64);
 
 			// remove
@@ -1087,9 +1116,62 @@ pub mod tests {
 			DoubleMap::insert(&key1, &(key2 + 1), &4u64);
 			DoubleMap::insert(&(key1 + 1), &key2, &4u64);
 			DoubleMap::insert(&(key1 + 1), &(key2 + 1), &4u64);
+		});
+		e.commit_all().unwrap();
+		e.execute_with(|| {
 			assert!(matches!(
-				DoubleMap::remove_prefix(&key1, None),
-				sp_io::KillStorageResult::AllRemoved(0), // all in overlay
+				DoubleMap::clear_prefix(&key1, u32::max_value(), None),
+				MultiRemovalResults { maybe_cursor: None, backend: 2, unique: 2, loops: 2 }
+			));
+			assert_eq!(DoubleMap::get(&key1, &key2), 0u64);
+			assert_eq!(DoubleMap::get(&key1, &(key2 + 1)), 0u64);
+			assert_eq!(DoubleMap::get(&(key1 + 1), &key2), 4u64);
+			assert_eq!(DoubleMap::get(&(key1 + 1), &(key2 + 1)), 4u64);
+		});
+	}
+
+	#[test]
+	fn double_map_basic_insert_remove_remove_prefix_should_work() {
+		new_test_ext().execute_with(|| {
+			let key1 = 17u32;
+			let key2 = 18u32;
+			type DoubleMap = DataDM;
+
+			// initialized during genesis
+			assert_eq!(DoubleMap::get(&15u32, &16u32), 42u64);
+
+			// get / insert / take
+			assert_eq!(DoubleMap::get(&key1, &key2), 0u64);
+			DoubleMap::insert(&key1, &key2, &4u64);
+			assert_eq!(DoubleMap::get(&key1, &key2), 4u64);
+			assert_eq!(DoubleMap::take(&key1, &key2), 4u64);
+			assert_eq!(DoubleMap::get(&key1, &key2), 0u64);
+
+			// mutate
+			DoubleMap::mutate(&key1, &key2, |val| *val = 15);
+			assert_eq!(DoubleMap::get(&key1, &key2), 15u64);
+
+			// remove
+			DoubleMap::remove(&key1, &key2);
+			assert_eq!(DoubleMap::get(&key1, &key2), 0u64);
+
+			// remove prefix
+			DoubleMap::insert(&key1, &key2, &4u64);
+			DoubleMap::insert(&key1, &(key2 + 1), &4u64);
+			DoubleMap::insert(&(key1 + 1), &key2, &4u64);
+			DoubleMap::insert(&(key1 + 1), &(key2 + 1), &4u64);
+			// all in overlay
+			assert!(matches!(
+				DoubleMap::clear_prefix(&key1, u32::max_value(), None),
+				MultiRemovalResults { maybe_cursor: None, backend: 0, unique: 0, loops: 0 }
+			));
+			// Note this is the incorrect answer (for now), since we are using v2 of
+			// `clear_prefix`.
+			// When we switch to v3, then this will become:
+			//   MultiRemovalResults:: { maybe_cursor: None, backend: 0, unique: 2, loops: 2 },
+			assert!(matches!(
+				DoubleMap::clear_prefix(&key1, u32::max_value(), None),
+				MultiRemovalResults { maybe_cursor: None, backend: 0, unique: 0, loops: 0 }
 			));
 			assert_eq!(DoubleMap::get(&key1, &key2), 0u64);
 			assert_eq!(DoubleMap::get(&key1, &(key2 + 1)), 0u64);
@@ -1308,7 +1390,7 @@ pub mod pallet_prelude {
 		},
 		traits::{
 			ConstU32, EnsureOrigin, Get, GetDefault, GetStorageVersion, Hooks, IsType,
-			PalletInfoAccess, StorageInfoTrait,
+			PalletInfoAccess, StorageInfoTrait, StorageVersion, TypedGet,
 		},
 		weights::{DispatchClass, Pays, Weight},
 		Blake2_128, Blake2_128Concat, Blake2_256, CloneNoBound, DebugNoBound, EqNoBound, Identity,
@@ -1544,6 +1626,15 @@ pub mod pallet_prelude {
 /// used using `#[pallet::compact]`, function must return `DispatchResultWithPostInfo` or
 /// `DispatchResult`.
 ///
+/// Each dispatchable may also be annotated with the `#[pallet::call_index($idx)]` attribute,
+/// which defines and sets the codec index for the dispatchable function in the `Call` enum.
+///
+/// All call indexes start from 0, until it encounters a dispatchable function with a defined
+/// call index. The dispatchable function that lexically follows the function with a defined
+/// call index will have that call index, but incremented by 1, e.g. if there are 3
+/// dispatchable functions `fn foo`, `fn bar` and `fn qux` in that order, and only `fn bar` has
+/// a call index of 10, then `fn qux` will have an index of 11, instead of 1.
+///
 /// All arguments must implement `Debug`, `PartialEq`, `Eq`, `Decode`, `Encode`, `Clone`. For
 /// ease of use, bound the trait `Member` available in frame_support::pallet_prelude.
 ///
@@ -1557,16 +1648,18 @@ pub mod pallet_prelude {
 /// **WARNING**: modifying dispatchables, changing their order, removing some must be done with
 /// care. Indeed this will change the outer runtime call type (which is an enum with one
 /// variant per pallet), this outer runtime call can be stored on-chain (e.g. in
-/// pallet-scheduler). Thus migration might be needed.
+/// pallet-scheduler). Thus migration might be needed. To mitigate against some of this, the
+/// `#[pallet::call_index($idx)]` attribute can be used to fix the order of the dispatchable so
+/// that the `Call` enum encoding does not change after modification.
 ///
 /// ### Macro expansion
 ///
-/// The macro create an enum `Call` with one variant per dispatchable. This enum implements:
+/// The macro creates an enum `Call` with one variant per dispatchable. This enum implements:
 /// `Clone`, `Eq`, `PartialEq`, `Debug` (with stripped implementation in `not("std")`),
 /// `Encode`, `Decode`, `GetDispatchInfo`, `GetCallName`, `UnfilteredDispatchable`.
 ///
-/// The macro implement on `Pallet`, the `Callable` trait and a function `call_functions` which
-/// returns the dispatchable metadatas.
+/// The macro implement the `Callable` trait on `Pallet` and a function `call_functions` which
+/// returns the dispatchable metadata.
 ///
 /// # Extra constants: `#[pallet::extra_constants]` optional
 ///

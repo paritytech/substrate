@@ -1111,14 +1111,19 @@ use super::*;
 			ensure!(Founder::<T, I>::get().as_ref() == Some(&founder), Error::<T, I>::NotFounder);
 			ensure!(MemberCount::<T, I>::get() == 1, Error::<T, I>::NotHead);
 
+			#[allow(deprecated)]
 			Members::<T, I>::remove_all(None);
 			MemberCount::<T, I>::kill();
+			#[allow(deprecated)]
 			MemberByIndex::<T, I>::remove_all(None);
+			#[allow(deprecated)]
 			Members::<T, I>::remove_all(None);
+			#[allow(deprecated)]
 			Votes::<T, I>::remove_all(None);
 			Head::<T, I>::kill();
 			Founder::<T, I>::kill();
 			Rules::<T, I>::kill();
+			#[allow(deprecated)]
 			Candidates::<T, I>::remove_all(None);
 			Self::deposit_event(Event::<T, I>::Unfounded { founder });
 			Ok(())
@@ -1332,9 +1337,9 @@ impl<T: Config> EnsureOrigin<<T as frame_system::Config>::Origin> for EnsureFoun
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> T::Origin {
-		let founder = Founder::<T>::get().expect("society founder should exist");
-		T::Origin::from(frame_system::RawOrigin::Signed(founder))
+	fn try_successful_origin() -> Result<T::Origin, ()> {
+		let founder = Founder::<T>::get().ok_or(())?;
+		Ok(T::Origin::from(frame_system::RawOrigin::Signed(founder)))
 	}
 }
 
@@ -1929,7 +1934,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// This actually does computation. If you need to keep using it, then make sure you cache the
 	/// value and only call this once.
 	pub fn account_id() -> T::AccountId {
-		T::PalletId::get().into_account()
+		T::PalletId::get().into_account_truncating()
 	}
 
 	/// The account ID of the payouts pot. This is where payouts are made from.
@@ -1937,7 +1942,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// This actually does computation. If you need to keep using it, then make sure you cache the
 	/// value and only call this once.
 	pub fn payouts() -> T::AccountId {
-		T::PalletId::get().into_sub_account(b"payouts")
+		T::PalletId::get().into_sub_account_truncating(b"payouts")
 	}
 
 	/// Return the duration of the lock, in blocks, with the given number of members.

@@ -54,14 +54,14 @@ pub trait V2ToV3 {
 }
 
 #[frame_support::storage_alias]
-type UpgradedToU32RefCount<T> = Value<Pallet<T: Config>, bool, ValueQuery>;
+type UpgradedToU32RefCount<T: Config> = StorageValue<Pallet<T>, bool, ValueQuery>;
 
 #[frame_support::storage_alias]
-type UpgradedToTripleRefCount<T> = Value<Pallet<T: Config>, bool, ValueQuery>;
+type UpgradedToTripleRefCount<T: Config> = StorageValue<Pallet<T>, bool, ValueQuery>;
 
 #[frame_support::storage_alias]
-type Account<V, T> = Map<
-	Pallet<T: Config>,
+type Account<V, T: Config> = StorageMap<
+	Pallet<T>,
 	Blake2_128Concat,
 	<V as V2ToV3>::AccountId,
 	AccountInfo<<V as V2ToV3>::Index, <V as V2ToV3>::AccountData>,

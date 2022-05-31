@@ -183,7 +183,22 @@ where
 	where
 		K: HasKeyPrefix<KP>,
 	{
-		unhashed::kill_prefix(&Self::storage_n_map_partial_key(partial_key), limit)
+		unhashed::clear_prefix(&Self::storage_n_map_partial_key(partial_key), limit, None).into()
+	}
+
+	fn clear_prefix<KP>(
+		partial_key: KP,
+		limit: u32,
+		maybe_cursor: Option<&[u8]>,
+	) -> sp_io::MultiRemovalResults
+	where
+		K: HasKeyPrefix<KP>,
+	{
+		unhashed::clear_prefix(
+			&Self::storage_n_map_partial_key(partial_key),
+			Some(limit),
+			maybe_cursor,
+		)
 	}
 
 	fn iter_prefix_values<KP>(partial_key: KP) -> PrefixIterator<V>
@@ -476,7 +491,7 @@ mod test_iterators {
 		sp_io::TestExternalities::default().execute_with(|| {
 			use crate::{hash::Identity, storage::Key as NMapKey};
 			#[crate::storage_alias]
-			type MyNMap = NMap<
+			type MyNMap = StorageNMap<
 				MyModule,
 				(NMapKey<Identity, u64>, NMapKey<Identity, u64>, NMapKey<Identity, u64>),
 				u64,
@@ -521,8 +536,14 @@ mod test_iterators {
 
 			{
 				#[crate::storage_alias]
-				type NMap =
-					DoubleMap<Test, crate::Blake2_128Concat, u16, crate::Twox64Concat, u32, u64>;
+				type NMap = StorageDoubleMap<
+					Test,
+					crate::Blake2_128Concat,
+					u16,
+					crate::Twox64Concat,
+					u32,
+					u64,
+				>;
 
 				let value = NMap::get(1, 2).unwrap();
 				assert_eq!(value, 50);

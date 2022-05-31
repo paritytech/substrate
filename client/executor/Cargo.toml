@@ -50,6 +50,8 @@ paste = "1.0"
 regex = "1.5.5"
 criterion = "0.3"
 env_logger = "0.9"
+num_cpus = "1.13.1"
+tempfile = "3.3.0"
 
 [[bench]]
 name = "bench"

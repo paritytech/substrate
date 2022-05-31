@@ -95,16 +95,18 @@ impl<B: UniqueSaturatedInto<u64> + UniqueSaturatedFrom<u128>> CurrencyToVote<B>
 	}
 }
 
-pub trait VoteTally<Votes> {
-	fn ayes(&self) -> Votes;
-	fn turnout(&self) -> Perbill;
-	fn approval(&self) -> Perbill;
+pub trait VoteTally<Votes, Class> {
+	fn new(_: Class) -> Self;
+	fn ayes(&self, class: Class) -> Votes;
+	fn support(&self, class: Class) -> Perbill;
+	fn approval(&self, class: Class) -> Perbill;
 	#[cfg(feature = "runtime-benchmarks")]
-	fn unanimity() -> Self;
+	fn unanimity(class: Class) -> Self;
 	#[cfg(feature = "runtime-benchmarks")]
-	fn from_requirements(turnout: Perbill, approval: Perbill) -> Self;
+	fn rejection(class: Class) -> Self;
+	#[cfg(feature = "runtime-benchmarks")]
+	fn from_requirements(support: Perbill, approval: Perbill, class: Class) -> Self;
 }
-
 pub enum PollStatus<Tally, Moment, Class> {
 	None,
 	Ongoing(Tally, Class),

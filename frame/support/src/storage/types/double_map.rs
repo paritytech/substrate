@@ -229,11 +229,51 @@ where
 	/// Calling this multiple times per block with a `limit` set leads always to the same keys being
 	/// removed and the same result being returned. This happens because the keys to delete in the
 	/// overlay are not taken into account when deleting keys in the backend.
+	#[deprecated = "Use `clear_prefix` instead"]
 	pub fn remove_prefix<KArg1>(k1: KArg1, limit: Option<u32>) -> sp_io::KillStorageResult
 	where
 		KArg1: ?Sized + EncodeLike<Key1>,
 	{
+		#[allow(deprecated)]
 		<Self as crate::storage::StorageDoubleMap<Key1, Key2, Value>>::remove_prefix(k1, limit)
+	}
+
+	/// Attempt to remove items from the map matching a `first_key` prefix.
+	///
+	/// Returns [`MultiRemovalResults`](sp_io::MultiRemovalResults) to inform about the result. Once
+	/// the resultant `maybe_cursor` field is `None`, then no further items remain to be deleted.
+	///
+	/// NOTE: After the initial call for any given map, it is important that no further items
+	/// are inserted into the map which match the `first_key`. If so, then the map may not be
+	/// empty when the resultant `maybe_cursor` is `None`.
+	///
+	/// # Limit
+	///
+	/// A `limit` must always be provided through in order to cap the maximum
+	/// amount of deletions done in a single call. This is one fewer than the
+	/// maximum number of backend iterations which may be done by this operation and as such
+	/// represents the maximum number of backend deletions which may happen. A `limit` of zero
+	/// implies that no keys will be deleted, though there may be a single iteration done.
+	///
+	/// # Cursor
+	///
+	/// A *cursor* may be passed in to this operation with `maybe_cursor`. `None` should only be
+	/// passed once (in the initial call) for any given storage map and `first_key`. Subsequent
+	/// calls operating on the same map/`first_key` should always pass `Some`, and this should be
+	/// equal to the previous call result's `maybe_cursor` field.
+	pub fn clear_prefix<KArg1>(
+		first_key: KArg1,
+		limit: u32,
+		maybe_cursor: Option<&[u8]>,
+	) -> sp_io::MultiRemovalResults
+	where
+		KArg1: ?Sized + EncodeLike<Key1>,
+	{
+		<Self as crate::storage::StorageDoubleMap<Key1, Key2, Value>>::clear_prefix(
+			first_key,
+			limit,
+			maybe_cursor,
+		)
 	}
 
 	/// Iterate over values that share the first key.
@@ -359,8 +399,37 @@ where
 	/// Calling this multiple times per block with a `limit` set leads always to the same keys being
 	/// removed and the same result being returned. This happens because the keys to delete in the
 	/// overlay are not taken into account when deleting keys in the backend.
+	#[deprecated = "Use `clear` instead"]
 	pub fn remove_all(limit: Option<u32>) -> sp_io::KillStorageResult {
+		#[allow(deprecated)]
 		<Self as crate::storage::StoragePrefixedMap<Value>>::remove_all(limit)
+	}
+
+	/// Attempt to remove all items from the map.
+	///
+	/// Returns [`MultiRemovalResults`](sp_io::MultiRemovalResults) to inform about the result. Once
+	/// the resultant `maybe_cursor` field is `None`, then no further items remain to be deleted.
+	///
+	/// NOTE: After the initial call for any given map, it is important that no further items
+	/// are inserted into the map. If so, then the map may not be empty when the resultant
+	/// `maybe_cursor` is `None`.
+	///
+	/// # Limit
+	///
+	/// A `limit` must always be provided through in order to cap the maximum
+	/// amount of deletions done in a single call. This is one fewer than the
+	/// maximum number of backend iterations which may be done by this operation and as such
+	/// represents the maximum number of backend deletions which may happen.A `limit` of zero
+	/// implies that no keys will be deleted, though there may be a single iteration done.
+	///
+	/// # Cursor
+	///
+	/// A *cursor* may be passed in to this operation with `maybe_cursor`. `None` should only be
+	/// passed once (in the initial call) for any given storage map. Subsequent calls
+	/// operating on the same map should always pass `Some`, and this should be equal to the
+	/// previous call result's `maybe_cursor` field.
+	pub fn clear(limit: u32, maybe_cursor: Option<&[u8]>) -> sp_io::MultiRemovalResults {
+		<Self as crate::storage::StoragePrefixedMap<Value>>::clear(limit, maybe_cursor)
 	}
 
 	/// Iter over all value of the storage.
@@ -768,7 +837,7 @@ mod test {
 
 			A::insert(3, 30, 10);
 			A::insert(4, 40, 10);
-			A::remove_all(None);
+			let _ = A::clear(u32::max_value(), None);
 			assert_eq!(A::contains_key(3, 30), false);
 			assert_eq!(A::contains_key(4, 40), false);
 
@@ -829,7 +898,7 @@ mod test {
 				]
 			);
 
-			WithLen::remove_all(None);
+			let _ = WithLen::clear(u32::max_value(), None);
 			assert_eq!(WithLen::decode_len(3, 30), None);
 			WithLen::append(0, 100, 10);
 			assert_eq!(WithLen::decode_len(0, 100), Some(1));
@@ -843,7 +912,7 @@ mod test {
 			assert_eq!(A::iter_prefix_values(4).collect::<Vec<_>>(), vec![13, 14]);
 			assert_eq!(A::iter_prefix(4).collect::<Vec<_>>(), vec![(40, 13), (41, 14)]);
 
-			A::remove_prefix(3, None);
+			let _ = A::clear_prefix(3, u32::max_value(), None);
 			assert_eq!(A::iter_prefix(3).collect::<Vec<_>>(), vec![]);
 			assert_eq!(A::iter_prefix(4).collect::<Vec<_>>(), vec![(40, 13), (41, 14)]);
 
