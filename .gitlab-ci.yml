@@ -200,7 +200,6 @@ build-rustdoc:
     - rm -f /cargo_target_dir/doc/.lock
     - mv /cargo_target_dir/doc ./crate-docs
     # FIXME: remove me after CI image gets nonroot
-    - sleep 3600
     - chown -R nonroot:nonroot ./crate-docs
     - echo "<meta http-equiv=refresh content=0;url=${DOC_INDEX_PAGE}>" > ./crate-docs/index.html
     - rusty-cachier cache upload
