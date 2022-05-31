@@ -7,8 +7,11 @@ cargo-deny:
     - .docker-env
     - .nightly-pipeline
   script:
+    - rusty-cachier snapshot create
     - cargo deny check --hide-inclusion-graph -c ./scripts/ci/deny.toml
+    - rusty-cachier cache upload
   after_script:
+    - !reference [.rusty-cachier, after_script]
     - echo "___The complete log is in the artifacts___"
     - cargo deny check -c ./scripts/ci/deny.toml 2> deny.log
   artifacts:
@@ -22,11 +25,15 @@ cargo-deny:
 
 cargo-fmt:
   stage:                           test
+  variables:
+    RUSTY_CACHIER_TOOLCHAIN: nightly
   extends:
     - .docker-env
     - .test-refs
   script:
+    - rusty-cachier snapshot create
     - cargo +nightly fmt --all -- --check
+    - rusty-cachier cache upload
 
 cargo-clippy:
   stage:                           test
@@ -34,11 +41,15 @@ cargo-clippy:
   needs:
     - job:                         cargo-fmt
       artifacts:                   false
+  variables:
+    RUSTY_CACHIER_TOOLCHAIN: nightly
   extends:
     - .docker-env
     - .test-refs
   script:
+    - rusty-cachier snapshot create
     - SKIP_WASM_BUILD=1 env -u RUSTFLAGS cargo +nightly clippy --all-targets
+    - rusty-cachier cache upload
 
 cargo-check-nixos:
   stage:                           test
@@ -62,6 +73,8 @@ cargo-check-nixos:
 
 cargo-check-benches:
   stage:                           test
+  variables:
+    RUSTY_CACHIER_TOOLCHAIN: nightly
   extends:
     - .docker-env
     - .test-refs
@@ -76,7 +89,9 @@ cargo-check-benches:
         git merge $CI_COMMIT_REF_NAME --verbose --no-edit;
       fi
     - !reference [.rust-info-script, script]
+    - !reference [.rusty-cachier, before_script]
   script:
+    - rusty-cachier snapshot create
     - mkdir -p ./artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA
     - SKIP_WASM_BUILD=1 time cargo +nightly check --benches --all
     - 'cargo run --release -p node-bench -- ::node::import::native::sr25519::transfer_keep_alive::paritydb::small --json
@@ -84,6 +99,7 @@ cargo-check-benches:
     - 'cargo run --release -p node-bench -- ::trie::read::small --json
       | tee ./artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA/::trie::read::small.json'
     - sccache -s
+    - rusty-cachier cache upload
   tags:
     - linux-docker-benches
 
@@ -120,8 +136,10 @@ cargo-check-subkey:
     - .docker-env
     - .test-refs
   script:
+    - rusty-cachier snapshot create
     - cd ./bin/utils/subkey
     - SKIP_WASM_BUILD=1 time cargo check --release
+    - rusty-cachier cache upload
 
 cargo-check-try-runtime:
   stage:                           test
@@ -133,7 +151,9 @@ cargo-check-try-runtime:
     - .docker-env
     - .test-refs
   script:
+    - rusty-cachier snapshot create
     - time cargo check --features try-runtime
+    - rusty-cachier cache upload
 
 cargo-check-wasmer-sandbox:
   stage:                           test
@@ -145,7 +165,9 @@ cargo-check-wasmer-sandbox:
     - .docker-env
     - .test-refs
   script:
+    - rusty-cachier snapshot create
     - time cargo check --features wasmer-sandbox
+    - rusty-cachier cache upload
 
 test-deterministic-wasm:
   stage:                           test
@@ -159,16 +181,18 @@ test-deterministic-wasm:
   variables:
     WASM_BUILD_NO_COLOR:           1
   script:
+    - rusty-cachier snapshot create
     # build runtime
     - cargo build --verbose --release -p node-runtime
     # make checksum
-    - sha256sum ./target/release/wbuild/node-runtime/target/wasm32-unknown-unknown/release/node_runtime.wasm > checksum.sha256
+    - sha256sum /cargo_target_dir/release/wbuild/node-runtime/target/wasm32-unknown-unknown/release/node_runtime.wasm > checksum.sha256
     # clean up – FIXME: can we reuse some of the artifacts?
     - cargo clean
     # build again
     - cargo build --verbose --release -p node-runtime
     # confirm checksum
     - sha256sum -c ./checksum.sha256
+    - rusty-cachier cache upload
 
 test-linux-stable:
   stage:                           test
@@ -184,14 +208,18 @@ test-linux-stable:
     # Ensure we run the UI tests.
     RUN_UI_TESTS:                  1
   script:
+    - rusty-cachier snapshot create
     # this job runs all tests in former runtime-benchmarks, frame-staking and wasmtime tests
     - time cargo test --workspace --locked --release --verbose --features runtime-benchmarks --manifest-path ./bin/node/cli/Cargo.toml
     - time cargo test -p frame-support-test --features=conditional-storage,no-metadata-docs --manifest-path ./frame/support/test/Cargo.toml --test pallet # does not reuse cache 1 min 44 sec
     - SUBSTRATE_TEST_TIMEOUT=1 time cargo test -p substrate-test-utils --release --verbose --locked -- --ignored timeout
+    - rusty-cachier cache upload
 
 test-frame-examples-compile-to-wasm:
   # into one job
   stage:                           test
+  variables:
+    RUSTY_CACHIER_TOOLCHAIN: nightly
   extends:
     - .docker-env
     - .test-refs
@@ -201,10 +229,12 @@ test-frame-examples-compile-to-wasm:
     RUSTFLAGS:                     "-Cdebug-assertions=y"
     RUST_BACKTRACE: 1
   script:
+    - rusty-cachier snapshot create
     - cd ./frame/examples/offchain-worker/
     - cargo +nightly build --target=wasm32-unknown-unknown --no-default-features
     - cd ../basic
     - cargo +nightly build --target=wasm32-unknown-unknown --no-default-features
+    - rusty-cachier cache upload
 
 test-linux-stable-int:
   stage:                           test
@@ -220,13 +250,16 @@ test-linux-stable-int:
     # Ensure we run the UI tests.
     RUN_UI_TESTS:                  1
   script:
+    - rusty-cachier snapshot create
     - echo "___Logs will be partly shown at the end in case of failure.___"
     - echo "___Full log will be saved to the job artifacts only in case of failure.___"
     - WASM_BUILD_NO_COLOR=1
       RUST_LOG=sync=trace,consensus=trace,client=trace,state-db=trace,db=trace,forks=trace,state_db=trace,storage_cache=trace
         time cargo test -p node-cli --release --verbose --locked -- --ignored
         &> ${CI_COMMIT_SHORT_SHA}_int_failure.log
+    - rusty-cachier cache upload
   after_script:
+    - !reference [.rusty-cachier, after_script]
     - awk '/FAILED|^error\[/,0' ${CI_COMMIT_SHORT_SHA}_int_failure.log
   artifacts:
     name:                          $CI_COMMIT_SHORT_SHA
@@ -241,13 +274,17 @@ check-tracing:
   needs:
     - job:                         test-linux-stable-int
       artifacts:                   false
+  variables:
+    RUSTY_CACHIER_TOOLCHAIN: nightly
   extends:
     - .docker-env
     - .test-refs
   script:
+    - rusty-cachier snapshot create
     # with-tracing must be explicitly activated, we run a test to ensure this works as expected in both cases
     - time cargo +nightly test --manifest-path ./primitives/tracing/Cargo.toml --no-default-features
     - time cargo +nightly test --manifest-path ./primitives/tracing/Cargo.toml --no-default-features --features=with-tracing
+    - rusty-cachier cache upload
 
 test-full-crypto-feature:
   stage:                           test
@@ -255,6 +292,8 @@ test-full-crypto-feature:
   needs:
     - job:                         check-tracing
       artifacts:                   false
+  variables:
+    RUSTY_CACHIER_TOOLCHAIN: nightly
   extends:
     - .docker-env
     - .test-refs
@@ -264,10 +303,12 @@ test-full-crypto-feature:
     RUSTFLAGS:                     "-Cdebug-assertions=y"
     RUST_BACKTRACE: 1
   script:
+    - rusty-cachier snapshot create
     - cd primitives/core/
     - time cargo +nightly build --verbose --no-default-features --features full_crypto
     - cd ../application-crypto
     - time cargo +nightly build --verbose --no-default-features --features full_crypto
+    - rusty-cachier cache upload
 
 test-wasmer-sandbox:
   stage:                           test
@@ -275,7 +316,9 @@ test-wasmer-sandbox:
     - .docker-env
     - .test-refs-wasmer-sandbox
   script:
+    - rusty-cachier snapshot create
     - time cargo test --release --features runtime-benchmarks,wasmer-sandbox,disable-ui-tests
+    - rusty-cachier cache upload
 
 cargo-check-macos:
   stage:                           test
@@ -289,6 +332,8 @@ cargo-check-macos:
 
 check-rustdoc:
   stage:                           test
+  variables:
+    RUSTY_CACHIER_TOOLCHAIN: nightly
   extends:
     - .docker-env
     - .test-refs
@@ -296,4 +341,6 @@ check-rustdoc:
     SKIP_WASM_BUILD:               1
     RUSTDOCFLAGS:                  "-Dwarnings"
   script:
+    - rusty-cachier snapshot create
     - time cargo +nightly doc --workspace --all-features --verbose --no-deps
+    - rusty-cachier cache upload
