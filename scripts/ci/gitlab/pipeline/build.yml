@@ -105,7 +105,7 @@ build-subkey-linux:
 build-subkey-macos:
   extends:                         .build-subkey
   # duplicating before_script & script sections from .build-subkey hidden job
-  # to get rid of rusty-cachier mentions as rusty-cachier doesn't work on macos
+  # to overwrite rusty-cachier integration as it doesn't work on macos
   before_script:
     - mkdir -p ./artifacts/subkey
   script:
