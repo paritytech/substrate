@@ -106,7 +106,6 @@ impl<M: GetMaxVoters> Tally<M> {
 // This keeps everything O(1) while still allowing arbitrary number of ranks.
 
 // All functions of VoteTally now include the class as a param.
-// TODO: ** BEFORE COMMIT ** split and move into gg2t branch.
 
 pub type TallyOf<T, I = ()> = Tally<Pallet<T, I>>;
 pub type PollIndexOf<T, I = ()> = <<T as Config<I>>::Polls as Polling<TallyOf<T, I>>>::Index;
