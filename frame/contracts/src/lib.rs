@@ -380,15 +380,28 @@ pub mod pallet {
 		T::AccountId: UncheckedFrom<T::Hash>,
 		T::AccountId: AsRef<[u8]>,
 	{
+		fn on_idle(_block: T::BlockNumber, remaining_weight: Weight) -> Weight {
+			Storage::<T>::process_deletion_queue_batch(remaining_weight)
+				.saturating_add(T::WeightInfo::on_process_deletion_queue_batch())
+		}
+
 		fn on_initialize(_block: T::BlockNumber) -> Weight {
-			// We do not want to go above the block limit and rather avoid lazy deletion
-			// in that case. This should only happen on runtime upgrades.
-			let weight_limit = T::BlockWeights::get()
-				.max_block
-				.saturating_sub(System::<T>::block_weight().total())
-				.min(T::DeletionWeightLimit::get());
-			Storage::<T>::process_deletion_queue_batch(weight_limit)
-				.saturating_add(T::WeightInfo::on_initialize())
+			// We want to process the deletion_queue in the on_idle hook. Only in the case
+			// that the queue length has reached its maximal depth, we process it here.
+			let max_len = T::DeletionQueueDepth::get() as usize;
+			let queue_len = <DeletionQueue<T>>::decode_len().unwrap_or(0);
+			if queue_len >= max_len {
+				// We do not want to go above the block limit and rather avoid lazy deletion
+				// in that case. This should only happen on runtime upgrades.
+				let weight_limit = T::BlockWeights::get()
+					.max_block
+					.saturating_sub(System::<T>::block_weight().total())
+					.min(T::DeletionWeightLimit::get());
+				Storage::<T>::process_deletion_queue_batch(weight_limit)
+					.saturating_add(T::WeightInfo::on_process_deletion_queue_batch())
+			} else {
+				T::WeightInfo::on_process_deletion_queue_batch()
+			}
 		}
 	}
 
@@ -585,6 +598,42 @@ pub mod pallet {
 			<PrefabWasmModule<T>>::remove(&origin, code_hash)?;
 			// we waive the fee because removing unused code is beneficial
 			Ok(Pays::No.into())
+		}
+
+		/// Privileged function that changes the code of an existing contract.
+		///
+		/// This takes care of updating refcounts and all other necessary operations. Returns
+		/// an error if either the `code_hash` or `dest` do not exist.
+		///
+		/// # Note
+		///
+		/// This does **not** change the address of the contract in question. This means
+		/// that the contract address is no longer derived from its code hash after calling
+		/// this dispatchable.
+		#[pallet::weight(T::WeightInfo::set_code())]
+		pub fn set_code(
+			origin: OriginFor<T>,
+			dest: <T::Lookup as StaticLookup>::Source,
+			code_hash: CodeHash<T>,
+		) -> DispatchResult {
+			ensure_root(origin)?;
+			let dest = T::Lookup::lookup(dest)?;
+			<ContractInfoOf<T>>::try_mutate(&dest, |contract| {
+				let contract = if let Some(contract) = contract {
+					contract
+				} else {
+					return Err(<Error<T>>::ContractNotFound.into())
+				};
+				<PrefabWasmModule<T>>::add_user(code_hash)?;
+				<PrefabWasmModule<T>>::remove_user(contract.code_hash);
+				Self::deposit_event(Event::ContractCodeUpdated {
+					contract: dest.clone(),
+					new_code_hash: code_hash,
+					old_code_hash: contract.code_hash,
+				});
+				contract.code_hash = code_hash;
+				Ok(())
+			})
 		}
 	}
 

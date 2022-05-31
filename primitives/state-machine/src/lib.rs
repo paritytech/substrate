@@ -143,7 +143,7 @@ mod std_reexport {
 	pub use crate::{
 		basic::BasicExternalities,
 		error::{Error, ExecutionError},
-		in_memory_backend::new_in_mem,
+		in_memory_backend::{new_in_mem, new_in_mem_hash_key},
 		proving_backend::{
 			create_proof_check_backend, ProofRecorder, ProvingBackend, ProvingBackendRecorder,
 		},
@@ -1347,7 +1347,8 @@ mod execution {
 #[cfg(test)]
 mod tests {
 	use super::{ext::Ext, *};
-	use crate::execution::CallResult;
+	use crate::{execution::CallResult, in_memory_backend::new_in_mem_hash_key};
+	use assert_matches::assert_matches;
 	use codec::{Decode, Encode};
 	use sp_core::{
 		map,
@@ -1572,7 +1573,7 @@ mod tests {
 		{
 			let mut cache = StorageTransactionCache::default();
 			let mut ext = Ext::new(&mut overlay, &mut cache, backend, None);
-			ext.clear_prefix(b"ab", None);
+			let _ = ext.clear_prefix(b"ab", None, None);
 		}
 		overlay.commit_transaction().unwrap();
 
@@ -1596,7 +1597,10 @@ mod tests {
 		{
 			let mut cache = StorageTransactionCache::default();
 			let mut ext = Ext::new(&mut overlay, &mut cache, backend, None);
-			assert_eq!((false, 1), ext.clear_prefix(b"ab", Some(1)));
+			assert_matches!(
+				ext.clear_prefix(b"ab", Some(1), None).deconstruct(),
+				(Some(_), 1, 3, 1)
+			);
 		}
 		overlay.commit_transaction().unwrap();
 
@@ -1638,7 +1642,8 @@ mod tests {
 		{
 			let mut cache = StorageTransactionCache::default();
 			let mut ext = Ext::new(&mut overlay, &mut cache, &backend, None);
-			assert_eq!(ext.kill_child_storage(&child_info, Some(2)), (false, 2));
+			let r = ext.kill_child_storage(&child_info, Some(2), None);
+			assert_matches!(r.deconstruct(), (Some(_), 2, 6, 2));
 		}
 
 		assert_eq!(
@@ -1673,21 +1678,44 @@ mod tests {
 		let mut overlay = OverlayedChanges::default();
 		let mut cache = StorageTransactionCache::default();
 		let mut ext = Ext::new(&mut overlay, &mut cache, &backend, None);
-		assert_eq!(ext.kill_child_storage(&child_info, Some(0)), (false, 0));
-		assert_eq!(ext.kill_child_storage(&child_info, Some(1)), (false, 1));
-		assert_eq!(ext.kill_child_storage(&child_info, Some(2)), (false, 2));
-		assert_eq!(ext.kill_child_storage(&child_info, Some(3)), (false, 3));
-		assert_eq!(ext.kill_child_storage(&child_info, Some(4)), (true, 4));
-		// Only 4 items to remove
-		assert_eq!(ext.kill_child_storage(&child_info, Some(5)), (true, 4));
-		assert_eq!(ext.kill_child_storage(&child_info, None), (true, 4));
+		let r = ext.kill_child_storage(&child_info, Some(0), None).deconstruct();
+		assert_matches!(r, (Some(_), 0, 0, 0));
+		let r = ext
+			.kill_child_storage(&child_info, Some(1), r.0.as_ref().map(|x| &x[..]))
+			.deconstruct();
+		assert_matches!(r, (Some(_), 1, 1, 1));
+		let r = ext
+			.kill_child_storage(&child_info, Some(4), r.0.as_ref().map(|x| &x[..]))
+			.deconstruct();
+		// Only 3 items remaining to remove
+		assert_matches!(r, (None, 3, 3, 3));
+		let r = ext.kill_child_storage(&child_info, Some(1), None).deconstruct();
+		assert_matches!(r, (Some(_), 0, 0, 1));
+	}
+
+	#[test]
+	fn limited_child_kill_off_by_one_works_without_limit() {
+		let child_info = ChildInfo::new_default(b"sub1");
+		let initial: HashMap<_, BTreeMap<_, _>> = map![
+			Some(child_info.clone()) => map![
+				b"a".to_vec() => b"0".to_vec(),
+				b"b".to_vec() => b"1".to_vec(),
+				b"c".to_vec() => b"2".to_vec(),
+				b"d".to_vec() => b"3".to_vec()
+			],
+		];
+		let backend = InMemoryBackend::<BlakeTwo256>::from((initial, StateVersion::default()));
+		let mut overlay = OverlayedChanges::default();
+		let mut cache = StorageTransactionCache::default();
+		let mut ext = Ext::new(&mut overlay, &mut cache, &backend, None);
+		assert_eq!(ext.kill_child_storage(&child_info, None, None).deconstruct(), (None, 4, 4, 4));
 	}
 
 	#[test]
 	fn set_child_storage_works() {
 		let child_info = ChildInfo::new_default(b"sub1");
 		let child_info = &child_info;
-		let state = new_in_mem::<BlakeTwo256>();
+		let state = new_in_mem_hash_key::<BlakeTwo256>();
 		let backend = state.as_trie_backend().unwrap();
 		let mut overlay = OverlayedChanges::default();
 		let mut cache = StorageTransactionCache::default();
@@ -1695,7 +1723,7 @@ mod tests {
 
 		ext.set_child_storage(child_info, b"abc".to_vec(), b"def".to_vec());
 		assert_eq!(ext.child_storage(child_info, b"abc"), Some(b"def".to_vec()));
-		ext.kill_child_storage(child_info, None);
+		let _ = ext.kill_child_storage(child_info, None, None);
 		assert_eq!(ext.child_storage(child_info, b"abc"), None);
 	}
 
@@ -1703,7 +1731,7 @@ mod tests {
 	fn append_storage_works() {
 		let reference_data = vec![b"data1".to_vec(), b"2".to_vec(), b"D3".to_vec(), b"d4".to_vec()];
 		let key = b"key".to_vec();
-		let state = new_in_mem::<BlakeTwo256>();
+		let state = new_in_mem_hash_key::<BlakeTwo256>();
 		let backend = state.as_trie_backend().unwrap();
 		let mut overlay = OverlayedChanges::default();
 		let mut cache = StorageTransactionCache::default();
@@ -1740,7 +1768,7 @@ mod tests {
 
 		let key = b"events".to_vec();
 		let mut cache = StorageTransactionCache::default();
-		let state = new_in_mem::<BlakeTwo256>();
+		let state = new_in_mem_hash_key::<BlakeTwo256>();
 		let backend = state.as_trie_backend().unwrap();
 		let mut overlay = OverlayedChanges::default();
 

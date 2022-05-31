@@ -202,8 +202,8 @@ benchmarks! {
 		<BalanceOf<T> as codec::HasCompact>::Type: Clone + Eq + PartialEq + sp_std::fmt::Debug + scale_info::TypeInfo + codec::Encode,
 	}
 
-	// The base weight without any actual work performed apart from the setup costs.
-	on_initialize {}: {
+	// The base weight consumed on processing contracts deletion queue.
+	on_process_deletion_queue_batch {}: {
 		Storage::<T>::process_deletion_queue_batch(Weight::MAX)
 	}
 
@@ -389,6 +389,20 @@ benchmarks! {
 		// removing the code should have unreserved the deposit
 		assert_eq!(T::Currency::reserved_balance(&caller), 0u32.into());
 		assert!(<Contract<T>>::code_removed(&hash));
+	}
+
+	set_code {
+		let instance = <Contract<T>>::with_caller(
+			whitelisted_caller(), WasmModule::dummy(), vec![],
+		)?;
+		// we just add some bytes so that the code hash is different
+		let WasmModule { code, hash, .. } = <WasmModule<T>>::dummy_with_bytes(128);
+		<Contracts<T>>::store_code_raw(code, instance.caller.clone())?;
+		let callee = instance.addr.clone();
+		assert_ne!(instance.info()?.code_hash, hash);
+	}: _(RawOrigin::Root, callee, hash)
+	verify {
+		assert_eq!(instance.info()?.code_hash, hash);
 	}
 
 	seal_caller {
@@ -1935,7 +1949,7 @@ benchmarks! {
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
-				module: "__unstable__",
+				module: "seal0",
 				name: "seal_ecdsa_recover",
 				params: vec![ValueType::I32, ValueType::I32, ValueType::I32],
 				return_type: Some(ValueType::I32),
@@ -1978,7 +1992,7 @@ benchmarks! {
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
-				module: "__unstable__",
+				module: "seal0",
 				name: "seal_ecdsa_to_eth_address",
 				params: vec![ValueType::I32, ValueType::I32],
 				return_type: Some(ValueType::I32),

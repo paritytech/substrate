@@ -1067,6 +1067,7 @@ pub mod pallet {
 			Founder::<T, I>::kill();
 			Rules::<T, I>::kill();
 			Candidates::<T, I>::kill();
+			#[allow(deprecated)]
 			SuspendedCandidates::<T, I>::remove_all(None);
 			Self::deposit_event(Event::<T, I>::Unfounded { founder });
 			Ok(())
@@ -1511,6 +1512,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				.collect::<Vec<_>>();
 
 			// Clean up all votes.
+			#[allow(deprecated)]
 			<Votes<T, I>>::remove_all(None);
 
 			// Reward one of the voters who voted the right way.
@@ -1695,6 +1697,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				}
 
 				// Clean up all votes.
+				#[allow(deprecated)]
 				<DefenderVotes<T, I>>::remove_all(None);
 			}
 

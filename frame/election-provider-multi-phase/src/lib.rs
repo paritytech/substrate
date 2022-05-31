@@ -948,6 +948,11 @@ pub mod pallet {
 				compute: ElectionCompute::Emergency,
 			};
 
+			Self::deposit_event(Event::SolutionStored {
+				election_compute: ElectionCompute::Emergency,
+				prev_ejected: QueuedSolution::<T>::exists(),
+			});
+
 			<QueuedSolution<T>>::put(solution);
 			Ok(())
 		}
@@ -1056,6 +1061,11 @@ pub mod pallet {
 				score: Default::default(),
 				compute: ElectionCompute::Fallback,
 			};
+
+			Self::deposit_event(Event::SolutionStored {
+				election_compute: ElectionCompute::Fallback,
+				prev_ejected: QueuedSolution::<T>::exists(),
+			});
 
 			<QueuedSolution<T>>::put(solution);
 			Ok(())
@@ -1792,7 +1802,7 @@ mod tests {
 	use crate::{
 		mock::{
 			multi_phase_events, roll_to, AccountId, ExtBuilder, MockWeightInfo, MockedWeightInfo,
-			MultiPhase, Runtime, SignedMaxSubmissions, System, TargetIndex, Targets,
+			MultiPhase, Origin, Runtime, SignedMaxSubmissions, System, TargetIndex, Targets,
 		},
 		Phase,
 	};
@@ -2035,6 +2045,50 @@ mod tests {
 			assert_eq!(MultiPhase::elect().unwrap_err(), ElectionError::Fallback("NoFallback."));
 			// phase is now emergency.
 			assert_eq!(MultiPhase::current_phase(), Phase::Emergency);
+		})
+	}
+
+	#[test]
+	fn governance_fallback_works() {
+		ExtBuilder::default().onchain_fallback(false).build_and_execute(|| {
+			roll_to(25);
+			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
+
+			// Zilch solutions thus far.
+			assert!(MultiPhase::queued_solution().is_none());
+			assert_eq!(MultiPhase::elect().unwrap_err(), ElectionError::Fallback("NoFallback."));
+
+			// phase is now emergency.
+			assert_eq!(MultiPhase::current_phase(), Phase::Emergency);
+			assert!(MultiPhase::queued_solution().is_none());
+
+			// no single account can trigger this
+			assert_noop!(
+				MultiPhase::governance_fallback(Origin::signed(99), None, None),
+				DispatchError::BadOrigin
+			);
+
+			// only root can
+			assert_ok!(MultiPhase::governance_fallback(Origin::root(), None, None));
+			// something is queued now
+			assert!(MultiPhase::queued_solution().is_some());
+			// next election call with fix everything.;
+			assert!(MultiPhase::elect().is_ok());
+			assert_eq!(MultiPhase::current_phase(), Phase::Off);
+
+			assert_eq!(
+				multi_phase_events(),
+				vec![
+					Event::SignedPhaseStarted { round: 1 },
+					Event::UnsignedPhaseStarted { round: 1 },
+					Event::ElectionFinalized { election_compute: None },
+					Event::SolutionStored {
+						election_compute: ElectionCompute::Fallback,
+						prev_ejected: false
+					},
+					Event::ElectionFinalized { election_compute: Some(ElectionCompute::Fallback) }
+				]
+			);
 		})
 	}
 

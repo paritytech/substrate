@@ -66,8 +66,7 @@ use frame_support::{
 	dispatch::DispatchResult,
 	traits::{EstimateCallFee, Get},
 	weights::{
-		DispatchClass, DispatchInfo, GetDispatchInfo, Pays, PostDispatchInfo, Weight,
-		WeightToFeeCoefficient, WeightToFeePolynomial,
+		DispatchClass, DispatchInfo, GetDispatchInfo, Pays, PostDispatchInfo, Weight, WeightToFee,
 	},
 };
 
@@ -283,28 +282,13 @@ pub mod pallet {
 		type OperationalFeeMultiplier: Get<u8>;
 
 		/// Convert a weight value into a deductible fee based on the currency type.
-		type WeightToFee: WeightToFeePolynomial<Balance = BalanceOf<Self>>;
+		type WeightToFee: WeightToFee<Balance = BalanceOf<Self>>;
 
 		/// Convert a length value into a deductible fee based on the currency type.
-		type LengthToFee: WeightToFeePolynomial<Balance = BalanceOf<Self>>;
+		type LengthToFee: WeightToFee<Balance = BalanceOf<Self>>;
 
 		/// Update the multiplier of the next block, based on the previous block's weight.
 		type FeeMultiplierUpdate: MultiplierUpdate;
-	}
-
-	#[pallet::extra_constants]
-	impl<T: Config> Pallet<T> {
-		#[pallet::constant_name(WeightToFee)]
-		/// The polynomial that is applied in order to derive fee from weight.
-		fn weight_to_fee_polynomial() -> Vec<WeightToFeeCoefficient<BalanceOf<T>>> {
-			T::WeightToFee::polynomial().to_vec()
-		}
-
-		/// The polynomial that is applied in order to derive fee from length.
-		#[pallet::constant_name(LengthToFee)]
-		fn length_to_fee_polynomial() -> Vec<WeightToFeeCoefficient<BalanceOf<T>>> {
-			T::LengthToFee::polynomial().to_vec()
-		}
 	}
 
 	#[pallet::type_value]
@@ -533,14 +517,14 @@ where
 	}
 
 	fn length_to_fee(length: u32) -> BalanceOf<T> {
-		T::LengthToFee::calc(&(length as Weight))
+		T::LengthToFee::weight_to_fee(&(length as Weight))
 	}
 
 	fn weight_to_fee(weight: Weight) -> BalanceOf<T> {
 		// cap the weight to the maximum defined in runtime, otherwise it will be the
 		// `Bounded` maximum of its data type, which is not desired.
 		let capped_weight = weight.min(T::BlockWeights::get().max_block);
-		T::WeightToFee::calc(&capped_weight)
+		T::WeightToFee::weight_to_fee(&capped_weight)
 	}
 }
 
@@ -776,14 +760,12 @@ mod tests {
 	use std::cell::RefCell;
 
 	use codec::Encode;
-	use smallvec::smallvec;
 
 	use sp_core::H256;
 	use sp_runtime::{
 		testing::{Header, TestXt},
 		traits::{BlakeTwo256, IdentityLookup, One},
 		transaction_validity::InvalidTransaction,
-		Perbill,
 	};
 
 	use frame_support::{
@@ -791,7 +773,7 @@ mod tests {
 		traits::{ConstU32, ConstU64, Currency, Imbalance, OnUnbalanced},
 		weights::{
 			DispatchClass, DispatchInfo, GetDispatchInfo, PostDispatchInfo, Weight,
-			WeightToFeeCoefficient, WeightToFeeCoefficients, WeightToFeePolynomial,
+			WeightToFee as WeightToFeeT,
 		},
 	};
 	use frame_system as system;
@@ -879,29 +861,21 @@ mod tests {
 		type WeightInfo = ();
 	}
 
-	impl WeightToFeePolynomial for WeightToFee {
+	impl WeightToFeeT for WeightToFee {
 		type Balance = u64;
 
-		fn polynomial() -> WeightToFeeCoefficients<Self::Balance> {
-			smallvec![WeightToFeeCoefficient {
-				degree: 1,
-				coeff_frac: Perbill::zero(),
-				coeff_integer: WEIGHT_TO_FEE.with(|v| *v.borrow()),
-				negative: false,
-			}]
+		fn weight_to_fee(weight: &Weight) -> Self::Balance {
+			Self::Balance::saturated_from(*weight)
+				.saturating_mul(WEIGHT_TO_FEE.with(|v| *v.borrow()))
 		}
 	}
 
-	impl WeightToFeePolynomial for TransactionByteFee {
+	impl WeightToFeeT for TransactionByteFee {
 		type Balance = u64;
 
-		fn polynomial() -> WeightToFeeCoefficients<Self::Balance> {
-			smallvec![WeightToFeeCoefficient {
-				degree: 1,
-				coeff_frac: Perbill::zero(),
-				coeff_integer: TRANSACTION_BYTE_FEE.with(|v| *v.borrow()),
-				negative: false,
-			}]
+		fn weight_to_fee(weight: &Weight) -> Self::Balance {
+			Self::Balance::saturated_from(*weight)
+				.saturating_mul(TRANSACTION_BYTE_FEE.with(|v| *v.borrow()))
 		}
 	}
 

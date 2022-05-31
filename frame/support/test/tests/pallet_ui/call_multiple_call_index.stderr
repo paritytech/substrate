@@ -1,0 +1,5 @@
+error: Invalid pallet::call, too many call_index attributes given
+  --> tests/pallet_ui/call_multiple_call_index.rs:17:7
+   |
+17 |         pub fn foo(origin: OriginFor<T>) -> DispatchResultWithPostInfo {}
+   |             ^^
