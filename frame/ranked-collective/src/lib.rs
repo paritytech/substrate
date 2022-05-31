@@ -94,7 +94,7 @@ pub struct Tally<M: GetMaxVoters> {
 }
 
 impl<M: GetMaxVoters> Tally<M> {
-	fn from_parts(bare_ayes: MemberIndex, ayes: Votes, nays: Votes) -> Self {
+	pub fn from_parts(bare_ayes: MemberIndex, ayes: Votes, nays: Votes) -> Self {
 		Tally { bare_ayes, ayes, nays, dummy: PhantomData }
 	}
 }
