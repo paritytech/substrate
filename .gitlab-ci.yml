@@ -89,6 +89,8 @@ default:
     - rustup +nightly show
     - cargo +nightly --version
 
+# rusty-cachier's hidden job. Parts of this job are used to instrument the pipeline's other real jobs with rusty-cachier
+# Description of the commands is available here - https://gitlab.parity.io/parity/infrastructure/ci_cd/rusty-cachier/client#description
 .rusty-cachier:
   before_script:
     - curl -s https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.parity.io/parity/infrastructure/ci_cd/rusty-cachier/client/-/raw/release/util/install.sh | bash
@@ -219,6 +221,8 @@ deploy-prometheus-alerting-rules:
 
 #### stage:                        notify
 
+# This job notifies rusty-cachier about the latest commit with the cache.
+# This info is later used for the cache distribution and an overlay creation.
 rusty-cachier-notify:
   stage:                           notify
   <<:                              *docker-env
