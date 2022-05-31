@@ -1,25 +1,22 @@
-Collective system: Members of a set of account IDs can make their collective feelings known
-through dispatched calls from one of two specialized origins.
+# Ranked collective system.
 
-The membership can be provided in one of two ways: either directly, using the Root-dispatchable
-function `set_members`, or indirectly, through implementing the `ChangeMembers`.
-The pallet assumes that the amount of members stays at or below `MaxMembers` for its weight
-calculations, but enforces this neither in `set_members` nor in `change_members_sorted`.
+This is a membership pallet providing a `Tally` implementation ready for use with polling
+systems such as the Referenda pallet. Members each have a rank, with zero being the lowest.
+There is no complexity limitation on either the number of members at a rank or the number of
+ranks in the system thus allowing potentially public membership. A member of at least a given
+rank can be selected at random in O(1) time, allowing for various games to constructed using
+this as a primitive. Members may only be promoted and demoted by one rank at a time, however
+all operations (save one) are O(1) in complexity. The only operation which is not O(1) is the
+`remove_member` since they must be removed from all ranks from the present down to zero.
 
-A "prime" member may be set to help determine the default vote behavior based on chain
-config. If `PrimeDefaultVote` is used, the prime vote acts as the default vote in case of any
-abstentions after the voting period. If `MoreThanMajorityThenPrimeDefaultVote` is used, then
-abstentations will first follow the majority of the collective voting, and then the prime
-member.
+Different ranks have different voting power, and are able to vote in different polls. In general
+rank privileges are cumulative. Higher ranks are able to vote in any polls open to lower ranks.
+Similarly, higher ranks always have at least as much voting power in any given poll as lower
+ranks.
 
-Voting happens through motions comprising a proposal (i.e. a dispatchable) plus a
-number of approvals required for it to pass and be called. Motions are open for members to
-vote on for a minimum period given by `MotionDuration`. As soon as the required number of
-approvals is given, the motion is closed and executed. If the number of approvals is not reached
-during the voting period, then `close` may be called by any account in order to force the end
-the motion explicitly. If a prime member is defined, then their vote is used instead of any
-abstentions and the proposal is executed if there are enough approvals counting the new votes.
+Two `Config` trait items control these "rank privileges": `MinRankOfClass` and `VoteWeight`.
+The first controls which ranks are allowed to vote on a particular class of poll. The second
+controls the weight of a vote given the voters rank compared to the minimum rank of the poll.
 
-If there are not, or if no prime member is set, then the motion is dropped without being executed.
-
-License: Apache-2.0
+An origin control, `EnsureRank`, ensures that the origin is a member of the collective of at
+least a particular rank.
