@@ -17,6 +17,8 @@
 
 //! Traits for dealing with dispatching calls and the origin from which they are dispatched.
 
+use std::marker::PhantomData;
+
 use crate::dispatch::{DispatchResultWithPostInfo, Parameter, RawOrigin};
 use sp_runtime::{
 	traits::{BadOrigin, Member},
