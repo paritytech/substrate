@@ -98,17 +98,17 @@ pub mod weights;
 #[cfg(test)]
 mod tests;
 
-pub use crate::{
-	exec::Frame,
-	pallet::*,
-	schedule::{HostFnWeights, InstructionWeights, Limits, Schedule},
-};
 use crate::{
 	exec::{AccountIdOf, ExecError, Executable, Stack as ExecStack, StorageHash},
 	gas::GasMeter,
 	storage::{meter::Meter as StorageMeter, ContractInfo, DeletedContract, Storage},
 	wasm::{OwnerInfo, PrefabWasmModule},
 	weights::WeightInfo,
+};
+pub use crate::{
+	exec::{FixSizedKey, Frame, VarSizedKey},
+	pallet::*,
+	schedule::{HostFnWeights, InstructionWeights, Limits, Schedule},
 };
 use codec::{Encode, HasCompact};
 use frame_support::{
