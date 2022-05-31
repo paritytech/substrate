@@ -17,13 +17,15 @@
 
 //! Traits for dealing with dispatching calls and the origin from which they are dispatched.
 
-use std::marker::PhantomData;
-
+use sp_std::marker::PhantomData;
 use crate::dispatch::{DispatchResultWithPostInfo, Parameter, RawOrigin};
+use sp_arithmetic::traits::{Zero, CheckedSub};
 use sp_runtime::{
-	traits::{BadOrigin, Member},
+	traits::{BadOrigin, Member, Morph, TryMorph},
 	Either,
 };
+
+use super::TypedGet;
 
 /// Some sort of check on the origin is performed by this object.
 pub trait EnsureOrigin<OuterOrigin> {
@@ -334,7 +336,7 @@ mod tests {
 			Ok(V::get())
 		}
 		#[cfg(feature = "runtime-benchmarks")]
-		fn try_successful_origin() -> () {
+		fn try_successful_origin() -> Result<(), ()> {
 			Ok(())
 		}
 	}
@@ -345,7 +347,7 @@ mod tests {
 			Err(())
 		}
 		#[cfg(feature = "runtime-benchmarks")]
-		fn try_successful_origin() -> () {
+		fn try_successful_origin() -> Result<(), ()> {
 			Err(())
 		}
 	}
