@@ -71,8 +71,8 @@ use sp_runtime::{
 	traits::{
 		self, AtLeast32Bit, AtLeast32BitUnsigned, BadOrigin, BlockNumberProvider, Bounded,
 		CheckEqual, Dispatchable, Hash, Lookup, LookupError, MaybeDisplay, MaybeMallocSizeOf,
-		MaybeSerializeDeserialize, Member, One, Saturating, SimpleBitOps, StaticLookup, Zero,
-		TrailingZeroInput,
+		MaybeSerializeDeserialize, Member, One, Saturating, SimpleBitOps, StaticLookup,
+		TrailingZeroInput, Zero,
 	},
 	DispatchError, Perbill, RuntimeDebug,
 };
