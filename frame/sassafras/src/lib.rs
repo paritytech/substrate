@@ -46,18 +46,19 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![warn(unused_must_use, unsafe_code, unused_variables, unused_must_use)]
 
-use frame_support::{
-	traits::{FindAuthor, Get, OneSessionHandler},
-	weights::Weight,
-	WeakBoundedVec,
-};
+use scale_codec::{Decode, Encode};
+
+use frame_support::{traits::Get, weights::Weight, WeakBoundedVec};
+use sp_consensus_vrf::schnorrkel;
 use sp_runtime::{
-	traits::{SaturatedConversion, Saturating},
-	ConsensusEngineId, Permill,
+	generic::DigestItem,
+	traits::{One, Saturating},
+	BoundToRuntimeAppPublic,
 };
 use sp_std::prelude::Vec;
 
 pub use sp_consensus_sassafras::{
+	digests::{ConsensusLog, NextEpochDescriptor, PreDigest},
 	AuthorityId, SassafrasAuthorityWeight, SassafrasEpochConfiguration, Slot, PUBLIC_KEY_LENGTH,
 	RANDOMNESS_LENGTH, SASSAFRAS_ENGINE_ID, VRF_OUTPUT_LENGTH,
 };
@@ -80,12 +81,27 @@ pub trait EpochChangeTrigger {
 	fn trigger<T: Config>(now: T::BlockNumber);
 }
 
-/// A type signifying to Sassafras that an external trigger
-/// for epoch changes (e.g. pallet-session) is used.
+/// A type signifying to Sassafras that an external trigger for epoch changes
+/// (e.g. pallet-session) is used.
 pub struct ExternalTrigger;
 
 impl EpochChangeTrigger for ExternalTrigger {
-	fn trigger<T: Config>(_: T::BlockNumber) {} // nothing to do - trigger is external.
+	fn trigger<T: Config>(_: T::BlockNumber) {} // nothing - trigger is external.
+}
+
+/// A type signifying to Sassafras that it should perform epoch changes with an internal
+/// trigger, recycling the same authorities forever.
+pub struct SameAuthoritiesForever;
+
+impl EpochChangeTrigger for SameAuthoritiesForever {
+	fn trigger<T: Config>(now: T::BlockNumber) {
+		if <Pallet<T>>::should_epoch_change(now) {
+			let authorities = <Pallet<T>>::authorities();
+			let next_authorities = authorities.clone();
+
+			<Pallet<T>>::enact_epoch_change(authorities, next_authorities);
+		}
+	}
 }
 
 #[frame_support::pallet]
@@ -138,6 +154,11 @@ pub mod pallet {
 		StorageOverflow,
 	}
 
+	/// Current epoch index.
+	#[pallet::storage]
+	#[pallet::getter(fn epoch_index)]
+	pub type EpochIndex<T> = StorageValue<_, u64, ValueQuery>;
+
 	/// Current epoch authorities.
 	#[pallet::storage]
 	#[pallet::getter(fn authorities)]
@@ -147,23 +168,53 @@ pub mod pallet {
 		ValueQuery,
 	>;
 
-	/// Current slot number.
-	#[pallet::storage]
-	#[pallet::getter(fn current_slot)]
-	pub type CurrentSlot<T> = StorageValue<_, Slot, ValueQuery>;
-
 	/// Next epoch authorities.
 	#[pallet::storage]
-	pub(super) type NextAuthorities<T: Config> = StorageValue<
+	pub type NextAuthorities<T: Config> = StorageValue<
 		_,
 		WeakBoundedVec<(AuthorityId, SassafrasAuthorityWeight), T::MaxAuthorities>,
 		ValueQuery,
 	>;
 
+	/// The slot at which the first epoch actually started. This is 0
+	/// until the first block of the chain.
+	#[pallet::storage]
+	#[pallet::getter(fn genesis_slot)]
+	pub type GenesisSlot<T> = StorageValue<_, Slot, ValueQuery>;
+
+	/// Current slot number.
+	#[pallet::storage]
+	#[pallet::getter(fn current_slot)]
+	pub type CurrentSlot<T> = StorageValue<_, Slot, ValueQuery>;
+
+	/// The epoch randomness for the *current* epoch.
+	///
+	/// # Security
+	///
+	/// This MUST NOT be used for gambling, as it can be influenced by a
+	/// malicious validator in the short term. It MAY be used in many
+	/// cryptographic protocols, however, so long as one remembers that this
+	/// (like everything else on-chain) it is public. For example, it can be
+	/// used where a number is needed that cannot have been chosen by an
+	/// adversary, for purposes such as public-coin zero-knowledge proofs.
+	#[pallet::storage]
+	#[pallet::getter(fn randomness)]
+	pub type Randomness<T> = StorageValue<_, schnorrkel::Randomness, ValueQuery>;
+
+	/// Next epoch randomness.
+	#[pallet::storage]
+	pub type NextRandomness<T> = StorageValue<_, schnorrkel::Randomness, ValueQuery>;
+
+	/// Temporary value (cleared at block finalization) which is `Some`
+	/// if per-block initialization has already been called for current block.
+	#[pallet::storage]
+	#[pallet::getter(fn initialized)]
+	pub type Initialized<T> = StorageValue<_, Option<PreDigest>>;
+
 	/// The configuration for the current epoch. Should never be `None` as it is initialized in
 	/// genesis.
 	#[pallet::storage]
-	pub(super) type EpochConfig<T> = StorageValue<_, SassafrasEpochConfiguration>;
+	pub type EpochConfig<T> = StorageValue<_, SassafrasEpochConfiguration>;
 
 	#[cfg_attr(feature = "std", derive(Default))]
 	#[pallet::genesis_config]
@@ -175,8 +226,6 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig {
 		fn build(&self) {
-			//SegmentIndex::<T>::put(0); // TODO-SASS Used by Babe to collect randomness under
-			// construction
 			Pallet::<T>::initialize_genesis_authorities(&self.authorities);
 			EpochConfig::<T>::put(
 				self.epoch_config.clone().expect("epoch_config must not be None"),
@@ -184,59 +233,81 @@ pub mod pallet {
 		}
 	}
 
-	// TODO-SASS
-	// #[pallet::hooks]
+	#[pallet::hooks]
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		/// Block initialization
+		fn on_initialize(now: BlockNumberFor<T>) -> Weight {
+			Self::initialize(now);
+			0
+		}
+
+		/// Block finalization
+		fn on_finalize(_now: BlockNumberFor<T>) {
+			// At the end of the block, we can safely include the new VRF output from
+			// this block into the randomness accumulator. If we've determined
+			// that this block was the first in a new epoch, the changeover logic has
+			// already occurred at this point, so the under-construction randomness
+			// will only contain outputs from the right epoch.
+			if let Some(pre_digest) = Initialized::<T>::take().flatten() {
+				let authority_index = pre_digest.authority_index();
+
+				// TODO-SASS: accumulate randomness
+
+				// if T::DisabledValidators::is_disabled(authority_index) {
+				// 	panic!(
+				// 		"Validator with index {:?} is disabled and should not be attempting to author
+				// blocks.", 		authority_index,
+				// 	);
+				// }
+
+				// if let Some((vrf_output, vrf_proof)) = pre_digest.vrf() {
+				// 	let randomness: Option<schnorrkel::Randomness> = Authorities::<T>::get()
+				// 		.get(authority_index as usize)
+				// 		.and_then(|(authority, _)| {
+				// 			schnorrkel::PublicKey::from_bytes(authority.as_slice()).ok()
+				// 		})
+				// 		.and_then(|pubkey| {
+				// 			let current_slot = CurrentSlot::<T>::get();
+
+				// 			let transcript = sp_consensus_sassafras::make_transcript(
+				// 				&Self::randomness(),
+				// 				current_slot,
+				// 				EpochIndex::<T>::get(),
+				// 			);
+
+				// 			// NOTE: this is verified by the client when importing the block, before
+				// 			// execution. we don't run the verification again here to avoid slowing
+				// 			// down the runtime.
+				// 			debug_assert!(pubkey
+				// 				.vrf_verify(transcript.clone(), vrf_output, vrf_proof)
+				// 				.is_ok());
+
+				// 			vrf_output.0.attach_input_hash(&pubkey, transcript).ok()
+				// 		})
+				// 		.map(|inout| inout.make_bytes(sp_consensus_babe::BABE_VRF_INOUT_CONTEXT));
+
+				// 	if let Some(randomness) = pre_digest.is_primary().then(|| randomness).flatten()
+				// 	{
+				// 		Self::deposit_randomness(&randomness);
+				// 	}
+				// }
+			}
+
+			// remove temporary "environment" entry from storage
+			//Lateness::<T>::kill();
+		}
+	}
 
 	// TODO-SASS
-	// Dispatchable functions allows users to interact with the pallet and invoke state changes.
-	// These functions materialize as "extrinsics", which are often compared to transactions.
-	// Dispatchable functions must be annotated with a weight and must return a DispatchResult.
+	// Dummy placeholder
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// An example dispatchable that takes a singles value as a parameter, writes the value to
-		/// storage and emits an event. This function must be dispatched by a signed extrinsic.
 		#[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
 		pub fn do_something(origin: OriginFor<T>, something: u32) -> DispatchResult {
-			// Check that the extrinsic was signed and get the signer.
-			// This function will return an error if the extrinsic is not signed.
-			// https://docs.substrate.io/v3/runtime/origins
 			let _who = ensure_signed(origin)?;
 			let _ = something;
-
 			Ok(())
 		}
-	}
-}
-
-impl<T: Config> FindAuthor<u32> for Pallet<T> {
-	fn find_author<'a, I>(digests: I) -> Option<u32>
-	where
-		I: 'a + IntoIterator<Item = (ConsensusEngineId, &'a [u8])>,
-	{
-		for (id, mut data) in digests.into_iter() {
-			if id == SASSAFRAS_ENGINE_ID {
-				return None
-				// TODO-SASS
-				//let pre_digest: PreDigest = PreDigest::decode(&mut data).ok()?;
-				//return Some(pre_digest.authority_index())
-			}
-		}
-
-		None
-	}
-}
-
-impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
-	fn should_end_session(now: T::BlockNumber) -> bool {
-		// it might be (and it is in current implementation) that session module is calling
-		// `should_end_session` from it's own `on_initialize` handler, in which case it's
-		// possible that babe's own `on_initialize` has not run yet, so let's ensure that we
-		// have initialized the pallet and updated the current slot.
-
-		// TODO-SASS
-		//Self::initialize(now);
-		//Self::should_epoch_change(now)
-		false
 	}
 }
 
@@ -249,6 +320,22 @@ impl<T: Config> Pallet<T> {
 		// we double the minimum block-period so each author can always propose within
 		// the majority of their slot.
 		<T as pallet_timestamp::Config>::MinimumPeriod::get().saturating_mul(2u32.into())
+	}
+
+	/// Determine whether an epoch change should take place at this block.
+	/// Assumes that initialization has already taken place.
+	pub fn should_epoch_change(now: T::BlockNumber) -> bool {
+		// The epoch has technically ended during the passage of time between this block and the
+		// last, but we have to "end" the epoch now, since there is no earlier possible block we
+		// could have done it.
+		//
+		// The exception is for block 1: the genesis has slot 0, so we treat epoch 0 as having
+		// started at the slot of block 1. We want to use the same randomness and validator set as
+		// signalled in the genesis, so we don't rotate the epoch.
+		now != One::one() && {
+			let diff = CurrentSlot::<T>::get().saturating_sub(Self::current_epoch_start());
+			*diff >= T::EpochDuration::get()
+		}
 	}
 
 	/// DANGEROUS: Enact an epoch change. Should be done on every block where `should_epoch_change`
@@ -267,17 +354,17 @@ impl<T: Config> Pallet<T> {
 		let _ = next_authorities;
 
 		//TODO-SASS
-		// // PRECONDITION: caller has done initialization and is guaranteed
-		// // by the session module to be called before this.
-		// debug_assert!(Self::initialized().is_some());
+		// PRECONDITION: caller has done initialization and is guaranteed by the session module to
+		// be called before this.
+		debug_assert!(Self::initialized().is_some());
 
-		// // Update epoch index
-		// let epoch_index = EpochIndex::<T>::get()
-		// 	.checked_add(1)
-		// 	.expect("epoch indices will never reach 2^64 before the death of the universe; qed");
+		// Update epoch index
+		let epoch_index = EpochIndex::<T>::get()
+			.checked_add(1)
+			.expect("epoch indices will never reach 2^64 before the death of the universe; qed");
 
-		// EpochIndex::<T>::put(epoch_index);
-		// Authorities::<T>::put(authorities);
+		EpochIndex::<T>::put(epoch_index);
+		Authorities::<T>::put(authorities);
 
 		// // Update epoch randomness.
 		// let next_epoch_index = epoch_index
@@ -289,8 +376,8 @@ impl<T: Config> Pallet<T> {
 		// let randomness = Self::randomness_change_epoch(next_epoch_index);
 		// Randomness::<T>::put(randomness);
 
-		// // Update the next epoch authorities.
-		// NextAuthorities::<T>::put(&next_authorities);
+		// Update the next epoch authorities.
+		NextAuthorities::<T>::put(&next_authorities);
 
 		// // Update the start blocks of the previous and new current epoch.
 		// <EpochStart<T>>::mutate(|(previous_epoch_start_block, current_epoch_start_block)| {
@@ -300,13 +387,13 @@ impl<T: Config> Pallet<T> {
 
 		// // After we update the current epoch, we signal the *next* epoch change
 		// // so that nodes can track changes.
-		// let next_randomness = NextRandomness::<T>::get();
+		let next_randomness = NextRandomness::<T>::get();
 
-		// let next_epoch = NextEpochDescriptor {
-		// 	authorities: next_authorities.to_vec(),
-		// 	randomness: next_randomness,
-		// };
-		// Self::deposit_consensus(ConsensusLog::NextEpochData(next_epoch));
+		let next_epoch = NextEpochDescriptor {
+			authorities: next_authorities.to_vec(),
+			randomness: next_randomness,
+		};
+		Self::deposit_consensus(ConsensusLog::NextEpochData(next_epoch));
 
 		// if let Some(next_config) = NextEpochConfig::<T>::get() {
 		// 	EpochConfig::<T>::put(next_config);
@@ -316,9 +403,30 @@ impl<T: Config> Pallet<T> {
 		// 	let next_epoch_config: BabeEpochConfiguration =
 		// 		pending_epoch_config_change.clone().into();
 		// 	NextEpochConfig::<T>::put(next_epoch_config);
-
 		// 	Self::deposit_consensus(ConsensusLog::NextConfigData(pending_epoch_config_change));
 		// }
+	}
+
+	/// Finds the start slot of the current epoch. Only guaranteed to give correct results after
+	/// `initialize` of the first block in the chain (as its result is based off of `GenesisSlot`).
+	pub fn current_epoch_start() -> Slot {
+		Self::epoch_start(EpochIndex::<T>::get())
+	}
+
+	fn epoch_start(epoch_index: u64) -> Slot {
+		// (epoch_index * epoch_duration) + genesis_slot
+
+		const PROOF: &str = "slot number is u64; it should relate in some way to wall clock time; \
+							 if u64 is not enough we should crash for safety; qed.";
+
+		let epoch_start = epoch_index.checked_mul(T::EpochDuration::get()).expect(PROOF);
+
+		epoch_start.checked_add(*GenesisSlot::<T>::get()).expect(PROOF).into()
+	}
+
+	fn deposit_consensus<U: Encode>(new: U) {
+		let log = DigestItem::Consensus(SASSAFRAS_ENGINE_ID, new.encode());
+		<frame_system::Pallet<T>>::deposit_log(log)
 	}
 
 	// Initialize authorities on genesis phase.
@@ -332,78 +440,152 @@ impl<T: Config> Pallet<T> {
 			NextAuthorities::<T>::put(&bounded_authorities);
 		}
 	}
+
+	fn initialize_genesis_epoch(genesis_slot: Slot) {
+		GenesisSlot::<T>::put(genesis_slot);
+		debug_assert_ne!(*GenesisSlot::<T>::get(), 0);
+
+		// Deposit a log because this is the first block in epoch #0. We use the same values
+		// as genesis because we haven't collected any randomness yet.
+		let next = NextEpochDescriptor {
+			authorities: Self::authorities().to_vec(),
+			randomness: Self::randomness(),
+		};
+
+		Self::deposit_consensus(ConsensusLog::NextEpochData(next));
+	}
+
+	fn initialize(now: T::BlockNumber) {
+		// Since `initialize` can be called twice (e.g. if session module is present)
+		// let's ensure that we only do the initialization once per block
+		if Self::initialized().is_some() {
+			return
+		}
+
+		let pre_digest = <frame_system::Pallet<T>>::digest()
+			.logs
+			.iter()
+			.filter_map(|s| s.as_pre_runtime())
+			.filter_map(|(id, mut data)| {
+				if id == SASSAFRAS_ENGINE_ID {
+					PreDigest::decode(&mut data).ok()
+				} else {
+					None
+				}
+			})
+			.next();
+
+		if let Some(ref pre_digest) = pre_digest {
+			// The slot number of the current block being initialized
+			let current_slot = pre_digest.slot();
+
+			// On the first non-zero block (i.e. block #1) this is where the first epoch
+			// (epoch #0) actually starts. We need to adjust internal storage accordingly.
+			if *GenesisSlot::<T>::get() == 0 {
+				Self::initialize_genesis_epoch(current_slot)
+			}
+
+			// How many slots were skipped between current and last block
+			// let lateness = current_slot.saturating_sub(CurrentSlot::<T>::get() + 1);
+			// let lateness = T::BlockNumber::from(*lateness as u32);
+			// Lateness::<T>::put(lateness);
+
+			CurrentSlot::<T>::put(current_slot);
+		}
+
+		Initialized::<T>::put(pre_digest);
+
+		// enact epoch change, if necessary.
+		T::EpochChangeTrigger::trigger::<T>(now);
+	}
 }
 
-impl<T: Config> frame_support::traits::EstimateNextSessionRotation<T::BlockNumber> for Pallet<T> {
-	fn average_session_length() -> T::BlockNumber {
-		T::EpochDuration::get().saturated_into()
-	}
-
-	fn estimate_current_session_progress(_now: T::BlockNumber) -> (Option<Permill>, Weight) {
-		// let elapsed = CurrentSlot::<T>::get().saturating_sub(Self::current_epoch_start()) + 1;
-
-		// (
-		// 	Some(Permill::from_rational(*elapsed, T::EpochDuration::get())),
-		// 	// Read: Current Slot, Epoch Index, Genesis Slot
-		// 	T::DbWeight::get().reads(3),
-		// )
-		(None, Weight::default())
-	}
-
-	fn estimate_next_session_rotation(now: T::BlockNumber) -> (Option<T::BlockNumber>, Weight) {
-		// (
-		// 	Self::next_expected_epoch_change(now),
-		// 	// Read: Current Slot, Epoch Index, Genesis Slot
-		// 	T::DbWeight::get().reads(3),
-		// )
-		(None, Weight::default())
-	}
-}
-
-impl<T: Config> sp_runtime::BoundToRuntimeAppPublic for Pallet<T> {
+impl<T: Config> BoundToRuntimeAppPublic for Pallet<T> {
 	type Public = AuthorityId;
 }
 
-// TODO-SASS
-impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
-	type Key = AuthorityId;
+// impl<T: Config> OnTimestampSet<T::Moment> for Pallet<T> {
+// 	fn on_timestamp_set(moment: T::Moment) {
+// 		let slot_duration = Self::slot_duration();
+// 		assert!(!slot_duration.is_zero(), "Babe slot duration cannot be zero.");
 
-	fn on_genesis_session<'a, I: 'a>(validators: I)
-	where
-		I: Iterator<Item = (&'a T::AccountId, AuthorityId)>,
-	{
-		let authorities = validators.map(|(_, k)| (k, 1)).collect::<Vec<_>>();
-		Self::initialize_genesis_authorities(&authorities);
-	}
+// 		let timestamp_slot = moment / slot_duration;
+// 		let timestamp_slot = Slot::from(timestamp_slot.saturated_into::<u64>());
 
-	fn on_new_session<'a, I: 'a>(_changed: bool, validators: I, queued_validators: I)
-	where
-		I: Iterator<Item = (&'a T::AccountId, AuthorityId)>,
-	{
-		let authorities = validators.map(|(_account, k)| (k, 1)).collect::<Vec<_>>();
-		let bounded_authorities = WeakBoundedVec::<_, T::MaxAuthorities>::force_from(
-			authorities,
-			Some(
-				"Warning: The session has more validators than expected. \
-				A runtime configuration adjustment may be needed.",
-			),
-		);
+// 		assert!(
+// 			CurrentSlot::<T>::get() == timestamp_slot,
+// 			"Timestamp slot must match `CurrentSlot`"
+// 		);
+// 	}
+// }
 
-		let next_authorities = queued_validators.map(|(_account, k)| (k, 1)).collect::<Vec<_>>();
-		let next_bounded_authorities = WeakBoundedVec::<_, T::MaxAuthorities>::force_from(
-			next_authorities,
-			Some(
-				"Warning: The session has more queued validators than expected. \
-				A runtime configuration adjustment may be needed.",
-			),
-		);
+// TODO-SASS: used by pallet-session
+// impl<T: Config> frame_support::traits::EstimateNextSessionRotation<T::BlockNumber> for Pallet<T>
+// { 	fn average_session_length() -> T::BlockNumber {
+// 		T::EpochDuration::get().saturated_into()
+// 	}
 
-		Self::enact_epoch_change(bounded_authorities, next_bounded_authorities)
-	}
+// 	fn estimate_current_session_progress(_now: T::BlockNumber) -> (Option<Permill>, Weight) {
+// 		// let elapsed = CurrentSlot::<T>::get().saturating_sub(Self::current_epoch_start()) + 1;
 
-	fn on_disabled(i: u32) {
-		let _ = i;
-		// TODO-SASS
-		//Self::deposit_consensus(ConsensusLog::OnDisabled(i))
-	}
-}
+// 		// (
+// 		// 	Some(Permill::from_rational(*elapsed, T::EpochDuration::get())),
+// 		// 	// Read: Current Slot, Epoch Index, Genesis Slot
+// 		// 	T::DbWeight::get().reads(3),
+// 		// )
+// 		(None, Weight::default())
+// 	}
+
+// 	fn estimate_next_session_rotation(now: T::BlockNumber) -> (Option<T::BlockNumber>, Weight) {
+// 		// (
+// 		// 	Self::next_expected_epoch_change(now),
+// 		// 	// Read: Current Slot, Epoch Index, Genesis Slot
+// 		// 	T::DbWeight::get().reads(3),
+// 		// )
+// 		(None, Weight::default())
+// 	}
+// }
+
+// TODO-SASS: used by pallet-session
+//impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
+//	type Key = AuthorityId;
+
+//	fn on_genesis_session<'a, I: 'a>(validators: I)
+//	where
+//		I: Iterator<Item = (&'a T::AccountId, AuthorityId)>,
+//	{
+//		let authorities = validators.map(|(_, k)| (k, 1)).collect::<Vec<_>>();
+//		Self::initialize_genesis_authorities(&authorities);
+//	}
+
+//	fn on_new_session<'a, I: 'a>(_changed: bool, validators: I, queued_validators: I)
+//	where
+//		I: Iterator<Item = (&'a T::AccountId, AuthorityId)>,
+//	{
+//		let authorities = validators.map(|(_account, k)| (k, 1)).collect::<Vec<_>>();
+//		let bounded_authorities = WeakBoundedVec::<_, T::MaxAuthorities>::force_from(
+//			authorities,
+//			Some(
+//				"Warning: The session has more validators than expected. \
+//				A runtime configuration adjustment may be needed.",
+//			),
+//		);
+
+//		let next_authorities = queued_validators.map(|(_account, k)| (k, 1)).collect::<Vec<_>>();
+//		let next_bounded_authorities = WeakBoundedVec::<_, T::MaxAuthorities>::force_from(
+//			next_authorities,
+//			Some(
+//				"Warning: The session has more queued validators than expected. \
+//				A runtime configuration adjustment may be needed.",
+//			),
+//		);
+
+//		Self::enact_epoch_change(bounded_authorities, next_bounded_authorities)
+//	}
+
+//	fn on_disabled(i: u32) {
+//		let _ = i;
+//		// TODO-SASS
+//		//Self::deposit_consensus(ConsensusLog::OnDisabled(i))
+//	}
+//}

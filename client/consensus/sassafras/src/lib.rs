@@ -26,6 +26,7 @@
 #![allow(unused_imports)]
 
 use std::{
+	borrow::Cow,
 	collections::HashMap,
 	future::Future,
 	pin::Pin,
@@ -41,9 +42,10 @@ use futures::{
 	},
 	prelude::*,
 };
-use log::{debug, info, trace};
+use log::{debug, info, log, trace, warn};
 use parking_lot::Mutex;
 use prometheus_endpoint::Registry;
+use retain_mut::RetainMut;
 use scale_codec::{Decode, Encode};
 
 use sc_client_api::{
@@ -88,10 +90,11 @@ use sp_runtime::{
 pub use sp_consensus::SyncOracle;
 pub use sp_consensus_sassafras::{
 	digests::{
-		CompatibleDigestItem, NextEpochDescriptor, PreDigest, PrimaryPreDigest, SecondaryPreDigest,
+		CompatibleDigestItem, ConsensusLog, NextEpochDescriptor, PreDigest, PrimaryPreDigest,
+		SecondaryPreDigest,
 	},
 	AuthorityId, AuthorityPair, AuthoritySignature, SassafrasApi, SassafrasAuthorityWeight,
-	SassafrasEpochConfiguration, SassafrasGenesisConfiguration,
+	SassafrasEpochConfiguration, SassafrasGenesisConfiguration, SASSAFRAS_ENGINE_ID,
 };
 
 pub mod authorship;
@@ -151,17 +154,17 @@ impl Epoch {
 /// TODO-SASS: these are BABE errors...
 #[derive(Debug, thiserror::Error)]
 pub enum Error<B: BlockT> {
-	/// Multiple BABE pre-runtime digests
-	#[error("Multiple BABE pre-runtime digests, rejecting!")]
+	/// Multiple Sassafras pre-runtime digests
+	#[error("Multiple Sassafras pre-runtime digests, rejecting!")]
 	MultiplePreRuntimeDigests,
-	/// No BABE pre-runtime digest found
-	#[error("No BABE pre-runtime digest found")]
+	/// No Sassafras pre-runtime digest found
+	#[error("No Sassafras pre-runtime digest found")]
 	NoPreRuntimeDigest,
-	/// Multiple BABE epoch change digests
-	#[error("Multiple BABE epoch change digests, rejecting!")]
+	/// Multiple Sassafras epoch change digests
+	#[error("Multiple Sassafras epoch change digests, rejecting!")]
 	MultipleEpochChangeDigests,
-	/// Multiple BABE config change digests
-	#[error("Multiple BABE config change digests, rejecting!")]
+	/// Multiple Sassafras config change digests
+	#[error("Multiple Sassafras config change digests, rejecting!")]
 	MultipleConfigChangeDigests,
 	/// Could not extract timestamp and slot
 	#[error("Could not extract timestamp and slot: {0}")]
@@ -202,6 +205,7 @@ pub enum Error<B: BlockT> {
 	/// VRF verification of block by author failed
 	#[error("VRF verification of block by author {0:?} failed: threshold {1} exceeded")]
 	VRFVerificationOfBlockFailed(AuthorityId, u128),
+	// TODO-SASS
 	// /// VRF verification failed
 	// #[error("VRF verification failed: {0:?}")]
 	// VRFVerificationFailed(SignatureError),
@@ -235,15 +239,31 @@ pub enum Error<B: BlockT> {
 	/// Runtime Api error.
 	#[error(transparent)]
 	RuntimeApi(sp_api::ApiError),
+	// TODO-SASS
 	// /// Fork tree error
 	// #[error(transparent)]
 	// ForkTree(Box<fork_tree::Error<sp_blockchain::Error>>),
+}
+
+impl<B: BlockT> From<Error<B>> for String {
+	fn from(error: Error<B>) -> String {
+		error.to_string()
+	}
 }
 
 fn sassafras_err<B: BlockT>(error: Error<B>) -> Error<B> {
 	debug!(target: "sassafras", "{}", error);
 	error
 }
+
+/// Intermediate value passed to block importer.
+pub struct SassafrasIntermediate<B: BlockT> {
+	/// The epoch descriptor.
+	pub epoch_descriptor: ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>,
+}
+
+/// Intermediate key for Babe engine.
+pub static INTERMEDIATE_KEY: &[u8] = b"sass1";
 
 /// Configuration for Sassafras used for defining block verification parameters as
 /// well as authoring (e.g. the slot duration).
@@ -402,7 +422,7 @@ where
 	})
 }
 
-/// Requests to the BABE service.
+/// Requests to the Sassafras service.
 #[non_exhaustive]
 pub enum SassafrasRequest<B: BlockT> {
 	/// Request the epoch that a child of the given block, with the given slot number would have.
@@ -440,7 +460,7 @@ async fn answer_requests<B: BlockT, C>(
 pub struct SassafrasWorkerHandle<B: BlockT>(Sender<SassafrasRequest<B>>);
 
 impl<B: BlockT> SassafrasWorkerHandle<B> {
-	/// Send a request to the BABE service.
+	/// Send a request to the Sassafras service.
 	pub async fn send(&mut self, request: SassafrasRequest<B>) {
 		// Failure to send means that the service is down.
 		// This will manifest as the receiver of the request being dropped.
@@ -478,9 +498,8 @@ struct SassafrasSlotWorker<B: BlockT, C, E, I, SO, L> {
 	keystore: SyncCryptoStorePtr,
 	epoch_changes: SharedEpochChanges<B, Epoch>,
 	slot_notification_sinks: SlotNotificationSinks<B>,
-	// TODO-SASS (will be used by authorities_len method)
-	#[allow(dead_code)]
 	config: Config,
+	// TODO-SASS (will be used by authorities_len method)
 }
 
 #[async_trait::async_trait]
@@ -519,27 +538,40 @@ where
 		parent: &B::Header,
 		slot: Slot,
 	) -> Result<Self::EpochData, ConsensusError> {
-		self.epoch_changes
-			.shared_data()
-			.epoch_descriptor_for_child_of(
-				descendent_query(&*self.client),
-				&parent.hash(),
-				*parent.number(),
-				slot,
-			)
-			.map_err(|e| ConsensusError::ChainLookup(e.to_string()))?
+		// self.epoch_changes
+		// 	.shared_data()
+		// 	.epoch_descriptor_for_child_of(
+		// 		descendent_query(&*self.client),
+		// 		&parent.hash(),
+		// 		*parent.number(),
+		// 		slot,
+		// 	)
+		// 	.map_err(|e| ConsensusError::ChainLookup(e.to_string()))?
+		// 	.ok_or(sp_consensus::Error::InvalidAuthoritiesSet)
+
+		let desc = self.epoch_changes.shared_data().epoch_descriptor_for_child_of(
+			descendent_query(&*self.client),
+			&parent.hash(),
+			*parent.number(),
+			slot,
+		);
+
+		debug!(target: "sassafras", ">>> GET_EPOCH_DATA");
+		if let Ok(None) = desc {
+			debug!(target: "sassafras", ">>> NONE!!!");
+		}
+
+		desc.map_err(|e| ConsensusError::ChainLookup(e.to_string()))?
 			.ok_or(sp_consensus::Error::InvalidAuthoritiesSet)
 	}
 
-	fn authorities_len(&self, _epoch_descriptor: &Self::EpochData) -> Option<usize> {
-		//TODO-SASS
-		// self.epoch_changes
-		// 	.shared_data()
-		// 	.viable_epoch(epoch_descriptor, |slot| {
-		// 		Epoch::genesis(&self.config.genesis_config, slot)
-		// 	})
-		// 	.map(|epoch| epoch.as_ref().authorities.len())
-		None
+	fn authorities_len(&self, epoch_descriptor: &Self::EpochData) -> Option<usize> {
+		self.epoch_changes
+			.shared_data()
+			.viable_epoch(epoch_descriptor, |slot| {
+				Epoch::genesis(&self.config.genesis_config, slot)
+			})
+			.map(|epoch| epoch.as_ref().authorities.len())
 	}
 
 	async fn claim_slot(
@@ -549,6 +581,7 @@ where
 		epoch_descriptor: &ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>,
 	) -> Option<Self::Claim> {
 		debug!(target: "sassafras", "Attempting to claim slot {}", slot);
+
 		let s = authorship::claim_slot(
 			slot,
 			self.epoch_changes
@@ -563,49 +596,47 @@ where
 		if s.is_some() {
 			debug!(target: "sassafras", "Claimed slot {}", slot);
 		}
-
 		s
 	}
 
 	fn notify_slot(
 		&self,
 		_parent_header: &B::Header,
-		_slot: Slot,
-		_epoch_descriptor: &ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>,
+		slot: Slot,
+		epoch_descriptor: &ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>,
 	) {
-		// TODO-SASS
-		// RetainMut::retain_mut(&mut *self.slot_notification_sinks.lock(), |sink| {
-		// 	match sink.try_send((slot, epoch_descriptor.clone())) {
-		// 		Ok(()) => true,
-		// 		Err(e) =>
-		// 			if e.is_full() {
-		// 				warn!(target: "sassafras", "Trying to notify a slot but the channel is full");
-		// 				true
-		// 			} else {
-		// 				false
-		// 			},
-		// 	}
-		// });
+		RetainMut::retain_mut(&mut *self.slot_notification_sinks.lock(), |sink| {
+			match sink.try_send((slot, epoch_descriptor.clone())) {
+				Ok(()) => true,
+				Err(e) =>
+					if e.is_full() {
+						warn!(target: "sassafras", "Trying to notify a slot but the channel is full");
+						true
+					} else {
+						false
+					},
+			}
+		});
 	}
 
-	fn pre_digest_data(&self, _slot: Slot, _claim: &Self::Claim) -> Vec<sp_runtime::DigestItem> {
-		// TODO-SASS
-		//vec![<DigestItem as CompatibleDigestItem>::sassafras_pre_digest(claim.0.clone())]
-		vec![]
+	fn pre_digest_data(&self, _slot: Slot, claim: &Self::Claim) -> Vec<sp_runtime::DigestItem> {
+		vec![<DigestItem as CompatibleDigestItem>::sassafras_pre_digest(claim.0.clone())]
 	}
 
 	async fn block_import_params(
 		&self,
 		header: B::Header,
 		_header_hash: &B::Hash,
-		_body: Vec<B::Extrinsic>,
-		_storage_changes: StorageChanges<<Self::BlockImport as BlockImport<B>>::Transaction, B>,
+		body: Vec<B::Extrinsic>,
+		storage_changes: StorageChanges<<Self::BlockImport as BlockImport<B>>::Transaction, B>,
 		(_, _public): Self::Claim,
-		_epoch_descriptor: Self::EpochData,
+		epoch_descriptor: Self::EpochData,
 	) -> Result<
 		sc_consensus::BlockImportParams<B, <Self::BlockImport as BlockImport<B>>::Transaction>,
 		sp_consensus::Error,
 	> {
+		// TODO-SASS: add Seal
+
 		// // sign the pre-sealed hash of the block and then
 		// // add it to a digest item.
 		// let public_type_pair = public.clone().into();
@@ -631,13 +662,13 @@ where
 
 		let mut import_block = BlockImportParams::new(BlockOrigin::Own, header);
 		// import_block.post_digests.push(digest_item);
-		// import_block.body = Some(body);
-		// import_block.state_action =
-		// 	StateAction::ApplyChanges(sc_consensus::StorageChanges::Changes(storage_changes));
-		// import_block.intermediates.insert(
-		// 	Cow::from(INTERMEDIATE_KEY),
-		// 	Box::new(SassafrasIntermediate::<B> { epoch_descriptor }) as Box<_>,
-		// );
+		import_block.body = Some(body);
+		import_block.state_action =
+			StateAction::ApplyChanges(sc_consensus::StorageChanges::Changes(storage_changes));
+		import_block.intermediates.insert(
+			Cow::from(INTERMEDIATE_KEY),
+			Box::new(SassafrasIntermediate::<B> { epoch_descriptor }) as Box<_>,
+		);
 
 		Ok(import_block)
 	}
@@ -727,6 +758,25 @@ pub fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<PreDigest, Error
 	pre_digest.ok_or_else(|| sassafras_err(Error::NoPreRuntimeDigest))
 }
 
+/// Extract the Sassafras epoch change digest from the given header, if it exists.
+fn find_next_epoch_digest<B: BlockT>(
+	header: &B::Header,
+) -> Result<Option<NextEpochDescriptor>, Error<B>> {
+	let mut epoch_digest: Option<_> = None;
+	for log in header.digest().logs() {
+		trace!(target: "sassafras", "Checking log {:?}, looking for epoch change digest.", log);
+		let log = log.try_to::<ConsensusLog>(OpaqueDigestItemId::Consensus(&SASSAFRAS_ENGINE_ID));
+		match (log, epoch_digest.is_some()) {
+			(Some(ConsensusLog::NextEpochData(_)), true) =>
+				return Err(sassafras_err(Error::MultipleEpochChangeDigests)),
+			(Some(ConsensusLog::NextEpochData(epoch)), false) => epoch_digest = Some(epoch),
+			_ => trace!(target: "sassafras", "Ignoring digest not meant for us"),
+		}
+	}
+
+	Ok(epoch_digest)
+}
+
 /// State that must be shared between the import queue and the authoring logic.
 #[derive(Clone)]
 pub struct SassafrasLink<B: BlockT> {
@@ -800,10 +850,10 @@ where
 
 		debug!(target: "sassafras", "We have {:?} logs in this header", block.header.digest().logs().len());
 
-		// TODO-SASS-SASS
+		// TODO-SASS
 		Ok((block, Default::default()))
 
-		// TODO-SASS-SASS
+		// TODO-SASS
 		// let hash = block.header.hash();
 		// let parent_hash = *block.header.parent_hash();
 
@@ -984,14 +1034,216 @@ where
 
 	async fn import_block(
 		&mut self,
-		block: BlockImportParams<Block, Self::Transaction>,
+		mut block: BlockImportParams<Block, Self::Transaction>,
 		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
+		let hash = block.post_hash();
+		let number = *block.header.number();
+
+		let pre_digest = find_pre_digest::<Block>(&block.header).expect(
+			"valid sassafras headers must contain a predigest; header has been already verified; qed",
+		);
+		let slot = pre_digest.slot();
+
+		let parent_hash = *block.header.parent_hash();
+		let parent_header = self
+			.client
+			.header(BlockId::Hash(parent_hash))
+			.map_err(|e| ConsensusError::ChainLookup(e.to_string()))?
+			.ok_or_else(|| {
+				ConsensusError::ChainLookup(
+					sassafras_err(Error::<Block>::ParentUnavailable(parent_hash, hash)).into(),
+				)
+			})?;
+
+		let parent_slot = find_pre_digest::<Block>(&parent_header).map(|d| d.slot()).expect(
+			"parent is non-genesis; valid Sassafras headers contain a pre-digest; \
+             header has already been verified; qed",
+		);
+
+		// Make sure that slot number is strictly increasing
+		if slot <= parent_slot {
+			return Err(ConsensusError::ClientImport(
+				sassafras_err(Error::<Block>::SlotMustIncrease(parent_slot, slot)).into(),
+			))
+		}
+
+		// If there's a pending epoch we'll save the previous epoch changes here
+		// this way we can revert it if there's any error
+		let mut old_epoch_changes = None;
+
+		// Use an extra scope to make the compiler happy, because otherwise he complains about the
+		// mutex, even if we dropped it...
+		let mut epoch_changes = {
+			let mut epoch_changes = self.epoch_changes.shared_data_locked();
+
+			// Check if there's any epoch change expected to happen at this slot.
+			// `epoch` is the epoch to verify the block under, and `first_in_epoch` is true
+			// if this is the first block in its chain for that epoch.
+			//
+			// also provides the total weight of the chain, including the imported block.
+			let parent_weight = if *parent_header.number() == Zero::zero() {
+				0
+			} else {
+				aux_schema::load_block_weight(&*self.client, parent_hash)
+					.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
+					.ok_or_else(|| {
+						ConsensusError::ClientImport(
+							sassafras_err(Error::<Block>::ParentBlockNoAssociatedWeight(hash))
+								.into(),
+						)
+					})?
+			};
+
+			let intermediate =
+				block.take_intermediate::<SassafrasIntermediate<Block>>(INTERMEDIATE_KEY)?;
+
+			let epoch_descriptor = intermediate.epoch_descriptor;
+			let first_in_epoch = parent_slot < epoch_descriptor.start_slot();
+
+			let total_weight = parent_weight + pre_digest.added_weight();
+
+			// Search for this all the time so we can reject unexpected announcements.
+			let next_epoch_digest = find_next_epoch_digest::<Block>(&block.header)
+				.map_err(|e| ConsensusError::ClientImport(e.to_string()))?;
+
+			match (first_in_epoch, next_epoch_digest.is_some()) {
+				(true, false) =>
+					return Err(ConsensusError::ClientImport(
+						sassafras_err(Error::<Block>::ExpectedEpochChange(hash, slot)).into(),
+					)),
+				(false, true) =>
+					return Err(ConsensusError::ClientImport(
+						sassafras_err(Error::<Block>::UnexpectedEpochChange).into(),
+					)),
+				_ => (),
+			}
+
+			let info = self.client.info();
+
+			if let Some(next_epoch_descriptor) = next_epoch_digest {
+				old_epoch_changes = Some((*epoch_changes).clone());
+
+				let viable_epoch = epoch_changes
+					.viable_epoch(&epoch_descriptor, |slot| {
+						Epoch::genesis(&self.config.genesis_config, slot)
+					})
+					.ok_or_else(|| {
+						ConsensusError::ClientImport(Error::<Block>::FetchEpoch(parent_hash).into())
+					})?;
+
+				// restrict info logging during initial sync to avoid spam
+				let log_level = if block.origin == BlockOrigin::NetworkInitialSync {
+					log::Level::Debug
+				} else {
+					log::Level::Info
+				};
+
+				log!(target: "sassafras",
+					 log_level,
+					 "🍁 New epoch {} launching at block {} (block slot {} >= start slot {}).",
+					 viable_epoch.as_ref().epoch_index,
+					 hash,
+					 slot,
+					 viable_epoch.as_ref().start_slot,
+				);
+
+				let next_epoch = viable_epoch.increment(next_epoch_descriptor);
+
+				log!(target: "sassafras",
+					 log_level,
+					 "🍁 Next epoch starts at slot {}",
+					 next_epoch.as_ref().start_slot,
+				);
+
+				// Prune the tree of epochs not part of the finalized chain or
+				// that are not live anymore, and then track the given epoch change
+				// in the tree.
+				// NOTE: it is important that these operations are done in this
+				// order, otherwise if pruning after import the `is_descendent_of`
+				// used by pruning may not know about the block that is being
+				// imported.
+				let prune_and_import = || {
+					prune_finalized(self.client.clone(), &mut epoch_changes)?;
+
+					epoch_changes
+						.import(
+							descendent_query(&*self.client),
+							hash,
+							number,
+							*block.header.parent_hash(),
+							next_epoch,
+						)
+						.map_err(|e| {
+							ConsensusError::ClientImport(format!(
+								"Error importing epoch changes: {}",
+								e
+							))
+						})?;
+					Ok(())
+				};
+
+				if let Err(e) = prune_and_import() {
+					debug!(target: "sassafras", "Failed to launch next epoch: {}", e);
+					*epoch_changes =
+						old_epoch_changes.expect("set `Some` above and not taken; qed");
+					return Err(e)
+				}
+
+				aux_schema::write_epoch_changes::<Block, _, _>(&*epoch_changes, |insert| {
+					block
+						.auxiliary
+						.extend(insert.iter().map(|(k, v)| (k.to_vec(), Some(v.to_vec()))))
+				});
+			}
+
+			aux_schema::write_block_weight(hash, total_weight, |values| {
+				block
+					.auxiliary
+					.extend(values.iter().map(|(k, v)| (k.to_vec(), Some(v.to_vec()))))
+			});
+
+			// The fork choice rule is that we pick the heaviest chain (i.e.
+			// more primary blocks), if there's a tie we go with the longest
+			// chain.
+			block.fork_choice = {
+				let (last_best, last_best_number) = (info.best_hash, info.best_number);
+
+				let last_best_weight = if &last_best == block.header.parent_hash() {
+					// the parent=genesis case is already covered for loading parent weight,
+					// so we don't need to cover again here.
+					parent_weight
+				} else {
+					aux_schema::load_block_weight(&*self.client, last_best)
+						.map_err(|e| ConsensusError::ChainLookup(e.to_string()))?
+						.ok_or_else(|| {
+							ConsensusError::ChainLookup(
+								"No block weight for parent header.".to_string(),
+							)
+						})?
+				};
+
+				Some(ForkChoiceStrategy::Custom(if total_weight > last_best_weight {
+					true
+				} else if total_weight == last_best_weight {
+					number > last_best_number
+				} else {
+					false
+				}))
+			};
+			// Release the mutex, but it stays locked
+			epoch_changes.release_mutex()
+		};
+
 		let import_result = self.inner.import_block(block, new_cache).await;
 
-		// revert to the original epoch changes in case there's an error
+		// Revert to the original epoch changes in case there's an error
 		// importing the block
-		if import_result.is_err() {}
+		if import_result.is_err() {
+			if let Some(old_epoch_changes) = old_epoch_changes {
+				*epoch_changes.upgrade() = old_epoch_changes;
+			}
+		}
 
 		import_result.map_err(Into::into)
 	}
@@ -1002,6 +1254,45 @@ where
 	) -> Result<ImportResult, Self::Error> {
 		self.inner.check_block(block).await.map_err(Into::into)
 	}
+}
+
+/// Gets the best finalized block and its slot, and prunes the given epoch tree.
+fn prune_finalized<C, B>(
+	client: Arc<C>,
+	epoch_changes: &mut EpochChangesFor<B, Epoch>,
+) -> Result<(), ConsensusError>
+where
+	B: BlockT,
+	C: HeaderBackend<B> + HeaderMetadata<B, Error = sp_blockchain::Error>,
+{
+	let info = client.info();
+	if info.block_gap.is_none() {
+		epoch_changes.clear_gap();
+	}
+
+	let finalized_slot = {
+		let finalized_header = client
+			.header(BlockId::Hash(info.finalized_hash))
+			.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
+			.expect(
+				"best finalized hash was given by client; finalized headers must exist in db; qed",
+			);
+
+		find_pre_digest::<B>(&finalized_header)
+			.expect("finalized header must be valid; valid blocks have a pre-digest; qed")
+			.slot()
+	};
+
+	epoch_changes
+		.prune_finalized(
+			descendent_query(&*client),
+			&info.finalized_hash,
+			info.finalized_number,
+			finalized_slot,
+		)
+		.map_err(|e| ConsensusError::ClientImport(e.to_string()))?;
+
+	Ok(())
 }
 
 /// Produce a Sassafras block-import object to be used later on in the construction of
@@ -1016,9 +1307,9 @@ pub fn block_import<C, B: BlockT, I>(
 ) -> ClientResult<(SassafrasBlockImport<B, C, I>, SassafrasLink<B>)>
 where
 	C: AuxStore
-		// + HeaderBackend<Block>
-		// + HeaderMetadata<Block, Error = sp_blockchain::Error>
-		// + PreCommitActions<Block>
+		+ HeaderBackend<B>
+		+ HeaderMetadata<B, Error = sp_blockchain::Error>
+		// + PreCommitActions<B>
 		+ 'static,
 {
 	let epoch_changes = aux_schema::load_epoch_changes::<B, _>(&*client)?;
@@ -1028,10 +1319,9 @@ where
 	// NOTE: this isn't entirely necessary, but since we didn't use to prune the
 	// epoch tree it is useful as a migration, so that nodes prune long trees on
 	// startup rather than waiting until importing the next epoch change block.
-	//TODO-SASS
-	//prune_finalized(client.clone(), &mut epoch_changes.shared_data())?;
+	prune_finalized(client.clone(), &mut epoch_changes.shared_data())?;
 
-	// TODO-SASS: Eventually register cleanup finality actions
+	// TODO-SASS: If required, register cleanup finality actions
 	// let client_weak = Arc::downgrade(&client);
 	// let on_finality = move |summary: &FinalityNotification<Block>| {
 	// 	if let Some(client) = client_weak.upgrade() {

@@ -143,8 +143,7 @@ fn testnet_genesis(
 		},
 
 		sassafras: SassafrasConfig {
-			authorities: vec![], /* TODO-SASS: initial_authorities.iter().map(|x|
-			                      * (x.0.clone())).collect(), */
+			authorities: initial_authorities.iter().map(|x| (x.0.clone(), 0)).collect(),
 			epoch_config: Some(node_sassafras_runtime::SASSAFRAS_GENESIS_EPOCH_CONFIG),
 		},
 		grandpa: GrandpaConfig {
