@@ -861,6 +861,7 @@ mod tests {
 	}
 
 	#[test]
+	#[cfg(not(feature = "unstable-interface"))]
 	fn contains_storage_works() {
 		const CODE: &str = r#"
 (module
@@ -869,11 +870,10 @@ mod tests {
 	(import "seal0" "seal_contains_storage" (func $seal_contains_storage (param i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 
-	;; [0, 4) size of input buffer (32 bits as we copy the key here)
+	;; [0, 4) size of input buffer (32 bytes as we copy the key here)
 	(data (i32.const 0) "\20")
 
 	;; [4, 36) input buffer
-
 	;; [36, inf) output buffer
 
 	(func (export "call")
@@ -918,6 +918,84 @@ mod tests {
 		// value did exist -> success (zero sized type)
 		let result = execute(CODE, [2u8; 32].encode(), &mut ext).unwrap();
 		assert_eq!(u32::from_le_bytes(result.data.0.try_into().unwrap()), 0,);
+	}
+
+	#[test]
+	#[cfg(feature = "unstable-interface")]
+	fn contains_storage_works() {
+		const CODE: &str = r#"
+(module
+	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
+	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
+	(import "__unstable__" "seal_contains_storage" (func $seal_contains_storage (param i32 i32) (result i32)))
+	(import "env" "memory" (memory 1 1))
+
+
+	;; size of input buffer
+	;; [0, 4) size of input buffer (128+32 = 160 bytes = 0xA0)
+	(data (i32.const 0) "\A0")
+
+	;; [4, 164) input buffer
+
+	(func (export "call")
+		;; Receive key
+		(call $seal_input
+			(i32.const 4)	;; Where we take input and store it
+			(i32.const 0)	;; Where we take and store the length of the data
+		)
+		;; Call seal_clear_storage and save what it returns at 0
+		(i32.store (i32.const 0)
+			(call $seal_contains_storage
+				(i32.const 8)			;; key_ptr
+				(i32.load (i32.const 4))	;; key_len
+			)
+		)
+		(call $seal_return
+			(i32.const 0)	;; flags
+			(i32.const 0)	;; returned value
+			(i32.const 4)	;; length of returned value
+		)
+	)
+
+	(func (export "deploy"))
+)
+"#;
+
+		let mut ext = MockExt::default();
+		ext.set_storage_transparent(
+			VarSizedKey::<Test>::try_from([1u8; 64].to_vec()).unwrap(),
+			Some(vec![42u8]),
+			false,
+		)
+		.unwrap();
+		ext.set_storage_transparent(
+			VarSizedKey::<Test>::try_from([2u8; 19].to_vec()).unwrap(),
+			Some(vec![]),
+			false,
+		)
+		.unwrap();
+
+		//value does not exist (wrong key length)
+		let input = (63, [1u8; 64]).encode();
+		let result = execute(CODE, input, &mut ext).unwrap();
+		// sentinel returned
+		assert_eq!(u32::from_le_bytes(result.data.0.try_into().unwrap()), crate::SENTINEL);
+
+		// value exists
+		let input = (64, [1u8; 64]).encode();
+		let result = execute(CODE, input, &mut ext).unwrap();
+		// true as u32 returned
+		assert_eq!(u32::from_le_bytes(result.data.0.try_into().unwrap()), 1);
+		// getter does not remove the value from storage
+		assert_eq!(ext.storage.get(&[1u8; 64].to_vec()).unwrap(), &[42u8]);
+
+		// value exists (test for 0 sized)
+		let input = (19, [2u8; 19]).encode();
+		let result = execute(CODE, input, &mut ext).unwrap();
+		// true as u32 returned
+		assert_eq!(u32::from_le_bytes(result.data.0.try_into().unwrap()), 0);
+		// getter does not remove the value from storage
+		assert_eq!(ext.storage.get(&[2u8; 19].to_vec()).unwrap(), &([] as [u8; 0]));
 	}
 
 	const CODE_INSTANTIATE: &str = r#"
@@ -2344,7 +2422,7 @@ mod tests {
 	(import "__unstable__" "seal_get_storage" (func $seal_get_storage (param i32 i32 i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 
-	;; [0, 4) size of input buffer (160 Bits as we copy the key+len here)
+	;; [0, 4) size of input buffer (160 bytes as we copy the key+len here)
 	(data (i32.const 0) "\A0")
 
 	;; [4, 8) size of output buffer
@@ -2439,7 +2517,7 @@ mod tests {
 	(import "env" "memory" (memory 1 1))
 
 	;; size of input buffer
-	;; [0, 4) size of input buffer (128+32 = 160 bits = 0xA0)
+	;; [0, 4) size of input buffer (128+32 = 160 bytes = 0xA0)
 	(data (i32.const 0) "\A0")
 
 	;; [4, 164) input buffer
@@ -2524,7 +2602,7 @@ mod tests {
 	(import "__unstable__" "seal_take_storage" (func $seal_take_storage (param i32 i32 i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 
-	;; [0, 4) size of input buffer (160 Bits as we copy the key+len here)
+	;; [0, 4) size of input buffer (160 bytes as we copy the key+len here)
 	(data (i32.const 0) "\A0")
 
 	;; [4, 8) size of output buffer
