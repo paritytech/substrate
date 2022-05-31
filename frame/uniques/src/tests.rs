@@ -17,8 +17,7 @@
 
 //! Tests for Uniques pallet.
 
-use super::*;
-use crate::mock::*;
+use crate::{mock::*, Event, *};
 use frame_support::{assert_noop, assert_ok, traits::Currency};
 use pallet_balances::Error as BalancesError;
 use sp_std::prelude::*;
@@ -69,6 +68,18 @@ fn attributes(collection: u32) -> Vec<(Option<u32>, Vec<u8>, Vec<u8>)> {
 		.collect();
 	s.sort();
 	s
+}
+
+fn events() -> Vec<Event<Test>> {
+	let result = System::events()
+		.into_iter()
+		.map(|r| r.event)
+		.filter_map(|e| if let mock::Event::Uniques(inner) = e { Some(inner) } else { None })
+		.collect::<Vec<_>>();
+
+	System::reset_events();
+
+	result
 }
 
 #[test]
@@ -630,6 +641,48 @@ fn cancel_approval_works_with_force() {
 		assert_noop!(
 			Uniques::cancel_approval(Origin::root(), 0, 42, None),
 			Error::<Test>::NoDelegate
+		);
+	});
+}
+
+#[test]
+fn max_supply_should_work() {
+	new_test_ext().execute_with(|| {
+		let collection_id = 0;
+		let user_id = 1;
+		let max_supply = 2;
+
+		// validate set_collection_max_supply
+		assert_ok!(Uniques::force_create(Origin::root(), collection_id, user_id, true));
+		assert!(!CollectionMaxSupply::<Test>::contains_key(collection_id));
+
+		assert_ok!(Uniques::set_collection_max_supply(
+			Origin::signed(user_id),
+			collection_id,
+			max_supply
+		));
+		assert_eq!(CollectionMaxSupply::<Test>::get(collection_id).unwrap(), max_supply);
+
+		assert!(events().contains(&Event::<Test>::CollectionMaxSupplySet {
+			collection: collection_id,
+			max_supply,
+		}));
+
+		assert_noop!(
+			Uniques::set_collection_max_supply(
+				Origin::signed(user_id),
+				collection_id,
+				max_supply + 1
+			),
+			Error::<Test>::MaxSupplyAlreadySet
+		);
+
+		// validate we can't mint more to max supply
+		assert_ok!(Uniques::mint(Origin::signed(user_id), collection_id, 0, user_id));
+		assert_ok!(Uniques::mint(Origin::signed(user_id), collection_id, 1, user_id));
+		assert_noop!(
+			Uniques::mint(Origin::signed(user_id), collection_id, 2, user_id),
+			Error::<Test>::MaxSupplyReached
 		);
 	});
 }

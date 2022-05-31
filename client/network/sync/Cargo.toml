@@ -42,7 +42,7 @@ sp-finality-grandpa = { version = "4.0.0-dev", path = "../../../primitives/final
 sp-runtime = { version = "6.0.0", path = "../../../primitives/runtime" }
 
 [dev-dependencies]
-quickcheck = "1.0.3"
+quickcheck = { version = "1.0.3", default-features = false }
 sc-block-builder = { version = "0.10.0-dev", path = "../../block-builder" }
 sp-test-primitives = { version = "2.0.0", path = "../../../primitives/test-primitives" }
 sp-tracing = { version = "5.0.0", path = "../../../primitives/tracing" }

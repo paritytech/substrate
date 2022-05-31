@@ -110,8 +110,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			for (item, details) in Item::<T, I>::drain_prefix(&collection) {
 				Account::<T, I>::remove((&details.owner, &collection, &item));
 			}
+			#[allow(deprecated)]
 			ItemMetadataOf::<T, I>::remove_prefix(&collection, None);
 			CollectionMetadataOf::<T, I>::remove(&collection);
+			#[allow(deprecated)]
 			Attribute::<T, I>::remove_prefix((&collection,), None);
 			CollectionAccount::<T, I>::remove(&collection_details.owner, &collection);
 			T::Currency::unreserve(&collection_details.owner, collection_details.total_deposit);
@@ -141,6 +143,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					maybe_collection_details.as_mut().ok_or(Error::<T, I>::UnknownCollection)?;
 
 				with_details(collection_details)?;
+
+				if let Ok(max_supply) = CollectionMaxSupply::<T, I>::try_get(&collection) {
+					ensure!(collection_details.items < max_supply, Error::<T, I>::MaxSupplyReached);
+				}
 
 				let items =
 					collection_details.items.checked_add(1).ok_or(ArithmeticError::Overflow)?;

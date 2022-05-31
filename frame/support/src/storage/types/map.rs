@@ -247,8 +247,37 @@ where
 	/// Calling this multiple times per block with a `limit` set leads always to the same keys being
 	/// removed and the same result being returned. This happens because the keys to delete in the
 	/// overlay are not taken into account when deleting keys in the backend.
+	#[deprecated = "Use `clear` instead"]
 	pub fn remove_all(limit: Option<u32>) -> sp_io::KillStorageResult {
+		#[allow(deprecated)]
 		<Self as crate::storage::StoragePrefixedMap<Value>>::remove_all(limit)
+	}
+
+	/// Attempt to remove all items from the map.
+	///
+	/// Returns [`MultiRemovalResults`](sp_io::MultiRemovalResults) to inform about the result. Once
+	/// the resultant `maybe_cursor` field is `None`, then no further items remain to be deleted.
+	///
+	/// NOTE: After the initial call for any given map, it is important that no further items
+	/// are inserted into the map. If so, then the map may not be empty when the resultant
+	/// `maybe_cursor` is `None`.
+	///
+	/// # Limit
+	///
+	/// A `limit` must always be provided through in order to cap the maximum
+	/// amount of deletions done in a single call. This is one fewer than the
+	/// maximum number of backend iterations which may be done by this operation and as such
+	/// represents the maximum number of backend deletions which may happen. A `limit` of zero
+	/// implies that no keys will be deleted, though there may be a single iteration done.
+	///
+	/// # Cursor
+	///
+	/// A *cursor* may be passed in to this operation with `maybe_cursor`. `None` should only be
+	/// passed once (in the initial call) for any given storage map. Subsequent calls
+	/// operating on the same map should always pass `Some`, and this should be equal to the
+	/// previous call result's `maybe_cursor` field.
+	pub fn clear(limit: u32, maybe_cursor: Option<&[u8]>) -> sp_io::MultiRemovalResults {
+		<Self as crate::storage::StoragePrefixedMap<Value>>::clear(limit, maybe_cursor)
 	}
 
 	/// Iter over all value of the storage.
@@ -563,7 +592,7 @@ mod test {
 
 			A::insert(3, 10);
 			A::insert(4, 10);
-			A::remove_all(None);
+			let _ = A::clear(u32::max_value(), None);
 			assert_eq!(A::contains_key(3), false);
 			assert_eq!(A::contains_key(4), false);
 
@@ -618,7 +647,7 @@ mod test {
 				]
 			);
 
-			WithLen::remove_all(None);
+			let _ = WithLen::clear(u32::max_value(), None);
 			assert_eq!(WithLen::decode_len(3), None);
 			WithLen::append(0, 10);
 			assert_eq!(WithLen::decode_len(0), Some(1));
