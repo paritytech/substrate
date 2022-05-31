@@ -232,10 +232,9 @@ impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::Origin>
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> T::Origin {
-		let who = IndexToId::<T, I>::get(MIN_RANK, 0)
-			.expect("Must be at least one member at rank for a successful origin");
-		frame_system::RawOrigin::Signed(who).into()
+	fn try_successful_origin() -> Result<T::Origin, ()> {
+		let who = IndexToId::<T, I>::get(MIN_RANK, 0).ok_or(())?;
+		Ok(frame_system::RawOrigin::Signed(who).into())
 	}
 }
 
@@ -254,10 +253,9 @@ impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::Origin>
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> T::Origin {
-		let who = IndexToId::<T, I>::get(MIN_RANK, 0)
-			.expect("Must be at least one member at rank for a successful origin");
-		frame_system::RawOrigin::Signed(who).into()
+	fn try_successful_origin() -> Result<T::Origin, ()> {
+		let who = IndexToId::<T, I>::get(MIN_RANK, 0).ok_or(())?;
+		Ok(frame_system::RawOrigin::Signed(who).into())
 	}
 }
 
@@ -276,10 +274,9 @@ impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::Origin>
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> T::Origin {
-		let who = IndexToId::<T, I>::get(MIN_RANK, 0)
-			.expect("Must be at least one member at rank for a successful origin");
-		frame_system::RawOrigin::Signed(who).into()
+	fn try_successful_origin() -> Result<T::Origin, ()> {
+		let who = IndexToId::<T, I>::get(MIN_RANK, 0).ok_or(())?;
+		Ok(frame_system::RawOrigin::Signed(who).into())
 	}
 }
 

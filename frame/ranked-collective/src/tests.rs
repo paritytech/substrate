@@ -172,14 +172,16 @@ impl Config for Test {
 	type WeightInfo = ();
 	type Event = Event;
 	type PromoteOrigin = EitherOf<
+		// Root can promote arbitrarily.
+		frame_system::EnsureRootWithSuccess<Self::AccountId, ConstU16<65535>>,
 		// Members can promote up to the rank of 2 below them.
 		MapSuccess<EnsureRanked<Test, (), 2>, ReduceBy<ConstU16<2>>>,
-		frame_system::EnsureRootWithSuccess<Self::AccountId, ConstU16<65535>>,
 	>;
 	type DemoteOrigin = EitherOf<
+		// Root can demote arbitrarily.
+		frame_system::EnsureRootWithSuccess<Self::AccountId, ConstU16<65535>>,
 		// Members can demote up to the rank of 3 below them.
 		MapSuccess<EnsureRanked<Test, (), 3>, ReduceBy<ConstU16<3>>>,
-		frame_system::EnsureRootWithSuccess<Self::AccountId, ConstU16<65535>>,
 	>;
 	type Polls = TestPolls;
 	type MinRankOfClass = Identity;

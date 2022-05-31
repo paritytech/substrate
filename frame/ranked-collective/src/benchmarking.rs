@@ -33,10 +33,10 @@ fn assert_last_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::
 
 fn make_member<T: Config<I>, I: 'static>(rank: Rank) -> T::AccountId {
 	let who = account::<T::AccountId>("member", MemberCount::<T, I>::get(0), SEED);
-	assert_ok!(Pallet::<T, I>::add_member(T::AdminOrigin::successful_origin(), who.clone()));
+	assert_ok!(Pallet::<T, I>::add_member(T::PromoteOrigin::successful_origin(), who.clone()));
 	for _ in 0..rank {
 		assert_ok!(Pallet::<T, I>::promote_member(
-			T::AdminOrigin::successful_origin(),
+			T::PromoteOrigin::successful_origin(),
 			who.clone()
 		));
 	}
@@ -46,7 +46,7 @@ fn make_member<T: Config<I>, I: 'static>(rank: Rank) -> T::AccountId {
 benchmarks_instance_pallet! {
 	add_member {
 		let who = account::<T::AccountId>("member", 0, SEED);
-		let origin = T::AdminOrigin::successful_origin();
+		let origin = T::PromoteOrigin::successful_origin();
 		let call = Call::<T, I>::add_member { who: who.clone() };
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
@@ -61,7 +61,7 @@ benchmarks_instance_pallet! {
 		let who = make_member::<T, I>(rank);
 		let last = make_member::<T, I>(rank);
 		let last_index = (0..=rank).map(|r| IdToIndex::<T, I>::get(r, &last).unwrap()).collect::<Vec<_>>();
-		let origin = T::AdminOrigin::successful_origin();
+		let origin = T::DemoteOrigin::successful_origin();
 		let call = Call::<T, I>::remove_member { who: who.clone(), min_rank: rank };
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
@@ -76,7 +76,7 @@ benchmarks_instance_pallet! {
 		let r in 0 .. 10;
 		let rank = r as u16;
 		let who = make_member::<T, I>(rank);
-		let origin = T::AdminOrigin::successful_origin();
+		let origin = T::PromoteOrigin::successful_origin();
 		let call = Call::<T, I>::promote_member { who: who.clone() };
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
@@ -91,7 +91,7 @@ benchmarks_instance_pallet! {
 		let who = make_member::<T, I>(rank);
 		let last = make_member::<T, I>(rank);
 		let last_index = IdToIndex::<T, I>::get(rank, &last).unwrap();
-		let origin = T::AdminOrigin::successful_origin();
+		let origin = T::DemoteOrigin::successful_origin();
 		let call = Call::<T, I>::demote_member { who: who.clone() };
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
@@ -106,9 +106,17 @@ benchmarks_instance_pallet! {
 
 	vote {
 		let caller: T::AccountId = whitelisted_caller();
-		assert_ok!(Pallet::<T, I>::add_member(T::AdminOrigin::successful_origin(), caller.clone()));
+		assert_ok!(Pallet::<T, I>::add_member(T::PromoteOrigin::successful_origin(), caller.clone()));
 		// Create a poll
-		let class = 0;
+		let class = T::Polls::classes().into_iter().next().unwrap();
+		let rank = T::MinRankOfClass::convert(class.clone());
+		for _ in 0..rank {
+			assert_ok!(Pallet::<T, I>::promote_member(
+				T::PromoteOrigin::successful_origin(),
+				caller.clone()
+			));
+		}
+
 		let poll = T::Polls::create_ongoing(class).expect("Must always be able to create a poll for rank 0");
 
 		// Vote once.
@@ -124,12 +132,13 @@ benchmarks_instance_pallet! {
 		let n in 1 .. 100;
 
 		// Create a poll
-		let class = 0;
+		let class = T::Polls::classes().into_iter().next().unwrap();
+		let rank = T::MinRankOfClass::convert(class.clone());
 		let poll = T::Polls::create_ongoing(class).expect("Must always be able to create a poll");
 
 		// Vote in the poll by each of `n` members
 		for i in 0..n {
-			let who = make_member::<T, I>(0);
+			let who = make_member::<T, I>(rank);
 			assert_ok!(Pallet::<T, I>::vote(SystemOrigin::Signed(who).into(), poll, true));
 		}
 
