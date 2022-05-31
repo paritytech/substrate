@@ -2336,6 +2336,100 @@ mod tests {
 
 	#[test]
 	#[cfg(feature = "unstable-interface")]
+	fn get_storage_works() {
+		const CODE: &str = r#"
+(module
+	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
+	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
+	(import "__unstable__" "seal_get_storage" (func $seal_get_storage (param i32 i32 i32 i32) (result i32)))
+	(import "env" "memory" (memory 1 1))
+
+	;; [0, 4) size of input buffer (160 Bits as we copy the key+len here)
+	(data (i32.const 0) "\A0")
+
+	;; [4, 8) size of output buffer
+	;; 4k in little endian
+	(data (i32.const 4) "\00\10")
+
+	;; [8, 168) input buffer
+	;; [168, 4264) output buffer
+
+	(func (export "call")
+		;; Receive (key ++ value_to_write)
+		(call $seal_input
+			(i32.const 8)	;; Pointer to the input buffer
+			(i32.const 0)	;; Size of the input buffer
+		)
+		;; Load a storage value and result of this call into the output buffer
+		(i32.store (i32.const 168)
+			(call $seal_get_storage
+				(i32.const 12)			;; key_ptr
+				(i32.load (i32.const 8))	;; key_len
+				(i32.const 172)			;; Pointer to the output buffer
+				(i32.const 4)			;; Pointer to the size of the buffer
+			)
+		)
+		(call $seal_return
+			(i32.const 0)				;; flags
+			(i32.const 168)				;; output buffer ptr
+			(i32.add				;; length: output size + 4 (retval)
+				(i32.load (i32.const 4))
+				(i32.const 4)
+			)
+		)
+	)
+
+	(func (export "deploy"))
+)
+"#;
+
+		let mut ext = MockExt::default();
+
+		ext.set_storage_transparent(
+			VarSizedKey::<Test>::try_from([1u8; 64].to_vec()).unwrap(),
+			Some(vec![42u8]),
+			false,
+		)
+		.unwrap();
+
+		ext.set_storage_transparent(
+			VarSizedKey::<Test>::try_from([2u8; 19].to_vec()).unwrap(),
+			Some(vec![]),
+			false,
+		)
+		.unwrap();
+
+		// value does not exist
+		let input = (63, [1u8; 64]).encode();
+		let result = execute(CODE, input, &mut ext).unwrap();
+		assert_eq!(
+			u32::from_le_bytes(result.data.0[0..4].try_into().unwrap()),
+			ReturnCode::KeyNotFound as u32
+		);
+
+		// value exists
+		let input = (64, [1u8; 64]).encode();
+		let result = execute(CODE, input, &mut ext).unwrap();
+		assert_eq!(
+			u32::from_le_bytes(result.data.0[0..4].try_into().unwrap()),
+			ReturnCode::Success as u32
+		);
+		assert_eq!(ext.storage.get(&[1u8; 64].to_vec()).unwrap(), &[42u8]);
+		assert_eq!(&result.data.0[4..], &[42u8]);
+
+		// value exists (test for 0 sized)
+		let input = (19, [2u8; 19]).encode();
+		let result = execute(CODE, input, &mut ext).unwrap();
+		assert_eq!(
+			u32::from_le_bytes(result.data.0[0..4].try_into().unwrap()),
+			ReturnCode::Success as u32
+		);
+		assert_eq!(ext.storage.get(&[2u8; 19].to_vec()), Some(&vec![]));
+		assert_eq!(&result.data.0[4..], &([] as [u8; 0]));
+	}
+
+	#[test]
+	#[cfg(feature = "unstable-interface")]
 	fn clear_storage_works() {
 		const CODE: &str = r#"
 (module
@@ -2452,7 +2546,7 @@ mod tests {
 			(call $seal_take_storage
 				(i32.const 12)			;; key_ptr
 				(i32.load (i32.const 8))	;; key_len
-				(I32.const 172)			;; Pointer to the output buffer
+				(i32.const 172)			;; Pointer to the output buffer
 				(i32.const 4)			;; Pointer to the size of the buffer
 			)
 		)
@@ -2466,6 +2560,7 @@ mod tests {
 				(i32.const 4)
 			)
 		)
+	)
 	)
 
 	(func (export "deploy"))
