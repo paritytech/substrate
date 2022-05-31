@@ -50,7 +50,7 @@ use frame_support::{
 	codec::{Decode, Encode, MaxEncodedLen},
 	dispatch::{DispatchError, DispatchResultWithPostInfo},
 	ensure,
-	traits::{EnsureOrigin, OriginTrait, PollStatus, Polling, VoteTally},
+	traits::{EnsureOrigin, PollStatus, Polling, VoteTally},
 	weights::PostDispatchInfo,
 	CloneNoBound, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
 };
@@ -217,25 +217,25 @@ impl<T: Config<I>, I: 'static> GetMaxVoters for Pallet<T, I> {
 	}
 }
 
-pub struct EnsureRanked<T, I, const MinRank: u16>(PhantomData<(T, I)>);
+pub struct EnsureRanked<T, I, const MIN_RANK: u16>(PhantomData<(T, I)>);
 impl<
 	T: Config<I>,
 	I: 'static,
-	const MinRank: u16,
-> EnsureOrigin<T::Origin> for EnsureRanked<T, I, MinRank> {
+	const MIN_RANK: u16,
+> EnsureOrigin<T::Origin> for EnsureRanked<T, I, MIN_RANK> {
 	type Success = T::AccountId;
 
 	fn try_origin(o: T::Origin) -> Result<Self::Success, T::Origin> {
 		let who = frame_system::EnsureSigned::try_origin(o)?;
 		match Members::<T, I>::get(&who) {
-			Some(MemberRecord { rank, .. }) if rank >= MinRank => Ok(who),
+			Some(MemberRecord { rank, .. }) if rank >= MIN_RANK => Ok(who),
 			_ => Err(frame_system::RawOrigin::Signed(who).into()),
 		}
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn successful_origin() -> T::Origin {
-		let who = IndexToId::<T, I>::get(MinRank, 0)
+		let who = IndexToId::<T, I>::get(MIN_RANK, 0)
 			.expect("Must be at least one member at rank for a successful origin");
 		frame_system::RawOrigin::Signed(who).into()
 	}
@@ -280,9 +280,6 @@ pub mod pallet {
 		/// Rank_delta is defined as the number of ranks above the minimum required to take part
 		/// in the poll.
 		type VoteWeight: Convert<Rank, Votes>;
-
-		/// Dummy Get impl.
-		type TestGetter: Get<u32>;
 	}
 
 	/// The number of members in the collective who have at least the rank according to the index
@@ -323,7 +320,7 @@ pub mod pallet {
 		_,
 		Blake2_128Concat,
 		PollIndexOf<T, I>,
-		BoundedVec<u8, frame_support::storage::KeyLenOf<Voting<T, I>> >,
+		BoundedVec<u8, KeyLenOf::<Voting<T, I>>>,
 	>;
 
 	#[pallet::event]

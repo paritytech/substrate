@@ -174,6 +174,9 @@ pub trait OriginTrait: Sized {
 
 	/// Create with system signed origin and `frame_system::Config::BaseCallFilter`.
 	fn signed(by: Self::AccountId) -> Self;
+
+	/// Extract the signer from the message if it is a `Signed` origin.
+	fn as_signed(self) -> Option<Self::AccountId>;
 }
 
 /// "OR gate" implementation of `EnsureOrigin` allowing for different `Success` types for `L`

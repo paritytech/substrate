@@ -173,7 +173,6 @@ impl Config for Test {
 	type Polls = TestPolls;
 	type MinRankOfClass = Identity;
 	type VoteWeight = Geometric;
-	type TestGetter = frame_support::storage::KeyLenOf<Voting<Test>>;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
@@ -353,5 +352,38 @@ fn cleanup_works() {
 		assert_ok!(Club::cleanup_poll(Origin::signed(4), 3, 10));
 		// NOTE: This will fail until #10016 is merged.
 		//		assert_noop!(Club::cleanup_poll(Origin::signed(4), 3, 10), Error::<Test>::NoneRemaining);
+	});
+}
+
+#[test]
+fn ensure_ranked_works() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Club::add_member(Origin::root(), 1));
+		assert_ok!(Club::promote_member(Origin::root(), 1));
+		assert_ok!(Club::add_member(Origin::root(), 2));
+		assert_ok!(Club::promote_member(Origin::root(), 2));
+		assert_ok!(Club::promote_member(Origin::root(), 2));
+		assert_ok!(Club::add_member(Origin::root(), 3));
+		assert_ok!(Club::promote_member(Origin::root(), 3));
+		assert_ok!(Club::promote_member(Origin::root(), 3));
+		assert_ok!(Club::promote_member(Origin::root(), 3));
+
+		use frame_support::traits::OriginTrait;
+		type Rank1 = EnsureRanked::<Test, (), 1>;
+		type Rank2 = EnsureRanked::<Test, (), 2>;
+		type Rank3 = EnsureRanked::<Test, (), 3>;
+		type Rank4 = EnsureRanked::<Test, (), 4>;
+		assert_eq!(Rank1::try_origin(Origin::signed(1)).unwrap(), 1);
+		assert_eq!(Rank1::try_origin(Origin::signed(2)).unwrap(), 2);
+		assert_eq!(Rank1::try_origin(Origin::signed(3)).unwrap(), 3);
+		assert_eq!(Rank2::try_origin(Origin::signed(1)).unwrap_err().as_signed().unwrap(), 1);
+		assert_eq!(Rank2::try_origin(Origin::signed(2)).unwrap(), 2);
+		assert_eq!(Rank2::try_origin(Origin::signed(3)).unwrap(), 3);
+		assert_eq!(Rank3::try_origin(Origin::signed(1)).unwrap_err().as_signed().unwrap(), 1);
+		assert_eq!(Rank3::try_origin(Origin::signed(2)).unwrap_err().as_signed().unwrap(), 2);
+		assert_eq!(Rank3::try_origin(Origin::signed(3)).unwrap(), 3);
+		assert_eq!(Rank4::try_origin(Origin::signed(1)).unwrap_err().as_signed().unwrap(), 1);
+		assert_eq!(Rank4::try_origin(Origin::signed(2)).unwrap_err().as_signed().unwrap(), 2);
+		assert_eq!(Rank4::try_origin(Origin::signed(3)).unwrap_err().as_signed().unwrap(), 3);
 	});
 }
