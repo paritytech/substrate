@@ -218,11 +218,9 @@ impl<T: Config<I>, I: 'static> GetMaxVoters for Pallet<T, I> {
 }
 
 pub struct EnsureRanked<T, I, const MIN_RANK: u16>(PhantomData<(T, I)>);
-impl<
-	T: Config<I>,
-	I: 'static,
-	const MIN_RANK: u16,
-> EnsureOrigin<T::Origin> for EnsureRanked<T, I, MIN_RANK> {
+impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::Origin>
+	for EnsureRanked<T, I, MIN_RANK>
+{
 	type Success = T::AccountId;
 
 	fn try_origin(o: T::Origin) -> Result<Self::Success, T::Origin> {
@@ -264,11 +262,7 @@ pub mod pallet {
 		type AdminOrigin: EnsureOrigin<Self::Origin>;
 
 		/// The polling system used for our voting.
-		type Polls: Polling<
-			TallyOf<Self, I>,
-			Votes = Votes,
-			Moment = Self::BlockNumber,
-		>;
+		type Polls: Polling<TallyOf<Self, I>, Votes = Votes, Moment = Self::BlockNumber>;
 
 		/// Convert the tally class into the minimum rank required to vote on the poll. If
 		/// `Polls::Class` is the same type as `Rank`, then `Identity` can be used here to mean
@@ -316,12 +310,8 @@ pub mod pallet {
 	>;
 
 	#[pallet::storage]
-	pub type VotingCleanup<T: Config<I>, I: 'static = ()> = StorageMap<
-		_,
-		Blake2_128Concat,
-		PollIndexOf<T, I>,
-		BoundedVec<u8, KeyLenOf::<Voting<T, I>>>,
-	>;
+	pub type VotingCleanup<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Blake2_128Concat, PollIndexOf<T, I>, BoundedVec<u8, KeyLenOf<Voting<T, I>>>>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -536,7 +526,11 @@ pub mod pallet {
 			ensure_signed(origin)?;
 			ensure!(T::Polls::as_ongoing(poll_index).is_none(), Error::<T, I>::Ongoing);
 
-			let r = Voting::<T, I>::clear_prefix(poll_index, max, VotingCleanup::<T, I>::take(poll_index).as_ref().map(|c| &c[..]));
+			let r = Voting::<T, I>::clear_prefix(
+				poll_index,
+				max,
+				VotingCleanup::<T, I>::take(poll_index).as_ref().map(|c| &c[..]),
+			);
 			if r.unique == 0 {
 				// return Err(Error::<T, I>::NoneRemaining)
 				return Ok(Pays::Yes.into())

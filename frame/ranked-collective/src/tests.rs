@@ -26,7 +26,7 @@ use frame_support::{
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
-	traits::{BlakeTwo256, IdentityLookup, Identity},
+	traits::{BlakeTwo256, Identity, IdentityLookup},
 };
 
 use super::*;
@@ -369,10 +369,10 @@ fn ensure_ranked_works() {
 		assert_ok!(Club::promote_member(Origin::root(), 3));
 
 		use frame_support::traits::OriginTrait;
-		type Rank1 = EnsureRanked::<Test, (), 1>;
-		type Rank2 = EnsureRanked::<Test, (), 2>;
-		type Rank3 = EnsureRanked::<Test, (), 3>;
-		type Rank4 = EnsureRanked::<Test, (), 4>;
+		type Rank1 = EnsureRanked<Test, (), 1>;
+		type Rank2 = EnsureRanked<Test, (), 2>;
+		type Rank3 = EnsureRanked<Test, (), 3>;
+		type Rank4 = EnsureRanked<Test, (), 4>;
 		assert_eq!(Rank1::try_origin(Origin::signed(1)).unwrap(), 1);
 		assert_eq!(Rank1::try_origin(Origin::signed(2)).unwrap(), 2);
 		assert_eq!(Rank1::try_origin(Origin::signed(3)).unwrap(), 3);

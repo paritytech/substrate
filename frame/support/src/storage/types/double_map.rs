@@ -22,7 +22,7 @@ use crate::{
 	metadata::{StorageEntryMetadata, StorageEntryType},
 	storage::{
 		types::{OptionQuery, QueryKindTrait, StorageEntryMetadataBuilder},
-		StorageAppend, StorageDecodeLength, StoragePrefixedMap, StorageTryAppend, KeyLenOf,
+		KeyLenOf, StorageAppend, StorageDecodeLength, StoragePrefixedMap, StorageTryAppend,
 	},
 	traits::{Get, GetDefault, StorageInfo, StorageInstance},
 };
@@ -71,8 +71,19 @@ pub struct StorageDoubleMap<
 );
 
 impl<Prefix, Hasher1, Key1, Hasher2, Key2, Value, QueryKind, OnEmpty, MaxValues> Get<u32>
-for KeyLenOf<StorageDoubleMap<Prefix, Hasher1, Key1, Hasher2, Key2, Value, QueryKind, OnEmpty, MaxValues>>
-where
+	for KeyLenOf<
+		StorageDoubleMap<
+			Prefix,
+			Hasher1,
+			Key1,
+			Hasher2,
+			Key2,
+			Value,
+			QueryKind,
+			OnEmpty,
+			MaxValues,
+		>,
+	> where
 	Prefix: StorageInstance,
 	Hasher1: crate::hash::StorageHasher,
 	Hasher2: crate::hash::StorageHasher,
@@ -80,14 +91,13 @@ where
 	Key2: MaxEncodedLen,
 {
 	fn get() -> u32 {
-		let z = Hasher1::max_len::<Key1>()
-		+ Hasher2::max_len::<Key2>()
-		+ Prefix::pallet_prefix().len()
-		+ Prefix::STORAGE_PREFIX.len();
+		let z = Hasher1::max_len::<Key1>() +
+			Hasher2::max_len::<Key2>() +
+			Prefix::pallet_prefix().len() +
+			Prefix::STORAGE_PREFIX.len();
 		z as u32
 	}
 }
-
 
 impl<Prefix, Hasher1, Key1, Hasher2, Key2, Value, QueryKind, OnEmpty, MaxValues>
 	crate::storage::generator::StorageDoubleMap<Key1, Key2, Value>

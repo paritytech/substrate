@@ -22,7 +22,7 @@ use crate::{
 	metadata::{StorageEntryMetadata, StorageEntryType},
 	storage::{
 		types::{OptionQuery, QueryKindTrait, StorageEntryMetadataBuilder},
-		StorageAppend, StorageDecodeLength, StoragePrefixedMap, StorageTryAppend, KeyLenOf,
+		KeyLenOf, StorageAppend, StorageDecodeLength, StoragePrefixedMap, StorageTryAppend,
 	},
 	traits::{Get, GetDefault, StorageInfo, StorageInstance},
 };
@@ -53,8 +53,7 @@ pub struct StorageMap<
 	MaxValues = GetDefault,
 >(core::marker::PhantomData<(Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues)>);
 
-impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
-	Get<u32>
+impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues> Get<u32>
 	for KeyLenOf<StorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>>
 where
 	Prefix: StorageInstance,
@@ -62,9 +61,8 @@ where
 	Key: FullCodec + MaxEncodedLen,
 {
 	fn get() -> u32 {
-		let z = Hasher::max_len::<Key>()
-		+ Prefix::pallet_prefix().len()
-		+ Prefix::STORAGE_PREFIX.len();
+		let z =
+			Hasher::max_len::<Key>() + Prefix::pallet_prefix().len() + Prefix::STORAGE_PREFIX.len();
 		z as u32
 	}
 }
