@@ -32,7 +32,7 @@ use frame_support::{
 };
 use scale_info::TypeInfo;
 use sp_core::crypto::UncheckedFrom;
-use sp_io::{hashing::blake2_256, KillStorageResult};
+use sp_io::KillStorageResult;
 use sp_runtime::{
 	traits::{Hash, Zero},
 	RuntimeDebug,
