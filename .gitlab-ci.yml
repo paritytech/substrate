@@ -89,6 +89,16 @@ default:
     - rustup +nightly show
     - cargo +nightly --version
 
+.docker-env:
+  image:                           "${CI_IMAGE}"
+  before_script:
+    - !reference [.rust-info-script, script]
+    - !reference [.rusty-cachier, before_script]
+  after_script:
+    - !reference [.rusty-cachier, after_script]
+  tags:
+    - linux-docker
+
 # rusty-cachier's hidden job. Parts of this job are used to instrument the pipeline's other real jobs with rusty-cachier
 # Description of the commands is available here - https://gitlab.parity.io/parity/infrastructure/ci_cd/rusty-cachier/client#description
 .rusty-cachier:
@@ -99,16 +109,6 @@ default:
     - rusty-cachier project mtime
   after_script:
     - rusty-cachier snapshot destroy
-
-.docker-env:
-  image:                           "${CI_IMAGE}"
-  before_script:
-    - !reference [.rust-info-script, script]
-    - !reference [.rusty-cachier, before_script]
-  after_script:
-    - !reference [.rusty-cachier, after_script]
-  tags:
-    - linux-docker
 
 .test-refs:
   rules:
@@ -225,7 +225,8 @@ deploy-prometheus-alerting-rules:
 # This info is later used for the cache distribution and an overlay creation.
 rusty-cachier-notify:
   stage:                           notify
-  <<:                              *docker-env
+  extends:
+    - .docker-env
   script:
     - rusty-cachier cache notify
 
