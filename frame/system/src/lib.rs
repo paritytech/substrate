@@ -86,7 +86,7 @@ use frame_support::{
 	storage,
 	traits::{
 		ConstU32, Contains, EnsureOrigin, Get, HandleLifetime, OnKilledAccount, OnNewAccount,
-		OriginTrait, PalletInfo, SortedMembers, StoredMap,
+		OriginTrait, PalletInfo, SortedMembers, StoredMap, TypedGet,
 	},
 	weights::{
 		extract_actual_weight, DispatchClass, DispatchInfo, PerDispatchClass, RuntimeDbWeight,
@@ -475,7 +475,7 @@ pub mod pallet {
 			_subkeys: u32,
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
-			storage::unhashed::kill_prefix(&prefix, None);
+			let _ = storage::unhashed::clear_prefix(&prefix, None, None);
 			Ok(().into())
 		}
 
@@ -777,6 +777,29 @@ impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>, Acco
 	fn try_origin(o: O) -> Result<Self::Success, O> {
 		o.into().and_then(|o| match o {
 			RawOrigin::Root => Ok(()),
+			r => Err(O::from(r)),
+		})
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> O {
+		O::from(RawOrigin::Root)
+	}
+}
+
+pub struct EnsureRootWithSuccess<AccountId, Success>(
+	sp_std::marker::PhantomData<(AccountId, Success)>,
+);
+impl<
+		O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
+		AccountId,
+		Success: TypedGet,
+	> EnsureOrigin<O> for EnsureRootWithSuccess<AccountId, Success>
+{
+	type Success = Success::Type;
+	fn try_origin(o: O) -> Result<Self::Success, O> {
+		o.into().and_then(|o| match o {
+			RawOrigin::Root => Ok(Success::get()),
 			r => Err(O::from(r)),
 		})
 	}
@@ -1427,7 +1450,7 @@ impl<T: Config> Pallet<T> {
 	pub fn reset_events() {
 		<Events<T>>::kill();
 		EventCount::<T>::kill();
-		<EventTopics<T>>::remove_all(None);
+		let _ = <EventTopics<T>>::clear(u32::max_value(), None);
 	}
 
 	/// Assert the given `event` exists.

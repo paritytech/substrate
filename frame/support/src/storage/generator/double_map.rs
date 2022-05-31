@@ -202,11 +202,28 @@ where
 		unhashed::kill(&Self::storage_double_map_final_key(k1, k2))
 	}
 
-	fn remove_prefix<KArg1>(k1: KArg1, limit: Option<u32>) -> sp_io::KillStorageResult
+	fn remove_prefix<KArg1>(k1: KArg1, maybe_limit: Option<u32>) -> sp_io::KillStorageResult
 	where
 		KArg1: EncodeLike<K1>,
 	{
-		unhashed::kill_prefix(Self::storage_double_map_final_key1(k1).as_ref(), limit)
+		unhashed::clear_prefix(Self::storage_double_map_final_key1(k1).as_ref(), maybe_limit, None)
+			.into()
+	}
+
+	fn clear_prefix<KArg1>(
+		k1: KArg1,
+		limit: u32,
+		maybe_cursor: Option<&[u8]>,
+	) -> sp_io::MultiRemovalResults
+	where
+		KArg1: EncodeLike<K1>,
+	{
+		unhashed::clear_prefix(
+			Self::storage_double_map_final_key1(k1).as_ref(),
+			Some(limit),
+			maybe_cursor,
+		)
+		.into()
 	}
 
 	fn iter_prefix_values<KArg1>(k1: KArg1) -> storage::PrefixIterator<V>
