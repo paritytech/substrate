@@ -17,11 +17,16 @@
 
 //! Traits for dealing with dispatching calls and the origin from which they are dispatched.
 
+use std::marker::PhantomData;
+
 use crate::dispatch::{DispatchResultWithPostInfo, Parameter, RawOrigin};
+use sp_arithmetic::traits::{Zero, CheckedSub};
 use sp_runtime::{
-	traits::{BadOrigin, Member},
+	traits::{BadOrigin, Member, TryMorph, Morph},
 	Either,
 };
+
+use super::TypedGet;
 
 /// Some sort of check on the origin is performed by this object.
 pub trait EnsureOrigin<OuterOrigin> {
@@ -101,6 +106,54 @@ impl<OuterOrigin, Argument, EO: EnsureOrigin<OuterOrigin>>
 		EO::successful_origin()
 	}
 }
+
+/// A derivative `EnsureOrigin` implementation. It mutates the `Success` result of an `Original`
+/// implementation with a given `Mutator`.
+pub struct MapSuccess<Original, Mutator>(PhantomData<(Original, Mutator)>);
+impl<
+	O,
+	Original: EnsureOrigin<O>,
+	Mutator: Morph<Original::Success>,
+> EnsureOrigin<O> for MapSuccess<Original, Mutator> {
+	type Success = Mutator::Outcome;
+	fn try_origin(o: O) -> Result<Mutator::Outcome, O> {
+		Ok(Mutator::morph(Original::try_origin(o)?))
+	}
+}
+
+/// A derivative `EnsureOrigin` implementation. It mutates the `Success` result of an `Original`
+/// implementation with a given `Mutator`, allowing the possibility of an error to be returned
+/// from the mutator.
+///
+/// NOTE: This is strictly worse performance than `MapSuccess` since it clones the original origin
+/// value. If possible, use `MapSuccess` instead.
+pub struct TryMapSuccess<Orig, Mutator>(PhantomData<(Orig, Mutator)>);
+impl<
+	O: Clone,
+	Original: EnsureOrigin<O>,
+	Mutator: TryMorph<Original::Success>,
+> EnsureOrigin<O> for TryMapSuccess<Original, Mutator> {
+	type Success = Mutator::Outcome;
+	fn try_origin(o: O) -> Result<Mutator::Outcome, O> {
+		let orig = o.clone();
+		Mutator::try_morph(Original::try_origin(o)?).map_err(|()| orig)
+	}
+}
+
+pub struct ReduceBy<N>(PhantomData<N>);
+impl<N: TypedGet> TryMorph<N::Type> for ReduceBy<N> where N::Type: CheckedSub {
+	type Outcome = N::Type;
+	fn try_morph(r: N::Type) -> Result<N::Type, ()> {
+		r.checked_sub(&N::get()).ok_or(())
+	}
+}
+impl<N: TypedGet> Morph<N::Type> for ReduceBy<N> where N::Type: CheckedSub + Zero {
+	type Outcome = N::Type;
+	fn morph(r: N::Type) -> N::Type {
+		r.checked_sub(&N::get()).unwrap_or(Zero::zero())
+	}
+}
+
 
 /// Type that can be dispatched with an origin but without checking the origin filter.
 ///

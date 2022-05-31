@@ -21,7 +21,7 @@ use std::collections::BTreeMap;
 
 use frame_support::{
 	assert_noop, assert_ok, parameter_types,
-	traits::{ConstU32, ConstU64, Everything, Polling},
+	traits::{ConstU32, ConstU64, Everything, Polling, ConstU16, EitherOf, MapSuccess, ReduceBy}, error::BadOrigin,
 };
 use sp_core::H256;
 use sp_runtime::{
@@ -169,7 +169,16 @@ impl Polling<TallyOf<Test>> for TestPolls {
 impl Config for Test {
 	type WeightInfo = ();
 	type Event = Event;
-	type AdminOrigin = frame_system::EnsureRoot<Self::AccountId>;
+	type PromoteOrigin = EitherOf<
+		// Members can promote up to the rank of 2 below them.
+		MapSuccess<EnsureRanked<Test, (), 2>, ReduceBy<ConstU16<2>>>,
+		frame_system::EnsureRootWithSuccess<Self::AccountId, ConstU16<65535>>
+	>;
+	type DemoteOrigin = EitherOf<
+		// Members can demote up to the rank of 3 below them.
+		MapSuccess<EnsureRanked<Test, (), 3>, ReduceBy<ConstU16<3>>>,
+		frame_system::EnsureRootWithSuccess<Self::AccountId, ConstU16<65535>>
+	>;
 	type Polls = TestPolls;
 	type MinRankOfClass = Identity;
 	type VoteWeight = Geometric;
@@ -296,6 +305,59 @@ fn promote_demote_works() {
 }
 
 #[test]
+fn promote_demote_by_rank_works() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Club::add_member(Origin::root(), 1));
+		for _ in 0..7 { assert_ok!(Club::promote_member(Origin::root(), 1)); };
+
+		// #1 can add #2 and promote to rank 1
+		assert_ok!(Club::add_member(Origin::signed(1), 2));
+		assert_ok!(Club::promote_member(Origin::signed(1), 2));
+		// #2 as rank 1 cannot do anything privileged
+		assert_noop!(Club::add_member(Origin::signed(2), 3), BadOrigin);
+
+		assert_ok!(Club::promote_member(Origin::signed(1), 2));
+		// #2 as rank 2 can add #3.
+		assert_ok!(Club::add_member(Origin::signed(2), 3));
+
+		// #2 as rank 2 cannot promote #3 to rank 1
+		assert_noop!(Club::promote_member(Origin::signed(2), 3), Error::<Test>::NoPermission);
+
+		// #1 as rank 7 can promote #2 only up to rank 5 and once there cannot demote them.
+		assert_ok!(Club::promote_member(Origin::signed(1), 2));
+		assert_ok!(Club::promote_member(Origin::signed(1), 2));
+		assert_ok!(Club::promote_member(Origin::signed(1), 2));
+		assert_noop!(Club::promote_member(Origin::signed(1), 2), Error::<Test>::NoPermission);
+		assert_noop!(Club::demote_member(Origin::signed(1), 2), Error::<Test>::NoPermission);
+
+		// #2 as rank 5 can promote #3 only up to rank 3 and once there cannot demote them.
+		assert_ok!(Club::promote_member(Origin::signed(2), 3));
+		assert_ok!(Club::promote_member(Origin::signed(2), 3));
+		assert_ok!(Club::promote_member(Origin::signed(2), 3));
+		assert_noop!(Club::promote_member(Origin::signed(2), 3), Error::<Test>::NoPermission);
+		assert_noop!(Club::demote_member(Origin::signed(2), 3), Error::<Test>::NoPermission);
+
+		// #2 can add #4 & #5 as rank 0 and #6 & #7 as rank 1.
+		assert_ok!(Club::add_member(Origin::signed(2), 4));
+		assert_ok!(Club::add_member(Origin::signed(2), 5));
+		assert_ok!(Club::add_member(Origin::signed(2), 6));
+		assert_ok!(Club::promote_member(Origin::signed(2), 6));
+		assert_ok!(Club::add_member(Origin::signed(2), 7));
+		assert_ok!(Club::promote_member(Origin::signed(2), 7));
+
+		// #3 as rank 3 can demote/remove #4 & #5 but not #6 & #7
+		assert_ok!(Club::demote_member(Origin::signed(3), 4));
+		assert_ok!(Club::remove_member(Origin::signed(3), 5, 0));
+		assert_noop!(Club::demote_member(Origin::signed(3), 6), Error::<Test>::NoPermission);
+		assert_noop!(Club::remove_member(Origin::signed(3), 7, 1), Error::<Test>::NoPermission);
+
+		// #2 as rank 5 can demote/remove #6 & #7
+		assert_ok!(Club::demote_member(Origin::signed(2), 6));
+		assert_ok!(Club::remove_member(Origin::signed(2), 7, 1));
+	});
+}
+
+#[test]
 fn voting_works() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Club::add_member(Origin::root(), 0));
@@ -387,3 +449,4 @@ fn ensure_ranked_works() {
 		assert_eq!(Rank4::try_origin(Origin::signed(3)).unwrap_err().as_signed().unwrap(), 3);
 	});
 }
+

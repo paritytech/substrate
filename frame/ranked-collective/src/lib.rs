@@ -221,12 +221,56 @@ pub struct EnsureRanked<T, I, const MIN_RANK: u16>(PhantomData<(T, I)>);
 impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::Origin>
 	for EnsureRanked<T, I, MIN_RANK>
 {
+	type Success = Rank;
+
+	fn try_origin(o: T::Origin) -> Result<Self::Success, T::Origin> {
+		let who = frame_system::EnsureSigned::try_origin(o)?;
+		match Members::<T, I>::get(&who) {
+			Some(MemberRecord { rank, .. }) if rank >= MIN_RANK => Ok(rank),
+			_ => Err(frame_system::RawOrigin::Signed(who).into()),
+		}
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> T::Origin {
+		let who = IndexToId::<T, I>::get(MIN_RANK, 0)
+			.expect("Must be at least one member at rank for a successful origin");
+		frame_system::RawOrigin::Signed(who).into()
+	}
+}
+
+pub struct EnsureMember<T, I, const MIN_RANK: u16>(PhantomData<(T, I)>);
+impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::Origin>
+	for EnsureMember<T, I, MIN_RANK>
+{
 	type Success = T::AccountId;
 
 	fn try_origin(o: T::Origin) -> Result<Self::Success, T::Origin> {
 		let who = frame_system::EnsureSigned::try_origin(o)?;
 		match Members::<T, I>::get(&who) {
 			Some(MemberRecord { rank, .. }) if rank >= MIN_RANK => Ok(who),
+			_ => Err(frame_system::RawOrigin::Signed(who).into()),
+		}
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> T::Origin {
+		let who = IndexToId::<T, I>::get(MIN_RANK, 0)
+			.expect("Must be at least one member at rank for a successful origin");
+		frame_system::RawOrigin::Signed(who).into()
+	}
+}
+
+pub struct EnsureRankedMember<T, I, const MIN_RANK: u16>(PhantomData<(T, I)>);
+impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::Origin>
+	for EnsureRankedMember<T, I, MIN_RANK>
+{
+	type Success = (T::AccountId, Rank);
+
+	fn try_origin(o: T::Origin) -> Result<Self::Success, T::Origin> {
+		let who = frame_system::EnsureSigned::try_origin(o)?;
+		match Members::<T, I>::get(&who) {
+			Some(MemberRecord { rank, .. }) if rank >= MIN_RANK => Ok((who, rank)),
 			_ => Err(frame_system::RawOrigin::Signed(who).into()),
 		}
 	}
@@ -258,8 +302,13 @@ pub mod pallet {
 		/// The outer event type.
 		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 
-		/// The origin required to add, promote or remove a member.
-		type AdminOrigin: EnsureOrigin<Self::Origin>;
+		/// The origin required to add or promote a mmember. The success value indicates the
+		/// maximum rank *to which* the promotion may be.
+		type PromoteOrigin: EnsureOrigin<Self::Origin, Success = Rank>;
+
+		/// The origin required to demote or remove a member. The success value indicates the
+		/// maximum rank *from which* the demotion/removal may be.
+		type DemoteOrigin: EnsureOrigin<Self::Origin, Success = Rank>;
 
 		/// The polling system used for our voting.
 		type Polls: Polling<TallyOf<Self, I>, Votes = Votes, Moment = Self::BlockNumber>;
@@ -345,6 +394,8 @@ pub mod pallet {
 		RankTooLow,
 		/// The information provided is incorrect.
 		InvalidWitness,
+		/// The origin is not sufficiently privileged to do the operation.
+		NoPermission,
 	}
 
 	#[pallet::call]
@@ -358,7 +409,7 @@ pub mod pallet {
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::add_member())]
 		pub fn add_member(origin: OriginFor<T>, who: T::AccountId) -> DispatchResult {
-			T::AdminOrigin::ensure_origin(origin)?;
+			let _ = T::PromoteOrigin::ensure_origin(origin)?;
 			ensure!(!Members::<T, I>::contains_key(&who), Error::<T, I>::AlreadyMember);
 			let index = MemberCount::<T, I>::get(0);
 			let count = index.checked_add(1).ok_or(Overflow)?;
@@ -380,9 +431,10 @@ pub mod pallet {
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::promote_member(0))]
 		pub fn promote_member(origin: OriginFor<T>, who: T::AccountId) -> DispatchResult {
-			T::AdminOrigin::ensure_origin(origin)?;
+			let max_rank = T::PromoteOrigin::ensure_origin(origin)?;
 			let record = Self::ensure_member(&who)?;
 			let rank = record.rank.checked_add(1).ok_or(Overflow)?;
+			ensure!(max_rank >= rank, Error::<T, I>::NoPermission);
 			let index = MemberCount::<T, I>::get(rank);
 			MemberCount::<T, I>::insert(rank, index.checked_add(1).ok_or(Overflow)?);
 			IdToIndex::<T, I>::insert(rank, &who, index);
@@ -402,9 +454,10 @@ pub mod pallet {
 		/// Weight: `O(1)`, less if the member's index is highest in its rank.
 		#[pallet::weight(T::WeightInfo::demote_member(0))]
 		pub fn demote_member(origin: OriginFor<T>, who: T::AccountId) -> DispatchResult {
-			T::AdminOrigin::ensure_origin(origin)?;
+			let max_rank = T::DemoteOrigin::ensure_origin(origin)?;
 			let mut record = Self::ensure_member(&who)?;
 			let rank = record.rank;
+			ensure!(max_rank >= rank, Error::<T, I>::NoPermission);
 
 			Self::remove_from_rank(&who, rank)?;
 			let maybe_rank = rank.checked_sub(1);
@@ -435,9 +488,10 @@ pub mod pallet {
 			who: T::AccountId,
 			min_rank: Rank,
 		) -> DispatchResultWithPostInfo {
-			T::AdminOrigin::ensure_origin(origin)?;
+			let max_rank = T::DemoteOrigin::ensure_origin(origin)?;
 			let MemberRecord { rank, .. } = Self::ensure_member(&who)?;
 			ensure!(min_rank >= rank, Error::<T, I>::InvalidWitness);
+			ensure!(max_rank >= rank, Error::<T, I>::NoPermission);
 
 			for r in 0..=rank {
 				Self::remove_from_rank(&who, r)?;
