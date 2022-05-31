@@ -74,7 +74,7 @@ pub type Rank = u16;
 /// Votes.
 pub type Votes = u32;
 
-/// Aggregated votes for an ongoing poll.
+/// Aggregated votes for an ongoing poll by members of the ranked collective.
 #[derive(
 	CloneNoBound,
 	PartialEqNoBound,
@@ -208,7 +208,9 @@ impl Convert<Rank, Votes> for Geometric {
 	}
 }
 
+/// Trait for getting the maximum number of voters for a given rank.
 pub trait GetMaxVoters {
+	/// Return the maximum number of voters for the rank `r`.
 	fn get_max_voters(r: Rank) -> MemberIndex;
 }
 impl<T: Config<I>, I: 'static> GetMaxVoters for Pallet<T, I> {
@@ -217,6 +219,8 @@ impl<T: Config<I>, I: 'static> GetMaxVoters for Pallet<T, I> {
 	}
 }
 
+/// Guard to ensure that the given origin is a member of the collective. The rank of the member is
+/// the `Success` value.
 pub struct EnsureRanked<T, I, const MIN_RANK: u16>(PhantomData<(T, I)>);
 impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::Origin>
 	for EnsureRanked<T, I, MIN_RANK>
@@ -238,6 +242,8 @@ impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::Origin>
 	}
 }
 
+/// Guard to ensure that the given origin is a member of the collective. The account ID of the
+/// member is the `Success` value.
 pub struct EnsureMember<T, I, const MIN_RANK: u16>(PhantomData<(T, I)>);
 impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::Origin>
 	for EnsureMember<T, I, MIN_RANK>
@@ -259,6 +265,8 @@ impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::Origin>
 	}
 }
 
+/// Guard to ensure that the given origin is a member of the collective. The pair of including both
+/// the account ID and the rank of the member is the `Success` value.
 pub struct EnsureRankedMember<T, I, const MIN_RANK: u16>(PhantomData<(T, I)>);
 impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::Origin>
 	for EnsureRankedMember<T, I, MIN_RANK>
@@ -476,9 +484,9 @@ pub mod pallet {
 		///
 		/// - `origin`: Must be the `AdminOrigin`.
 		/// - `who`: Account of existing member of rank greater than zero.
-		/// - `rank`: The rank of the member.
+		/// - `min_rank`: The rank of the member or greater.
 		///
-		/// Weight: `O(rank)`.
+		/// Weight: `O(min_rank)`.
 		#[pallet::weight(T::WeightInfo::remove_member(*min_rank as u32))]
 		pub fn remove_member(
 			origin: OriginFor<T>,
