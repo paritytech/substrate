@@ -53,8 +53,8 @@ pub trait Ext<T: Config> {
 	///
 	/// `origin`: The origin of the call stack from which is responsible for putting down a deposit.
 	/// `limit`: The limit with which the meter was constructed.
-	/// `min_leftover`: How much `free_balance` in addition to the existential deposit (ed) should be
-	/// left inside the `origin` account.
+	/// `min_leftover`: How much `free_balance` in addition to the existential deposit (ed) should
+	/// be left inside the `origin` account.
 	///
 	/// Returns the limit that should be used by the meter. If origin can't afford the `limit`
 	/// it returns `Err`.
