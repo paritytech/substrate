@@ -358,8 +358,8 @@ mod tests {
 	fn op_checked_rounded_div_works() {
 		for i in 0..100_000u32 {
 			let a = random_u128(i);
-			let b = random_u128(i + 1 << 30);
-			let c = random_u128(i + 1 << 31);
+			let b = random_u128(i + (1 << 30));
+			let c = random_u128(i + (1 << 31));
 			let x = mulrat(a, b, c, NearestPrefDown);
 			let y = multiply_by_rational(a, b, c).ok();
 			assert_eq!(x.is_some(), y.is_some());

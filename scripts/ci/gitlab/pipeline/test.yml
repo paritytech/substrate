@@ -251,22 +251,10 @@ test-linux-stable-int:
     RUN_UI_TESTS:                  1
   script:
     - rusty-cachier snapshot create
-    - echo "___Logs will be partly shown at the end in case of failure.___"
-    - echo "___Full log will be saved to the job artifacts only in case of failure.___"
     - WASM_BUILD_NO_COLOR=1
       RUST_LOG=sync=trace,consensus=trace,client=trace,state-db=trace,db=trace,forks=trace,state_db=trace,storage_cache=trace
         time cargo test -p node-cli --release --verbose --locked -- --ignored
-        &> ${CI_COMMIT_SHORT_SHA}_int_failure.log
     - rusty-cachier cache upload
-  after_script:
-    - !reference [.rusty-cachier, after_script]
-    - awk '/FAILED|^error\[/,0' ${CI_COMMIT_SHORT_SHA}_int_failure.log
-  artifacts:
-    name:                          $CI_COMMIT_SHORT_SHA
-    when:                          on_failure
-    expire_in:                     3 days
-    paths:
-      - ${CI_COMMIT_SHORT_SHA}_int_failure.log
 
 check-tracing:
   stage:                           test
