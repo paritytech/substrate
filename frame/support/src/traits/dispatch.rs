@@ -18,14 +18,11 @@
 //! Traits for dealing with dispatching calls and the origin from which they are dispatched.
 
 use crate::dispatch::{DispatchResultWithPostInfo, Parameter, RawOrigin};
-use sp_arithmetic::traits::{CheckedSub, Zero};
 use sp_runtime::{
 	traits::{BadOrigin, Member, Morph, TryMorph},
 	Either,
 };
 use sp_std::marker::PhantomData;
-
-use super::TypedGet;
 
 /// Some sort of check on the origin is performed by this object.
 pub trait EnsureOrigin<OuterOrigin> {
@@ -223,27 +220,6 @@ impl<
 	#[cfg(feature = "runtime-benchmarks")]
 	fn try_successful_origin() -> Result<OuterOrigin, ()> {
 		L::try_successful_origin().or_else(|()| R::try_successful_origin())
-	}
-}
-
-/// Mutator which reduces a scalar by a particular amount.
-pub struct ReduceBy<N>(PhantomData<N>);
-impl<N: TypedGet> TryMorph<N::Type> for ReduceBy<N>
-where
-	N::Type: CheckedSub,
-{
-	type Outcome = N::Type;
-	fn try_morph(r: N::Type) -> Result<N::Type, ()> {
-		r.checked_sub(&N::get()).ok_or(())
-	}
-}
-impl<N: TypedGet> Morph<N::Type> for ReduceBy<N>
-where
-	N::Type: CheckedSub + Zero,
-{
-	type Outcome = N::Type;
-	fn morph(r: N::Type) -> N::Type {
-		r.checked_sub(&N::get()).unwrap_or(Zero::zero())
 	}
 }
 

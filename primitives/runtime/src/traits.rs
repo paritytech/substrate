@@ -27,6 +27,8 @@ use crate::{
 	},
 	DispatchResult,
 };
+#[doc(hidden)]
+pub use sp_std::marker::PhantomData;
 use impl_trait_for_tuples::impl_for_tuples;
 #[cfg(feature = "std")]
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -37,7 +39,7 @@ pub use sp_arithmetic::traits::{
 	UniqueSaturatedFrom, UniqueSaturatedInto, Zero,
 };
 use sp_core::{self, storage::StateVersion, Hasher, RuntimeDebug, TypeId};
-use sp_std::{self, fmt::Debug, marker::PhantomData, prelude::*};
+use sp_std::{self, fmt::Debug, prelude::*};
 #[cfg(feature = "std")]
 use std::fmt::Display;
 #[cfg(feature = "std")]
@@ -274,6 +276,74 @@ where
 	}
 }
 
+/// A trait for querying a single value from a type defined in the trait.
+///
+/// It is not required that the value is constant.
+pub trait TypedGet {
+	/// The type which is returned.
+	type Type;
+	/// Return the current value.
+	fn get() -> Self::Type;
+}
+
+/// A trait for querying a single value from a type.
+///
+/// It is not required that the value is constant.
+pub trait Get<T> {
+	/// Return the current value.
+	fn get() -> T;
+}
+
+impl<T: Default> Get<T> for () {
+	fn get() -> T {
+		T::default()
+	}
+}
+
+/// Implement Get by returning Default for any type that implements Default.
+pub struct GetDefault;
+impl<T: Default> Get<T> for GetDefault {
+	fn get() -> T {
+		T::default()
+	}
+}
+
+macro_rules! impl_const_get {
+	($name:ident, $t:ty) => {
+		#[doc = "Const getter for a basic type."]
+		#[derive($crate::RuntimeDebug)]
+		pub struct $name<const T: $t>;
+		impl<const T: $t> Get<$t> for $name<T> {
+			fn get() -> $t {
+				T
+			}
+		}
+		impl<const T: $t> Get<Option<$t>> for $name<T> {
+			fn get() -> Option<$t> {
+				Some(T)
+			}
+		}
+		impl<const T: $t> TypedGet for $name<T> {
+			type Type = $t;
+			fn get() -> $t {
+				T
+			}
+		}
+	};
+}
+
+impl_const_get!(ConstBool, bool);
+impl_const_get!(ConstU8, u8);
+impl_const_get!(ConstU16, u16);
+impl_const_get!(ConstU32, u32);
+impl_const_get!(ConstU64, u64);
+impl_const_get!(ConstU128, u128);
+impl_const_get!(ConstI8, i8);
+impl_const_get!(ConstI16, i16);
+impl_const_get!(ConstI32, i32);
+impl_const_get!(ConstI64, i64);
+impl_const_get!(ConstI128, i128);
+
 /// Extensible conversion trait. Generic over only source type, with destination type being
 /// associated.
 pub trait Morph<A> {
@@ -307,6 +377,75 @@ impl<T> TryMorph<T> for Identity {
 	type Outcome = T;
 	fn try_morph(a: T) -> Result<T, ()> {
 		Ok(a)
+	}
+}
+
+#[macro_export]
+macro_rules! morph_types {
+	(
+		$( #[doc = $doc:expr] )?
+		$vq:vis type $name:ident
+		< $( $bound_id:ident $( : $bound_head:path $( | $bound_tail:path )* )? ),* >
+		= |_| -> $outcome:ty { $( $ex:expr )* };
+		$( $rest:tt )*
+	) => {
+		$( #[doc = $doc] )?
+		$vq struct $name<$($bound_id)?>($crate::traits::PhantomData<($($bound_id,)*)>);
+		impl<$(
+			$bound_id $( :
+				$bound_head $( + $bound_tail )*
+			)? ,
+		)* X> $crate::traits::Morph<X> for $name<$($bound_id),*> {
+			type Outcome = $outcome;
+			fn morph(_: X) -> Self::Outcome { $( $ex )* }
+		}
+		morph_types!{ $($rest)* }
+	};
+	(
+		$( #[doc = $doc:expr] )?
+		$vq:vis type $name:ident
+		< $( $bound_id:ident $( : $bound_head:path $( | $bound_tail:path )* )? ),* >
+		= |$var:ident: $var_type:ty| -> $outcome:ty { $( $ex:expr )* };
+		$( $rest:tt )*
+	) => {
+		$( #[doc = $doc] )?
+		$vq struct $name<$($bound_id)?>($crate::traits::PhantomData<($($bound_id,)*)>);
+		impl<$(
+			$bound_id $( :
+				$bound_head $( + $bound_tail )*
+			)?
+		),*> $crate::traits::Morph<$var_type> for $name<$($bound_id),*> {
+			type Outcome = $outcome;
+			fn morph($var: $var_type) -> Self::Outcome { $( $ex )* }
+		}
+		morph_types!{ $($rest)* }
+	};
+	() => {}
+}
+
+morph_types! {
+	/// Morpher to disregard the source value and replace with another.
+	pub type Replace<V: TypedGet> = |_| -> V::Type { V::get() };
+}
+
+/// Mutator which reduces a scalar by a particular amount.
+pub struct ReduceBy<N>(PhantomData<N>);
+impl<N: TypedGet> TryMorph<N::Type> for ReduceBy<N>
+where
+	N::Type: CheckedSub,
+{
+	type Outcome = N::Type;
+	fn try_morph(r: N::Type) -> Result<N::Type, ()> {
+		r.checked_sub(&N::get()).ok_or(())
+	}
+}
+impl<N: TypedGet> Morph<N::Type> for ReduceBy<N>
+where
+	N::Type: CheckedSub + Zero,
+{
+	type Outcome = N::Type;
+	fn morph(r: N::Type) -> N::Type {
+		r.checked_sub(&N::get()).unwrap_or(Zero::zero())
 	}
 }
 
