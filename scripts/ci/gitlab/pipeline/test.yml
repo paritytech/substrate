@@ -205,6 +205,7 @@ test-linux-stable:
     RUSTFLAGS:                     "-Cdebug-assertions=y -Dwarnings"
     RUST_BACKTRACE:                1
     WASM_BUILD_NO_COLOR:           1
+    WASM_BUILD_RUSTFLAGS:          "-Cdebug-assertions=y -Dwarnings"
     # Ensure we run the UI tests.
     RUN_UI_TESTS:                  1
   script:
@@ -247,6 +248,7 @@ test-linux-stable-int:
     RUSTFLAGS:                     "-Cdebug-assertions=y -Dwarnings"
     RUST_BACKTRACE:                1
     WASM_BUILD_NO_COLOR:           1
+    WASM_BUILD_RUSTFLAGS:          "-Cdebug-assertions=y -Dwarnings"
     # Ensure we run the UI tests.
     RUN_UI_TESTS:                  1
   script:
