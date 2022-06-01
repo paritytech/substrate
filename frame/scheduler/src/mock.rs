@@ -23,7 +23,7 @@ use crate as scheduler;
 use frame_support::{
 	ord_parameter_types, parameter_types,
 	traits::{
-		ConstU32, ConstU64, Contains, EnsureOneOf, EqualPrivilegeOnly, OnFinalize, OnInitialize,
+		ConstU32, ConstU64, Contains, EitherOfDiverse, EqualPrivilegeOnly, OnFinalize, OnInitialize,
 	},
 	weights::constants::RocksDbWeight,
 };
@@ -38,7 +38,7 @@ use sp_runtime::{
 // Logger module to track execution.
 #[frame_support::pallet]
 pub mod logger {
-	use super::*;
+	use super::{OriginCaller, OriginTrait};
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 	use std::cell::RefCell;
@@ -71,7 +71,7 @@ pub mod logger {
 	#[pallet::call]
 	impl<T: Config> Pallet<T>
 	where
-		<T as system::Config>::Origin: OriginTrait<PalletsOrigin = OriginCaller>,
+		<T as frame_system::Config>::Origin: OriginTrait<PalletsOrigin = OriginCaller>,
 	{
 		#[pallet::weight(*weight)]
 		pub fn log(origin: OriginFor<T>, i: u32, weight: Weight) -> DispatchResult {
@@ -174,7 +174,7 @@ impl Config for Test {
 	type PalletsOrigin = OriginCaller;
 	type Call = Call;
 	type MaximumWeight = MaximumSchedulerWeight;
-	type ScheduleOrigin = EnsureOneOf<EnsureRoot<u64>, EnsureSignedBy<One, u64>>;
+	type ScheduleOrigin = EitherOfDiverse<EnsureRoot<u64>, EnsureSignedBy<One, u64>>;
 	type MaxScheduledPerBlock = ConstU32<10>;
 	type WeightInfo = ();
 	type OriginPrivilegeCmp = EqualPrivilegeOnly;

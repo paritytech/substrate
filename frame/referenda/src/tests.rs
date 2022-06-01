@@ -28,8 +28,6 @@ use frame_support::{
 };
 use pallet_balances::Error as BalancesError;
 
-// TODO: Scheduler should re-use `None` items in its `Agenda`.
-
 #[test]
 fn params_should_work() {
 	new_test_ext().execute_with(|| {
@@ -47,7 +45,7 @@ fn basic_happy_path_works() {
 			Origin::signed(1),
 			RawOrigin::Root.into(),
 			set_balance_proposal_hash(1),
-			AtOrAfter::At(10),
+			DispatchTime::At(10),
 		));
 		assert_eq!(Balances::reserved_balance(&1), 2);
 		assert_eq!(ReferendumCount::<Test>::get(), 1);
@@ -178,7 +176,7 @@ fn queueing_works() {
 			Origin::signed(5),
 			RawOrigin::Root.into(),
 			set_balance_proposal_hash(0),
-			AtOrAfter::After(0),
+			DispatchTime::After(0),
 		));
 		assert_ok!(Referenda::place_decision_deposit(Origin::signed(5), 0));
 
@@ -190,7 +188,7 @@ fn queueing_works() {
 				Origin::signed(i),
 				RawOrigin::Root.into(),
 				set_balance_proposal_hash(i),
-				AtOrAfter::After(0),
+				DispatchTime::After(0),
 			));
 			assert_ok!(Referenda::place_decision_deposit(Origin::signed(i), i as u32));
 			// TODO: decision deposit after some initial votes with a non-highest voted coming
@@ -275,7 +273,7 @@ fn auto_timeout_should_happen_with_nothing_but_submit() {
 			Origin::signed(1),
 			RawOrigin::Root.into(),
 			set_balance_proposal_hash(1),
-			AtOrAfter::At(20),
+			DispatchTime::At(20),
 		));
 		run_to(20);
 		assert_matches!(ReferendumInfoFor::<Test>::get(0), Some(ReferendumInfo::Ongoing(..)));
@@ -295,13 +293,13 @@ fn tracks_are_distinguished() {
 			Origin::signed(1),
 			RawOrigin::Root.into(),
 			set_balance_proposal_hash(1),
-			AtOrAfter::At(10),
+			DispatchTime::At(10),
 		));
 		assert_ok!(Referenda::submit(
 			Origin::signed(2),
 			RawOrigin::None.into(),
 			set_balance_proposal_hash(2),
-			AtOrAfter::At(20),
+			DispatchTime::At(20),
 		));
 
 		assert_ok!(Referenda::place_decision_deposit(Origin::signed(3), 0));
@@ -318,7 +316,7 @@ fn tracks_are_distinguished() {
 						track: 0,
 						origin: OriginCaller::system(RawOrigin::Root),
 						proposal_hash: set_balance_proposal_hash(1),
-						enactment: AtOrAfter::At(10),
+						enactment: DispatchTime::At(10),
 						submitted: 1,
 						submission_deposit: Deposit { who: 1, amount: 2 },
 						decision_deposit: Some(Deposit { who: 3, amount: 10 }),
@@ -334,7 +332,7 @@ fn tracks_are_distinguished() {
 						track: 1,
 						origin: OriginCaller::system(RawOrigin::None),
 						proposal_hash: set_balance_proposal_hash(2),
-						enactment: AtOrAfter::At(20),
+						enactment: DispatchTime::At(20),
 						submitted: 1,
 						submission_deposit: Deposit { who: 2, amount: 2 },
 						decision_deposit: Some(Deposit { who: 4, amount: 1 }),
@@ -355,13 +353,18 @@ fn submit_errors_work() {
 		let h = set_balance_proposal_hash(1);
 		// No track for Signed origins.
 		assert_noop!(
-			Referenda::submit(Origin::signed(1), RawOrigin::Signed(2).into(), h, AtOrAfter::At(10),),
+			Referenda::submit(
+				Origin::signed(1),
+				RawOrigin::Signed(2).into(),
+				h,
+				DispatchTime::At(10),
+			),
 			Error::<Test>::NoTrack
 		);
 
 		// No funds for deposit
 		assert_noop!(
-			Referenda::submit(Origin::signed(10), RawOrigin::Root.into(), h, AtOrAfter::At(10),),
+			Referenda::submit(Origin::signed(10), RawOrigin::Root.into(), h, DispatchTime::At(10),),
 			BalancesError::<Test>::InsufficientBalance
 		);
 	});
@@ -378,13 +381,13 @@ fn decision_deposit_errors_work() {
 			Origin::signed(1),
 			RawOrigin::Root.into(),
 			h,
-			AtOrAfter::At(10),
+			DispatchTime::At(10),
 		));
 		let e = BalancesError::<Test>::InsufficientBalance;
 		assert_noop!(Referenda::place_decision_deposit(Origin::signed(10), 0), e);
 
 		assert_ok!(Referenda::place_decision_deposit(Origin::signed(2), 0));
-		let e = Error::<Test>::HaveDeposit;
+		let e = Error::<Test>::HasDeposit;
 		assert_noop!(Referenda::place_decision_deposit(Origin::signed(2), 0), e);
 	});
 }
@@ -400,7 +403,7 @@ fn refund_deposit_works() {
 			Origin::signed(1),
 			RawOrigin::Root.into(),
 			h,
-			AtOrAfter::At(10),
+			DispatchTime::At(10),
 		));
 		let e = Error::<Test>::NoDeposit;
 		assert_noop!(Referenda::refund_decision_deposit(Origin::signed(2), 0), e);
@@ -422,7 +425,7 @@ fn cancel_works() {
 			Origin::signed(1),
 			RawOrigin::Root.into(),
 			h,
-			AtOrAfter::At(10),
+			DispatchTime::At(10),
 		));
 		assert_ok!(Referenda::place_decision_deposit(Origin::signed(2), 0));
 
@@ -441,7 +444,7 @@ fn cancel_errors_works() {
 			Origin::signed(1),
 			RawOrigin::Root.into(),
 			h,
-			AtOrAfter::At(10),
+			DispatchTime::At(10),
 		));
 		assert_ok!(Referenda::place_decision_deposit(Origin::signed(2), 0));
 		assert_noop!(Referenda::cancel(Origin::signed(1), 0), BadOrigin);
@@ -459,7 +462,7 @@ fn kill_works() {
 			Origin::signed(1),
 			RawOrigin::Root.into(),
 			h,
-			AtOrAfter::At(10),
+			DispatchTime::At(10),
 		));
 		assert_ok!(Referenda::place_decision_deposit(Origin::signed(2), 0));
 
@@ -479,7 +482,7 @@ fn kill_errors_works() {
 			Origin::signed(1),
 			RawOrigin::Root.into(),
 			h,
-			AtOrAfter::At(10),
+			DispatchTime::At(10),
 		));
 		assert_ok!(Referenda::place_decision_deposit(Origin::signed(2), 0));
 		assert_noop!(Referenda::kill(Origin::signed(4), 0), BadOrigin);
@@ -499,12 +502,14 @@ fn set_balance_proposal_is_correctly_filtered_out() {
 
 #[test]
 fn curve_handles_all_inputs() {
-	let test_curve = Curve::LinearDecreasing { begin: Perbill::zero(), delta: Perbill::zero() };
+	let test_curve = Curve::LinearDecreasing {
+		length: Perbill::one(),
+		floor: Perbill::zero(),
+		ceil: Perbill::from_percent(100),
+	};
 
 	let delay = test_curve.delay(Perbill::zero());
-	assert_eq!(delay, Perbill::zero());
-
-	let test_curve = Curve::LinearDecreasing { begin: Perbill::zero(), delta: Perbill::one() };
+	assert_eq!(delay, Perbill::one());
 
 	let threshold = test_curve.threshold(Perbill::one());
 	assert_eq!(threshold, Perbill::zero());

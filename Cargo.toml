@@ -43,6 +43,9 @@ members = [
 	"client/keystore",
 	"client/network",
 	"client/network-gossip",
+	"client/network/common",
+	"client/network/light",
+	"client/network/sync",
 	"client/network/test",
 	"client/offchain",
 	"client/peerset",
@@ -54,6 +57,7 @@ members = [
 	"client/service",
 	"client/service/test",
 	"client/state-db",
+	"client/sysinfo",
 	"client/sync-state-rpc",
 	"client/telemetry",
 	"client/tracing",
@@ -86,6 +90,9 @@ members = [
 	"frame/try-runtime",
 	"frame/election-provider-multi-phase",
 	"frame/election-provider-support",
+	"frame/election-provider-support/benchmarking",
+	"frame/election-provider-support/solution-type",
+	"frame/election-provider-support/solution-type/fuzzer",
 	"frame/examples/basic",
 	"frame/examples/offchain-worker",
 	"frame/examples/parallel",
@@ -98,7 +105,6 @@ members = [
 	"frame/lottery",
 	"frame/membership",
 	"frame/merkle-mountain-range",
-	"frame/merkle-mountain-range/primitives",
 	"frame/merkle-mountain-range/rpc",
 	"frame/multisig",
 	"frame/nicks",
@@ -106,9 +112,13 @@ members = [
 	"frame/offences",
 	"frame/preimage",
 	"frame/proxy",
+	"frame/nomination-pools",
+	"frame/nomination-pools/benchmarking",
 	"frame/randomness-collective-flip",
+	"frame/ranked-collective",
 	"frame/recovery",
 	"frame/referenda",
+	"frame/remark",
 	"frame/scheduler",
 	"frame/scored-pool",
 	"frame/session",
@@ -117,6 +127,7 @@ members = [
 	"frame/staking",
 	"frame/staking/reward-curve",
 	"frame/staking/reward-fn",
+	"frame/state-trie-migration",
 	"frame/sudo",
 	"frame/support",
 	"frame/support/procedural",
@@ -138,6 +149,7 @@ members = [
 	"frame/uniques",
 	"frame/utility",
 	"frame/vesting",
+	"frame/whitelist",
 	"primitives/api",
 	"primitives/api/proc-macro",
 	"primitives/api/test",
@@ -167,8 +179,8 @@ members = [
 	"primitives/keyring",
 	"primitives/keystore",
 	"primitives/maybe-compressed-blob",
+	"primitives/merkle-mountain-range",
 	"primitives/npos-elections",
-	"primitives/npos-elections/solution-type",
 	"primitives/npos-elections/fuzzer",
 	"primitives/offchain",
 	"primitives/panic-handler",
@@ -208,6 +220,7 @@ members = [
 	"utils/frame/remote-externalities",
 	"utils/frame/frame-utilities-cli",
 	"utils/frame/try-runtime/cli",
+	"utils/frame/rpc/state-trie-migration-rpc",
 	"utils/frame/rpc/support",
 	"utils/frame/rpc/system",
 	"utils/frame/generate-bags",
@@ -250,6 +263,7 @@ hash-db = { opt-level = 3 }
 hmac = { opt-level = 3 }
 httparse = { opt-level = 3 }
 integer-sqrt = { opt-level = 3 }
+k256 = { opt-level = 3 }
 keccak = { opt-level = 3 }
 libm = { opt-level = 3 }
 librocksdb-sys = { opt-level = 3 }
@@ -264,6 +278,7 @@ percent-encoding = { opt-level = 3 }
 primitive-types = { opt-level = 3 }
 ring = { opt-level = 3 }
 rustls = { opt-level = 3 }
+secp256k1 = { opt-level = 3 }
 sha2 = { opt-level = 3 }
 sha3 = { opt-level = 3 }
 smallvec = { opt-level = 3 }

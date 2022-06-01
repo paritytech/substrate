@@ -30,7 +30,7 @@ use sc_service::{
 	client::Client,
 	config::{BasePath, DatabaseSource, KeystoreConfig},
 	ChainSpecExtension, Configuration, Error, GenericChainSpec, KeepBlocks, Role, RuntimeGenesis,
-	SpawnTaskHandle, TaskManager, TransactionStorageMode,
+	SpawnTaskHandle, TaskManager,
 };
 use sc_transaction_pool_api::TransactionPool;
 use sp_api::BlockId;
@@ -235,7 +235,6 @@ fn node_config<
 		state_cache_child_ratio: None,
 		state_pruning: Default::default(),
 		keep_blocks: KeepBlocks::All,
-		transaction_storage: TransactionStorageMode::BlockBody,
 		chain_spec: Box::new((*spec).clone()),
 		wasm_method: sc_service::config::WasmExecutionMethod::Interpreted,
 		wasm_runtime_overrides: Default::default(),
@@ -247,6 +246,10 @@ fn node_config<
 		rpc_cors: None,
 		rpc_methods: Default::default(),
 		rpc_max_payload: None,
+		rpc_max_request_size: None,
+		rpc_max_response_size: None,
+		rpc_id_provider: None,
+		rpc_max_subs_per_conn: None,
 		ws_max_out_buffer_capacity: None,
 		prometheus_config: None,
 		telemetry_endpoints: None,
@@ -309,15 +312,15 @@ where
 				handle.clone(),
 				Some(key),
 				self.base_port,
-				&temp,
+				temp,
 			);
-			let addr = node_config.network.listen_addresses.iter().next().unwrap().clone();
+			let addr = node_config.network.listen_addresses.first().unwrap().clone();
 			let (service, user_data) =
 				authority(node_config).expect("Error creating test node service");
 
 			handle.spawn(service.clone().map_err(|_| ()));
-			let addr = addr
-				.with(multiaddr::Protocol::P2p(service.network().local_peer_id().clone().into()));
+			let addr =
+				addr.with(multiaddr::Protocol::P2p((*service.network().local_peer_id()).into()));
 			self.authority_nodes.push((self.nodes, service, user_data, addr));
 			self.nodes += 1;
 		}
@@ -330,14 +333,14 @@ where
 				handle.clone(),
 				None,
 				self.base_port,
-				&temp,
+				temp,
 			);
-			let addr = node_config.network.listen_addresses.iter().next().unwrap().clone();
+			let addr = node_config.network.listen_addresses.first().unwrap().clone();
 			let (service, user_data) = full(node_config).expect("Error creating test node service");
 
 			handle.spawn(service.clone().map_err(|_| ()));
-			let addr = addr
-				.with(multiaddr::Protocol::P2p(service.network().local_peer_id().clone().into()));
+			let addr =
+				addr.with(multiaddr::Protocol::P2p((*service.network().local_peer_id()).into()));
 			self.full_nodes.push((self.nodes, service, user_data, addr));
 			self.nodes += 1;
 		}
@@ -462,7 +465,7 @@ pub fn sync<G, E, Fb, F, B, ExF, U>(
 				info!("Generating #{}", i + 1);
 			}
 
-			make_block_and_import(&first_service, first_user_data);
+			make_block_and_import(first_service, first_user_data);
 		}
 		let info = network.full_nodes[0].1.client().info();
 		network.full_nodes[0]

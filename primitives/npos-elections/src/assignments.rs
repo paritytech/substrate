@@ -17,7 +17,7 @@
 
 //! Structs and helpers for distributing a voter's stake among various winners.
 
-use crate::{Error, ExtendedBalance, IdentifierT, PerThing128, __OrInvalidIndex};
+use crate::{ExtendedBalance, IdentifierT, PerThing128};
 #[cfg(feature = "std")]
 use codec::{Decode, Encode};
 use sp_arithmetic::{
@@ -120,18 +120,17 @@ impl<AccountId> StakedAssignment<AccountId> {
 		AccountId: IdentifierT,
 	{
 		let stake = self.total();
-		let distribution = self
-			.distribution
-			.into_iter()
-			.filter_map(|(target, w)| {
-				let per_thing = P::from_rational(w, stake);
-				if per_thing == Bounded::min_value() {
-					None
-				} else {
-					Some((target, per_thing))
-				}
-			})
-			.collect::<Vec<(AccountId, P)>>();
+		// most likely, the size of the staked assignment and normal assignments will be the same,
+		// so we pre-allocate it to prevent a sudden 2x allocation. `filter_map` starts with a size
+		// of 0 by default.
+		// https://www.reddit.com/r/rust/comments/3spfh1/does_collect_allocate_more_than_once_while/
+		let mut distribution = Vec::<(AccountId, P)>::with_capacity(self.distribution.len());
+		self.distribution.into_iter().for_each(|(target, w)| {
+			let per_thing = P::from_rational(w, stake);
+			if per_thing != Bounded::min_value() {
+				distribution.push((target, per_thing));
+			}
+		});
 
 		Assignment { who: self.who, distribution }
 	}
@@ -166,44 +165,3 @@ impl<AccountId> StakedAssignment<AccountId> {
 		self.distribution.iter().fold(Zero::zero(), |a, b| a.saturating_add(b.1))
 	}
 }
-/// The [`IndexAssignment`] type is an intermediate between the assignments list
-/// ([`&[Assignment<T>]`][Assignment]) and `SolutionOf<T>`.
-///
-/// The voter and target identifiers have already been replaced with appropriate indices,
-/// making it fast to repeatedly encode into a `SolutionOf<T>`. This property turns out
-/// to be important when trimming for solution length.
-#[derive(RuntimeDebug, Clone, Default)]
-#[cfg_attr(feature = "std", derive(PartialEq, Eq, Encode, Decode))]
-pub struct IndexAssignment<VoterIndex, TargetIndex, P: PerThing> {
-	/// Index of the voter among the voters list.
-	pub who: VoterIndex,
-	/// The distribution of the voter's stake among winning targets.
-	///
-	/// Targets are identified by their index in the canonical list.
-	pub distribution: Vec<(TargetIndex, P)>,
-}
-
-impl<VoterIndex, TargetIndex, P: PerThing> IndexAssignment<VoterIndex, TargetIndex, P> {
-	pub fn new<AccountId: IdentifierT>(
-		assignment: &Assignment<AccountId, P>,
-		voter_index: impl Fn(&AccountId) -> Option<VoterIndex>,
-		target_index: impl Fn(&AccountId) -> Option<TargetIndex>,
-	) -> Result<Self, Error> {
-		Ok(Self {
-			who: voter_index(&assignment.who).or_invalid_index()?,
-			distribution: assignment
-				.distribution
-				.iter()
-				.map(|(target, proportion)| Some((target_index(target)?, proportion.clone())))
-				.collect::<Option<Vec<_>>>()
-				.or_invalid_index()?,
-		})
-	}
-}
-
-/// A type alias for [`IndexAssignment`] made from [`crate::NposSolution`].
-pub type IndexAssignmentOf<C> = IndexAssignment<
-	<C as crate::NposSolution>::VoterIndex,
-	<C as crate::NposSolution>::TargetIndex,
-	<C as crate::NposSolution>::Accuracy,
->;

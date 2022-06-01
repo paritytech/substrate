@@ -19,7 +19,7 @@
 
 #![cfg(test)]
 
-use frame_election_provider_support::onchain;
+use frame_election_provider_support::{onchain, SequentialPhragmen};
 use frame_support::{
 	parameter_types,
 	traits::{ConstU32, ConstU64},
@@ -73,9 +73,7 @@ impl frame_system::Config for Test {
 	type OnSetCode = ();
 	type MaxConsumers = ConstU32<16>;
 }
-parameter_types! {
-	pub const ExistentialDeposit: Balance = 10;
-}
+
 impl pallet_balances::Config for Test {
 	type MaxLocks = ();
 	type MaxReserves = ();
@@ -83,7 +81,7 @@ impl pallet_balances::Config for Test {
 	type Balance = Balance;
 	type Event = Event;
 	type DustRemoval = ();
-	type ExistentialDeposit = ExistentialDeposit;
+	type ExistentialDeposit = ConstU64<10>;
 	type AccountStore = System;
 	type WeightInfo = ();
 }
@@ -156,14 +154,18 @@ where
 	type Extrinsic = Extrinsic;
 }
 
-impl onchain::Config for Test {
-	type Accuracy = sp_runtime::Perbill;
+pub struct OnChainSeqPhragmen;
+impl onchain::Config for OnChainSeqPhragmen {
+	type System = Test;
+	type Solver = SequentialPhragmen<AccountId, sp_runtime::Perbill>;
 	type DataProvider = Staking;
+	type WeightInfo = ();
 }
 
 impl pallet_staking::Config for Test {
 	type MaxNominations = ConstU32<16>;
 	type Currency = Balances;
+	type CurrencyBalance = <Self as pallet_balances::Config>::Balance;
 	type UnixTime = pallet_timestamp::Pallet<Self>;
 	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
 	type RewardRemainder = ();
@@ -179,9 +181,11 @@ impl pallet_staking::Config for Test {
 	type NextNewSession = Session;
 	type MaxNominatorRewardedPerValidator = ConstU32<64>;
 	type OffendingValidatorsThreshold = ();
-	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
+	type ElectionProvider = onchain::UnboundedExecution<OnChainSeqPhragmen>;
 	type GenesisElectionProvider = Self::ElectionProvider;
-	type SortedListProvider = pallet_staking::UseNominatorsMap<Self>;
+	type MaxUnlockingChunks = ConstU32<32>;
+	type VoterList = pallet_staking::UseNominatorsAndValidatorsMap<Self>;
+	type OnStakerSlash = ();
 	type BenchmarkingConfig = pallet_staking::TestBenchmarkingConfig;
 	type WeightInfo = ();
 }

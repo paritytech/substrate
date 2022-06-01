@@ -41,7 +41,7 @@
 //! In order to become concluded, one of three things must happen:
 //! - The referendum should remain in an unbroken _Passing_ state for a period of time. This
 //! is known as the _Confirmation Period_ and is determined by the track. A referendum is considered
-//! _Passing_ when there is a sufficiently high turnout and approval, given the amount of time it
+//! _Passing_ when there is a sufficiently high support and approval, given the amount of time it
 //! has been being decided. Generally the threshold for what counts as being "sufficiently high"
 //! will reduce over time. The curves setting these thresholds are determined by the track. In this
 //! case, the referendum is considered _Approved_ and the proposal is scheduled for dispatch.
@@ -53,6 +53,10 @@
 //! conclude without ever entering into a deciding stage.
 //!
 //! Once a referendum is concluded, the decision deposit may be refunded.
+//!
+//! ## Terms
+//! - *Support*: The number of aye-votes, pre-conviction, as a proportion of the total number of
+//!   pre-conviction votes able to be cast in the population.
 //!
 //! - [`Config`]
 //! - [`Call`]
@@ -68,8 +72,8 @@ use frame_support::{
 			v2::{Anon as ScheduleAnon, Named as ScheduleNamed},
 			DispatchTime, MaybeHashed,
 		},
-		Currency, Get, LockIdentifier, LockableCurrency, OnUnbalanced, OriginTrait, PollStatus,
-		Polling, ReservableCurrency, VoteTally,
+		Currency, Get, LockIdentifier, OnUnbalanced, OriginTrait, PollStatus, Polling,
+		ReservableCurrency, VoteTally,
 	},
 	BoundedVec,
 };
@@ -83,15 +87,18 @@ use sp_std::{fmt::Debug, prelude::*};
 mod branch;
 mod types;
 pub mod weights;
-use branch::{BeginDecidingBranch, OneFewerDecidingBranch, ServiceBranch};
-pub use pallet::*;
-pub use types::{
-	AtOrAfter, BalanceOf, CallOf, Curve, DecidingStatus, DecidingStatusOf, Deposit, InsertSorted,
-	NegativeImbalanceOf, PalletsOriginOf, ReferendumIndex, ReferendumInfo, ReferendumInfoOf,
-	ReferendumStatus, ReferendumStatusOf, ScheduleAddressOf, TallyOf, TrackIdOf, TrackInfo,
-	TrackInfoOf, TracksInfo, VotesOf,
+
+use self::branch::{BeginDecidingBranch, OneFewerDecidingBranch, ServiceBranch};
+pub use self::{
+	pallet::*,
+	types::{
+		BalanceOf, CallOf, Curve, DecidingStatus, DecidingStatusOf, Deposit, InsertSorted,
+		NegativeImbalanceOf, PalletsOriginOf, ReferendumIndex, ReferendumInfo, ReferendumInfoOf,
+		ReferendumStatus, ReferendumStatusOf, ScheduleAddressOf, TallyOf, TrackIdOf, TrackInfo,
+		TrackInfoOf, TracksInfo, VotesOf,
+	},
+	weights::WeightInfo,
 };
-pub use weights::WeightInfo;
 
 #[cfg(test)]
 mod mock;
@@ -106,45 +113,58 @@ const ASSEMBLY_ID: LockIdentifier = *b"assembly";
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::{pallet_prelude::*, traits::EnsureOrigin, Parameter};
+	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
-	use sp_runtime::DispatchResult;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
 	#[pallet::without_storage_info]
-	pub struct Pallet<T>(_);
+	pub struct Pallet<T, I = ()>(_);
 
 	#[pallet::config]
-	pub trait Config: frame_system::Config + Sized {
+	pub trait Config<I: 'static = ()>: frame_system::Config + Sized {
 		// System level stuff.
-		type Call: Parameter + Dispatchable<Origin = Self::Origin> + From<Call<Self>>;
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type Call: Parameter + Dispatchable<Origin = Self::Origin> + From<Call<Self, I>>;
+		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
 		/// The Scheduler.
-		type Scheduler: ScheduleAnon<Self::BlockNumber, CallOf<Self>, PalletsOriginOf<Self>, Hash = Self::Hash>
-			+ ScheduleNamed<Self::BlockNumber, CallOf<Self>, PalletsOriginOf<Self>, Hash = Self::Hash>;
+		type Scheduler: ScheduleAnon<
+				Self::BlockNumber,
+				CallOf<Self, I>,
+				PalletsOriginOf<Self>,
+				Hash = Self::Hash,
+			> + ScheduleNamed<
+				Self::BlockNumber,
+				CallOf<Self, I>,
+				PalletsOriginOf<Self>,
+				Hash = Self::Hash,
+			>;
 		/// Currency type for this pallet.
-		type Currency: ReservableCurrency<Self::AccountId>
-			+ LockableCurrency<Self::AccountId, Moment = Self::BlockNumber>;
-
+		type Currency: ReservableCurrency<Self::AccountId>;
 		// Origins and unbalances.
+		/// Origin from which proposals may be submitted.
+		type SubmitOrigin: EnsureOrigin<Self::Origin, Success = Self::AccountId>;
 		/// Origin from which any vote may be cancelled.
 		type CancelOrigin: EnsureOrigin<Self::Origin>;
 		/// Origin from which any vote may be killed.
 		type KillOrigin: EnsureOrigin<Self::Origin>;
 		/// Handler for the unbalanced reduction when slashing a preimage deposit.
-		type Slash: OnUnbalanced<NegativeImbalanceOf<Self>>;
+		type Slash: OnUnbalanced<NegativeImbalanceOf<Self, I>>;
 		/// The counting type for votes. Usually just balance.
-		type Votes: AtLeast32BitUnsigned + Copy + Parameter + Member;
+		type Votes: AtLeast32BitUnsigned + Copy + Parameter + Member + MaxEncodedLen;
 		/// The tallying type.
-		type Tally: VoteTally<Self::Votes> + Default + Clone + Codec + Eq + Debug + TypeInfo;
+		type Tally: VoteTally<Self::Votes, TrackIdOf<Self, I>>
+			+ Clone
+			+ Codec
+			+ Eq
+			+ Debug
+			+ TypeInfo;
 
 		// Constants
 		/// The minimum amount to be used as a deposit for a public referendum proposal.
 		#[pallet::constant]
-		type SubmissionDeposit: Get<BalanceOf<Self>>;
+		type SubmissionDeposit: Get<BalanceOf<Self, I>>;
 
 		/// Maximum size of the referendum queue for a single track.
 		#[pallet::constant]
@@ -164,7 +184,7 @@ pub mod pallet {
 		// The other stuff.
 		/// Information concerning the different referendum tracks.
 		type Tracks: TracksInfo<
-			BalanceOf<Self>,
+			BalanceOf<Self, I>,
 			Self::BlockNumber,
 			Origin = <Self::Origin as OriginTrait>::PalletsOrigin,
 		>;
@@ -172,41 +192,40 @@ pub mod pallet {
 
 	/// The next free referendum index, aka the number of referenda started so far.
 	#[pallet::storage]
-	pub type ReferendumCount<T> = StorageValue<_, ReferendumIndex, ValueQuery>;
+	pub type ReferendumCount<T, I = ()> = StorageValue<_, ReferendumIndex, ValueQuery>;
 
 	/// Information concerning any given referendum.
-	///
-	/// TWOX-NOTE: SAFE as indexes are not under an attacker’s control.
 	#[pallet::storage]
-	pub type ReferendumInfoFor<T: Config> =
-		StorageMap<_, Blake2_128Concat, ReferendumIndex, ReferendumInfoOf<T>>;
+	pub type ReferendumInfoFor<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Blake2_128Concat, ReferendumIndex, ReferendumInfoOf<T, I>>;
 
 	/// The sorted list of referenda ready to be decided but not yet being decided, ordered by
 	/// conviction-weighted approvals.
 	///
 	/// This should be empty if `DecidingCount` is less than `TrackInfo::max_deciding`.
 	#[pallet::storage]
-	pub type TrackQueue<T: Config> = StorageMap<
+	pub type TrackQueue<T: Config<I>, I: 'static = ()> = StorageMap<
 		_,
 		Twox64Concat,
-		TrackIdOf<T>,
+		TrackIdOf<T, I>,
 		BoundedVec<(ReferendumIndex, T::Votes), T::MaxQueued>,
 		ValueQuery,
 	>;
 
 	/// The number of referenda being decided currently.
 	#[pallet::storage]
-	pub type DecidingCount<T: Config> = StorageMap<_, Twox64Concat, TrackIdOf<T>, u32, ValueQuery>;
+	pub type DecidingCount<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, TrackIdOf<T, I>, u32, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum Event<T: Config> {
+	pub enum Event<T: Config<I>, I: 'static = ()> {
 		/// A referendum has being submitted.
 		Submitted {
 			/// Index of the referendum.
 			index: ReferendumIndex,
 			/// The track (and by extension proposal dispatch origin) of this referendum.
-			track: TrackIdOf<T>,
+			track: TrackIdOf<T, I>,
 			/// The hash of the proposal up for referendum.
 			proposal_hash: T::Hash,
 		},
@@ -217,7 +236,7 @@ pub mod pallet {
 			/// The account who placed the deposit.
 			who: T::AccountId,
 			/// The amount placed by the account.
-			amount: BalanceOf<T>,
+			amount: BalanceOf<T, I>,
 		},
 		/// The decision deposit has been refunded.
 		DecisionDepositRefunded {
@@ -226,21 +245,21 @@ pub mod pallet {
 			/// The account who placed the deposit.
 			who: T::AccountId,
 			/// The amount placed by the account.
-			amount: BalanceOf<T>,
+			amount: BalanceOf<T, I>,
 		},
 		/// A deposit has been slashaed.
 		DepositSlashed {
 			/// The account who placed the deposit.
 			who: T::AccountId,
 			/// The amount placed by the account.
-			amount: BalanceOf<T>,
+			amount: BalanceOf<T, I>,
 		},
 		/// A referendum has moved into the deciding phase.
 		DecisionStarted {
 			/// Index of the referendum.
 			index: ReferendumIndex,
 			/// The track (and by extension proposal dispatch origin) of this referendum.
-			track: TrackIdOf<T>,
+			track: TrackIdOf<T, I>,
 			/// The hash of the proposal up for referendum.
 			proposal_hash: T::Hash,
 			/// The current tally of votes in this referendum.
@@ -297,11 +316,11 @@ pub mod pallet {
 	}
 
 	#[pallet::error]
-	pub enum Error<T> {
+	pub enum Error<T, I = ()> {
 		/// Referendum is not ongoing.
 		NotOngoing,
 		/// Referendum's decision deposit is already paid.
-		HaveDeposit,
+		HasDeposit,
 		/// The track identifier given was invalid.
 		BadTrack,
 		/// There are already a full complement of referendums in progress for this track.
@@ -323,10 +342,10 @@ pub mod pallet {
 	}
 
 	#[pallet::call]
-	impl<T: Config> Pallet<T> {
+	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Propose a referendum on a privileged action.
 		///
-		/// - `origin`: must be `Signed` and the account must have `SubmissionDeposit` funds
+		/// - `origin`: must be `SubmitOrigin` and the account must have `SubmissionDeposit` funds
 		///   available.
 		/// - `proposal_origin`: The origin from which the proposal should be executed.
 		/// - `proposal_hash`: The hash of the proposal preimage.
@@ -338,13 +357,14 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			proposal_origin: PalletsOriginOf<T>,
 			proposal_hash: T::Hash,
-			enactment_moment: AtOrAfter<T::BlockNumber>,
+			enactment_moment: DispatchTime<T::BlockNumber>,
 		) -> DispatchResult {
-			let who = ensure_signed(origin)?;
+			let who = T::SubmitOrigin::ensure_origin(origin)?;
 
-			let track = T::Tracks::track_for(&proposal_origin).map_err(|_| Error::<T>::NoTrack)?;
+			let track =
+				T::Tracks::track_for(&proposal_origin).map_err(|_| Error::<T, I>::NoTrack)?;
 			let submission_deposit = Self::take_deposit(who, T::SubmissionDeposit::get())?;
-			let index = ReferendumCount::<T>::mutate(|x| {
+			let index = ReferendumCount::<T, I>::mutate(|x| {
 				let r = *x;
 				*x += 1;
 				r
@@ -354,19 +374,19 @@ pub mod pallet {
 			let status = ReferendumStatus {
 				track,
 				origin: proposal_origin,
-				proposal_hash: proposal_hash.clone(),
+				proposal_hash,
 				enactment: enactment_moment,
 				submitted: now,
 				submission_deposit,
 				decision_deposit: None,
 				deciding: None,
-				tally: Default::default(),
+				tally: TallyOf::<T, I>::new(track),
 				in_queue: false,
 				alarm: Self::set_alarm(nudge_call, now.saturating_add(T::UndecidingTimeout::get())),
 			};
-			ReferendumInfoFor::<T>::insert(index, ReferendumInfo::Ongoing(status));
+			ReferendumInfoFor::<T, I>::insert(index, ReferendumInfo::Ongoing(status));
 
-			Self::deposit_event(Event::<T>::Submitted { index, track, proposal_hash });
+			Self::deposit_event(Event::<T, I>::Submitted { index, track, proposal_hash });
 			Ok(())
 		}
 
@@ -378,24 +398,24 @@ pub mod pallet {
 		///   posted.
 		///
 		/// Emits `DecisionDepositPlaced`.
-		#[pallet::weight(ServiceBranch::max_weight_of_deposit::<T>())]
+		#[pallet::weight(ServiceBranch::max_weight_of_deposit::<T, I>())]
 		pub fn place_decision_deposit(
 			origin: OriginFor<T>,
 			index: ReferendumIndex,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let mut status = Self::ensure_ongoing(index)?;
-			ensure!(status.decision_deposit.is_none(), Error::<T>::HaveDeposit);
-			let track = Self::track(status.track).ok_or(Error::<T>::NoTrack)?;
+			ensure!(status.decision_deposit.is_none(), Error::<T, I>::HasDeposit);
+			let track = Self::track(status.track).ok_or(Error::<T, I>::NoTrack)?;
 			status.decision_deposit =
 				Some(Self::take_deposit(who.clone(), track.decision_deposit)?);
 			let now = frame_system::Pallet::<T>::block_number();
 			let (info, _, branch) = Self::service_referendum(now, index, status);
-			ReferendumInfoFor::<T>::insert(index, info);
+			ReferendumInfoFor::<T, I>::insert(index, info);
 			let e =
-				Event::<T>::DecisionDepositPlaced { index, who, amount: track.decision_deposit };
+				Event::<T, I>::DecisionDepositPlaced { index, who, amount: track.decision_deposit };
 			Self::deposit_event(e);
-			Ok(branch.weight_of_deposit::<T>().into())
+			Ok(branch.weight_of_deposit::<T, I>().into())
 		}
 
 		/// Refund the Decision Deposit for a closed referendum back to the depositor.
@@ -411,14 +431,15 @@ pub mod pallet {
 			index: ReferendumIndex,
 		) -> DispatchResult {
 			ensure_signed_or_root(origin)?;
-			let mut info = ReferendumInfoFor::<T>::get(index).ok_or(Error::<T>::BadReferendum)?;
+			let mut info =
+				ReferendumInfoFor::<T, I>::get(index).ok_or(Error::<T, I>::BadReferendum)?;
 			let deposit = info
 				.take_decision_deposit()
-				.map_err(|_| Error::<T>::Unfinished)?
-				.ok_or(Error::<T>::NoDeposit)?;
+				.map_err(|_| Error::<T, I>::Unfinished)?
+				.ok_or(Error::<T, I>::NoDeposit)?;
 			Self::refund_deposit(Some(deposit.clone()));
-			ReferendumInfoFor::<T>::insert(index, info);
-			let e = Event::<T>::DecisionDepositRefunded {
+			ReferendumInfoFor::<T, I>::insert(index, info);
+			let e = Event::<T, I>::DecisionDepositRefunded {
 				index,
 				who: deposit.who,
 				amount: deposit.amount,
@@ -441,13 +462,13 @@ pub mod pallet {
 				let _ = T::Scheduler::cancel(last_alarm);
 			}
 			Self::note_one_fewer_deciding(status.track);
-			Self::deposit_event(Event::<T>::Cancelled { index, tally: status.tally });
+			Self::deposit_event(Event::<T, I>::Cancelled { index, tally: status.tally });
 			let info = ReferendumInfo::Cancelled(
 				frame_system::Pallet::<T>::block_number(),
 				status.submission_deposit,
 				status.decision_deposit,
 			);
-			ReferendumInfoFor::<T>::insert(index, info);
+			ReferendumInfoFor::<T, I>::insert(index, info);
 			Ok(())
 		}
 
@@ -465,11 +486,11 @@ pub mod pallet {
 				let _ = T::Scheduler::cancel(last_alarm);
 			}
 			Self::note_one_fewer_deciding(status.track);
-			Self::deposit_event(Event::<T>::Killed { index, tally: status.tally });
+			Self::deposit_event(Event::<T, I>::Killed { index, tally: status.tally });
 			Self::slash_deposit(Some(status.submission_deposit.clone()));
 			Self::slash_deposit(status.decision_deposit.clone());
 			let info = ReferendumInfo::Killed(frame_system::Pallet::<T>::block_number());
-			ReferendumInfoFor::<T>::insert(index, info);
+			ReferendumInfoFor::<T, I>::insert(index, info);
 			Ok(())
 		}
 
@@ -477,7 +498,7 @@ pub mod pallet {
 		///
 		/// - `origin`: must be `Root`.
 		/// - `index`: the referendum to be advanced.
-		#[pallet::weight(ServiceBranch::max_weight_of_nudge::<T>())]
+		#[pallet::weight(ServiceBranch::max_weight_of_nudge::<T, I>())]
 		pub fn nudge_referendum(
 			origin: OriginFor<T>,
 			index: ReferendumIndex,
@@ -489,9 +510,9 @@ pub mod pallet {
 			status.alarm = None;
 			let (info, dirty, branch) = Self::service_referendum(now, index, status);
 			if dirty {
-				ReferendumInfoFor::<T>::insert(index, info);
+				ReferendumInfoFor::<T, I>::insert(index, info);
 			}
-			Ok(Some(branch.weight_of_nudge::<T>()).into())
+			Ok(Some(branch.weight_of_nudge::<T, I>()).into())
 		}
 
 		/// Advance a track onto its next logical state. Only used internally.
@@ -503,14 +524,14 @@ pub mod pallet {
 		/// `DecidingCount` is not yet updated. This means that we should either:
 		/// - begin deciding another referendum (and leave `DecidingCount` alone); or
 		/// - decrement `DecidingCount`.
-		#[pallet::weight(OneFewerDecidingBranch::max_weight::<T>())]
+		#[pallet::weight(OneFewerDecidingBranch::max_weight::<T, I>())]
 		pub fn one_fewer_deciding(
 			origin: OriginFor<T>,
-			track: TrackIdOf<T>,
+			track: TrackIdOf<T, I>,
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
-			let track_info = T::Tracks::info(track).ok_or(Error::<T>::BadTrack)?;
-			let mut track_queue = TrackQueue::<T>::get(track);
+			let track_info = T::Tracks::info(track).ok_or(Error::<T, I>::BadTrack)?;
+			let mut track_queue = TrackQueue::<T, I>::get(track);
 			let branch =
 				if let Some((index, mut status)) = Self::next_for_deciding(&mut track_queue) {
 					let now = frame_system::Pallet::<T>::block_number();
@@ -519,23 +540,23 @@ pub mod pallet {
 					if let Some(set_alarm) = maybe_alarm {
 						Self::ensure_alarm_at(&mut status, index, set_alarm);
 					}
-					ReferendumInfoFor::<T>::insert(index, ReferendumInfo::Ongoing(status));
-					TrackQueue::<T>::insert(track, track_queue);
+					ReferendumInfoFor::<T, I>::insert(index, ReferendumInfo::Ongoing(status));
+					TrackQueue::<T, I>::insert(track, track_queue);
 					branch.into()
 				} else {
-					DecidingCount::<T>::mutate(track, |x| x.saturating_dec());
+					DecidingCount::<T, I>::mutate(track, |x| x.saturating_dec());
 					OneFewerDecidingBranch::QueueEmpty
 				};
-			Ok(Some(branch.weight::<T>()).into())
+			Ok(Some(branch.weight::<T, I>()).into())
 		}
 	}
 }
 
-impl<T: Config> Polling<T::Tally> for Pallet<T> {
+impl<T: Config<I>, I: 'static> Polling<T::Tally> for Pallet<T, I> {
 	type Index = ReferendumIndex;
-	type Votes = VotesOf<T>;
+	type Votes = VotesOf<T, I>;
 	type Moment = T::BlockNumber;
-	type Class = TrackIdOf<T>;
+	type Class = TrackIdOf<T, I>;
 
 	fn classes() -> Vec<Self::Class> {
 		T::Tracks::tracks().iter().map(|x| x.0).collect()
@@ -543,14 +564,14 @@ impl<T: Config> Polling<T::Tally> for Pallet<T> {
 
 	fn access_poll<R>(
 		index: Self::Index,
-		f: impl FnOnce(PollStatus<&mut T::Tally, T::BlockNumber, TrackIdOf<T>>) -> R,
+		f: impl FnOnce(PollStatus<&mut T::Tally, T::BlockNumber, TrackIdOf<T, I>>) -> R,
 	) -> R {
-		match ReferendumInfoFor::<T>::get(index) {
+		match ReferendumInfoFor::<T, I>::get(index) {
 			Some(ReferendumInfo::Ongoing(mut status)) => {
 				let result = f(PollStatus::Ongoing(&mut status.tally, status.track));
 				let now = frame_system::Pallet::<T>::block_number();
 				Self::ensure_alarm_at(&mut status, index, now + One::one());
-				ReferendumInfoFor::<T>::insert(index, ReferendumInfo::Ongoing(status));
+				ReferendumInfoFor::<T, I>::insert(index, ReferendumInfo::Ongoing(status));
 				result
 			},
 			Some(ReferendumInfo::Approved(end, ..)) => f(PollStatus::Completed(end, true)),
@@ -562,15 +583,15 @@ impl<T: Config> Polling<T::Tally> for Pallet<T> {
 	fn try_access_poll<R>(
 		index: Self::Index,
 		f: impl FnOnce(
-			PollStatus<&mut T::Tally, T::BlockNumber, TrackIdOf<T>>,
+			PollStatus<&mut T::Tally, T::BlockNumber, TrackIdOf<T, I>>,
 		) -> Result<R, DispatchError>,
 	) -> Result<R, DispatchError> {
-		match ReferendumInfoFor::<T>::get(index) {
+		match ReferendumInfoFor::<T, I>::get(index) {
 			Some(ReferendumInfo::Ongoing(mut status)) => {
 				let result = f(PollStatus::Ongoing(&mut status.tally, status.track))?;
 				let now = frame_system::Pallet::<T>::block_number();
 				Self::ensure_alarm_at(&mut status, index, now + One::one());
-				ReferendumInfoFor::<T>::insert(index, ReferendumInfo::Ongoing(status));
+				ReferendumInfoFor::<T, I>::insert(index, ReferendumInfo::Ongoing(status));
 				Ok(result)
 			},
 			Some(ReferendumInfo::Approved(end, ..)) => f(PollStatus::Completed(end, true)),
@@ -579,13 +600,13 @@ impl<T: Config> Polling<T::Tally> for Pallet<T> {
 		}
 	}
 
-	fn as_ongoing(index: Self::Index) -> Option<(T::Tally, TrackIdOf<T>)> {
+	fn as_ongoing(index: Self::Index) -> Option<(T::Tally, TrackIdOf<T, I>)> {
 		Self::ensure_ongoing(index).ok().map(|x| (x.tally, x.track))
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn create_ongoing(class: Self::Class) -> Result<Self::Index, ()> {
-		let index = ReferendumCount::<T>::mutate(|x| {
+		let index = ReferendumCount::<T, I>::mutate(|x| {
 			let r = *x;
 			*x += 1;
 			r
@@ -594,21 +615,21 @@ impl<T: Config> Polling<T::Tally> for Pallet<T> {
 		let dummy_account_id =
 			codec::Decode::decode(&mut sp_runtime::traits::TrailingZeroInput::new(&b"dummy"[..]))
 				.expect("infinite length input; no invalid inputs for type; qed");
-		let mut status = ReferendumStatusOf::<T> {
+		let mut status = ReferendumStatusOf::<T, I> {
 			track: class,
 			origin: frame_support::dispatch::RawOrigin::Root.into(),
 			proposal_hash: <T::Hashing as sp_runtime::traits::Hash>::hash_of(&index),
-			enactment: AtOrAfter::After(Zero::zero()),
+			enactment: DispatchTime::After(Zero::zero()),
 			submitted: now,
 			submission_deposit: Deposit { who: dummy_account_id, amount: Zero::zero() },
 			decision_deposit: None,
 			deciding: None,
-			tally: Default::default(),
+			tally: TallyOf::<T, I>::new(class),
 			in_queue: false,
 			alarm: None,
 		};
 		Self::ensure_alarm_at(&mut status, index, sp_runtime::traits::Bounded::max_value());
-		ReferendumInfoFor::<T>::insert(index, ReferendumInfo::Ongoing(status));
+		ReferendumInfoFor::<T, I>::insert(index, ReferendumInfo::Ongoing(status));
 		Ok(index)
 	}
 
@@ -623,7 +644,7 @@ impl<T: Config> Polling<T::Tally> for Pallet<T> {
 		} else {
 			ReferendumInfo::Rejected(now, status.submission_deposit, status.decision_deposit)
 		};
-		ReferendumInfoFor::<T>::insert(index, info);
+		ReferendumInfoFor::<T, I>::insert(index, info);
 		Ok(())
 	}
 
@@ -633,25 +654,27 @@ impl<T: Config> Polling<T::Tally> for Pallet<T> {
 			.iter()
 			.max_by_key(|(_, info)| info.max_deciding)
 			.expect("Always one class");
-		(r.0.clone(), r.1.max_deciding)
+		(r.0, r.1.max_deciding)
 	}
 }
 
-impl<T: Config> Pallet<T> {
+impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Check that referendum `index` is in the `Ongoing` state and return the `ReferendumStatus`
 	/// value, or `Err` otherwise.
-	pub fn ensure_ongoing(index: ReferendumIndex) -> Result<ReferendumStatusOf<T>, DispatchError> {
-		match ReferendumInfoFor::<T>::get(index) {
+	pub fn ensure_ongoing(
+		index: ReferendumIndex,
+	) -> Result<ReferendumStatusOf<T, I>, DispatchError> {
+		match ReferendumInfoFor::<T, I>::get(index) {
 			Some(ReferendumInfo::Ongoing(status)) => Ok(status),
-			_ => Err(Error::<T>::NotOngoing.into()),
+			_ => Err(Error::<T, I>::NotOngoing.into()),
 		}
 	}
 
 	// Enqueue a proposal from a referendum which has presumably passed.
 	fn schedule_enactment(
 		index: ReferendumIndex,
-		track: &TrackInfoOf<T>,
-		desired: AtOrAfter<T::BlockNumber>,
+		track: &TrackInfoOf<T, I>,
+		desired: DispatchTime<T::BlockNumber>,
 		origin: PalletsOriginOf<T>,
 		call_hash: T::Hash,
 	) {
@@ -672,9 +695,9 @@ impl<T: Config> Pallet<T> {
 
 	/// Set an alarm to dispatch `call` at block number `when`.
 	fn set_alarm(
-		call: impl Into<CallOf<T>>,
+		call: impl Into<CallOf<T, I>>,
 		when: T::BlockNumber,
-	) -> Option<(T::BlockNumber, ScheduleAddressOf<T>)> {
+	) -> Option<(T::BlockNumber, ScheduleAddressOf<T, I>)> {
 		let alarm_interval = T::AlarmInterval::get().max(One::one());
 		let when = (when + alarm_interval - One::one()) / alarm_interval * alarm_interval;
 		let maybe_result = T::Scheduler::schedule(
@@ -702,33 +725,34 @@ impl<T: Config> Pallet<T> {
 	///
 	/// This will properly set up the `confirming` item.
 	fn begin_deciding(
-		status: &mut ReferendumStatusOf<T>,
+		status: &mut ReferendumStatusOf<T, I>,
 		index: ReferendumIndex,
 		now: T::BlockNumber,
-		track: &TrackInfoOf<T>,
+		track: &TrackInfoOf<T, I>,
 	) -> (Option<T::BlockNumber>, BeginDecidingBranch) {
 		let is_passing = Self::is_passing(
 			&status.tally,
 			Zero::zero(),
 			track.decision_period,
-			&track.min_turnout,
+			&track.min_support,
 			&track.min_approval,
+			status.track,
 		);
 		status.in_queue = false;
-		Self::deposit_event(Event::<T>::DecisionStarted {
+		Self::deposit_event(Event::<T, I>::DecisionStarted {
 			index,
 			tally: status.tally.clone(),
-			proposal_hash: status.proposal_hash.clone(),
-			track: status.track.clone(),
+			proposal_hash: status.proposal_hash,
+			track: status.track,
 		});
 		let confirming = if is_passing {
-			Self::deposit_event(Event::<T>::ConfirmStarted { index });
+			Self::deposit_event(Event::<T, I>::ConfirmStarted { index });
 			Some(now.saturating_add(track.confirm_period))
 		} else {
 			None
 		};
 		let deciding_status = DecidingStatus { since: now, confirming };
-		let alarm = Self::decision_time(&deciding_status, &status.tally, track);
+		let alarm = Self::decision_time(&deciding_status, &status.tally, status.track, track);
 		status.deciding = Some(deciding_status);
 		let branch =
 			if is_passing { BeginDecidingBranch::Passing } else { BeginDecidingBranch::Failing };
@@ -741,21 +765,21 @@ impl<T: Config> Pallet<T> {
 	/// If `None`, then it is queued and should be nudged automatically as the queue gets drained.
 	fn ready_for_deciding(
 		now: T::BlockNumber,
-		track: &TrackInfoOf<T>,
+		track: &TrackInfoOf<T, I>,
 		index: ReferendumIndex,
-		status: &mut ReferendumStatusOf<T>,
+		status: &mut ReferendumStatusOf<T, I>,
 	) -> (Option<T::BlockNumber>, ServiceBranch) {
-		let deciding_count = DecidingCount::<T>::get(status.track);
+		let deciding_count = DecidingCount::<T, I>::get(status.track);
 		if deciding_count < track.max_deciding {
 			// Begin deciding.
-			DecidingCount::<T>::insert(status.track, deciding_count.saturating_add(1));
+			DecidingCount::<T, I>::insert(status.track, deciding_count.saturating_add(1));
 			let r = Self::begin_deciding(status, index, now, track);
 			(r.0, r.1.into())
 		} else {
 			// Add to queue.
-			let item = (index, status.tally.ayes());
+			let item = (index, status.tally.ayes(status.track));
 			status.in_queue = true;
-			TrackQueue::<T>::mutate(status.track, |q| q.insert_sorted_by_key(item, |x| x.1));
+			TrackQueue::<T, I>::mutate(status.track, |q| q.insert_sorted_by_key(item, |x| x.1));
 			(None, ServiceBranch::Queued)
 		}
 	}
@@ -763,8 +787,8 @@ impl<T: Config> Pallet<T> {
 	/// Grab the index and status for the referendum which is the highest priority of those for the
 	/// given track which are ready for being decided.
 	fn next_for_deciding(
-		track_queue: &mut BoundedVec<(u32, VotesOf<T>), T::MaxQueued>,
-	) -> Option<(ReferendumIndex, ReferendumStatusOf<T>)> {
+		track_queue: &mut BoundedVec<(u32, VotesOf<T, I>), T::MaxQueued>,
+	) -> Option<(ReferendumIndex, ReferendumStatusOf<T, I>)> {
 		loop {
 			let (index, _) = track_queue.pop()?;
 			match Self::ensure_ongoing(index) {
@@ -777,7 +801,7 @@ impl<T: Config> Pallet<T> {
 	/// Schedule a call to `one_fewer_deciding` function via the dispatchable
 	/// `defer_one_fewer_deciding`. We could theoretically call it immediately (and it would be
 	/// overall more efficient), however the weights become rather less easy to measure.
-	fn note_one_fewer_deciding(track: TrackIdOf<T>) {
+	fn note_one_fewer_deciding(track: TrackIdOf<T, I>) {
 		// Set an alarm call for the next block to nudge the track along.
 		let now = frame_system::Pallet::<T>::block_number();
 		let next_block = now + One::one();
@@ -805,7 +829,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Returns `false` if nothing changed.
 	fn ensure_alarm_at(
-		status: &mut ReferendumStatusOf<T>,
+		status: &mut ReferendumStatusOf<T, I>,
 		index: ReferendumIndex,
 		alarm: T::BlockNumber,
 	) -> bool {
@@ -843,8 +867,8 @@ impl<T: Config> Pallet<T> {
 	fn service_referendum(
 		now: T::BlockNumber,
 		index: ReferendumIndex,
-		mut status: ReferendumStatusOf<T>,
-	) -> (ReferendumInfoOf<T>, bool, ServiceBranch) {
+		mut status: ReferendumStatusOf<T, I>,
+	) -> (ReferendumInfoOf<T, I>, bool, ServiceBranch) {
 		let mut dirty = false;
 		// Should it begin being decided?
 		let track = match Self::track(status.track) {
@@ -860,13 +884,13 @@ impl<T: Config> Pallet<T> {
 				// Are we already queued for deciding?
 				if status.in_queue {
 					// Does our position in the queue need updating?
-					let ayes = status.tally.ayes();
-					let mut queue = TrackQueue::<T>::get(status.track);
+					let ayes = status.tally.ayes(status.track);
+					let mut queue = TrackQueue::<T, I>::get(status.track);
 					let maybe_old_pos = queue.iter().position(|(x, _)| *x == index);
 					let new_pos = queue.binary_search_by_key(&ayes, |x| x.1).unwrap_or_else(|x| x);
 					branch = if maybe_old_pos.is_none() && new_pos > 0 {
 						// Just insert.
-						queue.force_insert_keep_right(new_pos, (index, ayes));
+						let _ = queue.force_insert_keep_right(new_pos, (index, ayes));
 						ServiceBranch::RequeuedInsertion
 					} else if let Some(old_pos) = maybe_old_pos {
 						// We were in the queue - slide into the correct position.
@@ -876,14 +900,14 @@ impl<T: Config> Pallet<T> {
 					} else {
 						ServiceBranch::NotQueued
 					};
-					TrackQueue::<T>::insert(status.track, queue);
+					TrackQueue::<T, I>::insert(status.track, queue);
 				} else {
 					// Are we ready for deciding?
 					branch = if status.decision_deposit.is_some() {
 						let prepare_end = status.submitted.saturating_add(track.prepare_period);
 						if now >= prepare_end {
 							let (maybe_alarm, branch) =
-								Self::ready_for_deciding(now, &track, index, &mut status);
+								Self::ready_for_deciding(now, track, index, &mut status);
 							if let Some(set_alarm) = maybe_alarm {
 								alarm = alarm.min(set_alarm);
 							}
@@ -901,7 +925,7 @@ impl<T: Config> Pallet<T> {
 				if status.deciding.is_none() && now >= timeout {
 					// Too long without being decided - end it.
 					Self::ensure_no_alarm(&mut status);
-					Self::deposit_event(Event::<T>::TimedOut { index, tally: status.tally });
+					Self::deposit_event(Event::<T, I>::TimedOut { index, tally: status.tally });
 					return (
 						ReferendumInfo::TimedOut(
 							now,
@@ -918,11 +942,12 @@ impl<T: Config> Pallet<T> {
 					&status.tally,
 					now.saturating_sub(deciding.since),
 					track.decision_period,
-					&track.min_turnout,
+					&track.min_support,
 					&track.min_approval,
+					status.track,
 				);
 				branch = if is_passing {
-					match deciding.confirming.clone() {
+					match deciding.confirming {
 						Some(t) if now >= t => {
 							// Passed!
 							Self::ensure_no_alarm(&mut status);
@@ -935,7 +960,7 @@ impl<T: Config> Pallet<T> {
 								status.origin,
 								call_hash,
 							);
-							Self::deposit_event(Event::<T>::Confirmed {
+							Self::deposit_event(Event::<T, I>::Confirmed {
 								index,
 								tally: status.tally,
 							});
@@ -954,7 +979,7 @@ impl<T: Config> Pallet<T> {
 							// Start confirming
 							dirty = true;
 							deciding.confirming = Some(now.saturating_add(track.confirm_period));
-							Self::deposit_event(Event::<T>::ConfirmStarted { index });
+							Self::deposit_event(Event::<T, I>::ConfirmStarted { index });
 							ServiceBranch::BeginConfirming
 						},
 					}
@@ -963,7 +988,7 @@ impl<T: Config> Pallet<T> {
 						// Failed!
 						Self::ensure_no_alarm(&mut status);
 						Self::note_one_fewer_deciding(status.track);
-						Self::deposit_event(Event::<T>::Rejected { index, tally: status.tally });
+						Self::deposit_event(Event::<T, I>::Rejected { index, tally: status.tally });
 						return (
 							ReferendumInfo::Rejected(
 								now,
@@ -978,13 +1003,13 @@ impl<T: Config> Pallet<T> {
 						// Stop confirming
 						dirty = true;
 						deciding.confirming = None;
-						Self::deposit_event(Event::<T>::ConfirmAborted { index });
+						Self::deposit_event(Event::<T, I>::ConfirmAborted { index });
 						ServiceBranch::EndConfirming
 					} else {
 						ServiceBranch::ContinueNotConfirming
 					}
 				};
-				alarm = Self::decision_time(&deciding, &status.tally, track);
+				alarm = Self::decision_time(deciding, &status.tally, status.track, track);
 			},
 		}
 
@@ -997,21 +1022,22 @@ impl<T: Config> Pallet<T> {
 	fn decision_time(
 		deciding: &DecidingStatusOf<T>,
 		tally: &T::Tally,
-		track: &TrackInfoOf<T>,
+		track_id: TrackIdOf<T, I>,
+		track: &TrackInfoOf<T, I>,
 	) -> T::BlockNumber {
 		deciding.confirming.unwrap_or_else(|| {
 			// Set alarm to the point where the current voting would make it pass.
-			let approval = tally.approval();
-			let turnout = tally.turnout();
+			let approval = tally.approval(track_id);
+			let support = tally.support(track_id);
 			let until_approval = track.min_approval.delay(approval);
-			let until_turnout = track.min_turnout.delay(turnout);
-			let offset = until_turnout.max(until_approval);
+			let until_support = track.min_support.delay(support);
+			let offset = until_support.max(until_approval);
 			deciding.since.saturating_add(offset * track.decision_period)
 		})
 	}
 
 	/// Cancel the alarm in `status`, if one exists.
-	fn ensure_no_alarm(status: &mut ReferendumStatusOf<T>) {
+	fn ensure_no_alarm(status: &mut ReferendumStatusOf<T, I>) {
 		if let Some((_, last_alarm)) = status.alarm.take() {
 			// Incorrect alarm - cancel it.
 			let _ = T::Scheduler::cancel(last_alarm);
@@ -1021,45 +1047,47 @@ impl<T: Config> Pallet<T> {
 	/// Reserve a deposit and return the `Deposit` instance.
 	fn take_deposit(
 		who: T::AccountId,
-		amount: BalanceOf<T>,
-	) -> Result<Deposit<T::AccountId, BalanceOf<T>>, DispatchError> {
+		amount: BalanceOf<T, I>,
+	) -> Result<Deposit<T::AccountId, BalanceOf<T, I>>, DispatchError> {
 		T::Currency::reserve(&who, amount)?;
 		Ok(Deposit { who, amount })
 	}
 
 	/// Return a deposit, if `Some`.
-	fn refund_deposit(deposit: Option<Deposit<T::AccountId, BalanceOf<T>>>) {
+	fn refund_deposit(deposit: Option<Deposit<T::AccountId, BalanceOf<T, I>>>) {
 		if let Some(Deposit { who, amount }) = deposit {
 			T::Currency::unreserve(&who, amount);
 		}
 	}
 
 	/// Slash a deposit, if `Some`.
-	fn slash_deposit(deposit: Option<Deposit<T::AccountId, BalanceOf<T>>>) {
+	fn slash_deposit(deposit: Option<Deposit<T::AccountId, BalanceOf<T, I>>>) {
 		if let Some(Deposit { who, amount }) = deposit {
 			T::Slash::on_unbalanced(T::Currency::slash_reserved(&who, amount).0);
-			Self::deposit_event(Event::<T>::DepositSlashed { who, amount });
+			Self::deposit_event(Event::<T, I>::DepositSlashed { who, amount });
 		}
 	}
 
 	/// Get the track info value for the track `id`.
-	fn track(id: TrackIdOf<T>) -> Option<&'static TrackInfoOf<T>> {
+	fn track(id: TrackIdOf<T, I>) -> Option<&'static TrackInfoOf<T, I>> {
 		let tracks = T::Tracks::tracks();
 		let index = tracks.binary_search_by_key(&id, |x| x.0).unwrap_or_else(|x| x);
 		Some(&tracks[index].1)
 	}
 
 	/// Determine whether the given `tally` would result in a referendum passing at `elapsed` blocks
-	/// into a total decision `period`, given the two curves for `turnout_needed` and
+	/// into a total decision `period`, given the two curves for `support_needed` and
 	/// `approval_needed`.
 	fn is_passing(
 		tally: &T::Tally,
 		elapsed: T::BlockNumber,
 		period: T::BlockNumber,
-		turnout_needed: &Curve,
+		support_needed: &Curve,
 		approval_needed: &Curve,
+		id: TrackIdOf<T, I>,
 	) -> bool {
 		let x = Perbill::from_rational(elapsed.min(period), period);
-		turnout_needed.passing(x, tally.turnout()) && approval_needed.passing(x, tally.approval())
+		support_needed.passing(x, tally.support(id)) &&
+			approval_needed.passing(x, tally.approval(id))
 	}
 }

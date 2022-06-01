@@ -201,7 +201,7 @@ fn construct_runtime_intermediary_expansion(
 		);
 	}
 
-	Ok(expansion.into())
+	Ok(expansion)
 }
 
 /// All pallets have explicit definition of parts, this will expand to the runtime declaration.
@@ -225,22 +225,23 @@ fn construct_runtime_final_expansion(
 		})?;
 
 	let hidden_crate_name = "construct_runtime";
-	let scrate = generate_crate_access(&hidden_crate_name, "frame-support");
-	let scrate_decl = generate_hidden_includes(&hidden_crate_name, "frame-support");
+	let scrate = generate_crate_access(hidden_crate_name, "frame-support");
+	let scrate_decl = generate_hidden_includes(hidden_crate_name, "frame-support");
 
 	let outer_event = expand::expand_outer_event(&name, &pallets, &scrate)?;
 
-	let outer_origin = expand::expand_outer_origin(&name, &system_pallet, &pallets, &scrate)?;
+	let outer_origin = expand::expand_outer_origin(&name, system_pallet, &pallets, &scrate)?;
 	let all_pallets = decl_all_pallets(&name, pallets.iter());
 	let pallet_to_index = decl_pallet_runtime_setup(&name, &pallets, &scrate);
 
-	let dispatch = expand::expand_outer_dispatch(&name, &system_pallet, &pallets, &scrate);
+	let dispatch = expand::expand_outer_dispatch(&name, system_pallet, &pallets, &scrate);
 	let metadata = expand::expand_runtime_metadata(&name, &pallets, &scrate, &unchecked_extrinsic);
 	let outer_config = expand::expand_outer_config(&name, &pallets, &scrate);
 	let inherent =
 		expand::expand_outer_inherent(&name, &block, &unchecked_extrinsic, &pallets, &scrate);
 	let validate_unsigned = expand::expand_outer_validate_unsigned(&name, &pallets, &scrate);
 	let integrity_test = decl_integrity_test(&scrate);
+	let static_assertions = decl_static_assertions(&name, &pallets, &scrate);
 
 	let res = quote!(
 		#scrate_decl
@@ -282,6 +283,8 @@ fn construct_runtime_final_expansion(
 		#validate_unsigned
 
 		#integrity_test
+
+		#static_assertions
 	);
 
 	Ok(res)
@@ -470,4 +473,35 @@ fn decl_integrity_test(scrate: &TokenStream2) -> TokenStream2 {
 			}
 		}
 	)
+}
+
+fn decl_static_assertions(
+	runtime: &Ident,
+	pallet_decls: &[Pallet],
+	scrate: &TokenStream2,
+) -> TokenStream2 {
+	let error_encoded_size_check = pallet_decls.iter().map(|decl| {
+		let path = &decl.path;
+		let assert_message = format!(
+			"The maximum encoded size of the error type in the `{}` pallet exceeds \
+			`MAX_MODULE_ERROR_ENCODED_SIZE`",
+			decl.name,
+		);
+
+		quote! {
+			#scrate::tt_call! {
+				macro = [{ #path::tt_error_token }]
+				frame_support = [{ #scrate }]
+				~~> #scrate::assert_error_encoded_size! {
+					path = [{ #path }]
+					runtime = [{ #runtime }]
+					assert_message = [{ #assert_message }]
+				}
+			}
+		}
+	});
+
+	quote! {
+		#(#error_encoded_size_check)*
+	}
 }

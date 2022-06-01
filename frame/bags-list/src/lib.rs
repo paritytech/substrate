@@ -17,13 +17,14 @@
 
 //! # Bags-List Pallet
 //!
-//! A semi-sorted list, where items hold an `AccountId` based on some `VoteWeight`. The `AccountId`
-//! (`id` for short) might be synonym to a `voter` or `nominator` in some context, and `VoteWeight`
-//! signifies the chance of each id being included in the final [`SortedListProvider::iter`].
+//! A semi-sorted list, where items hold an `AccountId` based on some `Score`. The
+//! `AccountId` (`id` for short) might be synonym to a `voter` or `nominator` in some context, and
+//! `Score` signifies the chance of each id being included in the final
+//! [`SortedListProvider::iter`].
 //!
 //! It implements [`frame_election_provider_support::SortedListProvider`] to provide a semi-sorted
 //! list of accounts to another pallet. It needs some other pallet to give it some information about
-//! the weights of accounts via [`frame_election_provider_support::VoteWeightProvider`].
+//! the weights of accounts via [`frame_election_provider_support::ScoreProvider`].
 //!
 //! This pallet is not configurable at genesis. Whoever uses it should call appropriate functions of
 //! the `SortedListProvider` (e.g. `on_insert`, or `unsafe_regenerate`) at their genesis.
@@ -33,12 +34,12 @@
 //! The data structure exposed by this pallet aims to be optimized for:
 //!
 //! - insertions and removals.
-//! - iteration over the top* N items by weight, where the precise ordering of items doesn't
+//! - iteration over the top* N items by score, where the precise ordering of items doesn't
 //!   particularly matter.
 //!
 //! # Details
 //!
-//! - items are kept in bags, which are delineated by their range of weight (See
+//! - items are kept in bags, which are delineated by their range of score (See
 //!   [`Config::BagThresholds`]).
 //! - for iteration, bags are chained together from highest to lowest and elements within the bag
 //!   are iterated from head to tail.
@@ -46,14 +47,16 @@
 //!   it will worsen its position in list iteration; this reduces incentives for some types of spam
 //!   that involve consistently removing and inserting for better position. Further, ordering
 //!   granularity is thus dictated by range between each bag threshold.
-//! - if an item's weight changes to a value no longer within the range of its current bag the
-//!   item's position will need to be updated by an external actor with rebag (update), or removal
-//!   and insertion.
+//! - if an item's score changes to a value no longer within the range of its current bag the item's
+//!   position will need to be updated by an external actor with rebag (update), or removal and
+//!   insertion.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use frame_election_provider_support::{SortedListProvider, VoteWeight, VoteWeightProvider};
+use codec::FullCodec;
+use frame_election_provider_support::{ScoreProvider, SortedListProvider};
 use frame_system::ensure_signed;
+use sp_runtime::traits::{AtLeast32BitUnsigned, Bounded};
 use sp_std::prelude::*;
 
 #[cfg(any(feature = "runtime-benchmarks", test))]
@@ -67,11 +70,11 @@ pub mod mock;
 mod tests;
 pub mod weights;
 
-pub use list::{notional_bag_for, Bag, Error, List, Node};
+pub use list::{notional_bag_for, Bag, List, ListError, Node};
 pub use pallet::*;
 pub use weights::WeightInfo;
 
-pub(crate) const LOG_TARGET: &'static str = "runtime::bags_list";
+pub(crate) const LOG_TARGET: &str = "runtime::bags_list";
 
 // syntactic sugar for logging.
 #[macro_export]
@@ -79,7 +82,10 @@ macro_rules! log {
 	($level:tt, $patter:expr $(, $values:expr)* $(,)?) => {
 		log::$level!(
 			target: crate::LOG_TARGET,
-			concat!("[{:?}] 👜", $patter), <frame_system::Pallet<T>>::block_number() $(, $values)*
+			concat!("[{:?}] 👜 [{}]", $patter),
+			<frame_system::Pallet<T>>::block_number(),
+			<crate::Pallet::<T, I> as frame_support::traits::PalletInfoAccess>::name()
+			$(, $values)*
 		)
 	};
 }
@@ -92,38 +98,38 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(crate) trait Store)]
-	pub struct Pallet<T>(_);
+	pub struct Pallet<T, I = ()>(_);
 
 	#[pallet::config]
-	pub trait Config: frame_system::Config {
+	pub trait Config<I: 'static = ()>: frame_system::Config {
 		/// The overarching event type.
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: weights::WeightInfo;
 
-		/// Something that provides the weights of ids.
-		type VoteWeightProvider: VoteWeightProvider<Self::AccountId>;
+		/// Something that provides the scores of ids.
+		type ScoreProvider: ScoreProvider<Self::AccountId, Score = Self::Score>;
 
 		/// The list of thresholds separating the various bags.
 		///
-		/// Ids are separated into unsorted bags according to their vote weight. This specifies the
-		/// thresholds separating the bags. An id's bag is the largest bag for which the id's weight
+		/// Ids are separated into unsorted bags according to their score. This specifies the
+		/// thresholds separating the bags. An id's bag is the largest bag for which the id's score
 		/// is less than or equal to its upper threshold.
 		///
 		/// When ids are iterated, higher bags are iterated completely before lower bags. This means
-		/// that iteration is _semi-sorted_: ids of higher weight tend to come before ids of lower
-		/// weight, but peer ids within a particular bag are sorted in insertion order.
+		/// that iteration is _semi-sorted_: ids of higher score tend to come before ids of lower
+		/// score, but peer ids within a particular bag are sorted in insertion order.
 		///
 		/// # Expressing the constant
 		///
 		/// This constant must be sorted in strictly increasing order. Duplicate items are not
 		/// permitted.
 		///
-		/// There is an implied upper limit of `VoteWeight::MAX`; that value does not need to be
+		/// There is an implied upper limit of `Score::MAX`; that value does not need to be
 		/// specified within the bag. For any two threshold lists, if one ends with
-		/// `VoteWeight::MAX`, the other one does not, and they are otherwise equal, the two lists
-		/// will behave identically.
+		/// `Score::MAX`, the other one does not, and they are otherwise equal, the two
+		/// lists will behave identically.
 		///
 		/// # Calculation
 		///
@@ -141,63 +147,86 @@ pub mod pallet {
 		///   the procedure given above, then the constant ratio is equal to 2.
 		/// - If `BagThresholds::get().len() == 200`, and the thresholds are determined according to
 		///   the procedure given above, then the constant ratio is approximately equal to 1.248.
-		/// - If the threshold list begins `[1, 2, 3, ...]`, then an id with weight 0 or 1 will fall
-		///   into bag 0, an id with weight 2 will fall into bag 1, etc.
+		/// - If the threshold list begins `[1, 2, 3, ...]`, then an id with score 0 or 1 will fall
+		///   into bag 0, an id with score 2 will fall into bag 1, etc.
 		///
 		/// # Migration
 		///
 		/// In the event that this list ever changes, a copy of the old bags list must be retained.
 		/// With that `List::migrate` can be called, which will perform the appropriate migration.
 		#[pallet::constant]
-		type BagThresholds: Get<&'static [VoteWeight]>;
+		type BagThresholds: Get<&'static [Self::Score]>;
+
+		/// The type used to dictate a node position relative to other nodes.
+		type Score: Clone
+			+ Default
+			+ PartialEq
+			+ Eq
+			+ Ord
+			+ PartialOrd
+			+ sp_std::fmt::Debug
+			+ Copy
+			+ AtLeast32BitUnsigned
+			+ Bounded
+			+ TypeInfo
+			+ FullCodec
+			+ MaxEncodedLen;
 	}
 
 	/// A single node, within some bag.
 	///
 	/// Nodes store links forward and back within their respective bags.
 	#[pallet::storage]
-	pub(crate) type ListNodes<T: Config> =
-		CountedStorageMap<_, Twox64Concat, T::AccountId, list::Node<T>>;
+	pub(crate) type ListNodes<T: Config<I>, I: 'static = ()> =
+		CountedStorageMap<_, Twox64Concat, T::AccountId, list::Node<T, I>>;
 
 	/// A bag stored in storage.
 	///
 	/// Stores a `Bag` struct, which stores head and tail pointers to itself.
 	#[pallet::storage]
-	pub(crate) type ListBags<T: Config> = StorageMap<_, Twox64Concat, VoteWeight, list::Bag<T>>;
+	pub(crate) type ListBags<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, T::Score, list::Bag<T, I>>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(crate) fn deposit_event)]
-	pub enum Event<T: Config> {
+	pub enum Event<T: Config<I>, I: 'static = ()> {
 		/// Moved an account from one bag to another.
-		Rebagged { who: T::AccountId, from: VoteWeight, to: VoteWeight },
+		Rebagged { who: T::AccountId, from: T::Score, to: T::Score },
+		/// Updated the score of some account to the given amount.
+		ScoreUpdated { who: T::AccountId, new_score: T::Score },
 	}
 
 	#[pallet::error]
 	#[cfg_attr(test, derive(PartialEq))]
-	pub enum Error<T> {
-		/// Attempted to place node in front of a node in another bag.
-		NotInSameBag,
-		/// Id not found in list.
-		IdNotFound,
-		/// An Id does not have a greater vote weight than another Id.
-		NotHeavier,
+	pub enum Error<T, I = ()> {
+		/// A error in the list interface implementation.
+		List(ListError),
+	}
+
+	impl<T, I> From<ListError> for Error<T, I> {
+		fn from(t: ListError) -> Self {
+			Error::<T, I>::List(t)
+		}
 	}
 
 	#[pallet::call]
-	impl<T: Config> Pallet<T> {
+	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Declare that some `dislocated` account has, through rewards or penalties, sufficiently
-		/// changed its weight that it should properly fall into a different bag than its current
+		/// changed its score that it should properly fall into a different bag than its current
 		/// one.
 		///
 		/// Anyone can call this function about any potentially dislocated account.
 		///
-		/// Will never return an error; if `dislocated` does not exist or doesn't need a rebag, then
-		/// it is a noop and fees are still collected from `origin`.
+		/// Will always update the stored score of `dislocated` to the correct score, based on
+		/// `ScoreProvider`.
+		///
+		/// If `dislocated` does not exists, it returns an error.
 		#[pallet::weight(T::WeightInfo::rebag_non_terminal().max(T::WeightInfo::rebag_terminal()))]
 		pub fn rebag(origin: OriginFor<T>, dislocated: T::AccountId) -> DispatchResult {
 			ensure_signed(origin)?;
-			let current_weight = T::VoteWeightProvider::vote_weight(&dislocated);
-			let _ = Pallet::<T>::do_rebag(&dislocated, current_weight);
+			let current_score = T::ScoreProvider::score(&dislocated);
+			let _ = Pallet::<T, I>::do_rebag(&dislocated, current_score)
+				.map_err::<Error<T, I>, _>(Into::into)?;
 			Ok(())
 		}
 
@@ -208,16 +237,18 @@ pub mod pallet {
 		///
 		/// Only works if
 		/// - both nodes are within the same bag,
-		/// - and `origin` has a greater `VoteWeight` than `lighter`.
+		/// - and `origin` has a greater `Score` than `lighter`.
 		#[pallet::weight(T::WeightInfo::put_in_front_of())]
 		pub fn put_in_front_of(origin: OriginFor<T>, lighter: T::AccountId) -> DispatchResult {
 			let heavier = ensure_signed(origin)?;
-			List::<T>::put_in_front_of(&lighter, &heavier).map_err(Into::into)
+			List::<T, I>::put_in_front_of(&lighter, &heavier)
+				.map_err::<Error<T, I>, _>(Into::into)
+				.map_err::<DispatchError, _>(Into::into)
 		}
 	}
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
 		fn integrity_test() {
 			// ensure they are strictly increasing, this also implies that duplicates are detected.
 			assert!(
@@ -228,71 +259,83 @@ pub mod pallet {
 	}
 }
 
-impl<T: Config> Pallet<T> {
+impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Move an account from one bag to another, depositing an event on success.
 	///
-	/// If the account changed bags, returns `Some((from, to))`.
+	/// If the account changed bags, returns `Ok(Some((from, to)))`.
 	pub fn do_rebag(
 		account: &T::AccountId,
-		new_weight: VoteWeight,
-	) -> Option<(VoteWeight, VoteWeight)> {
-		// if no voter at that node, don't do anything.
-		// the caller just wasted the fee to call this.
-		let maybe_movement = list::Node::<T>::get(&account)
-			.and_then(|node| List::update_position_for(node, new_weight));
+		new_score: T::Score,
+	) -> Result<Option<(T::Score, T::Score)>, ListError> {
+		// If no voter at that node, don't do anything. the caller just wasted the fee to call this.
+		let node = list::Node::<T, I>::get(&account).ok_or(ListError::NodeNotFound)?;
+		let maybe_movement = List::update_position_for(node, new_score);
 		if let Some((from, to)) = maybe_movement {
-			Self::deposit_event(Event::<T>::Rebagged { who: account.clone(), from, to });
+			Self::deposit_event(Event::<T, I>::Rebagged { who: account.clone(), from, to });
 		};
-		maybe_movement
+		Self::deposit_event(Event::<T, I>::ScoreUpdated { who: account.clone(), new_score });
+		Ok(maybe_movement)
 	}
 
 	/// Equivalent to `ListBags::get`, but public. Useful for tests in outside of this crate.
 	#[cfg(feature = "std")]
-	pub fn list_bags_get(weight: VoteWeight) -> Option<list::Bag<T>> {
-		ListBags::get(weight)
+	pub fn list_bags_get(score: T::Score) -> Option<list::Bag<T, I>> {
+		ListBags::get(score)
 	}
 }
 
-impl<T: Config> SortedListProvider<T::AccountId> for Pallet<T> {
-	type Error = Error;
+impl<T: Config<I>, I: 'static> SortedListProvider<T::AccountId> for Pallet<T, I> {
+	type Error = ListError;
+	type Score = T::Score;
 
 	fn iter() -> Box<dyn Iterator<Item = T::AccountId>> {
-		Box::new(List::<T>::iter().map(|n| n.id().clone()))
+		Box::new(List::<T, I>::iter().map(|n| n.id().clone()))
+	}
+
+	fn iter_from(
+		start: &T::AccountId,
+	) -> Result<Box<dyn Iterator<Item = T::AccountId>>, Self::Error> {
+		let iter = List::<T, I>::iter_from(start)?;
+		Ok(Box::new(iter.map(|n| n.id().clone())))
 	}
 
 	fn count() -> u32 {
-		ListNodes::<T>::count()
+		ListNodes::<T, I>::count()
 	}
 
 	fn contains(id: &T::AccountId) -> bool {
-		List::<T>::contains(id)
+		List::<T, I>::contains(id)
 	}
 
-	fn on_insert(id: T::AccountId, weight: VoteWeight) -> Result<(), Error> {
-		List::<T>::insert(id, weight)
+	fn on_insert(id: T::AccountId, score: T::Score) -> Result<(), ListError> {
+		List::<T, I>::insert(id, score)
 	}
 
-	fn on_update(id: &T::AccountId, new_weight: VoteWeight) {
-		Pallet::<T>::do_rebag(id, new_weight);
+	fn get_score(id: &T::AccountId) -> Result<T::Score, ListError> {
+		List::<T, I>::get_score(id)
 	}
 
-	fn on_remove(id: &T::AccountId) {
-		List::<T>::remove(id)
+	fn on_update(id: &T::AccountId, new_score: T::Score) -> Result<(), ListError> {
+		Pallet::<T, I>::do_rebag(id, new_score).map(|_| ())
+	}
+
+	fn on_remove(id: &T::AccountId) -> Result<(), ListError> {
+		List::<T, I>::remove(id)
 	}
 
 	fn unsafe_regenerate(
 		all: impl IntoIterator<Item = T::AccountId>,
-		weight_of: Box<dyn Fn(&T::AccountId) -> VoteWeight>,
+		score_of: Box<dyn Fn(&T::AccountId) -> T::Score>,
 	) -> u32 {
 		// NOTE: This call is unsafe for the same reason as SortedListProvider::unsafe_regenerate.
 		// I.e. because it can lead to many storage accesses.
 		// So it is ok to call it as caller must ensure the conditions.
-		List::<T>::unsafe_regenerate(all, weight_of)
+		List::<T, I>::unsafe_regenerate(all, score_of)
 	}
 
 	#[cfg(feature = "std")]
 	fn sanity_check() -> Result<(), &'static str> {
-		List::<T>::sanity_check()
+		List::<T, I>::sanity_check()
 	}
 
 	#[cfg(not(feature = "std"))]
@@ -304,17 +347,17 @@ impl<T: Config> SortedListProvider<T::AccountId> for Pallet<T> {
 		// NOTE: This call is unsafe for the same reason as SortedListProvider::unsafe_clear.
 		// I.e. because it can lead to many storage accesses.
 		// So it is ok to call it as caller must ensure the conditions.
-		List::<T>::unsafe_clear()
+		List::<T, I>::unsafe_clear()
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn weight_update_worst_case(who: &T::AccountId, is_increase: bool) -> VoteWeight {
+	fn score_update_worst_case(who: &T::AccountId, is_increase: bool) -> Self::Score {
 		use frame_support::traits::Get as _;
 		let thresholds = T::BagThresholds::get();
-		let node = list::Node::<T>::get(who).unwrap();
+		let node = list::Node::<T, I>::get(who).unwrap();
 		let current_bag_idx = thresholds
 			.iter()
-			.chain(sp_std::iter::once(&VoteWeight::MAX))
+			.chain(sp_std::iter::once(&T::Score::max_value()))
 			.position(|w| w == &node.bag_upper())
 			.unwrap();
 
@@ -327,5 +370,24 @@ impl<T: Config> SortedListProvider<T::AccountId> for Pallet<T> {
 			let prev_threshold_idx = current_bag_idx - 1;
 			thresholds[prev_threshold_idx]
 		}
+	}
+}
+
+impl<T: Config<I>, I: 'static> ScoreProvider<T::AccountId> for Pallet<T, I> {
+	type Score = <Pallet<T, I> as SortedListProvider<T::AccountId>>::Score;
+
+	fn score(id: &T::AccountId) -> T::Score {
+		Node::<T, I>::get(id).map(|node| node.score()).unwrap_or_default()
+	}
+
+	#[cfg(any(feature = "runtime-benchmarks", test))]
+	fn set_score_of(id: &T::AccountId, new_score: T::Score) {
+		ListNodes::<T, I>::mutate(id, |maybe_node| {
+			if let Some(node) = maybe_node.as_mut() {
+				node.set_score(new_score)
+			} else {
+				panic!("trying to mutate {:?} which does not exists", id);
+			}
+		})
 	}
 }

@@ -26,15 +26,19 @@
 //!
 //! See [`sc-service::builder::RpcExtensionBuilder`] for more details.
 
-use std::{marker::PhantomData, sync::Arc};
+use futures::stream::{FusedStream, Stream};
+use std::{
+	pin::Pin,
+	task::{Context, Poll},
+};
 
-use crate::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
+use crate::pubsub::{Hub, Receiver};
 
-use parking_lot::Mutex;
+mod registry;
+use registry::Registry;
 
-/// Collection of channel sending endpoints shared with the receiver side
-/// so they can register themselves.
-type SharedSenders<Payload> = Arc<Mutex<Vec<TracingUnboundedSender<Payload>>>>;
+#[cfg(test)]
+mod tests;
 
 /// Trait used to define the "tracing key" string used to tag
 /// and identify the mpsc channels.
@@ -44,108 +48,75 @@ pub trait TracingKeyStr {
 	const TRACING_KEY: &'static str;
 }
 
-/// The sending half of the notifications channel(s).
+/// The receiving half of the notifications channel.
 ///
-/// Used to send notifications from the BEEFY gadget side.
+/// The [`NotificationStream`] entity stores the [`Hub`] so it can be
+/// used to add more subscriptions.
 #[derive(Clone)]
-pub struct NotificationSender<Payload: Clone> {
-	subscribers: SharedSenders<Payload>,
+pub struct NotificationStream<Payload, TK: TracingKeyStr> {
+	hub: Hub<Payload, Registry>,
+	_pd: std::marker::PhantomData<TK>,
 }
 
-impl<Payload: Clone> NotificationSender<Payload> {
-	/// The `subscribers` should be shared with a corresponding `NotificationStream`.
-	fn new(subscribers: SharedSenders<Payload>) -> Self {
-		Self { subscribers }
+/// The receiving half of the notifications channel(s).
+#[derive(Debug)]
+pub struct NotificationReceiver<Payload> {
+	receiver: Receiver<Payload, Registry>,
+}
+
+/// The sending half of the notifications channel(s).
+pub struct NotificationSender<Payload> {
+	hub: Hub<Payload, Registry>,
+}
+
+impl<Payload, TK: TracingKeyStr> NotificationStream<Payload, TK> {
+	/// Creates a new pair of receiver and sender of `Payload` notifications.
+	pub fn channel() -> (NotificationSender<Payload>, Self) {
+		let hub = Hub::new(TK::TRACING_KEY);
+		let sender = NotificationSender { hub: hub.clone() };
+		let receiver = NotificationStream { hub, _pd: Default::default() };
+		(sender, receiver)
 	}
 
+	/// Subscribe to a channel through which the generic payload can be received.
+	pub fn subscribe(&self) -> NotificationReceiver<Payload> {
+		let receiver = self.hub.subscribe(());
+		NotificationReceiver { receiver }
+	}
+}
+
+impl<Payload> NotificationSender<Payload> {
 	/// Send out a notification to all subscribers that a new payload is available for a
 	/// block.
 	pub fn notify<Error>(
 		&self,
 		payload: impl FnOnce() -> Result<Payload, Error>,
-	) -> Result<(), Error> {
-		let mut subscribers = self.subscribers.lock();
-
-		// do an initial prune on closed subscriptions
-		subscribers.retain(|n| !n.is_closed());
-
-		if !subscribers.is_empty() {
-			let payload = payload()?;
-			subscribers.retain(|n| n.unbounded_send(payload.clone()).is_ok());
-		}
-
-		Ok(())
+	) -> Result<(), Error>
+	where
+		Payload: Clone,
+	{
+		self.hub.send(payload)
 	}
 }
 
-/// The receiving half of the notifications channel.
-///
-/// The `NotificationStream` entity stores the `SharedSenders` so it can be
-/// used to add more subscriptions.
-#[derive(Clone)]
-pub struct NotificationStream<Payload: Clone, TK: TracingKeyStr> {
-	subscribers: SharedSenders<Payload>,
-	_trace_key: PhantomData<TK>,
-}
-
-impl<Payload: Clone, TK: TracingKeyStr> NotificationStream<Payload, TK> {
-	/// Creates a new pair of receiver and sender of `Payload` notifications.
-	pub fn channel() -> (NotificationSender<Payload>, Self) {
-		let subscribers = Arc::new(Mutex::new(vec![]));
-		let receiver = NotificationStream::new(subscribers.clone());
-		let sender = NotificationSender::new(subscribers);
-		(sender, receiver)
-	}
-
-	/// Create a new receiver of `Payload` notifications.
-	///
-	/// The `subscribers` should be shared with a corresponding `NotificationSender`.
-	fn new(subscribers: SharedSenders<Payload>) -> Self {
-		Self { subscribers, _trace_key: PhantomData }
-	}
-
-	/// Subscribe to a channel through which the generic payload can be received.
-	pub fn subscribe(&self) -> TracingUnboundedReceiver<Payload> {
-		let (sender, receiver) = tracing_unbounded(TK::TRACING_KEY);
-		self.subscribers.lock().push(sender);
-		receiver
+impl<Payload> Clone for NotificationSender<Payload> {
+	fn clone(&self) -> Self {
+		Self { hub: self.hub.clone() }
 	}
 }
 
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use futures::StreamExt;
+impl<Payload> Unpin for NotificationReceiver<Payload> {}
 
-	#[derive(Clone)]
-	pub struct DummyTracingKey;
-	impl TracingKeyStr for DummyTracingKey {
-		const TRACING_KEY: &'static str = "test_notification_stream";
+impl<Payload> Stream for NotificationReceiver<Payload> {
+	type Item = Payload;
+
+	fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Payload>> {
+		Pin::new(&mut self.get_mut().receiver).poll_next(cx)
 	}
+}
 
-	type StringStream = NotificationStream<String, DummyTracingKey>;
-
-	#[test]
-	fn notification_channel_simple() {
-		let (sender, stream) = StringStream::channel();
-
-		let test_payload = String::from("test payload");
-		let closure_payload = test_payload.clone();
-
-		// Create a future to receive a single notification
-		// from the stream and verify its payload.
-		let future = stream.subscribe().take(1).for_each(move |payload| {
-			let test_payload = closure_payload.clone();
-			async move {
-				assert_eq!(payload, test_payload);
-			}
-		});
-
-		// Send notification.
-		let r: std::result::Result<(), ()> = sender.notify(|| Ok(test_payload));
-		r.unwrap();
-
-		// Run receiver future.
-		tokio_test::block_on(future);
+impl<Payload> FusedStream for NotificationReceiver<Payload> {
+	fn is_terminated(&self) -> bool {
+		self.receiver.is_terminated()
 	}
 }

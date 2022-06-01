@@ -23,7 +23,7 @@ use crate as pallet_identity;
 use codec::{Decode, Encode};
 use frame_support::{
 	assert_noop, assert_ok, ord_parameter_types, parameter_types,
-	traits::{ConstU32, ConstU64, EnsureOneOf},
+	traits::{ConstU32, ConstU64, EitherOfDiverse},
 	BoundedVec,
 };
 use frame_system::{EnsureRoot, EnsureSignedBy};
@@ -100,8 +100,8 @@ ord_parameter_types! {
 	pub const One: u64 = 1;
 	pub const Two: u64 = 2;
 }
-type EnsureOneOrRoot = EnsureOneOf<EnsureRoot<u64>, EnsureSignedBy<One, u64>>;
-type EnsureTwoOrRoot = EnsureOneOf<EnsureRoot<u64>, EnsureSignedBy<Two, u64>>;
+type EnsureOneOrRoot = EitherOfDiverse<EnsureRoot<u64>, EnsureSignedBy<One, u64>>;
+type EnsureTwoOrRoot = EitherOfDiverse<EnsureRoot<u64>, EnsureSignedBy<Two, u64>>;
 impl pallet_identity::Config for Test {
 	type Event = Event;
 	type Currency = Balances;
@@ -498,5 +498,22 @@ fn setting_account_id_should_work() {
 		assert_ok!(Identity::set_account_id(Origin::signed(3), 0, 4));
 		// account 4 can now, because that's their new ID.
 		assert_ok!(Identity::set_account_id(Origin::signed(4), 0, 3));
+	});
+}
+
+#[test]
+fn test_has_identity() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Identity::set_identity(Origin::signed(10), Box::new(ten())));
+		assert!(Identity::has_identity(&10, IdentityField::Display as u64));
+		assert!(Identity::has_identity(&10, IdentityField::Legal as u64));
+		assert!(Identity::has_identity(
+			&10,
+			IdentityField::Display as u64 | IdentityField::Legal as u64
+		));
+		assert!(!Identity::has_identity(
+			&10,
+			IdentityField::Display as u64 | IdentityField::Legal as u64 | IdentityField::Web as u64
+		));
 	});
 }

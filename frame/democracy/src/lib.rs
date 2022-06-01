@@ -670,8 +670,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
-			let seconds =
-				Self::len_of_deposit_of(proposal).ok_or_else(|| Error::<T>::ProposalMissing)?;
+			let seconds = Self::len_of_deposit_of(proposal).ok_or(Error::<T>::ProposalMissing)?;
 			ensure!(seconds <= seconds_upper_bound, Error::<T>::WrongUpperBound);
 			let mut deposit = Self::deposit_of(proposal).ok_or(Error::<T>::ProposalMissing)?;
 			T::Currency::reserve(&who, deposit.1)?;
@@ -820,12 +819,10 @@ pub mod pallet {
 			// - `InstantAllowed` is `true` and `origin` is `InstantOrigin`.
 			let maybe_ensure_instant = if voting_period < T::FastTrackVotingPeriod::get() {
 				Some(origin)
+			} else if let Err(origin) = T::FastTrackOrigin::try_origin(origin) {
+				Some(origin)
 			} else {
-				if let Err(origin) = T::FastTrackOrigin::try_origin(origin) {
-					Some(origin)
-				} else {
-					None
-				}
+				None
 			};
 			if let Some(ensure_instant) = maybe_ensure_instant {
 				T::InstantOrigin::ensure_origin(ensure_instant)?;
@@ -842,7 +839,12 @@ pub mod pallet {
 
 			<NextExternal<T>>::kill();
 			let now = <frame_system::Pallet<T>>::block_number();
-			Self::inject_referendum(now + voting_period, proposal_hash, threshold, delay);
+			Self::inject_referendum(
+				now.saturating_add(voting_period),
+				proposal_hash,
+				threshold,
+				delay,
+			);
 			Ok(())
 		}
 
@@ -862,7 +864,7 @@ pub mod pallet {
 			if let Some((e_proposal_hash, _)) = <NextExternal<T>>::get() {
 				ensure!(proposal_hash == e_proposal_hash, Error::<T>::ProposalMissing);
 			} else {
-				Err(Error::<T>::NoProposal)?;
+				return Err(Error::<T>::NoProposal.into())
 			}
 
 			let mut existing_vetoers =
@@ -871,7 +873,8 @@ pub mod pallet {
 				existing_vetoers.binary_search(&who).err().ok_or(Error::<T>::AlreadyVetoed)?;
 
 			existing_vetoers.insert(insert_position, who.clone());
-			let until = <frame_system::Pallet<T>>::block_number() + T::CooloffPeriod::get();
+			let until =
+				<frame_system::Pallet<T>>::block_number().saturating_add(T::CooloffPeriod::get());
 			<Blacklist<T>>::insert(&proposal_hash, (until, existing_vetoers));
 
 			Self::deposit_event(Event::<T>::Vetoed { who, proposal_hash, until });
@@ -960,7 +963,7 @@ pub mod pallet {
 		///   voted on. Weight is charged as if maximum votes.
 		// NOTE: weight must cover an incorrect voting of origin with max votes, this is ensure
 		// because a valid delegation cover decoding a direct voting with max votes.
-		#[pallet::weight(T::WeightInfo::undelegate(T::MaxVotes::get().into()))]
+		#[pallet::weight(T::WeightInfo::undelegate(T::MaxVotes::get()))]
 		pub fn undelegate(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let votes = Self::try_undelegate(who)?;
@@ -1089,7 +1092,10 @@ pub mod pallet {
 			let now = <frame_system::Pallet<T>>::block_number();
 			let (voting, enactment) = (T::VotingPeriod::get(), T::EnactmentPeriod::get());
 			let additional = if who == provider { Zero::zero() } else { enactment };
-			ensure!(now >= since + voting + additional, Error::<T>::TooEarly);
+			ensure!(
+				now >= since.saturating_add(voting).saturating_add(additional),
+				Error::<T>::TooEarly
+			);
 			ensure!(expiry.map_or(true, |e| now > e), Error::<T>::Imminent);
 
 			let res =
@@ -1282,7 +1288,7 @@ impl<T: Config> Pallet<T> {
 	/// Get the amount locked in support of `proposal`; `None` if proposal isn't a valid proposal
 	/// index.
 	pub fn backing_for(proposal: PropIndex) -> Option<BalanceOf<T>> {
-		Self::deposit_of(proposal).map(|(l, d)| d * (l.len() as u32).into())
+		Self::deposit_of(proposal).map(|(l, d)| d.saturating_mul((l.len() as u32).into()))
 	}
 
 	/// Get all referenda ready for tally at block `n`.
@@ -1318,7 +1324,7 @@ impl<T: Config> Pallet<T> {
 		delay: T::BlockNumber,
 	) -> ReferendumIndex {
 		<Pallet<T>>::inject_referendum(
-			<frame_system::Pallet<T>>::block_number() + T::VotingPeriod::get(),
+			<frame_system::Pallet<T>>::block_number().saturating_add(T::VotingPeriod::get()),
 			proposal_hash,
 			threshold,
 			delay,
@@ -1424,7 +1430,9 @@ impl<T: Config> Pallet<T> {
 					},
 					Some(ReferendumInfo::Finished { end, approved }) => {
 						if let Some((lock_periods, balance)) = votes[i].1.locked_if(approved) {
-							let unlock_at = end + T::VoteLockingPeriod::get() * lock_periods.into();
+							let unlock_at = end.saturating_add(
+								T::VoteLockingPeriod::get().saturating_mul(lock_periods.into()),
+							);
 							let now = frame_system::Pallet::<T>::block_number();
 							if now < unlock_at {
 								ensure!(
@@ -1513,9 +1521,16 @@ impl<T: Config> Pallet<T> {
 			};
 			sp_std::mem::swap(&mut old, voting);
 			match old {
-				Voting::Delegating { balance, target, conviction, delegations, prior, .. } => {
+				Voting::Delegating {
+					balance, target, conviction, delegations, mut prior, ..
+				} => {
 					// remove any delegation votes to our current target.
 					Self::reduce_upstream_delegation(&target, conviction.votes(balance));
+					let now = frame_system::Pallet::<T>::block_number();
+					let lock_periods = conviction.lock_periods().into();
+					let unlock_block = now
+						.saturating_add(T::VoteLockingPeriod::get().saturating_mul(lock_periods));
+					prior.accumulate(unlock_block, balance);
 					voting.set_common(delegations, prior);
 				},
 				Voting::Direct { votes, delegations, prior } => {
@@ -1548,7 +1563,9 @@ impl<T: Config> Pallet<T> {
 						Self::reduce_upstream_delegation(&target, conviction.votes(balance));
 					let now = frame_system::Pallet::<T>::block_number();
 					let lock_periods = conviction.lock_periods().into();
-					prior.accumulate(now + T::VoteLockingPeriod::get() * lock_periods, balance);
+					let unlock_block = now
+						.saturating_add(T::VoteLockingPeriod::get().saturating_mul(lock_periods));
+					prior.accumulate(unlock_block, balance);
 					voting.set_common(delegations, prior);
 
 					Ok(votes)
@@ -1607,14 +1624,14 @@ impl<T: Config> Pallet<T> {
 			LastTabledWasExternal::<T>::put(true);
 			Self::deposit_event(Event::<T>::ExternalTabled);
 			Self::inject_referendum(
-				now + T::VotingPeriod::get(),
+				now.saturating_add(T::VotingPeriod::get()),
 				proposal,
 				threshold,
 				T::EnactmentPeriod::get(),
 			);
 			Ok(())
 		} else {
-			Err(Error::<T>::NoneWaiting)?
+			return Err(Error::<T>::NoneWaiting.into())
 		}
 	}
 
@@ -1639,7 +1656,7 @@ impl<T: Config> Pallet<T> {
 					depositors,
 				});
 				Self::inject_referendum(
-					now + T::VotingPeriod::get(),
+					now.saturating_add(T::VotingPeriod::get()),
 					proposal,
 					VoteThreshold::SuperMajorityApprove,
 					T::EnactmentPeriod::get(),
@@ -1647,7 +1664,7 @@ impl<T: Config> Pallet<T> {
 			}
 			Ok(())
 		} else {
-			Err(Error::<T>::NoneWaiting)?
+			return Err(Error::<T>::NoneWaiting.into())
 		}
 	}
 
@@ -1693,7 +1710,7 @@ impl<T: Config> Pallet<T> {
 			if status.delay.is_zero() {
 				let _ = Self::do_enact_proposal(status.proposal_hash, index);
 			} else {
-				let when = now + status.delay;
+				let when = now.saturating_add(status.delay);
 				// Note that we need the preimage now.
 				Preimages::<T>::mutate_exists(
 					&status.proposal_hash,
@@ -1802,8 +1819,7 @@ impl<T: Config> Pallet<T> {
 		// To decode the enum variant we only need the first byte.
 		let mut buf = [0u8; 1];
 		let key = <Preimages<T>>::hashed_key_for(proposal_hash);
-		let bytes =
-			sp_io::storage::read(&key, &mut buf, 0).ok_or_else(|| Error::<T>::NotImminent)?;
+		let bytes = sp_io::storage::read(&key, &mut buf, 0).ok_or(Error::<T>::NotImminent)?;
 		// The value may be smaller that 1 byte.
 		let mut input = &buf[0..buf.len().min(bytes as usize)];
 
@@ -1831,8 +1847,7 @@ impl<T: Config> Pallet<T> {
 		// * at most 5 bytes to decode a `Compact<u32>`
 		let mut buf = [0u8; 6];
 		let key = <Preimages<T>>::hashed_key_for(proposal_hash);
-		let bytes =
-			sp_io::storage::read(&key, &mut buf, 0).ok_or_else(|| Error::<T>::PreimageMissing)?;
+		let bytes = sp_io::storage::read(&key, &mut buf, 0).ok_or(Error::<T>::PreimageMissing)?;
 		// The value may be smaller that 6 bytes.
 		let mut input = &buf[0..buf.len().min(bytes as usize)];
 
@@ -1911,7 +1926,7 @@ impl<T: Config> Pallet<T> {
 fn decode_compact_u32_at(key: &[u8]) -> Option<u32> {
 	// `Compact<u32>` takes at most 5 bytes.
 	let mut buf = [0u8; 5];
-	let bytes = sp_io::storage::read(&key, &mut buf, 0)?;
+	let bytes = sp_io::storage::read(key, &mut buf, 0)?;
 	// The value may be smaller than 5 bytes.
 	let mut input = &buf[0..buf.len().min(bytes as usize)];
 	match codec::Compact::<u32>::decode(&mut input) {

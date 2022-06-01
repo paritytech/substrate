@@ -86,7 +86,7 @@ fn generate_impl_call(
 		let (#( #pnames ),*) : ( #( #ptypes ),* ) =
 			match #c::DecodeLimit::decode_all_with_depth_limit(
 				#c::MAX_EXTRINSIC_DEPTH,
-				&#input,
+				&mut #input,
 			) {
 				Ok(res) => res,
 				Err(e) => panic!("Bad input data provided to {}: {}", #fn_name_str, e),
@@ -207,7 +207,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 			storage_transaction_cache: std::cell::RefCell<
 				#crate_::StorageTransactionCache<Block, C::StateBackend>
 			>,
-			recorder: Option<#crate_::ProofRecorder<Block>>,
+			recorder: std::option::Option<#crate_::ProofRecorder<Block>>,
 		}
 
 		// `RuntimeApi` itself is not threadsafe. However, an instance is only available in a
@@ -233,12 +233,12 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 				&self,
 				call: F,
 			) -> R where Self: Sized {
-				self.changes.borrow_mut().start_transaction();
-				*self.commit_on_success.borrow_mut() = false;
+				#crate_::OverlayedChanges::start_transaction(&mut std::cell::RefCell::borrow_mut(&self.changes));
+				*std::cell::RefCell::borrow_mut(&self.commit_on_success) = false;
 				let res = call(self);
-				*self.commit_on_success.borrow_mut() = true;
+				*std::cell::RefCell::borrow_mut(&self.commit_on_success) = true;
 
-				self.commit_or_rollback(matches!(res, #crate_::TransactionOutcome::Commit(_)));
+				self.commit_or_rollback(std::matches!(res, #crate_::TransactionOutcome::Commit(_)));
 
 				res.into_inner()
 			}
@@ -247,9 +247,8 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 				&self,
 				at: &#crate_::BlockId<Block>,
 			) -> std::result::Result<bool, #crate_::ApiError> where Self: Sized {
-				self.call
-					.runtime_version_at(at)
-					.map(|v| v.has_api_with(&A::ID, |v| v == A::VERSION))
+				#crate_::CallApiAt::<Block>::runtime_version_at(self.call, at)
+					.map(|v| #crate_::RuntimeVersion::has_api_with(&v, &A::ID, |v| v == A::VERSION))
 			}
 
 			fn has_api_with<A: #crate_::RuntimeApiInfo + ?Sized, P: Fn(u32) -> bool>(
@@ -257,52 +256,48 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 				at: &#crate_::BlockId<Block>,
 				pred: P,
 			) -> std::result::Result<bool, #crate_::ApiError> where Self: Sized {
-				self.call
-					.runtime_version_at(at)
-					.map(|v| v.has_api_with(&A::ID, pred))
+				#crate_::CallApiAt::<Block>::runtime_version_at(self.call, at)
+					.map(|v| #crate_::RuntimeVersion::has_api_with(&v, &A::ID, pred))
 			}
 
 			fn api_version<A: #crate_::RuntimeApiInfo + ?Sized>(
 				&self,
 				at: &#crate_::BlockId<Block>,
 			) -> std::result::Result<Option<u32>, #crate_::ApiError> where Self: Sized {
-				self.call
-					.runtime_version_at(at)
-					.map(|v| v.api_version(&A::ID))
+				#crate_::CallApiAt::<Block>::runtime_version_at(self.call, at)
+					.map(|v| #crate_::RuntimeVersion::api_version(&v, &A::ID))
 			}
 
 			fn record_proof(&mut self) {
-				self.recorder = Some(Default::default());
+				self.recorder = std::option::Option::Some(std::default::Default::default());
 			}
 
-			fn proof_recorder(&self) -> Option<#crate_::ProofRecorder<Block>> {
-				self.recorder.clone()
+			fn proof_recorder(&self) -> std::option::Option<#crate_::ProofRecorder<Block>> {
+				std::clone::Clone::clone(&self.recorder)
 			}
 
-			fn extract_proof(&mut self) -> Option<#crate_::StorageProof> {
-				self.recorder
-					.take()
-					.map(|recorder| recorder.to_storage_proof())
+			fn extract_proof(&mut self) -> std::option::Option<#crate_::StorageProof> {
+				std::option::Option::take(&mut self.recorder)
+					.map(|recorder| #crate_::ProofRecorder::<Block>::to_storage_proof(&recorder))
 			}
 
 			fn into_storage_changes(
 				&self,
 				backend: &Self::StateBackend,
 				parent_hash: Block::Hash,
-			) -> std::result::Result<
+			) -> core::result::Result<
 				#crate_::StorageChanges<C::StateBackend, Block>,
 				String
 			> where Self: Sized {
-				let at = #crate_::BlockId::Hash(parent_hash.clone());
-				let state_version = self.call
-					.runtime_version_at(&at)
-					.map(|v| v.state_version())
+				let at = #crate_::BlockId::Hash(std::clone::Clone::clone(&parent_hash));
+				let state_version = #crate_::CallApiAt::<Block>::runtime_version_at(self.call, &at)
+					.map(|v| #crate_::RuntimeVersion::state_version(&v))
 					.map_err(|e| format!("Failed to get state version: {}", e))?;
 
-				self.changes.replace(Default::default()).into_storage_changes(
+				#crate_::OverlayedChanges::into_storage_changes(
+					std::cell::RefCell::take(&self.changes),
 					backend,
-					parent_hash,
-					self.storage_transaction_cache.replace(Default::default()),
+					core::cell::RefCell::take(&self.storage_transaction_cache),
 					state_version,
 				)
 			}
@@ -322,9 +317,9 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 				RuntimeApiImpl {
 					call: unsafe { std::mem::transmute(call) },
 					commit_on_success: true.into(),
-					changes: Default::default(),
-					recorder: Default::default(),
-					storage_transaction_cache: Default::default(),
+					changes: std::default::Default::default(),
+					recorder: std::default::Default::default(),
+					storage_transaction_cache: std::default::Default::default(),
 				}.into()
 			}
 		}
@@ -332,20 +327,22 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 		#[cfg(any(feature = "std", test))]
 		impl<Block: #crate_::BlockT, C: #crate_::CallApiAt<Block>> RuntimeApiImpl<Block, C> {
 			fn call_api_at<
-				R: #crate_::Encode + #crate_::Decode + PartialEq,
+				R: #crate_::Encode + #crate_::Decode + std::cmp::PartialEq,
 				F: FnOnce(
 					&C,
 					&std::cell::RefCell<#crate_::OverlayedChanges>,
 					&std::cell::RefCell<#crate_::StorageTransactionCache<Block, C::StateBackend>>,
-					&Option<#crate_::ProofRecorder<Block>>,
+					&std::option::Option<#crate_::ProofRecorder<Block>>,
 				) -> std::result::Result<#crate_::NativeOrEncoded<R>, E>,
 				E,
 			>(
 				&self,
 				call_api_at: F,
 			) -> std::result::Result<#crate_::NativeOrEncoded<R>, E> {
-				if *self.commit_on_success.borrow() {
-					self.changes.borrow_mut().start_transaction();
+				if *std::cell::RefCell::borrow(&self.commit_on_success) {
+					#crate_::OverlayedChanges::start_transaction(
+						&mut std::cell::RefCell::borrow_mut(&self.changes)
+					);
 				}
 				let res = call_api_at(
 					&self.call,
@@ -354,7 +351,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 					&self.recorder,
 				);
 
-				self.commit_or_rollback(res.is_ok());
+				self.commit_or_rollback(std::result::Result::is_ok(&res));
 				res
 			}
 
@@ -363,13 +360,19 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 					We only close a transaction when we opened one ourself.
 					Other parts of the runtime that make use of transactions (state-machine)
 					also balance their transactions. The runtime cannot close client initiated
-					transactions. qed";
-				if *self.commit_on_success.borrow() {
-					if commit {
-						self.changes.borrow_mut().commit_transaction().expect(proof);
+					transactions; qed";
+				if *std::cell::RefCell::borrow(&self.commit_on_success) {
+					let res = if commit {
+						#crate_::OverlayedChanges::commit_transaction(
+							&mut std::cell::RefCell::borrow_mut(&self.changes)
+						)
 					} else {
-						self.changes.borrow_mut().rollback_transaction().expect(proof);
-					}
+						#crate_::OverlayedChanges::rollback_transaction(
+							&mut std::cell::RefCell::borrow_mut(&self.changes)
+						)
+					};
+
+					std::result::Result::expect(res, proof);
 				}
 			}
 		}
@@ -488,7 +491,7 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 			};
 
 			input.sig.ident =
-				generate_method_runtime_api_impl_name(&self.impl_trait, &input.sig.ident);
+				generate_method_runtime_api_impl_name(self.impl_trait, &input.sig.ident);
 			let ret_type = return_type_extract_type(&input.sig.output);
 
 			// Generate the correct return type.
@@ -590,7 +593,7 @@ fn generate_api_impl_for_runtime_api(impls: &[ItemImpl]) -> Result<TokenStream> 
 	let mut result = Vec::with_capacity(impls.len());
 
 	for impl_ in impls {
-		let impl_trait_path = extract_impl_trait(&impl_, RequireQualifiedTraitPath::Yes)?;
+		let impl_trait_path = extract_impl_trait(impl_, RequireQualifiedTraitPath::Yes)?;
 		let impl_trait = &impl_trait_path
 			.segments
 			.last()
@@ -631,7 +634,7 @@ fn generate_runtime_api_versions(impls: &[ItemImpl]) -> Result<TokenStream> {
 
 	for impl_ in impls {
 		let mut path = extend_with_runtime_decl_path(
-			extract_impl_trait(&impl_, RequireQualifiedTraitPath::Yes)?.clone(),
+			extract_impl_trait(impl_, RequireQualifiedTraitPath::Yes)?.clone(),
 		);
 		// Remove the trait
 		let trait_ = path
@@ -720,7 +723,7 @@ fn impl_runtime_apis_impl_inner(api_impls: &[ItemImpl]) -> Result<TokenStream> {
 
 // Filters all attributes except the cfg ones.
 fn filter_cfg_attrs(attrs: &[Attribute]) -> Vec<Attribute> {
-	attrs.into_iter().filter(|a| a.path.is_ident("cfg")).cloned().collect()
+	attrs.iter().filter(|a| a.path.is_ident("cfg")).cloned().collect()
 }
 
 #[cfg(test)]

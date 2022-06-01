@@ -22,10 +22,7 @@ use crate::{
 	traits::{Get, TryCollect},
 };
 use codec::{Decode, Encode, MaxEncodedLen};
-use sp_std::{
-	borrow::Borrow, collections::btree_map::BTreeMap, convert::TryFrom, marker::PhantomData,
-	ops::Deref,
-};
+use sp_std::{borrow::Borrow, collections::btree_map::BTreeMap, marker::PhantomData, ops::Deref};
 
 /// A bounded map based on a B-Tree.
 ///
@@ -75,6 +72,14 @@ where
 	/// Create `Self` from `t` without any checks.
 	fn unchecked_from(t: BTreeMap<K, V>) -> Self {
 		Self(t, Default::default())
+	}
+
+	/// Exactly the same semantics as `BTreeMap::retain`.
+	///
+	/// The is a safe `&mut self` borrow because `retain` can only ever decrease the length of the
+	/// inner map.
+	pub fn retain<F: FnMut(&K, &mut V) -> bool>(&mut self, f: F) {
+		self.0.retain(f)
 	}
 
 	/// Create a new `BoundedBTreeMap`.
@@ -343,12 +348,15 @@ pub mod test {
 	use frame_support::traits::ConstU32;
 	use sp_io::TestExternalities;
 
-	crate::generate_storage_alias! { Prefix, Foo => Value<BoundedBTreeMap<u32, (), ConstU32<7>>> }
-	crate::generate_storage_alias! { Prefix, FooMap => Map<(u32, Twox128), BoundedBTreeMap<u32, (),  ConstU32<7>>> }
-	crate::generate_storage_alias! {
-		Prefix,
-		FooDoubleMap => DoubleMap<(u32, Twox128), (u32, Twox128), BoundedBTreeMap<u32, (),  ConstU32<7>>>
-	}
+	#[crate::storage_alias]
+	type Foo = StorageValue<Prefix, BoundedBTreeMap<u32, (), ConstU32<7>>>;
+
+	#[crate::storage_alias]
+	type FooMap = StorageMap<Prefix, Twox128, u32, BoundedBTreeMap<u32, (), ConstU32<7>>>;
+
+	#[crate::storage_alias]
+	type FooDoubleMap =
+		StorageDoubleMap<Prefix, Twox128, u32, Twox128, u32, BoundedBTreeMap<u32, (), ConstU32<7>>>;
 
 	fn map_from_keys<K>(keys: &[K]) -> BTreeMap<K, ()>
 	where

@@ -24,8 +24,8 @@ use crate::{
 	storage::Storage,
 	wasm::{PrefabWasmModule, ReturnCode as RuntimeReturnCode},
 	weights::WeightInfo,
-	BalanceOf, Code, CodeStorage, Config, ContractInfoOf, DefaultAddressGenerator, Error, Pallet,
-	Schedule,
+	BalanceOf, Code, CodeStorage, Config, ContractInfoOf, DefaultAddressGenerator,
+	DefaultContractAccessWeight, DeletionQueue, Error, Pallet, Schedule,
 };
 use assert_matches::assert_matches;
 use codec::Encode;
@@ -35,20 +35,22 @@ use frame_support::{
 	parameter_types,
 	storage::child,
 	traits::{
-		BalanceStatus, ConstU32, ConstU64, Contains, Currency, OnInitialize, ReservableCurrency,
+		BalanceStatus, ConstU32, ConstU64, Contains, Currency, Get, OnIdle, OnInitialize,
+		ReservableCurrency,
 	},
 	weights::{constants::WEIGHT_PER_SECOND, DispatchClass, PostDispatchInfo, Weight},
 };
 use frame_system::{self as system, EventRecord, Phase};
-use pretty_assertions::assert_eq;
+use pretty_assertions::{assert_eq, assert_ne};
 use sp_core::Bytes;
 use sp_io::hashing::blake2_256;
+use sp_keystore::{testing::KeyStore, KeystoreExt};
 use sp_runtime::{
 	testing::{Header, H256},
 	traits::{BlakeTwo256, Convert, Hash, IdentityLookup},
 	AccountId32,
 };
-use std::cell::RefCell;
+use std::{cell::RefCell, sync::Arc};
 
 use crate as pallet_contracts;
 
@@ -73,17 +75,15 @@ frame_support::construct_runtime!(
 #[macro_use]
 pub mod test_utils {
 	use super::{Balances, Test};
-	use crate::{
-		exec::AccountIdOf, storage::Storage, AccountCounter, CodeHash, Config, ContractInfoOf,
-	};
+	use crate::{exec::AccountIdOf, storage::Storage, CodeHash, Config, ContractInfoOf, Nonce};
 	use frame_support::traits::Currency;
 
 	pub fn place_contract(address: &AccountIdOf<Test>, code_hash: CodeHash<Test>) {
-		let seed = <AccountCounter<Test>>::mutate(|counter| {
+		let nonce = <Nonce<Test>>::mutate(|counter| {
 			*counter += 1;
 			*counter
 		});
-		let trie_id = Storage::<Test>::generate_trie_id(address, seed);
+		let trie_id = Storage::<Test>::generate_trie_id(address, nonce);
 		set_balance(address, <Test as Config>::Currency::minimum_balance() * 10);
 		let contract = Storage::<Test>::new_contract(&address, trie_id, code_hash).unwrap();
 		<ContractInfoOf<Test>>::insert(address, contract);
@@ -97,7 +97,6 @@ pub mod test_utils {
 	}
 	macro_rules! assert_return_code {
 		( $x:expr , $y:expr $(,)? ) => {{
-			use sp_std::convert::TryInto;
 			assert_eq!(u32::from_le_bytes($x.data[..].try_into().unwrap()), $y as u32);
 		}};
 	}
@@ -236,11 +235,13 @@ impl pallet_utility::Config for Test {
 	type WeightInfo = ();
 }
 parameter_types! {
-	pub const MaxValueSize: u32 = 16_384;
-	pub const DeletionWeightLimit: Weight = 500_000_000_000;
-	pub const MaxCodeSize: u32 = 2 * 1024;
-	pub MySchedule: Schedule<Test> = <Schedule<Test>>::default();
-	pub const TransactionByteFee: u64 = 0;
+	pub MySchedule: Schedule<Test> = {
+		let mut schedule = <Schedule<Test>>::default();
+		// We want stack height to be always enabled for tests so that this
+		// instrumentation path is always tested implicitly.
+		schedule.limits.stack_height = Some(512);
+		schedule
+	};
 	pub static DepositPerByte: BalanceOf<Test> = 1;
 	pub const DepositPerItem: BalanceOf<Test> = 2;
 }
@@ -282,11 +283,14 @@ impl Config for Test {
 	type WeightInfo = ();
 	type ChainExtension = TestExtension;
 	type DeletionQueueDepth = ConstU32<1024>;
-	type DeletionWeightLimit = DeletionWeightLimit;
+	type DeletionWeightLimit = ConstU64<500_000_000_000>;
 	type Schedule = MySchedule;
 	type DepositPerByte = DepositPerByte;
 	type DepositPerItem = DepositPerItem;
 	type AddressGenerator = DefaultAddressGenerator;
+	type ContractAccessWeight = DefaultContractAccessWeight<BlockWeights>;
+	type MaxCodeLen = ConstU32<{ 128 * 1024 }>;
+	type RelaxedMaxCodeLen = ConstU32<{ 256 * 1024 }>;
 }
 
 pub const ALICE: AccountId32 = AccountId32::new([1u8; 32]);
@@ -322,6 +326,7 @@ impl ExtBuilder {
 			.assimilate_storage(&mut t)
 			.unwrap();
 		let mut ext = sp_io::TestExternalities::new(t);
+		ext.register_extension(KeystoreExt(Arc::new(KeyStore::new())));
 		ext.execute_with(|| System::set_block_number(1));
 		ext
 	}
@@ -339,6 +344,11 @@ where
 	let wasm_binary = wat::parse_file(fixture_path)?;
 	let code_hash = T::Hashing::hash(&wasm_binary);
 	Ok((wasm_binary, code_hash))
+}
+
+fn initialize_block(number: u64) {
+	System::reset_events();
+	System::initialize(&number, &[0u8; 32].into(), &Default::default());
 }
 
 // Perform a call to a plain account.
@@ -532,9 +542,67 @@ fn run_out_of_gas() {
 	});
 }
 
-fn initialize_block(number: u64) {
-	System::reset_events();
-	System::initialize(&number, &[0u8; 32].into(), &Default::default());
+/// Check that contracts with the same account id have different trie ids.
+/// Check the `Nonce` storage item for more information.
+#[test]
+fn instantiate_unique_trie_id() {
+	let (wasm, code_hash) = compile_module::<Test>("self_destruct").unwrap();
+
+	ExtBuilder::default().existential_deposit(500).build().execute_with(|| {
+		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		Contracts::upload_code(Origin::signed(ALICE), wasm, None).unwrap();
+		let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
+
+		// Instantiate the contract and store its trie id for later comparison.
+		assert_ok!(Contracts::instantiate(
+			Origin::signed(ALICE),
+			0,
+			GAS_LIMIT,
+			None,
+			code_hash,
+			vec![],
+			vec![],
+		));
+		let trie_id = ContractInfoOf::<Test>::get(&addr).unwrap().trie_id;
+
+		// Try to instantiate it again without termination should yield an error.
+		assert_err_ignore_postinfo!(
+			Contracts::instantiate(
+				Origin::signed(ALICE),
+				0,
+				GAS_LIMIT,
+				None,
+				code_hash,
+				vec![],
+				vec![],
+			),
+			<Error<Test>>::DuplicateContract,
+		);
+
+		// Terminate the contract.
+		assert_ok!(Contracts::call(
+			Origin::signed(ALICE),
+			addr.clone(),
+			0,
+			GAS_LIMIT,
+			None,
+			vec![]
+		));
+
+		// Re-Instantiate after termination.
+		assert_ok!(Contracts::instantiate(
+			Origin::signed(ALICE),
+			0,
+			GAS_LIMIT,
+			None,
+			code_hash,
+			vec![],
+			vec![],
+		));
+
+		// Trie ids shouldn't match or we might have a collision
+		assert_ne!(trie_id, ContractInfoOf::<Test>::get(&addr).unwrap().trie_id);
+	});
 }
 
 #[test]
@@ -693,7 +761,6 @@ fn deploy_and_call_other_contract() {
 }
 
 #[test]
-#[cfg(feature = "unstable-interface")]
 fn delegate_call() {
 	let (caller_wasm, caller_code_hash) = compile_module::<Test>("delegate_call").unwrap();
 	let (callee_wasm, callee_code_hash) = compile_module::<Test>("delegate_call_lib").unwrap();
@@ -1544,10 +1611,29 @@ fn lazy_removal_works() {
 		assert_matches!(child::get(trie, &[99]), Some(42));
 
 		// Run the lazy removal
-		Contracts::on_initialize(Weight::max_value());
+		Contracts::on_idle(System::block_number(), Weight::max_value());
 
 		// Value should be gone now
 		assert_matches!(child::get::<i32>(trie, &[99]), None);
+	});
+}
+
+#[test]
+fn lazy_removal_on_full_queue_works_on_initialize() {
+	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
+		// Fill the deletion queue with dummy values, so that on_initialize attempts
+		// to clear the queue
+		Storage::<Test>::fill_queue_with_dummies();
+
+		let queue_len_initial = <DeletionQueue<Test>>::decode_len().unwrap_or(0);
+
+		// Run the lazy removal
+		Contracts::on_initialize(System::block_number());
+
+		let queue_len_after_on_initialize = <DeletionQueue<Test>>::decode_len().unwrap_or(0);
+
+		// Queue length should be decreased after call of on_initialize()
+		assert!(queue_len_initial - queue_len_after_on_initialize > 0);
 	});
 }
 
@@ -1595,7 +1681,7 @@ fn lazy_batch_removal_works() {
 		}
 
 		// Run single lazy removal
-		Contracts::on_initialize(Weight::max_value());
+		Contracts::on_idle(System::block_number(), Weight::max_value());
 
 		// The single lazy removal should have removed all queued tries
 		for trie in tries.iter() {
@@ -1695,7 +1781,34 @@ fn lazy_removal_partial_remove_works() {
 }
 
 #[test]
-fn lazy_removal_does_no_run_on_full_block() {
+fn lazy_removal_does_no_run_on_full_queue_and_full_block() {
+	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
+		// Fill up the block which should prevent the lazy storage removal from running.
+		System::register_extra_weight_unchecked(
+			<Test as system::Config>::BlockWeights::get().max_block,
+			DispatchClass::Mandatory,
+		);
+
+		// Fill the deletion queue with dummy values, so that on_initialize attempts
+		// to clear the queue
+		Storage::<Test>::fill_queue_with_dummies();
+
+		// Check that on_initialize() tries to perform lazy removal but removes nothing
+		//  as no more weight is left for that.
+		let weight_used = Contracts::on_initialize(System::block_number());
+		let base = <<Test as Config>::WeightInfo as WeightInfo>::on_process_deletion_queue_batch();
+		assert_eq!(weight_used, base);
+
+		// Check that the deletion queue is still full after execution of the
+		// on_initialize() hook.
+		let max_len: u32 = <Test as Config>::DeletionQueueDepth::get();
+		let queue_len: u32 = <DeletionQueue<Test>>::decode_len().unwrap_or(0).try_into().unwrap();
+		assert_eq!(max_len, queue_len);
+	});
+}
+
+#[test]
+fn lazy_removal_does_no_run_on_low_remaining_weight() {
 	let (code, hash) = compile_module::<Test>("self_destruct").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		let min_balance = <Test as Config>::Currency::minimum_balance();
@@ -1713,19 +1826,10 @@ fn lazy_removal_does_no_run_on_full_block() {
 
 		let addr = Contracts::contract_address(&ALICE, &hash, &[]);
 		let info = <ContractInfoOf<Test>>::get(&addr).unwrap();
-		let max_keys = 30;
-
-		// Create some storage items for the contract.
-		let vals: Vec<_> = (0..max_keys)
-			.map(|i| (blake2_256(&i.encode()), (i as u32), (i as u32).encode()))
-			.collect();
+		let trie = &info.child_trie_info();
 
 		// Put value into the contracts child trie
-		for val in &vals {
-			Storage::<Test>::write(&info.trie_id, &val.0, Some(val.2.clone()), None, false)
-				.unwrap();
-		}
-		<ContractInfoOf<Test>>::insert(&addr, info.clone());
+		child::put(trie, &[99], &42);
 
 		// Terminate the contract
 		assert_ok!(Contracts::call(
@@ -1740,37 +1844,30 @@ fn lazy_removal_does_no_run_on_full_block() {
 		// Contract info should be gone
 		assert!(!<ContractInfoOf::<Test>>::contains_key(&addr));
 
-		let trie = info.child_trie_info();
-
 		// But value should be still there as the lazy removal did not run, yet.
-		for val in &vals {
-			assert_eq!(child::get::<u32>(&trie, &blake2_256(&val.0)), Some(val.1));
-		}
+		assert_matches!(child::get(trie, &[99]), Some(42));
 
-		// Fill up the block which should prevent the lazy storage removal from running.
-		System::register_extra_weight_unchecked(
-			<Test as system::Config>::BlockWeights::get().max_block,
-			DispatchClass::Mandatory,
-		);
+		// Assign a remaining weight which is too low for a successfull deletion of the contract
+		let low_remaining_weight =
+			<<Test as Config>::WeightInfo as WeightInfo>::on_process_deletion_queue_batch();
 
-		// Run the lazy removal without any limit so that all keys would be removed if there
-		// had been some weight left in the block.
-		let weight_used = Contracts::on_initialize(Weight::max_value());
-		let base = <<Test as Config>::WeightInfo as WeightInfo>::on_initialize();
-		assert_eq!(weight_used, base);
+		// Run the lazy removal
+		Contracts::on_idle(System::block_number(), low_remaining_weight);
 
-		// All the keys are still in place
-		for val in &vals {
-			assert_eq!(child::get::<u32>(&trie, &blake2_256(&val.0)), Some(val.1));
-		}
+		// Value should still be there, since remaining weight was too low for removal
+		assert_matches!(child::get::<i32>(trie, &[99]), Some(42));
 
-		// Run the lazy removal directly which disregards the block limits
-		Storage::<Test>::process_deletion_queue_batch(Weight::max_value());
+		// Run the lazy removal while deletion_queue is not full
+		Contracts::on_initialize(System::block_number());
 
-		// Now the keys should be gone
-		for val in &vals {
-			assert_eq!(child::get::<u32>(&trie, &blake2_256(&val.0)), None);
-		}
+		// Value should still be there, since deletion_queue was not full
+		assert_matches!(child::get::<i32>(trie, &[99]), Some(42));
+
+		// Run on_idle with max remaining weight, this should remove the value
+		Contracts::on_idle(System::block_number(), Weight::max_value());
+
+		// Value should be gone
+		assert_matches!(child::get::<i32>(trie, &[99]), None);
 	});
 }
 
@@ -1998,7 +2095,7 @@ fn reinstrument_does_charge() {
 		assert!(result2.gas_consumed > result1.gas_consumed);
 		assert_eq!(
 			result2.gas_consumed,
-			result1.gas_consumed + <Test as Config>::WeightInfo::reinstrument(code_len / 1024),
+			result1.gas_consumed + <Test as Config>::WeightInfo::reinstrument(code_len),
 		);
 	});
 }
@@ -2211,7 +2308,6 @@ fn gas_estimation_call_runtime() {
 }
 
 #[test]
-#[cfg(feature = "unstable-interface")]
 fn ecdsa_recover() {
 	let (wasm, code_hash) = compile_module::<Test>("ecdsa_recover").unwrap();
 
@@ -2797,6 +2893,86 @@ fn storage_deposit_works() {
 }
 
 #[test]
+fn set_code_extrinsic() {
+	let (wasm, code_hash) = compile_module::<Test>("dummy").unwrap();
+	let (new_wasm, new_code_hash) = compile_module::<Test>("crypto_hashes").unwrap();
+
+	assert_ne!(code_hash, new_code_hash);
+
+	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
+		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+
+		assert_ok!(Contracts::instantiate_with_code(
+			Origin::signed(ALICE),
+			0,
+			GAS_LIMIT,
+			None,
+			wasm,
+			vec![],
+			vec![],
+		));
+		let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
+
+		assert_ok!(Contracts::upload_code(Origin::signed(ALICE), new_wasm, None,));
+
+		// Drop previous events
+		initialize_block(2);
+
+		assert_eq!(<ContractInfoOf<Test>>::get(&addr).unwrap().code_hash, code_hash);
+		assert_refcount!(&code_hash, 1);
+		assert_refcount!(&new_code_hash, 0);
+
+		// only root can execute this extrinsic
+		assert_noop!(
+			Contracts::set_code(Origin::signed(ALICE), addr.clone(), new_code_hash),
+			sp_runtime::traits::BadOrigin,
+		);
+		assert_eq!(<ContractInfoOf<Test>>::get(&addr).unwrap().code_hash, code_hash);
+		assert_refcount!(&code_hash, 1);
+		assert_refcount!(&new_code_hash, 0);
+		assert_eq!(System::events(), vec![],);
+
+		// contract must exist
+		assert_noop!(
+			Contracts::set_code(Origin::root(), BOB, new_code_hash),
+			<Error<Test>>::ContractNotFound,
+		);
+		assert_eq!(<ContractInfoOf<Test>>::get(&addr).unwrap().code_hash, code_hash);
+		assert_refcount!(&code_hash, 1);
+		assert_refcount!(&new_code_hash, 0);
+		assert_eq!(System::events(), vec![],);
+
+		// new code hash must exist
+		assert_noop!(
+			Contracts::set_code(Origin::root(), addr.clone(), Default::default()),
+			<Error<Test>>::CodeNotFound,
+		);
+		assert_eq!(<ContractInfoOf<Test>>::get(&addr).unwrap().code_hash, code_hash);
+		assert_refcount!(&code_hash, 1);
+		assert_refcount!(&new_code_hash, 0);
+		assert_eq!(System::events(), vec![],);
+
+		// successful call
+		assert_ok!(Contracts::set_code(Origin::root(), addr.clone(), new_code_hash));
+		assert_eq!(<ContractInfoOf<Test>>::get(&addr).unwrap().code_hash, new_code_hash);
+		assert_refcount!(&code_hash, 0);
+		assert_refcount!(&new_code_hash, 1);
+		assert_eq!(
+			System::events(),
+			vec![EventRecord {
+				phase: Phase::Initialization,
+				event: Event::Contracts(pallet_contracts::Event::ContractCodeUpdated {
+					contract: addr,
+					new_code_hash,
+					old_code_hash: code_hash,
+				}),
+				topics: vec![],
+			},]
+		);
+	});
+}
+
+#[test]
 fn call_after_killed_account_needs_funding() {
 	let (wasm, code_hash) = compile_module::<Test>("dummy").unwrap();
 	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
@@ -3025,7 +3201,6 @@ fn code_rejected_error_works() {
 }
 
 #[test]
-#[cfg(feature = "unstable-interface")]
 fn set_code_hash() {
 	let (wasm, code_hash) = compile_module::<Test>("set_code_hash").unwrap();
 	let (new_wasm, new_code_hash) = compile_module::<Test>("new_set_code_hash_contract").unwrap();

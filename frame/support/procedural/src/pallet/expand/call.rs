@@ -42,6 +42,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 	let pallet_ident = &def.pallet_struct.pallet;
 
 	let fn_name = methods.iter().map(|method| &method.name).collect::<Vec<_>>();
+	let call_index = methods.iter().map(|method| method.call_index).collect::<Vec<_>>();
 	let new_call_variant_fn_name = fn_name
 		.iter()
 		.map(|fn_name| quote::format_ident!("new_call_variant_{}", fn_name))
@@ -68,7 +69,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 				.args
 				.iter()
 				.map(|(_, name, _)| {
-					syn::Ident::new(&name.to_string().trim_start_matches('_'), name.span())
+					syn::Ident::new(name.to_string().trim_start_matches('_'), name.span())
 				})
 				.collect::<Vec<_>>()
 		})
@@ -177,8 +178,12 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 			),
 			#(
 				#( #[doc = #fn_doc] )*
+				#[codec(index = #call_index)]
 				#fn_name {
-					#( #args_compact_attr #args_name_stripped: #args_type ),*
+					#(
+						#[allow(missing_docs)]
+						#args_compact_attr #args_name_stripped: #args_type
+					),*
 				},
 			)*
 		}
@@ -262,8 +267,12 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 							#frame_support::sp_tracing::enter_span!(
 								#frame_support::sp_tracing::trace_span!(stringify!(#fn_name))
 							);
-							<#pallet_ident<#type_use_gen>>::#fn_name(origin, #( #args_name, )* )
-								.map(Into::into).map_err(Into::into)
+							// We execute all dispatchable in at least one storage layer, allowing them
+							// to return an error at any point, and undoing any storage changes.
+							#frame_support::storage::in_storage_layer(|| {
+								<#pallet_ident<#type_use_gen>>::#fn_name(origin, #( #args_name, )* )
+									.map(Into::into).map_err(Into::into)
+							})
 						},
 					)*
 					Self::__Ignore(_, _) => {
