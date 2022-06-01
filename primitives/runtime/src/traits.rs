@@ -404,7 +404,7 @@ macro_rules! parameter_types {
 	) => (
 		$( #[ $attr ] )*
 		$vis struct $name;
-		$crate::parameter_types!(IMPL_CONST $name , $type , $value);
+		$crate::parameter_types!(@IMPL_CONST $name , $type , $value);
 		$crate::parameter_types!( $( $rest )* );
 	);
 	(
@@ -414,11 +414,11 @@ macro_rules! parameter_types {
 	) => (
 		$( #[ $attr ] )*
 		$vis struct $name;
-		$crate::parameter_types!(IMPL $name, $type, $value);
+		$crate::parameter_types!(@IMPL $name, $type, $value);
 		$crate::parameter_types!( $( $rest )* );
 	);
 	() => ();
-	(IMPL_CONST $name:ident, $type:ty, $value:expr) => {
+	(@IMPL_CONST $name:ident, $type:ty, $value:expr) => {
 		impl $name {
 			/// Returns the value of this parameter type.
 			pub const fn get() -> $type {
@@ -439,7 +439,7 @@ macro_rules! parameter_types {
 			}
 		}
 	};
-	(IMPL $name:ident, $type:ty, $value:expr) => {
+	(@IMPL $name:ident, $type:ty, $value:expr) => {
 		impl $name {
 			/// Returns the value of this parameter type.
 			pub fn get() -> $type {
@@ -536,18 +536,18 @@ impl<T> TryMorph<T> for Identity {
 #[macro_export]
 macro_rules! morph_types {
 	(
-		DECL $( #[doc = $doc:expr] )* $vq:vis $name:ident ()
+		@DECL $( #[doc = $doc:expr] )* $vq:vis $name:ident ()
 	) => {
 		$( #[doc = $doc] )* $vq struct $name;
 	};
 	(
-		DECL $( #[doc = $doc:expr] )* $vq:vis $name:ident ( $( $bound_id:ident ),+ )
+		@DECL $( #[doc = $doc:expr] )* $vq:vis $name:ident ( $( $bound_id:ident ),+ )
 	) => {
 		$( #[doc = $doc] )*
 		$vq struct $name < $($bound_id,)* > ( $crate::traits::PhantomData< ( $($bound_id,)* ) > ) ;
 	};
 	(
-		IMPL $name:ty : ( $( $bounds:tt )* ) ( $( $where:tt )* )
+		@IMPL $name:ty : ( $( $bounds:tt )* ) ( $( $where:tt )* )
 		= |$var:ident: $var_type:ty| -> $outcome:ty { $( $ex:expr )* }
 	) => {
 		impl<$($bounds)*> $crate::traits::Morph<$var_type> for $name $( $where )? {
@@ -556,7 +556,7 @@ macro_rules! morph_types {
 		}
 	};
 	(
-		IMPL_TRY $name:ty : ( $( $bounds:tt )* ) ( $( $where:tt )* )
+		@IMPL_TRY $name:ty : ( $( $bounds:tt )* ) ( $( $where:tt )* )
 		= |$var:ident: $var_type:ty| -> $outcome:ty { $( $ex:expr )* }
 	) => {
 		impl<$($bounds)*> $crate::traits::TryMorph<$var_type> for $name $( $where )? {
@@ -565,7 +565,7 @@ macro_rules! morph_types {
 		}
 	};
 	(
-		IMPL $name:ty : () ( $( $where:tt )* )
+		@IMPL $name:ty : () ( $( $where:tt )* )
 		= |$var:ident: $var_type:ty| -> $outcome:ty { $( $ex:expr )* }
 	) => {
 		impl $crate::traits::Morph<$var_type> for $name $( $where )? {
@@ -574,7 +574,7 @@ macro_rules! morph_types {
 		}
 	};
 	(
-		IMPL_TRY $name:ty : () ( $( $where:tt )* )
+		@IMPL_TRY $name:ty : () ( $( $where:tt )* )
 		= |$var:ident: $var_type:ty| -> $outcome:ty { $( $ex:expr )* }
 	) => {
 		impl $crate::traits::TryMorph<$var_type> for $name $( $where )? {
@@ -583,18 +583,19 @@ macro_rules! morph_types {
 		}
 	};
 	(
-		IMPL_BOTH $name:ty : ( $( $bounds:tt )* ) ( $( $where:tt )* )
+		@IMPL_BOTH $name:ty : ( $( $bounds:tt )* ) ( $( $where:tt )* )
 		= |$var:ident: $var_type:ty| -> $outcome:ty { $( $ex:expr )* }
 	) => {
 		morph_types! {
-			IMPL $name : ($($bounds)*) ($($where)*)
+			@IMPL $name : ($($bounds)*) ($($where)*)
 			= |$var: $var_type| -> $outcome { $( $ex )* }
 		}
 		morph_types! {
-			IMPL_TRY $name : ($($bounds)*) ($($where)*)
+			@IMPL_TRY $name : ($($bounds)*) ($($where)*)
 			= |$var: $var_type| -> $outcome { Ok({$( $ex )*}) }
 		}
 	};
+
 	(
 		$( #[doc = $doc:expr] )* $vq:vis type $name:ident
 		$( < $( $bound_id:ident $( : $bound_head:path $( | $bound_tail:path )* )? ),+ > )?
@@ -611,7 +612,6 @@ macro_rules! morph_types {
 			$( $rest )*
 		}
 	};
-
 	(
 		$( #[doc = $doc:expr] )* $vq:vis type $name:ident
 		$( < $( $bound_id:ident $( : $bound_head:path $( | $bound_tail:path )* )? ),+ > )?
@@ -620,9 +620,9 @@ macro_rules! morph_types {
 		$( where $( $where_path:ty : $where_bound_head:path $( | $where_bound_tail:path )* ),* )?;
 		$( $rest:tt )*
 	) => {
-		morph_types! { DECL $( #[doc = $doc] )* $vq $name ( $( $( $bound_id ),+ )? ) }
+		morph_types! { @DECL $( #[doc = $doc] )* $vq $name ( $( $( $bound_id ),+ )? ) }
 		morph_types! {
-			IMPL_BOTH $name $( < $( $bound_id ),* > )? :
+			@IMPL_BOTH $name $( < $( $bound_id ),* > )? :
 			( $( $( $bound_id $( : $bound_head $( + $bound_tail )* )? , )+ )? $( $extra )? )
 			( $( where $( $where_path : $where_bound_head $( + $where_bound_tail )* ),* )? )
 			= |$var: $var_type| -> $outcome { $( $ex )* }
@@ -638,9 +638,9 @@ macro_rules! morph_types {
 		$( where $( $where_path:ty : $where_bound_head:path $( | $where_bound_tail:path )* ),* )?;
 		$( $rest:tt )*
 	) => {
-		morph_types! { DECL $( #[doc = $doc] )* $vq $name ( $( $( $bound_id ),+ )? ) }
+		morph_types! { @DECL $( #[doc = $doc] )* $vq $name ( $( $( $bound_id ),+ )? ) }
 		morph_types! {
-			IMPL $name $( < $( $bound_id ),* > )? :
+			@IMPL $name $( < $( $bound_id ),* > )? :
 			( $( $( $bound_id $( : $bound_head $( + $bound_tail )* )? , )+ )? $( $extra )? )
 			( $( where $( $where_path : $where_bound_head $( + $where_bound_tail )* ),* )? )
 			= |$var: $var_type| -> $outcome { $( $ex )* }
@@ -656,9 +656,9 @@ macro_rules! morph_types {
 		$( where $( $where_path:ty : $where_bound_head:path $( | $where_bound_tail:path )* ),* )?;
 		$( $rest:tt )*
 	) => {
-		morph_types! { DECL $( #[doc = $doc] )* $vq $name ( $( $( $bound_id ),+ )? ) }
+		morph_types! { @DECL $( #[doc = $doc] )* $vq $name ( $( $( $bound_id ),+ )? ) }
 		morph_types! {
-			IMPL_TRY $name $( < $( $bound_id ),* > )? :
+			@IMPL_TRY $name $( < $( $bound_id ),* > )? :
 			( $( $( $bound_id $( : $bound_head $( + $bound_tail )* )? , )+ )? $( $extra )? )
 			( $( where $( $where_path : $where_bound_head $( + $where_bound_tail )* ),* )? )
 			= |$var: $var_type| -> $outcome { $( $ex )* }
