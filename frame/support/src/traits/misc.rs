@@ -23,9 +23,7 @@ use scale_info::{build::Fields, meta_type, Path, Type, TypeInfo, TypeParameter};
 use sp_arithmetic::traits::{CheckedAdd, CheckedMul, CheckedSub, Saturating};
 use sp_runtime::{traits::Block as BlockT, DispatchError};
 use sp_std::{cmp::Ordering, prelude::*};
-
 #[doc(hidden)]
-#[deprecated = "Use type in `sp_runtime::traits` instead"]
 pub use sp_runtime::traits::{
 	TypedGet, Get, GetDefault, ConstBool, ConstU8, ConstU16, ConstU32, ConstU64, ConstU128, ConstI8,
 	ConstI16, ConstI32, ConstI64, ConstI128,
