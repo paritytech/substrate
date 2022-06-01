@@ -150,7 +150,7 @@ pub mod pallet {
 		/// Handler for the unbalanced reduction when slashing a preimage deposit.
 		type Slash: OnUnbalanced<NegativeImbalanceOf<Self, I>>;
 		/// The counting type for votes. Usually just balance.
-		type Votes: AtLeast32BitUnsigned + Copy + Parameter + Member;
+		type Votes: AtLeast32BitUnsigned + Copy + Parameter + Member + MaxEncodedLen;
 		/// The tallying type.
 		type Tally: VoteTally<Self::Votes, TrackIdOf<Self, I>>
 			+ Clone

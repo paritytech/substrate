@@ -27,7 +27,7 @@ use crate::{
 use codec::{Decode, Encode, EncodeLike, FullCodec, FullEncode};
 use sp_core::storage::ChildInfo;
 use sp_runtime::generic::{Digest, DigestItem};
-use sp_std::prelude::*;
+use sp_std::{marker::PhantomData, prelude::*};
 
 pub use self::{
 	transactional::{
@@ -50,6 +50,10 @@ pub mod transactional;
 pub mod types;
 pub mod unhashed;
 pub mod weak_bounded_vec;
+
+/// Utility type for converting a storage map into a `Get<u32>` impl which returns the maximum
+/// key size.
+pub struct KeyLenOf<M>(PhantomData<M>);
 
 /// A trait for working with macro-generated storage values under the substrate storage API.
 ///
