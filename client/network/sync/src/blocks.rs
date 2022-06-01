@@ -178,15 +178,18 @@ impl<B: BlockT> BlockCollection<B> {
 
 		let mut prev = from;
 		for (start, range_data) in &mut self.blocks {
+			if *start > prev {
+				break
+			}
 			let len = match range_data {
-				BlockRangeState::Complete(blocks) if *start <= prev => {
+				BlockRangeState::Complete(blocks) => {
 					let len = (blocks.len() as u32).into();
 					prev = *start + len;
 					// Remove all elements from `blocks` and add them to `drained`
 					ready.append(blocks);
 					len
 				},
-				BlockRangeState::Queued { .. } if *start <= prev => continue,
+				BlockRangeState::Queued { .. } => continue,
 				_ => break,
 			};
 			*range_data = BlockRangeState::Queued { len };
