@@ -286,6 +286,12 @@ impl<T, S: Get<u32>> BoundedVec<T, S> {
 		Self::with_bounded_capacity(Self::bound())
 	}
 
+	/// Consume and truncate the vector `v` in order to create a new instance of `Self` from it.
+	pub fn truncate_from(mut v: Vec<T>) -> Self {
+		v.truncate(Self::bound());
+		Self::unchecked_from(v)
+	}
+
 	/// Get the bound of the type in `usize`.
 	pub fn bound() -> usize {
 		S::get() as usize
