@@ -36,29 +36,27 @@ pub struct PrimaryPreDigest {
 	pub authority_index: AuthorityIndex,
 	/// Corresponding slot number.
 	pub slot: Slot,
+	/// Block VRF output.
+	pub block_vrf_output: VRFOutput,
+	/// Block VRF proof.
+	pub block_vrf_proof: VRFProof,
 	// /// Index of ticket VRF proof that has been previously committed.
 	// pub ticket_vrf_index: VRFIndex,
 	// /// Attempt number of the ticket VRF proof.
 	// pub ticket_vrf_attempt: u64,
-	// /// Reveal of tocket VRF output.
+	// /// Reveal of ticket VRF proof.
 	// pub ticket_vrf_proof: VRFProof,
-	// /// Secondary "Post Block VRF" proof.
-	// pub post_vrf_proof: VRFProof,
-	// /// Secondary "Post Block VRF" output.
-	// pub post_vrf_output: VRFOutput,
-	// /// Additional commitments posted directly at pre-digest.
-	// pub commitments: Vec<VRFOutput>,
 }
 
 /// Sassafras secondary slot assignment pre-digest.
+/// TODO-SASS: use this for AURA fallback.
+/// Should we include block randomness here as well? Why not...
 #[derive(Clone, RuntimeDebug, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub struct SecondaryPreDigest {
 	/// Authority index.
 	pub authority_index: AuthorityIndex,
 	/// Slot number.
 	pub slot: Slot,
-	// /// Additional commitments posted directly at pre-digest.
-	// pub commitments: Vec<VRFOutput>,
 }
 
 /// A Sassafras pre-runtime digest. This contains all data required to validate a
@@ -102,6 +100,15 @@ impl PreDigest {
 		match self {
 			PreDigest::Primary(_) => 1,
 			PreDigest::Secondary(_) => 0,
+		}
+	}
+
+	/// Returns the VRF output and proof, if they exist.
+	pub fn vrf(&self) -> Option<(&VRFOutput, &VRFProof)> {
+		match self {
+			PreDigest::Primary(primary) =>
+				Some((&primary.block_vrf_output, &primary.block_vrf_proof)),
+			PreDigest::Secondary(_) => None,
 		}
 	}
 }

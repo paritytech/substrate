@@ -31,6 +31,7 @@ pub enum VRFTranscriptValue {
 	/// Value is a u64 integer
 	U64(u64),
 }
+
 /// VRF Transcript data
 #[derive(Clone, Encode)]
 pub struct VRFTranscriptData {
@@ -39,6 +40,7 @@ pub struct VRFTranscriptData {
 	/// Additional data to be registered into the transcript
 	pub items: Vec<(&'static str, VRFTranscriptValue)>,
 }
+
 /// VRF signature data
 pub struct VRFSignature {
 	/// The VRFOutput serialized

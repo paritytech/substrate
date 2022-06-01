@@ -24,13 +24,14 @@
 // TODO-SASS: temporary
 #![allow(unused_imports)]
 
-pub mod digests;
-pub mod inherents;
+pub use merlin::Transcript;
 
 use scale_codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "std")]
+use sp_keystore::vrf::{VRFTranscriptData, VRFTranscriptValue};
 use sp_runtime::{ConsensusEngineId, RuntimeDebug};
 use sp_std::vec::Vec;
 
@@ -42,6 +43,9 @@ pub use sp_consensus_vrf::schnorrkel::{
 /// Key type for Sassafras module.
 pub const KEY_TYPE: sp_core::crypto::KeyTypeId = sp_application_crypto::key_types::SASSAFRAS;
 
+pub mod digests;
+pub mod inherents;
+
 mod app {
 	use sp_application_crypto::{app_crypto, key_types::SASSAFRAS, sr25519};
 	app_crypto!(sr25519, SASSAFRAS);
@@ -50,9 +54,8 @@ mod app {
 /// The index of an authority.
 pub type AuthorityIndex = u32;
 
-// TODO-SASS
-// /// An epoch number.
-//pub type EpochNumber = u64;
+/// BABE VRFInOut context.
+pub const SASSAFRAS_VRF_INOUT_CONTEXT: &[u8] = b"BabeVRFInOutContext";
 
 /// Sassafras authority keypair. Necessarily equivalent to the schnorrkel public key used in
 /// the main Sassafras module. If that ever changes, then this must, too.
@@ -90,9 +93,9 @@ pub struct SassafrasGenesisConfiguration {
 	pub epoch_length: u64,
 	/// The authorities for the genesis epoch.
 	pub genesis_authorities: Vec<(AuthorityId, SassafrasAuthorityWeight)>,
+	/// The randomness for the genesis epoch.
+	pub randomness: Randomness,
 	// TODO-SASS
-	// /// The randomness for the genesis epoch.
-	// pub randomness: Randomness,
 }
 
 /// Configuration data used by the Sassafras consensus engine that can be modified on epoch change.
@@ -100,6 +103,28 @@ pub struct SassafrasGenesisConfiguration {
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct SassafrasEpochConfiguration {
 	// TODO-SASS
+}
+
+/// Make a VRF transcript from given randomness, slot number and epoch.
+pub fn make_transcript(randomness: &Randomness, slot: Slot, epoch: u64) -> Transcript {
+	let mut transcript = Transcript::new(&SASSAFRAS_ENGINE_ID);
+	transcript.append_u64(b"slot number", *slot);
+	transcript.append_u64(b"current epoch", epoch);
+	transcript.append_message(b"chain randomness", &randomness[..]);
+	transcript
+}
+
+/// Make a VRF transcript data container
+#[cfg(feature = "std")]
+pub fn make_transcript_data(randomness: &Randomness, slot: Slot, epoch: u64) -> VRFTranscriptData {
+	VRFTranscriptData {
+		label: &SASSAFRAS_ENGINE_ID,
+		items: vec![
+			("slot number", VRFTranscriptValue::U64(*slot)),
+			("current epoch", VRFTranscriptValue::U64(epoch)),
+			("chain randomness", VRFTranscriptValue::Bytes(randomness.to_vec())),
+		],
+	}
 }
 
 sp_api::decl_runtime_apis! {

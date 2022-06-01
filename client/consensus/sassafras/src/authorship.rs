@@ -20,10 +20,12 @@
 
 use crate::Epoch;
 
+use sp_application_crypto::AppKey;
 use sp_consensus_sassafras::{
 	digests::{PreDigest, PrimaryPreDigest},
-	AuthorityId, Slot,
+	make_transcript_data, AuthorityId, Slot,
 };
+use sp_consensus_vrf::schnorrkel::{VRFOutput, VRFProof};
 use sp_core::ByteArray;
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 
@@ -58,6 +60,8 @@ pub fn claim_slot_using_keys(
 	// 	if epoch.config.allowed_slots.is_secondary_plain_slots_allowed() ||
 	// 		epoch.config.allowed_slots.is_secondary_vrf_slots_allowed()
 	// 	{
+	// 		// TODO-SASS: this should not be performed as a fallback...
+	// 		// but only if we run out of tickets for the epoch "center"
 	// 		claim_secondary_slot(
 	// 			slot,
 	// 			epoch,
@@ -82,22 +86,36 @@ fn claim_primary_slot(
 	keystore: &SyncCryptoStorePtr,
 	keys: &[(AuthorityId, usize)],
 ) -> Option<(PreDigest, AuthorityId)> {
-	// TODO-SASS: this is a dummy placeholder
+	let Epoch { authorities, randomness, epoch_index, .. } = epoch;
+	if authorities.is_empty() {
+		return None
+	}
 
-	use sp_core::crypto::key_types::SASSAFRAS;
+	// TODO-SASS: this is a dummy placeholder
+	// We'll need to replace this with the ticket system...
+	// let expected_author = is_my_turn according to the epoch tickets?
 
 	for (authority_id, authority_index) in keys {
-		if SyncCryptoStore::has_keys(
-			keystore.as_ref(),
-			&[(authority_id.clone().to_raw_vec(), SASSAFRAS)],
-		) {
+		// TODO-SASS
+		// if expected_author != authority_id { continue }
+
+		// If we can author, also also need to push block randomness.
+		let transcript_data = make_transcript_data(randomness, slot, *epoch_index);
+		let result = SyncCryptoStore::sr25519_vrf_sign(
+			&**keystore,
+			AuthorityId::ID,
+			authority_id.as_ref(),
+			transcript_data,
+		);
+		if let Ok(Some(signature)) = result {
 			let pre_digest = PreDigest::Primary(PrimaryPreDigest {
 				authority_index: *authority_index as u32,
 				slot,
+				block_vrf_output: VRFOutput(signature.output),
+				block_vrf_proof: VRFProof(signature.proof),
 			});
 			return Some((pre_digest, authority_id.clone()))
 		}
 	}
-
 	None
 }

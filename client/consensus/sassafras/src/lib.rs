@@ -95,6 +95,7 @@ pub use sp_consensus_sassafras::{
 	},
 	AuthorityId, AuthorityPair, AuthoritySignature, SassafrasApi, SassafrasAuthorityWeight,
 	SassafrasEpochConfiguration, SassafrasGenesisConfiguration, SASSAFRAS_ENGINE_ID,
+	VRF_OUTPUT_LENGTH,
 };
 
 pub mod authorship;
@@ -111,6 +112,8 @@ pub struct Epoch {
 	pub duration: u64,
 	/// The authorities and their weights.
 	pub authorities: Vec<(AuthorityId, SassafrasAuthorityWeight)>,
+	/// Randomness for this epoch.
+	pub randomness: [u8; VRF_OUTPUT_LENGTH],
 	// TODO-SASS
 }
 
@@ -125,6 +128,7 @@ impl EpochT for Epoch {
 			start_slot: self.start_slot + self.duration,
 			duration: self.duration,
 			authorities: descriptor.authorities,
+			randomness: descriptor.randomness,
 		}
 	}
 
@@ -146,6 +150,7 @@ impl Epoch {
 			start_slot: slot,
 			duration: genesis_config.epoch_length,
 			authorities: genesis_config.genesis_authorities.clone(),
+			randomness: genesis_config.randomness,
 		}
 	}
 }

@@ -49,6 +49,7 @@
 use scale_codec::{Decode, Encode};
 
 use frame_support::{traits::Get, weights::Weight, WeakBoundedVec};
+use sp_application_crypto::ByteArray;
 use sp_consensus_vrf::schnorrkel;
 use sp_runtime::{
 	generic::DigestItem,
@@ -205,6 +206,10 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type NextRandomness<T> = StorageValue<_, schnorrkel::Randomness, ValueQuery>;
 
+	/// Current epoch randomness accumulator.
+	#[pallet::storage]
+	pub type RandomnessAccumulator<T> = StorageValue<_, schnorrkel::Randomness, ValueQuery>;
+
 	/// Temporary value (cleared at block finalization) which is `Some`
 	/// if per-block initialization has already been called for current block.
 	#[pallet::storage]
@@ -216,6 +221,7 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type EpochConfig<T> = StorageValue<_, SassafrasEpochConfiguration>;
 
+	/// Genesis configuration for Sassafras protocol.
 	#[cfg_attr(feature = "std", derive(Default))]
 	#[pallet::genesis_config]
 	pub struct GenesisConfig {
@@ -260,37 +266,41 @@ pub mod pallet {
 				// 	);
 				// }
 
-				// if let Some((vrf_output, vrf_proof)) = pre_digest.vrf() {
-				// 	let randomness: Option<schnorrkel::Randomness> = Authorities::<T>::get()
-				// 		.get(authority_index as usize)
-				// 		.and_then(|(authority, _)| {
-				// 			schnorrkel::PublicKey::from_bytes(authority.as_slice()).ok()
-				// 		})
-				// 		.and_then(|pubkey| {
-				// 			let current_slot = CurrentSlot::<T>::get();
+				if let Some((vrf_output, vrf_proof)) = pre_digest.vrf() {
+					let randomness: Option<schnorrkel::Randomness> = Authorities::<T>::get()
+						.get(authority_index as usize)
+						.and_then(|(authority, _)| {
+							schnorrkel::PublicKey::from_bytes(authority.as_slice()).ok()
+						})
+						.and_then(|pubkey| {
+							let current_slot = CurrentSlot::<T>::get();
 
-				// 			let transcript = sp_consensus_sassafras::make_transcript(
-				// 				&Self::randomness(),
-				// 				current_slot,
-				// 				EpochIndex::<T>::get(),
-				// 			);
+							// TODO-SASS: clarification... why we use the chain randomness here?
+							let transcript = sp_consensus_sassafras::make_transcript(
+								&Self::randomness(),
+								current_slot,
+								EpochIndex::<T>::get(),
+							);
 
-				// 			// NOTE: this is verified by the client when importing the block, before
-				// 			// execution. we don't run the verification again here to avoid slowing
-				// 			// down the runtime.
-				// 			debug_assert!(pubkey
-				// 				.vrf_verify(transcript.clone(), vrf_output, vrf_proof)
-				// 				.is_ok());
+							// This has already been verified by the client on block import.
+							debug_assert!(pubkey
+								.vrf_verify(transcript.clone(), vrf_output, vrf_proof)
+								.is_ok());
 
-				// 			vrf_output.0.attach_input_hash(&pubkey, transcript).ok()
-				// 		})
-				// 		.map(|inout| inout.make_bytes(sp_consensus_babe::BABE_VRF_INOUT_CONTEXT));
+							vrf_output.0.attach_input_hash(&pubkey, transcript).ok()
+						})
+						.map(|inout| {
+							inout.make_bytes(sp_consensus_sassafras::SASSAFRAS_VRF_INOUT_CONTEXT)
+						});
 
-				// 	if let Some(randomness) = pre_digest.is_primary().then(|| randomness).flatten()
-				// 	{
-				// 		Self::deposit_randomness(&randomness);
-				// 	}
-				// }
+					if let Some(randomness) = pre_digest.is_primary().then(|| randomness).flatten()
+					{
+						Self::deposit_randomness(&randomness);
+					}
+
+					// TODO-SASS: is this really required?
+					//AuthorVrfRandomness::<T>::put(randomness);
+				}
 			}
 
 			// remove temporary "environment" entry from storage
@@ -350,10 +360,8 @@ impl<T: Config> Pallet<T> {
 			T::MaxAuthorities,
 		>,
 	) {
-		let _ = authorities;
-		let _ = next_authorities;
-
 		//TODO-SASS
+
 		// PRECONDITION: caller has done initialization and is guaranteed by the session module to
 		// be called before this.
 		debug_assert!(Self::initialized().is_some());
@@ -362,22 +370,21 @@ impl<T: Config> Pallet<T> {
 		let epoch_index = EpochIndex::<T>::get()
 			.checked_add(1)
 			.expect("epoch indices will never reach 2^64 before the death of the universe; qed");
-
 		EpochIndex::<T>::put(epoch_index);
+
+		// Update authorities
 		Authorities::<T>::put(authorities);
-
-		// // Update epoch randomness.
-		// let next_epoch_index = epoch_index
-		// 	.checked_add(1)
-		// 	.expect("epoch indices will never reach 2^64 before the death of the universe; qed");
-
-		// // Returns randomness for the current epoch and computes the *next*
-		// // epoch randomness.
-		// let randomness = Self::randomness_change_epoch(next_epoch_index);
-		// Randomness::<T>::put(randomness);
-
-		// Update the next epoch authorities.
 		NextAuthorities::<T>::put(&next_authorities);
+
+		// Update epoch randomness.
+		let next_epoch_index = epoch_index
+			.checked_add(1)
+			.expect("epoch indices will never reach 2^64 before the death of the universe; qed");
+
+		// Returns randomness for the current epoch and computes the *next*
+		// epoch randomness.
+		let randomness = Self::randomness_change_epoch(next_epoch_index);
+		Randomness::<T>::put(randomness);
 
 		// // Update the start blocks of the previous and new current epoch.
 		// <EpochStart<T>>::mutate(|(previous_epoch_start_block, current_epoch_start_block)| {
@@ -385,8 +392,9 @@ impl<T: Config> Pallet<T> {
 		// 	*current_epoch_start_block = <frame_system::Pallet<T>>::block_number();
 		// });
 
-		// // After we update the current epoch, we signal the *next* epoch change
-		// // so that nodes can track changes.
+		// After we update the current epoch, we signal the *next* epoch change
+		// so that nodes can track changes.
+
 		let next_randomness = NextRandomness::<T>::get();
 
 		let next_epoch = NextEpochDescriptor {
@@ -427,6 +435,14 @@ impl<T: Config> Pallet<T> {
 	fn deposit_consensus<U: Encode>(new: U) {
 		let log = DigestItem::Consensus(SASSAFRAS_ENGINE_ID, new.encode());
 		<frame_system::Pallet<T>>::deposit_log(log)
+	}
+
+	fn deposit_randomness(randomness: &schnorrkel::Randomness) {
+		let mut s = RandomnessAccumulator::<T>::get().to_vec();
+		s.extend_from_slice(randomness);
+
+		let accumulator = sp_io::hashing::blake2_256(&s);
+		RandomnessAccumulator::<T>::put(accumulator);
 	}
 
 	// Initialize authorities on genesis phase.
@@ -485,6 +501,7 @@ impl<T: Config> Pallet<T> {
 				Self::initialize_genesis_epoch(current_slot)
 			}
 
+			// TODO-SASS
 			// How many slots were skipped between current and last block
 			// let lateness = current_slot.saturating_sub(CurrentSlot::<T>::get() + 1);
 			// let lateness = T::BlockNumber::from(*lateness as u32);
@@ -498,94 +515,27 @@ impl<T: Config> Pallet<T> {
 		// enact epoch change, if necessary.
 		T::EpochChangeTrigger::trigger::<T>(now);
 	}
+
+	/// Call this function exactly once when an epoch changes, to update the
+	/// randomness. Returns the new randomness.
+	fn randomness_change_epoch(next_epoch_index: u64) -> schnorrkel::Randomness {
+		let this_randomness = NextRandomness::<T>::get();
+		let accumulator = RandomnessAccumulator::<T>::get();
+
+		let mut s = Vec::with_capacity(2 * this_randomness.len() + 8);
+		s.extend_from_slice(&this_randomness);
+		s.extend_from_slice(&next_epoch_index.to_le_bytes());
+		s.extend_from_slice(&accumulator);
+
+		let next_randomness = sp_io::hashing::blake2_256(&s);
+		NextRandomness::<T>::put(&next_randomness);
+
+		// TODO: reset randomness accumulator? Maybe we can leave it as is...
+
+		this_randomness
+	}
 }
 
 impl<T: Config> BoundToRuntimeAppPublic for Pallet<T> {
 	type Public = AuthorityId;
 }
-
-// impl<T: Config> OnTimestampSet<T::Moment> for Pallet<T> {
-// 	fn on_timestamp_set(moment: T::Moment) {
-// 		let slot_duration = Self::slot_duration();
-// 		assert!(!slot_duration.is_zero(), "Babe slot duration cannot be zero.");
-
-// 		let timestamp_slot = moment / slot_duration;
-// 		let timestamp_slot = Slot::from(timestamp_slot.saturated_into::<u64>());
-
-// 		assert!(
-// 			CurrentSlot::<T>::get() == timestamp_slot,
-// 			"Timestamp slot must match `CurrentSlot`"
-// 		);
-// 	}
-// }
-
-// TODO-SASS: used by pallet-session
-// impl<T: Config> frame_support::traits::EstimateNextSessionRotation<T::BlockNumber> for Pallet<T>
-// { 	fn average_session_length() -> T::BlockNumber {
-// 		T::EpochDuration::get().saturated_into()
-// 	}
-
-// 	fn estimate_current_session_progress(_now: T::BlockNumber) -> (Option<Permill>, Weight) {
-// 		// let elapsed = CurrentSlot::<T>::get().saturating_sub(Self::current_epoch_start()) + 1;
-
-// 		// (
-// 		// 	Some(Permill::from_rational(*elapsed, T::EpochDuration::get())),
-// 		// 	// Read: Current Slot, Epoch Index, Genesis Slot
-// 		// 	T::DbWeight::get().reads(3),
-// 		// )
-// 		(None, Weight::default())
-// 	}
-
-// 	fn estimate_next_session_rotation(now: T::BlockNumber) -> (Option<T::BlockNumber>, Weight) {
-// 		// (
-// 		// 	Self::next_expected_epoch_change(now),
-// 		// 	// Read: Current Slot, Epoch Index, Genesis Slot
-// 		// 	T::DbWeight::get().reads(3),
-// 		// )
-// 		(None, Weight::default())
-// 	}
-// }
-
-// TODO-SASS: used by pallet-session
-//impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
-//	type Key = AuthorityId;
-
-//	fn on_genesis_session<'a, I: 'a>(validators: I)
-//	where
-//		I: Iterator<Item = (&'a T::AccountId, AuthorityId)>,
-//	{
-//		let authorities = validators.map(|(_, k)| (k, 1)).collect::<Vec<_>>();
-//		Self::initialize_genesis_authorities(&authorities);
-//	}
-
-//	fn on_new_session<'a, I: 'a>(_changed: bool, validators: I, queued_validators: I)
-//	where
-//		I: Iterator<Item = (&'a T::AccountId, AuthorityId)>,
-//	{
-//		let authorities = validators.map(|(_account, k)| (k, 1)).collect::<Vec<_>>();
-//		let bounded_authorities = WeakBoundedVec::<_, T::MaxAuthorities>::force_from(
-//			authorities,
-//			Some(
-//				"Warning: The session has more validators than expected. \
-//				A runtime configuration adjustment may be needed.",
-//			),
-//		);
-
-//		let next_authorities = queued_validators.map(|(_account, k)| (k, 1)).collect::<Vec<_>>();
-//		let next_bounded_authorities = WeakBoundedVec::<_, T::MaxAuthorities>::force_from(
-//			next_authorities,
-//			Some(
-//				"Warning: The session has more queued validators than expected. \
-//				A runtime configuration adjustment may be needed.",
-//			),
-//		);
-
-//		Self::enact_epoch_change(bounded_authorities, next_bounded_authorities)
-//	}
-
-//	fn on_disabled(i: u32) {
-//		let _ = i;
-//		// TODO-SASS
-//		//Self::deposit_consensus(ConsensusLog::OnDisabled(i))
-//	}
-//}

@@ -409,6 +409,7 @@ impl_runtime_apis! {
 				slot_duration: Sassafras::slot_duration(),
 				epoch_length: EpochDuration::get(),
 				genesis_authorities: Sassafras::authorities().to_vec(),
+				randomness: Sassafras::randomness(),
 			}
 		}
 
