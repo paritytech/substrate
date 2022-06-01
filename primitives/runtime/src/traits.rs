@@ -344,6 +344,128 @@ impl_const_get!(ConstI32, i32);
 impl_const_get!(ConstI64, i64);
 impl_const_get!(ConstI128, i128);
 
+/// Create new implementations of the [`Get`](crate::traits::Get) trait.
+///
+/// The so-called parameter type can be created in four different ways:
+///
+/// - Using `const` to create a parameter type that provides a `const` getter. It is required that
+///   the `value` is const.
+///
+/// - Declare the parameter type without `const` to have more freedom when creating the value.
+///
+/// NOTE: A more substantial version of this macro is available in `frame_support` crate which
+/// allows mutable and persistant variants.
+///
+/// # Examples
+///
+/// ```
+/// # use frame_support::traits::Get;
+/// # use frame_support::parameter_types;
+/// // This function cannot be used in a const context.
+/// fn non_const_expression() -> u64 { 99 }
+///
+/// const FIXED_VALUE: u64 = 10;
+/// parameter_types! {
+///    pub const Argument: u64 = 42 + FIXED_VALUE;
+///    /// Visibility of the type is optional
+///    OtherArgument: u64 = non_const_expression();
+///    pub storage StorageArgument: u64 = 5;
+/// }
+///
+/// trait Config {
+///    type Parameter: Get<u64>;
+///    type OtherParameter: Get<u64>;
+///    type StorageParameter: Get<u64>;
+///    type StaticParameter: Get<u32>;
+/// }
+///
+/// struct Runtime;
+/// impl Config for Runtime {
+///    type Parameter = Argument;
+///    type OtherParameter = OtherArgument;
+///    type StorageParameter = StorageArgument;
+/// }
+/// ```
+///
+/// # Invalid example:
+///
+/// ```compile_fail
+/// # use frame_support::traits::Get;
+/// # use frame_support::parameter_types;
+/// // This function cannot be used in a const context.
+/// fn non_const_expression() -> u64 { 99 }
+///
+/// parameter_types! {
+///    pub const Argument: u64 = non_const_expression();
+/// }
+/// ```
+#[macro_export]
+macro_rules! parameter_types {
+	(
+		$( #[ $attr:meta ] )*
+		$vis:vis const $name:ident: $type:ty = $value:expr;
+		$( $rest:tt )*
+	) => (
+		$( #[ $attr ] )*
+		$vis struct $name;
+		$crate::parameter_types!(IMPL_CONST $name , $type , $value);
+		$crate::parameter_types!( $( $rest )* );
+	);
+	(
+		$( #[ $attr:meta ] )*
+		$vis:vis $name:ident: $type:ty = $value:expr;
+		$( $rest:tt )*
+	) => (
+		$( #[ $attr ] )*
+		$vis struct $name;
+		$crate::parameter_types!(IMPL $name, $type, $value);
+		$crate::parameter_types!( $( $rest )* );
+	);
+	() => ();
+	(IMPL_CONST $name:ident, $type:ty, $value:expr) => {
+		impl $name {
+			/// Returns the value of this parameter type.
+			pub const fn get() -> $type {
+				$value
+			}
+		}
+
+		impl<I: From<$type>> $crate::traits::Get<I> for $name {
+			fn get() -> I {
+				I::from(Self::get())
+			}
+		}
+
+		impl $crate::traits::TypedGet for $name {
+			type Type = $type;
+			fn get() -> $type {
+				Self::get()
+			}
+		}
+	};
+	(IMPL $name:ident, $type:ty, $value:expr) => {
+		impl $name {
+			/// Returns the value of this parameter type.
+			pub fn get() -> $type {
+				$value
+			}
+		}
+
+		impl<I: From<$type>> $crate::traits::Get<I> for $name {
+			fn get() -> I {
+				I::from(Self::get())
+			}
+		}
+
+		impl $crate::traits::TypedGet for $name {
+			type Type = $type;
+			fn get() -> $type {
+				Self::get()
+			}
+		}
+	};
+}
+
 /// Extensible conversion trait. Generic over only source type, with destination type being
 /// associated.
 pub trait Morph<A> {
@@ -380,8 +502,40 @@ impl<T> TryMorph<T> for Identity {
 	}
 }
 
+/// Create a `Morph` impl with a simple closure-like expression.
 #[macro_export]
 macro_rules! morph_types {
+	(
+		DECL
+		$( #[doc = $doc:expr] )?
+		$vq:vis $name:ident ( $( $bound_id:ident ),* )
+	) => {
+		$( #[doc = $doc] )?
+		$vq struct $name<$($bound_id)?>($crate::traits::PhantomData<($($bound_id,)*)>);
+	};
+	(
+		IMPL $name:ty :
+		( $( $bounds:tt )* )
+		( $( $where:tt )* )
+		= |$var:ident: $var_type:ty| -> $outcome:ty { $( $ex:expr )* }
+	) => {
+		impl<$($bounds)*> $crate::traits::Morph<$var_type> for $name $( $where )? {
+			type Outcome = $outcome;
+			fn morph($var: $var_type) -> Self::Outcome { $( $ex )* }
+		}
+	};
+	(
+		IMPL_TRY $name:ty :
+		( $( $bounds:tt )* )
+		( $( $where:tt )* )
+		= |$var:ident: $var_type:ty| -> $outcome:ty { $( $ex:expr )* }
+	) => {
+		impl<$($bounds)*> $crate::traits::TryMorph<$var_type> for $name $( $where )? {
+			type Outcome = $outcome;
+			fn try_morph($var: $var_type) -> Result<Self::Outcome, ()> { $( $ex )* }
+		}
+	};
+
 	(
 		$( #[doc = $doc:expr] )?
 		$vq:vis type $name:ident
@@ -389,15 +543,18 @@ macro_rules! morph_types {
 		= |_| -> $outcome:ty { $( $ex:expr )* };
 		$( $rest:tt )*
 	) => {
-		$( #[doc = $doc] )?
-		$vq struct $name<$($bound_id)?>($crate::traits::PhantomData<($($bound_id,)*)>);
-		impl<$(
-			$bound_id $( :
-				$bound_head $( + $bound_tail )*
-			)? ,
-		)* X> $crate::traits::Morph<X> for $name<$($bound_id),*> {
-			type Outcome = $outcome;
-			fn morph(_: X) -> Self::Outcome { $( $ex )* }
+		morph_types! { DECL $( #[doc = $doc] )? $vq $name ( $( $bound_id ),* ) }
+		morph_types! {
+			IMPL $name<$( $bound_id ),*> :
+			( $( $bound_id $( : $bound_head $( + $bound_tail )* )? , )* X )
+			()
+			= |_x: X| -> $outcome { $( $ex )* }
+		}
+		morph_types! {
+			IMPL_TRY $name<$( $bound_id ),*> :
+			( $( $bound_id $( : $bound_head $( + $bound_tail )* )? , )* X )
+			()
+			= |_x: X| -> $outcome { Ok({$( $ex )*}) }
 		}
 		morph_types!{ $($rest)* }
 	};
@@ -405,18 +562,98 @@ macro_rules! morph_types {
 		$( #[doc = $doc:expr] )?
 		$vq:vis type $name:ident
 		< $( $bound_id:ident $( : $bound_head:path $( | $bound_tail:path )* )? ),* >
-		= |$var:ident: $var_type:ty| -> $outcome:ty { $( $ex:expr )* };
+		= |$var:ident: $var_type:ty| -> $outcome:ty { $( $ex:expr )* }
+		$(
+			where $( $where_path:ty : $where_bound_head:path $( | $where_bound_tail:path )* ),*
+		)?;
 		$( $rest:tt )*
 	) => {
-		$( #[doc = $doc] )?
-		$vq struct $name<$($bound_id)?>($crate::traits::PhantomData<($($bound_id,)*)>);
-		impl<$(
-			$bound_id $( :
-				$bound_head $( + $bound_tail )*
-			)?
-		),*> $crate::traits::Morph<$var_type> for $name<$($bound_id),*> {
-			type Outcome = $outcome;
-			fn morph($var: $var_type) -> Self::Outcome { $( $ex )* }
+		morph_types! { DECL $( #[doc = $doc] )? $vq $name ( $( $bound_id ),* ) }
+		morph_types! {
+			IMPL $name<$( $bound_id ),*> :
+			( $( $bound_id $( : $bound_head $( + $bound_tail )* )? , )* )
+			( $( where $( $where_path : $where_bound_head $( + $where_bound_tail )* ),* )? )
+			= |$var: $var_type| -> $outcome { $( $ex )* }
+		}
+		morph_types! {
+			IMPL_TRY $name<$( $bound_id ),*> :
+			( $( $bound_id $( : $bound_head $( + $bound_tail )* )? , )* )
+			( $( where $( $where_path : $where_bound_head $( + $where_bound_tail )* ),* )? )
+			= |$var: $var_type| -> $outcome { Ok({$( $ex )*}) }
+		}
+		morph_types!{ $($rest)* }
+	};
+	(
+		$( #[doc = $doc:expr] )?
+		$vq:vis type $name:ident
+		< $( $bound_id:ident $( : $bound_head:path $( | $bound_tail:path )* )? ),* >
+		: Morph
+		= |_| -> $outcome:ty { $( $ex:expr )* };
+		$( $rest:tt )*
+	) => {
+		morph_types! { DECL $( #[doc = $doc] )? $vq $name ( $( $bound_id ),* ) }
+		morph_types! {
+			IMPL $name<$( $bound_id ),*> :
+			( $( $bound_id $( : $bound_head $( + $bound_tail )* )? , )* X )
+			()
+			= |_x: X| -> $outcome { $( $ex )* }
+		}
+		morph_types!{ $($rest)* }
+	};
+	(
+		$( #[doc = $doc:expr] )?
+		$vq:vis type $name:ident
+		< $( $bound_id:ident $( : $bound_head:path $( | $bound_tail:path )* )? ),* >
+		: Morph
+		= |$var:ident: $var_type:ty| -> $outcome:ty { $( $ex:expr )* }
+		$(
+			where $( $where_path:ty : $where_bound_head:path $( | $where_bound_tail:path )* ),*
+		)?;
+		$( $rest:tt )*
+	) => {
+		morph_types! { DECL $( #[doc = $doc] )? $vq $name ( $( $bound_id ),* ) }
+		morph_types! {
+			IMPL $name<$( $bound_id ),*> :
+			( $( $bound_id $( : $bound_head $( + $bound_tail )* )? , )* )
+			( $( where $( $where_path : $where_bound_head $( + $where_bound_tail )* ),* )? )
+			= |$var: $var_type| -> $outcome { $( $ex )* }
+		}
+		morph_types!{ $($rest)* }
+	};
+	(
+		$( #[doc = $doc:expr] )?
+		$vq:vis type $name:ident
+		< $( $bound_id:ident $( : $bound_head:path $( | $bound_tail:path )* )? ),* >
+		: TryMorph
+		= |_| -> Result<$outcome:ty, ()> { $( $ex:expr )* };
+		$( $rest:tt )*
+	) => {
+		morph_types! { DECL $( #[doc = $doc] )? $vq $name ( $( $bound_id ),* ) }
+		morph_types! {
+			IMPL $name<$( $bound_id ),*> :
+			( $( $bound_id $( : $bound_head $( + $bound_tail )* )? , )* X )
+			()
+			= |_x: X| -> $outcome { $( $ex )* }
+		}
+		morph_types!{ $($rest)* }
+	};
+	(
+		$( #[doc = $doc:expr] )?
+		$vq:vis type $name:ident
+		< $( $bound_id:ident $( : $bound_head:path $( | $bound_tail:path )* )? ),* >
+		: TryMorph
+		= |$var:ident: $var_type:ty| -> Result<$outcome:ty, ()> { $( $ex:expr )* }
+		$(
+			where $( $where_path:ty : $where_bound_head:path $( | $where_bound_tail:path )* ),*
+		)?;
+		$( $rest:tt )*
+	) => {
+		morph_types! { DECL $( #[doc = $doc] )? $vq $name ( $( $bound_id ),* ) }
+		morph_types! {
+			IMPL $name<$( $bound_id ),*> :
+			( $( $bound_id $( : $bound_head $( + $bound_tail )* )? , )* )
+			( $( where $( $where_path : $where_bound_head $( + $where_bound_tail )* ),* )? )
+			= |$var: $var_type| -> $outcome { $( $ex )* }
 		}
 		morph_types!{ $($rest)* }
 	};
@@ -426,27 +663,10 @@ macro_rules! morph_types {
 morph_types! {
 	/// Morpher to disregard the source value and replace with another.
 	pub type Replace<V: TypedGet> = |_| -> V::Type { V::get() };
-}
-
-/// Mutator which reduces a scalar by a particular amount.
-pub struct ReduceBy<N>(PhantomData<N>);
-impl<N: TypedGet> TryMorph<N::Type> for ReduceBy<N>
-where
-	N::Type: CheckedSub,
-{
-	type Outcome = N::Type;
-	fn try_morph(r: N::Type) -> Result<N::Type, ()> {
-		r.checked_sub(&N::get()).ok_or(())
-	}
-}
-impl<N: TypedGet> Morph<N::Type> for ReduceBy<N>
-where
-	N::Type: CheckedSub + Zero,
-{
-	type Outcome = N::Type;
-	fn morph(r: N::Type) -> N::Type {
+	/// Mutator which reduces a scalar by a particular amount.
+	pub type ReduceBy<N: TypedGet> = |r: N::Type| -> N::Type {
 		r.checked_sub(&N::get()).unwrap_or(Zero::zero())
-	}
+	} where N::Type: CheckedSub | Zero;
 }
 
 /// Extensible conversion trait. Generic over both source and destination types.

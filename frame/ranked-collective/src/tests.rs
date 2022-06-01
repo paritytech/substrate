@@ -23,12 +23,12 @@ use frame_support::{
 	assert_noop, assert_ok,
 	error::BadOrigin,
 	parameter_types,
-	traits::{ConstU16, ConstU32, ConstU64, EitherOf, Everything, MapSuccess, Polling, ReduceBy},
+	traits::{ConstU16, ConstU32, ConstU64, EitherOf, Everything, MapSuccess, Polling},
 };
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
-	traits::{BlakeTwo256, Identity, IdentityLookup},
+	traits::{BlakeTwo256, Identity, IdentityLookup, ReduceBy},
 };
 
 use super::*;
