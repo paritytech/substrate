@@ -20,7 +20,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 // `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256.
-#![recursion_limit = "256"]
+#![recursion_limit = "512"]
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_election_provider_support::{
@@ -43,7 +43,7 @@ use frame_support::{
 };
 use frame_system::{
 	limits::{BlockLength, BlockWeights},
-	EnsureRoot, EnsureSigned,
+	EnsureRoot, EnsureRootWithSuccess, EnsureSigned,
 };
 pub use node_primitives::{AccountId, Signature};
 use node_primitives::{AccountIndex, Balance, BlockNumber, Hash, Index, Moment};
@@ -780,11 +780,11 @@ parameter_types! {
 
 pub struct TracksInfo;
 impl pallet_referenda::TracksInfo<Balance, BlockNumber> for TracksInfo {
-	type Id = u8;
+	type Id = u16;
 	type Origin = <Origin as frame_support::traits::OriginTrait>::PalletsOrigin;
 	fn tracks() -> &'static [(Self::Id, pallet_referenda::TrackInfo<Balance, BlockNumber>)] {
-		static DATA: [(u8, pallet_referenda::TrackInfo<Balance, BlockNumber>); 1] = [(
-			0u8,
+		static DATA: [(u16, pallet_referenda::TrackInfo<Balance, BlockNumber>); 1] = [(
+			0u16,
 			pallet_referenda::TrackInfo {
 				name: "root",
 				max_deciding: 1,
@@ -835,6 +835,34 @@ impl pallet_referenda::Config for Runtime {
 	type UndecidingTimeout = UndecidingTimeout;
 	type AlarmInterval = AlarmInterval;
 	type Tracks = TracksInfo;
+}
+
+impl pallet_referenda::Config<pallet_referenda::Instance2> for Runtime {
+	type WeightInfo = pallet_referenda::weights::SubstrateWeight<Self>;
+	type Call = Call;
+	type Event = Event;
+	type Scheduler = Scheduler;
+	type Currency = pallet_balances::Pallet<Self>;
+	type CancelOrigin = EnsureRoot<AccountId>;
+	type KillOrigin = EnsureRoot<AccountId>;
+	type Slash = ();
+	type Votes = pallet_ranked_collective::Votes;
+	type Tally = pallet_ranked_collective::TallyOf<Runtime>;
+	type SubmissionDeposit = SubmissionDeposit;
+	type MaxQueued = ConstU32<100>;
+	type UndecidingTimeout = UndecidingTimeout;
+	type AlarmInterval = AlarmInterval;
+	type Tracks = TracksInfo;
+}
+
+impl pallet_ranked_collective::Config for Runtime {
+	type WeightInfo = pallet_ranked_collective::weights::SubstrateWeight<Self>;
+	type Event = Event;
+	type PromoteOrigin = EnsureRootWithSuccess<AccountId, ConstU16<65535>>;
+	type DemoteOrigin = EnsureRootWithSuccess<AccountId, ConstU16<65535>>;
+	type Polls = RankedPolls;
+	type MinRankOfClass = traits::Identity;
+	type VoteWeight = pallet_ranked_collective::Geometric;
 }
 
 impl pallet_remark::Config for Runtime {
@@ -1534,6 +1562,8 @@ construct_runtime!(
 		ConvictionVoting: pallet_conviction_voting,
 		Whitelist: pallet_whitelist,
 		NominationPools: pallet_nomination_pools,
+		RankedPolls: pallet_referenda::<Instance2>,
+		RankedCollective: pallet_ranked_collective,
 	}
 );
 
@@ -1622,6 +1652,7 @@ mod benches {
 		[pallet_offences, OffencesBench::<Runtime>]
 		[pallet_preimage, Preimage]
 		[pallet_proxy, Proxy]
+		[pallet_ranked_collective, RankedCollective]
 		[pallet_referenda, Referenda]
 		[pallet_recovery, Recovery]
 		[pallet_remark, Remark]

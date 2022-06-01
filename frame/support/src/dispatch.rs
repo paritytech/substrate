@@ -2748,6 +2748,9 @@ mod tests {
 		fn signed(_by: <TraitImpl as system::Config>::AccountId) -> Self {
 			unimplemented!("Not required in tests!")
 		}
+		fn as_signed(self) -> Option<Self::AccountId> {
+			unimplemented!("Not required in tests!")
+		}
 	}
 
 	impl system::Config for TraitImpl {

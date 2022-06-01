@@ -4764,6 +4764,7 @@ dependencies = [
  "pallet-preimage",
  "pallet-proxy",
  "pallet-randomness-collective-flip",
+ "pallet-ranked-collective",
  "pallet-recovery",
  "pallet-referenda",
  "pallet-remark",
@@ -5982,6 +5983,23 @@ dependencies = [
  "parity-scale-codec",
  "safe-mix",
  "scale-info",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
+name = "pallet-ranked-collective"
+version = "4.0.0-dev"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "log",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-arithmetic",
  "sp-core",
  "sp-io",
  "sp-runtime",
