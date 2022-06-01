@@ -698,7 +698,6 @@ pub fn build_collator_network<TBl, TImpQu, TCl>(
 where
 	TBl: BlockT,
 	TCl: HeaderMetadata<TBl, Error = sp_blockchain::Error>
-		+ Chain<TBl>
 		+ BlockBackend<TBl>
 		+ BlockIdTo<TBl, Error = sp_blockchain::Error>
 		+ ProofProvider<TBl>
