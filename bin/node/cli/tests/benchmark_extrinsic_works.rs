@@ -17,8 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use assert_cmd::cargo::cargo_bin;
-use std::{path::Path, process::Command};
-use tempfile::tempdir;
+use std::process::Command;
 
 /// Tests that the `benchmark extrinsic` command works for
 /// remark and transfer_keep_alive within the substrate dev runtime.
