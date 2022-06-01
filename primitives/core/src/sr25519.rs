@@ -40,9 +40,9 @@ use substrate_bip39::mini_secret_from_entropy;
 use crate::{
 	crypto::{
 		ByteArray, CryptoType, CryptoTypeId, CryptoTypePublicPair, Derive, Public as TraitPublic,
-		UncheckedFrom,
+		UncheckedFrom, FromEntropy,
 	},
-	hash::{H256, H512}, traits::FromEntropy,
+	hash::{H256, H512},
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;

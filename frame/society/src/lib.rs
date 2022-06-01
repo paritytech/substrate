@@ -469,9 +469,7 @@ pub enum OldVote {
 
 #[frame_support::pallet]
 pub mod pallet {
-	use sp_io::KillStorageResult;
-
-use super::*;
+	use super::*;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
@@ -721,6 +719,14 @@ use super::*;
 		T::AccountId,
 		Vote,
 		OptionQuery,
+	>;
+
+	/// Clear-cursor for Vote, map from Candidate -> (Maybe) Cursor.
+	#[pallet::storage]
+	pub type VoteClearCursor<T: Config<I>, I: 'static = ()> = StorageMap<_,
+		Twox64Concat,
+		T::AccountId,
+		BoundedVec<u8, KeyLenOf::<Votes>>,
 	>;
 
 	/// At the end of the claim period, this contains the most recently approved members (along with
@@ -1297,13 +1303,10 @@ use super::*;
 		pub fn cleanup_candidacy(origin: OriginFor<T>, candidate: T::AccountId, max: u32) -> DispatchResultWithPostInfo {
 			ensure_signed(origin)?;
 			ensure!(!Candidates::<T, I>::contains_key(&candidate), Error::<T, I>::InProgress);
-			match Votes::<T, I>::remove_prefix(&candidate, Some(max)) {
-				KillStorageResult::AllRemoved(0) => {
-					dbg!(Votes::<T, I>::iter_prefix(&candidate).collect::<Vec<_>>());
-					Err(Error::<T, I>::NoVotes.into())
-				},
-				_ => Ok(Pays::No.into()),
-			}
+			let maybe_cursor = VoteClearCursor::<T, I>::get(&candidate);
+			let r = Votes::<T, I>::clear_prefix(&candidate, Some(max), maybe_cursor.as_ref().map(|x| &x[..]));
+			VoteClearCursor::<T, I>::set(&candidate, r.maybe_cursor.map(BoundedVec::truncate_from));
+			Ok(if r.loops == 0 { Pays::Yes } else { Pays::No }.into())
 		}
 
 		/// Remove up to `max` stale votes for the defender in the given `challenge_round`.

@@ -197,7 +197,7 @@ impl<MaxNormal: Get<u32>, MaxOverflow: Get<u32>> ConsumerLimits for (MaxNormal, 
 pub mod pallet {
 	use crate::{self as frame_system, pallet_prelude::*, *};
 	use frame_support::pallet_prelude::*;
-	use sp_core::traits::FromEntropy;
+	use sp_core::crypto::FromEntropy;
 
 	/// System configuration trait. Implemented by runtime.
 	#[pallet::config]

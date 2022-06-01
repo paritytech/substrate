@@ -35,61 +35,61 @@ pub(crate) mod old {
 		Approve,
 	}
 
-	#[storage_alias] pub type Bids<T, I> = Value<
-		pallet::Pallet<T: Config<I>, I: Instance + 'static>,
+	#[storage_alias] pub type Bids<T: Config<I>, I: 'static> = StorageValue<
+		Pallet<T, I>,
 		Vec<Bid<<T as frame_system::Config>::AccountId, BalanceOf<T, I>>>,
 		ValueQuery,
 	>;
-	#[storage_alias] pub type Candidates<T, I> = Value<
-		Pallet<T: Config<I>, I: Instance + 'static>,
+	#[storage_alias] pub type Candidates<T: Config<I>, I: 'static> = StorageValue<
+		Pallet<T, I>,
 		Vec<Bid<<T as frame_system::Config>::AccountId, BalanceOf<T, I>>>,
 		ValueQuery,
 	>;
-	#[storage_alias] pub type Votes<T, I> = DoubleMap<
-		Pallet<T: Config<I>, I: Instance + 'static>,
+	#[storage_alias] pub type Votes<T: Config<I>, I: 'static> = StorageDoubleMap<
+		Pallet<T, I>,
 		Twox64Concat, <T as frame_system::Config>::AccountId,
 		Twox64Concat, <T as frame_system::Config>::AccountId,
 		Vote,
 	>;
-	#[storage_alias] pub type SuspendedCandidates<T, I> = Map<
-		Pallet<T: Config<I>, I: Instance + 'static>,
+	#[storage_alias] pub type SuspendedCandidates<T: Config<I>, I: 'static> = StorageMap<
+		Pallet<T, I>,
 		Twox64Concat, <T as frame_system::Config>::AccountId,
 		(BalanceOf<T, I>, BidKind<<T as frame_system::Config>::AccountId, BalanceOf<T, I>>),
 	>;
-	#[storage_alias] pub type Members<T, I> = Value<
-		Pallet<T: Config<I>, I: Instance + 'static>,
+	#[storage_alias] pub type Members<T: Config<I>, I: 'static> = StorageValue<
+		Pallet<T, I>,
 		Vec<<T as frame_system::Config>::AccountId>,
 		ValueQuery,
 	>;
-	#[storage_alias] pub type Vouching<T, I> = Map<
-		Pallet<T: Config<I>, I: Instance + 'static>,
+	#[storage_alias] pub type Vouching<T: Config<I>, I: 'static> = StorageMap<
+		Pallet<T, I>,
 		Twox64Concat, <T as frame_system::Config>::AccountId,
 		VouchingStatus,
 	>;
-	#[storage_alias] pub type Strikes<T, I> = Map<
-		Pallet<T: Config<I>, I: Instance + 'static>,
+	#[storage_alias] pub type Strikes<T: Config<I>, I: 'static> = StorageMap<
+		Pallet<T, I>,
 		Twox64Concat, <T as frame_system::Config>::AccountId,
 		StrikeCount,
 		ValueQuery,
 	>;
-	#[storage_alias] pub type Payouts<T, I> = Map<
-		Pallet<T: Config<I>, I: Instance + 'static>,
+	#[storage_alias] pub type Payouts<T: Config<I>, I: 'static> = StorageMap<
+		Pallet<T, I>,
 		Twox64Concat, <T as frame_system::Config>::AccountId,
 		Vec<(<T as frame_system::Config>::BlockNumber, BalanceOf<T, I>)>,
 		ValueQuery,
 	>;
-	#[storage_alias] pub type SuspendedMembers<T, I> = Map<
-		Pallet<T: Config<I>, I: Instance + 'static>,
+	#[storage_alias] pub type SuspendedMembers<T: Config<I>, I: 'static> = StorageMap<
+		Pallet<T, I>,
 		Twox64Concat, <T as frame_system::Config>::AccountId,
 		bool,
 		ValueQuery,
 	>;
-	#[storage_alias] pub type Defender<T, I> = Value<
-		Pallet<T: Config<I>, I: Instance + 'static>,
+	#[storage_alias] pub type Defender<T: Config<I>, I: 'static> = StorageValue<
+		Pallet<T, I>,
 		<T as frame_system::Config>::AccountId,
 	>;
-	#[storage_alias] pub type DefenderVotes<T, I> = Map<
-		Pallet<T: Config<I>, I: Instance + 'static>,
+	#[storage_alias] pub type DefenderVotes<T: Config<I>, I: 'static> = StorageMap<
+		Pallet<T, I>,
 		Twox64Concat, <T as frame_system::Config>::AccountId,
 		Vote,
 	>;

@@ -74,7 +74,7 @@ type Seed = [u8; 32];
 )]
 pub struct Public(pub [u8; 33]);
 
-impl crate::traits::FromEntropy for Public {
+impl crate::crypto::FromEntropy for Public {
 	fn from_entropy(input: &mut impl codec::Input) -> Result<Self, codec::Error> {
 		let mut result = Self([0u8; 33]);
 		input.read(&mut result.0[..])?;

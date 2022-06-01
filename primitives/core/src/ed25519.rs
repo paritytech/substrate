@@ -33,6 +33,7 @@ use scale_info::TypeInfo;
 use crate::crypto::Ss58Codec;
 use crate::crypto::{
 	CryptoType, CryptoTypeId, CryptoTypePublicPair, Derive, Public as TraitPublic, UncheckedFrom,
+	FromEntropy,
 };
 #[cfg(feature = "full_crypto")]
 use crate::crypto::{DeriveJunction, Pair as TraitPair, SecretStringError};
@@ -88,7 +89,7 @@ impl Clone for Pair {
 	}
 }
 
-impl crate::traits::FromEntropy for Public {
+impl FromEntropy for Public {
 	fn from_entropy(input: &mut impl codec::Input) -> Result<Self, codec::Error> {
 		let mut result = Self([0u8; 32]);
 		input.read(&mut result.0[..])?;
