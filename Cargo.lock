@@ -135,15 +135,14 @@ dependencies = [
 [[package]]
 name = "ark-ec"
 version = "0.3.0"
-source = "git+https://github.com/w3f/arkworks-algebra?branch=ietf-hasher#eb2a8a9b7b9051003c02cdddb49ac3c47e677707"
+source = "git+https://github.com/w3f/arkworks-algebra?branch=master#bf1e24211df2be1ee317e382aa128281766e9c1f"
 dependencies = [
  "ark-ff",
  "ark-poly",
  "ark-serialize",
  "ark-std",
  "derivative",
- "digest 0.10.3",
- "hashbrown 0.11.2",
+ "hashbrown 0.12.1",
  "num-traits",
  "zeroize",
 ]
@@ -151,13 +150,14 @@ dependencies = [
 [[package]]
 name = "ark-ff"
 version = "0.3.0"
-source = "git+https://github.com/w3f/arkworks-algebra?branch=ietf-hasher#eb2a8a9b7b9051003c02cdddb49ac3c47e677707"
+source = "git+https://github.com/w3f/arkworks-algebra?branch=master#bf1e24211df2be1ee317e382aa128281766e9c1f"
 dependencies = [
  "ark-ff-asm",
  "ark-ff-macros",
  "ark-serialize",
  "ark-std",
  "derivative",
+ "digest 0.10.3",
  "num-bigint 0.4.3",
  "num-traits",
  "paste 1.0.7",
@@ -168,7 +168,7 @@ dependencies = [
 [[package]]
 name = "ark-ff-asm"
 version = "0.3.0"
-source = "git+https://github.com/w3f/arkworks-algebra?branch=ietf-hasher#eb2a8a9b7b9051003c02cdddb49ac3c47e677707"
+source = "git+https://github.com/w3f/arkworks-algebra?branch=master#bf1e24211df2be1ee317e382aa128281766e9c1f"
 dependencies = [
  "quote",
  "syn",
@@ -177,7 +177,7 @@ dependencies = [
 [[package]]
 name = "ark-ff-macros"
 version = "0.3.0"
-source = "git+https://github.com/w3f/arkworks-algebra?branch=ietf-hasher#eb2a8a9b7b9051003c02cdddb49ac3c47e677707"
+source = "git+https://github.com/w3f/arkworks-algebra?branch=master#bf1e24211df2be1ee317e382aa128281766e9c1f"
 dependencies = [
  "num-bigint 0.4.3",
  "num-traits",
@@ -188,7 +188,7 @@ dependencies = [
 [[package]]
 name = "ark-poly"
 version = "0.3.0"
-source = "git+https://github.com/w3f/arkworks-algebra?branch=ietf-hasher#eb2a8a9b7b9051003c02cdddb49ac3c47e677707"
+source = "git+https://github.com/w3f/arkworks-algebra?branch=master#bf1e24211df2be1ee317e382aa128281766e9c1f"
 dependencies = [
  "ark-ff",
  "ark-serialize",
@@ -200,7 +200,7 @@ dependencies = [
 [[package]]
 name = "ark-serialize"
 version = "0.3.0"
-source = "git+https://github.com/w3f/arkworks-algebra?branch=ietf-hasher#eb2a8a9b7b9051003c02cdddb49ac3c47e677707"
+source = "git+https://github.com/w3f/arkworks-algebra?branch=master#bf1e24211df2be1ee317e382aa128281766e9c1f"
 dependencies = [
  "ark-serialize-derive",
  "ark-std",
@@ -210,7 +210,7 @@ dependencies = [
 [[package]]
 name = "ark-serialize-derive"
 version = "0.3.0"
-source = "git+https://github.com/w3f/arkworks-algebra?branch=ietf-hasher#eb2a8a9b7b9051003c02cdddb49ac3c47e677707"
+source = "git+https://github.com/w3f/arkworks-algebra?branch=master#bf1e24211df2be1ee317e382aa128281766e9c1f"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -854,6 +854,7 @@ dependencies = [
 [[package]]
 name = "bls-like"
 version = "0.1.0"
+source = "git+https://github.com/w3f/bls?branch=skalman-hash-to-curve-wb#297e2730cd6dbf5f42b3c259aaaa8423cd3db6f5"
 dependencies = [
  "ark-bls12-377",
  "ark-bls12-381",
@@ -12377,3 +12378,4 @@ dependencies = [
 [[patch.unused]]
 name = "primitive-types"
 version = "0.11.1"
+source = "git+https://github.com/drskalman/parity-common#902fefbfc2e90f11300aa6a6d108c596e48528f5"

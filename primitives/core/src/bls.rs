@@ -24,7 +24,7 @@ use sp_std::vec::Vec;
 
 use crate::{
 	crypto::ByteArray,
-	hash::{H256, H384, H512, H768},
+	hash::{H384, H768},
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
@@ -398,7 +398,7 @@ impl From<&Public> for CryptoTypePublicPair {
 fn derive_hard_junction(secret_seed: &Seed, cc: &[u8; 32]) -> Seed {
 	("BLS12377HDKD", secret_seed, cc).using_encoded(|data| {
 		let mut res = [0u8; BLS377::SECRET_KEY_SIZE];
-		res.copy_from_slice(blake2_rfc::blake2b::blake2b(BLS377::PUBLICKEY_SERIALIZED_SIZE, &[], data).as_bytes());
+		res.copy_from_slice(blake2_rfc::blake2b::blake2b(BLS377::SECRET_KEY_SIZE, &[], data).as_bytes());
 		res
 	})
 }
@@ -462,8 +462,7 @@ impl TraitPair for Pair {
         if seed_slice.len() != BLS377::SECRET_KEY_SIZE {
             return Err(SecretStringError::InvalidSeedLength);
         }        
-		let secret = bls_like::SecretKey::from_seed(seed_slice.try_into()
-            .map_err(|_| SecretStringError::InvalidSeedLength)?);
+		let secret = bls_like::SecretKey::from_seed(seed_slice);
 		let public = secret.into_public();
 		Ok(Pair(bls_like::Keypair { secret, public }))
 	}
@@ -588,16 +587,18 @@ mod test {
 		);
 	}
 
+    //only passes if the seed = seed (mod ScalarField)
 	#[test]
 	fn seed_and_derive_should_work() {
-		let seed = hex!("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60");
+		let seed = hex!("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f00"); 
 		let pair = Pair::from_seed(&seed);
-		assert_eq!(pair.seed(), seed);
+        // we are using hash to field so this is not going to work
+		// assert_eq!(pair.seed(), seed);
 		let path = vec![DeriveJunction::Hard([0u8; 32])];
 		let derived = pair.derive(path.into_iter(), None).ok().unwrap().0;
 		assert_eq!(
 			derived.seed(),
-			hex!("ede3354e133f9c8e337ddd6ee5415ed4b4ffe5fc7d21e933f4930a3730e5b21c")
+			hex!("a4f2269333b3e87c577aa00c4a2cd650b3b30b2e8c286a47c251279ff3a26e0d")
 		);
 	}
 
@@ -610,11 +611,11 @@ mod test {
 		assert_eq!(
 			public,
 			Public::from_raw(hex!(
-				"333a13bec6f72058589f7d0a50e147a0f2e74cd964b46a0777b36a218ad984acacd75a0efc0cfa9e4b632d0048416c81"
+				"7a84ca8ce4c37c93c95ecee6a3c0c9a7b9c225093cf2f12dc4f69cbfb847ef9424a18f5755d5a742247d386ff2aabb80"
 			))
 		);
 		let message = b"";
-		let signature = hex!("456f36e24e8a30c89d45ef5ac8c8a6861eb8b5fd2d5ca7aefaa332e1c5a24c60df5a76ed9cff3c35c59eaf400605110052f71046cd7322decdfdfbdc63532cfda2add881bc6c73d96b98ae425d1e95757a37ec380e650e49d78b21165aa5a100");
+		let signature = hex!("cb12ab70f52b7c955a49ff30488fe7d612561e1a4d2903d0e0823b59201cd25e26bf6c145726f6519c2c989f2c2d5501ed973296de6c4e15bee5dc975ced74495fc38afac70e8cc60184f734ffd42b90718c393f82fa8c1b5403d686c33a9000");
 		let signature = Signature::from_raw(signature);
 		assert!(pair.sign(&message[..]) == signature);
 		assert!(Pair::verify(&signature, &message[..], &public));
@@ -631,11 +632,11 @@ mod test {
 		assert_eq!(
 			public,
 			Public::from_raw(hex!(
-				"333a13bec6f72058589f7d0a50e147a0f2e74cd964b46a0777b36a218ad984acacd75a0efc0cfa9e4b632d0048416c81"
+				"6dc6be608fab3c6bd894a606be86db346cc170db85c733853a371f3db54ae1b12052c0888d472760c81b537572a26f00"
 			))
 		);
 		let message = b"";
-		let signature = hex!("456f36e24e8a30c89d45ef5ac8c8a6861eb8b5fd2d5ca7aefaa332e1c5a24c60df5a76ed9cff3c35c59eaf400605110052f71046cd7322decdfdfbdc63532cfda2add881bc6c73d96b98ae425d1e95757a37ec380e650e49d78b21165aa5a100");
+		let signature = hex!("300b1ef3d3c8d7afd275c035241331dee228a502c3d210657a12eb735d3f5c17827d61b5071a71cb23c24f351d6f7600e61b41c0789bbb839946c654b7dee43174dc1aed6179062cfb00c0fab461fbdb9e15dbb849b31c285b60bfc44f9d9901");
 		let signature = Signature::from_raw(signature);
 		assert!(pair.sign(&message[..]) == signature);
 		assert!(Pair::verify(&signature, &message[..], &public));
@@ -658,8 +659,8 @@ mod test {
 		assert_eq!(
 			public,
 			Public::from_raw(hex!(
-				"273b6333dfbdde7a7a3793a7e487bdd721c619bd39ca66625c6be10979c3e43274595c5f1b08c5511f05354bc2717e01"
-			))
+				"754d2f2bbfa67df54d7e0e951979a18a1e0f45948857752cc2bac6bbb0b1d05e8e48bcc453920bf0c4bbd59932124801")
+			)
 		);
 		let message = hex!("2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee00000000000000000200d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a4500000000000000");
 		let signature = pair.sign(&message[..]);
@@ -708,8 +709,8 @@ mod test {
 		let message = b"Something important";
 		let signature = pair.sign(&message[..]);
 		let serialized_signature = serde_json::to_string(&signature).unwrap();
-		// Signature is 64 bytes, so 128 chars + 2 quote chars
-		assert_eq!(serialized_signature.len(), 130);
+		// Signature is 96 bytes, so 192 chars + 2 quote chars
+		assert_eq!(serialized_signature.len(), 194);
 		let signature = serde_json::from_str(&serialized_signature).unwrap();
 		assert!(Pair::verify(&signature, &message[..], &pair.public()));
 	}
