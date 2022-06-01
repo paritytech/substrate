@@ -28,8 +28,6 @@ use frame_support::{
 };
 use pallet_balances::Error as BalancesError;
 
-// TODO: Scheduler should re-use `None` items in its `Agenda`.
-
 #[test]
 fn params_should_work() {
 	new_test_ext().execute_with(|| {

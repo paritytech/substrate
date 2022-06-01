@@ -143,6 +143,8 @@ pub mod pallet {
 		/// Currency type for this pallet.
 		type Currency: ReservableCurrency<Self::AccountId>;
 		// Origins and unbalances.
+		/// Origin from which proposals may be submitted.
+		type SubmitOrigin: EnsureOrigin<Self::Origin, Success = Self::AccountId>;
 		/// Origin from which any vote may be cancelled.
 		type CancelOrigin: EnsureOrigin<Self::Origin>;
 		/// Origin from which any vote may be killed.
@@ -343,7 +345,7 @@ pub mod pallet {
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Propose a referendum on a privileged action.
 		///
-		/// - `origin`: must be `Signed` and the account must have `SubmissionDeposit` funds
+		/// - `origin`: must be `SubmitOrigin` and the account must have `SubmissionDeposit` funds
 		///   available.
 		/// - `proposal_origin`: The origin from which the proposal should be executed.
 		/// - `proposal_hash`: The hash of the proposal preimage.
@@ -357,7 +359,7 @@ pub mod pallet {
 			proposal_hash: T::Hash,
 			enactment_moment: DispatchTime<T::BlockNumber>,
 		) -> DispatchResult {
-			let who = ensure_signed(origin)?;
+			let who = T::SubmitOrigin::ensure_origin(origin)?;
 
 			let track =
 				T::Tracks::track_for(&proposal_origin).map_err(|_| Error::<T, I>::NoTrack)?;
