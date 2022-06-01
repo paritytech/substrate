@@ -116,12 +116,12 @@ pub mod pallet {
 		/// Prefix for elements stored in the Off-chain DB via Indexing API.
 		///
 		/// Each node of the MMR is inserted both on-chain and off-chain via Indexing API.
-		/// The former does not store full leaf content, just it's compact version (hash),
+		/// The former does not store full leaf content, just its compact version (hash),
 		/// and some of the inner mmr nodes might be pruned from on-chain storage.
 		/// The latter will contain all the entries in their full form.
 		///
 		/// Each node is stored in the Off-chain DB under key derived from the
-		/// [`Self::INDEXING_PREFIX`] and it's in-tree index (MMR position).
+		/// [`Self::INDEXING_PREFIX`] and its in-tree index (MMR position).
 		const INDEXING_PREFIX: &'static [u8];
 
 		/// A hasher type for MMR.
