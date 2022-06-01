@@ -1,5 +1,7 @@
 # This file is part of .gitlab-ci.yml
 # Here are all jobs that are executed during "check" stage
+#
+# dummy info to test https://github.com/paritytech/ci_cd/issues/431
 
 check-runtime:
   stage:                           check
