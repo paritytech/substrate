@@ -444,7 +444,7 @@ pub mod pallet {
 			MemberCount::<T, I>::insert(rank, index.checked_add(1).ok_or(Overflow)?);
 			IdToIndex::<T, I>::insert(rank, &who, index);
 			IndexToId::<T, I>::insert(rank, index, &who);
-			Members::<T, I>::insert(&who, MemberRecord { rank, ..record });
+			Members::<T, I>::insert(&who, MemberRecord { rank });
 			Self::deposit_event(Event::RankChanged { who, rank });
 
 			Ok(())
