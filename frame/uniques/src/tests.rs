@@ -704,7 +704,7 @@ fn set_price_should_work() {
 			Origin::signed(user_id),
 			collection_id,
 			item_1,
-			Some(1.into()),
+			Some(1),
 			None,
 		));
 
@@ -712,22 +712,22 @@ fn set_price_should_work() {
 			Origin::signed(user_id),
 			collection_id,
 			item_2,
-			Some(2.into()),
+			Some(2),
 			Some(3)
 		));
 
 		let item = ItemPriceOf::<Test>::get(collection_id, item_1).unwrap();
-		assert_eq!(item.0, 1.into());
+		assert_eq!(item.0, 1);
 		assert_eq!(item.1, None);
 
 		let item = ItemPriceOf::<Test>::get(collection_id, item_2).unwrap();
-		assert_eq!(item.0, 2.into());
+		assert_eq!(item.0, 2);
 		assert_eq!(item.1, Some(3));
 
 		assert!(events().contains(&Event::<Test>::ItemPriceSet {
 			collection: collection_id,
 			item: item_1,
-			price: 1.into(),
+			price: 1,
 			whitelisted_buyer: None,
 		}));
 
@@ -748,13 +748,7 @@ fn set_price_should_work() {
 		assert_ok!(Uniques::freeze_collection(Origin::signed(user_id), collection_id));
 
 		assert_noop!(
-			Uniques::set_price(
-				Origin::signed(user_id),
-				collection_id,
-				item_1,
-				Some(1.into()),
-				None
-			),
+			Uniques::set_price(Origin::signed(user_id), collection_id, item_1, Some(1), None),
 			Error::<Test>::Frozen
 		);
 		assert_ok!(Uniques::thaw_collection(Origin::signed(user_id), collection_id));
@@ -763,13 +757,7 @@ fn set_price_should_work() {
 		assert_ok!(Uniques::freeze(Origin::signed(user_id), collection_id, item_1));
 
 		assert_noop!(
-			Uniques::set_price(
-				Origin::signed(user_id),
-				collection_id,
-				item_1,
-				Some(1.into()),
-				None
-			),
+			Uniques::set_price(Origin::signed(user_id), collection_id, item_1, Some(1), None),
 			Error::<Test>::Frozen
 		);
 	});
@@ -803,7 +791,7 @@ fn buy_item_should_work() {
 			Origin::signed(user_1),
 			collection_id,
 			item_1,
-			Some(price_1.into()),
+			Some(price_1),
 			None,
 		));
 
@@ -811,33 +799,17 @@ fn buy_item_should_work() {
 			Origin::signed(user_1),
 			collection_id,
 			item_2,
-			Some(price_2.into()),
+			Some(price_2),
 			Some(user_3),
 		));
 
 		// can't buy for less
 		assert_noop!(
-			Uniques::buy_item(Origin::signed(user_2), collection_id, item_1, 1.into()),
+			Uniques::buy_item(Origin::signed(user_2), collection_id, item_1, 1),
 			Error::<Test>::BidTooLow
 		);
 
-		// validate the currency
-		assert_noop!(
-			Uniques::buy_item(
-				Origin::signed(user_2),
-				collection_id,
-				item_1,
-				types::BalanceOrAsset::Asset { id: 1, amount: price_2.clone() }
-			),
-			Error::<Test>::WrongCurrency
-		);
-
-		assert_ok!(Uniques::buy_item(
-			Origin::signed(user_2),
-			collection_id,
-			item_1,
-			price_1.into()
-		));
+		assert_ok!(Uniques::buy_item(Origin::signed(user_2), collection_id, item_1, price_1,));
 
 		// validate the new owner & balances
 		let item = Item::<Test>::get(collection_id, item_1).unwrap();
@@ -847,28 +819,23 @@ fn buy_item_should_work() {
 
 		// can't buy from yourself
 		assert_noop!(
-			Uniques::buy_item(Origin::signed(user_1), collection_id, item_2, price_2.into()),
+			Uniques::buy_item(Origin::signed(user_1), collection_id, item_2, price_2),
 			Error::<Test>::NoPermission
 		);
 
 		// can't buy when the item is listed for a specific buyer
 		assert_noop!(
-			Uniques::buy_item(Origin::signed(user_2), collection_id, item_2, price_2.into()),
+			Uniques::buy_item(Origin::signed(user_2), collection_id, item_2, price_2),
 			Error::<Test>::NoPermission
 		);
 
 		// can buy when I'm a whitelisted buyer
-		assert_ok!(Uniques::buy_item(
-			Origin::signed(user_3),
-			collection_id,
-			item_2,
-			price_2.into()
-		));
+		assert_ok!(Uniques::buy_item(Origin::signed(user_3), collection_id, item_2, price_2,));
 
 		assert!(events().contains(&Event::<Test>::ItemBought {
 			collection: collection_id,
 			item: item_2,
-			price: price_2.into(),
+			price: price_2,
 			seller: user_1,
 			buyer: user_3,
 		}));
@@ -878,7 +845,7 @@ fn buy_item_should_work() {
 
 		// can't buy when item is not for sale
 		assert_noop!(
-			Uniques::buy_item(Origin::signed(user_2), collection_id, item_3, price_2.into()),
+			Uniques::buy_item(Origin::signed(user_2), collection_id, item_3, price_2),
 			Error::<Test>::NotForSale
 		);
 	});

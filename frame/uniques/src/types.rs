@@ -30,12 +30,8 @@ pub(super) type CollectionDetailsFor<T, I> =
 	CollectionDetails<<T as SystemConfig>::AccountId, DepositBalanceOf<T, I>>;
 pub(super) type ItemDetailsFor<T, I> =
 	ItemDetails<<T as SystemConfig>::AccountId, DepositBalanceOf<T, I>>;
-pub(super) type AssetIdOf<T, I = ()> =
-	<<T as Config<I>>::Assets as Inspect<<T as SystemConfig>::AccountId>>::AssetId;
-pub(super) type AssetBalanceOf<T, I = ()> =
-	<<T as Config<I>>::Assets as Inspect<<T as SystemConfig>::AccountId>>::Balance;
-pub(super) type BalanceOrAssetOf<T, I> =
-	BalanceOrAsset<DepositBalanceOf<T, I>, AssetIdOf<T, I>, AssetBalanceOf<T, I>>;
+pub(super) type ItemPrice<T, I = ()> =
+	<<T as Config<I>>::Currency as Currency<<T as SystemConfig>::AccountId>>::Balance;
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct CollectionDetails<AccountId, DepositBalance> {
@@ -130,41 +126,4 @@ pub struct ItemMetadata<DepositBalance, StringLimit: Get<u32>> {
 	pub(super) data: BoundedVec<u8, StringLimit>,
 	/// Whether the item metadata may be changed by a non Force origin.
 	pub(super) is_frozen: bool,
-}
-
-/// Represents either a System currency or a set of fungible assets.
-#[derive(Encode, Decode, Clone, PartialEq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
-pub enum BalanceOrAsset<Balance, AssetId, AssetBalance> {
-	Balance { amount: Balance },
-	Asset { id: AssetId, amount: AssetBalance },
-}
-
-impl<B, A, AB> From<B> for BalanceOrAsset<B, A, AB> {
-	fn from(amount: B) -> Self {
-		Self::Balance { amount }
-	}
-}
-
-impl<B, A, AB> BalanceOrAsset<B, A, AB>
-where
-	A: PartialEq,
-	B: PartialOrd,
-	AB: PartialOrd,
-{
-	pub fn is_greater_or_equal<T: Config<I>, I: 'static>(
-		&self,
-		other: &Self,
-	) -> Result<bool, sp_runtime::DispatchError> {
-		use BalanceOrAsset::*;
-		match (self, other) {
-			(Balance { amount: a }, Balance { amount: b }) => Ok(a >= b),
-			(Asset { id, amount: a }, Asset { id: id2, amount: b, .. }) =>
-				if id != id2 {
-					Err(Error::<T, I>::WrongCurrency.into())
-				} else {
-					Ok(a >= b)
-				},
-			_ => Err(Error::<T, I>::WrongCurrency.into()),
-		}
-	}
 }

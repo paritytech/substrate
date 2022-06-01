@@ -43,10 +43,7 @@ pub mod weights;
 
 use codec::{Decode, Encode};
 use frame_support::traits::{
-	fungibles::{Inspect, Transfer},
-	tokens::Locker,
-	BalanceStatus::Reserved,
-	Currency, EnsureOriginWithArg, ReservableCurrency,
+	tokens::Locker, BalanceStatus::Reserved, Currency, EnsureOriginWithArg, ReservableCurrency,
 };
 use frame_system::Config as SystemConfig;
 use sp_runtime::{
@@ -153,31 +150,6 @@ pub mod pallet {
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
-
-		/// Fungible assets.
-		type Assets: Inspect<Self::AccountId, AssetId = Self::AssetId, Balance = Self::AssetBalance>
-			+ Transfer<Self::AccountId>;
-
-		/// Fungible asset balance.
-		type AssetBalance: sp_runtime::traits::AtLeast32BitUnsigned
-			+ codec::FullCodec
-			+ Copy
-			+ MaybeSerializeDeserialize
-			+ sp_std::fmt::Debug
-			+ Default
-			+ From<u64>
-			+ TypeInfo
-			+ MaxEncodedLen;
-
-		/// Fungible asset id.
-		type AssetId: Member
-			+ Parameter
-			+ Default
-			+ Copy
-			+ codec::HasCompact
-			+ MaybeSerializeDeserialize
-			+ MaxEncodedLen
-			+ TypeInfo;
 	}
 
 	#[pallet::storage]
@@ -281,7 +253,7 @@ pub mod pallet {
 		T::CollectionId,
 		Blake2_128Concat,
 		T::ItemId,
-		(BalanceOrAssetOf<T, I>, Option<T::AccountId>),
+		(ItemPrice<T, I>, Option<T::AccountId>),
 		OptionQuery,
 	>;
 
@@ -385,7 +357,7 @@ pub mod pallet {
 		ItemPriceSet {
 			collection: T::CollectionId,
 			item: T::ItemId,
-			price: BalanceOrAssetOf<T, I>,
+			price: ItemPrice<T, I>,
 			whitelisted_buyer: Option<T::AccountId>,
 		},
 		/// The price for the instance was removed.
@@ -394,7 +366,7 @@ pub mod pallet {
 		ItemBought {
 			collection: T::CollectionId,
 			item: T::ItemId,
-			price: BalanceOrAssetOf<T, I>,
+			price: ItemPrice<T, I>,
 			seller: T::AccountId,
 			buyer: T::AccountId,
 		},
@@ -436,8 +408,6 @@ pub mod pallet {
 		UnknownItem,
 		/// Item is not for sale.
 		NotForSale,
-		/// Wrong currency provided.
-		WrongCurrency,
 		/// The provided bid is too low.
 		BidTooLow,
 	}
@@ -1490,7 +1460,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
 			item: T::ItemId,
-			price: Option<BalanceOrAssetOf<T, I>>,
+			price: Option<ItemPrice<T, I>>,
 			whitelisted_buyer: Option<<T::Lookup as StaticLookup>::Source>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
@@ -1512,7 +1482,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
 			item: T::ItemId,
-			bid_price: BalanceOrAssetOf<T, I>,
+			bid_price: ItemPrice<T, I>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			Self::do_buy_item(collection, item, origin, bid_price)

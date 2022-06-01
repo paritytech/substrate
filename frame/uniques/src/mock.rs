@@ -42,7 +42,6 @@ construct_runtime!(
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		Uniques: pallet_uniques::{Pallet, Call, Storage, Event<T>},
-		Assets: pallet_assets,
 	}
 );
 
@@ -85,23 +84,6 @@ impl pallet_balances::Config for Test {
 	type ReserveIdentifier = [u8; 8];
 }
 
-impl pallet_assets::Config for Test {
-	type Event = Event;
-	type Balance = u64;
-	type AssetId = u32;
-	type Currency = Balances;
-	type ForceOrigin = frame_system::EnsureRoot<u64>;
-	type AssetDeposit = ConstU64<1>;
-	type AssetAccountDeposit = ConstU64<10>;
-	type MetadataDepositBase = ConstU64<1>;
-	type MetadataDepositPerByte = ConstU64<1>;
-	type ApprovalDeposit = ConstU64<1>;
-	type StringLimit = ConstU32<50>;
-	type Freezer = ();
-	type WeightInfo = ();
-	type Extra = ();
-}
-
 impl Config for Test {
 	type Event = Event;
 	type CollectionId = u32;
@@ -119,9 +101,6 @@ impl Config for Test {
 	type KeyLimit = ConstU32<50>;
 	type ValueLimit = ConstU32<50>;
 	type WeightInfo = ();
-	type AssetBalance = <Self as pallet_balances::Config>::Balance;
-	type Assets = Assets;
-	type AssetId = u32;
 	#[cfg(feature = "runtime-benchmarks")]
 	type Helper = ();
 }

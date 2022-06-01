@@ -211,7 +211,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		collection: T::CollectionId,
 		item: T::ItemId,
 		sender: T::AccountId,
-		price: Option<BalanceOrAssetOf<T, I>>,
+		price: Option<ItemPrice<T, I>>,
 		whitelisted_buyer: Option<T::AccountId>,
 	) -> DispatchResult {
 		let collection_details =
@@ -247,7 +247,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		collection: T::CollectionId,
 		item: T::ItemId,
 		buyer: T::AccountId,
-		bid_price: BalanceOrAssetOf<T, I>,
+		bid_price: ItemPrice<T, I>,
 	) -> DispatchResult {
 		let details = Item::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::UnknownItem)?;
 		ensure!(details.owner != buyer, Error::<T, I>::NoPermission);
@@ -255,13 +255,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let price_info =
 			ItemPriceOf::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::NotForSale)?;
 
-		ensure!(bid_price.is_greater_or_equal::<T, I>(&price_info.0)?, Error::<T, I>::BidTooLow);
+		ensure!(bid_price >= price_info.0, Error::<T, I>::BidTooLow);
 
 		if let Some(only_buyer) = price_info.1 {
 			ensure!(only_buyer == buyer, Error::<T, I>::NoPermission);
 		}
 
-		Self::transfer_currency(
+		T::Currency::transfer(
 			&buyer,
 			&details.owner,
 			bid_price.clone(),
@@ -281,23 +281,5 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		});
 
 		Ok(())
-	}
-
-	fn transfer_currency(
-		source: &T::AccountId,
-		dest: &T::AccountId,
-		value: BalanceOrAssetOf<T, I>,
-		existence_requirement: ExistenceRequirement,
-	) -> DispatchResult {
-		use BalanceOrAsset::*;
-
-		match value {
-			Balance { amount } =>
-				T::Currency::transfer(&source, &dest, amount, existence_requirement),
-			Asset { id, amount } => {
-				let keep_alive = existence_requirement == ExistenceRequirement::KeepAlive;
-				return T::Assets::transfer(id, &source, &dest, amount, keep_alive).map(|_| ())
-			},
-		}
 	}
 }
