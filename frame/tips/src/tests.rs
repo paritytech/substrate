@@ -144,6 +144,7 @@ impl pallet_treasury::Config for Test {
 	type WeightInfo = ();
 	type SpendFunds = ();
 	type MaxApprovals = ConstU32<100>;
+	type SpendOrigin = frame_support::traits::NeverEnsureOrigin<u64>;
 }
 parameter_types! {
 	pub const TipFindersFee: Percent = Percent::from_percent(20);

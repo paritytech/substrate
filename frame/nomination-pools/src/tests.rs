@@ -21,6 +21,7 @@ use frame_support::{
 	assert_noop, assert_ok, assert_storage_noop, bounded_btree_map,
 	storage::{with_transaction, TransactionOutcome},
 };
+use sp_runtime::traits::Dispatchable;
 
 macro_rules! unbonding_pools_with_era {
 	($($k:expr => $v:expr),* $(,)?) => {{
@@ -3256,10 +3257,13 @@ mod create {
 			Balances::make_free_balance_be(&11, 5 + 20);
 
 			// Then
-			assert_noop!(
-				Pools::create(Origin::signed(11), 20, 11, 11, 11),
-				Error::<Runtime>::MaxPoolMembers
-			);
+			let create = Call::Pools(crate::Call::<Runtime>::create {
+				amount: 20,
+				root: 11,
+				nominator: 11,
+				state_toggler: 11,
+			});
+			assert_noop!(create.dispatch(Origin::signed(11)), Error::<Runtime>::MaxPoolMembers);
 		});
 	}
 }

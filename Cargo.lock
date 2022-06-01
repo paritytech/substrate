@@ -6018,6 +6018,7 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "serde",
+ "sp-arithmetic",
  "sp-core",
  "sp-io",
  "sp-runtime",
@@ -9500,6 +9501,7 @@ dependencies = [
  "rand 0.7.3",
  "scale-info",
  "serde",
+ "sp-core",
  "sp-debug-derive",
  "sp-std",
  "static_assertions",
@@ -10070,6 +10072,7 @@ dependencies = [
 name = "sp-state-machine"
 version = "0.12.0"
 dependencies = [
+ "assert_matches",
  "hash-db",
  "hex-literal",
  "log",

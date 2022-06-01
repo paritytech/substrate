@@ -267,7 +267,8 @@ where
 		&self,
 		child_info: Option<&ChildInfo>,
 		prefix: Option<&[u8]>,
-		mut f: F,
+		start_at: Option<&[u8]>,
+		f: F,
 	) {
 		let root = if let Some(child_info) = child_info.as_ref() {
 			match self.child_root(child_info) {
@@ -283,7 +284,7 @@ where
 			self.root
 		};
 
-		self.trie_iter_key_inner(&root, prefix, |k| f(k), child_info)
+		self.trie_iter_key_inner(&root, prefix, f, child_info, start_at)
 	}
 
 	/// Execute given closure for all keys starting with prefix.
@@ -311,6 +312,7 @@ where
 				true
 			},
 			Some(child_info),
+			None,
 		)
 	}
 
@@ -324,28 +326,31 @@ where
 				true
 			},
 			None,
+			None,
 		)
 	}
 
 	fn trie_iter_key_inner<F: FnMut(&[u8]) -> bool>(
 		&self,
 		root: &H::Out,
-		prefix: Option<&[u8]>,
+		maybe_prefix: Option<&[u8]>,
 		mut f: F,
 		child_info: Option<&ChildInfo>,
+		maybe_start_at: Option<&[u8]>,
 	) {
 		let mut iter = move |db| -> sp_std::result::Result<(), Box<TrieError<H::Out>>> {
 			let trie = TrieDB::<H>::new(db, root)?;
-			let iter = if let Some(prefix) = prefix.as_ref() {
-				TrieDBKeyIterator::new_prefixed(&trie, prefix)?
-			} else {
-				TrieDBKeyIterator::new(&trie)?
-			};
+			let prefix = maybe_prefix.unwrap_or(&[]);
+			let iter = match maybe_start_at {
+				Some(start_at) =>
+					TrieDBKeyIterator::new_prefixed_then_seek(&trie, prefix, start_at),
+				None => TrieDBKeyIterator::new_prefixed(&trie, prefix),
+			}?;
 
 			for x in iter {
 				let key = x?;
 
-				debug_assert!(prefix
+				debug_assert!(maybe_prefix
 					.as_ref()
 					.map(|prefix| key.starts_with(prefix))
 					.unwrap_or(true));
