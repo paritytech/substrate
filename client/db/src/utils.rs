@@ -192,7 +192,7 @@ fn open_database_at<Block: BlockT>(
 ) -> OpenDbResult {
 	let db: Arc<dyn Database<DbHash>> = match &db_source {
 		DatabaseSource::ParityDb { path } => open_parity_db::<Block>(path, db_type, create)?,
-		#[cfg(feature = "with-kvdb-rocksdb")]
+		#[cfg(feature = "rocksdb")]
 		DatabaseSource::RocksDb { path, cache_size } =>
 			open_kvdb_rocksdb::<Block>(path, db_type, create, *cache_size)?,
 		DatabaseSource::Custom { db, require_create_flag } => {
@@ -293,7 +293,7 @@ fn open_parity_db<Block: BlockT>(path: &Path, db_type: DatabaseType, create: boo
 	}
 }
 
-#[cfg(any(feature = "with-kvdb-rocksdb", test))]
+#[cfg(any(feature = "rocksdb", test))]
 fn open_kvdb_rocksdb<Block: BlockT>(
 	path: &Path,
 	db_type: DatabaseType,
@@ -343,7 +343,7 @@ fn open_kvdb_rocksdb<Block: BlockT>(
 	Ok(sp_database::as_database(db))
 }
 
-#[cfg(not(any(feature = "with-kvdb-rocksdb", test)))]
+#[cfg(not(any(feature = "rocksdb", test)))]
 fn open_kvdb_rocksdb<Block: BlockT>(
 	_path: &Path,
 	_db_type: DatabaseType,
@@ -586,7 +586,7 @@ mod tests {
 	use std::path::PathBuf;
 	type Block = RawBlock<ExtrinsicWrapper<u32>>;
 
-	#[cfg(any(feature = "with-kvdb-rocksdb", test))]
+	#[cfg(any(feature = "rocksdb", test))]
 	#[test]
 	fn database_type_subdir_migration() {
 		type Block = RawBlock<ExtrinsicWrapper<u64>>;

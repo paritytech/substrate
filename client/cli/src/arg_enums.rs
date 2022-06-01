@@ -238,7 +238,7 @@ impl Into<sc_service::config::RpcMethods> for RpcMethods {
 #[derive(Debug, Clone, PartialEq, Copy)]
 pub enum Database {
 	/// Facebooks RocksDB
-	#[cfg(feature = "with-rocks-db")]
+	#[cfg(feature = "rocksdb")]
 	RocksDb,
 	/// ParityDb. <https://github.com/paritytech/parity-db/>
 	ParityDb,
@@ -253,7 +253,7 @@ impl std::str::FromStr for Database {
 	type Err = String;
 
 	fn from_str(s: &str) -> Result<Self, String> {
-		#[cfg(feature = "with-rocks-db")]
+		#[cfg(feature = "rocksdb")]
 		if s.eq_ignore_ascii_case("rocksdb") {
 			return Ok(Self::RocksDb)
 		}
@@ -261,8 +261,7 @@ impl std::str::FromStr for Database {
 			return Ok(Self::ParityDbDeprecated)
 		} else if s.eq_ignore_ascii_case("paritydb") {
 			return Ok(Self::ParityDb)
-		}
-		if s.eq_ignore_ascii_case("auto") {
+		} else if s.eq_ignore_ascii_case("auto") {
 			Ok(Self::Auto)
 		} else {
 			Err(format!("Unknown variant `{}`, known variants: {:?}", s, Self::variants()))
@@ -274,7 +273,7 @@ impl Database {
 	/// Returns all the variants of this enum to be shown in the cli.
 	pub const fn variants() -> &'static [&'static str] {
 		&[
-			#[cfg(feature = "with-rocks-db")]
+			#[cfg(feature = "rocksdb")]
 			"rocksdb",
 			"paritydb",
 			"paritydb-experimental",

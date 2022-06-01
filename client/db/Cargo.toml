@@ -45,4 +45,4 @@ substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/ru
 default = []
 test-helpers = []
 runtime-benchmarks = []
-with-kvdb-rocksdb = ["kvdb-rocksdb"]
+rocksdb = ["kvdb-rocksdb"]

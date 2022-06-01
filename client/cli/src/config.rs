@@ -220,7 +220,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		let rocksdb_path = base_path.join("db").join(role_dir);
 		let paritydb_path = base_path.join("paritydb").join(role_dir);
 		Ok(match database {
-			#[cfg(feature = "with-rocks-db")]
+			#[cfg(feature = "rocksdb")]
 			Database::RocksDb => DatabaseSource::RocksDb { path: rocksdb_path, cache_size },
 			Database::ParityDb => DatabaseSource::ParityDb { path: paritydb_path },
 			Database::ParityDbDeprecated => {
@@ -502,11 +502,11 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		let client_id = C::client_id();
 		let database_cache_size = self.database_cache_size()?.unwrap_or(1024);
 		let database = self.database()?.unwrap_or(
-			#[cfg(feature = "with-rocks-db")]
+			#[cfg(feature = "rocksdb")]
 			{
 				Database::RocksDb
 			},
-			#[cfg(not(feature = "with-rocks-db"))]
+			#[cfg(not(feature = "rocksdb"))]
 			{
 				Database::ParityDb
 			},

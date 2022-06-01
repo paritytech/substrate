@@ -36,7 +36,7 @@ mod children;
 mod parity_db;
 mod stats;
 mod storage_cache;
-#[cfg(any(feature = "with-kvdb-rocksdb", test))]
+#[cfg(any(feature = "rocksdb", test))]
 mod upgrade;
 mod utils;
 
@@ -323,7 +323,7 @@ pub enum DatabaseSource {
 		cache_size: usize,
 	},
 	/// Load a RocksDB database from a given path. Recommended for most uses.
-	#[cfg(feature = "with-kvdb-rocksdb")]
+	#[cfg(feature = "rocksdb")]
 	RocksDb {
 		/// Path to the database.
 		path: PathBuf,
@@ -356,7 +356,7 @@ impl DatabaseSource {
 			// IIUC this is needed for polkadot to create its own dbs, so until it can use parity db
 			// I would think rocksdb, but later parity-db.
 			DatabaseSource::Auto { paritydb_path, .. } => Some(paritydb_path),
-			#[cfg(feature = "with-kvdb-rocksdb")]
+			#[cfg(feature = "rocksdb")]
 			DatabaseSource::RocksDb { path, .. } => Some(path),
 			DatabaseSource::ParityDb { path } => Some(path),
 			DatabaseSource::Custom { .. } => None,
@@ -370,7 +370,7 @@ impl DatabaseSource {
 				*paritydb_path = p.into();
 				true
 			},
-			#[cfg(feature = "with-kvdb-rocksdb")]
+			#[cfg(feature = "rocksdb")]
 			DatabaseSource::RocksDb { ref mut path, .. } => {
 				*path = p.into();
 				true
@@ -388,7 +388,7 @@ impl std::fmt::Display for DatabaseSource {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		let name = match self {
 			DatabaseSource::Auto { .. } => "Auto",
-			#[cfg(feature = "with-kvdb-rocksdb")]
+			#[cfg(feature = "rocksdb")]
 			DatabaseSource::RocksDb { .. } => "RocksDb",
 			DatabaseSource::ParityDb { .. } => "ParityDb",
 			DatabaseSource::Custom { .. } => "Custom",

@@ -58,6 +58,6 @@ sp-storage = { version = "6.0.0", path = "../../../primitives/storage" }
 sp-trie = { version = "6.0.0", path = "../../../primitives/trie" }
 
 [features]
-default = ["with-rocks-db", "runtime-benchmarks"]
+default = ["rocksdb", "runtime-benchmarks"]
 runtime-benchmarks = ["sc-client-db/runtime-benchmarks"]
-with-rocks-db = ["sc-cli/with-rocks-db", "sc-client-db/with-kvdb-rocksdb"]
+rocksdb = ["sc-cli/rocksdb", "sc-client-db/rocksdb"]
