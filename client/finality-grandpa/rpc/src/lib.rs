@@ -66,7 +66,7 @@ pub trait GrandpaApi<Notification, Hash, Number> {
 }
 
 /// Provides RPC methods for interacting with GRANDPA.
-pub struct GrandpaRpc<AuthoritySet, VoterState, Block: BlockT, ProofProvider> {
+pub struct Grandpa<AuthoritySet, VoterState, Block: BlockT, ProofProvider> {
 	executor: SubscriptionTaskExecutor,
 	authority_set: AuthoritySet,
 	voter_state: VoterState,
@@ -74,9 +74,9 @@ pub struct GrandpaRpc<AuthoritySet, VoterState, Block: BlockT, ProofProvider> {
 	finality_proof_provider: Arc<ProofProvider>,
 }
 impl<AuthoritySet, VoterState, Block: BlockT, ProofProvider>
-	GrandpaRpc<AuthoritySet, VoterState, Block, ProofProvider>
+	Grandpa<AuthoritySet, VoterState, Block, ProofProvider>
 {
-	/// Prepare a new [`GrandpaRpc`]
+	/// Prepare a new [`Grandpa`] Rpc handler.
 	pub fn new(
 		executor: SubscriptionTaskExecutor,
 		authority_set: AuthoritySet,
@@ -91,7 +91,7 @@ impl<AuthoritySet, VoterState, Block: BlockT, ProofProvider>
 #[async_trait]
 impl<AuthoritySet, VoterState, Block, ProofProvider>
 	GrandpaApiServer<JustificationNotification, Block::Hash, NumberFor<Block>>
-	for GrandpaRpc<AuthoritySet, VoterState, Block, ProofProvider>
+	for Grandpa<AuthoritySet, VoterState, Block, ProofProvider>
 where
 	VoterState: ReportVoterState + Send + Sync + 'static,
 	AuthoritySet: ReportAuthoritySet + Send + Sync + 'static,
@@ -113,11 +113,9 @@ where
 			if let Some(mut sink) = pending.accept() {
 				sink.pipe_from_stream(stream).await;
 			}
-		}
-		.boxed();
+		};
 
-		self.executor
-			.spawn("substrate-rpc-subscription", Some("rpc"), fut.map(drop).boxed());
+		self.executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
 	}
 
 	async fn prove_finality(
@@ -245,7 +243,7 @@ mod tests {
 	fn setup_io_handler<VoterState>(
 		voter_state: VoterState,
 	) -> (
-		RpcModule<GrandpaRpc<TestAuthoritySet, VoterState, Block, TestFinalityProofProvider>>,
+		RpcModule<Grandpa<TestAuthoritySet, VoterState, Block, TestFinalityProofProvider>>,
 		GrandpaJustificationSender<Block>,
 	)
 	where
@@ -258,7 +256,7 @@ mod tests {
 		voter_state: VoterState,
 		finality_proof: Option<FinalityProof<Header>>,
 	) -> (
-		RpcModule<GrandpaRpc<TestAuthoritySet, VoterState, Block, TestFinalityProofProvider>>,
+		RpcModule<Grandpa<TestAuthoritySet, VoterState, Block, TestFinalityProofProvider>>,
 		GrandpaJustificationSender<Block>,
 	)
 	where
@@ -268,7 +266,7 @@ mod tests {
 		let finality_proof_provider = Arc::new(TestFinalityProofProvider { finality_proof });
 		let executor = Arc::new(TaskExecutor::default());
 
-		let rpc = GrandpaRpc::new(
+		let rpc = Grandpa::new(
 			executor,
 			TestAuthoritySet,
 			voter_state,

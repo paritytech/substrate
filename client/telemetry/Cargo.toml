@@ -17,7 +17,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 chrono = "0.4.19"
 futures = "0.3.21"
 libp2p = { version = "0.44.0", default-features = false, features = ["dns-async-std", "tcp-async-io", "wasm-ext", "websocket"] }
-log = "0.4.16"
+log = "0.4.17"
 parking_lot = "0.12.0"
 pin-project = "1.0.10"
 rand = "0.7.2"

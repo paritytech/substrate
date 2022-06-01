@@ -526,9 +526,9 @@ frame_benchmarking::benchmarks! {
 				member_counter: 1,
 				roles: PoolRoles {
 					depositor: depositor.clone(),
-					root: depositor.clone(),
-					nominator: depositor.clone(),
-					state_toggler: depositor.clone(),
+					root: Some(depositor.clone()),
+					nominator: Some(depositor.clone()),
+					state_toggler: Some(depositor.clone()),
 				},
 			}
 		);
@@ -567,9 +567,9 @@ frame_benchmarking::benchmarks! {
 				member_counter: 1,
 				roles: PoolRoles {
 					depositor: depositor.clone(),
-					root: depositor.clone(),
-					nominator: depositor.clone(),
-					state_toggler: depositor.clone(),
+					root: Some(depositor.clone()),
+					nominator: Some(depositor.clone()),
+					state_toggler: Some(depositor.clone()),
 				}
 			}
 		);
@@ -638,17 +638,17 @@ frame_benchmarking::benchmarks! {
 	}:_(
 		Origin::Signed(root.clone()),
 		first_id,
-		Some(random.clone()),
-		Some(random.clone()),
-		Some(random.clone())
+		ConfigOp::Set(random.clone()),
+		ConfigOp::Set(random.clone()),
+		ConfigOp::Set(random.clone())
 	) verify {
 		assert_eq!(
 			pallet_nomination_pools::BondedPools::<T>::get(first_id).unwrap().roles,
 			pallet_nomination_pools::PoolRoles {
 				depositor: root,
-				nominator: random.clone(),
-				state_toggler: random.clone(),
-				root: random,
+				nominator: Some(random.clone()),
+				state_toggler: Some(random.clone()),
+				root: Some(random),
 			},
 		)
 	}

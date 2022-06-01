@@ -186,8 +186,15 @@ pub fn expand_outer_origin(
 				#system_path::RawOrigin::Root.into()
 			}
 
-			fn signed(by: <#runtime as #system_path::Config>::AccountId) -> Self {
+			fn signed(by: Self::AccountId) -> Self {
 				#system_path::RawOrigin::Signed(by).into()
+			}
+
+			fn as_signed(self) -> Option<Self::AccountId> {
+				match self.caller {
+					OriginCaller::system(#system_path::RawOrigin::Signed(by)) => Some(by),
+					_ => None,
+				}
 			}
 		}
 

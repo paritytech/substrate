@@ -148,6 +148,7 @@ fn clean<T: Config>() {
 	<Members<T>>::kill();
 	<Candidates<T>>::kill();
 	<RunnersUp<T>>::kill();
+	#[allow(deprecated)]
 	<Voting<T>>::remove_all(None);
 }
 

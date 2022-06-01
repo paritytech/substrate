@@ -245,6 +245,13 @@ impl<K: FullEncode, V: FullCodec, G: StorageMap<K, V>> storage::StorageMap<K, V>
 		unhashed::get(Self::storage_map_final_key(key).as_ref()).ok_or(())
 	}
 
+	fn set<KeyArg: EncodeLike<K>>(key: KeyArg, q: Self::Query) {
+		match G::from_query_to_optional_value(q) {
+			Some(v) => Self::insert(key, v),
+			None => Self::remove(key),
+		}
+	}
+
 	fn insert<KeyArg: EncodeLike<K>, ValArg: EncodeLike<V>>(key: KeyArg, val: ValArg) {
 		unhashed::put(Self::storage_map_final_key(key).as_ref(), &val)
 	}
@@ -384,7 +391,8 @@ mod test_iterators {
 	fn map_iter_from() {
 		sp_io::TestExternalities::default().execute_with(|| {
 			use crate::hash::Identity;
-			crate::generate_storage_alias!(MyModule, MyMap => Map<(Identity, u64), u64>);
+			#[crate::storage_alias]
+			type MyMap = StorageMap<MyModule, Identity, u64, u64>;
 
 			MyMap::insert(1, 10);
 			MyMap::insert(2, 20);
