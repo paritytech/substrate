@@ -152,6 +152,11 @@ where
 		<Self as crate::storage::StorageMap<Key, Value>>::swap(key1, key2)
 	}
 
+	/// Store or remove the value to be associated with `key` so that `get` returns the `query`.
+	pub fn set<KeyArg: EncodeLike<Key>>(key: KeyArg, q: QueryKind::Query) {
+		<Self as crate::storage::StorageMap<Key, Value>>::set(key, q)
+	}
+
 	/// Store a value to be associated with the given key from the map.
 	pub fn insert<KeyArg: EncodeLike<Key>, ValArg: EncodeLike<Value>>(key: KeyArg, val: ValArg) {
 		<Self as crate::storage::StorageMap<Key, Value>>::insert(key, val)

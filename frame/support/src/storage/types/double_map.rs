@@ -203,6 +203,15 @@ where
 		<Self as crate::storage::StorageDoubleMap<Key1, Key2, Value>>::try_get(k1, k2)
 	}
 
+	/// Store or remove the value to be associated with `key` so that `get` returns the `query`.
+	pub fn set<KArg1: EncodeLike<Key1>, KArg2: EncodeLike<Key2>>(
+		k1: KArg1,
+		k2: KArg2,
+		q: QueryKind::Query,
+	) {
+		<Self as crate::storage::StorageDoubleMap<Key1, Key2, Value>>::set(k1, k2, q)
+	}
+
 	/// Take a value from storage, removing it afterwards.
 	pub fn take<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> QueryKind::Query
 	where
