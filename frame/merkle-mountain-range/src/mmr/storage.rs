@@ -58,6 +58,14 @@ impl<StorageType, T, I, L> Default for Storage<StorageType, T, I, L> {
 	}
 }
 
+fn parent_hash_of_ancestor_that_added_node<T: frame_system::Config>(
+	_pos: NodeIndex,
+) -> <T as frame_system::Config>::Hash {
+	// TODO: implement
+	let block_num_from_pos: <T as frame_system::Config>::BlockNumber = 42_u32.into();
+	<frame_system::Pallet<T>>::block_hash(block_num_from_pos)
+}
+
 impl<T, I, L> mmr_lib::MMRStore<NodeOf<T, I, L>> for Storage<OffchainStorage, T, I, L>
 where
 	T: Config<I>,
@@ -65,7 +73,11 @@ where
 	L: primitives::FullLeaf + codec::Decode,
 {
 	fn get_elem(&self, pos: NodeIndex) -> mmr_lib::Result<Option<NodeOf<T, I, L>>> {
-		let key = Pallet::<T, I>::offchain_key(pos);
+		// Get the parent hash of the ancestor block that added node at index `pos`.
+		// Use the hash as extra identifier to differentiate between various `pos` entries
+		// in offchain DB coming from various chain forks.
+		let parent_hash_of_ancestor = parent_hash_of_ancestor_that_added_node::<T>(pos);
+		let key = Pallet::<T, I>::offchain_key(parent_hash_of_ancestor, pos);
 		// Retrieve the element from Off-chain DB.
 		Ok(sp_io::offchain::local_storage_get(sp_core::offchain::StorageKind::PERSISTENT, &key)
 			.and_then(|v| codec::Decode::decode(&mut &*v).ok()))
@@ -112,10 +124,13 @@ where
 		let mut leaf_index = leaves;
 		let mut node_index = size;
 
+		// Use parent hash of block adding new nodes (this block) as extra identifier
+		// in offchain DB to avoid DB collisions and overwrites in case of forks.
+		let parent_hash = <frame_system::Pallet<T>>::parent_hash();
 		for elem in elems {
 			// Indexing API is used to store the full node content (both leaf and inner).
 			elem.using_encoded(|elem| {
-				offchain_index::set(&Pallet::<T, I>::offchain_key(node_index), elem)
+				offchain_index::set(&Pallet::<T, I>::offchain_key(parent_hash, node_index), elem)
 			});
 
 			// On-chain we are going to only store new peaks.

@@ -254,9 +254,16 @@ where
 }
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
-	fn offchain_key(pos: NodeIndex) -> sp_std::prelude::Vec<u8> {
-		(T::INDEXING_PREFIX, pos).encode()
+	/// Build offchain key from `parent_hash` of block that originally added node `pos` to MMR.
+	///
+	/// This combination makes the offchain (key,value) entry resilient to chain forks.
+	fn offchain_key(
+		parent_hash: <T as frame_system::Config>::Hash,
+		pos: NodeIndex,
+	) -> sp_std::prelude::Vec<u8> {
+		(T::INDEXING_PREFIX, parent_hash, pos).encode()
 	}
+
 	/// Generate a MMR proof for the given `leaf_indices`.
 	///
 	/// Note this method can only be used from an off-chain context
