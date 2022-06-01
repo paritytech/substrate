@@ -49,7 +49,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let origin = details.owner;
 		details.owner = dest;
 		Item::<T, I>::insert(&collection, &item, &details);
-		InstancePriceOf::<T, I>::remove(&class, &instance);
+		ItemPriceOf::<T, I>::remove(&collection, &item);
 
 		Self::deposit_event(Event::Transferred {
 			collection,
@@ -117,7 +117,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			#[allow(deprecated)]
 			ItemMetadataOf::<T, I>::remove_prefix(&collection, None);
 			#[allow(deprecated)]
-			InstancePriceOf::<T, I>::remove_prefix(&collection, None);
+			ItemPriceOf::<T, I>::remove_prefix(&collection, None);
 			CollectionMetadataOf::<T, I>::remove(&collection);
 			#[allow(deprecated)]
 			Attribute::<T, I>::remove_prefix((&collection,), None);
@@ -201,58 +201,59 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		Item::<T, I>::remove(&collection, &item);
 		Account::<T, I>::remove((&owner, &collection, &item));
-		InstancePriceOf::<T, I>::remove(&collection, &item);
+		ItemPriceOf::<T, I>::remove(&collection, &item);
 
 		Self::deposit_event(Event::Burned { collection, item, owner });
 		Ok(())
 	}
 
 	pub fn do_set_price(
-		class: T::ClassId,
-		instance: T::InstanceId,
+		collection: T::CollectionId,
+		item: T::ItemId,
 		sender: T::AccountId,
 		price: Option<BalanceOrAssetOf<T, I>>,
 		whitelisted_buyer: Option<T::AccountId>,
 	) -> DispatchResult {
-		let class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
-		ensure!(!class_details.is_frozen, Error::<T, I>::Frozen);
-		ensure!(!T::Locker::is_locked(class, instance), Error::<T, I>::Locked);
+		let collection_details =
+			Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
+		ensure!(!collection_details.is_frozen, Error::<T, I>::Frozen);
+		ensure!(!T::Locker::is_locked(collection, item), Error::<T, I>::Locked);
 
-		let details = Asset::<T, I>::get(&class, &instance).ok_or(Error::<T, I>::UnknownItem)?;
+		let details = Item::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::UnknownItem)?;
 		ensure!(!details.is_frozen, Error::<T, I>::Frozen);
 		ensure!(details.owner == sender, Error::<T, I>::NoPermission);
 
 		if let Some(ref price) = price {
-			InstancePriceOf::<T, I>::insert(
-				&class,
-				&instance,
+			ItemPriceOf::<T, I>::insert(
+				&collection,
+				&item,
 				(price.clone(), whitelisted_buyer.clone()),
 			);
-			Self::deposit_event(Event::InstancePriceSet {
-				class,
-				instance,
+			Self::deposit_event(Event::ItemPriceSet {
+				collection,
+				item,
 				price: price.clone(),
 				whitelisted_buyer,
 			});
 		} else {
-			InstancePriceOf::<T, I>::remove(&class, &instance);
-			Self::deposit_event(Event::InstancePriceRemoved { class, instance });
+			ItemPriceOf::<T, I>::remove(&collection, &item);
+			Self::deposit_event(Event::ItemPriceRemoved { collection, item });
 		}
 
 		Ok(())
 	}
 
 	pub fn do_buy_item(
-		class: T::ClassId,
-		instance: T::InstanceId,
+		collection: T::CollectionId,
+		item: T::ItemId,
 		buyer: T::AccountId,
 		bid_price: BalanceOrAssetOf<T, I>,
 	) -> DispatchResult {
-		let details = Asset::<T, I>::get(&class, &instance).ok_or(Error::<T, I>::UnknownItem)?;
+		let details = Item::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::UnknownItem)?;
 		ensure!(details.owner != buyer, Error::<T, I>::NoPermission);
 
 		let price_info =
-			InstancePriceOf::<T, I>::get(&class, &instance).ok_or(Error::<T, I>::NotForSale)?;
+			ItemPriceOf::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::NotForSale)?;
 
 		ensure!(bid_price.is_greater_or_equal::<T, I>(&price_info.0)?, Error::<T, I>::BidTooLow);
 
@@ -269,11 +270,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		let old_owner = details.owner.clone();
 
-		Self::do_transfer(class, instance, buyer.clone(), |_, _| Ok(()))?;
+		Self::do_transfer(collection, item, buyer.clone(), |_, _| Ok(()))?;
 
 		Self::deposit_event(Event::ItemBought {
-			class,
-			instance,
+			collection,
+			item,
 			price: bid_price,
 			seller: old_owner,
 			buyer,

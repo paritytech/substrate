@@ -62,7 +62,7 @@ pub use weights::WeightInfo;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::{pallet_prelude::*, transactional};
+	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
@@ -275,12 +275,12 @@ pub mod pallet {
 
 	#[pallet::storage]
 	/// Price of an asset instance.
-	pub(super) type InstancePriceOf<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
+	pub(super) type ItemPriceOf<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
 		_,
 		Blake2_128Concat,
-		T::ClassId,
+		T::CollectionId,
 		Blake2_128Concat,
-		T::InstanceId,
+		T::ItemId,
 		(BalanceOrAssetOf<T, I>, Option<T::AccountId>),
 		OptionQuery,
 	>;
@@ -382,18 +382,18 @@ pub mod pallet {
 		/// Max supply has been set for a collection.
 		CollectionMaxSupplySet { collection: T::CollectionId, max_supply: u32 },
 		/// The price was set for the instance.
-		InstancePriceSet {
-			class: T::CollectionId,
-			instance: T::ItemId,
+		ItemPriceSet {
+			collection: T::CollectionId,
+			item: T::ItemId,
 			price: BalanceOrAssetOf<T, I>,
 			whitelisted_buyer: Option<T::AccountId>,
 		},
 		/// The price for the instance was removed.
-		InstancePriceRemoved { class: T::CollectionId, instance: T::ItemId },
+		ItemPriceRemoved { collection: T::CollectionId, item: T::ItemId },
 		/// An item was bought.
 		ItemBought {
-			class: T::CollectionId,
-			instance: T::ItemId,
+			collection: T::CollectionId,
+			item: T::ItemId,
 			price: BalanceOrAssetOf<T, I>,
 			seller: T::AccountId,
 			buyer: T::AccountId,
@@ -1474,50 +1474,48 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Set (or reset) the price for an instance.
+		/// Set (or reset) the price for an item.
 		///
-		/// Origin must be Signed and must be the owner of the asset `instance`.
+		/// Origin must be Signed and must be the owner of the asset `item`.
 		///
-		/// - `class`: The class of the asset.
-		/// - `instance`: The instance of the asset.
-		/// - `price`: The price for the asset. Pass `None`, to reset the price.
+		/// - `collection`: The collection of the item.
+		/// - `item`: The item to set the price for.
+		/// - `price`: The price for the item. Pass `None`, to reset the price.
 		/// - `buyer`: Restricts the buy operation to a specific account.
 		///
-		/// Emits `InstancePriceSet` on success if the price is not `None`.
-		/// Emits `InstancePriceRemoved` on success if the price is `None`.
+		/// Emits `ItemPriceSet` on success if the price is not `None`.
+		/// Emits `ItemPriceRemoved` on success if the price is `None`.
 		#[pallet::weight(0)]
-		#[transactional]
 		pub fn set_price(
 			origin: OriginFor<T>,
-			class: T::ClassId,
-			instance: T::InstanceId,
+			collection: T::CollectionId,
+			item: T::ItemId,
 			price: Option<BalanceOrAssetOf<T, I>>,
 			whitelisted_buyer: Option<<T::Lookup as StaticLookup>::Source>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			let whitelisted_buyer = whitelisted_buyer.map(T::Lookup::lookup).transpose()?;
-			Self::do_set_price(class, instance, origin, price, whitelisted_buyer)
+			Self::do_set_price(collection, item, origin, price, whitelisted_buyer)
 		}
 
 		/// Allows to buy an item if it's up for sale.
 		///
-		/// Origin must be Signed and must not be the owner of the asset `instance`.
+		/// Origin must be Signed and must not be the owner of the `item`.
 		///
-		/// - `class`: The class of the asset.
-		/// - `instance`: The instance of the asset the sender wants to buy.
+		/// - `collection`: The collection of the item.
+		/// - `item`: The item the sender wants to buy.
 		/// - `bid_price`: The price the sender is willing to pay.
 		///
 		/// Emits `ItemBought` on success.
 		#[pallet::weight(0)]
-		#[transactional]
 		pub fn buy_item(
 			origin: OriginFor<T>,
-			class: T::ClassId,
-			instance: T::InstanceId,
+			collection: T::CollectionId,
+			item: T::ItemId,
 			bid_price: BalanceOrAssetOf<T, I>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
-			Self::do_buy_item(class, instance, origin, bid_price)
+			Self::do_buy_item(collection, item, origin, bid_price)
 		}
 	}
 }

@@ -716,28 +716,28 @@ fn set_price_should_work() {
 			Some(3)
 		));
 
-		let item = InstancePriceOf::<Test>::get(collection_id, item_1).unwrap();
+		let item = ItemPriceOf::<Test>::get(collection_id, item_1).unwrap();
 		assert_eq!(item.0, 1.into());
 		assert_eq!(item.1, None);
 
-		let item = InstancePriceOf::<Test>::get(collection_id, item_2).unwrap();
+		let item = ItemPriceOf::<Test>::get(collection_id, item_2).unwrap();
 		assert_eq!(item.0, 2.into());
 		assert_eq!(item.1, Some(3));
 
-		assert!(events().contains(&Event::<Test>::InstancePriceSet {
-			class: collection_id,
-			instance: item_1,
+		assert!(events().contains(&Event::<Test>::ItemPriceSet {
+			collection: collection_id,
+			item: item_1,
 			price: 1.into(),
 			whitelisted_buyer: None,
 		}));
 
 		// validate we can unset the price
 		assert_ok!(Uniques::set_price(Origin::signed(user_id), collection_id, item_2, None, None));
-		assert!(events().contains(&Event::<Test>::InstancePriceRemoved {
-			class: collection_id,
-			instance: item_2
+		assert!(events().contains(&Event::<Test>::ItemPriceRemoved {
+			collection: collection_id,
+			item: item_2
 		}));
-		assert!(!InstancePriceOf::<Test>::contains_key(collection_id, item_2));
+		assert!(!ItemPriceOf::<Test>::contains_key(collection_id, item_2));
 
 		// ensure we can't set the price when a collection or an item are frozen
 		let collection_id = 1;
@@ -745,7 +745,7 @@ fn set_price_should_work() {
 		assert_ok!(Uniques::mint(Origin::signed(user_id), collection_id, item_1, user_id));
 
 		// freeze collection
-		assert_ok!(Uniques::freeze_class(Origin::signed(user_id), collection_id));
+		assert_ok!(Uniques::freeze_collection(Origin::signed(user_id), collection_id));
 
 		assert_noop!(
 			Uniques::set_price(
@@ -757,7 +757,7 @@ fn set_price_should_work() {
 			),
 			Error::<Test>::Frozen
 		);
-		assert_ok!(Uniques::thaw_class(Origin::signed(user_id), collection_id));
+		assert_ok!(Uniques::thaw_collection(Origin::signed(user_id), collection_id));
 
 		// freeze item
 		assert_ok!(Uniques::freeze(Origin::signed(user_id), collection_id, item_1));
@@ -840,7 +840,7 @@ fn buy_item_should_work() {
 		));
 
 		// validate the new owner & balances
-		let item = Asset::<Test>::get(collection_id, item_1).unwrap();
+		let item = Item::<Test>::get(collection_id, item_1).unwrap();
 		assert_eq!(item.owner, user_2);
 		assert_eq!(Balances::total_balance(&user_1), initial_balance + price_1);
 		assert_eq!(Balances::total_balance(&user_2), initial_balance - price_1);
@@ -866,15 +866,15 @@ fn buy_item_should_work() {
 		));
 
 		assert!(events().contains(&Event::<Test>::ItemBought {
-			class: collection_id,
-			instance: item_2,
+			collection: collection_id,
+			item: item_2,
 			price: price_2.into(),
 			seller: user_1,
 			buyer: user_3,
 		}));
 
 		// ensure we reset the buyer field
-		assert!(!InstancePriceOf::<Test>::contains_key(collection_id, item_2));
+		assert!(!ItemPriceOf::<Test>::contains_key(collection_id, item_2));
 
 		// can't buy when item is not for sale
 		assert_noop!(
