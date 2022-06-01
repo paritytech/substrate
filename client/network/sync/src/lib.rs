@@ -1423,9 +1423,6 @@ where
 	fn update_peer_common_number(&mut self, peer_id: &PeerId, new_common: NumberFor<B>) {
 		if let Some(peer) = self.peers.get_mut(peer_id) {
 			peer.update_common_number(new_common);
-			// now that our common number is updated it is safe to clear queued blocks
-			// from the block collection without causing duplicate block requests.
-			self.blocks.clear_queued(new_common);
 		}
 	}
 
@@ -1510,9 +1507,13 @@ where
 		for (_, hash) in &results {
 			self.queue_blocks.remove(hash);
 		}
+		let up_to = results.last().and_then(|(r, _)| Some(r.as_ref().ok()?.number().clone()));
+		if let Some(up_to) = up_to {
+			self.blocks.clear_queued(up_to);
+		}
 		for (result, hash) in results {
 			if has_error {
-				continue
+				break
 			}
 
 			if result.is_err() {
