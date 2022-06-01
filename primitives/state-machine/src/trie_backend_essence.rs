@@ -29,8 +29,7 @@ use sp_trie::{
 	child_delta_trie_root, delta_trie_root, empty_child_trie_root, read_child_trie_value,
 	read_trie_value,
 	trie_types::{TrieDB, TrieError},
-	DBValue, KeySpacedDB, LayoutV1 as Layout, Trie, TrieDBIterator,
-	TrieDBKeyIterator,
+	DBValue, KeySpacedDB, LayoutV1 as Layout, Trie, TrieDBIterator, TrieDBKeyIterator,
 };
 #[cfg(feature = "std")]
 use std::collections::HashMap;

@@ -85,7 +85,7 @@ fn derive_debug(
 /// This is only used then the `full` feature is activated.
 #[cfg(feature = "full")]
 fn iterate_fields(data: &syn::DataStruct, fmt: impl Fn(&Ident) -> TokenStream) -> TokenStream {
-	use syn::{Fields, spanned::Spanned};
+	use syn::{spanned::Spanned, Fields};
 
 	match &data.fields {
 		Fields::Named(fields) => {
