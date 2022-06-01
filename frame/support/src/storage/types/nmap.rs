@@ -142,6 +142,14 @@ where
 		<Self as crate::storage::StorageNMap<Key, Value>>::try_get(key)
 	}
 
+	/// Store or remove the value to be associated with `key` so that `get` returns the `query`.
+	pub fn set<KArg: EncodeLikeTuple<Key::KArg> + TupleToEncodedIter>(
+		key: KArg,
+		query: QueryKind::Query,
+	) {
+		<Self as crate::storage::StorageNMap<Key, Value>>::set(key, query)
+	}
+
 	/// Take a value from storage, removing it afterwards.
 	pub fn take<KArg: EncodeLikeTuple<Key::KArg> + TupleToEncodedIter>(
 		key: KArg,

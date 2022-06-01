@@ -132,6 +132,11 @@ where
 		<Self as MapWrapper>::Map::try_get(key)
 	}
 
+	/// Store or remove the value to be associated with `key` so that `get` returns the `query`.
+	pub fn set<KeyArg: EncodeLike<Key>>(key: KeyArg, q: QueryKind::Query) {
+		<Self as MapWrapper>::Map::set(key, q)
+	}
+
 	/// Swap the values of two keys.
 	pub fn swap<KeyArg1: EncodeLike<Key>, KeyArg2: EncodeLike<Key>>(key1: KeyArg1, key2: KeyArg2) {
 		<Self as MapWrapper>::Map::swap(key1, key2)
