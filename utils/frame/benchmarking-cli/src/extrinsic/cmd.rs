@@ -36,8 +36,8 @@ use super::{
 /// This is calculated by filling a block with a specific extrinsic and executing the block.
 /// The result time is then divided by the number of extrinsics in that block.
 ///
-/// NOTE: The [`frame_support::BlockExecutionWeight`] is ignored
-/// in this case since it is very small compared to the total block execution time.
+/// NOTE: The BlockExecutionWeight is ignored  in this case since it
+// is very small compared to the total block execution time.
 #[derive(Debug, Parser)]
 pub struct ExtrinsicCmd {
 	#[allow(missing_docs)]

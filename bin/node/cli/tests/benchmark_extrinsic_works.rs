@@ -31,7 +31,7 @@ fn benchmark_extrinsic_works() {
 fn benchmark_extrinsic(pallet: &str, extrinsic: &str) {
 	let status = Command::new(cargo_bin("substrate"))
 		.args(&["benchmark", "extrinsic", "--dev"])
-		.args([pallet, extrinsic])
+		.args(&["--pallet", pallet, "--extrinsic", extrinsic])
 		// Run with low repeats for faster execution.
 		.args(["--warmup=10", "--repeat=10", "--max-ext-per-block=10"])
 		.status()
