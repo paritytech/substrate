@@ -24,6 +24,8 @@
 //! * [`System`](../frame_system/index.html)
 //! * [`Support`](../frame_support/index.html)
 
+#![recursion_limit = "256"]
+
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -1455,7 +1457,7 @@ pub mod pallet {
 		///
 		/// Emits `ItemPriceSet` on success if the price is not `None`.
 		/// Emits `ItemPriceRemoved` on success if the price is `None`.
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::set_price())]
 		pub fn set_price(
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
@@ -1477,7 +1479,7 @@ pub mod pallet {
 		/// - `bid_price`: The price the sender is willing to pay.
 		///
 		/// Emits `ItemBought` on success.
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::buy_item())]
 		pub fn buy_item(
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
