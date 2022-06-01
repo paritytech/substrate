@@ -1384,8 +1384,8 @@ pub mod pallet {
 
 			// We just need its total earnings at this point in time, but we don't need to write it
 			// because we are not adjusting its points (all other values can calculated virtual).
-			let reward_pool =
-				RewardPool::<T>::get_and_update(pool_id).defensive_ok_or_else(|| -> Error<T> {
+			let reward_pool = RewardPool::<T>::get_and_update(pool_id)
+				.defensive_ok_or_else::<Error<T>, _>(|| {
 					DefensiveError::RewardPoolNotFound.into()
 				})?;
 
@@ -1554,7 +1554,7 @@ pub mod pallet {
 					.try_insert(unbond_era, UnbondPool::default())
 					// The above call to `maybe_merge_pools` should ensure there is
 					// always enough space to insert.
-					.defensive_map_err(|_| -> Error<T> {
+					.defensive_map_err::<Error<T>, _>(|_| {
 						DefensiveError::NotEnoughSpaceInUnbondPool.into()
 					})?;
 			}
@@ -1563,7 +1563,7 @@ pub mod pallet {
 				.with_era
 				.get_mut(&unbond_era)
 				// The above check ensures the pool exists.
-				.defensive_ok_or_else(|| -> Error<T> { DefensiveError::PoolNotFound.into() })?
+				.defensive_ok_or_else::<Error<T>, _>(|| DefensiveError::PoolNotFound.into())?
 				.issue(unbonding_balance);
 
 			Self::deposit_event(Event::<T>::Unbonded {
@@ -1635,9 +1635,9 @@ pub mod pallet {
 			let current_era = T::StakingInterface::current_era();
 
 			let bonded_pool = BondedPool::<T>::get(member.pool_id)
-				.defensive_ok_or_else(|| -> Error<T> { DefensiveError::PoolNotFound.into() })?;
+				.defensive_ok_or_else::<Error<T>, _>(|| DefensiveError::PoolNotFound.into())?;
 			let mut sub_pools = SubPoolsStorage::<T>::get(member.pool_id)
-				.defensive_ok_or_else(|| -> Error<T> { DefensiveError::SubPoolsNotFound.into() })?;
+				.defensive_ok_or_else::<Error<T>, _>(|| DefensiveError::SubPoolsNotFound.into())?;
 
 			bonded_pool.ok_to_withdraw_unbonded_with(
 				&caller,
