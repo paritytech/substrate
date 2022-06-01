@@ -2599,7 +2599,7 @@ mod tests {
 
 	#[test]
 	#[cfg(feature = "unstable-interface")]
-	fn reentrant_count() {
+	fn reentrant_count_works() {
 		const CODE: &str = r#"
 (module
 	(import "__unstable__" "seal_reentrant_count" (func $seal_reentrant_count (result i32)))

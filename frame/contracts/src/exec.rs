@@ -1243,7 +1243,7 @@ where
 	}
 
 	fn account_entrance_count(&self, account_id: &AccountIdOf<Self::T>) -> u32 {
-		self.frames().filter_map(|f| Some(f.delegate_caller.is_none() && &f.account_id == account_id)).count() as u32
+		self.frames().filter_map(|f| (f.delegate_caller.is_none() && &f.account_id == account_id).then(|| true)).count() as u32
 	}
 }
 
