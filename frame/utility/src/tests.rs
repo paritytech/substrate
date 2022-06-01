@@ -471,11 +471,11 @@ fn batch_all_revert() {
 
 		assert_eq!(Balances::free_balance(1), 10);
 		assert_eq!(Balances::free_balance(2), 10);
+		let batch_all_calls = Call::Utility(crate::Call::<Test>::batch_all {
+			calls: vec![call_transfer(2, 5), call_transfer(2, 10), call_transfer(2, 5)],
+		});
 		assert_noop!(
-			Utility::batch_all(
-				Origin::signed(1),
-				vec![call_transfer(2, 5), call_transfer(2, 10), call_transfer(2, 5),]
-			),
+			batch_all_calls.dispatch(Origin::signed(1)),
 			DispatchErrorWithPostInfo {
 				post_info: PostDispatchInfo {
 					actual_weight: Some(
@@ -604,5 +604,37 @@ fn batch_limit() {
 		let calls = vec![Call::System(SystemCall::remark { remark: vec![] }); 40_000];
 		assert_noop!(Utility::batch(Origin::signed(1), calls.clone()), Error::<Test>::TooManyCalls);
 		assert_noop!(Utility::batch_all(Origin::signed(1), calls), Error::<Test>::TooManyCalls);
+	});
+}
+
+#[test]
+fn force_batch_works() {
+	new_test_ext().execute_with(|| {
+		assert_eq!(Balances::free_balance(1), 10);
+		assert_eq!(Balances::free_balance(2), 10);
+		assert_ok!(Utility::force_batch(
+			Origin::signed(1),
+			vec![
+				call_transfer(2, 5),
+				call_foobar(true, 75, None),
+				call_transfer(2, 10),
+				call_transfer(2, 5),
+			]
+		),);
+		System::assert_last_event(utility::Event::BatchCompletedWithErrors.into());
+		System::assert_has_event(
+			utility::Event::ItemFailed { error: DispatchError::Other("") }.into(),
+		);
+		assert_eq!(Balances::free_balance(1), 0);
+		assert_eq!(Balances::free_balance(2), 20);
+
+		assert_ok!(Utility::force_batch(
+			Origin::signed(2),
+			vec![call_transfer(1, 5), call_transfer(1, 5),]
+		),);
+		System::assert_last_event(utility::Event::BatchCompleted.into());
+
+		assert_ok!(Utility::force_batch(Origin::signed(1), vec![call_transfer(2, 50),]),);
+		System::assert_last_event(utility::Event::BatchCompletedWithErrors.into());
 	});
 }

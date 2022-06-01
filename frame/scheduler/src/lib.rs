@@ -565,6 +565,7 @@ impl<T: Config> Pallet<T> {
 			},
 		);
 
+		#[allow(deprecated)]
 		frame_support::storage::migration::remove_storage_prefix(
 			Self::name().as_bytes(),
 			b"StorageVersion",
@@ -601,6 +602,7 @@ impl<T: Config> Pallet<T> {
 			)
 		});
 
+		#[allow(deprecated)]
 		frame_support::storage::migration::remove_storage_prefix(
 			Self::name().as_bytes(),
 			b"StorageVersion",

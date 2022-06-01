@@ -2788,6 +2788,80 @@ fn deferred_slashes_are_deferred() {
 }
 
 #[test]
+fn staker_cannot_bail_deferred_slash() {
+	// as long as SlashDeferDuration is less than BondingDuration, this should not be possible.
+	ExtBuilder::default().slash_defer_duration(2).build_and_execute(|| {
+		mock::start_active_era(1);
+
+		assert_eq!(Balances::free_balance(11), 1000);
+		assert_eq!(Balances::free_balance(101), 2000);
+
+		let exposure = Staking::eras_stakers(active_era(), 11);
+		let nominated_value = exposure.others.iter().find(|o| o.who == 101).unwrap().value;
+
+		on_offence_now(
+			&[OffenceDetails {
+				offender: (11, Staking::eras_stakers(active_era(), 11)),
+				reporters: vec![],
+			}],
+			&[Perbill::from_percent(10)],
+		);
+
+		// now we chill
+		assert_ok!(Staking::chill(Origin::signed(100)));
+		assert_ok!(Staking::unbond(Origin::signed(100), 500));
+
+		assert_eq!(Staking::current_era().unwrap(), 1);
+		assert_eq!(active_era(), 1);
+
+		assert_eq!(
+			Ledger::<Test>::get(100).unwrap(),
+			StakingLedger {
+				active: 0,
+				total: 500,
+				stash: 101,
+				claimed_rewards: Default::default(),
+				unlocking: bounded_vec![UnlockChunk { era: 4u32, value: 500 }],
+			}
+		);
+
+		// no slash yet.
+		assert_eq!(Balances::free_balance(11), 1000);
+		assert_eq!(Balances::free_balance(101), 2000);
+
+		// no slash yet.
+		mock::start_active_era(2);
+		assert_eq!(Balances::free_balance(11), 1000);
+		assert_eq!(Balances::free_balance(101), 2000);
+		assert_eq!(Staking::current_era().unwrap(), 2);
+		assert_eq!(active_era(), 2);
+
+		// no slash yet.
+		mock::start_active_era(3);
+		assert_eq!(Balances::free_balance(11), 1000);
+		assert_eq!(Balances::free_balance(101), 2000);
+		assert_eq!(Staking::current_era().unwrap(), 3);
+		assert_eq!(active_era(), 3);
+
+		// and cannot yet unbond:
+		assert_storage_noop!(assert!(Staking::withdraw_unbonded(Origin::signed(100), 0).is_ok()));
+		assert_eq!(
+			Ledger::<Test>::get(100).unwrap().unlocking.into_inner(),
+			vec![UnlockChunk { era: 4u32, value: 500 as Balance }],
+		);
+
+		// at the start of era 4, slashes from era 1 are processed,
+		// after being deferred for at least 2 full eras.
+		mock::start_active_era(4);
+
+		assert_eq!(Balances::free_balance(11), 900);
+		assert_eq!(Balances::free_balance(101), 2000 - (nominated_value / 10));
+
+		// and the leftover of the funds can now be unbonded.
+	})
+}
+
+#[test]
 fn remove_deferred() {
 	ExtBuilder::default().slash_defer_duration(2).build_and_execute(|| {
 		mock::start_active_era(1);
@@ -3314,7 +3388,7 @@ fn six_session_delay() {
 #[test]
 fn test_max_nominator_rewarded_per_validator_and_cant_steal_someone_else_reward() {
 	ExtBuilder::default().build_and_execute(|| {
-		for i in 0..=<Test as Config>::MaxNominatorRewardedPerValidator::get() {
+		for i in 0..=<<Test as Config>::MaxNominatorRewardedPerValidator as Get<_>>::get() {
 			let stash = 10_000 + i as AccountId;
 			let controller = 20_000 + i as AccountId;
 			let balance = 10_000 + i as Balance;
@@ -3337,7 +3411,7 @@ fn test_max_nominator_rewarded_per_validator_and_cant_steal_someone_else_reward(
 		mock::make_all_reward_payment(1);
 
 		// Assert only nominators from 1 to Max are rewarded
-		for i in 0..=<Test as Config>::MaxNominatorRewardedPerValidator::get() {
+		for i in 0..=<<Test as Config>::MaxNominatorRewardedPerValidator as Get<_>>::get() {
 			let stash = 10_000 + i as AccountId;
 			let balance = 10_000 + i as Balance;
 			if stash == 10_000 {
@@ -3575,7 +3649,8 @@ fn payout_stakers_handles_weight_refund() {
 	// Note: this test relies on the assumption that `payout_stakers_alive_staked` is solely used by
 	// `payout_stakers` to calculate the weight of each payout op.
 	ExtBuilder::default().has_stakers(false).build_and_execute(|| {
-		let max_nom_rewarded = <Test as Config>::MaxNominatorRewardedPerValidator::get();
+		let max_nom_rewarded =
+			<<Test as Config>::MaxNominatorRewardedPerValidator as Get<_>>::get();
 		// Make sure the configured value is meaningful for our use.
 		assert!(max_nom_rewarded >= 4);
 		let half_max_nom_rewarded = max_nom_rewarded / 2;
@@ -4856,7 +4931,7 @@ fn force_apply_min_commission_works() {
 }
 
 #[test]
-fn ledger_slash_works() {
+fn proportional_ledger_slash_works() {
 	let c = |era, value| UnlockChunk::<Balance> { era, value };
 	// Given
 	let mut ledger = StakingLedger::<Test> {

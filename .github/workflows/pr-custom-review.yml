@@ -37,6 +37,6 @@ jobs:
         if: github.event.pull_request.draft == true
         run: exit 1
       - name: pr-custom-review
-        uses: paritytech/pr-custom-review@v2
+        uses: paritytech/pr-custom-review@action-v3
         with:
-          token: ${{ secrets.PRCR_TOKEN }}
+          checks-reviews-api: http://pcr.parity-prod.parity.io/api/v1/check_reviews

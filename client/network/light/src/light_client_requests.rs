@@ -21,7 +21,7 @@
 /// For incoming light client requests.
 pub mod handler;
 
-use crate::{config::ProtocolId, request_responses::ProtocolConfig};
+use sc_network_common::{config::ProtocolId, request_responses::ProtocolConfig};
 
 use std::time::Duration;
 

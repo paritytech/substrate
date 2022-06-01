@@ -50,6 +50,16 @@ macro_rules! defensive {
 			$error
 		);
 		debug_assert!(false, "{}: {:?}", $crate::traits::DEFENSIVE_OP_INTERNAL_ERROR, $error);
+	};
+	($error:tt, $proof:tt) => {
+		frame_support::log::error!(
+			target: "runtime",
+			"{}: {:?}: {:?}",
+			$crate::traits::DEFENSIVE_OP_PUBLIC_ERROR,
+			$error,
+			$proof,
+		);
+		debug_assert!(false, "{}: {:?}: {:?}", $crate::traits::DEFENSIVE_OP_INTERNAL_ERROR, $error, $proof);
 	}
 }
 
@@ -102,6 +112,10 @@ pub trait Defensive<T> {
 	/// }
 	/// ```
 	fn defensive(self) -> Self;
+
+	/// Same as [`Defensive::defensive`], but it takes a proof as input, and displays it if the
+	/// defensive operation has been triggered.
+	fn defensive_proof(self, proof: &'static str) -> Self;
 }
 
 /// Subset of methods similar to [`Defensive`] that can only work for a `Result`.
@@ -184,6 +198,13 @@ impl<T> Defensive<T> for Option<T> {
 			},
 		}
 	}
+
+	fn defensive_proof(self, proof: &'static str) -> Self {
+		if self.is_none() {
+			defensive!(proof);
+		}
+		self
+	}
 }
 
 impl<T, E: sp_std::fmt::Debug> Defensive<T> for Result<T, E> {
@@ -225,6 +246,16 @@ impl<T, E: sp_std::fmt::Debug> Defensive<T> for Result<T, E> {
 			Ok(inner) => Ok(inner),
 			Err(e) => {
 				defensive!(e);
+				Err(e)
+			},
+		}
+	}
+
+	fn defensive_proof(self, proof: &'static str) -> Self {
+		match self {
+			Ok(inner) => Ok(inner),
+			Err(e) => {
+				defensive!(e, proof);
 				Err(e)
 			},
 		}
@@ -356,6 +387,16 @@ where
 	}
 }
 
+/// A trait for querying a single value from a type defined in the trait.
+///
+/// It is not required that the value is constant.
+pub trait TypedGet {
+	/// The type which is returned.
+	type Type;
+	/// Return the current value.
+	fn get() -> Self::Type;
+}
+
 /// A trait for querying a single value from a type.
 ///
 /// It is not required that the value is constant.
@@ -390,6 +431,12 @@ macro_rules! impl_const_get {
 		impl<const T: $t> Get<Option<$t>> for $name<T> {
 			fn get() -> Option<$t> {
 				Some(T)
+			}
+		}
+		impl<const T: $t> TypedGet for $name<T> {
+			type Type = $t;
+			fn get() -> $t {
+				T
 			}
 		}
 	};

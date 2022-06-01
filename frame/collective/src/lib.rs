@@ -51,9 +51,7 @@ use frame_support::{
 	codec::{Decode, Encode},
 	dispatch::{DispatchError, DispatchResultWithPostInfo, Dispatchable, PostDispatchInfo},
 	ensure,
-	traits::{
-		Backing, ChangeMembers, EnsureOrigin, Get, GetBacking, InitializeMembers, StorageVersion,
-	},
+	traits::{Backing, ChangeMembers, EnsureOrigin, Get, GetBacking, InitializeMembers},
 	weights::{GetDispatchInfo, Weight},
 };
 
@@ -998,11 +996,11 @@ impl<
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> O {
+	fn try_successful_origin() -> Result<O, ()> {
 		let zero_account_id =
 			AccountId::decode(&mut sp_runtime::traits::TrailingZeroInput::zeroes())
 				.expect("infinite length input; no invalid inputs for type; qed");
-		O::from(RawOrigin::Member(zero_account_id))
+		Ok(O::from(RawOrigin::Member(zero_account_id)))
 	}
 }
 
@@ -1023,8 +1021,8 @@ impl<
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> O {
-		O::from(RawOrigin::Members(N, N))
+	fn try_successful_origin() -> Result<O, ()> {
+		Ok(O::from(RawOrigin::Members(N, N)))
 	}
 }
 
@@ -1048,8 +1046,8 @@ impl<
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> O {
-		O::from(RawOrigin::Members(1u32, 0u32))
+	fn try_successful_origin() -> Result<O, ()> {
+		Ok(O::from(RawOrigin::Members(1u32, 0u32)))
 	}
 }
 
@@ -1073,7 +1071,7 @@ impl<
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> O {
-		O::from(RawOrigin::Members(0u32, 0u32))
+	fn try_successful_origin() -> Result<O, ()> {
+		Ok(O::from(RawOrigin::Members(0u32, 0u32)))
 	}
 }
