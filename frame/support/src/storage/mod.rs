@@ -167,6 +167,9 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 	/// Load the value associated with the given key from the map.
 	fn get<KeyArg: EncodeLike<K>>(key: KeyArg) -> Self::Query;
 
+	/// Store or remove the value to be associated with `key` so that `get` returns the `query`.
+	fn set<KeyArg: EncodeLike<K>>(key: KeyArg, query: Self::Query);
+
 	/// Try to get the value for the given key from the map.
 	///
 	/// Returns `Ok` if it exists, `Err` if not.
@@ -481,6 +484,9 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 		KArg1: EncodeLike<K1>,
 		KArg2: EncodeLike<K2>;
 
+	/// Store or remove the value to be associated with `key` so that `get` returns the `query`.
+	fn set<KArg1: EncodeLike<K1>, KArg2: EncodeLike<K2>>(k1: KArg1, k2: KArg2, query: Self::Query);
+
 	/// Take a value from storage, removing it afterwards.
 	fn take<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> Self::Query
 	where
@@ -656,6 +662,9 @@ pub trait StorageNMap<K: KeyGenerator, V: FullCodec> {
 	///
 	/// Returns `Ok` if it exists, `Err` if not.
 	fn try_get<KArg: EncodeLikeTuple<K::KArg> + TupleToEncodedIter>(key: KArg) -> Result<V, ()>;
+
+	/// Store or remove the value to be associated with `key` so that `get` returns the `query`.
+	fn set<KArg: EncodeLikeTuple<K::KArg> + TupleToEncodedIter>(key: KArg, query: Self::Query);
 
 	/// Swap the values of two keys.
 	fn swap<KOther, KArg1, KArg2>(key1: KArg1, key2: KArg2)
