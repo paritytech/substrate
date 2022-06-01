@@ -825,6 +825,7 @@ impl pallet_referenda::Config for Runtime {
 	type Event = Event;
 	type Scheduler = Scheduler;
 	type Currency = pallet_balances::Pallet<Self>;
+	type SubmitOrigin = EnsureSigned<AccountId>;
 	type CancelOrigin = EnsureRoot<AccountId>;
 	type KillOrigin = EnsureRoot<AccountId>;
 	type Slash = ();
@@ -843,6 +844,7 @@ impl pallet_referenda::Config<pallet_referenda::Instance2> for Runtime {
 	type Event = Event;
 	type Scheduler = Scheduler;
 	type Currency = pallet_balances::Pallet<Self>;
+	type SubmitOrigin = EnsureSigned<AccountId>;
 	type CancelOrigin = EnsureRoot<AccountId>;
 	type KillOrigin = EnsureRoot<AccountId>;
 	type Slash = ();
