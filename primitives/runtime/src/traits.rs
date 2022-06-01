@@ -37,7 +37,9 @@ pub use sp_arithmetic::traits::{
 	UniqueSaturatedFrom, UniqueSaturatedInto, Zero,
 };
 use sp_core::{self, storage::StateVersion, Hasher, RuntimeDebug, TypeId};
-use sp_std::{self, fmt::Debug, marker::PhantomData, prelude::*};
+#[doc(hidden)]
+pub use sp_std::marker::PhantomData;
+use sp_std::{self, fmt::Debug, prelude::*};
 #[cfg(feature = "std")]
 use std::fmt::Display;
 #[cfg(feature = "std")]
@@ -274,6 +276,192 @@ where
 	}
 }
 
+/// A trait for querying a single value from a type defined in the trait.
+///
+/// It is not required that the value is constant.
+pub trait TypedGet {
+	/// The type which is returned.
+	type Type;
+	/// Return the current value.
+	fn get() -> Self::Type;
+}
+
+/// A trait for querying a single value from a type.
+///
+/// It is not required that the value is constant.
+pub trait Get<T> {
+	/// Return the current value.
+	fn get() -> T;
+}
+
+impl<T: Default> Get<T> for () {
+	fn get() -> T {
+		T::default()
+	}
+}
+
+/// Implement Get by returning Default for any type that implements Default.
+pub struct GetDefault;
+impl<T: Default> Get<T> for GetDefault {
+	fn get() -> T {
+		T::default()
+	}
+}
+
+macro_rules! impl_const_get {
+	($name:ident, $t:ty) => {
+		#[doc = "Const getter for a basic type."]
+		#[derive($crate::RuntimeDebug)]
+		pub struct $name<const T: $t>;
+		impl<const T: $t> Get<$t> for $name<T> {
+			fn get() -> $t {
+				T
+			}
+		}
+		impl<const T: $t> Get<Option<$t>> for $name<T> {
+			fn get() -> Option<$t> {
+				Some(T)
+			}
+		}
+		impl<const T: $t> TypedGet for $name<T> {
+			type Type = $t;
+			fn get() -> $t {
+				T
+			}
+		}
+	};
+}
+
+impl_const_get!(ConstBool, bool);
+impl_const_get!(ConstU8, u8);
+impl_const_get!(ConstU16, u16);
+impl_const_get!(ConstU32, u32);
+impl_const_get!(ConstU64, u64);
+impl_const_get!(ConstU128, u128);
+impl_const_get!(ConstI8, i8);
+impl_const_get!(ConstI16, i16);
+impl_const_get!(ConstI32, i32);
+impl_const_get!(ConstI64, i64);
+impl_const_get!(ConstI128, i128);
+
+/// Create new implementations of the [`Get`](crate::traits::Get) trait.
+///
+/// The so-called parameter type can be created in four different ways:
+///
+/// - Using `const` to create a parameter type that provides a `const` getter. It is required that
+///   the `value` is const.
+///
+/// - Declare the parameter type without `const` to have more freedom when creating the value.
+///
+/// NOTE: A more substantial version of this macro is available in `frame_support` crate which
+/// allows mutable and persistant variants.
+///
+/// # Examples
+///
+/// ```
+/// # use sp_runtime::traits::Get;
+/// # use sp_runtime::parameter_types;
+/// // This function cannot be used in a const context.
+/// fn non_const_expression() -> u64 { 99 }
+///
+/// const FIXED_VALUE: u64 = 10;
+/// parameter_types! {
+///    pub const Argument: u64 = 42 + FIXED_VALUE;
+///    /// Visibility of the type is optional
+///    OtherArgument: u64 = non_const_expression();
+/// }
+///
+/// trait Config {
+///    type Parameter: Get<u64>;
+///    type OtherParameter: Get<u64>;
+/// }
+///
+/// struct Runtime;
+/// impl Config for Runtime {
+///    type Parameter = Argument;
+///    type OtherParameter = OtherArgument;
+/// }
+/// ```
+///
+/// # Invalid example:
+///
+/// ```compile_fail
+/// # use sp_runtime::traits::Get;
+/// # use sp_runtime::parameter_types;
+/// // This function cannot be used in a const context.
+/// fn non_const_expression() -> u64 { 99 }
+///
+/// parameter_types! {
+///    pub const Argument: u64 = non_const_expression();
+/// }
+/// ```
+#[macro_export]
+macro_rules! parameter_types {
+	(
+		$( #[ $attr:meta ] )*
+		$vis:vis const $name:ident: $type:ty = $value:expr;
+		$( $rest:tt )*
+	) => (
+		$( #[ $attr ] )*
+		$vis struct $name;
+		$crate::parameter_types!(@IMPL_CONST $name , $type , $value);
+		$crate::parameter_types!( $( $rest )* );
+	);
+	(
+		$( #[ $attr:meta ] )*
+		$vis:vis $name:ident: $type:ty = $value:expr;
+		$( $rest:tt )*
+	) => (
+		$( #[ $attr ] )*
+		$vis struct $name;
+		$crate::parameter_types!(@IMPL $name, $type, $value);
+		$crate::parameter_types!( $( $rest )* );
+	);
+	() => ();
+	(@IMPL_CONST $name:ident, $type:ty, $value:expr) => {
+		impl $name {
+			/// Returns the value of this parameter type.
+			pub const fn get() -> $type {
+				$value
+			}
+		}
+
+		impl<I: From<$type>> $crate::traits::Get<I> for $name {
+			fn get() -> I {
+				I::from(Self::get())
+			}
+		}
+
+		impl $crate::traits::TypedGet for $name {
+			type Type = $type;
+			fn get() -> $type {
+				Self::get()
+			}
+		}
+	};
+	(@IMPL $name:ident, $type:ty, $value:expr) => {
+		impl $name {
+			/// Returns the value of this parameter type.
+			pub fn get() -> $type {
+				$value
+			}
+		}
+
+		impl<I: From<$type>> $crate::traits::Get<I> for $name {
+			fn get() -> I {
+				I::from(Self::get())
+			}
+		}
+
+		impl $crate::traits::TypedGet for $name {
+			type Type = $type;
+			fn get() -> $type {
+				Self::get()
+			}
+		}
+	};
+}
+
 /// Extensible conversion trait. Generic over only source type, with destination type being
 /// associated.
 pub trait Morph<A> {
@@ -308,6 +496,185 @@ impl<T> TryMorph<T> for Identity {
 	fn try_morph(a: T) -> Result<T, ()> {
 		Ok(a)
 	}
+}
+
+/// Create a `Morph` and/or `TryMorph` impls with a simple closure-like expression.
+///
+/// # Examples
+///
+/// ```
+/// # use sp_runtime::{morph_types, traits::{Morph, TryMorph, TypedGet, ConstU32}};
+/// # use sp_arithmetic::traits::CheckedSub;
+///
+/// morph_types! {
+///    /// Replace by some other value; produce both `Morph` and `TryMorph` implementations
+///    pub type Replace<V: TypedGet> = |_| -> V::Type { V::get() };
+///    /// A private `Morph` implementation to reduce a `u32` by 10.
+///    type ReduceU32ByTen: Morph = |r: u32| -> u32 { r - 10 };
+///    /// A `TryMorph` implementation to reduce a scalar by a particular amount, checking for
+///    /// underflow.
+///    pub type CheckedReduceBy<N: TypedGet>: TryMorph = |r: N::Type| -> Result<N::Type, ()> {
+///        r.checked_sub(&N::get()).ok_or(())
+///    } where N::Type: CheckedSub;
+/// }
+///
+/// trait Config {
+///    type TestMorph1: Morph<u32>;
+///    type TestTryMorph1: TryMorph<u32>;
+///    type TestMorph2: Morph<u32>;
+///    type TestTryMorph2: TryMorph<u32>;
+/// }
+///
+/// struct Runtime;
+/// impl Config for Runtime {
+///    type TestMorph1 = Replace<ConstU32<42>>;
+///    type TestTryMorph1 = Replace<ConstU32<42>>;
+///    type TestMorph2 = ReduceU32ByTen;
+///    type TestTryMorph2 = CheckedReduceBy<ConstU32<10>>;
+/// }
+/// ```
+#[macro_export]
+macro_rules! morph_types {
+	(
+		@DECL $( #[doc = $doc:expr] )* $vq:vis $name:ident ()
+	) => {
+		$( #[doc = $doc] )* $vq struct $name;
+	};
+	(
+		@DECL $( #[doc = $doc:expr] )* $vq:vis $name:ident ( $( $bound_id:ident ),+ )
+	) => {
+		$( #[doc = $doc] )*
+		$vq struct $name < $($bound_id,)* > ( $crate::traits::PhantomData< ( $($bound_id,)* ) > ) ;
+	};
+	(
+		@IMPL $name:ty : ( $( $bounds:tt )* ) ( $( $where:tt )* )
+		= |$var:ident: $var_type:ty| -> $outcome:ty { $( $ex:expr )* }
+	) => {
+		impl<$($bounds)*> $crate::traits::Morph<$var_type> for $name $( $where )? {
+			type Outcome = $outcome;
+			fn morph($var: $var_type) -> Self::Outcome { $( $ex )* }
+		}
+	};
+	(
+		@IMPL_TRY $name:ty : ( $( $bounds:tt )* ) ( $( $where:tt )* )
+		= |$var:ident: $var_type:ty| -> $outcome:ty { $( $ex:expr )* }
+	) => {
+		impl<$($bounds)*> $crate::traits::TryMorph<$var_type> for $name $( $where )? {
+			type Outcome = $outcome;
+			fn try_morph($var: $var_type) -> Result<Self::Outcome, ()> { $( $ex )* }
+		}
+	};
+	(
+		@IMPL $name:ty : () ( $( $where:tt )* )
+		= |$var:ident: $var_type:ty| -> $outcome:ty { $( $ex:expr )* }
+	) => {
+		impl $crate::traits::Morph<$var_type> for $name $( $where )? {
+			type Outcome = $outcome;
+			fn morph($var: $var_type) -> Self::Outcome { $( $ex )* }
+		}
+	};
+	(
+		@IMPL_TRY $name:ty : () ( $( $where:tt )* )
+		= |$var:ident: $var_type:ty| -> $outcome:ty { $( $ex:expr )* }
+	) => {
+		impl $crate::traits::TryMorph<$var_type> for $name $( $where )? {
+			type Outcome = $outcome;
+			fn try_morph($var: $var_type) -> Result<Self::Outcome, ()> { $( $ex )* }
+		}
+	};
+	(
+		@IMPL_BOTH $name:ty : ( $( $bounds:tt )* ) ( $( $where:tt )* )
+		= |$var:ident: $var_type:ty| -> $outcome:ty { $( $ex:expr )* }
+	) => {
+		morph_types! {
+			@IMPL $name : ($($bounds)*) ($($where)*)
+			= |$var: $var_type| -> $outcome { $( $ex )* }
+		}
+		morph_types! {
+			@IMPL_TRY $name : ($($bounds)*) ($($where)*)
+			= |$var: $var_type| -> $outcome { Ok({$( $ex )*}) }
+		}
+	};
+
+	(
+		$( #[doc = $doc:expr] )* $vq:vis type $name:ident
+		$( < $( $bound_id:ident $( : $bound_head:path $( | $bound_tail:path )* )? ),+ > )?
+		$(: $type:tt)?
+		= |_| -> $outcome:ty { $( $ex:expr )* };
+		$( $rest:tt )*
+	) => {
+		morph_types! {
+			$( #[doc = $doc] )* $vq type $name
+			$( < $( $bound_id $( : $bound_head $( | $bound_tail )* )? ),+ > )?
+			EXTRA_GENERIC(X)
+			$(: $type)?
+			= |_x: X| -> $outcome { $( $ex )* };
+			$( $rest )*
+		}
+	};
+	(
+		$( #[doc = $doc:expr] )* $vq:vis type $name:ident
+		$( < $( $bound_id:ident $( : $bound_head:path $( | $bound_tail:path )* )? ),+ > )?
+		$( EXTRA_GENERIC ($extra:ident) )?
+		= |$var:ident: $var_type:ty| -> $outcome:ty { $( $ex:expr )* }
+		$( where $( $where_path:ty : $where_bound_head:path $( | $where_bound_tail:path )* ),* )?;
+		$( $rest:tt )*
+	) => {
+		morph_types! { @DECL $( #[doc = $doc] )* $vq $name ( $( $( $bound_id ),+ )? ) }
+		morph_types! {
+			@IMPL_BOTH $name $( < $( $bound_id ),* > )? :
+			( $( $( $bound_id $( : $bound_head $( + $bound_tail )* )? , )+ )? $( $extra )? )
+			( $( where $( $where_path : $where_bound_head $( + $where_bound_tail )* ),* )? )
+			= |$var: $var_type| -> $outcome { $( $ex )* }
+		}
+		morph_types!{ $($rest)* }
+	};
+	(
+		$( #[doc = $doc:expr] )* $vq:vis type $name:ident
+		$( < $( $bound_id:ident $( : $bound_head:path $( | $bound_tail:path )* )? ),+ > )?
+		$( EXTRA_GENERIC ($extra:ident) )?
+		: Morph
+		= |$var:ident: $var_type:ty| -> $outcome:ty { $( $ex:expr )* }
+		$( where $( $where_path:ty : $where_bound_head:path $( | $where_bound_tail:path )* ),* )?;
+		$( $rest:tt )*
+	) => {
+		morph_types! { @DECL $( #[doc = $doc] )* $vq $name ( $( $( $bound_id ),+ )? ) }
+		morph_types! {
+			@IMPL $name $( < $( $bound_id ),* > )? :
+			( $( $( $bound_id $( : $bound_head $( + $bound_tail )* )? , )+ )? $( $extra )? )
+			( $( where $( $where_path : $where_bound_head $( + $where_bound_tail )* ),* )? )
+			= |$var: $var_type| -> $outcome { $( $ex )* }
+		}
+		morph_types!{ $($rest)* }
+	};
+	(
+		$( #[doc = $doc:expr] )* $vq:vis type $name:ident
+		$( < $( $bound_id:ident $( : $bound_head:path $( | $bound_tail:path )* )? ),+ > )?
+		$( EXTRA_GENERIC ($extra:ident) )?
+		: TryMorph
+		= |$var:ident: $var_type:ty| -> Result<$outcome:ty, ()> { $( $ex:expr )* }
+		$( where $( $where_path:ty : $where_bound_head:path $( | $where_bound_tail:path )* ),* )?;
+		$( $rest:tt )*
+	) => {
+		morph_types! { @DECL $( #[doc = $doc] )* $vq $name ( $( $( $bound_id ),+ )? ) }
+		morph_types! {
+			@IMPL_TRY $name $( < $( $bound_id ),* > )? :
+			( $( $( $bound_id $( : $bound_head $( + $bound_tail )* )? , )+ )? $( $extra )? )
+			( $( where $( $where_path : $where_bound_head $( + $where_bound_tail )* ),* )? )
+			= |$var: $var_type| -> $outcome { $( $ex )* }
+		}
+		morph_types!{ $($rest)* }
+	};
+	() => {}
+}
+
+morph_types! {
+	/// Morpher to disregard the source value and replace with another.
+	pub type Replace<V: TypedGet> = |_| -> V::Type { V::get() };
+	/// Mutator which reduces a scalar by a particular amount.
+	pub type ReduceBy<N: TypedGet> = |r: N::Type| -> N::Type {
+		r.checked_sub(&N::get()).unwrap_or(Zero::zero())
+	} where N::Type: CheckedSub | Zero;
 }
 
 /// Extensible conversion trait. Generic over both source and destination types.
