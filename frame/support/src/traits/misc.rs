@@ -21,13 +21,13 @@ use crate::dispatch::Parameter;
 use codec::{CompactLen, Decode, DecodeAll, Encode, EncodeLike, Input, MaxEncodedLen};
 use scale_info::{build::Fields, meta_type, Path, Type, TypeInfo, TypeParameter};
 use sp_arithmetic::traits::{CheckedAdd, CheckedMul, CheckedSub, Saturating};
-use sp_runtime::{traits::Block as BlockT, DispatchError};
-use sp_std::{cmp::Ordering, prelude::*};
 #[doc(hidden)]
 pub use sp_runtime::traits::{
-	TypedGet, Get, GetDefault, ConstBool, ConstU8, ConstU16, ConstU32, ConstU64, ConstU128, ConstI8,
-	ConstI16, ConstI32, ConstI64, ConstI128,
+	ConstBool, ConstI128, ConstI16, ConstI32, ConstI64, ConstI8, ConstU128, ConstU16, ConstU32,
+	ConstU64, ConstU8, Get, GetDefault, TypedGet,
 };
+use sp_runtime::{traits::Block as BlockT, DispatchError};
+use sp_std::{cmp::Ordering, prelude::*};
 
 #[doc(hidden)]
 pub const DEFENSIVE_OP_PUBLIC_ERROR: &str = "a defensive failure has been triggered; please report the block number at https://github.com/paritytech/substrate/issues";

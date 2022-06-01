@@ -27,8 +27,6 @@ use crate::{
 	},
 	DispatchResult,
 };
-#[doc(hidden)]
-pub use sp_std::marker::PhantomData;
 use impl_trait_for_tuples::impl_for_tuples;
 #[cfg(feature = "std")]
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -39,6 +37,8 @@ pub use sp_arithmetic::traits::{
 	UniqueSaturatedFrom, UniqueSaturatedInto, Zero,
 };
 use sp_core::{self, storage::StateVersion, Hasher, RuntimeDebug, TypeId};
+#[doc(hidden)]
+pub use sp_std::marker::PhantomData;
 use sp_std::{self, fmt::Debug, prelude::*};
 #[cfg(feature = "std")]
 use std::fmt::Display;
@@ -359,8 +359,8 @@ impl_const_get!(ConstI128, i128);
 /// # Examples
 ///
 /// ```
-/// # use frame_support::traits::Get;
-/// # use frame_support::parameter_types;
+/// # use sp_runtime::traits::Get;
+/// # use sp_runtime::parameter_types;
 /// // This function cannot be used in a const context.
 /// fn non_const_expression() -> u64 { 99 }
 ///
@@ -369,29 +369,25 @@ impl_const_get!(ConstI128, i128);
 ///    pub const Argument: u64 = 42 + FIXED_VALUE;
 ///    /// Visibility of the type is optional
 ///    OtherArgument: u64 = non_const_expression();
-///    pub storage StorageArgument: u64 = 5;
 /// }
 ///
 /// trait Config {
 ///    type Parameter: Get<u64>;
 ///    type OtherParameter: Get<u64>;
-///    type StorageParameter: Get<u64>;
-///    type StaticParameter: Get<u32>;
 /// }
 ///
 /// struct Runtime;
 /// impl Config for Runtime {
 ///    type Parameter = Argument;
 ///    type OtherParameter = OtherArgument;
-///    type StorageParameter = StorageArgument;
 /// }
 /// ```
 ///
 /// # Invalid example:
 ///
 /// ```compile_fail
-/// # use frame_support::traits::Get;
-/// # use frame_support::parameter_types;
+/// # use sp_runtime::traits::Get;
+/// # use sp_runtime::parameter_types;
 /// // This function cannot be used in a const context.
 /// fn non_const_expression() -> u64 { 99 }
 ///
@@ -502,21 +498,56 @@ impl<T> TryMorph<T> for Identity {
 	}
 }
 
-/// Create a `Morph` impl with a simple closure-like expression.
+/// Create a `Morph` and/or `TryMorph` impls with a simple closure-like expression.
+///
+/// # Examples
+///
+/// ```
+/// # use sp_runtime::{morph_types, traits::{Morph, TryMorph, TypedGet, ConstU32}};
+/// # use sp_arithmetic::traits::CheckedSub;
+///
+/// morph_types! {
+///    /// Replace by some other value; produce both `Morph` and `TryMorph` implementations
+///    pub type Replace<V: TypedGet> = |_| -> V::Type { V::get() };
+///    /// A private `Morph` implementation to reduce a `u32` by 10.
+///    type ReduceU32ByTen: Morph = |r: u32| -> u32 { r - 10 };
+///    /// A `TryMorph` implementation to reduce a scalar by a particular amount, checking for
+///    /// underflow.
+///    pub type CheckedReduceBy<N: TypedGet>: TryMorph = |r: N::Type| -> Result<N::Type, ()> {
+///        r.checked_sub(&N::get()).ok_or(())
+///    } where N::Type: CheckedSub;
+/// }
+///
+/// trait Config {
+///    type TestMorph1: Morph<u32>;
+///    type TestTryMorph1: TryMorph<u32>;
+///    type TestMorph2: Morph<u32>;
+///    type TestTryMorph2: TryMorph<u32>;
+/// }
+///
+/// struct Runtime;
+/// impl Config for Runtime {
+///    type TestMorph1 = Replace<ConstU32<42>>;
+///    type TestTryMorph1 = Replace<ConstU32<42>>;
+///    type TestMorph2 = ReduceU32ByTen;
+///    type TestTryMorph2 = CheckedReduceBy<ConstU32<10>>;
+/// }
+/// ```
 #[macro_export]
 macro_rules! morph_types {
 	(
-		DECL
-		$( #[doc = $doc:expr] )?
-		$vq:vis $name:ident ( $( $bound_id:ident ),* )
+		DECL $( #[doc = $doc:expr] )* $vq:vis $name:ident ()
 	) => {
-		$( #[doc = $doc] )?
-		$vq struct $name<$($bound_id)?>($crate::traits::PhantomData<($($bound_id,)*)>);
+		$( #[doc = $doc] )* $vq struct $name;
 	};
 	(
-		IMPL $name:ty :
-		( $( $bounds:tt )* )
-		( $( $where:tt )* )
+		DECL $( #[doc = $doc:expr] )* $vq:vis $name:ident ( $( $bound_id:ident ),+ )
+	) => {
+		$( #[doc = $doc] )*
+		$vq struct $name < $($bound_id,)* > ( $crate::traits::PhantomData< ( $($bound_id,)* ) > ) ;
+	};
+	(
+		IMPL $name:ty : ( $( $bounds:tt )* ) ( $( $where:tt )* )
 		= |$var:ident: $var_type:ty| -> $outcome:ty { $( $ex:expr )* }
 	) => {
 		impl<$($bounds)*> $crate::traits::Morph<$var_type> for $name $( $where )? {
@@ -525,9 +556,7 @@ macro_rules! morph_types {
 		}
 	};
 	(
-		IMPL_TRY $name:ty :
-		( $( $bounds:tt )* )
-		( $( $where:tt )* )
+		IMPL_TRY $name:ty : ( $( $bounds:tt )* ) ( $( $where:tt )* )
 		= |$var:ident: $var_type:ty| -> $outcome:ty { $( $ex:expr )* }
 	) => {
 		impl<$($bounds)*> $crate::traits::TryMorph<$var_type> for $name $( $where )? {
@@ -535,123 +564,102 @@ macro_rules! morph_types {
 			fn try_morph($var: $var_type) -> Result<Self::Outcome, ()> { $( $ex )* }
 		}
 	};
-
 	(
-		$( #[doc = $doc:expr] )?
-		$vq:vis type $name:ident
-		< $( $bound_id:ident $( : $bound_head:path $( | $bound_tail:path )* )? ),* >
-		= |_| -> $outcome:ty { $( $ex:expr )* };
-		$( $rest:tt )*
+		IMPL $name:ty : () ( $( $where:tt )* )
+		= |$var:ident: $var_type:ty| -> $outcome:ty { $( $ex:expr )* }
 	) => {
-		morph_types! { DECL $( #[doc = $doc] )? $vq $name ( $( $bound_id ),* ) }
-		morph_types! {
-			IMPL $name<$( $bound_id ),*> :
-			( $( $bound_id $( : $bound_head $( + $bound_tail )* )? , )* X )
-			()
-			= |_x: X| -> $outcome { $( $ex )* }
+		impl $crate::traits::Morph<$var_type> for $name $( $where )? {
+			type Outcome = $outcome;
+			fn morph($var: $var_type) -> Self::Outcome { $( $ex )* }
 		}
-		morph_types! {
-			IMPL_TRY $name<$( $bound_id ),*> :
-			( $( $bound_id $( : $bound_head $( + $bound_tail )* )? , )* X )
-			()
-			= |_x: X| -> $outcome { Ok({$( $ex )*}) }
-		}
-		morph_types!{ $($rest)* }
 	};
 	(
-		$( #[doc = $doc:expr] )?
-		$vq:vis type $name:ident
-		< $( $bound_id:ident $( : $bound_head:path $( | $bound_tail:path )* )? ),* >
+		IMPL_TRY $name:ty : () ( $( $where:tt )* )
 		= |$var:ident: $var_type:ty| -> $outcome:ty { $( $ex:expr )* }
-		$(
-			where $( $where_path:ty : $where_bound_head:path $( | $where_bound_tail:path )* ),*
-		)?;
-		$( $rest:tt )*
 	) => {
-		morph_types! { DECL $( #[doc = $doc] )? $vq $name ( $( $bound_id ),* ) }
+		impl $crate::traits::TryMorph<$var_type> for $name $( $where )? {
+			type Outcome = $outcome;
+			fn try_morph($var: $var_type) -> Result<Self::Outcome, ()> { $( $ex )* }
+		}
+	};
+	(
+		IMPL_BOTH $name:ty : ( $( $bounds:tt )* ) ( $( $where:tt )* )
+		= |$var:ident: $var_type:ty| -> $outcome:ty { $( $ex:expr )* }
+	) => {
 		morph_types! {
-			IMPL $name<$( $bound_id ),*> :
-			( $( $bound_id $( : $bound_head $( + $bound_tail )* )? , )* )
-			( $( where $( $where_path : $where_bound_head $( + $where_bound_tail )* ),* )? )
+			IMPL $name : ($($bounds)*) ($($where)*)
 			= |$var: $var_type| -> $outcome { $( $ex )* }
 		}
 		morph_types! {
-			IMPL_TRY $name<$( $bound_id ),*> :
-			( $( $bound_id $( : $bound_head $( + $bound_tail )* )? , )* )
-			( $( where $( $where_path : $where_bound_head $( + $where_bound_tail )* ),* )? )
+			IMPL_TRY $name : ($($bounds)*) ($($where)*)
 			= |$var: $var_type| -> $outcome { Ok({$( $ex )*}) }
 		}
-		morph_types!{ $($rest)* }
 	};
 	(
-		$( #[doc = $doc:expr] )?
-		$vq:vis type $name:ident
-		< $( $bound_id:ident $( : $bound_head:path $( | $bound_tail:path )* )? ),* >
-		: Morph
+		$( #[doc = $doc:expr] )* $vq:vis type $name:ident
+		$( < $( $bound_id:ident $( : $bound_head:path $( | $bound_tail:path )* )? ),+ > )?
+		$(: $type:tt)?
 		= |_| -> $outcome:ty { $( $ex:expr )* };
 		$( $rest:tt )*
 	) => {
-		morph_types! { DECL $( #[doc = $doc] )? $vq $name ( $( $bound_id ),* ) }
 		morph_types! {
-			IMPL $name<$( $bound_id ),*> :
-			( $( $bound_id $( : $bound_head $( + $bound_tail )* )? , )* X )
-			()
-			= |_x: X| -> $outcome { $( $ex )* }
+			$( #[doc = $doc] )* $vq type $name
+			$( < $( $bound_id $( : $bound_head $( | $bound_tail )* )? ),+ > )?
+			EXTRA_GENERIC(X)
+			$(: $type)?
+			= |_x: X| -> $outcome { $( $ex )* };
+			$( $rest )*
 		}
-		morph_types!{ $($rest)* }
 	};
+
 	(
-		$( #[doc = $doc:expr] )?
-		$vq:vis type $name:ident
-		< $( $bound_id:ident $( : $bound_head:path $( | $bound_tail:path )* )? ),* >
-		: Morph
+		$( #[doc = $doc:expr] )* $vq:vis type $name:ident
+		$( < $( $bound_id:ident $( : $bound_head:path $( | $bound_tail:path )* )? ),+ > )?
+		$( EXTRA_GENERIC ($extra:ident) )?
 		= |$var:ident: $var_type:ty| -> $outcome:ty { $( $ex:expr )* }
-		$(
-			where $( $where_path:ty : $where_bound_head:path $( | $where_bound_tail:path )* ),*
-		)?;
+		$( where $( $where_path:ty : $where_bound_head:path $( | $where_bound_tail:path )* ),* )?;
 		$( $rest:tt )*
 	) => {
-		morph_types! { DECL $( #[doc = $doc] )? $vq $name ( $( $bound_id ),* ) }
+		morph_types! { DECL $( #[doc = $doc] )* $vq $name ( $( $( $bound_id ),+ )? ) }
 		morph_types! {
-			IMPL $name<$( $bound_id ),*> :
-			( $( $bound_id $( : $bound_head $( + $bound_tail )* )? , )* )
+			IMPL_BOTH $name $( < $( $bound_id ),* > )? :
+			( $( $( $bound_id $( : $bound_head $( + $bound_tail )* )? , )+ )? $( $extra )? )
 			( $( where $( $where_path : $where_bound_head $( + $where_bound_tail )* ),* )? )
 			= |$var: $var_type| -> $outcome { $( $ex )* }
 		}
 		morph_types!{ $($rest)* }
 	};
 	(
-		$( #[doc = $doc:expr] )?
-		$vq:vis type $name:ident
-		< $( $bound_id:ident $( : $bound_head:path $( | $bound_tail:path )* )? ),* >
-		: TryMorph
-		= |_| -> Result<$outcome:ty, ()> { $( $ex:expr )* };
+		$( #[doc = $doc:expr] )* $vq:vis type $name:ident
+		$( < $( $bound_id:ident $( : $bound_head:path $( | $bound_tail:path )* )? ),+ > )?
+		$( EXTRA_GENERIC ($extra:ident) )?
+		: Morph
+		= |$var:ident: $var_type:ty| -> $outcome:ty { $( $ex:expr )* }
+		$( where $( $where_path:ty : $where_bound_head:path $( | $where_bound_tail:path )* ),* )?;
 		$( $rest:tt )*
 	) => {
-		morph_types! { DECL $( #[doc = $doc] )? $vq $name ( $( $bound_id ),* ) }
+		morph_types! { DECL $( #[doc = $doc] )* $vq $name ( $( $( $bound_id ),+ )? ) }
 		morph_types! {
-			IMPL $name<$( $bound_id ),*> :
-			( $( $bound_id $( : $bound_head $( + $bound_tail )* )? , )* X )
-			()
-			= |_x: X| -> $outcome { $( $ex )* }
+			IMPL $name $( < $( $bound_id ),* > )? :
+			( $( $( $bound_id $( : $bound_head $( + $bound_tail )* )? , )+ )? $( $extra )? )
+			( $( where $( $where_path : $where_bound_head $( + $where_bound_tail )* ),* )? )
+			= |$var: $var_type| -> $outcome { $( $ex )* }
 		}
 		morph_types!{ $($rest)* }
 	};
 	(
-		$( #[doc = $doc:expr] )?
-		$vq:vis type $name:ident
-		< $( $bound_id:ident $( : $bound_head:path $( | $bound_tail:path )* )? ),* >
+		$( #[doc = $doc:expr] )* $vq:vis type $name:ident
+		$( < $( $bound_id:ident $( : $bound_head:path $( | $bound_tail:path )* )? ),+ > )?
+		$( EXTRA_GENERIC ($extra:ident) )?
 		: TryMorph
 		= |$var:ident: $var_type:ty| -> Result<$outcome:ty, ()> { $( $ex:expr )* }
-		$(
-			where $( $where_path:ty : $where_bound_head:path $( | $where_bound_tail:path )* ),*
-		)?;
+		$( where $( $where_path:ty : $where_bound_head:path $( | $where_bound_tail:path )* ),* )?;
 		$( $rest:tt )*
 	) => {
-		morph_types! { DECL $( #[doc = $doc] )? $vq $name ( $( $bound_id ),* ) }
+		morph_types! { DECL $( #[doc = $doc] )* $vq $name ( $( $( $bound_id ),+ )? ) }
 		morph_types! {
-			IMPL $name<$( $bound_id ),*> :
-			( $( $bound_id $( : $bound_head $( + $bound_tail )* )? , )* )
+			IMPL_TRY $name $( < $( $bound_id ),* > )? :
+			( $( $( $bound_id $( : $bound_head $( + $bound_tail )* )? , )+ )? $( $extra )? )
 			( $( where $( $where_path : $where_bound_head $( + $where_bound_tail )* ),* )? )
 			= |$var: $var_type| -> $outcome { $( $ex )* }
 		}
