@@ -556,8 +556,8 @@ pub mod pallet {
 					Votes {
 						index,
 						threshold,
-						ayes: vec![].try_into().expect("MaxMembers should not be set to zero"),
-						nays: vec![].try_into().expect("MaxMembers should not be set to zero"),
+						ayes: Default::default(),
+						nays: Default::default(),
 						end,
 					}
 				};
@@ -948,14 +948,14 @@ impl<T: Config<I>, I: 'static> ChangeMembers<T::AccountId> for Pallet<T, I> {
 						.filter(|i| outgoing.binary_search(i).is_err())
 						.collect::<Vec<T::AccountId>>()
 						.try_into()
-						.expect("Ayes does not exceed max members; qed");
+						.expect("Ayes do not exceed max members; qed");
 					votes.nays = votes
 						.nays
 						.into_iter()
 						.filter(|i| outgoing.binary_search(i).is_err())
 						.collect::<Vec<T::AccountId>>()
 						.try_into()
-						.expect("Nays does not exceed max members; qed");
+						.expect("Nays do not exceed max members; qed");
 					*v = Some(votes);
 				}
 			});
