@@ -43,9 +43,6 @@ pub fn expand_outer_dispatch(
 		variant_defs.extend(
 			quote!(#[codec(index = #index)] #name( #scrate::dispatch::CallableCallFor<#name, #runtime> ),),
 		);
-/*		variant_types.extend(
-			quote!( #scrate::dispatch::CallableCallFor::<#name, #runtime> ),
-		);*/
 		variant_patterns.push(quote!(Call::#name(call)));
 		pallet_names.push(name);
 		query_call_part_macros.push(quote! {
