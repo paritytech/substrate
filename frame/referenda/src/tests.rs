@@ -364,7 +364,12 @@ fn submit_errors_work() {
 
 		// No funds for deposit
 		assert_noop!(
-			Referenda::submit(Origin::signed(10), Box::new(RawOrigin::Root.into()), h, DispatchTime::At(10),),
+			Referenda::submit(
+				Origin::signed(10),
+				Box::new(RawOrigin::Root.into()),
+				h,
+				DispatchTime::At(10),
+			),
 			BalancesError::<Test>::InsufficientBalance
 		);
 	});
