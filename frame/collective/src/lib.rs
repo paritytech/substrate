@@ -54,7 +54,7 @@ use frame_support::{
 	ensure,
 	traits::{Backing, ChangeMembers, EnsureOrigin, Get, GetBacking, InitializeMembers},
 	weights::{GetDispatchInfo, Weight},
-	BoundedVec, BoundedSlice,
+	BoundedSlice, BoundedVec,
 };
 
 #[cfg(test)]
@@ -146,16 +146,15 @@ impl<AccountId, I> GetBacking for RawOrigin<AccountId, I> {
 
 /// Info for keeping track of a motion being voted on.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
-pub struct Votes<MaxMembers: Get<u32> + MaxEncodedLen, AccountId, BlockNumber> {
-// pub struct Votes<MaxMembers, AccountId, BlockNumber> {
+pub struct Votes<BoundedVoters, BlockNumber> {
 	/// The proposal's unique index.
 	index: ProposalIndex,
 	/// The number of approval votes that are needed to pass the motion.
 	threshold: MemberCount,
 	/// The current set of voters that approved it.
-	ayes: BoundedVec<AccountId, MaxMembers>,
+	ayes: BoundedVoters,
 	/// The current set of voters that rejected it.
-	nays: BoundedVec<AccountId, MaxMembers>,
+	nays: BoundedVoters,
 	/// The hard end time of this vote.
 	end: BlockNumber,
 }
@@ -172,7 +171,6 @@ pub mod pallet {
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
 	#[pallet::storage_version(STORAGE_VERSION)]
-	// #[pallet::without_storage_info]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	#[pallet::config]
@@ -201,7 +199,7 @@ pub mod pallet {
 		/// NOTE:
 		/// + Benchmarks will need to be re-run and weights adjusted if this changes.
 		/// + This pallet assumes that dependents keep to the limit without enforcing it.
-		type MaxMembers: Get<MemberCount> + MaxEncodedLen + TypeInfo;
+		type MaxMembers: Get<MemberCount>;
 
 		/// Default vote strategy of this collective.
 		type DefaultVote: DefaultVote;
@@ -261,7 +259,7 @@ pub mod pallet {
 		_,
 		Identity,
 		T::Hash,
-		Votes<T::MaxMembers, T::AccountId, T::BlockNumber>,
+		Votes<BoundedVec<T::AccountId, T::MaxMembers>, T::BlockNumber>,
 		OptionQuery,
 	>;
 
@@ -949,20 +947,23 @@ impl<T: Config<I>, I: 'static> ChangeMembers<T::AccountId> for Pallet<T, I> {
 						.into_iter()
 						.filter(|i| outgoing.binary_search(i).is_err())
 						.collect::<Vec<T::AccountId>>()
-    					.try_into()
-						.expect("TODO");
+						.try_into()
+						.expect("Ayes does not exceed max members; qed");
 					votes.nays = votes
 						.nays
 						.into_iter()
 						.filter(|i| outgoing.binary_search(i).is_err())
 						.collect::<Vec<T::AccountId>>()
 						.try_into()
-						.expect("TODO");
+						.expect("Nays does not exceed max members; qed");
 					*v = Some(votes);
 				}
 			});
 		}
-		Members::<T, I>::put(BoundedSlice::try_from(new).expect("TODO"));
+		Members::<T, I>::put(
+			BoundedSlice::try_from(new)
+				.expect("TODO – should we truncate the `new` slice to MaxMembers here?"),
+		);
 		Prime::<T, I>::kill();
 	}
 
