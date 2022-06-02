@@ -962,7 +962,7 @@ impl<T: Config<I>, I: 'static> ChangeMembers<T::AccountId> for Pallet<T, I> {
 		}
 		Members::<T, I>::put(
 			BoundedSlice::try_from(new)
-				.expect("TODO – should we truncate the `new` slice to MaxMembers here?"),
+				.expect("TODO: (dp) – should we truncate the `new` slice to MaxMembers here?"),
 		);
 		Prime::<T, I>::kill();
 	}
