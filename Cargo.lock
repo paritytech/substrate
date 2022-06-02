@@ -8629,6 +8629,7 @@ dependencies = [
  "hash-db",
  "jsonrpsee",
  "lazy_static",
+ "libp2p",
  "log",
  "parity-scale-codec",
  "parking_lot 0.12.0",

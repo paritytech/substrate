@@ -30,7 +30,7 @@
 use crate::{
 	behaviour::{self, Behaviour, BehaviourOut},
 	bitswap::Bitswap,
-	config::{MultiaddrWithPeerId, Params, TransportConfig},
+	config::{parse_addr, Params, TransportConfig},
 	discovery::DiscoveryConfig,
 	error::Error,
 	network_state::{
@@ -676,7 +676,7 @@ where
 	}
 
 	/// Adds a `PeerId` and its address as reserved. 
-	pub fn add_reserved_peer(&self, peer: MultiaddrWithPeerId) -> Result<(), String> {
+	pub fn add_reserved_peer(&self, peer: Multiaddr) -> Result<(), String> {
 		self.service.add_reserved_peer(peer)
 	}
 
@@ -1082,17 +1082,23 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 
 	/// Adds a `PeerId` and its address as reserved.
 	///
-	/// Returns an `Err` if peer ID of given peer is the local peer ID.
-	pub fn add_reserved_peer(&self, peer: MultiaddrWithPeerId) -> Result<(), String> {
+	/// The `Multiaddr` parameter must end with a `/p2p/` component containing the `PeerId`. It can also
+	/// consist of only `/p2p/<peerid>`.
+	///
+	/// Returns an `Err` if the address is invalid or contains an invalid peer ID
+	/// (which includes the local peer ID).
+	pub fn add_reserved_peer(&self, peer: Multiaddr) -> Result<(), String> {
 		// Make sure the local peer ID is never added to the PSM.
-		if peer.peer_id == self.local_peer_id {
+		let (peer_id, addr) = parse_addr(peer).map_err(|e| format!("{:?}", e))?;
+
+		if peer_id == self.local_peer_id {
 			return Err("Local peer ID cannot be added as a reserved peer.".to_string())
 		}
 
 		let _ = self
 			.to_worker
-			.unbounded_send(ServiceToWorkerMsg::AddKnownAddress(peer.peer_id, peer.multiaddr));
-		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::AddReserved(peer.peer_id));
+			.unbounded_send(ServiceToWorkerMsg::AddKnownAddress(peer_id, addr));
+		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::AddReserved(peer_id));
 		Ok(())
 	}
 

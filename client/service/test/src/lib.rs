@@ -382,7 +382,7 @@ where
 			for (_, service, _, _) in network.full_nodes.iter().skip(1) {
 				service
 					.network()
-					.add_reserved_peer(first_address)
+					.add_reserved_peer(first_address.clone())
 					.expect("Error adding reserved peer");
 			}
 
@@ -479,7 +479,7 @@ pub fn sync<G, E, Fb, F, B, ExF, U>(
 	for (_, service, _, _) in network.full_nodes.iter().skip(1) {
 		service
 			.network()
-			.add_reserved_peer(first_address)
+			.add_reserved_peer(first_address.clone())
 			.expect("Error adding reserved peer");
 	}
 
@@ -532,13 +532,13 @@ pub fn consensus<G, E, Fb, F>(
 	for (_, service, _, _) in network.full_nodes.iter() {
 		service
 			.network()
-			.add_reserved_peer(first_address)
+			.add_reserved_peer(first_address.clone())
 			.expect("Error adding reserved peer");
 	}
 	for (_, service, _, _) in network.authority_nodes.iter().skip(1) {
 		service
 			.network()
-			.add_reserved_peer(first_address)
+			.add_reserved_peer(first_address.clone())
 			.expect("Error adding reserved peer");
 	}
 	network.run_until_all_full(|_index, service| {
@@ -556,7 +556,7 @@ pub fn consensus<G, E, Fb, F>(
 	for (_, service, _, _) in network.full_nodes.iter() {
 		service
 			.network()
-			.add_reserved_peer(first_address)
+			.add_reserved_peer(first_address.clone())
 			.expect("Error adding reserved peer");
 	}
 
