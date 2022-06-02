@@ -21,13 +21,18 @@ use crate::dispatch::Parameter;
 use codec::{CompactLen, Decode, DecodeAll, Encode, EncodeLike, Input, MaxEncodedLen};
 use scale_info::{build::Fields, meta_type, Path, Type, TypeInfo, TypeParameter};
 use sp_arithmetic::traits::{CheckedAdd, CheckedMul, CheckedSub, Saturating};
+#[doc(hidden)]
+pub use sp_runtime::traits::{
+	ConstBool, ConstI128, ConstI16, ConstI32, ConstI64, ConstI8, ConstU128, ConstU16, ConstU32,
+	ConstU64, ConstU8, Get, GetDefault, TypedGet,
+};
 use sp_runtime::{traits::Block as BlockT, DispatchError};
 use sp_std::{cmp::Ordering, prelude::*};
 
 #[doc(hidden)]
-pub const DEFENSIVE_OP_PUBLIC_ERROR: &'static str = "a defensive failure has been triggered; please report the block number at https://github.com/paritytech/substrate/issues";
+pub const DEFENSIVE_OP_PUBLIC_ERROR: &str = "a defensive failure has been triggered; please report the block number at https://github.com/paritytech/substrate/issues";
 #[doc(hidden)]
-pub const DEFENSIVE_OP_INTERNAL_ERROR: &'static str = "Defensive failure has been triggered!";
+pub const DEFENSIVE_OP_INTERNAL_ERROR: &str = "Defensive failure has been triggered!";
 
 /// Generic function to mark an execution path as ONLY defensive.
 ///
@@ -50,6 +55,16 @@ macro_rules! defensive {
 			$error
 		);
 		debug_assert!(false, "{}: {:?}", $crate::traits::DEFENSIVE_OP_INTERNAL_ERROR, $error);
+	};
+	($error:tt, $proof:tt) => {
+		frame_support::log::error!(
+			target: "runtime",
+			"{}: {:?}: {:?}",
+			$crate::traits::DEFENSIVE_OP_PUBLIC_ERROR,
+			$error,
+			$proof,
+		);
+		debug_assert!(false, "{}: {:?}: {:?}", $crate::traits::DEFENSIVE_OP_INTERNAL_ERROR, $error, $proof);
 	}
 }
 
@@ -102,6 +117,10 @@ pub trait Defensive<T> {
 	/// }
 	/// ```
 	fn defensive(self) -> Self;
+
+	/// Same as [`Defensive::defensive`], but it takes a proof as input, and displays it if the
+	/// defensive operation has been triggered.
+	fn defensive_proof(self, proof: &'static str) -> Self;
 }
 
 /// Subset of methods similar to [`Defensive`] that can only work for a `Result`.
@@ -129,8 +148,12 @@ pub trait DefensiveOption<T> {
 	/// if `None`, which should never happen.
 	fn defensive_map_or_else<U, D: FnOnce() -> U, F: FnOnce(T) -> U>(self, default: D, f: F) -> U;
 
-	/// Defensively transform this option to a result.
+	/// Defensively transform this option to a result, mapping `None` to the return value of an
+	/// error closure.
 	fn defensive_ok_or_else<E, F: FnOnce() -> E>(self, err: F) -> Result<T, E>;
+
+	/// Defensively transform this option to a result, mapping `None` to a default value.
+	fn defensive_ok_or<E>(self, err: E) -> Result<T, E>;
 
 	/// Exactly the same as `map`, but it prints the appropriate warnings if the value being mapped
 	/// is `None`.
@@ -180,6 +203,13 @@ impl<T> Defensive<T> for Option<T> {
 			},
 		}
 	}
+
+	fn defensive_proof(self, proof: &'static str) -> Self {
+		if self.is_none() {
+			defensive!(proof);
+		}
+		self
+	}
 }
 
 impl<T, E: sp_std::fmt::Debug> Defensive<T> for Result<T, E> {
@@ -221,6 +251,16 @@ impl<T, E: sp_std::fmt::Debug> Defensive<T> for Result<T, E> {
 			Ok(inner) => Ok(inner),
 			Err(e) => {
 				defensive!(e);
+				Err(e)
+			},
+		}
+	}
+
+	fn defensive_proof(self, proof: &'static str) -> Self {
+		match self {
+			Ok(inner) => Ok(inner),
+			Err(e) => {
+				defensive!(e, proof);
 				Err(e)
 			},
 		}
@@ -284,6 +324,13 @@ impl<T> DefensiveOption<T> for Option<T> {
 		})
 	}
 
+	fn defensive_ok_or<E>(self, err: E) -> Result<T, E> {
+		self.ok_or_else(|| {
+			defensive!();
+			err
+		})
+	}
+
 	fn defensive_map<U, F: FnOnce(T) -> U>(self, f: F) -> Option<U> {
 		match self {
 			Some(inner) => Some(f(inner)),
@@ -344,57 +391,6 @@ where
 		self.clone().into_iter().len()
 	}
 }
-
-/// A trait for querying a single value from a type.
-///
-/// It is not required that the value is constant.
-pub trait Get<T> {
-	/// Return the current value.
-	fn get() -> T;
-}
-
-impl<T: Default> Get<T> for () {
-	fn get() -> T {
-		T::default()
-	}
-}
-
-/// Implement Get by returning Default for any type that implements Default.
-pub struct GetDefault;
-impl<T: Default> Get<T> for GetDefault {
-	fn get() -> T {
-		T::default()
-	}
-}
-
-macro_rules! impl_const_get {
-	($name:ident, $t:ty) => {
-		#[derive($crate::RuntimeDebug)]
-		pub struct $name<const T: $t>;
-		impl<const T: $t> Get<$t> for $name<T> {
-			fn get() -> $t {
-				T
-			}
-		}
-		impl<const T: $t> Get<Option<$t>> for $name<T> {
-			fn get() -> Option<$t> {
-				Some(T)
-			}
-		}
-	};
-}
-
-impl_const_get!(ConstBool, bool);
-impl_const_get!(ConstU8, u8);
-impl_const_get!(ConstU16, u16);
-impl_const_get!(ConstU32, u32);
-impl_const_get!(ConstU64, u64);
-impl_const_get!(ConstU128, u128);
-impl_const_get!(ConstI8, i8);
-impl_const_get!(ConstI16, i16);
-impl_const_get!(ConstI32, i32);
-impl_const_get!(ConstI64, i64);
-impl_const_get!(ConstI128, i128);
 
 /// A type for which some values make sense to be able to drop without further consideration.
 pub trait TryDrop: Sized {

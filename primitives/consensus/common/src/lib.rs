@@ -169,7 +169,7 @@ impl ProofRecording for EnableProofRecording {
 	const ENABLED: bool = true;
 
 	fn into_proof(proof: Option<StorageProof>) -> Result<Self::Proof, NoProofRecorded> {
-		proof.ok_or_else(|| NoProofRecorded)
+		proof.ok_or(NoProofRecorded)
 	}
 }
 

@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use std::{convert::TryFrom, time::SystemTime};
+use std::time::SystemTime;
 
 use crate::config::Configuration;
 use futures_timer::Delay;
@@ -61,13 +61,13 @@ impl PrometheusMetrics {
 				.const_label("name", name)
 				.const_label("version", version),
 			)?,
-			&registry,
+			registry,
 		)?
 		.set(1);
 
 		register(
 			Gauge::<U64>::new("substrate_node_roles", "The roles the node is running as")?,
-			&registry,
+			registry,
 		)?
 		.set(roles);
 

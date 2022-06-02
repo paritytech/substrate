@@ -321,7 +321,7 @@ impl<'a> DigestItemRef<'a> {
 	/// Cast this digest item into `PreRuntime`
 	pub fn as_pre_runtime(&self) -> Option<(ConsensusEngineId, &'a [u8])> {
 		match *self {
-			Self::PreRuntime(consensus_engine_id, ref data) => Some((*consensus_engine_id, data)),
+			Self::PreRuntime(consensus_engine_id, data) => Some((*consensus_engine_id, data)),
 			_ => None,
 		}
 	}
@@ -329,7 +329,7 @@ impl<'a> DigestItemRef<'a> {
 	/// Cast this digest item into `Consensus`
 	pub fn as_consensus(&self) -> Option<(ConsensusEngineId, &'a [u8])> {
 		match *self {
-			Self::Consensus(consensus_engine_id, ref data) => Some((*consensus_engine_id, data)),
+			Self::Consensus(consensus_engine_id, data) => Some((*consensus_engine_id, data)),
 			_ => None,
 		}
 	}
@@ -337,7 +337,7 @@ impl<'a> DigestItemRef<'a> {
 	/// Cast this digest item into `Seal`
 	pub fn as_seal(&self) -> Option<(ConsensusEngineId, &'a [u8])> {
 		match *self {
-			Self::Seal(consensus_engine_id, ref data) => Some((*consensus_engine_id, data)),
+			Self::Seal(consensus_engine_id, data) => Some((*consensus_engine_id, data)),
 			_ => None,
 		}
 	}
@@ -345,7 +345,7 @@ impl<'a> DigestItemRef<'a> {
 	/// Cast this digest item into `PreRuntime`
 	pub fn as_other(&self) -> Option<&'a [u8]> {
 		match *self {
-			Self::Other(ref data) => Some(data),
+			Self::Other(data) => Some(data),
 			_ => None,
 		}
 	}

@@ -71,16 +71,16 @@ pub struct RunCmd {
 
 	/// RPC methods to expose.
 	///
-	/// - `Unsafe`: Exposes every RPC method.
-	/// - `Safe`: Exposes only a safe subset of RPC methods, denying unsafe RPC methods.
-	/// - `Auto`: Acts as `Safe` if RPC is served externally, e.g. when `--{rpc,ws}-external` is
-	///   passed, otherwise acts as `Unsafe`.
+	/// - `unsafe`: Exposes every RPC method.
+	/// - `safe`: Exposes only a safe subset of RPC methods, denying unsafe RPC methods.
+	/// - `auto`: Acts as `safe` if RPC is served externally, e.g. when `--{rpc,ws}-external` is
+	///   passed, otherwise acts as `unsafe`.
 	#[clap(
 		long,
 		value_name = "METHOD SET",
 		arg_enum,
 		ignore_case = true,
-		default_value = "Auto",
+		default_value = "auto",
 		verbatim_doc_comment
 	)]
 	pub rpc_methods: RpcMethods,
@@ -100,10 +100,25 @@ pub struct RunCmd {
 	#[clap(long)]
 	pub unsafe_ws_external: bool,
 
-	/// Set the the maximum RPC payload size for both requests and responses (both http and ws), in
-	/// megabytes. Default is 15MiB.
+	/// DEPRECATED, this has no affect anymore. Use `rpc_max_request_size` or
+	/// `rpc_max_response_size` instead.
 	#[clap(long)]
 	pub rpc_max_payload: Option<usize>,
+
+	/// Set the the maximum RPC request payload size for both HTTP and WS in megabytes.
+	/// Default is 15MiB.
+	#[clap(long)]
+	pub rpc_max_request_size: Option<usize>,
+
+	/// Set the the maximum RPC response payload size for both HTTP and WS in megabytes.
+	/// Default is 15MiB.
+	#[clap(long)]
+	pub rpc_max_response_size: Option<usize>,
+
+	/// Set the the maximum concurrent subscriptions per connection.
+	/// Default is 1024.
+	#[clap(long)]
+	pub rpc_max_subscriptions_per_connection: Option<usize>,
 
 	/// Expose Prometheus exporter on all interfaces.
 	///
@@ -111,7 +126,7 @@ pub struct RunCmd {
 	#[clap(long)]
 	pub prometheus_external: bool,
 
-	/// Specify IPC RPC server path
+	/// DEPRECATED, IPC support has been removed.
 	#[clap(long, value_name = "PATH")]
 	pub ipc_path: Option<String>,
 
@@ -127,7 +142,7 @@ pub struct RunCmd {
 	#[clap(long, value_name = "COUNT")]
 	pub ws_max_connections: Option<usize>,
 
-	/// Set the the maximum WebSocket output buffer size in MiB. Default is 16.
+	/// DEPRECATED, this has no affect anymore. Use `rpc_max_response_size` instead.
 	#[clap(long)]
 	pub ws_max_out_buffer_capacity: Option<usize>,
 
@@ -447,6 +462,18 @@ impl CliConfiguration for RunCmd {
 
 	fn rpc_max_payload(&self) -> Result<Option<usize>> {
 		Ok(self.rpc_max_payload)
+	}
+
+	fn rpc_max_request_size(&self) -> Result<Option<usize>> {
+		Ok(self.rpc_max_request_size)
+	}
+
+	fn rpc_max_response_size(&self) -> Result<Option<usize>> {
+		Ok(self.rpc_max_response_size)
+	}
+
+	fn rpc_max_subscriptions_per_connection(&self) -> Result<Option<usize>> {
+		Ok(self.rpc_max_subscriptions_per_connection)
 	}
 
 	fn ws_max_out_buffer_capacity(&self) -> Result<Option<usize>> {

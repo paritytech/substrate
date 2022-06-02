@@ -22,7 +22,7 @@
 use sp_runtime_interface::runtime_interface;
 
 #[cfg(not(feature = "std"))]
-use sp_std::{convert::TryFrom, mem, prelude::*};
+use sp_std::{mem, prelude::*};
 
 use sp_core::{sr25519::Public, wasm_export_functions};
 

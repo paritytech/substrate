@@ -132,12 +132,18 @@ pub struct NetworkParams {
 
 	/// Blockchain syncing mode.
 	///
-	/// - `Full`: Download and validate full blockchain history.
-	///
-	/// - `Fast`: Download blocks and the latest state only.
-	///
-	/// - `FastUnsafe`: Same as `Fast`, but skip downloading state proofs.
-	#[clap(long, arg_enum, value_name = "SYNC_MODE", default_value = "Full", ignore_case(true))]
+	/// - `full`: Download and validate full blockchain history.
+	/// - `fast`: Download blocks and the latest state only.
+	/// - `fast-unsafe`: Same as `fast`, but skip downloading state proofs.
+	/// - `warp`: Download the latest state and proof.
+	#[clap(
+		long,
+		arg_enum,
+		value_name = "SYNC_MODE",
+		default_value = "full",
+		ignore_case = true,
+		verbatim_doc_comment
+	)]
 	pub sync: SyncMode,
 }
 
@@ -157,7 +163,7 @@ impl NetworkParams {
 		let port = self.port.unwrap_or(default_listen_port);
 
 		let listen_addresses = if self.listen_addr.is_empty() {
-			if is_validator {
+			if is_validator || is_dev {
 				vec![
 					Multiaddr::empty()
 						.with(Protocol::Ip6([0, 0, 0, 0, 0, 0, 0, 0].into()))

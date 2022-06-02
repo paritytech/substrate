@@ -34,7 +34,7 @@ use serde::Serialize;
 use std::{fmt::Debug, marker::PhantomData, sync::Arc, time::Instant};
 use thousands::Separable;
 
-use crate::storage::record::{StatSelect, Stats};
+use crate::shared::{StatSelect, Stats};
 
 /// Log target for printing block weight info.
 const LOG_TARGET: &'static str = "benchmark::block::weight";

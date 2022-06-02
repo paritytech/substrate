@@ -16,16 +16,16 @@ targets = ["x86_64-unknown-linux-gnu"]
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = [
 	"derive",
 ] }
-scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
-sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
-sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
+log = { version = "0.4.17", default-features = false }
+scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
+frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "../benchmarking" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 pallet-treasury = { version = "4.0.0-dev", default-features = false, path = "../treasury" }
-sp-io = { version = "6.0.0", path = "../../primitives/io", default-features = false }
-sp-core = { version = "6.0.0", path = "../../primitives/core", default-features = false }
-frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
-log = { version = "0.4.14", default-features = false }
+sp-core = { version = "6.0.0", default-features = false, path = "../../primitives/core" }
+sp-io = { version = "6.0.0", default-features = false, path = "../../primitives/io" }
+sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
 
 [dev-dependencies]
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
@@ -34,15 +34,15 @@ pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 default = ["std"]
 std = [
 	"codec/std",
-	"sp-core/std",
-	"sp-io/std",
-	"scale-info/std",
-	"sp-std/std",
-	"sp-runtime/std",
 	"frame-support/std",
 	"frame-system/std",
-	"pallet-treasury/std",
 	"log/std",
+	"pallet-treasury/std",
+	"scale-info/std",
+	"sp-core/std",
+	"sp-io/std",
+	"sp-runtime/std",
+	"sp-std/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",

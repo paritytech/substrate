@@ -91,28 +91,26 @@ where
 		B: backend::Backend<Block>,
 	{
 		let spec = CallExecutor::runtime_version(self, id)?;
-		let code = if let Some(d) = self
-			.wasm_override
-			.as_ref()
-			.as_ref()
-			.map(|o| o.get(&spec.spec_version, onchain_code.heap_pages, &spec.spec_name))
-			.flatten()
-		{
-			log::debug!(target: "wasm_overrides", "using WASM override for block {}", id);
-			d
-		} else if let Some(s) =
-			self.wasm_substitutes.get(spec.spec_version, onchain_code.heap_pages, id)
-		{
-			log::debug!(target: "wasm_substitutes", "Using WASM substitute for block {:?}", id);
-			s
-		} else {
-			log::debug!(
-				target: "wasm_overrides",
-				"No WASM override available for block {}, using onchain code",
-				id
-			);
-			onchain_code
-		};
+		let code =
+			if let Some(d) =
+				self.wasm_override.as_ref().as_ref().and_then(|o| {
+					o.get(&spec.spec_version, onchain_code.heap_pages, &spec.spec_name)
+				}) {
+				log::debug!(target: "wasm_overrides", "using WASM override for block {}", id);
+				d
+			} else if let Some(s) =
+				self.wasm_substitutes.get(spec.spec_version, onchain_code.heap_pages, id)
+			{
+				log::debug!(target: "wasm_substitutes", "Using WASM substitute for block {:?}", id);
+				s
+			} else {
+				log::debug!(
+					target: "wasm_overrides",
+					"No WASM override available for block {}, using onchain code",
+					id
+				);
+				onchain_code
+			};
 
 		Ok(code)
 	}
@@ -285,7 +283,7 @@ where
 			state_runtime_code.runtime_code().map_err(sp_blockchain::Error::RuntimeCode)?;
 		self.executor
 			.runtime_version(&mut ext, &runtime_code)
-			.map_err(|e| sp_blockchain::Error::VersionInvalid(e.to_string()).into())
+			.map_err(|e| sp_blockchain::Error::VersionInvalid(e.to_string()))
 	}
 
 	fn prove_execution(
@@ -307,7 +305,7 @@ where
 		let runtime_code = self.check_override(runtime_code, at)?;
 
 		sp_state_machine::prove_execution_on_trie_backend(
-			&trie_backend,
+			trie_backend,
 			&mut Default::default(),
 			&self.executor,
 			self.spawn_handle.clone(),

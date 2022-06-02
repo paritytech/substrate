@@ -4,7 +4,7 @@ version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
 license = "Apache-2.0"
-homepage = "https://substrate.dev"
+homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 description = "Fuzzer for FRAME pallet bags list"
 readme = "README.md"
@@ -13,9 +13,8 @@ publish = false
 [dependencies]
 honggfuzz = "0.5"
 rand = { version = "0.8", features = ["std", "small_rng"] }
-
+frame-election-provider-support = { version = "4.0.0-dev", features = ["runtime-benchmarks"], path = "../../election-provider-support" }
 pallet-bags-list = { version = "4.0.0-dev", features = ["fuzz"], path = ".." }
-frame-election-provider-support = { version = "4.0.0-dev", path = "../../election-provider-support", features = ["runtime-benchmarks"] }
 
 [[bin]]
 name = "bags-list"

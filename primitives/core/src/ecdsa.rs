@@ -137,7 +137,7 @@ impl AsMut<[u8]> for Public {
 	}
 }
 
-impl sp_std::convert::TryFrom<&[u8]> for Public {
+impl TryFrom<&[u8]> for Public {
 	type Error = ();
 
 	fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
@@ -209,7 +209,7 @@ impl<'de> Deserialize<'de> for Public {
 #[derive(Encode, Decode, MaxEncodedLen, PassByInner, TypeInfo, PartialEq, Eq)]
 pub struct Signature(pub [u8; 65]);
 
-impl sp_std::convert::TryFrom<&[u8]> for Signature {
+impl TryFrom<&[u8]> for Signature {
 	type Error = ();
 
 	fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
@@ -364,7 +364,7 @@ impl From<RecoverableSignature> for Signature {
 /// Derive a single hard junction.
 #[cfg(feature = "full_crypto")]
 fn derive_hard_junction(secret_seed: &Seed, cc: &[u8; 32]) -> Seed {
-	("Secp256k1HDKD", secret_seed, cc).using_encoded(|data| sp_core_hashing::blake2_256(data))
+	("Secp256k1HDKD", secret_seed, cc).using_encoded(sp_core_hashing::blake2_256)
 }
 
 /// An error when deriving a key.
@@ -763,12 +763,12 @@ mod test {
 			set_default_ss58_version(Ss58AddressFormat::custom(200));
 			// custom addr encoded by version 200
 			let addr = "4pbsSkWcBaYoFHrKJZp5fDVUKbqSYD9dhZZGvpp3vQ5ysVs5ybV";
-			Public::from_ss58check(&addr).unwrap();
+			Public::from_ss58check(addr).unwrap();
 
 			set_default_ss58_version(default_format);
 			// set current ss58 version to default version
 			let addr = "KWAfgC2aRG5UVD6CpbPQXCx4YZZUhvWqqAJE6qcYc9Rtr6g5C";
-			Public::from_ss58check(&addr).unwrap();
+			Public::from_ss58check(addr).unwrap();
 
 			println!("CUSTOM_FORMAT_SUCCESSFUL");
 		} else {

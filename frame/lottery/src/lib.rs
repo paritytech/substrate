@@ -108,7 +108,7 @@ impl<T: Config> ValidateCall<T> for () {
 impl<T: Config> ValidateCall<T> for Pallet<T> {
 	fn validate_call(call: &<T as Config>::Call) -> bool {
 		let valid_calls = CallIndices::<T>::get();
-		let call_index = match Self::call_to_index(&call) {
+		let call_index = match Self::call_to_index(call) {
 			Ok(call_index) => call_index,
 			Err(_) => return false,
 		};
@@ -278,7 +278,7 @@ pub mod pallet {
 						// but is not used if it is not relevant.
 					}
 				}
-				return T::DbWeight::get().reads(1)
+				T::DbWeight::get().reads(1)
 			})
 		}
 	}
@@ -389,7 +389,7 @@ impl<T: Config> Pallet<T> {
 	/// This actually does computation. If you need to keep using it, then make sure you cache the
 	/// value and only call this once.
 	pub fn account_id() -> T::AccountId {
-		T::PalletId::get().into_account()
+		T::PalletId::get().into_account_truncating()
 	}
 
 	/// Return the pot account and amount of money in the pot.
@@ -418,9 +418,9 @@ impl<T: Config> Pallet<T> {
 	fn call_to_index(call: &<T as Config>::Call) -> Result<CallIndex, DispatchError> {
 		let encoded_call = call.encode();
 		if encoded_call.len() < 2 {
-			Err(Error::<T>::EncodingFailed)?
+			return Err(Error::<T>::EncodingFailed.into())
 		}
-		return Ok((encoded_call[0], encoded_call[1]))
+		Ok((encoded_call[0], encoded_call[1]))
 	}
 
 	/// Logic for buying a ticket.
