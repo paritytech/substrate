@@ -981,7 +981,7 @@ impl<T: Config<I>, I: 'static> InitializeMembers<T::AccountId> for Pallet<T, I> 
 		// TODO: (dp) this looks odd – check if empty and then assert on the same predicate again?
 		if !members.is_empty() {
 			assert!(<Members<T, I>>::get().is_empty(), "Members are already initialized!");
-			<Members<T, I>>::put(BoundedSlice::try_from(members).expect("TODO"));
+			<Members<T, I>>::put(BoundedSlice::try_from(members).expect("TODO: (dp) – truncate to MaxMembers?"));
 		}
 	}
 }
