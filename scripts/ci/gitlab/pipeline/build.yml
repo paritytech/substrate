@@ -11,7 +11,7 @@
   script:
     - git clone
         --depth=1
-        "--branch=$PIPELINE_SCRIPTS_TAG"
+        --branch="$PIPELINE_SCRIPTS_TAG"
         https://github.com/paritytech/pipeline-scripts
     - ./pipeline-scripts/check_dependent_project.sh
         --org paritytech
@@ -34,15 +34,14 @@ check-dependent-polkadot:
   rules:
     - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/  #PRs
 
-# TODO: Re-enable after https://github.com/paritytech/pipeline-scripts/issues/44
-#check-dependent-cumulus:
-#  extends:                         .check-dependent-project
-#  variables:
-#    DEPENDENT_REPO:                cumulus
-#    EXTRA_DEPENDENCIES:            polkadot
-#    COMPANION_OVERRIDES: |
-#      substrate: polkadot-v*
-#      polkadot: release-v*
+check-dependent-cumulus:
+  extends:                         .check-dependent-project
+  variables:
+    DEPENDENT_REPO:                cumulus
+    EXTRA_DEPENDENCIES:            polkadot
+    COMPANION_OVERRIDES: |
+      substrate: polkadot-v*
+      polkadot: release-v*
 
 build-linux-substrate:
   stage:                           build
