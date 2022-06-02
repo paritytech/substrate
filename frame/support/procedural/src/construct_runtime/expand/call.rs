@@ -65,7 +65,7 @@ pub fn expand_outer_dispatch(
 		#[cfg(test)]
 		impl Call {
 			/// Return a list of the module names together with their size in memory.
-			pub fn sizes() -> &'static [( &'static str, usize )] {
+			pub const fn sizes() -> &'static [( &'static str, usize )] {
 				use #scrate::dispatch::Callable;
 				use core::mem::size_of;
 				&[#(
@@ -76,7 +76,8 @@ pub fn expand_outer_dispatch(
 				)*]
 			}
 
-			pub fn check_size(limit: usize) {
+			/// Panics with diagnostic information if the size is greater than the given `limit`.
+			pub fn assert_size_under(limit: usize) {
 				let size = core::mem::size_of::<Self>();
 				let call_oversize = size > limit;
 				if call_oversize {
