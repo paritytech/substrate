@@ -111,6 +111,15 @@ where
 #[scale_info(skip_type_params(S))]
 pub struct BoundedSlice<'a, T, S>(&'a [T], PhantomData<S>);
 
+impl<'a, T, S> Clone for BoundedSlice<'a, T, S> {
+	fn clone(&self) -> Self {
+		BoundedSlice(self.0, PhantomData)
+	}
+}
+
+// Since a slice `&[]` is always `Copy`, so is `BoundedSlice`.
+impl<'a, T, S> Copy for BoundedSlice<'a, T, S> {}
+
 // `BoundedSlice`s encode to something which will always decode into a `BoundedVec`,
 // `WeakBoundedVec`, or a `Vec`.
 impl<'a, T: Encode + Decode, S: Get<u32>> EncodeLike<BoundedVec<T, S>> for BoundedSlice<'a, T, S> {}
