@@ -181,7 +181,7 @@ test-deterministic-wasm:
   variables:
     WASM_BUILD_NO_COLOR:           1
     # this variable gets overriden by "rusty-cachier environment inject", use the value as default
-    CARGO_TARGET_DIR:              "./target"
+    CARGO_TARGET_DIR:              "$CI_PROJECT_DIR/target"
   script:
     - rusty-cachier snapshot create
     # build runtime
