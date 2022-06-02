@@ -101,9 +101,10 @@ pub fn is_transactional() -> bool {
 /// error.
 ///
 /// Commits happen to the parent transaction.
-pub fn with_transaction<T, E>(f: impl FnOnce() -> TransactionOutcome<Result<T, E>>) -> Result<T, E>
+pub fn with_transaction<T, E, F>(f: F) -> Result<T, E>
 where
 	E: From<DispatchError>,
+	F: FnOnce() -> TransactionOutcome<Result<T, E>>,
 {
 	// This needs to happen before `start_transaction` below.
 	// Otherwise we may rollback the increase, then decrease as the guard goes out of scope
@@ -129,7 +130,10 @@ where
 /// This is mostly for backwards compatibility before there was a transactional layer limit.
 /// It is recommended to only use [`with_transaction`] to avoid users from generating too many
 /// transactional layers.
-pub fn with_transaction_unchecked<R>(f: impl FnOnce() -> TransactionOutcome<R>) -> R {
+pub fn with_transaction_unchecked<R, F>(f: F) -> R
+where
+	F: FnOnce() -> TransactionOutcome<R>,
+{
 	// This needs to happen before `start_transaction` below.
 	// Otherwise we may rollback the increase, then decrease as the guard goes out of scope
 	// and then end in some bad state.
@@ -163,9 +167,10 @@ pub fn with_transaction_unchecked<R>(f: impl FnOnce() -> TransactionOutcome<R>) 
 /// This is the same as `with_transaction`, but assuming that any function returning
 /// an `Err` should rollback, and any function returning `Ok` should commit. This
 /// provides a cleaner API to the developer who wants this behavior.
-pub fn with_storage_layer<T, E>(f: impl FnOnce() -> Result<T, E>) -> Result<T, E>
+pub fn with_storage_layer<T, E, F>(f: F) -> Result<T, E>
 where
 	E: From<DispatchError>,
+	F: FnOnce() -> Result<T, E>,
 {
 	with_transaction(|| {
 		let r = f();
@@ -181,9 +186,10 @@ where
 ///
 /// If we are already in a storage layer, we just execute the provided closure.
 /// If we are not, we execute the closure within a [`with_storage_layer`].
-pub fn in_storage_layer<T, E>(f: impl FnOnce() -> Result<T, E>) -> Result<T, E>
+pub fn in_storage_layer<T, E, F>(f: F) -> Result<T, E>
 where
 	E: From<DispatchError>,
+	F: FnOnce() -> Result<T, E>,
 {
 	if is_transactional() {
 		f()
