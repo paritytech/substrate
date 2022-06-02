@@ -29,12 +29,7 @@
 #     - ./scripts/ci/gitlab/my_amazing_script.sh
 
 stages:
-  - check
   - test
-  - build
-  - publish
-  - deploy
-  - notify
 
 workflow:
   rules:
