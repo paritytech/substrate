@@ -42,14 +42,13 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![recursion_limit = "128"]
 
-use codec::MaxEncodedLen;
 use scale_info::TypeInfo;
 use sp_io::storage;
 use sp_runtime::{traits::Hash, RuntimeDebug};
 use sp_std::{marker::PhantomData, prelude::*, result};
 
 use frame_support::{
-	codec::{Decode, Encode},
+	codec::{Decode, Encode, MaxEncodedLen},
 	dispatch::{DispatchError, DispatchResultWithPostInfo, Dispatchable, PostDispatchInfo},
 	ensure,
 	traits::{Backing, ChangeMembers, EnsureOrigin, Get, GetBacking, InitializeMembers},
@@ -981,7 +980,9 @@ impl<T: Config<I>, I: 'static> InitializeMembers<T::AccountId> for Pallet<T, I> 
 		// TODO: (dp) this looks odd – check if empty and then assert on the same predicate again?
 		if !members.is_empty() {
 			assert!(<Members<T, I>>::get().is_empty(), "Members are already initialized!");
-			<Members<T, I>>::put(BoundedSlice::try_from(members).expect("TODO: (dp) – truncate to MaxMembers?"));
+			<Members<T, I>>::put(
+				BoundedSlice::try_from(members).expect("TODO: (dp) – truncate to MaxMembers?"),
+			);
 		}
 	}
 }
