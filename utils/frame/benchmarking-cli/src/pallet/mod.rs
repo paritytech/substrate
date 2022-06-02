@@ -18,6 +18,7 @@
 mod command;
 mod writer;
 
+use crate::shared::HostInfoParams;
 use sc_cli::{
 	ExecutionStrategy, WasmExecutionMethod, WasmtimeInstantiationStrategy,
 	DEFAULT_WASMTIME_INSTANTIATION_STRATEGY, DEFAULT_WASM_EXECUTION_METHOD,
@@ -90,6 +91,10 @@ pub struct PalletCmd {
 	/// Path to Handlebars template file used for outputting benchmark results. (Optional)
 	#[clap(long)]
 	pub template: Option<PathBuf>,
+
+	#[allow(missing_docs)]
+	#[clap(flatten)]
+	pub hostinfo_params: HostInfoParams,
 
 	/// Which analysis function to use when outputting benchmarks:
 	/// * min-squares (default)
