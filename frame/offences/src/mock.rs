@@ -23,12 +23,14 @@ use crate as offences;
 use crate::Config;
 use codec::Encode;
 use frame_support::{
+	pallet_prelude::MaxEncodedLen,
 	parameter_types,
 	traits::{ConstU32, ConstU64},
 	weights::{
 		constants::{RocksDbWeight, WEIGHT_PER_SECOND},
 		Weight,
 	},
+	BoundedVec,
 };
 use sp_core::H256;
 use sp_runtime::{
@@ -49,8 +51,10 @@ thread_local! {
 	pub static OFFENCE_WEIGHT: RefCell<Weight> = RefCell::new(Default::default());
 }
 
-impl<Reporter, Offender> offence::OnOffenceHandler<Reporter, Offender, Weight>
-	for OnOffenceHandler
+impl<Reporter, Offender> offence::OnOffenceHandler<Reporter, Offender, Weight> for OnOffenceHandler
+where
+	Reporter: MaxEncodedLen,
+	Offender: MaxEncodedLen,
 {
 	fn on_offence(
 		_offenders: &[OffenceDetails<Reporter, Offender>],
@@ -80,7 +84,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		Offences: offences::{Pallet, Storage, Event},
+		Offences: offences::{Pallet, Storage, Event<T>},
 	}
 );
 
@@ -119,6 +123,18 @@ impl Config for Runtime {
 	type Event = Event;
 	type IdentificationTuple = u64;
 	type OnOffenceHandler = OnOffenceHandler;
+
+	type MaxReports = ConstU32<100>;
+	type MaxReportersPerOffence = ConstU32<100>;
+
+	type MaxConcurrentReports = Self::MaxReports;
+	type MaxConcurrentReportsPerKindAndTime = Self::MaxReports;
+
+	type MaxSameKindReports = Self::MaxReports;
+	type MaxSameKindReportsPerKind = Self::MaxReports;
+
+	type MaxSameKindReportsEncodedLen = ConstU32<1_000>; // Guessed...
+	type MaxOpaqueTimeSlotLen = ConstU32<1_000>;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
@@ -131,9 +147,15 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 pub const KIND: [u8; 16] = *b"test_report_1234";
 
 /// Returns all offence details for the specific `kind` happened at the specific time slot.
-pub fn offence_reports(kind: Kind, time_slot: u128) -> Vec<OffenceDetails<u64, u64>> {
-	<crate::ConcurrentReportsIndex<Runtime>>::get(&kind, &time_slot.encode())
-		.into_iter()
+pub fn offence_reports(
+	kind: Kind,
+	time_slot: u128,
+) -> Vec<OffenceDetails<BoundedVec<u64, ConstU32<100_u32>>, u64>> {
+	let time_slot: BoundedVec<u8, ConstU32<1_000>> = time_slot.encode().try_into().unwrap();
+
+	let r = <crate::ConcurrentReportsIndex<Runtime>>::get(&kind, &time_slot);
+
+	r.into_iter()
 		.map(|report_id| {
 			<crate::Reports<Runtime>>::get(&report_id)
 				.expect("dangling report id is found in ConcurrentReportsIndex")
@@ -142,13 +164,13 @@ pub fn offence_reports(kind: Kind, time_slot: u128) -> Vec<OffenceDetails<u64, u
 }
 
 #[derive(Clone)]
-pub struct Offence<T> {
+pub struct Offence<Offender> {
 	pub validator_set_count: u32,
-	pub offenders: Vec<T>,
+	pub offenders: Vec<Offender>,
 	pub time_slot: u128,
 }
 
-impl<T: Clone> offence::Offence<T> for Offence<T> {
+impl<T: Clone + MaxEncodedLen> offence::Offence<T> for Offence<T> {
 	const ID: offence::Kind = KIND;
 	type TimeSlot = u128;
 

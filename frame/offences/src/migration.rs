@@ -16,13 +16,15 @@
 // limitations under the License.
 
 use super::{Config, OffenceDetails, Perbill, SessionIndex};
-use frame_support::{pallet_prelude::ValueQuery, storage_alias, traits::Get, weights::Weight};
+use frame_support::{
+	bounded_vec, pallet_prelude::ValueQuery, storage_alias, traits::Get, weights::Weight,
+};
 use sp_staking::offence::{DisableStrategy, OnOffenceHandler};
 use sp_std::vec::Vec;
 
 /// Type of data stored as a deferred offence
 type DeferredOffenceOf<T> = (
-	Vec<OffenceDetails<<T as frame_system::Config>::AccountId, <T as Config>::IdentificationTuple>>,
+	Vec<OffenceDetails<crate::ReportersOf<T>, <T as Config>::IdentificationTuple>>,
 	Vec<Perbill>,
 	SessionIndex,
 );
@@ -66,13 +68,11 @@ mod test {
 				assert_eq!(f.clone(), vec![]);
 			});
 
-			let offence_details = OffenceDetails::<
-				<T as frame_system::Config>::AccountId,
-				<T as Config>::IdentificationTuple,
-			> {
-				offender: 5,
-				reporters: vec![],
-			};
+			let offence_details =
+				OffenceDetails::<crate::ReportersOf<T>, <T as Config>::IdentificationTuple> {
+					offender: 5,
+					reporters: bounded_vec![],
+				};
 
 			// push deferred offence
 			<DeferredOffences<T>>::append((

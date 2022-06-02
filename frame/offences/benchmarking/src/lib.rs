@@ -270,7 +270,7 @@ fn check_events<T: Config, I: Iterator<Item = <T as SystemConfig>::Event>>(expec
 
 benchmarks! {
 	report_offence_im_online {
-		let r in 1 .. MAX_REPORTERS;
+		let r in 1 .. T::MaxReportersPerOffence;
 		// we skip 1 offender, because in such case there is no slashing
 		let o in 2 .. MAX_OFFENDERS;
 		let n in 0 .. MAX_NOMINATORS.min(<T as pallet_staking::Config>::MaxNominations::get());

@@ -201,6 +201,18 @@ impl pallet_offences::Config for Test {
 	type Event = Event;
 	type IdentificationTuple = pallet_session::historical::IdentificationTuple<Self>;
 	type OnOffenceHandler = Staking;
+
+	type MaxReports = ConstU32<100>;
+	type MaxReportersPerOffence = ConstU32<MAX_REPORTERS>;
+
+	type MaxConcurrentReports = Self::MaxReports;
+	type MaxConcurrentReportsPerKindAndTime = Self::MaxReports;
+
+	type MaxSameKindReports = Self::MaxReports;
+	type MaxSameKindReportsPerKind = Self::MaxReports;
+
+	type MaxSameKindReportsEncodedLen = ConstU32<1_000>; // Guessed...
+	type MaxOpaqueTimeSlotLen = ConstU32<1_000>;
 }
 
 impl<T> frame_system::offchain::SendTransactionTypes<T> for Test

@@ -20,7 +20,7 @@
 
 use sp_std::vec::Vec;
 
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, MaxEncodedLen};
 use sp_runtime::Perbill;
 
 use crate::SessionIndex;
@@ -139,9 +139,9 @@ impl sp_runtime::traits::Printable for OffenceError {
 }
 
 /// A trait for decoupling offence reporters from the actual handling of offence reports.
-pub trait ReportOffence<Reporter, Offender, O: Offence<Offender>> {
+pub trait ReportOffence<Reporters, Offender, O: Offence<Offender>> {
 	/// Report an `offence` and reward given `reporters`.
-	fn report_offence(reporters: Vec<Reporter>, offence: O) -> Result<(), OffenceError>;
+	fn report_offence(reporters: Reporters, offence: O) -> Result<(), OffenceError>;
 
 	/// Returns true iff all of the given offenders have been previously reported
 	/// at the given time slot. This function is useful to prevent the sending of
@@ -149,8 +149,12 @@ pub trait ReportOffence<Reporter, Offender, O: Offence<Offender>> {
 	fn is_known_offence(offenders: &[Offender], time_slot: &O::TimeSlot) -> bool;
 }
 
-impl<Reporter, Offender, O: Offence<Offender>> ReportOffence<Reporter, Offender, O> for () {
-	fn report_offence(_reporters: Vec<Reporter>, _offence: O) -> Result<(), OffenceError> {
+impl<Reporters, Offender, O: Offence<Offender>> ReportOffence<Reporters, Offender, O> for ()
+where
+	Reporters: MaxEncodedLen,
+	Offender: MaxEncodedLen,
+{
+	fn report_offence(_reporters: Reporters, _offence: O) -> Result<(), OffenceError> {
 		Ok(())
 	}
 
@@ -163,7 +167,7 @@ impl<Reporter, Offender, O: Offence<Offender>> ReportOffence<Reporter, Offender,
 ///
 /// Used to decouple the module that handles offences and
 /// the one that should punish for those offences.
-pub trait OnOffenceHandler<Reporter, Offender, Res> {
+pub trait OnOffenceHandler<Reporters: MaxEncodedLen, Offender: MaxEncodedLen, Res> {
 	/// A handler for an offence of a particular kind.
 	///
 	/// Note that this contains a list of all previous offenders
@@ -183,16 +187,20 @@ pub trait OnOffenceHandler<Reporter, Offender, Res> {
 	/// The receiver might decide to not accept this offence. In this case, the call site is
 	/// responsible for queuing the report and re-submitting again.
 	fn on_offence(
-		offenders: &[OffenceDetails<Reporter, Offender>],
+		offenders: &[OffenceDetails<Reporters, Offender>],
 		slash_fraction: &[Perbill],
 		session: SessionIndex,
 		disable_strategy: DisableStrategy,
 	) -> Res;
 }
 
-impl<Reporter, Offender, Res: Default> OnOffenceHandler<Reporter, Offender, Res> for () {
+impl<Reporters, Offender, Res: Default> OnOffenceHandler<Reporters, Offender, Res> for ()
+where
+	Reporters: MaxEncodedLen,
+	Offender: MaxEncodedLen,
+{
 	fn on_offence(
-		_offenders: &[OffenceDetails<Reporter, Offender>],
+		_offenders: &[OffenceDetails<Reporters, Offender>],
 		_slash_fraction: &[Perbill],
 		_session: SessionIndex,
 		_disable_strategy: DisableStrategy,
@@ -202,11 +210,20 @@ impl<Reporter, Offender, Res: Default> OnOffenceHandler<Reporter, Offender, Res>
 }
 
 /// A details about an offending authority for a particular kind of offence.
-#[derive(Clone, PartialEq, Eq, Encode, Decode, sp_runtime::RuntimeDebug, scale_info::TypeInfo)]
-pub struct OffenceDetails<Reporter, Offender> {
+#[derive(
+	Clone,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	sp_runtime::RuntimeDebug,
+	scale_info::TypeInfo,
+	MaxEncodedLen,
+)]
+pub struct OffenceDetails<Reporters: MaxEncodedLen, Offender: MaxEncodedLen> {
 	/// The offending authority id
 	pub offender: Offender,
 	/// A list of reporters of offences of this authority ID. Possibly empty where there are no
 	/// particular reporters.
-	pub reporters: Vec<Reporter>,
+	pub reporters: Reporters,
 }
