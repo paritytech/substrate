@@ -243,12 +243,12 @@ pub trait Ext: sealing::Sealed {
 	/// Sets new code hash for existing contract.
 	fn set_code_hash(&mut self, hash: CodeHash<Self::T>) -> Result<(), DispatchError>;
 
-	/// Returns then number of times currently executing contract exists on the call stack in addition
-	/// to the calling instance. A value of 0 means no reentrancy.
+	/// Returns then number of times currently executing contract exists on the call stack in
+	/// addition to the calling instance. A value of 0 means no reentrancy.
 	fn reentrant_count(&self) -> u32;
 
-	/// Returns the number of times specified contract exists on the call stack. Delegated calls are not
-	/// calculated as separate entrance.
+	/// Returns the number of times specified contract exists on the call stack. Delegated calls are
+	/// not calculated as separate entrance.
 	/// A value of 0 means it does not exist on the call stack.
 	fn account_entrance_count(&self, account_id: &AccountIdOf<Self::T>) -> u32;
 }
@@ -1243,7 +1243,11 @@ where
 	}
 
 	fn account_entrance_count(&self, account_id: &AccountIdOf<Self::T>) -> u32 {
-		self.frames().filter_map(|f| (f.delegate_caller.is_none() && &f.account_id == account_id).then(|| true)).count() as u32
+		self.frames()
+			.filter_map(|f| {
+				(f.delegate_caller.is_none() && &f.account_id == account_id).then(|| true)
+			})
+			.count() as u32
 	}
 }
 

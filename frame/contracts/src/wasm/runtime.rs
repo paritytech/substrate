@@ -2110,7 +2110,7 @@ define_env!(Env, <E: Ext>,
 	// Returns 0 when the contract does not exist on the call stack.
 	[__unstable__] seal_account_entrance_count(ctx, account_ptr: u32) -> u32 => {
 		ctx.charge_gas(RuntimeCosts::AccountEntranceCount)?;
-		let account_id: &<<E as Ext>::T as frame_system::Config>::AccountId = ctx.read_sandbox_memory_as(account_ptr)?;
+		let account_id: <<E as Ext>::T as frame_system::Config>::AccountId = ctx.read_sandbox_memory_as(account_ptr)?;
 		Ok(ctx.ext.account_entrance_count(&account_id) as u32)
 	},
 );

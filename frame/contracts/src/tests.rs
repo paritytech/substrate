@@ -3257,8 +3257,8 @@ fn reentrant_count_works() {
 			AsRef::<[u8]>::as_ref(&contract_addr1).to_vec(),
 			true,
 		)
-			.result
-			.unwrap();
+		.result
+		.unwrap();
 	});
 }
 #[test]
@@ -3289,7 +3289,7 @@ fn account_entrance_count_works() {
 			AsRef::<[u8]>::as_ref(&contract_addr1).to_vec(),
 			true,
 		)
-			.result
-			.unwrap();
+		.result
+		.unwrap();
 	});
 }

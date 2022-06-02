@@ -523,8 +523,12 @@ mod tests {
 		fn ecdsa_to_eth_address(&self, _pk: &[u8; 33]) -> Result<[u8; 20], ()> {
 			Ok([2u8; 20])
 		}
-		fn reentrant_count(&self) -> u32 { 12 }
-		fn account_entrance_count(&self, _account_id: &AccountIdOf<Self::T>) -> u32 { unimplemented!() }
+		fn reentrant_count(&self) -> u32 {
+			12
+		}
+		fn account_entrance_count(&self, _account_id: &AccountIdOf<Self::T>) -> u32 {
+			unimplemented!()
+		}
 	}
 
 	fn execute<E: BorrowMut<MockExt>>(wat: &str, input_data: Vec<u8>, mut ext: E) -> ExecResult {
