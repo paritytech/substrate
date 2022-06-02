@@ -53,11 +53,59 @@ impl NodesUtils {
 
 		64 - self.no_of_leaves.next_power_of_two().leading_zeros()
 	}
+
+	/// Calculate `LeafIndex` for the leaf that added `node_index` to the MMR.
+	pub fn leaf_index_that_added_node(node_index: NodeIndex) -> LeafIndex {
+		let rightmost_leaf_pos = Self::rightmost_leaf_node_index_from_pos(node_index);
+		Self::leaf_node_index_to_leaf_index(rightmost_leaf_pos)
+	}
+
+	// Translate a _leaf_ `NodeIndex` to its `LeafIndex`.
+	fn leaf_node_index_to_leaf_index(pos: NodeIndex) -> LeafIndex {
+		if pos == 0 {
+			return 0
+		}
+		let (leaf_count, _) =
+			mmr_lib::helper::get_peaks(pos)
+				.iter()
+				.fold((0, 0), |(mut acc, last_peak), peak| {
+					let leaves = (peak - last_peak) >> 1;
+					acc += leaves + 1;
+					// last_peak, leaves, acc);
+					(acc, peak.clone())
+				});
+		leaf_count
+	}
+
+	// Starting from any node position get position of rightmost leaf; this is the leaf
+	// responsible for the addition of node `pos`.
+	fn rightmost_leaf_node_index_from_pos(mut pos: NodeIndex) -> NodeIndex {
+		use mmr_lib::helper::pos_height_in_tree;
+		if pos > 0 {
+			let mut current_height = pos_height_in_tree(pos);
+			let mut right_child_height = pos_height_in_tree(pos - 1);
+			while right_child_height < current_height {
+				pos = pos - 1;
+				current_height = right_child_height;
+				right_child_height = pos_height_in_tree(pos - 1);
+			}
+		}
+		pos
+	}
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	#[test]
+	fn test_leaf_node_index_to_leaf_index() {
+		use mmr_lib::helper::leaf_index_to_pos;
+		for index in 0..100000 {
+			let pos = leaf_index_to_pos(index);
+			assert_eq!(NodesUtils::leaf_node_index_to_leaf_index(pos), index);
+		}
+	}
 
 	#[test]
 	fn should_calculate_number_of_leaves_correctly() {

@@ -271,7 +271,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// all the leaves to be present.
 	/// It may return an error or panic if used incorrectly.
 	pub fn generate_batch_proof(
-		leaf_indices: Vec<NodeIndex>,
+		leaf_indices: Vec<LeafIndex>,
 	) -> Result<
 		(Vec<LeafOf<T, I>>, primitives::BatchProof<<T as Config<I>>::Hash>),
 		primitives::Error,
