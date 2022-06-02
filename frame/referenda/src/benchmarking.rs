@@ -46,7 +46,7 @@ fn create_referendum<T: Config>() -> (T::AccountId, ReferendumIndex) {
 	whitelist_account!(caller);
 	assert_ok!(Referenda::<T>::submit(
 		RawOrigin::Signed(caller.clone()).into(),
-		RawOrigin::Root.into(),
+		Box::new(RawOrigin::Root.into()),
 		T::Hashing::hash_of(&0),
 		DispatchTime::After(0u32.into())
 	));
@@ -177,7 +177,7 @@ benchmarks! {
 		whitelist_account!(caller);
 	}: _(
 		RawOrigin::Signed(caller),
-		RawOrigin::Root.into(),
+		Box::new(RawOrigin::Root.into()),
 		T::Hashing::hash_of(&0),
 		DispatchTime::After(0u32.into())
 	) verify {
