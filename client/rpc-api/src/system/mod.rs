@@ -22,9 +22,9 @@ use jsonrpsee::{
 	core::{JsonValue, RpcResult},
 	proc_macros::rpc,
 };
+use libp2p::Multiaddr;
 
 pub use self::helpers::{Health, NodeRole, PeerInfo, SyncState, SystemInfo};
-use sc_network::Multiaddr;
 
 pub mod error;
 pub mod helpers;
