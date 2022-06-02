@@ -18,18 +18,13 @@
 use crate::{BalanceOf, CodeHash, Config, Pallet, TrieId, Weight};
 use codec::{Decode, Encode};
 use frame_support::{
-	codec, generate_storage_alias,
-	pallet_prelude::*,
-	storage::migration,
-	traits::{Get, PalletInfoAccess},
-	Identity, Twox64Concat,
+	codec, pallet_prelude::*, storage::migration, storage_alias, traits::Get, Identity,
+	Twox64Concat,
 };
 use sp_std::{marker::PhantomData, prelude::*};
 
 /// Wrapper for all migrations of this pallet, based on `StorageVersion`.
 pub fn migrate<T: Config>() -> Weight {
-	use frame_support::traits::StorageVersion;
-
 	let version = StorageVersion::get::<Pallet<T>>();
 	let mut weight: Weight = 0;
 
@@ -61,6 +56,7 @@ mod v4 {
 	use super::*;
 
 	pub fn migrate<T: Config>() -> Weight {
+		#[allow(deprecated)]
 		migration::remove_storage_prefix(<Pallet<T>>::name().as_bytes(), b"CurrentSchedule", b"");
 		T::DbWeight::get().writes(1)
 	}
@@ -119,15 +115,16 @@ mod v5 {
 		trie_id: TrieId,
 	}
 
-	generate_storage_alias!(
-		Contracts,
-		ContractInfoOf<T: Config> => Map<(Twox64Concat, T::AccountId), ContractInfo<T>>
-	);
+	#[storage_alias]
+	type ContractInfoOf<T: Config> = StorageMap<
+		Pallet<T>,
+		Twox64Concat,
+		<T as frame_system::Config>::AccountId,
+		ContractInfo<T>,
+	>;
 
-	generate_storage_alias!(
-		Contracts,
-		DeletionQueue => Value<Vec<DeletedContract>>
-	);
+	#[storage_alias]
+	type DeletionQueue<T: Config> = StorageValue<Pallet<T>, Vec<DeletedContract>>;
 
 	pub fn migrate<T: Config>() -> Weight {
 		let mut weight: Weight = 0;
@@ -144,7 +141,7 @@ mod v5 {
 			}
 		});
 
-		DeletionQueue::translate(|old: Option<Vec<OldDeletedContract>>| {
+		DeletionQueue::<T>::translate(|old: Option<Vec<OldDeletedContract>>| {
 			weight = weight.saturating_add(T::DbWeight::get().reads_writes(1, 1));
 			old.map(|old| old.into_iter().map(|o| DeletedContract { trie_id: o.trie_id }).collect())
 		})
@@ -204,20 +201,19 @@ mod v6 {
 
 	type ContractInfo<T> = RawContractInfo<CodeHash<T>, BalanceOf<T>>;
 
-	generate_storage_alias!(
-		Contracts,
-		ContractInfoOf<T: Config> => Map<(Twox64Concat, T::AccountId), ContractInfo<T>>
-	);
+	#[storage_alias]
+	type ContractInfoOf<T: Config> = StorageMap<
+		Pallet<T>,
+		Twox64Concat,
+		<T as frame_system::Config>::AccountId,
+		ContractInfo<T>,
+	>;
 
-	generate_storage_alias!(
-		Contracts,
-		CodeStorage<T: Config> => Map<(Identity, CodeHash<T>), PrefabWasmModule>
-	);
+	#[storage_alias]
+	type CodeStorage<T: Config> = StorageMap<Pallet<T>, Identity, CodeHash<T>, PrefabWasmModule>;
 
-	generate_storage_alias!(
-		Contracts,
-		OwnerInfoOf<T: Config> => Map<(Identity, CodeHash<T>), OwnerInfo<T>>
-	);
+	#[storage_alias]
+	type OwnerInfoOf<T: Config> = StorageMap<Pallet<T>, Identity, CodeHash<T>, OwnerInfo<T>>;
 
 	pub fn migrate<T: Config>() -> Weight {
 		let mut weight: Weight = 0;
@@ -261,15 +257,12 @@ mod v7 {
 	use super::*;
 
 	pub fn migrate<T: Config>() -> Weight {
-		generate_storage_alias!(
-			Contracts,
-			AccountCounter => Value<u64, ValueQuery>
-		);
-		generate_storage_alias!(
-			Contracts,
-			Nonce => Value<u64, ValueQuery>
-		);
-		Nonce::set(AccountCounter::take());
+		#[storage_alias]
+		type AccountCounter<T: Config> = StorageValue<Pallet<T>, u64, ValueQuery>;
+		#[storage_alias]
+		type Nonce<T: Config> = StorageValue<Pallet<T>, u64, ValueQuery>;
+
+		Nonce::<T>::set(AccountCounter::<T>::take());
 		T::DbWeight::get().reads_writes(1, 2)
 	}
 }

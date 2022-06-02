@@ -37,7 +37,7 @@
 //! ```
 //!
 //! If the [`LightSyncStateExtension`] is not added as an extension to the chain spec,
-//! the [`SyncStateRpc`] will fail at instantiation.
+//! the [`SyncState`] will fail at instantiation.
 
 #![deny(unused_crate_dependencies)]
 
@@ -125,21 +125,21 @@ pub struct LightSyncState<Block: BlockT> {
 
 /// An api for sync state RPC calls.
 #[rpc(client, server)]
-pub trait SyncStateRpcApi {
+pub trait SyncStateApi {
 	/// Returns the JSON serialized chainspec running the node, with a sync state.
 	#[method(name = "sync_state_genSyncSpec")]
-	fn system_gen_sync_spec(&self, raw: bool) -> RpcResult<String>;
+	fn system_gen_sync_spec(&self, raw: bool) -> RpcResult<serde_json::Value>;
 }
 
 /// An api for sync state RPC calls.
-pub struct SyncStateRpc<Block: BlockT, Client> {
+pub struct SyncState<Block: BlockT, Client> {
 	chain_spec: Box<dyn sc_chain_spec::ChainSpec>,
 	client: Arc<Client>,
 	shared_authority_set: SharedAuthoritySet<Block>,
 	shared_epoch_changes: SharedEpochChanges<Block>,
 }
 
-impl<Block, Client> SyncStateRpc<Block, Client>
+impl<Block, Client> SyncState<Block, Client>
 where
 	Block: BlockT,
 	Client: HeaderBackend<Block> + sc_client_api::AuxStore + 'static,
@@ -180,12 +180,12 @@ where
 	}
 }
 
-impl<Block, Backend> SyncStateRpcApiServer for SyncStateRpc<Block, Backend>
+impl<Block, Backend> SyncStateApiServer for SyncState<Block, Backend>
 where
 	Block: BlockT,
 	Backend: HeaderBackend<Block> + sc_client_api::AuxStore + 'static,
 {
-	fn system_gen_sync_spec(&self, raw: bool) -> RpcResult<String> {
+	fn system_gen_sync_spec(&self, raw: bool) -> RpcResult<serde_json::Value> {
 		let current_sync_state = self.build_sync_state()?;
 		let mut chain_spec = self.chain_spec.cloned_box();
 
@@ -197,6 +197,7 @@ where
 		let val = serde_json::to_value(&current_sync_state)?;
 		*extension = Some(val);
 
-		chain_spec.as_json(raw).map_err(|e| Error::<Block>::JsonRpc(e).into())
+		let json_str = chain_spec.as_json(raw).map_err(|e| Error::<Block>::JsonRpc(e))?;
+		serde_json::from_str(&json_str).map_err(Into::into)
 	}
 }

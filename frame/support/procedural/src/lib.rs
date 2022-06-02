@@ -31,6 +31,7 @@ mod pallet;
 mod pallet_error;
 mod partial_eq_no_bound;
 mod storage;
+mod storage_alias;
 mod transactional;
 mod tt_macro;
 
@@ -432,6 +433,12 @@ pub fn transactional(attr: TokenStream, input: TokenStream) -> TokenStream {
 	transactional::transactional(attr, input).unwrap_or_else(|e| e.to_compile_error().into())
 }
 
+#[proc_macro_attribute]
+pub fn require_transactional(attr: TokenStream, input: TokenStream) -> TokenStream {
+	transactional::require_transactional(attr, input)
+		.unwrap_or_else(|e| e.to_compile_error().into())
+}
+
 /// Derive [`Clone`] but do not bound any generic. Docs are at `frame_support::CloneNoBound`.
 #[proc_macro_derive(CloneNoBound)]
 pub fn derive_clone_no_bound(input: TokenStream) -> TokenStream {
@@ -509,12 +516,6 @@ pub fn derive_default_no_bound(input: TokenStream) -> TokenStream {
 	default_no_bound::derive_default_no_bound(input)
 }
 
-#[proc_macro_attribute]
-pub fn require_transactional(attr: TokenStream, input: TokenStream) -> TokenStream {
-	transactional::require_transactional(attr, input)
-		.unwrap_or_else(|e| e.to_compile_error().into())
-}
-
 #[proc_macro]
 pub fn crate_to_crate_version(input: TokenStream) -> TokenStream {
 	crate_version::crate_to_crate_version(input)
@@ -574,4 +575,11 @@ pub fn derive_pallet_error(input: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn __create_tt_macro(input: TokenStream) -> TokenStream {
 	tt_macro::create_tt_return_macro(input)
+}
+
+#[proc_macro_attribute]
+pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
+	storage_alias::storage_alias(input.into())
+		.unwrap_or_else(|r| r.into_compile_error())
+		.into()
 }
