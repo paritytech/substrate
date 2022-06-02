@@ -188,13 +188,13 @@ skip-if-draft:
 
 include:
   # check jobs
-  # - scripts/ci/gitlab/pipeline/check.yml
+  - scripts/ci/gitlab/pipeline/check.yml
   # tests jobs
   - scripts/ci/gitlab/pipeline/test.yml
   # build jobs
-  # - scripts/ci/gitlab/pipeline/build.yml
+  - scripts/ci/gitlab/pipeline/build.yml
   # publish jobs
-  # - scripts/ci/gitlab/pipeline/publish.yml
+  - scripts/ci/gitlab/pipeline/publish.yml
 
 
 #### stage:                        deploy
