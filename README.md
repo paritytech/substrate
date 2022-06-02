@@ -29,3 +29,4 @@ The reason for the split-licensing is to ensure that for the vast majority of te
 
 In the interests of the community, we require any deeper improvements made to Substrate's core logic (e.g. Substrate's internal consensus, crypto or database code) to be contributed back so everyone can benefit.
 
+
