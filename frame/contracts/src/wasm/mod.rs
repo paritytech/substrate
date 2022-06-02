@@ -2632,7 +2632,5 @@ mod tests {
 
 		let mut mock_ext = MockExt::default();
 		execute(CODE, vec![], &mut mock_ext).unwrap();
-
-		assert_eq!(mock_ext.reentrant_count.pop().unwrap(), 12u8);
 	}
 }

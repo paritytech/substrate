@@ -11,9 +11,9 @@
 		)
 	)
 	(func (export "call")
-		(local $entrance_count i32)
+		(local $account_entrance_count i32)
 
-		(set_local $entrance_count
+		(set_local $account_entrance_count
 			(call $seal_account_entrance_count)
 		)
 
