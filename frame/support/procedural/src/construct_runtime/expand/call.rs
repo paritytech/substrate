@@ -27,7 +27,6 @@ pub fn expand_outer_dispatch(
 	scrate: &TokenStream,
 ) -> TokenStream {
 	let mut variant_defs = TokenStream::new();
-//	let mut variant_types = TokenStream::new();
 	let mut variant_patterns = Vec::new();
 	let mut query_call_part_macros = Vec::new();
 	let mut pallet_names = Vec::new();
