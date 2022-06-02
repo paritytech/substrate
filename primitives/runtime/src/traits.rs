@@ -174,8 +174,8 @@ pub trait BackgroundVerify: Verify {
 	///
 	/// # Security
 	///
-	/// It is required that this is called in a [`SignatureBatching`](crate::SignatureBatching)
-	/// context.
+	/// It is required that this is called in a
+	/// [`BackgroundVerifyContext`](crate::BackgroundVerifyContext) context.
 	fn background_verify<L: Lazy<[u8]>>(
 		&self,
 		msg: L,

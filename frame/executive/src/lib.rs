@@ -240,7 +240,7 @@ where
 		Self::initial_checks(&block);
 
 		#[cfg(feature = "background-signature-verification")]
-		let signature_batching = sp_runtime::SignatureBatching::start();
+		let signature_batching = sp_runtime::BackgroundVerifyContext::start();
 
 		let (header, extrinsics) = block.deconstruct();
 		let checked_extrinsics = check_extrinsics(extrinsics);
@@ -398,7 +398,7 @@ where
 			Self::initial_checks(&block);
 
 			#[cfg(feature = "background-signature-verification")]
-			let signature_batching = sp_runtime::SignatureBatching::start();
+			let signature_batching = sp_runtime::BackgroundVerifyContext::start();
 
 			// check extrinsics in background
 			let (header, extrinsics) = block.deconstruct();
