@@ -42,6 +42,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![recursion_limit = "128"]
 
+use codec::MaxEncodedLen;
 use scale_info::TypeInfo;
 use sp_io::storage;
 use sp_runtime::{traits::Hash, RuntimeDebug};
@@ -53,6 +54,7 @@ use frame_support::{
 	ensure,
 	traits::{Backing, ChangeMembers, EnsureOrigin, Get, GetBacking, InitializeMembers},
 	weights::{GetDispatchInfo, Weight},
+	BoundedVec, BoundedSlice,
 };
 
 #[cfg(test)]
@@ -143,16 +145,17 @@ impl<AccountId, I> GetBacking for RawOrigin<AccountId, I> {
 }
 
 /// Info for keeping track of a motion being voted on.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
-pub struct Votes<AccountId, BlockNumber> {
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+pub struct Votes<MaxMembers: Get<u32> + MaxEncodedLen, AccountId, BlockNumber> {
+// pub struct Votes<MaxMembers, AccountId, BlockNumber> {
 	/// The proposal's unique index.
 	index: ProposalIndex,
 	/// The number of approval votes that are needed to pass the motion.
 	threshold: MemberCount,
 	/// The current set of voters that approved it.
-	ayes: Vec<AccountId>,
+	ayes: BoundedVec<AccountId, MaxMembers>,
 	/// The current set of voters that rejected it.
-	nays: Vec<AccountId>,
+	nays: BoundedVec<AccountId, MaxMembers>,
 	/// The hard end time of this vote.
 	end: BlockNumber,
 }
@@ -169,7 +172,7 @@ pub mod pallet {
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
 	#[pallet::storage_version(STORAGE_VERSION)]
-	#[pallet::without_storage_info]
+	// #[pallet::without_storage_info]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	#[pallet::config]
@@ -181,7 +184,8 @@ pub mod pallet {
 		type Proposal: Parameter
 			+ Dispatchable<Origin = <Self as Config<I>>::Origin, PostInfo = PostDispatchInfo>
 			+ From<frame_system::Call<Self>>
-			+ GetDispatchInfo;
+			+ GetDispatchInfo
+			+ MaxEncodedLen;
 
 		/// The outer event type.
 		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
@@ -197,7 +201,7 @@ pub mod pallet {
 		/// NOTE:
 		/// + Benchmarks will need to be re-run and weights adjusted if this changes.
 		/// + This pallet assumes that dependents keep to the limit without enforcing it.
-		type MaxMembers: Get<MemberCount>;
+		type MaxMembers: Get<MemberCount> + MaxEncodedLen + TypeInfo;
 
 		/// Default vote strategy of this collective.
 		type DefaultVote: DefaultVote;
@@ -209,7 +213,7 @@ pub mod pallet {
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
 		pub phantom: PhantomData<I>,
-		pub members: Vec<T::AccountId>,
+		pub members: BoundedVec<T::AccountId, T::MaxMembers>,
 	}
 
 	#[cfg(feature = "std")]
@@ -253,8 +257,13 @@ pub mod pallet {
 	/// Votes on a given proposal, if it is ongoing.
 	#[pallet::storage]
 	#[pallet::getter(fn voting)]
-	pub type Voting<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Identity, T::Hash, Votes<T::AccountId, T::BlockNumber>, OptionQuery>;
+	pub type Voting<T: Config<I>, I: 'static = ()> = StorageMap<
+		_,
+		Identity,
+		T::Hash,
+		Votes<T::MaxMembers, T::AccountId, T::BlockNumber>,
+		OptionQuery,
+	>;
 
 	/// Proposals so far.
 	#[pallet::storage]
@@ -265,7 +274,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn members)]
 	pub type Members<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, Vec<T::AccountId>, ValueQuery>;
+		StorageValue<_, BoundedVec<T::AccountId, T::MaxMembers>, ValueQuery>;
 
 	/// The prime member that helps determine the default vote behavior in case of absentations.
 	#[pallet::storage]
@@ -546,7 +555,13 @@ pub mod pallet {
 				<ProposalOf<T, I>>::insert(proposal_hash, *proposal);
 				let votes = {
 					let end = frame_system::Pallet::<T>::block_number() + T::MotionDuration::get();
-					Votes { index, threshold, ayes: vec![], nays: vec![], end }
+					Votes {
+						index,
+						threshold,
+						ayes: vec![].try_into().expect("MaxMembers should not be set to zero"),
+						nays: vec![].try_into().expect("MaxMembers should not be set to zero"),
+						end,
+					}
 				};
 				<Voting<T, I>>::insert(proposal_hash, votes);
 
@@ -603,7 +618,7 @@ pub mod pallet {
 
 			if approve {
 				if position_yes.is_none() {
-					voting.ayes.push(who.clone());
+					voting.ayes.force_push(who.clone());
 				} else {
 					return Err(Error::<T, I>::DuplicateVote.into())
 				}
@@ -612,7 +627,7 @@ pub mod pallet {
 				}
 			} else {
 				if position_no.is_none() {
-					voting.nays.push(who.clone());
+					voting.nays.force_push(who.clone());
 				} else {
 					return Err(Error::<T, I>::DuplicateVote.into())
 				}
@@ -933,17 +948,21 @@ impl<T: Config<I>, I: 'static> ChangeMembers<T::AccountId> for Pallet<T, I> {
 						.ayes
 						.into_iter()
 						.filter(|i| outgoing.binary_search(i).is_err())
-						.collect();
+						.collect::<Vec<T::AccountId>>()
+    					.try_into()
+						.expect("TODO");
 					votes.nays = votes
 						.nays
 						.into_iter()
 						.filter(|i| outgoing.binary_search(i).is_err())
-						.collect();
+						.collect::<Vec<T::AccountId>>()
+						.try_into()
+						.expect("TODO");
 					*v = Some(votes);
 				}
 			});
 		}
-		Members::<T, I>::put(new);
+		Members::<T, I>::put(BoundedSlice::try_from(new).expect("TODO"));
 		Prime::<T, I>::kill();
 	}
 
@@ -958,9 +977,10 @@ impl<T: Config<I>, I: 'static> ChangeMembers<T::AccountId> for Pallet<T, I> {
 
 impl<T: Config<I>, I: 'static> InitializeMembers<T::AccountId> for Pallet<T, I> {
 	fn initialize_members(members: &[T::AccountId]) {
+		// TODO: (dp) this looks odd – check if empty and then assert on the same predicate again?
 		if !members.is_empty() {
 			assert!(<Members<T, I>>::get().is_empty(), "Members are already initialized!");
-			<Members<T, I>>::put(members);
+			<Members<T, I>>::put(BoundedSlice::try_from(members).expect("TODO"));
 		}
 	}
 }
