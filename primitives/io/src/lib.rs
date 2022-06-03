@@ -1700,7 +1700,7 @@ mod tests {
 		t.execute_with(|| {
 			assert_eq!(storage::get(b"hello"), None);
 			storage::set(b"hello", b"world");
-			assert_eq!(storage::get(b"hello"), Some(b"world".to_vec()));
+			assert_eq!(storage::get(b"hello"), Some(b"world".to_vec().into()));
 			assert_eq!(storage::get(b"foo"), None);
 			storage::set(b"foo", &[1, 2, 3][..]);
 		});
@@ -1712,7 +1712,7 @@ mod tests {
 
 		t.execute_with(|| {
 			assert_eq!(storage::get(b"hello"), None);
-			assert_eq!(storage::get(b"foo"), Some(b"bar".to_vec()));
+			assert_eq!(storage::get(b"foo"), Some(b"bar".to_vec().into()));
 		});
 
 		let value = vec![7u8; 35];
@@ -1722,7 +1722,7 @@ mod tests {
 
 		t.execute_with(|| {
 			assert_eq!(storage::get(b"hello"), None);
-			assert_eq!(storage::get(b"foo00"), Some(value.clone()));
+			assert_eq!(storage::get(b"foo00"), Some(value.clone().into()));
 		});
 	}
 
