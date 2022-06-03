@@ -25,6 +25,9 @@ impl<T: frame_system::Config> {{pallet}}::WeightInfo for WeightInfo<T> {
 	{{#each benchmark.comments as |comment|}}
 	// {{comment}}
 	{{/each}}
+	{{#each benchmark.component_ranges as |range|}}
+	/// The range of component `{{range.name}}` is `[{{range.min}}, {{range.max}}]`.
+	{{/each}}
 	fn {{benchmark.name~}}
 	(
 		{{~#each benchmark.components as |c| ~}}
