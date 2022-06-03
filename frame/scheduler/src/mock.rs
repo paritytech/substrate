@@ -177,6 +177,7 @@ impl Config for Test {
 	type MaxAgendas = ConstU32<100000>;
 	type MaxSchedules = ConstU32<250>;
 	type MaxScheduleIdLen = ConstU32<8>;
+	type MaxCallLen = ConstU32<300_000>; // TODO
 	type ScheduleOrigin = EitherOfDiverse<EnsureRoot<u64>, EnsureSignedBy<One, u64>>;
 	type MaxScheduledPerBlock = ConstU32<10>;
 	type WeightInfo = ();

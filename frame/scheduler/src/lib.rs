@@ -84,7 +84,44 @@ pub type PeriodicIndex = u32;
 /// The location of a scheduled task that can be used to remove it.
 pub type TaskAddress<BlockNumber> = (BlockNumber, u32);
 
+//#[derive(MaxEncodedLen, Decode, Encode)]
+//pub struct EncodedCallOf<T: Config>(BoundedVec<u8, <T as Config>::MaxCallLen>);
+#[derive(MaxEncodedLen, Debug, Decode, Clone, Encode, PartialEq, Eq, scale_info::TypeInfo)]
+#[codec(mel_bound(T: Config))]
+#[scale_info(skip_type_params(T))]
+pub struct EncodedCallOrHashOf<T: Config>(pub BoundedVec<u8, <T as Config>::MaxCallLen>);
 pub type CallOrHashOf<T> = MaybeHashed<<T as Config>::Call, <T as frame_system::Config>::Hash>;
+/*
+impl<T: Config> EncodedCallOf<T> {
+	pub fn from_call(call: <T as Config>::Call) -> Result<Self, crate::Error<T>> {
+		let encoded: BoundedVec<u8, <T as Config>::MaxCallLen> = call.encode().try_into().map_err(|_| crate::Error::CallTooLong)?;
+		Ok(Self(encoded))
+	}
+
+	pub fn into_call(mut self) -> <T as Config>::Call {
+		<T as Config>::Call::decode(&mut &self.0[..]).expect("Must decode")
+	}
+
+	pub fn migrate(self) -> Result<EncodedCallOrHashOf<T>, crate::Error<T>> {
+		EncodedCallOrHashOf::<T>::new(self.into_call().into())
+	}
+}*/
+
+impl<T: Config> EncodedCallOrHashOf<T> {
+	pub fn new(call: CallOrHashOf<T>) -> Result<Self, crate::Error<T>> {
+		let encoded: BoundedVec<u8, <T as Config>::MaxCallLen> =
+			call.encode().try_into().map_err(|_| crate::Error::CallTooLong)?;
+		Ok(Self(encoded))
+	}
+
+	pub fn from_call(call: <T as Config>::Call) -> Result<Self, crate::Error<T>> {
+		Self::new(call.into())
+	}
+
+	pub fn into_call(self) -> CallOrHashOf<T> {
+		CallOrHashOf::<T>::decode(&mut &self.0[..]).expect("Must decode")
+	}
+}
 
 #[cfg_attr(any(feature = "std", test), derive(PartialEq, Eq))]
 #[derive(Clone, RuntimeDebug, Encode, Decode)]
@@ -112,7 +149,8 @@ pub struct ScheduledV3<Call, BlockNumber, PalletsOrigin, AccountId, ID> {
 	_phantom: PhantomData<AccountId>,
 }
 
-use crate::ScheduledV3 as ScheduledV2;
+// V3 can be re-used for V4 and V2.
+use crate::{ScheduledV3 as ScheduledV2, ScheduledV3 as ScheduledV4};
 
 pub type ScheduledV2Of<T> = ScheduledV3<
 	<T as Config>::Call,
@@ -130,12 +168,20 @@ pub type ScheduledV3Of<T> = ScheduledV3<
 	ScheduleIdOf<T>,
 >;
 
-pub type ScheduledOf<T> = ScheduledV3Of<T>;
+pub type ScheduledV4Of<T> = ScheduledV3<
+	EncodedCallOrHashOf<T>,
+	<T as frame_system::Config>::BlockNumber,
+	<T as Config>::PalletsOrigin,
+	<T as frame_system::Config>::AccountId,
+	ScheduleIdOf<T>,
+>;
+
+pub type ScheduledOf<T> = ScheduledV4Of<T>;
 pub type ScheduleIdOf<T> = BoundedVec<u8, <T as Config>::MaxScheduleIdLen>;
 
-/// The current version of Scheduled struct.
+/// The current version of Scheduled struct. Can also be V2 or V3 since its the same struct.
 pub type Scheduled<Call, BlockNumber, PalletsOrigin, AccountId, ID> =
-	ScheduledV2<Call, BlockNumber, PalletsOrigin, AccountId, ID>;
+	ScheduledV4<Call, BlockNumber, PalletsOrigin, AccountId, ID>;
 
 #[cfg(feature = "runtime-benchmarks")]
 mod preimage_provider {
@@ -259,6 +305,9 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxAgendas: Get<Option<u32>>;
 
+		#[pallet::constant]
+		type MaxCallLen: Get<u32>;
+
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
 
@@ -274,7 +323,7 @@ pub mod pallet {
 	pub type Agenda<T: Config> = StorageMap<
 		Hasher = Twox64Concat,
 		Key = T::BlockNumber,
-		Value = BoundedVec<Option<ScheduledV3Of<T>>, T::MaxScheduledPerBlock>,
+		Value = BoundedVec<Option<ScheduledV4Of<T>>, T::MaxScheduledPerBlock>,
 		QueryKind = ValueQuery,
 		MaxValues = T::MaxAgendas,
 	>;
@@ -324,6 +373,7 @@ pub mod pallet {
 		ScheduleIdTooLong,
 		/// The maximum number of agendas was reached.
 		TooManyAgendas,
+		CallTooLong,
 	}
 
 	#[pallet::hooks]
@@ -351,8 +401,8 @@ pub mod pallet {
 					false
 				};
 
-				let (call, maybe_completed) = s.call.resolved::<T::PreimageProvider>();
-				s.call = call;
+				let (call, maybe_completed) = s.call.into_call().resolved::<T::PreimageProvider>();
+				s.call = EncodedCallOrHashOf::<T>::new(call).expect("todo");
 
 				let resolved = if let Some(completed) = maybe_completed {
 					T::PreimageProvider::unrequest_preimage(&completed);
@@ -361,7 +411,8 @@ pub mod pallet {
 					false
 				};
 
-				let call = match s.call.as_value().cloned() {
+				let tmp = s.call.clone().into_call();
+				let call = match tmp.as_value().cloned() {
 					Some(c) => c,
 					None => {
 						// Preimage not available - postpone until some block.
@@ -373,7 +424,7 @@ pub mod pallet {
 								Lookup::<T>::insert(id, (until, index as u32));
 							}
 							Agenda::<T>::try_append(until, Some(s))
-								expect("TODO Failed to schedule future block");
+								.expect("TODO Failed to schedule future block");
 						}
 						continue
 					},
@@ -410,7 +461,7 @@ pub mod pallet {
 					}
 					Agenda::<T>::try_append(next, Some(s))
 						.map_err(|_| Error::<T>::TooManyAgendas)
-						expect("TODO Failed to schedule future block");
+						.expect("TODO Failed to schedule future block");
 					continue
 				}
 
@@ -444,7 +495,7 @@ pub mod pallet {
 					}
 					Agenda::<T>::try_append(wake, Some(s))
 						.map_err(|_| Error::<T>::TooManyAgendas)
-						expect("TODO Failed to schedule future block");
+						.expect("TODO Failed to schedule future block");
 				}
 			}
 			total_weight
@@ -579,10 +630,10 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
-	/// Migrate storage format from V1 to V3.
+	/// Migrate storage format from V1 to V4.
 	///
 	/// Returns the weight consumed by this migration.
-	pub fn migrate_v1_to_v3() -> Weight {
+	pub fn migrate_v1_to_v4() -> Weight {
 		let mut weight = T::DbWeight::get().reads_writes(1, 1);
 
 		Agenda::<T>::translate::<
@@ -595,18 +646,23 @@ impl<T: Config> Pallet<T> {
 					.map(|schedule| {
 						weight.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
 
-						schedule.map(|schedule| ScheduledV3 {
-							maybe_id: schedule.maybe_id,
-							priority: schedule.priority,
-							call: schedule.call.into(),
-							maybe_periodic: schedule.maybe_periodic,
-							origin: system::RawOrigin::Root.into(),
-							_phantom: Default::default(),
+						schedule.map(|schedule| {
+							let call =
+								EncodedCallOrHashOf::<T>::from_call(schedule.call).expect("TODO");
+
+							ScheduledV4Of::<T> {
+								maybe_id: schedule.maybe_id,
+								priority: schedule.priority,
+								call: call.into(),
+								maybe_periodic: schedule.maybe_periodic,
+								origin: system::RawOrigin::Root.into(),
+								_phantom: Default::default(),
+							}
 						})
 					})
-					.collect::<Vec<_>>()
+					.collect::<Vec<Option<ScheduledV4Of<T>>>>()
 					.try_into()
-					.expect("V1 schedules fit in storage; The number of V3 schedules is the same as V1; Therefore V3 fit in storage; qed"),
+					.expect("V1 schedules fit in storage; Therefore V3 fit in storage; qed"),
 			)
 		});
 
@@ -622,26 +678,29 @@ impl<T: Config> Pallet<T> {
 		weight + T::DbWeight::get().writes(2)
 	}
 
-	/// Migrate storage format from V2 to V3.
+	/// Migrate storage format from V3 to V4.
 	///
 	/// Returns the weight consumed by this migration.
-	pub fn migrate_v2_to_v3() -> Weight {
+	pub fn migrate_v3_to_v4() -> Weight {
 		let mut weight = T::DbWeight::get().reads_writes(1, 1);
 
-		Agenda::<T>::translate::<Vec<Option<ScheduledV2Of<T>>>, _>(|_, agenda| {
+		Agenda::<T>::translate::<Vec<Option<ScheduledV3Of<T>>>, _>(|_, agenda| {
 			Some(
 				agenda
 					.into_iter()
 					.map(|schedule| {
 						weight.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
-						schedule.map(|schedule| ScheduledV3 {
+						schedule.map(|schedule| {
+							let call = EncodedCallOrHashOf::<T>::new(schedule.call).expect("TODO");
+
+							ScheduledV4Of::<T> {
 							maybe_id: schedule.maybe_id,
 							priority: schedule.priority,
-							call: schedule.call.into(),
+							call: call.into(),
 							maybe_periodic: schedule.maybe_periodic,
 							origin: schedule.origin,
 							_phantom: Default::default(),
-						})
+						}})
 					})
 					.collect::<Vec<_>>()
 					.try_into()
@@ -683,7 +742,7 @@ impl<T: Config> Pallet<T> {
 			Vec<
 				Option<
 					Scheduled<
-						CallOrHashOf<T>,
+						EncodedCallOrHashOf<T>,
 						T::BlockNumber,
 						OldOrigin,
 						T::AccountId,
@@ -700,7 +759,7 @@ impl<T: Config> Pallet<T> {
 						schedule.map(|schedule| Scheduled {
 							maybe_id: schedule.maybe_id,
 							priority: schedule.priority,
-							call: schedule.call,
+							call: schedule.call.into(),
 							maybe_periodic: schedule.maybe_periodic,
 							origin: schedule.origin.into(),
 							_phantom: Default::default(),
@@ -708,7 +767,7 @@ impl<T: Config> Pallet<T> {
 					})
 					.collect::<Vec<_>>()
 					.try_into()
-					.expect("V1 schedules fit in storage; The number of V3 schedules is the same as V1; Therefore V3 fit in storage; qed"),
+					.expect("The number of elements does not change from translate; qed"),
 			)
 		});
 	}
@@ -739,6 +798,7 @@ impl<T: Config> Pallet<T> {
 	) -> Result<TaskAddress<T::BlockNumber>, DispatchError> {
 		let when = Self::resolve_time(when)?;
 		call.ensure_requested::<T::PreimageProvider>();
+		let call = EncodedCallOrHashOf::<T>::new(call)?;
 
 		// sanitize maybe_periodic
 		let maybe_periodic = maybe_periodic
@@ -781,7 +841,7 @@ impl<T: Config> Pallet<T> {
 			)
 		})?;
 		if let Some(s) = scheduled {
-			s.call.ensure_unrequested::<T::PreimageProvider>();
+			s.call.into_call().ensure_unrequested::<T::PreimageProvider>();
 			if let Some(id) = s.maybe_id {
 				Lookup::<T>::remove(id);
 			}
@@ -832,6 +892,7 @@ impl<T: Config> Pallet<T> {
 		let when = Self::resolve_time(when)?;
 
 		call.ensure_requested::<T::PreimageProvider>();
+		let call = EncodedCallOrHashOf::<T>::new(call)?;
 
 		// sanitize maybe_periodic
 		let maybe_periodic = maybe_periodic
@@ -869,7 +930,7 @@ impl<T: Config> Pallet<T> {
 							) {
 								return Err(BadOrigin.into())
 							}
-							s.call.ensure_unrequested::<T::PreimageProvider>();
+							s.call.clone().into_call().ensure_unrequested::<T::PreimageProvider>();
 						}
 						*s = None;
 					}
