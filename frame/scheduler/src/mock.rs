@@ -174,6 +174,9 @@ impl Config for Test {
 	type PalletsOrigin = OriginCaller;
 	type Call = Call;
 	type MaximumWeight = MaximumSchedulerWeight;
+	type MaxAgendas = ConstU32<100000>;
+	type MaxSchedules = ConstU32<250>;
+	type MaxScheduleIdLen = ConstU32<8>;
 	type ScheduleOrigin = EitherOfDiverse<EnsureRoot<u64>, EnsureSignedBy<One, u64>>;
 	type MaxScheduledPerBlock = ConstU32<10>;
 	type WeightInfo = ();
@@ -195,6 +198,11 @@ pub fn run_to_block(n: u64) {
 		System::set_block_number(System::block_number() + 1);
 		Scheduler::on_initialize(System::block_number());
 	}
+}
+
+/// Creates a Schedule ID from the given value.
+pub fn sid<T: Encode>(id: T) -> ScheduleIdOf<Test> {
+	id.encode().try_into().expect("must be a valid ScheduleId")
 }
 
 pub fn root() -> OriginCaller {

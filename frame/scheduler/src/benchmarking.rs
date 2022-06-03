@@ -67,7 +67,14 @@ fn fill_schedule<T: Config>(
 		let t = DispatchTime::At(when);
 		let origin = frame_system::RawOrigin::Root.into();
 		if named {
-			Scheduler::<T>::do_schedule_named(i.encode(), t, period, 0, origin, call_or_hash)?;
+			Scheduler::<T>::do_schedule_named(
+				i.encode().try_into().unwrap(),
+				t,
+				period,
+				0,
+				origin,
+				call_or_hash,
+			)?;
 		} else {
 			Scheduler::<T>::do_schedule(t, period, 0, origin, call_or_hash)?;
 		}
@@ -201,7 +208,7 @@ benchmarks! {
 	}
 
 	schedule {
-		let s in 0 .. T::MaxScheduledPerBlock::get();
+		let s in 0 .. (T::MaxScheduledPerBlock::get() - 1);
 		let when = BLOCK_NUMBER.into();
 		let periodic = Some((T::BlockNumber::one(), 100));
 		let priority = 0;
@@ -226,8 +233,9 @@ benchmarks! {
 		assert_eq!(Agenda::<T>::get(when).len(), s as usize);
 	}: _(RawOrigin::Root, when, 0)
 	verify {
+		let id: ScheduleIdOf<T> = 0.encode().try_into().unwrap();
 		ensure!(
-			Lookup::<T>::get(0.encode()).is_none(),
+			Lookup::<T>::get(id).is_none(),
 			"didn't remove from lookup"
 		);
 		// Removed schedule is NONE
@@ -238,7 +246,7 @@ benchmarks! {
 	}
 
 	schedule_named {
-		let s in 0 .. T::MaxScheduledPerBlock::get();
+		let s in 0 .. (T::MaxScheduledPerBlock::get() - 1);
 		let id = s.encode();
 		let when = BLOCK_NUMBER.into();
 		let periodic = Some((T::BlockNumber::one(), 100));
@@ -263,8 +271,9 @@ benchmarks! {
 		fill_schedule::<T>(when, s, true, true, Some(false))?;
 	}: _(RawOrigin::Root, 0.encode())
 	verify {
+		let id: ScheduleIdOf<T> = 0.encode().try_into().unwrap();
 		ensure!(
-			Lookup::<T>::get(0.encode()).is_none(),
+			Lookup::<T>::get(id).is_none(),
 			"didn't remove from lookup"
 		);
 		// Removed schedule is NONE

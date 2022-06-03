@@ -18,7 +18,9 @@
 //! # Scheduler tests.
 
 use super::*;
-use crate::mock::{logger, new_test_ext, root, run_to_block, Call, LoggerCall, Scheduler, Test, *};
+use crate::mock::{
+	logger, new_test_ext, root, run_to_block, sid, Call, LoggerCall, Scheduler, Test, *,
+};
 use frame_support::{
 	assert_err, assert_noop, assert_ok,
 	traits::{Contains, GetStorageVersion, OnInitialize, PreimageProvider},
@@ -192,7 +194,7 @@ fn reschedule_named_works() {
 		assert!(!<Test as frame_system::Config>::BaseCallFilter::contains(&call));
 		assert_eq!(
 			Scheduler::do_schedule_named(
-				1u32.encode(),
+				sid(1),
 				DispatchTime::At(4),
 				None,
 				127,
@@ -206,13 +208,10 @@ fn reschedule_named_works() {
 		run_to_block(3);
 		assert!(logger::log().is_empty());
 
-		assert_eq!(
-			Scheduler::do_reschedule_named(1u32.encode(), DispatchTime::At(6)).unwrap(),
-			(6, 0)
-		);
+		assert_eq!(Scheduler::do_reschedule_named(sid(1), DispatchTime::At(6)).unwrap(), (6, 0));
 
 		assert_noop!(
-			Scheduler::do_reschedule_named(1u32.encode(), DispatchTime::At(6)),
+			Scheduler::do_reschedule_named(sid(1), DispatchTime::At(6)),
 			Error::<Test>::RescheduleNoChange
 		);
 
@@ -234,7 +233,7 @@ fn reschedule_named_perodic_works() {
 		assert!(!<Test as frame_system::Config>::BaseCallFilter::contains(&call));
 		assert_eq!(
 			Scheduler::do_schedule_named(
-				1u32.encode(),
+				sid(1),
 				DispatchTime::At(4),
 				Some((3, 3)),
 				127,
@@ -248,14 +247,8 @@ fn reschedule_named_perodic_works() {
 		run_to_block(3);
 		assert!(logger::log().is_empty());
 
-		assert_eq!(
-			Scheduler::do_reschedule_named(1u32.encode(), DispatchTime::At(5)).unwrap(),
-			(5, 0)
-		);
-		assert_eq!(
-			Scheduler::do_reschedule_named(1u32.encode(), DispatchTime::At(6)).unwrap(),
-			(6, 0)
-		);
+		assert_eq!(Scheduler::do_reschedule_named(sid(1), DispatchTime::At(5)).unwrap(), (5, 0));
+		assert_eq!(Scheduler::do_reschedule_named(sid(1), DispatchTime::At(6)).unwrap(), (6, 0));
 
 		run_to_block(5);
 		assert!(logger::log().is_empty());
@@ -263,10 +256,7 @@ fn reschedule_named_perodic_works() {
 		run_to_block(6);
 		assert_eq!(logger::log(), vec![(root(), 42u32)]);
 
-		assert_eq!(
-			Scheduler::do_reschedule_named(1u32.encode(), DispatchTime::At(10)).unwrap(),
-			(10, 0)
-		);
+		assert_eq!(Scheduler::do_reschedule_named(sid(1), DispatchTime::At(10)).unwrap(), (10, 0));
 
 		run_to_block(9);
 		assert_eq!(logger::log(), vec![(root(), 42u32)]);
@@ -287,7 +277,7 @@ fn cancel_named_scheduling_works_with_normal_cancel() {
 	new_test_ext().execute_with(|| {
 		// at #4.
 		Scheduler::do_schedule_named(
-			1u32.encode(),
+			sid(1),
 			DispatchTime::At(4),
 			None,
 			127,
@@ -305,7 +295,7 @@ fn cancel_named_scheduling_works_with_normal_cancel() {
 		.unwrap();
 		run_to_block(3);
 		assert!(logger::log().is_empty());
-		assert_ok!(Scheduler::do_cancel_named(None, 1u32.encode()));
+		assert_ok!(Scheduler::do_cancel_named(None, sid(1)));
 		assert_ok!(Scheduler::do_cancel(None, i));
 		run_to_block(100);
 		assert!(logger::log().is_empty());
@@ -317,7 +307,7 @@ fn cancel_named_periodic_scheduling_works() {
 	new_test_ext().execute_with(|| {
 		// at #4, every 3 blocks, 3 times.
 		Scheduler::do_schedule_named(
-			1u32.encode(),
+			sid(1),
 			DispatchTime::At(4),
 			Some((3, 3)),
 			127,
@@ -327,7 +317,7 @@ fn cancel_named_periodic_scheduling_works() {
 		.unwrap();
 		// same id results in error.
 		assert!(Scheduler::do_schedule_named(
-			1u32.encode(),
+			sid(1),
 			DispatchTime::At(4),
 			None,
 			127,
@@ -337,7 +327,7 @@ fn cancel_named_periodic_scheduling_works() {
 		.is_err());
 		// different id is ok.
 		Scheduler::do_schedule_named(
-			2u32.encode(),
+			sid(2),
 			DispatchTime::At(8),
 			None,
 			127,
@@ -350,7 +340,7 @@ fn cancel_named_periodic_scheduling_works() {
 		run_to_block(4);
 		assert_eq!(logger::log(), vec![(root(), 42u32)]);
 		run_to_block(6);
-		assert_ok!(Scheduler::do_cancel_named(None, 1u32.encode()));
+		assert_ok!(Scheduler::do_cancel_named(None, sid(1)));
 		run_to_block(100);
 		assert_eq!(logger::log(), vec![(root(), 42u32), (root(), 69u32)]);
 	});
@@ -479,7 +469,7 @@ fn on_initialize_weight_is_correct() {
 
 		// Named
 		assert_ok!(Scheduler::do_schedule_named(
-			1u32.encode(),
+			sid(1),
 			DispatchTime::At(3),
 			None,
 			255,
@@ -504,7 +494,7 @@ fn on_initialize_weight_is_correct() {
 		));
 		// Named Periodic
 		assert_ok!(Scheduler::do_schedule_named(
-			2u32.encode(),
+			sid(2),
 			DispatchTime::At(1),
 			Some((1000, 3)),
 			126,
@@ -593,7 +583,21 @@ fn fails_to_schedule_task_in_the_past() {
 		);
 	});
 }
+/*
+#[test]
+fn fails_to_schedule_too_many_tasks() {
+	new_test_ext().execute_with(|| {
+		let call = Box::new(Call::Logger(LoggerCall::log { i: 69, weight: 1000 }).into());
 
+		for
+
+		assert_err!(
+			Scheduler::schedule_named(Origin::root(), 1u32.encode(), 2, None, 127, call1),
+			Error::<Test>::TargetBlockNumberInPast,
+		);
+	});
+}
+*/
 #[test]
 fn should_use_orign() {
 	new_test_ext().execute_with(|| {
@@ -714,7 +718,7 @@ fn migration_to_v3_works() {
 			vec![
 				(
 					0,
-					vec![
+					BoundedVec::<_, <Test as Config>::MaxScheduledPerBlock>::truncate_from(vec![
 						Some(ScheduledV3Of::<Test> {
 							maybe_id: None,
 							priority: 10,
@@ -725,18 +729,18 @@ fn migration_to_v3_works() {
 						}),
 						None,
 						Some(ScheduledV3Of::<Test> {
-							maybe_id: Some(b"test".to_vec()),
+							maybe_id: Some(sid(b"test")),
 							priority: 123,
 							call: Call::Logger(LoggerCall::log { i: 69, weight: 1000 }).into(),
 							maybe_periodic: Some((456u64, 10)),
 							origin: root(),
 							_phantom: PhantomData::<u64>::default(),
 						}),
-					]
+					])
 				),
 				(
 					1,
-					vec![
+					BoundedVec::<_, <Test as Config>::MaxScheduledPerBlock>::truncate_from(vec![
 						Some(ScheduledV3Of::<Test> {
 							maybe_id: None,
 							priority: 11,
@@ -747,18 +751,18 @@ fn migration_to_v3_works() {
 						}),
 						None,
 						Some(ScheduledV3Of::<Test> {
-							maybe_id: Some(b"test".to_vec()),
+							maybe_id: Some(sid(b"test")),
 							priority: 123,
 							call: Call::Logger(LoggerCall::log { i: 69, weight: 1000 }).into(),
 							maybe_periodic: Some((456u64, 10)),
 							origin: root(),
 							_phantom: PhantomData::<u64>::default(),
 						}),
-					]
+					])
 				),
 				(
 					2,
-					vec![
+					BoundedVec::<_, <Test as Config>::MaxScheduledPerBlock>::truncate_from(vec![
 						Some(ScheduledV3Of::<Test> {
 							maybe_id: None,
 							priority: 12,
@@ -769,14 +773,14 @@ fn migration_to_v3_works() {
 						}),
 						None,
 						Some(ScheduledV3Of::<Test> {
-							maybe_id: Some(b"test".to_vec()),
+							maybe_id: Some(sid(b"test")),
 							priority: 123,
 							call: Call::Logger(LoggerCall::log { i: 69, weight: 1000 }).into(),
 							maybe_periodic: Some((456u64, 10)),
 							origin: root(),
 							_phantom: PhantomData::<u64>::default(),
 						}),
-					]
+					])
 				)
 			]
 		);
@@ -790,7 +794,7 @@ fn test_migrate_origin() {
 	new_test_ext().execute_with(|| {
 		for i in 0..3u64 {
 			let k = i.twox_64_concat();
-			let old: Vec<Option<Scheduled<CallOrHashOf<Test>, u64, u32, u64>>> = vec![
+			let old: Vec<Option<Scheduled<CallOrHashOf<Test>, u64, u32, u64, ScheduleIdOf<Test>>>> = vec![
 				Some(Scheduled {
 					maybe_id: None,
 					priority: i as u8 + 10,
@@ -801,7 +805,7 @@ fn test_migrate_origin() {
 				}),
 				None,
 				Some(Scheduled {
-					maybe_id: Some(b"test".to_vec()),
+					maybe_id: Some(sid(b"test")),
 					priority: 123,
 					origin: 2u32,
 					call: Call::Logger(LoggerCall::log { i: 69, weight: 1000 }).into(),
@@ -829,8 +833,14 @@ fn test_migrate_origin() {
 			vec![
 				(
 					0,
-					vec![
-						Some(ScheduledV2::<CallOrHashOf<Test>, u64, OriginCaller, u64> {
+					BoundedVec::<_, <Test as Config>::MaxScheduledPerBlock>::truncate_from(vec![
+						Some(ScheduledV2::<
+							CallOrHashOf<Test>,
+							u64,
+							OriginCaller,
+							u64,
+							ScheduleIdOf<Test>,
+						> {
 							maybe_id: None,
 							priority: 10,
 							call: Call::Logger(LoggerCall::log { i: 96, weight: 100 }).into(),
@@ -840,18 +850,18 @@ fn test_migrate_origin() {
 						}),
 						None,
 						Some(ScheduledV2 {
-							maybe_id: Some(b"test".to_vec()),
+							maybe_id: Some(sid(b"test")),
 							priority: 123,
 							call: Call::Logger(LoggerCall::log { i: 69, weight: 1000 }).into(),
 							maybe_periodic: Some((456u64, 10)),
 							origin: system::RawOrigin::None.into(),
 							_phantom: PhantomData::<u64>::default(),
 						}),
-					]
+					])
 				),
 				(
 					1,
-					vec![
+					BoundedVec::<_, <Test as Config>::MaxScheduledPerBlock>::truncate_from(vec![
 						Some(ScheduledV2 {
 							maybe_id: None,
 							priority: 11,
@@ -862,18 +872,18 @@ fn test_migrate_origin() {
 						}),
 						None,
 						Some(ScheduledV2 {
-							maybe_id: Some(b"test".to_vec()),
+							maybe_id: Some(sid(b"test")),
 							priority: 123,
 							call: Call::Logger(LoggerCall::log { i: 69, weight: 1000 }).into(),
 							maybe_periodic: Some((456u64, 10)),
 							origin: system::RawOrigin::None.into(),
 							_phantom: PhantomData::<u64>::default(),
 						}),
-					]
+					])
 				),
 				(
 					2,
-					vec![
+					BoundedVec::<_, <Test as Config>::MaxScheduledPerBlock>::truncate_from(vec![
 						Some(ScheduledV2 {
 							maybe_id: None,
 							priority: 12,
@@ -884,14 +894,14 @@ fn test_migrate_origin() {
 						}),
 						None,
 						Some(ScheduledV2 {
-							maybe_id: Some(b"test".to_vec()),
+							maybe_id: Some(sid(b"test")),
 							priority: 123,
 							call: Call::Logger(LoggerCall::log { i: 69, weight: 1000 }).into(),
 							maybe_periodic: Some((456u64, 10)),
 							origin: system::RawOrigin::None.into(),
 							_phantom: PhantomData::<u64>::default(),
 						}),
-					]
+					])
 				)
 			]
 		);

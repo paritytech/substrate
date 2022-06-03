@@ -61,11 +61,13 @@ pub mod weights;
 use codec::{Codec, Decode, Encode};
 use frame_support::{
 	dispatch::{DispatchError, DispatchResult, Dispatchable, Parameter},
+	pallet_prelude::MaxEncodedLen,
 	traits::{
 		schedule::{self, DispatchTime, MaybeHashed},
 		EnsureOrigin, Get, IsType, OriginTrait, PalletInfoAccess, PrivilegeCmp, StorageVersion,
 	},
 	weights::{GetDispatchInfo, Weight},
+	BoundedVec,
 };
 use frame_system::{self as system, ensure_signed};
 pub use pallet::*;
@@ -86,8 +88,8 @@ pub type CallOrHashOf<T> = MaybeHashed<<T as Config>::Call, <T as frame_system::
 
 #[cfg_attr(any(feature = "std", test), derive(PartialEq, Eq))]
 #[derive(Clone, RuntimeDebug, Encode, Decode)]
-struct ScheduledV1<Call, BlockNumber> {
-	maybe_id: Option<Vec<u8>>,
+struct ScheduledV1<Call, BlockNumber, ID> {
+	maybe_id: Option<ID>,
 	priority: schedule::Priority,
 	call: Call,
 	maybe_periodic: Option<schedule::Period<BlockNumber>>,
@@ -95,10 +97,10 @@ struct ScheduledV1<Call, BlockNumber> {
 
 /// Information regarding an item to be executed in the future.
 #[cfg_attr(any(feature = "std", test), derive(PartialEq, Eq))]
-#[derive(Clone, RuntimeDebug, Encode, Decode, TypeInfo)]
-pub struct ScheduledV3<Call, BlockNumber, PalletsOrigin, AccountId> {
+#[derive(Clone, RuntimeDebug, Encode, Decode, TypeInfo, MaxEncodedLen)]
+pub struct ScheduledV3<Call, BlockNumber, PalletsOrigin, AccountId, ID> {
 	/// The unique identity for this task, if there is one.
-	maybe_id: Option<Vec<u8>>,
+	maybe_id: Option<ID>,
 	/// This task's priority.
 	priority: schedule::Priority,
 	/// The call to be dispatched.
@@ -117,6 +119,7 @@ pub type ScheduledV2Of<T> = ScheduledV3<
 	<T as frame_system::Config>::BlockNumber,
 	<T as Config>::PalletsOrigin,
 	<T as frame_system::Config>::AccountId,
+	ScheduleIdOf<T>,
 >;
 
 pub type ScheduledV3Of<T> = ScheduledV3<
@@ -124,13 +127,15 @@ pub type ScheduledV3Of<T> = ScheduledV3<
 	<T as frame_system::Config>::BlockNumber,
 	<T as Config>::PalletsOrigin,
 	<T as frame_system::Config>::AccountId,
+	ScheduleIdOf<T>,
 >;
 
 pub type ScheduledOf<T> = ScheduledV3Of<T>;
+pub type ScheduleIdOf<T> = BoundedVec<u8, <T as Config>::MaxScheduleIdLen>;
 
 /// The current version of Scheduled struct.
-pub type Scheduled<Call, BlockNumber, PalletsOrigin, AccountId> =
-	ScheduledV2<Call, BlockNumber, PalletsOrigin, AccountId>;
+pub type Scheduled<Call, BlockNumber, PalletsOrigin, AccountId, ID> =
+	ScheduledV2<Call, BlockNumber, PalletsOrigin, AccountId, ID>;
 
 #[cfg(feature = "runtime-benchmarks")]
 mod preimage_provider {
@@ -231,10 +236,28 @@ pub mod pallet {
 		/// be used. This will only check if two given origins are equal.
 		type OriginPrivilegeCmp: PrivilegeCmp<Self::PalletsOrigin>;
 
+		/// Maximum number of tasks that an be scheduled in total.
+		///
+		/// Should be at least `MaxScheduledPerBlock` * `MaxAgendas`.
+		#[pallet::constant]
+		type MaxSchedules: Get<Option<u32>>;
+
 		/// The maximum number of scheduled calls in the queue for a single block.
-		/// Not strictly enforced, but used for weight estimation.
+		/// Is strictly enforced and rejects scheduling more than this number of calls per block.
+		///
+		/// Must be at most `MaxSchedules`.
 		#[pallet::constant]
 		type MaxScheduledPerBlock: Get<u32>;
+
+		/// Maximum length of a schedule ID.
+		#[pallet::constant]
+		type MaxScheduleIdLen: Get<u32>;
+
+		/// Maximum number of agendas that can be scheduled.
+		///
+		/// Should be at most `MaxSchedules`.
+		#[pallet::constant]
+		type MaxAgendas: Get<Option<u32>>;
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
@@ -248,13 +271,22 @@ pub mod pallet {
 
 	/// Items to be executed, indexed by the block number that they should be executed on.
 	#[pallet::storage]
-	pub type Agenda<T: Config> =
-		StorageMap<_, Twox64Concat, T::BlockNumber, Vec<Option<ScheduledV3Of<T>>>, ValueQuery>;
+	pub type Agenda<T: Config> = StorageMap<
+		Hasher = Twox64Concat,
+		Key = T::BlockNumber,
+		Value = BoundedVec<Option<ScheduledV3Of<T>>, T::MaxScheduledPerBlock>,
+		QueryKind = ValueQuery,
+		MaxValues = T::MaxAgendas,
+	>;
 
 	/// Lookup from identity to the block number and index of the task.
 	#[pallet::storage]
-	pub(crate) type Lookup<T: Config> =
-		StorageMap<_, Twox64Concat, Vec<u8>, TaskAddress<T::BlockNumber>>;
+	pub(crate) type Lookup<T: Config> = StorageMap<
+		Hasher = Twox64Concat,
+		Key = ScheduleIdOf<T>,
+		Value = TaskAddress<T::BlockNumber>,
+		MaxValues = T::MaxSchedules,
+	>;
 
 	/// Events type.
 	#[pallet::event]
@@ -267,7 +299,7 @@ pub mod pallet {
 		/// Dispatched some task.
 		Dispatched {
 			task: TaskAddress<T::BlockNumber>,
-			id: Option<Vec<u8>>,
+			id: Option<ScheduleIdOf<T>>,
 			result: DispatchResult,
 		},
 		/// The call for the provided hash was not found so the task has been aborted.
@@ -288,6 +320,10 @@ pub mod pallet {
 		TargetBlockNumberInPast,
 		/// Reschedule failed because it does not change scheduled time.
 		RescheduleNoChange,
+		/// The ID of a schedule was too long.
+		ScheduleIdTooLong,
+		/// The maximum number of agendas was reached.
+		TooManyAgendas,
 	}
 
 	#[pallet::hooks]
@@ -301,14 +337,6 @@ pub mod pallet {
 				.enumerate()
 				.filter_map(|(index, s)| Some((index as u32, s?)))
 				.collect::<Vec<_>>();
-
-			if queued.len() as u32 > T::MaxScheduledPerBlock::get() {
-				log::warn!(
-					target: "runtime::scheduler",
-					"Warning: This block has more items queued in Scheduler than \
-					expected from the runtime configuration. An update might be needed."
-				);
-			}
 
 			queued.sort_by_key(|(_, s)| s.priority);
 
@@ -344,7 +372,8 @@ pub mod pallet {
 								let index = Agenda::<T>::decode_len(until).unwrap_or(0);
 								Lookup::<T>::insert(id, (until, index as u32));
 							}
-							Agenda::<T>::append(until, Some(s));
+							Agenda::<T>::try_append(until, Some(s))
+								expect("TODO Failed to schedule future block");
 						}
 						continue
 					},
@@ -379,7 +408,9 @@ pub mod pallet {
 						let index = Agenda::<T>::decode_len(next).unwrap_or(0);
 						Lookup::<T>::insert(id, (next, index as u32));
 					}
-					Agenda::<T>::append(next, Some(s));
+					Agenda::<T>::try_append(next, Some(s))
+						.map_err(|_| Error::<T>::TooManyAgendas)
+						expect("TODO Failed to schedule future block");
 					continue
 				}
 
@@ -411,7 +442,9 @@ pub mod pallet {
 						let wake_index = Agenda::<T>::decode_len(wake).unwrap_or(0);
 						Lookup::<T>::insert(id, (wake, wake_index as u32));
 					}
-					Agenda::<T>::append(wake, Some(s));
+					Agenda::<T>::try_append(wake, Some(s))
+						.map_err(|_| Error::<T>::TooManyAgendas)
+						expect("TODO Failed to schedule future block");
 				}
 			}
 			total_weight
@@ -462,6 +495,9 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::ScheduleOrigin::ensure_origin(origin.clone())?;
 			let origin = <T as Config>::Origin::from(origin);
+			let id: ScheduleIdOf<T> =
+				id.clone().try_into().map_err(|_| Error::<T>::ScheduleIdTooLong)?;
+
 			Self::do_schedule_named(
 				id,
 				DispatchTime::At(when),
@@ -478,6 +514,9 @@ pub mod pallet {
 		pub fn cancel_named(origin: OriginFor<T>, id: Vec<u8>) -> DispatchResult {
 			T::ScheduleOrigin::ensure_origin(origin.clone())?;
 			let origin = <T as Config>::Origin::from(origin);
+			let id: ScheduleIdOf<T> =
+				id.clone().try_into().map_err(|_| Error::<T>::ScheduleIdTooLong)?;
+
 			Self::do_cancel_named(Some(origin.caller().clone()), id)?;
 			Ok(())
 		}
@@ -523,6 +562,9 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::ScheduleOrigin::ensure_origin(origin.clone())?;
 			let origin = <T as Config>::Origin::from(origin);
+			let id: ScheduleIdOf<T> =
+				id.clone().try_into().map_err(|_| Error::<T>::ScheduleIdTooLong)?;
+
 			Self::do_schedule_named(
 				id,
 				DispatchTime::After(after),
@@ -543,27 +585,30 @@ impl<T: Config> Pallet<T> {
 	pub fn migrate_v1_to_v3() -> Weight {
 		let mut weight = T::DbWeight::get().reads_writes(1, 1);
 
-		Agenda::<T>::translate::<Vec<Option<ScheduledV1<<T as Config>::Call, T::BlockNumber>>>, _>(
-			|_, agenda| {
-				Some(
-					agenda
-						.into_iter()
-						.map(|schedule| {
-							weight.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
+		Agenda::<T>::translate::<
+			Vec<Option<ScheduledV1<<T as Config>::Call, T::BlockNumber, ScheduleIdOf<T>>>>,
+			_,
+		>(|_, agenda| {
+			Some(
+				agenda
+					.into_iter()
+					.map(|schedule| {
+						weight.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
 
-							schedule.map(|schedule| ScheduledV3 {
-								maybe_id: schedule.maybe_id,
-								priority: schedule.priority,
-								call: schedule.call.into(),
-								maybe_periodic: schedule.maybe_periodic,
-								origin: system::RawOrigin::Root.into(),
-								_phantom: Default::default(),
-							})
+						schedule.map(|schedule| ScheduledV3 {
+							maybe_id: schedule.maybe_id,
+							priority: schedule.priority,
+							call: schedule.call.into(),
+							maybe_periodic: schedule.maybe_periodic,
+							origin: system::RawOrigin::Root.into(),
+							_phantom: Default::default(),
 						})
-						.collect::<Vec<_>>(),
-				)
-			},
-		);
+					})
+					.collect::<Vec<_>>()
+					.try_into()
+					.expect("V1 schedules fit in storage; The number of V3 schedules is the same as V1; Therefore V3 fit in storage; qed"),
+			)
+		});
 
 		#[allow(deprecated)]
 		frame_support::storage::migration::remove_storage_prefix(
@@ -598,7 +643,9 @@ impl<T: Config> Pallet<T> {
 							_phantom: Default::default(),
 						})
 					})
-					.collect::<Vec<_>>(),
+					.collect::<Vec<_>>()
+					.try_into()
+					.expect("V1 schedules fit in storage; The number of V3 schedules is the same as V1; Therefore V3 fit in storage; qed"),
 			)
 		});
 
@@ -633,7 +680,17 @@ impl<T: Config> Pallet<T> {
 	/// Helper to migrate scheduler when the pallet origin type has changed.
 	pub fn migrate_origin<OldOrigin: Into<T::PalletsOrigin> + codec::Decode>() {
 		Agenda::<T>::translate::<
-			Vec<Option<Scheduled<CallOrHashOf<T>, T::BlockNumber, OldOrigin, T::AccountId>>>,
+			Vec<
+				Option<
+					Scheduled<
+						CallOrHashOf<T>,
+						T::BlockNumber,
+						OldOrigin,
+						T::AccountId,
+						ScheduleIdOf<T>,
+					>,
+				>,
+			>,
 			_,
 		>(|_, agenda| {
 			Some(
@@ -649,7 +706,9 @@ impl<T: Config> Pallet<T> {
 							_phantom: Default::default(),
 						})
 					})
-					.collect::<Vec<_>>(),
+					.collect::<Vec<_>>()
+					.try_into()
+					.expect("V1 schedules fit in storage; The number of V3 schedules is the same as V1; Therefore V3 fit in storage; qed"),
 			)
 		});
 	}
@@ -694,7 +753,7 @@ impl<T: Config> Pallet<T> {
 			origin,
 			_phantom: PhantomData::<T::AccountId>::default(),
 		});
-		Agenda::<T>::append(when, s);
+		Agenda::<T>::try_append(when, s).map_err(|_| Error::<T>::TooManyAgendas)?;
 		let index = Agenda::<T>::decode_len(when).unwrap_or(1) as u32 - 1;
 		Self::deposit_event(Event::Scheduled { when, index });
 
@@ -708,7 +767,7 @@ impl<T: Config> Pallet<T> {
 		let scheduled = Agenda::<T>::try_mutate(when, |agenda| {
 			agenda.get_mut(index as usize).map_or(
 				Ok(None),
-				|s| -> Result<Option<Scheduled<_, _, _, _>>, DispatchError> {
+				|s| -> Result<Option<Scheduled<_, _, _, _, _>>, DispatchError> {
 					if let (Some(ref o), Some(ref s)) = (origin, s.borrow()) {
 						if matches!(
 							T::OriginPrivilegeCmp::cmp_privilege(o, &s.origin),
@@ -746,8 +805,8 @@ impl<T: Config> Pallet<T> {
 		Agenda::<T>::try_mutate(when, |agenda| -> DispatchResult {
 			let task = agenda.get_mut(index as usize).ok_or(Error::<T>::NotFound)?;
 			let task = task.take().ok_or(Error::<T>::NotFound)?;
-			Agenda::<T>::append(new_time, Some(task));
-			Ok(())
+			Agenda::<T>::try_append(new_time, Some(task))
+				.map_err(|_| Error::<T>::TooManyAgendas.into())
 		})?;
 
 		let new_index = Agenda::<T>::decode_len(new_time).unwrap_or(1) as u32 - 1;
@@ -758,7 +817,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn do_schedule_named(
-		id: Vec<u8>,
+		id: ScheduleIdOf<T>,
 		when: DispatchTime<T::BlockNumber>,
 		maybe_periodic: Option<schedule::Period<T::BlockNumber>>,
 		priority: schedule::Priority,
@@ -788,7 +847,7 @@ impl<T: Config> Pallet<T> {
 			origin,
 			_phantom: Default::default(),
 		};
-		Agenda::<T>::append(when, Some(s));
+		Agenda::<T>::try_append(when, Some(s)).map_err(|_| Error::<T>::TooManyAgendas)?;
 		let index = Agenda::<T>::decode_len(when).unwrap_or(1) as u32 - 1;
 		let address = (when, index);
 		Lookup::<T>::insert(&id, &address);
@@ -797,7 +856,7 @@ impl<T: Config> Pallet<T> {
 		Ok(address)
 	}
 
-	fn do_cancel_named(origin: Option<T::PalletsOrigin>, id: Vec<u8>) -> DispatchResult {
+	fn do_cancel_named(origin: Option<T::PalletsOrigin>, id: ScheduleIdOf<T>) -> DispatchResult {
 		Lookup::<T>::try_mutate_exists(id, |lookup| -> DispatchResult {
 			if let Some((when, index)) = lookup.take() {
 				let i = index as usize;
@@ -825,9 +884,11 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn do_reschedule_named(
-		id: Vec<u8>,
+		id: ScheduleIdOf<T>,
 		new_time: DispatchTime<T::BlockNumber>,
 	) -> Result<TaskAddress<T::BlockNumber>, DispatchError> {
+		let id: ScheduleIdOf<T> =
+			id.clone().try_into().map_err(|_| Error::<T>::ScheduleIdTooLong)?;
 		let new_time = Self::resolve_time(new_time)?;
 
 		Lookup::<T>::try_mutate_exists(
@@ -842,9 +903,8 @@ impl<T: Config> Pallet<T> {
 				Agenda::<T>::try_mutate(when, |agenda| -> DispatchResult {
 					let task = agenda.get_mut(index as usize).ok_or(Error::<T>::NotFound)?;
 					let task = task.take().ok_or(Error::<T>::NotFound)?;
-					Agenda::<T>::append(new_time, Some(task));
-
-					Ok(())
+					Agenda::<T>::try_append(new_time, Some(task))
+						.map_err(|_| Error::<T>::TooManyAgendas.into())
 				})?;
 
 				let new_index = Agenda::<T>::decode_len(new_time).unwrap_or(1) as u32 - 1;
@@ -897,6 +957,7 @@ impl<T: Config> schedule::v2::Named<T::BlockNumber, <T as Config>::Call, T::Pall
 	type Address = TaskAddress<T::BlockNumber>;
 	type Hash = T::Hash;
 
+	// TODO maybe change `Named` trait instead.
 	fn schedule_named(
 		id: Vec<u8>,
 		when: DispatchTime<T::BlockNumber>,
@@ -905,10 +966,14 @@ impl<T: Config> schedule::v2::Named<T::BlockNumber, <T as Config>::Call, T::Pall
 		origin: T::PalletsOrigin,
 		call: CallOrHashOf<T>,
 	) -> Result<Self::Address, ()> {
+		let id: ScheduleIdOf<T> = id.clone().try_into().map_err(|_| ())?;
+
 		Self::do_schedule_named(id, when, maybe_periodic, priority, origin, call).map_err(|_| ())
 	}
 
 	fn cancel_named(id: Vec<u8>) -> Result<(), ()> {
+		let id: ScheduleIdOf<T> = id.clone().try_into().map_err(|_| ())?;
+
 		Self::do_cancel_named(None, id).map_err(|_| ())
 	}
 
@@ -916,10 +981,15 @@ impl<T: Config> schedule::v2::Named<T::BlockNumber, <T as Config>::Call, T::Pall
 		id: Vec<u8>,
 		when: DispatchTime<T::BlockNumber>,
 	) -> Result<Self::Address, DispatchError> {
+		let id: ScheduleIdOf<T> =
+			id.clone().try_into().map_err(|_| Error::<T>::ScheduleIdTooLong)?;
+
 		Self::do_reschedule_named(id, when)
 	}
 
 	fn next_dispatch_time(id: Vec<u8>) -> Result<T::BlockNumber, ()> {
+		let id: ScheduleIdOf<T> = id.clone().try_into().map_err(|_| ())?;
+
 		Lookup::<T>::get(id)
 			.and_then(|(when, index)| Agenda::<T>::get(when).get(index as usize).map(|_| when))
 			.ok_or(())
