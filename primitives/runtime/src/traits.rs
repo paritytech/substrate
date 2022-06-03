@@ -274,6 +274,42 @@ where
 	}
 }
 
+/// Extensible conversion trait. Generic over only source type, with destination type being
+/// associated.
+pub trait Morph<A> {
+	/// The type into which `A` is mutated.
+	type Outcome;
+
+	/// Make conversion.
+	fn morph(a: A) -> Self::Outcome;
+}
+
+/// A structure that performs identity conversion.
+impl<T> Morph<T> for Identity {
+	type Outcome = T;
+	fn morph(a: T) -> T {
+		a
+	}
+}
+
+/// Extensible conversion trait. Generic over only source type, with destination type being
+/// associated.
+pub trait TryMorph<A> {
+	/// The type into which `A` is mutated.
+	type Outcome;
+
+	/// Make conversion.
+	fn try_morph(a: A) -> Result<Self::Outcome, ()>;
+}
+
+/// A structure that performs identity conversion.
+impl<T> TryMorph<T> for Identity {
+	type Outcome = T;
+	fn try_morph(a: T) -> Result<T, ()> {
+		Ok(a)
+	}
+}
+
 /// Extensible conversion trait. Generic over both source and destination types.
 pub trait Convert<A, B> {
 	/// Make conversion.
