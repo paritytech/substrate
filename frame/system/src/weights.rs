@@ -57,9 +57,11 @@ pub trait WeightInfo {
 /// Weights for frame_system using the Substrate node and recommended hardware.
 pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: crate::Config> WeightInfo for SubstrateWeight<T> {
+	/// The range of component `b` is `[0, 3932160]`.
 	fn remark(_b: u32, ) -> Weight {
-		(0 as Weight)
+		(1_000_000 as Weight)
 	}
+	/// The range of component `b` is `[0, 3932160]`.
 	fn remark_with_event(b: u32, ) -> Weight {
 		(0 as Weight)
 			// Standard Error: 0
@@ -73,6 +75,7 @@ impl<T: crate::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
+	/// The range of component `i` is `[1, 1000]`.
 	fn set_storage(i: u32, ) -> Weight {
 		(0 as Weight)
 			// Standard Error: 1_000
@@ -80,6 +83,7 @@ impl<T: crate::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().writes((1 as Weight).saturating_mul(i as Weight)))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
+	/// The range of component `i` is `[1, 1000]`.
 	fn kill_storage(i: u32, ) -> Weight {
 		(0 as Weight)
 			// Standard Error: 1_000
@@ -87,6 +91,7 @@ impl<T: crate::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().writes((1 as Weight).saturating_mul(i as Weight)))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
+	/// The range of component `p` is `[1, 1000]`.
 	fn kill_prefix(p: u32, ) -> Weight {
 		(0 as Weight)
 			// Standard Error: 1_000
@@ -97,9 +102,11 @@ impl<T: crate::Config> WeightInfo for SubstrateWeight<T> {
 
 // For backwards compatibility and tests
 impl WeightInfo for () {
+	/// The range of component `b` is `[0, 3932160]`.
 	fn remark(_b: u32, ) -> Weight {
-		(0 as Weight)
+		(1_000_000 as Weight)
 	}
+	/// The range of component `b` is `[0, 3932160]`.
 	fn remark_with_event(b: u32, ) -> Weight {
 		(0 as Weight)
 			// Standard Error: 0
@@ -113,6 +120,7 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
+	/// The range of component `i` is `[1, 1000]`.
 	fn set_storage(i: u32, ) -> Weight {
 		(0 as Weight)
 			// Standard Error: 1_000
@@ -120,6 +128,7 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().writes((1 as Weight).saturating_mul(i as Weight)))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
+	/// The range of component `i` is `[1, 1000]`.
 	fn kill_storage(i: u32, ) -> Weight {
 		(0 as Weight)
 			// Standard Error: 1_000
@@ -127,6 +136,7 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().writes((1 as Weight).saturating_mul(i as Weight)))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
+	/// The range of component `p` is `[1, 1000]`.
 	fn kill_prefix(p: u32, ) -> Weight {
 		(0 as Weight)
 			// Standard Error: 1_000

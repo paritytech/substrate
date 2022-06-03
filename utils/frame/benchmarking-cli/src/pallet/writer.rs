@@ -26,7 +26,7 @@ use std::{
 use inflector::Inflector;
 use serde::Serialize;
 
-use crate::{shared::UnderscoreHelper, PalletCmd};
+use crate::{pallet::command::ComponentRange, shared::UnderscoreHelper, PalletCmd};
 use frame_benchmarking::{
 	Analysis, AnalysisChoice, BenchmarkBatchSplitResults, BenchmarkResult, BenchmarkSelector,
 	RegressionModel,
@@ -67,6 +67,7 @@ struct BenchmarkData {
 	component_weight: Vec<ComponentSlope>,
 	component_reads: Vec<ComponentSlope>,
 	component_writes: Vec<ComponentSlope>,
+	component_ranges: Vec<ComponentRange>,
 	comments: Vec<String>,
 }
 
@@ -118,6 +119,7 @@ fn io_error(s: &str) -> std::io::Error {
 fn map_results(
 	batches: &[BenchmarkBatchSplitResults],
 	storage_info: &[StorageInfo],
+	component_ranges: &HashMap<(Vec<u8>, Vec<u8>), Vec<ComponentRange>>,
 	analysis_choice: &AnalysisChoice,
 ) -> Result<HashMap<(String, String), Vec<BenchmarkData>>, std::io::Error> {
 	// Skip if batches is empty.
@@ -135,7 +137,8 @@ fn map_results(
 
 		let pallet_string = String::from_utf8(batch.pallet.clone()).unwrap();
 		let instance_string = String::from_utf8(batch.instance.clone()).unwrap();
-		let benchmark_data = get_benchmark_data(batch, storage_info, analysis_choice);
+		let benchmark_data =
+			get_benchmark_data(batch, storage_info, &component_ranges, analysis_choice);
 		let pallet_benchmarks = all_benchmarks.entry((pallet_string, instance_string)).or_default();
 		pallet_benchmarks.push(benchmark_data);
 	}
@@ -155,6 +158,8 @@ fn extract_errors(model: &Option<RegressionModel>) -> impl Iterator<Item = u128>
 fn get_benchmark_data(
 	batch: &BenchmarkBatchSplitResults,
 	storage_info: &[StorageInfo],
+	// Per extrinsic component ranges.
+	component_ranges: &HashMap<(Vec<u8>, Vec<u8>), Vec<ComponentRange>>,
 	analysis_choice: &AnalysisChoice,
 ) -> BenchmarkData {
 	// You can use this to put any additional comments with the benchmarking output.
@@ -238,6 +243,10 @@ fn get_benchmark_data(
 
 	// We add additional comments showing which storage items were touched.
 	add_storage_comments(&mut comments, &batch.db_results, storage_info);
+	let component_ranges = component_ranges
+		.get(&(batch.pallet.clone(), batch.benchmark.clone()))
+		.map(|c| c.clone())
+		.unwrap_or_default();
 
 	BenchmarkData {
 		name: String::from_utf8(batch.benchmark.clone()).unwrap(),
@@ -248,14 +257,16 @@ fn get_benchmark_data(
 		component_weight: used_extrinsic_time,
 		component_reads: used_reads,
 		component_writes: used_writes,
+		component_ranges,
 		comments,
 	}
 }
 
 // Create weight file from benchmark data and Handlebars template.
-pub fn write_results(
+pub(crate) fn write_results(
 	batches: &[BenchmarkBatchSplitResults],
 	storage_info: &[StorageInfo],
+	component_ranges: &HashMap<(Vec<u8>, Vec<u8>), Vec<ComponentRange>>,
 	path: &PathBuf,
 	cmd: &PalletCmd,
 ) -> Result<(), std::io::Error> {
@@ -305,7 +316,7 @@ pub fn write_results(
 	handlebars.register_escape_fn(|s| -> String { s.to_string() });
 
 	// Organize results by pallet into a JSON map
-	let all_results = map_results(batches, storage_info, &analysis_choice)?;
+	let all_results = map_results(batches, storage_info, component_ranges, &analysis_choice)?;
 	for ((pallet, instance), results) in all_results.iter() {
 		let mut file_path = path.clone();
 		// If a user only specified a directory...
@@ -531,6 +542,7 @@ mod test {
 				test_data(b"second", b"first", BenchmarkParameter::c, 3, 4),
 			],
 			&[],
+			&Default::default(),
 			&AnalysisChoice::default(),
 		)
 		.unwrap();
