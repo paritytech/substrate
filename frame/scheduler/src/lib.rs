@@ -84,6 +84,8 @@ pub type PeriodicIndex = u32;
 /// The location of a scheduled task that can be used to remove it.
 pub type TaskAddress<BlockNumber> = (BlockNumber, u32);
 
+/// Wraps a `CallOrHashOf` to make it compatible with MaxEncodedLen
+/// since a `Call` is otherwise not encodable with limited length.
 #[derive(MaxEncodedLen, Debug, Decode, Clone, Encode, PartialEq, Eq, scale_info::TypeInfo)]
 #[codec(mel_bound(T: Config))]
 #[scale_info(skip_type_params(T))]
@@ -92,17 +94,20 @@ pub struct EncodedCallOrHashOf<T: Config>(pub BoundedVec<u8, <T as Config>::MaxC
 pub type CallOrHashOf<T> = MaybeHashed<<T as Config>::Call, <T as frame_system::Config>::Hash>;
 
 impl<T: Config> EncodedCallOrHashOf<T> {
-	pub fn new(call: CallOrHashOf<T>) -> Result<Self, crate::Error<T>> {
+	/// Creates a new `Self` from the given `CallOrHashOf`.
+	pub fn new(inner: CallOrHashOf<T>) -> Result<Self, crate::Error<T>> {
 		let encoded: BoundedVec<u8, <T as Config>::MaxCallLen> =
-			call.encode().try_into().map_err(|_| crate::Error::CallTooLong)?;
+		inner.encode().try_into().map_err(|_| crate::Error::CallTooLong)?;
 		Ok(Self(encoded))
 	}
 
+	/// Creates a new `Self` from the given `Call`.
 	pub fn from_call(call: <T as Config>::Call) -> Result<Self, crate::Error<T>> {
 		Self::new(call.into())
 	}
 
-	pub fn into_call(self) -> CallOrHashOf<T> {
+	/// Returns the wrapped `CallOrHashOf`.
+	pub fn into_inner(self) -> CallOrHashOf<T> {
 		CallOrHashOf::<T>::decode(&mut &self.0[..]).expect("Must decode")
 	}
 }
@@ -134,7 +139,7 @@ pub struct ScheduledV3<Call, BlockNumber, PalletsOrigin, AccountId, ID> {
 }
 
 // V3 can be re-used for V4 and V2.
-use crate::{ScheduledV3 as ScheduledV2, ScheduledV3 as ScheduledV4};
+use crate::ScheduledV3 as ScheduledV4;
 
 pub type ScheduledV2Of<T> = ScheduledV3<
 	<T as Config>::Call,
@@ -385,7 +390,7 @@ pub mod pallet {
 					false
 				};
 
-				let (call, maybe_completed) = s.call.into_call().resolved::<T::PreimageProvider>();
+				let (call, maybe_completed) = s.call.into_inner().resolved::<T::PreimageProvider>();
 				s.call = EncodedCallOrHashOf::<T>::new(call).expect("todo");
 
 				let resolved = if let Some(completed) = maybe_completed {
@@ -395,7 +400,7 @@ pub mod pallet {
 					false
 				};
 
-				let tmp = s.call.clone().into_call();
+				let tmp = s.call.clone().into_inner();
 				let call = match tmp.as_value().cloned() {
 					Some(c) => c,
 					None => {
@@ -825,7 +830,7 @@ impl<T: Config> Pallet<T> {
 			)
 		})?;
 		if let Some(s) = scheduled {
-			s.call.into_call().ensure_unrequested::<T::PreimageProvider>();
+			s.call.into_inner().ensure_unrequested::<T::PreimageProvider>();
 			if let Some(id) = s.maybe_id {
 				Lookup::<T>::remove(id);
 			}
@@ -914,7 +919,7 @@ impl<T: Config> Pallet<T> {
 							) {
 								return Err(BadOrigin.into())
 							}
-							s.call.clone().into_call().ensure_unrequested::<T::PreimageProvider>();
+							s.call.clone().into_inner().ensure_unrequested::<T::PreimageProvider>();
 						}
 						*s = None;
 					}
