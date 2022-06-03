@@ -84,28 +84,12 @@ pub type PeriodicIndex = u32;
 /// The location of a scheduled task that can be used to remove it.
 pub type TaskAddress<BlockNumber> = (BlockNumber, u32);
 
-//#[derive(MaxEncodedLen, Decode, Encode)]
-//pub struct EncodedCallOf<T: Config>(BoundedVec<u8, <T as Config>::MaxCallLen>);
 #[derive(MaxEncodedLen, Debug, Decode, Clone, Encode, PartialEq, Eq, scale_info::TypeInfo)]
 #[codec(mel_bound(T: Config))]
 #[scale_info(skip_type_params(T))]
 pub struct EncodedCallOrHashOf<T: Config>(pub BoundedVec<u8, <T as Config>::MaxCallLen>);
+
 pub type CallOrHashOf<T> = MaybeHashed<<T as Config>::Call, <T as frame_system::Config>::Hash>;
-/*
-impl<T: Config> EncodedCallOf<T> {
-	pub fn from_call(call: <T as Config>::Call) -> Result<Self, crate::Error<T>> {
-		let encoded: BoundedVec<u8, <T as Config>::MaxCallLen> = call.encode().try_into().map_err(|_| crate::Error::CallTooLong)?;
-		Ok(Self(encoded))
-	}
-
-	pub fn into_call(mut self) -> <T as Config>::Call {
-		<T as Config>::Call::decode(&mut &self.0[..]).expect("Must decode")
-	}
-
-	pub fn migrate(self) -> Result<EncodedCallOrHashOf<T>, crate::Error<T>> {
-		EncodedCallOrHashOf::<T>::new(self.into_call().into())
-	}
-}*/
 
 impl<T: Config> EncodedCallOrHashOf<T> {
 	pub fn new(call: CallOrHashOf<T>) -> Result<Self, crate::Error<T>> {

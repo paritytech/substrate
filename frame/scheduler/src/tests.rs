@@ -806,31 +806,40 @@ fn migration_to_v4_works() {
 		assert_eq!(Scheduler::current_storage_version(), 3);
 	});
 }
-/*
+
 #[test]
 fn test_migrate_origin() {
 	new_test_ext().execute_with(|| {
 		for i in 0..3u64 {
 			let k = i.twox_64_concat();
-			let old: Vec<Option<Scheduled<CallOrHashOf<Test>, u64, u32, u64, ScheduleIdOf<Test>>>> = vec![
-				Some(Scheduled {
-					maybe_id: None,
-					priority: i as u8 + 10,
-					call: Call::Logger(LoggerCall::log { i: 96, weight: 100 }).into(),
-					origin: 3u32,
-					maybe_periodic: None,
-					_phantom: Default::default(),
-				}),
-				None,
-				Some(Scheduled {
-					maybe_id: Some(sid(b"test")),
-					priority: 123,
-					origin: 2u32,
-					call: Call::Logger(LoggerCall::log { i: 69, weight: 1000 }).into(),
-					maybe_periodic: Some((456u64, 10)),
-					_phantom: Default::default(),
-				}),
-			];
+			let old: Vec<
+				Option<Scheduled<EncodedCallOrHashOf<Test>, u64, u32, u64, ScheduleIdOf<Test>>>,
+			> =
+				vec![
+					Some(Scheduled {
+						maybe_id: None,
+						priority: i as u8 + 10,
+						call: EncodedCallOrHashOf::<Test>::from_call(Call::Logger(
+							LoggerCall::log { i: 96, weight: 100 },
+						))
+						.unwrap(),
+						origin: 3u32,
+						maybe_periodic: None,
+						_phantom: Default::default(),
+					}),
+					None,
+					Some(Scheduled {
+						maybe_id: Some(sid(b"test")),
+						priority: 123,
+						origin: 2u32,
+						call: EncodedCallOrHashOf::<Test>::from_call(Call::Logger(
+							LoggerCall::log { i: 69, weight: 1000 },
+						))
+						.unwrap(),
+						maybe_periodic: Some((456u64, 10)),
+						_phantom: Default::default(),
+					}),
+				];
 			frame_support::migration::put_storage_value(b"Scheduler", b"Agenda", &k, old);
 		}
 
@@ -852,25 +861,25 @@ fn test_migrate_origin() {
 				(
 					0,
 					BoundedVec::<_, <Test as Config>::MaxScheduledPerBlock>::truncate_from(vec![
-						Some(ScheduledV2::<
-							CallOrHashOf<Test>,
-							u64,
-							OriginCaller,
-							u64,
-							ScheduleIdOf<Test>,
-						> {
+						Some(ScheduledV4Of::<Test> {
 							maybe_id: None,
 							priority: 10,
-							call: Call::Logger(LoggerCall::log { i: 96, weight: 100 }).into(),
+							call: EncodedCallOrHashOf::<Test>::from_call(Call::Logger(
+								LoggerCall::log { i: 96, weight: 100 }
+							))
+							.unwrap(),
 							maybe_periodic: None,
 							origin: system::RawOrigin::Root.into(),
 							_phantom: PhantomData::<u64>::default(),
 						}),
 						None,
-						Some(ScheduledV2 {
+						Some(ScheduledV4Of::<Test> {
 							maybe_id: Some(sid(b"test")),
 							priority: 123,
-							call: Call::Logger(LoggerCall::log { i: 69, weight: 1000 }).into(),
+							call: EncodedCallOrHashOf::<Test>::from_call(Call::Logger(
+								LoggerCall::log { i: 69, weight: 1000 }
+							))
+							.unwrap(),
 							maybe_periodic: Some((456u64, 10)),
 							origin: system::RawOrigin::None.into(),
 							_phantom: PhantomData::<u64>::default(),
@@ -880,19 +889,25 @@ fn test_migrate_origin() {
 				(
 					1,
 					BoundedVec::<_, <Test as Config>::MaxScheduledPerBlock>::truncate_from(vec![
-						Some(ScheduledV2 {
+						Some(ScheduledV4Of::<Test> {
 							maybe_id: None,
 							priority: 11,
-							call: Call::Logger(LoggerCall::log { i: 96, weight: 100 }).into(),
+							call: EncodedCallOrHashOf::<Test>::from_call(Call::Logger(
+								LoggerCall::log { i: 96, weight: 100 }
+							))
+							.unwrap(),
 							maybe_periodic: None,
 							origin: system::RawOrigin::Root.into(),
 							_phantom: PhantomData::<u64>::default(),
 						}),
 						None,
-						Some(ScheduledV2 {
+						Some(ScheduledV4Of::<Test> {
 							maybe_id: Some(sid(b"test")),
 							priority: 123,
-							call: Call::Logger(LoggerCall::log { i: 69, weight: 1000 }).into(),
+							call: EncodedCallOrHashOf::<Test>::from_call(Call::Logger(
+								LoggerCall::log { i: 69, weight: 1000 }
+							))
+							.unwrap(),
 							maybe_periodic: Some((456u64, 10)),
 							origin: system::RawOrigin::None.into(),
 							_phantom: PhantomData::<u64>::default(),
@@ -902,19 +917,25 @@ fn test_migrate_origin() {
 				(
 					2,
 					BoundedVec::<_, <Test as Config>::MaxScheduledPerBlock>::truncate_from(vec![
-						Some(ScheduledV2 {
+						Some(ScheduledV4Of::<Test> {
 							maybe_id: None,
 							priority: 12,
-							call: Call::Logger(LoggerCall::log { i: 96, weight: 100 }).into(),
+							call: EncodedCallOrHashOf::<Test>::from_call(Call::Logger(
+								LoggerCall::log { i: 96, weight: 100 }
+							))
+							.unwrap(),
 							maybe_periodic: None,
 							origin: system::RawOrigin::Root.into(),
 							_phantom: PhantomData::<u64>::default(),
 						}),
 						None,
-						Some(ScheduledV2 {
+						Some(ScheduledV4Of::<Test> {
 							maybe_id: Some(sid(b"test")),
 							priority: 123,
-							call: Call::Logger(LoggerCall::log { i: 69, weight: 1000 }).into(),
+							call: EncodedCallOrHashOf::<Test>::from_call(Call::Logger(
+								LoggerCall::log { i: 69, weight: 1000 }
+							))
+							.unwrap(),
 							maybe_periodic: Some((456u64, 10)),
 							origin: system::RawOrigin::None.into(),
 							_phantom: PhantomData::<u64>::default(),
@@ -925,4 +946,3 @@ fn test_migrate_origin() {
 		);
 	});
 }
-*/
