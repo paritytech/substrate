@@ -247,7 +247,7 @@ impl<T: codec::Codec> PassByImpl<T> for Codec<T> {
 		let (ptr, len) = unpack_ptr_and_len(arg);
 		let len = len as usize;
 
-		let mut encoded = if len == 0 {
+		let encoded = if len == 0 {
 			bytes::Bytes::new()
 		} else {
 			bytes::Bytes::from(unsafe { Vec::from_raw_parts(ptr as *mut u8, len, len) })
