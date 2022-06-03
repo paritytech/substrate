@@ -78,14 +78,14 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Uniques Class (r:1 w:1)
 	// Storage: Uniques ClassAccount (r:0 w:1)
 	fn create() -> Weight {
-		(29_035_000 as Weight)
+		(27_715_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
 	// Storage: Uniques Class (r:1 w:1)
 	// Storage: Uniques ClassAccount (r:0 w:1)
 	fn force_create() -> Weight {
-		(16_854_000 as Weight)
+		(16_929_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
@@ -103,11 +103,11 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	fn destroy(n: u32, m: u32, a: u32, ) -> Weight {
 		(0 as Weight)
 			// Standard Error: 16_000
-			.saturating_add((10_541_000 as Weight).saturating_mul(n as Weight))
+			.saturating_add((10_481_000 as Weight).saturating_mul(n as Weight))
 			// Standard Error: 16_000
-			.saturating_add((1_632_000 as Weight).saturating_mul(m as Weight))
+			.saturating_add((1_762_000 as Weight).saturating_mul(m as Weight))
 			// Standard Error: 16_000
-			.saturating_add((1_483_000 as Weight).saturating_mul(a as Weight))
+			.saturating_add((1_590_000 as Weight).saturating_mul(a as Weight))
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().reads((1 as Weight).saturating_mul(n as Weight)))
 			.saturating_add(T::DbWeight::get().writes(4 as Weight))
@@ -120,7 +120,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Uniques CollectionMaxSupply (r:1 w:0)
 	// Storage: Uniques Account (r:0 w:1)
 	fn mint() -> Weight {
-		(36_291_000 as Weight)
+		(36_577_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(3 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
@@ -128,7 +128,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Uniques Asset (r:1 w:1)
 	// Storage: Uniques Account (r:0 w:1)
 	fn burn() -> Weight {
-		(36_465_000 as Weight)
+		(36_124_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
@@ -136,7 +136,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Uniques Asset (r:1 w:1)
 	// Storage: Uniques Account (r:0 w:2)
 	fn transfer() -> Weight {
-		(27_471_000 as Weight)
+		(27_225_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
@@ -145,8 +145,8 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// The range of component `i` is `[0, 5000]`.
 	fn redeposit(i: u32, ) -> Weight {
 		(0 as Weight)
-			// Standard Error: 15_000
-			.saturating_add((12_351_000 as Weight).saturating_mul(i as Weight))
+			// Standard Error: 14_000
+			.saturating_add((12_407_000 as Weight).saturating_mul(i as Weight))
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().reads((1 as Weight).saturating_mul(i as Weight)))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
@@ -155,26 +155,26 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Uniques Asset (r:1 w:1)
 	// Storage: Uniques Class (r:1 w:0)
 	fn freeze() -> Weight {
-		(22_748_000 as Weight)
+		(21_452_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	// Storage: Uniques Asset (r:1 w:1)
 	// Storage: Uniques Class (r:1 w:0)
 	fn thaw() -> Weight {
-		(21_768_000 as Weight)
+		(22_155_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	// Storage: Uniques Class (r:1 w:1)
 	fn freeze_collection() -> Weight {
-		(17_197_000 as Weight)
+		(16_897_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	// Storage: Uniques Class (r:1 w:1)
 	fn thaw_collection() -> Weight {
-		(17_155_000 as Weight)
+		(16_657_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
@@ -182,20 +182,20 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Uniques Class (r:1 w:1)
 	// Storage: Uniques ClassAccount (r:0 w:2)
 	fn transfer_ownership() -> Weight {
-		(24_403_000 as Weight)
+		(25_057_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(4 as Weight))
 	}
 	// Storage: Uniques Class (r:1 w:1)
 	fn set_team() -> Weight {
-		(17_858_000 as Weight)
+		(17_253_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	// Storage: Uniques Class (r:1 w:1)
 	// Storage: Uniques ClassAccount (r:0 w:1)
 	fn force_item_status() -> Weight {
-		(19_905_000 as Weight)
+		(20_010_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
@@ -203,7 +203,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Uniques InstanceMetadataOf (r:1 w:0)
 	// Storage: Uniques Attribute (r:1 w:1)
 	fn set_attribute() -> Weight {
-		(41_835_000 as Weight)
+		(41_159_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(3 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
@@ -211,62 +211,62 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Uniques InstanceMetadataOf (r:1 w:0)
 	// Storage: Uniques Attribute (r:1 w:1)
 	fn clear_attribute() -> Weight {
-		(39_247_000 as Weight)
+		(39_598_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(3 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
 	// Storage: Uniques Class (r:1 w:1)
 	// Storage: Uniques InstanceMetadataOf (r:1 w:1)
 	fn set_metadata() -> Weight {
-		(33_664_000 as Weight)
+		(33_387_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
 	// Storage: Uniques Class (r:1 w:1)
 	// Storage: Uniques InstanceMetadataOf (r:1 w:1)
 	fn clear_metadata() -> Weight {
-		(32_958_000 as Weight)
+		(33_208_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
 	// Storage: Uniques Class (r:1 w:1)
 	// Storage: Uniques ClassMetadataOf (r:1 w:1)
 	fn set_collection_metadata() -> Weight {
-		(32_185_000 as Weight)
+		(32_619_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
 	// Storage: Uniques Class (r:1 w:0)
 	// Storage: Uniques ClassMetadataOf (r:1 w:1)
 	fn clear_collection_metadata() -> Weight {
-		(31_117_000 as Weight)
+		(31_028_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	// Storage: Uniques Class (r:1 w:0)
 	// Storage: Uniques Asset (r:1 w:1)
 	fn approve_transfer() -> Weight {
-		(22_990_000 as Weight)
+		(22_263_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	// Storage: Uniques Class (r:1 w:0)
 	// Storage: Uniques Asset (r:1 w:1)
 	fn cancel_approval() -> Weight {
-		(23_070_000 as Weight)
+		(22_910_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	// Storage: Uniques OwnershipAcceptance (r:1 w:1)
 	fn set_accept_ownership() -> Weight {
-		(21_220_000 as Weight)
+		(20_716_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	// Storage: Uniques CollectionMaxSupply (r:1 w:1)
 	// Storage: Uniques Class (r:1 w:0)
 	fn set_collection_max_supply() -> Weight {
-		(19_688_000 as Weight)
+		(19_380_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
@@ -277,14 +277,14 @@ impl WeightInfo for () {
 	// Storage: Uniques Class (r:1 w:1)
 	// Storage: Uniques ClassAccount (r:0 w:1)
 	fn create() -> Weight {
-		(29_035_000 as Weight)
+		(27_715_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
 	// Storage: Uniques Class (r:1 w:1)
 	// Storage: Uniques ClassAccount (r:0 w:1)
 	fn force_create() -> Weight {
-		(16_854_000 as Weight)
+		(16_929_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
@@ -302,11 +302,11 @@ impl WeightInfo for () {
 	fn destroy(n: u32, m: u32, a: u32, ) -> Weight {
 		(0 as Weight)
 			// Standard Error: 16_000
-			.saturating_add((10_541_000 as Weight).saturating_mul(n as Weight))
+			.saturating_add((10_481_000 as Weight).saturating_mul(n as Weight))
 			// Standard Error: 16_000
-			.saturating_add((1_632_000 as Weight).saturating_mul(m as Weight))
+			.saturating_add((1_762_000 as Weight).saturating_mul(m as Weight))
 			// Standard Error: 16_000
-			.saturating_add((1_483_000 as Weight).saturating_mul(a as Weight))
+			.saturating_add((1_590_000 as Weight).saturating_mul(a as Weight))
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().reads((1 as Weight).saturating_mul(n as Weight)))
 			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
@@ -319,7 +319,7 @@ impl WeightInfo for () {
 	// Storage: Uniques CollectionMaxSupply (r:1 w:0)
 	// Storage: Uniques Account (r:0 w:1)
 	fn mint() -> Weight {
-		(36_291_000 as Weight)
+		(36_577_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
 	}
@@ -327,7 +327,7 @@ impl WeightInfo for () {
 	// Storage: Uniques Asset (r:1 w:1)
 	// Storage: Uniques Account (r:0 w:1)
 	fn burn() -> Weight {
-		(36_465_000 as Weight)
+		(36_124_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
 	}
@@ -335,7 +335,7 @@ impl WeightInfo for () {
 	// Storage: Uniques Asset (r:1 w:1)
 	// Storage: Uniques Account (r:0 w:2)
 	fn transfer() -> Weight {
-		(27_471_000 as Weight)
+		(27_225_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
 	}
@@ -344,8 +344,8 @@ impl WeightInfo for () {
 	/// The range of component `i` is `[0, 5000]`.
 	fn redeposit(i: u32, ) -> Weight {
 		(0 as Weight)
-			// Standard Error: 15_000
-			.saturating_add((12_351_000 as Weight).saturating_mul(i as Weight))
+			// Standard Error: 14_000
+			.saturating_add((12_407_000 as Weight).saturating_mul(i as Weight))
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().reads((1 as Weight).saturating_mul(i as Weight)))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
@@ -354,26 +354,26 @@ impl WeightInfo for () {
 	// Storage: Uniques Asset (r:1 w:1)
 	// Storage: Uniques Class (r:1 w:0)
 	fn freeze() -> Weight {
-		(22_748_000 as Weight)
+		(21_452_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	// Storage: Uniques Asset (r:1 w:1)
 	// Storage: Uniques Class (r:1 w:0)
 	fn thaw() -> Weight {
-		(21_768_000 as Weight)
+		(22_155_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	// Storage: Uniques Class (r:1 w:1)
 	fn freeze_collection() -> Weight {
-		(17_197_000 as Weight)
+		(16_897_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	// Storage: Uniques Class (r:1 w:1)
 	fn thaw_collection() -> Weight {
-		(17_155_000 as Weight)
+		(16_657_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
@@ -381,20 +381,20 @@ impl WeightInfo for () {
 	// Storage: Uniques Class (r:1 w:1)
 	// Storage: Uniques ClassAccount (r:0 w:2)
 	fn transfer_ownership() -> Weight {
-		(24_403_000 as Weight)
+		(25_057_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
 	}
 	// Storage: Uniques Class (r:1 w:1)
 	fn set_team() -> Weight {
-		(17_858_000 as Weight)
+		(17_253_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	// Storage: Uniques Class (r:1 w:1)
 	// Storage: Uniques ClassAccount (r:0 w:1)
 	fn force_item_status() -> Weight {
-		(19_905_000 as Weight)
+		(20_010_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
@@ -402,7 +402,7 @@ impl WeightInfo for () {
 	// Storage: Uniques InstanceMetadataOf (r:1 w:0)
 	// Storage: Uniques Attribute (r:1 w:1)
 	fn set_attribute() -> Weight {
-		(41_835_000 as Weight)
+		(41_159_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
@@ -410,62 +410,62 @@ impl WeightInfo for () {
 	// Storage: Uniques InstanceMetadataOf (r:1 w:0)
 	// Storage: Uniques Attribute (r:1 w:1)
 	fn clear_attribute() -> Weight {
-		(39_247_000 as Weight)
+		(39_598_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
 	// Storage: Uniques Class (r:1 w:1)
 	// Storage: Uniques InstanceMetadataOf (r:1 w:1)
 	fn set_metadata() -> Weight {
-		(33_664_000 as Weight)
+		(33_387_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
 	// Storage: Uniques Class (r:1 w:1)
 	// Storage: Uniques InstanceMetadataOf (r:1 w:1)
 	fn clear_metadata() -> Weight {
-		(32_958_000 as Weight)
+		(33_208_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
 	// Storage: Uniques Class (r:1 w:1)
 	// Storage: Uniques ClassMetadataOf (r:1 w:1)
 	fn set_collection_metadata() -> Weight {
-		(32_185_000 as Weight)
+		(32_619_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
 	// Storage: Uniques Class (r:1 w:0)
 	// Storage: Uniques ClassMetadataOf (r:1 w:1)
 	fn clear_collection_metadata() -> Weight {
-		(31_117_000 as Weight)
+		(31_028_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	// Storage: Uniques Class (r:1 w:0)
 	// Storage: Uniques Asset (r:1 w:1)
 	fn approve_transfer() -> Weight {
-		(22_990_000 as Weight)
+		(22_263_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	// Storage: Uniques Class (r:1 w:0)
 	// Storage: Uniques Asset (r:1 w:1)
 	fn cancel_approval() -> Weight {
-		(23_070_000 as Weight)
+		(22_910_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	// Storage: Uniques OwnershipAcceptance (r:1 w:1)
 	fn set_accept_ownership() -> Weight {
-		(21_220_000 as Weight)
+		(20_716_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	// Storage: Uniques CollectionMaxSupply (r:1 w:1)
 	// Storage: Uniques Class (r:1 w:0)
 	fn set_collection_max_supply() -> Weight {
-		(19_688_000 as Weight)
+		(19_380_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
