@@ -751,13 +751,13 @@ mod tests {
 				BadOrigin
 			);
 
-			assert_ok!(Membership::reset_members(Origin::signed(4), bounded_vec![20, 40, 30]));
+			assert_ok!(Membership::reset_members(Origin::signed(4), vec![20, 40, 30]));
 			assert_eq!(Membership::members(), vec![20, 30, 40]);
 			assert_eq!(MEMBERS.with(|m| m.borrow().clone()), Membership::members().to_vec());
 			assert_eq!(Membership::prime(), Some(20));
 			assert_eq!(PRIME.with(|m| *m.borrow()), Membership::prime());
 
-			assert_ok!(Membership::reset_members(Origin::signed(4), bounded_vec![10, 40, 30]));
+			assert_ok!(Membership::reset_members(Origin::signed(4), vec![10, 40, 30]));
 			assert_eq!(Membership::members(), vec![10, 30, 40]);
 			assert_eq!(MEMBERS.with(|m| m.borrow().clone()), Membership::members().to_vec());
 			assert_eq!(Membership::prime(), None);
