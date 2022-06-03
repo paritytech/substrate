@@ -1385,7 +1385,7 @@ pub mod pallet {
 			// We just need its total earnings at this point in time, but we don't need to write it
 			// because we are not adjusting its points (all other values can calculated virtual).
 			let reward_pool = RewardPool::<T>::get_and_update(pool_id)
-				.defensive_ok_or::<Error<T>>(DefensiveError::RewardPoolNotFound.into())?;
+				.defensive_ok_or(DefensiveError::RewardPoolNotFound)?;
 
 			bonded_pool.try_inc_members()?;
 			let points_issued = bonded_pool.try_bond_funds(&who, amount, BondType::Later)?;
@@ -1561,7 +1561,7 @@ pub mod pallet {
 				.with_era
 				.get_mut(&unbond_era)
 				// The above check ensures the pool exists.
-				.defensive_ok_or::<Error<T>>(DefensiveError::PoolNotFound.into())?
+				.defensive_ok_or(DefensiveError::PoolNotFound)?
 				.issue(unbonding_balance);
 
 			Self::deposit_event(Event::<T>::Unbonded {
@@ -1633,9 +1633,9 @@ pub mod pallet {
 			let current_era = T::StakingInterface::current_era();
 
 			let bonded_pool = BondedPool::<T>::get(member.pool_id)
-				.defensive_ok_or::<Error<T>>(DefensiveError::PoolNotFound.into())?;
+				.defensive_ok_or(DefensiveError::PoolNotFound)?;
 			let mut sub_pools = SubPoolsStorage::<T>::get(member.pool_id)
-				.defensive_ok_or::<Error<T>>(DefensiveError::SubPoolsNotFound.into())?;
+				.defensive_ok_or(DefensiveError::SubPoolsNotFound)?;
 
 			bonded_pool.ok_to_withdraw_unbonded_with(
 				&caller,
@@ -2054,9 +2054,9 @@ impl<T: Config> Pallet<T> {
 	) -> Result<(PoolMember<T>, BondedPool<T>, RewardPool<T>), Error<T>> {
 		let member = PoolMembers::<T>::get(&who).ok_or(Error::<T>::PoolMemberNotFound)?;
 		let bonded_pool = BondedPool::<T>::get(member.pool_id)
-			.defensive_ok_or::<Error<T>>(DefensiveError::PoolNotFound.into())?;
+			.defensive_ok_or(DefensiveError::PoolNotFound)?;
 		let reward_pool = RewardPools::<T>::get(member.pool_id)
-			.defensive_ok_or::<Error<T>>(DefensiveError::PoolNotFound.into())?;
+			.defensive_ok_or(DefensiveError::PoolNotFound)?;
 		Ok((member, bonded_pool, reward_pool))
 	}
 
