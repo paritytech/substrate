@@ -120,7 +120,8 @@ for PALLET in "${PALLETS[@]}"; do
     --execution=wasm \
     --wasm-execution=compiled \
     --template=./.maintain/frame-weight-template.hbs \
-    --output="$WEIGHT_FILE" 2>&1
+    --output="$WEIGHT_FILE" \
+    --base-path=/mnt/disks 2>&1
   )
   if [ $? -ne 0 ]; then
     echo "$OUTPUT" >> "$ERR_FILE"
@@ -137,7 +138,8 @@ OUTPUT=$(
   --wasm-execution=compiled \
   --weight-path="./frame/support/src/weights/" \
   --warmup=10 \
-  --repeat=100 2>&1
+  --repeat=100 \
+  --base-path=/mnt/disks 2>&1
 )
 if [ $? -ne 0 ]; then
   echo "$OUTPUT" >> "$ERR_FILE"
@@ -146,7 +148,7 @@ fi
 
 echo "[+] Benchmarking the machine..."
 OUTPUT=$(
-  $SUBSTRATE benchmark machine --chain=dev 2>&1
+  $SUBSTRATE benchmark machine --chain=dev --base-path=/mnt/disks 2>&1
 )
 if [ $? -ne 0 ]; then
   # Do not write the error to the error file since it is not a benchmarking error.

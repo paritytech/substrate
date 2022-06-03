@@ -16,7 +16,7 @@
 // limitations under the License.
 
 //! THIS FILE WAS AUTO-GENERATED USING THE SUBSTRATE BENCHMARK CLI VERSION 4.0.0-dev
-//! DATE: 2022-05-24 (Y/M/D)
+//! DATE: 2022-06-03 (Y/M/D)
 //!
 //! SHORT-NAME: `block`, LONG-NAME: `BlockExecution`, RUNTIME: `Development`
 //! WARMUPS: `10`, REPEAT: `100`
@@ -33,6 +33,7 @@
 //   --weight-path=./frame/support/src/weights/
 //   --warmup=10
 //   --repeat=100
+//   --base-path=/mnt/disks
 
 use frame_support::{
 	parameter_types,
@@ -44,16 +45,16 @@ parameter_types! {
 	/// Calculated by multiplying the *Average* with `1` and adding `0`.
 	///
 	/// Stats nanoseconds:
-	///   Min, Max: 5_303_128, 5_507_784
-	///   Average:  5_346_284
-	///   Median:   5_328_139
-	///   Std-Dev:  41749.5
+	///   Min, Max: 7_120_732, 7_212_011
+	///   Average:  7_172_864
+	///   Median:   7_174_283
+	///   Std-Dev:  19712.13
 	///
 	/// Percentiles nanoseconds:
-	///   99th: 5_489_273
-	///   95th: 5_433_314
-	///   75th: 5_354_812
-	pub const BlockExecutionWeight: Weight = 5_346_284 * WEIGHT_PER_NANOS;
+	///   99th: 7_211_472
+	///   95th: 7_198_752
+	///   75th: 7_186_703
+	pub const BlockExecutionWeight: Weight = 7_172_864 * WEIGHT_PER_NANOS;
 }
 
 #[cfg(test)]

@@ -16,7 +16,7 @@
 // limitations under the License.
 
 //! THIS FILE WAS AUTO-GENERATED USING THE SUBSTRATE BENCHMARK CLI VERSION 4.0.0-dev
-//! DATE: 2022-05-24 (Y/M/D)
+//! DATE: 2022-06-03 (Y/M/D)
 //!
 //! SHORT-NAME: `extrinsic`, LONG-NAME: `ExtrinsicBase`, RUNTIME: `Development`
 //! WARMUPS: `10`, REPEAT: `100`
@@ -33,6 +33,7 @@
 //   --weight-path=./frame/support/src/weights/
 //   --warmup=10
 //   --repeat=100
+//   --base-path=/mnt/disks
 
 use frame_support::{
 	parameter_types,
@@ -44,16 +45,16 @@ parameter_types! {
 	/// Calculated by multiplying the *Average* with `1` and adding `0`.
 	///
 	/// Stats nanoseconds:
-	///   Min, Max: 86_060, 86_999
-	///   Average:  86_298
-	///   Median:   86_248
-	///   Std-Dev:  207.19
+	///   Min, Max: 98_019, 99_053
+	///   Average:  98_321
+	///   Median:   98_243
+	///   Std-Dev:  299.19
 	///
 	/// Percentiles nanoseconds:
-	///   99th: 86_924
-	///   95th: 86_828
-	///   75th: 86_347
-	pub const ExtrinsicBaseWeight: Weight = 86_298 * WEIGHT_PER_NANOS;
+	///   99th: 99_048
+	///   95th: 98_950
+	///   75th: 98_313
+	pub const ExtrinsicBaseWeight: Weight = 98_321 * WEIGHT_PER_NANOS;
 }
 
 #[cfg(test)]
