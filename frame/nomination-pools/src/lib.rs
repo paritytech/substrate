@@ -1385,7 +1385,7 @@ pub mod pallet {
 			// We just need its total earnings at this point in time, but we don't need to write it
 			// because we are not adjusting its points (all other values can calculated virtual).
 			let reward_pool = RewardPool::<T>::get_and_update(pool_id)
-				.defensive_ok_or(DefensiveError::RewardPoolNotFound)?;
+				.defensive_ok_or::<Error<T>>(DefensiveError::RewardPoolNotFound.into())?;
 
 			bonded_pool.try_inc_members()?;
 			let points_issued = bonded_pool.try_bond_funds(&who, amount, BondType::Later)?;
@@ -1561,7 +1561,7 @@ pub mod pallet {
 				.with_era
 				.get_mut(&unbond_era)
 				// The above check ensures the pool exists.
-				.defensive_ok_or(DefensiveError::PoolNotFound)?
+				.defensive_ok_or::<Error<T>>(DefensiveError::PoolNotFound.into())?
 				.issue(unbonding_balance);
 
 			Self::deposit_event(Event::<T>::Unbonded {
@@ -1633,9 +1633,9 @@ pub mod pallet {
 			let current_era = T::StakingInterface::current_era();
 
 			let bonded_pool = BondedPool::<T>::get(member.pool_id)
-				.defensive_ok_or(DefensiveError::PoolNotFound)?;
+				.defensive_ok_or::<Error<T>>(DefensiveError::PoolNotFound.into())?;
 			let mut sub_pools = SubPoolsStorage::<T>::get(member.pool_id)
-				.defensive_ok_or(DefensiveError::SubPoolsNotFound)?;
+				.defensive_ok_or::<Error<T>>(DefensiveError::SubPoolsNotFound.into())?;
 
 			bonded_pool.ok_to_withdraw_unbonded_with(
 				&caller,
