@@ -117,7 +117,7 @@ impl<'a, T, S> Clone for BoundedSlice<'a, T, S> {
 	}
 }
 
-// Since a slice `&[]` is always `Copy`, so is `BoundedSlice`.
+// Since a reference `&T` is always `Copy`, so is `BoundedSlice<'a, T, S>`.
 impl<'a, T, S> Copy for BoundedSlice<'a, T, S> {}
 
 // `BoundedSlice`s encode to something which will always decode into a `BoundedVec`,
