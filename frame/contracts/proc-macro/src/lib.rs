@@ -24,7 +24,7 @@ extern crate alloc;
 use alloc::string::ToString;
 use proc_macro2::TokenStream;
 use quote::{quote, quote_spanned};
-use syn::{parse_macro_input, spanned::Spanned, Data, DataStruct, DeriveInput, Fields, Ident};
+use syn::{parse_macro_input, Data, DeriveInput, Ident};
 
 /// This derives `Debug` for a struct where each field must be of some numeric type.
 /// It interprets each field as its represents some weight and formats it as times so that
@@ -84,7 +84,9 @@ fn derive_debug(
 
 /// This is only used then the `full` feature is activated.
 #[cfg(feature = "full")]
-fn iterate_fields(data: &DataStruct, fmt: impl Fn(&Ident) -> TokenStream) -> TokenStream {
+fn iterate_fields(data: &syn::DataStruct, fmt: impl Fn(&Ident) -> TokenStream) -> TokenStream {
+	use syn::{spanned::Spanned, Fields};
+
 	match &data.fields {
 		Fields::Named(fields) => {
 			let recurse = fields.named.iter().filter_map(|f| {

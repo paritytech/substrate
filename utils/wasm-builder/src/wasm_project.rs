@@ -51,6 +51,11 @@ impl WasmBinaryBloaty {
 	pub fn wasm_binary_bloaty_path_escaped(&self) -> String {
 		self.0.display().to_string().escape_default().to_string()
 	}
+
+	/// Returns the path to the wasm binary.
+	pub fn wasm_binary_bloaty_path(&self) -> &Path {
+		&self.0
+	}
 }
 
 /// Holds the path to the WASM binary.
@@ -137,9 +142,17 @@ pub(crate) fn create_and_compile(
 		copy_wasm_to_target_directory(project_cargo_toml, wasm_binary_compressed)
 	});
 
-	generate_rerun_if_changed_instructions(project_cargo_toml, &project, &wasm_workspace);
+	let final_wasm_binary = wasm_binary_compressed.or(wasm_binary);
 
-	(wasm_binary_compressed.or(wasm_binary), bloaty)
+	generate_rerun_if_changed_instructions(
+		project_cargo_toml,
+		&project,
+		&wasm_workspace,
+		final_wasm_binary.as_ref(),
+		&bloaty,
+	);
+
+	(final_wasm_binary, bloaty)
 }
 
 /// Find the `Cargo.lock` relative to the `OUT_DIR` environment variable.
@@ -712,6 +725,8 @@ fn generate_rerun_if_changed_instructions(
 	cargo_manifest: &Path,
 	project_folder: &Path,
 	wasm_workspace: &Path,
+	compressed_or_compact_wasm: Option<&WasmBinary>,
+	bloaty_wasm: &WasmBinaryBloaty,
 ) {
 	// Rerun `build.rs` if the `Cargo.lock` changes
 	if let Some(cargo_lock) = find_cargo_lock(cargo_manifest) {
@@ -760,6 +775,9 @@ fn generate_rerun_if_changed_instructions(
 
 	// Make sure that if any file/folder of a dependency change, we need to rerun the `build.rs`
 	packages.iter().for_each(package_rerun_if_changed);
+
+	compressed_or_compact_wasm.map(|w| rerun_if_changed(w.wasm_binary_path()));
+	rerun_if_changed(bloaty_wasm.wasm_binary_bloaty_path());
 
 	// Register our env variables
 	println!("cargo:rerun-if-env-changed={}", crate::SKIP_BUILD_ENV);
