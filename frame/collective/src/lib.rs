@@ -191,6 +191,7 @@ pub mod pallet {
 		type MotionDuration: Get<Self::BlockNumber>;
 
 		/// Maximum number of proposals allowed to be active in parallel.
+		#[pallet::constant]
 		type MaxProposals: Get<ProposalIndex>;
 
 		/// The maximum number of members supported by the pallet. Used for weight estimation.
@@ -198,6 +199,7 @@ pub mod pallet {
 		/// NOTE:
 		/// + Benchmarks will need to be re-run and weights adjusted if this changes.
 		/// + This pallet assumes that dependents keep to the limit without enforcing it.
+		#[pallet::constant]
 		type MaxMembers: Get<MemberCount>;
 
 		/// Default vote strategy of this collective.
