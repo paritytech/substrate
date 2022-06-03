@@ -43,6 +43,8 @@ const TEMPLATE: &str = include_str!("./template.hbs");
 struct TemplateData {
 	args: Vec<String>,
 	date: String,
+	hostname: String,
+	cpuname: String,
 	version: String,
 	pallet: String,
 	instance: String,
@@ -322,6 +324,8 @@ pub fn write_results(
 		let hbs_data = TemplateData {
 			args: args.clone(),
 			date: date.clone(),
+			hostname: cmd.hostinfo_params.hostname(),
+			cpuname: cmd.hostinfo_params.cpuname(),
 			version: VERSION.to_string(),
 			pallet: pallet.to_string(),
 			instance: instance.to_string(),
