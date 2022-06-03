@@ -19,7 +19,7 @@
 
 use codec::{Encode, MaxEncodedLen};
 
-use frame_support::{traits::OneSessionHandler, BoundedSlice, Parameter, WeakBoundedVec};
+use frame_support::{traits::OneSessionHandler, BoundedSlice, BoundedVec, Parameter};
 
 use sp_runtime::{
 	generic::DigestItem,
@@ -63,7 +63,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn authorities)]
 	pub(super) type Authorities<T: Config> =
-		StorageValue<_, WeakBoundedVec<T::BeefyId, T::MaxAuthorities>, ValueQuery>;
+		StorageValue<_, BoundedVec<T::BeefyId, T::MaxAuthorities>, ValueQuery>;
 
 	/// The current validator set id
 	#[pallet::storage]
@@ -75,7 +75,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn next_authorities)]
 	pub(super) type NextAuthorities<T: Config> =
-		StorageValue<_, WeakBoundedVec<T::BeefyId, T::MaxAuthorities>, ValueQuery>;
+		StorageValue<_, BoundedVec<T::BeefyId, T::MaxAuthorities>, ValueQuery>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
@@ -92,7 +92,10 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
-			Pallet::<T>::initialize_authorities(&self.authorities);
+			Pallet::<T>::initialize_authorities(&self.authorities)
+				// we panic here as runtime maintainers can simply reconfigure genesis and restart
+				// the chain easily
+				.expect("Authorities vec too big");
 		}
 	}
 }
@@ -100,14 +103,14 @@ pub mod pallet {
 impl<T: Config> Pallet<T> {
 	/// Return the current active BEEFY validator set.
 	pub fn validator_set() -> Option<ValidatorSet<T::BeefyId>> {
-		let validators: WeakBoundedVec<T::BeefyId, T::MaxAuthorities> = Self::authorities();
+		let validators: BoundedVec<T::BeefyId, T::MaxAuthorities> = Self::authorities();
 		let id: beefy_primitives::ValidatorSetId = Self::validator_set_id();
 		ValidatorSet::<T::BeefyId>::new(validators, id)
 	}
 
 	fn change_authorities(
-		new: WeakBoundedVec<T::BeefyId, T::MaxAuthorities>,
-		queued: WeakBoundedVec<T::BeefyId, T::MaxAuthorities>,
+		new: BoundedVec<T::BeefyId, T::MaxAuthorities>,
+		queued: BoundedVec<T::BeefyId, T::MaxAuthorities>,
 	) {
 		<Authorities<T>>::put(&new);
 
@@ -124,21 +127,23 @@ impl<T: Config> Pallet<T> {
 		<NextAuthorities<T>>::put(&queued);
 	}
 
-	fn initialize_authorities(authorities: &[T::BeefyId]) {
+	fn initialize_authorities(authorities: &[T::BeefyId]) -> Result<(), ()> {
 		if authorities.is_empty() {
-			return
+			return Ok(())
 		}
 
-		assert!(<Authorities<T>>::get().is_empty(), "Authorities are already initialized!");
+		if !<Authorities<T>>::get().is_empty() {
+			return Err(())
+		}
 
 		let bounded_authorities =
-			BoundedSlice::<T::BeefyId, T::MaxAuthorities>::try_from(authorities)
-				.expect("Authorities vec too big");
+			BoundedSlice::<T::BeefyId, T::MaxAuthorities>::try_from(authorities)?;
 
 		<Authorities<T>>::put(bounded_authorities);
 		<ValidatorSetId<T>>::put(0);
 		// Like `pallet_session`, initialize the next validator set as well.
 		<NextAuthorities<T>>::put(bounded_authorities);
+		Ok(())
 	}
 }
 
@@ -154,7 +159,9 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 		I: Iterator<Item = (&'a T::AccountId, T::BeefyId)>,
 	{
 		let authorities = validators.map(|(_, k)| k).collect::<Vec<_>>();
-		Self::initialize_authorities(&authorities);
+		// we panic here as runtime maintainers can simply reconfigure genesis and restart the
+		// chain easily
+		Self::initialize_authorities(&authorities).expect("Authorities vec too big");
 	}
 
 	fn on_new_session<'a, I: 'a>(_changed: bool, validators: I, queued_validators: I)
@@ -162,21 +169,11 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 		I: Iterator<Item = (&'a T::AccountId, T::BeefyId)>,
 	{
 		let next_authorities = validators.map(|(_, k)| k).collect::<Vec<_>>();
-		let bounded_next_authorities = WeakBoundedVec::<_, T::MaxAuthorities>::force_from(
-			next_authorities,
-			Some(
-				"Warning: The session has more validators than expected. \
-				A runtime configuration adjustment may be needed.",
-			),
-		);
+		let bounded_next_authorities =
+			BoundedVec::<_, T::MaxAuthorities>::truncate_from(next_authorities);
 		let next_queued_authorities = queued_validators.map(|(_, k)| k).collect::<Vec<_>>();
-		let bounded_next_queued_authorities = WeakBoundedVec::<_, T::MaxAuthorities>::force_from(
-			next_queued_authorities,
-			Some(
-				"Warning: The session has more queued validators than expected. \
-				A runtime configuration adjustment may be needed.",
-			),
-		);
+		let bounded_next_queued_authorities =
+			BoundedVec::<_, T::MaxAuthorities>::truncate_from(next_queued_authorities);
 
 		// Always issue a change on each `session`, even if validator set hasn't changed.
 		// We want to have at least one BEEFY mandatory block per session.
