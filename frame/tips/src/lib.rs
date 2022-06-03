@@ -66,11 +66,12 @@ use sp_runtime::{
 };
 use sp_std::prelude::*;
 
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
+	BoundedVec,
 	traits::{
 		ContainsLengthBound, Currency, EnsureOrigin, ExistenceRequirement::KeepAlive, Get,
-		OnUnbalanced, ReservableCurrency, SortedMembers,
+		OnUnbalanced, ReservableCurrency, SortedMembers, LengthBoundMaximum,
 	},
 	Parameter,
 };
@@ -83,12 +84,15 @@ pub type NegativeImbalanceOf<T> = pallet_treasury::NegativeImbalanceOf<T>;
 
 /// An open tipping "motion". Retains all details of a tip including information on the finder
 /// and the members who have voted.
-#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, scale_info::TypeInfo)]
+#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, scale_info::TypeInfo, MaxEncodedLen)]
+#[codec(mel_bound())]
+#[scale_info(skip_type_params(Tippers))]
 pub struct OpenTip<
-	AccountId: Parameter,
-	Balance: Parameter,
-	BlockNumber: Parameter,
-	Hash: Parameter,
+	AccountId: Parameter + MaxEncodedLen,
+	Balance: Parameter + MaxEncodedLen,
+	BlockNumber: Parameter + MaxEncodedLen,
+	Hash: Parameter + MaxEncodedLen,
+	Tippers: ContainsLengthBound,
 > {
 	/// The hash of the reason for the tip. The reason should be a human-readable UTF-8 encoded
 	/// string. A URL would be sensible.
@@ -103,7 +107,7 @@ pub struct OpenTip<
 	/// scheduled.
 	closes: Option<BlockNumber>,
 	/// The members who have voted for this tip. Sorted by AccountId.
-	tips: Vec<(AccountId, Balance)>,
+	tips: BoundedVec<(AccountId, Balance), LengthBoundMaximum<Tippers>>,
 	/// Whether this tip should result in the finder taking a fee.
 	finders_fee: bool,
 }
@@ -120,7 +124,6 @@ pub mod pallet {
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
 	#[pallet::storage_version(STORAGE_VERSION)]
-	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
@@ -170,7 +173,7 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		T::Hash,
-		OpenTip<T::AccountId, BalanceOf<T>, T::BlockNumber, T::Hash>,
+		OpenTip<T::AccountId, BalanceOf<T>, T::BlockNumber, T::Hash, T::Tippers>,
 		OptionQuery,
 	>;
 
@@ -178,7 +181,7 @@ pub mod pallet {
 	/// insecure enumerable hash since the key is guaranteed to be the result of a secure hash.
 	#[pallet::storage]
 	#[pallet::getter(fn reasons)]
-	pub type Reasons<T: Config> = StorageMap<_, Identity, T::Hash, Vec<u8>, OptionQuery>;
+	pub type Reasons<T: Config> = StorageMap<_, Identity, T::Hash, BoundedVec<u8, T::MaximumReasonLength>, OptionQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -209,6 +212,8 @@ pub mod pallet {
 		StillOpen,
 		/// The tip cannot be claimed/closed because it's still in the countdown period.
 		Premature,
+		/// Too many tips are being stored.
+		TipsTooBig,
 	}
 
 	#[pallet::call]
@@ -240,10 +245,8 @@ pub mod pallet {
 		) -> DispatchResult {
 			let finder = ensure_signed(origin)?;
 
-			ensure!(
-				reason.len() <= T::MaximumReasonLength::get() as usize,
-				Error::<T>::ReasonTooBig
-			);
+			// make reason bounded
+			let reason: BoundedVec<u8, _> = reason.try_into().map_err(|_| Error::<T>::ReasonTooBig)?;
 
 			let reason_hash = T::Hashing::hash(&reason[..]);
 			ensure!(!Reasons::<T>::contains_key(&reason_hash), Error::<T>::AlreadyKnown);
@@ -261,7 +264,7 @@ pub mod pallet {
 				finder,
 				deposit,
 				closes: None,
-				tips: vec![],
+				tips: BoundedVec::default(),
 				finders_fee: true,
 			};
 			Tips::<T>::insert(&hash, tip);
@@ -333,6 +336,9 @@ pub mod pallet {
 			who: T::AccountId,
 			#[pallet::compact] tip_value: BalanceOf<T>,
 		) -> DispatchResult {
+			// make reason bounded
+			let reason: BoundedVec<u8, _> = reason.try_into().map_err(|_| Error::<T>::ReasonTooBig)?;
+
 			let tipper = ensure_signed(origin)?;
 			ensure!(T::Tippers::contains(&tipper), BadOrigin);
 			let reason_hash = T::Hashing::hash(&reason[..]);
@@ -341,7 +347,7 @@ pub mod pallet {
 
 			Reasons::<T>::insert(&reason_hash, &reason);
 			Self::deposit_event(Event::NewTip { tip_hash: hash });
-			let tips = vec![(tipper.clone(), tip_value)];
+			let tips = vec![(tipper.clone(), tip_value)].try_into().map_err(|_| Error::<T>::TipsTooBig)?;
 			let tip = OpenTip {
 				reason: reason_hash,
 				who,
@@ -475,7 +481,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// `O(T)` and one storage access.
 	fn insert_tip_and_check_closing(
-		tip: &mut OpenTip<T::AccountId, BalanceOf<T>, T::BlockNumber, T::Hash>,
+		tip: &mut OpenTip<T::AccountId, BalanceOf<T>, T::BlockNumber, T::Hash, T::Tippers>,
 		tipper: T::AccountId,
 		tip_value: BalanceOf<T>,
 	) -> bool {
@@ -520,7 +526,7 @@ impl<T: Config> Pallet<T> {
 	/// Plus `O(T)` (`T` is Tippers length).
 	fn payout_tip(
 		hash: T::Hash,
-		tip: OpenTip<T::AccountId, BalanceOf<T>, T::BlockNumber, T::Hash>,
+		tip: OpenTip<T::AccountId, BalanceOf<T>, T::BlockNumber, T::Hash, T::Tippers>,
 	) {
 		let mut tips = tip.tips;
 		Self::retain_active_tips(&mut tips);
@@ -597,7 +603,7 @@ impl<T: Config> Pallet<T> {
 				finder,
 				deposit,
 				closes: old_tip.closes,
-				tips: old_tip.tips,
+				tips: BoundedVec::truncate_from(old_tip.tips),
 				finders_fee,
 			};
 			Tips::<T>::insert(hash, new_tip)

@@ -18,6 +18,7 @@
 //! Traits for dealing with the idea of membership.
 
 use sp_std::{marker::PhantomData, prelude::*};
+use sp_runtime::traits::Get;
 
 /// A trait for querying whether a type can be said to "contain" a value.
 pub trait Contains<T> {
@@ -258,6 +259,20 @@ pub trait ContainsLengthBound {
 	fn min_len() -> usize;
 	/// Maximum number of elements contained
 	fn max_len() -> usize;
+}
+
+pub struct LengthBoundMaximum<T>(PhantomData<T>);
+impl<T: ContainsLengthBound> Get<u32> for LengthBoundMaximum<T> {
+	fn get() -> u32 {
+		T::max_len() as u32
+	}
+}
+
+pub struct LengthBoundMinimum<T>(PhantomData<T>);
+impl<T: ContainsLengthBound> Get<u32> for LengthBoundMinimum<T> {
+	fn get() -> u32 {
+		T::min_len() as u32
+	}
 }
 
 /// Trait for type that can handle the initialization of account IDs at genesis.

@@ -36,7 +36,7 @@ pub use members::{AllowAll, DenyAll, Filter};
 pub use members::{
 	AsContains, ChangeMembers, Contains, ContainsLengthBound, ContainsPair, Everything,
 	EverythingBut, FromContainsPair, InitializeMembers, InsideBoth, IsInVec, Nothing,
-	SortedMembers, TheseExcept,
+	SortedMembers, TheseExcept, LengthBoundMaximum, LengthBoundMinimum,
 };
 
 mod validation;
