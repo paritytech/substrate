@@ -2053,10 +2053,10 @@ impl<T: Config> Pallet<T> {
 		who: &T::AccountId,
 	) -> Result<(PoolMember<T>, BondedPool<T>, RewardPool<T>), Error<T>> {
 		let member = PoolMembers::<T>::get(&who).ok_or(Error::<T>::PoolMemberNotFound)?;
-		let bonded_pool = BondedPool::<T>::get(member.pool_id)
-			.defensive_ok_or(DefensiveError::PoolNotFound)?;
-		let reward_pool = RewardPools::<T>::get(member.pool_id)
-			.defensive_ok_or(DefensiveError::PoolNotFound)?;
+		let bonded_pool =
+			BondedPool::<T>::get(member.pool_id).defensive_ok_or(DefensiveError::PoolNotFound)?;
+		let reward_pool =
+			RewardPools::<T>::get(member.pool_id).defensive_ok_or(DefensiveError::PoolNotFound)?;
 		Ok((member, bonded_pool, reward_pool))
 	}
 
