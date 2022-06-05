@@ -261,6 +261,8 @@ pub trait ContainsLengthBound {
 	fn max_len() -> usize;
 }
 
+/// A wrapper struct to convert an object which implements `ContainsLengthBound`, and returns
+/// the maximum length as a `Get<u32>`. Useful for implementing other bounding conditions.
 pub struct LengthBoundMaximum<T>(PhantomData<T>);
 impl<T: ContainsLengthBound> Get<u32> for LengthBoundMaximum<T> {
 	fn get() -> u32 {
@@ -268,6 +270,8 @@ impl<T: ContainsLengthBound> Get<u32> for LengthBoundMaximum<T> {
 	}
 }
 
+/// A wrapper struct to convert an object which implements `ContainsLengthBound`, and returns
+/// the minimum length as a `Get<u32>`. Useful for implementing other bounding conditions.
 pub struct LengthBoundMinimum<T>(PhantomData<T>);
 impl<T: ContainsLengthBound> Get<u32> for LengthBoundMinimum<T> {
 	fn get() -> u32 {
