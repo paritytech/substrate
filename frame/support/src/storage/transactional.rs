@@ -35,6 +35,8 @@ pub type Layer = u32;
 pub const TRANSACTION_LEVEL_KEY: &[u8] = b":transaction_level:";
 /// The maximum number of nested layers.
 pub const TRANSACTIONAL_LIMIT: Layer = 255;
+/// The key that holds if transactional is being used.
+pub const TRANSACTIONAL_MODE_KEY: &[u8] = b":transactional_mode:";
 
 /// Returns the current number of nested transactional layers.
 fn get_transaction_level() -> Layer {
@@ -89,7 +91,17 @@ impl Drop for StorageLayerGuard {
 
 /// Check if the current call is within a transactional layer.
 pub fn is_transactional() -> bool {
-	get_transaction_level() > 0
+	get_transaction_level() > 0 && get_transactional_mode()
+}
+
+/// Returns the mode of transactional
+pub fn get_transactional_mode() -> bool {
+	crate::storage::unhashed::get_or::<bool>(TRANSACTIONAL_MODE_KEY, true)
+}
+
+/// Set the value of transactional mode
+pub fn set_transactional_mode(value: bool) {
+	crate::storage::unhashed::put::<bool>(TRANSACTIONAL_MODE_KEY, &value);
 }
 
 /// Execute the supplied function in a new storage transaction.
@@ -296,6 +308,29 @@ mod tests {
 			});
 
 			assert_noop!(res, "epic fail");
+		});
+	}
+
+	#[test]
+	fn transactional_mode_should_be_true_by_default() {
+		TestExternalities::default().execute_with(|| {
+			assert_eq!(get_transactional_mode(), true);
+		});
+	}
+
+	#[test]
+	fn set_transactional_mode_should_work(){
+		TestExternalities::default().execute_with(|| {
+			set_transactional_mode(false);
+			assert_eq!(get_transactional_mode(), false);
+		});
+	}
+
+	#[test]
+	fn is_transactional_should_be_false_when_mode_false() {
+		TestExternalities::default().execute_with(|| {
+			set_transactional_mode(false);
+			assert_eq!(is_transactional(), false);
 		});
 	}
 }
