@@ -19,7 +19,7 @@
 //! votes.
 
 use crate::dispatch::{DispatchError, Parameter};
-use codec::HasCompact;
+use codec::{HasCompact, MaxEncodedLen};
 use sp_arithmetic::{
 	traits::{SaturatedConversion, UniqueSaturatedFrom, UniqueSaturatedInto},
 	Perbill,
@@ -123,9 +123,9 @@ impl<Tally, Moment, Class> PollStatus<Tally, Moment, Class> {
 }
 
 pub trait Polling<Tally> {
-	type Index: Parameter + Member + Ord + PartialOrd + Copy + HasCompact;
-	type Votes: Parameter + Member + Ord + PartialOrd + Copy + HasCompact;
-	type Class: Parameter + Member + Ord + PartialOrd;
+	type Index: Parameter + Member + Ord + PartialOrd + Copy + HasCompact + MaxEncodedLen;
+	type Votes: Parameter + Member + Ord + PartialOrd + Copy + HasCompact + MaxEncodedLen;
+	type Class: Parameter + Member + Ord + PartialOrd + MaxEncodedLen;
 	type Moment;
 
 	/// Provides a vec of values that `T` may take.

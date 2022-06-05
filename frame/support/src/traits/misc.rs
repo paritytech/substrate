@@ -21,6 +21,11 @@ use crate::dispatch::Parameter;
 use codec::{CompactLen, Decode, DecodeAll, Encode, EncodeLike, Input, MaxEncodedLen};
 use scale_info::{build::Fields, meta_type, Path, Type, TypeInfo, TypeParameter};
 use sp_arithmetic::traits::{CheckedAdd, CheckedMul, CheckedSub, Saturating};
+#[doc(hidden)]
+pub use sp_runtime::traits::{
+	ConstBool, ConstI128, ConstI16, ConstI32, ConstI64, ConstI8, ConstU128, ConstU16, ConstU32,
+	ConstU64, ConstU8, Get, GetDefault, TypedGet,
+};
 use sp_runtime::{traits::Block as BlockT, DispatchError};
 use sp_std::{cmp::Ordering, prelude::*};
 
@@ -386,73 +391,6 @@ where
 		self.clone().into_iter().len()
 	}
 }
-
-/// A trait for querying a single value from a type defined in the trait.
-///
-/// It is not required that the value is constant.
-pub trait TypedGet {
-	/// The type which is returned.
-	type Type;
-	/// Return the current value.
-	fn get() -> Self::Type;
-}
-
-/// A trait for querying a single value from a type.
-///
-/// It is not required that the value is constant.
-pub trait Get<T> {
-	/// Return the current value.
-	fn get() -> T;
-}
-
-impl<T: Default> Get<T> for () {
-	fn get() -> T {
-		T::default()
-	}
-}
-
-/// Implement Get by returning Default for any type that implements Default.
-pub struct GetDefault;
-impl<T: Default> Get<T> for GetDefault {
-	fn get() -> T {
-		T::default()
-	}
-}
-
-macro_rules! impl_const_get {
-	($name:ident, $t:ty) => {
-		#[derive($crate::RuntimeDebug)]
-		pub struct $name<const T: $t>;
-		impl<const T: $t> Get<$t> for $name<T> {
-			fn get() -> $t {
-				T
-			}
-		}
-		impl<const T: $t> Get<Option<$t>> for $name<T> {
-			fn get() -> Option<$t> {
-				Some(T)
-			}
-		}
-		impl<const T: $t> TypedGet for $name<T> {
-			type Type = $t;
-			fn get() -> $t {
-				T
-			}
-		}
-	};
-}
-
-impl_const_get!(ConstBool, bool);
-impl_const_get!(ConstU8, u8);
-impl_const_get!(ConstU16, u16);
-impl_const_get!(ConstU32, u32);
-impl_const_get!(ConstU64, u64);
-impl_const_get!(ConstU128, u128);
-impl_const_get!(ConstI8, i8);
-impl_const_get!(ConstI16, i16);
-impl_const_get!(ConstI32, i32);
-impl_const_get!(ConstI64, i64);
-impl_const_get!(ConstI128, i128);
 
 /// A type for which some values make sense to be able to drop without further consideration.
 pub trait TryDrop: Sized {
