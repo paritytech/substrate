@@ -357,10 +357,7 @@ mod tests {
 		assert_eq!(r(5, 30).lcm(&r(1, 10)).unwrap(), 30);
 
 		// large numbers
-		assert_eq!(
-			r(1_000_000_000, MAX128).lcm(&r(7_000_000_000, MAX128 - 1)),
-			None,
-		);
+		assert_eq!(r(1_000_000_000, MAX128).lcm(&r(7_000_000_000, MAX128 - 1)), None,);
 		assert_eq!(
 			r(1_000_000_000, MAX64).lcm(&r(7_000_000_000, MAX64 - 1)),
 			Some(340282366920938463408034375210639556610),
@@ -424,10 +421,7 @@ mod tests {
 
 	#[test]
 	fn multiply_by_rational_with_rounding_works() {
-		assert_eq!(
-			multiply_by_rational_with_rounding(7, 2, 3, Rounding::Down).unwrap(),
-			7 * 2 / 3
-		);
+		assert_eq!(multiply_by_rational_with_rounding(7, 2, 3, Rounding::Down).unwrap(), 7 * 2 / 3);
 		assert_eq!(
 			multiply_by_rational_with_rounding(7, 20, 30, Rounding::Down).unwrap(),
 			7 * 2 / 3
@@ -454,40 +448,24 @@ mod tests {
 		);
 		assert_eq!(
 			// MAX128 % 1000 == 455
-			multiply_by_rational_with_rounding(MAX128, 555, 1000, Rounding::Down)
-				.unwrap(),
+			multiply_by_rational_with_rounding(MAX128, 555, 1000, Rounding::Down).unwrap(),
 			(MAX128 / 1000 * 555) + (455 * 555 / 1000),
 		);
 
 		assert_eq!(
-			multiply_by_rational_with_rounding(
-				2 * MAX64 - 1,
-				MAX64,
-				MAX64,
-				Rounding::Down
-			)
-			.unwrap(),
+			multiply_by_rational_with_rounding(2 * MAX64 - 1, MAX64, MAX64, Rounding::Down)
+				.unwrap(),
 			2 * MAX64 - 1
 		);
 		assert_eq!(
-			multiply_by_rational_with_rounding(
-				2 * MAX64 - 1,
-				MAX64 - 1,
-				MAX64,
-				Rounding::Down
-			)
-			.unwrap(),
+			multiply_by_rational_with_rounding(2 * MAX64 - 1, MAX64 - 1, MAX64, Rounding::Down)
+				.unwrap(),
 			2 * MAX64 - 3
 		);
 
 		assert_eq!(
-			multiply_by_rational_with_rounding(
-				MAX64 + 100,
-				MAX64_2,
-				MAX64_2 / 2,
-				Rounding::Down
-			)
-			.unwrap(),
+			multiply_by_rational_with_rounding(MAX64 + 100, MAX64_2, MAX64_2 / 2, Rounding::Down)
+				.unwrap(),
 			(MAX64 + 100) * 2,
 		);
 		assert_eq!(
@@ -512,13 +490,8 @@ mod tests {
 			73786976294838206461,
 		);
 		assert_eq!(
-			multiply_by_rational_with_rounding(
-				1_000_000_000,
-				MAX128 / 8,
-				MAX128 / 2,
-				Rounding::Up
-			)
-			.unwrap(),
+			multiply_by_rational_with_rounding(1_000_000_000, MAX128 / 8, MAX128 / 2, Rounding::Up)
+				.unwrap(),
 			250000000
 		);
 

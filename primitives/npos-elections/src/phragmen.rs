@@ -185,10 +185,14 @@ pub fn seq_phragmen_core<AccountId: IdentifierT>(
 		for edge in &mut voter.edges {
 			if edge.candidate.borrow().elected {
 				// update internal state.
-				edge.weight =
-					multiply_by_rational_with_rounding(voter.budget, edge.load.n(), voter.load.n(), Rounding::Down)
-						// If result cannot fit in u128. Not much we can do about it.
-						.unwrap_or(Bounded::max_value());
+				edge.weight = multiply_by_rational_with_rounding(
+					voter.budget,
+					edge.load.n(),
+					voter.load.n(),
+					Rounding::Down,
+				)
+				// If result cannot fit in u128. Not much we can do about it.
+				.unwrap_or(Bounded::max_value());
 			} else {
 				edge.weight = 0
 			}
