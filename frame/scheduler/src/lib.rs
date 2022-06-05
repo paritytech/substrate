@@ -139,7 +139,8 @@ pub struct ScheduledV3<Call, BlockNumber, PalletsOrigin, AccountId, ID> {
 }
 
 // V3 can be re-used for V4 and V2.
-use crate::ScheduledV3 as ScheduledV4;
+#[allow(unused_imports)]
+use crate::{ScheduledV3 as ScheduledV4, ScheduledV3 as ScheduledV2};
 
 pub type ScheduledV2Of<T> = ScheduledV3<
 	<T as Config>::Call,
@@ -226,7 +227,7 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 
 	/// The current storage version.
-	const STORAGE_VERSION: StorageVersion = StorageVersion::new(3);
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(4);
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
@@ -624,7 +625,7 @@ impl<T: Config> Pallet<T> {
 	/// Returns the weight consumed by this migration.
 	pub fn migrate_v1_to_v4() -> Weight {
 		let mut weight = T::DbWeight::get().reads_writes(1, 1);
-
+		
 		Agenda::<T>::translate::<Vec<Option<ScheduledV1<<T as Config>::Call, T::BlockNumber>>>, _>(
 			|_, agenda| {
 				Some(
@@ -635,9 +636,11 @@ impl<T: Config> Pallet<T> {
 
 							schedule.map(|schedule| {
 								let call = EncodedCallOrHashOf::<T>::from_call(schedule.call)
-									.expect("TODO");
-								let id =
-									schedule.maybe_id.map(|id| id.try_into().expect("ID too long"));
+									.expect("Cannot encode Call. Increase `MaxCallLen`.");
+								let id = schedule.maybe_id.map(|id| {
+									id.try_into()
+										.expect("Cannot encode ID. Increase `MaxScheduleIdLen`.")
+								});
 
 								ScheduledV4Of::<T> {
 									maybe_id: id,
@@ -650,8 +653,8 @@ impl<T: Config> Pallet<T> {
 							})
 						})
 						.collect::<Vec<Option<ScheduledV4Of<T>>>>()
-						.try_into()
-						.expect("V1 schedules fit in storage; Therefore V3 fit in storage; qed"),
+						.try_into() // BoundedVec
+						.expect("Count not fit all schedules in storage. Increase ``."),
 				)
 			},
 		);
@@ -663,7 +666,7 @@ impl<T: Config> Pallet<T> {
 			&[],
 		);
 
-		StorageVersion::new(3).put::<Self>();
+		StorageVersion::new(4).put::<Self>();
 
 		weight + T::DbWeight::get().writes(2)
 	}
@@ -708,21 +711,68 @@ impl<T: Config> Pallet<T> {
 			&[],
 		);
 
-		StorageVersion::new(3).put::<Self>();
+		StorageVersion::new(4).put::<Self>();
+
+		weight + T::DbWeight::get().writes(2)
+	}
+
+	/// Migrate storage format from V2 to V4.
+	///
+	/// Returns the weight consumed by this migration.
+	pub fn migrate_v2_to_v4() -> Weight {
+		let mut weight = T::DbWeight::get().reads_writes(1, 1);
+
+		Agenda::<T>::translate::<Vec<Option<ScheduledV2Of<T>>>, _>(|_, agenda| {
+			Some(
+				agenda
+					.into_iter()
+					.map(|schedule| {
+						weight.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
+						schedule.map(|schedule| {
+							let call = EncodedCallOrHashOf::<T>::from_call(schedule.call).expect("TODO");
+							let id = schedule.maybe_id.map(|id|
+								id.try_into().expect("ID too long")
+							);
+
+							ScheduledV4Of::<T> {
+							maybe_id: id,
+							priority: schedule.priority,
+							call: call.into(),
+							maybe_periodic: schedule.maybe_periodic,
+							origin: schedule.origin,
+							_phantom: Default::default(),
+						}})
+					})
+					.collect::<Vec<_>>()
+					.try_into()
+					.expect("V1 schedules fit in storage; The number of V3 schedules is the same as V1; Therefore V3 fit in storage; qed"),
+			)
+		});
+
+		#[allow(deprecated)]
+		frame_support::storage::migration::remove_storage_prefix(
+			Self::name().as_bytes(),
+			b"StorageVersion",
+			&[],
+		);
+
+		StorageVersion::new(4).put::<Self>();
 
 		weight + T::DbWeight::get().writes(2)
 	}
 
 	#[cfg(feature = "try-runtime")]
-	pub fn pre_migrate_to_v3() -> Result<(), &'static str> {
+	pub fn pre_migrate_to_v4() -> Result<(), &'static str> {
+		assert!(<P as GetStorageVersion>::on_chain_storage_version() < 4, "Cannot downgrade");
 		Ok(())
 	}
 
 	#[cfg(feature = "try-runtime")]
-	pub fn post_migrate_to_v3() -> Result<(), &'static str> {
+	pub fn post_migrate_to_v4() -> Result<(), &'static str> {
 		use frame_support::dispatch::GetStorageVersion;
 
-		assert!(Self::current_storage_version() == 3);
+		assert!(Self::current_storage_version() == 4);
+		assert!(Self::on_chain_storage_version() == StorageVersion::new(4));
 		for k in Agenda::<T>::iter_keys() {
 			let _ = Agenda::<T>::try_get(k).map_err(|()| "Invalid item in Agenda")?;
 		}

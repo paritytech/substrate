@@ -174,7 +174,7 @@ impl Config for Test {
 	type PalletsOrigin = OriginCaller;
 	type Call = Call;
 	type MaximumWeight = MaximumSchedulerWeight;
-	type MaxAgendas = ConstU32<100000>;
+	type MaxAgendas = ConstU32<100>;
 	type MaxSchedules = ConstU32<250>;
 	type MaxScheduleIdLen = ConstU32<8>;
 	type MaxCallLen = ConstU32<300_000>; // TODO

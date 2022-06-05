@@ -44,6 +44,24 @@ fn basic_scheduling_works() {
 	});
 }
 
+// This is the old behaviour which we want to fix.
+#[test]
+fn scheduling_and_cancelling_bloats_the_agenda() {
+	new_test_ext().execute_with(|| {
+		let call = Box::new(Call::Logger(LoggerCall::log { i: 69, weight: 1000 }).into());
+		assert_ok!(Scheduler::schedule_named(Origin::root(), 1u32.encode(), 4, None, 127, call,));
+		run_to_block(3);
+		// Scheduled call are in the agenda.
+		assert_eq!(Agenda::<Test>::get(4).len(), 1);
+		assert!(logger::log().is_empty());
+		// Cancel it.
+		assert_ok!(Scheduler::cancel_named(Origin::root(), 1u32.encode()));
+		// There is now an ugly `None` hole in the agenda...
+		assert_eq!(Agenda::<Test>::get(4).len(), 1);
+		assert_eq!(Agenda::<Test>::get(4).first(), Some(&None));
+		assert!(logger::log().is_empty());
+	});
+}
 #[test]
 fn scheduling_with_preimages_works() {
 	new_test_ext().execute_with(|| {
@@ -599,7 +617,7 @@ fn fails_to_schedule_too_many_tasks() {
 }
 */
 #[test]
-fn should_use_orign() {
+fn should_use_origin() {
 	new_test_ext().execute_with(|| {
 		let call = Box::new(Call::Logger(LoggerCall::log { i: 69, weight: 1000 }).into());
 		let call2 = Box::new(Call::Logger(LoggerCall::log { i: 42, weight: 1000 }).into());
@@ -689,7 +707,7 @@ fn should_check_orign_for_cancel() {
 }
 
 #[test]
-fn migration_to_v4_works() {
+fn migration_v1_to_v4_works() {
 	new_test_ext().execute_with(|| {
 		for i in 0..3u64 {
 			let k = i.twox_64_concat();
@@ -803,7 +821,253 @@ fn migration_to_v4_works() {
 			]
 		);
 
-		assert_eq!(Scheduler::current_storage_version(), 3);
+		assert_eq!(Scheduler::on_chain_storage_version(), StorageVersion::new(4));
+	});
+}
+
+#[test]
+fn migration_v2_to_v4_works() {
+	new_test_ext().execute_with(|| {
+		for i in 0..3u64 {
+			let k = i.twox_64_concat();
+			let old = vec![
+				Some(ScheduledV2Of::<Test> {
+					maybe_id: None,
+					priority: i as u8 + 10,
+					call: Call::Logger(LoggerCall::log { i: 96, weight: 100 }),
+					origin: root(),
+					maybe_periodic: None,
+					_phantom: PhantomData::<u64>::default(),
+				}),
+				None,
+				Some(ScheduledV2Of::<Test> {
+					maybe_id: Some(b"test".to_vec()),
+					priority: 123,
+					call: Call::Logger(LoggerCall::log { i: 69, weight: 1000 }),
+					origin: root(),
+					maybe_periodic: Some((456u64, 10)),
+					_phantom: PhantomData::<u64>::default(),
+				}),
+			];
+			frame_support::migration::put_storage_value(b"Scheduler", b"Agenda", &k, old);
+		}
+
+		Scheduler::migrate_v2_to_v4();
+
+		assert_eq_uvec!(
+			Agenda::<Test>::iter().collect::<Vec<_>>(),
+			vec![
+				(
+					0,
+					BoundedVec::<_, <Test as Config>::MaxScheduledPerBlock>::truncate_from(vec![
+						Some(ScheduledV4Of::<Test> {
+							maybe_id: None,
+							priority: 10,
+							call: EncodedCallOrHashOf::<Test>::from_call(Call::Logger(
+								LoggerCall::log { i: 96, weight: 100 }
+							))
+							.unwrap(),
+							maybe_periodic: None,
+							origin: root(),
+							_phantom: PhantomData::<u64>::default(),
+						}),
+						None,
+						Some(ScheduledV4Of::<Test> {
+							maybe_id: Some(sid(b"test")),
+							priority: 123,
+							call: EncodedCallOrHashOf::<Test>::from_call(Call::Logger(
+								LoggerCall::log { i: 69, weight: 1000 }
+							))
+							.unwrap(),
+							maybe_periodic: Some((456u64, 10)),
+							origin: root(),
+							_phantom: PhantomData::<u64>::default(),
+						}),
+					])
+				),
+				(
+					1,
+					BoundedVec::<_, <Test as Config>::MaxScheduledPerBlock>::truncate_from(vec![
+						Some(ScheduledV4Of::<Test> {
+							maybe_id: None,
+							priority: 11,
+							call: EncodedCallOrHashOf::<Test>::from_call(Call::Logger(
+								LoggerCall::log { i: 96, weight: 100 }
+							))
+							.unwrap(),
+							maybe_periodic: None,
+							origin: root(),
+							_phantom: PhantomData::<u64>::default(),
+						}),
+						None,
+						Some(ScheduledV4Of::<Test> {
+							maybe_id: Some(sid(b"test")),
+							priority: 123,
+							call: EncodedCallOrHashOf::<Test>::from_call(Call::Logger(
+								LoggerCall::log { i: 69, weight: 1000 }
+							))
+							.unwrap(),
+							maybe_periodic: Some((456u64, 10)),
+							origin: root(),
+							_phantom: PhantomData::<u64>::default(),
+						}),
+					])
+				),
+				(
+					2,
+					BoundedVec::<_, <Test as Config>::MaxScheduledPerBlock>::truncate_from(vec![
+						Some(ScheduledV4Of::<Test> {
+							maybe_id: None,
+							priority: 12,
+							call: EncodedCallOrHashOf::<Test>::from_call(Call::Logger(
+								LoggerCall::log { i: 96, weight: 100 }
+							))
+							.unwrap(),
+							maybe_periodic: None,
+							origin: root(),
+							_phantom: PhantomData::<u64>::default(),
+						}),
+						None,
+						Some(ScheduledV4Of::<Test> {
+							maybe_id: Some(sid(b"test")),
+							priority: 123,
+							call: EncodedCallOrHashOf::<Test>::from_call(Call::Logger(
+								LoggerCall::log { i: 69, weight: 1000 }
+							))
+							.unwrap(),
+							maybe_periodic: Some((456u64, 10)),
+							origin: root(),
+							_phantom: PhantomData::<u64>::default(),
+						}),
+					])
+				)
+			]
+		);
+
+		assert_eq!(Scheduler::on_chain_storage_version(), StorageVersion::new(4));
+	});
+}
+
+#[test]
+fn migration_v3_to_v4_works() {
+	new_test_ext().execute_with(|| {
+		for i in 0..3u64 {
+			let k = i.twox_64_concat();
+			let old = vec![
+				Some(ScheduledV3Of::<Test> {
+					maybe_id: None,
+					priority: i as u8 + 10,
+					call: Call::Logger(LoggerCall::log { i: 96, weight: 100 }).into(),
+					origin: root(),
+					maybe_periodic: None,
+					_phantom: PhantomData::<u64>::default(),
+				}),
+				None,
+				Some(ScheduledV3Of::<Test> {
+					maybe_id: Some(b"test".to_vec()),
+					priority: 123,
+					call: Call::Logger(LoggerCall::log { i: 69, weight: 1000 }).into(),
+					origin: root(),
+					maybe_periodic: Some((456u64, 10)),
+					_phantom: PhantomData::<u64>::default(),
+				}),
+			];
+			frame_support::migration::put_storage_value(b"Scheduler", b"Agenda", &k, old);
+		}
+
+		Scheduler::migrate_v3_to_v4();
+
+		assert_eq_uvec!(
+			Agenda::<Test>::iter().collect::<Vec<_>>(),
+			vec![
+				(
+					0,
+					BoundedVec::<_, <Test as Config>::MaxScheduledPerBlock>::truncate_from(vec![
+						Some(ScheduledV4Of::<Test> {
+							maybe_id: None,
+							priority: 10,
+							call: EncodedCallOrHashOf::<Test>::from_call(Call::Logger(
+								LoggerCall::log { i: 96, weight: 100 }
+							))
+							.unwrap(),
+							maybe_periodic: None,
+							origin: root(),
+							_phantom: PhantomData::<u64>::default(),
+						}),
+						None,
+						Some(ScheduledV4Of::<Test> {
+							maybe_id: Some(sid(b"test")),
+							priority: 123,
+							call: EncodedCallOrHashOf::<Test>::from_call(Call::Logger(
+								LoggerCall::log { i: 69, weight: 1000 }
+							))
+							.unwrap(),
+							maybe_periodic: Some((456u64, 10)),
+							origin: root(),
+							_phantom: PhantomData::<u64>::default(),
+						}),
+					])
+				),
+				(
+					1,
+					BoundedVec::<_, <Test as Config>::MaxScheduledPerBlock>::truncate_from(vec![
+						Some(ScheduledV4Of::<Test> {
+							maybe_id: None,
+							priority: 11,
+							call: EncodedCallOrHashOf::<Test>::from_call(Call::Logger(
+								LoggerCall::log { i: 96, weight: 100 }
+							))
+							.unwrap(),
+							maybe_periodic: None,
+							origin: root(),
+							_phantom: PhantomData::<u64>::default(),
+						}),
+						None,
+						Some(ScheduledV4Of::<Test> {
+							maybe_id: Some(sid(b"test")),
+							priority: 123,
+							call: EncodedCallOrHashOf::<Test>::from_call(Call::Logger(
+								LoggerCall::log { i: 69, weight: 1000 }
+							))
+							.unwrap(),
+							maybe_periodic: Some((456u64, 10)),
+							origin: root(),
+							_phantom: PhantomData::<u64>::default(),
+						}),
+					])
+				),
+				(
+					2,
+					BoundedVec::<_, <Test as Config>::MaxScheduledPerBlock>::truncate_from(vec![
+						Some(ScheduledV4Of::<Test> {
+							maybe_id: None,
+							priority: 12,
+							call: EncodedCallOrHashOf::<Test>::from_call(Call::Logger(
+								LoggerCall::log { i: 96, weight: 100 }
+							))
+							.unwrap(),
+							maybe_periodic: None,
+							origin: root(),
+							_phantom: PhantomData::<u64>::default(),
+						}),
+						None,
+						Some(ScheduledV4Of::<Test> {
+							maybe_id: Some(sid(b"test")),
+							priority: 123,
+							call: EncodedCallOrHashOf::<Test>::from_call(Call::Logger(
+								LoggerCall::log { i: 69, weight: 1000 }
+							))
+							.unwrap(),
+							maybe_periodic: Some((456u64, 10)),
+							origin: root(),
+							_phantom: PhantomData::<u64>::default(),
+						}),
+					])
+				)
+			]
+		);
+
+		assert_eq!(Scheduler::on_chain_storage_version(), StorageVersion::new(4));
 	});
 }
 
