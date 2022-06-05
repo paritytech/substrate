@@ -68,12 +68,11 @@ use sp_std::prelude::*;
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
-	BoundedVec,
 	traits::{
 		ContainsLengthBound, Currency, EnsureOrigin, ExistenceRequirement::KeepAlive, Get,
-		OnUnbalanced, ReservableCurrency, SortedMembers, LengthBoundMaximum,
+		LengthBoundMaximum, OnUnbalanced, ReservableCurrency, SortedMembers,
 	},
-	Parameter,
+	BoundedVec, Parameter,
 };
 
 pub use pallet::*;
@@ -84,7 +83,9 @@ pub type NegativeImbalanceOf<T> = pallet_treasury::NegativeImbalanceOf<T>;
 
 /// An open tipping "motion". Retains all details of a tip including information on the finder
 /// and the members who have voted.
-#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, scale_info::TypeInfo, MaxEncodedLen)]
+#[derive(
+	Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, scale_info::TypeInfo, MaxEncodedLen,
+)]
 #[codec(mel_bound())]
 #[scale_info(skip_type_params(Tippers))]
 pub struct OpenTip<
@@ -181,7 +182,8 @@ pub mod pallet {
 	/// insecure enumerable hash since the key is guaranteed to be the result of a secure hash.
 	#[pallet::storage]
 	#[pallet::getter(fn reasons)]
-	pub type Reasons<T: Config> = StorageMap<_, Identity, T::Hash, BoundedVec<u8, T::MaximumReasonLength>, OptionQuery>;
+	pub type Reasons<T: Config> =
+		StorageMap<_, Identity, T::Hash, BoundedVec<u8, T::MaximumReasonLength>, OptionQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -246,7 +248,8 @@ pub mod pallet {
 			let finder = ensure_signed(origin)?;
 
 			// make reason bounded
-			let reason: BoundedVec<u8, _> = reason.try_into().map_err(|_| Error::<T>::ReasonTooBig)?;
+			let reason: BoundedVec<u8, _> =
+				reason.try_into().map_err(|_| Error::<T>::ReasonTooBig)?;
 
 			let reason_hash = T::Hashing::hash(&reason[..]);
 			ensure!(!Reasons::<T>::contains_key(&reason_hash), Error::<T>::AlreadyKnown);
@@ -337,7 +340,8 @@ pub mod pallet {
 			#[pallet::compact] tip_value: BalanceOf<T>,
 		) -> DispatchResult {
 			// make reason bounded
-			let reason: BoundedVec<u8, _> = reason.try_into().map_err(|_| Error::<T>::ReasonTooBig)?;
+			let reason: BoundedVec<u8, _> =
+				reason.try_into().map_err(|_| Error::<T>::ReasonTooBig)?;
 
 			let tipper = ensure_signed(origin)?;
 			ensure!(T::Tippers::contains(&tipper), BadOrigin);
@@ -347,7 +351,9 @@ pub mod pallet {
 
 			Reasons::<T>::insert(&reason_hash, &reason);
 			Self::deposit_event(Event::NewTip { tip_hash: hash });
-			let tips = vec![(tipper.clone(), tip_value)].try_into().map_err(|_| Error::<T>::TipsTooBig)?;
+			let tips = vec![(tipper.clone(), tip_value)]
+				.try_into()
+				.map_err(|_| Error::<T>::TipsTooBig)?;
 			let tip = OpenTip {
 				reason: reason_hash,
 				who,
@@ -395,7 +401,7 @@ pub mod pallet {
 			ensure!(T::Tippers::contains(&tipper), BadOrigin);
 
 			let mut tip = Tips::<T>::get(hash).ok_or(Error::<T>::UnknownTip)?;
-			if Self::insert_tip_and_check_closing(&mut tip, tipper, tip_value) {
+			if Self::insert_tip_and_check_closing(&mut tip, tipper, tip_value)? {
 				Self::deposit_event(Event::TipClosing { tip_hash: hash });
 			}
 			Tips::<T>::insert(&hash, tip);
@@ -484,23 +490,28 @@ impl<T: Config> Pallet<T> {
 		tip: &mut OpenTip<T::AccountId, BalanceOf<T>, T::BlockNumber, T::Hash, T::Tippers>,
 		tipper: T::AccountId,
 		tip_value: BalanceOf<T>,
-	) -> bool {
+	) -> Result<bool, sp_runtime::DispatchError> {
 		match tip.tips.binary_search_by_key(&&tipper, |x| &x.0) {
 			Ok(pos) => tip.tips[pos] = (tipper, tip_value),
-			Err(pos) => tip.tips.insert(pos, (tipper, tip_value)),
+			Err(pos) => tip
+				.tips
+				.try_insert(pos, (tipper, tip_value))
+				.map_err(|_| Error::<T>::TipsTooBig)?,
 		}
 		Self::retain_active_tips(&mut tip.tips);
 		let threshold = (T::Tippers::count() + 1) / 2;
 		if tip.tips.len() >= threshold && tip.closes.is_none() {
 			tip.closes = Some(frame_system::Pallet::<T>::block_number() + T::TipCountdown::get());
-			true
+			Ok(true)
 		} else {
-			false
+			Ok(false)
 		}
 	}
 
 	/// Remove any non-members of `Tippers` from a `tips` vector. `O(T)`.
-	fn retain_active_tips(tips: &mut Vec<(T::AccountId, BalanceOf<T>)>) {
+	fn retain_active_tips(
+		tips: &mut BoundedVec<(T::AccountId, BalanceOf<T>), LengthBoundMaximum<T::Tippers>>,
+	) {
 		let members = T::Tippers::sorted_members();
 		let mut members_iter = members.iter();
 		let mut member = members_iter.next();

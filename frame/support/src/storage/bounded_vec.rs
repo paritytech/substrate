@@ -182,6 +182,17 @@ impl<T, S> BoundedVec<T, S> {
 		self.0
 	}
 
+	/// Exactly the same semantics as [`slice::sort_by_key`].
+	///
+	/// This is safe since sorting cannot change the number of elements in the vector.
+	pub fn sort_by_key<K, F>(&mut self, f: F)
+	where
+		F: FnMut(&T) -> K,
+		K: Ord,
+	{
+		self.0.sort_by_key(f)
+	}
+
 	/// Exactly the same semantics as [`slice::sort_by`].
 	///
 	/// This is safe since sorting cannot change the number of elements in the vector.

@@ -30,7 +30,7 @@ use sp_runtime::{
 use sp_storage::Storage;
 
 use frame_support::{
-	assert_noop, assert_ok,
+	assert_noop, assert_ok, bounded_vec,
 	pallet_prelude::GenesisBuild,
 	parameter_types,
 	storage::StoragePrefixedMap,
@@ -101,6 +101,7 @@ impl pallet_balances::Config for Test {
 thread_local! {
 	static TEN_TO_FOURTEEN: RefCell<Vec<u128>> = RefCell::new(vec![10,11,12,13,14]);
 }
+#[derive(PartialEq, Debug)]
 pub struct TenToFourteen;
 impl SortedMembers<u128> for TenToFourteen {
 	fn sorted_members() -> Vec<u128> {
@@ -445,7 +446,7 @@ fn test_last_reward_migration() {
 				finder: 20,
 				deposit: 30,
 				closes: Some(13),
-				tips: vec![(40, 50), (60, 70)],
+				tips: bounded_vec![(40, 50), (60, 70)],
 				finders_fee: true,
 			})
 		);
@@ -459,7 +460,7 @@ fn test_last_reward_migration() {
 				finder: Default::default(),
 				deposit: 0,
 				closes: Some(13),
-				tips: vec![(40, 50), (60, 70)],
+				tips: bounded_vec![(40, 50), (60, 70)],
 				finders_fee: false,
 			})
 		);
@@ -471,13 +472,13 @@ fn test_migration_v4() {
 	let reason1 = BlakeTwo256::hash(b"reason1");
 	let hash1 = BlakeTwo256::hash_of(&(reason1, 10u64));
 
-	let tip = OpenTip::<u128, u64, u64, H256> {
+	let tip = OpenTip::<u128, u64, u64, H256, TenToFourteen> {
 		reason: reason1,
 		who: 10,
 		finder: 20,
 		deposit: 30,
 		closes: Some(13),
-		tips: vec![(40, 50), (60, 70)],
+		tips: bounded_vec![(40, 50), (60, 70)],
 		finders_fee: true,
 	};
 

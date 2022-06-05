@@ -17,8 +17,8 @@
 
 //! Traits for dealing with the idea of membership.
 
-use sp_std::{marker::PhantomData, prelude::*};
 use sp_runtime::traits::Get;
+use sp_std::{marker::PhantomData, prelude::*};
 
 /// A trait for querying whether a type can be said to "contain" a value.
 pub trait Contains<T> {
