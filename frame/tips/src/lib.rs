@@ -568,7 +568,7 @@ impl<T: Config> Pallet<T> {
 		Self::deposit_event(Event::TipClosed { tip_hash: hash, who: tip.who, payout });
 	}
 
-	pub fn migrate_retract_tip_for_tip_new(module: &[u8], item: &[u8]) {
+	pub fn migrate_retract_tip_for_tip_new(module: &[u8], item: &[u8]) -> Result<(), ()> {
 		/// An open tipping "motion". Retains all details of a tip including information on the
 		/// finder and the members who have voted.
 		#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug)]
@@ -614,10 +614,12 @@ impl<T: Config> Pallet<T> {
 				finder,
 				deposit,
 				closes: old_tip.closes,
-				tips: BoundedVec::truncate_from(old_tip.tips),
+				tips: BoundedVec::try_from(old_tip.tips).map_err(|_| ())?,
 				finders_fee,
 			};
 			Tips::<T>::insert(hash, new_tip)
 		}
+
+		Ok(())
 	}
 }

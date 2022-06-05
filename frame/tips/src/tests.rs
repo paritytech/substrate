@@ -435,7 +435,7 @@ fn test_last_reward_migration() {
 	sp_io::TestExternalities::new(s).execute_with(|| {
 		let module = pallet_tips::Tips::<Test>::module_prefix();
 		let item = pallet_tips::Tips::<Test>::storage_prefix();
-		Tips::migrate_retract_tip_for_tip_new(module, item);
+		Tips::migrate_retract_tip_for_tip_new(module, item).unwrap();
 
 		// Test w/ finder
 		assert_eq!(
