@@ -143,11 +143,11 @@ impl Rational128 {
 
 	/// Convert `self` to a similar rational number where denominator is the given `den`.
 	//
-	/// This only returns if the result is accurate. `Err` is returned if the result cannot be
+	/// This only returns if the result is accurate. `None` is returned if the result cannot be
 	/// accurately calculated.
-	pub fn to_den(self, den: u128) -> Result<Self, &'static str> {
+	pub fn to_den(self, den: u128) -> Option<Self> {
 		if den == self.1 {
-			Ok(self)
+			Some(self)
 		} else {
 			helpers_128bit::multiply_by_rational_with_rounding(
 				self.0,
@@ -161,7 +161,7 @@ impl Rational128 {
 
 	/// Get the least common divisor of `self` and `other`.
 	///
-	/// This only returns if the result is accurate. `Err` is returned if the result cannot be
+	/// This only returns if the result is accurate. `None` is returned if the result cannot be
 	/// accurately calculated.
 	pub fn lcm(&self, other: &Self) -> Option<u128> {
 		// this should be tested better: two large numbers that are almost the same.
@@ -199,9 +199,11 @@ impl Rational128 {
 	///
 	/// Overflow might happen during any of the steps. Error is returned in such cases.
 	pub fn checked_add(self, other: Self) -> Result<Self, &'static str> {
-		let lcm = self.lcm(&other).map_err(|_| "failed to scale to denominator")?;
-		let self_scaled = self.to_den(lcm).map_err(|_| "failed to scale to denominator")?;
-		let other_scaled = other.to_den(lcm).map_err(|_| "failed to scale to denominator")?;
+		let lcm = self.lcm(&other).ok_or(0).map_err(|_| "failed to scale to denominator")?;
+		let self_scaled =
+			self.to_den(lcm).ok_or(0).map_err(|_| "failed to scale to denominator")?;
+		let other_scaled =
+			other.to_den(lcm).ok_or(0).map_err(|_| "failed to scale to denominator")?;
 		let n = self_scaled
 			.0
 			.checked_add(other_scaled.0)
@@ -213,9 +215,11 @@ impl Rational128 {
 	///
 	/// Overflow might happen during any of the steps. None is returned in such cases.
 	pub fn checked_sub(self, other: Self) -> Result<Self, &'static str> {
-		let lcm = self.lcm(&other).map_err(|_| "failed to scale to denominator")?;
-		let self_scaled = self.to_den(lcm).map_err(|_| "failed to scale to denominator")?;
-		let other_scaled = other.to_den(lcm).map_err(|_| "failed to scale to denominator")?;
+		let lcm = self.lcm(&other).ok_or(0).map_err(|_| "failed to scale to denominator")?;
+		let self_scaled =
+			self.to_den(lcm).ok_or(0).map_err(|_| "failed to scale to denominator")?;
+		let other_scaled =
+			other.to_den(lcm).ok_or(0).map_err(|_| "failed to scale to denominator")?;
 
 		let n = self_scaled
 			.0
@@ -522,7 +526,8 @@ mod tests {
 			multiply_by_rational_with_rounding(
 				29459999999999999988000u128,
 				1000000000000000000u128,
-				10000000000000000000u128
+				10000000000000000000u128,
+				Rounding::NearestPrefDown
 			)
 			.unwrap(),
 			2945999999999999998800u128

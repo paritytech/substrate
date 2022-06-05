@@ -175,7 +175,6 @@ pub trait FixedPointNumber:
 			Self::DIV.unique_saturated_into(),
 			Rounding::from_signed(SignedRounding::Minor, negative),
 		)
-		.ok()
 		.and_then(|value| from_i129(I129 { value, negative }))
 	}
 
@@ -847,7 +846,6 @@ macro_rules! implement_fixed {
 					rhs.value,
 					Rounding::from_signed(SignedRounding::Minor, negative),
 				)
-				.ok()
 				.and_then(|value| from_i129(I129 { value, negative }))
 				.map(Self)
 			}
@@ -865,7 +863,6 @@ macro_rules! implement_fixed {
 					Self::DIV as u128,
 					Rounding::from_signed(SignedRounding::Minor, negative),
 				)
-				.ok()
 				.and_then(|value| from_i129(I129 { value, negative }))
 				.map(Self)
 			}
