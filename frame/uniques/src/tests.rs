@@ -809,7 +809,8 @@ fn buy_item_should_work() {
 			Error::<Test>::BidTooLow
 		);
 
-		assert_ok!(Uniques::buy_item(Origin::signed(user_2), collection_id, item_1, price_1,));
+		// pass the higher price to validate it will still deduct correctly
+		assert_ok!(Uniques::buy_item(Origin::signed(user_2), collection_id, item_1, price_1 + 1,));
 
 		// validate the new owner & balances
 		let item = Item::<Test>::get(collection_id, item_1).unwrap();
