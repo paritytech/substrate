@@ -19,7 +19,7 @@
 
 use codec::{Encode, MaxEncodedLen};
 
-use frame_support::{traits::OneSessionHandler, BoundedSlice, BoundedVec, Parameter};
+use frame_support::{log, traits::{Get, OneSessionHandler}, BoundedSlice, BoundedVec, Parameter};
 
 use sp_runtime::{
 	generic::DigestItem,
@@ -169,9 +169,24 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 		I: Iterator<Item = (&'a T::AccountId, T::BeefyId)>,
 	{
 		let next_authorities = validators.map(|(_, k)| k).collect::<Vec<_>>();
+		if next_authorities.len() as u32 > T::MaxAuthorities::get() {
+			log::error!(
+				target: "runtime::beefy",
+				"authorities list {:?} truncated to length {}",
+				next_authorities, T::MaxAuthorities::get(),
+			);
+		}
 		let bounded_next_authorities =
 			BoundedVec::<_, T::MaxAuthorities>::truncate_from(next_authorities);
+
 		let next_queued_authorities = queued_validators.map(|(_, k)| k).collect::<Vec<_>>();
+		if next_queued_authorities.len() as u32 > T::MaxAuthorities::get() {
+			log::error!(
+				target: "runtime::beefy",
+				"authorities list {:?} truncated to length {}",
+				next_queued_authorities, T::MaxAuthorities::get(),
+			);
+		}
 		let bounded_next_queued_authorities =
 			BoundedVec::<_, T::MaxAuthorities>::truncate_from(next_queued_authorities);
 
