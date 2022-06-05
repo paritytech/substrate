@@ -230,7 +230,7 @@ benchmarks! {
 		let when = BLOCK_NUMBER.into();
 
 		fill_schedule::<T>(when, s, true, true, Some(false))?;
-		assert_eq!(Agenda::<T>::get(when).len(), s as usize);
+		assert_eq!(Agenda::<T>::get(when).len() as u32, s);
 	}: _(RawOrigin::Root, when, 0)
 	verify {
 		let id: ScheduleIdOf<T> = 0.encode().try_into().unwrap();
@@ -238,11 +238,9 @@ benchmarks! {
 			Lookup::<T>::get(id).is_none(),
 			"didn't remove from lookup"
 		);
-		// Removed schedule is NONE
-		ensure!(
-			Agenda::<T>::get(when)[0].is_none(),
-			"didn't remove from schedule"
-		);
+		// Removed schedule and its agenda are gone.
+		// Removed schedule is gone.
+		assert_eq!(Agenda::<T>::get(when).len() as u32, s-1, 	"didn't remove the agenda");
 	}
 
 	schedule_named {
@@ -269,6 +267,7 @@ benchmarks! {
 		let when = BLOCK_NUMBER.into();
 
 		fill_schedule::<T>(when, s, true, true, Some(false))?;
+		assert_eq!(Agenda::<T>::get(when).len() as u32, s);
 	}: _(RawOrigin::Root, 0.encode())
 	verify {
 		let id: ScheduleIdOf<T> = 0.encode().try_into().unwrap();
@@ -276,11 +275,8 @@ benchmarks! {
 			Lookup::<T>::get(id).is_none(),
 			"didn't remove from lookup"
 		);
-		// Removed schedule is NONE
-		ensure!(
-			Agenda::<T>::get(when)[0].is_none(),
-			"didn't remove from schedule"
-		);
+		// Removed schedule is gone.
+		assert_eq!(Agenda::<T>::get(when).len() as u32, s-1, 	"didn't remove the agenda");
 	}
 
 	impl_benchmark_test_suite!(Scheduler, crate::mock::new_test_ext(), crate::mock::Test);

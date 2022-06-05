@@ -78,7 +78,7 @@ use sp_runtime::{
 	traits::{BadOrigin, One, Saturating, Zero},
 	RuntimeDebug,
 };
-use sp_std::{borrow::Borrow, cmp::Ordering, marker::PhantomData, prelude::*};
+use sp_std::{cmp::Ordering, marker::PhantomData, prelude::*};
 pub use weights::WeightInfo;
 
 /// Just a simple index for naming period tasks.
@@ -356,7 +356,7 @@ pub mod pallet {
 	pub type Agenda<T: Config> = StorageMap<
 		Hasher = Twox64Concat,
 		Key = T::BlockNumber,
-		Value = BoundedVec<Option<ScheduledV4Of<T>>, T::MaxScheduledPerBlock>,
+		Value = BoundedVec<ScheduledV4Of<T>, T::MaxScheduledPerBlock>,
 		QueryKind = ValueQuery,
 		MaxValues = T::MaxAgendas,
 	>;
@@ -419,11 +419,7 @@ pub mod pallet {
 		fn on_initialize(now: T::BlockNumber) -> Weight {
 			let limit = T::MaximumWeight::get();
 
-			let mut queued = Agenda::<T>::take(now)
-				.into_iter()
-				.enumerate()
-				.filter_map(|(index, s)| Some((index as u32, s?)))
-				.collect::<Vec<_>>();
+			let mut queued = Agenda::<T>::take(now).into_iter().enumerate().collect::<Vec<_>>();
 
 			queued.sort_by_key(|(_, s)| s.priority);
 
@@ -439,7 +435,12 @@ pub mod pallet {
 				};
 
 				let (call, maybe_completed) = s.call.into_inner().resolved::<T::PreimageProvider>();
-				s.call = EncodedCallOrHashOf::<T>::new(call).expect("todo");
+				let encoded_call = match EncodedCallOrHashOf::<T>::new(call.clone()).defensive_ok()
+				{
+					Some(encoded) => encoded,
+					None => continue, // This is a defensive failure and should never happen.
+				};
+				s.call = encoded_call;
 
 				let resolved = if let Some(completed) = maybe_completed {
 					T::PreimageProvider::unrequest_preimage(&completed);
@@ -448,10 +449,10 @@ pub mod pallet {
 					false
 				};
 
-				let tmp = s.call.clone().into_inner();
-				let call = match tmp.as_value().cloned() {
-					Some(c) => c,
-					None => {
+				//let call = s.call.clone().into_inner();
+				let call = match call {
+					MaybeHashed::Value(c) => c,
+					MaybeHashed::Hash(hash) => {
 						// Preimage not available - postpone until some block.
 						total_weight.saturating_accrue(T::WeightInfo::item(false, named, None));
 						if let Some(delay) = T::NoPreimagePostponement::get() {
@@ -460,8 +461,13 @@ pub mod pallet {
 								let index = Agenda::<T>::decode_len(until).unwrap_or(0);
 								Lookup::<T>::insert(id, (until, index as u32));
 							}
-							Agenda::<T>::try_append(until, Some(s))
-								.expect("TODO Failed to schedule future block");
+
+							if Agenda::<T>::try_append(until, s).is_err() {
+								// There is not enough room in the future block where the call
+								// should be re-scheduled. Nothing that we can do about it.
+
+								T::PreimageProvider::unrequest_preimage(&hash);
+							}
 						}
 						continue
 					},
@@ -501,7 +507,7 @@ pub mod pallet {
 						let index = Agenda::<T>::decode_len(next).unwrap_or(0);
 						Lookup::<T>::insert(id, (next, index as u32));
 					}
-					Agenda::<T>::try_append(next, Some(s))
+					Agenda::<T>::try_append(next, s)
 						.map_err(|_| Error::<T>::TooManyAgendas)
 						.expect("TODO Failed to schedule future block");
 					continue
@@ -518,7 +524,7 @@ pub mod pallet {
 				total_weight.saturating_accrue(actual_call_weight);
 
 				Self::deposit_event(Event::Dispatched {
-					task: (now, index),
+					task: (now, index as u32),
 					id: s.maybe_id.clone(),
 					result,
 				});
@@ -535,7 +541,7 @@ pub mod pallet {
 						let wake_index = Agenda::<T>::decode_len(wake).unwrap_or(0);
 						Lookup::<T>::insert(id, (wake, wake_index as u32));
 					}
-					Agenda::<T>::try_append(wake, Some(s))
+					Agenda::<T>::try_append(wake, s)
 						.map_err(|_| Error::<T>::TooManyAgendas)
 						.expect("TODO Failed to schedule future block");
 				}
@@ -683,33 +689,30 @@ impl<T: Config> Pallet<T> {
 				Some(
 					agenda
 						.into_iter()
+						.filter_map(|s| s)
 						.map(|schedule| {
 							weight.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
 
-							schedule.map(|schedule| {
-								let call = EncodedCallOrHashOf::<T>::from_call(schedule.call)
-									.expect("Expected to encode call into V4 format");
-								let id = schedule.maybe_id.map(|id| {
-									id.try_into()
-										.expect("ID too long, cannot migrate. Try to increase ")
-								});
+							let call = EncodedCallOrHashOf::<T>::from_call(schedule.call)
+								.expect("Expected to encode call into V4 format");
+							let id = schedule.maybe_id.map(|id| {
+								id.try_into()
+									.expect("ID too long, cannot migrate. Try to increase ")
+							});
 
-								ScheduledV4Of::<T> {
-									maybe_id: id,
-									priority: schedule.priority,
-									call: call.into(),
-									maybe_periodic: schedule.maybe_periodic,
-									origin: BoundedCodecWrapper::try_from(
-										system::RawOrigin::Root.into(),
-									)
-									.expect(
-										"Cannot encode origin. Increase `MaxPalletsOriginLen`.",
-									),
-									_phantom: Default::default(),
-								}
-							})
+							ScheduledV4Of::<T> {
+								maybe_id: id,
+								priority: schedule.priority,
+								call: call.into(),
+								maybe_periodic: schedule.maybe_periodic,
+								origin: BoundedCodecWrapper::try_from(
+									system::RawOrigin::Root.into(),
+								)
+								.expect("Cannot encode origin. Increase `MaxPalletsOriginLen`."),
+								_phantom: Default::default(),
+							}
 						})
-						.collect::<Vec<Option<ScheduledV4Of<T>>>>()
+						.collect::<Vec<_>>()
 						.try_into()
 						.expect("V1 schedules fit in storage; Therefore V3 fit in storage; qed"),
 				)
@@ -738,9 +741,9 @@ impl<T: Config> Pallet<T> {
 			Some(
 				agenda
 					.into_iter()
+					.filter_map(|s| s)
 					.map(|schedule| {
 						weight.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
-						schedule.map(|schedule| {
 							let call = EncodedCallOrHashOf::<T>::new(schedule.call).expect("TODO");
 							let id = schedule.maybe_id.map(|id|
 								id.try_into().expect("ID too long")
@@ -753,7 +756,7 @@ impl<T: Config> Pallet<T> {
 							maybe_periodic: schedule.maybe_periodic,
 							origin: BoundedCodecWrapper::try_from(schedule.origin).expect("Cannot encode origin. Increase `MaxPalletsOriginLen`."),
 							_phantom: Default::default(),
-						}})
+						}
 					})
 					.collect::<Vec<_>>()
 					.try_into()
@@ -783,9 +786,9 @@ impl<T: Config> Pallet<T> {
 			Some(
 				agenda
 					.into_iter()
+					.filter_map(|s| s)
 					.map(|schedule| {
 						weight.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
-						schedule.map(|schedule| {
 							let call = EncodedCallOrHashOf::<T>::from_call(schedule.call).expect("TODO");
 							let id = schedule.maybe_id.map(|id|
 								id.try_into().expect("ID too long")
@@ -798,7 +801,7 @@ impl<T: Config> Pallet<T> {
 							maybe_periodic: schedule.maybe_periodic,
 							origin: BoundedCodecWrapper::try_from(schedule.origin).expect("Cannot encode origin. Increase `MaxPalletsOriginLen`."),
 							_phantom: Default::default(),
-						}})
+						}
 					})
 					.collect::<Vec<_>>()
 					.try_into()
@@ -840,14 +843,12 @@ impl<T: Config> Pallet<T> {
 	pub fn migrate_origin<OldOrigin: Into<T::PalletsOrigin> + codec::Decode>() {
 		Agenda::<T>::translate::<
 			Vec<
-				Option<
-					Scheduled<
-						EncodedCallOrHashOf<T>,
-						T::BlockNumber,
-						OldOrigin,
-						T::AccountId,
-						ScheduleIdOf<T>,
-					>,
+				Scheduled<
+					EncodedCallOrHashOf<T>,
+					T::BlockNumber,
+					OldOrigin,
+					T::AccountId,
+					ScheduleIdOf<T>,
 				>,
 			>,
 			_,
@@ -855,16 +856,14 @@ impl<T: Config> Pallet<T> {
 			Some(
 				agenda
 					.into_iter()
-					.map(|schedule| {
-						schedule.map(|schedule| Scheduled {
-							maybe_id: schedule.maybe_id,
-							priority: schedule.priority,
-							call: schedule.call.into(),
-							maybe_periodic: schedule.maybe_periodic,
-							origin: BoundedCodecWrapper::try_from(schedule.origin.into())
-								.expect("Cannot encode origin. Increase `MaxPalletsOriginLen`."),
-							_phantom: Default::default(),
-						})
+					.map(|schedule| Scheduled {
+						maybe_id: schedule.maybe_id,
+						priority: schedule.priority,
+						call: schedule.call.into(),
+						maybe_periodic: schedule.maybe_periodic,
+						origin: BoundedCodecWrapper::try_from(schedule.origin.into())
+							.expect("Cannot encode origin. Increase `MaxPalletsOriginLen`."),
+						_phantom: Default::default(),
 					})
 					.collect::<Vec<_>>()
 					.try_into()
@@ -906,7 +905,7 @@ impl<T: Config> Pallet<T> {
 			.filter(|p| p.1 > 1 && !p.0.is_zero())
 			// Remove one from the number of repetitions since we will schedule one now.
 			.map(|(p, c)| (p, c - 1));
-		let s = Some(Scheduled {
+		let s = Scheduled {
 			maybe_id: None,
 			priority,
 			call,
@@ -914,7 +913,7 @@ impl<T: Config> Pallet<T> {
 			origin: BoundedCodecWrapper::try_from(origin)
 				.map_err(|_| Error::<T>::PalletsOriginTooLong)?,
 			_phantom: PhantomData::<T::AccountId>::default(),
-		});
+		};
 		Agenda::<T>::try_append(when, s).map_err(|_| Error::<T>::TooManyAgendas)?;
 		let index = Agenda::<T>::decode_len(when).unwrap_or(1) as u32 - 1;
 		Self::deposit_event(Event::Scheduled { when, index });
@@ -926,35 +925,32 @@ impl<T: Config> Pallet<T> {
 		origin: Option<T::PalletsOrigin>,
 		(when, index): TaskAddress<T::BlockNumber>,
 	) -> Result<(), DispatchError> {
-		let scheduled = Agenda::<T>::try_mutate(when, |agenda| {
-			agenda.get_mut(index as usize).map_or(
-				Ok(None),
-				|s| -> Result<Option<Scheduled<_, _, _, _, _>>, DispatchError> {
-					if let (Some(ref o), Some(ref s)) = (origin, s.borrow()) {
-						if matches!(
-							T::OriginPrivilegeCmp::cmp_privilege(
-								o,
-								&s.origin.clone().try_into_inner().expect("TODO")
-							),
-							Some(Ordering::Less) | None
-						) {
-							return Err(BadOrigin.into())
-						}
-					};
-					Ok(s.take())
-				},
-			)
-		})?;
-		if let Some(s) = scheduled {
-			s.call.into_inner().ensure_unrequested::<T::PreimageProvider>();
-			if let Some(id) = s.maybe_id {
-				Lookup::<T>::remove(id);
+		let mut agenda = Agenda::<T>::try_get(when).map_err(|_| Error::<T>::NotFound)?;
+		let schedule = agenda.get(index as usize).ok_or(Error::<T>::NotFound)?.clone();
+		let decoded_origin = schedule.origin.clone().try_into_inner().expect("TODO");
+
+		if let Some(ref o) = origin {
+			if matches!(
+				T::OriginPrivilegeCmp::cmp_privilege(o, &decoded_origin,),
+				Some(Ordering::Less) | None
+			) {
+				return Err(BadOrigin.into())
 			}
-			Self::deposit_event(Event::Canceled { when, index });
-			Ok(())
-		} else {
-			return Err(Error::<T>::NotFound.into())
 		}
+		agenda.remove(index as usize);
+
+		if agenda.is_empty() {
+			Agenda::<T>::remove(when);
+		} else {
+			Agenda::<T>::insert(when, agenda);
+		}
+
+		schedule.call.into_inner().ensure_unrequested::<T::PreimageProvider>();
+		if let Some(id) = schedule.maybe_id {
+			Lookup::<T>::remove(id);
+		}
+		Self::deposit_event(Event::Canceled { when, index });
+		Ok(())
 	}
 
 	fn do_reschedule(
@@ -968,10 +964,9 @@ impl<T: Config> Pallet<T> {
 		}
 
 		Agenda::<T>::try_mutate(when, |agenda| -> DispatchResult {
-			let task = agenda.get_mut(index as usize).ok_or(Error::<T>::NotFound)?;
-			let task = task.take().ok_or(Error::<T>::NotFound)?;
-			Agenda::<T>::try_append(new_time, Some(task))
-				.map_err(|_| Error::<T>::TooManyAgendas.into())
+			let task = agenda.get(index as usize).ok_or(Error::<T>::NotFound)?.clone();
+			agenda.remove(index as usize);
+			Agenda::<T>::try_append(new_time, task).map_err(|_| Error::<T>::TooManyAgendas.into())
 		})?;
 
 		let new_index = Agenda::<T>::decode_len(new_time).unwrap_or(1) as u32 - 1;
@@ -1014,7 +1009,7 @@ impl<T: Config> Pallet<T> {
 				.map_err(|_| Error::<T>::PalletsOriginTooLong)?,
 			_phantom: Default::default(),
 		};
-		Agenda::<T>::try_append(when, Some(s)).map_err(|_| Error::<T>::TooManyAgendas)?;
+		Agenda::<T>::try_append(when, s).map_err(|_| Error::<T>::TooManyAgendas)?;
 		let index = Agenda::<T>::decode_len(when).unwrap_or(1) as u32 - 1;
 		let address = (when, index);
 		Lookup::<T>::insert(&id, &address);
@@ -1026,24 +1021,7 @@ impl<T: Config> Pallet<T> {
 	fn do_cancel_named(origin: Option<T::PalletsOrigin>, id: ScheduleIdOf<T>) -> DispatchResult {
 		Lookup::<T>::try_mutate_exists(id, |lookup| -> DispatchResult {
 			if let Some((when, index)) = lookup.take() {
-				let i = index as usize;
-				Agenda::<T>::try_mutate(when, |agenda| -> DispatchResult {
-					if let Some(s) = agenda.get_mut(i) {
-						if let (Some(ref o), Some(ref s)) = (origin, s.borrow()) {
-							if matches!(
-								T::OriginPrivilegeCmp::cmp_privilege(o, &s.origin.clone().try_into_inner().expect("The call was encoded successfully and must therefore decode; qed")),
-								Some(Ordering::Less) | None
-							) {
-								return Err(BadOrigin.into())
-							}
-							s.call.clone().into_inner().ensure_unrequested::<T::PreimageProvider>();
-						}
-						*s = None;
-					}
-					Ok(())
-				})?;
-				Self::deposit_event(Event::Canceled { when, index });
-				Ok(())
+				Self::do_cancel(origin, (when, index))
 			} else {
 				return Err(Error::<T>::NotFound.into())
 			}
@@ -1068,9 +1046,9 @@ impl<T: Config> Pallet<T> {
 				}
 
 				Agenda::<T>::try_mutate(when, |agenda| -> DispatchResult {
-					let task = agenda.get_mut(index as usize).ok_or(Error::<T>::NotFound)?;
-					let task = task.take().ok_or(Error::<T>::NotFound)?;
-					Agenda::<T>::try_append(new_time, Some(task))
+					let task = agenda.get(index as usize).ok_or(Error::<T>::NotFound)?.clone();
+					agenda.remove(index as usize);
+					Agenda::<T>::try_append(new_time, task)
 						.map_err(|_| Error::<T>::TooManyAgendas.into())
 				})?;
 
@@ -1124,7 +1102,6 @@ impl<T: Config> schedule::v2::Named<T::BlockNumber, <T as Config>::Call, T::Pall
 	type Address = TaskAddress<T::BlockNumber>;
 	type Hash = T::Hash;
 
-	// TODO maybe change `Named` trait instead.
 	fn schedule_named(
 		id: Vec<u8>,
 		when: DispatchTime<T::BlockNumber>,

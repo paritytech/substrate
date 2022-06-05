@@ -153,6 +153,7 @@ impl logger::Config for Test {
 parameter_types! {
 	pub MaximumSchedulerWeight: Weight = Perbill::from_percent(80) * BlockWeights::get().max_block;
 	pub const NoPreimagePostponement: Option<u64> = Some(2);
+	pub const MaxScheduledPerBlock: u32 = 10;
 }
 ord_parameter_types! {
 	pub const One: u64 = 1;
@@ -180,7 +181,7 @@ impl Config for Test {
 	type MaxCallLen = ConstU32<300_000>; // TODO
 	type MaxPalletsOriginLen = ConstU32<16>; // TODO
 	type ScheduleOrigin = EitherOfDiverse<EnsureRoot<u64>, EnsureSignedBy<One, u64>>;
-	type MaxScheduledPerBlock = ConstU32<10>;
+	type MaxScheduledPerBlock = MaxScheduledPerBlock;
 	type WeightInfo = ();
 	type OriginPrivilegeCmp = EqualPrivilegeOnly;
 	type PreimageProvider = Preimage;
