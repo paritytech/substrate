@@ -1,6 +1,6 @@
 (module
-	(import "seal1" "seal_input" (func $seal_input (param i32 i32)))
-	(import "seal1" "seal_call" (func $seal_call (param i32 i32 i64 i32 i32 i32 i32 i32 i32) (result i32)))
+	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
+	(import "seal0" "seal_call" (func $seal_call (param i32 i32 i64 i32 i32 i32 i32 i32 i32) (result i32)))
 	(import "seal0" "seal_delegate_call" (func $seal_delegate_call (param i32 i32 i32 i32 i32 i32) (result i32)))
 	(import "__unstable__" "seal_reentrant_count" (func $seal_reentrant_count (result i32)))
 	(import "env" "memory" (memory 1 1))
