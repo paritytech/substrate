@@ -297,7 +297,7 @@ mod tests {
 			let b = random_u128(i + (1 << 30));
 			let c = random_u128(i + (1 << 31));
 			let x = mulrat(a, b, c, NearestPrefDown);
-			let y = multiply_by_rational_with_rounding(a, b, c).ok();
+			let y = multiply_by_rational_with_rounding(a, b, c, Rounding::NearestPrefDown);
 			assert_eq!(x.is_some(), y.is_some());
 			let x = x.unwrap_or(0);
 			let y = y.unwrap_or(0);

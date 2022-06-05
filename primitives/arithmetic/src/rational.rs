@@ -329,18 +329,18 @@ mod tests {
 	#[test]
 	fn to_denom_works() {
 		// simple up and down
-		assert_eq!(r(1, 5).to_den(10), Ok(r(2, 10)));
-		assert_eq!(r(4, 10).to_den(5), Ok(r(2, 5)));
+		assert_eq!(r(1, 5).to_den(10), Some(r(2, 10)));
+		assert_eq!(r(4, 10).to_den(5), Some(r(2, 5)));
 
 		// up and down with large numbers
-		assert_eq!(r(MAX128 - 10, MAX128).to_den(10), Ok(r(10, 10)));
-		assert_eq!(r(MAX128 / 2, MAX128).to_den(10), Ok(r(5, 10)));
+		assert_eq!(r(MAX128 - 10, MAX128).to_den(10), Some(r(10, 10)));
+		assert_eq!(r(MAX128 / 2, MAX128).to_den(10), Some(r(5, 10)));
 
 		// large to perbill. This is very well needed for npos-elections.
-		assert_eq!(r(MAX128 / 2, MAX128).to_den(1000_000_000), Ok(r(500_000_000, 1000_000_000)));
+		assert_eq!(r(MAX128 / 2, MAX128).to_den(1000_000_000), Some(r(500_000_000, 1000_000_000)));
 
 		// large to large
-		assert_eq!(r(MAX128 / 2, MAX128).to_den(MAX128 / 2), Ok(r(MAX128 / 4, MAX128 / 2)));
+		assert_eq!(r(MAX128 / 2, MAX128).to_den(MAX128 / 2), Some(r(MAX128 / 4, MAX128 / 2)));
 	}
 
 	#[test]
@@ -359,11 +359,11 @@ mod tests {
 		// large numbers
 		assert_eq!(
 			r(1_000_000_000, MAX128).lcm(&r(7_000_000_000, MAX128 - 1)),
-			Err("result cannot fit in u128"),
+			None,
 		);
 		assert_eq!(
 			r(1_000_000_000, MAX64).lcm(&r(7_000_000_000, MAX64 - 1)),
-			Ok(340282366920938463408034375210639556610),
+			Some(340282366920938463408034375210639556610),
 		);
 		const_assert!(340282366920938463408034375210639556610 < MAX128);
 		const_assert!(340282366920938463408034375210639556610 == MAX64 * (MAX64 - 1));
@@ -425,36 +425,36 @@ mod tests {
 	#[test]
 	fn multiply_by_rational_with_rounding_works() {
 		assert_eq!(
-			multiply_by_rational_with_rounding(7, 2, 3, Rounding::NearestPrefDown).unwrap(),
+			multiply_by_rational_with_rounding(7, 2, 3, Rounding::Down).unwrap(),
 			7 * 2 / 3
 		);
 		assert_eq!(
-			multiply_by_rational_with_rounding(7, 20, 30, Rounding::NearestPrefDown).unwrap(),
+			multiply_by_rational_with_rounding(7, 20, 30, Rounding::Down).unwrap(),
 			7 * 2 / 3
 		);
 		assert_eq!(
-			multiply_by_rational_with_rounding(20, 7, 30, Rounding::NearestPrefDown).unwrap(),
+			multiply_by_rational_with_rounding(20, 7, 30, Rounding::Down).unwrap(),
 			7 * 2 / 3
 		);
 
 		assert_eq!(
 			// MAX128 % 3 == 0
-			multiply_by_rational_with_rounding(MAX128, 2, 3, Rounding::NearestPrefDown).unwrap(),
+			multiply_by_rational_with_rounding(MAX128, 2, 3, Rounding::Down).unwrap(),
 			MAX128 / 3 * 2,
 		);
 		assert_eq!(
 			// MAX128 % 7 == 3
-			multiply_by_rational_with_rounding(MAX128, 5, 7, Rounding::NearestPrefDown).unwrap(),
+			multiply_by_rational_with_rounding(MAX128, 5, 7, Rounding::Down).unwrap(),
 			(MAX128 / 7 * 5) + (3 * 5 / 7),
 		);
 		assert_eq!(
 			// MAX128 % 7 == 3
-			multiply_by_rational_with_rounding(MAX128, 11, 13, Rounding::NearestPrefDown).unwrap(),
+			multiply_by_rational_with_rounding(MAX128, 11, 13, Rounding::Down).unwrap(),
 			(MAX128 / 13 * 11) + (8 * 11 / 13),
 		);
 		assert_eq!(
 			// MAX128 % 1000 == 455
-			multiply_by_rational_with_rounding(MAX128, 555, 1000, Rounding::NearestPrefDown)
+			multiply_by_rational_with_rounding(MAX128, 555, 1000, Rounding::Down)
 				.unwrap(),
 			(MAX128 / 1000 * 555) + (455 * 555 / 1000),
 		);
@@ -464,7 +464,7 @@ mod tests {
 				2 * MAX64 - 1,
 				MAX64,
 				MAX64,
-				Rounding::NearestPrefDown
+				Rounding::Down
 			)
 			.unwrap(),
 			2 * MAX64 - 1
@@ -474,7 +474,7 @@ mod tests {
 				2 * MAX64 - 1,
 				MAX64 - 1,
 				MAX64,
-				Rounding::NearestPrefDown
+				Rounding::Down
 			)
 			.unwrap(),
 			2 * MAX64 - 3
@@ -485,7 +485,7 @@ mod tests {
 				MAX64 + 100,
 				MAX64_2,
 				MAX64_2 / 2,
-				Rounding::NearestPrefDown
+				Rounding::Down
 			)
 			.unwrap(),
 			(MAX64 + 100) * 2,
@@ -495,7 +495,7 @@ mod tests {
 				MAX64 + 100,
 				MAX64_2 / 100,
 				MAX64_2 / 200,
-				Rounding::NearestPrefDown
+				Rounding::Down
 			)
 			.unwrap(),
 			(MAX64 + 100) * 2,
@@ -506,7 +506,7 @@ mod tests {
 				2u128.pow(66) - 1,
 				2u128.pow(65) - 1,
 				2u128.pow(65),
-				Rounding::NearestPrefDown
+				Rounding::Down
 			)
 			.unwrap(),
 			73786976294838206461,
@@ -516,7 +516,7 @@ mod tests {
 				1_000_000_000,
 				MAX128 / 8,
 				MAX128 / 2,
-				Rounding::NearestPrefDown
+				Rounding::Up
 			)
 			.unwrap(),
 			250000000
@@ -527,7 +527,7 @@ mod tests {
 				29459999999999999988000u128,
 				1000000000000000000u128,
 				10000000000000000000u128,
-				Rounding::NearestPrefDown
+				Rounding::Down
 			)
 			.unwrap(),
 			2945999999999999998800u128
