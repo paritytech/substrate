@@ -351,6 +351,7 @@ impl pallet_scheduler::Config for Runtime {
 	type MaxSchedules = ConstU32<250>;
 	type MaxScheduleIdLen = ConstU32<8>;
 	type MaxCallLen = ConstU32<300_000>; // TODO
+	type MaxPalletsOriginLen = ConstU32<16>; // TODO
 	type WeightInfo = pallet_scheduler::weights::SubstrateWeight<Runtime>;
 	type OriginPrivilegeCmp = EqualPrivilegeOnly;
 	type PreimageProvider = Preimage;

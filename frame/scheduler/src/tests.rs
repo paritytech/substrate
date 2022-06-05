@@ -58,7 +58,7 @@ fn scheduling_and_cancelling_bloats_the_agenda() {
 		assert_ok!(Scheduler::cancel_named(Origin::root(), 1u32.encode()));
 		// There is now an ugly `None` hole in the agenda...
 		assert_eq!(Agenda::<Test>::get(4).len(), 1);
-		assert_eq!(Agenda::<Test>::get(4).first(), Some(&None));
+		assert!(Agenda::<Test>::get(4).first().unwrap().is_none());
 		assert!(logger::log().is_empty());
 	});
 }
@@ -731,6 +731,7 @@ fn migration_v1_to_v4_works() {
 
 		Scheduler::migrate_v1_to_v4();
 
+		let origin = BoundedCodecWrapper::try_from(root()).unwrap();
 		assert_eq_uvec!(
 			Agenda::<Test>::iter().collect::<Vec<_>>(),
 			vec![
@@ -745,7 +746,7 @@ fn migration_v1_to_v4_works() {
 							))
 							.unwrap(),
 							maybe_periodic: None,
-							origin: root(),
+							origin: origin.clone(),
 							_phantom: PhantomData::<u64>::default(),
 						}),
 						None,
@@ -757,7 +758,7 @@ fn migration_v1_to_v4_works() {
 							))
 							.unwrap(),
 							maybe_periodic: Some((456u64, 10)),
-							origin: root(),
+							origin: origin.clone(),
 							_phantom: PhantomData::<u64>::default(),
 						}),
 					])
@@ -773,7 +774,7 @@ fn migration_v1_to_v4_works() {
 							))
 							.unwrap(),
 							maybe_periodic: None,
-							origin: root(),
+							origin: origin.clone(),
 							_phantom: PhantomData::<u64>::default(),
 						}),
 						None,
@@ -785,7 +786,7 @@ fn migration_v1_to_v4_works() {
 							))
 							.unwrap(),
 							maybe_periodic: Some((456u64, 10)),
-							origin: root(),
+							origin: origin.clone(),
 							_phantom: PhantomData::<u64>::default(),
 						}),
 					])
@@ -801,7 +802,7 @@ fn migration_v1_to_v4_works() {
 							))
 							.unwrap(),
 							maybe_periodic: None,
-							origin: root(),
+							origin: origin.clone(),
 							_phantom: PhantomData::<u64>::default(),
 						}),
 						None,
@@ -813,7 +814,7 @@ fn migration_v1_to_v4_works() {
 							))
 							.unwrap(),
 							maybe_periodic: Some((456u64, 10)),
-							origin: root(),
+							origin: origin.clone(),
 							_phantom: PhantomData::<u64>::default(),
 						}),
 					])
@@ -854,6 +855,7 @@ fn migration_v2_to_v4_works() {
 
 		Scheduler::migrate_v2_to_v4();
 
+		let origin = BoundedCodecWrapper::try_from(root()).unwrap();
 		assert_eq_uvec!(
 			Agenda::<Test>::iter().collect::<Vec<_>>(),
 			vec![
@@ -868,7 +870,7 @@ fn migration_v2_to_v4_works() {
 							))
 							.unwrap(),
 							maybe_periodic: None,
-							origin: root(),
+							origin: origin.clone(),
 							_phantom: PhantomData::<u64>::default(),
 						}),
 						None,
@@ -880,7 +882,7 @@ fn migration_v2_to_v4_works() {
 							))
 							.unwrap(),
 							maybe_periodic: Some((456u64, 10)),
-							origin: root(),
+							origin: origin.clone(),
 							_phantom: PhantomData::<u64>::default(),
 						}),
 					])
@@ -896,7 +898,7 @@ fn migration_v2_to_v4_works() {
 							))
 							.unwrap(),
 							maybe_periodic: None,
-							origin: root(),
+							origin: origin.clone(),
 							_phantom: PhantomData::<u64>::default(),
 						}),
 						None,
@@ -908,7 +910,7 @@ fn migration_v2_to_v4_works() {
 							))
 							.unwrap(),
 							maybe_periodic: Some((456u64, 10)),
-							origin: root(),
+							origin: origin.clone(),
 							_phantom: PhantomData::<u64>::default(),
 						}),
 					])
@@ -924,7 +926,7 @@ fn migration_v2_to_v4_works() {
 							))
 							.unwrap(),
 							maybe_periodic: None,
-							origin: root(),
+							origin: origin.clone(),
 							_phantom: PhantomData::<u64>::default(),
 						}),
 						None,
@@ -936,7 +938,7 @@ fn migration_v2_to_v4_works() {
 							))
 							.unwrap(),
 							maybe_periodic: Some((456u64, 10)),
-							origin: root(),
+							origin: origin.clone(),
 							_phantom: PhantomData::<u64>::default(),
 						}),
 					])
@@ -976,6 +978,7 @@ fn migration_v3_to_v4_works() {
 		}
 
 		Scheduler::migrate_v3_to_v4();
+		let origin = BoundedCodecWrapper::try_from(root()).unwrap();
 
 		assert_eq_uvec!(
 			Agenda::<Test>::iter().collect::<Vec<_>>(),
@@ -991,7 +994,7 @@ fn migration_v3_to_v4_works() {
 							))
 							.unwrap(),
 							maybe_periodic: None,
-							origin: root(),
+							origin: origin.clone(),
 							_phantom: PhantomData::<u64>::default(),
 						}),
 						None,
@@ -1003,7 +1006,7 @@ fn migration_v3_to_v4_works() {
 							))
 							.unwrap(),
 							maybe_periodic: Some((456u64, 10)),
-							origin: root(),
+							origin: origin.clone(),
 							_phantom: PhantomData::<u64>::default(),
 						}),
 					])
@@ -1019,7 +1022,7 @@ fn migration_v3_to_v4_works() {
 							))
 							.unwrap(),
 							maybe_periodic: None,
-							origin: root(),
+							origin: origin.clone(),
 							_phantom: PhantomData::<u64>::default(),
 						}),
 						None,
@@ -1031,7 +1034,7 @@ fn migration_v3_to_v4_works() {
 							))
 							.unwrap(),
 							maybe_periodic: Some((456u64, 10)),
-							origin: root(),
+							origin: origin.clone(),
 							_phantom: PhantomData::<u64>::default(),
 						}),
 					])
@@ -1047,7 +1050,7 @@ fn migration_v3_to_v4_works() {
 							))
 							.unwrap(),
 							maybe_periodic: None,
-							origin: root(),
+							origin: origin.clone(),
 							_phantom: PhantomData::<u64>::default(),
 						}),
 						None,
@@ -1059,7 +1062,7 @@ fn migration_v3_to_v4_works() {
 							))
 							.unwrap(),
 							maybe_periodic: Some((456u64, 10)),
-							origin: root(),
+							origin: origin.clone(),
 							_phantom: PhantomData::<u64>::default(),
 						}),
 					])
@@ -1119,6 +1122,9 @@ fn test_migrate_origin() {
 
 		Scheduler::migrate_origin::<u32>();
 
+		let root_origin = BoundedCodecWrapper::try_from(system::RawOrigin::Root.into()).unwrap();
+		let none_origin = BoundedCodecWrapper::try_from(system::RawOrigin::None.into()).unwrap();
+
 		assert_eq_uvec!(
 			Agenda::<Test>::iter().collect::<Vec<_>>(),
 			vec![
@@ -1133,7 +1139,7 @@ fn test_migrate_origin() {
 							))
 							.unwrap(),
 							maybe_periodic: None,
-							origin: system::RawOrigin::Root.into(),
+							origin: root_origin.clone(),
 							_phantom: PhantomData::<u64>::default(),
 						}),
 						None,
@@ -1145,7 +1151,7 @@ fn test_migrate_origin() {
 							))
 							.unwrap(),
 							maybe_periodic: Some((456u64, 10)),
-							origin: system::RawOrigin::None.into(),
+							origin: none_origin.clone(),
 							_phantom: PhantomData::<u64>::default(),
 						}),
 					])
@@ -1161,7 +1167,7 @@ fn test_migrate_origin() {
 							))
 							.unwrap(),
 							maybe_periodic: None,
-							origin: system::RawOrigin::Root.into(),
+							origin: root_origin.clone(),
 							_phantom: PhantomData::<u64>::default(),
 						}),
 						None,
@@ -1173,7 +1179,7 @@ fn test_migrate_origin() {
 							))
 							.unwrap(),
 							maybe_periodic: Some((456u64, 10)),
-							origin: system::RawOrigin::None.into(),
+							origin: none_origin.clone(),
 							_phantom: PhantomData::<u64>::default(),
 						}),
 					])
@@ -1189,7 +1195,7 @@ fn test_migrate_origin() {
 							))
 							.unwrap(),
 							maybe_periodic: None,
-							origin: system::RawOrigin::Root.into(),
+							origin: root_origin.clone(),
 							_phantom: PhantomData::<u64>::default(),
 						}),
 						None,
@@ -1201,7 +1207,7 @@ fn test_migrate_origin() {
 							))
 							.unwrap(),
 							maybe_periodic: Some((456u64, 10)),
-							origin: system::RawOrigin::None.into(),
+							origin: none_origin.clone(),
 							_phantom: PhantomData::<u64>::default(),
 						}),
 					])
