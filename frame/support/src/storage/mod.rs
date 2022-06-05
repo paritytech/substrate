@@ -31,8 +31,8 @@ use sp_std::{marker::PhantomData, prelude::*};
 
 pub use self::{
 	transactional::{
-		in_storage_layer, with_storage_layer, with_transaction, with_transaction_unchecked,
-		set_transactional_mode
+		in_storage_layer, set_transactional_mode, with_storage_layer, with_transaction,
+		with_transaction_unchecked,
 	},
 	types::StorageEntryMetadataBuilder,
 };

@@ -319,7 +319,7 @@ mod tests {
 	}
 
 	#[test]
-	fn set_transactional_mode_should_work(){
+	fn set_transactional_mode_should_work() {
 		TestExternalities::default().execute_with(|| {
 			set_transactional_mode(false);
 			assert_eq!(get_transactional_mode(), false);

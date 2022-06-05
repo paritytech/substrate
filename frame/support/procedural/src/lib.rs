@@ -436,7 +436,8 @@ pub fn transactional(attr: TokenStream, input: TokenStream) -> TokenStream {
 
 #[proc_macro_attribute]
 pub fn without_transactional(attr: TokenStream, input: TokenStream) -> TokenStream {
-	transactional::without_transactional(attr, input).unwrap_or_else(|e| e.to_compile_error().into())
+	transactional::without_transactional(attr, input)
+		.unwrap_or_else(|e| e.to_compile_error().into())
 }
 
 #[proc_macro_attribute]
