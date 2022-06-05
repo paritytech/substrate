@@ -264,7 +264,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		T::Currency::transfer(
 			&buyer,
 			&details.owner,
-			bid_price.clone(),
+			price_info.0,
 			ExistenceRequirement::KeepAlive,
 		)?;
 
