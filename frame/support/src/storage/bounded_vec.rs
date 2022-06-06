@@ -135,7 +135,7 @@ impl<T: Ord, Bound: Get<u32>> Ord for BoundedVec<T, Bound> {
 impl<'a, T, S: Get<u32>> TryFrom<&'a [T]> for BoundedSlice<'a, T, S> {
 	type Error = ();
 	fn try_from(t: &'a [T]) -> Result<Self, Self::Error> {
-		if t.len() < S::get() as usize {
+		if t.len() <= S::get() as usize {
 			Ok(BoundedSlice(t, PhantomData))
 		} else {
 			Err(())
@@ -673,7 +673,22 @@ where
 }
 
 #[cfg(test)]
-pub mod test {
+pub mod test_bounded_slice {
+	use super::*;
+	use crate::traits::ConstU32;
+
+	#[test]
+	fn try_from_slice_and_into_work() {
+		let slice = &[1, 2, 3][..];
+
+		let bounded: BoundedSlice<u32, ConstU32<3>> = slice.try_into().unwrap();
+		let as_slice: &[u32] = bounded.into();
+		assert_eq!(as_slice, slice);
+	}
+}
+
+#[cfg(test)]
+pub mod test_bounded_vec {
 	use super::*;
 	use crate::{bounded_vec, traits::ConstU32, Twox128};
 	use sp_io::TestExternalities;
