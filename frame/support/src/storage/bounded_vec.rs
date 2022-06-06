@@ -109,13 +109,16 @@ where
 /// Similar to a `BoundedVec`, but not owned and cannot be decoded.
 #[derive(Encode, scale_info::TypeInfo)]
 #[scale_info(skip_type_params(S))]
-pub struct BoundedSlice<T: 'static, S>(&'static [T], PhantomData<S>);
+pub struct BoundedSlice<'a, T, S>(&'a [T], PhantomData<S>);
 
 // `BoundedSlice`s encode to something which will always decode into a `BoundedVec`,
 // `WeakBoundedVec`, or a `Vec`.
-impl<T: Encode + Decode, S: Get<u32>> EncodeLike<BoundedVec<T, S>> for BoundedSlice<T, S> {}
-impl<T: Encode + Decode, S: Get<u32>> EncodeLike<WeakBoundedVec<T, S>> for BoundedSlice<T, S> {}
-impl<T: Encode + Decode, S: Get<u32>> EncodeLike<Vec<T>> for BoundedSlice<T, S> {}
+impl<'a, T: Encode + Decode, S: Get<u32>> EncodeLike<BoundedVec<T, S>> for BoundedSlice<'a, T, S> {}
+impl<'a, T: Encode + Decode, S: Get<u32>> EncodeLike<WeakBoundedVec<T, S>>
+	for BoundedSlice<'a, T, S>
+{
+}
+impl<'a, T: Encode + Decode, S: Get<u32>> EncodeLike<Vec<T>> for BoundedSlice<'a, T, S> {}
 
 impl<T: PartialOrd, Bound: Get<u32>> PartialOrd for BoundedVec<T, Bound> {
 	fn partial_cmp(&self, other: &Self) -> Option<sp_std::cmp::Ordering> {
@@ -129,9 +132,9 @@ impl<T: Ord, Bound: Get<u32>> Ord for BoundedVec<T, Bound> {
 	}
 }
 
-impl<T: 'static, S: Get<u32>> TryFrom<&'static [T]> for BoundedSlice<T, S> {
+impl<'a, T, S: Get<u32>> TryFrom<&'a [T]> for BoundedSlice<'a, T, S> {
 	type Error = ();
-	fn try_from(t: &'static [T]) -> Result<Self, Self::Error> {
+	fn try_from(t: &'a [T]) -> Result<Self, Self::Error> {
 		if t.len() <= S::get() as usize {
 			Ok(BoundedSlice(t, PhantomData))
 		} else {
@@ -140,8 +143,8 @@ impl<T: 'static, S: Get<u32>> TryFrom<&'static [T]> for BoundedSlice<T, S> {
 	}
 }
 
-impl<T: 'static, S> From<BoundedSlice<T, S>> for &'static [T] {
-	fn from(t: BoundedSlice<T, S>) -> Self {
+impl<'a, T, S> From<BoundedSlice<'a, T, S>> for &'a [T] {
+	fn from(t: BoundedSlice<'a, T, S>) -> Self {
 		t.0
 	}
 }
