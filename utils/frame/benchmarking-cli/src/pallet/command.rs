@@ -23,10 +23,13 @@ use frame_benchmarking::{
 };
 use frame_support::traits::StorageInfo;
 use linked_hash_map::LinkedHashMap;
-use sc_cli::{CliConfiguration, ExecutionStrategy, Result, SharedParams};
+use sc_cli::{
+	execution_method_from_cli, CliConfiguration, ExecutionStrategy, Result, SharedParams,
+};
 use sc_client_db::BenchmarkingState;
 use sc_executor::NativeElseWasmExecutor;
 use sc_service::{Configuration, NativeExecutionDispatch};
+use serde::Serialize;
 use sp_core::offchain::{
 	testing::{TestOffchainExt, TestTransactionPoolExt},
 	OffchainDbExt, OffchainWorkerExt, TransactionPoolExt,
@@ -35,7 +38,18 @@ use sp_externalities::Extensions;
 use sp_keystore::{testing::KeyStore, KeystoreExt, SyncCryptoStorePtr};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use sp_state_machine::StateMachine;
-use std::{fmt::Debug, fs, sync::Arc, time};
+use std::{collections::HashMap, fmt::Debug, fs, sync::Arc, time};
+
+/// The inclusive range of a component.
+#[derive(Serialize, Debug, Clone, Eq, PartialEq)]
+pub(crate) struct ComponentRange {
+	/// Name of the component.
+	name: String,
+	/// Minimal valid value of the component.
+	min: u32,
+	/// Maximal valid value of the component.
+	max: u32,
+}
 
 // This takes multiple benchmark batches and combines all the results where the pallet, instance,
 // and benchmark are the same.
@@ -121,7 +135,6 @@ impl PalletCmd {
 		}
 
 		let spec = config.chain_spec;
-		let wasm_method = self.wasm_method.into();
 		let strategy = self.execution.unwrap_or(ExecutionStrategy::Native);
 		let pallet = self.pallet.clone().unwrap_or_default();
 		let pallet = pallet.as_bytes();
@@ -141,7 +154,7 @@ impl PalletCmd {
 		let state_without_tracking =
 			BenchmarkingState::<BB>::new(genesis_storage, cache_size, self.record_proof, false)?;
 		let executor = NativeElseWasmExecutor::<ExecDispatch>::new(
-			wasm_method,
+			execution_method_from_cli(self.wasm_method, self.wasmtime_instantiation_strategy),
 			self.heap_pages,
 			2, // The runtime instances cache size.
 			2, // The runtime cache size
@@ -211,6 +224,9 @@ impl PalletCmd {
 		let mut batches = Vec::new();
 		let mut batches_db = Vec::new();
 		let mut timer = time::SystemTime::now();
+		// Maps (pallet, extrinsic) to its component ranges.
+		let mut component_ranges = HashMap::<(Vec<u8>, Vec<u8>), Vec<ComponentRange>>::new();
+
 		for (pallet, extrinsic, components) in benchmarks_to_run {
 			let all_components = if components.is_empty() {
 				vec![Default::default()]
@@ -243,6 +259,11 @@ impl PalletCmd {
 							.collect();
 						all_components.push(c);
 					}
+
+					component_ranges
+						.entry((pallet.clone(), extrinsic.clone()))
+						.or_default()
+						.push(ComponentRange { name: name.to_string(), min: lowest, max: highest });
 				}
 				all_components
 			};
@@ -365,7 +386,7 @@ impl PalletCmd {
 
 		// Create the weights.rs file.
 		if let Some(output_path) = &self.output {
-			writer::write_results(&batches, &storage_info, output_path, self)?;
+			writer::write_results(&batches, &storage_info, &component_ranges, output_path, self)?;
 		}
 
 		// Jsonify the result and write it to a file or stdout if desired.

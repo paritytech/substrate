@@ -387,13 +387,14 @@ where
 			.map(|p| PeerInfo { best_hash: p.best_hash, best_number: p.best_number })
 	}
 
+	/// Returns the current sync status.
 	fn status(&self) -> SyncStatus<B> {
-		let best_seen = self.peers.values().map(|p| p.best_number).max();
+		let best_seen = self.best_seen();
 		let sync_state = if let Some(n) = best_seen {
 			// A chain is classified as downloading if the provided best block is
-			// more than `MAJOR_SYNC_BLOCKS` behind the best queued block.
-			if n > self.best_queued_number && n - self.best_queued_number > MAJOR_SYNC_BLOCKS.into()
-			{
+			// more than `MAJOR_SYNC_BLOCKS` behind the best block.
+			let best_block = self.client.info().best_number;
+			if n > best_block && n - best_block > MAJOR_SYNC_BLOCKS.into() {
 				SyncState::Downloading
 			} else {
 				SyncState::Idle
@@ -1716,6 +1717,20 @@ where
 		};
 		sync.reset_sync_start_point()?;
 		Ok(sync)
+	}
+
+	/// Returns the best seen block.
+	fn best_seen(&self) -> Option<NumberFor<B>> {
+		let mut best_seens = self.peers.values().map(|p| p.best_number).collect::<Vec<_>>();
+
+		if best_seens.is_empty() {
+			None
+		} else {
+			let middle = best_seens.len() / 2;
+
+			// Not the "perfect median" when we have an even number of peers.
+			Some(*best_seens.select_nth_unstable(middle).1)
+		}
 	}
 
 	fn required_block_attributes(&self) -> BlockAttributes {

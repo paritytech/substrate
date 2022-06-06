@@ -23,7 +23,7 @@ use crate as pallet_identity;
 use codec::{Decode, Encode};
 use frame_support::{
 	assert_noop, assert_ok, ord_parameter_types, parameter_types,
-	traits::{ConstU32, ConstU64, EnsureOneOf},
+	traits::{ConstU32, ConstU64, EitherOfDiverse},
 	BoundedVec,
 };
 use frame_system::{EnsureRoot, EnsureSignedBy};
@@ -100,8 +100,8 @@ ord_parameter_types! {
 	pub const One: u64 = 1;
 	pub const Two: u64 = 2;
 }
-type EnsureOneOrRoot = EnsureOneOf<EnsureRoot<u64>, EnsureSignedBy<One, u64>>;
-type EnsureTwoOrRoot = EnsureOneOf<EnsureRoot<u64>, EnsureSignedBy<Two, u64>>;
+type EnsureOneOrRoot = EitherOfDiverse<EnsureRoot<u64>, EnsureSignedBy<One, u64>>;
+type EnsureTwoOrRoot = EitherOfDiverse<EnsureRoot<u64>, EnsureSignedBy<Two, u64>>;
 impl pallet_identity::Config for Test {
 	type Event = Event;
 	type Currency = Balances;
