@@ -371,7 +371,7 @@ fn generate_piecewise_linear(points: Vec<(u32, u32)>) -> TokenStream2 {
 	}
 
 	quote!(
-		_sp_runtime::curve::PiecewiseLinear::<'static> {
+		_sp_runtime::curve::PiecewiseLinear {
 			points: & [ #points_tokens ],
 			maximum: _sp_runtime::Perbill::from_parts(#max),
 		}
