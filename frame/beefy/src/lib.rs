@@ -183,7 +183,7 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 		if next_queued_authorities.len() as u32 > T::MaxAuthorities::get() {
 			log::error!(
 				target: "runtime::beefy",
-				"authorities list {:?} truncated to length {}",
+				"queued authorities list {:?} truncated to length {}",
 				next_queued_authorities, T::MaxAuthorities::get(),
 			);
 		}
