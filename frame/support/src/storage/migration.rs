@@ -256,12 +256,43 @@ pub fn put_storage_value<T: Encode>(module: &[u8], item: &[u8], hash: &[u8], val
 
 /// Remove all items under a storage prefix by the `module`, the map's `item` name and the key
 /// `hash`.
+#[deprecated = "Use `clear_storage_prefix` instead"]
 pub fn remove_storage_prefix(module: &[u8], item: &[u8], hash: &[u8]) {
 	let mut key = vec![0u8; 32 + hash.len()];
 	let storage_prefix = storage_prefix(module, item);
 	key[0..32].copy_from_slice(&storage_prefix);
 	key[32..].copy_from_slice(hash);
-	frame_support::storage::unhashed::kill_prefix(&key, None);
+	let _ = frame_support::storage::unhashed::clear_prefix(&key, None, None);
+}
+
+/// Attempt to remove all values under a storage prefix by the `module`, the map's `item` name and
+/// the key `hash`.
+///
+/// All values in the client overlay will be deleted, if `maybe_limit` is `Some` then up to
+/// that number of values are deleted from the client backend by seeking and reading that number of
+/// storage values plus one. If `maybe_limit` is `None` then all values in the client backend are
+/// deleted. This is potentially unsafe since it's an unbounded operation.
+///
+/// ## Cursors
+///
+/// The `maybe_cursor` parameter should be `None` for the first call to initial removal.
+/// If the resultant `maybe_cursor` is `Some`, then another call is required to complete the
+/// removal operation. This value must be passed in as the subsequent call's `maybe_cursor`
+/// parameter. If the resultant `maybe_cursor` is `None`, then the operation is complete and no
+/// items remain in storage provided that no items were added between the first calls and the
+/// final call.
+pub fn clear_storage_prefix(
+	module: &[u8],
+	item: &[u8],
+	hash: &[u8],
+	maybe_limit: Option<u32>,
+	maybe_cursor: Option<&[u8]>,
+) -> sp_io::MultiRemovalResults {
+	let mut key = vec![0u8; 32 + hash.len()];
+	let storage_prefix = storage_prefix(module, item);
+	key[0..32].copy_from_slice(&storage_prefix);
+	key[32..].copy_from_slice(hash);
+	frame_support::storage::unhashed::clear_prefix(&key, maybe_limit, maybe_cursor)
 }
 
 /// Take a particular item in storage by the `module`, the map's `item` name and the key `hash`.

@@ -111,7 +111,6 @@ parameter_types! {
 	pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
 }
 
-// impl pallet_treasury::Config for Test {
 impl pallet_treasury::Config for Test {
 	type PalletId = TreasuryPalletId;
 	type Currency = pallet_balances::Pallet<Test>;
@@ -128,6 +127,7 @@ impl pallet_treasury::Config for Test {
 	type WeightInfo = ();
 	type SpendFunds = Bounties;
 	type MaxApprovals = ConstU32<100>;
+	type SpendOrigin = frame_support::traits::NeverEnsureOrigin<u64>;
 }
 
 impl pallet_treasury::Config<Instance1> for Test {

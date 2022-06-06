@@ -316,7 +316,7 @@ use frame_support::{
 		Currency, Defensive, DefensiveOption, DefensiveResult, DefensiveSaturating,
 		ExistenceRequirement, Get,
 	},
-	CloneNoBound, DefaultNoBound, PartialEqNoBound, RuntimeDebugNoBound,
+	CloneNoBound, DefaultNoBound, RuntimeDebugNoBound,
 };
 use scale_info::TypeInfo;
 use sp_core::U256;
@@ -398,7 +398,7 @@ enum AccountType {
 
 /// A member in a pool.
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebugNoBound, CloneNoBound)]
-#[cfg_attr(feature = "std", derive(PartialEqNoBound, DefaultNoBound))]
+#[cfg_attr(feature = "std", derive(frame_support::PartialEqNoBound, DefaultNoBound))]
 #[codec(mel_bound(T: Config))]
 #[scale_info(skip_type_params(T))]
 pub struct PoolMember<T: Config> {
@@ -1082,7 +1082,7 @@ impl<T: Config> Get<u32> for TotalUnbondingPools<T> {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::{traits::StorageVersion, transactional};
+	use frame_support::traits::StorageVersion;
 	use frame_system::{ensure_signed, pallet_prelude::*};
 
 	/// The current storage version.
@@ -1329,11 +1329,29 @@ pub mod pallet {
 		MetadataExceedsMaxLen,
 		/// Some error occurred that should never happen. This should be reported to the
 		/// maintainers.
-		DefensiveError,
+		Defensive(DefensiveError),
 		/// Not enough points. Ty unbonding less.
 		NotEnoughPointsToUnbond,
 		/// Partial unbonding now allowed permissionlessly.
 		PartialUnbondNotAllowedPermissionlessly,
+	}
+
+	#[derive(Encode, Decode, PartialEq, TypeInfo, frame_support::PalletError)]
+	pub enum DefensiveError {
+		/// There isn't enough space in the unbond pool.
+		NotEnoughSpaceInUnbondPool,
+		/// A (bonded) pool id does not exist.
+		PoolNotFound,
+		/// A reward pool does not exist. In all cases this is a system logic error.
+		RewardPoolNotFound,
+		/// A sub pool does not exist.
+		SubPoolsNotFound,
+	}
+
+	impl<T> From<DefensiveError> for Error<T> {
+		fn from(e: DefensiveError) -> Error<T> {
+			Error::<T>::Defensive(e)
+		}
 	}
 
 	#[pallet::call]
@@ -1349,7 +1367,6 @@ pub mod pallet {
 		///   `existential deposit + amount` in their account.
 		/// * Only a pool with [`PoolState::Open`] can be joined
 		#[pallet::weight(T::WeightInfo::join())]
-		#[transactional]
 		pub fn join(
 			origin: OriginFor<T>,
 			#[pallet::compact] amount: BalanceOf<T>,
@@ -1367,7 +1384,7 @@ pub mod pallet {
 			// We just need its total earnings at this point in time, but we don't need to write it
 			// because we are not adjusting its points (all other values can calculated virtual).
 			let reward_pool = RewardPool::<T>::get_and_update(pool_id)
-				.defensive_ok_or_else(|| Error::<T>::RewardPoolNotFound)?;
+				.defensive_ok_or::<Error<T>>(DefensiveError::RewardPoolNotFound.into())?;
 
 			bonded_pool.try_inc_members()?;
 			let points_issued = bonded_pool.try_bond_funds(&who, amount, BondType::Later)?;
@@ -1410,7 +1427,6 @@ pub mod pallet {
 			T::WeightInfo::bond_extra_transfer()
 			.max(T::WeightInfo::bond_extra_reward())
 		)]
-		#[transactional]
 		pub fn bond_extra(origin: OriginFor<T>, extra: BondExtra<BalanceOf<T>>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let (mut member, mut bonded_pool, mut reward_pool) = Self::get_member_with_pools(&who)?;
@@ -1449,7 +1465,6 @@ pub mod pallet {
 		/// The member will earn rewards pro rata based on the members stake vs the sum of the
 		/// members in the pools stake. Rewards do not "expire".
 		#[pallet::weight(T::WeightInfo::claim_payout())]
-		#[transactional]
 		pub fn claim_payout(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let (mut member, mut bonded_pool, mut reward_pool) = Self::get_member_with_pools(&who)?;
@@ -1489,7 +1504,6 @@ pub mod pallet {
 		/// there are too many unlocking chunks, the result of this call will likely be the
 		/// `NoMoreChunks` error from the staking system.
 		#[pallet::weight(T::WeightInfo::unbond())]
-		#[transactional]
 		pub fn unbond(
 			origin: OriginFor<T>,
 			member_account: T::AccountId,
@@ -1534,14 +1548,16 @@ pub mod pallet {
 					.try_insert(unbond_era, UnbondPool::default())
 					// The above call to `maybe_merge_pools` should ensure there is
 					// always enough space to insert.
-					.defensive_map_err(|_| Error::<T>::DefensiveError)?;
+					.defensive_map_err::<Error<T>, _>(|_| {
+						DefensiveError::NotEnoughSpaceInUnbondPool.into()
+					})?;
 			}
 
 			sub_pools
 				.with_era
 				.get_mut(&unbond_era)
 				// The above check ensures the pool exists.
-				.defensive_ok_or_else(|| Error::<T>::DefensiveError)?
+				.defensive_ok_or::<Error<T>>(DefensiveError::PoolNotFound.into())?
 				.issue(unbonding_balance);
 
 			Self::deposit_event(Event::<T>::Unbonded {
@@ -1564,7 +1580,6 @@ pub mod pallet {
 		/// would probably see an error like `NoMoreChunks` emitted from the staking system when
 		/// they attempt to unbond.
 		#[pallet::weight(T::WeightInfo::pool_withdraw_unbonded(*num_slashing_spans))]
-		#[transactional]
 		pub fn pool_withdraw_unbonded(
 			origin: OriginFor<T>,
 			pool_id: PoolId,
@@ -1601,7 +1616,6 @@ pub mod pallet {
 		#[pallet::weight(
 			T::WeightInfo::withdraw_unbonded_kill(*num_slashing_spans)
 		)]
-		#[transactional]
 		pub fn withdraw_unbonded(
 			origin: OriginFor<T>,
 			member_account: T::AccountId,
@@ -1613,9 +1627,9 @@ pub mod pallet {
 			let current_era = T::StakingInterface::current_era();
 
 			let bonded_pool = BondedPool::<T>::get(member.pool_id)
-				.defensive_ok_or_else(|| Error::<T>::PoolNotFound)?;
+				.defensive_ok_or::<Error<T>>(DefensiveError::PoolNotFound.into())?;
 			let mut sub_pools = SubPoolsStorage::<T>::get(member.pool_id)
-				.defensive_ok_or_else(|| Error::<T>::SubPoolsNotFound)?;
+				.defensive_ok_or::<Error<T>>(DefensiveError::SubPoolsNotFound.into())?;
 
 			bonded_pool.ok_to_withdraw_unbonded_with(
 				&caller,
@@ -1717,7 +1731,6 @@ pub mod pallet {
 		/// In addition to `amount`, the caller will transfer the existential deposit; so the caller
 		/// needs at have at least `amount + existential_deposit` transferrable.
 		#[pallet::weight(T::WeightInfo::create())]
-		#[transactional]
 		pub fn create(
 			origin: OriginFor<T>,
 			#[pallet::compact] amount: BalanceOf<T>,
@@ -2034,9 +2047,9 @@ impl<T: Config> Pallet<T> {
 	) -> Result<(PoolMember<T>, BondedPool<T>, RewardPool<T>), Error<T>> {
 		let member = PoolMembers::<T>::get(&who).ok_or(Error::<T>::PoolMemberNotFound)?;
 		let bonded_pool =
-			BondedPool::<T>::get(member.pool_id).defensive_ok_or(Error::<T>::PoolNotFound)?;
+			BondedPool::<T>::get(member.pool_id).defensive_ok_or(DefensiveError::PoolNotFound)?;
 		let reward_pool =
-			RewardPools::<T>::get(member.pool_id).defensive_ok_or(Error::<T>::PoolNotFound)?;
+			RewardPools::<T>::get(member.pool_id).defensive_ok_or(DefensiveError::PoolNotFound)?;
 		Ok((member, bonded_pool, reward_pool))
 	}
 

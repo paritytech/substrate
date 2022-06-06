@@ -226,9 +226,10 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 		&self,
 		child_info: Option<&ChildInfo>,
 		prefix: Option<&[u8]>,
+		start_at: Option<&[u8]>,
 		f: F,
 	) {
-		self.state.apply_to_keys_while(child_info, prefix, f)
+		self.state.apply_to_keys_while(child_info, prefix, start_at, f)
 	}
 
 	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
