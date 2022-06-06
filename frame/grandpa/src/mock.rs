@@ -159,7 +159,7 @@ impl pallet_timestamp::Config for Test {
 }
 
 pallet_staking_reward_curve::build! {
-	const REWARD_CURVE: PiecewiseLinear<'static> = curve!(
+	const REWARD_CURVE: PiecewiseLinear = curve!(
 		min_inflation: 0_025_000u64,
 		max_inflation: 0_100_000,
 		ideal_stake: 0_500_000,
@@ -172,7 +172,7 @@ pallet_staking_reward_curve::build! {
 parameter_types! {
 	pub const SessionsPerEra: SessionIndex = 3;
 	pub const BondingDuration: EraIndex = 3;
-	pub const RewardCurve: &'static PiecewiseLinear<'static> = &REWARD_CURVE;
+	pub const RewardCurve: &'static PiecewiseLinear = &REWARD_CURVE;
 	pub const OffendingValidatorsThreshold: Perbill = Perbill::from_percent(17);
 }
 

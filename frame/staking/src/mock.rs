@@ -201,7 +201,7 @@ impl pallet_timestamp::Config for Test {
 }
 
 pallet_staking_reward_curve::build! {
-	const I_NPOS: PiecewiseLinear<'static> = curve!(
+	const I_NPOS: PiecewiseLinear = curve!(
 		min_inflation: 0_025_000,
 		max_inflation: 0_100_000,
 		ideal_stake: 0_500_000,
@@ -212,7 +212,7 @@ pallet_staking_reward_curve::build! {
 }
 parameter_types! {
 	pub const BondingDuration: EraIndex = 3;
-	pub const RewardCurve: &'static PiecewiseLinear<'static> = &I_NPOS;
+	pub const RewardCurve: &'static PiecewiseLinear = &I_NPOS;
 	pub const OffendingValidatorsThreshold: Perbill = Perbill::from_percent(75);
 }
 

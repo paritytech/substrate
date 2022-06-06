@@ -74,7 +74,7 @@ impl pallet_balances::Config for Runtime {
 }
 
 pallet_staking_reward_curve::build! {
-	const I_NPOS: sp_runtime::curve::PiecewiseLinear<'static> = curve!(
+	const I_NPOS: sp_runtime::curve::PiecewiseLinear = curve!(
 		min_inflation: 0_025_000,
 		max_inflation: 0_100_000,
 		ideal_stake: 0_500_000,
@@ -84,7 +84,7 @@ pallet_staking_reward_curve::build! {
 	);
 }
 parameter_types! {
-	pub const RewardCurve: &'static sp_runtime::curve::PiecewiseLinear<'static> = &I_NPOS;
+	pub const RewardCurve: &'static sp_runtime::curve::PiecewiseLinear = &I_NPOS;
 }
 impl pallet_staking::Config for Runtime {
 	type MaxNominations = ConstU32<16>;

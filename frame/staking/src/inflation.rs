@@ -30,7 +30,7 @@ use sp_runtime::{curve::PiecewiseLinear, traits::AtLeast32BitUnsigned, Perbill};
 ///
 /// `era_duration` is expressed in millisecond.
 pub fn compute_total_payout<N>(
-	yearly_inflation: &PiecewiseLinear<'static>,
+	yearly_inflation: &PiecewiseLinear,
 	npos_token_staked: N,
 	total_tokens: N,
 	era_duration: u64,
@@ -54,7 +54,7 @@ mod test {
 	use sp_runtime::curve::PiecewiseLinear;
 
 	pallet_staking_reward_curve::build! {
-		const I_NPOS: PiecewiseLinear<'static> = curve!(
+		const I_NPOS: PiecewiseLinear = curve!(
 			min_inflation: 0_025_000,
 			max_inflation: 0_100_000,
 			ideal_stake: 0_500_000,
