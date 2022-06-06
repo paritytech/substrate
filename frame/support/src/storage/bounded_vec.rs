@@ -135,7 +135,7 @@ impl<T: Ord, Bound: Get<u32>> Ord for BoundedVec<T, Bound> {
 impl<'a, T, S: Get<u32>> TryFrom<&'a [T]> for BoundedSlice<'a, T, S> {
 	type Error = ();
 	fn try_from(t: &'a [T]) -> Result<Self, Self::Error> {
-		if t.len() < S::get() as usize {
+		if t.len() <= S::get() as usize {
 			Ok(BoundedSlice(t, PhantomData))
 		} else {
 			Err(())
@@ -1006,5 +1006,19 @@ pub mod test {
 			Err(msg) => assert_eq!(msg.to_string(), "out of bounds at line 1 column 11"),
 			_ => unreachable!("deserializer must raise error"),
 		}
+	}
+
+	#[test]
+	fn bounded_vec_try_from_works() {
+		assert!(BoundedVec::<u32, ConstU32<2>>::try_from(vec![0]).is_ok());
+		assert!(BoundedVec::<u32, ConstU32<2>>::try_from(vec![0, 1]).is_ok());
+		assert!(BoundedVec::<u32, ConstU32<2>>::try_from(vec![0, 1, 2]).is_err());
+	}
+
+	#[test]
+	fn bounded_slice_try_from_works() {
+		assert!(BoundedSlice::<u32, ConstU32<2>>::try_from(&[0][..]).is_ok());
+		assert!(BoundedSlice::<u32, ConstU32<2>>::try_from(&[0, 1][..]).is_ok());
+		assert!(BoundedSlice::<u32, ConstU32<2>>::try_from(&[0, 1, 2][..]).is_err());
 	}
 }
