@@ -51,7 +51,7 @@ variables:                         &default-vars
   RUSTY_CACHIER_SINGLE_BRANCH:     master
   RUSTY_CACHIER_DONT_OPERATE_ON_MAIN_BRANCH: "true"
 
-  RUSTY_CACHIER_SNEAKY_BYPASS: "false"
+  RUSTY_CACHIER_SKIP_BYPASSES: "true"
   CARGO_LOG: "cargo::core::compiler::fingerprint=trace"
 
 default:
