@@ -25,9 +25,9 @@ use core::ops::Sub;
 
 /// Piecewise Linear function in [0, 1] -> [0, 1].
 #[derive(PartialEq, Eq, sp_core::RuntimeDebug, scale_info::TypeInfo)]
-pub struct PiecewiseLinear<'a> {
+pub struct PiecewiseLinear {
 	/// Array of points. Must be in order from the lowest abscissas to the highest.
-	pub points: &'a [(Perbill, Perbill)],
+	pub points: &'static [(Perbill, Perbill)],
 	/// The maximum value that can be returned.
 	pub maximum: Perbill,
 }
@@ -36,7 +36,7 @@ fn abs_sub<N: Ord + Sub<Output = N> + Clone>(a: N, b: N) -> N where {
 	a.clone().max(b.clone()) - a.min(b)
 }
 
-impl<'a> PiecewiseLinear<'a> {
+impl PiecewiseLinear {
 	/// Compute `f(n/d)*d` with `n <= d`. This is useful to avoid loss of precision.
 	pub fn calculate_for_fraction_times_denominator<N>(&self, n: N, d: N) -> N
 	where
