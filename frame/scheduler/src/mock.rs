@@ -191,8 +191,11 @@ impl Config for Test {
 pub type LoggerCall = logger::Call<Test>;
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
-	t.into()
+	let storage = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	let mut ext: sp_io::TestExternalities = storage.into();
+	// Setup event emission.
+	ext.execute_with(|| System::set_block_number(1));
+	ext.into()
 }
 
 pub fn run_to_block(n: u64) {

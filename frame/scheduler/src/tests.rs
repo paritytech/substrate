@@ -44,23 +44,6 @@ fn basic_scheduling_works() {
 	});
 }
 
-// This is the old behaviour which we want to fix.
-#[test]
-fn cancelling_removes_the_whole_agenda() {
-	new_test_ext().execute_with(|| {
-		let call = Box::new(Call::Logger(LoggerCall::log { i: 69, weight: 1000 }).into());
-		assert_ok!(Scheduler::schedule_named(Origin::root(), 1u32.encode(), 4, None, 127, call,));
-		run_to_block(3);
-		// Scheduled call are in the agenda.
-		assert_eq!(Agenda::<Test>::get(4).len(), 1);
-		assert!(logger::log().is_empty());
-		// Cancel it.
-		assert_ok!(Scheduler::cancel_named(Origin::root(), 1u32.encode()));
-		// The whole agenda is gone.
-		assert!(!Agenda::<Test>::contains_key(4));
-		assert!(logger::log().is_empty());
-	});
-}
 #[test]
 fn scheduling_with_preimages_works() {
 	new_test_ext().execute_with(|| {
@@ -159,6 +142,56 @@ fn scheduling_with_preimage_postpones_full_block_cancels() {
 		assert_eq!(System::events().len(), 1);
 		assert_eq!(Agenda::<Test>::get(2).len(), 0);
 		assert_eq!(Agenda::<Test>::get(postpone).len() as u32, MaxScheduledPerBlock::get());
+	});
+}
+
+#[test]
+fn scheduling_respects_max_agendas_per_block() {
+	new_test_ext().execute_with(|| {
+		let call = Call::Logger(LoggerCall::log { i: 42, weight: 1000 });
+		let max = MaxScheduledPerBlock::get() as usize;
+		// No schedules in block 4.
+		assert!(Agenda::<Test>::get(4).is_empty());
+
+		// Schedule the maximum.
+		for _ in 0..max {
+			assert_ok!(Scheduler::do_schedule(
+				DispatchTime::At(4),
+				None,
+				127,
+				root(),
+				call.clone().into()
+			));
+		}
+		// Worked.
+		assert_eq!(System::events().len(), max);
+		assert_eq!(Agenda::<Test>::get(4).len(), max);
+		// Scheduling more fails.
+		assert_noop!(Scheduler::do_schedule(
+			DispatchTime::At(4),
+			None,
+			127,
+			root(),
+			call.clone().into()
+		), Error::<Test>::FailedToSchedule);
+	});
+}
+
+// Checks that the whole agenda is removed and not an empty one left behind.
+#[test]
+fn cancelling_removes_the_whole_agenda() {
+	new_test_ext().execute_with(|| {
+		let call = Box::new(Call::Logger(LoggerCall::log { i: 69, weight: 1000 }).into());
+		assert_ok!(Scheduler::schedule_named(Origin::root(), 1u32.encode(), 4, None, 127, call,));
+		run_to_block(3);
+		// Scheduled call are in the agenda.
+		assert_eq!(Agenda::<Test>::get(4).len(), 1);
+		assert!(logger::log().is_empty());
+		// Cancel it.
+		assert_ok!(Scheduler::cancel_named(Origin::root(), 1u32.encode()));
+		// The whole agenda is gone.
+		assert!(!Agenda::<Test>::contains_key(4));
+		assert!(logger::log().is_empty());
 	});
 }
 

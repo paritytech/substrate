@@ -914,7 +914,7 @@ impl<T: Config> Pallet<T> {
 				.map_err(|_| Error::<T>::PalletsOriginTooLong)?,
 			_phantom: PhantomData::<T::AccountId>::default(),
 		};
-		Agenda::<T>::try_append(when, s).map_err(|_| Error::<T>::TooManyAgendas)?;
+		Agenda::<T>::try_append(when, s).map_err(|_| Error::<T>::FailedToSchedule)?;
 		let index = Agenda::<T>::decode_len(when).unwrap_or(1) as u32 - 1;
 		Self::deposit_event(Event::Scheduled { when, index });
 
