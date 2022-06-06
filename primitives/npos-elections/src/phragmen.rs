@@ -147,7 +147,7 @@ pub fn seq_phragmen_core<AccountId: IdentifierT>(
 						voter.load.n(),
 						voter.budget,
 						candidate.approval_stake,
-						Rounding::NearestPrefDown,
+						Rounding::Down,
 					)
 					.unwrap_or(Bounded::max_value());
 					let temp_d = voter.load.d();
