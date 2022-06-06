@@ -19,7 +19,11 @@
 
 use codec::{Encode, MaxEncodedLen};
 
-use frame_support::{log, traits::{Get, OneSessionHandler}, BoundedSlice, BoundedVec, Parameter};
+use frame_support::{
+	log,
+	traits::{Get, OneSessionHandler},
+	BoundedSlice, BoundedVec, Parameter,
+};
 
 use sp_runtime::{
 	generic::DigestItem,
