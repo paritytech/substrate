@@ -1507,9 +1507,8 @@ where
 		for (_, hash) in &results {
 			self.queue_blocks.remove(hash);
 		}
-		let up_to = results.last().and_then(|(r, _)| Some(r.as_ref().ok()?.number().clone()));
-		if let Some(up_to) = up_to {
-			self.blocks.clear_queued(up_to);
+		if let Some(from_hash) = results.first().map(|(_, h)| h) {
+			self.blocks.clear_queued(from_hash);
 		}
 		for (result, hash) in results {
 			if has_error {

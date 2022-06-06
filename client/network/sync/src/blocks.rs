@@ -18,7 +18,7 @@
 
 use crate::message;
 use libp2p::PeerId;
-use log::trace;
+use log::{debug, trace};
 use sp_runtime::traits::{Block as BlockT, NumberFor, One};
 use std::{
 	cmp,
@@ -58,12 +58,19 @@ pub struct BlockCollection<B: BlockT> {
 	/// Downloaded blocks.
 	blocks: BTreeMap<NumberFor<B>, BlockRangeState<B>>,
 	peer_requests: HashMap<PeerId, NumberFor<B>>,
+	/// Block ranges downloaded and queued for import.
+	/// Maps start_hash => (start_num, end_num).
+	queued_blocks: HashMap<B::Hash, (NumberFor<B>, NumberFor<B>)>,
 }
 
 impl<B: BlockT> BlockCollection<B> {
 	/// Create a new instance.
 	pub fn new() -> Self {
-		Self { blocks: BTreeMap::new(), peer_requests: HashMap::new() }
+		Self {
+			blocks: BTreeMap::new(),
+			peer_requests: HashMap::new(),
+			queued_blocks: HashMap::new(),
+		}
 	}
 
 	/// Clear everything.
@@ -177,15 +184,18 @@ impl<B: BlockT> BlockCollection<B> {
 		let mut ready = Vec::new();
 
 		let mut prev = from;
-		for (start, range_data) in &mut self.blocks {
-			if *start > prev {
+		for (&start, range_data) in &mut self.blocks {
+			if start > prev {
 				break
 			}
 			let len = match range_data {
 				BlockRangeState::Complete(blocks) => {
 					let len = (blocks.len() as u32).into();
-					prev = *start + len;
-					// Remove all elements from `blocks` and add them to `drained`
+					if let Some(BlockData { block, .. }) = blocks.first() {
+						self.queued_blocks.insert(block.hash, (start, start + len));
+					}
+					prev = start + len;
+					// Remove all elements from `blocks` and add them to `ready`
 					ready.append(blocks);
 					len
 				},
@@ -199,24 +209,21 @@ impl<B: BlockT> BlockCollection<B> {
 		ready
 	}
 
-	pub fn clear_queued(&mut self, from: NumberFor<B>) {
-		let mut ranges = Vec::new();
-
-		let mut prev = from;
-		for (start, range_data) in &self.blocks {
-			match range_data {
-				BlockRangeState::Queued { len } if *start <= prev => {
-					prev = *start + *len;
-					ranges.push(*start);
-				},
-				_ => break,
-			}
+	pub fn clear_queued(&mut self, from_hash: &B::Hash) {
+		match self.queued_blocks.get(from_hash) {
+			None => {
+				debug!(target: "sync", "Can't clear unknown queued blocks from {:?}", from_hash);
+			},
+			Some(&(from, to)) => {
+				let mut block_num = from;
+				while block_num < to {
+					self.blocks.remove(&block_num);
+					block_num += One::one();
+				}
+				self.queued_blocks.remove(from_hash);
+				trace!(target: "sync", "Cleared blocks from {:?} to {:?}", from, to);
+			},
 		}
-
-		for r in &ranges {
-			self.blocks.remove(r);
-		}
-		trace!(target: "sync", "Cleared {} block ranges from {:?}", ranges.len(), from);
 	}
 
 	pub fn clear_peer_download(&mut self, who: &PeerId) {
