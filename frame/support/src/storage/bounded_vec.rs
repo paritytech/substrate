@@ -149,6 +149,14 @@ impl<'a, T, S> From<BoundedSlice<'a, T, S>> for &'a [T] {
 	}
 }
 
+impl<'a, T, S> sp_std::iter::IntoIterator for BoundedSlice<'a, T, S> {
+	type Item = &'a T;
+	type IntoIter = sp_std::slice::Iter<'a, T>;
+	fn into_iter(self) -> Self::IntoIter {
+		self.0.iter()
+	}
+}
+
 impl<T: Decode, S: Get<u32>> Decode for BoundedVec<T, S> {
 	fn decode<I: codec::Input>(input: &mut I) -> Result<Self, codec::Error> {
 		let inner = Vec::<T>::decode(input)?;
@@ -602,6 +610,22 @@ impl<T, S> sp_std::iter::IntoIterator for BoundedVec<T, S> {
 	type IntoIter = sp_std::vec::IntoIter<T>;
 	fn into_iter(self) -> Self::IntoIter {
 		self.0.into_iter()
+	}
+}
+
+impl<'a, T, S> sp_std::iter::IntoIterator for &'a BoundedVec<T, S> {
+	type Item = &'a T;
+	type IntoIter = sp_std::slice::Iter<'a, T>;
+	fn into_iter(self) -> Self::IntoIter {
+		self.0.iter()
+	}
+}
+
+impl<'a, T, S> sp_std::iter::IntoIterator for &'a mut BoundedVec<T, S> {
+	type Item = &'a mut T;
+	type IntoIter = sp_std::slice::IterMut<'a, T>;
+	fn into_iter(self) -> Self::IntoIter {
+		self.0.iter_mut()
 	}
 }
 
