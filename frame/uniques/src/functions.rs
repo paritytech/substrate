@@ -275,7 +275,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Self::deposit_event(Event::ItemBought {
 			collection,
 			item,
-			price: bid_price,
+			price: price_info.0,
 			seller: old_owner,
 			buyer,
 		});
