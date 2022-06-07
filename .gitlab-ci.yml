@@ -47,7 +47,7 @@ variables:                         &default-vars
   RUSTY_CACHIER_DONT_OPERATE_ON_MAIN_BRANCH: "true"
 
   RUSTY_CACHIER_SKIP_BYPASSES: "true"
-  CARGO_LOG: "cargo::core::compiler::fingerprint=info"
+  CARGO_LOG: "cargo::core::compiler::fingerprint=trace"
 
 default:
   retry:
