@@ -24,7 +24,7 @@
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	dispatch,
-	traits::{FindAuthor, Get, VerifySeal},
+	traits::{Defensive, FindAuthor, Get, VerifySeal},
 	BoundedSlice, BoundedVec,
 };
 use sp_authorship::{InherentError, UnclesInherentData, INHERENT_IDENTIFIER};
@@ -341,7 +341,8 @@ impl<T: Config> Pallet<T> {
 		let mut uncles = <Uncles<T>>::get();
 		uncles
 			.try_push(UncleEntryItem::InclusionHeight(now))
-			.expect("the list of uncles accepted per generation is bounded, and the number of generations is bounded, so pushing a new element will always succeed");
+			.defensive_proof("the list of uncles accepted per generation is bounded, and the number of generations is bounded, so pushing a new element will always succeed")
+			.map_err(|_| Error::<T>::TooManyUncles)?;
 
 		let mut acc: <T::FilterUncle as FilterUncle<_, _>>::Accumulator = Default::default();
 
@@ -357,7 +358,8 @@ impl<T: Config> Pallet<T> {
 				T::EventHandler::note_uncle(author, now - *uncle.number());
 			}
 			uncles.try_push(UncleEntryItem::Uncle(hash, maybe_author))
-			.expect("the list of uncles accepted per generation is bounded, and the number of generations is bounded, so pushing a new element will always succeed");
+			.defensive_proof("the list of uncles accepted per generation is bounded, and the number of generations is bounded, so pushing a new element will always succeed")
+			.map_err(|_| Error::<T>::TooManyUncles)?;
 		}
 
 		<Uncles<T>>::put(&uncles);
