@@ -43,7 +43,7 @@ workflow:
 
 variables:                         &default-vars
   GIT_STRATEGY:                    fetch
-  GIT_DEPTH:                       100
+  GIT_DEPTH:                       1000
   CARGO_INCREMENTAL:               0
   DOCKER_OS:                       "debian:stretch"
   ARCH:                            "x86_64"
@@ -109,6 +109,7 @@ default:
     - curl -s https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.parity.io/parity/infrastructure/ci_cd/rusty-cachier/client/-/raw/release/util/install.sh | bash
     - rusty-cachier environment check --gracefully
     - $(rusty-cachier environment inject)
+    - rusty-cachier project mtime
   after_script:
     - env RUSTY_CACHIER_SUPRESS_OUTPUT=true rusty-cachier snapshot destroy
 
