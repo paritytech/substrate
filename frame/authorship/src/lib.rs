@@ -34,10 +34,7 @@ use sp_std::{collections::btree_set::BTreeSet, prelude::*, result};
 const MAX_UNCLES: usize = 10;
 
 struct MaxUncleEntryItems<T>(core::marker::PhantomData<T>);
-impl<T> Get<u32> for MaxUncleEntryItems<T>
-where
-	T: Config,
-{
+impl<T: Config> Get<u32> for MaxUncleEntryItems<T> {
 	fn get() -> u32 {
 		// There can be at most `MAX_UNCLES` of `UncleEntryItem::Uncle` and
 		// one `UncleEntryItem::InclusionHeight` per one `UncleGenerations`,
