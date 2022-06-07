@@ -109,7 +109,6 @@ default:
     - curl -s https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.parity.io/parity/infrastructure/ci_cd/rusty-cachier/client/-/raw/release/util/install.sh | bash
     - rusty-cachier environment check --gracefully
     - $(rusty-cachier environment inject)
-    - git restore-mtime
   after_script:
     - env RUSTY_CACHIER_SUPRESS_OUTPUT=true rusty-cachier snapshot destroy
 
