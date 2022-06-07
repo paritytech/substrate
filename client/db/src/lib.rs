@@ -313,8 +313,6 @@ pub enum KeepBlocks {
 	/// Keep full block history.
 	All,
 	/// Keep N recent finalized blocks.
-	///
-	/// NOTE: only finalized blocks are subject for removal!
 	Some(u32),
 }
 
