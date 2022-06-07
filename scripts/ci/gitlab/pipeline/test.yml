@@ -11,4 +11,5 @@ cargo-clippy:
     - .test-refs
   script:
     - rusty-cachier snapshot create
+    - sleep 3600
     - SKIP_WASM_BUILD=1 env -u RUSTFLAGS cargo +nightly clippy --all-targets
