@@ -350,7 +350,7 @@ mod benchmark {
 	const SEED: u32 = 0;
 
 	fn set_members<T: Config<I>, I: 'static>(
-		members: BoundedVec<T::AccountId>,
+		members: BoundedVec<T::AccountId, T::MaxMembers>,
 		prime: Option<usize>,
 	) {
 		let reset_origin = T::ResetOrigin::successful_origin();
