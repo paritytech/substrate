@@ -302,6 +302,8 @@ pub struct DatabaseSettings {
 	/// Where to find the database.
 	pub source: DatabaseSource,
 	/// Block pruning mode.
+	///
+	/// NOTE: only finalized blocks are subject for removal!
 	pub keep_blocks: KeepBlocks,
 }
 
@@ -311,6 +313,8 @@ pub enum KeepBlocks {
 	/// Keep full block history.
 	All,
 	/// Keep N recent finalized blocks.
+	///
+	/// NOTE: only finalized blocks are subject for removal!
 	Some(u32),
 }
 
