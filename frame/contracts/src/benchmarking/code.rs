@@ -254,7 +254,7 @@ where
 			code = inject_stack_metering::<T>(code);
 		}
 
-		let code = code.to_bytes().unwrap();
+		let code = code.into_bytes().unwrap();
 		let hash = T::Hashing::hash(&code);
 		Self { code, hash, memory: def.memory }
 	}
@@ -285,7 +285,7 @@ where
 			.find_map(|e| if let External::Memory(mem) = e.external() { Some(mem) } else { None })
 			.unwrap()
 			.limits();
-		let code = module.to_bytes().unwrap();
+		let code = module.into_bytes().unwrap();
 		let hash = T::Hashing::hash(&code);
 		let memory =
 			ImportedMemory { min_pages: limits.initial(), max_pages: limits.maximum().unwrap() };

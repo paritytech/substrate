@@ -673,7 +673,7 @@ pub struct WasmiRuntime {
 	/// Enable stub generation for functions that are not available in `host_functions`.
 	/// These stubs will error when the wasm blob tries to call them.
 	allow_missing_func_imports: bool,
-	/// Numer of heap pages this runtime uses.
+	/// Number of heap pages this runtime uses.
 	heap_pages: u64,
 
 	global_vals_snapshot: GlobalValsSnapshot,
@@ -714,8 +714,10 @@ pub fn create_runtime(
 	let data_segments_snapshot =
 		DataSegmentsSnapshot::take(&blob).map_err(|e| WasmError::Other(e.to_string()))?;
 
-	let module =
-		Module::from_parity_wasm_module(blob.into_inner()).map_err(|_| WasmError::InvalidModule)?;
+	let module = Module::from_buffer(
+		blob.into_inner().into_bytes().map_err(|e| WasmError::Other(e.to_string()))?,
+	)
+	.map_err(|_| WasmError::InvalidModule)?;
 
 	let global_vals_snapshot = {
 		let (instance, _, _) = instantiate_module(
