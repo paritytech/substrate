@@ -227,9 +227,7 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 						T::MaxAuthorities::get(),
 					);
 				}
-				let bounded = <BoundedVec<_, T::MaxAuthorities>>::truncate_from(
-					next_authorities,
-				);
+				let bounded = <BoundedVec<_, T::MaxAuthorities>>::truncate_from(next_authorities);
 				Self::change_authorities(bounded);
 			}
 		}
