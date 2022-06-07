@@ -363,7 +363,7 @@ mod benchmark {
 
 	benchmarks_instance_pallet! {
 		add_member {
-			let m in 1 .. T::MaxMembers::get();
+			let m in 1 .. (T::MaxMembers::get() - 1);
 
 			let members = (0..m).map(|i| account("member", i, SEED)).collect::<Vec<T::AccountId>>();
 			set_members::<T, I>(members, None);
