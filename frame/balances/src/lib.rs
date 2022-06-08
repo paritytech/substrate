@@ -158,6 +158,7 @@ mod tests;
 mod benchmarking;
 mod tests_composite;
 mod tests_local;
+#[cfg(test)]
 mod tests_reentrancy;
 pub mod weights;
 
