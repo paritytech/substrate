@@ -19,7 +19,7 @@
 
 use super::*;
 use crate::mock::*;
-use frame_support::{assert_noop, assert_ok};
+use frame_support::{assert_noop, assert_ok, traits::GenesisBuild};
 use sp_runtime::traits::BadOrigin;
 
 #[test]
@@ -40,13 +40,18 @@ fn add_well_known_node_works() {
 
 		assert_ok!(NodeAuthorization::add_well_known_node(Origin::signed(1), test_node(15), 15));
 		assert_eq!(
-			WellKnownNodes::<Test>::get(),
-			BTreeSet::from_iter(vec![test_node(10), test_node(15), test_node(20), test_node(30)])
+			WellKnownNodes::<Test>::get().into_inner(),
+			BTreeSet::from_iter(vec![
+				bounded_node(10),
+				bounded_node(15),
+				bounded_node(20),
+				bounded_node(30)
+			])
 		);
-		assert_eq!(Owners::<Test>::get(test_node(10)), Some(10));
-		assert_eq!(Owners::<Test>::get(test_node(20)), Some(20));
-		assert_eq!(Owners::<Test>::get(test_node(30)), Some(30));
-		assert_eq!(Owners::<Test>::get(test_node(15)), Some(15));
+		assert_eq!(Owners::<Test>::get(bounded_node(10)), Some(10));
+		assert_eq!(Owners::<Test>::get(bounded_node(20)), Some(20));
+		assert_eq!(Owners::<Test>::get(bounded_node(30)), Some(30));
+		assert_eq!(Owners::<Test>::get(bounded_node(15)), Some(15));
 
 		assert_noop!(
 			NodeAuthorization::add_well_known_node(Origin::signed(1), test_node(25), 25),
@@ -72,18 +77,18 @@ fn remove_well_known_node_works() {
 		);
 
 		AdditionalConnections::<Test>::insert(
-			test_node(20),
-			BTreeSet::from_iter(vec![test_node(40)]),
+			bounded_node(20),
+			bounded_btree_set(vec![bounded_node(40)]),
 		);
-		assert!(AdditionalConnections::<Test>::contains_key(test_node(20)));
+		assert!(AdditionalConnections::<Test>::contains_key(bounded_node(20)));
 
 		assert_ok!(NodeAuthorization::remove_well_known_node(Origin::signed(2), test_node(20)));
 		assert_eq!(
-			WellKnownNodes::<Test>::get(),
-			BTreeSet::from_iter(vec![test_node(10), test_node(30)])
+			WellKnownNodes::<Test>::get().into_inner(),
+			BTreeSet::from_iter(vec![bounded_node(10), bounded_node(30)])
 		);
-		assert!(!Owners::<Test>::contains_key(test_node(20)));
-		assert!(!AdditionalConnections::<Test>::contains_key(test_node(20)));
+		assert!(!Owners::<Test>::contains_key(bounded_node(20)));
+		assert!(!AdditionalConnections::<Test>::contains_key(bounded_node(20)));
 	});
 }
 
@@ -117,8 +122,8 @@ fn swap_well_known_node_works() {
 			test_node(20)
 		));
 		assert_eq!(
-			WellKnownNodes::<Test>::get(),
-			BTreeSet::from_iter(vec![test_node(10), test_node(20), test_node(30)])
+			WellKnownNodes::<Test>::get().into_inner(),
+			BTreeSet::from_iter(vec![bounded_node(10), bounded_node(20), bounded_node(30)])
 		);
 
 		assert_noop!(
@@ -135,8 +140,8 @@ fn swap_well_known_node_works() {
 		);
 
 		AdditionalConnections::<Test>::insert(
-			test_node(20),
-			BTreeSet::from_iter(vec![test_node(15)]),
+			bounded_node(20),
+			bounded_btree_set(vec![bounded_node(15)]),
 		);
 		assert_ok!(NodeAuthorization::swap_well_known_node(
 			Origin::signed(3),
@@ -144,15 +149,15 @@ fn swap_well_known_node_works() {
 			test_node(5)
 		));
 		assert_eq!(
-			WellKnownNodes::<Test>::get(),
-			BTreeSet::from_iter(vec![test_node(5), test_node(10), test_node(30)])
+			WellKnownNodes::<Test>::get().into_inner(),
+			BTreeSet::from_iter(vec![bounded_node(5), bounded_node(10), bounded_node(30)])
 		);
-		assert!(!Owners::<Test>::contains_key(test_node(20)));
-		assert_eq!(Owners::<Test>::get(test_node(5)), Some(20));
-		assert!(!AdditionalConnections::<Test>::contains_key(test_node(20)));
+		assert!(!Owners::<Test>::contains_key(bounded_node(20)));
+		assert_eq!(Owners::<Test>::get(bounded_node(5)), Some(20));
+		assert!(!AdditionalConnections::<Test>::contains_key(bounded_node(20)));
 		assert_eq!(
-			AdditionalConnections::<Test>::get(test_node(5)),
-			BTreeSet::from_iter(vec![test_node(15)])
+			AdditionalConnections::<Test>::get(bounded_node(5)).into_inner(),
+			BTreeSet::from_iter(vec![bounded_node(15)])
 		);
 	});
 }
@@ -175,6 +180,7 @@ fn reset_well_known_nodes_works() {
 					(test_node(5), 5),
 					(test_node(20), 20),
 					(test_node(25), 25),
+					(test_node(30), 30),
 				]
 			),
 			Error::<Test>::TooManyNodes
@@ -185,12 +191,25 @@ fn reset_well_known_nodes_works() {
 			vec![(test_node(15), 15), (test_node(5), 5), (test_node(20), 20)]
 		));
 		assert_eq!(
-			WellKnownNodes::<Test>::get(),
-			BTreeSet::from_iter(vec![test_node(5), test_node(15), test_node(20)])
+			WellKnownNodes::<Test>::get().into_inner(),
+			BTreeSet::from_iter(vec![bounded_node(5), bounded_node(15), bounded_node(20)])
 		);
-		assert_eq!(Owners::<Test>::get(test_node(5)), Some(5));
-		assert_eq!(Owners::<Test>::get(test_node(15)), Some(15));
-		assert_eq!(Owners::<Test>::get(test_node(20)), Some(20));
+		assert_eq!(Owners::<Test>::get(bounded_node(5)), Some(5));
+		assert_eq!(Owners::<Test>::get(bounded_node(15)), Some(15));
+		assert_eq!(Owners::<Test>::get(bounded_node(20)), Some(20));
+	});
+}
+
+#[test]
+fn reset_well_known_nodes_enforces_peer_id_limit() {
+	new_test_ext().execute_with(|| {
+		assert_noop!(
+			NodeAuthorization::reset_well_known_nodes(
+				Origin::signed(4),
+				vec![(test_node(15), 15), (PeerId(vec![1, 2, 3]), 5)]
+			),
+			Error::<Test>::PeerIdTooLong
+		);
 	});
 }
 
@@ -207,7 +226,7 @@ fn claim_node_works() {
 		);
 
 		assert_ok!(NodeAuthorization::claim_node(Origin::signed(15), test_node(15)));
-		assert_eq!(Owners::<Test>::get(test_node(15)), Some(15));
+		assert_eq!(Owners::<Test>::get(bounded_node(15)), Some(15));
 	});
 }
 
@@ -233,14 +252,14 @@ fn remove_claim_works() {
 			Error::<Test>::PermissionDenied
 		);
 
-		Owners::<Test>::insert(test_node(15), 15);
+		Owners::<Test>::insert(bounded_node(15), 15);
 		AdditionalConnections::<Test>::insert(
-			test_node(15),
-			BTreeSet::from_iter(vec![test_node(20)]),
+			bounded_node(15),
+			bounded_btree_set(vec![bounded_node(20)]),
 		);
 		assert_ok!(NodeAuthorization::remove_claim(Origin::signed(15), test_node(15)));
-		assert!(!Owners::<Test>::contains_key(test_node(15)));
-		assert!(!AdditionalConnections::<Test>::contains_key(test_node(15)));
+		assert!(!Owners::<Test>::contains_key(bounded_node(15)));
+		assert!(!AdditionalConnections::<Test>::contains_key(bounded_node(15)));
 	});
 }
 
@@ -262,7 +281,7 @@ fn transfer_node_works() {
 		);
 
 		assert_ok!(NodeAuthorization::transfer_node(Origin::signed(20), test_node(20), 15));
-		assert_eq!(Owners::<Test>::get(test_node(20)), Some(15));
+		assert_eq!(Owners::<Test>::get(bounded_node(20)), Some(15));
 	});
 }
 
@@ -301,8 +320,22 @@ fn add_connections_works() {
 			vec![test_node(15), test_node(5), test_node(25), test_node(20)]
 		));
 		assert_eq!(
-			AdditionalConnections::<Test>::get(test_node(20)),
-			BTreeSet::from_iter(vec![test_node(5), test_node(15), test_node(25)])
+			AdditionalConnections::<Test>::get(bounded_node(20)).into_inner(),
+			BTreeSet::from_iter(vec![bounded_node(5), bounded_node(15), bounded_node(25)])
+		);
+	});
+}
+
+#[test]
+fn add_connections_enforces_peer_id_limit_on_the_connections() {
+	new_test_ext().execute_with(|| {
+		assert_noop!(
+			NodeAuthorization::add_connections(
+				Origin::signed(20),
+				test_node(20),
+				vec![PeerId(vec![1, 2, 3])]
+			),
+			Error::<Test>::PeerIdTooLong
 		);
 	});
 }
@@ -337,8 +370,8 @@ fn remove_connections_works() {
 		);
 
 		AdditionalConnections::<Test>::insert(
-			test_node(20),
-			BTreeSet::from_iter(vec![test_node(5), test_node(15), test_node(25)]),
+			bounded_node(20),
+			bounded_btree_set(vec![bounded_node(5), bounded_node(15), bounded_node(25)]),
 		);
 		assert_ok!(NodeAuthorization::remove_connections(
 			Origin::signed(20),
@@ -346,8 +379,22 @@ fn remove_connections_works() {
 			vec![test_node(15), test_node(5)]
 		));
 		assert_eq!(
-			AdditionalConnections::<Test>::get(test_node(20)),
-			BTreeSet::from_iter(vec![test_node(25)])
+			AdditionalConnections::<Test>::get(bounded_node(20)).into_inner(),
+			BTreeSet::from_iter(vec![bounded_node(25)])
+		);
+	});
+}
+
+#[test]
+fn remove_connections_enforces_peer_id_limit_on_the_connections() {
+	new_test_ext().execute_with(|| {
+		assert_noop!(
+			NodeAuthorization::remove_connections(
+				Origin::signed(20),
+				test_node(20),
+				vec![PeerId(vec![1, 2, 3])]
+			),
+			Error::<Test>::PeerIdTooLong
 		);
 	});
 }
@@ -356,15 +403,41 @@ fn remove_connections_works() {
 fn get_authorized_nodes_works() {
 	new_test_ext().execute_with(|| {
 		AdditionalConnections::<Test>::insert(
-			test_node(20),
-			BTreeSet::from_iter(vec![test_node(5), test_node(15), test_node(25)]),
+			bounded_node(20),
+			bounded_btree_set(vec![bounded_node(5), bounded_node(15), bounded_node(25)]),
 		);
 
-		let mut authorized_nodes = Pallet::<Test>::get_authorized_nodes(&test_node(20));
+		let mut authorized_nodes = Pallet::<Test>::get_authorized_nodes(&bounded_node(20));
 		authorized_nodes.sort();
 		assert_eq!(
 			authorized_nodes,
 			vec![test_node(5), test_node(10), test_node(15), test_node(25), test_node(30)]
 		);
 	});
+}
+
+#[test]
+#[should_panic(expected = "PeerIdTooLong")]
+fn peer_id_limit_is_enforced_on_genesis() {
+	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	crate::GenesisConfig::<Test> { nodes: vec![(PeerId(vec![1, 2, 3]), 10)] }
+		.assimilate_storage(&mut t)
+		.unwrap();
+}
+
+#[test]
+#[should_panic(expected = "TooManyNodes")]
+fn maximum_node_limit_is_enforced_on_genesis() {
+	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	crate::GenesisConfig::<Test> {
+		nodes: vec![
+			(test_node(1), 1),
+			(test_node(2), 2),
+			(test_node(3), 3),
+			(test_node(4), 4),
+			(test_node(5), 5),
+		],
+	}
+	.assimilate_storage(&mut t)
+	.unwrap();
 }

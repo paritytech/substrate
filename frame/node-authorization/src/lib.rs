@@ -44,9 +44,10 @@ mod tests;
 
 pub mod weights;
 
+use frame_support::{traits::Defensive, BoundedBTreeSet};
 pub use pallet::*;
 use sp_core::OpaquePeerId as PeerId;
-use sp_std::{collections::btree_set::BTreeSet, iter::FromIterator, prelude::*};
+use sp_std::{collections::btree_set::BTreeSet, prelude::*};
 pub use weights::WeightInfo;
 
 #[frame_support::pallet]
@@ -57,7 +58,6 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
-	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
 	/// The module configuration trait
@@ -73,6 +73,10 @@ pub mod pallet {
 		/// The maximum length in bytes of PeerId
 		#[pallet::constant]
 		type MaxPeerIdLength: Get<u32>;
+
+		/// The maximum number of additional connections that are allowed to be set
+		#[pallet::constant]
+		type MaxAdditionalConnections: Get<u32>;
 
 		/// The origin which can add a well known node.
 		type AddOrigin: EnsureOrigin<Self::Origin>;
@@ -90,21 +94,70 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 	}
 
+	/// A bounded opaque peer ID.
+	#[derive(Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+	#[codec(mel_bound())]
+	#[scale_info(skip_type_params(T))]
+	pub struct BoundedPeerId<T: Config>(BoundedVec<u8, T::MaxPeerIdLength>);
+
+	impl<T: Config> PartialEq for BoundedPeerId<T> {
+		fn eq(&self, rhs: &Self) -> bool {
+			self.0.eq(&rhs.0)
+		}
+	}
+	impl<T: Config> Eq for BoundedPeerId<T> {}
+	impl<T: Config> PartialOrd for BoundedPeerId<T> {
+		fn partial_cmp(&self, rhs: &Self) -> Option<std::cmp::Ordering> {
+			Some(self.0.cmp(&rhs.0))
+		}
+	}
+	impl<T: Config> Ord for BoundedPeerId<T> {
+		fn cmp(&self, rhs: &Self) -> std::cmp::Ordering {
+			self.0.cmp(&rhs.0)
+		}
+	}
+	impl<T: Config> Clone for BoundedPeerId<T> {
+		fn clone(&self) -> Self {
+			BoundedPeerId(self.0.clone())
+		}
+	}
+
+	impl<T: Config> TryFrom<PeerId> for BoundedPeerId<T> {
+		type Error = Error<T>;
+		fn try_from(id: PeerId) -> Result<Self, Self::Error> {
+			BoundedVec::try_from(id.0)
+				.map_err(|_| Error::<T>::PeerIdTooLong)
+				.map(BoundedPeerId::<T>)
+		}
+	}
+
+	impl<T: Config> From<BoundedPeerId<T>> for PeerId {
+		fn from(id: BoundedPeerId<T>) -> Self {
+			PeerId(id.0.into())
+		}
+	}
+
 	/// The set of well known nodes. This is stored sorted (just by value).
 	#[pallet::storage]
 	#[pallet::getter(fn well_known_nodes)]
-	pub type WellKnownNodes<T> = StorageValue<_, BTreeSet<PeerId>, ValueQuery>;
+	pub type WellKnownNodes<T: Config> =
+		StorageValue<_, BoundedBTreeSet<BoundedPeerId<T>, T::MaxWellKnownNodes>, ValueQuery>;
 
 	/// A map that maintains the ownership of each node.
 	#[pallet::storage]
 	#[pallet::getter(fn owners)]
-	pub type Owners<T: Config> = StorageMap<_, Blake2_128Concat, PeerId, T::AccountId>;
+	pub type Owners<T: Config> = StorageMap<_, Blake2_128Concat, BoundedPeerId<T>, T::AccountId>;
 
 	/// The additional adapative connections of each node.
 	#[pallet::storage]
 	#[pallet::getter(fn additional_connection)]
-	pub type AdditionalConnections<T> =
-		StorageMap<_, Blake2_128Concat, PeerId, BTreeSet<PeerId>, ValueQuery>;
+	pub type AdditionalConnections<T: Config> = StorageMap<
+		_,
+		Blake2_128Concat,
+		BoundedPeerId<T>,
+		BoundedBTreeSet<BoundedPeerId<T>, T::MaxAdditionalConnections>,
+		ValueQuery,
+	>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
@@ -121,7 +174,9 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
-			Pallet::<T>::initialize_nodes(&self.nodes);
+			if let Err(error) = Pallet::<T>::initialize_nodes(&self.nodes) {
+				panic!("Failed to initialize node-authorization pallet on genesis: {:?}", error);
+			}
 		}
 	}
 
@@ -167,6 +222,8 @@ pub mod pallet {
 		NotOwner,
 		/// No permisson to perform specific operation.
 		PermissionDenied,
+		/// Too many additional connections.
+		TooManyAdditionalConnections,
 	}
 
 	#[pallet::hooks]
@@ -189,10 +246,19 @@ pub mod pallet {
 							"Error: failed to decode PeerId at {:?}",
 							now,
 						),
-						Ok(node) => sp_io::offchain::set_authorized_nodes(
-							Self::get_authorized_nodes(&PeerId(node)),
-							true,
-						),
+						Ok(node) =>
+							if let Ok(node) = BoundedPeerId::<T>::try_from(PeerId(node)) {
+								sp_io::offchain::set_authorized_nodes(
+									Self::get_authorized_nodes(&node),
+									true,
+								)
+							} else {
+								log::error!(
+									target: "runtime::node-authorization",
+									"Error: PeerId is too long at {:?}",
+									now,
+								)
+							},
 					}
 				},
 			}
@@ -214,18 +280,16 @@ pub mod pallet {
 			owner: T::AccountId,
 		) -> DispatchResult {
 			T::AddOrigin::ensure_origin(origin)?;
-			ensure!(node.0.len() < T::MaxPeerIdLength::get() as usize, Error::<T>::PeerIdTooLong);
+			let node = BoundedPeerId::<T>::try_from(node)?;
 
 			let mut nodes = WellKnownNodes::<T>::get();
-			ensure!(nodes.len() < T::MaxWellKnownNodes::get() as usize, Error::<T>::TooManyNodes);
 			ensure!(!nodes.contains(&node), Error::<T>::AlreadyJoined);
-
-			nodes.insert(node.clone());
+			nodes.try_insert(node.clone()).map_err(|_| Error::<T>::TooManyNodes)?;
 
 			WellKnownNodes::<T>::put(&nodes);
 			<Owners<T>>::insert(&node, &owner);
 
-			Self::deposit_event(Event::NodeAdded { peer_id: node, who: owner });
+			Self::deposit_event(Event::NodeAdded { peer_id: node.into(), who: owner });
 			Ok(())
 		}
 
@@ -238,7 +302,7 @@ pub mod pallet {
 		#[pallet::weight((T::WeightInfo::remove_well_known_node(), DispatchClass::Operational))]
 		pub fn remove_well_known_node(origin: OriginFor<T>, node: PeerId) -> DispatchResult {
 			T::RemoveOrigin::ensure_origin(origin)?;
-			ensure!(node.0.len() < T::MaxPeerIdLength::get() as usize, Error::<T>::PeerIdTooLong);
+			let node = BoundedPeerId::<T>::try_from(node)?;
 
 			let mut nodes = WellKnownNodes::<T>::get();
 			ensure!(nodes.contains(&node), Error::<T>::NotExist);
@@ -249,7 +313,7 @@ pub mod pallet {
 			<Owners<T>>::remove(&node);
 			AdditionalConnections::<T>::remove(&node);
 
-			Self::deposit_event(Event::NodeRemoved { peer_id: node });
+			Self::deposit_event(Event::NodeRemoved { peer_id: node.into() });
 			Ok(())
 		}
 
@@ -267,8 +331,8 @@ pub mod pallet {
 			add: PeerId,
 		) -> DispatchResult {
 			T::SwapOrigin::ensure_origin(origin)?;
-			ensure!(remove.0.len() < T::MaxPeerIdLength::get() as usize, Error::<T>::PeerIdTooLong);
-			ensure!(add.0.len() < T::MaxPeerIdLength::get() as usize, Error::<T>::PeerIdTooLong);
+			let remove = BoundedPeerId::<T>::try_from(remove)?;
+			let add = BoundedPeerId::<T>::try_from(add)?;
 
 			if remove == add {
 				return Ok(())
@@ -279,13 +343,17 @@ pub mod pallet {
 			ensure!(!nodes.contains(&add), Error::<T>::AlreadyJoined);
 
 			nodes.remove(&remove);
-			nodes.insert(add.clone());
+			nodes
+				.try_insert(add.clone())
+				.map_err(|_| ())
+				.defensive_proof("swapping the nodes doesn't change the number of nodes")
+				.map_err(|_| Error::<T>::TooManyNodes)?;
 
 			WellKnownNodes::<T>::put(&nodes);
 			Owners::<T>::swap(&remove, &add);
 			AdditionalConnections::<T>::swap(&remove, &add);
 
-			Self::deposit_event(Event::NodeSwapped { removed: remove, added: add });
+			Self::deposit_event(Event::NodeSwapped { removed: remove.into(), added: add.into() });
 			Ok(())
 		}
 
@@ -302,10 +370,8 @@ pub mod pallet {
 			nodes: Vec<(PeerId, T::AccountId)>,
 		) -> DispatchResult {
 			T::ResetOrigin::ensure_origin(origin)?;
-			ensure!(nodes.len() < T::MaxWellKnownNodes::get() as usize, Error::<T>::TooManyNodes);
 
-			Self::initialize_nodes(&nodes);
-
+			Self::initialize_nodes(&nodes)?;
 			Self::deposit_event(Event::NodesReset { nodes });
 			Ok(())
 		}
@@ -318,11 +384,11 @@ pub mod pallet {
 		pub fn claim_node(origin: OriginFor<T>, node: PeerId) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 
-			ensure!(node.0.len() < T::MaxPeerIdLength::get() as usize, Error::<T>::PeerIdTooLong);
+			let node = BoundedPeerId::<T>::try_from(node)?;
 			ensure!(!Owners::<T>::contains_key(&node), Error::<T>::AlreadyClaimed);
 
 			Owners::<T>::insert(&node, &sender);
-			Self::deposit_event(Event::NodeClaimed { peer_id: node, who: sender });
+			Self::deposit_event(Event::NodeClaimed { peer_id: node.into(), who: sender });
 			Ok(())
 		}
 
@@ -335,7 +401,7 @@ pub mod pallet {
 		pub fn remove_claim(origin: OriginFor<T>, node: PeerId) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 
-			ensure!(node.0.len() < T::MaxPeerIdLength::get() as usize, Error::<T>::PeerIdTooLong);
+			let node = BoundedPeerId::<T>::try_from(node)?;
 			let owner = Owners::<T>::get(&node).ok_or(Error::<T>::NotClaimed)?;
 			ensure!(owner == sender, Error::<T>::NotOwner);
 			ensure!(!WellKnownNodes::<T>::get().contains(&node), Error::<T>::PermissionDenied);
@@ -343,7 +409,7 @@ pub mod pallet {
 			Owners::<T>::remove(&node);
 			AdditionalConnections::<T>::remove(&node);
 
-			Self::deposit_event(Event::ClaimRemoved { peer_id: node, who: sender });
+			Self::deposit_event(Event::ClaimRemoved { peer_id: node.into(), who: sender });
 			Ok(())
 		}
 
@@ -359,13 +425,13 @@ pub mod pallet {
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 
-			ensure!(node.0.len() < T::MaxPeerIdLength::get() as usize, Error::<T>::PeerIdTooLong);
+			let node = BoundedPeerId::<T>::try_from(node)?;
 			let pre_owner = Owners::<T>::get(&node).ok_or(Error::<T>::NotClaimed)?;
 			ensure!(pre_owner == sender, Error::<T>::NotOwner);
 
 			Owners::<T>::insert(&node, &owner);
 
-			Self::deposit_event(Event::NodeTransferred { peer_id: node, target: owner });
+			Self::deposit_event(Event::NodeTransferred { peer_id: node.into(), target: owner });
 			Ok(())
 		}
 
@@ -381,23 +447,25 @@ pub mod pallet {
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 
-			ensure!(node.0.len() < T::MaxPeerIdLength::get() as usize, Error::<T>::PeerIdTooLong);
+			let node = BoundedPeerId::<T>::try_from(node)?;
 			let owner = Owners::<T>::get(&node).ok_or(Error::<T>::NotClaimed)?;
 			ensure!(owner == sender, Error::<T>::NotOwner);
 
-			let mut nodes = AdditionalConnections::<T>::get(&node);
-
+			let mut nodes: BTreeSet<_> = AdditionalConnections::<T>::get(&node).into();
 			for add_node in connections.iter() {
-				if *add_node == node {
+				if add_node.0 == node.0.as_slice() {
 					continue
 				}
-				nodes.insert(add_node.clone());
+
+				nodes.insert(BoundedPeerId::<T>::try_from(add_node.clone())?);
 			}
 
+			let nodes: BoundedBTreeSet<_, _> =
+				nodes.try_into().map_err(|_| Error::<T>::TooManyAdditionalConnections)?;
 			AdditionalConnections::<T>::insert(&node, nodes);
 
 			Self::deposit_event(Event::ConnectionsAdded {
-				peer_id: node,
+				peer_id: node.into(),
 				allowed_connections: connections,
 			});
 			Ok(())
@@ -415,20 +483,20 @@ pub mod pallet {
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 
-			ensure!(node.0.len() < T::MaxPeerIdLength::get() as usize, Error::<T>::PeerIdTooLong);
+			let node = BoundedPeerId::<T>::try_from(node)?;
 			let owner = Owners::<T>::get(&node).ok_or(Error::<T>::NotClaimed)?;
 			ensure!(owner == sender, Error::<T>::NotOwner);
 
 			let mut nodes = AdditionalConnections::<T>::get(&node);
-
 			for remove_node in connections.iter() {
-				nodes.remove(remove_node);
+				let remove_node = BoundedPeerId::<T>::try_from(remove_node.clone())?;
+				nodes.remove(&remove_node);
 			}
 
 			AdditionalConnections::<T>::insert(&node, nodes);
 
 			Self::deposit_event(Event::ConnectionsRemoved {
-				peer_id: node,
+				peer_id: node.into(),
 				allowed_connections: connections,
 			});
 			Ok(())
@@ -437,24 +505,35 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
-	fn initialize_nodes(nodes: &Vec<(PeerId, T::AccountId)>) {
-		let peer_ids = nodes.iter().map(|item| item.0.clone()).collect::<BTreeSet<PeerId>>();
-		WellKnownNodes::<T>::put(&peer_ids);
-
-		for (node, who) in nodes.iter() {
-			Owners::<T>::insert(node, who);
+	fn initialize_nodes(nodes: &Vec<(PeerId, T::AccountId)>) -> Result<(), Error<T>> {
+		let mut peer_ids = BoundedBTreeSet::new();
+		let mut owners = Vec::new();
+		for (peer_id, account_id) in nodes {
+			let peer_id = BoundedPeerId::<T>::try_from(peer_id.clone())?;
+			peer_ids.try_insert(peer_id.clone()).map_err(|_| Error::<T>::TooManyNodes)?;
+			owners.push((peer_id, account_id));
 		}
+
+		WellKnownNodes::<T>::put(&peer_ids);
+		for (peer_id, account_id) in owners {
+			Owners::<T>::insert(peer_id, account_id);
+		}
+
+		Ok(())
 	}
 
-	fn get_authorized_nodes(node: &PeerId) -> Vec<PeerId> {
-		let mut nodes = AdditionalConnections::<T>::get(node);
+	fn get_authorized_nodes(node: &BoundedPeerId<T>) -> Vec<PeerId> {
+		let mut nodes: Vec<_> = AdditionalConnections::<T>::get(node)
+			.into_iter()
+			.map(|node| node.into())
+			.collect();
 
 		let mut well_known_nodes = WellKnownNodes::<T>::get();
 		if well_known_nodes.contains(node) {
 			well_known_nodes.remove(node);
-			nodes.extend(well_known_nodes);
+			nodes.extend(well_known_nodes.into_iter().map(|node| node.into()));
 		}
 
-		Vec::from_iter(nodes)
+		nodes
 	}
 }

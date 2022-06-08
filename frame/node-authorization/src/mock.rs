@@ -22,7 +22,7 @@ use crate as pallet_node_authorization;
 
 use frame_support::{
 	ord_parameter_types,
-	traits::{ConstU32, ConstU64, GenesisBuild},
+	traits::{ConstU32, ConstU64, GenesisBuild, Get},
 };
 use frame_system::EnsureSignedBy;
 use sp_core::H256;
@@ -85,6 +85,7 @@ impl Config for Test {
 	type Event = Event;
 	type MaxWellKnownNodes = ConstU32<4>;
 	type MaxPeerIdLength = ConstU32<2>;
+	type MaxAdditionalConnections = ConstU32<4>;
 	type AddOrigin = EnsureSignedBy<One, u64>;
 	type RemoveOrigin = EnsureSignedBy<Two, u64>;
 	type SwapOrigin = EnsureSignedBy<Three, u64>;
@@ -94,6 +95,18 @@ impl Config for Test {
 
 pub fn test_node(id: u8) -> PeerId {
 	PeerId(vec![id])
+}
+
+pub fn bounded_node(id: u8) -> BoundedPeerId<Test> {
+	test_node(id).try_into().unwrap()
+}
+
+pub fn bounded_btree_set<T, S>(vec: Vec<T>) -> BoundedBTreeSet<T, S>
+where
+	T: Ord,
+	S: Get<u32>,
+{
+	BTreeSet::from_iter(vec).try_into().unwrap()
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
