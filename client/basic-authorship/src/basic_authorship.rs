@@ -371,7 +371,7 @@ where
 					error!(
 						"❌️ Mandatory inherent extrinsic returned error. Block cannot be produced."
 					);
-					Err(ApplyExtrinsicFailed(Validity(e)))?
+					return Err(ApplyExtrinsicFailed(Validity(e)))
 				},
 				Err(e) => {
 					warn!("❗️ Inherent extrinsic returned unexpected error: {}. Dropping.", e);

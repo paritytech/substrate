@@ -37,7 +37,7 @@ use codec::Decode;
 use ip_network::IpNetwork;
 use libp2p::{
 	core::multiaddr,
-	multihash::{Hasher, Multihash},
+	multihash::{Multihash, MultihashDigest},
 };
 use log::{debug, error, log_enabled};
 use prometheus_endpoint::{register, Counter, CounterVec, Gauge, Opts, U64};
@@ -64,7 +64,7 @@ mod schema {
 #[cfg(test)]
 pub mod tests;
 
-const LOG_TARGET: &'static str = "sub-authority-discovery";
+const LOG_TARGET: &str = "sub-authority-discovery";
 
 /// Maximum number of addresses cached per authority. Additional addresses are discarded.
 const MAX_ADDRESSES_PER_AUTHORITY: usize = 10;
@@ -510,7 +510,7 @@ where
 				// Ignore [`Multiaddr`]s without [`PeerId`] or with own addresses.
 				let addresses: Vec<Multiaddr> = addresses
 					.into_iter()
-					.filter(|a| get_peer_id(&a).filter(|p| *p != local_peer_id).is_some())
+					.filter(|a| get_peer_id(a).filter(|p| *p != local_peer_id).is_some())
 					.collect();
 
 				let remote_peer_id = single(addresses.iter().map(get_peer_id))
@@ -525,7 +525,7 @@ where
 				if let Some(peer_signature) = peer_signature {
 					let public_key =
 						sc_network::PublicKey::from_protobuf_encoding(&peer_signature.public_key)
-							.map_err(|e| Error::ParsingLibp2pIdentity(e))?;
+							.map_err(Error::ParsingLibp2pIdentity)?;
 					let signature =
 						sc_network::Signature { public_key, bytes: peer_signature.signature };
 
@@ -638,7 +638,7 @@ where
 }
 
 fn hash_authority_id(id: &[u8]) -> sc_network::KademliaKey {
-	sc_network::KademliaKey::new(&libp2p::multihash::Sha2_256::digest(id))
+	sc_network::KademliaKey::new(&libp2p::multihash::Code::Sha2_256.digest(id).digest())
 }
 
 // Makes sure all values are the same and returns it

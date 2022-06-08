@@ -18,7 +18,7 @@ sp-wasm-interface = { version = "6.0.0", path = "../wasm-interface", default-fea
 sp-std = { version = "4.0.0", default-features = false, path = "../std" }
 sp-tracing = { version = "5.0.0", default-features = false, path = "../tracing" }
 sp-runtime-interface-proc-macro = { version = "5.0.0", path = "proc-macro" }
-sp-externalities = { version = "0.12.0", optional = true, path = "../externalities" }
+sp-externalities = { version = "0.12.0", default-features = false, path = "../externalities" }
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false }
 static_assertions = "1.0.0"
 primitive-types = { version = "0.11.1", default-features = false }
@@ -40,7 +40,7 @@ std = [
 	"sp-std/std",
 	"sp-tracing/std",
 	"codec/std",
-	"sp-externalities",
+	"sp-externalities/std",
 	"primitive-types/std",
 ]
 

@@ -26,14 +26,13 @@ use nix::{
 use node_primitives::Block;
 use remote_externalities::rpc_api;
 use std::{
+	io::{BufRead, BufReader, Read},
 	ops::{Deref, DerefMut},
 	path::Path,
-	process::{Child, Command, ExitStatus},
+	process::{self, Child, Command, ExitStatus},
 	time::Duration,
 };
 use tokio::time::timeout;
-
-static LOCALHOST_WS: &str = "ws://127.0.0.1:9944/";
 
 /// Wait for the given `child` the given number of `secs`.
 ///
@@ -63,8 +62,9 @@ pub fn wait_for(child: &mut Child, secs: u64) -> Result<ExitStatus, ()> {
 pub async fn wait_n_finalized_blocks(
 	n: usize,
 	timeout_secs: u64,
+	url: &str,
 ) -> Result<(), tokio::time::error::Elapsed> {
-	timeout(Duration::from_secs(timeout_secs), wait_n_finalized_blocks_from(n, LOCALHOST_WS)).await
+	timeout(Duration::from_secs(timeout_secs), wait_n_finalized_blocks_from(n, url)).await
 }
 
 /// Wait for at least n blocks to be finalized from a specified node
@@ -85,12 +85,23 @@ pub async fn wait_n_finalized_blocks_from(n: usize, url: &str) {
 
 /// Run the node for a while (3 blocks)
 pub async fn run_node_for_a_while(base_path: &Path, args: &[&str]) {
-	let mut cmd = Command::new(cargo_bin("substrate"));
+	let mut cmd = Command::new(cargo_bin("substrate"))
+		.stdout(process::Stdio::piped())
+		.stderr(process::Stdio::piped())
+		.args(args)
+		.arg("-d")
+		.arg(base_path)
+		.spawn()
+		.unwrap();
 
-	let mut child = KillChildOnDrop(cmd.args(args).arg("-d").arg(base_path).spawn().unwrap());
+	let stderr = cmd.stderr.take().unwrap();
+
+	let mut child = KillChildOnDrop(cmd);
+
+	let (ws_url, _) = find_ws_url_from_output(stderr);
 
 	// Let it produce some blocks.
-	let _ = wait_n_finalized_blocks(3, 30).await;
+	let _ = wait_n_finalized_blocks(3, 30, &ws_url).await;
 
 	assert!(child.try_wait().unwrap().is_none(), "the process should still be running");
 
@@ -133,4 +144,31 @@ impl DerefMut for KillChildOnDrop {
 	fn deref_mut(&mut self) -> &mut Self::Target {
 		&mut self.0
 	}
+}
+
+/// Read the WS address from the output.
+///
+/// This is hack to get the actual binded sockaddr because
+/// substrate assigns a random port if the specified port was already binded.
+pub fn find_ws_url_from_output(read: impl Read + Send) -> (String, String) {
+	let mut data = String::new();
+
+	let ws_url = BufReader::new(read)
+		.lines()
+		.find_map(|line| {
+			let line =
+				line.expect("failed to obtain next line from stdout for WS address discovery");
+			data.push_str(&line);
+
+			// does the line contain our port (we expect this specific output from substrate).
+			let sock_addr = match line.split_once("Running JSON-RPC WS server: addr=") {
+				None => return None,
+				Some((_, after)) => after.split_once(",").unwrap().0,
+			};
+
+			Some(format!("ws://{}", sock_addr))
+		})
+		.expect("We should get a WebSocket address");
+
+	(ws_url, data)
 }

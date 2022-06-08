@@ -29,8 +29,7 @@ use sp_trie::{
 	child_delta_trie_root, delta_trie_root, empty_child_trie_root, read_child_trie_value,
 	read_trie_value,
 	trie_types::{TrieDB, TrieError},
-	DBValue, KeySpacedDB, LayoutV1 as Layout, PrefixedMemoryDB, Trie, TrieDBIterator,
-	TrieDBKeyIterator,
+	DBValue, KeySpacedDB, LayoutV1 as Layout, Trie, TrieDBIterator, TrieDBKeyIterator,
 };
 #[cfg(feature = "std")]
 use std::collections::HashMap;
@@ -267,7 +266,8 @@ where
 		&self,
 		child_info: Option<&ChildInfo>,
 		prefix: Option<&[u8]>,
-		mut f: F,
+		start_at: Option<&[u8]>,
+		f: F,
 	) {
 		let root = if let Some(child_info) = child_info.as_ref() {
 			match self.child_root(child_info) {
@@ -283,7 +283,7 @@ where
 			self.root
 		};
 
-		self.trie_iter_key_inner(&root, prefix, |k| f(k), child_info)
+		self.trie_iter_key_inner(&root, prefix, f, child_info, start_at)
 	}
 
 	/// Execute given closure for all keys starting with prefix.
@@ -311,6 +311,7 @@ where
 				true
 			},
 			Some(child_info),
+			None,
 		)
 	}
 
@@ -324,28 +325,31 @@ where
 				true
 			},
 			None,
+			None,
 		)
 	}
 
 	fn trie_iter_key_inner<F: FnMut(&[u8]) -> bool>(
 		&self,
 		root: &H::Out,
-		prefix: Option<&[u8]>,
+		maybe_prefix: Option<&[u8]>,
 		mut f: F,
 		child_info: Option<&ChildInfo>,
+		maybe_start_at: Option<&[u8]>,
 	) {
 		let mut iter = move |db| -> sp_std::result::Result<(), Box<TrieError<H::Out>>> {
 			let trie = TrieDB::<H>::new(db, root)?;
-			let iter = if let Some(prefix) = prefix.as_ref() {
-				TrieDBKeyIterator::new_prefixed(&trie, prefix)?
-			} else {
-				TrieDBKeyIterator::new(&trie)?
-			};
+			let prefix = maybe_prefix.unwrap_or(&[]);
+			let iter = match maybe_start_at {
+				Some(start_at) =>
+					TrieDBKeyIterator::new_prefixed_then_seek(&trie, prefix, start_at),
+				None => TrieDBKeyIterator::new_prefixed(&trie, prefix),
+			}?;
 
 			for x in iter {
 				let key = x?;
 
-				debug_assert!(prefix
+				debug_assert!(maybe_prefix
 					.as_ref()
 					.map(|prefix| key.starts_with(prefix))
 					.unwrap_or(true));
@@ -453,22 +457,9 @@ where
 
 	/// Returns all keys that start with the given `prefix`.
 	pub fn keys(&self, prefix: &[u8]) -> Vec<StorageKey> {
-		let collect_all = || -> sp_std::result::Result<_, Box<TrieError<H::Out>>> {
-			let trie = TrieDB::<H>::new(self, &self.root)?;
-			let mut v = Vec::new();
-			for x in trie.iter()? {
-				let (key, _) = x?;
-				if key.starts_with(prefix) {
-					v.push(key.to_vec());
-				}
-			}
-
-			Ok(v)
-		};
-
-		collect_all()
-			.map_err(|e| debug!(target: "trie", "Error extracting trie keys: {}", e))
-			.unwrap_or_default()
+		let mut keys = Vec::new();
+		self.for_keys_with_prefix(prefix, |k| keys.push(k.to_vec()));
+		keys
 	}
 
 	/// Return the storage root after applying the given `delta`.
@@ -521,7 +512,7 @@ where
 			Ok(None) => default_root,
 			Err(e) => {
 				warn!(target: "trie", "Failed to read child storage root: {}", e);
-				default_root.clone()
+				default_root
 			},
 		};
 
@@ -580,16 +571,12 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> hash_db::HashDB<H, DBValue>
 	for Ephemeral<'a, S, H>
 {
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Option<DBValue> {
-		match HashDB::get(self.overlay, key, prefix) {
-			Some(val) => Some(val),
-			None => match self.storage.get(&key, prefix) {
-				Ok(x) => x,
-				Err(e) => {
-					warn!(target: "trie", "Failed to read from DB: {}", e);
-					None
-				},
-			},
-		}
+		HashDB::get(self.overlay, key, prefix).or_else(|| {
+			self.storage.get(key, prefix).unwrap_or_else(|e| {
+				warn!(target: "trie", "Failed to read from DB: {}", e);
+				None
+			})
+		})
 	}
 
 	fn contains(&self, key: &H::Out, prefix: Prefix) -> bool {
@@ -631,7 +618,7 @@ pub trait TrieBackendStorage<H: Hasher>: Send + Sync {
 // This implementation is used by normal storage trie clients.
 #[cfg(feature = "std")]
 impl<H: Hasher> TrieBackendStorage<H> for Arc<dyn Storage<H>> {
-	type Overlay = PrefixedMemoryDB<H>;
+	type Overlay = sp_trie::PrefixedMemoryDB<H>;
 
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>> {
 		Storage::<H>::get(std::ops::Deref::deref(self), key, prefix)
@@ -664,7 +651,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> HashDB<H, DBValue> for TrieBackendEsse
 		if *key == self.empty {
 			return Some([0u8].to_vec())
 		}
-		match self.storage.get(&key, prefix) {
+		match self.storage.get(key, prefix) {
 			Ok(x) => x,
 			Err(e) => {
 				warn!(target: "trie", "Failed to read from DB: {}", e);

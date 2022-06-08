@@ -262,6 +262,22 @@ impl<T, S> sp_std::iter::IntoIterator for WeakBoundedVec<T, S> {
 	}
 }
 
+impl<'a, T, S> sp_std::iter::IntoIterator for &'a WeakBoundedVec<T, S> {
+	type Item = &'a T;
+	type IntoIter = sp_std::slice::Iter<'a, T>;
+	fn into_iter(self) -> Self::IntoIter {
+		self.0.iter()
+	}
+}
+
+impl<'a, T, S> sp_std::iter::IntoIterator for &'a mut WeakBoundedVec<T, S> {
+	type Item = &'a mut T;
+	type IntoIter = sp_std::slice::IterMut<'a, T>;
+	fn into_iter(self) -> Self::IntoIter {
+		self.0.iter_mut()
+	}
+}
+
 impl<T, S> codec::DecodeLength for WeakBoundedVec<T, S> {
 	fn len(self_encoded: &[u8]) -> Result<usize, codec::Error> {
 		// `WeakBoundedVec<T, _>` stored just a `Vec<T>`, thus the length is at the beginning in
@@ -321,12 +337,13 @@ pub mod test {
 	use frame_support::traits::ConstU32;
 	use sp_io::TestExternalities;
 
-	crate::generate_storage_alias! { Prefix, Foo => Value<WeakBoundedVec<u32, ConstU32<7>>> }
-	crate::generate_storage_alias! { Prefix, FooMap => Map<(Twox128, u32), WeakBoundedVec<u32, ConstU32<7>>> }
-	crate::generate_storage_alias! {
-		Prefix,
-		FooDoubleMap => DoubleMap<(Twox128, u32), (Twox128, u32), WeakBoundedVec<u32, ConstU32<7>>>
-	}
+	#[crate::storage_alias]
+	type Foo = StorageValue<Prefix, WeakBoundedVec<u32, ConstU32<7>>>;
+	#[crate::storage_alias]
+	type FooMap = StorageMap<Prefix, Twox128, u32, WeakBoundedVec<u32, ConstU32<7>>>;
+	#[crate::storage_alias]
+	type FooDoubleMap =
+		StorageDoubleMap<Prefix, Twox128, u32, Twox128, u32, WeakBoundedVec<u32, ConstU32<7>>>;
 
 	#[test]
 	fn bound_returns_correct_value() {

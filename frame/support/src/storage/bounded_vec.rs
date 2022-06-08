@@ -28,6 +28,11 @@ use core::{
 	ops::{Deref, Index, IndexMut, RangeBounds},
 	slice::SliceIndex,
 };
+#[cfg(feature = "std")]
+use serde::{
+	de::{Error, SeqAccess, Visitor},
+	Deserialize, Deserializer, Serialize,
+};
 use sp_std::{marker::PhantomData, prelude::*};
 
 /// A bounded vector.
@@ -37,9 +42,67 @@ use sp_std::{marker::PhantomData, prelude::*};
 ///
 /// As the name suggests, the length of the queue is always bounded. All internal operations ensure
 /// this bound is respected.
+#[cfg_attr(feature = "std", derive(Serialize), serde(transparent))]
 #[derive(Encode, scale_info::TypeInfo)]
 #[scale_info(skip_type_params(S))]
-pub struct BoundedVec<T, S>(Vec<T>, PhantomData<S>);
+pub struct BoundedVec<T, S>(
+	Vec<T>,
+	#[cfg_attr(feature = "std", serde(skip_serializing))] PhantomData<S>,
+);
+
+#[cfg(feature = "std")]
+impl<'de, T, S: Get<u32>> Deserialize<'de> for BoundedVec<T, S>
+where
+	T: Deserialize<'de>,
+{
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+	where
+		D: Deserializer<'de>,
+	{
+		struct VecVisitor<T, S: Get<u32>>(PhantomData<(T, S)>);
+
+		impl<'de, T, S: Get<u32>> Visitor<'de> for VecVisitor<T, S>
+		where
+			T: Deserialize<'de>,
+		{
+			type Value = Vec<T>;
+
+			fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+				formatter.write_str("a sequence")
+			}
+
+			fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+			where
+				A: SeqAccess<'de>,
+			{
+				let size = seq.size_hint().unwrap_or(0);
+				let max = match usize::try_from(S::get()) {
+					Ok(n) => n,
+					Err(_) => return Err(A::Error::custom("can't convert to usize")),
+				};
+				if size > max {
+					Err(A::Error::custom("out of bounds"))
+				} else {
+					let mut values = Vec::with_capacity(size);
+
+					while let Some(value) = seq.next_element()? {
+						values.push(value);
+						if values.len() > max {
+							return Err(A::Error::custom("out of bounds"))
+						}
+					}
+
+					Ok(values)
+				}
+			}
+		}
+
+		let visitor: VecVisitor<T, S> = VecVisitor(PhantomData);
+		deserializer
+			.deserialize_seq(visitor)
+			.map(|v| BoundedVec::<T, S>::try_from(v).map_err(|_| Error::custom("out of bounds")))?
+	}
+}
 
 /// A bounded slice.
 ///
@@ -72,7 +135,7 @@ impl<T: Ord, Bound: Get<u32>> Ord for BoundedVec<T, Bound> {
 impl<'a, T, S: Get<u32>> TryFrom<&'a [T]> for BoundedSlice<'a, T, S> {
 	type Error = ();
 	fn try_from(t: &'a [T]) -> Result<Self, Self::Error> {
-		if t.len() < S::get() as usize {
+		if t.len() <= S::get() as usize {
 			Ok(BoundedSlice(t, PhantomData))
 		} else {
 			Err(())
@@ -83,6 +146,14 @@ impl<'a, T, S: Get<u32>> TryFrom<&'a [T]> for BoundedSlice<'a, T, S> {
 impl<'a, T, S> From<BoundedSlice<'a, T, S>> for &'a [T] {
 	fn from(t: BoundedSlice<'a, T, S>) -> Self {
 		t.0
+	}
+}
+
+impl<'a, T, S> sp_std::iter::IntoIterator for BoundedSlice<'a, T, S> {
+	type Item = &'a T;
+	type IntoIter = sp_std::slice::Iter<'a, T>;
+	fn into_iter(self) -> Self::IntoIter {
+		self.0.iter()
 	}
 }
 
@@ -221,6 +292,12 @@ impl<T, S: Get<u32>> BoundedVec<T, S> {
 	/// Allocate self with the maximum possible capacity.
 	pub fn with_max_capacity() -> Self {
 		Self::with_bounded_capacity(Self::bound())
+	}
+
+	/// Consume and truncate the vector `v` in order to create a new instance of `Self` from it.
+	pub fn truncate_from(mut v: Vec<T>) -> Self {
+		v.truncate(Self::bound());
+		Self::unchecked_from(v)
 	}
 
 	/// Get the bound of the type in `usize`.
@@ -536,6 +613,22 @@ impl<T, S> sp_std::iter::IntoIterator for BoundedVec<T, S> {
 	}
 }
 
+impl<'a, T, S> sp_std::iter::IntoIterator for &'a BoundedVec<T, S> {
+	type Item = &'a T;
+	type IntoIter = sp_std::slice::Iter<'a, T>;
+	fn into_iter(self) -> Self::IntoIter {
+		self.0.iter()
+	}
+}
+
+impl<'a, T, S> sp_std::iter::IntoIterator for &'a mut BoundedVec<T, S> {
+	type Item = &'a mut T;
+	type IntoIter = sp_std::slice::IterMut<'a, T>;
+	fn into_iter(self) -> Self::IntoIter {
+		self.0.iter_mut()
+	}
+}
+
 impl<T, S> codec::DecodeLength for BoundedVec<T, S> {
 	fn len(self_encoded: &[u8]) -> Result<usize, codec::Error> {
 		// `BoundedVec<T, _>` stored just a `Vec<T>`, thus the length is at the beginning in
@@ -609,12 +702,15 @@ pub mod test {
 	use crate::{bounded_vec, traits::ConstU32, Twox128};
 	use sp_io::TestExternalities;
 
-	crate::generate_storage_alias! { Prefix, Foo => Value<BoundedVec<u32, ConstU32<7>>> }
-	crate::generate_storage_alias! { Prefix, FooMap => Map<(Twox128, u32), BoundedVec<u32, ConstU32<7>>> }
-	crate::generate_storage_alias! {
-		Prefix,
-		FooDoubleMap => DoubleMap<(Twox128, u32), (Twox128, u32), BoundedVec<u32, ConstU32<7>>>
-	}
+	#[crate::storage_alias]
+	type Foo = StorageValue<Prefix, BoundedVec<u32, ConstU32<7>>>;
+
+	#[crate::storage_alias]
+	type FooMap = StorageMap<Prefix, Twox128, u32, BoundedVec<u32, ConstU32<7>>>;
+
+	#[crate::storage_alias]
+	type FooDoubleMap =
+		StorageDoubleMap<Prefix, Twox128, u32, Twox128, u32, BoundedVec<u32, ConstU32<7>>>;
 
 	#[test]
 	fn slide_works() {
@@ -907,5 +1003,46 @@ pub mod test {
 		let mut b: BoundedVec<u32, ConstU32<5>> = bounded_vec![1, 2, 3];
 		assert!(b.try_extend(vec![4, 5, 6].into_iter()).is_err());
 		assert_eq!(*b, vec![1, 2, 3]);
+	}
+
+	#[test]
+	fn test_serializer() {
+		let c: BoundedVec<u32, ConstU32<6>> = bounded_vec![0, 1, 2];
+		assert_eq!(serde_json::json!(&c).to_string(), r#"[0,1,2]"#);
+	}
+
+	#[test]
+	fn test_deserializer() {
+		let c: BoundedVec<u32, ConstU32<6>> = serde_json::from_str(r#"[0,1,2]"#).unwrap();
+
+		assert_eq!(c.len(), 3);
+		assert_eq!(c[0], 0);
+		assert_eq!(c[1], 1);
+		assert_eq!(c[2], 2);
+	}
+
+	#[test]
+	fn test_deserializer_failed() {
+		let c: Result<BoundedVec<u32, ConstU32<4>>, serde_json::error::Error> =
+			serde_json::from_str(r#"[0,1,2,3,4,5]"#);
+
+		match c {
+			Err(msg) => assert_eq!(msg.to_string(), "out of bounds at line 1 column 11"),
+			_ => unreachable!("deserializer must raise error"),
+		}
+	}
+
+	#[test]
+	fn bounded_vec_try_from_works() {
+		assert!(BoundedVec::<u32, ConstU32<2>>::try_from(vec![0]).is_ok());
+		assert!(BoundedVec::<u32, ConstU32<2>>::try_from(vec![0, 1]).is_ok());
+		assert!(BoundedVec::<u32, ConstU32<2>>::try_from(vec![0, 1, 2]).is_err());
+	}
+
+	#[test]
+	fn bounded_slice_try_from_works() {
+		assert!(BoundedSlice::<u32, ConstU32<2>>::try_from(&[0][..]).is_ok());
+		assert!(BoundedSlice::<u32, ConstU32<2>>::try_from(&[0, 1][..]).is_ok());
+		assert!(BoundedSlice::<u32, ConstU32<2>>::try_from(&[0, 1, 2][..]).is_err());
 	}
 }

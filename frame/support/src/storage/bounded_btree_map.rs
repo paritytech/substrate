@@ -74,6 +74,14 @@ where
 		Self(t, Default::default())
 	}
 
+	/// Exactly the same semantics as `BTreeMap::retain`.
+	///
+	/// The is a safe `&mut self` borrow because `retain` can only ever decrease the length of the
+	/// inner map.
+	pub fn retain<F: FnMut(&K, &mut V) -> bool>(&mut self, f: F) {
+		self.0.retain(f)
+	}
+
 	/// Create a new `BoundedBTreeMap`.
 	///
 	/// Does not allocate.
@@ -244,6 +252,24 @@ impl<K, V, S> IntoIterator for BoundedBTreeMap<K, V, S> {
 	}
 }
 
+impl<'a, K, V, S> IntoIterator for &'a BoundedBTreeMap<K, V, S> {
+	type Item = (&'a K, &'a V);
+	type IntoIter = sp_std::collections::btree_map::Iter<'a, K, V>;
+
+	fn into_iter(self) -> Self::IntoIter {
+		self.0.iter()
+	}
+}
+
+impl<'a, K, V, S> IntoIterator for &'a mut BoundedBTreeMap<K, V, S> {
+	type Item = (&'a K, &'a mut V);
+	type IntoIter = sp_std::collections::btree_map::IterMut<'a, K, V>;
+
+	fn into_iter(self) -> Self::IntoIter {
+		self.0.iter_mut()
+	}
+}
+
 impl<K, V, S> MaxEncodedLen for BoundedBTreeMap<K, V, S>
 where
 	K: MaxEncodedLen,
@@ -340,12 +366,15 @@ pub mod test {
 	use frame_support::traits::ConstU32;
 	use sp_io::TestExternalities;
 
-	crate::generate_storage_alias! { Prefix, Foo => Value<BoundedBTreeMap<u32, (), ConstU32<7>>> }
-	crate::generate_storage_alias! { Prefix, FooMap => Map<(Twox128, u32), BoundedBTreeMap<u32, (),  ConstU32<7>>> }
-	crate::generate_storage_alias! {
-		Prefix,
-		FooDoubleMap => DoubleMap<(Twox128, u32), (Twox128, u32), BoundedBTreeMap<u32, (),  ConstU32<7>>>
-	}
+	#[crate::storage_alias]
+	type Foo = StorageValue<Prefix, BoundedBTreeMap<u32, (), ConstU32<7>>>;
+
+	#[crate::storage_alias]
+	type FooMap = StorageMap<Prefix, Twox128, u32, BoundedBTreeMap<u32, (), ConstU32<7>>>;
+
+	#[crate::storage_alias]
+	type FooDoubleMap =
+		StorageDoubleMap<Prefix, Twox128, u32, Twox128, u32, BoundedBTreeMap<u32, (), ConstU32<7>>>;
 
 	fn map_from_keys<K>(keys: &[K]) -> BTreeMap<K, ()>
 	where

@@ -38,7 +38,7 @@ use crate::{
 use frame_support::{
 	dispatch::{DispatchError, DispatchResult},
 	ensure,
-	traits::ReservableCurrency,
+	traits::{Get, ReservableCurrency},
 };
 use sp_core::crypto::UncheckedFrom;
 use sp_runtime::traits::BadOrigin;
@@ -163,17 +163,17 @@ pub fn load<T: Config>(
 where
 	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 {
-	let charged = gas_meter.charge(CodeToken::Load(schedule.limits.code_len))?;
+	let max_code_len = T::MaxCodeLen::get();
+	let charged = gas_meter.charge(CodeToken::Load(max_code_len))?;
 
-	let mut prefab_module =
-		<CodeStorage<T>>::get(code_hash).ok_or_else(|| Error::<T>::CodeNotFound)?;
+	let mut prefab_module = <CodeStorage<T>>::get(code_hash).ok_or(Error::<T>::CodeNotFound)?;
 	gas_meter.adjust_gas(charged, CodeToken::Load(prefab_module.code.len() as u32));
 	prefab_module.code_hash = code_hash;
 
 	if prefab_module.instruction_weights_version < schedule.instruction_weights.version {
 		// The instruction weights have changed.
 		// We need to re-instrument the code with the new instruction weights.
-		let charged = gas_meter.charge(CodeToken::Reinstrument(schedule.limits.code_len))?;
+		let charged = gas_meter.charge(CodeToken::Reinstrument(max_code_len))?;
 		let code_size = reinstrument(&mut prefab_module, schedule)?;
 		gas_meter.adjust_gas(charged, CodeToken::Reinstrument(code_size));
 	}
@@ -189,9 +189,12 @@ pub fn reinstrument<T: Config>(
 	schedule: &Schedule<T>,
 ) -> Result<u32, DispatchError> {
 	let original_code =
-		<PristineCode<T>>::get(&prefab_module.code_hash).ok_or_else(|| Error::<T>::CodeNotFound)?;
+		<PristineCode<T>>::get(&prefab_module.code_hash).ok_or(Error::<T>::CodeNotFound)?;
 	let original_code_len = original_code.len();
-	prefab_module.code = prepare::reinstrument_contract::<T>(original_code, schedule)?;
+	prefab_module.code = prepare::reinstrument_contract::<T>(&original_code, schedule)
+		.map_err(|_| <Error<T>>::CodeRejected)?
+		.try_into()
+		.map_err(|_| <Error<T>>::CodeTooLarge)?;
 	prefab_module.instruction_weights_version = schedule.instruction_weights.version;
 	<CodeStorage<T>>::insert(&prefab_module.code_hash, &*prefab_module);
 	Ok(original_code_len as u32)
@@ -217,8 +220,12 @@ impl<T: Config> Token<T> for CodeToken {
 		// size of the contract.
 		match *self {
 			Reinstrument(len) => T::WeightInfo::reinstrument(len),
-			Load(len) => T::WeightInfo::call_with_code_per_byte(len)
-				.saturating_sub(T::WeightInfo::call_with_code_per_byte(0)),
+			Load(len) => {
+				let computation = T::WeightInfo::call_with_code_per_byte(len)
+					.saturating_sub(T::WeightInfo::call_with_code_per_byte(0));
+				let bandwith = T::ContractAccessWeight::get().saturating_mul(len.into());
+				computation.max(bandwith)
+			},
 		}
 	}
 }

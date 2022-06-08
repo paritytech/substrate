@@ -230,6 +230,15 @@ impl<T, S> IntoIterator for BoundedBTreeSet<T, S> {
 	}
 }
 
+impl<'a, T, S> IntoIterator for &'a BoundedBTreeSet<T, S> {
+	type Item = &'a T;
+	type IntoIter = sp_std::collections::btree_set::Iter<'a, T>;
+
+	fn into_iter(self) -> Self::IntoIter {
+		self.0.iter()
+	}
+}
+
 impl<T, S> MaxEncodedLen for BoundedBTreeSet<T, S>
 where
 	T: MaxEncodedLen,
@@ -322,12 +331,15 @@ pub mod test {
 	use frame_support::traits::ConstU32;
 	use sp_io::TestExternalities;
 
-	crate::generate_storage_alias! { Prefix, Foo => Value<BoundedBTreeSet<u32, ConstU32<7>>> }
-	crate::generate_storage_alias! { Prefix, FooMap => Map<(Twox128, u32), BoundedBTreeSet<u32, ConstU32<7>>> }
-	crate::generate_storage_alias! {
-		Prefix,
-		FooDoubleMap => DoubleMap<(Twox128, u32), (Twox128, u32), BoundedBTreeSet<u32, ConstU32<7>>>
-	}
+	#[crate::storage_alias]
+	type Foo = StorageValue<Prefix, BoundedBTreeSet<u32, ConstU32<7>>>;
+
+	#[crate::storage_alias]
+	type FooMap = StorageMap<Prefix, Twox128, u32, BoundedBTreeSet<u32, ConstU32<7>>>;
+
+	#[crate::storage_alias]
+	type FooDoubleMap =
+		StorageDoubleMap<Prefix, Twox128, u32, Twox128, u32, BoundedBTreeSet<u32, ConstU32<7>>>;
 
 	fn set_from_keys<T>(keys: &[T]) -> BTreeSet<T>
 	where

@@ -61,13 +61,13 @@ impl PrometheusMetrics {
 				.const_label("name", name)
 				.const_label("version", version),
 			)?,
-			&registry,
+			registry,
 		)?
 		.set(1);
 
 		register(
 			Gauge::<U64>::new("substrate_node_roles", "The roles the node is running as")?,
-			&registry,
+			registry,
 		)?
 		.set(roles);
 

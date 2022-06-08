@@ -46,7 +46,7 @@ fn create_referendum<T: Config>() -> (T::AccountId, ReferendumIndex) {
 	whitelist_account!(caller);
 	assert_ok!(Referenda::<T>::submit(
 		RawOrigin::Signed(caller.clone()).into(),
-		RawOrigin::Root.into(),
+		Box::new(RawOrigin::Root.into()),
 		T::Hashing::hash_of(&0),
 		DispatchTime::After(0u32.into())
 	));
@@ -57,10 +57,7 @@ fn create_referendum<T: Config>() -> (T::AccountId, ReferendumIndex) {
 fn place_deposit<T: Config>(index: ReferendumIndex) {
 	let caller = funded_account::<T>("caller", 0);
 	whitelist_account!(caller);
-	assert_ok!(Referenda::<T>::place_decision_deposit(
-		RawOrigin::Signed(caller.clone()).into(),
-		index,
-	));
+	assert_ok!(Referenda::<T>::place_decision_deposit(RawOrigin::Signed(caller).into(), index));
 }
 
 fn nudge<T: Config>(index: ReferendumIndex) {
@@ -104,27 +101,27 @@ fn info<T: Config>(index: ReferendumIndex) -> &'static TrackInfoOf<T> {
 }
 
 fn make_passing_after<T: Config>(index: ReferendumIndex, period_portion: Perbill) {
-	let turnout = info::<T>(index).min_turnout.threshold(period_portion);
+	let support = info::<T>(index).min_support.threshold(period_portion);
 	let approval = info::<T>(index).min_approval.threshold(period_portion);
 	Referenda::<T>::access_poll(index, |status| {
-		if let PollStatus::Ongoing(tally, ..) = status {
-			*tally = T::Tally::from_requirements(turnout, approval);
+		if let PollStatus::Ongoing(tally, class) = status {
+			*tally = T::Tally::from_requirements(support, approval, class);
 		}
 	});
 }
 
 fn make_passing<T: Config>(index: ReferendumIndex) {
 	Referenda::<T>::access_poll(index, |status| {
-		if let PollStatus::Ongoing(tally, ..) = status {
-			*tally = T::Tally::unanimity();
+		if let PollStatus::Ongoing(tally, class) = status {
+			*tally = T::Tally::unanimity(class);
 		}
 	});
 }
 
 fn make_failing<T: Config>(index: ReferendumIndex) {
 	Referenda::<T>::access_poll(index, |status| {
-		if let PollStatus::Ongoing(tally, ..) = status {
-			*tally = T::Tally::default();
+		if let PollStatus::Ongoing(tally, class) = status {
+			*tally = T::Tally::rejection(class);
 		}
 	});
 }
@@ -180,7 +177,7 @@ benchmarks! {
 		whitelist_account!(caller);
 	}: _(
 		RawOrigin::Signed(caller),
-		RawOrigin::Root.into(),
+		Box::new(RawOrigin::Root.into()),
 		T::Hashing::hash_of(&0),
 		DispatchTime::After(0u32.into())
 	) verify {
@@ -265,7 +262,7 @@ benchmarks! {
 		let track = Referenda::<T>::ensure_ongoing(index).unwrap().track;
 		assert_ok!(Referenda::<T>::cancel(T::CancelOrigin::successful_origin(), index));
 		assert_eq!(DecidingCount::<T>::get(&track), 1);
-	}: one_fewer_deciding(RawOrigin::Root, track.clone())
+	}: one_fewer_deciding(RawOrigin::Root, track)
 	verify {
 		assert_eq!(DecidingCount::<T>::get(&track), 0);
 	}
@@ -278,7 +275,7 @@ benchmarks! {
 		assert_ok!(Referenda::<T>::cancel(T::CancelOrigin::successful_origin(), queued[0]));
 		assert_eq!(TrackQueue::<T>::get(&track).len() as u32, T::MaxQueued::get());
 		let deciding_count = DecidingCount::<T>::get(&track);
-	}: one_fewer_deciding(RawOrigin::Root, track.clone())
+	}: one_fewer_deciding(RawOrigin::Root, track)
 	verify {
 		assert_eq!(DecidingCount::<T>::get(&track), deciding_count);
 		assert_eq!(TrackQueue::<T>::get(&track).len() as u32, T::MaxQueued::get() - 1);
@@ -297,7 +294,7 @@ benchmarks! {
 		assert_ok!(Referenda::<T>::cancel(T::CancelOrigin::successful_origin(), queued[0]));
 		assert_eq!(TrackQueue::<T>::get(&track).len() as u32, T::MaxQueued::get());
 		let deciding_count = DecidingCount::<T>::get(&track);
-	}: one_fewer_deciding(RawOrigin::Root, track.clone())
+	}: one_fewer_deciding(RawOrigin::Root, track)
 	verify {
 		assert_eq!(DecidingCount::<T>::get(&track), deciding_count);
 		assert_eq!(TrackQueue::<T>::get(&track).len() as u32, T::MaxQueued::get() - 1);
@@ -504,6 +501,7 @@ benchmarks! {
 		let (_caller, index) = create_referendum::<T>();
 		place_deposit::<T>(index);
 		skip_prepare_period::<T>(index);
+		make_failing::<T>(index);
 		nudge::<T>(index);
 		skip_decision_period::<T>(index);
 	}: nudge_referendum(RawOrigin::Root, index)
