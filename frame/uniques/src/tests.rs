@@ -684,5 +684,13 @@ fn max_supply_should_work() {
 			Uniques::mint(Origin::signed(user_id), collection_id, 2, user_id),
 			Error::<Test>::MaxSupplyReached
 		);
+
+		// validate we remove the CollectionMaxSupply record when we destroy the collection
+		assert_ok!(Uniques::destroy(
+			Origin::signed(user_id),
+			collection_id,
+			Collection::<Test>::get(collection_id).unwrap().destroy_witness()
+		));
+		assert!(!CollectionMaxSupply::<Test>::contains_key(collection_id));
 	});
 }

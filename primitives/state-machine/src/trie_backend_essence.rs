@@ -29,8 +29,7 @@ use sp_trie::{
 	child_delta_trie_root, delta_trie_root, empty_child_trie_root, read_child_trie_value,
 	read_trie_value,
 	trie_types::{TrieDB, TrieError},
-	DBValue, KeySpacedDB, LayoutV1 as Layout, PrefixedMemoryDB, Trie, TrieDBIterator,
-	TrieDBKeyIterator,
+	DBValue, KeySpacedDB, LayoutV1 as Layout, Trie, TrieDBIterator, TrieDBKeyIterator,
 };
 #[cfg(feature = "std")]
 use std::collections::HashMap;
@@ -619,7 +618,7 @@ pub trait TrieBackendStorage<H: Hasher>: Send + Sync {
 // This implementation is used by normal storage trie clients.
 #[cfg(feature = "std")]
 impl<H: Hasher> TrieBackendStorage<H> for Arc<dyn Storage<H>> {
-	type Overlay = PrefixedMemoryDB<H>;
+	type Overlay = sp_trie::PrefixedMemoryDB<H>;
 
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>> {
 		Storage::<H>::get(std::ops::Deref::deref(self), key, prefix)

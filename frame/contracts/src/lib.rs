@@ -165,8 +165,8 @@ pub trait AddressGenerator<T: frame_system::Config> {
 /// Default address generator.
 ///
 /// This is the default address generator used by contract instantiation. Its result
-/// is only dependend on its inputs. It can therefore be used to reliably predict the
-/// address of a contract. This is akin to the formular of eth's CREATE2 opcode. There
+/// is only dependant on its inputs. It can therefore be used to reliably predict the
+/// address of a contract. This is akin to the formula of eth's CREATE2 opcode. There
 /// is no CREATE equivalent because CREATE2 is strictly more powerful.
 ///
 /// Formula: `hash(deploying_address ++ code_hash ++ salt)`
@@ -231,7 +231,7 @@ pub mod pallet {
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
-		/// The time implementation used to supply timestamps to conntracts through `seal_now`.
+		/// The time implementation used to supply timestamps to contracts through `seal_now`.
 		type Time: Time;
 
 		/// The generator used to supply randomness to contracts through `seal_random`.
@@ -339,7 +339,7 @@ pub mod pallet {
 		///
 		/// For more information check out: <https://github.com/paritytech/substrate/issues/10301>
 		///
-		/// [`DefaultContractAccessWeight`] is a safe default to be used for polkadot or kusama
+		/// [`DefaultContractAccessWeight`] is a safe default to be used for Polkadot or Kusama
 		/// parachains.
 		///
 		/// # Note
@@ -1044,7 +1044,7 @@ where
 						})?;
 					// The open deposit will be charged during execution when the
 					// uploaded module does not already exist. This deposit is not part of the
-					// storage meter because it is not transfered to the contract but
+					// storage meter because it is not transferred to the contract but
 					// reserved on the uploading account.
 					(executable.open_deposit(), executable)
 				},
