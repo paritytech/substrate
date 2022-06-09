@@ -23,7 +23,7 @@ parameter_types! {
 	pub storage UnbondingBalanceMap: BTreeMap<AccountId, Balance> = Default::default();
 	#[derive(Clone, PartialEq)]
 	pub static MaxUnbonding: u32 = 8;
-	pub storage Nominations: Vec<AccountId> = vec![];
+	pub storage Nominations: Option<Vec<AccountId>> = None;
 }
 
 pub struct StakingMock;
@@ -107,8 +107,13 @@ impl sp_staking::StakingInterface for StakingMock {
 	}
 
 	fn nominate(_: Self::AccountId, nominations: Vec<Self::AccountId>) -> DispatchResult {
-		Nominations::set(&nominations);
+		Nominations::set(&Some(nominations));
+		dbg!(Nominations::get());
 		Ok(())
+	}
+
+	fn nominations(_: Self::AccountId) -> Option<Vec<Self::AccountId>> {
+		Nominations::get()
 	}
 }
 

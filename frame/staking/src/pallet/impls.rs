@@ -1445,4 +1445,9 @@ impl<T: Config> StakingInterface for Pallet<T> {
 		let targets = targets.into_iter().map(T::Lookup::unlookup).collect::<Vec<_>>();
 		Self::nominate(RawOrigin::Signed(controller).into(), targets)
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn nominations(who: Self::AccountId) -> Option<Vec<T::AccountId>> {
+		Nominators::<T>::get(who).map(|n| n.targets.into_inner())
+	}
 }

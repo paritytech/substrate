@@ -1549,6 +1549,7 @@ pub mod pallet {
 		/// there are too many unlocking chunks, the result of this call will likely be the
 		/// `NoMoreChunks` error from the staking system.
 		#[pallet::weight(T::WeightInfo::unbond())]
+		// #[frame_support::transactional]
 		pub fn unbond(
 			origin: OriginFor<T>,
 			member_account: T::AccountId,

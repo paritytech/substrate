@@ -18,7 +18,7 @@
 use super::*;
 use crate::{mock::*, Event};
 use frame_support::{
-	assert_noop, assert_ok, assert_storage_noop, bounded_btree_map,
+	assert_err, assert_noop, assert_ok, assert_storage_noop, bounded_btree_map,
 	storage::{with_transaction, TransactionOutcome},
 };
 use pallet_balances::Event as BEvent;
@@ -66,7 +66,7 @@ fn test_setup_works() {
 		);
 		assert_eq!(
 			RewardPools::<Runtime>::get(last_pool).unwrap(),
-			RewardPool::<Runtime> { balance: 0, points: 0.into(), total_earnings: 0 }
+			RewardPool::<Runtime> { balance: 0, points: 0u32.into(), total_earnings: 0 }
 		);
 		assert_eq!(
 			PoolMembers::<Runtime>::get(10).unwrap(),
@@ -81,7 +81,7 @@ fn test_setup_works() {
 		assert_eq!(StakingMock::total_stake(&bonded_account).unwrap(), 10);
 
 		// but not nominating yet.
-		assert!(Nominations::get().is_empty());
+		assert!(Nominations::get().is_none());
 
 		// reward account should have an initial ED in it.
 		assert_eq!(Balances::free_balance(&reward_account), Balances::minimum_balance());
@@ -2059,8 +2059,12 @@ mod unbond {
 			);
 
 			// when: unbonding more than our active: error
-			assert_noop!(
-				Pools::unbond(Origin::signed(10), 10, 5),
+			assert_err!(
+				frame_support::storage::in_storage_layer(|| Pools::unbond(
+					Origin::signed(10),
+					10,
+					5
+				)),
 				Error::<Runtime>::NotEnoughPointsToUnbond
 			);
 			// instead:
@@ -2109,8 +2113,12 @@ mod unbond {
 
 			// when
 			CurrentEra::set(2);
-			assert_noop!(
-				Pools::unbond(Origin::signed(10), 10, 4),
+			assert_err!(
+				frame_support::storage::in_storage_layer(|| Pools::unbond(
+					Origin::signed(10),
+					10,
+					4
+				)),
 				Error::<Runtime>::MaxUnbondingLimit
 			);
 
@@ -3185,11 +3193,11 @@ mod nominate {
 
 			// Root can nominate
 			assert_ok!(Pools::nominate(Origin::signed(900), 1, vec![21]));
-			assert_eq!(Nominations::get(), vec![21]);
+			assert_eq!(Nominations::get().unwrap(), vec![21]);
 
 			// Nominator can nominate
 			assert_ok!(Pools::nominate(Origin::signed(901), 1, vec![31]));
-			assert_eq!(Nominations::get(), vec![31]);
+			assert_eq!(Nominations::get().unwrap(), vec![31]);
 
 			// Can't nominate for a pool that doesn't exist
 			assert_noop!(

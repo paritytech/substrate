@@ -134,4 +134,8 @@ pub trait StakingInterface {
 		stash: Self::AccountId,
 		num_slashing_spans: u32,
 	) -> Result<bool, DispatchError>;
+
+	/// Get the nominations of a stash, if they are a nominator, `None` otherwise.
+	#[cfg(feature = "runtime-benchmarks")]
+	fn nominations(who: Self::AccountId) -> Option<Vec<Self::AccountId>>;
 }

@@ -24,7 +24,7 @@ mod mock;
 
 use frame_benchmarking::{account, frame_support::traits::Currency, vec, whitelist_account, Vec};
 use frame_election_provider_support::SortedListProvider;
-use frame_support::{ensure, traits::Get};
+use frame_support::{ensure, assert_ok, traits::Get};
 use frame_system::RawOrigin as Origin;
 use pallet_nomination_pools::{
 	BalanceOf, BondExtra, BondedPoolInner, BondedPools, ConfigOp, MaxPoolMembers,
@@ -651,6 +651,27 @@ frame_benchmarking::benchmarks! {
 				root: Some(random),
 			},
 		)
+	}
+
+	chill {
+		// Create a pool
+		let min_create_bond = MinCreateBond::<T>::get()
+			.max(T::StakingInterface::minimum_bond())
+			.max(CurrencyOf::<T>::minimum_balance());
+		let (depositor, pool_account) = create_pool_account::<T>(0, min_create_bond);
+
+		// Nominate with the pool.
+		 let validators: Vec<_> = (0..T::MaxNominations::get())
+			.map(|i| account("stash", USER_SEED, i))
+			.collect();
+
+		assert_ok!(Pools::<T>::nominate(Origin::Signed(depositor.clone()).into(), 1, validators));
+		assert!(T::StakingInterface::nominations(Pools::<T>::create_bonded_account(1)).is_some());
+
+		whitelist_account!(depositor);
+	}:_(Origin::Signed(depositor.clone()), 1)
+	verify {
+		assert!(T::StakingInterface::nominations(Pools::<T>::create_bonded_account(1)).is_none());
 	}
 
 	impl_benchmark_test_suite!(
