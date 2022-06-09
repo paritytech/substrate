@@ -239,8 +239,8 @@ pub mod pallet {
 		/// The block production rate (which may be slowed down because of finality lagging) should
 		/// be taken into account when choosing the `delay`. The GRANDPA voters based on the new
 		/// authority will start voting on top of `best_finalized_block_number` for new finalized
-		/// blocks. `best_finalized_block_number` should be the median of the latest finalized block
-		/// of the validators of the new authority set.
+		/// blocks. `best_finalized_block_number` should be the highest of the latest finalized
+		/// block of all validators of the new authority set.
 		///
 		/// Only callable by root.
 		#[pallet::weight(T::WeightInfo::note_stalled())]
