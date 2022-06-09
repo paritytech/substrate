@@ -184,13 +184,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 }
 
 fn last_events(n: usize) -> Vec<Event> {
-	system::Pallet::<Test>::events()
-		.into_iter()
-		.rev()
-		.take(n)
-		.rev()
-		.map(|e| e.event)
-		.collect()
+	System::events().into_iter().rev().take(n).rev().map(|e| e.event).collect()
 }
 
 fn expect_events(e: Vec<Event>) {
@@ -298,7 +292,7 @@ fn delayed_requires_pre_announcement() {
 		assert_noop!(Proxy::proxy_announced(Origin::signed(0), 2, 1, None, call.clone()), e);
 		let call_hash = BlakeTwo256::hash_of(&call);
 		assert_ok!(Proxy::announce(Origin::signed(2), 1, call_hash));
-		system::Pallet::<Test>::set_block_number(2);
+		System::set_block_number(2);
 		assert_ok!(Proxy::proxy_announced(Origin::signed(0), 2, 1, None, call.clone()));
 	});
 }
@@ -316,7 +310,7 @@ fn proxy_announced_removes_announcement_and_returns_deposit() {
 		let e = Error::<Test>::Unannounced;
 		assert_noop!(Proxy::proxy_announced(Origin::signed(0), 3, 1, None, call.clone()), e);
 
-		system::Pallet::<Test>::set_block_number(2);
+		System::set_block_number(2);
 		assert_ok!(Proxy::proxy_announced(Origin::signed(0), 3, 1, None, call.clone()));
 		let announcements = Announcements::<Test>::get(3);
 		assert_eq!(announcements.0, vec![Announcement { real: 2, call_hash, height: 1 }]);
@@ -592,6 +586,31 @@ fn anonymous_works() {
 		assert_noop!(
 			Proxy::proxy(Origin::signed(1), anon, None, call.clone()),
 			Error::<Test>::NotProxy
+		);
+	});
+}
+
+#[test]
+fn proxied_batch_all_does_not_nest() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Proxy::add_proxy(Origin::signed(1), 3, ProxyType::Any, 0));
+
+		let batch_all = Call::Proxy(ProxyCall::proxy {
+			real: 1,
+			force_proxy_type: None,
+			call: Box::new(Call::Utility(UtilityCall::batch_all {
+				calls: vec![call_transfer(2, 1), call_transfer(2, 1), call_transfer(2, 1)],
+			})),
+		});
+
+		assert_eq!(Balances::free_balance(1), 8);
+		assert_eq!(Balances::free_balance(2), 10);
+		Utility::batch_all(Origin::signed(3), vec![batch_all.clone()]).unwrap();
+		System::assert_has_event(
+			ProxyEvent::ProxyExecuted {
+				result: Err(frame_system::Error::<Test>::CallFiltered.into()),
+			}
+			.into(),
 		);
 	});
 }

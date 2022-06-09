@@ -218,7 +218,7 @@ pub mod pallet {
 		type Origin: Into<Result<RawOrigin<Self::AccountId>, Self::Origin>>
 			+ From<RawOrigin<Self::AccountId>>
 			+ Clone
-			+ OriginTrait<Call = Self::Call>;
+			+ OriginTrait<Call = Self::Call, AccountId = Self::AccountId>;
 
 		/// The aggregated `Call` type.
 		type Call: Dispatchable + Debug;

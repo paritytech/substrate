@@ -41,7 +41,7 @@ use frame_support::{
 	weights::GetDispatchInfo,
 	RuntimeDebug,
 };
-use frame_system::{self as system};
+use frame_system::pallet_prelude::*;
 use scale_info::TypeInfo;
 use sp_io::hashing::blake2_256;
 use sp_runtime::{
@@ -98,7 +98,6 @@ pub struct Announcement<AccountId, Hash, BlockNumber> {
 pub mod pallet {
 	use super::{DispatchResult, *};
 	use frame_support::pallet_prelude::*;
-	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
@@ -208,11 +207,11 @@ pub mod pallet {
 			force_proxy_type: Option<T::ProxyType>,
 			call: Box<<T as Config>::Call>,
 		) -> DispatchResult {
-			let who = ensure_signed(origin)?;
+			let who = ensure_signed(origin.clone())?;
 			let def = Self::find_proxy(&real, &who, force_proxy_type)?;
 			ensure!(def.delay.is_zero(), Error::<T>::Unannounced);
 
-			Self::do_proxy(def, real, *call);
+			Self::do_proxy(def, origin, real, *call);
 
 			Ok(())
 		}
@@ -414,7 +413,7 @@ pub mod pallet {
 			let announcement = Announcement {
 				real: real.clone(),
 				call_hash,
-				height: system::Pallet::<T>::block_number(),
+				height: frame_system::Pallet::<T>::block_number(),
 			};
 
 			Announcements::<T>::try_mutate(&who, |(ref mut pending, ref mut deposit)| {
@@ -532,11 +531,11 @@ pub mod pallet {
 			force_proxy_type: Option<T::ProxyType>,
 			call: Box<<T as Config>::Call>,
 		) -> DispatchResult {
-			ensure_signed(origin)?;
+			ensure_signed(origin.clone())?;
 			let def = Self::find_proxy(&real, &delegate, force_proxy_type)?;
 
 			let call_hash = T::CallHasher::hash_of(&call);
-			let now = system::Pallet::<T>::block_number();
+			let now = frame_system::Pallet::<T>::block_number();
 			Self::edit_announcements(&delegate, |ann| {
 				ann.real != real ||
 					ann.call_hash != call_hash ||
@@ -544,7 +543,7 @@ pub mod pallet {
 			})
 			.map_err(|_| Error::<T>::Unannounced)?;
 
-			Self::do_proxy(def, real, *call);
+			Self::do_proxy(def, origin, real, *call);
 
 			Ok(())
 		}
@@ -651,8 +650,8 @@ impl<T: Config> Pallet<T> {
 	) -> T::AccountId {
 		let (height, ext_index) = maybe_when.unwrap_or_else(|| {
 			(
-				system::Pallet::<T>::block_number(),
-				system::Pallet::<T>::extrinsic_index().unwrap_or_default(),
+				frame_system::Pallet::<T>::block_number(),
+				frame_system::Pallet::<T>::extrinsic_index().unwrap_or_default(),
 			)
 		});
 		let entropy = (b"modlpy/proxy____", who, height, ext_index, proxy_type, index)
@@ -805,11 +804,11 @@ impl<T: Config> Pallet<T> {
 
 	fn do_proxy(
 		def: ProxyDefinition<T::AccountId, T::ProxyType, T::BlockNumber>,
+		mut origin: OriginFor<T>,
 		real: T::AccountId,
 		call: <T as Config>::Call,
 	) {
-		// This is a freshly authenticated new account, the origin restrictions doesn't apply.
-		let mut origin: T::Origin = frame_system::RawOrigin::Signed(real).into();
+		origin.set_caller_from(OriginFor::<T>::signed(real));
 		origin.add_filter(move |c: &<T as frame_system::Config>::Call| {
 			let c = <T as Config>::Call::from_ref(c);
 			// We make sure the proxy call does access this pallet to change modify proxies.
