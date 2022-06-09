@@ -419,6 +419,17 @@ fn full_native_block_import_works() {
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
+				event: Event::TransactionPayment(
+					pallet_transaction_payment::Event::TransactionPaid {
+						who: alice().into(),
+						fee: fees,
+						tip: 0,
+					},
+				),
+				topics: vec![],
+			},
+			EventRecord {
+				phase: Phase::ApplyExtrinsic(1),
 				event: Event::System(frame_system::Event::ExtrinsicSuccess {
 					dispatch_info: DispatchInfo { weight: transfer_weight, ..Default::default() },
 				}),
