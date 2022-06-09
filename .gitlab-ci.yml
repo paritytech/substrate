@@ -38,7 +38,7 @@ workflow:
 
 variables:                         &default-vars
   GIT_STRATEGY:                    fetch
-  GIT_DEPTH:                       1000
+  GIT_DEPTH:                       100
   CARGO_INCREMENTAL:               0
   DOCKER_OS:                       "debian:stretch"
   ARCH:                            "x86_64"
