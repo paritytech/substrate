@@ -99,16 +99,11 @@ pub mod weights;
 mod tests;
 
 use crate::{
-	exec::{AccountIdOf, ExecError, Executable, Stack as ExecStack, StorageHash},
+	exec::{AccountIdOf, ExecError, Executable, Stack as ExecStack, StorageKey},
 	gas::GasMeter,
 	storage::{meter::Meter as StorageMeter, ContractInfo, DeletedContract, Storage},
 	wasm::{OwnerInfo, PrefabWasmModule},
 	weights::WeightInfo,
-};
-pub use crate::{
-	exec::{FixSizedKey, Frame, VarSizedKey},
-	pallet::*,
-	schedule::{HostFnWeights, InstructionWeights, Limits, Schedule},
 };
 use codec::{Encode, HasCompact};
 use frame_support::{
@@ -128,6 +123,12 @@ use scale_info::TypeInfo;
 use sp_core::{crypto::UncheckedFrom, Bytes};
 use sp_runtime::traits::{Convert, Hash, Saturating, StaticLookup};
 use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
+
+pub use crate::{
+	exec::{FixSizedKey, Frame, VarSizedKey},
+	pallet::*,
+	schedule::{HostFnWeights, InstructionWeights, Limits, Schedule},
+};
 
 type CodeHash<T> = <T as frame_system::Config>::Hash;
 type TrieId = BoundedVec<u8, ConstU32<128>>;
@@ -945,7 +946,7 @@ where
 	}
 
 	/// Query storage of a specified contract under a specified key.
-	pub fn get_storage<K: StorageHash<T>>(address: T::AccountId, key: K) -> GetStorageResult {
+	pub fn get_storage<K: StorageKey<T>>(address: T::AccountId, key: K) -> GetStorageResult {
 		let contract_info =
 			ContractInfoOf::<T>::get(&address).ok_or(ContractAccessError::DoesntExist)?;
 

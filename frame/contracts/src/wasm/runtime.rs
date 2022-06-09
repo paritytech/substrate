@@ -46,6 +46,18 @@ enum KeyType {
 	Variable(u32),
 }
 
+impl KeyType {
+	fn len<T: Config>(&self) -> Result<u32, TrapReason> {
+		match self {
+			KeyType::Fix => Ok(32u32),
+			KeyType::Variable(len) => {
+				ensure!(len <= &<T>::MaxStorageKeyLen::get(), Error::<T>::DecodingFailed);
+				Ok(*len)
+			},
+		}
+	}
+}
+
 /// Every error that can be returned to a contract when it calls any of the host functions.
 ///
 /// # Note
@@ -717,26 +729,16 @@ where
 		if value_len > max_size {
 			return Err(Error::<E::T>::ValueTooLarge.into())
 		}
-		let key_len = match key_type {
-			KeyType::Fix => 32u32,
-			KeyType::Variable(len) => {
-				ensure!(
-					len <= <E::T as Config>::MaxStorageKeyLen::get(),
-					Error::<E::T>::DecodingFailed
-				);
-				len
-			},
-		};
-		let key = self.read_sandbox_memory(key_ptr, key_len)?;
+		let key = self.read_sandbox_memory(key_ptr, key_type.len::<E::T>()?)?;
 		let value = Some(self.read_sandbox_memory(value_ptr, value_len)?);
 		let write_outcome = match key_type {
 			KeyType::Fix => self.ext.set_storage(
-				FixSizedKey::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?,
+				&FixSizedKey::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?,
 				value,
 				false,
 			)?,
 			KeyType::Variable(_) => self.ext.set_storage_transparent(
-				VarSizedKey::<E::T>::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?,
+				&VarSizedKey::<E::T>::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?,
 				value,
 				false,
 			)?,
@@ -751,25 +753,15 @@ where
 
 	fn clear_storage(&mut self, key_type: KeyType, key_ptr: u32) -> Result<u32, TrapReason> {
 		let charged = self.charge_gas(RuntimeCosts::ClearStorage(self.ext.max_value_size()))?;
-		let key_len = match key_type {
-			KeyType::Fix => 32u32,
-			KeyType::Variable(len) => {
-				ensure!(
-					len <= <E::T as Config>::MaxStorageKeyLen::get(),
-					Error::<E::T>::DecodingFailed
-				);
-				len
-			},
-		};
-		let key = self.read_sandbox_memory(key_ptr, key_len)?;
+		let key = self.read_sandbox_memory(key_ptr, key_type.len::<E::T>()?)?;
 		let outcome = match key_type {
 			KeyType::Fix => self.ext.set_storage(
-				FixSizedKey::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?,
+				&FixSizedKey::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?,
 				None,
 				false,
 			)?,
 			KeyType::Variable(_) => self.ext.set_storage_transparent(
-				VarSizedKey::<E::T>::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?,
+				&VarSizedKey::<E::T>::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?,
 				None,
 				false,
 			)?,
@@ -1004,7 +996,7 @@ define_env!(Env, <E: Ext>,
 		let charged = ctx.charge_gas(RuntimeCosts::GetStorage(ctx.ext.max_value_size()))?;
 		let mut key: FixSizedKey = [0; 32];
 		ctx.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
-		if let Some(value) = ctx.ext.get_storage(key) {
+		if let Some(value) = ctx.ext.get_storage(&key) {
 			ctx.adjust_gas(charged, RuntimeCosts::GetStorage(value.len() as u32));
 			ctx.write_sandbox_output(out_ptr, out_len_ptr, &value, false, already_charged)?;
 			Ok(ReturnCode::Success)
@@ -1062,7 +1054,7 @@ define_env!(Env, <E: Ext>,
 		let charged = ctx.charge_gas(RuntimeCosts::ContainsStorage(ctx.ext.max_value_size()))?;
 		let mut key: FixSizedKey = [0; 32];
 		ctx.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
-		if let Some(len) = ctx.ext.get_storage_size(key) {
+		if let Some(len) = ctx.ext.get_storage_size(&key) {
 			ctx.adjust_gas(charged, RuntimeCosts::ContainsStorage(len));
 			Ok(len)
 		} else {

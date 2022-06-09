@@ -426,13 +426,13 @@ mod tests {
 			self.terminations.push(TerminationEntry { beneficiary: beneficiary.clone() });
 			Ok(())
 		}
-		fn get_storage(&mut self, key: FixSizedKey) -> Option<Vec<u8>> {
+		fn get_storage(&mut self, key: &FixSizedKey) -> Option<Vec<u8>> {
 			self.storage.get(&key.to_vec()).cloned()
 		}
 		fn get_storage_transparent(&mut self, key: VarSizedKey<Self::T>) -> Option<Vec<u8>> {
 			self.storage.get(&key.to_vec()).cloned()
 		}
-		fn get_storage_size(&mut self, key: FixSizedKey) -> Option<u32> {
+		fn get_storage_size(&mut self, key: &FixSizedKey) -> Option<u32> {
 			self.storage.get(&key.to_vec()).map(|val| val.len() as u32)
 		}
 		fn get_storage_size_transparent(&mut self, key: VarSizedKey<Self::T>) -> Option<u32> {
@@ -440,7 +440,7 @@ mod tests {
 		}
 		fn set_storage(
 			&mut self,
-			key: FixSizedKey,
+			key: &FixSizedKey,
 			value: Option<Vec<u8>>,
 			take_old: bool,
 		) -> Result<WriteOutcome, DispatchError> {
@@ -2303,7 +2303,7 @@ mod tests {
 			(call $seal_set_storage
 				(i32.const 4)				;; key_ptr
 				(i32.const 36)				;; value_ptr
-				(i32.sub				;; value_len (input_size - key_size)
+				(i32.sub			;; value_len (input_size - key_size)
 					(i32.load (i32.const 0))
 					(i32.const 32)
 				)
