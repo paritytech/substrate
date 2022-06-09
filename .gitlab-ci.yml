@@ -47,7 +47,6 @@ variables:                         &default-vars
   RUSTY_CACHIER_DONT_OPERATE_ON_MAIN_BRANCH: "true"
 
   RUSTY_CACHIER_SKIP_BYPASSES: "true"
-  RUSTY_CACHIER_TESTING: "true"
 
 default:
   retry:
@@ -104,8 +103,7 @@ default:
     - curl -s https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.parity.io/parity/infrastructure/ci_cd/rusty-cachier/client/-/raw/release/util/install.sh | bash
     - rusty-cachier environment check --gracefully
     - $(rusty-cachier environment inject)
-    - find . -exec touch -t 202005260100 {} +
-    - git restore-mtime
+    - rusty-cachier project mtime
   after_script:
     - env RUSTY_CACHIER_SUPRESS_OUTPUT=true rusty-cachier snapshot destroy
 
