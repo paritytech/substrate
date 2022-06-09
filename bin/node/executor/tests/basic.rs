@@ -417,13 +417,13 @@ fn full_native_block_import_works() {
 				event: Event::Treasury(pallet_treasury::Event::Deposit { value: fees * 8 / 10 }),
 				topics: vec![],
 			},
-			EventRecord { 
-				phase: Phase::ApplyExtrinsic(1), 
-				event: Event::TransactionPayment(Event::TransactionPaid { 
-					who: alice().into(), 
-					fee: fees, 
+			EventRecord {
+				phase: Phase::ApplyExtrinsic(1),
+				event: Event::TransactionPayment(Event::TransactionPaid {
+					who: alice().into(),
+					fee: fees,
 					tip: 0,
-				}), 
+				}),
 				topics: vec![],
 			},
 			EventRecord {
