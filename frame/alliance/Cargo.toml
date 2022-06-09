@@ -2,11 +2,11 @@
 name = "pallet-alliance"
 version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
+edition = "2021"
 license = "Apache-2.0"
-homepage = "https://substrate.dev"
+homepage = "https://docs.substrate.io/"
 repository = "https://github.com/paritytech/substrate/"
-description = "The Alliance Pallet provides a DAO to form an industry group."
+description = "The Alliance pallet provides a collective for standard-setting industry collaboration."
 readme = "README.md"
 
 [package.metadata.docs.rs]
