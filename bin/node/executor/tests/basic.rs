@@ -419,11 +419,13 @@ fn full_native_block_import_works() {
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
-				event: Event::TransactionPayment(Event::TransactionPaid {
-					who: alice().into(),
-					fee: fees,
-					tip: 0,
-				}),
+				event: Event::TransactionPayment(
+					pallet_transaction_payment::Event::TransactionPaid {
+						who: alice().into(),
+						fee: fees,
+						tip: 0,
+					},
+				),
 				topics: vec![],
 			},
 			EventRecord {
