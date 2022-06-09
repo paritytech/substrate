@@ -1027,7 +1027,7 @@ define_env!(Env, <E: Ext>,
 	[__unstable__] seal_get_storage(ctx, key_ptr: u32, key_len: u32, out_ptr: u32, out_len_ptr: u32) -> ReturnCode => {
 		let charged = ctx.charge_gas(RuntimeCosts::GetStorage(ctx.ext.max_value_size()))?;
 		let key = ctx.read_sandbox_memory(key_ptr, key_len)?;
-		if let Some(value) = ctx.ext.get_storage_transparent(VarSizedKey::<E::T>::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?) {
+		if let Some(value) = ctx.ext.get_storage_transparent(&VarSizedKey::<E::T>::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?) {
 			ctx.adjust_gas(charged, RuntimeCosts::GetStorage(value.len() as u32));
 			ctx.write_sandbox_output(out_ptr, out_len_ptr, &value, false, already_charged)?;
 			Ok(ReturnCode::Success)
@@ -1079,7 +1079,7 @@ define_env!(Env, <E: Ext>,
 	[__unstable__] seal_contains_storage(ctx, key_ptr: u32, key_len: u32) -> u32 => {
 		let charged = ctx.charge_gas(RuntimeCosts::ContainsStorage(ctx.ext.max_value_size()))?;
 		let key = ctx.read_sandbox_memory(key_ptr, key_len)?;
-		if let Some(len) = ctx.ext.get_storage_size_transparent(VarSizedKey::<E::T>::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?) {
+		if let Some(len) = ctx.ext.get_storage_size_transparent(&VarSizedKey::<E::T>::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?) {
 			ctx.adjust_gas(charged, RuntimeCosts::ContainsStorage(len));
 			Ok(len)
 		} else {
@@ -1104,7 +1104,7 @@ define_env!(Env, <E: Ext>,
 	[__unstable__] seal_take_storage(ctx, key_ptr: u32, key_len: u32, out_ptr: u32, out_len_ptr: u32) -> ReturnCode => {
 		let charged = ctx.charge_gas(RuntimeCosts::TakeStorage(ctx.ext.max_value_size()))?;
 		let key = ctx.read_sandbox_memory(key_ptr, key_len)?;
-		if let crate::storage::WriteOutcome::Taken(value) = ctx.ext.set_storage_transparent(VarSizedKey::<E::T>::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?, None, true)? {
+		if let crate::storage::WriteOutcome::Taken(value) = ctx.ext.set_storage_transparent(&VarSizedKey::<E::T>::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?, None, true)? {
 			ctx.adjust_gas(charged, RuntimeCosts::TakeStorage(value.len() as u32));
 			ctx.write_sandbox_output(out_ptr, out_len_ptr, &value, false, already_charged)?;
 			Ok(ReturnCode::Success)

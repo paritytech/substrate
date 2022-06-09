@@ -66,7 +66,7 @@ impl<T: Config> StorageKey<T> for FixSizedKey {
 	}
 }
 
-impl<T> StorageKey<T> for VarSizedKey<T>
+impl<T> StorageKey<T> for &VarSizedKey<T>
 where
 	T: Config,
 {
@@ -1144,7 +1144,7 @@ where
 	}
 
 	fn get_storage_transparent(&mut self, key: &VarSizedKey<T>) -> Option<Vec<u8>> {
-		Storage::<T>::read(&self.top_frame_mut().contract_info().trie_id, key.clone())
+		Storage::<T>::read(&self.top_frame_mut().contract_info().trie_id, &key.clone())
 	}
 
 	fn get_storage_size(&mut self, key: &FixSizedKey) -> Option<u32> {
@@ -1152,7 +1152,7 @@ where
 	}
 
 	fn get_storage_size_transparent(&mut self, key: &VarSizedKey<T>) -> Option<u32> {
-		Storage::<T>::size(&self.top_frame_mut().contract_info().trie_id, key.clone())
+		Storage::<T>::size(&self.top_frame_mut().contract_info().trie_id, &key.clone())
 	}
 
 	fn set_storage(
@@ -1180,7 +1180,7 @@ where
 		let frame = self.top_frame_mut();
 		Storage::<T>::write(
 			&frame.contract_info.get(&frame.account_id).trie_id,
-			key.clone(),
+			&key.clone(),
 			value,
 			Some(&mut frame.nested_storage),
 			take_old,
@@ -2713,35 +2713,35 @@ mod tests {
 		let code_hash = MockLoader::insert(Call, |ctx, _| {
 			// Write
 			assert_eq!(
-				ctx.ext.set_storage([1; 32], Some(vec![1, 2, 3]), false),
+				ctx.ext.set_storage(&[1; 32], Some(vec![1, 2, 3]), false),
 				Ok(WriteOutcome::New)
 			);
 			assert_eq!(
-				ctx.ext.set_storage([2; 32], Some(vec![4, 5, 6]), true),
+				ctx.ext.set_storage(&[2; 32], Some(vec![4, 5, 6]), true),
 				Ok(WriteOutcome::New)
 			);
-			assert_eq!(ctx.ext.set_storage([3; 32], None, false), Ok(WriteOutcome::New));
-			assert_eq!(ctx.ext.set_storage([4; 32], None, true), Ok(WriteOutcome::New));
-			assert_eq!(ctx.ext.set_storage([5; 32], Some(vec![]), false), Ok(WriteOutcome::New));
-			assert_eq!(ctx.ext.set_storage([6; 32], Some(vec![]), true), Ok(WriteOutcome::New));
+			assert_eq!(ctx.ext.set_storage(&[3; 32], None, false), Ok(WriteOutcome::New));
+			assert_eq!(ctx.ext.set_storage(&[4; 32], None, true), Ok(WriteOutcome::New));
+			assert_eq!(ctx.ext.set_storage(&[5; 32], Some(vec![]), false), Ok(WriteOutcome::New));
+			assert_eq!(ctx.ext.set_storage(&[6; 32], Some(vec![]), true), Ok(WriteOutcome::New));
 
 			// Overwrite
 			assert_eq!(
-				ctx.ext.set_storage([1; 32], Some(vec![42]), false),
+				ctx.ext.set_storage(&[1; 32], Some(vec![42]), false),
 				Ok(WriteOutcome::Overwritten(3))
 			);
 			assert_eq!(
-				ctx.ext.set_storage([2; 32], Some(vec![48]), true),
+				ctx.ext.set_storage(&[2; 32], Some(vec![48]), true),
 				Ok(WriteOutcome::Taken(vec![4, 5, 6]))
 			);
-			assert_eq!(ctx.ext.set_storage([3; 32], None, false), Ok(WriteOutcome::New));
-			assert_eq!(ctx.ext.set_storage([4; 32], None, true), Ok(WriteOutcome::New));
+			assert_eq!(ctx.ext.set_storage(&[3; 32], None, false), Ok(WriteOutcome::New));
+			assert_eq!(ctx.ext.set_storage(&[4; 32], None, true), Ok(WriteOutcome::New));
 			assert_eq!(
-				ctx.ext.set_storage([5; 32], Some(vec![]), false),
+				ctx.ext.set_storage(&[5; 32], Some(vec![]), false),
 				Ok(WriteOutcome::Overwritten(0))
 			);
 			assert_eq!(
-				ctx.ext.set_storage([6; 32], Some(vec![]), true),
+				ctx.ext.set_storage(&[6; 32], Some(vec![]), true),
 				Ok(WriteOutcome::Taken(vec![]))
 			);
 
@@ -2774,7 +2774,7 @@ mod tests {
 			// Write
 			assert_eq!(
 				ctx.ext.set_storage_transparent(
-					VarSizedKey::<Test>::try_from([1; 64].to_vec()).unwrap(),
+					&VarSizedKey::<Test>::try_from([1; 64].to_vec()).unwrap(),
 					Some(vec![1, 2, 3]),
 					false
 				),
@@ -2782,7 +2782,7 @@ mod tests {
 			);
 			assert_eq!(
 				ctx.ext.set_storage_transparent(
-					VarSizedKey::<Test>::try_from([2; 19].to_vec()).unwrap(),
+					&VarSizedKey::<Test>::try_from([2; 19].to_vec()).unwrap(),
 					Some(vec![4, 5, 6]),
 					true
 				),
@@ -2790,7 +2790,7 @@ mod tests {
 			);
 			assert_eq!(
 				ctx.ext.set_storage_transparent(
-					VarSizedKey::<Test>::try_from([3; 19].to_vec()).unwrap(),
+					&VarSizedKey::<Test>::try_from([3; 19].to_vec()).unwrap(),
 					None,
 					false
 				),
@@ -2798,7 +2798,7 @@ mod tests {
 			);
 			assert_eq!(
 				ctx.ext.set_storage_transparent(
-					VarSizedKey::<Test>::try_from([4; 64].to_vec()).unwrap(),
+					&VarSizedKey::<Test>::try_from([4; 64].to_vec()).unwrap(),
 					None,
 					true
 				),
@@ -2806,7 +2806,7 @@ mod tests {
 			);
 			assert_eq!(
 				ctx.ext.set_storage_transparent(
-					VarSizedKey::<Test>::try_from([5; 30].to_vec()).unwrap(),
+					&VarSizedKey::<Test>::try_from([5; 30].to_vec()).unwrap(),
 					Some(vec![]),
 					false
 				),
@@ -2814,7 +2814,7 @@ mod tests {
 			);
 			assert_eq!(
 				ctx.ext.set_storage_transparent(
-					VarSizedKey::<Test>::try_from([6; 128].to_vec()).unwrap(),
+					&VarSizedKey::<Test>::try_from([6; 128].to_vec()).unwrap(),
 					Some(vec![]),
 					true
 				),
@@ -2824,7 +2824,7 @@ mod tests {
 			// Overwrite
 			assert_eq!(
 				ctx.ext.set_storage_transparent(
-					VarSizedKey::<Test>::try_from([1; 64].to_vec()).unwrap(),
+					&VarSizedKey::<Test>::try_from([1; 64].to_vec()).unwrap(),
 					Some(vec![42, 43, 44]),
 					false
 				),
@@ -2832,7 +2832,7 @@ mod tests {
 			);
 			assert_eq!(
 				ctx.ext.set_storage_transparent(
-					VarSizedKey::<Test>::try_from([2; 19].to_vec()).unwrap(),
+					&VarSizedKey::<Test>::try_from([2; 19].to_vec()).unwrap(),
 					Some(vec![48]),
 					true
 				),
@@ -2840,7 +2840,7 @@ mod tests {
 			);
 			assert_eq!(
 				ctx.ext.set_storage_transparent(
-					VarSizedKey::<Test>::try_from([3; 19].to_vec()).unwrap(),
+					&VarSizedKey::<Test>::try_from([3; 19].to_vec()).unwrap(),
 					None,
 					false
 				),
@@ -2848,7 +2848,7 @@ mod tests {
 			);
 			assert_eq!(
 				ctx.ext.set_storage_transparent(
-					VarSizedKey::<Test>::try_from([4; 64].to_vec()).unwrap(),
+					&VarSizedKey::<Test>::try_from([4; 64].to_vec()).unwrap(),
 					None,
 					true
 				),
@@ -2856,7 +2856,7 @@ mod tests {
 			);
 			assert_eq!(
 				ctx.ext.set_storage_transparent(
-					VarSizedKey::<Test>::try_from([5; 30].to_vec()).unwrap(),
+					&VarSizedKey::<Test>::try_from([5; 30].to_vec()).unwrap(),
 					Some(vec![]),
 					false
 				),
@@ -2864,7 +2864,7 @@ mod tests {
 			);
 			assert_eq!(
 				ctx.ext.set_storage_transparent(
-					VarSizedKey::<Test>::try_from([6; 128].to_vec()).unwrap(),
+					&VarSizedKey::<Test>::try_from([6; 128].to_vec()).unwrap(),
 					Some(vec![]),
 					true
 				),
@@ -2898,13 +2898,13 @@ mod tests {
 	fn get_storage_works() {
 		let code_hash = MockLoader::insert(Call, |ctx, _| {
 			assert_eq!(
-				ctx.ext.set_storage([1; 32], Some(vec![1, 2, 3]), false),
+				ctx.ext.set_storage(&[1; 32], Some(vec![1, 2, 3]), false),
 				Ok(WriteOutcome::New)
 			);
-			assert_eq!(ctx.ext.set_storage([2; 32], Some(vec![]), false), Ok(WriteOutcome::New));
-			assert_eq!(ctx.ext.get_storage([1; 32]), Some(vec![1, 2, 3]));
-			assert_eq!(ctx.ext.get_storage([2; 32]), Some(vec![]));
-			assert_eq!(ctx.ext.get_storage([3; 32]), None);
+			assert_eq!(ctx.ext.set_storage(&[2; 32], Some(vec![]), false), Ok(WriteOutcome::New));
+			assert_eq!(ctx.ext.get_storage(&[1; 32]), Some(vec![1, 2, 3]));
+			assert_eq!(ctx.ext.get_storage(&[2; 32]), Some(vec![]));
+			assert_eq!(ctx.ext.get_storage(&[3; 32]), None);
 
 			exec_success()
 		});
@@ -2933,13 +2933,13 @@ mod tests {
 	fn get_storage_size_works() {
 		let code_hash = MockLoader::insert(Call, |ctx, _| {
 			assert_eq!(
-				ctx.ext.set_storage([1; 32], Some(vec![1, 2, 3]), false),
+				ctx.ext.set_storage(&[1; 32], Some(vec![1, 2, 3]), false),
 				Ok(WriteOutcome::New)
 			);
-			assert_eq!(ctx.ext.set_storage([2; 32], Some(vec![]), false), Ok(WriteOutcome::New));
-			assert_eq!(ctx.ext.get_storage_size([1; 32]), Some(3));
-			assert_eq!(ctx.ext.get_storage_size([2; 32]), Some(0));
-			assert_eq!(ctx.ext.get_storage_size([3; 32]), None);
+			assert_eq!(ctx.ext.set_storage(&[2; 32], Some(vec![]), false), Ok(WriteOutcome::New));
+			assert_eq!(ctx.ext.get_storage_size(&[1; 32]), Some(3));
+			assert_eq!(ctx.ext.get_storage_size(&[2; 32]), Some(0));
+			assert_eq!(ctx.ext.get_storage_size(&[3; 32]), None);
 
 			exec_success()
 		});
@@ -2969,7 +2969,7 @@ mod tests {
 		let code_hash = MockLoader::insert(Call, |ctx, _| {
 			assert_eq!(
 				ctx.ext.set_storage_transparent(
-					VarSizedKey::<Test>::try_from([1; 19].to_vec()).unwrap(),
+					&VarSizedKey::<Test>::try_from([1; 19].to_vec()).unwrap(),
 					Some(vec![1, 2, 3]),
 					false
 				),
@@ -2977,7 +2977,7 @@ mod tests {
 			);
 			assert_eq!(
 				ctx.ext.set_storage_transparent(
-					VarSizedKey::<Test>::try_from([2; 16].to_vec()).unwrap(),
+					&VarSizedKey::<Test>::try_from([2; 16].to_vec()).unwrap(),
 					Some(vec![]),
 					false
 				),
@@ -2985,19 +2985,19 @@ mod tests {
 			);
 			assert_eq!(
 				ctx.ext.get_storage_transparent(
-					VarSizedKey::<Test>::try_from([1; 19].to_vec()).unwrap()
+					&VarSizedKey::<Test>::try_from([1; 19].to_vec()).unwrap()
 				),
 				Some(vec![1, 2, 3])
 			);
 			assert_eq!(
 				ctx.ext.get_storage_transparent(
-					VarSizedKey::<Test>::try_from([2; 16].to_vec()).unwrap()
+					&VarSizedKey::<Test>::try_from([2; 16].to_vec()).unwrap()
 				),
 				Some(vec![])
 			);
 			assert_eq!(
 				ctx.ext.get_storage_transparent(
-					VarSizedKey::<Test>::try_from([3; 8].to_vec()).unwrap()
+					&VarSizedKey::<Test>::try_from([3; 8].to_vec()).unwrap()
 				),
 				None
 			);
@@ -3030,7 +3030,7 @@ mod tests {
 		let code_hash = MockLoader::insert(Call, |ctx, _| {
 			assert_eq!(
 				ctx.ext.set_storage_transparent(
-					VarSizedKey::<Test>::try_from([1; 19].to_vec()).unwrap(),
+					&VarSizedKey::<Test>::try_from([1; 19].to_vec()).unwrap(),
 					Some(vec![1, 2, 3]),
 					false
 				),
@@ -3038,7 +3038,7 @@ mod tests {
 			);
 			assert_eq!(
 				ctx.ext.set_storage_transparent(
-					VarSizedKey::<Test>::try_from([2; 16].to_vec()).unwrap(),
+					&VarSizedKey::<Test>::try_from([2; 16].to_vec()).unwrap(),
 					Some(vec![]),
 					false
 				),
@@ -3046,19 +3046,19 @@ mod tests {
 			);
 			assert_eq!(
 				ctx.ext.get_storage_size_transparent(
-					VarSizedKey::<Test>::try_from([1; 19].to_vec()).unwrap()
+					&VarSizedKey::<Test>::try_from([1; 19].to_vec()).unwrap()
 				),
 				Some(3)
 			);
 			assert_eq!(
 				ctx.ext.get_storage_size_transparent(
-					VarSizedKey::<Test>::try_from([2; 16].to_vec()).unwrap()
+					&VarSizedKey::<Test>::try_from([2; 16].to_vec()).unwrap()
 				),
 				Some(0)
 			);
 			assert_eq!(
 				ctx.ext.get_storage_size_transparent(
-					VarSizedKey::<Test>::try_from([3; 8].to_vec()).unwrap()
+					&VarSizedKey::<Test>::try_from([3; 8].to_vec()).unwrap()
 				),
 				None
 			);

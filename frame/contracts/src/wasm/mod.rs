@@ -429,13 +429,13 @@ mod tests {
 		fn get_storage(&mut self, key: &FixSizedKey) -> Option<Vec<u8>> {
 			self.storage.get(&key.to_vec()).cloned()
 		}
-		fn get_storage_transparent(&mut self, key: VarSizedKey<Self::T>) -> Option<Vec<u8>> {
+		fn get_storage_transparent(&mut self, key: &VarSizedKey<Self::T>) -> Option<Vec<u8>> {
 			self.storage.get(&key.to_vec()).cloned()
 		}
 		fn get_storage_size(&mut self, key: &FixSizedKey) -> Option<u32> {
 			self.storage.get(&key.to_vec()).map(|val| val.len() as u32)
 		}
-		fn get_storage_size_transparent(&mut self, key: VarSizedKey<Self::T>) -> Option<u32> {
+		fn get_storage_size_transparent(&mut self, key: &VarSizedKey<Self::T>) -> Option<u32> {
 			self.storage.get(&key.to_vec()).map(|val| val.len() as u32)
 		}
 		fn set_storage(
@@ -458,7 +458,7 @@ mod tests {
 		}
 		fn set_storage_transparent(
 			&mut self,
-			key: VarSizedKey<Self::T>,
+			key: &VarSizedKey<Self::T>,
 			value: Option<Vec<u8>>,
 			take_old: bool,
 		) -> Result<WriteOutcome, DispatchError> {
@@ -963,13 +963,13 @@ mod tests {
 
 		let mut ext = MockExt::default();
 		ext.set_storage_transparent(
-			VarSizedKey::<Test>::try_from([1u8; 64].to_vec()).unwrap(),
+			&VarSizedKey::<Test>::try_from([1u8; 64].to_vec()).unwrap(),
 			Some(vec![42u8]),
 			false,
 		)
 		.unwrap();
 		ext.set_storage_transparent(
-			VarSizedKey::<Test>::try_from([2u8; 19].to_vec()).unwrap(),
+			&VarSizedKey::<Test>::try_from([2u8; 19].to_vec()).unwrap(),
 			Some(vec![]),
 			false,
 		)
@@ -2464,14 +2464,14 @@ mod tests {
 		let mut ext = MockExt::default();
 
 		ext.set_storage_transparent(
-			VarSizedKey::<Test>::try_from([1u8; 64].to_vec()).unwrap(),
+			&VarSizedKey::<Test>::try_from([1u8; 64].to_vec()).unwrap(),
 			Some(vec![42u8]),
 			false,
 		)
 		.unwrap();
 
 		ext.set_storage_transparent(
-			VarSizedKey::<Test>::try_from([2u8; 19].to_vec()).unwrap(),
+			&VarSizedKey::<Test>::try_from([2u8; 19].to_vec()).unwrap(),
 			Some(vec![]),
 			false,
 		)
@@ -2549,13 +2549,13 @@ mod tests {
 		let mut ext = MockExt::default();
 
 		ext.set_storage_transparent(
-			VarSizedKey::<Test>::try_from([1u8; 64].to_vec()).unwrap(),
+			&VarSizedKey::<Test>::try_from([1u8; 64].to_vec()).unwrap(),
 			Some(vec![42u8]),
 			false,
 		)
 		.unwrap();
 		ext.set_storage_transparent(
-			VarSizedKey::<Test>::try_from([2u8; 19].to_vec()).unwrap(),
+			&VarSizedKey::<Test>::try_from([2u8; 19].to_vec()).unwrap(),
 			Some(vec![]),
 			false,
 		)
@@ -2647,14 +2647,14 @@ mod tests {
 		let mut ext = MockExt::default();
 
 		ext.set_storage_transparent(
-			VarSizedKey::<Test>::try_from([1u8; 64].to_vec()).unwrap(),
+			&VarSizedKey::<Test>::try_from([1u8; 64].to_vec()).unwrap(),
 			Some(vec![42u8]),
 			false,
 		)
 		.unwrap();
 
 		ext.set_storage_transparent(
-			VarSizedKey::<Test>::try_from([2u8; 19].to_vec()).unwrap(),
+			&VarSizedKey::<Test>::try_from([2u8; 19].to_vec()).unwrap(),
 			Some(vec![]),
 			false,
 		)

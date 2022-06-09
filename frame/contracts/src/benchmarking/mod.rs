@@ -949,7 +949,7 @@ benchmarks! {
 		for key in keys {
 			Storage::<T>::write(
 				&info.trie_id,
-				VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
+				&VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
 				Some(vec![]),
 				None,
 				false,
@@ -1001,7 +1001,7 @@ benchmarks! {
 		for key in keys {
 			Storage::<T>::write(
 				&info.trie_id,
-				VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
+				&VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
 				Some(vec![]),
 				None,
 				false,
@@ -1053,7 +1053,7 @@ benchmarks! {
 		for key in keys {
 			Storage::<T>::write(
 				&info.trie_id,
-				VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
+				&VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
 				Some(vec![42u8; (n * 1024) as usize]),
 				None,
 				false,
@@ -1107,7 +1107,7 @@ benchmarks! {
 		for key in keys {
 			Storage::<T>::write(
 				&info.trie_id,
-				VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
+				&VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
 				Some(vec![]),
 				None,
 				false,
@@ -1158,7 +1158,7 @@ benchmarks! {
 		for key in keys {
 			Storage::<T>::write(
 				&info.trie_id,
-				VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
+				&VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
 				Some(vec![42u8; (n * 1024) as usize]),
 				None,
 				false,
@@ -1216,7 +1216,7 @@ benchmarks! {
 		for key in keys {
 			Storage::<T>::write(
 				&info.trie_id,
-				VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
+				&VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
 				Some(vec![]),
 				None,
 				false,
@@ -1274,7 +1274,7 @@ benchmarks! {
 		for key in keys {
 			Storage::<T>::write(
 				&info.trie_id,
-				VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
+				&VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
 				Some(vec![42u8; (n * 1024) as usize]),
 				None,
 				false,
@@ -1327,7 +1327,7 @@ benchmarks! {
 		for key in keys {
 			Storage::<T>::write(
 				&info.trie_id,
-				VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
+				&VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
 				Some(vec![]),
 				None,
 				false,
@@ -1378,7 +1378,7 @@ benchmarks! {
 		for key in keys {
 			Storage::<T>::write(
 				&info.trie_id,
-				VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
+				&VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
 				Some(vec![42u8; (n * 1024) as usize]),
 				None,
 				false,
@@ -1436,7 +1436,7 @@ benchmarks! {
 		for key in keys {
 			Storage::<T>::write(
 				&info.trie_id,
-				VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
+				&VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
 				Some(vec![]),
 				None,
 				false,
@@ -1494,7 +1494,7 @@ benchmarks! {
 		for key in keys {
 			Storage::<T>::write(
 				&info.trie_id,
-				VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
+				&VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
 				Some(vec![42u8; (n * 1024) as usize]),
 				None,
 				false,
