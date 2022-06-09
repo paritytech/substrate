@@ -279,27 +279,11 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 			fn extract_proof(
 				&mut self,
 				at: &#crate_::BlockId<Block>,
-			) -> core::result::Result<std::option::Option<#crate_::StorageProof>, #crate_::ApiError> {
+			) -> std::option::Option<#crate_::StorageProof> {
 				let recorder = std::option::Option::take(&mut self.recorder);
-				let res = std::option::Option::map(recorder, |recorder| {
-					let backend = #crate_::CallApiAt::<Block>::state_at(self.call, at)?;
-					let trie_backend =
-						#crate_::AsTrieBackend::<#crate_::HashFor<Block>>::as_trie_backend(
-							&backend,
-						);
-
-					let builder = #crate_::TrieBackendBuilder::wrap(&trie_backend);
-					let builder = #crate_::TrieBackendBuilder::with_recorder(builder, recorder);
-					let trie_backend = #crate_::TrieBackendBuilder::build(builder);
-					let res = #crate_::TrieBackend::extract_proof(trie_backend);
-
-					core::result::Result::map_err(
-						res,
-						|err| #crate_::ApiError::Application(std::boxed::Box::from(err)),
-					)
-				});
-
-				std::option::Option::map_or(res, Ok(None), |res| res)
+				std::option::Option::map(recorder, |recorder| {
+					#crate_::ProofRecorder::<Block>::drain_storage_proof(recorder)
+				})
 			}
 
 			fn into_storage_changes(

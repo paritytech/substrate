@@ -2750,7 +2750,7 @@ dependencies = [
 [[package]]
 name = "hash-db"
 version = "0.15.2"
-source = "git+https://github.com/paritytech/trie?branch=bkchr-funny-branch#8a0dc1f31eb922805b5c97e7d3d0819ebf272d58"
+source = "git+https://github.com/paritytech/trie?branch=bkchr-funny-branch#db1cea0f42c2ee5b930e0d4770a2d2a204783d26"
 
 [[package]]
 name = "hash256-std-hasher"
@@ -2764,7 +2764,7 @@ dependencies = [
 [[package]]
 name = "hash256-std-hasher"
 version = "0.15.2"
-source = "git+https://github.com/paritytech/trie?branch=bkchr-funny-branch#8a0dc1f31eb922805b5c97e7d3d0819ebf272d58"
+source = "git+https://github.com/paritytech/trie?branch=bkchr-funny-branch#db1cea0f42c2ee5b930e0d4770a2d2a204783d26"
 dependencies = [
  "crunchy",
 ]
@@ -3310,7 +3310,7 @@ dependencies = [
 [[package]]
 name = "keccak-hasher"
 version = "0.15.3"
-source = "git+https://github.com/paritytech/trie?branch=bkchr-funny-branch#8a0dc1f31eb922805b5c97e7d3d0819ebf272d58"
+source = "git+https://github.com/paritytech/trie?branch=bkchr-funny-branch#db1cea0f42c2ee5b930e0d4770a2d2a204783d26"
 dependencies = [
  "hash-db",
  "hash256-std-hasher 0.15.2 (git+https://github.com/paritytech/trie?branch=bkchr-funny-branch)",
@@ -4239,7 +4239,7 @@ dependencies = [
 [[package]]
 name = "memory-db"
 version = "0.29.0"
-source = "git+https://github.com/paritytech/trie?branch=bkchr-funny-branch#8a0dc1f31eb922805b5c97e7d3d0819ebf272d58"
+source = "git+https://github.com/paritytech/trie?branch=bkchr-funny-branch#db1cea0f42c2ee5b930e0d4770a2d2a204783d26"
 dependencies = [
  "hash-db",
  "hashbrown 0.12.0",
@@ -11032,7 +11032,7 @@ checksum = "a7f741b240f1a48843f9b8e0444fb55fb2a4ff67293b50a9179dfd5ea67f8d41"
 [[package]]
 name = "trie-bench"
 version = "0.30.0"
-source = "git+https://github.com/paritytech/trie?branch=bkchr-funny-branch#8a0dc1f31eb922805b5c97e7d3d0819ebf272d58"
+source = "git+https://github.com/paritytech/trie?branch=bkchr-funny-branch#db1cea0f42c2ee5b930e0d4770a2d2a204783d26"
 dependencies = [
  "criterion",
  "hash-db",
@@ -11047,7 +11047,7 @@ dependencies = [
 [[package]]
 name = "trie-db"
 version = "0.23.1"
-source = "git+https://github.com/paritytech/trie?branch=bkchr-funny-branch#8a0dc1f31eb922805b5c97e7d3d0819ebf272d58"
+source = "git+https://github.com/paritytech/trie?branch=bkchr-funny-branch#db1cea0f42c2ee5b930e0d4770a2d2a204783d26"
 dependencies = [
  "hash-db",
  "hashbrown 0.12.0",
@@ -11059,7 +11059,7 @@ dependencies = [
 [[package]]
 name = "trie-root"
 version = "0.17.0"
-source = "git+https://github.com/paritytech/trie?branch=bkchr-funny-branch#8a0dc1f31eb922805b5c97e7d3d0819ebf272d58"
+source = "git+https://github.com/paritytech/trie?branch=bkchr-funny-branch#db1cea0f42c2ee5b930e0d4770a2d2a204783d26"
 dependencies = [
  "hash-db",
 ]
@@ -11077,7 +11077,7 @@ dependencies = [
 [[package]]
 name = "trie-standardmap"
 version = "0.15.2"
-source = "git+https://github.com/paritytech/trie?branch=bkchr-funny-branch#8a0dc1f31eb922805b5c97e7d3d0819ebf272d58"
+source = "git+https://github.com/paritytech/trie?branch=bkchr-funny-branch#db1cea0f42c2ee5b930e0d4770a2d2a204783d26"
 dependencies = [
  "hash-db",
  "keccak-hasher 0.15.3 (git+https://github.com/paritytech/trie?branch=bkchr-funny-branch)",
@@ -11184,9 +11184,9 @@ version = "1.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4ee73e6e4924fe940354b8d4d98cad5231175d615cd855b758adc658c0aac6a0"
 dependencies = [
- "cfg-if 1.0.0",
+ "cfg-if 0.1.10",
  "digest 0.10.3",
- "rand 0.8.4",
+ "rand 0.6.5",
  "static_assertions",
 ]
 

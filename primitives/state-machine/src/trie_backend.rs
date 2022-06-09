@@ -210,23 +210,8 @@ where
 	///
 	/// This only returns `Some` when there was a recorder set.
 	#[cfg(feature = "std")]
-	pub fn extract_proof(mut self) -> Result<Option<StorageProof>, crate::DefaultError> {
-		let recorder = self.essence.recorder.take();
-		let root = self.root();
-		let essence = self.essence();
-
-		recorder
-			.map(|r| {
-				let mut cache = self
-					.essence
-					.trie_node_cache
-					.as_ref()
-					.map(|c| c.as_local_trie_cache().as_trie_db_cache(*root));
-
-				r.into_storage_proof(root, essence, cache.as_mut())
-			})
-			.transpose()
-			.map_err(|e| format!("{:?}", e))
+	pub fn extract_proof(mut self) -> Option<StorageProof> {
+		self.essence.recorder.take().map(|r| r.drain_storage_proof())
 	}
 }
 
@@ -685,7 +670,6 @@ pub mod tests {
 			.build()
 			.extract_proof()
 			.unwrap()
-			.unwrap()
 			.is_empty());
 	}
 
@@ -703,7 +687,7 @@ pub mod tests {
 			.with_recorder(Recorder::default())
 			.build();
 		assert_eq!(backend.storage(b"key").unwrap(), Some(b"value".to_vec()));
-		assert!(!backend.extract_proof().unwrap().unwrap().is_empty());
+		assert!(!backend.extract_proof().unwrap().is_empty());
 	}
 
 	#[test]
@@ -779,7 +763,7 @@ pub mod tests {
 					.build();
 				assert_eq!(proving.storage(&[42]).unwrap().unwrap(), vec![42; size_content]);
 
-				let proof = proving.extract_proof().unwrap().unwrap();
+				let proof = proving.extract_proof().unwrap();
 
 				let proof_check =
 					create_proof_check_backend::<BlakeTwo256>(in_memory_root.into(), proof)
@@ -827,7 +811,7 @@ pub mod tests {
 					assert_eq!(proving.next_storage_key(&[i]).unwrap(), Some(vec![i + 1]))
 				});
 
-				let proof = proving.extract_proof().unwrap().unwrap();
+				let proof = proving.extract_proof().unwrap();
 
 				let proof_check =
 					create_proof_check_backend::<BlakeTwo256>(in_memory_root.into(), proof)
@@ -896,7 +880,7 @@ pub mod tests {
 					.build();
 				assert_eq!(proving.storage(&[42]).unwrap().unwrap(), vec![42]);
 
-				let proof = proving.extract_proof().unwrap().unwrap();
+				let proof = proving.extract_proof().unwrap();
 
 				let proof_check =
 					create_proof_check_backend::<BlakeTwo256>(in_memory_root.into(), proof)
@@ -916,7 +900,7 @@ pub mod tests {
 				assert_eq!(proving.child_storage(child_info_2, &[14]), Ok(Some(vec![14])));
 				assert_eq!(proving.child_storage(child_info_2, &[25]), Ok(None));
 
-				let proof = proving.extract_proof().unwrap().unwrap();
+				let proof = proving.extract_proof().unwrap();
 				let proof_check =
 					create_proof_check_backend::<BlakeTwo256>(in_memory_root.into(), proof)
 						.unwrap();
@@ -979,7 +963,7 @@ pub mod tests {
 			let value_hash = BlakeTwo256::hash(&value);
 			assert_eq!(value, vec![65; 128]);
 
-			let proof = backend.extract_proof().unwrap().unwrap();
+			let proof = backend.extract_proof().unwrap();
 
 			let mut nodes = Vec::new();
 			for node in proof.iter_nodes() {
@@ -1027,7 +1011,7 @@ pub mod tests {
 				.build();
 			assert_eq!(proving.child_storage(child_info_1, &[65]), Ok(Some(vec![65; 128])));
 
-			let proof = proving.extract_proof().unwrap().unwrap();
+			let proof = proving.extract_proof().unwrap();
 			// And check that we have a correct proof.
 			let proof_check =
 				create_proof_check_backend::<BlakeTwo256>(in_memory_root.into(), proof).unwrap();
@@ -1066,7 +1050,7 @@ pub mod tests {
 			has_cache: bool,
 		) {
 			let estimation = backend.essence.recorder.as_ref().unwrap().estimate_encoded_size();
-			let storage_proof = backend.extract_proof().unwrap().unwrap();
+			let storage_proof = backend.extract_proof().unwrap();
 			let storage_proof_size =
 				storage_proof.into_nodes().into_iter().map(|n| n.encoded_size()).sum::<usize>();
 

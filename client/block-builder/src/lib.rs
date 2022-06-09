@@ -256,7 +256,7 @@ where
 			),
 		);
 
-		let proof = self.api.extract_proof(&self.block_id)?;
+		let proof = self.api.extract_proof(&self.block_id);
 
 		let state = self.backend.state_at(self.block_id)?;
 		let parent_hash = self.parent_hash;

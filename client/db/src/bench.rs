@@ -31,8 +31,7 @@ use sp_runtime::{
 	StateVersion, Storage,
 };
 use sp_state_machine::{
-	backend::{AsTrieBackend, Backend as StateBackend},
-	ChildStorageCollection, DBValue, StorageCollection,
+	backend::Backend as StateBackend, ChildStorageCollection, DBValue, StorageCollection,
 };
 use sp_trie::{
 	cache::{CacheSize, SharedTrieCache},
@@ -585,37 +584,29 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 	}
 
 	fn proof_size(&self) -> Option<u32> {
-		let state = self.state.borrow();
-		self.proof_recorder.as_ref().and_then(|p| state.as_ref().map(|s| (p, s))).map(
-			|(recorder, state)| {
-				let proof_size = recorder.estimate_encoded_size() as u32;
-				let trie_backend = state.as_trie_backend();
+		self.proof_recorder.as_ref().map(|recorder| {
+			let proof_size = recorder.estimate_encoded_size() as u32;
 
-				let proof = recorder
-					.to_storage_proof(&self.root.get(), trie_backend.essence(), None)
-					.expect("Failed to generate storage proof");
+			let proof = recorder.to_storage_proof();
 
-				let proof_recorder_root = self.proof_recorder_root.get();
-				if proof_recorder_root == Default::default() || proof_size == 1 {
-					// empty trie
-					proof_size
+			let proof_recorder_root = self.proof_recorder_root.get();
+			if proof_recorder_root == Default::default() || proof_size == 1 {
+				// empty trie
+				proof_size
+			} else {
+				if let Some(size) = proof.encoded_compact_size::<HashFor<B>>(proof_recorder_root) {
+					size as u32
 				} else {
-					if let Some(size) =
-						proof.encoded_compact_size::<HashFor<B>>(proof_recorder_root)
-					{
-						size as u32
-					} else {
-						panic!(
-							"proof rec root {:?}, root {:?}, genesis {:?}, rec_len {:?}",
-							self.proof_recorder_root.get(),
-							self.root.get(),
-							self.genesis_root,
-							proof_size,
-						);
-					}
+					panic!(
+						"proof rec root {:?}, root {:?}, genesis {:?}, rec_len {:?}",
+						self.proof_recorder_root.get(),
+						self.root.get(),
+						self.genesis_root,
+						proof_size,
+					);
 				}
-			},
-		)
+			}
+		})
 	}
 }
 

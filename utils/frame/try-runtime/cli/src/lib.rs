@@ -769,7 +769,7 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, D: NativeExecutionDis
 	.map_err::<sc_cli::Error, _>(Into::into)?;
 
 	let proof = proving_backend
-		.extract_proof()?
+		.extract_proof()
 		.expect("A recorder was set and thus, a storage proof can be extracted; qed");
 	let proof_size = proof.encoded_size();
 	let compact_proof = proof

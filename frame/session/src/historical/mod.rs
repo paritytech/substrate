@@ -278,7 +278,7 @@ impl<T: Config> ProvingTrie<T> {
 
 	/// Prove the full verification data for a given key and key ID.
 	pub fn prove(&self, key_id: KeyTypeId, key_data: &[u8]) -> Option<Vec<Vec<u8>>> {
-		let mut recorder = Recorder::<LayoutV1<_>>::new();
+		let mut recorder = Recorder::<LayoutV1<T::Hashing>>::new();
 		{
 			let trie =
 				TrieDBBuilder::new(&self.db, &self.root).with_recorder(&mut recorder).build();
@@ -293,10 +293,7 @@ impl<T: Config> ProvingTrie<T> {
 			})?;
 		}
 
-		recorder
-			.drain(&self.db, &self.root, None)
-			.ok()
-			.map(|d| d.into_iter().map(|r| r.1).collect())
+		Some(recorder.drain().into_iter().map(|r| r.1).collect())
 	}
 
 	/// Access the underlying trie root.

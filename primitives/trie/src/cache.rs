@@ -658,7 +658,7 @@ mod tests {
 
 			{
 				let mut cache = local_cache.as_trie_db_cache(root);
-				let mut recorder = recorder.as_trie_recorder(root, None);
+				let mut recorder = recorder.as_trie_recorder();
 				let trie = TrieDBBuilder::<Layout>::new(&db, &root)
 					.with_cache(&mut cache)
 					.with_recorder(&mut recorder)
@@ -669,9 +669,7 @@ mod tests {
 				}
 			}
 
-			let storage_proof = recorder
-				.into_storage_proof(&root, &db, Some(&mut local_cache.as_trie_db_cache(root)))
-				.unwrap();
+			let storage_proof = recorder.drain_storage_proof();
 			let memory_db: MemoryDB = storage_proof.into_memory_db();
 
 			{
@@ -708,7 +706,7 @@ mod tests {
 			{
 				let mut db = db.clone();
 				let mut cache = local_cache.as_trie_db_cache(root);
-				let mut recorder = recorder.as_trie_recorder(root, None);
+				let mut recorder = recorder.as_trie_recorder();
 				let mut trie = TrieDBMutBuilder::<Layout>::from_existing(&mut db, &mut new_root)
 					.with_cache(&mut cache)
 					.with_recorder(&mut recorder)
@@ -719,9 +717,7 @@ mod tests {
 				}
 			}
 
-			let storage_proof = recorder
-				.into_storage_proof(&root, &db, Some(&mut local_cache.as_trie_db_cache(root)))
-				.unwrap();
+			let storage_proof = recorder.drain_storage_proof();
 			let mut memory_db: MemoryDB = storage_proof.into_memory_db();
 			let mut proof_root = root.clone();
 
