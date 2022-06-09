@@ -410,10 +410,15 @@ impl OverlayedChangeSet {
 		&mut self,
 		predicate: impl Fn(&[u8], &OverlayedValue) -> bool,
 		at_extrinsic: Option<u32>,
-	) {
+	) -> u32 {
+		let mut count = 0;
 		for (key, val) in self.changes.iter_mut().filter(|(k, v)| predicate(k, v)) {
+			if val.value_ref().is_some() {
+				count += 1;
+			}
 			val.set(None, insert_dirty(&mut self.dirty_keys, key.clone()), at_extrinsic);
 		}
+		count
 	}
 
 	/// Get the iterator over all changes that follow the supplied `key`.

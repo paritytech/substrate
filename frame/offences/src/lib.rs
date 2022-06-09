@@ -59,7 +59,7 @@ pub mod pallet {
 		/// The overarching event type.
 		type Event: From<Event> + IsType<<Self as frame_system::Config>::Event>;
 		/// Full identification of the validator.
-		type IdentificationTuple: Parameter + Ord;
+		type IdentificationTuple: Parameter;
 		/// A handler called for every offence report.
 		type OnOffenceHandler: OnOffenceHandler<Self::AccountId, Self::IdentificationTuple, Weight>;
 	}

@@ -202,8 +202,8 @@ benchmarks! {
 		<BalanceOf<T> as codec::HasCompact>::Type: Clone + Eq + PartialEq + sp_std::fmt::Debug + scale_info::TypeInfo + codec::Encode,
 	}
 
-	// The base weight without any actual work performed apart from the setup costs.
-	on_initialize {}: {
+	// The base weight consumed on processing contracts deletion queue.
+	on_process_deletion_queue_batch {}: {
 		Storage::<T>::process_deletion_queue_batch(Weight::MAX)
 	}
 

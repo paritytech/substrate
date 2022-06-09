@@ -115,6 +115,7 @@ members = [
 	"frame/nomination-pools",
 	"frame/nomination-pools/benchmarking",
 	"frame/randomness-collective-flip",
+	"frame/ranked-collective",
 	"frame/recovery",
 	"frame/referenda",
 	"frame/remark",

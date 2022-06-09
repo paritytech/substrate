@@ -36,6 +36,7 @@ pretty_assertions = "1.2.1"
 rand = "0.7.2"
 sp-runtime = { version = "6.0.0", path = "../runtime" }
 trie-db = "0.23.1"
+assert_matches = "1.5"
 
 [features]
 default = ["std"]

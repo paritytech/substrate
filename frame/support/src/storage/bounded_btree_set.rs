@@ -230,6 +230,15 @@ impl<T, S> IntoIterator for BoundedBTreeSet<T, S> {
 	}
 }
 
+impl<'a, T, S> IntoIterator for &'a BoundedBTreeSet<T, S> {
+	type Item = &'a T;
+	type IntoIter = sp_std::collections::btree_set::Iter<'a, T>;
+
+	fn into_iter(self) -> Self::IntoIter {
+		self.0.iter()
+	}
+}
+
 impl<T, S> MaxEncodedLen for BoundedBTreeSet<T, S>
 where
 	T: MaxEncodedLen,

@@ -2112,6 +2112,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "gethostname",
  "handlebars",
  "hash-db",
  "hex",
@@ -2594,6 +2595,16 @@ checksum = "501466ecc8a30d1d3b7fc9229b122b2ce8ed6e9d9223f1138d4babb253e51817"
 dependencies = [
  "typenum",
  "version_check",
+]
+
+[[package]]
+name = "gethostname"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c1ebd34e35c46e00bb73e81363248d627782724609fe1b6396f553f68fe3862e"
+dependencies = [
+ "libc",
+ "winapi",
 ]
 
 [[package]]
@@ -4780,6 +4791,7 @@ dependencies = [
  "pallet-preimage",
  "pallet-proxy",
  "pallet-randomness-collective-flip",
+ "pallet-ranked-collective",
  "pallet-recovery",
  "pallet-referenda",
  "pallet-remark",
@@ -5150,7 +5162,6 @@ dependencies = [
  "scale-info",
  "serde",
  "serde_json",
- "smallvec",
  "sp-core",
  "sp-io",
  "sp-runtime",
@@ -6006,6 +6017,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-ranked-collective"
+version = "4.0.0-dev"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "log",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-arithmetic",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-recovery"
 version = "4.0.0-dev"
 dependencies = [
@@ -6035,6 +6063,7 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "serde",
+ "sp-arithmetic",
  "sp-core",
  "sp-io",
  "sp-runtime",
@@ -6301,7 +6330,6 @@ dependencies = [
  "scale-info",
  "serde",
  "serde_json",
- "smallvec",
  "sp-core",
  "sp-io",
  "sp-runtime",
@@ -8297,6 +8325,7 @@ dependencies = [
  "log",
  "parity-scale-codec",
  "parity-wasm 0.42.2",
+ "paste 1.0.6",
  "sc-allocator",
  "sc-executor-common",
  "sc-runtime-test",
@@ -9521,6 +9550,7 @@ dependencies = [
  "rand 0.7.3",
  "scale-info",
  "serde",
+ "sp-core",
  "sp-debug-derive",
  "sp-std",
  "static_assertions",
@@ -10091,6 +10121,7 @@ dependencies = [
 name = "sp-state-machine"
 version = "0.12.0"
 dependencies = [
+ "assert_matches",
  "hash-db",
  "hex-literal",
  "log",
