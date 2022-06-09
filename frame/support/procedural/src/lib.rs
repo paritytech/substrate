@@ -429,6 +429,7 @@ pub fn pallet(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// }
 /// ```
 #[proc_macro_attribute]
+#[deprecated(note = "This is now the default behaviour for all extrinsics.")]
 pub fn transactional(attr: TokenStream, input: TokenStream) -> TokenStream {
 	transactional::transactional(attr, input).unwrap_or_else(|e| e.to_compile_error().into())
 }
