@@ -141,3 +141,16 @@ pub struct EquivocationProof<Header, Id> {
 	/// The second header involved in the equivocation.
 	pub second_header: Header,
 }
+
+// Just put a crazy maximum for now.
+impl<Header: Encode, Id: Encode> MaxEncodedLen for EquivocationProof<Header, Id> {
+	fn max_encoded_len() -> usize {
+		500_000
+	}
+}
+
+impl<Header: Encode, Id: Encode> MaxEncodedLen for sp_std::boxed::Box<EquivocationProof<Header, Id>> {
+	fn max_encoded_len() -> usize {
+		500_000
+	}
+}

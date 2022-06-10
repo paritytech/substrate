@@ -37,7 +37,7 @@ mod tests;
 pub mod weights;
 
 use sp_runtime::traits::{BadOrigin, DispatchInfoOf, Hash, Saturating, SignedExtension};
-use sp_std::prelude::*;
+use sp_std::{prelude::*, cell::RefCell, borrow::Cow, collections::btree_map::BTreeMap};
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -337,6 +337,10 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
+thread_local! {
+	static TEMP_PREIMAGES: RefCell<BTreeMap<Vec<u8>, Cow<[u8]>>> = RefCell::new(Default::default());
+}
+
 impl<T: Config> PreimageProvider<T::Hash> for Pallet<T> {
 	fn have_preimage(hash: &T::Hash) -> bool {
 		PreimageFor::<T>::contains_key(hash)
@@ -346,10 +350,9 @@ impl<T: Config> PreimageProvider<T::Hash> for Pallet<T> {
 		matches!(StatusFor::<T>::get(hash), Some(RequestStatus::Requested(..)))
 	}
 
-	fn get_preimage(hash: &T::Hash) -> Option<Vec<u8>> {
-		TempPreimageFor::<T>::get(hash)
-			.map(|preimage| preimage.into())
-			.or_else(|| PreimageFor::<T>::get(hash).map(|preimage| preimage.to_vec()))
+	fn get_preimage(hash: &T::Hash) -> Option<Cow<[u8]>> {
+		TEMP_PREIMAGES.with(|t| hash.using_encoded(|e| t.borrow().get(e).map(|x| x.into()))
+			.or_else(|| PreimageFor::<T>::get(hash).map(|preimage| preimage.to_vec().into()))
 	}
 
 	fn request_preimage(hash: &T::Hash) {
@@ -442,7 +445,8 @@ where
 		_len: usize,
 	) -> TransactionValidity {
 		for i in &self.0 {
-			TempPreimageFor::<T>::insert(T::Hashing::hash(&i[..]), i);
+			TEMP_PREIMAGES.with(|t| t.borrow_mut().insert(T::Hashing::hash(&i[..]).encode(), i));
+//			TempPreimageFor::<T>::insert(T::Hashing::hash(&i[..]), i);
 		}
 		Ok(ValidTransaction::default())
 	}
@@ -456,8 +460,9 @@ where
 	) -> Result<(), TransactionValidityError> {
 		// this is fine since a) it's not persisted and b) we want to move to explicitly
 		// transient storage anyway.
-		#[allow(deprecated)]
-		TempPreimageFor::<T>::remove_all(None);
+//		#[allow(deprecated)]
+//		TempPreimageFor::<T>::remove_all(None);
+		TEMP_PREIMAGES.with(|t| t.borrow_mut().clear());
 		Ok(())
 	}
 }

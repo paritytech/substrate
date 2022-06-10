@@ -389,10 +389,10 @@ pub mod pallet {
 
 		const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
-		fn create_inherent(_data: &InherentData) -> Option<Self::Call> {
+		fn create_inherent(_data: &InherentData) -> Option<(Self::Call, Vec<Vec<u8>>)> {
 			let _ = T::AccountId::from(SomeType1); // Test for where clause
 			let _ = T::AccountId::from(SomeType6); // Test for where clause
-			Some(Call::foo_no_post_info {})
+			Some((Call::foo_no_post_info {}, Vec::new()))
 		}
 
 		fn is_inherent(call: &Self::Call) -> bool {
@@ -689,6 +689,7 @@ fn inherent_expand() {
 		signature: None,
 	}];
 	assert_eq!(expected, inherents);
+	assert_eq!(required_preimages, vec![]);
 
 	let block = Block::new(
 		Header::new(

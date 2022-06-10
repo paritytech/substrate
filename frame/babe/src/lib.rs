@@ -150,7 +150,7 @@ pub mod pallet {
 		/// The proof of key ownership, used for validating equivocation reports.
 		/// The proof must include the session index and validator count of the
 		/// session at which the equivocation occurred.
-		type KeyOwnerProof: Parameter + GetSessionNumber + GetValidatorCount;
+		type KeyOwnerProof: Parameter + GetSessionNumber + GetValidatorCount + MaxEncodedLen;
 
 		/// The identification of a key owner, used when reporting equivocations.
 		type KeyOwnerIdentification: Parameter;

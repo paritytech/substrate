@@ -57,21 +57,22 @@ pub fn expand_outer_inherent(
 			{
 				use #scrate::inherent::ProvideInherent;
 
-				let mut inherents = Vec::new();
+				let mut xts = Vec::new();
 
 				#(
-					if let Some(inherent) = #pallet_names::create_inherent(self) {
-						let inherent = <#unchecked_extrinsic as #scrate::inherent::Extrinsic>::new(
+					if let Some((inherent, required_preimages)) = #pallet_names::create_inherent(self) {
+						let xt = <#unchecked_extrinsic as #scrate::inherent::Extrinsic>::new(
 							inherent.into(),
 							None,
+							required_preimages,
 						).expect("Runtime UncheckedExtrinsic is not Opaque, so it has to return \
 							`Some`; qed");
 
-						inherents.push(inherent);
+						xts.push(xt);
 					}
 				)*
 
-				inherents
+				xts
 			}
 
 			fn check_extrinsics(&self, block: &#block) -> #scrate::inherent::CheckInherentsResult {

@@ -220,9 +220,10 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		/// Provide a set of uncles.
 		#[pallet::weight((0, DispatchClass::Mandatory))]
-		pub fn set_uncles(origin: OriginFor<T>, new_uncles: Vec<T::Header>) -> DispatchResult {
+		pub fn set_uncles(origin: OriginFor<T>, hash: T::Hash) -> DispatchResult {
 			ensure_none(origin)?;
-			ensure!(new_uncles.len() <= MAX_UNCLES, Error::<T>::TooManyUncles);
+			let new_uncles: Vec<T::Header> = frame_system::Pallet::<T>::unhashed_limited_vec(hash, MAX_UNCLES)?
+				.ok_or(Error::<T>::TooManyUncles)?;
 
 			if <DidSetUncles<T>>::get() {
 				return Err(Error::<T>::UnclesAlreadySet.into())
@@ -239,7 +240,7 @@ pub mod pallet {
 		type Error = InherentError;
 		const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
-		fn create_inherent(data: &InherentData) -> Option<Self::Call> {
+		fn create_inherent(data: &InherentData) -> Option<(Self::Call, Vec<Vec<u8>>)> {
 			let uncles = data.uncles().unwrap_or_default();
 			let mut new_uncles = Vec::new();
 
@@ -277,17 +278,29 @@ pub mod pallet {
 			if new_uncles.is_empty() {
 				None
 			} else {
-				Some(Call::set_uncles { new_uncles })
+				let data = new_uncles.encode();
+				let hash = <T::Hashing as sp_runtime::traits::Hash>::hash(&data[..]);
+				Some((Call::set_uncles { hash }, vec![data]))
 			}
 		}
 
 		fn check_inherent(
 			call: &Self::Call,
 			_data: &InherentData,
+//			aux_data: &Vec<Vec<u8>>,// <<< TODO
 		) -> result::Result<(), Self::Error> {
 			match call {
-				Call::set_uncles { ref new_uncles } if new_uncles.len() > MAX_UNCLES =>
-					Err(InherentError::Uncles(Error::<T>::TooManyUncles.as_str().into())),
+				Call::set_uncles { ref hash } => {
+/*					let data = aux_data.first().ok_or(InherentError::Uncles("preimage missing"))?;
+					let real_hash = <T::Hashing as sp_runtime::traits::Hash>::hash(&data[..]);
+					ensure!(hash == real_hash, InherentError::Uncles("wrong preimage"));
+					let uncles = Vec::<T::Header>::decode(&mut &data[..])
+						.ok_or(InherentError::Uncles("preimage invalid"))?;
+					if uncles.len() > MAX_UNCLES {
+						return Err(InherentError::Uncles(Error::<T>::TooManyUncles.as_str().into()))
+					}*/
+					Ok(())
+				},
 				_ => Ok(()),
 			}
 		}

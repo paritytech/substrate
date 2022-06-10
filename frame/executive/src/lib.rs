@@ -679,7 +679,7 @@ mod tests {
 
 			const INHERENT_IDENTIFIER: [u8; 8] = *b"test1234";
 
-			fn create_inherent(_data: &InherentData) -> Option<Self::Call> {
+			fn create_inherent(_data: &InherentData) -> Option<(Self::Call, Vec<Vec<u8>>)> {
 				None
 			}
 

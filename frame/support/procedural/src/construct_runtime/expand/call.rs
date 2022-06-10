@@ -56,6 +56,7 @@ pub fn expand_outer_dispatch(
 			Clone, PartialEq, Eq,
 			#scrate::codec::Encode,
 			#scrate::codec::Decode,
+			#scrate::codec::MaxEncodedLen,
 			#scrate::scale_info::TypeInfo,
 			#scrate::RuntimeDebug,
 		)]

@@ -100,7 +100,7 @@ pub use sp_runtime::{
 	self, print, traits::Printable, ConsensusEngineId, MAX_MODULE_ERROR_ENCODED_SIZE,
 };
 
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_runtime::TypeId;
 
@@ -108,11 +108,11 @@ use sp_runtime::TypeId;
 pub const LOG_TARGET: &str = "runtime::frame-support";
 
 /// A type that cannot be instantiated.
-#[derive(Encode, Decode, Debug, PartialEq, Eq, Clone, TypeInfo)]
+#[derive(Encode, Decode, Debug, PartialEq, Eq, Clone, TypeInfo, MaxEncodedLen)]
 pub enum Never {}
 
 /// A pallet identifier. These are per pallet and should be stored in a registry somewhere.
-#[derive(Clone, Copy, Eq, PartialEq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Copy, Eq, PartialEq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct PalletId(pub [u8; 8]);
 
 impl TypeId for PalletId {
@@ -2208,7 +2208,7 @@ pub mod pallet_prelude {
 ///
 /// 		const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 ///
-/// 		fn create_inherent(_data: &InherentData) -> Option<Self::Call> {
+/// 		fn create_inherent(_data: &InherentData) -> Option<(Self::Call, Vec<Vec<u8>>)> {
 /// 			unimplemented!();
 /// 		}
 ///
@@ -2339,7 +2339,7 @@ pub mod pallet_prelude {
 ///
 /// 		const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 ///
-/// 		fn create_inherent(_data: &InherentData) -> Option<Self::Call> {
+/// 		fn create_inherent(_data: &InherentData) -> Option<(Self::Call, Vec<Vec<u8>>)> {
 /// 			unimplemented!();
 /// 		}
 ///

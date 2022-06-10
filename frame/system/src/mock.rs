@@ -26,9 +26,10 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
 	BuildStorage,
 };
-use std::{
+use sp_std::{
+	borrow::Cow,
 	cell::RefCell,
-	collections::{HashMap, HashSet},
+	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
 };
 
 type UncheckedExtrinsic = mocking::MockUncheckedExtrinsic<Test>;
@@ -94,8 +95,8 @@ impl OnKilledAccount<u64> for RecordKilled {
 }
 
 thread_local! {
-	pub static PREIMAGES: RefCell<HashMap<H256, Vec<u8>>> = RefCell::new(HashMap::new());
-	pub static PREIMAGE_REQUESTS: RefCell<HashSet<H256>> = RefCell::new(HashSet::new());
+	pub static PREIMAGES: RefCell<BTreeMap<H256, Vec<u8>>> = RefCell::new(BTreeMap::new());
+	pub static PREIMAGE_REQUESTS: RefCell<BTreeSet<H256>> = RefCell::new(BTreeSet::new());
 }
 
 pub struct TestPreimageProvider;
@@ -105,8 +106,8 @@ impl PreimageProvider<H256> for TestPreimageProvider {
 	}
 
 	/// Returns the preimage for a given hash.
-	fn get_preimage(hash: &H256) -> Option<Vec<u8>> {
-		PREIMAGES.with(|x| x.borrow().get(hash).cloned())
+	fn get_preimage(hash: &H256) -> Option<Cow<[u8]>> {
+		PREIMAGES.with(|x| x.borrow().get(hash).cloned().map(Cow::from))
 	}
 
 	/// Returns whether a preimage request exists for a given hash.

@@ -32,7 +32,7 @@ fn user_note_preimage_works() {
 
 		let h = hashed([1]);
 		assert!(Preimage::have_preimage(&h));
-		assert_eq!(Preimage::get_preimage(&h), Some(vec![1]));
+		assert_eq!(Preimage::get_preimage(&h).unwrap().into_owned(), vec![1]);
 
 		assert_noop!(
 			Preimage::note_preimage(Origin::signed(2), vec![1]),
@@ -54,7 +54,7 @@ fn manager_note_preimage_works() {
 
 		let h = hashed([1]);
 		assert!(Preimage::have_preimage(&h));
-		assert_eq!(Preimage::get_preimage(&h), Some(vec![1]));
+		assert_eq!(Preimage::get_preimage(&h).unwrap().into_owned(), vec![1]);
 
 		assert_noop!(
 			Preimage::note_preimage(Origin::signed(1), vec![1]),
@@ -137,7 +137,7 @@ fn requested_then_noted_preimage_cannot_be_unnoted() {
 
 		let h = hashed([1]);
 		assert!(Preimage::have_preimage(&h));
-		assert_eq!(Preimage::get_preimage(&h), Some(vec![1]));
+		assert_eq!(Preimage::get_preimage(&h).unwrap().into_owned(), vec![1]);
 	});
 }
 
@@ -172,7 +172,7 @@ fn requested_then_user_noted_preimage_is_free() {
 
 		let h = hashed([1]);
 		assert!(Preimage::have_preimage(&h));
-		assert_eq!(Preimage::get_preimage(&h), Some(vec![1]));
+		assert_eq!(Preimage::get_preimage(&h).unwrap().into_owned(), vec![1]);
 	});
 }
 

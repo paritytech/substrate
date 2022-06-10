@@ -25,7 +25,7 @@ extern crate alloc;
 #[cfg(feature = "std")]
 use serde::Serialize;
 
-use codec::{Codec, Decode, Encode, Input};
+use codec::{Codec, Decode, Encode, Input, MaxEncodedLen};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
@@ -175,6 +175,13 @@ impl<N: Codec> ConsensusLog<N> {
 pub struct EquivocationProof<H, N> {
 	set_id: SetId,
 	equivocation: Equivocation<H, N>,
+}
+
+// Just put a crazy maximum for now.
+impl<H: Encode, N: Encode> MaxEncodedLen for EquivocationProof<H, N> {
+	fn max_encoded_len() -> usize {
+		500_000
+	}
 }
 
 impl<H, N> EquivocationProof<H, N> {

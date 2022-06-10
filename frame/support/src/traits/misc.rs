@@ -27,7 +27,7 @@ pub use sp_runtime::traits::{
 	ConstU64, ConstU8, Get, GetDefault, TypedGet,
 };
 use sp_runtime::{traits::Block as BlockT, DispatchError};
-use sp_std::{cmp::Ordering, prelude::*};
+use sp_std::{cmp::Ordering, prelude::*, borrow::Cow};
 
 #[doc(hidden)]
 pub const DEFENSIVE_OP_PUBLIC_ERROR: &str = "a defensive failure has been triggered; please report the block number at https://github.com/paritytech/substrate/issues";
@@ -895,7 +895,7 @@ pub trait PreimageProvider<Hash> {
 	fn have_preimage(hash: &Hash) -> bool;
 
 	/// Returns the preimage for a given hash.
-	fn get_preimage(hash: &Hash) -> Option<Vec<u8>>;
+	fn get_preimage(hash: &Hash) -> Option<Cow<[u8]>>;
 
 	/// Returns whether a preimage request exists for a given hash.
 	fn preimage_requested(hash: &Hash) -> bool;
@@ -912,7 +912,7 @@ impl<Hash> PreimageProvider<Hash> for () {
 	fn have_preimage(_: &Hash) -> bool {
 		false
 	}
-	fn get_preimage(_: &Hash) -> Option<Vec<u8>> {
+	fn get_preimage(_: &Hash) -> Option<Cow<[u8]>> {
 		None
 	}
 	fn preimage_requested(_: &Hash) -> bool {

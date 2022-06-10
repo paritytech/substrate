@@ -408,7 +408,7 @@ pub mod pallet {
 		type SessionHandler: SessionHandler<Self::ValidatorId>;
 
 		/// The keys.
-		type Keys: OpaqueKeys + Member + Parameter + MaybeSerializeDeserialize;
+		type Keys: OpaqueKeys + Member + Parameter + MaybeSerializeDeserialize + MaxEncodedLen;
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
@@ -596,8 +596,9 @@ pub mod pallet {
 		/// - DbWrites per key id: `KeyOwner`
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::set_keys())]
-		pub fn set_keys(origin: OriginFor<T>, keys: T::Keys, proof: Vec<u8>) -> DispatchResult {
+		pub fn set_keys(origin: OriginFor<T>, keys: T::Keys, proof: T::Hash) -> DispatchResult {
 			let who = ensure_signed(origin)?;
+			let proof = frame_system::Pallet::<T>::preimage_of(proof).unwrap_or_default();
 			ensure!(keys.ownership_proof_is_valid(&proof), Error::<T>::InvalidProof);
 
 			Self::do_set_keys(&who, keys)?;

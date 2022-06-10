@@ -111,7 +111,7 @@ pub mod weights;
 
 use frame_support::traits::{OnTimestampSet, Time, UnixTime};
 use sp_runtime::traits::{AtLeast32Bit, SaturatedConversion, Scale, Zero};
-use sp_std::{cmp, result};
+use sp_std::{prelude::*, cmp, result};
 use sp_timestamp::{InherentError, InherentType, INHERENT_IDENTIFIER};
 pub use weights::WeightInfo;
 
@@ -225,7 +225,7 @@ pub mod pallet {
 		type Error = InherentError;
 		const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
-		fn create_inherent(data: &InherentData) -> Option<Self::Call> {
+		fn create_inherent(data: &InherentData) -> Option<(Self::Call, Vec<Vec<u8>>)> {
 			let inherent_data = data
 				.get_data::<InherentType>(&INHERENT_IDENTIFIER)
 				.expect("Timestamp inherent data not correctly encoded")
@@ -233,7 +233,7 @@ pub mod pallet {
 			let data = (*inherent_data).saturated_into::<T::Moment>();
 
 			let next_time = cmp::max(data, Self::now() + T::MinimumPeriod::get());
-			Some(Call::set { now: next_time })
+			Some((Call::set { now: next_time }, Vec::new()))
 		}
 
 		fn check_inherent(

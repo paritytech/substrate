@@ -7,5 +7,5 @@ error[E0046]: not all trait items implemented, missing: `Call`, `Error`, `INHERE
    = help: implement the missing item: `type Call = Type;`
    = help: implement the missing item: `type Error = Type;`
    = help: implement the missing item: `const INHERENT_IDENTIFIER: [u8; 8] = value;`
-   = help: implement the missing item: `fn create_inherent(_: &InherentData) -> std::option::Option<<Self as ProvideInherent>::Call> { todo!() }`
+   = help: implement the missing item: `fn create_inherent(_: &InherentData) -> std::option::Option<(<Self as ProvideInherent>::Call, Vec<Vec<u8>>)> { todo!() }`
    = help: implement the missing item: `fn is_inherent(_: &<Self as ProvideInherent>::Call) -> bool { todo!() }`

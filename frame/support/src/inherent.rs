@@ -45,7 +45,7 @@ pub trait ProvideInherent {
 	/// E.g. if this provides the timestamp, the call will check that the given timestamp is
 	/// increasing the old timestamp by more than a minimum and it will also check that the
 	/// timestamp hasn't already been set in the current block.
-	fn create_inherent(data: &InherentData) -> Option<Self::Call>;
+	fn create_inherent(data: &InherentData) -> Option<(Self::Call, Vec<Vec<u8>>)>;
 
 	/// Determines whether this inherent is required in this block.
 	///

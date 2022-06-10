@@ -405,7 +405,7 @@ pub mod pallet {
 		type Error = InherentError;
 		const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
-		fn create_inherent(data: &InherentData) -> Option<Self::Call> {
+		fn create_inherent(data: &InherentData) -> Option<(Self::Call, Vec<Vec<u8>>)> {
 			let proof = data
 				.get_data::<TransactionStorageProof>(&Self::INHERENT_IDENTIFIER)
 				.unwrap_or(None);

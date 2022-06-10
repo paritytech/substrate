@@ -450,13 +450,10 @@ pub mod pallet {
 			max_items: u32,
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
-			let items_data = Self::preimage_of(items_hash)?;
-			let item_count = <codec::Compact<u32>>::decode(&mut &items_data[..])
-				.map_err(|_| Error::<T>::BadPreimage)?;
-			let item_count: u32 = item_count.into();
-			ensure!(item_count <= max_items, Error::<T>::BadWitness);
-			let items = <Vec<(Vec<u8>, Vec<u8>)>>::decode(&mut &items_data[..])
-				.map_err(|_| Error::<T>::BadPreimage)?;
+			let items: Vec<(Vec<u8>, Vec<u8>)> = Self::unhashed_limited_vec(
+				items_hash,
+				max_items as usize,
+			)?.ok_or(Error::<T>::BadWitness)?;
 			for i in items.into_iter().take(max_items as usize) {
 				storage::unhashed::put_raw(&i.0, &i.1);
 			}
@@ -474,14 +471,9 @@ pub mod pallet {
 			max_keys: u32,
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
-			let keys_data = Self::preimage_of(keys_hash)?;
-			let key_count = <codec::Compact<u32>>::decode(&mut &keys_data[..])
-				.map_err(|_| Error::<T>::BadPreimage)?;
-			let key_count: u32 = key_count.into();
-			ensure!(key_count <= max_keys, Error::<T>::BadWitness);
-			let keys =
-				<Vec<Vec<u8>>>::decode(&mut &keys_data[..]).map_err(|_| Error::<T>::BadPreimage)?;
-			for key in &keys {
+			let keys: Vec<Vec<u8>> = Self::unhashed_limited_vec(keys_hash, max_keys as usize)?
+				.ok_or(Error::<T>::BadWitness)?;
+			for key in keys.iter() {
 				storage::unhashed::kill(key);
 			}
 			Ok(().into())
@@ -999,12 +991,26 @@ pub enum DecRefStatus {
 impl<T: Config> Pallet<T> {
 	/// Retrieve the preimage of a given hash or give a `DispatchError`.
 	pub fn preimage_of(h: impl Borrow<T::Hash>) -> Result<Vec<u8>, DispatchError> {
-		Ok(T::PreimageProvider::get_preimage(h.borrow()).ok_or(Error::<T>::BadPreimage)?)
+		Ok(T::PreimageProvider::get_preimage(h.borrow()).ok_or(Error::<T>::BadPreimage)?.into_owned())
 	}
 
 	/// Retrieve the value whose encoding is the preimage of a given hash or give a `DispatchError`.
 	pub fn unhashed<D: Decode>(h: impl Borrow<T::Hash>) -> Result<D, DispatchError> {
 		Ok(D::decode(&mut &Self::preimage_of(h)?[..]).map_err(|_| Error::<T>::BadPreimage)?)
+	}
+
+	/// Retrieve the value whose encoding is the preimage of a given hash or give a `DispatchError`.
+	pub fn unhashed_limited_vec<D: Decode>(
+		h: impl Borrow<T::Hash>,
+		limit: usize,
+	) -> Result<Option<Vec<D>>, DispatchError> {
+		let data = Self::preimage_of(h)?;
+		let count = <codec::Compact<u32>>::decode(&mut &data[..])
+			.map_err(|_| Error::<T>::BadPreimage)?;
+		if u32::from(count) as usize > limit {
+			return Ok(None)
+		}
+		Ok(Some(<Vec<D>>::decode(&mut &data[..]).map_err(|_| Error::<T>::BadPreimage)?))
 	}
 
 	pub fn account_exists(who: &T::AccountId) -> bool {

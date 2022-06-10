@@ -186,7 +186,7 @@ pub mod pallet {
 
 		const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
-		fn create_inherent(_data: &InherentData) -> Option<Self::Call> {
+		fn create_inherent(_data: &InherentData) -> Option<(Self::Call, Vec<Vec<u8>>)> {
 			unimplemented!();
 		}
 
