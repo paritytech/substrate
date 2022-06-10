@@ -473,6 +473,11 @@ impl PalletCmd {
 				{
 					println!("Writes = {:?}", analysis);
 				}
+				if let Some(analysis) =
+					Analysis::median_slopes(&batch.db_results, BenchmarkSelector::ProofSize)
+				{
+					println!("Proof Size = {:?}", analysis);
+				}
 				println!();
 			}
 			if !self.no_min_squares {
@@ -491,6 +496,11 @@ impl PalletCmd {
 					Analysis::min_squares_iqr(&batch.db_results, BenchmarkSelector::Writes)
 				{
 					println!("Writes = {:?}", analysis);
+				}
+				if let Some(analysis) =
+					Analysis::min_squares_iqr(&batch.db_results, BenchmarkSelector::ProofSize)
+				{
+					println!("Proof Size = {:?}", analysis);
 				}
 				println!();
 			}

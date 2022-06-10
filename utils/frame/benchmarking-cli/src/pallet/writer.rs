@@ -64,11 +64,14 @@ struct BenchmarkData {
 	base_reads: u128,
 	#[serde(serialize_with = "string_serialize")]
 	base_writes: u128,
+	#[serde(serialize_with = "string_serialize")]
+	base_proof_size: u128,
 	component_weight: Vec<ComponentSlope>,
 	component_reads: Vec<ComponentSlope>,
 	component_writes: Vec<ComponentSlope>,
+	component_proof_size: Vec<ComponentSlope>,
+	worst_case_proof_size: u32,
 	component_ranges: Vec<ComponentRange>,
-	proof_size: u32,
 	comments: Vec<String>,
 }
 
@@ -179,6 +182,8 @@ fn get_benchmark_data(
 		.expect("analysis function should return the number of reads for valid inputs");
 	let writes = analysis_function(&batch.db_results, BenchmarkSelector::Writes)
 		.expect("analysis function should return the number of writes for valid inputs");
+	let proof_size = analysis_function(&batch.db_results, BenchmarkSelector::ProofSize)
+		.expect("analysis function should return proof sizes for valid inputs");
 
 	// Analysis data may include components that are not used, this filters out anything whose value
 	// is zero.
@@ -186,6 +191,7 @@ fn get_benchmark_data(
 	let mut used_extrinsic_time = Vec::new();
 	let mut used_reads = Vec::new();
 	let mut used_writes = Vec::new();
+	let mut used_proof_size = Vec::new();
 
 	extrinsic_time
 		.slopes
@@ -230,6 +236,19 @@ fn get_benchmark_data(
 				used_writes.push(ComponentSlope { name: name.clone(), slope, error });
 			}
 		});
+	proof_size
+		.slopes
+		.into_iter()
+		.zip(proof_size.names.iter())
+		.zip(extract_errors(&proof_size.model))
+		.for_each(|((slope, name), error)| {
+			if !slope.is_zero() {
+				if !used_components.contains(&name) {
+					used_components.push(name);
+				}
+				used_proof_size.push(ComponentSlope { name: name.clone(), slope, error });
+			}
+		});
 
 	// This puts a marker on any component which is entirely unused in the weight formula.
 	let components = batch.time_results[0]
@@ -263,11 +282,13 @@ fn get_benchmark_data(
 		base_weight: extrinsic_time.base.saturating_mul(1000),
 		base_reads: reads.base,
 		base_writes: writes.base,
+		base_proof_size: proof_size.base,
 		component_weight: used_extrinsic_time,
 		component_reads: used_reads,
 		component_writes: used_writes,
+		component_proof_size: used_proof_size,
+		worst_case_proof_size,
 		component_ranges,
-		proof_size: worst_case_proof_size,
 		comments,
 	}
 }
@@ -502,7 +523,7 @@ mod test {
 				repeat_reads: 0,
 				writes: (base + slope * i).into(),
 				repeat_writes: 0,
-				proof_size: i * 1024,
+				proof_size: (i + 1) * 1024,
 				keys: vec![],
 			})
 		}
@@ -541,7 +562,11 @@ mod test {
 			benchmark.component_writes,
 			vec![ComponentSlope { name: component.to_string(), slope, error: 0 }]
 		);
-		assert_eq!(benchmark.proof_size, 4 * 1024);
+		assert_eq!(benchmark.base_proof_size, 1024);
+		assert_eq!(
+			benchmark.component_proof_size,
+			vec![ComponentSlope { name: component.to_string(), slope: 1024, error: 0 }]
+		);
 	}
 
 	#[test]
