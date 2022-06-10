@@ -17,7 +17,7 @@
 
 use super::*;
 use codec::{Decode, Encode, MaxEncodedLen};
-use enumflags2::BitFlags;
+use enumflags2::{bitflags, BitFlags};
 use frame_support::{
 	traits::{ConstU32, Get},
 	BoundedVec, CloneNoBound, PartialEqNoBound, RuntimeDebugNoBound,
@@ -230,8 +230,9 @@ impl<Balance: Encode + Decode + MaxEncodedLen + Copy + Clone + Debug + Eq + Part
 
 /// The fields that we use to identify the owner of an account with. Each corresponds to a field
 /// in the `IdentityInfo` struct.
+#[bitflags]
 #[repr(u64)]
-#[derive(Clone, Copy, PartialEq, Eq, BitFlags, RuntimeDebug, TypeInfo)]
+#[derive(Clone, Copy, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub enum IdentityField {
 	Display = 0b0000000000000000000000000000000000000000000000000000000000000001,
 	Legal = 0b0000000000000000000000000000000000000000000000000000000000000010,

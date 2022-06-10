@@ -93,7 +93,9 @@ pub use self::{
 		StorageMap, StorageNMap, StoragePrefixedMap, StorageValue,
 	},
 };
-pub use sp_runtime::{self, print, traits::Printable, ConsensusEngineId};
+pub use sp_runtime::{
+	self, print, traits::Printable, ConsensusEngineId, MAX_MODULE_ERROR_ENCODED_SIZE,
+};
 
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
@@ -103,7 +105,7 @@ use sp_runtime::TypeId;
 pub const LOG_TARGET: &'static str = "runtime::frame-support";
 
 /// A type that cannot be instantiated.
-#[derive(Debug, PartialEq, Eq, Clone, TypeInfo)]
+#[derive(Encode, Decode, Debug, PartialEq, Eq, Clone, TypeInfo)]
 pub enum Never {}
 
 /// A pallet identifier. These are per pallet and should be stored in a registry somewhere.
@@ -125,13 +127,11 @@ impl TypeId for PalletId {
 macro_rules! bounded_vec {
 	($ ($values:expr),* $(,)?) => {
 		{
-			use $crate::sp_std::convert::TryInto as _;
 			$crate::sp_std::vec![$($values),*].try_into().unwrap()
 		}
 	};
 	( $value:expr ; $repetition:expr ) => {
 		{
-			use $crate::sp_std::convert::TryInto as _;
 			$crate::sp_std::vec![$value ; $repetition].try_into().unwrap()
 		}
 	}
@@ -154,8 +154,8 @@ macro_rules! bounded_vec {
 /// // to `Vec<u8>`
 /// generate_storage_alias!(
 /// 	OtherPrefix, OtherStorageName => DoubleMap<
-/// 		(u32, Twox64Concat),
-/// 		(u32, Twox64Concat),
+/// 		(Twox64Concat, u32),
+/// 		(Twox64Concat, u32),
 /// 		Vec<u8>
 /// 	>
 /// );
@@ -165,8 +165,8 @@ macro_rules! bounded_vec {
 /// generate_storage_alias!(Prefix, ValueName => Value<u32, OptionQuery>);
 /// generate_storage_alias!(
 /// 	Prefix, SomeStorageName => DoubleMap<
-/// 		(u32, Twox64Concat),
-/// 		(u32, Twox64Concat),
+/// 		(Twox64Concat, u32),
+/// 		(Twox64Concat, u32),
 /// 		Vec<u8>,
 /// 		ValueQuery
 /// 	>
@@ -175,14 +175,14 @@ macro_rules! bounded_vec {
 /// // generate a map from `Config::AccountId` (with hasher `Twox64Concat`) to `Vec<u8>`
 /// trait Config { type AccountId: codec::FullCodec; }
 /// generate_storage_alias!(
-/// 	Prefix, GenericStorage<T: Config> => Map<(T::AccountId, Twox64Concat), Vec<u8>>
+/// 	Prefix, GenericStorage<T: Config> => Map<(Twox64Concat, T::AccountId), Vec<u8>>
 /// );
 /// # fn main() {}
 /// ```
 #[macro_export]
 macro_rules! generate_storage_alias {
 	// without generic for $name.
-	($pallet:ident, $name:ident => Map<($key:ty, $hasher:ty), $value:ty $(, $querytype:ty)?>) => {
+	($pallet:ident, $name:ident => Map<($hasher:ty, $key:ty), $value:ty $(, $querytype:ty)?>) => {
 		$crate::paste::paste! {
 			$crate::generate_storage_alias!(@GENERATE_INSTANCE_STRUCT $pallet, $name);
 			type $name = $crate::storage::types::StorageMap<
@@ -197,7 +197,7 @@ macro_rules! generate_storage_alias {
 	(
 		$pallet:ident,
 		$name:ident
-		=> DoubleMap<($key1:ty, $hasher1:ty), ($key2:ty, $hasher2:ty), $value:ty $(, $querytype:ty)?>
+		=> DoubleMap<($hasher1:ty, $key1:ty), ($hasher2:ty, $key2:ty), $value:ty $(, $querytype:ty)?>
 	) => {
 		$crate::paste::paste! {
 			$crate::generate_storage_alias!(@GENERATE_INSTANCE_STRUCT $pallet, $name);
@@ -215,7 +215,7 @@ macro_rules! generate_storage_alias {
 	(
 		$pallet:ident,
 		$name:ident
-		=> NMap<Key<$(($key:ty, $hasher:ty)),+>, $value:ty $(, $querytype:ty)?>
+		=> NMap<Key<$(($hasher:ty, $key:ty)),+>, $value:ty $(, $querytype:ty)?>
 	) => {
 		$crate::paste::paste! {
 			$crate::generate_storage_alias!(@GENERATE_INSTANCE_STRUCT $pallet, $name);
@@ -243,15 +243,15 @@ macro_rules! generate_storage_alias {
 	(
 		$pallet:ident,
 		$name:ident<$t:ident : $bounds:tt>
-		=> Map<($key:ty, $hasher:ty), $value:ty $(, $querytype:ty)?>
+		=> Map<($hasher:ty, $key:ty), $value:ty $(, $querytype:ty)?>
 	) => {
 		$crate::paste::paste! {
 			$crate::generate_storage_alias!(@GENERATE_INSTANCE_STRUCT $pallet, $name);
 			#[allow(type_alias_bounds)]
 			type $name<$t : $bounds> = $crate::storage::types::StorageMap<
 				[<$name Instance>],
-				$key,
 				$hasher,
+				$key,
 				$value,
 				$( $querytype )?
 			>;
@@ -260,17 +260,17 @@ macro_rules! generate_storage_alias {
 	(
 		$pallet:ident,
 		$name:ident<$t:ident : $bounds:tt>
-		=> DoubleMap<($key1:ty, $hasher1:ty), ($key2:ty, $hasher2:ty), $value:ty $(, $querytype:ty)?>
+		=> DoubleMap<($hasher1:ty, $key1:ty), ($hasher2:ty, $key2:ty), $value:ty $(, $querytype:ty)?>
 	) => {
 		$crate::paste::paste! {
 			$crate::generate_storage_alias!(@GENERATE_INSTANCE_STRUCT $pallet, $name);
 			#[allow(type_alias_bounds)]
 			type $name<$t : $bounds> = $crate::storage::types::StorageDoubleMap<
 				[<$name Instance>],
-				$key1,
 				$hasher1,
-				$key2,
+				$key1,
 				$hasher2,
+				$key2,
 				$value,
 				$( $querytype )?
 			>;
@@ -279,7 +279,7 @@ macro_rules! generate_storage_alias {
 	(
 		$pallet:ident,
 		$name:ident<$t:ident : $bounds:tt>
-		=> NMap<$(($key:ty, $hasher:ty),)+ $value:ty $(, $querytype:ty)?>
+		=> NMap<$(($hasher:ty, $key:ty),)+ $value:ty $(, $querytype:ty)?>
 	) => {
 		$crate::paste::paste! {
 			$crate::generate_storage_alias!(@GENERATE_INSTANCE_STRUCT $pallet, $name);
@@ -598,11 +598,12 @@ pub fn debug(data: &impl sp_std::fmt::Debug) {
 
 #[doc(inline)]
 pub use frame_support_procedural::{
-	construct_runtime, decl_storage, match_and_insert, transactional, RuntimeDebugNoBound,
+	construct_runtime, decl_storage, match_and_insert, transactional, PalletError,
+	RuntimeDebugNoBound,
 };
 
 #[doc(hidden)]
-pub use frame_support_procedural::__generate_dummy_part_checker;
+pub use frame_support_procedural::{__create_tt_macro, __generate_dummy_part_checker};
 
 /// Derive [`Clone`] but do not bound any generic.
 ///
@@ -847,6 +848,32 @@ macro_rules! assert_ok {
 	};
 }
 
+/// Assert that the maximum encoding size does not exceed the value defined in
+/// [`MAX_MODULE_ERROR_ENCODED_SIZE`] during compilation.
+///
+/// This macro is intended to be used in conjunction with `tt_call!`.
+#[macro_export]
+macro_rules! assert_error_encoded_size {
+	{
+		path = [{ $($path:ident)::+ }]
+		runtime = [{ $runtime:ident }]
+		assert_message = [{ $assert_message:literal }]
+		error = [{ $error:ident }]
+	} => {
+		const _: () = assert!(
+			<
+				$($path::)+$error<$runtime> as $crate::traits::PalletError
+			>::MAX_ENCODED_SIZE <= $crate::MAX_MODULE_ERROR_ENCODED_SIZE,
+			$assert_message
+		);
+	};
+	{
+		path = [{ $($path:ident)::+ }]
+		runtime = [{ $runtime:ident }]
+		assert_message = [{ $assert_message:literal }]
+	} => {};
+}
+
 #[cfg(feature = "std")]
 #[doc(hidden)]
 pub use serde::{Deserialize, Serialize};
@@ -943,6 +970,20 @@ pub mod tests {
 			self.sort();
 			self
 		}
+	}
+
+	#[test]
+	fn generate_storage_alias_works() {
+		new_test_ext().execute_with(|| {
+			generate_storage_alias!(
+				Test,
+				GenericData2<T: Config> => Map<(Blake2_128Concat, T::BlockNumber), T::BlockNumber>
+			);
+
+			assert_eq!(Module::<Test>::generic_data2(5), None);
+			GenericData2::<Test>::insert(5, 5);
+			assert_eq!(Module::<Test>::generic_data2(5), Some(5));
+		});
 	}
 
 	#[test]
@@ -1361,6 +1402,7 @@ pub mod pallet_prelude {
 			TransactionTag, TransactionValidity, TransactionValidityError, UnknownTransaction,
 			ValidTransaction,
 		},
+		MAX_MODULE_ERROR_ENCODED_SIZE,
 	};
 	pub use sp_std::marker::PhantomData;
 }
@@ -1638,10 +1680,25 @@ pub mod pallet_prelude {
 /// pub enum Error<T> {
 /// 	/// $some_optional_doc
 /// 	$SomeFieldLessVariant,
+/// 	/// $some_more_optional_doc
+/// 	$SomeVariantWithOneField(FieldType),
 /// 	...
 /// }
 /// ```
-/// I.e. a regular rust enum named `Error`, with generic `T` and fieldless variants.
+/// I.e. a regular rust enum named `Error`, with generic `T` and fieldless or multiple-field
+/// variants.
+///
+/// Any field type in the enum variants must implement [`scale_info::TypeInfo`] in order to be
+/// properly used in the metadata, and its encoded size should be as small as possible,
+/// preferably 1 byte in size in order to reduce storage size. The error enum itself has an
+/// absolute maximum encoded size specified by [`MAX_MODULE_ERROR_ENCODED_SIZE`].
+///
+/// Field types in enum variants must also implement [`PalletError`](traits::PalletError),
+/// otherwise the pallet will fail to compile. Rust primitive types have already implemented
+/// the [`PalletError`](traits::PalletError) trait along with some commonly used stdlib types
+/// such as `Option` and `PhantomData`, and hence in most use cases, a manual implementation is
+/// not necessary and is discouraged.
+///
 /// The generic `T` mustn't bound anything and where clause is not allowed. But bounds and
 /// where clause shouldn't be needed for any usecase.
 ///

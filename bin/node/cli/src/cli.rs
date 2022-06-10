@@ -38,13 +38,10 @@ pub enum Subcommand {
 	)]
 	Inspect(node_inspect::cli::InspectCmd),
 
-	/// The custom benchmark subcommmand benchmarking runtime pallets.
-	#[clap(name = "benchmark", about = "Benchmark runtime pallets.")]
+	/// Sub-commands concerned with benchmarking.
+	/// The pallet benchmarking moved to the `pallet` sub-command.
+	#[clap(subcommand)]
 	Benchmark(frame_benchmarking_cli::BenchmarkCmd),
-
-	/// Sub command for benchmarking the storage speed.
-	#[clap(name = "benchmark-storage", about = "Benchmark storage speed.")]
-	BenchmarkStorage(frame_benchmarking_cli::StorageCmd),
 
 	/// Try some command against runtime state.
 	#[cfg(feature = "try-runtime")]

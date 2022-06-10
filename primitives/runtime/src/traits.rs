@@ -36,16 +36,8 @@ pub use sp_arithmetic::traits::{
 	CheckedShr, CheckedSub, IntegerSquareRoot, One, SaturatedConversion, Saturating,
 	UniqueSaturatedFrom, UniqueSaturatedInto, Zero,
 };
-use sp_core::{self, Hasher, RuntimeDebug, ShufflingSeed, TypeId};
-
-use crate::StateVersion;
-use sp_std::{
-	self,
-	convert::{TryFrom, TryInto},
-	fmt::Debug,
-	marker::PhantomData,
-	prelude::*,
-};
+use sp_core::{self, storage::StateVersion, Hasher, RuntimeDebug, ShufflingSeed, TypeId};
+use sp_std::{self, fmt::Debug, marker::PhantomData, prelude::*};
 #[cfg(feature = "std")]
 use std::fmt::Display;
 #[cfg(feature = "std")]
@@ -1582,6 +1574,12 @@ impl Printable for u64 {
 impl Printable for &[u8] {
 	fn print(&self) {
 		sp_io::misc::print_hex(self);
+	}
+}
+
+impl<const N: usize> Printable for [u8; N] {
+	fn print(&self) {
+		sp_io::misc::print_hex(&self[..]);
 	}
 }
 

@@ -16,19 +16,19 @@ targets = ["x86_64-unknown-linux-gnu"]
 chrono = "0.4.10"
 clap = { version = "3.1.6", features = ["derive"] }
 fdlimit = "0.2.1"
-futures = "0.3.19"
+futures = "0.3.21"
 hex = "0.4.2"
 libp2p = "0.40.0"
 log = "0.4.11"
-names = { version = "0.12.0", default-features = false }
+names = { version = "0.13.0", default-features = false }
 rand = "0.7.3"
-regex = "1.5.4"
+regex = "1.5.5"
 rpassword = "5.0.0"
 serde = "1.0.136"
-serde_json = "1.0.74"
+serde_json = "1.0.79"
 thiserror = "1.0.30"
 tiny-bip39 = "0.8.2"
-tokio = { version = "1.15", features = ["signal", "rt-multi-thread", "parking_lot"] }
+tokio = { version = "1.17.0", features = ["signal", "rt-multi-thread", "parking_lot"] }
 
 parity-scale-codec = "3.0.0"
 sc-client-api = { version = "4.0.0-dev", path = "../api" }

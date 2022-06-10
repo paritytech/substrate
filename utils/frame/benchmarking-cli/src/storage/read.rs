@@ -27,7 +27,8 @@ use log::info;
 use rand::prelude::*;
 use std::{fmt::Debug, sync::Arc, time::Instant};
 
-use super::{cmd::StorageCmd, record::BenchRecord};
+use super::cmd::StorageCmd;
+use crate::shared::BenchRecord;
 
 impl StorageCmd {
 	/// Benchmarks the time it takes to read a single Storage item.
@@ -48,17 +49,6 @@ impl StorageCmd {
 		let mut keys = client.storage_keys(&block, &empty_prefix)?;
 		let mut rng = Self::setup_rng();
 		keys.shuffle(&mut rng);
-
-		// Run some rounds of the benchmark as warmup.
-		for i in 0..self.params.warmups {
-			info!("Warmup round {}/{}", i + 1, self.params.warmups);
-			for key in keys.clone() {
-				let _ = client
-					.storage(&block, &key)
-					.expect("Checked above to exist")
-					.ok_or("Value unexpectedly empty")?;
-			}
-		}
 
 		// Interesting part here:
 		// Read all the keys in the database and measure the time it takes to access each.

@@ -26,7 +26,6 @@ use nix::{
 use node_primitives::Block;
 use remote_externalities::rpc_api;
 use std::{
-	convert::TryInto,
 	ops::{Deref, DerefMut},
 	path::Path,
 	process::{Child, Command, ExitStatus},
