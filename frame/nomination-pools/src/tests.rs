@@ -43,6 +43,71 @@ pub const DEFAULT_ROLES: PoolRoles<AccountId> =
 	PoolRoles { depositor: 10, root: Some(900), nominator: Some(901), state_toggler: Some(902) };
 
 #[test]
+fn rewards_distribution_is_fair() {
+	ExtBuilder::default().build_and_execute(|| {
+		let ed = Balances::minimum_balance();
+
+		Balances::mutate_account(&default_reward_account(), |f| f.free += 10).unwrap();
+
+		Balances::make_free_balance_be(&20, ed + 10);
+		assert_ok!(Pools::join(Origin::signed(20), 10, 1));
+
+		Balances::mutate_account(&default_reward_account(), |f| f.free += 20).unwrap();
+
+		// 10 should claim 10, 20 should claim nothing.
+		assert_ok!(Pools::claim_payout(Origin::signed(10)));
+		assert_ok!(Pools::claim_payout(Origin::signed(20)));
+
+		dbg!(pool_events_since_last_call());
+		panic!();
+
+		assert_eq!(
+			pool_events_since_last_call(),
+			vec![
+				Event::Created { depositor: 10, pool_id: 1 },
+				Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+				Event::Bonded { member: 20, pool_id: 1, bonded: 10, joined: true },
+				Event::PaidOut { member: 10, pool_id: 1, payout: 10 },
+			]
+		);
+	});
+
+	ExtBuilder::default().build_and_execute(|| {
+		let ed = Balances::minimum_balance();
+
+		Balances::mutate_account(&default_reward_account(), |f| f.free += 30).unwrap();
+
+		Balances::make_free_balance_be(&20, ed + 10);
+		assert_ok!(Pools::join(Origin::signed(20), 10, 1));
+
+		Balances::mutate_account(&default_reward_account(), |f| f.free += 50).unwrap();
+
+		Balances::make_free_balance_be(&30, ed + 10);
+		assert_ok!(Pools::join(Origin::signed(30), 10, 1));
+
+		Balances::mutate_account(&default_reward_account(), |f| f.free += 60).unwrap();
+
+		// 10 should claim 10, 20 should claim nothing.
+		assert_ok!(Pools::claim_payout(Origin::signed(10)));
+		assert_ok!(Pools::claim_payout(Origin::signed(20)));
+		assert_ok!(Pools::claim_payout(Origin::signed(30)));
+
+		assert_eq!(
+			pool_events_since_last_call(),
+			vec![
+				Event::Created { depositor: 10, pool_id: 1 },
+				Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+				Event::Bonded { member: 20, pool_id: 1, bonded: 10, joined: true },
+				Event::Bonded { member: 30, pool_id: 1, bonded: 10, joined: true },
+				Event::PaidOut { member: 10, pool_id: 1, payout: 30 + 50 / 2 + 60 / 3 },
+				Event::PaidOut { member: 20, pool_id: 1, payout: 50 / 2 + 60 / 3 },
+				Event::PaidOut { member: 30, pool_id: 1, payout: 60 / 3 },
+			]
+		);
+	})
+}
+
+#[test]
 fn test_setup_works() {
 	ExtBuilder::default().build_and_execute(|| {
 		assert_eq!(BondedPools::<Runtime>::count(), 1);

@@ -948,19 +948,23 @@ pub struct RewardPool<T: Config> {
 
 impl<T: Config> RewardPool<T> {
 	/// Mutate the reward pool by updating the total earnings and current free balance.
-	fn update_total_earnings_and_balance(&mut self, id: PoolId) {
+	///
+	/// Returns the new earnings amount.
+	fn update_total_earnings_and_balance(&mut self, id: PoolId) -> BalanceOf<T> {
 		let current_balance = Self::current_balance(id);
 		// The earnings since the last time it was updated
 		let new_earnings = current_balance.saturating_sub(self.balance);
 		// The lifetime earnings of the of the reward pool
 		self.total_earnings = new_earnings.saturating_add(self.total_earnings);
 		self.balance = current_balance;
+
+		new_earnings
 	}
 
 	/// Get a reward pool and update its total earnings and balance
 	fn get_and_update(id: PoolId) -> Option<Self> {
 		RewardPools::<T>::get(id).map(|mut r| {
-			r.update_total_earnings_and_balance(id);
+			let _ = r.update_total_earnings_and_balance(id);
 			r
 		})
 	}
@@ -2209,18 +2213,17 @@ impl<T: Config> Pallet<T> {
 	) -> Result<BalanceOf<T>, DispatchError> {
 		let u256 = |x| T::BalanceToU256::convert(x);
 		let balance = |x| T::U256ToBalance::convert(x);
+		let virtualize = |x, w| u256(x).saturating_mul(u256(w));
 
-		let last_total_earnings = reward_pool.total_earnings;
-		reward_pool.update_total_earnings_and_balance(bonded_pool.id);
-
-		// Notice there is an edge case where total_earnings have not increased and this is zero
-		let new_earnings = u256(reward_pool.total_earnings.saturating_sub(last_total_earnings));
+		// Notice there is an edge case where total_earnings have not increased and this is zero.
+		let new_earnings = reward_pool.update_total_earnings_and_balance(bonded_pool.id);
+		println!("new earnings upon {:?} cashing out: {:?}", member, new_earnings);
 
 		// The new points that will be added to the pool. For every unit of balance that has been
 		// earned by the reward pool, we inflate the reward pool points by `bonded_pool.points`. In
 		// effect this allows each, single unit of balance (e.g. plank) to be divvied up pro rata
 		// among members based on points.
-		let new_points = u256(bonded_pool.points).saturating_mul(new_earnings);
+		let new_points = virtualize(bonded_pool.points, new_earnings);
 
 		// The points of the reward pool after taking into account the new earnings. Notice that
 		// this only stays even or increases over time except for when we subtract member virtual
@@ -2233,10 +2236,7 @@ impl<T: Config> Pallet<T> {
 
 		// The points of the reward pool that belong to the member.
 		let member_virtual_points =
-			// The members portion of the reward pool
-			u256(member.active_points())
-			// times the amount the pool has earned since the member last claimed.
-			.saturating_mul(u256(new_earnings_since_last_claim));
+			virtualize(member.active_points(), new_earnings_since_last_claim);
 
 		let member_payout = if member_virtual_points.is_zero() ||
 			current_points.is_zero() ||
@@ -2244,23 +2244,29 @@ impl<T: Config> Pallet<T> {
 		{
 			Zero::zero()
 		} else {
-			// Equivalent to `(member_virtual_points / current_points) * reward_pool.balance`
+			// Equivalent to `(member_virtual_points / current_points) *
+			// reward_pool.balance`
 			let numerator = {
-				let numerator = member_virtual_points.saturating_mul(u256(reward_pool.balance));
+				let numerator =
+					dbg!(member_virtual_points).saturating_mul(u256(reward_pool.balance));
 				bonded_pool.bound_check(numerator)
 			};
 			balance(
 				numerator
 					// We check for zero above
-					.div(current_points),
+					.div(dbg!(current_points)),
 			)
 		};
+
+		println!("final payout is {:?}", member_payout);
 
 		// Record updates
 		if reward_pool.total_earnings == BalanceOf::<T>::max_value() {
 			bonded_pool.set_state(PoolState::Destroying);
 		};
+
 		member.reward_pool_total_earnings = reward_pool.total_earnings;
+		member.bonded_pool_total_points = bonded_pool.points;
 		reward_pool.points = current_points.saturating_sub(member_virtual_points);
 		reward_pool.balance = reward_pool.balance.saturating_sub(member_payout);
 
@@ -2443,7 +2449,7 @@ impl<T: Config> OnStakerSlash<T::AccountId, BalanceOf<T>> for Pallet<T> {
 		slashed_bonded: BalanceOf<T>,
 		slashed_unlocking: &BTreeMap<EraIndex, BalanceOf<T>>,
 	) {
-		if let Some(pool_id) = ReversePoolIdLookup::<T>::get(pool_account).defensive() {
+		if let Some(pool_id) = ReversePoolIdLookup::<T>::get(pool_account) {
 			let mut sub_pools = match SubPoolsStorage::<T>::get(pool_id).defensive() {
 				Some(sub_pools) => sub_pools,
 				None => return,
