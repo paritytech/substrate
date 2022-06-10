@@ -104,7 +104,14 @@ pub fn expand_outer_origin(
 		#[derive(Clone)]
 		pub struct Origin {
 			caller: OriginCaller,
-			filter: #scrate::sp_std::rc::Rc<Box<dyn Fn(&<#runtime as #system_path::Config>::Call) -> bool>>,
+			filter: #scrate::sp_std::rc::Rc<dyn Fn(&<#runtime as #system_path::Config>::Call) -> bool>,
+			/// Key is `(pallet name, name)`.
+			named_filters: #scrate::sp_std::collections::btree_map::BTreeMap<
+				(&'static str, &'static str),
+				#scrate::sp_std::rc::Rc<
+					dyn Fn(&<#runtime as #system_path::Config>::Call) -> bool
+				>
+			>,
 		}
 
 		#[cfg(not(feature = "std"))]
@@ -138,9 +145,20 @@ pub fn expand_outer_origin(
 			fn add_filter(&mut self, filter: impl Fn(&Self::Call) -> bool + 'static) {
 				let f = self.filter.clone();
 
-				self.filter = #scrate::sp_std::rc::Rc::new(Box::new(move |call| {
+				self.filter = #scrate::sp_std::rc::Rc::new(move |call| {
 					f(call) && filter(call)
-				}));
+				});
+			}
+
+			fn add_named_filter<Pallet: #scrate::traits::PalletInfoAccess, F: Fn(&Self::Call) -> bool + 'static>(
+				&mut self,
+				name: &'static str,
+				filter: F,
+			) {
+				self.named_filters.insert(
+					(<Pallet as #scrate::traits::PalletInfoAccess>::name(), name),
+					#scrate::sp_std::rc::Rc::new(filter),
+				);
 			}
 
 			fn reset_filter(&mut self) {
@@ -149,7 +167,8 @@ pub fn expand_outer_origin(
 					as #scrate::traits::Contains<<#runtime as #system_path::Config>::Call>
 				>::contains;
 
-				self.filter = #scrate::sp_std::rc::Rc::new(Box::new(filter));
+				self.filter = #scrate::sp_std::rc::Rc::new(filter);
+				self.named_filters.clear();
 			}
 
 			fn set_caller_from(&mut self, other: impl Into<Self>) {
@@ -160,7 +179,7 @@ pub fn expand_outer_origin(
 				match self.caller {
 					// Root bypasses all filters
 					OriginCaller::system(#system_path::Origin::<#runtime>::Root) => true,
-					_ => (self.filter)(call),
+					_ => self.named_filters.values().all(|f| (*f)(call)) && (*self.filter)(call),
 				}
 			}
 
@@ -251,11 +270,9 @@ pub fn expand_outer_origin(
 		}
 
 		impl From<#system_path::Origin<#runtime>> for Origin {
-
 			#[doc = #doc_string_runtime_origin]
 			fn from(x: #system_path::Origin<#runtime>) -> Self {
-				let o: OriginCaller = x.into();
-				o.into()
+				OriginCaller::from(x).into()
 			}
 		}
 
@@ -263,7 +280,8 @@ pub fn expand_outer_origin(
 			fn from(x: OriginCaller) -> Self {
 				let mut o = Origin {
 					caller: x,
-					filter: #scrate::sp_std::rc::Rc::new(Box::new(|_| true)),
+					filter: #scrate::sp_std::rc::Rc::new(|_| true),
+					named_filters: Default::default(),
 				};
 
 				#scrate::traits::OriginTrait::reset_filter(&mut o);

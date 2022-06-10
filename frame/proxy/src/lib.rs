@@ -809,24 +809,27 @@ impl<T: Config> Pallet<T> {
 		call: <T as Config>::Call,
 	) {
 		origin.set_caller_from(OriginFor::<T>::signed(real));
-		origin.add_filter(move |c: &<T as frame_system::Config>::Call| {
-			let c = <T as Config>::Call::from_ref(c);
-			// We make sure the proxy call does access this pallet to change modify proxies.
-			match c.is_sub_type() {
-				// Proxy call cannot add or remove a proxy with more permissions than it already
-				// has.
-				Some(Call::add_proxy { ref proxy_type, .. }) |
-				Some(Call::remove_proxy { ref proxy_type, .. })
-					if !def.proxy_type.is_superset(proxy_type) =>
-					false,
-				// Proxy call cannot remove all proxies or kill anonymous proxies unless it has full
-				// permissions.
-				Some(Call::remove_proxies { .. }) | Some(Call::kill_anonymous { .. })
-					if def.proxy_type != T::ProxyType::default() =>
-					false,
-				_ => def.proxy_type.filter(c),
-			}
-		});
+		origin.add_named_filter::<Self, _>(
+			"check_permission",
+			move |c: &<T as frame_system::Config>::Call| {
+				let c = <T as Config>::Call::from_ref(c);
+				// We make sure the proxy call does access this pallet to change modify proxies.
+				match c.is_sub_type() {
+					// Proxy call cannot add or remove a proxy with more permissions than it already
+					// has.
+					Some(Call::add_proxy { ref proxy_type, .. }) |
+					Some(Call::remove_proxy { ref proxy_type, .. })
+						if !def.proxy_type.is_superset(proxy_type) =>
+						false,
+					// Proxy call cannot remove all proxies or kill anonymous proxies unless it has
+					// full permissions.
+					Some(Call::remove_proxies { .. }) | Some(Call::kill_anonymous { .. })
+						if def.proxy_type != T::ProxyType::default() =>
+						false,
+					_ => def.proxy_type.filter(c),
+				}
+			},
+		);
 		let e = call.dispatch(origin);
 		Self::deposit_event(Event::ProxyExecuted { result: e.map(|_| ()).map_err(|e| e.error) });
 	}

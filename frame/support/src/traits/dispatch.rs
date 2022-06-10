@@ -24,6 +24,8 @@ use sp_runtime::{
 };
 use sp_std::marker::PhantomData;
 
+use super::PalletInfoAccess;
+
 /// Some sort of check on the origin is performed by this object.
 pub trait EnsureOrigin<OuterOrigin> {
 	/// A return type.
@@ -264,7 +266,27 @@ pub trait OriginTrait: Sized {
 	type AccountId;
 
 	/// Add a filter to the origin.
+	///
+	/// - `filter`: A closure that should return `true` when the call is allowed or `false` when the
+	///   call should be filtered.
 	fn add_filter(&mut self, filter: impl Fn(&Self::Call) -> bool + 'static);
+
+	/// Add a named filter to the origin.
+	///
+	/// In contrast to a normal filter added via [`Self::add_filter`], named filters can be used
+	/// when the current filter depends on some call local context. Adding a second filter with the
+	/// same `name` from the same `Pallet` will evict the previous one. Using the same `name`
+	/// across different `Pallet`s is allowed.
+	///
+	/// - `Pallet`: Generic argument that represents the pallet.
+	/// - `name`: The name of the filter.
+	/// - `filter`: A closure that should return `true` when the call is allowed or `false` when the
+	///   call should be filtered.
+	fn add_named_filter<Pallet: PalletInfoAccess, F: Fn(&Self::Call) -> bool + 'static>(
+		&mut self,
+		name: &'static str,
+		filter: F,
+	);
 
 	/// Reset origin filters to default one, i.e `frame_system::Config::BaseCallFilter`.
 	fn reset_filter(&mut self);
