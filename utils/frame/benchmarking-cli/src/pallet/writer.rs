@@ -576,4 +576,34 @@ mod test {
 		assert_eq!(second_pallet_benchmark.name, "first_benchmark");
 		check_data(second_pallet_benchmark, "c", 3, 4);
 	}
+
+	#[test]
+	fn template_works() {
+		let all_results = map_results(
+			&[
+				test_data(b"first", b"first", BenchmarkParameter::a, 10, 3),
+				test_data(b"first", b"second", BenchmarkParameter::b, 9, 2),
+				test_data(b"second", b"first", BenchmarkParameter::c, 3, 4),
+			],
+			&[],
+			&Default::default(),
+			&AnalysisChoice::default(),
+		)
+		.unwrap();
+
+		// New Handlebars instance with helpers.
+		let mut handlebars = handlebars::Handlebars::new();
+		handlebars.register_helper("underscore", Box::new(UnderscoreHelper));
+		handlebars.register_helper("join", Box::new(JoinHelper));
+		// Don't HTML escape any characters.
+		handlebars.register_escape_fn(|s| -> String { s.to_string() });
+
+		for ((_pallet, _instance), results) in all_results.iter() {
+			let hbs_data = TemplateData { benchmarks: results.clone(), ..Default::default() };
+
+			let output = handlebars.render_template(&TEMPLATE, &hbs_data);
+			assert!(output.is_ok());
+			println!("{:?}", output);
+		}
+	}
 }
