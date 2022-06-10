@@ -88,7 +88,7 @@ use frame_support::{
 	storage,
 	traits::{
 		ConstU32, Contains, EnsureOrigin, Get, HandleLifetime, OnKilledAccount, OnNewAccount,
-		OriginTrait, PalletInfo, SortedMembers, StoredMap, TypedGet,
+		OriginTrait, PalletInfo, SortedMembers, StoredMap, TypedGet, PreimageProvider,
 	},
 	weights::{
 		extract_actual_weight, DispatchClass, DispatchInfo, PerDispatchClass, RuntimeDbWeight,
@@ -232,7 +232,8 @@ pub mod pallet {
 			+ Default
 			+ MaybeDisplay
 			+ AtLeast32Bit
-			+ Copy;
+			+ Copy
+			+ MaxEncodedLen;
 
 		/// The block number type used by the runtime.
 		type BlockNumber: Parameter
@@ -295,7 +296,9 @@ pub mod pallet {
 			+ Member
 			+ From<Event<Self>>
 			+ Debug
-			+ IsType<<Self as frame_system::Config>::Event>;
+			+ IsType<<Self as frame_system::Config>::Event> // TODO: remove as tautology?!?
+		//	+ MaxEncodedLen
+		;
 
 		/// Maximum number of block number to block hash mappings to keep (oldest pruned first).
 		#[pallet::constant]
@@ -319,7 +322,7 @@ pub mod pallet {
 
 		/// Data to be associated with an account (other than nonce/transaction counter, which this
 		/// pallet does regardless).
-		type AccountData: Member + FullCodec + Clone + Default + TypeInfo;
+		type AccountData: Member + FullCodec + Clone + Default + TypeInfo + MaxEncodedLen;
 
 		/// Handler for when a new account has just been created.
 		type OnNewAccount: OnNewAccount<Self::AccountId>;
@@ -350,6 +353,9 @@ pub mod pallet {
 
 		/// The maximum number of consumers allowed on a single account.
 		type MaxConsumers: ConsumerLimits;
+
+		/// The Preimage provider.
+		type PreimageProvider: PreimageProvider<Self::Hash>;
 	}
 
 	#[pallet::pallet]
@@ -408,8 +414,10 @@ pub mod pallet {
 		/// expensive. We will treat this as a full block.
 		/// # </weight>
 		#[pallet::weight((T::BlockWeights::get().max_block, DispatchClass::Operational))]
-		pub fn set_code(origin: OriginFor<T>, code: Vec<u8>) -> DispatchResultWithPostInfo {
+		pub fn set_code(origin: OriginFor<T>, code_hash: T::Hash) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
+			let code = T::PreimageProvider::get_preimage(&code_hash)
+				.ok_or(Error::<T>::UnknownHash)?;
 			Self::can_set_code(&code)?;
 			T::OnSetCode::set_code(code)?;
 			Ok(().into())
@@ -530,6 +538,8 @@ pub mod pallet {
 		NonZeroRefCount,
 		/// The origin filter prevent the call to be dispatched.
 		CallFiltered,
+		/// The provided hash is not known by the preimage provider.
+		UnknownHash,
 	}
 
 	/// Exposed trait-generic origin type.
@@ -729,7 +739,7 @@ type EventIndex = u32;
 pub type RefCount = u32;
 
 /// Information of an account.
-#[derive(Clone, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode, TypeInfo)]
+#[derive(Clone, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct AccountInfo<Index, AccountData> {
 	/// The number of transactions this account has sent.
 	pub nonce: Index,

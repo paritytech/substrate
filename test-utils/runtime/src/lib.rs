@@ -604,6 +604,7 @@ impl frame_system::Config for Runtime {
 	type SS58Prefix = ();
 	type OnSetCode = ();
 	type MaxConsumers = ConstU32<16>;
+	type PreimageProvider = ();
 }
 
 impl pallet_timestamp::Config for Runtime {
