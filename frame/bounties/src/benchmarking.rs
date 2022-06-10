@@ -103,7 +103,7 @@ benchmarks! {
 		Bounties::<T>::propose_bounty(RawOrigin::Signed(caller).into(), value, reason)?;
 		let bounty_id = BountyCount::<T>::get() - 1;
 		Bounties::<T>::approve_bounty(RawOrigin::Root.into(), bounty_id)?;
-		Bounties::<T>::on_initialize(T::BlockNumber::zero());
+		Treasury::<T>::on_initialize(T::BlockNumber::zero());
 	}: _(RawOrigin::Root, bounty_id, curator_lookup, fee)
 
 	// Worst case when curator is inactive and any sender unassigns the curator.
@@ -123,7 +123,7 @@ benchmarks! {
 		Bounties::<T>::propose_bounty(RawOrigin::Signed(caller).into(), value, reason)?;
 		let bounty_id = BountyCount::<T>::get() - 1;
 		Bounties::<T>::approve_bounty(RawOrigin::Root.into(), bounty_id)?;
-		Bounties::<T>::on_initialize(T::BlockNumber::zero());
+		Treasury::<T>::on_initialize(T::BlockNumber::zero());
 		Bounties::<T>::propose_curator(RawOrigin::Root.into(), bounty_id, curator_lookup, fee)?;
 	}: _(RawOrigin::Signed(curator), bounty_id)
 
