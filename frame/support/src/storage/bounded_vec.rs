@@ -135,7 +135,7 @@ impl<T: Ord, Bound: Get<u32>> Ord for BoundedVec<T, Bound> {
 impl<'a, T, S: Get<u32>> TryFrom<&'a [T]> for BoundedSlice<'a, T, S> {
 	type Error = ();
 	fn try_from(t: &'a [T]) -> Result<Self, Self::Error> {
-		if t.len() < S::get() as usize {
+		if t.len() <= S::get() as usize {
 			Ok(BoundedSlice(t, PhantomData))
 		} else {
 			Err(())
@@ -146,6 +146,14 @@ impl<'a, T, S: Get<u32>> TryFrom<&'a [T]> for BoundedSlice<'a, T, S> {
 impl<'a, T, S> From<BoundedSlice<'a, T, S>> for &'a [T] {
 	fn from(t: BoundedSlice<'a, T, S>) -> Self {
 		t.0
+	}
+}
+
+impl<'a, T, S> sp_std::iter::IntoIterator for BoundedSlice<'a, T, S> {
+	type Item = &'a T;
+	type IntoIter = sp_std::slice::Iter<'a, T>;
+	fn into_iter(self) -> Self::IntoIter {
+		self.0.iter()
 	}
 }
 
@@ -616,6 +624,22 @@ impl<T, S> sp_std::iter::IntoIterator for BoundedVec<T, S> {
 	}
 }
 
+impl<'a, T, S> sp_std::iter::IntoIterator for &'a BoundedVec<T, S> {
+	type Item = &'a T;
+	type IntoIter = sp_std::slice::Iter<'a, T>;
+	fn into_iter(self) -> Self::IntoIter {
+		self.0.iter()
+	}
+}
+
+impl<'a, T, S> sp_std::iter::IntoIterator for &'a mut BoundedVec<T, S> {
+	type Item = &'a mut T;
+	type IntoIter = sp_std::slice::IterMut<'a, T>;
+	fn into_iter(self) -> Self::IntoIter {
+		self.0.iter_mut()
+	}
+}
+
 impl<T, S> codec::DecodeLength for BoundedVec<T, S> {
 	fn len(self_encoded: &[u8]) -> Result<usize, codec::Error> {
 		// `BoundedVec<T, _>` stored just a `Vec<T>`, thus the length is at the beginning in
@@ -1017,5 +1041,19 @@ pub mod test {
 			Err(msg) => assert_eq!(msg.to_string(), "out of bounds at line 1 column 11"),
 			_ => unreachable!("deserializer must raise error"),
 		}
+	}
+
+	#[test]
+	fn bounded_vec_try_from_works() {
+		assert!(BoundedVec::<u32, ConstU32<2>>::try_from(vec![0]).is_ok());
+		assert!(BoundedVec::<u32, ConstU32<2>>::try_from(vec![0, 1]).is_ok());
+		assert!(BoundedVec::<u32, ConstU32<2>>::try_from(vec![0, 1, 2]).is_err());
+	}
+
+	#[test]
+	fn bounded_slice_try_from_works() {
+		assert!(BoundedSlice::<u32, ConstU32<2>>::try_from(&[0][..]).is_ok());
+		assert!(BoundedSlice::<u32, ConstU32<2>>::try_from(&[0, 1][..]).is_ok());
+		assert!(BoundedSlice::<u32, ConstU32<2>>::try_from(&[0, 1, 2][..]).is_err());
 	}
 }

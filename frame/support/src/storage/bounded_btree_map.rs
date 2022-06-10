@@ -252,6 +252,24 @@ impl<K, V, S> IntoIterator for BoundedBTreeMap<K, V, S> {
 	}
 }
 
+impl<'a, K, V, S> IntoIterator for &'a BoundedBTreeMap<K, V, S> {
+	type Item = (&'a K, &'a V);
+	type IntoIter = sp_std::collections::btree_map::Iter<'a, K, V>;
+
+	fn into_iter(self) -> Self::IntoIter {
+		self.0.iter()
+	}
+}
+
+impl<'a, K, V, S> IntoIterator for &'a mut BoundedBTreeMap<K, V, S> {
+	type Item = (&'a K, &'a mut V);
+	type IntoIter = sp_std::collections::btree_map::IterMut<'a, K, V>;
+
+	fn into_iter(self) -> Self::IntoIter {
+		self.0.iter_mut()
+	}
+}
+
 impl<K, V, S> MaxEncodedLen for BoundedBTreeMap<K, V, S>
 where
 	K: MaxEncodedLen,

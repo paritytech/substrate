@@ -23,7 +23,10 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use frame_support::traits::{ChangeMembers, Contains, Get, InitializeMembers, SortedMembers};
+use frame_support::{
+	traits::{ChangeMembers, Contains, Get, InitializeMembers, SortedMembers},
+	BoundedVec,
+};
 use sp_std::prelude::*;
 
 pub mod migrations;
@@ -44,7 +47,6 @@ pub mod pallet {
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
 	#[pallet::storage_version(STORAGE_VERSION)]
-	#[pallet::without_storage_info]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	#[pallet::config]
@@ -79,7 +81,7 @@ pub mod pallet {
 		///
 		/// This is used for benchmarking. Re-run the benchmarks if this changes.
 		///
-		/// This is not enforced in the code; the membership size can exceed this limit.
+		/// This is enforced in the code; the membership size can not exceed this limit.
 		type MaxMembers: Get<u32>;
 
 		/// Weight information for extrinsics in this pallet.
@@ -90,7 +92,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn members)]
 	pub type Members<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, Vec<T::AccountId>, ValueQuery>;
+		StorageValue<_, BoundedVec<T::AccountId, T::MaxMembers>, ValueQuery>;
 
 	/// The current prime member, if one exists.
 	#[pallet::storage]
@@ -99,14 +101,14 @@ pub mod pallet {
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
-		pub members: Vec<T::AccountId>,
+		pub members: BoundedVec<T::AccountId, T::MaxMembers>,
 		pub phantom: PhantomData<I>,
 	}
 
 	#[cfg(feature = "std")]
 	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
 		fn default() -> Self {
-			Self { members: Vec::new(), phantom: Default::default() }
+			Self { members: Default::default(), phantom: Default::default() }
 		}
 	}
 
@@ -151,6 +153,8 @@ pub mod pallet {
 		AlreadyMember,
 		/// Not a member.
 		NotMember,
+		/// Too many members.
+		TooManyMembers,
 	}
 
 	#[pallet::call]
@@ -164,9 +168,10 @@ pub mod pallet {
 
 			let mut members = <Members<T, I>>::get();
 			let location = members.binary_search(&who).err().ok_or(Error::<T, I>::AlreadyMember)?;
-			members.insert(location, who.clone());
+			members
+				.try_insert(location, who.clone())
+				.map_err(|_| Error::<T, I>::TooManyMembers)?;
 
-			Self::maybe_warn_max_members(&members);
 			<Members<T, I>>::put(&members);
 
 			T::MembershipChanged::change_members_sorted(&[who], &[], &members[..]);
@@ -186,7 +191,6 @@ pub mod pallet {
 			let location = members.binary_search(&who).ok().ok_or(Error::<T, I>::NotMember)?;
 			members.remove(location);
 
-			Self::maybe_warn_max_members(&members);
 			<Members<T, I>>::put(&members);
 
 			T::MembershipChanged::change_members_sorted(&[], &[who], &members[..]);
@@ -219,7 +223,6 @@ pub mod pallet {
 			members[location] = add.clone();
 			members.sort();
 
-			Self::maybe_warn_max_members(&members);
 			<Members<T, I>>::put(&members);
 
 			T::MembershipChanged::change_members_sorted(&[add], &[remove], &members[..]);
@@ -237,12 +240,12 @@ pub mod pallet {
 		pub fn reset_members(origin: OriginFor<T>, members: Vec<T::AccountId>) -> DispatchResult {
 			T::ResetOrigin::ensure_origin(origin)?;
 
-			let mut members = members;
+			let mut members: BoundedVec<T::AccountId, T::MaxMembers> =
+				BoundedVec::try_from(members).map_err(|_| Error::<T, I>::TooManyMembers)?;
 			members.sort();
 			<Members<T, I>>::mutate(|m| {
 				T::MembershipChanged::set_members_sorted(&members[..], m);
 				Self::rejig_prime(&members);
-				Self::maybe_warn_max_members(&members);
 				*m = members;
 			});
 
@@ -267,7 +270,6 @@ pub mod pallet {
 				members[location] = new.clone();
 				members.sort();
 
-				Self::maybe_warn_max_members(&members);
 				<Members<T, I>>::put(&members);
 
 				T::MembershipChanged::change_members_sorted(
@@ -320,17 +322,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			}
 		}
 	}
-
-	fn maybe_warn_max_members(members: &[T::AccountId]) {
-		if members.len() as u32 > T::MaxMembers::get() {
-			log::error!(
-				target: "runtime::membership",
-				"maximum number of members used for weight is exceeded, weights can be underestimated [{} > {}].",
-				members.len(),
-				T::MaxMembers::get(),
-			)
-		}
-	}
 }
 
 impl<T: Config<I>, I: 'static> Contains<T::AccountId> for Pallet<T, I> {
@@ -341,7 +332,7 @@ impl<T: Config<I>, I: 'static> Contains<T::AccountId> for Pallet<T, I> {
 
 impl<T: Config<I>, I: 'static> SortedMembers<T::AccountId> for Pallet<T, I> {
 	fn sorted_members() -> Vec<T::AccountId> {
-		Self::members()
+		Self::members().to_vec()
 	}
 
 	fn count() -> usize {
@@ -372,7 +363,7 @@ mod benchmark {
 
 	benchmarks_instance_pallet! {
 		add_member {
-			let m in 1 .. T::MaxMembers::get();
+			let m in 1 .. (T::MaxMembers::get() - 1);
 
 			let members = (0..m).map(|i| account("member", i, SEED)).collect::<Vec<T::AccountId>>();
 			set_members::<T, I>(members, None);
@@ -504,7 +495,7 @@ mod tests {
 	};
 
 	use frame_support::{
-		assert_noop, assert_ok, ord_parameter_types, parameter_types,
+		assert_noop, assert_ok, bounded_vec, ord_parameter_types, parameter_types,
 		traits::{ConstU32, ConstU64, GenesisBuild, StorageVersion},
 	};
 	use frame_system::EnsureSignedBy;
@@ -609,7 +600,7 @@ mod tests {
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		// We use default for brevity, but you can configure as desired if needed.
 		pallet_membership::GenesisConfig::<Test> {
-			members: vec![10, 20, 30],
+			members: bounded_vec![10, 20, 30],
 			..Default::default()
 		}
 		.assimilate_storage(&mut t)
@@ -661,7 +652,7 @@ mod tests {
 			);
 			assert_ok!(Membership::add_member(Origin::signed(1), 15));
 			assert_eq!(Membership::members(), vec![10, 15, 20, 30]);
-			assert_eq!(MEMBERS.with(|m| m.borrow().clone()), Membership::members());
+			assert_eq!(MEMBERS.with(|m| m.borrow().clone()), Membership::members().to_vec());
 		});
 	}
 
@@ -676,7 +667,7 @@ mod tests {
 			assert_ok!(Membership::set_prime(Origin::signed(5), 20));
 			assert_ok!(Membership::remove_member(Origin::signed(2), 20));
 			assert_eq!(Membership::members(), vec![10, 30]);
-			assert_eq!(MEMBERS.with(|m| m.borrow().clone()), Membership::members());
+			assert_eq!(MEMBERS.with(|m| m.borrow().clone()), Membership::members().to_vec());
 			assert_eq!(Membership::prime(), None);
 			assert_eq!(PRIME.with(|m| *m.borrow()), Membership::prime());
 		});
@@ -704,7 +695,7 @@ mod tests {
 			assert_ok!(Membership::set_prime(Origin::signed(5), 10));
 			assert_ok!(Membership::swap_member(Origin::signed(3), 10, 25));
 			assert_eq!(Membership::members(), vec![20, 25, 30]);
-			assert_eq!(MEMBERS.with(|m| m.borrow().clone()), Membership::members());
+			assert_eq!(MEMBERS.with(|m| m.borrow().clone()), Membership::members().to_vec());
 			assert_eq!(Membership::prime(), None);
 			assert_eq!(PRIME.with(|m| *m.borrow()), Membership::prime());
 		});
@@ -715,7 +706,7 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Membership::swap_member(Origin::signed(3), 10, 5));
 			assert_eq!(Membership::members(), vec![5, 20, 30]);
-			assert_eq!(MEMBERS.with(|m| m.borrow().clone()), Membership::members());
+			assert_eq!(MEMBERS.with(|m| m.borrow().clone()), Membership::members().to_vec());
 		});
 	}
 
@@ -733,7 +724,7 @@ mod tests {
 			);
 			assert_ok!(Membership::change_key(Origin::signed(10), 40));
 			assert_eq!(Membership::members(), vec![20, 30, 40]);
-			assert_eq!(MEMBERS.with(|m| m.borrow().clone()), Membership::members());
+			assert_eq!(MEMBERS.with(|m| m.borrow().clone()), Membership::members().to_vec());
 			assert_eq!(Membership::prime(), Some(40));
 			assert_eq!(PRIME.with(|m| *m.borrow()), Membership::prime());
 		});
@@ -744,7 +735,7 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Membership::change_key(Origin::signed(10), 5));
 			assert_eq!(Membership::members(), vec![5, 20, 30]);
-			assert_eq!(MEMBERS.with(|m| m.borrow().clone()), Membership::members());
+			assert_eq!(MEMBERS.with(|m| m.borrow().clone()), Membership::members().to_vec());
 		});
 	}
 
@@ -752,17 +743,20 @@ mod tests {
 	fn reset_members_works() {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Membership::set_prime(Origin::signed(5), 20));
-			assert_noop!(Membership::reset_members(Origin::signed(1), vec![20, 40, 30]), BadOrigin);
+			assert_noop!(
+				Membership::reset_members(Origin::signed(1), bounded_vec![20, 40, 30]),
+				BadOrigin
+			);
 
 			assert_ok!(Membership::reset_members(Origin::signed(4), vec![20, 40, 30]));
 			assert_eq!(Membership::members(), vec![20, 30, 40]);
-			assert_eq!(MEMBERS.with(|m| m.borrow().clone()), Membership::members());
+			assert_eq!(MEMBERS.with(|m| m.borrow().clone()), Membership::members().to_vec());
 			assert_eq!(Membership::prime(), Some(20));
 			assert_eq!(PRIME.with(|m| *m.borrow()), Membership::prime());
 
 			assert_ok!(Membership::reset_members(Origin::signed(4), vec![10, 40, 30]));
 			assert_eq!(Membership::members(), vec![10, 30, 40]);
-			assert_eq!(MEMBERS.with(|m| m.borrow().clone()), Membership::members());
+			assert_eq!(MEMBERS.with(|m| m.borrow().clone()), Membership::members().to_vec());
 			assert_eq!(Membership::prime(), None);
 			assert_eq!(PRIME.with(|m| *m.borrow()), Membership::prime());
 		});
@@ -772,7 +766,7 @@ mod tests {
 	#[should_panic(expected = "Members cannot contain duplicate accounts.")]
 	fn genesis_build_panics_with_duplicate_members() {
 		pallet_membership::GenesisConfig::<Test> {
-			members: vec![1, 2, 3, 1],
+			members: bounded_vec![1, 2, 3, 1],
 			phantom: Default::default(),
 		}
 		.build_storage()
