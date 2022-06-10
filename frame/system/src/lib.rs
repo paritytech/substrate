@@ -375,6 +375,18 @@ pub mod pallet {
 			Ok(().into())
 		}
 
+		/// Demonstrates how to use extended call data.
+		#[pallet::weight(0)]
+		pub fn dump_ecd(origin: OriginFor<T>) -> DispatchResult {
+			// Load the extended call data from the system storage.
+			let ecd = Pallet::<T>::extended_call_data();
+			if let Some(ecd) = ecd {
+				panic!("ECD: {:?}", &ecd);
+			}
+
+			Ok(())
+		}
+
 		/// Make some on-chain remark.
 		///
 		/// # <weight>
@@ -573,9 +585,14 @@ pub mod pallet {
 		StorageMap<_, Twox64Concat, u32, Vec<u8>, ValueQuery>;
 
 	/// Extended Call Data (ECD) storage for the current extrinsic.
+	///
+	/// This value can be set by the [`ExtendedCallData`] signed extension.
+	/// It only exists for the current extrinsic and gets cleaned up after the extrinsic is done.
+	/// This can be used to upload large blobs of data for example when using `set_code` while still
+	/// allowing `Call` to be `MaxEncodedLen`.
 	#[pallet::storage]
 	#[pallet::getter(fn extended_call_data)]
-	pub(super) type ECDStorage<T: Config> =
+	pub(super) type ExtendedCallDataStorage<T: Config> =
 		StorageValue<_, BoundedVec<u8, ConstU32<4_000_000>>, OptionQuery>;
 
 	/// The current block number being processed. Set by `execute_block`.

@@ -17,11 +17,11 @@
 
 use crate::Config;
 use codec::{Decode, Encode, MaxEncodedLen};
-use frame_support::{traits::ConstU32, weights::DispatchInfo, *};
+use frame_support::{pallet_prelude::DispatchResult, traits::ConstU32, weights::DispatchInfo, *};
 use scale_info::TypeInfo;
 use sp_core::Hasher;
 use sp_runtime::{
-	traits::{DispatchInfoOf, Dispatchable, One, SignedExtension},
+	traits::{DispatchInfoOf, Dispatchable, One, PostDispatchInfoOf, SignedExtension},
 	transaction_validity::{
 		InvalidTransaction, TransactionLongevity, TransactionValidity, TransactionValidityError,
 		ValidTransaction,
@@ -86,12 +86,12 @@ where
 		// TODO refactor into interface
 		//crate::Scheduler::note_bytes(self.0, None).expect("todo");
 
-		let has = crate::ECDStorage::<T>::take().is_some();
+		let has = crate::ExtendedCallDataStorage::<T>::take().is_some();
 		assert!(!has, "Should not be present from past block");
 
 		if let Some(data) = self.0 {
-			let v: Vec<u8> = data.try_into().expect("Must fit");
-			crate::ECDStorage::<T>::set(Some(v.try_into().expect("lol")));
+			let v: Vec<u8> = data.try_into().expect("TODO");
+			crate::ExtendedCallDataStorage::<T>::set(Some(v.try_into().expect("TODO")));
 		}
 		Ok(Default::default())
 	}
@@ -103,9 +103,24 @@ where
 		_info: &DispatchInfoOf<Self::Call>,
 		_len: usize,
 	) -> TransactionValidity {
-		let has = crate::ECDStorage::<T>::get().is_some();
+		// TODO remove
+		let has = crate::ExtendedCallDataStorage::<T>::get().is_some();
 		assert!(has, "Should be present from `pre_validate`");
 
 		Ok(Default::default())
+	}
+
+	fn post_dispatch(
+		_pre: Option<Self::Pre>,
+		_info: &DispatchInfoOf<Self::Call>,
+		_post_info: &PostDispatchInfoOf<Self::Call>,
+		_len: usize,
+		_result: &DispatchResult,
+	) -> Result<(), TransactionValidityError> {
+		// TODO remove
+		let had = crate::ExtendedCallDataStorage::<T>::take().is_some();
+		assert!(had, "Should be present from `pre_validate`");
+
+		Ok(())
 	}
 }

@@ -562,19 +562,6 @@ pub mod pallet {
 			// All good, no refund.
 			Ok(())
 		}
-
-		/// Demonstrates how to use extended call data.
-		#[pallet::weight(0)]
-		pub fn set_from_ecd(origin: OriginFor<T>) -> DispatchResult {
-			ensure_root(origin)?;
-
-			let ecd = frame_system::Pallet::<T>::extended_call_data().expect("Need ECD");
-			let new_value: T::Balance = Decode::decode(&mut &ecd[..]).expect("Must decode balance");
-			<Dummy<T>>::put(new_value);
-
-			Self::deposit_event(Event::SetDummy { balance: new_value });
-			Ok(())
-		}
 	}
 
 	/// Events are a simple means of reporting upecific conditions and

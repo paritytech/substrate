@@ -41,19 +41,30 @@ use sp_std::vec::Vec;
 #[test]
 fn extended_call_data_works() {
 	new_test_ext().execute_with(|| {
-		let info = DispatchInfo::default();
-		let len = 0_usize;
-		// Too large for normal Call data.
+		// Some data that is too large for a normal Call.
 		let raw = vec![0u8; 4_000_000];
 		let ecd: BoundedVec<_, _> = raw.try_into().unwrap();
 
 		let extension = ExtendedCallData::<Test>::from(ecd.clone());
 		// The user must sign the complete ECD.
 		assert_eq!(extension.additional_signed().unwrap(), Some(ecd.clone()));
-		assert!(extension.pre_dispatch(&0, CALL, &info, len).is_ok());
+		let pre = extension
+			.pre_dispatch(&0, CALL, &Default::default(), Default::default())
+			.unwrap();
 
 		// Interesting part here:
 		// Any extrinsic can now access the ECD via this getter function.
 		assert_eq!(System::<Test>::extended_call_data(), Some(ecd));
+
+		assert!(ExtendedCallData::<Test>::post_dispatch(
+			Some(pre),
+			&Default::default(),
+			&Default::default(),
+			Default::default(),
+			&Ok(())
+		)
+		.is_ok());
+
+		assert!(System::<Test>::extended_call_data().is_none());
 	})
 }

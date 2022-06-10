@@ -129,6 +129,41 @@ fn fee_multiplier_increases_and_decreases_on_big_weight() {
 	});
 }
 
+#[test]
+fn extended_call_data_works() {
+	let mut tt = new_test_ext(compact_code_unwrap());
+
+	let time = 42 * 1000;
+	let block = construct_block(
+		&mut tt,
+		1,
+		GENESIS_HASH.into(),
+		vec![CheckedExtrinsic {
+			signed: None,
+			function: Call::System(frame_system::Call::dump_ecd {}),
+		}],
+		(time1 / SLOT_DURATION).into(),
+	);
+
+	// execute a big block.
+	executor_call::<NeverNativeValue, fn() -> _>(
+		&mut t,
+		"Core_execute_block",
+		&block.0,
+		true,
+		None,
+	)
+	.0
+	.unwrap();
+
+	// weight multiplier is increased for next block.
+	//t.execute_with(|| {
+	//	let fm = TransactionPayment::next_fee_multiplier();
+	//	println!("After a small block: {:?} -> {:?}", prev_multiplier, fm);
+	//	assert!(fm < prev_multiplier);
+	//});
+}
+
 fn new_account_info(free_dollars: u128) -> Vec<u8> {
 	frame_system::AccountInfo {
 		nonce: 0u32,
