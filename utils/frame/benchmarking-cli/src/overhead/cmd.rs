@@ -35,7 +35,7 @@ use crate::{
 		bench::{Benchmark, BenchmarkParams, BenchmarkType},
 		template::TemplateData,
 	},
-	shared::WeightParams,
+	shared::{HostInfoParams, WeightParams},
 };
 
 /// Benchmark the execution overhead per-block and per-extrinsic.
@@ -64,6 +64,10 @@ pub struct OverheadParams {
 	#[allow(missing_docs)]
 	#[clap(flatten)]
 	pub bench: BenchmarkParams,
+
+	#[allow(missing_docs)]
+	#[clap(flatten)]
+	pub hostinfo: HostInfoParams,
 }
 
 /// Used by the benchmark to build signed extrinsics.

@@ -27,10 +27,10 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug, thiserror::Error)]
 #[allow(missing_docs)]
 pub enum Error {
-	#[error("Transaction pool error")]
+	#[error("Transaction pool error: {0}")]
 	Pool(#[from] TxPoolError),
 
-	#[error("Blockchain error")]
+	#[error("Blockchain error: {0}")]
 	Blockchain(#[from] sp_blockchain::Error),
 
 	#[error("Block conversion error: {0}")]
