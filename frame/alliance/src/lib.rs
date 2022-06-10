@@ -207,7 +207,7 @@ pub enum UnscrupulousItem<AccountId, Url> {
 	Website(Url),
 }
 
-type UnscrupulousItemOf<T, I> = 
+type UnscrupulousItemOf<T, I> =
 	UnscrupulousItem<<T as frame_system::Config>::AccountId, UrlOf<T, I>>;
 
 #[frame_support::pallet]
@@ -1003,7 +1003,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			<UnscrupulousAccounts<T, I>>::try_mutate(|accounts| -> DispatchResult {
 				for who in out_accounts.iter() {
 					let pos =
-						accounts.binary_search(who).ok().ok_or(Error::<T, I>::NotListedAsUnscrupulous)?;
+						accounts
+							.binary_search(who)
+							.ok()
+							.ok_or(Error::<T, I>::NotListedAsUnscrupulous)?;
 					accounts.remove(pos);
 				}
 				Ok(())
@@ -1012,7 +1015,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		if !out_webs.is_empty() {
 			<UnscrupulousWebsites<T, I>>::try_mutate(|webs| -> DispatchResult {
 				for web in out_webs.iter() {
-					let pos = webs.binary_search(web).ok().ok_or(Error::<T, I>::NotListedAsUnscrupulous)?;
+					let pos = webs
+						.binary_search(web)
+						.ok()
+						.ok_or(Error::<T, I>::NotListedAsUnscrupulous)?;
 					webs.remove(pos);
 				}
 				Ok(())

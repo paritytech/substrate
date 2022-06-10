@@ -449,7 +449,10 @@ fn add_unscrupulous_items_works() {
 		assert_eq!(Alliance::unscrupulous_websites().into_inner(), vec!["abc".as_bytes().to_vec()]);
 
 		assert_noop!(
-			Alliance::add_unscrupulous_items(Origin::signed(3), vec![UnscrupulousItem::AccountId(3)]),
+			Alliance::add_unscrupulous_items(
+				Origin::signed(3),
+				vec![UnscrupulousItem::AccountId(3)]
+			),
 			Error::<Test, ()>::AlreadyUnscrupulous
 		);
 	});
@@ -459,7 +462,10 @@ fn add_unscrupulous_items_works() {
 fn remove_unscrupulous_items_works() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
-			Alliance::remove_unscrupulous_items(Origin::signed(3), vec![UnscrupulousItem::AccountId(3)]),
+			Alliance::remove_unscrupulous_items(
+				Origin::signed(3),
+				vec![UnscrupulousItem::AccountId(3)]
+			),
 			Error::<Test, ()>::NotListedAsUnscrupulous
 		);
 
