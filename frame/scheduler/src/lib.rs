@@ -59,12 +59,10 @@ mod tests;
 pub mod weights;
 
 use codec::{Codec, Decode, Encode};
-use derivative::Derivative;
 use frame_support::{
 	dispatch::{DispatchError, DispatchResult, Dispatchable, Parameter},
 	pallet_prelude::MaxEncodedLen,
 	traits::{
-		defensive_prelude::*,
 		schedule::{self, DispatchTime, MaybeHashed},
 		EnsureOrigin, Get, IsType, OriginTrait, PalletInfoAccess, PrivilegeCmp, StorageVersion,
 	},
@@ -86,33 +84,7 @@ pub type PeriodicIndex = u32;
 /// The location of a scheduled task that can be used to remove it.
 pub type TaskAddress<BlockNumber> = (BlockNumber, u32);
 
-/// Wraps a `CallOrHashOf` to make it compatible with MaxEncodedLen
-/// since a `Call` is otherwise not encodable with limited length.
-#[derive(MaxEncodedLen, Debug, Decode, Clone, Encode, PartialEq, Eq, scale_info::TypeInfo)]
-#[codec(mel_bound(T: Config))]
-#[scale_info(skip_type_params(T))]
-pub struct EncodedCallOrHashOf<T: Config>(pub BoundedVec<u8, <T as Config>::MaxCallLen>);
-
 pub type CallOrHashOf<T> = MaybeHashed<<T as Config>::Call, <T as frame_system::Config>::Hash>;
-
-impl<T: Config> EncodedCallOrHashOf<T> {
-	/// Creates a new `Self` from the given `CallOrHashOf`.
-	pub fn new(inner: CallOrHashOf<T>) -> Result<Self, crate::Error<T>> {
-		let encoded: BoundedVec<u8, <T as Config>::MaxCallLen> =
-			inner.encode().try_into().map_err(|_| crate::Error::CallTooLong)?;
-		Ok(Self(encoded))
-	}
-
-	/// Creates a new `Self` from the given `Call`.
-	pub fn from_call(call: <T as Config>::Call) -> Result<Self, crate::Error<T>> {
-		Self::new(call.into())
-	}
-
-	/// Returns the wrapped `CallOrHashOf`.
-	pub fn into_inner(self) -> CallOrHashOf<T> {
-		CallOrHashOf::<T>::decode(&mut &self.0[..]).expect("Must decode")
-	}
-}
 
 #[cfg_attr(any(feature = "std", test), derive(PartialEq, Eq))]
 #[derive(Clone, RuntimeDebug, Encode, Decode)]
@@ -122,44 +94,6 @@ struct ScheduledV1<Call, BlockNumber> {
 	call: Call,
 	maybe_periodic: Option<schedule::Period<BlockNumber>>,
 }
-
-// NOTE: use `Derivative` here until <https://github.com/rust-lang/rust/issues/26925> is fixed.
-// The problem is that `#[derive(Clone)]` requires `Clone` for ALL its generic types,
-// which does not make sense for `Get<>`.
-#[derive(Derivative)]
-#[derivative(Clone(bound = "T: Clone"), PartialEq(bound = "T: PartialEq"), Eq(bound = "T: Eq"))]
-#[derive(Debug, Decode, Encode, scale_info::TypeInfo)]
-#[scale_info(skip_type_params(S))]
-pub struct BoundedCodecWrapper<T, S: Get<u32>>(pub BoundedVec<u8, S>, PhantomData<T>);
-
-impl<T, S> MaxEncodedLen for BoundedCodecWrapper<T, S>
-where
-	S: Get<u32>,
-{
-	fn max_encoded_len() -> usize {
-		S::get() as usize
-	}
-}
-
-impl<T, S> BoundedCodecWrapper<T, S>
-where
-	T: codec::Encode + codec::Decode,
-	S: Get<u32>,
-{
-	/// Creates a new `Self` from the given `T`.
-	//
-	// NOTE: No `TryFrom/TryInto` possible until <https://github.com/rust-lang/rust/issues/50133>.
-	pub fn try_from(inner: T) -> Result<Self, ()> {
-		let encoded: BoundedVec<u8, S> = inner.encode().try_into().map_err(|_| ())?;
-		Ok(Self(encoded, PhantomData::<T>::default()))
-	}
-
-	/// Returns the wrapped `CallOrHashOf`.
-	pub fn try_into_inner(self) -> Result<T, ()> {
-		Decode::decode(&mut &self.0[..]).map_err(|_| ())
-	}
-}
-
 /// Information regarding an item to be executed in the future.
 #[cfg_attr(any(feature = "std", test), derive(PartialEq, Eq))]
 #[derive(Clone, RuntimeDebug, Encode, Decode, TypeInfo, MaxEncodedLen)]
@@ -198,9 +132,9 @@ pub type ScheduledV3Of<T> = ScheduledV3<
 >;
 
 pub type ScheduledV4Of<T> = ScheduledV3<
-	EncodedCallOrHashOf<T>,
+	CallOrHashOf<T>,
 	<T as frame_system::Config>::BlockNumber,
-	BoundedCodecWrapper<<T as Config>::PalletsOrigin, <T as Config>::MaxPalletsOriginLen>,
+	<T as Config>::PalletsOrigin,
 	<T as frame_system::Config>::AccountId,
 	ScheduleIdOf<T>,
 >;
@@ -271,6 +205,7 @@ pub mod pallet {
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
 	#[pallet::storage_version(STORAGE_VERSION)]
+	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
 	/// `system::Config` should always be included in our implied traits.
@@ -434,13 +369,8 @@ pub mod pallet {
 					false
 				};
 
-				let (call, maybe_completed) = s.call.into_inner().resolved::<T::PreimageProvider>();
-				let encoded_call = match EncodedCallOrHashOf::<T>::new(call.clone()).defensive_ok()
-				{
-					Some(encoded) => encoded,
-					None => continue, // This is a defensive failure and should never happen.
-				};
-				s.call = encoded_call;
+				let (call, maybe_completed) = s.call.resolved::<T::PreimageProvider>();
+				s.call = call;
 
 				let resolved = if let Some(completed) = maybe_completed {
 					T::PreimageProvider::unrequest_preimage(&completed);
@@ -449,8 +379,7 @@ pub mod pallet {
 					false
 				};
 
-				//let call = s.call.clone().into_inner();
-				let call = match call {
+				let call = match s.call.clone() {
 					MaybeHashed::Value(c) => c,
 					MaybeHashed::Hash(hash) => {
 						// Preimage not available - postpone until some block.
@@ -476,13 +405,8 @@ pub mod pallet {
 				let periodic = s.maybe_periodic.is_some();
 				let call_weight = call.get_dispatch_info().weight;
 				let mut item_weight = T::WeightInfo::item(periodic, named, Some(resolved));
-				let decoded_origin = s
-					.origin
-					.clone()
-					.try_into_inner()
-					.expect("The call was encoded successfully and must therefore decode; qed");
 				let origin =
-					<<T as Config>::Origin as From<T::PalletsOrigin>>::from(decoded_origin.clone())
+					<<T as Config>::Origin as From<T::PalletsOrigin>>::from(s.origin.clone())
 						.into();
 				if ensure_signed(origin).is_ok() {
 					// Weights of Signed dispatches expect their signing account to be whitelisted.
@@ -513,7 +437,7 @@ pub mod pallet {
 					continue
 				}
 
-				let dispatch_origin = decoded_origin.into();
+				let dispatch_origin = s.origin.clone().into();
 				let (maybe_actual_call_weight, result) = match call.dispatch(dispatch_origin) {
 					Ok(post_info) => (post_info.actual_weight, Ok(())),
 					Err(error_and_info) =>
@@ -693,8 +617,6 @@ impl<T: Config> Pallet<T> {
 						.map(|schedule| {
 							weight.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
 
-							let call = EncodedCallOrHashOf::<T>::from_call(schedule.call)
-								.expect("Expected to encode call into V4 format");
 							let id = schedule.maybe_id.map(|id| {
 								id.try_into()
 									.expect("ID too long, cannot migrate. Try to increase ")
@@ -703,12 +625,9 @@ impl<T: Config> Pallet<T> {
 							ScheduledV4Of::<T> {
 								maybe_id: id,
 								priority: schedule.priority,
-								call: call.into(),
+								call: schedule.call.into(),
 								maybe_periodic: schedule.maybe_periodic,
-								origin: BoundedCodecWrapper::try_from(
-									system::RawOrigin::Root.into(),
-								)
-								.expect("Cannot encode origin. Increase `MaxPalletsOriginLen`."),
+								origin: system::RawOrigin::Root.into(),
 								_phantom: Default::default(),
 							}
 						})
@@ -744,7 +663,6 @@ impl<T: Config> Pallet<T> {
 					.filter_map(|s| s)
 					.map(|schedule| {
 						weight.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
-							let call = EncodedCallOrHashOf::<T>::new(schedule.call).expect("TODO");
 							let id = schedule.maybe_id.map(|id|
 								id.try_into().expect("ID too long")
 							);
@@ -752,9 +670,9 @@ impl<T: Config> Pallet<T> {
 							ScheduledV4Of::<T> {
 							maybe_id: id,
 							priority: schedule.priority,
-							call: call.into(),
+							call: schedule.call.into(),
 							maybe_periodic: schedule.maybe_periodic,
-							origin: BoundedCodecWrapper::try_from(schedule.origin).expect("Cannot encode origin. Increase `MaxPalletsOriginLen`."),
+							origin: schedule.origin,
 							_phantom: Default::default(),
 						}
 					})
@@ -789,7 +707,6 @@ impl<T: Config> Pallet<T> {
 					.filter_map(|s| s)
 					.map(|schedule| {
 						weight.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
-							let call = EncodedCallOrHashOf::<T>::from_call(schedule.call).expect("TODO");
 							let id = schedule.maybe_id.map(|id|
 								id.try_into().expect("ID too long")
 							);
@@ -797,9 +714,9 @@ impl<T: Config> Pallet<T> {
 							ScheduledV4Of::<T> {
 							maybe_id: id,
 							priority: schedule.priority,
-							call: call.into(),
+							call: schedule.call.into(),
 							maybe_periodic: schedule.maybe_periodic,
-							origin: BoundedCodecWrapper::try_from(schedule.origin).expect("Cannot encode origin. Increase `MaxPalletsOriginLen`."),
+							origin: schedule.origin,
 							_phantom: Default::default(),
 						}
 					})
@@ -844,7 +761,7 @@ impl<T: Config> Pallet<T> {
 		Agenda::<T>::translate::<
 			Vec<
 				Scheduled<
-					EncodedCallOrHashOf<T>,
+					CallOrHashOf<T>,
 					T::BlockNumber,
 					OldOrigin,
 					T::AccountId,
@@ -861,8 +778,7 @@ impl<T: Config> Pallet<T> {
 						priority: schedule.priority,
 						call: schedule.call.into(),
 						maybe_periodic: schedule.maybe_periodic,
-						origin: BoundedCodecWrapper::try_from(schedule.origin.into())
-							.expect("Cannot encode origin. Increase `MaxPalletsOriginLen`."),
+						origin: schedule.origin.into(),
 						_phantom: Default::default(),
 					})
 					.collect::<Vec<_>>()
@@ -898,7 +814,6 @@ impl<T: Config> Pallet<T> {
 	) -> Result<TaskAddress<T::BlockNumber>, DispatchError> {
 		let when = Self::resolve_time(when)?;
 		call.ensure_requested::<T::PreimageProvider>();
-		let call = EncodedCallOrHashOf::<T>::new(call)?;
 
 		// sanitize maybe_periodic
 		let maybe_periodic = maybe_periodic
@@ -910,8 +825,7 @@ impl<T: Config> Pallet<T> {
 			priority,
 			call,
 			maybe_periodic,
-			origin: BoundedCodecWrapper::try_from(origin)
-				.map_err(|_| Error::<T>::PalletsOriginTooLong)?,
+			origin,
 			_phantom: PhantomData::<T::AccountId>::default(),
 		};
 		Agenda::<T>::try_append(when, s).map_err(|_| Error::<T>::FailedToSchedule)?;
@@ -927,11 +841,10 @@ impl<T: Config> Pallet<T> {
 	) -> Result<(), DispatchError> {
 		let mut agenda = Agenda::<T>::try_get(when).map_err(|_| Error::<T>::NotFound)?;
 		let schedule = agenda.get(index as usize).ok_or(Error::<T>::NotFound)?.clone();
-		let decoded_origin = schedule.origin.clone().try_into_inner().expect("TODO");
 
 		if let Some(ref o) = origin {
 			if matches!(
-				T::OriginPrivilegeCmp::cmp_privilege(o, &decoded_origin,),
+				T::OriginPrivilegeCmp::cmp_privilege(o, &schedule.origin),
 				Some(Ordering::Less) | None
 			) {
 				return Err(BadOrigin.into())
@@ -945,7 +858,7 @@ impl<T: Config> Pallet<T> {
 			Agenda::<T>::insert(when, agenda);
 		}
 
-		schedule.call.into_inner().ensure_unrequested::<T::PreimageProvider>();
+		schedule.call.ensure_unrequested::<T::PreimageProvider>();
 		if let Some(id) = schedule.maybe_id {
 			Lookup::<T>::remove(id);
 		}
@@ -992,7 +905,6 @@ impl<T: Config> Pallet<T> {
 		let when = Self::resolve_time(when)?;
 
 		call.ensure_requested::<T::PreimageProvider>();
-		let call = EncodedCallOrHashOf::<T>::new(call)?;
 
 		// sanitize maybe_periodic
 		let maybe_periodic = maybe_periodic
@@ -1005,8 +917,7 @@ impl<T: Config> Pallet<T> {
 			priority,
 			call,
 			maybe_periodic,
-			origin: BoundedCodecWrapper::try_from(origin)
-				.map_err(|_| Error::<T>::PalletsOriginTooLong)?,
+			origin,
 			_phantom: Default::default(),
 		};
 		Agenda::<T>::try_append(when, s).map_err(|_| Error::<T>::TooManyAgendas)?;
