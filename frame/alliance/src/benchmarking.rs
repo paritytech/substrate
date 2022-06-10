@@ -76,8 +76,8 @@ fn outsider<T: Config<I>, I: 'static>(index: u32) -> T::AccountId {
 	funded_account::<T, I>("outsider", index)
 }
 
-fn blacklist<T: Config<I>, I: 'static>(index: u32) -> T::AccountId {
-	funded_account::<T, I>("blacklist", index)
+fn unscrupulous_list<T: Config<I>, I: 'static>(index: u32) -> T::AccountId {
+	funded_account::<T, I>("unscrupulous", index)
 }
 
 fn set_members<T: Config<I>, I: 'static>() {
@@ -733,54 +733,54 @@ benchmarks_instance_pallet! {
 		}.into());
 	}
 
-	add_blacklist_items {
-		let n in 1 .. T::MaxBlacklistCount::get();
+	add_unscrupulous_items {
+		let n in 1 .. T::MaxUnscrupulousItems::get();
 		let l in 1 .. T::MaxWebsiteUrlLength::get();
 
 		set_members::<T, I>();
 
-		let accounts = (0 .. n).map(|i| blacklist::<T, I>(i)).collect::<Vec<_>>();
+		let accounts = (0 .. n).map(|i| unscrupulous_list::<T, I>(i)).collect::<Vec<_>>();
 		let websites = (0 .. n).map(|i| -> BoundedVec<u8, T::MaxWebsiteUrlLength> {
 			BoundedVec::try_from(vec![i as u8; l as usize]).unwrap()
 		}).collect::<Vec<_>>();
 
-		let mut blacklist = Vec::with_capacity(accounts.len() + websites.len());
-		blacklist.extend(accounts.into_iter().map(BlacklistItem::AccountId));
-		blacklist.extend(websites.into_iter().map(BlacklistItem::Website));
+		let mut unscrupulous_list = Vec::with_capacity(accounts.len() + websites.len());
+		unscrupulous_list.extend(accounts.into_iter().map(UnscrupulousItem::AccountId));
+		unscrupulous_list.extend(websites.into_iter().map(UnscrupulousItem::Website));
 
-		let call = Call::<T, I>::add_blacklist_items { items: blacklist.clone() };
+		let call = Call::<T, I>::add_unscrupulous_items { items: unscrupulous_list.clone() };
 		let origin = T::AnnouncementOrigin::successful_origin();
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
-		assert_last_event::<T, I>(Event::BlacklistItemsAdded { items: blacklist }.into());
+		assert_last_event::<T, I>(Event::UnscrupulousItemAdded { items: unscrupulous_list }.into());
 	}
 
-	remove_blacklist_items {
-		let n in 1 .. T::MaxBlacklistCount::get();
+	remove_unscrupulous_items {
+		let n in 1 .. T::MaxUnscrupulousItems::get();
 		let l in 1 .. T::MaxWebsiteUrlLength::get();
 
 		set_members::<T, I>();
 
-		let mut accounts = (0 .. n).map(|i| blacklist::<T, I>(i)).collect::<Vec<_>>();
+		let mut accounts = (0 .. n).map(|i| unscrupulous_list::<T, I>(i)).collect::<Vec<_>>();
 		accounts.sort();
-		let accounts: BoundedVec<_, T::MaxBlacklistCount> = accounts.try_into().unwrap();
-		AccountBlacklist::<T, I>::put(accounts.clone());
+		let accounts: BoundedVec<_, T::MaxUnscrupulousItems> = accounts.try_into().unwrap();
+		UnscrupulousAccounts::<T, I>::put(accounts.clone());
 
 		let mut websites = (0 .. n).map(|i| -> BoundedVec<_, T::MaxWebsiteUrlLength>
 			{ BoundedVec::try_from(vec![i as u8; l as usize]).unwrap() }).collect::<Vec<_>>();
 		websites.sort();
-		let websites: BoundedVec<_, T::MaxBlacklistCount> = websites.try_into().unwrap();
-		WebsiteBlacklist::<T, I>::put(websites.clone());
+		let websites: BoundedVec<_, T::MaxUnscrupulousItems> = websites.try_into().unwrap();
+		UnscrupulousWebsites::<T, I>::put(websites.clone());
 
-		let mut blacklist = Vec::with_capacity(accounts.len() + websites.len());
-		blacklist.extend(accounts.into_iter().map(BlacklistItem::AccountId));
-		blacklist.extend(websites.into_iter().map(BlacklistItem::Website));
+		let mut unscrupulous_list = Vec::with_capacity(accounts.len() + websites.len());
+		unscrupulous_list.extend(accounts.into_iter().map(UnscrupulousItem::AccountId));
+		unscrupulous_list.extend(websites.into_iter().map(UnscrupulousItem::Website));
 
-		let call = Call::<T, I>::remove_blacklist_items { items: blacklist.clone() };
+		let call = Call::<T, I>::remove_unscrupulous_items { items: unscrupulous_list.clone() };
 		let origin = T::AnnouncementOrigin::successful_origin();
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
-		assert_last_event::<T, I>(Event::BlacklistItemsRemoved { items: blacklist }.into());
+		assert_last_event::<T, I>(Event::UnscrupulousItemRemoved { items: unscrupulous_list }.into());
 	}
 
 	impl_benchmark_test_suite!(Alliance, crate::mock::new_bench_ext(), crate::mock::Test);

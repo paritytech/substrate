@@ -17,8 +17,8 @@
 
 //! # Alliance Pallet
 //!
-//! The Alliance Pallet provides a collective that curates a blacklist of accounts and URLs,
-//! presumably agreed by the voting members to be bad actors. The alliance
+//! The Alliance Pallet provides a collective that curates a list of accounts and URLs, deemed by
+//! the voting members to be unscrupulous actors. The alliance
 //!
 //! - provides a set of ethics against bad behavior, and
 //! - provides recognition and influence for those teams that contribute something back to the
@@ -30,8 +30,8 @@
 //! identity and website can join as an Ally. The `MembershipManager` origin can elevate Allies to
 //! Fellows, giving them voting rights within the Alliance.
 //!
-//! Voting members of the Alliance maintain a blacklist of accounts and websites. Members can also
-//! vote to update the Alliance's rule and make announcements.
+//! Voting members of the Alliance maintain a list of accounts and websites. Members can also vote
+//! to update the Alliance's rule and make announcements.
 //!
 //! ### Terminology
 //!
@@ -47,8 +47,8 @@
 //! - Ally: An account who would like to join the alliance. To become a voting member, Fellow or
 //!   Founder, it will need approval from the `MembershipManager` origin. Any account can join as an
 //!   Ally either by placing a deposit or by nomination from a voting member.
-//! - Blacklist: A list of bad websites and addresses, items can be added or removed by Founders and
-//!   Fellows.
+//! - Unscrupulous List: A list of bad websites and addresses, items can be added or removed by
+//!   Founders and Fellows.
 //!
 //! ## Interface
 //!
@@ -72,8 +72,9 @@
 //! - `nominate_ally` - Nominate a non-member to become an Ally, without deposit.
 //! - `elevate_ally` - Approve an ally to become a Fellow.
 //! - `kick_member` - Kick a member and slash its deposit.
-//! - `add_blacklist_items` - Add some items, either accounts or websites, to the blacklist.
-//! - `remove_blacklist_items` - Remove some items from the blacklist.
+//! - `add_unscrupulous_items` - Add some items, either accounts or websites, to the list of
+//!   unscrupulous items.
+//! - `remove_unscrupulous_items` - Remove some items from the list of unscrupulous items.
 //!
 //! #### For Members (Only Founders)
 //!
@@ -199,14 +200,15 @@ pub enum MemberRole {
 	Ally,
 }
 
-/// The type of item within the blacklist.
+/// The type of item that may be deemed unscrupulous.
 #[derive(Clone, PartialEq, Eq, RuntimeDebug, Encode, Decode, TypeInfo, MaxEncodedLen)]
-pub enum BlacklistItem<AccountId, Url> {
+pub enum UnscrupulousItem<AccountId, Url> {
 	AccountId(AccountId),
 	Website(Url),
 }
 
-type BlacklistItemOf<T, I> = BlacklistItem<<T as frame_system::Config>::AccountId, UrlOf<T, I>>;
+type UnscrupulousItemOf<T, I> = 
+	UnscrupulousItem<<T as frame_system::Config>::AccountId, UrlOf<T, I>>;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -236,7 +238,7 @@ pub mod pallet {
 		/// Origin that manages entry and forcible discharge from the Alliance.
 		type MembershipManager: EnsureOrigin<Self::Origin>;
 
-		/// Origin for making announcements and adding/removing items from the blacklist.
+		/// Origin for making announcements and adding/removing unscrupulous items.
 		type AnnouncementOrigin: EnsureOrigin<Self::Origin>;
 
 		/// The currency used for deposits.
@@ -281,9 +283,9 @@ pub mod pallet {
 		/// + This pallet assumes that dependencies keep to the limit without enforcing it.
 		type MaxAllies: Get<u32>;
 
-		/// The maximum length of the blacklist supported by the pallet.
+		/// The maximum number of the unscrupulous items supported by the pallet.
 		#[pallet::constant]
-		type MaxBlacklistCount: Get<u32>;
+		type MaxUnscrupulousItems: Get<u32>;
 
 		/// The maximum length of a website URL.
 		#[pallet::constant]
@@ -324,12 +326,15 @@ pub mod pallet {
 		NoVotingRights,
 		/// Account is already an elevated (fellow) member.
 		AlreadyElevated,
-		/// Item is already in the blacklist.
-		AlreadyInBlacklist,
-		/// Item is not blacklisted.
-		NotInBlacklist,
-		/// Length of blacklist exceeds `MaxBlacklist`.
-		TooManyItemsInBlacklist,
+		/// Item is already listed as unscrupulous.
+		AlreadyUnscrupulous,
+		/// Account has been deemed unscrupulous by the Alliance and is not welcome to join or be
+		/// nominated.
+		AccountNonGrata,
+		/// Item has not been deemed unscrupulous.
+		NotListedAsUnscrupulous,
+		/// The number of unscrupulous items exceeds `MaxUnscrupulousItems`.
+		TooManyUnscrupulousItems,
 		/// Length of website URL exceeds `MaxWebsiteUrlLength`.
 		TooLongWebsiteUrl,
 		/// Balance is insufficient for the required deposit.
@@ -377,10 +382,10 @@ pub mod pallet {
 		MemberRetired { member: T::AccountId, unreserved: Option<BalanceOf<T, I>> },
 		/// A member has been kicked out with its deposit slashed.
 		MemberKicked { member: T::AccountId, slashed: Option<BalanceOf<T, I>> },
-		/// Accounts or websites have been added into the blacklist.
-		BlacklistItemsAdded { items: Vec<BlacklistItemOf<T, I>> },
-		/// Accounts or websites have been removed from the blacklist.
-		BlacklistItemsRemoved { items: Vec<BlacklistItemOf<T, I>> },
+		/// Accounts or websites have been added into the list of unscrupulous items.
+		UnscrupulousItemAdded { items: Vec<UnscrupulousItemOf<T, I>> },
+		/// Accounts or websites have been removed from the list of unscrupulous items.
+		UnscrupulousItemRemoved { items: Vec<UnscrupulousItemOf<T, I>> },
 	}
 
 	#[pallet::genesis_config]
@@ -478,17 +483,18 @@ pub mod pallet {
 	pub type UpForKicking<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Blake2_128Concat, T::AccountId, bool, ValueQuery>;
 
-	/// The current blacklist of accounts. These accounts cannot submit candidacy.
+	/// The current list of accounts deemed unscrupulous. These accounts non grata cannot submit
+	/// candidacy.
 	#[pallet::storage]
-	#[pallet::getter(fn account_blacklist)]
-	pub type AccountBlacklist<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, BoundedVec<T::AccountId, T::MaxBlacklistCount>, ValueQuery>;
+	#[pallet::getter(fn unscrupulous_accounts)]
+	pub type UnscrupulousAccounts<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, BoundedVec<T::AccountId, T::MaxUnscrupulousItems>, ValueQuery>;
 
-	/// The current blacklist of websites.
+	/// The current list of websites deemed unscrupulous.
 	#[pallet::storage]
-	#[pallet::getter(fn website_blacklist)]
-	pub type WebsiteBlacklist<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, BoundedVec<UrlOf<T, I>, T::MaxBlacklistCount>, ValueQuery>;
+	#[pallet::getter(fn unscrupulous_websites)]
+	pub type UnscrupulousWebsites<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, BoundedVec<UrlOf<T, I>, T::MaxUnscrupulousItems>, ValueQuery>;
 
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
@@ -699,8 +705,8 @@ pub mod pallet {
 		pub fn join_alliance(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
-			// Blacklisted accounts cannot join.
-			ensure!(!Self::account_blacklisted(&who), Error::<T, I>::AlreadyInBlacklist);
+			// Unscrupulous accounts are non grata.
+			ensure!(!Self::is_unscrupulous_account(&who), Error::<T, I>::AccountNonGrata);
 			ensure!(!Self::is_member(&who), Error::<T, I>::AlreadyMember);
 			// check user self or parent should has verified identity to reuse display name and
 			// website.
@@ -731,8 +737,8 @@ pub mod pallet {
 			ensure!(Self::has_voting_rights(&nominator), Error::<T, I>::NoVotingRights);
 			let who = T::Lookup::lookup(who)?;
 
-			// Individual voting members cannot nominate blacklisted accounts.
-			ensure!(!Self::account_blacklisted(&who), Error::<T, I>::AlreadyInBlacklist);
+			// Individual voting members cannot nominate accounts non grata.
+			ensure!(!Self::is_unscrupulous_account(&who), Error::<T, I>::AccountNonGrata);
 			ensure!(!Self::is_member(&who), Error::<T, I>::AlreadyMember);
 			// check user self or parent should has verified identity to reuse display name and
 			// website.
@@ -806,21 +812,21 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Add accounts or websites to the blacklist.
-		#[pallet::weight(T::WeightInfo::add_blacklist_items(items.len() as u32, T::MaxWebsiteUrlLength::get()))]
-		pub fn add_blacklist_items(
+		/// Add accounts or websites to the list of unscrupulous items.
+		#[pallet::weight(T::WeightInfo::add_unscrupulous_items(items.len() as u32, T::MaxWebsiteUrlLength::get()))]
+		pub fn add_unscrupulous_items(
 			origin: OriginFor<T>,
-			items: Vec<BlacklistItemOf<T, I>>,
+			items: Vec<UnscrupulousItemOf<T, I>>,
 		) -> DispatchResult {
 			T::AnnouncementOrigin::ensure_origin(origin)?;
 
 			let mut accounts = vec![];
 			let mut webs = vec![];
 			for info in items.iter() {
-				ensure!(!Self::is_in_blacklist(info), Error::<T, I>::AlreadyInBlacklist);
+				ensure!(!Self::is_unscrupulous(info), Error::<T, I>::AlreadyUnscrupulous);
 				match info {
-					BlacklistItem::AccountId(who) => accounts.push(who.clone()),
-					BlacklistItem::Website(url) => {
+					UnscrupulousItem::AccountId(who) => accounts.push(who.clone()),
+					UnscrupulousItem::Website(url) => {
 						ensure!(
 							url.len() as u32 <= T::MaxWebsiteUrlLength::get(),
 							Error::<T, I>::TooLongWebsiteUrl
@@ -830,29 +836,31 @@ pub mod pallet {
 				}
 			}
 
-			Self::do_add_blacklist_items(&mut accounts, &mut webs)?;
-			Self::deposit_event(Event::BlacklistItemsAdded { items });
+			Self::do_add_unscrupulous_items(&mut accounts, &mut webs)?;
+			Self::deposit_event(Event::UnscrupulousItemAdded { items });
 			Ok(())
 		}
 
-		/// Remove accounts or websites from the blacklist.
-		#[pallet::weight(<T as Config<I>>::WeightInfo::remove_blacklist_items(items.len() as u32, T::MaxWebsiteUrlLength::get()))]
-		pub fn remove_blacklist_items(
+		/// Deem an item no longer unscrupulous.
+		#[pallet::weight(<T as Config<I>>::WeightInfo::remove_unscrupulous_items(
+			items.len() as u32, T::MaxWebsiteUrlLength::get()
+		))]
+		pub fn remove_unscrupulous_items(
 			origin: OriginFor<T>,
-			items: Vec<BlacklistItemOf<T, I>>,
+			items: Vec<UnscrupulousItemOf<T, I>>,
 		) -> DispatchResult {
 			T::AnnouncementOrigin::ensure_origin(origin)?;
 			let mut accounts = vec![];
 			let mut webs = vec![];
 			for info in items.iter() {
-				ensure!(Self::is_in_blacklist(info), Error::<T, I>::NotInBlacklist);
+				ensure!(Self::is_unscrupulous(info), Error::<T, I>::NotListedAsUnscrupulous);
 				match info {
-					BlacklistItem::AccountId(who) => accounts.push(who.clone()),
-					BlacklistItem::Website(url) => webs.push(url.clone()),
+					UnscrupulousItem::AccountId(who) => accounts.push(who.clone()),
+					UnscrupulousItem::Website(url) => webs.push(url.clone()),
 				}
 			}
-			Self::do_remove_blacklist_items(&mut accounts, &mut webs)?;
-			Self::deposit_event(Event::BlacklistItemsRemoved { items });
+			Self::do_remove_unscrupulous_items(&mut accounts, &mut webs)?;
+			Self::deposit_event(Event::UnscrupulousItemRemoved { items });
 			Ok(())
 		}
 	}
@@ -946,37 +954,37 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
-	/// Check if an item is blacklisted.
-	fn is_in_blacklist(info: &BlacklistItemOf<T, I>) -> bool {
+	/// Check if an item is listed as unscrupulous.
+	fn is_unscrupulous(info: &UnscrupulousItemOf<T, I>) -> bool {
 		match info {
-			BlacklistItem::Website(url) => <WebsiteBlacklist<T, I>>::get().contains(url),
-			BlacklistItem::AccountId(who) => <AccountBlacklist<T, I>>::get().contains(who),
+			UnscrupulousItem::Website(url) => <UnscrupulousWebsites<T, I>>::get().contains(url),
+			UnscrupulousItem::AccountId(who) => <UnscrupulousAccounts<T, I>>::get().contains(who),
 		}
 	}
 
-	/// Check if a user is blacklisted.
-	fn account_blacklisted(who: &T::AccountId) -> bool {
-		<AccountBlacklist<T, I>>::get().contains(who)
+	/// Check if an account is listed as unscrupulous.
+	fn is_unscrupulous_account(who: &T::AccountId) -> bool {
+		<UnscrupulousAccounts<T, I>>::get().contains(who)
 	}
 
-	/// Add identity info to the blacklist set.
-	fn do_add_blacklist_items(
+	/// Add item to the unscrupulous list.
+	fn do_add_unscrupulous_items(
 		new_accounts: &mut Vec<T::AccountId>,
 		new_webs: &mut Vec<UrlOf<T, I>>,
 	) -> DispatchResult {
 		if !new_accounts.is_empty() {
-			<AccountBlacklist<T, I>>::try_mutate(|accounts| -> DispatchResult {
+			<UnscrupulousAccounts<T, I>>::try_mutate(|accounts| -> DispatchResult {
 				accounts
 					.try_append(new_accounts)
-					.map_err(|_| Error::<T, I>::TooManyItemsInBlacklist)?;
+					.map_err(|_| Error::<T, I>::TooManyUnscrupulousItems)?;
 				accounts.sort();
 
 				Ok(())
 			})?;
 		}
 		if !new_webs.is_empty() {
-			<WebsiteBlacklist<T, I>>::try_mutate(|webs| -> DispatchResult {
-				webs.try_append(new_webs).map_err(|_| Error::<T, I>::TooManyItemsInBlacklist)?;
+			<UnscrupulousWebsites<T, I>>::try_mutate(|webs| -> DispatchResult {
+				webs.try_append(new_webs).map_err(|_| Error::<T, I>::TooManyUnscrupulousItems)?;
 				webs.sort();
 
 				Ok(())
@@ -986,25 +994,25 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
-	/// Remove identity info from the blacklist.
-	fn do_remove_blacklist_items(
+	/// Remove item from the unscrupulous list.
+	fn do_remove_unscrupulous_items(
 		out_accounts: &mut Vec<T::AccountId>,
 		out_webs: &mut Vec<UrlOf<T, I>>,
 	) -> DispatchResult {
 		if !out_accounts.is_empty() {
-			<AccountBlacklist<T, I>>::try_mutate(|accounts| -> DispatchResult {
+			<UnscrupulousAccounts<T, I>>::try_mutate(|accounts| -> DispatchResult {
 				for who in out_accounts.iter() {
 					let pos =
-						accounts.binary_search(who).ok().ok_or(Error::<T, I>::NotInBlacklist)?;
+						accounts.binary_search(who).ok().ok_or(Error::<T, I>::NotListedAsUnscrupulous)?;
 					accounts.remove(pos);
 				}
 				Ok(())
 			})?;
 		}
 		if !out_webs.is_empty() {
-			<WebsiteBlacklist<T, I>>::try_mutate(|webs| -> DispatchResult {
+			<UnscrupulousWebsites<T, I>>::try_mutate(|webs| -> DispatchResult {
 				for web in out_webs.iter() {
-					let pos = webs.binary_search(web).ok().ok_or(Error::<T, I>::NotInBlacklist)?;
+					let pos = webs.binary_search(web).ok().ok_or(Error::<T, I>::NotListedAsUnscrupulous)?;
 					webs.remove(pos);
 				}
 				Ok(())

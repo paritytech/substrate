@@ -219,7 +219,7 @@ impl Config for Test {
 	type MaxFounders = MaxFounders;
 	type MaxFellows = MaxFellows;
 	type MaxAllies = MaxAllies;
-	type MaxBlacklistCount = ConstU32<100>;
+	type MaxUnscrupulousItems = ConstU32<100>;
 	type MaxWebsiteUrlLength = ConstU32<255>;
 	type MaxAnnouncementsCount = ConstU32<100>;
 	type MaxMembersCount = MaxMembers;

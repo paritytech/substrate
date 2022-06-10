@@ -282,18 +282,18 @@ fn join_alliance_works() {
 		// check already member
 		assert_noop!(Alliance::join_alliance(Origin::signed(1)), Error::<Test, ()>::AlreadyMember);
 
-		// check already in blacklist
-		assert_ok!(Alliance::add_blacklist_items(
+		// check already listed as unscrupulous
+		assert_ok!(Alliance::add_unscrupulous_items(
 			Origin::signed(3),
-			vec![BlacklistItem::AccountId(4)]
+			vec![UnscrupulousItem::AccountId(4)]
 		));
 		assert_noop!(
 			Alliance::join_alliance(Origin::signed(4)),
-			Error::<Test, ()>::AlreadyInBlacklist
+			Error::<Test, ()>::AccountNonGrata
 		);
-		assert_ok!(Alliance::remove_blacklist_items(
+		assert_ok!(Alliance::remove_unscrupulous_items(
 			Origin::signed(3),
-			vec![BlacklistItem::AccountId(4)]
+			vec![UnscrupulousItem::AccountId(4)]
 		));
 
 		// check deposit funds
@@ -340,18 +340,18 @@ fn nominate_ally_works() {
 			Error::<Test, ()>::NoVotingRights
 		);
 
-		// check already in blacklist
-		assert_ok!(Alliance::add_blacklist_items(
+		// check already listed as unscrupulous
+		assert_ok!(Alliance::add_unscrupulous_items(
 			Origin::signed(3),
-			vec![BlacklistItem::AccountId(4)]
+			vec![UnscrupulousItem::AccountId(4)]
 		));
 		assert_noop!(
 			Alliance::nominate_ally(Origin::signed(1), 4),
-			Error::<Test, ()>::AlreadyInBlacklist
+			Error::<Test, ()>::AccountNonGrata
 		);
-		assert_ok!(Alliance::remove_blacklist_items(
+		assert_ok!(Alliance::remove_unscrupulous_items(
 			Origin::signed(3),
-			vec![BlacklistItem::AccountId(4)]
+			vec![UnscrupulousItem::AccountId(4)]
 		));
 
 		// success to nominate
@@ -436,42 +436,42 @@ fn kick_member_works() {
 }
 
 #[test]
-fn add_blacklist_items_works() {
+fn add_unscrupulous_items_works() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Alliance::add_blacklist_items(
+		assert_ok!(Alliance::add_unscrupulous_items(
 			Origin::signed(3),
 			vec![
-				BlacklistItem::AccountId(3),
-				BlacklistItem::Website("abc".as_bytes().to_vec().try_into().unwrap())
+				UnscrupulousItem::AccountId(3),
+				UnscrupulousItem::Website("abc".as_bytes().to_vec().try_into().unwrap())
 			]
 		));
-		assert_eq!(Alliance::account_blacklist().into_inner(), vec![3]);
-		assert_eq!(Alliance::website_blacklist().into_inner(), vec!["abc".as_bytes().to_vec()]);
+		assert_eq!(Alliance::unscrupulous_accounts().into_inner(), vec![3]);
+		assert_eq!(Alliance::unscrupulous_websites().into_inner(), vec!["abc".as_bytes().to_vec()]);
 
 		assert_noop!(
-			Alliance::add_blacklist_items(Origin::signed(3), vec![BlacklistItem::AccountId(3)]),
-			Error::<Test, ()>::AlreadyInBlacklist
+			Alliance::add_unscrupulous_items(Origin::signed(3), vec![UnscrupulousItem::AccountId(3)]),
+			Error::<Test, ()>::AlreadyUnscrupulous
 		);
 	});
 }
 
 #[test]
-fn remove_blacklist_items_works() {
+fn remove_unscrupulous_items_works() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
-			Alliance::remove_blacklist_items(Origin::signed(3), vec![BlacklistItem::AccountId(3)]),
-			Error::<Test, ()>::NotInBlacklist
+			Alliance::remove_unscrupulous_items(Origin::signed(3), vec![UnscrupulousItem::AccountId(3)]),
+			Error::<Test, ()>::NotListedAsUnscrupulous
 		);
 
-		assert_ok!(Alliance::add_blacklist_items(
+		assert_ok!(Alliance::add_unscrupulous_items(
 			Origin::signed(3),
-			vec![BlacklistItem::AccountId(3)]
+			vec![UnscrupulousItem::AccountId(3)]
 		));
-		assert_eq!(Alliance::account_blacklist(), vec![3]);
-		assert_ok!(Alliance::remove_blacklist_items(
+		assert_eq!(Alliance::unscrupulous_accounts(), vec![3]);
+		assert_ok!(Alliance::remove_unscrupulous_items(
 			Origin::signed(3),
-			vec![BlacklistItem::AccountId(3)]
+			vec![UnscrupulousItem::AccountId(3)]
 		));
-		assert_eq!(Alliance::account_blacklist(), Vec::<u64>::new());
+		assert_eq!(Alliance::unscrupulous_accounts(), Vec::<u64>::new());
 	});
 }

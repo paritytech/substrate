@@ -1,7 +1,7 @@
 # Alliance Pallet
 
-The Alliance Pallet provides a collective that curates a blacklist of accounts and URLs,
-presumably agreed by the voting members to be bad actors. The alliance
+The Alliance Pallet provides a collective that curates a list of accounts and URLs, deemed by
+the voting members to be unscrupulous actors. The alliance
 
 - provides a set of ethics against bad behavior, and
 - provides recognition and influence for those teams that contribute something back to the
@@ -13,8 +13,8 @@ The network initializes the Alliance via a Root call. After that, anyone with an
 identity and website can join as an Ally. The `MembershipManager` origin can elevate Allies to
 Fellows, giving them voting rights within the Alliance.
 
-Voting members of the Alliance maintain a blacklist of accounts and websites. Members can also
-vote to update the Alliance's rule and make announcements.
+Voting members of the Alliance maintain a list of accounts and websites. Members can also vote
+to update the Alliance's rule and make announcements.
 
 ### Terminology
 
@@ -30,8 +30,8 @@ vote to update the Alliance's rule and make announcements.
 - Ally: An account who would like to join the alliance. To become a voting member, Fellow or
   Founder, it will need approval from the `MembershipManager` origin. Any account can join as an
   Ally either by placing a deposit or by nomination from a voting member.
-- Blacklist: A list of bad websites and addresses, items can be added or removed by Founders and
-  Fellows.
+- Unscrupulous List: A list of bad websites and addresses, items can be added or removed by
+  Founders and Fellows.
 
 ## Interface
 
@@ -55,8 +55,9 @@ vote to update the Alliance's rule and make announcements.
 - `nominate_ally` - Nominate a non-member to become an Ally, without deposit.
 - `elevate_ally` - Approve an ally to become a Fellow.
 - `kick_member` - Kick a member and slash its deposit.
-- `add_blacklist_items` - Add some items, either accounts or websites, to the blacklist.
-- `remove_blacklist_items` - Remove some items from the blacklist.
+- `add_unscrupulous_items` - Add some items, either accounts or websites, to the list of
+  unscrupulous items.
+- `remove_unscrupulous_items` - Remove some items from the list of unscrupulous items.
 
 #### For Members (Only Founders)
 
