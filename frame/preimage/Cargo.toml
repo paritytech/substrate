@@ -19,6 +19,7 @@ sp-core = { version = "6.0.0", default-features = false, optional = true, path =
 sp-io = { version = "6.0.0", default-features = false, path = "../../primitives/io" }
 sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
+derivative = "2.2.0"
 
 [dev-dependencies]
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }

@@ -102,7 +102,8 @@ impl Config for Test {
 // This function basically just builds a genesis storage key/value store according to
 // our desired mockup.
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let t = GenesisConfig {
+	let mut storage = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	let config = GenesisConfig {
 		// We use default for brevity, but you can configure as desired if needed.
 		system: Default::default(),
 		balances: Default::default(),
@@ -112,10 +113,12 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			bar: vec![(1, 2), (2, 3)],
 			foo: 24,
 		},
-	}
-	.build_storage()
-	.unwrap();
-	t.into()
+	};
+	config.assimilate_storage(&mut storage).unwrap();
+
+	let mut ext: sp_io::TestExternalities = storage.into();
+	ext.execute_with(|| System::set_block_number(1));
+	ext
 }
 
 #[test]
@@ -152,6 +155,17 @@ fn set_dummy_works() {
 		let test_val = 133;
 		assert_ok!(Example::set_dummy(Origin::root(), test_val.into()));
 		assert_eq!(Example::dummy(), Some(test_val));
+		assert_eq!(System::events().len(), 1);
+	});
+}
+
+#[test]
+fn set_dummy_from_ecd_works() {
+	new_test_ext().execute_with(|| {
+		let test_val = 133;
+		assert_ok!(Example::set_from_ecd(Origin::root()));
+		assert_eq!(Example::dummy(), Some(test_val));
+		assert_eq!(System::events().len(), 1);
 	});
 }
 

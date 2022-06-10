@@ -122,7 +122,7 @@ pub use extensions::{
 	check_genesis::CheckGenesis, check_mortality::CheckMortality,
 	check_non_zero_sender::CheckNonZeroSender, check_nonce::CheckNonce,
 	check_spec_version::CheckSpecVersion, check_tx_version::CheckTxVersion,
-	check_weight::CheckWeight,
+	check_weight::CheckWeight, extended_call_data::ExtendedCallData,
 };
 // Backward compatible re-export.
 pub use extensions::check_mortality::CheckMortality as CheckEra;
@@ -571,6 +571,12 @@ pub mod pallet {
 	#[pallet::getter(fn extrinsic_data)]
 	pub(super) type ExtrinsicData<T: Config> =
 		StorageMap<_, Twox64Concat, u32, Vec<u8>, ValueQuery>;
+
+	/// Extended Call Data (ECD) storage for the current extrinsic.
+	#[pallet::storage]
+	#[pallet::getter(fn extended_call_data)]
+	pub(super) type ECDStorage<T: Config> =
+		StorageValue<_, BoundedVec<u8, ConstU32<4_000_000>>, OptionQuery>;
 
 	/// The current block number being processed. Set by `execute_block`.
 	#[pallet::storage]
