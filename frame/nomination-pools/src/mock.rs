@@ -108,7 +108,6 @@ impl sp_staking::StakingInterface for StakingMock {
 
 	fn nominate(_: Self::AccountId, nominations: Vec<Self::AccountId>) -> DispatchResult {
 		Nominations::set(&Some(nominations));
-		dbg!(Nominations::get());
 		Ok(())
 	}
 

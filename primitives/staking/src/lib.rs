@@ -137,5 +137,5 @@ pub trait StakingInterface {
 
 	/// Get the nominations of a stash, if they are a nominator, `None` otherwise.
 	#[cfg(feature = "runtime-benchmarks")]
-	fn nominations(who: Self::AccountId) -> Option<Vec<Self::AccountId>>;
+	fn nominations(who: Self::AccountId) -> Option<sp_std::prelude::Vec<Self::AccountId>>;
 }
