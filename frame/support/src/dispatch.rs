@@ -2700,7 +2700,9 @@ mod tests {
 		}
 	}
 
-	#[derive(TypeInfo, crate::RuntimeDebug, Eq, PartialEq, Clone, Encode, Decode)]
+	#[derive(
+		TypeInfo, crate::RuntimeDebug, Eq, PartialEq, Clone, Encode, Decode, MaxEncodedLen,
+	)]
 	pub struct OuterOrigin;
 
 	impl From<RawOrigin<<TraitImpl as system::Config>::AccountId>> for OuterOrigin {

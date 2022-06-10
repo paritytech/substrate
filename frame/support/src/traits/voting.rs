@@ -122,7 +122,7 @@ impl<Tally, Moment, Class> PollStatus<Tally, Moment, Class> {
 	}
 }
 
-pub struct ClassCountOf<P, T>(std::marker::PhantomData<(P, T)>);
+pub struct ClassCountOf<P, T>(sp_std::marker::PhantomData<(P, T)>);
 impl<T, P: Polling<T>> sp_runtime::traits::Get<u32> for ClassCountOf<P, T> {
 	fn get() -> u32 {
 		P::classes().len() as u32
