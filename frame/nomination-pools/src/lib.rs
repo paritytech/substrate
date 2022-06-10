@@ -2266,7 +2266,6 @@ impl<T: Config> Pallet<T> {
 		};
 
 		member.reward_pool_total_earnings = reward_pool.total_earnings;
-		member.bonded_pool_total_points = bonded_pool.points;
 		reward_pool.points = current_points.saturating_sub(member_virtual_points);
 		reward_pool.balance = reward_pool.balance.saturating_sub(member_payout);
 
