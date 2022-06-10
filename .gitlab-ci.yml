@@ -91,11 +91,6 @@ default:
 
 .docker-env:
   image:                           "${CI_IMAGE}"
-  before_script:
-    - !reference [.rust-info-script, script]
-    - !reference [before_script]
-  after_script:
-    - !reference [after_script]
   tags:
     - linux-docker
 
