@@ -488,7 +488,7 @@ impl FreeingBumpHeapAllocator {
 			.checked_sub(order.size() + HEADER_SIZE)
 			.ok_or_else(|| error("underflow of the currently allocated bytes count"))?;
 
-		log::trace!("after deallocation: {:?}", self.stats,);
+		log::trace!("after deallocation: {:?}", self.stats);
 
 		bomb.disarm();
 		Ok(())
