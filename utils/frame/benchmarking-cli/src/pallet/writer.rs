@@ -68,6 +68,7 @@ struct BenchmarkData {
 	component_reads: Vec<ComponentSlope>,
 	component_writes: Vec<ComponentSlope>,
 	component_ranges: Vec<ComponentRange>,
+	proof_size: u32,
 	comments: Vec<String>,
 }
 
@@ -248,6 +249,14 @@ fn get_benchmark_data(
 		.map(|c| c.clone())
 		.unwrap_or_default();
 
+	// We find the worst case proof size, and use that as the final proof size result.
+	let worst_case_proof_size: u32 = batch
+		.db_results
+		.iter()
+		.max_by_key(|r| r.proof_size)
+		.map(|r| r.proof_size)
+		.unwrap_or_default();
+
 	BenchmarkData {
 		name: String::from_utf8(batch.benchmark.clone()).unwrap(),
 		components,
@@ -258,6 +267,7 @@ fn get_benchmark_data(
 		component_reads: used_reads,
 		component_writes: used_writes,
 		component_ranges,
+		proof_size: worst_case_proof_size,
 		comments,
 	}
 }
@@ -492,7 +502,7 @@ mod test {
 				repeat_reads: 0,
 				writes: (base + slope * i).into(),
 				repeat_writes: 0,
-				proof_size: 0,
+				proof_size: i * 1024,
 				keys: vec![],
 			})
 		}
@@ -531,6 +541,7 @@ mod test {
 			benchmark.component_writes,
 			vec![ComponentSlope { name: component.to_string(), slope, error: 0 }]
 		);
+		assert_eq!(benchmark.proof_size, 4 * 1024);
 	}
 
 	#[test]

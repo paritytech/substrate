@@ -33,6 +33,7 @@ impl<T: frame_system::Config> {{pallet}}::WeightInfo for WeightInfo<T> {
 		{{~#each benchmark.components as |c| ~}}
 		{{~#if (not c.is_used)}}_{{/if}}{{c.name}}: u32, {{/each~}}
 	) -> Weight {
+		// Proof Size: `{{benchmark.proof_size}}` bytes
 		({{underscore benchmark.base_weight}} as Weight)
 			{{#each benchmark.component_weight as |cw|}}
 			// Standard Error: {{underscore cw.error}}
