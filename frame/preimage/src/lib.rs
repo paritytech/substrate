@@ -36,14 +36,14 @@ mod mock;
 mod tests;
 pub mod weights;
 
-use sp_runtime::traits::{BadOrigin, Hash, Saturating};
+use sp_runtime::traits::{BadOrigin, Hash, Saturating, SignedExtension, DispatchInfoOf};
 use sp_std::prelude::*;
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	ensure,
 	pallet_prelude::Get,
-	traits::{Currency, PreimageProvider, PreimageRecipient, ReservableCurrency},
+	traits::{Currency, PreimageProvider, PreimageRecipient, ReservableCurrency, IsSubType},
 	weights::Pays,
 	BoundedVec,
 };
@@ -68,6 +68,34 @@ pub enum RequestStatus<AccountId, Balance> {
 
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+
+
+#[derive(Clone, Eq, PartialEq, Encode, Decode, TypeInfo, RuntimeDebug)]
+pub struct UnboundedBlob(Vec<u8>);
+impl MaxEncodedLen for UnboundedBlob {
+	fn max_encoded_len() -> usize {
+		0
+	}
+}
+
+impl AsRef<Vec<u8>> for UnboundedBlob {
+	fn as_ref(&self) -> &Vec<u8> {
+		&self.0
+	}
+}
+
+impl From<Vec<u8>> for UnboundedBlob {
+	fn from(t: Vec<u8>) -> Self {
+		Self(t)
+	}
+}
+impl From<UnboundedBlob> for Vec<u8> {
+	fn from(t: UnboundedBlob) -> Self {
+		t.0
+	}
+}
+impl<'a> codec::EncodeLike<UnboundedBlob> for Vec<u8> {}
+impl<'a> codec::EncodeLike<UnboundedBlob> for &'a Vec<u8> {}
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -138,6 +166,22 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(super) type PreimageFor<T: Config> =
 		StorageMap<_, Identity, T::Hash, BoundedVec<u8, T::MaxSize>>;
+
+	/// The preimages stored by this pallet.
+	#[pallet::storage]
+	//#[pallet::storage(write-only)]
+	// This is not persisted
+	pub(super) type TempPreimageFor<T: Config> = StorageMap<_, Identity, T::Hash, UnboundedBlob>;
+
+	#[pallet::hooks]
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn on_finalize(_: T::BlockNumber) {
+			// this is fine since a) it's not persisted and b) we want to move to explicitly
+			// transient storage anyway.
+			#[allow(deprecated)]
+			TempPreimageFor::<T>::remove_all(None);
+		}
+	}
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
@@ -314,7 +358,9 @@ impl<T: Config> PreimageProvider<T::Hash> for Pallet<T> {
 	}
 
 	fn get_preimage(hash: &T::Hash) -> Option<Vec<u8>> {
-		PreimageFor::<T>::get(hash).map(|preimage| preimage.to_vec())
+		TempPreimageFor::<T>::get(hash).map(|preimage| preimage.into()).or_else(||
+			PreimageFor::<T>::get(hash).map(|preimage| preimage.to_vec())
+		)
 	}
 
 	fn request_preimage(hash: &T::Hash) {
@@ -342,3 +388,74 @@ impl<T: Config> PreimageRecipient<T::Hash> for Pallet<T> {
 		debug_assert!(res.is_ok(), "unnote_preimage failed - request outstanding?");
 	}
 }
+
+/// Place temporary primages into non-persistent storage for use in the transaction's call.
+#[derive(Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+#[scale_info(skip_type_params(T))]
+pub struct TempPreimages<T: Config + Send + Sync>(Vec<Vec<u8>>, sp_std::marker::PhantomData<T>)
+where
+	<T as frame_system::Config>::Call: IsSubType<Call<T>>;
+
+impl<T: Config + Send + Sync> sp_std::fmt::Debug for TempPreimages<T>
+where
+	<T as frame_system::Config>::Call: IsSubType<Call<T>>,
+{
+	#[cfg(feature = "std")]
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
+		write!(f, "TempPreimages")
+	}
+
+	#[cfg(not(feature = "std"))]
+	fn fmt(&self, _: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
+		Ok(())
+	}
+}
+
+impl<T: Config + Send + Sync> TempPreimages<T>
+where
+	<T as frame_system::Config>::Call: IsSubType<Call<T>>,
+{
+	/// Create new `SignedExtension` to feed in preimages.
+	pub fn new(preimages: Vec<Vec<u8>>) -> Self {
+		Self(preimages, sp_std::marker::PhantomData)
+	}
+}
+
+impl<T: Config + Send + Sync> SignedExtension for TempPreimages<T>
+where
+	<T as frame_system::Config>::Call: IsSubType<Call<T>>,
+{
+	type AccountId = T::AccountId;
+	type Call = <T as frame_system::Config>::Call;
+	type AdditionalSigned = ();
+	type Pre = ();
+	const IDENTIFIER: &'static str = "TempPreimages";
+
+	fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
+		Ok(())
+	}
+
+	fn pre_dispatch(
+		self,
+		who: &Self::AccountId,
+		call: &Self::Call,
+		info: &DispatchInfoOf<Self::Call>,
+		len: usize,
+	) -> Result<Self::Pre, TransactionValidityError> {
+		Ok(self.validate(who, call, info, len).map(|_| ())?)
+	}
+
+	fn validate(
+		&self,
+		_who: &Self::AccountId,
+		_call: &Self::Call,
+		_info: &DispatchInfoOf<Self::Call>,
+		_len: usize,
+	) -> TransactionValidity {
+		for i in &self.0 {
+			TempPreimageFor::<T>::insert(T::Hashing::hash(&i[..]), i);
+		}
+		Ok(ValidTransaction::default())
+	}
+}
+
