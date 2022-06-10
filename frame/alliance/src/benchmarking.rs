@@ -76,7 +76,7 @@ fn outsider<T: Config<I>, I: 'static>(index: u32) -> T::AccountId {
 	funded_account::<T, I>("outsider", index)
 }
 
-fn unscrupulous_list<T: Config<I>, I: 'static>(index: u32) -> T::AccountId {
+fn generate_unscrupulous_account<T: Config<I>, I: 'static>(index: u32) -> T::AccountId {
 	funded_account::<T, I>("unscrupulous", index)
 }
 
@@ -739,7 +739,9 @@ benchmarks_instance_pallet! {
 
 		set_members::<T, I>();
 
-		let accounts = (0 .. n).map(|i| unscrupulous_list::<T, I>(i)).collect::<Vec<_>>();
+		let accounts = (0 .. n)
+			.map(|i| generate_unscrupulous_account::<T, I>(i))
+			.collect::<Vec<_>>();
 		let websites = (0 .. n).map(|i| -> BoundedVec<u8, T::MaxWebsiteUrlLength> {
 			BoundedVec::try_from(vec![i as u8; l as usize]).unwrap()
 		}).collect::<Vec<_>>();
@@ -761,7 +763,9 @@ benchmarks_instance_pallet! {
 
 		set_members::<T, I>();
 
-		let mut accounts = (0 .. n).map(|i| unscrupulous_list::<T, I>(i)).collect::<Vec<_>>();
+		let mut accounts = (0 .. n)
+			.map(|i| generate_unscrupulous_account::<T, I>(i))
+			.collect::<Vec<_>>();
 		accounts.sort();
 		let accounts: BoundedVec<_, T::MaxUnscrupulousItems> = accounts.try_into().unwrap();
 		UnscrupulousAccounts::<T, I>::put(accounts.clone());
