@@ -1002,11 +1002,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		if !out_accounts.is_empty() {
 			<UnscrupulousAccounts<T, I>>::try_mutate(|accounts| -> DispatchResult {
 				for who in out_accounts.iter() {
-					let pos =
-						accounts
-							.binary_search(who)
-							.ok()
-							.ok_or(Error::<T, I>::NotListedAsUnscrupulous)?;
+					let pos = accounts
+						.binary_search(who)
+						.ok()
+						.ok_or(Error::<T, I>::NotListedAsUnscrupulous)?;
 					accounts.remove(pos);
 				}
 				Ok(())
