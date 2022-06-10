@@ -18,7 +18,7 @@
 use crate::{self as frame_system, *};
 use frame_support::{
 	parameter_types,
-	traits::{ConstU32, ConstU64},
+	traits::{ConstU32, ConstU64, PreimageProvider},
 };
 use sp_core::H256;
 use sp_runtime::{
@@ -26,7 +26,10 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
 	BuildStorage,
 };
-use sp_std::cell::RefCell;
+use std::{
+	collections::{HashMap, HashSet},
+	cell::RefCell
+};
 
 type UncheckedExtrinsic = mocking::MockUncheckedExtrinsic<Test>;
 type Block = mocking::MockBlock<Test>;
@@ -90,6 +93,29 @@ impl OnKilledAccount<u64> for RecordKilled {
 	}
 }
 
+thread_local! {
+	pub static PREIMAGES: RefCell<HashMap<H256, Vec<u8>>> = RefCell::new(HashMap::new());
+	pub static PREIMAGE_REQUESTS: RefCell<HashSet<H256>> = RefCell::new(HashSet::new());
+}
+
+pub struct TestPreimageProvider;
+impl PreimageProvider<H256> for TestPreimageProvider {
+	fn have_preimage(hash: &H256) -> bool { PREIMAGES.with(|x| x.borrow().contains_key(hash)) }
+
+	/// Returns the preimage for a given hash.
+	fn get_preimage(hash: &H256) -> Option<Vec<u8>> { PREIMAGES.with(|x| x.borrow().get(hash).cloned()) }
+
+	/// Returns whether a preimage request exists for a given hash.
+	fn preimage_requested(hash: &H256) -> bool { PREIMAGE_REQUESTS.with(|r| r.borrow().contains(hash)) }
+
+	/// Request that someone report a preimage. Providers use this to optimise the economics for
+	/// preimage reporting.
+	fn request_preimage(hash: &H256) { PREIMAGE_REQUESTS.with(|r| r.borrow_mut().insert(hash.clone())); }
+
+	/// Cancel a previous preimage request.
+	fn unrequest_preimage(hash: &H256) { PREIMAGE_REQUESTS.with(|r| r.borrow_mut().remove(hash)); }
+}
+
 impl Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = RuntimeBlockWeights;
@@ -115,6 +141,13 @@ impl Config for Test {
 	type SS58Prefix = ();
 	type OnSetCode = ();
 	type MaxConsumers = ConstU32<16>;
+	type PreimageProvider = TestPreimageProvider;
+}
+
+pub fn insert_preimage(v: Vec<u8>) -> H256 {
+	let h = BlakeTwo256::hash(&v[..]);
+	PREIMAGES.with(|p| p.borrow_mut().insert(h.clone(), v));
+	h
 }
 
 pub type SysEvent = frame_system::Event<Test>;
