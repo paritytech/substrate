@@ -27,8 +27,8 @@ use sp_runtime::{
 	BuildStorage,
 };
 use std::{
+	cell::RefCell,
 	collections::{HashMap, HashSet},
-	cell::RefCell
 };
 
 type UncheckedExtrinsic = mocking::MockUncheckedExtrinsic<Test>;
@@ -100,20 +100,30 @@ thread_local! {
 
 pub struct TestPreimageProvider;
 impl PreimageProvider<H256> for TestPreimageProvider {
-	fn have_preimage(hash: &H256) -> bool { PREIMAGES.with(|x| x.borrow().contains_key(hash)) }
+	fn have_preimage(hash: &H256) -> bool {
+		PREIMAGES.with(|x| x.borrow().contains_key(hash))
+	}
 
 	/// Returns the preimage for a given hash.
-	fn get_preimage(hash: &H256) -> Option<Vec<u8>> { PREIMAGES.with(|x| x.borrow().get(hash).cloned()) }
+	fn get_preimage(hash: &H256) -> Option<Vec<u8>> {
+		PREIMAGES.with(|x| x.borrow().get(hash).cloned())
+	}
 
 	/// Returns whether a preimage request exists for a given hash.
-	fn preimage_requested(hash: &H256) -> bool { PREIMAGE_REQUESTS.with(|r| r.borrow().contains(hash)) }
+	fn preimage_requested(hash: &H256) -> bool {
+		PREIMAGE_REQUESTS.with(|r| r.borrow().contains(hash))
+	}
 
 	/// Request that someone report a preimage. Providers use this to optimise the economics for
 	/// preimage reporting.
-	fn request_preimage(hash: &H256) { PREIMAGE_REQUESTS.with(|r| r.borrow_mut().insert(hash.clone())); }
+	fn request_preimage(hash: &H256) {
+		PREIMAGE_REQUESTS.with(|r| r.borrow_mut().insert(hash.clone()));
+	}
 
 	/// Cancel a previous preimage request.
-	fn unrequest_preimage(hash: &H256) { PREIMAGE_REQUESTS.with(|r| r.borrow_mut().remove(hash)); }
+	fn unrequest_preimage(hash: &H256) {
+		PREIMAGE_REQUESTS.with(|r| r.borrow_mut().remove(hash));
+	}
 }
 
 impl Config for Test {

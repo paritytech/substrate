@@ -36,14 +36,14 @@ mod mock;
 mod tests;
 pub mod weights;
 
-use sp_runtime::traits::{BadOrigin, Hash, Saturating, SignedExtension, DispatchInfoOf};
+use sp_runtime::traits::{BadOrigin, DispatchInfoOf, Hash, Saturating, SignedExtension};
 use sp_std::prelude::*;
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	ensure,
 	pallet_prelude::Get,
-	traits::{Currency, PreimageProvider, PreimageRecipient, ReservableCurrency, IsSubType},
+	traits::{Currency, IsSubType, PreimageProvider, PreimageRecipient, ReservableCurrency},
 	weights::Pays,
 	BoundedVec,
 };
@@ -68,7 +68,6 @@ pub enum RequestStatus<AccountId, Balance> {
 
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
-
 
 #[derive(Clone, Eq, PartialEq, Encode, Decode, TypeInfo, RuntimeDebug)]
 pub struct UnboundedBlob(Vec<u8>);
@@ -172,16 +171,6 @@ pub mod pallet {
 	//#[pallet::storage(write-only)]
 	// This is not persisted
 	pub(super) type TempPreimageFor<T: Config> = StorageMap<_, Identity, T::Hash, UnboundedBlob>;
-
-	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_finalize(_: T::BlockNumber) {
-			// this is fine since a) it's not persisted and b) we want to move to explicitly
-			// transient storage anyway.
-			#[allow(deprecated)]
-			TempPreimageFor::<T>::remove_all(None);
-		}
-	}
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
@@ -358,9 +347,9 @@ impl<T: Config> PreimageProvider<T::Hash> for Pallet<T> {
 	}
 
 	fn get_preimage(hash: &T::Hash) -> Option<Vec<u8>> {
-		TempPreimageFor::<T>::get(hash).map(|preimage| preimage.into()).or_else(||
-			PreimageFor::<T>::get(hash).map(|preimage| preimage.to_vec())
-		)
+		TempPreimageFor::<T>::get(hash)
+			.map(|preimage| preimage.into())
+			.or_else(|| PreimageFor::<T>::get(hash).map(|preimage| preimage.to_vec()))
 	}
 
 	fn request_preimage(hash: &T::Hash) {
@@ -457,5 +446,18 @@ where
 		}
 		Ok(ValidTransaction::default())
 	}
-}
 
+	fn post_dispatch(
+		_pre: Option<Self::Pre>,
+		_info: &DispatchInfoOf<Self::Call>,
+		_post_info: &sp_runtime::traits::PostDispatchInfoOf<Self::Call>,
+		_len: usize,
+		_result: &sp_runtime::DispatchResult,
+	) -> Result<(), TransactionValidityError> {
+		// this is fine since a) it's not persisted and b) we want to move to explicitly
+		// transient storage anyway.
+		#[allow(deprecated)]
+		TempPreimageFor::<T>::remove_all(None);
+		Ok(())
+	}
+}

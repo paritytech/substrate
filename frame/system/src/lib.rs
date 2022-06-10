@@ -79,7 +79,7 @@ use sp_runtime::{
 };
 #[cfg(any(feature = "std", test))]
 use sp_std::map;
-use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
+use sp_std::{borrow::Borrow, fmt::Debug, marker::PhantomData, prelude::*};
 use sp_version::RuntimeVersion;
 
 use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen};
@@ -88,7 +88,7 @@ use frame_support::{
 	storage,
 	traits::{
 		ConstU32, Contains, EnsureOrigin, Get, HandleLifetime, OnKilledAccount, OnNewAccount,
-		OriginTrait, PalletInfo, SortedMembers, StoredMap, TypedGet, PreimageProvider,
+		OriginTrait, PalletInfo, PreimageProvider, SortedMembers, StoredMap, TypedGet,
 	},
 	weights::{
 		extract_actual_weight, DispatchClass, DispatchInfo, PerDispatchClass, RuntimeDbWeight,
@@ -296,9 +296,7 @@ pub mod pallet {
 			+ Member
 			+ From<Event<Self>>
 			+ Debug
-			+ IsType<<Self as frame_system::Config>::Event> // TODO: remove as tautology?!?
-		//	+ MaxEncodedLen
-		;
+			+ IsType<<Self as frame_system::Config>::Event>;
 
 		/// Maximum number of block number to block hash mappings to keep (oldest pruned first).
 		#[pallet::constant]
@@ -386,8 +384,8 @@ pub mod pallet {
 		/// # <weight>
 		/// - `O(1)`
 		/// # </weight>
-		#[pallet::weight(T::SystemWeightInfo::remark(_remark.len() as u32))]
-		pub fn remark(origin: OriginFor<T>, _remark: Vec<u8>) -> DispatchResultWithPostInfo {
+		#[pallet::weight(T::SystemWeightInfo::remark(32))]
+		pub fn remark(origin: OriginFor<T>, _remark: T::Hash) -> DispatchResultWithPostInfo {
 			ensure_signed_or_root(origin)?;
 			Ok(().into())
 		}
@@ -416,8 +414,7 @@ pub mod pallet {
 		#[pallet::weight((T::BlockWeights::get().max_block, DispatchClass::Operational))]
 		pub fn set_code(origin: OriginFor<T>, code_hash: T::Hash) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
-			let code = T::PreimageProvider::get_preimage(&code_hash)
-				.ok_or(Error::<T>::UnknownHash)?;
+			let code = Self::preimage_of(code_hash)?;
 			Self::can_set_code(&code)?;
 			T::OnSetCode::set_code(code)?;
 			Ok(().into())
@@ -435,24 +432,32 @@ pub mod pallet {
 		#[pallet::weight((T::BlockWeights::get().max_block, DispatchClass::Operational))]
 		pub fn set_code_without_checks(
 			origin: OriginFor<T>,
-			code: Vec<u8>,
+			code_hash: T::Hash,
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
-			T::OnSetCode::set_code(code)?;
+			T::OnSetCode::set_code(Self::preimage_of(code_hash)?)?;
 			Ok(().into())
 		}
 
 		/// Set some items of storage.
 		#[pallet::weight((
-			T::SystemWeightInfo::set_storage(items.len() as u32),
+			T::SystemWeightInfo::set_storage(*max_items),
 			DispatchClass::Operational,
 		))]
 		pub fn set_storage(
 			origin: OriginFor<T>,
-			items: Vec<KeyValue>,
+			items_hash: T::Hash,
+			max_items: u32,
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
-			for i in &items {
+			let items_data = Self::preimage_of(items_hash)?;
+			let item_count = <codec::Compact<u32>>::decode(&mut &items_data[..])
+				.map_err(|_| Error::<T>::BadPreimage)?;
+			let item_count: u32 = item_count.into();
+			ensure!(item_count <= max_items, Error::<T>::BadWitness);
+			let items = <Vec<(Vec<u8>, Vec<u8>)>>::decode(&mut &items_data[..])
+				.map_err(|_| Error::<T>::BadPreimage)?;
+			for i in items.into_iter().take(max_items as usize) {
 				storage::unhashed::put_raw(&i.0, &i.1);
 			}
 			Ok(().into())
@@ -460,11 +465,22 @@ pub mod pallet {
 
 		/// Kill some items from storage.
 		#[pallet::weight((
-			T::SystemWeightInfo::kill_storage(keys.len() as u32),
+			T::SystemWeightInfo::kill_storage(*max_keys),
 			DispatchClass::Operational,
 		))]
-		pub fn kill_storage(origin: OriginFor<T>, keys: Vec<Key>) -> DispatchResultWithPostInfo {
+		pub fn kill_storage(
+			origin: OriginFor<T>,
+			keys_hash: T::Hash,
+			max_keys: u32,
+		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
+			let keys_data = Self::preimage_of(keys_hash)?;
+			let key_count = <codec::Compact<u32>>::decode(&mut &keys_data[..])
+				.map_err(|_| Error::<T>::BadPreimage)?;
+			let key_count: u32 = key_count.into();
+			ensure!(key_count <= max_keys, Error::<T>::BadWitness);
+			let keys =
+				<Vec<Vec<u8>>>::decode(&mut &keys_data[..]).map_err(|_| Error::<T>::BadPreimage)?;
 			for key in &keys {
 				storage::unhashed::kill(key);
 			}
@@ -481,22 +497,22 @@ pub mod pallet {
 		))]
 		pub fn kill_prefix(
 			origin: OriginFor<T>,
-			prefix: Key,
+			prefix_hash: T::Hash,
 			_subkeys: u32,
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
-			let _ = storage::unhashed::clear_prefix(&prefix, None, None);
+			let _ = storage::unhashed::clear_prefix(&Self::preimage_of(prefix_hash)?, None, None);
 			Ok(().into())
 		}
 
-		/// Make some on-chain remark and emit event.
-		#[pallet::weight(T::SystemWeightInfo::remark_with_event(remark.len() as u32))]
+		/// Ensure some hash's preimage is known and emit an event with it.
+		#[pallet::weight(T::SystemWeightInfo::remark_with_event(32))]
 		pub fn remark_with_event(
 			origin: OriginFor<T>,
-			remark: Vec<u8>,
+			hash: T::Hash,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			let hash = T::Hashing::hash(&remark[..]);
+			ensure!(T::PreimageProvider::have_preimage(&hash), Error::<T>::BadPreimage);
 			Self::deposit_event(Event::Remarked { sender: who, hash });
 			Ok(().into())
 		}
@@ -540,6 +556,10 @@ pub mod pallet {
 		CallFiltered,
 		/// The provided hash is not known by the preimage provider.
 		UnknownHash,
+		/// The provided hash is known however its preimage is not in the right format.
+		BadPreimage,
+		/// A witness datum is invalid.
+		BadWitness,
 	}
 
 	/// Exposed trait-generic origin type.
@@ -977,6 +997,16 @@ pub enum DecRefStatus {
 }
 
 impl<T: Config> Pallet<T> {
+	/// Retrieve the preimage of a given hash or give a `DispatchError`.
+	pub fn preimage_of(h: impl Borrow<T::Hash>) -> Result<Vec<u8>, DispatchError> {
+		Ok(T::PreimageProvider::get_preimage(h.borrow()).ok_or(Error::<T>::BadPreimage)?)
+	}
+
+	/// Retrieve the value whose encoding is the preimage of a given hash or give a `DispatchError`.
+	pub fn unhashed<D: Decode>(h: impl Borrow<T::Hash>) -> Result<D, DispatchError> {
+		Ok(D::decode(&mut &Self::preimage_of(h)?[..]).map_err(|_| Error::<T>::BadPreimage)?)
+	}
+
 	pub fn account_exists(who: &T::AccountId) -> bool {
 		Account::<T>::contains_key(who)
 	}

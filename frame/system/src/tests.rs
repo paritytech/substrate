@@ -418,8 +418,9 @@ fn set_code_with_real_wasm_blob() {
 	ext.register_extension(sp_core::traits::ReadRuntimeVersionExt::new(executor));
 	ext.execute_with(|| {
 		System::set_block_number(1);
-		let h = insert_preimage(substrate_test_runtime_client::runtime::wasm_binary_unwrap().to_vec());
-		System::set_code( RawOrigin::Root.into(), h).unwrap();
+		let h =
+			insert_preimage(substrate_test_runtime_client::runtime::wasm_binary_unwrap().to_vec());
+		System::set_code(RawOrigin::Root.into(), h).unwrap();
 
 		assert_eq!(
 			System::events(),
@@ -438,14 +439,14 @@ fn runtime_upgraded_with_set_storage() {
 	let mut ext = new_test_ext();
 	ext.register_extension(sp_core::traits::ReadRuntimeVersionExt::new(executor));
 	ext.execute_with(|| {
-		System::set_storage(
-			RawOrigin::Root.into(),
+		let h = insert_preimage(
 			vec![(
 				well_known_keys::CODE.to_vec(),
 				substrate_test_runtime_client::runtime::wasm_binary_unwrap().to_vec(),
-			)],
-		)
-		.unwrap();
+			)]
+			.encode(),
+		);
+		System::set_storage(RawOrigin::Root.into(), h, 1).unwrap();
 	});
 }
 
