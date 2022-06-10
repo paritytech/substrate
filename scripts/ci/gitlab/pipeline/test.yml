@@ -11,7 +11,7 @@ cargo-deny:
     - cargo deny check --hide-inclusion-graph -c ./scripts/ci/deny.toml
     - rusty-cachier cache upload
   after_script:
-    - !reference [.rusty-cachier, after_script]
+    - !reference [after_script]
     - echo "___The complete log is in the artifacts___"
     - cargo deny check -c ./scripts/ci/deny.toml 2> deny.log
   artifacts:
@@ -89,7 +89,7 @@ cargo-check-benches:
         git merge $CI_COMMIT_REF_NAME --verbose --no-edit;
       fi
     - !reference [.rust-info-script, script]
-    - !reference [.rusty-cachier, before_script]
+    - !reference [before_script]
   script:
     - rusty-cachier snapshot create
     - mkdir -p ./artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA

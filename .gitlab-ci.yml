@@ -93,9 +93,9 @@ default:
   image:                           "${CI_IMAGE}"
   before_script:
     - !reference [.rust-info-script, script]
-    - !reference [.rusty-cachier, before_script]
+    - !reference [before_script]
   after_script:
-    - !reference [.rusty-cachier, after_script]
+    - !reference [after_script]
   tags:
     - linux-docker
 
