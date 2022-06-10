@@ -117,10 +117,6 @@ pub struct PalletCmd {
 	#[clap(long)]
 	pub extra: bool,
 
-	/// Estimate PoV size.
-	#[clap(long)]
-	pub record_proof: bool,
-
 	#[allow(missing_docs)]
 	#[clap(flatten)]
 	pub shared_params: sc_cli::SharedParams,

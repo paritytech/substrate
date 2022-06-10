@@ -66,7 +66,6 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	) -> Weight {
 		// Proof Size
 		// Base: `{{benchmark.base_proof_size}}` bytes
-		// Components:
 		{{#each benchmark.component_proof_size as |cp|}}
 		// Component Name: `{{cp.name}}`
 		// Component Slope: `{{cp.slope}}`
@@ -110,7 +109,6 @@ impl WeightInfo for () {
 	) -> Weight {
 		// Proof Size
 		// Base: `{{benchmark.base_proof_size}}` bytes
-		// Components:
 		{{#each benchmark.component_proof_size as |cp|}}
 		// Component Name: `{{cp.name}}`
 		// Component Slope: `{{cp.slope}}`

@@ -148,11 +148,20 @@ impl PalletCmd {
 		let state_with_tracking = BenchmarkingState::<BB>::new(
 			genesis_storage.clone(),
 			cache_size,
-			self.record_proof,
+			// Record proof size
+			true,
+			// Enable storage tracking
 			true,
 		)?;
 		let state_without_tracking =
-			BenchmarkingState::<BB>::new(genesis_storage, cache_size, self.record_proof, false)?;
+			BenchmarkingState::<BB>::new(
+				genesis_storage,
+				cache_size,
+				// Do not record proof size
+				false,
+				// Do not enable storage tracking
+				false
+			)?;
 		let executor = NativeElseWasmExecutor::<ExecDispatch>::new(
 			execution_method_from_cli(self.wasm_method, self.wasmtime_instantiation_strategy),
 			self.heap_pages,

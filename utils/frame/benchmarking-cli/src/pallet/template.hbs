@@ -35,7 +35,6 @@ impl<T: frame_system::Config> {{pallet}}::WeightInfo for WeightInfo<T> {
 	) -> Weight {
 		// Proof Size
 		// Base: `{{benchmark.base_proof_size}}` bytes
-		// Components:
 		{{#each benchmark.component_proof_size as |cp|}}
 		//     Component Name: `{{cp.name}}`
 		//     Component Slope: `{{cp.slope}}`
