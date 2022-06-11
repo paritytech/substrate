@@ -2260,6 +2260,7 @@ impl<T: Config> Pallet<T> {
 		if reward_pool.total_earnings == BalanceOf::<T>::max_value() {
 			bonded_pool.set_state(PoolState::Destroying);
 		};
+
 		member.reward_pool_total_earnings = reward_pool.total_earnings;
 		reward_pool.points = current_points.saturating_sub(member_virtual_points);
 		reward_pool.balance = reward_pool.balance.saturating_sub(member_payout);
@@ -2443,7 +2444,7 @@ impl<T: Config> OnStakerSlash<T::AccountId, BalanceOf<T>> for Pallet<T> {
 		slashed_bonded: BalanceOf<T>,
 		slashed_unlocking: &BTreeMap<EraIndex, BalanceOf<T>>,
 	) {
-		if let Some(pool_id) = ReversePoolIdLookup::<T>::get(pool_account).defensive() {
+		if let Some(pool_id) = ReversePoolIdLookup::<T>::get(pool_account) {
 			let mut sub_pools = match SubPoolsStorage::<T>::get(pool_id).defensive() {
 				Some(sub_pools) => sub_pools,
 				None => return,
