@@ -493,7 +493,7 @@ pub mod pallet {
 		/// keys which are then hashed and concatenated, resulting in arbitrarily long keys.
 		///
 		/// Use the *state migration RPC* to retrieve the length of the longest key in your
-		/// storage: https://github.com/paritytech/substrate/issues/11642
+		/// storage: <https://github.com/paritytech/substrate/issues/11642>
 		///
 		/// The migration will halt with a `Halted` event if this value is too small.
 		/// Since there is no real penalty from over-estimating, it is advised to use a large
@@ -505,7 +505,7 @@ pub mod pallet {
 		/// - [`frame_support::storage::StorageDoubleMap`]: 96 byte
 		///
 		/// For more info see
-		/// https://www.shawntabrizi.com/substrate/querying-substrate-storage-via-rpc/
+		/// <https://www.shawntabrizi.com/substrate/querying-substrate-storage-via-rpc/>
 
 		#[pallet::constant]
 		type MaxKeyLen: Get<u32>;
@@ -921,7 +921,6 @@ pub mod pallet {
 mod benchmarks {
 	use super::{pallet::Pallet as StateTrieMigration, *};
 	use frame_support::{
-		bounded_vec,
 		traits::{Currency, Get},
 	};
 	use sp_runtime::traits::Saturating;
@@ -948,7 +947,7 @@ mod benchmarks {
 		continue_migrate_wrong_witness {
 			let null = MigrationLimits::default();
 			let caller = frame_benchmarking::whitelisted_caller();
-			let bad_witness = MigrationTask { progress_top: Progress::LastKey(bounded_vec![1u8]), ..Default::default() };
+			let bad_witness = MigrationTask { progress_top: Progress::LastKey(vec![1u8].try_into().unwrap()), ..Default::default() };
 		}: {
 			assert!(
 				StateTrieMigration::<T>::continue_migrate(
@@ -1263,7 +1262,7 @@ mod mock {
 #[cfg(test)]
 mod test {
 	use super::{mock::*, *};
-	use frame_support::{bounded_vec, dispatch::*, weights::Pays};
+	use frame_support::{bounded_vec, dispatch::*};
 	use sp_runtime::{traits::Bounded, StateVersion};
 
 	#[test]
