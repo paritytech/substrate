@@ -72,7 +72,6 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		// Component Slope: `{{cp.slope}}`
 		// Standard Error: `{{underscore cp.error}}`
 		{{/each}}
-		// Worst Case: {{benchmark.worst_case_proof_size}}
 		({{underscore benchmark.base_weight}} as Weight)
 			{{#each benchmark.component_weight as |cw|}}
 			// Standard Error: {{underscore cw.error}}
@@ -116,7 +115,6 @@ impl WeightInfo for () {
 		// Component Slope: `{{cp.slope}}`
 		// Standard Error: `{{underscore cp.error}}`
 		{{/each}}
-		// Worst Case: {{benchmark.worst_case_proof_size}}
 		({{underscore benchmark.base_weight}} as Weight)
 			{{#each benchmark.component_weight as |cw|}}
 			// Standard Error: {{underscore cw.error}}
