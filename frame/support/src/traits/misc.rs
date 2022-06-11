@@ -27,7 +27,10 @@ pub use sp_runtime::traits::{
 	ConstU64, ConstU8, Get, GetDefault, TypedGet,
 };
 use sp_runtime::{traits::Block as BlockT, DispatchError};
-use sp_std::{cmp::Ordering, prelude::*, borrow::Cow};
+use sp_std::{borrow::Cow, cmp::Ordering, prelude::*};
+
+#[doc(hidden)]
+pub use sp_runtime::traits::PreimageHandler;
 
 #[doc(hidden)]
 pub const DEFENSIVE_OP_PUBLIC_ERROR: &str = "a defensive failure has been triggered; please report the block number at https://github.com/paritytech/substrate/issues";
@@ -701,7 +704,7 @@ where
 	Extra: sp_runtime::traits::SignedExtension,
 {
 	fn call(&self) -> &Self::Call {
-		&self.function
+		&self.function.call
 	}
 }
 
@@ -944,25 +947,6 @@ impl<Hash> PreimageRecipient<Hash> for () {
 	type MaxSize = ();
 	fn note_preimage(_: crate::BoundedVec<u8, Self::MaxSize>) {}
 	fn unnote_preimage(_: &Hash) {}
-}
-
-/// A interface for placing preimages on-chain temporarily. These preimages are unbounded.
-pub trait TempPreimageRecipient<Hash>: PreimageProvider<Hash> {
-	/// Store the bytes of a preimage on chain. If you are using borreowed data, it must be valid
-	/// "forever".
-	fn note_preimage(bytes: Cow<'static, [u8]>);
-
-	/// Clear a previously noted preimage.
-	fn unnote_preimage(hash: &Hash);
-
-	/// Clear all previously noted preimages. This might be faster than removing them one at a time.
-	fn clear();
-}
-
-impl<Hash> TempPreimageRecipient<Hash> for () {
-	fn note_preimage(_: Cow<'static, [u8]>) {}
-	fn unnote_preimage(_: &Hash) {}
-	fn clear() {}
 }
 
 #[cfg(test)]

@@ -22,8 +22,8 @@ use crate::{
 	generic::Digest,
 	scale_info::{MetaType, StaticTypeInfo, TypeInfo},
 	transaction_validity::{
-		TransactionSource, TransactionValidity, TransactionValidityError, UnknownTransaction,
-		ValidTransaction, InvalidTransaction,
+		InvalidTransaction, TransactionSource, TransactionValidity, TransactionValidityError,
+		UnknownTransaction, ValidTransaction,
 	},
 	DispatchResult,
 };
@@ -39,7 +39,12 @@ pub use sp_arithmetic::traits::{
 use sp_core::{self, storage::StateVersion, Hasher, RuntimeDebug, TypeId};
 #[doc(hidden)]
 pub use sp_std::marker::PhantomData;
-use sp_std::{self, fmt::{self, Debug}, borrow::Cow, prelude::*};
+use sp_std::{
+	self,
+	borrow::Cow,
+	fmt::{self, Debug},
+	prelude::*,
+};
 #[cfg(feature = "std")]
 use std::fmt::Display;
 #[cfg(feature = "std")]
@@ -1138,7 +1143,21 @@ pub trait Extrinsic: Sized + MaybeMallocSizeOf {
 	/// 1. Inherents (no signature; created by validators during block production)
 	/// 2. Unsigned Transactions (no signature; represent "system calls" or other special kinds of
 	/// calls) 3. Signed Transactions (with signature; a regular transactions with known origin)
-	fn new(_call: FatCall<Self::Call>, _signed_data: Option<Self::SignaturePayload>) -> Option<Self> {
+	#[deprecated = "Use `from_parts` instead"]
+	fn new(call: Self::Call, signed_data: Option<Self::SignaturePayload>) -> Option<Self> {
+		Self::from_parts(call.into(), signed_data)
+	}
+
+	/// Create new instance of the extrinsic.
+	///
+	/// Extrinsics can be split into:
+	/// 1. Inherents (no signature; created by validators during block production)
+	/// 2. Unsigned Transactions (no signature; represent "system calls" or other special kinds of
+	/// calls) 3. Signed Transactions (with signature; a regular transactions with known origin)
+	fn from_parts(
+		_fat_call: FatCall<Self::Call>,
+		_signed_data: Option<Self::SignaturePayload>,
+	) -> Option<Self> {
 		None
 	}
 }
@@ -1322,7 +1341,9 @@ pub trait SignedExtension:
 		len: usize,
 		aux_data: &AuxData,
 	) -> Result<(), TransactionValidityError> {
-		Self::validate_unsigned(call, info, len, aux_data).map(|_| ()).map_err(Into::into)
+		Self::validate_unsigned(call, info, len, aux_data)
+			.map(|_| ())
+			.map_err(Into::into)
 	}
 
 	/// Do any post-flight stuff for an extrinsic.
@@ -1597,7 +1618,7 @@ impl<Call: Debug> Debug for FatCall<Call> {
 #[cfg(not(feature = "std"))]
 impl<Call: Debug> Debug for FatCall<Call> {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(f, "{:?} + {}", self.function, self.auxilliary_data.len())
+		write!(f, "{:?} + {}", self.call, self.auxilliary_data.len())
 	}
 }
 
@@ -1652,7 +1673,11 @@ pub trait ValidateUnsigned {
 	///
 	/// NOTE: This should check the `aux_data` and ensure that all items there are
 	/// needed for the call.
-	fn validate_unsigned(source: TransactionSource, call: &Self::Call, aux_data: &AuxData) -> TransactionValidity;
+	fn validate_unsigned(
+		source: TransactionSource,
+		call: &Self::Call,
+		aux_data: &AuxData,
+	) -> TransactionValidity;
 }
 
 /// Opaque data type that may be destructured into a series of raw byte slices (which represent

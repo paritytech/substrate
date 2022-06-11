@@ -20,8 +20,8 @@
 
 use crate::{
 	traits::{
-		self, DispatchInfoOf, Dispatchable, MaybeDisplay, Member, PostDispatchInfoOf,
-		SignedExtension, ValidateUnsigned, PreimageHandler, FatCall,
+		self, DispatchInfoOf, Dispatchable, FatCall, MaybeDisplay, Member, PostDispatchInfoOf,
+		PreimageHandler, SignedExtension, ValidateUnsigned,
 	},
 	transaction_validity::{TransactionSource, TransactionValidity},
 };

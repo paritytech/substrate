@@ -20,8 +20,8 @@
 use crate::{
 	generic::CheckedExtrinsic,
 	traits::{
-		self, Checkable, Extrinsic, ExtrinsicMetadata, IdentifyAccount, MaybeDisplay, Member,
-		SignedExtension, FatCall,
+		self, AuxData, Checkable, Extrinsic, ExtrinsicMetadata, FatCall, IdentifyAccount,
+		MaybeDisplay, Member, SignedExtension,
 	},
 	transaction_validity::{InvalidTransaction, TransactionValidityError},
 	OpaqueExtrinsic,
@@ -109,7 +109,12 @@ impl<Address, Call, Signature, Extra: SignedExtension>
 	UncheckedExtrinsic<Address, Call, Signature, Extra>
 {
 	/// New instance of a signed extrinsic aka "transaction".
-	pub fn new_signed(function: FatCall<Call>, signed: Address, signature: Signature, extra: Extra) -> Self {
+	pub fn new_signed(
+		function: FatCall<Call>,
+		signed: Address,
+		signature: Signature,
+		extra: Extra,
+	) -> Self {
 		Self { signature: Some((signed, signature, extra)), function }
 	}
 
@@ -130,7 +135,10 @@ impl<Address, Call, Signature, Extra: SignedExtension> Extrinsic
 		Some(self.signature.is_some())
 	}
 
-	fn new(function: FatCall<Call>, signed_data: Option<Self::SignaturePayload>) -> Option<Self> {
+	fn from_parts(
+		function: FatCall<Call>,
+		signed_data: Option<Self::SignaturePayload>,
+	) -> Option<Self> {
 		Some(if let Some((address, signature, extra)) = signed_data {
 			Self::new_signed(function, address, signature, extra)
 		} else {
@@ -156,12 +164,14 @@ where
 		Ok(match self.signature {
 			Some((signed, signature, extra)) => {
 				let signed = lookup.lookup(signed)?;
-				let raw_payload = SignedPayload::new(self.function, extra)?;
+				let FatCall { call, auxilliary_data } = self.function;
+				let raw_payload = SignedPayload::new(call, &auxilliary_data, extra)?;
 				if !raw_payload.using_encoded(|payload| signature.verify(payload, &signed)) {
 					return Err(InvalidTransaction::BadProof.into())
 				}
 
-				let (function, extra, _) = raw_payload.deconstruct();
+				let (call, extra, ..) = raw_payload.deconstruct();
+				let function = FatCall { call, auxilliary_data };
 				CheckedExtrinsic { signed: Some((signed, extra)), function }
 			},
 			None => CheckedExtrinsic { signed: None, function: self.function },
@@ -178,12 +188,38 @@ where
 	type SignedExtensions = Extra;
 }
 
+/// The maximum number of items of auxilliary data allowed. We limit it to cap the size of `Vec` we
+/// need to have around while hashing.
+pub const MAX_AUXILLIARY_DATA_ITEMS: usize = 256;
+
+pub struct AuxDataHash(Vec<[u8; 32]>);
+impl Encode for AuxDataHash {
+	fn encode_to<T: codec::Output + ?Sized>(&self, output: &mut T) {
+		for i in self.0.iter() {
+			i.encode_to(output)
+		}
+	}
+}
+impl sp_std::convert::TryFrom<&AuxData> for AuxDataHash {
+	type Error = InvalidTransaction;
+	fn try_from(aux_data: &AuxData) -> Result<Self, Self::Error> {
+		// We pre-hash the aux-data to avoid re-encoding a potentially large blob. We use a Merkle-
+		// encoding with 16 items per branch, primarily to avoid stack exhaustion issues.
+		if aux_data.len() > MAX_AUXILLIARY_DATA_ITEMS {
+			return Err(InvalidTransaction::TooManyAuxDataItems)
+		}
+		Ok(AuxDataHash(aux_data.iter().map(|h| blake2_256(&h[..])).collect()))
+	}
+}
+
 /// A payload that has been signed for an unchecked extrinsics.
 ///
 /// Note that the payload that we sign to produce unchecked extrinsic signature
 /// is going to be different than the `SignaturePayload` - so the thing the extrinsic
 /// actually contains.
-pub struct SignedPayload<Call, Extra: SignedExtension>((FatCall<Call>, Extra, Extra::AdditionalSigned));
+pub struct SignedPayload<Call, Extra: SignedExtension>(
+	(Call, Extra, Extra::AdditionalSigned, AuxDataHash),
+);
 
 impl<Call, Extra> SignedPayload<Call, Extra>
 where
@@ -193,26 +229,35 @@ where
 	/// Create new `SignedPayload`.
 	///
 	/// This function may fail if `additional_signed` of `Extra` is not available.
-	pub fn new(call: FatCall<Call>, extra: Extra) -> Result<Self, TransactionValidityError> {
+	pub fn new(
+		call: Call,
+		aux_data: &AuxData,
+		extra: Extra,
+	) -> Result<Self, TransactionValidityError> {
+		let aux_hash = AuxDataHash::try_from(aux_data)?;
 		let additional_signed = extra.additional_signed()?;
-		let raw_payload = (call, extra, additional_signed);
-		Ok(Self(raw_payload))
+		Ok(Self((call, extra, additional_signed, aux_hash)))
 	}
 
 	/// Create new `SignedPayload` from raw components.
-	pub fn from_raw(call: FatCall<Call>, extra: Extra, additional_signed: Extra::AdditionalSigned) -> Self {
-		Self((call, extra, additional_signed))
+	pub fn from_raw(
+		call: Call,
+		aux_data_hash: AuxDataHash,
+		extra: Extra,
+		additional_signed: Extra::AdditionalSigned,
+	) -> Self {
+		Self((call, extra, additional_signed, aux_data_hash))
 	}
 
 	/// Deconstruct the payload into its components.
-	pub fn deconstruct(self) -> (FatCall<Call>, Extra, Extra::AdditionalSigned) {
+	pub fn deconstruct(self) -> (Call, Extra, Extra::AdditionalSigned, AuxDataHash) {
 		self.0
 	}
 }
 
 impl<Call, Extra> Encode for SignedPayload<Call, Extra>
 where
-	FatCall<Call>: Encode,
+	Call: Encode,
 	Extra: SignedExtension,
 {
 	/// Get an encoded version of this payload.
@@ -231,7 +276,7 @@ where
 
 impl<Call, Extra> EncodeLike for SignedPayload<Call, Extra>
 where
-	FatCall<Call>: Encode,
+	Call: Encode,
 	Extra: SignedExtension,
 {
 }
@@ -328,7 +373,8 @@ where
 #[cfg(feature = "std")]
 impl<Address: Encode, Signature: Encode, Call: Encode, Extra: SignedExtension> serde::Serialize
 	for UncheckedExtrinsic<Address, Call, Signature, Extra>
-	where FatCall<Call>: Encode
+where
+	FatCall<Call>: Encode,
 {
 	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error>
 	where
@@ -340,9 +386,9 @@ impl<Address: Encode, Signature: Encode, Call: Encode, Extra: SignedExtension> s
 
 #[cfg(feature = "std")]
 impl<'a, Address: Decode, Signature: Decode, Call: Decode, Extra: SignedExtension>
-	serde::Deserialize<'a>
-	for UncheckedExtrinsic<Address, Call, Signature, Extra>
-	where FatCall<Call>: Decode
+	serde::Deserialize<'a> for UncheckedExtrinsic<Address, Call, Signature, Extra>
+where
+	FatCall<Call>: Decode,
 {
 	fn deserialize<D>(de: D) -> Result<Self, D::Error>
 	where
@@ -393,7 +439,7 @@ mod tests {
 	use crate::{
 		codec::{Decode, Encode},
 		testing::TestSignature as TestSig,
-		traits::{DispatchInfoOf, IdentityLookup, SignedExtension},
+		traits::{AuxData, DispatchInfoOf, IdentityLookup, SignedExtension},
 	};
 	use sp_io::hashing::blake2_256;
 
@@ -423,8 +469,9 @@ mod tests {
 			call: &Self::Call,
 			info: &DispatchInfoOf<Self::Call>,
 			len: usize,
+			aux_data: &AuxData,
 		) -> Result<Self::Pre, TransactionValidityError> {
-			self.validate(who, call, info, len).map(|_| ())
+			self.validate(who, call, info, len, aux_data).map(|_| ())
 		}
 	}
 
@@ -433,14 +480,14 @@ mod tests {
 
 	#[test]
 	fn unsigned_codec_should_work() {
-		let ux = Ex::new_unsigned(vec![0u8; 0]);
+		let ux = Ex::new_unsigned(vec![0u8; 0].into());
 		let encoded = ux.encode();
 		assert_eq!(Ex::decode(&mut &encoded[..]), Ok(ux));
 	}
 
 	#[test]
 	fn invalid_length_prefix_is_detected() {
-		let ux = Ex::new_unsigned(vec![0u8; 0]);
+		let ux = Ex::new_unsigned(vec![0u8; 0].into());
 		let mut encoded = ux.encode();
 
 		let length = Compact::<u32>::decode(&mut &encoded[..]).unwrap();
@@ -452,7 +499,7 @@ mod tests {
 	#[test]
 	fn signed_codec_should_work() {
 		let ux = Ex::new_signed(
-			vec![0u8; 0],
+			vec![0u8; 0].into(),
 			TEST_ACCOUNT,
 			TestSig(TEST_ACCOUNT, (vec![0u8; 0], TestExtra).encode()),
 			TestExtra,
@@ -464,7 +511,7 @@ mod tests {
 	#[test]
 	fn large_signed_codec_should_work() {
 		let ux = Ex::new_signed(
-			vec![0u8; 0],
+			vec![0u8; 0].into(),
 			TEST_ACCOUNT,
 			TestSig(
 				TEST_ACCOUNT,
@@ -478,7 +525,7 @@ mod tests {
 
 	#[test]
 	fn unsigned_check_should_work() {
-		let ux = Ex::new_unsigned(vec![0u8; 0]);
+		let ux = Ex::new_unsigned(vec![0u8; 0].into());
 		assert!(!ux.is_signed().unwrap_or(false));
 		assert!(<Ex as Checkable<TestContext>>::check(ux, &Default::default()).is_ok());
 	}
@@ -486,7 +533,7 @@ mod tests {
 	#[test]
 	fn badly_signed_check_should_fail() {
 		let ux = Ex::new_signed(
-			vec![0u8; 0],
+			vec![0u8; 0].into(),
 			TEST_ACCOUNT,
 			TestSig(TEST_ACCOUNT, vec![0u8; 0]),
 			TestExtra,
@@ -501,7 +548,7 @@ mod tests {
 	#[test]
 	fn signed_check_should_work() {
 		let ux = Ex::new_signed(
-			vec![0u8; 0],
+			vec![0u8; 0].into(),
 			TEST_ACCOUNT,
 			TestSig(TEST_ACCOUNT, (vec![0u8; 0], TestExtra).encode()),
 			TestExtra,
@@ -509,13 +556,13 @@ mod tests {
 		assert!(ux.is_signed().unwrap_or(false));
 		assert_eq!(
 			<Ex as Checkable<TestContext>>::check(ux, &Default::default()),
-			Ok(CEx { signed: Some((TEST_ACCOUNT, TestExtra)), function: vec![0u8; 0] }),
+			Ok(CEx { signed: Some((TEST_ACCOUNT, TestExtra)), function: vec![0u8; 0].into() }),
 		);
 	}
 
 	#[test]
 	fn encoding_matches_vec() {
-		let ex = Ex::new_unsigned(vec![0u8; 0]);
+		let ex = Ex::new_unsigned(vec![0u8; 0].into());
 		let encoded = ex.encode();
 		let decoded = Ex::decode(&mut encoded.as_slice()).unwrap();
 		assert_eq!(decoded, ex);
@@ -525,7 +572,7 @@ mod tests {
 
 	#[test]
 	fn conversion_to_opaque() {
-		let ux = Ex::new_unsigned(vec![0u8; 0]);
+		let ux = Ex::new_unsigned(vec![0u8; 0].into());
 		let encoded = ux.encode();
 		let opaque: OpaqueExtrinsic = ux.into();
 		let opaque_encoded = opaque.encode();

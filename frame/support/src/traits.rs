@@ -60,7 +60,7 @@ pub use misc::{
 	EstimateCallFee, ExecuteBlock, ExtrinsicCall, Get, GetBacking, GetDefault, HandleLifetime,
 	IsSubType, IsType, Len, OffchainWorker, OnKilledAccount, OnNewAccount, PreimageProvider,
 	PreimageRecipient, PrivilegeCmp, SameOrOther, Time, TryCollect, TryDrop, TypedGet, UnixTime,
-	WrapperKeepOpaque, WrapperOpaque, TempPreimageRecipient,
+	WrapperKeepOpaque, WrapperOpaque,
 };
 #[doc(hidden)]
 pub use misc::{DEFENSIVE_OP_INTERNAL_ERROR, DEFENSIVE_OP_PUBLIC_ERROR};

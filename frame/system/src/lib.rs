@@ -88,7 +88,7 @@ use frame_support::{
 	storage,
 	traits::{
 		ConstU32, Contains, EnsureOrigin, Get, HandleLifetime, OnKilledAccount, OnNewAccount,
-		OriginTrait, PalletInfo, PreimageProvider, SortedMembers, StoredMap, TypedGet, TempPreimageRecipient,
+		OriginTrait, PalletInfo, PreimageProvider, SortedMembers, StoredMap, TypedGet,
 	},
 	weights::{
 		extract_actual_weight, DispatchClass, DispatchInfo, PerDispatchClass, RuntimeDbWeight,
@@ -197,6 +197,7 @@ impl<MaxNormal: Get<u32>, MaxOverflow: Get<u32>> ConsumerLimits for (MaxNormal, 
 pub mod pallet {
 	use crate::{self as frame_system, pallet_prelude::*, *};
 	use frame_support::pallet_prelude::*;
+	use sp_runtime::traits::PreimageHandler;
 
 	/// System configuration trait. Implemented by runtime.
 	#[pallet::config]
@@ -357,7 +358,7 @@ pub mod pallet {
 
 		/// The recipient for temporary preimages. We expect these to be available via the
 		/// `PreimageProvider` throughout the current runtime API function.
-		type TempPreimageRecipient: TempPreimageRecipient<Self::Hash>;
+		type TempPreimageRecipient: PreimageHandler<Hash = Self::Hash>;
 	}
 
 	#[pallet::pallet]
@@ -454,10 +455,9 @@ pub mod pallet {
 			max_items: u32,
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
-			let items: Vec<(Vec<u8>, Vec<u8>)> = Self::unhashed_limited_vec(
-				items_hash,
-				max_items as usize,
-			)?.ok_or(Error::<T>::BadWitness)?;
+			let items: Vec<(Vec<u8>, Vec<u8>)> =
+				Self::unhashed_limited_vec(items_hash, max_items as usize)?
+					.ok_or(Error::<T>::BadWitness)?;
 			for i in items.into_iter().take(max_items as usize) {
 				storage::unhashed::put_raw(&i.0, &i.1);
 			}
@@ -508,7 +508,7 @@ pub mod pallet {
 			hash: T::Hash,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			ensure!(T::Preimages::have_preimage(&hash), Error::<T>::BadPreimage);
+			ensure!(T::PreimageProvider::have_preimage(&hash), Error::<T>::BadPreimage);
 			Self::deposit_event(Event::Remarked { sender: who, hash });
 			Ok(().into())
 		}
@@ -995,7 +995,9 @@ pub enum DecRefStatus {
 impl<T: Config> Pallet<T> {
 	/// Retrieve the preimage of a given hash or give a `DispatchError`.
 	pub fn preimage_of(h: impl Borrow<T::Hash>) -> Result<Vec<u8>, DispatchError> {
-		Ok(T::Preimages::get_preimage(h.borrow()).ok_or(Error::<T>::BadPreimage)?.into_owned())
+		Ok(T::PreimageProvider::get_preimage(h.borrow())
+			.ok_or(Error::<T>::BadPreimage)?
+			.into_owned())
 	}
 
 	/// Retrieve the value whose encoding is the preimage of a given hash or give a `DispatchError`.
@@ -1009,8 +1011,8 @@ impl<T: Config> Pallet<T> {
 		limit: usize,
 	) -> Result<Option<Vec<D>>, DispatchError> {
 		let data = Self::preimage_of(h)?;
-		let count = <codec::Compact<u32>>::decode(&mut &data[..])
-			.map_err(|_| Error::<T>::BadPreimage)?;
+		let count =
+			<codec::Compact<u32>>::decode(&mut &data[..]).map_err(|_| Error::<T>::BadPreimage)?;
 		if u32::from(count) as usize > limit {
 			return Ok(None)
 		}

@@ -22,8 +22,8 @@ use crate::{
 	generic,
 	scale_info::TypeInfo,
 	traits::{
-		self, Applyable, BlakeTwo256, Checkable, DispatchInfoOf, Dispatchable, OpaqueKeys,
-		PostDispatchInfoOf, SignedExtension, ValidateUnsigned, PreimageHandler, FatCall, AuxData,
+		self, Applyable, AuxData, BlakeTwo256, Checkable, DispatchInfoOf, Dispatchable, FatCall,
+		OpaqueKeys, PostDispatchInfoOf, PreimageHandler, SignedExtension, ValidateUnsigned,
 	},
 	transaction_validity::{TransactionSource, TransactionValidity, TransactionValidityError},
 	ApplyExtrinsicResultWithInfo, CryptoTypeId, KeyTypeId,
@@ -344,7 +344,7 @@ impl<Call: Codec + Sync + Send, Extra> traits::Extrinsic for TestXt<Call, Extra>
 		Some(self.signature.is_some())
 	}
 
-	fn new(c: FatCall<Call>, sig: Option<Self::SignaturePayload>) -> Option<Self> {
+	fn from_parts(c: FatCall<Call>, sig: Option<Self::SignaturePayload>) -> Option<Self> {
 		Some(TestXt { signature: sig, call: c.call, aux_data: c.auxilliary_data })
 	}
 }

@@ -83,6 +83,8 @@ pub enum InvalidTransaction {
 	BadSigner,
 	/// Auxilliary data was supplied in the extrinsic which was unexpected.
 	UnexpectedData,
+	/// Too many auxilliary data items were includes with the extrinsic.
+	TooManyAuxDataItems,
 }
 
 impl InvalidTransaction {
@@ -115,6 +117,7 @@ impl From<InvalidTransaction> for &'static str {
 			InvalidTransaction::Custom(_) => "InvalidTransaction custom error",
 			InvalidTransaction::BadSigner => "Invalid signing address",
 			InvalidTransaction::UnexpectedData => "Unexpected auxilliary data",
+			InvalidTransaction::TooManyAuxDataItems => "Too many auxilliary data items",
 		}
 	}
 }

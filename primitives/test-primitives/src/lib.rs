@@ -25,7 +25,7 @@ pub use sp_application_crypto;
 use sp_application_crypto::sr25519;
 
 pub use sp_core::{hash::H256, RuntimeDebug};
-use sp_runtime::traits::{BlakeTwo256, Extrinsic as ExtrinsicT, Verify};
+use sp_runtime::traits::{BlakeTwo256, Extrinsic as ExtrinsicT, FatCall, Verify};
 
 /// Extrinsic for test-runtime.
 #[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
@@ -57,8 +57,12 @@ impl ExtrinsicT for Extrinsic {
 		}
 	}
 
-	fn new(call: Self::Call, _signature_payload: Option<Self::SignaturePayload>) -> Option<Self> {
-		Some(call)
+	fn from_parts(
+		fat_call: FatCall<Self::Call>,
+		_signature_payload: Option<Self::SignaturePayload>,
+	) -> Option<Self> {
+		assert!(fat_call.auxilliary_data.is_empty());
+		Some(fat_call.call)
 	}
 }
 

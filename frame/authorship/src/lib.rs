@@ -222,8 +222,9 @@ pub mod pallet {
 		#[pallet::weight((0, DispatchClass::Mandatory))]
 		pub fn set_uncles(origin: OriginFor<T>, hash: T::Hash) -> DispatchResult {
 			ensure_none(origin)?;
-			let new_uncles: Vec<T::Header> = frame_system::Pallet::<T>::unhashed_limited_vec(hash, MAX_UNCLES)?
-				.ok_or(Error::<T>::TooManyUncles)?;
+			let new_uncles: Vec<T::Header> =
+				frame_system::Pallet::<T>::unhashed_limited_vec(hash, MAX_UNCLES)?
+					.ok_or(Error::<T>::TooManyUncles)?;
 
 			if <DidSetUncles<T>>::get() {
 				return Err(Error::<T>::UnclesAlreadySet.into())
@@ -287,11 +288,11 @@ pub mod pallet {
 		fn check_inherent(
 			call: &Self::Call,
 			_data: &InherentData,
-//			aux_data: &Vec<Vec<u8>>,// <<< TODO
+			//			aux_data: &Vec<Vec<u8>>,// <<< TODO
 		) -> result::Result<(), Self::Error> {
 			match call {
 				Call::set_uncles { ref hash } => {
-/*					let data = aux_data.first().ok_or(InherentError::Uncles("preimage missing"))?;
+					/*					let data = aux_data.first().ok_or(InherentError::Uncles("preimage missing"))?;
 					let real_hash = <T::Hashing as sp_runtime::traits::Hash>::hash(&data[..]);
 					ensure!(hash == real_hash, InherentError::Uncles("wrong preimage"));
 					let uncles = Vec::<T::Header>::decode(&mut &data[..])

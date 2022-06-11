@@ -20,7 +20,7 @@ use codec::{Decode, Encode};
 use scale_info::TypeInfo;
 use sp_runtime::{
 	generic::Era,
-	traits::{DispatchInfoOf, SaturatedConversion, SignedExtension},
+	traits::{AuxData, DispatchInfoOf, SaturatedConversion, SignedExtension},
 	transaction_validity::{
 		InvalidTransaction, TransactionValidity, TransactionValidityError, ValidTransaction,
 	},
@@ -67,6 +67,7 @@ impl<T: Config + Send + Sync> SignedExtension for CheckMortality<T> {
 		_call: &Self::Call,
 		_info: &DispatchInfoOf<Self::Call>,
 		_len: usize,
+		_aux_data: &AuxData,
 	) -> TransactionValidity {
 		let current_u64 = <Pallet<T>>::block_number().saturated_into::<u64>();
 		let valid_till = self.0.death(current_u64);
@@ -92,8 +93,9 @@ impl<T: Config + Send + Sync> SignedExtension for CheckMortality<T> {
 		call: &Self::Call,
 		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
+		aux_data: &AuxData,
 	) -> Result<Self::Pre, TransactionValidityError> {
-		self.validate(who, call, info, len).map(|_| ())
+		self.validate(who, call, info, len, aux_data).map(|_| ())
 	}
 }
 
@@ -136,7 +138,7 @@ mod tests {
 			System::set_block_number(17);
 			<BlockHash<Test>>::insert(16, H256::repeat_byte(1));
 
-			assert_eq!(ext.validate(&1, CALL, &normal, len).unwrap().longevity, 15);
+			assert_eq!(ext.validate(&1, CALL, &normal, len, &vec![]).unwrap().longevity, 15);
 		})
 	}
 }

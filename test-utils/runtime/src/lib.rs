@@ -47,8 +47,8 @@ use sp_runtime::traits::NumberFor;
 use sp_runtime::{
 	create_runtime_str, impl_opaque_keys,
 	traits::{
-		BlakeTwo256, BlindCheckable, Block as BlockT, Extrinsic as ExtrinsicT, GetNodeBlockType,
-		GetRuntimeBlockType, IdentityLookup, Verify,
+		BlakeTwo256, BlindCheckable, Block as BlockT, Extrinsic as ExtrinsicT, FatCall,
+		GetNodeBlockType, GetRuntimeBlockType, IdentityLookup, Verify,
 	},
 	transaction_validity::{
 		InvalidTransaction, TransactionSource, TransactionValidity, TransactionValidityError,
@@ -226,8 +226,12 @@ impl ExtrinsicT for Extrinsic {
 		}
 	}
 
-	fn new(call: Self::Call, _signature_payload: Option<Self::SignaturePayload>) -> Option<Self> {
-		Some(call)
+	fn from_parts(
+		call: FatCall<Self::Call>,
+		_signature_payload: Option<Self::SignaturePayload>,
+	) -> Option<Self> {
+		assert!(call.auxilliary_data.is_empty());
+		Some(call.call)
 	}
 }
 
@@ -604,7 +608,8 @@ impl frame_system::Config for Runtime {
 	type SS58Prefix = ();
 	type OnSetCode = ();
 	type MaxConsumers = ConstU32<16>;
-	type PreimageProvider = ();
+	type PreimageProvider = frame_support::InMemoryPreimages<Hashing>;
+	type TempPreimageRecipient = frame_support::InMemoryPreimages<Hashing>;
 }
 
 impl pallet_timestamp::Config for Runtime {

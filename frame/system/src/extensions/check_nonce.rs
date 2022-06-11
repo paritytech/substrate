@@ -20,7 +20,7 @@ use codec::{Decode, Encode};
 use frame_support::weights::DispatchInfo;
 use scale_info::TypeInfo;
 use sp_runtime::{
-	traits::{DispatchInfoOf, Dispatchable, One, SignedExtension},
+	traits::{AuxData, DispatchInfoOf, Dispatchable, One, SignedExtension},
 	transaction_validity::{
 		InvalidTransaction, TransactionLongevity, TransactionValidity, TransactionValidityError,
 		ValidTransaction,
@@ -78,6 +78,7 @@ where
 		_call: &Self::Call,
 		_info: &DispatchInfoOf<Self::Call>,
 		_len: usize,
+		_aux_data: &AuxData,
 	) -> Result<(), TransactionValidityError> {
 		let mut account = crate::Account::<T>::get(who);
 		if self.0 != account.nonce {
@@ -99,6 +100,7 @@ where
 		_call: &Self::Call,
 		_info: &DispatchInfoOf<Self::Call>,
 		_len: usize,
+		_aux_data: &AuxData,
 	) -> TransactionValidity {
 		// check index
 		let account = crate::Account::<T>::get(who);
@@ -146,20 +148,20 @@ mod tests {
 			let len = 0_usize;
 			// stale
 			assert_noop!(
-				CheckNonce::<Test>(0).validate(&1, CALL, &info, len),
+				CheckNonce::<Test>(0).validate(&1, CALL, &info, len, &vec![]),
 				InvalidTransaction::Stale
 			);
 			assert_noop!(
-				CheckNonce::<Test>(0).pre_dispatch(&1, CALL, &info, len),
+				CheckNonce::<Test>(0).pre_dispatch(&1, CALL, &info, len, &vec![]),
 				InvalidTransaction::Stale
 			);
 			// correct
-			assert_ok!(CheckNonce::<Test>(1).validate(&1, CALL, &info, len));
-			assert_ok!(CheckNonce::<Test>(1).pre_dispatch(&1, CALL, &info, len));
+			assert_ok!(CheckNonce::<Test>(1).validate(&1, CALL, &info, len, &vec![]));
+			assert_ok!(CheckNonce::<Test>(1).pre_dispatch(&1, CALL, &info, len, &vec![]));
 			// future
-			assert_ok!(CheckNonce::<Test>(5).validate(&1, CALL, &info, len));
+			assert_ok!(CheckNonce::<Test>(5).validate(&1, CALL, &info, len, &vec![]));
 			assert_noop!(
-				CheckNonce::<Test>(5).pre_dispatch(&1, CALL, &info, len),
+				CheckNonce::<Test>(5).pre_dispatch(&1, CALL, &info, len, &vec![]),
 				InvalidTransaction::Future
 			);
 		})

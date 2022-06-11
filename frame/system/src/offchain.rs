@@ -60,7 +60,7 @@ use codec::Encode;
 use frame_support::RuntimeDebug;
 use sp_runtime::{
 	app_crypto::RuntimeAppPublic,
-	traits::{Extrinsic as ExtrinsicT, IdentifyAccount, One},
+	traits::{AuxData, Extrinsic as ExtrinsicT, FatCall, IdentifyAccount, One},
 };
 use sp_std::{collections::btree_set::BTreeSet, prelude::*};
 
@@ -88,15 +88,33 @@ where
 		call: <T as SendTransactionTypes<LocalCall>>::OverarchingCall,
 		signature: Option<<T::Extrinsic as ExtrinsicT>::SignaturePayload>,
 	) -> Result<(), ()> {
-		let xt = T::Extrinsic::new(call, signature).ok_or(())?;
-		sp_io::offchain::submit_transaction(xt.encode())
+		Self::submit_fat_transaction(call, vec![], signature)
 	}
 
 	/// A convenience method to submit an unsigned transaction onchain.
 	pub fn submit_unsigned_transaction(
 		call: <T as SendTransactionTypes<LocalCall>>::OverarchingCall,
 	) -> Result<(), ()> {
-		SubmitTransaction::<T, LocalCall>::submit_transaction(call, None)
+		Self::submit_unsigned_fat_transaction(call, vec![])
+	}
+
+	/// Submit transaction onchain by providing the call and an optional signature
+	pub fn submit_fat_transaction(
+		call: <T as SendTransactionTypes<LocalCall>>::OverarchingCall,
+		auxilliary_data: AuxData,
+		signature: Option<<T::Extrinsic as ExtrinsicT>::SignaturePayload>,
+	) -> Result<(), ()> {
+		let fat_call = FatCall { call, auxilliary_data };
+		let xt = T::Extrinsic::from_parts(fat_call, signature).ok_or(())?;
+		sp_io::offchain::submit_transaction(xt.encode())
+	}
+
+	/// A convenience method to submit an unsigned transaction onchain.
+	pub fn submit_unsigned_fat_transaction(
+		call: <T as SendTransactionTypes<LocalCall>>::OverarchingCall,
+		auxilliary_data: AuxData,
+	) -> Result<(), ()> {
+		SubmitTransaction::<T, LocalCall>::submit_fat_transaction(call, auxilliary_data, None)
 	}
 }
 
@@ -537,7 +555,7 @@ pub trait SendSignedTransaction<
 	fn send_single_signed_transaction(
 		&self,
 		account: &Account<T>,
-		call: LocalCall,
+		local_call: LocalCall,
 	) -> Option<Result<(), ()>> {
 		let mut account_data = crate::Account::<T>::get(&account.id);
 		log::debug!(
@@ -547,11 +565,13 @@ pub trait SendSignedTransaction<
 			account_data.nonce,
 		);
 		let (call, signature) = T::create_transaction::<C>(
-			call.into(),
+			local_call.into(),
 			account.public.clone(),
 			account.id.clone(),
 			account_data.nonce,
 		)?;
+		// TODO: This assumes the `call` needs no auxilliary data. We should alter the API or
+		// add a new function for submitting transactions which do.
 		let res = SubmitTransaction::<T, LocalCall>::submit_transaction(call, Some(signature));
 
 		if res.is_ok() {
@@ -588,8 +608,9 @@ pub trait SendUnsignedTransaction<T: SigningTypes + SendTransactionTypes<LocalCa
 		TPayload: SignedPayload<T>;
 
 	/// Submits an unsigned call to the transaction pool.
-	fn submit_unsigned_transaction(&self, call: LocalCall) -> Option<Result<(), ()>> {
-		Some(SubmitTransaction::<T, LocalCall>::submit_unsigned_transaction(call.into()))
+	fn submit_unsigned_transaction(&self, local_call: LocalCall) -> Option<Result<(), ()>> {
+		let call = <T as SendTransactionTypes<LocalCall>>::OverarchingCall::from(local_call);
+		Some(SubmitTransaction::<T, LocalCall>::submit_unsigned_transaction(call))
 	}
 }
 

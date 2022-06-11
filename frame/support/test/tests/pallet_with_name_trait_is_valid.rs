@@ -77,7 +77,9 @@ impl<T: Trait> frame_support::inherent::ProvideInherent for Module<T> {
 	type Error = frame_support::inherent::MakeFatalError<()>;
 	const INHERENT_IDENTIFIER: frame_support::inherent::InherentIdentifier = INHERENT_IDENTIFIER;
 
-	fn create_inherent(_data: &frame_support::inherent::InherentData) -> Option<(Self::Call, Vec<Vec<u8>>)> {
+	fn create_inherent(
+		_data: &frame_support::inherent::InherentData,
+	) -> Option<(Self::Call, Vec<Vec<u8>>)> {
 		unimplemented!();
 	}
 

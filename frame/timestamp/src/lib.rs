@@ -111,7 +111,7 @@ pub mod weights;
 
 use frame_support::traits::{OnTimestampSet, Time, UnixTime};
 use sp_runtime::traits::{AtLeast32Bit, SaturatedConversion, Scale, Zero};
-use sp_std::{prelude::*, cmp, result};
+use sp_std::{cmp, prelude::*, result};
 use sp_timestamp::{InherentError, InherentType, INHERENT_IDENTIFIER};
 pub use weights::WeightInfo;
 

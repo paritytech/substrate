@@ -20,7 +20,7 @@ use codec::{Decode, Encode};
 use frame_support::weights::DispatchInfo;
 use scale_info::TypeInfo;
 use sp_runtime::{
-	traits::{DispatchInfoOf, Dispatchable, SignedExtension},
+	traits::{AuxData, DispatchInfoOf, Dispatchable, SignedExtension},
 	transaction_validity::{
 		InvalidTransaction, TransactionValidity, TransactionValidityError, ValidTransaction,
 	},
@@ -71,8 +71,9 @@ where
 		call: &Self::Call,
 		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
+		aux_data: &AuxData,
 	) -> Result<Self::Pre, TransactionValidityError> {
-		self.validate(who, call, info, len).map(|_| ())
+		self.validate(who, call, info, len, aux_data).map(|_| ())
 	}
 
 	fn validate(
@@ -81,6 +82,7 @@ where
 		_call: &Self::Call,
 		_info: &DispatchInfoOf<Self::Call>,
 		_len: usize,
+		_aux_data: &AuxData,
 	) -> TransactionValidity {
 		if who.using_encoded(|d| d.iter().all(|x| *x == 0)) {
 			return Err(TransactionValidityError::Invalid(InvalidTransaction::BadSigner))
@@ -101,10 +103,10 @@ mod tests {
 			let info = DispatchInfo::default();
 			let len = 0_usize;
 			assert_noop!(
-				CheckNonZeroSender::<Test>::new().validate(&0, CALL, &info, len),
+				CheckNonZeroSender::<Test>::new().validate(&0, CALL, &info, len, &vec![]),
 				InvalidTransaction::BadSigner
 			);
-			assert_ok!(CheckNonZeroSender::<Test>::new().validate(&1, CALL, &info, len));
+			assert_ok!(CheckNonZeroSender::<Test>::new().validate(&1, CALL, &info, len, &vec![]));
 		})
 	}
 }

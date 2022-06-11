@@ -35,7 +35,7 @@ use frame_support::{
 use sp_application_crypto::ByteArray;
 use sp_runtime::{
 	generic::DigestItem,
-	traits::{IsMember, One, SaturatedConversion, Saturating, Zero},
+	traits::{AuxData, IsMember, One, SaturatedConversion, Saturating, Zero},
 	ConsensusEngineId, KeyTypeId, Permill,
 };
 use sp_session::{GetSessionNumber, GetValidatorCount};
@@ -466,11 +466,18 @@ pub mod pallet {
 	#[pallet::validate_unsigned]
 	impl<T: Config> ValidateUnsigned for Pallet<T> {
 		type Call = Call<T>;
-		fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity {
+		fn validate_unsigned(
+			source: TransactionSource,
+			call: &Self::Call,
+			_aux_data: &AuxData,
+		) -> TransactionValidity {
 			Self::validate_unsigned(source, call)
 		}
 
-		fn pre_dispatch(call: &Self::Call) -> Result<(), TransactionValidityError> {
+		fn pre_dispatch(
+			call: &Self::Call,
+			_aux_data: &AuxData,
+		) -> Result<(), TransactionValidityError> {
 			Self::pre_dispatch(call)
 		}
 	}

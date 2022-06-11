@@ -18,6 +18,8 @@
 //! Support code for the runtime.
 
 #![cfg_attr(not(feature = "std"), no_std)]
+#![cfg_attr(not(feature = "std"), feature(thread_local))]
+#![cfg_attr(not(feature = "std"), feature(const_btree_new))]
 
 /// Export ourself as `frame_support` to make tests happy.
 extern crate self as frame_support;
@@ -61,6 +63,7 @@ mod hash;
 pub mod storage;
 #[macro_use]
 pub mod event;
+mod in_memory_preimages;
 pub mod inherent;
 #[macro_use]
 pub mod error;
@@ -96,6 +99,7 @@ pub use self::{
 		StorageMap, StorageNMap, StoragePrefixedMap, StorageValue,
 	},
 };
+pub use in_memory_preimages::InMemoryPreimages;
 pub use sp_runtime::{
 	self, print, traits::Printable, ConsensusEngineId, MAX_MODULE_ERROR_ENCODED_SIZE,
 };

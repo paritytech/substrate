@@ -23,7 +23,7 @@ use frame_support::{
 };
 use scale_info::TypeInfo;
 use sp_runtime::{
-	traits::{DispatchInfoOf, Dispatchable, PostDispatchInfoOf, SignedExtension},
+	traits::{AuxData, DispatchInfoOf, Dispatchable, PostDispatchInfoOf, SignedExtension},
 	transaction_validity::{InvalidTransaction, TransactionValidity, TransactionValidityError},
 	DispatchResult,
 };
@@ -186,6 +186,7 @@ where
 		_call: &Self::Call,
 		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
+		_aux_data: &AuxData,
 	) -> Result<(), TransactionValidityError> {
 		if info.class == DispatchClass::Mandatory {
 			return Err(InvalidTransaction::MandatoryDispatch.into())
@@ -199,6 +200,7 @@ where
 		_call: &Self::Call,
 		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
+		_aux_data: &AuxData,
 	) -> TransactionValidity {
 		if info.class == DispatchClass::Mandatory {
 			return Err(InvalidTransaction::MandatoryDispatch.into())
@@ -210,6 +212,7 @@ where
 		_call: &Self::Call,
 		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
+		_aux_data: &AuxData,
 	) -> Result<(), TransactionValidityError> {
 		Self::do_pre_dispatch(info, len)
 	}
@@ -218,6 +221,7 @@ where
 		_call: &Self::Call,
 		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
+		_aux_data: &AuxData,
 	) -> TransactionValidity {
 		Self::do_validate(info, len)
 	}
