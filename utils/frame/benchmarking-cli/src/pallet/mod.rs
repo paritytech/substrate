@@ -162,4 +162,11 @@ pub struct PalletCmd {
 	/// template for that purpose.
 	#[clap(long)]
 	pub no_storage_info: bool,
+
+	/// When the maximum size of a map is not defined by the runtime developer,
+	/// this value is used as a worst case scenario. It will affect the calculated worst case
+	/// PoV size for accessing a value in a map, since the PoV will need to include the trie
+	/// nodes down to the underlying value.
+	#[clap(long = "map-size", default_value = "1_000_000")]
+	pub worst_case_map_size: u32,
 }

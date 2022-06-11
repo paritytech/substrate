@@ -449,7 +449,12 @@ impl PalletCmd {
 
 			if !self.no_storage_info {
 				let mut comments: Vec<String> = Default::default();
-				writer::process_storage_results(&mut comments, &batch.db_results, storage_info);
+				writer::process_storage_results(
+					&mut comments,
+					&batch.db_results,
+					storage_info,
+					self.worst_case_map_size,
+				);
 				println!("Raw Storage Info\n========");
 				for comment in comments {
 					println!("{}", comment);
