@@ -101,11 +101,12 @@ impl Config for Test {
 pub struct ExtBuilder {
 	existential_deposit: u64,
 	vesting_genesis_config: Option<Vec<(u64, u64, u64, u64)>>,
+	schedules: Vec<(u64, VestingInfo<u64, u64>)>,
 }
 
 impl Default for ExtBuilder {
 	fn default() -> Self {
-		Self { existential_deposit: 1, vesting_genesis_config: None }
+		Self { existential_deposit: 1, vesting_genesis_config: None, schedules: vec![] }
 	}
 }
 
@@ -150,7 +151,23 @@ impl ExtBuilder {
 			.assimilate_storage(&mut t)
 			.unwrap();
 		let mut ext = sp_io::TestExternalities::new(t);
-		ext.execute_with(|| System::set_block_number(1));
+		ext.execute_with(|| {
+            System::set_block_number(1);
+            self.schedules.iter().for_each(|schedule| {
+                Vesting::vested_transfer(Some(13).into(), schedule.0, schedule.1).unwrap();
+            });
+        });
 		ext
 	}
+
+	pub fn add_vest(mut self, who: u64, locked: u64, per_block: u64, starting_block: u64) -> Self {
+        let sched = VestingInfo::new(
+            locked,
+            per_block, 
+            starting_block,
+        );
+    
+        self.schedules.push((who, sched));
+        self
+    }
 }

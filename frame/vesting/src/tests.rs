@@ -98,48 +98,39 @@ fn check_vesting_status() {
 
 #[test]
 fn check_vesting_status_for_multi_schedule_account() {
-	ExtBuilder::default().existential_deposit(ED).build().execute_with(|| {
+	ExtBuilder::default().existential_deposit(ED).add_vest(2, ED * 10, ED, 0)
+	.add_vest(2, ED * 30, ED, 5).build().execute_with(|| {
 		assert_eq!(System::block_number(), 1);
 		let sched0 = VestingInfo::new(
 			ED * 20,
 			ED, // Vesting over 20 blocks
 			10,
 		);
-		// Account 2 already has a vesting schedule.
-		assert_eq!(Vesting::vesting(&2).unwrap(), vec![sched0]);
 
-		// Account 2's free balance is from sched0.
-		let free_balance = Balances::free_balance(&2);
-		assert_eq!(free_balance, ED * (20));
-		assert_eq!(Vesting::vesting_balance(&2), Some(free_balance));
-
-		// Add a 2nd schedule that is already unlocking by block #1.
 		let sched1 = VestingInfo::new(
 			ED * 10,
 			ED, // Vesting over 10 blocks
 			0,
 		);
-		assert_ok!(Vesting::vested_transfer(Some(4).into(), 2, sched1));
-		// Free balance is equal to the two existing schedules total amount.
-		let free_balance = Balances::free_balance(&2);
-		assert_eq!(free_balance, ED * (10 + 20));
-		// The most recently added schedule exists.
-		assert_eq!(Vesting::vesting(&2).unwrap(), vec![sched0, sched1]);
-		// sched1 has free funds at block #1, but nothing else.
-		assert_eq!(Vesting::vesting_balance(&2), Some(free_balance - sched1.per_block()));
 
-		// Add a 3rd schedule.
 		let sched2 = VestingInfo::new(
 			ED * 30,
 			ED, // Vesting over 30 blocks
 			5,
 		);
-		assert_ok!(Vesting::vested_transfer(Some(4).into(), 2, sched2));
 
-		System::set_block_number(9);
+		// Account 2 has 3 schedules.
+		assert_eq!(Vesting::vesting(&2).unwrap(), vec![sched0, sched1, sched2]);
+
 		// Free balance is equal to the 3 existing schedules total amount.
 		let free_balance = Balances::free_balance(&2);
 		assert_eq!(free_balance, ED * (10 + 20 + 30));
+
+		// sched1 has free funds at block #1, but nothing else.
+		assert_eq!(Vesting::vesting_balance(&2), Some(free_balance - sched1.per_block()));
+
+		System::set_block_number(9);
+		
 		// sched1 and sched2 are freeing funds at block #9.
 		assert_eq!(
 			Vesting::vesting_balance(&2),
@@ -239,9 +230,8 @@ fn vested_balance_should_transfer_using_vest_other() {
 
 #[test]
 fn vested_balance_should_transfer_using_vest_other_with_multi_sched() {
-	ExtBuilder::default().existential_deposit(ED).build().execute_with(|| {
+	ExtBuilder::default().existential_deposit(ED).add_vest(1, 5 * ED, 128, 0).build().execute_with(|| {
 		let sched0 = VestingInfo::new(5 * ED, 128, 0);
-		assert_ok!(Vesting::vested_transfer(Some(13).into(), 1, sched0));
 		// Total of 10*ED of locked for all the schedules.
 		assert_eq!(Vesting::vesting(&1).unwrap(), vec![sched0, sched0]);
 
@@ -616,21 +606,21 @@ fn merge_schedules_that_have_not_started() {
 #[test]
 fn merge_ongoing_schedules() {
 	// Merging two schedules that have started will vest both before merging.
-	ExtBuilder::default().existential_deposit(ED).build().execute_with(|| {
+	ExtBuilder::default().existential_deposit(ED).add_vest(2, ED * 10, ED, 15)
+	.build().execute_with(|| {
 		// Account 2 should already have a vesting schedule.
 		let sched0 = VestingInfo::new(
 			ED * 20,
 			ED, // Vest over 20 blocks.
 			10,
 		);
-		assert_eq!(Vesting::vesting(&2).unwrap(), vec![sched0]);
 
 		let sched1 = VestingInfo::new(
 			ED * 10,
 			ED,                          // Vest over 10 blocks.
 			sched0.starting_block() + 5, // Start at block 15.
 		);
-		assert_ok!(Vesting::vested_transfer(Some(4).into(), 2, sched1));
+
 		assert_eq!(Vesting::vesting(&2).unwrap(), vec![sched0, sched1]);
 
 		// Got to half way through the second schedule where both schedules are actively vesting.
@@ -805,30 +795,28 @@ fn merge_ongoing_and_yet_to_be_started_schedules() {
 fn merge_finished_and_ongoing_schedules() {
 	// If a schedule finishes by the current block we treat the ongoing schedule,
 	// without any alterations, as the merged one.
-	ExtBuilder::default().existential_deposit(ED).build().execute_with(|| {
+	ExtBuilder::default().existential_deposit(ED).add_vest(2, ED * 40, ED, 10)
+	.add_vest(2, ED * 30, ED, 10).build().execute_with(|| {
 		// Account 2 should already have a vesting schedule.
 		let sched0 = VestingInfo::new(
 			ED * 20,
 			ED, // Vesting over 20 blocks.
 			10,
 		);
-		assert_eq!(Vesting::vesting(&2).unwrap(), vec![sched0]);
 
 		let sched1 = VestingInfo::new(
 			ED * 40,
 			ED, // Vesting over 40 blocks.
 			10,
 		);
-		assert_ok!(Vesting::vested_transfer(Some(4).into(), 2, sched1));
 
-		// Transfer a 3rd schedule, so we can demonstrate how schedule indices change.
+		// 3rd schedule transferred, so we can demonstrate how schedule indices change.
 		// (We are not merging this schedule.)
 		let sched2 = VestingInfo::new(
 			ED * 30,
 			ED, // Vesting over 30 blocks.
 			10,
 		);
-		assert_ok!(Vesting::vested_transfer(Some(3).into(), 2, sched2));
 
 		// The schedules are in expected order prior to merging.
 		assert_eq!(Vesting::vesting(&2).unwrap(), vec![sched0, sched1, sched2]);
@@ -867,14 +855,13 @@ fn merge_finished_and_ongoing_schedules() {
 #[test]
 fn merge_finishing_schedules_does_not_create_a_new_one() {
 	// If both schedules finish by the current block we don't create new one
-	ExtBuilder::default().existential_deposit(ED).build().execute_with(|| {
+	ExtBuilder::default().existential_deposit(ED).add_vest(2, ED * 30, ED, 10).build().execute_with(|| {
 		// Account 2 should already have a vesting schedule.
 		let sched0 = VestingInfo::new(
 			ED * 20,
 			ED, // 20 block duration.
 			10,
 		);
-		assert_eq!(Vesting::vesting(&2).unwrap(), vec![sched0]);
 
 		// Create sched1 and transfer it to account 2.
 		let sched1 = VestingInfo::new(
@@ -882,7 +869,6 @@ fn merge_finishing_schedules_does_not_create_a_new_one() {
 			ED, // 30 block duration.
 			10,
 		);
-		assert_ok!(Vesting::vested_transfer(Some(3).into(), 2, sched1));
 		assert_eq!(Vesting::vesting(&2).unwrap(), vec![sched0, sched1]);
 
 		let all_scheds_end = sched0
@@ -909,21 +895,19 @@ fn merge_finishing_schedules_does_not_create_a_new_one() {
 
 #[test]
 fn merge_finished_and_yet_to_be_started_schedules() {
-	ExtBuilder::default().existential_deposit(ED).build().execute_with(|| {
+	ExtBuilder::default().existential_deposit(ED).add_vest(2, ED * 30, ED * 2, 35).build().execute_with(|| {
 		// Account 2 should already have a vesting schedule.
 		let sched0 = VestingInfo::new(
 			ED * 20,
 			ED, // 20 block duration.
 			10, // Ends at block 30
 		);
-		assert_eq!(Vesting::vesting(&2).unwrap(), vec![sched0]);
 
 		let sched1 = VestingInfo::new(
 			ED * 30,
 			ED * 2, // 30 block duration.
 			35,
 		);
-		assert_ok!(Vesting::vested_transfer(Some(13).into(), 2, sched1));
 		assert_eq!(Vesting::vesting(&2).unwrap(), vec![sched0, sched1]);
 
 		let sched2 = VestingInfo::new(
