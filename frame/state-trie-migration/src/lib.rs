@@ -920,9 +920,7 @@ pub mod pallet {
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarks {
 	use super::{pallet::Pallet as StateTrieMigration, *};
-	use frame_support::{
-		traits::{Currency, Get},
-	};
+	use frame_support::traits::{Currency, Get};
 	use sp_runtime::traits::Saturating;
 	use sp_std::prelude::*;
 
