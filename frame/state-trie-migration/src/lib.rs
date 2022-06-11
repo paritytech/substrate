@@ -486,6 +486,18 @@ pub mod pallet {
 		type Currency: Currency<Self::AccountId>;
 
 		/// Maximal number of bytes that a key can have.
+		///
+		/// FRAME itself does not limit the key length.
+		/// The concrete value must therefore depend on your storage usage.
+		/// A [`frame_support::storage::StorageNMap`] for example can have an arbitrary number of
+		/// keys which are then hashed and concatenated, resulting in arbitrarily long keys.
+		///
+		/// Use the *state migration RPC* to retrieve the length of the longest key in your
+		/// storage: https://github.com/paritytech/substrate/issues/11642
+		///
+		/// The migration will halt with a `Halted` event if this value is too small.
+		/// Since there is no real penalty from over-estimating, it is advised to use a large
+		/// value. The default is 512 byte.
 		#[pallet::constant]
 		type MaxKeyLen: Get<u32>;
 
