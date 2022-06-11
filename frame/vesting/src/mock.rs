@@ -153,7 +153,7 @@ impl ExtBuilder {
 		let mut ext = sp_io::TestExternalities::new(t);
 		ext.execute_with(|| {
             System::set_block_number(1);
-            self.schedules.iter().for_each(|schedule| {
+            self.schedules.into_iter().for_each(|(who, schedule)| {
                 Vesting::vested_transfer(Some(13).into(), schedule.0, schedule.1).unwrap();
             });
         });
