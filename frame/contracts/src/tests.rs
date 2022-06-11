@@ -1726,7 +1726,7 @@ fn lazy_removal_partial_remove_works() {
 		for val in &vals {
 			Storage::<Test>::write(
 				&info.trie_id,
-				val.0 as FixSizedKey,
+				&val.0 as &FixSizedKey,
 				Some(val.2.clone()),
 				None,
 				false,
@@ -1912,7 +1912,7 @@ fn lazy_removal_does_not_use_all_weight() {
 		for val in &vals {
 			Storage::<Test>::write(
 				&info.trie_id,
-				val.0 as FixSizedKey,
+				&val.0 as &FixSizedKey,
 				Some(val.2.clone()),
 				None,
 				false,

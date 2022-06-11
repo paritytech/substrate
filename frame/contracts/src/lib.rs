@@ -946,7 +946,7 @@ where
 	}
 
 	/// Query storage of a specified contract under a specified key.
-	pub fn get_storage<K: StorageKey<T>>(address: T::AccountId, key: K) -> GetStorageResult {
+	pub fn get_storage<K: StorageKey<T>>(address: T::AccountId, key: &K) -> GetStorageResult {
 		let contract_info =
 			ContractInfoOf::<T>::get(&address).ok_or(ContractAccessError::DoesntExist)?;
 

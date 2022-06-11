@@ -57,20 +57,20 @@ pub trait StorageKey<T>
 where
 	T: Config,
 {
-	fn hash(self) -> Vec<u8>;
+	fn hash(&self) -> Vec<u8>;
 }
 
 impl<T: Config> StorageKey<T> for FixSizedKey {
-	fn hash(self) -> Vec<u8> {
+	fn hash(&self) -> Vec<u8> {
 		blake2_256(self.as_slice()).to_vec()
 	}
 }
 
-impl<T> StorageKey<T> for &VarSizedKey<T>
+impl<T> StorageKey<T> for VarSizedKey<T>
 where
 	T: Config,
 {
-	fn hash(self) -> Vec<u8> {
+	fn hash(&self) -> Vec<u8> {
 		Blake2_128Concat::hash(self.as_slice())
 	}
 }
@@ -1140,19 +1140,19 @@ where
 	}
 
 	fn get_storage(&mut self, key: &FixSizedKey) -> Option<Vec<u8>> {
-		Storage::<T>::read(&self.top_frame_mut().contract_info().trie_id, key.clone())
+		Storage::<T>::read(&self.top_frame_mut().contract_info().trie_id, key)
 	}
 
 	fn get_storage_transparent(&mut self, key: &VarSizedKey<T>) -> Option<Vec<u8>> {
-		Storage::<T>::read(&self.top_frame_mut().contract_info().trie_id, &key.clone())
+		Storage::<T>::read(&self.top_frame_mut().contract_info().trie_id, key)
 	}
 
 	fn get_storage_size(&mut self, key: &FixSizedKey) -> Option<u32> {
-		Storage::<T>::size(&self.top_frame_mut().contract_info().trie_id, key.clone())
+		Storage::<T>::size(&self.top_frame_mut().contract_info().trie_id, key)
 	}
 
 	fn get_storage_size_transparent(&mut self, key: &VarSizedKey<T>) -> Option<u32> {
-		Storage::<T>::size(&self.top_frame_mut().contract_info().trie_id, &key.clone())
+		Storage::<T>::size(&self.top_frame_mut().contract_info().trie_id, key)
 	}
 
 	fn set_storage(
@@ -1164,7 +1164,7 @@ where
 		let frame = self.top_frame_mut();
 		Storage::<T>::write(
 			&frame.contract_info.get(&frame.account_id).trie_id,
-			key.clone(),
+			key,
 			value,
 			Some(&mut frame.nested_storage),
 			take_old,
@@ -1180,7 +1180,7 @@ where
 		let frame = self.top_frame_mut();
 		Storage::<T>::write(
 			&frame.contract_info.get(&frame.account_id).trie_id,
-			&key.clone(),
+			key,
 			value,
 			Some(&mut frame.nested_storage),
 			take_old,

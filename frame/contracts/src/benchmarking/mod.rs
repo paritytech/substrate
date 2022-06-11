@@ -137,7 +137,7 @@ where
 		for item in items {
 			Storage::<T>::write(
 				&info.trie_id,
-				item.0 as FixSizedKey,
+				&item.0 as &FixSizedKey,
 				Some(item.1.clone()),
 				None,
 				false,
