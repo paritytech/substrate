@@ -363,6 +363,8 @@ pub fn testnet_genesis(
 		gilt: Default::default(),
 		transaction_storage: Default::default(),
 		transaction_payment: Default::default(),
+		alliance: Default::default(),
+		alliance_motion: Default::default(),
 		nomination_pools: Default::default(),
 	}
 }
