@@ -523,7 +523,6 @@ pub mod pallet {
 		AccountData<T::Balance>,
 		ValueQuery,
 		GetDefault,
-		ConstU32<300_000>,
 	>;
 
 	/// Any liquidity locks on some account balances.
@@ -537,7 +536,6 @@ pub mod pallet {
 		WeakBoundedVec<BalanceLock<T::Balance>, T::MaxLocks>,
 		ValueQuery,
 		GetDefault,
-		ConstU32<300_000>,
 	>;
 
 	/// Named reserves on some account balances.

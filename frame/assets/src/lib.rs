@@ -264,7 +264,6 @@ pub mod pallet {
 		AssetAccountOf<T, I>,
 		OptionQuery,
 		GetDefault,
-		ConstU32<300_000>,
 	>;
 
 	#[pallet::storage]
@@ -281,7 +280,6 @@ pub mod pallet {
 		Approval<T::Balance, DepositBalanceOf<T, I>>,
 		OptionQuery,
 		GetDefault,
-		ConstU32<300_000>,
 	>;
 
 	#[pallet::storage]
@@ -293,7 +291,6 @@ pub mod pallet {
 		AssetMetadata<DepositBalanceOf<T, I>, BoundedVec<u8, T::StringLimit>>,
 		ValueQuery,
 		GetDefault,
-		ConstU32<300_000>,
 	>;
 
 	#[pallet::genesis_config]
