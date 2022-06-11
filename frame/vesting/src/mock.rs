@@ -154,7 +154,7 @@ impl ExtBuilder {
 		ext.execute_with(|| {
             System::set_block_number(1);
             self.schedules.into_iter().for_each(|(who, schedule)| {
-                Vesting::vested_transfer(Some(13).into(), schedule.0, schedule.1).unwrap();
+                Vesting::vested_transfer(Some(13).into(), who, schedule).unwrap();
             });
         });
 		ext
