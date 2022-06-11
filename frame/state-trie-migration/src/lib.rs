@@ -859,7 +859,7 @@ pub mod pallet {
 		}
 
 		/// Put a stop to all ongoing migrations and logs an error.
-		fn halt<E: std::fmt::Debug + ?Sized>(msg: &E) {
+		fn halt<E: sp_std::fmt::Debug + ?Sized>(msg: &E) {
 			log!(error, "migration halted due to: {:?}", msg);
 			AutoLimits::<T>::kill();
 			Self::deposit_event(Event::<T>::Halted);
