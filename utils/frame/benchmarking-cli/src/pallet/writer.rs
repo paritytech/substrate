@@ -262,18 +262,12 @@ fn get_benchmark_data(
 		.collect::<Vec<_>>();
 
 	// We add additional comments showing which storage items were touched.
-	add_storage_comments(&mut comments, &batch.db_results, storage_info);
+	// We find the worst case proof size, and use that as the final proof size result.
+	let worst_case_proof_size: u32 =
+		process_storage_results(&mut comments, &batch.db_results, storage_info);
 	let component_ranges = component_ranges
 		.get(&(batch.pallet.clone(), batch.benchmark.clone()))
 		.map(|c| c.clone())
-		.unwrap_or_default();
-
-	// We find the worst case proof size, and use that as the final proof size result.
-	let worst_case_proof_size: u32 = batch
-		.db_results
-		.iter()
-		.max_by_key(|r| r.proof_size)
-		.map(|r| r.proof_size)
 		.unwrap_or_default();
 
 	BenchmarkData {
@@ -387,11 +381,13 @@ pub(crate) fn write_results(
 // This function looks at the keys touched during the benchmark, and the storage info we collected
 // from the pallets, and creates comments with information about the storage keys touched during
 // each benchmark.
-pub(crate) fn add_storage_comments(
+//
+// It returns the max PoV size used by all the storage accesses from these results.
+pub(crate) fn process_storage_results(
 	comments: &mut Vec<String>,
 	results: &[BenchmarkResult],
 	storage_info: &[StorageInfo],
-) {
+) -> u32 {
 	let mut storage_info_map = storage_info
 		.iter()
 		.map(|info| (info.prefix.clone(), info))
@@ -418,7 +414,10 @@ pub(crate) fn add_storage_comments(
 	storage_info_map.insert(benchmark_override.prefix.clone(), &benchmark_override);
 
 	// This tracks the keys we already identified, so we only generate a single comment.
-	let mut identified = HashSet::<Vec<u8>>::new();
+	let mut identified_prefix = HashSet::<Vec<u8>>::new();
+	let mut identified_key = HashSet::<Vec<u8>>::new();
+
+	let mut max_pov: u32 = 0;
 
 	for result in results {
 		for (key, reads, writes, whitelisted) in &result.keys {
@@ -428,38 +427,128 @@ pub(crate) fn add_storage_comments(
 			}
 			let prefix_length = key.len().min(32);
 			let prefix = key[0..prefix_length].to_vec();
-			if identified.contains(&prefix) {
-				// skip adding comments for keys we already identified
-				continue
-			} else {
-				// track newly identified keys
-				identified.insert(prefix.clone());
+			let is_key_identified = identified_key.contains(key);
+			let is_prefix_identified = identified_prefix.contains(&prefix);
+
+			match (is_key_identified, is_prefix_identified) {
+				// We already did everything, move on...
+				(true, true) => continue,
+				// New key, but an existing prefix, we just add the base storage size, since
+				// trie impact should already be accounted for when we looked at the prefix last.
+				(false, true) => {
+					// track newly identified key
+					identified_key.insert(key.clone());
+				},
+				// New key and prefix. Calculate the total worst case PoV including the trie.
+				(false, false) => {
+					// track newly identified key and prefix
+					identified_key.insert(key.clone());
+					identified_prefix.insert(prefix.clone());
+				},
+				// Not possible. If the key is known, the prefix is too.
+				(true, false) => unreachable!(),
 			}
-			match storage_info_map.get(&prefix) {
-				Some(key_info) => {
-					let comment = format!(
-						"Storage: {} {} (r:{} w:{})",
-						String::from_utf8(key_info.pallet_name.clone())
-							.expect("encoded from string"),
-						String::from_utf8(key_info.storage_name.clone())
-							.expect("encoded from string"),
-						reads,
-						writes,
-					);
-					comments.push(comment)
-				},
-				None => {
-					let comment = format!(
-						"Storage: unknown [0x{}] (r:{} w:{})",
-						HexDisplay::from(key),
-						reads,
-						writes,
-					);
-					comments.push(comment)
-				},
+
+			// For any new prefix, we should write some comment
+			if !is_prefix_identified {
+				match storage_info_map.get(&prefix) {
+					Some(key_info) => {
+						let comment = format!(
+							"Storage: {} {} (r:{} w:{})",
+							String::from_utf8(key_info.pallet_name.clone())
+								.expect("encoded from string"),
+							String::from_utf8(key_info.storage_name.clone())
+								.expect("encoded from string"),
+							reads,
+							writes,
+						);
+						comments.push(comment)
+					},
+					None => {
+						let comment = format!(
+							"Storage: unknown [0x{}] (r:{} w:{})",
+							HexDisplay::from(key),
+							reads,
+							writes,
+						);
+						comments.push(comment)
+					},
+				}
+			}
+
+			// For any new key, we should add the PoV impact.
+			if !is_key_identified {
+				match storage_info_map.get(&prefix) {
+					Some(key_info) => {
+						match worst_case_pov(
+							key_info.max_values,
+							key_info.max_size,
+							!is_prefix_identified,
+						) {
+							Some(new_pov) => max_pov += new_pov,
+							None => {
+								let comment = format!(
+									"Storage Proof Skipped: {} {}",
+									String::from_utf8(key_info.pallet_name.clone())
+										.expect("encoded from string"),
+									String::from_utf8(key_info.storage_name.clone())
+										.expect("encoded from string"),
+								);
+								comments.push(comment)
+							},
+						}
+					},
+					None => {
+						let comment = format!(
+							"Storage Proof Skipped: unknown [0x{}] (r:{} w:{})",
+							HexDisplay::from(key),
+							reads,
+							writes,
+						);
+						comments.push(comment)
+					},
+				}
 			}
 		}
 	}
+
+	max_pov
+}
+
+// Given the max values and max size of some storage item, calculate the worst
+// case PoV
+fn worst_case_pov(
+	max_values: Option<u32>,
+	max_size: Option<u32>,
+	is_new_prefix: bool,
+) -> Option<u32> {
+	if let Some(max_size) = max_size {
+		let trie_size: u32 = if is_new_prefix {
+			// Assume worst case map of 6 layers.
+			let max_values = max_values.unwrap_or(16u32.pow(6));
+			let depth: u32 = easy_log_16(max_values);
+			// 16 items per depth layer, each containing a 32 byte hash.
+			depth * 16 * 32
+		} else {
+			0
+		};
+
+		Some(trie_size + max_size)
+	} else {
+		None
+	}
+}
+
+// A really basic loop which calculates Log 16 of some value.
+fn easy_log_16(input: u32) -> u32 {
+	for i in 0..7 {
+		if input <= 16u32.pow(i) {
+			return i + 1
+		}
+	}
+
+	// u32 supports up to 16^8
+	8
 }
 
 // A helper to join a string of vectors.

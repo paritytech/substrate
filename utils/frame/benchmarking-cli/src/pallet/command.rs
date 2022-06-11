@@ -153,15 +153,14 @@ impl PalletCmd {
 			// Enable storage tracking
 			true,
 		)?;
-		let state_without_tracking =
-			BenchmarkingState::<BB>::new(
-				genesis_storage,
-				cache_size,
-				// Do not record proof size
-				false,
-				// Do not enable storage tracking
-				false
-			)?;
+		let state_without_tracking = BenchmarkingState::<BB>::new(
+			genesis_storage,
+			cache_size,
+			// Do not record proof size
+			false,
+			// Do not enable storage tracking
+			false,
+		)?;
 		let executor = NativeElseWasmExecutor::<ExecDispatch>::new(
 			execution_method_from_cli(self.wasm_method, self.wasmtime_instantiation_strategy),
 			self.heap_pages,
@@ -450,7 +449,7 @@ impl PalletCmd {
 
 			if !self.no_storage_info {
 				let mut comments: Vec<String> = Default::default();
-				writer::add_storage_comments(&mut comments, &batch.db_results, storage_info);
+				writer::process_storage_results(&mut comments, &batch.db_results, storage_info);
 				println!("Raw Storage Info\n========");
 				for comment in comments {
 					println!("{}", comment);
