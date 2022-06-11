@@ -125,7 +125,7 @@ fn map_results(
 	storage_info: &[StorageInfo],
 	component_ranges: &HashMap<(Vec<u8>, Vec<u8>), Vec<ComponentRange>>,
 	analysis_choice: &AnalysisChoice,
-	worst_case_map_size: u32,
+	worst_case_map_values: u32,
 ) -> Result<HashMap<(String, String), Vec<BenchmarkData>>, std::io::Error> {
 	// Skip if batches is empty.
 	if batches.is_empty() {
@@ -147,7 +147,7 @@ fn map_results(
 			storage_info,
 			&component_ranges,
 			analysis_choice,
-			worst_case_map_size,
+			worst_case_map_values,
 		);
 		let pallet_benchmarks = all_benchmarks.entry((pallet_string, instance_string)).or_default();
 		pallet_benchmarks.push(benchmark_data);
@@ -171,7 +171,7 @@ fn get_benchmark_data(
 	// Per extrinsic component ranges.
 	component_ranges: &HashMap<(Vec<u8>, Vec<u8>), Vec<ComponentRange>>,
 	analysis_choice: &AnalysisChoice,
-	worst_case_map_size: u32,
+	worst_case_map_values: u32,
 ) -> BenchmarkData {
 	// You can use this to put any additional comments with the benchmarking output.
 	let mut comments = Vec::<String>::new();
@@ -274,7 +274,7 @@ fn get_benchmark_data(
 		&mut comments,
 		&batch.db_results,
 		storage_info,
-		worst_case_map_size,
+		worst_case_map_values,
 	);
 	let component_ranges = component_ranges
 		.get(&(batch.pallet.clone(), batch.benchmark.clone()))
@@ -357,7 +357,7 @@ pub(crate) fn write_results(
 		storage_info,
 		component_ranges,
 		&analysis_choice,
-		cmd.worst_case_map_size,
+		cmd.worst_case_map_values,
 	)?;
 	for ((pallet, instance), results) in all_results.iter() {
 		let mut file_path = path.clone();
@@ -404,7 +404,7 @@ pub(crate) fn process_storage_results(
 	comments: &mut Vec<String>,
 	results: &[BenchmarkResult],
 	storage_info: &[StorageInfo],
-	worst_case_map_size: u32,
+	worst_case_map_values: u32,
 ) -> u32 {
 	let mut storage_info_map = storage_info
 		.iter()
@@ -503,7 +503,7 @@ pub(crate) fn process_storage_results(
 							key_info.max_values,
 							key_info.max_size,
 							!is_prefix_identified,
-							worst_case_map_size,
+							worst_case_map_values,
 						) {
 							Some(new_pov) => {
 								max_pov += new_pov;
@@ -556,12 +556,12 @@ fn worst_case_pov(
 	max_values: Option<u32>,
 	max_size: Option<u32>,
 	is_new_prefix: bool,
-	worst_case_map_size: u32,
+	worst_case_map_values: u32,
 ) -> Option<u32> {
 	if let Some(max_size) = max_size {
 		let trie_size: u32 = if is_new_prefix {
 			// Assume worst case map of 6 layers.
-			let max_values = max_values.unwrap_or(worst_case_map_size);
+			let max_values = max_values.unwrap_or(worst_case_map_values);
 			let depth: u32 = easy_log_16(max_values);
 			// 16 items per depth layer, each containing a 32 byte hash.
 			depth * 16 * 32

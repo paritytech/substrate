@@ -453,7 +453,7 @@ impl PalletCmd {
 					&mut comments,
 					&batch.db_results,
 					storage_info,
-					self.worst_case_map_size,
+					self.worst_case_map_values,
 				);
 				println!("Raw Storage Info\n========");
 				for comment in comments {

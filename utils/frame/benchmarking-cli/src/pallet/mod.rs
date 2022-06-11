@@ -168,5 +168,5 @@ pub struct PalletCmd {
 	/// PoV size for accessing a value in a map, since the PoV will need to include the trie
 	/// nodes down to the underlying value.
 	#[clap(long = "map-size", default_value = "1_000_000")]
-	pub worst_case_map_size: u32,
+	pub worst_case_map_values: u32,
 }
