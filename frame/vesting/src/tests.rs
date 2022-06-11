@@ -863,7 +863,6 @@ fn merge_finishing_schedules_does_not_create_a_new_one() {
 			10,
 		);
 
-		// Create sched1 and transfer it to account 2.
 		let sched1 = VestingInfo::new(
 			ED * 30,
 			ED, // 30 block duration.
