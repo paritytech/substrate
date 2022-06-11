@@ -167,6 +167,6 @@ pub struct PalletCmd {
 	/// this value is used as a worst case scenario. It will affect the calculated worst case
 	/// PoV size for accessing a value in a map, since the PoV will need to include the trie
 	/// nodes down to the underlying value.
-	#[clap(long = "map-size", default_value = "1_000_000")]
+	#[clap(long = "map-size", default_value = "1000000")]
 	pub worst_case_map_values: u32,
 }
