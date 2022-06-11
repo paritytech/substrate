@@ -65,6 +65,7 @@ members = [
 	"client/transaction-pool",
 	"client/transaction-pool/api",
 	"client/utils",
+	"frame/alliance",
 	"frame/assets",
 	"frame/atomic-swap",
 	"frame/aura",
