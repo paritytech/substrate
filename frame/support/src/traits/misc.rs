@@ -946,6 +946,25 @@ impl<Hash> PreimageRecipient<Hash> for () {
 	fn unnote_preimage(_: &Hash) {}
 }
 
+/// A interface for placing preimages on-chain temporarily. These preimages are unbounded.
+pub trait TempPreimageRecipient<Hash>: PreimageProvider<Hash> {
+	/// Store the bytes of a preimage on chain. If you are using borreowed data, it must be valid
+	/// "forever".
+	fn note_preimage(bytes: Cow<'static, [u8]>);
+
+	/// Clear a previously noted preimage.
+	fn unnote_preimage(hash: &Hash);
+
+	/// Clear all previously noted preimages. This might be faster than removing them one at a time.
+	fn clear();
+}
+
+impl<Hash> TempPreimageRecipient<Hash> for () {
+	fn note_preimage(_: Cow<'static, [u8]>) {}
+	fn unnote_preimage(_: &Hash) {}
+	fn clear() {}
+}
+
 #[cfg(test)]
 mod test {
 	use super::*;

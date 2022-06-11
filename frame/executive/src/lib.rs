@@ -458,7 +458,7 @@ where
 
 		// Decode parameters and dispatch
 		let dispatch_info = xt.get_dispatch_info();
-		let r = Applyable::apply::<UnsignedValidator>(xt, &dispatch_info, encoded_len)?;
+		let r = Applyable::apply::<UnsignedValidator, <T as system::Config>::TempPreimageRecipient>(xt, &dispatch_info, encoded_len)?;
 
 		<frame_system::Pallet<System>>::note_applied_extrinsic(&r, dispatch_info);
 

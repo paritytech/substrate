@@ -23,7 +23,7 @@ use crate::{
 	scale_info::{MetaType, StaticTypeInfo, TypeInfo},
 	transaction_validity::{
 		TransactionSource, TransactionValidity, TransactionValidityError, UnknownTransaction,
-		ValidTransaction,
+		ValidTransaction, InvalidTransaction,
 	},
 	DispatchResult,
 };
@@ -39,7 +39,7 @@ pub use sp_arithmetic::traits::{
 use sp_core::{self, storage::StateVersion, Hasher, RuntimeDebug, TypeId};
 #[doc(hidden)]
 pub use sp_std::marker::PhantomData;
-use sp_std::{self, fmt::Debug, prelude::*};
+use sp_std::{self, fmt::{self, Debug}, borrow::Cow, prelude::*};
 #[cfg(feature = "std")]
 use std::fmt::Display;
 #[cfg(feature = "std")]
@@ -1138,7 +1138,7 @@ pub trait Extrinsic: Sized + MaybeMallocSizeOf {
 	/// 1. Inherents (no signature; created by validators during block production)
 	/// 2. Unsigned Transactions (no signature; represent "system calls" or other special kinds of
 	/// calls) 3. Signed Transactions (with signature; a regular transactions with known origin)
-	fn new(_call: Self::Call, _signed_data: Option<Self::SignaturePayload>) -> Option<Self> {
+	fn new(_call: FatCall<Self::Call>, _signed_data: Option<Self::SignaturePayload>) -> Option<Self> {
 		None
 	}
 }
@@ -1249,7 +1249,7 @@ pub trait SignedExtension:
 	/// from the transaction using the `additional_signed` function.
 	type AdditionalSigned: Encode + TypeInfo;
 
-	/// The type that encodes information that can be passed from pre_dispatch to post-dispatch.
+	/// The type that encodes information that can be passed from `pre_dispatch` to `post_dispatch`.
 	type Pre;
 
 	/// Construct any additional data that should be in the signed payload of the transaction. Can
@@ -1271,6 +1271,7 @@ pub trait SignedExtension:
 		_call: &Self::Call,
 		_info: &DispatchInfoOf<Self::Call>,
 		_len: usize,
+		_aux_data: &AuxData,
 	) -> TransactionValidity {
 		Ok(ValidTransaction::default())
 	}
@@ -1284,6 +1285,7 @@ pub trait SignedExtension:
 		call: &Self::Call,
 		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
+		_aux_data: &AuxData,
 	) -> Result<Self::Pre, TransactionValidityError>;
 
 	/// Validate an unsigned transaction for the transaction queue.
@@ -1294,15 +1296,19 @@ pub trait SignedExtension:
 	/// and quickly eliminate ones that are stale or incorrect.
 	///
 	/// Make sure to perform the same checks in `pre_dispatch_unsigned` function.
+	///
+	/// By default this ensures that there is no auxilliary data given.
 	fn validate_unsigned(
 		_call: &Self::Call,
 		_info: &DispatchInfoOf<Self::Call>,
 		_len: usize,
+		_aux_data: &AuxData,
 	) -> TransactionValidity {
 		Ok(ValidTransaction::default())
 	}
 
-	/// Do any pre-flight stuff for a unsigned transaction.
+	/// Do any pre-flight stuff for a unsigned transaction. This version supplies the auxilliary
+	/// data.
 	///
 	/// Note this function by default delegates to `validate_unsigned`, so that
 	/// all checks performed for the transaction queue are also performed during
@@ -1314,8 +1320,9 @@ pub trait SignedExtension:
 		call: &Self::Call,
 		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
+		aux_data: &AuxData,
 	) -> Result<(), TransactionValidityError> {
-		Self::validate_unsigned(call, info, len).map(|_| ()).map_err(Into::into)
+		Self::validate_unsigned(call, info, len, aux_data).map(|_| ()).map_err(Into::into)
 	}
 
 	/// Do any post-flight stuff for an extrinsic.
@@ -1390,9 +1397,10 @@ impl<AccountId, Call: Dispatchable> SignedExtension for Tuple {
 		call: &Self::Call,
 		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
+		aux_data: &AuxData,
 	) -> TransactionValidity {
 		let valid = ValidTransaction::default();
-		for_tuples!( #( let valid = valid.combine_with(Tuple.validate(who, call, info, len)?); )* );
+		for_tuples!( #( let valid = valid.combine_with(Tuple.validate(who, call, info, len, aux_data)?); )* );
 		Ok(valid)
 	}
 
@@ -1402,17 +1410,19 @@ impl<AccountId, Call: Dispatchable> SignedExtension for Tuple {
 		call: &Self::Call,
 		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
+		aux_data: &AuxData,
 	) -> Result<Self::Pre, TransactionValidityError> {
-		Ok(for_tuples!( ( #( Tuple.pre_dispatch(who, call, info, len)? ),* ) ))
+		Ok(for_tuples!( ( #( Tuple.pre_dispatch(who, call, info, len, aux_data)? ),* ) ))
 	}
 
 	fn validate_unsigned(
 		call: &Self::Call,
 		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
+		aux_data: &AuxData,
 	) -> TransactionValidity {
 		let valid = ValidTransaction::default();
-		for_tuples!( #( let valid = valid.combine_with(Tuple::validate_unsigned(call, info, len)?); )* );
+		for_tuples!( #( let valid = valid.combine_with(Tuple::validate_unsigned(call, info, len, aux_data)?); )* );
 		Ok(valid)
 	}
 
@@ -1420,8 +1430,9 @@ impl<AccountId, Call: Dispatchable> SignedExtension for Tuple {
 		call: &Self::Call,
 		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
+		aux_data: &AuxData,
 	) -> Result<(), TransactionValidityError> {
-		for_tuples!( #( Tuple::pre_dispatch_unsigned(call, info, len)?; )* );
+		for_tuples!( #( Tuple::pre_dispatch_unsigned(call, info, len, aux_data)?; )* );
 		Ok(())
 	}
 
@@ -1467,9 +1478,35 @@ impl SignedExtension for () {
 		call: &Self::Call,
 		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
+		aux_data: &AuxData,
 	) -> Result<Self::Pre, TransactionValidityError> {
-		self.validate(who, call, info, len).map(|_| ())
+		self.validate(who, call, info, len, aux_data).map(|_| ())
 	}
+}
+
+/// A interface for placing preimages on-chain temporarily. Unlike the `PreimageRecipient` in
+/// `frame-support`, these preimages are unbounded as they are not expected to be stored on-chain
+/// without further runtime logic to validate them.
+pub trait PreimageHandler {
+	/// The hash type by which we can delete previously created preimages.
+	type Hash;
+
+	/// Store the bytes of a preimage on chain. If you are using borreowed data, it must be valid
+	/// "forever".
+	fn note_preimage(bytes: sp_std::borrow::Cow<'static, [u8]>);
+
+	/// Clear a previously noted preimage.
+	fn unnote_preimage(hash: &Self::Hash);
+
+	/// Clear all previously noted preimages. This might be faster than removing them one at a time.
+	fn clear();
+}
+
+impl PreimageHandler for () {
+	type Hash = ();
+	fn note_preimage(_: Cow<'static, [u8]>) {}
+	fn unnote_preimage(_: &Self::Hash) {}
+	fn clear() {}
 }
 
 /// An "executable" piece of information, used by the standard Substrate Executive in order to
@@ -1483,7 +1520,7 @@ pub trait Applyable: Sized + Send + Sync {
 	type Call: Dispatchable;
 
 	/// Checks to see if this is a valid *transaction*. It returns information on it if so.
-	fn validate<V: ValidateUnsigned<Call = Self::Call>>(
+	fn validate<V: ValidateUnsigned<Call = Self::Call>, P: PreimageHandler>(
 		&self,
 		source: TransactionSource,
 		info: &DispatchInfoOf<Self::Call>,
@@ -1492,7 +1529,7 @@ pub trait Applyable: Sized + Send + Sync {
 
 	/// Executes all necessary logic needed prior to dispatch and deconstructs into function call,
 	/// index and sender.
-	fn apply<V: ValidateUnsigned<Call = Self::Call>>(
+	fn apply<V: ValidateUnsigned<Call = Self::Call>, P: PreimageHandler>(
 		self,
 		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
@@ -1509,6 +1546,59 @@ pub trait GetRuntimeBlockType {
 pub trait GetNodeBlockType {
 	/// The `NodeBlock` type.
 	type NodeBlock: self::Block;
+}
+
+/// The auxilliary data for an extrinsic. This is the set of preimages which the associated `Call`
+/// expects to be known during its execution.
+///
+/// NOTE: Would be great if this were a `Cow<&'static, [u8]>` so we can avoid any copies and use
+/// the slab of data coming into the runtime directly.
+pub type AuxData = Vec<Vec<u8>>;
+
+/// Call type which contains auxilliary data used during dispatch.
+#[derive(PartialEq, Eq, Clone, Encode, Decode)]
+pub struct FatCall<Call> {
+	/// The function that should be called.
+	pub call: Call,
+	/// Any additional data whose hash the `function` expects System to be able to provide the
+	/// preimage of known during execution. In transaction version 4, this is not provided and
+	/// assumed empty.
+	pub auxilliary_data: AuxData,
+}
+
+impl<Call> From<Call> for FatCall<Call> {
+	fn from(call: Call) -> Self {
+		Self { call, auxilliary_data: Vec::new() }
+	}
+}
+
+#[cfg(feature = "std")]
+impl<Call: Debug> Debug for FatCall<Call> {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		write!(f, "{:?}", self.call)?;
+		let mut first = true;
+		for i in self.auxilliary_data.iter() {
+			match first {
+				true => {
+					first = false;
+					write!(f, " + [")?;
+				},
+				false => write!(f, ", ")?,
+			}
+			write!(f, "{:?}", sp_core::blake2_256(i))?;
+		}
+		if !first {
+			write!(f, "]")?;
+		}
+		Ok(())
+	}
+}
+
+#[cfg(not(feature = "std"))]
+impl<Call: Debug> Debug for FatCall<Call> {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		write!(f, "{:?} + {}", self.function, self.auxilliary_data.len())
+	}
 }
 
 /// Something that can validate unsigned extrinsics for the transaction pool.
@@ -1531,10 +1621,26 @@ pub trait ValidateUnsigned {
 	/// this function again to make sure we never include an invalid transaction.
 	///
 	/// Changes made to storage WILL be persisted if the call returns `Ok`.
-	fn pre_dispatch(call: &Self::Call) -> Result<(), TransactionValidityError> {
-		Self::validate_unsigned(TransactionSource::InBlock, call)
+	///
+	/// NOTE: This should check the `aux_data` and ensure that all items there are
+	/// needed for the call.
+	fn pre_dispatch(call: &Self::Call, aux_data: &AuxData) -> Result<(), TransactionValidityError> {
+		Self::validate_unsigned(TransactionSource::InBlock, call, aux_data)
 			.map(|_| ())
 			.map_err(Into::into)
+	}
+
+	/// Check that any auxilliary data included in the extrinsic is expected.
+	///
+	/// By default this ensures that there is none. Reimplement if some is expected.
+	fn validate_aux_data(
+		_call: &Self::Call,
+		aux_data: &AuxData,
+	) -> Result<(), TransactionValidityError> {
+		match aux_data.is_empty() {
+			true => Ok(()),
+			false => Err(TransactionValidityError::Invalid(InvalidTransaction::UnexpectedData)),
+		}
 	}
 
 	/// Return the validity of the call
@@ -1543,7 +1649,10 @@ pub trait ValidateUnsigned {
 	/// whether the transaction would panic if it were included or not.
 	///
 	/// Changes made to storage should be discarded by caller.
-	fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity;
+	///
+	/// NOTE: This should check the `aux_data` and ensure that all items there are
+	/// needed for the call.
+	fn validate_unsigned(source: TransactionSource, call: &Self::Call, aux_data: &AuxData) -> TransactionValidity;
 }
 
 /// Opaque data type that may be destructured into a series of raw byte slices (which represent

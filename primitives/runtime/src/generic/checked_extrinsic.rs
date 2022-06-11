@@ -21,7 +21,7 @@
 use crate::{
 	traits::{
 		self, DispatchInfoOf, Dispatchable, MaybeDisplay, Member, PostDispatchInfoOf,
-		SignedExtension, ValidateUnsigned,
+		SignedExtension, ValidateUnsigned, PreimageHandler, FatCall,
 	},
 	transaction_validity::{TransactionSource, TransactionValidity},
 };
@@ -35,8 +35,9 @@ pub struct CheckedExtrinsic<AccountId, Call, Extra> {
 	/// from the same signer, if anyone (note this is not a signature).
 	pub signed: Option<(AccountId, Extra)>,
 
-	/// The function that should be called.
-	pub function: Call,
+	/// The function that should be called. This should include everything needed for correct
+	/// execution, and in the latest version includes data which the dispatchable relies on.
+	pub function: FatCall<Call>,
 }
 
 impl<AccountId, Call, Extra, Origin> traits::Applyable for CheckedExtrinsic<AccountId, Call, Extra>
@@ -48,7 +49,7 @@ where
 {
 	type Call = Call;
 
-	fn validate<U: ValidateUnsigned<Call = Self::Call>>(
+	fn validate<U: ValidateUnsigned<Call = Self::Call>, P: PreimageHandler>(
 		&self,
 		// TODO [#5006;ToDr] should source be passed to `SignedExtension`s?
 		// Perhaps a change for 2.0 to avoid breaking too much APIs?
@@ -56,29 +57,41 @@ where
 		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
 	) -> TransactionValidity {
+		let FatCall { call, auxilliary_data: aux_data } = &self.function;
 		if let Some((ref id, ref extra)) = self.signed {
-			Extra::validate(extra, id, &self.function, info, len)
+			Extra::validate(extra, id, call, info, len, aux_data)
 		} else {
-			let valid = Extra::validate_unsigned(&self.function, info, len)?;
-			let unsigned_validation = U::validate_unsigned(source, &self.function)?;
+			U::validate_aux_data(call, aux_data)?;
+			let unsigned_validation = U::validate_unsigned(source, call, aux_data)?;
+			let valid = Extra::validate_unsigned(call, info, len, aux_data)?;
 			Ok(valid.combine_with(unsigned_validation))
 		}
 	}
 
-	fn apply<U: ValidateUnsigned<Call = Self::Call>>(
+	fn apply<U: ValidateUnsigned<Call = Self::Call>, P: PreimageHandler>(
 		self,
 		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
 	) -> crate::ApplyExtrinsicResultWithInfo<PostDispatchInfoOf<Self::Call>> {
+		let FatCall { call, auxilliary_data: aux_data } = self.function;
 		let (maybe_who, maybe_pre) = if let Some((id, extra)) = self.signed {
-			let pre = Extra::pre_dispatch(extra, &id, &self.function, info, len)?;
+			let pre = Extra::pre_dispatch(extra, &id, &call, info, len, &aux_data)?;
 			(Some(id), Some(pre))
 		} else {
-			Extra::pre_dispatch_unsigned(&self.function, info, len)?;
-			U::pre_dispatch(&self.function)?;
+			U::validate_aux_data(&call, &aux_data)?;
+			U::pre_dispatch(&call, &aux_data)?;
+			Extra::pre_dispatch_unsigned(&call, info, len, &aux_data)?;
 			(None, None)
 		};
-		let res = self.function.dispatch(Origin::from(maybe_who));
+
+		// Place the primage data.
+		for data in aux_data.into_iter() {
+			P::note_preimage(sp_std::borrow::Cow::from(data));
+		}
+		let res = call.dispatch(Origin::from(maybe_who));
+		// Remove the primage data.
+		P::clear();
+
 		let post_info = match res {
 			Ok(info) => info,
 			Err(err) => err.post_info,

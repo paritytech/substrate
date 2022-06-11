@@ -148,9 +148,3 @@ impl<Header: Encode, Id: Encode> MaxEncodedLen for EquivocationProof<Header, Id>
 		500_000
 	}
 }
-
-impl<Header: Encode, Id: Encode> MaxEncodedLen for sp_std::boxed::Box<EquivocationProof<Header, Id>> {
-	fn max_encoded_len() -> usize {
-		500_000
-	}
-}

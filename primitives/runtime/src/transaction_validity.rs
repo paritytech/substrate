@@ -81,6 +81,8 @@ pub enum InvalidTransaction {
 	MandatoryDispatch,
 	/// The sending address is disabled or known to be invalid.
 	BadSigner,
+	/// Auxilliary data was supplied in the extrinsic which was unexpected.
+	UnexpectedData,
 }
 
 impl InvalidTransaction {
@@ -112,6 +114,7 @@ impl From<InvalidTransaction> for &'static str {
 				"Transaction dispatch is mandatory; transactions may not have mandatory dispatches.",
 			InvalidTransaction::Custom(_) => "InvalidTransaction custom error",
 			InvalidTransaction::BadSigner => "Invalid signing address",
+			InvalidTransaction::UnexpectedData => "Unexpected auxilliary data",
 		}
 	}
 }

@@ -21,7 +21,7 @@ use crate::{
 	generic::CheckedExtrinsic,
 	traits::{
 		self, Checkable, Extrinsic, ExtrinsicMetadata, IdentifyAccount, MaybeDisplay, Member,
-		SignedExtension,
+		SignedExtension, FatCall,
 	},
 	transaction_validity::{InvalidTransaction, TransactionValidityError},
 	OpaqueExtrinsic,
@@ -31,12 +31,17 @@ use scale_info::{build::Fields, meta_type, Path, StaticTypeInfo, Type, TypeInfo,
 use sp_io::hashing::blake2_256;
 use sp_std::{fmt, prelude::*};
 
-/// Current version of the [`UncheckedExtrinsic`] encoded format.
+/// Latest version of the [`UncheckedExtrinsic`] encoded format.
 ///
 /// This version needs to be bumped if the encoded representation changes.
 /// It ensures that if the representation is changed and the format is not known,
 /// the decoding fails.
-const EXTRINSIC_FORMAT_VERSION: u8 = 4;
+const EXTRINSIC_FORMAT_VERSION: u8 = 5;
+
+/// Previous version of the [`UncheckedExtrinsic`] encoded format where the `function` type was
+/// actually just a `Call`, not a `FatCall`. This will still decode correctly, but we will never
+/// encode to this version.
+const THIN_CALL_EXTRINSIC_FORMAT_VERSION: u8 = 4;
 
 /// A extrinsic right from the external world. This is unchecked and so
 /// can contain a signature.
@@ -49,8 +54,9 @@ where
 	/// the same signer and an era describing the longevity of this transaction,
 	/// if this is a signed extrinsic.
 	pub signature: Option<(Address, Signature, Extra)>,
-	/// The function that should be called.
-	pub function: Call,
+
+	/// The function that should be called together with any dependent data.
+	pub function: FatCall<Call>,
 }
 
 /// Manual [`TypeInfo`] implementation because of custom encoding. The data is a valid encoded
@@ -103,12 +109,12 @@ impl<Address, Call, Signature, Extra: SignedExtension>
 	UncheckedExtrinsic<Address, Call, Signature, Extra>
 {
 	/// New instance of a signed extrinsic aka "transaction".
-	pub fn new_signed(function: Call, signed: Address, signature: Signature, extra: Extra) -> Self {
+	pub fn new_signed(function: FatCall<Call>, signed: Address, signature: Signature, extra: Extra) -> Self {
 		Self { signature: Some((signed, signature, extra)), function }
 	}
 
 	/// New instance of an unsigned extrinsic aka "inherent".
-	pub fn new_unsigned(function: Call) -> Self {
+	pub fn new_unsigned(function: FatCall<Call>) -> Self {
 		Self { signature: None, function }
 	}
 }
@@ -124,7 +130,7 @@ impl<Address, Call, Signature, Extra: SignedExtension> Extrinsic
 		Some(self.signature.is_some())
 	}
 
-	fn new(function: Call, signed_data: Option<Self::SignaturePayload>) -> Option<Self> {
+	fn new(function: FatCall<Call>, signed_data: Option<Self::SignaturePayload>) -> Option<Self> {
 		Some(if let Some((address, signature, extra)) = signed_data {
 			Self::new_signed(function, address, signature, extra)
 		} else {
@@ -177,36 +183,36 @@ where
 /// Note that the payload that we sign to produce unchecked extrinsic signature
 /// is going to be different than the `SignaturePayload` - so the thing the extrinsic
 /// actually contains.
-pub struct SignedPayload<Call, Extra: SignedExtension>((Call, Extra, Extra::AdditionalSigned));
+pub struct SignedPayload<Call, Extra: SignedExtension>((FatCall<Call>, Extra, Extra::AdditionalSigned));
 
 impl<Call, Extra> SignedPayload<Call, Extra>
 where
-	Call: Encode,
+	FatCall<Call>: Encode,
 	Extra: SignedExtension,
 {
 	/// Create new `SignedPayload`.
 	///
 	/// This function may fail if `additional_signed` of `Extra` is not available.
-	pub fn new(call: Call, extra: Extra) -> Result<Self, TransactionValidityError> {
+	pub fn new(call: FatCall<Call>, extra: Extra) -> Result<Self, TransactionValidityError> {
 		let additional_signed = extra.additional_signed()?;
 		let raw_payload = (call, extra, additional_signed);
 		Ok(Self(raw_payload))
 	}
 
 	/// Create new `SignedPayload` from raw components.
-	pub fn from_raw(call: Call, extra: Extra, additional_signed: Extra::AdditionalSigned) -> Self {
+	pub fn from_raw(call: FatCall<Call>, extra: Extra, additional_signed: Extra::AdditionalSigned) -> Self {
 		Self((call, extra, additional_signed))
 	}
 
-	/// Deconstruct the payload into it's components.
-	pub fn deconstruct(self) -> (Call, Extra, Extra::AdditionalSigned) {
+	/// Deconstruct the payload into its components.
+	pub fn deconstruct(self) -> (FatCall<Call>, Extra, Extra::AdditionalSigned) {
 		self.0
 	}
 }
 
 impl<Call, Extra> Encode for SignedPayload<Call, Extra>
 where
-	Call: Encode,
+	FatCall<Call>: Encode,
 	Extra: SignedExtension,
 {
 	/// Get an encoded version of this payload.
@@ -225,7 +231,7 @@ where
 
 impl<Call, Extra> EncodeLike for SignedPayload<Call, Extra>
 where
-	Call: Encode,
+	FatCall<Call>: Encode,
 	Extra: SignedExtension,
 {
 }
@@ -235,6 +241,7 @@ where
 	Address: Decode,
 	Signature: Decode,
 	Call: Decode,
+	FatCall<Call>: Decode,
 	Extra: SignedExtension,
 {
 	fn decode<I: Input>(input: &mut I) -> Result<Self, Error> {
@@ -248,12 +255,17 @@ where
 
 		let is_signed = version & 0b1000_0000 != 0;
 		let version = version & 0b0111_1111;
-		if version != EXTRINSIC_FORMAT_VERSION {
-			return Err("Invalid transaction version".into())
-		}
+		let is_thin_call = match version {
+			EXTRINSIC_FORMAT_VERSION => false,
+			THIN_CALL_EXTRINSIC_FORMAT_VERSION => true,
+			_ => return Err("Invalid transaction version".into()),
+		};
 
 		let signature = is_signed.then(|| Decode::decode(input)).transpose()?;
-		let function = Decode::decode(input)?;
+		let function = match is_thin_call {
+			true => Call::decode(input)?.into(),
+			false => Decode::decode(input)?,
+		};
 
 		if let Some((before_length, after_length)) =
 			input.remaining_len()?.and_then(|a| before_length.map(|b| (b, a)))
@@ -273,7 +285,7 @@ impl<Address, Call, Signature, Extra> Encode for UncheckedExtrinsic<Address, Cal
 where
 	Address: Encode,
 	Signature: Encode,
-	Call: Encode,
+	FatCall<Call>: Encode,
 	Extra: SignedExtension,
 {
 	fn encode(&self) -> Vec<u8> {
@@ -308,7 +320,7 @@ impl<Address, Call, Signature, Extra> EncodeLike
 where
 	Address: Encode,
 	Signature: Encode,
-	Call: Encode,
+	FatCall<Call>: Encode,
 	Extra: SignedExtension,
 {
 }
@@ -316,6 +328,7 @@ where
 #[cfg(feature = "std")]
 impl<Address: Encode, Signature: Encode, Call: Encode, Extra: SignedExtension> serde::Serialize
 	for UncheckedExtrinsic<Address, Call, Signature, Extra>
+	where FatCall<Call>: Encode
 {
 	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error>
 	where
@@ -327,7 +340,9 @@ impl<Address: Encode, Signature: Encode, Call: Encode, Extra: SignedExtension> s
 
 #[cfg(feature = "std")]
 impl<'a, Address: Decode, Signature: Decode, Call: Decode, Extra: SignedExtension>
-	serde::Deserialize<'a> for UncheckedExtrinsic<Address, Call, Signature, Extra>
+	serde::Deserialize<'a>
+	for UncheckedExtrinsic<Address, Call, Signature, Extra>
+	where FatCall<Call>: Decode
 {
 	fn deserialize<D>(de: D) -> Result<Self, D::Error>
 	where
@@ -361,7 +376,7 @@ impl<Address, Call, Signature, Extra> From<UncheckedExtrinsic<Address, Call, Sig
 where
 	Address: Encode,
 	Signature: Encode,
-	Call: Encode,
+	FatCall<Call>: Encode,
 	Extra: SignedExtension,
 {
 	fn from(extrinsic: UncheckedExtrinsic<Address, Call, Signature, Extra>) -> Self {

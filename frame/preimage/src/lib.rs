@@ -43,7 +43,7 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	ensure,
 	pallet_prelude::Get,
-	traits::{Currency, IsSubType, PreimageProvider, PreimageRecipient, ReservableCurrency},
+	traits::{Currency, IsSubType, PreimageProvider, PreimageRecipient, ReservableCurrency, TempPreimageRecipient},
 	weights::Pays,
 	BoundedVec,
 };
@@ -381,88 +381,21 @@ impl<T: Config> PreimageRecipient<T::Hash> for Pallet<T> {
 	}
 }
 
-/// Place temporary primages into non-persistent storage for use in the transaction's call.
-#[derive(Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
-#[scale_info(skip_type_params(T))]
-pub struct TempPreimages<T: Config + Send + Sync>(Vec<Vec<u8>>, sp_std::marker::PhantomData<T>)
-where
-	<T as frame_system::Config>::Call: IsSubType<Call<T>>;
-
-impl<T: Config + Send + Sync> sp_std::fmt::Debug for TempPreimages<T>
-where
-	<T as frame_system::Config>::Call: IsSubType<Call<T>>,
-{
-	#[cfg(feature = "std")]
-	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		write!(f, "TempPreimages")
+/// A special preimage recipient which doesn't store it on-chain but in-memory for the duration of
+/// the current runtime API function.
+pub struct Temporary<T>(sp_std::marker::PhantomData<T>);
+impl<T: Config> TempPreimageRecipient<T::Hash> for Temporary<T> {
+	fn note_preimage(bytes: Cow<&'static, [u8]>) {
+		// We don't really care if this fails, since that's only the case if someone else has
+		// already noted it.
+		TEMP_PREIMAGES.with(|t| t.borrow_mut().insert(T::Hashing::hash(&bytes[..]).encode(), bytes));
 	}
 
-	#[cfg(not(feature = "std"))]
-	fn fmt(&self, _: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		Ok(())
-	}
-}
-
-impl<T: Config + Send + Sync> TempPreimages<T>
-where
-	<T as frame_system::Config>::Call: IsSubType<Call<T>>,
-{
-	/// Create new `SignedExtension` to feed in preimages.
-	pub fn new(preimages: Vec<Vec<u8>>) -> Self {
-		Self(preimages, sp_std::marker::PhantomData)
-	}
-}
-
-impl<T: Config + Send + Sync> SignedExtension for TempPreimages<T>
-where
-	<T as frame_system::Config>::Call: IsSubType<Call<T>>,
-{
-	type AccountId = T::AccountId;
-	type Call = <T as frame_system::Config>::Call;
-	type AdditionalSigned = ();
-	type Pre = ();
-	const IDENTIFIER: &'static str = "TempPreimages";
-
-	fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
-		Ok(())
+	fn unnote_preimage(hash: &T::Hash) {
+		TEMP_PREIMAGES.with(|t| t.borrow_mut().remove(hash));
 	}
 
-	fn pre_dispatch(
-		self,
-		who: &Self::AccountId,
-		call: &Self::Call,
-		info: &DispatchInfoOf<Self::Call>,
-		len: usize,
-	) -> Result<Self::Pre, TransactionValidityError> {
-		Ok(self.validate(who, call, info, len).map(|_| ())?)
-	}
-
-	fn validate(
-		&self,
-		_who: &Self::AccountId,
-		_call: &Self::Call,
-		_info: &DispatchInfoOf<Self::Call>,
-		_len: usize,
-	) -> TransactionValidity {
-		for i in &self.0 {
-			TEMP_PREIMAGES.with(|t| t.borrow_mut().insert(T::Hashing::hash(&i[..]).encode(), i));
-//			TempPreimageFor::<T>::insert(T::Hashing::hash(&i[..]), i);
-		}
-		Ok(ValidTransaction::default())
-	}
-
-	fn post_dispatch(
-		_pre: Option<Self::Pre>,
-		_info: &DispatchInfoOf<Self::Call>,
-		_post_info: &sp_runtime::traits::PostDispatchInfoOf<Self::Call>,
-		_len: usize,
-		_result: &sp_runtime::DispatchResult,
-	) -> Result<(), TransactionValidityError> {
-		// this is fine since a) it's not persisted and b) we want to move to explicitly
-		// transient storage anyway.
-//		#[allow(deprecated)]
-//		TempPreimageFor::<T>::remove_all(None);
+	fn clear() {
 		TEMP_PREIMAGES.with(|t| t.borrow_mut().clear());
-		Ok(())
 	}
 }

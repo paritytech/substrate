@@ -88,7 +88,7 @@ use frame_support::{
 	storage,
 	traits::{
 		ConstU32, Contains, EnsureOrigin, Get, HandleLifetime, OnKilledAccount, OnNewAccount,
-		OriginTrait, PalletInfo, PreimageProvider, SortedMembers, StoredMap, TypedGet,
+		OriginTrait, PalletInfo, PreimageProvider, SortedMembers, StoredMap, TypedGet, TempPreimageRecipient,
 	},
 	weights::{
 		extract_actual_weight, DispatchClass, DispatchInfo, PerDispatchClass, RuntimeDbWeight,
@@ -354,6 +354,10 @@ pub mod pallet {
 
 		/// The Preimage provider.
 		type PreimageProvider: PreimageProvider<Self::Hash>;
+
+		/// The recipient for temporary preimages. We expect these to be available via the
+		/// `PreimageProvider` throughout the current runtime API function.
+		type TempPreimageRecipient: TempPreimageRecipient<Self::Hash>;
 	}
 
 	#[pallet::pallet]
@@ -504,7 +508,7 @@ pub mod pallet {
 			hash: T::Hash,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			ensure!(T::PreimageProvider::have_preimage(&hash), Error::<T>::BadPreimage);
+			ensure!(T::Preimages::have_preimage(&hash), Error::<T>::BadPreimage);
 			Self::deposit_event(Event::Remarked { sender: who, hash });
 			Ok(().into())
 		}
@@ -991,7 +995,7 @@ pub enum DecRefStatus {
 impl<T: Config> Pallet<T> {
 	/// Retrieve the preimage of a given hash or give a `DispatchError`.
 	pub fn preimage_of(h: impl Borrow<T::Hash>) -> Result<Vec<u8>, DispatchError> {
-		Ok(T::PreimageProvider::get_preimage(h.borrow()).ok_or(Error::<T>::BadPreimage)?.into_owned())
+		Ok(T::Preimages::get_preimage(h.borrow()).ok_or(Error::<T>::BadPreimage)?.into_owned())
 	}
 
 	/// Retrieve the value whose encoding is the preimage of a given hash or give a `DispatchError`.

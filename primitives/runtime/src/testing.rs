@@ -23,7 +23,7 @@ use crate::{
 	scale_info::TypeInfo,
 	traits::{
 		self, Applyable, BlakeTwo256, Checkable, DispatchInfoOf, Dispatchable, OpaqueKeys,
-		PostDispatchInfoOf, SignedExtension, ValidateUnsigned,
+		PostDispatchInfoOf, SignedExtension, ValidateUnsigned, PreimageHandler, FatCall, AuxData,
 	},
 	transaction_validity::{TransactionSource, TransactionValidity, TransactionValidityError},
 	ApplyExtrinsicResultWithInfo, CryptoTypeId, KeyTypeId,
@@ -297,12 +297,14 @@ pub struct TestXt<Call, Extra> {
 	pub signature: Option<(u64, Extra)>,
 	/// Call of the extrinsic.
 	pub call: Call,
+	/// The auxilliary data of the extrinsic.
+	pub aux_data: AuxData,
 }
 
 impl<Call, Extra> TestXt<Call, Extra> {
 	/// Create a new `TextXt`.
 	pub fn new(call: Call, signature: Option<(u64, Extra)>) -> Self {
-		Self { call, signature }
+		Self { call, signature, aux_data: Vec::new() }
 	}
 }
 
@@ -342,8 +344,8 @@ impl<Call: Codec + Sync + Send, Extra> traits::Extrinsic for TestXt<Call, Extra>
 		Some(self.signature.is_some())
 	}
 
-	fn new(c: Call, sig: Option<Self::SignaturePayload>) -> Option<Self> {
-		Some(TestXt { signature: sig, call: c })
+	fn new(c: FatCall<Call>, sig: Option<Self::SignaturePayload>) -> Option<Self> {
+		Some(TestXt { signature: sig, call: c.call, aux_data: c.auxilliary_data })
 	}
 }
 
@@ -366,37 +368,42 @@ where
 	type Call = Call;
 
 	/// Checks to see if this is a valid *transaction*. It returns information on it if so.
-	fn validate<U: ValidateUnsigned<Call = Self::Call>>(
+	fn validate<U: ValidateUnsigned<Call = Self::Call>, P: PreimageHandler>(
 		&self,
 		source: TransactionSource,
 		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
 	) -> TransactionValidity {
 		if let Some((ref id, ref extra)) = self.signature {
-			Extra::validate(extra, id, &self.call, info, len)
+			Extra::validate(extra, id, &self.call, info, len, &self.aux_data)
 		} else {
-			let valid = Extra::validate_unsigned(&self.call, info, len)?;
-			let unsigned_validation = U::validate_unsigned(source, &self.call)?;
+			let valid = Extra::validate_unsigned(&self.call, info, len, &self.aux_data)?;
+			let unsigned_validation = U::validate_unsigned(source, &self.call, &self.aux_data)?;
 			Ok(valid.combine_with(unsigned_validation))
 		}
 	}
 
 	/// Executes all necessary logic needed prior to dispatch and deconstructs into function call,
 	/// index and sender.
-	fn apply<U: ValidateUnsigned<Call = Self::Call>>(
+	fn apply<U: ValidateUnsigned<Call = Self::Call>, P: PreimageHandler>(
 		self,
 		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
 	) -> ApplyExtrinsicResultWithInfo<PostDispatchInfoOf<Self::Call>> {
 		let maybe_who = if let Some((who, extra)) = self.signature {
-			Extra::pre_dispatch(extra, &who, &self.call, info, len)?;
+			Extra::pre_dispatch(extra, &who, &self.call, info, len, &self.aux_data)?;
 			Some(who)
 		} else {
-			Extra::pre_dispatch_unsigned(&self.call, info, len)?;
-			U::pre_dispatch(&self.call)?;
+			Extra::pre_dispatch_unsigned(&self.call, info, len, &self.aux_data)?;
+			U::pre_dispatch(&self.call, &self.aux_data)?;
 			None
 		};
 
-		Ok(self.call.dispatch(maybe_who.into()))
+		for i in self.aux_data.into_iter() {
+			P::note_preimage(i.into());
+		}
+		let r = self.call.dispatch(maybe_who.into());
+		P::clear();
+		Ok(r)
 	}
 }
