@@ -1492,7 +1492,7 @@ impl pallet_whitelist::Config for Runtime {
 parameter_types! {
 	pub const MigrationSignedDepositPerItem: Balance = 1 * CENTS;
 	pub const MigrationSignedDepositBase: Balance = 20 * DOLLARS;
-	pub const MigrationMaxKeyLen: u32 = 128;
+	pub const MigrationMaxKeyLen: u32 = 512;
 }
 
 impl pallet_state_trie_migration::Config for Runtime {

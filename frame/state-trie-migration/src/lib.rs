@@ -1127,7 +1127,7 @@ mod mock {
 	parameter_types! {
 		pub const SignedDepositPerItem: u64 = 1;
 		pub const SignedDepositBase: u64 = 5;
-		pub const MigrationMaxKeyLen: u32 = 128;
+		pub const MigrationMaxKeyLen: u32 = 512;
 	}
 
 	impl pallet_balances::Config for Test {
