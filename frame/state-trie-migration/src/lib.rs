@@ -277,7 +277,7 @@ pub mod pallet {
 
 			while !self.exhausted(limits) && !self.finished() {
 				if let Err(e) = self.migrate_tick() {
-					log!(warn, "migration halted due to error: {:?}", e);
+					log!(error, "migrate_until_exhaustion failed: {:?}", e);
 					return Err(e)
 				}
 			}
@@ -461,7 +461,7 @@ pub mod pallet {
 		Slashed { who: T::AccountId, amount: BalanceOf<T> },
 		/// The auto migration task finished.
 		AutoMigrationFinished,
-		/// Migration got halted.
+		/// Migration got halted due to an error or miss-configuration.
 		Halted,
 	}
 
@@ -534,6 +534,8 @@ pub mod pallet {
 		/// This means that the migration halted at the current [`Progress`] and
 		/// can be resumed with a larger [`crate::Config::MaxKeyLen`] value.
 		/// Retrying with the same [`crate::Config::MaxKeyLen`] value will not work.
+		/// The value should only be increased to avoid a storage migration for the currently
+		/// stored [`crate::Progress::LastKey`].
 		KeyTooLong,
 		/// submitter does not have enough funds.
 		NotEnoughFunds,
@@ -644,7 +646,10 @@ pub mod pallet {
 			let post_info = PostDispatchInfo { actual_weight, pays_fee: Pays::No };
 			match migration {
 				Ok(_) => Ok(post_info),
-				Err(error) => Err(DispatchErrorWithPostInfo { post_info, error }),
+				Err(error) => {
+					Self::halt(&error);
+					Err(DispatchErrorWithPostInfo { post_info, error })
+				},
 			}
 		}
 
@@ -810,8 +815,9 @@ pub mod pallet {
 		fn on_initialize(_: BlockNumberFor<T>) -> Weight {
 			if let Some(limits) = Self::auto_limits() {
 				let mut task = Self::migration_process();
-				// The function itself already logs a warning, so ignore it here.
-				let _ = task.migrate_until_exhaustion(limits);
+				if let Err(e) = task.migrate_until_exhaustion(limits) {
+					Self::halt(&e);
+				}
 				let weight = Self::dynamic_weight(task.dyn_total_items(), task.dyn_size);
 
 				log!(
@@ -852,8 +858,9 @@ pub mod pallet {
 				.saturating_add(T::WeightInfo::process_top_key(size))
 		}
 
-		/// Put a stop to all ongoing migrations.
-		fn halt() {
+		/// Put a stop to all ongoing migrations and logs an error.
+		fn halt<E: std::fmt::Debug + ?Sized>(msg: &E) {
+			log!(error, "migration halted due to: {:?}", msg);
 			AutoLimits::<T>::kill();
 			Self::deposit_event(Event::<T>::Halted);
 		}
@@ -874,7 +881,7 @@ pub mod pallet {
 		fn transform_child_key_or_halt(root: &Vec<u8>) -> &[u8] {
 			let key = Self::transform_child_key(root);
 			if key.is_none() {
-				Self::halt();
+				Self::halt("bad child root key");
 			}
 			key.unwrap_or_default()
 		}
@@ -1108,6 +1115,7 @@ mod mock {
 	parameter_types! {
 		pub const SignedDepositPerItem: u64 = 1;
 		pub const SignedDepositBase: u64 = 5;
+		pub const MigrationMaxKeyLen: u32 = 128;
 	}
 
 	impl pallet_balances::Config for Test {
@@ -1126,7 +1134,7 @@ mod mock {
 		type Event = Event;
 		type ControlOrigin = EnsureRoot<u64>;
 		type Currency = Balances;
-		type MaxKeyLen = ConstU32<128>;
+		type MaxKeyLen = MigrationMaxKeyLen;
 		type SignedDepositPerItem = SignedDepositPerItem;
 		type SignedDepositBase = SignedDepositBase;
 		type SignedFilter = EnsureSigned<Self::AccountId>;
@@ -1234,7 +1242,7 @@ mod mock {
 #[cfg(test)]
 mod test {
 	use super::{mock::*, *};
-	use frame_support::bounded_vec;
+	use frame_support::{bounded_vec, dispatch::*, weights::Pays};
 	use sp_runtime::{traits::Bounded, StateVersion};
 
 	#[test]
@@ -1247,6 +1255,80 @@ mod test {
 
 		// these two roots should not be the same.
 		assert_ne!(root1, root2);
+	}
+
+	#[test]
+	fn halts_if_top_key_too_long() {
+		let bad_key = vec![1u8; MigrationMaxKeyLen::get() as usize + 1];
+		let bad_top_keys = vec![(bad_key.clone(), vec![])];
+
+		new_test_ext(StateVersion::V0, true, Some(bad_top_keys), None).execute_with(|| {
+			System::set_block_number(1);
+			assert_eq!(MigrationProcess::<Test>::get(), Default::default());
+
+			// Allow signed migrations.
+			SignedMigrationMaxLimits::<Test>::put(MigrationLimits { size: 1 << 20, item: 50 });
+
+			// fails if the top key is too long.
+			frame_support::assert_err_with_weight!(
+				StateTrieMigration::continue_migrate(
+					Origin::signed(1),
+					MigrationLimits { item: 50, size: 1 << 20 },
+					Bounded::max_value(),
+					MigrationProcess::<Test>::get()
+				),
+				Error::<Test>::KeyTooLong,
+				Some(2000000),
+			);
+			// The auto migration halted.
+			System::assert_last_event(crate::Event::Halted {}.into());
+			// Limits are killed.
+			assert!(AutoLimits::<Test>::get().is_none());
+
+			// Calling `migrate_until_exhaustion` also fails.
+			let mut task = StateTrieMigration::migration_process();
+			let result = task.migrate_until_exhaustion(
+				StateTrieMigration::signed_migration_max_limits().unwrap(),
+			);
+			assert!(result.is_err());
+		});
+	}
+
+	#[test]
+	fn halts_if_child_key_too_long() {
+		let bad_key = vec![1u8; MigrationMaxKeyLen::get() as usize + 1];
+		let bad_child_keys = vec![(bad_key.clone(), vec![], vec![])];
+
+		new_test_ext(StateVersion::V0, true, None, Some(bad_child_keys)).execute_with(|| {
+			System::set_block_number(1);
+			assert_eq!(MigrationProcess::<Test>::get(), Default::default());
+
+			// Allow signed migrations.
+			SignedMigrationMaxLimits::<Test>::put(MigrationLimits { size: 1 << 20, item: 50 });
+
+			// fails if the top key is too long.
+			frame_support::assert_err_with_weight!(
+				StateTrieMigration::continue_migrate(
+					Origin::signed(1),
+					MigrationLimits { item: 50, size: 1 << 20 },
+					Bounded::max_value(),
+					MigrationProcess::<Test>::get()
+				),
+				Error::<Test>::KeyTooLong,
+				Some(2000000),
+			);
+			// The auto migration halted.
+			System::assert_last_event(crate::Event::Halted {}.into());
+			// Limits are killed.
+			assert!(AutoLimits::<Test>::get().is_none());
+
+			// Calling `migrate_until_exhaustion` also fails.
+			let mut task = StateTrieMigration::migration_process();
+			let result = task.migrate_until_exhaustion(
+				StateTrieMigration::signed_migration_max_limits().unwrap(),
+			);
+			assert!(result.is_err());
+		});
 	}
 
 	#[test]
