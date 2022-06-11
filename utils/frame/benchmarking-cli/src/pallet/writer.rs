@@ -449,7 +449,8 @@ pub(crate) fn process_storage_results(
 				(true, false) => unreachable!(),
 			}
 
-			// For any new prefix, we should write some comment
+			// For any new prefix, we should write some comment about the number of reads and
+			// writes.
 			if !is_prefix_identified {
 				match storage_info_map.get(&prefix) {
 					Some(key_info) => {
@@ -485,14 +486,29 @@ pub(crate) fn process_storage_results(
 							key_info.max_size,
 							!is_prefix_identified,
 						) {
-							Some(new_pov) => max_pov += new_pov,
-							None => {
+							Some(new_pov) => {
+								max_pov += new_pov;
 								let comment = format!(
-									"Storage Proof Skipped: {} {}",
+									"Proof: {} {} (max_values: {:?}, max_size: {:?}, added: {})",
 									String::from_utf8(key_info.pallet_name.clone())
 										.expect("encoded from string"),
 									String::from_utf8(key_info.storage_name.clone())
 										.expect("encoded from string"),
+									key_info.max_values,
+									key_info.max_size,
+									new_pov,
+								);
+								comments.push(comment)
+							},
+							None => {
+								let comment = format!(
+									"Proof Skipped: {} {} (max_values: {:?}, max_size: {:?})",
+									String::from_utf8(key_info.pallet_name.clone())
+										.expect("encoded from string"),
+									String::from_utf8(key_info.storage_name.clone())
+										.expect("encoded from string"),
+									key_info.max_values,
+									key_info.max_size,
 								);
 								comments.push(comment)
 							},
@@ -500,7 +516,7 @@ pub(crate) fn process_storage_results(
 					},
 					None => {
 						let comment = format!(
-							"Storage Proof Skipped: unknown [0x{}] (r:{} w:{})",
+							"Proof Skipped: unknown [0x{}] (r:{} w:{})",
 							HexDisplay::from(key),
 							reads,
 							writes,
@@ -540,15 +556,18 @@ fn worst_case_pov(
 }
 
 // A really basic loop which calculates Log 16 of some value.
-fn easy_log_16(input: u32) -> u32 {
-	for i in 0..7 {
-		if input <= 16u32.pow(i) {
-			return i + 1
-		}
+fn easy_log_16(i: u32) -> u32 {
+	match i {
+		i if i == 0 => 0,
+		i if i <= 16 => 1,
+		i if i <= 256 => 2,
+		i if i <= 4_096 => 3,
+		i if i <= 65_536 => 4,
+		i if i <= 1_048_576 => 5,
+		i if i <= 16_777_216 => 6,
+		i if i <= 268_435_456 => 7,
+		_ => 8,
 	}
-
-	// u32 supports up to 16^8
-	8
 }
 
 // A helper to join a string of vectors.
@@ -719,5 +738,26 @@ mod test {
 			assert!(output.is_ok());
 			println!("{:?}", output);
 		}
+	}
+
+	#[test]
+	fn easy_log_16_works() {
+		assert_eq!(easy_log_16(0), 0);
+		assert_eq!(easy_log_16(1), 1);
+		assert_eq!(easy_log_16(16), 1);
+		assert_eq!(easy_log_16(17), 2);
+		assert_eq!(easy_log_16(16u32.pow(2)), 2);
+		assert_eq!(easy_log_16(16u32.pow(2) + 1), 3);
+		assert_eq!(easy_log_16(16u32.pow(3)), 3);
+		assert_eq!(easy_log_16(16u32.pow(3) + 1), 4);
+		assert_eq!(easy_log_16(16u32.pow(4)), 4);
+		assert_eq!(easy_log_16(16u32.pow(4) + 1), 5);
+		assert_eq!(easy_log_16(16u32.pow(5)), 5);
+		assert_eq!(easy_log_16(16u32.pow(5) + 1), 6);
+		assert_eq!(easy_log_16(16u32.pow(6)), 6);
+		assert_eq!(easy_log_16(16u32.pow(6) + 1), 7);
+		assert_eq!(easy_log_16(16u32.pow(7)), 7);
+		assert_eq!(easy_log_16(16u32.pow(7) + 1), 8);
+		assert_eq!(easy_log_16(u32::MAX), 8);
 	}
 }
