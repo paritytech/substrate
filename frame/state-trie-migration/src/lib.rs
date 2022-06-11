@@ -498,6 +498,15 @@ pub mod pallet {
 		/// The migration will halt with a `Halted` event if this value is too small.
 		/// Since there is no real penalty from over-estimating, it is advised to use a large
 		/// value. The default is 512 byte.
+		///
+		/// Some key lengths for reference:
+		/// - [`frame_support::storage::StorageValue`]: 32 byte
+		/// - [`frame_support::storage::StorageMap`]: 64 byte
+		/// - [`frame_support::storage::StorageDoubleMap`]: 96 byte
+		///
+		/// For more info see
+		/// https://www.shawntabrizi.com/substrate/querying-substrate-storage-via-rpc/
+
 		#[pallet::constant]
 		type MaxKeyLen: Get<u32>;
 
