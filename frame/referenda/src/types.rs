@@ -136,7 +136,7 @@ pub struct TrackInfo<Balance, Moment> {
 /// Information on the voting tracks.
 pub trait TracksInfo<Balance, Moment> {
 	/// The identifier for a track.
-	type Id: Copy + Parameter + Ord + PartialOrd + Send + Sync + 'static;
+	type Id: Copy + Parameter + Ord + PartialOrd + Send + Sync + 'static + MaxEncodedLen;
 
 	/// The origin type from which a track is implied.
 	type Origin;
