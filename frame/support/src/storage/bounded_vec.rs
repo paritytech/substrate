@@ -111,6 +111,12 @@ where
 #[scale_info(skip_type_params(S))]
 pub struct BoundedSlice<'a, T, S>(&'a [T], PhantomData<S>);
 
+impl<'a, T, S> AsRef<[T]> for BoundedSlice<'a, T, S> {
+	fn as_ref(&self) -> &[T] {
+		&self.0
+	}
+}
+
 // `BoundedSlice`s encode to something which will always decode into a `BoundedVec`,
 // `WeakBoundedVec`, or a `Vec`.
 impl<'a, T: Encode + Decode, S: Get<u32>> EncodeLike<BoundedVec<T, S>> for BoundedSlice<'a, T, S> {}
@@ -154,6 +160,23 @@ impl<'a, T, S> sp_std::iter::IntoIterator for BoundedSlice<'a, T, S> {
 	type IntoIter = sp_std::slice::Iter<'a, T>;
 	fn into_iter(self) -> Self::IntoIter {
 		self.0.iter()
+	}
+}
+
+impl<'a, T, S> BoundedSlice<'a, T, S> {
+	/// Consume self, and return the inner `Vec`. Henceforth, the `Vec<_>` can be altered in an
+	/// arbitrary way. At some point, if the reverse conversion is required, `TryFrom<Vec<_>>` can
+	/// be used.
+	///
+	/// This is useful for cases if you need access to an internal API of the inner `Vec<_>` which
+	/// is not provided by the wrapper `BoundedVec`.
+	pub fn into_inner(self) -> &'a [T] {
+		self.0
+	}
+
+	/// Returns the number of elements in the slice.
+	pub fn len(&self) -> usize {
+		self.0.len()
 	}
 }
 

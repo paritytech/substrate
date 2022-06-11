@@ -106,7 +106,7 @@ impl PreimageProvider<H256> for TestPreimageProvider {
 	}
 
 	/// Returns the preimage for a given hash.
-	fn get_preimage(hash: &H256) -> Option<Cow<[u8]>> {
+	fn get_preimage(hash: &H256) -> Option<Cow<'static, [u8]>> {
 		PREIMAGES.with(|x| x.borrow().get(hash).cloned().map(Cow::from))
 	}
 

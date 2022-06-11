@@ -23,7 +23,7 @@ use crate::{
 	scale_info::TypeInfo,
 	traits::{
 		self, Applyable, AuxData, BlakeTwo256, Checkable, DispatchInfoOf, Dispatchable, FatCall,
-		OpaqueKeys, PostDispatchInfoOf, PreimageHandler, SignedExtension, ValidateUnsigned,
+		OpaqueKeys, PostDispatchInfoOf, PreimageStash, SignedExtension, ValidateUnsigned,
 	},
 	transaction_validity::{TransactionSource, TransactionValidity, TransactionValidityError},
 	ApplyExtrinsicResultWithInfo, CryptoTypeId, KeyTypeId,
@@ -368,7 +368,7 @@ where
 	type Call = Call;
 
 	/// Checks to see if this is a valid *transaction*. It returns information on it if so.
-	fn validate<U: ValidateUnsigned<Call = Self::Call>, P: PreimageHandler>(
+	fn validate<U: ValidateUnsigned<Call = Self::Call>, P: PreimageStash>(
 		&self,
 		source: TransactionSource,
 		info: &DispatchInfoOf<Self::Call>,
@@ -385,7 +385,7 @@ where
 
 	/// Executes all necessary logic needed prior to dispatch and deconstructs into function call,
 	/// index and sender.
-	fn apply<U: ValidateUnsigned<Call = Self::Call>, P: PreimageHandler>(
+	fn apply<U: ValidateUnsigned<Call = Self::Call>, P: PreimageStash>(
 		self,
 		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
@@ -400,7 +400,7 @@ where
 		};
 
 		for i in self.aux_data.into_iter() {
-			P::note_preimage(i.into());
+			P::stash(i.into());
 		}
 		let r = self.call.dispatch(maybe_who.into());
 		P::clear();

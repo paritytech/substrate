@@ -27,6 +27,8 @@
 //! large byte-blobs.
 
 #![cfg_attr(not(feature = "std"), no_std)]
+#![cfg_attr(not(feature = "std"), feature(thread_local))]
+#![cfg_attr(not(feature = "std"), feature(const_btree_new))]
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
@@ -36,16 +38,16 @@ mod mock;
 mod tests;
 pub mod weights;
 
-use sp_runtime::traits::{BadOrigin, DispatchInfoOf, Hash, Saturating, SignedExtension};
-use sp_std::{prelude::*, cell::RefCell, borrow::Cow, collections::btree_map::BTreeMap};
+use sp_runtime::traits::{BadOrigin, Hash, PreimageStash, Saturating};
+use sp_std::{borrow::Cow, cell::RefCell, collections::btree_map::BTreeMap, prelude::*};
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	ensure,
 	pallet_prelude::Get,
-	traits::{Currency, IsSubType, PreimageProvider, PreimageRecipient, ReservableCurrency, TempPreimageRecipient},
+	traits::{Currency, PreimageProvider, PreimageRecipient, ReservableCurrency},
 	weights::Pays,
-	BoundedVec,
+	BoundedSlice, BoundedVec,
 };
 use scale_info::TypeInfo;
 pub use weights::WeightInfo;
@@ -154,6 +156,8 @@ pub mod pallet {
 		Requested,
 		/// The preimage request cannot be removed since no outstanding requests exist.
 		NotRequested,
+		/// The provided witness info is invalid.
+		BadWitness,
 	}
 
 	/// The request status of a given hash.
@@ -178,14 +182,20 @@ pub mod pallet {
 		///
 		/// If the preimage was previously requested, no fees or deposits are taken for providing
 		/// the preimage. Otherwise, a deposit is taken proportional to the size of the preimage.
-		#[pallet::weight(T::WeightInfo::note_preimage(bytes.len() as u32))]
-		pub fn note_preimage(origin: OriginFor<T>, bytes: Vec<u8>) -> DispatchResultWithPostInfo {
+		#[pallet::weight(T::WeightInfo::note_preimage(*len))]
+		pub fn note_preimage(
+			origin: OriginFor<T>,
+			hash: T::Hash,
+			len: u32,
+		) -> DispatchResultWithPostInfo {
 			// We accept a signed origin which will pay a deposit, or a root origin where a deposit
 			// is not taken.
 			let maybe_sender = Self::ensure_signed_or_manager(origin)?;
-			let bounded_vec =
-				BoundedVec::<u8, T::MaxSize>::try_from(bytes).map_err(|()| Error::<T>::TooLarge)?;
-			let system_requested = Self::note_bytes(bounded_vec, maybe_sender.as_ref())?;
+			let bytes = frame_system::Pallet::<T>::preimage_of(hash)?;
+			ensure!(bytes.len() <= len as usize, Error::<T>::BadWitness);
+			let bounded_slice = BoundedSlice::<u8, T::MaxSize>::try_from(bytes.as_ref())
+				.map_err(|()| Error::<T>::TooLarge)?;
+			let system_requested = Self::note_bytes(bounded_slice, maybe_sender.as_ref())?;
 			if system_requested || maybe_sender.is_none() {
 				Ok(Pays::No.into())
 			} else {
@@ -238,10 +248,10 @@ impl<T: Config> Pallet<T> {
 	///
 	/// If the preimage was requested to be uploaded, then the user pays no deposits or tx fees.
 	fn note_bytes(
-		preimage: BoundedVec<u8, T::MaxSize>,
+		preimage: BoundedSlice<u8, T::MaxSize>,
 		maybe_depositor: Option<&T::AccountId>,
 	) -> Result<bool, DispatchError> {
-		let hash = T::Hashing::hash(&preimage);
+		let hash = T::Hashing::hash(preimage.as_ref());
 		ensure!(!PreimageFor::<T>::contains_key(hash), Error::<T>::AlreadyNoted);
 
 		// We take a deposit only if there is a provided depositor, and the preimage was not
@@ -337,22 +347,56 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
+#[cfg(feature = "std")]
 thread_local! {
-	static TEMP_PREIMAGES: RefCell<BTreeMap<Vec<u8>, Cow<[u8]>>> = RefCell::new(Default::default());
+	static TEMP_PREIMAGES: RefCell<BTreeMap<Vec<u8>, Cow<'static, [u8]>>> = RefCell::new(BTreeMap::new());
 }
 
+#[cfg(not(feature = "std"))]
+#[thread_local]
+static TEMP_PREIMAGES: RefCell<BTreeMap<Vec<u8>, Cow<[u8]>>> = RefCell::new(BTreeMap::new());
+
+#[cfg(feature = "std")]
 impl<T: Config> PreimageProvider<T::Hash> for Pallet<T> {
 	fn have_preimage(hash: &T::Hash) -> bool {
-		PreimageFor::<T>::contains_key(hash)
+		TEMP_PREIMAGES.with(|t| hash.using_encoded(|e| t.borrow().contains_key(e))) ||
+			PreimageFor::<T>::contains_key(hash)
 	}
 
 	fn preimage_requested(hash: &T::Hash) -> bool {
 		matches!(StatusFor::<T>::get(hash), Some(RequestStatus::Requested(..)))
 	}
 
-	fn get_preimage(hash: &T::Hash) -> Option<Cow<[u8]>> {
-		TEMP_PREIMAGES.with(|t| hash.using_encoded(|e| t.borrow().get(e).map(|x| x.into()))
-			.or_else(|| PreimageFor::<T>::get(hash).map(|preimage| preimage.to_vec().into()))
+	fn get_preimage(hash: &T::Hash) -> Option<Cow<'static, [u8]>> {
+		TEMP_PREIMAGES
+			.with(|t| hash.using_encoded(|e| t.borrow().get(e).cloned()))
+			.or_else(|| PreimageFor::<T>::get(hash).map(|preimage| Vec::from(preimage).into()))
+	}
+
+	fn request_preimage(hash: &T::Hash) {
+		Self::do_request_preimage(hash)
+	}
+
+	fn unrequest_preimage(hash: &T::Hash) {
+		let res = Self::do_unrequest_preimage(hash);
+		debug_assert!(res.is_ok(), "do_unrequest_preimage failed - counter underflow?");
+	}
+}
+
+#[cfg(not(feature = "std"))]
+impl<T: Config> PreimageProvider<T::Hash> for Pallet<T> {
+	fn have_preimage(hash: &T::Hash) -> bool {
+		hash.using_encoded(|e| TEMP_PREIMAGES.borrow().contains_key(e)) ||
+			PreimageFor::<T>::contains_key(hash)
+	}
+
+	fn preimage_requested(hash: &T::Hash) -> bool {
+		matches!(StatusFor::<T>::get(hash), Some(RequestStatus::Requested(..)))
+	}
+
+	fn get_preimage(hash: &T::Hash) -> Option<Cow<'static, [u8]>> {
+		hash.using_encoded(|e| TEMP_PREIMAGES.borrow().get(e).cloned())
+			.or_else(|| PreimageFor::<T>::get(hash).map(|preimage| Vec::from(preimage).into()))
 	}
 
 	fn request_preimage(hash: &T::Hash) {
@@ -368,7 +412,7 @@ impl<T: Config> PreimageProvider<T::Hash> for Pallet<T> {
 impl<T: Config> PreimageRecipient<T::Hash> for Pallet<T> {
 	type MaxSize = T::MaxSize;
 
-	fn note_preimage(bytes: BoundedVec<u8, Self::MaxSize>) {
+	fn note_preimage(bytes: BoundedSlice<u8, Self::MaxSize>) {
 		// We don't really care if this fails, since that's only the case if someone else has
 		// already noted it.
 		let _ = Self::note_bytes(bytes, None);
@@ -381,21 +425,41 @@ impl<T: Config> PreimageRecipient<T::Hash> for Pallet<T> {
 	}
 }
 
-/// A special preimage recipient which doesn't store it on-chain but in-memory for the duration of
-/// the current runtime API function.
-pub struct Temporary<T>(sp_std::marker::PhantomData<T>);
-impl<T: Config> TempPreimageRecipient<T::Hash> for Temporary<T> {
-	fn note_preimage(bytes: Cow<&'static, [u8]>) {
+#[cfg(feature = "std")]
+impl<T: Config> PreimageStash for Pallet<T> {
+	type Hash = T::Hash;
+
+	fn stash(bytes: Cow<'static, [u8]>) {
 		// We don't really care if this fails, since that's only the case if someone else has
 		// already noted it.
-		TEMP_PREIMAGES.with(|t| t.borrow_mut().insert(T::Hashing::hash(&bytes[..]).encode(), bytes));
+		TEMP_PREIMAGES
+			.with(|t| t.borrow_mut().insert(T::Hashing::hash(&bytes[..]).encode(), bytes));
 	}
 
-	fn unnote_preimage(hash: &T::Hash) {
-		TEMP_PREIMAGES.with(|t| t.borrow_mut().remove(hash));
+	fn unstash(hash: &T::Hash) {
+		hash.using_encoded(|key| TEMP_PREIMAGES.with(|t| t.borrow_mut().remove(key)));
 	}
 
 	fn clear() {
 		TEMP_PREIMAGES.with(|t| t.borrow_mut().clear());
+	}
+}
+
+#[cfg(not(feature = "std"))]
+impl<T: Config> PreimageStash for Pallet<T> {
+	type Hash = T::Hash;
+
+	fn stash(bytes: Cow<'static, [u8]>) {
+		// We don't really care if this fails, since that's only the case if someone else has
+		// already noted it.
+		TEMP_PREIMAGES.borrow_mut().insert(T::Hashing::hash(&bytes[..]).encode(), bytes);
+	}
+
+	fn unstash(hash: &T::Hash) {
+		hash.using_encoded(|key| TEMP_PREIMAGES.borrow_mut().remove(key));
+	}
+
+	fn clear() {
+		TEMP_PREIMAGES.borrow_mut().clear();
 	}
 }

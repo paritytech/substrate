@@ -17,19 +17,48 @@
 
 //! MultiAddress type is a wrapper for multiple downstream account formats.
 
-use codec::{Decode, Encode};
-use sp_std::vec::Vec;
+use codec::{Decode, Encode, MaxEncodedLen};
+
+/// A numch of raw bytes.
+#[derive(PartialEq, Eq, Clone, crate::RuntimeDebug, scale_info::TypeInfo)]
+#[cfg_attr(feature = "std", derive(Hash))]
+pub struct RawAddress(Vec<u8>);
+
+impl Decode for RawAddress {
+	fn decode<I: codec::Input>(value: &mut I) -> Result<Self, codec::Error> {
+		let inner = Vec::<u8>::decode(value)?;
+		if inner.len() > 64 {
+			return Err("`RawAddress` too long".into())
+		}
+		Ok(Self(inner))
+	}
+}
+
+impl Encode for RawAddress {
+	fn encode_to<T: codec::Output + ?Sized>(&self, output: &mut T) {
+		// ensure it's no greater than 64 bytes.
+		(&self.0[0..64]).encode_to(output)
+	}
+}
+
+impl MaxEncodedLen for RawAddress {
+	fn max_encoded_len() -> usize {
+		65
+	}
+}
 
 /// A multi-format address wrapper for on-chain accounts.
-#[derive(Encode, Decode, PartialEq, Eq, Clone, crate::RuntimeDebug, scale_info::TypeInfo)]
+#[derive(
+	Encode, Decode, PartialEq, Eq, Clone, crate::RuntimeDebug, scale_info::TypeInfo, MaxEncodedLen,
+)]
 #[cfg_attr(feature = "std", derive(Hash))]
-pub enum MultiAddress<AccountId, AccountIndex> {
+pub enum MultiAddress<AccountId, AccountIndex: MaxEncodedLen> {
 	/// It's an account ID (pubkey).
 	Id(AccountId),
 	/// It's an account index.
 	Index(#[codec(compact)] AccountIndex),
-	/// It's some arbitrary raw bytes.
-	Raw(Vec<u8>),
+	/// It's up to 64 raw bytes.
+	Raw(RawAddress),
 	/// It's a 32 byte representation.
 	Address32([u8; 32]),
 	/// Its a 20 byte representation.
@@ -40,12 +69,12 @@ pub enum MultiAddress<AccountId, AccountIndex> {
 impl<AccountId, AccountIndex> std::fmt::Display for MultiAddress<AccountId, AccountIndex>
 where
 	AccountId: std::fmt::Debug,
-	AccountIndex: std::fmt::Debug,
+	AccountIndex: std::fmt::Debug + MaxEncodedLen,
 {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
 		use sp_core::hexdisplay::HexDisplay;
 		match self {
-			Self::Raw(inner) => write!(f, "MultiAddress::Raw({})", HexDisplay::from(inner)),
+			Self::Raw(inner) => write!(f, "MultiAddress::Raw({})", HexDisplay::from(&inner.0)),
 			Self::Address32(inner) => {
 				write!(f, "MultiAddress::Address32({})", HexDisplay::from(inner))
 			},
@@ -57,7 +86,9 @@ where
 	}
 }
 
-impl<AccountId, AccountIndex> From<AccountId> for MultiAddress<AccountId, AccountIndex> {
+impl<AccountId, AccountIndex: MaxEncodedLen> From<AccountId>
+	for MultiAddress<AccountId, AccountIndex>
+{
 	fn from(a: AccountId) -> Self {
 		Self::Id(a)
 	}

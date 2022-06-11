@@ -46,10 +46,10 @@ pub fn expand_outer_validate_unsigned(
 		impl #scrate::unsigned::ValidateUnsigned for #runtime {
 			type Call = Call;
 
-			fn pre_dispatch(call: &Self::Call) -> Result<(), #scrate::unsigned::TransactionValidityError> {
+			fn pre_dispatch(call: &Self::Call, aux_data: &#scrate::AuxData) -> Result<(), #scrate::unsigned::TransactionValidityError> {
 				#[allow(unreachable_patterns)]
 				match call {
-					#( Call::#pallet_names(inner_call) => #pallet_names::pre_dispatch(inner_call), )*
+					#( Call::#pallet_names(inner_call) => #pallet_names::pre_dispatch(inner_call, aux_data), )*
 					// pre-dispatch should not stop inherent extrinsics, validation should prevent
 					// including arbitrary (non-inherent) extrinsics to blocks.
 					_ => Ok(()),
@@ -60,10 +60,11 @@ pub fn expand_outer_validate_unsigned(
 				#[allow(unused_variables)]
 				source: #scrate::unsigned::TransactionSource,
 				call: &Self::Call,
+				aux_data: &#scrate::AuxData,
 			) -> #scrate::unsigned::TransactionValidity {
 				#[allow(unreachable_patterns)]
 				match call {
-					#( Call::#pallet_names(inner_call) => #pallet_names::validate_unsigned(source, inner_call), )*
+					#( Call::#pallet_names(inner_call) => #pallet_names::validate_unsigned(source, inner_call, aux_data), )*
 					_ => #scrate::unsigned::UnknownTransaction::NoUnsignedValidator.into(),
 				}
 			}

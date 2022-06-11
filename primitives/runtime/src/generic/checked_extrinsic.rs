@@ -21,7 +21,7 @@
 use crate::{
 	traits::{
 		self, DispatchInfoOf, Dispatchable, FatCall, MaybeDisplay, Member, PostDispatchInfoOf,
-		PreimageHandler, SignedExtension, ValidateUnsigned,
+		PreimageStash, SignedExtension, ValidateUnsigned,
 	},
 	transaction_validity::{TransactionSource, TransactionValidity},
 };
@@ -49,7 +49,7 @@ where
 {
 	type Call = Call;
 
-	fn validate<U: ValidateUnsigned<Call = Self::Call>, P: PreimageHandler>(
+	fn validate<U: ValidateUnsigned<Call = Self::Call>, P: PreimageStash>(
 		&self,
 		// TODO [#5006;ToDr] should source be passed to `SignedExtension`s?
 		// Perhaps a change for 2.0 to avoid breaking too much APIs?
@@ -68,7 +68,7 @@ where
 		}
 	}
 
-	fn apply<U: ValidateUnsigned<Call = Self::Call>, P: PreimageHandler>(
+	fn apply<U: ValidateUnsigned<Call = Self::Call>, P: PreimageStash>(
 		self,
 		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
@@ -86,7 +86,7 @@ where
 
 		// Place the primage data.
 		for data in aux_data.into_iter() {
-			P::note_preimage(sp_std::borrow::Cow::from(data));
+			P::stash(sp_std::borrow::Cow::from(data));
 		}
 		let res = call.dispatch(Origin::from(maybe_who));
 		// Remove the primage data.

@@ -212,7 +212,7 @@ pub trait Lookup {
 /// context.
 pub trait StaticLookup {
 	/// Type to lookup from.
-	type Source: Codec + Clone + PartialEq + Debug + TypeInfo;
+	type Source: Codec + Clone + PartialEq + Debug + TypeInfo + MaxEncodedLen;
 	/// Type to lookup into.
 	type Target;
 	/// Attempt a lookup.
@@ -224,7 +224,9 @@ pub trait StaticLookup {
 /// A lookup implementation returning the input value.
 #[derive(Default)]
 pub struct IdentityLookup<T>(PhantomData<T>);
-impl<T: Codec + Clone + PartialEq + Debug + TypeInfo> StaticLookup for IdentityLookup<T> {
+impl<T: Codec + Clone + PartialEq + Debug + TypeInfo + MaxEncodedLen> StaticLookup
+	for IdentityLookup<T>
+{
 	type Source = T;
 	type Target = T;
 	fn lookup(x: T) -> Result<T, LookupError> {
@@ -247,9 +249,9 @@ impl<T> Lookup for IdentityLookup<T> {
 pub struct AccountIdLookup<AccountId, AccountIndex>(PhantomData<(AccountId, AccountIndex)>);
 impl<AccountId, AccountIndex> StaticLookup for AccountIdLookup<AccountId, AccountIndex>
 where
-	AccountId: Codec + Clone + PartialEq + Debug,
-	AccountIndex: Codec + Clone + PartialEq + Debug,
-	crate::MultiAddress<AccountId, AccountIndex>: Codec + StaticTypeInfo,
+	AccountId: Codec + Clone + PartialEq + Debug + MaxEncodedLen,
+	AccountIndex: Codec + Clone + PartialEq + Debug + MaxEncodedLen,
+	crate::MultiAddress<AccountId, AccountIndex>: Codec + StaticTypeInfo + MaxEncodedLen,
 {
 	type Source = crate::MultiAddress<AccountId, AccountIndex>;
 	type Target = AccountId;
@@ -1508,25 +1510,25 @@ impl SignedExtension for () {
 /// A interface for placing preimages on-chain temporarily. Unlike the `PreimageRecipient` in
 /// `frame-support`, these preimages are unbounded as they are not expected to be stored on-chain
 /// without further runtime logic to validate them.
-pub trait PreimageHandler {
+pub trait PreimageStash {
 	/// The hash type by which we can delete previously created preimages.
 	type Hash;
 
 	/// Store the bytes of a preimage on chain. If you are using borreowed data, it must be valid
 	/// "forever".
-	fn note_preimage(bytes: sp_std::borrow::Cow<'static, [u8]>);
+	fn stash(bytes: sp_std::borrow::Cow<'static, [u8]>);
 
 	/// Clear a previously noted preimage.
-	fn unnote_preimage(hash: &Self::Hash);
+	fn unstash(hash: &Self::Hash);
 
 	/// Clear all previously noted preimages. This might be faster than removing them one at a time.
 	fn clear();
 }
 
-impl PreimageHandler for () {
+impl PreimageStash for () {
 	type Hash = ();
-	fn note_preimage(_: Cow<'static, [u8]>) {}
-	fn unnote_preimage(_: &Self::Hash) {}
+	fn stash(_: Cow<'static, [u8]>) {}
+	fn unstash(_: &Self::Hash) {}
 	fn clear() {}
 }
 
@@ -1541,7 +1543,7 @@ pub trait Applyable: Sized + Send + Sync {
 	type Call: Dispatchable;
 
 	/// Checks to see if this is a valid *transaction*. It returns information on it if so.
-	fn validate<V: ValidateUnsigned<Call = Self::Call>, P: PreimageHandler>(
+	fn validate<V: ValidateUnsigned<Call = Self::Call>, P: PreimageStash>(
 		&self,
 		source: TransactionSource,
 		info: &DispatchInfoOf<Self::Call>,
@@ -1550,7 +1552,7 @@ pub trait Applyable: Sized + Send + Sync {
 
 	/// Executes all necessary logic needed prior to dispatch and deconstructs into function call,
 	/// index and sender.
-	fn apply<V: ValidateUnsigned<Call = Self::Call>, P: PreimageHandler>(
+	fn apply<V: ValidateUnsigned<Call = Self::Call>, P: PreimageStash>(
 		self,
 		info: &DispatchInfoOf<Self::Call>,
 		len: usize,

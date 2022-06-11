@@ -30,7 +30,7 @@ use sp_runtime::{traits::Block as BlockT, DispatchError};
 use sp_std::{borrow::Cow, cmp::Ordering, prelude::*};
 
 #[doc(hidden)]
-pub use sp_runtime::traits::PreimageHandler;
+pub use sp_runtime::traits::PreimageStash;
 
 #[doc(hidden)]
 pub const DEFENSIVE_OP_PUBLIC_ERROR: &str = "a defensive failure has been triggered; please report the block number at https://github.com/paritytech/substrate/issues";
@@ -898,7 +898,7 @@ pub trait PreimageProvider<Hash> {
 	fn have_preimage(hash: &Hash) -> bool;
 
 	/// Returns the preimage for a given hash.
-	fn get_preimage(hash: &Hash) -> Option<Cow<[u8]>>;
+	fn get_preimage(hash: &Hash) -> Option<Cow<'static, [u8]>>;
 
 	/// Returns whether a preimage request exists for a given hash.
 	fn preimage_requested(hash: &Hash) -> bool;
@@ -915,7 +915,7 @@ impl<Hash> PreimageProvider<Hash> for () {
 	fn have_preimage(_: &Hash) -> bool {
 		false
 	}
-	fn get_preimage(_: &Hash) -> Option<Cow<[u8]>> {
+	fn get_preimage(_: &Hash) -> Option<Cow<'static, [u8]>> {
 		None
 	}
 	fn preimage_requested(_: &Hash) -> bool {
@@ -935,7 +935,7 @@ pub trait PreimageRecipient<Hash>: PreimageProvider<Hash> {
 	type MaxSize: Get<u32>;
 
 	/// Store the bytes of a preimage on chain.
-	fn note_preimage(bytes: crate::BoundedVec<u8, Self::MaxSize>);
+	fn note_preimage(bytes: crate::BoundedSlice<u8, Self::MaxSize>);
 
 	/// Clear a previously noted preimage. This is infallible and should be treated more like a
 	/// hint - if it was not previously noted or if it is now requested, then this will not do
@@ -945,7 +945,7 @@ pub trait PreimageRecipient<Hash>: PreimageProvider<Hash> {
 
 impl<Hash> PreimageRecipient<Hash> for () {
 	type MaxSize = ();
-	fn note_preimage(_: crate::BoundedVec<u8, Self::MaxSize>) {}
+	fn note_preimage(_: crate::BoundedSlice<u8, Self::MaxSize>) {}
 	fn unnote_preimage(_: &Hash) {}
 }
 

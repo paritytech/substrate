@@ -79,7 +79,12 @@ use sp_runtime::{
 };
 #[cfg(any(feature = "std", test))]
 use sp_std::map;
-use sp_std::{borrow::Borrow, fmt::Debug, marker::PhantomData, prelude::*};
+use sp_std::{
+	borrow::{Borrow, Cow},
+	fmt::Debug,
+	marker::PhantomData,
+	prelude::*,
+};
 use sp_version::RuntimeVersion;
 
 use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen};
@@ -153,12 +158,12 @@ pub use pallet::*;
 /// Do something when we should be setting the code.
 pub trait SetCode<T: Config> {
 	/// Set the code to the given blob.
-	fn set_code(code: Vec<u8>) -> DispatchResult;
+	fn set_code(code: &[u8]) -> DispatchResult;
 }
 
 impl<T: Config> SetCode<T> for () {
-	fn set_code(code: Vec<u8>) -> DispatchResult {
-		<Pallet<T>>::update_code_in_storage(&code)?;
+	fn set_code(code: &[u8]) -> DispatchResult {
+		<Pallet<T>>::update_code_in_storage(code)?;
 		Ok(())
 	}
 }
@@ -197,7 +202,7 @@ impl<MaxNormal: Get<u32>, MaxOverflow: Get<u32>> ConsumerLimits for (MaxNormal, 
 pub mod pallet {
 	use crate::{self as frame_system, pallet_prelude::*, *};
 	use frame_support::pallet_prelude::*;
-	use sp_runtime::traits::PreimageHandler;
+	use sp_runtime::traits::PreimageStash;
 
 	/// System configuration trait. Implemented by runtime.
 	#[pallet::config]
@@ -358,7 +363,7 @@ pub mod pallet {
 
 		/// The recipient for temporary preimages. We expect these to be available via the
 		/// `PreimageProvider` throughout the current runtime API function.
-		type TempPreimageRecipient: PreimageHandler<Hash = Self::Hash>;
+		type TempPreimageRecipient: PreimageStash<Hash = Self::Hash>;
 	}
 
 	#[pallet::pallet]
@@ -420,8 +425,8 @@ pub mod pallet {
 		pub fn set_code(origin: OriginFor<T>, code_hash: T::Hash) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			let code = Self::preimage_of(code_hash)?;
-			Self::can_set_code(&code)?;
-			T::OnSetCode::set_code(code)?;
+			Self::can_set_code(code.as_ref())?;
+			T::OnSetCode::set_code(code.as_ref())?;
 			Ok(().into())
 		}
 
@@ -440,7 +445,7 @@ pub mod pallet {
 			code_hash: T::Hash,
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
-			T::OnSetCode::set_code(Self::preimage_of(code_hash)?)?;
+			T::OnSetCode::set_code(Self::preimage_of(code_hash)?.as_ref())?;
 			Ok(().into())
 		}
 
@@ -497,7 +502,11 @@ pub mod pallet {
 			_subkeys: u32,
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
-			let _ = storage::unhashed::clear_prefix(&Self::preimage_of(prefix_hash)?, None, None);
+			let _ = storage::unhashed::clear_prefix(
+				&Self::preimage_of(prefix_hash)?.as_ref(),
+				None,
+				None,
+			);
 			Ok(().into())
 		}
 
@@ -994,15 +1003,13 @@ pub enum DecRefStatus {
 
 impl<T: Config> Pallet<T> {
 	/// Retrieve the preimage of a given hash or give a `DispatchError`.
-	pub fn preimage_of(h: impl Borrow<T::Hash>) -> Result<Vec<u8>, DispatchError> {
-		Ok(T::PreimageProvider::get_preimage(h.borrow())
-			.ok_or(Error::<T>::BadPreimage)?
-			.into_owned())
+	pub fn preimage_of(h: impl Borrow<T::Hash>) -> Result<Cow<'static, [u8]>, DispatchError> {
+		Ok(T::PreimageProvider::get_preimage(h.borrow()).ok_or(Error::<T>::BadPreimage)?)
 	}
 
 	/// Retrieve the value whose encoding is the preimage of a given hash or give a `DispatchError`.
 	pub fn unhashed<D: Decode>(h: impl Borrow<T::Hash>) -> Result<D, DispatchError> {
-		Ok(D::decode(&mut &Self::preimage_of(h)?[..]).map_err(|_| Error::<T>::BadPreimage)?)
+		Ok(D::decode(&mut Self::preimage_of(h)?.as_ref()).map_err(|_| Error::<T>::BadPreimage)?)
 	}
 
 	/// Retrieve the value whose encoding is the preimage of a given hash or give a `DispatchError`.
@@ -1011,8 +1018,8 @@ impl<T: Config> Pallet<T> {
 		limit: usize,
 	) -> Result<Option<Vec<D>>, DispatchError> {
 		let data = Self::preimage_of(h)?;
-		let count =
-			<codec::Compact<u32>>::decode(&mut &data[..]).map_err(|_| Error::<T>::BadPreimage)?;
+		let count = <codec::Compact<u32>>::decode(&mut data.as_ref())
+			.map_err(|_| Error::<T>::BadPreimage)?;
 		if u32::from(count) as usize > limit {
 			return Ok(None)
 		}

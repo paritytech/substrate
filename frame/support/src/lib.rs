@@ -48,7 +48,7 @@ pub use sp_core_hashing_proc_macro;
 #[doc(hidden)]
 pub use sp_io::{self, storage::root as storage_root};
 #[doc(hidden)]
-pub use sp_runtime::{RuntimeDebug, StateVersion};
+pub use sp_runtime::{traits::AuxData, RuntimeDebug, StateVersion};
 #[cfg(feature = "std")]
 #[doc(hidden)]
 pub use sp_state_machine::BasicExternalities;
