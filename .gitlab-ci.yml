@@ -108,7 +108,7 @@ default:
     - $(rusty-cachier environment inject)
     - rusty-cachier project mtime
   after_script:
-    - rusty-cachier snapshot destroy
+    - env RUSTY_CACHIER_SUPRESS_OUTPUT=true rusty-cachier snapshot destroy
 
 .test-refs:
   rules:
@@ -225,8 +225,7 @@ deploy-prometheus-alerting-rules:
 # This info is later used for the cache distribution and an overlay creation.
 rusty-cachier-notify:
   stage:                           notify
-  extends:
-    - .docker-env
+  extends:                         .docker-env
   script:
     - rusty-cachier cache notify
 

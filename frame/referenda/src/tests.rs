@@ -43,7 +43,7 @@ fn basic_happy_path_works() {
 		// #1: submit
 		assert_ok!(Referenda::submit(
 			Origin::signed(1),
-			RawOrigin::Root.into(),
+			Box::new(RawOrigin::Root.into()),
 			set_balance_proposal_hash(1),
 			DispatchTime::At(10),
 		));
@@ -174,7 +174,7 @@ fn queueing_works() {
 		// Submit a proposal into a track with a queue len of 1.
 		assert_ok!(Referenda::submit(
 			Origin::signed(5),
-			RawOrigin::Root.into(),
+			Box::new(RawOrigin::Root.into()),
 			set_balance_proposal_hash(0),
 			DispatchTime::After(0),
 		));
@@ -186,7 +186,7 @@ fn queueing_works() {
 		for i in 1..=4 {
 			assert_ok!(Referenda::submit(
 				Origin::signed(i),
-				RawOrigin::Root.into(),
+				Box::new(RawOrigin::Root.into()),
 				set_balance_proposal_hash(i),
 				DispatchTime::After(0),
 			));
@@ -271,7 +271,7 @@ fn auto_timeout_should_happen_with_nothing_but_submit() {
 		// #1: submit
 		assert_ok!(Referenda::submit(
 			Origin::signed(1),
-			RawOrigin::Root.into(),
+			Box::new(RawOrigin::Root.into()),
 			set_balance_proposal_hash(1),
 			DispatchTime::At(20),
 		));
@@ -291,13 +291,13 @@ fn tracks_are_distinguished() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Referenda::submit(
 			Origin::signed(1),
-			RawOrigin::Root.into(),
+			Box::new(RawOrigin::Root.into()),
 			set_balance_proposal_hash(1),
 			DispatchTime::At(10),
 		));
 		assert_ok!(Referenda::submit(
 			Origin::signed(2),
-			RawOrigin::None.into(),
+			Box::new(RawOrigin::None.into()),
 			set_balance_proposal_hash(2),
 			DispatchTime::At(20),
 		));
@@ -355,7 +355,7 @@ fn submit_errors_work() {
 		assert_noop!(
 			Referenda::submit(
 				Origin::signed(1),
-				RawOrigin::Signed(2).into(),
+				Box::new(RawOrigin::Signed(2).into()),
 				h,
 				DispatchTime::At(10),
 			),
@@ -364,7 +364,12 @@ fn submit_errors_work() {
 
 		// No funds for deposit
 		assert_noop!(
-			Referenda::submit(Origin::signed(10), RawOrigin::Root.into(), h, DispatchTime::At(10),),
+			Referenda::submit(
+				Origin::signed(10),
+				Box::new(RawOrigin::Root.into()),
+				h,
+				DispatchTime::At(10),
+			),
 			BalancesError::<Test>::InsufficientBalance
 		);
 	});
@@ -379,7 +384,7 @@ fn decision_deposit_errors_work() {
 		let h = set_balance_proposal_hash(1);
 		assert_ok!(Referenda::submit(
 			Origin::signed(1),
-			RawOrigin::Root.into(),
+			Box::new(RawOrigin::Root.into()),
 			h,
 			DispatchTime::At(10),
 		));
@@ -401,7 +406,7 @@ fn refund_deposit_works() {
 		let h = set_balance_proposal_hash(1);
 		assert_ok!(Referenda::submit(
 			Origin::signed(1),
-			RawOrigin::Root.into(),
+			Box::new(RawOrigin::Root.into()),
 			h,
 			DispatchTime::At(10),
 		));
@@ -423,7 +428,7 @@ fn cancel_works() {
 		let h = set_balance_proposal_hash(1);
 		assert_ok!(Referenda::submit(
 			Origin::signed(1),
-			RawOrigin::Root.into(),
+			Box::new(RawOrigin::Root.into()),
 			h,
 			DispatchTime::At(10),
 		));
@@ -442,7 +447,7 @@ fn cancel_errors_works() {
 		let h = set_balance_proposal_hash(1);
 		assert_ok!(Referenda::submit(
 			Origin::signed(1),
-			RawOrigin::Root.into(),
+			Box::new(RawOrigin::Root.into()),
 			h,
 			DispatchTime::At(10),
 		));
@@ -460,7 +465,7 @@ fn kill_works() {
 		let h = set_balance_proposal_hash(1);
 		assert_ok!(Referenda::submit(
 			Origin::signed(1),
-			RawOrigin::Root.into(),
+			Box::new(RawOrigin::Root.into()),
 			h,
 			DispatchTime::At(10),
 		));
@@ -480,7 +485,7 @@ fn kill_errors_works() {
 		let h = set_balance_proposal_hash(1);
 		assert_ok!(Referenda::submit(
 			Origin::signed(1),
-			RawOrigin::Root.into(),
+			Box::new(RawOrigin::Root.into()),
 			h,
 			DispatchTime::At(10),
 		));

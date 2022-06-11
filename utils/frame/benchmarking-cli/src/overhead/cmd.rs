@@ -36,7 +36,7 @@ use crate::{
 		ExtrinsicBuilder,
 	},
 	overhead::template::TemplateData,
-	shared::WeightParams,
+	shared::{HostInfoParams, WeightParams},
 };
 
 /// Benchmark the execution overhead per-block and per-extrinsic.
@@ -65,6 +65,10 @@ pub struct OverheadParams {
 	#[allow(missing_docs)]
 	#[clap(flatten)]
 	pub bench: ExtrinsicBenchmarkParams,
+
+	#[allow(missing_docs)]
+	#[clap(flatten)]
+	pub hostinfo: HostInfoParams,
 }
 
 /// Type of a benchmark.
