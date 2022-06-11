@@ -1938,7 +1938,7 @@ impl_runtime_apis! {
 			address: AccountId,
 			key: [u8; 32],
 		) -> pallet_contracts_primitives::GetStorageResult {
-			Contracts::get_storage(address, key)
+			Contracts::get_storage(address, &key)
 		}
 	}
 
