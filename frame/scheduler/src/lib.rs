@@ -64,7 +64,7 @@ use frame_support::{
 	traits::{
 		schedule::{self, DispatchTime, MaybeHashed},
 		ConstU32, EnsureOrigin, Get, IsType, OriginTrait, PalletInfoAccess, PrivilegeCmp,
-		StorageVersion,
+		StorageVersion, Bounded,
 	},
 	weights::{GetDispatchInfo, Weight},
 	BoundedVec,
@@ -148,22 +148,6 @@ pub type ScheduledOf<T> = ScheduledV4Of<T>;
 /// The current version of Scheduled struct.
 pub type Scheduled<Call, BlockNumber, PalletsOrigin, AccountId> =
 	ScheduledV4<Call, BlockNumber, PalletsOrigin, AccountId>;
-
-#[cfg(feature = "runtime-benchmarks")]
-mod preimage_provider {
-	use frame_support::traits::PreimageRecipient;
-	pub trait PreimageProviderAndMaybeRecipient<H>: PreimageRecipient<H> {}
-	impl<H, T: PreimageRecipient<H>> PreimageProviderAndMaybeRecipient<H> for T {}
-}
-
-#[cfg(not(feature = "runtime-benchmarks"))]
-mod preimage_provider {
-	use frame_support::traits::PreimageProvider;
-	pub trait PreimageProviderAndMaybeRecipient<H>: PreimageProvider<H> {}
-	impl<H, T: PreimageProvider<H>> PreimageProviderAndMaybeRecipient<H> for T {}
-}
-
-pub use preimage_provider::PreimageProviderAndMaybeRecipient;
 
 pub(crate) trait MarginalWeightInfo: WeightInfo {
 	fn item(periodic: bool, named: bool, resolved: Option<bool>) -> Weight {
@@ -257,7 +241,7 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 
 		/// The preimage provider with which we look up call hashes to get the call.
-		type PreimageProvider: PreimageProviderAndMaybeRecipient<Self::Hash>;
+		type Preimages: QueryPreimage + StorePreimage;
 
 		/// If `Some` then the number of blocks to postpone execution for when the item is delayed.
 		type NoPreimagePostponement: Get<Option<Self::BlockNumber>>;
@@ -340,19 +324,12 @@ pub mod pallet {
 					false
 				};
 
-				let (call, maybe_completed) = s.call.resolved::<T::PreimageProvider>();
-				s.call = call;
+				// TODO: use this to estimate the weight and decide whether to continue.
+				let _len = T::Preimages::len(&s.call);
 
-				let resolved = if let Some(completed) = maybe_completed {
-					T::PreimageProvider::unrequest_preimage(&completed);
-					true
-				} else {
-					false
-				};
-
-				let call = match s.call.as_value().cloned() {
-					Some(c) => c,
-					None => {
+				let call = match T::Preimages::unrequest_into_value(&s.call) {
+					Ok(call) => call,
+					Err(_) => {
 						// Preimage not available - postpone until some block.
 						total_weight.saturating_accrue(T::WeightInfo::item(false, named, None));
 						if let Some(delay) = T::NoPreimagePostponement::get() {
@@ -364,8 +341,8 @@ pub mod pallet {
 							Agenda::<T>::append(until, Some(s));
 						}
 						continue
-					},
-				};
+					}
+				}
 
 				let periodic = s.maybe_periodic.is_some();
 				let call_weight = call.get_dispatch_info().weight;
