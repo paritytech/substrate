@@ -24,7 +24,7 @@ pub struct WeightInfo<T>(PhantomData<T>);
 impl<T: frame_system::Config> {{pallet}}::WeightInfo for WeightInfo<T> {
 	{{#each benchmarks as |benchmark|}}
 	{{#each benchmark.comments as |comment|}}
-	// {{comment}}
+	/// {{comment}}
 	{{/each}}
 	{{#each benchmark.component_ranges as |range|}}
 	/// The range of component `{{range.name}}` is `[{{range.min}}, {{range.max}}]`.
@@ -34,17 +34,15 @@ impl<T: frame_system::Config> {{pallet}}::WeightInfo for WeightInfo<T> {
 		{{~#each benchmark.components as |c| ~}}
 		{{~#if (not c.is_used)}}_{{/if}}{{c.name}}: u32, {{/each~}}
 	) -> Weight {
-		// Proof Size
-		// Worst Case: `{{benchmark.worst_case_proof_size}}` bytes
-		// Base: `{{benchmark.base_proof_size}}` bytes
+		/// Proof Size
+		/// Worst Case: `{{benchmark.worst_case_proof_size}}` bytes
+		/// Base: `{{benchmark.base_proof_size}}` bytes
 		{{#each benchmark.component_proof_size as |cp|}}
-		//     Component Name: `{{cp.name}}`
-		//     Component Slope: `{{cp.slope}}`
-		//     Standard Error: `{{underscore cp.error}}`
+		///     PoV component: `{{cp.name}} * {{cp.slope}}` with slope stddev `{{underscore cp.error}}`.
 		{{/each}}
 		({{underscore benchmark.base_weight}} as Weight)
 			{{#each benchmark.component_weight as |cw|}}
-			// Standard Error: {{underscore cw.error}}
+			/// Standard Error: `{{underscore cw.error}}`
 			.saturating_add(({{underscore cw.slope}} as Weight).saturating_mul({{cw.name}} as Weight))
 			{{/each}}
 			{{#if (ne benchmark.base_reads "0")}}
