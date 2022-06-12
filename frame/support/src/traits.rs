@@ -105,3 +105,6 @@ mod voting;
 pub use voting::{
 	CurrencyToVote, PollStatus, Polling, SaturatingCurrencyToVote, U128CurrencyToVote, VoteTally,
 };
+
+mod preimages;
+pub use preimages::{Hash, BoundedInline, Encoded, QueryPreimage, StorePreimage, FetchResult};

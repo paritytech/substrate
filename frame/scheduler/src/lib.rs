@@ -64,8 +64,9 @@ use frame_support::{
 	traits::{
 		schedule::{self, DispatchTime, MaybeHashed},
 		EnsureOrigin, Get, IsType, OriginTrait, PalletInfoAccess, PrivilegeCmp, StorageVersion,
+		ConstU32,
 	},
-	weights::{GetDispatchInfo, Weight},
+	weights::{GetDispatchInfo, Weight}, BoundedVec,
 };
 use frame_system::{self as system, ensure_signed};
 pub use pallet::*;
@@ -74,6 +75,7 @@ use sp_runtime::{
 	traits::{BadOrigin, One, Saturating, Zero},
 	RuntimeDebug,
 };
+use sp_io::hashing::blake2_256;
 use sp_std::{borrow::Borrow, cmp::Ordering, marker::PhantomData, prelude::*};
 pub use weights::WeightInfo;
 
@@ -83,6 +85,13 @@ pub type PeriodicIndex = u32;
 pub type TaskAddress<BlockNumber> = (BlockNumber, u32);
 
 pub type CallOrHashOf<T> = MaybeHashed<<T as Config>::Call, <T as frame_system::Config>::Hash>;
+
+pub enum EncodedCall<T> {
+	/// A an encoded `Call`. Its encoding must be at most 128 bytes.
+	Inline(BoundedVec<u8, ConstU32<128>>),
+	/// A Blake2-256 hash of the call togehter with an upper limit for its size.
+	Hashed { hash: [u8; 32], max_size: u32 },
+}
 
 #[cfg_attr(any(feature = "std", test), derive(PartialEq, Eq))]
 #[derive(Clone, RuntimeDebug, Encode, Decode)]
