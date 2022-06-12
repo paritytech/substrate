@@ -107,4 +107,4 @@ pub use voting::{
 };
 
 mod preimages;
-pub use preimages::{Hash, BoundedInline, Encoded, QueryPreimage, StorePreimage, FetchResult};
+pub use preimages::{BoundedInline, Encoded, FetchResult, Hash, QueryPreimage, StorePreimage};

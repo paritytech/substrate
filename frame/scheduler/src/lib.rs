@@ -63,19 +63,20 @@ use frame_support::{
 	dispatch::{DispatchError, DispatchResult, Dispatchable, Parameter},
 	traits::{
 		schedule::{self, DispatchTime, MaybeHashed},
-		EnsureOrigin, Get, IsType, OriginTrait, PalletInfoAccess, PrivilegeCmp, StorageVersion,
-		ConstU32,
+		ConstU32, EnsureOrigin, Get, IsType, OriginTrait, PalletInfoAccess, PrivilegeCmp,
+		StorageVersion,
 	},
-	weights::{GetDispatchInfo, Weight}, BoundedVec,
+	weights::{GetDispatchInfo, Weight},
+	BoundedVec,
 };
 use frame_system::{self as system, ensure_signed};
 pub use pallet::*;
 use scale_info::TypeInfo;
+use sp_io::hashing::blake2_256;
 use sp_runtime::{
 	traits::{BadOrigin, One, Saturating, Zero},
 	RuntimeDebug,
 };
-use sp_io::hashing::blake2_256;
 use sp_std::{borrow::Borrow, cmp::Ordering, marker::PhantomData, prelude::*};
 pub use weights::WeightInfo;
 

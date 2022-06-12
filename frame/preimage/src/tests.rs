@@ -148,7 +148,7 @@ fn request_note_order_makes_no_difference() {
 		assert_ok!(Preimage::note_preimage(Origin::signed(1), vec![1]));
 		(
 			StatusFor::<Test>::iter().collect::<Vec<_>>(),
-			PreimageFor::<Test>::iter().collect::<Vec<_>>(),
+			Preimage7For::<Test>::iter().collect::<Vec<_>>(),
 		)
 	});
 	new_test_ext().execute_with(|| {
@@ -156,7 +156,7 @@ fn request_note_order_makes_no_difference() {
 		assert_ok!(Preimage::request_preimage(Origin::signed(1), hashed([1])));
 		let other_way = (
 			StatusFor::<Test>::iter().collect::<Vec<_>>(),
-			PreimageFor::<Test>::iter().collect::<Vec<_>>(),
+			Preimage7For::<Test>::iter().collect::<Vec<_>>(),
 		);
 		assert_eq!(one_way, other_way);
 	});
@@ -183,7 +183,7 @@ fn request_user_note_order_makes_no_difference() {
 		assert_ok!(Preimage::note_preimage(Origin::signed(2), vec![1]));
 		(
 			StatusFor::<Test>::iter().collect::<Vec<_>>(),
-			PreimageFor::<Test>::iter().collect::<Vec<_>>(),
+			Preimage7For::<Test>::iter().collect::<Vec<_>>(),
 		)
 	});
 	new_test_ext().execute_with(|| {
@@ -191,7 +191,7 @@ fn request_user_note_order_makes_no_difference() {
 		assert_ok!(Preimage::request_preimage(Origin::signed(1), hashed([1])));
 		let other_way = (
 			StatusFor::<Test>::iter().collect::<Vec<_>>(),
-			PreimageFor::<Test>::iter().collect::<Vec<_>>(),
+			Preimage7For::<Test>::iter().collect::<Vec<_>>(),
 		);
 		assert_eq!(one_way, other_way);
 	});

@@ -675,8 +675,7 @@ impl From<DispatchError> for &'static str {
 			Other(msg) => msg,
 			CannotLookup => "Cannot lookup",
 			BadOrigin => "Bad origin",
-			Module(ModuleError { message, .. }) =>
-				message.unwrap_or("Unknown module error"),
+			Module(ModuleError { message, .. }) => message.unwrap_or("Unknown module error"),
 			ConsumerRemaining => "Consumer remaining",
 			NoProviders => "No providers",
 			TooManyConsumers => "Too many consumers",
