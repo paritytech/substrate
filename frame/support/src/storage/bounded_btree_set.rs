@@ -21,8 +21,8 @@ use crate::{
 	storage::StorageDecodeLength,
 	traits::{Get, TryCollect},
 };
-use sp_std::collections::btree_set::BTreeSet;
 pub use sp_runtime::BoundedBTreeSet;
+use sp_std::collections::btree_set::BTreeSet;
 
 impl<T, S> StorageDecodeLength for BoundedBTreeSet<T, S> {}
 
@@ -38,7 +38,8 @@ where
 		if self.len() > Bound::get() as usize {
 			Err("iterator length too big")
 		} else {
-			Ok(BoundedBTreeSet::<T, Bound>::try_from(self.collect::<BTreeSet<T>>()).expect("length is checked above; qed"))
+			Ok(BoundedBTreeSet::<T, Bound>::try_from(self.collect::<BTreeSet<T>>())
+				.expect("length is checked above; qed"))
 		}
 	}
 }
