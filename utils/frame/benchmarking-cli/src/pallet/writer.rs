@@ -87,6 +87,7 @@ struct CmdData {
 	chain: String,
 	db_cache: u32,
 	analysis_choice: String,
+	worst_case_map_values: u32,
 }
 
 // This encodes the component name and whether that component is used.
@@ -342,6 +343,7 @@ pub(crate) fn write_results(
 		chain: format!("{:?}", cmd.shared_params.chain),
 		db_cache: cmd.database_cache_size,
 		analysis_choice: format!("{:?}", analysis_choice),
+		worst_case_map_values: cmd.worst_case_map_values,
 	};
 
 	// New Handlebars instance with helpers.
