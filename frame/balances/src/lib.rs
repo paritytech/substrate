@@ -517,15 +517,8 @@ pub mod pallet {
 	/// `Balances` pallet, which uses a `StorageMap` to store balances data only.
 	/// NOTE: This is only used in the case that this pallet is used to store balances.
 	#[pallet::storage]
-	pub type Account<T: Config<I>, I: 'static = ()> = StorageMap<
-		_,
-		Blake2_128Concat,
-		T::AccountId,
-		AccountData<T::Balance>,
-		ValueQuery,
-		GetDefault,
-		ConstU32<300_000>,
-	>;
+	pub type Account<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Blake2_128Concat, T::AccountId, AccountData<T::Balance>, ValueQuery>;
 
 	/// Any liquidity locks on some account balances.
 	/// NOTE: Should only be accessed when setting, changing and freeing a lock.
@@ -537,8 +530,6 @@ pub mod pallet {
 		T::AccountId,
 		WeakBoundedVec<BalanceLock<T::Balance>, T::MaxLocks>,
 		ValueQuery,
-		GetDefault,
-		ConstU32<300_000>,
 	>;
 
 	/// Named reserves on some account balances.
