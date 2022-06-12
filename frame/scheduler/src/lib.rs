@@ -106,7 +106,7 @@ struct ScheduledV1<Call, BlockNumber> {
 /// Information regarding an item to be executed in the future.
 #[cfg_attr(any(feature = "std", test), derive(PartialEq, Eq))]
 #[derive(Clone, RuntimeDebug, Encode, Decode, TypeInfo)]
-pub struct ScheduledV3<Call, BlockNumber, PalletsOrigin, AccountId> {
+pub struct ScheduledV4<Call, BlockNumber, PalletsOrigin, AccountId> {
 	/// The unique identity for this task, if there is one.
 	maybe_id: Option<Vec<u8>>,
 	/// This task's priority.
@@ -120,9 +120,9 @@ pub struct ScheduledV3<Call, BlockNumber, PalletsOrigin, AccountId> {
 	_phantom: PhantomData<AccountId>,
 }
 
-use crate::ScheduledV3 as ScheduledV2;
+use crate::{ScheduledV4 as ScheduledV3, ScheduledV4 as ScheduledV2};
 
-pub type ScheduledV2Of<T> = ScheduledV3<
+pub type ScheduledV2Of<T> = ScheduledV2<
 	<T as Config>::Call,
 	<T as frame_system::Config>::BlockNumber,
 	<T as Config>::PalletsOrigin,
@@ -136,11 +136,18 @@ pub type ScheduledV3Of<T> = ScheduledV3<
 	<T as frame_system::Config>::AccountId,
 >;
 
-pub type ScheduledOf<T> = ScheduledV3Of<T>;
+pub type ScheduledV4Of<T> = ScheduledV4<
+	Bounded<<T as Config>::Call>,
+	<T as frame_system::Config>::BlockNumber,
+	<T as Config>::PalletsOrigin,
+	<T as frame_system::Config>::AccountId,
+>;
+
+pub type ScheduledOf<T> = ScheduledV4Of<T>;
 
 /// The current version of Scheduled struct.
 pub type Scheduled<Call, BlockNumber, PalletsOrigin, AccountId> =
-	ScheduledV2<Call, BlockNumber, PalletsOrigin, AccountId>;
+	ScheduledV4<Call, BlockNumber, PalletsOrigin, AccountId>;
 
 #[cfg(feature = "runtime-benchmarks")]
 mod preimage_provider {

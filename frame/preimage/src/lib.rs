@@ -237,7 +237,6 @@ impl<T: Config> Pallet<T> {
 	) -> Result<(bool, T::Hash), DispatchError> {
 		let hash = T::Hashing::hash(&preimage);
 		let len = preimage.len() as u32;
-		ensure!(!Self::have(&hash, Some(len)), Error::<T>::AlreadyNoted);
 		ensure!(len <= MAX_SIZE, Error::<T>::TooBig);
 
 		// We take a deposit only if there is a provided depositor, and the preimage was not
@@ -332,7 +331,7 @@ impl<T: Config> Pallet<T> {
 		};
 		StatusFor::<T>::remove(hash);
 
-		Self::just_remove(hash, len);
+		Self::remove(hash, len);
 
 		Self::deposit_event(Event::Cleared { hash: *hash });
 		Ok(())
@@ -350,7 +349,7 @@ impl<T: Config> Pallet<T> {
 				if let Some(len) = len {
 					// We only bother removing if we know the len - if we don't then it's an
 					// indication that the preimage was never known.
-					Self::just_remove(hash, len);
+					Self::remove(hash, len);
 				}
 				StatusFor::<T>::remove(hash);
 				Self::deposit_event(Event::Cleared { hash: *hash });
@@ -360,7 +359,7 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
-	fn just_remove(hash: &T::Hash, len: u32) {
+	fn remove(hash: &T::Hash, len: u32) {
 		match len {
 			0..=128 => Preimage7For::<T>::remove(hash),
 			0..=1024 => Preimage10For::<T>::remove(hash),
@@ -374,62 +373,39 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	fn have(hash: &T::Hash, len: Option<u32>) -> bool {
-		if let Some(len) = len {
-			match len {
-				0..=128 => Preimage7For::<T>::contains_key(hash),
-				0..=1024 => Preimage10For::<T>::contains_key(hash),
-				0..=8192 => Preimage13For::<T>::contains_key(hash),
-				0..=65536 => Preimage16For::<T>::contains_key(hash),
-				0..=524288 => Preimage19For::<T>::contains_key(hash),
-				0..=1048576 => Preimage20For::<T>::contains_key(hash),
-				0..=2097152 => Preimage21For::<T>::contains_key(hash),
-				0..=MAX_SIZE => Preimage22For::<T>::contains_key(hash),
-				_ => false,
-			}
-		} else {
-			Preimage7For::<T>::contains_key(hash) ||
-				Preimage10For::<T>::contains_key(hash) ||
-				Preimage13For::<T>::contains_key(hash) ||
-				Preimage16For::<T>::contains_key(hash) ||
-				Preimage19For::<T>::contains_key(hash) ||
-				Preimage20For::<T>::contains_key(hash) ||
-				Preimage21For::<T>::contains_key(hash) ||
-				Preimage22For::<T>::contains_key(hash)
+	fn have(hash: &T::Hash) -> bool {
+		Self::len(hash).is_some()
+	}
+
+	fn len(hash: &T::Hash) -> Option<u32> {
+		use RequestStatus::*;
+		match StatusFor::<T>::get(hash) {
+			Some(Requested { len: Some(len), .. }) | Some(Unrequested { len, .. }) => Some(len),
+			_ => None,
 		}
 	}
 
 	fn fetch(hash: &T::Hash, len: Option<u32>) -> FetchResult {
-		let maybe_preimage = if let Some(len) = len {
-			match len {
-				0..=128 => Preimage7For::<T>::get(hash).map(|p| p.into_inner()),
-				0..=1024 => Preimage10For::<T>::get(hash).map(|p| p.into_inner()),
-				0..=8192 => Preimage13For::<T>::get(hash).map(|p| p.into_inner()),
-				0..=65536 => Preimage16For::<T>::get(hash).map(|p| p.into_inner()),
-				0..=524288 => Preimage19For::<T>::get(hash).map(|p| p.into_inner()),
-				0..=1048576 => Preimage20For::<T>::get(hash).map(|p| p.into_inner()),
-				0..=2097152 => Preimage21For::<T>::get(hash).map(|p| p.into_inner()),
-				0..=MAX_SIZE => Preimage22For::<T>::get(hash).map(|p| p.into_inner()),
-				_ => None,
-			}
-		} else {
-			Preimage22For::<T>::get(hash)
-				.map(|p| p.into_inner())
-				.or_else(|| Preimage21For::<T>::get(hash).map(|p| p.into_inner()))
-				.or_else(|| Preimage20For::<T>::get(hash).map(|p| p.into_inner()))
-				.or_else(|| Preimage19For::<T>::get(hash).map(|p| p.into_inner()))
-				.or_else(|| Preimage16For::<T>::get(hash).map(|p| p.into_inner()))
-				.or_else(|| Preimage13For::<T>::get(hash).map(|p| p.into_inner()))
-				.or_else(|| Preimage10For::<T>::get(hash).map(|p| p.into_inner()))
-				.or_else(|| Preimage7For::<T>::get(hash).map(|p| p.into_inner()))
-		};
-		maybe_preimage.map(Into::into).ok_or(DispatchError::Unavailable)
+		let len = len.or_else(|| Self::len(hash)).ok_or(DispatchError::Unavailable)?;
+		match len {
+			0..=128 => Preimage7For::<T>::get(hash).map(|p| p.into_inner()),
+			0..=1024 => Preimage10For::<T>::get(hash).map(|p| p.into_inner()),
+			0..=8192 => Preimage13For::<T>::get(hash).map(|p| p.into_inner()),
+			0..=65536 => Preimage16For::<T>::get(hash).map(|p| p.into_inner()),
+			0..=524288 => Preimage19For::<T>::get(hash).map(|p| p.into_inner()),
+			0..=1048576 => Preimage20For::<T>::get(hash).map(|p| p.into_inner()),
+			0..=2097152 => Preimage21For::<T>::get(hash).map(|p| p.into_inner()),
+			0..=MAX_SIZE => Preimage22For::<T>::get(hash).map(|p| p.into_inner()),
+			_ => None,
+		}
+		.map(Into::into)
+		.ok_or(DispatchError::Unavailable)
 	}
 }
 
 impl<T: Config> PreimageProvider<T::Hash> for Pallet<T> {
 	fn have_preimage(hash: &T::Hash) -> bool {
-		Self::have(hash, None)
+		Self::have(hash)
 	}
 
 	fn preimage_requested(hash: &T::Hash) -> bool {
@@ -467,8 +443,8 @@ impl<T: Config> PreimageRecipient<T::Hash> for Pallet<T> {
 }
 
 impl<T: Config<Hash = PreimageHash>> QueryPreimage for Pallet<T> {
-	fn have(hash: &T::Hash, len: Option<u32>) -> bool {
-		Pallet::<T>::have(hash, len)
+	fn len(hash: &T::Hash) -> Option<u32> {
+		Pallet::<T>::len(hash)
 	}
 
 	fn fetch(hash: &T::Hash, len: Option<u32>) -> FetchResult {
