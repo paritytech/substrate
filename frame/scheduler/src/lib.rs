@@ -63,8 +63,8 @@ use frame_support::{
 	dispatch::{DispatchError, DispatchResult, Dispatchable, Parameter},
 	traits::{
 		schedule::{self, DispatchTime, MaybeHashed},
-		ConstU32, EnsureOrigin, Get, IsType, OriginTrait, PalletInfoAccess, PrivilegeCmp,
-		StorageVersion, Bounded,
+		Bounded, ConstU32, EnsureOrigin, Get, IsType, OriginTrait, PalletInfoAccess, PrivilegeCmp,
+		StorageVersion,
 	},
 	weights::{GetDispatchInfo, Weight},
 	BoundedVec,
@@ -341,8 +341,8 @@ pub mod pallet {
 							Agenda::<T>::append(until, Some(s));
 						}
 						continue
-					}
-				}
+					},
+				};
 
 				let periodic = s.maybe_periodic.is_some();
 				let call_weight = call.get_dispatch_info().weight;
