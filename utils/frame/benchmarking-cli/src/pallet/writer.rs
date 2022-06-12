@@ -453,13 +453,10 @@ pub(crate) fn process_storage_results(
 			match (is_key_identified, is_prefix_identified) {
 				// We already did everything, move on...
 				(true, true) => continue,
-				// New key, but an existing prefix, we just add the base storage size, since
-				// trie impact should already be accounted for when we looked at the prefix last.
 				(false, true) => {
 					// track newly identified key
 					identified_key.insert(key.clone());
 				},
-				// New key and prefix. Calculate the total worst case PoV including the trie.
 				(false, false) => {
 					// track newly identified key and prefix
 					identified_key.insert(key.clone());
@@ -553,7 +550,7 @@ pub(crate) fn process_storage_results(
 }
 
 // Given the max values and max size of some storage item, calculate the worst
-// case PoV
+// case PoV.
 fn worst_case_pov(
 	max_values: Option<u32>,
 	max_size: Option<u32>,
@@ -562,7 +559,6 @@ fn worst_case_pov(
 ) -> Option<u32> {
 	if let Some(max_size) = max_size {
 		let trie_size: u32 = if is_new_prefix {
-			// Assume worst case map of 6 layers.
 			let max_values = max_values.unwrap_or(worst_case_map_values);
 			let depth: u32 = easy_log_16(max_values);
 			// 16 items per depth layer, each containing a 32 byte hash.
@@ -577,7 +573,7 @@ fn worst_case_pov(
 	}
 }
 
-// A really basic loop which calculates Log 16 of some value.
+// A simple match statement which outputs the log 16 of some value.
 fn easy_log_16(i: u32) -> u32 {
 	match i {
 		i if i == 0 => 0,
