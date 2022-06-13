@@ -235,8 +235,8 @@ benchmarks! {
 			T::BlockNumber::zero(),
 			0
 		)?;
-		let height = system::Pallet::<T>::block_number();
-		let ext_index = system::Pallet::<T>::extrinsic_index().unwrap_or(0);
+		let height = frame_system::Pallet::<T>::block_number();
+		let ext_index = frame_system::Pallet::<T>::extrinsic_index().unwrap_or(0);
 		let anon = Pallet::<T>::anonymous_account(&caller, &T::ProxyType::default(), 0, None);
 
 		add_proxies::<T>(p, Some(anon.clone()))?;
