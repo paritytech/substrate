@@ -30,6 +30,7 @@
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
+pub mod migration;
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
@@ -44,8 +45,8 @@ use frame_support::{
 	ensure,
 	pallet_prelude::Get,
 	traits::{
-		Currency, FetchResult, Hash as PreimageHash, PreimageProvider, PreimageRecipient,
-		QueryPreimage, ReservableCurrency, StorePreimage,
+		Currency, Defensive, FetchResult, Hash as PreimageHash, PreimageProvider,
+		PreimageRecipient, QueryPreimage, ReservableCurrency, StorePreimage,
 	},
 	weights::Pays,
 	BoundedSlice, BoundedVec,
@@ -74,11 +75,14 @@ type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
 /// Maximum size of preimage we can store is 4mb.
-const MAX_SIZE: u32 = 4194304;
+pub const MAX_SIZE: u32 = 4194304;
 
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
+
+	/// The current storage version.
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
@@ -104,6 +108,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(PhantomData<T>);
 
 	#[pallet::event]
@@ -262,26 +267,8 @@ impl<T: Config> Pallet<T> {
 		let was_requested = matches!(status, RequestStatus::Requested { .. });
 		StatusFor::<T>::insert(hash, status);
 
-		let res = match len {
-			0..=128 => BoundedSlice::<u8, ConstU32<128>>::try_from(preimage.as_ref())
-				.map(|s| Preimage7For::<T>::insert(hash, s)),
-			0..=1024 => BoundedSlice::<u8, ConstU32<1024>>::try_from(preimage.as_ref())
-				.map(|s| Preimage10For::<T>::insert(hash, s)),
-			0..=8192 => BoundedSlice::<u8, ConstU32<8192>>::try_from(preimage.as_ref())
-				.map(|s| Preimage13For::<T>::insert(hash, s)),
-			0..=65536 => BoundedSlice::<u8, ConstU32<65536>>::try_from(preimage.as_ref())
-				.map(|s| Preimage16For::<T>::insert(hash, s)),
-			0..=524288 => BoundedSlice::<u8, ConstU32<524288>>::try_from(preimage.as_ref())
-				.map(|s| Preimage19For::<T>::insert(hash, s)),
-			0..=1048576 => BoundedSlice::<u8, ConstU32<1048576>>::try_from(preimage.as_ref())
-				.map(|s| Preimage20For::<T>::insert(hash, s)),
-			0..=2097152 => BoundedSlice::<u8, ConstU32<2097152>>::try_from(preimage.as_ref())
-				.map(|s| Preimage21For::<T>::insert(hash, s)),
-			0..=MAX_SIZE => BoundedSlice::<u8, ConstU32<MAX_SIZE>>::try_from(preimage.as_ref())
-				.map(|s| Preimage22For::<T>::insert(hash, s)),
-			_ => Err(()),
-		};
-		debug_assert!(res.is_ok(), "Unable to insert. Logic error in `note_bytes`?");
+		let _ = Self::insert(&hash, len, preimage)
+			.defensive_proof("Unable to insert. Logic error in `note_bytes`?");
 
 		Self::deposit_event(Event::Noted { hash });
 
@@ -370,6 +357,28 @@ impl<T: Config> Pallet<T> {
 			RequestStatus::Unrequested { .. } => return Err(Error::<T>::NotRequested.into()),
 		}
 		Ok(())
+	}
+
+	fn insert(hash: &T::Hash, len: u32, preimage: Cow<[u8]>) -> Result<(), ()> {
+		match len {
+			0..=128 => BoundedSlice::<u8, ConstU32<128>>::try_from(preimage.as_ref())
+				.map(|s| Preimage7For::<T>::insert(hash, s)),
+			0..=1024 => BoundedSlice::<u8, ConstU32<1024>>::try_from(preimage.as_ref())
+				.map(|s| Preimage10For::<T>::insert(hash, s)),
+			0..=8192 => BoundedSlice::<u8, ConstU32<8192>>::try_from(preimage.as_ref())
+				.map(|s| Preimage13For::<T>::insert(hash, s)),
+			0..=65536 => BoundedSlice::<u8, ConstU32<65536>>::try_from(preimage.as_ref())
+				.map(|s| Preimage16For::<T>::insert(hash, s)),
+			0..=524288 => BoundedSlice::<u8, ConstU32<524288>>::try_from(preimage.as_ref())
+				.map(|s| Preimage19For::<T>::insert(hash, s)),
+			0..=1048576 => BoundedSlice::<u8, ConstU32<1048576>>::try_from(preimage.as_ref())
+				.map(|s| Preimage20For::<T>::insert(hash, s)),
+			0..=2097152 => BoundedSlice::<u8, ConstU32<2097152>>::try_from(preimage.as_ref())
+				.map(|s| Preimage21For::<T>::insert(hash, s)),
+			0..=MAX_SIZE => BoundedSlice::<u8, ConstU32<MAX_SIZE>>::try_from(preimage.as_ref())
+				.map(|s| Preimage22For::<T>::insert(hash, s)),
+			_ => Err(()),
+		}
 	}
 
 	fn remove(hash: &T::Hash, len: u32) {
