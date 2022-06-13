@@ -724,7 +724,8 @@ where
 	}
 }
 
-impl<'a, T, BoundSelf, BoundRhs> PartialEq<BoundedSlice<'a, T, BoundRhs>> for BoundedVec<T, BoundSelf>
+impl<'a, T, BoundSelf, BoundRhs> PartialEq<BoundedSlice<'a, T, BoundRhs>>
+	for BoundedVec<T, BoundSelf>
 where
 	T: PartialEq,
 	BoundSelf: Get<u32>,
@@ -765,7 +766,8 @@ where
 	}
 }
 
-impl<'a, T, BoundSelf, BoundRhs> PartialOrd<BoundedSlice<'a, T, BoundRhs>> for BoundedVec<T, BoundSelf>
+impl<'a, T, BoundSelf, BoundRhs> PartialOrd<BoundedSlice<'a, T, BoundRhs>>
+	for BoundedVec<T, BoundSelf>
 where
 	T: PartialOrd,
 	BoundSelf: Get<u32>,
