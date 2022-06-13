@@ -63,7 +63,7 @@ where
 		base: Block::Hash,
 		block: Block::Hash,
 	) -> Result<Vec<Block::Hash>, GrandpaError> {
-		environment::ancestry(&self.client, base, block)
+		environment::ancestry(self.client, base, block)
 	}
 }
 
@@ -193,13 +193,13 @@ where
 	);
 
 	let observer_work = ObserverWork::new(
-		client.clone(),
+		client,
 		network,
 		persistent_data,
 		config.keystore,
 		voter_commands_rx,
 		Some(justification_sender),
-		telemetry.clone(),
+		telemetry,
 	);
 
 	let observer_work = observer_work.map_ok(|_| ()).map_err(|e| {

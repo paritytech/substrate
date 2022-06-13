@@ -18,65 +18,61 @@
 
 //! Substrate system API.
 
+use jsonrpsee::{
+	core::{JsonValue, RpcResult},
+	proc_macros::rpc,
+};
+
+pub use self::helpers::{Health, NodeRole, PeerInfo, SyncState, SystemInfo};
+
 pub mod error;
 pub mod helpers;
 
-use crate::helpers::Receiver;
-use jsonrpc_core::BoxFuture;
-use jsonrpc_derive::rpc;
-
-use self::error::Result as SystemResult;
-
-pub use self::{
-	gen_client::Client as SystemClient,
-	helpers::{Health, NodeRole, PeerInfo, SyncState, SystemInfo},
-};
-
 /// Substrate system RPC API
-#[rpc]
+#[rpc(client, server)]
 pub trait SystemApi<Hash, Number> {
 	/// Get the node's implementation name. Plain old string.
-	#[rpc(name = "system_name")]
-	fn system_name(&self) -> SystemResult<String>;
+	#[method(name = "system_name")]
+	fn system_name(&self) -> RpcResult<String>;
 
 	/// Get the node implementation's version. Should be a semver string.
-	#[rpc(name = "system_version")]
-	fn system_version(&self) -> SystemResult<String>;
+	#[method(name = "system_version")]
+	fn system_version(&self) -> RpcResult<String>;
 
 	/// Get the chain's name. Given as a string identifier.
-	#[rpc(name = "system_chain")]
-	fn system_chain(&self) -> SystemResult<String>;
+	#[method(name = "system_chain")]
+	fn system_chain(&self) -> RpcResult<String>;
 
 	/// Get the chain's type.
-	#[rpc(name = "system_chainType")]
-	fn system_type(&self) -> SystemResult<sc_chain_spec::ChainType>;
+	#[method(name = "system_chainType")]
+	fn system_type(&self) -> RpcResult<sc_chain_spec::ChainType>;
 
 	/// Get a custom set of properties as a JSON object, defined in the chain spec.
-	#[rpc(name = "system_properties")]
-	fn system_properties(&self) -> SystemResult<sc_chain_spec::Properties>;
+	#[method(name = "system_properties")]
+	fn system_properties(&self) -> RpcResult<sc_chain_spec::Properties>;
 
 	/// Return health status of the node.
 	///
 	/// Node is considered healthy if it is:
 	/// - connected to some peers (unless running in dev mode)
 	/// - not performing a major sync
-	#[rpc(name = "system_health", returns = "Health")]
-	fn system_health(&self) -> Receiver<Health>;
+	#[method(name = "system_health")]
+	async fn system_health(&self) -> RpcResult<Health>;
 
 	/// Returns the base58-encoded PeerId of the node.
-	#[rpc(name = "system_localPeerId", returns = "String")]
-	fn system_local_peer_id(&self) -> Receiver<String>;
+	#[method(name = "system_localPeerId")]
+	async fn system_local_peer_id(&self) -> RpcResult<String>;
 
-	/// Returns the multiaddresses that the local node is listening on
+	/// Returns the multi-addresses that the local node is listening on
 	///
 	/// The addresses include a trailing `/p2p/` with the local PeerId, and are thus suitable to
-	/// be passed to `system_addReservedPeer` or as a bootnode address for example.
-	#[rpc(name = "system_localListenAddresses", returns = "Vec<String>")]
-	fn system_local_listen_addresses(&self) -> Receiver<Vec<String>>;
+	/// be passed to `addReservedPeer` or as a bootnode address for example.
+	#[method(name = "system_localListenAddresses")]
+	async fn system_local_listen_addresses(&self) -> RpcResult<Vec<String>>;
 
 	/// Returns currently connected peers
-	#[rpc(name = "system_peers", returns = "Vec<PeerInfo<Hash, Number>>")]
-	fn system_peers(&self) -> BoxFuture<jsonrpc_core::Result<Vec<PeerInfo<Hash, Number>>>>;
+	#[method(name = "system_peers")]
+	async fn system_peers(&self) -> RpcResult<Vec<PeerInfo<Hash, Number>>>;
 
 	/// Returns current state of the network.
 	///
@@ -84,47 +80,44 @@ pub trait SystemApi<Hash, Number> {
 	/// as its format might change at any time.
 	// TODO: the future of this call is uncertain: https://github.com/paritytech/substrate/issues/1890
 	// https://github.com/paritytech/substrate/issues/5541
-	#[rpc(name = "system_unstable_networkState", returns = "jsonrpc_core::Value")]
-	fn system_network_state(&self) -> BoxFuture<jsonrpc_core::Result<jsonrpc_core::Value>>;
+	#[method(name = "system_unstable_networkState")]
+	async fn system_network_state(&self) -> RpcResult<JsonValue>;
 
 	/// Adds a reserved peer. Returns the empty string or an error. The string
 	/// parameter should encode a `p2p` multiaddr.
 	///
 	/// `/ip4/198.51.100.19/tcp/30333/p2p/QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV`
 	/// is an example of a valid, passing multiaddr with PeerId attached.
-	#[rpc(name = "system_addReservedPeer", returns = "()")]
-	fn system_add_reserved_peer(&self, peer: String) -> BoxFuture<Result<(), jsonrpc_core::Error>>;
+	#[method(name = "system_addReservedPeer")]
+	async fn system_add_reserved_peer(&self, peer: String) -> RpcResult<()>;
 
 	/// Remove a reserved peer. Returns the empty string or an error. The string
 	/// should encode only the PeerId e.g. `QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV`.
-	#[rpc(name = "system_removeReservedPeer", returns = "()")]
-	fn system_remove_reserved_peer(
-		&self,
-		peer_id: String,
-	) -> BoxFuture<Result<(), jsonrpc_core::Error>>;
+	#[method(name = "system_removeReservedPeer")]
+	async fn system_remove_reserved_peer(&self, peer_id: String) -> RpcResult<()>;
 
 	/// Returns the list of reserved peers
-	#[rpc(name = "system_reservedPeers", returns = "Vec<String>")]
-	fn system_reserved_peers(&self) -> Receiver<Vec<String>>;
+	#[method(name = "system_reservedPeers")]
+	async fn system_reserved_peers(&self) -> RpcResult<Vec<String>>;
 
 	/// Returns the roles the node is running as.
-	#[rpc(name = "system_nodeRoles", returns = "Vec<NodeRole>")]
-	fn system_node_roles(&self) -> Receiver<Vec<NodeRole>>;
+	#[method(name = "system_nodeRoles")]
+	async fn system_node_roles(&self) -> RpcResult<Vec<NodeRole>>;
 
 	/// Returns the state of the syncing of the node: starting block, current best block, highest
 	/// known block.
-	#[rpc(name = "system_syncState", returns = "SyncState<Number>")]
-	fn system_sync_state(&self) -> Receiver<SyncState<Number>>;
+	#[method(name = "system_syncState")]
+	async fn system_sync_state(&self) -> RpcResult<SyncState<Number>>;
 
 	/// Adds the supplied directives to the current log filter
 	///
 	/// The syntax is identical to the CLI `<target>=<level>`:
 	///
 	/// `sync=debug,state=trace`
-	#[rpc(name = "system_addLogFilter", returns = "()")]
-	fn system_add_log_filter(&self, directives: String) -> Result<(), jsonrpc_core::Error>;
+	#[method(name = "system_addLogFilter")]
+	fn system_add_log_filter(&self, directives: String) -> RpcResult<()>;
 
 	/// Resets the log filter to Substrate defaults
-	#[rpc(name = "system_resetLogFilter", returns = "()")]
-	fn system_reset_log_filter(&self) -> Result<(), jsonrpc_core::Error>;
+	#[method(name = "system_resetLogFilter")]
+	fn system_reset_log_filter(&self) -> RpcResult<()>;
 }

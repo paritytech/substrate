@@ -27,7 +27,11 @@
 use crate::Config;
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_election_provider_support::ScoreProvider;
-use frame_support::{traits::Get, DefaultNoBound};
+use frame_support::{
+	ensure,
+	traits::{Defensive, Get},
+	DefaultNoBound, PalletError,
+};
 use scale_info::TypeInfo;
 use sp_runtime::traits::{Bounded, Zero};
 use sp_std::{
@@ -35,13 +39,17 @@ use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
 	iter,
 	marker::PhantomData,
-	vec::Vec,
+	prelude::*,
 };
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo, PalletError)]
 pub enum ListError {
 	/// A duplicate id has been detected.
 	Duplicate,
+	/// An Id does not have a greater score than another Id.
+	NotHeavier,
+	/// Attempted to place node in front of a node in another bag.
+	NotInSameBag,
 	/// Given node id was not found.
 	NodeNotFound,
 }
@@ -59,7 +67,7 @@ mod tests;
 pub fn notional_bag_for<T: Config<I>, I: 'static>(score: T::Score) -> T::Score {
 	let thresholds = T::BagThresholds::get();
 	let idx = thresholds.partition_point(|&threshold| score > threshold);
-	thresholds.get(idx).copied().unwrap_or(T::Score::max_value())
+	thresholds.get(idx).copied().unwrap_or_else(T::Score::max_value)
 }
 
 /// The **ONLY** entry point of this module. All operations to the bags-list should happen through
@@ -86,7 +94,9 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 	/// this function should generally not be used in production as it could lead to a very large
 	/// number of storage accesses.
 	pub(crate) fn unsafe_clear() {
+		#[allow(deprecated)]
 		crate::ListBags::<T, I>::remove_all(None);
+		#[allow(deprecated)]
 		crate::ListNodes::<T, I>::remove_all();
 	}
 
@@ -163,7 +173,7 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 			let affected_bag = {
 				// this recreates `notional_bag_for` logic, but with the old thresholds.
 				let idx = old_thresholds.partition_point(|&threshold| inserted_bag > threshold);
-				old_thresholds.get(idx).copied().unwrap_or(T::Score::max_value())
+				old_thresholds.get(idx).copied().unwrap_or_else(T::Score::max_value)
 			};
 			if !affected_old_bags.insert(affected_bag) {
 				// If the previous threshold list was [10, 20], and we insert [3, 5], then there's
@@ -218,6 +228,11 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 	/// Returns `true` if the list contains `id`, otherwise returns `false`.
 	pub(crate) fn contains(id: &T::AccountId) -> bool {
 		crate::ListNodes::<T, I>::contains_key(id)
+	}
+
+	/// Get the score of the given node,
+	pub fn get_score(id: &T::AccountId) -> Result<T::Score, ListError> {
+		Node::<T, I>::get(id).map(|node| node.score()).ok_or(ListError::NodeNotFound)
 	}
 
 	/// Iterate over all nodes in all bags in the list.
@@ -303,7 +318,7 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 		let bag_score = notional_bag_for::<T, I>(score);
 		let mut bag = Bag::<T, I>::get_or_make(bag_score);
 		// unchecked insertion is okay; we just got the correct `notional_bag_for`.
-		bag.insert_unchecked(id.clone());
+		bag.insert_unchecked(id.clone(), score);
 
 		// new inserts are always the tail, so we must write the bag.
 		bag.put();
@@ -321,9 +336,13 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 		Ok(())
 	}
 
-	/// Remove an id from the list.
-	pub(crate) fn remove(id: &T::AccountId) {
-		Self::remove_many(sp_std::iter::once(id));
+	/// Remove an id from the list, returning an error if `id` does not exists.
+	pub(crate) fn remove(id: &T::AccountId) -> Result<(), ListError> {
+		if !Self::contains(id) {
+			return Err(ListError::NodeNotFound)
+		}
+		let _ = Self::remove_many(sp_std::iter::once(id));
+		Ok(())
 	}
 
 	/// Remove many ids from the list.
@@ -370,16 +389,18 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 	/// If the node was in the correct bag, no effect. If the node was in the incorrect bag, they
 	/// are moved into the correct bag.
 	///
-	/// Returns `Some((old_idx, new_idx))` if the node moved, otherwise `None`.
+	/// Returns `Some((old_idx, new_idx))` if the node moved, otherwise `None`. In both cases, the
+	/// node's score is written to the `score` field. Thus, this is not a noop, even if `None`.
 	///
 	/// This operation is somewhat more efficient than simply calling [`self.remove`] followed by
 	/// [`self.insert`]. However, given large quantities of nodes to move, it may be more efficient
 	/// to call [`self.remove_many`] followed by [`self.insert_many`].
 	pub(crate) fn update_position_for(
-		node: Node<T, I>,
+		mut node: Node<T, I>,
 		new_score: T::Score,
 	) -> Option<(T::Score, T::Score)> {
-		node.is_misplaced(new_score).then(move || {
+		node.score = new_score;
+		if node.is_misplaced(new_score) {
 			let old_bag_upper = node.bag_upper;
 
 			if !node.is_terminal() {
@@ -391,12 +412,9 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 				bag.remove_node_unchecked(&node);
 				bag.put();
 			} else {
-				crate::log!(
-					error,
-					"Node {:?} did not have a bag; ListBags is in an inconsistent state",
-					node.id,
+				frame_support::defensive!(
+					"Node did not have a bag; BagsList is in an inconsistent state"
 				);
-				debug_assert!(false, "every node must have an extant bag associated with it");
 			}
 
 			// put the node into the appropriate new bag.
@@ -407,8 +425,12 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 			bag.insert_node_unchecked(node);
 			bag.put();
 
-			(old_bag_upper, new_bag_upper)
-		})
+			Some((old_bag_upper, new_bag_upper))
+		} else {
+			// just write the new score.
+			node.put();
+			None
+		}
 	}
 
 	/// Put `heavier_id` to the position directly in front of `lighter_id`. Both ids must be in the
@@ -416,31 +438,29 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 	pub(crate) fn put_in_front_of(
 		lighter_id: &T::AccountId,
 		heavier_id: &T::AccountId,
-	) -> Result<(), crate::pallet::Error<T, I>> {
-		use crate::pallet;
-		use frame_support::ensure;
+	) -> Result<(), ListError> {
+		let lighter_node = Node::<T, I>::get(&lighter_id).ok_or(ListError::NodeNotFound)?;
+		let heavier_node = Node::<T, I>::get(&heavier_id).ok_or(ListError::NodeNotFound)?;
 
-		let lighter_node = Node::<T, I>::get(&lighter_id).ok_or(pallet::Error::IdNotFound)?;
-		let heavier_node = Node::<T, I>::get(&heavier_id).ok_or(pallet::Error::IdNotFound)?;
-
-		ensure!(lighter_node.bag_upper == heavier_node.bag_upper, pallet::Error::NotInSameBag);
+		ensure!(lighter_node.bag_upper == heavier_node.bag_upper, ListError::NotInSameBag);
 
 		// this is the most expensive check, so we do it last.
 		ensure!(
 			T::ScoreProvider::score(&heavier_id) > T::ScoreProvider::score(&lighter_id),
-			pallet::Error::NotHeavier
+			ListError::NotHeavier
 		);
 
 		// remove the heavier node from this list. Note that this removes the node from storage and
 		// decrements the node counter.
-		Self::remove(&heavier_id);
+		let _ =
+			Self::remove(&heavier_id).defensive_proof("both nodes have been checked to exist; qed");
 
 		// re-fetch `lighter_node` from storage since it may have been updated when `heavier_node`
 		// was removed.
-		let lighter_node = Node::<T, I>::get(&lighter_id).ok_or_else(|| {
+		let lighter_node = Node::<T, I>::get(lighter_id).ok_or_else(|| {
 			debug_assert!(false, "id that should exist cannot be found");
 			crate::log!(warn, "id that should exist cannot be found");
-			pallet::Error::IdNotFound
+			ListError::NodeNotFound
 		})?;
 
 		// insert `heavier_node` directly in front of `lighter_node`. This will update both nodes
@@ -499,7 +519,6 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 	/// all bags and nodes are checked per *any* update to `List`.
 	#[cfg(feature = "std")]
 	pub(crate) fn sanity_check() -> Result<(), &'static str> {
-		use frame_support::ensure;
 		let mut seen_in_list = BTreeSet::new();
 		ensure!(
 			Self::iter().map(|node| node.id).all(|id| seen_in_list.insert(id)),
@@ -512,7 +531,7 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 		ensure!(iter_count == stored_count, "iter_count != stored_count");
 		ensure!(stored_count == nodes_count, "stored_count != nodes_count");
 
-		crate::log!(debug, "count of nodes: {}", stored_count);
+		crate::log!(trace, "count of nodes: {}", stored_count);
 
 		let active_bags = {
 			let thresholds = T::BagThresholds::get().iter().copied();
@@ -527,13 +546,13 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 			thresholds.into_iter().filter_map(|t| Bag::<T, I>::get(t))
 		};
 
-		let _ = active_bags.clone().map(|b| b.sanity_check()).collect::<Result<_, _>>()?;
+		let _ = active_bags.clone().try_for_each(|b| b.sanity_check())?;
 
 		let nodes_in_bags_count =
 			active_bags.clone().fold(0u32, |acc, cur| acc + cur.iter().count() as u32);
 		ensure!(nodes_count == nodes_in_bags_count, "stored_count != nodes_in_bags_count");
 
-		crate::log!(debug, "count of active bags {}", active_bags.count());
+		crate::log!(trace, "count of active bags {}", active_bags.count());
 
 		// check that all nodes are sane. We check the `ListNodes` storage item directly in case we
 		// have some "stale" nodes that are not in a bag.
@@ -656,7 +675,7 @@ impl<T: Config<I>, I: 'static> Bag<T, I> {
 	///
 	/// Storage note: this modifies storage, but only for the nodes. You still need to call
 	/// `self.put()` after use.
-	fn insert_unchecked(&mut self, id: T::AccountId) {
+	fn insert_unchecked(&mut self, id: T::AccountId, score: T::Score) {
 		// insert_node will overwrite `prev`, `next` and `bag_upper` to the proper values. As long
 		// as this bag is the correct one, we're good. All calls to this must come after getting the
 		// correct [`notional_bag_for`].
@@ -665,6 +684,7 @@ impl<T: Config<I>, I: 'static> Bag<T, I> {
 			prev: None,
 			next: None,
 			bag_upper: Zero::zero(),
+			score,
 			_phantom: PhantomData,
 		});
 	}
@@ -708,7 +728,7 @@ impl<T: Config<I>, I: 'static> Bag<T, I> {
 		// the first insertion into the bag. In this case, both head and tail should point to the
 		// same node.
 		if self.head.is_none() {
-			self.head = Some(id.clone());
+			self.head = Some(id);
 			debug_assert!(self.iter().count() == 1);
 		}
 	}
@@ -773,11 +793,6 @@ impl<T: Config<I>, I: 'static> Bag<T, I> {
 		Ok(())
 	}
 
-	#[cfg(not(feature = "std"))]
-	fn sanity_check(&self) -> Result<(), &'static str> {
-		Ok(())
-	}
-
 	/// Iterate over the nodes in this bag (public for tests).
 	#[cfg(feature = "std")]
 	#[allow(dead_code)]
@@ -798,12 +813,13 @@ impl<T: Config<I>, I: 'static> Bag<T, I> {
 #[scale_info(skip_type_params(T, I))]
 #[cfg_attr(feature = "std", derive(frame_support::DebugNoBound, Clone, PartialEq))]
 pub struct Node<T: Config<I>, I: 'static = ()> {
-	id: T::AccountId,
-	prev: Option<T::AccountId>,
-	next: Option<T::AccountId>,
-	bag_upper: T::Score,
+	pub(crate) id: T::AccountId,
+	pub(crate) prev: Option<T::AccountId>,
+	pub(crate) next: Option<T::AccountId>,
+	pub(crate) bag_upper: T::Score,
+	pub(crate) score: T::Score,
 	#[codec(skip)]
-	_phantom: PhantomData<I>,
+	pub(crate) _phantom: PhantomData<I>,
 }
 
 impl<T: Config<I>, I: 'static> Node<T, I> {
@@ -866,11 +882,21 @@ impl<T: Config<I>, I: 'static> Node<T, I> {
 		&self.id
 	}
 
+	/// Get the current vote weight of the node.
+	pub(crate) fn score(&self) -> T::Score {
+		self.score
+	}
+
 	/// Get the underlying voter (public fo tests).
 	#[cfg(feature = "std")]
 	#[allow(dead_code)]
 	pub fn std_id(&self) -> &T::AccountId {
 		&self.id
+	}
+
+	#[cfg(any(feature = "runtime-benchmarks", test))]
+	pub fn set_score(&mut self, s: T::Score) {
+		self.score = s
 	}
 
 	/// The bag this nodes belongs to (public for benchmarks).

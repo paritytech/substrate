@@ -112,6 +112,7 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 		&self,
 		child_info: Option<&ChildInfo>,
 		prefix: Option<&[u8]>,
+		start_at: Option<&[u8]>,
 		f: F,
 	);
 
@@ -197,7 +198,7 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 		// child first
 		for (child_info, child_delta) in child_deltas {
 			let (child_root, empty, child_txs) =
-				self.child_storage_root(&child_info, child_delta, state_version);
+				self.child_storage_root(child_info, child_delta, state_version);
 			let prefixed_storage_key = child_info.prefixed_storage_key();
 			txs.consolidate(child_txs);
 			if empty {
@@ -311,7 +312,7 @@ pub struct BackendRuntimeCode<'a, B, H> {
 impl<'a, B: Backend<H>, H: Hasher> sp_core::traits::FetchRuntimeCode
 	for BackendRuntimeCode<'a, B, H>
 {
-	fn fetch_runtime_code<'b>(&'b self) -> Option<std::borrow::Cow<'b, [u8]>> {
+	fn fetch_runtime_code(&self) -> Option<std::borrow::Cow<[u8]>> {
 		self.backend
 			.storage(sp_core::storage::well_known_keys::CODE)
 			.ok()

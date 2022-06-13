@@ -17,12 +17,15 @@
 
 //! System FRAME specific RPC methods.
 
-use std::sync::Arc;
+use std::{fmt::Display, sync::Arc};
 
-use codec::{Codec, Decode, Encode};
-use futures::FutureExt;
-use jsonrpc_core::{Error as RpcError, ErrorCode};
-use jsonrpc_derive::rpc;
+use codec::{self, Codec, Decode, Encode};
+use jsonrpsee::{
+	core::{async_trait, RpcResult},
+	proc_macros::rpc,
+	types::error::{CallError, ErrorObject},
+};
+
 use sc_rpc_api::DenyUnsafe;
 use sc_transaction_pool_api::{InPoolTransaction, TransactionPool};
 use sp_api::ApiExt;
@@ -31,26 +34,22 @@ use sp_blockchain::HeaderBackend;
 use sp_core::{hexdisplay::HexDisplay, Bytes};
 use sp_runtime::{generic::BlockId, legacy, traits};
 
-pub use self::gen_client::Client as SystemClient;
 pub use frame_system_rpc_runtime_api::AccountNonceApi;
 
-/// Future that resolves to account nonce.
-type FutureResult<T> = jsonrpc_core::BoxFuture<Result<T, RpcError>>;
-
 /// System RPC methods.
-#[rpc]
+#[rpc(client, server)]
 pub trait SystemApi<BlockHash, AccountId, Index> {
 	/// Returns the next valid index (aka nonce) for given account.
 	///
 	/// This method takes into consideration all pending transactions
 	/// currently in the pool and if no transactions are found in the pool
 	/// it fallbacks to query the index from the runtime (aka. state nonce).
-	#[rpc(name = "system_accountNextIndex", alias("account_nextIndex"))]
-	fn nonce(&self, account: AccountId) -> FutureResult<Index>;
+	#[method(name = "system_accountNextIndex", aliases = ["account_nextIndex"])]
+	async fn nonce(&self, account: AccountId) -> RpcResult<Index>;
 
 	/// Dry run an extrinsic at a given block. Return SCALE encoded ApplyExtrinsicResult.
-	#[rpc(name = "system_dryRun", alias("system_dryRunAt"))]
-	fn dry_run(&self, extrinsic: Bytes, at: Option<BlockHash>) -> FutureResult<Bytes>;
+	#[method(name = "system_dryRun", aliases = ["system_dryRunAt"])]
+	async fn dry_run(&self, extrinsic: Bytes, at: Option<BlockHash>) -> RpcResult<Bytes>;
 }
 
 /// Error type of this RPC api.
@@ -61,8 +60,8 @@ pub enum Error {
 	RuntimeError,
 }
 
-impl From<Error> for i64 {
-	fn from(e: Error) -> i64 {
+impl From<Error> for i32 {
+	fn from(e: Error) -> i32 {
 		match e {
 			Error::RuntimeError => 1,
 			Error::DecodeError => 2,
@@ -71,22 +70,23 @@ impl From<Error> for i64 {
 }
 
 /// An implementation of System-specific RPC methods on full client.
-pub struct FullSystem<P: TransactionPool, C, B> {
+pub struct System<P: TransactionPool, C, B> {
 	client: Arc<C>,
 	pool: Arc<P>,
 	deny_unsafe: DenyUnsafe,
 	_marker: std::marker::PhantomData<B>,
 }
 
-impl<P: TransactionPool, C, B> FullSystem<P, C, B> {
+impl<P: TransactionPool, C, B> System<P, C, B> {
 	/// Create new `FullSystem` given client and transaction pool.
 	pub fn new(client: Arc<C>, pool: Arc<P>, deny_unsafe: DenyUnsafe) -> Self {
-		FullSystem { client, pool, deny_unsafe, _marker: Default::default() }
+		Self { client, pool, deny_unsafe, _marker: Default::default() }
 	}
 }
 
-impl<P, C, Block, AccountId, Index> SystemApi<<Block as traits::Block>::Hash, AccountId, Index>
-	for FullSystem<P, C, Block>
+#[async_trait]
+impl<P, C, Block, AccountId, Index>
+	SystemApiServer<<Block as traits::Block>::Hash, AccountId, Index> for System<P, C, Block>
 where
 	C: sp_api::ProvideRuntimeApi<Block>,
 	C: HeaderBackend<Block>,
@@ -95,88 +95,83 @@ where
 	C::Api: BlockBuilder<Block>,
 	P: TransactionPool + 'static,
 	Block: traits::Block,
-	AccountId: Clone + std::fmt::Display + Codec,
-	Index: Clone + std::fmt::Display + Codec + Send + traits::AtLeast32Bit + 'static,
+	AccountId: Clone + Display + Codec + Send + 'static,
+	Index: Clone + Display + Codec + Send + traits::AtLeast32Bit + 'static,
 {
-	fn nonce(&self, account: AccountId) -> FutureResult<Index> {
-		let get_nonce = || {
-			let api = self.client.runtime_api();
-			let best = self.client.info().best_hash;
-			let at = BlockId::hash(best);
+	async fn nonce(&self, account: AccountId) -> RpcResult<Index> {
+		let api = self.client.runtime_api();
+		let best = self.client.info().best_hash;
+		let at = BlockId::hash(best);
 
-			let nonce = api.account_nonce(&at, account.clone()).map_err(|e| RpcError {
-				code: ErrorCode::ServerError(Error::RuntimeError.into()),
-				message: "Unable to query nonce.".into(),
-				data: Some(e.to_string().into()),
-			})?;
-
-			Ok(adjust_nonce(&*self.pool, account, nonce))
-		};
-
-		let res = get_nonce();
-		async move { res }.boxed()
+		let nonce = api.account_nonce(&at, account.clone()).map_err(|e| {
+			CallError::Custom(ErrorObject::owned(
+				Error::RuntimeError.into(),
+				"Unable to query nonce.",
+				Some(e.to_string()),
+			))
+		})?;
+		Ok(adjust_nonce(&*self.pool, account, nonce))
 	}
 
-	fn dry_run(
+	async fn dry_run(
 		&self,
 		extrinsic: Bytes,
 		at: Option<<Block as traits::Block>::Hash>,
-	) -> FutureResult<Bytes> {
-		if let Err(err) = self.deny_unsafe.check_if_safe() {
-			return async move { Err(err.into()) }.boxed()
-		}
+	) -> RpcResult<Bytes> {
+		self.deny_unsafe.check_if_safe()?;
+		let api = self.client.runtime_api();
+		let at = BlockId::<Block>::hash(at.unwrap_or_else(||
+			// If the block hash is not supplied assume the best block.
+			self.client.info().best_hash));
 
-		let dry_run = || {
-			let api = self.client.runtime_api();
-			let at = BlockId::<Block>::hash(at.unwrap_or_else(||
-				// If the block hash is not supplied assume the best block.
-				self.client.info().best_hash));
+		let uxt: <Block as traits::Block>::Extrinsic =
+			Decode::decode(&mut &*extrinsic).map_err(|e| {
+				CallError::Custom(ErrorObject::owned(
+					Error::DecodeError.into(),
+					"Unable to dry run extrinsic",
+					Some(e.to_string()),
+				))
+			})?;
 
-			let uxt: <Block as traits::Block>::Extrinsic = Decode::decode(&mut &*extrinsic)
-				.map_err(|e| RpcError {
-					code: ErrorCode::ServerError(Error::DecodeError.into()),
-					message: "Unable to dry run extrinsic.".into(),
-					data: Some(e.to_string().into()),
-				})?;
+		let api_version = api
+			.api_version::<dyn BlockBuilder<Block>>(&at)
+			.map_err(|e| {
+				CallError::Custom(ErrorObject::owned(
+					Error::RuntimeError.into(),
+					"Unable to dry run extrinsic.",
+					Some(e.to_string()),
+				))
+			})?
+			.ok_or_else(|| {
+				CallError::Custom(ErrorObject::owned(
+					Error::RuntimeError.into(),
+					"Unable to dry run extrinsic.",
+					Some(format!("Could not find `BlockBuilder` api for block `{:?}`.", at)),
+				))
+			})?;
 
-			let api_version = api
-				.api_version::<dyn BlockBuilder<Block>>(&at)
-				.map_err(|e| RpcError {
-					code: ErrorCode::ServerError(Error::RuntimeError.into()),
-					message: "Unable to dry run extrinsic.".into(),
-					data: Some(e.to_string().into()),
+		let result = if api_version < 6 {
+			#[allow(deprecated)]
+			api.apply_extrinsic_before_version_6(&at, uxt)
+				.map(legacy::byte_sized_error::convert_to_latest)
+				.map_err(|e| {
+					CallError::Custom(ErrorObject::owned(
+						Error::RuntimeError.into(),
+						"Unable to dry run extrinsic.",
+						Some(e.to_string()),
+					))
 				})?
-				.ok_or_else(|| RpcError {
-					code: ErrorCode::ServerError(Error::RuntimeError.into()),
-					message: "Unable to dry run extrinsic.".into(),
-					data: Some(
-						format!("Could not find `BlockBuilder` api for block `{:?}`.", at).into(),
-					),
-				})?;
-
-			let result = if api_version < 6 {
-				#[allow(deprecated)]
-				api.apply_extrinsic_before_version_6(&at, uxt)
-					.map(legacy::byte_sized_error::convert_to_latest)
-					.map_err(|e| RpcError {
-						code: ErrorCode::ServerError(Error::RuntimeError.into()),
-						message: "Unable to dry run extrinsic.".into(),
-						data: Some(e.to_string().into()),
-					})?
-			} else {
-				api.apply_extrinsic(&at, uxt).map_err(|e| RpcError {
-					code: ErrorCode::ServerError(Error::RuntimeError.into()),
-					message: "Unable to dry run extrinsic.".into(),
-					data: Some(e.to_string().into()),
-				})?
-			};
-
-			Ok(Encode::encode(&result).into())
+		} else {
+			api.apply_extrinsic(&at, uxt).map_err(|e| {
+				CallError::Custom(ErrorObject::owned(
+					Error::RuntimeError.into(),
+					"Unable to dry run extrinsic.",
+					Some(e.to_string()),
+				))
+			})?
 		};
 
-		let res = dry_run();
-
-		async move { res }.boxed()
+		Ok(Encode::encode(&result).into())
 	}
 }
 
@@ -220,7 +215,9 @@ where
 mod tests {
 	use super::*;
 
+	use assert_matches::assert_matches;
 	use futures::executor::block_on;
+	use jsonrpsee::{core::Error as JsonRpseeError, types::error::CallError};
 	use sc_transaction_pool::BasicPool;
 	use sp_runtime::{
 		transaction_validity::{InvalidTransaction, TransactionValidityError},
@@ -228,8 +225,8 @@ mod tests {
 	};
 	use substrate_test_runtime_client::{runtime::Transfer, AccountKeyring};
 
-	#[test]
-	fn should_return_next_nonce_for_some_account() {
+	#[tokio::test]
+	async fn should_return_next_nonce_for_some_account() {
 		sp_tracing::try_init_simple();
 
 		// given
@@ -254,17 +251,17 @@ mod tests {
 		let ext1 = new_transaction(1);
 		block_on(pool.submit_one(&BlockId::number(0), source, ext1)).unwrap();
 
-		let accounts = FullSystem::new(client, pool, DenyUnsafe::Yes);
+		let accounts = System::new(client, pool, DenyUnsafe::Yes);
 
 		// when
-		let nonce = accounts.nonce(AccountKeyring::Alice.into());
+		let nonce = accounts.nonce(AccountKeyring::Alice.into()).await;
 
 		// then
-		assert_eq!(block_on(nonce).unwrap(), 2);
+		assert_eq!(nonce.unwrap(), 2);
 	}
 
-	#[test]
-	fn dry_run_should_deny_unsafe() {
+	#[tokio::test]
+	async fn dry_run_should_deny_unsafe() {
 		sp_tracing::try_init_simple();
 
 		// given
@@ -273,17 +270,17 @@ mod tests {
 		let pool =
 			BasicPool::new_full(Default::default(), true.into(), None, spawner, client.clone());
 
-		let accounts = FullSystem::new(client, pool, DenyUnsafe::Yes);
+		let accounts = System::new(client, pool, DenyUnsafe::Yes);
 
 		// when
-		let res = accounts.dry_run(vec![].into(), None);
-
-		// then
-		assert_eq!(block_on(res), Err(RpcError::method_not_found()));
+		let res = accounts.dry_run(vec![].into(), None).await;
+		assert_matches!(res, Err(JsonRpseeError::Call(CallError::Custom(e))) => {
+			assert!(e.message().contains("RPC call is unsafe to be called externally"));
+		});
 	}
 
-	#[test]
-	fn dry_run_should_work() {
+	#[tokio::test]
+	async fn dry_run_should_work() {
 		sp_tracing::try_init_simple();
 
 		// given
@@ -292,7 +289,7 @@ mod tests {
 		let pool =
 			BasicPool::new_full(Default::default(), true.into(), None, spawner, client.clone());
 
-		let accounts = FullSystem::new(client, pool, DenyUnsafe::No);
+		let accounts = System::new(client, pool, DenyUnsafe::No);
 
 		let tx = Transfer {
 			from: AccountKeyring::Alice.into(),
@@ -303,16 +300,15 @@ mod tests {
 		.into_signed_tx();
 
 		// when
-		let res = accounts.dry_run(tx.encode().into(), None);
+		let bytes = accounts.dry_run(tx.encode().into(), None).await.expect("Call is successful");
 
 		// then
-		let bytes = block_on(res).unwrap().0;
-		let apply_res: ApplyExtrinsicResult = Decode::decode(&mut bytes.as_slice()).unwrap();
+		let apply_res: ApplyExtrinsicResult = Decode::decode(&mut bytes.as_ref()).unwrap();
 		assert_eq!(apply_res, Ok(Ok(())));
 	}
 
-	#[test]
-	fn dry_run_should_indicate_error() {
+	#[tokio::test]
+	async fn dry_run_should_indicate_error() {
 		sp_tracing::try_init_simple();
 
 		// given
@@ -321,7 +317,7 @@ mod tests {
 		let pool =
 			BasicPool::new_full(Default::default(), true.into(), None, spawner, client.clone());
 
-		let accounts = FullSystem::new(client, pool, DenyUnsafe::No);
+		let accounts = System::new(client, pool, DenyUnsafe::No);
 
 		let tx = Transfer {
 			from: AccountKeyring::Alice.into(),
@@ -332,11 +328,10 @@ mod tests {
 		.into_signed_tx();
 
 		// when
-		let res = accounts.dry_run(tx.encode().into(), None);
+		let bytes = accounts.dry_run(tx.encode().into(), None).await.expect("Call is successful");
 
 		// then
-		let bytes = block_on(res).unwrap().0;
-		let apply_res: ApplyExtrinsicResult = Decode::decode(&mut bytes.as_slice()).unwrap();
+		let apply_res: ApplyExtrinsicResult = Decode::decode(&mut bytes.as_ref()).unwrap();
 		assert_eq!(apply_res, Err(TransactionValidityError::Invalid(InvalidTransaction::Stale)));
 	}
 }

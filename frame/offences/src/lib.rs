@@ -59,7 +59,7 @@ pub mod pallet {
 		/// The overarching event type.
 		type Event: From<Event> + IsType<<Self as frame_system::Config>::Event>;
 		/// Full identification of the validator.
-		type IdentificationTuple: Parameter + Ord;
+		type IdentificationTuple: Parameter;
 		/// A handler called for every offence report.
 		type OnOffenceHandler: OnOffenceHandler<Self::AccountId, Self::IdentificationTuple, Weight>;
 	}
@@ -136,8 +136,7 @@ where
 		// The amount new offenders are slashed
 		let new_fraction = O::slash_fraction(offenders_count, validator_set_count);
 
-		let slash_perbill: Vec<_> =
-			(0..concurrent_offenders.len()).map(|_| new_fraction.clone()).collect();
+		let slash_perbill: Vec<_> = (0..concurrent_offenders.len()).map(|_| new_fraction).collect();
 
 		T::OnOffenceHandler::on_offence(
 			&concurrent_offenders,
@@ -202,7 +201,7 @@ impl<T: Config> Pallet<T> {
 			let concurrent_offenders = storage
 				.concurrent_reports
 				.iter()
-				.filter_map(|report_id| <Reports<T>>::get(report_id))
+				.filter_map(<Reports<T>>::get)
 				.collect::<Vec<_>>();
 
 			storage.save();

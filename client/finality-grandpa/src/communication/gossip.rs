@@ -504,13 +504,13 @@ impl<N: Ord> Peers<N> {
 	fn new_peer(&mut self, who: PeerId, role: ObservedRole) {
 		match role {
 			ObservedRole::Authority if self.first_stage_peers.len() < LUCKY_PEERS => {
-				self.first_stage_peers.insert(who.clone());
+				self.first_stage_peers.insert(who);
 			},
 			ObservedRole::Authority if self.second_stage_peers.len() < LUCKY_PEERS => {
-				self.second_stage_peers.insert(who.clone());
+				self.second_stage_peers.insert(who);
 			},
 			ObservedRole::Light if self.lucky_light_peers.len() < LUCKY_PEERS => {
-				self.lucky_light_peers.insert(who.clone());
+				self.lucky_light_peers.insert(who);
 			},
 			_ => {},
 		}
@@ -590,11 +590,8 @@ impl<N: Ord> Peers<N> {
 		// - third set: LUCKY_PEERS random light client peers
 
 		let shuffled_peers = {
-			let mut peers = self
-				.inner
-				.iter()
-				.map(|(peer_id, info)| (*peer_id, info.clone()))
-				.collect::<Vec<_>>();
+			let mut peers =
+				self.inner.iter().map(|(peer_id, info)| (*peer_id, info)).collect::<Vec<_>>();
 
 			peers.shuffle(&mut rand::thread_rng());
 			peers
@@ -1103,7 +1100,7 @@ impl<Block: BlockT> Inner<Block> {
 		// won't be able to reply since they don't follow the full GRANDPA
 		// protocol and therefore might not have the vote data available.
 		if let (Some(peer), Some(local_view)) = (self.peers.peer(who), &self.local_view) {
-			if self.catch_up_config.request_allowed(&peer) &&
+			if self.catch_up_config.request_allowed(peer) &&
 				peer.view.set_id == local_view.set_id &&
 				peer.view.round.0.saturating_sub(CATCH_UP_THRESHOLD) > local_view.round.0
 			{
@@ -1195,7 +1192,7 @@ impl<Block: BlockT> Inner<Block> {
 					return (false, None)
 				} else {
 					// report peer for timeout
-					Some((peer.clone(), cost::CATCH_UP_REQUEST_TIMEOUT))
+					Some((*peer, cost::CATCH_UP_REQUEST_TIMEOUT))
 				}
 			},
 			PendingCatchUp::Processing { instant, .. } => {
@@ -1209,7 +1206,7 @@ impl<Block: BlockT> Inner<Block> {
 		};
 
 		self.pending_catch_up = PendingCatchUp::Requesting {
-			who: who.clone(),
+			who: *who,
 			request: catch_up_request.clone(),
 			instant: Instant::now(),
 		};
@@ -1488,7 +1485,7 @@ impl<Block: BlockT> sc_network_gossip::Validator<Block> for GossipValidator<Bloc
 	) {
 		let packet = {
 			let mut inner = self.inner.write();
-			inner.peers.new_peer(who.clone(), roles);
+			inner.peers.new_peer(*who, roles);
 
 			inner.local_view.as_ref().map(|v| NeighborPacket {
 				round: v.round,
@@ -1526,16 +1523,16 @@ impl<Block: BlockT> sc_network_gossip::Validator<Block> for GossipValidator<Bloc
 
 		match action {
 			Action::Keep(topic, cb) => {
-				self.report(who.clone(), cb);
+				self.report(*who, cb);
 				context.broadcast_message(topic, data.to_vec(), false);
 				sc_network_gossip::ValidationResult::ProcessAndKeep(topic)
 			},
 			Action::ProcessAndDiscard(topic, cb) => {
-				self.report(who.clone(), cb);
+				self.report(*who, cb);
 				sc_network_gossip::ValidationResult::ProcessAndDiscard(topic)
 			},
 			Action::Discard(cb) => {
-				self.report(who.clone(), cb);
+				self.report(*who, cb);
 				sc_network_gossip::ValidationResult::Discard
 			},
 		}
@@ -1572,7 +1569,7 @@ impl<Block: BlockT> sc_network_gossip::Validator<Block> for GossipValidator<Bloc
 
 			// if the topic is not something we're keeping at the moment,
 			// do not send.
-			let (maybe_round, set_id) = match inner.live_topics.topic_info(&topic) {
+			let (maybe_round, set_id) = match inner.live_topics.topic_info(topic) {
 				None => return false,
 				Some(x) => x,
 			};
@@ -1583,11 +1580,9 @@ impl<Block: BlockT> sc_network_gossip::Validator<Block> for GossipValidator<Bloc
 						// early return if the vote message isn't allowed at this stage.
 						return false
 					}
-				} else {
-					if !inner.global_message_allowed(who) {
-						// early return if the global message isn't allowed at this stage.
-						return false
-					}
+				} else if !inner.global_message_allowed(who) {
+					// early return if the global message isn't allowed at this stage.
+					return false
 				}
 			}
 

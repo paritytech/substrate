@@ -31,6 +31,7 @@ use crate::{
 	Never,
 };
 use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen, Ref};
+use sp_io::MultiRemovalResults;
 use sp_runtime::traits::Saturating;
 use sp_std::prelude::*;
 
@@ -131,6 +132,11 @@ where
 		<Self as MapWrapper>::Map::try_get(key)
 	}
 
+	/// Store or remove the value to be associated with `key` so that `get` returns the `query`.
+	pub fn set<KeyArg: EncodeLike<Key>>(key: KeyArg, q: QueryKind::Query) {
+		<Self as MapWrapper>::Map::set(key, q)
+	}
+
 	/// Swap the values of two keys.
 	pub fn swap<KeyArg1: EncodeLike<Key>, KeyArg2: EncodeLike<Key>>(key1: KeyArg1, key2: KeyArg2) {
 		<Self as MapWrapper>::Map::swap(key1, key2)
@@ -217,8 +223,7 @@ where
 
 	/// Take the value under a key.
 	pub fn take<KeyArg: EncodeLike<Key> + Clone>(key: KeyArg) -> QueryKind::Query {
-		let removed_value =
-			<Self as MapWrapper>::Map::mutate_exists(key, |value| core::mem::replace(value, None));
+		let removed_value = <Self as MapWrapper>::Map::mutate_exists(key, |value| value.take());
 		if removed_value.is_some() {
 			CounterFor::<Prefix>::mutate(|value| value.saturating_dec());
 		}
@@ -274,13 +279,44 @@ where
 		<Self as MapWrapper>::Map::migrate_key::<OldHasher, _>(key)
 	}
 
-	/// Remove all value of the storage.
+	/// Remove all values in the map.
+	#[deprecated = "Use `clear` instead"]
 	pub fn remove_all() {
-		// NOTE: it is not possible to remove up to some limit because
-		// `sp_io::storage::clear_prefix` and `StorageMap::remove_all` don't give the number of
-		// value removed from the overlay.
-		CounterFor::<Prefix>::set(0u32);
+		#[allow(deprecated)]
 		<Self as MapWrapper>::Map::remove_all(None);
+		CounterFor::<Prefix>::kill();
+	}
+
+	/// Attempt to remove all items from the map.
+	///
+	/// Returns [`MultiRemovalResults`](sp_io::MultiRemovalResults) to inform about the result. Once
+	/// the resultant `maybe_cursor` field is `None`, then no further items remain to be deleted.
+	///
+	/// NOTE: After the initial call for any given map, it is important that no further items
+	/// are inserted into the map. If so, then the map may not be empty when the resultant
+	/// `maybe_cursor` is `None`.
+	///
+	/// # Limit
+	///
+	/// A `limit` must always be provided through in order to cap the maximum
+	/// amount of deletions done in a single call. This is one fewer than the
+	/// maximum number of backend iterations which may be done by this operation and as such
+	/// represents the maximum number of backend deletions which may happen. A `limit` of zero
+	/// implies that no keys will be deleted, though there may be a single iteration done.
+	///
+	/// # Cursor
+	///
+	/// A *cursor* may be passed in to this operation with `maybe_cursor`. `None` should only be
+	/// passed once (in the initial call) for any given storage map. Subsequent calls
+	/// operating on the same map should always pass `Some`, and this should be equal to the
+	/// previous call result's `maybe_cursor` field.
+	pub fn clear(limit: u32, maybe_cursor: Option<&[u8]>) -> MultiRemovalResults {
+		let result = <Self as MapWrapper>::Map::clear(limit, maybe_cursor);
+		match result.maybe_cursor {
+			None => CounterFor::<Prefix>::kill(),
+			Some(_) => CounterFor::<Prefix>::mutate(|x| x.saturating_reduce(result.unique)),
+		}
+		result
 	}
 
 	/// Iter over all value of the storage.
@@ -429,7 +465,7 @@ where
 			if cfg!(feature = "no-metadata-docs") {
 				vec![]
 			} else {
-				vec![&"Counter for the related counted storage map"]
+				vec!["Counter for the related counted storage map"]
 			},
 			entries,
 		);
@@ -692,7 +728,7 @@ mod test {
 			assert_eq!(A::count(), 2);
 
 			// Remove all.
-			A::remove_all();
+			let _ = A::clear(u32::max_value(), None);
 
 			assert_eq!(A::count(), 0);
 			assert_eq!(A::initialize_counter(), 0);
@@ -923,7 +959,7 @@ mod test {
 			assert_eq!(B::count(), 2);
 
 			// Remove all.
-			B::remove_all();
+			let _ = B::clear(u32::max_value(), None);
 
 			assert_eq!(B::count(), 0);
 			assert_eq!(B::initialize_counter(), 0);

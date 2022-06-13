@@ -57,7 +57,7 @@
 
 pub use pallet::*;
 
-const LOG_TARGET: &'static str = "runtime::state-trie-migration";
+const LOG_TARGET: &str = "runtime::state-trie-migration";
 
 #[macro_export]
 macro_rules! log {
@@ -319,12 +319,12 @@ pub mod pallet {
 			let (maybe_current_child, child_root) = match (&self.progress_child, &self.progress_top)
 			{
 				(Progress::LastKey(last_child), Progress::LastKey(last_top)) => {
-					let child_root = Pallet::<T>::transform_child_key_or_halt(&last_top);
-					let maybe_current_child = child_io::next_key(child_root, &last_child);
+					let child_root = Pallet::<T>::transform_child_key_or_halt(last_top);
+					let maybe_current_child = child_io::next_key(child_root, last_child);
 					(maybe_current_child, child_root)
 				},
 				(Progress::ToStart, Progress::LastKey(last_top)) => {
-					let child_root = Pallet::<T>::transform_child_key_or_halt(&last_top);
+					let child_root = Pallet::<T>::transform_child_key_or_halt(last_top);
 					// Start with the empty key as first key.
 					(Some(Vec::new()), child_root)
 				},
@@ -336,7 +336,7 @@ pub mod pallet {
 			};
 
 			if let Some(current_child) = maybe_current_child.as_ref() {
-				let added_size = if let Some(data) = child_io::get(child_root, &current_child) {
+				let added_size = if let Some(data) = child_io::get(child_root, current_child) {
 					child_io::set(child_root, current_child, &data);
 					data.len() as u32
 				} else {
@@ -369,8 +369,8 @@ pub mod pallet {
 			};
 
 			if let Some(current_top) = maybe_current_top.as_ref() {
-				let added_size = if let Some(data) = sp_io::storage::get(&current_top) {
-					sp_io::storage::set(&current_top, &data);
+				let added_size = if let Some(data) = sp_io::storage::get(current_top) {
+					sp_io::storage::set(current_top, &data);
 					data.len() as u32
 				} else {
 					Zero::zero()
@@ -503,7 +503,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::ControlOrigin::ensure_origin(origin)?;
 			AutoLimits::<T>::put(maybe_config);
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Continue the migration for the given `limits`.
@@ -616,7 +616,7 @@ pub mod pallet {
 
 			let mut dyn_size = 0u32;
 			for key in &keys {
-				if let Some(data) = sp_io::storage::get(&key) {
+				if let Some(data) = sp_io::storage::get(key) {
 					dyn_size = dyn_size.saturating_add(data.len() as u32);
 					sp_io::storage::set(key, &data);
 				}
@@ -678,9 +678,9 @@ pub mod pallet {
 			let mut dyn_size = 0u32;
 			let transformed_child_key = Self::transform_child_key(&root).ok_or("bad child key")?;
 			for child_key in &child_keys {
-				if let Some(data) = child_io::get(transformed_child_key, &child_key) {
+				if let Some(data) = child_io::get(transformed_child_key, child_key) {
 					dyn_size = dyn_size.saturating_add(data.len() as u32);
-					child_io::set(transformed_child_key, &child_key, &data);
+					child_io::set(transformed_child_key, child_key, &data);
 				}
 			}
 
@@ -839,7 +839,7 @@ mod benchmarks {
 
 	// The size of the key seemingly makes no difference in the read/write time, so we make it
 	// constant.
-	const KEY: &'static [u8] = b"key";
+	const KEY: &[u8] = b"key";
 
 	frame_benchmarking::benchmarks! {
 		continue_migrate {
@@ -848,6 +848,8 @@ mod benchmarks {
 			// function.
 			let null = MigrationLimits::default();
 			let caller = frame_benchmarking::whitelisted_caller();
+			// Allow signed migrations.
+			SignedMigrationMaxLimits::<T>::put(MigrationLimits { size: 1024, item: 5 });
 		}: _(frame_system::RawOrigin::Signed(caller), null, 0, StateTrieMigration::<T>::migration_process())
 		verify {
 			assert_eq!(StateTrieMigration::<T>::migration_process(), Default::default())
@@ -980,7 +982,10 @@ mod benchmarks {
 mod mock {
 	use super::*;
 	use crate as pallet_state_trie_migration;
-	use frame_support::{parameter_types, traits::Hooks};
+	use frame_support::{
+		parameter_types,
+		traits::{ConstU32, ConstU64, Hooks},
+	};
 	use frame_system::{EnsureRoot, EnsureSigned};
 	use sp_core::{
 		storage::{ChildInfo, StateVersion},
@@ -1008,7 +1013,6 @@ mod mock {
 	);
 
 	parameter_types! {
-		pub const BlockHashCount: u32 = 250;
 		pub const SS58Prefix: u8 = 42;
 	}
 
@@ -1026,7 +1030,7 @@ mod mock {
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = sp_runtime::generic::Header<Self::BlockNumber, BlakeTwo256>;
 		type Event = Event;
-		type BlockHashCount = BlockHashCount;
+		type BlockHashCount = ConstU32<250>;
 		type DbWeight = ();
 		type Version = ();
 		type PalletInfo = PalletInfo;
@@ -1036,12 +1040,10 @@ mod mock {
 		type SystemWeightInfo = ();
 		type SS58Prefix = SS58Prefix;
 		type OnSetCode = ();
-		type MaxConsumers = frame_support::traits::ConstU32<16>;
+		type MaxConsumers = ConstU32<16>;
 	}
 
 	parameter_types! {
-		pub const ExistentialDeposit: u64 = 1;
-		pub const OffchainRepeat: u32 = 1;
 		pub const SignedDepositPerItem: u64 = 1;
 		pub const SignedDepositBase: u64 = 5;
 	}
@@ -1050,7 +1052,7 @@ mod mock {
 		type Balance = u64;
 		type Event = Event;
 		type DustRemoval = ();
-		type ExistentialDeposit = ExistentialDeposit;
+		type ExistentialDeposit = ConstU64<1>;
 		type AccountStore = System;
 		type MaxLocks = ();
 		type MaxReserves = ();
@@ -1146,14 +1148,7 @@ mod mock {
 		}
 
 		sp_tracing::try_init_simple();
-		let mut ext: sp_io::TestExternalities = (custom_storage, version).into();
-
-		// set some genesis values for this pallet as well.
-		ext.execute_with(|| {
-			SignedMigrationMaxLimits::<Test>::put(MigrationLimits { size: 1024, item: 5 });
-		});
-
-		ext
+		(custom_storage, version).into()
 	}
 
 	pub(crate) fn run_to_block(n: u32) -> (H256, u64) {
@@ -1291,6 +1286,9 @@ mod test {
 	fn signed_migrate_works() {
 		new_test_ext(StateVersion::V0, true, None, None).execute_with(|| {
 			assert_eq!(MigrationProcess::<Test>::get(), Default::default());
+
+			// Allow signed migrations.
+			SignedMigrationMaxLimits::<Test>::put(MigrationLimits { size: 1024, item: 5 });
 
 			// can't submit if limit is too high.
 			frame_support::assert_err!(

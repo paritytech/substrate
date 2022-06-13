@@ -31,9 +31,8 @@ pub use error::Error;
 /// Various re-exports from the `hash-db` crate.
 pub use hash_db::{HashDB as HashDBT, EMPTY_PREFIX};
 use hash_db::{Hasher, Prefix};
-pub use memory_db::prefixed_key;
 /// Various re-exports from the `memory-db` crate.
-pub use memory_db::KeyFunction;
+pub use memory_db::{prefixed_key, HashKey, KeyFunction, PrefixedKey};
 /// The Substrate format implementation of `NodeCodec`.
 pub use node_codec::NodeCodec;
 use sp_std::{borrow::Borrow, boxed::Box, marker::PhantomData, vec::Vec};
@@ -555,7 +554,7 @@ mod tests {
 				for (x, y) in input.iter().rev() {
 					t.insert(x, y).unwrap();
 				}
-				t.root().clone()
+				*t.root()
 			};
 			assert_eq!(closed_form, persistent);
 		}
@@ -571,7 +570,7 @@ mod tests {
 			}
 		}
 		{
-			let t = TrieDB::<T>::new(&mut memdb, &root).unwrap();
+			let t = TrieDB::<T>::new(&memdb, &root).unwrap();
 			assert_eq!(
 				input.iter().map(|(i, j)| (i.to_vec(), j.to_vec())).collect::<Vec<_>>(),
 				t.iter()
@@ -752,7 +751,7 @@ mod tests {
 			memtrie.commit();
 			if *memtrie.root() != real {
 				println!("TRIE MISMATCH");
-				println!("");
+				println!();
 				println!("{:?} vs {:?}", memtrie.root(), real);
 				for i in &x {
 					println!("{:#x?} -> {:#x?}", i.0, i.1);
@@ -764,7 +763,7 @@ mod tests {
 			let hashed_null_node = hashed_null_node::<L>();
 			if *memtrie.root() != hashed_null_node {
 				println!("- TRIE MISMATCH");
-				println!("");
+				println!();
 				println!("{:?} vs {:?}", memtrie.root(), hashed_null_node);
 				for i in &x {
 					println!("{:#x?} -> {:#x?}", i.0, i.1);

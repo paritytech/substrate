@@ -537,6 +537,8 @@ pub mod pallet {
 		Voted { voter: T::AccountId, ref_index: ReferendumIndex, vote: AccountVote<BalanceOf<T>> },
 		/// An account has secconded a proposal
 		Seconded { seconder: T::AccountId, prop_index: PropIndex },
+		/// A proposal got canceled.
+		ProposalCanceled { prop_index: PropIndex },
 	}
 
 	#[pallet::error]
@@ -670,8 +672,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
-			let seconds =
-				Self::len_of_deposit_of(proposal).ok_or_else(|| Error::<T>::ProposalMissing)?;
+			let seconds = Self::len_of_deposit_of(proposal).ok_or(Error::<T>::ProposalMissing)?;
 			ensure!(seconds <= seconds_upper_bound, Error::<T>::WrongUpperBound);
 			let mut deposit = Self::deposit_of(proposal).ok_or(Error::<T>::ProposalMissing)?;
 			T::Currency::reserve(&who, deposit.1)?;
@@ -820,12 +821,10 @@ pub mod pallet {
 			// - `InstantAllowed` is `true` and `origin` is `InstantOrigin`.
 			let maybe_ensure_instant = if voting_period < T::FastTrackVotingPeriod::get() {
 				Some(origin)
+			} else if let Err(origin) = T::FastTrackOrigin::try_origin(origin) {
+				Some(origin)
 			} else {
-				if let Err(origin) = T::FastTrackOrigin::try_origin(origin) {
-					Some(origin)
-				} else {
-					None
-				}
+				None
 			};
 			if let Some(ensure_instant) = maybe_ensure_instant {
 				T::InstantOrigin::ensure_origin(ensure_instant)?;
@@ -867,7 +866,7 @@ pub mod pallet {
 			if let Some((e_proposal_hash, _)) = <NextExternal<T>>::get() {
 				ensure!(proposal_hash == e_proposal_hash, Error::<T>::ProposalMissing);
 			} else {
-				Err(Error::<T>::NoProposal)?;
+				return Err(Error::<T>::NoProposal.into())
 			}
 
 			let mut existing_vetoers =
@@ -966,7 +965,7 @@ pub mod pallet {
 		///   voted on. Weight is charged as if maximum votes.
 		// NOTE: weight must cover an incorrect voting of origin with max votes, this is ensure
 		// because a valid delegation cover decoding a direct voting with max votes.
-		#[pallet::weight(T::WeightInfo::undelegate(T::MaxVotes::get().into()))]
+		#[pallet::weight(T::WeightInfo::undelegate(T::MaxVotes::get()))]
 		pub fn undelegate(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let votes = Self::try_undelegate(who)?;
@@ -1280,6 +1279,7 @@ pub mod pallet {
 				}
 			}
 
+			Self::deposit_event(Event::<T>::ProposalCanceled { prop_index });
 			Ok(())
 		}
 	}
@@ -1634,7 +1634,7 @@ impl<T: Config> Pallet<T> {
 			);
 			Ok(())
 		} else {
-			Err(Error::<T>::NoneWaiting)?
+			return Err(Error::<T>::NoneWaiting.into())
 		}
 	}
 
@@ -1667,7 +1667,7 @@ impl<T: Config> Pallet<T> {
 			}
 			Ok(())
 		} else {
-			Err(Error::<T>::NoneWaiting)?
+			return Err(Error::<T>::NoneWaiting.into())
 		}
 	}
 
@@ -1822,8 +1822,7 @@ impl<T: Config> Pallet<T> {
 		// To decode the enum variant we only need the first byte.
 		let mut buf = [0u8; 1];
 		let key = <Preimages<T>>::hashed_key_for(proposal_hash);
-		let bytes =
-			sp_io::storage::read(&key, &mut buf, 0).ok_or_else(|| Error::<T>::NotImminent)?;
+		let bytes = sp_io::storage::read(&key, &mut buf, 0).ok_or(Error::<T>::NotImminent)?;
 		// The value may be smaller that 1 byte.
 		let mut input = &buf[0..buf.len().min(bytes as usize)];
 
@@ -1851,8 +1850,7 @@ impl<T: Config> Pallet<T> {
 		// * at most 5 bytes to decode a `Compact<u32>`
 		let mut buf = [0u8; 6];
 		let key = <Preimages<T>>::hashed_key_for(proposal_hash);
-		let bytes =
-			sp_io::storage::read(&key, &mut buf, 0).ok_or_else(|| Error::<T>::PreimageMissing)?;
+		let bytes = sp_io::storage::read(&key, &mut buf, 0).ok_or(Error::<T>::PreimageMissing)?;
 		// The value may be smaller that 6 bytes.
 		let mut input = &buf[0..buf.len().min(bytes as usize)];
 
@@ -1931,7 +1929,7 @@ impl<T: Config> Pallet<T> {
 fn decode_compact_u32_at(key: &[u8]) -> Option<u32> {
 	// `Compact<u32>` takes at most 5 bytes.
 	let mut buf = [0u8; 5];
-	let bytes = sp_io::storage::read(&key, &mut buf, 0)?;
+	let bytes = sp_io::storage::read(key, &mut buf, 0)?;
 	// The value may be smaller than 5 bytes.
 	let mut input = &buf[0..buf.len().min(bytes as usize)];
 	match codec::Compact::<u32>::decode(&mut input) {

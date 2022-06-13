@@ -101,15 +101,14 @@ fn create_offender<T: Config>(n: u32, nominators: u32) -> Result<Offender<T>, &'
 	let controller: T::AccountId = account("controller", n, SEED);
 	let controller_lookup: LookupSourceOf<T> = T::Lookup::unlookup(controller.clone());
 	let reward_destination = RewardDestination::Staked;
-	let raw_amount = bond_amount::<T>();
+	let amount = bond_amount::<T>();
 	// add twice as much balance to prevent the account from being killed.
-	let free_amount = raw_amount.saturating_mul(2u32.into());
+	let free_amount = amount.saturating_mul(2u32.into());
 	T::Currency::make_free_balance_be(&stash, free_amount);
-	let amount: BalanceOf<T> = raw_amount.into();
 	Staking::<T>::bond(
 		RawOrigin::Signed(stash.clone()).into(),
 		controller_lookup.clone(),
-		amount.clone(),
+		amount,
 		reward_destination.clone(),
 	)?;
 
@@ -127,12 +126,12 @@ fn create_offender<T: Config>(n: u32, nominators: u32) -> Result<Offender<T>, &'
 			account("nominator controller", n * MAX_NOMINATORS + i, SEED);
 		let nominator_controller_lookup: LookupSourceOf<T> =
 			T::Lookup::unlookup(nominator_controller.clone());
-		T::Currency::make_free_balance_be(&nominator_stash, free_amount.into());
+		T::Currency::make_free_balance_be(&nominator_stash, free_amount);
 
 		Staking::<T>::bond(
 			RawOrigin::Signed(nominator_stash.clone()).into(),
 			nominator_controller_lookup.clone(),
-			amount.clone(),
+			amount,
 			reward_destination.clone(),
 		)?;
 
@@ -143,14 +142,13 @@ fn create_offender<T: Config>(n: u32, nominators: u32) -> Result<Offender<T>, &'
 		)?;
 
 		individual_exposures
-			.push(IndividualExposure { who: nominator_stash.clone(), value: amount.clone() });
+			.push(IndividualExposure { who: nominator_stash.clone(), value: amount });
 		nominator_stashes.push(nominator_stash.clone());
 	}
 
-	let exposure =
-		Exposure { total: amount.clone() * n.into(), own: amount, others: individual_exposures };
+	let exposure = Exposure { total: amount * n.into(), own: amount, others: individual_exposures };
 	let current_era = 0u32;
-	Staking::<T>::add_era_stakers(current_era.into(), stash.clone().into(), exposure);
+	Staking::<T>::add_era_stakers(current_era, stash.clone(), exposure);
 
 	Ok(Offender { controller, stash, nominator_stashes })
 }
@@ -327,13 +325,13 @@ benchmarks! {
 			.flat_map(|offender| {
 				let nom_slashes = offender.nominator_stashes.into_iter().flat_map(|nom| {
 					balance_slash(nom.clone()).map(Into::into)
-					.chain(slash(nom.clone()).map(Into::into))
-				}).collect::<Vec<_>>();
+					.chain(slash(nom).map(Into::into))
+				});
 
 				let mut events = chill(offender.stash.clone()).map(Into::into)
 					.chain(balance_slash(offender.stash.clone()).map(Into::into))
-					.chain(slash(offender.stash.clone()).map(Into::into))
-					.chain(nom_slashes.into_iter())
+					.chain(slash(offender.stash).map(Into::into))
+					.chain(nom_slashes)
 					.collect::<Vec<_>>();
 
 				// the first deposit creates endowed events, see `endowed_reward_events`
@@ -341,10 +339,10 @@ benchmarks! {
 					first = false;
 					let mut reward_events = reporters.clone().into_iter()
 						.flat_map(|reporter| vec![
-							balance_deposit(reporter.clone(), reward.into()).into(),
+							balance_deposit(reporter.clone(), reward).into(),
 							frame_system::Event::<T>::NewAccount { account: reporter.clone() }.into(),
 							<T as BalancesConfig>::Event::from(
-								pallet_balances::Event::<T>::Endowed{account: reporter.clone(), free_balance: reward.into()}
+								pallet_balances::Event::<T>::Endowed{account: reporter, free_balance: reward.into()}
 							).into(),
 						])
 						.collect::<Vec<_>>();
@@ -352,7 +350,7 @@ benchmarks! {
 					events.into_iter()
 				} else {
 					let mut reward_events = reporters.clone().into_iter()
-						.map(|reporter| balance_deposit(reporter, reward.into()).into())
+						.map(|reporter| balance_deposit(reporter, reward).into())
 						.collect::<Vec<_>>();
 					events.append(&mut reward_events);
 					events.into_iter()

@@ -26,7 +26,7 @@ use std::{
 use inflector::Inflector;
 use serde::Serialize;
 
-use crate::{shared::UnderscoreHelper, PalletCmd};
+use crate::{pallet::command::ComponentRange, shared::UnderscoreHelper, PalletCmd};
 use frame_benchmarking::{
 	Analysis, AnalysisChoice, BenchmarkBatchSplitResults, BenchmarkResult, BenchmarkSelector,
 	RegressionModel,
@@ -35,7 +35,7 @@ use frame_support::traits::StorageInfo;
 use sp_core::hexdisplay::HexDisplay;
 use sp_runtime::traits::Zero;
 
-const VERSION: &'static str = env!("CARGO_PKG_VERSION");
+const VERSION: &str = env!("CARGO_PKG_VERSION");
 const TEMPLATE: &str = include_str!("./template.hbs");
 
 // This is the final structure we will pass to the Handlebars template.
@@ -43,6 +43,8 @@ const TEMPLATE: &str = include_str!("./template.hbs");
 struct TemplateData {
 	args: Vec<String>,
 	date: String,
+	hostname: String,
+	cpuname: String,
 	version: String,
 	pallet: String,
 	instance: String,
@@ -65,6 +67,7 @@ struct BenchmarkData {
 	component_weight: Vec<ComponentSlope>,
 	component_reads: Vec<ComponentSlope>,
 	component_writes: Vec<ComponentSlope>,
+	component_ranges: Vec<ComponentRange>,
 	comments: Vec<String>,
 }
 
@@ -116,6 +119,7 @@ fn io_error(s: &str) -> std::io::Error {
 fn map_results(
 	batches: &[BenchmarkBatchSplitResults],
 	storage_info: &[StorageInfo],
+	component_ranges: &HashMap<(Vec<u8>, Vec<u8>), Vec<ComponentRange>>,
 	analysis_choice: &AnalysisChoice,
 ) -> Result<HashMap<(String, String), Vec<BenchmarkData>>, std::io::Error> {
 	// Skip if batches is empty.
@@ -133,7 +137,8 @@ fn map_results(
 
 		let pallet_string = String::from_utf8(batch.pallet.clone()).unwrap();
 		let instance_string = String::from_utf8(batch.instance.clone()).unwrap();
-		let benchmark_data = get_benchmark_data(batch, storage_info, analysis_choice);
+		let benchmark_data =
+			get_benchmark_data(batch, storage_info, &component_ranges, analysis_choice);
 		let pallet_benchmarks = all_benchmarks.entry((pallet_string, instance_string)).or_default();
 		pallet_benchmarks.push(benchmark_data);
 	}
@@ -153,6 +158,8 @@ fn extract_errors(model: &Option<RegressionModel>) -> impl Iterator<Item = u128>
 fn get_benchmark_data(
 	batch: &BenchmarkBatchSplitResults,
 	storage_info: &[StorageInfo],
+	// Per extrinsic component ranges.
+	component_ranges: &HashMap<(Vec<u8>, Vec<u8>), Vec<ComponentRange>>,
 	analysis_choice: &AnalysisChoice,
 ) -> BenchmarkData {
 	// You can use this to put any additional comments with the benchmarking output.
@@ -236,6 +243,10 @@ fn get_benchmark_data(
 
 	// We add additional comments showing which storage items were touched.
 	add_storage_comments(&mut comments, &batch.db_results, storage_info);
+	let component_ranges = component_ranges
+		.get(&(batch.pallet.clone(), batch.benchmark.clone()))
+		.map(|c| c.clone())
+		.unwrap_or_default();
 
 	BenchmarkData {
 		name: String::from_utf8(batch.benchmark.clone()).unwrap(),
@@ -246,14 +257,16 @@ fn get_benchmark_data(
 		component_weight: used_extrinsic_time,
 		component_reads: used_reads,
 		component_writes: used_writes,
+		component_ranges,
 		comments,
 	}
 }
 
 // Create weight file from benchmark data and Handlebars template.
-pub fn write_results(
+pub(crate) fn write_results(
 	batches: &[BenchmarkBatchSplitResults],
 	storage_info: &[StorageInfo],
+	component_ranges: &HashMap<(Vec<u8>, Vec<u8>), Vec<ComponentRange>>,
 	path: &PathBuf,
 	cmd: &PalletCmd,
 ) -> Result<(), std::io::Error> {
@@ -280,12 +293,12 @@ pub fn write_results(
 
 	// Which analysis function should be used when outputting benchmarks
 	let analysis_choice: AnalysisChoice =
-		cmd.output_analysis.clone().try_into().map_err(|e| io_error(e))?;
+		cmd.output_analysis.clone().try_into().map_err(io_error)?;
 
 	// Capture individual args
 	let cmd_data = CmdData {
-		steps: cmd.steps.clone(),
-		repeat: cmd.repeat.clone(),
+		steps: cmd.steps,
+		repeat: cmd.repeat,
 		lowest_range_values: cmd.lowest_range_values.clone(),
 		highest_range_values: cmd.highest_range_values.clone(),
 		execution: format!("{:?}", cmd.execution),
@@ -303,7 +316,7 @@ pub fn write_results(
 	handlebars.register_escape_fn(|s| -> String { s.to_string() });
 
 	// Organize results by pallet into a JSON map
-	let all_results = map_results(batches, storage_info, &analysis_choice)?;
+	let all_results = map_results(batches, storage_info, component_ranges, &analysis_choice)?;
 	for ((pallet, instance), results) in all_results.iter() {
 		let mut file_path = path.clone();
 		// If a user only specified a directory...
@@ -311,7 +324,7 @@ pub fn write_results(
 			// Check if there might be multiple instances benchmarked.
 			if all_results.keys().any(|(p, i)| p == pallet && i != instance) {
 				// Create new file: "path/to/pallet_name_instance_name.rs".
-				file_path.push(pallet.clone() + "_" + &instance.to_snake_case());
+				file_path.push(pallet.clone() + "_" + instance.to_snake_case().as_str());
 			} else {
 				// Create new file: "path/to/pallet_name.rs".
 				file_path.push(pallet.clone());
@@ -322,6 +335,8 @@ pub fn write_results(
 		let hbs_data = TemplateData {
 			args: args.clone(),
 			date: date.clone(),
+			hostname: cmd.hostinfo_params.hostname(),
+			cpuname: cmd.hostinfo_params.cpuname(),
 			version: VERSION.to_string(),
 			pallet: pallet.to_string(),
 			instance: instance.to_string(),
@@ -374,7 +389,7 @@ pub(crate) fn add_storage_comments(
 	// This tracks the keys we already identified, so we only generate a single comment.
 	let mut identified = HashSet::<Vec<u8>>::new();
 
-	for result in results.clone() {
+	for result in results {
 		for (key, reads, writes, whitelisted) in &result.keys {
 			// skip keys which are whitelisted
 			if *whitelisted {
@@ -527,6 +542,7 @@ mod test {
 				test_data(b"second", b"first", BenchmarkParameter::c, 3, 4),
 			],
 			&[],
+			&Default::default(),
 			&AnalysisChoice::default(),
 		)
 		.unwrap();

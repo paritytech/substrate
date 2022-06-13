@@ -10,9 +10,9 @@ The Uniques module provides functionality for asset management of non-fungible a
 * Asset Transfer
 * Asset Destruction
 
-To use it in your runtime, you need to implement the assets [`uniques::Config`](https://docs.rs/pallet-uniques/latest/pallet_uniques/pallet/trait.Config.html).
+To use it in your runtime, you need to implement the assets [`uniques::Config`](https://paritytech.github.io/substrate/master/pallet_uniques/pallet/trait.Config.html).
 
-The supported dispatchable functions are documented in the [`uniques::Call`](https://docs.rs/pallet-uniques/latest/pallet_uniques/pallet/enum.Call.html) enum.
+The supported dispatchable functions are documented in the [`uniques::Call`](https://paritytech.github.io/substrate/master/pallet_uniques/pallet/enum.Call.html) enum.
 
 ### Terminology
 
@@ -20,7 +20,7 @@ The supported dispatchable functions are documented in the [`uniques::Call`](htt
 * **Asset transfer:** The action of transferring an asset instance from one account to another.
 * **Asset burning:** The destruction of an asset instance.
 * **Non-fungible asset:** An asset for which each unit has unique characteristics. There is exactly
-  one instance of such an asset in existance and there is exactly one owning account.
+  one instance of such an asset in existence and there is exactly one owning account.
 
 ### Goals
 
@@ -66,7 +66,7 @@ The Uniques pallet in Substrate is designed to make the following possible:
 * `force_create`: Create a new asset class.
 * `force_asset_status`: Alter the underlying characteristics of an asset class.
 
-Please refer to the [`Call`](https://docs.rs/pallet-assets/latest/pallet_assets/enum.Call.html) enum
+Please refer to the [`Call`](https://paritytech.github.io/substrate/master/pallet_uniques/pallet/enum.Call.html) enum
 and its associated variants for documentation on each function.
 
 ## Related Modules

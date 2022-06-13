@@ -41,7 +41,10 @@ pub mod rational;
 pub mod traits;
 
 pub use fixed_point::{FixedI128, FixedI64, FixedPointNumber, FixedPointOperand, FixedU128};
-pub use per_things::{InnerOf, PerThing, PerU16, Perbill, Percent, Permill, Perquintill, UpperOf};
+pub use per_things::{
+	InnerOf, PerThing, PerU16, Perbill, Percent, Permill, Perquintill, Rounding, SignedRounding,
+	UpperOf,
+};
 pub use rational::{Rational128, RationalInfinite};
 
 use sp_std::{cmp::Ordering, fmt::Debug, prelude::*};
@@ -65,7 +68,7 @@ where
 	fn tcmp(&self, other: &T, threshold: T) -> Ordering {
 		// early exit.
 		if threshold.is_zero() {
-			return self.cmp(&other)
+			return self.cmp(other)
 		}
 
 		let upper_bound = other.saturating_add(threshold);
@@ -73,7 +76,7 @@ where
 
 		if upper_bound <= lower_bound {
 			// defensive only. Can never happen.
-			self.cmp(&other)
+			self.cmp(other)
 		} else {
 			// upper_bound is guaranteed now to be bigger than lower.
 			match (self.cmp(&lower_bound), self.cmp(&upper_bound)) {
@@ -113,10 +116,7 @@ impl_normalize_for_numeric!(u8, u16, u32, u64, u128);
 
 impl<P: PerThing> Normalizable<P> for Vec<P> {
 	fn normalize(&self, targeted_sum: P) -> Result<Vec<P>, &'static str> {
-		let uppers = self
-			.iter()
-			.map(|p| <UpperOf<P>>::from(p.clone().deconstruct()))
-			.collect::<Vec<_>>();
+		let uppers = self.iter().map(|p| <UpperOf<P>>::from(p.deconstruct())).collect::<Vec<_>>();
 
 		let normalized =
 			normalize(uppers.as_ref(), <UpperOf<P>>::from(targeted_sum.deconstruct()))?;
