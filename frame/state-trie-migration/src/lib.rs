@@ -1618,6 +1618,7 @@ pub(crate) mod remote_tests {
 	use sp_runtime::traits::{Block as BlockT, HashFor, Header as _, One};
 	use thousands::Separable;
 
+	#[allow(dead_code)]
 	fn run_to_block<Runtime: crate::Config<Hash = H256>>(
 		n: <Runtime as frame_system::Config>::BlockNumber,
 	) -> (H256, u64) {
@@ -1639,6 +1640,7 @@ pub(crate) mod remote_tests {
 	/// Run the entire migration, against the given `Runtime`, until completion.
 	///
 	/// This will print some very useful statistics, make sure [`crate::LOG_TARGET`] is enabled.
+	#[allow(dead_code)]
 	pub(crate) async fn run_with_limits<
 		Runtime: crate::Config<Hash = H256>,
 		Block: BlockT<Hash = H256> + serde::de::DeserializeOwned,
@@ -1738,6 +1740,7 @@ mod remote_tests_local {
 	};
 	use remote_externalities::{Mode, OfflineConfig, OnlineConfig};
 	use sp_runtime::traits::Bounded;
+	use sp_std::env::var as env_var;
 
 	// we only use the hash type from this, so using the mock should be fine.
 	type Extrinsic = sp_runtime::testing::TestXt<MockCall, ()>;
@@ -1745,14 +1748,13 @@ mod remote_tests_local {
 
 	#[tokio::test]
 	async fn on_initialize_migration() {
+		let snap = env_var("SNAP").expect("Need SNAP env var").into();
+		let ws_api = env_var("WS_API").expect("Need WS_API env var").into();
+
 		sp_tracing::try_init_simple();
 		let mode = Mode::OfflineOrElseOnline(
-			OfflineConfig { state_snapshot: env!("SNAP").to_owned().into() },
-			OnlineConfig {
-				transport: std::env!("WS_API").to_owned().into(),
-				state_snapshot: Some(env!("SNAP").to_owned().into()),
-				..Default::default()
-			},
+			OfflineConfig { state_snapshot: snap },
+			OnlineConfig { transport: ws_api, state_snapshot: Some(snap), ..Default::default() },
 		);
 
 		// item being the bottleneck
