@@ -310,6 +310,7 @@ impl<T: Default> Get<T> for GetDefault {
 
 /// Try and collect into a collection `C`.
 pub trait TryCollect<C> {
+	/// The error type that gets returned when a collection can't be made from `self`.
 	type Error;
 	/// Consume self and try to collect the results into `C`.
 	///
