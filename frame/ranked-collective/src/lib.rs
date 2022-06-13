@@ -145,14 +145,14 @@ impl<M: GetMaxVoters> VoteTally<Votes, Rank> for Tally<M> {
 }
 
 /// Record needed for every member.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct MemberRecord {
 	/// The rank of the member.
 	rank: Rank,
 }
 
 /// Record needed for every vote.
-#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug, TypeInfo)]
+#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub enum VoteRecord {
 	/// Vote was an aye with given vote weight.
 	Aye(Votes),
@@ -296,7 +296,6 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
-	#[pallet::without_storage_info]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	#[pallet::config]

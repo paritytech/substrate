@@ -24,7 +24,7 @@ use sp_arithmetic::traits::{CheckedAdd, CheckedMul, CheckedSub, Saturating};
 #[doc(hidden)]
 pub use sp_runtime::traits::{
 	ConstBool, ConstI128, ConstI16, ConstI32, ConstI64, ConstI8, ConstU128, ConstU16, ConstU32,
-	ConstU64, ConstU8, Get, GetDefault, TypedGet,
+	ConstU64, ConstU8, Get, GetDefault, TryCollect, TypedGet,
 };
 use sp_runtime::{traits::Block as BlockT, DispatchError};
 use sp_std::{cmp::Ordering, prelude::*};
@@ -365,16 +365,6 @@ impl<T: Saturating + CheckedAdd + CheckedMul + CheckedSub> DefensiveSaturating f
 	fn defensive_saturating_mul(self, other: Self) -> Self {
 		self.checked_mul(&other).defensive_unwrap_or_else(|| self.saturating_mul(other))
 	}
-}
-
-/// Try and collect into a collection `C`.
-pub trait TryCollect<C> {
-	type Error;
-	/// Consume self and try to collect the results into `C`.
-	///
-	/// This is useful in preventing the undesirable `.collect().try_into()` call chain on
-	/// collections that need to be converted into a bounded type (e.g. `BoundedVec`).
-	fn try_collect(self) -> Result<C, Self::Error>;
 }
 
 /// Anything that can have a `::len()` method.
