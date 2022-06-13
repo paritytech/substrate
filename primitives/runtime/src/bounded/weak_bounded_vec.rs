@@ -303,6 +303,18 @@ impl<T: PartialEq, S: Get<u32>> PartialEq<Vec<T>> for WeakBoundedVec<T, S> {
 
 impl<T, S> Eq for WeakBoundedVec<T, S> where T: Eq {}
 
+impl<T: PartialOrd, S: Get<u32>> PartialOrd for WeakBoundedVec<T, S> {
+	fn partial_cmp(&self, other: &Self) -> Option<sp_std::cmp::Ordering> {
+		self.0.partial_cmp(&other.0)
+	}
+}
+
+impl<T: Ord, S: Get<u32>> Ord for WeakBoundedVec<T, S> {
+	fn cmp(&self, other: &Self) -> sp_std::cmp::Ordering {
+		self.0.cmp(&other.0)
+	}
+}
+
 impl<T, S> MaxEncodedLen for WeakBoundedVec<T, S>
 where
 	T: MaxEncodedLen,

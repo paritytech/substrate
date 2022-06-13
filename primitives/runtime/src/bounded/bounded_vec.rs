@@ -117,13 +117,13 @@ impl<'a, T: Encode + Decode, S: Get<u32>> EncodeLike<WeakBoundedVec<T, S>>
 }
 impl<'a, T: Encode + Decode, S: Get<u32>> EncodeLike<Vec<T>> for BoundedSlice<'a, T, S> {}
 
-impl<T: PartialOrd, Bound: Get<u32>> PartialOrd for BoundedVec<T, Bound> {
+impl<'a, T: PartialOrd, Bound: Get<u32>> PartialOrd for BoundedSlice<'a, T, Bound> {
 	fn partial_cmp(&self, other: &Self) -> Option<sp_std::cmp::Ordering> {
 		self.0.partial_cmp(&other.0)
 	}
 }
 
-impl<T: Ord, Bound: Get<u32>> Ord for BoundedVec<T, Bound> {
+impl<'a, T: Ord, Bound: Get<u32>> Ord for BoundedSlice<'a, T, Bound> {
 	fn cmp(&self, other: &Self) -> sp_std::cmp::Ordering {
 		self.0.cmp(&other.0)
 	}
@@ -652,6 +652,18 @@ impl<T: PartialEq, S: Get<u32>> PartialEq<Vec<T>> for BoundedVec<T, S> {
 }
 
 impl<T, S: Get<u32>> Eq for BoundedVec<T, S> where T: Eq {}
+
+impl<T: PartialOrd, Bound: Get<u32>> PartialOrd for BoundedVec<T, Bound> {
+	fn partial_cmp(&self, other: &Self) -> Option<sp_std::cmp::Ordering> {
+		self.0.partial_cmp(&other.0)
+	}
+}
+
+impl<T: Ord, Bound: Get<u32>> Ord for BoundedVec<T, Bound> {
+	fn cmp(&self, other: &Self) -> sp_std::cmp::Ordering {
+		self.0.cmp(&other.0)
+	}
+}
 
 impl<T, S> MaxEncodedLen for BoundedVec<T, S>
 where
