@@ -45,6 +45,9 @@ pub use sp_core::Void;
 pub use sp_core_hashing_proc_macro;
 #[doc(hidden)]
 pub use sp_io::{self, storage::root as storage_root};
+#[cfg(feature = "std")]
+#[doc(hidden)]
+pub use sp_runtime::{bounded_btree_map, bounded_vec};
 #[doc(hidden)]
 pub use sp_runtime::{RuntimeDebug, StateVersion};
 #[cfg(feature = "std")]
@@ -117,46 +120,6 @@ pub struct PalletId(pub [u8; 8]);
 
 impl TypeId for PalletId {
 	const TYPE_ID: [u8; 4] = *b"modl";
-}
-
-/// Build a bounded vec from the given literals.
-///
-/// The type of the outcome must be known.
-///
-/// Will not handle any errors and just panic if the given literals cannot fit in the corresponding
-/// bounded vec type. Thus, this is only suitable for testing and non-consensus code.
-#[macro_export]
-#[cfg(feature = "std")]
-macro_rules! bounded_vec {
-	($ ($values:expr),* $(,)?) => {
-		{
-			$crate::sp_std::vec![$($values),*].try_into().unwrap()
-		}
-	};
-	( $value:expr ; $repetition:expr ) => {
-		{
-			$crate::sp_std::vec![$value ; $repetition].try_into().unwrap()
-		}
-	}
-}
-
-/// Build a bounded btree-map from the given literals.
-///
-/// The type of the outcome must be known.
-///
-/// Will not handle any errors and just panic if the given literals cannot fit in the corresponding
-/// bounded vec type. Thus, this is only suitable for testing and non-consensus code.
-#[macro_export]
-#[cfg(feature = "std")]
-macro_rules! bounded_btree_map {
-	($ ( $key:expr => $value:expr ),* $(,)?) => {
-		{
-			$crate::traits::TryCollect::<$crate::BoundedBTreeMap<_, _, _>>::try_collect(
-				$crate::sp_std::vec![$(($key, $value)),*].into_iter()
-			).unwrap()
-		}
-	};
-
 }
 
 /// Generate a new type alias for [`storage::types::StorageValue`],
