@@ -487,12 +487,12 @@ impl<T, S: Get<u32>> BoundedVec<T, S> {
 	/// # Panics
 	///
 	/// Panics if `index > len`.
-	pub fn try_insert(&mut self, index: usize, element: T) -> Result<(), ()> {
+	pub fn try_insert(&mut self, index: usize, element: T) -> Result<(), T> {
 		if self.len() < Self::bound() {
 			self.0.insert(index, element);
 			Ok(())
 		} else {
-			Err(())
+			Err(element)
 		}
 	}
 
@@ -502,12 +502,12 @@ impl<T, S: Get<u32>> BoundedVec<T, S> {
 	/// # Panics
 	///
 	/// Panics if the new capacity exceeds isize::MAX bytes.
-	pub fn try_push(&mut self, element: T) -> Result<(), ()> {
+	pub fn try_push(&mut self, element: T) -> Result<(), T> {
 		if self.len() < Self::bound() {
 			self.0.push(element);
 			Ok(())
 		} else {
-			Err(())
+			Err(element)
 		}
 	}
 }

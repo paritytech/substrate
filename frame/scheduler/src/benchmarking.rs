@@ -32,7 +32,7 @@ use frame_system::Pallet as System;
 
 const BLOCK_NUMBER: u32 = 2;
 
-/// Add `n` named items to the schedule.
+/// Add `n` items to the schedule.
 ///
 /// For `resolved`:
 /// - `None`: aborted (hash without preimage)
@@ -135,11 +135,7 @@ benchmarks! {
 	}: { Scheduler::<T>::on_initialize(BLOCK_NUMBER.into()); }
 	verify {
 		assert_eq!(System::<T>::event_count(), 0);
-		if let Some(delay) = T::NoPreimagePostponement::get() {
-			assert_eq!(Agenda::<T>::get(when + delay).len(), s as usize);
-		} else {
-			assert!(Agenda::<T>::iter().count() == 0);
-		}
+		assert!(Agenda::<T>::iter().count() == 0);
 	}
 
 	on_initialize_aborted {
@@ -149,11 +145,7 @@ benchmarks! {
 	}: { Scheduler::<T>::on_initialize(BLOCK_NUMBER.into()); }
 	verify {
 		assert_eq!(System::<T>::event_count(), 0);
-		if let Some(delay) = T::NoPreimagePostponement::get() {
-			assert_eq!(Agenda::<T>::get(when + delay).len(), s as usize);
-		} else {
-			assert!(Agenda::<T>::iter().count() == 0);
-		}
+		assert!(Agenda::<T>::iter().count() == 0);
 	}
 
 	on_initialize_periodic_named {

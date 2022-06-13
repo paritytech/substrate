@@ -120,7 +120,6 @@ impl pallet_scheduler::Config for Test {
 	type WeightInfo = ();
 	type OriginPrivilegeCmp = EqualPrivilegeOnly;
 	type PreimageProvider = ();
-	type NoPreimagePostponement = ();
 }
 
 impl pallet_balances::Config for Test {

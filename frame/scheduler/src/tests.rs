@@ -70,39 +70,6 @@ fn scheduling_with_preimages_works() {
 }
 
 #[test]
-fn scheduling_with_preimage_postpones_correctly() {
-	new_test_ext().execute_with(|| {
-		let call = Call::Logger(LoggerCall::log { i: 42, weight: 1000 });
-		let hash = <Test as frame_system::Config>::Hashing::hash_of(&call);
-		let len = call.using_encoded(|x| x.len()) as u32;
-		let hashed = Preimage::pick(hash.clone(), len);
-
-		assert_ok!(Scheduler::do_schedule(DispatchTime::At(4), None, 127, root(), hashed));
-		assert!(Preimage::is_requested(&hash));
-
-		run_to_block(4);
-		// #4 empty due to no preimage
-		assert!(logger::log().is_empty());
-
-		// Register preimage.
-		assert_ok!(Preimage::note_preimage(Origin::signed(0), call.encode()));
-
-		run_to_block(5);
-		// #5 empty since postponement is 2 blocks.
-		assert!(logger::log().is_empty());
-
-		run_to_block(6);
-		// #6 is good.
-		assert_eq!(logger::log(), vec![(root(), 42u32)]);
-		assert!(!Preimage::len(&hash).is_some());
-		assert!(!Preimage::is_requested(&hash));
-
-		run_to_block(100);
-		assert_eq!(logger::log(), vec![(root(), 42u32)]);
-	});
-}
-
-#[test]
 fn schedule_after_works() {
 	new_test_ext().execute_with(|| {
 		run_to_block(2);
@@ -735,13 +702,13 @@ fn migration_to_v4_works() {
 
 		Scheduler::migrate_v1_to_v4();
 
-		let mut x = Agenda::<Test>::iter().collect::<Vec<_>>();
+		let mut x = Agenda::<Test>::iter().map(|x| (x.0, x.1.into_inner())).collect::<Vec<_>>();
 		x.sort_by_key(|x| x.0);
 		let expected = vec![
 			(
 				0,
 				vec![
-					Some(ScheduledV4Of::<Test> {
+					Some(ScheduledOf::<Test> {
 						maybe_id: None,
 						priority: 10,
 						call: Preimage::bound(Call::Logger(LoggerCall::log { i: 96, weight: 100 }))
@@ -751,7 +718,7 @@ fn migration_to_v4_works() {
 						_phantom: PhantomData::<u64>::default(),
 					}),
 					None,
-					Some(ScheduledV4Of::<Test> {
+					Some(ScheduledOf::<Test> {
 						maybe_id: Some(blake2_256(&b"test"[..])),
 						priority: 123,
 						call: Preimage::bound(Call::Logger(LoggerCall::log {
@@ -768,7 +735,7 @@ fn migration_to_v4_works() {
 			(
 				1,
 				vec![
-					Some(ScheduledV4Of::<Test> {
+					Some(ScheduledOf::<Test> {
 						maybe_id: None,
 						priority: 11,
 						call: Preimage::bound(Call::Logger(LoggerCall::log { i: 96, weight: 100 }))
@@ -778,7 +745,7 @@ fn migration_to_v4_works() {
 						_phantom: PhantomData::<u64>::default(),
 					}),
 					None,
-					Some(ScheduledV4Of::<Test> {
+					Some(ScheduledOf::<Test> {
 						maybe_id: Some(blake2_256(&b"test"[..])),
 						priority: 123,
 						call: Preimage::bound(Call::Logger(LoggerCall::log {
@@ -795,7 +762,7 @@ fn migration_to_v4_works() {
 			(
 				2,
 				vec![
-					Some(ScheduledV4Of::<Test> {
+					Some(ScheduledOf::<Test> {
 						maybe_id: None,
 						priority: 12,
 						call: Preimage::bound(Call::Logger(LoggerCall::log { i: 96, weight: 100 }))
@@ -805,7 +772,7 @@ fn migration_to_v4_works() {
 						_phantom: PhantomData::<u64>::default(),
 					}),
 					None,
-					Some(ScheduledV4Of::<Test> {
+					Some(ScheduledOf::<Test> {
 						maybe_id: Some(blake2_256(&b"test"[..])),
 						priority: 123,
 						call: Preimage::bound(Call::Logger(LoggerCall::log {
@@ -874,7 +841,7 @@ fn test_migrate_origin() {
 		Scheduler::migrate_origin::<u32>();
 
 		assert_eq_uvec!(
-			Agenda::<Test>::iter().collect::<Vec<_>>(),
+			Agenda::<Test>::iter().map(|x| (x.0, x.1.into_inner())).collect::<Vec<_>>(),
 			vec![
 				(
 					0,
