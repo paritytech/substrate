@@ -63,8 +63,8 @@ use frame_support::{
 	dispatch::{DispatchError, DispatchResult, Dispatchable, Parameter},
 	traits::{
 		schedule::{self, DispatchTime, MaybeHashed},
-		Bounded, EnsureOrigin, Get, IsType, OriginTrait, PalletInfoAccess, PrivilegeCmp,
-		StorageVersion, Hash as PreimageHash, QueryPreimage, StorePreimage
+		Bounded, EnsureOrigin, Get, Hash as PreimageHash, IsType, OriginTrait, PalletInfoAccess,
+		PrivilegeCmp, QueryPreimage, StorageVersion, StorePreimage,
 	},
 	weights::{GetDispatchInfo, Weight},
 };
@@ -172,10 +172,7 @@ impl<T: WeightInfo> MarginalWeightInfo for T {}
 pub mod pallet {
 	use super::*;
 	use frame_support::{
-		storage_alias,
-		dispatch::PostDispatchInfo,
-		pallet_prelude::*,
-		traits::schedule::LookupError,
+		dispatch::PostDispatchInfo, pallet_prelude::*, storage_alias, traits::schedule::LookupError,
 	};
 	use frame_system::pallet_prelude::*;
 
@@ -254,8 +251,12 @@ pub mod pallet {
 		StorageMap<_, Twox64Concat, TaskName, TaskAddress<T::BlockNumber>>;
 
 	#[storage_alias]
-	pub(crate) type LookupV1<T: Config> =
-		StorageMap<Pallet<T>, Twox64Concat, Vec<u8>, TaskAddress<<T as frame_system::Config>::BlockNumber>>;
+	pub(crate) type LookupV1<T: Config> = StorageMap<
+		Pallet<T>,
+		Twox64Concat,
+		Vec<u8>,
+		TaskAddress<<T as frame_system::Config>::BlockNumber>,
+	>;
 
 	/// Events type.
 	#[pallet::event]
@@ -330,7 +331,7 @@ pub mod pallet {
 					// T::WeightInfo::decode_item(periodic, named, Some(call));
 				}
 
-				let call = match T::Preimages::realize(&s.call) {
+				let call = match T::Preimages::peek(&s.call) {
 					Ok(call) => call,
 					Err(_) => {
 						// Preimage not available - postpone until some block.
@@ -349,7 +350,8 @@ pub mod pallet {
 
 				let periodic = s.maybe_periodic.is_some();
 				let call_weight = call.get_dispatch_info().weight;
-				// TODO: we no longer need the resolved argument - the call is guaranteed here by now.
+				// TODO: we no longer need the resolved argument - the call is guaranteed here by
+				// now.
 				let mut item_weight = T::WeightInfo::item(periodic, named, Some(false));
 				let origin =
 					<<T as Config>::Origin as From<T::PalletsOrigin>>::from(s.origin.clone())
@@ -410,6 +412,8 @@ pub mod pallet {
 						Lookup::<T>::insert(id, (wake, wake_index as u32));
 					}
 					Agenda::<T>::append(wake, Some(s));
+				} else {
+					T::Preimages::drop(&s.call);
 				}
 			}
 			total_weight
@@ -534,6 +538,8 @@ pub mod pallet {
 	}
 }
 
+// TODO: Lookup should only retain block number.
+
 impl<T: Config<Hash = PreimageHash>> Pallet<T> {
 	/// Migrate storage format from V1 to V4.
 	///
@@ -546,10 +552,10 @@ impl<T: Config<Hash = PreimageHash>> Pallet<T> {
 				Some(
 					agenda
 						.into_iter()
-						.filter_map(|schedule| {
+						.map(|schedule| {
 							weight.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
 
-							schedule.map(|schedule| {
+							schedule.and_then(|schedule| {
 								if let Some(id) = schedule.maybe_id.as_ref() {
 									let name = blake2_256(id);
 									if let Some(item) = LookupV1::<T>::take(id) {
@@ -601,9 +607,9 @@ impl<T: Config<Hash = PreimageHash>> Pallet<T> {
 			Some(
 				agenda
 					.into_iter()
-					.filter_map(|schedule| {
+					.map(|schedule| {
 						weight.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
-						schedule.map(|schedule| {
+						schedule.and_then(|schedule| {
 							if let Some(id) = schedule.maybe_id.as_ref() {
 								let name = blake2_256(id);
 								if let Some(item) = Lookup::<T>::take(id) {
@@ -653,9 +659,9 @@ impl<T: Config<Hash = PreimageHash>> Pallet<T> {
 			Some(
 				agenda
 					.into_iter()
-					.filter_map(|schedule| {
+					.map(|schedule| {
 						weight.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
-						schedule.map(|schedule| {
+						schedule.and_then(|schedule| {
 							if let Some(id) = schedule.maybe_id.as_ref() {
 								let name = blake2_256(id);
 								if let Some(item) = Lookup::<T>::take(id) {
@@ -665,14 +671,15 @@ impl<T: Config<Hash = PreimageHash>> Pallet<T> {
 							}
 
 							let call = match schedule.call {
-								MaybeHashed::Hash(h) => {
+								MaybeHashed::Hash(h) =>
 									#[allow(deprecated)]
-									Bounded::from_legacy_hash(h)
-								},
+									Bounded::from_legacy_hash(h),
 								MaybeHashed::Value(v) => {
 									let call = T::Preimages::bound(v).ok()?;
 									if call.lookup_needed() {
-										weight.saturating_accrue(T::DbWeight::get().reads_writes(0, 1));
+										weight.saturating_accrue(
+											T::DbWeight::get().reads_writes(0, 1),
+										);
 									}
 									call
 								},
@@ -725,7 +732,16 @@ impl<T: Config> Pallet<T> {
 	/// Helper to migrate scheduler when the pallet origin type has changed.
 	pub fn migrate_origin<OldOrigin: Into<T::PalletsOrigin> + codec::Decode>() {
 		Agenda::<T>::translate::<
-			Vec<Option<Scheduled<Bounded<<T as Config>::Call>, T::BlockNumber, OldOrigin, T::AccountId>>>,
+			Vec<
+				Option<
+					Scheduled<
+						Bounded<<T as Config>::Call>,
+						T::BlockNumber,
+						OldOrigin,
+						T::AccountId,
+					>,
+				>,
+			>,
 			_,
 		>(|_, agenda| {
 			Some(
@@ -948,8 +964,8 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-impl<T: Config<Hash = PreimageHash>> schedule::v2::Anon<T::BlockNumber, <T as Config>::Call, T::PalletsOrigin>
-	for Pallet<T>
+impl<T: Config<Hash = PreimageHash>>
+	schedule::v2::Anon<T::BlockNumber, <T as Config>::Call, T::PalletsOrigin> for Pallet<T>
 {
 	type Address = TaskAddress<T::BlockNumber>;
 	type Hash = T::Hash;
@@ -982,8 +998,8 @@ impl<T: Config<Hash = PreimageHash>> schedule::v2::Anon<T::BlockNumber, <T as Co
 	}
 }
 
-impl<T: Config<Hash = PreimageHash>> schedule::v2::Named<T::BlockNumber, <T as Config>::Call, T::PalletsOrigin>
-	for Pallet<T>
+impl<T: Config<Hash = PreimageHash>>
+	schedule::v2::Named<T::BlockNumber, <T as Config>::Call, T::PalletsOrigin> for Pallet<T>
 {
 	type Address = TaskAddress<T::BlockNumber>;
 	type Hash = T::Hash;
@@ -1050,7 +1066,10 @@ impl<T: Config> schedule::v3::Anon<T::BlockNumber, <T as Config>::Call, T::Palle
 	}
 
 	fn next_dispatch_time((when, index): Self::Address) -> Result<T::BlockNumber, DispatchError> {
-		Agenda::<T>::get(when).get(index as usize).ok_or(DispatchError::Unavailable).map(|_| when)
+		Agenda::<T>::get(when)
+			.get(index as usize)
+			.ok_or(DispatchError::Unavailable)
+			.map(|_| when)
 	}
 }
 

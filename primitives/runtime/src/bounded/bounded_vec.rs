@@ -540,13 +540,13 @@ where
 }
 
 impl<T, S: Get<u32>> TryFrom<Vec<T>> for BoundedVec<T, S> {
-	type Error = ();
+	type Error = Vec<T>;
 	fn try_from(t: Vec<T>) -> Result<Self, Self::Error> {
 		if t.len() <= Self::bound() {
 			// explicit check just above
 			Ok(Self::unchecked_from(t))
 		} else {
-			Err(())
+			Err(t)
 		}
 	}
 }

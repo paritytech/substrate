@@ -163,7 +163,6 @@ impl pallet_preimage::Config for Test {
 	type WeightInfo = ();
 	type Currency = ();
 	type ManagerOrigin = EnsureRoot<u64>;
-	type MaxSize = ConstU32<1024>;
 	type BaseDeposit = ();
 	type ByteDeposit = ();
 }
@@ -178,7 +177,7 @@ impl Config for Test {
 	type MaxScheduledPerBlock = ConstU32<10>;
 	type WeightInfo = ();
 	type OriginPrivilegeCmp = EqualPrivilegeOnly;
-	type PreimageProvider = Preimage;
+	type Preimages = Preimage;
 	type NoPreimagePostponement = NoPreimagePostponement;
 }
 
