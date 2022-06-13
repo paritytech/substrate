@@ -412,8 +412,6 @@ impl_runtime_apis! {
 				randomness: Sassafras::randomness(),
 			}
 		}
-
-		// TODO-SASS: improve API
 	}
 
 	impl sp_session::SessionKeys<Block> for Runtime {

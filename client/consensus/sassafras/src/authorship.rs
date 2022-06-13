@@ -99,7 +99,7 @@ fn claim_primary_slot(
 		// TODO-SASS
 		// if expected_author != authority_id { continue }
 
-		// If we can author, also also need to push block randomness.
+		// If we can author, we also need to push block randomness.
 		let transcript_data = make_transcript_data(randomness, slot, *epoch_index);
 		let result = SyncCryptoStore::sr25519_vrf_sign(
 			&**keystore,

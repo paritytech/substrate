@@ -8265,6 +8265,7 @@ name = "sc-consensus-sassafras"
 version = "0.0.1"
 dependencies = [
  "async-trait",
+ "fork-tree",
  "futures",
  "log",
  "parity-scale-codec",

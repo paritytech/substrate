@@ -29,17 +29,17 @@ pub type InherentType = sp_consensus_slots::Slot;
 /// Auxiliary trait to extract Sassafras inherent data.
 pub trait SassafrasInherentData {
 	/// Get Sassafras inherent data.
-	fn babe_inherent_data(&self) -> Result<Option<InherentType>, Error>;
+	fn sassafras_inherent_data(&self) -> Result<Option<InherentType>, Error>;
 	/// Replace Sassafras inherent data.
-	fn babe_replace_inherent_data(&mut self, new: InherentType);
+	fn sassafras_replace_inherent_data(&mut self, new: InherentType);
 }
 
 impl SassafrasInherentData for InherentData {
-	fn babe_inherent_data(&self) -> Result<Option<InherentType>, Error> {
+	fn sassafras_inherent_data(&self) -> Result<Option<InherentType>, Error> {
 		self.get_data(&INHERENT_IDENTIFIER)
 	}
 
-	fn babe_replace_inherent_data(&mut self, new: InherentType) {
+	fn sassafras_replace_inherent_data(&mut self, new: InherentType) {
 		self.replace_data(INHERENT_IDENTIFIER, &new);
 	}
 }

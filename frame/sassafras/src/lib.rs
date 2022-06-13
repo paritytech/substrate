@@ -516,8 +516,8 @@ impl<T: Config> Pallet<T> {
 		T::EpochChangeTrigger::trigger::<T>(now);
 	}
 
-	/// Call this function exactly once when an epoch changes, to update the
-	/// randomness. Returns the new randomness.
+	/// Call this function exactly once when an epoch changes, to update the randomness.
+	/// Returns the new randomness.
 	fn randomness_change_epoch(next_epoch_index: u64) -> schnorrkel::Randomness {
 		let this_randomness = NextRandomness::<T>::get();
 		let accumulator = RandomnessAccumulator::<T>::get();

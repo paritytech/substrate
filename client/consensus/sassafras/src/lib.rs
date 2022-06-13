@@ -66,8 +66,9 @@ use sc_consensus_slots::{
 	check_equivocation, BackoffAuthoringBlocksStrategy, CheckedHeader, InherentDataProviderExt,
 	SlotInfo, StorageChanges,
 };
-use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_INFO, CONSENSUS_WARN};
+use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_TRACE};
 use sp_api::{ApiExt, ProvideRuntimeApi};
+use sp_application_crypto::AppKey;
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
 use sp_blockchain::{
 	Backend as _, Error as ClientError, HeaderBackend, HeaderMetadata, Result as ClientResult,
@@ -78,7 +79,7 @@ use sp_consensus::{
 };
 use sp_consensus_sassafras::inherents::SassafrasInherentData;
 use sp_consensus_slots::{Slot, SlotDuration};
-use sp_core::traits::SpawnEssentialNamed;
+use sp_core::{crypto::ByteArray, traits::SpawnEssentialNamed, ExecutionContext};
 use sp_inherents::{CreateInherentDataProviders, InherentData, InherentDataProvider};
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::{
@@ -97,6 +98,8 @@ pub use sp_consensus_sassafras::{
 	SassafrasEpochConfiguration, SassafrasGenesisConfiguration, SASSAFRAS_ENGINE_ID,
 	VRF_OUTPUT_LENGTH,
 };
+
+mod verification;
 
 pub mod authorship;
 pub mod aux_schema;
@@ -244,10 +247,9 @@ pub enum Error<B: BlockT> {
 	/// Runtime Api error.
 	#[error(transparent)]
 	RuntimeApi(sp_api::ApiError),
-	// TODO-SASS
-	// /// Fork tree error
-	// #[error(transparent)]
-	// ForkTree(Box<fork_tree::Error<sp_blockchain::Error>>),
+	/// Fork tree error
+	#[error(transparent)]
+	ForkTree(Box<fork_tree::Error<sp_blockchain::Error>>),
 }
 
 impl<B: BlockT> From<Error<B>> for String {
@@ -543,30 +545,15 @@ where
 		parent: &B::Header,
 		slot: Slot,
 	) -> Result<Self::EpochData, ConsensusError> {
-		// self.epoch_changes
-		// 	.shared_data()
-		// 	.epoch_descriptor_for_child_of(
-		// 		descendent_query(&*self.client),
-		// 		&parent.hash(),
-		// 		*parent.number(),
-		// 		slot,
-		// 	)
-		// 	.map_err(|e| ConsensusError::ChainLookup(e.to_string()))?
-		// 	.ok_or(sp_consensus::Error::InvalidAuthoritiesSet)
-
-		let desc = self.epoch_changes.shared_data().epoch_descriptor_for_child_of(
-			descendent_query(&*self.client),
-			&parent.hash(),
-			*parent.number(),
-			slot,
-		);
-
-		debug!(target: "sassafras", ">>> GET_EPOCH_DATA");
-		if let Ok(None) = desc {
-			debug!(target: "sassafras", ">>> NONE!!!");
-		}
-
-		desc.map_err(|e| ConsensusError::ChainLookup(e.to_string()))?
+		self.epoch_changes
+			.shared_data()
+			.epoch_descriptor_for_child_of(
+				descendent_query(&*self.client),
+				&parent.hash(),
+				*parent.number(),
+				slot,
+			)
+			.map_err(|e| ConsensusError::ChainLookup(e.to_string()))?
 			.ok_or(sp_consensus::Error::InvalidAuthoritiesSet)
 	}
 
@@ -631,42 +618,39 @@ where
 	async fn block_import_params(
 		&self,
 		header: B::Header,
-		_header_hash: &B::Hash,
+		header_hash: &B::Hash,
 		body: Vec<B::Extrinsic>,
 		storage_changes: StorageChanges<<Self::BlockImport as BlockImport<B>>::Transaction, B>,
-		(_, _public): Self::Claim,
+		(_, public): Self::Claim,
 		epoch_descriptor: Self::EpochData,
 	) -> Result<
 		sc_consensus::BlockImportParams<B, <Self::BlockImport as BlockImport<B>>::Transaction>,
 		sp_consensus::Error,
 	> {
-		// TODO-SASS: add Seal
-
-		// // sign the pre-sealed hash of the block and then
-		// // add it to a digest item.
-		// let public_type_pair = public.clone().into();
-		// let public = public.to_raw_vec();
-		// let signature = SyncCryptoStore::sign_with(
-		// 	&*self.keystore,
-		// 	<AuthorityId as AppKey>::ID,
-		// 	&public_type_pair,
-		// 	header_hash.as_ref(),
-		// )
-		// .map_err(|e| sp_consensus::Error::CannotSign(public.clone(), e.to_string()))?
-		// .ok_or_else(|| {
-		// 	sp_consensus::Error::CannotSign(
-		// 		public.clone(),
-		// 		"Could not find key in keystore.".into(),
-		// 	)
-		// })?;
-		// let signature: AuthoritySignature = signature
-		// 	.clone()
-		// 	.try_into()
-		// 	.map_err(|_| sp_consensus::Error::InvalidSignature(signature, public))?;
-		// let digest_item = <DigestItem as CompatibleDigestItem>::sassafras_seal(signature);
+		// Sign the pre-sealed hash of the block and then add it to a digest item.
+		let public_type_pair = public.clone().into();
+		let public = public.to_raw_vec();
+		let signature = SyncCryptoStore::sign_with(
+			&*self.keystore,
+			<AuthorityId as AppKey>::ID,
+			&public_type_pair,
+			header_hash.as_ref(),
+		)
+		.map_err(|e| sp_consensus::Error::CannotSign(public.clone(), e.to_string()))?
+		.ok_or_else(|| {
+			sp_consensus::Error::CannotSign(
+				public.clone(),
+				"Could not find key in keystore.".into(),
+			)
+		})?;
+		let signature: AuthoritySignature = signature
+			.clone()
+			.try_into()
+			.map_err(|_| sp_consensus::Error::InvalidSignature(signature, public))?;
+		let digest_item = <DigestItem as CompatibleDigestItem>::sassafras_seal(signature);
 
 		let mut import_block = BlockImportParams::new(BlockOrigin::Own, header);
-		// import_block.post_digests.push(digest_item);
+		import_block.post_digests.push(digest_item);
 		import_block.body = Some(body);
 		import_block.state_action =
 			StateAction::ApplyChanges(sc_consensus::StorageChanges::Changes(storage_changes));
@@ -680,26 +664,11 @@ where
 
 	fn force_authoring(&self) -> bool {
 		// TODO-SASS
-		//self.force_authoring
 		false
 	}
 
 	fn should_backoff(&self, _slot: Slot, _chain_head: &B::Header) -> bool {
 		// TODO-SASS
-		// if let Some(ref strategy) = self.backoff_authoring_blocks {
-		// 	if let Ok(chain_head_slot) =
-		// 		find_pre_digest::<B>(chain_head).map(|digest| digest.slot())
-		// 	{
-		// 		return strategy.should_backoff(
-		// 			*chain_head.number(),
-		// 			chain_head_slot,
-		// 			self.client.info().finalized_number,
-		// 			slot,
-		// 			self.logging_target(),
-		// 		)
-		// 	}
-		// }
-		// false
 		false
 	}
 
@@ -721,7 +690,6 @@ where
 
 	fn telemetry(&self) -> Option<TelemetryHandle> {
 		//TODO-SASS
-		//self.telemetry.clone()
 		None
 	}
 
@@ -745,7 +713,7 @@ where
 /// Extract the Sassafras pre digest from the given header. Pre-runtime digests are
 /// mandatory, the function will return `Err` if none is found.
 pub fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<PreDigest, Error<B>> {
-	// genesis block doesn't contain a pre digest so let's generate a
+	// Genesis block doesn't contain a pre digest so let's generate a
 	// dummy one to not break any invariants in the rest of the code
 	if header.number().is_zero() {
 		return Ok(PreDigest::Secondary(SecondaryPreDigest { authority_index: 0, slot: 0.into() }))
@@ -812,6 +780,87 @@ pub struct SassafrasVerifier<Block: BlockT, Client, SelectChain, CAW, CIDP> {
 	telemetry: Option<TelemetryHandle>,
 }
 
+impl<Block, Client, SelectChain, CAW, CIDP> SassafrasVerifier<Block, Client, SelectChain, CAW, CIDP>
+where
+	Block: BlockT,
+	Client: AuxStore + HeaderBackend<Block> + HeaderMetadata<Block> + ProvideRuntimeApi<Block>,
+	Client::Api: BlockBuilderApi<Block> + SassafrasApi<Block>,
+	SelectChain: sp_consensus::SelectChain<Block>,
+	CAW: CanAuthorWith<Block>,
+	CIDP: CreateInherentDataProviders<Block, ()>,
+{
+	async fn check_inherents(
+		&self,
+		block: Block,
+		block_id: BlockId<Block>,
+		inherent_data: InherentData,
+		create_inherent_data_providers: CIDP::InherentDataProviders,
+		execution_context: ExecutionContext,
+	) -> Result<(), Error<Block>> {
+		if let Err(e) = self.can_author_with.can_author_with(&block_id) {
+			debug!(
+				target: "sassafras",
+				"Skipping `check_inherents` as authoring version is not compatible: {}",
+				e,
+			);
+
+			return Ok(())
+		}
+
+		let inherent_res = self
+			.client
+			.runtime_api()
+			.check_inherents_with_context(&block_id, execution_context, block, inherent_data)
+			.map_err(Error::RuntimeApi)?;
+
+		if !inherent_res.ok() {
+			for (i, e) in inherent_res.into_errors() {
+				match create_inherent_data_providers.try_handle_error(&i, &e).await {
+					Some(res) => res.map_err(|e| Error::CheckInherents(e))?,
+					None => return Err(Error::CheckInherentsUnhandled(i)),
+				}
+			}
+		}
+
+		Ok(())
+	}
+
+	async fn check_and_report_equivocation(
+		&self,
+		slot_now: Slot,
+		slot: Slot,
+		header: &Block::Header,
+		author: &AuthorityId,
+		origin: &BlockOrigin,
+	) -> Result<(), Error<Block>> {
+		// Don't report any equivocations during initial sync as they are most likely stale.
+		if *origin == BlockOrigin::NetworkInitialSync {
+			return Ok(())
+		}
+
+		// Check if authorship of this header is an equivocation and return a proof if so.
+		let equivocation_proof =
+			match check_equivocation(&*self.client, slot_now, slot, header, author)
+				.map_err(Error::Client)?
+			{
+				Some(proof) => proof,
+				None => return Ok(()),
+			};
+
+		info!(
+			"Slot author {:?} is equivocating at slot {} with headers {:?} and {:?}",
+			author,
+			slot,
+			equivocation_proof.first_header.hash(),
+			equivocation_proof.second_header.hash(),
+		);
+
+		// TODO-SASS
+
+		Ok(())
+	}
+}
+
 type BlockVerificationResult<Block> =
 	Result<(BlockImportParams<Block, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String>;
 
@@ -855,132 +904,130 @@ where
 
 		debug!(target: "sassafras", "We have {:?} logs in this header", block.header.digest().logs().len());
 
-		// TODO-SASS
-		Ok((block, Default::default()))
+		let hash = block.header.hash();
+		let parent_hash = *block.header.parent_hash();
+
+		let create_inherent_data_providers = self
+			.create_inherent_data_providers
+			.create_inherent_data_providers(parent_hash, ())
+			.await
+			.map_err(|e| Error::<Block>::Client(sp_consensus::Error::from(e).into()))?;
+
+		let slot_now = create_inherent_data_providers.slot();
+
+		let parent_header_metadata = self
+			.client
+			.header_metadata(parent_hash)
+			.map_err(Error::<Block>::FetchParentHeader)?;
+
+		let pre_digest = find_pre_digest::<Block>(&block.header)?;
+
+		let (check_header, epoch_descriptor) = {
+			let epoch_changes = self.epoch_changes.shared_data();
+			let epoch_descriptor = epoch_changes
+				.epoch_descriptor_for_child_of(
+					descendent_query(&*self.client),
+					&parent_hash,
+					parent_header_metadata.number,
+					pre_digest.slot(),
+				)
+				.map_err(|e| Error::<Block>::ForkTree(Box::new(e)))?
+				.ok_or(Error::<Block>::FetchEpoch(parent_hash))?;
+			let viable_epoch = epoch_changes
+				.viable_epoch(&epoch_descriptor, |slot| {
+					Epoch::genesis(&self.config.genesis_config, slot)
+				})
+				.ok_or(Error::<Block>::FetchEpoch(parent_hash))?;
+
+			// We add one to the current slot to allow for some small drift.
+			// FIXME #1019 in the future, alter this queue to allow deferring of headers
+			let v_params = verification::VerificationParams {
+				header: block.header.clone(),
+				pre_digest: Some(pre_digest),
+				slot_now: slot_now + 1,
+				epoch: viable_epoch.as_ref(),
+			};
+
+			(verification::check_header::<Block>(v_params)?, epoch_descriptor)
+		};
 
 		// TODO-SASS
-		// let hash = block.header.hash();
-		// let parent_hash = *block.header.parent_hash();
+		match check_header {
+			CheckedHeader::Checked(pre_header, verified_info) => {
+				let sassafras_pre_digest = verified_info
+					.pre_digest
+					.as_sassafras_pre_digest()
+					.expect("check_header always returns a pre-digest digest item; qed");
+				let slot = sassafras_pre_digest.slot();
 
-		// let create_inherent_data_providers = self
-		// 	.create_inherent_data_providers
-		// 	.create_inherent_data_providers(parent_hash, ())
-		// 	.await
-		// 	.map_err(|e| Error::<Block>::Client(sp_consensus::Error::from(e).into()))?;
+				// The header is valid but let's check if there was something else already
+				// proposed at the same slot by the given author. If there was, we will
+				// report the equivocation to the runtime.
+				if let Err(err) = self
+					.check_and_report_equivocation(
+						slot_now,
+						slot,
+						&block.header,
+						&verified_info.author,
+						&block.origin,
+					)
+					.await
+				{
+					warn!(target: "sassafras", "Error checking/reporting Sassafras equivocation: {}", err);
+				}
 
-		// let slot_now = create_inherent_data_providers.slot();
+				// If the body is passed through, we need to use the runtime to check that the
+				// internally-set timestamp in the inherents actually matches the slot set in the
+				// seal.
+				if let Some(inner_body) = block.body {
+					let mut inherent_data = create_inherent_data_providers
+						.create_inherent_data()
+						.map_err(Error::<Block>::CreateInherents)?;
+					inherent_data.sassafras_replace_inherent_data(slot);
+					let new_block = Block::new(pre_header.clone(), inner_body);
 
-		// let parent_header_metadata = self
-		// 	.client
-		// 	.header_metadata(parent_hash)
-		// 	.map_err(Error::<Block>::FetchParentHeader)?;
+					self.check_inherents(
+						new_block.clone(),
+						BlockId::Hash(parent_hash),
+						inherent_data,
+						create_inherent_data_providers,
+						block.origin.into(),
+					)
+					.await?;
 
-		// let pre_digest = find_pre_digest::<Block>(&block.header)?;
-		// let (check_header, epoch_descriptor) = {
-		// 	let epoch_changes = self.epoch_changes.shared_data();
-		// 	let epoch_descriptor = epoch_changes
-		// 		.epoch_descriptor_for_child_of(
-		// 			descendent_query(&*self.client),
-		// 			&parent_hash,
-		// 			parent_header_metadata.number,
-		// 			pre_digest.slot(),
-		// 		)
-		// 		.map_err(|e| Error::<Block>::ForkTree(Box::new(e)))?
-		// 		.ok_or(Error::<Block>::FetchEpoch(parent_hash))?;
-		// 	let viable_epoch = epoch_changes
-		// 		.viable_epoch(&epoch_descriptor, |slot| {
-		// 			Epoch::genesis(&self.config.genesis_config, slot)
-		// 		})
-		// 		.ok_or(Error::<Block>::FetchEpoch(parent_hash))?;
+					let (_, inner_body) = new_block.deconstruct();
+					block.body = Some(inner_body);
+				}
 
-		// 	// We add one to the current slot to allow for some small drift.
-		// 	// FIXME #1019 in the future, alter this queue to allow deferring of headers
-		// 	let v_params = verification::VerificationParams {
-		// 		header: block.header.clone(),
-		// 		pre_digest: Some(pre_digest),
-		// 		slot_now: slot_now + 1,
-		// 		epoch: viable_epoch.as_ref(),
-		// 	};
+				trace!(target: "sassafras", "Checked {:?}; importing.", pre_header);
+				telemetry!(
+					self.telemetry;
+					CONSENSUS_TRACE;
+					"sassafras.checked_and_importing";
+					"pre_header" => ?pre_header,
+				);
 
-		// 	(verification::check_header::<Block>(v_params)?, epoch_descriptor)
-		// };
+				block.header = pre_header;
+				block.post_digests.push(verified_info.seal);
+				block.intermediates.insert(
+					Cow::from(INTERMEDIATE_KEY),
+					Box::new(SassafrasIntermediate::<Block> { epoch_descriptor }) as Box<_>,
+				);
+				block.post_hash = Some(hash);
 
-		// match check_header {
-		// 	CheckedHeader::Checked(pre_header, verified_info) => {
-		// 		let sassafras_pre_digest = verified_info
-		// 			.pre_digest
-		// 			.as_sassafras_pre_digest()
-		// 			.expect("check_header always returns a pre-digest digest item; qed");
-		// 		let slot = sassafras_pre_digest.slot();
-
-		// 		// the header is valid but let's check if there was something else already
-		// 		// proposed at the same slot by the given author. if there was, we will
-		// 		// report the equivocation to the runtime.
-		// 		if let Err(err) = self
-		// 			.check_and_report_equivocation(
-		// 				slot_now,
-		// 				slot,
-		// 				&block.header,
-		// 				&verified_info.author,
-		// 				&block.origin,
-		// 			)
-		// 			.await
-		// 		{
-		// 			warn!(target: "sassafras", "Error checking/reporting BABE equivocation: {}", err);
-		// 		}
-
-		// 		// if the body is passed through, we need to use the runtime
-		// 		// to check that the internally-set timestamp in the inherents
-		// 		// actually matches the slot set in the seal.
-		// 		if let Some(inner_body) = block.body {
-		// 			let mut inherent_data = create_inherent_data_providers
-		// 				.create_inherent_data()
-		// 				.map_err(Error::<Block>::CreateInherents)?;
-		// 			inherent_data.sassafras_replace_inherent_data(slot);
-		// 			let new_block = Block::new(pre_header.clone(), inner_body);
-
-		// 			self.check_inherents(
-		// 				new_block.clone(),
-		// 				BlockId::Hash(parent_hash),
-		// 				inherent_data,
-		// 				create_inherent_data_providers,
-		// 				block.origin.into(),
-		// 			)
-		// 			.await?;
-
-		// 			let (_, inner_body) = new_block.deconstruct();
-		// 			block.body = Some(inner_body);
-		// 		}
-
-		// 		trace!(target: "sassafras", "Checked {:?}; importing.", pre_header);
-		// 		telemetry!(
-		// 			self.telemetry;
-		// 			CONSENSUS_TRACE;
-		// 			"sassafras.checked_and_importing";
-		// 			"pre_header" => ?pre_header,
-		// 		);
-
-		// 		block.header = pre_header;
-		// 		block.post_digests.push(verified_info.seal);
-		// 		block.intermediates.insert(
-		// 			Cow::from(INTERMEDIATE_KEY),
-		// 			Box::new(SassafrasIntermediate::<Block> { epoch_descriptor }) as Box<_>,
-		// 		);
-		// 		block.post_hash = Some(hash);
-
-		// 		Ok((block, Default::default()))
-		// 	},
-		// 	CheckedHeader::Deferred(a, b) => {
-		// 		debug!(target: "sassafras", "Checking {:?} failed; {:?}, {:?}.", hash, a, b);
-		// 		telemetry!(
-		// 			self.telemetry;
-		// 			CONSENSUS_DEBUG;
-		// 			"sassafras.header_too_far_in_future";
-		// 			"hash" => ?hash, "a" => ?a, "b" => ?b
-		// 		);
-		// 		Err(Error::<Block>::TooFarInFuture(hash).into())
-		// 	},
-		// }
+				Ok((block, Default::default()))
+			},
+			CheckedHeader::Deferred(a, b) => {
+				debug!(target: "sassafras", "Checking {:?} failed; {:?}, {:?}.", hash, a, b);
+				telemetry!(
+					self.telemetry;
+					CONSENSUS_DEBUG;
+					"sassafras.header_too_far_in_future";
+					"hash" => ?hash, "a" => ?a, "b" => ?b
+				);
+				Err(Error::<Block>::TooFarInFuture(hash).into())
+			},
+		}
 	}
 }
 

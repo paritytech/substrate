@@ -133,6 +133,6 @@ sp_api::decl_runtime_apis! {
 		/// Return the genesis configuration for Sassafras. The configuration is only read on genesis.
 		fn configuration() -> SassafrasGenesisConfiguration;
 
-		// TODO-SASS: augment API
+		// TODO-SASS: incomplete API
 	}
 }
