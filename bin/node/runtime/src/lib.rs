@@ -1492,12 +1492,14 @@ impl pallet_whitelist::Config for Runtime {
 parameter_types! {
 	pub const MigrationSignedDepositPerItem: Balance = 1 * CENTS;
 	pub const MigrationSignedDepositBase: Balance = 20 * DOLLARS;
+	pub const MigrationMaxKeyLen: u32 = 512;
 }
 
 impl pallet_state_trie_migration::Config for Runtime {
 	type Event = Event;
 	type ControlOrigin = EnsureRoot<AccountId>;
 	type Currency = Balances;
+	type MaxKeyLen = MigrationMaxKeyLen;
 	type SignedDepositPerItem = MigrationSignedDepositPerItem;
 	type SignedDepositBase = MigrationSignedDepositBase;
 	// Warning: this is not advised, as it might allow the chain to be temporarily DOS-ed.
