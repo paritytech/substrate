@@ -58,16 +58,15 @@ mod mock;
 mod tests;
 pub mod weights;
 
-use codec::{Codec, Decode, Encode};
+use codec::{Codec, Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	dispatch::{DispatchError, DispatchResult, Dispatchable, Parameter},
 	traits::{
 		schedule::{self, DispatchTime, MaybeHashed},
-		Bounded, ConstU32, EnsureOrigin, Get, IsType, OriginTrait, PalletInfoAccess, PrivilegeCmp,
-		StorageVersion,
+		Bounded, EnsureOrigin, Get, IsType, OriginTrait, PalletInfoAccess, PrivilegeCmp,
+		StorageVersion, Hash as PreimageHash, QueryPreimage, StorePreimage
 	},
 	weights::{GetDispatchInfo, Weight},
-	BoundedVec,
 };
 use frame_system::{self as system, ensure_signed};
 pub use pallet::*;
@@ -87,13 +86,6 @@ pub type TaskAddress<BlockNumber> = (BlockNumber, u32);
 
 pub type CallOrHashOf<T> = MaybeHashed<<T as Config>::Call, <T as frame_system::Config>::Hash>;
 
-pub enum EncodedCall<T> {
-	/// A an encoded `Call`. Its encoding must be at most 128 bytes.
-	Inline(BoundedVec<u8, ConstU32<128>>),
-	/// A Blake2-256 hash of the call togehter with an upper limit for its size.
-	Hashed { hash: [u8; 32], max_size: u32 },
-}
-
 #[cfg_attr(any(feature = "std", test), derive(PartialEq, Eq))]
 #[derive(Clone, RuntimeDebug, Encode, Decode)]
 struct ScheduledV1<Call, BlockNumber> {
@@ -105,10 +97,10 @@ struct ScheduledV1<Call, BlockNumber> {
 
 /// Information regarding an item to be executed in the future.
 #[cfg_attr(any(feature = "std", test), derive(PartialEq, Eq))]
-#[derive(Clone, RuntimeDebug, Encode, Decode, TypeInfo)]
+#[derive(Clone, RuntimeDebug, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub struct ScheduledV4<Call, BlockNumber, PalletsOrigin, AccountId> {
 	/// The unique identity for this task, if there is one.
-	maybe_id: Option<Vec<u8>>,
+	maybe_id: Option<[u8; 32]>,
 	/// This task's priority.
 	priority: schedule::Priority,
 	/// The call to be dispatched.
@@ -180,9 +172,10 @@ impl<T: WeightInfo> MarginalWeightInfo for T {}
 pub mod pallet {
 	use super::*;
 	use frame_support::{
+		storage_alias,
 		dispatch::PostDispatchInfo,
 		pallet_prelude::*,
-		traits::{schedule::LookupError, PreimageProvider},
+		traits::schedule::LookupError,
 	};
 	use frame_system::pallet_prelude::*;
 
@@ -250,12 +243,19 @@ pub mod pallet {
 	/// Items to be executed, indexed by the block number that they should be executed on.
 	#[pallet::storage]
 	pub type Agenda<T: Config> =
-		StorageMap<_, Twox64Concat, T::BlockNumber, Vec<Option<ScheduledV3Of<T>>>, ValueQuery>;
+		StorageMap<_, Twox64Concat, T::BlockNumber, Vec<Option<ScheduledOf<T>>>, ValueQuery>;
 
-	/// Lookup from identity to the block number and index of the task.
+	/// Lookup from a name to the block number and index of the task.
+	///
+	/// For v3 -> v4 the previously unbounded identities are Blake2-256 hashed to form the v4
+	/// identities.
 	#[pallet::storage]
 	pub(crate) type Lookup<T: Config> =
-		StorageMap<_, Twox64Concat, Vec<u8>, TaskAddress<T::BlockNumber>>;
+		StorageMap<_, Twox64Concat, TaskName, TaskAddress<T::BlockNumber>>;
+
+	#[storage_alias]
+	pub(crate) type LookupV1<T: Config> =
+		StorageMap<Pallet<T>, Twox64Concat, Vec<u8>, TaskAddress<<T as frame_system::Config>::BlockNumber>>;
 
 	/// Events type.
 	#[pallet::event]
@@ -268,13 +268,13 @@ pub mod pallet {
 		/// Dispatched some task.
 		Dispatched {
 			task: TaskAddress<T::BlockNumber>,
-			id: Option<Vec<u8>>,
+			id: Option<[u8; 32]>,
 			result: DispatchResult,
 		},
 		/// The call for the provided hash was not found so the task has been aborted.
 		CallLookupFailed {
 			task: TaskAddress<T::BlockNumber>,
-			id: Option<Vec<u8>>,
+			id: Option<[u8; 32]>,
 			error: LookupError,
 		},
 	}
@@ -324,10 +324,13 @@ pub mod pallet {
 					false
 				};
 
-				// TODO: use this to estimate the weight and decide whether to continue.
-				let _len = T::Preimages::len(&s.call);
+				if s.call.lookup_needed() {
+					let _len = s.call.len();
+					// TODO: introduce a new weight checkpoint here which will be based on len
+					// T::WeightInfo::decode_item(periodic, named, Some(call));
+				}
 
-				let call = match T::Preimages::unrequest_into_value(&s.call) {
+				let call = match T::Preimages::realize(&s.call) {
 					Ok(call) => call,
 					Err(_) => {
 						// Preimage not available - postpone until some block.
@@ -346,7 +349,8 @@ pub mod pallet {
 
 				let periodic = s.maybe_periodic.is_some();
 				let call_weight = call.get_dispatch_info().weight;
-				let mut item_weight = T::WeightInfo::item(periodic, named, Some(resolved));
+				// TODO: we no longer need the resolved argument - the call is guaranteed here by now.
+				let mut item_weight = T::WeightInfo::item(periodic, named, Some(false));
 				let origin =
 					<<T as Config>::Origin as From<T::PalletsOrigin>>::from(s.origin.clone())
 						.into();
@@ -421,7 +425,7 @@ pub mod pallet {
 			when: T::BlockNumber,
 			maybe_periodic: Option<schedule::Period<T::BlockNumber>>,
 			priority: schedule::Priority,
-			call: Box<CallOrHashOf<T>>,
+			call: Box<<T as Config>::Call>,
 		) -> DispatchResult {
 			T::ScheduleOrigin::ensure_origin(origin.clone())?;
 			let origin = <T as Config>::Origin::from(origin);
@@ -430,7 +434,7 @@ pub mod pallet {
 				maybe_periodic,
 				priority,
 				origin.caller().clone(),
-				*call,
+				T::Preimages::bound(*call)?,
 			)?;
 			Ok(())
 		}
@@ -448,11 +452,11 @@ pub mod pallet {
 		#[pallet::weight(<T as Config>::WeightInfo::schedule_named(T::MaxScheduledPerBlock::get()))]
 		pub fn schedule_named(
 			origin: OriginFor<T>,
-			id: Vec<u8>,
+			id: TaskName,
 			when: T::BlockNumber,
 			maybe_periodic: Option<schedule::Period<T::BlockNumber>>,
 			priority: schedule::Priority,
-			call: Box<CallOrHashOf<T>>,
+			call: Box<<T as Config>::Call>,
 		) -> DispatchResult {
 			T::ScheduleOrigin::ensure_origin(origin.clone())?;
 			let origin = <T as Config>::Origin::from(origin);
@@ -462,14 +466,14 @@ pub mod pallet {
 				maybe_periodic,
 				priority,
 				origin.caller().clone(),
-				*call,
+				T::Preimages::bound(*call)?,
 			)?;
 			Ok(())
 		}
 
 		/// Cancel a named scheduled task.
 		#[pallet::weight(<T as Config>::WeightInfo::cancel_named(T::MaxScheduledPerBlock::get()))]
-		pub fn cancel_named(origin: OriginFor<T>, id: Vec<u8>) -> DispatchResult {
+		pub fn cancel_named(origin: OriginFor<T>, id: TaskName) -> DispatchResult {
 			T::ScheduleOrigin::ensure_origin(origin.clone())?;
 			let origin = <T as Config>::Origin::from(origin);
 			Self::do_cancel_named(Some(origin.caller().clone()), id)?;
@@ -487,7 +491,7 @@ pub mod pallet {
 			after: T::BlockNumber,
 			maybe_periodic: Option<schedule::Period<T::BlockNumber>>,
 			priority: schedule::Priority,
-			call: Box<CallOrHashOf<T>>,
+			call: Box<<T as Config>::Call>,
 		) -> DispatchResult {
 			T::ScheduleOrigin::ensure_origin(origin.clone())?;
 			let origin = <T as Config>::Origin::from(origin);
@@ -496,7 +500,7 @@ pub mod pallet {
 				maybe_periodic,
 				priority,
 				origin.caller().clone(),
-				*call,
+				T::Preimages::bound(*call)?,
 			)?;
 			Ok(())
 		}
@@ -509,11 +513,11 @@ pub mod pallet {
 		#[pallet::weight(<T as Config>::WeightInfo::schedule_named(T::MaxScheduledPerBlock::get()))]
 		pub fn schedule_named_after(
 			origin: OriginFor<T>,
-			id: Vec<u8>,
+			id: TaskName,
 			after: T::BlockNumber,
 			maybe_periodic: Option<schedule::Period<T::BlockNumber>>,
 			priority: schedule::Priority,
-			call: Box<CallOrHashOf<T>>,
+			call: Box<<T as Config>::Call>,
 		) -> DispatchResult {
 			T::ScheduleOrigin::ensure_origin(origin.clone())?;
 			let origin = <T as Config>::Origin::from(origin);
@@ -523,18 +527,18 @@ pub mod pallet {
 				maybe_periodic,
 				priority,
 				origin.caller().clone(),
-				*call,
+				T::Preimages::bound(*call)?,
 			)?;
 			Ok(())
 		}
 	}
 }
 
-impl<T: Config> Pallet<T> {
-	/// Migrate storage format from V1 to V3.
+impl<T: Config<Hash = PreimageHash>> Pallet<T> {
+	/// Migrate storage format from V1 to V4.
 	///
 	/// Returns the weight consumed by this migration.
-	pub fn migrate_v1_to_v3() -> Weight {
+	pub fn migrate_v1_to_v4() -> Weight {
 		let mut weight = T::DbWeight::get().reads_writes(1, 1);
 
 		Agenda::<T>::translate::<Vec<Option<ScheduledV1<<T as Config>::Call, T::BlockNumber>>>, _>(
@@ -542,16 +546,32 @@ impl<T: Config> Pallet<T> {
 				Some(
 					agenda
 						.into_iter()
-						.map(|schedule| {
+						.filter_map(|schedule| {
 							weight.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
 
-							schedule.map(|schedule| ScheduledV3 {
-								maybe_id: schedule.maybe_id,
-								priority: schedule.priority,
-								call: schedule.call.into(),
-								maybe_periodic: schedule.maybe_periodic,
-								origin: system::RawOrigin::Root.into(),
-								_phantom: Default::default(),
+							schedule.map(|schedule| {
+								if let Some(id) = schedule.maybe_id.as_ref() {
+									let name = blake2_256(id);
+									if let Some(item) = LookupV1::<T>::take(id) {
+										Lookup::<T>::insert(name, item);
+									}
+									weight.saturating_accrue(T::DbWeight::get().reads_writes(2, 2));
+								}
+
+								let call = T::Preimages::bound(schedule.call).ok()?;
+
+								if call.lookup_needed() {
+									weight.saturating_accrue(T::DbWeight::get().reads_writes(0, 1));
+								}
+
+								Some(ScheduledV4 {
+									maybe_id: schedule.maybe_id.map(|x| blake2_256(&x[..])),
+									priority: schedule.priority,
+									call,
+									maybe_periodic: schedule.maybe_periodic,
+									origin: system::RawOrigin::Root.into(),
+									_phantom: Default::default(),
+								})
 							})
 						})
 						.collect::<Vec<_>>(),
@@ -566,30 +586,45 @@ impl<T: Config> Pallet<T> {
 			&[],
 		);
 
-		StorageVersion::new(3).put::<Self>();
+		StorageVersion::new(4).put::<Self>();
 
 		weight + T::DbWeight::get().writes(2)
 	}
 
-	/// Migrate storage format from V2 to V3.
+	/// Migrate storage format from V2 to V4.
 	///
 	/// Returns the weight consumed by this migration.
-	pub fn migrate_v2_to_v3() -> Weight {
+	pub fn migrate_v2_to_v4() -> Weight {
 		let mut weight = T::DbWeight::get().reads_writes(1, 1);
 
 		Agenda::<T>::translate::<Vec<Option<ScheduledV2Of<T>>>, _>(|_, agenda| {
 			Some(
 				agenda
 					.into_iter()
-					.map(|schedule| {
+					.filter_map(|schedule| {
 						weight.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
-						schedule.map(|schedule| ScheduledV3 {
-							maybe_id: schedule.maybe_id,
-							priority: schedule.priority,
-							call: schedule.call.into(),
-							maybe_periodic: schedule.maybe_periodic,
-							origin: schedule.origin,
-							_phantom: Default::default(),
+						schedule.map(|schedule| {
+							if let Some(id) = schedule.maybe_id.as_ref() {
+								let name = blake2_256(id);
+								if let Some(item) = Lookup::<T>::take(id) {
+									Lookup::<T>::insert(name, item);
+								}
+								weight.saturating_accrue(T::DbWeight::get().reads_writes(2, 2));
+							}
+
+							let call = T::Preimages::bound(schedule.call).ok()?;
+							if call.lookup_needed() {
+								weight.saturating_accrue(T::DbWeight::get().reads_writes(0, 1));
+							}
+
+							Some(ScheduledV4 {
+								maybe_id: schedule.maybe_id.map(|x| blake2_256(&x[..])),
+								priority: schedule.priority,
+								call,
+								maybe_periodic: schedule.maybe_periodic,
+								origin: schedule.origin,
+								_phantom: Default::default(),
+							})
 						})
 					})
 					.collect::<Vec<_>>(),
@@ -603,18 +638,79 @@ impl<T: Config> Pallet<T> {
 			&[],
 		);
 
-		StorageVersion::new(3).put::<Self>();
+		StorageVersion::new(4).put::<Self>();
+
+		weight + T::DbWeight::get().writes(2)
+	}
+
+	/// Migrate storage format from V3 to V4.
+	///
+	/// Returns the weight consumed by this migration.
+	pub fn migrate_v3_to_v4() -> Weight {
+		let mut weight = T::DbWeight::get().reads_writes(1, 1);
+
+		Agenda::<T>::translate::<Vec<Option<ScheduledV3Of<T>>>, _>(|_, agenda| {
+			Some(
+				agenda
+					.into_iter()
+					.filter_map(|schedule| {
+						weight.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
+						schedule.map(|schedule| {
+							if let Some(id) = schedule.maybe_id.as_ref() {
+								let name = blake2_256(id);
+								if let Some(item) = Lookup::<T>::take(id) {
+									Lookup::<T>::insert(name, item);
+								}
+								weight.saturating_accrue(T::DbWeight::get().reads_writes(2, 2));
+							}
+
+							let call = match schedule.call {
+								MaybeHashed::Hash(h) => {
+									#[allow(deprecated)]
+									Bounded::from_legacy_hash(h)
+								},
+								MaybeHashed::Value(v) => {
+									let call = T::Preimages::bound(v).ok()?;
+									if call.lookup_needed() {
+										weight.saturating_accrue(T::DbWeight::get().reads_writes(0, 1));
+									}
+									call
+								},
+							};
+
+							Some(ScheduledV4 {
+								maybe_id: schedule.maybe_id.map(|x| blake2_256(&x[..])),
+								priority: schedule.priority,
+								call,
+								maybe_periodic: schedule.maybe_periodic,
+								origin: schedule.origin,
+								_phantom: Default::default(),
+							})
+						})
+					})
+					.collect::<Vec<_>>(),
+			)
+		});
+
+		#[allow(deprecated)]
+		frame_support::storage::migration::remove_storage_prefix(
+			Self::name().as_bytes(),
+			b"StorageVersion",
+			&[],
+		);
+
+		StorageVersion::new(4).put::<Self>();
 
 		weight + T::DbWeight::get().writes(2)
 	}
 
 	#[cfg(feature = "try-runtime")]
-	pub fn pre_migrate_to_v3() -> Result<(), &'static str> {
+	pub fn pre_migrate_to_v4() -> Result<(), &'static str> {
 		Ok(())
 	}
 
 	#[cfg(feature = "try-runtime")]
-	pub fn post_migrate_to_v3() -> Result<(), &'static str> {
+	pub fn post_migrate_to_v4() -> Result<(), &'static str> {
 		use frame_support::dispatch::GetStorageVersion;
 
 		assert!(Self::current_storage_version() == 3);
@@ -623,11 +719,13 @@ impl<T: Config> Pallet<T> {
 		}
 		Ok(())
 	}
+}
 
+impl<T: Config> Pallet<T> {
 	/// Helper to migrate scheduler when the pallet origin type has changed.
 	pub fn migrate_origin<OldOrigin: Into<T::PalletsOrigin> + codec::Decode>() {
 		Agenda::<T>::translate::<
-			Vec<Option<Scheduled<CallOrHashOf<T>, T::BlockNumber, OldOrigin, T::AccountId>>>,
+			Vec<Option<Scheduled<Bounded<<T as Config>::Call>, T::BlockNumber, OldOrigin, T::AccountId>>>,
 			_,
 		>(|_, agenda| {
 			Some(
@@ -670,10 +768,9 @@ impl<T: Config> Pallet<T> {
 		maybe_periodic: Option<schedule::Period<T::BlockNumber>>,
 		priority: schedule::Priority,
 		origin: T::PalletsOrigin,
-		call: CallOrHashOf<T>,
+		call: Bounded<<T as Config>::Call>,
 	) -> Result<TaskAddress<T::BlockNumber>, DispatchError> {
 		let when = Self::resolve_time(when)?;
-		call.ensure_requested::<T::PreimageProvider>();
 
 		// sanitize maybe_periodic
 		let maybe_periodic = maybe_periodic
@@ -716,7 +813,7 @@ impl<T: Config> Pallet<T> {
 			)
 		})?;
 		if let Some(s) = scheduled {
-			s.call.ensure_unrequested::<T::PreimageProvider>();
+			T::Preimages::drop(&s.call);
 			if let Some(id) = s.maybe_id {
 				Lookup::<T>::remove(id);
 			}
@@ -752,12 +849,12 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn do_schedule_named(
-		id: Vec<u8>,
+		id: TaskName,
 		when: DispatchTime<T::BlockNumber>,
 		maybe_periodic: Option<schedule::Period<T::BlockNumber>>,
 		priority: schedule::Priority,
 		origin: T::PalletsOrigin,
-		call: CallOrHashOf<T>,
+		call: Bounded<<T as Config>::Call>,
 	) -> Result<TaskAddress<T::BlockNumber>, DispatchError> {
 		// ensure id it is unique
 		if Lookup::<T>::contains_key(&id) {
@@ -766,8 +863,6 @@ impl<T: Config> Pallet<T> {
 
 		let when = Self::resolve_time(when)?;
 
-		call.ensure_requested::<T::PreimageProvider>();
-
 		// sanitize maybe_periodic
 		let maybe_periodic = maybe_periodic
 			.filter(|p| p.1 > 1 && !p.0.is_zero())
@@ -775,7 +870,7 @@ impl<T: Config> Pallet<T> {
 			.map(|(p, c)| (p, c - 1));
 
 		let s = Scheduled {
-			maybe_id: Some(id.clone()),
+			maybe_id: Some(id),
 			priority,
 			call,
 			maybe_periodic,
@@ -791,7 +886,7 @@ impl<T: Config> Pallet<T> {
 		Ok(address)
 	}
 
-	fn do_cancel_named(origin: Option<T::PalletsOrigin>, id: Vec<u8>) -> DispatchResult {
+	fn do_cancel_named(origin: Option<T::PalletsOrigin>, id: TaskName) -> DispatchResult {
 		Lookup::<T>::try_mutate_exists(id, |lookup| -> DispatchResult {
 			if let Some((when, index)) = lookup.take() {
 				let i = index as usize;
@@ -804,7 +899,7 @@ impl<T: Config> Pallet<T> {
 							) {
 								return Err(BadOrigin.into())
 							}
-							s.call.ensure_unrequested::<T::PreimageProvider>();
+							T::Preimages::drop(&s.call);
 						}
 						*s = None;
 					}
@@ -819,7 +914,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn do_reschedule_named(
-		id: Vec<u8>,
+		id: TaskName,
 		new_time: DispatchTime<T::BlockNumber>,
 	) -> Result<TaskAddress<T::BlockNumber>, DispatchError> {
 		let new_time = Self::resolve_time(new_time)?;
@@ -853,7 +948,7 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-impl<T: Config> schedule::v2::Anon<T::BlockNumber, <T as Config>::Call, T::PalletsOrigin>
+impl<T: Config<Hash = PreimageHash>> schedule::v2::Anon<T::BlockNumber, <T as Config>::Call, T::PalletsOrigin>
 	for Pallet<T>
 {
 	type Address = TaskAddress<T::BlockNumber>;
@@ -866,6 +961,8 @@ impl<T: Config> schedule::v2::Anon<T::BlockNumber, <T as Config>::Call, T::Palle
 		origin: T::PalletsOrigin,
 		call: CallOrHashOf<T>,
 	) -> Result<Self::Address, DispatchError> {
+		let call = call.as_value().ok_or(DispatchError::CannotLookup)?;
+		let call = T::Preimages::bound(call)?.transmute();
 		Self::do_schedule(when, maybe_periodic, priority, origin, call)
 	}
 
@@ -885,7 +982,7 @@ impl<T: Config> schedule::v2::Anon<T::BlockNumber, <T as Config>::Call, T::Palle
 	}
 }
 
-impl<T: Config> schedule::v2::Named<T::BlockNumber, <T as Config>::Call, T::PalletsOrigin>
+impl<T: Config<Hash = PreimageHash>> schedule::v2::Named<T::BlockNumber, <T as Config>::Call, T::PalletsOrigin>
 	for Pallet<T>
 {
 	type Address = TaskAddress<T::BlockNumber>;
@@ -899,23 +996,96 @@ impl<T: Config> schedule::v2::Named<T::BlockNumber, <T as Config>::Call, T::Pall
 		origin: T::PalletsOrigin,
 		call: CallOrHashOf<T>,
 	) -> Result<Self::Address, ()> {
-		Self::do_schedule_named(id, when, maybe_periodic, priority, origin, call).map_err(|_| ())
+		let call = call.as_value().ok_or(())?;
+		let call = T::Preimages::bound(call).map_err(|_| ())?.transmute();
+		let name = blake2_256(&id[..]);
+		Self::do_schedule_named(name, when, maybe_periodic, priority, origin, call).map_err(|_| ())
 	}
 
 	fn cancel_named(id: Vec<u8>) -> Result<(), ()> {
-		Self::do_cancel_named(None, id).map_err(|_| ())
+		let name = blake2_256(&id[..]);
+		Self::do_cancel_named(None, name).map_err(|_| ())
 	}
 
 	fn reschedule_named(
 		id: Vec<u8>,
 		when: DispatchTime<T::BlockNumber>,
 	) -> Result<Self::Address, DispatchError> {
-		Self::do_reschedule_named(id, when)
+		let name = blake2_256(&id[..]);
+		Self::do_reschedule_named(name, when)
 	}
 
 	fn next_dispatch_time(id: Vec<u8>) -> Result<T::BlockNumber, ()> {
-		Lookup::<T>::get(id)
+		let name = blake2_256(&id[..]);
+		Lookup::<T>::get(name)
 			.and_then(|(when, index)| Agenda::<T>::get(when).get(index as usize).map(|_| when))
 			.ok_or(())
+	}
+}
+
+impl<T: Config> schedule::v3::Anon<T::BlockNumber, <T as Config>::Call, T::PalletsOrigin>
+	for Pallet<T>
+{
+	type Address = TaskAddress<T::BlockNumber>;
+
+	fn schedule(
+		when: DispatchTime<T::BlockNumber>,
+		maybe_periodic: Option<schedule::Period<T::BlockNumber>>,
+		priority: schedule::Priority,
+		origin: T::PalletsOrigin,
+		call: Bounded<<T as Config>::Call>,
+	) -> Result<Self::Address, DispatchError> {
+		Self::do_schedule(when, maybe_periodic, priority, origin, call)
+	}
+
+	fn cancel((when, index): Self::Address) -> Result<(), DispatchError> {
+		Self::do_cancel(None, (when, index))
+	}
+
+	fn reschedule(
+		address: Self::Address,
+		when: DispatchTime<T::BlockNumber>,
+	) -> Result<Self::Address, DispatchError> {
+		Self::do_reschedule(address, when)
+	}
+
+	fn next_dispatch_time((when, index): Self::Address) -> Result<T::BlockNumber, DispatchError> {
+		Agenda::<T>::get(when).get(index as usize).ok_or(DispatchError::Unavailable).map(|_| when)
+	}
+}
+
+use schedule::v3::TaskName;
+
+impl<T: Config> schedule::v3::Named<T::BlockNumber, <T as Config>::Call, T::PalletsOrigin>
+	for Pallet<T>
+{
+	type Address = TaskAddress<T::BlockNumber>;
+
+	fn schedule_named(
+		id: TaskName,
+		when: DispatchTime<T::BlockNumber>,
+		maybe_periodic: Option<schedule::Period<T::BlockNumber>>,
+		priority: schedule::Priority,
+		origin: T::PalletsOrigin,
+		call: Bounded<<T as Config>::Call>,
+	) -> Result<Self::Address, DispatchError> {
+		Self::do_schedule_named(id, when, maybe_periodic, priority, origin, call)
+	}
+
+	fn cancel_named(id: TaskName) -> Result<(), DispatchError> {
+		Self::do_cancel_named(None, id)
+	}
+
+	fn reschedule_named(
+		id: TaskName,
+		when: DispatchTime<T::BlockNumber>,
+	) -> Result<Self::Address, DispatchError> {
+		Self::do_reschedule_named(id, when)
+	}
+
+	fn next_dispatch_time(id: TaskName) -> Result<T::BlockNumber, DispatchError> {
+		Lookup::<T>::get(id)
+			.and_then(|(when, index)| Agenda::<T>::get(when).get(index as usize).map(|_| when))
+			.ok_or(DispatchError::Unavailable)
 	}
 }

@@ -409,7 +409,7 @@ pub mod v3 {
 		///
 		/// NOTE2: This will not work to cancel periodic tasks after their initial execution. For
 		/// that, you must name the task explicitly using the `Named` trait.
-		fn cancel(address: Self::Address) -> Result<(), ()>;
+		fn cancel(address: Self::Address) -> Result<(), DispatchError>;
 
 		/// Reschedule a task. For one-off tasks, this dispatch is guaranteed to succeed
 		/// only if it is executed *before* the currently scheduled block. For periodic tasks,
@@ -425,8 +425,10 @@ pub mod v3 {
 		/// Return the next dispatch time for a given task.
 		///
 		/// Will return an error if the `address` is invalid.
-		fn next_dispatch_time(address: Self::Address) -> Result<BlockNumber, ()>;
+		fn next_dispatch_time(address: Self::Address) -> Result<BlockNumber, DispatchError>;
 	}
+
+	pub type TaskName = [u8; 32];
 
 	/// A type that can be used as a scheduler.
 	pub trait Named<BlockNumber, Call, Origin> {
@@ -437,13 +439,13 @@ pub mod v3 {
 		///
 		/// - `id`: The identity of the task. This must be unique and will return an error if not.
 		fn schedule_named(
-			id: Vec<u8>,
+			id: TaskName,
 			when: DispatchTime<BlockNumber>,
 			maybe_periodic: Option<Period<BlockNumber>>,
 			priority: Priority,
 			origin: Origin,
 			call: Bounded<Call>,
-		) -> Result<Self::Address, ()>;
+		) -> Result<Self::Address, DispatchError>;
 
 		/// Cancel a scheduled, named task. If periodic, then it will cancel all further instances
 		/// of that, also.
@@ -452,19 +454,19 @@ pub mod v3 {
 		///
 		/// NOTE: This guaranteed to work only *before* the point that it is due to be executed.
 		/// If it ends up being delayed beyond the point of execution, then it cannot be cancelled.
-		fn cancel_named(id: Vec<u8>) -> Result<(), ()>;
+		fn cancel_named(id: TaskName) -> Result<(), DispatchError>;
 
 		/// Reschedule a task. For one-off tasks, this dispatch is guaranteed to succeed
 		/// only if it is executed *before* the currently scheduled block.
 		fn reschedule_named(
-			id: Vec<u8>,
+			id: TaskName,
 			when: DispatchTime<BlockNumber>,
 		) -> Result<Self::Address, DispatchError>;
 
 		/// Return the next dispatch time for a given task.
 		///
 		/// Will return an error if the `id` is invalid.
-		fn next_dispatch_time(id: Vec<u8>) -> Result<BlockNumber, ()>;
+		fn next_dispatch_time(id: TaskName) -> Result<BlockNumber, DispatchError>;
 	}
 }
 
