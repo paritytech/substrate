@@ -17,32 +17,10 @@
 
 //! Traits, types and structs to support a bounded BTreeMap.
 
-use crate::{
-	storage::StorageDecodeLength,
-	traits::{Get, TryCollect},
-};
+use crate::storage::StorageDecodeLength;
 pub use sp_runtime::BoundedBTreeMap;
-use sp_std::collections::btree_map::BTreeMap;
 
 impl<K, V, S> StorageDecodeLength for BoundedBTreeMap<K, V, S> {}
-
-impl<I, K, V, Bound> TryCollect<BoundedBTreeMap<K, V, Bound>> for I
-where
-	K: Ord,
-	I: ExactSizeIterator + Iterator<Item = (K, V)>,
-	Bound: Get<u32>,
-{
-	type Error = &'static str;
-
-	fn try_collect(self) -> Result<BoundedBTreeMap<K, V, Bound>, Self::Error> {
-		if self.len() > Bound::get() as usize {
-			Err("iterator length too big")
-		} else {
-			Ok(BoundedBTreeMap::<K, V, Bound>::try_from(self.collect::<BTreeMap<K, V>>())
-				.expect("length checked above; qed"))
-		}
-	}
-}
 
 #[cfg(test)]
 pub mod test {
@@ -100,54 +78,5 @@ pub mod test {
 			assert!(FooDoubleMap::decode_len(1, 2).is_none());
 			assert!(FooDoubleMap::decode_len(2, 2).is_none());
 		});
-	}
-
-	#[test]
-	fn can_be_collected() {
-		let b1 = boundedmap_from_keys::<u32, ConstU32<5>>(&[1, 2, 3, 4]);
-		let b2: BoundedBTreeMap<u32, (), ConstU32<5>> =
-			b1.iter().map(|(k, v)| (k + 1, *v)).try_collect().unwrap();
-		assert_eq!(b2.into_iter().map(|(k, _)| k).collect::<Vec<_>>(), vec![2, 3, 4, 5]);
-
-		// can also be collected into a collection of length 4.
-		let b2: BoundedBTreeMap<u32, (), ConstU32<4>> =
-			b1.iter().map(|(k, v)| (k + 1, *v)).try_collect().unwrap();
-		assert_eq!(b2.into_iter().map(|(k, _)| k).collect::<Vec<_>>(), vec![2, 3, 4, 5]);
-
-		// can be mutated further into iterators that are `ExactSizedIterator`.
-		let b2: BoundedBTreeMap<u32, (), ConstU32<5>> =
-			b1.iter().map(|(k, v)| (k + 1, *v)).rev().skip(2).try_collect().unwrap();
-		// note that the binary tree will re-sort this, so rev() is not really seen
-		assert_eq!(b2.into_iter().map(|(k, _)| k).collect::<Vec<_>>(), vec![2, 3]);
-
-		let b2: BoundedBTreeMap<u32, (), ConstU32<5>> =
-			b1.iter().map(|(k, v)| (k + 1, *v)).take(2).try_collect().unwrap();
-		assert_eq!(b2.into_iter().map(|(k, _)| k).collect::<Vec<_>>(), vec![2, 3]);
-
-		// but these worn't work
-		let b2: Result<BoundedBTreeMap<u32, (), ConstU32<3>>, _> =
-			b1.iter().map(|(k, v)| (k + 1, *v)).try_collect();
-		assert!(b2.is_err());
-
-		let b2: Result<BoundedBTreeMap<u32, (), ConstU32<1>>, _> =
-			b1.iter().map(|(k, v)| (k + 1, *v)).skip(2).try_collect();
-		assert!(b2.is_err());
-	}
-
-	#[test]
-	fn eq_works() {
-		// of same type
-		let b1 = boundedmap_from_keys::<u32, ConstU32<7>>(&[1, 2]);
-		let b2 = boundedmap_from_keys::<u32, ConstU32<7>>(&[1, 2]);
-		assert_eq!(b1, b2);
-
-		// of different type, but same value and bound.
-		crate::parameter_types! {
-			B1: u32 = 7;
-			B2: u32 = 7;
-		}
-		let b1 = boundedmap_from_keys::<u32, B1>(&[1, 2]);
-		let b2 = boundedmap_from_keys::<u32, B2>(&[1, 2]);
-		assert_eq!(b1, b2);
 	}
 }

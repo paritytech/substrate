@@ -17,32 +17,10 @@
 
 //! Traits, types and structs to support a bounded `BTreeSet`.
 
-use crate::{
-	storage::StorageDecodeLength,
-	traits::{Get, TryCollect},
-};
+use crate::storage::StorageDecodeLength;
 pub use sp_runtime::BoundedBTreeSet;
-use sp_std::collections::btree_set::BTreeSet;
 
 impl<T, S> StorageDecodeLength for BoundedBTreeSet<T, S> {}
-
-impl<I, T, Bound> TryCollect<BoundedBTreeSet<T, Bound>> for I
-where
-	T: Ord,
-	I: ExactSizeIterator + Iterator<Item = T>,
-	Bound: Get<u32>,
-{
-	type Error = &'static str;
-
-	fn try_collect(self) -> Result<BoundedBTreeSet<T, Bound>, Self::Error> {
-		if self.len() > Bound::get() as usize {
-			Err("iterator length too big")
-		} else {
-			Ok(BoundedBTreeSet::<T, Bound>::try_from(self.collect::<BTreeSet<T>>())
-				.expect("length is checked above; qed"))
-		}
-	}
-}
 
 #[cfg(test)]
 pub mod test {
@@ -100,35 +78,5 @@ pub mod test {
 			assert!(FooDoubleMap::decode_len(1, 2).is_none());
 			assert!(FooDoubleMap::decode_len(2, 2).is_none());
 		});
-	}
-
-	#[test]
-	fn can_be_collected() {
-		let b1 = boundedset_from_keys::<u32, ConstU32<5>>(&[1, 2, 3, 4]);
-		let b2: BoundedBTreeSet<u32, ConstU32<5>> = b1.iter().map(|k| k + 1).try_collect().unwrap();
-		assert_eq!(b2.into_iter().collect::<Vec<_>>(), vec![2, 3, 4, 5]);
-
-		// can also be collected into a collection of length 4.
-		let b2: BoundedBTreeSet<u32, ConstU32<4>> = b1.iter().map(|k| k + 1).try_collect().unwrap();
-		assert_eq!(b2.into_iter().collect::<Vec<_>>(), vec![2, 3, 4, 5]);
-
-		// can be mutated further into iterators that are `ExactSizedIterator`.
-		let b2: BoundedBTreeSet<u32, ConstU32<5>> =
-			b1.iter().map(|k| k + 1).rev().skip(2).try_collect().unwrap();
-		// note that the binary tree will re-sort this, so rev() is not really seen
-		assert_eq!(b2.into_iter().collect::<Vec<_>>(), vec![2, 3]);
-
-		let b2: BoundedBTreeSet<u32, ConstU32<5>> =
-			b1.iter().map(|k| k + 1).take(2).try_collect().unwrap();
-		assert_eq!(b2.into_iter().collect::<Vec<_>>(), vec![2, 3]);
-
-		// but these worn't work
-		let b2: Result<BoundedBTreeSet<u32, ConstU32<3>>, _> =
-			b1.iter().map(|k| k + 1).try_collect();
-		assert!(b2.is_err());
-
-		let b2: Result<BoundedBTreeSet<u32, ConstU32<1>>, _> =
-			b1.iter().map(|k| k + 1).skip(2).try_collect();
-		assert!(b2.is_err());
 	}
 }

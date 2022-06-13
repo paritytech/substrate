@@ -19,7 +19,7 @@
 //! or a double map.
 
 use super::WeakBoundedVec;
-use crate::traits::Get;
+use crate::traits::{Get, TryCollect};
 use codec::{Decode, Encode, EncodeLike, MaxEncodedLen};
 use core::{
 	ops::{Deref, Index, IndexMut, RangeBounds},
@@ -669,6 +669,22 @@ where
 	}
 }
 
+impl<I, T, Bound> TryCollect<BoundedVec<T, Bound>> for I
+where
+	I: ExactSizeIterator + Iterator<Item = T>,
+	Bound: Get<u32>,
+{
+	type Error = &'static str;
+
+	fn try_collect(self) -> Result<BoundedVec<T, Bound>, Self::Error> {
+		if self.len() > Bound::get() as usize {
+			Err("iterator length too big")
+		} else {
+			Ok(BoundedVec::<T, Bound>::unchecked_from(self.collect::<Vec<T>>()))
+		}
+	}
+}
+
 #[cfg(test)]
 pub mod test {
 	use super::*;
@@ -940,5 +956,43 @@ pub mod test {
 		assert!(BoundedSlice::<u32, ConstU32<2>>::try_from(&[0][..]).is_ok());
 		assert!(BoundedSlice::<u32, ConstU32<2>>::try_from(&[0, 1][..]).is_ok());
 		assert!(BoundedSlice::<u32, ConstU32<2>>::try_from(&[0, 1, 2][..]).is_err());
+	}
+
+	#[test]
+	fn can_be_collected() {
+		let b1: BoundedVec<u32, ConstU32<5>> = bounded_vec![1, 2, 3, 4];
+		let b2: BoundedVec<u32, ConstU32<5>> = b1.iter().map(|x| x + 1).try_collect().unwrap();
+		assert_eq!(b2, vec![2, 3, 4, 5]);
+
+		// can also be collected into a collection of length 4.
+		let b2: BoundedVec<u32, ConstU32<4>> = b1.iter().map(|x| x + 1).try_collect().unwrap();
+		assert_eq!(b2, vec![2, 3, 4, 5]);
+
+		// can be mutated further into iterators that are `ExactSizedIterator`.
+		let b2: BoundedVec<u32, ConstU32<4>> =
+			b1.iter().map(|x| x + 1).rev().try_collect().unwrap();
+		assert_eq!(b2, vec![5, 4, 3, 2]);
+
+		let b2: BoundedVec<u32, ConstU32<4>> =
+			b1.iter().map(|x| x + 1).rev().skip(2).try_collect().unwrap();
+		assert_eq!(b2, vec![3, 2]);
+		let b2: BoundedVec<u32, ConstU32<2>> =
+			b1.iter().map(|x| x + 1).rev().skip(2).try_collect().unwrap();
+		assert_eq!(b2, vec![3, 2]);
+
+		let b2: BoundedVec<u32, ConstU32<4>> =
+			b1.iter().map(|x| x + 1).rev().take(2).try_collect().unwrap();
+		assert_eq!(b2, vec![5, 4]);
+		let b2: BoundedVec<u32, ConstU32<2>> =
+			b1.iter().map(|x| x + 1).rev().take(2).try_collect().unwrap();
+		assert_eq!(b2, vec![5, 4]);
+
+		// but these worn't work
+		let b2: Result<BoundedVec<u32, ConstU32<3>>, _> = b1.iter().map(|x| x + 1).try_collect();
+		assert!(b2.is_err());
+
+		let b2: Result<BoundedVec<u32, ConstU32<1>>, _> =
+			b1.iter().map(|x| x + 1).rev().take(2).try_collect();
+		assert!(b2.is_err());
 	}
 }
