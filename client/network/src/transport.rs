@@ -56,11 +56,14 @@ pub fn build_transport(
 	let transport = if !memory_only {
 		let desktop_trans = tcp::TcpConfig::new().nodelay(true);
 		let desktop_trans =
-			websocket::WsConfig::new(desktop_trans.clone()).or_transport(desktop_trans);
-		let dns_init = futures::executor::block_on(dns::DnsConfig::system(desktop_trans.clone()));
+			websocket::WsConfig::new(desktop_trans).or_transport(tcp::TcpConfig::new().nodelay(true));
+		let dns_init = futures::executor::block_on(dns::DnsConfig::system(desktop_trans));
 		EitherTransport::Left(if let Ok(dns) = dns_init {
 			EitherTransport::Left(dns)
 		} else {
+			let desktop_trans = tcp::TcpConfig::new().nodelay(true);
+			let desktop_trans =
+				websocket::WsConfig::new(desktop_trans).or_transport(tcp::TcpConfig::new().nodelay(true));
 			EitherTransport::Right(desktop_trans.map_err(dns::DnsErr::Transport))
 		})
 	} else {
