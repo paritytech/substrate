@@ -43,7 +43,7 @@ use sp_std::{marker::PhantomData, prelude::*};
 #[derive(Encode, scale_info::TypeInfo)]
 #[scale_info(skip_type_params(S))]
 pub struct BoundedVec<T, S>(
-	Vec<T>,
+	pub(super) Vec<T>,
 	#[cfg_attr(feature = "std", serde(skip_serializing))] PhantomData<S>,
 );
 
@@ -106,7 +106,7 @@ where
 /// Similar to a `BoundedVec`, but not owned and cannot be decoded.
 #[derive(Encode, scale_info::TypeInfo)]
 #[scale_info(skip_type_params(S))]
-pub struct BoundedSlice<'a, T, S>(&'a [T], PhantomData<S>);
+pub struct BoundedSlice<'a, T, S>(pub(super) &'a [T], PhantomData<S>);
 
 // `BoundedSlice`s encode to something which will always decode into a `BoundedVec`,
 // `WeakBoundedVec`, or a `Vec`.
@@ -117,13 +117,81 @@ impl<'a, T: Encode + Decode, S: Get<u32>> EncodeLike<WeakBoundedVec<T, S>>
 }
 impl<'a, T: Encode + Decode, S: Get<u32>> EncodeLike<Vec<T>> for BoundedSlice<'a, T, S> {}
 
-impl<T: PartialOrd, Bound: Get<u32>> PartialOrd for BoundedVec<T, Bound> {
-	fn partial_cmp(&self, other: &Self) -> Option<sp_std::cmp::Ordering> {
-		self.0.partial_cmp(&other.0)
+impl<'a, T, BoundSelf, BoundRhs> PartialEq<BoundedSlice<'a, T, BoundRhs>>
+	for BoundedSlice<'a, T, BoundSelf>
+where
+	T: PartialEq,
+	BoundSelf: Get<u32>,
+	BoundRhs: Get<u32>,
+{
+	fn eq(&self, other: &BoundedSlice<'a, T, BoundRhs>) -> bool {
+		self.0 == other.0
 	}
 }
 
-impl<T: Ord, Bound: Get<u32>> Ord for BoundedVec<T, Bound> {
+impl<'a, T, BoundSelf, BoundRhs> PartialEq<BoundedVec<T, BoundRhs>>
+	for BoundedSlice<'a, T, BoundSelf>
+where
+	T: PartialEq,
+	BoundSelf: Get<u32>,
+	BoundRhs: Get<u32>,
+{
+	fn eq(&self, other: &BoundedVec<T, BoundRhs>) -> bool {
+		self.0 == other.0
+	}
+}
+
+impl<'a, T, BoundSelf, BoundRhs> PartialEq<WeakBoundedVec<T, BoundRhs>>
+	for BoundedSlice<'a, T, BoundSelf>
+where
+	T: PartialEq,
+	BoundSelf: Get<u32>,
+	BoundRhs: Get<u32>,
+{
+	fn eq(&self, other: &WeakBoundedVec<T, BoundRhs>) -> bool {
+		self.0 == other.0
+	}
+}
+
+impl<'a, T, S: Get<u32>> Eq for BoundedSlice<'a, T, S> where T: Eq {}
+
+impl<'a, T, BoundSelf, BoundRhs> PartialOrd<BoundedSlice<'a, T, BoundRhs>>
+	for BoundedSlice<'a, T, BoundSelf>
+where
+	T: PartialOrd,
+	BoundSelf: Get<u32>,
+	BoundRhs: Get<u32>,
+{
+	fn partial_cmp(&self, other: &BoundedSlice<'a, T, BoundRhs>) -> Option<sp_std::cmp::Ordering> {
+		self.0.partial_cmp(other.0)
+	}
+}
+
+impl<'a, T, BoundSelf, BoundRhs> PartialOrd<BoundedVec<T, BoundRhs>>
+	for BoundedSlice<'a, T, BoundSelf>
+where
+	T: PartialOrd,
+	BoundSelf: Get<u32>,
+	BoundRhs: Get<u32>,
+{
+	fn partial_cmp(&self, other: &BoundedVec<T, BoundRhs>) -> Option<sp_std::cmp::Ordering> {
+		self.0.partial_cmp(&*other.0)
+	}
+}
+
+impl<'a, T, BoundSelf, BoundRhs> PartialOrd<WeakBoundedVec<T, BoundRhs>>
+	for BoundedSlice<'a, T, BoundSelf>
+where
+	T: PartialOrd,
+	BoundSelf: Get<u32>,
+	BoundRhs: Get<u32>,
+{
+	fn partial_cmp(&self, other: &WeakBoundedVec<T, BoundRhs>) -> Option<sp_std::cmp::Ordering> {
+		self.0.partial_cmp(&*other.0)
+	}
+}
+
+impl<'a, T: Ord, Bound: Get<u32>> Ord for BoundedSlice<'a, T, Bound> {
 	fn cmp(&self, other: &Self) -> sp_std::cmp::Ordering {
 		self.0.cmp(&other.0)
 	}
@@ -650,7 +718,30 @@ where
 	BoundRhs: Get<u32>,
 {
 	fn eq(&self, rhs: &BoundedVec<T, BoundRhs>) -> bool {
-		BoundSelf::get() == BoundRhs::get() && self.0 == rhs.0
+		self.0 == rhs.0
+	}
+}
+
+impl<T, BoundSelf, BoundRhs> PartialEq<WeakBoundedVec<T, BoundRhs>> for BoundedVec<T, BoundSelf>
+where
+	T: PartialEq,
+	BoundSelf: Get<u32>,
+	BoundRhs: Get<u32>,
+{
+	fn eq(&self, rhs: &WeakBoundedVec<T, BoundRhs>) -> bool {
+		self.0 == rhs.0
+	}
+}
+
+impl<'a, T, BoundSelf, BoundRhs> PartialEq<BoundedSlice<'a, T, BoundRhs>>
+	for BoundedVec<T, BoundSelf>
+where
+	T: PartialEq,
+	BoundSelf: Get<u32>,
+	BoundRhs: Get<u32>,
+{
+	fn eq(&self, rhs: &BoundedSlice<'a, T, BoundRhs>) -> bool {
+		self.0 == rhs.0
 	}
 }
 
@@ -661,6 +752,46 @@ impl<T: PartialEq, S: Get<u32>> PartialEq<Vec<T>> for BoundedVec<T, S> {
 }
 
 impl<T, S: Get<u32>> Eq for BoundedVec<T, S> where T: Eq {}
+
+impl<T, BoundSelf, BoundRhs> PartialOrd<BoundedVec<T, BoundRhs>> for BoundedVec<T, BoundSelf>
+where
+	T: PartialOrd,
+	BoundSelf: Get<u32>,
+	BoundRhs: Get<u32>,
+{
+	fn partial_cmp(&self, other: &BoundedVec<T, BoundRhs>) -> Option<sp_std::cmp::Ordering> {
+		self.0.partial_cmp(&other.0)
+	}
+}
+
+impl<T, BoundSelf, BoundRhs> PartialOrd<WeakBoundedVec<T, BoundRhs>> for BoundedVec<T, BoundSelf>
+where
+	T: PartialOrd,
+	BoundSelf: Get<u32>,
+	BoundRhs: Get<u32>,
+{
+	fn partial_cmp(&self, other: &WeakBoundedVec<T, BoundRhs>) -> Option<sp_std::cmp::Ordering> {
+		self.0.partial_cmp(&other.0)
+	}
+}
+
+impl<'a, T, BoundSelf, BoundRhs> PartialOrd<BoundedSlice<'a, T, BoundRhs>>
+	for BoundedVec<T, BoundSelf>
+where
+	T: PartialOrd,
+	BoundSelf: Get<u32>,
+	BoundRhs: Get<u32>,
+{
+	fn partial_cmp(&self, other: &BoundedSlice<'a, T, BoundRhs>) -> Option<sp_std::cmp::Ordering> {
+		(&*self.0).partial_cmp(other.0)
+	}
+}
+
+impl<T: Ord, Bound: Get<u32>> Ord for BoundedVec<T, Bound> {
+	fn cmp(&self, other: &Self) -> sp_std::cmp::Ordering {
+		self.0.cmp(&other.0)
+	}
+}
 
 impl<T, S> MaxEncodedLen for BoundedVec<T, S>
 where

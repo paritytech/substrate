@@ -18,6 +18,7 @@
 //! Traits, types and structs to support putting a bounded vector into storage, as a raw value, map
 //! or a double map.
 
+use super::{BoundedSlice, BoundedVec};
 use crate::traits::Get;
 use codec::{Decode, Encode, MaxEncodedLen};
 use core::{
@@ -35,7 +36,7 @@ use sp_std::{marker::PhantomData, prelude::*};
 /// is accepted, and some method allow to bypass the restriction with warnings.
 #[derive(Encode, scale_info::TypeInfo)]
 #[scale_info(skip_type_params(S))]
-pub struct WeakBoundedVec<T, S>(Vec<T>, PhantomData<S>);
+pub struct WeakBoundedVec<T, S>(pub(super) Vec<T>, PhantomData<S>);
 
 impl<T: Decode, S: Get<u32>> Decode for WeakBoundedVec<T, S> {
 	fn decode<I: codec::Input>(input: &mut I) -> Result<Self, codec::Error> {
@@ -283,14 +284,36 @@ impl<T, S> codec::DecodeLength for WeakBoundedVec<T, S> {
 	}
 }
 
-// NOTE: we could also implement this as:
-// impl<T: Value, S1: Get<u32>, S2: Get<u32>> PartialEq<WeakBoundedVec<T, S2>> for WeakBoundedVec<T,
-// S1> to allow comparison of bounded vectors with different bounds.
-impl<T, S> PartialEq for WeakBoundedVec<T, S>
+impl<T, BoundSelf, BoundRhs> PartialEq<WeakBoundedVec<T, BoundRhs>> for WeakBoundedVec<T, BoundSelf>
 where
 	T: PartialEq,
+	BoundSelf: Get<u32>,
+	BoundRhs: Get<u32>,
 {
-	fn eq(&self, rhs: &Self) -> bool {
+	fn eq(&self, rhs: &WeakBoundedVec<T, BoundRhs>) -> bool {
+		self.0 == rhs.0
+	}
+}
+
+impl<T, BoundSelf, BoundRhs> PartialEq<BoundedVec<T, BoundRhs>> for WeakBoundedVec<T, BoundSelf>
+where
+	T: PartialEq,
+	BoundSelf: Get<u32>,
+	BoundRhs: Get<u32>,
+{
+	fn eq(&self, rhs: &BoundedVec<T, BoundRhs>) -> bool {
+		self.0 == rhs.0
+	}
+}
+
+impl<'a, T, BoundSelf, BoundRhs> PartialEq<BoundedSlice<'a, T, BoundRhs>>
+	for WeakBoundedVec<T, BoundSelf>
+where
+	T: PartialEq,
+	BoundSelf: Get<u32>,
+	BoundRhs: Get<u32>,
+{
+	fn eq(&self, rhs: &BoundedSlice<'a, T, BoundRhs>) -> bool {
 		self.0 == rhs.0
 	}
 }
@@ -301,7 +324,48 @@ impl<T: PartialEq, S: Get<u32>> PartialEq<Vec<T>> for WeakBoundedVec<T, S> {
 	}
 }
 
-impl<T, S> Eq for WeakBoundedVec<T, S> where T: Eq {}
+impl<T, S: Get<u32>> Eq for WeakBoundedVec<T, S> where T: Eq {}
+
+impl<T, BoundSelf, BoundRhs> PartialOrd<WeakBoundedVec<T, BoundRhs>>
+	for WeakBoundedVec<T, BoundSelf>
+where
+	T: PartialOrd,
+	BoundSelf: Get<u32>,
+	BoundRhs: Get<u32>,
+{
+	fn partial_cmp(&self, other: &WeakBoundedVec<T, BoundRhs>) -> Option<sp_std::cmp::Ordering> {
+		self.0.partial_cmp(&other.0)
+	}
+}
+
+impl<T, BoundSelf, BoundRhs> PartialOrd<BoundedVec<T, BoundRhs>> for WeakBoundedVec<T, BoundSelf>
+where
+	T: PartialOrd,
+	BoundSelf: Get<u32>,
+	BoundRhs: Get<u32>,
+{
+	fn partial_cmp(&self, other: &BoundedVec<T, BoundRhs>) -> Option<sp_std::cmp::Ordering> {
+		self.0.partial_cmp(&other.0)
+	}
+}
+
+impl<'a, T, BoundSelf, BoundRhs> PartialOrd<BoundedSlice<'a, T, BoundRhs>>
+	for WeakBoundedVec<T, BoundSelf>
+where
+	T: PartialOrd,
+	BoundSelf: Get<u32>,
+	BoundRhs: Get<u32>,
+{
+	fn partial_cmp(&self, other: &BoundedSlice<'a, T, BoundRhs>) -> Option<sp_std::cmp::Ordering> {
+		(&*self.0).partial_cmp(other.0)
+	}
+}
+
+impl<T: Ord, S: Get<u32>> Ord for WeakBoundedVec<T, S> {
+	fn cmp(&self, other: &Self) -> sp_std::cmp::Ordering {
+		self.0.cmp(&other.0)
+	}
+}
 
 impl<T, S> MaxEncodedLen for WeakBoundedVec<T, S>
 where
