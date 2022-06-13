@@ -159,13 +159,12 @@ where
 	}
 }
 
-#[cfg(feature = "std")]
-impl<T, S> std::fmt::Debug for BoundedBTreeSet<T, S>
+impl<T, S> sp_std::fmt::Debug for BoundedBTreeSet<T, S>
 where
-	BTreeSet<T>: std::fmt::Debug,
+	BTreeSet<T>: sp_std::fmt::Debug,
 	S: Get<u32>,
 {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
 		f.debug_tuple("BoundedBTreeSet").field(&self.0).field(&Self::bound()).finish()
 	}
 }
