@@ -1738,9 +1738,9 @@ mod remote_tests_local {
 		remote_tests::run_with_limits,
 		*,
 	};
-	use remote_externalities::{Mode, OfflineConfig, OnlineConfig};
+	use remote_externalities::{Mode, OfflineConfig, OnlineConfig, SnapshotConfig};
 	use sp_runtime::traits::Bounded;
-	use sp_std::env::var as env_var;
+	use std::env::var as env_var;
 
 	// we only use the hash type from this, so using the mock should be fine.
 	type Extrinsic = sp_runtime::testing::TestXt<MockCall, ()>;
@@ -1748,12 +1748,12 @@ mod remote_tests_local {
 
 	#[tokio::test]
 	async fn on_initialize_migration() {
-		let snap = env_var("SNAP").expect("Need SNAP env var").into();
+		let snap: SnapshotConfig = env_var("SNAP").expect("Need SNAP env var").into();
 		let ws_api = env_var("WS_API").expect("Need WS_API env var").into();
 
 		sp_tracing::try_init_simple();
 		let mode = Mode::OfflineOrElseOnline(
-			OfflineConfig { state_snapshot: snap },
+			OfflineConfig { state_snapshot: snap.clone() },
 			OnlineConfig { transport: ws_api, state_snapshot: Some(snap), ..Default::default() },
 		);
 
