@@ -146,6 +146,15 @@ impl<'a, T, S> From<BoundedSlice<'a, T, S>> for &'a [T] {
 	}
 }
 
+impl<'a, T, S> Clone for BoundedSlice<'a, T, S> {
+	fn clone(&self) -> Self {
+		BoundedSlice(self.0, PhantomData)
+	}
+}
+
+// Since a reference `&T` is always `Copy`, so is `BoundedSlice<'a, T, S>`.
+impl<'a, T, S> Copy for BoundedSlice<'a, T, S> {}
+
 impl<'a, T, S> sp_std::iter::IntoIterator for BoundedSlice<'a, T, S> {
 	type Item = &'a T;
 	type IntoIter = sp_std::slice::Iter<'a, T>;
