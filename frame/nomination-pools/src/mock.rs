@@ -111,6 +111,7 @@ impl sp_staking::StakingInterface for StakingMock {
 		Ok(())
 	}
 
+	#[cfg(feature = "runtime-benchmarks")]
 	fn nominations(_: Self::AccountId) -> Option<Vec<Self::AccountId>> {
 		Nominations::get()
 	}
@@ -183,6 +184,7 @@ impl pools::Config for Runtime {
 	type Event = Event;
 	type WeightInfo = ();
 	type Currency = Balances;
+	type CurrencyBalance = Balance;
 	type BalanceToU256 = BalanceToU256;
 	type U256ToBalance = U256ToBalance;
 	type StakingInterface = StakingMock;
@@ -280,8 +282,8 @@ pub(crate) fn unsafe_set_state(pool_id: PoolId, state: PoolState) -> Result<(), 
 }
 
 parameter_types! {
-	static PoolsEvents: usize = 0;
-	static BalancesEvents: usize = 0;
+	storage PoolsEvents: u32 = 0;
+	storage BalancesEvents: u32 = 0;
 }
 
 /// All events of this pallet.
@@ -292,8 +294,8 @@ pub(crate) fn pool_events_since_last_call() -> Vec<super::Event<Runtime>> {
 		.filter_map(|e| if let Event::Pools(inner) = e { Some(inner) } else { None })
 		.collect::<Vec<_>>();
 	let already_seen = PoolsEvents::get();
-	PoolsEvents::set(events.len());
-	events.into_iter().skip(already_seen).collect()
+	PoolsEvents::set(&(events.len() as u32));
+	events.into_iter().skip(already_seen as usize).collect()
 }
 
 /// All events of the `Balances` pallet.
@@ -304,8 +306,8 @@ pub(crate) fn balances_events_since_last_call() -> Vec<pallet_balances::Event<Ru
 		.filter_map(|e| if let Event::Balances(inner) = e { Some(inner) } else { None })
 		.collect::<Vec<_>>();
 	let already_seen = BalancesEvents::get();
-	BalancesEvents::set(events.len());
-	events.into_iter().skip(already_seen).collect()
+	BalancesEvents::set(&(events.len() as u32));
+	events.into_iter().skip(already_seen as usize).collect()
 }
 
 /// Same as `fully_unbond`, in permissioned setting.
