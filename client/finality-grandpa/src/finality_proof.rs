@@ -271,6 +271,7 @@ mod tests {
 		let justification: GrandpaJustification<Block> =
 			Decode::decode(&mut &proof.justification[..])
 				.map_err(|_| ClientError::JustificationDecode)?;
+
 		justification.verify(current_set_id, &current_authorities)?;
 
 		Ok(proof)
@@ -370,7 +371,7 @@ mod tests {
 
 	#[test]
 	fn finality_proof_check_fails_with_incomplete_justification() {
-		let (client, _, blocks) = test_blockchain(8, &[4, 5, 8]);
+		let (_, _, blocks) = test_blockchain(8, &[4, 5, 8]);
 
 		// Create a commit without precommits
 		let commit = finality_grandpa::Commit {
@@ -378,7 +379,9 @@ mod tests {
 			target_number: *blocks[7].header().number(),
 			precommits: Vec::new(),
 		};
-		let grandpa_just = GrandpaJustification::from_commit(&client, 8, commit).unwrap();
+
+		let grandpa_just =
+			GrandpaJustification::<Block> { round: 8, votes_ancestries: Vec::new(), commit };
 
 		let finality_proof = FinalityProof {
 			block: header(2).hash(),

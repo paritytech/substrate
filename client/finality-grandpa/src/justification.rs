@@ -42,9 +42,9 @@ use crate::{AuthorityList, Commit, Error};
 /// nodes, and are used by syncing nodes to prove authority set handoffs.
 #[derive(Clone, Encode, Decode, PartialEq, Eq, Debug)]
 pub struct GrandpaJustification<Block: BlockT> {
-	round: u64,
+	pub(crate) round: u64,
 	pub(crate) commit: Commit<Block>,
-	votes_ancestries: Vec<Block::Header>,
+	pub(crate) votes_ancestries: Vec<Block::Header>,
 }
 
 impl<Block: BlockT> GrandpaJustification<Block> {
