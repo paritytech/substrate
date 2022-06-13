@@ -262,6 +262,22 @@ impl<T, S> sp_std::iter::IntoIterator for WeakBoundedVec<T, S> {
 	}
 }
 
+impl<'a, T, S> sp_std::iter::IntoIterator for &'a WeakBoundedVec<T, S> {
+	type Item = &'a T;
+	type IntoIter = sp_std::slice::Iter<'a, T>;
+	fn into_iter(self) -> Self::IntoIter {
+		self.0.iter()
+	}
+}
+
+impl<'a, T, S> sp_std::iter::IntoIterator for &'a mut WeakBoundedVec<T, S> {
+	type Item = &'a mut T;
+	type IntoIter = sp_std::slice::IterMut<'a, T>;
+	fn into_iter(self) -> Self::IntoIter {
+		self.0.iter_mut()
+	}
+}
+
 impl<T, S> codec::DecodeLength for WeakBoundedVec<T, S> {
 	fn len(self_encoded: &[u8]) -> Result<usize, codec::Error> {
 		// `WeakBoundedVec<T, _>` stored just a `Vec<T>`, thus the length is at the beginning in

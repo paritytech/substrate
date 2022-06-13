@@ -22,7 +22,7 @@ use crate::{
 	metadata::{StorageEntryMetadata, StorageEntryType},
 	storage::{
 		types::{OptionQuery, QueryKindTrait, StorageEntryMetadataBuilder},
-		StorageAppend, StorageDecodeLength, StoragePrefixedMap, StorageTryAppend,
+		KeyLenOf, StorageAppend, StorageDecodeLength, StoragePrefixedMap, StorageTryAppend,
 	},
 	traits::{Get, GetDefault, StorageInfo, StorageInstance},
 };
@@ -52,6 +52,20 @@ pub struct StorageMap<
 	OnEmpty = GetDefault,
 	MaxValues = GetDefault,
 >(core::marker::PhantomData<(Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues)>);
+
+impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues> Get<u32>
+	for KeyLenOf<StorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>>
+where
+	Prefix: StorageInstance,
+	Hasher: crate::hash::StorageHasher,
+	Key: FullCodec + MaxEncodedLen,
+{
+	fn get() -> u32 {
+		let z =
+			Hasher::max_len::<Key>() + Prefix::pallet_prefix().len() + Prefix::STORAGE_PREFIX.len();
+		z as u32
+	}
+}
 
 impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
 	crate::storage::generator::StorageMap<Key, Value>
@@ -136,6 +150,11 @@ where
 	/// Swap the values of two keys.
 	pub fn swap<KeyArg1: EncodeLike<Key>, KeyArg2: EncodeLike<Key>>(key1: KeyArg1, key2: KeyArg2) {
 		<Self as crate::storage::StorageMap<Key, Value>>::swap(key1, key2)
+	}
+
+	/// Store or remove the value to be associated with `key` so that `get` returns the `query`.
+	pub fn set<KeyArg: EncodeLike<Key>>(key: KeyArg, q: QueryKind::Query) {
+		<Self as crate::storage::StorageMap<Key, Value>>::set(key, q)
 	}
 
 	/// Store a value to be associated with the given key from the map.

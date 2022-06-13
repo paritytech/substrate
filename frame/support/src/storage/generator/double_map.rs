@@ -151,6 +151,13 @@ where
 		unhashed::get(&Self::storage_double_map_final_key(k1, k2)).ok_or(())
 	}
 
+	fn set<KArg1: EncodeLike<K1>, KArg2: EncodeLike<K2>>(k1: KArg1, k2: KArg2, q: Self::Query) {
+		match G::from_query_to_optional_value(q) {
+			Some(v) => Self::insert(k1, k2, v),
+			None => Self::remove(k1, k2),
+		}
+	}
+
 	fn take<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> Self::Query
 	where
 		KArg1: EncodeLike<K1>,
