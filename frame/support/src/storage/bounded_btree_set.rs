@@ -26,8 +26,9 @@ impl<T, S> StorageDecodeLength for BoundedBTreeSet<T, S> {}
 pub mod test {
 	use super::*;
 	use crate::Twox128;
-	use frame_support::traits::ConstU32;
+	use frame_support::traits::{ConstU32, Get};
 	use sp_io::TestExternalities;
+	use sp_std::collections::btree_set::BTreeSet;
 
 	#[crate::storage_alias]
 	type Foo = StorageValue<Prefix, BoundedBTreeSet<u32, ConstU32<7>>>;
