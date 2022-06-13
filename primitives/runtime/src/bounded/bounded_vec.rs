@@ -163,7 +163,7 @@ where
 	BoundRhs: Get<u32>,
 {
 	fn partial_cmp(&self, other: &BoundedSlice<'a, T, BoundRhs>) -> Option<sp_std::cmp::Ordering> {
-		self.0.partial_cmp(&other.0)
+		self.0.partial_cmp(other.0)
 	}
 }
 
