@@ -35,10 +35,10 @@ pub type DepositOf<T> = Deposit<BalanceOf<T>>;
 /// A production root storage meter that actually charges from its origin.
 pub type Meter<T> = RawMeter<T, ReservingExt, Root>;
 
-/// A poduction nested storage meter that actually charges from its origin.
+/// A production nested storage meter that actually charges from its origin.
 pub type NestedMeter<T> = RawMeter<T, ReservingExt, Nested>;
 
-/// A poduction storage meter that actually charges from its origin.
+/// A production storage meter that actually charges from its origin.
 ///
 /// This can be used where we want to be generic over the state (Root vs. Nested).
 pub type GenericMeter<T, S> = RawMeter<T, ReservingExt, S>;
@@ -53,8 +53,8 @@ pub trait Ext<T: Config> {
 	///
 	/// `origin`: The origin of the call stack from which is responsible for putting down a deposit.
 	/// `limit`: The limit with which the meter was constructed.
-	/// `min_leftover`: How much `free_balance` in addition to the ed should be left inside the
-	/// `origin` account.
+	/// `min_leftover`: How much `free_balance` in addition to the existential deposit (ed) should
+	/// be left inside the `origin` account.
 	///
 	/// Returns the limit that should be used by the meter. If origin can't afford the `limit`
 	/// it returns `Err`.
@@ -551,7 +551,7 @@ mod tests {
 		let mut meter = TestMeter::new(&ALICE, Some(1_000), 0).unwrap();
 		assert_eq!(meter.available(), 1_000);
 
-		// an empty charge foes not create a `Charge` entry
+		// an empty charge does not create a `Charge` entry
 		let mut nested0 = meter.nested();
 		nested0.charge(&Default::default()).unwrap();
 		meter.absorb(nested0, &ALICE, &BOB, None);

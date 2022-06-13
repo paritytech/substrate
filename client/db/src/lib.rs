@@ -226,9 +226,10 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 		&self,
 		child_info: Option<&ChildInfo>,
 		prefix: Option<&[u8]>,
+		start_at: Option<&[u8]>,
 		f: F,
 	) {
-		self.state.apply_to_keys_while(child_info, prefix, f)
+		self.state.apply_to_keys_while(child_info, prefix, start_at, f)
 	}
 
 	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
@@ -301,6 +302,8 @@ pub struct DatabaseSettings {
 	/// Where to find the database.
 	pub source: DatabaseSource,
 	/// Block pruning mode.
+	///
+	/// NOTE: only finalized blocks are subject for removal!
 	pub keep_blocks: KeepBlocks,
 }
 

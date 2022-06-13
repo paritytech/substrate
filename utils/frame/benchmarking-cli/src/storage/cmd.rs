@@ -34,7 +34,7 @@ use sp_runtime::generic::BlockId;
 use std::{fmt::Debug, path::PathBuf, sync::Arc};
 
 use super::template::TemplateData;
-use crate::shared::{new_rng, WeightParams};
+use crate::shared::{new_rng, HostInfoParams, WeightParams};
 
 /// Benchmark the storage speed of a chain snapshot.
 #[derive(Debug, Parser)]
@@ -62,6 +62,10 @@ pub struct StorageParams {
 	#[allow(missing_docs)]
 	#[clap(flatten)]
 	pub weight_params: WeightParams,
+
+	#[allow(missing_docs)]
+	#[clap(flatten)]
+	pub hostinfo: HostInfoParams,
 
 	/// Skip the `read` benchmark.
 	#[clap(long)]

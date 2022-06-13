@@ -104,7 +104,7 @@ use frame_support::{
 	traits::{
 		defensive_prelude::*, ChangeMembers, Contains, ContainsLengthBound, Currency,
 		CurrencyToVote, Get, InitializeMembers, LockIdentifier, LockableCurrency, OnUnbalanced,
-		ReservableCurrency, SortedMembers, StorageVersion, WithdrawReasons,
+		ReservableCurrency, SortedMembers, WithdrawReasons,
 	},
 	weights::Weight,
 };
@@ -122,9 +122,6 @@ pub use weights::WeightInfo;
 
 /// All migrations.
 pub mod migrations;
-
-/// The current storage version.
-const STORAGE_VERSION: StorageVersion = StorageVersion::new(4);
 
 /// The maximum votes allowed per voter.
 pub const MAXIMUM_VOTE: usize = 16;
@@ -186,6 +183,15 @@ pub mod pallet {
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 
+	/// The current storage version.
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(4);
+
+	#[pallet::pallet]
+	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::storage_version(STORAGE_VERSION)]
+	#[pallet::without_storage_info]
+	pub struct Pallet<T>(PhantomData<T>);
+
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
@@ -246,12 +252,6 @@ pub mod pallet {
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
 	}
-
-	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
-	#[pallet::storage_version(STORAGE_VERSION)]
-	#[pallet::without_storage_info]
-	pub struct Pallet<T>(PhantomData<T>);
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
