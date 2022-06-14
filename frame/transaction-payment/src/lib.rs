@@ -327,7 +327,8 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// A transaction fee `actual_fee`, of which `tip` was added to the minimum inclusion fee, has been paid by `who`.
+		/// A transaction fee `actual_fee`, of which `tip` was added to the minimum inclusion fee,
+		/// has been paid by `who`.
 		TransactionFeePaid { who: T::AccountId, actual_fee: BalanceOf<T>, tip: BalanceOf<T> },
 	}
 
@@ -744,7 +745,7 @@ where
 			T::OnChargeTransaction::correct_and_deposit_fee(
 				&who, info, post_info, actual_fee, tip, imbalance,
 			)?;
-			Pallet::<T>::deposit_event(Event::<T>::TransactionPaid { who, fee: actual_fee, tip });
+			Pallet::<T>::deposit_event(Event::<T>::TransactionFeePaid { who, actual_fee, tip });
 		}
 		Ok(())
 	}
@@ -1419,11 +1420,11 @@ mod tests {
 					&Ok(())
 				));
 				assert_eq!(Balances::total_balance(&user), 0);
-				// TransactionPaid Event
+				// TransactionFeePaid Event
 				System::assert_has_event(Event::TransactionPayment(
-					pallet_transaction_payment::Event::TransactionPaid {
+					pallet_transaction_payment::Event::TransactionFeePaid {
 						who: user,
-						fee: 0,
+						actual_fee: 0,
 						tip: 0,
 					},
 				));

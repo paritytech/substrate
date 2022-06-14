@@ -420,9 +420,9 @@ fn full_native_block_import_works() {
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
 				event: Event::TransactionPayment(
-					pallet_transaction_payment::Event::TransactionPaid {
+					pallet_transaction_payment::Event::TransactionFeePaid {
 						who: alice().into(),
-						fee: fees,
+						actual_fee: fees,
 						tip: 0,
 					},
 				),
@@ -502,9 +502,9 @@ fn full_native_block_import_works() {
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
 				event: Event::TransactionPayment(
-					pallet_transaction_payment::Event::TransactionPaid {
+					pallet_transaction_payment::Event::TransactionFeePaid {
 						who: bob().into(),
-						fee: fees,
+						actual_fee: fees,
 						tip: 0,
 					},
 				),
@@ -550,9 +550,9 @@ fn full_native_block_import_works() {
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(2),
 				event: Event::TransactionPayment(
-					pallet_transaction_payment::Event::TransactionPaid {
+					pallet_transaction_payment::Event::TransactionFeePaid {
 						who: alice().into(),
-						fee: fees,
+						actual_fee: fees,
 						tip: 0,
 					},
 				),
