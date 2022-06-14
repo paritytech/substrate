@@ -27,7 +27,7 @@ use sp_std::{
 };
 
 pub use schnorrkel::{
-	vrf::{VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH},
+	vrf::{VRFInOut, VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH},
 	PublicKey, SignatureError,
 };
 

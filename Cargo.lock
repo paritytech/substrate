@@ -8268,6 +8268,8 @@ dependencies = [
  "fork-tree",
  "futures",
  "log",
+ "num-bigint",
+ "num-traits",
  "parity-scale-codec",
  "parking_lot 0.12.0",
  "retain_mut",

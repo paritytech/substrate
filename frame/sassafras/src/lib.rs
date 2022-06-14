@@ -257,8 +257,7 @@ pub mod pallet {
 			if let Some(pre_digest) = Initialized::<T>::take().flatten() {
 				let authority_index = pre_digest.authority_index();
 
-				// TODO-SASS: accumulate randomness
-
+				// TODO-SASS: check for disabled validators
 				// if T::DisabledValidators::is_disabled(authority_index) {
 				// 	panic!(
 				// 		"Validator with index {:?} is disabled and should not be attempting to author
@@ -290,7 +289,7 @@ pub mod pallet {
 							vrf_output.0.attach_input_hash(&pubkey, transcript).ok()
 						})
 						.map(|inout| {
-							inout.make_bytes(sp_consensus_sassafras::SASSAFRAS_VRF_INOUT_CONTEXT)
+							inout.make_bytes(sp_consensus_sassafras::SASSAFRAS_BLOCK_VRF_PREFIX)
 						});
 
 					if let Some(randomness) = pre_digest.is_primary().then(|| randomness).flatten()

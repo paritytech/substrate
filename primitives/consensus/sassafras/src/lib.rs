@@ -54,8 +54,11 @@ mod app {
 /// The index of an authority.
 pub type AuthorityIndex = u32;
 
-/// BABE VRFInOut context.
-pub const SASSAFRAS_VRF_INOUT_CONTEXT: &[u8] = b"BabeVRFInOutContext";
+/// The prefix used by Sassafras for its ticket VRF keys.
+pub const SASSAFRAS_TICKET_VRF_PREFIX: &[u8] = b"substrate-sassafras-ticket-vrf";
+
+/// The prefix used by Sassafras for its post-block VRF keys.
+pub const SASSAFRAS_BLOCK_VRF_PREFIX: &[u8] = b"substrate-sassafras-block-vrf";
 
 /// Sassafras authority keypair. Necessarily equivalent to the schnorrkel public key used in
 /// the main Sassafras module. If that ever changes, then this must, too.
@@ -103,6 +106,9 @@ pub struct SassafrasGenesisConfiguration {
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct SassafrasEpochConfiguration {
 	// TODO-SASS
+	// x: redundancy_factor
+	// a: attempts number
+	// L: bound on aa number of tickets that can be gossiped
 }
 
 /// Make a VRF transcript from given randomness, slot number and epoch.
@@ -121,6 +127,34 @@ pub fn make_transcript_data(randomness: &Randomness, slot: Slot, epoch: u64) -> 
 		label: &SASSAFRAS_ENGINE_ID,
 		items: vec![
 			("slot number", VRFTranscriptValue::U64(*slot)),
+			("current epoch", VRFTranscriptValue::U64(epoch)),
+			("chain randomness", VRFTranscriptValue::Bytes(randomness.to_vec())),
+		],
+	}
+}
+
+/// Make a ticket VRF transcript.
+pub fn make_ticket_transcript(randomness: &[u8], attempt: u64, epoch: u64) -> Transcript {
+	let mut transcript = Transcript::new(&SASSAFRAS_ENGINE_ID);
+	transcript.append_message(b"type", b"ticket");
+	transcript.append_u64(b"attempt", attempt);
+	transcript.append_u64(b"current epoch", epoch);
+	transcript.append_message(b"chain randomness", randomness);
+	transcript
+}
+
+/// Make a ticket VRF transcript data container
+#[cfg(feature = "std")]
+pub fn make_ticket_transcript_data(
+	randomness: &[u8],
+	attempt: u64,
+	epoch: u64,
+) -> VRFTranscriptData {
+	VRFTranscriptData {
+		label: &SASSAFRAS_ENGINE_ID,
+		items: vec![
+			("type", VRFTranscriptValue::Bytes(b"ticket".to_vec())),
+			("attempt", VRFTranscriptValue::U64(attempt)),
 			("current epoch", VRFTranscriptValue::U64(epoch)),
 			("chain randomness", VRFTranscriptValue::Bytes(randomness.to_vec())),
 		],

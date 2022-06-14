@@ -60,7 +60,8 @@ use sc_consensus::{
 	import_queue::{BasicQueue, BoxJustificationImport, DefaultImportQueue, Verifier},
 };
 use sc_consensus_epochs::{
-	descendent_query, Epoch as EpochT, EpochChangesFor, SharedEpochChanges, ViableEpochDescriptor,
+	descendent_query, Epoch as EpochT, EpochChangesFor, EpochIdentifier, SharedEpochChanges,
+	ViableEpochDescriptor,
 };
 use sc_consensus_slots::{
 	check_equivocation, BackoffAuthoringBlocksStrategy, CheckedHeader, InherentDataProviderExt,
@@ -111,13 +112,14 @@ pub struct Epoch {
 	pub epoch_index: u64,
 	/// The starting slot of the epoch.
 	pub start_slot: Slot,
-	/// The duration of this epoch.
+	/// The duration of this epoch in slots.
 	pub duration: u64,
 	/// The authorities and their weights.
 	pub authorities: Vec<(AuthorityId, SassafrasAuthorityWeight)>,
 	/// Randomness for this epoch.
 	pub randomness: [u8; VRF_OUTPUT_LENGTH],
-	// TODO-SASS
+	/// Configuration of the epoch.
+	pub config: SassafrasEpochConfiguration,
 }
 
 impl EpochT for Epoch {
@@ -125,13 +127,14 @@ impl EpochT for Epoch {
 	type Slot = Slot;
 
 	fn increment(&self, descriptor: NextEpochDescriptor) -> Epoch {
-		// TODO-SASS
 		Epoch {
 			epoch_index: self.epoch_index + 1,
 			start_slot: self.start_slot + self.duration,
 			duration: self.duration,
 			authorities: descriptor.authorities,
 			randomness: descriptor.randomness,
+			// TODO-SASS: allow config change on epoch change (i.e. pass as param)
+			config: self.config.clone(),
 		}
 	}
 
@@ -154,6 +157,7 @@ impl Epoch {
 			duration: genesis_config.epoch_length,
 			authorities: genesis_config.genesis_authorities.clone(),
 			randomness: genesis_config.randomness,
+			config: SassafrasEpochConfiguration {},
 		}
 	}
 }
@@ -397,7 +401,7 @@ where
 		env,
 		sync_oracle: sync_oracle.clone(),
 		justification_sync_link,
-		keystore,
+		keystore: keystore.clone(),
 		epoch_changes: sassafras_link.epoch_changes.clone(),
 		slot_notification_sinks: slot_notification_sinks.clone(),
 		config: sassafras_link.config.clone(),
@@ -412,6 +416,9 @@ where
 		can_author_with,
 	);
 
+	let ticket_worker =
+		tickets_worker(client.clone(), keystore, sassafras_link.epoch_changes.clone());
+
 	// TODO-SASS: proper handler for inbound requests
 	let (worker_tx, worker_rx) = channel(HANDLE_BUFFER_SIZE);
 	let answer_requests = answer_requests(
@@ -421,12 +428,66 @@ where
 		sassafras_link.epoch_changes,
 	);
 
-	let inner = future::select(Box::pin(slot_worker), Box::pin(answer_requests));
+	let inner = async {
+		futures::select! {
+			_ = slot_worker.fuse() => (),
+			_ = ticket_worker.fuse() => (),
+			_ = answer_requests.fuse() => (),
+		}
+	};
+
 	Ok(SassafrasWorker {
 		inner: Box::pin(inner.map(|_| ())),
 		slot_notification_sinks,
 		handle: SassafrasWorkerHandle(worker_tx),
 	})
+}
+
+async fn tickets_worker<B, C>(
+	client: Arc<C>,
+	keystore: SyncCryptoStorePtr,
+	epoch_changes: SharedEpochChanges<B, Epoch>,
+) where
+	B: BlockT,
+	C: BlockchainEvents<B>,
+{
+	use sc_consensus_epochs::EpochIdentifierPosition;
+
+	let mut notifications = client.import_notification_stream();
+	while let Some(notification) = notifications.next().await {
+		warn!(target: "sassafras", ">>> IMPORTED: {:?}", notification.hash);
+		let next_epoch_digest = find_next_epoch_digest::<B>(&notification.header)
+			.map_err(|e| ConsensusError::ClientImport(e.to_string()))
+			.expect("TODO-SASS: remove me");
+		if let Some(epoch_desc) = next_epoch_digest {
+			warn!(target: "sassafras", ">>> NEW EPOCH ANNOUCED {:x?}", epoch_desc);
+
+			let epoch_changes = epoch_changes.shared_data();
+
+			let number = *notification.header.number();
+			let position = if number == One::one() {
+				EpochIdentifierPosition::Genesis1
+			} else {
+				EpochIdentifierPosition::Regular
+			};
+			let epoch_identifier = EpochIdentifier { position, hash: notification.hash, number };
+
+			let epoch = match epoch_changes.epoch(&epoch_identifier) {
+				Some(epoch) => epoch,
+				None => {
+					warn!(target: "sassafras", "Unexpected missing epoch data for {}", notification.hash);
+					continue
+				},
+			};
+
+			let tickets = authorship::generate_epoch_tickets(epoch, 40, &keystore);
+			warn!(target: "sassafras", ">>> Got {} tickets", tickets.len());
+
+			// TODO-SASS
+			// 1. Publish on-chain as unsigned transaction
+			// 2. Onchain code will accept it as far as the slot is below the half of the epoch
+		}
+	}
 }
 
 /// Requests to the Sassafras service.
@@ -438,12 +499,13 @@ pub enum SassafrasRequest<B: BlockT> {
 	EpochForChild(B::Hash, NumberFor<B>, Slot, oneshot::Sender<Result<Epoch, Error<B>>>),
 }
 
-async fn answer_requests<B: BlockT, C>(
+async fn answer_requests<B, C>(
 	mut request_rx: Receiver<SassafrasRequest<B>>,
 	_config: Config,
 	_client: Arc<C>,
 	_epoch_changes: SharedEpochChanges<B, Epoch>,
 ) where
+	B: BlockT,
 	C: ProvideRuntimeApi<B>
 		+ ProvideUncles<B>
 		+ BlockchainEvents<B>
@@ -1232,6 +1294,7 @@ where
 								e
 							))
 						})?;
+
 					Ok(())
 				};
 
@@ -1358,11 +1421,7 @@ pub fn block_import<C, B: BlockT, I>(
 	client: Arc<C>,
 ) -> ClientResult<(SassafrasBlockImport<B, C, I>, SassafrasLink<B>)>
 where
-	C: AuxStore
-		+ HeaderBackend<B>
-		+ HeaderMetadata<B, Error = sp_blockchain::Error>
-		// + PreCommitActions<B>
-		+ 'static,
+	C: AuxStore + HeaderBackend<B> + HeaderMetadata<B, Error = sp_blockchain::Error> + 'static,
 {
 	let epoch_changes = aux_schema::load_epoch_changes::<B, _>(&*client)?;
 
@@ -1373,16 +1432,7 @@ where
 	// startup rather than waiting until importing the next epoch change block.
 	prune_finalized(client.clone(), &mut epoch_changes.shared_data())?;
 
-	// TODO-SASS: If required, register cleanup finality actions
-	// let client_weak = Arc::downgrade(&client);
-	// let on_finality = move |summary: &FinalityNotification<Block>| {
-	// 	if let Some(client) = client_weak.upgrade() {
-	// 		aux_storage_cleanup(client.as_ref(), summary)
-	// 	} else {
-	// 		Default::default()
-	// 	}
-	// };
-	// client.register_finality_action(Box::new(on_finality));
+	// TODO-SASS: If required, register on-finality actions (e.g. aux data cleanup)
 
 	let import = SassafrasBlockImport::new(client, epoch_changes, wrapped_block_import, config);
 
