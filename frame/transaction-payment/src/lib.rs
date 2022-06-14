@@ -327,8 +327,8 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// A transaction has been paid.
-		TransactionPaid { who: T::AccountId, fee: BalanceOf<T>, tip: BalanceOf<T> },
+		/// A transaction fee `actual_fee`, of which `tip` was added to the minimum inclusion fee, has been paid by `who`.
+		TransactionFeePaid { who: T::AccountId, actual_fee: BalanceOf<T>, tip: BalanceOf<T> },
 	}
 
 	#[pallet::hooks]
