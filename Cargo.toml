@@ -305,4 +305,3 @@ inherits = "release"
 lto = "fat"
 # https://doc.rust-lang.org/rustc/codegen-options/index.html#codegen-units
 codegen-units = 1
-
