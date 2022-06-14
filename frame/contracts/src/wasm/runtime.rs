@@ -820,6 +820,36 @@ where
 		}
 	}
 
+	fn contains_storage(&mut self, key_type: KeyType, key_ptr: u32) -> Result<u32, TrapReason> {
+		let charged = self.charge_gas(RuntimeCosts::ContainsStorage(self.ext.max_value_size()))?;
+		let key = self.read_sandbox_memory(key_ptr, key_type.len::<E::T>()?)?;
+		match key_type {
+			KeyType::Fix => {
+				if let Some(len) = self.ext.get_storage_size(
+					&FixSizedKey::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?,
+				) {
+					self.adjust_gas(charged, RuntimeCosts::ContainsStorage(len));
+					Ok(len)
+				} else {
+					self.adjust_gas(charged, RuntimeCosts::ContainsStorage(0));
+					Ok(SENTINEL)
+				}
+			},
+			KeyType::Variable(_) => {
+				if let Some(len) = self.ext.get_storage_size_transparent(
+					&VarSizedKey::<E::T>::try_from(key)
+						.map_err(|_| Error::<E::T>::DecodingFailed)?,
+				) {
+					self.adjust_gas(charged, RuntimeCosts::ContainsStorage(len));
+					Ok(len)
+				} else {
+					self.adjust_gas(charged, RuntimeCosts::ContainsStorage(0));
+					Ok(SENTINEL)
+				}
+			},
+		}
+	}
+
 	fn call(
 		&mut self,
 		flags: CallFlags,
@@ -1000,7 +1030,7 @@ define_env!(Env, <E: Ext>,
 	// Returns the size of the pre-existing value at the specified key if any. Otherwise
 	// `SENTINEL` is returned as a sentinel value.
 	[__unstable__] seal_set_storage(ctx, key_ptr: u32, key_len: u32, value_ptr: u32, value_len: u32) -> u32 => {
-		ctx.set_storage(KeyType::Variable(key_len), key_ptr, value_ptr, value_len).map_err(Into::into)
+		ctx.set_storage(KeyType::Variable(key_len), key_ptr, value_ptr, value_len)
 	},
 
 	// Clear the value at the given key in the contract storage.
@@ -1008,7 +1038,7 @@ define_env!(Env, <E: Ext>,
 	// Equivalent to the newer version of `seal_clear_storage` with the exception of the return
 	// type. Still a valid thing to call when not interested in the return value.
 	[seal0] seal_clear_storage(ctx, key_ptr: u32) => {
-		ctx.clear_storage(KeyType::Fix, key_ptr).map(|_| ()).map_err(Into::into)
+		ctx.clear_storage(KeyType::Fix, key_ptr).map(|_| ())
 	},
 
 	// Clear the value at the given key in the contract storage.
@@ -1023,7 +1053,7 @@ define_env!(Env, <E: Ext>,
 	// Returns the size of the pre-existing value at the specified key if any. Otherwise
 	// `SENTINEL` is returned as a sentinel value.
 	[__unstable__] seal_clear_storage(ctx, key_ptr: u32, key_len: u32) -> u32 => {
-		ctx.clear_storage(KeyType::Variable(key_len), key_ptr).map_err(Into::into)
+		ctx.clear_storage(KeyType::Variable(key_len), key_ptr)
 	},
 
 	// Retrieve the value under the given key from storage.
@@ -1042,7 +1072,7 @@ define_env!(Env, <E: Ext>,
 	//
 	// `ReturnCode::KeyNotFound`
 	[seal0] seal_get_storage(ctx, key_ptr: u32, out_ptr: u32, out_len_ptr: u32) -> ReturnCode => {
-		ctx.get_storage(KeyType::Fix, key_ptr, out_ptr, out_len_ptr).map_err(Into::into)
+		ctx.get_storage(KeyType::Fix, key_ptr, out_ptr, out_len_ptr)
 	},
 
 	// Retrieve the value under the given key from storage.
@@ -1064,7 +1094,7 @@ define_env!(Env, <E: Ext>,
 	//
 	// `ReturnCode::KeyNotFound`
 	[__unstable__] seal_get_storage(ctx, key_ptr: u32, key_len: u32, out_ptr: u32, out_len_ptr: u32) -> ReturnCode => {
-		ctx.get_storage(KeyType::Variable(key_len), key_ptr, out_ptr, out_len_ptr).map_err(Into::into)
+		ctx.get_storage(KeyType::Variable(key_len), key_ptr, out_ptr, out_len_ptr)
 	},
 
 	// Checks whether there is a value stored under the given key.
@@ -1081,16 +1111,7 @@ define_env!(Env, <E: Ext>,
 	// Returns the size of the pre-existing value at the specified key if any. Otherwise
 	// `SENTINEL` is returned as a sentinel value.
 	[seal0] seal_contains_storage(ctx, key_ptr: u32) -> u32 => {
-		let charged = ctx.charge_gas(RuntimeCosts::ContainsStorage(ctx.ext.max_value_size()))?;
-		let mut key: FixSizedKey = [0; 32];
-		ctx.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
-		if let Some(len) = ctx.ext.get_storage_size(&key) {
-			ctx.adjust_gas(charged, RuntimeCosts::ContainsStorage(len));
-			Ok(len)
-		} else {
-			ctx.adjust_gas(charged, RuntimeCosts::ContainsStorage(0));
-			Ok(SENTINEL)
-		}
+		ctx.contains_storage(KeyType::Fix, key_ptr)
 	},
 
 	// Checks whether there is a value stored under the given key.
@@ -1107,15 +1128,7 @@ define_env!(Env, <E: Ext>,
 	// Returns the size of the pre-existing value at the specified key if any. Otherwise
 	// `SENTINEL` is returned as a sentinel value.
 	[__unstable__] seal_contains_storage(ctx, key_ptr: u32, key_len: u32) -> u32 => {
-		let charged = ctx.charge_gas(RuntimeCosts::ContainsStorage(ctx.ext.max_value_size()))?;
-		let key = ctx.read_sandbox_memory(key_ptr, key_len)?;
-		if let Some(len) = ctx.ext.get_storage_size_transparent(&VarSizedKey::<E::T>::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?) {
-			ctx.adjust_gas(charged, RuntimeCosts::ContainsStorage(len));
-			Ok(len)
-		} else {
-			ctx.adjust_gas(charged, RuntimeCosts::ContainsStorage(0));
-			Ok(SENTINEL)
-		}
+		ctx.contains_storage(KeyType::Variable(key_len), key_ptr)
 	},
 
 	// Retrieve and remove the value under the given key from storage.
