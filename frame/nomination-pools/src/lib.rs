@@ -348,7 +348,8 @@ pub use pallet::*;
 pub use weights::WeightInfo;
 
 /// The balance type used by the currency system.
-pub type BalanceOf<T> = <T as Config>::CurrencyBalance;
+pub type BalanceOf<T> =
+	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 /// Type used for unique identifier of each pool.
 pub type PoolId = u32;
 /// The fixed point type used for all reward counters.
@@ -920,23 +921,46 @@ impl<T: Config> BondedPool<T> {
 }
 
 /// A reward pool.
+///
+/// A reward pool is not so much a pool anymore, since it does not contain any shares or point
+/// anymore, rather simply to fit nicely next to bonded pool and unbonding pools. In reality, a
+/// reward pool is just a container for a few pool-dependent data related to the rewards.
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebugNoBound)]
 #[cfg_attr(feature = "std", derive(Clone, PartialEq, DefaultNoBound))]
 #[codec(mel_bound(T: Config))]
 #[scale_info(skip_type_params(T))]
 pub struct RewardPool<T: Config> {
-	pub last_recorded_reward_counter: RewardCounter,
-	pub last_recorded_total_payouts: BalanceOf<T>,
-	pub total_rewards_claimed: BalanceOf<T>,
+	/// The last recorded value of the reward counter.
+	///
+	/// This is updated ONLY when the points in the bonded pool change, which means `join`,
+	/// `bond_extra` and `unbond`, all of which is done through `update_recorded`.
+	last_recorded_reward_counter: RewardCounter,
+	/// The last recorded total payouts of the reward pool.
+	///
+	/// Payouts is essentially income of the pool.
+	last_recorded_total_payouts: BalanceOf<T>,
+	/// Total amount that this pool has paid out so far to the members.
+	total_rewards_claimed: BalanceOf<T>,
 }
 
 impl<T: Config> RewardPool<T> {
+	fn last_recorded_reward_counter(&self) -> RewardCounter {
+		self.last_recorded_reward_counter
+	}
+
+	/// Register some rewards that are claimed from the pool by the members.
+	fn register_claimed_reward(&mut self, reward: BalanceOf<T>) {
+		self.total_rewards_claimed += reward
+	}
+
+	/// Update the recorded values of the pool.
 	fn update_records(&mut self, id: PoolId, bonded_points: BalanceOf<T>) {
 		let balance = Self::current_balance(id);
 		self.last_recorded_reward_counter = self.current_reward_counter(id, bonded_points);
 		self.last_recorded_total_payouts = balance + self.total_rewards_claimed;
 	}
 
+	/// Get the current reward counter, based on the given `bonded_points`.
 	fn current_reward_counter(&self, id: PoolId, bonded_points: BalanceOf<T>) -> RewardCounter {
 		let balance = Self::current_balance(id);
 		let payouts_since_last_record =
@@ -945,6 +969,9 @@ impl<T: Config> RewardPool<T> {
 			(RewardCounter::saturating_from_rational(payouts_since_last_record, bonded_points))
 	}
 
+	/// Current free balance of the reward pool.
+	///
+	/// This is sum of all the rewards that are claimable.
 	fn current_balance(id: PoolId) -> BalanceOf<T> {
 		T::Currency::free_balance(&Pallet::<T>::create_reward_account(id))
 			.saturating_sub(T::Currency::minimum_balance())
@@ -1095,7 +1122,8 @@ pub mod pallet {
 
 		/// The nominating balance.
 		type Currency: Currency<Self::AccountId, Balance = Self::CurrencyBalance>;
-		// TODO: not sure if I need this after all. Update BalanceOf type accordingly.
+
+		/// The balance type. Needed to bound it to `FixedPointOperand`.
 		type CurrencyBalance: sp_runtime::traits::AtLeast32BitUnsigned
 			+ codec::FullCodec
 			+ Copy
@@ -1430,7 +1458,7 @@ pub mod pallet {
 					points: points_issued,
 					// we just updated `last_known_reward_counter` to the current one in
 					// `update_recorded`.
-					last_recorded_reward_counter: reward_pool.last_recorded_reward_counter,
+					last_recorded_reward_counter: reward_pool.last_recorded_reward_counter(),
 					unbonding_eras: Default::default(),
 				},
 			);
@@ -1467,7 +1495,9 @@ pub mod pallet {
 			// before updating the bonded pool points, similar to that of `join` transaction.
 			reward_pool.update_records(bonded_pool.id, bonded_pool.points);
 			// TODO: optimize this to not touch the free balance of `who ` at all in benchmarks.
-			// Currently, bonding rewards is like a batch.
+			// Currently, bonding rewards is like a batch. In the same PR, also make this function
+			// take a boolean argument that make it either 100% pure (no storage update), or make it
+			// also emit event and do the transfer.
 			let claimed =
 				Self::do_reward_payout(&who, &mut member, &mut bonded_pool, &mut reward_pool)?;
 
@@ -2088,7 +2118,7 @@ impl<T: Config> Pallet<T> {
 			ExistenceRequirement::AllowDeath,
 		);
 
-		// TODO: this is purely defensive.
+		// NOTE: this is purely defensive.
 		T::Currency::make_free_balance_be(&reward_account, Zero::zero());
 		T::Currency::make_free_balance_be(&bonded_pool.bonded_account(), Zero::zero());
 
@@ -2200,15 +2230,13 @@ impl<T: Config> Pallet<T> {
 		let pending_rewards = member.pending_rewards(current_reward_counter);
 
 		member.last_recorded_reward_counter = current_reward_counter;
-		reward_pool.total_rewards_claimed += pending_rewards;
+		reward_pool.register_claimed_reward(pending_rewards);
 
 		if pending_rewards.is_zero() {
 			return Ok(pending_rewards)
 		}
 
 		// Transfer payout to the member.
-		// TODO: this is pretty shitty for the case of bond_extra, this function should not transfer
-		// anything.
 		T::Currency::transfer(
 			&bonded_pool.reward_account(),
 			&member_account,
@@ -2216,7 +2244,6 @@ impl<T: Config> Pallet<T> {
 			ExistenceRequirement::AllowDeath,
 		)?;
 
-		// TODO don't do this either, call site should do.
 		Self::deposit_event(Event::<T>::PaidOut {
 			member: member_account.clone(),
 			pool_id: member.pool_id,
