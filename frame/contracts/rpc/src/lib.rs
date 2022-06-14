@@ -167,7 +167,7 @@ where
 	fn get_storage(
 		&self,
 		address: AccountId,
-		key: H256,
+		key: Bytes,
 		at: Option<BlockHash>,
 	) -> RpcResult<Option<Bytes>>;
 }
@@ -292,7 +292,7 @@ where
 	fn get_storage(
 		&self,
 		address: AccountId,
-		key: H256,
+		key: Bytes,
 		at: Option<<Block as BlockT>::Hash>,
 	) -> RpcResult<Option<Bytes>> {
 		let api = self.client.runtime_api();
