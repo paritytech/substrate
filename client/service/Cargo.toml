@@ -13,10 +13,10 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [features]
-default = ["db"]
+default = ["rocksdb"]
 # The RocksDB feature activates the RocksDB database backend. If it is not activated, and you pass
 # a path to a database, an error will be produced at runtime.
-db = ["sc-client-db/with-kvdb-rocksdb", "sc-client-db/with-parity-db"]
+rocksdb = ["sc-client-db/rocksdb"]
 wasmtime = ["sc-executor/wasmtime"]
 # exposes the client type
 test-helpers = []

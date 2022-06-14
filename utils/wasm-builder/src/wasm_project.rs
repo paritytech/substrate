@@ -152,7 +152,39 @@ pub(crate) fn create_and_compile(
 		&bloaty,
 	);
 
+	if let Err(err) = adjust_mtime(&bloaty, final_wasm_binary.as_ref()) {
+		build_helper::warning!("Error while adjusting the mtime of the wasm binaries: {}", err)
+	}
+
 	(final_wasm_binary, bloaty)
+}
+
+/// Adjust the mtime of the bloaty and compressed/compact wasm files.
+///
+/// We add the bloaty and the compressed/compact wasm file to the `rerun-if-changed` files.
+/// Cargo/Rustc determines based on the timestamp of the `invoked.timestamp` file that can be found
+/// in the `OUT_DIR/..`, if it needs to rerun a `build.rs` script. The problem is that this
+/// `invoked.timestamp` is created when the `build.rs` is executed and the wasm binaries are created
+/// later. This leads to them having a later mtime than the `invoked.timestamp` file and thus,
+/// cargo/rustc always re-executes the `build.rs` script. To hack around this, we copy the mtime of
+/// the `invoked.timestamp` to the wasm binaries.
+fn adjust_mtime(
+	bloaty_wasm: &WasmBinaryBloaty,
+	compressed_or_compact_wasm: Option<&WasmBinary>,
+) -> std::io::Result<()> {
+	let out_dir = build_helper::out_dir();
+	let invoked_timestamp = out_dir.join("../invoked.timestamp");
+
+	// Get the mtime of the `invoked.timestamp`
+	let metadata = fs::metadata(invoked_timestamp)?;
+	let mtime = filetime::FileTime::from_last_modification_time(&metadata);
+
+	filetime::set_file_mtime(bloaty_wasm.wasm_binary_bloaty_path(), mtime)?;
+	if let Some(binary) = compressed_or_compact_wasm.as_ref() {
+		filetime::set_file_mtime(binary.wasm_binary_path(), mtime)?;
+	}
+
+	Ok(())
 }
 
 /// Find the `Cargo.lock` relative to the `OUT_DIR` environment variable.
