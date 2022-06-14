@@ -906,16 +906,6 @@ impl<T: Config> BondedPool<T> {
 		Ok(points_issued)
 	}
 
-	/// If `n` saturates at it's upper bound, mark the pool as destroying. This is useful when a
-	/// number saturating indicates the pool can no longer correctly keep track of state.
-	fn bound_check(&mut self, n: U256) -> U256 {
-		if n == U256::max_value() {
-			self.set_state(PoolState::Destroying)
-		}
-
-		n
-	}
-
 	// Set the state of `self`, and deposit an event if the state changed. State should never be set
 	// directly in in order to ensure a state change event is always correctly deposited.
 	fn set_state(&mut self, state: PoolState) {
@@ -931,7 +921,7 @@ impl<T: Config> BondedPool<T> {
 
 /// A reward pool.
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebugNoBound)]
-#[cfg_attr(feature = "std", derive(Clone, PartialEq))]
+#[cfg_attr(feature = "std", derive(Clone, PartialEq, frame_support::DefaultNoBound))]
 #[codec(mel_bound(T: Config))]
 #[scale_info(skip_type_params(T))]
 pub struct RewardPool<T: Config> {
@@ -1470,22 +1460,20 @@ pub mod pallet {
 			.max(T::WeightInfo::bond_extra_reward())
 		)]
 		pub fn bond_extra(origin: OriginFor<T>, extra: BondExtra<BalanceOf<T>>) -> DispatchResult {
-			// TODO: claim payouts here before updating the points.
 			let who = ensure_signed(origin)?;
 			let (mut member, mut bonded_pool, mut reward_pool) = Self::get_member_with_pools(&who)?;
+
+			// payout related stuff: we must claim the payouts, and updated recorded payout data
+			// before going further.
+			reward_pool.update_records(bonded_pool.id, bonded_pool.points);
+			let claimed =
+				Self::do_reward_payout(&who, &mut member, &mut bonded_pool, &mut reward_pool)?;
 
 			let (points_issued, bonded) = match extra {
 				BondExtra::FreeBalance(amount) =>
 					(bonded_pool.try_bond_funds(&who, amount, BondType::Later)?, amount),
-				BondExtra::Rewards => {
-					let claimed = Self::do_reward_payout(
-						&who,
-						&mut member,
-						&mut bonded_pool,
-						&mut reward_pool,
-					)?;
-					(bonded_pool.try_bond_funds(&who, claimed, BondType::Later)?, claimed)
-				},
+				BondExtra::Rewards =>
+					(bonded_pool.try_bond_funds(&who, claimed, BondType::Later)?, claimed),
 			};
 			bonded_pool.ok_to_be_open(bonded)?;
 			member.points = member.points.saturating_add(points_issued);
@@ -1552,21 +1540,17 @@ pub mod pallet {
 			member_account: T::AccountId,
 			#[pallet::compact] unbonding_points: BalanceOf<T>,
 		) -> DispatchResult {
-			let caller = ensure_signed(origin)?;
+			let who = ensure_signed(origin)?;
 			let (mut member, mut bonded_pool, mut reward_pool) =
 				Self::get_member_with_pools(&member_account)?;
 
-			bonded_pool.ok_to_unbond_with(&caller, &member_account, &member, unbonding_points)?;
+			bonded_pool.ok_to_unbond_with(&who, &member_account, &member, unbonding_points)?;
 
 			// Claim the the payout prior to unbonding. Once the user is unbonding their points no
 			// longer exist in the bonded pool and thus they can no longer claim their payouts. It
 			// is not strictly necessary to claim the rewards, but we do it here for UX.
-			Self::do_reward_payout(
-				&member_account,
-				&mut member,
-				&mut bonded_pool,
-				&mut reward_pool,
-			)?;
+			reward_pool.update_records(bonded_pool.id, bonded_pool.points);
+			let _ = Self::do_reward_payout(&who, &mut member, &mut bonded_pool, &mut reward_pool)?;
 
 			let current_era = T::StakingInterface::current_era();
 			let unbond_era = T::StakingInterface::bonding_duration().saturating_add(current_era);
@@ -2206,8 +2190,6 @@ impl<T: Config> Pallet<T> {
 		// a member who has no skin in the game anymore cannot claim any rewards.
 		ensure!(!member.active_points().is_zero(), Error::<T>::FullyUnbonding);
 
-		let was_destroying = bonded_pool.is_destroying();
-
 		let current_reward_counter =
 			reward_pool.current_reward_counter(bonded_pool.id, bonded_pool.points);
 		let pending_rewards = member.pending_rewards(current_reward_counter);
@@ -2220,6 +2202,8 @@ impl<T: Config> Pallet<T> {
 		}
 
 		// Transfer payout to the member.
+		// TODO: this is pretty shitty for the case of bond_extra, this function should not transfer
+		// anything.
 		T::Currency::transfer(
 			&bonded_pool.reward_account(),
 			&member_account,
@@ -2233,13 +2217,6 @@ impl<T: Config> Pallet<T> {
 			pool_id: member.pool_id,
 			payout: pending_rewards,
 		});
-
-		if bonded_pool.is_destroying() && !was_destroying {
-			Self::deposit_event(Event::<T>::StateChanged {
-				pool_id: member.pool_id,
-				new_state: PoolState::Destroying,
-			});
-		}
 
 		Ok(pending_rewards)
 	}
