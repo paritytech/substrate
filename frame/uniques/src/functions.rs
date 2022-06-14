@@ -22,7 +22,7 @@ use frame_support::{
 	ensure,
 	traits::{ExistenceRequirement, Get},
 };
-use sp_runtime::{DispatchError, DispatchResult};
+use sp_runtime::{DispatchError, DispatchResult, Perbill};
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub fn do_transfer(
@@ -124,6 +124,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			CollectionAccount::<T, I>::remove(&collection_details.owner, &collection);
 			T::Currency::unreserve(&collection_details.owner, collection_details.total_deposit);
 			CollectionMaxSupply::<T, I>::remove(&collection);
+			CollectionRoyaltiesOf::<T, I>::remove(&collection);
 
 			Self::deposit_event(Event::Destroyed { collection });
 
@@ -262,10 +263,21 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			ensure!(only_buyer == buyer, Error::<T, I>::NoPermission);
 		}
 
+		let mut transfer_amount = price_info.0.clone();
+		if let Ok(royalties) = CollectionRoyaltiesOf::<T, I>::try_get(&collection) {
+			transfer_amount = Self::process_royalties(
+				transfer_amount.clone(),
+				royalties,
+				&buyer,
+				&collection,
+				&item,
+			)?;
+		}
+
 		T::Currency::transfer(
 			&buyer,
 			&details.owner,
-			price_info.0,
+			transfer_amount,
 			ExistenceRequirement::KeepAlive,
 		)?;
 
@@ -282,5 +294,71 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		});
 
 		Ok(())
+	}
+
+	pub fn do_set_royalties(
+		sender: T::AccountId,
+		collection_id: T::CollectionId,
+		new_royalties: Perbill,
+	) -> DispatchResult {
+		let collection =
+			Collection::<T, I>::get(&collection_id).ok_or(Error::<T, I>::UnknownCollection)?;
+		ensure!(!collection.is_frozen, Error::<T, I>::Frozen);
+		ensure!(collection.owner == sender, Error::<T, I>::NoPermission);
+
+		CollectionRoyaltiesOf::<T, I>::try_mutate(collection_id, |maybe_royalties| {
+			// royalties can only be decreased
+			if let Some(ref royalties) = maybe_royalties {
+				ensure!(
+					new_royalties.is_zero() || new_royalties < *royalties,
+					Error::<T, I>::RoyaltiesCantBeIncreased
+				);
+			}
+
+			let royalties = maybe_royalties.get_or_insert_with(|| Perbill::zero());
+			*royalties = new_royalties.clone();
+
+			Self::deposit_event(Event::RoyaltiesChanged {
+				collection: collection_id,
+				royalties: new_royalties,
+			});
+
+			Ok(())
+		})
+	}
+
+	pub fn process_royalties(
+		amount: ItemPrice<T, I>,
+		royalties: Perbill,
+		source: &T::AccountId,
+		collection_id: &T::CollectionId,
+		item_id: &T::ItemId,
+	) -> Result<ItemPrice<T, I>, DispatchError> {
+		let mut amount_left = amount.clone();
+
+		if !royalties.is_zero() {
+			let collection =
+				Collection::<T, I>::get(&collection_id).ok_or(Error::<T, I>::UnknownCollection)?;
+			let transfer_amount = royalties * amount;
+
+			amount_left = amount - transfer_amount;
+
+			T::Currency::transfer(
+				&source,
+				&collection.owner,
+				transfer_amount.clone(),
+				ExistenceRequirement::KeepAlive,
+			)?;
+
+			Self::deposit_event(Event::RoyaltiesPaid {
+				collection_id: *collection_id,
+				item_id: *item_id,
+				amount: transfer_amount,
+				payer: source.clone(),
+				receiver: collection.owner.clone(),
+			});
+		}
+
+		Ok(amount_left)
 	}
 }

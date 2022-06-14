@@ -29,7 +29,7 @@ use frame_support::{
 	BoundedVec,
 };
 use frame_system::RawOrigin as SystemOrigin;
-use sp_runtime::traits::Bounded;
+use sp_runtime::{traits::Bounded, Perbill};
 use sp_std::prelude::*;
 
 use crate::Pallet as Uniques;
@@ -442,6 +442,14 @@ benchmarks_instance_pallet! {
 			seller,
 			buyer,
 		}.into());
+	}
+
+	set_royalties {
+		let (collection, caller, _) = create_collection::<T, I>();
+		let royalties = Perbill::from_percent(100);
+	}: _(SystemOrigin::Signed(caller.clone()), collection, royalties.clone())
+	verify {
+		assert_last_event::<T, I>(Event::RoyaltiesChanged { collection, royalties }.into());
 	}
 
 	impl_benchmark_test_suite!(Uniques, crate::mock::new_test_ext(), crate::mock::Test);

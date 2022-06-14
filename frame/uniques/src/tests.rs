@@ -20,6 +20,7 @@
 use crate::{mock::*, Event, *};
 use frame_support::{assert_noop, assert_ok, traits::Currency};
 use pallet_balances::Error as BalancesError;
+use sp_runtime::Perbill;
 use sp_std::prelude::*;
 
 fn items() -> Vec<(u64, u32, u32)> {
@@ -818,7 +819,7 @@ fn buy_item_should_work() {
 		);
 
 		// pass the higher price to validate it will still deduct correctly
-		assert_ok!(Uniques::buy_item(Origin::signed(user_2), collection_id, item_1, price_1 + 1,));
+		assert_ok!(Uniques::buy_item(Origin::signed(user_2), collection_id, item_1, price_1 + 1));
 
 		// validate the new owner & balances
 		let item = Item::<Test>::get(collection_id, item_1).unwrap();
@@ -839,7 +840,7 @@ fn buy_item_should_work() {
 		);
 
 		// can buy when I'm a whitelisted buyer
-		assert_ok!(Uniques::buy_item(Origin::signed(user_3), collection_id, item_2, price_2,));
+		assert_ok!(Uniques::buy_item(Origin::signed(user_3), collection_id, item_2, price_2));
 
 		assert!(events().contains(&Event::<Test>::ItemBought {
 			collection: collection_id,
@@ -857,5 +858,120 @@ fn buy_item_should_work() {
 			Uniques::buy_item(Origin::signed(user_2), collection_id, item_3, price_2),
 			Error::<Test>::NotForSale
 		);
+	});
+}
+
+#[test]
+fn set_royalties_should_work() {
+	new_test_ext().execute_with(|| {
+		let user_id = 1;
+		let collection_id = 0;
+		let item_id = 0;
+		let royalties = 30;
+
+		assert_ok!(Uniques::force_create(Origin::root(), collection_id, user_id, true));
+		assert_ok!(Uniques::mint(Origin::signed(user_id), collection_id, item_id, user_id));
+		assert!(!CollectionRoyaltiesOf::<Test>::contains_key(collection_id));
+
+		assert_ok!(Uniques::set_royalties(
+			Origin::signed(user_id),
+			collection_id,
+			Perbill::from_percent(royalties),
+		));
+		assert_eq!(
+			CollectionRoyaltiesOf::<Test>::get(collection_id).unwrap(),
+			Perbill::from_percent(royalties)
+		);
+
+		// validate royalties can only be decreased
+		assert_noop!(
+			Uniques::set_royalties(
+				Origin::signed(user_id),
+				collection_id,
+				Perbill::from_percent(royalties + 10),
+			),
+			Error::<Test>::RoyaltiesCantBeIncreased
+		);
+
+		// validate we can't change royalties if the collection is locked
+		assert_ok!(Uniques::freeze_collection(Origin::signed(user_id), collection_id));
+		assert_noop!(
+			Uniques::set_royalties(
+				Origin::signed(user_id),
+				collection_id,
+				Perbill::from_percent(royalties - 10),
+			),
+			Error::<Test>::Frozen
+		);
+
+		assert_ok!(Uniques::thaw_collection(Origin::signed(user_id), collection_id));
+
+		// validate we can remove royalties
+		assert_ok!(
+			Uniques::set_royalties(Origin::signed(user_id), collection_id, Perbill::zero(),)
+		);
+		assert_eq!(CollectionRoyaltiesOf::<Test>::get(collection_id).unwrap(), Perbill::zero());
+
+		// validate event
+		assert!(events().contains(&Event::<Test>::RoyaltiesChanged {
+			collection: collection_id,
+			royalties: Perbill::zero(),
+		}));
+	});
+}
+
+#[test]
+fn royalties_payent_should_work() {
+	new_test_ext().execute_with(|| {
+		let collection_id = 0;
+		let item_id = 1;
+		let user_1 = 1;
+		let user_2 = 2;
+		let collection_owner = 4;
+		let price = 10;
+		let royalties = 10;
+		let initial_balance = 2000;
+
+		Balances::make_free_balance_be(&user_1, initial_balance);
+		Balances::make_free_balance_be(&user_2, initial_balance);
+		Balances::make_free_balance_be(&collection_owner, initial_balance);
+
+		assert_ok!(Uniques::force_create(Origin::root(), collection_id, collection_owner, true));
+		assert_ok!(Uniques::mint(Origin::signed(collection_owner), collection_id, item_id, user_1));
+
+		assert_ok!(Uniques::set_royalties(
+			Origin::signed(collection_owner),
+			collection_id,
+			Perbill::from_percent(royalties),
+		));
+
+		assert_ok!(Uniques::set_price(
+			Origin::signed(user_1),
+			collection_id,
+			item_id,
+			Some(price),
+			None,
+		));
+		assert_ok!(Uniques::buy_item(Origin::signed(user_2), collection_id, item_id, price));
+
+		// validate balances
+		let expect_royalties_payment = 1;
+		let expect_received_for_item = price - expect_royalties_payment;
+
+		assert_eq!(
+			Balances::total_balance(&collection_owner),
+			initial_balance + expect_royalties_payment
+		);
+		assert_eq!(Balances::total_balance(&user_1), initial_balance + expect_received_for_item);
+		assert_eq!(Balances::total_balance(&user_2), initial_balance - price);
+
+		// validate events
+		assert!(events().contains(&Event::<Test>::RoyaltiesPaid {
+			collection_id,
+			item_id,
+			amount: expect_royalties_payment,
+			payer: user_2,
+			receiver: collection_owner,
+		}));
 	});
 }

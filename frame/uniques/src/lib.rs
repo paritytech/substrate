@@ -62,6 +62,7 @@ pub mod pallet {
 	use super::*;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
+	use sp_runtime::Perbill;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
@@ -259,6 +260,11 @@ pub mod pallet {
 	>;
 
 	#[pallet::storage]
+	/// Royalties of a collection.
+	pub(super) type CollectionRoyaltiesOf<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Blake2_128Concat, T::CollectionId, Perbill, OptionQuery>;
+
+	#[pallet::storage]
 	/// Keeps track of the number of items a collection might have.
 	pub(super) type CollectionMaxSupply<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Blake2_128Concat, T::CollectionId, u32, OptionQuery>;
@@ -371,6 +377,16 @@ pub mod pallet {
 			seller: T::AccountId,
 			buyer: T::AccountId,
 		},
+		/// Royalties has been changed.
+		RoyaltiesChanged { collection: T::CollectionId, royalties: Perbill },
+		/// Royalties has been paid.
+		RoyaltiesPaid {
+			collection_id: T::CollectionId,
+			item_id: T::ItemId,
+			amount: ItemPrice<T, I>,
+			payer: T::AccountId,
+			receiver: T::AccountId,
+		},
 	}
 
 	#[pallet::error]
@@ -411,6 +427,8 @@ pub mod pallet {
 		NotForSale,
 		/// The provided bid is too low.
 		BidTooLow,
+		/// Royalties can only be decreased.
+		RoyaltiesCantBeIncreased,
 	}
 
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
@@ -1447,7 +1465,7 @@ pub mod pallet {
 
 		/// Set (or reset) the price for an item.
 		///
-		/// Origin must be Signed and must be the owner of the asset `item`.
+		/// Origin must be Signed and must be an owner of the `item`.
 		///
 		/// - `collection`: The collection of the item.
 		/// - `item`: The item to set the price for.
@@ -1487,6 +1505,27 @@ pub mod pallet {
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			Self::do_buy_item(collection, item, origin, bid_price)
+		}
+
+		/// Set the royalties for the collection.
+		///
+		/// Origin must be Signed and must be an owner of the `collection`.
+		///
+		/// Note: royalties can only be decreased.
+		///
+		/// - `collection`: The collection of the item.
+		/// - `royalties`: The royalties for the collection.
+		///
+		/// Emits `RoyaltiesChanged` on success.
+		#[pallet::weight(T::WeightInfo::set_royalties())]
+		pub fn set_royalties(
+			origin: OriginFor<T>,
+			collection: T::CollectionId,
+			royalties: Perbill,
+		) -> DispatchResult {
+			let origin = ensure_signed(origin)?;
+			Self::do_set_royalties(origin, collection, royalties)?;
+			Ok(())
 		}
 	}
 }
