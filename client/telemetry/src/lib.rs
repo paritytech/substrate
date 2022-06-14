@@ -42,8 +42,10 @@ use log::{error, warn};
 use parking_lot::Mutex;
 use serde::Serialize;
 use std::{
-	collections::HashMap,
-	collections::hash_map::Entry::{Occupied, Vacant},
+	collections::{
+		hash_map::Entry::{Occupied, Vacant},
+		HashMap,
+	},
 	sync::{atomic, Arc},
 };
 
@@ -257,7 +259,7 @@ impl TelemetryWorker {
 										"Could not initialise transport: {}",
 										err,
 									);
-									continue;
+									continue
 								},
 							};
 							entry.insert(Node::new(transport, addr.clone(), Vec::new(), Vec::new()))
