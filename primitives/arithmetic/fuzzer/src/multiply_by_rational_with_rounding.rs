@@ -46,9 +46,7 @@ fn main() {
 
 			// The point of this fuzzing is to make sure that `multiply_by_rational_with_rounding`
 			// is 100% accurate as long as the value fits in a u128.
-			if let Some(result) =
-				multiply_by_rational_with_rounding(a, b, c, Rounding::NearestPrefDown)
-			{
+			if let Some(result) = multiply_by_rational_with_rounding(a, b, c, Rounding::Down) {
 				let truth = mul_div(a, b, c);
 
 				if result != truth && result != truth + 1 {

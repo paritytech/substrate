@@ -183,7 +183,7 @@ mod double128 {
 }
 
 /// Returns `a * b / c` and `(a * b) % c` (wrapping to 128 bits) or `None` in the case of
-/// overflow.
+/// overflow and c = 0.
 pub const fn multiply_by_rational_with_rounding(
 	a: u128,
 	b: u128,
@@ -192,7 +192,7 @@ pub const fn multiply_by_rational_with_rounding(
 ) -> Option<u128> {
 	use double128::Double128;
 	if c == 0 {
-		panic!("attempt to divide by zero")
+		return None
 	}
 	let (result, remainder) = Double128::product_of(a, b).div(c);
 	let mut result: u128 = match result.try_into_u128() {
