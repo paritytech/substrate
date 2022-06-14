@@ -85,6 +85,22 @@ pub trait CryptoStore: Send + Sync {
 		seed: Option<&str>,
 	) -> Result<ecdsa::Public, Error>;
 
+	/// Returns all bls12-377 public keys for the given key type.
+	async fn bls_public_keys(&self, id: KeyTypeId) -> Vec<bls::Public>;
+
+	/// Generate a new bls12-377 key pair for the given key type and an optional seed.
+	///
+	/// If the given seed is `Some(_)`, the key pair will only be stored in memory.
+	///
+	/// Returns the public key of the generated key pair.
+	async fn bls_generate_new(
+		&self,
+		id: KeyTypeId,
+		seed: Option<&str>,
+	) -> Result<bls::Public, Error>;
+
+	/// Returns all ed25519 public keys for the given key type.
+
 	/// Insert a new key. This doesn't require any known of the crypto; but a public key must be
 	/// manually provided.
 	///
@@ -256,6 +272,17 @@ pub trait SyncCryptoStore: CryptoStore + Send + Sync {
 	/// Returns the public key of the generated key pair.
 	fn ecdsa_generate_new(&self, id: KeyTypeId, seed: Option<&str>)
 		-> Result<ecdsa::Public, Error>;
+
+    /// Returns all bls12-377 public keys for the given key type.
+	fn bls_public_keys(&self, id: KeyTypeId) -> Vec<bls::Public>;
+
+	/// Generate a new bls12-377 key pair for the given key type and an optional seed.
+	///
+	/// If the given seed is `Some(_)`, the key pair will only be stored in memory.
+	///
+	/// Returns the public key of the generated key pair.
+	fn bls_generate_new(&self, id: KeyTypeId, seed: Option<&str>)
+		-> Result<bls::Public, Error>;
 
 	/// Insert a new key. This doesn't require any known of the crypto; but a public key must be
 	/// manually provided.

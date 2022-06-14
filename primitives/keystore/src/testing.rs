@@ -19,7 +19,7 @@
 
 use sp_core::{
 	crypto::{ByteArray, CryptoTypePublicPair, KeyTypeId, Pair},
-	ecdsa, ed25519, sr25519,
+	ecdsa, ed25519, sr25519, bls
 };
 
 use crate::{
@@ -105,6 +105,18 @@ impl CryptoStore for KeyStore {
 		SyncCryptoStore::ecdsa_public_keys(self, id)
 	}
 
+    async fn bls_public_keys(&self, id: KeyTypeId) -> Vec<bls::Public> {
+		SyncCryptoStore::bls_public_keys(self, id)
+	}
+
+	async fn bls_generate_new(
+		&self,
+		id: KeyTypeId,
+		seed: Option<&str>,
+	) -> Result<bls::Public, Error> {
+		SyncCryptoStore::bls_generate_new(self, id, seed)
+	}
+
 	async fn ecdsa_generate_new(
 		&self,
 		id: KeyTypeId,
@@ -112,6 +124,7 @@ impl CryptoStore for KeyStore {
 	) -> Result<ecdsa::Public, Error> {
 		SyncCryptoStore::ecdsa_generate_new(self, id, seed)
 	}
+
 
 	async fn insert_unknown(&self, id: KeyTypeId, suri: &str, public: &[u8]) -> Result<(), ()> {
 		SyncCryptoStore::insert_unknown(self, id, suri, public)
@@ -302,8 +315,53 @@ impl SyncCryptoStore for KeyStore {
 				Ok(pair.public())
 			},
 		}
+
+    }
+
+	fn bls_public_keys(&self, id: KeyTypeId) -> Vec<bls::Public> {
+		self.keys
+			.read()
+			.get(&id)
+			.map(|keys| {
+				keys.values()
+					.map(|s| {
+						bls::Pair::from_string(s, None).expect("`bls` seed slice is valid")
+					})
+					.map(|p| p.public())
+					.collect()
+			})
+			.unwrap_or_default()
 	}
 
+	fn bls_generate_new(
+		&self,
+		id: KeyTypeId,
+		seed: Option<&str>,
+	) -> Result<bls::Public, Error> {
+		match seed {
+			Some(seed) => {
+				let pair = bls::Pair::from_string(seed, None)
+					.map_err(|_| Error::ValidationError("Generates an `bls` pair.".to_owned()))?;
+				self.keys
+					.write()
+					.entry(id)
+					.or_default()
+					.insert(pair.public().to_raw_vec(), seed.into());
+				Ok(pair.public())
+			},
+			None => {
+				let (pair, phrase, _) = bls::Pair::generate_with_phrase(None);
+				self.keys
+					.write()
+					.entry(id)
+					.or_default()
+					.insert(pair.public().to_raw_vec(), phrase);
+				Ok(pair.public())
+			},
+		}
+
+	}
+    
 	fn insert_unknown(&self, id: KeyTypeId, suri: &str, public: &[u8]) -> Result<(), ()> {
 		self.keys
 			.write()
