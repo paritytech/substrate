@@ -52,7 +52,7 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		Beefy: pallet_beefy::{Pallet, Call, Config<T>, Storage},
+		Beefy: pallet_beefy::{Pallet, Config<T>, Storage},
 		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
 	}
 );
@@ -86,6 +86,7 @@ impl frame_system::Config for Test {
 
 impl pallet_beefy::Config for Test {
 	type BeefyId = BeefyId;
+	type MaxAuthorities = ConstU32<100>;
 }
 
 parameter_types! {

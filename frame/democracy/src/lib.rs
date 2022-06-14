@@ -537,6 +537,8 @@ pub mod pallet {
 		Voted { voter: T::AccountId, ref_index: ReferendumIndex, vote: AccountVote<BalanceOf<T>> },
 		/// An account has secconded a proposal
 		Seconded { seconder: T::AccountId, prop_index: PropIndex },
+		/// A proposal got canceled.
+		ProposalCanceled { prop_index: PropIndex },
 	}
 
 	#[pallet::error]
@@ -1277,6 +1279,7 @@ pub mod pallet {
 				}
 			}
 
+			Self::deposit_event(Event::<T>::ProposalCanceled { prop_index });
 			Ok(())
 		}
 	}

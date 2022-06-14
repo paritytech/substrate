@@ -2168,6 +2168,15 @@ implement_fixed!(
 );
 
 implement_fixed!(
+	FixedU64,
+	test_fixed_u64,
+	u64,
+	false,
+	1_000_000_000,
+	"_Fixed Point 64 bits unsigned, range = [0.000000000, 18446744073.709551615]_",
+);
+
+implement_fixed!(
 	FixedI128,
 	test_fixed_i128,
 	i128,

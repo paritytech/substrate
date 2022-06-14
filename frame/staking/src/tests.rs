@@ -4931,6 +4931,25 @@ fn force_apply_min_commission_works() {
 }
 
 #[test]
+fn proportional_slash_stop_slashing_if_remaining_zero() {
+	let c = |era, value| UnlockChunk::<Balance> { era, value };
+	// Given
+	let mut ledger = StakingLedger::<Test> {
+		stash: 123,
+		total: 40,
+		active: 20,
+		// we have some chunks, but they are not affected.
+		unlocking: bounded_vec![c(1, 10), c(2, 10)],
+		claimed_rewards: vec![],
+	};
+
+	assert_eq!(BondingDuration::get(), 3);
+
+	// should not slash more than the amount requested, by accidentally slashing the first chunk.
+	assert_eq!(ledger.slash(18, 1, 0), 18);
+}
+
+#[test]
 fn proportional_ledger_slash_works() {
 	let c = |era, value| UnlockChunk::<Balance> { era, value };
 	// Given
