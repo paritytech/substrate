@@ -299,11 +299,6 @@
 //!   funds via vote splitting.
 //! * PoolMembers cannot quickly transfer to another pool if they do no like nominations, instead
 //!   they must wait for the unbonding duration.
-//!
-//! # Runtime builder warnings
-//!
-//! * Watch out for overflow of [`RewardPoints`] and [`BalanceOf`] types. Consider things like the
-//!   chains total issuance, staking reward rate, and burn rate.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -322,7 +317,7 @@ use scale_info::TypeInfo;
 use sp_core::U256;
 use sp_runtime::{
 	traits::{AccountIdConversion, Bounded, CheckedSub, Convert, Saturating, Zero},
-	FixedU128, FixedPointNumber,
+	FixedPointNumber, FixedU128,
 };
 use sp_staking::{EraIndex, OnStakerSlash, StakingInterface};
 use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, ops::Div, vec::Vec};
@@ -354,11 +349,10 @@ pub use weights::WeightInfo;
 
 /// The balance type used by the currency system.
 pub type BalanceOf<T> = <T as Config>::CurrencyBalance;
-/// Type used to track the points of a reward pool.
-// TODO: remove all things related to the u256 stuff.
-pub type RewardPoints = U256;
 /// Type used for unique identifier of each pool.
 pub type PoolId = u32;
+/// The fixed point type used for all reward counters.
+pub type RewardCounter = FixedU128;
 
 type UnbondingPoolsWithEra<T> = BoundedBTreeMap<EraIndex, UnbondPool<T>, TotalUnbondingPools<T>>;
 
@@ -414,15 +408,16 @@ pub struct PoolMember<T: Config> {
 	/// Assuming no massive burning events, we expect this value to always be below total issuance.
 	/// This value lines up with the [`RewardPool::total_earnings`] after a member claims a
 	/// payout.
-	pub last_recorded_reward_counter: FixedU128,
+	pub last_recorded_reward_counter: RewardCounter,
 	/// The eras in which this member is unbonding, mapped from era index to the number of
 	/// points scheduled to unbond in the given era.
 	pub unbonding_eras: BoundedBTreeMap<EraIndex, BalanceOf<T>, T::MaxUnbonding>,
 }
 
 impl<T: Config> PoolMember<T> {
-	fn pending_rewards(&self, current_reward_counter: FixedU128) -> BalanceOf<T> {
-		(current_reward_counter - self.last_recorded_reward_counter).saturating_mul_int(self.active_points())
+	fn pending_rewards(&self, current_reward_counter: RewardCounter) -> BalanceOf<T> {
+		(current_reward_counter - self.last_recorded_reward_counter)
+			.saturating_mul_int(self.active_points())
 	}
 
 	fn total_points(&self) -> BalanceOf<T> {
@@ -940,7 +935,7 @@ impl<T: Config> BondedPool<T> {
 #[codec(mel_bound(T: Config))]
 #[scale_info(skip_type_params(T))]
 pub struct RewardPool<T: Config> {
-	pub last_recorded_reward_counter: FixedU128,
+	pub last_recorded_reward_counter: RewardCounter,
 	pub last_recorded_total_payouts: BalanceOf<T>,
 	pub total_rewards_claimed: BalanceOf<T>,
 }
@@ -952,11 +947,12 @@ impl<T: Config> RewardPool<T> {
 		self.last_recorded_total_payouts = balance + self.total_rewards_claimed;
 	}
 
-	fn current_reward_counter(&self, id: PoolId, bonded_points: BalanceOf<T>) -> FixedU128 {
+	fn current_reward_counter(&self, id: PoolId, bonded_points: BalanceOf<T>) -> RewardCounter {
 		let balance = Self::current_balance(id);
 		let payouts_since_last_record =
 			balance + self.total_rewards_claimed - self.last_recorded_total_payouts;
-		self.last_recorded_reward_counter + (FixedU128::saturating_from_rational(payouts_since_last_record, bonded_points))
+		self.last_recorded_reward_counter +
+			(RewardCounter::saturating_from_rational(payouts_since_last_record, bonded_points))
 	}
 
 	fn current_balance(id: PoolId) -> BalanceOf<T> {
@@ -2056,11 +2052,6 @@ pub mod pallet {
 			assert!(
 				T::MinPointsToBalance::get() > 0,
 				"Minimum points to balance ratio must be greater than 0"
-			);
-			assert!(
-				sp_std::mem::size_of::<RewardPoints>() >=
-					2 * sp_std::mem::size_of::<BalanceOf<T>>(),
-				"bit-length of the reward points must be at least twice as much as balance"
 			);
 			assert!(
 				T::StakingInterface::bonding_duration() < TotalUnbondingPools::<T>::get(),
