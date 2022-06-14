@@ -215,13 +215,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		price: Option<ItemPrice<T, I>>,
 		whitelisted_buyer: Option<T::AccountId>,
 	) -> DispatchResult {
-		let collection_details =
-			Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
-		ensure!(!collection_details.is_frozen, Error::<T, I>::Frozen);
-		ensure!(!T::Locker::is_locked(collection, item), Error::<T, I>::Locked);
-
 		let details = Item::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::UnknownItem)?;
-		ensure!(!details.is_frozen, Error::<T, I>::Frozen);
 		ensure!(details.owner == sender, Error::<T, I>::NoPermission);
 
 		if let Some(ref price) = price {

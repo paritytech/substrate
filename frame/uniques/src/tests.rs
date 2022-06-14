@@ -18,7 +18,7 @@
 //! Tests for Uniques pallet.
 
 use crate::{mock::*, Event, *};
-use frame_support::{assert_noop, assert_ok, traits::Currency};
+use frame_support::{assert_noop, assert_ok, dispatch::Dispatchable, traits::Currency};
 use pallet_balances::Error as BalancesError;
 use sp_std::prelude::*;
 
@@ -746,28 +746,6 @@ fn set_price_should_work() {
 			item: item_2
 		}));
 		assert!(!ItemPriceOf::<Test>::contains_key(collection_id, item_2));
-
-		// ensure we can't set the price when a collection or an item are frozen
-		let collection_id = 1;
-		assert_ok!(Uniques::force_create(Origin::root(), collection_id, user_id, true));
-		assert_ok!(Uniques::mint(Origin::signed(user_id), collection_id, item_1, user_id));
-
-		// freeze collection
-		assert_ok!(Uniques::freeze_collection(Origin::signed(user_id), collection_id));
-
-		assert_noop!(
-			Uniques::set_price(Origin::signed(user_id), collection_id, item_1, Some(1), None),
-			Error::<Test>::Frozen
-		);
-		assert_ok!(Uniques::thaw_collection(Origin::signed(user_id), collection_id));
-
-		// freeze item
-		assert_ok!(Uniques::freeze(Origin::signed(user_id), collection_id, item_1));
-
-		assert_noop!(
-			Uniques::set_price(Origin::signed(user_id), collection_id, item_1, Some(1), None),
-			Error::<Test>::Frozen
-		);
 	});
 }
 
@@ -857,5 +835,38 @@ fn buy_item_should_work() {
 			Uniques::buy_item(Origin::signed(user_2), collection_id, item_3, price_2),
 			Error::<Test>::NotForSale
 		);
+
+		// ensure we can't buy an item when the collection or an item is frozen
+		{
+			assert_ok!(Uniques::set_price(
+				Origin::signed(user_1),
+				collection_id,
+				item_3,
+				Some(price_1),
+				None,
+			));
+
+			// freeze collection
+			assert_ok!(Uniques::freeze_collection(Origin::signed(user_1), collection_id));
+
+			let buy_item_call = mock::Call::Uniques(crate::Call::<Test>::buy_item {
+				collection: collection_id,
+				item: item_3,
+				bid_price: price_1,
+			});
+			assert_noop!(buy_item_call.dispatch(Origin::signed(user_2)), Error::<Test>::Frozen);
+
+			assert_ok!(Uniques::thaw_collection(Origin::signed(user_1), collection_id));
+
+			// freeze item
+			assert_ok!(Uniques::freeze(Origin::signed(user_1), collection_id, item_3));
+
+			let buy_item_call = mock::Call::Uniques(crate::Call::<Test>::buy_item {
+				collection: collection_id,
+				item: item_3,
+				bid_price: price_1,
+			});
+			assert_noop!(buy_item_call.dispatch(Origin::signed(user_2)), Error::<Test>::Frozen);
+		}
 	});
 }
