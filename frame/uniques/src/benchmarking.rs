@@ -428,6 +428,7 @@ benchmarks_instance_pallet! {
 		let (collection, seller, _) = create_collection::<T, I>();
 		let (item, ..) = mint_item::<T, I>(0);
 		let buyer: T::AccountId = account("buyer", 0, SEED);
+		whitelist_account!(buyer);
 		let buyer_lookup = T::Lookup::unlookup(buyer.clone());
 		let price = ItemPrice::<T, I>::from(100u32);
 		let origin = SystemOrigin::Signed(seller.clone()).into();
