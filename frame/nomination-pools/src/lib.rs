@@ -921,7 +921,7 @@ impl<T: Config> BondedPool<T> {
 
 /// A reward pool.
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebugNoBound)]
-#[cfg_attr(feature = "std", derive(Clone, PartialEq, frame_support::DefaultNoBound))]
+#[cfg_attr(feature = "std", derive(Clone, PartialEq, DefaultNoBound))]
 #[codec(mel_bound(T: Config))]
 #[scale_info(skip_type_params(T))]
 pub struct RewardPool<T: Config> {
@@ -1416,10 +1416,8 @@ pub mod pallet {
 
 			let mut reward_pool = RewardPools::<T>::get(pool_id)
 				.defensive_ok_or::<Error<T>>(DefensiveError::RewardPoolNotFound.into())?;
-			let current_reward_counter =
-				reward_pool.current_reward_counter(pool_id, bonded_pool.points);
 
-			// reward pool records must be updated with the old points.
+			// IMPORTANT: reward pool records must be updated with the old points.
 			reward_pool.update_records(pool_id, bonded_pool.points);
 
 			bonded_pool.try_inc_members()?;
@@ -1430,7 +1428,9 @@ pub mod pallet {
 				PoolMember::<T> {
 					pool_id,
 					points: points_issued,
-					last_recorded_reward_counter: current_reward_counter,
+					// we just updated `last_known_reward_counter` to the current one in
+					// `update_recorded`.
+					last_recorded_reward_counter: reward_pool.last_recorded_reward_counter,
 					unbonding_eras: Default::default(),
 				},
 			);
@@ -1464,8 +1464,10 @@ pub mod pallet {
 			let (mut member, mut bonded_pool, mut reward_pool) = Self::get_member_with_pools(&who)?;
 
 			// payout related stuff: we must claim the payouts, and updated recorded payout data
-			// before going further.
+			// before updating the bonded pool points, similar to that of `join` transaction.
 			reward_pool.update_records(bonded_pool.id, bonded_pool.points);
+			// TODO: optimize this to not touch the free balance of `who ` at all in benchmarks.
+			// Currently, bonding rewards is like a batch.
 			let claimed =
 				Self::do_reward_payout(&who, &mut member, &mut bonded_pool, &mut reward_pool)?;
 
@@ -1475,6 +1477,7 @@ pub mod pallet {
 				BondExtra::Rewards =>
 					(bonded_pool.try_bond_funds(&who, claimed, BondType::Later)?, claimed),
 			};
+
 			bonded_pool.ok_to_be_open(bonded)?;
 			member.points = member.points.saturating_add(points_issued);
 
@@ -1834,10 +1837,12 @@ pub mod pallet {
 				},
 			);
 			ReversePoolIdLookup::<T>::insert(bonded_pool.bonded_account(), pool_id);
+
 			Self::deposit_event(Event::<T>::Created {
 				depositor: who.clone(),
 				pool_id: pool_id.clone(),
 			});
+
 			Self::deposit_event(Event::<T>::Bonded {
 				member: who,
 				pool_id,
