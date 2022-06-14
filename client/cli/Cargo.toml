@@ -31,7 +31,7 @@ thiserror = "1.0.30"
 tiny-bip39 = "0.8.2"
 tokio = { version = "1.17.0", features = ["signal", "rt-multi-thread", "parking_lot"] }
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
-sc-client-db = { version = "0.10.0-dev", path = "../db" }
+sc-client-db = { version = "0.10.0-dev", default-features = false, path = "../db" }
 sc-keystore = { version = "4.0.0-dev", path = "../keystore" }
 sc-network = { version = "0.10.0-dev", path = "../network" }
 sc-service = { version = "0.10.0-dev", default-features = false, path = "../service" }
@@ -50,4 +50,6 @@ sp-version = { version = "5.0.0", path = "../../primitives/version" }
 tempfile = "3.1.0"
 
 [features]
+default = ["rocksdb"]
+rocksdb = ["sc-client-db/rocksdb"]
 wasmtime = ["sc-service/wasmtime"]
