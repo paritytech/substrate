@@ -31,7 +31,7 @@ impl<T: crate::Config> frame_support::traits::OnRuntimeUpgrade for RemoveLimitsF
 			if max_block_transactions_remove_result.backend != 1 {
 				log::warn!(
 					target: "runtime::transaction_storage",
-					"Expected to remove single item 'MaxTransactionSize' from storage. {} items were removed.", max_size_remove_result.backend);
+					"Expected to remove single item 'MaxBlockTransactions' from storage. {} items were removed.", max_block_transactions_remove_result.backend);
 			}
 
 			StorageVersion::new(1).put::<Pallet<T>>();
