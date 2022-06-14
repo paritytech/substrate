@@ -909,9 +909,9 @@ benchmarks! {
 	// it at a virgin key.
 	#[skip_meta]
 	seal_set_storage {
-		let r in 0 .. API_BENCHMARK_BATCHES;
+		let r in 0 .. API_BENCHMARK_BATCHES/2;
 		let max_key_len = T::MaxStorageKeyLen::get();
-		let keys = (0 .. r * API_BENCHMARK_BATCH_SIZE/2)
+		let keys = (0 .. r * API_BENCHMARK_BATCH_SIZE)
 				.map(|n| { let mut h = T::Hashing::hash_of(&n).as_ref().to_vec();
 						h.resize(max_key_len.try_into().unwrap(), n.to_le_bytes()[0]); h })
 		.collect::<Vec<_>>();
@@ -961,9 +961,9 @@ benchmarks! {
 
 	#[skip_meta]
 	seal_set_storage_per_new_kb {
-		let n in 0 .. T::Schedule::get().limits.payload_len / 1024;
+		let n in 0 .. T::Schedule::get().limits.payload_len / 2048;
 		let max_key_len = T::MaxStorageKeyLen::get();
-		let keys = (0 .. n * API_BENCHMARK_BATCH_SIZE/2)
+		let keys = (0 .. n * API_BENCHMARK_BATCH_SIZE)
 				.map(|n| { let mut h = T::Hashing::hash_of(&n).as_ref().to_vec();
 						h.resize(max_key_len.try_into().unwrap(), n.to_le_bytes()[0]); h })
 		.collect::<Vec<_>>();
@@ -1013,9 +1013,9 @@ benchmarks! {
 
 	#[skip_meta]
 	seal_set_storage_per_old_kb {
-		let n in 0 .. T::Schedule::get().limits.payload_len / 1024;
+		let n in 0 .. T::Schedule::get().limits.payload_len / 2048;
 		let max_key_len = T::MaxStorageKeyLen::get();
-		let keys = (0 .. n * API_BENCHMARK_BATCH_SIZE/2)
+		let keys = (0 .. n * API_BENCHMARK_BATCH_SIZE)
 				.map(|n| { let mut h = T::Hashing::hash_of(&n).as_ref().to_vec();
 						h.resize(max_key_len.try_into().unwrap(), n.to_le_bytes()[0]); h })
 		.collect::<Vec<_>>();
@@ -1069,9 +1069,9 @@ benchmarks! {
 	// reduce batch size in order to make resulting contract code size less than MaxCodeLen.
 	#[skip_meta]
 	seal_clear_storage {
-		let r in 0 .. API_BENCHMARK_BATCHES;
+		let r in 0 .. API_BENCHMARK_BATCHES/2;
 		let max_key_len = T::MaxStorageKeyLen::get();
-		let keys = (0 .. r * API_BENCHMARK_BATCH_SIZE/2)
+		let keys = (0 .. r * API_BENCHMARK_BATCH_SIZE)
 				.map(|n| { let mut h = T::Hashing::hash_of(&n).as_ref().to_vec();
 						h.resize(max_key_len.try_into().unwrap(), n.to_le_bytes()[0]); h })
 		.collect::<Vec<_>>();
@@ -1120,9 +1120,9 @@ benchmarks! {
 
 	#[skip_meta]
 	seal_clear_storage_per_kb {
-		let n in 0 .. T::Schedule::get().limits.payload_len / 1024;
+		let n in 0 .. T::Schedule::get().limits.payload_len / 2048;
 		let max_key_len = T::MaxStorageKeyLen::get();
-		let keys = (0 .. n * API_BENCHMARK_BATCH_SIZE/2)
+		let keys = (0 .. n * API_BENCHMARK_BATCH_SIZE)
 				.map(|n| { let mut h = T::Hashing::hash_of(&n).as_ref().to_vec();
 						h.resize(max_key_len.try_into().unwrap(), n.to_le_bytes()[0]); h })
 		.collect::<Vec<_>>();
@@ -1171,9 +1171,9 @@ benchmarks! {
 	// We make sure that all storage accesses are to unique keys.
 	#[skip_meta]
 	seal_get_storage {
-		let r in 0 .. API_BENCHMARK_BATCHES;
+		let r in 0 .. API_BENCHMARK_BATCHES/2;
 		let max_key_len = T::MaxStorageKeyLen::get();
-		let keys = (0 .. r * API_BENCHMARK_BATCH_SIZE/2)
+		let keys = (0 .. r * API_BENCHMARK_BATCH_SIZE)
 				.map(|n| { let mut h = T::Hashing::hash_of(&n).as_ref().to_vec();
 						h.resize(max_key_len.try_into().unwrap(), n.to_le_bytes()[0]); h })
 		.collect::<Vec<_>>();
@@ -1229,9 +1229,9 @@ benchmarks! {
 
 	#[skip_meta]
 	seal_get_storage_per_kb {
-		let n in 0 .. T::Schedule::get().limits.payload_len / 1024;
+		let n in 0 .. T::Schedule::get().limits.payload_len / 2048;
 		let max_key_len = T::MaxStorageKeyLen::get();
-		let keys = (0 .. n * API_BENCHMARK_BATCH_SIZE/2)
+		let keys = (0 .. n * API_BENCHMARK_BATCH_SIZE)
 				.map(|n| { let mut h = T::Hashing::hash_of(&n).as_ref().to_vec();
 						h.resize(max_key_len.try_into().unwrap(), n.to_le_bytes()[0]); h })
 		.collect::<Vec<_>>();
@@ -1288,9 +1288,9 @@ benchmarks! {
 	// We make sure that all storage accesses are to unique keys.
 	#[skip_meta]
 	seal_contains_storage {
-		let r in 0 .. API_BENCHMARK_BATCHES;
+		let r in 0 .. API_BENCHMARK_BATCHES/2;
 		let max_key_len = T::MaxStorageKeyLen::get();
-		let keys = (0 .. r * API_BENCHMARK_BATCH_SIZE/2)
+		let keys = (0 .. r * API_BENCHMARK_BATCH_SIZE)
 				.map(|n| { let mut h = T::Hashing::hash_of(&n).as_ref().to_vec();
 						h.resize(max_key_len.try_into().unwrap(), n.to_le_bytes()[0]); h })
 		.collect::<Vec<_>>();
@@ -1340,9 +1340,9 @@ benchmarks! {
 
 	#[skip_meta]
 	seal_contains_storage_per_kb {
-		let n in 0 .. T::Schedule::get().limits.payload_len / 1024;
+		let n in 0 .. T::Schedule::get().limits.payload_len / 2048;
 		let max_key_len = T::MaxStorageKeyLen::get();
-		let keys = (0 .. n * API_BENCHMARK_BATCH_SIZE/2)
+		let keys = (0 .. n * API_BENCHMARK_BATCH_SIZE)
 				.map(|n| { let mut h = T::Hashing::hash_of(&n).as_ref().to_vec();
 						h.resize(max_key_len.try_into().unwrap(), n.to_le_bytes()[0]); h })
 		.collect::<Vec<_>>();
@@ -1391,9 +1391,9 @@ benchmarks! {
 
 	#[skip_meta]
 	seal_take_storage {
-		let r in 0 .. API_BENCHMARK_BATCHES;
+		let r in 0 .. API_BENCHMARK_BATCHES/2;
 		let max_key_len = T::MaxStorageKeyLen::get();
-		let keys = (0 .. r * API_BENCHMARK_BATCH_SIZE/2)
+		let keys = (0 .. r * API_BENCHMARK_BATCH_SIZE)
 				.map(|n| { let mut h = T::Hashing::hash_of(&n).as_ref().to_vec();
 						h.resize(max_key_len.try_into().unwrap(), n.to_le_bytes()[0]); h })
 		.collect::<Vec<_>>();
@@ -1449,9 +1449,9 @@ benchmarks! {
 
 	#[skip_meta]
 	seal_take_storage_per_kb {
-		let n in 0 .. T::Schedule::get().limits.payload_len / 1024;
+		let n in 0 .. T::Schedule::get().limits.payload_len / 2048;
 		let max_key_len = T::MaxStorageKeyLen::get();
-		let keys = (0 .. n * API_BENCHMARK_BATCH_SIZE/2)
+		let keys = (0 .. n * API_BENCHMARK_BATCH_SIZE)
 				.map(|n| { let mut h = T::Hashing::hash_of(&n).as_ref().to_vec();
 						h.resize(max_key_len.try_into().unwrap(), n.to_le_bytes()[0]); h })
 		.collect::<Vec<_>>();
