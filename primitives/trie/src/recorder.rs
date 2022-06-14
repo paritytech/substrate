@@ -233,7 +233,7 @@ impl<H: Hasher, I: DerefMut<Target = RecorderInner<H::Out>>> trie_db::TrieRecord
 	}
 
 	fn trie_nodes_recorded_for_key(&self, key: &[u8]) -> RecordedForKey {
-		self.inner.recorded_keys.get(key).copied().unwrap_or(RecordedForKey::Nothing)
+		self.inner.recorded_keys.get(key).copied().unwrap_or(RecordedForKey::None)
 	}
 }
 
