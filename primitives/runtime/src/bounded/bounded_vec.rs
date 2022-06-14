@@ -228,7 +228,7 @@ impl<'a, T, S> Deref for BoundedSlice<'a, T, S> {
 	type Target = [T];
 
 	fn deref(&self) -> &Self::Target {
-		&self.0
+		self.0
 	}
 }
 
