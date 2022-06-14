@@ -52,6 +52,7 @@ use sp_core::{
 		HttpError, HttpRequestId, HttpRequestStatus, OpaqueNetworkState, StorageKind, Timestamp,
 	},
 	sr25519,
+    bls,
 	storage::StateVersion,
 	LogLevel, LogLevelFilter, OpaquePeerId, H256,
 };
@@ -1073,6 +1074,56 @@ pub trait Crypto {
 			.map_err(|_| EcdsaVerifyError::BadSignature)?;
 		Ok(pubkey.serialize())
 	}
+
+    fn bls_public_keys(&mut self, id: KeyTypeId) -> Vec<bls::Public> {
+	    let keystore = &***self
+			.extension::<KeystoreExt>()
+			.expect("No `keystore` associated for the current context!");
+		SyncCryptoStore::bls_public_keys(keystore, id)
+	}
+
+    /// Generate an `bls12-377` key for the given key type using an optional seed and
+	/// store it in the keystore.
+	///
+	/// The `seed` needs to be a valid utf8.
+	///
+	/// Returns the public key.
+	fn bls_generate(&mut self, id: KeyTypeId, seed: Option<Vec<u8>>) -> bls::Public {
+		let seed = seed.as_ref().map(|s| std::str::from_utf8(s).expect("Seed is valid utf8!"));
+		let keystore = &***self
+			.extension::<KeystoreExt>()
+			.expect("No `keystore` associated for the current context!");
+		SyncCryptoStore::bls_generate_new(keystore, id, seed)
+			.expect("`bls_generate` failed")
+	}
+
+	/// Sign the given `msg` with the `bls12-377` key that corresponds to the given public key and
+	/// key type in the keystore.
+	///
+	/// Returns the signature.
+	fn bls_sign(
+		&mut self,
+		id: KeyTypeId,
+		pub_key: &bls::Public,
+		msg: &[u8],
+	) -> Option<bls::Signature> {
+		let keystore = &***self
+			.extension::<KeystoreExt>()
+			.expect("No `keystore` associated for the current context!");
+		SyncCryptoStore::sign_with(keystore, id, &pub_key.into(), msg)
+			.ok()
+			.flatten()
+			.and_then(|sig| bls::Signature::from_slice(&sig))
+	}
+
+	/// Verify an `bls12-377` signature.
+	///
+	/// Returns `true` when the verification in successful regardless of
+	/// signature version.
+	fn bls_verify(sig: &bls::Signature, msg: &[u8], pubkey: &bls::Public) -> bool {
+		bls::Pair::verify(sig, msg, pubkey)
+	}
+
 }
 
 /// Interface that provides functions for hashing with different algorithms.
