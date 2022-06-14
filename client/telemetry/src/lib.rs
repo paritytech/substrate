@@ -42,7 +42,10 @@ use log::{error, warn};
 use parking_lot::Mutex;
 use serde::Serialize;
 use std::{
-	collections::HashMap,
+	collections::{
+		hash_map::Entry::{Occupied, Vacant},
+		HashMap,
+	},
 	sync::{atomic, Arc},
 };
 
@@ -147,7 +150,6 @@ pub struct TelemetryWorker {
 	register_receiver: mpsc::UnboundedReceiver<Register>,
 	register_sender: mpsc::UnboundedSender<Register>,
 	id_counter: Arc<atomic::AtomicU64>,
-	transport: WsTrans,
 }
 
 impl TelemetryWorker {
@@ -155,7 +157,7 @@ impl TelemetryWorker {
 	///
 	/// Only one is needed per process.
 	pub fn new(buffer_size: usize) -> Result<Self> {
-		let transport = initialize_transport()?;
+		let _transport = initialize_transport()?;
 		let (message_sender, message_receiver) = mpsc::channel(buffer_size);
 		let (register_sender, register_receiver) = mpsc::unbounded();
 
@@ -165,7 +167,6 @@ impl TelemetryWorker {
 			register_receiver,
 			register_sender,
 			id_counter: Arc::new(atomic::AtomicU64::new(1)),
-			transport,
 		})
 	}
 
@@ -200,7 +201,6 @@ impl TelemetryWorker {
 					&mut node_pool,
 					&mut node_map,
 					&mut pending_connection_notifications,
-					self.transport.clone(),
 				).await,
 			}
 		}
@@ -211,7 +211,6 @@ impl TelemetryWorker {
 		node_pool: &mut HashMap<Multiaddr, Node<WsTrans>>,
 		node_map: &mut HashMap<Id, Vec<(VerbosityLevel, Multiaddr)>>,
 		pending_connection_notifications: &mut Vec<(Multiaddr, ConnectionNotifierSender)>,
-		transport: WsTrans,
 	) {
 		let input = input.expect("the stream is never closed; qed");
 
@@ -248,9 +247,24 @@ impl TelemetryWorker {
 					);
 					node_map.entry(id).or_default().push((verbosity, addr.clone()));
 
-					let node = node_pool.entry(addr.clone()).or_insert_with(|| {
-						Node::new(transport.clone(), addr.clone(), Vec::new(), Vec::new())
-					});
+					let node = match node_pool.entry(addr.clone()) {
+						Occupied(entry) => entry.into_mut(),
+						Vacant(entry) => {
+							let transport = initialize_transport();
+							let transport = match transport {
+								Ok(t) => t,
+								Err(err) => {
+									log::error!(
+										target: "telemetry",
+										"Could not initialise transport: {}",
+										err,
+									);
+									continue
+								},
+							};
+							entry.insert(Node::new(transport, addr.clone(), Vec::new(), Vec::new()))
+						},
+					};
 
 					node.connection_messages.extend(connection_message.clone());
 
