@@ -39,9 +39,9 @@ frame-benchmarking = { version = "4.0.0-dev", path = "../../../frame/benchmarkin
 frame-support = { version = "4.0.0-dev", path = "../../../frame/support" }
 frame-system = { version = "4.0.0-dev", path = "../../../frame/system" }
 sc-block-builder = { version = "0.10.0-dev", path = "../../../client/block-builder" }
-sc-cli = { version = "0.10.0-dev", path = "../../../client/cli" }
+sc-cli = { version = "0.10.0-dev", default-features = false, path = "../../../client/cli" }
 sc-client-api = { version = "4.0.0-dev", path = "../../../client/api" }
-sc-client-db = { version = "0.10.0-dev", path = "../../../client/db" }
+sc-client-db = { version = "0.10.0-dev", default-features = false, path = "../../../client/db" }
 sc-executor = { version = "0.10.0-dev", path = "../../../client/executor" }
 sc-service = { version = "0.10.0-dev", default-features = false, path = "../../../client/service" }
 sc-sysinfo = { version = "6.0.0-dev", path = "../../../client/sysinfo" }
@@ -59,5 +59,6 @@ sp-trie = { version = "6.0.0", path = "../../../primitives/trie" }
 gethostname = "0.2.3"
 
 [features]
-default = ["db", "sc-client-db/runtime-benchmarks"]
-db = ["sc-client-db/with-kvdb-rocksdb", "sc-client-db/with-parity-db"]
+default = ["rocksdb", "runtime-benchmarks"]
+runtime-benchmarks = ["sc-client-db/runtime-benchmarks"]
+rocksdb = ["sc-cli/rocksdb", "sc-client-db/rocksdb"]

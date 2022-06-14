@@ -153,7 +153,7 @@ cli = [
 	"sc-cli",
 	"frame-benchmarking-cli",
 	"substrate-frame-cli",
-	"sc-service/db",
+	"sc-service/rocksdb",
 	"clap",
 	"clap_complete",
 	"substrate-build-script-utils",
