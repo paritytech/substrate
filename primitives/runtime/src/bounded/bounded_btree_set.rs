@@ -65,6 +65,11 @@ where
 	T: Ord,
 	S: Get<u32>,
 {
+	/// Create `Self` from `t` without any checks.
+	fn unchecked_from(t: BTreeSet<T>) -> Self {
+		Self(t, Default::default())
+	}
+
 	/// Create a new `BoundedBTreeSet`.
 	///
 	/// Does not allocate.
@@ -154,13 +159,12 @@ where
 	}
 }
 
-#[cfg(feature = "std")]
-impl<T, S> std::fmt::Debug for BoundedBTreeSet<T, S>
+impl<T, S> sp_std::fmt::Debug for BoundedBTreeSet<T, S>
 where
-	BTreeSet<T>: std::fmt::Debug,
+	BTreeSet<T>: sp_std::fmt::Debug,
 	S: Get<u32>,
 {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
 		f.debug_tuple("BoundedBTreeSet").field(&self.0).field(&Self::bound()).finish()
 	}
 }
@@ -309,8 +313,7 @@ where
 		if self.len() > Bound::get() as usize {
 			Err("iterator length too big")
 		} else {
-			Ok(BoundedBTreeSet::<T, Bound>::try_from(self.collect::<BTreeSet<T>>())
-				.expect("length is checked above; qed"))
+			Ok(BoundedBTreeSet::<T, Bound>::unchecked_from(self.collect::<BTreeSet<T>>()))
 		}
 	}
 }
