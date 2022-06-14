@@ -191,10 +191,6 @@ pub mod pallet {
 		BoundedVec<VestingInfo<BalanceOf<T>, T::BlockNumber>, MaxVestingSchedulesGet<T>>,
 	>;
 
-	#[pallet::storage]
-	#[pallet::getter(fn is_sudo_unlock_disallowed)]
-	pub type IsSudoUnlockDisallowed<T: Config> = StorageValue<_, bool, ValueQuery>;
-
 	/// Storage version of the pallet.
 	///
 	/// New networks start with latest version, as determined by the genesis build.
@@ -421,12 +417,9 @@ pub mod pallet {
 		) -> DispatchResult {
 			ensure_root(origin)?;
 
-			ensure!(!Self::is_sudo_unlock_disallowed(), Error::<T>::SudoUnlockIsDisallowed);
 			let who = T::Lookup::lookup(target)?;
 
 			Self::do_unlock_all(who, token_id)?;
-
-			IsSudoUnlockDisallowed::<T>::put(true);
 
 			Ok(())
 		}
