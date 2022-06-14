@@ -66,7 +66,7 @@ fn instant_referendum_works() {
 			Democracy::fast_track(Origin::signed(6), h, 1, 0),
 			Error::<Test>::InstantNotAllowed
 		);
-		InstantAllowed::set(true);
+		INSTANT_ALLOWED.with(|v| *v.borrow_mut() = true);
 		assert_noop!(
 			Democracy::fast_track(Origin::signed(6), h, 0, 0),
 			Error::<Test>::VotingPeriodLow
