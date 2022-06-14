@@ -771,6 +771,55 @@ where
 		Ok(outcome.old_len_with_sentinel())
 	}
 
+	fn get_storage(
+		&mut self,
+		key_type: KeyType,
+		key_ptr: u32,
+		out_ptr: u32,
+		out_len_ptr: u32,
+	) -> Result<ReturnCode, TrapReason> {
+		let charged = self.charge_gas(RuntimeCosts::GetStorage(self.ext.max_value_size()))?;
+		let key = self.read_sandbox_memory(key_ptr, key_type.len::<E::T>()?)?;
+		match key_type {
+			KeyType::Fix =>
+				if let Some(value) = self.ext.get_storage(
+					&FixSizedKey::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?,
+				) {
+					self.adjust_gas(charged, RuntimeCosts::GetStorage(value.len() as u32));
+					self.write_sandbox_output(
+						out_ptr,
+						out_len_ptr,
+						&value,
+						false,
+						already_charged,
+					)?;
+					Ok(ReturnCode::Success)
+				} else {
+					self.adjust_gas(charged, RuntimeCosts::GetStorage(0));
+					Ok(ReturnCode::KeyNotFound)
+				},
+			KeyType::Variable(_) => {
+				if let Some(value) = self.ext.get_storage_transparent(
+					&VarSizedKey::<E::T>::try_from(key)
+						.map_err(|_| Error::<E::T>::DecodingFailed)?,
+				) {
+					self.adjust_gas(charged, RuntimeCosts::GetStorage(value.len() as u32));
+					self.write_sandbox_output(
+						out_ptr,
+						out_len_ptr,
+						&value,
+						false,
+						already_charged,
+					)?;
+					Ok(ReturnCode::Success)
+				} else {
+					self.adjust_gas(charged, RuntimeCosts::GetStorage(0));
+					Ok(ReturnCode::KeyNotFound)
+				}
+			},
+		}
+	}
+
 	fn call(
 		&mut self,
 		flags: CallFlags,
@@ -993,17 +1042,7 @@ define_env!(Env, <E: Ext>,
 	//
 	// `ReturnCode::KeyNotFound`
 	[seal0] seal_get_storage(ctx, key_ptr: u32, out_ptr: u32, out_len_ptr: u32) -> ReturnCode => {
-		let charged = ctx.charge_gas(RuntimeCosts::GetStorage(ctx.ext.max_value_size()))?;
-		let mut key: FixSizedKey = [0; 32];
-		ctx.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
-		if let Some(value) = ctx.ext.get_storage(&key) {
-			ctx.adjust_gas(charged, RuntimeCosts::GetStorage(value.len() as u32));
-			ctx.write_sandbox_output(out_ptr, out_len_ptr, &value, false, already_charged)?;
-			Ok(ReturnCode::Success)
-		} else {
-			ctx.adjust_gas(charged, RuntimeCosts::GetStorage(0));
-			Ok(ReturnCode::KeyNotFound)
-		}
+		ctx.get_storage(KeyType::Fix, key_ptr, out_ptr, out_len_ptr).map_err(Into::into)
 	},
 
 	// Retrieve the value under the given key from storage.
@@ -1025,16 +1064,7 @@ define_env!(Env, <E: Ext>,
 	//
 	// `ReturnCode::KeyNotFound`
 	[__unstable__] seal_get_storage(ctx, key_ptr: u32, key_len: u32, out_ptr: u32, out_len_ptr: u32) -> ReturnCode => {
-		let charged = ctx.charge_gas(RuntimeCosts::GetStorage(ctx.ext.max_value_size()))?;
-		let key = ctx.read_sandbox_memory(key_ptr, key_len)?;
-		if let Some(value) = ctx.ext.get_storage_transparent(&VarSizedKey::<E::T>::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?) {
-			ctx.adjust_gas(charged, RuntimeCosts::GetStorage(value.len() as u32));
-			ctx.write_sandbox_output(out_ptr, out_len_ptr, &value, false, already_charged)?;
-			Ok(ReturnCode::Success)
-		} else {
-			ctx.adjust_gas(charged, RuntimeCosts::GetStorage(0));
-			Ok(ReturnCode::KeyNotFound)
-		}
+		ctx.get_storage(KeyType::Variable(key_len), key_ptr, out_ptr, out_len_ptr).map_err(Into::into)
 	},
 
 	// Checks whether there is a value stored under the given key.
