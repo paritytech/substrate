@@ -105,9 +105,9 @@ pub mod pallet {
 		type FeeDestination: OnUnbalanced<NegativeImbalanceOf<Self>>;
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
-
+		/// Maximum number of indexed transactions in the block.
 		type MaxBlockTransactions: Get<u32>;
-
+		/// Maximum data set in a single transaction in bytes.
 		type MaxTransactionSize: Get<u32>;
 	}
 
