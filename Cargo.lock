@@ -3148,9 +3148,8 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee"
-version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eae63f7fdeb51700b35e9b28bf92e8d233951590968c186ed79510b6c12fa3d9"
+version = "0.13.1"
+source = "git+https://github.com/paritytech/jsonrpsee#5a344c0c39bb2bf15c42350cc9b199789a179fa1"
 dependencies = [
  "jsonrpsee-core",
  "jsonrpsee-http-server",
@@ -3163,9 +3162,8 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-client-transport"
-version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "32feb1f2f0b5ce37a03b96a988a6dadccc3f529a2f930356bac93f13c09cf385"
+version = "0.13.1"
+source = "git+https://github.com/paritytech/jsonrpsee#5a344c0c39bb2bf15c42350cc9b199789a179fa1"
 dependencies = [
  "futures-util",
  "http",
@@ -3184,9 +3182,8 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-core"
-version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "31e6b13067b615dd050ced7c19517a52cde490eee2c754d5447ce513f2275f7d"
+version = "0.13.1"
+source = "git+https://github.com/paritytech/jsonrpsee#5a344c0c39bb2bf15c42350cc9b199789a179fa1"
 dependencies = [
  "anyhow",
  "arrayvec 0.7.1",
@@ -3196,8 +3193,10 @@ dependencies = [
  "futures-channel",
  "futures-timer",
  "futures-util",
+ "globset",
  "hyper",
  "jsonrpsee-types",
+ "lazy_static",
  "parking_lot 0.12.0",
  "rand 0.8.4",
  "rustc-hash",
@@ -3207,32 +3206,29 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
-]
-
-[[package]]
-name = "jsonrpsee-http-server"
-version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b34f1090bdc8f7f14ad8811fc84501867c23a9046ce79d49c0cd929a256c501e"
-dependencies = [
- "futures-channel",
- "futures-util",
- "globset",
- "hyper",
- "jsonrpsee-core",
- "jsonrpsee-types",
- "lazy_static",
- "serde_json",
- "tokio",
- "tracing",
  "unicase",
 ]
 
 [[package]]
+name = "jsonrpsee-http-server"
+version = "0.13.1"
+source = "git+https://github.com/paritytech/jsonrpsee#5a344c0c39bb2bf15c42350cc9b199789a179fa1"
+dependencies = [
+ "futures-channel",
+ "futures-util",
+ "hyper",
+ "jsonrpsee-core",
+ "jsonrpsee-types",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "jsonrpsee-proc-macros"
-version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5d8dc7a8b629e371cd5ca9d128883763ae00c5b63158ace4a6a61345726a21b7"
+version = "0.13.1"
+source = "git+https://github.com/paritytech/jsonrpsee#5a344c0c39bb2bf15c42350cc9b199789a179fa1"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
@@ -3242,9 +3238,8 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-types"
-version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "44f1835f131e77cd766b4dcb025873944cb1e479cd5debb639e2dc11f90df24a"
+version = "0.13.1"
+source = "git+https://github.com/paritytech/jsonrpsee#5a344c0c39bb2bf15c42350cc9b199789a179fa1"
 dependencies = [
  "anyhow",
  "beef",
@@ -3256,9 +3251,8 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-ws-client"
-version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9d75df866743c9733b3e2f5421e56df2f5b4630f7de39f82c44eaab350604926"
+version = "0.13.1"
+source = "git+https://github.com/paritytech/jsonrpsee#5a344c0c39bb2bf15c42350cc9b199789a179fa1"
 dependencies = [
  "jsonrpsee-client-transport",
  "jsonrpsee-core",
@@ -3267,9 +3261,8 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-ws-server"
-version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "099971913436e7f6b1bc80180d4e5f014ec944660636da45d2f372c23d6308c3"
+version = "0.13.1"
+source = "git+https://github.com/paritytech/jsonrpsee#5a344c0c39bb2bf15c42350cc9b199789a179fa1"
 dependencies = [
  "futures-channel",
  "futures-util",
@@ -3278,6 +3271,7 @@ dependencies = [
  "serde_json",
  "soketto",
  "tokio",
+ "tokio-stream",
  "tokio-util 0.7.1",
  "tracing",
 ]
@@ -11231,7 +11225,7 @@ checksum = "4ee73e6e4924fe940354b8d4d98cad5231175d615cd855b758adc658c0aac6a0"
 dependencies = [
  "cfg-if 0.1.10",
  "digest 0.10.3",
- "rand 0.8.4",
+ "rand 0.6.5",
  "static_assertions",
 ]
 
