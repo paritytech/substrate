@@ -429,7 +429,7 @@ benchmarks_instance_pallet! {
 		let (item, ..) = mint_item::<T, I>(0);
 		let buyer: T::AccountId = account("buyer", 0, SEED);
 		let buyer_lookup = T::Lookup::unlookup(buyer.clone());
-		let price = ItemPrice::<T, I>::from(100u32);
+		let price = ItemPrice::<T, I>::from(0u32);
 		let origin = SystemOrigin::Signed(seller.clone()).into();
 		Uniques::<T, I>::set_price(origin, collection, item, Some(price.clone()), Some(buyer_lookup))?;
 		T::Currency::make_free_balance_be(&buyer, DepositBalanceOf::<T, I>::max_value());
