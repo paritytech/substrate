@@ -157,6 +157,7 @@ impl pallet_nomination_pools::Config for Runtime {
 	type Event = Event;
 	type WeightInfo = ();
 	type Currency = Balances;
+	type CurrencyBalance = Balance;
 	type BalanceToU256 = BalanceToU256;
 	type U256ToBalance = U256ToBalance;
 	type StakingInterface = Staking;

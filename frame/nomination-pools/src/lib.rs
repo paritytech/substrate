@@ -1497,7 +1497,7 @@ pub mod pallet {
 			// TODO: optimize this to not touch the free balance of `who ` at all in benchmarks.
 			// Currently, bonding rewards is like a batch. In the same PR, also make this function
 			// take a boolean argument that make it either 100% pure (no storage update), or make it
-			// also emit event and do the transfer.
+			// also emit event and do the transfer. #11671
 			let claimed =
 				Self::do_reward_payout(&who, &mut member, &mut bonded_pool, &mut reward_pool)?;
 
