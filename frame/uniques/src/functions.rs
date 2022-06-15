@@ -320,7 +320,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		})
 	}
 
-	pub fn process_royalties(
+	fn process_royalties(
 		amount: ItemPrice<T, I>,
 		royalties: Perbill,
 		source: &T::AccountId,
