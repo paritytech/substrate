@@ -1676,7 +1676,6 @@ pub type Executive = frame_executive::Executive<
 	frame_system::ChainContext<Runtime>,
 	Runtime,
 	AllPalletsWithSystem,
-	pallet_transaction_storage::migration::RemoveLimitsFromStorage<Runtime>,
 >;
 
 /// MMR helper types.

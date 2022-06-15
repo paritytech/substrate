@@ -51,7 +51,6 @@ type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
 pub use pallet::*;
 pub use weights::WeightInfo;
 
-pub mod migration;
 /// Maximum bytes that can be stored in one transaction.
 // Setting higher limit also requires raising the allocator limit.
 pub const DEFAULT_MAX_TRANSACTION_SIZE: u32 = 8 * 1024 * 1024;
@@ -141,12 +140,8 @@ pub mod pallet {
 		BadContext,
 	}
 
-	/// The current storage version.
-	const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
-
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
-	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(_);
 
 	#[pallet::hooks]
