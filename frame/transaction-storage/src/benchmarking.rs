@@ -126,7 +126,7 @@ pub fn run_to_block<T: Config>(n: T::BlockNumber) {
 
 benchmarks! {
 	store {
-		let l in 1 .. <T>::MaxTransactionSize::get();
+		let l in 1 .. T::MaxTransactionSize::get();
 		let caller: T::AccountId = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 	}: _(RawOrigin::Signed(caller.clone()), vec![0u8; l as usize])
@@ -140,7 +140,7 @@ benchmarks! {
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 		TransactionStorage::<T>::store(
 			RawOrigin::Signed(caller.clone()).into(),
-			vec![0u8; <T>::MaxTransactionSize::get() as usize],
+			vec![0u8; T::MaxTransactionSize::get() as usize],
 		)?;
 		run_to_block::<T>(1u32.into());
 	}: _(RawOrigin::Signed(caller.clone()), T::BlockNumber::zero(), 0)
@@ -152,10 +152,10 @@ benchmarks! {
 		run_to_block::<T>(1u32.into());
 		let caller: T::AccountId = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
-		for _ in 0 .. <T>::MaxBlockTransactions::get() {
+		for _ in 0 .. T::MaxBlockTransactions::get() {
 			TransactionStorage::<T>::store(
 				RawOrigin::Signed(caller.clone()).into(),
-				vec![0u8; <T>::MaxTransactionSize::get() as usize],
+				vec![0u8; T::MaxTransactionSize::get() as usize],
 			)?;
 		}
 		run_to_block::<T>(StoragePeriod::<T>::get() + T::BlockNumber::one());
