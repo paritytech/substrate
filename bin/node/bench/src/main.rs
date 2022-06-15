@@ -75,11 +75,11 @@ struct Opt {
 	#[clap(short, long, default_value = "regular")]
 	mode: BenchmarkMode,
 	/// Benchmarks to exclude
-	/// 
+	///
 	/// Provide the names of the benchmarks you would like to skip.
-	/// e.g `--exclude` 
+	/// e.g `--exclude benchmark_name`
 	#[clap(long)]
-	exclude: Vec<String>
+	exclude: Vec<String>,
 }
 
 fn main() {
@@ -178,7 +178,7 @@ fn main() {
 		if opt.filter.as_ref().map(|f| benchmark.path().has(f)).unwrap_or(true) {
 			if is_excluded(format!("{}", benchmark.name()), &opt.exclude) {
 				log::info!("{} is excluded", benchmark.name());
-				continue;
+				continue
 			}
 			log::info!("Starting {}", benchmark.name());
 			let result = run_benchmark(benchmark, opt.mode);
@@ -203,7 +203,7 @@ fn main() {
 fn is_excluded(benchmark_name: String, excluded: &Vec<String>) -> bool {
 	for benchmark in excluded {
 		if benchmark_name == *benchmark {
-			return true;
+			return true
 		}
 	}
 	false
