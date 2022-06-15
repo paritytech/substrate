@@ -141,14 +141,25 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	/// Return the pre digest data to include in a block authored with the given claim.
 	fn pre_digest_data(&self, slot: Slot, claim: &Self::Claim) -> Vec<sp_runtime::DigestItem>;
 
+	/// Sign the pre-sealed hash of the block and then add it to a digest item.
+	///
+	/// Different consensus should add their own seal digest here.
+	fn seal_block(
+		&self,
+		header_hash: &B::Hash,
+		public: &Self::Claim,
+		import_block: sc_consensus::BlockImportParams<B, <Self::BlockImport as BlockImport<B>>::Transaction>,
+	) ->  Result<
+		sc_consensus::BlockImportParams<B, <Self::BlockImport as BlockImport<B>>::Transaction>,
+		sp_consensus::Error,
+	>;
+
 	/// Returns a function which produces a `BlockImportParams`.
 	async fn block_import_params(
 		&self,
 		header: B::Header,
-		header_hash: &B::Hash,
 		body: Vec<B::Extrinsic>,
 		storage_changes: StorageChanges<<Self::BlockImport as BlockImport<B>>::Transaction, B>,
-		public: Self::Claim,
 		epoch: Self::EpochData,
 	) -> Result<
 		sc_consensus::BlockImportParams<B, <Self::BlockImport as BlockImport<B>>::Transaction>,
@@ -339,10 +350,8 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		let block_import_params = match self
 			.block_import_params(
 				header,
-				&header_hash,
 				body.clone(),
 				proposal.storage_changes,
-				claim,
 				epoch_data,
 			)
 			.await
@@ -355,11 +364,21 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			},
 		};
 
+		let block_import_params = match self.seal_block(&header_hash, &claim, block_import_params) {
+			Ok(bi) => bi,
+			Err(err) => {
+				warn!(target: logging_target, "Failed to seal block: {}", err);
+
+				return None
+			},
+		};
+
+		let hash_now = block_import_params.post_hash();
 		info!(
 			target: logging_target,
 			"🔖 Pre-sealed block for proposal at {}. Hash now {:?}, previously {:?}.",
 			header_num,
-			block_import_params.post_hash(),
+			hash_now,
 			header_hash,
 		);
 
@@ -368,7 +387,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			CONSENSUS_INFO;
 			"slots.pre_sealed_block";
 			"header_num" => ?header_num,
-			"hash_now" => ?block_import_params.post_hash(),
+			"hash_now" => ?hash_now,
 			"hash_previously" => ?header_hash,
 		);
 

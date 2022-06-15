@@ -853,20 +853,15 @@ where
 		vec![<DigestItem as CompatibleDigestItem>::babe_pre_digest(claim.0.clone())]
 	}
 
-	async fn block_import_params(
+	fn seal_block(
 		&self,
-		header: B::Header,
 		header_hash: &B::Hash,
-		body: Vec<B::Extrinsic>,
-		storage_changes: StorageChanges<<Self::BlockImport as BlockImport<B>>::Transaction, B>,
-		(_, public): Self::Claim,
-		epoch_descriptor: Self::EpochData,
-	) -> Result<
+		(_, public): &Self::Claim,
+		mut import_block: sc_consensus::BlockImportParams<B, <Self::BlockImport as BlockImport<B>>::Transaction>,
+	) ->  Result<
 		sc_consensus::BlockImportParams<B, <Self::BlockImport as BlockImport<B>>::Transaction>,
 		sp_consensus::Error,
 	> {
-		// sign the pre-sealed hash of the block and then
-		// add it to a digest item.
 		let public_type_pair = public.clone().into();
 		let public = public.to_raw_vec();
 		let signature = SyncCryptoStore::sign_with(
@@ -875,21 +870,33 @@ where
 			&public_type_pair,
 			header_hash.as_ref(),
 		)
-		.map_err(|e| sp_consensus::Error::CannotSign(public.clone(), e.to_string()))?
-		.ok_or_else(|| {
-			sp_consensus::Error::CannotSign(
-				public.clone(),
-				"Could not find key in keystore.".into(),
-			)
-		})?;
+			.map_err(|e| sp_consensus::Error::CannotSign(public.clone(), e.to_string()))?
+			.ok_or_else(|| {
+				sp_consensus::Error::CannotSign(
+					public.clone(),
+					"Could not find key in keystore.".into(),
+				)
+			})?;
 		let signature: AuthoritySignature = signature
 			.clone()
 			.try_into()
 			.map_err(|_| sp_consensus::Error::InvalidSignature(signature, public))?;
 		let digest_item = <DigestItem as CompatibleDigestItem>::babe_seal(signature);
-
-		let mut import_block = BlockImportParams::new(BlockOrigin::Own, header);
 		import_block.post_digests.push(digest_item);
+		Ok(import_block)
+	}
+
+	async fn block_import_params(
+		&self,
+		header: B::Header,
+		body: Vec<B::Extrinsic>,
+		storage_changes: StorageChanges<<Self::BlockImport as BlockImport<B>>::Transaction, B>,
+		epoch_descriptor: Self::EpochData,
+	) -> Result<
+		sc_consensus::BlockImportParams<B, <Self::BlockImport as BlockImport<B>>::Transaction>,
+		sp_consensus::Error,
+	> {
+		let mut import_block = BlockImportParams::new(BlockOrigin::Own, header);
 		import_block.body = Some(body);
 		import_block.state_action =
 			StateAction::ApplyChanges(sc_consensus::StorageChanges::Changes(storage_changes));
