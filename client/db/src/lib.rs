@@ -108,7 +108,6 @@ pub type DbStateBuilder<B> = sp_state_machine::TrieBackendBuilder<
 >;
 
 /// Length of a [`DbHash`].
-#[cfg(feature = "with-parity-db")]
 const DB_HASH_LEN: usize = 32;
 
 /// Hash type that this backend uses for the database.
