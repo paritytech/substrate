@@ -199,7 +199,7 @@ impl<H: Hasher> Clone for SharedTrieCache<H> {
 
 impl<H: Hasher> SharedTrieCache<H> {
 	/// Returns the size of one element in the value cache.
-	const fn value_cache_element_size() -> usize {
+	fn value_cache_element_size() -> usize {
 		// key + value
 		mem::size_of::<u64>() + mem::size_of::<CachedValue<H::Out>>()
 	}
