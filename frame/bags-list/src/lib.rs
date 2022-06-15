@@ -240,8 +240,9 @@ pub mod pallet {
 		/// - both nodes are within the same bag,
 		/// - and `origin` has a greater `Score` than `lighter`.
 		#[pallet::weight(T::WeightInfo::put_in_front_of())]
-		pub fn put_in_front_of(origin: OriginFor<T>, lighter: T::AccountId) -> DispatchResult {
+		pub fn put_in_front_of(origin: OriginFor<T>, lighter: <T::Lookup as StaticLookup>::Source) -> DispatchResult {
 			let heavier = ensure_signed(origin)?;
+            let lighter = T::Lookup::lookup(lighter)?;
 			List::<T, I>::put_in_front_of(&lighter, &heavier)
 				.map_err::<Error<T, I>, _>(Into::into)
 				.map_err::<DispatchError, _>(Into::into)
