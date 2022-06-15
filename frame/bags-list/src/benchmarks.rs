@@ -47,7 +47,7 @@ frame_benchmarking::benchmarks! {
 		let origin_head: T::AccountId = account("origin_head", 0, 0);
 		assert_ok!(List::<T, _>::insert(origin_head.clone(), origin_bag_thresh));
 
-		let origin_middle: T::AccountId = account("origin_middle", 0, 0); // the node we rebag (_R_)
+		let origin_middle: T::AccountId  = account("origin_middle", 0, 0); // the node we rebag (_R_)
 		assert_ok!(List::<T, _>::insert(origin_middle.clone(), origin_bag_thresh));
 
 		let origin_tail: T::AccountId  = account("origin_tail", 0, 0);
@@ -56,6 +56,8 @@ frame_benchmarking::benchmarks! {
 		// seed items in the destination bag.
 		let dest_head: T::AccountId  = account("dest_head", 0, 0);
 		assert_ok!(List::<T, _>::insert(dest_head.clone(), dest_bag_thresh));
+
+        let origin_middle_lookup = T::Lookup::unlookup(origin_middle.clone());
 
 		// the bags are in the expected state after initial setup.
 		assert_eq!(
@@ -69,7 +71,7 @@ frame_benchmarking::benchmarks! {
 		let caller = whitelisted_caller();
 		// update the weight of `origin_middle` to guarantee it will be rebagged into the destination.
 		T::ScoreProvider::set_score_of(&origin_middle, dest_bag_thresh);
-	}: rebag(SystemOrigin::Signed(caller), origin_middle.clone())
+	}: rebag(SystemOrigin::Signed(caller), origin_middle_lookup.clone())
 	verify {
 		// check the bags have updated as expected.
 		assert_eq!(
@@ -114,7 +116,9 @@ frame_benchmarking::benchmarks! {
 		let dest_head: T::AccountId  = account("dest_head", 0, 0);
 		assert_ok!(List::<T, _>::insert(dest_head.clone(), dest_bag_thresh));
 
-		// the bags are in the expected state after initial setup.
+		let origin_tail_lookup = T::Lookup::unlookup(origin_tail.clone());
+
+        // the bags are in the expected state after initial setup.
 		assert_eq!(
 			List::<T, _>::get_bags(),
 			vec![
@@ -126,7 +130,7 @@ frame_benchmarking::benchmarks! {
 		let caller = whitelisted_caller();
 		// update the weight of `origin_tail` to guarantee it will be rebagged into the destination.
 		T::ScoreProvider::set_score_of(&origin_tail, dest_bag_thresh);
-	}: rebag(SystemOrigin::Signed(caller), origin_tail.clone())
+	}: rebag(SystemOrigin::Signed(caller), origin_tail_lookup.clone())
 	verify {
 		// check the bags have updated as expected.
 		assert_eq!(
