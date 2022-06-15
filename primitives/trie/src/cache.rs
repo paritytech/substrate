@@ -81,7 +81,7 @@ fn value_cache_get_key(key: &[u8], storage_root: &impl AsRef<[u8]>) -> u64 {
 /// The shared node cache.
 ///
 /// Internally this stores all cached nodes in a [`LruCache`]. It ensures that when updating the
-/// cache, that the cache stays within it allowed bounds.
+/// cache, that the cache stays within its allowed bounds.
 struct SharedNodeCache<H: Hasher> {
 	/// The cached nodes, ordered by least recently used.
 	lru: LruCache<H::Out, NodeOwned<H::Out>>,
