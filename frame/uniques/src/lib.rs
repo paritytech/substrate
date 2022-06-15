@@ -1524,8 +1524,7 @@ pub mod pallet {
 			royalties: Perbill,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
-			Self::do_set_royalties(origin, collection, royalties)?;
-			Ok(())
+			Self::do_set_royalties(origin, collection, royalties)
 		}
 	}
 }
