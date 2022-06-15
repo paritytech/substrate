@@ -968,9 +968,11 @@ impl<T: Config> RewardPool<T> {
 		let payouts_since_last_record = balance
 			.saturating_add(self.total_rewards_claimed)
 			.saturating_sub(self.last_recorded_total_payouts);
-		self.last_recorded_reward_counter.saturating_add(
-			(RewardCounter::saturating_from_rational(payouts_since_last_record, bonded_points)),
-		)
+		self.last_recorded_reward_counter
+			.saturating_add(RewardCounter::saturating_from_rational(
+				payouts_since_last_record,
+				bonded_points,
+			))
 	}
 
 	/// Current free balance of the reward pool.
