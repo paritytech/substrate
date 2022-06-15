@@ -905,9 +905,7 @@ fn set_royalties_should_work() {
 		);
 
 		// validate we can remove royalties
-		assert_ok!(
-			Uniques::set_royalties(Origin::signed(user_id), collection_id, Perbill::zero())
-		);
+		assert_ok!(Uniques::set_royalties(Origin::signed(user_id), collection_id, Perbill::zero()));
 		assert_eq!(CollectionRoyaltiesOf::<Test>::get(collection_id).unwrap(), Perbill::zero());
 
 		// validate event
