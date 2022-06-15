@@ -417,7 +417,7 @@ pub struct PoolMember<T: Config> {
 
 impl<T: Config> PoolMember<T> {
 	fn pending_rewards(&self, current_reward_counter: RewardCounter) -> BalanceOf<T> {
-		(current_reward_counter - self.last_recorded_reward_counter)
+		(current_reward_counter.saturating_sub(self.last_recorded_reward_counter))
 			.saturating_mul_int(self.active_points())
 	}
 
@@ -922,9 +922,9 @@ impl<T: Config> BondedPool<T> {
 
 /// A reward pool.
 ///
-/// A reward pool is not so much a pool anymore, since it does not contain any shares or point
-/// anymore, rather simply to fit nicely next to bonded pool and unbonding pools. In reality, a
-/// reward pool is just a container for a few pool-dependent data related to the rewards.
+/// A reward pool is not so much a pool anymore, since it does not contain any shares or points.
+/// Rather, simply to fit nicely next to bonded pool and unbonding pools in terms of terminology. In
+/// reality, a reward pool is just a container for a few pool-dependent data related to the rewards.
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebugNoBound)]
 #[cfg_attr(feature = "std", derive(Clone, PartialEq, DefaultNoBound))]
 #[codec(mel_bound(T: Config))]
@@ -938,6 +938,8 @@ pub struct RewardPool<T: Config> {
 	/// The last recorded total payouts of the reward pool.
 	///
 	/// Payouts is essentially income of the pool.
+	///
+	/// Update criteria is same as that of `last_recorded_reward_counter`.
 	last_recorded_total_payouts: BalanceOf<T>,
 	/// Total amount that this pool has paid out so far to the members.
 	total_rewards_claimed: BalanceOf<T>,
@@ -950,23 +952,25 @@ impl<T: Config> RewardPool<T> {
 
 	/// Register some rewards that are claimed from the pool by the members.
 	fn register_claimed_reward(&mut self, reward: BalanceOf<T>) {
-		self.total_rewards_claimed += reward
+		self.total_rewards_claimed = self.total_rewards_claimed.saturating_add(reward);
 	}
 
 	/// Update the recorded values of the pool.
 	fn update_records(&mut self, id: PoolId, bonded_points: BalanceOf<T>) {
 		let balance = Self::current_balance(id);
 		self.last_recorded_reward_counter = self.current_reward_counter(id, bonded_points);
-		self.last_recorded_total_payouts = balance + self.total_rewards_claimed;
+		self.last_recorded_total_payouts = balance.saturating_add(self.total_rewards_claimed);
 	}
 
 	/// Get the current reward counter, based on the given `bonded_points`.
 	fn current_reward_counter(&self, id: PoolId, bonded_points: BalanceOf<T>) -> RewardCounter {
 		let balance = Self::current_balance(id);
-		let payouts_since_last_record =
-			balance + self.total_rewards_claimed - self.last_recorded_total_payouts;
-		self.last_recorded_reward_counter +
-			(RewardCounter::saturating_from_rational(payouts_since_last_record, bonded_points))
+		let payouts_since_last_record = balance
+			.saturating_add(self.total_rewards_claimed)
+			.saturating_sub(self.last_recorded_total_payouts);
+		self.last_recorded_reward_counter.saturating_add(
+			(RewardCounter::saturating_from_rational(payouts_since_last_record, bonded_points)),
+		)
 	}
 
 	/// Current free balance of the reward pool.
@@ -1444,7 +1448,6 @@ pub mod pallet {
 
 			let mut reward_pool = RewardPools::<T>::get(pool_id)
 				.defensive_ok_or::<Error<T>>(DefensiveError::RewardPoolNotFound.into())?;
-
 			// IMPORTANT: reward pool records must be updated with the old points.
 			reward_pool.update_records(pool_id, bonded_pool.points);
 
