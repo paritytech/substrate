@@ -297,7 +297,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> DispatchResult {
 		let collection =
 			Collection::<T, I>::get(&collection_id).ok_or(Error::<T, I>::UnknownCollection)?;
-		ensure!(!collection.is_frozen, Error::<T, I>::Frozen);
 		ensure!(collection.owner == sender, Error::<T, I>::NoPermission);
 
 		CollectionRoyaltiesOf::<T, I>::try_mutate(collection_id, |maybe_royalties| {

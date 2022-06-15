@@ -904,22 +904,9 @@ fn set_royalties_should_work() {
 			Error::<Test>::RoyaltiesCantBeIncreased
 		);
 
-		// validate we can't change royalties if the collection is locked
-		assert_ok!(Uniques::freeze_collection(Origin::signed(user_id), collection_id));
-		assert_noop!(
-			Uniques::set_royalties(
-				Origin::signed(user_id),
-				collection_id,
-				Perbill::from_percent(royalties - 10),
-			),
-			Error::<Test>::Frozen
-		);
-
-		assert_ok!(Uniques::thaw_collection(Origin::signed(user_id), collection_id));
-
 		// validate we can remove royalties
 		assert_ok!(
-			Uniques::set_royalties(Origin::signed(user_id), collection_id, Perbill::zero(),)
+			Uniques::set_royalties(Origin::signed(user_id), collection_id, Perbill::zero())
 		);
 		assert_eq!(CollectionRoyaltiesOf::<Test>::get(collection_id).unwrap(), Perbill::zero());
 
