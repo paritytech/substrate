@@ -4664,6 +4664,7 @@ dependencies = [
  "pallet-contracts",
  "pallet-im-online",
  "pallet-timestamp",
+ "pallet-transaction-payment",
  "pallet-treasury",
  "parity-scale-codec",
  "sc-executor",
