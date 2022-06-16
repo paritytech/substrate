@@ -18,6 +18,5 @@ message SignedAuthorityRecord {
 	bytes record = 1;
 	bytes auth_signature = 2;
 	// Even if there are multiple `record.addresses`, all of them have the same peer id.
-	// Old versions are missing this field, so `optional` will provide compatibility both ways.
-	optional PeerSignature peer_signature = 3;
+	PeerSignature peer_signature = 3;
 }
