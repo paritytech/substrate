@@ -80,7 +80,7 @@ pub struct ProposerFactory<A, B, C, PR> {
 	/// The soft deadline indicates where we should stop attempting to add transactions
 	/// to the block, which exhaust resources. After soft deadline is reached,
 	/// we switch to a fixed-amount mode, in which after we see `MAX_SKIPPED_TRANSACTIONS`
-	/// transactions which exhaust resrouces, we will conclude that the block is full.
+	/// transactions which exhaust resources, we will conclude that the block is full.
 	soft_deadline_percent: Percent,
 	telemetry: Option<TelemetryHandle>,
 	/// When estimating the block size, should the proof be included?
@@ -166,7 +166,7 @@ impl<A, B, C, PR> ProposerFactory<A, B, C, PR> {
 	/// The soft deadline indicates where we should stop attempting to add transactions
 	/// to the block, which exhaust resources. After soft deadline is reached,
 	/// we switch to a fixed-amount mode, in which after we see `MAX_SKIPPED_TRANSACTIONS`
-	/// transactions which exhaust resrouces, we will conclude that the block is full.
+	/// transactions which exhaust resources, we will conclude that the block is full.
 	///
 	/// Setting the value too low will significantly limit the amount of transactions
 	/// we try in case they exhaust resources. Setting the value too high can
@@ -191,7 +191,7 @@ where
 	C::Api:
 		ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>> + BlockBuilderApi<Block>,
 {
-	fn init_with_now(
+	pub fn init_with_now(
 		&mut self,
 		parent_header: &<Block as BlockT>::Header,
 		now: Box<dyn Fn() -> time::Instant + Send + Sync>,
@@ -237,8 +237,8 @@ where
 		ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>> + BlockBuilderApi<Block>,
 	PR: ProofRecording,
 {
-	type CreateProposer = future::Ready<Result<Self::Proposer, Self::Error>>;
 	type Proposer = Proposer<B, Block, C, A, PR>;
+	type CreateProposer = future::Ready<Result<Self::Proposer, Self::Error>>;
 	type Error = sp_blockchain::Error;
 
 	fn init(&mut self, parent_header: &<Block as BlockT>::Header) -> Self::CreateProposer {
@@ -278,6 +278,7 @@ where
 		ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>> + BlockBuilderApi<Block>,
 	PR: ProofRecording,
 {
+	type Error = sp_blockchain::Error;
 	type Transaction = backend::TransactionFor<B, Block>;
 	type Proposal = Pin<
 		Box<
@@ -285,7 +286,6 @@ where
 				+ Send,
 		>,
 	>;
-	type Error = sp_blockchain::Error;
 	type ProofRecording = PR;
 	type Proof = PR::Proof;
 
@@ -338,7 +338,7 @@ where
 		ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>> + BlockBuilderApi<Block>,
 	PR: ProofRecording,
 {
-	async fn propose_with(
+	pub async fn propose_with(
 		self,
 		inherent_data: InherentData,
 		inherent_digests: Digest,
