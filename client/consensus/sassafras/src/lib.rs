@@ -1,6 +1,4 @@
-// This file is part of Substrate.
-
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// This file is part of SubstrateNonepyright (C) 2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -42,7 +40,7 @@ use futures::{
 	},
 	prelude::*,
 };
-use log::{debug, info, log, trace, warn};
+use log::{debug, error, info, log, trace, warn};
 use parking_lot::Mutex;
 use prometheus_endpoint::Registry;
 use retain_mut::RetainMut;
@@ -409,15 +407,19 @@ where
 
 	let slot_worker = sc_consensus_slots::start_slot_worker(
 		sassafras_link.config.slot_duration(),
-		select_chain,
+		select_chain.clone(),
 		sc_consensus_slots::SimpleSlotWorkerToSlotWorker(worker),
 		sync_oracle,
 		create_inherent_data_providers,
 		can_author_with,
 	);
 
-	let ticket_worker =
-		tickets_worker(client.clone(), keystore, sassafras_link.epoch_changes.clone());
+	let ticket_worker = tickets_worker(
+		client.clone(),
+		keystore,
+		sassafras_link.epoch_changes.clone(),
+		select_chain,
+	);
 
 	// TODO-SASS: proper handler for inbound requests
 	let (worker_tx, worker_rx) = channel(HANDLE_BUFFER_SIZE);
@@ -443,13 +445,16 @@ where
 	})
 }
 
-async fn tickets_worker<B, C>(
+async fn tickets_worker<B, C, SC>(
 	client: Arc<C>,
 	keystore: SyncCryptoStorePtr,
 	epoch_changes: SharedEpochChanges<B, Epoch>,
+	select_chain: SC,
 ) where
 	B: BlockT,
-	C: BlockchainEvents<B>,
+	C: BlockchainEvents<B> + ProvideRuntimeApi<B>,
+	C::Api: SassafrasApi<B>,
+	SC: SelectChain<B> + 'static,
 {
 	use sc_consensus_epochs::EpochIdentifierPosition;
 
@@ -462,30 +467,50 @@ async fn tickets_worker<B, C>(
 		if let Some(epoch_desc) = next_epoch_digest {
 			warn!(target: "sassafras", ">>> NEW EPOCH ANNOUCED {:x?}", epoch_desc);
 
-			let epoch_changes = epoch_changes.shared_data();
+			let epoch = {
+				let epoch_changes = epoch_changes.shared_data();
 
-			let number = *notification.header.number();
-			let position = if number == One::one() {
-				EpochIdentifierPosition::Genesis1
-			} else {
-				EpochIdentifierPosition::Regular
+				let number = *notification.header.number();
+				let position = if number == One::one() {
+					EpochIdentifierPosition::Genesis1
+				} else {
+					EpochIdentifierPosition::Regular
+				};
+				let epoch_identifier =
+					EpochIdentifier { position, hash: notification.hash, number };
+
+				let epoch = match epoch_changes.epoch(&epoch_identifier) {
+					Some(epoch) => epoch,
+					None => {
+						warn!(target: "sassafras", "Unexpected missing epoch data for {}", notification.hash);
+						continue
+					},
+				};
+				epoch.clone()
 			};
-			let epoch_identifier = EpochIdentifier { position, hash: notification.hash, number };
 
-			let epoch = match epoch_changes.epoch(&epoch_identifier) {
-				Some(epoch) => epoch,
-				None => {
-					warn!(target: "sassafras", "Unexpected missing epoch data for {}", notification.hash);
+			let tickets = authorship::generate_epoch_tickets(&epoch, 40, &keystore);
+			warn!(target: "sassafras", ">>> Got {} tickets", tickets.len());
+
+			// Get the best block on which we will build and send the tickets.
+			let best_id = match select_chain.best_chain().await {
+				Ok(header) => BlockId::Hash(header.hash()),
+				Err(err) => {
+					error!(target: "sassafras", "{}", err.to_string());
 					continue
 				},
 			};
 
-			let tickets = authorship::generate_epoch_tickets(epoch, 40, &keystore);
-			warn!(target: "sassafras", ">>> Got {} tickets", tickets.len());
+			warn!(target: "sassafras", ">>> Submitting tx @ {:?}", best_id);
+
+			if let Err(err) =
+				client.runtime_api().submit_tickets_unsigned_extrinsic(&best_id, tickets)
+			{
+				error!(target: "sassafras", "Unable to submit tickets: {}", err.to_string())
+			}
 
 			// TODO-SASS
-			// 1. Publish on-chain as unsigned transaction
-			// 2. Onchain code will accept it as far as the slot is below the half of the epoch
+			// 2. Do not submit tickets if we are over half of the epoch
 		}
 	}
 }

@@ -24,7 +24,7 @@ use sp_application_crypto::AppKey;
 use sp_consensus_sassafras::{
 	digests::{PreDigest, PrimaryPreDigest},
 	make_ticket_transcript, make_ticket_transcript_data, make_transcript_data, AuthorityId,
-	SassafrasAuthorityWeight, Slot, SASSAFRAS_TICKET_VRF_PREFIX,
+	SassafrasAuthorityWeight, Slot, Ticket, SASSAFRAS_TICKET_VRF_PREFIX,
 };
 use sp_consensus_vrf::schnorrkel::{PublicKey, VRFInOut, VRFOutput, VRFProof};
 use sp_core::ByteArray;
@@ -159,18 +159,6 @@ pub fn calculate_threshold(
 #[inline]
 pub fn check_threshold(inout: &VRFInOut, threshold: u128) -> bool {
 	u128::from_le_bytes(inout.make_bytes::<[u8; 16]>(SASSAFRAS_TICKET_VRF_PREFIX)) < threshold
-}
-
-/// TODO-SASS: docs
-pub struct Ticket {
-	/// TODO
-	pub attempt: u32,
-	/// TODO
-	pub authority_index: u32,
-	/// TODO
-	pub vrf_output: VRFOutput,
-	/// TODO
-	pub vrf_proof: VRFProof,
 }
 
 /// TODO-SASS

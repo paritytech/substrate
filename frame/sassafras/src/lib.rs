@@ -48,7 +48,8 @@
 
 use scale_codec::{Decode, Encode};
 
-use frame_support::{traits::Get, weights::Weight, WeakBoundedVec};
+use frame_support::{traits::Get, weights::Weight, BoundedVec, WeakBoundedVec};
+use frame_system::offchain::{SendTransactionTypes, SubmitTransaction};
 use sp_application_crypto::ByteArray;
 use sp_consensus_vrf::schnorrkel;
 use sp_runtime::{
@@ -60,8 +61,8 @@ use sp_std::prelude::Vec;
 
 pub use sp_consensus_sassafras::{
 	digests::{ConsensusLog, NextEpochDescriptor, PreDigest},
-	AuthorityId, SassafrasAuthorityWeight, SassafrasEpochConfiguration, Slot, PUBLIC_KEY_LENGTH,
-	RANDOMNESS_LENGTH, SASSAFRAS_ENGINE_ID, VRF_OUTPUT_LENGTH,
+	AuthorityId, SassafrasAuthorityWeight, SassafrasEpochConfiguration, Slot, Ticket,
+	PUBLIC_KEY_LENGTH, RANDOMNESS_LENGTH, SASSAFRAS_ENGINE_ID, VRF_OUTPUT_LENGTH,
 };
 
 //#[cfg(test)]
@@ -120,7 +121,7 @@ pub mod pallet {
 	// TODO-SASS: this is incomplete
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
-	pub trait Config: pallet_timestamp::Config {
+	pub trait Config: pallet_timestamp::Config + SendTransactionTypes<Call<Self>> {
 		/// The amount of time, in slots, that each epoch should last.
 		/// NOTE: Currently it is not possible to change the epoch duration after the chain has
 		/// started. Attempting to do so will brick block production.
@@ -145,6 +146,10 @@ pub mod pallet {
 		/// Max number of authorities allowed
 		#[pallet::constant]
 		type MaxAuthorities: Get<u32>;
+
+		/// TODO-SASS
+		#[pallet::constant]
+		type MaxTickets: Get<u32>;
 	}
 
 	// TODO-SASS
@@ -220,6 +225,18 @@ pub mod pallet {
 	/// genesis.
 	#[pallet::storage]
 	pub type EpochConfig<T> = StorageValue<_, SassafrasEpochConfiguration>;
+
+	/// TODO-SASS
+	/// Current session tickets
+	#[pallet::storage]
+	pub type Tickets<T: Config> = StorageValue<_, BoundedVec<Ticket, T::MaxTickets>, ValueQuery>;
+
+	/// TODO-SASS
+	/// Here probably the best thing is to store the Tickets in a Map
+	/// Each map entry contains a vector of tickets as they are received.
+	#[pallet::storage]
+	pub type NextTickets<T: Config> =
+		StorageValue<_, WeakBoundedVec<Ticket, T::MaxTickets>, ValueQuery>;
 
 	/// Genesis configuration for Sassafras protocol.
 	#[cfg_attr(feature = "std", derive(Default))]
@@ -307,15 +324,75 @@ pub mod pallet {
 		}
 	}
 
-	// TODO-SASS
-	// Dummy placeholder
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		#[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
-		pub fn do_something(origin: OriginFor<T>, something: u32) -> DispatchResult {
-			let _who = ensure_signed(origin)?;
-			let _ = something;
+		/// Submit next epoch tickets.
+		/// TODO-SASS:
+		/// BoundedVec with max set by the Config (maybe equal to epoch duration)
+		#[pallet::weight(10_000)]
+		pub fn submit_tickets(origin: OriginFor<T>, mut tickets: Vec<Ticket>) -> DispatchResult {
+			ensure_none(origin)?;
+
+			// DEBUG-BEGIN
+			use core::fmt::Write;
+			let mut w = sp_std::Writer::default();
+			let _ = write!(&mut w, "Received Tickets ({}): ", tickets.len());
+			for ticket in tickets.iter() {
+				let _ = write!(&mut w, "{}, ", ticket.attempt);
+			}
+			let _ = write!(&mut w, "\n");
+			log::debug!(target: "sassafras::runtime", "{}", sp_std::str::from_utf8(w.inner()).unwrap());
+			// DEBUG-END
+
+			let mut next_tickets = NextTickets::<T>::get().into_inner();
+			next_tickets.append(&mut tickets);
+			let next_tickets = WeakBoundedVec::force_from(next_tickets, None);
+			NextTickets::<T>::put(next_tickets);
+
 			Ok(())
+		}
+	}
+
+	#[pallet::validate_unsigned]
+	impl<T: Config> ValidateUnsigned for Pallet<T> {
+		type Call = Call<T>;
+
+		fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity {
+			if let Call::submit_tickets { tickets } = call {
+				// Discard tickets not coming from the local node
+				// TODO-SASS: double check this `Local` requirement...
+				if source != TransactionSource::Local && source != TransactionSource::InBlock {
+					log::warn!(
+						target: "sassafras::runtime",
+						"Rejecting unsigned transaction because it is not local/in-block.",
+					);
+					return InvalidTransaction::BadSigner.into()
+				}
+
+				// Current slot should be at most equal to half of epoch duration
+				let diff = CurrentSlot::<T>::get().saturating_sub(Self::current_epoch_start());
+				let epoch_half = T::EpochDuration::get() / 2;
+				if diff >= epoch_half {
+					return InvalidTransaction::Stale.into()
+				}
+
+				// TODO-SASS more validation steps:
+				// 1. epoch index
+				// 2. signed by an authority for current epoch
+				// 3. single submission attempt from validator?
+
+				ValidTransaction::with_tag_prefix("Sassafras")
+					// We assign the maximum priority for any equivocation report.
+					.priority(TransactionPriority::max_value())
+					// TODO-SASS: there is a better way to distinquish duplicates...
+					.and_provides(tickets)
+					// TODO-SASS: this should be set such that it is discarded after the first half
+					.longevity(3_u64)
+					.propagate(true)
+					.build()
+			} else {
+				InvalidTransaction::Call.into()
+			}
 		}
 	}
 }
@@ -412,6 +489,19 @@ impl<T: Config> Pallet<T> {
 		// 	NextEpochConfig::<T>::put(next_epoch_config);
 		// 	Self::deposit_consensus(ConsensusLog::NextConfigData(pending_epoch_config_change));
 		// }
+
+		// TODO-SASS: offchain tasks?
+		// Sort tickets and drop middle values, then sort using outside-in order.
+		{
+			let mut tickets = NextTickets::<T>::get().into_inner();
+
+			tickets.sort_unstable_by_key(|t| t.vrf_output);
+			// TODO: outside-in sort
+
+			let tickets = BoundedVec::<Ticket, T::MaxTickets>::try_from(tickets).unwrap();
+			Tickets::<T>::put(tickets);
+			NextTickets::<T>::kill();
+		}
 	}
 
 	/// Finds the start slot of the current epoch. Only guaranteed to give correct results after
@@ -532,6 +622,36 @@ impl<T: Config> Pallet<T> {
 		// TODO: reset randomness accumulator? Maybe we can leave it as is...
 
 		this_randomness
+	}
+
+	/// TODO-SASS: improve docs
+	/// Submit the next epoch validator tickets via an unsigned extrinsic.
+	pub fn submit_tickets_unsigned_extrinsic(tickets: Vec<Ticket>) -> Option<()> {
+		// DEBUG-BEGIN
+		use core::fmt::Write;
+		let mut w = sp_std::Writer::default();
+		let _ = write!(&mut w, "Submitting Tickets ({}): ", tickets.len());
+		for ticket in tickets.iter() {
+			let _ = write!(&mut w, "{}, ", ticket.attempt);
+		}
+		let _ = write!(&mut w, "\n");
+		log::debug!(target: "sassafras::runtime", "{}", sp_std::str::from_utf8(w.inner()).unwrap());
+		// DEBUG-END
+
+		// DEBUG-BEGIN
+		log::debug!(target: "sassafras", "!!!!!!!!!!!!!!!!! SUBMIT TICKETS {}", *CurrentSlot::<T>::get());
+		// DEBUG-END
+
+		let call = Call::submit_tickets { tickets };
+
+		if let Err(_) = SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into()) {
+			log::error!(
+				target: "sassafras::runtime",
+				"Error submitting tickets"
+			);
+		}
+
+		Some(())
 	}
 }
 

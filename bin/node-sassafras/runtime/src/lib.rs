@@ -147,6 +147,14 @@ pub fn native_version() -> NativeVersion {
 
 const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(75);
 
+impl<C> frame_system::offchain::SendTransactionTypes<C> for Runtime
+where
+	Call: From<C>,
+{
+	type Extrinsic = UncheckedExtrinsic;
+	type OverarchingCall = Call;
+}
+
 parameter_types! {
 	pub const BlockHashCount: BlockNumber = 2400;
 	pub const Version: RuntimeVersion = VERSION;
@@ -219,6 +227,8 @@ parameter_types! {
 	pub const ExpectedBlockTime: Moment = MILLISECS_PER_BLOCK;
 	// TODO-SASS: small test value
 	pub const MaxAuthorities: u32 = 3;
+	// TODO-SASS: ...
+	pub const MaxTickets: u32 = EPOCH_DURATION_IN_SLOTS as u32;
 }
 
 impl pallet_sassafras::Config for Runtime {
@@ -226,6 +236,7 @@ impl pallet_sassafras::Config for Runtime {
 	type ExpectedBlockTime = ExpectedBlockTime;
 	type EpochChangeTrigger = pallet_sassafras::SameAuthoritiesForever;
 	type MaxAuthorities = MaxAuthorities;
+	type MaxTickets = MaxTickets;
 }
 
 impl pallet_grandpa::Config for Runtime {
@@ -411,6 +422,12 @@ impl_runtime_apis! {
 				genesis_authorities: Sassafras::authorities().to_vec(),
 				randomness: Sassafras::randomness(),
 			}
+		}
+
+		fn submit_tickets_unsigned_extrinsic(
+			tickets: Vec<sp_consensus_sassafras::Ticket>
+		) -> Option<()> {
+			Sassafras::submit_tickets_unsigned_extrinsic(tickets)
 		}
 	}
 

@@ -37,7 +37,7 @@ use sp_std::vec::Vec;
 
 pub use sp_consensus_slots::{Slot, SlotDuration};
 pub use sp_consensus_vrf::schnorrkel::{
-	Randomness, RANDOMNESS_LENGTH, VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH,
+	Randomness, VRFOutput, VRFProof, RANDOMNESS_LENGTH, VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH,
 };
 
 /// Key type for Sassafras module.
@@ -111,6 +111,29 @@ pub struct SassafrasEpochConfiguration {
 	// L: bound on aa number of tickets that can be gossiped
 }
 
+/// TODO-SASS: docs
+#[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, MaxEncodedLen, TypeInfo)]
+pub struct Ticket {
+	/// TODO
+	pub attempt: u32,
+	/// TODO
+	pub authority_index: u32,
+	/// TODO
+	pub vrf_output: VRFOutput,
+	/// TODO
+	pub vrf_proof: VRFProof,
+}
+
+// TODO-SASS
+// pub struct EpochTickets {
+//  /// Epoch index for the tickets list
+//  pub epoch_index: u64,
+//  /// Submitter index
+//  pub proxy_index: u32,
+//  /// Tickets list
+//  pub tickets: Vec<Ticket>,
+// }
+
 /// Make a VRF transcript from given randomness, slot number and epoch.
 pub fn make_transcript(randomness: &Randomness, slot: Slot, epoch: u64) -> Transcript {
 	let mut transcript = Transcript::new(&SASSAFRAS_ENGINE_ID);
@@ -166,6 +189,13 @@ sp_api::decl_runtime_apis! {
 	pub trait SassafrasApi {
 		/// Return the genesis configuration for Sassafras. The configuration is only read on genesis.
 		fn configuration() -> SassafrasGenesisConfiguration;
+
+		/// TODO-SASS: improve docs
+		/// Submit the next epoch validator tickets via an unsigned extrinsic.
+		/// This method returns `None` when creation of the extrinsics fails.
+		fn submit_tickets_unsigned_extrinsic(
+			tickets: Vec<Ticket>
+		) -> Option<()>;
 
 		// TODO-SASS: incomplete API
 	}

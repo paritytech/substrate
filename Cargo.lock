@@ -6126,6 +6126,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "log",
  "pallet-session",
  "pallet-timestamp",
  "parity-scale-codec",

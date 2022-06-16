@@ -17,6 +17,7 @@ scale-codec = { package = "parity-scale-codec", version = "3.0.0", default-featu
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "../benchmarking" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
+log = { version = "0.4.17", default-features = false }
 pallet-session = { version = "4.0.0-dev", default-features = false, path = "../session" }
 pallet-timestamp = { version = "4.0.0-dev", default-features = false, path = "../timestamp" }
 scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
@@ -38,6 +39,7 @@ std = [
 	"frame-benchmarking/std",
 	"frame-support/std",
 	"frame-system/std",
+	"log/std",
 	"pallet-session/std",
 	"pallet-timestamp/std",
 	"scale-info/std",
