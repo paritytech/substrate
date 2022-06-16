@@ -39,7 +39,7 @@ use sp_api::ProvideRuntimeApi;
 use sp_core::crypto::CryptoTypePublicPair;
 pub use sp_finality_grandpa::{AuthorityId, AuthorityList, SetId};
 use sp_runtime::traits::{Block as BlockT, Header, NumberFor};
-use sp_session::SessionKeys;
+use sp_session::CurrentSessionKeys;
 use std::{
 	collections::{BTreeMap, BTreeSet, HashMap, HashSet},
 	sync::Arc,
@@ -102,7 +102,7 @@ impl<B, C> MixnetWorker<B, C>
 where
 	B: BlockT,
 	C: UsageProvider<B> + BlockchainEvents<B> + ProvideRuntimeApi<B>,
-	C::Api: SessionKeys<B>,
+	C::Api: CurrentSessionKeys<B>,
 {
 	/// Instantiate worker. Should be call after imonline and
 	/// grandpa as it reads their keystore.

@@ -46,11 +46,14 @@ sp_api::decl_runtime_apis! {
 		///
 		/// Returns the list of public raw public keys + key type.
 		fn decode_session_keys(encoded: Vec<u8>) -> Option<Vec<(Vec<u8>, KeyTypeId)>>;
+	}
 
+	/// Current Session key runtime api.
+	pub trait CurrentSessionKeys {
 		/// Access current session index.
 		fn session_index() -> SessionIndex;
 
-		/// Access queued key session keys.
+		/// Access queued session keys.
 		///
 		/// Returns the list of public raw public keys + key type per node id.
 		fn queued_keys() -> Vec<(Vec<u8>, Vec<(KeyTypeId, sp_core::crypto::CryptoTypePublicPair)>)>;

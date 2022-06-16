@@ -912,14 +912,6 @@ cfg_if! {
 				) -> Option<Vec<(Vec<u8>, sp_core::crypto::KeyTypeId)>> {
 					SessionKeys::decode_into_raw_public_keys(&encoded)
 				}
-
-				fn session_index() -> sp_session::SessionIndex {
-					unimplemented!()
-				}
-
-				fn queued_keys() -> Vec<(Vec<u8>, Vec<(KeyTypeId, sp_core::crypto::CryptoTypePublicPair)>)> {
-					unimplemented!()
-				}
 			}
 
 			impl sp_finality_grandpa::GrandpaApi<Block> for Runtime {
@@ -1183,14 +1175,6 @@ cfg_if! {
 					encoded: Vec<u8>,
 				) -> Option<Vec<(Vec<u8>, sp_core::crypto::KeyTypeId)>> {
 					SessionKeys::decode_into_raw_public_keys(&encoded)
-				}
-
-				fn session_index() -> sp_session::SessionIndex {
-					unimplemented!()
-				}
-
-				fn queued_keys() -> Vec<(Vec<u8>, Vec<(KeyTypeId, sp_core::crypto::CryptoTypePublicPair)>)> {
-					unimplemented!()
 				}
 			}
 

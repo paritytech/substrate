@@ -2038,7 +2038,9 @@ impl_runtime_apis! {
 		) -> Option<Vec<(Vec<u8>, KeyTypeId)>> {
 			SessionKeys::decode_into_raw_public_keys(&encoded)
 		}
+	}
 
+	impl sp_session::CurrentSessionKeys<Block> for Runtime {
 		fn session_index() -> sp_session::SessionIndex {
 			Session::current_index()
 		}
