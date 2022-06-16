@@ -405,10 +405,7 @@ pub struct PoolMember<T: Config> {
 	/// The quantity of points this member has in the bonded pool or in a sub pool if
 	/// `Self::unbonding_era` is some.
 	pub points: BalanceOf<T>,
-	/// The reward pools total earnings _ever_ the last time this member claimed a payout.
-	/// Assuming no massive burning events, we expect this value to always be below total issuance.
-	/// This value lines up with the [`RewardPool::total_earnings`] after a member claims a
-	/// payout.
+	/// The reward counter at the time of this member's last payout claim.
 	pub last_recorded_reward_counter: RewardCounter,
 	/// The eras in which this member is unbonding, mapped from era index to the number of
 	/// points scheduled to unbond in the given era.
@@ -416,20 +413,17 @@ pub struct PoolMember<T: Config> {
 }
 
 impl<T: Config> PoolMember<T> {
+	/// The pending rewards of this member.
 	fn pending_rewards(&self, current_reward_counter: RewardCounter) -> BalanceOf<T> {
 		(current_reward_counter.saturating_sub(self.last_recorded_reward_counter))
 			.saturating_mul_int(self.active_points())
-	}
-
-	fn total_points(&self) -> BalanceOf<T> {
-		self.active_points().saturating_add(self.unbonding_points())
 	}
 
 	/// Active balance of the member.
 	///
 	/// This is derived from the ratio of points in the pool to which the member belongs to.
 	/// Might return different values based on the pool state for the same member and points.
-	pub(crate) fn active_balance(&self) -> BalanceOf<T> {
+	fn active_balance(&self) -> BalanceOf<T> {
 		if let Some(pool) = BondedPool::<T>::get(self.pool_id).defensive() {
 			pool.points_to_balance(self.points)
 		} else {
@@ -437,13 +431,18 @@ impl<T: Config> PoolMember<T> {
 		}
 	}
 
+	/// Total points of this member, both active and unbonding.
+	fn total_points(&self) -> BalanceOf<T> {
+		self.active_points().saturating_add(self.unbonding_points())
+	}
+
 	/// Active points of the member.
-	pub(crate) fn active_points(&self) -> BalanceOf<T> {
+	fn active_points(&self) -> BalanceOf<T> {
 		self.points
 	}
 
 	/// Inactive points of the member, waiting to be withdrawn.
-	pub(crate) fn unbonding_points(&self) -> BalanceOf<T> {
+	fn unbonding_points(&self) -> BalanceOf<T> {
 		self.unbonding_eras
 			.as_ref()
 			.iter()
@@ -1111,7 +1110,7 @@ pub mod pallet {
 	use frame_system::{ensure_signed, pallet_prelude::*};
 
 	/// The current storage version.
-	const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(2);
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(crate) trait Store)]

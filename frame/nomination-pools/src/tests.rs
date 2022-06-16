@@ -1146,19 +1146,19 @@ mod claim_payout {
 	#[test]
 	fn rewards_distribution_is_fair_basic() {
 		ExtBuilder::default().build_and_execute(|| {
-			let ed = Balances::minimum_balance();
-
+			// reward pool by 10.
 			Balances::mutate_account(&default_reward_account(), |f| f.free += 10).unwrap();
 
-			Balances::make_free_balance_be(&20, ed + 10);
+			// 20 joins afterwards.
+			Balances::make_free_balance_be(&20, Balances::minimum_balance() + 10);
 			assert_ok!(Pools::join(Origin::signed(20), 10, 1));
 
+			// reward by another 20
 			Balances::mutate_account(&default_reward_account(), |f| f.free += 20).unwrap();
 
-			// 10 should claim 10, 20 should claim nothing.
+			// 10 should claim 10 + 10, 20 should claim 20 / 2.
 			assert_ok!(Pools::claim_payout(Origin::signed(10)));
 			assert_ok!(Pools::claim_payout(Origin::signed(20)));
-
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
@@ -1191,11 +1191,9 @@ mod claim_payout {
 		// basically checks the case where the amount of rewards is less than the pool shares. for
 		// this, we have to rely on fixed point arithmetic.
 		ExtBuilder::default().build_and_execute(|| {
-			let ed = Balances::minimum_balance();
-
 			Balances::mutate_account(&default_reward_account(), |f| f.free += 3).unwrap();
 
-			Balances::make_free_balance_be(&20, ed + 10);
+			Balances::make_free_balance_be(&20, Balances::minimum_balance() + 10);
 			assert_ok!(Pools::join(Origin::signed(20), 10, 1));
 
 			Balances::mutate_account(&default_reward_account(), |f| f.free += 6).unwrap();
