@@ -29,7 +29,7 @@ use futures::{
 };
 use log::{debug, error, info, trace, warn};
 use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider};
-use sc_client_api::backend;
+use sc_client_api::{backend, StorageProof};
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_INFO};
 use sc_transaction_pool_api::{InPoolTransaction, TransactionPool};
 use sp_api::{ApiExt, ProvideRuntimeApi};
@@ -307,7 +307,19 @@ where
 				let deadline = (self.now)() + max_duration - max_duration / 3;
 				let res = self
 					.propose_with(inherent_data, inherent_digests, deadline, block_size_limit)
-					.await;
+					.await.and_then(|proposal| {
+						let Proposal {
+							block,
+							proof,
+							storage_changes,
+						} = proposal;
+						let proof = PR::into_proof(proof).map_err(|e| sp_blockchain::Error::Application(Box::new(e)))?;
+						Ok(Proposal {
+							block,
+							proof,
+							storage_changes,
+						})
+					});
 				if tx.send(res).is_err() {
 					trace!("Could not send block production result to proposer!");
 				}
@@ -344,7 +356,7 @@ where
 		inherent_digests: Digest,
 		deadline: time::Instant,
 		block_size_limit: Option<usize>,
-	) -> Result<Proposal<Block, backend::TransactionFor<B, Block>, PR::Proof>, sp_blockchain::Error>
+	) -> Result<Proposal<Block, backend::TransactionFor<B, Block>, Option<StorageProof>>, sp_blockchain::Error>
 	{
 		let propose_with_start = time::Instant::now();
 		let mut block_builder =
@@ -545,9 +557,6 @@ where
 		{
 			error!("Failed to evaluate authored block: {:?}", err);
 		}
-
-		let proof =
-			PR::into_proof(proof).map_err(|e| sp_blockchain::Error::Application(Box::new(e)))?;
 
 		let propose_with_end = time::Instant::now();
 		self.metrics.report(|metrics| {
