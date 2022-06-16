@@ -152,11 +152,32 @@ pub trait OnRuntimeUpgradeHelpersExt {
 #[cfg(feature = "try-runtime")]
 impl<U: OnRuntimeUpgrade> OnRuntimeUpgradeHelpersExt for U {}
 
+#[derive(
+	codec::Encode, codec::Decode, Clone, sp_std::fmt::Debug, scale_info::TypeInfo, PartialEq, Eq,
+)]
+pub struct RuntimeUpgradeIdentifier(pub [u8; 16]);
+
+impl From<&str> for RuntimeUpgradeIdentifier {
+	fn from(s: &str) -> Self {
+		let mut dest: [u8; 16] = Default::default();
+		if s.len() > 16 {
+			dest.copy_from_slice(&s.as_bytes()[..16]);
+		} else if s.len() < 16 {
+			((&mut dest)[..s.len()]).copy_from_slice(s.as_bytes());
+		} else {
+			dest.copy_from_slice(s.as_bytes());
+		}
+		RuntimeUpgradeIdentifier(dest)
+	}
+}
+
 /// The runtime upgrade trait.
 ///
 /// Implementing this lets you express what should happen when the runtime upgrades,
 /// and changes may need to occur to your module.
 pub trait OnRuntimeUpgrade {
+	fn deposit_event() {}
+
 	/// Perform a module upgrade.
 	///
 	/// # Warning
@@ -191,7 +212,10 @@ pub trait OnRuntimeUpgrade {
 impl OnRuntimeUpgrade for Tuple {
 	fn on_runtime_upgrade() -> crate::weights::Weight {
 		let mut weight = 0;
-		for_tuples!( #( weight = weight.saturating_add(Tuple::on_runtime_upgrade()); )* );
+		for_tuples!( #(
+			weight = weight.saturating_add(Tuple::on_runtime_upgrade());
+			Tuple::deposit_event();
+		)* );
 		weight
 	}
 

@@ -82,6 +82,7 @@ mod hooks;
 pub use hooks::GenesisBuild;
 pub use hooks::{
 	Hooks, OnFinalize, OnGenesis, OnIdle, OnInitialize, OnRuntimeUpgrade, OnTimestampSet,
+	RuntimeUpgradeIdentifier,
 };
 #[cfg(feature = "try-runtime")]
 pub use hooks::{OnRuntimeUpgradeHelpersExt, ON_RUNTIME_UPGRADE_PREFIX};

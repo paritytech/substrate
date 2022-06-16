@@ -263,10 +263,9 @@ where
 	/// This should only be used for testing.
 	#[cfg(feature = "try-runtime")]
 	pub fn try_runtime_upgrade() -> Result<frame_support::weights::Weight, &'static str> {
-		<(COnRuntimeUpgrade, AllPalletsWithSystem) as OnRuntimeUpgrade>::pre_upgrade().unwrap();
+		<(COnRuntimeUpgrade, AllPalletsWithSystem) as OnRuntimeUpgrade>::pre_upgrade()?;
 		let weight = Self::execute_on_runtime_upgrade();
-
-		<(COnRuntimeUpgrade, AllPalletsWithSystem) as OnRuntimeUpgrade>::post_upgrade().unwrap();
+		<(COnRuntimeUpgrade, AllPalletsWithSystem) as OnRuntimeUpgrade>::post_upgrade()?;
 
 		Ok(weight)
 	}
@@ -574,7 +573,7 @@ mod tests {
 		assert_err, parameter_types,
 		traits::{
 			ConstU32, ConstU64, ConstU8, Currency, LockIdentifier, LockableCurrency,
-			WithdrawReasons,
+			RuntimeUpgradeIdentifier, WithdrawReasons,
 		},
 		weights::{ConstantMultiplier, IdentityFee, RuntimeDbWeight, Weight, WeightToFee},
 	};
@@ -819,6 +818,14 @@ mod tests {
 
 	struct CustomOnRuntimeUpgrade;
 	impl OnRuntimeUpgrade for CustomOnRuntimeUpgrade {
+		fn deposit_event() {
+			frame_system::Pallet::<Runtime>::deposit_event(
+				frame_system::Event::<Runtime>::RuntimeUpgradeExecuted(
+					"CustomOnRuntimeUpgrade".into(),
+				),
+			)
+		}
+
 		fn on_runtime_upgrade() -> Weight {
 			sp_io::storage::set(TEST_KEY, "custom_upgrade".as_bytes());
 			sp_io::storage::set(CUSTOM_ON_RUNTIME_KEY, &true.encode());
@@ -1311,8 +1318,49 @@ mod tests {
 				Digest::default(),
 			));
 
-			System::assert_last_event(frame_system::Event::<Runtime>::CodeUpdated.into());
-		});
+			dbg!(System::events());
+
+			assert_eq!(
+				frame_system::Pallet::<Runtime>::events()
+					.into_iter()
+					.map(|oe| oe.event)
+					.collect::<Vec<_>>(),
+				vec![
+					Event::System(frame_system::Event::CodeUpdated),
+					Event::System(frame_system::Event::RuntimeUpgradeExecuted(
+						RuntimeUpgradeIdentifier([
+							67, 117, 115, 116, 111, 109, 79, 110, 82, 117, 110, 116, 105, 109,
+							101, // CustomOnRuntimeU
+							85
+						])
+					)),
+					Event::System(frame_system::Event::RuntimeUpgradeExecuted(
+						RuntimeUpgradeIdentifier([
+							83, 121, 115, 116, 101, 109, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+							0 // System
+						])
+					)),
+					Event::System(frame_system::Event::RuntimeUpgradeExecuted(
+						RuntimeUpgradeIdentifier([
+							66, 97, 108, 97, 110, 99, 101, 115, 0, 0, 0, 0, 0, 0, 0,
+							0 // Balances
+						])
+					)),
+					Event::System(frame_system::Event::RuntimeUpgradeExecuted(
+						RuntimeUpgradeIdentifier([
+							84, 114, 97, 110, 115, 97, 99, 116, 105, 111, 110, 80, 97, 121, 109,
+							101 // TransactionPayme
+						])
+					)),
+					Event::System(frame_system::Event::RuntimeUpgradeExecuted(
+						RuntimeUpgradeIdentifier([
+							67, 117, 115, 116, 111, 109, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+							0 // Custom
+						])
+					))
+				]
+			);
+		})
 	}
 
 	/// Regression test that ensures that the custom on runtime upgrade is called when executive is

@@ -503,6 +503,8 @@ pub mod pallet {
 		ExtrinsicFailed { dispatch_error: DispatchError, dispatch_info: DispatchInfo },
 		/// `:code` was updated.
 		CodeUpdated,
+		/// A `OnRuntimeUpgrade` hook with the given identifier was executed.
+		RuntimeUpgradeExecuted(frame_support::traits::RuntimeUpgradeIdentifier),
 		/// A new account was created.
 		NewAccount { account: T::AccountId },
 		/// An account was reaped.
