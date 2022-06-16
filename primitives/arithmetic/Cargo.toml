@@ -29,6 +29,7 @@ sp-std = { version = "4.0.0", default-features = false, path = "../std" }
 [dev-dependencies]
 criterion = "0.3"
 primitive-types = "0.11.1"
+sp-core = { version = "6.0.0", features = ["full_crypto"], path = "../core" }
 rand = "0.7.2"
 
 [features]
