@@ -18,6 +18,7 @@ name = "node-template"
 
 [dependencies]
 clap = { version = "3.1.18", features = ["derive"] }
+tracing-core = "=0.1.26"
 
 sc-cli = { version = "0.10.0-dev", path = "../../../client/cli", features = ["wasmtime"] }
 sp-core = { version = "6.0.0", path = "../../../primitives/core" }
