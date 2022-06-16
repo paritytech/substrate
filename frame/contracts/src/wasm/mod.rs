@@ -527,7 +527,7 @@ mod tests {
 			12
 		}
 		fn account_entrance_count(&self, _account_id: &AccountIdOf<Self::T>) -> u32 {
-			unimplemented!()
+			12
 		}
 	}
 
@@ -2617,12 +2617,45 @@ mod tests {
 		)
 	)
 	(func (export "call")
-		(local $exit_code i32)
-		(set_local $exit_code
+		(local $return_val i32)
+		(set_local $return_val
 			(call $seal_reentrant_count)
 		)
 		(call $assert
-			(i32.eq (get_local $exit_code) (i32.const 12))
+			(i32.eq (get_local $return_val) (i32.const 12))
+		)
+	)
+
+	(func (export "deploy"))
+)
+"#;
+
+		let mut mock_ext = MockExt::default();
+		execute(CODE, vec![], &mut mock_ext).unwrap();
+	}
+
+	#[test]
+	#[cfg(feature = "unstable-interface")]
+	fn account_entrance_count_works() {
+		const CODE: &str = r#"
+(module
+	(import "__unstable__" "seal_account_entrance_count" (func $seal_account_entrance_count (param i32) (result i32)))
+	(import "env" "memory" (memory 1 1))
+	(func $assert (param i32)
+		(block $ok
+			(br_if $ok
+				(get_local 0)
+			)
+			(unreachable)
+		)
+	)
+	(func (export "call")
+		(local $return_val i32)
+		(set_local $return_val
+			(call $seal_account_entrance_count (i32.const 0))
+		)
+		(call $assert
+			(i32.eq (get_local $return_val) (i32.const 12))
 		)
 	)
 

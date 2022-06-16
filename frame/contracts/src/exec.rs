@@ -1239,7 +1239,7 @@ where
 
 	fn reentrant_count(&self) -> u32 {
 		let id: &AccountIdOf<Self::T> = &self.top_frame().account_id;
-		self.account_entrance_count(id) - 1u32
+		self.account_entrance_count(id).checked_sub(1).unwrap_or(0)
 	}
 
 	fn account_entrance_count(&self, account_id: &AccountIdOf<Self::T>) -> u32 {

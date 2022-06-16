@@ -3231,7 +3231,7 @@ fn set_code_hash() {
 
 #[test]
 #[cfg(feature = "unstable-interface")]
-fn reentrant_count_works() {
+fn reentrant_count_works_with_call() {
 	let (wasm1, code_hash1) = compile_module::<Test>("reentrant_count_call").unwrap();
 	let contract_addr1 = Contracts::contract_address(&ALICE, &code_hash1, &[]);
 

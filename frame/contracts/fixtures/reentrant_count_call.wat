@@ -1,7 +1,6 @@
 (module
 	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
 	(import "seal0" "seal_call" (func $seal_call (param i32 i32 i64 i32 i32 i32 i32 i32 i32) (result i32)))
-	(import "seal0" "seal_delegate_call" (func $seal_delegate_call (param i32 i32 i32 i32 i32 i32) (result i32)))
 	(import "__unstable__" "seal_reentrant_count" (func $seal_reentrant_count (result i32)))
 	(import "env" "memory" (memory 1 1))
 
@@ -33,23 +32,6 @@
 		        (call $assert
 		        	(i32.eq (get_local $reentrant_count) (i32.const 1))
 		        )
-
-                ;; Delegated call to itself
-		        (set_local $exit_code
-		        	(call $seal_delegate_call
-		        		(i32.const 0)	;; Set no call flags (reentrance is forbidden)
-		        		(i32.const 0)	;; Pointer to "callee" code_hash.
-		        		(i32.const 0)	;; Input is ignored
-		        		(i32.const 0)	;; Length of the input
-		        		(i32.const 0xffffffff)	;; u32 max sentinel value: do not copy output
-		        		(i32.const 0)	;; Length is ignored in this case
-		        	)
-		        )
-
-		        ;; Second reentrance is forbidden
-		        (call $assert
-		        	(i32.eq (get_local $exit_code) (i32.const 1))
-		        )
             )
             (else
 		        ;; Reading "callee" contract address (which is the address of the caller)
@@ -70,9 +52,9 @@
 		        	)
 		        )
 
-		        ;; Check for status code 1, due to reentrance in delegated call.
+		        ;; assert reentrant_count == 0
 		        (call $assert
-		        	(i32.eq (get_local $exit_code) (i32.const 1)) ;; ReturnCode::ContractTrapped
+		        	(i32.eq (get_local $reentrant_count) (i32.const 0))
 		        )
             )
         )
