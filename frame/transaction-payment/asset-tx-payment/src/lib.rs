@@ -113,6 +113,8 @@ pub mod pallet {
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config + pallet_transaction_payment::Config {
+		/// The overarching event type.
+		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 		/// The fungibles instance used to pay for transactions in assets.
 		type Fungibles: Balanced<Self::AccountId>;
 		/// The actual transaction charging logic that charges the fees.
@@ -122,6 +124,14 @@ pub mod pallet {
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
+
+	#[pallet::event]
+	#[pallet::generate_deposit(pub(super) fn deposit_event)]
+	pub enum Event<T: Config> {
+		/// A transaction fee `actual_fee`, of which `tip` was added to the minimum inclusion fee,
+		/// has been paid by `who`.
+		TransactionFeePaid { who: T::AccountId, actual_fee: BalanceOf<T>, tip: BalanceOf<T> },
+	}
 }
 
 /// Require the transactor pay for themselves and maybe include a tip to gain additional priority
@@ -273,6 +283,7 @@ where
 						tip.into(),
 						already_withdrawn.into(),
 					)?;
+					Pallet::<T>::deposit_event(Event::<T>::TransactionFeePaid { who, actual_fee, tip });
 				},
 				InitialPayment::Nothing => {
 					// `actual_fee` should be zero here for any signed extrinsic. It would be

@@ -51,7 +51,7 @@ frame_support::construct_runtime!(
 		TransactionPayment: pallet_transaction_payment::{Pallet, Storage, Event<T>},
 		Assets: pallet_assets::{Pallet, Call, Storage, Event<T>},
 		Authorship: pallet_authorship::{Pallet, Call, Storage},
-		AssetTxPayment: pallet_asset_tx_payment::{Pallet},
+		AssetTxPayment: pallet_asset_tx_payment::{Pallet, Event<T>},
 	}
 );
 
@@ -198,6 +198,7 @@ impl HandleCredit<AccountId, Assets> for CreditToBlockAuthor {
 }
 
 impl Config for Runtime {
+	type Event = Event;
 	type Fungibles = Assets;
 	type OnChargeAssetTransaction = FungiblesAdapter<
 		pallet_assets::BalanceToAssetBalance<Balances, Runtime, ConvertInto>,
