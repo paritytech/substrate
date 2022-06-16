@@ -282,9 +282,10 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::add_registrar(T::MaxRegistrars::get()))]
 		pub fn add_registrar(
 			origin: OriginFor<T>,
-			account: T::AccountId,
+			account: <T::Lookup as StaticLookup>::Source,
 		) -> DispatchResultWithPostInfo {
 			T::RegistrarOrigin::ensure_origin(origin)?;
+            let account = T::Lookup::lookup(account)?;
 
 			let (i, registrar_count) = <Registrars<T>>::try_mutate(
 				|registrars| -> Result<(RegistrarIndex, usize), DispatchError> {
@@ -672,9 +673,10 @@ pub mod pallet {
 		pub fn set_account_id(
 			origin: OriginFor<T>,
 			#[pallet::compact] index: RegistrarIndex,
-			new: T::AccountId,
+			new: <T::Lookup as StaticLookup>::Source,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
+            let new = T::Lookup::lookup(new)?;
 
 			let registrars = <Registrars<T>>::mutate(|rs| -> Result<usize, DispatchError> {
 				rs.get_mut(index as usize)

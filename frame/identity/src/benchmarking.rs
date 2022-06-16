@@ -37,8 +37,9 @@ fn assert_last_event<T: Config>(generic_event: <T as Config>::Event) {
 fn add_registrars<T: Config>(r: u32) -> Result<(), &'static str> {
 	for i in 0..r {
 		let registrar: T::AccountId = account("registrar", i, SEED);
+        let registrar_lookup = T::Lookup::unlookup(registrar.clone());
 		let _ = T::Currency::make_free_balance_be(&registrar, BalanceOf::<T>::max_value());
-		Identity::<T>::add_registrar(RawOrigin::Root.into(), registrar.clone())?;
+		Identity::<T>::add_registrar(RawOrigin::Root.into(), registrar_lookup)?;
 		Identity::<T>::set_fee(RawOrigin::Signed(registrar.clone()).into(), i, 10u32.into())?;
 		let fields =
 			IdentityFields(
@@ -256,10 +257,11 @@ benchmarks! {
 
 	set_fee {
 		let caller: T::AccountId = whitelisted_caller();
+        let caller_lookup = T::Lookup::unlookup(caller.clone());
 
 		let r in 1 .. T::MaxRegistrars::get() - 1 => add_registrars::<T>(r)?;
 
-		Identity::<T>::add_registrar(RawOrigin::Root.into(), caller.clone())?;
+		Identity::<T>::add_registrar(RawOrigin::Root.into(), caller_lookup)?;
 		let registrars = Registrars::<T>::get();
 		ensure!(registrars[r as usize].as_ref().unwrap().fee == 0u32.into(), "Fee already set.");
 	}: _(RawOrigin::Signed(caller), r, 100u32.into())
@@ -270,11 +272,12 @@ benchmarks! {
 
 	set_account_id {
 		let caller: T::AccountId = whitelisted_caller();
+        let caller_lookup = T::Lookup::unlookup(caller.clone());
 		let _ = T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 
 		let r in 1 .. T::MaxRegistrars::get() - 1 => add_registrars::<T>(r)?;
 
-		Identity::<T>::add_registrar(RawOrigin::Root.into(), caller.clone())?;
+		Identity::<T>::add_registrar(RawOrigin::Root.into(), caller_lookup)?;
 		let registrars = Registrars::<T>::get();
 		ensure!(registrars[r as usize].as_ref().unwrap().account == caller, "id not set.");
 	}: _(RawOrigin::Signed(caller), r, account("new", 0, SEED))
@@ -285,11 +288,12 @@ benchmarks! {
 
 	set_fields {
 		let caller: T::AccountId = whitelisted_caller();
+        let caller_lookup = T::Lookup::unlookup(caller.clone());
 		let _ = T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 
 		let r in 1 .. T::MaxRegistrars::get() - 1 => add_registrars::<T>(r)?;
 
-		Identity::<T>::add_registrar(RawOrigin::Root.into(), caller.clone())?;
+		Identity::<T>::add_registrar(RawOrigin::Root.into(), caller_lookup)?;
 		let fields = IdentityFields(
 			IdentityField::Display | IdentityField::Legal | IdentityField::Web | IdentityField::Riot
 			| IdentityField::Email | IdentityField::PgpFingerprint | IdentityField::Image | IdentityField::Twitter
@@ -310,6 +314,7 @@ benchmarks! {
 		let _ = T::Currency::make_free_balance_be(&user, BalanceOf::<T>::max_value());
 
 		let caller: T::AccountId = whitelisted_caller();
+        let caller_lookup = T::Lookup::unlookup(caller.clone());
 		let _ = T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 
 		let r in 1 .. T::MaxRegistrars::get() - 1 => add_registrars::<T>(r)?;
@@ -318,7 +323,7 @@ benchmarks! {
 			Identity::<T>::set_identity(user_origin.clone(), Box::new(info))?;
 		};
 
-		Identity::<T>::add_registrar(RawOrigin::Root.into(), caller.clone())?;
+		Identity::<T>::add_registrar(RawOrigin::Root.into(), caller_lookup)?;
 		Identity::<T>::request_judgement(user_origin, r, 10u32.into())?;
 	}: _(RawOrigin::Signed(caller), r, user_lookup, Judgement::Reasonable)
 	verify {

@@ -481,9 +481,10 @@ benchmarks! {
 		let caller = funded_account::<T>("caller", 0);
 		// Caller will initially delegate to `old_delegate`
 		let old_delegate: T::AccountId = funded_account::<T>("old_delegate", r);
+        let old_delegate_lookup = T::Lookup::unlookup(old_delegate.clone());
 		Democracy::<T>::delegate(
 			RawOrigin::Signed(caller.clone()).into(),
-			old_delegate.clone(),
+			old_delegate_lookup,
 			Conviction::Locked1x,
 			delegated_balance,
 		)?;
@@ -495,6 +496,7 @@ benchmarks! {
 		assert_eq!(balance, delegated_balance, "delegation balance didn't work");
 		// Caller will now switch to `new_delegate`
 		let new_delegate: T::AccountId = funded_account::<T>("new_delegate", r);
+        let new_delegate_lookup = T::Lookup::unlookup(new_delegate.clone());
 		let account_vote = account_vote::<T>(initial_balance);
 		// We need to create existing direct votes for the `new_delegate`
 		for i in 0..r {
@@ -507,7 +509,7 @@ benchmarks! {
 		};
 		assert_eq!(votes.len(), r as usize, "Votes were not recorded.");
 		whitelist_account!(caller);
-	}: _(RawOrigin::Signed(caller.clone()), new_delegate.clone(), Conviction::Locked1x, delegated_balance)
+	}: _(RawOrigin::Signed(caller.clone()), new_delegate_lookup, Conviction::Locked1x, delegated_balance)
 	verify {
 		let (target, balance) = match VotingOf::<T>::get(&caller) {
 			Voting::Delegating { target, balance, .. } => (target, balance),
@@ -531,9 +533,10 @@ benchmarks! {
 		let caller = funded_account::<T>("caller", 0);
 		// Caller will delegate
 		let the_delegate: T::AccountId = funded_account::<T>("delegate", r);
+        let the_delegate_lookup = T::Lookup::unlookup(the_delegate.clone());
 		Democracy::<T>::delegate(
 			RawOrigin::Signed(caller.clone()).into(),
-			the_delegate.clone(),
+			the_delegate_lookup,
 			Conviction::Locked1x,
 			delegated_balance,
 		)?;
@@ -640,6 +643,7 @@ benchmarks! {
 		let r in 1 .. MAX_REFERENDUMS;
 
 		let locker = funded_account::<T>("locker", 0);
+        let locker_lookup = T::Lookup::unlookup(locker.clone());
 		// Populate votes so things are locked
 		let base_balance: BalanceOf<T> = 100u32.into();
 		let small_vote = account_vote::<T>(base_balance);
@@ -652,7 +656,7 @@ benchmarks! {
 
 		let caller = funded_account::<T>("caller", 0);
 		whitelist_account!(caller);
-	}: unlock(RawOrigin::Signed(caller), locker.clone())
+	}: unlock(RawOrigin::Signed(caller), locker_lookup)
 	verify {
 		// Note that we may want to add a `get_lock` api to actually verify
 		let voting = VotingOf::<T>::get(&locker);
@@ -664,6 +668,7 @@ benchmarks! {
 		let r in 1 .. MAX_REFERENDUMS;
 
 		let locker = funded_account::<T>("locker", 0);
+        let locker_lookup = T::Lookup::unlookup(locker.clone());
 		// Populate votes so things are locked
 		let base_balance: BalanceOf<T> = 100u32.into();
 		let small_vote = account_vote::<T>(base_balance);
@@ -690,7 +695,7 @@ benchmarks! {
 
 		let caller = funded_account::<T>("caller", 0);
 		whitelist_account!(caller);
-	}: unlock(RawOrigin::Signed(caller), locker.clone())
+	}: unlock(RawOrigin::Signed(caller), locker_lookup)
 	verify {
 		let votes = match VotingOf::<T>::get(&locker) {
 			Voting::Direct { votes, .. } => votes,
@@ -736,6 +741,7 @@ benchmarks! {
 		let r in 1 .. MAX_REFERENDUMS;
 
 		let caller = funded_account::<T>("caller", r);
+        let caller_lookup = T::Lookup::unlookup(caller.clone());
 		let account_vote = account_vote::<T>(100u32.into());
 
 		for i in 0 .. r {
@@ -751,7 +757,7 @@ benchmarks! {
 
 		let referendum_index = r - 1;
 		whitelist_account!(caller);
-	}: _(RawOrigin::Signed(caller.clone()), caller.clone(), referendum_index)
+	}: _(RawOrigin::Signed(caller.clone()), caller_lookup, referendum_index)
 	verify {
 		let votes = match VotingOf::<T>::get(&caller) {
 			Voting::Direct { votes, .. } => votes,
