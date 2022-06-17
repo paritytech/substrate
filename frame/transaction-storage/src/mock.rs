@@ -17,8 +17,10 @@
 
 //! Test environment for transaction-storage pallet.
 
-use crate as pallet_transaction_storage;
-use crate::TransactionStorageProof;
+use crate::{
+	self as pallet_transaction_storage, TransactionStorageProof, DEFAULT_MAX_BLOCK_TRANSACTIONS,
+	DEFAULT_MAX_TRANSACTION_SIZE,
+};
 use frame_support::traits::{ConstU16, ConstU32, ConstU64, OnFinalize, OnInitialize};
 use sp_core::H256;
 use sp_runtime::{
@@ -90,6 +92,8 @@ impl pallet_transaction_storage::Config for Test {
 	type Currency = Balances;
 	type FeeDestination = ();
 	type WeightInfo = ();
+	type MaxBlockTransactions = ConstU32<{ DEFAULT_MAX_BLOCK_TRANSACTIONS }>;
+	type MaxTransactionSize = ConstU32<{ DEFAULT_MAX_TRANSACTION_SIZE }>;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
@@ -102,8 +106,6 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			storage_period: 10,
 			byte_fee: 2,
 			entry_fee: 200,
-			max_block_transactions: crate::DEFAULT_MAX_BLOCK_TRANSACTIONS,
-			max_transaction_size: crate::DEFAULT_MAX_TRANSACTION_SIZE,
 		},
 	}
 	.build_storage()
