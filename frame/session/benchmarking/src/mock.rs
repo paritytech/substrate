@@ -93,8 +93,8 @@ impl pallet_timestamp::Config for Test {
 	type WeightInfo = ();
 }
 impl pallet_session::historical::Config for Test {
-	type FullIdentification = pallet_staking::Exposure<AccountId, Balance>;
-	type FullIdentificationOf = pallet_staking::ExposureOf<Test>;
+	type FullIdentification = pallet_staking::ExposureOf<Test>;
+	type FullIdentificationOf = pallet_staking::ActiveExposure<Test>;
 }
 
 sp_runtime::impl_opaque_keys! {

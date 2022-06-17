@@ -30,6 +30,7 @@ use sp_core::{
 	OpaquePeerId,
 };
 use sp_runtime::{
+	bounded_vec,
 	testing::UintAuthorityId,
 	transaction_validity::{InvalidTransaction, TransactionValidityError},
 };
@@ -74,15 +75,15 @@ fn should_report_offline_validators() {
 		advance_session();
 
 		// then
-		let offences = OFFENCES.with(|l| l.replace(vec![]));
+		let offences = OFFENCES.with(|l| l.replace(Default::default()));
 		assert_eq!(
 			offences,
 			vec![(
-				vec![],
+				Default::default(),
 				UnresponsivenessOffence {
 					session_index: 2,
 					validator_set_count: 3,
-					offenders: vec![(1, 1), (2, 2), (3, 3),],
+					offenders: bounded_vec![(1, 1), (2, 2), (3, 3),],
 				}
 			)]
 		);
@@ -98,11 +99,11 @@ fn should_report_offline_validators() {
 		assert_eq!(
 			offences,
 			vec![(
-				vec![],
+				Default::default(),
 				UnresponsivenessOffence {
 					session_index: 3,
 					validator_set_count: 6,
-					offenders: vec![(5, 5), (6, 6),],
+					offenders: bounded_vec![(5, 5), (6, 6),],
 				}
 			)]
 		);

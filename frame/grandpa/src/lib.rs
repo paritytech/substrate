@@ -48,9 +48,9 @@ use frame_support::{
 	WeakBoundedVec,
 };
 use scale_info::TypeInfo;
-use sp_runtime::{generic::DigestItem, traits::Zero, DispatchResult, KeyTypeId};
+use sp_runtime::{generic::DigestItem, traits::Zero, BoundedVec, DispatchResult, KeyTypeId};
 use sp_session::{GetSessionNumber, GetValidatorCount};
-use sp_staking::SessionIndex;
+use sp_staking::{offence::MaxReporters, SessionIndex};
 
 mod default_weights;
 mod equivocation;
@@ -568,9 +568,16 @@ impl<T: Config> Pallet<T> {
 			return Err(Error::<T>::InvalidEquivocationProof.into())
 		}
 
+		let reporters: BoundedVec<T::AccountId, MaxReporters> = match reporter {
+			Some(id) => vec![id],
+			None => vec![],
+		}
+		.try_into()
+		.expect("MaxReporters must be greater 0");
+
 		// report to the offences module rewarding the sender.
 		T::HandleEquivocation::report_offence(
-			reporter.into_iter().collect(),
+			reporters,
 			<T::HandleEquivocation as HandleEquivocation<T>>::Offence::new(
 				session_index,
 				validator_count,

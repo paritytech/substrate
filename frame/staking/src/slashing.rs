@@ -50,7 +50,7 @@
 //! Based on research at <https://research.web3.foundation/en/latest/polkadot/slashing/npos.html>
 
 use crate::{
-	BalanceOf, Config, Error, Exposure, NegativeImbalanceOf, Pallet, Perbill, SessionInterface,
+	BalanceOf, Config, Error, ExposureOf, NegativeImbalanceOf, Pallet, Perbill, SessionInterface,
 	Store, UnappliedSlash,
 };
 use codec::{Decode, Encode};
@@ -204,7 +204,7 @@ pub(crate) struct SlashParams<'a, T: 'a + Config> {
 	/// The proportion of the slash.
 	pub(crate) slash: Perbill,
 	/// The exposure of the stash and all nominators.
-	pub(crate) exposure: &'a Exposure<T::AccountId, BalanceOf<T>>,
+	pub(crate) exposure: &'a ExposureOf<T>,
 	/// The era where the offence occurred.
 	pub(crate) slash_era: EraIndex,
 	/// The first era in the current bonding period.

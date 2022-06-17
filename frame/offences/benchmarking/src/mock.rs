@@ -32,6 +32,7 @@ use sp_runtime::{
 	testing::{Header, UintAuthorityId},
 	traits::IdentityLookup,
 };
+use sp_staking::offence::{MaxOffenders, MaxReporters};
 
 type AccountId = u64;
 type AccountIndex = u32;
@@ -89,8 +90,8 @@ impl pallet_timestamp::Config for Test {
 	type WeightInfo = ();
 }
 impl pallet_session::historical::Config for Test {
-	type FullIdentification = pallet_staking::Exposure<AccountId, Balance>;
-	type FullIdentificationOf = pallet_staking::ExposureOf<Test>;
+	type FullIdentification = pallet_staking::ExposureOf<Test>;
+	type FullIdentificationOf = pallet_staking::ActiveExposure<Self>;
 }
 
 sp_runtime::impl_opaque_keys! {
@@ -202,14 +203,13 @@ impl pallet_offences::Config for Test {
 	type IdentificationTuple = pallet_session::historical::IdentificationTuple<Self>;
 	type OnOffenceHandler = Staking;
 
-	type MaxReports = ConstU32<100>;
-	type MaxReportersPerOffence = ConstU32<MAX_REPORTERS>;
+	type MaxReportersPerOffence = MaxReporters;
 
-	type MaxConcurrentReports = Self::MaxReports;
-	type MaxConcurrentReportsPerKindAndTime = Self::MaxReports;
+	type MaxConcurrentReports = MaxOffenders;
+	type MaxConcurrentReportsPerKindAndTime = MaxOffenders;
 
-	type MaxSameKindReports = Self::MaxReports;
-	type MaxSameKindReportsPerKind = Self::MaxReports;
+	type MaxSameKindReports = MaxOffenders;
+	type MaxSameKindReportsPerKind = MaxOffenders;
 
 	type MaxSameKindReportsEncodedLen = ConstU32<1_000>; // Guessed...
 	type MaxOpaqueTimeSlotLen = ConstU32<1_000>;
@@ -239,7 +239,7 @@ frame_support::construct_runtime!(
 		Staking: pallet_staking::{Pallet, Call, Config<T>, Storage, Event<T>},
 		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
 		ImOnline: pallet_im_online::{Pallet, Call, Storage, Event<T>, ValidateUnsigned, Config<T>},
-		Offences: pallet_offences::{Pallet, Storage, Event},
+		Offences: pallet_offences::{Pallet, Storage, Event<T>},
 		Historical: pallet_session_historical::{Pallet},
 	}
 );

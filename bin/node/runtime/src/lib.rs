@@ -507,8 +507,8 @@ impl pallet_session::Config for Runtime {
 }
 
 impl pallet_session::historical::Config for Runtime {
-	type FullIdentification = pallet_staking::Exposure<AccountId, Balance>;
-	type FullIdentificationOf = pallet_staking::ExposureOf<Runtime>;
+	type FullIdentification = pallet_staking::Exposure<AccountId, Balance, MaxNominations>;
+	type FullIdentificationOf = pallet_staking::ActiveExposure<Runtime>;
 }
 
 pallet_staking_reward_curve::build! {
@@ -1244,6 +1244,17 @@ impl pallet_offences::Config for Runtime {
 	type Event = Event;
 	type IdentificationTuple = pallet_session::historical::IdentificationTuple<Self>;
 	type OnOffenceHandler = Staking;
+
+	type MaxReportersPerOffence = ConstU32<100>;
+
+	type MaxConcurrentReports = ConstU32<100>;
+	type MaxConcurrentReportsPerKindAndTime = ConstU32<100>;
+
+	type MaxSameKindReports = ConstU32<100>;
+	type MaxSameKindReportsPerKind = ConstU32<100>;
+
+	type MaxSameKindReportsEncodedLen = ConstU32<1_000>; // Guessed...
+	type MaxOpaqueTimeSlotLen = ConstU32<1_000>;
 }
 
 impl pallet_authority_discovery::Config for Runtime {

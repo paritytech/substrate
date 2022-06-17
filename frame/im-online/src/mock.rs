@@ -31,10 +31,10 @@ use sp_core::H256;
 use sp_runtime::{
 	testing::{Header, TestXt, UintAuthorityId},
 	traits::{BlakeTwo256, ConvertInto, IdentityLookup},
-	Permill,
+	BoundedVec, Permill,
 };
 use sp_staking::{
-	offence::{OffenceError, ReportOffence},
+	offence::{MaxOffenders, MaxReporters, OffenceError, ReportOffence},
 	SessionIndex,
 };
 
@@ -92,18 +92,24 @@ type IdentificationTuple = (u64, u64);
 type Offence = crate::UnresponsivenessOffence<IdentificationTuple>;
 
 thread_local! {
-	pub static OFFENCES: RefCell<Vec<(Vec<u64>, Offence)>> = RefCell::new(vec![]);
+	pub static OFFENCES: RefCell<Vec<(BoundedVec<u64, MaxReporters>, Offence)>> = RefCell::new(Default::default());
 }
 
 /// A mock offence report handler.
 pub struct OffenceHandler;
 impl ReportOffence<u64, IdentificationTuple, Offence> for OffenceHandler {
-	fn report_offence(reporters: Vec<u64>, offence: Offence) -> Result<(), OffenceError> {
+	fn report_offence(
+		reporters: BoundedVec<u64, MaxReporters>,
+		offence: Offence,
+	) -> Result<(), OffenceError> {
 		OFFENCES.with(|l| l.borrow_mut().push((reporters, offence)));
 		Ok(())
 	}
 
-	fn is_known_offence(_offenders: &[IdentificationTuple], _time_slot: &SessionIndex) -> bool {
+	fn is_known_offence(
+		_offenders: &BoundedVec<IdentificationTuple, MaxOffenders>,
+		_time_slot: &SessionIndex,
+	) -> bool {
 		false
 	}
 }

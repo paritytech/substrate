@@ -26,8 +26,8 @@ use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	ensure,
 	traits::{
-		ConstU32, DisabledValidators, FindAuthor, Get, KeyOwnerProofSystem, OnTimestampSet,
-		OneSessionHandler,
+		ConstU32, Defensive, DisabledValidators, FindAuthor, Get, KeyOwnerProofSystem,
+		OnTimestampSet, OneSessionHandler,
 	},
 	weights::{Pays, Weight},
 	BoundedVec, WeakBoundedVec,
@@ -39,6 +39,7 @@ use sp_runtime::{
 	ConsensusEngineId, KeyTypeId, Permill,
 };
 use sp_session::{GetSessionNumber, GetValidatorCount};
+use sp_staking::offence::MaxReporters;
 use sp_std::prelude::*;
 
 use sp_consensus_babe::{
@@ -826,10 +827,13 @@ impl<T: Config> Pallet<T> {
 		let offence =
 			BabeEquivocationOffence { slot, validator_set_count, offender, session_index };
 
-		let reporters = match reporter {
+		let reporters: BoundedVec<T::AccountId, MaxReporters> = match reporter {
 			Some(id) => vec![id],
 			None => vec![],
-		};
+		}
+		.try_into()
+		.defensive_proof("Static config is known good")
+		.unwrap();
 
 		T::HandleEquivocation::report_offence(reporters, offence)
 			.map_err(|_| Error::<T>::DuplicateOffenceReport)?;

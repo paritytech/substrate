@@ -39,7 +39,10 @@ use sp_runtime::{
 	traits::{Header as _, IdentityLookup, OpaqueKeys},
 	Perbill,
 };
-use sp_staking::{EraIndex, SessionIndex};
+use sp_staking::{
+	offence::{MaxOffenders, MaxReporters},
+	EraIndex, SessionIndex,
+};
 
 type DummyValidatorId = u64;
 
@@ -56,7 +59,7 @@ frame_support::construct_runtime!(
 		Authorship: pallet_authorship::{Pallet, Call, Storage, Inherent},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		Historical: pallet_session_historical::{Pallet},
-		Offences: pallet_offences::{Pallet, Storage, Event},
+		Offences: pallet_offences::{Pallet, Storage, Event<T>},
 		Babe: pallet_babe::{Pallet, Call, Storage, Config, ValidateUnsigned},
 		Staking: pallet_staking::{Pallet, Call, Storage, Config<T>, Event<T>},
 		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
@@ -123,8 +126,8 @@ impl pallet_session::Config for Test {
 }
 
 impl pallet_session::historical::Config for Test {
-	type FullIdentification = pallet_staking::Exposure<u64, u128>;
-	type FullIdentificationOf = pallet_staking::ExposureOf<Self>;
+	type FullIdentification = pallet_staking::ExposureOf<Test>;
+	type FullIdentificationOf = pallet_staking::ActiveExposure<Self>;
 }
 
 impl pallet_authorship::Config for Test {
@@ -212,6 +215,17 @@ impl pallet_offences::Config for Test {
 	type Event = Event;
 	type IdentificationTuple = pallet_session::historical::IdentificationTuple<Self>;
 	type OnOffenceHandler = Staking;
+
+	type MaxReportersPerOffence = MaxReporters;
+
+	type MaxConcurrentReports = MaxOffenders;
+	type MaxConcurrentReportsPerKindAndTime = MaxOffenders;
+
+	type MaxSameKindReports = MaxOffenders;
+	type MaxSameKindReportsPerKind = MaxOffenders;
+
+	type MaxSameKindReportsEncodedLen = ConstU32<1_000>; // Guessed...
+	type MaxOpaqueTimeSlotLen = ConstU32<1_000>;
 }
 
 parameter_types! {

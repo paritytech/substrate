@@ -299,12 +299,12 @@ pub mod weights;
 
 mod pallet;
 
-use codec::{Decode, Encode, HasCompact};
+use codec::{Decode, Encode, HasCompact, MaxEncodedLen};
 use frame_support::{
 	parameter_types,
 	traits::{Currency, Defensive, Get},
 	weights::Weight,
-	BoundedVec, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
+	BoundedVec, CloneNoBound, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
 };
 use scale_info::TypeInfo;
 use sp_runtime::{
@@ -313,10 +313,10 @@ use sp_runtime::{
 	Perbill, Perquintill, RuntimeDebug,
 };
 use sp_staking::{
-	offence::{Offence, OffenceError, ReportOffence},
+	offence::{MaxOffenders, MaxReporters, Offence, OffenceError, ReportOffence},
 	EraIndex, SessionIndex,
 };
-use sp_std::{collections::btree_map::BTreeMap, prelude::*};
+use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, prelude::*};
 pub use weights::WeightInfo;
 
 pub use pallet::{pallet::*, *};
@@ -643,7 +643,9 @@ pub struct Nominations<T: Config> {
 }
 
 /// The amount of exposure (to slashing) than an individual nominator has.
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
+#[derive(
+	PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen,
+)]
 pub struct IndividualExposure<AccountId, Balance: HasCompact> {
 	/// The stash account of the nominator in question.
 	pub who: AccountId,
@@ -653,8 +655,26 @@ pub struct IndividualExposure<AccountId, Balance: HasCompact> {
 }
 
 /// A snapshot of the stake backing a single validator in the system.
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
-pub struct Exposure<AccountId, Balance: HasCompact> {
+#[derive(
+	PartialEqNoBound,
+	EqNoBound,
+	PartialOrd,
+	Ord,
+	CloneNoBound,
+	Encode,
+	Decode,
+	RuntimeDebugNoBound,
+	TypeInfo,
+	MaxEncodedLen,
+)]
+#[codec(mel_bound())]
+#[scale_info(skip_type_params(MaxNominations))]
+pub struct Exposure<AccountId, Balance, MaxNominations>
+where
+	AccountId: Debug + Encode + Decode + MaxEncodedLen + Clone + Eq + PartialEq,
+	Balance: Debug + HasCompact + Encode + Decode + MaxEncodedLen + Clone + Eq + PartialEq,
+	MaxNominations: Get<u32>,
+{
 	/// The total balance backing this validator.
 	#[codec(compact)]
 	pub total: Balance,
@@ -662,12 +682,18 @@ pub struct Exposure<AccountId, Balance: HasCompact> {
 	#[codec(compact)]
 	pub own: Balance,
 	/// The portions of nominators stashes that are exposed.
-	pub others: Vec<IndividualExposure<AccountId, Balance>>,
+	pub others: BoundedVec<IndividualExposure<AccountId, Balance>, MaxNominations>,
 }
 
-impl<AccountId, Balance: Default + HasCompact> Default for Exposure<AccountId, Balance> {
+impl<AccountId, Balance, MaxNominations> Default for Exposure<AccountId, Balance, MaxNominations>
+where
+	AccountId: Debug + Encode + Decode + MaxEncodedLen + Clone + Eq + PartialEq,
+	Balance:
+		Debug + Default + HasCompact + Encode + Decode + MaxEncodedLen + Clone + Eq + PartialEq,
+	MaxNominations: Get<u32>,
+{
 	fn default() -> Self {
-		Self { total: Default::default(), own: Default::default(), others: vec![] }
+		Self { total: Default::default(), own: Default::default(), others: Default::default() }
 	}
 }
 
@@ -717,8 +743,8 @@ impl<T: Config> SessionInterface<<T as frame_system::Config>::AccountId> for T
 where
 	T: pallet_session::Config<ValidatorId = <T as frame_system::Config>::AccountId>,
 	T: pallet_session::historical::Config<
-		FullIdentification = Exposure<<T as frame_system::Config>::AccountId, BalanceOf<T>>,
-		FullIdentificationOf = ExposureOf<T>,
+		FullIdentification = ExposureOf<T>,
+		FullIdentificationOf = ActiveExposure<T>,
 	>,
 	T::SessionHandler: pallet_session::SessionHandler<<T as frame_system::Config>::AccountId>,
 	T::SessionManager: pallet_session::SessionManager<<T as frame_system::Config>::AccountId>,
@@ -852,17 +878,19 @@ impl<T: Config> Convert<T::AccountId, Option<T::AccountId>> for StashOf<T> {
 	}
 }
 
+/// Convenience type alias for the [`Exposure`] type.
+pub type ExposureOf<T> =
+	Exposure<<T as frame_system::Config>::AccountId, BalanceOf<T>, <T as Config>::MaxNominations>;
+
 /// A typed conversion from stash account ID to the active exposure of nominators
 /// on that account.
 ///
 /// Active exposure is the exposure of the validator set currently validating, i.e. in
 /// `active_era`. It can differ from the latest planned exposure in `current_era`.
-pub struct ExposureOf<T>(sp_std::marker::PhantomData<T>);
+pub struct ActiveExposure<T>(sp_std::marker::PhantomData<T>);
 
-impl<T: Config> Convert<T::AccountId, Option<Exposure<T::AccountId, BalanceOf<T>>>>
-	for ExposureOf<T>
-{
-	fn convert(validator: T::AccountId) -> Option<Exposure<T::AccountId, BalanceOf<T>>> {
+impl<T: Config> Convert<T::AccountId, Option<ExposureOf<T>>> for ActiveExposure<T> {
+	fn convert(validator: T::AccountId) -> Option<ExposureOf<T>> {
 		<Pallet<T>>::active_era()
 			.map(|active_era| <Pallet<T>>::eras_stakers(active_era.index, &validator))
 	}
@@ -880,7 +908,10 @@ where
 	R: ReportOffence<Reporter, Offender, O>,
 	O: Offence<Offender>,
 {
-	fn report_offence(reporters: Vec<Reporter>, offence: O) -> Result<(), OffenceError> {
+	fn report_offence(
+		reporters: BoundedVec<Reporter, MaxReporters>,
+		offence: O,
+	) -> Result<(), OffenceError> {
 		// Disallow any slashing from before the current bonding period.
 		let offence_session = offence.session_index();
 		let bonded_eras = BondedEras::<T>::get();
@@ -893,7 +924,10 @@ where
 		}
 	}
 
-	fn is_known_offence(offenders: &[Offender], time_slot: &O::TimeSlot) -> bool {
+	fn is_known_offence(
+		offenders: &BoundedVec<Offender, MaxOffenders>,
+		time_slot: &O::TimeSlot,
+	) -> bool {
 		R::is_known_offence(offenders, time_slot)
 	}
 }

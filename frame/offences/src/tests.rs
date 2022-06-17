@@ -25,16 +25,16 @@ use crate::mock::{
 	System, KIND,
 };
 use frame_system::{EventRecord, Phase};
-use sp_runtime::Perbill;
+use sp_runtime::{bounded_vec, Perbill};
 
 #[test]
 fn should_report_an_authority_and_trigger_on_offence() {
 	new_test_ext().execute_with(|| {
 		// given
 		let time_slot = 42;
-		assert_eq!(offence_reports(KIND, time_slot), vec![]);
+		assert!(offence_reports(KIND, time_slot).is_empty());
 
-		let offence = Offence { validator_set_count: 5, time_slot, offenders: vec![5] };
+		let offence = Offence { validator_set_count: 5, time_slot, offenders: bounded_vec![5] };
 
 		// when
 		Offences::report_offence(Default::default(), offence).unwrap();
@@ -51,9 +51,9 @@ fn should_not_report_the_same_authority_twice_in_the_same_slot() {
 	new_test_ext().execute_with(|| {
 		// given
 		let time_slot = 42;
-		assert_eq!(offence_reports(KIND, time_slot), vec![]);
+		assert!(offence_reports(KIND, time_slot).is_empty());
 
-		let offence = Offence { validator_set_count: 5, time_slot, offenders: vec![5] };
+		let offence = Offence { validator_set_count: 5, time_slot, offenders: bounded_vec![5] };
 		Offences::report_offence(Default::default(), offence.clone()).unwrap();
 		with_on_offence_fractions(|f| {
 			assert_eq!(f.clone(), vec![Perbill::from_percent(25)]);
@@ -79,9 +79,9 @@ fn should_report_in_different_time_slot() {
 	new_test_ext().execute_with(|| {
 		// given
 		let time_slot = 42;
-		assert_eq!(offence_reports(KIND, time_slot), vec![]);
+		assert!(offence_reports(KIND, time_slot).is_empty());
 
-		let mut offence = Offence { validator_set_count: 5, time_slot, offenders: vec![5] };
+		let mut offence = Offence { validator_set_count: 5, time_slot, offenders: bounded_vec![5] };
 		Offences::report_offence(Default::default(), offence.clone()).unwrap();
 		with_on_offence_fractions(|f| {
 			assert_eq!(f.clone(), vec![Perbill::from_percent(25)]);
@@ -105,9 +105,9 @@ fn should_deposit_event() {
 	new_test_ext().execute_with(|| {
 		// given
 		let time_slot = 42;
-		assert_eq!(offence_reports(KIND, time_slot), vec![]);
+		assert!(offence_reports(KIND, time_slot).is_empty());
 
-		let offence = Offence { validator_set_count: 5, time_slot, offenders: vec![5] };
+		let offence = Offence { validator_set_count: 5, time_slot, offenders: bounded_vec![5] };
 
 		// when
 		Offences::report_offence(Default::default(), offence).unwrap();
@@ -132,9 +132,9 @@ fn doesnt_deposit_event_for_dups() {
 	new_test_ext().execute_with(|| {
 		// given
 		let time_slot = 42;
-		assert_eq!(offence_reports(KIND, time_slot), vec![]);
+		assert!(offence_reports(KIND, time_slot).is_empty());
 
-		let offence = Offence { validator_set_count: 5, time_slot, offenders: vec![5] };
+		let offence = Offence { validator_set_count: 5, time_slot, offenders: bounded_vec![5] };
 		Offences::report_offence(Default::default(), offence.clone()).unwrap();
 		with_on_offence_fractions(|f| {
 			assert_eq!(f.clone(), vec![Perbill::from_percent(25)]);
@@ -170,12 +170,12 @@ fn reports_if_an_offence_is_dup() {
 
 	new_test_ext().execute_with(|| {
 		let time_slot = 42;
-		assert_eq!(offence_reports(KIND, time_slot), vec![]);
+		assert!(offence_reports(KIND, time_slot).is_empty());
 
 		let offence =
 			|time_slot, offenders| TestOffence { validator_set_count: 5, time_slot, offenders };
 
-		let mut test_offence = offence(time_slot, vec![0]);
+		let mut test_offence = offence(time_slot, bounded_vec![0]);
 
 		// the report for authority 0 at time slot 42 should not be a known
 		// offence
@@ -200,7 +200,7 @@ fn reports_if_an_offence_is_dup() {
 		);
 
 		// after adding a new offender to the offence report
-		test_offence.offenders.push(1);
+		test_offence.offenders.try_push(1).unwrap();
 
 		// it should not be a known offence anymore
 		assert!(!<Offences as ReportOffence<_, _, TestOffence>>::is_known_offence(
@@ -213,7 +213,7 @@ fn reports_if_an_offence_is_dup() {
 
 		// creating a new offence for the same authorities on the next slot
 		// should be considered a new offence and thefore not known
-		let test_offence_next_slot = offence(time_slot + 1, vec![0, 1]);
+		let test_offence_next_slot = offence(time_slot + 1, bounded_vec![0, 1]);
 		assert!(!<Offences as ReportOffence<_, _, TestOffence>>::is_known_offence(
 			&test_offence_next_slot.offenders,
 			&test_offence_next_slot.time_slot
@@ -228,10 +228,10 @@ fn should_properly_count_offences() {
 	new_test_ext().execute_with(|| {
 		// given
 		let time_slot = 42;
-		assert_eq!(offence_reports(KIND, time_slot), vec![]);
+		assert!(offence_reports(KIND, time_slot).is_empty());
 
-		let offence1 = Offence { validator_set_count: 5, time_slot, offenders: vec![5] };
-		let offence2 = Offence { validator_set_count: 5, time_slot, offenders: vec![4] };
+		let offence1 = Offence { validator_set_count: 5, time_slot, offenders: bounded_vec![5] };
+		let offence2 = Offence { validator_set_count: 5, time_slot, offenders: bounded_vec![4] };
 		Offences::report_offence(Default::default(), offence1).unwrap();
 		with_on_offence_fractions(|f| {
 			assert_eq!(f.clone(), vec![Perbill::from_percent(25)]);
@@ -244,11 +244,12 @@ fn should_properly_count_offences() {
 
 		// then
 		// the 1st authority should have count 2 and the 2nd one should be reported only once.
+
 		assert_eq!(
 			offence_reports(KIND, time_slot),
 			vec![
-				OffenceDetails { offender: 5, reporters: Default::default() },
-				OffenceDetails { offender: 4, reporters: Default::default() },
+				OffenceDetails::<u64, u64> { offender: 5, reporters: Default::default() },
+				OffenceDetails::<u64, u64> { offender: 4, reporters: Default::default() },
 			]
 		);
 	});
@@ -261,14 +262,20 @@ fn should_properly_sort_offences() {
 	new_test_ext().execute_with(|| {
 		// given
 		let time_slot = 42;
-		assert_eq!(offence_reports(KIND, time_slot), vec![]);
+		assert!(offence_reports(KIND, time_slot).is_empty());
 
-		let offence1 = Offence { validator_set_count: 5, time_slot, offenders: vec![5] };
-		let offence2 = Offence { validator_set_count: 5, time_slot, offenders: vec![4] };
-		let offence3 =
-			Offence { validator_set_count: 5, time_slot: time_slot + 1, offenders: vec![6, 7] };
-		let offence4 =
-			Offence { validator_set_count: 5, time_slot: time_slot - 1, offenders: vec![3] };
+		let offence1 = Offence { validator_set_count: 5, time_slot, offenders: bounded_vec![5] };
+		let offence2 = Offence { validator_set_count: 5, time_slot, offenders: bounded_vec![4] };
+		let offence3 = Offence {
+			validator_set_count: 5,
+			time_slot: time_slot + 1,
+			offenders: bounded_vec![6, 7],
+		};
+		let offence4 = Offence {
+			validator_set_count: 5,
+			time_slot: time_slot - 1,
+			offenders: bounded_vec![3],
+		};
 		Offences::report_offence(Default::default(), offence1).unwrap();
 		with_on_offence_fractions(|f| {
 			assert_eq!(f.clone(), vec![Perbill::from_percent(25)]);

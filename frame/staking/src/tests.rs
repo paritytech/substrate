@@ -199,7 +199,7 @@ fn basic_setup_works() {
 			Exposure {
 				total: 1125,
 				own: 1000,
-				others: vec![IndividualExposure { who: 101, value: 125 }]
+				others: bounded_vec![IndividualExposure { who: 101, value: 125 }]
 			},
 		);
 		assert_eq!(
@@ -207,7 +207,7 @@ fn basic_setup_works() {
 			Exposure {
 				total: 1375,
 				own: 1000,
-				others: vec![IndividualExposure { who: 101, value: 375 }]
+				others: bounded_vec![IndividualExposure { who: 101, value: 375 }]
 			},
 		);
 
@@ -592,7 +592,7 @@ fn nominating_and_rewards_should_work() {
 				Exposure {
 					total: 1000 + 800,
 					own: 1000,
-					others: vec![
+					others: bounded_vec![
 						IndividualExposure { who: 1, value: 400 },
 						IndividualExposure { who: 3, value: 400 },
 					]
@@ -603,7 +603,7 @@ fn nominating_and_rewards_should_work() {
 				Exposure {
 					total: 1000 + 1200,
 					own: 1000,
-					others: vec![
+					others: bounded_vec![
 						IndividualExposure { who: 1, value: 600 },
 						IndividualExposure { who: 3, value: 600 },
 					]
@@ -674,8 +674,11 @@ fn nominators_also_get_slashed_pro_rata() {
 
 		// 11 goes offline
 		on_offence_now(
-			&[OffenceDetails { offender: (11, initial_exposure.clone()), reporters: vec![] }],
-			&[slash_percent],
+			&bounded_vec![OffenceDetails {
+				offender: (11, initial_exposure.clone()),
+				reporters: Default::default()
+			}],
+			&bounded_vec![slash_percent],
 		);
 
 		// both stakes must have been decreased.
@@ -1206,7 +1209,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 		);
 		assert_eq!(
 			Staking::eras_stakers(active_era(), 11),
-			Exposure { total: 1000, own: 1000, others: vec![] }
+			Exposure { total: 1000, own: 1000, others: Default::default() }
 		);
 
 		// deposit the extra 100 units
@@ -1225,7 +1228,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 		// Exposure is a snapshot! only updated after the next era update.
 		assert_ne!(
 			Staking::eras_stakers(active_era(), 11),
-			Exposure { total: 1000 + 100, own: 1000 + 100, others: vec![] }
+			Exposure { total: 1000 + 100, own: 1000 + 100, others: Default::default() }
 		);
 
 		// trigger next era.
@@ -1246,7 +1249,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 		// Exposure is now updated.
 		assert_eq!(
 			Staking::eras_stakers(active_era(), 11),
-			Exposure { total: 1000 + 100, own: 1000 + 100, others: vec![] }
+			Exposure { total: 1000 + 100, own: 1000 + 100, others: Default::default() }
 		);
 
 		// Unbond almost all of the funds in stash.
@@ -1652,7 +1655,11 @@ fn reward_to_stake_works() {
 			let _ = Balances::make_free_balance_be(&20, 1000);
 
 			// Bypass logic and change current exposure
-			ErasStakers::<Test>::insert(0, 21, Exposure { total: 69, own: 69, others: vec![] });
+			ErasStakers::<Test>::insert(
+				0,
+				21,
+				Exposure { total: 69, own: 69, others: Default::default() },
+			);
 			<Ledger<Test>>::insert(
 				&20,
 				StakingLedger {
@@ -2063,7 +2070,7 @@ fn reward_validator_slashing_validator_does_not_overflow() {
 		// Set staker
 		let _ = Balances::make_free_balance_be(&11, stake);
 
-		let exposure = Exposure::<AccountId, Balance> { total: stake, own: stake, others: vec![] };
+		let exposure = ExposureOf::<Test> { total: stake, own: stake, others: Default::default() };
 		let reward = EraRewardPoints::<AccountId> {
 			total: 1,
 			individual: vec![(11, 1)].into_iter().collect(),
@@ -2091,17 +2098,17 @@ fn reward_validator_slashing_validator_does_not_overflow() {
 			Exposure {
 				total: stake,
 				own: 1,
-				others: vec![IndividualExposure { who: 2, value: stake - 1 }],
+				others: bounded_vec![IndividualExposure { who: 2, value: stake - 1 }],
 			},
 		);
 
 		// Check slashing
 		on_offence_now(
-			&[OffenceDetails {
+			&bounded_vec![OffenceDetails {
 				offender: (11, Staking::eras_stakers(active_era(), 11)),
-				reporters: vec![],
+				reporters: Default::default(),
 			}],
-			&[Perbill::from_percent(100)],
+			&bounded_vec![Perbill::from_percent(100)],
 		);
 
 		assert_eq!(Balances::total_balance(&11), stake);
@@ -2201,11 +2208,11 @@ fn era_is_always_same_length() {
 fn offence_forces_new_era() {
 	ExtBuilder::default().build_and_execute(|| {
 		on_offence_now(
-			&[OffenceDetails {
+			&bounded_vec![OffenceDetails {
 				offender: (11, Staking::eras_stakers(active_era(), 11)),
-				reporters: vec![],
+				reporters: Default::default(),
 			}],
-			&[Perbill::from_percent(5)],
+			&bounded_vec![Perbill::from_percent(5)],
 		);
 
 		assert_eq!(Staking::force_era(), Forcing::ForceNew);
@@ -2219,11 +2226,11 @@ fn offence_ensures_new_era_without_clobbering() {
 		assert_eq!(Staking::force_era(), Forcing::ForceAlways);
 
 		on_offence_now(
-			&[OffenceDetails {
+			&bounded_vec![OffenceDetails {
 				offender: (11, Staking::eras_stakers(active_era(), 11)),
-				reporters: vec![],
+				reporters: Default::default(),
 			}],
-			&[Perbill::from_percent(5)],
+			&bounded_vec![Perbill::from_percent(5)],
 		);
 
 		assert_eq!(Staking::force_era(), Forcing::ForceAlways);
@@ -2237,11 +2244,11 @@ fn offence_deselects_validator_even_when_slash_is_zero() {
 		assert!(<Validators<Test>>::contains_key(11));
 
 		on_offence_now(
-			&[OffenceDetails {
+			&bounded_vec![OffenceDetails {
 				offender: (11, Staking::eras_stakers(active_era(), 11)),
-				reporters: vec![],
+				reporters: Default::default(),
 			}],
-			&[Perbill::from_percent(0)],
+			&bounded_vec![Perbill::from_percent(0)],
 		);
 
 		assert_eq!(Staking::force_era(), Forcing::ForceNew);
@@ -2263,11 +2270,11 @@ fn slashing_performed_according_exposure() {
 
 		// Handle an offence with a historical exposure.
 		on_offence_now(
-			&[OffenceDetails {
-				offender: (11, Exposure { total: 500, own: 500, others: vec![] }),
-				reporters: vec![],
+			&bounded_vec![OffenceDetails {
+				offender: (11, Exposure { total: 500, own: 500, others: Default::default() }),
+				reporters: Default::default(),
 			}],
-			&[Perbill::from_percent(50)],
+			&bounded_vec![Perbill::from_percent(50)],
 		);
 
 		// The stash account should be slashed for 250 (50% of 500).
@@ -2284,11 +2291,11 @@ fn slash_in_old_span_does_not_deselect() {
 		assert!(Session::validators().contains(&11));
 
 		on_offence_now(
-			&[OffenceDetails {
+			&bounded_vec![OffenceDetails {
 				offender: (11, Staking::eras_stakers(active_era(), 11)),
-				reporters: vec![],
+				reporters: Default::default(),
 			}],
-			&[Perbill::from_percent(0)],
+			&bounded_vec![Perbill::from_percent(0)],
 		);
 
 		assert_eq!(Staking::force_era(), Forcing::ForceNew);
@@ -2307,11 +2314,11 @@ fn slash_in_old_span_does_not_deselect() {
 		// their prior slash.
 
 		on_offence_in_era(
-			&[OffenceDetails {
+			&bounded_vec![OffenceDetails {
 				offender: (11, Staking::eras_stakers(active_era(), 11)),
-				reporters: vec![],
+				reporters: Default::default(),
 			}],
-			&[Perbill::from_percent(0)],
+			&bounded_vec![Perbill::from_percent(0)],
 			1,
 			DisableStrategy::WhenSlashed,
 		);
@@ -2323,12 +2330,12 @@ fn slash_in_old_span_does_not_deselect() {
 		assert_eq!(Staking::force_era(), Forcing::ForceNew);
 
 		on_offence_in_era(
-			&[OffenceDetails {
+			&bounded_vec![OffenceDetails {
 				offender: (11, Staking::eras_stakers(active_era(), 11)),
-				reporters: vec![],
+				reporters: Default::default(),
 			}],
 			// NOTE: A 100% slash here would clean up the account, causing de-registration.
-			&[Perbill::from_percent(95)],
+			&bounded_vec![Perbill::from_percent(95)],
 			1,
 			DisableStrategy::WhenSlashed,
 		);
@@ -2354,11 +2361,11 @@ fn reporters_receive_their_slice() {
 		assert_eq!(Staking::eras_stakers(active_era(), 11).total, initial_balance);
 
 		on_offence_now(
-			&[OffenceDetails {
+			&bounded_vec![OffenceDetails {
 				offender: (11, Staking::eras_stakers(active_era(), 11)),
-				reporters: vec![1, 2],
+				reporters: bounded_vec![1, 2],
 			}],
-			&[Perbill::from_percent(50)],
+			&bounded_vec![Perbill::from_percent(50)],
 		);
 
 		// F1 * (reward_proportion * slash - 0)
@@ -2381,11 +2388,11 @@ fn subsequent_reports_in_same_span_pay_out_less() {
 		assert_eq!(Staking::eras_stakers(active_era(), 11).total, initial_balance);
 
 		on_offence_now(
-			&[OffenceDetails {
+			&bounded_vec![OffenceDetails {
 				offender: (11, Staking::eras_stakers(active_era(), 11)),
-				reporters: vec![1],
+				reporters: bounded_vec![1],
 			}],
-			&[Perbill::from_percent(20)],
+			&bounded_vec![Perbill::from_percent(20)],
 		);
 
 		// F1 * (reward_proportion * slash - 0)
@@ -2394,11 +2401,11 @@ fn subsequent_reports_in_same_span_pay_out_less() {
 		assert_eq!(Balances::free_balance(1), 10 + reward);
 
 		on_offence_now(
-			&[OffenceDetails {
+			&bounded_vec![OffenceDetails {
 				offender: (11, Staking::eras_stakers(active_era(), 11)),
-				reporters: vec![1],
+				reporters: bounded_vec![1],
 			}],
-			&[Perbill::from_percent(50)],
+			&bounded_vec![Perbill::from_percent(50)],
 		);
 
 		let prior_payout = reward;
@@ -2424,17 +2431,17 @@ fn invulnerables_are_not_slashed() {
 			exposure.others.iter().map(|o| Balances::free_balance(&o.who)).collect();
 
 		on_offence_now(
-			&[
+			&bounded_vec![
 				OffenceDetails {
 					offender: (11, Staking::eras_stakers(active_era(), 11)),
-					reporters: vec![],
+					reporters: Default::default(),
 				},
 				OffenceDetails {
 					offender: (21, Staking::eras_stakers(active_era(), 21)),
-					reporters: vec![],
+					reporters: Default::default(),
 				},
 			],
-			&[Perbill::from_percent(50), Perbill::from_percent(20)],
+			&bounded_vec![Perbill::from_percent(50), Perbill::from_percent(20)],
 		);
 
 		// The validator 11 hasn't been slashed, but 21 has been.
@@ -2459,11 +2466,11 @@ fn dont_slash_if_fraction_is_zero() {
 		assert_eq!(Balances::free_balance(11), 1000);
 
 		on_offence_now(
-			&[OffenceDetails {
+			&bounded_vec![OffenceDetails {
 				offender: (11, Staking::eras_stakers(active_era(), 11)),
-				reporters: vec![],
+				reporters: Default::default(),
 			}],
-			&[Perbill::from_percent(0)],
+			&bounded_vec![Perbill::from_percent(0)],
 		);
 
 		// The validator hasn't been slashed. The new era is not forced.
@@ -2480,11 +2487,11 @@ fn only_slash_for_max_in_era() {
 		assert_eq!(Balances::free_balance(11), 1000);
 
 		on_offence_now(
-			&[OffenceDetails {
+			&bounded_vec![OffenceDetails {
 				offender: (11, Staking::eras_stakers(active_era(), 11)),
-				reporters: vec![],
+				reporters: Default::default(),
 			}],
-			&[Perbill::from_percent(50)],
+			&bounded_vec![Perbill::from_percent(50)],
 		);
 
 		// The validator has been slashed and has been force-chilled.
@@ -2492,22 +2499,22 @@ fn only_slash_for_max_in_era() {
 		assert_eq!(Staking::force_era(), Forcing::ForceNew);
 
 		on_offence_now(
-			&[OffenceDetails {
+			&bounded_vec![OffenceDetails {
 				offender: (11, Staking::eras_stakers(active_era(), 11)),
-				reporters: vec![],
+				reporters: Default::default(),
 			}],
-			&[Perbill::from_percent(25)],
+			&bounded_vec![Perbill::from_percent(25)],
 		);
 
 		// The validator has not been slashed additionally.
 		assert_eq!(Balances::free_balance(11), 500);
 
 		on_offence_now(
-			&[OffenceDetails {
+			&bounded_vec![OffenceDetails {
 				offender: (11, Staking::eras_stakers(active_era(), 11)),
-				reporters: vec![],
+				reporters: Default::default(),
 			}],
-			&[Perbill::from_percent(60)],
+			&bounded_vec![Perbill::from_percent(60)],
 		);
 
 		// The validator got slashed 10% more.
@@ -2525,11 +2532,11 @@ fn garbage_collection_after_slashing() {
 			assert_eq!(Balances::free_balance(11), 2000);
 
 			on_offence_now(
-				&[OffenceDetails {
+				&bounded_vec![OffenceDetails {
 					offender: (11, Staking::eras_stakers(active_era(), 11)),
-					reporters: vec![],
+					reporters: Default::default(),
 				}],
-				&[Perbill::from_percent(10)],
+				&bounded_vec![Perbill::from_percent(10)],
 			);
 
 			assert_eq!(Balances::free_balance(11), 2000 - 200);
@@ -2537,11 +2544,11 @@ fn garbage_collection_after_slashing() {
 			assert_eq!(<Staking as crate::Store>::SpanSlash::get(&(11, 0)).amount(), &200);
 
 			on_offence_now(
-				&[OffenceDetails {
+				&bounded_vec![OffenceDetails {
 					offender: (11, Staking::eras_stakers(active_era(), 11)),
-					reporters: vec![],
+					reporters: Default::default(),
 				}],
-				&[Perbill::from_percent(100)],
+				&bounded_vec![Perbill::from_percent(100)],
 			);
 
 			// validator and nominator slash in era are garbage-collected by era change,
@@ -2580,8 +2587,11 @@ fn garbage_collection_on_window_pruning() {
 		let nominated_value = exposure.others.iter().find(|o| o.who == 101).unwrap().value;
 
 		on_offence_now(
-			&[OffenceDetails { offender: (11, Staking::eras_stakers(now, 11)), reporters: vec![] }],
-			&[Perbill::from_percent(10)],
+			&bounded_vec![OffenceDetails {
+				offender: (11, Staking::eras_stakers(now, 11)),
+				reporters: Default::default()
+			}],
+			&bounded_vec![Perbill::from_percent(10)],
 		);
 
 		assert_eq!(Balances::free_balance(11), 900);
@@ -2621,11 +2631,11 @@ fn slashing_nominators_by_span_max() {
 		let nominated_value_21 = exposure_21.others.iter().find(|o| o.who == 101).unwrap().value;
 
 		on_offence_in_era(
-			&[OffenceDetails {
+			&bounded_vec![OffenceDetails {
 				offender: (11, Staking::eras_stakers(active_era(), 11)),
-				reporters: vec![],
+				reporters: Default::default(),
 			}],
-			&[Perbill::from_percent(10)],
+			&bounded_vec![Perbill::from_percent(10)],
 			2,
 			DisableStrategy::WhenSlashed,
 		);
@@ -2648,11 +2658,11 @@ fn slashing_nominators_by_span_max() {
 
 		// second slash: higher era, higher value, same span.
 		on_offence_in_era(
-			&[OffenceDetails {
+			&bounded_vec![OffenceDetails {
 				offender: (21, Staking::eras_stakers(active_era(), 21)),
-				reporters: vec![],
+				reporters: Default::default(),
 			}],
-			&[Perbill::from_percent(30)],
+			&bounded_vec![Perbill::from_percent(30)],
 			3,
 			DisableStrategy::WhenSlashed,
 		);
@@ -2670,11 +2680,11 @@ fn slashing_nominators_by_span_max() {
 		// third slash: in same era and on same validator as first, higher
 		// in-era value, but lower slash value than slash 2.
 		on_offence_in_era(
-			&[OffenceDetails {
+			&bounded_vec![OffenceDetails {
 				offender: (11, Staking::eras_stakers(active_era(), 11)),
-				reporters: vec![],
+				reporters: Default::default(),
 			}],
-			&[Perbill::from_percent(20)],
+			&bounded_vec![Perbill::from_percent(20)],
 			2,
 			DisableStrategy::WhenSlashed,
 		);
@@ -2705,11 +2715,11 @@ fn slashes_are_summed_across_spans() {
 		let get_span = |account| <Staking as crate::Store>::SlashingSpans::get(&account).unwrap();
 
 		on_offence_now(
-			&[OffenceDetails {
+			&bounded_vec![OffenceDetails {
 				offender: (21, Staking::eras_stakers(active_era(), 21)),
-				reporters: vec![],
+				reporters: Default::default(),
 			}],
-			&[Perbill::from_percent(10)],
+			&bounded_vec![Perbill::from_percent(10)],
 		);
 
 		let expected_spans = vec![
@@ -2728,11 +2738,11 @@ fn slashes_are_summed_across_spans() {
 		assert_eq!(Staking::slashable_balance_of(&21), 900);
 
 		on_offence_now(
-			&[OffenceDetails {
+			&bounded_vec![OffenceDetails {
 				offender: (21, Staking::eras_stakers(active_era(), 21)),
-				reporters: vec![],
+				reporters: Default::default(),
 			}],
-			&[Perbill::from_percent(10)],
+			&bounded_vec![Perbill::from_percent(10)],
 		);
 
 		let expected_spans = vec![
@@ -2758,11 +2768,11 @@ fn deferred_slashes_are_deferred() {
 		let nominated_value = exposure.others.iter().find(|o| o.who == 101).unwrap().value;
 
 		on_offence_now(
-			&[OffenceDetails {
+			&bounded_vec![OffenceDetails {
 				offender: (11, Staking::eras_stakers(active_era(), 11)),
-				reporters: vec![],
+				reporters: Default::default(),
 			}],
-			&[Perbill::from_percent(10)],
+			&bounded_vec![Perbill::from_percent(10)],
 		);
 
 		assert_eq!(Balances::free_balance(11), 1000);
@@ -2800,11 +2810,11 @@ fn staker_cannot_bail_deferred_slash() {
 		let nominated_value = exposure.others.iter().find(|o| o.who == 101).unwrap().value;
 
 		on_offence_now(
-			&[OffenceDetails {
+			&bounded_vec![OffenceDetails {
 				offender: (11, Staking::eras_stakers(active_era(), 11)),
-				reporters: vec![],
+				reporters: Default::default(),
 			}],
-			&[Perbill::from_percent(10)],
+			&bounded_vec![Perbill::from_percent(10)],
 		);
 
 		// now we chill
@@ -2873,8 +2883,11 @@ fn remove_deferred() {
 		let nominated_value = exposure.others.iter().find(|o| o.who == 101).unwrap().value;
 
 		on_offence_now(
-			&[OffenceDetails { offender: (11, exposure.clone()), reporters: vec![] }],
-			&[Perbill::from_percent(10)],
+			&bounded_vec![OffenceDetails {
+				offender: (11, exposure.clone()),
+				reporters: Default::default()
+			}],
+			&bounded_vec![Perbill::from_percent(10)],
 		);
 
 		assert_eq!(Balances::free_balance(11), 1000);
@@ -2883,8 +2896,11 @@ fn remove_deferred() {
 		mock::start_active_era(2);
 
 		on_offence_in_era(
-			&[OffenceDetails { offender: (11, exposure.clone()), reporters: vec![] }],
-			&[Perbill::from_percent(15)],
+			&bounded_vec![OffenceDetails {
+				offender: (11, exposure.clone()),
+				reporters: Default::default()
+			}],
+			&bounded_vec![Perbill::from_percent(15)],
 			1,
 			DisableStrategy::WhenSlashed,
 		);
@@ -2939,31 +2955,43 @@ fn remove_multi_deferred() {
 		assert_eq!(Balances::free_balance(101), 2000);
 
 		on_offence_now(
-			&[OffenceDetails { offender: (11, exposure.clone()), reporters: vec![] }],
-			&[Perbill::from_percent(10)],
-		);
-
-		on_offence_now(
-			&[OffenceDetails {
-				offender: (21, Staking::eras_stakers(active_era(), 21)),
-				reporters: vec![],
+			&bounded_vec![OffenceDetails {
+				offender: (11, exposure.clone()),
+				reporters: Default::default()
 			}],
-			&[Perbill::from_percent(10)],
+			&bounded_vec![Perbill::from_percent(10)],
 		);
 
 		on_offence_now(
-			&[OffenceDetails { offender: (11, exposure.clone()), reporters: vec![] }],
-			&[Perbill::from_percent(25)],
+			&bounded_vec![OffenceDetails {
+				offender: (21, Staking::eras_stakers(active_era(), 21)),
+				reporters: Default::default(),
+			}],
+			&bounded_vec![Perbill::from_percent(10)],
 		);
 
 		on_offence_now(
-			&[OffenceDetails { offender: (42, exposure.clone()), reporters: vec![] }],
-			&[Perbill::from_percent(25)],
+			&bounded_vec![OffenceDetails {
+				offender: (11, exposure.clone()),
+				reporters: Default::default()
+			}],
+			&bounded_vec![Perbill::from_percent(25)],
 		);
 
 		on_offence_now(
-			&[OffenceDetails { offender: (69, exposure.clone()), reporters: vec![] }],
-			&[Perbill::from_percent(25)],
+			&bounded_vec![OffenceDetails {
+				offender: (42, exposure.clone()),
+				reporters: Default::default()
+			}],
+			&bounded_vec![Perbill::from_percent(25)],
+		);
+
+		on_offence_now(
+			&bounded_vec![OffenceDetails {
+				offender: (69, exposure.clone()),
+				reporters: Default::default()
+			}],
+			&bounded_vec![Perbill::from_percent(25)],
 		);
 
 		assert_eq!(<Staking as Store>::UnappliedSlashes::get(&1).len(), 5);
@@ -3011,8 +3039,11 @@ fn slash_kicks_validators_not_nominators_and_disables_nominator_for_kicked_valid
 		assert_eq!(exposure_21.total, 1000 + 375);
 
 		on_offence_now(
-			&[OffenceDetails { offender: (11, exposure_11.clone()), reporters: vec![] }],
-			&[Perbill::from_percent(10)],
+			&bounded_vec![OffenceDetails {
+				offender: (11, exposure_11.clone()),
+				reporters: Default::default()
+			}],
+			&bounded_vec![Perbill::from_percent(10)],
 		);
 
 		// post-slash balance
@@ -3059,14 +3090,20 @@ fn non_slashable_offence_doesnt_disable_validator() {
 
 		// offence with no slash associated
 		on_offence_now(
-			&[OffenceDetails { offender: (11, exposure_11.clone()), reporters: vec![] }],
-			&[Perbill::zero()],
+			&bounded_vec![OffenceDetails {
+				offender: (11, exposure_11.clone()),
+				reporters: Default::default()
+			}],
+			&bounded_vec![Perbill::zero()],
 		);
 
 		// offence that slashes 25% of the bond
 		on_offence_now(
-			&[OffenceDetails { offender: (21, exposure_21.clone()), reporters: vec![] }],
-			&[Perbill::from_percent(25)],
+			&bounded_vec![OffenceDetails {
+				offender: (21, exposure_21.clone()),
+				reporters: Default::default()
+			}],
+			&bounded_vec![Perbill::from_percent(25)],
 		);
 
 		// the offence for validator 10 wasn't slashable so it wasn't disabled
@@ -3089,16 +3126,22 @@ fn slashing_independent_of_disabling_validator() {
 
 		// offence with no slash associated, BUT disabling
 		on_offence_in_era(
-			&[OffenceDetails { offender: (11, exposure_11.clone()), reporters: vec![] }],
-			&[Perbill::zero()],
+			&bounded_vec![OffenceDetails {
+				offender: (11, exposure_11.clone()),
+				reporters: Default::default()
+			}],
+			&bounded_vec![Perbill::zero()],
 			now,
 			DisableStrategy::Always,
 		);
 
 		// offence that slashes 25% of the bond, BUT not disabling
 		on_offence_in_era(
-			&[OffenceDetails { offender: (21, exposure_21.clone()), reporters: vec![] }],
-			&[Perbill::from_percent(25)],
+			&bounded_vec![OffenceDetails {
+				offender: (21, exposure_21.clone()),
+				reporters: Default::default()
+			}],
+			&bounded_vec![Perbill::from_percent(25)],
 			now,
 			DisableStrategy::Never,
 		);
@@ -3132,22 +3175,31 @@ fn offence_threshold_triggers_new_era() {
 			let exposure_31 = Staking::eras_stakers(Staking::active_era().unwrap().index, &31);
 
 			on_offence_now(
-				&[OffenceDetails { offender: (11, exposure_11.clone()), reporters: vec![] }],
-				&[Perbill::zero()],
+				&bounded_vec![OffenceDetails {
+					offender: (11, exposure_11.clone()),
+					reporters: Default::default()
+				}],
+				&bounded_vec![Perbill::zero()],
 			);
 
 			assert_eq!(ForceEra::<Test>::get(), Forcing::NotForcing);
 
 			on_offence_now(
-				&[OffenceDetails { offender: (21, exposure_21.clone()), reporters: vec![] }],
-				&[Perbill::zero()],
+				&bounded_vec![OffenceDetails {
+					offender: (21, exposure_21.clone()),
+					reporters: Default::default()
+				}],
+				&bounded_vec![Perbill::zero()],
 			);
 
 			assert_eq!(ForceEra::<Test>::get(), Forcing::NotForcing);
 
 			on_offence_now(
-				&[OffenceDetails { offender: (31, exposure_31.clone()), reporters: vec![] }],
-				&[Perbill::zero()],
+				&bounded_vec![OffenceDetails {
+					offender: (31, exposure_31.clone()),
+					reporters: Default::default()
+				}],
+				&bounded_vec![Perbill::zero()],
 			);
 
 			assert_eq!(ForceEra::<Test>::get(), Forcing::ForceNew);
@@ -3168,13 +3220,19 @@ fn disabled_validators_are_kept_disabled_for_whole_era() {
 			let exposure_21 = Staking::eras_stakers(Staking::active_era().unwrap().index, &21);
 
 			on_offence_now(
-				&[OffenceDetails { offender: (11, exposure_11.clone()), reporters: vec![] }],
-				&[Perbill::zero()],
+				&bounded_vec![OffenceDetails {
+					offender: (11, exposure_11.clone()),
+					reporters: Default::default()
+				}],
+				&bounded_vec![Perbill::zero()],
 			);
 
 			on_offence_now(
-				&[OffenceDetails { offender: (21, exposure_21.clone()), reporters: vec![] }],
-				&[Perbill::from_percent(25)],
+				&bounded_vec![OffenceDetails {
+					offender: (21, exposure_21.clone()),
+					reporters: Default::default()
+				}],
+				&bounded_vec![Perbill::from_percent(25)],
 			);
 
 			// validator 10 should not be disabled since the offence wasn't slashable
@@ -3190,8 +3248,11 @@ fn disabled_validators_are_kept_disabled_for_whole_era() {
 
 			// validator 10 should now get disabled
 			on_offence_now(
-				&[OffenceDetails { offender: (11, exposure_11.clone()), reporters: vec![] }],
-				&[Perbill::from_percent(25)],
+				&bounded_vec![OffenceDetails {
+					offender: (11, exposure_11.clone()),
+					reporters: Default::default()
+				}],
+				&bounded_vec![Perbill::from_percent(25)],
 			);
 
 			advance_session();
@@ -3303,8 +3364,11 @@ fn zero_slash_keeps_nominators() {
 		assert_eq!(Balances::free_balance(101), 2000);
 
 		on_offence_now(
-			&[OffenceDetails { offender: (11, exposure.clone()), reporters: vec![] }],
-			&[Perbill::from_percent(0)],
+			&bounded_vec![OffenceDetails {
+				offender: (11, exposure.clone()),
+				reporters: Default::default()
+			}],
+			&bounded_vec![Perbill::from_percent(0)],
 		);
 
 		assert_eq!(Balances::free_balance(11), 1000);
@@ -3803,26 +3867,27 @@ fn offences_weight_calculated_correctly() {
 	ExtBuilder::default().nominate(true).build_and_execute(|| {
 		// On offence with zero offenders: 4 Reads, 1 Write
 		let zero_offence_weight = <Test as frame_system::Config>::DbWeight::get().reads_writes(4, 1);
-		assert_eq!(Staking::on_offence(&[], &[Perbill::from_percent(50)], 0, DisableStrategy::WhenSlashed), zero_offence_weight);
+		assert_eq!(Staking::on_offence(&Default::default(), &bounded_vec![Perbill::from_percent(50)], 0, DisableStrategy::WhenSlashed), zero_offence_weight);
 
 		// On Offence with N offenders, Unapplied: 4 Reads, 1 Write + 4 Reads, 5 Writes
 		let n_offence_unapplied_weight = <Test as frame_system::Config>::DbWeight::get().reads_writes(4, 1)
 			+ <Test as frame_system::Config>::DbWeight::get().reads_writes(4, 5);
 
-		let offenders: Vec<OffenceDetails<<Test as frame_system::Config>::AccountId, pallet_session::historical::IdentificationTuple<Test>>>
+		let offenders: BoundedVec<_, MaxOffenders>
 			= (1..10).map(|i|
 				OffenceDetails {
 					offender: (i, Staking::eras_stakers(active_era(), i)),
-					reporters: vec![],
+					reporters: Default::default(),
 				}
-			).collect();
-		assert_eq!(Staking::on_offence(&offenders, &[Perbill::from_percent(50)], 0, DisableStrategy::WhenSlashed), n_offence_unapplied_weight);
+			).collect::<Vec<_>>()
+			.try_into().unwrap();
+		assert_eq!(Staking::on_offence(&offenders, &bounded_vec![Perbill::from_percent(50)], 0, DisableStrategy::WhenSlashed), n_offence_unapplied_weight);
 
 		// On Offence with one offenders, Applied
-		let one_offender = [
+		let one_offender = bounded_vec![
 			OffenceDetails {
 				offender: (11, Staking::eras_stakers(active_era(), 11)),
-				reporters: vec![1],
+				reporters: bounded_vec![1],
 			},
 		];
 
@@ -3837,7 +3902,7 @@ fn offences_weight_calculated_correctly() {
 			// `reward_cost` * reporters (1)
 			+ <Test as frame_system::Config>::DbWeight::get().reads_writes(2, 2);
 
-		assert_eq!(Staking::on_offence(&one_offender, &[Perbill::from_percent(50)], 0, DisableStrategy::WhenSlashed), one_offence_unapplied_weight);
+		assert_eq!(Staking::on_offence(&one_offender, &bounded_vec![Perbill::from_percent(50)], 0, DisableStrategy::WhenSlashed), one_offence_unapplied_weight);
 	});
 }
 

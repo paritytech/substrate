@@ -146,6 +146,15 @@ impl<'a, T, S> From<BoundedSlice<'a, T, S>> for &'a [T] {
 	}
 }
 
+// will allow for all immutable operations of `[T]` on `BoundedSlice<T>`.
+impl<'a, T, S> Deref for BoundedSlice<'a, T, S> {
+	type Target = [T];
+
+	fn deref(&self) -> &Self::Target {
+		self.0
+	}
+}
+
 impl<'a, T, S> sp_std::iter::IntoIterator for BoundedSlice<'a, T, S> {
 	type Item = &'a T;
 	type IntoIter = sp_std::slice::Iter<'a, T>;

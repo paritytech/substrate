@@ -32,6 +32,7 @@ use frame_support::{
 use sp_core::H256;
 use sp_io;
 use sp_runtime::{
+	bounded_vec,
 	curve::PiecewiseLinear,
 	testing::{Header, TestXt, UintAuthorityId},
 	traits::{IdentityLookup, Zero},
@@ -183,8 +184,8 @@ impl pallet_session::Config for Test {
 }
 
 impl pallet_session::historical::Config for Test {
-	type FullIdentification = crate::Exposure<AccountId, Balance>;
-	type FullIdentificationOf = crate::ExposureOf<Test>;
+	type FullIdentification = crate::ExposureOf<Test>;
+	type FullIdentificationOf = crate::ActiveExposure<Test>;
 }
 impl pallet_authorship::Config for Test {
 	type FindAuthor = Author11;
@@ -790,11 +791,11 @@ pub(crate) fn validator_controllers() -> Vec<AccountId> {
 }
 
 pub(crate) fn on_offence_in_era(
-	offenders: &[OffenceDetails<
-		AccountId,
-		pallet_session::historical::IdentificationTuple<Test>,
-	>],
-	slash_fraction: &[Perbill],
+	offenders: &BoundedVec<
+		OffenceDetails<AccountId, pallet_session::historical::IdentificationTuple<Test>>,
+		MaxOffenders,
+	>,
+	slash_fraction: &BoundedVec<Perbill, MaxOffenders>,
 	era: EraIndex,
 	disable_strategy: DisableStrategy,
 ) {
@@ -821,11 +822,11 @@ pub(crate) fn on_offence_in_era(
 }
 
 pub(crate) fn on_offence_now(
-	offenders: &[OffenceDetails<
-		AccountId,
-		pallet_session::historical::IdentificationTuple<Test>,
-	>],
-	slash_fraction: &[Perbill],
+	offenders: &BoundedVec<
+		OffenceDetails<AccountId, pallet_session::historical::IdentificationTuple<Test>>,
+		MaxOffenders,
+	>,
+	slash_fraction: &BoundedVec<Perbill, MaxOffenders>,
 ) {
 	let now = Staking::active_era().unwrap().index;
 	on_offence_in_era(offenders, slash_fraction, now, DisableStrategy::WhenSlashed)
@@ -833,11 +834,11 @@ pub(crate) fn on_offence_now(
 
 pub(crate) fn add_slash(who: &AccountId) {
 	on_offence_now(
-		&[OffenceDetails {
+		&bounded_vec![OffenceDetails {
 			offender: (who.clone(), Staking::eras_stakers(active_era(), who.clone())),
-			reporters: vec![],
+			reporters: Default::default(),
 		}],
-		&[Perbill::from_percent(10)],
+		&bounded_vec![Perbill::from_percent(10)],
 	);
 }
 

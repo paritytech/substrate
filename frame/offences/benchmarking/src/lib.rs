@@ -24,12 +24,15 @@ mod mock;
 use sp_std::{prelude::*, vec};
 
 use frame_benchmarking::{account, benchmarks};
-use frame_support::traits::{Currency, Get, ValidatorSet, ValidatorSetWithIdentification};
+use frame_support::traits::{
+	ConstU32, Currency, Get, ValidatorSet, ValidatorSetWithIdentification,
+};
 use frame_system::{Config as SystemConfig, Pallet as System, RawOrigin};
 
 use sp_runtime::{
+	bounded_vec,
 	traits::{Convert, Saturating, StaticLookup, UniqueSaturatedInto},
-	Perbill,
+	BoundedVec, Perbill,
 };
 use sp_staking::offence::{Offence, ReportOffence};
 
@@ -146,7 +149,11 @@ fn create_offender<T: Config>(n: u32, nominators: u32) -> Result<Offender<T>, &'
 		nominator_stashes.push(nominator_stash.clone());
 	}
 
-	let exposure = Exposure { total: amount * n.into(), own: amount, others: individual_exposures };
+	let exposure = Exposure {
+		total: amount * n.into(),
+		own: amount,
+		others: individual_exposures.try_into().expect("TODO"),
+	};
 	let current_era = 0u32;
 	Staking::<T>::add_era_stakers(current_era, stash.clone(), exposure);
 
@@ -185,7 +192,13 @@ fn make_offenders<T: Config>(
 fn make_offenders_im_online<T: Config>(
 	num_offenders: u32,
 	num_nominators: u32,
-) -> Result<(Vec<pallet_im_online::IdentificationTuple<T>>, Vec<Offender<T>>), &'static str> {
+) -> Result<
+	(
+		Vec<pallet_im_online::IdentificationTuple<T>>,
+		BoundedVec<Offender<T>, ConstU32<MAX_OFFENDERS>>,
+	),
+	&'static str,
+> {
 	Staking::<T>::new_session(0);
 
 	let mut offenders = vec![];
@@ -212,7 +225,7 @@ fn make_offenders_im_online<T: Config>(
 			.expect("failed to convert validator id to full identification")
 		})
 		.collect::<Vec<pallet_im_online::IdentificationTuple<T>>>();
-	Ok((id_tuples, offenders))
+	Ok((id_tuples, offenders.try_into().unwrap()))
 }
 
 #[cfg(test)]
@@ -270,7 +283,7 @@ fn check_events<T: Config, I: Iterator<Item = <T as SystemConfig>::Event>>(expec
 
 benchmarks! {
 	report_offence_im_online {
-		let r in 1 .. T::MaxReportersPerOffence;
+		let r in 1 .. MAX_REPORTERS; // TODO @ggwpez
 		// we skip 1 offender, because in such case there is no slashing
 		let o in 2 .. MAX_OFFENDERS;
 		let n in 0 .. MAX_NOMINATORS.min(<T as pallet_staking::Config>::MaxNominations::get());
@@ -295,12 +308,12 @@ benchmarks! {
 		let offence = UnresponsivenessOffence {
 			session_index: 0,
 			validator_set_count,
-			offenders,
+			offenders: offenders.try_into().unwrap(),
 		};
 		assert_eq!(System::<T>::event_count(), 0);
 	}: {
 		let _ = <T as ImOnlineConfig>::ReportUnresponsiveness::report_offence(
-			reporters.clone(),
+			reporters.clone().try_into().unwrap(),
 			offence
 		);
 	}
@@ -371,7 +384,7 @@ benchmarks! {
 					.chain(std::iter::once(<T as OffencesConfig>::Event::from(
 						pallet_offences::Event::Offence{
 							kind: UnresponsivenessOffence::<T>::ID,
-							timeslot: 0_u32.to_le_bytes().to_vec(),
+							timeslot: 0_u32.to_le_bytes().to_vec().try_into().unwrap(),
 						}
 					).into()))
 			);
@@ -383,7 +396,7 @@ benchmarks! {
 
 		// for grandpa equivocation reports the number of reporters
 		// and offenders is always 1
-		let reporters = vec![account("reporter", 1, SEED)];
+		let reporters = bounded_vec![account("reporter", 1, SEED)];
 
 		// make sure reporters actually get rewarded
 		Staking::<T>::set_slash_reward_fraction(Perbill::one());
@@ -419,7 +432,7 @@ benchmarks! {
 
 		// for babe equivocation reports the number of reporters
 		// and offenders is always 1
-		let reporters = vec![account("reporter", 1, SEED)];
+		let reporters = bounded_vec![account("reporter", 1, SEED)];
 
 		// make sure reporters actually get rewarded
 		Staking::<T>::set_slash_reward_fraction(Perbill::one());

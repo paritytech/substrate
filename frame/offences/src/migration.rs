@@ -24,7 +24,7 @@ use sp_std::vec::Vec;
 
 /// Type of data stored as a deferred offence
 type DeferredOffenceOf<T> = (
-	Vec<OffenceDetails<crate::ReportersOf<T>, <T as Config>::IdentificationTuple>>,
+	Vec<OffenceDetails<<T as frame_system::Config>::AccountId, <T as Config>::IdentificationTuple>>,
 	Vec<Perbill>,
 	SessionIndex,
 );
@@ -69,7 +69,7 @@ mod test {
 			});
 
 			let offence_details =
-				OffenceDetails::<crate::ReportersOf<T>, <T as Config>::IdentificationTuple> {
+				OffenceDetails::<T::AccountId, <T as Config>::IdentificationTuple> {
 					offender: 5,
 					reporters: bounded_vec![],
 				};

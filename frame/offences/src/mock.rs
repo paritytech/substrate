@@ -39,7 +39,7 @@ use sp_runtime::{
 	Perbill,
 };
 use sp_staking::{
-	offence::{self, DisableStrategy, Kind, OffenceDetails},
+	offence::{self, DisableStrategy, Kind, MaxOffenders, MaxReporters, OffenceDetails},
 	SessionIndex,
 };
 use std::cell::RefCell;
@@ -51,14 +51,12 @@ thread_local! {
 	pub static OFFENCE_WEIGHT: RefCell<Weight> = RefCell::new(Default::default());
 }
 
-impl<Reporter, Offender> offence::OnOffenceHandler<Reporter, Offender, Weight> for OnOffenceHandler
-where
-	Reporter: MaxEncodedLen,
-	Offender: MaxEncodedLen,
+impl<Reporter, Offender> offence::OnOffenceHandler<Reporter, Offender, Weight>
+	for OnOffenceHandler
 {
 	fn on_offence(
-		_offenders: &[OffenceDetails<Reporter, Offender>],
-		slash_fraction: &[Perbill],
+		_offenders: &BoundedVec<OffenceDetails<Reporter, Offender>, MaxOffenders>,
+		slash_fraction: &BoundedVec<Perbill, MaxReporters>,
 		_offence_session: SessionIndex,
 		_disable_strategy: DisableStrategy,
 	) -> Weight {
@@ -124,14 +122,13 @@ impl Config for Runtime {
 	type IdentificationTuple = u64;
 	type OnOffenceHandler = OnOffenceHandler;
 
-	type MaxReports = ConstU32<100>;
 	type MaxReportersPerOffence = ConstU32<100>;
 
-	type MaxConcurrentReports = Self::MaxReports;
-	type MaxConcurrentReportsPerKindAndTime = Self::MaxReports;
+	type MaxConcurrentReports = ConstU32<100>;
+	type MaxConcurrentReportsPerKindAndTime = ConstU32<100>;
 
-	type MaxSameKindReports = Self::MaxReports;
-	type MaxSameKindReportsPerKind = Self::MaxReports;
+	type MaxSameKindReports = ConstU32<100>;
+	type MaxSameKindReportsPerKind = ConstU32<100>;
 
 	type MaxSameKindReportsEncodedLen = ConstU32<1_000>; // Guessed...
 	type MaxOpaqueTimeSlotLen = ConstU32<1_000>;
@@ -147,10 +144,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 pub const KIND: [u8; 16] = *b"test_report_1234";
 
 /// Returns all offence details for the specific `kind` happened at the specific time slot.
-pub fn offence_reports(
-	kind: Kind,
-	time_slot: u128,
-) -> Vec<OffenceDetails<BoundedVec<u64, ConstU32<100_u32>>, u64>> {
+pub fn offence_reports(kind: Kind, time_slot: u128) -> Vec<OffenceDetails<u64, u64>> {
 	let time_slot: BoundedVec<u8, ConstU32<1_000>> = time_slot.encode().try_into().unwrap();
 
 	let r = <crate::ConcurrentReportsIndex<Runtime>>::get(&kind, &time_slot);
@@ -166,7 +160,7 @@ pub fn offence_reports(
 #[derive(Clone)]
 pub struct Offence<Offender> {
 	pub validator_set_count: u32,
-	pub offenders: Vec<Offender>,
+	pub offenders: BoundedVec<Offender, ConstU32<100>>,
 	pub time_slot: u128,
 }
 
@@ -174,7 +168,7 @@ impl<T: Clone + MaxEncodedLen> offence::Offence<T> for Offence<T> {
 	const ID: offence::Kind = KIND;
 	type TimeSlot = u128;
 
-	fn offenders(&self) -> Vec<T> {
+	fn offenders(&self) -> BoundedVec<T, ConstU32<100>> {
 		self.offenders.clone()
 	}
 

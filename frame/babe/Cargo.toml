@@ -30,6 +30,7 @@ sp-runtime = { version = "6.0.0", default-features = false, path = "../../primit
 sp-session = { version = "4.0.0-dev", default-features = false, path = "../../primitives/session" }
 sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../primitives/staking" }
 sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
+static_assertions = "1.1.0"
 
 [dev-dependencies]
 frame-election-provider-support = { version = "4.0.0-dev", path = "../election-provider-support" }

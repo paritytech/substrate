@@ -28,6 +28,7 @@ use frame_support::{
 		LockableCurrency, OnUnbalanced, UnixTime, WithdrawReasons,
 	},
 	weights::{Weight, WithPostDispatchInfo},
+	BoundedVec,
 };
 use frame_system::{pallet_prelude::BlockNumberFor, RawOrigin};
 use pallet_session::historical;
@@ -36,15 +37,15 @@ use sp_runtime::{
 	Perbill,
 };
 use sp_staking::{
-	offence::{DisableStrategy, OffenceDetails, OnOffenceHandler},
+	offence::{DisableStrategy, MaxOffenders, OffenceDetails, OnOffenceHandler},
 	EraIndex, SessionIndex, StakingInterface,
 };
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
 use crate::{
-	log, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraPayout, Exposure, ExposureOf,
-	Forcing, IndividualExposure, Nominations, PositiveImbalanceOf, RewardDestination,
-	SessionInterface, StakingLedger, ValidatorPrefs,
+	log, slashing, weights::WeightInfo, ActiveEraInfo, ActiveExposure, BalanceOf, EraPayout,
+	Exposure, ExposureOf, Forcing, IndividualExposure, Nominations, PositiveImbalanceOf,
+	RewardDestination, SessionInterface, StakingLedger, ValidatorPrefs,
 };
 
 use super::{pallet::*, STAKING_ID};
@@ -406,7 +407,7 @@ impl<T: Config> Pallet<T> {
 	/// Returns the new validator set.
 	pub fn trigger_new_era(
 		start_session_index: SessionIndex,
-		exposures: Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>,
+		exposures: Vec<(T::AccountId, ExposureOf<T>)>,
 	) -> Vec<T::AccountId> {
 		// Increment or set current era.
 		let new_planned_era = CurrentEra::<T>::mutate(|s| {
@@ -482,7 +483,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Store staking information for the new planned era
 	pub fn store_stakers_info(
-		exposures: Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>,
+		exposures: Vec<(T::AccountId, ExposureOf<T>)>,
 		new_planned_era: EraIndex,
 	) -> Vec<T::AccountId> {
 		let elected_stashes = exposures.iter().cloned().map(|(x, _)| x).collect::<Vec<_>>();
@@ -525,9 +526,7 @@ impl<T: Config> Pallet<T> {
 
 	/// Consume a set of [`Supports`] from [`sp_npos_elections`] and collect them into a
 	/// [`Exposure`].
-	fn collect_exposures(
-		supports: Supports<T::AccountId>,
-	) -> Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)> {
+	fn collect_exposures(supports: Supports<T::AccountId>) -> Vec<(T::AccountId, ExposureOf<T>)> {
 		let total_issuance = T::Currency::total_issuance();
 		let to_currency = |e: frame_election_provider_support::ExtendedBalance| {
 			T::CurrencyToVote::to_currency(e, total_issuance)
@@ -553,10 +552,10 @@ impl<T: Config> Pallet<T> {
 						total = total.saturating_add(stake);
 					});
 
-				let exposure = Exposure { own, others, total };
+				let exposure = Exposure { own, others: others.try_into().expect("TODO"), total };
 				(validator, exposure)
 			})
-			.collect::<Vec<(T::AccountId, Exposure<_, _>)>>()
+			.collect::<Vec<(T::AccountId, ExposureOf<T>)>>()
 	}
 
 	/// Remove all associated data of a stash account from the staking system.
@@ -649,7 +648,7 @@ impl<T: Config> Pallet<T> {
 	pub fn add_era_stakers(
 		current_era: EraIndex,
 		controller: T::AccountId,
-		exposure: Exposure<T::AccountId, BalanceOf<T>>,
+		exposure: ExposureOf<T>,
 	) {
 		<ErasStakers<T>>::insert(&current_era, &controller, &exposure);
 	}
@@ -1075,12 +1074,8 @@ impl<T: Config> pallet_session::SessionManager<T::AccountId> for Pallet<T> {
 	}
 }
 
-impl<T: Config> historical::SessionManager<T::AccountId, Exposure<T::AccountId, BalanceOf<T>>>
-	for Pallet<T>
-{
-	fn new_session(
-		new_index: SessionIndex,
-	) -> Option<Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>> {
+impl<T: Config> historical::SessionManager<T::AccountId, ExposureOf<T>> for Pallet<T> {
+	fn new_session(new_index: SessionIndex) -> Option<Vec<(T::AccountId, ExposureOf<T>)>> {
 		<Self as pallet_session::SessionManager<_>>::new_session(new_index).map(|validators| {
 			let current_era = Self::current_era()
 				// Must be some as a new era has been created.
@@ -1095,9 +1090,7 @@ impl<T: Config> historical::SessionManager<T::AccountId, Exposure<T::AccountId, 
 				.collect()
 		})
 	}
-	fn new_session_genesis(
-		new_index: SessionIndex,
-	) -> Option<Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>> {
+	fn new_session_genesis(new_index: SessionIndex) -> Option<Vec<(T::AccountId, ExposureOf<T>)>> {
 		<Self as pallet_session::SessionManager<_>>::new_session_genesis(new_index).map(
 			|validators| {
 				let current_era = Self::current_era()
@@ -1150,8 +1143,8 @@ impl<T: Config>
 where
 	T: pallet_session::Config<ValidatorId = <T as frame_system::Config>::AccountId>,
 	T: pallet_session::historical::Config<
-		FullIdentification = Exposure<<T as frame_system::Config>::AccountId, BalanceOf<T>>,
-		FullIdentificationOf = ExposureOf<T>,
+		FullIdentification = ExposureOf<T>,
+		FullIdentificationOf = ActiveExposure<T>,
 	>,
 	T::SessionHandler: pallet_session::SessionHandler<<T as frame_system::Config>::AccountId>,
 	T::SessionManager: pallet_session::SessionManager<<T as frame_system::Config>::AccountId>,
@@ -1161,14 +1154,18 @@ where
 	>,
 {
 	fn on_offence(
-		offenders: &[OffenceDetails<
-			T::AccountId,
-			pallet_session::historical::IdentificationTuple<T>,
-		>],
-		slash_fraction: &[Perbill],
+		offenders: &BoundedVec<
+			OffenceDetails<T::AccountId, pallet_session::historical::IdentificationTuple<T>>,
+			MaxOffenders,
+		>,
+		slash_fraction: &BoundedVec<Perbill, MaxOffenders>,
 		slash_session: SessionIndex,
 		disable_strategy: DisableStrategy,
 	) -> Weight {
+		// TODO: This can be remove when MEL bounding the staking pallet.
+		let offenders = offenders.to_vec();
+		let slash_fraction = slash_fraction.to_vec();
+
 		let reward_proportion = SlashRewardFraction::<T>::get();
 		let mut consumed_weight: Weight = 0;
 		let mut add_db_reads_writes = |reads, writes| {
@@ -1231,7 +1228,7 @@ where
 
 			let unapplied = slashing::compute_slash::<T>(slashing::SlashParams {
 				stash,
-				slash: *slash_fraction,
+				slash: slash_fraction,
 				exposure,
 				slash_era,
 				window_start,
@@ -1249,7 +1246,7 @@ where
 					let rw = upper_bound + nominators_len * upper_bound;
 					add_db_reads_writes(rw, rw);
 				}
-				unapplied.reporters = details.reporters.clone();
+				unapplied.reporters = details.reporters.to_vec();
 				if slash_defer_duration == 0 {
 					// Apply right away.
 					slashing::apply_slash::<T>(unapplied, slash_era);

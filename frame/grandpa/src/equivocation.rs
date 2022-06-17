@@ -38,17 +38,17 @@
 use sp_std::prelude::*;
 
 use codec::{self as codec, Decode, Encode};
-use frame_support::traits::{Get, KeyOwnerProofSystem};
+use frame_support::traits::{Defensive, Get, KeyOwnerProofSystem};
 use sp_finality_grandpa::{EquivocationProof, RoundNumber, SetId};
 use sp_runtime::{
 	transaction_validity::{
 		InvalidTransaction, TransactionPriority, TransactionSource, TransactionValidity,
 		TransactionValidityError, ValidTransaction,
 	},
-	DispatchResult, Perbill,
+	BoundedVec, DispatchResult, Perbill,
 };
 use sp_staking::{
-	offence::{Kind, Offence, OffenceError, ReportOffence},
+	offence::{Kind, MaxOffenders, MaxReporters, Offence, OffenceError, ReportOffence},
 	SessionIndex,
 };
 
@@ -68,7 +68,7 @@ pub trait HandleEquivocation<T: Config> {
 
 	/// Report an offence proved by the given reporters.
 	fn report_offence(
-		reporters: Vec<T::AccountId>,
+		reporters: BoundedVec<T::AccountId, MaxReporters>,
 		offence: Self::Offence,
 	) -> Result<(), OffenceError>;
 
@@ -93,7 +93,7 @@ impl<T: Config> HandleEquivocation<T> for () {
 	type ReportLongevity = ();
 
 	fn report_offence(
-		_reporters: Vec<T::AccountId>,
+		_reporters: BoundedVec<T::AccountId, MaxReporters>,
 		_offence: GrandpaEquivocationOffence<T::KeyOwnerIdentification>,
 	) -> Result<(), OffenceError> {
 		Ok(())
@@ -150,12 +150,15 @@ where
 	type Offence = O;
 	type ReportLongevity = L;
 
-	fn report_offence(reporters: Vec<T::AccountId>, offence: O) -> Result<(), OffenceError> {
-		R::report_offence(reporters, offence)
+	fn report_offence(
+		reporters: BoundedVec<T::AccountId, MaxReporters>,
+		offence: O,
+	) -> Result<(), OffenceError> {
+		R::report_offence(reporters.try_into().expect("TODO"), offence)
 	}
 
 	fn is_known_offence(offenders: &[T::KeyOwnerIdentification], time_slot: &O::TimeSlot) -> bool {
-		R::is_known_offence(offenders, time_slot)
+		R::is_known_offence(&offenders.to_vec().try_into().expect("TODO"), time_slot)
 	}
 
 	fn submit_unsigned_equivocation_report(
@@ -337,8 +340,11 @@ impl<FullIdentification: Clone> Offence<FullIdentification>
 	const ID: Kind = *b"grandpa:equivoca";
 	type TimeSlot = GrandpaTimeSlot;
 
-	fn offenders(&self) -> Vec<FullIdentification> {
+	fn offenders(&self) -> BoundedVec<FullIdentification, MaxOffenders> {
 		vec![self.offender.clone()]
+			.try_into()
+			.defensive_proof("Static config is known good")
+			.unwrap()
 	}
 
 	fn session_index(&self) -> SessionIndex {

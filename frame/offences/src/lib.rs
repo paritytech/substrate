@@ -22,16 +22,16 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-pub mod migration;
+//TODO pub mod migration;
 mod mock;
 mod tests;
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{weights::Weight, BoundedVec};
-use sp_runtime::{traits::Hash, Perbill};
-use sp_staking::{
-	offence::{Kind, Offence, OffenceDetails, OffenceError, OnOffenceHandler, ReportOffence},
-	SessionIndex,
+use sp_runtime::traits::Hash;
+use sp_staking::offence::{
+	Kind, MaxOffenders, MaxReporters, Offence, OffenceDetails, OffenceError, OnOffenceHandler,
+	ReportOffence,
 };
 use sp_std::prelude::*;
 
@@ -44,10 +44,6 @@ type OpaqueTimeSlotOf<T> = BoundedVec<u8, <T as Config>::MaxOpaqueTimeSlotLen>;
 
 /// A type alias for a report identifier.
 type ReportIdOf<T> = <T as frame_system::Config>::Hash;
-// NOTE: This type should rather reside in sp-primitives/staking but
-// cannot since `BoundedVec` is defined in `frame_support`.
-type ReportersOf<T> =
-	BoundedVec<<T as frame_system::Config>::AccountId, <T as Config>::MaxReportersPerOffence>;
 
 type SameKindReportsOf<T, TimeSlot> =
 	BoundedVec<(TimeSlot, ReportIdOf<T>), <T as Config>::MaxSameKindReportsPerKind>;
@@ -62,6 +58,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
 	/// The pallet's config trait.
@@ -73,15 +70,7 @@ pub mod pallet {
 		/// Full identification of the validator.
 		type IdentificationTuple: Parameter + MaxEncodedLen;
 		/// A handler called for every offence report.
-		type OnOffenceHandler: OnOffenceHandler<
-			ReportersOf<Self>,
-			Self::IdentificationTuple,
-			Weight,
-		>;
-
-		// Maximum number of reports in total.
-		#[pallet::constant]
-		type MaxReports: Get<Option<u32>>;
+		type OnOffenceHandler: OnOffenceHandler<Self::AccountId, Self::IdentificationTuple, Weight>;
 
 		/// The maximum number of reporters per offence.
 		#[pallet::constant]
@@ -94,27 +83,18 @@ pub mod pallet {
 		type MaxConcurrentReports: Get<Option<u32>>;
 
 		/// Maximum number of reports of the same kind that happened at a specific time slot.
-		///
-		/// Can be trivially set to `MaxReports`.
 		#[pallet::constant]
 		type MaxConcurrentReportsPerKindAndTime: Get<u32>;
 
 		/// The maximum number of reports for the same kind.
-		///
-		/// Can be trivially set to `MaxReports`.
 		#[pallet::constant]
 		type MaxSameKindReports: Get<Option<u32>>;
 
 		/// The maximum number of reports for the same kind.
-		///
-		/// Can be trivially set to `MaxReports`.
 		#[pallet::constant]
 		type MaxSameKindReportsPerKind: Get<u32>;
 
 		/// Maximum encoded length of same-kind reports `SameKindReportsOf<T>`.
-		///
-		/// Should be AT LEAST `MaxSameKindReports` * `(TimeSlot,
-		/// ReportIdOf<T>)::max_encoded_len()`.
 		#[pallet::constant]
 		type MaxSameKindReportsEncodedLen: Get<u32>;
 
@@ -127,22 +107,22 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn reports)]
 	pub type Reports<T: Config> = StorageMap<
-		Hasher = Twox64Concat,
-		Key = ReportIdOf<T>,
-		Value = OffenceDetails<ReportersOf<T>, T::IdentificationTuple>,
-		MaxValues = T::MaxReports,
+		_,
+		Twox64Concat,
+		ReportIdOf<T>,
+		OffenceDetails<T::AccountId, T::IdentificationTuple>,
 	>;
 
 	/// A vector of reports of the same kind that happened at the same time slot.
 	#[pallet::storage]
 	pub type ConcurrentReportsIndex<T: Config> = StorageDoubleMap<
-		Hasher1 = Twox64Concat,
-		Key1 = Kind,
-		Hasher2 = Twox64Concat,
-		Key2 = OpaqueTimeSlotOf<T>,
-		Value = ConcurrentReportsOf<T>,
-		QueryKind = ValueQuery,
-		MaxValues = T::MaxConcurrentReports,
+		_,
+		Twox64Concat,
+		Kind,
+		Twox64Concat,
+		OpaqueTimeSlotOf<T>,
+		ConcurrentReportsOf<T>,
+		ValueQuery,
 	>;
 
 	/// Enumerates all reports of a kind along with the time they happened.
@@ -153,11 +133,11 @@ pub mod pallet {
 	/// different types are not supported at the moment so we are doing the manual serialization.
 	#[pallet::storage]
 	pub type ReportsByKindIndex<T: Config> = StorageMap<
-		Hasher = Twox64Concat,
-		Key = Kind,
-		Value = BoundedVec<u8, T::MaxSameKindReportsEncodedLen>, // (O::TimeSlot, ReportIdOf<T>)
-		QueryKind = ValueQuery,
-		MaxValues = T::MaxSameKindReports,
+		_,
+		Twox64Concat,
+		Kind,
+		BoundedVec<u8, T::MaxSameKindReportsEncodedLen>, // (O::TimeSlot, ReportIdOf<T>)
+		ValueQuery,
 	>;
 
 	/// Events type.
@@ -184,11 +164,14 @@ pub mod pallet {
 }
 
 impl<T: Config, O: Offence<T::IdentificationTuple>>
-	ReportOffence<ReportersOf<T>, T::IdentificationTuple, O> for Pallet<T>
+	ReportOffence<T::AccountId, T::IdentificationTuple, O> for Pallet<T>
 where
 	T::IdentificationTuple: Clone,
 {
-	fn report_offence(reporters: ReportersOf<T>, offence: O) -> Result<(), OffenceError> {
+	fn report_offence(
+		reporters: BoundedVec<T::AccountId, MaxReporters>,
+		offence: O,
+	) -> Result<(), OffenceError> {
 		let offenders = offence.offenders();
 		let time_slot = offence.time_slot();
 		let validator_set_count = offence.validator_set_count();
@@ -208,6 +191,7 @@ where
 		let new_fraction = O::slash_fraction(offenders_count, validator_set_count);
 
 		let slash_perbill: Vec<_> = (0..concurrent_offenders.len()).map(|_| new_fraction).collect();
+		let slash_perbill: BoundedVec<_, _> = slash_perbill.try_into().expect("todo");
 
 		T::OnOffenceHandler::on_offence(
 			&concurrent_offenders,
@@ -228,7 +212,10 @@ where
 		Ok(())
 	}
 
-	fn is_known_offence(offenders: &[T::IdentificationTuple], time_slot: &O::TimeSlot) -> bool {
+	fn is_known_offence(
+		offenders: &BoundedVec<T::IdentificationTuple, MaxOffenders>,
+		time_slot: &O::TimeSlot,
+	) -> bool {
 		let any_unknown = offenders.iter().any(|offender| {
 			let report_id = Self::report_id::<O>(time_slot, offender);
 			!<Reports<T>>::contains_key(&report_id)
@@ -266,9 +253,9 @@ impl<T: Config> Pallet<T> {
 	/// Triages the offence report and returns the set of offenders that was involved in unique
 	/// reports along with the list of the concurrent offences.
 	fn triage_offence_report<O: Offence<T::IdentificationTuple>>(
-		reporters: ReportersOf<T>,
+		reporters: BoundedVec<T::AccountId, MaxReporters>,
 		time_slot: &O::TimeSlot,
-		offenders: Vec<T::IdentificationTuple>,
+		offenders: BoundedVec<T::IdentificationTuple, MaxOffenders>,
 	) -> Result<Option<TriageOutcome<T>>, Error<T>> {
 		let mut storage = ReportIndexStorage::<T, O>::load(time_slot)?;
 
@@ -293,7 +280,9 @@ impl<T: Config> Pallet<T> {
 				.concurrent_reports
 				.iter()
 				.filter_map(<Reports<T>>::get)
-				.collect::<Vec<_>>();
+				.collect::<Vec<_>>()
+				.try_into()
+				.expect("todo");
 
 			storage.save()?;
 
@@ -306,7 +295,8 @@ impl<T: Config> Pallet<T> {
 
 struct TriageOutcome<T: Config> {
 	/// Other reports for the same report kinds.
-	concurrent_offenders: Vec<OffenceDetails<ReportersOf<T>, T::IdentificationTuple>>,
+	concurrent_offenders:
+		BoundedVec<OffenceDetails<T::AccountId, T::IdentificationTuple>, MaxOffenders>,
 }
 
 /// An auxiliary struct for working with storage of indexes localized for a specific offence

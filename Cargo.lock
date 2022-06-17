@@ -5284,6 +5284,7 @@ dependencies = [
  "sp-session",
  "sp-staking",
  "sp-std",
+ "static_assertions",
 ]
 
 [[package]]

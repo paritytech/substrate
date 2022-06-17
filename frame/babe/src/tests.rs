@@ -438,7 +438,7 @@ fn report_equivocation_current_session_works() {
 
 			assert_eq!(
 				Staking::eras_stakers(1, validator),
-				pallet_staking::Exposure { total: 10_000, own: 10_000, others: vec![] },
+				pallet_staking::Exposure { total: 10_000, own: 10_000, others: Default::default() },
 			);
 		}
 
@@ -479,7 +479,7 @@ fn report_equivocation_current_session_works() {
 		assert_eq!(Staking::slashable_balance_of(&offending_validator_id), 0);
 		assert_eq!(
 			Staking::eras_stakers(2, offending_validator_id),
-			pallet_staking::Exposure { total: 0, own: 0, others: vec![] },
+			pallet_staking::Exposure { total: 0, own: 0, others: Default::default() },
 		);
 
 		// check that the balances of all other validators are left intact.
@@ -492,7 +492,7 @@ fn report_equivocation_current_session_works() {
 			assert_eq!(Staking::slashable_balance_of(validator), 10_000);
 			assert_eq!(
 				Staking::eras_stakers(2, validator),
-				pallet_staking::Exposure { total: 10_000, own: 10_000, others: vec![] },
+				pallet_staking::Exposure { total: 10_000, own: 10_000, others: Default::default() },
 			);
 		}
 	})
@@ -551,7 +551,7 @@ fn report_equivocation_old_session_works() {
 		assert_eq!(Staking::slashable_balance_of(&offending_validator_id), 0);
 		assert_eq!(
 			Staking::eras_stakers(3, offending_validator_id),
-			pallet_staking::Exposure { total: 0, own: 0, others: vec![] },
+			pallet_staking::Exposure { total: 0, own: 0, others: Default::default() },
 		);
 	})
 }

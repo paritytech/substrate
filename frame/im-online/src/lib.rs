@@ -88,7 +88,7 @@ use frame_support::{
 		EstimateNextSessionRotation, Get, OneSessionHandler, ValidatorSet,
 		ValidatorSetWithIdentification, WrapperOpaque,
 	},
-	BoundedSlice, WeakBoundedVec,
+	BoundedSlice, BoundedVec, WeakBoundedVec,
 };
 use frame_system::offchain::{SendTransactionTypes, SubmitTransaction};
 pub use pallet::*;
@@ -101,7 +101,7 @@ use sp_runtime::{
 	PerThing, Perbill, Permill, RuntimeDebug, SaturatedConversion,
 };
 use sp_staking::{
-	offence::{Kind, Offence, ReportOffence},
+	offence::{Kind, MaxOffenders, Offence, ReportOffence},
 	SessionIndex,
 };
 use sp_std::prelude::*;
@@ -911,8 +911,12 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 			Self::deposit_event(Event::<T>::SomeOffline { offline: offenders.clone() });
 
 			let validator_set_count = keys.len() as u32;
-			let offence = UnresponsivenessOffence { session_index, validator_set_count, offenders };
-			if let Err(e) = T::ReportUnresponsiveness::report_offence(vec![], offence) {
+			let offence = UnresponsivenessOffence {
+				session_index,
+				validator_set_count,
+				offenders: offenders.try_into().expect("TODO"),
+			};
+			if let Err(e) = T::ReportUnresponsiveness::report_offence(Default::default(), offence) {
 				sp_runtime::print(e);
 			}
 		}
@@ -935,14 +939,14 @@ pub struct UnresponsivenessOffence<Offender> {
 	/// The size of the validator set in current session/era.
 	pub validator_set_count: u32,
 	/// Authorities that were unresponsive during the current era.
-	pub offenders: Vec<Offender>,
+	pub offenders: BoundedVec<Offender, MaxOffenders>,
 }
 
 impl<Offender: Clone> Offence<Offender> for UnresponsivenessOffence<Offender> {
 	const ID: Kind = *b"im-online:offlin";
 	type TimeSlot = SessionIndex;
 
-	fn offenders(&self) -> Vec<Offender> {
+	fn offenders(&self) -> BoundedVec<Offender, MaxOffenders> {
 		self.offenders.clone()
 	}
 

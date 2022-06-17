@@ -18,10 +18,8 @@
 //! Common traits and types that are useful for describing offences for usage in environments
 //! that use staking.
 
-use sp_std::vec::Vec;
-
 use codec::{Decode, Encode, MaxEncodedLen};
-use sp_runtime::Perbill;
+use sp_runtime::{traits::ConstU32, BoundedVec, Perbill};
 
 use crate::SessionIndex;
 
@@ -36,6 +34,11 @@ pub type Kind = [u8; 16];
 /// This counter keeps track of how many times the authority was already reported in the past,
 /// so that we can slash it accordingly.
 pub type OffenceCount = u32;
+
+/// The hard-coded maximal number of reporters per offence.
+pub type MaxReporters = ConstU32<100>;
+/// The hard-coded maximal number of offenders per offence.
+pub type MaxOffenders = ConstU32<100>;
 
 /// In case of an offence, which conditions get an offending validator disabled.
 #[derive(
@@ -78,7 +81,7 @@ pub trait Offence<Offender> {
 	/// The list of all offenders involved in this incident.
 	///
 	/// The list has no duplicates, so it is rather a set.
-	fn offenders(&self) -> Vec<Offender>;
+	fn offenders(&self) -> BoundedVec<Offender, MaxOffenders>;
 
 	/// The session index that is used for querying the validator set for the `slash_fraction`
 	/// function.
@@ -139,26 +142,34 @@ impl sp_runtime::traits::Printable for OffenceError {
 }
 
 /// A trait for decoupling offence reporters from the actual handling of offence reports.
-pub trait ReportOffence<Reporters, Offender, O: Offence<Offender>> {
+pub trait ReportOffence<Reporter, Offender, O: Offence<Offender>> {
 	/// Report an `offence` and reward given `reporters`.
-	fn report_offence(reporters: Reporters, offence: O) -> Result<(), OffenceError>;
+	fn report_offence(
+		reporters: BoundedVec<Reporter, MaxReporters>,
+		offence: O,
+	) -> Result<(), OffenceError>;
 
 	/// Returns true iff all of the given offenders have been previously reported
 	/// at the given time slot. This function is useful to prevent the sending of
 	/// duplicate offence reports.
-	fn is_known_offence(offenders: &[Offender], time_slot: &O::TimeSlot) -> bool;
+	fn is_known_offence(
+		offenders: &BoundedVec<Offender, MaxOffenders>,
+		time_slot: &O::TimeSlot,
+	) -> bool;
 }
 
-impl<Reporters, Offender, O: Offence<Offender>> ReportOffence<Reporters, Offender, O> for ()
-where
-	Reporters: MaxEncodedLen,
-	Offender: MaxEncodedLen,
-{
-	fn report_offence(_reporters: Reporters, _offence: O) -> Result<(), OffenceError> {
+impl<Reporter, Offender, O: Offence<Offender>> ReportOffence<Reporter, Offender, O> for () {
+	fn report_offence(
+		_reporters: BoundedVec<Reporter, MaxReporters>,
+		_offence: O,
+	) -> Result<(), OffenceError> {
 		Ok(())
 	}
 
-	fn is_known_offence(_offenders: &[Offender], _time_slot: &O::TimeSlot) -> bool {
+	fn is_known_offence(
+		_offenders: &BoundedVec<Offender, MaxOffenders>,
+		_time_slot: &O::TimeSlot,
+	) -> bool {
 		true
 	}
 }
@@ -167,7 +178,7 @@ where
 ///
 /// Used to decouple the module that handles offences and
 /// the one that should punish for those offences.
-pub trait OnOffenceHandler<Reporters: MaxEncodedLen, Offender: MaxEncodedLen, Res> {
+pub trait OnOffenceHandler<Reporter, Offender, Res> {
 	/// A handler for an offence of a particular kind.
 	///
 	/// Note that this contains a list of all previous offenders
@@ -187,21 +198,17 @@ pub trait OnOffenceHandler<Reporters: MaxEncodedLen, Offender: MaxEncodedLen, Re
 	/// The receiver might decide to not accept this offence. In this case, the call site is
 	/// responsible for queuing the report and re-submitting again.
 	fn on_offence(
-		offenders: &[OffenceDetails<Reporters, Offender>],
-		slash_fraction: &[Perbill],
+		offenders: &BoundedVec<OffenceDetails<Reporter, Offender>, MaxOffenders>,
+		slash_fraction: &BoundedVec<Perbill, MaxOffenders>,
 		session: SessionIndex,
 		disable_strategy: DisableStrategy,
 	) -> Res;
 }
 
-impl<Reporters, Offender, Res: Default> OnOffenceHandler<Reporters, Offender, Res> for ()
-where
-	Reporters: MaxEncodedLen,
-	Offender: MaxEncodedLen,
-{
+impl<Reporter, Offender, Res: Default> OnOffenceHandler<Reporter, Offender, Res> for () {
 	fn on_offence(
-		_offenders: &[OffenceDetails<Reporters, Offender>],
-		_slash_fraction: &[Perbill],
+		_offenders: &BoundedVec<OffenceDetails<Reporter, Offender>, MaxOffenders>,
+		_slash_fraction: &BoundedVec<Perbill, MaxOffenders>,
 		_session: SessionIndex,
 		_disable_strategy: DisableStrategy,
 	) -> Res {
@@ -212,18 +219,18 @@ where
 /// A details about an offending authority for a particular kind of offence.
 #[derive(
 	Clone,
-	PartialEq,
-	Eq,
 	Encode,
+	Eq,
+	PartialEq,
 	Decode,
 	sp_runtime::RuntimeDebug,
 	scale_info::TypeInfo,
 	MaxEncodedLen,
 )]
-pub struct OffenceDetails<Reporters: MaxEncodedLen, Offender: MaxEncodedLen> {
+pub struct OffenceDetails<Reporter, Offender> {
 	/// The offending authority id
 	pub offender: Offender,
 	/// A list of reporters of offences of this authority ID. Possibly empty where there are no
 	/// particular reporters.
-	pub reporters: Reporters,
+	pub reporters: BoundedVec<Reporter, MaxReporters>,
 }
