@@ -664,7 +664,7 @@ fn post_dispatch_fee_is_zero_if_pre_dispatch_fee_is_zero() {
 				.unwrap();
 			// `Pays::No` implies no pre-dispatch fees
 			assert_eq!(Assets::balance(asset_id, caller), balance);
-			let (_tip, _who, initial_payment) = &pre;
+			let (_tip, _who, initial_payment, _asset_id) = &pre;
 			let not_paying = match initial_payment {
 				&InitialPayment::Nothing => true,
 				_ => false,
