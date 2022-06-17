@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -85,7 +85,7 @@ pub fn expand_genesis_config(def: &mut Def) -> proc_macro2::TokenStream {
 		syn::Item::Enum(syn::ItemEnum { attrs, .. }) |
 		syn::Item::Struct(syn::ItemStruct { attrs, .. }) |
 		syn::Item::Type(syn::ItemType { attrs, .. }) => {
-			if get_doc_literals(&attrs).is_empty() {
+			if get_doc_literals(attrs).is_empty() {
 				attrs.push(syn::parse_quote!(
 					#[doc = r"
 					Can be used to configure the

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -272,7 +272,7 @@ fn check_generics(
 		);
 		e.pop();
 		e.pop();
-		e.push_str(".");
+		e.push('.');
 		e
 	};
 
@@ -550,7 +550,7 @@ fn process_generics(
 	let args_span = segment.arguments.span();
 
 	let args = match &segment.arguments {
-		syn::PathArguments::AngleBracketed(args) if args.args.len() != 0 => args,
+		syn::PathArguments::AngleBracketed(args) if !args.args.is_empty() => args,
 		_ => {
 			let msg = "Invalid pallet::storage, invalid number of generic generic arguments, \
 				expect more that 0 generic arguments.";
@@ -646,13 +646,16 @@ impl StorageDef {
 		self.rename_as
 			.as_ref()
 			.map(syn::LitStr::value)
-			.unwrap_or(self.ident.to_string())
+			.unwrap_or_else(|| self.ident.to_string())
 	}
 
 	/// Return either the span of the ident or the span of the literal in the
 	/// #[storage_prefix] attribute
 	pub fn prefix_span(&self) -> proc_macro2::Span {
-		self.rename_as.as_ref().map(syn::LitStr::span).unwrap_or(self.ident.span())
+		self.rename_as
+			.as_ref()
+			.map(syn::LitStr::span)
+			.unwrap_or_else(|| self.ident.span())
 	}
 
 	pub fn try_from(
@@ -672,8 +675,7 @@ impl StorageDef {
 
 		let cfg_attrs = helper::get_item_cfg_attrs(&item.attrs);
 
-		let mut instances = vec![];
-		instances.push(helper::check_type_def_gen(&item.generics, item.ident.span())?);
+		let instances = vec![helper::check_type_def_gen(&item.generics, item.ident.span())?];
 
 		let where_clause = item.generics.where_clause.clone();
 		let docs = get_doc_literals(&item.attrs);
@@ -704,11 +706,11 @@ impl StorageDef {
 			})
 			.unwrap_or(Some(QueryKind::OptionQuery)); // This value must match the default generic.
 
-		if query_kind.is_none() && getter.is_some() {
+		if let (None, Some(getter)) = (query_kind.as_ref(), getter.as_ref()) {
 			let msg = "Invalid pallet::storage, cannot generate getter because QueryKind is not \
 				identifiable. QueryKind must be `OptionQuery`, `ValueQuery`, or default one to be \
 				identifiable.";
-			return Err(syn::Error::new(getter.unwrap().span(), msg))
+			return Err(syn::Error::new(getter.span(), msg))
 		}
 
 		Ok(StorageDef {

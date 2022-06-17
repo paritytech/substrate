@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -19,10 +19,7 @@
 //! Helper methods dedicated to timestamps.
 
 use sp_core::offchain::Timestamp;
-use std::{
-	convert::TryInto,
-	time::{Duration, SystemTime},
-};
+use std::time::{Duration, SystemTime};
 
 /// Returns the current time as a `Timestamp`.
 pub fn now() -> Timestamp {

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,7 +15,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use futures_util::future::Future;
 use hyper::{
 	http::StatusCode,
 	server::Server,
@@ -34,7 +33,6 @@ pub use prometheus::{
 use prometheus::{core::Collector, Encoder, TextEncoder};
 use std::net::SocketAddr;
 
-mod networking;
 mod sourced;
 
 pub use sourced::{MetricSource, SourcedCounter, SourcedGauge, SourcedMetric};
@@ -47,27 +45,22 @@ pub fn register<T: Clone + Collector + 'static>(
 	Ok(metric)
 }
 
-#[derive(Debug, derive_more::Display, derive_more::From)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
 	/// Hyper internal error.
-	Hyper(hyper::Error),
-	/// Http request error.
-	Http(hyper::http::Error),
-	/// i/o error.
-	Io(std::io::Error),
-	#[display(fmt = "Prometheus port {} already in use.", _0)]
-	PortInUse(SocketAddr),
-}
+	#[error(transparent)]
+	Hyper(#[from] hyper::Error),
 
-impl std::error::Error for Error {
-	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-		match self {
-			Error::Hyper(error) => Some(error),
-			Error::Http(error) => Some(error),
-			Error::Io(error) => Some(error),
-			Error::PortInUse(_) => None,
-		}
-	}
+	/// Http request error.
+	#[error(transparent)]
+	Http(#[from] hyper::http::Error),
+
+	/// i/o error.
+	#[error(transparent)]
+	Io(#[from] std::io::Error),
+
+	#[error("Prometheus port {0} already in use.")]
+	PortInUse(SocketAddr),
 }
 
 async fn request_metrics(req: Request<Body>, registry: Registry) -> Result<Response<Body>, Error> {
@@ -90,23 +83,10 @@ async fn request_metrics(req: Request<Body>, registry: Registry) -> Result<Respo
 	}
 }
 
-#[derive(Clone)]
-pub struct Executor;
-
-impl<T> hyper::rt::Executor<T> for Executor
-where
-	T: Future + Send + 'static,
-	T::Output: Send + 'static,
-{
-	fn execute(&self, future: T) {
-		async_std::task::spawn(future);
-	}
-}
-
 /// Initializes the metrics context, and starts an HTTP server
 /// to serve metrics.
 pub async fn init_prometheus(prometheus_addr: SocketAddr, registry: Registry) -> Result<(), Error> {
-	let listener = async_std::net::TcpListener::bind(&prometheus_addr)
+	let listener = tokio::net::TcpListener::bind(&prometheus_addr)
 		.await
 		.map_err(|_| Error::PortInUse(prometheus_addr))?;
 
@@ -115,12 +95,11 @@ pub async fn init_prometheus(prometheus_addr: SocketAddr, registry: Registry) ->
 
 /// Init prometheus using the given listener.
 async fn init_prometheus_with_listener(
-	listener: async_std::net::TcpListener,
+	listener: tokio::net::TcpListener,
 	registry: Registry,
 ) -> Result<(), Error> {
-	use networking::Incoming;
-
-	log::info!("〽️ Prometheus exporter started at {}", listener.local_addr()?);
+	let listener = hyper::server::conn::AddrIncoming::from_listener(listener)?;
+	log::info!("〽️ Prometheus exporter started at {}", listener.local_addr());
 
 	let service = make_service_fn(move |_| {
 		let registry = registry.clone();
@@ -132,7 +111,7 @@ async fn init_prometheus_with_listener(
 		}
 	});
 
-	let server = Server::builder(Incoming(listener.incoming())).executor(Executor).serve(service);
+	let server = Server::builder(listener).serve(service);
 
 	let result = server.await.map_err(Into::into);
 
@@ -143,7 +122,6 @@ async fn init_prometheus_with_listener(
 mod tests {
 	use super::*;
 	use hyper::{Client, Uri};
-	use std::convert::TryFrom;
 
 	#[test]
 	fn prometheus_works() {
@@ -152,7 +130,7 @@ mod tests {
 		let runtime = tokio::runtime::Runtime::new().expect("Creates the runtime");
 
 		let listener = runtime
-			.block_on(async_std::net::TcpListener::bind("127.0.0.1:0"))
+			.block_on(tokio::net::TcpListener::bind("127.0.0.1:0"))
 			.expect("Creates listener");
 
 		let local_addr = listener.local_addr().expect("Returns the local addr");

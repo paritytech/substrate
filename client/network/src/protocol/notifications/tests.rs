@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -29,8 +29,8 @@ use libp2p::{
 	},
 	identity, noise,
 	swarm::{
-		IntoProtocolsHandler, NetworkBehaviour, NetworkBehaviourAction, PollParameters,
-		ProtocolsHandler, Swarm, SwarmEvent,
+		ConnectionHandler, DialError, IntoConnectionHandler, NetworkBehaviour,
+		NetworkBehaviourAction, PollParameters, Swarm, SwarmEvent,
 	},
 	yamux, Multiaddr, PeerId, Transport,
 };
@@ -68,7 +68,7 @@ fn build_nodes() -> (Swarm<CustomProtoWithAddr>, Swarm<CustomProtoWithAddr>) {
 				in_peers: 25,
 				out_peers: 25,
 				bootnodes: if index == 0 {
-					keypairs.iter().skip(1).map(|keypair| keypair.public().into_peer_id()).collect()
+					keypairs.iter().skip(1).map(|keypair| keypair.public().to_peer_id()).collect()
 				} else {
 					vec![]
 				},
@@ -92,7 +92,7 @@ fn build_nodes() -> (Swarm<CustomProtoWithAddr>, Swarm<CustomProtoWithAddr>) {
 				.enumerate()
 				.filter_map(|(n, a)| {
 					if n != index {
-						Some((keypairs[n].public().into_peer_id(), a.clone()))
+						Some((keypairs[n].public().to_peer_id(), a.clone()))
 					} else {
 						None
 					}
@@ -100,7 +100,7 @@ fn build_nodes() -> (Swarm<CustomProtoWithAddr>, Swarm<CustomProtoWithAddr>) {
 				.collect(),
 		};
 
-		let mut swarm = Swarm::new(transport, behaviour, keypairs[index].public().into_peer_id());
+		let mut swarm = Swarm::new(transport, behaviour, keypairs[index].public().to_peer_id());
 		swarm.listen_on(addrs[index].clone()).unwrap();
 		out.push(swarm);
 	}
@@ -133,10 +133,10 @@ impl std::ops::DerefMut for CustomProtoWithAddr {
 }
 
 impl NetworkBehaviour for CustomProtoWithAddr {
-	type ProtocolsHandler = <Notifications as NetworkBehaviour>::ProtocolsHandler;
+	type ConnectionHandler = <Notifications as NetworkBehaviour>::ConnectionHandler;
 	type OutEvent = <Notifications as NetworkBehaviour>::OutEvent;
 
-	fn new_handler(&mut self) -> Self::ProtocolsHandler {
+	fn new_handler(&mut self) -> Self::ConnectionHandler {
 		self.inner.new_handler()
 	}
 
@@ -150,21 +150,21 @@ impl NetworkBehaviour for CustomProtoWithAddr {
 		list
 	}
 
-	fn inject_connected(&mut self, peer_id: &PeerId) {
-		self.inner.inject_connected(peer_id)
-	}
-
-	fn inject_disconnected(&mut self, peer_id: &PeerId) {
-		self.inner.inject_disconnected(peer_id)
-	}
-
 	fn inject_connection_established(
 		&mut self,
 		peer_id: &PeerId,
 		conn: &ConnectionId,
 		endpoint: &ConnectedPoint,
+		failed_addresses: Option<&Vec<Multiaddr>>,
+		other_established: usize,
 	) {
-		self.inner.inject_connection_established(peer_id, conn, endpoint)
+		self.inner.inject_connection_established(
+			peer_id,
+			conn,
+			endpoint,
+			failed_addresses,
+			other_established,
+		)
 	}
 
 	fn inject_connection_closed(
@@ -172,15 +172,18 @@ impl NetworkBehaviour for CustomProtoWithAddr {
 		peer_id: &PeerId,
 		conn: &ConnectionId,
 		endpoint: &ConnectedPoint,
+		handler: <Self::ConnectionHandler as IntoConnectionHandler>::Handler,
+		remaining_established: usize,
 	) {
-		self.inner.inject_connection_closed(peer_id, conn, endpoint)
+		self.inner
+			.inject_connection_closed(peer_id, conn, endpoint, handler, remaining_established)
 	}
 
 	fn inject_event(
 		&mut self,
 		peer_id: PeerId,
 		connection: ConnectionId,
-		event: <<Self::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::OutEvent,
+		event: <<Self::ConnectionHandler as IntoConnectionHandler>::Handler as ConnectionHandler>::OutEvent,
 	) {
 		self.inner.inject_event(peer_id, connection, event)
 	}
@@ -188,27 +191,18 @@ impl NetworkBehaviour for CustomProtoWithAddr {
 	fn poll(
 		&mut self,
 		cx: &mut Context,
-		params: &mut impl PollParameters
-	) -> Poll<
-		NetworkBehaviourAction<
-			<<Self::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::InEvent,
-			Self::OutEvent
-		>
-	>{
+		params: &mut impl PollParameters,
+	) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>> {
 		self.inner.poll(cx, params)
 	}
 
-	fn inject_addr_reach_failure(
+	fn inject_dial_failure(
 		&mut self,
-		peer_id: Option<&PeerId>,
-		addr: &Multiaddr,
-		error: &dyn std::error::Error,
+		peer_id: Option<PeerId>,
+		handler: Self::ConnectionHandler,
+		error: &DialError,
 	) {
-		self.inner.inject_addr_reach_failure(peer_id, addr, error)
-	}
-
-	fn inject_dial_failure(&mut self, peer_id: &PeerId) {
-		self.inner.inject_dial_failure(peer_id)
+		self.inner.inject_dial_failure(peer_id, handler, error)
 	}
 
 	fn inject_new_listener(&mut self, id: ListenerId) {

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -95,36 +95,36 @@ macro_rules! impl_traits_for_primitives {
 }
 
 impl_traits_for_primitives! {
-	u8, u8,
-	u16, u16,
+	u8, u32,
+	u16, u32,
 	u32, u32,
 	u64, u64,
-	i8, i8,
-	i16, i16,
+	i8, i32,
+	i16, i32,
 	i32, i32,
 	i64, i64,
 }
 
-/// `bool` is passed as `u8`.
+/// `bool` is passed as `u32`.
 ///
 /// - `1`: true
 /// - `0`: false
 impl RIType for bool {
-	type FFIType = u8;
+	type FFIType = u32;
 }
 
 #[cfg(not(feature = "std"))]
 impl IntoFFIValue for bool {
 	type Owned = ();
 
-	fn into_ffi_value(&self) -> WrappedFFIValue<u8> {
+	fn into_ffi_value(&self) -> WrappedFFIValue<u32> {
 		if *self { 1 } else { 0 }.into()
 	}
 }
 
 #[cfg(not(feature = "std"))]
 impl FromFFIValue for bool {
-	fn from_ffi_value(arg: u8) -> bool {
+	fn from_ffi_value(arg: u32) -> bool {
 		arg == 1
 	}
 }
@@ -133,14 +133,14 @@ impl FromFFIValue for bool {
 impl FromFFIValue for bool {
 	type SelfInstance = bool;
 
-	fn from_ffi_value(_: &mut dyn FunctionContext, arg: u8) -> Result<bool> {
+	fn from_ffi_value(_: &mut dyn FunctionContext, arg: u32) -> Result<bool> {
 		Ok(arg == 1)
 	}
 }
 
 #[cfg(feature = "std")]
 impl IntoFFIValue for bool {
-	fn into_ffi_value(self, _: &mut dyn FunctionContext) -> Result<u8> {
+	fn into_ffi_value(self, _: &mut dyn FunctionContext) -> Result<u32> {
 		Ok(if self { 1 } else { 0 })
 	}
 }
@@ -318,9 +318,8 @@ macro_rules! impl_traits_for_arrays {
 				type SelfInstance = [u8; $n];
 
 				fn from_ffi_value(context: &mut dyn FunctionContext, arg: u32) -> Result<[u8; $n]> {
-					let data = context.read_memory(Pointer::new(arg), $n)?;
 					let mut res = [0u8; $n];
-					res.copy_from_slice(&data);
+					context.read_memory_into(Pointer::new(arg), &mut res)?;
 					Ok(res)
 				}
 			}
@@ -514,10 +513,8 @@ macro_rules! for_u128_i128 {
 			type SelfInstance = $type;
 
 			fn from_ffi_value(context: &mut dyn FunctionContext, arg: u32) -> Result<$type> {
-				let data =
-					context.read_memory(Pointer::new(arg), mem::size_of::<$type>() as u32)?;
 				let mut res = [0u8; mem::size_of::<$type>()];
-				res.copy_from_slice(&data);
+				context.read_memory_into(Pointer::new(arg), &mut res)?;
 				Ok(<$type>::from_le_bytes(res))
 			}
 		}
@@ -545,5 +542,13 @@ impl PassBy for sp_wasm_interface::Value {
 }
 
 impl PassBy for sp_storage::TrackedStorageKey {
+	type PassBy = Codec<Self>;
+}
+
+impl PassBy for sp_storage::StateVersion {
+	type PassBy = Enum<Self>;
+}
+
+impl PassBy for sp_externalities::MultiRemovalResults {
 	type PassBy = Codec<Self>;
 }

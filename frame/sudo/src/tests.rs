@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -28,7 +28,7 @@ use mock::{
 fn test_setup_works() {
 	// Environment setup, logger storage, and sudo `key` retrieval should work as expected.
 	new_test_ext(1).execute_with(|| {
-		assert_eq!(Sudo::key(), 1u64);
+		assert_eq!(Sudo::key(), Some(1u64));
 		assert!(Logger::i32_log().is_empty());
 		assert!(Logger::account_log().is_empty());
 	});
@@ -58,7 +58,7 @@ fn sudo_emits_events_correctly() {
 		// Should emit event to indicate success when called with the root `key` and `call` is `Ok`.
 		let call = Box::new(Call::Logger(LoggerCall::privileged_i32_log { i: 42, weight: 1 }));
 		assert_ok!(Sudo::sudo(Origin::signed(1), call));
-		System::assert_has_event(TestEvent::Sudo(Event::Sudid(Ok(()))));
+		System::assert_has_event(TestEvent::Sudo(Event::Sudid { sudo_result: Ok(()) }));
 	})
 }
 
@@ -96,7 +96,7 @@ fn sudo_unchecked_weight_emits_events_correctly() {
 		// Should emit event to indicate success when called with the root `key` and `call` is `Ok`.
 		let call = Box::new(Call::Logger(LoggerCall::privileged_i32_log { i: 42, weight: 1 }));
 		assert_ok!(Sudo::sudo_unchecked_weight(Origin::signed(1), call, 1_000));
-		System::assert_has_event(TestEvent::Sudo(Event::Sudid(Ok(()))));
+		System::assert_has_event(TestEvent::Sudo(Event::Sudid { sudo_result: Ok(()) }));
 	})
 }
 
@@ -105,7 +105,7 @@ fn set_key_basics() {
 	new_test_ext(1).execute_with(|| {
 		// A root `key` can change the root `key`
 		assert_ok!(Sudo::set_key(Origin::signed(1), 2));
-		assert_eq!(Sudo::key(), 2u64);
+		assert_eq!(Sudo::key(), Some(2u64));
 	});
 
 	new_test_ext(1).execute_with(|| {
@@ -123,10 +123,10 @@ fn set_key_emits_events_correctly() {
 
 		// A root `key` can change the root `key`.
 		assert_ok!(Sudo::set_key(Origin::signed(1), 2));
-		System::assert_has_event(TestEvent::Sudo(Event::KeyChanged(1)));
+		System::assert_has_event(TestEvent::Sudo(Event::KeyChanged { old_sudoer: Some(1) }));
 		// Double check.
 		assert_ok!(Sudo::set_key(Origin::signed(2), 4));
-		System::assert_has_event(TestEvent::Sudo(Event::KeyChanged(2)));
+		System::assert_has_event(TestEvent::Sudo(Event::KeyChanged { old_sudoer: Some(2) }));
 	});
 }
 
@@ -161,6 +161,6 @@ fn sudo_as_emits_events_correctly() {
 		// A non-privileged function will work when passed to `sudo_as` with the root `key`.
 		let call = Box::new(Call::Logger(LoggerCall::non_privileged_log { i: 42, weight: 1 }));
 		assert_ok!(Sudo::sudo_as(Origin::signed(1), 2, call));
-		System::assert_has_event(TestEvent::Sudo(Event::SudoAsDone(Ok(()))));
+		System::assert_has_event(TestEvent::Sudo(Event::SudoAsDone { sudo_result: Ok(()) }));
 	});
 }

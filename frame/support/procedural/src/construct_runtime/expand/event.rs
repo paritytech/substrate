@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -127,7 +127,7 @@ fn expand_event_conversion(
 				Event::#variant_name(x)
 			}
 		}
-		impl #scrate::sp_std::convert::TryInto<#pallet_event> for Event {
+		impl TryInto<#pallet_event> for Event {
 			type Error = ();
 
 			fn try_into(self) -> #scrate::sp_std::result::Result<#pallet_event, Self::Error> {

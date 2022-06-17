@@ -1,17 +1,11 @@
 error[E0277]: the trait bound `<T as pallet::Config>::Bar: Clone` is not satisfied
-   --> $DIR/event_field_not_member.rs:23:7
-    |
-23  |         B { b: T::Bar },
-    |             ^ the trait `Clone` is not implemented for `<T as pallet::Config>::Bar`
-    |
-note: required by `clone`
-   --> $DIR/clone.rs:121:5
-    |
-121 |     fn clone(&self) -> Self;
-    |     ^^^^^^^^^^^^^^^^^^^^^^^^
+  --> tests/pallet_ui/event_field_not_member.rs:23:7
+   |
+23 |         B { b: T::Bar },
+   |             ^ the trait `Clone` is not implemented for `<T as pallet::Config>::Bar`
 
 error[E0369]: binary operation `==` cannot be applied to type `&<T as pallet::Config>::Bar`
-  --> $DIR/event_field_not_member.rs:23:7
+  --> tests/pallet_ui/event_field_not_member.rs:23:7
    |
 23 |         B { b: T::Bar },
    |             ^
@@ -22,7 +16,7 @@ help: consider further restricting this bound
    |                              +++++++++++++++++++++
 
 error[E0277]: `<T as pallet::Config>::Bar` doesn't implement `std::fmt::Debug`
-  --> $DIR/event_field_not_member.rs:23:7
+  --> tests/pallet_ui/event_field_not_member.rs:23:7
    |
 23 |         B { b: T::Bar },
    |             ^ `<T as pallet::Config>::Bar` cannot be formatted using `{:?}` because it doesn't implement `std::fmt::Debug`

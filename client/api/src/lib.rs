@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -21,25 +21,22 @@
 
 pub mod backend;
 pub mod call_executor;
-pub mod cht;
 pub mod client;
 pub mod execution_extensions;
 pub mod in_mem;
 pub mod leaves;
-pub mod light;
 pub mod notifications;
 pub mod proof_provider;
 
 pub use backend::*;
 pub use call_executor::*;
 pub use client::*;
-pub use light::*;
 pub use notifications::*;
 pub use proof_provider::*;
 pub use sp_blockchain as blockchain;
 pub use sp_blockchain::HeaderBackend;
 
-pub use sp_state_machine::{ExecutionStrategy, StorageProof};
+pub use sp_state_machine::{CompactProof, ExecutionStrategy, StorageProof};
 pub use sp_storage::{ChildInfo, PrefixedStorageKey, StorageData, StorageKey};
 
 /// Usage Information Provider interface
@@ -60,10 +57,10 @@ pub mod utils {
 	/// represent the current block `hash` and its `parent hash`, if given the
 	/// function that's returned will assume that `hash` isn't part of the local DB
 	/// yet, and all searches in the DB will instead reference the parent.
-	pub fn is_descendent_of<'a, Block: BlockT, T>(
-		client: &'a T,
+	pub fn is_descendent_of<Block: BlockT, T>(
+		client: &T,
 		current: Option<(Block::Hash, Block::Hash)>,
-	) -> impl Fn(&Block::Hash, &Block::Hash) -> Result<bool, Error> + 'a
+	) -> impl Fn(&Block::Hash, &Block::Hash) -> Result<bool, Error> + '_
 	where
 		T: HeaderBackend<Block> + HeaderMetadata<Block, Error = Error>,
 	{

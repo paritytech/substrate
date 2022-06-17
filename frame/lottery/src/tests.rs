@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,7 +18,7 @@
 //! Tests for the module.
 
 use super::*;
-use frame_support::{assert_noop, assert_ok};
+use frame_support::{assert_noop, assert_ok, assert_storage_noop};
 use mock::{
 	new_test_ext, run_to_block, Balances, BalancesCall, Call, Lottery, Origin, SystemCall, Test,
 };
@@ -30,7 +30,7 @@ fn initial_state() {
 	new_test_ext().execute_with(|| {
 		assert_eq!(Balances::free_balance(Lottery::account_id()), 0);
 		assert!(crate::Lottery::<Test>::get().is_none());
-		assert_eq!(Participants::<Test>::get(&1), (0, vec![]));
+		assert_eq!(Participants::<Test>::get(&1), (0, Default::default()));
 		assert_eq!(TicketsCount::<Test>::get(), 0);
 		assert!(Tickets::<Test>::get(0).is_none());
 	});
@@ -90,6 +90,37 @@ fn basic_end_to_end_works() {
 	});
 }
 
+/// Only the manager can stop the Lottery from repeating via `stop_repeat`.
+#[test]
+fn stop_repeat_works() {
+	new_test_ext().execute_with(|| {
+		let price = 10;
+		let length = 20;
+		let delay = 5;
+
+		// Set no calls for the lottery.
+		assert_ok!(Lottery::set_calls(Origin::root(), vec![]));
+		// Start lottery, it repeats.
+		assert_ok!(Lottery::start_lottery(Origin::root(), price, length, delay, true));
+
+		// Non-manager fails to `stop_repeat`.
+		assert_noop!(Lottery::stop_repeat(Origin::signed(1)), DispatchError::BadOrigin);
+		// Manager can `stop_repeat`, even twice.
+		assert_ok!(Lottery::stop_repeat(Origin::root()));
+		assert_ok!(Lottery::stop_repeat(Origin::root()));
+
+		// Lottery still exists.
+		assert!(crate::Lottery::<Test>::get().is_some());
+		// End and pick a winner.
+		run_to_block(length + delay);
+
+		// Lottery stays dead and does not repeat.
+		assert!(crate::Lottery::<Test>::get().is_none());
+		run_to_block(length + delay + 1);
+		assert!(crate::Lottery::<Test>::get().is_none());
+	});
+}
+
 #[test]
 fn set_calls_works() {
 	new_test_ext().execute_with(|| {
@@ -117,6 +148,27 @@ fn set_calls_works() {
 		// Clear calls
 		assert_ok!(Lottery::set_calls(Origin::root(), vec![]));
 		assert!(CallIndices::<Test>::get().is_empty());
+	});
+}
+
+#[test]
+fn call_to_indices_works() {
+	new_test_ext().execute_with(|| {
+		let calls = vec![
+			Call::Balances(BalancesCall::force_transfer { source: 0, dest: 0, value: 0 }),
+			Call::Balances(BalancesCall::transfer { dest: 0, value: 0 }),
+		];
+		let indices = Lottery::calls_to_indices(&calls).unwrap().into_inner();
+		// Only comparing the length since it is otherwise dependant on the API
+		// of `BalancesCall`.
+		assert_eq!(indices.len(), calls.len());
+
+		let too_many_calls = vec![
+			Call::Balances(BalancesCall::force_transfer { source: 0, dest: 0, value: 0 }),
+			Call::Balances(BalancesCall::transfer { dest: 0, value: 0 }),
+			Call::System(SystemCall::remark { remark: vec![] }),
+		];
+		assert_noop!(Lottery::calls_to_indices(&too_many_calls), Error::<Test>::TooManyCalls);
 	});
 }
 
@@ -239,6 +291,106 @@ fn buy_ticket_works() {
 	});
 }
 
+/// Test that `do_buy_ticket` returns an `AlreadyParticipating` error.
+/// Errors of `do_buy_ticket` are ignored by `buy_ticket`, therefore this white-box test.
+#[test]
+fn do_buy_ticket_already_participating() {
+	new_test_ext().execute_with(|| {
+		let calls = vec![Call::Balances(BalancesCall::transfer { dest: 0, value: 0 })];
+		assert_ok!(Lottery::set_calls(Origin::root(), calls.clone()));
+		assert_ok!(Lottery::start_lottery(Origin::root(), 1, 10, 10, false));
+
+		// Buying once works.
+		assert_ok!(Lottery::do_buy_ticket(&1, &calls[0]));
+		// Buying the same ticket again fails.
+		assert_noop!(Lottery::do_buy_ticket(&1, &calls[0]), Error::<Test>::AlreadyParticipating);
+	});
+}
+
+/// `buy_ticket` is a storage noop when called with the same ticket again.
+#[test]
+fn buy_ticket_already_participating() {
+	new_test_ext().execute_with(|| {
+		let calls = vec![Call::Balances(BalancesCall::transfer { dest: 0, value: 0 })];
+		assert_ok!(Lottery::set_calls(Origin::root(), calls.clone()));
+		assert_ok!(Lottery::start_lottery(Origin::root(), 1, 10, 10, false));
+
+		// Buying once works.
+		let call = Box::new(calls[0].clone());
+		assert_ok!(Lottery::buy_ticket(Origin::signed(1), call.clone()));
+
+		// Buying the same ticket again returns Ok, but changes nothing.
+		assert_storage_noop!(Lottery::buy_ticket(Origin::signed(1), call).unwrap());
+
+		// Exactly one ticket exists.
+		assert_eq!(TicketsCount::<Test>::get(), 1);
+	});
+}
+
+/// `buy_ticket` is a storage noop when called with insufficient balance.
+#[test]
+fn buy_ticket_insufficient_balance() {
+	new_test_ext().execute_with(|| {
+		let calls = vec![Call::Balances(BalancesCall::transfer { dest: 0, value: 0 })];
+		assert_ok!(Lottery::set_calls(Origin::root(), calls.clone()));
+		// Price set to 100.
+		assert_ok!(Lottery::start_lottery(Origin::root(), 100, 10, 10, false));
+		let call = Box::new(calls[0].clone());
+
+		// Buying a ticket returns Ok, but changes nothing.
+		assert_storage_noop!(Lottery::buy_ticket(Origin::signed(1), call).unwrap());
+		assert!(TicketsCount::<Test>::get().is_zero());
+	});
+}
+
+#[test]
+fn do_buy_ticket_insufficient_balance() {
+	new_test_ext().execute_with(|| {
+		let calls = vec![Call::Balances(BalancesCall::transfer { dest: 0, value: 0 })];
+		assert_ok!(Lottery::set_calls(Origin::root(), calls.clone()));
+		// Price set to 101.
+		assert_ok!(Lottery::start_lottery(Origin::root(), 101, 10, 10, false));
+
+		// Buying fails with InsufficientBalance.
+		assert_noop!(
+			Lottery::do_buy_ticket(&1, &calls[0]),
+			BalancesError::<Test, _>::InsufficientBalance
+		);
+		assert!(TicketsCount::<Test>::get().is_zero());
+	});
+}
+
+#[test]
+fn do_buy_ticket_keep_alive() {
+	new_test_ext().execute_with(|| {
+		let calls = vec![Call::Balances(BalancesCall::transfer { dest: 0, value: 0 })];
+		assert_ok!(Lottery::set_calls(Origin::root(), calls.clone()));
+		// Price set to 100.
+		assert_ok!(Lottery::start_lottery(Origin::root(), 100, 10, 10, false));
+
+		// Buying fails with KeepAlive.
+		assert_noop!(Lottery::do_buy_ticket(&1, &calls[0]), BalancesError::<Test, _>::KeepAlive);
+		assert!(TicketsCount::<Test>::get().is_zero());
+	});
+}
+
+/// The lottery handles the case that no one participated.
+#[test]
+fn no_participants_works() {
+	new_test_ext().execute_with(|| {
+		let length = 20;
+		let delay = 5;
+
+		// Set no calls for the lottery.
+		assert_ok!(Lottery::set_calls(Origin::root(), vec![]));
+		// Start lottery.
+		assert_ok!(Lottery::start_lottery(Origin::root(), 10, length, delay, false));
+
+		// End the lottery, no one wins.
+		run_to_block(length + delay);
+	});
+}
+
 #[test]
 fn start_lottery_will_create_account() {
 	new_test_ext().execute_with(|| {
@@ -249,5 +401,28 @@ fn start_lottery_will_create_account() {
 		assert_eq!(Balances::total_balance(&Lottery::account_id()), 0);
 		assert_ok!(Lottery::start_lottery(Origin::root(), price, length, delay, false));
 		assert_eq!(Balances::total_balance(&Lottery::account_id()), 1);
+	});
+}
+
+#[test]
+fn choose_ticket_trivial_cases() {
+	new_test_ext().execute_with(|| {
+		assert!(Lottery::choose_ticket(0).is_none());
+		assert_eq!(Lottery::choose_ticket(1).unwrap(), 0);
+	});
+}
+
+#[test]
+fn choose_account_one_participant() {
+	new_test_ext().execute_with(|| {
+		let calls = vec![Call::Balances(BalancesCall::transfer { dest: 0, value: 0 })];
+		assert_ok!(Lottery::set_calls(Origin::root(), calls.clone()));
+		assert_ok!(Lottery::start_lottery(Origin::root(), 10, 10, 10, false));
+		let call = Box::new(calls[0].clone());
+
+		// Buy one ticket with account 1.
+		assert_ok!(Lottery::buy_ticket(Origin::signed(1), call));
+		// Account 1 is always the winner.
+		assert_eq!(Lottery::choose_account().unwrap(), 1);
 	});
 }

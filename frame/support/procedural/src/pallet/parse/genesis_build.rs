@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -53,8 +53,7 @@ impl GenesisBuildDef {
 			})?
 			.1;
 
-		let mut instances = vec![];
-		instances.push(helper::check_genesis_builder_usage(&item_trait)?);
+		let instances = vec![helper::check_genesis_builder_usage(item_trait)?];
 
 		Ok(Self { attr_span, index, instances, where_clause: item.generics.where_clause.clone() })
 	}

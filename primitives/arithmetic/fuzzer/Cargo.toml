@@ -2,7 +2,7 @@
 name = "sp-arithmetic-fuzzer"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
+edition = "2021"
 license = "Apache-2.0"
 homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
@@ -14,10 +14,10 @@ publish = false
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sp-arithmetic = { version = "4.0.0-dev", path = ".." }
 honggfuzz = "0.5.49"
-primitive-types = "0.10.1"
 num-bigint = "0.2"
+primitive-types = "0.11.1"
+sp-arithmetic = { version = "5.0.0", path = ".." }
 
 [[bin]]
 name = "biguint"
@@ -32,8 +32,8 @@ name = "per_thing_rational"
 path = "src/per_thing_rational.rs"
 
 [[bin]]
-name = "multiply_by_rational"
-path = "src/multiply_by_rational.rs"
+name = "multiply_by_rational_with_rounding"
+path = "src/multiply_by_rational_with_rounding.rs"
 
 [[bin]]
 name = "fixed_point"

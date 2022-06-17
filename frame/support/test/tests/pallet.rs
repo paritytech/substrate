@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,10 +17,11 @@
 
 use frame_support::{
 	dispatch::{Parameter, UnfilteredDispatchable},
+	pallet_prelude::ValueQuery,
 	storage::unhashed,
 	traits::{
-		GetCallName, GetStorageVersion, OnFinalize, OnGenesis, OnInitialize, OnRuntimeUpgrade,
-		PalletInfoAccess, StorageVersion,
+		ConstU32, GetCallName, GetStorageVersion, OnFinalize, OnGenesis, OnInitialize,
+		OnRuntimeUpgrade, PalletError, PalletInfoAccess, StorageVersion,
 	},
 	weights::{DispatchClass, DispatchInfo, GetDispatchInfo, Pays, RuntimeDbWeight},
 };
@@ -29,7 +30,7 @@ use sp_io::{
 	hashing::{blake2_128, twox_128, twox_64},
 	TestExternalities,
 };
-use sp_runtime::DispatchError;
+use sp_runtime::{DispatchError, ModuleError};
 
 pub struct SomeType1;
 impl From<SomeType1> for u64 {
@@ -96,13 +97,9 @@ impl SomeAssociation2 for u64 {
 
 #[frame_support::pallet]
 pub mod pallet {
-	use super::{
-		SomeAssociation1, SomeAssociation2, SomeType1, SomeType2, SomeType3, SomeType4, SomeType5,
-		SomeType6, SomeType7, StorageVersion,
-	};
+	use super::*;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
-	use scale_info::TypeInfo;
 
 	type BalanceOf<T> = <T as Config>::Balance;
 
@@ -156,7 +153,6 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(crate) trait Store)]
-	#[pallet::generate_storage_info]
 	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(_);
 
@@ -166,25 +162,25 @@ pub mod pallet {
 		T::AccountId: From<SomeType2> + From<SomeType1> + SomeAssociation1,
 	{
 		fn on_initialize(_: BlockNumberFor<T>) -> Weight {
-			T::AccountId::from(SomeType1); // Test for where clause
-			T::AccountId::from(SomeType2); // Test for where clause
+			let _ = T::AccountId::from(SomeType1); // Test for where clause
+			let _ = T::AccountId::from(SomeType2); // Test for where clause
 			Self::deposit_event(Event::Something(10));
 			10
 		}
 		fn on_finalize(_: BlockNumberFor<T>) {
-			T::AccountId::from(SomeType1); // Test for where clause
-			T::AccountId::from(SomeType2); // Test for where clause
+			let _ = T::AccountId::from(SomeType1); // Test for where clause
+			let _ = T::AccountId::from(SomeType2); // Test for where clause
 			Self::deposit_event(Event::Something(20));
 		}
 		fn on_runtime_upgrade() -> Weight {
-			T::AccountId::from(SomeType1); // Test for where clause
-			T::AccountId::from(SomeType2); // Test for where clause
+			let _ = T::AccountId::from(SomeType1); // Test for where clause
+			let _ = T::AccountId::from(SomeType2); // Test for where clause
 			Self::deposit_event(Event::Something(30));
 			30
 		}
 		fn integrity_test() {
-			T::AccountId::from(SomeType1); // Test for where clause
-			T::AccountId::from(SomeType2); // Test for where clause
+			let _ = T::AccountId::from(SomeType1); // Test for where clause
+			let _ = T::AccountId::from(SomeType2); // Test for where clause
 		}
 	}
 
@@ -200,8 +196,8 @@ pub mod pallet {
 			#[pallet::compact] _foo: u32,
 			_bar: u32,
 		) -> DispatchResultWithPostInfo {
-			T::AccountId::from(SomeType1); // Test for where clause
-			T::AccountId::from(SomeType3); // Test for where clause
+			let _ = T::AccountId::from(SomeType1); // Test for where clause
+			let _ = T::AccountId::from(SomeType3); // Test for where clause
 			let _ = origin;
 			Self::deposit_event(Event::Something(3));
 			Ok(().into())
@@ -209,8 +205,7 @@ pub mod pallet {
 
 		/// Doc comment put in metadata
 		#[pallet::weight(1)]
-		#[frame_support::transactional]
-		pub fn foo_transactional(
+		pub fn foo_storage_layer(
 			_origin: OriginFor<T>,
 			#[pallet::compact] foo: u32,
 		) -> DispatchResultWithPostInfo {
@@ -230,9 +225,14 @@ pub mod pallet {
 	}
 
 	#[pallet::error]
+	#[derive(PartialEq, Eq)]
 	pub enum Error<T> {
 		/// doc comment put into metadata
 		InsufficientProposersBalance,
+		Code(u8),
+		#[codec(skip)]
+		Skipped(u128),
+		CompactU8(#[codec(compact)] u8),
 	}
 
 	#[pallet::event]
@@ -262,12 +262,13 @@ pub mod pallet {
 	#[pallet::storage_prefix = "Value2"]
 	pub type RenamedValue<T> = StorageValue<Value = u64>;
 
+	/// Test some doc
 	#[pallet::type_value]
 	pub fn MyDefault<T: Config>() -> u16
 	where
 		T::AccountId: From<SomeType7> + From<SomeType1> + SomeAssociation1,
 	{
-		T::AccountId::from(SomeType7); // Test where clause works
+		let _ = T::AccountId::from(SomeType7); // Test where clause works
 		4u16
 	}
 
@@ -351,14 +352,21 @@ pub mod pallet {
 		T::AccountId: From<SomeType1> + SomeAssociation1 + From<SomeType4>,
 	{
 		fn build(&self) {
-			T::AccountId::from(SomeType1); // Test for where clause
-			T::AccountId::from(SomeType4); // Test for where clause
+			let _ = T::AccountId::from(SomeType1); // Test for where clause
+			let _ = T::AccountId::from(SomeType4); // Test for where clause
 		}
 	}
 
 	#[pallet::origin]
 	#[derive(
-		EqNoBound, RuntimeDebugNoBound, CloneNoBound, PartialEqNoBound, Encode, Decode, TypeInfo,
+		EqNoBound,
+		RuntimeDebugNoBound,
+		CloneNoBound,
+		PartialEqNoBound,
+		Encode,
+		Decode,
+		TypeInfo,
+		MaxEncodedLen,
 	)]
 	pub struct Origin<T>(PhantomData<T>);
 
@@ -369,9 +377,9 @@ pub mod pallet {
 	{
 		type Call = Call<T>;
 		fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
-			T::AccountId::from(SomeType1); // Test for where clause
-			T::AccountId::from(SomeType5); // Test for where clause
-			if matches!(call, Call::foo_transactional { .. }) {
+			let _ = T::AccountId::from(SomeType1); // Test for where clause
+			let _ = T::AccountId::from(SomeType5); // Test for where clause
+			if matches!(call, Call::foo_storage_layer { .. }) {
 				return Ok(ValidTransaction::default())
 			}
 			Err(TransactionValidityError::Invalid(InvalidTransaction::Call))
@@ -389,8 +397,8 @@ pub mod pallet {
 		const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
 		fn create_inherent(_data: &InherentData) -> Option<Self::Call> {
-			T::AccountId::from(SomeType1); // Test for where clause
-			T::AccountId::from(SomeType6); // Test for where clause
+			let _ = T::AccountId::from(SomeType1); // Test for where clause
+			let _ = T::AccountId::from(SomeType6); // Test for where clause
 			Some(Call::foo_no_post_info {})
 		}
 
@@ -432,7 +440,7 @@ pub mod pallet {
 }
 
 // Test that a pallet with non generic event and generic genesis_config is correctly handled
-// and that a pallet without the attribute generate_storage_info is correctly handled.
+// and that a pallet with the attribute without_storage_info is correctly handled.
 #[frame_support::pallet]
 pub mod pallet2 {
 	use super::{SomeAssociation1, SomeType1};
@@ -449,12 +457,25 @@ pub mod pallet2 {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(crate) trait Store)]
+	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> where
-		T::AccountId: From<SomeType1> + SomeAssociation1
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T>
+	where
+		T::AccountId: From<SomeType1> + SomeAssociation1,
 	{
+		fn on_initialize(_: BlockNumberFor<T>) -> Weight {
+			Self::deposit_event(Event::Something(11));
+			0
+		}
+		fn on_finalize(_: BlockNumberFor<T>) {
+			Self::deposit_event(Event::Something(21));
+		}
+		fn on_runtime_upgrade() -> Weight {
+			Self::deposit_event(Event::Something(31));
+			0
+		}
 	}
 
 	#[pallet::call]
@@ -468,6 +489,7 @@ pub mod pallet2 {
 		CountedStorageMap<Hasher = Twox64Concat, Key = u8, Value = u32>;
 
 	#[pallet::event]
+	#[pallet::generate_deposit(fn deposit_event)]
 	pub enum Event {
 		/// Something
 		Something(u32),
@@ -522,10 +544,7 @@ pub mod pallet4 {
 }
 
 frame_support::parameter_types!(
-	pub const MyGetParam: u32 = 10;
-	pub const MyGetParam2: u32 = 11;
 	pub const MyGetParam3: u32 = 12;
-	pub const BlockHashCount: u32 = 250;
 );
 
 impl frame_system::Config for Runtime {
@@ -540,7 +559,7 @@ impl frame_system::Config for Runtime {
 	type Lookup = sp_runtime::traits::IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = BlockHashCount;
+	type BlockHashCount = ConstU32<250>;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
@@ -552,11 +571,12 @@ impl frame_system::Config for Runtime {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
+	type MaxConsumers = ConstU32<16>;
 }
 impl pallet::Config for Runtime {
 	type Event = Event;
-	type MyGetParam = MyGetParam;
-	type MyGetParam2 = MyGetParam2;
+	type MyGetParam = ConstU32<10>;
+	type MyGetParam2 = ConstU32<11>;
 	type MyGetParam3 = MyGetParam3;
 	type Balance = u64;
 }
@@ -597,13 +617,13 @@ fn transactional_works() {
 	TestExternalities::default().execute_with(|| {
 		frame_system::Pallet::<Runtime>::set_block_number(1);
 
-		pallet::Call::<Runtime>::foo_transactional { foo: 0 }
+		pallet::Call::<Runtime>::foo_storage_layer { foo: 0 }
 			.dispatch_bypass_filter(None.into())
 			.err()
 			.unwrap();
 		assert!(frame_system::Pallet::<Runtime>::events().is_empty());
 
-		pallet::Call::<Runtime>::foo_transactional { foo: 1 }
+		pallet::Call::<Runtime>::foo_storage_layer { foo: 1 }
 			.dispatch_bypass_filter(None.into())
 			.unwrap();
 		assert_eq!(
@@ -626,7 +646,7 @@ fn call_expand() {
 	assert_eq!(call_foo.get_call_name(), "foo");
 	assert_eq!(
 		pallet::Call::<Runtime>::get_call_names(),
-		&["foo", "foo_transactional", "foo_no_post_info"],
+		&["foo", "foo_storage_layer", "foo_no_post_info"],
 	);
 }
 
@@ -642,8 +662,13 @@ fn error_expand() {
 	);
 	assert_eq!(
 		DispatchError::from(pallet::Error::<Runtime>::InsufficientProposersBalance),
-		DispatchError::Module { index: 1, error: 0, message: Some("InsufficientProposersBalance") },
+		DispatchError::Module(ModuleError {
+			index: 1,
+			error: [0, 0, 0, 0],
+			message: Some("InsufficientProposersBalance")
+		}),
 	);
+	assert_eq!(<pallet::Error::<Runtime> as PalletError>::MAX_ENCODED_SIZE, 3);
 }
 
 #[test]
@@ -725,7 +750,7 @@ fn inherent_expand() {
 			Digest::default(),
 		),
 		vec![UncheckedExtrinsic {
-			function: Call::Example(pallet::Call::foo_transactional { foo: 0 }),
+			function: Call::Example(pallet::Call::foo_storage_layer { foo: 0 }),
 			signature: None,
 		}],
 	);
@@ -766,7 +791,7 @@ fn inherent_expand() {
 				signature: None,
 			},
 			UncheckedExtrinsic {
-				function: Call::Example(pallet::Call::foo_transactional { foo: 0 }),
+				function: Call::Example(pallet::Call::foo_storage_layer { foo: 0 }),
 				signature: None,
 			},
 		],
@@ -788,7 +813,7 @@ fn inherent_expand() {
 				signature: None,
 			},
 			UncheckedExtrinsic {
-				function: Call::Example(pallet::Call::foo_transactional { foo: 0 }),
+				function: Call::Example(pallet::Call::foo_storage_layer { foo: 0 }),
 				signature: None,
 			},
 			UncheckedExtrinsic {
@@ -838,7 +863,7 @@ fn validate_unsigned_expand() {
 	let validity = pallet::Pallet::validate_unsigned(TransactionSource::Local, &call).unwrap_err();
 	assert_eq!(validity, TransactionValidityError::Invalid(InvalidTransaction::Call));
 
-	let call = pallet::Call::<Runtime>::foo_transactional { foo: 0 };
+	let call = pallet::Call::<Runtime>::foo_storage_layer { foo: 0 };
 
 	let validity = pallet::Pallet::validate_unsigned(TransactionSource::External, &call).unwrap();
 	assert_eq!(validity, ValidTransaction::default());
@@ -869,7 +894,7 @@ fn pallet_expand_deposit_event() {
 
 #[test]
 fn pallet_new_call_variant() {
-	Call::Example(pallet::Call::new_call_variant_foo(3, 4));
+	pallet::Call::<Runtime>::new_call_variant_foo(3, 4);
 }
 
 #[test]
@@ -962,10 +987,10 @@ fn pallet_hooks_expand() {
 	TestExternalities::default().execute_with(|| {
 		frame_system::Pallet::<Runtime>::set_block_number(1);
 
-		assert_eq!(AllPallets::on_initialize(1), 10);
-		AllPallets::on_finalize(1);
+		assert_eq!(AllPalletsWithoutSystem::on_initialize(1), 10);
+		AllPalletsWithoutSystem::on_finalize(1);
 
-		assert_eq!(AllPallets::on_runtime_upgrade(), 30);
+		assert_eq!(AllPalletsWithoutSystem::on_runtime_upgrade(), 30);
 
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,
@@ -973,10 +998,62 @@ fn pallet_hooks_expand() {
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[1].event,
-			Event::Example(pallet::Event::Something(20)),
+			Event::Example2(pallet2::Event::Something(11)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[2].event,
+			Event::Example(pallet::Event::Something(20)),
+		);
+		assert_eq!(
+			frame_system::Pallet::<Runtime>::events()[3].event,
+			Event::Example2(pallet2::Event::Something(21)),
+		);
+		assert_eq!(
+			frame_system::Pallet::<Runtime>::events()[4].event,
+			Event::Example(pallet::Event::Something(30)),
+		);
+		assert_eq!(
+			frame_system::Pallet::<Runtime>::events()[5].event,
+			Event::Example2(pallet2::Event::Something(31)),
+		);
+	})
+}
+
+#[test]
+fn all_pallets_type_reversed_order_is_correct() {
+	TestExternalities::default().execute_with(|| {
+		frame_system::Pallet::<Runtime>::set_block_number(1);
+
+		#[allow(deprecated)]
+		{
+			assert_eq!(AllPalletsWithoutSystemReversed::on_initialize(1), 10);
+			AllPalletsWithoutSystemReversed::on_finalize(1);
+
+			assert_eq!(AllPalletsWithoutSystemReversed::on_runtime_upgrade(), 30);
+		}
+
+		assert_eq!(
+			frame_system::Pallet::<Runtime>::events()[0].event,
+			Event::Example2(pallet2::Event::Something(11)),
+		);
+		assert_eq!(
+			frame_system::Pallet::<Runtime>::events()[1].event,
+			Event::Example(pallet::Event::Something(10)),
+		);
+		assert_eq!(
+			frame_system::Pallet::<Runtime>::events()[2].event,
+			Event::Example2(pallet2::Event::Something(21)),
+		);
+		assert_eq!(
+			frame_system::Pallet::<Runtime>::events()[3].event,
+			Event::Example(pallet::Event::Something(20)),
+		);
+		assert_eq!(
+			frame_system::Pallet::<Runtime>::events()[4].event,
+			Event::Example2(pallet2::Event::Something(31)),
+		);
+		assert_eq!(
+			frame_system::Pallet::<Runtime>::events()[5].event,
 			Event::Example(pallet::Event::Something(30)),
 		);
 	})
@@ -1035,6 +1112,14 @@ fn migrate_from_pallet_version_to_storage_version() {
 #[test]
 fn metadata() {
 	use frame_support::metadata::*;
+
+	fn maybe_docs(doc: Vec<&'static str>) -> Vec<&'static str> {
+		if cfg!(feature = "no-metadata-docs") {
+			vec![]
+		} else {
+			doc
+		}
+	}
 
 	let pallets = vec![
 		PalletMetadata {
@@ -1205,7 +1290,7 @@ fn metadata() {
 						modifier: StorageEntryModifier::Default,
 						ty: StorageEntryType::Plain(meta_type::<u32>()),
 						default: vec![0, 0, 0, 0],
-						docs: vec!["Counter for the related counted storage map"],
+						docs: maybe_docs(vec!["Counter for the related counted storage map"]),
 					},
 					StorageEntryMetadata {
 						name: "Unbounded",
@@ -1223,13 +1308,13 @@ fn metadata() {
 					name: "MyGetParam",
 					ty: meta_type::<u32>(),
 					value: vec![10, 0, 0, 0],
-					docs: vec![" Some comment", " Some comment"],
+					docs: maybe_docs(vec![" Some comment", " Some comment"]),
 				},
 				PalletConstantMetadata {
 					name: "MyGetParam2",
 					ty: meta_type::<u32>(),
 					value: vec![11, 0, 0, 0],
-					docs: vec![" Some comment", " Some comment"],
+					docs: maybe_docs(vec![" Some comment", " Some comment"]),
 				},
 				PalletConstantMetadata {
 					name: "MyGetParam3",
@@ -1241,19 +1326,19 @@ fn metadata() {
 					name: "some_extra",
 					ty: meta_type::<u64>(),
 					value: vec![100, 0, 0, 0, 0, 0, 0, 0],
-					docs: vec![" Some doc", " Some doc"],
+					docs: maybe_docs(vec![" Some doc", " Some doc"]),
 				},
 				PalletConstantMetadata {
 					name: "some_extra_extra",
 					ty: meta_type::<u64>(),
 					value: vec![0, 0, 0, 0, 0, 0, 0, 0],
-					docs: vec![" Some doc"],
+					docs: maybe_docs(vec![" Some doc"]),
 				},
 				PalletConstantMetadata {
 					name: "SomeExtraRename",
 					ty: meta_type::<u64>(),
 					value: vec![0, 0, 0, 0, 0, 0, 0, 0],
-					docs: vec![" Some doc"],
+					docs: maybe_docs(vec![" Some doc"]),
 				},
 			],
 			error: Some(PalletErrorMetadata { ty: meta_type::<pallet::Error<Runtime>>() }),
@@ -1287,7 +1372,7 @@ fn metadata() {
 						modifier: StorageEntryModifier::Default,
 						ty: StorageEntryType::Plain(meta_type::<u32>()),
 						default: vec![0, 0, 0, 0],
-						docs: vec!["Counter for the related counted storage map"],
+						docs: maybe_docs(vec!["Counter for the related counted storage map"]),
 					},
 				],
 			}),
@@ -1297,6 +1382,16 @@ fn metadata() {
 			error: None,
 		},
 	];
+
+	let empty_doc = pallets[0].event.as_ref().unwrap().ty.type_info().docs().is_empty() &&
+		pallets[0].error.as_ref().unwrap().ty.type_info().docs().is_empty() &&
+		pallets[0].calls.as_ref().unwrap().ty.type_info().docs().is_empty();
+
+	if cfg!(feature = "no-metadata-docs") {
+		assert!(empty_doc)
+	} else {
+		assert!(!empty_doc)
+	}
 
 	let extrinsic = ExtrinsicMetadata {
 		ty: meta_type::<UncheckedExtrinsic>(),
@@ -1497,4 +1592,63 @@ fn test_storage_info() {
 			},
 		],
 	);
+}
+
+#[test]
+fn assert_type_all_pallets_reversed_with_system_first_is_correct() {
+	// Just ensure the 2 types are same.
+	fn _a(_t: AllPalletsReversedWithSystemFirst) {}
+	fn _b(t: (System, (Example4, (Example2, (Example,))))) {
+		_a(t)
+	}
+}
+
+#[test]
+fn assert_type_all_pallets_with_system_is_correct() {
+	// Just ensure the 2 types are same.
+	fn _a(_t: AllPalletsWithSystem) {}
+	fn _b(t: (System, (Example, (Example2, (Example4,))))) {
+		_a(t)
+	}
+}
+
+#[test]
+fn assert_type_all_pallets_without_system_is_correct() {
+	// Just ensure the 2 types are same.
+	fn _a(_t: AllPalletsWithoutSystem) {}
+	fn _b(t: (Example, (Example2, (Example4,)))) {
+		_a(t)
+	}
+}
+
+#[test]
+fn assert_type_all_pallets_with_system_reversed_is_correct() {
+	// Just ensure the 2 types are same.
+	fn _a(_t: AllPalletsWithSystemReversed) {}
+	fn _b(t: (Example4, (Example2, (Example, (System,))))) {
+		_a(t)
+	}
+}
+
+#[test]
+fn assert_type_all_pallets_without_system_reversed_is_correct() {
+	// Just ensure the 2 types are same.
+	fn _a(_t: AllPalletsWithoutSystemReversed) {}
+	fn _b(t: (Example4, (Example2, (Example,)))) {
+		_a(t)
+	}
+}
+
+#[test]
+fn test_storage_alias() {
+	#[frame_support::storage_alias]
+	type Value<T: pallet::Config>
+	where
+		<T as frame_system::Config>::AccountId: From<SomeType1> + SomeAssociation1,
+	= StorageValue<pallet::Pallet<T>, u32, ValueQuery>;
+
+	TestExternalities::default().execute_with(|| {
+		pallet::Value::<Runtime>::put(10);
+		assert_eq!(10, Value::<Runtime>::get());
+	})
 }

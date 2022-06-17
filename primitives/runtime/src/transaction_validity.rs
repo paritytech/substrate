@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,6 +21,7 @@ use crate::{
 	codec::{Decode, Encode},
 	RuntimeDebug,
 };
+use scale_info::TypeInfo;
 use sp_std::prelude::*;
 
 /// Priority for a transaction. Additive. Higher is better.
@@ -34,7 +35,7 @@ pub type TransactionLongevity = u64;
 pub type TransactionTag = Vec<u8>;
 
 /// An invalid transaction validity.
-#[derive(Clone, PartialEq, Eq, Encode, Decode, Copy, RuntimeDebug)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode, Copy, RuntimeDebug, TypeInfo)]
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub enum InvalidTransaction {
 	/// The call of the transaction is not expected.
@@ -79,6 +80,8 @@ pub enum InvalidTransaction {
 	/// A transaction with a mandatory dispatch. This is invalid; only inherent extrinsics are
 	/// allowed to have mandatory dispatches.
 	MandatoryDispatch,
+	/// The sending address is disabled or known to be invalid.
+	BadSigner,
 }
 
 impl InvalidTransaction {
@@ -109,12 +112,13 @@ impl From<InvalidTransaction> for &'static str {
 			InvalidTransaction::MandatoryDispatch =>
 				"Transaction dispatch is mandatory; transactions may not have mandatory dispatches.",
 			InvalidTransaction::Custom(_) => "InvalidTransaction custom error",
+			InvalidTransaction::BadSigner => "Invalid signing address",
 		}
 	}
 }
 
 /// An unknown transaction validity.
-#[derive(Clone, PartialEq, Eq, Encode, Decode, Copy, RuntimeDebug)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode, Copy, RuntimeDebug, TypeInfo)]
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub enum UnknownTransaction {
 	/// Could not lookup some information that is required to validate the transaction.
@@ -138,7 +142,7 @@ impl From<UnknownTransaction> for &'static str {
 }
 
 /// Errors that can occur while checking the validity of a transaction.
-#[derive(Clone, PartialEq, Eq, Encode, Decode, Copy, RuntimeDebug)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode, Copy, RuntimeDebug, TypeInfo)]
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub enum TransactionValidityError {
 	/// The transaction is invalid.

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -174,9 +174,7 @@ impl Extensions {
 	}
 
 	/// Returns a mutable iterator over all extensions.
-	pub fn iter_mut<'a>(
-		&'a mut self,
-	) -> impl Iterator<Item = (&'a TypeId, &'a mut Box<dyn Extension>)> {
+	pub fn iter_mut(&mut self) -> impl Iterator<Item = (&TypeId, &mut Box<dyn Extension>)> {
 		self.extensions.iter_mut()
 	}
 }

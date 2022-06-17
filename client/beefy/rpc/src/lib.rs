@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -20,95 +20,280 @@
 
 #![warn(missing_docs)]
 
+use parking_lot::RwLock;
 use std::sync::Arc;
 
+use sc_rpc::SubscriptionTaskExecutor;
 use sp_runtime::traits::Block as BlockT;
 
-use futures::{FutureExt, SinkExt, StreamExt};
-use jsonrpc_derive::rpc;
-use jsonrpc_pubsub::{manager::SubscriptionManager, typed::Subscriber, SubscriptionId};
+use futures::{task::SpawnError, FutureExt, StreamExt};
+use jsonrpsee::{
+	core::{async_trait, Error as JsonRpseeError, RpcResult},
+	proc_macros::rpc,
+	types::{error::CallError, ErrorObject},
+	PendingSubscription,
+};
 use log::warn;
 
-use beefy_gadget::notification::BeefySignedCommitmentStream;
+use beefy_gadget::notification::{BeefyBestBlockStream, BeefySignedCommitmentStream};
 
 mod notification;
 
-/// Provides RPC methods for interacting with BEEFY.
-#[rpc]
+#[derive(Debug, thiserror::Error)]
+/// Top-level error type for the RPC handler
+pub enum Error {
+	/// The BEEFY RPC endpoint is not ready.
+	#[error("BEEFY RPC endpoint not ready")]
+	EndpointNotReady,
+	/// The BEEFY RPC background task failed to spawn.
+	#[error("BEEFY RPC background task failed to spawn")]
+	RpcTaskFailure(#[from] SpawnError),
+}
+
+/// The error codes returned by jsonrpc.
+pub enum ErrorCode {
+	/// Returned when BEEFY RPC endpoint is not ready.
+	NotReady = 1,
+	/// Returned on BEEFY RPC background task failure.
+	TaskFailure = 2,
+}
+
+impl From<Error> for ErrorCode {
+	fn from(error: Error) -> Self {
+		match error {
+			Error::EndpointNotReady => ErrorCode::NotReady,
+			Error::RpcTaskFailure(_) => ErrorCode::TaskFailure,
+		}
+	}
+}
+
+impl From<Error> for JsonRpseeError {
+	fn from(error: Error) -> Self {
+		let message = error.to_string();
+		let code = ErrorCode::from(error);
+		JsonRpseeError::Call(CallError::Custom(ErrorObject::owned(
+			code as i32,
+			message,
+			None::<()>,
+		)))
+	}
+}
+
+// Provides RPC methods for interacting with BEEFY.
+#[rpc(client, server)]
 pub trait BeefyApi<Notification, Hash> {
-	/// RPC Metadata
-	type Metadata;
-
 	/// Returns the block most recently finalized by BEEFY, alongside side its justification.
-	#[pubsub(
-		subscription = "beefy_justifications",
-		subscribe,
-		name = "beefy_subscribeJustifications"
+	#[subscription(
+		name = "beefy_subscribeJustifications" => "beefy_justifications",
+		unsubscribe = "beefy_unsubscribeJustifications",
+		item = Notification,
 	)]
-	fn subscribe_justifications(
-		&self,
-		metadata: Self::Metadata,
-		subscriber: Subscriber<Notification>,
-	);
+	fn subscribe_justifications(&self);
 
-	/// Unsubscribe from receiving notifications about recently finalized blocks.
-	#[pubsub(
-		subscription = "beefy_justifications",
-		unsubscribe,
-		name = "beefy_unsubscribeJustifications"
-	)]
-	fn unsubscribe_justifications(
-		&self,
-		metadata: Option<Self::Metadata>,
-		id: SubscriptionId,
-	) -> jsonrpc_core::Result<bool>;
+	/// Returns hash of the latest BEEFY finalized block as seen by this client.
+	///
+	/// The latest BEEFY block might not be available if the BEEFY gadget is not running
+	/// in the network or if the client is still initializing or syncing with the network.
+	/// In such case an error would be returned.
+	#[method(name = "beefy_getFinalizedHead")]
+	async fn latest_finalized(&self) -> RpcResult<Hash>;
 }
 
 /// Implements the BeefyApi RPC trait for interacting with BEEFY.
-pub struct BeefyRpcHandler<Block: BlockT> {
+pub struct Beefy<Block: BlockT> {
 	signed_commitment_stream: BeefySignedCommitmentStream<Block>,
-	manager: SubscriptionManager,
+	beefy_best_block: Arc<RwLock<Option<Block::Hash>>>,
+	executor: SubscriptionTaskExecutor,
 }
 
-impl<Block: BlockT> BeefyRpcHandler<Block> {
-	/// Creates a new BeefyRpcHandler instance.
-	pub fn new<E>(signed_commitment_stream: BeefySignedCommitmentStream<Block>, executor: E) -> Self
-	where
-		E: futures::task::Spawn + Send + Sync + 'static,
-	{
-		let manager = SubscriptionManager::new(Arc::new(executor));
-		Self { signed_commitment_stream, manager }
-	}
-}
-
-impl<Block> BeefyApi<notification::SignedCommitment, Block> for BeefyRpcHandler<Block>
+impl<Block> Beefy<Block>
 where
 	Block: BlockT,
 {
-	type Metadata = sc_rpc::Metadata;
+	/// Creates a new Beefy Rpc handler instance.
+	pub fn new(
+		signed_commitment_stream: BeefySignedCommitmentStream<Block>,
+		best_block_stream: BeefyBestBlockStream<Block>,
+		executor: SubscriptionTaskExecutor,
+	) -> Result<Self, Error> {
+		let beefy_best_block = Arc::new(RwLock::new(None));
 
-	fn subscribe_justifications(
-		&self,
-		_metadata: Self::Metadata,
-		subscriber: Subscriber<notification::SignedCommitment>,
-	) {
+		let stream = best_block_stream.subscribe();
+		let closure_clone = beefy_best_block.clone();
+		let future = stream.for_each(move |best_beefy| {
+			let async_clone = closure_clone.clone();
+			async move { *async_clone.write() = Some(best_beefy) }
+		});
+
+		executor.spawn("substrate-rpc-subscription", Some("rpc"), future.map(drop).boxed());
+		Ok(Self { signed_commitment_stream, beefy_best_block, executor })
+	}
+}
+
+#[async_trait]
+impl<Block> BeefyApiServer<notification::EncodedSignedCommitment, Block::Hash> for Beefy<Block>
+where
+	Block: BlockT,
+{
+	fn subscribe_justifications(&self, pending: PendingSubscription) {
 		let stream = self
 			.signed_commitment_stream
 			.subscribe()
-			.map(|x| Ok::<_, ()>(Ok(notification::SignedCommitment::new::<Block>(x))));
+			.map(|sc| notification::EncodedSignedCommitment::new::<Block>(sc));
 
-		self.manager.add(subscriber, |sink| {
-			stream
-				.forward(sink.sink_map_err(|e| warn!("Error sending notifications: {:?}", e)))
-				.map(|_| ())
-		});
+		let fut = async move {
+			if let Some(mut sink) = pending.accept() {
+				sink.pipe_from_stream(stream).await;
+			}
+		};
+
+		self.executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
 	}
 
-	fn unsubscribe_justifications(
-		&self,
-		_metadata: Option<Self::Metadata>,
-		id: SubscriptionId,
-	) -> jsonrpc_core::Result<bool> {
-		Ok(self.manager.cancel(id))
+	async fn latest_finalized(&self) -> RpcResult<Block::Hash> {
+		self.beefy_best_block
+			.read()
+			.as_ref()
+			.cloned()
+			.ok_or(Error::EndpointNotReady)
+			.map_err(Into::into)
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	use beefy_gadget::notification::{
+		BeefyBestBlockStream, BeefySignedCommitment, BeefySignedCommitmentSender,
+	};
+	use beefy_primitives::{known_payload_ids, Payload};
+	use codec::{Decode, Encode};
+	use jsonrpsee::{types::EmptyParams, RpcModule};
+	use sp_runtime::traits::{BlakeTwo256, Hash};
+	use substrate_test_runtime_client::runtime::Block;
+
+	fn setup_io_handler() -> (RpcModule<Beefy<Block>>, BeefySignedCommitmentSender<Block>) {
+		let (_, stream) = BeefyBestBlockStream::<Block>::channel();
+		setup_io_handler_with_best_block_stream(stream)
+	}
+
+	fn setup_io_handler_with_best_block_stream(
+		best_block_stream: BeefyBestBlockStream<Block>,
+	) -> (RpcModule<Beefy<Block>>, BeefySignedCommitmentSender<Block>) {
+		let (commitment_sender, commitment_stream) =
+			BeefySignedCommitmentStream::<Block>::channel();
+
+		let handler =
+			Beefy::new(commitment_stream, best_block_stream, sc_rpc::testing::test_executor())
+				.expect("Setting up the BEEFY RPC handler works");
+
+		(handler.into_rpc(), commitment_sender)
+	}
+
+	#[tokio::test]
+	async fn uninitialized_rpc_handler() {
+		let (rpc, _) = setup_io_handler();
+		let request = r#"{"jsonrpc":"2.0","method":"beefy_getFinalizedHead","params":[],"id":1}"#;
+		let expected_response = r#"{"jsonrpc":"2.0","error":{"code":1,"message":"BEEFY RPC endpoint not ready"},"id":1}"#.to_string();
+		let (result, _) = rpc.raw_json_request(&request).await.unwrap();
+
+		assert_eq!(expected_response, result,);
+	}
+
+	#[tokio::test]
+	async fn latest_finalized_rpc() {
+		let (sender, stream) = BeefyBestBlockStream::<Block>::channel();
+		let (io, _) = setup_io_handler_with_best_block_stream(stream);
+
+		let hash = BlakeTwo256::hash(b"42");
+		let r: Result<(), ()> = sender.notify(|| Ok(hash));
+		r.unwrap();
+
+		// Verify RPC `beefy_getFinalizedHead` returns expected hash.
+		let request = r#"{"jsonrpc":"2.0","method":"beefy_getFinalizedHead","params":[],"id":1}"#;
+		let expected = "{\
+			\"jsonrpc\":\"2.0\",\
+			\"result\":\"0x2f0039e93a27221fcf657fb877a1d4f60307106113e885096cb44a461cd0afbf\",\
+			\"id\":1\
+		}"
+		.to_string();
+		let not_ready = "{\
+			\"jsonrpc\":\"2.0\",\
+			\"error\":{\"code\":1,\"message\":\"BEEFY RPC endpoint not ready\"},\
+			\"id\":1\
+		}"
+		.to_string();
+
+		let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+		while std::time::Instant::now() < deadline {
+			let (response, _) = io.raw_json_request(request).await.expect("RPC requests work");
+			if response != not_ready {
+				assert_eq!(response, expected);
+				// Success
+				return
+			}
+			std::thread::sleep(std::time::Duration::from_millis(50))
+		}
+
+		panic!(
+			"Deadline reached while waiting for best BEEFY block to update. Perhaps the background task is broken?"
+		);
+	}
+
+	#[tokio::test]
+	async fn subscribe_and_unsubscribe_with_wrong_id() {
+		let (rpc, _) = setup_io_handler();
+		// Subscribe call.
+		let _sub = rpc
+			.subscribe("beefy_subscribeJustifications", EmptyParams::new())
+			.await
+			.unwrap();
+
+		// Unsubscribe with wrong ID
+		let (response, _) = rpc
+			.raw_json_request(
+				r#"{"jsonrpc":"2.0","method":"beefy_unsubscribeJustifications","params":["FOO"],"id":1}"#,
+			)
+			.await
+			.unwrap();
+		let expected = r#"{"jsonrpc":"2.0","result":false,"id":1}"#;
+
+		assert_eq!(response, expected);
+	}
+
+	fn create_commitment() -> BeefySignedCommitment<Block> {
+		let payload = Payload::new(known_payload_ids::MMR_ROOT_ID, "Hello World!".encode());
+		BeefySignedCommitment::<Block> {
+			commitment: beefy_primitives::Commitment {
+				payload,
+				block_number: 5,
+				validator_set_id: 0,
+			},
+			signatures: vec![],
+		}
+	}
+
+	#[tokio::test]
+	async fn subscribe_and_listen_to_one_justification() {
+		let (rpc, commitment_sender) = setup_io_handler();
+
+		// Subscribe
+		let mut sub = rpc
+			.subscribe("beefy_subscribeJustifications", EmptyParams::new())
+			.await
+			.unwrap();
+
+		// Notify with commitment
+		let commitment = create_commitment();
+		let r: Result<(), ()> = commitment_sender.notify(|| Ok(commitment.clone()));
+		r.unwrap();
+
+		// Inspect what we received
+		let (bytes, recv_sub_id) = sub.next::<sp_core::Bytes>().await.unwrap().unwrap();
+		let recv_commitment: BeefySignedCommitment<Block> =
+			Decode::decode(&mut &bytes[..]).unwrap();
+		assert_eq!(&recv_sub_id, sub.subscription_id());
+		assert_eq!(recv_commitment, commitment);
 	}
 }

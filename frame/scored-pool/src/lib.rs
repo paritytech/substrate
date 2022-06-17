@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -54,16 +54,24 @@
 //! ## Usage
 //!
 //! ```
-//! use frame_support::{decl_module, dispatch};
-//! use frame_system::ensure_signed;
 //! use pallet_scored_pool::{self as scored_pool};
 //!
-//! pub trait Config: scored_pool::Config {}
+//! #[frame_support::pallet]
+//! pub mod pallet {
+//! 	use super::*;
+//! 	use frame_support::pallet_prelude::*;
+//! 	use frame_system::pallet_prelude::*;
 //!
-//! decl_module! {
-//! 	pub struct Module<T: Config> for enum Call where origin: T::Origin {
-//! 		#[weight = 0]
-//! 		pub fn candidate(origin) -> dispatch::DispatchResult {
+//! 	#[pallet::pallet]
+//! 	pub struct Pallet<T>(_);
+//!
+//! 	#[pallet::config]
+//! 	pub trait Config: frame_system::Config + scored_pool::Config {}
+//!
+//! 	#[pallet::call]
+//! 	impl<T: Config> Pallet<T> {
+//! 		#[pallet::weight(0)]
+//! 		pub fn candidate(origin: OriginFor<T>) -> DispatchResult {
 //! 			let who = ensure_signed(origin)?;
 //!
 //! 			let _ = <scored_pool::Pallet<T>>::submit_candidacy(
@@ -116,12 +124,12 @@ enum ChangeReceiver {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::{pallet_prelude::*, traits::EnsureOrigin, weights::Weight};
-	use frame_system::{ensure_root, ensure_signed, pallet_prelude::*};
-	use sp_runtime::traits::MaybeSerializeDeserialize;
+	use frame_support::pallet_prelude::*;
+	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::without_storage_info]
 	pub struct Pallet<T, I = ()>(_);
 
 	#[pallet::config]
@@ -248,7 +256,7 @@ pub mod pallet {
 			// reserve balance for each candidate in the pool.
 			// panicking here is ok, since this just happens one time, pre-genesis.
 			pool.iter().for_each(|(who, _)| {
-				T::Currency::reserve(&who, T::CandidateDeposit::get())
+				T::Currency::reserve(who, T::CandidateDeposit::get())
 					.expect("balance too low to create candidacy");
 				<CandidateExists<T, I>>::insert(who, true);
 			});
@@ -379,7 +387,7 @@ pub mod pallet {
 			// if there is already an element with `score`, we insert
 			// right before that. if not, the search returns a location
 			// where we can insert while maintaining order.
-			let item = (who, Some(score.clone()));
+			let item = (who, Some(score));
 			let location = pool
 				.binary_search_by_key(&Reverse(score), |(_, maybe_score)| {
 					Reverse(maybe_score.unwrap_or_default())

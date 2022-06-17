@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -23,40 +23,33 @@
 #![warn(unused_extern_crates)]
 
 mod api;
+pub mod error;
 mod graph;
 mod metrics;
 mod revalidation;
+#[cfg(test)]
+mod tests;
 
-pub mod error;
-
-/// Common types for testing the transaction pool
-#[cfg(feature = "test-helpers")]
-pub mod test_helpers {
-	pub use super::{
-		graph::{BlockHash, ChainApi, ExtrinsicFor, NumberFor, Pool},
-		revalidation::RevalidationQueue,
-	};
-}
-
-pub use crate::api::{FullChainApi, LightChainApi};
+pub use crate::api::FullChainApi;
 use futures::{
 	channel::oneshot,
 	future::{self, ready},
 	prelude::*,
 };
-pub use graph::{base_pool::Limit as PoolLimit, ChainApi, Options, Pool, Transaction};
+pub use graph::{
+	base_pool::Limit as PoolLimit, ChainApi, Options, Pool, Transaction, ValidatedTransaction,
+};
 use parking_lot::Mutex;
 use std::{
 	collections::{HashMap, HashSet},
-	convert::TryInto,
 	pin::Pin,
 	sync::Arc,
 };
 
 use graph::{ExtrinsicHash, IsValidator};
 use sc_transaction_pool_api::{
-	ChainEvent, ImportNotificationStream, MaintainedTransactionPool, PoolFuture, PoolStatus,
-	ReadyTransactions, TransactionFor, TransactionPool, TransactionSource,
+	error::Error as TxPoolError, ChainEvent, ImportNotificationStream, MaintainedTransactionPool,
+	PoolFuture, PoolStatus, ReadyTransactions, TransactionFor, TransactionPool, TransactionSource,
 	TransactionStatusStreamFor, TxHash,
 };
 use sp_core::traits::SpawnEssentialNamed;
@@ -79,9 +72,6 @@ type PolledIterator<PoolApi> = Pin<Box<dyn Future<Output = ReadyIteratorFor<Pool
 
 /// A transaction pool for a full node.
 pub type FullPool<Block, Client> = BasicPool<FullChainApi<Client, Block>, Block>;
-/// A transaction pool for a light node.
-pub type LightPool<Block, Client, Fetcher> =
-	BasicPool<LightChainApi<Client, Fetcher, Block>, Block>;
 
 /// Basic implementation of transaction pool that can be customized by providing PoolApi.
 pub struct BasicPool<PoolApi, Block>
@@ -173,13 +163,10 @@ where
 	PoolApi: graph::ChainApi<Block = Block> + 'static,
 {
 	/// Create new basic transaction pool with provided api, for tests.
-	#[cfg(feature = "test-helpers")]
-	pub fn new_test(
-		pool_api: Arc<PoolApi>,
-	) -> (Self, Pin<Box<dyn Future<Output = ()> + Send>>, intervalier::BackSignalControl) {
+	pub fn new_test(pool_api: Arc<PoolApi>) -> (Self, Pin<Box<dyn Future<Output = ()> + Send>>) {
 		let pool = Arc::new(graph::Pool::new(Default::default(), true.into(), pool_api.clone()));
-		let (revalidation_queue, background_task, notifier) =
-			revalidation::RevalidationQueue::new_test(pool_api.clone(), pool.clone());
+		let (revalidation_queue, background_task) =
+			revalidation::RevalidationQueue::new_background(pool_api.clone(), pool.clone());
 		(
 			Self {
 				api: pool_api,
@@ -190,7 +177,6 @@ where
 				metrics: Default::default(),
 			},
 			background_task,
-			notifier,
 		)
 	}
 
@@ -217,7 +203,7 @@ where
 		};
 
 		if let Some(background_task) = background_task {
-			spawner.spawn_essential("txpool-background", background_task);
+			spawner.spawn_essential("txpool-background", Some("transaction-pool"), background_task);
 		}
 
 		Self {
@@ -240,7 +226,6 @@ where
 	}
 
 	/// Get access to the underlying api
-	#[cfg(feature = "test-helpers")]
 	pub fn api(&self) -> &PoolApi {
 		&self.api
 	}
@@ -364,33 +349,6 @@ where
 	}
 }
 
-impl<Block, Client, Fetcher> LightPool<Block, Client, Fetcher>
-where
-	Block: BlockT,
-	Client: sp_blockchain::HeaderBackend<Block> + sc_client_api::UsageProvider<Block> + 'static,
-	Fetcher: sc_client_api::Fetcher<Block> + 'static,
-{
-	/// Create new basic transaction pool for a light node with the provided api.
-	pub fn new_light(
-		options: graph::Options,
-		prometheus: Option<&PrometheusRegistry>,
-		spawner: impl SpawnEssentialNamed,
-		client: Arc<Client>,
-		fetcher: Arc<Fetcher>,
-	) -> Self {
-		let pool_api = Arc::new(LightChainApi::new(client.clone(), fetcher));
-		Self::with_revalidation_type(
-			options,
-			false.into(),
-			pool_api,
-			prometheus,
-			RevalidationType::Light,
-			spawner,
-			client.usage_info().chain.best_number,
-		)
-	}
-}
-
 impl<Block, Client> FullPool<Block, Client>
 where
 	Block: BlockT,
@@ -451,7 +409,6 @@ where
 		at: &BlockId<Self::Block>,
 		xt: sc_transaction_pool_api::LocalTransactionFor<Self>,
 	) -> Result<Self::Hash, Self::Error> {
-		use graph::ValidatedTransaction;
 		use sp_runtime::{
 			traits::SaturatedConversion, transaction_validity::TransactionValidityError,
 		};
@@ -461,8 +418,8 @@ where
 			.validate_transaction_blocking(at, TransactionSource::Local, xt.clone())?
 			.map_err(|e| {
 				Self::Error::Pool(match e {
-					TransactionValidityError::Invalid(i) => i.into(),
-					TransactionValidityError::Unknown(u) => u.into(),
+					TransactionValidityError::Invalid(i) => TxPoolError::InvalidTransaction(i),
+					TransactionValidityError::Unknown(u) => TxPoolError::UnknownTransaction(u),
 				})
 			})?;
 
@@ -474,7 +431,7 @@ where
 
 		let validated = ValidatedTransaction::valid_at(
 			block_number.saturated_into::<u64>(),
-			hash.clone(),
+			hash,
 			TransactionSource::Local,
 			xt,
 			bytes,
@@ -577,12 +534,12 @@ async fn prune_known_txs_for_block<Block: BlockT, Api: graph::ChainApi<Block = B
 		.block_body(&block_id)
 		.await
 		.unwrap_or_else(|e| {
-			log::warn!("Prune known transactions: error request {:?}!", e);
+			log::warn!("Prune known transactions: error request: {}", e);
 			None
 		})
 		.unwrap_or_default();
 
-	let hashes = extrinsics.iter().map(|tx| pool.hash_of(&tx)).collect::<Vec<_>>();
+	let hashes = extrinsics.iter().map(|tx| pool.hash_of(tx)).collect::<Vec<_>>();
 
 	log::trace!(target: "txpool", "Pruning transactions: {:?}", hashes);
 
@@ -593,14 +550,14 @@ async fn prune_known_txs_for_block<Block: BlockT, Api: graph::ChainApi<Block = B
 			return hashes
 		},
 		Err(e) => {
-			log::debug!(target: "txpool", "Error retrieving header for {:?}: {:?}", block_id, e);
+			log::debug!(target: "txpool", "Error retrieving header for {:?}: {}", block_id, e);
 			return hashes
 		},
 	};
 
 	if let Err(e) = pool.prune(&block_id, &BlockId::hash(*header.parent_hash()), &extrinsics).await
 	{
-		log::error!("Cannot prune known in the pool {:?}!", e);
+		log::error!("Cannot prune known in the pool: {}", e);
 	}
 
 	hashes
@@ -653,11 +610,11 @@ where
 					if let Some(ref tree_route) = tree_route {
 						for retracted in tree_route.retracted() {
 							// notify txs awaiting finality that it has been retracted
-							pool.validated_pool().on_block_retracted(retracted.hash.clone());
+							pool.validated_pool().on_block_retracted(retracted.hash);
 						}
 
 						future::join_all(tree_route.enacted().iter().map(|h| {
-							prune_known_txs_for_block(BlockId::Hash(h.hash.clone()), &*api, &*pool)
+							prune_known_txs_for_block(BlockId::Hash(h.hash), &*api, &*pool)
 						}))
 						.await
 						.into_iter()
@@ -666,7 +623,7 @@ where
 						})
 					}
 
-					pruned_log.extend(prune_known_txs_for_block(id.clone(), &*api, &*pool).await);
+					pruned_log.extend(prune_known_txs_for_block(id, &*api, &*pool).await);
 
 					metrics.report(|metrics| {
 						metrics.block_transactions_pruned.inc_by(pruned_log.len() as u64)
@@ -676,13 +633,13 @@ where
 						let mut resubmit_transactions = Vec::new();
 
 						for retracted in tree_route.retracted() {
-							let hash = retracted.hash.clone();
+							let hash = retracted.hash;
 
 							let block_transactions = api
 								.block_body(&BlockId::hash(hash))
 								.await
 								.unwrap_or_else(|e| {
-									log::warn!("Failed to fetch block body {:?}!", e);
+									log::warn!("Failed to fetch block body: {}", e);
 									None
 								})
 								.unwrap_or_default()
@@ -693,7 +650,7 @@ where
 
 							resubmit_transactions.extend(block_transactions.into_iter().filter(
 								|tx| {
-									let tx_hash = pool.hash_of(&tx);
+									let tx_hash = pool.hash_of(tx);
 									let contains = pruned_log.contains(&tx_hash);
 
 									// need to count all transactions, not just filtered, here
@@ -728,7 +685,7 @@ where
 						{
 							log::debug!(
 								target: "txpool",
-								"[{:?}] Error re-submitting transactions: {:?}",
+								"[{:?}] Error re-submitting transactions: {}",
 								id,
 								e,
 							)
@@ -743,8 +700,7 @@ where
 					});
 
 					if next_action.revalidate {
-						let hashes =
-							pool.validated_pool().ready().map(|tx| tx.hash.clone()).collect();
+						let hashes = pool.validated_pool().ready().map(|tx| tx.hash).collect();
 						revalidation_queue.revalidate_later(block_number, hashes).await;
 
 						revalidation_strategy.lock().clear();
@@ -752,15 +708,17 @@ where
 				}
 				.boxed()
 			},
-			ChainEvent::Finalized { hash } => {
+			ChainEvent::Finalized { hash, tree_route } => {
 				let pool = self.pool.clone();
 				async move {
-					if let Err(e) = pool.validated_pool().on_block_finalized(hash).await {
-						log::warn!(
-							target: "txpool",
-							"Error [{}] occurred while attempting to notify watchers of finalization {}",
-							e, hash
-						)
+					for hash in tree_route.iter().chain(&[hash]) {
+						if let Err(e) = pool.validated_pool().on_block_finalized(*hash).await {
+							log::warn!(
+								target: "txpool",
+								"Error [{}] occurred while attempting to notify watchers of finalization {}",
+								e, hash
+							)
+						}
 					}
 				}
 				.boxed()

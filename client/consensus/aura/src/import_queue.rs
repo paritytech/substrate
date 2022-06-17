@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -33,7 +33,7 @@ use sp_api::{ApiExt, ProvideRuntimeApi};
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
 use sp_blockchain::{
 	well_known_cache_keys::{self, Id as CacheKeyId},
-	HeaderBackend, ProvideCache,
+	HeaderBackend,
 };
 use sp_consensus::{CanAuthorWith, Error as ConsensusError};
 use sp_consensus_aura::{
@@ -45,7 +45,8 @@ use sp_core::{crypto::Pair, ExecutionContext};
 use sp_inherents::{CreateInherentDataProviders, InherentDataProvider as _};
 use sp_runtime::{
 	generic::{BlockId, OpaqueDigestItemId},
-	traits::{Block as BlockT, DigestItemFor, Header},
+	traits::{Block as BlockT, Header},
+	DigestItem,
 };
 use std::{fmt::Debug, hash::Hash, marker::PhantomData, sync::Arc};
 
@@ -61,14 +62,13 @@ fn check_header<C, B: BlockT, P: Pair>(
 	hash: B::Hash,
 	authorities: &[AuthorityId<P>],
 	check_for_equivocation: CheckForEquivocation,
-) -> Result<CheckedHeader<B::Header, (Slot, DigestItemFor<B>)>, Error<B>>
+) -> Result<CheckedHeader<B::Header, (Slot, DigestItem)>, Error<B>>
 where
-	DigestItemFor<B>: CompatibleDigestItem<P::Signature>,
 	P::Signature: Codec,
 	C: sc_client_api::backend::AuxStore,
 	P::Public: Encode + Decode + PartialEq + Clone,
 {
-	let seal = header.digest_mut().pop().ok_or_else(|| Error::HeaderUnsealed(hash))?;
+	let seal = header.digest_mut().pop().ok_or(Error::HeaderUnsealed(hash))?;
 
 	let sig = seal.as_aura_seal().ok_or_else(|| aura_err(Error::HeaderBadSeal(hash)))?;
 
@@ -81,7 +81,7 @@ where
 		// check the signature is valid under the expected authority and
 		// chain state.
 		let expected_author =
-			slot_author::<P>(slot, &authorities).ok_or_else(|| Error::SlotAuthorNotFound)?;
+			slot_author::<P>(slot, authorities).ok_or(Error::SlotAuthorNotFound)?;
 
 		let pre_hash = header.hash();
 
@@ -189,14 +189,8 @@ where
 #[async_trait::async_trait]
 impl<B: BlockT, C, P, CAW, CIDP> Verifier<B> for AuraVerifier<C, P, CAW, CIDP>
 where
-	C: ProvideRuntimeApi<B>
-		+ Send
-		+ Sync
-		+ sc_client_api::backend::AuxStore
-		+ ProvideCache<B>
-		+ BlockOf,
+	C: ProvideRuntimeApi<B> + Send + Sync + sc_client_api::backend::AuxStore + BlockOf,
 	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>> + ApiExt<B>,
-	DigestItemFor<B>: CompatibleDigestItem<P::Signature>,
 	P: Pair + Send + Sync + 'static,
 	P::Public: Send + Sync + Hash + Eq + Clone + Decode + Encode + Debug + 'static,
 	P::Signature: Encode + Decode,
@@ -211,7 +205,7 @@ where
 		let hash = block.header.hash();
 		let parent_hash = *block.header.parent_hash();
 		let authorities = authorities(self.client.as_ref(), &BlockId::Hash(parent_hash))
-			.map_err(|e| format!("Could not fetch authorities at {:?}: {:?}", parent_hash, e))?;
+			.map_err(|e| format!("Could not fetch authorities at {:?}: {}", parent_hash, e))?;
 
 		let create_inherent_data_providers = self
 			.create_inherent_data_providers
@@ -255,7 +249,7 @@ where
 							&BlockId::Hash(parent_hash),
 							|v| v >= 2,
 						)
-						.map_err(|e| format!("{:?}", e))?
+						.map_err(|e| e.to_string())?
 					{
 						self.check_inherents(
 							new_block.clone(),
@@ -366,7 +360,7 @@ pub struct ImportQueueParams<'a, Block, I, C, S, CAW, CIDP> {
 }
 
 /// Start an import queue for the Aura consensus algorithm.
-pub fn import_queue<'a, P, Block, I, C, S, CAW, CIDP>(
+pub fn import_queue<P, Block, I, C, S, CAW, CIDP>(
 	ImportQueueParams {
 		block_import,
 		justification_import,
@@ -377,7 +371,7 @@ pub fn import_queue<'a, P, Block, I, C, S, CAW, CIDP>(
 		can_author_with,
 		check_for_equivocation,
 		telemetry,
-	}: ImportQueueParams<'a, Block, I, C, S, CAW, CIDP>,
+	}: ImportQueueParams<Block, I, C, S, CAW, CIDP>,
 ) -> Result<DefaultImportQueue<Block, C>, sp_consensus::Error>
 where
 	Block: BlockT,
@@ -385,7 +379,6 @@ where
 	C: 'static
 		+ ProvideRuntimeApi<Block>
 		+ BlockOf
-		+ ProvideCache<Block>
 		+ Send
 		+ Sync
 		+ AuxStore
@@ -395,7 +388,6 @@ where
 		+ Send
 		+ Sync
 		+ 'static,
-	DigestItemFor<Block>: CompatibleDigestItem<P::Signature>,
 	P: Pair + Send + Sync + 'static,
 	P::Public: Clone + Eq + Send + Sync + Hash + Debug + Encode + Decode,
 	P::Signature: Encode + Decode,

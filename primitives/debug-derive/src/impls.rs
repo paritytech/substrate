@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -67,10 +67,9 @@ mod implementation {
 	/// Derive the inner implementation of `Debug::fmt` function.
 	pub fn derive(name_str: &str, data: &Data) -> TokenStream {
 		match *data {
-			Data::Struct(ref s) => derive_struct(&name_str, &s.fields),
-			Data::Union(ref u) =>
-				derive_fields(&name_str, Fields::new(u.fields.named.iter(), None)),
-			Data::Enum(ref e) => derive_enum(&name_str, &e),
+			Data::Struct(ref s) => derive_struct(name_str, &s.fields),
+			Data::Union(ref u) => derive_fields(name_str, Fields::new(u.fields.named.iter(), None)),
+			Data::Enum(ref e) => derive_enum(name_str, e),
 		}
 	}
 
@@ -101,7 +100,7 @@ mod implementation {
 		}
 	}
 
-	fn derive_fields<'a>(name_str: &str, fields: Fields) -> TokenStream {
+	fn derive_fields(name_str: &str, fields: Fields) -> TokenStream {
 		match fields {
 			Fields::Named { names, this } => {
 				let names_str: Vec<_> = names.iter().map(|x| x.to_string()).collect();

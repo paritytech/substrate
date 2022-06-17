@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -26,7 +26,7 @@ use frame_support::{
 	assert_err_ignore_postinfo, assert_noop, assert_ok,
 	dispatch::{DispatchError, DispatchErrorWithPostInfo, Dispatchable},
 	parameter_types, storage,
-	traits::Contains,
+	traits::{ConstU32, ConstU64, Contains},
 	weights::{Pays, Weight},
 };
 use sp_core::H256;
@@ -38,7 +38,6 @@ use sp_runtime::{
 // example module to test behaviors.
 #[frame_support::pallet]
 pub mod example {
-	use super::*;
 	use frame_support::{dispatch::WithPostDispatchInfo, pallet_prelude::*};
 	use frame_system::pallet_prelude::*;
 
@@ -99,7 +98,6 @@ frame_support::construct_runtime!(
 );
 
 parameter_types! {
-	pub const BlockHashCount: u64 = 250;
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(Weight::max_value());
 }
@@ -118,7 +116,7 @@ impl frame_system::Config for Test {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = BlockHashCount;
+	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
 	type AccountData = pallet_balances::AccountData<u64>;
@@ -127,10 +125,9 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
+	type MaxConsumers = ConstU32<16>;
 }
-parameter_types! {
-	pub const ExistentialDeposit: u64 = 1;
-}
+
 impl pallet_balances::Config for Test {
 	type MaxLocks = ();
 	type MaxReserves = ();
@@ -138,7 +135,7 @@ impl pallet_balances::Config for Test {
 	type Balance = u64;
 	type DustRemoval = ();
 	type Event = Event;
-	type ExistentialDeposit = ExistentialDeposit;
+	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
 }
@@ -168,6 +165,7 @@ impl Contains<Call> for TestBaseCallFilter {
 impl Config for Test {
 	type Event = Event;
 	type Call = Call;
+	type PalletsOrigin = OriginCaller;
 	type WeightInfo = ();
 }
 
@@ -338,8 +336,11 @@ fn batch_with_signed_filters() {
 			vec![Call::Balances(pallet_balances::Call::transfer_keep_alive { dest: 2, value: 1 })]
 		),);
 		System::assert_last_event(
-			utility::Event::BatchInterrupted(0, frame_system::Error::<Test>::CallFiltered.into())
-				.into(),
+			utility::Event::BatchInterrupted {
+				index: 0,
+				error: frame_system::Error::<Test>::CallFiltered.into(),
+			}
+			.into(),
 		);
 	});
 }
@@ -410,7 +411,7 @@ fn batch_handles_weight_refund() {
 		let result = call.dispatch(Origin::signed(1));
 		assert_ok!(result);
 		System::assert_last_event(
-			utility::Event::BatchInterrupted(1, DispatchError::Other("")).into(),
+			utility::Event::BatchInterrupted { index: 1, error: DispatchError::Other("") }.into(),
 		);
 		// No weight is refunded
 		assert_eq!(extract_actual_weight(&result, &info), info.weight);
@@ -425,7 +426,7 @@ fn batch_handles_weight_refund() {
 		let result = call.dispatch(Origin::signed(1));
 		assert_ok!(result);
 		System::assert_last_event(
-			utility::Event::BatchInterrupted(1, DispatchError::Other("")).into(),
+			utility::Event::BatchInterrupted { index: 1, error: DispatchError::Other("") }.into(),
 		);
 		assert_eq!(extract_actual_weight(&result, &info), info.weight - diff * batch_len);
 
@@ -438,7 +439,7 @@ fn batch_handles_weight_refund() {
 		let result = call.dispatch(Origin::signed(1));
 		assert_ok!(result);
 		System::assert_last_event(
-			utility::Event::BatchInterrupted(1, DispatchError::Other("")).into(),
+			utility::Event::BatchInterrupted { index: 1, error: DispatchError::Other("") }.into(),
 		);
 		assert_eq!(
 			extract_actual_weight(&result, &info),
@@ -470,11 +471,11 @@ fn batch_all_revert() {
 
 		assert_eq!(Balances::free_balance(1), 10);
 		assert_eq!(Balances::free_balance(2), 10);
+		let batch_all_calls = Call::Utility(crate::Call::<Test>::batch_all {
+			calls: vec![call_transfer(2, 5), call_transfer(2, 10), call_transfer(2, 5)],
+		});
 		assert_noop!(
-			Utility::batch_all(
-				Origin::signed(1),
-				vec![call_transfer(2, 5), call_transfer(2, 10), call_transfer(2, 5),]
-			),
+			batch_all_calls.dispatch(Origin::signed(1)),
 			DispatchErrorWithPostInfo {
 				post_info: PostDispatchInfo {
 					actual_weight: Some(
@@ -586,8 +587,11 @@ fn batch_all_does_not_nest() {
 		// and balances.
 		assert_ok!(Utility::batch_all(Origin::signed(1), vec![batch_nested]));
 		System::assert_has_event(
-			utility::Event::BatchInterrupted(0, frame_system::Error::<Test>::CallFiltered.into())
-				.into(),
+			utility::Event::BatchInterrupted {
+				index: 0,
+				error: frame_system::Error::<Test>::CallFiltered.into(),
+			}
+			.into(),
 		);
 		assert_eq!(Balances::free_balance(1), 10);
 		assert_eq!(Balances::free_balance(2), 10);
@@ -600,5 +604,37 @@ fn batch_limit() {
 		let calls = vec![Call::System(SystemCall::remark { remark: vec![] }); 40_000];
 		assert_noop!(Utility::batch(Origin::signed(1), calls.clone()), Error::<Test>::TooManyCalls);
 		assert_noop!(Utility::batch_all(Origin::signed(1), calls), Error::<Test>::TooManyCalls);
+	});
+}
+
+#[test]
+fn force_batch_works() {
+	new_test_ext().execute_with(|| {
+		assert_eq!(Balances::free_balance(1), 10);
+		assert_eq!(Balances::free_balance(2), 10);
+		assert_ok!(Utility::force_batch(
+			Origin::signed(1),
+			vec![
+				call_transfer(2, 5),
+				call_foobar(true, 75, None),
+				call_transfer(2, 10),
+				call_transfer(2, 5),
+			]
+		),);
+		System::assert_last_event(utility::Event::BatchCompletedWithErrors.into());
+		System::assert_has_event(
+			utility::Event::ItemFailed { error: DispatchError::Other("") }.into(),
+		);
+		assert_eq!(Balances::free_balance(1), 0);
+		assert_eq!(Balances::free_balance(2), 20);
+
+		assert_ok!(Utility::force_batch(
+			Origin::signed(2),
+			vec![call_transfer(1, 5), call_transfer(1, 5),]
+		),);
+		System::assert_last_event(utility::Event::BatchCompleted.into());
+
+		assert_ok!(Utility::force_batch(Origin::signed(1), vec![call_transfer(2, 50),]),);
+		System::assert_last_event(utility::Event::BatchCompletedWithErrors.into());
 	});
 }

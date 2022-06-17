@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -24,7 +24,7 @@ mod mock;
 use sp_std::{prelude::*, vec};
 
 use frame_benchmarking::{account, benchmarks};
-use frame_support::traits::{Currency, ValidatorSet, ValidatorSetWithIdentification};
+use frame_support::traits::{Currency, Get, ValidatorSet, ValidatorSetWithIdentification};
 use frame_system::{Config as SystemConfig, Pallet as System, RawOrigin};
 
 use sp_runtime::{
@@ -101,15 +101,14 @@ fn create_offender<T: Config>(n: u32, nominators: u32) -> Result<Offender<T>, &'
 	let controller: T::AccountId = account("controller", n, SEED);
 	let controller_lookup: LookupSourceOf<T> = T::Lookup::unlookup(controller.clone());
 	let reward_destination = RewardDestination::Staked;
-	let raw_amount = bond_amount::<T>();
+	let amount = bond_amount::<T>();
 	// add twice as much balance to prevent the account from being killed.
-	let free_amount = raw_amount.saturating_mul(2u32.into());
+	let free_amount = amount.saturating_mul(2u32.into());
 	T::Currency::make_free_balance_be(&stash, free_amount);
-	let amount: BalanceOf<T> = raw_amount.into();
 	Staking::<T>::bond(
 		RawOrigin::Signed(stash.clone()).into(),
 		controller_lookup.clone(),
-		amount.clone(),
+		amount,
 		reward_destination.clone(),
 	)?;
 
@@ -127,12 +126,12 @@ fn create_offender<T: Config>(n: u32, nominators: u32) -> Result<Offender<T>, &'
 			account("nominator controller", n * MAX_NOMINATORS + i, SEED);
 		let nominator_controller_lookup: LookupSourceOf<T> =
 			T::Lookup::unlookup(nominator_controller.clone());
-		T::Currency::make_free_balance_be(&nominator_stash, free_amount.into());
+		T::Currency::make_free_balance_be(&nominator_stash, free_amount);
 
 		Staking::<T>::bond(
 			RawOrigin::Signed(nominator_stash.clone()).into(),
 			nominator_controller_lookup.clone(),
-			amount.clone(),
+			amount,
 			reward_destination.clone(),
 		)?;
 
@@ -143,14 +142,13 @@ fn create_offender<T: Config>(n: u32, nominators: u32) -> Result<Offender<T>, &'
 		)?;
 
 		individual_exposures
-			.push(IndividualExposure { who: nominator_stash.clone(), value: amount.clone() });
+			.push(IndividualExposure { who: nominator_stash.clone(), value: amount });
 		nominator_stashes.push(nominator_stash.clone());
 	}
 
-	let exposure =
-		Exposure { total: amount.clone() * n.into(), own: amount, others: individual_exposures };
+	let exposure = Exposure { total: amount * n.into(), own: amount, others: individual_exposures };
 	let current_era = 0u32;
-	Staking::<T>::add_era_stakers(current_era.into(), stash.clone().into(), exposure);
+	Staking::<T>::add_era_stakers(current_era, stash.clone(), exposure);
 
 	Ok(Offender { controller, stash, nominator_stashes })
 }
@@ -275,7 +273,7 @@ benchmarks! {
 		let r in 1 .. MAX_REPORTERS;
 		// we skip 1 offender, because in such case there is no slashing
 		let o in 2 .. MAX_OFFENDERS;
-		let n in 0 .. MAX_NOMINATORS.min(<T as pallet_staking::Config>::MAX_NOMINATIONS);
+		let n in 0 .. MAX_NOMINATORS.min(<T as pallet_staking::Config>::MaxNominations::get());
 
 		// Make r reporters
 		let mut reporters = vec![];
@@ -315,25 +313,25 @@ benchmarks! {
 			<T as StakingConfig>::Event::from(StakingEvent::<T>::Slashed(id, BalanceOf::<T>::from(slash_amount)))
 		);
 		let balance_slash = |id| core::iter::once(
-			<T as BalancesConfig>::Event::from(pallet_balances::Event::<T>::Slashed(id, slash_amount.into()))
+			<T as BalancesConfig>::Event::from(pallet_balances::Event::<T>::Slashed{who: id, amount: slash_amount.into()})
 		);
 		let chill = |id| core::iter::once(
 			<T as StakingConfig>::Event::from(StakingEvent::<T>::Chilled(id))
 		);
 		let balance_deposit = |id, amount: u32|
-			<T as BalancesConfig>::Event::from(pallet_balances::Event::<T>::Deposit(id, amount.into()));
+			<T as BalancesConfig>::Event::from(pallet_balances::Event::<T>::Deposit{who: id, amount: amount.into()});
 		let mut first = true;
 		let slash_events = raw_offenders.into_iter()
 			.flat_map(|offender| {
 				let nom_slashes = offender.nominator_stashes.into_iter().flat_map(|nom| {
 					balance_slash(nom.clone()).map(Into::into)
-					.chain(slash(nom.clone()).map(Into::into))
-				}).collect::<Vec<_>>();
+					.chain(slash(nom).map(Into::into))
+				});
 
 				let mut events = chill(offender.stash.clone()).map(Into::into)
 					.chain(balance_slash(offender.stash.clone()).map(Into::into))
-					.chain(slash(offender.stash.clone()).map(Into::into))
-					.chain(nom_slashes.into_iter())
+					.chain(slash(offender.stash).map(Into::into))
+					.chain(nom_slashes)
 					.collect::<Vec<_>>();
 
 				// the first deposit creates endowed events, see `endowed_reward_events`
@@ -341,10 +339,10 @@ benchmarks! {
 					first = false;
 					let mut reward_events = reporters.clone().into_iter()
 						.flat_map(|reporter| vec![
-							balance_deposit(reporter.clone(), reward.into()).into(),
-							frame_system::Event::<T>::NewAccount(reporter.clone()).into(),
+							balance_deposit(reporter.clone(), reward).into(),
+							frame_system::Event::<T>::NewAccount { account: reporter.clone() }.into(),
 							<T as BalancesConfig>::Event::from(
-								pallet_balances::Event::<T>::Endowed(reporter.clone(), reward.into())
+								pallet_balances::Event::<T>::Endowed{account: reporter, free_balance: reward.into()}
 							).into(),
 						])
 						.collect::<Vec<_>>();
@@ -352,7 +350,7 @@ benchmarks! {
 					events.into_iter()
 				} else {
 					let mut reward_events = reporters.clone().into_iter()
-						.map(|reporter| balance_deposit(reporter, reward.into()).into())
+						.map(|reporter| balance_deposit(reporter, reward).into())
 						.collect::<Vec<_>>();
 					events.append(&mut reward_events);
 					events.into_iter()
@@ -371,17 +369,17 @@ benchmarks! {
 				std::iter::empty()
 					.chain(slash_events.into_iter().map(Into::into))
 					.chain(std::iter::once(<T as OffencesConfig>::Event::from(
-						pallet_offences::Event::Offence(
-							UnresponsivenessOffence::<T>::ID,
-							0_u32.to_le_bytes().to_vec(),
-						)
+						pallet_offences::Event::Offence{
+							kind: UnresponsivenessOffence::<T>::ID,
+							timeslot: 0_u32.to_le_bytes().to_vec(),
+						}
 					).into()))
 			);
 		}
 	}
 
 	report_offence_grandpa {
-		let n in 0 .. MAX_NOMINATORS.min(<T as pallet_staking::Config>::MAX_NOMINATIONS);
+		let n in 0 .. MAX_NOMINATORS.min(<T as pallet_staking::Config>::MaxNominations::get());
 
 		// for grandpa equivocation reports the number of reporters
 		// and offenders is always 1
@@ -405,6 +403,7 @@ benchmarks! {
 	}
 	verify {
 		// make sure that all slashes have been applied
+		#[cfg(test)]
 		assert_eq!(
 			System::<T>::event_count(), 0
 			+ 1 // offence
@@ -416,7 +415,7 @@ benchmarks! {
 	}
 
 	report_offence_babe {
-		let n in 0 .. MAX_NOMINATORS.min(<T as pallet_staking::Config>::MAX_NOMINATIONS);
+		let n in 0 .. MAX_NOMINATORS.min(<T as pallet_staking::Config>::MaxNominations::get());
 
 		// for babe equivocation reports the number of reporters
 		// and offenders is always 1
@@ -440,6 +439,7 @@ benchmarks! {
 	}
 	verify {
 		// make sure that all slashes have been applied
+		#[cfg(test)]
 		assert_eq!(
 			System::<T>::event_count(), 0
 			+ 1 // offence

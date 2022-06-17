@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -87,9 +87,10 @@ impl ExtraConstantsDef {
 			))
 		};
 
-		let mut instances = vec![];
-		instances.push(helper::check_impl_gen(&item.generics, item.impl_token.span())?);
-		instances.push(helper::check_pallet_struct_usage(&item.self_ty)?);
+		let instances = vec![
+			helper::check_impl_gen(&item.generics, item.impl_token.span())?,
+			helper::check_pallet_struct_usage(&item.self_ty)?,
+		];
 
 		if let Some((_, _, for_)) = item.trait_ {
 			let msg = "Invalid pallet::call, expected no trait ident as in \

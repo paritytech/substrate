@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,7 +18,9 @@
 use std::vec;
 
 use frame_support::{
-	construct_runtime, parameter_types, sp_io::TestExternalities, traits::GenesisBuild,
+	construct_runtime, parameter_types,
+	sp_io::TestExternalities,
+	traits::{ConstU16, ConstU32, ConstU64, GenesisBuild},
 	BasicExternalities,
 };
 use sp_core::H256;
@@ -50,15 +52,10 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		Beefy: pallet_beefy::{Pallet, Call, Config<T>, Storage},
+		Beefy: pallet_beefy::{Pallet, Config<T>, Storage},
 		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
 	}
 );
-
-parameter_types! {
-	pub const BlockHashCount: u64 = 250;
-	pub const SS58Prefix: u8 = 42;
-}
 
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
@@ -75,24 +72,24 @@ impl frame_system::Config for Test {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = BlockHashCount;
+	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
 	type AccountData = ();
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
-	type SS58Prefix = SS58Prefix;
+	type SS58Prefix = ConstU16<42>;
 	type OnSetCode = ();
+	type MaxConsumers = ConstU32<16>;
 }
 
 impl pallet_beefy::Config for Test {
 	type BeefyId = BeefyId;
+	type MaxAuthorities = ConstU32<100>;
 }
 
 parameter_types! {
-	pub const Period: u64 = 1;
-	pub const Offset: u64 = 0;
 	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(33);
 }
 
@@ -100,8 +97,8 @@ impl pallet_session::Config for Test {
 	type Event = Event;
 	type ValidatorId = u64;
 	type ValidatorIdOf = ConvertInto;
-	type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
-	type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
+	type ShouldEndSession = pallet_session::PeriodicSessions<ConstU64<1>, ConstU64<0>>;
+	type NextSessionRotation = pallet_session::PeriodicSessions<ConstU64<1>, ConstU64<0>>;
 	type SessionManager = MockSessionManager;
 	type SessionHandler = <MockSessionKeys as OpaqueKeys>::KeyTypeIdProviders;
 	type Keys = MockSessionKeys;
@@ -126,9 +123,12 @@ impl pallet_session::SessionManager<u64> for MockSessionManager {
 
 // Note, that we can't use `UintAuthorityId` here. Reason is that the implementation
 // of `to_public_key()` assumes, that a public key is 32 bytes long. This is true for
-// ed25519 and sr25519 but *not* for ecdsa. An ecdsa public key is 33 bytes.
+// ed25519 and sr25519 but *not* for ecdsa. A compressed ecdsa public key is 33 bytes,
+// with the first one containing information to reconstruct the uncompressed key.
 pub fn mock_beefy_id(id: u8) -> BeefyId {
-	let buf: [u8; 33] = [id; 33];
+	let mut buf: [u8; 33] = [id; 33];
+	// Set to something valid.
+	buf[0] = 0x02;
 	let pk = Public::from_raw(buf);
 	BeefyId::from(pk)
 }
@@ -146,8 +146,7 @@ pub fn new_test_ext_raw_authorities(authorities: Vec<(u64, BeefyId)>) -> TestExt
 
 	let session_keys: Vec<_> = authorities
 		.iter()
-		.enumerate()
-		.map(|(_, id)| (id.0 as u64, id.0 as u64, MockSessionKeys { dummy: id.1.clone() }))
+		.map(|id| (id.0 as u64, id.0 as u64, MockSessionKeys { dummy: id.1.clone() }))
 		.collect();
 
 	BasicExternalities::execute_with_storage(&mut t, || {

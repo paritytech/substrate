@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -49,7 +49,7 @@ pub fn evaluate_initial<Block: BlockT>(
 	parent_number: <<Block as BlockT>::Header as HeaderT>::Number,
 ) -> Result<()> {
 	let encoded = Encode::encode(proposal);
-	let proposal = Block::decode(&mut &encoded[..]).map_err(|e| Error::BadProposalFormat(e))?;
+	let proposal = Block::decode(&mut &encoded[..]).map_err(Error::BadProposalFormat)?;
 
 	if *parent_hash != *proposal.header().parent_hash() {
 		return Err(Error::WrongParentHash {

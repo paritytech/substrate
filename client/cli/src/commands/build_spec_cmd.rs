@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -21,6 +21,7 @@ use crate::{
 	params::{NodeKeyParams, SharedParams},
 	CliConfiguration,
 };
+use clap::Parser;
 use log::info;
 use sc_network::config::build_multiaddr;
 use sc_service::{
@@ -28,28 +29,27 @@ use sc_service::{
 	ChainSpec,
 };
 use std::io::Write;
-use structopt::StructOpt;
 
 /// The `build-spec` command used to build a specification.
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, Clone, Parser)]
 pub struct BuildSpecCmd {
 	/// Force raw genesis storage output.
-	#[structopt(long = "raw")]
+	#[clap(long)]
 	pub raw: bool,
 
 	/// Disable adding the default bootnode to the specification.
 	///
 	/// By default the `/ip4/127.0.0.1/tcp/30333/p2p/NODE_PEER_ID` bootnode is added to the
 	/// specification when no bootnode exists.
-	#[structopt(long = "disable-default-bootnode")]
+	#[clap(long)]
 	pub disable_default_bootnode: bool,
 
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	pub shared_params: SharedParams,
 
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	pub node_key_params: NodeKeyParams,
 }
 
@@ -65,7 +65,7 @@ impl BuildSpecCmd {
 
 		if spec.boot_nodes().is_empty() && !self.disable_default_bootnode {
 			let keys = network_config.node_key.into_keypair()?;
-			let peer_id = keys.public().into_peer_id();
+			let peer_id = keys.public().to_peer_id();
 			let addr = MultiaddrWithPeerId {
 				multiaddr: build_multiaddr![Ip4([127, 0, 0, 1]), Tcp(30333u16)],
 				peer_id,

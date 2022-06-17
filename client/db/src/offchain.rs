@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -92,7 +92,7 @@ impl sp_core::offchain::OffchainStorage for LocalStorage {
 		{
 			let _key_guard = key_lock.lock();
 			let val = self.db.get(columns::OFFCHAIN, &key);
-			is_set = val.as_ref().map(|x| &**x) == old_value;
+			is_set = val.as_deref() == old_value;
 
 			if is_set {
 				self.set(prefix, item_key, new_value)
@@ -104,7 +104,7 @@ impl sp_core::offchain::OffchainStorage for LocalStorage {
 		{
 			drop(key_lock);
 			let key_lock = locks.get_mut(&key);
-			if let Some(_) = key_lock.and_then(Arc::get_mut) {
+			if key_lock.and_then(Arc::get_mut).is_some() {
 				locks.remove(&key);
 			}
 		}
@@ -114,7 +114,7 @@ impl sp_core::offchain::OffchainStorage for LocalStorage {
 
 /// Concatenate the prefix and key to create an offchain key in the db.
 pub(crate) fn concatenate_prefix_and_key(prefix: &[u8], key: &[u8]) -> Vec<u8> {
-	prefix.iter().chain(key.into_iter()).cloned().collect()
+	prefix.iter().chain(key.iter()).cloned().collect()
 }
 
 #[cfg(test)]

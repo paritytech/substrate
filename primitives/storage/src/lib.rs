@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -119,8 +119,7 @@ impl DerefMut for PrefixedStorageKey {
 }
 
 impl PrefixedStorageKey {
-	/// Create a prefixed storage key from its byte array
-	/// representation.
+	/// Create a prefixed storage key from its byte array representation.
 	pub fn new(inner: Vec<u8>) -> Self {
 		PrefixedStorageKey(inner)
 	}
@@ -130,9 +129,7 @@ impl PrefixedStorageKey {
 		PrefixedStorageKey::ref_cast(inner)
 	}
 
-	/// Get inner key, this should
-	/// only be needed when writing
-	/// into parent trie to avoid an
+	/// Get inner key, this should only be needed when writing into parent trie to avoid an
 	/// allocation.
 	pub fn into_inner(self) -> Vec<u8> {
 		self.0
@@ -171,10 +168,8 @@ pub struct StorageChild {
 pub struct Storage {
 	/// Top trie storage data.
 	pub top: StorageMap,
-	/// Children trie storage data.
-	/// The key does not including prefix, for the `default`
-	/// trie kind, so this is exclusively for the `ChildType::ParentKeyId`
-	/// tries.
+	/// Children trie storage data. Key does not include prefix, only for the `default` trie kind,
+	/// of `ChildType::ParentKeyId` type.
 	pub children_default: std::collections::HashMap<Vec<u8>, StorageChild>,
 }
 
@@ -194,24 +189,29 @@ pub mod well_known_keys {
 	/// Wasm code of the runtime.
 	///
 	/// Stored as a raw byte vector. Required by substrate.
-	pub const CODE: &'static [u8] = b":code";
+	pub const CODE: &[u8] = b":code";
 
 	/// Number of wasm linear memory pages required for execution of the runtime.
 	///
 	/// The type of this value is encoded `u64`.
-	pub const HEAP_PAGES: &'static [u8] = b":heappages";
+	pub const HEAP_PAGES: &[u8] = b":heappages";
 
 	/// Current extrinsic index (u32) is stored under this key.
-	pub const EXTRINSIC_INDEX: &'static [u8] = b":extrinsic_index";
-
-	/// Changes trie configuration is stored under this key.
-	pub const CHANGES_TRIE_CONFIG: &'static [u8] = b":changes_trie";
+	pub const EXTRINSIC_INDEX: &[u8] = b":extrinsic_index";
 
 	/// Prefix of child storage keys.
-	pub const CHILD_STORAGE_KEY_PREFIX: &'static [u8] = b":child_storage:";
+	pub const CHILD_STORAGE_KEY_PREFIX: &[u8] = b":child_storage:";
 
 	/// Prefix of the default child storage keys in the top trie.
-	pub const DEFAULT_CHILD_STORAGE_KEY_PREFIX: &'static [u8] = b":child_storage:default:";
+	pub const DEFAULT_CHILD_STORAGE_KEY_PREFIX: &[u8] = b":child_storage:default:";
+
+	/// Whether a key is a default child storage key.
+	///
+	/// This is convenience function which basically checks if the given `key` starts
+	/// with `DEFAULT_CHILD_STORAGE_KEY_PREFIX` and doesn't do anything apart from that.
+	pub fn is_default_child_storage_key(key: &[u8]) -> bool {
+		key.starts_with(DEFAULT_CHILD_STORAGE_KEY_PREFIX)
+	}
 
 	/// Whether a key is a child storage key.
 	///
@@ -232,9 +232,12 @@ pub mod well_known_keys {
 	}
 }
 
+/// Threshold size to start using trie value nodes in state.
+pub const TRIE_VALUE_NODE_THRESHOLD: u32 = 33;
+
 /// Information related to a child state.
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "std", derive(PartialEq, Eq, Hash, PartialOrd, Ord))]
+#[cfg_attr(feature = "std", derive(PartialEq, Eq, Hash, PartialOrd, Ord, Encode, Decode))]
 pub enum ChildInfo {
 	/// This is the one used by default.
 	ParentKeyId(ChildTrieParentKeyId),
@@ -356,7 +359,7 @@ impl ChildType {
 	fn do_prefix_key(&self, key: &mut Vec<u8>) {
 		let parent_prefix = self.parent_prefix();
 		let key_len = key.len();
-		if parent_prefix.len() > 0 {
+		if !parent_prefix.is_empty() {
 			key.resize(key_len + parent_prefix.len(), 0);
 			key.copy_within(..key_len, parent_prefix.len());
 			key[..parent_prefix.len()].copy_from_slice(parent_prefix);
@@ -373,16 +376,14 @@ impl ChildType {
 }
 
 /// A child trie of default type.
-/// It uses the same default implementation as the top trie,
-/// top trie being a child trie with no keyspace and no storage key.
-/// Its keyspace is the variable (unprefixed) part of its storage key.
-/// It shares its trie nodes backend storage with every other
-/// child trie, so its storage key needs to be a unique id
-/// that will be use only once.
-/// Those unique id also required to be long enough to avoid any
-/// unique id to be prefixed by an other unique id.
+///
+/// It uses the same default implementation as the top trie, top trie being a child trie with no
+/// keyspace and no storage key. Its keyspace is the variable (unprefixed) part of its storage key.
+/// It shares its trie nodes backend storage with every other child trie, so its storage key needs
+/// to be a unique id that will be use only once. Those unique id also required to be long enough to
+/// avoid any unique id to be prefixed by an other unique id.
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "std", derive(PartialEq, Eq, Hash, PartialOrd, Ord))]
+#[cfg_attr(feature = "std", derive(PartialEq, Eq, Hash, PartialOrd, Ord, Encode, Decode))]
 pub struct ChildTrieParentKeyId {
 	/// Data is the storage key without prefix.
 	data: Vec<u8>,
@@ -394,6 +395,54 @@ impl ChildTrieParentKeyId {
 	fn try_update(&mut self, other: &ChildInfo) -> bool {
 		match other {
 			ChildInfo::ParentKeyId(other) => self.data[..] == other.data[..],
+		}
+	}
+}
+
+/// Different possible state version.
+///
+/// V0 and V1 uses a same trie implementation, but V1 will write external value node in the trie for
+/// value with size at least `TRIE_VALUE_NODE_THRESHOLD`.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum StateVersion {
+	/// Old state version, no value nodes.
+	V0 = 0,
+	/// New state version can use value nodes.
+	V1 = 1,
+}
+
+impl Default for StateVersion {
+	fn default() -> Self {
+		StateVersion::V1
+	}
+}
+
+impl From<StateVersion> for u8 {
+	fn from(version: StateVersion) -> u8 {
+		version as u8
+	}
+}
+
+impl TryFrom<u8> for StateVersion {
+	type Error = ();
+	fn try_from(val: u8) -> sp_std::result::Result<StateVersion, ()> {
+		match val {
+			0 => Ok(StateVersion::V0),
+			1 => Ok(StateVersion::V1),
+			_ => Err(()),
+		}
+	}
+}
+
+impl StateVersion {
+	/// If defined, values in state of size bigger or equal
+	/// to this threshold will use a separate trie node.
+	/// Otherwhise, value will be inlined in branch or leaf
+	/// node.
+	pub fn state_value_threshold(&self) -> Option<u32> {
+		match self {
+			StateVersion::V0 => None,
+			StateVersion::V1 => Some(TRIE_VALUE_NODE_THRESHOLD),
 		}
 	}
 }

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,9 +18,7 @@
 use codec::{Encode, Joiner};
 use frame_support::{
 	traits::Currency,
-	weights::{
-		constants::ExtrinsicBaseWeight, GetDispatchInfo, IdentityFee, WeightToFeePolynomial,
-	},
+	weights::{constants::ExtrinsicBaseWeight, GetDispatchInfo, IdentityFee, WeightToFee},
 };
 use node_primitives::Balance;
 use node_runtime::{
@@ -36,7 +34,7 @@ use self::common::{sign, *};
 
 #[test]
 fn fee_multiplier_increases_and_decreases_on_big_weight() {
-	let mut t = new_test_ext(compact_code_unwrap(), false);
+	let mut t = new_test_ext(compact_code_unwrap());
 
 	// initial fee multiplier must be one.
 	let mut prev_multiplier = Multiplier::one();
@@ -45,7 +43,7 @@ fn fee_multiplier_increases_and_decreases_on_big_weight() {
 		assert_eq!(TransactionPayment::next_fee_multiplier(), prev_multiplier);
 	});
 
-	let mut tt = new_test_ext(compact_code_unwrap(), false);
+	let mut tt = new_test_ext(compact_code_unwrap());
 
 	let time1 = 42 * 1000;
 	// big one in terms of weight.
@@ -151,7 +149,7 @@ fn transaction_fee_is_correct() {
 	//   - 1 MILLICENTS in substrate node.
 	//   - 1 milli-dot based on current polkadot runtime.
 	// (this baed on assigning 0.1 CENT to the cheapest tx with `weight = 100`)
-	let mut t = new_test_ext(compact_code_unwrap(), false);
+	let mut t = new_test_ext(compact_code_unwrap());
 	t.insert(<frame_system::Account<Runtime>>::hashed_key_for(alice()), new_account_info(100));
 	t.insert(<frame_system::Account<Runtime>>::hashed_key_for(bob()), new_account_info(10));
 	t.insert(
@@ -197,13 +195,13 @@ fn transaction_fee_is_correct() {
 		let mut balance_alice = (100 - 69) * DOLLARS;
 
 		let base_weight = ExtrinsicBaseWeight::get();
-		let base_fee = IdentityFee::<Balance>::calc(&base_weight);
+		let base_fee = IdentityFee::<Balance>::weight_to_fee(&base_weight);
 
 		let length_fee = TransactionByteFee::get() * (xt.clone().encode().len() as Balance);
 		balance_alice -= length_fee;
 
 		let weight = default_transfer_call().get_dispatch_info().weight;
-		let weight_fee = IdentityFee::<Balance>::calc(&weight);
+		let weight_fee = IdentityFee::<Balance>::weight_to_fee(&weight);
 
 		// we know that weight to fee multiplier is effect-less in block 1.
 		// current weight of transfer = 200_000_000
@@ -226,9 +224,9 @@ fn block_weight_capacity_report() {
 	use node_primitives::Index;
 
 	// execution ext.
-	let mut t = new_test_ext(compact_code_unwrap(), false);
+	let mut t = new_test_ext(compact_code_unwrap());
 	// setup ext.
-	let mut tt = new_test_ext(compact_code_unwrap(), false);
+	let mut tt = new_test_ext(compact_code_unwrap());
 
 	let factor = 50;
 	let mut time = 10;
@@ -241,7 +239,10 @@ fn block_weight_capacity_report() {
 		let mut xts = (0..num_transfers)
 			.map(|i| CheckedExtrinsic {
 				signed: Some((charlie(), signed_extra(nonce + i as Index, 0))),
-				function: Call::Balances(pallet_balances::Call::transfer(bob().into(), 0)),
+				function: Call::Balances(pallet_balances::Call::transfer {
+					dest: bob().into(),
+					value: 0,
+				}),
 			})
 			.collect::<Vec<CheckedExtrinsic>>();
 
@@ -249,7 +250,7 @@ fn block_weight_capacity_report() {
 			0,
 			CheckedExtrinsic {
 				signed: None,
-				function: Call::Timestamp(pallet_timestamp::Call::set(time * 1000)),
+				function: Call::Timestamp(pallet_timestamp::Call::set { now: time * 1000 }),
 			},
 		);
 
@@ -300,9 +301,9 @@ fn block_length_capacity_report() {
 	use node_primitives::Index;
 
 	// execution ext.
-	let mut t = new_test_ext(compact_code_unwrap(), false);
+	let mut t = new_test_ext(compact_code_unwrap());
 	// setup ext.
-	let mut tt = new_test_ext(compact_code_unwrap(), false);
+	let mut tt = new_test_ext(compact_code_unwrap());
 
 	let factor = 256 * 1024;
 	let mut time = 10;
@@ -319,7 +320,7 @@ fn block_length_capacity_report() {
 			vec![
 				CheckedExtrinsic {
 					signed: None,
-					function: Call::Timestamp(pallet_timestamp::Call::set(time * 1000)),
+					function: Call::Timestamp(pallet_timestamp::Call::set { now: time * 1000 }),
 				},
 				CheckedExtrinsic {
 					signed: Some((charlie(), signed_extra(nonce, 0))),

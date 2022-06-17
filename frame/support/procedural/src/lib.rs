@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -28,9 +28,12 @@ mod dummy_part_checker;
 mod key_prefix;
 mod match_and_insert;
 mod pallet;
+mod pallet_error;
 mod partial_eq_no_bound;
 mod storage;
+mod storage_alias;
 mod transactional;
+mod tt_macro;
 
 use proc_macro::TokenStream;
 use std::{cell::RefCell, str::FromStr};
@@ -41,9 +44,9 @@ thread_local! {
 	static COUNTER: RefCell<Counter> = RefCell::new(Counter(0));
 }
 
-/// Counter to generate a relatively unique identifier for macros querying for the existence of
-/// pallet parts. This is necessary because declarative macros gets hoisted to the crate root,
-/// which shares the namespace with other pallets containing the very same query macros.
+/// Counter to generate a relatively unique identifier for macros. This is necessary because
+/// declarative macros gets hoisted to the crate root, which shares the namespace with other pallets
+/// containing the very same macros.
 struct Counter(u64);
 
 impl Counter {
@@ -426,8 +429,15 @@ pub fn pallet(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// }
 /// ```
 #[proc_macro_attribute]
+#[deprecated(note = "This is now the default behaviour for all extrinsics.")]
 pub fn transactional(attr: TokenStream, input: TokenStream) -> TokenStream {
 	transactional::transactional(attr, input).unwrap_or_else(|e| e.to_compile_error().into())
+}
+
+#[proc_macro_attribute]
+pub fn require_transactional(attr: TokenStream, input: TokenStream) -> TokenStream {
+	transactional::require_transactional(attr, input)
+		.unwrap_or_else(|e| e.to_compile_error().into())
 }
 
 /// Derive [`Clone`] but do not bound any generic. Docs are at `frame_support::CloneNoBound`.
@@ -507,12 +517,6 @@ pub fn derive_default_no_bound(input: TokenStream) -> TokenStream {
 	default_no_bound::derive_default_no_bound(input)
 }
 
-#[proc_macro_attribute]
-pub fn require_transactional(attr: TokenStream, input: TokenStream) -> TokenStream {
-	transactional::require_transactional(attr, input)
-		.unwrap_or_else(|e| e.to_compile_error().into())
-}
-
 #[proc_macro]
 pub fn crate_to_crate_version(input: TokenStream) -> TokenStream {
 	crate_version::crate_to_crate_version(input)
@@ -561,4 +565,22 @@ pub fn __generate_dummy_part_checker(input: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn match_and_insert(input: TokenStream) -> TokenStream {
 	match_and_insert::match_and_insert(input)
+}
+
+#[proc_macro_derive(PalletError, attributes(codec))]
+pub fn derive_pallet_error(input: TokenStream) -> TokenStream {
+	pallet_error::derive_pallet_error(input)
+}
+
+/// Internal macro used by `frame_support` to create tt-call-compliant macros
+#[proc_macro]
+pub fn __create_tt_macro(input: TokenStream) -> TokenStream {
+	tt_macro::create_tt_return_macro(input)
+}
+
+#[proc_macro_attribute]
+pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
+	storage_alias::storage_alias(input.into())
+		.unwrap_or_else(|r| r.into_compile_error())
+		.into()
 }

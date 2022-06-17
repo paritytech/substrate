@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -63,7 +63,7 @@ where
 	P: Clone + Encode + Decode + PartialEq,
 {
 	// We don't check equivocations for old headers out of our capacity.
-	if slot_now.saturating_sub(*slot) > Slot::from(MAX_SLOT_CAPACITY) {
+	if slot_now.saturating_sub(*slot) > MAX_SLOT_CAPACITY {
 		return Ok(None)
 	}
 

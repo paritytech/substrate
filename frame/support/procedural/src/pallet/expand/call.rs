@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -42,6 +42,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 	let pallet_ident = &def.pallet_struct.pallet;
 
 	let fn_name = methods.iter().map(|method| &method.name).collect::<Vec<_>>();
+	let call_index = methods.iter().map(|method| method.call_index).collect::<Vec<_>>();
 	let new_call_variant_fn_name = fn_name
 		.iter()
 		.map(|fn_name| quote::format_ident!("new_call_variant_{}", fn_name))
@@ -68,7 +69,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 				.args
 				.iter()
 				.map(|(_, name, _)| {
-					syn::Ident::new(&name.to_string().trim_start_matches('_'), name.span())
+					syn::Ident::new(name.to_string().trim_start_matches('_'), name.span())
 				})
 				.collect::<Vec<_>>()
 		})
@@ -137,6 +138,8 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 	let count = COUNTER.with(|counter| counter.borrow_mut().inc());
 	let macro_ident = syn::Ident::new(&format!("__is_call_part_defined_{}", count), span);
 
+	let capture_docs = if cfg!(feature = "no-metadata-docs") { "never" } else { "always" };
+
 	quote::quote_spanned!(span =>
 		#[doc(hidden)]
 		pub mod __substrate_call_check {
@@ -164,7 +167,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 		)]
 		#[codec(encode_bound())]
 		#[codec(decode_bound())]
-		#[scale_info(skip_type_params(#type_use_gen), capture_docs = "always")]
+		#[scale_info(skip_type_params(#type_use_gen), capture_docs = #capture_docs)]
 		#[allow(non_camel_case_types)]
 		pub enum #call_ident<#type_decl_bounded_gen> #where_clause {
 			#[doc(hidden)]
@@ -175,8 +178,12 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 			),
 			#(
 				#( #[doc = #fn_doc] )*
+				#[codec(index = #call_index)]
 				#fn_name {
-					#( #args_compact_attr #args_name_stripped: #args_type ),*
+					#(
+						#[allow(missing_docs)]
+						#args_compact_attr #args_name_stripped: #args_type
+					),*
 				},
 			)*
 		}
@@ -260,8 +267,12 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 							#frame_support::sp_tracing::enter_span!(
 								#frame_support::sp_tracing::trace_span!(stringify!(#fn_name))
 							);
-							<#pallet_ident<#type_use_gen>>::#fn_name(origin, #( #args_name, )* )
-								.map(Into::into).map_err(Into::into)
+							// We execute all dispatchable in at least one storage layer, allowing them
+							// to return an error at any point, and undoing any storage changes.
+							#frame_support::storage::in_storage_layer(|| {
+								<#pallet_ident<#type_use_gen>>::#fn_name(origin, #( #args_name, )* )
+									.map(Into::into).map_err(Into::into)
+							})
 						},
 					)*
 					Self::__Ignore(_, _) => {

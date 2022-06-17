@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,8 +21,12 @@ use super::*;
 use crate as pallet_identity;
 
 use codec::{Decode, Encode};
-use frame_support::{assert_noop, assert_ok, ord_parameter_types, parameter_types, BoundedVec};
-use frame_system::{EnsureOneOf, EnsureRoot, EnsureSignedBy};
+use frame_support::{
+	assert_noop, assert_ok, ord_parameter_types, parameter_types,
+	traits::{ConstU32, ConstU64, EitherOfDiverse},
+	BoundedVec,
+};
+use frame_system::{EnsureRoot, EnsureSignedBy};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -45,7 +49,6 @@ frame_support::construct_runtime!(
 );
 
 parameter_types! {
-	pub const BlockHashCount: u64 = 250;
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(1024);
 }
@@ -63,7 +66,7 @@ impl frame_system::Config for Test {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = BlockHashCount;
+	type BlockHashCount = ConstU64<250>;
 	type DbWeight = ();
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -73,43 +76,40 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
+	type MaxConsumers = ConstU32<16>;
 }
-parameter_types! {
-	pub const ExistentialDeposit: u64 = 1;
-}
+
 impl pallet_balances::Config for Test {
 	type Balance = u64;
 	type Event = Event;
 	type DustRemoval = ();
-	type ExistentialDeposit = ExistentialDeposit;
+	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
 	type MaxLocks = ();
 	type MaxReserves = ();
 	type ReserveIdentifier = [u8; 8];
 	type WeightInfo = ();
 }
+
 parameter_types! {
-	pub const BasicDeposit: u64 = 10;
-	pub const FieldDeposit: u64 = 10;
-	pub const SubAccountDeposit: u64 = 10;
-	pub const MaxSubAccounts: u32 = 2;
 	pub const MaxAdditionalFields: u32 = 2;
 	pub const MaxRegistrars: u32 = 20;
 }
+
 ord_parameter_types! {
 	pub const One: u64 = 1;
 	pub const Two: u64 = 2;
 }
-type EnsureOneOrRoot = EnsureOneOf<u64, EnsureRoot<u64>, EnsureSignedBy<One, u64>>;
-type EnsureTwoOrRoot = EnsureOneOf<u64, EnsureRoot<u64>, EnsureSignedBy<Two, u64>>;
+type EnsureOneOrRoot = EitherOfDiverse<EnsureRoot<u64>, EnsureSignedBy<One, u64>>;
+type EnsureTwoOrRoot = EitherOfDiverse<EnsureRoot<u64>, EnsureSignedBy<Two, u64>>;
 impl pallet_identity::Config for Test {
 	type Event = Event;
 	type Currency = Balances;
 	type Slashed = ();
-	type BasicDeposit = BasicDeposit;
-	type FieldDeposit = FieldDeposit;
-	type SubAccountDeposit = SubAccountDeposit;
-	type MaxSubAccounts = MaxSubAccounts;
+	type BasicDeposit = ConstU64<10>;
+	type FieldDeposit = ConstU64<10>;
+	type SubAccountDeposit = ConstU64<10>;
+	type MaxSubAccounts = ConstU32<2>;
 	type MaxAdditionalFields = MaxAdditionalFields;
 	type MaxRegistrars = MaxRegistrars;
 	type RegistrarOrigin = EnsureOneOrRoot;
@@ -498,5 +498,22 @@ fn setting_account_id_should_work() {
 		assert_ok!(Identity::set_account_id(Origin::signed(3), 0, 4));
 		// account 4 can now, because that's their new ID.
 		assert_ok!(Identity::set_account_id(Origin::signed(4), 0, 3));
+	});
+}
+
+#[test]
+fn test_has_identity() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Identity::set_identity(Origin::signed(10), Box::new(ten())));
+		assert!(Identity::has_identity(&10, IdentityField::Display as u64));
+		assert!(Identity::has_identity(&10, IdentityField::Legal as u64));
+		assert!(Identity::has_identity(
+			&10,
+			IdentityField::Display as u64 | IdentityField::Legal as u64
+		));
+		assert!(!Identity::has_identity(
+			&10,
+			IdentityField::Display as u64 | IdentityField::Legal as u64 | IdentityField::Web as u64
+		));
 	});
 }

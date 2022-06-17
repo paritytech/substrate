@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -26,7 +26,7 @@ pub(super) struct MultipleInputBytes(pub Vec<Vec<u8>>);
 
 impl MultipleInputBytes {
 	pub(super) fn concatenated(mut self) -> Vec<u8> {
-		if self.0.len() == 0 {
+		if self.0.is_empty() {
 			Vec::new()
 		} else {
 			let mut result = core::mem::take(&mut self.0[0]);

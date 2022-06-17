@@ -14,7 +14,7 @@ jobs:
         with:
           authToken: ${{ secrets.GITHUB_TOKEN }}
           ref: ${{ github.event.pull_request.head.sha }}
-          contexts: 'continuous-integration/gitlab-check-polkadot-companion-build'
+          contexts: 'continuous-integration/gitlab-check-dependent-polkadot'
           timeout: 1800
           notPresentTimeout: 3600 # It can take quite a while before the job starts on Gitlab when the CI queue is large
           failureStates: failure

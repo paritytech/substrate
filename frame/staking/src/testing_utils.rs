@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -36,13 +36,15 @@ const SEED: u32 = 0;
 
 /// This function removes all validators and nominators from storage.
 pub fn clear_validators_and_nominators<T: Config>() {
-	Validators::<T>::remove_all(None);
-	CounterForValidators::<T>::kill();
+	#[allow(deprecated)]
+	Validators::<T>::remove_all();
 
-	// whenever we touch nominators counter we should update `T::SortedListProvider` as well.
-	Nominators::<T>::remove_all(None);
-	CounterForNominators::<T>::kill();
-	let _ = T::SortedListProvider::clear(None);
+	// whenever we touch nominators counter we should update `T::VoterList` as well.
+	#[allow(deprecated)]
+	Nominators::<T>::remove_all();
+
+	// NOTE: safe to call outside block production
+	T::VoterList::unsafe_clear();
 }
 
 /// Grab a funded user.
@@ -85,7 +87,7 @@ pub fn create_stash_controller<T: Config>(
 		amount,
 		destination,
 	)?;
-	return Ok((stash, controller))
+	Ok((stash, controller))
 }
 
 /// Create a stash and controller pair with fixed balance.
@@ -127,7 +129,7 @@ pub fn create_stash_and_dead_controller<T: Config>(
 		amount,
 		destination,
 	)?;
-	return Ok((stash, controller))
+	Ok((stash, controller))
 }
 
 /// create `max` validators.

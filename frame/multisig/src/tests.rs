@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,7 +22,10 @@
 use super::*;
 
 use crate as pallet_multisig;
-use frame_support::{assert_noop, assert_ok, parameter_types, traits::Contains};
+use frame_support::{
+	assert_noop, assert_ok, parameter_types,
+	traits::{ConstU16, ConstU32, ConstU64, Contains},
+};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -46,7 +49,6 @@ frame_support::construct_runtime!(
 );
 
 parameter_types! {
-	pub const BlockHashCount: u64 = 250;
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(1024);
 }
@@ -65,7 +67,7 @@ impl frame_system::Config for Test {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = BlockHashCount;
+	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
 	type AccountData = pallet_balances::AccountData<u64>;
@@ -74,10 +76,9 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
+	type MaxConsumers = ConstU32<16>;
 }
-parameter_types! {
-	pub const ExistentialDeposit: u64 = 1;
-}
+
 impl pallet_balances::Config for Test {
 	type MaxLocks = ();
 	type MaxReserves = ();
@@ -85,15 +86,11 @@ impl pallet_balances::Config for Test {
 	type Balance = u64;
 	type Event = Event;
 	type DustRemoval = ();
-	type ExistentialDeposit = ExistentialDeposit;
+	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
 }
-parameter_types! {
-	pub const DepositBase: u64 = 1;
-	pub const DepositFactor: u64 = 1;
-	pub const MaxSignatories: u16 = 3;
-}
+
 pub struct TestBaseCallFilter;
 impl Contains<Call> for TestBaseCallFilter {
 	fn contains(c: &Call) -> bool {
@@ -109,9 +106,9 @@ impl Config for Test {
 	type Event = Event;
 	type Call = Call;
 	type Currency = Balances;
-	type DepositBase = DepositBase;
-	type DepositFactor = DepositFactor;
-	type MaxSignatories = MaxSignatories;
+	type DepositBase = ConstU64<1>;
+	type DepositFactor = ConstU64<1>;
+	type MaxSignatories = ConstU16<3>;
 	type WeightInfo = ();
 }
 
@@ -706,7 +703,14 @@ fn multisig_2_of_3_cannot_reissue_same_call() {
 
 		let err = DispatchError::from(BalancesError::<Test, _>::InsufficientBalance).stripped();
 		System::assert_last_event(
-			pallet_multisig::Event::MultisigExecuted(3, now(), multi, hash, Err(err)).into(),
+			pallet_multisig::Event::MultisigExecuted {
+				approving: 3,
+				timepoint: now(),
+				multisig: multi,
+				call_hash: hash,
+				result: Err(err),
+			}
+			.into(),
 		);
 	});
 }

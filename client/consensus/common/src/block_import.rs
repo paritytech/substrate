@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -20,8 +20,8 @@
 
 use serde::{Deserialize, Serialize};
 use sp_runtime::{
-	traits::{Block as BlockT, DigestItemFor, HashFor, Header as HeaderT, NumberFor},
-	Justification, Justifications,
+	traits::{Block as BlockT, HashFor, Header as HeaderT, NumberFor},
+	DigestItem, Justification, Justifications,
 };
 use std::{any::Any, borrow::Cow, collections::HashMap, sync::Arc};
 
@@ -62,8 +62,7 @@ impl ImportResult {
 	/// `clear_justification_requests`, `needs_justification`,
 	/// `bad_justification` set to false.
 	pub fn imported(is_new_best: bool) -> ImportResult {
-		let mut aux = ImportedAux::default();
-		aux.is_new_best = is_new_best;
+		let aux = ImportedAux { is_new_best, ..Default::default() };
 
 		ImportResult::Imported(aux)
 	}
@@ -122,7 +121,7 @@ pub struct BlockCheckParams<Block: BlockT> {
 /// Precomputed storage.
 pub enum StorageChanges<Block: BlockT, Transaction> {
 	/// Changes coming from block execution.
-	Changes(sp_state_machine::StorageChanges<Transaction, HashFor<Block>, NumberFor<Block>>),
+	Changes(sp_state_machine::StorageChanges<Transaction, HashFor<Block>>),
 	/// Whole new state.
 	Import(ImportedState<Block>),
 }
@@ -133,7 +132,7 @@ pub struct ImportedState<B: BlockT> {
 	/// Target block hash.
 	pub block: B::Hash,
 	/// State keys and values.
-	pub state: Vec<(Vec<u8>, Vec<u8>)>,
+	pub state: sp_state_machine::KeyValueStates,
 }
 
 impl<B: BlockT> std::fmt::Debug for ImportedState<B> {
@@ -175,7 +174,7 @@ pub struct BlockImportParams<Block: BlockT, Transaction> {
 	pub justifications: Option<Justifications>,
 	/// Digest items that have been added after the runtime for external
 	/// work, like a consensus signature.
-	pub post_digests: Vec<DigestItemFor<Block>>,
+	pub post_digests: Vec<DigestItem>,
 	/// The body of the block.
 	pub body: Option<Vec<Block::Extrinsic>>,
 	/// Indexed transaction body of the block.
@@ -190,8 +189,9 @@ pub struct BlockImportParams<Block: BlockT, Transaction> {
 	/// rejects block import if there are still intermediate values that remain unhandled.
 	pub intermediates: HashMap<Cow<'static, [u8]>, Box<dyn Any + Send>>,
 	/// Auxiliary consensus data produced by the block.
-	/// Contains a list of key-value pairs. If values are `None`, the keys
-	/// will be deleted.
+	/// Contains a list of key-value pairs. If values are `None`, the keys will be deleted. These
+	/// changes will be applied to `AuxStore` database all as one batch, which is more efficient
+	/// than updating `AuxStore` directly.
 	pub auxiliary: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	/// Fork choice strategy of this import. This should only be set by a
 	/// synchronous import, otherwise it may race against other imports.
@@ -286,9 +286,9 @@ impl<Block: BlockT, Transaction> BlockImportParams<Block, Transaction> {
 	pub fn take_intermediate<T: 'static>(&mut self, key: &[u8]) -> Result<Box<T>, Error> {
 		let (k, v) = self.intermediates.remove_entry(key).ok_or(Error::NoIntermediate)?;
 
-		v.downcast::<T>().or_else(|v| {
+		v.downcast::<T>().map_err(|v| {
 			self.intermediates.insert(k, v);
-			Err(Error::InvalidIntermediate)
+			Error::InvalidIntermediate
 		})
 	}
 

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -259,7 +259,7 @@ impl StorageLineDefExt {
 	) -> Self {
 		let is_generic = match &storage_def.storage_type {
 			StorageLineTypeDef::Simple(value) =>
-				ext::type_contains_ident(&value, &def.module_runtime_generic),
+				ext::type_contains_ident(value, &def.module_runtime_generic),
 			StorageLineTypeDef::Map(map) =>
 				ext::type_contains_ident(&map.key, &def.module_runtime_generic) ||
 					ext::type_contains_ident(&map.value, &def.module_runtime_generic),

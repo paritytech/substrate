@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -21,31 +21,40 @@ use crate::{
 	params::{GenericNumber, PruningParams, SharedParams},
 	CliConfiguration,
 };
+use clap::Parser;
 use sc_client_api::{Backend, UsageProvider};
 use sc_service::chain_ops::revert_chain;
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use std::{fmt::Debug, str::FromStr, sync::Arc};
-use structopt::StructOpt;
 
 /// The `revert` command used revert the chain to a previous state.
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Parser)]
 pub struct RevertCmd {
 	/// Number of blocks to revert.
-	#[structopt(default_value = "256")]
+	#[clap(default_value = "256")]
 	pub num: GenericNumber,
 
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	pub shared_params: SharedParams,
 
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	pub pruning_params: PruningParams,
 }
 
+/// Revert handler for auxiliary data (e.g. consensus).
+type AuxRevertHandler<C, BA, B> =
+	Box<dyn FnOnce(Arc<C>, Arc<BA>, NumberFor<B>) -> error::Result<()>>;
+
 impl RevertCmd {
 	/// Run the revert command
-	pub async fn run<B, BA, C>(&self, client: Arc<C>, backend: Arc<BA>) -> error::Result<()>
+	pub async fn run<B, BA, C>(
+		&self,
+		client: Arc<C>,
+		backend: Arc<BA>,
+		aux_revert: Option<AuxRevertHandler<C, BA, B>>,
+	) -> error::Result<()>
 	where
 		B: BlockT,
 		BA: Backend<B>,
@@ -53,6 +62,9 @@ impl RevertCmd {
 		<<<B as BlockT>::Header as HeaderT>::Number as FromStr>::Err: Debug,
 	{
 		let blocks = self.num.parse()?;
+		if let Some(aux_revert) = aux_revert {
+			aux_revert(client.clone(), backend.clone(), blocks)?;
+		}
 		revert_chain(client, backend, blocks)?;
 
 		Ok(())

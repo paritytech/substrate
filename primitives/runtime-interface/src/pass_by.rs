@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -33,7 +33,7 @@ use crate::wasm::*;
 #[cfg(feature = "std")]
 use sp_wasm_interface::{FunctionContext, Pointer, Result};
 
-use sp_std::{convert::TryFrom, marker::PhantomData};
+use sp_std::marker::PhantomData;
 
 #[cfg(not(feature = "std"))]
 use sp_std::vec::Vec;
@@ -382,7 +382,7 @@ impl<T: PassByInner<Inner = I>, I: RIType> RIType for Inner<T, I> {
 ///     }
 /// }
 ///
-/// impl std::convert::TryFrom<u8> for Test {
+/// impl TryFrom<u8> for Test {
 ///     type Error = ();
 ///
 ///     fn try_from(val: u8) -> Result<Test, ()> {
@@ -403,11 +403,11 @@ pub struct Enum<T: Copy + Into<u8> + TryFrom<u8>>(PhantomData<T>);
 #[cfg(feature = "std")]
 impl<T: Copy + Into<u8> + TryFrom<u8>> PassByImpl<T> for Enum<T> {
 	fn into_ffi_value(instance: T, _: &mut dyn FunctionContext) -> Result<Self::FFIType> {
-		Ok(instance.into())
+		Ok(instance.into() as u32)
 	}
 
 	fn from_ffi_value(_: &mut dyn FunctionContext, arg: Self::FFIType) -> Result<T> {
-		T::try_from(arg).map_err(|_| format!("Invalid enum discriminant: {}", arg))
+		T::try_from(arg as u8).map_err(|_| format!("Invalid enum discriminant: {}", arg))
 	}
 }
 
@@ -417,17 +417,17 @@ impl<T: Copy + Into<u8> + TryFrom<u8, Error = ()>> PassByImpl<T> for Enum<T> {
 
 	fn into_ffi_value(instance: &T) -> WrappedFFIValue<Self::FFIType, Self::Owned> {
 		let value: u8 = (*instance).into();
-		value.into()
+		(value as u32).into()
 	}
 
 	fn from_ffi_value(arg: Self::FFIType) -> T {
-		T::try_from(arg).expect("Host to wasm provides a valid enum discriminant; qed")
+		T::try_from(arg as u8).expect("Host to wasm provides a valid enum discriminant; qed")
 	}
 }
 
-/// The type is passed as `u8`.
+/// The type is passed as `u32`.
 ///
 /// The value is corresponds to the discriminant of the variant.
 impl<T: Copy + Into<u8> + TryFrom<u8>> RIType for Enum<T> {
-	type FFIType = u8;
+	type FFIType = u32;
 }

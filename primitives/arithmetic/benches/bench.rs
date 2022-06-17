@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -41,19 +41,19 @@ fn bench_op<F: Fn(&BigUint, &BigUint)>(c: &mut Criterion, name: &str, op: F) {
 
 fn bench_addition(c: &mut Criterion) {
 	bench_op(c, "addition", |a, b| {
-		let _ = a.clone().add(&b);
+		let _ = a.clone().add(b);
 	});
 }
 
 fn bench_subtraction(c: &mut Criterion) {
 	bench_op(c, "subtraction", |a, b| {
-		let _ = a.clone().sub(&b);
+		let _ = a.clone().sub(b);
 	});
 }
 
 fn bench_multiplication(c: &mut Criterion) {
 	bench_op(c, "multiplication", |a, b| {
-		let _ = a.clone().mul(&b);
+		let _ = a.clone().mul(b);
 	});
 }
 

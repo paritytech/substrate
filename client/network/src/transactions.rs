@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -27,7 +27,7 @@
 //! `Future` that processes transactions.
 
 use crate::{
-	config::{self, ProtocolId, TransactionImport, TransactionImportFuture, TransactionPool},
+	config::{self, TransactionImport, TransactionImportFuture, TransactionPool},
 	error,
 	protocol::message,
 	service::NetworkService,
@@ -40,6 +40,7 @@ use futures::{channel::mpsc, prelude::*, stream::FuturesUnordered};
 use libp2p::{multiaddr, PeerId};
 use log::{debug, trace, warn};
 use prometheus_endpoint::{register, Counter, PrometheusError, Registry, U64};
+use sc_network_common::config::ProtocolId;
 use sp_runtime::traits::Block as BlockT;
 use std::{
 	borrow::Cow,
@@ -95,7 +96,7 @@ impl Metrics {
 		Ok(Self {
 			propagated_transactions: register(
 				Counter::new(
-					"sync_propagated_transactions",
+					"substrate_sync_propagated_transactions",
 					"Number of transactions propagated to at least one peer",
 				)?,
 				r,
@@ -133,15 +134,7 @@ pub struct TransactionsHandlerPrototype {
 impl TransactionsHandlerPrototype {
 	/// Create a new instance.
 	pub fn new(protocol_id: ProtocolId) -> Self {
-		Self {
-			protocol_name: Cow::from({
-				let mut proto = String::new();
-				proto.push_str("/");
-				proto.push_str(protocol_id.as_ref());
-				proto.push_str("/transactions/1");
-				proto
-			}),
-		}
+		Self { protocol_name: format!("/{}/transactions/1", protocol_id.as_ref()).into() }
 	}
 
 	/// Returns the configuration of the set to put in the network configuration.
@@ -336,13 +329,13 @@ impl<B: BlockT + 'static, H: ExHashT> TransactionsHandler<B, H> {
 					},
 				);
 				debug_assert!(_was_in.is_none());
-			}
+			},
 			Event::NotificationStreamClosed { remote, protocol }
 				if protocol == self.protocol_name =>
 			{
 				let _peer = self.peers.remove(&remote);
 				debug_assert!(_peer.is_some());
-			}
+			},
 
 			Event::NotificationsReceived { remote, messages } => {
 				for (protocol, message) in messages {

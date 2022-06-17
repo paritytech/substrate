@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -74,9 +74,7 @@ fn check_prefix_duplicates(
 			),
 		);
 
-		if let Some(other_dup_err) =
-			used_prefixes.insert(counter_prefix.clone(), counter_dup_err.clone())
-		{
+		if let Some(other_dup_err) = used_prefixes.insert(counter_prefix, counter_dup_err.clone()) {
 			let mut err = counter_dup_err;
 			err.combine(other_dup_err);
 			return Err(err)
@@ -113,7 +111,7 @@ pub fn process_generics(def: &mut Def) -> syn::Result<()> {
 			_ => unreachable!("Checked by def"),
 		};
 
-		let prefix_ident = prefix_ident(&storage_def);
+		let prefix_ident = prefix_ident(storage_def);
 		let type_use_gen = if def.config.has_instance {
 			quote::quote_spanned!(storage_def.attr_span => T, I)
 		} else {
@@ -215,7 +213,7 @@ pub fn process_generics(def: &mut Def) -> syn::Result<()> {
 /// * generate metadatas
 pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 	if let Err(e) = process_generics(def) {
-		return e.into_compile_error().into()
+		return e.into_compile_error()
 	}
 
 	// Check for duplicate prefixes
@@ -234,7 +232,8 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 	let pallet_ident = &def.pallet_struct.pallet;
 
 	let entries_builder = def.storages.iter().map(|storage| {
-		let docs = &storage.docs;
+		let no_docs = vec![];
+		let docs = if cfg!(feature = "no-metadata-docs") { &no_docs } else { &storage.docs };
 
 		let ident = &storage.ident;
 		let gen = &def.type_use_generics(storage.attr_span);
@@ -392,7 +391,7 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 	let prefix_structs = def.storages.iter().map(|storage_def| {
 		let type_impl_gen = &def.type_impl_generics(storage_def.attr_span);
 		let type_use_gen = &def.type_use_generics(storage_def.attr_span);
-		let prefix_struct_ident = prefix_ident(&storage_def);
+		let prefix_struct_ident = prefix_ident(storage_def);
 		let prefix_struct_vis = &storage_def.vis;
 		let prefix_struct_const = storage_def.prefix();
 		let config_where_clause = &def.config.where_clause;
@@ -405,6 +404,7 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 
 			quote::quote_spanned!(storage_def.attr_span =>
 				#(#cfg_attrs)*
+				#[doc(hidden)]
 				#prefix_struct_vis struct #counter_prefix_struct_ident<#type_use_gen>(
 					core::marker::PhantomData<(#type_use_gen,)>
 				);
@@ -438,6 +438,7 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 			#maybe_counter
 
 			#(#cfg_attrs)*
+			#[doc(hidden)]
 			#prefix_struct_vis struct #prefix_struct_ident<#type_use_gen>(
 				core::marker::PhantomData<(#type_use_gen,)>
 			);

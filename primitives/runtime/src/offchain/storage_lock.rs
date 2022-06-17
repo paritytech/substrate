@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -134,7 +134,7 @@ impl Lockable for Time {
 
 	fn snooze(deadline: &Self::Deadline) {
 		let now = offchain::timestamp();
-		let remainder: Duration = now.diff(&deadline);
+		let remainder: Duration = now.diff(deadline);
 		// do not snooze the full duration, but instead snooze max 100ms
 		// it might get unlocked in another thread
 		use core::cmp::{max, min};

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -125,7 +125,7 @@ where
 		let current_target = current_target.clone();
 
 		// find the block at the given target height
-		Box::pin(std::future::ready(find_target(&*backend, target_number.clone(), &current_target)))
+		Box::pin(std::future::ready(find_target(&*backend, target_number, &current_target)))
 	}
 }
 

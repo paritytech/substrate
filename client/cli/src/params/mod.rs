@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -26,13 +26,13 @@ mod shared_params;
 mod transaction_pool_params;
 
 use crate::arg_enums::{CryptoScheme, OutputType};
+use clap::Args;
 use sp_core::crypto::Ss58AddressFormat;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, NumberFor},
 };
-use std::{convert::TryFrom, fmt::Debug, str::FromStr};
-use structopt::StructOpt;
+use std::{fmt::Debug, str::FromStr};
 
 pub use crate::params::{
 	database_params::*, import_params::*, keystore_params::*, network_params::*,
@@ -79,8 +79,8 @@ impl FromStr for BlockNumberOrHash {
 	type Err = String;
 
 	fn from_str(block_number: &str) -> Result<Self, Self::Err> {
-		if block_number.starts_with("0x") {
-			if let Some(pos) = &block_number[2..].chars().position(|c| !c.is_ascii_hexdigit()) {
+		if let Some(rest) = block_number.strip_prefix("0x") {
+			if let Some(pos) = rest.chars().position(|c| !c.is_ascii_hexdigit()) {
 				Err(format!(
 					"Expected block hash, found illegal hex character at position: {}",
 					2 + pos,
@@ -115,44 +115,32 @@ impl BlockNumberOrHash {
 }
 
 /// Optional flag for specifying crypto algorithm
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, Clone, Args)]
 pub struct CryptoSchemeFlag {
 	/// cryptography scheme
-	#[structopt(
-		long,
-		value_name = "SCHEME",
-		possible_values = &CryptoScheme::variants(),
-		case_insensitive = true,
-		default_value = "Sr25519"
-	)]
+	#[clap(long, value_name = "SCHEME", arg_enum, ignore_case = true, default_value = "sr25519")]
 	pub scheme: CryptoScheme,
 }
 
 /// Optional flag for specifying output type
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, Clone, Args)]
 pub struct OutputTypeFlag {
 	/// output format
-	#[structopt(
-		long,
-		value_name = "FORMAT",
-		possible_values = &OutputType::variants(),
-		case_insensitive = true,
-		default_value = "Text"
-	)]
+	#[clap(long, value_name = "FORMAT", arg_enum, ignore_case = true, default_value = "text")]
 	pub output_type: OutputType,
 }
 
 /// Optional flag for specifying network scheme
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, Clone, Args)]
 pub struct NetworkSchemeFlag {
 	/// network address format
-	#[structopt(
+	#[clap(
+		short = 'n',
 		long,
 		value_name = "NETWORK",
-		short = "n",
 		possible_values = &Ss58AddressFormat::all_names()[..],
+		ignore_case = true,
 		parse(try_from_str = Ss58AddressFormat::try_from),
-		case_insensitive = true,
 	)]
 	pub network: Option<Ss58AddressFormat>,
 }

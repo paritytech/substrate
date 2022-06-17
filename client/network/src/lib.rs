@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -103,8 +103,8 @@
 //! protocol ID.
 //!
 //! > **Note**: It is possible for the same connection to be used for multiple chains. For example,
-//! >           one can use both the `/dot/sync/2` and `/sub/sync/2` protocols on the same
-//! >           connection, provided that the remote supports them.
+//! > one can use both the `/dot/sync/2` and `/sub/sync/2` protocols on the same
+//! > connection, provided that the remote supports them.
 //!
 //! Substrate uses the following standard libp2p protocols:
 //!
@@ -245,9 +245,7 @@
 //! More precise usage details are still being worked on and will likely change in the future.
 
 mod behaviour;
-mod chain;
 mod discovery;
-mod on_demand_layer;
 mod peer_info;
 mod protocol;
 mod request_responses;
@@ -257,25 +255,29 @@ mod transport;
 mod utils;
 
 pub mod bitswap;
-pub mod block_request_handler;
 pub mod config;
 pub mod error;
-pub mod light_client_requests;
 pub mod network_state;
-pub mod state_request_handler;
 pub mod transactions;
-pub mod warp_request_handler;
 
 #[doc(inline)]
 pub use libp2p::{multiaddr, Multiaddr, PeerId};
 pub use protocol::{
 	event::{DhtEvent, Event, ObservedRole},
-	sync::{StateDownloadProgress, SyncState, WarpSyncPhase, WarpSyncProgress},
 	PeerInfo,
 };
+pub use sc_network_light::light_client_requests;
+pub use sc_network_sync::{
+	block_request_handler,
+	state::StateDownloadProgress,
+	state_request_handler,
+	warp::{WarpSyncPhase, WarpSyncProgress},
+	warp_request_handler, SyncState,
+};
 pub use service::{
-	IfDisconnected, NetworkService, NetworkWorker, NotificationSender, NotificationSenderReady,
-	OutboundFailure, RequestFailure,
+	DecodingError, IfDisconnected, KademliaKey, Keypair, NetworkService, NetworkWorker,
+	NotificationSender, NotificationSenderReady, OutboundFailure, PublicKey, RequestFailure,
+	Signature, SigningError,
 };
 
 pub use sc_peerset::ReputationChange;
@@ -326,7 +328,7 @@ pub struct NetworkStatus<B: BlockT> {
 	/// The total number of bytes sent.
 	pub total_bytes_outbound: u64,
 	/// State sync in progress.
-	pub state_sync: Option<protocol::sync::StateDownloadProgress>,
+	pub state_sync: Option<StateDownloadProgress>,
 	/// Warp sync in progress.
-	pub warp_sync: Option<protocol::sync::WarpSyncProgress<B>>,
+	pub warp_sync: Option<WarpSyncProgress<B>>,
 }

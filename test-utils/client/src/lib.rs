@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -28,7 +28,7 @@ pub use sc_client_api::{
 };
 pub use sc_client_db::{self, Backend};
 pub use sc_executor::{self, NativeElseWasmExecutor, WasmExecutionMethod};
-pub use sc_service::{client, RpcHandlers, RpcSession};
+pub use sc_service::{client, RpcHandlers};
 pub use sp_consensus;
 pub use sp_keyring::{
 	ed25519::Keyring as Ed25519Keyring, sr25519::Keyring as Sr25519Keyring, AccountKeyring,
@@ -37,28 +37,17 @@ pub use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 pub use sp_runtime::{Storage, StorageChild};
 pub use sp_state_machine::ExecutionStrategy;
 
-use futures::{
-	future::{Future, FutureExt},
-	stream::StreamExt,
-};
+use futures::{future::Future, stream::StreamExt};
 use sc_client_api::BlockchainEvents;
 use sc_service::client::{ClientConfig, LocalCallExecutor};
 use serde::Deserialize;
 use sp_core::storage::ChildInfo;
-use sp_runtime::{
-	codec::Encode,
-	traits::{BlakeTwo256, Block as BlockT},
-	OpaqueExtrinsic,
-};
+use sp_runtime::{codec::Encode, traits::Block as BlockT, OpaqueExtrinsic};
 use std::{
 	collections::{HashMap, HashSet},
 	pin::Pin,
 	sync::Arc,
 };
-
-/// Test client light database backend.
-pub type LightBackend<Block> =
-	sc_light::Backend<sc_client_db::light::LightStorage<Block>, BlakeTwo256>;
 
 /// A genesis storage initialization trait.
 pub trait GenesisInit: Default {
@@ -113,11 +102,7 @@ impl<Block: BlockT, ExecutorDispatch, G: GenesisInit>
 
 	/// Create new `TestClientBuilder` with default backend and storage chain mode
 	pub fn with_tx_storage(keep_blocks: u32) -> Self {
-		let backend = Arc::new(Backend::new_test_with_tx_storage(
-			keep_blocks,
-			0,
-			sc_client_db::TransactionStorageMode::StorageChain,
-		));
+		let backend = Arc::new(Backend::new_test_with_tx_storage(keep_blocks, 0));
 		Self::with_backend(backend)
 	}
 }
@@ -216,13 +201,13 @@ impl<Block: BlockT, ExecutorDispatch, Backend, G: GenesisInit>
 		sc_consensus::LongestChain<Backend, Block>,
 	)
 	where
-		ExecutorDispatch: sc_client_api::CallExecutor<Block> + 'static,
+		ExecutorDispatch:
+			sc_client_api::CallExecutor<Block> + sc_executor::RuntimeVersionOf + 'static,
 		Backend: sc_client_api::backend::Backend<Block>,
 		<Backend as sc_client_api::backend::Backend<Block>>::OffchainStorage: 'static,
 	{
 		let storage = {
 			let mut storage = self.genesis_init.genesis_storage();
-
 			// Add some child storage keys.
 			for (key, child_content) in self.child_storage_extension {
 				storage.children_default.insert(
@@ -270,7 +255,8 @@ impl<Block: BlockT, D, Backend, G: GenesisInit>
 		client::LocalCallExecutor<Block, Backend, NativeElseWasmExecutor<D>>,
 		Backend,
 		G,
-	>
+	> where
+	D: sc_executor::NativeExecutionDispatch,
 {
 	/// Build the test client with the given native executor.
 	pub fn build_with_native_executor<RuntimeApi, I>(
@@ -291,7 +277,7 @@ impl<Block: BlockT, D, Backend, G: GenesisInit>
 		Backend: sc_client_api::backend::Backend<Block> + 'static,
 	{
 		let executor = executor.into().unwrap_or_else(|| {
-			NativeElseWasmExecutor::new(WasmExecutionMethod::Interpreted, None, 8)
+			NativeElseWasmExecutor::new(WasmExecutionMethod::Interpreted, None, 8, 2)
 		});
 		let executor = LocalCallExecutor::new(
 			self.backend.clone(),
@@ -308,16 +294,14 @@ impl<Block: BlockT, D, Backend, G: GenesisInit>
 /// The output of an RPC transaction.
 pub struct RpcTransactionOutput {
 	/// The output string of the transaction if any.
-	pub result: Option<String>,
-	/// The session object.
-	pub session: RpcSession,
+	pub result: String,
 	/// An async receiver if data will be returned via a callback.
 	pub receiver: futures::channel::mpsc::UnboundedReceiver<String>,
 }
 
 impl std::fmt::Debug for RpcTransactionOutput {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-		write!(f, "RpcTransactionOutput {{ result: {:?}, session, receiver }}", self.result)
+		write!(f, "RpcTransactionOutput {{ result: {:?}, receiver }}", self.result)
 	}
 }
 
@@ -339,56 +323,51 @@ impl std::fmt::Display for RpcTransactionError {
 }
 
 /// An extension trait for `RpcHandlers`.
+#[async_trait::async_trait]
 pub trait RpcHandlersExt {
 	/// Send a transaction through the RpcHandlers.
-	fn send_transaction(
+	async fn send_transaction(
 		&self,
 		extrinsic: OpaqueExtrinsic,
-	) -> Pin<Box<dyn Future<Output = Result<RpcTransactionOutput, RpcTransactionError>> + Send>>;
+	) -> Result<RpcTransactionOutput, RpcTransactionError>;
 }
 
+#[async_trait::async_trait]
 impl RpcHandlersExt for RpcHandlers {
-	fn send_transaction(
+	async fn send_transaction(
 		&self,
 		extrinsic: OpaqueExtrinsic,
-	) -> Pin<Box<dyn Future<Output = Result<RpcTransactionOutput, RpcTransactionError>> + Send>> {
-		let (tx, rx) = futures::channel::mpsc::unbounded();
-		let mem = RpcSession::new(tx.into());
-		Box::pin(
-			self.rpc_query(
-				&mem,
-				&format!(
-					r#"{{
+	) -> Result<RpcTransactionOutput, RpcTransactionError> {
+		let (result, rx) = self
+			.rpc_query(&format!(
+				r#"{{
 						"jsonrpc": "2.0",
 						"method": "author_submitExtrinsic",
 						"params": ["0x{}"],
 						"id": 0
 					}}"#,
-					hex::encode(extrinsic.encode())
-				),
-			)
-			.map(move |result| parse_rpc_result(result, mem, rx)),
-		)
+				hex::encode(extrinsic.encode())
+			))
+			.await
+			.expect("valid JSON-RPC request object; qed");
+		parse_rpc_result(result, rx)
 	}
 }
 
 pub(crate) fn parse_rpc_result(
-	result: Option<String>,
-	session: RpcSession,
+	result: String,
 	receiver: futures::channel::mpsc::UnboundedReceiver<String>,
 ) -> Result<RpcTransactionOutput, RpcTransactionError> {
-	if let Some(ref result) = result {
-		let json: serde_json::Value =
-			serde_json::from_str(result).expect("the result can only be a JSONRPC string; qed");
-		let error = json.as_object().expect("JSON result is always an object; qed").get("error");
+	let json: serde_json::Value =
+		serde_json::from_str(&result).expect("the result can only be a JSONRPC string; qed");
+	let error = json.as_object().expect("JSON result is always an object; qed").get("error");
 
-		if let Some(error) = error {
-			return Err(serde_json::from_value(error.clone())
-				.expect("the JSONRPC result's error is always valid; qed"))
-		}
+	if let Some(error) = error {
+		return Err(serde_json::from_value(error.clone())
+			.expect("the JSONRPC result's error is always valid; qed"))
 	}
 
-	Ok(RpcTransactionOutput { result, session, receiver })
+	Ok(RpcTransactionOutput { result, receiver })
 }
 
 /// An extension trait for `BlockchainEvents`.
@@ -429,40 +408,23 @@ where
 
 #[cfg(test)]
 mod tests {
-	use sc_service::RpcSession;
-
-	fn create_session_and_receiver(
-	) -> (RpcSession, futures::channel::mpsc::UnboundedReceiver<String>) {
-		let (tx, rx) = futures::channel::mpsc::unbounded();
-		let mem = RpcSession::new(tx.into());
-
-		(mem, rx)
-	}
-
 	#[test]
 	fn parses_error_properly() {
-		let (mem, rx) = create_session_and_receiver();
-		assert!(super::parse_rpc_result(None, mem, rx).is_ok());
-
-		let (mem, rx) = create_session_and_receiver();
+		let (_, rx) = futures::channel::mpsc::unbounded();
 		assert!(super::parse_rpc_result(
-			Some(
-				r#"{
+			r#"{
 				"jsonrpc": "2.0",
 				"result": 19,
 				"id": 1
 			}"#
-				.to_string()
-			),
-			mem,
+			.to_string(),
 			rx
 		)
-		.is_ok(),);
+		.is_ok());
 
-		let (mem, rx) = create_session_and_receiver();
+		let (_, rx) = futures::channel::mpsc::unbounded();
 		let error = super::parse_rpc_result(
-			Some(
-				r#"{
+			r#"{
 				"jsonrpc": "2.0",
 				"error": {
 					"code": -32601,
@@ -470,9 +432,7 @@ mod tests {
 				},
 				"id": 1
 			}"#
-				.to_string(),
-			),
-			mem,
+			.to_string(),
 			rx,
 		)
 		.unwrap_err();
@@ -480,10 +440,9 @@ mod tests {
 		assert_eq!(error.message, "Method not found");
 		assert!(error.data.is_none());
 
-		let (mem, rx) = create_session_and_receiver();
+		let (_, rx) = futures::channel::mpsc::unbounded();
 		let error = super::parse_rpc_result(
-			Some(
-				r#"{
+			r#"{
 				"jsonrpc": "2.0",
 				"error": {
 					"code": -32601,
@@ -492,9 +451,7 @@ mod tests {
 				},
 				"id": 1
 			}"#
-				.to_string(),
-			),
-			mem,
+			.to_string(),
 			rx,
 		)
 		.unwrap_err();

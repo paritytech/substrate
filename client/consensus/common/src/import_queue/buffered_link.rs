@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -105,14 +105,14 @@ impl<B: BlockT> Link<B> for BufferedLinkSender<B> {
 		number: NumberFor<B>,
 		success: bool,
 	) {
-		let msg = BlockImportWorkerMsg::JustificationImported(who, hash.clone(), number, success);
+		let msg = BlockImportWorkerMsg::JustificationImported(who, *hash, number, success);
 		let _ = self.tx.unbounded_send(msg);
 	}
 
 	fn request_justification(&mut self, hash: &B::Hash, number: NumberFor<B>) {
 		let _ = self
 			.tx
-			.unbounded_send(BlockImportWorkerMsg::RequestJustification(hash.clone(), number));
+			.unbounded_send(BlockImportWorkerMsg::RequestJustification(*hash, number));
 	}
 }
 

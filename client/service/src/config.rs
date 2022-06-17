@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -19,15 +19,22 @@
 //! Service configuration.
 
 pub use sc_client_api::execution_extensions::{ExecutionStrategies, ExecutionStrategy};
-pub use sc_client_db::{Database, DatabaseSource, KeepBlocks, PruningMode, TransactionStorageMode};
+pub use sc_client_db::{Database, DatabaseSource, KeepBlocks, PruningMode};
 pub use sc_executor::WasmExecutionMethod;
+#[cfg(feature = "wasmtime")]
+pub use sc_executor::WasmtimeInstantiationStrategy;
 pub use sc_network::{
 	config::{
-		IncomingRequest, MultiaddrWithPeerId, NetworkConfiguration, NodeKeyConfig,
-		NonDefaultSetConfig, OutgoingResponse, RequestResponseConfig, Role, SetConfig,
-		TransportConfig,
+		MultiaddrWithPeerId, NetworkConfiguration, NodeKeyConfig, NonDefaultSetConfig, Role,
+		SetConfig, TransportConfig,
 	},
 	Multiaddr,
+};
+pub use sc_network_common::{
+	config::ProtocolId,
+	request_responses::{
+		IncomingRequest, OutgoingResponse, ProtocolConfig as RequestResponseConfig,
+	},
 };
 
 use prometheus_endpoint::Registry;
@@ -36,7 +43,7 @@ pub use sc_telemetry::TelemetryEndpoints;
 pub use sc_transaction_pool::Options as TransactionPoolOptions;
 use sp_core::crypto::SecretString;
 use std::{
-	io,
+	io, iter,
 	net::SocketAddr,
 	path::{Path, PathBuf},
 };
@@ -68,11 +75,11 @@ pub struct Configuration {
 	/// Size in percent of cache size dedicated to child tries
 	pub state_cache_child_ratio: Option<usize>,
 	/// State pruning settings.
-	pub state_pruning: PruningMode,
+	pub state_pruning: Option<PruningMode>,
 	/// Number of blocks to keep in the db.
+	///
+	/// NOTE: only finalized blocks are subject for removal!
 	pub keep_blocks: KeepBlocks,
-	/// Transaction storage scheme.
-	pub transaction_storage: TransactionStorageMode,
 	/// Chain configuration.
 	pub chain_spec: Box<dyn ChainSpec>,
 	/// Wasm execution method.
@@ -97,6 +104,18 @@ pub struct Configuration {
 	pub rpc_methods: RpcMethods,
 	/// Maximum payload of rpc request/responses.
 	pub rpc_max_payload: Option<usize>,
+	/// Maximum payload of a rpc request
+	pub rpc_max_request_size: Option<usize>,
+	/// Maximum payload of a rpc request
+	pub rpc_max_response_size: Option<usize>,
+	/// Custom JSON-RPC subscription ID provider.
+	///
+	/// Default: [`crate::RandomStringSubscriptionId`].
+	pub rpc_id_provider: Option<Box<dyn crate::RpcSubscriptionIdProvider>>,
+	/// Maximum allowed subscriptions per rpc connection
+	///
+	/// Default: 1024.
+	pub rpc_max_subs_per_conn: Option<usize>,
 	/// Maximum size of the output buffer capacity for websocket connections.
 	pub ws_max_out_buffer_capacity: Option<usize>,
 	/// Prometheus endpoint configuration. `None` if disabled.
@@ -132,6 +151,8 @@ pub struct Configuration {
 	pub base_path: Option<BasePath>,
 	/// Configuration of the output format that the informant uses.
 	pub informant_output_format: sc_informant::OutputFormat,
+	/// Maximum number of different runtime versions that can be cached.
+	pub runtime_cache_size: u8,
 }
 
 /// Type for tasks spawned by the executor.
@@ -186,12 +207,11 @@ pub struct PrometheusConfig {
 
 impl PrometheusConfig {
 	/// Create a new config using the default registry.
-	///
-	/// The default registry prefixes metrics with `substrate`.
-	pub fn new_with_default_registry(port: SocketAddr) -> Self {
+	pub fn new_with_default_registry(port: SocketAddr, chain_id: String) -> Self {
+		let param = iter::once((String::from("chain"), chain_id)).collect();
 		Self {
 			port,
-			registry: Registry::new_custom(Some("substrate".into()), None)
+			registry: Registry::new_custom(None, Some(param))
 				.expect("this can only fail if the prefix is empty"),
 		}
 	}
@@ -209,7 +229,7 @@ impl Configuration {
 	}
 
 	/// Returns the network protocol id from the chain spec, or the default.
-	pub fn protocol_id(&self) -> sc_network::config::ProtocolId {
+	pub fn protocol_id(&self) -> ProtocolId {
 		let protocol_id_full = match self.chain_spec.protocol_id() {
 			Some(pid) => pid,
 			None => {
@@ -221,7 +241,7 @@ impl Configuration {
 				crate::DEFAULT_PROTOCOL_ID
 			},
 		};
-		sc_network::config::ProtocolId::from(protocol_id_full)
+		ProtocolId::from(protocol_id_full)
 	}
 }
 
@@ -295,7 +315,7 @@ impl BasePath {
 	}
 }
 
-impl std::convert::From<PathBuf> for BasePath {
+impl From<PathBuf> for BasePath {
 	fn from(path: PathBuf) -> Self {
 		BasePath::new(path)
 	}

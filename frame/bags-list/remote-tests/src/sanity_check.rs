@@ -22,11 +22,10 @@ use frame_support::{
 	traits::{Get, PalletInfoAccess},
 };
 use remote_externalities::{Builder, Mode, OnlineConfig};
-use sp_runtime::traits::Block as BlockT;
-use sp_std::convert::TryInto;
+use sp_runtime::{traits::Block as BlockT, DeserializeOwned};
 
 /// Execute the sanity check of the bags-list.
-pub async fn execute<Runtime: crate::RuntimeT, Block: BlockT>(
+pub async fn execute<Runtime: crate::RuntimeT, Block: BlockT + DeserializeOwned>(
 	currency_unit: u64,
 	currency_name: &'static str,
 	ws_url: String,
@@ -35,8 +34,7 @@ pub async fn execute<Runtime: crate::RuntimeT, Block: BlockT>(
 		.mode(Mode::Online(OnlineConfig {
 			transport: ws_url.to_string().into(),
 			pallets: vec![pallet_bags_list::Pallet::<Runtime>::name().to_string()],
-			at: None,
-			state_snapshot: None,
+			..Default::default()
 		}))
 		.inject_hashed_prefix(&<pallet_staking::Bonded<Runtime>>::prefix_hash())
 		.inject_hashed_prefix(&<pallet_staking::Ledger<Runtime>>::prefix_hash())

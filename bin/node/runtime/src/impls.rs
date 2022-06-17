@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,13 +17,100 @@
 
 //! Some configurable implementations as associated type for the substrate runtime.
 
-use crate::{Authorship, Balances, NegativeImbalance};
-use frame_support::traits::{Currency, OnUnbalanced};
+use crate::{
+	AccountId, AllianceMotion, Assets, Authorship, Balances, Call, Hash, NegativeImbalance, Runtime,
+};
+use frame_support::{
+	pallet_prelude::*,
+	traits::{
+		fungibles::{Balanced, CreditOf},
+		Currency, OnUnbalanced,
+	},
+};
+use pallet_alliance::{IdentityVerifier, ProposalIndex, ProposalProvider};
+use pallet_asset_tx_payment::HandleCredit;
+use sp_std::prelude::*;
 
 pub struct Author;
 impl OnUnbalanced<NegativeImbalance> for Author {
 	fn on_nonzero_unbalanced(amount: NegativeImbalance) {
-		Balances::resolve_creating(&Authorship::author(), amount);
+		if let Some(author) = Authorship::author() {
+			Balances::resolve_creating(&author, amount);
+		}
+	}
+}
+
+/// A `HandleCredit` implementation that naively transfers the fees to the block author.
+/// Will drop and burn the assets in case the transfer fails.
+pub struct CreditToBlockAuthor;
+impl HandleCredit<AccountId, Assets> for CreditToBlockAuthor {
+	fn handle_credit(credit: CreditOf<AccountId, Assets>) {
+		if let Some(author) = pallet_authorship::Pallet::<Runtime>::author() {
+			// Drop the result which will trigger the `OnDrop` of the imbalance in case of error.
+			let _ = Assets::resolve(&author, credit);
+		}
+	}
+}
+
+pub struct AllianceIdentityVerifier;
+impl IdentityVerifier<AccountId> for AllianceIdentityVerifier {
+	fn has_identity(who: &AccountId, fields: u64) -> bool {
+		crate::Identity::has_identity(who, fields)
+	}
+
+	fn has_good_judgement(who: &AccountId) -> bool {
+		use pallet_identity::Judgement;
+		if let Some(judgements) =
+			crate::Identity::identity(who).map(|registration| registration.judgements)
+		{
+			judgements
+				.iter()
+				.any(|(_, j)| matches!(j, Judgement::KnownGood | Judgement::Reasonable))
+		} else {
+			false
+		}
+	}
+
+	fn super_account_id(who: &AccountId) -> Option<AccountId> {
+		crate::Identity::super_of(who).map(|parent| parent.0)
+	}
+}
+
+pub struct AllianceProposalProvider;
+impl ProposalProvider<AccountId, Hash, Call> for AllianceProposalProvider {
+	fn propose_proposal(
+		who: AccountId,
+		threshold: u32,
+		proposal: Box<Call>,
+		length_bound: u32,
+	) -> Result<(u32, u32), DispatchError> {
+		AllianceMotion::do_propose_proposed(who, threshold, proposal, length_bound)
+	}
+
+	fn vote_proposal(
+		who: AccountId,
+		proposal: Hash,
+		index: ProposalIndex,
+		approve: bool,
+	) -> Result<bool, DispatchError> {
+		AllianceMotion::do_vote(who, proposal, index, approve)
+	}
+
+	fn veto_proposal(proposal_hash: Hash) -> u32 {
+		AllianceMotion::do_disapprove_proposal(proposal_hash)
+	}
+
+	fn close_proposal(
+		proposal_hash: Hash,
+		proposal_index: ProposalIndex,
+		proposal_weight_bound: Weight,
+		length_bound: u32,
+	) -> DispatchResultWithPostInfo {
+		AllianceMotion::do_close(proposal_hash, proposal_index, proposal_weight_bound, length_bound)
+	}
+
+	fn proposal_of(proposal_hash: Hash) -> Option<Call> {
+		AllianceMotion::proposal_of(proposal_hash)
 	}
 }
 
@@ -41,7 +128,7 @@ mod multiplier_tests {
 		AdjustmentVariable, MinimumMultiplier, Runtime, RuntimeBlockWeights as BlockWeights,
 		System, TargetBlockFullness, TransactionPayment,
 	};
-	use frame_support::weights::{DispatchClass, Weight, WeightToFeePolynomial};
+	use frame_support::weights::{DispatchClass, Weight, WeightToFee};
 
 	fn max_normal() -> Weight {
 		BlockWeights::get()
@@ -216,7 +303,9 @@ mod multiplier_tests {
 				fm = next;
 				iterations += 1;
 				let fee =
-					<Runtime as pallet_transaction_payment::Config>::WeightToFee::calc(&tx_weight);
+					<Runtime as pallet_transaction_payment::Config>::WeightToFee::weight_to_fee(
+						&tx_weight,
+					);
 				let adjusted_fee = fm.saturating_mul_acc_int(fee);
 				println!(
 					"iteration {}, new fm = {:?}. Fee at this point is: {} units / {} millicents, \

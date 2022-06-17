@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -26,7 +26,10 @@ use linked_hash_map::{Entry, LinkedHashMap};
 use log::trace;
 use parking_lot::{RwLock, RwLockUpgradableReadGuard};
 use sp_core::{hexdisplay::HexDisplay, storage::ChildInfo};
-use sp_runtime::traits::{Block as BlockT, HashFor, Header, NumberFor};
+use sp_runtime::{
+	traits::{Block as BlockT, HashFor, Header, NumberFor},
+	StateVersion,
+};
 use sp_state_machine::{
 	backend::Backend as StateBackend, ChildStorageCollection, StorageCollection, StorageKey,
 	StorageValue, TrieBackend,
@@ -357,9 +360,9 @@ impl<B: BlockT> CacheChanges<B> {
 					// Same block comitted twice with different state changes.
 					// Treat it as reenacted/retracted.
 					if is_best {
-						enacted.push(commit_hash.clone());
+						enacted.push(*commit_hash);
 					} else {
-						retracted.to_mut().push(commit_hash.clone());
+						retracted.to_mut().push(*commit_hash);
 					}
 				}
 			}
@@ -368,7 +371,7 @@ impl<B: BlockT> CacheChanges<B> {
 		// Propagate cache only if committing on top of the latest canonical state
 		// blocks are ordered by number and only one block with a given number is marked as
 		// canonical (contributed to canonical state cache)
-		if let Some(_) = self.parent_hash {
+		if self.parent_hash.is_some() {
 			let mut local_cache = self.local_cache.write();
 			if is_best {
 				trace!(
@@ -420,9 +423,9 @@ impl<B: BlockT> CacheChanges<B> {
 				storage: modifications,
 				child_storage: child_modifications,
 				number: *number,
-				hash: hash.clone(),
+				hash: *hash,
 				is_canon: is_best,
-				parent: parent.clone(),
+				parent: *parent,
 			};
 			let insert_at = cache
 				.modifications
@@ -561,7 +564,7 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 			let cache = self.cache.shared_cache.upgradable_read();
 			if Self::is_allowed(Some(key), None, &self.cache.parent_hash, &cache.modifications) {
 				let mut cache = RwLockUpgradableReadGuard::upgrade(cache);
-				if let Some(entry) = cache.lru_hashes.get(key).map(|a| a.0.clone()) {
+				if let Some(entry) = cache.lru_hashes.get(key).map(|a| a.0) {
 					trace!("Found hash in shared cache: {:?}", HexDisplay::from(&key));
 					return Ok(entry)
 				}
@@ -636,9 +639,10 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 		&self,
 		child_info: Option<&ChildInfo>,
 		prefix: Option<&[u8]>,
+		start_at: Option<&[u8]>,
 		f: F,
 	) {
-		self.state.apply_to_keys_while(child_info, prefix, f)
+		self.state.apply_to_keys_while(child_info, prefix, start_at, f)
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -673,22 +677,24 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 	fn storage_root<'a>(
 		&self,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
+		state_version: StateVersion,
 	) -> (B::Hash, Self::Transaction)
 	where
 		B::Hash: Ord,
 	{
-		self.state.storage_root(delta)
+		self.state.storage_root(delta, state_version)
 	}
 
 	fn child_storage_root<'a>(
 		&self,
 		child_info: &ChildInfo,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
+		state_version: StateVersion,
 	) -> (B::Hash, bool, Self::Transaction)
 	where
 		B::Hash: Ord,
 	{
-		self.state.child_storage_root(child_info, delta)
+		self.state.child_storage_root(child_info, delta, state_version)
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
@@ -834,9 +840,10 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>>
 		&self,
 		child_info: Option<&ChildInfo>,
 		prefix: Option<&[u8]>,
+		start_at: Option<&[u8]>,
 		f: F,
 	) {
-		self.caching_state().apply_to_keys_while(child_info, prefix, f)
+		self.caching_state().apply_to_keys_while(child_info, prefix, start_at, f)
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -871,22 +878,24 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>>
 	fn storage_root<'a>(
 		&self,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
+		state_version: StateVersion,
 	) -> (B::Hash, Self::Transaction)
 	where
 		B::Hash: Ord,
 	{
-		self.caching_state().storage_root(delta)
+		self.caching_state().storage_root(delta, state_version)
 	}
 
 	fn child_storage_root<'a>(
 		&self,
 		child_info: &ChildInfo,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
+		state_version: StateVersion,
 	) -> (B::Hash, bool, Self::Transaction)
 	where
 		B::Hash: Ord,
 	{
-		self.caching_state().child_storage_root(child_info, delta)
+		self.caching_state().child_storage_root(child_info, delta, state_version)
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
@@ -927,7 +936,7 @@ impl<S, B: BlockT> Drop for SyncingCachingState<S, B> {
 			let _lock = self.lock.read();
 
 			self.state_usage.merge_sm(caching_state.usage.take());
-			if let Some(hash) = caching_state.cache.parent_hash.clone() {
+			if let Some(hash) = caching_state.cache.parent_hash {
 				let is_best = self.meta.read().best_hash == hash;
 				caching_state.cache.sync_cache(&[], &[], vec![], vec![], None, None, is_best);
 			}
@@ -1182,7 +1191,10 @@ mod tests {
 
 		let shared = new_shared_cache::<Block>(256 * 1024, (0, 1));
 		let mut backend = InMemoryBackend::<BlakeTwo256>::default();
-		backend.insert(std::iter::once((None, vec![(key.clone(), Some(vec![1]))])));
+		backend.insert(
+			std::iter::once((None, vec![(key.clone(), Some(vec![1]))])),
+			Default::default(),
+		);
 
 		let mut s = CachingState::new(backend.clone(), shared.clone(), Some(root_parent));
 		s.cache.sync_cache(

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -639,7 +639,7 @@ mod std_features {
 
 			tracing::span::Span::child_of(
 				a.parent_id.map(tracing_core::span::Id::from_u64),
-				&metadata,
+				metadata,
 				&tracing::valueset! { metadata.fields(), target, name, file, line, module_path, ?params },
 			)
 		}
@@ -658,7 +658,7 @@ mod std_features {
 
 			tracing_core::Event::child_of(
 				self.parent_id.map(tracing_core::span::Id::from_u64),
-				&metadata,
+				metadata,
 				&tracing::valueset! { metadata.fields(), target, name, file, line, module_path, ?params },
 			)
 		}

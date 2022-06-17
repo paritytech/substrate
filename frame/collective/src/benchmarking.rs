@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -43,9 +43,9 @@ benchmarks_instance_pallet! {
 		// Set old members.
 		// We compute the difference of old and new members, so it should influence timing.
 		let mut old_members = vec![];
-		let mut last_old_member = T::AccountId::default();
+		let mut last_old_member = account::<T::AccountId>("old member", 0, SEED);
 		for i in 0 .. m {
-			last_old_member = account("old member", i, SEED);
+			last_old_member = account::<T::AccountId>("old member", i, SEED);
 			old_members.push(last_old_member.clone());
 		}
 		let old_members_count = old_members.len() as u32;
@@ -91,9 +91,9 @@ benchmarks_instance_pallet! {
 		// Construct `new_members`.
 		// It should influence timing since it will sort this vector.
 		let mut new_members = vec![];
-		let mut last_member = T::AccountId::default();
+		let mut last_member = account::<T::AccountId>("member", 0, SEED);
 		for i in 0 .. n {
-			last_member = account("member", i, SEED);
+			last_member = account::<T::AccountId>("member", i, SEED);
 			new_members.push(last_member.clone());
 		}
 
@@ -112,7 +112,7 @@ benchmarks_instance_pallet! {
 		// Construct `members`.
 		let mut members = vec![];
 		for i in 0 .. m - 1 {
-			let member = account("member", i, SEED);
+			let member = account::<T::AccountId>("member", i, SEED);
 			members.push(member);
 		}
 
@@ -128,7 +128,7 @@ benchmarks_instance_pallet! {
 		let proposal_hash = T::Hashing::hash_of(&proposal);
 		// Note that execution fails due to mis-matched origin
 		assert_last_event::<T, I>(
-			Event::MemberExecuted(proposal_hash, Err(DispatchError::BadOrigin)).into()
+			Event::MemberExecuted { proposal_hash, result: Err(DispatchError::BadOrigin) }.into()
 		);
 	}
 
@@ -142,7 +142,7 @@ benchmarks_instance_pallet! {
 		// Construct `members`.
 		let mut members = vec![];
 		for i in 0 .. m - 1 {
-			let member = account("member", i, SEED);
+			let member = account::<T::AccountId>("member", i, SEED);
 			members.push(member);
 		}
 
@@ -159,7 +159,7 @@ benchmarks_instance_pallet! {
 		let proposal_hash = T::Hashing::hash_of(&proposal);
 		// Note that execution fails due to mis-matched origin
 		assert_last_event::<T, I>(
-			Event::Executed(proposal_hash, Err(DispatchError::BadOrigin)).into()
+			Event::Executed { proposal_hash, result: Err(DispatchError::BadOrigin) }.into()
 		);
 	}
 
@@ -174,7 +174,7 @@ benchmarks_instance_pallet! {
 		// Construct `members`.
 		let mut members = vec![];
 		for i in 0 .. m - 1 {
-			let member = account("member", i, SEED);
+			let member = account::<T::AccountId>("member", i, SEED);
 			members.push(member);
 		}
 		let caller: T::AccountId = whitelisted_caller();
@@ -203,7 +203,7 @@ benchmarks_instance_pallet! {
 		// New proposal is recorded
 		assert_eq!(Collective::<T, I>::proposals().len(), p as usize);
 		let proposal_hash = T::Hashing::hash_of(&proposal);
-		assert_last_event::<T, I>(Event::Proposed(caller, p - 1, proposal_hash, threshold).into());
+		assert_last_event::<T, I>(Event::Proposed { account: caller, proposal_index: p - 1, proposal_hash, threshold }.into());
 	}
 
 	vote {
@@ -216,13 +216,13 @@ benchmarks_instance_pallet! {
 
 		// Construct `members`.
 		let mut members = vec![];
-		let proposer: T::AccountId = account("proposer", 0, SEED);
+		let proposer: T::AccountId = account::<T::AccountId>("proposer", 0, SEED);
 		members.push(proposer.clone());
 		for i in 1 .. m - 1 {
-			let member = account("member", i, SEED);
+			let member = account::<T::AccountId>("member", i, SEED);
 			members.push(member);
 		}
-		let voter: T::AccountId = account("voter", 0, SEED);
+		let voter: T::AccountId = account::<T::AccountId>("voter", 0, SEED);
 		members.push(voter.clone());
 		Collective::<T, I>::set_members(SystemOrigin::Root.into(), members.clone(), None, T::MaxMembers::get())?;
 
@@ -250,7 +250,7 @@ benchmarks_instance_pallet! {
 			let approve = true;
 			Collective::<T, I>::vote(
 				SystemOrigin::Signed(voter.clone()).into(),
-				last_hash.clone(),
+				last_hash,
 				index,
 				approve,
 			)?;
@@ -259,7 +259,7 @@ benchmarks_instance_pallet! {
 		let approve = true;
 		Collective::<T, I>::vote(
 			SystemOrigin::Signed(voter.clone()).into(),
-			last_hash.clone(),
+			last_hash,
 			index,
 			approve,
 		)?;
@@ -272,7 +272,7 @@ benchmarks_instance_pallet! {
 		// Whitelist voter account from further DB operations.
 		let voter_key = frame_system::Account::<T>::hashed_key_for(&voter);
 		frame_benchmarking::benchmarking::add_to_whitelist(voter_key.into());
-	}: _(SystemOrigin::Signed(voter), last_hash.clone(), index, approve)
+	}: _(SystemOrigin::Signed(voter), last_hash, index, approve)
 	verify {
 		// All proposals exist and the last proposal has just been updated.
 		assert_eq!(Collective::<T, I>::proposals().len(), p as usize);
@@ -291,13 +291,13 @@ benchmarks_instance_pallet! {
 
 		// Construct `members`.
 		let mut members = vec![];
-		let proposer: T::AccountId = account("proposer", 0, SEED);
+		let proposer = account::<T::AccountId>("proposer", 0, SEED);
 		members.push(proposer.clone());
 		for i in 1 .. m - 1 {
-			let member = account("member", i, SEED);
+			let member = account::<T::AccountId>("member", i, SEED);
 			members.push(member);
 		}
-		let voter: T::AccountId = account("voter", 0, SEED);
+		let voter = account::<T::AccountId>("voter", 0, SEED);
 		members.push(voter.clone());
 		Collective::<T, I>::set_members(SystemOrigin::Root.into(), members.clone(), None, T::MaxMembers::get())?;
 
@@ -327,7 +327,7 @@ benchmarks_instance_pallet! {
 			let approve = true;
 			Collective::<T, I>::vote(
 				SystemOrigin::Signed(voter.clone()).into(),
-				last_hash.clone(),
+				last_hash,
 				index,
 				approve,
 			)?;
@@ -336,7 +336,7 @@ benchmarks_instance_pallet! {
 		let approve = true;
 		Collective::<T, I>::vote(
 			SystemOrigin::Signed(voter.clone()).into(),
-			last_hash.clone(),
+			last_hash,
 			index,
 			approve,
 		)?;
@@ -347,7 +347,7 @@ benchmarks_instance_pallet! {
 		let approve = false;
 		Collective::<T, I>::vote(
 			SystemOrigin::Signed(voter.clone()).into(),
-			last_hash.clone(),
+			last_hash,
 			index,
 			approve,
 		)?;
@@ -355,11 +355,11 @@ benchmarks_instance_pallet! {
 		// Whitelist voter account from further DB operations.
 		let voter_key = frame_system::Account::<T>::hashed_key_for(&voter);
 		frame_benchmarking::benchmarking::add_to_whitelist(voter_key.into());
-	}: close(SystemOrigin::Signed(voter), last_hash.clone(), index, Weight::max_value(), bytes_in_storage)
+	}: close(SystemOrigin::Signed(voter), last_hash, index, Weight::max_value(), bytes_in_storage)
 	verify {
 		// The last proposal is removed.
 		assert_eq!(Collective::<T, I>::proposals().len(), (p - 1) as usize);
-		assert_last_event::<T, I>(Event::Disapproved(last_hash).into());
+		assert_last_event::<T, I>(Event::Disapproved { proposal_hash: last_hash }.into());
 	}
 
 	close_early_approved {
@@ -373,7 +373,7 @@ benchmarks_instance_pallet! {
 		// Construct `members`.
 		let mut members = vec![];
 		for i in 0 .. m - 1 {
-			let member = account("member", i, SEED);
+			let member = account::<T::AccountId>("member", i, SEED);
 			members.push(member);
 		}
 		let caller: T::AccountId = whitelisted_caller();
@@ -400,7 +400,7 @@ benchmarks_instance_pallet! {
 		// Caller switches vote to nay on their own proposal, allowing them to be the deciding approval vote
 		Collective::<T, I>::vote(
 			SystemOrigin::Signed(caller.clone()).into(),
-			last_hash.clone(),
+			last_hash,
 			p - 1,
 			false,
 		)?;
@@ -411,7 +411,7 @@ benchmarks_instance_pallet! {
 			let approve = false;
 			Collective::<T, I>::vote(
 				SystemOrigin::Signed(voter.clone()).into(),
-				last_hash.clone(),
+				last_hash,
 				p - 1,
 				approve,
 			)?;
@@ -420,7 +420,7 @@ benchmarks_instance_pallet! {
 		// Member zero is the first aye
 		Collective::<T, I>::vote(
 			SystemOrigin::Signed(members[0].clone()).into(),
-			last_hash.clone(),
+			last_hash,
 			p - 1,
 			true,
 		)?;
@@ -432,15 +432,15 @@ benchmarks_instance_pallet! {
 		let approve = true;
 		Collective::<T, I>::vote(
 			SystemOrigin::Signed(caller.clone()).into(),
-			last_hash.clone(),
+			last_hash,
 			index, approve,
 		)?;
 
-	}: close(SystemOrigin::Signed(caller), last_hash.clone(), index, Weight::max_value(), bytes_in_storage)
+	}: close(SystemOrigin::Signed(caller), last_hash, index, Weight::max_value(), bytes_in_storage)
 	verify {
 		// The last proposal is removed.
 		assert_eq!(Collective::<T, I>::proposals().len(), (p - 1) as usize);
-		assert_last_event::<T, I>(Event::Executed(last_hash, Err(DispatchError::BadOrigin)).into());
+		assert_last_event::<T, I>(Event::Executed { proposal_hash: last_hash, result: Err(DispatchError::BadOrigin) }.into());
 	}
 
 	close_disapproved {
@@ -454,7 +454,7 @@ benchmarks_instance_pallet! {
 		// Construct `members`.
 		let mut members = vec![];
 		for i in 0 .. m - 1 {
-			let member = account("member", i, SEED);
+			let member = account::<T::AccountId>("member", i, SEED);
 			members.push(member);
 		}
 		let caller: T::AccountId = whitelisted_caller();
@@ -493,7 +493,7 @@ benchmarks_instance_pallet! {
 			let approve = true;
 			Collective::<T, I>::vote(
 				SystemOrigin::Signed(voter.clone()).into(),
-				last_hash.clone(),
+				last_hash,
 				index,
 				approve,
 			)?;
@@ -502,7 +502,7 @@ benchmarks_instance_pallet! {
 		// caller is prime, prime votes nay
 		Collective::<T, I>::vote(
 			SystemOrigin::Signed(caller.clone()).into(),
-			last_hash.clone(),
+			last_hash,
 			index,
 			false,
 		)?;
@@ -514,7 +514,7 @@ benchmarks_instance_pallet! {
 	}: close(SystemOrigin::Signed(caller), last_hash, index, Weight::max_value(), bytes_in_storage)
 	verify {
 		assert_eq!(Collective::<T, I>::proposals().len(), (p - 1) as usize);
-		assert_last_event::<T, I>(Event::Disapproved(last_hash).into());
+		assert_last_event::<T, I>(Event::Disapproved { proposal_hash: last_hash }.into());
 	}
 
 	close_approved {
@@ -528,7 +528,7 @@ benchmarks_instance_pallet! {
 		// Construct `members`.
 		let mut members = vec![];
 		for i in 0 .. m - 1 {
-			let member = account("member", i, SEED);
+			let member = account::<T::AccountId>("member", i, SEED);
 			members.push(member);
 		}
 		let caller: T::AccountId = whitelisted_caller();
@@ -560,7 +560,7 @@ benchmarks_instance_pallet! {
 		// The prime member votes aye, so abstentions default to aye.
 		Collective::<T, _>::vote(
 			SystemOrigin::Signed(caller.clone()).into(),
-			last_hash.clone(),
+			last_hash,
 			p - 1,
 			true // Vote aye.
 		)?;
@@ -572,7 +572,7 @@ benchmarks_instance_pallet! {
 			let approve = false;
 			Collective::<T, I>::vote(
 				SystemOrigin::Signed(voter.clone()).into(),
-				last_hash.clone(),
+				last_hash,
 				p - 1,
 				approve
 			)?;
@@ -586,7 +586,7 @@ benchmarks_instance_pallet! {
 	}: close(SystemOrigin::Signed(caller), last_hash, p - 1, Weight::max_value(), bytes_in_storage)
 	verify {
 		assert_eq!(Collective::<T, I>::proposals().len(), (p - 1) as usize);
-		assert_last_event::<T, I>(Event::Executed(last_hash, Err(DispatchError::BadOrigin)).into());
+		assert_last_event::<T, I>(Event::Executed { proposal_hash: last_hash, result: Err(DispatchError::BadOrigin) }.into());
 	}
 
 	disapprove_proposal {
@@ -599,10 +599,10 @@ benchmarks_instance_pallet! {
 		// Construct `members`.
 		let mut members = vec![];
 		for i in 0 .. m - 1 {
-			let member = account("member", i, SEED);
+			let member = account::<T::AccountId>("member", i, SEED);
 			members.push(member);
 		}
-		let caller: T::AccountId = account("caller", 0, SEED);
+		let caller = account::<T::AccountId>("caller", 0, SEED);
 		members.push(caller.clone());
 		Collective::<T, I>::set_members(
 			SystemOrigin::Root.into(),
@@ -634,7 +634,7 @@ benchmarks_instance_pallet! {
 	}: _(SystemOrigin::Root, last_hash)
 	verify {
 		assert_eq!(Collective::<T, I>::proposals().len(), (p - 1) as usize);
-		assert_last_event::<T, I>(Event::Disapproved(last_hash).into());
+		assert_last_event::<T, I>(Event::Disapproved { proposal_hash: last_hash }.into());
 	}
 
 	impl_benchmark_test_suite!(Collective, crate::tests::new_test_ext(), crate::tests::Test);

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -135,9 +135,10 @@ impl core::Benchmark for ImportBenchmark {
 			.inspect_state(|| {
 				match self.block_type {
 					BlockType::RandomTransfersKeepAlive => {
-						// should be 7 per signed extrinsic + 1 per unsigned
+						// should be 8 per signed extrinsic + 1 per unsigned
 						// we have 1 unsigned and the rest are signed in the block
-						// those 7 events per signed are:
+						// those 8 events per signed are:
+						//    - transaction paid for the transaction payment
 						//    - withdraw (Balances::Withdraw) for charging the transaction fee
 						//    - new account (System::NewAccount) as we always transfer fund to
 						//      non-existent account
@@ -148,7 +149,7 @@ impl core::Benchmark for ImportBenchmark {
 						//    - extrinsic success
 						assert_eq!(
 							node_runtime::System::events().len(),
-							(self.block.extrinsics.len() - 1) * 7 + 1,
+							(self.block.extrinsics.len() - 1) * 8 + 1,
 						);
 					},
 					BlockType::Noop => {

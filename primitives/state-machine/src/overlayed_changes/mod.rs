@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,18 +21,13 @@ mod changeset;
 mod offchain;
 
 use self::changeset::OverlayedChangeSet;
-use crate::{backend::Backend, changes_trie::BlockNumber, stats::StateMachineStats, DefaultError};
-#[cfg(feature = "std")]
-use crate::{
-	changes_trie::{build_changes_trie, State as ChangesTrieState},
-	ChangesTrieTransaction,
-};
+use crate::{backend::Backend, stats::StateMachineStats, DefaultError};
 use codec::{Decode, Encode};
 use hash_db::Hasher;
 pub use offchain::OffchainOverlayedChanges;
 use sp_core::{
 	offchain::OffchainOverlayedChange,
-	storage::{well_known_keys::EXTRINSIC_INDEX, ChildInfo},
+	storage::{well_known_keys::EXTRINSIC_INDEX, ChildInfo, StateVersion},
 };
 #[cfg(feature = "std")]
 use sp_externalities::{Extension, Extensions};
@@ -109,7 +104,7 @@ pub struct OverlayedChanges {
 	stats: StateMachineStats,
 }
 
-/// Transcation index operation.
+/// Transaction index operation.
 #[derive(Debug, Clone)]
 pub enum IndexOperation {
 	/// Insert transaction into index.
@@ -134,7 +129,7 @@ pub enum IndexOperation {
 ///
 /// This contains all the changes to the storage and transactions to apply theses changes to the
 /// backend.
-pub struct StorageChanges<Transaction, H: Hasher, N: BlockNumber> {
+pub struct StorageChanges<Transaction, H: Hasher> {
 	/// All changes to the main storage.
 	///
 	/// A value of `None` means that it was deleted.
@@ -150,22 +145,13 @@ pub struct StorageChanges<Transaction, H: Hasher, N: BlockNumber> {
 	pub transaction: Transaction,
 	/// The storage root after applying the transaction.
 	pub transaction_storage_root: H::Out,
-	/// Contains the transaction for the backend for the changes trie.
-	///
-	/// If changes trie is disabled the value is set to `None`.
-	#[cfg(feature = "std")]
-	pub changes_trie_transaction: Option<ChangesTrieTransaction<H, N>>,
-	/// Phantom data for block number until change trie support no_std.
-	#[cfg(not(feature = "std"))]
-	pub _ph: sp_std::marker::PhantomData<N>,
-
 	/// Changes to the transaction index,
 	#[cfg(feature = "std")]
 	pub transaction_index_changes: Vec<IndexOperation>,
 }
 
 #[cfg(feature = "std")]
-impl<Transaction, H: Hasher, N: BlockNumber> StorageChanges<Transaction, H, N> {
+impl<Transaction, H: Hasher> StorageChanges<Transaction, H> {
 	/// Deconstruct into the inner values
 	pub fn into_inner(
 		self,
@@ -175,7 +161,6 @@ impl<Transaction, H: Hasher, N: BlockNumber> StorageChanges<Transaction, H, N> {
 		OffchainChangesCollection,
 		Transaction,
 		H::Out,
-		Option<ChangesTrieTransaction<H, N>>,
 		Vec<IndexOperation>,
 	) {
 		(
@@ -184,58 +169,35 @@ impl<Transaction, H: Hasher, N: BlockNumber> StorageChanges<Transaction, H, N> {
 			self.offchain_storage_changes,
 			self.transaction,
 			self.transaction_storage_root,
-			self.changes_trie_transaction,
 			self.transaction_index_changes,
 		)
 	}
 }
 
-/// The storage transaction are calculated as part of the `storage_root` and
-/// `changes_trie_storage_root`. These transactions can be reused for importing the block into the
+/// Storage transactions are calculated as part of the `storage_root`.
+/// These transactions can be reused for importing the block into the
 /// storage. So, we cache them to not require a recomputation of those transactions.
-pub struct StorageTransactionCache<Transaction, H: Hasher, N: BlockNumber> {
+pub struct StorageTransactionCache<Transaction, H: Hasher> {
 	/// Contains the changes for the main and the child storages as one transaction.
 	pub(crate) transaction: Option<Transaction>,
 	/// The storage root after applying the transaction.
 	pub(crate) transaction_storage_root: Option<H::Out>,
-	/// Contains the changes trie transaction.
-	#[cfg(feature = "std")]
-	pub(crate) changes_trie_transaction: Option<Option<ChangesTrieTransaction<H, N>>>,
-	/// The storage root after applying the changes trie transaction.
-	#[cfg(feature = "std")]
-	pub(crate) changes_trie_transaction_storage_root: Option<Option<H::Out>>,
-	/// Phantom data for block number until change trie support no_std.
-	#[cfg(not(feature = "std"))]
-	pub(crate) _ph: sp_std::marker::PhantomData<N>,
 }
 
-impl<Transaction, H: Hasher, N: BlockNumber> StorageTransactionCache<Transaction, H, N> {
+impl<Transaction, H: Hasher> StorageTransactionCache<Transaction, H> {
 	/// Reset the cached transactions.
 	pub fn reset(&mut self) {
 		*self = Self::default();
 	}
 }
 
-impl<Transaction, H: Hasher, N: BlockNumber> Default
-	for StorageTransactionCache<Transaction, H, N>
-{
+impl<Transaction, H: Hasher> Default for StorageTransactionCache<Transaction, H> {
 	fn default() -> Self {
-		Self {
-			transaction: None,
-			transaction_storage_root: None,
-			#[cfg(feature = "std")]
-			changes_trie_transaction: None,
-			#[cfg(feature = "std")]
-			changes_trie_transaction_storage_root: None,
-			#[cfg(not(feature = "std"))]
-			_ph: Default::default(),
-		}
+		Self { transaction: None, transaction_storage_root: None }
 	}
 }
 
-impl<Transaction: Default, H: Hasher, N: BlockNumber> Default
-	for StorageChanges<Transaction, H, N>
-{
+impl<Transaction: Default, H: Hasher> Default for StorageChanges<Transaction, H> {
 	fn default() -> Self {
 		Self {
 			main_storage_changes: Default::default(),
@@ -243,10 +205,6 @@ impl<Transaction: Default, H: Hasher, N: BlockNumber> Default
 			offchain_storage_changes: Default::default(),
 			transaction: Default::default(),
 			transaction_storage_root: Default::default(),
-			#[cfg(feature = "std")]
-			changes_trie_transaction: None,
-			#[cfg(not(feature = "std"))]
-			_ph: Default::default(),
 			#[cfg(feature = "std")]
 			transaction_index_changes: Default::default(),
 		}
@@ -341,7 +299,7 @@ impl OverlayedChanges {
 	/// Clear child storage of given storage key.
 	///
 	/// Can be rolled back or committed when called inside a transaction.
-	pub(crate) fn clear_child_storage(&mut self, child_info: &ChildInfo) {
+	pub(crate) fn clear_child_storage(&mut self, child_info: &ChildInfo) -> u32 {
 		let extrinsic_index = self.extrinsic_index();
 		let storage_key = child_info.storage_key().to_vec();
 		let top = &self.top;
@@ -351,20 +309,20 @@ impl OverlayedChanges {
 			.or_insert_with(|| (top.spawn_child(), child_info.clone()));
 		let updatable = info.try_update(child_info);
 		debug_assert!(updatable);
-		changeset.clear_where(|_, _| true, extrinsic_index);
+		changeset.clear_where(|_, _| true, extrinsic_index)
 	}
 
 	/// Removes all key-value pairs which keys share the given prefix.
 	///
 	/// Can be rolled back or committed when called inside a transaction.
-	pub(crate) fn clear_prefix(&mut self, prefix: &[u8]) {
-		self.top.clear_where(|key, _| key.starts_with(prefix), self.extrinsic_index());
+	pub(crate) fn clear_prefix(&mut self, prefix: &[u8]) -> u32 {
+		self.top.clear_where(|key, _| key.starts_with(prefix), self.extrinsic_index())
 	}
 
 	/// Removes all key-value pairs which keys share the given prefix.
 	///
 	/// Can be rolled back or committed when called inside a transaction
-	pub(crate) fn clear_child_prefix(&mut self, child_info: &ChildInfo, prefix: &[u8]) {
+	pub(crate) fn clear_child_prefix(&mut self, child_info: &ChildInfo, prefix: &[u8]) -> u32 {
 		let extrinsic_index = self.extrinsic_index();
 		let storage_key = child_info.storage_key().to_vec();
 		let top = &self.top;
@@ -374,7 +332,7 @@ impl OverlayedChanges {
 			.or_insert_with(|| (top.spawn_child(), child_info.clone()));
 		let updatable = info.try_update(child_info);
 		debug_assert!(updatable);
-		changeset.clear_where(|key, _| key.starts_with(prefix), extrinsic_index);
+		changeset.clear_where(|key, _| key.starts_with(prefix), extrinsic_index)
 	}
 
 	/// Returns the current nesting depth of the transaction stack.
@@ -539,33 +497,31 @@ impl OverlayedChanges {
 
 	/// Convert this instance with all changes into a [`StorageChanges`] instance.
 	#[cfg(feature = "std")]
-	pub fn into_storage_changes<B: Backend<H>, H: Hasher, N: BlockNumber>(
+	pub fn into_storage_changes<B: Backend<H>, H: Hasher>(
 		mut self,
 		backend: &B,
-		changes_trie_state: Option<&ChangesTrieState<H, N>>,
-		parent_hash: H::Out,
-		mut cache: StorageTransactionCache<B::Transaction, H, N>,
-	) -> Result<StorageChanges<B::Transaction, H, N>, DefaultError>
+		mut cache: StorageTransactionCache<B::Transaction, H>,
+		state_version: StateVersion,
+	) -> Result<StorageChanges<B::Transaction, H>, DefaultError>
 	where
 		H::Out: Ord + Encode + 'static,
 	{
-		self.drain_storage_changes(backend, changes_trie_state, parent_hash, &mut cache)
+		self.drain_storage_changes(backend, &mut cache, state_version)
 	}
 
 	/// Drain all changes into a [`StorageChanges`] instance. Leave empty overlay in place.
-	pub fn drain_storage_changes<B: Backend<H>, H: Hasher, N: BlockNumber>(
+	pub fn drain_storage_changes<B: Backend<H>, H: Hasher>(
 		&mut self,
 		backend: &B,
-		#[cfg(feature = "std")] changes_trie_state: Option<&ChangesTrieState<H, N>>,
-		parent_hash: H::Out,
-		mut cache: &mut StorageTransactionCache<B::Transaction, H, N>,
-	) -> Result<StorageChanges<B::Transaction, H, N>, DefaultError>
+		cache: &mut StorageTransactionCache<B::Transaction, H>,
+		state_version: StateVersion,
+	) -> Result<StorageChanges<B::Transaction, H>, DefaultError>
 	where
 		H::Out: Ord + Encode + 'static,
 	{
 		// If the transaction does not exist, we generate it.
 		if cache.transaction.is_none() {
-			self.storage_root(backend, &mut cache);
+			self.storage_root(backend, cache, state_version);
 		}
 
 		let (transaction, transaction_storage_root) = cache
@@ -573,21 +529,6 @@ impl OverlayedChanges {
 			.take()
 			.and_then(|t| cache.transaction_storage_root.take().map(|tr| (t, tr)))
 			.expect("Transaction was be generated as part of `storage_root`; qed");
-
-		// If the transaction does not exist, we generate it.
-		#[cfg(feature = "std")]
-		if cache.changes_trie_transaction.is_none() {
-			self.changes_trie_root(backend, changes_trie_state, parent_hash, false, &mut cache)
-				.map_err(|_| "Failed to generate changes trie transaction")?;
-		}
-		#[cfg(not(feature = "std"))]
-		let _ = parent_hash;
-
-		#[cfg(feature = "std")]
-		let changes_trie_transaction = cache
-			.changes_trie_transaction
-			.take()
-			.expect("Changes trie transaction was generated by `changes_trie_root`; qed");
 
 		let (main_storage_changes, child_storage_changes) = self.drain_committed();
 		let offchain_storage_changes = self.offchain_drain_committed().collect();
@@ -604,11 +545,7 @@ impl OverlayedChanges {
 			transaction,
 			transaction_storage_root,
 			#[cfg(feature = "std")]
-			changes_trie_transaction,
-			#[cfg(feature = "std")]
 			transaction_index_changes,
-			#[cfg(not(feature = "std"))]
-			_ph: Default::default(),
 		})
 	}
 
@@ -639,10 +576,11 @@ impl OverlayedChanges {
 	/// as seen by the current transaction.
 	///
 	/// Returns the storage root and caches storage transaction in the given `cache`.
-	pub fn storage_root<H: Hasher, N: BlockNumber, B: Backend<H>>(
+	pub fn storage_root<H: Hasher, B: Backend<H>>(
 		&self,
 		backend: &B,
-		cache: &mut StorageTransactionCache<B::Transaction, H, N>,
+		cache: &mut StorageTransactionCache<B::Transaction, H>,
+		state_version: StateVersion,
 	) -> H::Out
 	where
 		H::Out: Ord + Encode,
@@ -652,46 +590,12 @@ impl OverlayedChanges {
 			(info, changes.map(|(k, v)| (&k[..], v.value().map(|v| &v[..]))))
 		});
 
-		let (root, transaction) = backend.full_storage_root(delta, child_delta);
+		let (root, transaction) = backend.full_storage_root(delta, child_delta, state_version);
 
 		cache.transaction = Some(transaction);
 		cache.transaction_storage_root = Some(root);
 
 		root
-	}
-
-	/// Generate the changes trie root.
-	///
-	/// Returns the changes trie root and caches the storage transaction into the given `cache`.
-	///
-	/// # Panics
-	///
-	/// Panics on storage error, when `panic_on_storage_error` is set.
-	#[cfg(feature = "std")]
-	pub fn changes_trie_root<'a, H: Hasher, N: BlockNumber, B: Backend<H>>(
-		&self,
-		backend: &B,
-		changes_trie_state: Option<&'a ChangesTrieState<'a, H, N>>,
-		parent_hash: H::Out,
-		panic_on_storage_error: bool,
-		cache: &mut StorageTransactionCache<B::Transaction, H, N>,
-	) -> Result<Option<H::Out>, ()>
-	where
-		H::Out: Ord + Encode + 'static,
-	{
-		build_changes_trie::<_, H, N>(
-			backend,
-			changes_trie_state,
-			self,
-			parent_hash,
-			panic_on_storage_error,
-		)
-		.map(|r| {
-			let root = r.as_ref().map(|r| r.1).clone();
-			cache.changes_trie_transaction = Some(r.map(|(db, _, cache)| (db, cache)));
-			cache.changes_trie_transaction_storage_root = Some(root);
-			root
-		})
 	}
 
 	/// Returns an iterator over the keys (in lexicographic order) following `key` (excluding `key`)
@@ -927,6 +831,7 @@ mod tests {
 
 	#[test]
 	fn overlayed_storage_root_works() {
+		let state_version = StateVersion::default();
 		let initial: BTreeMap<_, _> = vec![
 			(b"doe".to_vec(), b"reindeer".to_vec()),
 			(b"dog".to_vec(), b"puppyXXX".to_vec()),
@@ -935,9 +840,8 @@ mod tests {
 		]
 		.into_iter()
 		.collect();
-		let backend = InMemoryBackend::<Blake2Hasher>::from(initial);
+		let backend = InMemoryBackend::<Blake2Hasher>::from((initial, state_version));
 		let mut overlay = OverlayedChanges::default();
-		overlay.set_collect_extrinsics(false);
 
 		overlay.start_transaction();
 		overlay.set_storage(b"dog".to_vec(), Some(b"puppy".to_vec()));
@@ -950,17 +854,11 @@ mod tests {
 		overlay.set_storage(b"doug".to_vec(), None);
 
 		let mut cache = StorageTransactionCache::default();
-		let mut ext = Ext::new(
-			&mut overlay,
-			&mut cache,
-			&backend,
-			crate::changes_trie::disabled_state::<_, u64>(),
-			None,
-		);
+		let mut ext = Ext::new(&mut overlay, &mut cache, &backend, None);
 		const ROOT: [u8; 32] =
 			hex!("39245109cef3758c2eed2ccba8d9b370a917850af3824bc8348d505df2c298fa");
 
-		assert_eq!(&ext.storage_root()[..], &ROOT);
+		assert_eq!(&ext.storage_root(state_version)[..], &ROOT);
 	}
 
 	#[test]

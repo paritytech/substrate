@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -64,18 +64,26 @@
 //! ### Get current timestamp
 //!
 //! ```
-//! use frame_support::{decl_module, dispatch};
-//! # use pallet_timestamp as timestamp;
-//! use frame_system::ensure_signed;
+//! use pallet_timestamp::{self as timestamp};
 //!
-//! pub trait Config: timestamp::Config {}
+//! #[frame_support::pallet]
+//! pub mod pallet {
+//! 	use super::*;
+//! 	use frame_support::pallet_prelude::*;
+//! 	use frame_system::pallet_prelude::*;
 //!
-//! decl_module! {
-//! 	pub struct Module<T: Config> for enum Call where origin: T::Origin {
-//! 		#[weight = 0]
-//! 		pub fn get_time(origin) -> dispatch::DispatchResult {
+//! 	#[pallet::pallet]
+//! 	pub struct Pallet<T>(_);
+//!
+//! 	#[pallet::config]
+//! 	pub trait Config: frame_system::Config + timestamp::Config {}
+//!
+//! 	#[pallet::call]
+//! 	impl<T: Config> Pallet<T> {
+//! 		#[pallet::weight(0)]
+//! 		pub fn get_time(origin: OriginFor<T>) -> DispatchResult {
 //! 			let _sender = ensure_signed(origin)?;
-//! 			let _now = <timestamp::Module<T>>::get();
+//! 			let _now = <timestamp::Pallet<T>>::get();
 //! 			Ok(())
 //! 		}
 //! 	}
@@ -95,6 +103,10 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 mod benchmarking;
+#[cfg(test)]
+mod mock;
+#[cfg(test)]
+mod tests;
 pub mod weights;
 
 use frame_support::traits::{OnTimestampSet, Time, UnixTime};
@@ -140,7 +152,6 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
-	#[pallet::generate_storage_info]
 	pub struct Pallet<T>(PhantomData<T>);
 
 	/// Current time for the current block.
@@ -222,7 +233,7 @@ pub mod pallet {
 			let data = (*inherent_data).saturated_into::<T::Moment>();
 
 			let next_time = cmp::max(data, Self::now() + T::MinimumPeriod::get());
-			Some(Call::set { now: next_time.into() })
+			Some(Call::set { now: next_time })
 		}
 
 		fn check_inherent(
@@ -233,7 +244,7 @@ pub mod pallet {
 				sp_timestamp::Timestamp::new(30 * 1000);
 
 			let t: u64 = match call {
-				Call::set { ref now } => now.clone().saturated_into::<u64>(),
+				Call::set { ref now } => (*now).saturated_into::<u64>(),
 				_ => return Ok(()),
 			};
 
@@ -300,108 +311,5 @@ impl<T: Config> UnixTime for Pallet<T> {
 			}
 		}
 		core::time::Duration::from_millis(now.saturated_into::<u64>())
-	}
-}
-
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use crate as pallet_timestamp;
-
-	use frame_support::{assert_ok, parameter_types};
-	use sp_core::H256;
-	use sp_io::TestExternalities;
-	use sp_runtime::{
-		testing::Header,
-		traits::{BlakeTwo256, IdentityLookup},
-	};
-
-	pub fn new_test_ext() -> TestExternalities {
-		let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		TestExternalities::new(t)
-	}
-
-	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
-	type Block = frame_system::mocking::MockBlock<Test>;
-
-	frame_support::construct_runtime!(
-		pub enum Test where
-			Block = Block,
-			NodeBlock = Block,
-			UncheckedExtrinsic = UncheckedExtrinsic,
-		{
-			System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-			Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
-		}
-	);
-
-	parameter_types! {
-		pub const BlockHashCount: u64 = 250;
-		pub BlockWeights: frame_system::limits::BlockWeights =
-			frame_system::limits::BlockWeights::simple_max(1024);
-	}
-	impl frame_system::Config for Test {
-		type BaseCallFilter = frame_support::traits::Everything;
-		type BlockWeights = ();
-		type BlockLength = ();
-		type DbWeight = ();
-		type Origin = Origin;
-		type Index = u64;
-		type BlockNumber = u64;
-		type Call = Call;
-		type Hash = H256;
-		type Hashing = BlakeTwo256;
-		type AccountId = u64;
-		type Lookup = IdentityLookup<Self::AccountId>;
-		type Header = Header;
-		type Event = Event;
-		type BlockHashCount = BlockHashCount;
-		type Version = ();
-		type PalletInfo = PalletInfo;
-		type AccountData = ();
-		type OnNewAccount = ();
-		type OnKilledAccount = ();
-		type SystemWeightInfo = ();
-		type SS58Prefix = ();
-		type OnSetCode = ();
-	}
-	parameter_types! {
-		pub const MinimumPeriod: u64 = 5;
-	}
-	impl Config for Test {
-		type Moment = u64;
-		type OnTimestampSet = ();
-		type MinimumPeriod = MinimumPeriod;
-		type WeightInfo = ();
-	}
-
-	#[test]
-	fn timestamp_works() {
-		new_test_ext().execute_with(|| {
-			Timestamp::set_timestamp(42);
-			assert_ok!(Timestamp::set(Origin::none(), 69));
-			assert_eq!(Timestamp::now(), 69);
-		});
-	}
-
-	#[test]
-	#[should_panic(expected = "Timestamp must be updated only once in the block")]
-	fn double_timestamp_should_fail() {
-		new_test_ext().execute_with(|| {
-			Timestamp::set_timestamp(42);
-			assert_ok!(Timestamp::set(Origin::none(), 69));
-			let _ = Timestamp::set(Origin::none(), 70);
-		});
-	}
-
-	#[test]
-	#[should_panic(
-		expected = "Timestamp must increment by at least <MinimumPeriod> between sequential blocks"
-	)]
-	fn block_period_minimum_enforced() {
-		new_test_ext().execute_with(|| {
-			Timestamp::set_timestamp(42);
-			let _ = Timestamp::set(Origin::none(), 46);
-		});
 	}
 }

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -28,7 +28,7 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	dispatch::{Dispatchable, GetDispatchInfo},
 	traits::{Currency, OnUnbalanced, ReservableCurrency},
@@ -57,7 +57,16 @@ pub const DEFAULT_MAX_TRANSACTION_SIZE: u32 = 8 * 1024 * 1024;
 pub const DEFAULT_MAX_BLOCK_TRANSACTIONS: u32 = 512;
 
 /// State data for a stored transaction.
-#[derive(Encode, Decode, Clone, sp_runtime::RuntimeDebug, PartialEq, Eq, scale_info::TypeInfo)]
+#[derive(
+	Encode,
+	Decode,
+	Clone,
+	sp_runtime::RuntimeDebug,
+	PartialEq,
+	Eq,
+	scale_info::TypeInfo,
+	MaxEncodedLen,
+)]
 pub struct TransactionInfo {
 	/// Chunk trie root.
 	chunk_root: <BlakeTwo256 as Hash>::Output,
@@ -95,6 +104,10 @@ pub mod pallet {
 		type FeeDestination: OnUnbalanced<NegativeImbalanceOf<Self>>;
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
+		/// Maximum number of indexed transactions in the block.
+		type MaxBlockTransactions: Get<u32>;
+		/// Maximum data set in a single transaction in bytes.
+		type MaxTransactionSize: Get<u32>;
 	}
 
 	#[pallet::error]
@@ -169,7 +182,7 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Index and store data on chain. Minimum data size is 1 bytes, maximum is
+		/// Index and store data off chain. Minimum data size is 1 bytes, maximum is
 		/// `MaxTransactionSize`. Data will be removed after `STORAGE_PERIOD` blocks, unless `renew`
 		/// is called. # <weight>
 		/// - n*log(n) of data size, as all data is pushed to an in-memory trie.
@@ -179,7 +192,7 @@ pub mod pallet {
 		pub fn store(origin: OriginFor<T>, data: Vec<u8>) -> DispatchResult {
 			ensure!(data.len() > 0, Error::<T>::EmptyTransaction);
 			ensure!(
-				data.len() <= MaxTransactionSize::<T>::get() as usize,
+				data.len() <= T::MaxTransactionSize::get() as usize,
 				Error::<T>::TransactionTooLarge
 			);
 			let sender = ensure_signed(origin)?;
@@ -188,29 +201,31 @@ pub mod pallet {
 			// Chunk data and compute storage root
 			let chunk_count = num_chunks(data.len() as u32);
 			let chunks = data.chunks(CHUNK_SIZE).map(|c| c.to_vec()).collect();
-			let root = sp_io::trie::blake2_256_ordered_root(chunks);
+			let root = sp_io::trie::blake2_256_ordered_root(chunks, sp_runtime::StateVersion::V1);
 
 			let content_hash = sp_io::hashing::blake2_256(&data);
-			let extrinsic_index = <frame_system::Pallet<T>>::extrinsic_index()
-				.ok_or_else(|| Error::<T>::BadContext)?;
+			let extrinsic_index =
+				<frame_system::Pallet<T>>::extrinsic_index().ok_or(Error::<T>::BadContext)?;
 			sp_io::transaction_index::index(extrinsic_index, data.len() as u32, content_hash);
 
 			let mut index = 0;
 			<BlockTransactions<T>>::mutate(|transactions| {
-				if transactions.len() + 1 > MaxBlockTransactions::<T>::get() as usize {
+				if transactions.len() + 1 > T::MaxBlockTransactions::get() as usize {
 					return Err(Error::<T>::TooManyTransactions)
 				}
 				let total_chunks = transactions.last().map_or(0, |t| t.block_chunks) + chunk_count;
 				index = transactions.len() as u32;
-				transactions.push(TransactionInfo {
-					chunk_root: root,
-					size: data.len() as u32,
-					content_hash: content_hash.into(),
-					block_chunks: total_chunks,
-				});
+				transactions
+					.try_push(TransactionInfo {
+						chunk_root: root,
+						size: data.len() as u32,
+						content_hash: content_hash.into(),
+						block_chunks: total_chunks,
+					})
+					.map_err(|_| Error::<T>::TooManyTransactions)?;
 				Ok(())
 			})?;
-			Self::deposit_event(Event::Stored(index));
+			Self::deposit_event(Event::Stored { index });
 			Ok(())
 		}
 
@@ -237,21 +252,22 @@ pub mod pallet {
 
 			let mut index = 0;
 			<BlockTransactions<T>>::mutate(|transactions| {
-				if transactions.len() + 1 > MaxBlockTransactions::<T>::get() as usize {
+				if transactions.len() + 1 > T::MaxBlockTransactions::get() as usize {
 					return Err(Error::<T>::TooManyTransactions)
 				}
 				let chunks = num_chunks(info.size);
 				let total_chunks = transactions.last().map_or(0, |t| t.block_chunks) + chunks;
 				index = transactions.len() as u32;
-				transactions.push(TransactionInfo {
-					chunk_root: info.chunk_root,
-					size: info.size,
-					content_hash: info.content_hash,
-					block_chunks: total_chunks,
-				});
-				Ok(())
+				transactions
+					.try_push(TransactionInfo {
+						chunk_root: info.chunk_root,
+						size: info.size,
+						content_hash: info.content_hash,
+						block_chunks: total_chunks,
+					})
+					.map_err(|_| Error::<T>::TooManyTransactions)
 			})?;
-			Self::deposit_event(Event::Renewed(index));
+			Self::deposit_event(Event::Renewed { index });
 			Ok(().into())
 		}
 
@@ -286,13 +302,12 @@ pub mod pallet {
 						Ok(index) => index,
 						Err(index) => index,
 					};
-					let info =
-						infos.get(index).ok_or_else(|| Error::<T>::MissingStateData)?.clone();
+					let info = infos.get(index).ok_or(Error::<T>::MissingStateData)?.clone();
 					let chunks = num_chunks(info.size);
 					let prev_chunks = info.block_chunks - chunks;
 					(info, selected_chunk_index - prev_chunks)
 				},
-				None => Err(Error::<T>::MissingStateData)?,
+				None => return Err(Error::<T>::MissingStateData.into()),
 			};
 			ensure!(
 				sp_io::trie::blake2_256_verify_proof(
@@ -300,6 +315,7 @@ pub mod pallet {
 					&proof.proof,
 					&encode_index(chunk_index),
 					&proof.chunk,
+					sp_runtime::StateVersion::V1,
 				),
 				Error::<T>::InvalidProof
 			);
@@ -313,9 +329,9 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// Stored data under specified index.
-		Stored(u32),
+		Stored { index: u32 },
 		/// Renewed data under specified index.
-		Renewed(u32),
+		Renewed { index: u32 },
 		/// Storage proof was successfully checked.
 		ProofChecked,
 	}
@@ -323,8 +339,13 @@ pub mod pallet {
 	/// Collection of transaction metadata by block number.
 	#[pallet::storage]
 	#[pallet::getter(fn transaction_roots)]
-	pub(super) type Transactions<T: Config> =
-		StorageMap<_, Blake2_128Concat, T::BlockNumber, Vec<TransactionInfo>, OptionQuery>;
+	pub(super) type Transactions<T: Config> = StorageMap<
+		_,
+		Blake2_128Concat,
+		T::BlockNumber,
+		BoundedVec<TransactionInfo, T::MaxBlockTransactions>,
+		OptionQuery,
+	>;
 
 	/// Count indexed chunks for each block.
 	#[pallet::storage]
@@ -341,16 +362,6 @@ pub mod pallet {
 	/// Storage fee per transaction.
 	pub(super) type EntryFee<T: Config> = StorageValue<_, BalanceOf<T>>;
 
-	#[pallet::storage]
-	#[pallet::getter(fn max_transaction_size)]
-	/// Maximum data set in a single transaction in bytes.
-	pub(super) type MaxTransactionSize<T: Config> = StorageValue<_, u32, ValueQuery>;
-
-	#[pallet::storage]
-	#[pallet::getter(fn max_block_transactions)]
-	/// Maximum number of indexed transactions in the block.
-	pub(super) type MaxBlockTransactions<T: Config> = StorageValue<_, u32, ValueQuery>;
-
 	/// Storage period for data in blocks. Should match `sp_storage_proof::DEFAULT_STORAGE_PERIOD`
 	/// for block authoring.
 	#[pallet::storage]
@@ -359,7 +370,7 @@ pub mod pallet {
 	// Intermediates
 	#[pallet::storage]
 	pub(super) type BlockTransactions<T: Config> =
-		StorageValue<_, Vec<TransactionInfo>, ValueQuery>;
+		StorageValue<_, BoundedVec<TransactionInfo, T::MaxBlockTransactions>, ValueQuery>;
 
 	/// Was the proof checked in this block?
 	#[pallet::storage]
@@ -370,8 +381,6 @@ pub mod pallet {
 		pub byte_fee: BalanceOf<T>,
 		pub entry_fee: BalanceOf<T>,
 		pub storage_period: T::BlockNumber,
-		pub max_block_transactions: u32,
-		pub max_transaction_size: u32,
 	}
 
 	#[cfg(feature = "std")]
@@ -381,8 +390,6 @@ pub mod pallet {
 				byte_fee: 10u32.into(),
 				entry_fee: 1000u32.into(),
 				storage_period: sp_transaction_storage_proof::DEFAULT_STORAGE_PERIOD.into(),
-				max_block_transactions: DEFAULT_MAX_BLOCK_TRANSACTIONS,
-				max_transaction_size: DEFAULT_MAX_TRANSACTION_SIZE,
 			}
 		}
 	}
@@ -392,8 +399,6 @@ pub mod pallet {
 		fn build(&self) {
 			<ByteFee<T>>::put(&self.byte_fee);
 			<EntryFee<T>>::put(&self.entry_fee);
-			<MaxTransactionSize<T>>::put(&self.max_transaction_size);
-			<MaxBlockTransactions<T>>::put(&self.max_block_transactions);
 			<StoragePeriod<T>>::put(&self.storage_period);
 		}
 	}

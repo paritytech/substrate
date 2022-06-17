@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -42,13 +42,11 @@ pub type Transaction = sc_client_api::backend::TransactionFor<Backend, node_prim
 
 /// Genesis configuration parameters for `TestClient`.
 #[derive(Default)]
-pub struct GenesisParameters {
-	support_changes_trie: bool,
-}
+pub struct GenesisParameters;
 
 impl substrate_test_client::GenesisInit for GenesisParameters {
 	fn genesis_storage(&self) -> Storage {
-		crate::genesis::config(self.support_changes_trie, None).build_storage().unwrap()
+		crate::genesis::config(None).build_storage().unwrap()
 	}
 }
 

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -116,7 +116,7 @@ fn create_and_impl_instance_struct(
 	let instance_trait = quote!( #scrate::traits::Instance );
 
 	let instance_struct = &instance_def.instance_struct;
-	let prefix = format!("{}{}", instance_def.prefix, def.crate_name.to_string());
+	let prefix = format!("{}{}", instance_def.prefix, def.crate_name);
 	let doc = &instance_def.doc;
 	let index = instance_def.index;
 

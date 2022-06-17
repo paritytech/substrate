@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -404,19 +404,19 @@ impl Metrics {
 	) -> Result<Self, PrometheusError> {
 		Ok(Self {
 			finality_grandpa_round: register(
-				Gauge::new("finality_grandpa_round", "Highest completed GRANDPA round.")?,
+				Gauge::new("substrate_finality_grandpa_round", "Highest completed GRANDPA round.")?,
 				registry,
 			)?,
 			finality_grandpa_prevotes: register(
 				Counter::new(
-					"finality_grandpa_prevotes_total",
+					"substrate_finality_grandpa_prevotes_total",
 					"Total number of GRANDPA prevotes cast locally.",
 				)?,
 				registry,
 			)?,
 			finality_grandpa_precommits: register(
 				Counter::new(
-					"finality_grandpa_precommits_total",
+					"substrate_finality_grandpa_precommits_total",
 					"Total number of GRANDPA precommits cast locally.",
 				)?,
 				registry,
@@ -451,7 +451,7 @@ impl<BE, Block: BlockT, C, N: NetworkT<Block>, SC, VR> Environment<BE, Block, C,
 		F: FnOnce(&VoterSetState<Block>) -> Result<Option<VoterSetState<Block>>, Error>,
 	{
 		self.voter_set_state.with(|voter_set_state| {
-			if let Some(set_state) = f(&voter_set_state)? {
+			if let Some(set_state) = f(voter_set_state)? {
 				*voter_set_state = set_state;
 
 				if let Some(metrics) = self.metrics.as_ref() {
@@ -609,7 +609,7 @@ where
 	let tree_route = match tree_route_res {
 		Ok(tree_route) => tree_route,
 		Err(e) => {
-			debug!(target: "afg", "Encountered error computing ancestry between block {:?} and base {:?}: {:?}",
+			debug!(target: "afg", "Encountered error computing ancestry between block {:?} and base {:?}: {}",
 				   block, base, e);
 
 			return Err(GrandpaError::NotDescendent)
@@ -987,11 +987,9 @@ where
 			let mut current_rounds = current_rounds.clone();
 			current_rounds.remove(&round);
 
-			// NOTE: this condition should always hold as GRANDPA rounds are always
+			// NOTE: this entry should always exist as GRANDPA rounds are always
 			// started in increasing order, still it's better to play it safe.
-			if !current_rounds.contains_key(&(round + 1)) {
-				current_rounds.insert(round + 1, HasVoted::No);
-			}
+			current_rounds.entry(round + 1).or_insert(HasVoted::No);
 
 			let set_state = VoterSetState::<Block>::Live { completed_rounds, current_rounds };
 
@@ -1046,7 +1044,7 @@ where
 					.votes
 					.extend(historical_votes.seen().iter().skip(n_existing_votes).cloned());
 				already_completed.state = state;
-				crate::aux_schema::write_concluded_round(&*self.client, &already_completed)?;
+				crate::aux_schema::write_concluded_round(&*self.client, already_completed)?;
 			}
 
 			let set_state = VoterSetState::<Block>::Live {
@@ -1098,7 +1096,7 @@ where
 	) {
 		warn!(target: "afg", "Detected prevote equivocation in the finality worker: {:?}", equivocation);
 		if let Err(err) = self.report_equivocation(equivocation.into()) {
-			warn!(target: "afg", "Error reporting prevote equivocation: {:?}", err);
+			warn!(target: "afg", "Error reporting prevote equivocation: {}", err);
 		}
 	}
 
@@ -1109,7 +1107,7 @@ where
 	) {
 		warn!(target: "afg", "Detected precommit equivocation in the finality worker: {:?}", equivocation);
 		if let Err(err) = self.report_equivocation(equivocation.into()) {
-			warn!(target: "afg", "Error reporting precommit equivocation: {:?}", err);
+			warn!(target: "afg", "Error reporting precommit equivocation: {}", err);
 		}
 	}
 }
@@ -1224,7 +1222,7 @@ where
 				.or_else(|| Some((target_header.hash(), *target_header.number())))
 		},
 		Err(e) => {
-			debug!(target: "afg", "Encountered error finding best chain containing {:?}: {:?}", block, e);
+			warn!(target: "afg", "Encountered error finding best chain containing {:?}: {}", block, e);
 			None
 		},
 	};
@@ -1293,7 +1291,7 @@ where
 		) {
 			if let Some(sender) = justification_sender {
 				if let Err(err) = sender.notify(justification) {
-					warn!(target: "afg", "Error creating justification for subscriber: {:?}", err);
+					warn!(target: "afg", "Error creating justification for subscriber: {}", err);
 				}
 			}
 		}
@@ -1344,7 +1342,7 @@ where
 		client
 			.apply_finality(import_op, BlockId::Hash(hash), persisted_justification, true)
 			.map_err(|e| {
-				warn!(target: "afg", "Error applying finality to block {:?}: {:?}", (hash, number), e);
+				warn!(target: "afg", "Error applying finality to block {:?}: {}", (hash, number), e);
 				e
 			})?;
 

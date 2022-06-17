@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,7 +19,7 @@
 
 use codec::{Decode, Encode};
 use num_traits::{One, Zero};
-use sp_std::{cell::RefCell, cmp::Ordering, convert::TryFrom, ops, prelude::*, vec};
+use sp_std::{cell::RefCell, cmp::Ordering, ops, prelude::*, vec};
 
 // A sensible value for this would be half of the dword size of the host machine. Since the
 // runtime is compiled to 32bit webassembly, using 32 and 64 for single and double respectively
@@ -664,7 +664,6 @@ pub mod tests {
 
 	#[test]
 	fn can_try_build_numbers_from_types() {
-		use sp_std::convert::TryFrom;
 		assert_eq!(u64::try_from(with_limbs(1)).unwrap(), 1);
 		assert_eq!(u64::try_from(with_limbs(2)).unwrap(), u32::MAX as u64 + 2);
 		assert_eq!(u64::try_from(with_limbs(3)).unwrap_err(), "cannot fit a number into u64");

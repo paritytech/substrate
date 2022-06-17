@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -45,10 +45,10 @@ use frame_system::{self as system};
 use scale_info::TypeInfo;
 use sp_io::hashing::blake2_256;
 use sp_runtime::{
-	traits::{Dispatchable, Hash, Saturating, Zero},
+	traits::{Dispatchable, Hash, Saturating, TrailingZeroInput, Zero},
 	DispatchResult,
 };
-use sp_std::{convert::TryInto, prelude::*};
+use sp_std::prelude::*;
 pub use weights::WeightInfo;
 
 pub use pallet::*;
@@ -102,7 +102,6 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
-	#[pallet::generate_storage_info]
 	pub struct Pallet<T>(_);
 
 	/// Configuration trait.
@@ -197,7 +196,7 @@ pub mod pallet {
 		/// # </weight>
 		#[pallet::weight({
 			let di = call.get_dispatch_info();
-			(T::WeightInfo::proxy(T::MaxProxies::get().into())
+			(T::WeightInfo::proxy(T::MaxProxies::get())
 				.saturating_add(di.weight)
 				 // AccountData for inner call origin accountdata.
 				.saturating_add(T::DbWeight::get().reads_writes(1, 1)),
@@ -231,7 +230,7 @@ pub mod pallet {
 		/// # <weight>
 		/// Weight is a function of the number of proxies the user has (P).
 		/// # </weight>
-		#[pallet::weight(T::WeightInfo::add_proxy(T::MaxProxies::get().into()))]
+		#[pallet::weight(T::WeightInfo::add_proxy(T::MaxProxies::get()))]
 		pub fn add_proxy(
 			origin: OriginFor<T>,
 			delegate: T::AccountId,
@@ -253,7 +252,7 @@ pub mod pallet {
 		/// # <weight>
 		/// Weight is a function of the number of proxies the user has (P).
 		/// # </weight>
-		#[pallet::weight(T::WeightInfo::remove_proxy(T::MaxProxies::get().into()))]
+		#[pallet::weight(T::WeightInfo::remove_proxy(T::MaxProxies::get()))]
 		pub fn remove_proxy(
 			origin: OriginFor<T>,
 			delegate: T::AccountId,
@@ -274,7 +273,7 @@ pub mod pallet {
 		/// # <weight>
 		/// Weight is a function of the number of proxies the user has (P).
 		/// # </weight>
-		#[pallet::weight(T::WeightInfo::remove_proxies(T::MaxProxies::get().into()))]
+		#[pallet::weight(T::WeightInfo::remove_proxies(T::MaxProxies::get()))]
 		pub fn remove_proxies(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let (_, old_deposit) = Proxies::<T>::take(&who);
@@ -306,7 +305,7 @@ pub mod pallet {
 		/// Weight is a function of the number of proxies the user has (P).
 		/// # </weight>
 		/// TODO: Might be over counting 1 read
-		#[pallet::weight(T::WeightInfo::anonymous(T::MaxProxies::get().into()))]
+		#[pallet::weight(T::WeightInfo::anonymous(T::MaxProxies::get()))]
 		pub fn anonymous(
 			origin: OriginFor<T>,
 			proxy_type: T::ProxyType,
@@ -327,7 +326,12 @@ pub mod pallet {
 			T::Currency::reserve(&who, deposit)?;
 
 			Proxies::<T>::insert(&anonymous, (bounded_proxies, deposit));
-			Self::deposit_event(Event::AnonymousCreated(anonymous, who, proxy_type, index));
+			Self::deposit_event(Event::AnonymousCreated {
+				anonymous,
+				who,
+				proxy_type,
+				disambiguation_index: index,
+			});
 
 			Ok(())
 		}
@@ -352,7 +356,7 @@ pub mod pallet {
 		/// # <weight>
 		/// Weight is a function of the number of proxies the user has (P).
 		/// # </weight>
-		#[pallet::weight(T::WeightInfo::kill_anonymous(T::MaxProxies::get().into()))]
+		#[pallet::weight(T::WeightInfo::kill_anonymous(T::MaxProxies::get()))]
 		pub fn kill_anonymous(
 			origin: OriginFor<T>,
 			spawner: T::AccountId,
@@ -394,7 +398,7 @@ pub mod pallet {
 		/// - A: the number of announcements made.
 		/// - P: the number of proxies the user has.
 		/// # </weight>
-		#[pallet::weight(T::WeightInfo::announce(T::MaxPending::get(), T::MaxProxies::get().into()))]
+		#[pallet::weight(T::WeightInfo::announce(T::MaxPending::get(), T::MaxProxies::get()))]
 		pub fn announce(
 			origin: OriginFor<T>,
 			real: T::AccountId,
@@ -404,12 +408,12 @@ pub mod pallet {
 			Proxies::<T>::get(&real)
 				.0
 				.into_iter()
-				.find(|x| &x.delegate == &who)
+				.find(|x| x.delegate == who)
 				.ok_or(Error::<T>::NotProxy)?;
 
 			let announcement = Announcement {
 				real: real.clone(),
-				call_hash: call_hash.clone(),
+				call_hash,
 				height: system::Pallet::<T>::block_number(),
 			};
 
@@ -427,7 +431,7 @@ pub mod pallet {
 				})
 				.map(|d| *deposit = d)
 			})?;
-			Self::deposit_event(Event::Announced(real, who, call_hash));
+			Self::deposit_event(Event::Announced { real, proxy: who, call_hash });
 
 			Ok(())
 		}
@@ -448,9 +452,10 @@ pub mod pallet {
 		/// - A: the number of announcements made.
 		/// - P: the number of proxies the user has.
 		/// # </weight>
-		#[pallet::weight(
-			T::WeightInfo::remove_announcement(T::MaxPending::get(), T::MaxProxies::get().into())
-		)]
+		#[pallet::weight(T::WeightInfo::remove_announcement(
+			T::MaxPending::get(),
+			T::MaxProxies::get()
+		))]
 		pub fn remove_announcement(
 			origin: OriginFor<T>,
 			real: T::AccountId,
@@ -478,9 +483,10 @@ pub mod pallet {
 		/// - A: the number of announcements made.
 		/// - P: the number of proxies the user has.
 		/// # </weight>
-		#[pallet::weight(
-			T::WeightInfo::reject_announcement(T::MaxPending::get(), T::MaxProxies::get().into())
-		)]
+		#[pallet::weight(T::WeightInfo::reject_announcement(
+			T::MaxPending::get(),
+			T::MaxProxies::get()
+		))]
 		pub fn reject_announcement(
 			origin: OriginFor<T>,
 			delegate: T::AccountId,
@@ -513,7 +519,7 @@ pub mod pallet {
 		/// # </weight>
 		#[pallet::weight({
 			let di = call.get_dispatch_info();
-			(T::WeightInfo::proxy_announced(T::MaxPending::get(), T::MaxProxies::get().into())
+			(T::WeightInfo::proxy_announced(T::MaxPending::get(), T::MaxProxies::get())
 				.saturating_add(di.weight)
 				 // AccountData for inner call origin accountdata.
 				.saturating_add(T::DbWeight::get().reads_writes(1, 1)),
@@ -547,21 +553,33 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// A proxy was executed correctly, with the given \[result\].
-		ProxyExecuted(DispatchResult),
+		/// A proxy was executed correctly, with the given.
+		ProxyExecuted { result: DispatchResult },
 		/// Anonymous account has been created by new proxy with given
-		/// disambiguation index and proxy type. \[anonymous, who, proxy_type,
-		/// disambiguation_index\]
-		AnonymousCreated(T::AccountId, T::AccountId, T::ProxyType, u16),
-		/// An announcement was placed to make a call in the future. \[real, proxy, call_hash\]
-		Announced(T::AccountId, T::AccountId, CallHashOf<T>),
-		/// A proxy was added. \[delegator, delegatee, proxy_type, delay\]
-		ProxyAdded(T::AccountId, T::AccountId, T::ProxyType, T::BlockNumber),
+		/// disambiguation index and proxy type.
+		AnonymousCreated {
+			anonymous: T::AccountId,
+			who: T::AccountId,
+			proxy_type: T::ProxyType,
+			disambiguation_index: u16,
+		},
+		/// An announcement was placed to make a call in the future.
+		Announced { real: T::AccountId, proxy: T::AccountId, call_hash: CallHashOf<T> },
+		/// A proxy was added.
+		ProxyAdded {
+			delegator: T::AccountId,
+			delegatee: T::AccountId,
+			proxy_type: T::ProxyType,
+			delay: T::BlockNumber,
+		},
+		/// A proxy was removed.
+		ProxyRemoved {
+			delegator: T::AccountId,
+			delegatee: T::AccountId,
+			proxy_type: T::ProxyType,
+			delay: T::BlockNumber,
+		},
 	}
-
-	/// Old name generated by `decl_event`.
-	#[deprecated(note = "use `Event` instead")]
-	pub type RawEvent<T> = Event<T>;
 
 	#[pallet::error]
 	pub enum Error<T> {
@@ -639,7 +657,8 @@ impl<T: Config> Pallet<T> {
 		});
 		let entropy = (b"modlpy/proxy____", who, height, ext_index, proxy_type, index)
 			.using_encoded(blake2_256);
-		T::AccountId::decode(&mut &entropy[..]).unwrap_or_default()
+		Decode::decode(&mut TrailingZeroInput::new(entropy.as_ref()))
+			.expect("infinite length input; no invalid inputs for type; qed")
 	}
 
 	/// Register a proxy account for the delegator that is able to make calls on its behalf.
@@ -672,12 +691,12 @@ impl<T: Config> Pallet<T> {
 				T::Currency::unreserve(delegator, *deposit - new_deposit);
 			}
 			*deposit = new_deposit;
-			Self::deposit_event(Event::<T>::ProxyAdded(
-				delegator.clone(),
+			Self::deposit_event(Event::<T>::ProxyAdded {
+				delegator: delegator.clone(),
 				delegatee,
 				proxy_type,
 				delay,
-			));
+			});
 			Ok(())
 		})
 	}
@@ -698,7 +717,11 @@ impl<T: Config> Pallet<T> {
 	) -> DispatchResult {
 		Proxies::<T>::try_mutate_exists(delegator, |x| {
 			let (mut proxies, old_deposit) = x.take().ok_or(Error::<T>::NotFound)?;
-			let proxy_def = ProxyDefinition { delegate: delegatee, proxy_type, delay };
+			let proxy_def = ProxyDefinition {
+				delegate: delegatee.clone(),
+				proxy_type: proxy_type.clone(),
+				delay,
+			};
 			let i = proxies.binary_search(&proxy_def).ok().ok_or(Error::<T>::NotFound)?;
 			proxies.remove(i);
 			let new_deposit = Self::deposit(proxies.len() as u32);
@@ -710,6 +733,12 @@ impl<T: Config> Pallet<T> {
 			if !proxies.is_empty() {
 				*x = Some((proxies, new_deposit))
 			}
+			Self::deposit_event(Event::<T>::ProxyRemoved {
+				delegator: delegator.clone(),
+				delegatee,
+				proxy_type,
+				delay,
+			});
 			Ok(())
 		})
 	}
@@ -732,9 +761,9 @@ impl<T: Config> Pallet<T> {
 		let new_deposit =
 			if len == 0 { BalanceOf::<T>::zero() } else { base + factor * (len as u32).into() };
 		if new_deposit > old_deposit {
-			T::Currency::reserve(&who, new_deposit - old_deposit)?;
+			T::Currency::reserve(who, new_deposit - old_deposit)?;
 		} else if new_deposit < old_deposit {
-			T::Currency::unreserve(&who, old_deposit - new_deposit);
+			T::Currency::unreserve(who, old_deposit - new_deposit);
 		}
 		Ok(if len == 0 { None } else { Some(new_deposit) })
 	}
@@ -789,7 +818,7 @@ impl<T: Config> Pallet<T> {
 				// has.
 				Some(Call::add_proxy { ref proxy_type, .. }) |
 				Some(Call::remove_proxy { ref proxy_type, .. })
-					if !def.proxy_type.is_superset(&proxy_type) =>
+					if !def.proxy_type.is_superset(proxy_type) =>
 					false,
 				// Proxy call cannot remove all proxies or kill anonymous proxies unless it has full
 				// permissions.
@@ -800,6 +829,6 @@ impl<T: Config> Pallet<T> {
 			}
 		});
 		let e = call.dispatch(origin);
-		Self::deposit_event(Event::ProxyExecuted(e.map(|_| ()).map_err(|e| e.error)));
+		Self::deposit_event(Event::ProxyExecuted { result: e.map(|_| ()).map_err(|e| e.error) });
 	}
 }

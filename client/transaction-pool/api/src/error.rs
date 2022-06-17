@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -26,7 +26,7 @@ use sp_runtime::transaction_validity::{
 pub type Result<T> = std::result::Result<T, Error>;
 
 /// Transaction pool error type.
-#[derive(Debug, thiserror::Error, derive_more::From)]
+#[derive(Debug, thiserror::Error)]
 #[allow(missing_docs)]
 pub enum Error {
 	#[error("Unknown transaction validity: {0:?}")]
@@ -46,7 +46,7 @@ pub enum Error {
 	TemporarilyBanned,
 
 	#[error("[{0:?}] Already imported")]
-	AlreadyImported(Box<dyn std::any::Any + Send>),
+	AlreadyImported(Box<dyn std::any::Any + Send + Sync>),
 
 	#[error("Too low priority ({} > {})", old, new)]
 	TooLowPriority {
@@ -64,7 +64,6 @@ pub enum Error {
 	#[error("Transaction cannot be propagated and the local node does not author blocks")]
 	Unactionable,
 
-	#[from(ignore)]
 	#[error("{0}")]
 	InvalidBlockId(String),
 
@@ -73,7 +72,7 @@ pub enum Error {
 }
 
 /// Transaction pool error conversion.
-pub trait IntoPoolError: std::error::Error + Send + Sized {
+pub trait IntoPoolError: std::error::Error + Send + Sized + Sync {
 	/// Try to extract original `Error`
 	///
 	/// This implementation is optional and used only to

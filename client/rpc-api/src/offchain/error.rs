@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -18,7 +18,10 @@
 
 //! Offchain RPC errors.
 
-use jsonrpc_core as rpc;
+use jsonrpsee::{
+	core::Error as JsonRpseeError,
+	types::error::{CallError, ErrorObject},
+};
 
 /// Offchain RPC Result type.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -35,16 +38,17 @@ pub enum Error {
 }
 
 /// Base error code for all offchain errors.
-const BASE_ERROR: i64 = 5000;
+const BASE_ERROR: i32 = 5000;
 
-impl From<Error> for rpc::Error {
+impl From<Error> for JsonRpseeError {
 	fn from(e: Error) -> Self {
 		match e {
-			Error::UnavailableStorageKind => rpc::Error {
-				code: rpc::ErrorCode::ServerError(BASE_ERROR + 1),
-				message: "This storage kind is not available yet".into(),
-				data: None,
-			},
+			Error::UnavailableStorageKind => CallError::Custom(ErrorObject::owned(
+				BASE_ERROR + 1,
+				"This storage kind is not available yet",
+				None::<()>,
+			))
+			.into(),
 			Error::UnsafeRpcCalled(e) => e.into(),
 		}
 	}

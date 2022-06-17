@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -31,6 +31,7 @@ use crate::{
 	Never,
 };
 use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen, Ref};
+use sp_io::MultiRemovalResults;
 use sp_runtime::traits::Saturating;
 use sp_std::prelude::*;
 
@@ -98,6 +99,17 @@ where
 	OnEmpty: Get<QueryKind::Query> + 'static,
 	MaxValues: Get<Option<u32>>,
 {
+	/// The key used to store the counter of the map.
+	pub fn counter_storage_final_key() -> [u8; 32] {
+		CounterFor::<Prefix>::hashed_key()
+	}
+
+	/// The prefix used to generate the key of the map.
+	pub fn map_storage_final_prefix() -> Vec<u8> {
+		use crate::storage::generator::StorageMap;
+		<Self as MapWrapper>::Map::prefix_hash()
+	}
+
 	/// Get the storage key used to fetch a value corresponding to a specific key.
 	pub fn hashed_key_for<KeyArg: EncodeLike<Key>>(key: KeyArg) -> Vec<u8> {
 		<Self as MapWrapper>::Map::hashed_key_for(key)
@@ -118,6 +130,11 @@ where
 	/// Returns `Ok` if it exists, `Err` if not.
 	pub fn try_get<KeyArg: EncodeLike<Key>>(key: KeyArg) -> Result<Value, ()> {
 		<Self as MapWrapper>::Map::try_get(key)
+	}
+
+	/// Store or remove the value to be associated with `key` so that `get` returns the `query`.
+	pub fn set<KeyArg: EncodeLike<Key>>(key: KeyArg, q: QueryKind::Query) {
+		<Self as MapWrapper>::Map::set(key, q)
 	}
 
 	/// Swap the values of two keys.
@@ -179,6 +196,8 @@ where
 	}
 
 	/// Mutate the item, only if an `Ok` value is returned. Deletes the item if mutated to a `None`.
+	/// `f` will always be called with an option representing if the storage item exists (`Some<V>`)
+	/// or if the storage item does not exist (`None`), independent of the `QueryType`.
 	pub fn try_mutate_exists<KeyArg, R, E, F>(key: KeyArg, f: F) -> Result<R, E>
 	where
 		KeyArg: EncodeLike<Key> + Clone,
@@ -204,8 +223,7 @@ where
 
 	/// Take the value under a key.
 	pub fn take<KeyArg: EncodeLike<Key> + Clone>(key: KeyArg) -> QueryKind::Query {
-		let removed_value =
-			<Self as MapWrapper>::Map::mutate_exists(key, |value| core::mem::replace(value, None));
+		let removed_value = <Self as MapWrapper>::Map::mutate_exists(key, |value| value.take());
 		if removed_value.is_some() {
 			CounterFor::<Prefix>::mutate(|value| value.saturating_dec());
 		}
@@ -261,24 +279,51 @@ where
 		<Self as MapWrapper>::Map::migrate_key::<OldHasher, _>(key)
 	}
 
-	/// Remove all value of the storage.
+	/// Remove all values in the map.
+	#[deprecated = "Use `clear` instead"]
 	pub fn remove_all() {
-		CounterFor::<Prefix>::set(0u32);
+		#[allow(deprecated)]
 		<Self as MapWrapper>::Map::remove_all(None);
+		CounterFor::<Prefix>::kill();
+	}
+
+	/// Attempt to remove all items from the map.
+	///
+	/// Returns [`MultiRemovalResults`](sp_io::MultiRemovalResults) to inform about the result. Once
+	/// the resultant `maybe_cursor` field is `None`, then no further items remain to be deleted.
+	///
+	/// NOTE: After the initial call for any given map, it is important that no further items
+	/// are inserted into the map. If so, then the map may not be empty when the resultant
+	/// `maybe_cursor` is `None`.
+	///
+	/// # Limit
+	///
+	/// A `limit` must always be provided through in order to cap the maximum
+	/// amount of deletions done in a single call. This is one fewer than the
+	/// maximum number of backend iterations which may be done by this operation and as such
+	/// represents the maximum number of backend deletions which may happen. A `limit` of zero
+	/// implies that no keys will be deleted, though there may be a single iteration done.
+	///
+	/// # Cursor
+	///
+	/// A *cursor* may be passed in to this operation with `maybe_cursor`. `None` should only be
+	/// passed once (in the initial call) for any given storage map. Subsequent calls
+	/// operating on the same map should always pass `Some`, and this should be equal to the
+	/// previous call result's `maybe_cursor` field.
+	pub fn clear(limit: u32, maybe_cursor: Option<&[u8]>) -> MultiRemovalResults {
+		let result = <Self as MapWrapper>::Map::clear(limit, maybe_cursor);
+		match result.maybe_cursor {
+			None => CounterFor::<Prefix>::kill(),
+			Some(_) => CounterFor::<Prefix>::mutate(|x| x.saturating_reduce(result.unique)),
+		}
+		result
 	}
 
 	/// Iter over all value of the storage.
 	///
 	/// NOTE: If a value failed to decode because storage is corrupted then it is skipped.
 	pub fn iter_values() -> crate::storage::PrefixIterator<Value, OnRemovalCounterUpdate<Prefix>> {
-		let map_iterator = <Self as MapWrapper>::Map::iter_values();
-		crate::storage::PrefixIterator {
-			prefix: map_iterator.prefix,
-			previous_key: map_iterator.previous_key,
-			drain: map_iterator.drain,
-			closure: map_iterator.closure,
-			phantom: Default::default(),
-		}
+		<Self as MapWrapper>::Map::iter_values().convert_on_removal()
 	}
 
 	/// Translate the values of all elements by a function `f`, in the map in no particular order.
@@ -360,28 +405,14 @@ where
 	///
 	/// If you alter the map while doing this, you'll get undefined results.
 	pub fn iter() -> crate::storage::PrefixIterator<(Key, Value), OnRemovalCounterUpdate<Prefix>> {
-		let map_iterator = <Self as MapWrapper>::Map::iter();
-		crate::storage::PrefixIterator {
-			prefix: map_iterator.prefix,
-			previous_key: map_iterator.previous_key,
-			drain: map_iterator.drain,
-			closure: map_iterator.closure,
-			phantom: Default::default(),
-		}
+		<Self as MapWrapper>::Map::iter().convert_on_removal()
 	}
 
 	/// Remove all elements from the map and iterate through them in no particular order.
 	///
 	/// If you add elements to the map while doing this, you'll get undefined results.
 	pub fn drain() -> crate::storage::PrefixIterator<(Key, Value), OnRemovalCounterUpdate<Prefix>> {
-		let map_iterator = <Self as MapWrapper>::Map::drain();
-		crate::storage::PrefixIterator {
-			prefix: map_iterator.prefix,
-			previous_key: map_iterator.previous_key,
-			drain: map_iterator.drain,
-			closure: map_iterator.closure,
-			phantom: Default::default(),
-		}
+		<Self as MapWrapper>::Map::drain().convert_on_removal()
 	}
 
 	/// Translate the values of all elements by a function `f`, in the map in no particular order.
@@ -397,6 +428,23 @@ where
 			}
 			res
 		})
+	}
+
+	/// Enumerate all elements in the counted map after a specified `starting_raw_key` in no
+	/// particular order.
+	///
+	/// If you alter the map while doing this, you'll get undefined results.
+	pub fn iter_from(
+		starting_raw_key: Vec<u8>,
+	) -> crate::storage::PrefixIterator<(Key, Value), OnRemovalCounterUpdate<Prefix>> {
+		<Self as MapWrapper>::Map::iter_from(starting_raw_key).convert_on_removal()
+	}
+
+	/// Enumerate all keys in the counted map.
+	///
+	/// If you alter the map while doing this, you'll get undefined results.
+	pub fn iter_keys() -> crate::storage::KeyPrefixIterator<Key> {
+		<Self as MapWrapper>::Map::iter_keys()
 	}
 }
 
@@ -414,7 +462,11 @@ where
 	fn build_metadata(docs: Vec<&'static str>, entries: &mut Vec<StorageEntryMetadata>) {
 		<Self as MapWrapper>::Map::build_metadata(docs, entries);
 		CounterFor::<Prefix>::build_metadata(
-			vec![&"Counter for the related counted storage map"],
+			if cfg!(feature = "no-metadata-docs") {
+				vec![]
+			} else {
+				vec!["Counter for the related counted storage map"]
+			},
 			entries,
 		);
 	}
@@ -676,7 +728,7 @@ mod test {
 			assert_eq!(A::count(), 2);
 
 			// Remove all.
-			A::remove_all();
+			let _ = A::clear(u32::max_value(), None);
 
 			assert_eq!(A::count(), 0);
 			assert_eq!(A::initialize_counter(), 0);
@@ -907,7 +959,7 @@ mod test {
 			assert_eq!(B::count(), 2);
 
 			// Remove all.
-			B::remove_all();
+			let _ = B::clear(u32::max_value(), None);
 
 			assert_eq!(B::count(), 0);
 			assert_eq!(B::initialize_counter(), 0);
@@ -1009,6 +1061,25 @@ mod test {
 	}
 
 	#[test]
+	fn test_iter_from() {
+		type A = CountedStorageMap<Prefix, Twox64Concat, u16, u32>;
+		TestExternalities::default().execute_with(|| {
+			A::insert(1, 1);
+			A::insert(2, 2);
+			A::insert(3, 3);
+			A::insert(4, 4);
+
+			// no prefix is same as normal iter.
+			assert_eq!(A::iter_from(vec![]).collect::<Vec<_>>(), A::iter().collect::<Vec<_>>());
+
+			let iter_all = A::iter().collect::<Vec<_>>();
+			let (before, after) = iter_all.split_at(2);
+			let last_key = before.last().map(|(k, _)| k).unwrap();
+			assert_eq!(A::iter_from(A::hashed_key_for(last_key)).collect::<Vec<_>>(), after);
+		})
+	}
+
+	#[test]
 	fn test_metadata() {
 		type A = CountedStorageMap<Prefix, Twox64Concat, u16, u32, ValueQuery, ADefault>;
 		let mut entries = vec![];
@@ -1032,7 +1103,11 @@ mod test {
 					modifier: StorageEntryModifier::Default,
 					ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
 					default: vec![0, 0, 0, 0],
-					docs: vec!["Counter for the related counted storage map"],
+					docs: if cfg!(feature = "no-metadata-docs") {
+						vec![]
+					} else {
+						vec!["Counter for the related counted storage map"]
+					},
 				},
 			]
 		);

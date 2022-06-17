@@ -1,12 +1,12 @@
 error[E0277]: can't compare `Foo<T>` with `Foo<T>`
-   --> $DIR/eq.rs:6:8
+   --> tests/derive_no_bound_ui/eq.rs:6:8
     |
 6   | struct Foo<T: Config> {
     |        ^^^ no implementation for `Foo<T> == Foo<T>`
     |
     = help: the trait `PartialEq` is not implemented for `Foo<T>`
 note: required by a bound in `std::cmp::Eq`
-   --> $DIR/cmp.rs:272:15
+   --> $RUST/core/src/cmp.rs
     |
-272 | pub trait Eq: PartialEq<Self> {
+    | pub trait Eq: PartialEq<Self> {
     |               ^^^^^^^^^^^^^^^ required by this bound in `std::cmp::Eq`

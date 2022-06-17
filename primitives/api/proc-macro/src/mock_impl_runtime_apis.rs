@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -116,10 +116,6 @@ fn implement_common_api_traits(block_type: TypePath, self_ty: Type) -> Result<To
 			fn into_storage_changes(
 				&self,
 				_: &Self::StateBackend,
-				_: Option<&#crate_::ChangesTrieState<
-					#crate_::HashFor<#block_type>,
-					#crate_::NumberFor<#block_type>,
-				>>,
 				_: <#block_type as #crate_::BlockT>::Hash,
 			) -> std::result::Result<
 				#crate_::StorageChanges<Self::StateBackend, #block_type>,
@@ -287,7 +283,7 @@ impl<'a> Fold for FoldRuntimeApiImpl<'a> {
 			};
 
 			input.sig.ident =
-				generate_method_runtime_api_impl_name(&self.impl_trait, &input.sig.ident);
+				generate_method_runtime_api_impl_name(self.impl_trait, &input.sig.ident);
 
 			// When using advanced, the user needs to declare the correct return type on its own,
 			// otherwise do it for the user.
@@ -354,7 +350,7 @@ fn generate_runtime_api_impls(impls: &[ItemImpl]) -> Result<GeneratedRuntimeApiI
 	let mut self_ty: Option<Box<Type>> = None;
 
 	for impl_ in impls {
-		let impl_trait_path = extract_impl_trait(&impl_, RequireQualifiedTraitPath::No)?;
+		let impl_trait_path = extract_impl_trait(impl_, RequireQualifiedTraitPath::No)?;
 		let impl_trait = &impl_trait_path
 			.segments
 			.last()

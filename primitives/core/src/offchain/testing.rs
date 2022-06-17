@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -341,7 +341,7 @@ impl offchain::Externalities for TestOffchainExt {
 				Ok(0)
 			} else {
 				let read = std::cmp::min(buffer.len(), response[req.read..].len());
-				buffer[0..read].copy_from_slice(&response[req.read..read]);
+				buffer[0..read].copy_from_slice(&response[req.read..req.read + read]);
 				req.read += read;
 				Ok(read)
 			}

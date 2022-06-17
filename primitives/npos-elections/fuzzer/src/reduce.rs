@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -79,8 +79,7 @@ fn generate_random_phragmen_assignment(
 		let mut targets_to_chose_from = all_targets.clone();
 		let targets_to_chose = if edge_per_voter_var > 0 {
 			rng.gen_range(
-				avg_edge_per_voter - edge_per_voter_var,
-				avg_edge_per_voter + edge_per_voter_var,
+				avg_edge_per_voter - edge_per_voter_var..avg_edge_per_voter + edge_per_voter_var,
 			)
 		} else {
 			avg_edge_per_voter
@@ -89,11 +88,11 @@ fn generate_random_phragmen_assignment(
 		let distribution = (0..targets_to_chose)
 			.map(|_| {
 				let target =
-					targets_to_chose_from.remove(rng.gen_range(0, targets_to_chose_from.len()));
-				if winners.iter().find(|w| **w == target).is_none() {
+					targets_to_chose_from.remove(rng.gen_range(0..targets_to_chose_from.len()));
+				if winners.iter().all(|w| *w != target) {
 					winners.push(target.clone());
 				}
-				(target, rng.gen_range(1 * KSM, 100 * KSM))
+				(target, rng.gen_range(1 * KSM..100 * KSM))
 			})
 			.collect::<Vec<(AccountId, ExtendedBalance)>>();
 
@@ -119,7 +118,7 @@ fn reduce_and_compare(assignment: &Vec<StakedAssignment<AccountId>>, winners: &V
 	let n = assignment.len() as u32;
 	let m = winners.len() as u32;
 
-	let edges_before = assignment_len(&assignment);
+	let edges_before = assignment_len(assignment);
 	let num_changed = reduce(&mut altered_assignment);
 	let edges_after = edges_before - num_changed;
 

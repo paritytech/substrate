@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -46,7 +46,7 @@ use sc_client_api::{
 };
 use sc_client_db::PruningMode;
 use sc_consensus::{BlockImport, BlockImportParams, ForkChoiceStrategy, ImportResult, ImportedAux};
-use sc_executor::{NativeElseWasmExecutor, WasmExecutionMethod};
+use sc_executor::{NativeElseWasmExecutor, WasmExecutionMethod, WasmtimeInstantiationStrategy};
 use sp_api::ProvideRuntimeApi;
 use sp_block_builder::BlockBuilder;
 use sp_consensus::BlockOrigin;
@@ -243,11 +243,21 @@ impl TaskExecutor {
 }
 
 impl SpawnNamed for TaskExecutor {
-	fn spawn(&self, _: &'static str, future: futures::future::BoxFuture<'static, ()>) {
+	fn spawn(
+		&self,
+		_: &'static str,
+		_: Option<&'static str>,
+		future: futures::future::BoxFuture<'static, ()>,
+	) {
 		self.pool.spawn_ok(future);
 	}
 
-	fn spawn_blocking(&self, _: &'static str, future: futures::future::BoxFuture<'static, ()>) {
+	fn spawn_blocking(
+		&self,
+		_: &'static str,
+		_: Option<&'static str>,
+		future: futures::future::BoxFuture<'static, ()>,
+	) {
 		self.pool.spawn_ok(future);
 	}
 }
@@ -270,8 +280,7 @@ impl<'a> BlockContentIterator<'a> {
 		let genesis_hash = client
 			.block_hash(Zero::zero())
 			.expect("Database error?")
-			.expect("Genesis block always exists; qed")
-			.into();
+			.expect("Genesis block always exists; qed");
 
 		BlockContentIterator { iteration: 0, content, keyring, runtime_version, genesis_hash }
 	}
@@ -380,17 +389,23 @@ impl BenchDb {
 		let db_config = sc_client_db::DatabaseSettings {
 			state_cache_size: 16 * 1024 * 1024,
 			state_cache_child_ratio: Some((0, 100)),
-			state_pruning: PruningMode::ArchiveAll,
+			state_pruning: Some(PruningMode::ArchiveAll),
 			source: database_type.into_settings(dir.into()),
 			keep_blocks: sc_client_db::KeepBlocks::All,
-			transaction_storage: sc_client_db::TransactionStorageMode::BlockBody,
 		};
 		let task_executor = TaskExecutor::new();
 
 		let backend = sc_service::new_db_backend(db_config).expect("Should not fail");
 		let client = sc_service::new_client(
 			backend.clone(),
-			NativeElseWasmExecutor::new(WasmExecutionMethod::Compiled, None, 8),
+			NativeElseWasmExecutor::new(
+				WasmExecutionMethod::Compiled {
+					instantiation_strategy: WasmtimeInstantiationStrategy::PoolingCopyOnWrite,
+				},
+				None,
+				8,
+				2,
+			),
 			&keyring.generate_genesis(),
 			None,
 			None,
@@ -560,15 +575,13 @@ impl BenchKeyring {
 					genesis_hash,
 				);
 				let key = self.accounts.get(&signed).expect("Account id not found in keyring");
-				let signature = payload
-					.using_encoded(|b| {
-						if b.len() > 256 {
-							key.sign(&sp_io::hashing::blake2_256(b))
-						} else {
-							key.sign(b)
-						}
-					})
-					.into();
+				let signature = payload.using_encoded(|b| {
+					if b.len() > 256 {
+						key.sign(&sp_io::hashing::blake2_256(b))
+					} else {
+						key.sign(b)
+					}
+				});
 				UncheckedExtrinsic {
 					signature: Some((sp_runtime::MultiAddress::Id(signed), signature, extra)),
 					function: payload.0,
@@ -581,7 +594,6 @@ impl BenchKeyring {
 	/// Generate genesis with accounts from this keyring endowed with some balance.
 	pub fn generate_genesis(&self) -> node_runtime::GenesisConfig {
 		crate::genesis::config_endowed(
-			false,
 			Some(node_runtime::wasm_binary_unwrap()),
 			self.collect_account_ids(),
 		)

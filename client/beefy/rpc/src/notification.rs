@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -25,15 +25,15 @@ use sp_runtime::traits::Block as BlockT;
 /// The given bytes should be the SCALE-encoded representation of a
 /// `beefy_primitives::SignedCommitment`.
 #[derive(Clone, Serialize, Deserialize)]
-pub struct SignedCommitment(sp_core::Bytes);
+pub struct EncodedSignedCommitment(sp_core::Bytes);
 
-impl SignedCommitment {
+impl EncodedSignedCommitment {
 	pub fn new<Block>(
-		signed_commitment: beefy_gadget::notification::SignedCommitment<Block>,
+		signed_commitment: beefy_gadget::notification::BeefySignedCommitment<Block>,
 	) -> Self
 	where
 		Block: BlockT,
 	{
-		SignedCommitment(signed_commitment.encode().into())
+		EncodedSignedCommitment(signed_commitment.encode().into())
 	}
 }

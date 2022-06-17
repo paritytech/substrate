@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,7 +21,9 @@ use async_trait::async_trait;
 use parking_lot::RwLock;
 use sp_application_crypto::{ecdsa, ed25519, sr25519, AppKey, AppPair, IsWrappedBy};
 use sp_core::{
-	crypto::{CryptoTypePublicPair, ExposeSecret, KeyTypeId, Pair as PairT, Public, SecretString},
+	crypto::{
+		ByteArray, CryptoTypePublicPair, ExposeSecret, KeyTypeId, Pair as PairT, SecretString,
+	},
 	sr25519::{Pair as Sr25519Pair, Public as Sr25519Public},
 	Encode,
 };
@@ -189,30 +191,36 @@ impl SyncCryptoStore for LocalKeystore {
 	) -> std::result::Result<Option<Vec<u8>>, TraitError> {
 		match key.0 {
 			ed25519::CRYPTO_ID => {
-				let pub_key = ed25519::Public::from_slice(key.1.as_slice());
+				let pub_key = ed25519::Public::from_slice(key.1.as_slice()).map_err(|()| {
+					TraitError::Other("Corrupted public key - Invalid size".into())
+				})?;
 				let key_pair = self
 					.0
 					.read()
 					.key_pair_by_type::<ed25519::Pair>(&pub_key, id)
-					.map_err(|e| TraitError::from(e))?;
+					.map_err(TraitError::from)?;
 				key_pair.map(|k| k.sign(msg).encode()).map(Ok).transpose()
 			},
 			sr25519::CRYPTO_ID => {
-				let pub_key = sr25519::Public::from_slice(key.1.as_slice());
+				let pub_key = sr25519::Public::from_slice(key.1.as_slice()).map_err(|()| {
+					TraitError::Other("Corrupted public key - Invalid size".into())
+				})?;
 				let key_pair = self
 					.0
 					.read()
 					.key_pair_by_type::<sr25519::Pair>(&pub_key, id)
-					.map_err(|e| TraitError::from(e))?;
+					.map_err(TraitError::from)?;
 				key_pair.map(|k| k.sign(msg).encode()).map(Ok).transpose()
 			},
 			ecdsa::CRYPTO_ID => {
-				let pub_key = ecdsa::Public::from_slice(key.1.as_slice());
+				let pub_key = ecdsa::Public::from_slice(key.1.as_slice()).map_err(|()| {
+					TraitError::Other("Corrupted public key - Invalid size".into())
+				})?;
 				let key_pair = self
 					.0
 					.read()
 					.key_pair_by_type::<ecdsa::Pair>(&pub_key, id)
-					.map_err(|e| TraitError::from(e))?;
+					.map_err(TraitError::from)?;
 				key_pair.map(|k| k.sign(msg).encode()).map(Ok).transpose()
 			},
 			_ => Err(TraitError::KeyNotSupported(id)),
@@ -223,7 +231,11 @@ impl SyncCryptoStore for LocalKeystore {
 		self.0
 			.read()
 			.raw_public_keys(key_type)
-			.map(|v| v.into_iter().map(|k| sr25519::Public::from_slice(k.as_slice())).collect())
+			.map(|v| {
+				v.into_iter()
+					.filter_map(|k| sr25519::Public::from_slice(k.as_slice()).ok())
+					.collect()
+			})
 			.unwrap_or_default()
 	}
 
@@ -246,7 +258,11 @@ impl SyncCryptoStore for LocalKeystore {
 		self.0
 			.read()
 			.raw_public_keys(key_type)
-			.map(|v| v.into_iter().map(|k| ed25519::Public::from_slice(k.as_slice())).collect())
+			.map(|v| {
+				v.into_iter()
+					.filter_map(|k| ed25519::Public::from_slice(k.as_slice()).ok())
+					.collect()
+			})
 			.unwrap_or_default()
 	}
 
@@ -269,7 +285,11 @@ impl SyncCryptoStore for LocalKeystore {
 		self.0
 			.read()
 			.raw_public_keys(key_type)
-			.map(|v| v.into_iter().map(|k| ecdsa::Public::from_slice(k.as_slice())).collect())
+			.map(|v| {
+				v.into_iter()
+					.filter_map(|k| ecdsa::Public::from_slice(k.as_slice()).ok())
+					.collect()
+			})
 			.unwrap_or_default()
 	}
 
@@ -300,7 +320,7 @@ impl SyncCryptoStore for LocalKeystore {
 	fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> bool {
 		public_keys
 			.iter()
-			.all(|(p, t)| self.0.read().key_phrase_by_type(&p, *t).ok().flatten().is_some())
+			.all(|(p, t)| self.0.read().key_phrase_by_type(p, *t).ok().flatten().is_some())
 	}
 
 	fn sr25519_vrf_sign(
@@ -364,8 +384,7 @@ impl KeystoreInner {
 		let path = path.into();
 		fs::create_dir_all(&path)?;
 
-		let instance = Self { path: Some(path), additional: HashMap::new(), password };
-		Ok(instance)
+		Ok(Self { path: Some(path), additional: HashMap::new(), password })
 	}
 
 	/// Get the password for this store.
@@ -397,10 +416,9 @@ impl KeystoreInner {
 	/// Places it into the file system store, if a path is configured.
 	fn insert_unknown(&self, key_type: KeyTypeId, suri: &str, public: &[u8]) -> Result<()> {
 		if let Some(path) = self.key_file_path(public, key_type) {
-			let mut file = File::create(path).map_err(Error::Io)?;
-			serde_json::to_writer(&file, &suri).map_err(Error::Json)?;
-			file.flush().map_err(Error::Io)?;
+			Self::write_to_file(path, suri)?;
 		}
+
 		Ok(())
 	}
 
@@ -411,13 +429,27 @@ impl KeystoreInner {
 	fn generate_by_type<Pair: PairT>(&mut self, key_type: KeyTypeId) -> Result<Pair> {
 		let (pair, phrase, _) = Pair::generate_with_phrase(self.password());
 		if let Some(path) = self.key_file_path(pair.public().as_slice(), key_type) {
-			let mut file = File::create(path)?;
-			serde_json::to_writer(&file, &phrase)?;
-			file.flush()?;
+			Self::write_to_file(path, &phrase)?;
 		} else {
 			self.insert_ephemeral_pair(&pair, &phrase, key_type);
 		}
+
 		Ok(pair)
+	}
+
+	/// Write the given `data` to `file`.
+	fn write_to_file(file: PathBuf, data: &str) -> Result<()> {
+		let mut file = File::create(file)?;
+
+		#[cfg(target_family = "unix")]
+		{
+			use std::os::unix::fs::PermissionsExt;
+			file.set_permissions(fs::Permissions::from_mode(0o600))?;
+		}
+
+		serde_json::to_writer(&file, data)?;
+		file.flush()?;
+		Ok(())
 	}
 
 	/// Create a new key from seed.
@@ -471,7 +503,7 @@ impl KeystoreInner {
 		if &pair.public() == public {
 			Ok(Some(pair))
 		} else {
-			Err(Error::InvalidPassword)
+			Err(Error::PublicKeyMismatch)
 		}
 	}
 
@@ -504,7 +536,7 @@ impl KeystoreInner {
 				if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
 					match hex::decode(name) {
 						Ok(ref hex) if hex.len() > 4 => {
-							if &hex[0..4] != &id.0 {
+							if hex[0..4] != id.0 {
 								continue
 							}
 							let public = hex[4..].to_vec();
@@ -549,8 +581,9 @@ mod tests {
 		}
 
 		fn public_keys<Public: AppPublic>(&self) -> Result<Vec<Public>> {
-			self.raw_public_keys(Public::ID)
-				.map(|v| v.into_iter().map(|k| Public::from_slice(k.as_slice())).collect())
+			self.raw_public_keys(Public::ID).map(|v| {
+				v.into_iter().filter_map(|k| Public::from_slice(k.as_slice()).ok()).collect()
+			})
 		}
 
 		fn generate<Pair: AppPair>(&mut self) -> Result<Pair> {
@@ -734,5 +767,21 @@ mod tests {
 		assert_eq!(SyncCryptoStore::sr25519_public_keys(&store, TEST_KEY_TYPE).len(), 1);
 		SyncCryptoStore::sr25519_generate_new(&store, TEST_KEY_TYPE, None).unwrap();
 		assert_eq!(SyncCryptoStore::sr25519_public_keys(&store, TEST_KEY_TYPE).len(), 2);
+	}
+
+	#[test]
+	#[cfg(target_family = "unix")]
+	fn uses_correct_file_permissions_on_unix() {
+		use std::os::unix::fs::PermissionsExt;
+
+		let temp_dir = TempDir::new().unwrap();
+		let store = LocalKeystore::open(temp_dir.path(), None).unwrap();
+
+		let public = SyncCryptoStore::sr25519_generate_new(&store, TEST_KEY_TYPE, None).unwrap();
+
+		let path = store.0.read().key_file_path(public.as_ref(), TEST_KEY_TYPE).unwrap();
+		let permissions = File::open(path).unwrap().metadata().unwrap().permissions();
+
+		assert_eq!(0o100600, permissions.mode());
 	}
 }

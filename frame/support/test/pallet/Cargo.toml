@@ -2,7 +2,7 @@
 name = "frame-support-test-pallet"
 version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
+edition = "2021"
 license = "Apache-2.0"
 publish = false
 homepage = "https://substrate.io"
@@ -12,8 +12,8 @@ repository = "https://github.com/paritytech/substrate/"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
-scale-info = { version = "1.0", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"] }
+scale-info = { version = "2.0.0", default-features = false, features = ["derive"] }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../../" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../../../system" }
 
@@ -21,7 +21,7 @@ frame-system = { version = "4.0.0-dev", default-features = false, path = "../../
 default = ["std"]
 std = [
 	"codec/std",
-	"scale-info/std",
 	"frame-support/std",
 	"frame-system/std",
+	"scale-info/std",
 ]

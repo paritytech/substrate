@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,18 +17,20 @@
 
 use frame_support::{
 	dispatch::UnfilteredDispatchable,
+	pallet_prelude::ValueQuery,
 	storage::unhashed,
-	traits::{GetCallName, OnFinalize, OnGenesis, OnInitialize, OnRuntimeUpgrade},
+	traits::{ConstU32, GetCallName, OnFinalize, OnGenesis, OnInitialize, OnRuntimeUpgrade},
 	weights::{DispatchClass, DispatchInfo, GetDispatchInfo, Pays},
 };
 use sp_io::{
 	hashing::{blake2_128, twox_128, twox_64},
 	TestExternalities,
 };
-use sp_runtime::DispatchError;
+use sp_runtime::{DispatchError, ModuleError};
 
 #[frame_support::pallet]
 pub mod pallet {
+	use codec::MaxEncodedLen;
 	use frame_support::{pallet_prelude::*, scale_info};
 	use frame_system::pallet_prelude::*;
 	use sp_std::any::TypeId;
@@ -92,8 +94,7 @@ pub mod pallet {
 
 		/// Doc comment put in metadata
 		#[pallet::weight(1)]
-		#[frame_support::transactional]
-		pub fn foo_transactional(
+		pub fn foo_storage_layer(
 			origin: OriginFor<T>,
 			#[pallet::compact] _foo: u32,
 		) -> DispatchResultWithPostInfo {
@@ -164,6 +165,7 @@ pub mod pallet {
 		Encode,
 		Decode,
 		scale_info::TypeInfo,
+		MaxEncodedLen,
 	)]
 	#[scale_info(skip_type_params(T, I))]
 	pub struct Origin<T, I = ()>(PhantomData<(T, I)>);
@@ -245,11 +247,6 @@ pub mod pallet2 {
 	}
 }
 
-frame_support::parameter_types!(
-	pub const MyGetParam: u32 = 10;
-	pub const BlockHashCount: u32 = 250;
-);
-
 impl frame_system::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type Origin = Origin;
@@ -262,7 +259,7 @@ impl frame_system::Config for Runtime {
 	type Lookup = sp_runtime::traits::IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = BlockHashCount;
+	type BlockHashCount = ConstU32<250>;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
@@ -274,15 +271,16 @@ impl frame_system::Config for Runtime {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
+	type MaxConsumers = ConstU32<16>;
 }
 impl pallet::Config for Runtime {
 	type Event = Event;
-	type MyGetParam = MyGetParam;
+	type MyGetParam = ConstU32<10>;
 	type Balance = u64;
 }
 impl pallet::Config<pallet::Instance1> for Runtime {
 	type Event = Event;
-	type MyGetParam = MyGetParam;
+	type MyGetParam = ConstU32<10>;
 	type Balance = u64;
 }
 impl pallet2::Config for Runtime {
@@ -319,7 +317,7 @@ fn call_expand() {
 		DispatchInfo { weight: 3, class: DispatchClass::Normal, pays_fee: Pays::Yes }
 	);
 	assert_eq!(call_foo.get_call_name(), "foo");
-	assert_eq!(pallet::Call::<Runtime>::get_call_names(), &["foo", "foo_transactional"]);
+	assert_eq!(pallet::Call::<Runtime>::get_call_names(), &["foo", "foo_storage_layer"]);
 
 	let call_foo = pallet::Call::<Runtime, pallet::Instance1>::foo { foo: 3 };
 	assert_eq!(
@@ -329,7 +327,7 @@ fn call_expand() {
 	assert_eq!(call_foo.get_call_name(), "foo");
 	assert_eq!(
 		pallet::Call::<Runtime, pallet::Instance1>::get_call_names(),
-		&["foo", "foo_transactional"],
+		&["foo", "foo_storage_layer"],
 	);
 }
 
@@ -345,7 +343,11 @@ fn error_expand() {
 	);
 	assert_eq!(
 		DispatchError::from(pallet::Error::<Runtime>::InsufficientProposersBalance),
-		DispatchError::Module { index: 1, error: 0, message: Some("InsufficientProposersBalance") },
+		DispatchError::Module(ModuleError {
+			index: 1,
+			error: [0; 4],
+			message: Some("InsufficientProposersBalance")
+		}),
 	);
 
 	assert_eq!(
@@ -362,7 +364,11 @@ fn error_expand() {
 		DispatchError::from(
 			pallet::Error::<Runtime, pallet::Instance1>::InsufficientProposersBalance
 		),
-		DispatchError::Module { index: 2, error: 0, message: Some("InsufficientProposersBalance") },
+		DispatchError::Module(ModuleError {
+			index: 2,
+			error: [0; 4],
+			message: Some("InsufficientProposersBalance")
+		}),
 	);
 }
 
@@ -551,35 +557,34 @@ fn pallet_hooks_expand() {
 	TestExternalities::default().execute_with(|| {
 		frame_system::Pallet::<Runtime>::set_block_number(1);
 
-		assert_eq!(AllPallets::on_initialize(1), 21);
-		AllPallets::on_finalize(1);
+		assert_eq!(AllPalletsWithoutSystem::on_initialize(1), 21);
+		AllPalletsWithoutSystem::on_finalize(1);
 
-		assert_eq!(AllPallets::on_runtime_upgrade(), 61);
+		assert_eq!(AllPalletsWithoutSystem::on_runtime_upgrade(), 61);
 
-		// The order is indeed reversed due to https://github.com/paritytech/substrate/issues/6280
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,
-			Event::Instance1Example(pallet::Event::Something(11)),
-		);
-		assert_eq!(
-			frame_system::Pallet::<Runtime>::events()[1].event,
 			Event::Example(pallet::Event::Something(10)),
 		);
 		assert_eq!(
-			frame_system::Pallet::<Runtime>::events()[2].event,
-			Event::Instance1Example(pallet::Event::Something(21)),
+			frame_system::Pallet::<Runtime>::events()[1].event,
+			Event::Instance1Example(pallet::Event::Something(11)),
 		);
 		assert_eq!(
-			frame_system::Pallet::<Runtime>::events()[3].event,
+			frame_system::Pallet::<Runtime>::events()[2].event,
 			Event::Example(pallet::Event::Something(20)),
 		);
 		assert_eq!(
+			frame_system::Pallet::<Runtime>::events()[3].event,
+			Event::Instance1Example(pallet::Event::Something(21)),
+		);
+		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[4].event,
-			Event::Instance1Example(pallet::Event::Something(31)),
+			Event::Example(pallet::Event::Something(30)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[5].event,
-			Event::Example(pallet::Event::Something(30)),
+			Event::Instance1Example(pallet::Event::Something(31)),
 		);
 	})
 }
@@ -817,4 +822,16 @@ fn test_pallet_info_access() {
 	assert_eq!(<Instance1Example as frame_support::traits::PalletInfoAccess>::index(), 2);
 	assert_eq!(<Example2 as frame_support::traits::PalletInfoAccess>::index(), 3);
 	assert_eq!(<Instance1Example2 as frame_support::traits::PalletInfoAccess>::index(), 4);
+}
+
+#[test]
+fn test_storage_alias() {
+	#[frame_support::storage_alias]
+	type Value<T: pallet::Config<I>, I: 'static> =
+		StorageValue<pallet::Pallet<T, I>, u32, ValueQuery>;
+
+	TestExternalities::default().execute_with(|| {
+		pallet::Value::<Runtime, pallet::Instance1>::put(10);
+		assert_eq!(10, Value::<Runtime, pallet::Instance1>::get());
+	})
 }

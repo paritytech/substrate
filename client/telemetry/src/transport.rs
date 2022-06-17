@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -38,8 +38,13 @@ pub(crate) fn initialize_transport() -> Result<WsTrans, io::Error> {
 					let item = libp2p::websocket::framed::OutgoingData::Binary(item);
 					future::ready(Ok::<_, io::Error>(item))
 				})
-				.try_filter(|item| future::ready(item.is_data()))
-				.map_ok(|data| data.into_bytes());
+				.try_filter_map(|item| async move {
+					if let libp2p::websocket::framed::Incoming::Data(data) = item {
+						Ok(Some(data.into_bytes()))
+					} else {
+						Ok(None)
+					}
+				});
 			future::ready(Ok::<_, io::Error>(connec))
 		})
 	};

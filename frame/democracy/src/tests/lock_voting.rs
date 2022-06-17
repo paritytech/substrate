@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,7 +18,6 @@
 //! The tests for functionality concerning locking and lock-voting.
 
 use super::*;
-use std::convert::TryFrom;
 
 fn aye(x: u8, balance: u64) -> AccountVote<u64> {
 	AccountVote::Standard {

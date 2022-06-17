@@ -199,6 +199,7 @@ As mentioned above, Bounties, Tips and Lottery have been extracted out of treasu
  	type OnSlash = ();
  	type ProposalBond = ProposalBond;
  	type ProposalBondMinimum = ProposalBondMinimum;
+	type ProposalBondMaximum = ();
  	type SpendPeriod = SpendPeriod;
  	type Burn = Burn;
 +	type BurnDestination = ();
@@ -289,7 +290,7 @@ Democracy brings three new settings with this release, all to allow for better i
  	type CancellationOrigin = pallet_collective::EnsureProportionAtLeast<_2, _3, AccountId, CouncilCollective>;
 +	// To cancel a proposal before it has been passed, the technical committee must be unanimous or
 +	// Root must agree.
-+	type CancelProposalOrigin = EnsureOneOf<
++	type CancelProposalOrigin = EitherOfDiverse<
 +		AccountId,
 +		EnsureRoot<AccountId>,
 +		pallet_collective::EnsureProportionAtLeast<_1, _1, AccountId, TechnicalCollective>,

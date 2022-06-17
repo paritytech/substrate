@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -23,7 +23,7 @@ use kvdb::KeyValueDB;
 use lazy_static::lazy_static;
 use rand::Rng;
 use sp_state_machine::Backend as _;
-use sp_trie::{trie_types::TrieDBMut, TrieMut as _};
+use sp_trie::{trie_types::TrieDBMutV1, TrieMut as _};
 use std::{borrow::Cow, collections::HashMap, sync::Arc};
 
 use node_primitives::Hash;
@@ -155,7 +155,7 @@ impl core::BenchmarkDescription for TrieReadBenchmarkDescription {
 
 	fn name(&self) -> Cow<'static, str> {
 		format!(
-			"Trie read benchmark({} database ({} keys), db_type: {})",
+			"Trie read benchmark({:?} database ({} keys), db_type: {:?})",
 			self.database_size,
 			pretty_print(self.database_size.keys()),
 			self.database_type,
@@ -260,7 +260,7 @@ impl core::BenchmarkDescription for TrieWriteBenchmarkDescription {
 
 	fn name(&self) -> Cow<'static, str> {
 		format!(
-			"Trie write benchmark({} database ({} keys), db_type = {})",
+			"Trie write benchmark({:?} database ({} keys), db_type = {:?})",
 			self.database_size,
 			pretty_print(self.database_size.keys()),
 			self.database_type,
@@ -282,12 +282,12 @@ impl core::Benchmark for TrieWriteBenchmark {
 		let mut db = self.database.clone();
 		let kvdb = db.open(self.database_type);
 
-		let mut new_root = self.root.clone();
+		let mut new_root = self.root;
 
 		let mut overlay = HashMap::new();
 		let mut trie = SimpleTrie { db: kvdb.clone(), overlay: &mut overlay };
-		let mut trie_db_mut =
-			TrieDBMut::from_existing(&mut trie, &mut new_root).expect("Failed to create TrieDBMut");
+		let mut trie_db_mut = TrieDBMutV1::from_existing(&mut trie, &mut new_root)
+			.expect("Failed to create TrieDBMut");
 
 		for (warmup_key, warmup_value) in self.warmup_keys.iter() {
 			let value = trie_db_mut

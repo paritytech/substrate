@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -110,8 +110,6 @@ where
 
 #[test]
 fn test_multiply_by_rational_saturating() {
-	use std::convert::TryInto;
-
 	let div = 100u32;
 	for value in 0..=div {
 		for p in 0..=div {
@@ -132,8 +130,6 @@ fn test_multiply_by_rational_saturating() {
 
 #[test]
 fn test_calculate_for_fraction_times_denominator() {
-	use std::convert::TryInto;
-
 	let curve = PiecewiseLinear {
 		points: &[
 			(Perbill::from_parts(0_000_000_000), Perbill::from_parts(0_500_000_000)),

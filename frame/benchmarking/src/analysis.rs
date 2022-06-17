@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,7 +18,6 @@
 //! Tools for analyzing the benchmark results.
 
 use crate::BenchmarkResult;
-use core::convert::TryFrom;
 use linregress::{FormulaRegressionBuilder, RegressionDataBuilder};
 use std::collections::BTreeMap;
 
@@ -92,7 +91,7 @@ impl Analysis {
 			})
 			.collect();
 
-		values.sort();
+		values.sort_unstable();
 		let mid = values.len() / 2;
 
 		Some(Self {
@@ -200,7 +199,7 @@ impl Analysis {
 	}
 
 	pub fn min_squares_iqr(r: &Vec<BenchmarkResult>, selector: BenchmarkSelector) -> Option<Self> {
-		if r[0].components.is_empty() {
+		if r[0].components.is_empty() || r.len() <= 2 {
 			return Self::median_value(r, selector)
 		}
 
@@ -217,7 +216,7 @@ impl Analysis {
 		}
 
 		for (_, rs) in results.iter_mut() {
-			rs.sort();
+			rs.sort_unstable();
 			let ql = rs.len() / 4;
 			*rs = rs[ql..rs.len() - ql].to_vec();
 		}
@@ -256,7 +255,7 @@ impl Analysis {
 			.iter()
 			.map(|(p, vs)| {
 				// Avoid divide by zero
-				if vs.len() == 0 {
+				if vs.is_empty() {
 					return (p.clone(), 0, 0)
 				}
 				let total = vs.iter().fold(0u128, |acc, v| acc + *v);

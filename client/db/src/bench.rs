@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -34,7 +34,7 @@ use sp_core::{
 };
 use sp_runtime::{
 	traits::{Block as BlockT, HashFor},
-	Storage,
+	StateVersion, Storage,
 };
 use sp_state_machine::{
 	backend::Backend as StateBackend, ChildStorageCollection, DBValue, ProofRecorder,
@@ -57,14 +57,14 @@ impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for StorageDb<Bloc
 	fn get(&self, key: &Block::Hash, prefix: Prefix) -> Result<Option<DBValue>, String> {
 		let prefixed_key = prefixed_key::<HashFor<Block>>(key, prefix);
 		if let Some(recorder) = &self.proof_recorder {
-			if let Some(v) = recorder.get(&key) {
-				return Ok(v.clone())
+			if let Some(v) = recorder.get(key) {
+				return Ok(v)
 			}
 			let backend_value = self
 				.db
 				.get(0, &prefixed_key)
 				.map_err(|e| format!("Database backend error: {:?}", e))?;
-			recorder.record(key.clone(), backend_value.clone());
+			recorder.record(*key, backend_value.clone());
 			Ok(backend_value)
 		} else {
 			self.db
@@ -73,6 +73,7 @@ impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for StorageDb<Bloc
 		}
 	}
 }
+
 /// State that manages the backend database reference. Allows runtime to control the database.
 pub struct BenchmarkingState<B: BlockT> {
 	root: Cell<B::Hash>,
@@ -105,14 +106,15 @@ impl<B: BlockT> BenchmarkingState<B> {
 		record_proof: bool,
 		enable_tracking: bool,
 	) -> Result<Self, String> {
+		let state_version = sp_runtime::StateVersion::default();
 		let mut root = B::Hash::default();
 		let mut mdb = MemoryDB::<HashFor<B>>::default();
-		sp_state_machine::TrieDBMut::<HashFor<B>>::new(&mut mdb, &mut root);
+		sp_state_machine::TrieDBMutV1::<HashFor<B>>::new(&mut mdb, &mut root);
 
 		let mut state = BenchmarkingState {
 			state: RefCell::new(None),
 			db: Cell::new(None),
-			root: Cell::new(root.clone()),
+			root: Cell::new(root),
 			genesis: Default::default(),
 			genesis_root: Default::default(),
 			record: Default::default(),
@@ -121,7 +123,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 			child_key_tracker: Default::default(),
 			whitelist: Default::default(),
 			proof_recorder: record_proof.then(Default::default),
-			proof_recorder_root: Cell::new(root.clone()),
+			proof_recorder_root: Cell::new(root),
 			enable_tracking,
 		};
 
@@ -138,9 +140,10 @@ impl<B: BlockT> BenchmarkingState<B> {
 			state.state.borrow_mut().as_mut().unwrap().full_storage_root(
 				genesis.top.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref()))),
 				child_delta,
+				state_version,
 			);
 		state.genesis = transaction.clone().drain();
-		state.genesis_root = root.clone();
+		state.genesis_root = root;
 		state.commit(root, transaction, Vec::new(), Vec::new())?;
 		state.record.take();
 		Ok(state)
@@ -198,9 +201,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 		let mut main_key_tracker = self.main_key_tracker.borrow_mut();
 
 		let key_tracker = if let Some(childtrie) = childtrie {
-			child_key_tracker
-				.entry(childtrie.to_vec())
-				.or_insert_with(|| LinkedHashMap::new())
+			child_key_tracker.entry(childtrie.to_vec()).or_insert_with(LinkedHashMap::new)
 		} else {
 			&mut main_key_tracker
 		};
@@ -241,9 +242,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 		let mut main_key_tracker = self.main_key_tracker.borrow_mut();
 
 		let key_tracker = if let Some(childtrie) = childtrie {
-			child_key_tracker
-				.entry(childtrie.to_vec())
-				.or_insert_with(|| LinkedHashMap::new())
+			child_key_tracker.entry(childtrie.to_vec()).or_insert_with(LinkedHashMap::new)
 		} else {
 			&mut main_key_tracker
 		};
@@ -394,10 +393,11 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 		&self,
 		child_info: Option<&ChildInfo>,
 		prefix: Option<&[u8]>,
+		start_at: Option<&[u8]>,
 		f: F,
 	) {
 		if let Some(ref state) = *self.state.borrow() {
-			state.apply_to_keys_while(child_info, prefix, f)
+			state.apply_to_keys_while(child_info, prefix, start_at, f)
 		}
 	}
 
@@ -415,6 +415,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 	fn storage_root<'a>(
 		&self,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
+		state_version: StateVersion,
 	) -> (B::Hash, Self::Transaction)
 	where
 		B::Hash: Ord,
@@ -422,13 +423,14 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 		self.state
 			.borrow()
 			.as_ref()
-			.map_or(Default::default(), |s| s.storage_root(delta))
+			.map_or(Default::default(), |s| s.storage_root(delta, state_version))
 	}
 
 	fn child_storage_root<'a>(
 		&self,
 		child_info: &ChildInfo,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
+		state_version: StateVersion,
 	) -> (B::Hash, bool, Self::Transaction)
 	where
 		B::Hash: Ord,
@@ -436,7 +438,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 		self.state
 			.borrow()
 			.as_ref()
-			.map_or(Default::default(), |s| s.child_storage_root(child_info, delta))
+			.map_or(Default::default(), |s| s.child_storage_root(child_info, delta, state_version))
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
@@ -512,7 +514,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 			self.db.set(Some(db));
 		}
 
-		self.root.set(self.genesis_root.clone());
+		self.root.set(self.genesis_root);
 		self.reopen()?;
 		self.wipe_tracker();
 		Ok(())
@@ -607,18 +609,17 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 			if proof_recorder_root == Default::default() || proof_size == 1 {
 				// empty trie
 				proof_size
+			} else if let Some(size) = proof.encoded_compact_size::<HashFor<B>>(proof_recorder_root)
+			{
+				size as u32
 			} else {
-				if let Some(size) = proof.encoded_compact_size::<HashFor<B>>(proof_recorder_root) {
-					size as u32
-				} else {
-					panic!(
-						"proof rec root {:?}, root {:?}, genesis {:?}, rec_len {:?}",
-						self.proof_recorder_root.get(),
-						self.root.get(),
-						self.genesis_root,
-						proof_size,
-					);
-				}
+				panic!(
+					"proof rec root {:?}, root {:?}, genesis {:?}, rec_len {:?}",
+					self.proof_recorder_root.get(),
+					self.root.get(),
+					self.genesis_root,
+					proof_size,
+				);
 			}
 		})
 	}
@@ -667,7 +668,6 @@ mod test {
 			assert_eq!(rw_tracker.1, 0);
 			assert_eq!(rw_tracker.2, 2);
 			assert_eq!(rw_tracker.3, 0);
-			drop(rw_tracker);
 			bench_state.wipe().unwrap();
 		}
 	}

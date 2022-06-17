@@ -69,35 +69,43 @@ Import the Assets module and types and derive your runtime's configuration trait
 
 ```rust
 use pallet_assets as assets;
-use frame_support::{decl_module, dispatch, ensure};
-use frame_system::ensure_signed;
 use sp_runtime::ArithmeticError;
 
-pub trait Config: assets::Config { }
+#[frame_support::pallet]
+pub mod pallet {
+    use super::*;
+    use frame_support::pallet_prelude::*;
+    use frame_system::pallet_prelude::*;
 
-decl_module! {
-	pub struct Module<T: Config> for enum Call where origin: T::Origin {
-		pub fn issue_token_airdrop(origin) -> dispatch::DispatchResult {
-			let sender = ensure_signed(origin).map_err(|e| e.as_str())?;
+    #[pallet::pallet]
+    pub struct Pallet<T>(_);
 
-			const ACCOUNT_ALICE: u64 = 1;
-			const ACCOUNT_BOB: u64 = 2;
-			const COUNT_AIRDROP_RECIPIENTS: u64 = 2;
-			const TOKENS_FIXED_SUPPLY: u64 = 100;
+    #[pallet::config]
+    pub trait Config: frame_system::Config + assets::Config {}
 
-			ensure!(!COUNT_AIRDROP_RECIPIENTS.is_zero(), ArithmeticError::DivisionByZero);
+    #[pallet::call]
+    impl<T: Config> Pallet<T> {
+        pub fn issue_token_airdrop(origin: OriginFor<T>) -> DispatchResult {
+            let sender = ensure_signed(origin)?;
 
-			let asset_id = Self::next_asset_id();
+            const ACCOUNT_ALICE: u64 = 1;
+            const ACCOUNT_BOB: u64 = 2;
+            const COUNT_AIRDROP_RECIPIENTS: u64 = 2;
+            const TOKENS_FIXED_SUPPLY: u64 = 100;
 
-			<NextAssetId<T>>::mutate(|asset_id| *asset_id += 1);
-			<Balances<T>>::insert((asset_id, &ACCOUNT_ALICE), TOKENS_FIXED_SUPPLY / COUNT_AIRDROP_RECIPIENTS);
-			<Balances<T>>::insert((asset_id, &ACCOUNT_BOB), TOKENS_FIXED_SUPPLY / COUNT_AIRDROP_RECIPIENTS);
-			<TotalSupply<T>>::insert(asset_id, TOKENS_FIXED_SUPPLY);
+            ensure!(!COUNT_AIRDROP_RECIPIENTS.is_zero(), ArithmeticError::DivisionByZero);
 
-			Self::deposit_event(RawEvent::Issued(asset_id, sender, TOKENS_FIXED_SUPPLY));
-			Ok(())
-		}
-	}
+            let asset_id = Self::next_asset_id();
+
+            <NextAssetId<T>>::mutate(|asset_id| *asset_id += 1);
+            <Balances<T>>::insert((asset_id, &ACCOUNT_ALICE), TOKENS_FIXED_SUPPLY / COUNT_AIRDROP_RECIPIENTS);
+            <Balances<T>>::insert((asset_id, &ACCOUNT_BOB), TOKENS_FIXED_SUPPLY / COUNT_AIRDROP_RECIPIENTS);
+            <TotalSupply<T>>::insert(asset_id, TOKENS_FIXED_SUPPLY);
+
+            Self::deposit_event(Event::Issued(asset_id, sender, TOKENS_FIXED_SUPPLY));
+            Ok(())
+        }
+    }
 }
 ```
 

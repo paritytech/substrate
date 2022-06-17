@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -203,7 +203,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 				let imported = self.pool.write().import(tx)?;
 
 				if let base::Imported::Ready { ref hash, .. } = imported {
-					self.import_notification_sinks.lock().retain_mut(|sink| {
+					RetainMut::retain_mut(&mut *self.import_notification_sinks.lock(), |sink| {
 						match sink.try_send(*hash) {
 							Ok(()) => true,
 							Err(e) =>
@@ -442,7 +442,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 	pub fn extrinsics_tags(&self, hashes: &[ExtrinsicHash<B>]) -> Vec<Option<Vec<Tag>>> {
 		self.pool
 			.read()
-			.by_hashes(&hashes)
+			.by_hashes(hashes)
 			.into_iter()
 			.map(|existing_in_pool| {
 				existing_in_pool.map(|transaction| transaction.provides.to_vec())
@@ -546,7 +546,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 		let now = Instant::now();
 		let to_remove = {
 			self.ready()
-				.filter(|tx| self.rotator.ban_if_stale(&now, block_number, &tx))
+				.filter(|tx| self.rotator.ban_if_stale(&now, block_number, tx))
 				.map(|tx| tx.hash)
 				.collect::<Vec<_>>()
 		};
@@ -554,7 +554,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 			let p = self.pool.read();
 			let mut hashes = Vec::new();
 			for tx in p.futures() {
-				if self.rotator.ban_if_stale(&now, block_number, &tx) {
+				if self.rotator.ban_if_stale(&now, block_number, tx) {
 					hashes.push(tx.hash);
 				}
 			}
@@ -567,12 +567,6 @@ impl<B: ChainApi> ValidatedPool<B> {
 		self.rotator.clear_timeouts(&now);
 
 		Ok(())
-	}
-
-	/// Get rotator reference.
-	#[cfg(feature = "test-helpers")]
-	pub fn rotator(&self) -> &PoolRotator<ExtrinsicHash<B>> {
-		&self.rotator
 	}
 
 	/// Get api reference.
@@ -636,11 +630,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 
 	/// Returns a Vec of hashes and extrinsics in the future pool.
 	pub fn futures(&self) -> Vec<(ExtrinsicHash<B>, ExtrinsicFor<B>)> {
-		self.pool
-			.read()
-			.futures()
-			.map(|tx| (tx.hash.clone(), tx.data.clone()))
-			.collect()
+		self.pool.read().futures().map(|tx| (tx.hash, tx.data.clone())).collect()
 	}
 
 	/// Returns pool status.
@@ -669,9 +659,9 @@ where
 	match *imported {
 		base::Imported::Ready { ref promoted, ref failed, ref removed, ref hash } => {
 			listener.ready(hash, None);
-			failed.into_iter().for_each(|f| listener.invalid(f));
-			removed.into_iter().for_each(|r| listener.dropped(&r.hash, Some(hash)));
-			promoted.into_iter().for_each(|p| listener.ready(p, None));
+			failed.iter().for_each(|f| listener.invalid(f));
+			removed.iter().for_each(|r| listener.dropped(&r.hash, Some(hash)));
+			promoted.iter().for_each(|p| listener.ready(p, None));
 		},
 		base::Imported::Future { ref hash } => listener.future(hash),
 	}

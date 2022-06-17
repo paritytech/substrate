@@ -7,11 +7,9 @@ members = [
 	"bin/node-template/runtime",
 	"bin/node/bench",
 	"bin/node/cli",
-	"bin/node/test-runner-example",
 	"bin/node/executor",
 	"bin/node/primitives",
 	"bin/node/rpc",
-	"bin/node/rpc-client",
 	"bin/node/runtime",
 	"bin/node/testing",
 	"bin/utils/chain-spec-builder",
@@ -43,9 +41,11 @@ members = [
 	"client/finality-grandpa",
 	"client/informant",
 	"client/keystore",
-	"client/light",
 	"client/network",
 	"client/network-gossip",
+	"client/network/common",
+	"client/network/light",
+	"client/network/sync",
 	"client/network/test",
 	"client/offchain",
 	"client/peerset",
@@ -57,6 +57,7 @@ members = [
 	"client/service",
 	"client/service/test",
 	"client/state-db",
+	"client/sysinfo",
 	"client/sync-state-rpc",
 	"client/telemetry",
 	"client/tracing",
@@ -64,30 +65,38 @@ members = [
 	"client/transaction-pool",
 	"client/transaction-pool/api",
 	"client/utils",
+	"frame/alliance",
 	"frame/assets",
 	"frame/atomic-swap",
 	"frame/aura",
 	"frame/authority-discovery",
 	"frame/authorship",
 	"frame/babe",
+	"frame/bags-list",
+	"frame/bags-list/fuzzer",
+	"frame/bags-list/remote-tests",
 	"frame/balances",
 	"frame/beefy",
 	"frame/beefy-mmr",
 	"frame/beefy-mmr/primitives",
 	"frame/benchmarking",
 	"frame/bounties",
+	"frame/child-bounties",
 	"frame/collective",
 	"frame/contracts",
 	"frame/contracts/rpc",
 	"frame/contracts/rpc/runtime-api",
+	"frame/conviction-voting",
 	"frame/democracy",
 	"frame/try-runtime",
-	"frame/elections",
 	"frame/election-provider-multi-phase",
 	"frame/election-provider-support",
-	"frame/example",
-	"frame/example-offchain-worker",
-	"frame/example-parallel",
+	"frame/election-provider-support/benchmarking",
+	"frame/election-provider-support/solution-type",
+	"frame/election-provider-support/solution-type/fuzzer",
+	"frame/examples/basic",
+	"frame/examples/offchain-worker",
+	"frame/examples/parallel",
 	"frame/executive",
 	"frame/gilt",
 	"frame/grandpa",
@@ -97,15 +106,21 @@ members = [
 	"frame/lottery",
 	"frame/membership",
 	"frame/merkle-mountain-range",
-	"frame/merkle-mountain-range/primitives",
 	"frame/merkle-mountain-range/rpc",
 	"frame/multisig",
 	"frame/nicks",
 	"frame/node-authorization",
 	"frame/offences",
+	"frame/preimage",
 	"frame/proxy",
+	"frame/nomination-pools",
+	"frame/nomination-pools/benchmarking",
+	"frame/nomination-pools/test-staking",
 	"frame/randomness-collective-flip",
+	"frame/ranked-collective",
 	"frame/recovery",
+	"frame/referenda",
+	"frame/remark",
 	"frame/scheduler",
 	"frame/scored-pool",
 	"frame/session",
@@ -114,6 +129,7 @@ members = [
 	"frame/staking",
 	"frame/staking/reward-curve",
 	"frame/staking/reward-fn",
+	"frame/state-trie-migration",
 	"frame/sudo",
 	"frame/support",
 	"frame/support/procedural",
@@ -126,6 +142,7 @@ members = [
 	"frame/system/rpc/runtime-api",
 	"frame/timestamp",
 	"frame/transaction-payment",
+	"frame/transaction-payment/asset-tx-payment",
 	"frame/transaction-payment/rpc",
 	"frame/transaction-payment/rpc/runtime-api",
 	"frame/transaction-storage",
@@ -134,9 +151,7 @@ members = [
 	"frame/uniques",
 	"frame/utility",
 	"frame/vesting",
-	"frame/bags-list",
-	"frame/bags-list/remote-tests",
-	"frame/bags-list/fuzzer",
+	"frame/whitelist",
 	"primitives/api",
 	"primitives/api/proc-macro",
 	"primitives/api/test",
@@ -166,8 +181,8 @@ members = [
 	"primitives/keyring",
 	"primitives/keystore",
 	"primitives/maybe-compressed-blob",
+	"primitives/merkle-mountain-range",
 	"primitives/npos-elections",
-	"primitives/npos-elections/solution-type",
 	"primitives/npos-elections/fuzzer",
 	"primitives/offchain",
 	"primitives/panic-handler",
@@ -200,7 +215,6 @@ members = [
 	"test-utils/runtime",
 	"test-utils/runtime/client",
 	"test-utils/runtime/transaction-pool",
-	"test-utils/test-runner",
 	"test-utils/test-crate",
 	"utils/build-script-utils",
 	"utils/fork-tree",
@@ -208,6 +222,7 @@ members = [
 	"utils/frame/remote-externalities",
 	"utils/frame/frame-utilities-cli",
 	"utils/frame/try-runtime/cli",
+	"utils/frame/rpc/state-trie-migration-rpc",
 	"utils/frame/rpc/support",
 	"utils/frame/rpc/system",
 	"utils/frame/generate-bags",
@@ -250,6 +265,7 @@ hash-db = { opt-level = 3 }
 hmac = { opt-level = 3 }
 httparse = { opt-level = 3 }
 integer-sqrt = { opt-level = 3 }
+k256 = { opt-level = 3 }
 keccak = { opt-level = 3 }
 libm = { opt-level = 3 }
 librocksdb-sys = { opt-level = 3 }
@@ -264,6 +280,7 @@ percent-encoding = { opt-level = 3 }
 primitive-types = { opt-level = 3 }
 ring = { opt-level = 3 }
 rustls = { opt-level = 3 }
+secp256k1 = { opt-level = 3 }
 sha2 = { opt-level = 3 }
 sha3 = { opt-level = 3 }
 smallvec = { opt-level = 3 }
@@ -274,6 +291,17 @@ wasmi = { opt-level = 3 }
 x25519-dalek = { opt-level = 3 }
 yamux = { opt-level = 3 }
 zeroize = { opt-level = 3 }
+
 [profile.release]
 # Substrate runtime requires unwinding.
 panic = "unwind"
+
+[profile.production]
+inherits = "release"
+
+# Sacrifice compile speed for execution speed by using optimization flags:
+
+# https://doc.rust-lang.org/rustc/linker-plugin-lto.html
+lto = "fat"
+# https://doc.rust-lang.org/rustc/codegen-options/index.html#codegen-units
+codegen-units = 1

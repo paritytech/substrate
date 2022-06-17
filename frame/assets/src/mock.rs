@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,7 +20,10 @@
 use super::*;
 use crate as pallet_assets;
 
-use frame_support::{construct_runtime, parameter_types};
+use frame_support::{
+	construct_runtime,
+	traits::{ConstU32, ConstU64, GenesisBuild},
+};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -42,9 +45,6 @@ construct_runtime!(
 	}
 );
 
-parameter_types! {
-	pub const BlockHashCount: u64 = 250;
-}
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
@@ -59,7 +59,7 @@ impl frame_system::Config for Test {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = BlockHashCount;
+	type BlockHashCount = ConstU64<250>;
 	type DbWeight = ();
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -69,30 +69,19 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
-}
-
-parameter_types! {
-	pub const ExistentialDeposit: u64 = 1;
+	type MaxConsumers = ConstU32<2>;
 }
 
 impl pallet_balances::Config for Test {
 	type Balance = u64;
 	type DustRemoval = ();
 	type Event = Event;
-	type ExistentialDeposit = ExistentialDeposit;
+	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
 	type MaxLocks = ();
 	type MaxReserves = ();
 	type ReserveIdentifier = [u8; 8];
-}
-
-parameter_types! {
-	pub const AssetDeposit: u64 = 1;
-	pub const ApprovalDeposit: u64 = 1;
-	pub const StringLimit: u32 = 50;
-	pub const MetadataDepositBase: u64 = 1;
-	pub const MetadataDepositPerByte: u64 = 1;
 }
 
 impl Config for Test {
@@ -101,11 +90,12 @@ impl Config for Test {
 	type AssetId = u32;
 	type Currency = Balances;
 	type ForceOrigin = frame_system::EnsureRoot<u64>;
-	type AssetDeposit = AssetDeposit;
-	type MetadataDepositBase = MetadataDepositBase;
-	type MetadataDepositPerByte = MetadataDepositPerByte;
-	type ApprovalDeposit = ApprovalDeposit;
-	type StringLimit = StringLimit;
+	type AssetDeposit = ConstU64<1>;
+	type AssetAccountDeposit = ConstU64<10>;
+	type MetadataDepositBase = ConstU64<1>;
+	type MetadataDepositPerByte = ConstU64<1>;
+	type ApprovalDeposit = ConstU64<1>;
+	type StringLimit = ConstU32<50>;
 	type Freezer = TestFreezer;
 	type WeightInfo = ();
 	type Extra = ();
@@ -130,17 +120,25 @@ impl FrozenBalance<u32, u64, u64> for TestFreezer {
 
 	fn died(asset: u32, who: &u64) {
 		HOOKS.with(|h| h.borrow_mut().push(Hook::Died(asset, who.clone())));
+		// Sanity check: dead accounts have no balance.
+		assert!(Assets::balance(asset, *who).is_zero());
 	}
 }
 
 pub(crate) fn set_frozen_balance(asset: u32, who: u64, amount: u64) {
 	FROZEN.with(|f| f.borrow_mut().insert((asset, who), amount));
 }
+
 pub(crate) fn clear_frozen_balance(asset: u32, who: u64) {
 	FROZEN.with(|f| f.borrow_mut().remove(&(asset, who)));
 }
+
 pub(crate) fn hooks() -> Vec<Hook> {
 	HOOKS.with(|h| h.borrow().clone())
+}
+
+pub(crate) fn take_hooks() -> Vec<Hook> {
+	HOOKS.with(|h| h.take())
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
@@ -164,6 +162,8 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	config.assimilate_storage(&mut storage).unwrap();
 
 	let mut ext: sp_io::TestExternalities = storage.into();
+	// Clear thread local vars for https://github.com/paritytech/substrate/issues/10479.
+	ext.execute_with(|| take_hooks());
 	ext.execute_with(|| System::set_block_number(1));
 	ext
 }

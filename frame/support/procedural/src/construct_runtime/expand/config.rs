@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -43,12 +43,8 @@ pub fn expand_outer_config(
 
 			types.extend(expand_config_types(runtime, decl, &config, part_is_generic));
 			fields.extend(quote!(pub #field_name: #config,));
-			build_storage_calls.extend(expand_config_build_storage_call(
-				scrate,
-				runtime,
-				decl,
-				&field_name,
-			));
+			build_storage_calls
+				.extend(expand_config_build_storage_call(scrate, runtime, decl, field_name));
 			query_genesis_config_part_macros.push(quote! {
 				#path::__substrate_genesis_config_check::is_genesis_config_defined!(#pallet_name);
 				#[cfg(feature = "std")]

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -22,11 +22,7 @@ use log::info;
 use sc_client_api::ClientInfo;
 use sc_network::{NetworkStatus, SyncState, WarpSyncPhase, WarpSyncProgress};
 use sp_runtime::traits::{Block as BlockT, CheckedDiv, NumberFor, Saturating, Zero};
-use std::{
-	convert::{TryFrom, TryInto},
-	fmt,
-	time::Instant,
-};
+use std::{fmt, time::Instant};
 
 /// State of the informant display system.
 ///
@@ -34,7 +30,7 @@ use std::{
 /// like:
 ///
 /// > Syncing  5.4 bps, target=#531028 (4 peers), best: #90683 (0x4ca8…51b8),
-/// >  finalized #360 (0x6f24…a38b), ⬇ 5.5kiB/s ⬆ 0.9kiB/s
+/// > finalized #360 (0x6f24…a38b), ⬇ 5.5kiB/s ⬆ 0.9kiB/s
 ///
 /// # Usage
 ///
