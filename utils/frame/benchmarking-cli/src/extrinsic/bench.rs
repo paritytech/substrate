@@ -91,7 +91,7 @@ where
 		Stats::new(&record)
 	}
 
-	/// Builds a block which with some optional extrinsics.
+	/// Builds a block with some optional extrinsics.
 	///
 	/// Returns the block and the number of extrinsics in the block
 	/// that are not inherents.
