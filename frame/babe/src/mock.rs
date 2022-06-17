@@ -224,7 +224,7 @@ impl pallet_offences::Config for Test {
 	type MaxSameKindReports = MaxOffenders;
 	type MaxSameKindReportsPerKind = MaxOffenders;
 
-	type MaxSameKindReportsEncodedLen = ConstU32<1_000>; // Guessed...
+	type MaxSameKindReportsEncodedLen = ConstU32<4_000>; // Guessed...
 	type MaxOpaqueTimeSlotLen = ConstU32<1_000>;
 }
 

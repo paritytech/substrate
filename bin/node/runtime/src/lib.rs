@@ -1255,7 +1255,7 @@ impl pallet_offences::Config for Runtime {
 	type MaxSameKindReports = ConstU32<100>;
 	type MaxSameKindReportsPerKind = ConstU32<100>;
 
-	type MaxSameKindReportsEncodedLen = ConstU32<1_000>; // Guessed...
+	type MaxSameKindReportsEncodedLen = ConstU32<4_000>; // Guessed...
 	type MaxOpaqueTimeSlotLen = ConstU32<1_000>;
 }
 

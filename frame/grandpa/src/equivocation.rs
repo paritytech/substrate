@@ -154,7 +154,7 @@ where
 		reporters: BoundedVec<T::AccountId, MaxReporters>,
 		offence: O,
 	) -> Result<(), OffenceError> {
-		R::report_offence(reporters.try_into().expect("TODO"), offence)
+		R::report_offence(reporters, offence)
 	}
 
 	fn is_known_offence(offenders: &[T::KeyOwnerIdentification], time_slot: &O::TimeSlot) -> bool {

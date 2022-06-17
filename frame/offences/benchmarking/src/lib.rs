@@ -314,7 +314,7 @@ benchmarks! {
 		let _ = <T as ImOnlineConfig>::ReportUnresponsiveness::report_offence(
 			reporters.clone().try_into().unwrap(),
 			offence
-		);
+		).unwrap();
 	}
 	verify {
 		let bond_amount: u32 = UniqueSaturatedInto::<u32>::unique_saturated_into(bond_amount::<T>());

@@ -95,6 +95,8 @@ pub mod pallet {
 		type MaxSameKindReportsPerKind: Get<u32>;
 
 		/// Maximum encoded length of same-kind reports `SameKindReportsOf<T>`.
+		///
+		/// This depends on [`pallet_staking::Config::MaxNominations`].
 		#[pallet::constant]
 		type MaxSameKindReportsEncodedLen: Get<u32>;
 
