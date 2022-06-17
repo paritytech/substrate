@@ -4815,6 +4815,10 @@ fn min_commission_works() {
 	})
 }
 
+/// This tests checks changing the number of maximal nominations does not break staking.
+///
+/// Should probably be removed since it uses BoundedVec now which needs a migration for that.
+/// It therefore prints some scary error messages to the console when executed.
 #[test]
 fn change_of_max_nominations() {
 	use frame_election_provider_support::ElectionDataProvider;
@@ -4824,7 +4828,7 @@ fn change_of_max_nominations() {
 		.balance_factor(10)
 		.build_and_execute(|| {
 			// pre-condition
-			assert_eq!(MaxNominations::get(), 16);
+			assert_eq!(MaxNominations::get(), 100);
 
 			assert_eq!(
 				Nominators::<Test>::iter()
@@ -4835,7 +4839,7 @@ fn change_of_max_nominations() {
 			// 3 validators and 3 nominators
 			assert_eq!(Staking::electing_voters(None).unwrap().len(), 3 + 3);
 
-			// abrupt change from 16 to 4, everyone should be fine.
+			// abrupt change from 100 to 4, everyone should be fine.
 			MaxNominations::set(4);
 
 			assert_eq!(
