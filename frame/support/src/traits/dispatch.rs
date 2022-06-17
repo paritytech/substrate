@@ -18,6 +18,7 @@
 //! Traits for dealing with dispatching calls and the origin from which they are dispatched.
 
 use crate::dispatch::{DispatchResultWithPostInfo, Parameter, RawOrigin};
+use codec::MaxEncodedLen;
 use sp_runtime::{
 	traits::{BadOrigin, Member, Morph, TryMorph},
 	Either,
@@ -258,7 +259,11 @@ pub trait OriginTrait: Sized {
 	type Call;
 
 	/// The caller origin, overarching type of all pallets origins.
-	type PalletsOrigin: Parameter + Member + Into<Self> + From<RawOrigin<Self::AccountId>>;
+	type PalletsOrigin: Parameter
+		+ Member
+		+ Into<Self>
+		+ From<RawOrigin<Self::AccountId>>
+		+ MaxEncodedLen;
 
 	/// The AccountId used across the system.
 	type AccountId;
