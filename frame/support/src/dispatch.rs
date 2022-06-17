@@ -2732,6 +2732,10 @@ mod tests {
 			unimplemented!("Not required in tests!")
 		}
 
+		fn into_caller(self) -> Self::PalletsOrigin {
+			unimplemented!("Not required in tests!")
+		}
+
 		fn try_with_caller<R>(
 			self,
 			_f: impl FnOnce(Self::PalletsOrigin) -> Result<R, Self::PalletsOrigin>,
@@ -2749,6 +2753,9 @@ mod tests {
 			unimplemented!("Not required in tests!")
 		}
 		fn as_signed(self) -> Option<Self::AccountId> {
+			unimplemented!("Not required in tests!")
+		}
+		fn as_system_ref(&self) -> Option<&RawOrigin> {
 			unimplemented!("Not required in tests!")
 		}
 	}

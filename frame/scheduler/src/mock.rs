@@ -32,7 +32,6 @@ use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
-	Perbill,
 };
 
 // Logger module to track execution.
@@ -150,9 +149,6 @@ impl system::Config for Test {
 impl logger::Config for Test {
 	type Event = Event;
 }
-parameter_types! {
-	pub MaximumSchedulerWeight: Weight = Perbill::from_percent(80) * BlockWeights::get().max_block;
-}
 ord_parameter_types! {
 	pub const One: u64 = 1;
 }
@@ -166,15 +162,55 @@ impl pallet_preimage::Config for Test {
 	type ByteDeposit = ();
 }
 
+pub struct TestWeightInfo;
+impl WeightInfo for TestWeightInfo {
+	fn service_agendas() -> Weight {
+		0b0000_0001
+	}
+	fn service_agenda(i: u32) -> Weight {
+		(i << 8) as Weight + 0b0000_0010
+	}
+	fn service_task_base() -> Weight {
+		0b0000_0100
+	}
+	fn service_task_periodic() -> Weight {
+		0b0000_1100
+	}
+	fn service_task_named() -> Weight {
+		0b0001_0100
+	}
+	fn service_task_fetched(s: u32) -> Weight {
+		(s << 8) as Weight + 0b0010_0100
+	}
+	fn execute_dispatch_signed() -> Weight {
+		0b0100_0000
+	}
+	fn execute_dispatch_unsigned() -> Weight {
+		0b1000_0000
+	}
+	fn schedule(_s: u32) -> Weight {
+		50
+	}
+	fn cancel(_s: u32) -> Weight {
+		50
+	}
+	fn schedule_named(_s: u32) -> Weight {
+		50
+	}
+	fn cancel_named(_s: u32) -> Weight {
+		50
+	}
+}
+
 impl Config for Test {
 	type Event = Event;
 	type Origin = Origin;
 	type PalletsOrigin = OriginCaller;
 	type Call = Call;
-	type MaximumWeight = MaximumSchedulerWeight;
+	type MaximumWeight = ConstU64<10_000>;
 	type ScheduleOrigin = EitherOfDiverse<EnsureRoot<u64>, EnsureSignedBy<One, u64>>;
 	type MaxScheduledPerBlock = ConstU32<10>;
-	type WeightInfo = ();
+	type WeightInfo = TestWeightInfo;
 	type OriginPrivilegeCmp = EqualPrivilegeOnly;
 	type Preimages = Preimage;
 }

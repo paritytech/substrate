@@ -58,18 +58,18 @@ mod mock;
 mod tests;
 pub mod weights;
 
-use codec::{Codec, Decode, Encode, MaxEncodedLen};
+use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
-	dispatch::{DispatchError, DispatchResult, Dispatchable, Parameter},
+	dispatch::{DispatchError, DispatchResult, Dispatchable, Parameter, RawOrigin},
 	ensure,
 	traits::{
 		schedule::{self, DispatchTime, MaybeHashed},
-		Bounded, EnsureOrigin, Get, Hash as PreimageHash, IsType, OriginTrait, PalletInfoAccess,
-		PrivilegeCmp, QueryPreimage, StorageVersion, StorePreimage,
+		Bounded, CallerTrait, EnsureOrigin, Get, Hash as PreimageHash, IsType, OriginTrait,
+		PalletInfoAccess, PrivilegeCmp, QueryPreimage, StorageVersion, StorePreimage,
 	},
 	weights::{GetDispatchInfo, Weight},
 };
-use frame_system::{self as system, ensure_signed};
+use frame_system::{self as system};
 pub use pallet::*;
 use scale_info::TypeInfo;
 use sp_io::hashing::blake2_256;
@@ -136,29 +136,40 @@ pub type ScheduledOf<T> = Scheduled<
 	<T as frame_system::Config>::AccountId,
 >;
 
-pub(crate) trait MarginalWeightInfo: WeightInfo {
-	fn item(periodic: bool, named: bool, resolved: Option<bool>) -> Weight {
-		match (periodic, named, resolved) {
-			(_, false, None) => Self::on_initialize_aborted(2) - Self::on_initialize_aborted(1),
-			(_, true, None) =>
-				Self::on_initialize_named_aborted(2) - Self::on_initialize_named_aborted(1),
-			(false, false, Some(false)) => Self::on_initialize(2) - Self::on_initialize(1),
-			(false, true, Some(false)) =>
-				Self::on_initialize_named(2) - Self::on_initialize_named(1),
-			(true, false, Some(false)) =>
-				Self::on_initialize_periodic(2) - Self::on_initialize_periodic(1),
-			(true, true, Some(false)) =>
-				Self::on_initialize_periodic_named(2) - Self::on_initialize_periodic_named(1),
-			(false, false, Some(true)) =>
-				Self::on_initialize_resolved(2) - Self::on_initialize_resolved(1),
-			(false, true, Some(true)) =>
-				Self::on_initialize_named_resolved(2) - Self::on_initialize_named_resolved(1),
-			(true, false, Some(true)) =>
-				Self::on_initialize_periodic_resolved(2) - Self::on_initialize_periodic_resolved(1),
-			(true, true, Some(true)) =>
-				Self::on_initialize_periodic_named_resolved(2) -
-					Self::on_initialize_periodic_named_resolved(1),
+struct WeightCounter {
+	used: Weight,
+	limit: Weight,
+}
+impl WeightCounter {
+	fn check_accrue(&mut self, w: Weight) -> bool {
+		let test = self.used.saturating_add(w);
+		if test > self.limit {
+			false
+		} else {
+			dbg!((w, self.used, test));
+			self.used = test;
+			true
 		}
+	}
+	fn can_accrue(&mut self, w: Weight) -> bool {
+		self.used.saturating_add(w) <= self.limit
+	}
+}
+
+pub(crate) trait MarginalWeightInfo: WeightInfo {
+	fn service_task(maybe_lookup_len: Option<usize>, named: bool, periodic: bool) -> Weight {
+		let base = Self::service_task_base();
+		let mut total = match maybe_lookup_len {
+			None => base,
+			Some(l) => Self::service_task_fetched(l as u32),
+		};
+		if named {
+			total.saturating_accrue(Self::service_task_named().saturating_sub(base));
+		}
+		if periodic {
+			total.saturating_accrue(Self::service_task_periodic().saturating_sub(base));
+		}
+		total
 	}
 }
 impl<T: WeightInfo> MarginalWeightInfo for T {}
@@ -166,9 +177,7 @@ impl<T: WeightInfo> MarginalWeightInfo for T {}
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::{
-		dispatch::PostDispatchInfo, pallet_prelude::*, storage_alias, traits::schedule::LookupError,
-	};
+	use frame_support::{dispatch::PostDispatchInfo, pallet_prelude::*, storage_alias};
 	use frame_system::pallet_prelude::*;
 
 	/// The current storage version.
@@ -192,7 +201,7 @@ pub mod pallet {
 			+ IsType<<Self as system::Config>::Origin>;
 
 		/// The caller origin, overarching type of all pallets origins.
-		type PalletsOrigin: From<system::RawOrigin<Self::AccountId>> + Codec + Clone + Eq + TypeInfo;
+		type PalletsOrigin: From<system::RawOrigin<Self::AccountId>> + CallerTrait<Self::AccountId>;
 
 		/// The aggregated call type.
 		type Call: Parameter
@@ -218,7 +227,6 @@ pub mod pallet {
 		type OriginPrivilegeCmp: PrivilegeCmp<Self::PalletsOrigin>;
 
 		/// The maximum number of scheduled calls in the queue for a single block.
-		/// Not strictly enforced, but used for weight estimation.
 		#[pallet::constant]
 		type MaxScheduledPerBlock: Get<u32>;
 
@@ -273,11 +281,7 @@ pub mod pallet {
 			result: DispatchResult,
 		},
 		/// The call for the provided hash was not found so the task has been aborted.
-		CallLookupFailed {
-			task: TaskAddress<T::BlockNumber>,
-			id: Option<[u8; 32]>,
-			error: LookupError,
-		},
+		CallUnavailable { task: TaskAddress<T::BlockNumber>, id: Option<[u8; 32]> },
 		/// The given task was unable to be renewed since the agenda is full at that block.
 		PeriodicFailed { task: TaskAddress<T::BlockNumber>, id: Option<[u8; 32]> },
 		/// The given task was unable to be renewed since the agenda is full at that block.
@@ -302,151 +306,9 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		/// Execute the scheduled calls
 		fn on_initialize(now: T::BlockNumber) -> Weight {
-			let mut total_weight: Weight = 0;
-			let limit = T::MaximumWeight::get();
-
-			let mut incomplete_since = now + One::one();
-			let mut when = IncompleteSince::<T>::take().unwrap_or(now);
-			let mut executed = 0;
-
-			while when <= now &&
-				total_weight.saturating_add(T::WeightInfo::on_initialize(0)) < limit
-			{
-				total_weight.saturating_accrue(T::WeightInfo::on_initialize(0));
-
-				let mut agenda = Agenda::<T>::take(when);
-				let mut ordered = agenda
-					.iter()
-					.enumerate()
-					.filter_map(|(index, maybe_item)| {
-						maybe_item.as_ref().map(|item| (index as u32, item.priority))
-					})
-					.collect::<Vec<_>>();
-				ordered.sort_by_key(|k| k.1);
-
-				let mut skipped = 0;
-				let mut unavailable = 0;
-				for (order, (agenda_index, _priority)) in ordered.into_iter().enumerate() {
-					let mut task = match agenda[agenda_index as usize].take() {
-						Some(t) => t,
-						None => continue,
-					};
-
-					let named = if let Some(ref id) = task.maybe_id {
-						Lookup::<T>::remove(id);
-						true
-					} else {
-						false
-					};
-
-					if task.call.lookup_needed() {
-						let _len = task.call.len();
-						// TODO: introduce a new weight checkpoint here which will be based on len
-						// T::WeightInfo::decode_item(periodic, named, Some(call));
-					}
-
-					let call = match T::Preimages::peek(&task.call) {
-						Ok(call) => call,
-						Err(_) => {
-							// Preimage not available.
-							total_weight.saturating_accrue(T::WeightInfo::item(false, named, None));
-							unavailable += 1;
-							continue
-						},
-					};
-
-					let periodic = task.maybe_periodic.is_some();
-					let call_weight = call.get_dispatch_info().weight;
-					// TODO: we no longer need the resolved argument - the call is guaranteed here
-					// by now.
-					let mut item_weight = T::WeightInfo::item(periodic, named, Some(false));
-					let origin = <<T as Config>::Origin as From<T::PalletsOrigin>>::from(
-						task.origin.clone(),
-					)
-					.into();
-					if ensure_signed(origin).is_ok() {
-						// Weights of Signed dispatches expect their signing account to be
-						// whitelisted.
-						item_weight.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
-					}
-
-					// We allow a scheduled call if any is true:
-					// - It's priority is `HARD_DEADLINE`
-					// - It does not push the weight past the limit.
-					// - It is the first item in the schedule
-					let hard_deadline = task.priority <= schedule::HARD_DEADLINE;
-					let test_weight =
-						total_weight.saturating_add(call_weight).saturating_add(item_weight);
-					if !hard_deadline && order > 0 && test_weight > limit {
-						// Cannot be scheduled this block...
-						total_weight.saturating_accrue(T::WeightInfo::item(false, named, None));
-						if executed > 0 {
-							// ...postpone until next
-							agenda[agenda_index as usize] = Some(task);
-							skipped += 1;
-						} else {
-							// ...will never be executable as this is the first. discard.
-							Self::deposit_event(Event::PermanentlyOverweight {
-								task: (when, agenda_index),
-								id: task.maybe_id.clone(),
-							});
-						}
-						continue
-					}
-
-					executed += 1;
-					let dispatch_origin = task.origin.clone().into();
-					let (maybe_actual_call_weight, result) = match call.dispatch(dispatch_origin) {
-						Ok(post_info) => (post_info.actual_weight, Ok(())),
-						Err(error_and_info) =>
-							(error_and_info.post_info.actual_weight, Err(error_and_info.error)),
-					};
-					let actual_call_weight = maybe_actual_call_weight.unwrap_or(call_weight);
-					total_weight.saturating_accrue(item_weight);
-					total_weight.saturating_accrue(actual_call_weight);
-
-					Self::deposit_event(Event::Dispatched {
-						task: (when, agenda_index),
-						id: task.maybe_id.clone(),
-						result,
-					});
-
-					if let &Some((period, count)) = &task.maybe_periodic {
-						if count > 1 {
-							task.maybe_periodic = Some((period, count - 1));
-						} else {
-							task.maybe_periodic = None;
-						}
-						let wake = now + period;
-						// If scheduled is named, place its information in `Lookup`
-						match Self::place_task(wake, task) {
-							Ok(_) => {},
-							Err((_, task)) => {
-								// TODO: Leave task in storage for it to be rescheduled manually.
-								T::Preimages::drop(&task.call);
-								Self::deposit_event(Event::PeriodicFailed {
-									task: (when, agenda_index),
-									id: task.maybe_id.clone(),
-								});
-							},
-						}
-					} else {
-						T::Preimages::drop(&task.call);
-					}
-				}
-				if skipped > 0 || unavailable > 0 {
-					Agenda::<T>::insert(when, agenda);
-				}
-				if skipped > 0 {
-					incomplete_since = incomplete_since.min(when);
-				}
-				when.saturating_inc();
-			}
-			incomplete_since = incomplete_since.min(when);
-			if incomplete_since <= now {
-				IncompleteSince::<T>::put(incomplete_since);
-			}
-			total_weight
+			let mut weight_counter = WeightCounter { used: 0, limit: T::MaximumWeight::get() };
+			Self::service_agendas(now, &mut weight_counter, u32::max_value());
+			weight_counter.used
 		}
 	}
 
@@ -996,6 +858,219 @@ impl<T: Config> Pallet<T> {
 		})?;
 		Self::deposit_event(Event::Canceled { when, index });
 		Self::place_task(new_time, task).map_err(|x| x.0)
+	}
+}
+
+enum ServiceTaskError {
+	/// Could not be executed due to missing preimage.
+	Unavailable,
+	/// Could not be executed due to weight limitations.
+	Overweight,
+}
+use ServiceTaskError::*;
+
+impl<T: Config> Pallet<T> {
+	/// Service up to `max` agendas queue starting from earliest incompletely executed agenda.
+	fn service_agendas(now: T::BlockNumber, weight: &mut WeightCounter, max: u32) {
+		if !weight.check_accrue(T::WeightInfo::service_agendas()) {
+			return
+		}
+
+		let mut incomplete_since = now + One::one();
+		let mut when = IncompleteSince::<T>::take().unwrap_or(now);
+		let mut executed = 0;
+
+		let max_items = T::MaxScheduledPerBlock::get();
+		let mut count_down = max;
+		let service_agenda_base_weight = T::WeightInfo::service_agenda(max_items);
+		while count_down > 0 && when <= now && weight.can_accrue(service_agenda_base_weight) {
+			if !Self::service_agenda(when, now, weight, &mut executed, u32::max_value()) {
+				incomplete_since = incomplete_since.min(when);
+			}
+			when.saturating_inc();
+			count_down.saturating_dec();
+		}
+		incomplete_since = incomplete_since.min(when);
+		if incomplete_since <= now {
+			IncompleteSince::<T>::put(incomplete_since);
+		}
+	}
+
+	/// Returns `true` if the agenda was fully completed, `false` if it should be revisited at a
+	/// later block.
+	fn service_agenda(
+		when: T::BlockNumber,
+		now: T::BlockNumber,
+		weight: &mut WeightCounter,
+		executed: &mut u32,
+		max: u32,
+	) -> bool {
+		dbg!("service_agenda", when, now);
+		let mut agenda = Agenda::<T>::get(when);
+		let mut ordered = agenda
+			.iter()
+			.enumerate()
+			.filter_map(|(index, maybe_item)| {
+				maybe_item.as_ref().map(|item| (index as u32, item.priority))
+			})
+			.collect::<Vec<_>>();
+		ordered.sort_by_key(|k| k.1);
+		weight.check_accrue(T::WeightInfo::service_agenda(ordered.len() as u32));
+
+		// Items which we know can be executed and have postponed for execution in a later block.
+		let mut postponed = (ordered.len() as u32).saturating_sub(max);
+		// Items which we don't know can ever be executed.
+		let mut dropped = 0;
+
+		for (agenda_index, _) in ordered.into_iter().take(max as usize) {
+			let task = match agenda[agenda_index as usize].take() {
+				None => continue,
+				Some(t) => t,
+			};
+			let base_weight = T::WeightInfo::service_task(
+				task.call.lookup_len().map(|x| x as usize),
+				task.maybe_id.is_some(),
+				task.maybe_periodic.is_some(),
+			);
+			if !weight.can_accrue(base_weight) {
+				postponed += 1;
+				break
+			}
+			let result = Self::service_task(when, now, task, weight, *executed == 0, agenda_index);
+			agenda[agenda_index as usize] = match result {
+				Err((Unavailable, slot)) => {
+					dropped += 1;
+					slot
+				},
+				Err((Overweight, slot)) => {
+					postponed += 1;
+					slot
+				},
+				Ok(()) => {
+					*executed += 1;
+					None
+				},
+			};
+		}
+		if postponed > 0 || dropped > 0 {
+			Agenda::<T>::insert(when, agenda);
+		} else {
+			Agenda::<T>::remove(when);
+		}
+		postponed == 0
+	}
+
+	/// Service (i.e. execute) the given task, being careful not to overflow the `weight` counter.
+	///
+	/// This involves:
+	/// - removing and potentially replacing the `Lookup` entry for the task.
+	/// - realizing the task's call which can include a preimage lookup.
+	/// - Rescheduling the task for execution in a later agenda if periodic.
+	fn service_task(
+		when: T::BlockNumber,
+		now: T::BlockNumber,
+		mut task: ScheduledOf<T>,
+		weight: &mut WeightCounter,
+		is_first: bool,
+		agenda_index: u32,
+	) -> Result<(), (ServiceTaskError, Option<ScheduledOf<T>>)> {
+		if let Some(ref id) = task.maybe_id {
+			Lookup::<T>::remove(id);
+		}
+
+		let (call, lookup_len) = match T::Preimages::peek(&task.call) {
+			Ok(c) => c,
+			Err(_) => return Err((Unavailable, Some(task))),
+		};
+
+		weight.check_accrue(T::WeightInfo::service_task(
+			lookup_len.map(|x| x as usize),
+			task.maybe_id.is_some(),
+			task.maybe_periodic.is_some(),
+		));
+
+		match Self::execute_dispatch(weight, task.origin.clone(), call) {
+			Err(Unavailable) => {
+				Self::deposit_event(Event::CallUnavailable {
+					task: (when, agenda_index),
+					id: task.maybe_id.clone(),
+				});
+				Err((Unavailable, Some(task)))
+			},
+			Err(Overweight) if is_first => {
+				Self::deposit_event(Event::PermanentlyOverweight {
+					task: (when, agenda_index),
+					id: task.maybe_id.clone(),
+				});
+				Err((Unavailable, Some(task)))
+			},
+			Err(Overweight) => Err((Overweight, Some(task))),
+			Ok(result) => {
+				Self::deposit_event(Event::Dispatched {
+					task: (when, agenda_index),
+					id: task.maybe_id.clone(),
+					result,
+				});
+				if let &Some((period, count)) = &task.maybe_periodic {
+					if count > 1 {
+						task.maybe_periodic = Some((period, count - 1));
+					} else {
+						task.maybe_periodic = None;
+					}
+					let wake = now + period;
+					match Self::place_task(wake, task) {
+						Ok(_) => {},
+						Err((_, task)) => {
+							// TODO: Leave task in storage somewhere for it to be rescheduled
+							// manually.
+							T::Preimages::drop(&task.call);
+							Self::deposit_event(Event::PeriodicFailed {
+								task: (when, agenda_index),
+								id: task.maybe_id.clone(),
+							});
+						},
+					}
+				} else {
+					T::Preimages::drop(&task.call);
+				}
+				Ok(())
+			},
+		}
+	}
+
+	/// Make a dispatch to the given `call` from the given `origin`, ensuring that the `weight`
+	/// counter does not exceed its limit and that it is counted accurately (e.g. accounted using
+	/// post info if available).
+	///
+	/// NOTE: Only the weight for this function will be counted (origin lookup, dispatch and the
+	/// call itself).
+	fn execute_dispatch(
+		weight: &mut WeightCounter,
+		origin: T::PalletsOrigin,
+		call: <T as Config>::Call,
+	) -> Result<DispatchResult, ServiceTaskError> {
+		let base_weight = match origin.as_system_ref() {
+			Some(&RawOrigin::Signed(_)) => T::WeightInfo::execute_dispatch_signed(),
+			_ => T::WeightInfo::execute_dispatch_unsigned(),
+		};
+		let call_weight = call.get_dispatch_info().weight;
+		// We only allow a scheduled call if it cannot push the weight past the limit.
+		let max_weight = base_weight.saturating_add(call_weight);
+
+		if !weight.can_accrue(max_weight) {
+			return Err(Overweight)
+		}
+
+		let dispatch_origin = origin.into();
+		let (maybe_actual_call_weight, result) = match call.dispatch(dispatch_origin) {
+			Ok(post_info) => (post_info.actual_weight, Ok(())),
+			Err(error_and_info) =>
+				(error_and_info.post_info.actual_weight, Err(error_and_info.error)),
+		};
+		let call_weight = maybe_actual_call_weight.unwrap_or(call_weight);
+		weight.check_accrue(base_weight);
+		weight.check_accrue(call_weight);
+		Ok(result)
 	}
 }
 

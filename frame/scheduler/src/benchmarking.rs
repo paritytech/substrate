@@ -32,9 +32,22 @@ use frame_system::Pallet as System;
 
 const BLOCK_NUMBER: u32 = 2;
 
+enum Eventuality {
+	RealizationTooHeavy,
+	RealizationFailed,
+	DispatchTooHeavy,
+	DispatchSucceeded,
+}
+
+// TODO: service_agendas_base (i.e. when no agendas to be serviced)
+// TODO: service_agenda(n) (agenda with `n` items)
+// TODO: service_task(n) (agenda with `n` items)
+// TODO: RootOrigin vs Signed (/non-root).
+
 /// Add `n` items to the schedule.
 ///
 /// For `resolved`:
+/// - `
 /// - `None`: aborted (hash without preimage)
 /// - `Some(true)`: hash resolves into call if possible, plain call otherwise
 /// - `Some(false)`: plain call
@@ -83,7 +96,93 @@ fn call_and_hash<T: Config>(i: u32) -> (<T as Config>::Call, T::Hash) {
 	(call, hash)
 }
 
+fn dummy_counter() -> WeightCounter {
+	WeightCounter { used: 0, limit: Weight::max_value() }
+}
+
 benchmarks! {
+	// `service_agendas` when no work is done.
+	service_agendas_base {
+		IncompleteSince::<T>::put(BLOCK_NUMBER - 1);
+	}: { Scheduler::<T>::service_agendas(BLOCK_NUMBER.into(), dummy_counter(), 0); }
+	verify {
+		assert_eq!(IncompleteSince::<T>::get(), Some(BLOCK_NUMBER - 1));
+	}
+
+	// `service_agenda` when no work is done.
+	service_agenda_base {
+		let s in 0 .. T::MaxScheduledPerBlock::get();
+		fill_schedule::<T>(BLOCK_NUMBER.into(), s, true, true, Some(true))?;
+		let mut executed = 0;
+	}: { Scheduler::<T>::service_agenda(BLOCK_NUMBER.into(), dummy_counter(), &executed, 0); }
+	verify {
+		assert_eq!(executed, 0);
+	}
+
+	// `service_task` when the task is a non-periodic, non-named, non-fetched call which is not
+	// dispatched (e.g. due to being overweight).
+	service_task_base {
+		let s in 0 .. T::MaxScheduledPerBlock::get();
+		fill_schedule::<T>(BLOCK_NUMBER.into(), s, true, true, Some(true))?;
+		let mut executed = 0;
+	}: { Scheduler::<T>::service_agenda(BLOCK_NUMBER.into(), dummy_counter(), &executed, 0); }
+	verify {
+		assert_eq!(executed, 0);
+	}
+
+	// `service_task` when the task is a non-periodic, non-named, fetched call (with a known
+	// preimage length) and which is not dispatched (e.g. due to being overweight).
+	service_task_fetched {
+		let s in 0 .. T::MaxScheduledPerBlock::get();
+		fill_schedule::<T>(BLOCK_NUMBER.into(), s, true, true, Some(true))?;
+		let mut executed = 0;
+	}: { Scheduler::<T>::service_agenda(BLOCK_NUMBER.into(), dummy_counter(), &executed, 0); }
+	verify {
+		assert_eq!(executed, 0);
+	}
+
+	// `service_task` when the task is a non-periodic, named, non-fetched call which is not
+	// dispatched (e.g. due to being overweight).
+	service_task_named {
+		let s in 0 .. T::MaxScheduledPerBlock::get();
+		fill_schedule::<T>(BLOCK_NUMBER.into(), s, true, true, Some(true))?;
+		let mut executed = 0;
+	}: { Scheduler::<T>::service_agenda(BLOCK_NUMBER.into(), dummy_counter(), &executed, 0); }
+	verify {
+		assert_eq!(executed, 0);
+	}
+
+	// `service_task` when the task is a periodic, non-named, non-fetched call which is not
+	// dispatched (e.g. due to being overweight).
+	service_task_periodic {
+		let s in 0 .. T::MaxScheduledPerBlock::get();
+		fill_schedule::<T>(BLOCK_NUMBER.into(), s, true, true, Some(true))?;
+		let mut executed = 0;
+	}: { Scheduler::<T>::service_agenda(BLOCK_NUMBER.into(), dummy_counter(), &executed, 0); }
+	verify {
+		assert_eq!(executed, 0);
+	}
+
+	// `execute_dispatch` when the origin is `Signed`, not counting the dispatable's weight.
+	execute_dispatch_signed {
+		let s in 0 .. T::MaxScheduledPerBlock::get();
+		fill_schedule::<T>(BLOCK_NUMBER.into(), s, true, true, Some(true))?;
+		let mut executed = 0;
+	}: { Scheduler::<T>::service_agenda(BLOCK_NUMBER.into(), dummy_counter(), &executed, 0); }
+	verify {
+		assert_eq!(executed, 0);
+	}
+
+	// `execute_dispatch` when the origin is not `Signed`, not counting the dispatable's weight.
+	execute_dispatch_unsigned {
+		let s in 0 .. T::MaxScheduledPerBlock::get();
+		fill_schedule::<T>(BLOCK_NUMBER.into(), s, true, true, Some(true))?;
+		let mut executed = 0;
+	}: { Scheduler::<T>::service_agenda(BLOCK_NUMBER.into(), dummy_counter(), &executed, 0); }
+	verify {
+		assert_eq!(executed, 0);
+	}
+
 	on_initialize_periodic_named_resolved {
 		let s in 1 .. T::MaxScheduledPerBlock::get();
 		let when = BLOCK_NUMBER.into();
