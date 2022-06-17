@@ -314,7 +314,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		}
 
 		debug!(
-			target: self.logging_target(),
+			target: logging_target,
 			"Starting authorship at slot {}; timestamp = {}",
 			slot,
 			*timestamp,
