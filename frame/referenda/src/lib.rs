@@ -118,7 +118,6 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
-	#[pallet::without_storage_info]
 	pub struct Pallet<T, I = ()>(_);
 
 	#[pallet::config]
@@ -159,7 +158,8 @@ pub mod pallet {
 			+ Codec
 			+ Eq
 			+ Debug
-			+ TypeInfo;
+			+ TypeInfo
+			+ MaxEncodedLen;
 
 		// Constants
 		/// The minimum amount to be used as a deposit for a public referendum proposal.
