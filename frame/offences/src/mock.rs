@@ -117,21 +117,22 @@ impl frame_system::Config for Runtime {
 	type MaxConsumers = ConstU32<16>;
 }
 
+parameter_types! {
+	pub const MaxConcurrentReportsPerIndex: u32 = 100;
+	pub const MaxSameKindReports: u32 = 100;
+	pub const MaxSameKindReportsEncodedLen: u32 = 5_000;
+	pub const MaxOpaqueTimeSlotEncodedLen: u32 = 16;
+}
+
 impl Config for Runtime {
 	type Event = Event;
 	type IdentificationTuple = u64;
 	type OnOffenceHandler = OnOffenceHandler;
 
-	type MaxReportersPerOffence = ConstU32<100>;
-
-	type MaxConcurrentReports = ConstU32<100>;
-	type MaxConcurrentReportsPerKindAndTime = ConstU32<100>;
-
-	type MaxSameKindReports = ConstU32<100>;
-	type MaxSameKindReportsPerKind = ConstU32<100>;
-
-	type MaxSameKindReportsEncodedLen = ConstU32<4_000>; // Guessed...
-	type MaxOpaqueTimeSlotLen = ConstU32<1_000>;
+	type MaxConcurrentReportsPerIndex = MaxConcurrentReportsPerIndex;
+	type MaxSameKindReports = MaxSameKindReports;
+	type MaxSameKindReportsEncodedLen = MaxSameKindReportsEncodedLen;
+	type MaxOpaqueTimeSlotEncodedLen = MaxOpaqueTimeSlotEncodedLen;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
@@ -145,7 +146,8 @@ pub const KIND: [u8; 16] = *b"test_report_1234";
 
 /// Returns all offence details for the specific `kind` happened at the specific time slot.
 pub fn offence_reports(kind: Kind, time_slot: u128) -> Vec<OffenceDetails<u64, u64>> {
-	let time_slot: BoundedVec<u8, ConstU32<1_000>> = time_slot.encode().try_into().unwrap();
+	let time_slot: BoundedVec<u8, MaxOpaqueTimeSlotEncodedLen> =
+		time_slot.encode().try_into().unwrap();
 
 	let r = <crate::ConcurrentReportsIndex<Runtime>>::get(&kind, &time_slot);
 

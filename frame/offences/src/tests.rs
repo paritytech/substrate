@@ -21,8 +21,9 @@
 
 use super::*;
 use crate::mock::{
-	new_test_ext, offence_reports, report_id, with_on_offence_fractions, Event, Offence, Offences,
-	System, KIND,
+	new_test_ext, offence_reports, report_id, with_on_offence_fractions, Event,
+	MaxOpaqueTimeSlotEncodedLen, MaxSameKindReports, MaxSameKindReportsEncodedLen, Offence,
+	Offences, Runtime, System, KIND,
 };
 use frame_system::{EventRecord, Phase};
 use sp_runtime::{bounded_vec, Perbill};
@@ -290,7 +291,7 @@ fn should_properly_sort_offences() {
 
 		// then
 		let same_kind_reports = Vec::<(u128, sp_core::H256)>::decode(
-			&mut &crate::ReportsByKindIndex::<crate::mock::Runtime>::get(KIND)[..],
+			&mut &crate::ReportsByKindIndex::<Runtime>::get(KIND)[..],
 		)
 		.unwrap();
 		assert_eq!(
@@ -303,5 +304,28 @@ fn should_properly_sort_offences() {
 				(time_slot + 1, report_id(time_slot + 1, 7)),
 			]
 		);
+	});
+}
+
+/// Tests that the configured maximal encoding length are correct.
+///
+/// TODO: This test should run against the real runtime, not just the mock.
+#[test]
+fn encoding_lens_work() {
+	new_test_ext().execute_with(|| {
+		// Check that a time slot can be encode in at most `MaxOpaqueTimeSlotEncodedLen` byte.
+		let time_slot: u128 = 42;
+		let _encoded: BoundedVec<u8, MaxOpaqueTimeSlotEncodedLen> =
+			time_slot.encode().try_into().expect("MaxOpaqueTimeSlotEncodedLen too low");
+
+		// Check that `MaxSameKindReports` reports can be encoded in at most
+		// `MaxSameKindReportsEncodedLen` byte.
+		// This ignores that different values can have different encode lengths.
+		let report = (u128::MAX, Default::default());
+		let reports: SameKindReportsOf<Runtime, u128> =
+			bounded_vec![report; MaxSameKindReports::get() as usize];
+
+		let _encoded: BoundedVec<u8, MaxSameKindReportsEncodedLen> =
+			reports.encode().try_into().expect("MaxSameKindReportsEncodedLen too low");
 	});
 }

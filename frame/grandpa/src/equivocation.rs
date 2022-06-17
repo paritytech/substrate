@@ -74,7 +74,7 @@ pub trait HandleEquivocation<T: Config> {
 
 	/// Returns true if all of the offenders at the given time slot have already been reported.
 	fn is_known_offence(
-		offenders: &[T::KeyOwnerIdentification],
+		offenders: &BoundedVec<T::KeyOwnerIdentification, MaxOffenders>,
 		time_slot: &<Self::Offence as Offence<T::KeyOwnerIdentification>>::TimeSlot,
 	) -> bool;
 
@@ -100,7 +100,7 @@ impl<T: Config> HandleEquivocation<T> for () {
 	}
 
 	fn is_known_offence(
-		_offenders: &[T::KeyOwnerIdentification],
+		_offenders: &BoundedVec<T::KeyOwnerIdentification, MaxOffenders>,
 		_time_slot: &GrandpaTimeSlot,
 	) -> bool {
 		true
@@ -157,7 +157,10 @@ where
 		R::report_offence(reporters, offence)
 	}
 
-	fn is_known_offence(offenders: &[T::KeyOwnerIdentification], time_slot: &O::TimeSlot) -> bool {
+	fn is_known_offence(
+		offenders: &BoundedVec<T::KeyOwnerIdentification, MaxOffenders>,
+		time_slot: &O::TimeSlot,
+	) -> bool {
 		R::is_known_offence(&offenders.to_vec().try_into().expect("TODO"), time_slot)
 	}
 
@@ -264,6 +267,8 @@ fn is_known_offence<T: Config>(
 
 	let offender = T::KeyOwnerProofSystem::check_proof(key, key_owner_proof.clone())
 		.ok_or(InvalidTransaction::BadProof)?;
+	let offenders: BoundedVec<_, MaxOffenders> =
+		vec![offender].try_into().expect("MaxOffenders must be at least 1");
 
 	// check if the offence has already been reported,
 	// and if so then we can discard the report.
@@ -272,7 +277,7 @@ fn is_known_offence<T: Config>(
 		equivocation_proof.round(),
 	);
 
-	let is_known_offence = T::HandleEquivocation::is_known_offence(&[offender], &time_slot);
+	let is_known_offence = T::HandleEquivocation::is_known_offence(&offenders, &time_slot);
 
 	if is_known_offence {
 		Err(InvalidTransaction::Stale.into())

@@ -40,16 +40,16 @@ pub use pallet::*;
 /// A binary blob which represents a SCALE codec-encoded `O::TimeSlot`.
 ///
 /// Needs to be bounded since it is included in events.
-type OpaqueTimeSlotOf<T> = BoundedVec<u8, <T as Config>::MaxOpaqueTimeSlotLen>;
+type OpaqueTimeSlotOf<T> = BoundedVec<u8, <T as Config>::MaxOpaqueTimeSlotEncodedLen>;
 
 /// A type alias for a report identifier.
 type ReportIdOf<T> = <T as frame_system::Config>::Hash;
 
 type SameKindReportsOf<T, TimeSlot> =
-	BoundedVec<(TimeSlot, ReportIdOf<T>), <T as Config>::MaxSameKindReportsPerKind>;
+	BoundedVec<(TimeSlot, ReportIdOf<T>), <T as Config>::MaxSameKindReports>;
 
 type ConcurrentReportsOf<T> =
-	BoundedVec<ReportIdOf<T>, <T as Config>::MaxConcurrentReportsPerKindAndTime>;
+	BoundedVec<ReportIdOf<T>, <T as Config>::MaxConcurrentReportsPerIndex>;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -72,37 +72,24 @@ pub mod pallet {
 		/// A handler called for every offence report.
 		type OnOffenceHandler: OnOffenceHandler<Self::AccountId, Self::IdentificationTuple, Weight>;
 
-		/// The maximum number of reporters per offence.
-		#[pallet::constant]
-		type MaxReportersPerOffence: Get<u32>;
-
-		/// Maximum number of different kinds and different time slots reports that can be tracked.
-		///
-		/// Can be trivially set to `MaxReports`.
-		#[pallet::constant]
-		type MaxConcurrentReports: Get<Option<u32>>;
-
 		/// Maximum number of reports of the same kind that happened at a specific time slot.
 		#[pallet::constant]
-		type MaxConcurrentReportsPerKindAndTime: Get<u32>;
+		type MaxConcurrentReportsPerIndex: Get<u32>;
 
 		/// The maximum number of reports for the same kind.
 		#[pallet::constant]
-		type MaxSameKindReports: Get<Option<u32>>;
-
-		/// The maximum number of reports for the same kind.
-		#[pallet::constant]
-		type MaxSameKindReportsPerKind: Get<u32>;
+		type MaxSameKindReports: Get<u32>;
 
 		/// Maximum encoded length of same-kind reports `SameKindReportsOf<T>`.
 		///
-		/// This depends on [`pallet_staking::Config::MaxNominations`].
+		/// This depends on [`Self::MaxSameKindReports`]. The test `encoding_lens_work` ensure that
+		/// these work together.
 		#[pallet::constant]
 		type MaxSameKindReportsEncodedLen: Get<u32>;
 
 		/// The maximum encoded length of an offence `TimeSlot`.
 		#[pallet::constant]
-		type MaxOpaqueTimeSlotLen: Get<u32>;
+		type MaxOpaqueTimeSlotEncodedLen: Get<u32>;
 	}
 
 	/// The primary structure that holds all offence records keyed by report identifiers.
