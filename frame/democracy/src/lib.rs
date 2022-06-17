@@ -832,7 +832,7 @@ pub mod pallet {
 				T::InstantOrigin::ensure_origin(ensure_instant)?;
 				ensure!(T::InstantAllowed::get(), Error::<T>::InstantNotAllowed);
 			}
-			ensure!(voting_period != T::BlockNumber::zero(), Error::<T>::VotingPeriodLow);
+			ensure!(voting_period > T::BlockNumber::zero(), Error::<T>::VotingPeriodLow);
 			let (e_proposal_hash, threshold) =
 				<NextExternal<T>>::get().ok_or(Error::<T>::ProposalMissing)?;
 			ensure!(
