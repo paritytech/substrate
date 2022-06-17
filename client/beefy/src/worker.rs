@@ -25,10 +25,10 @@ use std::{
 };
 
 use codec::{Codec, Decode, Encode};
-use futures::{FutureExt, StreamExt};
+use futures::StreamExt;
 use log::{debug, error, info, log_enabled, trace, warn};
 
-use sc_client_api::{Backend, FinalityNotification, FinalityNotifications};
+use sc_client_api::{Backend, FinalityNotification};
 use sc_network_gossip::GossipEngine;
 
 use sp_api::{BlockId, ProvideRuntimeApi};
@@ -87,7 +87,6 @@ pub(crate) struct BeefyWorker<B: Block, BE, C, R, SO> {
 	rounds: Option<Rounds<Payload, B>>,
 	/// Buffer holding votes for blocks that the client hasn't seen finality for.
 	pending_votes: BTreeMap<NumberFor<B>, Vec<VoteMessage<NumberFor<B>, AuthorityId, Signature>>>,
-	finality_notifications: FinalityNotifications<B>,
 	/// Best block we received a GRANDPA notification for
 	best_grandpa_block_header: <B as Block>::Header,
 	/// Best block a BEEFY voting round has been concluded for
@@ -149,7 +148,6 @@ where
 			metrics,
 			rounds: None,
 			pending_votes: BTreeMap::new(),
-			finality_notifications: client.finality_notification_stream(),
 			best_grandpa_block_header: last_finalized_header,
 			best_beefy_block: None,
 			last_signed_id: 0,
@@ -475,11 +473,11 @@ where
 
 	/// Wait for BEEFY runtime pallet to be available.
 	async fn wait_for_runtime_pallet(&mut self) {
-		let gossip_engine = &mut self.gossip_engine;
-		let mut finality_stream = self.client.finality_notification_stream();
+		let mut gossip_engine = &mut self.gossip_engine;
+		let mut finality_stream = self.client.finality_notification_stream().fuse();
 		loop {
 			futures::select! {
-				notif = finality_stream.next().fuse() => {
+				notif = finality_stream.next() => {
 					let notif = match notif {
 						Some(notif) => notif,
 						None => break
@@ -502,14 +500,11 @@ where
 					debug!(target: "beefy", "🥩 Waiting for BEEFY pallet to become available...");
 				}
 				},
-				_ = gossip_engine.fuse() => {
+				_ = gossip_engine => {
 					break
 				}
 			}
 		}
-
-		// get a new stream that provides _new_ notifications (from here on out)
-		self.finality_notifications = self.client.finality_notification_stream();
 	}
 
 	/// Main loop for BEEFY worker.
@@ -520,16 +515,20 @@ where
 		info!(target: "beefy", "🥩 run BEEFY worker, best grandpa: #{:?}.", self.best_grandpa_block_header.number());
 		self.wait_for_runtime_pallet().await;
 
-		let mut votes = Box::pin(self.gossip_engine.messages_for(topic::<B>()).filter_map(
-			|notification| async move {
-				trace!(target: "beefy", "🥩 Got vote message: {:?}", notification);
+		let mut finality_notifications = self.client.finality_notification_stream().fuse();
+		let mut votes = Box::pin(
+			self.gossip_engine
+				.messages_for(topic::<B>())
+				.filter_map(|notification| async move {
+					trace!(target: "beefy", "🥩 Got vote message: {:?}", notification);
 
-				VoteMessage::<NumberFor<B>, AuthorityId, Signature>::decode(
-					&mut &notification.message[..],
-				)
-				.ok()
-			},
-		));
+					VoteMessage::<NumberFor<B>, AuthorityId, Signature>::decode(
+						&mut &notification.message[..],
+					)
+					.ok()
+				})
+				.fuse(),
+		);
 
 		loop {
 			while self.sync_oracle.is_major_syncing() {
@@ -537,18 +536,16 @@ where
 				futures_timer::Delay::new(Duration::from_secs(5)).await;
 			}
 
-			let gossip_engine = &mut self.gossip_engine;
-			let finality_notifications = &mut self.finality_notifications;
-
+			let mut gossip_engine = &mut self.gossip_engine;
 			futures::select! {
-				notification = finality_notifications.next().fuse() => {
+				notification = finality_notifications.next() => {
 					if let Some(notification) = notification {
 						self.handle_finality_notification(&notification);
 					} else {
 						return;
 					}
 				},
-				vote = votes.next().fuse() => {
+				vote = votes.next() => {
 					if let Some(vote) = vote {
 						let block_num = vote.commitment.block_number;
 						if block_num > *self.best_grandpa_block_header.number() {
@@ -571,7 +568,7 @@ where
 						return;
 					}
 				},
-				_ = gossip_engine.fuse() => {
+				_ = gossip_engine => {
 					error!(target: "beefy", "🥩 Gossip engine has terminated.");
 					return;
 				}
