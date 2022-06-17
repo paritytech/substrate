@@ -2177,7 +2177,7 @@ mod tests {
 		storage_info.sort_by_key(|k| k.max_size);
 		storage_info.reverse();
 
-		let mut test_pass = true;
+		let mut failed = 0;
 
 		for info in storage_info {
 			let pallet_name = String::from_utf8(info.pallet_name).unwrap();
@@ -2186,12 +2186,12 @@ mod tests {
 
 			if let Some(size) = info.max_size {
 				// We set the limit for storage size at 4MB
-				if (size > 4 * 1024 * 1024) {
-					test_pass = false;
+				if size > 4 * 1024 * 1024 {
+					failed += 1;
 				}
 			}
 		}
 
-		assert!(test_pass);
+		assert!(failed == 0, "{} pallets have too big storage", failed);
 	}
 }
