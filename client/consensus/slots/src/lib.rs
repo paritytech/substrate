@@ -189,9 +189,9 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		proposer: Self::Proposer,
 		claim: &Self::Claim,
 		slot_info: SlotInfo<B>,
-		slot: Slot,
 		proposing_remaining: Delay,
 	) -> Option<Proposal<B, <Self::Proposer as Proposer<B>>::Transaction, <Self::Proposer as Proposer<B>>::Proof>> {
+		let slot = slot_info.slot;
 		let telemetry = self.telemetry();
 		let logging_target = self.logging_target();
 		let proposing_remaining_duration = self.proposing_remaining_duration(&slot_info);
@@ -345,7 +345,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			},
 		};
 
-		let proposal = self.propose(proposer, &claim, slot_info, slot, proposing_remaining).await?;
+		let proposal = self.propose(proposer, &claim, slot_info, proposing_remaining).await?;
 
 		let (block, storage_proof) = (proposal.block, proposal.proof);
 		let (header, body) = block.deconstruct();
