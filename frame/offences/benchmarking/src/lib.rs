@@ -30,7 +30,6 @@ use frame_support::traits::{
 use frame_system::{Config as SystemConfig, Pallet as System, RawOrigin};
 
 use sp_runtime::{
-	bounded_vec,
 	traits::{Convert, Saturating, StaticLookup, UniqueSaturatedInto},
 	BoundedVec, Perbill,
 };
@@ -396,7 +395,7 @@ benchmarks! {
 
 		// for grandpa equivocation reports the number of reporters
 		// and offenders is always 1
-		let reporters = bounded_vec![account("reporter", 1, SEED)];
+		let reporters = vec![account("reporter", 1, SEED)].try_into().unwrap();
 
 		// make sure reporters actually get rewarded
 		Staking::<T>::set_slash_reward_fraction(Perbill::one());
@@ -432,7 +431,7 @@ benchmarks! {
 
 		// for babe equivocation reports the number of reporters
 		// and offenders is always 1
-		let reporters = bounded_vec![account("reporter", 1, SEED)];
+		let reporters = vec![account("reporter", 1, SEED)].try_into().unwrap();
 
 		// make sure reporters actually get rewarded
 		Staking::<T>::set_slash_reward_fraction(Perbill::one());
