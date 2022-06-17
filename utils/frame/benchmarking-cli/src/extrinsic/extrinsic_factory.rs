@@ -29,12 +29,12 @@ impl ExtrinsicFactory {
 	///
 	/// Is case in-sensitive.
 	pub fn try_get(&self, pallet: &str, extrinsic: &str) -> Option<&dyn ExtrinsicBuilder> {
+		let pallet = pallet.to_lowercase();
+		let extrinsic = extrinsic.to_lowercase();
+
 		self.0
 			.iter()
-			.find(|b| {
-				b.pallet().to_lowercase() == pallet.to_lowercase() &&
-					b.extrinsic().to_lowercase() == extrinsic.to_lowercase()
-			})
+			.find(|b| b.pallet() == pallet && b.extrinsic() == extrinsic)
 			.map(|b| b.as_ref())
 	}
 }
