@@ -107,8 +107,9 @@ thread_local! {
 }
 parameter_types! {
 	pub const ProposalBond: Permill = Permill::from_percent(5);
-	pub const Burn: Permill = Permill::from_percent(50);
+	pub static Burn: Permill = Permill::from_percent(50);
 	pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
+	pub const TreasuryPalletId2: PalletId = PalletId(*b"py/trsr2");
 }
 
 impl pallet_treasury::Config for Test {
@@ -131,7 +132,7 @@ impl pallet_treasury::Config for Test {
 }
 
 impl pallet_treasury::Config<Instance1> for Test {
-	type PalletId = TreasuryPalletId;
+	type PalletId = TreasuryPalletId2;
 	type Currency = pallet_balances::Pallet<Test>;
 	type ApproveOrigin = frame_system::EnsureRoot<u128>;
 	type RejectOrigin = frame_system::EnsureRoot<u128>;
@@ -1164,62 +1165,25 @@ fn accept_curator_handles_different_deposit_calculations() {
 #[test]
 fn approve_bounty_works_second_instance() {
 	new_test_ext().execute_with(|| {
+		// Set burn to 0 to make tracking funds easier.
+		Burn::set(Permill::from_percent(0));
+
 		System::set_block_number(1);
 		Balances::make_free_balance_be(&Treasury::account_id(), 101);
 		Balances::make_free_balance_be(&Treasury1::account_id(), 201);
-		assert_noop!(
-			Bounties1::approve_bounty(Origin::root(), 0),
-			Error::<Test, Instance1>::InvalidIndex
-		);
+		assert_eq!(Balances::free_balance(&Treasury::account_id()), 101);
+		assert_eq!(Balances::free_balance(&Treasury1::account_id()), 201);
 
 		assert_ok!(Bounties1::propose_bounty(Origin::signed(0), 50, b"12345".to_vec()));
-
 		assert_ok!(Bounties1::approve_bounty(Origin::root(), 0));
-
-		let deposit: u64 = 80 + 5;
-
-		assert_eq!(
-			Bounties1::bounties(0).unwrap(),
-			Bounty {
-				proposer: 0,
-				fee: 0,
-				value: 50,
-				curator_deposit: 0,
-				bond: deposit,
-				status: BountyStatus::Approved,
-			}
-		);
-		assert_eq!(Bounties1::bounty_approvals(), vec![0]);
-
-		assert_noop!(
-			Bounties1::close_bounty(Origin::root(), 0),
-			Error::<Test, Instance1>::UnexpectedStatus
-		);
-
-		// deposit not returned yet
-		assert_eq!(Balances::reserved_balance(0), deposit);
-		assert_eq!(Balances::free_balance(0), 100 - deposit);
-
+		<Treasury as OnInitialize<u64>>::on_initialize(2);
 		<Treasury1 as OnInitialize<u64>>::on_initialize(2);
 
-		// return deposit
-		assert_eq!(Balances::reserved_balance(0), 0);
-		assert_eq!(Balances::free_balance(0), 100);
-
-		assert_eq!(
-			Bounties1::bounties(0).unwrap(),
-			Bounty {
-				proposer: 0,
-				fee: 0,
-				curator_deposit: 0,
-				value: 50,
-				bond: deposit,
-				status: BountyStatus::Funded,
-			}
-		);
-
-		assert_eq!(Treasury1::pot(), 200 - 50 - 75); // burn 75
+		// Bounties 1 is funded... but from where?
 		assert_eq!(Balances::free_balance(Bounties1::bounty_account_id(0)), 50);
-		assert_eq!(Balances::free_balance(&Treasury::account_id()), 76);
+		// Treasury 1 unchanged
+		assert_eq!(Balances::free_balance(&Treasury::account_id()), 101);
+		// Treasury 2 has funds removed
+		assert_eq!(Balances::free_balance(&Treasury1::account_id()), 201 - 50);
 	});
 }

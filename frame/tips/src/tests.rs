@@ -129,6 +129,7 @@ parameter_types! {
 	pub const ProposalBond: Permill = Permill::from_percent(5);
 	pub const Burn: Permill = Permill::from_percent(50);
 	pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
+	pub const TreasuryPalletId2: PalletId = PalletId(*b"py/trsr2");
 }
 impl pallet_treasury::Config for Test {
 	type PalletId = TreasuryPalletId;
@@ -150,7 +151,7 @@ impl pallet_treasury::Config for Test {
 }
 
 impl pallet_treasury::Config<Instance1> for Test {
-	type PalletId = TreasuryPalletId;
+	type PalletId = TreasuryPalletId2;
 	type Currency = pallet_balances::Pallet<Test>;
 	type ApproveOrigin = frame_system::EnsureRoot<u128>;
 	type RejectOrigin = frame_system::EnsureRoot<u128>;
@@ -580,26 +581,31 @@ fn genesis_funding_works() {
 fn report_awesome_and_tip_works_second_instance() {
 	new_test_ext().execute_with(|| {
 		Balances::make_free_balance_be(&Treasury::account_id(), 101);
-		Balances::make_free_balance_be(&Treasury1::account_id(), 210);
-		assert_ok!(Tips1::report_awesome(Origin::signed(0), b"awesome.dot".to_vec(), 3));
-		assert_eq!(Balances::reserved_balance(0), 12);
-		assert_eq!(Balances::free_balance(0), 88);
+		Balances::make_free_balance_be(&Treasury1::account_id(), 201);
+		assert_eq!(Balances::free_balance(&Treasury::account_id()), 101);
+		assert_eq!(Balances::free_balance(&Treasury1::account_id()), 201);
 
-		// other reports don't count.
+		assert_ok!(Tips1::report_awesome(Origin::signed(0), b"awesome.dot".to_vec(), 3));
+		// duplicate report in tips1 reports don't count.
 		assert_noop!(
 			Tips1::report_awesome(Origin::signed(1), b"awesome.dot".to_vec(), 3),
 			Error::<Test, Instance1>::AlreadyKnown
 		);
+		// but tips is separate
+		assert_ok!(Tips::report_awesome(Origin::signed(0), b"awesome.dot".to_vec(), 3));
 
 		let h = tip_hash();
 		assert_ok!(Tips1::tip(Origin::signed(10), h.clone(), 10));
 		assert_ok!(Tips1::tip(Origin::signed(11), h.clone(), 10));
 		assert_ok!(Tips1::tip(Origin::signed(12), h.clone(), 10));
 		assert_noop!(Tips1::tip(Origin::signed(9), h.clone(), 10), BadOrigin);
+
 		System::set_block_number(2);
+
 		assert_ok!(Tips1::close_tip(Origin::signed(100), h.into()));
-		assert_eq!(Balances::reserved_balance(0), 0);
-		assert_eq!(Balances::free_balance(3), 8);
-		assert_eq!(Balances::free_balance(Treasury::account_id()), 200);
+		// Treasury 1 unchanged
+		assert_eq!(Balances::free_balance(&Treasury::account_id()), 101);
+		// Treasury 2 gave the funds
+		assert_eq!(Balances::free_balance(&Treasury1::account_id()), 191);
 	});
 }
