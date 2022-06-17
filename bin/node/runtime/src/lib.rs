@@ -2161,4 +2161,32 @@ mod tests {
 			size,
 		);
 	}
+
+	#[test]
+	fn check_pallet_storage_sizes() {
+		use frame_support::traits::StorageInfoTrait;
+		let mut storage_info = AllPalletsWithSystem::storage_info();
+		println!("| Pallet | Storage | Max Values | Max Size |");
+		println!("| --- | --- | --- | --- |");
+
+		storage_info.sort_by_key(|k| k.max_size);
+		storage_info.reverse();
+
+		let mut test_pass = true;
+
+		for info in storage_info {
+			let pallet_name = String::from_utf8(info.pallet_name).unwrap();
+			let storage_name = String::from_utf8(info.storage_name).unwrap();
+			println!("| {:?} | {:?} | {:?} | {:?} |", pallet_name, storage_name, info.max_values, info.max_size);
+
+			if let Some(size) = info.max_size {
+				// We set the limit for storage size at 4MB
+				if (size > 4 * 1024 * 1024) {
+					test_pass = false;
+				}
+			}
+		}
+
+		assert!(test_pass);
+	}
 }
