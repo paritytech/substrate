@@ -646,7 +646,11 @@ pub struct Nominations<T: Config> {
 #[derive(
 	PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen,
 )]
-pub struct IndividualExposure<AccountId, Balance: HasCompact> {
+pub struct IndividualExposure<AccountId, Balance>
+where
+	AccountId: MaxEncodedLen,
+	Balance: HasCompact + MaxEncodedLen,
+{
 	/// The stash account of the nominator in question.
 	pub who: AccountId,
 	/// Amount of funds exposed.
