@@ -139,7 +139,7 @@ pub fn run() -> Result<()> {
 							Box::new(TransferKeepAliveBuilder::new(
 								client.clone(),
 								Sr25519Keyring::Alice.to_account_id(),
-								ExistentialDeposit,
+								ExistentialDeposit::get(),
 							)),
 						]);
 
