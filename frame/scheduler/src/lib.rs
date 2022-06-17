@@ -307,7 +307,7 @@ pub mod pallet {
 		/// Execute the scheduled calls
 		fn on_initialize(now: T::BlockNumber) -> Weight {
 			let mut weight_counter = WeightCounter { used: 0, limit: T::MaximumWeight::get() };
-			Self::service_agendas(now, &mut weight_counter, u32::max_value());
+			Self::service_agendas(&mut weight_counter, now, u32::max_value());
 			weight_counter.used
 		}
 	}
@@ -871,7 +871,7 @@ use ServiceTaskError::*;
 
 impl<T: Config> Pallet<T> {
 	/// Service up to `max` agendas queue starting from earliest incompletely executed agenda.
-	fn service_agendas(now: T::BlockNumber, weight: &mut WeightCounter, max: u32) {
+	fn service_agendas(weight: &mut WeightCounter, now: T::BlockNumber, max: u32) {
 		if !weight.check_accrue(T::WeightInfo::service_agendas()) {
 			return
 		}
@@ -884,7 +884,7 @@ impl<T: Config> Pallet<T> {
 		let mut count_down = max;
 		let service_agenda_base_weight = T::WeightInfo::service_agenda(max_items);
 		while count_down > 0 && when <= now && weight.can_accrue(service_agenda_base_weight) {
-			if !Self::service_agenda(when, now, weight, &mut executed, u32::max_value()) {
+			if !Self::service_agenda(weight, &mut executed, now, when, u32::max_value()) {
 				incomplete_since = incomplete_since.min(when);
 			}
 			when.saturating_inc();
@@ -899,10 +899,10 @@ impl<T: Config> Pallet<T> {
 	/// Returns `true` if the agenda was fully completed, `false` if it should be revisited at a
 	/// later block.
 	fn service_agenda(
-		when: T::BlockNumber,
-		now: T::BlockNumber,
 		weight: &mut WeightCounter,
 		executed: &mut u32,
+		now: T::BlockNumber,
+		when: T::BlockNumber,
 		max: u32,
 	) -> bool {
 		dbg!("service_agenda", when, now);
@@ -936,7 +936,7 @@ impl<T: Config> Pallet<T> {
 				postponed += 1;
 				break
 			}
-			let result = Self::service_task(when, now, task, weight, *executed == 0, agenda_index);
+			let result = Self::service_task(weight, now, when, agenda_index, *executed == 0, task);
 			agenda[agenda_index as usize] = match result {
 				Err((Unavailable, slot)) => {
 					dropped += 1;
@@ -967,12 +967,12 @@ impl<T: Config> Pallet<T> {
 	/// - realizing the task's call which can include a preimage lookup.
 	/// - Rescheduling the task for execution in a later agenda if periodic.
 	fn service_task(
-		when: T::BlockNumber,
-		now: T::BlockNumber,
-		mut task: ScheduledOf<T>,
 		weight: &mut WeightCounter,
-		is_first: bool,
+		now: T::BlockNumber,
+		when: T::BlockNumber,
 		agenda_index: u32,
+		is_first: bool,
+		mut task: ScheduledOf<T>,
 	) -> Result<(), (ServiceTaskError, Option<ScheduledOf<T>>)> {
 		if let Some(ref id) = task.maybe_id {
 			Lookup::<T>::remove(id);

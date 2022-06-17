@@ -479,6 +479,8 @@ impl<T: Config<Hash = PreimageHash>> QueryPreimage for Pallet<T> {
 }
 
 impl<T: Config<Hash = PreimageHash>> StorePreimage for Pallet<T> {
+	const MAX_LENGTH: usize = MAX_SIZE as usize;
+
 	fn note(bytes: Cow<[u8]>) -> Result<T::Hash, DispatchError> {
 		// We don't really care if this fails, since that's only the case if someone else has
 		// already noted it.
