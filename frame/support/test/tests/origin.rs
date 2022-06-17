@@ -19,6 +19,7 @@
 
 #![recursion_limit = "128"]
 
+use codec::MaxEncodedLen;
 use frame_support::traits::{Contains, OriginTrait};
 use scale_info::TypeInfo;
 use sp_core::{sr25519, H256};
@@ -30,6 +31,7 @@ mod nested {
 	use super::*;
 
 	pub mod module {
+
 		use super::*;
 
 		pub trait Config: system::Config {}
@@ -45,7 +47,9 @@ mod nested {
 			}
 		}
 
-		#[derive(Clone, PartialEq, Eq, Debug, codec::Encode, codec::Decode, TypeInfo)]
+		#[derive(
+			Clone, PartialEq, Eq, Debug, codec::Encode, codec::Decode, TypeInfo, MaxEncodedLen,
+		)]
 		pub struct Origin;
 
 		frame_support::decl_event! {
@@ -101,7 +105,9 @@ pub mod module {
 		}
 	}
 
-	#[derive(Clone, PartialEq, Eq, Debug, codec::Encode, codec::Decode, TypeInfo)]
+	#[derive(
+		Clone, PartialEq, Eq, Debug, codec::Encode, codec::Decode, TypeInfo, MaxEncodedLen,
+	)]
 	pub struct Origin<T>(pub core::marker::PhantomData<T>);
 
 	frame_support::decl_event! {
