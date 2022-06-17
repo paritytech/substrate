@@ -2182,7 +2182,10 @@ mod tests {
 		for info in storage_info {
 			let pallet_name = String::from_utf8(info.pallet_name).unwrap();
 			let storage_name = String::from_utf8(info.storage_name).unwrap();
-			println!("| {:?} | {:?} | {:?} | {:?} |", pallet_name, storage_name, info.max_values, info.max_size);
+			println!(
+				"| {:?} | {:?} | {:?} | {:?} |",
+				pallet_name, storage_name, info.max_values, info.max_size
+			);
 
 			if let Some(size) = info.max_size {
 				// We set the limit for storage size at 4MB
