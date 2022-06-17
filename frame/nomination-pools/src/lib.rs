@@ -317,7 +317,7 @@ use scale_info::TypeInfo;
 use sp_core::U256;
 use sp_runtime::{
 	traits::{AccountIdConversion, Bounded, CheckedSub, Convert, Saturating, Zero},
-	FixedPointNumber, FixedU128,
+	FixedPointNumber, FixedU128, Perquintill,
 };
 use sp_staking::{EraIndex, OnStakerSlash, StakingInterface};
 use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, ops::Div, vec::Vec};
@@ -886,6 +886,7 @@ impl<T: Config> BondedPool<T> {
 				BondType::Later => ExistenceRequirement::KeepAlive,
 			},
 		)?;
+
 		// We must calculate the points issued *before* we bond who's funds, else points:balance
 		// ratio will be wrong.
 		let points_issued = self.issue(amount);
@@ -1290,9 +1291,20 @@ pub mod pallet {
 		/// A pool has been created.
 		Created { depositor: T::AccountId, pool_id: PoolId },
 		/// A member has became bonded in a pool.
-		Bonded { member: T::AccountId, pool_id: PoolId, bonded: BalanceOf<T>, joined: bool },
+		Bonded {
+			/// The member account id.
+			member: T::AccountId,
+			/// The pool to which they have joined.
+			pool_id: PoolId,
+			/// The amount of balance that they have transferred to the pool.
+			balance: BalanceOf<T>,
+			/// The amount of points that they have received in return.
+			points: BalanceOf<T>,
+			/// whether they have joined the pool now, or they were already bonded.
+			joined: bool,
+		},
 		/// A payout has been made to a member.
-		PaidOut { member: T::AccountId, pool_id: PoolId, payout: BalanceOf<T> },
+		MemberPaidOut { member: T::AccountId, pool_id: PoolId, payout: BalanceOf<T> },
 		/// A member has unbonded from their pool.
 		///
 		/// - `balance` is the corresponding balance of the number of points that has been
@@ -1470,7 +1482,8 @@ pub mod pallet {
 			Self::deposit_event(Event::<T>::Bonded {
 				member: who,
 				pool_id,
-				bonded: amount,
+				balance: amount,
+				points: points_issued,
 				joined: true,
 			});
 
@@ -1518,7 +1531,8 @@ pub mod pallet {
 			Self::deposit_event(Event::<T>::Bonded {
 				member: who.clone(),
 				pool_id: member.pool_id,
-				bonded,
+				points: points_issued,
+				balance: bonded,
 				joined: false,
 			});
 			Self::put_member_with_pools(&who, member, bonded_pool, reward_pool);
@@ -1845,6 +1859,11 @@ pub mod pallet {
 
 			bonded_pool.try_inc_members()?;
 			let points = bonded_pool.try_bond_funds(&who, amount, BondType::Create)?;
+			debug_assert_eq!(
+				points,
+				amount * POINTS_TO_BALANCE_INIT_RATIO.into(),
+				"pool has a well known points to balance ratio upon creation"
+			);
 
 			T::Currency::transfer(
 				&who,
@@ -1880,9 +1899,11 @@ pub mod pallet {
 			Self::deposit_event(Event::<T>::Bonded {
 				member: who,
 				pool_id,
-				bonded: amount,
+				points,
+				balance: amount,
 				joined: true,
 			});
+
 			bonded_pool.put();
 
 			Ok(())

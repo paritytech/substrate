@@ -45,7 +45,13 @@ fn pool_lifecycle_e2e() {
 			pool_events_since_last_call(),
 			vec![
 				PoolsEvent::Created { depositor: 10, pool_id: 1 },
-				PoolsEvent::Bonded { member: 10, pool_id: 1, bonded: 50, joined: true },
+				PoolsEvent::Bonded {
+					member: 10,
+					pool_id: 1,
+					balance: 50,
+					points: 50,
+					joined: true
+				},
 			]
 		);
 
@@ -60,8 +66,20 @@ fn pool_lifecycle_e2e() {
 		assert_eq!(
 			pool_events_since_last_call(),
 			vec![
-				PoolsEvent::Bonded { member: 20, pool_id: 1, bonded: 10, joined: true },
-				PoolsEvent::Bonded { member: 21, pool_id: 1, bonded: 10, joined: true },
+				PoolsEvent::Bonded {
+					member: 20,
+					pool_id: 1,
+					balance: 10,
+					points: 10,
+					joined: true
+				},
+				PoolsEvent::Bonded {
+					member: 21,
+					pool_id: 1,
+					balance: 10,
+					points: 10,
+					joined: true
+				},
 			]
 		);
 
@@ -182,7 +200,7 @@ fn pool_lifecycle_e2e() {
 }
 
 #[test]
-fn pool_slash_e2e() {
+fn slashed_pool_lifecycle_e2e() {
 	new_test_ext().execute_with(|| {
 		ExistentialDeposit::set(1);
 		assert_eq!(Balances::minimum_balance(), 1);
@@ -197,7 +215,13 @@ fn pool_slash_e2e() {
 			pool_events_since_last_call(),
 			vec![
 				PoolsEvent::Created { depositor: 10, pool_id: 1 },
-				PoolsEvent::Bonded { member: 10, pool_id: 1, bonded: 40, joined: true },
+				PoolsEvent::Bonded {
+					member: 10,
+					pool_id: 1,
+					balance: 40,
+					points: 40,
+					joined: true
+				},
 			]
 		);
 
@@ -214,8 +238,20 @@ fn pool_slash_e2e() {
 		assert_eq!(
 			pool_events_since_last_call(),
 			vec![
-				PoolsEvent::Bonded { member: 20, pool_id: 1, bonded: 20, joined: true },
-				PoolsEvent::Bonded { member: 21, pool_id: 1, bonded: 20, joined: true },
+				PoolsEvent::Bonded {
+					member: 20,
+					pool_id: 1,
+					balance: 20,
+					points: 20,
+					joined: true
+				},
+				PoolsEvent::Bonded {
+					member: 21,
+					pool_id: 1,
+					balance: 20,
+					points: 20,
+					joined: true
+				},
 			]
 		);
 
