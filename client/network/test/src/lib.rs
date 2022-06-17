@@ -669,6 +669,8 @@ impl<B: BlockT> warp_sync::WarpSyncProvider<B> for TestWarpSyncProvider<B> {
 #[derive(Default)]
 pub struct FullPeerConfig {
 	/// Pruning window size.
+	///
+	/// NOTE: only finalized blocks are subject for removal!
 	pub keep_blocks: Option<u32>,
 	/// Block announce validator.
 	pub block_announce_validator: Option<Box<dyn BlockAnnounceValidator<Block> + Send + Sync>>,
