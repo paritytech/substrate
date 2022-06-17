@@ -182,7 +182,8 @@ pub mod v2 {
 		pub unbonding_eras: BoundedBTreeMap<EraIndex, BalanceOf<T>, T::MaxUnbonding>,
 	}
 
-	/// Migrate the pool reward scheme to the new version, as per https://github.com/paritytech/substrate/pull/11669.
+	/// Migrate the pool reward scheme to the new version, as per
+	/// <https://github.com/paritytech/substrate/pull/11669.>.
 	pub struct MigrateToV2<T>(sp_std::marker::PhantomData<T>);
 	impl<T: Config> MigrateToV2<T> {
 		fn run(current: StorageVersion) -> Weight {
