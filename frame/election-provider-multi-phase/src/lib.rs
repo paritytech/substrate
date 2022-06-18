@@ -172,7 +172,7 @@
 //!
 //! ## Error types
 //!
-//! This pallet provides a verbose error system to ease future debugging and debugging. The overall
+//! This pallet provides a verbose error system to ease future debugging. The overall
 //! hierarchy of errors is as follows:
 //!
 //! 1. [`pallet::Error`]: These are the errors that can be returned in the dispatchables of the
@@ -957,9 +957,58 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Submit a signed solution during the emergency phase.
+		/// It will go through the `feasibility_check` right away.
+		///
+		/// The dispatch origin for this call must be __signed__.
+		///
+		/// The deposit that is reserved might be rewarded or slashed based on
+		/// the outcome.
+		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
+		pub fn submit_emergency_solution(
+			origin: OriginFor<T>,
+			raw_solution: Box<RawSolution<SolutionOf<T::MinerConfig>>>,
+		) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+
+			ensure!(Self::current_phase().is_emergency(), <Error<T>>::CallNotAllowed);
+
+			let size = Self::snapshot_metadata().ok_or(Error::<T>::MissingSnapshotMetadata)?;
+
+			ensure!(
+				Self::solution_weight_of(&raw_solution, size) < T::SignedMaxWeight::get(),
+				Error::<T>::SignedTooMuchWeight
+			);
+
+			let deposit = Self::deposit_for(&raw_solution, size);
+
+			T::Currency::reserve(&who, deposit).map_err(|_| Error::<T>::SignedCannotPayDeposit)?;
+
+			let call_fee = {
+				let call = Call::submit { raw_solution: raw_solution.clone() };
+				T::EstimateCallFee::estimate_call_fee(&call, None.into())
+			};
+
+			match Self::feasibility_check(*raw_solution.clone(), ElectionCompute::Signed) {
+				Ok(ready_solution) => {
+					Self::finalize_signed_phase_accept_solution(
+						ready_solution,
+						&who,
+						deposit,
+						call_fee,
+					);
+				},
+				Err(_) => {
+					Self::finalize_signed_phase_reject_solution(&who, deposit);
+				},
+			}
+
+			Ok(())
+		}
+
 		/// Submit a solution for the signed phase.
 		///
-		/// The dispatch origin fo this call must be __signed__.
+		/// The dispatch origin for this call must be __signed__.
 		///
 		/// The solution is potentially queued, based on the claimed score and processed at the end
 		/// of the signed phase.
