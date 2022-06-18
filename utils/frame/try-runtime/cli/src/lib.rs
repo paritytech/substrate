@@ -344,7 +344,7 @@ pub enum Command {
 	///
 	/// This executes the same runtime api as normal block import, namely `Core_execute_block`. If
 	/// `ExecuteBlockCmd::no_check` is set, it uses a custom, try-runtime-only runtime
-	/// api called `TryRuntime_execute_block_no_check`.
+	/// api called `TryRuntime_execute_block` without the state root checks.
 	ExecuteBlock(commands::execute_block::ExecuteBlockCmd),
 
 	/// Executes *the offchain worker hooks* of a given block against some state.

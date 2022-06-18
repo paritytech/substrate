@@ -139,7 +139,7 @@ where
 			state_ext,
 			&executor,
 			execution,
-			"TryRuntime_execute_block_no_check",
+			"TryRuntime_execute_block",
 			block.encode().as_ref(),
 			full_extensions(),
 		)?;

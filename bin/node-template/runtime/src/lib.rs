@@ -524,8 +524,8 @@ impl_runtime_apis! {
 			(weight, BlockWeights::get().max_block)
 		}
 
-		fn execute_block_no_check(block: Block) -> Weight {
-			Executive::execute_block_no_check(block)
+		fn execute_block(block: Block, state_root_check: bool, sanity_checks: frame_try_runtime::SanityCheckTargets) -> Weight {
+			Executive::try_execute_block(block, state_root_check, sanity_checks)
 		}
 	}
 }

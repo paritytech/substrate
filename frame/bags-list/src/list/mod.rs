@@ -518,7 +518,7 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 	/// * length of this list is in sync with `ListNodes::count()`,
 	/// * and sanity-checks all bags and nodes. This will cascade down all the checks and makes sure
 	/// all bags and nodes are checked per *any* update to `List`.
-	#[cfg(feature = "std")]
+	#[cfg(any(feature = "std", feature = "try-runtime"))]
 	pub(crate) fn sanity_check() -> Result<(), &'static str> {
 		let mut seen_in_list = BTreeSet::new();
 		ensure!(
@@ -561,11 +561,6 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 			node.sanity_check()?
 		}
 
-		Ok(())
-	}
-
-	#[cfg(not(feature = "std"))]
-	pub(crate) fn sanity_check() -> Result<(), &'static str> {
 		Ok(())
 	}
 
@@ -762,7 +757,7 @@ impl<T: Config<I>, I: 'static> Bag<T, I> {
 	/// * Ensures head has no prev.
 	/// * Ensures tail has no next.
 	/// * Ensures there are no loops, traversal from head to tail is correct.
-	#[cfg(feature = "std")]
+	#[cfg(any(feature = "std", feature = "try-runtime"))]
 	fn sanity_check(&self) -> Result<(), &'static str> {
 		frame_support::ensure!(
 			self.head()
@@ -802,7 +797,7 @@ impl<T: Config<I>, I: 'static> Bag<T, I> {
 	}
 
 	/// Check if the bag contains a node with `id`.
-	#[cfg(feature = "std")]
+	#[cfg(any(feature = "std", feature = "try-runtime"))]
 	fn contains(&self, id: &T::AccountId) -> bool {
 		self.iter().any(|n| n.id() == id)
 	}
@@ -907,7 +902,7 @@ impl<T: Config<I>, I: 'static> Node<T, I> {
 		self.bag_upper
 	}
 
-	#[cfg(feature = "std")]
+	#[cfg(any(feature = "std", feature = "try-runtime"))]
 	fn sanity_check(&self) -> Result<(), &'static str> {
 		let expected_bag = Bag::<T, I>::get(self.bag_upper).ok_or("bag not found for node")?;
 

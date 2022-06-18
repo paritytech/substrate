@@ -33,8 +33,7 @@ pub struct ExecuteBlockCmd {
 	overwrite_wasm_code: bool,
 
 	/// If set, then the state root check is disabled by the virtue of calling into
-	/// `TryRuntime_execute_block_no_check` instead of
-	/// `Core_execute_block`.
+	/// `TryRuntime_execute_block` instead of `Core_execute_block`.
 	#[clap(long)]
 	no_check: bool,
 
@@ -161,6 +160,7 @@ where
 	let (mut header, extrinsics) = block.deconstruct();
 	header.digest_mut().pop();
 	let block = Block::new(header, extrinsics);
+	let encoded_block = block.encode();
 
 	let (expected_spec_name, expected_spec_version, _) =
 		local_spec::<Block, ExecDispatch>(&ext, &executor);
@@ -176,8 +176,8 @@ where
 		&ext,
 		&executor,
 		execution,
-		if command.no_check { "TryRuntime_execute_block_no_check" } else { "Core_execute_block" },
-		block.encode().as_ref(),
+		if command.no_check { "TryRuntime_execute_block" } else { "Core_execute_block" },
+		if command.no_check { todo!() } else { encoded_block.as_ref() },
 		full_extensions(),
 	)?;
 

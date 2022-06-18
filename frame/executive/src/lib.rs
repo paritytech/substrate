@@ -174,17 +174,11 @@ impl<
 		Block: traits::Block<Header = System::Header, Hash = System::Hash>,
 		Context: Default,
 		UnsignedValidator,
-		#[cfg(not(feature = "try-runtime"))] AllPalletsWithSystem: OnRuntimeUpgrade
+		AllPalletsWithSystem: OnRuntimeUpgrade
 			+ OnInitialize<System::BlockNumber>
 			+ OnIdle<System::BlockNumber>
 			+ OnFinalize<System::BlockNumber>
 			+ OffchainWorker<System::BlockNumber>,
-		#[cfg(feature = "try-runtime")] AllPalletsWithSystem: OnRuntimeUpgrade
-			+ OnInitialize<System::BlockNumber>
-			+ OnIdle<System::BlockNumber>
-			+ OnFinalize<System::BlockNumber>
-			+ OffchainWorker<System::BlockNumber>
-			+ frame_support::traits::SanityCheck<System::BlockNumber>,
 		COnRuntimeUpgrade: OnRuntimeUpgrade,
 	> ExecuteBlock<Block>
 	for Executive<System, Block, Context, UnsignedValidator, AllPalletsWithSystem, COnRuntimeUpgrade>
@@ -208,17 +202,13 @@ where
 	}
 }
 
+#[cfg(feature = "try-runtime")]
 impl<
 		System: frame_system::Config + EnsureInherentsAreFirst<Block>,
 		Block: traits::Block<Header = System::Header, Hash = System::Hash>,
 		Context: Default,
 		UnsignedValidator,
-		#[cfg(not(feature = "try-runtime"))] AllPalletsWithSystem: OnRuntimeUpgrade
-			+ OnInitialize<System::BlockNumber>
-			+ OnIdle<System::BlockNumber>
-			+ OnFinalize<System::BlockNumber>
-			+ OffchainWorker<System::BlockNumber>,
-		#[cfg(feature = "try-runtime")] AllPalletsWithSystem: OnRuntimeUpgrade
+		AllPalletsWithSystem: OnRuntimeUpgrade
 			+ OnInitialize<System::BlockNumber>
 			+ OnIdle<System::BlockNumber>
 			+ OnFinalize<System::BlockNumber>
@@ -234,16 +224,14 @@ where
 	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
 	UnsignedValidator: ValidateUnsigned<Call = CallOf<Block::Extrinsic, Context>>,
 {
-	/// Execute all `OnRuntimeUpgrade` of this runtime, and return the aggregate weight.
-	pub fn execute_on_runtime_upgrade() -> frame_support::weights::Weight {
-		<(COnRuntimeUpgrade, AllPalletsWithSystem) as OnRuntimeUpgrade>::on_runtime_upgrade()
-	}
-
 	/// Execute given block, but don't do any of the `final_checks`.
 	///
 	/// Should only be used for testing.
-	#[cfg(feature = "try-runtime")]
-	pub fn execute_block_no_check(block: Block) -> frame_support::weights::Weight {
+	pub fn try_execute_block(
+		block: Block,
+		check_state_root: bool,
+		sanity_checks: frame_try_runtime::SanityCheckTargets,
+	) -> frame_support::weights::Weight {
 		Self::initialize_block(block.header());
 		Self::initial_checks(&block);
 
@@ -283,7 +271,6 @@ where
 	/// Execute all `OnRuntimeUpgrade` of this runtime, including the pre and post migration checks.
 	///
 	/// This should only be used for testing.
-	#[cfg(feature = "try-runtime")]
 	pub fn try_runtime_upgrade() -> Result<frame_support::weights::Weight, &'static str> {
 		<(COnRuntimeUpgrade, AllPalletsWithSystem) as OnRuntimeUpgrade>::pre_upgrade().unwrap();
 		let weight = Self::execute_on_runtime_upgrade();
@@ -291,6 +278,32 @@ where
 		<(COnRuntimeUpgrade, AllPalletsWithSystem) as OnRuntimeUpgrade>::post_upgrade().unwrap();
 
 		Ok(weight)
+	}
+}
+
+impl<
+		System: frame_system::Config + EnsureInherentsAreFirst<Block>,
+		Block: traits::Block<Header = System::Header, Hash = System::Hash>,
+		Context: Default,
+		UnsignedValidator,
+		AllPalletsWithSystem: OnRuntimeUpgrade
+			+ OnInitialize<System::BlockNumber>
+			+ OnIdle<System::BlockNumber>
+			+ OnFinalize<System::BlockNumber>
+			+ OffchainWorker<System::BlockNumber>,
+		COnRuntimeUpgrade: OnRuntimeUpgrade,
+	> Executive<System, Block, Context, UnsignedValidator, AllPalletsWithSystem, COnRuntimeUpgrade>
+where
+	Block::Extrinsic: Checkable<Context> + Codec,
+	CheckedOf<Block::Extrinsic, Context>: Applyable + GetDispatchInfo,
+	CallOf<Block::Extrinsic, Context>:
+		Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
+	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
+	UnsignedValidator: ValidateUnsigned<Call = CallOf<Block::Extrinsic, Context>>,
+{
+	/// Execute all `OnRuntimeUpgrade` of this runtime, and return the aggregate weight.
+	pub fn execute_on_runtime_upgrade() -> frame_support::weights::Weight {
+		<(COnRuntimeUpgrade, AllPalletsWithSystem) as OnRuntimeUpgrade>::on_runtime_upgrade()
 	}
 
 	/// Start the execution of a particular block.

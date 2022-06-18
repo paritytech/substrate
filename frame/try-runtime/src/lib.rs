@@ -20,6 +20,16 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use frame_support::weights::Weight;
+use sp_std::prelude::*;
+
+/// Which sanity checks to execute.
+#[derive(codec::Encode, codec::Decode, Clone, Debug)]
+pub enum SanityCheckTargets {
+	All,
+	None,
+	Random(u32),
+	Selected(Vec<Vec<u8>>),
+}
 
 sp_api::decl_runtime_apis! {
 	/// Runtime api for testing the execution of a runtime upgrade.
@@ -37,6 +47,6 @@ sp_api::decl_runtime_apis! {
 		///
 		/// This is only sensible where the incoming block is from a different network, yet it has
 		/// the same block format as the runtime implementing this API.
-		fn execute_block_no_check(block: Block) -> Weight;
+		fn execute_block(block: Block, state_root_check: bool, sanity_checks: SanityCheckTargets) -> Weight;
 	}
 }
