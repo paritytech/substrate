@@ -88,6 +88,7 @@ pub type Votes = u32;
 	MaxEncodedLen,
 )]
 #[scale_info(skip_type_params(M))]
+#[codec(mel_bound())]
 pub struct Tally<M: GetMaxVoters> {
 	bare_ayes: MemberIndex,
 	ayes: Votes,
