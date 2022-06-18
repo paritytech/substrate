@@ -61,7 +61,7 @@ pub mod migrations;
 pub mod weights;
 
 use sp_runtime::{
-	traits::{AccountIdConversion, BadOrigin, Hash, TrailingZeroInput, Zero},
+	traits::{AccountIdConversion, BadOrigin, Hash, TrailingZeroInput, Zero, StaticLookup},
 	Percent, RuntimeDebug,
 };
 use sp_std::prelude::*;
@@ -236,9 +236,10 @@ pub mod pallet {
 		pub fn report_awesome(
 			origin: OriginFor<T>,
 			reason: Vec<u8>,
-			who: T::AccountId,
+			who: <T::Lookup as StaticLookup>::Source,
 		) -> DispatchResult {
 			let finder = ensure_signed(origin)?;
+            let who = T::Lookup::lookup(who)?;
 
 			ensure!(
 				reason.len() <= T::MaximumReasonLength::get() as usize,
@@ -330,10 +331,11 @@ pub mod pallet {
 		pub fn tip_new(
 			origin: OriginFor<T>,
 			reason: Vec<u8>,
-			who: T::AccountId,
+			who: <T::Lookup as StaticLookup>::Source,
 			#[pallet::compact] tip_value: BalanceOf<T>,
 		) -> DispatchResult {
 			let tipper = ensure_signed(origin)?;
+            let who = T::Lookup::lookup(who)?;
 			ensure!(T::Tippers::contains(&tipper), BadOrigin);
 			let reason_hash = T::Hashing::hash(&reason[..]);
 			ensure!(!Reasons::<T>::contains_key(&reason_hash), Error::<T>::AlreadyKnown);

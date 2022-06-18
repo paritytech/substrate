@@ -88,18 +88,20 @@ benchmarks! {
 	report_awesome {
 		let r in 0 .. T::MaximumReasonLength::get();
 		let (caller, reason, awesome_person) = setup_awesome::<T>(r);
+        let awesome_person_lookup = T::Lookup::unlookup(awesome_person);
 		// Whitelist caller account from further DB operations.
 		let caller_key = frame_system::Account::<T>::hashed_key_for(&caller);
 		frame_benchmarking::benchmarking::add_to_whitelist(caller_key.into());
-	}: _(RawOrigin::Signed(caller), reason, awesome_person)
+	}: _(RawOrigin::Signed(caller), reason, awesome_person_lookup)
 
 	retract_tip {
 		let r = T::MaximumReasonLength::get();
 		let (caller, reason, awesome_person) = setup_awesome::<T>(r);
+        let awesome_person_lookup = T::Lookup::unlookup(awesome_person.clone());
 		TipsMod::<T>::report_awesome(
 			RawOrigin::Signed(caller.clone()).into(),
 			reason.clone(),
-			awesome_person.clone()
+			awesome_person_lookup
 		)?;
 		let reason_hash = T::Hashing::hash(&reason[..]);
 		let hash = T::Hashing::hash_of(&(&reason_hash, &awesome_person));
@@ -113,19 +115,21 @@ benchmarks! {
 		let t in 1 .. T::Tippers::max_len() as u32;
 
 		let (caller, reason, beneficiary, value) = setup_tip::<T>(r, t)?;
+        let beneficiary_lookup = T::Lookup::unlookup(beneficiary);
 		// Whitelist caller account from further DB operations.
 		let caller_key = frame_system::Account::<T>::hashed_key_for(&caller);
 		frame_benchmarking::benchmarking::add_to_whitelist(caller_key.into());
-	}: _(RawOrigin::Signed(caller), reason, beneficiary, value)
+	}: _(RawOrigin::Signed(caller), reason, beneficiary_lookup, value)
 
 	tip {
 		let t in 1 .. T::Tippers::max_len() as u32;
 		let (member, reason, beneficiary, value) = setup_tip::<T>(0, t)?;
+        let beneficiary_lookup = T::Lookup::unlookup(beneficiary.clone());
 		let value = T::Currency::minimum_balance().saturating_mul(100u32.into());
 		TipsMod::<T>::tip_new(
 			RawOrigin::Signed(member).into(),
 			reason.clone(),
-			beneficiary.clone(),
+			beneficiary_lookup,
 			value
 		)?;
 		let reason_hash = T::Hashing::hash(&reason[..]);
@@ -146,11 +150,12 @@ benchmarks! {
 
 		// Set up a new tip proposal
 		let (member, reason, beneficiary, value) = setup_tip::<T>(0, t)?;
+        let beneficiary_lookup = T::Lookup::unlookup(beneficiary.clone());
 		let value = T::Currency::minimum_balance().saturating_mul(100u32.into());
 		TipsMod::<T>::tip_new(
 			RawOrigin::Signed(member).into(),
 			reason.clone(),
-			beneficiary.clone(),
+			beneficiary_lookup,
 			value
 		)?;
 
@@ -175,11 +180,12 @@ benchmarks! {
 
 		// Set up a new tip proposal
 		let (member, reason, beneficiary, value) = setup_tip::<T>(0, t)?;
+        let beneficiary_lookup = T::Lookup::unlookup(beneficiary.clone());
 		let value = T::Currency::minimum_balance().saturating_mul(100u32.into());
 		TipsMod::<T>::tip_new(
 			RawOrigin::Signed(member).into(),
 			reason.clone(),
-			beneficiary.clone(),
+			beneficiary_lookup,
 			value
 		)?;
 
