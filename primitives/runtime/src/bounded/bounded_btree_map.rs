@@ -66,6 +66,11 @@ where
 	K: Ord,
 	S: Get<u32>,
 {
+	/// Create `Self` from `t` without any checks.
+	fn unchecked_from(t: BTreeMap<K, V>) -> Self {
+		Self(t, Default::default())
+	}
+
 	/// Exactly the same semantics as `BTreeMap::retain`.
 	///
 	/// The is a safe `&mut self` borrow because `retain` can only ever decrease the length of the
@@ -177,13 +182,12 @@ where
 	}
 }
 
-#[cfg(feature = "std")]
-impl<K, V, S> std::fmt::Debug for BoundedBTreeMap<K, V, S>
+impl<K, V, S> sp_std::fmt::Debug for BoundedBTreeMap<K, V, S>
 where
-	BTreeMap<K, V>: std::fmt::Debug,
+	BTreeMap<K, V>: sp_std::fmt::Debug,
 	S: Get<u32>,
 {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
 		f.debug_tuple("BoundedBTreeMap").field(&self.0).field(&Self::bound()).finish()
 	}
 }
@@ -344,8 +348,7 @@ where
 		if self.len() > Bound::get() as usize {
 			Err("iterator length too big")
 		} else {
-			Ok(BoundedBTreeMap::<K, V, Bound>::try_from(self.collect::<BTreeMap<K, V>>())
-				.expect("length checked above; qed"))
+			Ok(BoundedBTreeMap::<K, V, Bound>::unchecked_from(self.collect::<BTreeMap<K, V>>()))
 		}
 	}
 }

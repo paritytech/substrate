@@ -1414,17 +1414,17 @@ impl<T: Config> StakingInterface for Pallet<T> {
 		Self::unbond(RawOrigin::Signed(controller).into(), value)
 	}
 
+	fn chill(controller: Self::AccountId) -> DispatchResult {
+		Self::chill(RawOrigin::Signed(controller).into())
+	}
+
 	fn withdraw_unbonded(
 		controller: Self::AccountId,
 		num_slashing_spans: u32,
-	) -> Result<u64, DispatchError> {
-		Self::withdraw_unbonded(RawOrigin::Signed(controller).into(), num_slashing_spans)
-			.map(|post_info| {
-				post_info
-					.actual_weight
-					.unwrap_or(T::WeightInfo::withdraw_unbonded_kill(num_slashing_spans))
-			})
-			.map_err(|err_with_post_info| err_with_post_info.error)
+	) -> Result<bool, DispatchError> {
+		Self::withdraw_unbonded(RawOrigin::Signed(controller.clone()).into(), num_slashing_spans)
+			.map(|_| !Ledger::<T>::contains_key(&controller))
+			.map_err(|with_post| with_post.error)
 	}
 
 	fn bond(
@@ -1444,5 +1444,10 @@ impl<T: Config> StakingInterface for Pallet<T> {
 	fn nominate(controller: Self::AccountId, targets: Vec<Self::AccountId>) -> DispatchResult {
 		let targets = targets.into_iter().map(T::Lookup::unlookup).collect::<Vec<_>>();
 		Self::nominate(RawOrigin::Signed(controller).into(), targets)
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn nominations(who: Self::AccountId) -> Option<Vec<T::AccountId>> {
+		Nominators::<T>::get(who).map(|n| n.targets.into_inner())
 	}
 }
