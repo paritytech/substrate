@@ -998,6 +998,7 @@ impl<T: Config> Pallet<T> {
 				Err((Unavailable, Some(task)))
 			},
 			Err(Overweight) if is_first => {
+				T::Preimages::drop(&task.call);
 				Self::deposit_event(Event::PermanentlyOverweight {
 					task: (when, agenda_index),
 					id: task.maybe_id.clone(),
