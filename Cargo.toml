@@ -1907,7 +1907,7 @@ remote-externalities = { path = "../substrate/utils/frame/remote-externalities" 
 try-runtime-cli = { path = "../substrate/utils/frame/try-runtime/cli" }
 substrate-frame-rpc-system = { path = "../substrate/utils/frame/rpc/system" }
 pallet-vesting-mangata = { path = "../substrate/frame/vesting-mangata" }
-pallet-mmr-primitives = { path = "../substrate/frame/merkle-mountain-range/primitives" }
+#pallet-mmr-primitives = { path = "../substrate/frame/merkle-mountain-range/primitives" }
 pallet-mmr = { path = "../substrate/frame/merkle-mountain-range" }
 pallet-mmr-rpc = { path = "../substrate/frame/merkle-mountain-range/rpc" }
 pallet-transaction-payment = { path = "../substrate/frame/transaction-payment" }
@@ -2071,7 +2071,7 @@ remote-externalities = { path = "../substrate/utils/frame/remote-externalities" 
 try-runtime-cli = { path = "../substrate/utils/frame/try-runtime/cli" }
 substrate-frame-rpc-system = { path = "../substrate/utils/frame/rpc/system" }
 pallet-vesting-mangata = { path = "../substrate/frame/vesting-mangata" }
-pallet-mmr-primitives = { path = "../substrate/frame/merkle-mountain-range/primitives" }
+#pallet-mmr-primitives = { path = "../substrate/frame/merkle-mountain-range/primitives" }
 pallet-mmr = { path = "../substrate/frame/merkle-mountain-range" }
 pallet-mmr-rpc = { path = "../substrate/frame/merkle-mountain-range/rpc" }
 pallet-transaction-payment = { path = "../substrate/frame/transaction-payment" }
@@ -2235,7 +2235,7 @@ remote-externalities = { path = "../substrate/utils/frame/remote-externalities" 
 try-runtime-cli = { path = "../substrate/utils/frame/try-runtime/cli" }
 substrate-frame-rpc-system = { path = "../substrate/utils/frame/rpc/system" }
 pallet-vesting-mangata = { path = "../substrate/frame/vesting-mangata" }
-pallet-mmr-primitives = { path = "../substrate/frame/merkle-mountain-range/primitives" }
+#pallet-mmr-primitives = { path = "../substrate/frame/merkle-mountain-range/primitives" }
 pallet-mmr = { path = "../substrate/frame/merkle-mountain-range" }
 pallet-mmr-rpc = { path = "../substrate/frame/merkle-mountain-range/rpc" }
 pallet-transaction-payment = { path = "../substrate/frame/transaction-payment" }
