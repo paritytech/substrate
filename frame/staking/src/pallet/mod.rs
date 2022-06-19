@@ -30,7 +30,7 @@ use frame_support::{
 use frame_system::{ensure_root, ensure_signed, offchain::SendTransactionTypes, pallet_prelude::*};
 use sp_runtime::{
 	traits::{CheckedSub, SaturatedConversion, StaticLookup, Zero},
-	DispatchError, Perbill, Percent,
+	Perbill, Percent,
 };
 use sp_staking::{EraIndex, SessionIndex};
 use sp_std::{cmp::max, prelude::*};
@@ -75,8 +75,22 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>> {
 		/// The staking balance.
-		type Currency: LockableCurrency<Self::AccountId, Moment = Self::BlockNumber>;
-
+		type Currency: LockableCurrency<
+			Self::AccountId,
+			Moment = Self::BlockNumber,
+			Balance = Self::CurrencyBalance,
+		>;
+		/// Just the `Currency::Balance` type; we have this item to allow us to constrain it to
+		/// `From<u64>`.
+		type CurrencyBalance: sp_runtime::traits::AtLeast32BitUnsigned
+			+ codec::FullCodec
+			+ Copy
+			+ MaybeSerializeDeserialize
+			+ sp_std::fmt::Debug
+			+ Default
+			+ From<u64>
+			+ TypeInfo
+			+ MaxEncodedLen;
 		/// Time used for computing era duration.
 		///
 		/// It is guaranteed to start being called from the first `on_finalize`. Thus value at
@@ -175,6 +189,10 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxUnlockingChunks: Get<u32>;
 
+		/// A hook called when any staker is slashed. Mostly likely this can be a no-op unless
+		/// other pallets exist that are affected by slashing per-staker.
+		type OnStakerSlash: sp_staking::OnStakerSlash<Self::AccountId, BalanceOf<Self>>;
+
 		/// Some parameters of the benchmarking.
 		type BenchmarkingConfig: BenchmarkingConfig;
 
@@ -237,8 +255,7 @@ pub mod pallet {
 	/// Map from all (unlocked) "controller" accounts to the info regarding the staking.
 	#[pallet::storage]
 	#[pallet::getter(fn ledger)]
-	pub type Ledger<T: Config> =
-		StorageMap<_, Blake2_128Concat, T::AccountId, StakingLedger<T::AccountId, BalanceOf<T>>>;
+	pub type Ledger<T: Config> = StorageMap<_, Blake2_128Concat, T::AccountId, StakingLedger<T>>;
 
 	/// Where the reward payment should be made. Keyed by stash.
 	#[pallet::storage]
@@ -628,6 +645,8 @@ pub mod pallet {
 		Chilled(T::AccountId),
 		/// The stakers' rewards are getting paid. \[era_index, validator_stash\]
 		PayoutStarted(EraIndex, T::AccountId),
+		/// A validator has set their preferences.
+		ValidatorPrefsSet(T::AccountId, ValidatorPrefs),
 	}
 
 	#[pallet::error]
@@ -1016,7 +1035,9 @@ pub mod pallet {
 			}
 
 			Self::do_remove_nominator(stash);
-			Self::do_add_validator(stash, prefs);
+			Self::do_add_validator(stash, prefs.clone());
+			Self::deposit_event(Event::<T>::ValidatorPrefsSet(ledger.stash, prefs));
+
 			Ok(())
 		}
 
@@ -1109,7 +1130,7 @@ pub mod pallet {
 
 		/// (Re-)set the payment target for a controller.
 		///
-		/// Effects will be felt at the beginning of the next era.
+		/// Effects will be felt instantly (as soon as this function is completed successfully).
 		///
 		/// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
 		///
@@ -1137,7 +1158,7 @@ pub mod pallet {
 
 		/// (Re-)set the controller of a stash.
 		///
-		/// Effects will be felt at the beginning of the next era.
+		/// Effects will be felt instantly (as soon as this function is completed successfully).
 		///
 		/// The dispatch origin for this call must be _Signed_ by the stash, not the controller.
 		///
