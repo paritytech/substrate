@@ -577,8 +577,12 @@ where
 	}
 
 	/// Returns the best seen block.
-	fn best_seen(&self) -> Option<NumberFor<B>> {
-		let mut best_seens = self.peers.values().map(|p| p.best_number).collect::<Vec<_>>();
+	fn best_seen(&self, best_block: NumberFor<B>) -> Option<NumberFor<B>> {
+		let mut best_seens = self
+			.peers
+			.values()
+			.filter_map(|p| if p.best_number >= best_block { Some(p.best_number) } else { None })
+			.collect::<Vec<_>>();
 
 		if best_seens.is_empty() {
 			None
@@ -592,11 +596,11 @@ where
 
 	/// Returns the current sync status.
 	pub fn status(&self) -> Status<B> {
-		let best_seen = self.best_seen();
+		let best_block = self.client.info().best_number;
+		let best_seen = self.best_seen(best_block);
 		let sync_state = if let Some(n) = best_seen {
 			// A chain is classified as downloading if the provided best block is
 			// more than `MAJOR_SYNC_BLOCKS` behind the best block.
-			let best_block = self.client.info().best_number;
 			if n > best_block && n - best_block > MAJOR_SYNC_BLOCKS.into() {
 				SyncState::Downloading
 			} else {
