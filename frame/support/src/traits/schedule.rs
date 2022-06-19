@@ -137,7 +137,7 @@ pub mod v1 {
 	/// A type that can be used as a scheduler.
 	pub trait Anon<BlockNumber, Call, Origin> {
 		/// An address which can be used for removing a scheduled task.
-		type Address: Codec + Clone + Eq + EncodeLike + Debug + TypeInfo;
+		type Address: Codec + Clone + Eq + EncodeLike + Debug + TypeInfo + MaxEncodedLen;
 
 		/// Schedule a dispatch to happen at the beginning of some block in the future.
 		///
@@ -182,7 +182,7 @@ pub mod v1 {
 	/// A type that can be used as a scheduler.
 	pub trait Named<BlockNumber, Call, Origin> {
 		/// An address which can be used for removing a scheduled task.
-		type Address: Codec + Clone + Eq + EncodeLike + sp_std::fmt::Debug;
+		type Address: Codec + Clone + Eq + EncodeLike + sp_std::fmt::Debug + MaxEncodedLen;
 
 		/// Schedule a dispatch to happen at the beginning of some block in the future.
 		///
@@ -293,7 +293,7 @@ pub mod v2 {
 	/// A type that can be used as a scheduler.
 	pub trait Anon<BlockNumber, Call, Origin> {
 		/// An address which can be used for removing a scheduled task.
-		type Address: Codec + Clone + Eq + EncodeLike + Debug + TypeInfo;
+		type Address: Codec + Clone + Eq + EncodeLike + Debug + TypeInfo + MaxEncodedLen;
 		/// A means of expressing a call by the hash of its encoded data.
 		type Hash;
 
@@ -340,7 +340,7 @@ pub mod v2 {
 	/// A type that can be used as a scheduler.
 	pub trait Named<BlockNumber, Call, Origin> {
 		/// An address which can be used for removing a scheduled task.
-		type Address: Codec + Clone + Eq + EncodeLike + sp_std::fmt::Debug;
+		type Address: Codec + Clone + Eq + EncodeLike + sp_std::fmt::Debug + MaxEncodedLen;
 		/// A means of expressing a call by the hash of its encoded data.
 		type Hash;
 
