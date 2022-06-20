@@ -1,0 +1,20 @@
+[package]
+name = "deps-check"
+version = "0.1.0"
+edition = "2021"
+authors = ["Parity Technologies <admin@parity.io>"]
+repository = "https://github.com/paritytech/substrate/"
+publish = false
+
+[[bin]]
+path = "src/main.rs"
+name = "deps-check"
+
+[dependencies]
+toml_edit = "0.14"
+anyhow = "1.0"
+thiserror = "1.0"
+structopt = "0.3"
+log = "0.4"
+pretty_env_logger = "0.4"
+walkdir = "2.3"
