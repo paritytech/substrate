@@ -379,7 +379,7 @@ where
 	///
 	/// # Return
 	///
-	/// Returns a future that resolves to a [`Proposal`] or to [`Error`].
+	/// Returns a future that resolves to a [`Proposal`] or to [`sp_blockchain::Error`].
 	pub async fn propose_with(
 		self,
 		inherent_data: InherentData,
