@@ -219,6 +219,7 @@ impl fmt::Debug for OpaqueBlockResponse {
 	}
 }
 
+/// Something that represents the syncing strategy to download past and future blocks of the chain.
 pub trait ChainSync<Block: BlockT>: Send {
 	/// Returns the state of the sync of the given peer.
 	///
@@ -249,7 +250,6 @@ pub trait ChainSync<Block: BlockT>: Send {
 	) -> Result<Option<BlockRequest<Block>>, BadPeer>;
 
 	/// Signal that a new best block has been imported.
-	/// `ChainSync` state with that information.
 	fn update_chain_info(&mut self, best_hash: &Block::Hash, best_number: NumberFor<Block>);
 
 	/// Schedule a justification request for the given block.
@@ -259,7 +259,6 @@ pub trait ChainSync<Block: BlockT>: Send {
 	fn clear_justification_requests(&mut self);
 
 	/// Request syncing for the given block from given set of peers.
-	// The implementation is similar to on_block_announce with unknown parent hash.
 	fn set_sync_fork_request(
 		&mut self,
 		peers: Vec<PeerId>,
@@ -296,8 +295,6 @@ pub trait ChainSync<Block: BlockT>: Send {
 	) -> Result<OnBlockData<Block>, BadPeer>;
 
 	/// Handle a response from the remote to a state request that we made.
-	///
-	/// Returns next request if any.
 	fn on_state_data(
 		&mut self,
 		who: &PeerId,
@@ -305,16 +302,11 @@ pub trait ChainSync<Block: BlockT>: Send {
 	) -> Result<OnStateData<Block>, BadPeer>;
 
 	/// Handle a response from the remote to a warp proof request that we made.
-	///
-	/// Returns next request.
 	fn on_warp_sync_data(&mut self, who: &PeerId, response: EncodedProof) -> Result<(), BadPeer>;
 
 	/// Handle a response from the remote to a justification request that we made.
 	///
 	/// `request` must be the original request that triggered `response`.
-	///
-	/// Returns `Some` if this produces a justification that must be imported
-	/// into the import queue.
 	fn on_block_justification(
 		&mut self,
 		who: PeerId,
@@ -325,8 +317,6 @@ pub trait ChainSync<Block: BlockT>: Send {
 	///
 	/// Call this when a batch of blocks have been processed by the import
 	/// queue, with or without errors.
-	///
-	/// `peer_info` is passed in case of a restart.
 	fn on_blocks_processed(
 		&mut self,
 		imported: usize,
