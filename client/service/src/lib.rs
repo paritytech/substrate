@@ -149,7 +149,7 @@ async fn build_network_future<
 	mut network: sc_network::NetworkWorker<B, H, C>,
 	client: Arc<C>,
 	mut rpc_rx: TracingUnboundedReceiver<sc_rpc::system::Request<B>>,
-	mut mixnet_rx: TracingUnboundedReceiver<sc_rpc::author::SendToMixnet>,
+	mut mixnet_rx: futures::channel::mpsc::Receiver<sc_rpc::author::SendToMixnet>,
 	should_have_peers: bool,
 	announce_imported_blocks: bool,
 ) {

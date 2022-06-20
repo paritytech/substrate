@@ -60,7 +60,6 @@ pub use crate::request_responses::{
 	IfDisconnected, InboundFailure, OutboundFailure, RequestFailure, RequestId, ResponseFailure,
 };
 use mixnet::{MixPeerId, MixnetBehaviour, MixnetEvent};
-use sc_utils::mpsc::TracingUnboundedSender;
 
 /// Command for the mixnet worker.
 pub enum MixnetCommand {
@@ -112,7 +111,7 @@ where
 	mixnet: Toggle<MixnetBehaviour>,
 	/// Mixnet command sender if mixnet is enabled.
 	#[behaviour(ignore)]
-	mixnet_command_sender: Option<TracingUnboundedSender<MixnetCommand>>,
+	mixnet_command_sender: Option<futures::channel::mpsc::Sender<MixnetCommand>>,
 	/// Generic request-response protocols.
 	request_responses: request_responses::RequestResponsesBehaviour,
 
@@ -236,7 +235,7 @@ pub enum BehaviourOut<B: BlockT> {
 		MixPeerId,
 		Vec<u8>,
 		mixnet::MessageType,
-		Option<TracingUnboundedSender<MixnetCommand>>,
+		Option<futures::channel::mpsc::Sender<MixnetCommand>>,
 	),
 }
 
@@ -261,7 +260,7 @@ where
 		state_request_protocol_config: ProtocolConfig,
 		warp_sync_protocol_config: Option<ProtocolConfig>,
 		bitswap: Option<Bitswap<B, Client>>,
-		mixnet: Option<(MixnetBehaviour, TracingUnboundedSender<MixnetCommand>)>,
+		mixnet: Option<(MixnetBehaviour, futures::channel::mpsc::Sender<MixnetCommand>)>,
 		light_client_request_protocol_config: ProtocolConfig,
 		// All remaining request protocol configs.
 		mut request_response_protocols: Vec<ProtocolConfig>,

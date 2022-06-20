@@ -42,7 +42,6 @@ use libp2p::{multiaddr, PeerId};
 use log::{debug, trace, warn};
 use prometheus_endpoint::{register, Counter, PrometheusError, Registry, U64};
 use sc_network_common::config::ProtocolId;
-use sc_utils::mpsc::TracingUnboundedSender;
 use sp_runtime::traits::Block as BlockT;
 use std::{
 	borrow::Cow,
@@ -112,7 +111,8 @@ struct PendingTransaction<H> {
 	#[pin]
 	validation: TransactionImportFuture,
 	tx_hash: H,
-	mixnet: Option<Option<(TracingUnboundedSender<MixnetCommand>, Box<mixnet::SurbsPayload>)>>,
+	mixnet:
+		Option<Option<(futures::channel::mpsc::Sender<MixnetCommand>, Box<mixnet::SurbsPayload>)>>,
 }
 
 impl<H: ExHashT> Future for PendingTransaction<H> {
@@ -252,7 +252,7 @@ impl<H: ExHashT> TransactionsHandlerController<H> {
 		&self,
 		kind: mixnet::MessageType,
 		data: Vec<u8>,
-		reply: Option<TracingUnboundedSender<MixnetCommand>>,
+		reply: Option<futures::channel::mpsc::Sender<MixnetCommand>>,
 	) {
 		let _ = self
 			.to_handler
@@ -267,7 +267,7 @@ enum ToHandler<H: ExHashT> {
 	InjectTransactionMixnet(
 		mixnet::MessageType,
 		Vec<u8>,
-		Option<TracingUnboundedSender<MixnetCommand>>,
+		Option<futures::channel::mpsc::Sender<MixnetCommand>>,
 	),
 }
 
@@ -419,7 +419,7 @@ impl<B: BlockT + 'static, H: ExHashT> TransactionsHandler<B, H> {
 		&mut self,
 		kind: mixnet::MessageType,
 		transactions: Vec<u8>,
-		reply: Option<TracingUnboundedSender<MixnetCommand>>,
+		reply: Option<futures::channel::mpsc::Sender<MixnetCommand>>,
 	) {
 		if let Ok(transactions) =
 			<message::Transactions<B::Extrinsic> as Decode>::decode(&mut transactions.as_ref())

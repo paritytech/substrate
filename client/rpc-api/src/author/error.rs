@@ -59,8 +59,6 @@ pub enum Error {
 	Mixnet(String),
 }
 
-//TODO consider removing network error in favor of mixnet one.
-
 /// Base code for all authorship errors.
 const BASE_ERROR: i32 = 1000;
 /// Extrinsic has an invalid format.

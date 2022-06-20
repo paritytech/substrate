@@ -34,7 +34,7 @@ use futures_timer::Delay;
 use log::{debug, error, trace, warn};
 use sc_client_api::{BlockchainEvents, FinalityNotification, UsageProvider};
 use sc_network::{MixnetCommand, PeerId};
-use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
+use sc_utils::mpsc::tracing_unbounded;
 use sp_api::ProvideRuntimeApi;
 use sp_core::crypto::CryptoTypePublicPair;
 pub use sp_finality_grandpa::{AuthorityId, AuthorityList, SetId};
@@ -48,6 +48,9 @@ use std::{
 
 // Minimal number of node for accepting to add new message.
 const LOW_MIXNET_THRESHOLD: usize = 5;
+
+// Buffer size for mixnet command channel.
+const COMMAND_BUFFER_SIZE: usize = 25;
 
 /// Number of blocks before seen as synched
 /// (do not turn mixnet off every time we are a few block late).
@@ -72,12 +75,12 @@ pub struct MixnetWorker<B: BlockT, C> {
 	client: Arc<C>,
 	state: State,
 	// External command.
-	command_stream: TracingUnboundedReceiver<MixnetCommand>,
+	command_stream: futures::channel::mpsc::Receiver<MixnetCommand>,
 	key_store: Arc<dyn SyncCryptoStore>,
 	default_limit_config: Option<usize>,
 }
 
-type WorkerChannels = (mixnet::WorkerChannels, TracingUnboundedReceiver<MixnetCommand>);
+type WorkerChannels = (mixnet::WorkerChannels, futures::channel::mpsc::Receiver<MixnetCommand>);
 
 #[derive(PartialEq, Eq)]
 enum State {
@@ -88,10 +91,11 @@ enum State {
 
 /// Instantiate channels needed to spawn and communicate with the mixnet worker.
 pub fn new_channels(
-) -> (WorkerChannels, (SinkToWorker, StreamFromWorker, TracingUnboundedSender<MixnetCommand>)) {
+) -> (WorkerChannels, (SinkToWorker, StreamFromWorker, futures::channel::mpsc::Sender<MixnetCommand>))
+{
 	let (to_worker_sink, to_worker_stream) = tracing_unbounded("mpsc_mixnet_in");
 	let (from_worker_sink, from_worker_stream) = tracing_unbounded("mpsc_mixnet_out");
-	let (command_sink, command_stream) = tracing_unbounded("mpsc_mixnet_commands");
+	let (command_sink, command_stream) = futures::channel::mpsc::channel(COMMAND_BUFFER_SIZE);
 	(
 		((Box::new(from_worker_sink), Box::new(to_worker_stream)), command_stream),
 		(Box::new(to_worker_sink), Box::new(from_worker_stream), command_sink),

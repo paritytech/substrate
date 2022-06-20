@@ -31,12 +31,12 @@ use jsonrpsee::{
 	core::{async_trait, Error as JsonRpseeError, RpcResult},
 	PendingSubscription,
 };
+use parking_lot::Mutex;
 use sc_rpc_api::DenyUnsafe;
 use sc_transaction_pool_api::{
 	error::IntoPoolError, BlockHash, InPoolTransaction, TransactionFor, TransactionPool,
 	TransactionSource, TxHash,
 };
-use sc_utils::mpsc::TracingUnboundedSender;
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
 use sp_core::Bytes;
@@ -47,6 +47,9 @@ use sp_session::SessionKeys;
 use self::error::{Error, Result};
 /// Re-export the API for backward compatibility.
 pub use sc_rpc_api::author::*;
+
+/// Limit for mixnet concurrent rpc calls.
+pub const LIMIT_MIXNET_QUERY_QUEUE: usize = 1;
 
 /// Submit transaction to the mix network. TODO these request are query request, probably
 /// somewhere else for SendToMixnet
@@ -74,8 +77,9 @@ pub struct Author<P: TransactionPool + Sync + Send + 'static, Client> {
 	deny_unsafe: DenyUnsafe,
 	/// Executor to spawn subscriptions.
 	executor: SubscriptionTaskExecutor,
-	/// TODO just direct access to the worker to have replies in a non asynch way.
-	mixnet: TracingUnboundedSender<SendToMixnet>,
+	/// Forward query to mixnet, this is limited to `LIMIT_MIXNET_QUERY_QUEUE`
+	/// concurrent queries.;
+	mixnet: Arc<Mutex<futures::channel::mpsc::Sender<SendToMixnet>>>,
 }
 
 impl<P, Client> Author<P, Client>
@@ -87,10 +91,11 @@ where
 		client: Arc<Client>,
 		pool: Arc<P>,
 		keystore: SyncCryptoStorePtr,
-		mixnet: TracingUnboundedSender<SendToMixnet>,
+		mixnet: futures::channel::mpsc::Sender<SendToMixnet>,
 		deny_unsafe: DenyUnsafe,
 		executor: SubscriptionTaskExecutor,
 	) -> Self {
+		let mixnet = Arc::new(Mutex::new(mixnet));
 		Author { client, pool, keystore, mixnet, deny_unsafe, executor }
 	}
 }
@@ -131,12 +136,17 @@ where
 	async fn mix_extrinsic(&self, ext: Bytes, num_hop: usize, reply: bool) -> RpcResult<()> {
 		log::debug!(target: "mixnet", "Extrinsic for mixnet of len {}, {} hop and reply {}", ext.len(), num_hop, reply);
 		let (tx, rx) = oneshot::channel();
-		let _ = self.mixnet.unbounded_send(SendToMixnet {
-			message: ext.to_vec(),
-			num_hop,
-			surbs_reply: reply,
-			reply: tx,
-		});
+		{
+			let mut mixnet = self.mixnet.lock();
+			if let Err(e) = mixnet.start_send(SendToMixnet {
+				message: ext.to_vec(),
+				num_hop,
+				surbs_reply: reply,
+				reply: tx,
+			}) {
+				return Err(Error::Mixnet(format!("{}", e)).into())
+			}
+		}
 		match rx.await {
 			Ok(Ok(())) => Ok(()),
 			Ok(Err(e)) => Err(Error::Mixnet(format!("{}", e)).into()),

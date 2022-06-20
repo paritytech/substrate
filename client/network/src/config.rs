@@ -46,7 +46,6 @@ use libp2p::{
 };
 use prometheus_endpoint::Registry;
 use sc_consensus::ImportQueue;
-use sc_utils::mpsc::TracingUnboundedSender;
 use sp_consensus::block_validation::BlockAnnounceValidator;
 use sp_runtime::traits::Block as BlockT;
 use std::{
@@ -145,7 +144,7 @@ where
 	pub mixnet: Option<(
 		mixnet::SinkToWorker,
 		mixnet::StreamFromWorker,
-		TracingUnboundedSender<crate::MixnetCommand>,
+		futures::channel::mpsc::Sender<crate::MixnetCommand>,
 	)>,
 }
 

@@ -46,7 +46,7 @@ use sc_network::{
 	NetworkService,
 };
 use sc_rpc::{
-	author::AuthorApiServer,
+	author::{AuthorApiServer, LIMIT_MIXNET_QUERY_QUEUE},
 	chain::ChainApiServer,
 	offchain::OffchainApiServer,
 	state::{ChildStateApiServer, StateApiServer},
@@ -341,8 +341,8 @@ pub struct SpawnTasksParams<'a, TBl: BlockT, TCl, TExPool, TRpc, Backend> {
 	pub network: Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
 	/// A Sender for RPC requests.
 	pub system_rpc_tx: TracingUnboundedSender<sc_rpc::system::Request<TBl>>,
-	/// A Sender for mixnet message. TODO remove rpc from name and move type somewhere else.
-	pub mixnet_tx: TracingUnboundedSender<sc_rpc::author::SendToMixnet>,
+	/// A Sender for mixnet message.
+	pub mixnet_tx: futures::channel::mpsc::Sender<sc_rpc::author::SendToMixnet>,
 	/// Telemetry instance for this node.
 	pub telemetry: Option<&'a mut Telemetry>,
 }
@@ -587,7 +587,7 @@ fn gen_rpc_module<TBl, TBackend, TCl, TRpc, TExPool>(
 	transaction_pool: Arc<TExPool>,
 	keystore: SyncCryptoStorePtr,
 	system_rpc_tx: TracingUnboundedSender<sc_rpc::system::Request<TBl>>,
-	mixnet_tx: TracingUnboundedSender<sc_rpc::author::SendToMixnet>,
+	mixnet_tx: futures::channel::mpsc::Sender<sc_rpc::author::SendToMixnet>,
 	config: &Configuration,
 	offchain_storage: Option<<TBackend as sc_client_api::backend::Backend<TBl>>::OffchainStorage>,
 	rpc_builder: &(dyn Fn(DenyUnsafe, SubscriptionTaskExecutor) -> Result<RpcModule<TRpc>, Error>),
@@ -689,7 +689,7 @@ pub struct BuildNetworkParams<'a, TBl: BlockT, TExPool, TImpQu, TCl> {
 	pub mixnet: Option<(
 		sc_mixnet::SinkToWorker,
 		sc_mixnet::StreamFromWorker,
-		TracingUnboundedSender<sc_network::MixnetCommand>,
+		futures::channel::mpsc::Sender<sc_network::MixnetCommand>,
 	)>,
 }
 
@@ -700,7 +700,7 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 	(
 		Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
 		TracingUnboundedSender<sc_rpc::system::Request<TBl>>,
-		TracingUnboundedSender<sc_rpc::author::SendToMixnet>,
+		futures::channel::mpsc::Sender<sc_rpc::author::SendToMixnet>,
 		NetworkStarter,
 	),
 	Error,
@@ -849,7 +849,7 @@ where
 	let network = network_mut.service().clone();
 
 	let (system_rpc_tx, system_rpc_rx) = tracing_unbounded("mpsc_system_rpc");
-	let (mixnet_tx, mixnet_rx) = tracing_unbounded("mpsc_mixnet");
+	let (mixnet_tx, mixnet_rx) = futures::channel::mpsc::channel(LIMIT_MIXNET_QUERY_QUEUE);
 
 	let future = build_network_future(
 		config.role.clone(),
