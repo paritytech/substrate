@@ -126,7 +126,7 @@ use sp_inherents::{CreateInherentDataProviders, InherentData, InherentDataProvid
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::{
 	generic::{BlockId, OpaqueDigestItemId},
-	traits::{Block as BlockT, Header, NumberFor, One, SaturatedConversion, Saturating, Zero},
+	traits::{Block as BlockT, Header, NumberFor, SaturatedConversion, Saturating, Zero},
 	DigestItem,
 };
 
@@ -1875,13 +1875,10 @@ where
 	let finalized = client.info().finalized_number;
 	let revertible = blocks.min(best_number - finalized);
 
-	let number = best_number - revertible;
-	let hash = client
-		.block_hash_from_id(&BlockId::Number(number))?
-		.ok_or(ClientError::Backend(format!(
-			"Unexpected hash lookup failure for block number: {}",
-			number
-		)))?;
+	let revert_up_to_number = best_number - revertible;
+	let revert_up_to_hash = client.hash(revert_up_to_number)?.ok_or(ClientError::Backend(
+		format!("Unexpected hash lookup failure for block number: {}", revert_up_to_number),
+	))?;
 
 	// Revert epoch changes tree.
 
@@ -1890,34 +1887,37 @@ where
 		aux_schema::load_epoch_changes::<Block, Client>(&*client, config.genesis_config())?;
 	let mut epoch_changes = epoch_changes.shared_data();
 
-	if number == Zero::zero() {
+	if revert_up_to_number == Zero::zero() {
 		// Special case, no epoch changes data were present on genesis.
 		*epoch_changes = EpochChangesFor::<Block, Epoch>::default();
 	} else {
-		epoch_changes.revert(descendent_query(&*client), hash, number);
+		epoch_changes.revert(descendent_query(&*client), revert_up_to_hash, revert_up_to_number);
 	}
 
 	// Remove block weights added after the revert point.
 
 	let mut weight_keys = HashSet::with_capacity(revertible.saturated_into());
+
 	let leaves = backend.blockchain().leaves()?.into_iter().filter(|&leaf| {
-		sp_blockchain::tree_route(&*client, hash, leaf)
+		sp_blockchain::tree_route(&*client, revert_up_to_hash, leaf)
 			.map(|route| route.retracted().is_empty())
 			.unwrap_or_default()
 	});
+
 	for leaf in leaves {
 		let mut hash = leaf;
-		// Insert parent after parent until we don't hit an already processed
-		// branch or we reach a direct child of the rollback point.
-		while weight_keys.insert(aux_schema::block_weight_key(hash)) {
+		loop {
 			let meta = client.header_metadata(hash)?;
-			if meta.number <= number + One::one() {
-				// We've reached a child of the revert point, stop here.
+			if meta.number <= revert_up_to_number ||
+				!weight_keys.insert(aux_schema::block_weight_key(hash))
+			{
+				// We've reached the revert point or an already processed branch, stop here.
 				break
 			}
-			hash = client.header_metadata(hash)?.parent;
+			hash = meta.parent;
 		}
 	}
+
 	let weight_keys: Vec<_> = weight_keys.iter().map(|val| val.as_slice()).collect();
 
 	// Write epoch changes and remove weights in one shot.
