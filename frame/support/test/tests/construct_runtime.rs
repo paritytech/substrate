@@ -21,6 +21,7 @@
 
 #![recursion_limit = "128"]
 
+use codec::MaxEncodedLen;
 use frame_support::traits::{CrateVersion, PalletInfo as _};
 use scale_info::TypeInfo;
 use sp_core::{sr25519, H256};
@@ -55,7 +56,9 @@ mod module1 {
 		}
 	}
 
-	#[derive(Clone, PartialEq, Eq, Debug, codec::Encode, codec::Decode, TypeInfo)]
+	#[derive(
+		Clone, PartialEq, Eq, Debug, codec::Encode, codec::Decode, TypeInfo, MaxEncodedLen,
+	)]
 	pub struct Origin<T, I: Instance = DefaultInstance>(pub core::marker::PhantomData<(T, I)>);
 
 	frame_support::decl_event! {
@@ -97,7 +100,9 @@ mod module2 {
 		}
 	}
 
-	#[derive(Clone, PartialEq, Eq, Debug, codec::Encode, codec::Decode, TypeInfo)]
+	#[derive(
+		Clone, PartialEq, Eq, Debug, codec::Encode, codec::Decode, TypeInfo, MaxEncodedLen,
+	)]
 	pub struct Origin;
 
 	frame_support::decl_event! {
@@ -140,7 +145,9 @@ mod nested {
 			}
 		}
 
-		#[derive(Clone, PartialEq, Eq, Debug, codec::Encode, codec::Decode, TypeInfo)]
+		#[derive(
+			Clone, PartialEq, Eq, Debug, codec::Encode, codec::Decode, TypeInfo, MaxEncodedLen,
+		)]
 		pub struct Origin;
 
 		frame_support::decl_event! {
@@ -196,7 +203,9 @@ pub mod module3 {
 		}
 	}
 
-	#[derive(Clone, PartialEq, Eq, Debug, codec::Encode, codec::Decode, TypeInfo)]
+	#[derive(
+		Clone, PartialEq, Eq, Debug, codec::Encode, codec::Decode, TypeInfo, MaxEncodedLen,
+	)]
 	pub struct Origin<T>(pub core::marker::PhantomData<T>);
 
 	frame_support::decl_event! {
