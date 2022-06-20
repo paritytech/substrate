@@ -481,12 +481,12 @@ where
 				},
 			State::WaitingMorePeers =>
 				if self.worker.mixnet().topology.has_enough_nodes() {
-					debug!(target: "mixnet", "Running.");
+					debug!(target: "mixnet", "Mixnet running.");
 					self.state = State::Running;
 				},
 			State::Synching if synched =>
 				if self.worker.mixnet().topology.has_enough_nodes() {
-					debug!(target: "mixnet", "Running.");
+					debug!(target: "mixnet", "Mixnet running.");
 					self.state = State::Running;
 				} else {
 					self.state = State::WaitingMorePeers;

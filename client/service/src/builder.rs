@@ -685,7 +685,6 @@ pub struct BuildNetworkParams<'a, TBl: BlockT, TExPool, TImpQu, TCl> {
 	/// An optional warp sync provider.
 	pub warp_sync: Option<Arc<dyn WarpSyncProvider<TBl>>>,
 	/// Mixnet worker access if running.
-	/// TODO type instead of tuple.
 	pub mixnet: Option<(
 		sc_mixnet::SinkToWorker,
 		sc_mixnet::StreamFromWorker,
