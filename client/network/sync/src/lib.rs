@@ -1542,11 +1542,7 @@ where
 			!target.peers.is_empty()
 		});
 		let blocks = self.drain_blocks();
-		if !blocks.is_empty() {
-			Some(self.validate_and_queue_blocks(blocks, false))
-		} else {
-			None
-		}
+		(!blocks.is_empty()).then(|| self.validate_and_queue_blocks(blocks, false))
 	}
 
 	fn metrics(&self) -> Metrics {
