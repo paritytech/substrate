@@ -191,6 +191,7 @@ where
 	C::Api:
 		ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>> + BlockBuilderApi<Block>,
 {
+	/// Initialize the proposal logic with a callable now time function a on top of a specific parent header.
 	pub fn init_with_now(
 		&mut self,
 		parent_header: &<Block as BlockT>::Header,
@@ -198,7 +199,7 @@ where
 	) -> Proposer<B, Block, C, A, PR> {
 		let parent_hash = parent_header.hash();
 
-		let id = BlockId::hash(parent_hash);
+		let parent_id = BlockId::hash(parent_hash);
 
 		info!("🙌 Starting consensus session on top of parent {:?}", parent_hash);
 
@@ -206,7 +207,7 @@ where
 			spawn_handle: self.spawn_handle.clone(),
 			client: self.client.clone(),
 			parent_hash,
-			parent_id: id,
+			parent_id,
 			parent_number: *parent_header.number(),
 			transaction_pool: self.transaction_pool.clone(),
 			now,
@@ -214,8 +215,8 @@ where
 			default_block_size_limit: self.default_block_size_limit,
 			soft_deadline_percent: self.soft_deadline_percent,
 			telemetry: self.telemetry.clone(),
-			_phantom: PhantomData,
 			include_proof_in_block_size_estimation: self.include_proof_in_block_size_estimation,
+			_phantom: PhantomData,
 		};
 
 		proposer
@@ -248,18 +249,37 @@ where
 
 /// The proposer logic.
 pub struct Proposer<B, Block: BlockT, C, A: TransactionPool, PR> {
-	spawn_handle: Box<dyn SpawnNamed>,
-	client: Arc<C>,
-	parent_hash: <Block as BlockT>::Hash,
-	parent_id: BlockId<Block>,
-	parent_number: <<Block as BlockT>::Header as HeaderT>::Number,
-	transaction_pool: Arc<A>,
-	now: Box<dyn Fn() -> time::Instant + Send + Sync>,
-	metrics: PrometheusMetrics,
-	default_block_size_limit: usize,
-	include_proof_in_block_size_estimation: bool,
-	soft_deadline_percent: Percent,
-	telemetry: Option<TelemetryHandle>,
+	pub spawn_handle: Box<dyn SpawnNamed>,
+	/// The client instance.
+	pub client: Arc<C>,
+	/// The block hash of parent block.
+	pub parent_hash: <Block as BlockT>::Hash,
+	/// The block id of parent block.
+	pub parent_id: BlockId<Block>,
+	/// The number of parent block.
+	pub parent_number: <<Block as BlockT>::Header as HeaderT>::Number,
+	/// The transaction pool.
+	pub transaction_pool: Arc<A>,
+	pub now: Box<dyn Fn() -> time::Instant + Send + Sync>,
+	/// Prometheus Link,
+	pub metrics: PrometheusMetrics,
+	/// The default block size limit.
+	///
+	/// If no `block_size_limit` is passed to [`sp_consensus::Proposer::propose`], this block size
+	/// limit will be used.
+	pub default_block_size_limit: usize,
+	/// When estimating the block size, should the proof be included?
+	pub include_proof_in_block_size_estimation: bool,
+	/// Soft deadline percentage of hard deadline.
+	///
+	/// The value is used to compute soft deadline during block production.
+	/// The soft deadline indicates where we should stop attempting to add transactions
+	/// to the block, which exhaust resources. After soft deadline is reached,
+	/// we switch to a fixed-amount mode, in which after we see `MAX_SKIPPED_TRANSACTIONS`
+	/// transactions which exhaust resources, we will conclude that the block is full.
+	pub soft_deadline_percent: Percent,
+	pub telemetry: Option<TelemetryHandle>,
+	/// phantom member to pin the `Backend`/`ProofRecording` type.
 	_phantom: PhantomData<(B, PR)>,
 }
 
@@ -303,7 +323,7 @@ where
 			"basic-authorship-proposer",
 			None,
 			Box::pin(async move {
-				// leave some time for evaluation and block finalization (33%)
+				/// leave some time for evaluation and block finalization (33%).
 				let deadline = (self.now)() + max_duration - max_duration / 3;
 				let res = self
 					.propose_with(inherent_data, inherent_digests, deadline, block_size_limit)
@@ -350,6 +370,23 @@ where
 		ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>> + BlockBuilderApi<Block>,
 	PR: ProofRecording,
 {
+
+	/// Create a proposal.
+	///
+	/// Gets the `inherent_data` and `inherent_digests` as input for the proposal. Additionally
+	/// a maximum duration for building this proposal is given. If building the proposal takes
+	/// longer than this maximum, the proposal will be very likely discarded.
+	///
+	/// If `block_size_limit` is given, the proposer should push transactions until the block size
+	/// limit is hit. Depending on the `finalize_block` implementation of the runtime, it probably
+	/// incorporates other operations (that are happening after the block limit is hit). So,
+	/// when the block size estimation also includes a proof that is recorded alongside the block
+	/// production, the proof can still grow. This means that the `block_size_limit` should not be
+	/// the hard limit of what is actually allowed.
+	///
+	/// # Return
+	///
+	/// Returns a future that resolves to a [`Proposal`] or to [`Error`].
 	pub async fn propose_with(
 		self,
 		inherent_data: InherentData,
