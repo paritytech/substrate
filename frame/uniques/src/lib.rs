@@ -237,16 +237,12 @@ pub mod pallet {
 		OptionQuery,
 	>;
 	
-	//TODO  classes: free_holding is_frozen ????
-	//TODO: classes_metadata: deposit, is_frozen???
-	//TODO: instances ???
-	//TODO: instances_metadata ???
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
-		/// Genesis assets clases: class, owner, issuer, admin, freezer  
-		pub classes: Vec<(T::ClassId, T::AccountId, T::AccountId, T::AccountId, T::AccountId)>,
-		/// Genesis assets clases instances: instance, owner, approved, is_frozen, deposit
-		pub instances: Vec<(T::InstanceId, T::AccountId, Option<T::AccountId>, bool, DepositBalanceOf<T, I>)>,
+		/// Genesis assets clases: class, owner, admin, deposit, free_holding
+		pub classes: Vec<(T::ClassId, T::AccountId, T::AccountId, DepositBalanceOf<T, I>, bool)>,
+		/// Genesis assets clases instances: class, instance, owner
+		pub instances: Vec<(T::ClassId, T::InstanceId, T::AccountId)>,
 		/// Genesis assets clases metadata: class, deposit, data, is_frozen
 		pub classes_metadata: Vec<(T::ClassId, DepositBalanceOf<T, I>, Vec<u8>, bool)>,
 		/// Genesis assets clases attributes: class, key, value
@@ -274,61 +270,41 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I> {
 		fn build(&self) {
-			for item in self.classes {
-				let deposit = todo!();
-				let details = ClassDetails { 
-					owner: item.1, 
-					issuer: item.2, 
-					admin: item.3, 
-					freezer: item.4, 
-					total_deposit: 0, 
-					free_holding: todo!(), 
-					instances: 0, 
-					instance_metadatas: 0, 
-					attributes: 0, 
-					is_frozen: todo!(),
-				};
-				assert!(Class::<T, I>::contains_key(item.0), "duplicate class {:?} definition", item.0);
-				
-				T::Currency::reserve(&item.1, deposit)
-					.expect(format!("can't reserve currency from owner accout {}", item.1).as_str());
-				Class::<T, I>::insert(&item.0, details);
-				ClassAccount::<T, I>::insert(&item.1, &item.0, ());
+			for item in self.classes { 
+				Pallet::<T, I>::do_create_class(
+					item.0,
+					item.1,
+					item.2,
+					item.3,
+					item.4,
+					Event::Created { class: item.0, creator: (), owner: item.1}
+				)
+					.expect("can't create class");
 			}
 
 			for item in self.instances {
-
+				Pallet::<T, I>::do_mint(item.0, item.1, item.2, |_|Ok(()))
+					.expect("can't mint instance");
 			}
 
 			for item in self.classes_metadata {
-
+				Pallet::<T, I>::try_set_metadata(&item.0, &item.1, &item.2, item.3)
+					.expect("can't set class metadata");
 			}
 
 			for item in self.classes_attributes {
-
+				Pallet::<T, I>::try_set_attribute(&item.0, &None, item.1, item.2)
+					.expect("can't set class attribute");
 			}
 
 			for item in self.instances_metadata {
-
+				Pallet::<T, I>::try_set_metadata(&item.0, &item.1, &item.2, item.3)
+					.expect("can't set instance metadata");
 			}
 
-			// for (class, atribs) in self.instance_attributes {
-			// 	assert!(Class::<T, I>::contains_key(class), "class {:?} not found", class);
-				
-			// 	for (instance, key, value) in atribs {
-			// 		assert!(, "instanst {} from class {}", class);
-				
-			// 		Attribute::<T, I>::insert((&class, Some(instance), key), (value, deposit));
-			// 		Class::<T, I>::insert(class, &class_details);
-			// 	}
-			// }
-
 			for item in self.instance_attributes {
-
-				Attribute::<T, I>::insert((&class, maybe_instance, &key), (&value, deposit));
-				Class::<T, I>::try_mutate(item.0, |class| {
-					class.
-				});
+				Pallet::<T, I>::try_set_attribute(&item.0, &Some(item.1), item.2, item.3)
+					.expect("can't set instance attribute");
 			}
 		}
 	}
@@ -1104,23 +1080,21 @@ pub mod pallet {
 			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
-
+			
+			// Проверяем совпадает ли владелец 
 			let mut class_details =
 				Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
-			if let Some(check_owner) = &maybe_check_owner {
-				ensure!(check_owner == &class_details.owner, Error::<T, I>::NoPermission);
-			}
-			let maybe_is_frozen = match maybe_instance {
-				None => ClassMetadataOf::<T, I>::get(class).map(|v| v.is_frozen),
-				Some(instance) =>
-					InstanceMetadataOf::<T, I>::get(class, instance).map(|v| v.is_frozen),
-			};
-			ensure!(!maybe_is_frozen.unwrap_or(false), Error::<T, I>::Frozen);
+			
+			Self::is_class_owner(&maybe_check_owner, &class_details)?;
+			Self::is_unfrozen(&class, &maybe_instance);
 
+			// Если класс не имеет атрибуета по заданному ключу, увеличиваем счетчик колличества атрибутов
 			let attribute = Attribute::<T, I>::get((class, maybe_instance, &key));
 			if attribute.is_none() {
 				class_details.attributes.saturating_inc();
 			}
+
+			// Депонирование недостаюших средств
 			let old_deposit = attribute.map_or(Zero::zero(), |m| m.1);
 			class_details.total_deposit.saturating_reduce(old_deposit);
 			let mut deposit = Zero::zero();
@@ -1169,16 +1143,10 @@ pub mod pallet {
 
 			let mut class_details =
 				Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
-			if let Some(check_owner) = &maybe_check_owner {
-				ensure!(check_owner == &class_details.owner, Error::<T, I>::NoPermission);
-			}
-			let maybe_is_frozen = match maybe_instance {
-				None => ClassMetadataOf::<T, I>::get(class).map(|v| v.is_frozen),
-				Some(instance) =>
-					InstanceMetadataOf::<T, I>::get(class, instance).map(|v| v.is_frozen),
-			};
-			ensure!(!maybe_is_frozen.unwrap_or(false), Error::<T, I>::Frozen);
-
+			
+			Self::is_class_owner(&maybe_check_owner, &class_details)?;
+			Self::is_unfrozen(&class,&maybe_instance)?;
+		
 			if let Some((_, deposit)) = Attribute::<T, I>::take((class, maybe_instance, &key)) {
 				class_details.attributes.saturating_dec();
 				class_details.total_deposit.saturating_reduce(deposit);
@@ -1221,9 +1189,7 @@ pub mod pallet {
 			let mut class_details =
 				Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
 
-			if let Some(check_owner) = &maybe_check_owner {
-				ensure!(check_owner == &class_details.owner, Error::<T, I>::NoPermission);
-			}
+			Self::is_class_owner(&maybe_check_owner, &class_details)?;
 
 			InstanceMetadataOf::<T, I>::try_mutate_exists(class, instance, |metadata| {
 				let was_frozen = metadata.as_ref().map_or(false, |m| m.is_frozen);
@@ -1280,9 +1246,8 @@ pub mod pallet {
 
 			let mut class_details =
 				Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
-			if let Some(check_owner) = &maybe_check_owner {
-				ensure!(check_owner == &class_details.owner, Error::<T, I>::NoPermission);
-			}
+			
+			Self::is_class_owner(&maybe_check_owner, &class_details)?;
 
 			InstanceMetadataOf::<T, I>::try_mutate_exists(class, instance, |metadata| {
 				let was_frozen = metadata.as_ref().map_or(false, |m| m.is_frozen);
@@ -1329,9 +1294,8 @@ pub mod pallet {
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
 
 			let mut details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
-			if let Some(check_owner) = &maybe_check_owner {
-				ensure!(check_owner == &details.owner, Error::<T, I>::NoPermission);
-			}
+			
+			Self::is_class_owner(&maybe_check_owner, &details)?;
 
 			ClassMetadataOf::<T, I>::try_mutate_exists(class, |metadata| {
 				let was_frozen = metadata.as_ref().map_or(false, |m| m.is_frozen);
@@ -1380,9 +1344,7 @@ pub mod pallet {
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
 
 			let details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
-			if let Some(check_owner) = &maybe_check_owner {
-				ensure!(check_owner == &details.owner, Error::<T, I>::NoPermission);
-			}
+			Self::is_class_owner(&maybe_check_owner, &details)?;
 
 			ClassMetadataOf::<T, I>::try_mutate_exists(class, |metadata| {
 				let was_frozen = metadata.as_ref().map_or(false, |m| m.is_frozen);
@@ -1427,6 +1389,69 @@ pub mod pallet {
 				OwnershipAcceptance::<T, I>::remove(&who);
 			}
 			Self::deposit_event(Event::OwnershipAcceptanceChanged { who, maybe_class });
+			Ok(())
+		}
+	}
+
+	impl<T: Config<I>, I: 'static> Pallet<T, I> {
+		fn is_class_owner(
+			maybe_check_owner: &Option<T::AccountId>,
+			class_details: &ClassDetails<T::AccountId, DepositBalanceOf<T, I>>
+		) -> DispatchResult {
+			if let Some(check_owner) = &maybe_check_owner {
+				ensure!(check_owner == &class_details.owner, Error::<T, I>::NoPermission);
+			}
+
+			Ok(())
+		}
+		
+		fn is_unfrozen(
+			class: &T::ClassId,
+			maybe_instance: &Option<T::InstanceId>,
+		) -> DispatchResult {
+			let maybe_is_frozen = match maybe_instance {
+				None => ClassMetadataOf::<T, I>::get(class).map(|v| v.is_frozen),
+				Some(instance) =>
+					InstanceMetadataOf::<T, I>::get(class, instance).map(|v| v.is_frozen),
+			};
+			ensure!(!maybe_is_frozen.unwrap_or(false), Error::<T, I>::Frozen);
+
+			Ok(())
+		}
+
+		fn try_set_metadata(
+			class: &T::ClassId,
+			deposit: &DepositBalanceOf<T, I>, 
+			data: &Vec<u8>, 
+			is_frozen: bool,
+		) -> DispatchResult {
+			todo!()
+		}
+
+		fn try_set_attribute(
+			class: &T::ClassId,
+			maybe_instance: &Option<T::InstanceId>,
+			key: &BoundedVec<u8, T::KeyLimit>,
+			value: &BoundedVec<u8, T::ValueLimit>,
+		) -> DispatchResult {
+			// Если класс сушествует, обновляем метаданные класса и устанавливаем/обновляем атрибут 
+			Class::<T, I>::mutate_exists(class, |opt_class_details|{
+				match opt_class_details {
+					Some(class_details) => {
+						let attribute = Attribute::<T, I>::get((class, maybe_instance, &key));
+						// Если класс не имеет атрибуета по заданному ключу, увеличиваем счетчик колличества атрибутов
+						if attribute.is_none() {
+							class_details.attributes.saturating_inc();
+						}
+
+						let mut deposit = Attribute::<T, I>::get((class, maybe_instance, &key)).map_or(Zero::zero(), |m| m.1);
+						// Устанавливаем значение атрибута 
+						Attribute::<T, I>::insert((&class, maybe_instance, &key), (&value, deposit));
+						Ok(())
+					},
+					None => Err(Error::<T, I>::UnknownClass),
+   				}
+			})?;
 			Ok(())
 		}
 	}
