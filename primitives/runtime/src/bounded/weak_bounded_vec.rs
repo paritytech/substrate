@@ -78,19 +78,24 @@ where
 					Err(_) => return Err(A::Error::custom("can't convert to usize")),
 				};
 				if size > max {
-					Err(A::Error::custom("out of bounds"))
-				} else {
-					let mut values = Vec::with_capacity(size);
-
-					while let Some(value) = seq.next_element()? {
-						values.push(value);
-						if values.len() > max {
-							return Err(A::Error::custom("out of bounds"))
-						}
-					}
-
-					Ok(values)
+					log::warn!(
+						target: "runtime",
+						"length of a bounded vector while deserializing is not respected.",
+					);
 				}
+				let mut values = Vec::with_capacity(size);
+
+				while let Some(value) = seq.next_element()? {
+					values.push(value);
+					if values.len() > max {
+						log::warn!(
+							target: "runtime",
+							"length of a bounded vector while deserializing is not respected.",
+						);
+					}
+				}
+
+				Ok(values)
 			}
 		}
 
