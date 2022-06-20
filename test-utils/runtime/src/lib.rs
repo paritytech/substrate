@@ -36,7 +36,7 @@ use cfg_if::cfg_if;
 use frame_support::{
 	dispatch::RawOrigin,
 	parameter_types,
-	traits::{ConstU32, ConstU64, CrateVersion, KeyOwnerProofSystem},
+	traits::{ConstU32, ConstU64, CrateVersion, KeyOwnerProofSystem, CallerTrait},
 	weights::RuntimeDbWeight,
 };
 use frame_system::limits::{BlockLength, BlockWeights};
@@ -443,6 +443,16 @@ impl GetRuntimeBlockType for Runtime {
 #[derive(Clone, RuntimeDebug, Encode, Decode, PartialEq, Eq, TypeInfo, MaxEncodedLen)]
 pub struct Origin;
 
+impl CallerTrait<AccountId> for Origin {
+	fn into_system(self) -> Option<RawOrigin<AccountId>> {
+		unimplemented!("Not required in tests!")
+	}
+
+	fn as_system_ref(&self) -> Option<&RawOrigin<AccountId>> {
+		unimplemented!("Not required in tests!")
+	}
+}
+
 impl From<frame_system::Origin<Runtime>> for Origin {
 	fn from(_o: frame_system::Origin<Runtime>) -> Self {
 		unimplemented!("Not required in tests!")
@@ -502,7 +512,7 @@ impl frame_support::traits::OriginTrait for Origin {
 	fn as_signed(self) -> Option<Self::AccountId> {
 		unimplemented!("Not required in tests!")
 	}
-	fn as_system_ref(&self) -> Option<&RawOrigin> {
+	fn as_system_ref(&self) -> Option<&RawOrigin<Self::AccountId>> {
 		unimplemented!("Not required in tests!")
 	}
 }

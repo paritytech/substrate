@@ -234,13 +234,13 @@ pub fn expand_outer_origin(
 		}
 
 		impl #scrate::traits::CallerTrait<<#runtime as #system_path::Config>::AccountId> for OriginCaller {
-			fn into_system(self) -> Option<RawOrigin<<#runtime as #system_path::Config>::AccountId>> {
+			fn into_system(self) -> Option<#system_path::RawOrigin<<#runtime as #system_path::Config>::AccountId>> {
 				match self {
 					OriginCaller::system(x) => Some(x),
 					_ => None,
 				}
 			}
-			fn as_system_ref(&self) -> Option<&RawOrigin<<#runtime as #system_path::Config>::AccountId>> {
+			fn as_system_ref(&self) -> Option<&#system_path::RawOrigin<<#runtime as #system_path::Config>::AccountId>> {
 				match &self {
 					OriginCaller::system(o) => Some(o),
 					_ => None,

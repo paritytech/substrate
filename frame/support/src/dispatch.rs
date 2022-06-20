@@ -2759,7 +2759,7 @@ mod tests {
 		fn as_signed(self) -> Option<Self::AccountId> {
 			unimplemented!("Not required in tests!")
 		}
-		fn as_system_ref(&self) -> Option<&RawOrigin> {
+		fn as_system_ref(&self) -> Option<&RawOrigin<Self::AccountId>> {
 			unimplemented!("Not required in tests!")
 		}
 	}
