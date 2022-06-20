@@ -315,10 +315,6 @@ where
 	fn current_authorities(&self) -> AuthorityList {
 		self.authority_set.inner().current_authorities.clone()
 	}
-
-	fn current_session(&self) -> SetId {
-		self.authority_set.inner().set_id
-	}
 }
 
 #[cfg(test)]
