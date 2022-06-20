@@ -352,17 +352,17 @@ pub fn new_full_base(
 		Vec::default(),
 	));
 
-	let mut mixnet_channels = None;
+	let mut mixnet = None;
 	let mut mixnet_worker = None;
 	let role = config.role.clone();
 
 	// mixnet is optional for non validator node, mandatory for validator.
 	if config.mixnet || role.is_authority() {
-		let (worker_inner, (worker_in, worker_out, command_sender)) = sc_mixnet::new_channels();
-		mixnet_channels = Some((worker_in, worker_out, command_sender));
+		let (mixnet_to_network, network_to_mixnet) = sc_mixnet::new_channels();
+		mixnet = Some(network_to_mixnet);
 		let local_id = config.network.node_key.clone().into_keypair()?;
 		let authority_set = import_setup.1.shared_authority_set().clone();
-		mixnet_worker = Some((authority_set, worker_inner, local_id));
+		mixnet_worker = Some((authority_set, mixnet_to_network, local_id));
 	}
 
 	let (network, system_rpc_tx, mixnet_tx, network_starter) =
@@ -374,7 +374,7 @@ pub fn new_full_base(
 			import_queue,
 			block_announce_validator_builder: None,
 			warp_sync: Some(warp_sync),
-			mixnet: mixnet_channels,
+			mixnet,
 		})?;
 
 	if config.offchain_worker.enabled {
@@ -490,13 +490,10 @@ pub fn new_full_base(
 
 	// Spawn authority discovery module.
 	if role.is_authority() {
-		let authority_discovery_role = if role.is_authority() {
-			sc_authority_discovery::Role::PublishAndDiscover(keystore_container.keystore())
-		} else {
-			sc_authority_discovery::Role::Discover
-		};
+		let authority_discovery_role =
+			sc_authority_discovery::Role::PublishAndDiscover(keystore_container.keystore());
 		let dht_event_stream =
-			network.event_stream("authority-discovery", None).filter_map(|e| async move {
+			network.event_stream("authority-discovery").filter_map(|e| async move {
 				match e {
 					Event::Dht(e) => Some(e),
 					_ => None,
@@ -565,10 +562,9 @@ pub fn new_full_base(
 		);
 	}
 
-	// warn need to start after grandpa or imonline to access key.
-	if let Some((authority_set, inner_channels, local_id)) = mixnet_worker {
+	if let Some((authority_set, channels_to_network, local_id)) = mixnet_worker {
 		if let Some(mixnet_worker) = sc_mixnet::MixnetWorker::new(
-			inner_channels,
+			channels_to_network,
 			&local_id,
 			client.clone(),
 			authority_set,

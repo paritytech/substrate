@@ -83,7 +83,7 @@ impl<B: BlockT> GossipEngine<B> {
 		B: 'static,
 	{
 		let protocol = protocol.into();
-		let network_event_stream = network.event_stream(None);
+		let network_event_stream = network.event_stream();
 
 		GossipEngine {
 			state_machine: ConsensusGossip::new(validator, protocol.clone(), metrics_registry),
@@ -318,10 +318,7 @@ mod tests {
 	}
 
 	impl<B: BlockT> Network<B> for TestNetwork {
-		fn event_stream(
-			&self,
-			_filter: Option<fn(&Event) -> bool>,
-		) -> Pin<Box<dyn Stream<Item = Event> + Send>> {
+		fn event_stream(&self) -> Pin<Box<dyn Stream<Item = Event> + Send>> {
 			let (tx, rx) = unbounded();
 			self.inner.lock().unwrap().event_senders.push(tx);
 

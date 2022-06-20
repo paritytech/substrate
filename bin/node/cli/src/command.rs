@@ -65,6 +65,7 @@ impl SubstrateCli for Cli {
 				),
 			"dev" => Box::new(chain_spec::development_config()),
 			"local" => Box::new(chain_spec::local_testnet_config()),
+			"mixnet" => Box::new(chain_spec::local_testnet_config_mixnet()),
 			"fir" | "flaming-fir" => Box::new(chain_spec::flaming_fir_config()?),
 			"staging" => Box::new(chain_spec::staging_testnet_config()),
 			path =>

@@ -400,7 +400,15 @@ pub fn development_config() -> ChainSpec {
 }
 
 fn local_testnet_genesis() -> GenesisConfig {
-	// TODO specific mixnet conf: this will break most tests
+	testnet_genesis(
+		vec![authority_keys_from_seed("Alice"), authority_keys_from_seed("Bob")],
+		vec![],
+		get_account_id_from_seed::<sr25519::Public>("Alice"),
+		None,
+	)
+}
+
+fn local_testnet_genesis_mixnet() -> GenesisConfig {
 	testnet_genesis(
 		vec![
 			authority_keys_from_seed("Alice"),
@@ -416,6 +424,7 @@ fn local_testnet_genesis() -> GenesisConfig {
 	)
 }
 
+
 /// Local testnet config (multivalidator Alice + Bob)
 pub fn local_testnet_config() -> ChainSpec {
 	ChainSpec::from_genesis(
@@ -423,6 +432,22 @@ pub fn local_testnet_config() -> ChainSpec {
 		"local_testnet",
 		ChainType::Local,
 		local_testnet_genesis,
+		vec![],
+		None,
+		None,
+		None,
+		None,
+		Default::default(),
+	)
+}
+
+/// Local testnet config for mixnet tests (6 validators)
+pub fn local_testnet_config_mixnet() -> ChainSpec {
+	ChainSpec::from_genesis(
+		"Local Testnet Mixnet",
+		"local_testnet_mixnet",
+		ChainType::Local,
+		local_testnet_genesis_mixnet,
 		vec![],
 		None,
 		None,

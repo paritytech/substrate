@@ -3,8 +3,8 @@ timeout = 1000
 
 [relaychain]
 default_image = "{{ZOMBIENET_INTEGRATION_TEST_IMAGE}}"
-chain = "local"
-chain_spec_command = "substrate build-spec --chain local --disable-default-bootnode"
+chain = "mixnet"
+chain_spec_command = "substrate build-spec --chain mixnet --disable-default-bootnode"
 default_command = "substrate"
 
   [[relaychain.nodes]]

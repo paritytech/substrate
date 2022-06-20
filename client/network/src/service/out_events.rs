@@ -47,10 +47,10 @@ use std::{
 /// Creates a new channel that can be associated to a [`OutChannels`].
 ///
 /// The name is used in Prometheus reports.
-pub fn channel(name: &'static str, filter: Option<fn(&Event) -> bool>) -> (Sender, Receiver) {
+pub fn channel(name: &'static str) -> (Sender, Receiver) {
 	let (tx, rx) = mpsc::unbounded();
 	let metrics = Arc::new(Mutex::new(None));
-	let tx = Sender { inner: tx, name, metrics: metrics.clone(), filter };
+	let tx = Sender { inner: tx, name, metrics: metrics.clone() };
 	let rx = Receiver { inner: rx, name, metrics };
 	(tx, rx)
 }
@@ -65,7 +65,6 @@ pub fn channel(name: &'static str, filter: Option<fn(&Event) -> bool>) -> (Sende
 pub struct Sender {
 	inner: mpsc::UnboundedSender<Event>,
 	name: &'static str,
-	filter: Option<fn(&Event) -> bool>,
 	/// Clone of [`Receiver::metrics`].
 	metrics: Arc<Mutex<Option<Arc<Option<Metrics>>>>>,
 }
@@ -162,13 +161,8 @@ impl OutChannels {
 
 	/// Sends an event.
 	pub fn send(&mut self, event: Event) {
-		self.event_streams.retain(|sender| {
-			if sender.filter.map(|f| !f(&event)).unwrap_or(false) {
-				true
-			} else {
-				sender.inner.unbounded_send(event.clone()).is_ok()
-			}
-		});
+		self.event_streams
+			.retain(|sender| sender.inner.unbounded_send(event.clone()).is_ok());
 
 		if let Some(metrics) = &*self.metrics {
 			for ev in &self.event_streams {

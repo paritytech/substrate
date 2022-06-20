@@ -79,12 +79,7 @@ mod validator;
 /// Abstraction over a network.
 pub trait Network<B: BlockT> {
 	/// Returns a stream of events representing what happens on the network.
-	/// Events can be filtered before sending with `filter` (if define and
-	/// return false then the event is not cloned into the stream).
-	fn event_stream(
-		&self,
-		filter: Option<fn(&Event) -> bool>,
-	) -> Pin<Box<dyn Stream<Item = Event> + Send>>;
+	fn event_stream(&self) -> Pin<Box<dyn Stream<Item = Event> + Send>>;
 
 	/// Adjust the reputation of a node.
 	fn report_peer(&self, peer_id: PeerId, reputation: ReputationChange);
@@ -109,11 +104,8 @@ pub trait Network<B: BlockT> {
 }
 
 impl<B: BlockT, H: ExHashT> Network<B> for Arc<NetworkService<B, H>> {
-	fn event_stream(
-		&self,
-		filter: Option<fn(&Event) -> bool>,
-	) -> Pin<Box<dyn Stream<Item = Event> + Send>> {
-		Box::pin(NetworkService::event_stream(self, "network-gossip", filter))
+	fn event_stream(&self) -> Pin<Box<dyn Stream<Item = Event> + Send>> {
+		Box::pin(NetworkService::event_stream(self, "network-gossip"))
 	}
 
 	fn report_peer(&self, peer_id: PeerId, reputation: ReputationChange) {

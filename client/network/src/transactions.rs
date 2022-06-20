@@ -185,7 +185,7 @@ impl TransactionsHandlerPrototype {
 		transaction_pool: Arc<dyn TransactionPool<H, B>>,
 		metrics_registry: Option<&Registry>,
 	) -> error::Result<(TransactionsHandler<B, H>, TransactionsHandlerController<H>)> {
-		let event_stream = service.event_stream("transactions-handler", Some(event_filter)).boxed();
+		let event_stream = service.event_stream("transactions-handler").boxed();
 		let (to_handler, from_controller) = mpsc::unbounded();
 		let gossip_enabled = Arc::new(AtomicBool::new(false));
 
@@ -582,12 +582,5 @@ impl<B: BlockT + 'static, H: ExHashT> TransactionsHandler<B, H> {
 		let transactions = self.transaction_pool.transactions();
 		let propagated_to = self.do_propagate_transactions(&transactions);
 		self.transaction_pool.on_broadcasted(propagated_to);
-	}
-}
-
-fn event_filter(event: &Event) -> bool {
-	match event {
-		Event::Dht(_) => false,
-		_ => true,
 	}
 }
