@@ -47,7 +47,8 @@ macro_rules! groups_impl {
 
 		impl<P: Parse> Parse for $name<P> {
 			fn parse(input: ParseStream) -> Result<Self> {
-				let syn::group::$name { token, content } = syn::group::$parse(input)?;
+				let content;
+				let token = syn::$parse!(content in input);
 				let content = content.parse()?;
 				Ok($name { token, content })
 			}
@@ -71,9 +72,9 @@ macro_rules! groups_impl {
 	};
 }
 
-groups_impl!(Braces, Brace, Brace, parse_braces);
-groups_impl!(Brackets, Bracket, Bracket, parse_brackets);
-groups_impl!(Parens, Paren, Parenthesis, parse_parens);
+groups_impl!(Braces, Brace, Brace, braced);
+groups_impl!(Brackets, Bracket, Bracket, bracketed);
+groups_impl!(Parens, Paren, Parenthesis, parenthesized);
 
 #[derive(Debug)]
 pub struct PunctuatedInner<P, T, V> {

@@ -223,6 +223,15 @@ impl<'a, T, S> Clone for BoundedSlice<'a, T, S> {
 // Since a reference `&T` is always `Copy`, so is `BoundedSlice<'a, T, S>`.
 impl<'a, T, S> Copy for BoundedSlice<'a, T, S> {}
 
+// will allow for all immutable operations of `[T]` on `BoundedSlice<T>`.
+impl<'a, T, S> Deref for BoundedSlice<'a, T, S> {
+	type Target = [T];
+
+	fn deref(&self) -> &Self::Target {
+		self.0
+	}
+}
+
 impl<'a, T, S> sp_std::iter::IntoIterator for BoundedSlice<'a, T, S> {
 	type Item = &'a T;
 	type IntoIter = sp_std::slice::Iter<'a, T>;
@@ -598,7 +607,7 @@ impl<T, S> Default for BoundedVec<T, S> {
 
 impl<T, S> sp_std::fmt::Debug for BoundedVec<T, S>
 where
-	T: sp_std::fmt::Debug,
+	Vec<T>: sp_std::fmt::Debug,
 	S: Get<u32>,
 {
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
@@ -647,7 +656,7 @@ impl<T, S> AsMut<[T]> for BoundedVec<T, S> {
 	}
 }
 
-// will allow for immutable all operations of `Vec<T>` on `BoundedVec<T>`.
+// will allow for all immutable operations of `Vec<T>` on `BoundedVec<T>`.
 impl<T, S> Deref for BoundedVec<T, S> {
 	type Target = Vec<T>;
 
@@ -970,9 +979,18 @@ pub mod test {
 	}
 
 	#[test]
-	fn deref_coercion_works() {
+	fn deref_vec_coercion_works() {
 		let bounded: BoundedVec<u32, ConstU32<7>> = bounded_vec![1, 2, 3];
 		// these methods come from deref-ed vec.
+		assert_eq!(bounded.len(), 3);
+		assert!(bounded.iter().next().is_some());
+		assert!(!bounded.is_empty());
+	}
+
+	#[test]
+	fn deref_slice_coercion_works() {
+		let bounded = BoundedSlice::<u32, ConstU32<7>>::try_from(&[1, 2, 3][..]).unwrap();
+		// these methods come from deref-ed slice.
 		assert_eq!(bounded.len(), 3);
 		assert!(bounded.iter().next().is_some());
 		assert!(!bounded.is_empty());

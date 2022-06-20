@@ -182,13 +182,12 @@ where
 	}
 }
 
-#[cfg(feature = "std")]
-impl<K, V, S> std::fmt::Debug for BoundedBTreeMap<K, V, S>
+impl<K, V, S> sp_std::fmt::Debug for BoundedBTreeMap<K, V, S>
 where
-	BTreeMap<K, V>: std::fmt::Debug,
+	BTreeMap<K, V>: sp_std::fmt::Debug,
 	S: Get<u32>,
 {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
 		f.debug_tuple("BoundedBTreeMap").field(&self.0).field(&Self::bound()).finish()
 	}
 }

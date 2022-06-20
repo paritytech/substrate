@@ -36,6 +36,7 @@ pallet-contracts = { version = "4.0.0-dev", path = "../../../frame/contracts" }
 pallet-im-online = { version = "4.0.0-dev", path = "../../../frame/im-online" }
 pallet-timestamp = { version = "4.0.0-dev", path = "../../../frame/timestamp" }
 pallet-treasury = { version = "4.0.0-dev", path = "../../../frame/treasury" }
+pallet-transaction-payment = { version = "4.0.0-dev", path = "../../../frame/transaction-payment" }
 sp-application-crypto = { version = "6.0.0", path = "../../../primitives/application-crypto" }
 sp-consensus-babe = { version = "0.10.0-dev", path = "../../../primitives/consensus/babe" }
 sp-externalities = { version = "0.12.0", path = "../../../primitives/externalities" }
