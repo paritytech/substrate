@@ -191,7 +191,8 @@ where
 	C::Api:
 		ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>> + BlockBuilderApi<Block>,
 {
-	/// Initialize the proposal logic with a callable now time function a on top of a specific parent header.
+	/// Initialize the proposal logic with a callable now time function a on top of a specific
+	/// parent header.
 	pub fn init_with_now(
 		&mut self,
 		parent_header: &<Block as BlockT>::Header,
@@ -327,18 +328,12 @@ where
 				let deadline = (self.now)() + max_duration - max_duration / 3;
 				let res = self
 					.propose_with(inherent_data, inherent_digests, deadline, block_size_limit)
-					.await.and_then(|proposal| {
-						let Proposal {
-							block,
-							proof,
-							storage_changes,
-						} = proposal;
-						let proof = PR::into_proof(proof).map_err(|e| sp_blockchain::Error::Application(Box::new(e)))?;
-						Ok(Proposal {
-							block,
-							proof,
-							storage_changes,
-						})
+					.await
+					.and_then(|proposal| {
+						let Proposal { block, proof, storage_changes } = proposal;
+						let proof = PR::into_proof(proof)
+							.map_err(|e| sp_blockchain::Error::Application(Box::new(e)))?;
+						Ok(Proposal { block, proof, storage_changes })
 					});
 				if tx.send(res).is_err() {
 					trace!("Could not send block production result to proposer!");
@@ -370,7 +365,6 @@ where
 		ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>> + BlockBuilderApi<Block>,
 	PR: ProofRecording,
 {
-
 	/// Create a proposal.
 	///
 	/// Gets the `inherent_data` and `inherent_digests` as input for the proposal. Additionally
@@ -393,8 +387,10 @@ where
 		inherent_digests: Digest,
 		deadline: time::Instant,
 		block_size_limit: Option<usize>,
-	) -> Result<Proposal<Block, backend::TransactionFor<B, Block>, Option<StorageProof>>, sp_blockchain::Error>
-	{
+	) -> Result<
+		Proposal<Block, backend::TransactionFor<B, Block>, Option<StorageProof>>,
+		sp_blockchain::Error,
+	> {
 		let propose_with_start = time::Instant::now();
 		let mut block_builder =
 			self.client.new_block_at(&self.parent_id, inherent_digests, PR::ENABLED)?;
