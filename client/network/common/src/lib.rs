@@ -22,6 +22,3 @@ pub mod config;
 pub mod message;
 pub mod request_responses;
 pub mod sync;
-
-// TODO: Remove re-export
-pub use sync::warp as warp_sync;

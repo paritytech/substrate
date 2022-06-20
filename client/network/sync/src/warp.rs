@@ -23,11 +23,9 @@ use crate::{
 	state::{ImportResult, StateSync},
 };
 use sc_client_api::ProofProvider;
-use sc_network_common::{
-	sync::warp::WarpSyncPhase,
-	warp_sync::{
-		EncodedProof, VerificationResult, WarpProofRequest, WarpSyncProgress, WarpSyncProvider,
-	},
+use sc_network_common::sync::warp::{
+	EncodedProof, VerificationResult, WarpProofRequest, WarpSyncPhase, WarpSyncProgress,
+	WarpSyncProvider,
 };
 use sp_blockchain::HeaderBackend;
 use sp_finality_grandpa::{AuthorityList, SetId};

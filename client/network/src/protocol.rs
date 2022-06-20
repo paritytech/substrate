@@ -52,11 +52,11 @@ use sc_network_common::{
 		message::{
 			BlockAnnounce, BlockAttributes, BlockData, BlockRequest, BlockResponse, BlockState,
 		},
+		warp::{EncodedProof, WarpProofRequest},
 		BadPeer, ChainSync, OnBlockData, OnBlockJustification, OnStateData, OpaqueBlockRequest,
 		OpaqueBlockResponse, OpaqueStateRequest, OpaqueStateResponse, PollBlockAnnounceValidation,
 		SyncStatus,
 	},
-	warp_sync::{EncodedProof, WarpProofRequest},
 };
 use sp_arithmetic::traits::SaturatedConversion;
 use sp_blockchain::HeaderMetadata;

@@ -55,7 +55,9 @@ use sc_network::{
 	Multiaddr, NetworkService, NetworkWorker,
 };
 pub use sc_network_common::config::ProtocolId;
-use sc_network_common::warp_sync;
+use sc_network_common::sync::warp::{
+	AuthorityList, EncodedProof, SetId, VerificationResult, WarpSyncProvider,
+};
 use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
 use sc_network_sync::{
 	block_request_handler::BlockRequestHandler, state_request_handler::StateRequestHandler,
@@ -641,26 +643,26 @@ impl<B: BlockT> VerifierAdapter<B> {
 
 struct TestWarpSyncProvider<B: BlockT>(Arc<dyn HeaderBackend<B>>);
 
-impl<B: BlockT> warp_sync::WarpSyncProvider<B> for TestWarpSyncProvider<B> {
+impl<B: BlockT> WarpSyncProvider<B> for TestWarpSyncProvider<B> {
 	fn generate(
 		&self,
 		_start: B::Hash,
-	) -> Result<warp_sync::EncodedProof, Box<dyn std::error::Error + Send + Sync>> {
+	) -> Result<EncodedProof, Box<dyn std::error::Error + Send + Sync>> {
 		let info = self.0.info();
 		let best_header = self.0.header(BlockId::hash(info.best_hash)).unwrap().unwrap();
-		Ok(warp_sync::EncodedProof(best_header.encode()))
+		Ok(EncodedProof(best_header.encode()))
 	}
 	fn verify(
 		&self,
-		proof: &warp_sync::EncodedProof,
-		_set_id: warp_sync::SetId,
-		_authorities: warp_sync::AuthorityList,
-	) -> Result<warp_sync::VerificationResult<B>, Box<dyn std::error::Error + Send + Sync>> {
-		let warp_sync::EncodedProof(encoded) = proof;
+		proof: &EncodedProof,
+		_set_id: SetId,
+		_authorities: AuthorityList,
+	) -> Result<VerificationResult<B>, Box<dyn std::error::Error + Send + Sync>> {
+		let EncodedProof(encoded) = proof;
 		let header = B::Header::decode(&mut encoded.as_slice()).unwrap();
-		Ok(warp_sync::VerificationResult::Complete(0, Default::default(), header))
+		Ok(VerificationResult::Complete(0, Default::default(), header))
 	}
-	fn current_authorities(&self) -> warp_sync::AuthorityList {
+	fn current_authorities(&self) -> AuthorityList {
 		Default::default()
 	}
 }

@@ -27,7 +27,7 @@ use sc_network_common::{
 	request_responses::{
 		IncomingRequest, OutgoingResponse, ProtocolConfig as RequestResponseConfig,
 	},
-	warp_sync::{EncodedProof, WarpProofRequest, WarpSyncProvider},
+	sync::warp::{EncodedProof, WarpProofRequest, WarpSyncProvider},
 };
 use sp_runtime::traits::Block as BlockT;
 use std::{sync::Arc, time::Duration};

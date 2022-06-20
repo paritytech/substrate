@@ -41,7 +41,7 @@ use sc_network::{
 	config::{Role, SyncMode},
 	NetworkService,
 };
-use sc_network_common::warp_sync::WarpSyncProvider;
+use sc_network_common::sync::warp::WarpSyncProvider;
 use sc_network_light::light_client_requests::{self, handler::LightClientRequestHandler};
 use sc_network_sync::{
 	block_request_handler::{self, BlockRequestHandler},
