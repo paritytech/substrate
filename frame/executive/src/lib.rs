@@ -435,24 +435,15 @@ where
 		sp_io::init_tracing();
 		let encoded = uxt.encode();
 		let encoded_len = encoded.len();
-		Self::apply_extrinsic_with_len(uxt, encoded_len, encoded)
-	}
-
-	/// Actually apply an extrinsic given its `encoded_len`; this doesn't note its hash.
-	fn apply_extrinsic_with_len(
-		uxt: Block::Extrinsic,
-		encoded_len: usize,
-		to_note: Vec<u8>,
-	) -> ApplyExtrinsicResult {
 		sp_tracing::enter_span!(sp_tracing::info_span!("apply_extrinsic",
-				ext=?sp_core::hexdisplay::HexDisplay::from(&uxt.encode())));
+				ext=?sp_core::hexdisplay::HexDisplay::from(&encoded)));
 		// Verify that the signature is good.
 		let xt = uxt.check(&Default::default())?;
 
 		// We don't need to make sure to `note_extrinsic` only after we know it's going to be
 		// executed to prevent it from leaking in storage since at this point, it will either
 		// execute or panic (and revert storage changes).
-		<frame_system::Pallet<System>>::note_extrinsic(to_note);
+		<frame_system::Pallet<System>>::note_extrinsic(encoded);
 
 		// AUDIT: Under no circumstances may this function panic from here onwards.
 
