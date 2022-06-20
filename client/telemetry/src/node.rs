@@ -110,7 +110,6 @@ impl<TTrans: Transport> Node<TTrans> {
 
 impl<TTrans: Transport, TSinkErr> Node<TTrans>
 where
-	TTrans: Clone + Unpin,
 	TTrans::Dial: Unpin,
 	TTrans::Output:
 		Sink<Vec<u8>, Error = TSinkErr> + Stream<Item = Result<Vec<u8>, TSinkErr>> + Unpin,
@@ -137,7 +136,7 @@ pub(crate) enum Infallible {}
 
 impl<TTrans: Transport, TSinkErr> Sink<TelemetryPayload> for Node<TTrans>
 where
-	TTrans: Clone + Unpin,
+	TTrans: Unpin,
 	TTrans::Dial: Unpin,
 	TTrans::Output:
 		Sink<Vec<u8>, Error = TSinkErr> + Stream<Item = Result<Vec<u8>, TSinkErr>> + Unpin,
@@ -228,15 +227,18 @@ where
 						socket = NodeSocket::wait_reconnect();
 					},
 				},
-				NodeSocket::ReconnectNow => match self.transport.clone().dial(self.addr.clone()) {
-					Ok(d) => {
-						log::trace!(target: "telemetry", "Re-dialing {}", self.addr);
-						socket = NodeSocket::Dialing(d);
-					},
-					Err(err) => {
-						log::warn!(target: "telemetry", "❌ Error while re-dialing {}: {:?}", self.addr, err);
-						socket = NodeSocket::wait_reconnect();
-					},
+				NodeSocket::ReconnectNow => {
+					let addr = self.addr.clone();
+					match self.transport.dial(addr) {
+						Ok(d) => {
+							log::trace!(target: "telemetry", "Re-dialing {}", self.addr);
+							socket = NodeSocket::Dialing(d);
+						},
+						Err(err) => {
+							log::warn!(target: "telemetry", "❌ Error while re-dialing {}: {:?}", self.addr, err);
+							socket = NodeSocket::wait_reconnect();
+						},
+					}
 				},
 				NodeSocket::WaitingReconnect(mut s) => {
 					if Future::poll(Pin::new(&mut s), cx).is_ready() {
