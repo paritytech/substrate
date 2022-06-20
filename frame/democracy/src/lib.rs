@@ -802,8 +802,9 @@ pub mod pallet {
 		/// The dispatch of this call must be `FastTrackOrigin`.
 		///
 		/// - `proposal_hash`: The hash of the current external proposal.
-		/// - `voting_period`: The period that is allowed for voting on this proposal. Increased to
-		///   `FastTrackVotingPeriod` if too low.
+		/// - `voting_period`: The period that is allowed for voting on this proposal.
+		/// 	Must be always greater than zero.
+		/// 	For `FastTrackOrigin` must be equal or greater than `FastTrackVotingPeriod`.
 		/// - `delay`: The number of block after voting has ended in approval and this should be
 		///   enacted. This doesn't have a minimum amount.
 		///
