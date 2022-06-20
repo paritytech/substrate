@@ -31,7 +31,8 @@ use prometheus_endpoint::Registry;
 use sc_chain_spec::get_extension;
 use sc_client_api::{
 	execution_extensions::ExecutionExtensions, proof_provider::ProofProvider, BadBlocks,
-	BlockBackend, BlockchainEvents, ExecutorProvider, ForkBlocks, StorageProvider, UsageProvider,
+	BlockBackend, BlockchainEvents, BlockchainRPCEvents, ExecutorProvider, ForkBlocks,
+	StorageProvider, UsageProvider,
 };
 use sc_client_db::{Backend, DatabaseSettings};
 use sc_consensus::import_queue::ImportQueue;
@@ -698,6 +699,7 @@ pub fn build_collator_network<TBl, TImpQu, TCl>(
 where
 	TBl: BlockT,
 	TCl: HeaderMetadata<TBl, Error = sp_blockchain::Error>
+		+ BlockchainRPCEvents<TBl>
 		+ BlockBackend<TBl>
 		+ BlockIdTo<TBl, Error = sp_blockchain::Error>
 		+ ProofProvider<TBl>
@@ -753,7 +755,7 @@ where
 	let network_mut = sc_network::NetworkWorker::new(network_params)?;
 	let network = network_mut.service().clone();
 
-	let future = build_network_collator_future(network_mut);
+	let future = build_network_collator_future(network_mut, client.clone());
 
 	// TODO: [skunert] Remove this comment
 	// TODO: Normally, one is supposed to pass a list of notifications protocols supported by the

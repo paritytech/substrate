@@ -37,10 +37,12 @@ mod task_manager;
 use std::{collections::HashMap, net::SocketAddr};
 
 use codec::{Decode, Encode};
-use futures::{channel::mpsc, FutureExt, StreamExt};
+use futures::{channel::mpsc, FutureExt, Stream, StreamExt};
 use jsonrpsee::{core::Error as JsonRpseeError, RpcModule};
 use log::{debug, error, warn};
-use sc_client_api::{blockchain::HeaderBackend, BlockBackend, BlockchainEvents, ProofProvider};
+use sc_client_api::{
+	blockchain::HeaderBackend, BlockBackend, BlockchainEvents, BlockchainRPCEvents, ProofProvider,
+};
 use sc_network::PeerId;
 use sc_rpc_server::WsConfig;
 use sc_utils::mpsc::TracingUnboundedReceiver;
@@ -286,15 +288,52 @@ async fn build_network_future<
 async fn build_network_collator_future<
 	B: BlockT,
 	C: HeaderBackend<B>
+		+ BlockchainRPCEvents<B>
 		+ ProofProvider<B>
 		+ HeaderMetadata<B, Error = sp_blockchain::Error>
 		+ BlockBackend<B>,
 	H: sc_network::ExHashT,
 >(
 	mut network: sc_network::NetworkWorker<B, H, C>,
+	client: Arc<C>,
 ) {
+	// let mut imported_blocks_stream = client.import_notification_stream_rpc().fuse();
+
+	// Stream of finalized blocks reported by the client.
+	let mut finality_notification_stream = client.finality_notification_stream_rpc().await.fuse();
+	let mut best_notification_stream = client.best_block_stream_rpc().await.fuse();
+
 	loop {
 		futures::select! {
+			maybe_header = best_notification_stream.next() => {
+				if let Some(header) = maybe_header {
+					network.service().new_best_block_imported(
+						header.hash(),
+						*header.number(),
+					);
+				}
+			}
+			// // List of blocks that the client has imported.
+			// notification = imported_blocks_stream.next() => {
+			// 	let notification = match notification {
+			// 		Some(n) => n,
+			// 		// If this stream is shut down, that means the client has shut down, and the
+			// 		// most appropriate thing to do for the network future is to shut down too.
+			// 		None => return,
+			// 	};
+
+			// 	// if announce_imported_blocks {
+			// 	// 	network.service().announce_block(notification.hash, None);
+			// 	// }
+			// }
+
+			// List of blocks that the client has finalized.
+			maybe_header = finality_notification_stream.next() => {
+				if let Some(header) = maybe_header {
+					network.on_block_finalized(header.hash(), header);
+				}
+			}
+
 			// The network worker has done something. Nothing special to do, but could be
 			// used in the future to perform actions in response of things that happened on
 			// the network.

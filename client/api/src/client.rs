@@ -19,6 +19,7 @@
 //! A set of APIs supported by the client along with their primitives.
 
 use crate::{blockchain::Info, notifications::StorageEventStream, FinalizeSummary, ImportSummary};
+use futures::Stream;
 use sp_consensus::BlockOrigin;
 use sp_core::storage::StorageKey;
 use sp_runtime::{
@@ -26,7 +27,7 @@ use sp_runtime::{
 	traits::{Block as BlockT, NumberFor},
 	Justifications,
 };
-use std::{collections::HashSet, convert::TryFrom, fmt, sync::Arc};
+use std::{collections::HashSet, convert::TryFrom, fmt, pin::Pin, sync::Arc};
 
 use sc_transaction_pool_api::ChainEvent;
 use sc_utils::mpsc::TracingUnboundedReceiver;
@@ -54,6 +55,24 @@ pub type BadBlocks<Block> = Option<HashSet<<Block as BlockT>::Hash>>;
 pub trait BlockOf {
 	/// The type of the block.
 	type Type: BlockT;
+}
+
+/// A souruse std::pin::Pin;ce of blockchain events.
+#[async_trait::async_trait]
+pub trait BlockchainRPCEvents<Block: BlockT> {
+	/// Get block import event stream. Not guaranteed to be fired for every
+	/// imported block.
+	async fn import_notification_stream_rpc(
+		&self,
+	) -> Pin<Box<dyn Stream<Item = Block::Header> + Send>>;
+
+	/// Get a stream of finality notifications. Not guaranteed to be fired for every
+	/// finalized block.
+	async fn finality_notification_stream_rpc(
+		&self,
+	) -> Pin<Box<dyn Stream<Item = Block::Header> + Send>>;
+
+	async fn best_block_stream_rpc(&self) -> Pin<Box<dyn Stream<Item = Block::Header> + Send>>;
 }
 
 /// A source of blockchain events.
