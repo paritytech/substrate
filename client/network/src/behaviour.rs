@@ -27,9 +27,8 @@ use bytes::Bytes;
 use codec::{Decode, Encode};
 use futures::channel::oneshot;
 use libp2p::{
-	core::{Multiaddr, PeerId},
+	core::{Multiaddr, PeerId, PublicKey},
 	identify::IdentifyInfo,
-	identity::Keypair,
 	kad::record,
 	swarm::{
 		behaviour::toggle::Toggle, NetworkBehaviour, NetworkBehaviourAction,
@@ -256,7 +255,7 @@ where
 	pub fn new(
 		substrate: Protocol<B, Client>,
 		user_agent: String,
-		local_identity: Keypair,
+		local_public_key: PublicKey,
 		disco_config: DiscoveryConfig,
 		block_request_protocol_config: ProtocolConfig,
 		state_request_protocol_config: ProtocolConfig,
@@ -279,7 +278,6 @@ where
 			},
 			None => None,
 		};
-		let local_public_key = local_identity.public();
 		request_response_protocols.push(block_request_protocol_config);
 		request_response_protocols.push(state_request_protocol_config);
 		request_response_protocols.push(light_client_request_protocol_config);
@@ -309,12 +307,11 @@ where
 		self.discovery.known_peers()
 	}
 
-	/// TODO this doc? more like a TODO ?
-	/// Adds a hard-coded address for the given peer, that never expires.
+	/// Submit transaction to the mix network.
 	pub fn send_transaction_to_mixnet(
 		&mut self,
 		encoded_tx: Vec<u8>,
-		num_hop: usize,
+		number_hops: usize,
 		surb_reply: bool,
 		reply: oneshot::Sender<Result<(), mixnet::Error>>,
 	) -> Result<(), String> {
@@ -322,7 +319,7 @@ where
 			if let Ok(decoded) = <B::Extrinsic as Decode>::decode(&mut encoded_tx.as_ref()) {
 				let message = crate::protocol::message::Message::<B>::Transactions(vec![decoded]);
 				let send_options =
-					mixnet::SendOptions { num_hop: Some(num_hop), with_surb: surb_reply };
+					mixnet::SendOptions { num_hop: Some(number_hops), with_surb: surb_reply };
 				mixnet
 					.start_send(MixnetCommand::SendTransaction(
 						message.encode(),
@@ -674,19 +671,17 @@ where
 	fn inject_event(&mut self, event: MixnetEvent) {
 		match event {
 			MixnetEvent::Message(message) => {
-				// TODO could write specifically a message type here, but currently
-				// only one of a kind for query or reply.
 				match message.kind {
-					mixnet::MessageType::FromSurbs(_query) => {
-						trace!(target: "mixnet", "Got surb reply");
+					mixnet::MessageType::FromSurbs(query, recipient) => {
+						trace!(target: "mixnet", "Got surb reply for {:?}", query);
 
-						// TODO send in some client notification (keep query in worker?).
-						// Also attach query to FromSurbs??
 						let result = MixnetImportResult::decode(&mut message.message.as_ref());
-						info!(target: "mixnet", "Received from surb {:?}", result);
+						// Currently we only log reply for mixnet surb, could be send to
+						// some client ws in the future.
+						info!(target: "mixnet", "Received from {:?}, surb {:?}", recipient, result);
 					},
 					kind => {
-						trace!(target: "mixnet", "Got query");
+						trace!(target: "mixnet", "Received query.");
 						let reply = if kind.with_surb() {
 							self.mixnet_command_sender.clone()
 						} else {

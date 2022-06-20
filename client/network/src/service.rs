@@ -270,7 +270,7 @@ where
 			);
 
 			let discovery_config = {
-				let mut config = DiscoveryConfig::new(local_public);
+				let mut config = DiscoveryConfig::new(local_public.clone());
 				config.with_permanent_addresses(known_addresses);
 				config.discovery_limit(
 					u64::from(params.network_config.default_peers_set.out_peers) + 15,
@@ -350,8 +350,6 @@ where
 			let behaviour = {
 				let bitswap = params.network_config.ipfs_server.then(|| Bitswap::new(client));
 
-				// TODO move mixnet building to MixnetHandlePrototype?? + add metrics
-				// through call backs in crate and same as transaction handler to register
 				let mut mixnet = None;
 				if let Some((mixnet_in, mixnet_out, command_sender)) = params.mixnet {
 					mixnet = Some((MixnetBehaviour::new(mixnet_in, mixnet_out), command_sender));
@@ -360,7 +358,7 @@ where
 				let result = Behaviour::new(
 					protocol,
 					user_agent,
-					local_identity.clone(),
+					local_public,
 					discovery_config,
 					params.block_request_protocol_config,
 					params.state_request_protocol_config,
@@ -1926,9 +1924,7 @@ where
 					kind,
 					reply,
 				))) => {
-					// TODO sender in message still make sense to possibly track com from peer
-					// (worker side)
-					debug!(target: "mixnet", "Inject transaction from mixnet from {:?}) tx: {:?}", sender, message);
+					info!(target: "mixnet", "Inject transaction from mixnet from {:?}) tx: {:?}", sender, message);
 					this.tx_handler_controller.inject_transaction_mixnet(kind, message, reply);
 				},
 				Poll::Ready(SwarmEvent::ConnectionEstablished {

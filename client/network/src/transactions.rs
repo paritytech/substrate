@@ -345,7 +345,7 @@ impl<B: BlockT + 'static, H: ExHashT> TransactionsHandler<B, H> {
 
 	async fn handle_network_event(&mut self, event: Event) {
 		match event {
-			Event::Dht(_) => {}, // filtered by the filter.
+			Event::Dht(_) => {},
 			Event::SyncConnected { remote } => {
 				let addr = iter::once(multiaddr::Protocol::P2p(remote.into()))
 					.collect::<multiaddr::Multiaddr>();
@@ -433,8 +433,8 @@ impl<B: BlockT + 'static, H: ExHashT> TransactionsHandler<B, H> {
 			for t in transactions {
 				let hash = self.transaction_pool.hash_of(&t);
 				let mixnet_reply = if let Some(surb) = kind.clone().surb() {
-					// note that only first reply will pass (other will be blocked by replay
-					// protection. TODO consider single transaction only
+					// note that only first reply will pass (others will be blocked by replay
+					// protection).
 					reply.clone().map(move |r| (r, surb))
 				} else {
 					None
