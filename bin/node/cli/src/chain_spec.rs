@@ -424,7 +424,6 @@ fn local_testnet_genesis_mixnet() -> GenesisConfig {
 	)
 }
 
-
 /// Local testnet config (multivalidator Alice + Bob)
 pub fn local_testnet_config() -> ChainSpec {
 	ChainSpec::from_genesis(

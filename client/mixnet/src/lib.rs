@@ -220,7 +220,6 @@ where
 		loop {
 			futures::select! {
 				notif = self.finality_stream.next() => {
-					// TODO try accessing last of finality stream (possibly skipping some block)
 					if let Some(notif) = notif {
 						delay_finalized.reset(Duration::from_secs(DELAY_NO_FINALISATION_S));
 						self.handle_new_finalize_block(notif);
@@ -454,7 +453,6 @@ where
 	}
 
 	fn update_own_public_key_within_authority_set(&mut self, set: &AuthorityList) {
-		// TODO can filter to skip it when we are not a validator role
 		self.authority_id = None;
 		let local_pub_keys =
 			&SyncCryptoStore::ed25519_public_keys(&*self.key_store, key_types::GRANDPA)
@@ -573,11 +571,10 @@ impl AuthorityStar {
 			return None
 		}
 		// Warning this assume that PeerId is a randomly distributed value.
-		// TODO could just hash the public key once.
 		let mut ix = [0u8; 32];
 		rand::thread_rng().fill_bytes(&mut ix[..]);
 
-		debug!(target: "mixnet", "routing {:?}, ix {:?}", self.authorities, ix);
+		trace!(target: "mixnet", "routing {:?}, ix {:?}", self.authorities, ix);
 		for key in self.authorities.range(ix..) {
 			if !skip(&key.0) {
 				debug!(target: "mixnet", "Random route node");
@@ -598,13 +595,26 @@ impl Topology for AuthorityStar {
 	fn first_hop_nodes(&self) -> Vec<(MixPeerId, MixPublicKey)> {
 		self.authorities.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
 	}
-	fn first_hop_nodes_external(&self, _from: &MixPeerId) -> Vec<(MixPeerId, MixPublicKey)> {
+
+	fn first_hop_nodes_external(
+		&self,
+		from: &MixPeerId,
+		to: &MixPeerId,
+	) -> Vec<(MixPeerId, MixPublicKey)> {
 		// allow for all
-		self.first_hop_nodes()
+		let mut keys: Vec<_> = self
+			.first_hop_nodes()
 			.into_iter()
 			.filter(|(id, _key)| self.connected_nodes.contains_key(id))
-			.collect()
+			.filter(|(id, _key)| from != id)
+			.filter(|(id, _key)| to != id)
+			.collect();
+
+		use rand::prelude::SliceRandom;
+		keys.shuffle(&mut rand::thread_rng());
+		keys
 	}
+
 	fn is_first_node(&self, id: &MixPeerId) -> bool {
 		// allow for all
 		self.is_routing(id)
@@ -644,7 +654,7 @@ impl Topology for AuthorityStar {
 		&self,
 		start_node: (&MixPeerId, Option<&MixPublicKey>),
 		recipient_node: (&MixPeerId, Option<&MixPublicKey>),
-		count: usize,
+		nb_chunk: usize,
 		num_hops: usize,
 		max_hops: usize,
 		last_query_if_surb: Option<&Vec<(MixPeerId, MixPublicKey)>>,
@@ -656,11 +666,12 @@ impl Topology for AuthorityStar {
 		let start = if self.is_first_node(start_node.0) {
 			start_node.0.clone()
 		} else {
+			trace!(target: "mixnet", "External node");
 			if num_hops + 1 > max_hops {
 				return Err(Error::TooManyHops)
 			}
 
-			let firsts = self.first_hop_nodes_external(start_node.0);
+			let firsts = self.first_hop_nodes_external(start_node.0, recipient_node.0);
 			if firsts.len() == 0 {
 				return Err(Error::NoPath(Some(recipient_node.0.clone())))
 			}
@@ -674,6 +685,7 @@ impl Topology for AuthorityStar {
 		let recipient = if self.is_routing(recipient_node.0) {
 			recipient_node.0.clone()
 		} else {
+			trace!(target: "mixnet", "Non routing recipient");
 			if num_hops + 1 > max_hops {
 				return Err(Error::TooManyHops)
 			}
@@ -681,6 +693,7 @@ impl Topology for AuthorityStar {
 			if let Some(query) = last_query_if_surb {
 				// use again a node that was recently connected.
 				if let Some(rec) = query.get(0) {
+					trace!(target: "mixnet", "Surbs last: {:?}", rec);
 					add_end = Some(recipient_node);
 					rec.0.clone()
 				} else {
@@ -690,9 +703,9 @@ impl Topology for AuthorityStar {
 				return Err(Error::NoPath(Some(recipient_node.0.clone())))
 			}
 		};
-		trace!(target: "mixnet", "nb_hop: {:?}", num_hops);
-		let mut result = Vec::with_capacity(count);
-		while result.len() < count {
+		trace!(target: "mixnet", "number hop: {:?}", num_hops);
+		let mut result = Vec::with_capacity(nb_chunk);
+		while result.len() < nb_chunk {
 			let mut ids = BTreeSet::new();
 			ids.insert(start.clone());
 			ids.insert(recipient.clone());
@@ -708,6 +721,7 @@ impl Topology for AuthorityStar {
 
 			let mut path = Vec::with_capacity(num_hops + 1);
 			if let Some((peer, key)) = add_start {
+				debug!(target: "mixnet", "Add first ,nexts {:?}.", ids.len());
 				path.push((peer.clone(), key.clone()));
 			}
 
@@ -765,7 +779,7 @@ impl Topology for AuthorityStar {
 	}
 
 	fn allowed_external(&self, _id: &MixPeerId) -> Option<(usize, usize)> {
-		// 10% TODO possibly limit nb connection (on check_handshake success)
+		// 10% TODO just limit nb connection (on check_handshake success)
 		Some((1, 10))
 	}
 
@@ -803,9 +817,7 @@ impl Topology for AuthorityStar {
 
 	fn handshake(&mut self, with: &PeerId, public_key: &MixPublicKey) -> Option<Vec<u8>> {
 		let mut result = self.node_id.to_vec();
-		// TODO need to sign public key with local id
 		result.extend_from_slice(&public_key.as_bytes()[..]);
-		// TODO force the session one if existing TODO store the public key !!!! in topo
 		let mut message = with.to_bytes().to_vec();
 		message.extend_from_slice(&public_key.as_bytes()[..]);
 		match SyncCryptoStore::sign_with(
