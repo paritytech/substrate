@@ -284,7 +284,7 @@ pub struct Proposer<B, Block: BlockT, C, A: TransactionPool, PR> {
 	/// Handle to telemetry.
 	pub telemetry: Option<TelemetryHandle>,
 	/// Phantom member to pin the `Backend`/`ProofRecording` type.
-	_phantom: PhantomData<(B, PR)>,
+	pub _phantom: PhantomData<(B, PR)>,
 }
 
 impl<A, B, Block, C, PR> sp_consensus::Proposer<Block> for Proposer<B, Block, C, A, PR>
