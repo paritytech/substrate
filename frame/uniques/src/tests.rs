@@ -881,7 +881,6 @@ fn set_royalties_should_work() {
 		let royalties = 30;
 
 		assert_ok!(Uniques::force_create(Origin::root(), collection_id, user_id, true));
-		assert_ok!(Uniques::mint(Origin::signed(user_id), collection_id, item_id, user_id));
 		assert!(!CollectionRoyaltiesOf::<Test>::contains_key(collection_id));
 
 		assert_ok!(Uniques::set_royalties(
@@ -913,6 +912,19 @@ fn set_royalties_should_work() {
 			collection: collection_id,
 			royalties: Perbill::zero(),
 		}));
+
+		// validate we can't set royalties if the collection has some items minted
+		let collection_id = 2;
+		assert_ok!(Uniques::force_create(Origin::root(), collection_id, user_id, true));
+		assert_ok!(Uniques::mint(Origin::signed(user_id), collection_id, item_id, user_id));
+		assert_noop!(
+			Uniques::set_royalties(
+				Origin::signed(user_id),
+				collection_id,
+				Perbill::from_percent(royalties),
+			),
+			Error::<Test>::NonEmptyCollection
+		);
 	});
 }
 
@@ -933,14 +945,13 @@ fn royalties_payent_should_work() {
 		Balances::make_free_balance_be(&collection_owner, initial_balance);
 
 		assert_ok!(Uniques::force_create(Origin::root(), collection_id, collection_owner, true));
-		assert_ok!(Uniques::mint(Origin::signed(collection_owner), collection_id, item_id, user_1));
-
 		assert_ok!(Uniques::set_royalties(
 			Origin::signed(collection_owner),
 			collection_id,
 			Perbill::from_percent(royalties),
 		));
 
+		assert_ok!(Uniques::mint(Origin::signed(collection_owner), collection_id, item_id, user_1));
 		assert_ok!(Uniques::set_price(
 			Origin::signed(user_1),
 			collection_id,

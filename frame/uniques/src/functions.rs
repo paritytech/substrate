@@ -258,7 +258,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 
 		let mut transfer_amount = price_info.0.clone();
-		if let Ok(royalties) = CollectionRoyaltiesOf::<T, I>::try_get(&collection) {
+		if let Some(royalties) = CollectionRoyaltiesOf::<T, I>::get(&collection) {
 			transfer_amount = Self::process_royalties(
 				transfer_amount.clone(),
 				royalties,
@@ -306,6 +306,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					new_royalties.is_zero() || new_royalties < *royalties,
 					Error::<T, I>::RoyaltiesCantBeIncreased
 				);
+			} else {
+				ensure!(collection.items == 0, Error::<T, I>::NonEmptyCollection);
 			}
 
 			let royalties = maybe_royalties.get_or_insert_with(|| Perbill::zero());

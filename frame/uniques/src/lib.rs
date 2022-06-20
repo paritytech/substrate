@@ -429,6 +429,8 @@ pub mod pallet {
 		BidTooLow,
 		/// Royalties can only be decreased.
 		RoyaltiesCantBeIncreased,
+		/// Collection has minted items.
+		NonEmptyCollection,
 	}
 
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
