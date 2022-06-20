@@ -95,11 +95,9 @@ where
 		}
 
 		let visitor: VecVisitor<T, S> = VecVisitor(PhantomData);
-		deserializer
-			.deserialize_seq(visitor)
-			.map(|v| {
-				WeakBoundedVec::<T, S>::try_from(v).map_err(|_| Error::custom("out of bounds"))
-			})?
+		deserializer.deserialize_seq(visitor).map(|v| {
+			WeakBoundedVec::<T, S>::try_from(v).map_err(|_| Error::custom("out of bounds"))
+		})?
 	}
 }
 
