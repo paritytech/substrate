@@ -250,6 +250,7 @@ where
 
 /// The proposer logic.
 pub struct Proposer<B, Block: BlockT, C, A: TransactionPool, PR> {
+	/// A handle can spawn tasks.
 	pub spawn_handle: Box<dyn SpawnNamed>,
 	/// The client instance.
 	pub client: Arc<C>,
@@ -261,6 +262,7 @@ pub struct Proposer<B, Block: BlockT, C, A: TransactionPool, PR> {
 	pub parent_number: <<Block as BlockT>::Header as HeaderT>::Number,
 	/// The transaction pool.
 	pub transaction_pool: Arc<A>,
+	/// A function to return current time.
 	pub now: Box<dyn Fn() -> time::Instant + Send + Sync>,
 	/// Prometheus Link,
 	pub metrics: PrometheusMetrics,
@@ -279,8 +281,9 @@ pub struct Proposer<B, Block: BlockT, C, A: TransactionPool, PR> {
 	/// we switch to a fixed-amount mode, in which after we see `MAX_SKIPPED_TRANSACTIONS`
 	/// transactions which exhaust resources, we will conclude that the block is full.
 	pub soft_deadline_percent: Percent,
+	/// Handle to telemetry.
 	pub telemetry: Option<TelemetryHandle>,
-	/// phantom member to pin the `Backend`/`ProofRecording` type.
+	/// Phantom member to pin the `Backend`/`ProofRecording` type.
 	_phantom: PhantomData<(B, PR)>,
 }
 
@@ -324,7 +327,7 @@ where
 			"basic-authorship-proposer",
 			None,
 			Box::pin(async move {
-				/// leave some time for evaluation and block finalization (33%).
+				// leave some time for evaluation and block finalization (33%).
 				let deadline = (self.now)() + max_duration - max_duration / 3;
 				let res = self
 					.propose_with(inherent_data, inherent_digests, deadline, block_size_limit)
@@ -372,11 +375,7 @@ where
 	/// longer than this maximum, the proposal will be very likely discarded.
 	///
 	/// If `block_size_limit` is given, the proposer should push transactions until the block size
-	/// limit is hit. Depending on the `finalize_block` implementation of the runtime, it probably
-	/// incorporates other operations (that are happening after the block limit is hit). So,
-	/// when the block size estimation also includes a proof that is recorded alongside the block
-	/// production, the proof can still grow. This means that the `block_size_limit` should not be
-	/// the hard limit of what is actually allowed.
+	/// limit is hit.
 	///
 	/// # Return
 	///
