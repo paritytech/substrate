@@ -2057,36 +2057,46 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 	) -> ClientResult<(NumberFor<Block>, HashSet<Block::Hash>)> {
 		let mut reverted_finalized = HashSet::new();
 
-		let mut best_number = self.blockchain.info().best_number;
-		let mut best_hash = self.blockchain.info().best_hash;
+		let info = self.blockchain.info();
 
-		let finalized = self.blockchain.info().finalized_number;
+		let highest_leaf = self
+			.blockchain
+			.leaves
+			.read()
+			.highest_leaf()
+			.and_then(|(n, h)| h.last().map(|h| (n, *h)));
 
-		let revertible = best_number - finalized;
+		let best_number = info.best_number;
+		let best_hash = info.best_hash;
+
+		let finalized = info.finalized_number;
+
+		let (mut number_to_revert, mut hash_to_revert) = match dbg!(highest_leaf) {
+			Some((n, h)) if n > best_number => (n, h),
+			_ => (best_number, best_hash),
+		};
+
+		let revertible = number_to_revert - finalized;
 		let n = if !revert_finalized && revertible < n { revertible } else { n };
 
 		let mut revert_blocks = || -> ClientResult<NumberFor<Block>> {
 			for c in 0..n.saturated_into::<u64>() {
-				if best_number.is_zero() {
+				if number_to_revert.is_zero() {
 					return Ok(c.saturated_into::<NumberFor<Block>>())
 				}
 				let mut transaction = Transaction::new();
 				let removed =
-					self.blockchain.header(BlockId::Number(best_number))?.ok_or_else(|| {
+					self.blockchain.header(BlockId::Hash(hash_to_revert))?.ok_or_else(|| {
 						sp_blockchain::Error::UnknownBlock(format!(
-							"Error reverting to {}. Block hash not found.",
-							best_number
+							"Error reverting to {}. Block header not found.",
+							hash_to_revert,
 						))
 					})?;
 				let removed_hash = removed.hash();
 
-				let prev_number = best_number.saturating_sub(One::one());
-				let prev_hash = self.blockchain.hash(prev_number)?.ok_or_else(|| {
-					sp_blockchain::Error::UnknownBlock(format!(
-						"Error reverting to {}. Block hash not found.",
-						best_number
-					))
-				})?;
+				let prev_number = number_to_revert.saturating_sub(One::one());
+				let prev_hash =
+					if prev_number == best_number { best_hash } else { *removed.parent_hash() };
 
 				if !self.have_state_at(&prev_hash, prev_number) {
 					return Ok(c.saturated_into::<NumberFor<Block>>())
@@ -2096,12 +2106,15 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 					Some(commit) => {
 						apply_state_commit(&mut transaction, commit);
 
-						best_number = prev_number;
-						best_hash = prev_hash;
+						number_to_revert = prev_number;
+						hash_to_revert = prev_hash;
 
-						let update_finalized = best_number < finalized;
+						let update_finalized = number_to_revert < finalized;
 
-						let key = utils::number_and_hash_to_lookup_key(best_number, &best_hash)?;
+						let key = utils::number_and_hash_to_lookup_key(
+							number_to_revert,
+							&hash_to_revert,
+						)?;
 						if update_finalized {
 							transaction.set_from_vec(
 								columns::META,
@@ -2111,12 +2124,14 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 
 							reverted_finalized.insert(removed_hash);
 							if let Some((hash, _)) = self.blockchain.info().finalized_state {
-								if hash == best_hash {
-									if !best_number.is_zero() &&
-										self.have_state_at(&prev_hash, best_number - One::one())
-									{
+								if hash == hash_to_revert {
+									if !number_to_revert.is_zero() &&
+										self.have_state_at(
+											&prev_hash,
+											number_to_revert - One::one(),
+										) {
 										let lookup_key = utils::number_and_hash_to_lookup_key(
-											best_number - One::one(),
+											number_to_revert - One::one(),
 											prev_hash,
 										)?;
 										transaction.set_from_vec(
@@ -2137,13 +2152,16 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 							&mut transaction,
 							columns::META,
 							meta_keys::CHILDREN_PREFIX,
-							best_hash,
+							hash_to_revert,
 						);
 						self.storage.db.commit(transaction)?;
+
+						let is_best = number_to_revert < best_number;
+
 						self.blockchain.update_meta(MetaUpdate {
-							hash: best_hash,
-							number: best_number,
-							is_best: true,
+							hash: hash_to_revert,
+							number: number_to_revert,
+							is_best,
 							is_finalized: update_finalized,
 							with_state: false,
 						});
@@ -3462,5 +3480,65 @@ pub(crate) mod tests {
 		// Insert a fork prior to finalization point. Leave should not be created.
 		insert_header_no_head(&backend, 1, block0, [1; 32].into());
 		assert_eq!(backend.blockchain().leaves().unwrap(), vec![block2_a]);
+	}
+
+	#[test]
+	fn revert_non_best_blocks() {
+		let backend = Backend::<Block>::new_test(10, 10);
+
+		let genesis =
+			insert_block(&backend, 0, Default::default(), None, Default::default(), vec![], None)
+				.unwrap();
+
+		let block1 =
+			insert_block(&backend, 1, genesis, None, Default::default(), vec![], None).unwrap();
+
+		let block2 = {
+			let mut op = backend.begin_operation().unwrap();
+			backend.begin_state_operation(&mut op, BlockId::Number(1)).unwrap();
+			let header = Header {
+				number: 2,
+				parent_hash: block1,
+				state_root: BlakeTwo256::trie_root(Vec::new(), StateVersion::V1),
+				digest: Default::default(),
+				extrinsics_root: Default::default(),
+			};
+
+			op.set_block_data(header.clone(), Some(Vec::new()), None, None, NewBlockState::Normal)
+				.unwrap();
+
+			backend.commit_operation(op).unwrap();
+
+			header.hash()
+		};
+
+		let block3 = {
+			let mut op = backend.begin_operation().unwrap();
+			backend.begin_state_operation(&mut op, BlockId::Hash(block2)).unwrap();
+			let header = Header {
+				number: 3,
+				parent_hash: block2,
+				state_root: BlakeTwo256::trie_root(Vec::new(), StateVersion::V1),
+				digest: Default::default(),
+				extrinsics_root: Default::default(),
+			};
+
+			op.set_block_data(header.clone(), Some(Vec::new()), None, None, NewBlockState::Normal)
+				.unwrap();
+
+			backend.commit_operation(op).unwrap();
+
+			header.hash()
+		};
+
+		assert!(backend.have_state_at(&block1, 1));
+		assert!(backend.have_state_at(&block2, 2));
+		assert!(backend.have_state_at(&block3, 3));
+
+		assert_eq!(3, backend.revert(10, false).unwrap().0);
+
+		assert!(!backend.have_state_at(&block1, 1));
+		assert!(!backend.have_state_at(&block2, 2));
+		assert!(!backend.have_state_at(&block3, 3));
 	}
 }
