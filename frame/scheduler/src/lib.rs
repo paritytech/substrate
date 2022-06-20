@@ -146,7 +146,6 @@ impl WeightCounter {
 		if test > self.limit {
 			false
 		} else {
-			dbg!((w, self.used, test));
 			self.used = test;
 			true
 		}
@@ -905,7 +904,6 @@ impl<T: Config> Pallet<T> {
 		when: T::BlockNumber,
 		max: u32,
 	) -> bool {
-		dbg!("service_agenda", when, now);
 		let mut agenda = Agenda::<T>::get(when);
 		let mut ordered = agenda
 			.iter()

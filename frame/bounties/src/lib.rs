@@ -815,7 +815,7 @@ impl<T: Config> Pallet<T> {
 		value: BalanceOf<T>,
 	) -> DispatchResult {
 		let bounded_description: BoundedVec<_, _> =
-			description.try_into().map_err(|()| Error::<T>::ReasonTooBig)?;
+			description.try_into().map_err(|_| Error::<T>::ReasonTooBig)?;
 		ensure!(value >= T::BountyValueMinimum::get(), Error::<T>::InvalidValue);
 
 		let index = Self::bounty_count();

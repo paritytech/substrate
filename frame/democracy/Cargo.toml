@@ -28,6 +28,7 @@ sp-std = { version = "4.0.0", default-features = false, path = "../../primitives
 [dev-dependencies]
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 pallet-scheduler = { version = "4.0.0-dev", path = "../scheduler" }
+pallet-preimage = { version = "4.0.0-dev", path = "../preimage" }
 sp-core = { version = "6.0.0", path = "../../primitives/core" }
 
 [features]

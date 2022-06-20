@@ -23,10 +23,10 @@ use assert_matches::assert_matches;
 use frame_benchmarking::{account, benchmarks, whitelist_account};
 use frame_support::{
 	assert_ok,
-	traits::{Currency, EnsureOrigin},
+	traits::{Bounded, Currency, EnsureOrigin},
 };
 use frame_system::RawOrigin;
-use sp_runtime::traits::{Bounded, Hash};
+use sp_runtime::traits::{Bounded as ArithBounded};
 
 const SEED: u32 = 0;
 
@@ -41,13 +41,19 @@ fn funded_account<T: Config>(name: &'static str, index: u32) -> T::AccountId {
 	caller
 }
 
+fn dummy_call<T: Config>() -> Bounded<<T as Config>::Call> {
+	let inner = frame_system::Call::remark { remark: vec![] };
+	let call = <T as Config>::Call::from(<T as frame_system::Config>::Call::from(inner));
+	T::Preimages::bound(call).unwrap()
+}
+
 fn create_referendum<T: Config>() -> (T::AccountId, ReferendumIndex) {
 	let caller = funded_account::<T>("caller", 0);
 	whitelist_account!(caller);
 	assert_ok!(Referenda::<T>::submit(
 		RawOrigin::Signed(caller.clone()).into(),
 		Box::new(RawOrigin::Root.into()),
-		T::Hashing::hash_of(&0),
+		dummy_call::<T>(),
 		DispatchTime::After(0u32.into())
 	));
 	let index = ReferendumCount::<T>::get() - 1;
@@ -175,10 +181,11 @@ benchmarks! {
 	submit {
 		let caller = funded_account::<T>("caller", 0);
 		whitelist_account!(caller);
+		let call = dummy_call::<T>();
 	}: _(
 		RawOrigin::Signed(caller),
 		Box::new(RawOrigin::Root.into()),
-		T::Hashing::hash_of(&0),
+		call,
 		DispatchTime::After(0u32.into())
 	) verify {
 		let index = ReferendumCount::<T>::get().checked_sub(1).unwrap();

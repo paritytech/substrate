@@ -63,6 +63,7 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
+		Preimage: pallet_preimage,
 		Scheduler: pallet_scheduler::{Pallet, Call, Storage, Event<T>},
 		Democracy: pallet_democracy::{Pallet, Call, Storage, Config<T>, Event<T>},
 	}
@@ -82,7 +83,7 @@ parameter_types! {
 }
 impl frame_system::Config for Test {
 	type BaseCallFilter = BaseFilter;
-	type BlockWeights = ();
+	type BlockWeights = BlockWeights;
 	type BlockLength = ();
 	type DbWeight = ();
 	type Origin = Origin;
@@ -109,6 +110,16 @@ impl frame_system::Config for Test {
 parameter_types! {
 	pub MaximumSchedulerWeight: Weight = Perbill::from_percent(80) * BlockWeights::get().max_block;
 }
+
+impl pallet_preimage::Config for Test {
+	type Event = Event;
+	type WeightInfo = ();
+	type Currency = Balances;
+	type ManagerOrigin = EnsureRoot<u64>;
+	type BaseDeposit = ConstU64<0>;
+	type ByteDeposit = ConstU64<0>;
+}
+
 impl pallet_scheduler::Config for Test {
 	type Event = Event;
 	type Origin = Origin;
@@ -116,10 +127,10 @@ impl pallet_scheduler::Config for Test {
 	type Call = Call;
 	type MaximumWeight = MaximumSchedulerWeight;
 	type ScheduleOrigin = EnsureRoot<u64>;
-	type MaxScheduledPerBlock = ();
+	type MaxScheduledPerBlock = ConstU32<100>;
 	type WeightInfo = ();
 	type OriginPrivilegeCmp = EqualPrivilegeOnly;
-	type PreimageProvider = ();
+	type Preimages = ();
 }
 
 impl pallet_balances::Config for Test {

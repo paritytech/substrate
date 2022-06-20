@@ -1191,7 +1191,10 @@ pub mod pallet {
 		}
 
 		/// Enact a proposal from a referendum. For now we just make the weight be the maximum.
-		#[pallet::weight(T::BlockWeights::get().max_block)]
+		// NOTE: This is badbadbad. The entire mechanism should be scrapped in favour of using
+		// Scheduler throughout. However we should move all Democracy over to Gov2 anyway, so may
+		// as well just deprecate this pallet.
+		#[pallet::weight(T::BlockWeights::get().max_block / 5)]
 		pub fn enact_proposal(
 			origin: OriginFor<T>,
 			proposal_hash: T::Hash,

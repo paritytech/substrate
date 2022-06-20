@@ -2593,7 +2593,7 @@ mod tests {
 		metadata::*,
 		traits::{
 			CrateVersion, Get, GetCallName, IntegrityTest, OnFinalize, OnIdle, OnInitialize,
-			OnRuntimeUpgrade, PalletInfo,
+			OnRuntimeUpgrade, PalletInfo, CallerTrait,
 		},
 		weights::{DispatchClass, DispatchInfo, Pays, RuntimeDbWeight},
 	};
@@ -2707,6 +2707,16 @@ mod tests {
 
 	impl From<RawOrigin<<TraitImpl as system::Config>::AccountId>> for OuterOrigin {
 		fn from(_: RawOrigin<<TraitImpl as system::Config>::AccountId>) -> Self {
+			unimplemented!("Not required in tests!")
+		}
+	}
+
+	impl CallerTrait<<TraitImpl as system::Config>::AccountId> for OuterOrigin {
+		fn into_system(self) -> Option<RawOrigin<<TraitImpl as system::Config>::AccountId>> {
+			unimplemented!("Not required in tests!")
+		}
+
+		fn as_system_ref(&self) -> Option<&RawOrigin<<TraitImpl as system::Config>::AccountId>> {
 			unimplemented!("Not required in tests!")
 		}
 	}

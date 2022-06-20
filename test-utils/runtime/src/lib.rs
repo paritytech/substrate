@@ -443,21 +443,22 @@ impl GetRuntimeBlockType for Runtime {
 #[derive(Clone, RuntimeDebug, Encode, Decode, PartialEq, Eq, TypeInfo, MaxEncodedLen)]
 pub struct Origin;
 
-impl CallerTrait<AccountId> for Origin {
-	fn into_system(self) -> Option<RawOrigin<AccountId>> {
-		unimplemented!("Not required in tests!")
-	}
-
-	fn as_system_ref(&self) -> Option<&RawOrigin<AccountId>> {
+impl From<RawOrigin<<Runtime as frame_system::Config>::AccountId>> for Origin {
+	fn from(_: RawOrigin<<Runtime as frame_system::Config>::AccountId>) -> Self {
 		unimplemented!("Not required in tests!")
 	}
 }
 
-impl From<frame_system::Origin<Runtime>> for Origin {
-	fn from(_o: frame_system::Origin<Runtime>) -> Self {
+impl CallerTrait<<Runtime as frame_system::Config>::AccountId> for Origin {
+	fn into_system(self) -> Option<RawOrigin<<Runtime as frame_system::Config>::AccountId>> {
+		unimplemented!("Not required in tests!")
+	}
+
+	fn as_system_ref(&self) -> Option<&RawOrigin<<Runtime as frame_system::Config>::AccountId>> {
 		unimplemented!("Not required in tests!")
 	}
 }
+
 impl From<Origin> for Result<frame_system::Origin<Runtime>, Origin> {
 	fn from(_origin: Origin) -> Result<frame_system::Origin<Runtime>, Origin> {
 		unimplemented!("Not required in tests!")

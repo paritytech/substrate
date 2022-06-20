@@ -164,7 +164,6 @@ benchmarks! {
 	service_task_fetched {
 		let s in (BoundedInline::bound() as u32) .. (T::Preimages::MAX_LENGTH as u32);
 		let now = BLOCK_NUMBER.into();
-		dbg!(s);
 		let task = make_task::<T>(false, false, false, Some(s), 0);
 		// prevent any tasks from actually being executed as we only want the surrounding weight.
 		let mut counter = WeightCounter { used: 0, limit: 0 };
