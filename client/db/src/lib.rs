@@ -2071,7 +2071,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 
 		let finalized = info.finalized_number;
 
-		let (mut number_to_revert, mut hash_to_revert) = match dbg!(highest_leaf) {
+		let (mut number_to_revert, mut hash_to_revert) = match highest_leaf {
 			Some((n, h)) if n > best_number => (n, h),
 			_ => (best_number, best_hash),
 		};
