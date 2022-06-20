@@ -17,9 +17,13 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::Encode;
+use codec::{Encode, MaxEncodedLen};
 
-use frame_support::{traits::OneSessionHandler, Parameter};
+use frame_support::{
+	log,
+	traits::{Get, OneSessionHandler},
+	BoundedSlice, BoundedVec, Parameter,
+};
 
 use sp_runtime::{
 	generic::DigestItem,
@@ -42,28 +46,28 @@ pub use pallet::*;
 pub mod pallet {
 	use super::*;
 	use frame_support::pallet_prelude::*;
-	use frame_system::pallet_prelude::*;
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// Authority identifier type
-		type BeefyId: Member + Parameter + RuntimeAppPublic + MaybeSerializeDeserialize;
+		type BeefyId: Member
+			+ Parameter
+			+ RuntimeAppPublic
+			+ MaybeSerializeDeserialize
+			+ MaxEncodedLen;
+
+		/// The maximum number of authorities that can be added.
+		type MaxAuthorities: Get<u32>;
 	}
 
 	#[pallet::pallet]
-	#[pallet::without_storage_info]
 	pub struct Pallet<T>(PhantomData<T>);
-
-	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
-
-	#[pallet::call]
-	impl<T: Config> Pallet<T> {}
 
 	/// The current authorities set
 	#[pallet::storage]
 	#[pallet::getter(fn authorities)]
-	pub(super) type Authorities<T: Config> = StorageValue<_, Vec<T::BeefyId>, ValueQuery>;
+	pub(super) type Authorities<T: Config> =
+		StorageValue<_, BoundedVec<T::BeefyId, T::MaxAuthorities>, ValueQuery>;
 
 	/// The current validator set id
 	#[pallet::storage]
@@ -74,7 +78,8 @@ pub mod pallet {
 	/// Authorities set scheduled to be used with the next session
 	#[pallet::storage]
 	#[pallet::getter(fn next_authorities)]
-	pub(super) type NextAuthorities<T: Config> = StorageValue<_, Vec<T::BeefyId>, ValueQuery>;
+	pub(super) type NextAuthorities<T: Config> =
+		StorageValue<_, BoundedVec<T::BeefyId, T::MaxAuthorities>, ValueQuery>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
@@ -91,7 +96,10 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
-			Pallet::<T>::initialize_authorities(&self.authorities);
+			Pallet::<T>::initialize_authorities(&self.authorities)
+				// we panic here as runtime maintainers can simply reconfigure genesis and restart
+				// the chain easily
+				.expect("Authorities vec too big");
 		}
 	}
 }
@@ -99,12 +107,15 @@ pub mod pallet {
 impl<T: Config> Pallet<T> {
 	/// Return the current active BEEFY validator set.
 	pub fn validator_set() -> Option<ValidatorSet<T::BeefyId>> {
-		let validators: Vec<T::BeefyId> = Self::authorities();
+		let validators: BoundedVec<T::BeefyId, T::MaxAuthorities> = Self::authorities();
 		let id: beefy_primitives::ValidatorSetId = Self::validator_set_id();
 		ValidatorSet::<T::BeefyId>::new(validators, id)
 	}
 
-	fn change_authorities(new: Vec<T::BeefyId>, queued: Vec<T::BeefyId>) {
+	fn change_authorities(
+		new: BoundedVec<T::BeefyId, T::MaxAuthorities>,
+		queued: BoundedVec<T::BeefyId, T::MaxAuthorities>,
+	) {
 		<Authorities<T>>::put(&new);
 
 		let next_id = Self::validator_set_id() + 1u64;
@@ -120,17 +131,23 @@ impl<T: Config> Pallet<T> {
 		<NextAuthorities<T>>::put(&queued);
 	}
 
-	fn initialize_authorities(authorities: &[T::BeefyId]) {
+	fn initialize_authorities(authorities: &[T::BeefyId]) -> Result<(), ()> {
 		if authorities.is_empty() {
-			return
+			return Ok(())
 		}
 
-		assert!(<Authorities<T>>::get().is_empty(), "Authorities are already initialized!");
+		if !<Authorities<T>>::get().is_empty() {
+			return Err(())
+		}
 
-		<Authorities<T>>::put(authorities);
+		let bounded_authorities =
+			BoundedSlice::<T::BeefyId, T::MaxAuthorities>::try_from(authorities)?;
+
+		<Authorities<T>>::put(bounded_authorities);
 		<ValidatorSetId<T>>::put(0);
 		// Like `pallet_session`, initialize the next validator set as well.
-		<NextAuthorities<T>>::put(authorities);
+		<NextAuthorities<T>>::put(bounded_authorities);
+		Ok(())
 	}
 }
 
@@ -146,7 +163,9 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 		I: Iterator<Item = (&'a T::AccountId, T::BeefyId)>,
 	{
 		let authorities = validators.map(|(_, k)| k).collect::<Vec<_>>();
-		Self::initialize_authorities(&authorities);
+		// we panic here as runtime maintainers can simply reconfigure genesis and restart the
+		// chain easily
+		Self::initialize_authorities(&authorities).expect("Authorities vec too big");
 	}
 
 	fn on_new_session<'a, I: 'a>(_changed: bool, validators: I, queued_validators: I)
@@ -154,11 +173,30 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 		I: Iterator<Item = (&'a T::AccountId, T::BeefyId)>,
 	{
 		let next_authorities = validators.map(|(_, k)| k).collect::<Vec<_>>();
+		if next_authorities.len() as u32 > T::MaxAuthorities::get() {
+			log::error!(
+				target: "runtime::beefy",
+				"authorities list {:?} truncated to length {}",
+				next_authorities, T::MaxAuthorities::get(),
+			);
+		}
+		let bounded_next_authorities =
+			BoundedVec::<_, T::MaxAuthorities>::truncate_from(next_authorities);
+
 		let next_queued_authorities = queued_validators.map(|(_, k)| k).collect::<Vec<_>>();
+		if next_queued_authorities.len() as u32 > T::MaxAuthorities::get() {
+			log::error!(
+				target: "runtime::beefy",
+				"queued authorities list {:?} truncated to length {}",
+				next_queued_authorities, T::MaxAuthorities::get(),
+			);
+		}
+		let bounded_next_queued_authorities =
+			BoundedVec::<_, T::MaxAuthorities>::truncate_from(next_queued_authorities);
 
 		// Always issue a change on each `session`, even if validator set hasn't changed.
 		// We want to have at least one BEEFY mandatory block per session.
-		Self::change_authorities(next_authorities, next_queued_authorities);
+		Self::change_authorities(bounded_next_authorities, bounded_next_queued_authorities);
 	}
 
 	fn on_disabled(i: u32) {
