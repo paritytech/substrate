@@ -74,6 +74,12 @@ impl From<ContractAccessError> for JsonRpseeError {
 				None::<()>,
 			))
 			.into(),
+			KeyDecodingFailed => CallError::Custom(ErrorObject::owned(
+				CONTRACT_DOESNT_EXIST,
+				"Failed to decode the specified storage key.",
+				None::<()>,
+			))
+			.into(),
 		}
 	}
 }

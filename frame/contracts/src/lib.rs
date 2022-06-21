@@ -952,7 +952,7 @@ where
 
 		let maybe_value = Storage::<T>::read(
 			&contract_info.trie_id,
-			&VarSizedKey::<T>::try_from(key).map_err(|_| ContractAccessError::DoesntExist)?,
+			&VarSizedKey::<T>::try_from(key).map_err(|_| ContractAccessError::KeyDecodingFailed)?,
 		);
 		Ok(maybe_value)
 	}
