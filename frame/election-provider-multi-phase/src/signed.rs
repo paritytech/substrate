@@ -521,6 +521,15 @@ impl<T: Config> Pallet<T> {
 			.saturating_add(len_deposit)
 			.saturating_add(weight_deposit)
 	}
+
+	/// Same as `deposit_for`, but returns a multiple of the result.
+	pub fn deposit_for_emergency(
+		raw_solution: &RawSolution<SolutionOf<T::MinerConfig>>,
+		size: SolutionOrSnapshotSize,
+	) -> BalanceOf<T> {
+		BalanceOf::<T>::from(T::EmergencyPunishmentMultiple::get()) *
+			Self::deposit_for(raw_solution, size)
+	}
 }
 
 #[cfg(test)]

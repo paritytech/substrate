@@ -705,6 +705,11 @@ pub mod pallet {
 
 		/// The weight of the pallet.
 		type WeightInfo: WeightInfo;
+
+		/// The multiple of the signed submission punishment for bad submission
+		/// during the emergency phase.
+		#[pallet::constant]
+		type EmergencyPunishmentMultiple: Get<u32>;
 	}
 
 	#[pallet::hooks]
@@ -980,7 +985,7 @@ pub mod pallet {
 				Error::<T>::SignedTooMuchWeight
 			);
 
-			let deposit = Self::deposit_for(&raw_solution, size);
+			let deposit = Self::deposit_for_emergency(&raw_solution, size);
 
 			T::Currency::reserve(&who, deposit).map_err(|_| Error::<T>::SignedCannotPayDeposit)?;
 
@@ -989,7 +994,7 @@ pub mod pallet {
 				T::EstimateCallFee::estimate_call_fee(&call, None.into())
 			};
 
-			match Self::feasibility_check(*raw_solution.clone(), ElectionCompute::Signed) {
+			match Self::feasibility_check(*raw_solution, ElectionCompute::Signed) {
 				Ok(ready_solution) => {
 					Self::finalize_signed_phase_accept_solution(
 						ready_solution,
@@ -2064,6 +2069,54 @@ mod tests {
 			assert!(MultiPhase::queued_solution().is_none());
 			assert!(MultiPhase::signed_submissions().is_empty());
 		})
+	}
+
+	#[test]
+	fn accepts_good_solution_during_emergency() {
+		ExtBuilder::default().onchain_fallback(false).build_and_execute(|| {
+			roll_to(25);
+			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
+
+			// No solutions are submitted so the queue should be empty
+			assert!(MultiPhase::queued_solution().is_none());
+			assert_eq!(MultiPhase::elect().unwrap_err(), ElectionError::Fallback("NoFallback."));
+
+			assert!(MultiPhase::current_phase().is_emergency());
+
+			let solution = crate::mock::raw_solution();
+			let origin = crate::mock::Origin::signed(99);
+
+			assert_ok!(MultiPhase::submit_emergency_solution(origin, Box::new(solution)));
+
+			// The queed solution shouldn't be none now because the submitted
+			// solution is correct.
+			assert!(MultiPhase::queued_solution().is_some());
+		});
+	}
+
+	#[test]
+	fn rejects_bad_solution_during_emergency() {
+		ExtBuilder::default().onchain_fallback(false).build_and_execute(|| {
+			roll_to(25);
+			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
+
+			// No solutions are submitted so the queue should be empty.
+			assert!(MultiPhase::queued_solution().is_none());
+			assert_eq!(MultiPhase::elect().unwrap_err(), ElectionError::Fallback("NoFallback."));
+
+			assert!(MultiPhase::current_phase().is_emergency());
+
+			let mut solution = crate::mock::raw_solution();
+			// modifying the solution, so that it becomes incorrect.
+			solution.round += 1;
+			let origin = crate::mock::Origin::signed(99);
+
+			assert_ok!(MultiPhase::submit_emergency_solution(origin, Box::new(solution)));
+
+			// The queed solution should be none now because the submitted
+			// solution is incorrect.
+			assert!(MultiPhase::queued_solution().is_none());
+		});
 	}
 
 	#[test]

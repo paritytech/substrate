@@ -281,6 +281,7 @@ parameter_types! {
 	pub static MockWeightInfo: MockedWeightInfo = MockedWeightInfo::Real;
 	pub static MaxElectingVoters: VoterIndex = u32::max_value();
 	pub static MaxElectableTargets: TargetIndex = TargetIndex::max_value();
+	pub static EmergencyPunishmentMultiple: u32 = 2;
 
 	pub static EpochLength: u64 = 30;
 	pub static OnChainFallback: bool = true;
@@ -387,6 +388,7 @@ impl crate::Config for Runtime {
 	type MaxElectableTargets = MaxElectableTargets;
 	type MinerConfig = Self;
 	type Solver = SequentialPhragmen<AccountId, SolutionAccuracyOf<Runtime>, Balancing>;
+	type EmergencyPunishmentMultiple = EmergencyPunishmentMultiple;
 }
 
 impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Runtime
