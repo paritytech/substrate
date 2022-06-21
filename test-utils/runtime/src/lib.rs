@@ -23,7 +23,7 @@
 pub mod genesismap;
 pub mod system;
 
-use codec::{Decode, Encode, Error, Input};
+use codec::{Decode, Encode, Error, Input, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_std::{marker::PhantomData, prelude::*};
 
@@ -439,7 +439,7 @@ impl GetRuntimeBlockType for Runtime {
 	type RuntimeBlock = Block;
 }
 
-#[derive(Clone, RuntimeDebug, Encode, Decode, PartialEq, Eq, TypeInfo)]
+#[derive(Clone, RuntimeDebug, Encode, Decode, PartialEq, Eq, TypeInfo, MaxEncodedLen)]
 pub struct Origin;
 
 impl From<frame_system::Origin<Runtime>> for Origin {

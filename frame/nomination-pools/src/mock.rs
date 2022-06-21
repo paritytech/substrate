@@ -2,7 +2,6 @@ use super::*;
 use crate::{self as pools};
 use frame_support::{assert_ok, parameter_types, PalletId};
 use frame_system::RawOrigin;
-use std::collections::HashMap;
 
 pub type AccountId = u128;
 pub type Balance = u128;
@@ -20,17 +19,19 @@ pub fn default_reward_account() -> AccountId {
 parameter_types! {
 	pub static CurrentEra: EraIndex = 0;
 	pub static BondingDuration: EraIndex = 3;
-	static BondedBalanceMap: HashMap<AccountId, Balance> = Default::default();
-	static UnbondingBalanceMap: HashMap<AccountId, Balance> = Default::default();
+	pub storage BondedBalanceMap: BTreeMap<AccountId, Balance> = Default::default();
+	pub storage UnbondingBalanceMap: BTreeMap<AccountId, Balance> = Default::default();
 	#[derive(Clone, PartialEq)]
 	pub static MaxUnbonding: u32 = 8;
-	pub static Nominations: Vec<AccountId> = vec![];
+	pub storage Nominations: Option<Vec<AccountId>> = None;
 }
 
 pub struct StakingMock;
 impl StakingMock {
 	pub(crate) fn set_bonded_balance(who: AccountId, bonded: Balance) {
-		BONDED_BALANCE_MAP.with(|m| m.borrow_mut().insert(who, bonded));
+		let mut x = BondedBalanceMap::get();
+		x.insert(who, bonded);
+		BondedBalanceMap::set(&x)
 	}
 }
 
@@ -66,22 +67,33 @@ impl sp_staking::StakingInterface for StakingMock {
 	}
 
 	fn bond_extra(who: Self::AccountId, extra: Self::Balance) -> DispatchResult {
-		BONDED_BALANCE_MAP.with(|m| *m.borrow_mut().get_mut(&who).unwrap() += extra);
+		let mut x = BondedBalanceMap::get();
+		x.get_mut(&who).map(|v| *v += extra);
+		BondedBalanceMap::set(&x);
 		Ok(())
 	}
 
 	fn unbond(who: Self::AccountId, amount: Self::Balance) -> DispatchResult {
-		BONDED_BALANCE_MAP.with(|m| *m.borrow_mut().get_mut(&who).unwrap() -= amount);
-		UNBONDING_BALANCE_MAP
-			.with(|m| *m.borrow_mut().entry(who).or_insert(Self::Balance::zero()) += amount);
+		let mut x = BondedBalanceMap::get();
+		*x.get_mut(&who).unwrap() = x.get_mut(&who).unwrap().saturating_sub(amount);
+		BondedBalanceMap::set(&x);
+		let mut y = UnbondingBalanceMap::get();
+		*y.entry(who).or_insert(Self::Balance::zero()) += amount;
+		UnbondingBalanceMap::set(&y);
 		Ok(())
 	}
 
-	fn withdraw_unbonded(who: Self::AccountId, _: u32) -> Result<u64, DispatchError> {
-		// Simulates removing unlocking chunks and only having the bonded balance locked
-		let _maybe_new_free = UNBONDING_BALANCE_MAP.with(|m| m.borrow_mut().remove(&who));
+	fn chill(_: Self::AccountId) -> sp_runtime::DispatchResult {
+		Ok(())
+	}
 
-		Ok(100)
+	fn withdraw_unbonded(who: Self::AccountId, _: u32) -> Result<bool, DispatchError> {
+		// Simulates removing unlocking chunks and only having the bonded balance locked
+		let mut x = UnbondingBalanceMap::get();
+		x.remove(&who);
+		UnbondingBalanceMap::set(&x);
+
+		Ok(UnbondingBalanceMap::get().is_empty() && BondedBalanceMap::get().is_empty())
 	}
 
 	fn bond(
@@ -95,8 +107,12 @@ impl sp_staking::StakingInterface for StakingMock {
 	}
 
 	fn nominate(_: Self::AccountId, nominations: Vec<Self::AccountId>) -> DispatchResult {
-		Nominations::set(nominations);
+		Nominations::set(&Some(nominations));
 		Ok(())
+	}
+
+	fn nominations(_: Self::AccountId) -> Option<Vec<Self::AccountId>> {
+		Nominations::get()
 	}
 }
 
@@ -162,7 +178,6 @@ parameter_types! {
 	pub static MaxMetadataLen: u32 = 2;
 	pub static CheckLevel: u8 = 255;
 	pub const PoolsPalletId: PalletId = PalletId(*b"py/nopls");
-	pub const MinPointsToBalance: u32 = 10;
 }
 impl pools::Config for Runtime {
 	type Event = Event;
@@ -175,7 +190,7 @@ impl pools::Config for Runtime {
 	type PalletId = PoolsPalletId;
 	type MaxMetadataLen = MaxMetadataLen;
 	type MaxUnbonding = MaxUnbonding;
-	type MinPointsToBalance = MinPointsToBalance;
+	type MinPointsToBalance = frame_support::traits::ConstU32<10>;
 }
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;
@@ -265,7 +280,8 @@ pub(crate) fn unsafe_set_state(pool_id: PoolId, state: PoolState) -> Result<(), 
 }
 
 parameter_types! {
-	static ObservedEvents: usize = 0;
+	static PoolsEvents: usize = 0;
+	static BalancesEvents: usize = 0;
 }
 
 /// All events of this pallet.
@@ -275,8 +291,20 @@ pub(crate) fn pool_events_since_last_call() -> Vec<super::Event<Runtime>> {
 		.map(|r| r.event)
 		.filter_map(|e| if let Event::Pools(inner) = e { Some(inner) } else { None })
 		.collect::<Vec<_>>();
-	let already_seen = ObservedEvents::get();
-	ObservedEvents::set(events.len());
+	let already_seen = PoolsEvents::get();
+	PoolsEvents::set(events.len());
+	events.into_iter().skip(already_seen).collect()
+}
+
+/// All events of the `Balances` pallet.
+pub(crate) fn balances_events_since_last_call() -> Vec<pallet_balances::Event<Runtime>> {
+	let events = System::events()
+		.into_iter()
+		.map(|r| r.event)
+		.filter_map(|e| if let Event::Balances(inner) = e { Some(inner) } else { None })
+		.collect::<Vec<_>>();
+	let already_seen = BalancesEvents::get();
+	BalancesEvents::set(events.len());
 	events.into_iter().skip(already_seen).collect()
 }
 
