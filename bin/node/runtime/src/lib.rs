@@ -1693,6 +1693,14 @@ mod mmr {
 	pub type Hashing = <Runtime as pallet_mmr::Config>::Hashing;
 }
 
+/// Contracts helper types.
+mod contracts {
+	use super::Runtime;
+	use pallet_contracts::VarSizedKey;
+
+	pub type StorageKey = VarSizedKey<Runtime>;
+}
+
 #[cfg(feature = "runtime-benchmarks")]
 #[macro_use]
 extern crate frame_benchmarking;
@@ -1904,7 +1912,7 @@ impl_runtime_apis! {
 	}
 
 	impl pallet_contracts_rpc_runtime_api::ContractsApi<
-		Block, AccountId, Balance, BlockNumber, Hash,
+		Block, AccountId, Balance, BlockNumber, Hash, contracts::StorageKey,
 	>
 		for Runtime
 	{
@@ -1943,7 +1951,7 @@ impl_runtime_apis! {
 
 		fn get_storage(
 			address: AccountId,
-			key: Vec<u8>,
+			key: contracts::StorageKey,
 		) -> pallet_contracts_primitives::GetStorageResult {
 			Contracts::get_storage(address, key)
 		}

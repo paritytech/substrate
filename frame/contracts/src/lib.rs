@@ -946,14 +946,11 @@ where
 	}
 
 	/// Query storage of a specified contract under a specified key.
-	pub fn get_storage(address: T::AccountId, key: Vec<u8>) -> GetStorageResult {
+	pub fn get_storage(address: T::AccountId, key: VarSizedKey<T>) -> GetStorageResult {
 		let contract_info =
 			ContractInfoOf::<T>::get(&address).ok_or(ContractAccessError::DoesntExist)?;
 
-		let maybe_value = Storage::<T>::read(
-			&contract_info.trie_id,
-			&VarSizedKey::<T>::try_from(key).map_err(|_| ContractAccessError::DoesntExist)?,
-		);
+		let maybe_value = Storage::<T>::read(&contract_info.trie_id, &key);
 		Ok(maybe_value)
 	}
 
