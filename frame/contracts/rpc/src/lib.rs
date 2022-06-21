@@ -117,7 +117,7 @@ pub struct CodeUploadRequest<AccountId> {
 
 /// Contracts RPC methods.
 #[rpc(client, server)]
-pub trait ContractsApi<BlockHash, BlockNumber, AccountId, Balance, Hash, VarSizedKey>
+pub trait ContractsApi<BlockHash, BlockNumber, AccountId, Balance, Hash>
 where
 	Balance: Copy + TryFrom<NumberOrHex> + Into<NumberOrHex>,
 {
@@ -167,7 +167,7 @@ where
 	fn get_storage(
 		&self,
 		address: AccountId,
-		key: VarSizedKey,
+		key: Bytes,
 		at: Option<BlockHash>,
 	) -> RpcResult<Option<Bytes>>;
 }
@@ -186,14 +186,13 @@ impl<Client, Block> Contracts<Client, Block> {
 }
 
 #[async_trait]
-impl<Client, Block, AccountId, Balance, Hash, VarSizedKey>
+impl<Client, Block, AccountId, Balance, Hash>
 	ContractsApiServer<
 		<Block as BlockT>::Hash,
 		<<Block as BlockT>::Header as HeaderT>::Number,
 		AccountId,
 		Balance,
 		Hash,
-		VarSizedKey,
 	> for Contracts<Client, Block>
 where
 	Block: BlockT,
@@ -204,12 +203,10 @@ where
 		Balance,
 		<<Block as BlockT>::Header as HeaderT>::Number,
 		Hash,
-		VarSizedKey,
 	>,
 	AccountId: Codec,
 	Balance: Codec + Copy + TryFrom<NumberOrHex> + Into<NumberOrHex>,
 	Hash: Codec,
-	VarSizedKey: Codec,
 {
 	fn call(
 		&self,
@@ -295,13 +292,13 @@ where
 	fn get_storage(
 		&self,
 		address: AccountId,
-		key: VarSizedKey,
+		key: Bytes,
 		at: Option<<Block as BlockT>::Hash>,
 	) -> RpcResult<Option<Bytes>> {
 		let api = self.client.runtime_api();
 		let at = BlockId::hash(at.unwrap_or_else(|| self.client.info().best_hash));
 		let result = api
-			.get_storage(&at, address, key)
+			.get_storage(&at, address, key.to_vec())
 			.map_err(runtime_error_into_rpc_err)?
 			.map_err(ContractAccessError)?
 			.map(Bytes);

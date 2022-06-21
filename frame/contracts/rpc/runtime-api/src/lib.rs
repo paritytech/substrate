@@ -31,12 +31,11 @@ use sp_std::vec::Vec;
 
 sp_api::decl_runtime_apis! {
 	/// The API to interact with contracts without using executive.
-	pub trait ContractsApi<AccountId, Balance, BlockNumber, Hash, VarSizedKey> where
+	pub trait ContractsApi<AccountId, Balance, BlockNumber, Hash> where
 		AccountId: Codec,
 		Balance: Codec,
 		BlockNumber: Codec,
 		Hash: Codec,
-		VarSizedKey: Codec,
 	{
 		/// Perform a call from a specified account to a given contract.
 		///
@@ -80,7 +79,7 @@ sp_api::decl_runtime_apis! {
 		/// doesn't exist, or doesn't have a contract then `Err` is returned.
 		fn get_storage(
 			address: AccountId,
-			key: VarSizedKey,
+			key: Vec<u8>,
 		) -> GetStorageResult;
 	}
 }

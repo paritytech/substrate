@@ -47,7 +47,7 @@ use frame_system::{
 };
 pub use node_primitives::{AccountId, Signature};
 use node_primitives::{AccountIndex, Balance, BlockNumber, Hash, Index, Moment};
-use pallet_contracts::{weights::WeightInfo, VarSizedKey as StorageKey};
+use pallet_contracts::weights::WeightInfo;
 use pallet_election_provider_multi_phase::SolutionAccuracyOf;
 use pallet_grandpa::{
 	fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
@@ -1904,7 +1904,7 @@ impl_runtime_apis! {
 	}
 
 	impl pallet_contracts_rpc_runtime_api::ContractsApi<
-		Block, AccountId, Balance, BlockNumber, Hash, StorageKey<Runtime>,
+		Block, AccountId, Balance, BlockNumber, Hash,
 	>
 		for Runtime
 	{
@@ -1943,7 +1943,7 @@ impl_runtime_apis! {
 
 		fn get_storage(
 			address: AccountId,
-			key: StorageKey<Runtime>,
+			key: Vec<u8>,
 		) -> pallet_contracts_primitives::GetStorageResult {
 			Contracts::get_storage(address, key)
 		}
