@@ -415,6 +415,41 @@ pub struct PoolMember<T: Config> {
 impl<T: Config> PoolMember<T> {
 	/// The pending rewards of this member.
 	fn pending_rewards(&self, current_reward_counter: RewardCounter) -> BalanceOf<T> {
+		// Precision note: Reward counters are fixedU128 with base of 10^18. Multiplying it with
+		// points, which have the same granularity as with balance should almost always be fine for
+		// Polkadot and Kusama since: The total issuance of both are
+		//
+		// dot: 12,047,781,394,999,601,455
+		// ksm: 12,424,748,376,019,599,766
+		//
+		// both of which are around 60% of u64::max. So, the absolute worse case for a non-slashed
+		// pool that can happen is that the points are equal to the whole total issuance, and the
+		// reward counter is `RewardCounter::max_value()`. In this case, we get:
+		//
+		// dot_total_issuance * u128::max / 10^18
+		//
+		// which is roughly 12 more than u128::max. This means this will overflow if: a pool's
+		// points is roughly 1/12th of the total issuance, which in a non-slashed dot means if a
+		// pool owns 1/12th of the total issuance. In reality though, the accumulated reward will
+		// likely be much smaller than u128::max.
+		//
+		// more on that: the reward counter is the sum of all the rewards that are always given out
+		// to a pool, multiplied by 10^18. Again, assuming that the rewards of a pool are equal to
+		// the WHOLE total issuance (which is only realistically possible in multiple decades from
+		// now, and a single pool earning almost all the inflation), we can compute:
+		//
+		//  dot_total_issuance * 10**18 / 2**128
+		//
+		// which is roughly 3%, meaning that roughly 3% of the capacity of the u128 is filled, and
+		// that a more realistic value for the previous calculation was:
+		//
+		// dot_total_issuance * (dot_total_issuance * 10^18) / 10^18
+		//
+		// which simplifies to dot_total_issuance^2. In other words, as long as square of the total
+		// issuance fits in u128, this whole calculation won't saturate. Nonetheless, we make all of
+		// the calculations be checked arithmetic, to make sure if a pool ever reaches this state
+		// way earlier than the few decades we anticipate due to severe slashing, no operations can
+		// happen in that pool.
 		(current_reward_counter.saturating_sub(self.last_recorded_reward_counter))
 			.saturating_mul_int(self.active_points())
 	}
@@ -967,16 +1002,38 @@ impl<T: Config> RewardPool<T> {
 		let payouts_since_last_record = balance
 			.saturating_add(self.total_rewards_claimed)
 			.saturating_sub(self.last_recorded_total_payouts);
+
+		// accuracy notes: `payouts_since_last_record` is a subset of the total_issuance at the very
+		// worse. Bonded_points are similarly, in a non-slashed pool, have the same granularity as
+		// balance, and are thus below within the range of total_issuance. In the worse case
+		// scenario, for `saturating_from_rational`, we have:
+		//
+		// dot_total_issuance * 10^18 / `minJoinBond`
+		//
+		// assuming `MinJoinBond == ED`
+		//
+		// dot_total_issuance * 10^18 / 10^10 = dot_total_issuance * 10^8
+		//
+		// which, with the current numbers, is a miniscule fraction of the u128 capacity.
+		//
+		// Thus, adding two values of type reward counter should be safe for ages in a chain like
+		// Polkadot. The important note here is that `reward_pool.last_recorded_reward_counter` only
+		// ever accumulates, but its semantics imply that it is less than total_issuance, when
+		// represented as `FixedU128`, which means it is less than `total_issuance * 10^18`.
 		self.last_recorded_reward_counter
 			.saturating_add(RewardCounter::saturating_from_rational(
 				payouts_since_last_record,
 				bonded_points,
 			))
+
+		// TODO: make reward counter generic type
+		// TODO: make any arithmetic on rewardCounter fallible.
+		// TODO: test for arithmetic failing + micro reward payment in a mega-pool.
 	}
 
 	/// Current free balance of the reward pool.
 	///
-	/// This is sum of all the rewards that are claimable.
+	/// This is sum of all the rewards that are claimable by pool members.
 	fn current_balance(id: PoolId) -> BalanceOf<T> {
 		T::Currency::free_balance(&Pallet::<T>::create_reward_account(id))
 			.saturating_sub(T::Currency::minimum_balance())
