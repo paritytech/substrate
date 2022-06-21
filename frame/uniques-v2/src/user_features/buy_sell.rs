@@ -67,17 +67,14 @@ impl<T: Config> Pallet<T> {
 		let item = Items::<T>::get(collection_id, item_id).ok_or(Error::<T>::ItemNotFound)?;
 		ensure!(item.owner != buyer, Error::<T>::NotAuthorized);
 
-		if let Some(price) = item.price {
-			ensure!(bid_price >= price, Error::<T>::BidTooLow);
-		} else {
-			return Err(Error::<T>::ItemNotForSale.into())
-		}
+		let item_price = item.price.ok_or(Error::<T>::ItemNotForSale)?;
+		ensure!(bid_price >= item_price, Error::<T>::BidTooLow);
 
 		if let Some(only_buyer) = item.buyer {
 			ensure!(only_buyer == buyer, Error::<T>::ItemNotForSale);
 		}
 
-		let mut transfer_amount = price.clone();
+		let mut transfer_amount = item_price.clone();
 		if Self::has_royalties(&config) {
 			let collection =
 				Collections::<T>::get(collection_id).ok_or(Error::<T>::CollectionNotFound)?;
