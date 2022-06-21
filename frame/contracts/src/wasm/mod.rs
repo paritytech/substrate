@@ -31,10 +31,15 @@ use crate::{
 	exec::{ExecResult, Executable, ExportedFunction, Ext},
 	gas::GasMeter,
 	wasm::env_def::FunctionImplProvider,
-	AccountIdOf, BalanceOf, CodeHash, CodeStorage, Config, Schedule,
+	AccountIdOf, BalanceOf, CodeHash, CodeStorage, CodeVec, Config, Error, RelaxedCodeVec,
+	Schedule,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
-use frame_support::dispatch::{DispatchError, DispatchResult};
+use frame_support::{
+	dispatch::{DispatchError, DispatchResult},
+	ensure,
+	traits::Get,
+};
 use sp_core::crypto::UncheckedFrom;
 use sp_sandbox::{SandboxEnvironmentBuilder, SandboxInstance, SandboxMemory};
 use sp_std::prelude::*;
@@ -50,7 +55,8 @@ pub use tests::MockExt;
 /// `instruction_weights_version` and `code` change when a contract with an outdated instrumentation
 /// is called. Therefore one must be careful when holding any in-memory representation of this
 /// type while calling into a contract as those fields can get out of date.
-#[derive(Clone, Encode, Decode, scale_info::TypeInfo)]
+#[derive(Clone, Encode, Decode, scale_info::TypeInfo, MaxEncodedLen)]
+#[codec(mel_bound())]
 #[scale_info(skip_type_params(T))]
 pub struct PrefabWasmModule<T: Config> {
 	/// Version of the instruction weights with which the code was instrumented.
@@ -63,14 +69,14 @@ pub struct PrefabWasmModule<T: Config> {
 	#[codec(compact)]
 	maximum: u32,
 	/// Code instrumented with the latest schedule.
-	code: Vec<u8>,
+	code: RelaxedCodeVec<T>,
 	/// The uninstrumented, pristine version of the code.
 	///
 	/// It is not stored because the pristine code has its own storage item. The value
 	/// is only `Some` when this module was created from an `original_code` and `None` if
 	/// it was loaded from storage.
 	#[codec(skip)]
-	original_code: Option<Vec<u8>>,
+	original_code: Option<CodeVec<T>>,
 	/// The code hash of the stored code which is defined as the hash over the `original_code`.
 	///
 	/// As the map key there is no need to store the hash in the value, too. It is set manually
@@ -122,8 +128,19 @@ where
 		original_code: Vec<u8>,
 		schedule: &Schedule<T>,
 		owner: AccountIdOf<T>,
-	) -> Result<Self, &'static str> {
-		prepare::prepare_contract(original_code, schedule, owner)
+	) -> Result<Self, (DispatchError, &'static str)> {
+		let module = prepare::prepare_contract(
+			original_code.try_into().map_err(|_| (<Error<T>>::CodeTooLarge.into(), ""))?,
+			schedule,
+			owner,
+		)?;
+		// When instrumenting a new code we apply a stricter limit than enforced by the
+		// `RelaxedCodeVec` in order to leave some headroom for reinstrumentation.
+		ensure!(
+			module.code.len() as u32 <= T::MaxCodeLen::get(),
+			(<Error<T>>::CodeTooLarge.into(), ""),
+		);
+		Ok(module)
 	}
 
 	/// Store the code without instantiating it.
@@ -503,6 +520,9 @@ mod tests {
 		fn contract_info(&mut self) -> &mut crate::ContractInfo<Self::T> {
 			unimplemented!()
 		}
+		fn ecdsa_to_eth_address(&self, _pk: &[u8; 33]) -> Result<[u8; 20], ()> {
+			Ok([2u8; 20])
+		}
 	}
 
 	fn execute<E: BorrowMut<MockExt>>(wat: &str, input_data: Vec<u8>, mut ext: E) -> ExecResult {
@@ -816,13 +836,12 @@ mod tests {
 	}
 
 	#[test]
-	#[cfg(feature = "unstable-interface")]
 	fn contains_storage_works() {
 		const CODE: &str = r#"
 (module
 	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
 	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
-	(import "__unstable__" "seal_contains_storage" (func $seal_contains_storage (param i32) (result i32)))
+	(import "seal0" "seal_contains_storage" (func $seal_contains_storage (param i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; [0, 4) size of input buffer (32 byte as we copy the key here)
@@ -1040,7 +1059,6 @@ mod tests {
 		);
 	}
 
-	#[cfg(feature = "unstable-interface")]
 	const CODE_ECDSA_RECOVER: &str = r#"
 (module
 	;; seal_ecdsa_recover(
@@ -1048,7 +1066,7 @@ mod tests {
 	;;    message_hash_ptr: u32,
 	;;    output_ptr: u32
 	;; ) -> u32
-	(import "__unstable__" "seal_ecdsa_recover" (func $seal_ecdsa_recover (param i32 i32 i32) (result i32)))
+	(import "seal0" "seal_ecdsa_recover" (func $seal_ecdsa_recover (param i32 i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 	(func (export "call")
 		(drop
@@ -1078,11 +1096,45 @@ mod tests {
 "#;
 
 	#[test]
-	#[cfg(feature = "unstable-interface")]
 	fn contract_ecdsa_recover() {
 		let mut mock_ext = MockExt::default();
 		assert_ok!(execute(&CODE_ECDSA_RECOVER, vec![], &mut mock_ext));
 		assert_eq!(mock_ext.ecdsa_recover.into_inner(), [([1; 65], [1; 32])]);
+	}
+
+	#[test]
+	fn contract_ecdsa_to_eth_address() {
+		/// calls `seal_ecdsa_to_eth_address` for the contstant and ensures the result equals the
+		/// expected one.
+		const CODE_ECDSA_TO_ETH_ADDRESS: &str = r#"
+(module
+	(import "seal0" "seal_ecdsa_to_eth_address" (func $seal_ecdsa_to_eth_address (param i32 i32) (result i32)))
+	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
+	(func (export "call")
+		;; fill the buffer with the eth address.
+		(call $seal_ecdsa_to_eth_address (i32.const 0) (i32.const 0))
+
+		;; Return the contents of the buffer
+		(call $seal_return
+			(i32.const 0)
+			(i32.const 0)
+			(i32.const 20)
+		)
+
+		;; seal_return doesn't return, so this is effectively unreachable.
+		(unreachable)
+	)
+	(func (export "deploy"))
+)
+"#;
+
+		let output = execute(CODE_ECDSA_TO_ETH_ADDRESS, vec![], MockExt::default()).unwrap();
+		assert_eq!(
+			output,
+			ExecReturnValue { flags: ReturnFlags::empty(), data: Bytes([0x02; 20].to_vec()) }
+		);
 	}
 
 	const CODE_GET_STORAGE: &str = r#"
@@ -2124,13 +2176,12 @@ mod tests {
 	}
 
 	#[test]
-	#[cfg(feature = "unstable-interface")]
 	fn set_storage_works() {
 		const CODE: &str = r#"
 (module
 	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
 	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
-	(import "__unstable__" "seal_set_storage" (func $seal_set_storage (param i32 i32 i32) (result i32)))
+	(import "seal1" "seal_set_storage" (func $seal_set_storage (param i32 i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; 0x1000 = 4k in little endian
@@ -2368,12 +2419,11 @@ mod tests {
 	}
 
 	#[test]
-	#[cfg(feature = "unstable-interface")]
 	fn code_hash_works() {
 		/// calls `seal_code_hash` and compares the result with the constant.
 		const CODE_CODE_HASH: &str = r#"
 (module
-	(import "__unstable__" "seal_code_hash" (func $seal_code_hash (param i32 i32 i32) (result i32)))
+	(import "seal0" "seal_code_hash" (func $seal_code_hash (param i32 i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; size of our buffer is 32 bytes
@@ -2421,12 +2471,11 @@ mod tests {
 	}
 
 	#[test]
-	#[cfg(feature = "unstable-interface")]
 	fn own_code_hash_works() {
 		/// calls `seal_own_code_hash` and compares the result with the constant.
 		const CODE_OWN_CODE_HASH: &str = r#"
 (module
-	(import "__unstable__" "seal_own_code_hash" (func $seal_own_code_hash (param i32 i32)))
+	(import "seal0" "seal_own_code_hash" (func $seal_own_code_hash (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; size of our buffer is 32 bytes
@@ -2507,11 +2556,10 @@ mod tests {
 	}
 
 	#[test]
-	#[cfg(feature = "unstable-interface")]
 	fn set_code_hash() {
 		const CODE: &str = r#"
 (module
-	(import "__unstable__" "seal_set_code_hash" (func $seal_set_code_hash (param i32) (result i32)))
+	(import "seal0" "seal_set_code_hash" (func $seal_set_code_hash (param i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 	(func $assert (param i32)
 		(block $ok

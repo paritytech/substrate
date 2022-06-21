@@ -13,36 +13,38 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-serde = { version = "1.0.136", optional = true }
-hex-literal = { version = "0.3.4", optional = true }
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false }
-scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
+hex-literal = { version = "0.3.4", optional = true }
+scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
+serde = { version = "1.0.136", optional = true }
+frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "../benchmarking" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../balances" }
+sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../../primitives/inherents" }
+sp-io = { version = "6.0.0", default-features = false, path = "../../primitives/io" }
 sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
-sp-io = { version = "6.0.0", default-features = false, path = "../../primitives/io" }
-sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../../primitives/inherents" }
 sp-transaction-storage-proof = { version = "4.0.0-dev", default-features = false, path = "../../primitives/transaction-storage-proof" }
-frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
+log = { version = "0.4.17", default-features = false }
 
 [dev-dependencies]
+sp-core = { version = "6.0.0", default-features = false, path = "../../primitives/core" }
 sp-transaction-storage-proof = { version = "4.0.0-dev", default-features = true, path = "../../primitives/transaction-storage-proof" }
-sp-core = { version = "6.0.0", path = "../../primitives/core", default-features = false }
 
 [features]
 default = ["std"]
 runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks", "hex-literal"]
 std = [
-	"serde",
 	"codec/std",
-	"scale-info/std",
-	"sp-runtime/std",
 	"frame-support/std",
 	"frame-system/std",
 	"pallet-balances/std",
-	"sp-io/std",
-	"sp-std/std",
+	"scale-info/std",
+	"serde",
 	"sp-inherents/std",
+	"sp-io/std",
+	"sp-runtime/std",
+	"sp-std/std",
+	"sp-transaction-storage-proof/std",
 ]

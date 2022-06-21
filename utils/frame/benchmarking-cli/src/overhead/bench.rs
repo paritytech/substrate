@@ -36,17 +36,18 @@ use log::info;
 use serde::Serialize;
 use std::{marker::PhantomData, sync::Arc, time::Instant};
 
-use crate::{overhead::cmd::ExtrinsicBuilder, storage::record::Stats};
+use super::cmd::ExtrinsicBuilder;
+use crate::shared::Stats;
 
 /// Parameters to configure an *overhead* benchmark.
 #[derive(Debug, Default, Serialize, Clone, PartialEq, Args)]
 pub struct BenchmarkParams {
 	/// Rounds of warmups before measuring.
-	#[clap(long, default_value = "100")]
+	#[clap(long, default_value = "10")]
 	pub warmup: u32,
 
 	/// How many times the benchmark should be repeated.
-	#[clap(long, default_value = "1000")]
+	#[clap(long, default_value = "100")]
 	pub repeat: u32,
 
 	/// Maximal number of extrinsics that should be put into a block.

@@ -21,10 +21,7 @@ use crate::{OpaquePeerId, RuntimeDebug};
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
 use sp_runtime_interface::pass_by::{PassByCodec, PassByEnum, PassByInner};
-use sp_std::{
-	convert::TryFrom,
-	prelude::{Box, Vec},
-};
+use sp_std::prelude::{Box, Vec};
 
 pub use crate::crypto::KeyTypeId;
 
@@ -211,12 +208,14 @@ impl OpaqueMultiaddr {
 #[derive(
 	Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Default, RuntimeDebug, PassByInner, Encode, Decode,
 )]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub struct Timestamp(u64);
 
 /// Duration type
 #[derive(
 	Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Default, RuntimeDebug, PassByInner, Encode, Decode,
 )]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub struct Duration(u64);
 
 impl Duration {

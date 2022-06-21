@@ -14,51 +14,52 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"] }
-scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
-sp-application-crypto = { version = "6.0.0", default-features = false, path = "../../primitives/application-crypto" }
-sp-core = { version = "6.0.0", default-features = false, path = "../../primitives/core" }
-sp-finality-grandpa = { version = "4.0.0-dev", default-features = false, path = "../../primitives/finality-grandpa" }
-sp-io = { version = "6.0.0", default-features = false, path = "../../primitives/io" }
-sp-session = { version = "4.0.0-dev", default-features = false, path = "../../primitives/session" }
-sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
-sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../primitives/staking" }
-frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
+log = { version = "0.4.17", default-features = false }
+scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
+frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "../benchmarking" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 pallet-authorship = { version = "4.0.0-dev", default-features = false, path = "../authorship" }
 pallet-session = { version = "4.0.0-dev", default-features = false, path = "../session" }
-log = { version = "0.4.14", default-features = false }
+sp-application-crypto = { version = "6.0.0", default-features = false, path = "../../primitives/application-crypto" }
+sp-core = { version = "6.0.0", default-features = false, path = "../../primitives/core" }
+sp-finality-grandpa = { version = "4.0.0-dev", default-features = false, path = "../../primitives/finality-grandpa" }
+sp-io = { version = "6.0.0", default-features = false, path = "../../primitives/io" }
+sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-session = { version = "4.0.0-dev", default-features = false, path = "../../primitives/session" }
+sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../primitives/staking" }
+sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
 
 [dev-dependencies]
+grandpa = { package = "finality-grandpa", version = "0.16.0", features = ["derive-codec"] }
 frame-benchmarking = { version = "4.0.0-dev", path = "../benchmarking" }
-grandpa = { package = "finality-grandpa", version = "0.15.0", features = ["derive-codec"] }
-sp-keyring = { version = "6.0.0", path = "../../primitives/keyring" }
+frame-election-provider-support = { version = "4.0.0-dev", path = "../election-provider-support" }
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 pallet-offences = { version = "4.0.0-dev", path = "../offences" }
 pallet-staking = { version = "4.0.0-dev", path = "../staking" }
 pallet-staking-reward-curve = { version = "4.0.0-dev", path = "../staking/reward-curve" }
 pallet-timestamp = { version = "4.0.0-dev", path = "../timestamp" }
-frame-election-provider-support = { version = "4.0.0-dev", path = "../election-provider-support" }
+sp-keyring = { version = "6.0.0", path = "../../primitives/keyring" }
 
 [features]
 default = ["std"]
 std = [
 	"codec/std",
-	"scale-info/std",
 	"frame-benchmarking/std",
+	"frame-support/std",
+	"frame-system/std",
+	"log/std",
+	"pallet-authorship/std",
+	"pallet-session/std",
+	"scale-info/std",
 	"sp-application-crypto/std",
 	"sp-core/std",
 	"sp-finality-grandpa/std",
-	"sp-session/std",
-	"sp-std/std",
-	"frame-support/std",
+	"sp-io/std",
 	"sp-runtime/std",
+	"sp-session/std",
 	"sp-staking/std",
-	"frame-system/std",
-	"pallet-authorship/std",
-	"pallet-session/std",
-	"log/std",
+	"sp-std/std",
 ]
 runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks"]
 try-runtime = ["frame-support/try-runtime"]

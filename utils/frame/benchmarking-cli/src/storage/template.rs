@@ -22,9 +22,10 @@ use log::info;
 use serde::Serialize;
 use std::{env, fs, path::PathBuf};
 
-use super::{cmd::StorageParams, record::Stats};
+use super::cmd::StorageParams;
+use crate::shared::{Stats, UnderscoreHelper};
 
-static VERSION: &'static str = env!("CARGO_PKG_VERSION");
+static VERSION: &str = env!("CARGO_PKG_VERSION");
 static TEMPLATE: &str = include_str!("./weights.hbs");
 
 /// Data consumed by Handlebar to fill out the `weights.hbs` template.
@@ -40,6 +41,10 @@ pub(crate) struct TemplateData {
 	version: String,
 	/// Date that the template was filled out.
 	date: String,
+	/// Hostname of the machine that executed the benchmarks.
+	hostname: String,
+	/// CPU name of the machine that executed the benchmarks.
+	cpuname: String,
 	/// Command line arguments that were passed to the CLI.
 	args: Vec<String>,
 	/// Storage params of the executed command.
@@ -64,6 +69,8 @@ impl TemplateData {
 			runtime_name: cfg.chain_spec.name().into(),
 			version: VERSION.into(),
 			date: chrono::Utc::now().format("%Y-%m-%d (Y/M/D)").to_string(),
+			hostname: params.hostinfo.hostname(),
+			cpuname: params.hostinfo.cpuname(),
 			args: env::args().collect::<Vec<String>>(),
 			params: params.clone(),
 			..Default::default()
@@ -97,7 +104,7 @@ impl TemplateData {
 	pub fn write(&self, path: &Option<PathBuf>, hbs_template: &Option<PathBuf>) -> Result<()> {
 		let mut handlebars = handlebars::Handlebars::new();
 		// Format large integers with underscore.
-		handlebars.register_helper("underscore", Box::new(crate::writer::UnderscoreHelper));
+		handlebars.register_helper("underscore", Box::new(UnderscoreHelper));
 		// Don't HTML escape any characters.
 		handlebars.register_escape_fn(|s| -> String { s.to_string() });
 		// Use custom template if provided.

@@ -21,16 +21,32 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	dispatch,
-	traits::{FindAuthor, Get, VerifySeal},
+	traits::{Defensive, FindAuthor, Get, VerifySeal},
+	BoundedSlice, BoundedVec,
 };
 use sp_authorship::{InherentError, UnclesInherentData, INHERENT_IDENTIFIER};
-use sp_runtime::traits::{Header as HeaderT, One, Saturating};
+use sp_runtime::traits::{Header as HeaderT, One, Saturating, UniqueSaturatedInto};
 use sp_std::{collections::btree_set::BTreeSet, prelude::*, result};
 
 const MAX_UNCLES: usize = 10;
+
+struct MaxUncleEntryItems<T>(core::marker::PhantomData<T>);
+impl<T: Config> Get<u32> for MaxUncleEntryItems<T> {
+	fn get() -> u32 {
+		// There can be at most `MAX_UNCLES` of `UncleEntryItem::Uncle` and
+		// one `UncleEntryItem::InclusionHeight` per one `UncleGenerations`,
+		// so this gives us `MAX_UNCLES + 1` entries per one generation.
+		//
+		// There can be one extra generation worth of uncles (e.g. even
+		// if `UncleGenerations` is zero the pallet will still hold
+		// one generation worth of uncles).
+		let max_generations: u32 = T::UncleGenerations::get().unique_saturated_into();
+		(MAX_UNCLES as u32 + 1) * (max_generations + 1)
+	}
+}
 
 pub use pallet::*;
 
@@ -106,7 +122,7 @@ where
 		let number = header.number();
 
 		if let Some(ref author) = author {
-			if !acc.insert((number.clone(), author.clone())) {
+			if !acc.insert((*number, author.clone())) {
 				return Err("more than one uncle per number per author included")
 			}
 		}
@@ -115,7 +131,7 @@ where
 	}
 }
 
-#[derive(Encode, Decode, sp_runtime::RuntimeDebug, scale_info::TypeInfo)]
+#[derive(Encode, Decode, sp_runtime::RuntimeDebug, scale_info::TypeInfo, MaxEncodedLen)]
 #[cfg_attr(any(feature = "std", test), derive(PartialEq))]
 enum UncleEntryItem<BlockNumber, Hash, Author> {
 	InclusionHeight(BlockNumber),
@@ -156,7 +172,6 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
-	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
 	#[pallet::hooks]
@@ -187,8 +202,11 @@ pub mod pallet {
 
 	#[pallet::storage]
 	/// Uncles
-	pub(super) type Uncles<T: Config> =
-		StorageValue<_, Vec<UncleEntryItem<T::BlockNumber, T::Hash, T::AccountId>>, ValueQuery>;
+	pub(super) type Uncles<T: Config> = StorageValue<
+		_,
+		BoundedVec<UncleEntryItem<T::BlockNumber, T::Hash, T::AccountId>, MaxUncleEntryItems<T>>,
+		ValueQuery,
+	>;
 
 	#[pallet::storage]
 	/// Author of current block.
@@ -225,7 +243,7 @@ pub mod pallet {
 			ensure!(new_uncles.len() <= MAX_UNCLES, Error::<T>::TooManyUncles);
 
 			if <DidSetUncles<T>>::get() {
-				Err(Error::<T>::UnclesAlreadySet)?
+				return Err(Error::<T>::UnclesAlreadySet.into())
 			}
 			<DidSetUncles<T>>::put(true);
 
@@ -321,7 +339,10 @@ impl<T: Config> Pallet<T> {
 		let now = <frame_system::Pallet<T>>::block_number();
 
 		let mut uncles = <Uncles<T>>::get();
-		uncles.push(UncleEntryItem::InclusionHeight(now));
+		uncles
+			.try_push(UncleEntryItem::InclusionHeight(now))
+			.defensive_proof("the list of uncles accepted per generation is bounded, and the number of generations is bounded, so pushing a new element will always succeed")
+			.map_err(|_| Error::<T>::TooManyUncles)?;
 
 		let mut acc: <T::FilterUncle as FilterUncle<_, _>>::Accumulator = Default::default();
 
@@ -334,9 +355,11 @@ impl<T: Config> Pallet<T> {
 			let hash = uncle.hash();
 
 			if let Some(author) = maybe_author.clone() {
-				T::EventHandler::note_uncle(author, now - uncle.number().clone());
+				T::EventHandler::note_uncle(author, now - *uncle.number());
 			}
-			uncles.push(UncleEntryItem::Uncle(hash, maybe_author));
+			uncles.try_push(UncleEntryItem::Uncle(hash, maybe_author))
+			.defensive_proof("the list of uncles accepted per generation is bounded, and the number of generations is bounded, so pushing a new element will always succeed")
+			.map_err(|_| Error::<T>::TooManyUncles)?;
 		}
 
 		<Uncles<T>>::put(&uncles);
@@ -368,7 +391,7 @@ impl<T: Config> Pallet<T> {
 		}
 
 		{
-			let parent_number = uncle.number().clone() - One::one();
+			let parent_number = *uncle.number() - One::one();
 			let parent_hash = <frame_system::Pallet<T>>::block_hash(&parent_number);
 			if &parent_hash != uncle.parent_hash() {
 				return Err(Error::<T>::InvalidUncleParent.into())
@@ -387,7 +410,7 @@ impl<T: Config> Pallet<T> {
 		}
 
 		// check uncle validity.
-		T::FilterUncle::filter_uncle(&uncle, accumulator).map_err(|e| Into::into(e))
+		T::FilterUncle::filter_uncle(uncle, accumulator).map_err(Into::into)
 	}
 
 	fn prune_old_uncles(minimum_height: T::BlockNumber) {
@@ -397,8 +420,11 @@ impl<T: Config> Pallet<T> {
 			UncleEntryItem::InclusionHeight(height) => height < &minimum_height,
 		});
 		let prune_index = prune_entries.count();
+		let pruned_uncles =
+			<BoundedSlice<'_, _, MaxUncleEntryItems<T>>>::try_from(&uncles[prune_index..])
+				.expect("after pruning we can't end up with more uncles than we started with");
 
-		<Uncles<T>>::put(&uncles[prune_index..]);
+		<Uncles<T>>::put(pruned_uncles);
 	}
 }
 
@@ -408,7 +434,7 @@ mod tests {
 	use crate as pallet_authorship;
 	use frame_support::{
 		parameter_types,
-		traits::{ConstU32, ConstU64},
+		traits::{ConstU32, ConstU64, OnFinalize, OnInitialize},
 		ConsensusEngineId,
 	};
 	use sp_core::H256;
@@ -553,6 +579,7 @@ mod tests {
 				InclusionHeight(3u64),
 				Uncle(hash, None),
 			];
+			let uncles = BoundedVec::try_from(uncles).unwrap();
 
 			<Authorship as Store>::Uncles::put(uncles);
 			Authorship::prune_old_uncles(3);
@@ -680,6 +707,49 @@ mod tests {
 
 				assert!(Authorship::verify_and_import_uncles(vec![other_8]).is_ok());
 			}
+		});
+	}
+
+	#[test]
+	fn maximum_bound() {
+		new_test_ext().execute_with(|| {
+			let mut max_item_count = 0;
+
+			let mut author_counter = 0;
+			let mut current_depth = 1;
+			let mut parent_hash: H256 = [1; 32].into();
+			let mut uncles = vec![];
+
+			// We deliberately run this for more generations than the limit
+			// so that we can get the `Uncles` to hit its cap.
+			for _ in 0..<<Test as Config>::UncleGenerations as Get<u64>>::get() + 3 {
+				let new_uncles: Vec<_> = (0..MAX_UNCLES)
+					.map(|_| {
+						System::reset_events();
+						System::initialize(&current_depth, &parent_hash, &Default::default());
+						// Increment the author on every block to make sure the hash's always
+						// different.
+						author_counter += 1;
+						seal_header(System::finalize(), author_counter)
+					})
+					.collect();
+
+				author_counter += 1;
+				System::reset_events();
+				System::initialize(&current_depth, &parent_hash, &Default::default());
+				Authorship::on_initialize(current_depth);
+				Authorship::set_uncles(Origin::none(), uncles).unwrap();
+				Authorship::on_finalize(current_depth);
+				max_item_count =
+					std::cmp::max(max_item_count, <Authorship as Store>::Uncles::get().len());
+
+				let new_parent = seal_header(System::finalize(), author_counter);
+				parent_hash = new_parent.hash();
+				uncles = new_uncles;
+				current_depth += 1;
+			}
+
+			assert_eq!(max_item_count, MaxUncleEntryItems::<Test>::get() as usize);
 		});
 	}
 

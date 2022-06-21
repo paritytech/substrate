@@ -21,7 +21,7 @@
 use std::{cmp::Ord, fmt::Debug, ops::Add};
 
 use finality_grandpa::voter_set::VoterSet;
-use fork_tree::ForkTree;
+use fork_tree::{FilterAction, ForkTree};
 use log::debug;
 use parity_scale_codec::{Decode, Encode};
 use parking_lot::MappedMutexGuard;
@@ -219,6 +219,37 @@ where
 	/// Get the current set id and a reference to the current authority set.
 	pub(crate) fn current(&self) -> (u64, &[(AuthorityId, u64)]) {
 		(self.set_id, &self.current_authorities[..])
+	}
+
+	/// Revert to a specified block given its `hash` and `number`.
+	/// This removes all the authority set changes that were announced after
+	/// the revert point.
+	/// Revert point is identified by `number` and `hash`.
+	pub(crate) fn revert<F, E>(&mut self, hash: H, number: N, is_descendent_of: &F)
+	where
+		F: Fn(&H, &H) -> Result<bool, E>,
+	{
+		let filter = |node_hash: &H, node_num: &N, _: &PendingChange<H, N>| {
+			if number >= *node_num &&
+				(is_descendent_of(node_hash, &hash).unwrap_or_default() || *node_hash == hash)
+			{
+				// Continue the search in this subtree.
+				FilterAction::KeepNode
+			} else if number < *node_num && is_descendent_of(&hash, node_hash).unwrap_or_default() {
+				// Found a node to be removed.
+				FilterAction::Remove
+			} else {
+				// Not a parent or child of the one we're looking for, stop processing this branch.
+				FilterAction::KeepTree
+			}
+		};
+
+		// Remove standard changes.
+		let _ = self.pending_standard_changes.drain_filter(&filter);
+
+		// Remove forced changes.
+		self.pending_forced_changes
+			.retain(|change| !is_descendent_of(&hash, &change.canon_hash).unwrap_or_default());
 	}
 }
 
@@ -526,8 +557,7 @@ where
 			fork_tree::FinalizationResult::Changed(change) => {
 				status.changed = true;
 
-				let pending_forced_changes =
-					std::mem::replace(&mut self.pending_forced_changes, Vec::new());
+				let pending_forced_changes = std::mem::take(&mut self.pending_forced_changes);
 
 				// we will keep all forced changes for any later blocks and that are a
 				// descendent of the finalized block (i.e. they are part of this branch).

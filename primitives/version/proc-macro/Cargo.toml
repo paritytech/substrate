@@ -16,10 +16,10 @@ targets = ["x86_64-unknown-linux-gnu"]
 proc-macro = true
 
 [dependencies]
-quote = "1.0.10"
-syn = { version = "1.0.82", features = ["full", "fold", "extra-traits", "visit"] }
-proc-macro2 = "1.0.36"
 codec = { package = "parity-scale-codec", version = "3.0.0", features = [ "derive" ] }
+proc-macro2 = "1.0.37"
+quote = "1.0.10"
+syn = { version = "1.0.98", features = ["full", "fold", "extra-traits", "visit"] }
 
 [dev-dependencies]
 sp-version = { version = "5.0.0", path = ".." }

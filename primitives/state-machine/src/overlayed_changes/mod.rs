@@ -299,7 +299,7 @@ impl OverlayedChanges {
 	/// Clear child storage of given storage key.
 	///
 	/// Can be rolled back or committed when called inside a transaction.
-	pub(crate) fn clear_child_storage(&mut self, child_info: &ChildInfo) {
+	pub(crate) fn clear_child_storage(&mut self, child_info: &ChildInfo) -> u32 {
 		let extrinsic_index = self.extrinsic_index();
 		let storage_key = child_info.storage_key().to_vec();
 		let top = &self.top;
@@ -309,20 +309,20 @@ impl OverlayedChanges {
 			.or_insert_with(|| (top.spawn_child(), child_info.clone()));
 		let updatable = info.try_update(child_info);
 		debug_assert!(updatable);
-		changeset.clear_where(|_, _| true, extrinsic_index);
+		changeset.clear_where(|_, _| true, extrinsic_index)
 	}
 
 	/// Removes all key-value pairs which keys share the given prefix.
 	///
 	/// Can be rolled back or committed when called inside a transaction.
-	pub(crate) fn clear_prefix(&mut self, prefix: &[u8]) {
-		self.top.clear_where(|key, _| key.starts_with(prefix), self.extrinsic_index());
+	pub(crate) fn clear_prefix(&mut self, prefix: &[u8]) -> u32 {
+		self.top.clear_where(|key, _| key.starts_with(prefix), self.extrinsic_index())
 	}
 
 	/// Removes all key-value pairs which keys share the given prefix.
 	///
 	/// Can be rolled back or committed when called inside a transaction
-	pub(crate) fn clear_child_prefix(&mut self, child_info: &ChildInfo, prefix: &[u8]) {
+	pub(crate) fn clear_child_prefix(&mut self, child_info: &ChildInfo, prefix: &[u8]) -> u32 {
 		let extrinsic_index = self.extrinsic_index();
 		let storage_key = child_info.storage_key().to_vec();
 		let top = &self.top;
@@ -332,7 +332,7 @@ impl OverlayedChanges {
 			.or_insert_with(|| (top.spawn_child(), child_info.clone()));
 		let updatable = info.try_update(child_info);
 		debug_assert!(updatable);
-		changeset.clear_where(|key, _| key.starts_with(prefix), extrinsic_index);
+		changeset.clear_where(|key, _| key.starts_with(prefix), extrinsic_index)
 	}
 
 	/// Returns the current nesting depth of the transaction stack.
@@ -513,7 +513,7 @@ impl OverlayedChanges {
 	pub fn drain_storage_changes<B: Backend<H>, H: Hasher>(
 		&mut self,
 		backend: &B,
-		mut cache: &mut StorageTransactionCache<B::Transaction, H>,
+		cache: &mut StorageTransactionCache<B::Transaction, H>,
 		state_version: StateVersion,
 	) -> Result<StorageChanges<B::Transaction, H>, DefaultError>
 	where
@@ -521,7 +521,7 @@ impl OverlayedChanges {
 	{
 		// If the transaction does not exist, we generate it.
 		if cache.transaction.is_none() {
-			self.storage_root(backend, &mut cache, state_version);
+			self.storage_root(backend, cache, state_version);
 		}
 
 		let (transaction, transaction_storage_root) = cache

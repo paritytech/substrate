@@ -13,41 +13,42 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-serde = { version = "1.0.136", optional = true, features = ["derive"] }
-codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = [
+assert_matches = "1.3.0"
+codec = { package = "parity-scale-codec", version = "3.0.3", default-features = false, features = [
 	"derive",
+	"max-encoded-len",
 ] }
-scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
-sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
-sp-io = { version = "6.0.0", default-features = false, path = "../../primitives/io" }
-sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
-frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
+scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
+serde = { version = "1.0.136", features = ["derive"], optional = true }
+frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "../benchmarking" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
-assert_matches = "1.3.0"
+sp-io = { version = "6.0.0", default-features = false, path = "../../primitives/io" }
+sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
 
 [dev-dependencies]
-sp-core = { version = "6.0.0", path = "../../primitives/core" }
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 pallet-scheduler = { version = "4.0.0-dev", path = "../scheduler" }
+sp-core = { version = "6.0.0", path = "../../primitives/core" }
 
 [features]
 default = ["std"]
 std = [
-	"serde",
 	"codec/std",
-	"scale-info/std",
-	"sp-std/std",
-	"sp-io/std",
 	"frame-benchmarking/std",
 	"frame-support/std",
-	"sp-runtime/std",
 	"frame-system/std",
+	"scale-info/std",
+	"serde",
+	"sp-io/std",
+	"sp-runtime/std",
+	"sp-std/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking",
-	"frame-system/runtime-benchmarks",
 	"frame-support/runtime-benchmarks",
+	"frame-system/runtime-benchmarks",
 	"sp-runtime/runtime-benchmarks",
 ]
 try-runtime = ["frame-support/try-runtime"]

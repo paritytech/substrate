@@ -17,6 +17,7 @@
 
 use frame_support::{
 	dispatch::{Parameter, UnfilteredDispatchable},
+	pallet_prelude::ValueQuery,
 	storage::unhashed,
 	traits::{
 		ConstU32, GetCallName, GetStorageVersion, OnFinalize, OnGenesis, OnInitialize,
@@ -96,13 +97,9 @@ impl SomeAssociation2 for u64 {
 
 #[frame_support::pallet]
 pub mod pallet {
-	use super::{
-		SomeAssociation1, SomeAssociation2, SomeType1, SomeType2, SomeType3, SomeType4, SomeType5,
-		SomeType6, SomeType7, StorageVersion,
-	};
+	use super::*;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
-	use scale_info::TypeInfo;
 
 	type BalanceOf<T> = <T as Config>::Balance;
 
@@ -208,8 +205,7 @@ pub mod pallet {
 
 		/// Doc comment put in metadata
 		#[pallet::weight(1)]
-		#[frame_support::transactional]
-		pub fn foo_transactional(
+		pub fn foo_storage_layer(
 			_origin: OriginFor<T>,
 			#[pallet::compact] foo: u32,
 		) -> DispatchResultWithPostInfo {
@@ -363,7 +359,14 @@ pub mod pallet {
 
 	#[pallet::origin]
 	#[derive(
-		EqNoBound, RuntimeDebugNoBound, CloneNoBound, PartialEqNoBound, Encode, Decode, TypeInfo,
+		EqNoBound,
+		RuntimeDebugNoBound,
+		CloneNoBound,
+		PartialEqNoBound,
+		Encode,
+		Decode,
+		TypeInfo,
+		MaxEncodedLen,
 	)]
 	pub struct Origin<T>(PhantomData<T>);
 
@@ -376,7 +379,7 @@ pub mod pallet {
 		fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
 			let _ = T::AccountId::from(SomeType1); // Test for where clause
 			let _ = T::AccountId::from(SomeType5); // Test for where clause
-			if matches!(call, Call::foo_transactional { .. }) {
+			if matches!(call, Call::foo_storage_layer { .. }) {
 				return Ok(ValidTransaction::default())
 			}
 			Err(TransactionValidityError::Invalid(InvalidTransaction::Call))
@@ -614,13 +617,13 @@ fn transactional_works() {
 	TestExternalities::default().execute_with(|| {
 		frame_system::Pallet::<Runtime>::set_block_number(1);
 
-		pallet::Call::<Runtime>::foo_transactional { foo: 0 }
+		pallet::Call::<Runtime>::foo_storage_layer { foo: 0 }
 			.dispatch_bypass_filter(None.into())
 			.err()
 			.unwrap();
 		assert!(frame_system::Pallet::<Runtime>::events().is_empty());
 
-		pallet::Call::<Runtime>::foo_transactional { foo: 1 }
+		pallet::Call::<Runtime>::foo_storage_layer { foo: 1 }
 			.dispatch_bypass_filter(None.into())
 			.unwrap();
 		assert_eq!(
@@ -643,7 +646,7 @@ fn call_expand() {
 	assert_eq!(call_foo.get_call_name(), "foo");
 	assert_eq!(
 		pallet::Call::<Runtime>::get_call_names(),
-		&["foo", "foo_transactional", "foo_no_post_info"],
+		&["foo", "foo_storage_layer", "foo_no_post_info"],
 	);
 }
 
@@ -747,7 +750,7 @@ fn inherent_expand() {
 			Digest::default(),
 		),
 		vec![UncheckedExtrinsic {
-			function: Call::Example(pallet::Call::foo_transactional { foo: 0 }),
+			function: Call::Example(pallet::Call::foo_storage_layer { foo: 0 }),
 			signature: None,
 		}],
 	);
@@ -788,7 +791,7 @@ fn inherent_expand() {
 				signature: None,
 			},
 			UncheckedExtrinsic {
-				function: Call::Example(pallet::Call::foo_transactional { foo: 0 }),
+				function: Call::Example(pallet::Call::foo_storage_layer { foo: 0 }),
 				signature: None,
 			},
 		],
@@ -810,7 +813,7 @@ fn inherent_expand() {
 				signature: None,
 			},
 			UncheckedExtrinsic {
-				function: Call::Example(pallet::Call::foo_transactional { foo: 0 }),
+				function: Call::Example(pallet::Call::foo_storage_layer { foo: 0 }),
 				signature: None,
 			},
 			UncheckedExtrinsic {
@@ -860,7 +863,7 @@ fn validate_unsigned_expand() {
 	let validity = pallet::Pallet::validate_unsigned(TransactionSource::Local, &call).unwrap_err();
 	assert_eq!(validity, TransactionValidityError::Invalid(InvalidTransaction::Call));
 
-	let call = pallet::Call::<Runtime>::foo_transactional { foo: 0 };
+	let call = pallet::Call::<Runtime>::foo_storage_layer { foo: 0 };
 
 	let validity = pallet::Pallet::validate_unsigned(TransactionSource::External, &call).unwrap();
 	assert_eq!(validity, ValidTransaction::default());
@@ -1634,4 +1637,18 @@ fn assert_type_all_pallets_without_system_reversed_is_correct() {
 	fn _b(t: (Example4, (Example2, (Example,)))) {
 		_a(t)
 	}
+}
+
+#[test]
+fn test_storage_alias() {
+	#[frame_support::storage_alias]
+	type Value<T: pallet::Config>
+	where
+		<T as frame_system::Config>::AccountId: From<SomeType1> + SomeAssociation1,
+	= StorageValue<pallet::Pallet<T>, u32, ValueQuery>;
+
+	TestExternalities::default().execute_with(|| {
+		pallet::Value::<Runtime>::put(10);
+		assert_eq!(10, Value::<Runtime>::get());
+	})
 }

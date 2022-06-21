@@ -18,96 +18,59 @@
 
 //! Substrate blockchain API.
 
-pub mod error;
-
-use self::error::{FutureResult, Result};
-use jsonrpc_core::Result as RpcResult;
-use jsonrpc_derive::rpc;
-use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
+use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 use sp_rpc::{list::ListOrValue, number::NumberOrHex};
 
-pub use self::gen_client::Client as ChainClient;
+pub mod error;
 
-/// Substrate blockchain API
-#[rpc]
+#[rpc(client, server)]
 pub trait ChainApi<Number, Hash, Header, SignedBlock> {
-	/// RPC metadata
-	type Metadata;
-
-	/// Get header of a relay chain block.
-	#[rpc(name = "chain_getHeader")]
-	fn header(&self, hash: Option<Hash>) -> FutureResult<Option<Header>>;
+	/// Get header.
+	#[method(name = "chain_getHeader", blocking)]
+	fn header(&self, hash: Option<Hash>) -> RpcResult<Option<Header>>;
 
 	/// Get header and body of a relay chain block.
-	#[rpc(name = "chain_getBlock")]
-	fn block(&self, hash: Option<Hash>) -> FutureResult<Option<SignedBlock>>;
+	#[method(name = "chain_getBlock", blocking)]
+	fn block(&self, hash: Option<Hash>) -> RpcResult<Option<SignedBlock>>;
 
 	/// Get hash of the n-th block in the canon chain.
 	///
 	/// By default returns latest block hash.
-	#[rpc(name = "chain_getBlockHash", alias("chain_getHead"))]
+	#[method(name = "chain_getBlockHash", aliases = ["chain_getHead"], blocking)]
 	fn block_hash(
 		&self,
 		hash: Option<ListOrValue<NumberOrHex>>,
-	) -> Result<ListOrValue<Option<Hash>>>;
+	) -> RpcResult<ListOrValue<Option<Hash>>>;
 
 	/// Get hash of the last finalized block in the canon chain.
-	#[rpc(name = "chain_getFinalizedHead", alias("chain_getFinalisedHead"))]
-	fn finalized_head(&self) -> Result<Hash>;
+	#[method(name = "chain_getFinalizedHead", aliases = ["chain_getFinalisedHead"], blocking)]
+	fn finalized_head(&self) -> RpcResult<Hash>;
 
-	/// All head subscription
-	#[pubsub(subscription = "chain_allHead", subscribe, name = "chain_subscribeAllHeads")]
-	fn subscribe_all_heads(&self, metadata: Self::Metadata, subscriber: Subscriber<Header>);
-
-	/// Unsubscribe from all head subscription.
-	#[pubsub(subscription = "chain_allHead", unsubscribe, name = "chain_unsubscribeAllHeads")]
-	fn unsubscribe_all_heads(
-		&self,
-		metadata: Option<Self::Metadata>,
-		id: SubscriptionId,
-	) -> RpcResult<bool>;
-
-	/// New head subscription
-	#[pubsub(
-		subscription = "chain_newHead",
-		subscribe,
-		name = "chain_subscribeNewHeads",
-		alias("subscribe_newHead", "chain_subscribeNewHead")
+	/// All head subscription.
+	#[subscription(
+		name = "chain_subscribeAllHeads" => "chain_allHead",
+		unsubscribe = "chain_unsubscribeAllHeads",
+		item = Header
 	)]
-	fn subscribe_new_heads(&self, metadata: Self::Metadata, subscriber: Subscriber<Header>);
+	fn subscribe_all_heads(&self);
 
-	/// Unsubscribe from new head subscription.
-	#[pubsub(
-		subscription = "chain_newHead",
-		unsubscribe,
-		name = "chain_unsubscribeNewHeads",
-		alias("unsubscribe_newHead", "chain_unsubscribeNewHead")
+	/// New head subscription.
+	#[subscription(
+		name = "chain_subscribeNewHeads" => "chain_newHead",
+		aliases = ["subscribe_newHead", "chain_subscribeNewHead"],
+		unsubscribe = "chain_unsubscribeNewHeads",
+		unsubscribe_aliases = ["unsubscribe_newHead", "chain_unsubscribeNewHead"],
+		item = Header
 	)]
-	fn unsubscribe_new_heads(
-		&self,
-		metadata: Option<Self::Metadata>,
-		id: SubscriptionId,
-	) -> RpcResult<bool>;
+	fn subscribe_new_heads(&self);
 
-	/// Finalized head subscription
-	#[pubsub(
-		subscription = "chain_finalizedHead",
-		subscribe,
-		name = "chain_subscribeFinalizedHeads",
-		alias("chain_subscribeFinalisedHeads")
+	/// Finalized head subscription.
+	#[subscription(
+		name = "chain_subscribeFinalizedHeads" => "chain_finalizedHead",
+		aliases = ["chain_subscribeFinalisedHeads"],
+		unsubscribe = "chain_unsubscribeFinalizedHeads",
+		unsubscribe_aliases = ["chain_unsubscribeFinalisedHeads"],
+		item = Header
 	)]
-	fn subscribe_finalized_heads(&self, metadata: Self::Metadata, subscriber: Subscriber<Header>);
-
-	/// Unsubscribe from finalized head subscription.
-	#[pubsub(
-		subscription = "chain_finalizedHead",
-		unsubscribe,
-		name = "chain_unsubscribeFinalizedHeads",
-		alias("chain_unsubscribeFinalisedHeads")
-	)]
-	fn unsubscribe_finalized_heads(
-		&self,
-		metadata: Option<Self::Metadata>,
-		id: SubscriptionId,
-	) -> RpcResult<bool>;
+	fn subscribe_finalized_heads(&self);
 }

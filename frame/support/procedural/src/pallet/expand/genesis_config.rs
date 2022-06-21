@@ -85,7 +85,7 @@ pub fn expand_genesis_config(def: &mut Def) -> proc_macro2::TokenStream {
 		syn::Item::Enum(syn::ItemEnum { attrs, .. }) |
 		syn::Item::Struct(syn::ItemStruct { attrs, .. }) |
 		syn::Item::Type(syn::ItemType { attrs, .. }) => {
-			if get_doc_literals(&attrs).is_empty() {
+			if get_doc_literals(attrs).is_empty() {
 				attrs.push(syn::parse_quote!(
 					#[doc = r"
 					Can be used to configure the

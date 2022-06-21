@@ -87,12 +87,11 @@ type ClassOf<T, I = ()> = <<T as Config<I>>::Polls as Polling<TallyOf<T, I>>>::C
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::pallet_prelude::*;
+	use frame_support::{pallet_prelude::*, traits::ClassCountOf};
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
-	#[pallet::without_storage_info]
 	pub struct Pallet<T, I = ()>(_);
 
 	#[pallet::config]
@@ -154,7 +153,7 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		T::AccountId,
-		Vec<(ClassOf<T, I>, BalanceOf<T, I>)>,
+		BoundedVec<(ClassOf<T, I>, BalanceOf<T, I>), ClassCountOf<T::Polls, TallyOf<T, I>>>,
 		ValueQuery,
 	>;
 
@@ -553,7 +552,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					}),
 				);
 				match old {
-					Voting::Delegating(Delegating { .. }) => Err(Error::<T, I>::AlreadyDelegating)?,
+					Voting::Delegating(Delegating { .. }) =>
+						return Err(Error::<T, I>::AlreadyDelegating.into()),
 					Voting::Casting(Casting { votes, delegations, prior }) => {
 						// here we just ensure that we're currently idling with no votes recorded.
 						ensure!(votes.is_empty(), Error::<T, I>::AlreadyVoting);
@@ -615,7 +615,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		ClassLocksFor::<T, I>::mutate(who, |locks| {
 			match locks.iter().position(|x| &x.0 == class) {
 				Some(i) => locks[i].1 = locks[i].1.max(amount),
-				None => locks.push((class.clone(), amount)),
+				None => {
+					let ok = locks.try_push((class.clone(), amount)).is_ok();
+					debug_assert!(
+						ok,
+						"Vec bounded by number of classes; \
+						all items in Vec associated with a unique class; \
+						qed"
+					);
+				},
 			}
 		});
 		T::Currency::extend_lock(CONVICTION_VOTING_ID, who, amount, WithdrawReasons::TRANSFER);
@@ -631,7 +639,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let lock_needed = ClassLocksFor::<T, I>::mutate(who, |locks| {
 			locks.retain(|x| &x.0 != class);
 			if !class_lock_needed.is_zero() {
-				locks.push((class.clone(), class_lock_needed));
+				let ok = locks.try_push((class.clone(), class_lock_needed)).is_ok();
+				debug_assert!(
+					ok,
+					"Vec bounded by number of classes; \
+					all items in Vec associated with a unique class; \
+					qed"
+				);
 			}
 			locks.iter().map(|x| x.1).max().unwrap_or(Zero::zero())
 		});

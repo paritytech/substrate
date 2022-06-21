@@ -4,7 +4,7 @@ version = "5.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
 license = "Apache-2.0"
-homepage = "https://substrate.dev"
+homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 description = "This crate provides procedural macros for calculating static hash."
 documentation = "https://docs.rs/sp-core-hashing-proc-macro"
@@ -16,7 +16,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 proc-macro = true
 
 [dependencies]
-syn = { version = "1.0.82", features = ["full", "parsing"] }
+proc-macro2 = "1.0.37"
 quote = "1.0.6"
-proc-macro2 = "1.0.36"
-sp-core-hashing = { version = "4.0.0", path = "../", default-features = false }
+syn = { version = "1.0.98", features = ["full", "parsing"] }
+sp-core-hashing = { version = "4.0.0", default-features = false, path = "../" }

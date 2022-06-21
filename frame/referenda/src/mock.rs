@@ -26,7 +26,6 @@ use frame_support::{
 		ConstU32, ConstU64, Contains, EqualPrivilegeOnly, OnInitialize, OriginTrait, Polling,
 		PreimageRecipient, SortedMembers,
 	},
-	weights::Weight,
 };
 use frame_system::{EnsureRoot, EnsureSignedBy};
 use sp_core::H256;
@@ -62,7 +61,6 @@ impl Contains<Call> for BaseFilter {
 }
 
 parameter_types! {
-	pub const BlockHashCount: u64 = 250;
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(1_000_000);
 }
@@ -81,7 +79,7 @@ impl frame_system::Config for Test {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = BlockHashCount;
+	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
 	type AccountData = pallet_balances::AccountData<u64>;
@@ -101,15 +99,12 @@ impl pallet_preimage::Config for Test {
 	type BaseDeposit = ();
 	type ByteDeposit = ();
 }
-parameter_types! {
-	pub MaximumSchedulerWeight: Weight = 2_000_000_000_000;
-}
 impl pallet_scheduler::Config for Test {
 	type Event = Event;
 	type Origin = Origin;
 	type PalletsOrigin = OriginCaller;
 	type Call = Call;
-	type MaximumWeight = MaximumSchedulerWeight;
+	type MaximumWeight = ConstU64<2_000_000_000_000>;
 	type ScheduleOrigin = EnsureRoot<u64>;
 	type MaxScheduledPerBlock = ConstU32<100>;
 	type WeightInfo = ();
@@ -117,26 +112,19 @@ impl pallet_scheduler::Config for Test {
 	type PreimageProvider = Preimage;
 	type NoPreimagePostponement = ConstU64<10>;
 }
-parameter_types! {
-	pub const ExistentialDeposit: u64 = 1;
-	pub const MaxLocks: u32 = 10;
-}
 impl pallet_balances::Config for Test {
 	type MaxReserves = ();
 	type ReserveIdentifier = [u8; 8];
-	type MaxLocks = MaxLocks;
+	type MaxLocks = ConstU32<10>;
 	type Balance = u64;
 	type Event = Event;
 	type DustRemoval = ();
-	type ExistentialDeposit = ExistentialDeposit;
+	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
 }
 parameter_types! {
 	pub static AlarmInterval: u64 = 1;
-	pub const SubmissionDeposit: u64 = 2;
-	pub const MaxQueued: u32 = 3;
-	pub const UndecidingTimeout: u64 = 20;
 }
 ord_parameter_types! {
 	pub const One: u64 = 1;
@@ -172,12 +160,14 @@ impl TracksInfo<u64, u64> for TestTracksInfo {
 					confirm_period: 2,
 					min_enactment_period: 4,
 					min_approval: Curve::LinearDecreasing {
-						begin: Perbill::from_percent(100),
-						delta: Perbill::from_percent(50),
+						length: Perbill::from_percent(100),
+						floor: Perbill::from_percent(50),
+						ceil: Perbill::from_percent(100),
 					},
-					min_turnout: Curve::LinearDecreasing {
-						begin: Perbill::from_percent(100),
-						delta: Perbill::from_percent(100),
+					min_support: Curve::LinearDecreasing {
+						length: Perbill::from_percent(100),
+						floor: Perbill::from_percent(0),
+						ceil: Perbill::from_percent(100),
 					},
 				},
 			),
@@ -192,12 +182,14 @@ impl TracksInfo<u64, u64> for TestTracksInfo {
 					confirm_period: 1,
 					min_enactment_period: 2,
 					min_approval: Curve::LinearDecreasing {
-						begin: Perbill::from_percent(55),
-						delta: Perbill::from_percent(5),
+						length: Perbill::from_percent(100),
+						floor: Perbill::from_percent(95),
+						ceil: Perbill::from_percent(100),
 					},
-					min_turnout: Curve::LinearDecreasing {
-						begin: Perbill::from_percent(10),
-						delta: Perbill::from_percent(10),
+					min_support: Curve::LinearDecreasing {
+						length: Perbill::from_percent(100),
+						floor: Perbill::from_percent(90),
+						ceil: Perbill::from_percent(100),
 					},
 				},
 			),
@@ -223,14 +215,15 @@ impl Config for Test {
 	type Event = Event;
 	type Scheduler = Scheduler;
 	type Currency = pallet_balances::Pallet<Self>;
+	type SubmitOrigin = frame_system::EnsureSigned<u64>;
 	type CancelOrigin = EnsureSignedBy<Four, u64>;
 	type KillOrigin = EnsureRoot<u64>;
 	type Slash = ();
 	type Votes = u32;
 	type Tally = Tally;
-	type SubmissionDeposit = SubmissionDeposit;
-	type MaxQueued = MaxQueued;
-	type UndecidingTimeout = UndecidingTimeout;
+	type SubmissionDeposit = ConstU64<2>;
+	type MaxQueued = ConstU32<3>;
+	type UndecidingTimeout = ConstU64<20>;
 	type AlarmInterval = AlarmInterval;
 	type Tracks = TestTracksInfo;
 }
@@ -253,35 +246,48 @@ pub fn new_test_ext_execute_with_cond(execute: impl FnOnce(bool) -> () + Clone) 
 	new_test_ext().execute_with(|| execute(true));
 }
 
-#[derive(Encode, Debug, Decode, TypeInfo, Eq, PartialEq, Clone, Default, MaxEncodedLen)]
+#[derive(Encode, Debug, Decode, TypeInfo, Eq, PartialEq, Clone, MaxEncodedLen)]
 pub struct Tally {
 	pub ayes: u32,
 	pub nays: u32,
 }
 
-impl VoteTally<u32> for Tally {
-	fn ayes(&self) -> u32 {
+impl<Class> VoteTally<u32, Class> for Tally {
+	fn new(_: Class) -> Self {
+		Self { ayes: 0, nays: 0 }
+	}
+
+	fn ayes(&self, _: Class) -> u32 {
 		self.ayes
 	}
 
-	fn turnout(&self) -> Perbill {
-		Perbill::from_percent(self.ayes + self.nays)
+	fn support(&self, _: Class) -> Perbill {
+		Perbill::from_percent(self.ayes)
 	}
 
-	fn approval(&self) -> Perbill {
-		Perbill::from_rational(self.ayes, self.ayes + self.nays)
+	fn approval(&self, _: Class) -> Perbill {
+		if self.ayes + self.nays > 0 {
+			Perbill::from_rational(self.ayes, self.ayes + self.nays)
+		} else {
+			Perbill::zero()
+		}
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn unanimity() -> Self {
+	fn unanimity(_: Class) -> Self {
 		Self { ayes: 100, nays: 0 }
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn from_requirements(turnout: Perbill, approval: Perbill) -> Self {
-		let turnout = turnout.mul_ceil(100u32);
-		let ayes = approval.mul_ceil(turnout);
-		Self { ayes, nays: turnout - ayes }
+	fn rejection(_: Class) -> Self {
+		Self { ayes: 0, nays: 100 }
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn from_requirements(support: Perbill, approval: Perbill, _: Class) -> Self {
+		let ayes = support.mul_ceil(100u32);
+		let nays = ((ayes as u64) * 1_000_000_000u64 / approval.deconstruct() as u64) as u32 - ayes;
+		Self { ayes, nays }
 	}
 }
 
@@ -304,7 +310,7 @@ pub fn set_balance_proposal_hash(value: u64) -> H256 {
 pub fn propose_set_balance(who: u64, value: u64, delay: u64) -> DispatchResult {
 	Referenda::submit(
 		Origin::signed(who),
-		frame_system::RawOrigin::Root.into(),
+		Box::new(frame_system::RawOrigin::Root.into()),
 		set_balance_proposal_hash(value),
 		DispatchTime::After(delay),
 	)
@@ -432,7 +438,7 @@ impl RefState {
 	pub fn create(self) -> ReferendumIndex {
 		assert_ok!(Referenda::submit(
 			Origin::signed(1),
-			frame_support::dispatch::RawOrigin::Root.into(),
+			Box::new(frame_support::dispatch::RawOrigin::Root.into()),
 			set_balance_proposal_hash(1),
 			DispatchTime::At(10),
 		));

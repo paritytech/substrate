@@ -62,8 +62,7 @@ impl ImportResult {
 	/// `clear_justification_requests`, `needs_justification`,
 	/// `bad_justification` set to false.
 	pub fn imported(is_new_best: bool) -> ImportResult {
-		let mut aux = ImportedAux::default();
-		aux.is_new_best = is_new_best;
+		let aux = ImportedAux { is_new_best, ..Default::default() };
 
 		ImportResult::Imported(aux)
 	}

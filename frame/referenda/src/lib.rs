@@ -41,7 +41,7 @@
 //! In order to become concluded, one of three things must happen:
 //! - The referendum should remain in an unbroken _Passing_ state for a period of time. This
 //! is known as the _Confirmation Period_ and is determined by the track. A referendum is considered
-//! _Passing_ when there is a sufficiently high turnout and approval, given the amount of time it
+//! _Passing_ when there is a sufficiently high support and approval, given the amount of time it
 //! has been being decided. Generally the threshold for what counts as being "sufficiently high"
 //! will reduce over time. The curves setting these thresholds are determined by the track. In this
 //! case, the referendum is considered _Approved_ and the proposal is scheduled for dispatch.
@@ -53,6 +53,10 @@
 //! conclude without ever entering into a deciding stage.
 //!
 //! Once a referendum is concluded, the decision deposit may be refunded.
+//!
+//! ## Terms
+//! - *Support*: The number of aye-votes, pre-conviction, as a proportion of the total number of
+//!   pre-conviction votes able to be cast in the population.
 //!
 //! - [`Config`]
 //! - [`Call`]
@@ -114,7 +118,6 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
-	#[pallet::without_storage_info]
 	pub struct Pallet<T, I = ()>(_);
 
 	#[pallet::config]
@@ -139,6 +142,8 @@ pub mod pallet {
 		/// Currency type for this pallet.
 		type Currency: ReservableCurrency<Self::AccountId>;
 		// Origins and unbalances.
+		/// Origin from which proposals may be submitted.
+		type SubmitOrigin: EnsureOrigin<Self::Origin, Success = Self::AccountId>;
 		/// Origin from which any vote may be cancelled.
 		type CancelOrigin: EnsureOrigin<Self::Origin>;
 		/// Origin from which any vote may be killed.
@@ -146,9 +151,15 @@ pub mod pallet {
 		/// Handler for the unbalanced reduction when slashing a preimage deposit.
 		type Slash: OnUnbalanced<NegativeImbalanceOf<Self, I>>;
 		/// The counting type for votes. Usually just balance.
-		type Votes: AtLeast32BitUnsigned + Copy + Parameter + Member;
+		type Votes: AtLeast32BitUnsigned + Copy + Parameter + Member + MaxEncodedLen;
 		/// The tallying type.
-		type Tally: VoteTally<Self::Votes> + Default + Clone + Codec + Eq + Debug + TypeInfo;
+		type Tally: VoteTally<Self::Votes, TrackIdOf<Self, I>>
+			+ Clone
+			+ Codec
+			+ Eq
+			+ Debug
+			+ TypeInfo
+			+ MaxEncodedLen;
 
 		// Constants
 		/// The minimum amount to be used as a deposit for a public referendum proposal.
@@ -334,7 +345,7 @@ pub mod pallet {
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Propose a referendum on a privileged action.
 		///
-		/// - `origin`: must be `Signed` and the account must have `SubmissionDeposit` funds
+		/// - `origin`: must be `SubmitOrigin` and the account must have `SubmissionDeposit` funds
 		///   available.
 		/// - `proposal_origin`: The origin from which the proposal should be executed.
 		/// - `proposal_hash`: The hash of the proposal preimage.
@@ -344,11 +355,11 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::submit())]
 		pub fn submit(
 			origin: OriginFor<T>,
-			proposal_origin: PalletsOriginOf<T>,
+			proposal_origin: Box<PalletsOriginOf<T>>,
 			proposal_hash: T::Hash,
 			enactment_moment: DispatchTime<T::BlockNumber>,
 		) -> DispatchResult {
-			let who = ensure_signed(origin)?;
+			let who = T::SubmitOrigin::ensure_origin(origin)?;
 
 			let track =
 				T::Tracks::track_for(&proposal_origin).map_err(|_| Error::<T, I>::NoTrack)?;
@@ -362,14 +373,14 @@ pub mod pallet {
 			let nudge_call = Call::nudge_referendum { index };
 			let status = ReferendumStatus {
 				track,
-				origin: proposal_origin,
-				proposal_hash: proposal_hash.clone(),
+				origin: *proposal_origin,
+				proposal_hash,
 				enactment: enactment_moment,
 				submitted: now,
 				submission_deposit,
 				decision_deposit: None,
 				deciding: None,
-				tally: Default::default(),
+				tally: TallyOf::<T, I>::new(track),
 				in_queue: false,
 				alarm: Self::set_alarm(nudge_call, now.saturating_add(T::UndecidingTimeout::get())),
 			};
@@ -613,7 +624,7 @@ impl<T: Config<I>, I: 'static> Polling<T::Tally> for Pallet<T, I> {
 			submission_deposit: Deposit { who: dummy_account_id, amount: Zero::zero() },
 			decision_deposit: None,
 			deciding: None,
-			tally: Default::default(),
+			tally: TallyOf::<T, I>::new(class),
 			in_queue: false,
 			alarm: None,
 		};
@@ -643,7 +654,7 @@ impl<T: Config<I>, I: 'static> Polling<T::Tally> for Pallet<T, I> {
 			.iter()
 			.max_by_key(|(_, info)| info.max_deciding)
 			.expect("Always one class");
-		(r.0.clone(), r.1.max_deciding)
+		(r.0, r.1.max_deciding)
 	}
 }
 
@@ -723,15 +734,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			&status.tally,
 			Zero::zero(),
 			track.decision_period,
-			&track.min_turnout,
+			&track.min_support,
 			&track.min_approval,
+			status.track,
 		);
 		status.in_queue = false;
 		Self::deposit_event(Event::<T, I>::DecisionStarted {
 			index,
 			tally: status.tally.clone(),
-			proposal_hash: status.proposal_hash.clone(),
-			track: status.track.clone(),
+			proposal_hash: status.proposal_hash,
+			track: status.track,
 		});
 		let confirming = if is_passing {
 			Self::deposit_event(Event::<T, I>::ConfirmStarted { index });
@@ -740,7 +752,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			None
 		};
 		let deciding_status = DecidingStatus { since: now, confirming };
-		let alarm = Self::decision_time(&deciding_status, &status.tally, track);
+		let alarm = Self::decision_time(&deciding_status, &status.tally, status.track, track);
 		status.deciding = Some(deciding_status);
 		let branch =
 			if is_passing { BeginDecidingBranch::Passing } else { BeginDecidingBranch::Failing };
@@ -765,7 +777,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			(r.0, r.1.into())
 		} else {
 			// Add to queue.
-			let item = (index, status.tally.ayes());
+			let item = (index, status.tally.ayes(status.track));
 			status.in_queue = true;
 			TrackQueue::<T, I>::mutate(status.track, |q| q.insert_sorted_by_key(item, |x| x.1));
 			(None, ServiceBranch::Queued)
@@ -872,7 +884,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				// Are we already queued for deciding?
 				if status.in_queue {
 					// Does our position in the queue need updating?
-					let ayes = status.tally.ayes();
+					let ayes = status.tally.ayes(status.track);
 					let mut queue = TrackQueue::<T, I>::get(status.track);
 					let maybe_old_pos = queue.iter().position(|(x, _)| *x == index);
 					let new_pos = queue.binary_search_by_key(&ayes, |x| x.1).unwrap_or_else(|x| x);
@@ -895,7 +907,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						let prepare_end = status.submitted.saturating_add(track.prepare_period);
 						if now >= prepare_end {
 							let (maybe_alarm, branch) =
-								Self::ready_for_deciding(now, &track, index, &mut status);
+								Self::ready_for_deciding(now, track, index, &mut status);
 							if let Some(set_alarm) = maybe_alarm {
 								alarm = alarm.min(set_alarm);
 							}
@@ -930,11 +942,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					&status.tally,
 					now.saturating_sub(deciding.since),
 					track.decision_period,
-					&track.min_turnout,
+					&track.min_support,
 					&track.min_approval,
+					status.track,
 				);
 				branch = if is_passing {
-					match deciding.confirming.clone() {
+					match deciding.confirming {
 						Some(t) if now >= t => {
 							// Passed!
 							Self::ensure_no_alarm(&mut status);
@@ -996,7 +1009,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						ServiceBranch::ContinueNotConfirming
 					}
 				};
-				alarm = Self::decision_time(&deciding, &status.tally, track);
+				alarm = Self::decision_time(deciding, &status.tally, status.track, track);
 			},
 		}
 
@@ -1009,15 +1022,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn decision_time(
 		deciding: &DecidingStatusOf<T>,
 		tally: &T::Tally,
+		track_id: TrackIdOf<T, I>,
 		track: &TrackInfoOf<T, I>,
 	) -> T::BlockNumber {
 		deciding.confirming.unwrap_or_else(|| {
 			// Set alarm to the point where the current voting would make it pass.
-			let approval = tally.approval();
-			let turnout = tally.turnout();
+			let approval = tally.approval(track_id);
+			let support = tally.support(track_id);
 			let until_approval = track.min_approval.delay(approval);
-			let until_turnout = track.min_turnout.delay(turnout);
-			let offset = until_turnout.max(until_approval);
+			let until_support = track.min_support.delay(support);
+			let offset = until_support.max(until_approval);
 			deciding.since.saturating_add(offset * track.decision_period)
 		})
 	}
@@ -1062,16 +1076,18 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	/// Determine whether the given `tally` would result in a referendum passing at `elapsed` blocks
-	/// into a total decision `period`, given the two curves for `turnout_needed` and
+	/// into a total decision `period`, given the two curves for `support_needed` and
 	/// `approval_needed`.
 	fn is_passing(
 		tally: &T::Tally,
 		elapsed: T::BlockNumber,
 		period: T::BlockNumber,
-		turnout_needed: &Curve,
+		support_needed: &Curve,
 		approval_needed: &Curve,
+		id: TrackIdOf<T, I>,
 	) -> bool {
 		let x = Perbill::from_rational(elapsed.min(period), period);
-		turnout_needed.passing(x, tally.turnout()) && approval_needed.passing(x, tally.approval())
+		support_needed.passing(x, tally.support(id)) &&
+			approval_needed.passing(x, tally.approval(id))
 	}
 }

@@ -52,7 +52,7 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		Beefy: pallet_beefy::{Pallet, Call, Config<T>, Storage},
+		Beefy: pallet_beefy::{Pallet, Config<T>, Storage},
 		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
 	}
 );
@@ -86,6 +86,7 @@ impl frame_system::Config for Test {
 
 impl pallet_beefy::Config for Test {
 	type BeefyId = BeefyId;
+	type MaxAuthorities = ConstU32<100>;
 }
 
 parameter_types! {
@@ -145,8 +146,7 @@ pub fn new_test_ext_raw_authorities(authorities: Vec<(u64, BeefyId)>) -> TestExt
 
 	let session_keys: Vec<_> = authorities
 		.iter()
-		.enumerate()
-		.map(|(_, id)| (id.0 as u64, id.0 as u64, MockSessionKeys { dummy: id.1.clone() }))
+		.map(|id| (id.0 as u64, id.0 as u64, MockSessionKeys { dummy: id.1.clone() }))
 		.collect();
 
 	BasicExternalities::execute_with_storage(&mut t, || {

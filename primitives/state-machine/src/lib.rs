@@ -143,7 +143,7 @@ mod std_reexport {
 	pub use crate::{
 		basic::BasicExternalities,
 		error::{Error, ExecutionError},
-		in_memory_backend::new_in_mem,
+		in_memory_backend::{new_in_mem, new_in_mem_hash_key},
 		proving_backend::{
 			create_proof_check_backend, ProofRecorder, ProvingBackend, ProvingBackendRecorder,
 		},
@@ -644,7 +644,7 @@ mod execution {
 		H::Out: Ord + 'static + codec::Codec,
 		Spawn: SpawnNamed + Send + 'static,
 	{
-		let trie_backend = create_proof_check_backend::<H>(root.into(), proof)?;
+		let trie_backend = create_proof_check_backend::<H>(root, proof)?;
 		execution_proof_check_on_trie_backend::<_, _, _>(
 			&trie_backend,
 			overlay,
@@ -791,7 +791,7 @@ mod execution {
 						self.0.last().and_then(|s| s.key_values.last().map(|kv| kv.0.clone()));
 
 					if let Some(child_last) = child_last {
-						if last.len() == 0 {
+						if last.is_empty() {
 							if let Some(top_last) = top_last {
 								last.push(top_last)
 							} else {
@@ -866,7 +866,7 @@ mod execution {
 				.storage(&storage_key)
 				.map_err(|e| Box::new(e) as Box<dyn Error>)?
 			{
-				child_roots.insert(state_root.clone());
+				child_roots.insert(state_root);
 			} else {
 				return Err(Box::new("Invalid range start child trie key."))
 			}
@@ -880,7 +880,7 @@ mod execution {
 			let (child_info, depth) = if let Some(storage_key) = child_key.as_ref() {
 				let storage_key = PrefixedStorageKey::new_ref(storage_key);
 				(
-					Some(match ChildType::from_prefixed_key(&storage_key) {
+					Some(match ChildType::from_prefixed_key(storage_key) {
 						Some((ChildType::ParentKeyId, storage_key)) =>
 							ChildInfo::new_default(storage_key),
 						None => return Err(Box::new("Invalid range start child trie key.")),
@@ -900,15 +900,15 @@ mod execution {
 					None,
 					start_at_ref,
 					|key, value| {
-						if first {
-							if start_at_ref
+						if first &&
+							start_at_ref
 								.as_ref()
 								.map(|start| &key.as_slice() > start)
 								.unwrap_or(true)
-							{
-								first = false;
-							}
+						{
+							first = false;
 						}
+
 						if first {
 							true
 						} else if depth < MAX_NESTED_TRIE_DEPTH &&
@@ -938,12 +938,10 @@ mod execution {
 			if switch_child_key.is_none() {
 				if depth == 1 {
 					break
+				} else if completed {
+					start_at = child_key.take();
 				} else {
-					if completed {
-						start_at = child_key.take();
-					} else {
-						break
-					}
+					break
 				}
 			} else {
 				child_key = switch_child_key;
@@ -1269,7 +1267,7 @@ mod execution {
 
 				let storage_key = PrefixedStorageKey::new_ref(storage_key);
 				(
-					Some(match ChildType::from_prefixed_key(&storage_key) {
+					Some(match ChildType::from_prefixed_key(storage_key) {
 						Some((ChildType::ParentKeyId, storage_key)) =>
 							ChildInfo::new_default(storage_key),
 						None => return Err(Box::new("Invalid range start child trie key.")),
@@ -1294,15 +1292,15 @@ mod execution {
 					None,
 					start_at_ref,
 					|key, value| {
-						if first {
-							if start_at_ref
+						if first &&
+							start_at_ref
 								.as_ref()
 								.map(|start| &key.as_slice() > start)
 								.unwrap_or(true)
-							{
-								first = false;
-							}
+						{
+							first = false;
 						}
+
 						if !first {
 							values.push((key.to_vec(), value.to_vec()));
 						}
@@ -1349,7 +1347,8 @@ mod execution {
 #[cfg(test)]
 mod tests {
 	use super::{ext::Ext, *};
-	use crate::execution::CallResult;
+	use crate::{execution::CallResult, in_memory_backend::new_in_mem_hash_key};
+	use assert_matches::assert_matches;
 	use codec::{Decode, Encode};
 	use sp_core::{
 		map,
@@ -1390,7 +1389,7 @@ mod tests {
 			let using_native = use_native && self.native_available;
 			match (using_native, self.native_succeeds, self.fallback_succeeds, native_call) {
 				(true, true, _, Some(call)) => {
-					let res = sp_externalities::set_and_run_with_externalities(ext, || call());
+					let res = sp_externalities::set_and_run_with_externalities(ext, call);
 					(res.map(NativeOrEncoded::Native).map_err(|_| 0), true)
 				},
 				(true, true, _, None) | (false, _, true, None) => (
@@ -1574,7 +1573,7 @@ mod tests {
 		{
 			let mut cache = StorageTransactionCache::default();
 			let mut ext = Ext::new(&mut overlay, &mut cache, backend, None);
-			ext.clear_prefix(b"ab", None);
+			let _ = ext.clear_prefix(b"ab", None, None);
 		}
 		overlay.commit_transaction().unwrap();
 
@@ -1584,13 +1583,13 @@ mod tests {
 				.map(|(k, v)| (k.clone(), v.value().cloned()))
 				.collect::<HashMap<_, _>>(),
 			map![
-				b"abc".to_vec() => None.into(),
-				b"abb".to_vec() => None.into(),
-				b"aba".to_vec() => None.into(),
-				b"abd".to_vec() => None.into(),
+				b"abc".to_vec() => None,
+				b"abb".to_vec() => None,
+				b"aba".to_vec() => None,
+				b"abd".to_vec() => None,
 
-				b"bab".to_vec() => Some(b"228".to_vec()).into(),
-				b"bbd".to_vec() => Some(b"42".to_vec()).into()
+				b"bab".to_vec() => Some(b"228".to_vec()),
+				b"bbd".to_vec() => Some(b"42".to_vec())
 			],
 		);
 
@@ -1598,7 +1597,10 @@ mod tests {
 		{
 			let mut cache = StorageTransactionCache::default();
 			let mut ext = Ext::new(&mut overlay, &mut cache, backend, None);
-			assert_eq!((false, 1), ext.clear_prefix(b"ab", Some(1)));
+			assert_matches!(
+				ext.clear_prefix(b"ab", Some(1), None).deconstruct(),
+				(Some(_), 1, 3, 1)
+			);
 		}
 		overlay.commit_transaction().unwrap();
 
@@ -1608,12 +1610,12 @@ mod tests {
 				.map(|(k, v)| (k.clone(), v.value().cloned()))
 				.collect::<HashMap<_, _>>(),
 			map![
-				b"abb".to_vec() => None.into(),
-				b"aba".to_vec() => None.into(),
-				b"abd".to_vec() => None.into(),
+				b"abb".to_vec() => None,
+				b"aba".to_vec() => None,
+				b"abd".to_vec() => None,
 
-				b"bab".to_vec() => Some(b"228".to_vec()).into(),
-				b"bbd".to_vec() => Some(b"42".to_vec()).into()
+				b"bab".to_vec() => Some(b"228".to_vec()),
+				b"bbd".to_vec() => Some(b"42".to_vec())
 			],
 		);
 	}
@@ -1640,22 +1642,23 @@ mod tests {
 		{
 			let mut cache = StorageTransactionCache::default();
 			let mut ext = Ext::new(&mut overlay, &mut cache, &backend, None);
-			assert_eq!(ext.kill_child_storage(&child_info, Some(2)), (false, 2));
+			let r = ext.kill_child_storage(&child_info, Some(2), None);
+			assert_matches!(r.deconstruct(), (Some(_), 2, 6, 2));
 		}
 
 		assert_eq!(
 			overlay
 				.children()
 				.flat_map(|(iter, _child_info)| iter)
-				.map(|(k, v)| (k.clone(), v.value().clone()))
+				.map(|(k, v)| (k.clone(), v.value()))
 				.collect::<BTreeMap<_, _>>(),
 			map![
-				b"1".to_vec() => None.into(),
-				b"2".to_vec() => None.into(),
-				b"3".to_vec() => None.into(),
-				b"4".to_vec() => None.into(),
-				b"a".to_vec() => None.into(),
-				b"b".to_vec() => None.into(),
+				b"1".to_vec() => None,
+				b"2".to_vec() => None,
+				b"3".to_vec() => None,
+				b"4".to_vec() => None,
+				b"a".to_vec() => None,
+				b"b".to_vec() => None,
 			],
 		);
 	}
@@ -1675,21 +1678,44 @@ mod tests {
 		let mut overlay = OverlayedChanges::default();
 		let mut cache = StorageTransactionCache::default();
 		let mut ext = Ext::new(&mut overlay, &mut cache, &backend, None);
-		assert_eq!(ext.kill_child_storage(&child_info, Some(0)), (false, 0));
-		assert_eq!(ext.kill_child_storage(&child_info, Some(1)), (false, 1));
-		assert_eq!(ext.kill_child_storage(&child_info, Some(2)), (false, 2));
-		assert_eq!(ext.kill_child_storage(&child_info, Some(3)), (false, 3));
-		assert_eq!(ext.kill_child_storage(&child_info, Some(4)), (true, 4));
-		// Only 4 items to remove
-		assert_eq!(ext.kill_child_storage(&child_info, Some(5)), (true, 4));
-		assert_eq!(ext.kill_child_storage(&child_info, None), (true, 4));
+		let r = ext.kill_child_storage(&child_info, Some(0), None).deconstruct();
+		assert_matches!(r, (Some(_), 0, 0, 0));
+		let r = ext
+			.kill_child_storage(&child_info, Some(1), r.0.as_ref().map(|x| &x[..]))
+			.deconstruct();
+		assert_matches!(r, (Some(_), 1, 1, 1));
+		let r = ext
+			.kill_child_storage(&child_info, Some(4), r.0.as_ref().map(|x| &x[..]))
+			.deconstruct();
+		// Only 3 items remaining to remove
+		assert_matches!(r, (None, 3, 3, 3));
+		let r = ext.kill_child_storage(&child_info, Some(1), None).deconstruct();
+		assert_matches!(r, (Some(_), 0, 0, 1));
+	}
+
+	#[test]
+	fn limited_child_kill_off_by_one_works_without_limit() {
+		let child_info = ChildInfo::new_default(b"sub1");
+		let initial: HashMap<_, BTreeMap<_, _>> = map![
+			Some(child_info.clone()) => map![
+				b"a".to_vec() => b"0".to_vec(),
+				b"b".to_vec() => b"1".to_vec(),
+				b"c".to_vec() => b"2".to_vec(),
+				b"d".to_vec() => b"3".to_vec()
+			],
+		];
+		let backend = InMemoryBackend::<BlakeTwo256>::from((initial, StateVersion::default()));
+		let mut overlay = OverlayedChanges::default();
+		let mut cache = StorageTransactionCache::default();
+		let mut ext = Ext::new(&mut overlay, &mut cache, &backend, None);
+		assert_eq!(ext.kill_child_storage(&child_info, None, None).deconstruct(), (None, 4, 4, 4));
 	}
 
 	#[test]
 	fn set_child_storage_works() {
 		let child_info = ChildInfo::new_default(b"sub1");
 		let child_info = &child_info;
-		let state = new_in_mem::<BlakeTwo256>();
+		let state = new_in_mem_hash_key::<BlakeTwo256>();
 		let backend = state.as_trie_backend().unwrap();
 		let mut overlay = OverlayedChanges::default();
 		let mut cache = StorageTransactionCache::default();
@@ -1697,7 +1723,7 @@ mod tests {
 
 		ext.set_child_storage(child_info, b"abc".to_vec(), b"def".to_vec());
 		assert_eq!(ext.child_storage(child_info, b"abc"), Some(b"def".to_vec()));
-		ext.kill_child_storage(child_info, None);
+		let _ = ext.kill_child_storage(child_info, None, None);
 		assert_eq!(ext.child_storage(child_info, b"abc"), None);
 	}
 
@@ -1705,7 +1731,7 @@ mod tests {
 	fn append_storage_works() {
 		let reference_data = vec![b"data1".to_vec(), b"2".to_vec(), b"D3".to_vec(), b"d4".to_vec()];
 		let key = b"key".to_vec();
-		let state = new_in_mem::<BlakeTwo256>();
+		let state = new_in_mem_hash_key::<BlakeTwo256>();
 		let backend = state.as_trie_backend().unwrap();
 		let mut overlay = OverlayedChanges::default();
 		let mut cache = StorageTransactionCache::default();
@@ -1742,7 +1768,7 @@ mod tests {
 
 		let key = b"events".to_vec();
 		let mut cache = StorageTransactionCache::default();
-		let state = new_in_mem::<BlakeTwo256>();
+		let state = new_in_mem_hash_key::<BlakeTwo256>();
 		let backend = state.as_trie_backend().unwrap();
 		let mut overlay = OverlayedChanges::default();
 
@@ -1796,7 +1822,7 @@ mod tests {
 
 	fn test_compact(remote_proof: StorageProof, remote_root: &sp_core::H256) -> StorageProof {
 		let compact_remote_proof =
-			remote_proof.into_compact_proof::<BlakeTwo256>(remote_root.clone()).unwrap();
+			remote_proof.into_compact_proof::<BlakeTwo256>(*remote_root).unwrap();
 		compact_remote_proof
 			.to_storage_proof::<BlakeTwo256>(Some(remote_root))
 			.unwrap()
@@ -1823,8 +1849,7 @@ mod tests {
 			read_proof_check::<BlakeTwo256, _>(remote_root, remote_proof.clone(), &[b"value2"])
 				.unwrap();
 		let local_result2 =
-			read_proof_check::<BlakeTwo256, _>(remote_root, remote_proof.clone(), &[&[0xff]])
-				.is_ok();
+			read_proof_check::<BlakeTwo256, _>(remote_root, remote_proof, &[&[0xff]]).is_ok();
 		// check that results are correct
 		assert_eq!(
 			local_result1.into_iter().collect::<Vec<_>>(),
@@ -1852,7 +1877,7 @@ mod tests {
 		.unwrap();
 		let local_result3 = read_child_proof_check::<BlakeTwo256, _>(
 			remote_root,
-			remote_proof.clone(),
+			remote_proof,
 			missing_child_info,
 			&[b"dummy"],
 		)
@@ -1899,7 +1924,7 @@ mod tests {
 
 			let trie: InMemoryBackend<BlakeTwo256> =
 				(storage.clone(), StateVersion::default()).into();
-			let trie_root = trie.root().clone();
+			let trie_root = trie.root();
 			let backend = crate::ProvingBackend::new(&trie);
 			let mut queries = Vec::new();
 			for c in 0..(5 + nb_child_trie / 2) {
@@ -1948,7 +1973,7 @@ mod tests {
 			let storage_proof = backend.extract_proof();
 			let remote_proof = test_compact(storage_proof, &trie_root);
 			let proof_check =
-				create_proof_check_backend::<BlakeTwo256>(trie_root, remote_proof).unwrap();
+				create_proof_check_backend::<BlakeTwo256>(*trie_root, remote_proof).unwrap();
 
 			for (child_info, key, expected) in queries {
 				assert_eq!(
@@ -1998,15 +2023,9 @@ mod tests {
 			prove_range_read_with_size(remote_backend, None, None, 50000, Some(&[])).unwrap();
 		assert_eq!(proof.clone().into_memory_db::<BlakeTwo256>().drain().len(), 11);
 		assert_eq!(count, 132);
-		let (results, completed) = read_range_proof_check::<BlakeTwo256>(
-			remote_root,
-			proof.clone(),
-			None,
-			None,
-			None,
-			None,
-		)
-		.unwrap();
+		let (results, completed) =
+			read_range_proof_check::<BlakeTwo256>(remote_root, proof, None, None, None, None)
+				.unwrap();
 		assert_eq!(results.len() as u32, count);
 		assert_eq!(completed, true);
 	}
@@ -2041,11 +2060,11 @@ mod tests {
 			remote_proof
 		};
 
-		let remote_proof = check_proof(mdb.clone(), root.clone(), state_version);
+		let remote_proof = check_proof(mdb.clone(), root, state_version);
 		// check full values in proof
 		assert!(remote_proof.encode().len() > 1_100);
 		assert!(remote_proof.encoded_size() > 1_100);
-		let root1 = root.clone();
+		let root1 = root;
 
 		// do switch
 		state_version = StateVersion::V1;
@@ -2057,9 +2076,9 @@ mod tests {
 			trie.insert(b"foo", vec![1u8; 1000].as_slice()) // inner hash
 				.expect("insert failed");
 		}
-		let root3 = root.clone();
+		let root3 = root;
 		assert!(root1 != root3);
-		let remote_proof = check_proof(mdb.clone(), root.clone(), state_version);
+		let remote_proof = check_proof(mdb.clone(), root, state_version);
 		// nodes foo is replaced by its hashed value form.
 		assert!(remote_proof.encode().len() < 1000);
 		assert!(remote_proof.encoded_size() < 1000);
@@ -2159,7 +2178,7 @@ mod tests {
 		let remote_proof = test_compact(remote_proof, &remote_root);
 		let local_result1 = read_child_proof_check::<BlakeTwo256, _>(
 			remote_root,
-			remote_proof.clone(),
+			remote_proof,
 			&child_info1,
 			&[b"key1"],
 		)

@@ -16,12 +16,18 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use super::*;
-
+use super::{helpers::SyncState, *};
 use assert_matches::assert_matches;
-use futures::{executor, prelude::*};
+use futures::prelude::*;
+use jsonrpsee::{
+	core::Error as RpcError,
+	types::{error::CallError, EmptyParams},
+	RpcModule,
+};
 use sc_network::{self, config::Role, PeerId};
+use sc_rpc_api::system::helpers::PeerInfo;
 use sc_utils::mpsc::tracing_unbounded;
+use sp_core::H256;
 use std::{
 	env,
 	io::{BufRead, BufReader, Write},
@@ -43,7 +49,7 @@ impl Default for Status {
 	}
 }
 
-fn api<T: Into<Option<Status>>>(sync: T) -> System<Block> {
+fn api<T: Into<Option<Status>>>(sync: T) -> RpcModule<System<Block>> {
 	let status = sync.into().unwrap_or_default();
 	let should_have_peers = !status.is_dev;
 	let (tx, rx) = tracing_unbounded("rpc_system_tests");
@@ -136,98 +142,122 @@ fn api<T: Into<Option<Status>>>(sync: T) -> System<Block> {
 		tx,
 		sc_rpc_api::DenyUnsafe::No,
 	)
+	.into_rpc()
 }
 
-fn wait_receiver<T>(rx: Receiver<T>) -> T {
-	futures::executor::block_on(rx).unwrap()
-}
-
-#[test]
-fn system_name_works() {
-	assert_eq!(api(None).system_name().unwrap(), "testclient".to_owned());
-}
-
-#[test]
-fn system_version_works() {
-	assert_eq!(api(None).system_version().unwrap(), "0.2.0".to_owned());
-}
-
-#[test]
-fn system_chain_works() {
-	assert_eq!(api(None).system_chain().unwrap(), "testchain".to_owned());
-}
-
-#[test]
-fn system_properties_works() {
-	assert_eq!(api(None).system_properties().unwrap(), serde_json::map::Map::new());
-}
-
-#[test]
-fn system_type_works() {
-	assert_eq!(api(None).system_type().unwrap(), Default::default());
-}
-
-#[test]
-fn system_health() {
-	assert_matches!(
-		wait_receiver(api(None).system_health()),
-		Health { peers: 0, is_syncing: false, should_have_peers: true }
+#[tokio::test]
+async fn system_name_works() {
+	assert_eq!(
+		api(None).call::<_, String>("system_name", EmptyParams::new()).await.unwrap(),
+		"testclient".to_string(),
 	);
+}
 
-	assert_matches!(
-		wait_receiver(
-			api(Status { peer_id: PeerId::random(), peers: 5, is_syncing: true, is_dev: true })
-				.system_health()
-		),
-		Health { peers: 5, is_syncing: true, should_have_peers: false }
+#[tokio::test]
+async fn system_version_works() {
+	assert_eq!(
+		api(None).call::<_, String>("system_version", EmptyParams::new()).await.unwrap(),
+		"0.2.0".to_string(),
+	);
+}
+
+#[tokio::test]
+async fn system_chain_works() {
+	assert_eq!(
+		api(None).call::<_, String>("system_chain", EmptyParams::new()).await.unwrap(),
+		"testchain".to_string(),
+	);
+}
+
+#[tokio::test]
+async fn system_properties_works() {
+	type Map = serde_json::map::Map<String, serde_json::Value>;
+
+	assert_eq!(
+		api(None).call::<_, Map>("system_properties", EmptyParams::new()).await.unwrap(),
+		Map::new()
+	);
+}
+
+#[tokio::test]
+async fn system_type_works() {
+	assert_eq!(
+		api(None)
+			.call::<_, String>("system_chainType", EmptyParams::new())
+			.await
+			.unwrap(),
+		"Live".to_owned(),
+	);
+}
+
+#[tokio::test]
+async fn system_health() {
+	assert_eq!(
+		api(None).call::<_, Health>("system_health", EmptyParams::new()).await.unwrap(),
+		Health { peers: 0, is_syncing: false, should_have_peers: true },
 	);
 
 	assert_eq!(
-		wait_receiver(
-			api(Status { peer_id: PeerId::random(), peers: 5, is_syncing: false, is_dev: false })
-				.system_health()
-		),
-		Health { peers: 5, is_syncing: false, should_have_peers: true }
+		api(Status { peer_id: PeerId::random(), peers: 5, is_syncing: true, is_dev: true })
+			.call::<_, Health>("system_health", EmptyParams::new())
+			.await
+			.unwrap(),
+		Health { peers: 5, is_syncing: true, should_have_peers: false },
 	);
 
 	assert_eq!(
-		wait_receiver(
-			api(Status { peer_id: PeerId::random(), peers: 0, is_syncing: false, is_dev: true })
-				.system_health()
-		),
-		Health { peers: 0, is_syncing: false, should_have_peers: false }
+		api(Status { peer_id: PeerId::random(), peers: 5, is_syncing: false, is_dev: false })
+			.call::<_, Health>("system_health", EmptyParams::new())
+			.await
+			.unwrap(),
+		Health { peers: 5, is_syncing: false, should_have_peers: true },
+	);
+
+	assert_eq!(
+		api(Status { peer_id: PeerId::random(), peers: 0, is_syncing: false, is_dev: true })
+			.call::<_, Health>("system_health", EmptyParams::new())
+			.await
+			.unwrap(),
+		Health { peers: 0, is_syncing: false, should_have_peers: false },
 	);
 }
 
-#[test]
-fn system_local_peer_id_works() {
+#[tokio::test]
+async fn system_local_peer_id_works() {
 	assert_eq!(
-		wait_receiver(api(None).system_local_peer_id()),
-		"QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV".to_owned(),
+		api(None)
+			.call::<_, String>("system_localPeerId", EmptyParams::new())
+			.await
+			.unwrap(),
+		"QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV".to_owned()
 	);
 }
 
-#[test]
-fn system_local_listen_addresses_works() {
+#[tokio::test]
+async fn system_local_listen_addresses_works() {
 	assert_eq!(
-		wait_receiver(api(None).system_local_listen_addresses()),
+		api(None)
+			.call::<_, Vec<String>>("system_localListenAddresses", EmptyParams::new())
+			.await
+			.unwrap(),
 		vec![
-			"/ip4/198.51.100.19/tcp/30333/p2p/QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV"
-				.to_string(),
+			"/ip4/198.51.100.19/tcp/30333/p2p/QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV",
 			"/ip4/127.0.0.1/tcp/30334/ws/p2p/QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV"
-				.to_string(),
 		]
 	);
 }
 
-#[test]
-fn system_peers() {
+#[tokio::test]
+async fn system_peers() {
 	let peer_id = PeerId::random();
-	let req = api(Status { peer_id, peers: 1, is_syncing: false, is_dev: true }).system_peers();
-	let res = executor::block_on(req).unwrap();
+	let peer_info: Vec<PeerInfo<H256, u64>> =
+		api(Status { peer_id, peers: 1, is_syncing: false, is_dev: true })
+			.call("system_peers", EmptyParams::new())
+			.await
+			.unwrap();
 
 	assert_eq!(
-		res,
+		peer_info,
 		vec![PeerInfo {
 			peer_id: peer_id.to_base58(),
 			roles: "FULL".into(),
@@ -237,14 +267,16 @@ fn system_peers() {
 	);
 }
 
-#[test]
-fn system_network_state() {
-	let req = api(None).system_network_state();
-	let res = executor::block_on(req).unwrap();
-
+#[tokio::test]
+async fn system_network_state() {
+	use sc_network::network_state::NetworkState;
+	let network_state: NetworkState = api(None)
+		.call("system_unstable_networkState", EmptyParams::new())
+		.await
+		.unwrap();
 	assert_eq!(
-		serde_json::from_value::<sc_network::network_state::NetworkState>(res).unwrap(),
-		sc_network::network_state::NetworkState {
+		network_state,
+		NetworkState {
 			peer_id: String::new(),
 			listened_addresses: Default::default(),
 			external_addresses: Default::default(),
@@ -255,49 +287,58 @@ fn system_network_state() {
 	);
 }
 
-#[test]
-fn system_node_roles() {
-	assert_eq!(wait_receiver(api(None).system_node_roles()), vec![NodeRole::Authority]);
+#[tokio::test]
+async fn system_node_roles() {
+	let node_roles: Vec<NodeRole> =
+		api(None).call("system_nodeRoles", EmptyParams::new()).await.unwrap();
+	assert_eq!(node_roles, vec![NodeRole::Authority]);
 }
-
-#[test]
-fn system_sync_state() {
+#[tokio::test]
+async fn system_sync_state() {
+	let sync_state: SyncState<i32> =
+		api(None).call("system_syncState", EmptyParams::new()).await.unwrap();
 	assert_eq!(
-		wait_receiver(api(None).system_sync_state()),
+		sync_state,
 		SyncState { starting_block: 1, current_block: 2, highest_block: Some(3) }
 	);
 }
 
-#[test]
-fn system_network_add_reserved() {
+#[tokio::test]
+async fn system_network_add_reserved() {
 	let good_peer_id =
-		"/ip4/198.51.100.19/tcp/30333/p2p/QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV";
-	let bad_peer_id = "/ip4/198.51.100.19/tcp/30333";
+		["/ip4/198.51.100.19/tcp/30333/p2p/QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV"];
+	let _good: () = api(None)
+		.call("system_addReservedPeer", good_peer_id)
+		.await
+		.expect("good peer id works");
 
-	let good_fut = api(None).system_add_reserved_peer(good_peer_id.into());
-	let bad_fut = api(None).system_add_reserved_peer(bad_peer_id.into());
-	assert_eq!(executor::block_on(good_fut), Ok(()));
-	assert!(executor::block_on(bad_fut).is_err());
-}
-
-#[test]
-fn system_network_remove_reserved() {
-	let good_peer_id = "QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV";
-	let bad_peer_id =
-		"/ip4/198.51.100.19/tcp/30333/p2p/QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV";
-
-	let good_fut = api(None).system_remove_reserved_peer(good_peer_id.into());
-	let bad_fut = api(None).system_remove_reserved_peer(bad_peer_id.into());
-	assert_eq!(executor::block_on(good_fut), Ok(()));
-	assert!(executor::block_on(bad_fut).is_err());
-}
-
-#[test]
-fn system_network_reserved_peers() {
-	assert_eq!(
-		wait_receiver(api(None).system_reserved_peers()),
-		vec!["QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV".to_string()]
+	let bad_peer_id = ["/ip4/198.51.100.19/tcp/30333"];
+	assert_matches!(
+		api(None).call::<_, ()>("system_addReservedPeer", bad_peer_id).await,
+		Err(RpcError::Call(CallError::Custom(err))) if err.message().contains("Peer id is missing from the address")
 	);
+}
+
+#[tokio::test]
+async fn system_network_remove_reserved() {
+	let _good_peer: () = api(None)
+		.call("system_removeReservedPeer", ["QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV"])
+		.await
+		.expect("call with good peer id works");
+
+	let bad_peer_id =
+		["/ip4/198.51.100.19/tcp/30333/p2p/QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV"];
+
+	assert_matches!(
+		api(None).call::<_, String>("system_removeReservedPeer", bad_peer_id).await,
+		Err(RpcError::Call(CallError::Custom(err))) if err.message().contains("base-58 decode error: provided string contained invalid character '/' at byte 0")
+	);
+}
+#[tokio::test]
+async fn system_network_reserved_peers() {
+	let reserved_peers: Vec<String> =
+		api(None).call("system_reservedPeers", EmptyParams::new()).await.unwrap();
+	assert_eq!(reserved_peers, vec!["QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV".to_string()],);
 }
 
 #[test]
@@ -315,15 +356,20 @@ fn test_add_reset_log_filter() {
 		for line in std::io::stdin().lock().lines() {
 			let line = line.expect("Failed to read bytes");
 			if line.contains("add_reload") {
-				api(None)
-					.system_add_log_filter("test_after_add".into())
-					.expect("`system_add_log_filter` failed");
+				let filter = "test_after_add";
+				let fut =
+					async move { api(None).call::<_, ()>("system_addLogFilter", [filter]).await };
+				futures::executor::block_on(fut).expect("`system_addLogFilter` failed");
 			} else if line.contains("add_trace") {
-				api(None)
-					.system_add_log_filter("test_before_add=trace".into())
-					.expect("`system_add_log_filter` failed");
+				let filter = "test_before_add=trace";
+				let fut =
+					async move { api(None).call::<_, ()>("system_addLogFilter", [filter]).await };
+				futures::executor::block_on(fut).expect("`system_addLogFilter (trace)` failed");
 			} else if line.contains("reset") {
-				api(None).system_reset_log_filter().expect("`system_reset_log_filter` failed");
+				let fut = async move {
+					api(None).call::<_, ()>("system_resetLogFilter", EmptyParams::new()).await
+				};
+				futures::executor::block_on(fut).expect("`system_resetLogFilter` failed");
 			} else if line.contains("exit") {
 				return
 			}

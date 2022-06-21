@@ -2104,7 +2104,7 @@ fn reward_validator_slashing_validator_does_not_overflow() {
 			&[Perbill::from_percent(100)],
 		);
 
-		assert_eq!(Balances::total_balance(&11), stake - 1);
+		assert_eq!(Balances::total_balance(&11), stake);
 		assert_eq!(Balances::total_balance(&2), 1);
 	})
 }
@@ -2788,6 +2788,80 @@ fn deferred_slashes_are_deferred() {
 }
 
 #[test]
+fn staker_cannot_bail_deferred_slash() {
+	// as long as SlashDeferDuration is less than BondingDuration, this should not be possible.
+	ExtBuilder::default().slash_defer_duration(2).build_and_execute(|| {
+		mock::start_active_era(1);
+
+		assert_eq!(Balances::free_balance(11), 1000);
+		assert_eq!(Balances::free_balance(101), 2000);
+
+		let exposure = Staking::eras_stakers(active_era(), 11);
+		let nominated_value = exposure.others.iter().find(|o| o.who == 101).unwrap().value;
+
+		on_offence_now(
+			&[OffenceDetails {
+				offender: (11, Staking::eras_stakers(active_era(), 11)),
+				reporters: vec![],
+			}],
+			&[Perbill::from_percent(10)],
+		);
+
+		// now we chill
+		assert_ok!(Staking::chill(Origin::signed(100)));
+		assert_ok!(Staking::unbond(Origin::signed(100), 500));
+
+		assert_eq!(Staking::current_era().unwrap(), 1);
+		assert_eq!(active_era(), 1);
+
+		assert_eq!(
+			Ledger::<Test>::get(100).unwrap(),
+			StakingLedger {
+				active: 0,
+				total: 500,
+				stash: 101,
+				claimed_rewards: Default::default(),
+				unlocking: bounded_vec![UnlockChunk { era: 4u32, value: 500 }],
+			}
+		);
+
+		// no slash yet.
+		assert_eq!(Balances::free_balance(11), 1000);
+		assert_eq!(Balances::free_balance(101), 2000);
+
+		// no slash yet.
+		mock::start_active_era(2);
+		assert_eq!(Balances::free_balance(11), 1000);
+		assert_eq!(Balances::free_balance(101), 2000);
+		assert_eq!(Staking::current_era().unwrap(), 2);
+		assert_eq!(active_era(), 2);
+
+		// no slash yet.
+		mock::start_active_era(3);
+		assert_eq!(Balances::free_balance(11), 1000);
+		assert_eq!(Balances::free_balance(101), 2000);
+		assert_eq!(Staking::current_era().unwrap(), 3);
+		assert_eq!(active_era(), 3);
+
+		// and cannot yet unbond:
+		assert_storage_noop!(assert!(Staking::withdraw_unbonded(Origin::signed(100), 0).is_ok()));
+		assert_eq!(
+			Ledger::<Test>::get(100).unwrap().unlocking.into_inner(),
+			vec![UnlockChunk { era: 4u32, value: 500 as Balance }],
+		);
+
+		// at the start of era 4, slashes from era 1 are processed,
+		// after being deferred for at least 2 full eras.
+		mock::start_active_era(4);
+
+		assert_eq!(Balances::free_balance(11), 900);
+		assert_eq!(Balances::free_balance(101), 2000 - (nominated_value / 10));
+
+		// and the leftover of the funds can now be unbonded.
+	})
+}
+
+#[test]
 fn remove_deferred() {
 	ExtBuilder::default().slash_defer_duration(2).build_and_execute(|| {
 		mock::start_active_era(1);
@@ -3314,7 +3388,7 @@ fn six_session_delay() {
 #[test]
 fn test_max_nominator_rewarded_per_validator_and_cant_steal_someone_else_reward() {
 	ExtBuilder::default().build_and_execute(|| {
-		for i in 0..=<Test as Config>::MaxNominatorRewardedPerValidator::get() {
+		for i in 0..=<<Test as Config>::MaxNominatorRewardedPerValidator as Get<_>>::get() {
 			let stash = 10_000 + i as AccountId;
 			let controller = 20_000 + i as AccountId;
 			let balance = 10_000 + i as Balance;
@@ -3337,7 +3411,7 @@ fn test_max_nominator_rewarded_per_validator_and_cant_steal_someone_else_reward(
 		mock::make_all_reward_payment(1);
 
 		// Assert only nominators from 1 to Max are rewarded
-		for i in 0..=<Test as Config>::MaxNominatorRewardedPerValidator::get() {
+		for i in 0..=<<Test as Config>::MaxNominatorRewardedPerValidator as Get<_>>::get() {
 			let stash = 10_000 + i as AccountId;
 			let balance = 10_000 + i as Balance;
 			if stash == 10_000 {
@@ -3370,26 +3444,47 @@ fn set_history_depth_works() {
 
 #[test]
 fn test_payout_stakers() {
-	// Here we will test validator can set `max_nominators_payout` and it works.
-	// We also test that `payout_extra_nominators` works.
+	// Test that payout_stakers work in general, including that only the top
+	// `T::MaxNominatorRewardedPerValidator` nominators are rewarded.
 	ExtBuilder::default().has_stakers(false).build_and_execute(|| {
 		let balance = 1000;
+		// Track the exposure of the validator and all nominators.
+		let mut total_exposure = balance;
+		// Track the exposure of the validator and the nominators that will get paid out.
+		let mut payout_exposure = balance;
 		// Create a validator:
 		bond_validator(11, 10, balance); // Default(64)
+		assert_eq!(Validators::<Test>::count(), 1);
 
 		// Create nominators, targeting stash of validators
 		for i in 0..100 {
-			bond_nominator(1000 + i, 100 + i, balance + i as Balance, vec![11]);
+			let bond_amount = balance + i as Balance;
+			bond_nominator(1000 + i, 100 + i, bond_amount, vec![11]);
+			total_exposure += bond_amount;
+			if i >= 36 {
+				payout_exposure += bond_amount;
+			};
 		}
+		let payout_exposure_part = Perbill::from_rational(payout_exposure, total_exposure);
 
 		mock::start_active_era(1);
 		Staking::reward_by_ids(vec![(11, 1)]);
 
 		// compute and ensure the reward amount is greater than zero.
-		let _ = current_total_payout_for_duration(reward_time_per_era());
+		let payout = current_total_payout_for_duration(reward_time_per_era());
+		let actual_paid_out = payout_exposure_part * payout;
 
 		mock::start_active_era(2);
+
+		let pre_payout_total_issuance = Balances::total_issuance();
+		RewardOnUnbalanceWasCalled::set(false);
 		assert_ok!(Staking::payout_stakers(Origin::signed(1337), 11, 1));
+		assert_eq_error_rate!(
+			Balances::total_issuance(),
+			pre_payout_total_issuance + actual_paid_out,
+			1
+		);
+		assert!(RewardOnUnbalanceWasCalled::get());
 
 		// Top 64 nominators of validator 11 automatically paid out, including the validator
 		// Validator payout goes to controller.
@@ -3418,10 +3513,19 @@ fn test_payout_stakers() {
 			Staking::reward_by_ids(vec![(11, 1)]);
 
 			// compute and ensure the reward amount is greater than zero.
-			let _ = current_total_payout_for_duration(reward_time_per_era());
+			let payout = current_total_payout_for_duration(reward_time_per_era());
+			let actual_paid_out = payout_exposure_part * payout;
+			let pre_payout_total_issuance = Balances::total_issuance();
 
 			mock::start_active_era(i);
+			RewardOnUnbalanceWasCalled::set(false);
 			assert_ok!(Staking::payout_stakers(Origin::signed(1337), 11, i - 1));
+			assert_eq_error_rate!(
+				Balances::total_issuance(),
+				pre_payout_total_issuance + actual_paid_out,
+				1
+			);
+			assert!(RewardOnUnbalanceWasCalled::get());
 		}
 
 		// We track rewards in `claimed_rewards` vec
@@ -3545,7 +3649,8 @@ fn payout_stakers_handles_weight_refund() {
 	// Note: this test relies on the assumption that `payout_stakers_alive_staked` is solely used by
 	// `payout_stakers` to calculate the weight of each payout op.
 	ExtBuilder::default().has_stakers(false).build_and_execute(|| {
-		let max_nom_rewarded = <Test as Config>::MaxNominatorRewardedPerValidator::get();
+		let max_nom_rewarded =
+			<<Test as Config>::MaxNominatorRewardedPerValidator as Get<_>>::get();
 		// Make sure the configured value is meaningful for our use.
 		assert!(max_nom_rewarded >= 4);
 		let half_max_nom_rewarded = max_nom_rewarded / 2;
@@ -4598,10 +4703,20 @@ fn capped_stakers_works() {
 #[test]
 fn min_commission_works() {
 	ExtBuilder::default().build_and_execute(|| {
+		// account 10 controls the stash from account 11
 		assert_ok!(Staking::validate(
 			Origin::signed(10),
 			ValidatorPrefs { commission: Perbill::from_percent(5), blocked: false }
 		));
+
+		// event emitted should be correct
+		assert_eq!(
+			*staking_events().last().unwrap(),
+			Event::ValidatorPrefsSet(
+				11,
+				ValidatorPrefs { commission: Perbill::from_percent(5), blocked: false }
+			)
+		);
 
 		assert_ok!(Staking::set_staking_configs(
 			Origin::root(),
@@ -4813,4 +4928,236 @@ fn force_apply_min_commission_works() {
 			Error::<Test>::NotStash
 		);
 	});
+}
+
+#[test]
+fn proportional_slash_stop_slashing_if_remaining_zero() {
+	let c = |era, value| UnlockChunk::<Balance> { era, value };
+	// Given
+	let mut ledger = StakingLedger::<Test> {
+		stash: 123,
+		total: 40,
+		active: 20,
+		// we have some chunks, but they are not affected.
+		unlocking: bounded_vec![c(1, 10), c(2, 10)],
+		claimed_rewards: vec![],
+	};
+
+	assert_eq!(BondingDuration::get(), 3);
+
+	// should not slash more than the amount requested, by accidentally slashing the first chunk.
+	assert_eq!(ledger.slash(18, 1, 0), 18);
+}
+
+#[test]
+fn proportional_ledger_slash_works() {
+	let c = |era, value| UnlockChunk::<Balance> { era, value };
+	// Given
+	let mut ledger = StakingLedger::<Test> {
+		stash: 123,
+		total: 10,
+		active: 10,
+		unlocking: bounded_vec![],
+		claimed_rewards: vec![],
+	};
+
+	assert_eq!(BondingDuration::get(), 3);
+
+	// When we slash a ledger with no unlocking chunks
+	assert_eq!(ledger.slash(5, 1, 0), 5);
+	// Then
+	assert_eq!(ledger.total, 5);
+	assert_eq!(ledger.active, 5);
+	assert_eq!(LedgerSlashPerEra::get().0, 5);
+	assert_eq!(LedgerSlashPerEra::get().1, Default::default());
+
+	// When we slash a ledger with no unlocking chunks and the slash amount is greater then the
+	// total
+	assert_eq!(ledger.slash(11, 1, 0), 5);
+	// Then
+	assert_eq!(ledger.total, 0);
+	assert_eq!(ledger.active, 0);
+	assert_eq!(LedgerSlashPerEra::get().0, 0);
+	assert_eq!(LedgerSlashPerEra::get().1, Default::default());
+
+	// Given
+	ledger.unlocking = bounded_vec![c(4, 10), c(5, 10)];
+	ledger.total = 2 * 10;
+	ledger.active = 0;
+	// When all the chunks overlap with the slash eras
+	assert_eq!(ledger.slash(20, 0, 0), 20);
+	// Then
+	assert_eq!(ledger.unlocking, vec![]);
+	assert_eq!(ledger.total, 0);
+	assert_eq!(LedgerSlashPerEra::get().0, 0);
+	assert_eq!(LedgerSlashPerEra::get().1, BTreeMap::from([(4, 0), (5, 0)]));
+
+	// Given
+	ledger.unlocking = bounded_vec![c(4, 100), c(5, 100), c(6, 100), c(7, 100)];
+	ledger.total = 4 * 100;
+	ledger.active = 0;
+	// When the first 2 chunks don't overlap with the affected range of unlock eras.
+	assert_eq!(ledger.slash(140, 0, 2), 140);
+	// Then
+	assert_eq!(ledger.unlocking, vec![c(4, 100), c(5, 100), c(6, 30), c(7, 30)]);
+	assert_eq!(ledger.total, 4 * 100 - 140);
+	assert_eq!(LedgerSlashPerEra::get().0, 0);
+	assert_eq!(LedgerSlashPerEra::get().1, BTreeMap::from([(6, 30), (7, 30)]));
+
+	// Given
+	ledger.unlocking = bounded_vec![c(4, 40), c(5, 100), c(6, 10), c(7, 250)];
+	ledger.active = 500;
+	// 900
+	ledger.total = 40 + 10 + 100 + 250 + 500;
+	// When we have a partial slash that touches all chunks
+	assert_eq!(ledger.slash(900 / 2, 0, 0), 450);
+	// Then
+	assert_eq!(ledger.active, 500 / 2);
+	assert_eq!(ledger.unlocking, vec![c(4, 40 / 2), c(5, 100 / 2), c(6, 10 / 2), c(7, 250 / 2)]);
+	assert_eq!(ledger.total, 900 / 2);
+	assert_eq!(LedgerSlashPerEra::get().0, 500 / 2);
+	assert_eq!(
+		LedgerSlashPerEra::get().1,
+		BTreeMap::from([(4, 40 / 2), (5, 100 / 2), (6, 10 / 2), (7, 250 / 2)])
+	);
+
+	// slash 1/4th with not chunk.
+	ledger.unlocking = bounded_vec![];
+	ledger.active = 500;
+	ledger.total = 500;
+	// When we have a partial slash that touches all chunks
+	assert_eq!(ledger.slash(500 / 4, 0, 0), 500 / 4);
+	// Then
+	assert_eq!(ledger.active, 3 * 500 / 4);
+	assert_eq!(ledger.unlocking, vec![]);
+	assert_eq!(ledger.total, ledger.active);
+	assert_eq!(LedgerSlashPerEra::get().0, 3 * 500 / 4);
+	assert_eq!(LedgerSlashPerEra::get().1, Default::default());
+
+	// Given we have the same as above,
+	ledger.unlocking = bounded_vec![c(4, 40), c(5, 100), c(6, 10), c(7, 250)];
+	ledger.active = 500;
+	ledger.total = 40 + 10 + 100 + 250 + 500; // 900
+	assert_eq!(ledger.total, 900);
+	// When  we have a higher min balance
+	assert_eq!(
+		ledger.slash(
+			900 / 2,
+			25, /* min balance - chunks with era 0 & 2 will be slashed to <=25, causing it to
+			     * get swept */
+			0
+		),
+		475
+	);
+	let dust = (10 / 2) + (40 / 2);
+	assert_eq!(ledger.active, 500 / 2);
+	assert_eq!(ledger.unlocking, vec![c(5, 100 / 2), c(7, 250 / 2)]);
+	assert_eq!(ledger.total, 900 / 2 - dust);
+	assert_eq!(LedgerSlashPerEra::get().0, 500 / 2);
+	assert_eq!(
+		LedgerSlashPerEra::get().1,
+		BTreeMap::from([(4, 0), (5, 100 / 2), (6, 0), (7, 250 / 2)])
+	);
+
+	// Given
+	// slash order --------------------NA--------2----------0----------1----
+	ledger.unlocking = bounded_vec![c(4, 40), c(5, 100), c(6, 10), c(7, 250)];
+	ledger.active = 500;
+	ledger.total = 40 + 10 + 100 + 250 + 500; // 900
+	assert_eq!(
+		ledger.slash(
+			500 + 10 + 250 + 100 / 2, // active + era 6 + era 7 + era 5 / 2
+			0,
+			2 /* slash era 2+4 first, so the affected parts are era 2+4, era 3+4 and
+			   * ledge.active. This will cause the affected to go to zero, and then we will
+			   * start slashing older chunks */
+		),
+		500 + 250 + 10 + 100 / 2
+	);
+	// Then
+	assert_eq!(ledger.active, 0);
+	assert_eq!(ledger.unlocking, vec![c(4, 40), c(5, 100 / 2)]);
+	assert_eq!(ledger.total, 90);
+	assert_eq!(LedgerSlashPerEra::get().0, 0);
+	assert_eq!(LedgerSlashPerEra::get().1, BTreeMap::from([(5, 100 / 2), (6, 0), (7, 0)]));
+
+	// Given
+	// iteration order------------------NA---------2----------0----------1----
+	ledger.unlocking = bounded_vec![c(4, 100), c(5, 100), c(6, 100), c(7, 100)];
+	ledger.active = 100;
+	ledger.total = 5 * 100;
+	// When
+	assert_eq!(
+		ledger.slash(
+			351, // active + era 6 + era 7 + era 5 / 2 + 1
+			50,  // min balance - everything slashed below 50 will get dusted
+			2    /* slash era 2+4 first, so the affected parts are era 2+4, era 3+4 and
+			      * ledge.active. This will cause the affected to go to zero, and then we will
+			      * start slashing older chunks */
+		),
+		400
+	);
+	// Then
+	assert_eq!(ledger.active, 0);
+	assert_eq!(ledger.unlocking, vec![c(4, 100)]);
+	assert_eq!(ledger.total, 100);
+	assert_eq!(LedgerSlashPerEra::get().0, 0);
+	assert_eq!(LedgerSlashPerEra::get().1, BTreeMap::from([(5, 0), (6, 0), (7, 0)]));
+
+	// Tests for saturating arithmetic
+
+	// Given
+	let slash = u64::MAX as Balance * 2;
+	let value = slash
+		- (9 * 4) // The value of the other parts of ledger that will get slashed
+		+ 1;
+
+	ledger.active = 10;
+	ledger.unlocking = bounded_vec![c(4, 10), c(5, 10), c(6, 10), c(7, value)];
+	ledger.total = value + 40;
+	// When
+	let slash_amount = ledger.slash(slash, 0, 0);
+	assert_eq_error_rate!(slash_amount, slash, 5);
+	// Then
+	assert_eq!(ledger.active, 0); // slash of 9
+	assert_eq!(ledger.unlocking, vec![]);
+	assert_eq!(ledger.total, 0);
+	assert_eq!(LedgerSlashPerEra::get().0, 0);
+	assert_eq!(LedgerSlashPerEra::get().1, BTreeMap::from([(4, 0), (5, 0), (6, 0), (7, 0)]));
+
+	// Given
+	let slash = u64::MAX as Balance * 2;
+	let value = u64::MAX as Balance * 2;
+	let unit = 100;
+	// slash * value that will saturate
+	assert!(slash.checked_mul(value).is_none());
+	// but slash * unit won't.
+	assert!(slash.checked_mul(unit).is_some());
+	ledger.unlocking = bounded_vec![c(4, unit), c(5, value), c(6, unit), c(7, unit)];
+	//--------------------------------------note value^^^
+	ledger.active = unit;
+	ledger.total = unit * 4 + value;
+	// When
+	assert_eq!(ledger.slash(slash, 0, 0), slash - 43);
+	// Then
+	// The amount slashed out of `unit`
+	let affected_balance = value + unit * 4;
+	let ratio = Perquintill::from_rational(slash, affected_balance);
+	// `unit` after the slash is applied
+	let unit_slashed = {
+		let unit_slash = ratio * unit;
+		unit - unit_slash
+	};
+	let value_slashed = {
+		let value_slash = ratio * value;
+		value - value_slash
+	};
+	assert_eq!(ledger.active, unit_slashed);
+	assert_eq!(ledger.unlocking, vec![c(5, value_slashed)]);
+	assert_eq!(ledger.total, value_slashed);
+	assert_eq!(LedgerSlashPerEra::get().0, 0);
+	assert_eq!(
+		LedgerSlashPerEra::get().1,
+		BTreeMap::from([(4, 0), (5, value_slashed), (6, 0), (7, 0)])
+	);
 }

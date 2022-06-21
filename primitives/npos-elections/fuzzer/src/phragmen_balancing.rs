@@ -23,8 +23,8 @@ use common::*;
 use honggfuzz::fuzz;
 use rand::{self, SeedableRng};
 use sp_npos_elections::{
-	assignment_ratio_to_staked_normalized, seq_phragmen, to_supports, ElectionResult,
-	EvaluateSupport, VoteWeight,
+	assignment_ratio_to_staked_normalized, seq_phragmen, to_supports, BalancingConfig,
+	ElectionResult, EvaluateSupport, VoteWeight,
 };
 use sp_runtime::Perbill;
 
@@ -53,11 +53,9 @@ fn main() {
 			let stake_of = |who: &AccountId| -> VoteWeight { *stake_of_tree.get(who).unwrap() };
 
 			let unbalanced_score = {
-				let staked = assignment_ratio_to_staked_normalized(
-					unbalanced.assignments.clone(),
-					&stake_of,
-				)
-				.unwrap();
+				let staked =
+					assignment_ratio_to_staked_normalized(unbalanced.assignments, &stake_of)
+						.unwrap();
 				let score = to_supports(staked.as_ref()).evaluate();
 
 				if score.minimal_stake == 0 {
@@ -68,15 +66,14 @@ fn main() {
 			};
 
 			if iterations > 0 {
+				let config = BalancingConfig { iterations, tolerance: 0 };
 				let balanced: ElectionResult<AccountId, sp_runtime::Perbill> =
-					seq_phragmen(to_elect, candidates, voters, Some((iterations, 0))).unwrap();
+					seq_phragmen(to_elect, candidates, voters, Some(config)).unwrap();
 
 				let balanced_score = {
-					let staked = assignment_ratio_to_staked_normalized(
-						balanced.assignments.clone(),
-						&stake_of,
-					)
-					.unwrap();
+					let staked =
+						assignment_ratio_to_staked_normalized(balanced.assignments, &stake_of)
+							.unwrap();
 					to_supports(staked.as_ref()).evaluate()
 				};
 

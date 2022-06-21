@@ -13,37 +13,36 @@ readme = "README.md"
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
-
 [dependencies]
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive", "max-encoded-len"] }
-scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
-sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
-sp-io = { version = "6.0.0", default-features = false, path = "../../primitives/io", optional = true }
-sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../../primitives/inherents" }
-frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
+log = { version = "0.4.17", default-features = false }
+scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
+frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "../benchmarking" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
+sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../../primitives/inherents" }
+sp-io = { version = "6.0.0", default-features = false, optional = true, path = "../../primitives/io" }
+sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
 sp-timestamp = { version = "4.0.0-dev", default-features = false, path = "../../primitives/timestamp" }
-log = { version = "0.4.14", default-features = false }
 
 [dev-dependencies]
-sp-io ={ version = "6.0.0", path = "../../primitives/io" }
 sp-core = { version = "6.0.0", path = "../../primitives/core" }
+sp-io = { version = "6.0.0", path = "../../primitives/io" }
 
 [features]
 default = ["std"]
 std = [
-	"sp-inherents/std",
 	"codec/std",
-	"scale-info/std",
-	"sp-std/std",
-	"sp-runtime/std",
 	"frame-benchmarking/std",
 	"frame-support/std",
 	"frame-system/std",
-	"sp-timestamp/std",
 	"log/std",
+	"scale-info/std",
+	"sp-inherents/std",
+	"sp-runtime/std",
+	"sp-std/std",
+	"sp-timestamp/std",
 ]
 runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks", "sp-io"]
 try-runtime = ["frame-support/try-runtime"]

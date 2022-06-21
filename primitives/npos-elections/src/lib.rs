@@ -62,7 +62,7 @@
 //!
 //! The `Assignment` field of the election result is voter-major, i.e. it is from the perspective of
 //! the voter. The struct that represents the opposite is called a `Support`. This struct is usually
-//! accessed in a map-like manner, i.e. keyed by voters, therefor it is stored as a mapping called
+//! accessed in a map-like manner, i.e. keyed by voters, therefore it is stored as a mapping called
 //! `SupportMap`.
 //!
 //! Moreover, the support is built from absolute backing values, not ratios like the example above.
@@ -119,12 +119,14 @@ pub enum Error {
 	SolutionTargetOverflow,
 	/// One of the index functions returned none.
 	SolutionInvalidIndex,
-	/// One of the page indices was invalid
+	/// One of the page indices was invalid.
 	SolutionInvalidPageIndex,
 	/// An error occurred in some arithmetic operation.
 	ArithmeticError(&'static str),
 	/// The data provided to create support map was invalid.
 	InvalidSupportEdge,
+	/// The number of voters is bigger than the `MaxVoters` bound.
+	TooManyVoters,
 }
 
 /// A type which is used in the API of this crate as a numeric weight of a vote, most often the
@@ -213,6 +215,13 @@ impl sp_std::cmp::PartialOrd for ElectionScore {
 	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
 		Some(self.cmp(other))
 	}
+}
+
+/// Utility struct to group parameters for the balancing algorithm.
+#[derive(Clone, Copy)]
+pub struct BalancingConfig {
+	pub iterations: usize,
+	pub tolerance: ExtendedBalance,
 }
 
 /// A pointer to a candidate struct with interior mutability.
@@ -318,7 +327,7 @@ impl<AccountId: IdentifierT> Voter<AccountId> {
 	///
 	/// Note that this might create _un-normalized_ assignments, due to accuracy loss of `P`. Call
 	/// site might compensate by calling `normalize()` on the returned `Assignment` as a
-	/// post-precessing.
+	/// post-processing.
 	pub fn into_assignment<P: PerThing>(self) -> Option<Assignment<AccountId, P>> {
 		let who = self.who;
 		let budget = self.budget;
@@ -454,8 +463,8 @@ pub fn to_support_map<AccountId: IdentifierT>(
 	let mut supports = <BTreeMap<AccountId, Support<AccountId>>>::new();
 
 	// build support struct.
-	for StakedAssignment { who, distribution } in assignments.into_iter() {
-		for (c, weight_extended) in distribution.into_iter() {
+	for StakedAssignment { who, distribution } in assignments.iter() {
+		for (c, weight_extended) in distribution.iter() {
 			let mut support = supports.entry(c.clone()).or_default();
 			support.total = support.total.saturating_add(*weight_extended);
 			support.voters.push((who.clone(), *weight_extended));

@@ -4,18 +4,19 @@ version = "3.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
 license = "GPL-3.0"
-
-[dependencies]
-toml = "0.4"
-tar = "0.4"
-glob = "0.2"
-clap = { version = "3.0", features = ["derive"] }
-tempfile = "3"
-fs_extra = "1"
-git2 = "0.8"
-flate2 = "1.0"
-
-[workspace]
+homepage = "https://substrate.io"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+clap = { version = "3.0", features = ["derive"] }
+flate2 = "1.0"
+fs_extra = "1"
+git2 = "0.8"
+glob = "0.2"
+tar = "0.4"
+tempfile = "3"
+toml = "0.4"
+
+[workspace]

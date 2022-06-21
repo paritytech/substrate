@@ -100,6 +100,14 @@ pub trait Backend<Block: BlockT>:
 	/// Results must be ordered best (longest, highest) chain first.
 	fn leaves(&self) -> Result<Vec<Block::Hash>>;
 
+	/// Returns displaced leaves after the given block would be finalized.
+	///
+	/// The returned leaves do not contain the leaves from the same height as `block_number`.
+	fn displaced_leaves_after_finalizing(
+		&self,
+		block_number: NumberFor<Block>,
+	) -> Result<Vec<Block::Hash>>;
+
 	/// Return hashes of all blocks that are children of the block with `parent_hash`.
 	fn children(&self, parent_hash: Block::Hash) -> Result<Vec<Block::Hash>>;
 
@@ -176,7 +184,7 @@ pub trait Backend<Block: BlockT>:
 			if let Some(max_number) = maybe_max_number {
 				loop {
 					let current_header = self
-						.header(BlockId::Hash(current_hash.clone()))?
+						.header(BlockId::Hash(current_hash))?
 						.ok_or_else(|| Error::MissingHeader(current_hash.to_string()))?;
 
 					if current_header.number() <= &max_number {
@@ -196,7 +204,7 @@ pub trait Backend<Block: BlockT>:
 				}
 
 				let current_header = self
-					.header(BlockId::Hash(current_hash.clone()))?
+					.header(BlockId::Hash(current_hash))?
 					.ok_or_else(|| Error::MissingHeader(current_hash.to_string()))?;
 
 				// stop search in this chain once we go below the target's block number
