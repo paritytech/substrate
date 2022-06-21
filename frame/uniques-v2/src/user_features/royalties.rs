@@ -15,10 +15,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::BalanceOrAsset::{Asset, Balance};
 use crate::*;
 use enumflags2::BitFlags;
-use frame_support::pallet_prelude::*;
+use frame_support::{
+	pallet_prelude::*,
+	traits::{Currency, ExistenceRequirement::KeepAlive},
+};
 use sp_runtime::{traits::CheckedAdd, DispatchError, Perbill};
 
 impl<T: Config> Pallet<T> {
@@ -115,71 +117,40 @@ impl<T: Config> Pallet<T> {
 	}
 
 	pub fn process_royalties(
-		amount: BalanceOrAssetOf<T>,
+		amount: BalanceOf<T>,
 		source: &T::AccountId,
 		collection: &Collection<T::CollectionId, T::AccountId, BalanceOf<T>>,
 		item_id: T::ItemId,
-	) -> Result<BalanceOrAssetOf<T>, DispatchError> {
+	) -> Result<BalanceOf<T>, DispatchError> {
 		let mut amount_left = amount.clone();
 
 		if !collection.creator_royalties.is_zero() {
-			// let transfer_amount = collection.creator_royalties * amount.into_amount();
+			let transfer_amount = collection.creator_royalties * amount;
 
-			let transfer_amount = match amount {
-				Balance { amount } => collection.creator_royalties * amount,
-				Asset { amount, id: _ } => collection.creator_royalties * amount,
-			};
-			amount_left = match amount_left {
-				Balance { amount } => Balance { amount: amount - transfer_amount },
-				Asset { amount, id } => Asset { amount: amount - transfer_amount, id },
-			};
-			let transfer = match amount {
-				Balance { .. } => Balance { amount: transfer_amount },
-				Asset { id, .. } => Asset { amount: transfer_amount, id },
-			};
+			T::Currency::transfer(&source, &collection.creator, transfer_amount, KeepAlive)?;
 
-			Self::transfer(
-				&source,
-				&collection.creator,
-				transfer.clone(),
-				frame_support::traits::ExistenceRequirement::KeepAlive,
-			)?;
+			amount_left -= transfer_amount;
 
 			Self::deposit_event(Event::CreatorRoyaltiesPaid {
 				collection_id: collection.id,
 				item_id,
-				amount: transfer,
+				amount: transfer_amount,
 				payer: source.clone(),
 				receiver: collection.creator.clone(),
 			});
 		}
 
 		if !collection.owner_royalties.is_zero() {
-			// let transfer_amount = collection.owner_royalties * amount.into_amount();
-			let transfer_amount = match amount {
-				Balance { amount } => collection.owner_royalties * amount,
-				Asset { amount, id: _ } => collection.owner_royalties * amount,
-			};
-			amount_left = match amount_left {
-				Balance { amount } => Balance { amount: amount - transfer_amount },
-				Asset { amount, id } => Asset { amount: amount - transfer_amount, id },
-			};
-			let transfer = match amount {
-				Balance { .. } => Balance { amount: transfer_amount },
-				Asset { id, .. } => Asset { amount: transfer_amount, id },
-			};
+			let transfer_amount = collection.owner_royalties * amount;
 
-			Self::transfer(
-				&source,
-				&collection.owner,
-				transfer.clone(),
-				frame_support::traits::ExistenceRequirement::KeepAlive,
-			)?;
+			T::Currency::transfer(&source, &collection.owner, transfer_amount, KeepAlive)?;
+
+			amount_left -= transfer_amount;
 
 			Self::deposit_event(Event::OwnerRoyaltiesPaid {
 				collection_id: collection.id,
 				item_id,
-				amount: transfer,
+				amount: transfer_amount,
 				payer: source.clone(),
 				receiver: collection.owner.clone(),
 			});
@@ -192,7 +163,7 @@ impl<T: Config> Pallet<T> {
 	pub fn has_royalties(config: &CollectionConfig) -> bool {
 		let system_features: BitFlags<SystemFeature> = config.system_features.get();
 
-		return system_features.contains(SystemFeature::CreatorRoyalties)
-			|| system_features.contains(SystemFeature::OwnerRoyalties);
+		return system_features.contains(SystemFeature::CreatorRoyalties) ||
+			system_features.contains(SystemFeature::OwnerRoyalties)
 	}
 }

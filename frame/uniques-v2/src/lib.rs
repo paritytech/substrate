@@ -40,10 +40,7 @@ pub mod pallet {
 
 	use frame_support::{
 		storage::bounded_btree_map::BoundedBTreeMap,
-		traits::{
-			fungibles::{Inspect, Transfer},
-			Currency, ExistenceRequirement, ReservableCurrency,
-		},
+		traits::{Currency, ReservableCurrency},
 	};
 	use sp_runtime::{
 		traits::{CheckedAdd, One},
@@ -58,29 +55,7 @@ pub mod pallet {
 	pub trait Config: frame_system::Config {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
-		type Currency: ReservableCurrency<Self::AccountId, Balance = Self::CurrencyBalance>;
-
-		type CurrencyBalance: sp_runtime::traits::AtLeast32BitUnsigned
-			+ codec::FullCodec
-			+ Copy
-			+ MaybeSerializeDeserialize
-			+ sp_std::fmt::Debug
-			+ Default
-			+ From<u64>
-			+ TypeInfo
-			+ MaxEncodedLen;
-
-		type AssetId: Member
-			+ Parameter
-			+ Default
-			+ Copy
-			+ codec::HasCompact
-			+ MaybeSerializeDeserialize
-			+ MaxEncodedLen
-			+ TypeInfo;
-
-		type Assets: Inspect<Self::AccountId, AssetId = Self::AssetId, Balance = Self::CurrencyBalance>
-			+ Transfer<Self::AccountId>;
+		type Currency: ReservableCurrency<Self::AccountId>;
 
 		type CollectionId: Member + Parameter + Default + Copy + MaxEncodedLen + CheckedAdd + One;
 
@@ -125,7 +100,7 @@ pub mod pallet {
 	pub type BuyOfferOf<T> = BuyOffer<
 		<T as Config>::CollectionId,
 		<T as Config>::ItemId,
-		BalanceOrAssetOf<T>,
+		BalanceOf<T>,
 		<T as frame_system::Config>::BlockNumber,
 		<T as frame_system::Config>::AccountId,
 	>;
@@ -133,16 +108,10 @@ pub mod pallet {
 	pub type SwapOfferOf<T> = SwapOffer<
 		<T as Config>::CollectionId,
 		<T as Config>::ItemId,
-		BalanceOrAssetOf<T>,
+		BalanceOf<T>,
 		<T as frame_system::Config>::BlockNumber,
 		<T as frame_system::Config>::AccountId,
 	>;
-
-	pub type AssetIdOf<T> =
-		<<T as Config>::Assets as Inspect<<T as frame_system::Config>::AccountId>>::AssetId;
-	pub type AssetBalanceOf<T> =
-		<<T as Config>::Assets as Inspect<<T as frame_system::Config>::AccountId>>::Balance;
-	pub type BalanceOrAssetOf<T> = BalanceOrAsset<BalanceOf<T>, AssetIdOf<T>, AssetBalanceOf<T>>;
 
 	/// Maps a unique collection id to it's config.
 	#[pallet::storage]
@@ -212,7 +181,7 @@ pub mod pallet {
 		T::CollectionId,
 		Blake2_128Concat,
 		T::ItemId,
-		Item<T::ItemId, T::AccountId, BalanceOf<T>, BalanceOrAssetOf<T>, ApprovalsOf<T>>,
+		Item<T::ItemId, T::AccountId, BalanceOf<T>, ApprovalsOf<T>>,
 		OptionQuery,
 	>;
 
@@ -356,20 +325,20 @@ pub mod pallet {
 		ItemPriceSet {
 			collection_id: T::CollectionId,
 			item_id: T::ItemId,
-			price: Option<BalanceOrAssetOf<T>>,
+			price: Option<BalanceOf<T>>,
 			buyer: Option<T::AccountId>,
 		},
 		ItemBought {
 			collection_id: T::CollectionId,
 			item_id: T::ItemId,
-			price: BalanceOrAssetOf<T>,
+			price: BalanceOf<T>,
 			seller: T::AccountId,
 			buyer: T::AccountId,
 		},
 		BuyOfferAccepted {
 			collection_id: T::CollectionId,
 			item_id: T::ItemId,
-			price: BalanceOrAssetOf<T>,
+			price: BalanceOf<T>,
 			seller: T::AccountId,
 			buyer: T::AccountId,
 			receiver: T::AccountId,
@@ -383,7 +352,7 @@ pub mod pallet {
 			executed_by: T::AccountId,
 			new_item_from_owner: T::AccountId,
 			new_item_to_owner: T::AccountId,
-			price: Option<BalanceOrAssetOf<T>>,
+			price: Option<BalanceOf<T>>,
 			deadline: Option<T::BlockNumber>,
 		},
 		CreatorRoyaltiesChanged {
@@ -399,14 +368,14 @@ pub mod pallet {
 		CreatorRoyaltiesPaid {
 			collection_id: T::CollectionId,
 			item_id: T::ItemId,
-			amount: BalanceOrAssetOf<T>,
+			amount: BalanceOf<T>,
 			payer: T::AccountId,
 			receiver: T::AccountId,
 		},
 		OwnerRoyaltiesPaid {
 			collection_id: T::CollectionId,
 			item_id: T::ItemId,
-			amount: BalanceOrAssetOf<T>,
+			amount: BalanceOf<T>,
 			payer: T::AccountId,
 			receiver: T::AccountId,
 		},
@@ -433,10 +402,8 @@ pub mod pallet {
 		ItemsNotTransferable,
 		/// Item can't be sold.
 		ItemNotForSale,
-		/// Item underpriced.
-		ItemUnderpriced,
-		/// Wrong currency provided.
-		WrongCurrency,
+		/// The provided bid is too low.
+		BidTooLow,
 		/// User reached the limit of allowed items per collection per account
 		CollectionItemsPerAccountLimitReached,
 		/// The calling user is not authorized to make this call.
@@ -457,7 +424,7 @@ pub mod pallet {
 		MaxApprovalsReached,
 		/// Invalid signature provided.
 		InvalidSignature,
-		/// Invalid signature provided.
+		/// Unable to convert AccountId32 into AccountId.
 		ErrorConvertingToAccountId,
 		/// Invalid item id provided.
 		InvalidItemId,
@@ -733,7 +700,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			collection_id: T::CollectionId,
 			item_id: T::ItemId,
-			price: Option<BalanceOrAssetOf<T>>,
+			price: Option<BalanceOf<T>>,
 			buyer: Option<T::AccountId>,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
@@ -748,7 +715,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			collection_id: T::CollectionId,
 			item_id: T::ItemId,
-			bid_price: BalanceOrAssetOf<T>,
+			bid_price: BalanceOf<T>,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			let config =
@@ -845,24 +812,5 @@ pub mod pallet {
 	}
 
 	// Your Pallet's internal functions.
-	impl<T: Config> Pallet<T> {
-		pub fn transfer(
-			source: &T::AccountId,
-			dest: &T::AccountId,
-			value: BalanceOrAssetOf<T>,
-			existence_requirement: ExistenceRequirement,
-		) -> DispatchResult {
-			use BalanceOrAsset::*;
-
-			match value {
-				Balance { amount } => {
-					return T::Currency::transfer(&source, &dest, amount, existence_requirement);
-				},
-				Asset { id, amount } => {
-					let keep_alive = existence_requirement == ExistenceRequirement::KeepAlive;
-					return T::Assets::transfer(id, &source, &dest, amount, keep_alive).map(|_| ());
-				},
-			}
-		}
-	}
+	impl<T: Config> Pallet<T> {}
 }

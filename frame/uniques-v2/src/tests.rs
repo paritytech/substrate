@@ -669,7 +669,7 @@ fn set_price_should_work() {
 			Origin::signed(user_id),
 			collection_id,
 			item_1,
-			Some(1.into()),
+			Some(1),
 			None,
 		));
 
@@ -677,22 +677,22 @@ fn set_price_should_work() {
 			Origin::signed(user_id),
 			collection_id,
 			item_2,
-			Some(2.into()),
+			Some(2),
 			Some(3)
 		));
 
 		let item = Items::<Test>::get(collection_id, item_1).unwrap();
-		assert_eq!(item.price, Some(1.into()));
+		assert_eq!(item.price, Some(1));
 		assert_eq!(item.buyer, None);
 
 		let item = Items::<Test>::get(collection_id, item_2).unwrap();
-		assert_eq!(item.price, Some(2.into()));
+		assert_eq!(item.price, Some(2));
 		assert_eq!(item.buyer, Some(3));
 
 		assert!(events().contains(&Event::<Test>::ItemPriceSet {
 			collection_id,
 			item_id: item_1,
-			price: Some(1.into()),
+			price: Some(1),
 			buyer: None,
 		}));
 
@@ -711,13 +711,7 @@ fn set_price_should_work() {
 		assert_ok!(Uniques::mint(Origin::signed(user_id), user_id, collection_id, item_1));
 
 		assert_noop!(
-			Uniques::set_price(
-				Origin::signed(user_id),
-				collection_id,
-				item_1,
-				Some(1.into()),
-				None
-			),
+			Uniques::set_price(Origin::signed(user_id), collection_id, item_1, Some(1), None),
 			Error::<Test>::ItemsNotTransferable
 		);
 	});
@@ -759,7 +753,7 @@ fn buy_item_should_work() {
 			Origin::signed(user_1),
 			collection_id,
 			item_1,
-			Some(price_1.into()),
+			Some(price_1),
 			None,
 		));
 
@@ -767,33 +761,17 @@ fn buy_item_should_work() {
 			Origin::signed(user_1),
 			collection_id,
 			item_2,
-			Some(price_2.into()),
+			Some(price_2),
 			Some(user_3),
 		));
 
 		// can't buy for less
 		assert_noop!(
-			Uniques::buy_item(Origin::signed(user_2), collection_id, item_1, 1.into()),
-			Error::<Test>::ItemUnderpriced
+			Uniques::buy_item(Origin::signed(user_2), collection_id, item_1, 1),
+			Error::<Test>::BidTooLow
 		);
 
-		// can't buy for less
-		assert_noop!(
-			Uniques::buy_item(
-				Origin::signed(user_2),
-				collection_id,
-				item_1,
-				types::BalanceOrAsset::Asset { id: 1, amount: price_2.clone() }
-			),
-			Error::<Test>::WrongCurrency
-		);
-
-		assert_ok!(Uniques::buy_item(
-			Origin::signed(user_2),
-			collection_id,
-			item_1,
-			price_1.into()
-		));
+		assert_ok!(Uniques::buy_item(Origin::signed(user_2), collection_id, item_1, price_1,));
 
 		// validate the new owner & balances
 		let item = Items::<Test>::get(collection_id, item_1).unwrap();
@@ -803,28 +781,23 @@ fn buy_item_should_work() {
 
 		// can't buy from yourself
 		assert_noop!(
-			Uniques::buy_item(Origin::signed(user_1), collection_id, item_2, price_2.into()),
+			Uniques::buy_item(Origin::signed(user_1), collection_id, item_2, price_2),
 			Error::<Test>::NotAuthorized
 		);
 
 		// can't buy when the item is listed for specified buyer
 		assert_noop!(
-			Uniques::buy_item(Origin::signed(user_2), collection_id, item_2, price_2.into()),
+			Uniques::buy_item(Origin::signed(user_2), collection_id, item_2, price_2),
 			Error::<Test>::ItemNotForSale
 		);
 
 		// can buy when I'm a whitelisted buyer
-		assert_ok!(Uniques::buy_item(
-			Origin::signed(user_3),
-			collection_id,
-			item_2,
-			price_2.into()
-		));
+		assert_ok!(Uniques::buy_item(Origin::signed(user_3), collection_id, item_2, price_2,));
 
 		assert!(events().contains(&Event::<Test>::ItemBought {
 			collection_id,
 			item_id: item_2,
-			price: price_2.into(),
+			price: price_2,
 			seller: user_1,
 			buyer: user_3,
 		}));
@@ -834,7 +807,7 @@ fn buy_item_should_work() {
 
 		// can't buy when item is not for sale
 		assert_noop!(
-			Uniques::buy_item(Origin::signed(user_2), collection_id, item_3, price_2.into()),
+			Uniques::buy_item(Origin::signed(user_2), collection_id, item_3, price_2),
 			Error::<Test>::ItemNotForSale
 		);
 
@@ -851,7 +824,7 @@ fn buy_item_should_work() {
 		));
 
 		assert_noop!(
-			Uniques::buy_item(Origin::signed(user_1), collection_id, item_1, price_1.into()),
+			Uniques::buy_item(Origin::signed(user_1), collection_id, item_1, price_1),
 			Error::<Test>::ItemNotForSale
 		);
 	});
@@ -1093,7 +1066,7 @@ fn accept_buy_offer_should_work() {
 		let offer = BuyOffer {
 			collection_id,
 			item_id,
-			bid_price: bid_price.into(),
+			bid_price,
 			deadline: None,
 			item_owner: user_1,
 			signer: signer.clone(),
@@ -1112,7 +1085,7 @@ fn accept_buy_offer_should_work() {
 		assert!(events().contains(&Event::<Test>::BuyOfferAccepted {
 			collection_id,
 			item_id,
-			price: bid_price.into(),
+			price: bid_price,
 			seller: user_1,
 			buyer: signer_id,
 			receiver: user_2,
@@ -1184,7 +1157,7 @@ fn swap_items_should_work() {
 			item_from_id,
 			collection_to_id,
 			item_to_id: Some(item_to_id),
-			price: Some(price.into()),
+			price: Some(price),
 			deadline: None,
 			item_to_owner: user_2,
 			signer: signer.clone(),
@@ -1219,7 +1192,7 @@ fn swap_items_should_work() {
 			executed_by: user_2,
 			new_item_from_owner: user_2,
 			new_item_to_owner: user_1,
-			price: Some(price.into()),
+			price: Some(price),
 			deadline: None,
 		}));
 
@@ -1398,11 +1371,11 @@ fn paying_royalties_when_buying_an_item() {
 			Origin::signed(user_1),
 			collection_id,
 			item_id,
-			Some(price.into()),
+			Some(price),
 			None,
 		));
 
-		assert_ok!(Uniques::buy_item(Origin::signed(user_2), collection_id, item_id, price.into()));
+		assert_ok!(Uniques::buy_item(Origin::signed(user_2), collection_id, item_id, price));
 
 		// validate balances
 		let expect_creator_royalties = 1;
@@ -1419,14 +1392,14 @@ fn paying_royalties_when_buying_an_item() {
 		assert!(events.contains(&Event::<Test>::CreatorRoyaltiesPaid {
 			collection_id,
 			item_id,
-			amount: expect_creator_royalties.into(),
+			amount: expect_creator_royalties,
 			payer: user_2,
 			receiver: creator,
 		}));
 		assert!(events.contains(&Event::<Test>::OwnerRoyaltiesPaid {
 			collection_id,
 			item_id,
-			amount: expect_owner_royalties.into(),
+			amount: expect_owner_royalties,
 			payer: user_2,
 			receiver: owner,
 		}));
@@ -1469,7 +1442,7 @@ fn paying_royalties_when_accepting_an_offer() {
 		let offer = BuyOffer {
 			collection_id,
 			item_id,
-			bid_price: price.into(),
+			bid_price: price,
 			deadline: None,
 			item_owner: user_2,
 			signer: signer.clone(),
@@ -1500,14 +1473,14 @@ fn paying_royalties_when_accepting_an_offer() {
 		assert!(events.contains(&Event::<Test>::CreatorRoyaltiesPaid {
 			collection_id,
 			item_id,
-			amount: expect_creator_royalties.into(),
+			amount: expect_creator_royalties,
 			payer: user_1,
 			receiver: creator,
 		}));
 		assert!(events.contains(&Event::<Test>::OwnerRoyaltiesPaid {
 			collection_id,
 			item_id,
-			amount: expect_owner_royalties.into(),
+			amount: expect_owner_royalties,
 			payer: user_1,
 			receiver: owner,
 		}));
@@ -1566,7 +1539,7 @@ fn paying_royalties_when_swapping_items() {
 			item_from_id,
 			collection_to_id,
 			item_to_id: Some(item_to_id),
-			price: Some(price.into()),
+			price: Some(price),
 			deadline: None,
 			item_to_owner: user_2,
 			signer: signer.clone(),
@@ -1598,28 +1571,28 @@ fn paying_royalties_when_swapping_items() {
 		assert!(events.contains(&Event::<Test>::CreatorRoyaltiesPaid {
 			collection_id: collection_from_id,
 			item_id: item_from_id,
-			amount: 1.into(),
+			amount: 1,
 			payer: user_2,
 			receiver: creator,
 		}));
 		assert!(events.contains(&Event::<Test>::CreatorRoyaltiesPaid {
 			collection_id: collection_to_id,
 			item_id: item_to_id,
-			amount: 1.into(),
+			amount: 1,
 			payer: user_2,
 			receiver: creator,
 		}));
 		assert!(events.contains(&Event::<Test>::OwnerRoyaltiesPaid {
 			collection_id: collection_from_id,
 			item_id: item_from_id,
-			amount: 2.into(),
+			amount: 2,
 			payer: user_2,
 			receiver: owner,
 		}));
 		assert!(events.contains(&Event::<Test>::OwnerRoyaltiesPaid {
 			collection_id: collection_to_id,
 			item_id: item_to_id,
-			amount: 1.into(),
+			amount: 1,
 			payer: user_2,
 			receiver: owner,
 		}));

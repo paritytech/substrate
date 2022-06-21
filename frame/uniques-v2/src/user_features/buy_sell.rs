@@ -17,7 +17,10 @@
 
 use crate::*;
 use enumflags2::BitFlags;
-use frame_support::pallet_prelude::*;
+use frame_support::{
+	pallet_prelude::*,
+	traits::{Currency, ExistenceRequirement::KeepAlive},
+};
 
 impl<T: Config> Pallet<T> {
 	pub fn do_set_price(
@@ -25,7 +28,7 @@ impl<T: Config> Pallet<T> {
 		item_id: T::ItemId,
 		config: CollectionConfig,
 		caller: T::AccountId,
-		price: Option<BalanceOrAssetOf<T>>,
+		price: Option<BalanceOf<T>>,
 		buyer: Option<T::AccountId>,
 	) -> DispatchResult {
 		let user_features: BitFlags<UserFeature> = config.user_features.get();
@@ -53,7 +56,7 @@ impl<T: Config> Pallet<T> {
 		item_id: T::ItemId,
 		config: CollectionConfig,
 		buyer: T::AccountId,
-		bid_price: BalanceOrAssetOf<T>,
+		bid_price: BalanceOf<T>,
 	) -> DispatchResult {
 		let user_features: BitFlags<UserFeature> = config.user_features.get();
 		ensure!(
@@ -65,31 +68,25 @@ impl<T: Config> Pallet<T> {
 		ensure!(item.owner != buyer, Error::<T>::NotAuthorized);
 
 		if let Some(price) = item.price {
-			ensure!(bid_price.is_same_currency(&price), Error::<T>::WrongCurrency);
-			ensure!(bid_price.is_greater_or_equal(&price), Error::<T>::ItemUnderpriced);
+			ensure!(bid_price >= price, Error::<T>::BidTooLow);
 		} else {
-			return Err(Error::<T>::ItemNotForSale.into());
+			return Err(Error::<T>::ItemNotForSale.into())
 		}
 
 		if let Some(only_buyer) = item.buyer {
 			ensure!(only_buyer == buyer, Error::<T>::ItemNotForSale);
 		}
 
-		let mut transfer_amount = bid_price.clone();
+		let mut transfer_amount = price.clone();
 		if Self::has_royalties(&config) {
 			let collection =
 				Collections::<T>::get(collection_id).ok_or(Error::<T>::CollectionNotFound)?;
 
 			transfer_amount =
-				Self::process_royalties(bid_price.clone(), &buyer, &collection, item_id)?;
+				Self::process_royalties(transfer_amount.clone(), &buyer, &collection, item_id)?;
 		}
 
-		Self::transfer(
-			&buyer,
-			&item.owner,
-			transfer_amount,
-			frame_support::traits::ExistenceRequirement::KeepAlive,
-		)?;
+		T::Currency::transfer(&buyer, &item.owner, transfer_amount, KeepAlive)?;
 
 		let old_owner = item.owner.clone();
 
@@ -116,7 +113,7 @@ impl<T: Config> Pallet<T> {
 		buyer: T::AccountId, // user 1
 		receiver: T::AccountId,
 		item_owner: T::AccountId, // user 2
-		bid_price: BalanceOrAssetOf<T>,
+		bid_price: BalanceOf<T>,
 		deadline: Option<T::BlockNumber>,
 	) -> DispatchResult {
 		let user_features: BitFlags<UserFeature> = config.user_features.get();
@@ -142,12 +139,7 @@ impl<T: Config> Pallet<T> {
 				Self::process_royalties(bid_price.clone(), &buyer, &collection, item_id)?;
 		}
 
-		Self::transfer(
-			&buyer,
-			&item.owner,
-			transfer_amount,
-			frame_support::traits::ExistenceRequirement::KeepAlive,
-		)?;
+		T::Currency::transfer(&buyer, &item.owner, transfer_amount, KeepAlive)?;
 
 		let old_owner = item.owner.clone();
 
@@ -187,7 +179,7 @@ impl<T: Config> Pallet<T> {
 		signer_account: T::AccountId, // user 1
 		item_from_receiver: T::AccountId,
 		item_to_owner: T::AccountId, // user 2
-		price: Option<BalanceOrAssetOf<T>>,
+		price: Option<BalanceOf<T>>,
 		deadline: Option<T::BlockNumber>,
 	) -> DispatchResult {
 		let user_features: BitFlags<UserFeature> = config_from.user_features.get();
@@ -243,12 +235,7 @@ impl<T: Config> Pallet<T> {
 				)?;
 			}
 
-			Self::transfer(
-				&caller,
-				&from_item.owner,
-				transfer_amount,
-				frame_support::traits::ExistenceRequirement::KeepAlive,
-			)?;
+			T::Currency::transfer(&caller, &from_item.owner, transfer_amount, KeepAlive)?;
 		}
 
 		Self::do_transfer_item(
