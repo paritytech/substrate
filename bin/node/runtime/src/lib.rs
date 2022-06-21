@@ -47,7 +47,7 @@ use frame_system::{
 };
 pub use node_primitives::{AccountId, Signature};
 use node_primitives::{AccountIndex, Balance, BlockNumber, Hash, Index, Moment};
-use pallet_contracts::weights::WeightInfo;
+use pallet_contracts::{weights::WeightInfo, VarSizedKey as StorageKey};
 use pallet_election_provider_multi_phase::SolutionAccuracyOf;
 use pallet_grandpa::{
 	fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
@@ -1693,14 +1693,6 @@ mod mmr {
 	pub type Hashing = <Runtime as pallet_mmr::Config>::Hashing;
 }
 
-/// Contracts helper types.
-mod contracts {
-	use super::Runtime;
-	use pallet_contracts::VarSizedKey;
-
-	pub type StorageKey = VarSizedKey<Runtime>;
-}
-
 #[cfg(feature = "runtime-benchmarks")]
 #[macro_use]
 extern crate frame_benchmarking;
@@ -1912,7 +1904,7 @@ impl_runtime_apis! {
 	}
 
 	impl pallet_contracts_rpc_runtime_api::ContractsApi<
-		Block, AccountId, Balance, BlockNumber, Hash, contracts::StorageKey,
+		Block, AccountId, Balance, BlockNumber, Hash, StorageKey<Runtime>,
 	>
 		for Runtime
 	{
@@ -1951,7 +1943,7 @@ impl_runtime_apis! {
 
 		fn get_storage(
 			address: AccountId,
-			key: contracts::StorageKey,
+			key: StorageKey<Runtime>,
 		) -> pallet_contracts_primitives::GetStorageResult {
 			Contracts::get_storage(address, key)
 		}
