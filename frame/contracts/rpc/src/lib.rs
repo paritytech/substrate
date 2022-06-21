@@ -33,7 +33,7 @@ use pallet_contracts_primitives::{
 use serde::{Deserialize, Serialize};
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
-use sp_core::{Bytes, H256};
+use sp_core::Bytes;
 use sp_rpc::number::NumberOrHex;
 use sp_runtime::{
 	generic::BlockId,
@@ -117,7 +117,7 @@ pub struct CodeUploadRequest<AccountId> {
 
 /// Contracts RPC methods.
 #[rpc(client, server)]
-pub trait ContractsApi<BlockHash, BlockNumber, AccountId, Balance, Hash>
+pub trait ContractsApi<BlockHash, BlockNumber, AccountId, Balance, Hash, VarSizedKey>
 where
 	Balance: Copy + TryFrom<NumberOrHex> + Into<NumberOrHex>,
 {
@@ -167,7 +167,7 @@ where
 	fn get_storage(
 		&self,
 		address: AccountId,
-		key: Bytes,
+		key: VarSizedKey,
 		at: Option<BlockHash>,
 	) -> RpcResult<Option<Bytes>>;
 }
@@ -186,7 +186,7 @@ impl<Client, Block> Contracts<Client, Block> {
 }
 
 #[async_trait]
-impl<Client, Block, AccountId, Balance, Hash>
+impl<Client, Block, AccountId, Balance, Hash, VarSizedKey>
 	ContractsApiServer<
 		<Block as BlockT>::Hash,
 		<<Block as BlockT>::Header as HeaderT>::Number,
@@ -204,6 +204,7 @@ where
 		Balance,
 		<<Block as BlockT>::Header as HeaderT>::Number,
 		Hash,
+		VarSizedKey,
 	>,
 	AccountId: Codec,
 	Balance: Codec + Copy + TryFrom<NumberOrHex> + Into<NumberOrHex>,
@@ -294,13 +295,13 @@ where
 	fn get_storage(
 		&self,
 		address: AccountId,
-		key: Bytes,
+		key: VarSizedKey,
 		at: Option<<Block as BlockT>::Hash>,
 	) -> RpcResult<Option<Bytes>> {
 		let api = self.client.runtime_api();
 		let at = BlockId::hash(at.unwrap_or_else(|| self.client.info().best_hash));
 		let result = api
-			.get_storage(&at, address, key.into())
+			.get_storage(&at, address, key)
 			.map_err(runtime_error_into_rpc_err)?
 			.map_err(ContractAccessError)?
 			.map(Bytes);
