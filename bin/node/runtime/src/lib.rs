@@ -714,6 +714,7 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type MaxElectingVoters = MaxElectingVoters;
 	type BenchmarkingConfig = ElectionProviderBenchmarkConfig;
 	type WeightInfo = pallet_election_provider_multi_phase::weights::SubstrateWeight<Self>;
+	type EmergencyPunishmentMultiple = ConstU32<2>;
 }
 
 parameter_types! {
