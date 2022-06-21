@@ -192,8 +192,8 @@ impl<Client, Block, AccountId, Balance, Hash>
 		<<Block as BlockT>::Header as HeaderT>::Number,
 		AccountId,
 		Balance,
-	    Hash,
-	    VarSizedKey,
+		Hash,
+		VarSizedKey,
 	> for Contracts<Client, Block>
 where
 	Block: BlockT,
