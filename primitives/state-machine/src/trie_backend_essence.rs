@@ -36,6 +36,8 @@ use sp_trie::{
 	DBValue, KeySpacedDB, NodeCodec, Trie, TrieCache, TrieDBIterator, TrieDBKeyIterator,
 	TrieRecorder,
 };
+#[cfg(not(feature = "std"))]
+use sp_std::marker::PhantomData;
 #[cfg(feature = "std")]
 use std::{collections::HashMap, sync::Arc};
 
@@ -81,9 +83,12 @@ pub struct TrieBackendEssence<S: TrieBackendStorage<H>, H: Hasher, C> {
 	empty: H::Out,
 	#[cfg(feature = "std")]
 	pub(crate) cache: Arc<RwLock<Cache<H::Out>>>,
+	#[cfg(feature = "std")]
 	pub(crate) trie_node_cache: Option<C>,
 	#[cfg(feature = "std")]
 	pub(crate) recorder: Option<Recorder<H>>,
+	#[cfg(not(feature = "std"))]
+	_phantom: PhantomData<C>,
 }
 
 impl<S: TrieBackendStorage<H>, H: Hasher, C> TrieBackendEssence<S, H, C> {
@@ -95,9 +100,12 @@ impl<S: TrieBackendStorage<H>, H: Hasher, C> TrieBackendEssence<S, H, C> {
 			empty: H::hash(&[0u8]),
 			#[cfg(feature = "std")]
 			cache: Arc::new(RwLock::new(Cache::new())),
+			#[cfg(feature = "std")]
 			trie_node_cache: None,
 			#[cfg(feature = "std")]
 			recorder: None,
+			#[cfg(not(feature = "std"))]
+			_phantom: PhantomData,
 		}
 	}
 
@@ -113,7 +121,6 @@ impl<S: TrieBackendStorage<H>, H: Hasher, C> TrieBackendEssence<S, H, C> {
 			storage,
 			root,
 			empty: H::hash(&[0u8]),
-			#[cfg(feature = "std")]
 			cache: Arc::new(RwLock::new(Cache::new())),
 			trie_node_cache: cache,
 			recorder,
@@ -185,7 +192,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher, C: AsLocalTrieCache<H>> TrieBackendEss
 	#[cfg(not(feature = "std"))]
 	fn with_recorder_and_cache<R>(
 		&self,
-		storage_root: Option<H::Out>,
+		_: Option<H::Out>,
 		callback: impl FnOnce(
 			Option<&mut dyn TrieRecorder<H::Out>>,
 			Option<&mut dyn TrieCache<NodeCodec<H>>>,

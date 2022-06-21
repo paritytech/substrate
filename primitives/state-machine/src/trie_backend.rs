@@ -24,11 +24,14 @@ use crate::{
 	Backend, StorageKey, StorageValue,
 };
 use codec::Codec;
-use hash_db::{HashDB, Hasher};
+#[cfg(feature = "std")]
+use hash_db::HashDB;
+use hash_db::Hasher;
 use sp_core::storage::{ChildInfo, StateVersion};
 use sp_std::vec::Vec;
 #[cfg(feature = "std")]
 use sp_trie::{cache::LocalTrieCache, recorder::Recorder};
+#[cfg(feature = "std")]
 use sp_trie::{MemoryDB, StorageProof};
 
 /// Dummy type to be used in `no_std`.
@@ -173,6 +176,8 @@ where
 	/// Build the configured [`TrieBackend`].
 	#[cfg(not(feature = "std"))]
 	pub fn build(self) -> TrieBackend<S, H, C> {
+		let _ = self.cache;
+
 		TrieBackend { essence: TrieBackendEssence::new(self.storage, self.root) }
 	}
 }
@@ -353,6 +358,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher, C> AsTrieBackend<H, C> for TrieBackend
 /// Create a backend used for checking the proof, using `H` as hasher.
 ///
 /// `proof` and `root` must match, i.e. `root` must be the correct root of `proof` nodes.
+#[cfg(feature = "std")]
 pub fn create_proof_check_backend<H>(
 	root: H::Out,
 	proof: StorageProof,
