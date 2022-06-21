@@ -25,7 +25,9 @@ use sp_std::borrow::Cow;
 pub type Hash = H256;
 pub type BoundedInline = crate::BoundedVec<u8, ConstU32<128>>;
 
-#[derive(Encode, Decode, MaxEncodedLen, Clone, Eq, PartialEq, scale_info::TypeInfo, RuntimeDebug)]
+#[derive(
+	Encode, Decode, MaxEncodedLen, Clone, Eq, PartialEq, scale_info::TypeInfo, RuntimeDebug,
+)]
 pub enum Bounded<T> {
 	/// A Blake2 256 hash with no preimage length. We
 	/// do not support creation of this except for transitioning from legacy state.

@@ -19,7 +19,10 @@
 
 use super::*;
 use codec::{Decode, Encode, EncodeLike, MaxEncodedLen};
-use frame_support::{traits::{schedule::v3::Anon, Bounded}, Parameter};
+use frame_support::{
+	traits::{schedule::v3::Anon, Bounded},
+	Parameter,
+};
 use scale_info::TypeInfo;
 use sp_arithmetic::{Rounding::*, SignedRounding::*};
 use sp_runtime::{FixedI64, PerThing, RuntimeDebug};
