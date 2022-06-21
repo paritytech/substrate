@@ -69,7 +69,7 @@ use sp_runtime::{
 		SaturatedConversion, StaticLookup,
 	},
 	transaction_validity::{TransactionPriority, TransactionSource, TransactionValidity},
-	ApplyExtrinsicResult, FixedPointNumber, Perbill, Percent, Permill, Perquintill,
+	ApplyExtrinsicResult, FixedPointNumber, Perbill, Percent, Permill, Perquintill, FixedU128,
 };
 use sp_std::prelude::*;
 #[cfg(any(feature = "std", test))]
@@ -753,6 +753,7 @@ impl pallet_nomination_pools::Config for Runtime {
 	type Event = Event;
 	type Currency = Balances;
 	type CurrencyBalance = Balance;
+	type RewardCounter = FixedU128;
 	type BalanceToU256 = BalanceToU256;
 	type U256ToBalance = U256ToBalance;
 	type StakingInterface = pallet_staking::Pallet<Self>;
