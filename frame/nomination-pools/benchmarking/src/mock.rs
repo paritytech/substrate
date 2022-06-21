@@ -17,7 +17,7 @@
 
 use frame_election_provider_support::VoteWeight;
 use frame_support::{pallet_prelude::*, parameter_types, traits::ConstU64, PalletId};
-use sp_runtime::traits::{Convert, IdentityLookup};
+use sp_runtime::{traits::{Convert, IdentityLookup}, FixedU128};
 
 type AccountId = u128;
 type AccountIndex = u32;
@@ -152,6 +152,7 @@ impl pallet_nomination_pools::Config for Runtime {
 	type WeightInfo = ();
 	type Currency = Balances;
 	type CurrencyBalance = Balance;
+	type RewardCounter = FixedU128;
 	type BalanceToU256 = BalanceToU256;
 	type U256ToBalance = U256ToBalance;
 	type StakingInterface = Staking;

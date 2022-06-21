@@ -316,8 +316,8 @@ use frame_support::{
 use scale_info::TypeInfo;
 use sp_core::U256;
 use sp_runtime::{
-	traits::{AccountIdConversion, Bounded, CheckedSub, Convert, Saturating, Zero},
-	FixedPointNumber, FixedU128,
+	traits::{AccountIdConversion, Bounded, CheckedSub, Convert, Saturating, Zero, CheckedAdd},
+	FixedPointNumber, FixedPointOperand,
 };
 use sp_staking::{EraIndex, OnStakerSlash, StakingInterface};
 use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, ops::Div, vec::Vec};
@@ -352,8 +352,6 @@ pub type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 /// Type used for unique identifier of each pool.
 pub type PoolId = u32;
-/// The fixed point type used for all reward counters.
-pub type RewardCounter = FixedU128;
 
 type UnbondingPoolsWithEra<T> = BoundedBTreeMap<EraIndex, UnbondPool<T>, TotalUnbondingPools<T>>;
 
@@ -406,7 +404,7 @@ pub struct PoolMember<T: Config> {
 	/// `Self::unbonding_era` is some.
 	pub points: BalanceOf<T>,
 	/// The reward counter at the time of this member's last payout claim.
-	pub last_recorded_reward_counter: RewardCounter,
+	pub last_recorded_reward_counter: T::RewardCounter,
 	/// The eras in which this member is unbonding, mapped from era index to the number of
 	/// points scheduled to unbond in the given era.
 	pub unbonding_eras: BoundedBTreeMap<EraIndex, BalanceOf<T>, T::MaxUnbonding>,
@@ -414,7 +412,7 @@ pub struct PoolMember<T: Config> {
 
 impl<T: Config> PoolMember<T> {
 	/// The pending rewards of this member.
-	fn pending_rewards(&self, current_reward_counter: RewardCounter) -> BalanceOf<T> {
+	fn pending_rewards(&self, current_reward_counter: T::RewardCounter) -> Result<BalanceOf<T>, Error::<T>> {
 		// Precision note: Reward counters are fixedU128 with base of 10^18. Multiplying it with
 		// points, which have the same granularity as with balance should almost always be fine for
 		// Polkadot and Kusama since: The total issuance of both are
@@ -450,8 +448,8 @@ impl<T: Config> PoolMember<T> {
 		// the calculations be checked arithmetic, to make sure if a pool ever reaches this state
 		// way earlier than the few decades we anticipate due to severe slashing, no operations can
 		// happen in that pool.
-		(current_reward_counter.saturating_sub(self.last_recorded_reward_counter))
-			.saturating_mul_int(self.active_points())
+		(current_reward_counter.defensive_saturating_sub(self.last_recorded_reward_counter))
+			.checked_mul_int(self.active_points()).ok_or(Error::<T>::OverflowRisk)
 	}
 
 	/// Active balance of the member.
@@ -968,7 +966,7 @@ pub struct RewardPool<T: Config> {
 	///
 	/// This is updated ONLY when the points in the bonded pool change, which means `join`,
 	/// `bond_extra` and `unbond`, all of which is done through `update_recorded`.
-	last_recorded_reward_counter: RewardCounter,
+	last_recorded_reward_counter: T::RewardCounter,
 	/// The last recorded total payouts of the reward pool.
 	///
 	/// Payouts is essentially income of the pool.
@@ -980,7 +978,7 @@ pub struct RewardPool<T: Config> {
 }
 
 impl<T: Config> RewardPool<T> {
-	fn last_recorded_reward_counter(&self) -> RewardCounter {
+	fn last_recorded_reward_counter(&self) -> T::RewardCounter {
 		self.last_recorded_reward_counter
 	}
 
@@ -990,14 +988,20 @@ impl<T: Config> RewardPool<T> {
 	}
 
 	/// Update the recorded values of the pool.
-	fn update_records(&mut self, id: PoolId, bonded_points: BalanceOf<T>) {
+	fn update_records(&mut self, id: PoolId, bonded_points: BalanceOf<T>) -> Result<(), Error<T>> {
 		let balance = Self::current_balance(id);
-		self.last_recorded_reward_counter = self.current_reward_counter(id, bonded_points);
-		self.last_recorded_total_payouts = balance.saturating_add(self.total_rewards_claimed);
+		self.last_recorded_reward_counter = self.current_reward_counter(id, bonded_points)?;
+		self.last_recorded_total_payouts =
+			balance.checked_add(&self.total_rewards_claimed).ok_or(Error::<T>::OverflowRisk)?;
+		Ok(())
 	}
 
 	/// Get the current reward counter, based on the given `bonded_points`.
-	fn current_reward_counter(&self, id: PoolId, bonded_points: BalanceOf<T>) -> RewardCounter {
+	fn current_reward_counter(
+		&self,
+		id: PoolId,
+		bonded_points: BalanceOf<T>,
+	) -> Result<T::RewardCounter, Error<T>> {
 		let balance = Self::current_balance(id);
 		let payouts_since_last_record = balance
 			.saturating_add(self.total_rewards_claimed)
@@ -1020,14 +1024,10 @@ impl<T: Config> RewardPool<T> {
 		// Polkadot. The important note here is that `reward_pool.last_recorded_reward_counter` only
 		// ever accumulates, but its semantics imply that it is less than total_issuance, when
 		// represented as `FixedU128`, which means it is less than `total_issuance * 10^18`.
-		self.last_recorded_reward_counter
-			.saturating_add(RewardCounter::saturating_from_rational(
-				payouts_since_last_record,
-				bonded_points,
-			))
+		T::RewardCounter::checked_from_rational(payouts_since_last_record, bonded_points)
+			.and_then(|ref r| self.last_recorded_reward_counter.checked_add(r))
+			.ok_or(Error::<T>::OverflowRisk)
 
-		// TODO: make reward counter generic type
-		// TODO: make any arithmetic on rewardCounter fallible.
 		// TODO: test for arithmetic failing + micro reward payment in a mega-pool.
 	}
 
@@ -1165,6 +1165,7 @@ pub mod pallet {
 	use super::*;
 	use frame_support::traits::StorageVersion;
 	use frame_system::{ensure_signed, pallet_prelude::*};
+use sp_runtime::traits::CheckedAdd;
 
 	/// The current storage version.
 	const STORAGE_VERSION: StorageVersion = StorageVersion::new(2);
@@ -1185,16 +1186,33 @@ pub mod pallet {
 		/// The nominating balance.
 		type Currency: Currency<Self::AccountId, Balance = Self::CurrencyBalance>;
 
-		/// The balance type. Needed to bound it to `FixedPointOperand`.
+		/// Sadly needed to bound it to `FixedPointOperand`.
+		// The only alternative is to sprinkle a `where BalanceOf<T>: FixedPointOperand` in roughly
+		// a million places, so we prefer doing this.
 		type CurrencyBalance: sp_runtime::traits::AtLeast32BitUnsigned
 			+ codec::FullCodec
 			+ Copy
 			+ MaybeSerializeDeserialize
 			+ sp_std::fmt::Debug
 			+ Default
-			+ sp_runtime::FixedPointOperand
+			+ FixedPointOperand
+			+ CheckedAdd
 			+ TypeInfo
 			+ MaxEncodedLen;
+
+		/// The type that is used for reward counter.
+		///
+		/// The arithmetic of the reward counter might saturate based on the size of the
+		/// `Currency::Balance`. If this happens, operations fails. Nonetheless, this type should be
+		/// chosen such that this failure almost never happens, as if it happens, the pool basically
+		/// needs to be dismantled (or all pools migrated to a larger `RewardCounter` type, which is
+		/// a PITA to do).
+		///
+		/// See the inline code docs of `Member::pending_rewards` and `RewardPool::update_recorded`
+		/// for example analysis. A [`sp_runtime::FixedU128`] should be fine for chains with balance
+		/// types similar to that of Polkadot and Kusama, in the absence of severe slashing, for
+		/// many many years to come.
+		type RewardCounter: FixedPointNumber + MaxEncodedLen + TypeInfo + Default + codec::FullCodec;
 
 		/// The nomination pool's pallet id.
 		#[pallet::constant]
@@ -1507,7 +1525,7 @@ pub mod pallet {
 			let mut reward_pool = RewardPools::<T>::get(pool_id)
 				.defensive_ok_or::<Error<T>>(DefensiveError::RewardPoolNotFound.into())?;
 			// IMPORTANT: reward pool records must be updated with the old points.
-			reward_pool.update_records(pool_id, bonded_pool.points);
+			let _ = reward_pool.update_records(pool_id, bonded_pool.points)?;
 
 			bonded_pool.try_inc_members()?;
 			let points_issued = bonded_pool.try_bond_funds(&who, amount, BondType::Later)?;
@@ -1554,7 +1572,7 @@ pub mod pallet {
 
 			// payout related stuff: we must claim the payouts, and updated recorded payout data
 			// before updating the bonded pool points, similar to that of `join` transaction.
-			reward_pool.update_records(bonded_pool.id, bonded_pool.points);
+			let _ = reward_pool.update_records(bonded_pool.id, bonded_pool.points)?;
 			// TODO: optimize this to not touch the free balance of `who ` at all in benchmarks.
 			// Currently, bonding rewards is like a batch. In the same PR, also make this function
 			// take a boolean argument that make it either 100% pure (no storage update), or make it
@@ -1643,7 +1661,7 @@ pub mod pallet {
 			// Claim the the payout prior to unbonding. Once the user is unbonding their points no
 			// longer exist in the bonded pool and thus they can no longer claim their payouts. It
 			// is not strictly necessary to claim the rewards, but we do it here for UX.
-			reward_pool.update_records(bonded_pool.id, bonded_pool.points);
+			let _ = reward_pool.update_records(bonded_pool.id, bonded_pool.points)?;
 			let _ = Self::do_reward_payout(&who, &mut member, &mut bonded_pool, &mut reward_pool)?;
 
 			let current_era = T::StakingInterface::current_era();
@@ -2287,8 +2305,8 @@ impl<T: Config> Pallet<T> {
 		ensure!(!member.active_points().is_zero(), Error::<T>::FullyUnbonding);
 
 		let current_reward_counter =
-			reward_pool.current_reward_counter(bonded_pool.id, bonded_pool.points);
-		let pending_rewards = member.pending_rewards(current_reward_counter);
+			reward_pool.current_reward_counter(bonded_pool.id, bonded_pool.points)?;
+		let pending_rewards = member.pending_rewards(current_reward_counter)?;
 
 		member.last_recorded_reward_counter = current_reward_counter;
 		reward_pool.register_claimed_reward(pending_rewards);

@@ -2,9 +2,11 @@ use super::*;
 use crate::{self as pools};
 use frame_support::{assert_ok, parameter_types, PalletId};
 use frame_system::RawOrigin;
+use sp_runtime::{FixedU128};
 
 pub type AccountId = u128;
 pub type Balance = u128;
+pub type RewardCounter = FixedU128;
 
 // Ext builder creates a pool with id 1.
 pub fn default_bonded_account() -> AccountId {
@@ -185,6 +187,7 @@ impl pools::Config for Runtime {
 	type WeightInfo = ();
 	type Currency = Balances;
 	type CurrencyBalance = Balance;
+	type RewardCounter = RewardCounter;
 	type BalanceToU256 = BalanceToU256;
 	type U256ToBalance = U256ToBalance;
 	type StakingInterface = StakingMock;
