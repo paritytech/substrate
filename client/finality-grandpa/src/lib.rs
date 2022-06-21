@@ -1192,7 +1192,7 @@ where
 
 	let persistent_data: PersistentData<Block> =
 		aux_schema::load_persistent(&*client, info.genesis_hash, Zero::zero(), || {
-			const MSG: &str = "Unexpected missing grandpa genesis data during revert";
+			const MSG: &str = "Unexpected missing grandpa data during revert";
 			Err(ClientError::Application(Box::from(MSG)))
 		})?;
 
