@@ -233,3 +233,67 @@ fn user_noted_then_requested_preimage_is_refunded_once_only() {
 		assert_eq!(Balances::free_balance(2), 95);
 	});
 }
+
+#[test]
+fn noted_preimage_use_correct_map() {
+	new_test_ext().execute_with(|| {
+		// Add one preimage per bucket...
+		assert_ok!(Preimage::note_preimage(Origin::signed(1), vec![0; 128]));
+		assert_eq!(Preimage7For::<Test>::iter().count(), 1);
+
+		assert_ok!(Preimage::note_preimage(Origin::signed(1), vec![0; 1024]));
+		assert_eq!(Preimage10For::<Test>::iter().count(), 1);
+
+		assert_ok!(Preimage::note_preimage(Origin::signed(1), vec![0; 8192]));
+		assert_eq!(Preimage13For::<Test>::iter().count(), 1);
+
+		assert_ok!(Preimage::note_preimage(Origin::signed(1), vec![0; 65536]));
+		assert_eq!(Preimage16For::<Test>::iter().count(), 1);
+
+		assert_ok!(Preimage::note_preimage(Origin::signed(1), vec![0; 524288]));
+		assert_eq!(Preimage19For::<Test>::iter().count(), 1);
+
+		assert_ok!(Preimage::note_preimage(Origin::signed(1), vec![0; 1048576]));
+		assert_eq!(Preimage20For::<Test>::iter().count(), 1);
+
+		assert_ok!(Preimage::note_preimage(Origin::signed(1), vec![0; 2097152]));
+		assert_eq!(Preimage21For::<Test>::iter().count(), 1);
+
+		assert_ok!(Preimage::note_preimage(Origin::signed(1), vec![0; MAX_SIZE as usize]));
+		assert_eq!(Preimage22For::<Test>::iter().count(), 1);
+
+		// All are present
+		assert_eq!(StatusFor::<Test>::iter().count(), 8);
+
+		// Now start removing them again...
+		assert_ok!(Preimage::unnote_preimage(Origin::signed(1), hashed(vec![0; 128])));
+		assert_eq!(Preimage7For::<Test>::iter().count(), 0);
+
+		assert_ok!(Preimage::unnote_preimage(Origin::signed(1), hashed(vec![0; 1024])));
+		assert_eq!(Preimage10For::<Test>::iter().count(), 0);
+
+		assert_ok!(Preimage::unnote_preimage(Origin::signed(1), hashed(vec![0; 8192])));
+		assert_eq!(Preimage13For::<Test>::iter().count(), 0);
+
+		assert_ok!(Preimage::unnote_preimage(Origin::signed(1), hashed(vec![0; 65536])));
+		assert_eq!(Preimage16For::<Test>::iter().count(), 0);
+
+		assert_ok!(Preimage::unnote_preimage(Origin::signed(1), hashed(vec![0; 524288])));
+		assert_eq!(Preimage19For::<Test>::iter().count(), 0);
+
+		assert_ok!(Preimage::unnote_preimage(Origin::signed(1), hashed(vec![0; 1048576])));
+		assert_eq!(Preimage20For::<Test>::iter().count(), 0);
+
+		assert_ok!(Preimage::unnote_preimage(Origin::signed(1), hashed(vec![0; 2097152])));
+		assert_eq!(Preimage21For::<Test>::iter().count(), 0);
+
+		assert_ok!(Preimage::unnote_preimage(
+			Origin::signed(1),
+			hashed(vec![0; MAX_SIZE as usize])
+		));
+		assert_eq!(Preimage22For::<Test>::iter().count(), 0);
+
+		// All are gone
+		assert_eq!(StatusFor::<Test>::iter().count(), 0);
+	});
+}

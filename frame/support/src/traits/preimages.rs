@@ -226,3 +226,13 @@ impl StorePreimage for () {
 		Err(DispatchError::Exhausted)
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn bounded_size_is_correct() {
+		assert_eq!(<Bounded<Vec<u8>> as MaxEncodedLen>::max_encoded_len(), 130);
+	}
+}
