@@ -88,6 +88,11 @@ impl<T: Config> Pallet<T> {
 			item.price = None;
 			item.buyer = None;
 
+			if let Some(ref seller) = item.seller.clone() {
+				item.seller = None;
+				Sellers::<T>::remove((seller, &collection_id, &item_id));
+			}
+
 			Self::deposit_event(Event::ItemTransferred {
 				collection_id,
 				item_id,

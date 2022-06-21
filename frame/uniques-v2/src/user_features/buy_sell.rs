@@ -100,6 +100,111 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
+	pub fn do_set_seller(
+		collection_id: T::CollectionId,
+		item_id: T::ItemId,
+		config: CollectionConfig,
+		caller: T::AccountId,
+		seller: Option<T::AccountId>,
+		price: Option<BalanceOf<T>>,
+		seller_tips: Option<BalanceOf<T>>,
+	) -> DispatchResult {
+		let user_features: BitFlags<UserFeature> = config.user_features.get();
+		ensure!(
+			!user_features.contains(UserFeature::NonTransferableItems),
+			Error::<T>::ItemsNotTransferable
+		);
+
+		Items::<T>::try_mutate(collection_id, item_id, |maybe_item| {
+			let item = maybe_item.as_mut().ok_or(Error::<T>::ItemNotFound)?;
+			ensure!(item.owner == caller, Error::<T>::NotAuthorized);
+
+			if let Some(ref current_seller) = item.seller {
+				Sellers::<T>::remove((&current_seller, &collection_id, &item_id));
+			}
+
+			item.seller = None;
+
+			if let Some(ref seller) = seller {
+				if let Some(price) = price {
+					item.seller = Some(seller.clone());
+
+					Sellers::<T>::insert(
+						(seller, &collection_id, &item_id),
+						ItemSellData { seller_price: price, seller_tips },
+					);
+				}
+			}
+
+			Self::deposit_event(Event::ItemSellerSet {
+				collection_id,
+				item_id,
+				seller,
+				price,
+				seller_tips,
+			});
+
+			Ok(())
+		})
+	}
+
+	pub fn do_buy_from_seller(
+		collection_id: T::CollectionId,
+		item_id: T::ItemId,
+		config: CollectionConfig,
+		buyer: T::AccountId,
+		seller: T::AccountId,
+		amount: BalanceOf<T>,
+	) -> DispatchResult {
+		let user_features: BitFlags<UserFeature> = config.user_features.get();
+		ensure!(
+			!user_features.contains(UserFeature::NonTransferableItems),
+			Error::<T>::ItemsNotTransferable
+		);
+
+		let item = Items::<T>::get(collection_id, item_id).ok_or(Error::<T>::ItemNotFound)?;
+		ensure!(item.owner != buyer, Error::<T>::NotAuthorized);
+
+		let seller_account = item.seller.ok_or(Error::<T>::ItemNotForSale)?;
+		ensure!(seller_account == seller, Error::<T>::WrongSeller);
+
+		let ItemSellData { seller_price, seller_tips } =
+			Sellers::<T>::get((seller_account, collection_id, item_id))
+				.ok_or(Error::<T>::SellDataNotFound)?;
+
+		let total = seller_price + seller_tips.unwrap_or(Default::default());
+
+		if let Some(seller_tips) = seller_tips {
+			T::Currency::transfer(&buyer, &seller, seller_tips, KeepAlive)?;
+		}
+
+		ensure!(amount >= total, Error::<T>::AmountTooLow);
+
+		let mut transfer_amount = seller_price.clone();
+		if Self::has_royalties(&config) {
+			let collection =
+				Collections::<T>::get(collection_id).ok_or(Error::<T>::CollectionNotFound)?;
+
+			transfer_amount =
+				Self::process_royalties(transfer_amount.clone(), &buyer, &collection, item_id)?;
+		}
+
+		T::Currency::transfer(&buyer, &item.owner, transfer_amount, KeepAlive)?;
+
+		Self::do_transfer_item(collection_id, item_id, config, item.owner.clone(), buyer.clone())?;
+
+		Self::deposit_event(Event::ItemSold {
+			collection_id,
+			item_id,
+			buyer,
+			seller,
+			price: seller_price,
+			seller_tips,
+		});
+
+		Ok(())
+	}
+
 	// user 1 signed an offer to buy user's 2 item
 	// user 2 executes that offer
 	pub fn do_accept_buy_offer(

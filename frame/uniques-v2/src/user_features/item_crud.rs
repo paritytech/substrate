@@ -54,6 +54,7 @@ impl<T: Config> Pallet<T> {
 				price: None,
 				buyer: None,
 				approvals: Default::default(),
+				seller: None,
 			};
 
 			let instances = collection.items.checked_add(1).ok_or(ArithmeticError::Overflow)?;

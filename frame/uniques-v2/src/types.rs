@@ -162,6 +162,7 @@ pub struct Item<ItemId, Account, Balance, Approvals> {
 	// `None` assumes anyone can buy
 	pub buyer: Option<Account>,
 	pub approvals: Approvals,
+	pub seller: Option<Account>,
 }
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default, TypeInfo, MaxEncodedLen)]
@@ -180,6 +181,12 @@ pub struct ItemMetadata<Metadata> {
 	/// generally be either a JSON dump or the hash of some JSON which can be found on a
 	/// hash-addressable global publication system such as IPFS.
 	pub(super) data: Metadata,
+}
+
+#[derive(Encode, Decode, PartialEq, Default, MaxEncodedLen, TypeInfo)]
+pub struct ItemSellData<Balance> {
+	pub seller_price: Balance,
+	pub seller_tips: Option<Balance>,
 }
 
 /// Witness data for the destroy transactions.

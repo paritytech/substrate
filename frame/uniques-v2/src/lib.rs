@@ -236,6 +236,19 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
+	#[pallet::storage]
+	/// Sellers and items they could sell.
+	pub(super) type Sellers<T: Config> = StorageNMap<
+		_,
+		(
+			NMapKey<Blake2_128Concat, T::AccountId>, // seller
+			NMapKey<Blake2_128Concat, T::CollectionId>,
+			NMapKey<Blake2_128Concat, T::ItemId>,
+		),
+		ItemSellData<BalanceOf<T>>,
+		OptionQuery,
+	>;
+
 	// Pallet's events.
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -335,6 +348,21 @@ pub mod pallet {
 			seller: T::AccountId,
 			buyer: T::AccountId,
 		},
+		ItemSellerSet {
+			collection_id: T::CollectionId,
+			item_id: T::ItemId,
+			seller: Option<T::AccountId>,
+			price: Option<BalanceOf<T>>,
+			seller_tips: Option<BalanceOf<T>>,
+		},
+		ItemSold {
+			collection_id: T::CollectionId,
+			item_id: T::ItemId,
+			buyer: T::AccountId,
+			seller: T::AccountId,
+			price: BalanceOf<T>,
+			seller_tips: Option<BalanceOf<T>>,
+		},
 		BuyOfferAccepted {
 			collection_id: T::CollectionId,
 			item_id: T::ItemId,
@@ -404,6 +432,12 @@ pub mod pallet {
 		ItemNotForSale,
 		/// The provided bid is too low.
 		BidTooLow,
+		/// Wrong seller provided.
+		WrongSeller,
+		/// Item's sell data not found.
+		SellDataNotFound,
+		/// Wrong amount provided.
+		AmountTooLow,
 		/// User reached the limit of allowed items per collection per account
 		CollectionItemsPerAccountLimitReached,
 		/// The calling user is not authorized to make this call.
@@ -721,6 +755,37 @@ pub mod pallet {
 			let config =
 				CollectionConfigs::<T>::get(collection_id).ok_or(Error::<T>::CollectionNotFound)?;
 			Self::do_buy_item(collection_id, item_id, config, sender, bid_price)?;
+			Ok(())
+		}
+
+		#[pallet::weight(0)]
+		pub fn set_seller(
+			origin: OriginFor<T>,
+			collection_id: T::CollectionId,
+			item_id: T::ItemId,
+			seller: Option<T::AccountId>,
+			price: Option<BalanceOf<T>>,
+			tips: Option<BalanceOf<T>>,
+		) -> DispatchResult {
+			let sender = ensure_signed(origin)?;
+			let config =
+				CollectionConfigs::<T>::get(collection_id).ok_or(Error::<T>::CollectionNotFound)?;
+			Self::do_set_seller(collection_id, item_id, config, sender, seller, price, tips)?;
+			Ok(())
+		}
+
+		#[pallet::weight(0)]
+		pub fn buy_from_seller(
+			origin: OriginFor<T>,
+			collection_id: T::CollectionId,
+			item_id: T::ItemId,
+			seller: T::AccountId,
+			price: BalanceOf<T>,
+		) -> DispatchResult {
+			let sender = ensure_signed(origin)?;
+			let config =
+				CollectionConfigs::<T>::get(collection_id).ok_or(Error::<T>::CollectionNotFound)?;
+			Self::do_buy_from_seller(collection_id, item_id, config, sender, seller, price)?;
 			Ok(())
 		}
 
