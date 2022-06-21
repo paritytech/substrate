@@ -18,27 +18,25 @@
 		)
 	)
 	(func (export "call")
-	(local $exit_code i32)
+		(local $seal_call_exit_code i32)
 		(local $reentrant_count i32)
+		(local $seen_five_reentrances i32)
 
 		(set_local $reentrant_count
 			(call $seal_reentrant_count)
 		)
 
-		(get_local $reentrant_count)
+		(i32.eq (get_local $reentrant_count) (i32.const 5))
 		(if
 			(then
-				;; assert reentrant_count == 1
-				(call $assert
-					(i32.eq (get_local $reentrant_count) (i32.const 1))
-				)
+				(set_local $seen_five_reentrances (i32.const 1))
 			)
 			(else
 				;; Reading "callee" contract address (which is the address of the caller)
 				(call $seal_input (i32.const 0) (i32.const 32))
 
 				;; Call to itself
-				(set_local $exit_code
+				(set_local $seal_call_exit_code
 					(call $seal_call
 						(i32.const 0)	;; Pointer to "callee" address.
 						(i32.const 32)	;; Length of "callee" address.
@@ -52,14 +50,26 @@
 					)
 				)
 
-				;; assert reentrant_count == 0
 				(call $assert
-					(i32.eq (get_local $reentrant_count) (i32.const 0))
+					(i32.eq (get_local $seal_call_exit_code) (i32.const 0))
+				)
+			)
+		)
+
+		(i32.eq (get_local $seen_five_reentrances) (i32.const 1))
+		(if
+			(then
+				(call $assert
+					(i32.eq (get_local $reentrant_count) (i32.const 5))
+				)
+			)
+			(else
+				(call $assert
+					(i32.le_s (get_local $reentrant_count) (i32.const 4))
 				)
 			)
 		)
 	)
 
 	(func (export "deploy"))
-
 )
