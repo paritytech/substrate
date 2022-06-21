@@ -2087,15 +2087,15 @@ define_env!(Env, <E: Ext>,
 		}
 	},
 
-	// Returns then number of times currently executing contract exists on the call stack in addition
+	// Returns the number of times the currently executing contract exists on the call stack in addition
 	// to the calling instance.
 	//
 	// # Return Value
 	//
-	// Returns 0 when there is no reentrancy
+	// Returns 0 when there is no reentrancy.
 	[__unstable__] seal_reentrant_count(ctx) -> u32 => {
 		ctx.charge_gas(RuntimeCosts::ReentrantCount)?;
-		Ok(ctx.ext.reentrant_count() as u32)
+		Ok(ctx.ext.reentrant_count())
 	},
 
 	// Returns the number of times specified contract exists on the call stack. Delegated calls are
@@ -2111,6 +2111,6 @@ define_env!(Env, <E: Ext>,
 	[__unstable__] seal_account_entrance_count(ctx, account_ptr: u32) -> u32 => {
 		ctx.charge_gas(RuntimeCosts::AccountEntranceCount)?;
 		let account_id: <<E as Ext>::T as frame_system::Config>::AccountId = ctx.read_sandbox_memory_as(account_ptr)?;
-		Ok(ctx.ext.account_entrance_count(&account_id) as u32)
+		Ok(ctx.ext.account_entrance_count(&account_id))
 	},
 );

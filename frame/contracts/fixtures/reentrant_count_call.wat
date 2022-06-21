@@ -18,7 +18,7 @@
 		)
 	)
 	(func (export "call")
-	    (local $exit_code i32)
+	(local $exit_code i32)
 		(local $reentrant_count i32)
 
 		(set_local $reentrant_count
@@ -26,38 +26,38 @@
 		)
 
 		(get_local $reentrant_count)
-        (if
-            (then
-		        ;; assert reentrant_count == 1
-		        (call $assert
-		        	(i32.eq (get_local $reentrant_count) (i32.const 1))
-		        )
-            )
-            (else
-		        ;; Reading "callee" contract address (which is the address of the caller)
-		        (call $seal_input (i32.const 0) (i32.const 32))
+		(if
+			(then
+				;; assert reentrant_count == 1
+				(call $assert
+					(i32.eq (get_local $reentrant_count) (i32.const 1))
+				)
+			)
+			(else
+				;; Reading "callee" contract address (which is the address of the caller)
+				(call $seal_input (i32.const 0) (i32.const 32))
 
-                ;; Call to itself
-		        (set_local $exit_code
-		        	(call $seal_call
-		        		(i32.const 0)	;; Pointer to "callee" address.
-		        		(i32.const 32)	;; Length of "callee" address.
-		        		(i64.const 0)	;; How much gas to devote for the execution. 0 = all.
-		        		(i32.const 0)	;; Pointer to the buffer with value to transfer
-		        		(i32.const 0)	;; Length of the buffer with value to transfer.
-		        		(i32.const 0)	;; Pointer to input data buffer address
-		        		(i32.const 32)	;; Length of input data buffer
-		                (i32.const 0xffffffff) ;; u32 max sentinel value: do not copy output
-		                (i32.const 0) ;; Ptr to output buffer len
-		        	)
-		        )
+				;; Call to itself
+				(set_local $exit_code
+					(call $seal_call
+						(i32.const 0)	;; Pointer to "callee" address.
+						(i32.const 32)	;; Length of "callee" address.
+						(i64.const 0)	;; How much gas to devote for the execution. 0 = all.
+						(i32.const 0)	;; Pointer to the buffer with value to transfer
+						(i32.const 0)	;; Length of the buffer with value to transfer.
+						(i32.const 0)	;; Pointer to input data buffer address
+						(i32.const 32)	;; Length of input data buffer
+						(i32.const 0xffffffff) ;; u32 max sentinel value: do not copy output
+						(i32.const 0) ;; Ptr to output buffer len
+					)
+				)
 
-		        ;; assert reentrant_count == 0
-		        (call $assert
-		        	(i32.eq (get_local $reentrant_count) (i32.const 0))
-		        )
-            )
-        )
+				;; assert reentrant_count == 0
+				(call $assert
+					(i32.eq (get_local $reentrant_count) (i32.const 0))
+				)
+			)
+		)
 	)
 
 	(func (export "deploy"))

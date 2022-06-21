@@ -19,8 +19,8 @@
 	(func (export "call")
 		(local $account_entrance_count i32)
 
-	    ;; Reading "callee" contract address (which is the address of the caller)
-	    (call $seal_input (i32.const 0) (i32.const 32))
+		;; Reading "callee" contract address (which is the address of the caller)
+		(call $seal_input (i32.const 0) (i32.const 32))
 
 		(set_local $account_entrance_count
 			(call $seal_account_entrance_count (i32.const 0))
@@ -28,7 +28,7 @@
 
 		;; assert account_entrance_count == 1
 		(call $assert
-		   	(i32.eq (get_local $account_entrance_count) (i32.const 1))
+			(i32.eq (get_local $account_entrance_count) (i32.const 1))
 		)
 	)
 

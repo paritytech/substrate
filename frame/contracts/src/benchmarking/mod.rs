@@ -2098,7 +2098,7 @@ benchmarks! {
 				},
 			],
 			call_body: Some(body::repeated_dyn(r * API_BENCHMARK_BATCH_SIZE, vec![
-				Counter(0 as u32, account_id_len as u32), // account_ptr
+				Counter(0, account_id_len as u32), // account_ptr
 				Regular(Instruction::Call(0)),
 				Regular(Instruction::Drop),
 			])),
