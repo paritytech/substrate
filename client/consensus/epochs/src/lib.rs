@@ -505,6 +505,28 @@ where
 		}
 	}
 
+	pub fn sync(&mut self) {
+		self.inner = self.inner.clone().map(&mut |hash, number, epoch_header| {
+			let epoch = self.epochs.get(&(*hash, *number)).unwrap();
+
+			let epoch_data = match epoch {
+				PersistedEpoch::Genesis(..) => return epoch_header,
+				PersistedEpoch::Regular(epoch_data) => epoch_data,
+			};
+
+			let epoch_header = match epoch_header {
+				PersistedEpochHeader::Genesis(..) => epoch_header,
+				PersistedEpochHeader::Regular(mut epoch_header) => {
+					epoch_header.start_slot = epoch_data.start_slot();
+					epoch_header.end_slot = epoch_data.end_slot();
+					PersistedEpochHeader::Regular(epoch_header)
+				},
+			};
+
+			epoch_header
+		});
+	}
+
 	/// Prune out finalized epochs, except for the ancestor of the finalized
 	/// block. The given slot should be the slot number at which the finalized
 	/// block was authored.

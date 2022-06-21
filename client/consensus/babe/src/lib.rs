@@ -126,7 +126,7 @@ use sp_inherents::{CreateInherentDataProviders, InherentData, InherentDataProvid
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::{
 	generic::{BlockId, OpaqueDigestItemId},
-	traits::{Block as BlockT, Header, NumberFor, SaturatedConversion, Saturating, Zero},
+	traits::{Block as BlockT, Header, NumberFor, One, SaturatedConversion, Saturating, Zero},
 	DigestItem,
 };
 
@@ -1355,7 +1355,34 @@ pub struct BabeBlockImport<Block: BlockT, Client, I> {
 	inner: I,
 	client: Arc<Client>,
 	epoch_changes: SharedEpochChanges<Block, Epoch>,
+	genesis_slot: Option<Slot>,
 	config: Config,
+}
+
+impl<Block: BlockT, Client, I> BabeBlockImport<Block, Client, I>
+where
+	Client: HeaderBackend<Block>,
+{
+	fn genesis_slot(&mut self) -> Option<Slot> {
+		if self.genesis_slot.is_some() {
+			return self.genesis_slot.clone()
+		}
+
+		let genesis_slot =
+			self.client.header(BlockId::Number(One::one())).ok().flatten().map(|header| {
+				let pre_digest = find_pre_digest::<Block>(&header).expect(
+				"valid babe headers must contain a predigest; header has been already verified; qed",
+		    );
+
+				pre_digest.slot()
+			});
+
+		if genesis_slot.is_some() {
+			self.genesis_slot = genesis_slot.clone();
+		}
+
+		genesis_slot
+	}
 }
 
 impl<Block: BlockT, I: Clone, Client> Clone for BabeBlockImport<Block, Client, I> {
@@ -1364,6 +1391,7 @@ impl<Block: BlockT, I: Clone, Client> Clone for BabeBlockImport<Block, Client, I
 			inner: self.inner.clone(),
 			client: self.client.clone(),
 			epoch_changes: self.epoch_changes.clone(),
+			genesis_slot: self.genesis_slot.clone(),
 			config: self.config.clone(),
 		}
 	}
@@ -1376,7 +1404,7 @@ impl<Block: BlockT, Client, I> BabeBlockImport<Block, Client, I> {
 		block_import: I,
 		config: Config,
 	) -> Self {
-		BabeBlockImport { client, inner: block_import, epoch_changes, config }
+		BabeBlockImport { client, inner: block_import, epoch_changes, config, genesis_slot: None }
 	}
 }
 
@@ -1515,6 +1543,8 @@ where
 			))
 		}
 
+		let genesis_slot = self.genesis_slot();
+
 		// if there's a pending epoch we'll save the previous epoch changes here
 		// this way we can revert it if there's any error
 		let mut old_epoch_changes = None;
@@ -1581,8 +1611,8 @@ where
 			if let Some(next_epoch_descriptor) = next_epoch_digest {
 				old_epoch_changes = Some((*epoch_changes).clone());
 
-				let viable_epoch = epoch_changes
-					.viable_epoch(&epoch_descriptor, |slot| {
+				let mut viable_epoch = epoch_changes
+					.viable_epoch_mut(&epoch_descriptor, |slot| {
 						Epoch::genesis(&self.config.genesis_config, slot)
 					})
 					.ok_or_else(|| {
@@ -1599,6 +1629,29 @@ where
 				} else {
 					log::Level::Info
 				};
+
+				if let Some(genesis_slot) = genesis_slot {
+					let epoch_index = sp_consensus_babe::epoch_index(
+						slot,
+						genesis_slot,
+						viable_epoch.as_ref().duration,
+					);
+
+					if epoch_index != viable_epoch.as_ref().epoch_index {
+						warn!(target: "babe", "👶 Epoch(s) skipped: from {} to {}",
+							viable_epoch.as_ref().epoch_index, epoch_index,
+						);
+
+						let epoch_start = sp_consensus_babe::epoch_start_slot(
+							epoch_index,
+							genesis_slot,
+							viable_epoch.as_ref().duration,
+						);
+
+						viable_epoch.as_mut().epoch_index = epoch_index;
+						viable_epoch.as_mut().start_slot = epoch_start;
+					}
+				}
 
 				log!(target: "babe",
 					 log_level,
@@ -1627,6 +1680,7 @@ where
 				let prune_and_import = || {
 					prune_finalized(self.client.clone(), &mut epoch_changes)?;
 
+					epoch_changes.sync();
 					epoch_changes
 						.import(
 							descendent_query(&*self.client),
