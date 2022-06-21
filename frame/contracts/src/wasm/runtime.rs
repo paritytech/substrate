@@ -780,43 +780,22 @@ where
 	) -> Result<ReturnCode, TrapReason> {
 		let charged = self.charge_gas(RuntimeCosts::GetStorage(self.ext.max_value_size()))?;
 		let key = self.read_sandbox_memory(key_ptr, key_type.len::<E::T>()?)?;
-		match key_type {
-			KeyType::Fix =>
-				if let Some(value) = self.ext.get_storage(
-					&FixSizedKey::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?,
-				) {
-					self.adjust_gas(charged, RuntimeCosts::GetStorage(value.len() as u32));
-					self.write_sandbox_output(
-						out_ptr,
-						out_len_ptr,
-						&value,
-						false,
-						already_charged,
-					)?;
-					Ok(ReturnCode::Success)
-				} else {
-					self.adjust_gas(charged, RuntimeCosts::GetStorage(0));
-					Ok(ReturnCode::KeyNotFound)
-				},
-			KeyType::Variable(_) => {
-				if let Some(value) = self.ext.get_storage_transparent(
-					&VarSizedKey::<E::T>::try_from(key)
-						.map_err(|_| Error::<E::T>::DecodingFailed)?,
-				) {
-					self.adjust_gas(charged, RuntimeCosts::GetStorage(value.len() as u32));
-					self.write_sandbox_output(
-						out_ptr,
-						out_len_ptr,
-						&value,
-						false,
-						already_charged,
-					)?;
-					Ok(ReturnCode::Success)
-				} else {
-					self.adjust_gas(charged, RuntimeCosts::GetStorage(0));
-					Ok(ReturnCode::KeyNotFound)
-				}
-			},
+		let outcome = match key_type {
+			KeyType::Fix => self.ext.get_storage(
+				&FixSizedKey::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?,
+			),
+			KeyType::Variable(_) => self.ext.get_storage_transparent(
+				&VarSizedKey::<E::T>::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?,
+			),
+		};
+
+		if let Some(value) = outcome {
+			self.adjust_gas(charged, RuntimeCosts::GetStorage(value.len() as u32));
+			self.write_sandbox_output(out_ptr, out_len_ptr, &value, false, already_charged)?;
+			Ok(ReturnCode::Success)
+		} else {
+			self.adjust_gas(charged, RuntimeCosts::GetStorage(0));
+			Ok(ReturnCode::KeyNotFound)
 		}
 	}
 
