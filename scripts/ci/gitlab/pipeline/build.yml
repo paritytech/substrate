@@ -42,6 +42,8 @@ check-dependent-cumulus:
     COMPANION_OVERRIDES: |
       substrate: polkadot-v*
       polkadot: release-v*
+  rules:
+    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/  #PRs
 
 build-linux-substrate:
   stage:                           build
