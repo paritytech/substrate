@@ -18,6 +18,8 @@
 //! A MMR storage implementations.
 
 use codec::Encode;
+use frame_support::log;
+use log::info;
 use mmr_lib::helper;
 use sp_io::offchain_index;
 use sp_std::iter::Peekable;
@@ -70,7 +72,13 @@ fn parent_hash_of_ancestor_that_added_node<T: frame_system::Config>(
 			.expect("leaf-idx < block-num; qed")
 			.into();
 	// TODO: I think this only holds recent history, so old block hashes might not be here.
-	<frame_system::Pallet<T>>::block_hash(block_num)
+	let hash = <frame_system::Pallet<T>>::block_hash(block_num);
+	info!(
+		target: "runtime::mmr",
+		"🥩: parent of ancestor that added {}: leaf idx {}, block-num {:?} hash {:?}",
+		pos, leaf_idx, block_num, hash
+	);
+	hash
 }
 
 impl<T, I, L> mmr_lib::MMRStore<NodeOf<T, I, L>> for Storage<OffchainStorage, T, I, L>
@@ -85,6 +93,11 @@ where
 		// in offchain DB coming from various chain forks.
 		let parent_hash_of_ancestor = parent_hash_of_ancestor_that_added_node::<T>(pos);
 		let key = Pallet::<T, I>::offchain_key(parent_hash_of_ancestor, pos);
+		info!(
+			target: "runtime::mmr",
+			"🥩: get elem {}: key {:?}",
+			pos, key
+		);
 		// Retrieve the element from Off-chain DB.
 		Ok(sp_io::offchain::local_storage_get(sp_core::offchain::StorageKind::PERSISTENT, &key)
 			.and_then(|v| codec::Decode::decode(&mut &*v).ok()))
@@ -111,11 +124,17 @@ where
 		}
 
 		sp_std::if_std! {
-			frame_support::log::trace!("elems: {:?}", elems.iter().map(|elem| elem.hash()).collect::<Vec<_>>());
+			frame_support::log::info!("elems: {:?}", elems.iter().map(|elem| elem.hash()).collect::<Vec<_>>());
 		}
 
 		let leaves = NumberOfLeaves::<T, I>::get();
 		let size = NodesUtils::new(leaves).size();
+
+		info!(
+			target: "runtime::mmr",
+			"🥩: append elem {}: leaves {} size {}",
+			pos, leaves, size
+		);
 
 		if pos != size {
 			return Err(mmr_lib::Error::InconsistentStore)
@@ -134,11 +153,16 @@ where
 		// Use parent hash of block adding new nodes (this block) as extra identifier
 		// in offchain DB to avoid DB collisions and overwrites in case of forks.
 		let parent_hash = <frame_system::Pallet<T>>::parent_hash();
+		let block_number = <frame_system::Pallet<T>>::block_number();
 		for elem in elems {
+			let key = Pallet::<T, I>::offchain_key(parent_hash, node_index);
+			info!(
+				target: "runtime::mmr",
+				"🥩: offchain set: block-num {:?}, parent_hash {:?} node-idx {} key {:?}",
+				block_number, parent_hash, node_index, key
+			);
 			// Indexing API is used to store the full node content (both leaf and inner).
-			elem.using_encoded(|elem| {
-				offchain_index::set(&Pallet::<T, I>::offchain_key(parent_hash, node_index), elem)
-			});
+			elem.using_encoded(|elem| offchain_index::set(&key, elem));
 
 			// On-chain we are going to only store new peaks.
 			if peaks_to_store.next_if_eq(&node_index).is_some() {
