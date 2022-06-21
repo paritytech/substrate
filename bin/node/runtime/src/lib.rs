@@ -2171,8 +2171,11 @@ mod tests {
 	fn check_pallet_storage_sizes() {
 		use frame_support::traits::StorageInfoTrait;
 		let mut storage_info = AllPalletsWithSystem::storage_info();
-		println!("| Pallet | Storage | Max Values | Max Size |");
-		println!("| --- | --- | --- | --- |");
+		println!(
+			"| {:^30} | {:^30} | {:^10} | {:^15} |",
+			"Pallet", "Storage", "Max Values", "Max Size"
+		);
+		println!("| {:-<30} | {:-<30} | {:-<10} | {:-<15} |", "", "", "", "");
 
 		storage_info.sort_by_key(|k| k.max_size);
 		storage_info.reverse();
@@ -2182,9 +2185,12 @@ mod tests {
 		for info in storage_info {
 			let pallet_name = String::from_utf8(info.pallet_name).unwrap();
 			let storage_name = String::from_utf8(info.storage_name).unwrap();
-			println!(
-				"| {:?} | {:?} | {:?} | {:?} |",
-				pallet_name, storage_name, info.max_values, info.max_size
+                        println!(
+				"| {:<30} | {:<30} | {:<10} | {:<15} |",
+				pallet_name,
+				storage_name,
+				format!("{:?}", info.max_values),
+				format!("{:?}", info.max_size)
 			);
 
 			if let Some(size) = info.max_size {
