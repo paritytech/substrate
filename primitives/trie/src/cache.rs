@@ -53,7 +53,7 @@ lazy_static::lazy_static! {
 	static ref RANDOM_STATE: ahash::RandomState = ahash::RandomState::default();
 }
 
-/// No hashing [`lru::LruCache`].
+/// No hashing [`LruCache`].
 ///
 /// The key is an `u64` that is expected to be unique.
 type NoHashingLruCache<T> = lru::LruCache<u64, T, BuildNoHashHasher<u64>>;
@@ -188,6 +188,11 @@ impl CacheSize {
 /// The instance of this object can be shared between multiple threads.
 pub struct SharedTrieCache<H: Hasher> {
 	node_cache: Arc<RwLock<SharedNodeCache<H>>>,
+	/// The key to lookup a [`CachedValue`] is build using [`value_cache_get_key`].
+	///
+	/// We use this custom key generation function to use one [`LruCache`] over all different
+	/// state tries. As the storage key can be the same for different state tries, we need to
+	/// incorporate the storage root of the trie to get an unique key.
 	value_cache: Arc<RwLock<NoHashingLruCache<CachedValue<H::Out>>>>,
 }
 
