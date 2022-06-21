@@ -384,3 +384,27 @@ check-rustdoc:
     - rusty-cachier snapshot create
     - time cargo +nightly doc --workspace --all-features --verbose --no-deps
     - rusty-cachier cache upload
+
+publish-mixnet-image:
+  # service image for Simnet
+  stage:                           test
+  <<:                              *build-push-image
+  <<:                              *zombienet-refs
+  variables:
+    <<:                            *image-variables
+    # scripts/ci/dockerfiles/malus_injected.Dockerfile
+    DOCKERFILE:                    ci/dockerfiles/mixnet.Dockerfile
+    IMAGE_NAME:                    docker.io/paritypr/mixnet
+  needs:
+    - job:                         build-mixnet
+      artifacts:                   true
+  after_script:
+    - buildah logout "$IMAGE_NAME"
+    # pass artifacts to the zombienet-tests job
+    - echo "MIXNET_IMAGE_NAME=${IMAGE_NAME}" > ./artifacts/mixnet.env
+    - echo "MIXNET_IMAGE_TAG=$(cat ./artifacts/EXTRATAG)" >> ./artifacts/mixnet.env
+  artifacts:
+    reports:
+      # this artifact is used in zombienet-tests job
+      dotenv: ./artifacts/mixnet.env
+

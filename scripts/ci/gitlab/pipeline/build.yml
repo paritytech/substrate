@@ -75,6 +75,30 @@ build-linux-substrate:
     - ./scripts/ci/node-template-release.sh ./artifacts/substrate/substrate-node-template.tar.gz
     - rusty-cachier cache upload
 
+zombienet-tests-mixnet:
+  stage:                           build
+  image:                           "${ZOMBIENET_IMAGE}"
+  <<:                              *kubernetes-env2
+  <<:                              *zombienet-refs
+  needs:
+    - job:                         publish-mixnet-image
+  variables:
+    GH_DIR:                        "https://github.com/paritytech/substrate/tree/${CI_COMMIT_SHORT_SHA}/zumbanet_tests/mixnet"
+  before_script:
+    - echo "Zombie-net Tests Config"
+    - echo "${ZOMBIENET_IMAGE}"
+    - echo "${GH_DIR}"
+    - export DEBUG=zombie,zombie::network-node
+    - export ZOMBIENET_INTEGRATION_TEST_IMAGE=${MIXNET_IMAGE_NAME}:${MIXNET_IMAGE_TAG}
+  script:
+    - /home/nonroot/zombie-net/scripts/ci/run-test-env-manager.sh
+        --github-remote-dir="${GH_DIR}"
+        --test="0001-simple.feature"
+  allow_failure:                   false
+  retry: 2
+  tags:
+    - zombienet-substrate-test
+
 .build-subkey:
   stage:                           build
   extends:

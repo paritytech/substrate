@@ -52,3 +52,20 @@ test-prometheus-alerting-rules:
     - cat ./scripts/ci/monitoring/alerting-rules/alerting-rules.yaml |
         promtool test rules ./scripts/ci/monitoring/alerting-rules/alerting-rule-tests.yaml
 
+build-mixnet:
+  stage:                           check
+  <<:                              *collect-artifacts
+  <<:                              *docker-env2
+  <<:                              *compiler-info
+  <<:                              *test-refs
+  script:
+    - time cargo build --profile testnet --verbose -p node-cli
+    - sccache -s
+    # pack artifacts
+    - mkdir -p ./artifacts
+    - mv ./target/testnet/mixnet ./artifacts/.
+    - echo -n "${CI_COMMIT_REF_NAME}" > ./artifacts/VERSION
+    - echo -n "${CI_COMMIT_REF_NAME}-${CI_COMMIT_SHORT_SHA}" > ./artifacts/EXTRATAG
+    - echo "polkadot-test-mixnet = $(cat ./artifacts/VERSION) (EXTRATAG = $(cat ./artifacts/EXTRATAG))"
+    - cp -r ./scripts/* ./artifacts
+
