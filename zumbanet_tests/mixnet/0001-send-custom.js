@@ -34,17 +34,13 @@ async function connect(apiUrl, types) {
 
 async function run(nodeName, networkInfo, args) {
     const {wsUri, userDefinedTypes} = networkInfo.nodesByName[nodeName];
-    console.log(wsUri);
-    console.log(userDefinedTypes);
+		const with_surbs = args[0] == 'surbs';
     const api = await connect(wsUri, userDefinedTypes);
     const result = await api.rpc.author.mixExtrinsic(
 			"0x5c0d1176a568c1f92944340dbfed9e9c530ebca703c85910e7164cb7d1c9e47b",
 			3,
-			false
+      with_surbs
 		);
-    console.log("bef calld");
-    console.log(`${result}`);
-//    return result;
     return 1;
 }
 
