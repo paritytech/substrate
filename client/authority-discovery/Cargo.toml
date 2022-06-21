@@ -14,7 +14,7 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [build-dependencies]
-prost-build = "0.9"
+prost-build = "0.10"
 
 [dependencies]
 async-trait = "0.1"
@@ -22,7 +22,7 @@ codec = { package = "parity-scale-codec", version = "3.0.0", default-features = 
 futures = "0.3.21"
 futures-timer = "3.0.1"
 ip_network = "0.4.1"
-libp2p = { version = "0.44.0", default-features = false, features = ["kad"] }
+libp2p = { version = "0.45.1", default-features = false, features = ["kad"] }
 log = "0.4.17"
 prost = "0.10"
 rand = "0.7.2"
