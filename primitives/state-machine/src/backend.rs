@@ -17,9 +17,11 @@
 
 //! State machine backends. These manage the code and storage of contracts.
 
+#[cfg(feature = "std")]
+use crate::trie_backend::TrieBackend;
 use crate::{
-	trie_backend::TrieBackend, trie_backend_essence::TrieBackendStorage, ChildStorageCollection,
-	StorageCollection, StorageKey, StorageValue, UsageInfo,
+	trie_backend_essence::TrieBackendStorage, ChildStorageCollection, StorageCollection,
+	StorageKey, StorageValue, UsageInfo,
 };
 use codec::Encode;
 use hash_db::Hasher;

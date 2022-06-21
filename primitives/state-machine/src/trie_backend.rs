@@ -21,10 +21,10 @@
 use crate::backend::AsTrieBackend;
 use crate::{
 	trie_backend_essence::{TrieBackendEssence, TrieBackendStorage},
-	Backend, ExecutionError, StorageKey, StorageValue,
+	Backend, StorageKey, StorageValue,
 };
 use codec::Codec;
-use hash_db::{HashDBRef, Hasher, EMPTY_PREFIX};
+use hash_db::{HashDB, Hasher};
 use sp_core::storage::{ChildInfo, StateVersion};
 use sp_std::vec::Vec;
 #[cfg(feature = "std")]
@@ -353,7 +353,6 @@ impl<S: TrieBackendStorage<H>, H: Hasher, C> AsTrieBackend<H, C> for TrieBackend
 /// Create a backend used for checking the proof, using `H` as hasher.
 ///
 /// `proof` and `root` must match, i.e. `root` must be the correct root of `proof` nodes.
-#[cfg(feature = "std")]
 pub fn create_proof_check_backend<H>(
 	root: H::Out,
 	proof: StorageProof,
@@ -364,10 +363,10 @@ where
 {
 	let db = proof.into_memory_db();
 
-	if db.contains(&root, EMPTY_PREFIX) {
+	if db.contains(&root, hash_db::EMPTY_PREFIX) {
 		Ok(TrieBackendBuilder::new(db, root).build())
 	} else {
-		Err(Box::new(ExecutionError::InvalidProof))
+		Err(Box::new(crate::ExecutionError::InvalidProof))
 	}
 }
 
