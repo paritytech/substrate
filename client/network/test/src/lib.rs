@@ -661,9 +661,6 @@ impl<B: BlockT> warp_request_handler::WarpSyncProvider<B> for TestWarpSyncProvid
 	fn current_authorities(&self) -> warp_request_handler::AuthorityList {
 		Default::default()
 	}
-	fn current_session(&self) -> warp_request_handler::SetId {
-		Default::default()
-	}
 }
 
 /// Configuration for a full peer.

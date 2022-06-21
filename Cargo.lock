@@ -4461,6 +4461,7 @@ dependencies = [
 [[package]]
 name = "mixnet"
 version = "0.1.0"
+source = "git+https://github.com/cheme/mixnet?branch=branch_2#dfd2018781fa26c05237b8e0d4506f037a841322"
 dependencies = [
  "aes 0.8.1",
  "arrayref",

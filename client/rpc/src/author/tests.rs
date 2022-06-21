@@ -29,7 +29,6 @@ use jsonrpsee::{
 };
 use sc_transaction_pool::{BasicPool, FullChainApi};
 use sc_transaction_pool_api::TransactionStatus;
-use sc_utils::mpsc::tracing_unbounded;
 use sp_core::{
 	blake2_256,
 	bytes::to_hex,
@@ -79,7 +78,7 @@ impl Default for TestSetup {
 
 impl TestSetup {
 	fn author(&self) -> Author<FullTransactionPool, Client<Backend>> {
-		let (tx, rx) = tracing_unbounded("mixnet_tests");
+		let (tx, rx) = futures::channel::mpsc::channel(1);
 		std::thread::spawn(move || {
 			futures::executor::block_on(rx.for_each(move |request| {
 				let SendToMixnet { reply, .. } = request;
@@ -91,7 +90,7 @@ impl TestSetup {
 			client: self.client.clone(),
 			pool: self.pool.clone(),
 			keystore: self.keystore.clone(),
-			mixnet: tx,
+			mixnet: Arc::new(parking_lot::Mutex::new(tx)),
 			deny_unsafe: DenyUnsafe::No,
 			executor: test_executor(),
 		}
