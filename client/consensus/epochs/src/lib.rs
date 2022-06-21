@@ -755,7 +755,10 @@ where
 					Err(e) => PersistedEpoch::Regular(e),
 				}
 			}
-		} else if epoch.is_genesis() && !self.epochs.values().all(|e| e.is_genesis()) {
+		} else if epoch.is_genesis() &&
+			!self.epochs.is_empty() &&
+			!self.epochs.values().any(|e| e.is_genesis())
+		{
 			// There's a genesis epoch imported when we already have an active epoch.
 			// This happens after the warp sync as the ancient blocks download start.
 			// We need to start tracking gap epochs here.
