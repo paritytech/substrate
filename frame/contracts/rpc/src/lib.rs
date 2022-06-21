@@ -192,7 +192,8 @@ impl<Client, Block, AccountId, Balance, Hash>
 		<<Block as BlockT>::Header as HeaderT>::Number,
 		AccountId,
 		Balance,
-		Hash,
+	    Hash,
+	    VarSizedKey,
 	> for Contracts<Client, Block>
 where
 	Block: BlockT,
@@ -207,6 +208,7 @@ where
 	AccountId: Codec,
 	Balance: Codec + Copy + TryFrom<NumberOrHex> + Into<NumberOrHex>,
 	Hash: Codec,
+	VarSizedKey: Codec,
 {
 	fn call(
 		&self,
