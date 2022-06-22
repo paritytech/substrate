@@ -371,6 +371,7 @@ pub fn testnet_genesis(
 			min_join_bond: 1 * DOLLARS,
 			..Default::default()
 		},
+		uniques: Default::default(),
 	}
 }
 
