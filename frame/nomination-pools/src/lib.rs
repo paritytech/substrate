@@ -789,19 +789,19 @@ impl<T: Config> BondedPool<T> {
 			// We checked for zero above
 			.div(bonded_balance);
 
-		let min_points_to_balance = T::MinPointsToBalance::get();
+		let max_points_to_balance = T::MaxPointsToBalance::get();
 
 		// Pool points can inflate relative to balance, but only if the pool is slashed.
 		// If we cap the ratio of points:balance so one cannot join a pool that has been slashed
-		// by `min_points_to_balance`%, if not zero.
+		// by `max_points_to_balance`%, if not zero.
 		ensure!(
-			points_to_balance_ratio_floor < min_points_to_balance.into(),
+			points_to_balance_ratio_floor < max_points_to_balance.into(),
 			Error::<T>::OverflowRisk
 		);
-		// while restricting the balance to `min_points_to_balance` of max total issuance,
+		// while restricting the balance to `max_points_to_balance` of max total issuance,
 		let next_bonded_balance = bonded_balance.saturating_add(new_funds);
 		ensure!(
-			next_bonded_balance < BalanceOf::<T>::max_value().div(min_points_to_balance.into()),
+			next_bonded_balance < BalanceOf::<T>::max_value().div(max_points_to_balance.into()),
 			Error::<T>::OverflowRisk
 		);
 
@@ -1238,13 +1238,20 @@ pub mod pallet {
 		#[pallet::constant]
 		type PalletId: Get<frame_support::PalletId>;
 
-		/// The minimum pool points-to-balance ratio that must be maintained for it to be `open`.
+		/// The maximum pool points-to-balance ratio that an `open` pool can have.
+		///
 		/// This is important in the event slashing takes place and the pool's points-to-balance
 		/// ratio becomes disproportional.
+		///
+		/// Moreover, this relates to the `RewardCounter` type as well, as the arithmetic operations
+		/// are a function of number of points, and by setting this value to e.g. 10, you ensure
+		/// that the total number of points in the system are at most 10 times the total_issuance of
+		/// the chain, in the absolute worse case.
+		///
 		/// For a value of 10, the threshold would be a pool points-to-balance ratio of 10:1.
 		/// Such a scenario would also be the equivalent of the pool being 90% slashed.
 		#[pallet::constant]
-		type MinPointsToBalance: Get<u32>;
+		type MaxPointsToBalance: Get<u32>;
 
 		/// Infallible method for converting `Currency::Balance` to `U256`.
 		type BalanceToU256: Convert<BalanceOf<Self>, U256>;
@@ -2174,7 +2181,7 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn integrity_test() {
 			assert!(
-				T::MinPointsToBalance::get() > 0,
+				T::MaxPointsToBalance::get() > 0,
 				"Minimum points to balance ratio must be greater than 0"
 			);
 			assert!(

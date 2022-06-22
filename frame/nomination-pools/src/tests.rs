@@ -207,34 +207,34 @@ mod bonded_pool {
 				},
 			};
 
-			let min_points_to_balance: u128 =
-				<<Runtime as Config>::MinPointsToBalance as Get<u32>>::get().into();
+			let max_points_to_balance: u128 =
+				<<Runtime as Config>::MaxPointsToBalance as Get<u32>>::get().into();
 
 			// Simulate a 100% slashed pool
 			StakingMock::set_bonded_balance(pool.bonded_account(), 0);
 			assert_noop!(pool.ok_to_join(0), Error::<Runtime>::OverflowRisk);
 
-			// Simulate a slashed pool at `MinPointsToBalance` + 1 slashed pool
+			// Simulate a slashed pool at `MaxPointsToBalance` + 1 slashed pool
 			StakingMock::set_bonded_balance(
 				pool.bonded_account(),
-				min_points_to_balance.saturating_add(1).into(),
+				max_points_to_balance.saturating_add(1).into(),
 			);
 			assert_ok!(pool.ok_to_join(0));
 
-			// Simulate a slashed pool at `MinPointsToBalance`
-			StakingMock::set_bonded_balance(pool.bonded_account(), min_points_to_balance);
+			// Simulate a slashed pool at `MaxPointsToBalance`
+			StakingMock::set_bonded_balance(pool.bonded_account(), max_points_to_balance);
 			assert_noop!(pool.ok_to_join(0), Error::<Runtime>::OverflowRisk);
 
 			StakingMock::set_bonded_balance(
 				pool.bonded_account(),
-				Balance::MAX / min_points_to_balance,
+				Balance::MAX / max_points_to_balance,
 			);
 			// New bonded balance would be over threshold of Balance type
 			assert_noop!(pool.ok_to_join(0), Error::<Runtime>::OverflowRisk);
 			// and a sanity check
 			StakingMock::set_bonded_balance(
 				pool.bonded_account(),
-				Balance::MAX / min_points_to_balance - 1,
+				Balance::MAX / max_points_to_balance - 1,
 			);
 			assert_ok!(pool.ok_to_join(0));
 		});
@@ -518,35 +518,35 @@ mod join {
 			// and reward pool
 			RewardPools::<Runtime>::insert(123, RewardPool::<Runtime> { ..Default::default() });
 
-			// Force the points:balance ratio to `MinPointsToBalance` (100/10)
-			let min_points_to_balance: u128 =
-				<<Runtime as Config>::MinPointsToBalance as Get<u32>>::get().into();
+			// Force the points:balance ratio to `MaxPointsToBalance` (100/10)
+			let max_points_to_balance: u128 =
+				<<Runtime as Config>::MaxPointsToBalance as Get<u32>>::get().into();
 
 			StakingMock::set_bonded_balance(
 				Pools::create_bonded_account(123),
-				min_points_to_balance,
+				max_points_to_balance,
 			);
 			assert_noop!(Pools::join(Origin::signed(11), 420, 123), Error::<Runtime>::OverflowRisk);
 
 			StakingMock::set_bonded_balance(
 				Pools::create_bonded_account(123),
-				Balance::MAX / min_points_to_balance,
+				Balance::MAX / max_points_to_balance,
 			);
-			// Balance needs to be gt Balance::MAX / `MinPointsToBalance`
+			// Balance needs to be gt Balance::MAX / `MaxPointsToBalance`
 			assert_noop!(Pools::join(Origin::signed(11), 5, 123), Error::<Runtime>::OverflowRisk);
 
-			StakingMock::set_bonded_balance(Pools::create_bonded_account(1), min_points_to_balance);
+			StakingMock::set_bonded_balance(Pools::create_bonded_account(1), max_points_to_balance);
 
 			// Cannot join a pool that isn't open
 			unsafe_set_state(123, PoolState::Blocked).unwrap();
 			assert_noop!(
-				Pools::join(Origin::signed(11), min_points_to_balance, 123),
+				Pools::join(Origin::signed(11), max_points_to_balance, 123),
 				Error::<Runtime>::NotOpen
 			);
 
 			unsafe_set_state(123, PoolState::Destroying).unwrap();
 			assert_noop!(
-				Pools::join(Origin::signed(11), min_points_to_balance, 123),
+				Pools::join(Origin::signed(11), max_points_to_balance, 123),
 				Error::<Runtime>::NotOpen
 			);
 
