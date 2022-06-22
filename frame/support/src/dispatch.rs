@@ -2592,8 +2592,8 @@ mod tests {
 	use crate::{
 		metadata::*,
 		traits::{
-			CrateVersion, Get, GetCallName, IntegrityTest, OnFinalize, OnIdle, OnInitialize,
-			OnRuntimeUpgrade, PalletInfo, CallerTrait,
+			CallerTrait, CrateVersion, Get, GetCallName, IntegrityTest, OnFinalize, OnIdle,
+			OnInitialize, OnRuntimeUpgrade, PalletInfo,
 		},
 		weights::{DispatchClass, DispatchInfo, Pays, RuntimeDbWeight},
 	};

@@ -36,7 +36,7 @@ use cfg_if::cfg_if;
 use frame_support::{
 	dispatch::RawOrigin,
 	parameter_types,
-	traits::{ConstU32, ConstU64, CrateVersion, KeyOwnerProofSystem, CallerTrait},
+	traits::{CallerTrait, ConstU32, ConstU64, CrateVersion, KeyOwnerProofSystem},
 	weights::RuntimeDbWeight,
 };
 use frame_system::limits::{BlockLength, BlockWeights};

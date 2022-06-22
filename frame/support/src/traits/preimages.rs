@@ -25,7 +25,9 @@ use sp_std::borrow::Cow;
 pub type Hash = H256;
 pub type BoundedInline = crate::BoundedVec<u8, ConstU32<128>>;
 
-#[derive(Encode, Decode, MaxEncodedLen, Clone, Eq, PartialEq, scale_info::TypeInfo, RuntimeDebug)]
+#[derive(
+	Encode, Decode, MaxEncodedLen, Clone, Eq, PartialEq, scale_info::TypeInfo, RuntimeDebug,
+)]
 pub enum Bounded<T> {
 	/// A Blake2 256 hash with no preimage length. We
 	/// do not support creation of this except for transitioning from legacy state.
@@ -224,5 +226,15 @@ impl StorePreimage for () {
 	const MAX_LENGTH: usize = 0;
 	fn note(_: Cow<[u8]>) -> Result<Hash, DispatchError> {
 		Err(DispatchError::Exhausted)
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn bounded_size_is_correct() {
+		assert_eq!(<Bounded<Vec<u8>> as MaxEncodedLen>::max_encoded_len(), 130);
 	}
 }
