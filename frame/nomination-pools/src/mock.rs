@@ -2,11 +2,14 @@ use super::*;
 use crate::{self as pools};
 use frame_support::{assert_ok, parameter_types, PalletId};
 use frame_system::RawOrigin;
-use sp_runtime::{FixedU128};
+use sp_runtime::FixedU128;
 
 pub type AccountId = u128;
 pub type Balance = u128;
 pub type RewardCounter = FixedU128;
+// This sneaky little hack allows us to write code exactly as we would do in the pallet in the tests
+// as well, e.g. `StorageItem::<T>::get()`.
+pub type T = Runtime;
 
 // Ext builder creates a pool with id 1.
 pub fn default_bonded_account() -> AccountId {
@@ -25,6 +28,7 @@ parameter_types! {
 	pub storage UnbondingBalanceMap: BTreeMap<AccountId, Balance> = Default::default();
 	#[derive(Clone, PartialEq)]
 	pub static MaxUnbonding: u32 = 8;
+	pub static StakingMinBond: Balance = 10;
 	pub storage Nominations: Option<Vec<AccountId>> = None;
 }
 
@@ -42,7 +46,7 @@ impl sp_staking::StakingInterface for StakingMock {
 	type AccountId = AccountId;
 
 	fn minimum_bond() -> Self::Balance {
-		10
+		StakingMinBond::get()
 	}
 
 	fn current_era() -> EraIndex {
@@ -226,6 +230,11 @@ impl ExtBuilder {
 
 	pub(crate) fn ed(self, ed: Balance) -> Self {
 		ExistentialDeposit::set(ed);
+		self
+	}
+
+	pub(crate) fn min_bond(self, min: Balance) -> Self {
+		StakingMinBond::set(min);
 		self
 	}
 

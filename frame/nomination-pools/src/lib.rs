@@ -316,7 +316,7 @@ use frame_support::{
 use scale_info::TypeInfo;
 use sp_core::U256;
 use sp_runtime::{
-	traits::{AccountIdConversion, Bounded, CheckedSub, Convert, Saturating, Zero, CheckedAdd},
+	traits::{AccountIdConversion, Bounded, CheckedAdd, CheckedSub, Convert, Saturating, Zero},
 	FixedPointNumber, FixedPointOperand,
 };
 use sp_staking::{EraIndex, OnStakerSlash, StakingInterface};
@@ -412,8 +412,11 @@ pub struct PoolMember<T: Config> {
 
 impl<T: Config> PoolMember<T> {
 	/// The pending rewards of this member.
-	fn pending_rewards(&self, current_reward_counter: T::RewardCounter) -> Result<BalanceOf<T>, Error::<T>> {
-		// Precision note: Reward counters are fixedU128 with base of 10^18. Multiplying it with
+	fn pending_rewards(
+		&self,
+		current_reward_counter: T::RewardCounter,
+	) -> Result<BalanceOf<T>, Error<T>> {
+		// accuracy note: Reward counters are fixedU128 with base of 10^18. Multiplying it with
 		// points, which have the same granularity as with balance should almost always be fine for
 		// Polkadot and Kusama since: The total issuance of both are
 		//
@@ -449,7 +452,8 @@ impl<T: Config> PoolMember<T> {
 		// way earlier than the few decades we anticipate due to severe slashing, no operations can
 		// happen in that pool.
 		(current_reward_counter.defensive_saturating_sub(self.last_recorded_reward_counter))
-			.checked_mul_int(self.active_points()).ok_or(Error::<T>::OverflowRisk)
+			.checked_mul_int(self.active_points())
+			.ok_or(Error::<T>::OverflowRisk)
 	}
 
 	/// Active balance of the member.
@@ -708,7 +712,7 @@ impl<T: Config> BondedPool<T> {
 			MaxPoolMembers::<T>::get().map_or(true, |max| PoolMembers::<T>::count() < max),
 			Error::<T>::MaxPoolMembers
 		);
-		self.member_counter = self.member_counter.defensive_saturating_add(1);
+		self.member_counter = self.member_counter.checked_add(1).ok_or(Error::<T>::OverflowRisk)?;
 		Ok(())
 	}
 
@@ -991,12 +995,14 @@ impl<T: Config> RewardPool<T> {
 	fn update_records(&mut self, id: PoolId, bonded_points: BalanceOf<T>) -> Result<(), Error<T>> {
 		let balance = Self::current_balance(id);
 		self.last_recorded_reward_counter = self.current_reward_counter(id, bonded_points)?;
-		self.last_recorded_total_payouts =
-			balance.checked_add(&self.total_rewards_claimed).ok_or(Error::<T>::OverflowRisk)?;
+		self.last_recorded_total_payouts = balance
+			.checked_add(&self.total_rewards_claimed)
+			.ok_or(Error::<T>::OverflowRisk)?;
 		Ok(())
 	}
 
-	/// Get the current reward counter, based on the given `bonded_points`.
+	/// Get the current reward counter, based on the given `bonded_points` being the state of the
+	/// bonded pool at this time.
 	fn current_reward_counter(
 		&self,
 		id: PoolId,
@@ -1007,8 +1013,9 @@ impl<T: Config> RewardPool<T> {
 			.saturating_add(self.total_rewards_claimed)
 			.saturating_sub(self.last_recorded_total_payouts);
 
-		// accuracy notes: `payouts_since_last_record` is a subset of the total_issuance at the very
-		// worse. Bonded_points are similarly, in a non-slashed pool, have the same granularity as
+		// * accuracy notes regarding the multiplication in `checked_from_rational`:
+		// `payouts_since_last_record` is a subset of the total_issuance at the very
+		// worse. `bonded_points` are similarly, in a non-slashed pool, have the same granularity as
 		// balance, and are thus below within the range of total_issuance. In the worse case
 		// scenario, for `saturating_from_rational`, we have:
 		//
@@ -1024,11 +1031,24 @@ impl<T: Config> RewardPool<T> {
 		// Polkadot. The important note here is that `reward_pool.last_recorded_reward_counter` only
 		// ever accumulates, but its semantics imply that it is less than total_issuance, when
 		// represented as `FixedU128`, which means it is less than `total_issuance * 10^18`.
+		//
+		// * accuracy notes regarding `checked_from_rational` collapsing to zero, meaning that no
+		// reward can be claimed:
+		//
+		// largest `bonded_points`, such that the reward counter is non-zero, with `FixedU128`
+		// will be when the payout is being computed. This essentially means `payout/bonded_points`
+		// needs to be more than 1/1^18. Thus, assuming that `bonded_points` will always be less
+		// than `10 * dot_total_issuance`, if the reward_counter is the smallest possible value,
+		// the value of the reward being calculated is:
+		//
+		// x / 10^20 = 1/ 10^18
+		//
+		// x = 100
+		//
+		// which is basically 10^-8 DOTs. See `smallest_claimable_reward` for an example of this.
 		T::RewardCounter::checked_from_rational(payouts_since_last_record, bonded_points)
 			.and_then(|ref r| self.last_recorded_reward_counter.checked_add(r))
 			.ok_or(Error::<T>::OverflowRisk)
-
-		// TODO: test for arithmetic failing + micro reward payment in a mega-pool.
 	}
 
 	/// Current free balance of the reward pool.
@@ -1165,7 +1185,7 @@ pub mod pallet {
 	use super::*;
 	use frame_support::traits::StorageVersion;
 	use frame_system::{ensure_signed, pallet_prelude::*};
-use sp_runtime::traits::CheckedAdd;
+	use sp_runtime::traits::CheckedAdd;
 
 	/// The current storage version.
 	const STORAGE_VERSION: StorageVersion = StorageVersion::new(2);
@@ -1984,8 +2004,14 @@ use sp_runtime::traits::CheckedAdd;
 
 		/// Set a new state for the pool.
 		///
-		/// The dispatch origin of this call must be signed by the state toggler, or the root role
-		/// of the pool.
+		/// If a pool is already in the `Destroying` state, then under no condition can its state
+		/// change again.
+		///
+		/// The dispatch origin of this call must be either:
+		///
+		/// 1. signed by the state toggler, or the root role of the pool,
+		/// 2. if the pool conditions to be open are NOT met (as described by `ok_to_be_open`), and
+		///    then the state of the pool can be permissionlessly changed to `Destroying`.
 		#[pallet::weight(T::WeightInfo::set_state())]
 		pub fn set_state(
 			origin: OriginFor<T>,
@@ -2308,12 +2334,13 @@ impl<T: Config> Pallet<T> {
 			reward_pool.current_reward_counter(bonded_pool.id, bonded_pool.points)?;
 		let pending_rewards = member.pending_rewards(current_reward_counter)?;
 
-		member.last_recorded_reward_counter = current_reward_counter;
-		reward_pool.register_claimed_reward(pending_rewards);
-
 		if pending_rewards.is_zero() {
 			return Ok(pending_rewards)
 		}
+
+		// IFF the reward is non-zero alter the member and reward pool info.
+		member.last_recorded_reward_counter = current_reward_counter;
+		reward_pool.register_claimed_reward(pending_rewards);
 
 		// Transfer payout to the member.
 		T::Currency::transfer(

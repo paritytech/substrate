@@ -1143,6 +1143,7 @@ mod claim_payout {
 			});
 	}
 
+	// TODO: SR-LABS must audit these tests, until the end of the module. Only remove once approved.
 	#[test]
 	fn rewards_distribution_is_fair_basic() {
 		ExtBuilder::default().build_and_execute(|| {
@@ -4021,5 +4022,313 @@ mod update_roles {
 				PoolRoles { depositor: 10, root: Some(69), nominator: None, state_toggler: None },
 			);
 		})
+	}
+}
+
+mod reward_counter_precision {
+	use sp_runtime::FixedU128;
+
+	// TODO: SR-LABS must audit these tests. Only remove once approved.
+	use super::*;
+
+	const DOT: Balance = 10u128.pow(10u32);
+	const POLKADOT_TOTAL_ISSUANCE_GENESIS: Balance = DOT * 10u128.pow(9u32);
+
+	const fn inflation(years: u128) -> u128 {
+		let mut i = 0;
+		let mut start = POLKADOT_TOTAL_ISSUANCE_GENESIS;
+		while i < years {
+			start = start + start / 10;
+			i += 1
+		}
+		start
+	}
+
+	fn default_pool_reward_counter() -> FixedU128 {
+		RewardPools::<T>::get(1)
+			.unwrap()
+			.current_reward_counter(1, BondedPools::<T>::get(1).unwrap().points)
+			.unwrap()
+	}
+
+	fn pending_rewards(of: AccountId) -> Option<BalanceOf<T>> {
+		let member = PoolMembers::<T>::get(of).unwrap();
+		assert_eq!(member.pool_id, 1);
+		let rc = default_pool_reward_counter();
+		member.pending_rewards(rc).ok()
+	}
+
+	#[test]
+	fn smallest_claimable_reward() {
+		// create a pool that has all of the polkadot issuance in 50 years.
+		let pool_bond = inflation(50);
+		ExtBuilder::default().ed(DOT).min_bond(pool_bond).build_and_execute(|| {
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded {
+						member: 10,
+						pool_id: 1,
+						bonded: 1173908528796953165005,
+						joined: true,
+					}
+				]
+			);
+
+			// the smallest reward that this pool can handle is
+			let expected_smallest_reward = inflation(50) / 10u128.pow(18);
+
+			// tad bit less. cannot be paid out.
+			assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free +=
+				expected_smallest_reward - 1));
+			assert_ok!(Pools::claim_payout(Origin::signed(10)));
+			assert_eq!(pool_events_since_last_call(), vec![]);
+			// revert it.
+
+			assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free -=
+				expected_smallest_reward - 1));
+
+			// tad bit more. can be claimed.
+			assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free +=
+				expected_smallest_reward + 1));
+			assert_ok!(Pools::claim_payout(Origin::signed(10)));
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![Event::PaidOut { member: 10, pool_id: 1, payout: 1173 }]
+			);
+		})
+	}
+
+	#[test]
+	fn reward_counter_calc_wont_fail_in_normal_polkadot_future() {
+		// create a pool that has roughly half of the polkadot issuance in 10 years.
+		let pool_bond = inflation(10) / 2;
+		ExtBuilder::default().ed(DOT).min_bond(pool_bond).build_and_execute(|| {
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded {
+						member: 10,
+						pool_id: 1,
+						bonded: 12_968_712_300_500_000_000,
+						joined: true,
+					}
+				]
+			);
+
+			// in 10 years, the total claimed rewards are large values as well. assuming that a pool
+			// is earning all of the inflation per year (which is really unrealistic, but worse
+			// case), that will be:
+			let pool_total_earnings_10_years = inflation(10) - POLKADOT_TOTAL_ISSUANCE_GENESIS;
+			assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free +=
+				pool_total_earnings_10_years));
+
+			// some whale now joins with the other half ot the total issuance. This will bloat all
+			// the calculation regarding current reward counter.
+			Balances::make_free_balance_be(&20, pool_bond * 2);
+			assert_ok!(Pools::join(Origin::signed(20), pool_bond, 1));
+
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![Event::Bonded {
+					member: 20,
+					pool_id: 1,
+					bonded: 12_968_712_300_500_000_000,
+					joined: true
+				}]
+			);
+
+			assert_ok!(Pools::claim_payout(Origin::signed(10)));
+			assert_ok!(Pools::claim_payout(Origin::signed(20)));
+
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![Event::PaidOut { member: 10, pool_id: 1, payout: 15937424600999999996 }]
+			);
+
+			// now let a small member join with 10 DOTs.
+			Balances::make_free_balance_be(&30, 20 * DOT);
+			assert_ok!(Pools::join(Origin::signed(30), 10 * DOT, 1));
+
+			// and give a reasonably small reward to the pool.
+			assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free += DOT));
+
+			assert_ok!(Pools::claim_payout(Origin::signed(30)));
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![
+					Event::Bonded { member: 30, pool_id: 1, bonded: 100000000000, joined: true },
+					// quite small, but working fine.
+					Event::PaidOut { member: 30, pool_id: 1, payout: 38 }
+				]
+			);
+		})
+	}
+
+	#[test]
+	fn reward_counter_update_can_fail_if_pool_is_highly_slashed() {
+		// create a pool that has roughly half of the polkadot issuance in 10 years.
+		let pool_bond = inflation(10) / 2;
+		ExtBuilder::default().ed(DOT).min_bond(pool_bond).build_and_execute(|| {
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded {
+						member: 10,
+						pool_id: 1,
+						bonded: 12_968_712_300_500_000_000,
+						joined: true,
+					}
+				]
+			);
+
+			// slash this pool by 99% of that.
+			StakingMock::set_bonded_balance(default_bonded_account(), DOT + pool_bond / 100);
+
+			// some whale now joins with the other half ot the total issuance. This will trigger an
+			// overflow. This test is actually a bit too lenient because all the reward counters are
+			// set to zero. In other tests that we want to assert a scenario won't fail, we should
+			// also set the reward counters to some large value.
+			Balances::make_free_balance_be(&20, pool_bond * 2);
+			assert_err!(Pools::join(Origin::signed(20), pool_bond, 1), Error::<T>::OverflowRisk);
+		})
+	}
+
+	#[test]
+	fn if_small_member_waits_long_enough_they_will_earn_rewards() {
+		// create a pool that has a quarter of the current polkadot issuance
+		ExtBuilder::default()
+			.ed(DOT)
+			.min_bond(POLKADOT_TOTAL_ISSUANCE_GENESIS / 4)
+			.build_and_execute(|| {
+				assert_eq!(
+					pool_events_since_last_call(),
+					vec![
+						Event::Created { depositor: 10, pool_id: 1 },
+						Event::Bonded {
+							member: 10,
+							pool_id: 1,
+							bonded: 2500000000000000000,
+							joined: true,
+						}
+					]
+				);
+
+				// and have a tiny fish join the pool as well..
+				Balances::make_free_balance_be(&20, 20 * DOT);
+				assert_ok!(Pools::join(Origin::signed(20), 10 * DOT, 1));
+
+				// earn some small rewards
+				assert_ok!(
+					Balances::mutate_account(&default_reward_account(), |a| a.free += DOT / 1000)
+				);
+
+				// no point in claiming for 20 (nonetheless, it should be harmless)
+				assert!(pending_rewards(20).unwrap().is_zero());
+				assert_ok!(Pools::claim_payout(Origin::signed(10)));
+				assert_eq!(
+					pool_events_since_last_call(),
+					vec![
+						Event::Bonded {
+							member: 20,
+							pool_id: 1,
+							bonded: 100000000000,
+							joined: true
+						},
+						Event::PaidOut { member: 10, pool_id: 1, payout: 9999997 }
+					]
+				);
+
+				// earn some small more, still nothing can be claimed for 20, but 10 claims their
+				// share.
+				assert_ok!(
+					Balances::mutate_account(&default_reward_account(), |a| a.free += DOT / 1000)
+				);
+				assert!(pending_rewards(20).unwrap().is_zero());
+				assert_ok!(Pools::claim_payout(Origin::signed(10)));
+				assert_eq!(
+					pool_events_since_last_call(),
+					vec![Event::PaidOut { member: 10, pool_id: 1, payout: 10000000 }]
+				);
+
+				// earn some more rewards, this time 20 can also claim.
+				assert_ok!(
+					Balances::mutate_account(&default_reward_account(), |a| a.free += DOT / 1000)
+				);
+				assert_eq!(pending_rewards(20).unwrap(), 1);
+				assert_ok!(Pools::claim_payout(Origin::signed(10)));
+				assert_ok!(Pools::claim_payout(Origin::signed(20)));
+				assert_eq!(
+					pool_events_since_last_call(),
+					vec![
+						Event::PaidOut { member: 10, pool_id: 1, payout: 10000000 },
+						Event::PaidOut { member: 20, pool_id: 1, payout: 1 }
+					]
+				);
+			});
+	}
+
+	#[test]
+	fn zero_reward_claim_does_not_update_reward_counter() {
+		// create a pool that has a quarter of the current polkadot issuance
+		ExtBuilder::default()
+			.ed(DOT)
+			.min_bond(POLKADOT_TOTAL_ISSUANCE_GENESIS / 4)
+			.build_and_execute(|| {
+				assert_eq!(
+					pool_events_since_last_call(),
+					vec![
+						Event::Created { depositor: 10, pool_id: 1 },
+						Event::Bonded {
+							member: 10,
+							pool_id: 1,
+							bonded: 2500000000000000000,
+							joined: true,
+						}
+					]
+				);
+
+				// and have a tiny fish join the pool as well..
+				Balances::make_free_balance_be(&20, 20 * DOT);
+				assert_ok!(Pools::join(Origin::signed(20), 10 * DOT, 1));
+
+				// earn some small rewards
+				assert_ok!(
+					Balances::mutate_account(&default_reward_account(), |a| a.free += DOT / 1000)
+				);
+
+				// if 20 claims now, their reward counter should stay the same, so that they have a
+				// chance of claiming this if they let it accumulate. Also see
+				// `if_small_member_waits_long_enough_they_will_earn_rewards`
+				assert_ok!(Pools::claim_payout(Origin::signed(10)));
+				assert_ok!(Pools::claim_payout(Origin::signed(20)));
+				assert_eq!(
+					pool_events_since_last_call(),
+					vec![
+						Event::Bonded {
+							member: 20,
+							pool_id: 1,
+							bonded: 100000000000,
+							joined: true
+						},
+						Event::PaidOut { member: 10, pool_id: 1, payout: 9999997 }
+					]
+				);
+
+				let current_reward_counter = default_pool_reward_counter();
+				// has been updated, because they actually claimed something.
+				assert_eq!(
+					PoolMembers::<T>::get(10).unwrap().last_recorded_reward_counter,
+					current_reward_counter
+				);
+				// has not be updated, even though the claim transaction went through okay.
+				assert_eq!(
+					PoolMembers::<T>::get(20).unwrap().last_recorded_reward_counter,
+					Default::default()
+				);
+			});
 	}
 }
