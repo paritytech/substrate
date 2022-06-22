@@ -1515,6 +1515,16 @@ pub mod pallet {
 		///
 		/// Note: royalties can only be decreased.
 		///
+		/// Known limitations: the royalties are only collected when buying an item
+		/// but not when transferring it without direct payment.
+		/// And if buyer and seller cooperate (maybe using a trusted escrow or a smart contract
+		/// on another parachain via XCM), they can always arrange a transfer of the item and
+		/// a transfer of the payment without the uniques pallet knowing about the payment.
+		///
+		/// The recommendation for creators would be to only use a small percentage for royalties,
+		/// in that case, chances are high that users will accept it as some kind of convenience
+		/// fee for using the official marketplace/selling functionality.
+		///
 		/// - `collection`: The collection of the item.
 		/// - `royalties`: The royalties for the collection.
 		///
