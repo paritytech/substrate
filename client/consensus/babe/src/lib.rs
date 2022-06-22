@@ -1873,7 +1873,11 @@ where
 {
 	let best_number = client.info().best_number;
 	let finalized = client.info().finalized_number;
+
 	let revertible = blocks.min(best_number - finalized);
+	if revertible == Zero::zero() {
+		return Ok(())
+	}
 
 	let revert_up_to_number = best_number - revertible;
 	let revert_up_to_hash = client.hash(revert_up_to_number)?.ok_or(ClientError::Backend(
