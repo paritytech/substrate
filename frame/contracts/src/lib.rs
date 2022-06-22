@@ -125,7 +125,7 @@ use sp_runtime::traits::{Convert, Hash, Saturating, StaticLookup};
 use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
 
 pub use crate::{
-	exec::{FixSizedKey, Frame, VarSizedKey},
+	exec::{Frame, VarSizedKey as StorageKey},
 	pallet::*,
 	schedule::{HostFnWeights, InstructionWeights, Limits, Schedule},
 };
@@ -952,7 +952,7 @@ where
 
 		let maybe_value = Storage::<T>::read(
 			&contract_info.trie_id,
-			&VarSizedKey::<T>::try_from(key).map_err(|_| ContractAccessError::KeyDecodingFailed)?,
+			&StorageKey::<T>::try_from(key).map_err(|_| ContractAccessError::KeyDecodingFailed)?,
 		);
 		Ok(maybe_value)
 	}
