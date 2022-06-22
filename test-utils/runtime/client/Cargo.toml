@@ -24,3 +24,4 @@ sp-core = { version = "6.0.0", path = "../../../primitives/core" }
 sp-runtime = { version = "6.0.0", path = "../../../primitives/runtime" }
 substrate-test-client = { version = "2.0.0", path = "../../client" }
 substrate-test-runtime = { version = "2.0.0", path = "../../runtime" }
+ver-api = { path='../../../primitives/ver-api', version='4.0.0-dev' }
