@@ -336,7 +336,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				Collection::<T, I>::get(&collection_id).ok_or(Error::<T, I>::UnknownCollection)?;
 			let transfer_amount = royalties * amount;
 
-			amount_left = amount - transfer_amount;
+			amount_left = amount.saturating_sub(transfer_amount);
 
 			T::Currency::transfer(
 				&source,
