@@ -87,6 +87,8 @@
 //!   required as we walk up from the target directory until we find a `Cargo.toml`. If the target
 //!   directory is changed for the build, this environment variable can be used to point to the
 //!   actual workspace.
+//! - `CARGO_NET_OFFLINE` - If `true`, `--offline` will be passed to all processes launched to
+//!   prevent network access. Useful in offline environments.
 //!
 //! Each project can be skipped individually by using the environment variable
 //! `SKIP_PROJECT_NAME_WASM_BUILD`. Where `PROJECT_NAME` needs to be replaced by the name of the

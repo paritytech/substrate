@@ -593,6 +593,11 @@ impl Profile {
 	}
 }
 
+/// Check environment whether we should build without network
+fn offline_build() -> bool {
+	env::var(OFFLINE).map_or(false, |v| v == "true")
+}
+
 /// Build the project to create the WASM binary.
 fn build_project(
 	project: &Path,
@@ -631,7 +636,7 @@ fn build_project(
 	build_cmd.arg("--profile");
 	build_cmd.arg(profile.name());
 
-	if env::var(OFFLINE).map_or(false, |v| v == "true") {
+	if offline_build() {
 		build_cmd.arg("--offline");
 	}
 
@@ -759,7 +764,7 @@ fn create_metadata_command(path: impl Into<PathBuf>) -> MetadataCommand {
 	let mut metadata_command = MetadataCommand::new();
 	metadata_command.manifest_path(path);
 
-	if env::var(OFFLINE).map_or(false, |v| v == "true") {
+	if offline_build() {
 		metadata_command.other_options(vec!["--offline".to_owned()]);
 	}
 	metadata_command
