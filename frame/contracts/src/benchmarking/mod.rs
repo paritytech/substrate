@@ -915,7 +915,8 @@ benchmarks! {
 				.map(|n| { let mut h = T::Hashing::hash_of(&n).as_ref().to_vec();
 						h.resize(max_key_len.try_into().unwrap(), n.to_le_bytes()[0]); h })
 		.collect::<Vec<_>>();
-		let key_bytes = keys.iter().flatten().cloned().collect::<Vec<_>>();
+		let keys_bytes = keys.iter().flatten().cloned().collect::<Vec<_>>();
+		let keys_len = keys_bytes.len();
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
@@ -927,18 +928,14 @@ benchmarks! {
 			data_segments: vec![
 				DataSegment {
 					offset: 0,
-					value: max_key_len.to_le_bytes().to_vec(),
-				},
-				DataSegment {
-					offset: 32,
-					value: key_bytes,
+					value: keys_bytes,
 				},
 			],
 			call_body: Some(body::repeated_dyn(r * API_BENCHMARK_BATCH_SIZE, vec![
-				Counter(32, max_key_len as u32), // key_ptr
-				Regular(Instruction::I32Const(0)), // key_len
-				Regular(Instruction::I32Const(32)), // value_ptr
-				Regular(Instruction::I32Const(32)), // value_len
+				Counter(0, max_key_len as u32), // key_ptr
+				Regular(Instruction::I32Const(max_key_len as i32)), // key_len
+				Regular(Instruction::I32Const(0)), // value_ptr
+				Regular(Instruction::I32Const(keys_len as i32)), // value_len
 				Regular(Instruction::Call(0)),
 				Regular(Instruction::Drop),
 			])),
@@ -968,6 +965,7 @@ benchmarks! {
 						h.resize(max_key_len.try_into().unwrap(), n.to_le_bytes()[0]); h })
 		.collect::<Vec<_>>();
 		let key_bytes = keys.iter().flatten().cloned().collect::<Vec<_>>();
+		let keys_len = keys_bytes.len();
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
@@ -979,18 +977,14 @@ benchmarks! {
 			data_segments: vec![
 				DataSegment {
 					offset: 0,
-					value: max_key_len.to_le_bytes().to_vec(),
-				},
-				DataSegment {
-					offset: 32,
 					value: key_bytes,
 				},
 			],
 			call_body: Some(body::repeated_dyn(API_BENCHMARK_BATCH_SIZE, vec![
-				Counter(32, max_key_len as u32), // key_ptr
-				Regular(Instruction::I32Const(0)), // key_len
-				Regular(Instruction::I32Const(32)), // value_ptr
-				Regular(Instruction::I32Const((n * 1024) as i32)), // value_len
+				Counter(0, max_key_len as u32), // key_ptr
+				Regular(Instruction::I32Const(max_key_len as i32)), // key_len
+				Regular(Instruction::I32Const(0)), // value_ptr
+				Regular(Instruction::I32Const((keys_len as i32))), // value_len
 				Regular(Instruction::Call(0)),
 				Regular(Instruction::Drop),
 			])),
