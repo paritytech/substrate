@@ -20,14 +20,15 @@
 
 use crate::Epoch;
 
+use scale_codec::Encode;
 use sp_application_crypto::AppKey;
 use sp_consensus_sassafras::{
-	digests::{PreDigest, PrimaryPreDigest},
+	digests::{PreDigest, PrimaryPreDigest, SecondaryPreDigest},
 	make_ticket_transcript, make_ticket_transcript_data, make_transcript_data, AuthorityId,
 	SassafrasAuthorityWeight, Slot, Ticket, SASSAFRAS_TICKET_VRF_PREFIX,
 };
 use sp_consensus_vrf::schnorrkel::{PublicKey, VRFInOut, VRFOutput, VRFProof};
-use sp_core::ByteArray;
+use sp_core::{twox_128, ByteArray};
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 
 /// Tries to claim the given slot number. This method starts by trying to claim
@@ -74,7 +75,10 @@ pub fn claim_slot_using_keys(
 	// 		None
 	// 	}
 	// })
-	claim_primary_slot(slot, epoch, keystore, keys)
+	//
+	//claim_primary_slot(slot, epoch, keystore, keys)
+
+	claim_secondary_slot(slot, epoch, keys, keystore)
 }
 
 /// Claim a primary slot if it is our turn.  Returns `None` if it is not our turn.
@@ -121,6 +125,67 @@ fn claim_primary_slot(
 	None
 }
 
+// TEMPORARY (or maybe can be used for the "aura" like slots assignments
+fn secondary_slot_expected_author(
+	slot: Slot,
+	authorities: &[(AuthorityId, SassafrasAuthorityWeight)],
+	randomness: [u8; 32],
+) -> Option<&AuthorityId> {
+	if authorities.is_empty() {
+		return None
+	}
+
+	let rand = u128::from_le_bytes((randomness, slot).using_encoded(twox_128));
+	let idx = rand % authorities.len() as u128;
+
+	let expected_author = authorities.get(idx as usize).expect(
+		"authorities not empty; index constrained to list length; \
+				this is a valid index; qed",
+	);
+
+	Some(&expected_author.0)
+}
+
+/// Claim a secondary slot if it is our turn to propose, returning the
+/// pre-digest to use when authoring the block, or `None` if it is not our turn
+/// to propose.
+fn claim_secondary_slot(
+	slot: Slot,
+	epoch: &Epoch,
+	keys: &[(AuthorityId, usize)],
+	keystore: &SyncCryptoStorePtr,
+) -> Option<(PreDigest, AuthorityId)> {
+	let Epoch { authorities, randomness, epoch_index: _, .. } = epoch;
+
+	if authorities.is_empty() {
+		return None
+	}
+
+	let expected_author = secondary_slot_expected_author(slot, authorities, *randomness)?;
+
+	for (authority_id, authority_index) in keys {
+		if authority_id == expected_author {
+			let pre_digest = if SyncCryptoStore::has_keys(
+				&**keystore,
+				&[(authority_id.to_raw_vec(), AuthorityId::ID)],
+			) {
+				Some(PreDigest::Secondary(SecondaryPreDigest {
+					authority_index: *authority_index as u32,
+					slot,
+				}))
+			} else {
+				None
+			};
+
+			if let Some(pre_digest) = pre_digest {
+				return Some((pre_digest, authority_id.clone()))
+			}
+		}
+	}
+
+	None
+}
+
 /// Computes the threshold for a given epoch as:
 ///
 ///     T = (x*s)/(a*V)
@@ -142,17 +207,16 @@ pub fn calculate_threshold(
 	use num_bigint::{BigUint, ToBigUint};
 	use num_traits::cast::ToPrimitive;
 
-	log::warn!(target: "sassafras", ">>> T = {}",
+	log::debug!(target: "sassafras", "🌳 Tickets threshold: {}",
         (redundancy_factor as f64 * number_of_slots as f64) / (attempts as f64 * validators as f64));
+
 	const PROOF: &str = "Value is positive and finite, qed";
 	let num = BigUint::from(redundancy_factor) * number_of_slots; //to_biguint().expect(PROOF) * number_of_slots;
 	let den = attempts.to_biguint().expect(PROOF) * validators;
 	// If (because of badly chosen parameters) T > 1
-	let threshold = (u128::MAX.to_biguint().expect(PROOF) * num / den)
+	(u128::MAX.to_biguint().expect(PROOF) * num / den)
 		.to_u128()
-		.unwrap_or(u128::MAX);
-	log::warn!(target: "sassafras", ">>> T (hex) = 0x{:016x}", threshold);
-	threshold
+		.unwrap_or(u128::MAX)
 }
 
 /// Returns true if the given VRF output is lower than the given threshold, false otherwise.
@@ -165,10 +229,10 @@ pub fn check_threshold(inout: &VRFInOut, threshold: u128) -> bool {
 pub fn generate_epoch_tickets(
 	epoch: &Epoch,
 	max_attempts: usize,
+	redundancy_factor: usize,
 	keystore: &SyncCryptoStorePtr,
 ) -> Vec<Ticket> {
 	let mut tickets = vec![];
-	let redundancy_factor = 1;
 
 	let authorities = epoch
 		.authorities
@@ -209,7 +273,7 @@ pub fn generate_epoch_tickets(
 							attempt: attempt as u32,
 							authority_index: authority_index as u32,
 							vrf_output: VRFOutput(signature.output),
-							vrf_proof: VRFProof(signature.proof),
+							//vrf_proof: VRFProof(signature.proof),
 						};
 						tickets.push(ticket);
 					}

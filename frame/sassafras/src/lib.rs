@@ -227,6 +227,7 @@ pub mod pallet {
 	pub type EpochConfig<T> = StorageValue<_, SassafrasEpochConfiguration>;
 
 	/// TODO-SASS
+	/// Maybe we don't require to keep each ticket proof on-chain...
 	/// Current session tickets
 	#[pallet::storage]
 	pub type Tickets<T: Config> = StorageValue<_, BoundedVec<Ticket, T::MaxTickets>, ValueQuery>;
@@ -333,16 +334,7 @@ pub mod pallet {
 		pub fn submit_tickets(origin: OriginFor<T>, mut tickets: Vec<Ticket>) -> DispatchResult {
 			ensure_none(origin)?;
 
-			// DEBUG-BEGIN
-			use core::fmt::Write;
-			let mut w = sp_std::Writer::default();
-			let _ = write!(&mut w, "Received Tickets ({}): ", tickets.len());
-			for ticket in tickets.iter() {
-				let _ = write!(&mut w, "{}, ", ticket.attempt);
-			}
-			let _ = write!(&mut w, "\n");
-			log::debug!(target: "sassafras::runtime", "{}", sp_std::str::from_utf8(w.inner()).unwrap());
-			// DEBUG-END
+			print_tickets("Received", &tickets, *CurrentSlot::<T>::get());
 
 			let mut next_tickets = NextTickets::<T>::get().into_inner();
 			next_tickets.append(&mut tickets);
@@ -361,15 +353,23 @@ pub mod pallet {
 			if let Call::submit_tickets { tickets } = call {
 				// Discard tickets not coming from the local node
 				// TODO-SASS: double check this `Local` requirement...
+				log::debug!(target: "sassafras::runtime", "🌳 Validating unsigned from {} source",
+					match source {
+						TransactionSource::Local => "local",
+						TransactionSource::InBlock => "in-block",
+						TransactionSource::External => "external",
+					}
+				);
+
 				if source != TransactionSource::Local && source != TransactionSource::InBlock {
 					log::warn!(
 						target: "sassafras::runtime",
-						"Rejecting unsigned transaction because it is not local/in-block.",
+						"🌳 Rejecting unsigned transaction because it is not local/in-block.",
 					);
 					return InvalidTransaction::BadSigner.into()
 				}
 
-				// Current slot should be at most equal to half of epoch duration
+				// Current slot should be less than half of epoch duration.
 				let diff = CurrentSlot::<T>::get().saturating_sub(Self::current_epoch_start());
 				let epoch_half = T::EpochDuration::get() / 2;
 				if diff >= epoch_half {
@@ -384,7 +384,7 @@ pub mod pallet {
 				ValidTransaction::with_tag_prefix("Sassafras")
 					// We assign the maximum priority for any equivocation report.
 					.priority(TransactionPriority::max_value())
-					// TODO-SASS: there is a better way to distinquish duplicates...
+					// TODO-SASS: there should be a better way to distinquish duplicates...
 					.and_provides(tickets)
 					// TODO-SASS: this should be set such that it is discarded after the first half
 					.longevity(3_u64)
@@ -395,6 +395,17 @@ pub mod pallet {
 			}
 		}
 	}
+}
+
+fn print_tickets(verb: &str, tickets: &[Ticket], slot: u64) {
+	use core::fmt::Write;
+	let mut w = sp_std::Writer::default();
+	let _ = write!(&mut w, "{} {} tickets (slot = {}): [ ", verb, tickets.len(), slot);
+	for ticket in tickets.iter() {
+		let _ = write!(&mut w, "{}, ", ticket.attempt);
+	}
+	let _ = write!(&mut w, "] \n");
+	log::debug!(target: "sassafras::runtime", "🌳 {}", sp_std::str::from_utf8(w.inner()).unwrap());
 }
 
 // TODO-SASS
@@ -490,15 +501,31 @@ impl<T: Config> Pallet<T> {
 		// 	Self::deposit_consensus(ConsensusLog::NextConfigData(pending_epoch_config_change));
 		// }
 
-		// TODO-SASS: offchain tasks?
-		// Sort tickets and drop middle values, then sort using outside-in order.
+		// This sort should be benchmarked... for the moment just sort here
+		// NOTE: if using an offchain worker we can:
+		// 1. sort a piece on each block (i.e. do not overload wasmtime)
+		// 2. start once we reached half of the epoch (i.e. no more tickets can be submitted)
 		{
+			// Sort tickets and drop middle values, then sort using outside-in order.
 			let mut tickets = NextTickets::<T>::get().into_inner();
 
 			tickets.sort_unstable_by_key(|t| t.vrf_output);
+			if tickets.len() > T::MaxTickets::get() as usize {
+				// Drop extra tickets from the middle
+				let max = T::MaxTickets::get() as usize;
+				let diff = tickets.len() - max;
+				let off = max / 2;
+				// It is just not efficient to call remove
+				for i in off..off + diff {
+					tickets[i] = tickets[i + diff];
+				}
+				tickets.truncate(max);
+			}
 			// TODO: outside-in sort
 
-			let tickets = BoundedVec::<Ticket, T::MaxTickets>::try_from(tickets).unwrap();
+			let tickets = BoundedVec::<Ticket, T::MaxTickets>::try_from(tickets)
+				.expect("vector has been eventually truncated; qed");
+
 			Tickets::<T>::put(tickets);
 			NextTickets::<T>::kill();
 		}
@@ -627,28 +654,12 @@ impl<T: Config> Pallet<T> {
 	/// TODO-SASS: improve docs
 	/// Submit the next epoch validator tickets via an unsigned extrinsic.
 	pub fn submit_tickets_unsigned_extrinsic(tickets: Vec<Ticket>) -> Option<()> {
-		// DEBUG-BEGIN
-		use core::fmt::Write;
-		let mut w = sp_std::Writer::default();
-		let _ = write!(&mut w, "Submitting Tickets ({}): ", tickets.len());
-		for ticket in tickets.iter() {
-			let _ = write!(&mut w, "{}, ", ticket.attempt);
-		}
-		let _ = write!(&mut w, "\n");
-		log::debug!(target: "sassafras::runtime", "{}", sp_std::str::from_utf8(w.inner()).unwrap());
-		// DEBUG-END
-
-		// DEBUG-BEGIN
-		log::debug!(target: "sassafras", "!!!!!!!!!!!!!!!!! SUBMIT TICKETS {}", *CurrentSlot::<T>::get());
-		// DEBUG-END
+		print_tickets("Submitting", &tickets, *CurrentSlot::<T>::get());
 
 		let call = Call::submit_tickets { tickets };
 
 		if let Err(_) = SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into()) {
-			log::error!(
-				target: "sassafras::runtime",
-				"Error submitting tickets"
-			);
+			log::error!(target: "sassafras::runtime","🌳 Error submitting tickets");
 		}
 
 		Some(())

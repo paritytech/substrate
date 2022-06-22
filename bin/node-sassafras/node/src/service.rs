@@ -229,7 +229,7 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 
 	let role = config.role.clone();
 	// TODO-SASS
-	let _force_authoring = config.force_authoring;
+	let force_authoring = config.force_authoring;
 	let _backoff_authoring_blocks: Option<()> = None;
 	let name = config.network.node_name.clone();
 	let enable_grandpa = !config.disable_grandpa;
@@ -282,6 +282,7 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 			sassafras_link,
 			sync_oracle: network.clone(),
 			justification_sync_link: network.clone(),
+			force_authoring,
 			create_inherent_data_providers: move |_, ()| async move {
 				let timestamp = sp_timestamp::InherentDataProvider::from_system_time();
 

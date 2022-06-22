@@ -261,7 +261,7 @@ impl<B: BlockT> From<Error<B>> for String {
 }
 
 fn sassafras_err<B: BlockT>(error: Error<B>) -> Error<B> {
-	debug!(target: "sassafras", "{}", error);
+	error!(target: "sassafras", "🌳 {}", error);
 	error
 }
 
@@ -290,7 +290,7 @@ impl Config {
 	{
 		let mut best_block_id = BlockId::Hash(client.usage_info().chain.best_hash);
 		if client.usage_info().chain.finalized_state.is_none() {
-			debug!(target: "sassafras", "No finalized state is available. Reading config from genesis");
+			debug!(target: "sassafras", "🌳 No finalized state is available. Reading config from genesis");
 			best_block_id = BlockId::Hash(client.usage_info().chain.genesis_hash);
 		}
 
@@ -329,9 +329,6 @@ pub struct SassafrasParams<B: BlockT, C, SC, EN, I, SO, L, CIDP, CAW> {
 	/// critical consensus logic will be omitted.
 	pub block_import: I,
 
-	/// The source of timestamps for relative slots
-	pub sassafras_link: SassafrasLink<B>,
-
 	/// A sync oracle
 	pub sync_oracle: SO,
 
@@ -340,6 +337,12 @@ pub struct SassafrasParams<B: BlockT, C, SC, EN, I, SO, L, CIDP, CAW> {
 
 	/// Something that can create the inherent data providers.
 	pub create_inherent_data_providers: CIDP,
+
+	/// Force authoring of blocks even if we are offline
+	pub force_authoring: bool,
+
+	/// The source of timestamps for relative slots
+	pub sassafras_link: SassafrasLink<B>,
 
 	/// Checks if the current native implementation can author with a runtime at a given block.
 	pub can_author_with: CAW,
@@ -354,10 +357,11 @@ pub fn start_sassafras<B, C, SC, EN, I, SO, CIDP, CAW, L, ER>(
 		select_chain,
 		env,
 		block_import,
-		sassafras_link,
 		sync_oracle,
 		justification_sync_link,
 		create_inherent_data_providers,
+		force_authoring,
+		sassafras_link,
 		can_author_with,
 	}: SassafrasParams<B, C, SC, EN, I, SO, L, CIDP, CAW>,
 ) -> Result<SassafrasWorker<B>, sp_consensus::Error>
@@ -389,7 +393,7 @@ where
 {
 	const HANDLE_BUFFER_SIZE: usize = 1024;
 
-	info!(target: "sassafras", "🍁 Starting Sassafras Authorship worker");
+	info!(target: "sassafras", "🌳 🍁 Starting Sassafras Authorship worker");
 
 	let slot_notification_sinks = Arc::new(Mutex::new(Vec::new()));
 
@@ -399,6 +403,7 @@ where
 		env,
 		sync_oracle: sync_oracle.clone(),
 		justification_sync_link,
+		force_authoring,
 		keystore: keystore.clone(),
 		epoch_changes: sassafras_link.epoch_changes.clone(),
 		slot_notification_sinks: slot_notification_sinks.clone(),
@@ -460,12 +465,11 @@ async fn tickets_worker<B, C, SC>(
 
 	let mut notifications = client.import_notification_stream();
 	while let Some(notification) = notifications.next().await {
-		warn!(target: "sassafras", ">>> IMPORTED: {:?}", notification.hash);
 		let next_epoch_digest = find_next_epoch_digest::<B>(&notification.header)
 			.map_err(|e| ConsensusError::ClientImport(e.to_string()))
 			.expect("TODO-SASS: remove me");
 		if let Some(epoch_desc) = next_epoch_digest {
-			warn!(target: "sassafras", ">>> NEW EPOCH ANNOUCED {:x?}", epoch_desc);
+			debug!(target: "sassafras", "🌳 New epoch annouced {:x?}", epoch_desc);
 
 			let epoch = {
 				let epoch_changes = epoch_changes.shared_data();
@@ -482,35 +486,36 @@ async fn tickets_worker<B, C, SC>(
 				let epoch = match epoch_changes.epoch(&epoch_identifier) {
 					Some(epoch) => epoch,
 					None => {
-						warn!(target: "sassafras", "Unexpected missing epoch data for {}", notification.hash);
+						warn!(target: "sassafras", "🌳 Unexpected missing epoch data for {}", notification.hash);
 						continue
 					},
 				};
 				epoch.clone()
 			};
 
-			let tickets = authorship::generate_epoch_tickets(&epoch, 40, &keystore);
-			warn!(target: "sassafras", ">>> Got {} tickets", tickets.len());
+			// TODO-SASS:
+			// maybe we're going to store the both the tickets and proofs in a map within the
+			// epoch_changes tree to be used when claiming slots.
+			// The map key can be the ticket itself.
+			let tickets = authorship::generate_epoch_tickets(&epoch, 40, 1, &keystore);
 
 			// Get the best block on which we will build and send the tickets.
 			let best_id = match select_chain.best_chain().await {
 				Ok(header) => BlockId::Hash(header.hash()),
 				Err(err) => {
-					error!(target: "sassafras", "{}", err.to_string());
+					error!(target: "🌳 sassafras", "{}", err.to_string());
 					continue
 				},
 			};
 
-			warn!(target: "sassafras", ">>> Submitting tx @ {:?}", best_id);
+			// TODO-SASS
+			// 2. Do not submit tickets if we are already over half of the epoch
 
 			if let Err(err) =
 				client.runtime_api().submit_tickets_unsigned_extrinsic(&best_id, tickets)
 			{
-				error!(target: "sassafras", "Unable to submit tickets: {}", err.to_string())
+				error!(target: "sassafras", "🌳 Unable to submit tickets: {}", err)
 			}
-
-			// TODO-SASS
-			// 2. Do not submit tickets if we are over half of the epoch
 		}
 	}
 }
@@ -543,7 +548,7 @@ async fn answer_requests<B, C>(
 	while let Some(request) = request_rx.next().await {
 		match request {
 			SassafrasRequest::EpochForChild(..) => {
-				debug!(target: "sassafras", "Received `EpochForChild` request");
+				debug!(target: "sassafras", "🌳 Received `EpochForChild` request");
 			},
 		}
 	}
@@ -589,6 +594,7 @@ struct SassafrasSlotWorker<B: BlockT, C, E, I, SO, L> {
 	env: E,
 	sync_oracle: SO,
 	justification_sync_link: L,
+	force_authoring: bool,
 	keystore: SyncCryptoStorePtr,
 	epoch_changes: SharedEpochChanges<B, Epoch>,
 	slot_notification_sinks: SlotNotificationSinks<B>,
@@ -659,7 +665,7 @@ where
 		slot: Slot,
 		epoch_descriptor: &ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>,
 	) -> Option<Self::Claim> {
-		debug!(target: "sassafras", "Attempting to claim slot {}", slot);
+		debug!(target: "sassafras", "🌳 Attempting to claim slot {}", slot);
 
 		let s = authorship::claim_slot(
 			slot,
@@ -673,7 +679,7 @@ where
 		);
 
 		if s.is_some() {
-			debug!(target: "sassafras", "Claimed slot {}", slot);
+			debug!(target: "sassafras", "🌳 Claimed slot {}", slot);
 		}
 		s
 	}
@@ -689,7 +695,7 @@ where
 				Ok(()) => true,
 				Err(e) =>
 					if e.is_full() {
-						warn!(target: "sassafras", "Trying to notify a slot but the channel is full");
+						warn!(target: "sassafras", "🌳 Trying to notify a slot but the channel is full");
 						true
 					} else {
 						false
@@ -750,8 +756,7 @@ where
 	}
 
 	fn force_authoring(&self) -> bool {
-		// TODO-SASS
-		false
+		self.force_authoring
 	}
 
 	fn should_backoff(&self, _slot: Slot, _chain_head: &B::Header) -> bool {
@@ -808,10 +813,10 @@ pub fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<PreDigest, Error
 
 	let mut pre_digest: Option<_> = None;
 	for log in header.digest().logs() {
-		trace!(target: "sassafras", "Checking log {:?}, looking for pre runtime digest", log);
+		trace!(target: "sassafras", "🌳 Checking log {:?}, looking for pre runtime digest", log);
 		match (log.as_sassafras_pre_digest(), pre_digest.is_some()) {
 			(Some(_), true) => return Err(sassafras_err(Error::MultiplePreRuntimeDigests)),
-			(None, _) => trace!(target: "sassafras", "Ignoring digest not meant for us"),
+			(None, _) => trace!(target: "sassafras", "🌳 Ignoring digest not meant for us"),
 			(s, false) => pre_digest = s,
 		}
 	}
@@ -824,13 +829,13 @@ fn find_next_epoch_digest<B: BlockT>(
 ) -> Result<Option<NextEpochDescriptor>, Error<B>> {
 	let mut epoch_digest: Option<_> = None;
 	for log in header.digest().logs() {
-		trace!(target: "sassafras", "Checking log {:?}, looking for epoch change digest.", log);
+		trace!(target: "sassafras", "🌳 Checking log {:?}, looking for epoch change digest.", log);
 		let log = log.try_to::<ConsensusLog>(OpaqueDigestItemId::Consensus(&SASSAFRAS_ENGINE_ID));
 		match (log, epoch_digest.is_some()) {
 			(Some(ConsensusLog::NextEpochData(_)), true) =>
 				return Err(sassafras_err(Error::MultipleEpochChangeDigests)),
 			(Some(ConsensusLog::NextEpochData(epoch)), false) => epoch_digest = Some(epoch),
-			_ => trace!(target: "sassafras", "Ignoring digest not meant for us"),
+			_ => trace!(target: "sassafras", "🌳 Ignoring digest not meant for us"),
 		}
 	}
 
@@ -887,7 +892,7 @@ where
 		if let Err(e) = self.can_author_with.can_author_with(&block_id) {
 			debug!(
 				target: "sassafras",
-				"Skipping `check_inherents` as authoring version is not compatible: {}",
+				"🌳 Skipping `check_inherents` as authoring version is not compatible: {}",
 				e,
 			);
 
@@ -974,7 +979,7 @@ where
 	) -> BlockVerificationResult<Block> {
 		trace!(
 			target: "sassafras",
-			"Verifying origin: {:?} header: {:?} justification(s): {:?} body: {:?}",
+			"🌳 Verifying origin: {:?} header: {:?} justification(s): {:?} body: {:?}",
 			block.origin,
 			block.header,
 			block.justifications,
@@ -989,7 +994,7 @@ where
 			return Ok((block, Default::default()))
 		}
 
-		debug!(target: "sassafras", "We have {:?} logs in this header", block.header.digest().logs().len());
+		debug!(target: "sassafras", "🌳 We have {:?} logs in this header", block.header.digest().logs().len());
 
 		let hash = block.header.hash();
 		let parent_hash = *block.header.parent_hash();
@@ -1060,7 +1065,7 @@ where
 					)
 					.await
 				{
-					warn!(target: "sassafras", "Error checking/reporting Sassafras equivocation: {}", err);
+					warn!(target: "sassafras", "🌳 Error checking/reporting Sassafras equivocation: {}", err);
 				}
 
 				// If the body is passed through, we need to use the runtime to check that the
@@ -1086,7 +1091,7 @@ where
 					block.body = Some(inner_body);
 				}
 
-				trace!(target: "sassafras", "Checked {:?}; importing.", pre_header);
+				trace!(target: "sassafras", "🌳 Checked {:?}; importing.", pre_header);
 				telemetry!(
 					self.telemetry;
 					CONSENSUS_TRACE;
@@ -1105,7 +1110,7 @@ where
 				Ok((block, Default::default()))
 			},
 			CheckedHeader::Deferred(a, b) => {
-				debug!(target: "sassafras", "Checking {:?} failed; {:?}, {:?}.", hash, a, b);
+				debug!(target: "sassafras", "🌳 Checking {:?} failed; {:?}, {:?}.", hash, a, b);
 				telemetry!(
 					self.telemetry;
 					CONSENSUS_DEBUG;
@@ -1280,7 +1285,7 @@ where
 
 				log!(target: "sassafras",
 					 log_level,
-					 "🍁 New epoch {} launching at block {} (block slot {} >= start slot {}).",
+					 "🌳 🍁 New epoch {} launching at block {} (block slot {} >= start slot {}).",
 					 viable_epoch.as_ref().epoch_index,
 					 hash,
 					 slot,
@@ -1291,7 +1296,7 @@ where
 
 				log!(target: "sassafras",
 					 log_level,
-					 "🍁 Next epoch starts at slot {}",
+					 "🌳 🍁 Next epoch starts at slot {}",
 					 next_epoch.as_ref().start_slot,
 				);
 
@@ -1324,7 +1329,7 @@ where
 				};
 
 				if let Err(e) = prune_and_import() {
-					debug!(target: "sassafras", "Failed to launch next epoch: {}", e);
+					debug!(target: "sassafras", "🌳 Failed to launch next epoch: {}", e);
 					*epoch_changes =
 						old_epoch_changes.expect("set `Some` above and not taken; qed");
 					return Err(e)

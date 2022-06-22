@@ -112,7 +112,7 @@ pub struct SassafrasEpochConfiguration {
 }
 
 /// TODO-SASS: docs
-#[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, MaxEncodedLen, TypeInfo)]
+#[derive(Clone, Copy, PartialEq, Eq, Encode, Decode, RuntimeDebug, MaxEncodedLen, TypeInfo)]
 pub struct Ticket {
 	/// TODO
 	pub attempt: u32,
@@ -120,8 +120,8 @@ pub struct Ticket {
 	pub authority_index: u32,
 	/// TODO
 	pub vrf_output: VRFOutput,
-	/// TODO
-	pub vrf_proof: VRFProof,
+	// This should not be required... Required for the claim
+	//pub vrf_proof: VRFProof,
 }
 
 // TODO-SASS
