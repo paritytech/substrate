@@ -766,7 +766,7 @@ fn deploying_wasm_contract_should_work() {
 		// It does not matter that the storage item itself does not exist.
 		assert!(&pallet_contracts::Pallet::<Runtime>::get_storage(
 			addr,
-			pallet_contracts::StorageKey<Runtime>::default().to_vec()
+			pallet_contracts::StorageKey::<Runtime>::default().to_vec()
 		)
 		.is_ok());
 	});
