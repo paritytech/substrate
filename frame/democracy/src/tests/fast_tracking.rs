@@ -94,7 +94,7 @@ fn instant_next_block_referendum_backed() {
 		let instant_origin_id = 6;
 		let voting_period = 1;
 		let proposal_hash = set_balance_proposal_hash_and_note(2);
-		let delay = 2; // has no affect on test
+		let delay = 2; // has no effect on test
 
 		// init
 		System::set_block_number(start_block_number);
@@ -126,7 +126,7 @@ fn instant_next_block_referendum_backed() {
 			})
 		);
 
-		// referendum expected to be backed with the start of the next block
+		// referendum expected to be baked with the start of the next block
 		next_block();
 
 		// assert no active referendums
