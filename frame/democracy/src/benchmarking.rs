@@ -481,7 +481,7 @@ benchmarks! {
 		let caller = funded_account::<T>("caller", 0);
 		// Caller will initially delegate to `old_delegate`
 		let old_delegate: T::AccountId = funded_account::<T>("old_delegate", r);
-        let old_delegate_lookup = T::Lookup::unlookup(old_delegate.clone());
+		let old_delegate_lookup = T::Lookup::unlookup(old_delegate.clone());
 		Democracy::<T>::delegate(
 			RawOrigin::Signed(caller.clone()).into(),
 			old_delegate_lookup,
@@ -496,7 +496,7 @@ benchmarks! {
 		assert_eq!(balance, delegated_balance, "delegation balance didn't work");
 		// Caller will now switch to `new_delegate`
 		let new_delegate: T::AccountId = funded_account::<T>("new_delegate", r);
-        let new_delegate_lookup = T::Lookup::unlookup(new_delegate.clone());
+		let new_delegate_lookup = T::Lookup::unlookup(new_delegate.clone());
 		let account_vote = account_vote::<T>(initial_balance);
 		// We need to create existing direct votes for the `new_delegate`
 		for i in 0..r {
@@ -533,7 +533,7 @@ benchmarks! {
 		let caller = funded_account::<T>("caller", 0);
 		// Caller will delegate
 		let the_delegate: T::AccountId = funded_account::<T>("delegate", r);
-        let the_delegate_lookup = T::Lookup::unlookup(the_delegate.clone());
+		let the_delegate_lookup = T::Lookup::unlookup(the_delegate.clone());
 		Democracy::<T>::delegate(
 			RawOrigin::Signed(caller.clone()).into(),
 			the_delegate_lookup,
@@ -643,7 +643,7 @@ benchmarks! {
 		let r in 1 .. MAX_REFERENDUMS;
 
 		let locker = funded_account::<T>("locker", 0);
-        let locker_lookup = T::Lookup::unlookup(locker.clone());
+		let locker_lookup = T::Lookup::unlookup(locker.clone());
 		// Populate votes so things are locked
 		let base_balance: BalanceOf<T> = 100u32.into();
 		let small_vote = account_vote::<T>(base_balance);
@@ -668,7 +668,7 @@ benchmarks! {
 		let r in 1 .. MAX_REFERENDUMS;
 
 		let locker = funded_account::<T>("locker", 0);
-        let locker_lookup = T::Lookup::unlookup(locker.clone());
+		let locker_lookup = T::Lookup::unlookup(locker.clone());
 		// Populate votes so things are locked
 		let base_balance: BalanceOf<T> = 100u32.into();
 		let small_vote = account_vote::<T>(base_balance);
@@ -741,7 +741,7 @@ benchmarks! {
 		let r in 1 .. MAX_REFERENDUMS;
 
 		let caller = funded_account::<T>("caller", r);
-        let caller_lookup = T::Lookup::unlookup(caller.clone());
+		let caller_lookup = T::Lookup::unlookup(caller.clone());
 		let account_vote = account_vote::<T>(100u32.into());
 
 		for i in 0 .. r {

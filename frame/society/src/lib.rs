@@ -828,7 +828,7 @@ pub mod pallet {
 			tip: BalanceOf<T, I>,
 		) -> DispatchResult {
 			let voucher = ensure_signed(origin)?;
-            let who = T::Lookup::lookup(who)?;
+			let who = T::Lookup::lookup(who)?;
 			// Check user is not suspended.
 			ensure!(!<SuspendedCandidates<T, I>>::contains_key(&who), Error::<T, I>::Suspended);
 			ensure!(!<SuspendedMembers<T, I>>::contains_key(&who), Error::<T, I>::Suspended);
@@ -1032,7 +1032,7 @@ pub mod pallet {
 			rules: Vec<u8>,
 		) -> DispatchResult {
 			T::FounderSetOrigin::ensure_origin(origin)?;
-            let founder = T::Lookup::lookup(founder)?;
+			let founder = T::Lookup::lookup(founder)?;
 			ensure!(!<Head<T, I>>::exists(), Error::<T, I>::AlreadyFounded);
 			ensure!(max_members > 1, Error::<T, I>::MaxMembers);
 			// This should never fail in the context of this function...
@@ -1110,7 +1110,7 @@ pub mod pallet {
 			forgive: bool,
 		) -> DispatchResult {
 			T::SuspensionJudgementOrigin::ensure_origin(origin)?;
-            let who = T::Lookup::lookup(who)?;
+			let who = T::Lookup::lookup(who)?;
 			ensure!(<SuspendedMembers<T, I>>::contains_key(&who), Error::<T, I>::NotSuspended);
 
 			if forgive {
@@ -1187,7 +1187,7 @@ pub mod pallet {
 			judgement: Judgement,
 		) -> DispatchResult {
 			T::SuspensionJudgementOrigin::ensure_origin(origin)?;
-            let who = T::Lookup::lookup(who)?;
+			let who = T::Lookup::lookup(who)?;
 			if let Some((value, kind)) = <SuspendedCandidates<T, I>>::get(&who) {
 				match judgement {
 					Judgement::Approve => {

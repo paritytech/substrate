@@ -148,7 +148,7 @@ benchmarks! {
 	remove_other_vote {
 		let caller = funded_account::<T>("caller", 0);
 		let voter = funded_account::<T>("caller", 0);
-        let voter_lookup = T::Lookup::unlookup(voter.clone());
+		let voter_lookup = T::Lookup::unlookup(voter.clone());
 		whitelist_account!(caller);
 		let old_account_vote = account_vote::<T>(100u32.into());
 
@@ -182,7 +182,7 @@ benchmarks! {
 		let class = T::Polls::max_ongoing().0;
 		let polls = &all_polls[&class];
 		let voter = funded_account::<T>("voter", 0);
-        let voter_lookup = T::Lookup::unlookup(voter.clone());
+		let voter_lookup = T::Lookup::unlookup(voter.clone());
 		let caller = funded_account::<T>("caller", 0);
 		whitelist_account!(caller);
 
@@ -210,7 +210,7 @@ benchmarks! {
 		let class = T::Polls::max_ongoing().0;
 		let polls = &all_polls[&class];
 		let voter = funded_account::<T>("voter", 0);
-        let voter_lookup = T::Lookup::unlookup(voter.clone());
+		let voter_lookup = T::Lookup::unlookup(voter.clone());
 		let caller = funded_account::<T>("caller", 0);
 		whitelist_account!(caller);
 
@@ -241,7 +241,7 @@ benchmarks! {
 
 	unlock {
 		let caller = funded_account::<T>("caller", 0);
-        let caller_lookup = T::Lookup::unlookup(caller.clone());
+		let caller_lookup = T::Lookup::unlookup(caller.clone());
 		whitelist_account!(caller);
 		let normal_account_vote = account_vote::<T>(T::Currency::free_balance(&caller) - 100u32.into());
 		let big_account_vote = account_vote::<T>(T::Currency::free_balance(&caller));

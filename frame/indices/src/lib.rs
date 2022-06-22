@@ -137,7 +137,7 @@ pub mod pallet {
 			index: T::AccountIndex,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-            let new = T::Lookup::lookup(new)?;
+			let new = T::Lookup::lookup(new)?;
 			ensure!(who != new, Error::<T>::NotTransfer);
 
 			Accounts::<T>::try_mutate(index, |maybe_value| -> DispatchResult {
@@ -214,7 +214,7 @@ pub mod pallet {
 			freeze: bool,
 		) -> DispatchResult {
 			ensure_root(origin)?;
-            let new = T::Lookup::lookup(new)?;
+			let new = T::Lookup::lookup(new)?;
 
 			Accounts::<T>::mutate(index, |maybe_value| {
 				if let Some((account, amount, _)) = maybe_value.take() {

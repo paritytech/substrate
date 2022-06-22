@@ -44,7 +44,7 @@ benchmarks! {
 		let caller: T::AccountId = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 		let recipient: T::AccountId = account("recipient", 0, SEED);
-        let recipient_lookup = T::Lookup::unlookup(recipient.clone());
+		let recipient_lookup = T::Lookup::unlookup(recipient.clone());
 		T::Currency::make_free_balance_be(&recipient, BalanceOf::<T>::max_value());
 		// Claim the index
 		Indices::<T>::claim(RawOrigin::Signed(caller.clone()).into(), account_index)?;
@@ -71,7 +71,7 @@ benchmarks! {
 		let original: T::AccountId = account("original", 0, SEED);
 		T::Currency::make_free_balance_be(&original, BalanceOf::<T>::max_value());
 		let recipient: T::AccountId = account("recipient", 0, SEED);
-        let recipient_lookup = T::Lookup::unlookup(recipient.clone());
+		let recipient_lookup = T::Lookup::unlookup(recipient.clone());
 		T::Currency::make_free_balance_be(&recipient, BalanceOf::<T>::max_value());
 		// Claim the index
 		Indices::<T>::claim(RawOrigin::Signed(original).into(), account_index)?;

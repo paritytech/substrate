@@ -36,7 +36,7 @@ use frame_support::{
 	},
 };
 use sp_runtime::{
-	traits::{AtLeast32BitUnsigned, Saturating, Zero, StaticLookup},
+	traits::{AtLeast32BitUnsigned, Saturating, StaticLookup, Zero},
 	ArithmeticError, Perbill,
 };
 use sp_std::prelude::*;
@@ -250,7 +250,7 @@ pub mod pallet {
 			balance: BalanceOf<T, I>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-            let to = T::Lookup::lookup(to)?;
+			let to = T::Lookup::lookup(to)?;
 			let votes = Self::try_delegate(who, class, to, conviction, balance)?;
 
 			Ok(Some(T::WeightInfo::delegate(votes)).into())
@@ -298,7 +298,7 @@ pub mod pallet {
 			target: <T::Lookup as StaticLookup>::Source,
 		) -> DispatchResult {
 			ensure_signed(origin)?;
-            let target = T::Lookup::lookup(target)?;
+			let target = T::Lookup::lookup(target)?;
 			Self::update_lock(&class, &target);
 			Ok(())
 		}
@@ -366,7 +366,7 @@ pub mod pallet {
 			index: PollIndexOf<T, I>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-            let target = T::Lookup::lookup(target)?;
+			let target = T::Lookup::lookup(target)?;
 			let scope = if target == who { UnvoteScope::Any } else { UnvoteScope::OnlyExpired };
 			Self::try_remove_vote(&target, index, Some(class), scope)?;
 			Ok(())

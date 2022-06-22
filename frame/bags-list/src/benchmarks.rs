@@ -57,7 +57,7 @@ frame_benchmarking::benchmarks! {
 		let dest_head: T::AccountId  = account("dest_head", 0, 0);
 		assert_ok!(List::<T, _>::insert(dest_head.clone(), dest_bag_thresh));
 
-        let origin_middle_lookup = T::Lookup::unlookup(origin_middle.clone());
+		let origin_middle_lookup = T::Lookup::unlookup(origin_middle.clone());
 
 		// the bags are in the expected state after initial setup.
 		assert_eq!(
@@ -118,7 +118,7 @@ frame_benchmarking::benchmarks! {
 
 		let origin_tail_lookup = T::Lookup::unlookup(origin_tail.clone());
 
-        // the bags are in the expected state after initial setup.
+		// the bags are in the expected state after initial setup.
 		assert_eq!(
 			List::<T, _>::get_bags(),
 			vec![
@@ -170,7 +170,7 @@ frame_benchmarking::benchmarks! {
 		T::ScoreProvider::set_score_of(&lighter, bag_thresh - One::one());
 		T::ScoreProvider::set_score_of(&heavier, bag_thresh);
 
-        let lighter_lookup = T::Lookup::unlookup(lighter.clone());
+		let lighter_lookup = T::Lookup::unlookup(lighter.clone());
 
 		assert_eq!(
 			List::<T, _>::iter().map(|n| n.id().clone()).collect::<Vec<_>>(),

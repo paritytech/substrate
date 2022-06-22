@@ -285,7 +285,7 @@ pub mod pallet {
 			account: <T::Lookup as StaticLookup>::Source,
 		) -> DispatchResultWithPostInfo {
 			T::RegistrarOrigin::ensure_origin(origin)?;
-            let account = T::Lookup::lookup(account)?;
+			let account = T::Lookup::lookup(account)?;
 
 			let (i, registrar_count) = <Registrars<T>>::try_mutate(
 				|registrars| -> Result<(RegistrarIndex, usize), DispatchError> {
@@ -676,7 +676,7 @@ pub mod pallet {
 			new: <T::Lookup as StaticLookup>::Source,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-            let new = T::Lookup::lookup(new)?;
+			let new = T::Lookup::lookup(new)?;
 
 			let registrars = <Registrars<T>>::mutate(|rs| -> Result<usize, DispatchError> {
 				rs.get_mut(index as usize)

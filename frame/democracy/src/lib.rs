@@ -165,7 +165,7 @@ use frame_support::{
 };
 use scale_info::TypeInfo;
 use sp_runtime::{
-	traits::{Bounded, Dispatchable, Hash, Saturating, Zero, StaticLookup},
+	traits::{Bounded, Dispatchable, Hash, Saturating, StaticLookup, Zero},
 	ArithmeticError, DispatchError, DispatchResult, RuntimeDebug,
 };
 use sp_std::prelude::*;
@@ -946,7 +946,7 @@ pub mod pallet {
 			balance: BalanceOf<T>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-            let to = T::Lookup::lookup(to)?;
+			let to = T::Lookup::lookup(to)?;
 			let votes = Self::try_delegate(who, to, conviction, balance)?;
 
 			Ok(Some(T::WeightInfo::delegate(votes)).into())
@@ -1125,9 +1125,12 @@ pub mod pallet {
 			T::WeightInfo::unlock_set(T::MaxVotes::get())
 				.max(T::WeightInfo::unlock_remove(T::MaxVotes::get()))
 		)]
-		pub fn unlock(origin: OriginFor<T>, target: <T::Lookup as StaticLookup>::Source) -> DispatchResult {
+		pub fn unlock(
+			origin: OriginFor<T>,
+			target: <T::Lookup as StaticLookup>::Source,
+		) -> DispatchResult {
 			ensure_signed(origin)?;
-            let target = T::Lookup::lookup(target)?;
+			let target = T::Lookup::lookup(target)?;
 			Self::update_lock(&target);
 			Ok(())
 		}
@@ -1187,7 +1190,7 @@ pub mod pallet {
 			index: ReferendumIndex,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-            let target = T::Lookup::lookup(target)?;
+			let target = T::Lookup::lookup(target)?;
 			let scope = if target == who { UnvoteScope::Any } else { UnvoteScope::OnlyExpired };
 			Self::try_remove_vote(&target, index, scope)?;
 			Ok(())

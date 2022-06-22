@@ -320,7 +320,9 @@ use frame_support::{
 };
 use scale_info::TypeInfo;
 use sp_core::U256;
-use sp_runtime::traits::{AccountIdConversion, Bounded, CheckedSub, Convert, Saturating, Zero, StaticLookup};
+use sp_runtime::traits::{
+	AccountIdConversion, Bounded, CheckedSub, Convert, Saturating, StaticLookup, Zero,
+};
 use sp_staking::{EraIndex, OnStakerSlash, StakingInterface};
 use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, ops::Div, vec::Vec};
 
@@ -1555,7 +1557,7 @@ pub mod pallet {
 			#[pallet::compact] unbonding_points: BalanceOf<T>,
 		) -> DispatchResult {
 			let caller = ensure_signed(origin)?;
-            let member_account = T::Lookup::lookup(member_account)?;
+			let member_account = T::Lookup::lookup(member_account)?;
 			let (mut member, mut bonded_pool, mut reward_pool) =
 				Self::get_member_with_pools(&member_account)?;
 
@@ -1669,7 +1671,7 @@ pub mod pallet {
 			num_slashing_spans: u32,
 		) -> DispatchResultWithPostInfo {
 			let caller = ensure_signed(origin)?;
-            let member_account = T::Lookup::lookup(member_account)?;
+			let member_account = T::Lookup::lookup(member_account)?;
 			let mut member =
 				PoolMembers::<T>::get(&member_account).ok_or(Error::<T>::PoolMemberNotFound)?;
 			let current_era = T::StakingInterface::current_era();
@@ -1797,9 +1799,9 @@ pub mod pallet {
 			state_toggler: <T::Lookup as StaticLookup>::Source,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-            let root = T::Lookup::lookup(root)?;
-            let nominator = T::Lookup::lookup(nominator)?;
-            let state_toggler = T::Lookup::lookup(state_toggler)?;
+			let root = T::Lookup::lookup(root)?;
+			let nominator = T::Lookup::lookup(nominator)?;
+			let state_toggler = T::Lookup::lookup(state_toggler)?;
 
 			ensure!(
 				amount >=
@@ -2437,7 +2439,7 @@ impl<T: Config> Pallet<T> {
 		member: T::AccountId,
 	) -> DispatchResult {
 		let points = PoolMembers::<T>::get(&member).map(|d| d.active_points()).unwrap_or_default();
-        let member_lookup = T::Lookup::unlookup(member);
+		let member_lookup = T::Lookup::unlookup(member);
 		Self::unbond(origin, member_lookup, points)
 	}
 }

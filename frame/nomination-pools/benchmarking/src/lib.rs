@@ -31,7 +31,7 @@ use pallet_nomination_pools::{
 	MaxPoolMembersPerPool, MaxPools, Metadata, MinCreateBond, MinJoinBond, Pallet as Pools,
 	PoolMembers, PoolRoles, PoolState, RewardPools, SubPoolsStorage,
 };
-use sp_runtime::traits::{Bounded, Zero, StaticLookup};
+use sp_runtime::traits::{Bounded, StaticLookup, Zero};
 use sp_staking::{EraIndex, StakingInterface};
 // `frame_benchmarking::benchmarks!` macro needs this
 use pallet_nomination_pools::Call;
@@ -73,7 +73,7 @@ fn create_pool_account<T: pallet_nomination_pools::Config>(
 	let ed = CurrencyOf::<T>::minimum_balance();
 	let pool_creator: T::AccountId =
 		create_funded_user_with_balance::<T>("pool_creator", n, ed + balance * 2u32.into());
-    let pool_creator_lookup = T::Lookup::unlookup(pool_creator.clone());
+	let pool_creator_lookup = T::Lookup::unlookup(pool_creator.clone());
 
 	Pools::<T>::create(
 		Origin::Signed(pool_creator.clone()).into(),
@@ -311,7 +311,7 @@ frame_benchmarking::benchmarks! {
 
 		let scenario = scenario.add_joiner(amount);
 		let member_id = scenario.origin1_member.unwrap().clone();
-        let member_id_lookup = T::Lookup::unlookup(member_id.clone());
+		let member_id_lookup = T::Lookup::unlookup(member_id.clone());
 		let all_points = PoolMembers::<T>::get(&member_id).unwrap().points;
 		whitelist_account!(member_id);
 	}: _(Origin::Signed(member_id.clone()), member_id_lookup, all_points)
@@ -384,7 +384,7 @@ frame_benchmarking::benchmarks! {
 		// Add a new member
 		let min_join_bond = MinJoinBond::<T>::get().max(CurrencyOf::<T>::minimum_balance());
 		let joiner = create_funded_user_with_balance::<T>("joiner", 0, min_join_bond * 2u32.into());
-        let joiner_lookup = T::Lookup::unlookup(joiner.clone());
+		let joiner_lookup = T::Lookup::unlookup(joiner.clone());
 		Pools::<T>::join(Origin::Signed(joiner.clone()).into(), min_join_bond, 1)
 			.unwrap();
 
@@ -426,7 +426,7 @@ frame_benchmarking::benchmarks! {
 
 		let min_create_bond = min_create_bond::<T>();
 		let (depositor, pool_account) = create_pool_account::<T>(0, min_create_bond);
-        let depositor_lookup = T::Lookup::unlookup(depositor.clone());
+		let depositor_lookup = T::Lookup::unlookup(depositor.clone());
 
 		// We set the pool to the destroying state so the depositor can leave
 		BondedPools::<T>::try_mutate(&1, |maybe_bonded_pool| {
@@ -491,7 +491,7 @@ frame_benchmarking::benchmarks! {
 	create {
 		let min_create_bond = min_create_bond::<T>();
 		let depositor: T::AccountId = account("depositor", USER_SEED, 0);
-        let depositor_lookup = T::Lookup::unlookup(depositor.clone());
+		let depositor_lookup = T::Lookup::unlookup(depositor.clone());
 
 		// Give the depositor some balance to bond
 		CurrencyOf::<T>::make_free_balance_be(&depositor, min_create_bond * 2u32.into());

@@ -33,8 +33,11 @@ fn assert_last_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::
 
 fn make_member<T: Config<I>, I: 'static>(rank: Rank) -> T::AccountId {
 	let who = account::<T::AccountId>("member", MemberCount::<T, I>::get(0), SEED);
-    let who_lookup = T::Lookup::unlookup(who.clone());
-	assert_ok!(Pallet::<T, I>::add_member(T::PromoteOrigin::successful_origin(), who_lookup.clone()));
+	let who_lookup = T::Lookup::unlookup(who.clone());
+	assert_ok!(Pallet::<T, I>::add_member(
+		T::PromoteOrigin::successful_origin(),
+		who_lookup.clone()
+	));
 	for _ in 0..rank {
 		assert_ok!(Pallet::<T, I>::promote_member(
 			T::PromoteOrigin::successful_origin(),
@@ -47,7 +50,7 @@ fn make_member<T: Config<I>, I: 'static>(rank: Rank) -> T::AccountId {
 benchmarks_instance_pallet! {
 	add_member {
 		let who = account::<T::AccountId>("member", 0, SEED);
-        let who_lookup = T::Lookup::unlookup(who.clone());
+		let who_lookup = T::Lookup::unlookup(who.clone());
 		let origin = T::PromoteOrigin::successful_origin();
 		let call = Call::<T, I>::add_member { who: who_lookup };
 	}: { call.dispatch_bypass_filter(origin)? }
@@ -61,7 +64,7 @@ benchmarks_instance_pallet! {
 		let rank = r as u16;
 		let first = make_member::<T, I>(rank);
 		let who = make_member::<T, I>(rank);
-        let who_lookup = T::Lookup::unlookup(who.clone());
+		let who_lookup = T::Lookup::unlookup(who.clone());
 		let last = make_member::<T, I>(rank);
 		let last_index = (0..=rank).map(|r| IdToIndex::<T, I>::get(r, &last).unwrap()).collect::<Vec<_>>();
 		let origin = T::DemoteOrigin::successful_origin();
@@ -79,7 +82,7 @@ benchmarks_instance_pallet! {
 		let r in 0 .. 10;
 		let rank = r as u16;
 		let who = make_member::<T, I>(rank);
-        let who_lookup = T::Lookup::unlookup(who.clone());
+		let who_lookup = T::Lookup::unlookup(who.clone());
 		let origin = T::PromoteOrigin::successful_origin();
 		let call = Call::<T, I>::promote_member { who: who_lookup };
 	}: { call.dispatch_bypass_filter(origin)? }
@@ -93,7 +96,7 @@ benchmarks_instance_pallet! {
 		let rank = r as u16;
 		let first = make_member::<T, I>(rank);
 		let who = make_member::<T, I>(rank);
-        let who_lookup = T::Lookup::unlookup(who.clone());
+		let who_lookup = T::Lookup::unlookup(who.clone());
 		let last = make_member::<T, I>(rank);
 		let last_index = IdToIndex::<T, I>::get(rank, &last).unwrap();
 		let origin = T::DemoteOrigin::successful_origin();
@@ -111,7 +114,7 @@ benchmarks_instance_pallet! {
 
 	vote {
 		let caller: T::AccountId = whitelisted_caller();
-        let caller_lookup = T::Lookup::unlookup(caller.clone());
+		let caller_lookup = T::Lookup::unlookup(caller.clone());
 		assert_ok!(Pallet::<T, I>::add_member(T::PromoteOrigin::successful_origin(), caller_lookup.clone()));
 		// Create a poll
 		let class = T::Polls::classes().into_iter().next().unwrap();

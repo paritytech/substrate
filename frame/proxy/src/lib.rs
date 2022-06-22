@@ -45,7 +45,7 @@ use frame_system::{self as system};
 use scale_info::TypeInfo;
 use sp_io::hashing::blake2_256;
 use sp_runtime::{
-	traits::{Dispatchable, Hash, Saturating, TrailingZeroInput, Zero, StaticLookup},
+	traits::{Dispatchable, Hash, Saturating, StaticLookup, TrailingZeroInput, Zero},
 	DispatchResult,
 };
 use sp_std::prelude::*;
@@ -209,7 +209,7 @@ pub mod pallet {
 			call: Box<<T as Config>::Call>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-            let real = T::Lookup::lookup(real)?;
+			let real = T::Lookup::lookup(real)?;
 			let def = Self::find_proxy(&real, &who, force_proxy_type)?;
 			ensure!(def.delay.is_zero(), Error::<T>::Unannounced);
 
@@ -239,7 +239,7 @@ pub mod pallet {
 			delay: T::BlockNumber,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-            let delegate = T::Lookup::lookup(delegate)?;
+			let delegate = T::Lookup::lookup(delegate)?;
 			Self::add_proxy_delegate(&who, delegate, proxy_type, delay)
 		}
 
@@ -262,7 +262,7 @@ pub mod pallet {
 			delay: T::BlockNumber,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-            let delegate = T::Lookup::lookup(delegate)?;
+			let delegate = T::Lookup::lookup(delegate)?;
 			Self::remove_proxy_delegate(&who, delegate, proxy_type, delay)
 		}
 
@@ -369,7 +369,7 @@ pub mod pallet {
 			#[pallet::compact] ext_index: u32,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-            let spawner = T::Lookup::lookup(spawner)?;
+			let spawner = T::Lookup::lookup(spawner)?;
 
 			let when = (height, ext_index);
 			let proxy = Self::anonymous_account(&spawner, &proxy_type, index, Some(when));
@@ -409,7 +409,7 @@ pub mod pallet {
 			call_hash: CallHashOf<T>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-            let real = T::Lookup::lookup(real)?;
+			let real = T::Lookup::lookup(real)?;
 			Proxies::<T>::get(&real)
 				.0
 				.into_iter()
@@ -467,7 +467,7 @@ pub mod pallet {
 			call_hash: CallHashOf<T>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-            let real = T::Lookup::lookup(real)?;
+			let real = T::Lookup::lookup(real)?;
 			Self::edit_announcements(&who, |ann| ann.real != real || ann.call_hash != call_hash)?;
 
 			Ok(())
@@ -499,7 +499,7 @@ pub mod pallet {
 			call_hash: CallHashOf<T>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-            let delegate = T::Lookup::lookup(delegate)?;
+			let delegate = T::Lookup::lookup(delegate)?;
 			Self::edit_announcements(&delegate, |ann| {
 				ann.real != who || ann.call_hash != call_hash
 			})?;
@@ -540,8 +540,8 @@ pub mod pallet {
 			call: Box<<T as Config>::Call>,
 		) -> DispatchResult {
 			ensure_signed(origin)?;
-            let delegate = T::Lookup::lookup(delegate)?;
-            let real = T::Lookup::lookup(real)?;
+			let delegate = T::Lookup::lookup(delegate)?;
+			let real = T::Lookup::lookup(real)?;
 			let def = Self::find_proxy(&real, &delegate, force_proxy_type)?;
 
 			let call_hash = T::CallHasher::hash_of(&call);
