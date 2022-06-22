@@ -44,6 +44,7 @@ pub use pallet_contracts_rpc_runtime_api::ContractsApi as ContractsRuntimeApi;
 
 const RUNTIME_ERROR: i32 = 1;
 const CONTRACT_DOESNT_EXIST: i32 = 2;
+const KEY_DECODING_FAILED: i32 = 3;
 
 pub type Weight = u64;
 
@@ -75,7 +76,7 @@ impl From<ContractAccessError> for JsonRpseeError {
 			))
 			.into(),
 			KeyDecodingFailed => CallError::Custom(ErrorObject::owned(
-				CONTRACT_DOESNT_EXIST,
+				KEY_DECODING_FAILED,
 				"Failed to decode the specified storage key.",
 				None::<()>,
 			))
