@@ -916,7 +916,6 @@ benchmarks! {
 						h.resize(max_key_len.try_into().unwrap(), n.to_le_bytes()[0]); h })
 		.collect::<Vec<_>>();
 		let keys_bytes = keys.iter().flatten().cloned().collect::<Vec<_>>();
-		let value_len = T::Schedule::get().limits.payload_len / 1024;
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
@@ -935,7 +934,7 @@ benchmarks! {
 				Counter(0, max_key_len as u32), // key_ptr
 				Regular(Instruction::I32Const(max_key_len as i32)), // key_len
 				Regular(Instruction::I32Const(0)), // value_ptr
-				Regular(Instruction::I32Const(value_len as i32)), // value_len
+				Regular(Instruction::I32Const(0)), // value_len
 				Regular(Instruction::Call(0)),
 				Regular(Instruction::Drop),
 			])),
