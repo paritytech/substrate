@@ -1098,21 +1098,16 @@ pub mod pallet {
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
 
-			// Проверяем совпадает ли владелец
 			let mut class_details =
 				Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
 
 			Self::is_class_owner(&maybe_check_owner, &class_details)?;
 			Self::is_unfrozen(&class, &maybe_instance);
 
-			// Если класс не имеет атрибуета по заданному ключу, увеличиваем счетчик колличества
-			// атрибутов
 			let attribute = Attribute::<T, I>::get((class, maybe_instance, &key));
 			if attribute.is_none() {
 				class_details.attributes.saturating_inc();
 			}
-
-			// Депонирование недостаюших средств
 			let old_deposit = attribute.map_or(Zero::zero(), |m| m.1);
 			class_details.total_deposit.saturating_reduce(old_deposit);
 			let mut deposit = Zero::zero();
