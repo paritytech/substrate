@@ -105,11 +105,13 @@ pub(crate) fn write_memory_from(
 /// this syscall is broken.
 #[cfg(target_os = "linux")]
 fn is_madvise_working() -> std::result::Result<bool, String> {
+	let page_size = rustix::param::page_size();
+
 	unsafe {
 		// Allocate two memory pages.
 		let pointer = rustix::mm::mmap_anonymous(
 			std::ptr::null_mut(),
-			2 * 4096,
+			2 * page_size,
 			rustix::mm::ProtFlags::READ | rustix::mm::ProtFlags::WRITE,
 			rustix::mm::MapFlags::PRIVATE,
 		)
@@ -117,17 +119,18 @@ fn is_madvise_working() -> std::result::Result<bool, String> {
 
 		// Dirty them both.
 		std::ptr::write_volatile(pointer.cast::<u8>(), b'A');
-		std::ptr::write_volatile(pointer.cast::<u8>().add(4096), b'B');
+		std::ptr::write_volatile(pointer.cast::<u8>().add(page_size), b'B');
 
 		// Clear the first page.
-		let result_madvise = rustix::mm::madvise(pointer, 4096, rustix::mm::Advice::LinuxDontNeed)
-			.map_err(|error| format!("madvise failed: {}", error));
+		let result_madvise =
+			rustix::mm::madvise(pointer, page_size, rustix::mm::Advice::LinuxDontNeed)
+				.map_err(|error| format!("madvise failed: {}", error));
 
 		// Fetch the values.
 		let value_1 = std::ptr::read_volatile(pointer.cast::<u8>());
-		let value_2 = std::ptr::read_volatile(pointer.cast::<u8>().add(4096));
+		let value_2 = std::ptr::read_volatile(pointer.cast::<u8>().add(page_size));
 
-		let result_munmap = rustix::mm::munmap(pointer, 2 * 4096)
+		let result_munmap = rustix::mm::munmap(pointer, 2 * page_size)
 			.map_err(|error| format!("munmap failed: {}", error));
 
 		result_madvise?;
