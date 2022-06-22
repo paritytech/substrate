@@ -631,7 +631,7 @@ fn build_project(
 	build_cmd.arg("--profile");
 	build_cmd.arg(profile.name());
 
-	if Ok("true".to_string()) == env::var(OFFLINE) {
+	if env::var(OFFLINE).map_or(false, |v| v == "true") {
 		build_cmd.arg("--offline");
 	}
 
@@ -759,7 +759,7 @@ fn create_metadata_command(path: impl Into<PathBuf>) -> MetadataCommand {
 	let mut metadata_command = MetadataCommand::new();
 	metadata_command.manifest_path(path);
 
-	if Ok("true".to_string()) == env::var(OFFLINE) {
+	if env::var(OFFLINE).map_or(false, |v| v == "true") {
 		metadata_command.other_options(vec!["--offline".to_owned()]);
 	}
 	metadata_command
