@@ -95,6 +95,10 @@ impl<T: Config> Pallet<T> {
 				items_per_account.checked_sub(1).ok_or(ArithmeticError::Overflow)?;
 			CountForAccountItems::<T>::insert(&caller, &collection_id, new_items_amount);
 
+			if let Some(seller) = item.seller {
+				Sellers::<T>::remove((&seller, &collection_id, &item_id));
+			}
+
 			Items::<T>::remove(&collection_id, &item_id);
 			ItemMetadataOf::<T>::remove(&collection_id, &item_id);
 			AccountItems::<T>::remove((&caller, &collection_id, &item_id));
