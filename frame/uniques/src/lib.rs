@@ -332,7 +332,7 @@ pub mod pallet {
 			}
 		}
 	}
-
+  
 	#[pallet::storage]
 	/// Keeps track of the number of items a collection might have.
 	pub(super) type CollectionMaxSupply<T: Config<I>, I: 'static = ()> =
@@ -1188,7 +1188,7 @@ pub mod pallet {
 
 			let mut collection_details =
 				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
-
+      
 			Self::is_collection_owner(&maybe_check_owner, &collection_details)?;
 			Self::is_unfrozen(&collection, &maybe_item)?;
 
@@ -1317,7 +1317,7 @@ pub mod pallet {
 			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
-
+      
 			Self::do_set_collection_metadata(
 				collection,
 				data,
@@ -1355,8 +1355,9 @@ pub mod pallet {
 
 			let details =
 				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
-			Self::is_collection_owner(&maybe_check_owner, &details)?;
 
+			Self::is_collection_owner(&maybe_check_owner, &details)?;
+      
 			CollectionMetadataOf::<T, I>::try_mutate_exists(collection, |metadata| {
 				let was_frozen = metadata.as_ref().map_or(false, |m| m.is_frozen);
 				ensure!(maybe_check_owner.is_none() || !was_frozen, Error::<T, I>::Frozen);
@@ -1464,7 +1465,6 @@ pub mod pallet {
 				Some(item) => ItemMetadataOf::<T, I>::get(collection, item).map(|v| v.is_frozen),
 			};
 			ensure!(!maybe_is_frozen.unwrap_or(false), Error::<T, I>::Frozen);
-
 			Ok(())
 		}
 	}

@@ -196,7 +196,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		Item::<T, I>::remove(&collection, &item);
 		Account::<T, I>::remove((&owner, &collection, &item));
-
+    
 		Self::deposit_event(Event::Burned { collection, item, owner });
 		Ok(())
 	}
@@ -310,6 +310,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				None => Err(Error::<T, I>::UnknownCollection),
 			}
 		})?;
+		Self::deposit_event(Event::Burned { collection, item, owner });
 		Ok(())
 	}
 }
