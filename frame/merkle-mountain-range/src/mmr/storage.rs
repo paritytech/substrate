@@ -66,19 +66,21 @@ fn parent_hash_of_ancestor_that_added_node<T: frame_system::Config>(
 	// TODO: turn this in a pallet storage item recording block-num when pallet was activated.
 	let block_offset = 0;
 
-	let leaf_idx = NodesUtils::leaf_index_that_added_node(pos);
-	let block_num: <T as frame_system::Config>::BlockNumber =
-		u32::try_from(leaf_idx + block_offset)
+	let ancestor_leaf_idx = NodesUtils::leaf_index_that_added_node(pos);
+	// leafs are zero-indexed while block numbers are one-indexed,
+	// so `parent_block_number == (base + current_leaf_index)`.
+	let parent_block_num: <T as frame_system::Config>::BlockNumber =
+		u32::try_from(block_offset + ancestor_leaf_idx)
 			.expect("leaf-idx < block-num; qed")
 			.into();
 	// TODO: I think this only holds recent history, so old block hashes might not be here.
-	let hash = <frame_system::Pallet<T>>::block_hash(block_num);
+	let parent_hash = <frame_system::Pallet<T>>::block_hash(parent_block_num);
 	info!(
 		target: "runtime::mmr",
 		"🥩: parent of ancestor that added {}: leaf idx {}, block-num {:?} hash {:?}",
-		pos, leaf_idx, block_num, hash
+		pos, ancestor_leaf_idx, parent_block_num, parent_hash
 	);
-	hash
+	parent_hash
 }
 
 impl<T, I, L> mmr_lib::MMRStore<NodeOf<T, I, L>> for Storage<OffchainStorage, T, I, L>
