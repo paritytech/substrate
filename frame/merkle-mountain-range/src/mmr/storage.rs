@@ -22,6 +22,7 @@ use frame_support::log;
 use log::info;
 use mmr_lib::helper;
 use sp_io::offchain_index;
+use sp_mmr_primitives::LeafIndex;
 use sp_runtime::traits::Saturating;
 use sp_std::iter::Peekable;
 #[cfg(not(feature = "std"))]
@@ -97,6 +98,32 @@ where
 			parent_hash
 		);
 		parent_hash
+	}
+
+	fn nodes_added_by_leaf(leaf_index: LeafIndex) -> Vec<NodeIndex> {
+		let leaves = NumberOfLeaves::<T, I>::get();
+		let mmr_size = NodesUtils::new(leaves).size();
+
+		let pos = helper::leaf_index_to_pos(leaf_index);
+		let leaf_height = helper::pos_height_in_tree(pos); // either 0 or 1, not sure, but will hardcode once I confirm.
+		info!(
+			target: "runtime::mmr",
+			"🥩: leaf idx {} pos {} height {}",
+			leaf_index, pos, leaf_height
+		);
+
+		let mut nodes_added_by_leaf = vec![pos];
+		let mut next_pos = pos + 1;
+		while next_pos < mmr_size && helper::pos_height_in_tree(next_pos) > leaf_height {
+			nodes_added_by_leaf.push(next_pos);
+			next_pos += 1;
+		}
+		info!(
+			target: "runtime::mmr",
+			"🥩: nodes_added_by_leaf(idx {}, pos {}): {:?}",
+			leaf_index, pos, nodes_added_by_leaf
+		);
+		return nodes_added_by_leaf
 	}
 }
 
