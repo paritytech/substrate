@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{write_file_if_changed, CargoCommandVersioned};
+use crate::{write_file_if_changed, CargoCommandVersioned, OFFLINE};
 
 use build_helper::rerun_if_changed;
 use cargo_metadata::{CargoOpt, Metadata, MetadataCommand};
@@ -88,12 +88,12 @@ fn crate_metadata(cargo_manifest: &Path) -> Metadata {
 		cargo_manifest.to_path_buf()
 	};
 
-	let crate_metadata = MetadataCommand::new()
-		.manifest_path(cargo_manifest)
-		.features(CargoOpt::AllFeatures)
+	let mut crate_metadata = create_metadata_command(cargo_manifest);
+	crate_metadata.features(CargoOpt::AllFeatures);
+
+	let crate_metadata = crate_metadata
 		.exec()
 		.expect("`cargo metadata` can not fail on project `Cargo.toml`; qed");
-
 	// If the `Cargo.lock` didn't exist, we need to remove it after
 	// calling `cargo metadata`. This is required to ensure that we don't change
 	// the build directory outside of the `target` folder. Commands like
@@ -631,6 +631,10 @@ fn build_project(
 	build_cmd.arg("--profile");
 	build_cmd.arg(profile.name());
 
+	if env::var(OFFLINE).is_ok() {
+		build_cmd.arg("--offline");
+	}
+
 	println!("{}", colorize_info_message("Information that should be included in a bug report."));
 	println!("{} {:?}", colorize_info_message("Executing build command:"), build_cmd);
 	println!("{} {}", colorize_info_message("Using rustc version:"), cargo_cmd.rustc_version());
@@ -751,6 +755,16 @@ impl<'a> Deref for DeduplicatePackage<'a> {
 	}
 }
 
+fn create_metadata_command(path: impl Into<PathBuf>) -> MetadataCommand {
+	let mut metadata_command = MetadataCommand::new();
+	metadata_command.manifest_path(path);
+
+	if env::var(OFFLINE).is_ok() {
+		metadata_command.other_options(vec!["--offline".to_owned()]);
+	}
+	metadata_command
+}
+
 /// Generate the `rerun-if-changed` instructions for cargo to make sure that the WASM binary is
 /// rebuilt when needed.
 fn generate_rerun_if_changed_instructions(
@@ -765,8 +779,7 @@ fn generate_rerun_if_changed_instructions(
 		rerun_if_changed(cargo_lock);
 	}
 
-	let metadata = MetadataCommand::new()
-		.manifest_path(project_folder.join("Cargo.toml"))
+	let metadata = create_metadata_command(project_folder.join("Cargo.toml"))
 		.exec()
 		.expect("`cargo metadata` can not fail!");
 

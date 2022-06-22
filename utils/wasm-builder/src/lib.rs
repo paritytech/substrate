@@ -119,6 +119,9 @@ pub use builder::{WasmBuilder, WasmBuilderSelectProject};
 /// Environment variable that tells us to skip building the wasm binary.
 const SKIP_BUILD_ENV: &str = "SKIP_WASM_BUILD";
 
+/// Environment variable that tells us whether we should avoid network requests
+const OFFLINE: &str = "CARGO_NET_OFFLINE";
+
 /// Environment variable to force a certain build type when building the wasm binary.
 /// Expects "debug", "release" or "production" as value.
 ///
