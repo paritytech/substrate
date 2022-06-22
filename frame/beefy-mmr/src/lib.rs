@@ -194,13 +194,13 @@ impl<T: Config> Pallet<T>
 where
 	MerkleRootOf<T>: From<beefy_merkle_tree::Hash> + Into<beefy_merkle_tree::Hash>,
 {
-	/// Return the currently active BEEFY authority set.
-	pub fn authority_set() -> BeefyAuthoritySet<MerkleRootOf<T>> {
+	/// Return the currently active BEEFY authority set proof.
+	pub fn authority_set_proof() -> BeefyAuthoritySet<MerkleRootOf<T>> {
 		Pallet::<T>::beefy_authorities()
 	}
 
-	/// Return the next/queued BEEFY authority set.
-	pub fn next_authority_set() -> BeefyNextAuthoritySet<MerkleRootOf<T>> {
+	/// Return the next/queued BEEFY authority set proof.
+	pub fn next_authority_set_proof() -> BeefyNextAuthoritySet<MerkleRootOf<T>> {
 		Pallet::<T>::beefy_next_authorities()
 	}
 

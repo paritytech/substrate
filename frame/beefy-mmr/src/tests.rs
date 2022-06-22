@@ -153,8 +153,8 @@ fn should_contain_valid_leaf_data() {
 #[test]
 fn should_update_authorities() {
 	new_test_ext(vec![1, 2, 3, 4]).execute_with(|| {
-		let auth_set = BeefyMmr::authority_set();
-		let next_auth_set = BeefyMmr::next_authority_set();
+		let auth_set = BeefyMmr::authority_set_proof();
+		let next_auth_set = BeefyMmr::next_authority_set_proof();
 
 		// check current authority set
 		assert_eq!(0, auth_set.id);
@@ -170,8 +170,8 @@ fn should_update_authorities() {
 
 		let announced_set = next_auth_set;
 		init_block(1);
-		let auth_set = BeefyMmr::authority_set();
-		let next_auth_set = BeefyMmr::next_authority_set();
+		let auth_set = BeefyMmr::authority_set_proof();
+		let next_auth_set = BeefyMmr::next_authority_set_proof();
 
 		// check new auth are expected ones
 		assert_eq!(announced_set, auth_set);
@@ -185,8 +185,8 @@ fn should_update_authorities() {
 
 		let announced_set = next_auth_set;
 		init_block(2);
-		let auth_set = BeefyMmr::authority_set();
-		let next_auth_set = BeefyMmr::next_authority_set();
+		let auth_set = BeefyMmr::authority_set_proof();
+		let next_auth_set = BeefyMmr::next_authority_set_proof();
 
 		// check new auth are expected ones
 		assert_eq!(announced_set, auth_set);

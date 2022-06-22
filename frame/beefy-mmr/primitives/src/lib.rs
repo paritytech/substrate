@@ -384,11 +384,11 @@ sp_api::decl_runtime_apis! {
 		H: From<Hash> + Into<Hash>,
 		BeefyAuthoritySet<H>: sp_api::Decode,
 	{
-		/// Return the currently active BEEFY authority set.
-		fn authority_set() -> BeefyAuthoritySet<H>;
+		/// Return the currently active BEEFY authority set proof.
+		fn authority_set_proof() -> BeefyAuthoritySet<H>;
 
-		/// Return the next/queued BEEFY authority set.
-		fn next_authority_set() -> BeefyNextAuthoritySet<H>;
+		/// Return the next/queued BEEFY authority set proof.
+		fn next_authority_set_proof() -> BeefyNextAuthoritySet<H>;
 	}
 }
 
