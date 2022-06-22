@@ -982,7 +982,7 @@ benchmarks! {
 				Counter(0, max_key_len as u32), // key_ptr
 				Regular(Instruction::I32Const(max_key_len as i32)), // key_len
 				Regular(Instruction::I32Const(0)), // value_ptr
-				Regular(Instruction::I32Const((n * 2048) as i32)), // value_len = max payload_len
+				Regular(Instruction::I32Const((n * 2048) as i32)), // value_len increments by 2kb up to max payload_len
 				Regular(Instruction::Call(0)),
 				Regular(Instruction::Drop),
 			])),
@@ -1042,7 +1042,7 @@ benchmarks! {
 			Storage::<T>::write(
 				&info.trie_id,
 				&VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
-				Some(vec![42u8; (n * 2048) as usize]), // value_len = max payload_len
+				Some(vec![42u8; (n * 2048) as usize]), // value_len increments by 2kb up to max payload_len
 				None,
 				false,
 			)
@@ -1139,7 +1139,7 @@ benchmarks! {
 			Storage::<T>::write(
 				&info.trie_id,
 				&VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
-				Some(vec![42u8; (n * 2048) as usize]), // value_len = max payload_len
+				Some(vec![42u8; (n * 2048) as usize]), // value_len increments by 2kb up to max payload_len
 				None,
 				false,
 			)
@@ -1247,7 +1247,7 @@ benchmarks! {
 			Storage::<T>::write(
 				&info.trie_id,
 				&VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
-				Some(vec![42u8; (n * 2048) as usize]), // value_len = max payload_len
+				Some(vec![42u8; (n * 2048) as usize]), // value_len increments by 2kb up to max payload_len
 				None,
 				false,
 			)
@@ -1343,7 +1343,7 @@ benchmarks! {
 			Storage::<T>::write(
 				&info.trie_id,
 				&VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
-				Some(vec![42u8; (n * 2048) as usize]), // value_len = max payload_len
+				Some(vec![42u8; (n * 2048) as usize]), // value_len increments by 2kb up to max payload_len
 				None,
 				false,
 			)
@@ -1451,7 +1451,7 @@ benchmarks! {
 			Storage::<T>::write(
 				&info.trie_id,
 				&VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
-				Some(vec![42u8; (n * 2048) as usize]), // value_len = max payload_len
+				Some(vec![42u8; (n * 2048) as usize]), // value_len increments by 2kb up to max payload_len
 				None,
 				false,
 			)
