@@ -55,7 +55,6 @@ fn cancel_queued_should_work() {
 
 		fast_forward_to(4);
 
-		dbg!(pallet_scheduler::Agenda::<Test>::iter().collect::<Vec<_>>());
 		assert!(pallet_scheduler::Agenda::<Test>::get(6)[0].is_some());
 
 		assert_noop!(Democracy::cancel_queued(Origin::root(), 1), Error::<Test>::ProposalMissing);
