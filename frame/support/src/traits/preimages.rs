@@ -193,7 +193,7 @@ pub trait StorePreimage: QueryPreimage {
 	}
 
 	/// Convert an otherwise unbounded or large value into a type ready for placing in storage. The
-	/// result is a type whose `MaxEncodedLen` is 130 bytes.
+	/// result is a type whose `MaxEncodedLen` is 131 bytes.
 	///
 	/// NOTE: Once this API is used, you should use either `drop` or `realize`.
 	fn bound<T: Encode>(t: T) -> Result<Bounded<T>, DispatchError> {
