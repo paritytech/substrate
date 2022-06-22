@@ -57,24 +57,6 @@ pub trait BlockOf {
 	type Type: BlockT;
 }
 
-/// A souruse std::pin::Pin;ce of blockchain events.
-#[async_trait::async_trait]
-pub trait BlockchainRPCEvents<Block: BlockT> {
-	/// Get block import event stream. Not guaranteed to be fired for every
-	/// imported block.
-	async fn import_notification_stream_rpc(
-		&self,
-	) -> Pin<Box<dyn Stream<Item = Block::Header> + Send>>;
-
-	/// Get a stream of finality notifications. Not guaranteed to be fired for every
-	/// finalized block.
-	async fn finality_notification_stream_rpc(
-		&self,
-	) -> Pin<Box<dyn Stream<Item = Block::Header> + Send>>;
-
-	async fn best_block_stream_rpc(&self) -> Pin<Box<dyn Stream<Item = Block::Header> + Send>>;
-}
-
 /// A source of blockchain events.
 pub trait BlockchainEvents<Block: BlockT> {
 	/// Get block import event stream. Not guaranteed to be fired for every

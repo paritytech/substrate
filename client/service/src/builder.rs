@@ -17,7 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::{
-	build_network_collator_future, build_network_future,
+	build_network_future,
 	client::{Client, ClientConfig},
 	config::{Configuration, KeystoreConfig, PrometheusConfig},
 	error::Error,
@@ -31,8 +31,7 @@ use prometheus_endpoint::Registry;
 use sc_chain_spec::get_extension;
 use sc_client_api::{
 	execution_extensions::ExecutionExtensions, proof_provider::ProofProvider, BadBlocks,
-	BlockBackend, BlockchainEvents, BlockchainRPCEvents, ExecutorProvider, ForkBlocks,
-	StorageProvider, UsageProvider,
+	BlockBackend, BlockchainEvents, ExecutorProvider, ForkBlocks, StorageProvider, UsageProvider,
 };
 use sc_client_db::{Backend, DatabaseSettings};
 use sc_consensus::import_queue::ImportQueue;
@@ -680,123 +679,6 @@ pub struct BuildNetworkParams<'a, TBl: BlockT, TExPool, TImpQu, TCl> {
 	/// An optional warp sync provider.
 	pub warp_sync: Option<Arc<dyn WarpSyncProvider<TBl>>>,
 }
-
-pub struct BuildCollatorNetworkParams<'a, TImpQu, TCl> {
-	/// The service configuration.
-	pub config: &'a Configuration,
-	/// A shared client returned by `new_full_parts`.
-	pub client: Arc<TCl>,
-	/// A handle for spawning tasks.
-	pub spawn_handle: SpawnTaskHandle,
-	/// An import queue.
-	pub import_queue: TImpQu,
-}
-
-/// Build the network service, the network status sinks and an RPC sender.
-pub fn build_collator_network<TBl, TImpQu, TCl>(
-	params: BuildCollatorNetworkParams<TImpQu, TCl>,
-) -> Result<(Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>, NetworkStarter), Error>
-where
-	TBl: BlockT,
-	TCl: HeaderMetadata<TBl, Error = sp_blockchain::Error>
-		+ BlockchainRPCEvents<TBl>
-		+ BlockBackend<TBl>
-		+ BlockIdTo<TBl, Error = sp_blockchain::Error>
-		+ ProofProvider<TBl>
-		+ HeaderBackend<TBl>
-		+ BlockchainEvents<TBl>
-		+ 'static,
-	TImpQu: ImportQueue<TBl> + 'static,
-{
-	let BuildCollatorNetworkParams { config, client, spawn_handle, import_queue } = params;
-
-	let transaction_pool_adapter = Arc::new(sc_network::config::EmptyTransactionPool {});
-
-	let protocol_id = config.protocol_id();
-
-	let block_announce_validator = Box::new(DefaultBlockAnnounceValidator);
-
-	let block_request_protocol_config =
-		block_request_handler::generate_protocol_config(&protocol_id);
-
-	let state_request_protocol_config =
-		state_request_handler::generate_protocol_config(&protocol_id);
-
-	let light_client_request_protocol_config =
-		light_client_requests::generate_protocol_config(&protocol_id);
-
-	let mut network_params = sc_network::config::Params {
-		role: config.role.clone(),
-		executor: {
-			let spawn_handle = Clone::clone(&spawn_handle);
-			Some(Box::new(move |fut| {
-				spawn_handle.spawn("libp2p-node", Some("networking"), fut);
-			}))
-		},
-		transactions_handler_executor: {
-			let spawn_handle = Clone::clone(&spawn_handle);
-			Box::new(move |fut| {
-				spawn_handle.spawn("network-transactions-handler", Some("networking"), fut);
-			})
-		},
-		network_config: config.network.clone(),
-		chain: client.clone(),
-		transaction_pool: transaction_pool_adapter as _,
-		import_queue: Box::new(import_queue),
-		protocol_id,
-		block_announce_validator,
-		metrics_registry: config.prometheus_config.as_ref().map(|config| config.registry.clone()),
-		block_request_protocol_config,
-		state_request_protocol_config,
-		warp_sync: None,
-		light_client_request_protocol_config,
-	};
-
-	let network_mut = sc_network::NetworkWorker::new(network_params)?;
-	let network = network_mut.service().clone();
-
-	let future = build_network_collator_future(network_mut, client.clone());
-
-	// TODO: [skunert] Remove this comment
-	// TODO: Normally, one is supposed to pass a list of notifications protocols supported by the
-	// node through the `NetworkConfiguration` struct. But because this function doesn't know in
-	// advance which components, such as GrandPa or Polkadot, will be plugged on top of the
-	// service, it is unfortunately not possible to do so without some deep refactoring. To bypass
-	// this problem, the `NetworkService` provides a `register_notifications_protocol` method that
-	// can be called even after the network has been initialized. However, we want to avoid the
-	// situation where `register_notifications_protocol` is called *after* the network actually
-	// connects to other peers. For this reason, we delay the process of the network future until
-	// the user calls `NetworkStarter::start_network`.
-	//
-	// This entire hack should eventually be removed in favour of passing the list of protocols
-	// through the configuration.
-	//
-	// See also https://github.com/paritytech/substrate/issues/6827
-	let (network_start_tx, network_start_rx) = oneshot::channel();
-
-	// The network worker is responsible for gathering all network messages and processing
-	// them. This is quite a heavy task, and at the time of the writing of this comment it
-	// frequently happens that this future takes several seconds or in some situations
-	// even more than a minute until it has processed its entire queue. This is clearly an
-	// issue, and ideally we would like to fix the network future to take as little time as
-	// possible, but we also take the extra harm-prevention measure to execute the networking
-	// future using `spawn_blocking`.
-	spawn_handle.spawn_blocking("network-worker", Some("networking"), async move {
-		if network_start_rx.await.is_err() {
-			log::warn!(
-				"The NetworkStart returned as part of `build_network` has been silently dropped"
-			);
-			// This `return` might seem unnecessary, but we don't want to make it look like
-			// everything is working as normal even though the user is clearly misusing the API.
-			return
-		}
-
-		future.await
-	});
-
-	Ok((network, NetworkStarter(network_start_tx)))
-}
-
 /// Build the network service, the network status sinks and an RPC sender.
 pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 	params: BuildNetworkParams<TBl, TExPool, TImpQu, TCl>,
@@ -1004,6 +886,10 @@ where
 pub struct NetworkStarter(oneshot::Sender<()>);
 
 impl NetworkStarter {
+	pub fn new(sender: oneshot::Sender<()>) -> Self {
+		NetworkStarter(sender)
+	}
+
 	/// Start the network. Call this after all sub-components have been initialized.
 	///
 	/// > **Note**: If you don't call this function, the networking will not work.
