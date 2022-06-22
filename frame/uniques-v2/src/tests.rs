@@ -831,6 +831,225 @@ fn buy_item_should_work() {
 }
 
 #[test]
+fn set_seller_should_work() {
+	new_test_ext().execute_with(|| {
+		let user_id = 1;
+		let seller_id = 2;
+		let collection_id = 0;
+		let item_id = 1;
+
+		assert_ok!(Uniques::create(
+			Origin::signed(user_id),
+			user_id,
+			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
+			None,
+			None,
+			Perbill::zero(),
+			Perbill::zero(),
+		));
+
+		assert_ok!(Uniques::mint(Origin::signed(user_id), user_id, collection_id, item_id));
+
+		assert_ok!(Uniques::set_seller(
+			Origin::signed(user_id),
+			collection_id,
+			item_id,
+			Some(seller_id),
+			Some(1),
+			Some(2),
+		));
+
+		let item = Items::<Test>::get(collection_id, item_id).unwrap();
+		assert_eq!(item.seller, Some(seller_id));
+
+		let sell_data = Sellers::<Test>::get((seller_id, collection_id, item_id)).unwrap();
+		assert_eq!(sell_data.seller_price, 1);
+		assert_eq!(sell_data.seller_tips, Some(2));
+
+		assert!(events().contains(&Event::<Test>::ItemSellerSet {
+			collection_id,
+			item_id,
+			seller: Some(seller_id),
+			price: Some(1),
+			seller_tips: Some(2),
+		}));
+
+		// reset the seller by setting the seller field to `None`
+		assert_ok!(Uniques::set_seller(
+			Origin::signed(user_id),
+			collection_id,
+			item_id,
+			None,
+			Some(1),
+			Some(2),
+		));
+		let item = Items::<Test>::get(collection_id, item_id).unwrap();
+		assert_eq!(item.seller, None);
+		assert!(!Sellers::<Test>::contains_key((seller_id, collection_id, item_id)));
+
+		// reset the seller by setting the price field to `None`
+		assert_ok!(Uniques::set_seller(
+			Origin::signed(user_id),
+			collection_id,
+			item_id,
+			Some(seller_id),
+			Some(1),
+			Some(2),
+		));
+		assert_ok!(Uniques::set_seller(
+			Origin::signed(user_id),
+			collection_id,
+			item_id,
+			Some(seller_id),
+			None,
+			Some(2),
+		));
+		let item = Items::<Test>::get(collection_id, item_id).unwrap();
+		assert_eq!(item.seller, None);
+		assert!(!Sellers::<Test>::contains_key((seller_id, collection_id, item_id)));
+
+		// ensure we can't set the seller when the items are non-transferable
+		let collection_id = 1;
+		assert_ok!(Uniques::create(
+			Origin::signed(user_id),
+			user_id,
+			UserFeatures::new(UserFeature::NonTransferableItems.into()),
+			None,
+			None,
+			Perbill::zero(),
+			Perbill::zero(),
+		));
+
+		assert_ok!(Uniques::mint(Origin::signed(user_id), user_id, collection_id, item_id));
+
+		assert_noop!(
+			Uniques::set_seller(
+				Origin::signed(user_id),
+				collection_id,
+				item_id,
+				Some(seller_id),
+				Some(1),
+				None,
+			),
+			Error::<Test>::ItemsNotTransferable
+		);
+	});
+}
+
+#[test]
+fn buy_from_seller_should_work() {
+	new_test_ext().execute_with(|| {
+		let user_1 = 1;
+		let user_2 = 2;
+		let creator_id = 3;
+		let seller_id = 4;
+		let collection_id = 0;
+		let item_id = 1;
+		let price = 20;
+		let seller_tips = 10;
+		let creator_royalties = 10;
+		let initial_balance = 100;
+		let total = price + seller_tips;
+
+		Balances::make_free_balance_be(&user_1, initial_balance);
+		Balances::make_free_balance_be(&user_2, initial_balance);
+		Balances::make_free_balance_be(&creator_id, initial_balance);
+		Balances::make_free_balance_be(&seller_id, initial_balance);
+
+		assert_ok!(Uniques::create(
+			Origin::signed(creator_id),
+			user_1,
+			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
+			None,
+			None,
+			Perbill::from_percent(creator_royalties),
+			Perbill::zero(),
+		));
+
+		assert_ok!(Uniques::mint(Origin::signed(user_1), user_1, collection_id, item_id));
+
+		assert_ok!(Uniques::set_seller(
+			Origin::signed(user_1),
+			collection_id,
+			item_id,
+			Some(seller_id),
+			Some(price),
+			Some(seller_tips),
+		));
+
+		// can't buy for less
+		assert_noop!(
+			Uniques::buy_from_seller(
+				Origin::signed(user_2),
+				collection_id,
+				item_id,
+				seller_id,
+				total - 1,
+			),
+			Error::<Test>::AmountTooLow
+		);
+
+		// can't buy from yourself
+		assert_noop!(
+			Uniques::buy_from_seller(
+				Origin::signed(user_1),
+				collection_id,
+				item_id,
+				seller_id,
+				total,
+			),
+			Error::<Test>::NotAuthorized
+		);
+
+		// can't buy when the provided seller is wrong
+		assert_noop!(
+			Uniques::buy_from_seller(Origin::signed(user_2), collection_id, item_id, user_1, total,),
+			Error::<Test>::WrongSeller
+		);
+
+		// can buy with the right params
+		assert_ok!(Uniques::buy_from_seller(
+			Origin::signed(user_2),
+			collection_id,
+			item_id,
+			seller_id,
+			total,
+		));
+
+		// validate the new owner & balances
+		let item = Items::<Test>::get(collection_id, item_id).unwrap();
+		assert_eq!(item.owner, user_2);
+		// assert_eq!(Balances::total_balance(&user_1), initial_balance + price_1);
+		// assert_eq!(Balances::total_balance(&user_2), initial_balance - total);
+
+		assert!(events().contains(&Event::<Test>::ItemSold {
+			collection_id,
+			item_id,
+			buyer: user_2,
+			seller: seller_id,
+			price,
+			seller_tips: Some(seller_tips),
+		}));
+
+		// ensure we reset the seller field
+		assert_eq!(Items::<Test>::get(collection_id, item_id).unwrap().seller, None);
+		assert!(!Sellers::<Test>::contains_key((seller_id, collection_id, item_id)));
+
+		// can't buy when the item is not for sale
+		assert_noop!(
+			Uniques::buy_from_seller(
+				Origin::signed(user_1),
+				collection_id,
+				item_id,
+				seller_id,
+				total,
+			),
+			Error::<Test>::ItemNotForSale
+		);
+	});
+}
+
+#[test]
 fn add_remove_approval_should_work() {
 	new_test_ext().execute_with(|| {
 		let user_1 = 1;

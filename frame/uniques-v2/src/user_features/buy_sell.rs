@@ -173,12 +173,11 @@ impl<T: Config> Pallet<T> {
 				.ok_or(Error::<T>::SellDataNotFound)?;
 
 		let total = seller_price + seller_tips.unwrap_or(Default::default());
+		ensure!(amount >= total, Error::<T>::AmountTooLow);
 
 		if let Some(seller_tips) = seller_tips {
 			T::Currency::transfer(&buyer, &seller, seller_tips, KeepAlive)?;
 		}
-
-		ensure!(amount >= total, Error::<T>::AmountTooLow);
 
 		let mut transfer_amount = seller_price.clone();
 		if Self::has_royalties(&config) {
