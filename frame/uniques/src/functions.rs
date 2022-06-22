@@ -194,13 +194,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		is_frozen: bool,
 		maybe_check_owner: Option<T::AccountId>,
 		with_details: impl FnOnce(
-			&ClassDetailsFor<T, I>, 
-			&Option<InstanceMetadata<DepositBalanceOf<T, I>, T::StringLimit>>
+			&ClassDetailsFor<T, I>,
+			&Option<InstanceMetadata<DepositBalanceOf<T, I>, T::StringLimit>>,
 		) -> DispatchResult,
 	) -> DispatchResult {
 		InstanceMetadataOf::<T, I>::try_mutate_exists(class, instance, |metadata| {
-			let mut class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
-		
+			let mut class_details =
+				Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
+
 			with_details(&class_details, metadata)?;
 
 			if metadata.is_none() {
@@ -236,13 +237,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		is_frozen: bool,
 		maybe_check_owner: Option<T::AccountId>,
 		with_details: impl FnOnce(
-			&ClassDetailsFor<T, I>, 
-			&Option<InstanceMetadata<DepositBalanceOf<T, I>, T::StringLimit>>
+			&ClassDetailsFor<T, I>,
+			&Option<ClassMetadata<DepositBalanceOf<T, I>, T::StringLimit>>,
 		) -> DispatchResult,
 	) -> DispatchResult {
 		ClassMetadataOf::<T, I>::try_mutate_exists(class, |metadata| {
-			let mut class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
-		
+			let mut class_details =
+				Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
+
 			with_details(&class_details, &metadata)?;
 
 			let old_deposit = metadata.take().map_or(Zero::zero(), |m| m.deposit);
@@ -259,7 +261,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				T::Currency::unreserve(&class_details.owner, old_deposit - deposit);
 			}
 			class_details.total_deposit.saturating_accrue(deposit);
-			
+
 			*metadata = Some(ClassMetadata { deposit, data: data.clone(), is_frozen });
 
 			Class::<T, I>::insert(&class, class_details);
@@ -275,16 +277,18 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		value: &BoundedVec<u8, T::ValueLimit>,
 	) -> DispatchResult {
 		// If class exists, update class metadata and set/update attribute
-		Class::<T, I>::mutate_exists(class, |opt_class_details|{
+		Class::<T, I>::mutate_exists(class, |opt_class_details| {
 			match opt_class_details {
 				Some(class_details) => {
 					let attribute = Attribute::<T, I>::get((class, maybe_instance, &key));
-					// If the class does not have an attribute for the given key, increase the counter of the number of attributes
+					// If the class does not have an attribute for the given key, increase the
+					// counter of the number of attributes
 					if attribute.is_none() {
 						class_details.attributes.saturating_inc();
 					}
 
-					let mut deposit = Attribute::<T, I>::get((class, maybe_instance, &key)).map_or(Zero::zero(), |m| m.1);
+					let mut deposit = Attribute::<T, I>::get((class, maybe_instance, &key))
+						.map_or(Zero::zero(), |m| m.1);
 					//Set attribute value
 					Attribute::<T, I>::insert((&class, maybe_instance, &key), (&value, deposit));
 					Ok(())
@@ -294,5 +298,4 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		})?;
 		Ok(())
 	}
-	
 }

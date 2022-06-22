@@ -236,7 +236,7 @@ pub mod pallet {
 		(BoundedVec<u8, T::ValueLimit>, DepositBalanceOf<T, I>),
 		OptionQuery,
 	>;
-	
+
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
 		/// Genesis assets clases: class, owner, admin, deposit, free_holding
@@ -256,8 +256,8 @@ pub mod pallet {
 	#[cfg(feature = "std")]
 	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
 		fn default() -> Self {
-			Self { 
-				classes: Default::default(), 
+			Self {
+				classes: Default::default(),
 				instances: Default::default(),
 				classes_metadata: Default::default(),
 				classes_attributes: Default::default(),
@@ -270,58 +270,56 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I> {
 		fn build(&self) {
-			for item in self.classes { 
+			for item in self.classes {
 				Pallet::<T, I>::do_create_class(
 					item.0,
 					item.1,
 					item.2,
 					item.3,
 					item.4,
-					Event::Created { class: item.0, creator: ::RawOrigin::Root.into(), owner: item.1}
+					Event::Created {
+						class: item.0,
+						creator: ::RawOrigin::Root.into(),
+						owner: item.1,
+					},
 				)
-					.expect("can't create class");
+				.expect("can't create class");
 			}
 
 			for item in self.instances {
-				Pallet::<T, I>::do_mint(item.0, item.1, item.2, |_|Ok(()))
+				Pallet::<T, I>::do_mint(item.0, item.1, item.2, |_| Ok(()))
 					.expect("can't mint instance");
 			}
 
 			for item in self.classes_metadata {
-				let data = item.1.try_into()
-					.expect("can't convect classes_metadata's data");
-				Pallet::<T, I>::do_set_class_metadata(&item.0,  data, item.2, None)
+				let data = item.1.try_into().expect("can't convect classes_metadata's data");
+				Pallet::<T, I>::do_set_class_metadata(item.0, data, item.2, None, |_, _| Ok(()))
 					.expect("can't set class metadata");
 			}
 
 			for item in self.classes_attributes {
-				let key = item.1.try_into()
-					.expect("can't convect classes_attributes's key");
-				let value = item.2.try_into()
-					.expect("can't convect classes_attributes's value");
+				let key = item.1.try_into().expect("can't convect classes_attributes's key");
+				let value = item.2.try_into().expect("can't convect classes_attributes's value");
 				Pallet::<T, I>::do_set_attribute(&item.0, &None, &key, &value)
 					.expect("can't set class attribute");
 			}
 
 			for item in self.instances_metadata {
-				let data = item.2.try_into()
-					.expect("can't convect instances_metadata's data");
+				let data = item.2.try_into().expect("can't convect instances_metadata's data");
 				Pallet::<T, I>::do_set_instance_metadata(
-					item.0, 
-					item.1, 
-					data, 
+					item.0,
+					item.1,
+					data,
 					item.3,
 					None,
 					|_, _| Ok(()),
 				)
-					.expect("can't set instance metadata");
+				.expect("can't set instance metadata");
 			}
 
 			for item in self.instance_attributes {
-				let key = item.2.try_into()
-					.expect("can't convect instance_attributes's key");
-				let value = item.3.try_into()
-					.expect("can't convect instance_attributes's value");
+				let key = item.2.try_into().expect("can't convect instance_attributes's key");
+				let value = item.3.try_into().expect("can't convect instance_attributes's value");
 				Pallet::<T, I>::do_set_attribute(&item.0, &Some(item.1), &key, &value)
 					.expect("can't set instance attribute");
 			}
@@ -1099,15 +1097,16 @@ pub mod pallet {
 			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
-			
-			// Проверяем совпадает ли владелец 
+
+			// Проверяем совпадает ли владелец
 			let mut class_details =
 				Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
-			
+
 			Self::is_class_owner(&maybe_check_owner, &class_details)?;
 			Self::is_unfrozen(&class, &maybe_instance);
 
-			// Если класс не имеет атрибуета по заданному ключу, увеличиваем счетчик колличества атрибутов
+			// Если класс не имеет атрибуета по заданному ключу, увеличиваем счетчик колличества
+			// атрибутов
 			let attribute = Attribute::<T, I>::get((class, maybe_instance, &key));
 			if attribute.is_none() {
 				class_details.attributes.saturating_inc();
@@ -1162,10 +1161,10 @@ pub mod pallet {
 
 			let mut class_details =
 				Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
-			
+
 			Self::is_class_owner(&maybe_check_owner, &class_details)?;
 			Self::is_unfrozen(&class, &maybe_instance)?;
-		
+
 			if let Some((_, deposit)) = Attribute::<T, I>::take((class, maybe_instance, &key)) {
 				class_details.attributes.saturating_dec();
 				class_details.total_deposit.saturating_reduce(deposit);
@@ -1206,17 +1205,17 @@ pub mod pallet {
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
 
 			Self::do_set_instance_metadata(
-				class, 
-				instance, 
-				data, 
-				is_frozen, 
+				class,
+				instance,
+				data,
+				is_frozen,
 				maybe_check_owner,
-				|class_details, metadata|{
+				|class_details, metadata| {
 					let was_frozen = metadata.as_ref().map_or(false, |m| m.is_frozen);
-					Self::is_class_owner(&maybe_check_owner, &class_details)?; 
+					Self::is_class_owner(&maybe_check_owner, &class_details)?;
 					ensure!(maybe_check_owner.is_none() || !was_frozen, Error::<T, I>::Frozen);
 					Ok(())
-				} 
+				},
 			)
 		}
 
@@ -1245,7 +1244,7 @@ pub mod pallet {
 
 			let mut class_details =
 				Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
-			
+
 			Self::is_class_owner(&maybe_check_owner, &class_details)?;
 
 			InstanceMetadataOf::<T, I>::try_mutate_exists(class, instance, |metadata| {
@@ -1297,12 +1296,12 @@ pub mod pallet {
 				data,
 				is_frozen,
 				maybe_check_owner,
-				|class_details, metadata|{
+				|class_details, metadata| {
 					let was_frozen = metadata.as_ref().map_or(false, |m| m.is_frozen);
-					Self::is_class_owner(&maybe_check_owner, &class_details)?; 
+					Self::is_class_owner(&maybe_check_owner, &class_details)?;
 					ensure!(maybe_check_owner.is_none() || !was_frozen, Error::<T, I>::Frozen);
 					Ok(())
-				} 
+				},
 			)
 		}
 
@@ -1377,7 +1376,7 @@ pub mod pallet {
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		fn is_class_owner(
 			maybe_check_owner: &Option<T::AccountId>,
-			class_details: &ClassDetails<T::AccountId, DepositBalanceOf<T, I>>
+			class_details: &ClassDetails<T::AccountId, DepositBalanceOf<T, I>>,
 		) -> DispatchResult {
 			if let Some(check_owner) = &maybe_check_owner {
 				ensure!(check_owner == &class_details.owner, Error::<T, I>::NoPermission);
@@ -1385,7 +1384,7 @@ pub mod pallet {
 
 			Ok(())
 		}
-		
+
 		fn is_unfrozen(
 			class: &T::ClassId,
 			maybe_instance: &Option<T::InstanceId>,
