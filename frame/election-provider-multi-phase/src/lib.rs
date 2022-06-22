@@ -706,10 +706,10 @@ pub mod pallet {
 		/// The weight of the pallet.
 		type WeightInfo: WeightInfo;
 
-		/// The multiple of the signed submission punishment for bad submission
-		/// during the emergency phase.
+		/// The multiple of regular deposit needed for signed phase during
+		/// emergency phase.
 		#[pallet::constant]
-		type EmergencyPunishmentMultiple: Get<u32>;
+		type EmergencyDepositMultiple: Get<u32>;
 	}
 
 	#[pallet::hooks]

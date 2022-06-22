@@ -527,7 +527,7 @@ impl<T: Config> Pallet<T> {
 		raw_solution: &RawSolution<SolutionOf<T::MinerConfig>>,
 		size: SolutionOrSnapshotSize,
 	) -> BalanceOf<T> {
-		BalanceOf::<T>::from(T::EmergencyPunishmentMultiple::get()) *
+		BalanceOf::<T>::from(T::EmergencyDepositMultiple::get()) *
 			Self::deposit_for(raw_solution, size)
 	}
 }
