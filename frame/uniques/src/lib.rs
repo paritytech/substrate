@@ -88,10 +88,10 @@ pub mod pallet {
 		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// Identifier for the collection of item.
-		type CollectionId: Member + Parameter + MaxEncodedLen + Copy;
+		type CollectionId: Member + Parameter + MaxEncodedLen + Copy + MaybeSerializeDeserialize;
 
 		/// The type used to identify a unique item within a collection.
-		type ItemId: Member + Parameter + MaxEncodedLen + Copy;
+		type ItemId: Member + Parameter + MaxEncodedLen + Copy + MaybeSerializeDeserialize;
 
 		/// The currency mechanism, used for paying for reserves.
 		type Currency: ReservableCurrency<Self::AccountId>;
@@ -247,30 +247,31 @@ pub mod pallet {
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
-		/// Genesis assets clases: class, owner, admin, deposit, free_holding
-		pub classes: Vec<(T::ClassId, T::AccountId, T::AccountId, DepositBalanceOf<T, I>, bool)>,
-		/// Genesis assets clases instances: class, instance, owner
-		pub instances: Vec<(T::ClassId, T::InstanceId, T::AccountId)>,
-		/// Genesis assets clases metadata: class, data, is_frozen
-		pub classes_metadata: Vec<(T::ClassId, Vec<u8>, bool)>,
-		/// Genesis assets clases attributes: class, key, value
-		pub classes_attributes: Vec<(T::ClassId, Vec<u8>, Vec<u8>)>,
-		/// Genesis assets clases instances metadatas: class, instance, data, is_frozen  
-		pub instances_metadata: Vec<(T::ClassId, T::InstanceId, Vec<u8>, bool)>,
-		/// Genesis assets clases instances attributes: class, instance, key, value
-		pub instance_attributes: Vec<(T::ClassId, T::InstanceId, Vec<u8>, Vec<u8>)>,
+		/// Genesis assets collections: collection, owner, admin, deposit, free_holding
+		pub collections:
+			Vec<(T::CollectionId, T::AccountId, T::AccountId, DepositBalanceOf<T, I>, bool)>,
+		/// Genesis assets collections items: collection, item, owner
+		pub items: Vec<(T::CollectionId, T::ItemId, T::AccountId)>,
+		/// Genesis assets collections metadata: collection, data, is_frozen
+		pub collections_metadata: Vec<(T::CollectionId, Vec<u8>, bool)>,
+		/// Genesis assets collections attributes: collection, key, value
+		pub collections_attributes: Vec<(T::CollectionId, Vec<u8>, Vec<u8>)>,
+		/// Genesis assets collections items metadatas: collection, item, data, is_frozen  
+		pub item_metadata: Vec<(T::CollectionId, T::ItemId, Vec<u8>, bool)>,
+		/// Genesis assets collections items attributes: collection, item, key, value
+		pub item_attributes: Vec<(T::CollectionId, T::ItemId, Vec<u8>, Vec<u8>)>,
 	}
 
 	#[cfg(feature = "std")]
 	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
 		fn default() -> Self {
 			Self {
-				classes: Default::default(),
-				instances: Default::default(),
-				classes_metadata: Default::default(),
-				classes_attributes: Default::default(),
-				instances_metadata: Default::default(),
-				instance_attributes: Default::default(),
+				collections: Default::default(),
+				items: Default::default(),
+				collections_metadata: Default::default(),
+				collections_attributes: Default::default(),
+				item_metadata: Default::default(),
+				item_attributes: Default::default(),
 			}
 		}
 	}
@@ -278,58 +279,56 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I> {
 		fn build(&self) {
-			for item in self.classes {
-				Pallet::<T, I>::do_create_class(
+			for item in self.collections {
+				Pallet::<T, I>::do_create_collection(
 					item.0,
 					item.1,
 					item.2,
 					item.3,
 					item.4,
 					Event::Created {
-						class: item.0,
+						collection: item.0,
 						creator: ::RawOrigin::Root.into(),
 						owner: item.1,
 					},
 				)
-				.expect("can't create class");
+				.expect("can't create collection");
 			}
 
-			for item in self.instances {
+			for item in self.items {
 				Pallet::<T, I>::do_mint(item.0, item.1, item.2, |_| Ok(()))
-					.expect("can't mint instance");
+					.expect("can't mint item");
 			}
 
-			for item in self.classes_metadata {
-				let data = item.1.try_into().expect("can't convect classes_metadata's data");
-				Pallet::<T, I>::do_set_class_metadata(item.0, data, item.2, None, |_, _| Ok(()))
-					.expect("can't set class metadata");
+			for item in self.collections_metadata {
+				let data = item.1.try_into().expect("can't convect collections_metadata's data");
+				Pallet::<T, I>::do_set_collection_metadata(item.0, data, item.2, None, |_, _| {
+					Ok(())
+				})
+				.expect("can't set collection metadata");
 			}
 
-			for item in self.classes_attributes {
-				let key = item.1.try_into().expect("can't convect classes_attributes's key");
-				let value = item.2.try_into().expect("can't convect classes_attributes's value");
-				Pallet::<T, I>::do_set_attribute(&item.0, &None, &key, &value)
-					.expect("can't set class attribute");
+			for item in self.collections_attributes {
+				let key = item.1.try_into().expect("can't convect collections_attributes's key");
+				let value =
+					item.2.try_into().expect("can't convect collections_attributes's value");
+				Pallet::<T, I>::do_set_attribute(item.0, None, &key, &value)
+					.expect("can't set collection attribute");
 			}
 
-			for item in self.instances_metadata {
-				let data = item.2.try_into().expect("can't convect instances_metadata's data");
-				Pallet::<T, I>::do_set_instance_metadata(
-					item.0,
-					item.1,
-					data,
-					item.3,
-					None,
-					|_, _| Ok(()),
-				)
-				.expect("can't set instance metadata");
+			for item in self.item_metadata {
+				let data = item.2.try_into().expect("can't convect item_metadata's data");
+				Pallet::<T, I>::do_set_item_metadata(item.0, item.1, data, item.3, None, |_, _| {
+					Ok(())
+				})
+				.expect("can't set item metadata");
 			}
 
-			for item in self.instance_attributes {
-				let key = item.2.try_into().expect("can't convect instance_attributes's key");
-				let value = item.3.try_into().expect("can't convect instance_attributes's value");
-				Pallet::<T, I>::do_set_attribute(&item.0, &Some(item.1), &key, &value)
-					.expect("can't set instance attribute");
+			for item in self.item_attributes {
+				let key = item.2.try_into().expect("can't convect item_attributes's key");
+				let value = item.3.try_into().expect("can't convect item_attributes's value");
+				Pallet::<T, I>::do_set_attribute(item.0, Some(item.1), &key, &value)
+					.expect("can't set item attribute");
 			}
 		}
 	}
@@ -338,7 +337,6 @@ pub mod pallet {
 	/// Keeps track of the number of items a collection might have.
 	pub(super) type CollectionMaxSupply<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Blake2_128Concat, T::CollectionId, u32, OptionQuery>;
-
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -1132,11 +1130,11 @@ pub mod pallet {
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
 
-			let mut class_details =
-				Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
+			let mut collection_details =
+				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
 
-			Self::is_class_owner(&maybe_check_owner, &class_details)?;
-			Self::is_unfrozen(&class, &maybe_instance);
+			Self::is_collection_owner(&maybe_check_owner, &collection_details)?;
+			Self::is_unfrozen(&collection, &maybe_item);
 
 			let attribute = Attribute::<T, I>::get((collection, maybe_item, &key));
 			if attribute.is_none() {
@@ -1188,11 +1186,11 @@ pub mod pallet {
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
 
-			let mut class_details =
-				Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
+			let mut collection_details =
+				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
 
-			Self::is_class_owner(&maybe_check_owner, &class_details)?;
-			Self::is_unfrozen(&class, &maybe_instance)?;
+			Self::is_collection_owner(&maybe_check_owner, &collection_details)?;
+			Self::is_unfrozen(&collection, &maybe_item)?;
 
 			if let Some((_, deposit)) = Attribute::<T, I>::take((collection, maybe_item, &key)) {
 				collection_details.attributes.saturating_dec();
@@ -1233,15 +1231,15 @@ pub mod pallet {
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
 
-			Self::do_set_instance_metadata(
-				class,
-				instance,
+			Self::do_set_item_metadata(
+				collection,
+				item,
 				data,
 				is_frozen,
 				maybe_check_owner,
-				|class_details, metadata| {
+				|collection_details, metadata| {
 					let was_frozen = metadata.as_ref().map_or(false, |m| m.is_frozen);
-					Self::is_class_owner(&maybe_check_owner, &class_details)?;
+					Self::is_collection_owner(&maybe_check_owner, &collection_details)?;
 					ensure!(maybe_check_owner.is_none() || !was_frozen, Error::<T, I>::Frozen);
 					Ok(())
 				},
@@ -1271,10 +1269,10 @@ pub mod pallet {
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
 
-			let mut class_details =
-				Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
+			let mut collection_details =
+				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
 
-			Self::is_class_owner(&maybe_check_owner, &class_details)?;
+			Self::is_collection_owner(&maybe_check_owner, &collection_details)?;
 
 			ItemMetadataOf::<T, I>::try_mutate_exists(collection, item, |metadata| {
 				let was_frozen = metadata.as_ref().map_or(false, |m| m.is_frozen);
@@ -1320,14 +1318,14 @@ pub mod pallet {
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
 
-			Self::do_set_class_metadata(
-				class,
+			Self::do_set_collection_metadata(
+				collection,
 				data,
 				is_frozen,
 				maybe_check_owner,
-				|class_details, metadata| {
+				|collection_details, metadata| {
 					let was_frozen = metadata.as_ref().map_or(false, |m| m.is_frozen);
-					Self::is_class_owner(&maybe_check_owner, &class_details)?;
+					Self::is_collection_owner(&maybe_check_owner, &collection_details)?;
 					ensure!(maybe_check_owner.is_none() || !was_frozen, Error::<T, I>::Frozen);
 					Ok(())
 				},
@@ -1355,8 +1353,9 @@ pub mod pallet {
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
 
-			let details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
-			Self::is_class_owner(&maybe_check_owner, &details)?;
+			let details =
+				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
+			Self::is_collection_owner(&maybe_check_owner, &details)?;
 
 			CollectionMetadataOf::<T, I>::try_mutate_exists(collection, |metadata| {
 				let was_frozen = metadata.as_ref().map_or(false, |m| m.is_frozen);
@@ -1445,25 +1444,24 @@ pub mod pallet {
 	}
 
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
-		fn is_class_owner(
+		fn is_collection_owner(
 			maybe_check_owner: &Option<T::AccountId>,
-			class_details: &ClassDetails<T::AccountId, DepositBalanceOf<T, I>>,
+			collection_details: &CollectionDetails<T::AccountId, DepositBalanceOf<T, I>>,
 		) -> DispatchResult {
 			if let Some(check_owner) = &maybe_check_owner {
-				ensure!(check_owner == &class_details.owner, Error::<T, I>::NoPermission);
+				ensure!(check_owner == &collection_details.owner, Error::<T, I>::NoPermission);
 			}
 
 			Ok(())
 		}
 
 		fn is_unfrozen(
-			class: &T::ClassId,
-			maybe_instance: &Option<T::InstanceId>,
+			collection: &T::CollectionId,
+			maybe_item: &Option<T::ItemId>,
 		) -> DispatchResult {
-			let maybe_is_frozen = match maybe_instance {
-				None => ClassMetadataOf::<T, I>::get(class).map(|v| v.is_frozen),
-				Some(instance) =>
-					InstanceMetadataOf::<T, I>::get(class, instance).map(|v| v.is_frozen),
+			let maybe_is_frozen = match maybe_item {
+				None => CollectionMetadataOf::<T, I>::get(collection).map(|v| v.is_frozen),
+				Some(item) => ItemMetadataOf::<T, I>::get(collection, item).map(|v| v.is_frozen),
 			};
 			ensure!(!maybe_is_frozen.unwrap_or(false), Error::<T, I>::Frozen);
 

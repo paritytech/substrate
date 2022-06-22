@@ -201,113 +201,113 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
-	pub fn do_set_instance_metadata(
-		class: T::ClassId,
-		instance: T::InstanceId,
+	pub fn do_set_item_metadata(
+		collection: T::CollectionId,
+		item: T::ItemId,
 		data: BoundedVec<u8, T::StringLimit>,
 		is_frozen: bool,
 		maybe_check_owner: Option<T::AccountId>,
 		with_details: impl FnOnce(
-			&ClassDetailsFor<T, I>,
-			&Option<InstanceMetadata<DepositBalanceOf<T, I>, T::StringLimit>>,
+			&CollectionDetailsFor<T, I>,
+			&Option<ItemMetadata<DepositBalanceOf<T, I>, T::StringLimit>>,
 		) -> DispatchResult,
 	) -> DispatchResult {
-		InstanceMetadataOf::<T, I>::try_mutate_exists(class, instance, |metadata| {
-			let mut class_details =
-				Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
+		ItemMetadataOf::<T, I>::try_mutate_exists(collection, item, |metadata| {
+			let mut collection_details =
+				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
 
-			with_details(&class_details, metadata)?;
+			with_details(&collection_details, metadata)?;
 
 			if metadata.is_none() {
-				class_details.instance_metadatas.saturating_inc();
+				collection_details.item_metadatas.saturating_inc();
 			}
 
 			let old_deposit = metadata.take().map_or(Zero::zero(), |m| m.deposit);
-			class_details.total_deposit.saturating_reduce(old_deposit);
+			collection_details.total_deposit.saturating_reduce(old_deposit);
 			let mut deposit = Zero::zero();
-			if !class_details.free_holding && maybe_check_owner.is_some() {
+			if !collection_details.free_holding && maybe_check_owner.is_some() {
 				deposit = T::DepositPerByte::get()
 					.saturating_mul(((data.len()) as u32).into())
 					.saturating_add(T::MetadataDepositBase::get());
 			}
 			if deposit > old_deposit {
-				T::Currency::reserve(&class_details.owner, deposit - old_deposit)?;
+				T::Currency::reserve(&collection_details.owner, deposit - old_deposit)?;
 			} else if deposit < old_deposit {
-				T::Currency::unreserve(&class_details.owner, old_deposit - deposit);
+				T::Currency::unreserve(&collection_details.owner, old_deposit - deposit);
 			}
-			class_details.total_deposit.saturating_accrue(deposit);
+			collection_details.total_deposit.saturating_accrue(deposit);
 
-			*metadata = Some(InstanceMetadata { deposit, data: data.clone(), is_frozen });
+			*metadata = Some(ItemMetadata { deposit, data: data.clone(), is_frozen });
 
-			Class::<T, I>::insert(&class, &class_details);
-			Self::deposit_event(Event::MetadataSet { class, instance, data, is_frozen });
+			Collection::<T, I>::insert(&collection, &collection_details);
+			Self::deposit_event(Event::MetadataSet { collection, item, data, is_frozen });
 			Ok(())
 		})
 	}
 
-	pub fn do_set_class_metadata(
-		class: T::ClassId,
+	pub fn do_set_collection_metadata(
+		collection: T::CollectionId,
 		data: BoundedVec<u8, T::StringLimit>,
 		is_frozen: bool,
 		maybe_check_owner: Option<T::AccountId>,
 		with_details: impl FnOnce(
-			&ClassDetailsFor<T, I>,
-			&Option<ClassMetadata<DepositBalanceOf<T, I>, T::StringLimit>>,
+			&CollectionDetailsFor<T, I>,
+			&Option<CollectionMetadata<DepositBalanceOf<T, I>, T::StringLimit>>,
 		) -> DispatchResult,
 	) -> DispatchResult {
-		ClassMetadataOf::<T, I>::try_mutate_exists(class, |metadata| {
-			let mut class_details =
-				Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
+		CollectionMetadataOf::<T, I>::try_mutate_exists(collection, |metadata| {
+			let mut collection_details =
+				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
 
-			with_details(&class_details, &metadata)?;
+			with_details(&collection_details, metadata)?;
 
 			let old_deposit = metadata.take().map_or(Zero::zero(), |m| m.deposit);
-			class_details.total_deposit.saturating_reduce(old_deposit);
+			collection_details.total_deposit.saturating_reduce(old_deposit);
 			let mut deposit = Zero::zero();
-			if maybe_check_owner.is_some() && !class_details.free_holding {
+			if maybe_check_owner.is_some() && !collection_details.free_holding {
 				deposit = T::DepositPerByte::get()
 					.saturating_mul(((data.len()) as u32).into())
 					.saturating_add(T::MetadataDepositBase::get());
 			}
 			if deposit > old_deposit {
-				T::Currency::reserve(&class_details.owner, deposit - old_deposit)?;
+				T::Currency::reserve(&collection_details.owner, deposit - old_deposit)?;
 			} else if deposit < old_deposit {
-				T::Currency::unreserve(&class_details.owner, old_deposit - deposit);
+				T::Currency::unreserve(&collection_details.owner, old_deposit - deposit);
 			}
-			class_details.total_deposit.saturating_accrue(deposit);
+			collection_details.total_deposit.saturating_accrue(deposit);
 
-			*metadata = Some(ClassMetadata { deposit, data: data.clone(), is_frozen });
+			*metadata = Some(CollectionMetadata { deposit, data: data.clone(), is_frozen });
 
-			Class::<T, I>::insert(&class, class_details);
-			Self::deposit_event(Event::ClassMetadataSet { class, data, is_frozen });
+			Collection::<T, I>::insert(&collection, collection_details);
+			Self::deposit_event(Event::CollectionMetadataSet { collection, data, is_frozen });
 			Ok(())
 		})
 	}
 
 	pub fn do_set_attribute(
-		class: &T::ClassId,
-		maybe_instance: &Option<T::InstanceId>,
+		collection: T::CollectionId,
+		maybe_item: Option<T::ItemId>,
 		key: &BoundedVec<u8, T::KeyLimit>,
 		value: &BoundedVec<u8, T::ValueLimit>,
 	) -> DispatchResult {
-		// If class exists, update class metadata and set/update attribute
-		Class::<T, I>::mutate_exists(class, |opt_class_details| {
-			match opt_class_details {
-				Some(class_details) => {
-					let attribute = Attribute::<T, I>::get((class, maybe_instance, &key));
-					// If the class does not have an attribute for the given key, increase the
+		// If collection exists, update collection metadata and set/update attribute
+		Collection::<T, I>::mutate_exists(collection, |opt_collection_details| {
+			match opt_collection_details {
+				Some(collection_details) => {
+					let attribute = Attribute::<T, I>::get((collection, maybe_item, &key));
+					// If the collection does not have an attribute for the given key, increase the
 					// counter of the number of attributes
 					if attribute.is_none() {
-						class_details.attributes.saturating_inc();
+						collection_details.attributes.saturating_inc();
 					}
 
-					let mut deposit = Attribute::<T, I>::get((class, maybe_instance, &key))
+					let mut deposit = Attribute::<T, I>::get((collection, maybe_item, &key))
 						.map_or(Zero::zero(), |m| m.1);
 					//Set attribute value
-					Attribute::<T, I>::insert((&class, maybe_instance, &key), (&value, deposit));
+					Attribute::<T, I>::insert((&collection, maybe_item, &key), (&value, deposit));
 					Ok(())
 				},
-				None => Err(Error::<T, I>::UnknownClass),
+				None => Err(Error::<T, I>::UnknownCollection),
 			}
 		})?;
 		Ok(())
