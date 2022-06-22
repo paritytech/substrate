@@ -916,7 +916,7 @@ benchmarks! {
 						h.resize(max_key_len.try_into().unwrap(), n.to_le_bytes()[0]); h })
 		.collect::<Vec<_>>();
 		let keys_bytes = keys.iter().flatten().cloned().collect::<Vec<_>>();
-		let keys_len = keys_bytes.len();
+		let value_len = T::Schedule::get().limits.payload_len / 1024;
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
@@ -935,7 +935,7 @@ benchmarks! {
 				Counter(0, max_key_len as u32), // key_ptr
 				Regular(Instruction::I32Const(max_key_len as i32)), // key_len
 				Regular(Instruction::I32Const(0)), // value_ptr
-				Regular(Instruction::I32Const(keys_len as i32)), // value_len
+				Regular(Instruction::I32Const(value_len as i32)), // value_len
 				Regular(Instruction::Call(0)),
 				Regular(Instruction::Drop),
 			])),
@@ -958,14 +958,13 @@ benchmarks! {
 
 	#[skip_meta]
 	seal_set_storage_per_new_kb {
-		let n in 0 .. T::Schedule::get().limits.payload_len / 2048;
+		let n in 0 .. T::Schedule::get().limits.payload_len / 2048; // half of the max payload_len in kb
 		let max_key_len = T::MaxStorageKeyLen::get();
 		let keys = (0 .. n * API_BENCHMARK_BATCH_SIZE)
 				.map(|n| { let mut h = T::Hashing::hash_of(&n).as_ref().to_vec();
 						h.resize(max_key_len.try_into().unwrap(), n.to_le_bytes()[0]); h })
 		.collect::<Vec<_>>();
 		let key_bytes = keys.iter().flatten().cloned().collect::<Vec<_>>();
-		let keys_len = keys_bytes.len();
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
@@ -984,7 +983,7 @@ benchmarks! {
 				Counter(0, max_key_len as u32), // key_ptr
 				Regular(Instruction::I32Const(max_key_len as i32)), // key_len
 				Regular(Instruction::I32Const(0)), // value_ptr
-				Regular(Instruction::I32Const((keys_len as i32))), // value_len
+				Regular(Instruction::I32Const((n * 2048) as i32)), // value_len = max payload_len
 				Regular(Instruction::Call(0)),
 				Regular(Instruction::Drop),
 			])),
@@ -1007,7 +1006,7 @@ benchmarks! {
 
 	#[skip_meta]
 	seal_set_storage_per_old_kb {
-		let n in 0 .. T::Schedule::get().limits.payload_len / 2048;
+		let n in 0 .. T::Schedule::get().limits.payload_len / 2048; // half of the max payload_len in kb
 		let max_key_len = T::MaxStorageKeyLen::get();
 		let keys = (0 .. n * API_BENCHMARK_BATCH_SIZE)
 				.map(|n| { let mut h = T::Hashing::hash_of(&n).as_ref().to_vec();
@@ -1025,18 +1024,14 @@ benchmarks! {
 			data_segments: vec![
 				DataSegment {
 					offset: 0,
-					value: max_key_len.to_le_bytes().to_vec(),
-				},
-				DataSegment {
-					offset: 32,
 					value: key_bytes,
 				},
 			],
 			call_body: Some(body::repeated_dyn(API_BENCHMARK_BATCH_SIZE, vec![
-				Counter(32, max_key_len as u32), // key_ptr
-				Regular(Instruction::I32Const(0)), // key_len
-				Regular(Instruction::I32Const(32)), // value_ptr
-				Regular(Instruction::I32Const(32)), // value_len
+				Counter(0, max_key_len as u32), // key_ptr
+				Regular(Instruction::I32Const(max_key_len as i32)), // key_len
+				Regular(Instruction::I32Const(0)), // value_ptr
+				Regular(Instruction::I32Const(0)), // value_len is 0 as testing vs pre-existing value len
 				Regular(Instruction::Call(0)),
 				Regular(Instruction::Drop),
 			])),
@@ -1048,7 +1043,7 @@ benchmarks! {
 			Storage::<T>::write(
 				&info.trie_id,
 				&VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
-				Some(vec![42u8; (n * 1024) as usize]),
+				Some(vec![42u8; (n * 2048) as usize]), // value_len = max payload_len
 				None,
 				false,
 			)
@@ -1081,16 +1076,12 @@ benchmarks! {
 			data_segments: vec![
 				DataSegment {
 					offset: 0,
-					value: max_key_len.to_le_bytes().to_vec(),
-				},
-				DataSegment {
-					offset: 32,
 					value: key_bytes,
 				},
 			],
 			call_body: Some(body::repeated_dyn(r * API_BENCHMARK_BATCH_SIZE, vec![
-				Counter(32, max_key_len as u32), // key_ptr
-				Regular(Instruction::I32Const(0)), // key_len
+				Counter(0, max_key_len as u32), // key_ptr
+				Regular(Instruction::I32Const(max_key_len as i32)), // key_len
 				Regular(Instruction::Call(0)),
 				Regular(Instruction::Drop),
 			])),
@@ -1114,7 +1105,7 @@ benchmarks! {
 
 	#[skip_meta]
 	seal_clear_storage_per_kb {
-		let n in 0 .. T::Schedule::get().limits.payload_len / 2048;
+		let n in 0 .. T::Schedule::get().limits.payload_len / 2048; // half of the max payload_len in kb
 		let max_key_len = T::MaxStorageKeyLen::get();
 		let keys = (0 .. n * API_BENCHMARK_BATCH_SIZE)
 				.map(|n| { let mut h = T::Hashing::hash_of(&n).as_ref().to_vec();
@@ -1132,16 +1123,12 @@ benchmarks! {
 			data_segments: vec![
 				DataSegment {
 					offset: 0,
-					value: max_key_len.to_le_bytes().to_vec(),
-				},
-				DataSegment {
-					offset: 32,
 					value: key_bytes,
 				},
 			],
 			call_body: Some(body::repeated_dyn(API_BENCHMARK_BATCH_SIZE, vec![
-				Counter(32, max_key_len as u32), // key_ptr
-				Regular(Instruction::I32Const(0)), // key_len
+				Counter(0, max_key_len as u32), // key_ptr
+				Regular(Instruction::I32Const(max_key_len as i32)), // key_len
 				Regular(Instruction::Call(0)),
 				Regular(Instruction::Drop),
 			])),
@@ -1153,7 +1140,7 @@ benchmarks! {
 			Storage::<T>::write(
 				&info.trie_id,
 				&VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
-				Some(vec![42u8; (n * 1024) as usize]),
+				Some(vec![42u8; (n * 2048) as usize]), // value_len = max payload_len
 				None,
 				false,
 			)
@@ -1184,22 +1171,18 @@ benchmarks! {
 			data_segments: vec![
 				DataSegment {
 					offset: 0,
-					value: max_key_len.to_le_bytes().to_vec(),
-				},
-				DataSegment {
-					offset: 32,
 					value: key_bytes,
 				},
 				DataSegment {
-					offset: 32 + key_bytes_len as u32,
+					offset: key_bytes_len as u32,
 					value: T::Schedule::get().limits.payload_len.to_le_bytes().into(),
 				},
 			],
 			call_body: Some(body::repeated_dyn(r * API_BENCHMARK_BATCH_SIZE, vec![
-				Counter(32, max_key_len as u32), // key_ptr
-				Regular(Instruction::I32Const(0)), // key_len
-				Regular(Instruction::I32Const((32 + key_bytes_len + 4) as i32)), // out_ptr
-				Regular(Instruction::I32Const(32 + key_bytes_len as i32)), // out_len_ptr
+				Counter(0, max_key_len as u32), // key_ptr
+				Regular(Instruction::I32Const(max_key_len as i32)), // key_len
+				Regular(Instruction::I32Const((key_bytes_len + 4) as i32)), // out_ptr
+				Regular(Instruction::I32Const(key_bytes_len as i32)), // out_len_ptr
 				Regular(Instruction::Call(0)),
 				Regular(Instruction::Drop),
 			])),
@@ -1223,7 +1206,7 @@ benchmarks! {
 
 	#[skip_meta]
 	seal_get_storage_per_kb {
-		let n in 0 .. T::Schedule::get().limits.payload_len / 2048;
+		let n in 0 .. T::Schedule::get().limits.payload_len / 2048; // half of the max payload_len in kb
 		let max_key_len = T::MaxStorageKeyLen::get();
 		let keys = (0 .. n * API_BENCHMARK_BATCH_SIZE)
 				.map(|n| { let mut h = T::Hashing::hash_of(&n).as_ref().to_vec();
@@ -1242,22 +1225,18 @@ benchmarks! {
 			data_segments: vec![
 				DataSegment {
 					offset: 0,
-					value: max_key_len.to_le_bytes().to_vec(),
-				},
-				DataSegment {
-					offset: 32,
 					value: key_bytes,
 				},
 				DataSegment {
-					offset: 32 + key_bytes_len as u32,
+					offset: key_bytes_len as u32,
 					value: T::Schedule::get().limits.payload_len.to_le_bytes().into(),
 				},
 			],
 			call_body: Some(body::repeated_dyn(API_BENCHMARK_BATCH_SIZE, vec![
-				Counter(32, max_key_len as u32), // key_ptr
-				Regular(Instruction::I32Const(0)), // key_len
-				Regular(Instruction::I32Const((32 + key_bytes_len + 4) as i32)), // out_ptr
-				Regular(Instruction::I32Const(32 + key_bytes_len as i32)), // out_len_ptr
+				Counter(0, max_key_len as u32), // key_ptr
+				Regular(Instruction::I32Const(max_key_len as i32)), // key_len
+				Regular(Instruction::I32Const((key_bytes_len + 4) as i32)), // out_ptr
+				Regular(Instruction::I32Const(key_bytes_len as i32)), // out_len_ptr
 				Regular(Instruction::Call(0)),
 				Regular(Instruction::Drop),
 			])),
@@ -1269,7 +1248,7 @@ benchmarks! {
 			Storage::<T>::write(
 				&info.trie_id,
 				&VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
-				Some(vec![42u8; (n * 1024) as usize]),
+				Some(vec![42u8; (n * 2048) as usize]), // value_len = max payload_len
 				None,
 				false,
 			)
@@ -1301,16 +1280,12 @@ benchmarks! {
 			data_segments: vec![
 				DataSegment {
 					offset: 0,
-					value: max_key_len.to_le_bytes().to_vec(),
-				},
-				DataSegment {
-					offset: 32,
 					value: key_bytes,
 				},
 			],
 			call_body: Some(body::repeated_dyn(r * API_BENCHMARK_BATCH_SIZE, vec![
-				Counter(32, max_key_len as u32), // key_ptr
-				Regular(Instruction::I32Const(0)), // key_len
+				Counter(0, max_key_len as u32), // key_ptr
+				Regular(Instruction::I32Const(max_key_len as i32)), // key_len
 				Regular(Instruction::Call(0)),
 				Regular(Instruction::Drop),
 			])),
@@ -1334,7 +1309,7 @@ benchmarks! {
 
 	#[skip_meta]
 	seal_contains_storage_per_kb {
-		let n in 0 .. T::Schedule::get().limits.payload_len / 2048;
+		let n in 0 .. T::Schedule::get().limits.payload_len / 2048; // half of the max payload_len in kb
 		let max_key_len = T::MaxStorageKeyLen::get();
 		let keys = (0 .. n * API_BENCHMARK_BATCH_SIZE)
 				.map(|n| { let mut h = T::Hashing::hash_of(&n).as_ref().to_vec();
@@ -1352,16 +1327,12 @@ benchmarks! {
 			data_segments: vec![
 				DataSegment {
 					offset: 0,
-					value: max_key_len.to_le_bytes().to_vec(),
-				},
-				DataSegment {
-					offset: 32,
 					value: key_bytes,
 				},
 			],
 			call_body: Some(body::repeated_dyn(API_BENCHMARK_BATCH_SIZE, vec![
-				Counter(32, max_key_len as u32), // key_ptr
-				Regular(Instruction::I32Const(0)), // key_len
+				Counter(0, max_key_len as u32), // key_ptr
+				Regular(Instruction::I32Const(max_key_len as i32)), // key_len
 				Regular(Instruction::Call(0)),
 				Regular(Instruction::Drop),
 			])),
@@ -1373,7 +1344,7 @@ benchmarks! {
 			Storage::<T>::write(
 				&info.trie_id,
 				&VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
-				Some(vec![42u8; (n * 1024) as usize]),
+				Some(vec![42u8; (n * 2048) as usize]), // value_len = max payload_len
 				None,
 				false,
 			)
@@ -1404,22 +1375,18 @@ benchmarks! {
 			data_segments: vec![
 				DataSegment {
 					offset: 0,
-					value: max_key_len.to_le_bytes().to_vec(),
-				},
-				DataSegment {
-					offset: 32,
 					value: key_bytes,
 				},
 				DataSegment {
-					offset: 32 + key_bytes_len as u32,
+					offset: key_bytes_len as u32,
 					value: T::Schedule::get().limits.payload_len.to_le_bytes().into(),
 				},
 			],
 			call_body: Some(body::repeated_dyn(r * API_BENCHMARK_BATCH_SIZE, vec![
-				Counter(32, max_key_len as u32), // key_ptr
-				Regular(Instruction::I32Const(0)), // key_len
-				Regular(Instruction::I32Const((32 + key_bytes_len + 4) as i32)), // out_ptr
-				Regular(Instruction::I32Const(32 + key_bytes_len as i32)), // out_len_ptr
+				Counter(0, max_key_len as u32), // key_ptr
+				Regular(Instruction::I32Const(max_key_len as i32)), // key_len
+				Regular(Instruction::I32Const((key_bytes_len + 4) as i32)), // out_ptr
+				Regular(Instruction::I32Const(key_bytes_len as i32)), // out_len_ptr
 				Regular(Instruction::Call(0)),
 				Regular(Instruction::Drop),
 			])),
@@ -1443,7 +1410,7 @@ benchmarks! {
 
 	#[skip_meta]
 	seal_take_storage_per_kb {
-		let n in 0 .. T::Schedule::get().limits.payload_len / 2048;
+		let n in 0 .. T::Schedule::get().limits.payload_len / 2048; // half of the max payload_len in kb
 		let max_key_len = T::MaxStorageKeyLen::get();
 		let keys = (0 .. n * API_BENCHMARK_BATCH_SIZE)
 				.map(|n| { let mut h = T::Hashing::hash_of(&n).as_ref().to_vec();
@@ -1462,22 +1429,18 @@ benchmarks! {
 			data_segments: vec![
 				DataSegment {
 					offset: 0,
-					value: max_key_len.to_le_bytes().to_vec(),
-				},
-				DataSegment {
-					offset: 32,
 					value: key_bytes,
 				},
 				DataSegment {
-					offset: 32 + key_bytes_len as u32,
+					offset: key_bytes_len as u32,
 					value: T::Schedule::get().limits.payload_len.to_le_bytes().into(),
 				},
 			],
 			call_body: Some(body::repeated_dyn(API_BENCHMARK_BATCH_SIZE, vec![
-				Counter(32, max_key_len as u32), // key_ptr
-				Regular(Instruction::I32Const(0)), // key_len
-				Regular(Instruction::I32Const((32 + key_bytes_len + 4) as i32)), // out_ptr
-				Regular(Instruction::I32Const(32 + key_bytes_len as i32)), // out_len_ptr
+				Counter(0, max_key_len as u32), // key_ptr
+				Regular(Instruction::I32Const(max_key_len as i32)), // key_len
+				Regular(Instruction::I32Const((key_bytes_len + 4) as i32)), // out_ptr
+				Regular(Instruction::I32Const(key_bytes_len as i32)), // out_len_ptr
 				Regular(Instruction::Call(0)),
 				Regular(Instruction::Drop),
 			])),
@@ -1489,7 +1452,7 @@ benchmarks! {
 			Storage::<T>::write(
 				&info.trie_id,
 				&VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
-				Some(vec![42u8; (n * 1024) as usize]),
+				Some(vec![42u8; (n * 2048) as usize]), // value_len = max payload_len
 				None,
 				false,
 			)
