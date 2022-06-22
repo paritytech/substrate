@@ -126,12 +126,12 @@
 //! 2. Any other unforeseen internal error
 //!
 //! A call to `T::ElectionProvider::elect` is made, and `Ok(_)` cannot be returned, then the pallet
-//! proceeds to the [`Phase::Emergency`]. During this phase, any solution can be submitted from
-//! [`Config::ForceOrigin`], without any checking, via [`Pallet::set_emergency_election_result`]
-//! transaction. Hence, `[`Config::ForceOrigin`]` should only be set to a trusted origin, such as
-//! the council or root. Once submitted, the forced solution is kept in [`QueuedSolution`] until the
-//! next call to `T::ElectionProvider::elect`, where it is returned and [`Phase`] goes back to
-//! `Off`.
+//! proceeds to the [`Phase::Emergency`]. During this phase, there are two possibilities. One of
+//! them is to use the [`Pallet::set_emergency_election_result`] function that submits a solution
+//! without any checking. It only accepts solutions from `[`Config::ForceOrigin`]`, hence it should
+//! only be set to a trusted origin, such as the council or root. Once submitted,
+//! the forced solution is kept in [`QueuedSolution`] until the next call to
+//! `T::ElectionProvider::elect`, where it is returned and [`Phase`] goes back to `Off`.
 //!
 //! This implies that the user of this pallet (i.e. a staking pallet) should re-try calling
 //! `T::ElectionProvider::elect` in case of error, until `OK(_)` is returned.
@@ -150,6 +150,14 @@
 //! against any substrate-based chain.
 //!
 //! See the `staking-miner` documentation in the Polkadot repository for more information.
+//!
+//! The other option is to use the `Pallet::submit_emergency_solution` function which allows
+//! you to submit signed solutions during the emergency phase. The only difference between
+//! this function and the [`Pallet::submit`] function is that in
+//! [`Pallet::submit_emergency_solution`] the submissions are checked on the fly.
+//! Good solutions will get rewarded, but bad submissions will be highly punished.
+//! The deposit needed for submitting during the emergency phase is higher compared
+//! to the one in the regular submission.
 //!
 //! ## Feasible Solution (correct solution)
 //!
