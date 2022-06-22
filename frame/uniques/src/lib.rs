@@ -92,10 +92,10 @@ pub mod pallet {
 		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// Identifier for the collection of item.
-		type CollectionId: Member + Parameter + MaxEncodedLen + Copy;
+		type CollectionId: Member + Parameter + MaxEncodedLen + Copy + MaybeSerializeDeserialize;
 
 		/// The type used to identify a unique item within a collection.
-		type ItemId: Member + Parameter + MaxEncodedLen + Copy;
+		type ItemId: Member + Parameter + MaxEncodedLen + Copy + MaybeSerializeDeserialize;
 
 		/// The currency mechanism, used for paying for reserves.
 		type Currency: ReservableCurrency<Self::AccountId>;
@@ -248,6 +248,100 @@ pub mod pallet {
 		(BoundedVec<u8, T::ValueLimit>, DepositBalanceOf<T, I>),
 		OptionQuery,
 	>;
+
+	#[pallet::genesis_config]
+	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
+		/// Genesis assets collections: collection, owner, admin, deposit, free_holding
+		pub collections:
+			Vec<(T::CollectionId, T::AccountId, T::AccountId, DepositBalanceOf<T, I>, bool)>,
+		/// Genesis assets collections items: collection, item, owner
+		pub items: Vec<(T::CollectionId, T::ItemId, T::AccountId)>,
+		/// Genesis assets collections metadata: collection, data, is_frozen
+		pub collections_metadata: Vec<(T::CollectionId, Vec<u8>, bool)>,
+		/// Genesis assets collections attributes: collection, key, value
+		pub collections_attributes: Vec<(T::CollectionId, Vec<u8>, Vec<u8>)>,
+		/// Genesis assets collections items metadatas: collection, item, data, is_frozen  
+		pub item_metadata: Vec<(T::CollectionId, T::ItemId, Vec<u8>, bool)>,
+		/// Genesis assets collections items attributes: collection, item, key, value
+		pub item_attributes: Vec<(T::CollectionId, T::ItemId, Vec<u8>, Vec<u8>)>,
+	}
+
+	#[cfg(feature = "std")]
+	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
+		fn default() -> Self {
+			Self {
+				collections: Default::default(),
+				items: Default::default(),
+				collections_metadata: Default::default(),
+				collections_attributes: Default::default(),
+				item_metadata: Default::default(),
+				item_attributes: Default::default(),
+			}
+		}
+	}
+
+	#[pallet::genesis_build]
+	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I> {
+		fn build(&self) {
+			for item in &self.collections {
+				Pallet::<T, I>::do_create_collection(
+					item.0,
+					item.1.clone(),
+					item.2.clone(),
+					item.3,
+					item.4,
+					Event::Created {
+						collection: item.0,
+						creator: item.1.clone(),
+						owner: item.1.clone(),
+					},
+				)
+				.expect("can't create collection");
+			}
+
+			for item in &self.items {
+				Pallet::<T, I>::do_mint(item.0, item.1, item.2.clone(), |_| Ok(()))
+					.expect("can't mint item");
+			}
+
+			for item in &self.collections_metadata {
+				let data =
+					item.1.clone().try_into().expect("can't convect collections_metadata's data");
+				Pallet::<T, I>::do_set_collection_metadata(item.0, data, item.2, None, |_, _| {
+					Ok(())
+				})
+				.expect("can't set collection metadata");
+			}
+
+			for item in &self.collections_attributes {
+				let key =
+					item.1.clone().try_into().expect("can't convect collections_attributes's key");
+				let value = item
+					.2
+					.clone()
+					.try_into()
+					.expect("can't convect collections_attributes's value");
+				Pallet::<T, I>::do_set_attribute(item.0, None, key, value)
+					.expect("can't set collection attribute");
+			}
+
+			for item in &self.item_metadata {
+				let data = item.2.clone().try_into().expect("can't convect item_metadata's data");
+				Pallet::<T, I>::do_set_item_metadata(item.0, item.1, data, item.3, None, |_, _| {
+					Ok(())
+				})
+				.expect("can't set item metadata");
+			}
+
+			for item in &self.item_attributes {
+				let key = item.2.clone().try_into().expect("can't convect item_attributes's key");
+				let value =
+					item.3.clone().try_into().expect("can't convect item_attributes's value");
+				Pallet::<T, I>::do_set_attribute(item.0, Some(item.1), key, value)
+					.expect("can't set item attribute");
+			}
+		}
+	}
 
 	#[pallet::storage]
 	/// Price of an asset instance.
@@ -1083,14 +1177,9 @@ pub mod pallet {
 
 			let mut collection_details =
 				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
-			if let Some(check_owner) = &maybe_check_owner {
-				ensure!(check_owner == &collection_details.owner, Error::<T, I>::NoPermission);
-			}
-			let maybe_is_frozen = match maybe_item {
-				None => CollectionMetadataOf::<T, I>::get(collection).map(|v| v.is_frozen),
-				Some(item) => ItemMetadataOf::<T, I>::get(collection, item).map(|v| v.is_frozen),
-			};
-			ensure!(!maybe_is_frozen.unwrap_or(false), Error::<T, I>::Frozen);
+
+			Self::is_collection_owner(&maybe_check_owner, &collection_details)?;
+			Self::is_unfrozen(&collection, &maybe_item)?;
 
 			let attribute = Attribute::<T, I>::get((collection, maybe_item, &key));
 			if attribute.is_none() {
@@ -1144,14 +1233,9 @@ pub mod pallet {
 
 			let mut collection_details =
 				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
-			if let Some(check_owner) = &maybe_check_owner {
-				ensure!(check_owner == &collection_details.owner, Error::<T, I>::NoPermission);
-			}
-			let maybe_is_frozen = match maybe_item {
-				None => CollectionMetadataOf::<T, I>::get(collection).map(|v| v.is_frozen),
-				Some(item) => ItemMetadataOf::<T, I>::get(collection, item).map(|v| v.is_frozen),
-			};
-			ensure!(!maybe_is_frozen.unwrap_or(false), Error::<T, I>::Frozen);
+
+			Self::is_collection_owner(&maybe_check_owner, &collection_details)?;
+			Self::is_unfrozen(&collection, &maybe_item)?;
 
 			if let Some((_, deposit)) = Attribute::<T, I>::take((collection, maybe_item, &key)) {
 				collection_details.attributes.saturating_dec();
@@ -1192,41 +1276,19 @@ pub mod pallet {
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
 
-			let mut collection_details =
-				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
-
-			if let Some(check_owner) = &maybe_check_owner {
-				ensure!(check_owner == &collection_details.owner, Error::<T, I>::NoPermission);
-			}
-
-			ItemMetadataOf::<T, I>::try_mutate_exists(collection, item, |metadata| {
-				let was_frozen = metadata.as_ref().map_or(false, |m| m.is_frozen);
-				ensure!(maybe_check_owner.is_none() || !was_frozen, Error::<T, I>::Frozen);
-
-				if metadata.is_none() {
-					collection_details.item_metadatas.saturating_inc();
-				}
-				let old_deposit = metadata.take().map_or(Zero::zero(), |m| m.deposit);
-				collection_details.total_deposit.saturating_reduce(old_deposit);
-				let mut deposit = Zero::zero();
-				if !collection_details.free_holding && maybe_check_owner.is_some() {
-					deposit = T::DepositPerByte::get()
-						.saturating_mul(((data.len()) as u32).into())
-						.saturating_add(T::MetadataDepositBase::get());
-				}
-				if deposit > old_deposit {
-					T::Currency::reserve(&collection_details.owner, deposit - old_deposit)?;
-				} else if deposit < old_deposit {
-					T::Currency::unreserve(&collection_details.owner, old_deposit - deposit);
-				}
-				collection_details.total_deposit.saturating_accrue(deposit);
-
-				*metadata = Some(ItemMetadata { deposit, data: data.clone(), is_frozen });
-
-				Collection::<T, I>::insert(&collection, &collection_details);
-				Self::deposit_event(Event::MetadataSet { collection, item, data, is_frozen });
-				Ok(())
-			})
+			Self::do_set_item_metadata(
+				collection,
+				item,
+				data,
+				is_frozen,
+				maybe_check_owner.clone(),
+				|collection_details, metadata| {
+					let was_frozen = metadata.as_ref().map_or(false, |m| m.is_frozen);
+					Self::is_collection_owner(&maybe_check_owner, &collection_details)?;
+					ensure!(maybe_check_owner.is_none() || !was_frozen, Error::<T, I>::Frozen);
+					Ok(())
+				},
+			)
 		}
 
 		/// Clear the metadata for an item.
@@ -1254,9 +1316,8 @@ pub mod pallet {
 
 			let mut collection_details =
 				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
-			if let Some(check_owner) = &maybe_check_owner {
-				ensure!(check_owner == &collection_details.owner, Error::<T, I>::NoPermission);
-			}
+
+			Self::is_collection_owner(&maybe_check_owner, &collection_details)?;
 
 			ItemMetadataOf::<T, I>::try_mutate_exists(collection, item, |metadata| {
 				let was_frozen = metadata.as_ref().map_or(false, |m| m.is_frozen);
@@ -1302,38 +1363,18 @@ pub mod pallet {
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
 
-			let mut details =
-				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
-			if let Some(check_owner) = &maybe_check_owner {
-				ensure!(check_owner == &details.owner, Error::<T, I>::NoPermission);
-			}
-
-			CollectionMetadataOf::<T, I>::try_mutate_exists(collection, |metadata| {
-				let was_frozen = metadata.as_ref().map_or(false, |m| m.is_frozen);
-				ensure!(maybe_check_owner.is_none() || !was_frozen, Error::<T, I>::Frozen);
-
-				let old_deposit = metadata.take().map_or(Zero::zero(), |m| m.deposit);
-				details.total_deposit.saturating_reduce(old_deposit);
-				let mut deposit = Zero::zero();
-				if maybe_check_owner.is_some() && !details.free_holding {
-					deposit = T::DepositPerByte::get()
-						.saturating_mul(((data.len()) as u32).into())
-						.saturating_add(T::MetadataDepositBase::get());
-				}
-				if deposit > old_deposit {
-					T::Currency::reserve(&details.owner, deposit - old_deposit)?;
-				} else if deposit < old_deposit {
-					T::Currency::unreserve(&details.owner, old_deposit - deposit);
-				}
-				details.total_deposit.saturating_accrue(deposit);
-
-				Collection::<T, I>::insert(&collection, details);
-
-				*metadata = Some(CollectionMetadata { deposit, data: data.clone(), is_frozen });
-
-				Self::deposit_event(Event::CollectionMetadataSet { collection, data, is_frozen });
-				Ok(())
-			})
+			Self::do_set_collection_metadata(
+				collection,
+				data,
+				is_frozen,
+				maybe_check_owner.clone(),
+				|collection_details, metadata| {
+					let was_frozen = metadata.as_ref().map_or(false, |m| m.is_frozen);
+					Self::is_collection_owner(&maybe_check_owner, &collection_details)?;
+					ensure!(maybe_check_owner.is_none() || !was_frozen, Error::<T, I>::Frozen);
+					Ok(())
+				},
+			)
 		}
 
 		/// Clear the metadata for a collection.
@@ -1359,9 +1400,7 @@ pub mod pallet {
 
 			let details =
 				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
-			if let Some(check_owner) = &maybe_check_owner {
-				ensure!(check_owner == &details.owner, Error::<T, I>::NoPermission);
-			}
+			Self::is_collection_owner(&maybe_check_owner, &details)?;
 
 			CollectionMetadataOf::<T, I>::try_mutate_exists(collection, |metadata| {
 				let was_frozen = metadata.as_ref().map_or(false, |m| m.is_frozen);
@@ -1491,6 +1530,32 @@ pub mod pallet {
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			Self::do_buy_item(collection, item, origin, bid_price)
+		}
+	}
+
+	impl<T: Config<I>, I: 'static> Pallet<T, I> {
+		fn is_collection_owner(
+			maybe_check_owner: &Option<T::AccountId>,
+			collection_details: &CollectionDetails<T::AccountId, DepositBalanceOf<T, I>>,
+		) -> DispatchResult {
+			if let Some(check_owner) = &maybe_check_owner {
+				ensure!(check_owner == &collection_details.owner, Error::<T, I>::NoPermission);
+			}
+
+			Ok(())
+		}
+
+		fn is_unfrozen(
+			collection: &T::CollectionId,
+			maybe_item: &Option<T::ItemId>,
+		) -> DispatchResult {
+			let maybe_is_frozen = match maybe_item {
+				None => CollectionMetadataOf::<T, I>::get(collection).map(|v| v.is_frozen),
+				Some(item) => ItemMetadataOf::<T, I>::get(collection, item).map(|v| v.is_frozen),
+			};
+			ensure!(!maybe_is_frozen.unwrap_or(false), Error::<T, I>::Frozen);
+
+			Ok(())
 		}
 	}
 }
