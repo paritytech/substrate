@@ -172,28 +172,28 @@ pub struct Executive<
 );
 
 impl<
-		System: frame_system::Config + EnsureInherentsAreFirst<Block>,
-		Block: traits::Block<Header = System::Header, Hash = System::Hash>,
-		Context: Default,
-		UnsignedValidator,
-		AllPalletsWithSystem: OnRuntimeUpgrade
-			+ OnInitialize<System::BlockNumber>
-			+ OnIdle<System::BlockNumber>
-			+ OnFinalize<System::BlockNumber>
-			+ OffchainWorker<System::BlockNumber>,
-		COnRuntimeUpgrade: OnRuntimeUpgrade,
-	> ExecuteBlock<Block>
-	for Executive<System, Block, Context, UnsignedValidator, AllPalletsWithSystem, COnRuntimeUpgrade>
-where
-	Block::Extrinsic: IdentifyAccountWithLookup<Context, AccountId = System::AccountId>
+	System: frame_system::Config + EnsureInherentsAreFirst<Block>,
+	Block: traits::Block<Header = System::Header, Hash = System::Hash>,
+	Context: Default,
+	UnsignedValidator,
+	AllPalletsWithSystem: OnRuntimeUpgrade
+	+ OnInitialize<System::BlockNumber>
+	+ OnIdle<System::BlockNumber>
+	+ OnFinalize<System::BlockNumber>
+	+ OffchainWorker<System::BlockNumber>,
+	COnRuntimeUpgrade: OnRuntimeUpgrade,
+> ExecuteBlock<Block>
+for Executive<System, Block, Context, UnsignedValidator, AllPalletsWithSystem, COnRuntimeUpgrade>
+	where
+		Block::Extrinsic: IdentifyAccountWithLookup<Context, AccountId = System::AccountId>
 		+ Checkable<Context>
 		+ Codec
 		+ GetDispatchInfo,
-	CheckedOf<Block::Extrinsic, Context>: Applyable + GetDispatchInfo,
-	CallOf<Block::Extrinsic, Context>:
+		CheckedOf<Block::Extrinsic, Context>: Applyable + GetDispatchInfo,
+		CallOf<Block::Extrinsic, Context>:
 		Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
-	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
-	UnsignedValidator: ValidateUnsigned<Call = CallOf<Block::Extrinsic, Context>>,
+		OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
+		UnsignedValidator: ValidateUnsigned<Call = CallOf<Block::Extrinsic, Context>>,
 {
 	// for backward compatibility
 	fn execute_block(block: Block) {
@@ -220,28 +220,28 @@ where
 }
 
 impl<
-		System: frame_system::Config + EnsureInherentsAreFirst<Block>,
-		Block: traits::Block<Header = System::Header, Hash = System::Hash>,
-		Context: Default,
-		UnsignedValidator,
-		AllPalletsWithSystem: OnRuntimeUpgrade
-			+ OnInitialize<System::BlockNumber>
-			+ OnIdle<System::BlockNumber>
-			+ OnFinalize<System::BlockNumber>
-			+ OffchainWorker<System::BlockNumber>,
-		COnRuntimeUpgrade: OnRuntimeUpgrade,
-	> Executive<System, Block, Context, UnsignedValidator, AllPalletsWithSystem, COnRuntimeUpgrade>
-where
-	<System as frame_system::Config>::BlockNumber: AtLeast32BitUnsigned,
-	Block::Extrinsic: IdentifyAccountWithLookup<Context, AccountId = System::AccountId>
+	System: frame_system::Config + EnsureInherentsAreFirst<Block>,
+	Block: traits::Block<Header = System::Header, Hash = System::Hash>,
+	Context: Default,
+	UnsignedValidator,
+	AllPalletsWithSystem: OnRuntimeUpgrade
+	+ OnInitialize<System::BlockNumber>
+	+ OnIdle<System::BlockNumber>
+	+ OnFinalize<System::BlockNumber>
+	+ OffchainWorker<System::BlockNumber>,
+	COnRuntimeUpgrade: OnRuntimeUpgrade,
+> Executive<System, Block, Context, UnsignedValidator, AllPalletsWithSystem, COnRuntimeUpgrade>
+	where
+		<System as frame_system::Config>::BlockNumber: AtLeast32BitUnsigned,
+		Block::Extrinsic: IdentifyAccountWithLookup<Context, AccountId = System::AccountId>
 		+ Checkable<Context>
 		+ Codec
 		+ GetDispatchInfo,
-	CheckedOf<Block::Extrinsic, Context>: Applyable + GetDispatchInfo,
-	CallOf<Block::Extrinsic, Context>:
+		CheckedOf<Block::Extrinsic, Context>: Applyable + GetDispatchInfo,
+		CallOf<Block::Extrinsic, Context>:
 		Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
-	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
-	UnsignedValidator: ValidateUnsigned<Call = CallOf<Block::Extrinsic, Context>>,
+		OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
+		UnsignedValidator: ValidateUnsigned<Call = CallOf<Block::Extrinsic, Context>>,
 {
 	/// Execute all `OnRuntimeUpgrade` of this runtime, and return the aggregate weight.
 	pub fn execute_on_runtime_upgrade() -> frame_support::weights::Weight {
@@ -266,7 +266,7 @@ where
 			let new_header = <frame_system::Pallet<System>>::finalize();
 			let items_zip = header.digest().logs().iter().zip(new_header.digest().logs().iter());
 			for (header_item, computed_item) in items_zip {
-				header_item.check_equal(computed_item);
+				header_item.check_equal(&computed_item);
 				assert!(header_item == computed_item, "Digest item must match that calculated.");
 			}
 
@@ -296,7 +296,7 @@ where
 	pub fn initialize_block(header: &System::Header) {
 		sp_io::init_tracing();
 		sp_tracing::enter_span!(sp_tracing::Level::TRACE, "init_block");
-		let digests = Self::extract_pre_digest(header);
+		let digests = Self::extract_pre_digest(&header);
 		Self::initialize_block_impl(header.number(), header.parent_hash(), &digests);
 	}
 
@@ -380,7 +380,7 @@ where
 		let header = block.header();
 
 		// Check that `parent_hash` is correct.
-		let n = *header.number();
+		let n = header.number().clone();
 		assert!(
 			n > System::BlockNumber::zero() &&
 				<frame_system::Pallet<System>>::block_hash(n - System::BlockNumber::one()) ==
@@ -605,13 +605,13 @@ where
 		);
 		let items_zip = header.digest().logs().iter().zip(new_header.digest().logs().iter());
 		for (header_item, computed_item) in items_zip {
-			header_item.check_equal(computed_item);
+			header_item.check_equal(&computed_item);
 			assert!(header_item == computed_item, "Digest item must match that calculated.");
 		}
 
 		// check storage root.
 		let storage_root = new_header.state_root();
-		header.state_root().check_equal(storage_root);
+		header.state_root().check_equal(&storage_root);
 		assert!(header.state_root() == storage_root, "Storage root must match that calculated.");
 	}
 
@@ -699,7 +699,9 @@ mod tests {
 			ConstU32, ConstU64, ConstU8, Currency, LockIdentifier, LockableCurrency,
 			WithdrawReasons,
 		},
-		weights::{ConstantMultiplier, IdentityFee, RuntimeDbWeight, Weight, WeightToFee},
+		weights::{
+			ConstantMultiplier, IdentityFee, RuntimeDbWeight, Weight, WeightToFeePolynomial,
+		},
 	};
 	use frame_system::{Call as SystemCall, ChainContext, LastRuntimeUpgradeInfo};
 	use pallet_balances::Call as BalancesCall;
@@ -891,11 +893,14 @@ mod tests {
 	}
 
 	type Balance = u64;
+	parameter_types! {
+		pub const ExistentialDeposit: Balance = 1;
+	}
 	impl pallet_balances::Config for Runtime {
 		type Balance = Balance;
 		type Event = Event;
 		type DustRemoval = ();
-		type ExistentialDeposit = ConstU64<1>;
+		type ExistentialDeposit = ExistentialDeposit;
 		type AccountStore = System;
 		type MaxLocks = ();
 		type MaxReserves = ();
@@ -988,7 +993,7 @@ mod tests {
 				.get(DispatchClass::Normal)
 				.base_extrinsic;
 		let fee: Balance =
-			<Runtime as pallet_transaction_payment::Config>::WeightToFee::weight_to_fee(&weight);
+			<Runtime as pallet_transaction_payment::Config>::WeightToFee::calc(&weight);
 		let mut t = sp_io::TestExternalities::new(t);
 		t.execute_with(|| {
 			Executive::initialize_block(&Header::new(
@@ -1042,7 +1047,7 @@ mod tests {
 					extrinsics_root: hex!(
 						"03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314"
 					)
-					.into(),
+						.into(),
 					digest: Digest { logs: vec![] },
 					count: 0,
 					seed: Default::default(),
@@ -1064,7 +1069,7 @@ mod tests {
 					extrinsics_root: hex!(
 						"03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314"
 					)
-					.into(),
+						.into(),
 					digest: Digest { logs: vec![] },
 					count: 0,
 					seed: Default::default(),
@@ -1085,7 +1090,7 @@ mod tests {
 					state_root: hex!(
 						"75e7d8f360d375bbe91bcf8019c01ab6362448b4a89e3b329717eb9d910340e5"
 					)
-					.into(),
+						.into(),
 					extrinsics_root: [0u8; 32].into(),
 					digest: Digest { logs: vec![] },
 					count: 0,
@@ -1281,9 +1286,7 @@ mod tests {
 						.get(DispatchClass::Normal)
 						.base_extrinsic;
 				let fee: Balance =
-					<Runtime as pallet_transaction_payment::Config>::WeightToFee::weight_to_fee(
-						&weight,
-					);
+					<Runtime as pallet_transaction_payment::Config>::WeightToFee::calc(&weight);
 				Executive::initialize_block(&Header::new(
 					1,
 					H256::default(),
@@ -1429,7 +1432,7 @@ mod tests {
 					sp_version::RuntimeVersion { spec_version: 1, ..Default::default() }
 			});
 
-			// set block number to non zero so events are not excluded
+			// set block number to non zero so events are not exlcuded
 			System::set_block_number(1);
 
 			Executive::initialize_block(&Header::new(
@@ -1642,11 +1645,11 @@ mod tests {
 						state_root: hex!(
 							"58e5aca3629754c5185b50dd676053c5b9466c18488bb1f4c6138a46885cd79d"
 						)
-						.into(),
+							.into(),
 						extrinsics_root: hex!(
 							"03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314"
 						)
-						.into(),
+							.into(),
 						digest: Digest { logs: vec![] },
 						count: 0,
 						seed: Default::default(),
@@ -1670,11 +1673,11 @@ mod tests {
 						state_root: hex!(
 							"58e5aca3629754c5185b50dd676053c5b9466c18488bb1f4c6138a46885cd79d"
 						)
-						.into(),
+							.into(),
 						extrinsics_root: hex!(
 							"03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314"
 						)
-						.into(),
+							.into(),
 						digest: Digest { logs: vec![] },
 						count: 0,
 						seed: Default::default(),
@@ -1721,11 +1724,11 @@ mod tests {
 						state_root: hex!(
 							"a37408819189bd873665cfb3b7ac54ec63b4eaa56077198fff637fe3aacb2461"
 						)
-						.into(),
+							.into(),
 						extrinsics_root: hex!(
 							"03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314"
 						)
-						.into(),
+							.into(),
 						digest: Digest { logs: vec![] },
 						count: 0,
 						seed: ShufflingSeed {
