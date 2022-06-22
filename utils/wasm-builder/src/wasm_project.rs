@@ -88,10 +88,10 @@ fn crate_metadata(cargo_manifest: &Path) -> Metadata {
 		cargo_manifest.to_path_buf()
 	};
 
-	let mut crate_metadata = create_metadata_command(cargo_manifest);
-	crate_metadata.features(CargoOpt::AllFeatures);
+	let mut crate_metadata_command = create_metadata_command(cargo_manifest);
+	crate_metadata_command.features(CargoOpt::AllFeatures);
 
-	let crate_metadata = crate_metadata
+	let crate_metadata = crate_metadata_command
 		.exec()
 		.expect("`cargo metadata` can not fail on project `Cargo.toml`; qed");
 	// If the `Cargo.lock` didn't exist, we need to remove it after
@@ -631,7 +631,7 @@ fn build_project(
 	build_cmd.arg("--profile");
 	build_cmd.arg(profile.name());
 
-	if env::var(OFFLINE).is_ok() {
+	if Ok("true".to_string()) == env::var(OFFLINE) {
 		build_cmd.arg("--offline");
 	}
 
@@ -759,7 +759,7 @@ fn create_metadata_command(path: impl Into<PathBuf>) -> MetadataCommand {
 	let mut metadata_command = MetadataCommand::new();
 	metadata_command.manifest_path(path);
 
-	if env::var(OFFLINE).is_ok() {
+	if Ok("true".to_string()) == env::var(OFFLINE) {
 		metadata_command.other_options(vec!["--offline".to_owned()]);
 	}
 	metadata_command
