@@ -243,12 +243,12 @@ pub mod pallet {
 		pub classes: Vec<(T::ClassId, T::AccountId, T::AccountId, DepositBalanceOf<T, I>, bool)>,
 		/// Genesis assets clases instances: class, instance, owner
 		pub instances: Vec<(T::ClassId, T::InstanceId, T::AccountId)>,
-		/// Genesis assets clases metadata: class, deposit, data, is_frozen
-		pub classes_metadata: Vec<(T::ClassId, DepositBalanceOf<T, I>, Vec<u8>, bool)>,
+		/// Genesis assets clases metadata: class, data, is_frozen
+		pub classes_metadata: Vec<(T::ClassId, Vec<u8>, bool)>,
 		/// Genesis assets clases attributes: class, key, value
 		pub classes_attributes: Vec<(T::ClassId, Vec<u8>, Vec<u8>)>,
-		/// Genesis assets clases instances metadatas: class, deposit, data, is_frozen  
-		pub instances_metadata: Vec<(T::ClassId, DepositBalanceOf<T, I>, Vec<u8>, bool)>,
+		/// Genesis assets clases instances metadatas: class, instance, data, is_frozen  
+		pub instances_metadata: Vec<(T::ClassId, T::InstanceId, Vec<u8>, bool)>,
 		/// Genesis assets clases instances attributes: class, instance, key, value
 		pub instance_attributes: Vec<(T::ClassId, T::InstanceId, Vec<u8>, Vec<u8>)>,
 	}
@@ -277,7 +277,7 @@ pub mod pallet {
 					item.2,
 					item.3,
 					item.4,
-					Event::Created { class: item.0, creator: (), owner: item.1}
+					Event::Created { class: item.0, creator: ::RawOrigin::Root.into(), owner: item.1}
 				)
 					.expect("can't create class");
 			}
@@ -288,22 +288,41 @@ pub mod pallet {
 			}
 
 			for item in self.classes_metadata {
-				Pallet::<T, I>::try_set_metadata(&item.0, &item.1, &item.2, item.3)
+				let data = item.1.try_into()
+					.expect("can't convect classes_metadata's data");
+				Pallet::<T, I>::do_set_class_metadata(&item.0,  data, item.2, None)
 					.expect("can't set class metadata");
 			}
 
 			for item in self.classes_attributes {
-				Pallet::<T, I>::try_set_attribute(&item.0, &None, item.1, item.2)
+				let key = item.1.try_into()
+					.expect("can't convect classes_attributes's key");
+				let value = item.2.try_into()
+					.expect("can't convect classes_attributes's value");
+				Pallet::<T, I>::do_set_attribute(&item.0, &None, &key, &value)
 					.expect("can't set class attribute");
 			}
 
 			for item in self.instances_metadata {
-				Pallet::<T, I>::try_set_metadata(&item.0, &item.1, &item.2, item.3)
+				let data = item.2.try_into()
+					.expect("can't convect instances_metadata's data");
+				Pallet::<T, I>::do_set_instance_metadata(
+					item.0, 
+					item.1, 
+					data, 
+					item.3,
+					None,
+					|_, _| Ok(()),
+				)
 					.expect("can't set instance metadata");
 			}
 
 			for item in self.instance_attributes {
-				Pallet::<T, I>::try_set_attribute(&item.0, &Some(item.1), item.2, item.3)
+				let key = item.2.try_into()
+					.expect("can't convect instance_attributes's key");
+				let value = item.3.try_into()
+					.expect("can't convect instance_attributes's value");
+				Pallet::<T, I>::do_set_attribute(&item.0, &Some(item.1), &key, &value)
 					.expect("can't set instance attribute");
 			}
 		}
@@ -1145,7 +1164,7 @@ pub mod pallet {
 				Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
 			
 			Self::is_class_owner(&maybe_check_owner, &class_details)?;
-			Self::is_unfrozen(&class,&maybe_instance)?;
+			Self::is_unfrozen(&class, &maybe_instance)?;
 		
 			if let Some((_, deposit)) = Attribute::<T, I>::take((class, maybe_instance, &key)) {
 				class_details.attributes.saturating_dec();
@@ -1186,39 +1205,19 @@ pub mod pallet {
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
 
-			let mut class_details =
-				Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
-
-			Self::is_class_owner(&maybe_check_owner, &class_details)?;
-
-			InstanceMetadataOf::<T, I>::try_mutate_exists(class, instance, |metadata| {
-				let was_frozen = metadata.as_ref().map_or(false, |m| m.is_frozen);
-				ensure!(maybe_check_owner.is_none() || !was_frozen, Error::<T, I>::Frozen);
-
-				if metadata.is_none() {
-					class_details.instance_metadatas.saturating_inc();
-				}
-				let old_deposit = metadata.take().map_or(Zero::zero(), |m| m.deposit);
-				class_details.total_deposit.saturating_reduce(old_deposit);
-				let mut deposit = Zero::zero();
-				if !class_details.free_holding && maybe_check_owner.is_some() {
-					deposit = T::DepositPerByte::get()
-						.saturating_mul(((data.len()) as u32).into())
-						.saturating_add(T::MetadataDepositBase::get());
-				}
-				if deposit > old_deposit {
-					T::Currency::reserve(&class_details.owner, deposit - old_deposit)?;
-				} else if deposit < old_deposit {
-					T::Currency::unreserve(&class_details.owner, old_deposit - deposit);
-				}
-				class_details.total_deposit.saturating_accrue(deposit);
-
-				*metadata = Some(InstanceMetadata { deposit, data: data.clone(), is_frozen });
-
-				Class::<T, I>::insert(&class, &class_details);
-				Self::deposit_event(Event::MetadataSet { class, instance, data, is_frozen });
-				Ok(())
-			})
+			Self::do_set_instance_metadata(
+				class, 
+				instance, 
+				data, 
+				is_frozen, 
+				maybe_check_owner,
+				|class_details, metadata|{
+					let was_frozen = metadata.as_ref().map_or(false, |m| m.is_frozen);
+					Self::is_class_owner(&maybe_check_owner, &class_details)?; 
+					ensure!(maybe_check_owner.is_none() || !was_frozen, Error::<T, I>::Frozen);
+					Ok(())
+				} 
+			)
 		}
 
 		/// Clear the metadata for an asset instance.
@@ -1293,36 +1292,18 @@ pub mod pallet {
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
 
-			let mut details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
-			
-			Self::is_class_owner(&maybe_check_owner, &details)?;
-
-			ClassMetadataOf::<T, I>::try_mutate_exists(class, |metadata| {
-				let was_frozen = metadata.as_ref().map_or(false, |m| m.is_frozen);
-				ensure!(maybe_check_owner.is_none() || !was_frozen, Error::<T, I>::Frozen);
-
-				let old_deposit = metadata.take().map_or(Zero::zero(), |m| m.deposit);
-				details.total_deposit.saturating_reduce(old_deposit);
-				let mut deposit = Zero::zero();
-				if maybe_check_owner.is_some() && !details.free_holding {
-					deposit = T::DepositPerByte::get()
-						.saturating_mul(((data.len()) as u32).into())
-						.saturating_add(T::MetadataDepositBase::get());
-				}
-				if deposit > old_deposit {
-					T::Currency::reserve(&details.owner, deposit - old_deposit)?;
-				} else if deposit < old_deposit {
-					T::Currency::unreserve(&details.owner, old_deposit - deposit);
-				}
-				details.total_deposit.saturating_accrue(deposit);
-
-				Class::<T, I>::insert(&class, details);
-
-				*metadata = Some(ClassMetadata { deposit, data: data.clone(), is_frozen });
-
-				Self::deposit_event(Event::ClassMetadataSet { class, data, is_frozen });
-				Ok(())
-			})
+			Self::do_set_class_metadata(
+				class,
+				data,
+				is_frozen,
+				maybe_check_owner,
+				|class_details, metadata|{
+					let was_frozen = metadata.as_ref().map_or(false, |m| m.is_frozen);
+					Self::is_class_owner(&maybe_check_owner, &class_details)?; 
+					ensure!(maybe_check_owner.is_none() || !was_frozen, Error::<T, I>::Frozen);
+					Ok(())
+				} 
+			)
 		}
 
 		/// Clear the metadata for an asset class.
@@ -1416,42 +1397,6 @@ pub mod pallet {
 			};
 			ensure!(!maybe_is_frozen.unwrap_or(false), Error::<T, I>::Frozen);
 
-			Ok(())
-		}
-
-		fn try_set_metadata(
-			class: &T::ClassId,
-			deposit: &DepositBalanceOf<T, I>, 
-			data: &Vec<u8>, 
-			is_frozen: bool,
-		) -> DispatchResult {
-			todo!()
-		}
-
-		fn try_set_attribute(
-			class: &T::ClassId,
-			maybe_instance: &Option<T::InstanceId>,
-			key: &BoundedVec<u8, T::KeyLimit>,
-			value: &BoundedVec<u8, T::ValueLimit>,
-		) -> DispatchResult {
-			// Если класс сушествует, обновляем метаданные класса и устанавливаем/обновляем атрибут 
-			Class::<T, I>::mutate_exists(class, |opt_class_details|{
-				match opt_class_details {
-					Some(class_details) => {
-						let attribute = Attribute::<T, I>::get((class, maybe_instance, &key));
-						// Если класс не имеет атрибуета по заданному ключу, увеличиваем счетчик колличества атрибутов
-						if attribute.is_none() {
-							class_details.attributes.saturating_inc();
-						}
-
-						let mut deposit = Attribute::<T, I>::get((class, maybe_instance, &key)).map_or(Zero::zero(), |m| m.1);
-						// Устанавливаем значение атрибута 
-						Attribute::<T, I>::insert((&class, maybe_instance, &key), (&value, deposit));
-						Ok(())
-					},
-					None => Err(Error::<T, I>::UnknownClass),
-   				}
-			})?;
 			Ok(())
 		}
 	}
