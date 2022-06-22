@@ -774,7 +774,7 @@ fn deploying_wasm_contract_should_work() {
 
 #[test]
 fn wasm_big_block_import_fails() {
-	let mut t = new_test_ext(compact_code_unwrap()1);
+	let mut t = new_test_ext(compact_code_unwrap());
 
 	set_heap_pages(&mut t.ext(), 4);
 
