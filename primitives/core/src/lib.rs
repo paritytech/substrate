@@ -62,9 +62,6 @@ pub mod hash;
 #[cfg(feature = "std")]
 mod hasher;
 pub mod offchain;
-pub mod sandbox;
-mod seed;
-pub use seed::ShufflingSeed;
 pub mod sr25519;
 pub mod testing;
 #[cfg(feature = "std")]

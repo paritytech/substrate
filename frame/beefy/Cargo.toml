@@ -6,21 +6,18 @@ edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/paritytech/substrate"
 description = "BEEFY FRAME pallet"
+homepage = "https://substrate.io"
 
 [dependencies]
-codec = { version = "3.0.0", package = "parity-scale-codec", default-features = false, features = ["derive"] }
-scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"] }
+scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
 serde = { version = "1.0.136", optional = true }
-
-frame-support = { version = "4.0.0-dev", path = "../support", default-features = false }
-frame-system = { version = "4.0.0-dev", path = "../system", default-features = false }
-
-sp-runtime = { version = "6.0.0", path = "../../primitives/runtime", default-features = false }
-sp-std = { version = "4.0.0", path = "../../primitives/std", default-features = false }
-
-pallet-session = { version = "4.0.0-dev", path = "../session", default-features = false }
-
-beefy-primitives = { version = "4.0.0-dev", path = "../../primitives/beefy", default-features = false }
+beefy-primitives = { version = "4.0.0-dev", default-features = false, path = "../../primitives/beefy" }
+frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
+frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
+pallet-session = { version = "4.0.0-dev", default-features = false, path = "../session" }
+sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
 
 [dev-dependencies]
 sp-core = { version = "6.0.0", path = "../../primitives/core" }
@@ -30,13 +27,13 @@ sp-staking = { version = "4.0.0-dev", path = "../../primitives/staking" }
 [features]
 default = ["std"]
 std = [
-	"codec/std",
-	"scale-info/std",
-	"serde",
 	"beefy-primitives/std",
+	"codec/std",
 	"frame-support/std",
 	"frame-system/std",
+	"pallet-session/std",
+	"scale-info/std",
+	"serde",
 	"sp-runtime/std",
 	"sp-std/std",
-	"pallet-session/std",
 ]

@@ -266,7 +266,7 @@ where
 			let new_header = <frame_system::Pallet<System>>::finalize();
 			let items_zip = header.digest().logs().iter().zip(new_header.digest().logs().iter());
 			for (header_item, computed_item) in items_zip {
-				header_item.check_equal(&computed_item);
+				header_item.check_equal(computed_item);
 				assert!(header_item == computed_item, "Digest item must match that calculated.");
 			}
 
@@ -296,7 +296,7 @@ where
 	pub fn initialize_block(header: &System::Header) {
 		sp_io::init_tracing();
 		sp_tracing::enter_span!(sp_tracing::Level::TRACE, "init_block");
-		let digests = Self::extract_pre_digest(&header);
+		let digests = Self::extract_pre_digest(header);
 		Self::initialize_block_impl(header.number(), header.parent_hash(), &digests);
 	}
 
@@ -380,7 +380,7 @@ where
 		let header = block.header();
 
 		// Check that `parent_hash` is correct.
-		let n = header.number().clone();
+		let n = *header.number();
 		assert!(
 			n > System::BlockNumber::zero() &&
 				<frame_system::Pallet<System>>::block_hash(n - System::BlockNumber::one()) ==
@@ -605,13 +605,13 @@ where
 		);
 		let items_zip = header.digest().logs().iter().zip(new_header.digest().logs().iter());
 		for (header_item, computed_item) in items_zip {
-			header_item.check_equal(&computed_item);
+			header_item.check_equal(computed_item);
 			assert!(header_item == computed_item, "Digest item must match that calculated.");
 		}
 
 		// check storage root.
 		let storage_root = new_header.state_root();
-		header.state_root().check_equal(&storage_root);
+		header.state_root().check_equal(storage_root);
 		assert!(header.state_root() == storage_root, "Storage root must match that calculated.");
 	}
 
@@ -699,9 +699,7 @@ mod tests {
 			ConstU32, ConstU64, ConstU8, Currency, LockIdentifier, LockableCurrency,
 			WithdrawReasons,
 		},
-		weights::{
-			ConstantMultiplier, IdentityFee, RuntimeDbWeight, Weight, WeightToFeePolynomial,
-		},
+		weights::{ConstantMultiplier, IdentityFee, RuntimeDbWeight, Weight, WeightToFee},
 	};
 	use frame_system::{Call as SystemCall, ChainContext, LastRuntimeUpgradeInfo};
 	use pallet_balances::Call as BalancesCall;
@@ -893,14 +891,11 @@ mod tests {
 	}
 
 	type Balance = u64;
-	parameter_types! {
-		pub const ExistentialDeposit: Balance = 1;
-	}
 	impl pallet_balances::Config for Runtime {
 		type Balance = Balance;
 		type Event = Event;
 		type DustRemoval = ();
-		type ExistentialDeposit = ExistentialDeposit;
+		type ExistentialDeposit = ConstU64<1>;
 		type AccountStore = System;
 		type MaxLocks = ();
 		type MaxReserves = ();
@@ -993,7 +988,7 @@ mod tests {
 				.get(DispatchClass::Normal)
 				.base_extrinsic;
 		let fee: Balance =
-			<Runtime as pallet_transaction_payment::Config>::WeightToFee::calc(&weight);
+			<Runtime as pallet_transaction_payment::Config>::WeightToFee::weight_to_fee(&weight);
 		let mut t = sp_io::TestExternalities::new(t);
 		t.execute_with(|| {
 			Executive::initialize_block(&Header::new(
@@ -1286,7 +1281,9 @@ mod tests {
 						.get(DispatchClass::Normal)
 						.base_extrinsic;
 				let fee: Balance =
-					<Runtime as pallet_transaction_payment::Config>::WeightToFee::calc(&weight);
+					<Runtime as pallet_transaction_payment::Config>::WeightToFee::weight_to_fee(
+						&weight,
+					);
 				Executive::initialize_block(&Header::new(
 					1,
 					H256::default(),
@@ -1432,7 +1429,7 @@ mod tests {
 					sp_version::RuntimeVersion { spec_version: 1, ..Default::default() }
 			});
 
-			// set block number to non zero so events are not exlcuded
+			// set block number to non zero so events are not excluded
 			System::set_block_number(1);
 
 			Executive::initialize_block(&Header::new(

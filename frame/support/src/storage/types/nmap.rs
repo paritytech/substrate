@@ -481,7 +481,7 @@ where
 			modifier: QueryKind::METADATA,
 			ty: StorageEntryType::Map {
 				key: scale_info::meta_type::<Key::Key>(),
-				hashers: Key::HASHER_METADATA.iter().cloned().collect(),
+				hashers: Key::HASHER_METADATA.to_vec(),
 				value: scale_info::meta_type::<Value>(),
 			},
 			default: OnEmpty::get().encode(),
@@ -589,10 +589,8 @@ mod test {
 			assert_eq!(AValueQueryWithAnOnEmpty::get((3,)), 10);
 
 			{
-				crate::generate_storage_alias!(test, Foo => NMap<
-					Key<(Blake2_128Concat, u16)>,
-					u32
-				>);
+				#[crate::storage_alias]
+				type Foo = StorageNMap<test, (Key<Blake2_128Concat, u16>), u32>;
 
 				assert_eq!(Foo::contains_key((3,)), true);
 				assert_eq!(Foo::get((3,)), Some(10));

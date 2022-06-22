@@ -24,11 +24,10 @@ use crate::{
 	weights::WeightInfo,
 	BalanceOf, CodeHash, Config, ContractInfoOf, DeletionQueue, Error, TrieId, SENTINEL,
 };
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	dispatch::{DispatchError, DispatchResult},
 	storage::child::{self, ChildInfo, KillStorageResult},
-	traits::Get,
 	weights::Weight,
 };
 use scale_info::TypeInfo;
@@ -44,7 +43,7 @@ pub type ContractInfo<T> = RawContractInfo<CodeHash<T>, BalanceOf<T>>;
 
 /// Information for managing an account and its sub trie abstraction.
 /// This is the required info to cache for an account.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct RawContractInfo<CodeHash, Balance> {
 	/// Unique ID for the subtree encoded as a bytes vector.
 	pub trie_id: TrieId,
@@ -67,7 +66,7 @@ fn child_trie_info(trie_id: &[u8]) -> ChildInfo {
 	ChildInfo::new_default(trie_id)
 }
 
-#[derive(Encode, Decode, TypeInfo)]
+#[derive(Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct DeletedContract {
 	pub(crate) trie_id: TrieId,
 }
@@ -154,10 +153,10 @@ where
 		let hashed_key = blake2_256(key);
 		let child_trie_info = &child_trie_info(trie_id);
 		let (old_len, old_value) = if take {
-			let val = child::get_raw(&child_trie_info, &hashed_key);
+			let val = child::get_raw(child_trie_info, &hashed_key);
 			(val.as_ref().map(|v| v.len() as u32), val)
 		} else {
-			(child::len(&child_trie_info, &hashed_key), None)
+			(child::len(child_trie_info, &hashed_key), None)
 		};
 
 		if let Some(storage_meter) = storage_meter {
@@ -183,8 +182,8 @@ where
 		}
 
 		match &new_value {
-			Some(new_value) => child::put_raw(&child_trie_info, &hashed_key, new_value),
-			None => child::kill(&child_trie_info, &hashed_key),
+			Some(new_value) => child::put_raw(child_trie_info, &hashed_key, new_value),
+			None => child::kill(child_trie_info, &hashed_key),
 		}
 
 		Ok(match (old_len, old_value) {
@@ -217,19 +216,15 @@ where
 	///
 	/// You must make sure that the contract is also removed when queuing the trie for deletion.
 	pub fn queue_trie_for_deletion(contract: &ContractInfo<T>) -> DispatchResult {
-		if <DeletionQueue<T>>::decode_len().unwrap_or(0) >= T::DeletionQueueDepth::get() as usize {
-			Err(Error::<T>::DeletionQueueFull.into())
-		} else {
-			<DeletionQueue<T>>::append(DeletedContract { trie_id: contract.trie_id.clone() });
-			Ok(())
-		}
+		<DeletionQueue<T>>::try_append(DeletedContract { trie_id: contract.trie_id.clone() })
+			.map_err(|_| <Error<T>>::DeletionQueueFull.into())
 	}
 
 	/// Calculates the weight that is necessary to remove one key from the trie and how many
 	/// of those keys can be deleted from the deletion queue given the supplied queue length
 	/// and weight limit.
 	pub fn deletion_budget(queue_len: usize, weight_limit: Weight) -> (u64, u32) {
-		let base_weight = T::WeightInfo::on_initialize();
+		let base_weight = T::WeightInfo::on_process_deletion_queue_batch();
 		let weight_per_queue_item = T::WeightInfo::on_initialize_per_queue_item(1) -
 			T::WeightInfo::on_initialize_per_queue_item(0);
 		let weight_per_key = T::WeightInfo::on_initialize_per_trie_key(1) -
@@ -293,7 +288,11 @@ where
 	/// Generates a unique trie id by returning  `hash(account_id ++ nonce)`.
 	pub fn generate_trie_id(account_id: &AccountIdOf<T>, nonce: u64) -> TrieId {
 		let buf: Vec<_> = account_id.as_ref().iter().chain(&nonce.to_le_bytes()).cloned().collect();
-		T::Hashing::hash(&buf).as_ref().into()
+		T::Hashing::hash(&buf)
+			.as_ref()
+			.to_vec()
+			.try_into()
+			.expect("Runtime uses a reasonable hash size. Hence sizeof(T::Hash) <= 128; qed")
 	}
 
 	/// Returns the code hash of the contract specified by `account` ID.
@@ -305,9 +304,11 @@ where
 	/// Fill up the queue in order to exercise the limits during testing.
 	#[cfg(test)]
 	pub fn fill_queue_with_dummies() {
-		let queue: Vec<_> = (0..T::DeletionQueueDepth::get())
-			.map(|_| DeletedContract { trie_id: vec![] })
+		use frame_support::{traits::Get, BoundedVec};
+		let queue: Vec<DeletedContract> = (0..T::DeletionQueueDepth::get())
+			.map(|_| DeletedContract { trie_id: TrieId::default() })
 			.collect();
-		<DeletionQueue<T>>::put(queue);
+		let bounded: BoundedVec<_, _> = queue.try_into().unwrap();
+		<DeletionQueue<T>>::put(bounded);
 	}
 }

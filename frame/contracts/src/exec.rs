@@ -22,6 +22,7 @@ use crate::{
 	Pallet as Contracts, Schedule,
 };
 use frame_support::{
+	crypto::ecdsa::ECDSAExt,
 	dispatch::{DispatchError, DispatchResult, DispatchResultWithPostInfo, Dispatchable},
 	storage::{with_transaction, TransactionOutcome},
 	traits::{Contains, Currency, ExistenceRequirement, OriginTrait, Randomness, Time},
@@ -30,7 +31,7 @@ use frame_support::{
 use frame_system::RawOrigin;
 use pallet_contracts_primitives::ExecReturnValue;
 use smallvec::{Array, SmallVec};
-use sp_core::crypto::UncheckedFrom;
+use sp_core::{crypto::UncheckedFrom, ecdsa::Public as ECDSAPublic};
 use sp_io::crypto::secp256k1_ecdsa_recover_compressed;
 use sp_runtime::traits::Convert;
 use sp_std::{marker::PhantomData, mem, prelude::*};
@@ -231,6 +232,9 @@ pub trait Ext: sealing::Sealed {
 
 	/// Recovers ECDSA compressed public key based on signature and message hash.
 	fn ecdsa_recover(&self, signature: &[u8; 65], message_hash: &[u8; 32]) -> Result<[u8; 33], ()>;
+
+	/// Returns Ethereum address from the ECDSA compressed public key.
+	fn ecdsa_to_eth_address(&self, pk: &[u8; 33]) -> Result<[u8; 20], ()>;
 
 	/// Tests sometimes need to modify and inspect the contract info directly.
 	#[cfg(test)]
@@ -606,7 +610,7 @@ where
 		debug_message: Option<&'a mut Vec<u8>>,
 	) -> Result<(Self, E), ExecError> {
 		let (first_frame, executable, nonce) =
-			Self::new_frame(args, value, gas_meter, storage_meter, 0, &schedule)?;
+			Self::new_frame(args, value, gas_meter, storage_meter, 0, schedule)?;
 		let stack = Self {
 			origin,
 			schedule,
@@ -656,13 +660,10 @@ where
 				},
 				FrameArgs::Instantiate { sender, nonce, executable, salt } => {
 					let account_id =
-						<Contracts<T>>::contract_address(&sender, executable.code_hash(), &salt);
+						<Contracts<T>>::contract_address(&sender, executable.code_hash(), salt);
 					let trie_id = Storage::<T>::generate_trie_id(&account_id, nonce);
-					let contract = Storage::<T>::new_contract(
-						&account_id,
-						trie_id,
-						executable.code_hash().clone(),
-					)?;
+					let contract =
+						Storage::<T>::new_contract(&account_id, trie_id, *executable.code_hash())?;
 					(
 						account_id,
 						contract,
@@ -738,7 +739,7 @@ where
 				top_frame.nested_storage.charge_instantiate(
 					&self.origin,
 					&top_frame.account_id,
-					&mut top_frame.contract_info.get(&top_frame.account_id),
+					top_frame.contract_info.get(&top_frame.account_id),
 				)?;
 			}
 
@@ -1016,11 +1017,11 @@ where
 		code_hash: CodeHash<Self::T>,
 		input_data: Vec<u8>,
 	) -> Result<ExecReturnValue, ExecError> {
-		let executable = E::from_storage(code_hash, &self.schedule, self.gas_meter())?;
+		let executable = E::from_storage(code_hash, self.schedule, self.gas_meter())?;
 		let top_frame = self.top_frame_mut();
 		let contract_info = top_frame.contract_info().clone();
 		let account_id = top_frame.account_id.clone();
-		let value = top_frame.value_transferred.clone();
+		let value = top_frame.value_transferred;
 		let executable = self.push_frame(
 			FrameArgs::Call {
 				dest: account_id,
@@ -1041,7 +1042,7 @@ where
 		input_data: Vec<u8>,
 		salt: &[u8],
 	) -> Result<(AccountIdOf<T>, ExecReturnValue), ExecError> {
-		let executable = E::from_storage(code_hash, &self.schedule, self.gas_meter())?;
+		let executable = E::from_storage(code_hash, self.schedule, self.gas_meter())?;
 		let nonce = self.next_nonce();
 		let executable = self.push_frame(
 			FrameArgs::Instantiate {
@@ -1114,7 +1115,7 @@ where
 
 	fn caller(&self) -> &T::AccountId {
 		if let Some(caller) = &self.top_frame().delegate_caller {
-			&caller
+			caller
 		} else {
 			self.frames().nth(1).map(|f| &f.account_id).unwrap_or(&self.origin)
 		}
@@ -1176,7 +1177,7 @@ where
 	}
 
 	fn schedule(&self) -> &Schedule<Self::T> {
-		&self.schedule
+		self.schedule
 	}
 
 	fn gas_meter(&mut self) -> &mut GasMeter<Self::T> {
@@ -1201,7 +1202,11 @@ where
 	}
 
 	fn ecdsa_recover(&self, signature: &[u8; 65], message_hash: &[u8; 32]) -> Result<[u8; 33], ()> {
-		secp256k1_ecdsa_recover_compressed(&signature, &message_hash).map_err(|_| ())
+		secp256k1_ecdsa_recover_compressed(signature, message_hash).map_err(|_| ())
+	}
+
+	fn ecdsa_to_eth_address(&self, pk: &[u8; 33]) -> Result<[u8; 20], ()> {
+		ECDSAPublic(*pk).to_eth_address()
 	}
 
 	#[cfg(test)]
@@ -1212,8 +1217,8 @@ where
 	fn set_code_hash(&mut self, hash: CodeHash<Self::T>) -> Result<(), DispatchError> {
 		E::add_user(hash)?;
 		let top_frame = self.top_frame_mut();
-		let prev_hash = top_frame.contract_info().code_hash.clone();
-		E::remove_user(prev_hash.clone());
+		let prev_hash = top_frame.contract_info().code_hash;
+		E::remove_user(prev_hash);
 		top_frame.contract_info().code_hash = hash;
 		Contracts::<Self::T>::deposit_event(Event::ContractCodeUpdated {
 			contract: top_frame.account_id.clone(),
@@ -1267,6 +1272,7 @@ mod tests {
 	use codec::{Decode, Encode};
 	use frame_support::{assert_err, assert_ok};
 	use frame_system::{EventRecord, Phase};
+	use hex_literal::hex;
 	use pallet_contracts_primitives::ReturnFlags;
 	use pretty_assertions::assert_eq;
 	use sp_core::Bytes;
@@ -2716,6 +2722,38 @@ mod tests {
 				vec![],
 				None,
 			));
+		});
+	}
+	#[test]
+	fn ecdsa_to_eth_address_returns_proper_value() {
+		let bob_ch = MockLoader::insert(Call, |ctx, _| {
+			let pubkey_compressed: [u8; 33] =
+				hex!("028db55b05db86c0b1786ca49f095d76344c9e6056b2f02701a7e7f3c20aabfd91")[..]
+					.try_into()
+					.unwrap();
+			assert_eq!(
+				ctx.ext.ecdsa_to_eth_address(&pubkey_compressed).unwrap(),
+				hex!("09231da7b19A016f9e576d23B16277062F4d46A8")[..]
+			);
+			exec_success()
+		});
+
+		ExtBuilder::default().build().execute_with(|| {
+			let schedule = <Test as Config>::Schedule::get();
+			place_contract(&BOB, bob_ch);
+
+			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(0), 0).unwrap();
+			let result = MockStack::run_call(
+				ALICE,
+				BOB,
+				&mut GasMeter::<Test>::new(GAS_LIMIT),
+				&mut storage_meter,
+				&schedule,
+				0,
+				vec![],
+				None,
+			);
+			assert_matches!(result, Ok(_));
 		});
 	}
 }

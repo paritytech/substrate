@@ -23,10 +23,10 @@ use crate::{
 	chain_extension::ChainExtension,
 	storage::meter::Diff,
 	wasm::{env_def::ImportSatisfyCheck, OwnerInfo, PrefabWasmModule},
-	AccountIdOf, Config, Schedule,
+	AccountIdOf, CodeVec, Config, Error, Schedule,
 };
 use codec::{Encode, MaxEncodedLen};
-use sp_runtime::traits::Hash;
+use sp_runtime::{traits::Hash, DispatchError};
 use sp_std::prelude::*;
 use wasm_instrument::parity_wasm::elements::{
 	self, External, Internal, MemoryType, Type, ValueType,
@@ -225,10 +225,7 @@ impl<'a, T: Config> ContractModule<'a, T> {
 			.map(|is| is.entries())
 			.unwrap_or(&[])
 			.iter()
-			.filter(|entry| match *entry.external() {
-				External::Function(_) => true,
-				_ => false,
-			})
+			.filter(|entry| matches!(*entry.external(), External::Function(_)))
 			.count();
 
 		for export in export_entries {
@@ -259,11 +256,10 @@ impl<'a, T: Config> ContractModule<'a, T> {
 			// We still support () -> (i32) for backwards compatibility.
 			let func_ty_idx = func_entries
 				.get(fn_idx as usize)
-				.ok_or_else(|| "export refers to non-existent function")?
+				.ok_or("export refers to non-existent function")?
 				.type_ref();
-			let Type::Function(ref func_ty) = types
-				.get(func_ty_idx as usize)
-				.ok_or_else(|| "function has a non-existent type")?;
+			let Type::Function(ref func_ty) =
+				types.get(func_ty_idx as usize).ok_or("function has a non-existent type")?;
 			if !(func_ty.params().is_empty() &&
 				(func_ty.results().is_empty() || func_ty.results() == [ValueType::I32]))
 			{
@@ -300,11 +296,11 @@ impl<'a, T: Config> ContractModule<'a, T> {
 		let mut imported_mem_type = None;
 
 		for import in import_entries {
-			let type_idx = match import.external() {
-				&External::Table(_) => return Err("Cannot import tables"),
-				&External::Global(_) => return Err("Cannot import globals"),
-				&External::Function(ref type_idx) => type_idx,
-				&External::Memory(ref memory_type) => {
+			let type_idx = match *import.external() {
+				External::Table(_) => return Err("Cannot import tables"),
+				External::Global(_) => return Err("Cannot import globals"),
+				External::Function(ref type_idx) => type_idx,
+				External::Memory(ref memory_type) => {
 					if import.module() != IMPORT_MODULE_MEMORY {
 						return Err("Invalid module for imported memory")
 					}
@@ -321,7 +317,7 @@ impl<'a, T: Config> ContractModule<'a, T> {
 
 			let Type::Function(ref func_ty) = types
 				.get(*type_idx as usize)
-				.ok_or_else(|| "validation: import entry points to a non-existent type")?;
+				.ok_or("validation: import entry points to a non-existent type")?;
 
 			if !T::ChainExtension::enabled() &&
 				import.field().as_bytes() == b"seal_call_chain_extension"
@@ -352,17 +348,15 @@ fn get_memory_limits<T: Config>(
 		let limits = memory_type.limits();
 		match (limits.initial(), limits.maximum()) {
 			(initial, Some(maximum)) if initial > maximum =>
-				return Err(
-					"Requested initial number of pages should not exceed the requested maximum",
-				),
+				Err("Requested initial number of pages should not exceed the requested maximum"),
 			(_, Some(maximum)) if maximum > schedule.limits.memory_pages =>
-				return Err("Maximum number of pages should not exceed the configured maximum."),
+				Err("Maximum number of pages should not exceed the configured maximum."),
 			(initial, Some(maximum)) => Ok((initial, maximum)),
 			(_, None) => {
 				// Maximum number of pages should be always declared.
 				// This isn't a hard requirement and can be treated as a maximum set
 				// to configured maximum.
-				return Err("Maximum number of pages should be always declared.")
+				Err("Maximum number of pages should be always declared.")
 			},
 		}
 	} else {
@@ -377,7 +371,7 @@ fn check_and_instrument<C: ImportSatisfyCheck, T: Config>(
 	schedule: &Schedule<T>,
 ) -> Result<(Vec<u8>, (u32, u32)), &'static str> {
 	let result = (|| {
-		let contract_module = ContractModule::new(&original_code, schedule)?;
+		let contract_module = ContractModule::new(original_code, schedule)?;
 		contract_module.scan_exports()?;
 		contract_module.ensure_no_internal_memory()?;
 		contract_module.ensure_table_size_limit(schedule.limits.table_size)?;
@@ -407,19 +401,19 @@ fn check_and_instrument<C: ImportSatisfyCheck, T: Config>(
 }
 
 fn do_preparation<C: ImportSatisfyCheck, T: Config>(
-	original_code: Vec<u8>,
+	original_code: CodeVec<T>,
 	schedule: &Schedule<T>,
 	owner: AccountIdOf<T>,
-) -> Result<PrefabWasmModule<T>, &'static str> {
-	let (code, (initial, maximum)) =
-		check_and_instrument::<C, T>(original_code.as_ref(), schedule)?;
+) -> Result<PrefabWasmModule<T>, (DispatchError, &'static str)> {
+	let (code, (initial, maximum)) = check_and_instrument::<C, T>(original_code.as_ref(), schedule)
+		.map_err(|msg| (<Error<T>>::CodeRejected.into(), msg))?;
 	let original_code_len = original_code.len();
 
 	let mut module = PrefabWasmModule {
 		instruction_weights_version: schedule.instruction_weights.version,
 		initial,
 		maximum,
-		code,
+		code: code.try_into().map_err(|_| (<Error<T>>::CodeTooLarge.into(), ""))?,
 		code_hash: T::Hashing::hash(&original_code),
 		original_code: Some(original_code),
 		owner_info: None,
@@ -452,10 +446,10 @@ fn do_preparation<C: ImportSatisfyCheck, T: Config>(
 ///
 /// The preprocessing includes injecting code for gas metering and metering the height of stack.
 pub fn prepare_contract<T: Config>(
-	original_code: Vec<u8>,
+	original_code: CodeVec<T>,
 	schedule: &Schedule<T>,
 	owner: AccountIdOf<T>,
-) -> Result<PrefabWasmModule<T>, &'static str> {
+) -> Result<PrefabWasmModule<T>, (DispatchError, &'static str)> {
 	do_preparation::<super::runtime::Env, T>(original_code, schedule, owner)
 }
 
@@ -465,10 +459,10 @@ pub fn prepare_contract<T: Config>(
 ///
 /// Use this when an existing contract should be re-instrumented with a newer schedule version.
 pub fn reinstrument_contract<T: Config>(
-	original_code: Vec<u8>,
+	original_code: &[u8],
 	schedule: &Schedule<T>,
 ) -> Result<Vec<u8>, &'static str> {
-	Ok(check_and_instrument::<super::runtime::Env, T>(&original_code, schedule)?.0)
+	Ok(check_and_instrument::<super::runtime::Env, T>(original_code, schedule)?.0)
 }
 
 /// Alternate (possibly unsafe) preparation functions used only for benchmarking.
@@ -499,9 +493,12 @@ pub mod benchmarking {
 			instruction_weights_version: schedule.instruction_weights.version,
 			initial: memory_limits.0,
 			maximum: memory_limits.1,
-			code: contract_module.into_wasm_code()?,
 			code_hash: T::Hashing::hash(&original_code),
-			original_code: Some(original_code),
+			original_code: Some(original_code.try_into().map_err(|_| "Original code too large")?),
+			code: contract_module
+				.into_wasm_code()?
+				.try_into()
+				.map_err(|_| "Instrumented code too large")?,
 			owner_info: Some(OwnerInfo {
 				owner,
 				// this is a helper function for benchmarking which skips deposit collection
@@ -552,7 +549,7 @@ mod tests {
 		($name:ident, $wat:expr, $($expected:tt)*) => {
 			#[test]
 			fn $name() {
-				let wasm = wat::parse_str($wat).unwrap();
+				let wasm = wat::parse_str($wat).unwrap().try_into().unwrap();
 				let schedule = Schedule {
 					limits: Limits {
 						globals: 3,
@@ -565,7 +562,7 @@ mod tests {
 					.. Default::default()
 				};
 				let r = do_preparation::<env::Test, Test>(wasm, &schedule, ALICE);
-				assert_matches::assert_matches!(r, $($expected)*);
+				assert_matches::assert_matches!(r.map_err(|(_, msg)| msg), $($expected)*);
 			}
 		};
 	}

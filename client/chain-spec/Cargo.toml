@@ -13,13 +13,13 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sc-chain-spec-derive = { version = "4.0.0-dev", path = "./derive" }
+codec = { package = "parity-scale-codec", version = "3.0.0" }
 impl-trait-for-tuples = "0.2.2"
-sc-network = { version = "0.10.0-dev", path = "../network" }
-sp-core = { version = "6.0.0", path = "../../primitives/core" }
+memmap2 = "0.5.0"
 serde = { version = "1.0.136", features = ["derive"] }
 serde_json = "1.0.79"
-sp-runtime = { version = "6.0.0", path = "../../primitives/runtime" }
+sc-chain-spec-derive = { version = "4.0.0-dev", path = "./derive" }
+sc-network = { version = "0.10.0-dev", path = "../network" }
 sc-telemetry = { version = "4.0.0-dev", path = "../telemetry" }
-codec = { package = "parity-scale-codec", version = "3.0.0" }
-memmap2 = "0.5.0"
+sp-core = { version = "6.0.0", path = "../../primitives/core" }
+sp-runtime = { version = "6.0.0", path = "../../primitives/runtime" }

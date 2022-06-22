@@ -53,8 +53,7 @@ impl GenesisBuildDef {
 			})?
 			.1;
 
-		let mut instances = vec![];
-		instances.push(helper::check_genesis_builder_usage(&item_trait)?);
+		let instances = vec![helper::check_genesis_builder_usage(item_trait)?];
 
 		Ok(Self { attr_span, index, instances, where_clause: item.generics.where_clause.clone() })
 	}

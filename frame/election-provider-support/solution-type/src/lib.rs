@@ -153,7 +153,7 @@ fn check_attributes(input: ParseStream) -> syn::Result<bool> {
 	if attrs.len() > 1 {
 		let extra_attr = attrs.pop().expect("attributes vec with len > 1 can be popped");
 		return Err(syn::Error::new_spanned(
-			extra_attr.clone(),
+			extra_attr,
 			"compact solution can accept only #[compact]",
 		))
 	}
@@ -164,7 +164,7 @@ fn check_attributes(input: ParseStream) -> syn::Result<bool> {
 	if attr.path.is_ident("compact") {
 		Ok(true)
 	} else {
-		Err(syn::Error::new_spanned(attr.clone(), "compact solution can accept only #[compact]"))
+		Err(syn::Error::new_spanned(attr, "compact solution can accept only #[compact]"))
 	}
 }
 

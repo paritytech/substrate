@@ -30,7 +30,7 @@ use sp_core::{
 	Blake2Hasher,
 };
 use sp_externalities::{Extension, Extensions};
-use sp_trie::{empty_child_trie_root, LayoutV0, LayoutV1, TrieConfiguration};
+use sp_trie::{empty_child_trie_root, HashKey, LayoutV0, LayoutV1, TrieConfiguration};
 use std::{
 	any::{Any, TypeId},
 	collections::BTreeMap,
@@ -288,7 +288,7 @@ impl Externalities for BasicExternalities {
 		let empty_hash = empty_child_trie_root::<LayoutV1<Blake2Hasher>>();
 		for (prefixed_storage_key, child_info) in prefixed_keys {
 			let child_root = self.child_storage_root(&child_info, state_version);
-			if &empty_hash[..] == &child_root[..] {
+			if empty_hash[..] == child_root[..] {
 				top.remove(prefixed_storage_key.as_slice());
 			} else {
 				top.insert(prefixed_storage_key.into_inner(), child_root);
@@ -310,7 +310,7 @@ impl Externalities for BasicExternalities {
 	) -> Vec<u8> {
 		if let Some(child) = self.inner.children_default.get(child_info.storage_key()) {
 			let delta = child.data.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref())));
-			crate::in_memory_backend::new_in_mem::<Blake2Hasher>()
+			crate::in_memory_backend::new_in_mem::<Blake2Hasher, HashKey<_>>()
 				.child_storage_root(&child.child_info, delta, state_version)
 				.0
 		} else {

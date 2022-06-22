@@ -151,7 +151,7 @@ impl<Block: traits::Block> ExecutionExtensions<Block> {
 	where
 		T: OffchainSubmitTransaction<Block> + 'static,
 	{
-		*self.transaction_pool.write() = Some(Arc::downgrade(&pool) as _);
+		*self.transaction_pool.write() = Some(Arc::downgrade(pool) as _);
 	}
 
 	/// Based on the execution context and capabilities it produces

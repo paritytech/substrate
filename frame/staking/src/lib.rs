@@ -321,7 +321,7 @@ pub use weights::WeightInfo;
 
 pub use pallet::{pallet::*, *};
 
-pub(crate) const LOG_TARGET: &'static str = "runtime::staking";
+pub(crate) const LOG_TARGET: &str = "runtime::staking";
 
 // syntactic sugar for logging.
 #[macro_export]
@@ -369,9 +369,9 @@ pub struct ActiveEraInfo {
 #[derive(PartialEq, Encode, Decode, RuntimeDebug, TypeInfo)]
 pub struct EraRewardPoints<AccountId: Ord> {
 	/// Total number of points. Equals the sum of reward points for each validator.
-	total: RewardPoint,
+	pub total: RewardPoint,
 	/// The reward points earned by a given validator.
-	individual: BTreeMap<AccountId, RewardPoint>,
+	pub individual: BTreeMap<AccountId, RewardPoint>,
 }
 
 impl<AccountId: Ord> Default for EraRewardPoints<AccountId> {
@@ -533,10 +533,12 @@ impl<T: Config> StakingLedger<T> {
 	/// case that either the active bonded or some unlocking chunks become dust after slashing.
 	/// Returns the amount of funds actually slashed.
 	///
+	/// `slash_era` is the era in which the slash (which is being enacted now) actually happened.
+	///
 	/// # Note
 	///
-	/// This calls `Config::OnStakerSlash::on_slash` with information as to how the slash
-	/// was applied.
+	/// This calls `Config::OnStakerSlash::on_slash` with information as to how the slash was
+	/// applied.
 	fn slash(
 		&mut self,
 		slash_amount: BalanceOf<T>,
@@ -615,6 +617,7 @@ impl<T: Config> StakingLedger<T> {
 				break
 			}
 		}
+
 		self.unlocking.retain(|c| !c.value.is_zero());
 		T::OnStakerSlash::on_slash(&self.stash, self.active, &slashed_unlocking);
 		pre_slash_total.saturating_sub(self.total)
@@ -784,7 +787,7 @@ impl<Balance: AtLeast32BitUnsigned + Clone, T: Get<&'static PiecewiseLinear<'sta
 		era_duration_millis: u64,
 	) -> (Balance, Balance) {
 		let (validator_payout, max_payout) = inflation::compute_total_payout(
-			&T::get(),
+			T::get(),
 			total_staked,
 			total_issuance,
 			// Duration of era; more than u64::MAX is rewarded as u64::MAX.

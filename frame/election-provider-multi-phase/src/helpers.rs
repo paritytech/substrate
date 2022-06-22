@@ -17,7 +17,10 @@
 
 //! Some helper functions/macros for this crate.
 
-use crate::{unsigned::VoterOf, Config, SolutionTargetIndexOf, SolutionVoterIndexOf, VoteWeight};
+use crate::{
+	unsigned::{MinerConfig, MinerVoterOf},
+	SolutionTargetIndexOf, SolutionVoterIndexOf, VoteWeight,
+};
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
 #[macro_export]
@@ -30,11 +33,22 @@ macro_rules! log {
 	};
 }
 
+// This is only useful for a context where a `<T: Config>` is not in scope.
+#[macro_export]
+macro_rules! log_no_system {
+	($level:tt, $pattern:expr $(, $values:expr)* $(,)?) => {
+		log::$level!(
+			target: $crate::LOG_TARGET,
+			concat!("🗳 ", $pattern) $(, $values)*
+		)
+	};
+}
+
 /// Generate a btree-map cache of the voters and their indices.
 ///
 /// This can be used to efficiently build index getter closures.
-pub fn generate_voter_cache<T: Config>(
-	snapshot: &Vec<VoterOf<T>>,
+pub fn generate_voter_cache<T: MinerConfig>(
+	snapshot: &Vec<MinerVoterOf<T>>,
 ) -> BTreeMap<T::AccountId, usize> {
 	let mut cache: BTreeMap<T::AccountId, usize> = BTreeMap::new();
 	snapshot.iter().enumerate().for_each(|(i, (x, _, _))| {
@@ -54,7 +68,7 @@ pub fn generate_voter_cache<T: Config>(
 /// ## Warning
 ///
 /// Note that this will represent the snapshot data from which the `cache` is generated.
-pub fn voter_index_fn<T: Config>(
+pub fn voter_index_fn<T: MinerConfig>(
 	cache: &BTreeMap<T::AccountId, usize>,
 ) -> impl Fn(&T::AccountId) -> Option<SolutionVoterIndexOf<T>> + '_ {
 	move |who| {
@@ -68,7 +82,7 @@ pub fn voter_index_fn<T: Config>(
 ///
 /// Same as [`voter_index_fn`] but the returned function owns all its necessary data; nothing is
 /// borrowed.
-pub fn voter_index_fn_owned<T: Config>(
+pub fn voter_index_fn_owned<T: MinerConfig>(
 	cache: BTreeMap<T::AccountId, usize>,
 ) -> impl Fn(&T::AccountId) -> Option<SolutionVoterIndexOf<T>> {
 	move |who| {
@@ -83,7 +97,7 @@ pub fn voter_index_fn_owned<T: Config>(
 /// ## Warning
 ///
 /// Note that this will represent the snapshot data from which the `cache` is generated.
-pub fn voter_index_fn_usize<T: Config>(
+pub fn voter_index_fn_usize<T: MinerConfig>(
 	cache: &BTreeMap<T::AccountId, usize>,
 ) -> impl Fn(&T::AccountId) -> Option<usize> + '_ {
 	move |who| cache.get(who).cloned()
@@ -96,8 +110,8 @@ pub fn voter_index_fn_usize<T: Config>(
 ///
 /// Not meant to be used in production.
 #[cfg(test)]
-pub fn voter_index_fn_linear<T: Config>(
-	snapshot: &Vec<VoterOf<T>>,
+pub fn voter_index_fn_linear<T: MinerConfig>(
+	snapshot: &Vec<MinerVoterOf<T>>,
 ) -> impl Fn(&T::AccountId) -> Option<SolutionVoterIndexOf<T>> + '_ {
 	move |who| {
 		snapshot
@@ -114,7 +128,7 @@ pub fn voter_index_fn_linear<T: Config>(
 /// Note: to the extent possible, the returned function should be cached and reused. Producing that
 /// function requires a `O(n log n)` data transform. Each invocation of that function completes
 /// in `O(log n)`.
-pub fn target_index_fn<T: Config>(
+pub fn target_index_fn<T: MinerConfig>(
 	snapshot: &Vec<T::AccountId>,
 ) -> impl Fn(&T::AccountId) -> Option<SolutionTargetIndexOf<T>> + '_ {
 	let cache: BTreeMap<_, _> =
@@ -134,7 +148,7 @@ pub fn target_index_fn<T: Config>(
 ///
 /// Not meant to be used in production.
 #[cfg(test)]
-pub fn target_index_fn_linear<T: Config>(
+pub fn target_index_fn_linear<T: MinerConfig>(
 	snapshot: &Vec<T::AccountId>,
 ) -> impl Fn(&T::AccountId) -> Option<SolutionTargetIndexOf<T>> + '_ {
 	move |who| {
@@ -147,8 +161,8 @@ pub fn target_index_fn_linear<T: Config>(
 
 /// Create a function that can map a voter index ([`SolutionVoterIndexOf`]) to the actual voter
 /// account using a linearly indexible snapshot.
-pub fn voter_at_fn<T: Config>(
-	snapshot: &Vec<VoterOf<T>>,
+pub fn voter_at_fn<T: MinerConfig>(
+	snapshot: &Vec<MinerVoterOf<T>>,
 ) -> impl Fn(SolutionVoterIndexOf<T>) -> Option<T::AccountId> + '_ {
 	move |i| {
 		<SolutionVoterIndexOf<T> as TryInto<usize>>::try_into(i)
@@ -159,7 +173,7 @@ pub fn voter_at_fn<T: Config>(
 
 /// Create a function that can map a target index ([`SolutionTargetIndexOf`]) to the actual target
 /// account using a linearly indexible snapshot.
-pub fn target_at_fn<T: Config>(
+pub fn target_at_fn<T: MinerConfig>(
 	snapshot: &Vec<T::AccountId>,
 ) -> impl Fn(SolutionTargetIndexOf<T>) -> Option<T::AccountId> + '_ {
 	move |i| {
@@ -173,8 +187,8 @@ pub fn target_at_fn<T: Config>(
 ///
 /// This is not optimized and uses a linear search.
 #[cfg(test)]
-pub fn stake_of_fn_linear<T: Config>(
-	snapshot: &Vec<VoterOf<T>>,
+pub fn stake_of_fn_linear<T: MinerConfig>(
+	snapshot: &Vec<MinerVoterOf<T>>,
 ) -> impl Fn(&T::AccountId) -> VoteWeight + '_ {
 	move |who| {
 		snapshot
@@ -191,8 +205,8 @@ pub fn stake_of_fn_linear<T: Config>(
 ///
 /// The cache need must be derived from the same snapshot. Zero is returned if a voter is
 /// non-existent.
-pub fn stake_of_fn<'a, T: Config>(
-	snapshot: &'a Vec<VoterOf<T>>,
+pub fn stake_of_fn<'a, T: MinerConfig>(
+	snapshot: &'a Vec<MinerVoterOf<T>>,
 	cache: &'a BTreeMap<T::AccountId, usize>,
 ) -> impl Fn(&T::AccountId) -> VoteWeight + 'a {
 	move |who| {

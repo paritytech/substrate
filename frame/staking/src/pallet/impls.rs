@@ -123,8 +123,9 @@ impl<T: Config> Pallet<T> {
 			.claimed_rewards
 			.retain(|&x| x >= current_era.saturating_sub(history_depth));
 		match ledger.claimed_rewards.binary_search(&era) {
-			Ok(_) => Err(Error::<T>::AlreadyClaimed
-				.with_weight(T::WeightInfo::payout_stakers_alive_staked(0)))?,
+			Ok(_) =>
+				return Err(Error::<T>::AlreadyClaimed
+					.with_weight(T::WeightInfo::payout_stakers_alive_staked(0))),
 			Err(pos) => ledger.claimed_rewards.insert(pos, era),
 		}
 
@@ -146,8 +147,8 @@ impl<T: Config> Pallet<T> {
 		let validator_reward_points = era_reward_points
 			.individual
 			.get(&ledger.stash)
-			.map(|points| *points)
-			.unwrap_or_else(|| Zero::zero());
+			.copied()
+			.unwrap_or_else(Zero::zero);
 
 		// Nothing to do if they have no reward points.
 		if validator_reward_points.is_zero() {
@@ -174,11 +175,13 @@ impl<T: Config> Pallet<T> {
 
 		Self::deposit_event(Event::<T>::PayoutStarted(era, ledger.stash.clone()));
 
+		let mut total_imbalance = PositiveImbalanceOf::<T>::zero();
 		// We can now make total validator payout:
 		if let Some(imbalance) =
 			Self::make_payout(&ledger.stash, validator_staking_payout + validator_commission_payout)
 		{
 			Self::deposit_event(Event::<T>::Rewarded(ledger.stash, imbalance.peek()));
+			total_imbalance.subsume(imbalance);
 		}
 
 		// Track the number of payout ops to nominators. Note:
@@ -199,9 +202,11 @@ impl<T: Config> Pallet<T> {
 				nominator_payout_count += 1;
 				let e = Event::<T>::Rewarded(nominator.who.clone(), imbalance.peek());
 				Self::deposit_event(e);
+				total_imbalance.subsume(imbalance);
 			}
 		}
 
+		T::Reward::on_unbalanced(total_imbalance);
 		debug_assert!(nominator_payout_count <= T::MaxNominatorRewardedPerValidator::get());
 		Ok(Some(T::WeightInfo::payout_stakers_alive_staked(nominator_payout_count)).into())
 	}
@@ -256,8 +261,7 @@ impl<T: Config> Pallet<T> {
 					0
 				});
 
-			let era_length =
-				session_index.checked_sub(current_era_start_session_index).unwrap_or(0); // Must never happen.
+			let era_length = session_index.saturating_sub(current_era_start_session_index); // Must never happen.
 
 			match ForceEra::<T>::get() {
 				// Will be set to `NotForcing` again if a new era has been triggered.
@@ -799,7 +803,7 @@ impl<T: Config> Pallet<T> {
 	pub fn do_remove_nominator(who: &T::AccountId) -> bool {
 		let outcome = if Nominators::<T>::contains_key(who) {
 			Nominators::<T>::remove(who);
-			T::VoterList::on_remove(who);
+			let _ = T::VoterList::on_remove(who).defensive();
 			true
 		} else {
 			false
@@ -846,7 +850,7 @@ impl<T: Config> Pallet<T> {
 	pub fn do_remove_validator(who: &T::AccountId) -> bool {
 		let outcome = if Validators::<T>::contains_key(who) {
 			Validators::<T>::remove(who);
-			T::VoterList::on_remove(who);
+			let _ = T::VoterList::on_remove(who).defensive();
 			true
 		} else {
 			false
@@ -1032,7 +1036,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 			);
 			Self::do_add_nominator(
 				&v,
-				Nominations { targets: t.try_into().unwrap(), submitted_in: 0, suppressed: false },
+				Nominations { targets: t, submitted_in: 0, suppressed: false },
 			);
 		});
 	}
@@ -1339,11 +1343,16 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsAndValidatorsM
 		// nothing to do on insert.
 		Ok(())
 	}
-	fn on_update(_: &T::AccountId, _weight: Self::Score) {
-		// nothing to do on update.
+	fn get_score(id: &T::AccountId) -> Result<Self::Score, Self::Error> {
+		Ok(Pallet::<T>::weight_of(id))
 	}
-	fn on_remove(_: &T::AccountId) {
+	fn on_update(_: &T::AccountId, _weight: Self::Score) -> Result<(), Self::Error> {
+		// nothing to do on update.
+		Ok(())
+	}
+	fn on_remove(_: &T::AccountId) -> Result<(), Self::Error> {
 		// nothing to do on remove.
+		Ok(())
 	}
 	fn unsafe_regenerate(
 		_: impl IntoIterator<Item = T::AccountId>,

@@ -259,7 +259,7 @@ impl StorageLineDefExt {
 	) -> Self {
 		let is_generic = match &storage_def.storage_type {
 			StorageLineTypeDef::Simple(value) =>
-				ext::type_contains_ident(&value, &def.module_runtime_generic),
+				ext::type_contains_ident(value, &def.module_runtime_generic),
 			StorageLineTypeDef::Map(map) =>
 				ext::type_contains_ident(&map.key, &def.module_runtime_generic) ||
 					ext::type_contains_ident(&map.value, &def.module_runtime_generic),

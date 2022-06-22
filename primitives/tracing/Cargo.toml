@@ -23,7 +23,7 @@ codec = { version = "3.0.0", package = "parity-scale-codec", default-features = 
 	"derive",
 ] }
 tracing = { version = "0.1.29", default-features = false }
-tracing-core = { version = "0.1.21", default-features = false }
+tracing-core = { version = "0.1.26", default-features = false }
 tracing-subscriber = { version = "0.2.25", optional = true, features = [
 	"tracing-log",
 ] }

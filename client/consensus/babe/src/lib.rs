@@ -126,7 +126,7 @@ use sp_inherents::{CreateInherentDataProviders, InherentData, InherentDataProvid
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::{
 	generic::{BlockId, OpaqueDigestItemId},
-	traits::{Block as BlockT, Header, NumberFor, One, SaturatedConversion, Saturating, Zero},
+	traits::{Block as BlockT, Header, NumberFor, SaturatedConversion, Saturating, Zero},
 	DigestItem,
 };
 
@@ -528,7 +528,7 @@ where
 	let (worker_tx, worker_rx) = channel(HANDLE_BUFFER_SIZE);
 
 	let answer_requests =
-		answer_requests(worker_rx, babe_link.config, client, babe_link.epoch_changes.clone());
+		answer_requests(worker_rx, babe_link.config, client, babe_link.epoch_changes);
 
 	let inner = future::select(Box::pin(slot_worker), Box::pin(answer_requests));
 	Ok(BabeWorker {
@@ -638,13 +638,13 @@ async fn answer_requests<B: BlockT, C>(
 							slot_number,
 						)
 						.map_err(|e| Error::<B>::ForkTree(Box::new(e)))?
-						.ok_or_else(|| Error::<B>::FetchEpoch(parent_hash))?;
+						.ok_or(Error::<B>::FetchEpoch(parent_hash))?;
 
 					let viable_epoch = epoch_changes
 						.viable_epoch(&epoch_descriptor, |slot| {
 							Epoch::genesis(&config.genesis_config, slot)
 						})
-						.ok_or_else(|| Error::<B>::FetchEpoch(parent_hash))?;
+						.ok_or(Error::<B>::FetchEpoch(parent_hash))?;
 
 					Ok(sp_consensus_babe::Epoch {
 						epoch_index: viable_epoch.as_ref().epoch_index,
@@ -788,7 +788,7 @@ where
 			.epoch_descriptor_for_child_of(
 				descendent_query(&*self.client),
 				&parent.hash(),
-				parent.number().clone(),
+				*parent.number(),
 				slot,
 			)
 			.map_err(|e| ConsensusError::ChainLookup(e.to_string()))?
@@ -798,7 +798,7 @@ where
 	fn authorities_len(&self, epoch_descriptor: &Self::EpochData) -> Option<usize> {
 		self.epoch_changes
 			.shared_data()
-			.viable_epoch(&epoch_descriptor, |slot| {
+			.viable_epoch(epoch_descriptor, |slot| {
 				Epoch::genesis(&self.config.genesis_config, slot)
 			})
 			.map(|epoch| epoch.as_ref().authorities.len())
@@ -815,7 +815,7 @@ where
 			slot,
 			self.epoch_changes
 				.shared_data()
-				.viable_epoch(&epoch_descriptor, |slot| {
+				.viable_epoch(epoch_descriptor, |slot| {
 					Epoch::genesis(&self.config.genesis_config, slot)
 				})?
 				.as_ref(),
@@ -886,7 +886,7 @@ where
 			.clone()
 			.try_into()
 			.map_err(|_| sp_consensus::Error::InvalidSignature(signature, public))?;
-		let digest_item = <DigestItem as CompatibleDigestItem>::babe_seal(signature.into());
+		let digest_item = <DigestItem as CompatibleDigestItem>::babe_seal(signature);
 
 		let mut import_block = BlockImportParams::new(BlockOrigin::Own, header);
 		import_block.post_digests.push(digest_item);
@@ -1253,12 +1253,12 @@ where
 					pre_digest.slot(),
 				)
 				.map_err(|e| Error::<Block>::ForkTree(Box::new(e)))?
-				.ok_or_else(|| Error::<Block>::FetchEpoch(parent_hash))?;
+				.ok_or(Error::<Block>::FetchEpoch(parent_hash))?;
 			let viable_epoch = epoch_changes
 				.viable_epoch(&epoch_descriptor, |slot| {
 					Epoch::genesis(&self.config.genesis_config, slot)
 				})
-				.ok_or_else(|| Error::<Block>::FetchEpoch(parent_hash))?;
+				.ok_or(Error::<Block>::FetchEpoch(parent_hash))?;
 
 			// We add one to the current slot to allow for some small drift.
 			// FIXME #1019 in the future, alter this queue to allow deferring of headers
@@ -1791,9 +1791,13 @@ where
 	// startup rather than waiting until importing the next epoch change block.
 	prune_finalized(client.clone(), &mut epoch_changes.shared_data())?;
 
-	let client_clone = client.clone();
+	let client_weak = Arc::downgrade(&client);
 	let on_finality = move |summary: &FinalityNotification<Block>| {
-		aux_storage_cleanup(client_clone.as_ref(), summary)
+		if let Some(client) = client_weak.upgrade() {
+			aux_storage_cleanup(client.as_ref(), summary)
+		} else {
+			Default::default()
+		}
 	};
 	client.register_finality_action(Box::new(on_finality));
 
@@ -1879,13 +1883,10 @@ where
 	let finalized = client.info().finalized_number;
 	let revertible = blocks.min(best_number - finalized);
 
-	let number = best_number - revertible;
-	let hash = client
-		.block_hash_from_id(&BlockId::Number(number))?
-		.ok_or(ClientError::Backend(format!(
-			"Unexpected hash lookup failure for block number: {}",
-			number
-		)))?;
+	let revert_up_to_number = best_number - revertible;
+	let revert_up_to_hash = client.hash(revert_up_to_number)?.ok_or(ClientError::Backend(
+		format!("Unexpected hash lookup failure for block number: {}", revert_up_to_number),
+	))?;
 
 	// Revert epoch changes tree.
 
@@ -1894,34 +1895,37 @@ where
 		aux_schema::load_epoch_changes::<Block, Client>(&*client, config.genesis_config())?;
 	let mut epoch_changes = epoch_changes.shared_data();
 
-	if number == Zero::zero() {
+	if revert_up_to_number == Zero::zero() {
 		// Special case, no epoch changes data were present on genesis.
 		*epoch_changes = EpochChangesFor::<Block, Epoch>::default();
 	} else {
-		epoch_changes.revert(descendent_query(&*client), hash, number);
+		epoch_changes.revert(descendent_query(&*client), revert_up_to_hash, revert_up_to_number);
 	}
 
 	// Remove block weights added after the revert point.
 
 	let mut weight_keys = HashSet::with_capacity(revertible.saturated_into());
+
 	let leaves = backend.blockchain().leaves()?.into_iter().filter(|&leaf| {
-		sp_blockchain::tree_route(&*client, hash, leaf)
+		sp_blockchain::tree_route(&*client, revert_up_to_hash, leaf)
 			.map(|route| route.retracted().is_empty())
 			.unwrap_or_default()
 	});
+
 	for leaf in leaves {
 		let mut hash = leaf;
-		// Insert parent after parent until we don't hit an already processed
-		// branch or we reach a direct child of the rollback point.
-		while weight_keys.insert(aux_schema::block_weight_key(hash)) {
+		loop {
 			let meta = client.header_metadata(hash)?;
-			if meta.number <= number + One::one() {
-				// We've reached a child of the revert point, stop here.
+			if meta.number <= revert_up_to_number ||
+				!weight_keys.insert(aux_schema::block_weight_key(hash))
+			{
+				// We've reached the revert point or an already processed branch, stop here.
 				break
 			}
-			hash = client.header_metadata(hash)?.parent;
+			hash = meta.parent;
 		}
 	}
+
 	let weight_keys: Vec<_> = weight_keys.iter().map(|val| val.as_slice()).collect();
 
 	// Write epoch changes and remove weights in one shot.

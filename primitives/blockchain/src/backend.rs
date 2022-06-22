@@ -184,7 +184,7 @@ pub trait Backend<Block: BlockT>:
 			if let Some(max_number) = maybe_max_number {
 				loop {
 					let current_header = self
-						.header(BlockId::Hash(current_hash.clone()))?
+						.header(BlockId::Hash(current_hash))?
 						.ok_or_else(|| Error::MissingHeader(current_hash.to_string()))?;
 
 					if current_header.number() <= &max_number {
@@ -204,7 +204,7 @@ pub trait Backend<Block: BlockT>:
 				}
 
 				let current_header = self
-					.header(BlockId::Hash(current_hash.clone()))?
+					.header(BlockId::Hash(current_hash))?
 					.ok_or_else(|| Error::MissingHeader(current_hash.to_string()))?;
 
 				// stop search in this chain once we go below the target's block number

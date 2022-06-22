@@ -33,7 +33,7 @@ use wasm_instrument::{gas_metering, parity_wasm::elements};
 /// How many API calls are executed in a single batch. The reason for increasing the amount
 /// of API calls in batches (per benchmark component increase) is so that the linear regression
 /// has an easier time determining the contribution of that component.
-pub const API_BENCHMARK_BATCH_SIZE: u32 = 100;
+pub const API_BENCHMARK_BATCH_SIZE: u32 = 80;
 
 /// How many instructions are executed in a single batch. The reasoning is the same
 /// as for `API_BENCHMARK_BATCH_SIZE`.
@@ -147,11 +147,6 @@ pub struct Limits {
 
 	/// The maximum size of a storage value and event payload in bytes.
 	pub payload_len: u32,
-
-	/// The maximum length of a contract code in bytes. This limit applies to the instrumented
-	/// version of the code. Therefore `instantiate_with_code` can fail even when supplying
-	/// a wasm binary below this maximum size.
-	pub code_len: u32,
 }
 
 impl Limits {
@@ -418,6 +413,9 @@ pub struct HostFnWeights<T: Config> {
 	/// Weight of calling `seal_ecdsa_recover`.
 	pub ecdsa_recover: Weight,
 
+	/// Weight of calling `seal_ecdsa_to_eth_address`.
+	pub ecdsa_to_eth_address: Weight,
+
 	/// The type parameter is used in the default implementation.
 	#[codec(skip)]
 	pub _phantom: PhantomData<T>,
@@ -519,7 +517,6 @@ impl Default for Limits {
 			subject_len: 32,
 			call_depth: 32,
 			payload_len: 16 * 1024,
-			code_len: 128 * 1024,
 		}
 	}
 }
@@ -653,6 +650,7 @@ impl<T: Config> Default for HostFnWeights<T> {
 			hash_blake2_128: cost_batched!(seal_hash_blake2_128),
 			hash_blake2_128_per_byte: cost_byte_batched!(seal_hash_blake2_128_per_kb),
 			ecdsa_recover: cost_batched!(seal_ecdsa_recover),
+			ecdsa_to_eth_address: cost_batched!(seal_ecdsa_to_eth_address),
 			_phantom: PhantomData,
 		}
 	}
@@ -666,7 +664,7 @@ struct ScheduleRules<'a, T: Config> {
 impl<T: Config> Schedule<T> {
 	pub(crate) fn rules(&self, module: &elements::Module) -> impl gas_metering::Rules + '_ {
 		ScheduleRules {
-			schedule: &self,
+			schedule: self,
 			params: module
 				.type_section()
 				.iter()

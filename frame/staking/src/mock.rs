@@ -284,7 +284,7 @@ impl crate::pallet::pallet::Config for Test {
 	type RewardRemainder = RewardRemainderMock;
 	type Event = Event;
 	type Slash = ();
-	type Reward = ();
+	type Reward = MockReward;
 	type SessionsPerEra = SessionsPerEra;
 	type SlashDeferDuration = SlashDeferDuration;
 	type SlashCancelOrigin = frame_system::EnsureRoot<Self::AccountId>;

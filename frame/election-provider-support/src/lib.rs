@@ -168,15 +168,12 @@
 
 pub mod onchain;
 pub mod traits;
-#[cfg(feature = "std")]
-use codec::{Decode, Encode};
-use frame_support::{weights::Weight, BoundedVec, RuntimeDebug};
-use sp_runtime::traits::Bounded;
+use sp_runtime::traits::{Bounded, Saturating, Zero};
 use sp_std::{fmt::Debug, prelude::*};
 
 /// Re-export the solution generation macro.
 pub use frame_election_provider_solution_type::generate_solution_type;
-pub use frame_support::traits::Get;
+pub use frame_support::{traits::Get, weights::Weight, BoundedVec, RuntimeDebug};
 /// Re-export some type as they are used in the interface.
 pub use sp_arithmetic::PerThing;
 pub use sp_npos_elections::{
@@ -223,7 +220,7 @@ impl<T> __OrInvalidIndex<T> for Option<T> {
 /// making it fast to repeatedly encode into a `SolutionOf<T>`. This property turns out
 /// to be important when trimming for solution length.
 #[derive(RuntimeDebug, Clone, Default)]
-#[cfg_attr(feature = "std", derive(PartialEq, Eq, Encode, Decode))]
+#[cfg_attr(feature = "std", derive(PartialEq, Eq, codec::Encode, codec::Decode))]
 pub struct IndexAssignment<VoterIndex, TargetIndex, P: PerThing> {
 	/// Index of the voter among the voters list.
 	pub who: VoterIndex,
@@ -244,7 +241,7 @@ impl<VoterIndex, TargetIndex, P: PerThing> IndexAssignment<VoterIndex, TargetInd
 			distribution: assignment
 				.distribution
 				.iter()
-				.map(|(target, proportion)| Some((target_index(target)?, proportion.clone())))
+				.map(|(target, proportion)| Some((target_index(target)?, *proportion)))
 				.collect::<Option<Vec<_>>>()
 				.or_invalid_index()?,
 		})
@@ -439,7 +436,7 @@ pub trait SortedListProvider<AccountId> {
 	type Error: sp_std::fmt::Debug;
 
 	/// The type used by the list to compare nodes for ordering.
-	type Score: Bounded;
+	type Score: Bounded + Saturating + Zero;
 
 	/// An iterator over the list, which can have `take` called on it.
 	fn iter() -> Box<dyn Iterator<Item = AccountId>>;
@@ -456,13 +453,44 @@ pub trait SortedListProvider<AccountId> {
 	fn contains(id: &AccountId) -> bool;
 
 	/// Hook for inserting a new id.
+	///
+	/// Implementation should return an error if duplicate item is being inserted.
 	fn on_insert(id: AccountId, score: Self::Score) -> Result<(), Self::Error>;
 
 	/// Hook for updating a single id.
-	fn on_update(id: &AccountId, score: Self::Score);
+	///
+	/// The `new` score is given.
+	///
+	/// Returns `Ok(())` iff it successfully updates an item, an `Err(_)` otherwise.
+	fn on_update(id: &AccountId, score: Self::Score) -> Result<(), Self::Error>;
+
+	/// Get the score of `id`.
+	fn get_score(id: &AccountId) -> Result<Self::Score, Self::Error>;
+
+	/// Same as `on_update`, but incorporate some increased score.
+	fn on_increase(id: &AccountId, additional: Self::Score) -> Result<(), Self::Error> {
+		let old_score = Self::get_score(id)?;
+		let new_score = old_score.saturating_add(additional);
+		Self::on_update(id, new_score)
+	}
+
+	/// Same as `on_update`, but incorporate some decreased score.
+	///
+	/// If the new score of the item is `Zero`, it is removed.
+	fn on_decrease(id: &AccountId, decreased: Self::Score) -> Result<(), Self::Error> {
+		let old_score = Self::get_score(id)?;
+		let new_score = old_score.saturating_sub(decreased);
+		if new_score.is_zero() {
+			Self::on_remove(id)
+		} else {
+			Self::on_update(id, new_score)
+		}
+	}
 
 	/// Hook for removing am id from the list.
-	fn on_remove(id: &AccountId);
+	///
+	/// Returns `Ok(())` iff it successfully removes an item, an `Err(_)` otherwise.
+	fn on_remove(id: &AccountId) -> Result<(), Self::Error>;
 
 	/// Regenerate this list from scratch. Returns the count of items inserted.
 	///
@@ -496,7 +524,7 @@ pub trait SortedListProvider<AccountId> {
 	}
 }
 
-/// Something that can provide the `VoteWeight` of an account. Similar to [`ElectionProvider`] and
+/// Something that can provide the `Score` of an account. Similar to [`ElectionProvider`] and
 /// [`ElectionDataProvider`], this should typically be implementing by whoever is supposed to *use*
 /// `SortedListProvider`.
 pub trait ScoreProvider<AccountId> {
@@ -505,7 +533,7 @@ pub trait ScoreProvider<AccountId> {
 	/// Get the current `Score` of `who`.
 	fn score(who: &AccountId) -> Self::Score;
 
-	/// For tests and benchmarks, set the `VoteWeight`.
+	/// For tests and benchmarks, set the `score`.
 	#[cfg(any(feature = "runtime-benchmarks", test))]
 	fn set_score_of(_: &AccountId, _: Self::Score) {}
 }

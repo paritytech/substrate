@@ -11,13 +11,32 @@ on:
       - synchronize
       - review_requested
       - review_request_removed
+      - ready_for_review
+      - converted_to_draft
   pull_request_review:
 
 jobs:
   pr-custom-review:
     runs-on: ubuntu-latest
     steps:
+      - name: Skip if pull request is in Draft
+        # `if: github.event.pull_request.draft == true` should be kept here, at
+        # the step level, rather than at the job level. The latter is not
+        # recommended because when the PR is moved from "Draft" to "Ready to
+        # review" the workflow will immediately be passing (since it was skipped),
+        # even though it hasn't actually ran, since it takes a few seconds for
+        # the workflow to start. This is also disclosed in:
+        # https://github.community/t/dont-run-actions-on-draft-pull-requests/16817/17
+        # That scenario would open an opportunity for the check to be bypassed:
+        # 1. Get your PR approved
+        # 2. Move it to Draft
+        # 3. Push whatever commits you want
+        # 4. Move it to "Ready for review"; now the workflow is passing (it was
+        #    skipped) and "Check reviews" is also passing (it won't be updated
+        #    until the workflow is finished)
+        if: github.event.pull_request.draft == true
+        run: exit 1
       - name: pr-custom-review
-        uses: paritytech/pr-custom-review@v2
+        uses: paritytech/pr-custom-review@action-v3
         with:
-          token: ${{ secrets.PRCR_TOKEN }}
+          checks-reviews-api: http://pcr.parity-prod.parity.io/api/v1/check_reviews
