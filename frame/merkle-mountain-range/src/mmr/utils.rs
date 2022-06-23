@@ -92,6 +92,15 @@ impl NodesUtils {
 		}
 		pos
 	}
+
+	// Starting from any leaf position, get the sequence of positions of the nodes added
+	// to the mmr when this leaf was added (inclusive of the leaf's position itself).
+	// That is, all of these nodes are right children of their respective parents.
+	fn right_branch_ending_in_leaf(leaf_pos: NodeIndex) -> Vec<u64> {
+		let leaf_index = Self::leaf_node_index_to_leaf_index(leaf_pos);
+		let num_parents = leaf_index.trailing_ones() as u64;
+		return (leaf_pos..=leaf_pos + num_parents).rev().collect();
+	}
 }
 
 #[cfg(test)]
@@ -105,6 +114,28 @@ mod tests {
 			let pos = leaf_index_to_pos(index);
 			assert_eq!(NodesUtils::leaf_node_index_to_leaf_index(pos), index);
 		}
+	}
+
+	#[test]
+	fn should_calculate_right_branch_correctly() {
+		fn left_jump_sequence(pos: u64) -> Vec<u64> {
+			let mut right_branch_ending_in_leaf = vec![pos];
+			let mut next_pos = pos + 1;
+			while mmr_lib::helper::pos_height_in_tree(next_pos) > 0 {
+				right_branch_ending_in_leaf.push(next_pos);
+				next_pos += 1;
+			}
+			right_branch_ending_in_leaf.reverse();
+			right_branch_ending_in_leaf
+		}
+
+		(0..100000u64).for_each(|leaf_index| {
+			let pos = mmr_lib::helper::leaf_index_to_pos(leaf_index);
+			assert_eq!(
+				NodesUtils::right_branch_ending_in_leaf(pos),
+				left_jump_sequence(pos)
+			);
+		});
 	}
 
 	#[test]
