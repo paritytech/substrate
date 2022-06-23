@@ -191,9 +191,6 @@ impl<B: BlockT> BlockCollection<B> {
 			let len = match range_data {
 				BlockRangeState::Complete(blocks) => {
 					let len = (blocks.len() as u32).into();
-					if let Some(BlockData { block, .. }) = blocks.first() {
-						self.queued_blocks.insert(block.hash, (start, start + len));
-					}
 					prev = start + len;
 					// Remove all elements from `blocks` and add them to `ready`
 					ready.append(blocks);
