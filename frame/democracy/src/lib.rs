@@ -152,7 +152,7 @@
 #![recursion_limit = "256"]
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	ensure,
 	traits::{
@@ -207,7 +207,7 @@ pub type BoundedCallOf<T> = Bounded<CallOf<T>>;
 // A value placed in storage that represents the current version of the Democracy storage.
 // This value is used by the `on_runtime_upgrade` logic to determine whether we run
 // storage migration logic.
-#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+#[derive(Encode, MaxEncodedLen, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 enum Releases {
 	V1,
 }
@@ -390,7 +390,7 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		T::AccountId,
-		Voting<BalanceOf<T>, T::AccountId, T::BlockNumber>,
+		Voting<BalanceOf<T>, T::AccountId, T::BlockNumber, T::MaxVotes>,
 		ValueQuery,
 	>;
 
@@ -1155,11 +1155,7 @@ impl<T: Config> Pallet<T> {
 						votes[i].1 = vote;
 					},
 					Err(i) => {
-						ensure!(
-							votes.len() as u32 <= T::MaxVotes::get(),
-							Error::<T>::MaxVotesReached
-						);
-						votes.insert(i, (ref_index, vote));
+						votes.try_insert(i, (ref_index, vote)).map_err(|_| Error::<T>::MaxVotesReached)?;
 					},
 				}
 				Self::deposit_event(Event::<T>::Voted { voter: who.clone(), ref_index, vote });
