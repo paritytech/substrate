@@ -169,6 +169,9 @@ impl<T: Config> Pallet<T> {
 
 		for (item_id, details) in Items::<T>::drain_prefix(&id) {
 			AccountItems::<T>::remove((&details.owner, &id, &item_id));
+			if let Some(seller) = details.seller {
+				Sellers::<T>::remove((&seller, &id, &item_id));
+			}
 		}
 
 		ItemMetadataOf::<T>::remove_prefix(&id, None);
