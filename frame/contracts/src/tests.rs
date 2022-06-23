@@ -3261,6 +3261,43 @@ fn reentrant_count_works_with_call() {
 		.unwrap();
 	});
 }
+
+#[test]
+#[cfg(feature = "unstable-interface")]
+fn reentrant_count_works_with_delegated_call() {
+	let (wasm1, code_hash1) = compile_module::<Test>("reentrant_count_delegated_call").unwrap();
+	let contract_addr1 = Contracts::contract_address(&ALICE, &code_hash1, &[]);
+
+	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
+		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+
+		assert_ok!(Contracts::instantiate_with_code(
+			Origin::signed(ALICE),
+			300_000,
+			GAS_LIMIT,
+			None,
+			wasm1,
+			vec![],
+			vec![],
+		));
+
+		let mut input = AsRef::<[u8]>::as_ref(&(code_hash1.clone())).to_vec();
+		input.push(1); // adding callstack high to the input
+
+		Contracts::bare_call(
+			ALICE,
+			contract_addr1.clone(),
+			0,
+			GAS_LIMIT,
+			None,
+			input,
+			true,
+		)
+			.result
+			.unwrap();
+	});
+}
+
 #[test]
 #[cfg(feature = "unstable-interface")]
 fn account_entrance_count_works() {
