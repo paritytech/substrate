@@ -178,9 +178,6 @@ pub trait SanityCheck<BlockNumber> {
 }
 
 #[cfg(feature = "try-runtime")]
-use crate::traits::PalletInfoAccess;
-
-#[cfg(feature = "try-runtime")]
 #[impl_for_tuples(100)]
 impl<BlockNumber: Clone + AtLeast32BitUnsigned> SanityCheck<BlockNumber> for Tuple {
 	for_tuples!( where #( Tuple: crate::traits::PalletInfoAccess )* );
