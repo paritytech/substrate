@@ -203,7 +203,8 @@ impl<B: BlockT> BlockCollection<B> {
 		}
 
 		if let Some(BlockData { block, .. }) = ready.first() {
-			self.queued_blocks.insert(block.hash, (from, from + (ready.len() as u32).into()));
+			self.queued_blocks
+				.insert(block.hash, (from, from + (ready.len() as u32).into()));
 		}
 
 		trace!(target: "sync", "{} blocks ready for import", ready.len());
