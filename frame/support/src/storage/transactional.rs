@@ -33,8 +33,8 @@ use sp_runtime::{DispatchError, TransactionOutcome, TransactionalError};
 pub type Layer = u32;
 /// The key that is holds the current number of active layers.
 pub const TRANSACTION_LEVEL_KEY: &[u8] = b":transaction_level:";
-/// The maximum number of nested layers.
-pub const TRANSACTIONAL_LIMIT: Layer = 255;
+/// The maximum number of nested layers. If `None`, then there is no limit.
+pub const TRANSACTIONAL_LIMIT: Option<Layer> = None;
 
 /// Returns the current number of nested transactional layers.
 fn get_transaction_level() -> Layer {
@@ -56,10 +56,17 @@ fn kill_transaction_level() {
 /// Returns a guard that when dropped decrements the transaction level automatically.
 fn inc_transaction_level() -> Result<StorageLayerGuard, ()> {
 	let existing_levels = get_transaction_level();
-	if existing_levels >= TRANSACTIONAL_LIMIT {
+	if existing_levels == Layer::MAX {
 		return Err(())
 	}
-	// Cannot overflow because of check above.
+
+	if let Some(transactional_limit) = TRANSACTIONAL_LIMIT {
+		if existing_levels >= transactional_limit {
+			return Err(())
+		}
+	}
+
+	// Cannot overflow due to check above.
 	set_transaction_level(existing_levels + 1);
 	Ok(StorageLayerGuard)
 }
@@ -260,11 +267,13 @@ mod tests {
 				TransactionOutcome::Commit(res)
 			}));
 
-			assert_ok!(recursive_transactional(255));
-			assert_noop!(
-				recursive_transactional(256),
-				sp_runtime::TransactionalError::LimitReached
-			);
+			if let Some(limit) = TRANSACTIONAL_LIMIT {
+				assert_ok!(recursive_transactional(limit));
+				assert_noop!(
+					recursive_transactional(limit + 1),
+					sp_runtime::TransactionalError::LimitReached
+				);
+			}
 
 			assert_eq!(get_transaction_level(), 0);
 		});
