@@ -17,8 +17,8 @@
 
 //! # Nomination Pools for Staking Delegation
 //!
-//! A pallet that allows members to delegate their stake to nominating pools. A nomination pool
-//! acts as nominator and nominates validators on the members behalf.
+//! A pallet that allows members to delegate their stake to nominating pools. A nomination pool acts
+//! as nominator and nominates validators on the members behalf.
 //!
 //! # Index
 //!
@@ -28,16 +28,27 @@
 //!
 //! ## Key terms
 //!
+//!  * pool id: A unique identifier of each pool. Set to u12
 //!  * bonded pool: Tracks the distribution of actively staked funds. See [`BondedPool`] and
-//! [`BondedPoolInner`]. Bonded pools are identified via the pools bonded account.
+//! [`BondedPoolInner`].
 //! * reward pool: Tracks rewards earned by actively staked funds. See [`RewardPool`] and
-//!   [`RewardPools`]. Reward pools are identified via the pools bonded account.
+//!   [`RewardPools`].
 //! * unbonding sub pools: Collection of pools at different phases of the unbonding lifecycle. See
-//!   [`SubPools`] and [`SubPoolsStorage`]. Sub pools are identified via the pools bonded account.
-//! * members: Accounts that are members of pools. See [`PoolMember`] and [`PoolMembers`]. Pool
-//!   members are identified via their account.
-//! * point: A unit of measure for a members portion of a pool's funds.
+//!   [`SubPools`] and [`SubPoolsStorage`].
+//! * members: Accounts that are members of pools. See [`PoolMember`] and [`PoolMembers`].
+//! * roles: Administrative roles of each pool, capable of controlling nomination, and the state of
+//!   the pool.
+//! * point: A unit of measure for a members portion of a pool's funds. Points initially have a
+//!   ratio of 1 (as set by `POINTS_TO_BALANCE_INIT_RATIO`) to balance, but as slashing happens,
+//!   this can change.
 //! * kick: The act of a pool administrator forcibly ejecting a member.
+//! * bonded account: A key-less account id derived from the pool id that acts as the bonded
+//!   account. This account registers itself as a nominator in the staking system, and follows
+//!   exactly the same rules and conditions as a normal staker. Its bond increases or
+//!   decreases as members join, it can `nominate` or `chill`, and might not even earn staking
+//!   rewards if it is not nominating proper validators.
+//! * reward account: A similar key-less account, that is set as the `Payee` account fo the bonded
+//!   account for all staking rewards.
 //!
 //! ## Usage
 //!
@@ -55,11 +66,13 @@
 //!
 //! In order to leave, a member must take two steps.
 //!
-//! First, they must call [`Call::unbond`]. The unbond other extrinsic will start the
-//! unbonding process by unbonding all of the members funds.
+//! First, they must call [`Call::unbond`]. The unbond extrinsic will start the unbonding process by
+//! unbonding all or a portion of the members funds.
 //!
-//! Second, once [`sp_staking::StakingInterface::bonding_duration`] eras have passed, the member
-//! can call [`Call::withdraw_unbonded`] to withdraw all their funds.
+//! > A member can have up to [`MaxUnbonding`] distinct active unbonding requests.
+//!
+//! Second, once [`sp_staking::StakingInterface::bonding_duration`] eras have passed, the member can
+//! call [`Call::withdraw_unbonded`] to withdraw any funds that are free.
 //!
 //! For design docs see the [bonded pool](#bonded-pool) and [unbonding sub
 //! pools](#unbonding-sub-pools) sections.
@@ -67,9 +80,13 @@
 //! ### Slashes
 //!
 //! Slashes are distributed evenly across the bonded pool and the unbonding pools from slash era+1
-//! through the slash apply era. Thus, any member who either a) unbonded or b) was actively
-//! bonded in the aforementioned range of eras will be affected by the slash. A member is slashed
-//! pro-rata based on its stake relative to the total slash amount.
+//! through the slash apply era. Thus, any member who either
+//!
+//! 1. unbonded, or
+//! 2. was actively bonded
+//
+//! in the aforementioned range of eras will be affected by the slash. A member is slashed pro-rata
+//! based on its stake relative to the total slash amount.
 //!
 //! For design docs see the [slashing](#slashing) section.
 //!
@@ -82,19 +99,32 @@
 //! To help facilitate pool administration the pool has one of three states (see [`PoolState`]):
 //!
 //! * Open: Anyone can join the pool and no members can be permissionlessly removed.
-//! * Blocked: No members can join and some admin roles can kick members.
+//! * Blocked: No members can join and some admin roles can kick members. Kicking is not instant,
+//!   and follows the same process of `unbond` and then `withdraw_unbonded`. In other words,
+//!   administrators can permissionlessly unbond other members.
 //! * Destroying: No members can join and all members can be permissionlessly removed with
 //!   [`Call::unbond`] and [`Call::withdraw_unbonded`]. Once a pool is in destroying state, it
 //!   cannot be reverted to another state.
 //!
-//! A pool has 3 administrative roles (see [`PoolRoles`]):
+//! A pool has 4 administrative roles (see [`PoolRoles`]):
 //!
 //! * Depositor: creates the pool and is the initial member. They can only leave the pool once all
-//!   other members have left. Once they fully leave the pool is destroyed.
+//!   other members have left. Once they fully withdraw their funds, the pool is destroyed.
 //! * Nominator: can select which validators the pool nominates.
 //! * State-Toggler: can change the pools state and kick members if the pool is blocked.
 //! * Root: can change the nominator, state-toggler, or itself and can perform any of the actions
 //!   the nominator or state-toggler can.
+//!
+//! ### Dismantling
+//!
+//! As noted, a pool is destroyed once
+//!
+//! 1. First, all members need to fully unbond and withdraw. If the pool state is set to
+//!    `Destroying`, this can happen permissionlessly.
+//! 2. The depositor itself fully unbonds and withdraws. Note that at this point, based on the
+//!    requirements of the staking system, the pool's bonded account's stake might not be able to ge
+//!    below a certain threshold as a nominator. At this point, the pool should `chill` itself to
+//!    allow the depositor to leave.
 //!
 //! ## Design
 //!
@@ -108,8 +138,8 @@
 //!   members that where in the pool while it was backing a validator that got slashed.
 //! * Maximize scalability in terms of member count.
 //!
-//! In order to maintain scalability, all operations are independent of the number of members. To
-//! do this, delegation specific information is stored local to the member while the pool data
+//! In order to maintain scalability, all operations are independent of the number of members. To do
+//! this, delegation specific information is stored local to the member while the pool data
 //! structures have bounded datum.
 //!
 //! ### Bonded pool
@@ -118,9 +148,9 @@
 //! unbonding. The total points of a bonded pool are always equal to the sum of points of the
 //! delegation members. A bonded pool tracks its points and reads its bonded balance.
 //!
-//! When a member joins a pool, `amount_transferred` is transferred from the members account
-//! to the bonded pools account. Then the pool calls `staking::bond_extra(amount_transferred)` and
-//! issues new points which are tracked by the member and added to the bonded pool's points.
+//! When a member joins a pool, `amount_transferred` is transferred from the members account to the
+//! bonded pools account. Then the pool calls `staking::bond_extra(amount_transferred)` and issues
+//! new points which are tracked by the member and added to the bonded pool's points.
 //!
 //! When the pool already has some balance, we want the value of a point before the transfer to
 //! equal the value of a point after the transfer. So, when a member joins a bonded pool with a
@@ -148,77 +178,13 @@
 //! ### Reward pool
 //!
 //! When a pool is first bonded it sets up an deterministic, inaccessible account as its reward
-//! destination. To track staking rewards we track how the balance of this reward account changes.
+//! destination.
 //!
-//! The reward pool needs to store:
+//! The reward pool is not really a pool anymore, as it does not track points anymore. Instead, it
+//! tracks, a virtual value called `reward_counter`, among a few other values.
 //!
-//! * The pool balance at the time of the last payout: `reward_pool.balance`
-//! * The total earnings ever at the time of the last payout: `reward_pool.total_earnings`
-//! * The total points in the pool at the time of the last payout: `reward_pool.points`
-//!
-//! And the member needs to store:
-//!
-//! * The total payouts at the time of the last payout by that member:
-//!   `member.reward_pool_total_earnings`
-//!
-//! Before the first reward claim is initiated for a pool, all the above variables are set to zero.
-//!
-//! When a member initiates a claim, the following happens:
-//!
-//! 1) Compute the reward pool's total points and the member's virtual points in the reward pool
-//!     * First `current_total_earnings` is computed (`current_balance` is the free balance of the
-//!       reward pool at the beginning of these operations.)
-//!			```text
-//!			current_total_earnings =
-//!       		current_balance - reward_pool.balance + pool.total_earnings;
-//!			```
-//!     * Then the `current_points` is computed. Every balance unit that was added to the reward
-//!       pool since last time recorded means that the `pool.points` is increased by
-//!       `bonding_pool.total_points`. In other words, for every unit of balance that has been
-//!       earned by the reward pool, the reward pool points are inflated by `bonded_pool.points`. In
-//!       effect this allows each, single unit of balance (e.g. planck) to be divvied up pro-rata
-//!       among members based on points.
-//!			```text
-//!			new_earnings = current_total_earnings - reward_pool.total_earnings;
-//!       	current_points = reward_pool.points + bonding_pool.points * new_earnings;
-//!			```
-//!     * Finally, the`member_virtual_points` are computed: the product of the member's points in
-//!       the bonding pool and the total inflow of balance units since the last time the member
-//!       claimed rewards
-//!			```text
-//!			new_earnings_since_last_claim = current_total_earnings - member.reward_pool_total_earnings;
-//!        	member_virtual_points = member.points * new_earnings_since_last_claim;
-//!       	```
-//! 2) Compute the `member_payout`:
-//!     ```text
-//!     member_pool_point_ratio = member_virtual_points / current_points;
-//!     member_payout = current_balance * member_pool_point_ratio;
-//!     ```
-//! 3) Transfer `member_payout` to the member
-//! 4) For the member set:
-//!     ```text
-//!     member.reward_pool_total_earnings = current_total_earnings;
-//!     ```
-//! 5) For the pool set:
-//!     ```text
-//!     reward_pool.points = current_points - member_virtual_points;
-//!     reward_pool.balance = current_balance - member_payout;
-//!     reward_pool.total_earnings = current_total_earnings;
-//!     ```
-//!
-//! _Note_: One short coming of this design is that new joiners can claim rewards for the era after
-//! they join even though their funds did not contribute to the pools vote weight. When a
-//! member joins, it's `reward_pool_total_earnings` field is set equal to the `total_earnings`
-//! of the reward pool at that point in time. At best the reward pool has the rewards up through the
-//! previous era. If a member joins prior to the election snapshot it will benefit from the
-//! rewards for the active era despite not contributing to the pool's vote weight. If it joins
-//! after the election snapshot is taken it will benefit from the rewards of the next _2_ eras
-//! because it's vote weight will not be counted until the election snapshot in active era + 1.
-//! Related: <https://github.com/paritytech/substrate/issues/10861>
-// _Note to maintainers_: In order to ensure the reward account never falls below the existential
-// deposit, at creation the reward account must be endowed with the existential deposit. All logic
-// for calculating rewards then does not see that existential deposit as part of the free balance.
-// See `RewardPool::current_balance`.
+//! See [this link](https://hackmd.io/PFGn6wI5TbCmBYoEA_f2Uw) for an in-depth explanation of the
+//! reward pool mechanism.
 //!
 //! **Relevant extrinsics:**
 //!
@@ -416,41 +382,25 @@ impl<T: Config> PoolMember<T> {
 		&self,
 		current_reward_counter: T::RewardCounter,
 	) -> Result<BalanceOf<T>, Error<T>> {
-		// accuracy note: Reward counters are fixedU128 with base of 10^18. Multiplying it with
-		// points, which have the same granularity as with balance should almost always be fine for
-		// Polkadot and Kusama since: The total issuance of both are
+		// accuracy note: Reward counters are `FixedU128` with base of 10^18. This value is being
+		// multiplied by a point. The worse case of a point is 10x the granularity of the balance.
+		// Assuming roughly the current issuance of polkadot (12,047,781,394,999,601,455, which is
+		// 1.2 * 10^9 10^10 = 1.2 * 10^19), the worse case point value is around 10^20.
 		//
-		// dot: 12,047,781,394,999,601,455
-		// ksm: 12,424,748,376,019,599,766
+		// The final multiplication is:
 		//
-		// both of which are around 60% of u64::max. So, the absolute worse case for a non-slashed
-		// pool that can happen is that the points are equal to the whole total issuance, and the
-		// reward counter is `RewardCounter::max_value()`. In this case, we get:
+		// rc * 10^20 / 10^18 = rc * 100
 		//
-		// dot_total_issuance * u128::max / 10^18
+		// meaning that as long as reward_counter's value is less than 1/100th of its max capacity
+		// (u128), `checked_mul_int` won't saturate.
 		//
-		// which is roughly 12 more than u128::max. This means this will overflow if: a pool's
-		// points is roughly 1/12th of the total issuance, which in a non-slashed dot means if a
-		// pool owns 1/12th of the total issuance. In reality though, the accumulated reward will
-		// likely be much smaller than u128::max.
-		//
-		// more on that: the reward counter is the sum of all the rewards that are always given out
-		// to a pool, multiplied by 10^18. Again, assuming that the rewards of a pool are equal to
-		// the WHOLE total issuance (which is only realistically possible in multiple decades from
-		// now, and a single pool earning almost all the inflation), we can compute:
-		//
-		//  dot_total_issuance * 10**18 / 2**128
-		//
-		// which is roughly 3%, meaning that roughly 3% of the capacity of the u128 is filled, and
-		// that a more realistic value for the previous calculation was:
-		//
-		// dot_total_issuance * (dot_total_issuance * 10^18) / 10^18
-		//
-		// which simplifies to dot_total_issuance^2. In other words, as long as square of the total
-		// issuance fits in u128, this whole calculation won't saturate. Nonetheless, we make all of
-		// the calculations be checked arithmetic, to make sure if a pool ever reaches this state
-		// way earlier than the few decades we anticipate due to severe slashing, no operations can
-		// happen in that pool.
+		// given the nature of reward counter being 'pending_rewards / pool_total_point', the only
+		// (unrealistic) way that super high values can be achieved is for a pool to suddenly
+		// receive massive rewards with a very very small amount of stake. In all normal pools, as
+		// the points increase, so does the rewards. Moreover, as long as rewards are not
+		// accumulated for astronomically large durations,
+		// `current_reward_counter.defensive_saturating_sub(self.last_recorded_reward_counter)`
+		// won't be extremely big.
 		(current_reward_counter.defensive_saturating_sub(self.last_recorded_reward_counter))
 			.checked_mul_int(self.active_points())
 			.ok_or(Error::<T>::OverflowRisk)
@@ -982,6 +932,7 @@ pub struct RewardPool<T: Config> {
 }
 
 impl<T: Config> RewardPool<T> {
+	/// Getter for [`RewardPool::last_recorded_reward_counter`].
 	fn last_recorded_reward_counter(&self) -> T::RewardCounter {
 		self.last_recorded_reward_counter
 	}
@@ -1230,8 +1181,8 @@ pub mod pallet {
 		///
 		/// See the inline code docs of `Member::pending_rewards` and `RewardPool::update_recorded`
 		/// for example analysis. A [`sp_runtime::FixedU128`] should be fine for chains with balance
-		/// types similar to that of Polkadot and Kusama, in the absence of severe slashing, for
-		/// many many years to come.
+		/// types similar to that of Polkadot and Kusama, in the absence of severe slashing (or
+		/// prevented via a reasonable `MaxPointsToBalance`), for many many years to come.
 		type RewardCounter: FixedPointNumber + MaxEncodedLen + TypeInfo + Default + codec::FullCodec;
 
 		/// The nomination pool's pallet id.
@@ -1586,6 +1537,8 @@ pub mod pallet {
 		///
 		/// Additional funds can come from either the free balance of the account, of from the
 		/// accumulated rewards, see [`BondExtra`].
+		///
+		/// Bonding extra funds implies an automatic payout of all pending rewards as well.
 		// NOTE: this transaction is implemented with the sole purpose of readability and
 		// correctness, not optimization. We read/write several storage items multiple times instead
 		// of just once, in the spirit reusing code.

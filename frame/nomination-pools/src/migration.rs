@@ -255,6 +255,7 @@ pub mod v2 {
 								id,
 								accumulated_reward
 							);
+
 							if last_claim.is_zero() {
 								None
 							} else {
