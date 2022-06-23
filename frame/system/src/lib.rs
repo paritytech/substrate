@@ -221,7 +221,7 @@ pub mod pallet {
 			+ OriginTrait<Call = Self::Call>;
 
 		/// The aggregated `Call` type.
-		type Call: Dispatchable + Debug;
+		type Call: Parameter + Dispatchable<Origin = Self::Origin> + Debug + From<Call<Self>>;
 
 		/// Account index (aka nonce) type. This stores the number of previous transactions
 		/// associated with a sender account.

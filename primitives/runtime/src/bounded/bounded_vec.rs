@@ -108,6 +108,12 @@ where
 #[scale_info(skip_type_params(S))]
 pub struct BoundedSlice<'a, T, S>(pub(super) &'a [T], PhantomData<S>);
 
+impl<'a, T, S> Default for BoundedSlice<'a, T, S> {
+	fn default() -> Self {
+		Self(&[][..], PhantomData)
+	}
+}
+
 // `BoundedSlice`s encode to something which will always decode into a `BoundedVec`,
 // `WeakBoundedVec`, or a `Vec`.
 impl<'a, T: Encode + Decode, S: Get<u32>> EncodeLike<BoundedVec<T, S>> for BoundedSlice<'a, T, S> {}
@@ -237,6 +243,14 @@ impl<'a, T, S> sp_std::iter::IntoIterator for BoundedSlice<'a, T, S> {
 	type IntoIter = sp_std::slice::Iter<'a, T>;
 	fn into_iter(self) -> Self::IntoIter {
 		self.0.iter()
+	}
+}
+
+impl<'a, T, S: Get<u32>> BoundedSlice<'a, T, S> {
+	/// Create an instance from the first elements of the given slice (or all of it if it is smaller
+	/// than the length bound).
+	pub fn truncate_from(s: &'a[T]) -> Self {
+		Self(&s[0..(S::get() as usize)], PhantomData)
 	}
 }
 

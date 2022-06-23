@@ -208,8 +208,7 @@ pub mod pallet {
 			+ GetDispatchInfo
 			+ From<system::Call<Self>>;
 
-		/// The maximum weight that may be scheduled per block for any dispatchables of less
-		/// priority than `schedule::HARD_DEADLINE`.
+		/// The maximum weight that may be scheduled per block for any dispatchables.
 		#[pallet::constant]
 		type MaximumWeight: Get<Weight>;
 

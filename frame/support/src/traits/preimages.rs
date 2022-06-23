@@ -19,6 +19,7 @@
 
 use codec::{Decode, Encode, EncodeLike, MaxEncodedLen};
 use sp_core::{RuntimeDebug, H256};
+use sp_io::hashing::blake2_256;
 use sp_runtime::{traits::ConstU32, DispatchError};
 use sp_std::borrow::Cow;
 
@@ -49,6 +50,15 @@ impl<T> Bounded<T> {
 			Legacy { hash, .. } => Legacy { hash, dummy: sp_std::marker::PhantomData },
 			Inline(x) => Inline(x),
 			Lookup { hash, len } => Lookup { hash, len },
+		}
+	}
+
+	pub fn hash(&self) -> H256 {
+		use Bounded::*;
+		match self {
+			Legacy { hash, .. } => hash.clone(),
+			Inline(x) => blake2_256(x.as_ref()).into(),
+			Lookup { hash, .. } => hash.clone(),
 		}
 	}
 }
