@@ -44,9 +44,9 @@
 //! * kick: The act of a pool administrator forcibly ejecting a member.
 //! * bonded account: A key-less account id derived from the pool id that acts as the bonded
 //!   account. This account registers itself as a nominator in the staking system, and follows
-//!   exactly the same rules and conditions as a normal staker. Its bond increases or
-//!   decreases as members join, it can `nominate` or `chill`, and might not even earn staking
-//!   rewards if it is not nominating proper validators.
+//!   exactly the same rules and conditions as a normal staker. Its bond increases or decreases as
+//!   members join, it can `nominate` or `chill`, and might not even earn staking rewards if it is
+//!   not nominating proper validators.
 //! * reward account: A similar key-less account, that is set as the `Payee` account fo the bonded
 //!   account for all staking rewards.
 //!
