@@ -211,7 +211,7 @@ impl<B: BlockT> BlockCollection<B> {
 	}
 
 	pub fn clear_queued(&mut self, from_hash: &B::Hash) {
-		match self.queued_blocks.get(from_hash) {
+		match self.queued_blocks.remove(from_hash) {
 			None => {
 				debug!(target: "sync", "Can't clear unknown queued blocks from {:?}", from_hash);
 			},
@@ -221,7 +221,6 @@ impl<B: BlockT> BlockCollection<B> {
 					self.blocks.remove(&block_num);
 					block_num += One::one();
 				}
-				self.queued_blocks.remove(from_hash);
 				trace!(target: "sync", "Cleared blocks from {:?} to {:?}", from, to);
 			},
 		}
