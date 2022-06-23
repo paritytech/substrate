@@ -98,11 +98,6 @@ pub mod weights;
 #[cfg(test)]
 mod tests;
 
-pub use crate::{
-	exec::Frame,
-	pallet::*,
-	schedule::{HostFnWeights, InstructionWeights, Limits, Schedule},
-};
 use crate::{
 	exec::{AccountIdOf, ExecError, Executable, Stack as ExecStack},
 	gas::GasMeter,
@@ -128,6 +123,12 @@ use scale_info::TypeInfo;
 use sp_core::{crypto::UncheckedFrom, Bytes};
 use sp_runtime::traits::{Convert, Hash, Saturating, StaticLookup};
 use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
+
+pub use crate::{
+	exec::{Frame, VarSizedKey as StorageKey},
+	pallet::*,
+	schedule::{HostFnWeights, InstructionWeights, Limits, Schedule},
+};
 
 type CodeHash<T> = <T as frame_system::Config>::Hash;
 type TrieId = BoundedVec<u8, ConstU32<128>>;
@@ -372,6 +373,9 @@ pub mod pallet {
 		/// new instrumentation increases the size beyond the limit it would make that contract
 		/// inaccessible until rectified by another runtime upgrade.
 		type RelaxedMaxCodeLen: Get<u32>;
+
+		/// The maximum allowable length in bytes for storage keys.
+		type MaxStorageKeyLen: Get<u32>;
 	}
 
 	#[pallet::hooks]
@@ -942,11 +946,14 @@ where
 	}
 
 	/// Query storage of a specified contract under a specified key.
-	pub fn get_storage(address: T::AccountId, key: [u8; 32]) -> GetStorageResult {
+	pub fn get_storage(address: T::AccountId, key: Vec<u8>) -> GetStorageResult {
 		let contract_info =
 			ContractInfoOf::<T>::get(&address).ok_or(ContractAccessError::DoesntExist)?;
 
-		let maybe_value = Storage::<T>::read(&contract_info.trie_id, &key);
+		let maybe_value = Storage::<T>::read(
+			&contract_info.trie_id,
+			&StorageKey::<T>::try_from(key).map_err(|_| ContractAccessError::KeyDecodingFailed)?,
+		);
 		Ok(maybe_value)
 	}
 
