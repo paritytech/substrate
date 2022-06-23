@@ -15,15 +15,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Low-level types used throughout the Substrate code.
+//! Low-level types used throughout the Substrate node runtime.
 
 #![warn(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_runtime::{
-	generic,
-	traits::{BlakeTwo256, IdentifyAccount, Verify},
-	MultiSignature, OpaqueExtrinsic,
+	traits::{IdentifyAccount, Verify},
+	MultiSignature,
 };
 
 /// An index to a block.
@@ -55,12 +54,3 @@ pub type Hash = sp_core::H256;
 /// `u64` is enough to represent a duration of half a billion years, when the
 /// time scale is milliseconds.
 pub type Timestamp = u64;
-
-/// Digest item type.
-pub type DigestItem = generic::DigestItem;
-/// Header type.
-pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
-/// Block type.
-pub type Block = generic::Block<Header, OpaqueExtrinsic>;
-/// Block ID.
-pub type BlockId = generic::BlockId<Block>;
