@@ -18,12 +18,14 @@
 //! A MMR storage implementations.
 
 use codec::Encode;
-use frame_support::log;
-use log::info;
+use frame_support::{log::info, traits::Get};
 use mmr_lib::helper;
 use sp_io::offchain_index;
 use sp_mmr_primitives::LeafIndex;
-use sp_runtime::traits::Saturating;
+use sp_runtime::{
+	traits::{One, Saturating},
+	SaturatedConversion,
+};
 use sp_std::iter::Peekable;
 #[cfg(not(feature = "std"))]
 use sp_std::prelude::*;
@@ -71,13 +73,8 @@ where
 	fn parent_hash_of_ancestor_that_added_node(
 		pos: NodeIndex,
 	) -> <T as frame_system::Config>::Hash {
-		let leaves_count: <T as frame_system::Config>::BlockNumber =
-			u32::try_from(NumberOfLeaves::<T, I>::get())
-				.expect("leaf-idx < block-num; qed")
-				.into();
-		let ancestor_leaf_idx = u32::try_from(NodesUtils::leaf_index_that_added_node(pos))
-			.expect("leaf-idx < block-num; qed")
-			.into();
+		let leaves_count = NumberOfLeaves::<T, I>::get().saturated_into();
+		let ancestor_leaf_idx = NodesUtils::leaf_index_that_added_node(pos).saturated_into();
 		// leaves are zero-indexed and were added one per block since pallet activation,
 		// while block numbers are one-indexed, so block number that added `leaf_idx` is:
 		// `block_num = block_num_when_pallet_activated + leaf_idx + 1`
@@ -103,18 +100,11 @@ where
 	fn nodes_added_by_leaf(leaf_index: LeafIndex) -> Vec<NodeIndex> {
 		let leaves = NumberOfLeaves::<T, I>::get();
 		let mmr_size = NodesUtils::new(leaves).size();
-
 		let pos = helper::leaf_index_to_pos(leaf_index);
-		let leaf_height = helper::pos_height_in_tree(pos); // either 0 or 1, not sure, but will hardcode once I confirm.
-		info!(
-			target: "runtime::mmr",
-			"🥩: leaf idx {} pos {} height {}",
-			leaf_index, pos, leaf_height
-		);
 
 		let mut nodes_added_by_leaf = vec![pos];
 		let mut next_pos = pos + 1;
-		while next_pos < mmr_size && helper::pos_height_in_tree(next_pos) > leaf_height {
+		while next_pos < mmr_size && helper::pos_height_in_tree(next_pos) > 0 {
 			nodes_added_by_leaf.push(next_pos);
 			next_pos += 1;
 		}
