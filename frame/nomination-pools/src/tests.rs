@@ -1199,7 +1199,7 @@ mod claim_payout {
 
 			Balances::mutate_account(&default_reward_account(), |f| f.free += 6).unwrap();
 
-			// 10 should claim 10, 20 should claim nothing.
+			// 10 should claim 3, 20 should claim 3 + 3.
 			assert_ok!(Pools::claim_payout(Origin::signed(10)));
 			assert_ok!(Pools::claim_payout(Origin::signed(20)));
 
@@ -1374,7 +1374,7 @@ mod claim_payout {
 				]
 			);
 
-			// 30 now bumps itself to be like 20.
+			// 30 unbonds to be equal to 10 (10 points each).
 			assert_ok!(Pools::unbond(Origin::signed(20), 20, 10));
 
 			// more rewards come in.
