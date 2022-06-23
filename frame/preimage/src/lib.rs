@@ -144,29 +144,8 @@ pub mod pallet {
 		StorageMap<_, Identity, T::Hash, RequestStatus<T::AccountId, BalanceOf<T>>>;
 
 	#[pallet::storage]
-	pub(super) type Preimage7For<T: Config> =
-		StorageMap<_, Identity, T::Hash, BoundedVec<u8, ConstU32<128>>>;
-	#[pallet::storage]
-	pub(super) type Preimage10For<T: Config> =
-		StorageMap<_, Identity, T::Hash, BoundedVec<u8, ConstU32<1024>>>;
-	#[pallet::storage]
-	pub(super) type Preimage13For<T: Config> =
-		StorageMap<_, Identity, T::Hash, BoundedVec<u8, ConstU32<8192>>>;
-	#[pallet::storage]
-	pub(super) type Preimage16For<T: Config> =
-		StorageMap<_, Identity, T::Hash, BoundedVec<u8, ConstU32<65536>>>;
-	#[pallet::storage]
-	pub(super) type Preimage19For<T: Config> =
-		StorageMap<_, Identity, T::Hash, BoundedVec<u8, ConstU32<524288>>>;
-	#[pallet::storage]
-	pub(super) type Preimage20For<T: Config> =
-		StorageMap<_, Identity, T::Hash, BoundedVec<u8, ConstU32<1048576>>>;
-	#[pallet::storage]
-	pub(super) type Preimage21For<T: Config> =
-		StorageMap<_, Identity, T::Hash, BoundedVec<u8, ConstU32<2097152>>>;
-	#[pallet::storage]
-	pub(super) type Preimage22For<T: Config> =
-		StorageMap<_, Identity, T::Hash, BoundedVec<u8, ConstU32<MAX_SIZE>>>;
+	pub(super) type PreimageFor<T: Config> =
+		StorageMap<_, Identity, (T::Hash, u32), BoundedVec<u8, ConstU32<MAX_SIZE>>>;
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
@@ -267,7 +246,7 @@ impl<T: Config> Pallet<T> {
 		let was_requested = matches!(status, RequestStatus::Requested { .. });
 		StatusFor::<T>::insert(hash, status);
 
-		let _ = Self::insert(&hash, len, preimage)
+		let _ = Self::insert(&hash, preimage)
 			.defensive_proof("Unable to insert. Logic error in `note_bytes`?");
 
 		Self::deposit_event(Event::Noted { hash });
@@ -359,40 +338,13 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
-	fn insert(hash: &T::Hash, len: u32, preimage: Cow<[u8]>) -> Result<(), ()> {
-		match len {
-			0..=128 => BoundedSlice::<u8, ConstU32<128>>::try_from(preimage.as_ref())
-				.map(|s| Preimage7For::<T>::insert(hash, s)),
-			0..=1024 => BoundedSlice::<u8, ConstU32<1024>>::try_from(preimage.as_ref())
-				.map(|s| Preimage10For::<T>::insert(hash, s)),
-			0..=8192 => BoundedSlice::<u8, ConstU32<8192>>::try_from(preimage.as_ref())
-				.map(|s| Preimage13For::<T>::insert(hash, s)),
-			0..=65536 => BoundedSlice::<u8, ConstU32<65536>>::try_from(preimage.as_ref())
-				.map(|s| Preimage16For::<T>::insert(hash, s)),
-			0..=524288 => BoundedSlice::<u8, ConstU32<524288>>::try_from(preimage.as_ref())
-				.map(|s| Preimage19For::<T>::insert(hash, s)),
-			0..=1048576 => BoundedSlice::<u8, ConstU32<1048576>>::try_from(preimage.as_ref())
-				.map(|s| Preimage20For::<T>::insert(hash, s)),
-			0..=2097152 => BoundedSlice::<u8, ConstU32<2097152>>::try_from(preimage.as_ref())
-				.map(|s| Preimage21For::<T>::insert(hash, s)),
-			0..=MAX_SIZE => BoundedSlice::<u8, ConstU32<MAX_SIZE>>::try_from(preimage.as_ref())
-				.map(|s| Preimage22For::<T>::insert(hash, s)),
-			_ => Err(()),
-		}
+	fn insert(hash: &T::Hash, preimage: Cow<[u8]>) -> Result<(), ()> {
+		BoundedSlice::<u8, ConstU32<MAX_SIZE>>::try_from(preimage.as_ref())
+			.map(|s| PreimageFor::<T>::insert((hash, s.len() as u32), s))
 	}
 
 	fn remove(hash: &T::Hash, len: u32) {
-		match len {
-			0..=128 => Preimage7For::<T>::remove(hash),
-			0..=1024 => Preimage10For::<T>::remove(hash),
-			0..=8192 => Preimage13For::<T>::remove(hash),
-			0..=65536 => Preimage16For::<T>::remove(hash),
-			0..=524288 => Preimage19For::<T>::remove(hash),
-			0..=1048576 => Preimage20For::<T>::remove(hash),
-			0..=2097152 => Preimage21For::<T>::remove(hash),
-			0..=MAX_SIZE => Preimage22For::<T>::remove(hash),
-			_ => {},
-		}
+		PreimageFor::<T>::remove((hash, len))
 	}
 
 	fn have(hash: &T::Hash) -> bool {
@@ -409,17 +361,8 @@ impl<T: Config> Pallet<T> {
 
 	fn fetch(hash: &T::Hash, len: Option<u32>) -> FetchResult {
 		let len = len.or_else(|| Self::len(hash)).ok_or(DispatchError::Unavailable)?;
-		match len {
-			0..=128 => Preimage7For::<T>::get(hash).map(|p| p.into_inner()),
-			0..=1024 => Preimage10For::<T>::get(hash).map(|p| p.into_inner()),
-			0..=8192 => Preimage13For::<T>::get(hash).map(|p| p.into_inner()),
-			0..=65536 => Preimage16For::<T>::get(hash).map(|p| p.into_inner()),
-			0..=524288 => Preimage19For::<T>::get(hash).map(|p| p.into_inner()),
-			0..=1048576 => Preimage20For::<T>::get(hash).map(|p| p.into_inner()),
-			0..=2097152 => Preimage21For::<T>::get(hash).map(|p| p.into_inner()),
-			0..=MAX_SIZE => Preimage22For::<T>::get(hash).map(|p| p.into_inner()),
-			_ => None,
-		}
+		PreimageFor::<T>::get((hash, len))
+		.map(|p| p.into_inner())
 		.map(Into::into)
 		.ok_or(DispatchError::Unavailable)
 	}

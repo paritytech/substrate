@@ -119,7 +119,7 @@ pub mod v1 {
 				};
 				log::trace!(target: TARGET, "Moving preimage {:?} with len {}", hash, len);
 
-				Pallet::<T>::insert(&hash, len, preimage.into_inner().into())
+				Pallet::<T>::insert(&hash, preimage.into_inner().into())
 					.expect("Must insert preimage");
 				StatusFor::<T>::insert(hash, status);
 
@@ -150,18 +150,7 @@ pub mod v1 {
 	#[cfg(feature = "try-runtime")]
 	pub fn image_count<T: Config>() -> u32 {
 		// Use iter_values() to ensure that the values are decodable.
-		let images: u32 = Preimage7For::<T>::iter_values()
-			.count()
-			.saturating_add(Preimage10For::<T>::iter_values().count())
-			.saturating_add(Preimage13For::<T>::iter_values().count())
-			.saturating_add(Preimage16For::<T>::iter_values().count())
-			.saturating_add(Preimage19For::<T>::iter_values().count())
-			.saturating_add(Preimage20For::<T>::iter_values().count())
-			.saturating_add(Preimage21For::<T>::iter_values().count())
-			.saturating_add(Preimage22For::<T>::iter_values().count())
-			.try_into()
-			.unwrap();
-
+		let images = crate::PreimageFor::<T>::iter_values().count() as u32;
 		let status = crate::StatusFor::<T>::iter_values().count() as u32;
 		assert_eq!(images, status, "V1 storage corrupt: {} images vs {} status", images, status);
 		images
@@ -169,6 +158,7 @@ pub mod v1 {
 }
 
 #[cfg(test)]
+#[cfg(feature = "try-runtime")]
 mod test {
 	use super::*;
 	use crate::mock::{Test as T, *};

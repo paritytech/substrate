@@ -147,7 +147,7 @@ fn request_note_order_makes_no_difference() {
 		assert_ok!(Preimage::note_preimage(Origin::signed(2), vec![1]));
 		(
 			StatusFor::<Test>::iter().collect::<Vec<_>>(),
-			Preimage7For::<Test>::iter().collect::<Vec<_>>(),
+			PreimageFor::<Test>::iter().collect::<Vec<_>>(),
 		)
 	});
 	new_test_ext().execute_with(|| {
@@ -156,7 +156,7 @@ fn request_note_order_makes_no_difference() {
 		assert_ok!(Preimage::unnote_preimage(Origin::signed(2), hashed([1])));
 		let other_way = (
 			StatusFor::<Test>::iter().collect::<Vec<_>>(),
-			Preimage7For::<Test>::iter().collect::<Vec<_>>(),
+			PreimageFor::<Test>::iter().collect::<Vec<_>>(),
 		);
 		assert_eq!(one_way, other_way);
 	});
@@ -183,7 +183,7 @@ fn request_user_note_order_makes_no_difference() {
 		assert_ok!(Preimage::note_preimage(Origin::signed(2), vec![1]));
 		(
 			StatusFor::<Test>::iter().collect::<Vec<_>>(),
-			Preimage7For::<Test>::iter().collect::<Vec<_>>(),
+			PreimageFor::<Test>::iter().collect::<Vec<_>>(),
 		)
 	});
 	new_test_ext().execute_with(|| {
@@ -192,7 +192,7 @@ fn request_user_note_order_makes_no_difference() {
 		assert_ok!(Preimage::unnote_preimage(Origin::signed(2), hashed([1])));
 		let other_way = (
 			StatusFor::<Test>::iter().collect::<Vec<_>>(),
-			Preimage7For::<Test>::iter().collect::<Vec<_>>(),
+			PreimageFor::<Test>::iter().collect::<Vec<_>>(),
 		);
 		assert_eq!(one_way, other_way);
 	});
@@ -238,60 +238,25 @@ fn user_noted_then_requested_preimage_is_refunded_once_only() {
 fn noted_preimage_use_correct_map() {
 	new_test_ext().execute_with(|| {
 		// Add one preimage per bucket...
-		assert_ok!(Preimage::note_preimage(Origin::signed(1), vec![0; 128]));
-		assert_eq!(Preimage7For::<Test>::iter().count(), 1);
-
-		assert_ok!(Preimage::note_preimage(Origin::signed(1), vec![0; 1024]));
-		assert_eq!(Preimage10For::<Test>::iter().count(), 1);
-
-		assert_ok!(Preimage::note_preimage(Origin::signed(1), vec![0; 8192]));
-		assert_eq!(Preimage13For::<Test>::iter().count(), 1);
-
-		assert_ok!(Preimage::note_preimage(Origin::signed(1), vec![0; 65536]));
-		assert_eq!(Preimage16For::<Test>::iter().count(), 1);
-
-		assert_ok!(Preimage::note_preimage(Origin::signed(1), vec![0; 524288]));
-		assert_eq!(Preimage19For::<Test>::iter().count(), 1);
-
-		assert_ok!(Preimage::note_preimage(Origin::signed(1), vec![0; 1048576]));
-		assert_eq!(Preimage20For::<Test>::iter().count(), 1);
-
-		assert_ok!(Preimage::note_preimage(Origin::signed(1), vec![0; 2097152]));
-		assert_eq!(Preimage21For::<Test>::iter().count(), 1);
-
+		for i in 0..7 {
+			assert_ok!(Preimage::note_preimage(Origin::signed(1), vec![0; 128 << (i * 2)]));
+		}
 		assert_ok!(Preimage::note_preimage(Origin::signed(1), vec![0; MAX_SIZE as usize]));
-		assert_eq!(Preimage22For::<Test>::iter().count(), 1);
+		assert_eq!(PreimageFor::<Test>::iter().count(), 8);
 
 		// All are present
 		assert_eq!(StatusFor::<Test>::iter().count(), 8);
 
 		// Now start removing them again...
-		assert_ok!(Preimage::unnote_preimage(Origin::signed(1), hashed(vec![0; 128])));
-		assert_eq!(Preimage7For::<Test>::iter().count(), 0);
-
-		assert_ok!(Preimage::unnote_preimage(Origin::signed(1), hashed(vec![0; 1024])));
-		assert_eq!(Preimage10For::<Test>::iter().count(), 0);
-
-		assert_ok!(Preimage::unnote_preimage(Origin::signed(1), hashed(vec![0; 8192])));
-		assert_eq!(Preimage13For::<Test>::iter().count(), 0);
-
-		assert_ok!(Preimage::unnote_preimage(Origin::signed(1), hashed(vec![0; 65536])));
-		assert_eq!(Preimage16For::<Test>::iter().count(), 0);
-
-		assert_ok!(Preimage::unnote_preimage(Origin::signed(1), hashed(vec![0; 524288])));
-		assert_eq!(Preimage19For::<Test>::iter().count(), 0);
-
-		assert_ok!(Preimage::unnote_preimage(Origin::signed(1), hashed(vec![0; 1048576])));
-		assert_eq!(Preimage20For::<Test>::iter().count(), 0);
-
-		assert_ok!(Preimage::unnote_preimage(Origin::signed(1), hashed(vec![0; 2097152])));
-		assert_eq!(Preimage21For::<Test>::iter().count(), 0);
-
+		for i in 0..7 {
+			assert_ok!(Preimage::unnote_preimage(Origin::signed(1), hashed(vec![0; 128 << (i * 2)])));
+		}
+		assert_eq!(PreimageFor::<Test>::iter().count(), 1);
 		assert_ok!(Preimage::unnote_preimage(
 			Origin::signed(1),
 			hashed(vec![0; MAX_SIZE as usize])
 		));
-		assert_eq!(Preimage22For::<Test>::iter().count(), 0);
+		assert_eq!(PreimageFor::<Test>::iter().count(), 0);
 
 		// All are gone
 		assert_eq!(StatusFor::<Test>::iter().count(), 0);
