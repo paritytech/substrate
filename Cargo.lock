@@ -11296,6 +11296,7 @@ name = "try-runtime-cli"
 version = "0.10.0-dev"
 dependencies = [
  "clap 3.1.18",
+ "frame-try-runtime",
  "jsonrpsee",
  "log",
  "parity-scale-codec",

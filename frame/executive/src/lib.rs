@@ -239,6 +239,17 @@ where
 
 		Self::execute_extrinsics_with_book_keeping(extrinsics, *header.number());
 
+		// run the sanity-checks of all pallets.
+		<AllPalletsWithSystem as frame_support::traits::SanityCheck<System::BlockNumber>>::sanity_check(
+			*header.number(),
+			sanity_checks,
+		)
+		.map_err(|e| {
+			sp_runtime::print("failure:");
+			sp_runtime::print(e);
+		})
+		.expect("sanity-checks should not fail");
+
 		// do some of the checks that would normally happen in `final_checks`, but definitely skip
 		// the state root check.
 		{
@@ -249,21 +260,20 @@ where
 				assert!(header_item == computed_item, "Digest item must match that calculated.");
 			}
 
+			if check_state_root {
+				let storage_root = new_header.state_root();
+				header.state_root().check_equal(storage_root);
+				assert!(
+					header.state_root() == storage_root,
+					"Storage root must match that calculated."
+				);
+			}
+
 			assert!(
 				header.extrinsics_root() == new_header.extrinsics_root(),
 				"Transaction trie root must be valid.",
 			);
 		}
-
-		// run the sanity-checks of all pallets.
-		<AllPalletsWithSystem as frame_support::traits::SanityCheck<System::BlockNumber>>::sanity_check(
-			*header.number(),
-		)
-		.map_err(|e| {
-			sp_runtime::print("failure:");
-			sp_runtime::print(e);
-		})
-		.expect("sanity-checks should not fail");
 
 		frame_system::Pallet::<System>::block_weight().total()
 	}
@@ -274,7 +284,6 @@ where
 	pub fn try_runtime_upgrade() -> Result<frame_support::weights::Weight, &'static str> {
 		<(COnRuntimeUpgrade, AllPalletsWithSystem) as OnRuntimeUpgrade>::pre_upgrade().unwrap();
 		let weight = Self::execute_on_runtime_upgrade();
-
 		<(COnRuntimeUpgrade, AllPalletsWithSystem) as OnRuntimeUpgrade>::post_upgrade().unwrap();
 
 		Ok(weight)

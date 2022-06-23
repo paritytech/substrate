@@ -750,8 +750,10 @@ pub mod pallet {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn sanity_check(n: BlockNumberFor<T>) -> Result<(), &'static str> {
-			crate::log!(info, "sanity-checking pallet-staking");
+		fn sanity_check(
+			n: BlockNumberFor<T>,
+			_: frame_support::traits::SanityCheckTargets,
+		) -> Result<(), &'static str> {
 			Self::do_sanity_check(n)
 		}
 	}

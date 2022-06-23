@@ -17,7 +17,6 @@
 
 use crate::pallet::Def;
 
-///
 /// * implement the individual traits using the Hooks trait
 pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 	let (where_clause, span, has_runtime_upgrade) = match def.hooks.as_ref() {
@@ -57,6 +56,19 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 				pallet_name,
 			);
 		}
+	};
+
+	let log_sanity_check = quote::quote! {
+		let pallet_name = <
+			<T as #frame_system::Config>::PalletInfo
+			as
+			#frame_support::traits::PalletInfo
+		>::name::<Self>().unwrap_or("<unknown pallet name>");
+		#frame_support::log::debug!(
+			target: #frame_support::LOG_TARGET,
+			"🩺 sanity-checking pallet {:?}",
+			pallet_name,
+		);
 	};
 
 	let hooks_impl = if def.hooks.is_none() {
@@ -197,12 +209,13 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 			#frame_support::traits::SanityCheck<<T as #frame_system::Config>::BlockNumber>
 			for #pallet_ident<#type_use_gen> #where_clause
 		{
-			fn sanity_check(n: <T as #frame_system::Config>::BlockNumber) -> Result<(), &'static str> {
+			fn sanity_check(n: <T as #frame_system::Config>::BlockNumber, t: #frame_support::traits::SanityCheckTargets) -> Result<(), &'static str> {
+				#log_sanity_check
 				<
 					Self as #frame_support::traits::Hooks<
 						<T as #frame_system::Config>::BlockNumber
 					>
-				>::sanity_check(n)
+				>::sanity_check(n, t)
 			}
 		}
 	)

@@ -518,7 +518,6 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 	/// * length of this list is in sync with `ListNodes::count()`,
 	/// * and sanity-checks all bags and nodes. This will cascade down all the checks and makes sure
 	/// all bags and nodes are checked per *any* update to `List`.
-	#[cfg(any(feature = "std", feature = "try-runtime"))]
 	pub(crate) fn sanity_check() -> Result<(), &'static str> {
 		let mut seen_in_list = BTreeSet::new();
 		ensure!(

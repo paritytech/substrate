@@ -19,6 +19,7 @@ use crate::{
 	build_executor, ensure_matching_spec, extract_code, full_extensions, hash_of, local_spec,
 	state_machine_call_with_proof, SharedParams, State, LOG_TARGET,
 };
+use parity_scale_codec::Encode;
 use remote_externalities::rpc_api;
 use sc_service::{Configuration, NativeExecutionDispatch};
 use sp_core::storage::well_known_keys;
@@ -26,16 +27,21 @@ use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use std::{fmt::Debug, str::FromStr};
 
 /// Configurations of the [`Command::ExecuteBlock`].
+///
+/// This will always call into `TryRuntime_execute_block`, which can optionally skip state-root
+/// check (useful for trying a unreleased runtime), and can execute runtime sanity checks as well.
 #[derive(Debug, Clone, clap::Parser)]
 pub struct ExecuteBlockCmd {
 	/// Overwrite the wasm code in state or not.
 	#[clap(long)]
 	overwrite_wasm_code: bool,
 
-	/// If set, then the state root check is disabled by the virtue of calling into
-	/// `TryRuntime_execute_block` instead of `Core_execute_block`.
+	/// If set, then the state root check is disabled.
 	#[clap(long)]
-	no_check: bool,
+	no_state_root_check: bool,
+
+	#[clap(long, default_value = "all")]
+	sanity_check_targets: frame_try_runtime::SanityCheckTargets,
 
 	/// The block hash at which to fetch the block.
 	///
@@ -160,7 +166,7 @@ where
 	let (mut header, extrinsics) = block.deconstruct();
 	header.digest_mut().pop();
 	let block = Block::new(header, extrinsics);
-	let encoded_block = block.encode();
+	let payload = (block.clone(), !command.no_state_root_check, command.sanity_check_targets).encode();
 
 	let (expected_spec_name, expected_spec_version, _) =
 		local_spec::<Block, ExecDispatch>(&ext, &executor);
@@ -176,8 +182,8 @@ where
 		&ext,
 		&executor,
 		execution,
-		if command.no_check { "TryRuntime_execute_block" } else { "Core_execute_block" },
-		if command.no_check { todo!() } else { encoded_block.as_ref() },
+		"TryRuntime_execute_block",
+		&payload,
 		full_extensions(),
 	)?;
 

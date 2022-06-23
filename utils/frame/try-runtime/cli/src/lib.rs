@@ -334,17 +334,18 @@ pub enum Command {
 	///     different state transition function.
 	///
 	/// To make testing slightly more dynamic, you can disable the state root  check by enabling
-	/// `ExecuteBlockCmd::no_check`. If you get signature verification errors, you should
-	/// manually tweak your local runtime's spec version to fix this.
+	/// `ExecuteBlockCmd::no_check`. If you get signature verification errors, you should manually
+	/// tweak your local runtime's spec version to fix this.
 	///
 	/// A subtle detail of execute block is that if you want to execute block 100 of a live chain
 	/// again, you need to scrape the state of block 99. This is already done automatically if you
 	/// use [`State::Live`], and the parent hash of the target block is used to scrape the state.
 	/// If [`State::Snap`] is being used, then this needs to be manually taken into consideration.
 	///
-	/// This executes the same runtime api as normal block import, namely `Core_execute_block`. If
-	/// `ExecuteBlockCmd::no_check` is set, it uses a custom, try-runtime-only runtime
-	/// api called `TryRuntime_execute_block` without the state root checks.
+	/// This does not executes the same runtime api as normal block import, namely
+	/// `Core_execute_block`. Instead, it uses `TryRuntime_execute_block`, which can optionally
+	/// skip state-root check (useful for trying a unreleased runtime), and can execute runtime
+	/// sanity checks as well.
 	ExecuteBlock(commands::execute_block::ExecuteBlockCmd),
 
 	/// Executes *the offchain worker hooks* of a given block against some state.
@@ -791,15 +792,15 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, D: NativeExecutionDis
 			)
 		}
 	};
-	log::info!(
+	log::debug!(
 		target: LOG_TARGET,
 		"proof: {} / {} nodes",
 		HexDisplay::from(&proof_nodes.iter().flatten().cloned().collect::<Vec<_>>()),
 		proof_nodes.len()
 	);
-	log::info!(target: LOG_TARGET, "proof size: {}", humanize(proof_size));
-	log::info!(target: LOG_TARGET, "compact proof size: {}", humanize(compact_proof_size),);
-	log::info!(
+	log::debug!(target: LOG_TARGET, "proof size: {}", humanize(proof_size));
+	log::debug!(target: LOG_TARGET, "compact proof size: {}", humanize(compact_proof_size),);
+	log::debug!(
 		target: LOG_TARGET,
 		"zstd-compressed compact proof {}",
 		humanize(compressed_proof.len()),

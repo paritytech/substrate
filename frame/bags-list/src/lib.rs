@@ -258,8 +258,10 @@ pub mod pallet {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn sanity_check(_: BlockNumberFor<T>) -> Result<(), &'static str> {
-			log!(info, "sanity-checking pallet-bags-list");
+		fn sanity_check(
+			_: BlockNumberFor<T>,
+			_: frame_support::traits::SanityCheckTargets,
+		) -> Result<(), &'static str> {
 			<Self as SortedListProvider<T::AccountId>>::sanity_check()
 		}
 	}
@@ -339,14 +341,8 @@ impl<T: Config<I>, I: 'static> SortedListProvider<T::AccountId> for Pallet<T, I>
 		List::<T, I>::unsafe_regenerate(all, score_of)
 	}
 
-	#[cfg(feature = "std")]
 	fn sanity_check() -> Result<(), &'static str> {
 		List::<T, I>::sanity_check()
-	}
-
-	#[cfg(not(feature = "std"))]
-	fn sanity_check() -> Result<(), &'static str> {
-		Err("sanity checks should not be called from wasm")
 	}
 
 	fn unsafe_clear() {

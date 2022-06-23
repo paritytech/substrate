@@ -22,14 +22,7 @@
 use frame_support::weights::Weight;
 use sp_std::prelude::*;
 
-/// Which sanity checks to execute.
-#[derive(codec::Encode, codec::Decode, Clone, Debug)]
-pub enum SanityCheckTargets {
-	All,
-	None,
-	Random(u32),
-	Selected(Vec<Vec<u8>>),
-}
+pub use frame_support::traits::SanityCheckTargets;
 
 sp_api::decl_runtime_apis! {
 	/// Runtime api for testing the execution of a runtime upgrade.

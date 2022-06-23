@@ -23,7 +23,7 @@ use jsonrpsee::{
 	core::client::{Subscription, SubscriptionClientT},
 	ws_client::WsClientBuilder,
 };
-use parity_scale_codec::Decode;
+use parity_scale_codec::{Decode, Encode};
 use remote_externalities::{rpc_api, Builder, Mode, OnlineConfig};
 use sc_executor::NativeExecutionDispatch;
 use sc_service::Configuration;
@@ -40,6 +40,13 @@ pub struct FollowChainCmd {
 	/// The url to connect to.
 	#[clap(short, long, parse(try_from_str = parse::url))]
 	uri: String,
+
+	/// If set, then the state root check is enabled.
+	#[clap(long)]
+	state_root_check: bool,
+
+	#[clap(long, default_value = "all")]
+	sanity_check_targets: frame_try_runtime::SanityCheckTargets,
 }
 
 pub(crate) async fn follow_chain<Block, ExecDispatch>(
@@ -140,7 +147,9 @@ where
 			&executor,
 			execution,
 			"TryRuntime_execute_block",
-			block.encode().as_ref(),
+			(block, command.state_root_check, command.sanity_check_targets.clone())
+				.encode()
+				.as_ref(),
 			full_extensions(),
 		)?;
 

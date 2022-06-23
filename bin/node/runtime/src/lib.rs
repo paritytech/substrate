@@ -1679,7 +1679,7 @@ pub type Executive = frame_executive::Executive<
 	Block,
 	frame_system::ChainContext<Runtime>,
 	Runtime,
-	AllPalletsWithSystem,
+	AllPalletsWithSystemFlat,
 >;
 
 /// MMR helper types.
@@ -2048,6 +2048,12 @@ impl_runtime_apis! {
 		}
 
 		fn execute_block(block: Block, state_root_check: bool, sanity_checks: frame_try_runtime::SanityCheckTargets) -> Weight {
+			log::info!(
+				target: "node-runtime", "try-runtime: executing block {:?} / root checks: {:?} / sanity-checks: {:?}",
+				block.header.hash(),
+				state_root_check,
+				sanity_checks,
+			);
 			Executive::try_execute_block(block, state_root_check, sanity_checks)
 		}
 	}

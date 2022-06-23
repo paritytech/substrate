@@ -243,8 +243,8 @@ runtime-benchmarks = [
 	"hex-literal",
 ]
 try-runtime = [
-	"frame-executive/try-runtime",
 	"frame-try-runtime",
+	"frame-executive/try-runtime",
 	"frame-system/try-runtime",
 	"frame-support/try-runtime",
 	"pallet-alliance/try-runtime",
