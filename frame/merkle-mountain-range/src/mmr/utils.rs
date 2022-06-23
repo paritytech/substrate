@@ -73,16 +73,8 @@ impl NodesUtils {
 	// responsible for the addition of node `pos`.
 	fn rightmost_leaf_node_index_from_pos(mut pos: NodeIndex) -> NodeIndex {
 		use mmr_lib::helper::pos_height_in_tree;
-		if pos > 0 {
-			let mut current_height = pos_height_in_tree(pos);
-			let mut right_child_height = pos_height_in_tree(pos - 1);
-			while right_child_height < current_height {
-				pos = pos - 1;
-				current_height = right_child_height;
-				right_child_height = pos_height_in_tree(pos - 1);
-			}
-		}
-		pos
+		let mut current_height = pos_height_in_tree(pos);
+		pos - (pos_height_in_tree(pos) as u64)
 	}
 
 	// Starting from any leaf position, get the sequence of positions of the nodes added
