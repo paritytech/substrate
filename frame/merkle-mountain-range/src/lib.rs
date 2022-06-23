@@ -270,6 +270,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		(T::INDEXING_PREFIX, parent_hash, pos).encode()
 	}
 
+	/// Build finalized offchain key for node `pos` in MMR.
+	///
+	/// Used for nodes added by now finalized blocks.
+	fn final_offchain_key(pos: NodeIndex) -> sp_std::prelude::Vec<u8> {
+		(T::INDEXING_PREFIX, pos).encode()
+	}
+
 	/// Generate a MMR proof for the given `leaf_indices`.
 	///
 	/// Note this method can only be used from an off-chain context

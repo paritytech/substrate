@@ -23,7 +23,7 @@ use mmr_lib::helper;
 use sp_io::offchain_index;
 use sp_mmr_primitives::LeafIndex;
 use sp_runtime::{
-	traits::{One, Saturating},
+	traits::{One, Saturating, UniqueSaturatedInto},
 	SaturatedConversion,
 };
 use sp_std::iter::Peekable;
@@ -68,13 +68,15 @@ impl<StorageType, T, I, L> Storage<StorageType, T, I, L>
 where
 	T: Config<I>,
 	I: 'static,
-	L: primitives::FullLeaf + codec::Decode,
+	L: primitives::FullLeaf,
 {
-	fn parent_hash_of_ancestor_that_added_node(
-		pos: NodeIndex,
+	/// Provide the parent hash for the block that added `leaf_index` to the MMR.
+	///
+	/// Should only be called for blocks still available in `<frame_system::Pallet<T>>::block_hash`.
+	fn parent_hash_of_leaf(
+		leaf_index: LeafIndex,
+		leaves_count: LeafIndex,
 	) -> <T as frame_system::Config>::Hash {
-		let leaves_count = NumberOfLeaves::<T, I>::get().saturated_into();
-		let ancestor_leaf_idx = NodesUtils::leaf_index_that_added_node(pos).saturated_into();
 		// leaves are zero-indexed and were added one per block since pallet activation,
 		// while block numbers are one-indexed, so block number that added `leaf_idx` is:
 		// `block_num = block_num_when_pallet_activated + leaf_idx + 1`
@@ -82,24 +84,13 @@ where
 		// `parent_block_num = current_block_num - leaves_count + leaf_idx`.
 		let parent_block_num: <T as frame_system::Config>::BlockNumber =
 			<frame_system::Pallet<T>>::block_number()
-				.saturating_sub(leaves_count)
-				.saturating_add(ancestor_leaf_idx);
-
-		// TODO: I think this only holds recent history, so old block hashes might not be here.
-		let parent_hash = <frame_system::Pallet<T>>::block_hash(parent_block_num);
-		info!(
-			target: "runtime::mmr",
-			"🥩: parent of ancestor that added {}: leaf idx {:?}, block-num {:?} (block offset {:?}) hash {:?}",
-			pos, ancestor_leaf_idx, parent_block_num,
-			<frame_system::Pallet<T>>::block_number().saturating_sub(leaves_count),
-			parent_hash
-		);
-		parent_hash
+				.saturating_sub(leaves_count.saturated_into())
+				.saturating_add(leaf_index.saturated_into());
+		<frame_system::Pallet<T>>::block_hash(parent_block_num)
 	}
 
-	fn nodes_added_by_leaf(leaf_index: LeafIndex) -> Vec<NodeIndex> {
-		let leaves = NumberOfLeaves::<T, I>::get();
-		let mmr_size = NodesUtils::new(leaves).size();
+	fn nodes_added_by_leaf(leaf_index: LeafIndex, leaves_count: LeafIndex) -> Vec<NodeIndex> {
+		let mmr_size = NodesUtils::new(leaves_count).size();
 		let pos = helper::leaf_index_to_pos(leaf_index);
 
 		let mut nodes_added_by_leaf = vec![pos];
@@ -124,15 +115,17 @@ where
 	L: primitives::FullLeaf + codec::Decode,
 {
 	fn get_elem(&self, pos: NodeIndex) -> mmr_lib::Result<Option<NodeOf<T, I, L>>> {
+		let leaves_count = NumberOfLeaves::<T, I>::get();
 		// Get the parent hash of the ancestor block that added node at index `pos`.
 		// Use the hash as extra identifier to differentiate between various `pos` entries
 		// in offchain DB coming from various chain forks.
-		let parent_hash_of_ancestor = Self::parent_hash_of_ancestor_that_added_node(pos);
+		let ancestor_leaf_idx = NodesUtils::leaf_index_that_added_node(pos);
+		let parent_hash_of_ancestor = Self::parent_hash_of_leaf(ancestor_leaf_idx, leaves_count);
 		let key = Pallet::<T, I>::offchain_key(parent_hash_of_ancestor, pos);
 		info!(
 			target: "runtime::mmr",
-			"🥩: get elem {}: key {:?}",
-			pos, key
+			"🥩: parent of ancestor that added {}: leaf idx {:?}, hash {:?}, key {:?}",
+			pos, ancestor_leaf_idx, parent_hash_of_ancestor, key
 		);
 		// Retrieve the element from Off-chain DB.
 		Ok(sp_io::offchain::local_storage_get(sp_core::offchain::StorageKind::PERSISTENT, &key)
@@ -191,14 +184,50 @@ where
 		let parent_hash = <frame_system::Pallet<T>>::parent_hash();
 		let block_number = <frame_system::Pallet<T>>::block_number();
 		for elem in elems {
+			if helper::pos_height_in_tree(node_index) == 0 {
+				info!(
+					target: "runtime::mmr",
+					"🥩: appending leaf {}, pos {}, block-num {:?}",
+					leaf_index, node_index, block_number
+				);
+			} else {
+				info!(
+					target: "runtime::mmr",
+					"🥩: appending node pos {}, block-num {:?}",
+					node_index, block_number
+				);
+			}
 			let key = Pallet::<T, I>::offchain_key(parent_hash, node_index);
 			info!(
 				target: "runtime::mmr",
-				"🥩: offchain set: block-num {:?}, parent_hash {:?} node-idx {} key {:?}",
-				block_number, parent_hash, node_index, key
+				"🥩: offchain set: pos {} parent_hash {:?} key {:?}",
+				parent_hash, node_index, key
 			);
 			// Indexing API is used to store the full node content (both leaf and inner).
 			elem.using_encoded(|elem| offchain_index::set(&key, elem));
+
+			// Now we need to "canonicalize" any old leaves.
+			let window_size = <T as frame_system::Config>::BlockHashCount::get()
+				.saturating_sub(One::one())
+				.unique_saturated_into();
+			if leaf_index >= window_size && helper::pos_height_in_tree(node_index) == 0 {
+				let leaves = leaf_index + 1;
+				// move the rolling window for `block_num->hash` mappings available in the runtime:
+				// on every newly added _leaf_, we "canonicalize" the oldest leaf in the offchain db
+				// still using `(parent_hash, pos)` key.
+				let leaf_to_canon = leaf_index.saturating_sub(window_size);
+				let parent_hash_of_leaf = Self::parent_hash_of_leaf(leaf_to_canon, leaves);
+				let nodes_to_canon = Self::nodes_added_by_leaf(leaf_to_canon, leaves);
+				for pos in nodes_to_canon {
+					let key = Pallet::<T, I>::offchain_key(parent_hash_of_leaf, pos);
+					// FIXME: this approach also doesn't work because we can't read from offchain db
+					// in runtime context :((
+					let elem = vec![]; // this should have been: `offchain_index::get(&key)`
+					offchain_index::clear(&key);
+					let canon_key = Pallet::<T, I>::final_offchain_key(pos);
+					offchain_index::set(&canon_key, &elem);
+				}
+			}
 
 			// On-chain we are going to only store new peaks.
 			if peaks_to_store.next_if_eq(&node_index).is_some() {
