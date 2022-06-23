@@ -147,18 +147,24 @@ pub struct Worker<Client, Network, Block, DhtEventStream> {
 	phantom: PhantomData<Block>,
 }
 
+#[async_trait::async_trait]
 pub trait AuthorityDiscoveryWrapper<Block: BlockT> {
-	fn authorities(&self, at: &BlockId<Block>) -> std::result::Result<Vec<AuthorityId>, ApiError>;
+	async fn authorities(&self, at: Block::Hash)
+		-> std::result::Result<Vec<AuthorityId>, ApiError>;
 }
 
+#[async_trait::async_trait]
 impl<Block, T> AuthorityDiscoveryWrapper<Block> for T
 where
-	T: ProvideRuntimeApi<Block>,
+	T: ProvideRuntimeApi<Block> + Send + Sync,
 	T::Api: AuthorityDiscoveryApi<Block>,
 	Block: BlockT,
 {
-	fn authorities(&self, at: &BlockId<Block>) -> std::result::Result<Vec<AuthorityId>, ApiError> {
-		self.runtime_api().authorities(at)
+	async fn authorities(
+		&self,
+		at: Block::Hash,
+	) -> std::result::Result<Vec<AuthorityId>, ApiError> {
+		self.runtime_api().authorities(&BlockId::Hash(at))
 	}
 }
 
@@ -365,7 +371,7 @@ where
 	}
 
 	async fn refill_pending_lookups_queue(&mut self) -> Result<()> {
-		let id = BlockId::hash(self.client.info().best_hash);
+		let best_hash = self.client.info().best_hash;
 
 		let local_keys = match &self.role {
 			Role::PublishAndDiscover(key_store) => key_store
@@ -378,7 +384,8 @@ where
 
 		let mut authorities = self
 			.client
-			.authorities(&id)
+			.authorities(best_hash)
+			.await
 			.map_err(|e| Error::CallingRuntime(e.into()))?
 			.into_iter()
 			.filter(|id| !local_keys.contains(id.as_ref()))
@@ -587,9 +594,10 @@ where
 			.into_iter()
 			.collect::<HashSet<_>>();
 
-		let id = BlockId::hash(client.info().best_hash);
+		let best_hash = client.info().best_hash;
 		let authorities = client
-			.authorities(&id)
+			.authorities(best_hash)
+			.await
 			.map_err(|e| Error::CallingRuntime(e.into()))?
 			.into_iter()
 			.map(Into::into)

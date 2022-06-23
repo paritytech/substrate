@@ -19,7 +19,6 @@
 //! A set of APIs supported by the client along with their primitives.
 
 use crate::{blockchain::Info, notifications::StorageEventStream, FinalizeSummary, ImportSummary};
-use futures::Stream;
 use sp_consensus::BlockOrigin;
 use sp_core::storage::StorageKey;
 use sp_runtime::{
@@ -27,7 +26,7 @@ use sp_runtime::{
 	traits::{Block as BlockT, NumberFor},
 	Justifications,
 };
-use std::{collections::HashSet, convert::TryFrom, fmt, pin::Pin, sync::Arc};
+use std::{collections::HashSet, convert::TryFrom, fmt, sync::Arc};
 
 use sc_transaction_pool_api::ChainEvent;
 use sc_utils::mpsc::TracingUnboundedReceiver;
