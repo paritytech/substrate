@@ -109,16 +109,16 @@ benchmarks_instance_pallet! {
 		Bounties::<T, I>::propose_bounty(RawOrigin::Signed(caller).into(), value, reason)?;
 		let bounty_id = BountyCount::<T, I>::get() - 1;
 		Bounties::<T, I>::approve_bounty(RawOrigin::Root.into(), bounty_id)?;
-		Bounties::<T, I>::on_initialize(T::BlockNumber::zero());
+		Treasury::<T, I>::on_initialize(T::BlockNumber::zero());
 	}: _(RawOrigin::Root, bounty_id, curator_lookup, fee)
 
 	// Worst case when curator is inactive and any sender unassigns the curator.
 	unassign_curator {
 		setup_pot_account::<T, I>();
 		let (curator_lookup, bounty_id) = create_bounty::<T, I>()?;
-		Bounties::<T, I>::on_initialize(T::BlockNumber::zero());
+		Treasury::<T, I>::on_initialize(T::BlockNumber::zero());
 		let bounty_id = BountyCount::<T, I>::get() - 1;
-		frame_system::Pallet::<T>::set_block_number(T::BountyUpdatePeriod::get() + 1u32.into());
+		frame_system::Pallet::<T>::set_block_number(T::BountyUpdatePeriod::get() + 2u32.into());
 		let caller = whitelisted_caller();
 	}: _(RawOrigin::Signed(caller), bounty_id)
 
@@ -129,14 +129,14 @@ benchmarks_instance_pallet! {
 		Bounties::<T, I>::propose_bounty(RawOrigin::Signed(caller).into(), value, reason)?;
 		let bounty_id = BountyCount::<T, I>::get() - 1;
 		Bounties::<T, I>::approve_bounty(RawOrigin::Root.into(), bounty_id)?;
-		Bounties::<T, I>::on_initialize(T::BlockNumber::zero());
+		Treasury::<T, I>::on_initialize(T::BlockNumber::zero());
 		Bounties::<T, I>::propose_curator(RawOrigin::Root.into(), bounty_id, curator_lookup, fee)?;
 	}: _(RawOrigin::Signed(curator), bounty_id)
 
 	award_bounty {
 		setup_pot_account::<T, I>();
 		let (curator_lookup, bounty_id) = create_bounty::<T, I>()?;
-		Bounties::<T, I>::on_initialize(T::BlockNumber::zero());
+		Treasury::<T, I>::on_initialize(T::BlockNumber::zero());
 
 		let bounty_id = BountyCount::<T, I>::get() - 1;
 		let curator = T::Lookup::lookup(curator_lookup).map_err(<&str>::from)?;
@@ -147,7 +147,7 @@ benchmarks_instance_pallet! {
 	claim_bounty {
 		setup_pot_account::<T, I>();
 		let (curator_lookup, bounty_id) = create_bounty::<T, I>()?;
-		Bounties::<T, I>::on_initialize(T::BlockNumber::zero());
+		Treasury::<T, I>::on_initialize(T::BlockNumber::zero());
 
 		let bounty_id = BountyCount::<T, I>::get() - 1;
 		let curator = T::Lookup::lookup(curator_lookup).map_err(<&str>::from)?;
@@ -156,7 +156,7 @@ benchmarks_instance_pallet! {
 		let beneficiary = T::Lookup::unlookup(beneficiary_account.clone());
 		Bounties::<T, I>::award_bounty(RawOrigin::Signed(curator.clone()).into(), bounty_id, beneficiary)?;
 
-		frame_system::Pallet::<T>::set_block_number(T::BountyDepositPayoutDelay::get());
+		frame_system::Pallet::<T>::set_block_number(T::BountyDepositPayoutDelay::get() + 1u32.into());
 		ensure!(T::Currency::free_balance(&beneficiary_account).is_zero(), "Beneficiary already has balance");
 
 	}: _(RawOrigin::Signed(curator), bounty_id)
@@ -174,7 +174,7 @@ benchmarks_instance_pallet! {
 	close_bounty_active {
 		setup_pot_account::<T, I>();
 		let (curator_lookup, bounty_id) = create_bounty::<T, I>()?;
-		Bounties::<T, I>::on_initialize(T::BlockNumber::zero());
+		Treasury::<T, I>::on_initialize(T::BlockNumber::zero());
 		let bounty_id = BountyCount::<T, I>::get() - 1;
 	}: close_bounty(RawOrigin::Root, bounty_id)
 	verify {
@@ -184,7 +184,7 @@ benchmarks_instance_pallet! {
 	extend_bounty_expiry {
 		setup_pot_account::<T, I>();
 		let (curator_lookup, bounty_id) = create_bounty::<T, I>()?;
-		Bounties::<T, I>::on_initialize(T::BlockNumber::zero());
+		Treasury::<T, I>::on_initialize(T::BlockNumber::zero());
 
 		let bounty_id = BountyCount::<T, I>::get() - 1;
 		let curator = T::Lookup::lookup(curator_lookup).map_err(<&str>::from)?;
