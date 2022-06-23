@@ -18,8 +18,8 @@
 
 //! Abstract interfaces and data structures related to network sync.
 
-pub mod extra_requests;
 pub mod message;
+pub mod metrics;
 pub mod warp;
 
 use libp2p::PeerId;
@@ -172,7 +172,7 @@ pub enum SyncMode {
 pub struct Metrics {
 	pub queued_blocks: u32,
 	pub fork_targets: u32,
-	pub justifications: extra_requests::Metrics,
+	pub justifications: metrics::Metrics,
 }
 
 /// Wrapper for implementation-specific state request.

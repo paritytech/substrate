@@ -20,7 +20,7 @@ use crate::{PeerSync, PeerSyncState};
 use fork_tree::ForkTree;
 use libp2p::PeerId;
 use log::{debug, trace, warn};
-use sc_network_common::sync::extra_requests::Metrics;
+use sc_network_common::sync::metrics::Metrics;
 use sp_blockchain::Error as ClientError;
 use sp_runtime::traits::{Block as BlockT, NumberFor, Zero};
 use std::{
