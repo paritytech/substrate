@@ -21,7 +21,10 @@ use frame_support::{
 	pallet_prelude::*,
 	traits::{Currency, ExistenceRequirement::KeepAlive},
 };
-use sp_runtime::{traits::CheckedAdd, DispatchError, Perbill};
+use sp_runtime::{
+	traits::{CheckedAdd, Saturating},
+	DispatchError, Perbill,
+};
 
 impl<T: Config> Pallet<T> {
 	pub fn do_change_creator_royalties(
@@ -129,7 +132,7 @@ impl<T: Config> Pallet<T> {
 
 			T::Currency::transfer(&source, &collection.creator, transfer_amount, KeepAlive)?;
 
-			amount_left -= transfer_amount;
+			amount_left = amount_left.saturating_sub(transfer_amount);
 
 			Self::deposit_event(Event::CreatorRoyaltiesPaid {
 				collection_id: collection.id,
@@ -145,7 +148,7 @@ impl<T: Config> Pallet<T> {
 
 			T::Currency::transfer(&source, &collection.owner, transfer_amount, KeepAlive)?;
 
-			amount_left -= transfer_amount;
+			amount_left = amount_left.saturating_sub(transfer_amount);
 
 			Self::deposit_event(Event::OwnerRoyaltiesPaid {
 				collection_id: collection.id,

@@ -21,6 +21,7 @@ use frame_support::{
 	pallet_prelude::*,
 	traits::{Currency, ExistenceRequirement::KeepAlive},
 };
+use sp_runtime::traits::Saturating;
 
 impl<T: Config> Pallet<T> {
 	pub fn do_set_price(
@@ -172,7 +173,7 @@ impl<T: Config> Pallet<T> {
 			Sellers::<T>::get((seller_account, collection_id, item_id))
 				.ok_or(Error::<T>::SellDataNotFound)?;
 
-		let total = seller_price + seller_tips.unwrap_or(Default::default());
+		let total = seller_price.saturating_add(seller_tips.unwrap_or(Default::default()));
 		ensure!(amount >= total, Error::<T>::AmountTooLow);
 
 		if let Some(seller_tips) = seller_tips {
