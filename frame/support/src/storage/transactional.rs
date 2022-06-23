@@ -33,7 +33,8 @@ use sp_runtime::{DispatchError, TransactionOutcome, TransactionalError};
 pub type Layer = u32;
 /// The key that is holds the current number of active layers.
 pub const TRANSACTION_LEVEL_KEY: &[u8] = b":transaction_level:";
-/// The maximum number of nested layers. If `None`, then there is no limit.
+/// The maximum number of nested layers. If `None`, then there is no limit (beyond the U32::MAX
+/// limit).
 pub const TRANSACTIONAL_LIMIT: Option<Layer> = None;
 
 /// Returns the current number of nested transactional layers.
