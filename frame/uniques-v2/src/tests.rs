@@ -148,7 +148,6 @@ fn minting_should_work() {
 			owner,
 			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
 			None,
-			None,
 			Perbill::zero(),
 			Perbill::zero(),
 		));
@@ -167,7 +166,6 @@ fn minting_should_work() {
 			[Event::<Test>::CollectionCreated {
 				id,
 				max_supply: None,
-				max_items_per_account: None,
 				owner,
 				creator,
 				creator_royalties: Perbill::zero(),
@@ -190,7 +188,6 @@ fn collection_locking_should_work() {
 			Origin::signed(user_id),
 			user_id,
 			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
-			None,
 			None,
 			Perbill::zero(),
 			Perbill::zero(),
@@ -223,7 +220,6 @@ fn collection_locking_should_fail() {
 			user_id,
 			user_features,
 			None,
-			None,
 			Perbill::zero(),
 			Perbill::zero(),
 		));
@@ -252,7 +248,6 @@ fn update_max_supply_should_work() {
 			user_id,
 			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
 			max_supply,
-			None,
 			Perbill::zero(),
 			Perbill::zero(),
 		));
@@ -284,7 +279,6 @@ fn destroy_collection_should_work() {
 			user_id,
 			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
 			None,
-			None,
 			Perbill::zero(),
 			Perbill::zero(),
 		));
@@ -308,7 +302,6 @@ fn destroy_collection_should_work() {
 		assert!(!CollectionCreator::<Test>::contains_key(user_id, id));
 		assert!(!Items::<Test>::contains_key(id, 1));
 		assert!(!Items::<Test>::contains_key(id, 2));
-		assert!(!CountForAccountItems::<Test>::contains_key(user_id, id));
 
 		assert_eq!(collections(), vec![]);
 		assert_eq!(items(), vec![]);
@@ -326,7 +319,6 @@ fn transfer_owner_should_work() {
 			Origin::signed(user_1),
 			user_1,
 			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
-			None,
 			None,
 			Perbill::zero(),
 			Perbill::zero(),
@@ -360,7 +352,6 @@ fn mint_should_work() {
 			sender,
 			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
 			None,
-			None,
 			Perbill::zero(),
 			Perbill::zero(),
 		));
@@ -373,7 +364,6 @@ fn mint_should_work() {
 		assert_eq!(Collections::<Test>::get(collection_id).unwrap().item_metadatas, 0);
 
 		assert!(Items::<Test>::contains_key(collection_id, item_id));
-		assert_eq!(CountForAccountItems::<Test>::get(user_id, collection_id).unwrap(), 1);
 
 		assert!(events().contains(&Event::<Test>::ItemCreated { collection_id, item_id }));
 
@@ -383,7 +373,6 @@ fn mint_should_work() {
 			user_id,
 			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
 			Some(1),
-			None,
 			Perbill::zero(),
 			Perbill::zero(),
 		));
@@ -407,7 +396,6 @@ fn burn_should_work() {
 			user_id,
 			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
 			None,
-			None,
 			Perbill::zero(),
 			Perbill::zero(),
 		));
@@ -422,7 +410,6 @@ fn burn_should_work() {
 		assert_eq!(Collections::<Test>::get(collection_id).unwrap().item_metadatas, 0);
 
 		assert!(!Items::<Test>::contains_key(collection_id, item_id));
-		assert_eq!(CountForAccountItems::<Test>::get(user_id, collection_id).unwrap(), 0);
 
 		assert!(events().contains(&Event::<Test>::ItemBurned { collection_id, item_id }));
 	});
@@ -441,7 +428,6 @@ fn transfer_should_work() {
 			Origin::signed(user_1),
 			user_1,
 			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
-			None,
 			None,
 			Perbill::zero(),
 			Perbill::zero(),
@@ -467,10 +453,6 @@ fn transfer_should_work() {
 			receiver: user_3,
 		}));
 
-		assert_eq!(CountForAccountItems::<Test>::get(user_1, collection_id).unwrap_or_default(), 0);
-		assert_eq!(CountForAccountItems::<Test>::get(user_2, collection_id).unwrap_or_default(), 0);
-		assert_eq!(CountForAccountItems::<Test>::get(user_3, collection_id).unwrap(), 1);
-
 		assert_noop!(
 			Uniques::transfer_item(Origin::signed(user_2), collection_id, item_id, user_3, config),
 			Error::<Test>::NotAuthorized
@@ -482,7 +464,6 @@ fn transfer_should_work() {
 			Origin::signed(user_1),
 			user_1,
 			UserFeatures::new(UserFeature::NonTransferableItems.into()),
-			None,
 			None,
 			Perbill::zero(),
 			Perbill::zero(),
@@ -516,7 +497,6 @@ fn set_metadata_should_work() {
 			Origin::signed(user_1),
 			user_1,
 			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
-			None,
 			None,
 			Perbill::zero(),
 			Perbill::zero(),
@@ -585,7 +565,6 @@ fn set_attribute_should_work() {
 			Origin::signed(user_id),
 			user_id,
 			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
-			None,
 			None,
 			Perbill::zero(),
 			Perbill::zero(),
@@ -657,7 +636,6 @@ fn set_price_should_work() {
 			user_id,
 			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
 			None,
-			None,
 			Perbill::zero(),
 			Perbill::zero(),
 		));
@@ -703,7 +681,6 @@ fn set_price_should_work() {
 			user_id,
 			UserFeatures::new(UserFeature::NonTransferableItems.into()),
 			None,
-			None,
 			Perbill::zero(),
 			Perbill::zero(),
 		));
@@ -739,7 +716,6 @@ fn buy_item_should_work() {
 			Origin::signed(user_1),
 			user_1,
 			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
-			None,
 			None,
 			Perbill::zero(),
 			Perbill::zero(),
@@ -818,7 +794,6 @@ fn buy_item_should_work() {
 			user_1,
 			UserFeatures::new(UserFeature::NonTransferableItems.into()),
 			None,
-			None,
 			Perbill::zero(),
 			Perbill::zero(),
 		));
@@ -842,7 +817,6 @@ fn set_seller_should_work() {
 			Origin::signed(user_id),
 			user_id,
 			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
-			None,
 			None,
 			Perbill::zero(),
 			Perbill::zero(),
@@ -915,7 +889,6 @@ fn set_seller_should_work() {
 			user_id,
 			UserFeatures::new(UserFeature::NonTransferableItems.into()),
 			None,
-			None,
 			Perbill::zero(),
 			Perbill::zero(),
 		));
@@ -960,7 +933,6 @@ fn buy_from_seller_should_work() {
 			Origin::signed(creator_id),
 			user_1,
 			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
-			None,
 			None,
 			Perbill::from_percent(creator_royalties),
 			Perbill::zero(),
@@ -1063,7 +1035,6 @@ fn add_remove_approval_should_work() {
 			user_1,
 			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
 			None,
-			None,
 			Perbill::zero(),
 			Perbill::zero(),
 		));
@@ -1160,7 +1131,6 @@ fn add_remove_approval_should_work() {
 			user_1,
 			UserFeatures::new(UserFeature::NonTransferableItems.into()),
 			None,
-			None,
 			Perbill::zero(),
 			Perbill::zero(),
 		));
@@ -1187,7 +1157,6 @@ fn transfer_with_approval_should_work() {
 			Origin::signed(user_1),
 			user_1,
 			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
-			None,
 			None,
 			Perbill::zero(),
 			Perbill::zero(),
@@ -1275,7 +1244,6 @@ fn accept_buy_offer_should_work() {
 			user_1,
 			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
 			None,
-			None,
 			Perbill::zero(),
 			Perbill::zero(),
 		));
@@ -1344,7 +1312,6 @@ fn swap_items_should_work() {
 			user_1,
 			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
 			None,
-			None,
 			Perbill::zero(),
 			Perbill::zero(),
 		));
@@ -1355,7 +1322,6 @@ fn swap_items_should_work() {
 			Origin::signed(user_2),
 			user_2,
 			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
-			None,
 			None,
 			Perbill::zero(),
 			Perbill::zero(),
@@ -1457,7 +1423,6 @@ fn setting_royalties_should_work() {
 			user_1,
 			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
 			None,
-			None,
 			Perbill::from_percent(creator_royalties),
 			Perbill::from_percent(owner_royalties),
 		));
@@ -1548,7 +1513,6 @@ fn setting_royalties_should_work() {
 				user_1,
 				UserFeatures::new(DEFAULT_USER_FEATURES.into()),
 				None,
-				None,
 				Perbill::from_percent(70),
 				Perbill::from_percent(40),
 			),
@@ -1578,7 +1542,6 @@ fn paying_royalties_when_buying_an_item() {
 			Origin::signed(creator),
 			owner,
 			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
-			None,
 			None,
 			Perbill::from_percent(10),
 			Perbill::from_percent(20),
@@ -1650,7 +1613,6 @@ fn paying_royalties_when_accepting_an_offer() {
 			Origin::signed(creator),
 			owner,
 			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
-			None,
 			None,
 			Perbill::from_percent(10),
 			Perbill::from_percent(20),
@@ -1734,7 +1696,6 @@ fn paying_royalties_when_swapping_items() {
 			owner,
 			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
 			None,
-			None,
 			Perbill::from_percent(10),
 			Perbill::from_percent(20),
 		));
@@ -1745,7 +1706,6 @@ fn paying_royalties_when_swapping_items() {
 			Origin::signed(creator),
 			owner,
 			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
-			None,
 			None,
 			Perbill::from_percent(10),
 			Perbill::from_percent(20),
@@ -1828,7 +1788,6 @@ fn different_user_flags() {
 			1,
 			user_features,
 			None,
-			None,
 			Perbill::zero(),
 			Perbill::zero(),
 		));
@@ -1845,7 +1804,6 @@ fn different_user_flags() {
 			1,
 			user_features,
 			None,
-			None,
 			Perbill::zero(),
 			Perbill::zero(),
 		));
@@ -1859,7 +1817,6 @@ fn different_user_flags() {
 			1,
 			UserFeatures::new(BitFlags::EMPTY),
 			None,
-			None,
 			Perbill::zero(),
 			Perbill::zero(),
 		));
@@ -1869,7 +1826,6 @@ fn different_user_flags() {
 			Origin::signed(1),
 			1,
 			UserFeatures::new(UserFeature::empty()),
-			None,
 			None,
 			Perbill::zero(),
 			Perbill::zero(),

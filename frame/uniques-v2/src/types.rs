@@ -147,7 +147,6 @@ pub struct Collection<CollectionId, Account, Balance> {
 	pub items: u32,
 	pub item_metadatas: u32,
 	pub max_supply: Option<u32>,
-	pub max_items_per_account: Option<u32>,
 	pub creator_royalties: Perbill,
 	pub owner_royalties: Perbill,
 }

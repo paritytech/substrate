@@ -199,18 +199,6 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
-	/// Keeps track of the number of items per collection per user.
-	#[pallet::storage]
-	pub(super) type CountForAccountItems<T: Config> = StorageDoubleMap<
-		_,
-		Blake2_128Concat,
-		T::AccountId,
-		Blake2_128Concat,
-		T::CollectionId,
-		u32,
-		OptionQuery,
-	>;
-
 	#[pallet::storage]
 	/// Metadata of an asset instance.
 	pub(super) type ItemMetadataOf<T: Config> = StorageDoubleMap<
@@ -256,7 +244,6 @@ pub mod pallet {
 		CollectionCreated {
 			id: T::CollectionId,
 			max_supply: Option<u32>,
-			max_items_per_account: Option<u32>,
 			creator: T::AccountId,
 			owner: T::AccountId,
 			creator_royalties: Perbill,
@@ -280,10 +267,6 @@ pub mod pallet {
 		CollectionMaxSupplyChanged {
 			id: T::CollectionId,
 			max_supply: Option<u32>,
-		},
-		CollectionMaxItemsPerAccountChanged {
-			id: T::CollectionId,
-			max_items_per_account: Option<u32>,
 		},
 		CollectionConfigChanged {
 			id: T::CollectionId,
@@ -438,8 +421,6 @@ pub mod pallet {
 		SellDataNotFound,
 		/// Wrong amount provided.
 		AmountTooLow,
-		/// User reached the limit of allowed items per collection per account
-		CollectionItemsPerAccountLimitReached,
 		/// The calling user is not authorized to make this call.
 		NotAuthorized,
 		/// The calling user has an approval that already expired.
@@ -477,7 +458,6 @@ pub mod pallet {
 			owner: <T::Lookup as StaticLookup>::Source,
 			config: UserFeatures,
 			max_supply: Option<u32>,
-			max_items_per_account: Option<u32>,
 			creator_royalties: Perbill,
 			owner_royalties: Perbill,
 		) -> DispatchResult {
@@ -495,7 +475,6 @@ pub mod pallet {
 				owner,
 				config,
 				max_supply,
-				max_items_per_account,
 				creator_royalties,
 				owner_royalties,
 			)?;
@@ -524,18 +503,6 @@ pub mod pallet {
 			let sender = ensure_signed(origin)?;
 			let config = CollectionConfigs::<T>::get(id).ok_or(Error::<T>::CollectionNotFound)?;
 			Self::do_update_max_supply(id, sender, config, max_supply)?;
-			Ok(())
-		}
-
-		#[pallet::weight(0)]
-		pub fn update_max_items_per_account(
-			origin: OriginFor<T>,
-			id: T::CollectionId,
-			max_items_per_account: Option<u32>,
-		) -> DispatchResult {
-			let sender = ensure_signed(origin)?;
-			let config = CollectionConfigs::<T>::get(id).ok_or(Error::<T>::CollectionNotFound)?;
-			Self::do_update_max_items_per_account(id, sender, config, max_items_per_account)?;
 			Ok(())
 		}
 

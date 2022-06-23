@@ -29,7 +29,6 @@ impl<T: Config> Pallet<T> {
 		owner: T::AccountId,
 		user_config: UserFeatures,
 		max_supply: Option<u32>,
-		max_items_per_account: Option<u32>,
 		creator_royalties: Perbill,
 		owner_royalties: Perbill,
 	) -> DispatchResult {
@@ -61,7 +60,6 @@ impl<T: Config> Pallet<T> {
 			items: 0,
 			item_metadatas: 0,
 			max_supply,
-			max_items_per_account,
 			creator_royalties,
 			owner_royalties,
 		};
@@ -81,7 +79,6 @@ impl<T: Config> Pallet<T> {
 		Self::deposit_event(Event::<T>::CollectionCreated {
 			id,
 			max_supply,
-			max_items_per_account,
 			creator,
 			owner,
 			creator_royalties,
@@ -92,7 +89,6 @@ impl<T: Config> Pallet<T> {
 		let next_id = id.checked_add(&One::one()).ok_or(Error::<T>::Overflow)?;
 		CollectionNextId::<T>::put(next_id);
 
-		// TODO: maybe we should return the id here?
 		Ok(())
 	}
 
@@ -115,32 +111,6 @@ impl<T: Config> Pallet<T> {
 		Collections::<T>::insert(&id, collection);
 
 		Self::deposit_event(Event::<T>::CollectionMaxSupplyChanged { id, max_supply });
-
-		Ok(())
-	}
-
-	pub fn do_update_max_items_per_account(
-		id: T::CollectionId,
-		caller: T::AccountId,
-		config: CollectionConfig,
-		max_items_per_account: Option<u32>,
-	) -> DispatchResult {
-		let mut collection = Collections::<T>::get(&id).ok_or(Error::<T>::CollectionNotFound)?;
-		ensure!(collection.owner == caller, Error::<T>::NotAuthorized);
-
-		let user_features: BitFlags<UserFeature> = config.user_features.get();
-
-		if user_features.contains(UserFeature::IsLocked) {
-			return Err(Error::<T>::CollectionIsLocked.into())
-		}
-
-		collection.max_items_per_account = max_items_per_account;
-		Collections::<T>::insert(&id, collection);
-
-		Self::deposit_event(Event::<T>::CollectionMaxItemsPerAccountChanged {
-			id,
-			max_items_per_account,
-		});
 
 		Ok(())
 	}
@@ -199,7 +169,6 @@ impl<T: Config> Pallet<T> {
 
 		for (item_id, details) in Items::<T>::drain_prefix(&id) {
 			AccountItems::<T>::remove((&details.owner, &id, &item_id));
-			CountForAccountItems::<T>::remove(&details.owner, &id);
 		}
 
 		ItemMetadataOf::<T>::remove_prefix(&id, None);
