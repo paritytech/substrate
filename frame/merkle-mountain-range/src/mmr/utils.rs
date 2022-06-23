@@ -65,16 +65,8 @@ impl NodesUtils {
 		if pos == 0 {
 			return 0
 		}
-		let (leaf_count, _) =
-			mmr_lib::helper::get_peaks(pos)
-				.iter()
-				.fold((0, 0), |(mut acc, last_peak), peak| {
-					let leaves = (peak - last_peak) >> 1;
-					acc += leaves + 1;
-					// last_peak, leaves, acc);
-					(acc, peak.clone())
-				});
-		leaf_count
+		let peaks = mmr_lib::helper::get_peaks(pos);
+		(pos + peaks.len() as u64) >> 1
 	}
 
 	// Starting from any node position get position of rightmost leaf; this is the leaf
