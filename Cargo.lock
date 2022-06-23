@@ -511,10 +511,12 @@ dependencies = [
 name = "beefy-merkle-tree"
 version = "4.0.0-dev"
 dependencies = [
+ "beefy-primitives",
  "env_logger 0.9.0",
  "hex",
  "hex-literal",
  "log",
+ "sp-api",
  "tiny-keccak",
 ]
 
@@ -10646,6 +10648,7 @@ dependencies = [
 name = "substrate-test-runtime"
 version = "2.0.0"
 dependencies = [
+ "beefy-merkle-tree",
  "beefy-primitives",
  "cfg-if 1.0.0",
  "frame-support",
