@@ -215,7 +215,7 @@ impl<B: BlockT> BlockCollection<B> {
 			None => {
 				debug!(target: "sync", "Can't clear unknown queued blocks from {:?}", from_hash);
 			},
-			Some(&(from, to)) => {
+			Some((from, to)) => {
 				let mut block_num = from;
 				while block_num < to {
 					self.blocks.remove(&block_num);
