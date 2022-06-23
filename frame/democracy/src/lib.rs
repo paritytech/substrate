@@ -1051,7 +1051,7 @@ pub trait EncodeInto: Encode {
 			} else {
 				// encoded self is too big to fit into a T. hash it and use the first bytes of that
 				// instead.
-				let hash = sp_core::hashing::blake2_256(data);
+				let hash = sp_io::hashing::blake2_256(data);
 				let l = t.as_mut().len().min(hash.len());
 				t.as_mut()[0..l].copy_from_slice(&hash[0..l]);
 			}

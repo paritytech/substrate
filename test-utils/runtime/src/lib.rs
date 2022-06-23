@@ -119,7 +119,7 @@ pub fn native_version() -> NativeVersion {
 }
 
 /// Calls in transactions.
-#[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, TypeInfo)]
 pub struct Transfer {
 	pub from: AccountId,
 	pub to: AccountId,
@@ -150,7 +150,7 @@ impl Transfer {
 }
 
 /// Extrinsic for test-runtime.
-#[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, TypeInfo)]
 pub enum Extrinsic {
 	AuthoritiesChange(Vec<AuthorityId>),
 	Transfer {
@@ -596,6 +596,12 @@ parameter_types! {
 		BlockLength::max(4 * 1024 * 1024);
 	pub RuntimeBlockWeights: BlockWeights =
 		BlockWeights::with_sensible_defaults(4 * 1024 * 1024, Perbill::from_percent(75));
+}
+
+impl From<frame_system::Call<Runtime>> for Extrinsic {
+	fn from(_: frame_system::Call<Runtime>) -> Self {
+		unimplemented!("Not required in tests!")
+	}
 }
 
 impl frame_system::Config for Runtime {
