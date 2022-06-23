@@ -444,7 +444,8 @@ mod tests {
 			value: Option<Vec<u8>>,
 			take_old: bool,
 		) -> Result<WriteOutcome, DispatchError> {
-			let entry = self.storage.entry(key.to_vec());
+			let key = key.to_vec();
+			let entry = self.storage.entry(key.clone());
 			let result = match (entry, take_old) {
 				(Entry::Vacant(_), _) => WriteOutcome::New,
 				(Entry::Occupied(entry), false) =>
@@ -452,7 +453,7 @@ mod tests {
 				(Entry::Occupied(entry), true) => WriteOutcome::Taken(entry.remove()),
 			};
 			if let Some(value) = value {
-				self.storage.insert(key.to_vec(), value);
+				self.storage.insert(key, value);
 			}
 			Ok(result)
 		}
@@ -462,7 +463,8 @@ mod tests {
 			value: Option<Vec<u8>>,
 			take_old: bool,
 		) -> Result<WriteOutcome, DispatchError> {
-			let entry = self.storage.entry(key.to_vec());
+			let key = key.to_vec();
+			let entry = self.storage.entry(key.clone());
 			let result = match (entry, take_old) {
 				(Entry::Vacant(_), _) => WriteOutcome::New,
 				(Entry::Occupied(entry), false) =>
@@ -470,7 +472,7 @@ mod tests {
 				(Entry::Occupied(entry), true) => WriteOutcome::Taken(entry.remove()),
 			};
 			if let Some(value) = value {
-				self.storage.insert(key.to_vec(), value);
+				self.storage.insert(key, value);
 			}
 			Ok(result)
 		}
