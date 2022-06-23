@@ -80,6 +80,7 @@ cargo-check-benches:
     - .test-refs
     - .collect-artifacts
   before_script:
+    # perform rusty-cachier operations before any further modifications to the git repo to make cargo feel cheated not so much
     - !reference [.rust-info-script, script]
     - !reference [.rusty-cachier, before_script]
     # merges in the master branch on PRs
