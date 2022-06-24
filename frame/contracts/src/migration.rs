@@ -56,6 +56,7 @@ mod v4 {
 	use super::*;
 
 	pub fn migrate<T: Config>() -> Weight {
+		#[allow(deprecated)]
 		migration::remove_storage_prefix(<Pallet<T>>::name().as_bytes(), b"CurrentSchedule", b"");
 		T::DbWeight::get().writes(1)
 	}

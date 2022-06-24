@@ -50,6 +50,7 @@ frame-system-benchmarking = { version = "4.0.0-dev", default-features = false, p
 frame-election-provider-support = { version = "4.0.0-dev", default-features = false, path = "../../../frame/election-provider-support" }
 frame-system-rpc-runtime-api = { version = "4.0.0-dev", default-features = false, path = "../../../frame/system/rpc/runtime-api/" }
 frame-try-runtime = { version = "0.10.0-dev", default-features = false, path = "../../../frame/try-runtime", optional = true }
+pallet-alliance = { version = "4.0.0-dev", default-features = false, path = "../../../frame/alliance" }
 pallet-assets = { version = "4.0.0-dev", default-features = false, path = "../../../frame/assets" }
 pallet-authority-discovery = { version = "4.0.0-dev", default-features = false, path = "../../../frame/authority-discovery" }
 pallet-authorship = { version = "4.0.0-dev", default-features = false, path = "../../../frame/authorship" }
@@ -83,6 +84,7 @@ pallet-offences-benchmarking = { version = "4.0.0-dev", path = "../../../frame/o
 pallet-preimage = { version = "4.0.0-dev", default-features = false, path = "../../../frame/preimage" }
 pallet-proxy = { version = "4.0.0-dev", default-features = false, path = "../../../frame/proxy" }
 pallet-randomness-collective-flip = { version = "4.0.0-dev", default-features = false, path = "../../../frame/randomness-collective-flip" }
+pallet-ranked-collective = { version = "4.0.0-dev", default-features = false, path = "../../../frame/ranked-collective" }
 pallet-recovery = { version = "4.0.0-dev", default-features = false, path = "../../../frame/recovery" }
 pallet-referenda = { version = "4.0.0-dev", default-features = false, path = "../../../frame/referenda" }
 pallet-remark = { version = "4.0.0-dev", default-features = false, path = "../../../frame/remark" }
@@ -176,6 +178,7 @@ std = [
 	"pallet-utility/std",
 	"sp-version/std",
 	"pallet-society/std",
+	"pallet-ranked-collective/std",
 	"pallet-referenda/std",
 	"pallet-remark/std",
 	"pallet-recovery/std",
@@ -185,12 +188,14 @@ std = [
 	"frame-try-runtime/std",
 	"sp-io/std",
 	"pallet-child-bounties/std",
+	"pallet-alliance/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",
 	"frame-support/runtime-benchmarks",
 	"frame-system/runtime-benchmarks",
 	"sp-runtime/runtime-benchmarks",
+	"pallet-alliance/runtime-benchmarks",
 	"pallet-assets/runtime-benchmarks",
 	"pallet-babe/runtime-benchmarks",
 	"pallet-bags-list/runtime-benchmarks",
@@ -218,6 +223,7 @@ runtime-benchmarks = [
 	"pallet-preimage/runtime-benchmarks",
 	"pallet-proxy/runtime-benchmarks",
 	"pallet-scheduler/runtime-benchmarks",
+	"pallet-ranked-collective/runtime-benchmarks",
 	"pallet-referenda/runtime-benchmarks",
 	"pallet-recovery/runtime-benchmarks",
 	"pallet-remark/runtime-benchmarks",
@@ -240,6 +246,7 @@ try-runtime = [
 	"frame-executive/try-runtime",
 	"frame-try-runtime",
 	"frame-system/try-runtime",
+	"pallet-alliance/try-runtime",
 	"pallet-assets/try-runtime",
 	"pallet-authority-discovery/try-runtime",
 	"pallet-authorship/try-runtime",
@@ -265,6 +272,7 @@ try-runtime = [
 	"pallet-offences/try-runtime",
 	"pallet-preimage/try-runtime",
 	"pallet-proxy/try-runtime",
+	"pallet-ranked-collective/try-runtime",
 	"pallet-randomness-collective-flip/try-runtime",
 	"pallet-recovery/try-runtime",
 	"pallet-referenda/try-runtime",

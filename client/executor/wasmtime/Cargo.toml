@@ -18,7 +18,7 @@ codec = { package = "parity-scale-codec", version = "3.0.0" }
 libc = "0.2.121"
 log = "0.4.17"
 parity-wasm = "0.42.0"
-wasmtime = { version = "0.35.3", default-features = false, features = [
+wasmtime = { version = "0.38.0", default-features = false, features = [
 	"cache",
 	"cranelift",
 	"jitdump",
@@ -37,3 +37,4 @@ wat = "1.0"
 sc-runtime-test = { version = "2.0.0", path = "../runtime-test" }
 sp-io = { version = "6.0.0", path = "../../../primitives/io" }
 tempfile = "3.3.0"
+paste = "1.0"

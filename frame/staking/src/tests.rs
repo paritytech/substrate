@@ -3388,7 +3388,7 @@ fn six_session_delay() {
 #[test]
 fn test_max_nominator_rewarded_per_validator_and_cant_steal_someone_else_reward() {
 	ExtBuilder::default().build_and_execute(|| {
-		for i in 0..=<Test as Config>::MaxNominatorRewardedPerValidator::get() {
+		for i in 0..=<<Test as Config>::MaxNominatorRewardedPerValidator as Get<_>>::get() {
 			let stash = 10_000 + i as AccountId;
 			let controller = 20_000 + i as AccountId;
 			let balance = 10_000 + i as Balance;
@@ -3411,7 +3411,7 @@ fn test_max_nominator_rewarded_per_validator_and_cant_steal_someone_else_reward(
 		mock::make_all_reward_payment(1);
 
 		// Assert only nominators from 1 to Max are rewarded
-		for i in 0..=<Test as Config>::MaxNominatorRewardedPerValidator::get() {
+		for i in 0..=<<Test as Config>::MaxNominatorRewardedPerValidator as Get<_>>::get() {
 			let stash = 10_000 + i as AccountId;
 			let balance = 10_000 + i as Balance;
 			if stash == 10_000 {
@@ -3649,7 +3649,8 @@ fn payout_stakers_handles_weight_refund() {
 	// Note: this test relies on the assumption that `payout_stakers_alive_staked` is solely used by
 	// `payout_stakers` to calculate the weight of each payout op.
 	ExtBuilder::default().has_stakers(false).build_and_execute(|| {
-		let max_nom_rewarded = <Test as Config>::MaxNominatorRewardedPerValidator::get();
+		let max_nom_rewarded =
+			<<Test as Config>::MaxNominatorRewardedPerValidator as Get<_>>::get();
 		// Make sure the configured value is meaningful for our use.
 		assert!(max_nom_rewarded >= 4);
 		let half_max_nom_rewarded = max_nom_rewarded / 2;
@@ -4927,6 +4928,25 @@ fn force_apply_min_commission_works() {
 			Error::<Test>::NotStash
 		);
 	});
+}
+
+#[test]
+fn proportional_slash_stop_slashing_if_remaining_zero() {
+	let c = |era, value| UnlockChunk::<Balance> { era, value };
+	// Given
+	let mut ledger = StakingLedger::<Test> {
+		stash: 123,
+		total: 40,
+		active: 20,
+		// we have some chunks, but they are not affected.
+		unlocking: bounded_vec![c(1, 10), c(2, 10)],
+		claimed_rewards: vec![],
+	};
+
+	assert_eq!(BondingDuration::get(), 3);
+
+	// should not slash more than the amount requested, by accidentally slashing the first chunk.
+	assert_eq!(ledger.slash(18, 1, 0), 18);
 }
 
 #[test]
