@@ -18,6 +18,7 @@
 //! Merkle Mountain Range utilities.
 
 use crate::primitives::{LeafIndex, NodeIndex};
+use mmr_lib::helper;
 
 /// MMR nodes & size -related utilities.
 pub struct NodesUtils {
@@ -65,34 +66,33 @@ impl NodesUtils {
 		if pos == 0 {
 			return 0
 		}
-		let peaks = mmr_lib::helper::get_peaks(pos);
+		let peaks = helper::get_peaks(pos);
 		(pos + peaks.len() as u64) >> 1
 	}
 
 	// Starting from any node position get position of rightmost leaf; this is the leaf
 	// responsible for the addition of node `pos`.
 	fn rightmost_leaf_node_index_from_pos(pos: NodeIndex) -> NodeIndex {
-		use mmr_lib::helper::pos_height_in_tree;
-		pos - (pos_height_in_tree(pos) as u64)
+		pos - (helper::pos_height_in_tree(pos) as u64)
 	}
 
-	// Starting from any leaf position, get the sequence of positions of the nodes added
-	// to the mmr when this leaf was added (inclusive of the leaf's position itself).
-	// That is, all of these nodes are right children of their respective parents.
-	fn right_branch_ending_in_leaf(leaf_pos: NodeIndex) -> Vec<u64> {
-		let leaf_index = Self::leaf_node_index_to_leaf_index(leaf_pos);
+	/// Starting from any leaf index, get the sequence of positions of the nodes added
+	/// to the mmr when this leaf was added (inclusive of the leaf's position itself).
+	/// That is, all of these nodes are right children of their respective parents.
+	pub fn right_branch_ending_in_leaf(leaf_index: LeafIndex) -> Vec<u64> {
+		let pos = helper::leaf_index_to_pos(leaf_index);
 		let num_parents = leaf_index.trailing_ones() as u64;
-		return (leaf_pos..=leaf_pos + num_parents).rev().collect();
+		return (pos..=pos + num_parents).collect()
 	}
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use mmr_lib::helper::leaf_index_to_pos;
 
 	#[test]
 	fn test_leaf_node_index_to_leaf_index() {
-		use mmr_lib::helper::leaf_index_to_pos;
 		for index in 0..100000 {
 			let pos = leaf_index_to_pos(index);
 			assert_eq!(NodesUtils::leaf_node_index_to_leaf_index(pos), index);
@@ -101,23 +101,20 @@ mod tests {
 
 	#[test]
 	fn should_calculate_right_branch_correctly() {
-		fn left_jump_sequence(pos: u64) -> Vec<u64> {
+		fn left_jump_sequence(leaf_index: LeafIndex) -> Vec<u64> {
+			let pos = leaf_index_to_pos(leaf_index);
 			let mut right_branch_ending_in_leaf = vec![pos];
 			let mut next_pos = pos + 1;
 			while mmr_lib::helper::pos_height_in_tree(next_pos) > 0 {
 				right_branch_ending_in_leaf.push(next_pos);
 				next_pos += 1;
 			}
-			right_branch_ending_in_leaf.reverse();
 			right_branch_ending_in_leaf
 		}
 
 		(0..100000u64).for_each(|leaf_index| {
 			let pos = mmr_lib::helper::leaf_index_to_pos(leaf_index);
-			assert_eq!(
-				NodesUtils::right_branch_ending_in_leaf(pos),
-				left_jump_sequence(pos)
-			);
+			assert_eq!(NodesUtils::right_branch_ending_in_leaf(pos), left_jump_sequence(pos));
 		});
 	}
 
