@@ -20,8 +20,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use frame_support::weights::Weight;
-use sp_std::prelude::*;
-
 pub use frame_support::traits::SanityCheckTargets;
 
 sp_api::decl_runtime_apis! {
