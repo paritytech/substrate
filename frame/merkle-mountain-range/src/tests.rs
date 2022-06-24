@@ -113,11 +113,16 @@ fn should_start_empty() {
 
 #[test]
 fn should_append_to_mmr_when_on_initialize_is_called() {
+	use std::{cell::RefCell, rc::Rc};
+
 	let _ = env_logger::try_init();
+	let parent_hashes = Rc::new(RefCell::new(Default::default()));
+	let ext_parent_hashes = parent_hashes.clone();
 	let mut ext = new_test_ext();
-	ext.execute_with(|| {
+	ext.execute_with(move || {
 		// when
 		new_block();
+		let parent_b1 = <frame_system::Pallet<Test>>::parent_hash();
 
 		// then
 		assert_eq!(crate::NumberOfLeaves::<Test>::get(), 1);
@@ -136,6 +141,7 @@ fn should_append_to_mmr_when_on_initialize_is_called() {
 
 		// when
 		new_block();
+		let parent_b2 = <frame_system::Pallet<Test>>::parent_hash();
 
 		// then
 		assert_eq!(crate::NumberOfLeaves::<Test>::get(), 2);
@@ -157,26 +163,35 @@ fn should_append_to_mmr_when_on_initialize_is_called() {
 				hex("672c04a9cd05a644789d769daa552d35d8de7c33129f8a7cbf49e595234c4854"),
 			)
 		);
+
+		*ext_parent_hashes.borrow_mut() = (parent_b1, parent_b2);
 	});
+
+	let (parent_b1, parent_b2) = Rc::try_unwrap(parent_hashes).unwrap().into_inner();
 
 	// make sure the leaves end up in the offchain DB
 	ext.persist_offchain_overlay();
 	let offchain_db = ext.offchain_db();
 	assert_eq!(
-		offchain_db.get(&MMR::offchain_key(0)).map(decode_node),
+		offchain_db.get(&MMR::offchain_key(parent_b1, 0)).map(decode_node),
 		Some(mmr::Node::Data(((0, H256::repeat_byte(1)), LeafData::new(1),)))
 	);
 	assert_eq!(
-		offchain_db.get(&MMR::offchain_key(1)).map(decode_node),
+		offchain_db.get(&MMR::offchain_key(parent_b2, 1)).map(decode_node),
 		Some(mmr::Node::Data(((1, H256::repeat_byte(2)), LeafData::new(2),)))
 	);
 	assert_eq!(
-		offchain_db.get(&MMR::offchain_key(2)).map(decode_node),
+		offchain_db.get(&MMR::offchain_key(parent_b2, 2)).map(decode_node),
 		Some(mmr::Node::Hash(hex(
 			"672c04a9cd05a644789d769daa552d35d8de7c33129f8a7cbf49e595234c4854"
 		)))
 	);
-	assert_eq!(offchain_db.get(&MMR::offchain_key(3)), None);
+	assert_eq!(offchain_db.get(&MMR::offchain_key(parent_b2, 3)), None);
+
+	assert_eq!(offchain_db.get(&MMR::canon_offchain_key(0)), None);
+	assert_eq!(offchain_db.get(&MMR::canon_offchain_key(1)), None);
+	assert_eq!(offchain_db.get(&MMR::canon_offchain_key(2)), None);
+	assert_eq!(offchain_db.get(&MMR::canon_offchain_key(3)), None);
 }
 
 #[test]

@@ -86,7 +86,7 @@ where
 			);
 			for pos in nodes_to_canon {
 				let key = Pallet::<T, I>::offchain_key(parent_hash_of_leaf, pos);
-				let canon_key = Pallet::<T, I>::final_offchain_key(pos);
+				let canon_key = Pallet::<T, I>::canon_offchain_key(pos);
 				info!(
 					target: "runtime::mmr",
 					"🥩: move elem at pos {} from key {:?} to canon key {:?}",
@@ -133,7 +133,7 @@ where
 		// Retrieve the element from Off-chain DB.
 		Ok(sp_io::offchain::local_storage_get(sp_core::offchain::StorageKind::PERSISTENT, &key)
 			.or_else(|| {
-				let key = Pallet::<T, I>::final_offchain_key(pos);
+				let key = Pallet::<T, I>::canon_offchain_key(pos);
 				info!(
 					target: "runtime::mmr",
 					"🥩: not found {}: try final key {:?}",
