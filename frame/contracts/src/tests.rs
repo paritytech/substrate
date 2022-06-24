@@ -3284,15 +3284,7 @@ fn reentrant_count_works_with_delegated_call() {
 		let mut input = AsRef::<[u8]>::as_ref(&(code_hash1.clone())).to_vec();
 		input.push(1); // adding callstack high to the input
 
-		Contracts::bare_call(
-			ALICE,
-			contract_addr1.clone(),
-			0,
-			GAS_LIMIT,
-			None,
-			input,
-			true,
-		)
+		Contracts::bare_call(ALICE, contract_addr1.clone(), 0, GAS_LIMIT, None, input, true)
 			.result
 			.unwrap();
 	});
