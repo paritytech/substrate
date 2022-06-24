@@ -258,10 +258,7 @@ pub mod pallet {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn sanity_check(
-			_: BlockNumberFor<T>,
-			_: frame_support::traits::SanityCheckTargets,
-		) -> Result<(), &'static str> {
+		fn sanity_check(_: BlockNumberFor<T>) -> Result<(), &'static str> {
 			<Self as SortedListProvider<T::AccountId>>::sanity_check()
 		}
 	}

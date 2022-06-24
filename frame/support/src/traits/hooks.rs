@@ -382,7 +382,7 @@ pub trait Hooks<BlockNumber> {
 	/// It should focus on certain checks to ensure that the state is sensible. Can consume as much
 	/// weight as it needs.
 	#[cfg(feature = "try-runtime")]
-	fn sanity_check(_n: BlockNumber, _t: SanityCheckTargets) -> Result<(), &'static str> {
+	fn sanity_check(_n: BlockNumber) -> Result<(), &'static str> {
 		Ok(())
 	}
 

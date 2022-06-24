@@ -209,13 +209,13 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 			#frame_support::traits::SanityCheck<<T as #frame_system::Config>::BlockNumber>
 			for #pallet_ident<#type_use_gen> #where_clause
 		{
-			fn sanity_check(n: <T as #frame_system::Config>::BlockNumber, t: #frame_support::traits::SanityCheckTargets) -> Result<(), &'static str> {
+			fn sanity_check(n: <T as #frame_system::Config>::BlockNumber, _t: #frame_support::traits::SanityCheckTargets) -> Result<(), &'static str> {
 				#log_sanity_check
 				<
 					Self as #frame_support::traits::Hooks<
 						<T as #frame_system::Config>::BlockNumber
 					>
-				>::sanity_check(n, t)
+				>::sanity_check(n)
 			}
 		}
 	)
