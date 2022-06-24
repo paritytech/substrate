@@ -123,11 +123,20 @@ where
 		let key = Pallet::<T, I>::offchain_key(parent_hash_of_ancestor, pos);
 		info!(
 			target: "runtime::mmr",
-			"🥩: parent of ancestor that added {}: leaf idx {:?}, hash {:?}, key {:?}",
+			"🥩: offchain get {}: leaf idx {:?}, hash {:?}, key {:?}",
 			pos, ancestor_leaf_idx, parent_hash_of_ancestor, key
 		);
 		// Retrieve the element from Off-chain DB.
 		Ok(sp_io::offchain::local_storage_get(sp_core::offchain::StorageKind::PERSISTENT, &key)
+			.or_else(|| {
+				let key = Pallet::<T, I>::final_offchain_key(pos);
+				info!(
+					target: "runtime::mmr",
+					"🥩: not found {}: try final key {:?}",
+					pos, key
+				);
+				sp_io::offchain::local_storage_get(sp_core::offchain::StorageKind::PERSISTENT, &key)
+			})
 			.and_then(|v| codec::Decode::decode(&mut &*v).ok()))
 	}
 
@@ -207,7 +216,7 @@ where
 			info!(
 				target: "runtime::mmr",
 				"🥩: offchain set: pos {} parent_hash {:?} key {:?}",
-				parent_hash, node_index, key
+				node_index, parent_hash, key
 			);
 			// Indexing API is used to store the full node content (both leaf and inner).
 			elem.using_encoded(|elem| offchain_index::set(&key, elem));

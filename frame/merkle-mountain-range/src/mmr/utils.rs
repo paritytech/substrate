@@ -79,7 +79,7 @@ impl NodesUtils {
 	/// Starting from any leaf index, get the sequence of positions of the nodes added
 	/// to the mmr when this leaf was added (inclusive of the leaf's position itself).
 	/// That is, all of these nodes are right children of their respective parents.
-	pub fn right_branch_ending_in_leaf(leaf_index: LeafIndex) -> Vec<u64> {
+	pub fn right_branch_ending_in_leaf(leaf_index: LeafIndex) -> crate::Vec<u64> {
 		let pos = helper::leaf_index_to_pos(leaf_index);
 		let num_parents = leaf_index.trailing_ones() as u64;
 		return (pos..=pos + num_parents).collect()

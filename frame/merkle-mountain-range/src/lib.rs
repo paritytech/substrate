@@ -229,7 +229,7 @@ pub mod pallet {
 
 		fn offchain_worker(_n: T::BlockNumber) {
 			use mmr::storage::{OffchainStorage, Storage};
-			info!("Hello World from MMR offchain worker (block {:?})!", _n);
+			info!("🥩 Run MMR offchain worker for block {:?}...", _n);
 			Storage::<OffchainStorage, T, I, LeafOf<T, I>>::canonicalize_offchain();
 		}
 	}
