@@ -18,10 +18,7 @@
 use crate::*;
 use enumflags2::BitFlags;
 use frame_support::pallet_prelude::*;
-use sp_runtime::{
-	traits::{CheckedAdd, One},
-	Perbill,
-};
+use sp_runtime::traits::{CheckedAdd, One};
 
 impl<T: Config> Pallet<T> {
 	pub fn do_create_collection(
@@ -29,21 +26,12 @@ impl<T: Config> Pallet<T> {
 		owner: T::AccountId,
 		user_config: UserFeatures,
 		max_supply: Option<u32>,
-		creator_royalties: Perbill,
-		owner_royalties: Perbill,
 	) -> DispatchResult {
 		let id = CollectionNextId::<T>::get();
 
 		ensure!(!CollectionConfigs::<T>::contains_key(id), Error::<T>::CollectionIdTaken);
 
-		let mut system_features = (T::DefaultSystemConfig::get()).get();
-
-		if !creator_royalties.is_zero() {
-			system_features.insert(SystemFeature::CreatorRoyalties);
-		}
-		if !owner_royalties.is_zero() {
-			system_features.insert(SystemFeature::OwnerRoyalties);
-		}
+		let system_features = (T::DefaultSystemConfig::get()).get();
 
 		let collection_config = CollectionConfig {
 			system_features: SystemFeatures::new(system_features),
@@ -60,8 +48,6 @@ impl<T: Config> Pallet<T> {
 			items: 0,
 			item_metadatas: 0,
 			max_supply,
-			creator_royalties,
-			owner_royalties,
 		};
 		ensure!(!Collections::<T>::contains_key(id), Error::<T>::CollectionIdTaken);
 
@@ -76,14 +62,7 @@ impl<T: Config> Pallet<T> {
 			Self::deposit_event(Event::<T>::CollectionLocked { id });
 		}
 
-		Self::deposit_event(Event::<T>::CollectionCreated {
-			id,
-			max_supply,
-			creator,
-			owner,
-			creator_royalties,
-			owner_royalties,
-		});
+		Self::deposit_event(Event::<T>::CollectionCreated { id, max_supply, creator, owner });
 
 		// update the next id value
 		let next_id = id.checked_add(&One::one()).ok_or(Error::<T>::Overflow)?;

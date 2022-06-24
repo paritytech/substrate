@@ -75,16 +75,7 @@ impl<T: Config> Pallet<T> {
 			ensure!(only_buyer == buyer, Error::<T>::ItemNotForSale);
 		}
 
-		let mut transfer_amount = item_price.clone();
-		if Self::has_royalties(&config) {
-			let collection =
-				Collections::<T>::get(collection_id).ok_or(Error::<T>::CollectionNotFound)?;
-
-			transfer_amount =
-				Self::process_royalties(transfer_amount.clone(), &buyer, &collection, item_id)?;
-		}
-
-		T::Currency::transfer(&buyer, &item.owner, transfer_amount, KeepAlive)?;
+		T::Currency::transfer(&buyer, &item.owner, item_price.clone(), KeepAlive)?;
 
 		let old_owner = item.owner.clone();
 
@@ -93,7 +84,7 @@ impl<T: Config> Pallet<T> {
 		Self::deposit_event(Event::ItemBought {
 			collection_id,
 			item_id,
-			price: bid_price,
+			price: item_price,
 			seller: old_owner,
 			buyer,
 		});
@@ -180,16 +171,7 @@ impl<T: Config> Pallet<T> {
 			T::Currency::transfer(&buyer, &seller, seller_tips, KeepAlive)?;
 		}
 
-		let mut transfer_amount = seller_price.clone();
-		if Self::has_royalties(&config) {
-			let collection =
-				Collections::<T>::get(collection_id).ok_or(Error::<T>::CollectionNotFound)?;
-
-			transfer_amount =
-				Self::process_royalties(transfer_amount.clone(), &buyer, &collection, item_id)?;
-		}
-
-		T::Currency::transfer(&buyer, &item.owner, transfer_amount, KeepAlive)?;
+		T::Currency::transfer(&buyer, &item.owner, seller_price.clone(), KeepAlive)?;
 
 		Self::do_transfer_item(collection_id, item_id, config, item.owner.clone(), buyer.clone())?;
 
@@ -232,16 +214,7 @@ impl<T: Config> Pallet<T> {
 			ensure!(deadline >= now, Error::<T>::AuthorizationExpired);
 		}
 
-		let mut transfer_amount = bid_price.clone();
-		if Self::has_royalties(&config) {
-			let collection =
-				Collections::<T>::get(collection_id).ok_or(Error::<T>::CollectionNotFound)?;
-
-			transfer_amount =
-				Self::process_royalties(bid_price.clone(), &buyer, &collection, item_id)?;
-		}
-
-		T::Currency::transfer(&buyer, &item.owner, transfer_amount, KeepAlive)?;
+		T::Currency::transfer(&buyer, &item.owner, bid_price.clone(), KeepAlive)?;
 
 		let old_owner = item.owner.clone();
 
@@ -311,33 +284,8 @@ impl<T: Config> Pallet<T> {
 			ensure!(deadline >= now, Error::<T>::AuthorizationExpired);
 		}
 
-		if let Some(ref price) = price {
-			let mut transfer_amount = price.clone();
-			if Self::has_royalties(&config_from) {
-				let collection = Collections::<T>::get(collection_from_id)
-					.ok_or(Error::<T>::CollectionNotFound)?;
-
-				transfer_amount = Self::process_royalties(
-					transfer_amount.clone(),
-					&caller,
-					&collection,
-					item_from_id,
-				)?;
-			}
-
-			if Self::has_royalties(&config_to) {
-				let collection = Collections::<T>::get(collection_to_id)
-					.ok_or(Error::<T>::CollectionNotFound)?;
-
-				transfer_amount = Self::process_royalties(
-					transfer_amount.clone(),
-					&caller,
-					&collection,
-					item_to_id,
-				)?;
-			}
-
-			T::Currency::transfer(&caller, &from_item.owner, transfer_amount, KeepAlive)?;
+		if let Some(price) = price {
+			T::Currency::transfer(&caller, &from_item.owner, price, KeepAlive)?;
 		}
 
 		Self::do_transfer_item(

@@ -44,7 +44,7 @@ pub mod pallet {
 	};
 	use sp_runtime::{
 		traits::{CheckedAdd, One},
-		AccountId32, MultiSignature, Perbill,
+		AccountId32, MultiSignature,
 	};
 
 	// The struct on which we build all of our Pallet logic.
@@ -246,8 +246,6 @@ pub mod pallet {
 			max_supply: Option<u32>,
 			creator: T::AccountId,
 			owner: T::AccountId,
-			creator_royalties: Perbill,
-			owner_royalties: Perbill,
 		},
 		CollectionMetadataSet {
 			id: T::CollectionId,
@@ -366,30 +364,6 @@ pub mod pallet {
 			price: Option<BalanceOf<T>>,
 			deadline: Option<T::BlockNumber>,
 		},
-		CreatorRoyaltiesChanged {
-			id: T::CollectionId,
-			royalties: Perbill,
-			creator: T::AccountId,
-		},
-		OwnerRoyaltiesChanged {
-			id: T::CollectionId,
-			royalties: Perbill,
-			owner: T::AccountId,
-		},
-		CreatorRoyaltiesPaid {
-			collection_id: T::CollectionId,
-			item_id: T::ItemId,
-			amount: BalanceOf<T>,
-			payer: T::AccountId,
-			receiver: T::AccountId,
-		},
-		OwnerRoyaltiesPaid {
-			collection_id: T::CollectionId,
-			item_id: T::ItemId,
-			amount: BalanceOf<T>,
-			payer: T::AccountId,
-			receiver: T::AccountId,
-		},
 	}
 
 	// Your Pallet's error messages.
@@ -443,10 +417,6 @@ pub mod pallet {
 		ErrorConvertingToAccountId,
 		/// Invalid item id provided.
 		InvalidItemId,
-		/// New value is bigger to the previous one.
-		RoyaltiesBiggerToPreviousValue,
-		/// Total royalties (creator's + owner's) exceed 100%.
-		TotalRoyaltiesExceedHundredPercent,
 	}
 
 	// Pallet's callable functions.
@@ -458,26 +428,10 @@ pub mod pallet {
 			owner: <T::Lookup as StaticLookup>::Source,
 			config: UserFeatures,
 			max_supply: Option<u32>,
-			creator_royalties: Perbill,
-			owner_royalties: Perbill,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			let owner = T::Lookup::lookup(owner)?;
-
-			let total = creator_royalties.checked_add(&owner_royalties);
-			ensure!(
-				total.map_or(false, |v| v < Perbill::one()),
-				Error::<T>::TotalRoyaltiesExceedHundredPercent
-			);
-
-			Self::do_create_collection(
-				sender,
-				owner,
-				config,
-				max_supply,
-				creator_royalties,
-				owner_royalties,
-			)?;
+			Self::do_create_collection(sender, owner, config, max_supply)?;
 			Ok(())
 		}
 
@@ -503,29 +457,6 @@ pub mod pallet {
 			let sender = ensure_signed(origin)?;
 			let config = CollectionConfigs::<T>::get(id).ok_or(Error::<T>::CollectionNotFound)?;
 			Self::do_update_max_supply(id, sender, config, max_supply)?;
-			Ok(())
-		}
-
-		#[pallet::weight(0)]
-		pub fn change_creator_royalties(
-			origin: OriginFor<T>,
-			id: T::CollectionId,
-			royalties: Perbill,
-		) -> DispatchResult {
-			let sender = ensure_signed(origin)?;
-			Self::do_change_creator_royalties(sender, id, royalties)?;
-			Ok(())
-		}
-
-		#[pallet::weight(0)]
-		pub fn change_owner_royalties(
-			origin: OriginFor<T>,
-			id: T::CollectionId,
-			royalties: Perbill,
-		) -> DispatchResult {
-			let sender = ensure_signed(origin)?;
-			let config = CollectionConfigs::<T>::get(id).ok_or(Error::<T>::CollectionNotFound)?;
-			Self::do_change_owner_royalties(sender, id, config, royalties)?;
 			Ok(())
 		}
 

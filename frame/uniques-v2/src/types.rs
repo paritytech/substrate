@@ -21,7 +21,7 @@ use frame_support::RuntimeDebug;
 use scale_info::{build::Fields, meta_type, Path, Type, TypeInfo, TypeParameter};
 use sp_runtime::{
 	traits::{IdentifyAccount, Verify},
-	MultiSignature, MultiSigner, Perbill,
+	MultiSignature, MultiSigner,
 };
 
 // Support for up to 64 user-enabled features on a collection.
@@ -82,8 +82,6 @@ impl TypeInfo for UserFeatures {
 #[derive(Copy, Clone, RuntimeDebug, PartialEq, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub enum SystemFeature {
 	NoDeposit,
-	CreatorRoyalties,
-	OwnerRoyalties,
 }
 
 /// Wrapper type for `BitFlags<UserFeature>` that implements `Codec`.
@@ -147,8 +145,6 @@ pub struct Collection<CollectionId, Account, Balance> {
 	pub items: u32,
 	pub item_metadatas: u32,
 	pub max_supply: Option<u32>,
-	pub creator_royalties: Perbill,
-	pub owner_royalties: Perbill,
 }
 
 #[derive(Encode, Decode, PartialEq, Default, MaxEncodedLen, TypeInfo)]

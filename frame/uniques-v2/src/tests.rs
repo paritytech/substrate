@@ -18,7 +18,7 @@
 use crate::{mock::*, *};
 use codec::{Decode, Encode};
 use enumflags2::BitFlags;
-use sp_runtime::{traits::TrailingZeroInput, AccountId32, MultiSignature, MultiSigner, Perbill};
+use sp_runtime::{traits::TrailingZeroInput, AccountId32, MultiSignature, MultiSigner};
 
 use frame_support::{assert_noop, assert_ok, traits::Currency};
 
@@ -148,8 +148,6 @@ fn minting_should_work() {
 			owner,
 			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
 			None,
-			Perbill::zero(),
-			Perbill::zero(),
 		));
 
 		let id = get_id_from_event().unwrap();
@@ -163,14 +161,7 @@ fn minting_should_work() {
 
 		assert_eq!(
 			events(),
-			[Event::<Test>::CollectionCreated {
-				id,
-				max_supply: None,
-				owner,
-				creator,
-				creator_royalties: Perbill::zero(),
-				owner_royalties: Perbill::zero(),
-			}]
+			[Event::<Test>::CollectionCreated { id, max_supply: None, owner, creator }]
 		);
 		assert_eq!(CollectionNextId::<Test>::get(), 1);
 		assert!(CollectionCreator::<Test>::contains_key(creator, id));
@@ -189,8 +180,6 @@ fn collection_locking_should_work() {
 			user_id,
 			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
 			None,
-			Perbill::zero(),
-			Perbill::zero(),
 		));
 
 		let id = get_id_from_event().unwrap();
@@ -215,14 +204,7 @@ fn collection_locking_should_fail() {
 		let user_id = 1;
 		let user_features = UserFeatures::new(UserFeature::IsLocked.into());
 
-		assert_ok!(Uniques::create(
-			Origin::signed(user_id),
-			user_id,
-			user_features,
-			None,
-			Perbill::zero(),
-			Perbill::zero(),
-		));
+		assert_ok!(Uniques::create(Origin::signed(user_id), user_id, user_features, None));
 
 		let id = get_id_from_event().unwrap();
 		let new_config = UserFeatures::new(UserFeature::Administration.into());
@@ -248,8 +230,6 @@ fn update_max_supply_should_work() {
 			user_id,
 			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
 			max_supply,
-			Perbill::zero(),
-			Perbill::zero(),
 		));
 
 		let collection = Collections::<Test>::get(id).unwrap();
@@ -279,8 +259,6 @@ fn destroy_collection_should_work() {
 			user_id,
 			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
 			None,
-			Perbill::zero(),
-			Perbill::zero(),
 		));
 
 		assert_ok!(Uniques::set_collection_metadata(Origin::signed(user_id), id, bvec![0u8; 20]));
@@ -320,8 +298,6 @@ fn transfer_owner_should_work() {
 			user_1,
 			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
 			None,
-			Perbill::zero(),
-			Perbill::zero(),
 		));
 
 		assert_eq!(collections(), vec![(user_1, collection_id)]);
@@ -352,8 +328,6 @@ fn mint_should_work() {
 			sender,
 			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
 			None,
-			Perbill::zero(),
-			Perbill::zero(),
 		));
 
 		assert_ok!(Uniques::mint(Origin::signed(sender), user_id, collection_id, item_id));
@@ -373,8 +347,6 @@ fn mint_should_work() {
 			user_id,
 			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
 			Some(1),
-			Perbill::zero(),
-			Perbill::zero(),
 		));
 		assert_ok!(Uniques::mint(Origin::signed(user_id), user_id, 1, 1));
 		assert_noop!(
@@ -396,8 +368,6 @@ fn burn_should_work() {
 			user_id,
 			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
 			None,
-			Perbill::zero(),
-			Perbill::zero(),
 		));
 
 		assert_ok!(Uniques::mint(Origin::signed(user_id), user_id, collection_id, item_id));
@@ -429,8 +399,6 @@ fn transfer_should_work() {
 			user_1,
 			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
 			None,
-			Perbill::zero(),
-			Perbill::zero(),
 		));
 
 		assert_ok!(Uniques::mint(Origin::signed(user_1), user_2, collection_id, item_id));
@@ -465,8 +433,6 @@ fn transfer_should_work() {
 			user_1,
 			UserFeatures::new(UserFeature::NonTransferableItems.into()),
 			None,
-			Perbill::zero(),
-			Perbill::zero(),
 		));
 
 		assert_ok!(Uniques::mint(Origin::signed(user_1), user_1, collection_id, item_id));
@@ -498,8 +464,6 @@ fn set_metadata_should_work() {
 			user_1,
 			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
 			None,
-			Perbill::zero(),
-			Perbill::zero(),
 		));
 
 		assert_ok!(Uniques::set_collection_metadata(
@@ -566,8 +530,6 @@ fn set_attribute_should_work() {
 			user_id,
 			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
 			None,
-			Perbill::zero(),
-			Perbill::zero(),
 		));
 
 		assert_ok!(Uniques::set_attribute(Origin::signed(user_id), id, None, bvec![0], bvec![0]));
@@ -636,8 +598,6 @@ fn set_price_should_work() {
 			user_id,
 			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
 			None,
-			Perbill::zero(),
-			Perbill::zero(),
 		));
 
 		assert_ok!(Uniques::mint(Origin::signed(user_id), user_id, collection_id, item_1));
@@ -681,8 +641,6 @@ fn set_price_should_work() {
 			user_id,
 			UserFeatures::new(UserFeature::NonTransferableItems.into()),
 			None,
-			Perbill::zero(),
-			Perbill::zero(),
 		));
 
 		assert_ok!(Uniques::mint(Origin::signed(user_id), user_id, collection_id, item_1));
@@ -717,8 +675,6 @@ fn buy_item_should_work() {
 			user_1,
 			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
 			None,
-			Perbill::zero(),
-			Perbill::zero(),
 		));
 
 		assert_ok!(Uniques::mint(Origin::signed(user_1), user_1, collection_id, item_1));
@@ -747,7 +703,7 @@ fn buy_item_should_work() {
 			Error::<Test>::BidTooLow
 		);
 
-		assert_ok!(Uniques::buy_item(Origin::signed(user_2), collection_id, item_1, price_1,));
+		assert_ok!(Uniques::buy_item(Origin::signed(user_2), collection_id, item_1, price_1));
 
 		// validate the new owner & balances
 		let item = Items::<Test>::get(collection_id, item_1).unwrap();
@@ -768,7 +724,7 @@ fn buy_item_should_work() {
 		);
 
 		// can buy when I'm a whitelisted buyer
-		assert_ok!(Uniques::buy_item(Origin::signed(user_3), collection_id, item_2, price_2,));
+		assert_ok!(Uniques::buy_item(Origin::signed(user_3), collection_id, item_2, price_2));
 
 		assert!(events().contains(&Event::<Test>::ItemBought {
 			collection_id,
@@ -794,8 +750,6 @@ fn buy_item_should_work() {
 			user_1,
 			UserFeatures::new(UserFeature::NonTransferableItems.into()),
 			None,
-			Perbill::zero(),
-			Perbill::zero(),
 		));
 
 		assert_noop!(
@@ -818,8 +772,6 @@ fn set_seller_should_work() {
 			user_id,
 			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
 			None,
-			Perbill::zero(),
-			Perbill::zero(),
 		));
 
 		assert_ok!(Uniques::mint(Origin::signed(user_id), user_id, collection_id, item_id));
@@ -889,8 +841,6 @@ fn set_seller_should_work() {
 			user_id,
 			UserFeatures::new(UserFeature::NonTransferableItems.into()),
 			None,
-			Perbill::zero(),
-			Perbill::zero(),
 		));
 
 		assert_ok!(Uniques::mint(Origin::signed(user_id), user_id, collection_id, item_id));
@@ -920,7 +870,6 @@ fn buy_from_seller_should_work() {
 		let item_id = 1;
 		let price = 20;
 		let seller_tips = 10;
-		let creator_royalties = 10;
 		let initial_balance = 100;
 		let total = price + seller_tips;
 
@@ -934,8 +883,6 @@ fn buy_from_seller_should_work() {
 			user_1,
 			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
 			None,
-			Perbill::from_percent(creator_royalties),
-			Perbill::zero(),
 		));
 
 		assert_ok!(Uniques::mint(Origin::signed(user_1), user_1, collection_id, item_id));
@@ -975,7 +922,7 @@ fn buy_from_seller_should_work() {
 
 		// can't buy when the provided seller is wrong
 		assert_noop!(
-			Uniques::buy_from_seller(Origin::signed(user_2), collection_id, item_id, user_1, total,),
+			Uniques::buy_from_seller(Origin::signed(user_2), collection_id, item_id, user_1, total),
 			Error::<Test>::WrongSeller
 		);
 
@@ -1035,8 +982,6 @@ fn add_remove_approval_should_work() {
 			user_1,
 			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
 			None,
-			Perbill::zero(),
-			Perbill::zero(),
 		));
 
 		// validate we can't set an approval for non-existing item
@@ -1131,8 +1076,6 @@ fn add_remove_approval_should_work() {
 			user_1,
 			UserFeatures::new(UserFeature::NonTransferableItems.into()),
 			None,
-			Perbill::zero(),
-			Perbill::zero(),
 		));
 
 		assert_ok!(Uniques::mint(Origin::signed(user_1), user_1, collection_id, item_id));
@@ -1158,8 +1101,6 @@ fn transfer_with_approval_should_work() {
 			user_1,
 			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
 			None,
-			Perbill::zero(),
-			Perbill::zero(),
 		));
 		assert_ok!(Uniques::mint(Origin::signed(user_1), user_1, collection_id, item_id));
 		assert_ok!(Uniques::approve_transfer(
@@ -1244,8 +1185,6 @@ fn accept_buy_offer_should_work() {
 			user_1,
 			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
 			None,
-			Perbill::zero(),
-			Perbill::zero(),
 		));
 
 		assert_ok!(Uniques::mint(Origin::signed(user_1), user_1, collection_id, item_id));
@@ -1312,8 +1251,6 @@ fn swap_items_should_work() {
 			user_1,
 			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
 			None,
-			Perbill::zero(),
-			Perbill::zero(),
 		));
 
 		assert_ok!(Uniques::mint(Origin::signed(user_1), user_1, collection_from_id, item_from_id));
@@ -1323,8 +1260,6 @@ fn swap_items_should_work() {
 			user_2,
 			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
 			None,
-			Perbill::zero(),
-			Perbill::zero(),
 		));
 
 		assert_ok!(Uniques::mint(Origin::signed(user_2), user_2, collection_to_id, item_to_id));
@@ -1411,386 +1346,11 @@ fn swap_items_should_work() {
 }
 
 #[test]
-fn setting_royalties_should_work() {
-	new_test_ext().execute_with(|| {
-		let user_1 = 1;
-		let collection_id = 0;
-		let creator_royalties = 10;
-		let owner_royalties = 20;
-
-		assert_ok!(Uniques::create(
-			Origin::signed(user_1),
-			user_1,
-			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
-			None,
-			Perbill::from_percent(creator_royalties),
-			Perbill::from_percent(owner_royalties),
-		));
-
-		let collection_config = CollectionConfigs::<Test>::get(collection_id);
-		let system_features = collection_config.unwrap().system_features.get();
-		assert!(system_features.contains(SystemFeature::OwnerRoyalties));
-		assert!(system_features.contains(SystemFeature::CreatorRoyalties));
-
-		// validate we can't increase royalties
-		assert_noop!(
-			Uniques::change_creator_royalties(
-				Origin::signed(user_1),
-				collection_id,
-				Perbill::from_percent(creator_royalties + 10),
-			),
-			Error::<Test>::RoyaltiesBiggerToPreviousValue
-		);
-
-		// validate we can increase owner's royalties while the collection isn't locked
-		assert_ok!(Uniques::change_owner_royalties(
-			Origin::signed(user_1),
-			collection_id,
-			Perbill::from_percent(creator_royalties + 10),
-		));
-		assert_noop!(
-			Uniques::change_owner_royalties(
-				Origin::signed(user_1),
-				collection_id,
-				Perbill::from_percent(95),
-			),
-			Error::<Test>::TotalRoyaltiesExceedHundredPercent
-		);
-		assert_ok!(Uniques::change_collection_config(
-			Origin::signed(user_1),
-			collection_id,
-			UserFeatures::new(UserFeature::IsLocked.into())
-		));
-		assert_noop!(
-			Uniques::change_owner_royalties(
-				Origin::signed(user_1),
-				collection_id,
-				Perbill::from_percent(creator_royalties + 20),
-			),
-			Error::<Test>::RoyaltiesBiggerToPreviousValue
-		);
-
-		// remove owner's royalties
-		assert_ok!(Uniques::change_owner_royalties(
-			Origin::signed(user_1),
-			collection_id,
-			Perbill::zero(),
-		));
-		let collection_config = CollectionConfigs::<Test>::get(collection_id);
-		let system_features = collection_config.unwrap().system_features.get();
-		assert!(!system_features.contains(SystemFeature::OwnerRoyalties));
-		assert!(system_features.contains(SystemFeature::CreatorRoyalties));
-
-		// validate event
-		assert!(events().contains(&Event::<Test>::OwnerRoyaltiesChanged {
-			id: collection_id,
-			owner: user_1,
-			royalties: Perbill::zero(),
-		}));
-
-		// remove creator royalties
-		assert_ok!(Uniques::change_creator_royalties(
-			Origin::signed(user_1),
-			collection_id,
-			Perbill::zero(),
-		));
-		let collection_config = CollectionConfigs::<Test>::get(collection_id);
-		let system_features = collection_config.unwrap().system_features.get();
-		assert!(!system_features.contains(SystemFeature::OwnerRoyalties));
-		assert!(!system_features.contains(SystemFeature::CreatorRoyalties));
-
-		// validate event
-		assert!(events().contains(&Event::<Test>::CreatorRoyaltiesChanged {
-			id: collection_id,
-			creator: user_1,
-			royalties: Perbill::zero(),
-		}));
-
-		// can't set royalties higher to 100% in total
-		assert_noop!(
-			Uniques::create(
-				Origin::signed(user_1),
-				user_1,
-				UserFeatures::new(DEFAULT_USER_FEATURES.into()),
-				None,
-				Perbill::from_percent(70),
-				Perbill::from_percent(40),
-			),
-			Error::<Test>::TotalRoyaltiesExceedHundredPercent
-		);
-	});
-}
-
-#[test]
-fn paying_royalties_when_buying_an_item() {
-	new_test_ext().execute_with(|| {
-		let collection_id = 0;
-		let item_id = 1;
-		let user_1 = 1;
-		let user_2 = 2;
-		let creator = 3;
-		let owner = 4;
-		let price = 10;
-		let initial_balance = 2000;
-
-		Balances::make_free_balance_be(&user_1, initial_balance);
-		Balances::make_free_balance_be(&user_2, initial_balance);
-		Balances::make_free_balance_be(&creator, initial_balance);
-		Balances::make_free_balance_be(&owner, initial_balance);
-
-		assert_ok!(Uniques::create(
-			Origin::signed(creator),
-			owner,
-			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
-			None,
-			Perbill::from_percent(10),
-			Perbill::from_percent(20),
-		));
-
-		assert_ok!(Uniques::mint(Origin::signed(owner), user_1, collection_id, item_id));
-
-		assert_ok!(Uniques::set_price(
-			Origin::signed(user_1),
-			collection_id,
-			item_id,
-			Some(price),
-			None,
-		));
-
-		assert_ok!(Uniques::buy_item(Origin::signed(user_2), collection_id, item_id, price));
-
-		// validate balances
-		let expect_creator_royalties = 1;
-		let expect_owner_royalties = 2;
-		let expect_received_for_item = price - expect_creator_royalties - expect_owner_royalties;
-
-		assert_eq!(Balances::total_balance(&creator), initial_balance + expect_creator_royalties);
-		assert_eq!(Balances::total_balance(&owner), initial_balance + expect_owner_royalties);
-		assert_eq!(Balances::total_balance(&user_1), initial_balance + expect_received_for_item);
-		assert_eq!(Balances::total_balance(&user_2), initial_balance - price);
-
-		// validate events
-		let events = events();
-		assert!(events.contains(&Event::<Test>::CreatorRoyaltiesPaid {
-			collection_id,
-			item_id,
-			amount: expect_creator_royalties,
-			payer: user_2,
-			receiver: creator,
-		}));
-		assert!(events.contains(&Event::<Test>::OwnerRoyaltiesPaid {
-			collection_id,
-			item_id,
-			amount: expect_owner_royalties,
-			payer: user_2,
-			receiver: owner,
-		}));
-	});
-}
-
-#[test]
-fn paying_royalties_when_accepting_an_offer() {
-	new_test_ext().execute_with(|| {
-		let collection_id = 0;
-		let item_id = 1;
-
-		let signer = crypto::create_ed25519_pubkey(b"//verifier".to_vec());
-		let user_1 = signer_to_account_id(&signer.clone());
-		let user_2 = 2;
-		let user_3 = 3;
-		let creator = 4;
-		let owner = 5;
-		let price = 10;
-		let initial_balance = 2000;
-
-		Balances::make_free_balance_be(&user_1, initial_balance);
-		Balances::make_free_balance_be(&user_2, initial_balance);
-		Balances::make_free_balance_be(&user_3, initial_balance);
-		Balances::make_free_balance_be(&creator, initial_balance);
-		Balances::make_free_balance_be(&owner, initial_balance);
-
-		assert_ok!(Uniques::create(
-			Origin::signed(creator),
-			owner,
-			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
-			None,
-			Perbill::from_percent(10),
-			Perbill::from_percent(20),
-		));
-
-		assert_ok!(Uniques::mint(Origin::signed(owner), user_2, collection_id, item_id));
-
-		let offer = BuyOffer {
-			collection_id,
-			item_id,
-			bid_price: price,
-			deadline: None,
-			item_owner: user_2,
-			signer: signer.clone(),
-			receiver: user_3.clone(),
-		};
-		let valid_signature =
-			crypto::create_ed25519_signature(&Encode::encode(&offer), signer.clone());
-
-		assert_ok!(Uniques::accept_buy_offer(
-			Origin::signed(user_2),
-			offer.clone(),
-			valid_signature,
-		));
-
-		// validate balances
-		let expect_creator_royalties = 1;
-		let expect_owner_royalties = 2;
-		let expect_received_for_item = price - expect_creator_royalties - expect_owner_royalties;
-
-		assert_eq!(Balances::total_balance(&creator), initial_balance + expect_creator_royalties);
-		assert_eq!(Balances::total_balance(&owner), initial_balance + expect_owner_royalties);
-		assert_eq!(Balances::total_balance(&user_1), initial_balance - price);
-		assert_eq!(Balances::total_balance(&user_2), initial_balance + expect_received_for_item);
-		assert_eq!(Balances::total_balance(&user_3), initial_balance);
-
-		// validate events
-		let events = events();
-		assert!(events.contains(&Event::<Test>::CreatorRoyaltiesPaid {
-			collection_id,
-			item_id,
-			amount: expect_creator_royalties,
-			payer: user_1,
-			receiver: creator,
-		}));
-		assert!(events.contains(&Event::<Test>::OwnerRoyaltiesPaid {
-			collection_id,
-			item_id,
-			amount: expect_owner_royalties,
-			payer: user_1,
-			receiver: owner,
-		}));
-	});
-}
-
-#[test]
-fn paying_royalties_when_swapping_items() {
-	new_test_ext().execute_with(|| {
-		let collection_from_id = 0;
-		let collection_to_id = 1;
-		let item_from_id = 1;
-		let item_to_id = 2;
-
-		let signer = crypto::create_ed25519_pubkey(b"//verifier".to_vec());
-		let user_1 = signer_to_account_id(&signer.clone());
-		let user_2 = 2;
-		let user_3 = 3;
-		let creator = 4;
-		let owner = 5;
-		let price = 10;
-		let initial_balance = 2000;
-
-		Balances::make_free_balance_be(&user_1, initial_balance);
-		Balances::make_free_balance_be(&user_2, initial_balance);
-		Balances::make_free_balance_be(&user_3, initial_balance);
-		Balances::make_free_balance_be(&creator, initial_balance);
-		Balances::make_free_balance_be(&owner, initial_balance);
-
-		assert_ok!(Uniques::create(
-			Origin::signed(creator),
-			owner,
-			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
-			None,
-			Perbill::from_percent(10),
-			Perbill::from_percent(20),
-		));
-
-		assert_ok!(Uniques::mint(Origin::signed(owner), user_1, collection_from_id, item_from_id));
-
-		assert_ok!(Uniques::create(
-			Origin::signed(creator),
-			owner,
-			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
-			None,
-			Perbill::from_percent(10),
-			Perbill::from_percent(20),
-		));
-
-		assert_ok!(Uniques::mint(Origin::signed(owner), user_2, collection_to_id, item_to_id));
-
-		let offer = SwapOffer {
-			collection_from_id,
-			item_from_id,
-			collection_to_id,
-			item_to_id: Some(item_to_id),
-			price: Some(price),
-			deadline: None,
-			item_to_owner: user_2,
-			signer: signer.clone(),
-			item_from_receiver: user_2.clone(),
-		};
-		let valid_signature =
-			crypto::create_ed25519_signature(&Encode::encode(&offer), signer.clone());
-
-		assert_ok!(Uniques::swap_items(
-			Origin::signed(user_2),
-			offer.clone(),
-			valid_signature.clone(),
-			item_to_id,
-		));
-
-		// validate balances
-		let expect_creator_royalties = 2;
-		let expect_owner_royalties = 3;
-		let expect_received_for_item = price - expect_creator_royalties - expect_owner_royalties;
-
-		assert_eq!(Balances::total_balance(&creator), initial_balance + expect_creator_royalties);
-		assert_eq!(Balances::total_balance(&owner), initial_balance + expect_owner_royalties);
-		assert_eq!(Balances::total_balance(&user_1), initial_balance + expect_received_for_item);
-		assert_eq!(Balances::total_balance(&user_2), initial_balance - price);
-		assert_eq!(Balances::total_balance(&user_3), initial_balance);
-
-		// validate events
-		let events = events();
-		assert!(events.contains(&Event::<Test>::CreatorRoyaltiesPaid {
-			collection_id: collection_from_id,
-			item_id: item_from_id,
-			amount: 1,
-			payer: user_2,
-			receiver: creator,
-		}));
-		assert!(events.contains(&Event::<Test>::CreatorRoyaltiesPaid {
-			collection_id: collection_to_id,
-			item_id: item_to_id,
-			amount: 1,
-			payer: user_2,
-			receiver: creator,
-		}));
-		assert!(events.contains(&Event::<Test>::OwnerRoyaltiesPaid {
-			collection_id: collection_from_id,
-			item_id: item_from_id,
-			amount: 2,
-			payer: user_2,
-			receiver: owner,
-		}));
-		assert!(events.contains(&Event::<Test>::OwnerRoyaltiesPaid {
-			collection_id: collection_to_id,
-			item_id: item_to_id,
-			amount: 1,
-			payer: user_2,
-			receiver: owner,
-		}));
-	});
-}
-
-#[test]
 fn different_user_flags() {
 	new_test_ext().execute_with(|| {
 		// when setting one feature it's required to call .into() on it
 		let user_features = UserFeatures::new(UserFeature::IsLocked.into());
-		assert_ok!(Uniques::create(
-			Origin::signed(1),
-			1,
-			user_features,
-			None,
-			Perbill::zero(),
-			Perbill::zero(),
-		));
+		assert_ok!(Uniques::create(Origin::signed(1), 1, user_features, None));
 
 		let collection_config = CollectionConfigs::<Test>::get(0);
 		let stored_user_features = collection_config.unwrap().user_features.get();
@@ -1799,27 +1359,13 @@ fn different_user_flags() {
 
 		// no need to call .into() for multiple features
 		let user_features = UserFeatures::new(UserFeature::Administration | UserFeature::IsLocked);
-		assert_ok!(Uniques::create(
-			Origin::signed(1),
-			1,
-			user_features,
-			None,
-			Perbill::zero(),
-			Perbill::zero(),
-		));
+		assert_ok!(Uniques::create(Origin::signed(1), 1, user_features, None));
 		let collection_config = CollectionConfigs::<Test>::get(1);
 		let stored_user_features = collection_config.unwrap().user_features.get();
 		assert!(stored_user_features.contains(UserFeature::IsLocked));
 		assert!(stored_user_features.contains(UserFeature::Administration));
 
-		assert_ok!(Uniques::create(
-			Origin::signed(1),
-			1,
-			UserFeatures::new(BitFlags::EMPTY),
-			None,
-			Perbill::zero(),
-			Perbill::zero(),
-		));
+		assert_ok!(Uniques::create(Origin::signed(1), 1, UserFeatures::new(BitFlags::EMPTY), None));
 
 		use enumflags2::BitFlag;
 		assert_ok!(Uniques::create(
@@ -1827,8 +1373,6 @@ fn different_user_flags() {
 			1,
 			UserFeatures::new(UserFeature::empty()),
 			None,
-			Perbill::zero(),
-			Perbill::zero(),
 		));
 	});
 }
