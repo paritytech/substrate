@@ -247,8 +247,8 @@ pub trait Ext: sealing::Sealed {
 	/// addition to the calling instance. A value of 0 means no reentrancy.
 	fn reentrant_count(&self) -> u32;
 
-	/// Returns the number of times the specified contract exists on the call stack. Delegated calls are
-	/// not calculated as separate entrance.
+	/// Returns the number of times the specified contract exists on the call stack. Delegated calls
+	/// are not calculated as separate entrance.
 	/// A value of 0 means it does not exist on the call stack.
 	fn account_entrance_count(&self, account_id: &AccountIdOf<Self::T>) -> u32;
 }
