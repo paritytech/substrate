@@ -1559,7 +1559,24 @@ macro_rules! decl_module {
 		impl<$trait_instance: $system::Config + $trait_name$(<I>, $instance: $instantiable)?>
 			$crate::traits::SanityCheck<<$trait_instance as $system::Config>::BlockNumber>
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
-		{}
+		{
+			fn sanity_check(
+				_: <$trait_instance as $system::Config>::BlockNumber,
+				_: $crate::traits::SanityCheckTargets
+			) -> Result<(), &'static str> {
+				let pallet_name = <<
+					$trait_instance
+					as
+					$system::Config
+				>::PalletInfo as $crate::traits::PalletInfo>::name::<Self>().unwrap_or("<unknown pallet name>");
+				$crate::log::debug!(
+					target: $crate::LOG_TARGET,
+					"⚠️ pallet {} cannot have sanity-checks because it is using decl_module!",
+					pallet_name,
+				);
+				Ok(())
+			}
+		}
 	};
 
 	(@impl_on_runtime_upgrade
