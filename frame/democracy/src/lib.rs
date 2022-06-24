@@ -152,7 +152,7 @@
 #![recursion_limit = "256"]
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{Decode, Encode};
 use frame_support::{
 	ensure,
 	traits::{
@@ -163,10 +163,9 @@ use frame_support::{
 	},
 	weights::Weight,
 };
-use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{Bounded as ArithBounded, One, Saturating, Zero},
-	ArithmeticError, DispatchError, DispatchResult, RuntimeDebug,
+	ArithmeticError, DispatchError, DispatchResult,
 };
 use sp_std::prelude::*;
 
@@ -188,6 +187,8 @@ mod tests;
 #[cfg(feature = "runtime-benchmarks")]
 pub mod benchmarking;
 
+pub mod migrations;
+
 const DEMOCRACY_ID: LockIdentifier = *b"democrac";
 
 /// A proposal index.
@@ -204,14 +205,6 @@ type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
 pub type CallOf<T> = <T as frame_system::Config>::Call;
 pub type BoundedCallOf<T> = Bounded<CallOf<T>>;
 
-// A value placed in storage that represents the current version of the Democracy storage.
-// This value is used by the `on_runtime_upgrade` logic to determine whether we run
-// storage migration logic.
-#[derive(Encode, MaxEncodedLen, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug, TypeInfo)]
-enum Releases {
-	V1,
-}
-
 #[frame_support::pallet]
 pub mod pallet {
 	use super::{DispatchResult, *};
@@ -219,8 +212,12 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 	use sp_core::H256;
 
+	/// The current storage version.
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
+
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
@@ -427,12 +424,6 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type Cancellations<T: Config> = StorageMap<_, Identity, H256, bool, ValueQuery>;
 
-	/// Storage version of the pallet.
-	///
-	/// New networks start with last version.
-	#[pallet::storage]
-	pub(crate) type StorageVersion<T> = StorageValue<_, Releases>;
-
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		_phantom: sp_std::marker::PhantomData<T>,
@@ -451,7 +442,6 @@ pub mod pallet {
 			PublicPropCount::<T>::put(0 as PropIndex);
 			ReferendumCount::<T>::put(0 as ReferendumIndex);
 			LowestUnbaked::<T>::put(0 as ReferendumIndex);
-			StorageVersion::<T>::put(Releases::V1);
 		}
 	}
 
