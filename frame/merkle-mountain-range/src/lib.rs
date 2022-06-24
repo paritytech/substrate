@@ -59,7 +59,7 @@
 use codec::Encode;
 use frame_support::{log::info, weights::Weight};
 use sp_runtime::{
-	traits::{self, One, Saturating, UniqueSaturatedInto},
+	traits::{self, One, Saturating},
 	SaturatedConversion,
 };
 
@@ -228,44 +228,9 @@ pub mod pallet {
 		}
 
 		fn offchain_worker(_n: T::BlockNumber) {
-			use sp_core::offchain::StorageKind;
-			use sp_io::offchain;
-			info!("Hello World from MMR offchain worker!");
-
-			let leaves = NumberOfLeaves::<T, I>::get();
-			// our window is one less because we need the parent hash too.
-			let window_size = <T as frame_system::Config>::BlockHashCount::get()
-				.saturating_sub(One::one())
-				.unique_saturated_into();
-			if leaves >= window_size {
-				// move the rolling window towards the end of  `block_num->hash` mappings available
-				// in the runtime: we "canonicalize" the leaf at the end.
-				let leaf_to_canon = leaves.saturating_sub(window_size);
-				let parent_hash_of_leaf = Self::parent_hash_of_leaf(leaf_to_canon, leaves);
-				let nodes_to_canon =
-					mmr::utils::NodesUtils::right_branch_ending_in_leaf(leaf_to_canon);
-				info!(
-					target: "runtime::mmr",
-					"🥩: nodes to canon for leaf {}: {:?}",
-					leaf_to_canon, nodes_to_canon
-				);
-				for pos in nodes_to_canon {
-					let key = Pallet::<T, I>::offchain_key(parent_hash_of_leaf, pos);
-					let canon_key = Pallet::<T, I>::final_offchain_key(pos);
-					info!(
-						target: "runtime::mmr",
-						"🥩: move elem at pos {} from key {:?} to canon key {:?}",
-						pos, key, canon_key
-					);
-					// Retrieve the element from Off-chain DB.
-					if let Some(elem) = offchain::local_storage_get(StorageKind::PERSISTENT, &key) {
-						// Delete entry with old key.
-						offchain::local_storage_clear(StorageKind::PERSISTENT, &key);
-						// Add under new key.
-						offchain::local_storage_set(StorageKind::PERSISTENT, &key, &elem);
-					}
-				}
-			}
+			use mmr::storage::{OffchainStorage, Storage};
+			info!("Hello World from MMR offchain worker (block {:?})!", _n);
+			Storage::<OffchainStorage, T, I, LeafOf<T, I>>::canonicalize_offchain();
 		}
 	}
 }

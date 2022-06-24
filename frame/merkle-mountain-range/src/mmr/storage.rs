@@ -18,7 +18,7 @@
 //! A MMR storage implementations.
 
 use codec::Encode;
-use frame_support::log::info;
+use frame_support::{log::info, traits::Get};
 use mmr_lib::helper;
 use sp_io::offchain_index;
 use sp_std::iter::Peekable;
@@ -56,6 +56,53 @@ pub struct Storage<StorageType, T, I, L>(sp_std::marker::PhantomData<(StorageTyp
 impl<StorageType, T, I, L> Default for Storage<StorageType, T, I, L> {
 	fn default() -> Self {
 		Self(Default::default())
+	}
+}
+
+impl<T, I, L> Storage<OffchainStorage, T, I, L>
+where
+	T: Config<I>,
+	I: 'static,
+	L: primitives::FullLeaf,
+{
+	pub fn canonicalize_offchain() {
+		use sp_core::offchain::StorageKind;
+		use sp_io::offchain;
+		use sp_runtime::traits::{One, Saturating, UniqueSaturatedInto};
+
+		let leaves = NumberOfLeaves::<T, I>::get();
+		// our window is one less because we need the parent hash too.
+		let window_size = <T as frame_system::Config>::BlockHashCount::get()
+			.saturating_sub(One::one())
+			.unique_saturated_into();
+		if leaves >= window_size {
+			// move the rolling window towards the end of  `block_num->hash` mappings available
+			// in the runtime: we "canonicalize" the leaf at the end.
+			let leaf_to_canon = leaves.saturating_sub(window_size);
+			let parent_hash_of_leaf = Pallet::<T, I>::parent_hash_of_leaf(leaf_to_canon, leaves);
+			let nodes_to_canon = NodesUtils::right_branch_ending_in_leaf(leaf_to_canon);
+			info!(
+				target: "runtime::mmr",
+				"🥩: nodes to canon for leaf {}: {:?}",
+				leaf_to_canon, nodes_to_canon
+			);
+			for pos in nodes_to_canon {
+				let key = Pallet::<T, I>::offchain_key(parent_hash_of_leaf, pos);
+				let canon_key = Pallet::<T, I>::final_offchain_key(pos);
+				info!(
+					target: "runtime::mmr",
+					"🥩: move elem at pos {} from key {:?} to canon key {:?}",
+					pos, key, canon_key
+				);
+				// Retrieve the element from Off-chain DB.
+				if let Some(elem) = offchain::local_storage_get(StorageKind::PERSISTENT, &key) {
+					// Delete entry with old key.
+					offchain::local_storage_clear(StorageKind::PERSISTENT, &key);
+					// Add under new key.
+					offchain::local_storage_set(StorageKind::PERSISTENT, &key, &elem);
+				}
+			}
+		}
 	}
 }
 
