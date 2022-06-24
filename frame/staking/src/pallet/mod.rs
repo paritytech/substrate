@@ -750,9 +750,7 @@ pub mod pallet {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn sanity_check(
-			n: BlockNumberFor<T>,
-		) -> Result<(), &'static str> {
+		fn sanity_check(n: BlockNumberFor<T>) -> Result<(), &'static str> {
 			Self::do_sanity_check(n)
 		}
 	}

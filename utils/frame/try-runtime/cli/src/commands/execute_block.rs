@@ -166,7 +166,8 @@ where
 	let (mut header, extrinsics) = block.deconstruct();
 	header.digest_mut().pop();
 	let block = Block::new(header, extrinsics);
-	let payload = (block.clone(), !command.no_state_root_check, command.sanity_check_targets).encode();
+	let payload =
+		(block.clone(), !command.no_state_root_check, command.sanity_check_targets).encode();
 
 	let (expected_spec_name, expected_spec_version, _) =
 		local_spec::<Block, ExecDispatch>(&ext, &executor);
