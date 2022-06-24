@@ -574,8 +574,7 @@ pub mod pallet {
 
 			PublicPropCount::<T>::put(index + 1);
 
-			let ok = <PublicProps<T>>::try_append((index, proposal, who)).is_ok();
-			debug_assert!(ok, "have checked real_prop_count < max_proposals; qed");
+			PublicProps::<T>::try_append((index, proposal, who)).map_err(|_| Error::<T>::TooMany)?;
 
 			Self::deposit_event(Event::<T>::Proposed { proposal_index: index, deposit: value });
 			Ok(())
