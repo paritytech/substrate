@@ -362,9 +362,9 @@ impl<T: Config> Pallet<T> {
 	fn fetch(hash: &T::Hash, len: Option<u32>) -> FetchResult {
 		let len = len.or_else(|| Self::len(hash)).ok_or(DispatchError::Unavailable)?;
 		PreimageFor::<T>::get((hash, len))
-		.map(|p| p.into_inner())
-		.map(Into::into)
-		.ok_or(DispatchError::Unavailable)
+			.map(|p| p.into_inner())
+			.map(Into::into)
+			.ok_or(DispatchError::Unavailable)
 	}
 }
 

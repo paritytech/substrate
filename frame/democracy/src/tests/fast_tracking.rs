@@ -86,10 +86,7 @@ fn fast_track_referendum_fails_when_no_simple_majority() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(0);
 		let h = set_balance_proposal(2).hash();
-		assert_ok!(Democracy::external_propose(
-			Origin::signed(2),
-			set_balance_proposal(2)
-		));
+		assert_ok!(Democracy::external_propose(Origin::signed(2), set_balance_proposal(2)));
 		assert_noop!(
 			Democracy::fast_track(Origin::signed(5), h, 3, 2),
 			Error::<Test>::NotSimpleMajority

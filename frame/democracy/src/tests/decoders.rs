@@ -18,7 +18,10 @@
 //! The for various partial storage decoders
 
 use super::*;
-use frame_support::{storage::{migration, unhashed}, BoundedVec};
+use frame_support::{
+	storage::{migration, unhashed},
+	BoundedVec,
+};
 
 #[test]
 fn test_decode_compact_u32_at() {
@@ -42,7 +45,8 @@ fn test_decode_compact_u32_at() {
 fn len_of_deposit_of() {
 	new_test_ext().execute_with(|| {
 		for l in vec![0, 1, 200, 1000] {
-			let value: (BoundedVec<u64, _>, u64) = ((0..l).map(|_| Default::default()).collect::<Vec<_>>().try_into().unwrap(), 3u64);
+			let value: (BoundedVec<u64, _>, u64) =
+				((0..l).map(|_| Default::default()).collect::<Vec<_>>().try_into().unwrap(), 3u64);
 			DepositOf::<Test>::insert(2, value);
 			assert_eq!(Democracy::len_of_deposit_of(2), Some(l));
 		}

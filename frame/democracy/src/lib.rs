@@ -157,15 +157,15 @@ use frame_support::{
 	ensure,
 	traits::{
 		defensive_prelude::*,
-		schedule::{DispatchTime, v3::Named as ScheduleNamed},
-		Currency, Get, LockIdentifier, LockableCurrency, OnUnbalanced,
-		ReservableCurrency, WithdrawReasons, QueryPreimage, StorePreimage, Bounded,
+		schedule::{v3::Named as ScheduleNamed, DispatchTime},
+		Bounded, Currency, Get, LockIdentifier, LockableCurrency, OnUnbalanced, QueryPreimage,
+		ReservableCurrency, StorePreimage, WithdrawReasons,
 	},
 	weights::Weight,
 };
 use scale_info::TypeInfo;
 use sp_runtime::{
-	traits::{Bounded as ArithBounded, Saturating, Zero, One},
+	traits::{Bounded as ArithBounded, One, Saturating, Zero},
 	ArithmeticError, DispatchError, DispatchResult, RuntimeDebug,
 };
 use sp_std::prelude::*;
@@ -347,16 +347,23 @@ pub mod pallet {
 	/// The public proposals. Unsorted. The second item is the proposal.
 	#[pallet::storage]
 	#[pallet::getter(fn public_props)]
-	pub type PublicProps<T: Config> =
-		StorageValue<_, BoundedVec<(PropIndex, BoundedCallOf<T>, T::AccountId), T::MaxProposals>, ValueQuery>;
+	pub type PublicProps<T: Config> = StorageValue<
+		_,
+		BoundedVec<(PropIndex, BoundedCallOf<T>, T::AccountId), T::MaxProposals>,
+		ValueQuery,
+	>;
 
 	/// Those who have locked a deposit.
 	///
 	/// TWOX-NOTE: Safe, as increasing integer keys are safe.
 	#[pallet::storage]
 	#[pallet::getter(fn deposit_of)]
-	pub type DepositOf<T: Config> =
-		StorageMap<_, Twox64Concat, PropIndex, (BoundedVec<T::AccountId, T::MaxDeposits>, BalanceOf<T>)>;
+	pub type DepositOf<T: Config> = StorageMap<
+		_,
+		Twox64Concat,
+		PropIndex,
+		(BoundedVec<T::AccountId, T::MaxDeposits>, BalanceOf<T>),
+	>;
 
 	/// The next free referendum index, aka the number of referenda started so far.
 	#[pallet::storage]
@@ -409,8 +416,12 @@ pub mod pallet {
 	/// A record of who vetoed what. Maps proposal hash to a possible existent block number
 	/// (until when it may not be resubmitted) and who vetoed it.
 	#[pallet::storage]
-	pub type Blacklist<T: Config> =
-		StorageMap<_, Identity, H256, (T::BlockNumber, BoundedVec<T::AccountId, T::MaxBlacklisted>)>;
+	pub type Blacklist<T: Config> = StorageMap<
+		_,
+		Identity,
+		H256,
+		(T::BlockNumber, BoundedVec<T::AccountId, T::MaxBlacklisted>),
+	>;
 
 	/// Record of all proposals that have been subject to emergency cancellation.
 	#[pallet::storage]
@@ -574,7 +585,8 @@ pub mod pallet {
 
 			PublicPropCount::<T>::put(index + 1);
 
-			PublicProps::<T>::try_append((index, proposal, who)).map_err(|_| Error::<T>::TooMany)?;
+			PublicProps::<T>::try_append((index, proposal, who))
+				.map_err(|_| Error::<T>::TooMany)?;
 
 			Self::deposit_event(Event::<T>::Proposed { proposal_index: index, deposit: value });
 			Ok(())
@@ -652,7 +664,10 @@ pub mod pallet {
 		///
 		/// - `proposal_hash`: The preimage hash of the proposal.
 		#[pallet::weight(T::WeightInfo::external_propose())]
-		pub fn external_propose(origin: OriginFor<T>, proposal: BoundedCallOf<T>) -> DispatchResult {
+		pub fn external_propose(
+			origin: OriginFor<T>,
+			proposal: BoundedCallOf<T>,
+		) -> DispatchResult {
 			T::ExternalOrigin::ensure_origin(origin)?;
 			ensure!(!<NextExternal<T>>::exists(), Error::<T>::DuplicateProposal);
 			if let Some((until, _)) = <Blacklist<T>>::get(proposal.hash()) {
@@ -787,7 +802,9 @@ pub mod pallet {
 				<Blacklist<T>>::get(&proposal_hash).map(|pair| pair.1).unwrap_or_default();
 			let insert_position =
 				existing_vetoers.binary_search(&who).err().ok_or(Error::<T>::AlreadyVetoed)?;
-			existing_vetoers.try_insert(insert_position, who.clone()).map_err(|_| Error::<T>::TooMany)?;
+			existing_vetoers
+				.try_insert(insert_position, who.clone())
+				.map_err(|_| Error::<T>::TooMany)?;
 
 			let until =
 				<frame_system::Pallet<T>>::block_number().saturating_add(T::CooloffPeriod::get());
@@ -1154,7 +1171,9 @@ impl<T: Config> Pallet<T> {
 						votes[i].1 = vote;
 					},
 					Err(i) => {
-						votes.try_insert(i, (ref_index, vote)).map_err(|_| Error::<T>::MaxVotesReached)?;
+						votes
+							.try_insert(i, (ref_index, vote))
+							.map_err(|_| Error::<T>::MaxVotesReached)?;
 					},
 				}
 				Self::deposit_event(Event::<T>::Voted { voter: who.clone(), ref_index, vote });
@@ -1424,10 +1443,7 @@ impl<T: Config> Pallet<T> {
 				for d in depositors.iter() {
 					T::Currency::unreserve(d, deposit);
 				}
-				Self::deposit_event(Event::<T>::Tabled {
-					proposal_index: prop_index,
-					deposit,
-				});
+				Self::deposit_event(Event::<T>::Tabled { proposal_index: prop_index, deposit });
 				Self::inject_referendum(
 					now.saturating_add(T::VotingPeriod::get()),
 					proposal,
@@ -1466,7 +1482,9 @@ impl<T: Config> Pallet<T> {
 				63,
 				frame_system::RawOrigin::Root.into(),
 				status.proposal,
-			).is_err() {
+			)
+			.is_err()
+			{
 				frame_support::print("LOGIC ERROR: bake_referendum/schedule_named failed");
 			}
 		} else {
@@ -1517,8 +1535,8 @@ impl<T: Config> Pallet<T> {
 		}
 
 		// Notes:
-		// * We don't consider the lowest unbaked to be the last maturing in case some referenda have
-		//   a longer voting period than others.
+		// * We don't consider the lowest unbaked to be the last maturing in case some referenda
+		//   have a longer voting period than others.
 		// * The iteration here shouldn't trigger any storage read that are not in cache, due to
 		//   `maturing_referenda_at_inner` having already read them.
 		// * We shouldn't iterate more than `LaunchPeriod/VotingPeriod + 1` times because the number

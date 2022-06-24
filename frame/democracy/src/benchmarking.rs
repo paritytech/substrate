@@ -22,13 +22,11 @@ use super::*;
 use frame_benchmarking::{account, benchmarks, whitelist_account};
 use frame_support::{
 	assert_noop, assert_ok,
-	traits::{
-		Currency, EnsureOrigin, Get, OnInitialize, UnfilteredDispatchable,
-	},
+	traits::{Currency, EnsureOrigin, Get, OnInitialize, UnfilteredDispatchable},
 };
-use sp_core::H256;
 use frame_system::RawOrigin;
-use sp_runtime::{BoundedVec, traits::Bounded};
+use sp_core::H256;
+use sp_runtime::{traits::Bounded, BoundedVec};
 
 use crate::Pallet as Democracy;
 
@@ -58,12 +56,15 @@ fn add_referendum<T: Config>(n: u32) -> (ReferendumIndex, H256) {
 	let vote_threshold = VoteThreshold::SimpleMajority;
 	let proposal = make_proposal::<T>(n);
 	let hash = proposal.hash();
-	(Democracy::<T>::inject_referendum(
-		T::LaunchPeriod::get(),
-		proposal,
-		vote_threshold,
-		0u32.into(),
-	), hash)
+	(
+		Democracy::<T>::inject_referendum(
+			T::LaunchPeriod::get(),
+			proposal,
+			vote_threshold,
+			0u32.into(),
+		),
+		hash,
+	)
 }
 
 fn account_vote<T: Config>(b: BalanceOf<T>) -> AccountVote<BalanceOf<T>> {

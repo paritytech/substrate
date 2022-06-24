@@ -249,7 +249,7 @@ impl<'a, T, S> sp_std::iter::IntoIterator for BoundedSlice<'a, T, S> {
 impl<'a, T, S: Get<u32>> BoundedSlice<'a, T, S> {
 	/// Create an instance from the first elements of the given slice (or all of it if it is smaller
 	/// than the length bound).
-	pub fn truncate_from(s: &'a[T]) -> Self {
+	pub fn truncate_from(s: &'a [T]) -> Self {
 		Self(&s[0..(S::get() as usize)], PhantomData)
 	}
 }

@@ -249,7 +249,10 @@ fn noted_preimage_use_correct_map() {
 
 		// Now start removing them again...
 		for i in 0..7 {
-			assert_ok!(Preimage::unnote_preimage(Origin::signed(1), hashed(vec![0; 128 << (i * 2)])));
+			assert_ok!(Preimage::unnote_preimage(
+				Origin::signed(1),
+				hashed(vec![0; 128 << (i * 2)])
+			));
 		}
 		assert_eq!(PreimageFor::<Test>::iter().count(), 1);
 		assert_ok!(Preimage::unnote_preimage(

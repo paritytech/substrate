@@ -18,7 +18,7 @@
 //! The vote datatype.
 
 use crate::{Conviction, Delegations, ReferendumIndex};
-use codec::{Decode, Encode, MaxEncodedLen, EncodeLike, Input, Output};
+use codec::{Decode, Encode, EncodeLike, Input, MaxEncodedLen, Output};
 use frame_support::traits::Get;
 use scale_info::TypeInfo;
 use sp_runtime::{
@@ -114,8 +114,18 @@ impl<Balance: Saturating> AccountVote<Balance> {
 
 /// A "prior" lock, i.e. a lock for some now-forgotten reason.
 #[derive(
-	Encode, MaxEncodedLen, Decode, Default, Copy, Clone, Eq, PartialEq, Ord, PartialOrd,
-	RuntimeDebug, TypeInfo,
+	Encode,
+	MaxEncodedLen,
+	Decode,
+	Default,
+	Copy,
+	Clone,
+	Eq,
+	PartialEq,
+	Ord,
+	PartialOrd,
+	RuntimeDebug,
+	TypeInfo,
 )]
 pub struct PriorLock<BlockNumber, Balance>(BlockNumber, Balance);
 
@@ -139,9 +149,7 @@ impl<BlockNumber: Ord + Copy + Zero, Balance: Ord + Copy + Zero> PriorLock<Block
 }
 
 /// An indicator for what an account is doing; it can either be delegating or voting.
-#[derive(
-	Clone, Encode, Decode, Eq, MaxEncodedLen, PartialEq, RuntimeDebug, TypeInfo,
-)]
+#[derive(Clone, Encode, Decode, Eq, MaxEncodedLen, PartialEq, RuntimeDebug, TypeInfo)]
 #[codec(mel_bound(Balance: MaxEncodedLen, AccountId: MaxEncodedLen, BlockNumber: MaxEncodedLen))]
 #[scale_info(skip_type_params(MaxVotes))]
 pub enum Voting<Balance, AccountId, BlockNumber, MaxVotes: Get<u32>> {
@@ -179,8 +187,12 @@ impl<Balance: Default, AccountId, BlockNumber: Zero, MaxVotes: Get<u32>> Default
 	}
 }
 
-impl<Balance: Saturating + Ord + Zero + Copy, BlockNumber: Ord + Copy + Zero, AccountId, MaxVotes: Get<u32>>
-	Voting<Balance, AccountId, BlockNumber, MaxVotes>
+impl<
+		Balance: Saturating + Ord + Zero + Copy,
+		BlockNumber: Ord + Copy + Zero,
+		AccountId,
+		MaxVotes: Get<u32>,
+	> Voting<Balance, AccountId, BlockNumber, MaxVotes>
 {
 	pub fn rejig(&mut self, now: BlockNumber) {
 		match self {
