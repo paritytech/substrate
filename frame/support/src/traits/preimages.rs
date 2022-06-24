@@ -246,6 +246,6 @@ mod tests {
 
 	#[test]
 	fn bounded_size_is_correct() {
-		assert_eq!(<Bounded<Vec<u8>> as MaxEncodedLen>::max_encoded_len(), 130);
+		assert_eq!(<Bounded<Vec<u8>> as MaxEncodedLen>::max_encoded_len(), 131);
 	}
 }
