@@ -29,6 +29,7 @@ pub type BoundedInline = crate::BoundedVec<u8, ConstU32<128>>;
 #[derive(
 	Encode, Decode, MaxEncodedLen, Clone, Eq, PartialEq, scale_info::TypeInfo, RuntimeDebug,
 )]
+#[codec(mel_bound())]
 pub enum Bounded<T> {
 	/// A Blake2 256 hash with no preimage length. We
 	/// do not support creation of this except for transitioning from legacy state.
