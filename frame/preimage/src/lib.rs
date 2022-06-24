@@ -75,7 +75,7 @@ type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
 /// Maximum size of preimage we can store is 4mb.
-pub const MAX_SIZE: u32 = 4194304;
+pub const MAX_SIZE: u32 = 4 * 1024 * 1024;
 
 #[frame_support::pallet]
 pub mod pallet {
