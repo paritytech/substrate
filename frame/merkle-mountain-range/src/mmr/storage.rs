@@ -68,13 +68,11 @@ where
 	pub fn canonicalize_offchain() {
 		use sp_core::offchain::StorageKind;
 		use sp_io::offchain;
-		use sp_runtime::traits::{One, Saturating, UniqueSaturatedInto};
+		use sp_runtime::traits::UniqueSaturatedInto;
 
 		let leaves = NumberOfLeaves::<T, I>::get();
-		// our window is one less because we need the parent hash too.
-		let window_size = <T as frame_system::Config>::BlockHashCount::get()
-			.saturating_sub(One::one())
-			.unique_saturated_into();
+		let window_size =
+			<T as frame_system::Config>::BlockHashCount::get().unique_saturated_into();
 		if leaves >= window_size {
 			// move the rolling window towards the end of  `block_num->hash` mappings available
 			// in the runtime: we "canonicalize" the leaf at the end.
@@ -99,7 +97,13 @@ where
 					// Delete entry with old key.
 					offchain::local_storage_clear(StorageKind::PERSISTENT, &key);
 					// Add under new key.
-					offchain::local_storage_set(StorageKind::PERSISTENT, &key, &elem);
+					offchain::local_storage_set(StorageKind::PERSISTENT, &canon_key, &elem);
+				} else {
+					info!(
+						target: "runtime::mmr",
+						"🥩: offchain: could not get elem at pos {} using key {:?}",
+						pos, key
+					);
 				}
 			}
 		}
