@@ -3232,8 +3232,8 @@ fn set_code_hash() {
 #[test]
 #[cfg(feature = "unstable-interface")]
 fn reentrant_count_works_with_call() {
-	let (wasm1, code_hash1) = compile_module::<Test>("reentrant_count_call").unwrap();
-	let contract_addr1 = Contracts::contract_address(&ALICE, &code_hash1, &[]);
+	let (wasm, code_hash) = compile_module::<Test>("reentrant_count_call").unwrap();
+	let contract_addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
 
 	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
 		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
@@ -3243,18 +3243,18 @@ fn reentrant_count_works_with_call() {
 			300_000,
 			GAS_LIMIT,
 			None,
-			wasm1,
+			wasm,
 			vec![],
 			vec![],
 		));
 
 		Contracts::bare_call(
 			ALICE,
-			contract_addr1.clone(),
+			contract_addr.clone(),
 			0,
 			GAS_LIMIT,
 			None,
-			AsRef::<[u8]>::as_ref(&contract_addr1).to_vec(),
+			contract_addr.encode(),
 			true,
 		)
 		.result
@@ -3265,8 +3265,8 @@ fn reentrant_count_works_with_call() {
 #[test]
 #[cfg(feature = "unstable-interface")]
 fn reentrant_count_works_with_delegated_call() {
-	let (wasm1, code_hash1) = compile_module::<Test>("reentrant_count_delegated_call").unwrap();
-	let contract_addr1 = Contracts::contract_address(&ALICE, &code_hash1, &[]);
+	let (wasm, code_hash) = compile_module::<Test>("reentrant_count_delegated_call").unwrap();
+	let contract_addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
 
 	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
 		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
@@ -3276,15 +3276,15 @@ fn reentrant_count_works_with_delegated_call() {
 			300_000,
 			GAS_LIMIT,
 			None,
-			wasm1,
+			wasm,
 			vec![],
 			vec![],
 		));
 
-		let mut input = AsRef::<[u8]>::as_ref(&(code_hash1.clone())).to_vec();
-		input.push(1); // adding callstack high to the input
+		// adding a callstack height to the input
+		let input = (code_hash, 1).encode();
 
-		Contracts::bare_call(ALICE, contract_addr1.clone(), 0, GAS_LIMIT, None, input, true)
+		Contracts::bare_call(ALICE, contract_addr.clone(), 0, GAS_LIMIT, None, input, true)
 			.result
 			.unwrap();
 	});
@@ -3293,8 +3293,8 @@ fn reentrant_count_works_with_delegated_call() {
 #[test]
 #[cfg(feature = "unstable-interface")]
 fn account_entrance_count_works() {
-	let (wasm1, code_hash1) = compile_module::<Test>("account_entrance_count_call").unwrap();
-	let contract_addr1 = Contracts::contract_address(&ALICE, &code_hash1, &[]);
+	let (wasm, code_hash) = compile_module::<Test>("account_entrance_count_call").unwrap();
+	let contract_addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
 
 	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
 		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
@@ -3304,18 +3304,18 @@ fn account_entrance_count_works() {
 			300_000,
 			GAS_LIMIT,
 			None,
-			wasm1,
+			wasm,
 			vec![],
 			vec![],
 		));
 
 		Contracts::bare_call(
 			ALICE,
-			contract_addr1.clone(),
+			contract_addr.clone(),
 			0,
 			GAS_LIMIT,
 			None,
-			AsRef::<[u8]>::as_ref(&contract_addr1).to_vec(),
+			contract_addr.encode(),
 			true,
 		)
 		.result
