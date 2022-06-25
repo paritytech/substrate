@@ -106,6 +106,8 @@ pub type GetStorageResult = Result<Option<Vec<u8>>, ContractAccessError>;
 pub enum ContractAccessError {
 	/// The given address doesn't point to a contract.
 	DoesntExist,
+	/// Storage key cannot be decoded from the provided input data.
+	KeyDecodingFailed,
 }
 
 bitflags! {
