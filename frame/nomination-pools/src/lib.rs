@@ -1680,18 +1680,6 @@ pub mod pallet {
 			// Try and unbond in the member map.
 			member.try_unbond(unbonding_points, points_unbonded, unbond_era)?;
 
-			// Calculate the balance after the unbonding
-			let balance_after_unbond = {
-				let new_member_points =
-					member.active_points().saturating_sub(unbonding_points);
-				let mut member_after_unbond = member.clone();
-				member_after_unbond.points = new_member_points;
-				member_after_unbond.active_balance()
-			};
-
-			// Check if the remaining balance is more or equal to MinJoinBond and is not zero, and continue - else return error
-			ensure!(balance_after_unbond >= MinJoinBond::<T>::get() && !balance_after_unbond.is_zero(), Error::<T>::MinimumBondNotMet);
-
 			Self::deposit_event(Event::<T>::Unbonded {
 				member: member_account.clone(),
 				pool_id: member.pool_id,
