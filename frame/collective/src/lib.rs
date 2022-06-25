@@ -694,8 +694,101 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok((proposal_len as u32, result))
 	}
 
+	/// Ensure that the right proposal bounds were passed and get the proposal from storage.
+	///
+	/// Checks the length in storage via `storage::read` which adds an extra `size_of::<u32>() == 4`
+	/// to the length.
+	fn validate_and_get_proposal(
+		hash: &T::Hash,
+		length_bound: u32,
+		weight_bound: Weight,
+	) -> Result<(<T as Config<I>>::Proposal, usize), DispatchError> {
+		let key = ProposalOf::<T, I>::hashed_key_for(hash);
+		// read the length of the proposal storage entry directly
+		let proposal_len =
+			storage::read(&key, &mut [0; 0], 0).ok_or(Error::<T, I>::ProposalMissing)?;
+		ensure!(proposal_len <= length_bound, Error::<T, I>::WrongProposalLength);
+		let proposal = ProposalOf::<T, I>::get(hash).ok_or(Error::<T, I>::ProposalMissing)?;
+		let proposal_weight = proposal.get_dispatch_info().weight;
+		ensure!(proposal_weight <= weight_bound, Error::<T, I>::WrongProposalWeight);
+		Ok((proposal, proposal_len as usize))
+	}
+
+	/// Weight:
+	/// If `approved`:
+	/// - the weight of `proposal` preimage.
+	/// - two events deposited.
+	/// - two removals, one mutation.
+	/// - computation and i/o `O(P + L)` where:
+	///   - `P` is number of active proposals,
+	///   - `L` is the encoded length of `proposal` preimage.
+	///
+	/// If not `approved`:
+	/// - one event deposited.
+	/// Two removals, one mutation.
+	/// Computation and i/o `O(P)` where:
+	/// - `P` is number of active proposals
+	fn do_approve_proposal(
+		seats: MemberCount,
+		yes_votes: MemberCount,
+		proposal_hash: T::Hash,
+		proposal: <T as Config<I>>::Proposal,
+	) -> (Weight, u32) {
+		Self::deposit_event(Event::Approved { proposal_hash });
+
+		let dispatch_weight = proposal.get_dispatch_info().weight;
+		let origin = RawOrigin::Members(yes_votes, seats).into();
+		let result = proposal.dispatch(origin);
+		Self::deposit_event(Event::Executed {
+			proposal_hash,
+			result: result.map(|_| ()).map_err(|e| e.error),
+		});
+		// default to the dispatch info weight for safety
+		let proposal_weight = get_result_weight(result).unwrap_or(dispatch_weight); // P1
+
+		let proposal_count = Self::remove_proposal(proposal_hash);
+		(proposal_weight, proposal_count)
+	}
+
+	// Removes a proposal from the pallet, cleaning up votes and the vector of proposals.
+	fn remove_proposal(proposal_hash: T::Hash) -> u32 {
+		// remove proposal and vote
+		ProposalOf::<T, I>::remove(&proposal_hash);
+		Voting::<T, I>::remove(&proposal_hash);
+		let num_proposals = Proposals::<T, I>::mutate(|proposals| {
+			proposals.retain(|h| h != &proposal_hash);
+			proposals.len() + 1 // calculate weight based on original length
+		});
+		num_proposals as u32
+	}
+}
+
+pub trait ProposalProtocol<AccountId, Hash, Proposal>:
+	ProposalPropose<AccountId, Proposal>
+	+ ProposalVote<AccountId, Hash>
+	+ ProposalDisapprove<Hash>
+	+ ProposalClose<Hash>
+	+ ProposalProvider<Hash, Proposal>
+{
+}
+
+impl<T: Config<I>, I: 'static> ProposalProtocol<T::AccountId, T::Hash, T::Proposal>
+	for Pallet<T, I>
+{
+}
+
+pub trait ProposalPropose<AccountId, Proposal> {
+	fn do_propose_proposed(
+		who: AccountId,
+		threshold: u32,
+		proposal: Box<Proposal>,
+		length_bound: u32,
+	) -> Result<(u32, u32), DispatchError>;
+}
+
+impl<T: Config<I>, I: 'static> ProposalPropose<T::AccountId, T::Proposal> for Pallet<T, I> {
 	/// Add a new proposal to be voted.
-	pub fn do_propose_proposed(
+	fn do_propose_proposed(
 		who: T::AccountId,
 		threshold: MemberCount,
 		proposal: Box<<T as Config<I>>::Proposal>,
@@ -730,10 +823,21 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		});
 		Ok((proposal_len as u32, active_proposals as u32))
 	}
+}
 
+pub trait ProposalVote<AccountId, Hash> {
+	fn do_vote(
+		who: AccountId,
+		proposal: Hash,
+		index: ProposalIndex,
+		approve: bool,
+	) -> Result<bool, DispatchError>;
+}
+
+impl<T: Config<I>, I: 'static> ProposalVote<T::AccountId, T::Hash> for Pallet<T, I> {
 	/// Add an aye or nay vote for the member to the given proposal, returns true if it's the first
 	/// vote of the member in the motion
-	pub fn do_vote(
+	fn do_vote(
 		who: T::AccountId,
 		proposal: T::Hash,
 		index: ProposalIndex,
@@ -782,9 +886,32 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		Ok(is_account_voting_first_time)
 	}
+}
 
+pub trait ProposalDisapprove<Hash> {
+	fn do_disapprove_proposal(proposal_hash: Hash) -> u32;
+}
+
+impl<T: Config<I>, I: 'static> ProposalDisapprove<T::Hash> for Pallet<T, I> {
+	/// Removes a proposal from the pallet, and deposit the `Disapproved` event.
+	fn do_disapprove_proposal(proposal_hash: T::Hash) -> u32 {
+		Self::deposit_event(Event::Disapproved { proposal_hash });
+		Self::remove_proposal(proposal_hash)
+	}
+}
+
+pub trait ProposalClose<Hash> {
+	fn do_close(
+		proposal_hash: Hash,
+		index: ProposalIndex,
+		proposal_weight_bound: Weight,
+		length_bound: u32,
+	) -> DispatchResultWithPostInfo;
+}
+
+impl<T: Config<I>, I: 'static> ProposalClose<T::Hash> for Pallet<T, I> {
 	/// Close a vote that is either approved, disapproved or whose voting period has ended.
-	pub fn do_close(
+	fn do_close(
 		proposal_hash: T::Hash,
 		index: ProposalIndex,
 		proposal_weight_bound: Weight,
@@ -864,80 +991,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Ok((Some(T::WeightInfo::close_disapproved(seats, proposal_count)), Pays::No).into())
 		}
 	}
+}
 
-	/// Ensure that the right proposal bounds were passed and get the proposal from storage.
-	///
-	/// Checks the length in storage via `storage::read` which adds an extra `size_of::<u32>() == 4`
-	/// to the length.
-	fn validate_and_get_proposal(
-		hash: &T::Hash,
-		length_bound: u32,
-		weight_bound: Weight,
-	) -> Result<(<T as Config<I>>::Proposal, usize), DispatchError> {
-		let key = ProposalOf::<T, I>::hashed_key_for(hash);
-		// read the length of the proposal storage entry directly
-		let proposal_len =
-			storage::read(&key, &mut [0; 0], 0).ok_or(Error::<T, I>::ProposalMissing)?;
-		ensure!(proposal_len <= length_bound, Error::<T, I>::WrongProposalLength);
-		let proposal = ProposalOf::<T, I>::get(hash).ok_or(Error::<T, I>::ProposalMissing)?;
-		let proposal_weight = proposal.get_dispatch_info().weight;
-		ensure!(proposal_weight <= weight_bound, Error::<T, I>::WrongProposalWeight);
-		Ok((proposal, proposal_len as usize))
-	}
+pub trait ProposalOf<Hash, Proposal> {
+	fn proposal_of(proposal_hash: Hash) -> Option<Proposal>;
+}
 
-	/// Weight:
-	/// If `approved`:
-	/// - the weight of `proposal` preimage.
-	/// - two events deposited.
-	/// - two removals, one mutation.
-	/// - computation and i/o `O(P + L)` where:
-	///   - `P` is number of active proposals,
-	///   - `L` is the encoded length of `proposal` preimage.
-	///
-	/// If not `approved`:
-	/// - one event deposited.
-	/// Two removals, one mutation.
-	/// Computation and i/o `O(P)` where:
-	/// - `P` is number of active proposals
-	fn do_approve_proposal(
-		seats: MemberCount,
-		yes_votes: MemberCount,
-		proposal_hash: T::Hash,
-		proposal: <T as Config<I>>::Proposal,
-	) -> (Weight, u32) {
-		Self::deposit_event(Event::Approved { proposal_hash });
-
-		let dispatch_weight = proposal.get_dispatch_info().weight;
-		let origin = RawOrigin::Members(yes_votes, seats).into();
-		let result = proposal.dispatch(origin);
-		Self::deposit_event(Event::Executed {
-			proposal_hash,
-			result: result.map(|_| ()).map_err(|e| e.error),
-		});
-		// default to the dispatch info weight for safety
-		let proposal_weight = get_result_weight(result).unwrap_or(dispatch_weight); // P1
-
-		let proposal_count = Self::remove_proposal(proposal_hash);
-		(proposal_weight, proposal_count)
-	}
-
-	/// Removes a proposal from the pallet, and deposit the `Disapproved` event.
-	pub fn do_disapprove_proposal(proposal_hash: T::Hash) -> u32 {
-		// disapproved
-		Self::deposit_event(Event::Disapproved { proposal_hash });
-		Self::remove_proposal(proposal_hash)
-	}
-
-	// Removes a proposal from the pallet, cleaning up votes and the vector of proposals.
-	fn remove_proposal(proposal_hash: T::Hash) -> u32 {
-		// remove proposal and vote
-		ProposalOf::<T, I>::remove(&proposal_hash);
-		Voting::<T, I>::remove(&proposal_hash);
-		let num_proposals = Proposals::<T, I>::mutate(|proposals| {
-			proposals.retain(|h| h != &proposal_hash);
-			proposals.len() + 1 // calculate weight based on original length
-		});
-		num_proposals as u32
+impl<T: Config<I>, I: 'static> ProposalOf<T::Hash, T::Proposal> for Pallet<T, I> {
+	fn proposal_of(proposal_hash: T::Hash) -> Option<T::Proposal> {
+		Self::proposal_of(proposal_hash)
 	}
 }
 

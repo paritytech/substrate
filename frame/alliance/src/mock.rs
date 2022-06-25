@@ -24,6 +24,7 @@ pub use sp_runtime::{
 	BuildStorage,
 };
 use sp_std::convert::{TryFrom, TryInto};
+use std::marker::PhantomData;
 
 pub use frame_support::{
 	assert_ok, ord_parameter_types, parameter_types,
@@ -156,15 +157,21 @@ impl IdentityVerifier<u64> for AllianceIdentityVerifier {
 	}
 }
 
-pub struct AllianceProposalProvider;
-impl ProposalProvider<u64, H256, Call> for AllianceProposalProvider {
+type AllianceProposalProviderTest = CollectiveProposalProviderAdapter<AllianceMotion>;
+
+pub struct CollectiveProposalProviderAdapter<T>(PhantomData<T>);
+
+impl<T> ProposalProvider<u64, H256, Call> for CollectiveProposalProviderAdapter<T>
+where
+	T: pallet_collective::ProposalProtocol<u64, H256, Call>,
+{
 	fn propose_proposal(
 		who: u64,
 		threshold: u32,
 		proposal: Box<Call>,
 		length_bound: u32,
 	) -> Result<(u32, u32), DispatchError> {
-		AllianceMotion::do_propose_proposed(who, threshold, proposal, length_bound)
+		T::do_propose_proposed(who, threshold, proposal, length_bound)
 	}
 
 	fn vote_proposal(
@@ -173,11 +180,11 @@ impl ProposalProvider<u64, H256, Call> for AllianceProposalProvider {
 		index: ProposalIndex,
 		approve: bool,
 	) -> Result<bool, DispatchError> {
-		AllianceMotion::do_vote(who, proposal, index, approve)
+		T::do_vote(who, proposal, index, approve)
 	}
 
 	fn veto_proposal(proposal_hash: H256) -> u32 {
-		AllianceMotion::do_disapprove_proposal(proposal_hash)
+		T::do_disapprove_proposal(proposal_hash)
 	}
 
 	fn close_proposal(
@@ -186,11 +193,11 @@ impl ProposalProvider<u64, H256, Call> for AllianceProposalProvider {
 		proposal_weight_bound: Weight,
 		length_bound: u32,
 	) -> DispatchResultWithPostInfo {
-		AllianceMotion::do_close(proposal_hash, proposal_index, proposal_weight_bound, length_bound)
+		T::do_close(proposal_hash, proposal_index, proposal_weight_bound, length_bound)
 	}
 
 	fn proposal_of(proposal_hash: H256) -> Option<Call> {
-		AllianceMotion::proposal_of(proposal_hash)
+		T::proposal_of(proposal_hash)
 	}
 }
 
@@ -214,7 +221,7 @@ impl Config for Test {
 	type IdentityVerifier = AllianceIdentityVerifier;
 	#[cfg(feature = "runtime-benchmarks")]
 	type IdentityVerifier = ();
-	type ProposalProvider = AllianceProposalProvider;
+	type ProposalProvider = AllianceProposalProviderTest;
 	type MaxProposals = MaxProposals;
 	type MaxFounders = MaxFounders;
 	type MaxFellows = MaxFellows;
