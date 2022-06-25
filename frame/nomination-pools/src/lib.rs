@@ -1057,15 +1057,6 @@ impl<T: Config> SubPools<T> {
 		self
 	}
 
-	/// The sum of all unbonding points, regardless of whether they are actually unlocked or not.
-	fn sum_unbonding_points(&self) -> BalanceOf<T> {
-		self.no_era.points.saturating_add(
-			self.with_era
-				.values()
-				.fold(BalanceOf::<T>::zero(), |acc, pool| acc.saturating_add(pool.points)),
-		)
-	}
-
 	/// The sum of all unbonding balance, regardless of whether they are actually unlocked or not.
 	#[cfg(any(test, debug_assertions))]
 	fn sum_unbonding_balance(&self) -> BalanceOf<T> {
