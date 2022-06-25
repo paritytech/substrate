@@ -768,7 +768,7 @@ pub trait ProposalProtocol<AccountId, Hash, Proposal>:
 	+ ProposalVote<AccountId, Hash>
 	+ ProposalDisapprove<Hash>
 	+ ProposalClose<Hash>
-	+ ProposalProvider<Hash, Proposal>
+	+ ProposalOfHash<Hash, Proposal>
 {
 }
 
@@ -993,11 +993,11 @@ impl<T: Config<I>, I: 'static> ProposalClose<T::Hash> for Pallet<T, I> {
 	}
 }
 
-pub trait ProposalOf<Hash, Proposal> {
+pub trait ProposalOfHash<Hash, Proposal> {
 	fn proposal_of(proposal_hash: Hash) -> Option<Proposal>;
 }
 
-impl<T: Config<I>, I: 'static> ProposalOf<T::Hash, T::Proposal> for Pallet<T, I> {
+impl<T: Config<I>, I: 'static> ProposalOfHash<T::Hash, T::Proposal> for Pallet<T, I> {
 	fn proposal_of(proposal_hash: T::Hash) -> Option<T::Proposal> {
 		Self::proposal_of(proposal_hash)
 	}
