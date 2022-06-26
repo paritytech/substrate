@@ -1515,10 +1515,7 @@ pub mod pallet {
 				unbonding_eras: Default::default(),
 			};
 			log!(debug, "created member {:?}", new_member);
-			PoolMembers::insert(
-				who.clone(),
-				new_member,
-			);
+			PoolMembers::insert(who.clone(), new_member);
 
 			Self::deposit_event(Event::<T>::Bonded {
 				member: who,

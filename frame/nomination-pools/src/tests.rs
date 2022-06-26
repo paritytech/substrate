@@ -2495,7 +2495,7 @@ mod unbond {
 	fn depositor_permissioned_partial_unbond() {
 		ExtBuilder::default().ed(1).build_and_execute(|| {
 			// given
-			MinimumBond::set(5);
+			StakingMinBond::set(5);
 			assert_eq!(Pools::depositor_min_bond(), 5);
 
 			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().active_points(), 10);
@@ -2559,7 +2559,7 @@ mod unbond {
 
 			Balances::make_free_balance_be(
 				&default_reward_account(),
-				3 * Balances::minimum_balance(),
+				4 * Balances::minimum_balance(),
 			);
 
 			assert_ok!(Pools::unbond(Origin::signed(20), 20, 2));
@@ -2578,7 +2578,7 @@ mod unbond {
 			CurrentEra::set(1);
 			Balances::make_free_balance_be(
 				&default_reward_account(),
-				3 * Balances::minimum_balance(),
+				4 * Balances::minimum_balance(),
 			);
 
 			assert_ok!(Pools::unbond(Origin::signed(20), 20, 3));
@@ -2586,7 +2586,7 @@ mod unbond {
 				pool_events_since_last_call(),
 				vec![
 					// 2/3 of ed, which is 20's share.
-					Event::PaidOut { member: 20, pool_id: 1, payout: 2 * 5 },
+					Event::PaidOut { member: 20, pool_id: 1, payout: 6 },
 					Event::Unbonded { member: 20, pool_id: 1, points: 3, balance: 3 }
 				]
 			);
@@ -2594,15 +2594,15 @@ mod unbond {
 			CurrentEra::set(2);
 			Balances::make_free_balance_be(
 				&default_reward_account(),
-				3 * Balances::minimum_balance(),
+				4 * Balances::minimum_balance(),
 			);
 
-			assert_ok!(Pools::unbond(Origin::signed(10), 10, 5));
+			assert_ok!(Pools::unbond(Origin::signed(20), 20, 5));
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
-					Event::PaidOut { member: 10, pool_id: 1, payout: 2 * 5 },
-					Event::Unbonded { member: 10, pool_id: 1, points: 5, balance: 5 }
+					Event::PaidOut { member: 20, pool_id: 1, payout: 3 },
+					Event::Unbonded { member: 20, pool_id: 1, points: 5, balance: 5 }
 				]
 			);
 

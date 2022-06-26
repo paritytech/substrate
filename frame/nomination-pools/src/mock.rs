@@ -291,7 +291,8 @@ pub(crate) fn unsafe_set_state(pool_id: PoolId, state: PoolState) {
 		maybe_bonded_pool.as_mut().ok_or(()).map(|bonded_pool| {
 			bonded_pool.state = state;
 		})
-	}).unwrap()
+	})
+	.unwrap()
 }
 
 parameter_types! {
