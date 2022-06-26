@@ -23,6 +23,7 @@ parameter_types! {
 	pub storage UnbondingBalanceMap: BTreeMap<AccountId, Balance> = Default::default();
 	#[derive(Clone, PartialEq)]
 	pub static MaxUnbonding: u32 = 8;
+	pub static MinimumBond: Balance = 10;
 	pub storage Nominations: Option<Vec<AccountId>> = None;
 }
 
@@ -40,7 +41,7 @@ impl sp_staking::StakingInterface for StakingMock {
 	type AccountId = AccountId;
 
 	fn minimum_bond() -> Self::Balance {
-		10
+		MinimumBond::get()
 	}
 
 	fn current_era() -> EraIndex {
@@ -111,7 +112,8 @@ impl sp_staking::StakingInterface for StakingMock {
 		Ok(())
 	}
 
-	fn nominations(_: Self::AccountId) -> Option<Vec<Self::AccountId>> {
+	#[cfg(feature = "runtime-benchmarks")]
+	fn nominations(who: Self::AccountId) -> Option<sp_std::prelude::Vec<Self::AccountId>> {
 		Nominations::get()
 	}
 }
@@ -230,6 +232,7 @@ impl ExtBuilder {
 	}
 
 	pub(crate) fn build(self) -> sp_io::TestExternalities {
+		sp_tracing::try_init_simple();
 		let mut storage =
 			frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 

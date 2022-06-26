@@ -804,39 +804,43 @@ impl<T: Config> BondedPool<T> {
 			Error::<T>::PartialUnbondNotAllowedPermissionlessly
 		);
 
+		// any unbond must comply with the balance condition:
+		ensure!(
+			is_full_unbond ||
+				balance_after_unbond >
+					if is_depositor {
+						Pallet::<T>::depositor_min_bond()
+					} else {
+						MinJoinBond::<T>::get()
+					},
+			Error::<T>::MinimumBondNotMet
+		);
+
 		match (is_permissioned, is_depositor) {
-			// If the pool is blocked, then an admin with kicking permissions can remove a
-			// member. If the pool is being destroyed, anyone can remove a member
 			(false, false) => {
-				debug_assert!(is_full_unbond, "is_permissioned || is_full_unbond checked above, is_permissioned == false, so is_full_unbond == true");
+				// If the pool is blocked, then an admin with kicking permissions can remove a
+				// member. If the pool is being destroyed, anyone can remove a member
+				debug_assert!(
+					is_full_unbond,
+					"is_permissioned || is_full_unbond checked, is_permissioned == false, so is_full_unbond == true"
+				);
 				ensure!(
 					self.can_kick(caller) || self.is_destroying(),
 					Error::<T>::NotKickerOrDestroying
 				)
 			},
-			(true, false) => {
-				// Any member who is not the depositor can always unbond themselves as long as it is
-				// not too much.
-				ensure!(
-					balance_after_unbond > MinJoinBond::<T>::get(),
-					Error::<T>::MinimumBondNotMet
-				);
-			},
+			(true, false) => (),
 			(_, true) => {
 				if self.is_destroying_and_only_depositor(target_member.active_points()) {
 					// if the pool is about to be destroyed, anyone can unbond the depositor, and
 					// they can fully unbond.
 				} else {
-					// only the depositor can partially unbond, and they can only unbond up to the
-					// threshold.
+					// only the depositor can partially unbond.
 					ensure!(is_permissioned, Error::<T>::DoesNotHavePermission);
-					ensure!(
-						balance_after_unbond >= Pallet::<T>::depositor_skin_in_the_game(),
-						Error::<T>::MinimumBondNotMet
-					);
 				}
 			},
 		};
+
 		Ok(())
 	}
 
@@ -1334,7 +1338,7 @@ pub mod pallet {
 		/// The amount does not meet the minimum bond to either join or create a pool.
 		///
 		/// The depositor can never unbond to a value less than
-		/// `Pallet::depositor_skin_in_the_game`. The The caller does not have nominating
+		/// `Pallet::depositor_min_bond`. The The caller does not have nominating
 		/// permissions for the pool. Members can never unbond to a value below `MinJoinBond`.
 		MinimumBondNotMet,
 		/// The transaction could not be executed due to overflow risk for the pool.
@@ -1426,20 +1430,16 @@ pub mod pallet {
 			bonded_pool.try_inc_members()?;
 			let points_issued = bonded_pool.try_bond_funds(&who, amount, BondType::Later)?;
 
+			let new_member = PoolMember::<T> {
+				pool_id,
+				points: points_issued,
+				reward_pool_total_earnings: reward_pool.total_earnings,
+				unbonding_eras: Default::default(),
+			};
+			log!(debug, "created member {:?}", new_member);
 			PoolMembers::insert(
 				who.clone(),
-				PoolMember::<T> {
-					pool_id,
-					points: points_issued,
-					// At best the reward pool has the rewards up through the previous era. If the
-					// member joins prior to the snapshot they will benefit from the rewards of
-					// the active era despite not contributing to the pool's vote weight. If they
-					// join after the snapshot is taken they will benefit from the rewards of the
-					// next 2 eras because their vote weight will not be counted until the
-					// snapshot in active era + 1.
-					reward_pool_total_earnings: reward_pool.total_earnings,
-					unbonding_eras: Default::default(),
-				},
+				new_member,
 			);
 
 			Self::deposit_event(Event::<T>::Bonded {
@@ -1448,6 +1448,7 @@ pub mod pallet {
 				bonded: amount,
 				joined: true,
 			});
+
 			bonded_pool.put();
 
 			Ok(())
@@ -1783,10 +1784,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
-			ensure!(
-				amount >= Pallet::<T>::depositor_skin_in_the_game(),
-				Error::<T>::MinimumBondNotMet
-			);
+			ensure!(amount >= Pallet::<T>::depositor_min_bond(), Error::<T>::MinimumBondNotMet);
 			ensure!(
 				MaxPools::<T>::get()
 					.map_or(true, |max_pools| BondedPools::<T>::count() < max_pools),
@@ -2062,7 +2060,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// It is essentially `max { MinNominatorBond, MinCreateBond, MinJoinBond }`, where the former
 	/// is coming from the staking pallet and the latter two are configured in this pallet.
-	fn depositor_skin_in_the_game() -> BalanceOf<T> {
+	fn depositor_min_bond() -> BalanceOf<T> {
 		T::StakingInterface::minimum_bond()
 			.max(MinCreateBond::<T>::get())
 			.max(MinJoinBond::<T>::get())
