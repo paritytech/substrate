@@ -2190,11 +2190,12 @@ mod unbond {
 			// The depositor cannot be fully unbonded until they are the last member
 			assert_noop!(
 				Pools::fully_unbond(Origin::signed(10), 10),
-				Error::<Runtime>::NotOnlyPoolMember
+				Error::<Runtime>::MinimumBondNotMet,
 			);
 
 			// Any account can unbond a member that is not the depositor
 			assert_ok!(Pools::fully_unbond(Origin::signed(420), 100));
+
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
@@ -2398,7 +2399,7 @@ mod unbond {
 			);
 
 			// when: unbonding more than our active: error
-			assert_err!(
+			assert_noop!(
 				frame_support::storage::in_storage_layer(|| Pools::unbond(
 					Origin::signed(10),
 					10,
@@ -2436,26 +2437,24 @@ mod unbond {
 
 	#[test]
 	fn partial_unbond_max_chunks() {
-		ExtBuilder::default().ed(1).build_and_execute(|| {
-			// so the depositor can leave, just keeps the test simpler.
-			unsafe_set_state(1, PoolState::Destroying).unwrap();
+		ExtBuilder::default().add_members(vec![(20, 20)]).ed(1).build_and_execute(|| {
 			MaxUnbonding::set(2);
 
 			// given
-			assert_ok!(Pools::unbond(Origin::signed(10), 10, 2));
+			assert_ok!(Pools::unbond(Origin::signed(20), 20, 2));
 			CurrentEra::set(1);
-			assert_ok!(Pools::unbond(Origin::signed(10), 10, 3));
+			assert_ok!(Pools::unbond(Origin::signed(20), 20, 3));
 			assert_eq!(
-				PoolMembers::<Runtime>::get(10).unwrap().unbonding_eras,
+				PoolMembers::<Runtime>::get(20).unwrap().unbonding_eras,
 				member_unbonding_eras!(3 => 2, 4 => 3)
 			);
 
 			// when
 			CurrentEra::set(2);
-			assert_err!(
+			assert_noop!(
 				frame_support::storage::in_storage_layer(|| Pools::unbond(
-					Origin::signed(10),
-					10,
+					Origin::signed(20),
+					20,
 					4
 				)),
 				Error::<Runtime>::MaxUnbondingLimit
@@ -2463,19 +2462,22 @@ mod unbond {
 
 			// when
 			MaxUnbonding::set(3);
-			assert_ok!(Pools::unbond(Origin::signed(10), 10, 1));
+			assert_ok!(Pools::unbond(Origin::signed(20), 20, 1));
+
 			assert_eq!(
-				PoolMembers::<Runtime>::get(10).unwrap().unbonding_eras,
+				PoolMembers::<Runtime>::get(20).unwrap().unbonding_eras,
 				member_unbonding_eras!(3 => 2, 4 => 3, 5 => 1)
 			);
+
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
 					Event::Created { depositor: 10, pool_id: 1 },
 					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					Event::Unbonded { member: 10, pool_id: 1, points: 2, balance: 2 },
-					Event::Unbonded { member: 10, pool_id: 1, points: 3, balance: 3 },
-					Event::Unbonded { member: 10, pool_id: 1, points: 1, balance: 1 }
+					Event::Bonded { member: 20, pool_id: 1, bonded: 20, joined: true },
+					Event::Unbonded { member: 20, pool_id: 1, balance: 2, points: 2 },
+					Event::Unbonded { member: 20, pool_id: 1, balance: 3, points: 3 },
+					Event::Unbonded { member: 20, pool_id: 1, balance: 1, points: 1 }
 				]
 			);
 		})
@@ -2486,7 +2488,9 @@ mod unbond {
 	fn depositor_permissioned_partial_unbond() {
 		ExtBuilder::default().ed(1).build_and_execute(|| {
 			// given
-			assert_eq!(MinCreateBond::<Runtime>::get(), 2);
+			MinimumBond::set(5);
+			assert_eq!(Pools::depositor_min_bond(), 5);
+
 			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().active_points(), 10);
 			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().unbonding_points(), 0);
 
@@ -2498,7 +2502,7 @@ mod unbond {
 			// but not less than 2
 			assert_noop!(
 				Pools::unbond(Origin::signed(10), 10, 6),
-				Error::<Runtime>::NotOnlyPoolMember
+				Error::<Runtime>::MinimumBondNotMet
 			);
 
 			assert_eq!(
@@ -2527,7 +2531,7 @@ mod unbond {
 			// cannot unbond even 7, because the value of shares is now less.
 			assert_noop!(
 				Pools::unbond(Origin::signed(10), 10, 7),
-				Error::<Runtime>::NotOnlyPoolMember
+				Error::<Runtime>::MinimumBondNotMet
 			);
 			assert_eq!(
 				pool_events_since_last_call(),
@@ -2541,64 +2545,62 @@ mod unbond {
 
 	#[test]
 	fn every_unbonding_triggers_payout() {
-		ExtBuilder::default().build_and_execute(|| {
-			let initial_reward_account = Balances::free_balance(Pools::create_reward_account(1));
+		ExtBuilder::default().add_members(vec![(20, 20)]).build_and_execute(|| {
+			let initial_reward_account = Balances::free_balance(default_reward_account());
 			assert_eq!(initial_reward_account, Balances::minimum_balance());
 			assert_eq!(initial_reward_account, 5);
 
-			// set the pool to destroying so that depositor can leave.
-			unsafe_set_state(1, PoolState::Destroying).unwrap();
-
 			Balances::make_free_balance_be(
-				&Pools::create_reward_account(1),
-				2 * Balances::minimum_balance(),
+				&default_reward_account(),
+				3 * Balances::minimum_balance(),
 			);
 
-			assert_ok!(Pools::unbond(Origin::signed(10), 10, 2));
+			assert_ok!(Pools::unbond(Origin::signed(20), 20, 2));
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
+					// 2/3 of ed, which is 20's share.
 					Event::Created { depositor: 10, pool_id: 1 },
 					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					// exactly equal to ed, all that can be claimed.
-					Event::PaidOut { member: 10, pool_id: 1, payout: 5 },
-					Event::Unbonded { member: 10, pool_id: 1, points: 2, balance: 2 }
+					Event::Bonded { member: 20, pool_id: 1, bonded: 20, joined: true },
+					Event::PaidOut { member: 20, pool_id: 1, payout: 10 },
+					Event::Unbonded { member: 20, pool_id: 1, balance: 2, points: 2 }
 				]
 			);
 
 			CurrentEra::set(1);
 			Balances::make_free_balance_be(
-				&Pools::create_reward_account(1),
-				2 * Balances::minimum_balance(),
+				&default_reward_account(),
+				3 * Balances::minimum_balance(),
 			);
 
-			assert_ok!(Pools::unbond(Origin::signed(10), 10, 3));
+			assert_ok!(Pools::unbond(Origin::signed(20), 20, 3));
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
-					// exactly equal to ed, all that can be claimed.
-					Event::PaidOut { member: 10, pool_id: 1, payout: 5 },
-					Event::Unbonded { member: 10, pool_id: 1, points: 3, balance: 3 }
+					// 2/3 of ed, which is 20's share.
+					Event::PaidOut { member: 20, pool_id: 1, payout: 2 * 5 },
+					Event::Unbonded { member: 20, pool_id: 1, points: 3, balance: 3 }
 				]
 			);
 
 			CurrentEra::set(2);
 			Balances::make_free_balance_be(
-				&Pools::create_reward_account(1),
-				2 * Balances::minimum_balance(),
+				&default_reward_account(),
+				3 * Balances::minimum_balance(),
 			);
 
 			assert_ok!(Pools::unbond(Origin::signed(10), 10, 5));
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
-					Event::PaidOut { member: 10, pool_id: 1, payout: 5 },
+					Event::PaidOut { member: 10, pool_id: 1, payout: 2 * 5 },
 					Event::Unbonded { member: 10, pool_id: 1, points: 5, balance: 5 }
 				]
 			);
 
 			assert_eq!(
-				PoolMembers::<Runtime>::get(10).unwrap().unbonding_eras,
+				PoolMembers::<Runtime>::get(20).unwrap().unbonding_eras,
 				member_unbonding_eras!(3 => 2, 4 => 3, 5 => 5)
 			);
 		});
@@ -3322,12 +3324,19 @@ mod withdraw_unbonded {
 	#[test]
 	fn full_multi_step_withdrawing_depositor() {
 		ExtBuilder::default().ed(1).build_and_execute(|| {
-			// given
+			// initially depositor cannot unbond to less than 5.
+			assert_eq!(Pools::depositor_min_bond(), 10);
+			assert_noop!(
+				Pools::unbond(Origin::signed(10), 10, 1),
+				Error::<Runtime>::MinimumBondNotMet
+			);
+
+			// now they can.
+			unsafe_set_state(1, PoolState::Destroying).unwrap();
 			assert_ok!(Pools::unbond(Origin::signed(10), 10, 7));
 
 			// progress one era and unbond the leftover.
 			CurrentEra::set(1);
-			unsafe_set_state(1, PoolState::Destroying).unwrap();
 			assert_ok!(Pools::unbond(Origin::signed(10), 10, 3));
 			assert_eq!(
 				PoolMembers::<Runtime>::get(10).unwrap().unbonding_eras,
