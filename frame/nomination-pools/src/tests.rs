@@ -538,13 +538,13 @@ mod join {
 			StakingMock::set_bonded_balance(Pools::create_bonded_account(1), max_points_to_balance);
 
 			// Cannot join a pool that isn't open
-			unsafe_set_state(123, PoolState::Blocked).unwrap();
+			unsafe_set_state(123, PoolState::Blocked);
 			assert_noop!(
 				Pools::join(Origin::signed(11), max_points_to_balance, 123),
 				Error::<Runtime>::NotOpen
 			);
 
-			unsafe_set_state(123, PoolState::Destroying).unwrap();
+			unsafe_set_state(123, PoolState::Destroying);
 			assert_noop!(
 				Pools::join(Origin::signed(11), max_points_to_balance, 123),
 				Error::<Runtime>::NotOpen
@@ -1837,7 +1837,8 @@ mod claim_payout {
 	fn rewards_are_rounded_down_depositor_collects_them() {
 		ExtBuilder::default().add_members(vec![(20, 20)]).build_and_execute(|| {
 			// initial balance of 10.
-			assert_eq!(Balances::free_balance(&10), 5);
+
+			assert_eq!(Balances::free_balance(&10), 35);
 			assert_eq!(
 				Balances::free_balance(&default_reward_account()),
 				Balances::minimum_balance()
@@ -1888,7 +1889,7 @@ mod claim_payout {
 			);
 
 			// original ed + ed put into reward account + reward + bond + dust.
-			assert_eq!(Balances::free_balance(&10), 5 + 5 + 13 + 10 + 1);
+			assert_eq!(Balances::free_balance(&10), 35 + 5 + 13 + 10 + 1);
 		})
 	}
 }
@@ -1899,7 +1900,7 @@ mod unbond {
 	#[test]
 	fn unbond_of_1_works() {
 		ExtBuilder::default().build_and_execute(|| {
-			unsafe_set_state(1, PoolState::Destroying).unwrap();
+			unsafe_set_state(1, PoolState::Destroying);
 			assert_ok!(fully_unbond_permissioned(10));
 
 			assert_eq!(
@@ -1975,7 +1976,7 @@ mod unbond {
 				assert_eq!(Balances::free_balance(&40), 40 + 40); // We claim rewards when unbonding
 
 				// When
-				unsafe_set_state(1, PoolState::Destroying).unwrap();
+				unsafe_set_state(1, PoolState::Destroying);
 				assert_ok!(fully_unbond_permissioned(550));
 
 				// Then
@@ -2065,7 +2066,7 @@ mod unbond {
 					},
 				},
 			);
-			unsafe_set_state(1, PoolState::Destroying).unwrap();
+			unsafe_set_state(1, PoolState::Destroying);
 
 			// When
 			let current_era = 1 + TotalUnbondingPools::<Runtime>::get();
@@ -2102,7 +2103,7 @@ mod unbond {
 			.add_members(vec![(100, 100), (200, 200)])
 			.build_and_execute(|| {
 				// Given
-				unsafe_set_state(1, PoolState::Blocked).unwrap();
+				unsafe_set_state(1, PoolState::Blocked);
 				let bonded_pool = BondedPool::<Runtime>::get(1).unwrap();
 				assert_eq!(bonded_pool.roles.root.unwrap(), 900);
 				assert_eq!(bonded_pool.roles.nominator.unwrap(), 901);
@@ -2170,7 +2171,7 @@ mod unbond {
 		// Scenarios where non-admin accounts can unbond others
 		ExtBuilder::default().add_members(vec![(100, 100)]).build_and_execute(|| {
 			// Given the pool is blocked
-			unsafe_set_state(1, PoolState::Blocked).unwrap();
+			unsafe_set_state(1, PoolState::Blocked);
 
 			// A permissionless unbond attempt errors
 			assert_noop!(
@@ -2185,7 +2186,7 @@ mod unbond {
 			);
 
 			// Given the pool is destroying
-			unsafe_set_state(1, PoolState::Destroying).unwrap();
+			unsafe_set_state(1, PoolState::Destroying);
 
 			// The depositor cannot be fully unbonded until they are the last member
 			assert_noop!(
@@ -2213,7 +2214,7 @@ mod unbond {
 			);
 
 			// Given the pool is blocked
-			unsafe_set_state(1, PoolState::Blocked).unwrap();
+			unsafe_set_state(1, PoolState::Blocked);
 
 			// The depositor cannot be unbonded
 			assert_noop!(
@@ -2222,7 +2223,7 @@ mod unbond {
 			);
 
 			// Given the pools is destroying
-			unsafe_set_state(1, PoolState::Destroying).unwrap();
+			unsafe_set_state(1, PoolState::Destroying);
 
 			// The depositor cannot be unbonded yet.
 			assert_noop!(
@@ -2301,6 +2302,12 @@ mod unbond {
 	#[test]
 	fn partial_unbond_era_tracking() {
 		ExtBuilder::default().build_and_execute(|| {
+			// to make the depositor capable of withdrawing.
+			StakingMinBond::set(1);
+			MinCreateBond::<T>::set(1);
+			MinJoinBond::<T>::set(1);
+			assert_eq!(Pools::depositor_min_bond(), 1);
+
 			// given
 			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().active_points(), 10);
 			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().unbonding_points(), 0);
@@ -2315,7 +2322,7 @@ mod unbond {
 			assert_eq!(BondingDuration::get(), 3);
 
 			// so the depositor can leave, just keeps the test simpler.
-			unsafe_set_state(1, PoolState::Destroying).unwrap();
+			unsafe_set_state(1, PoolState::Destroying);
 
 			// when: casual unbond
 			assert_ok!(Pools::unbond(Origin::signed(10), 10, 1));
@@ -2405,7 +2412,7 @@ mod unbond {
 					10,
 					5
 				)),
-				Error::<Runtime>::NotEnoughPointsToUnbond
+				Error::<Runtime>::MinimumBondNotMet
 			);
 			// instead:
 			assert_ok!(Pools::unbond(Origin::signed(10), 10, 3));
@@ -2757,7 +2764,7 @@ mod withdraw_unbonded {
 				);
 
 				// now, finally, the depositor can take out its share.
-				unsafe_set_state(1, PoolState::Destroying).unwrap();
+				unsafe_set_state(1, PoolState::Destroying);
 				assert_ok!(fully_unbond_permissioned(10));
 
 				current_era += 3;
@@ -2867,7 +2874,7 @@ mod withdraw_unbonded {
 				assert!(SubPoolsStorage::<Runtime>::get(&1).unwrap().with_era.is_empty());
 
 				// now, finally, the depositor can take out its share.
-				unsafe_set_state(1, PoolState::Destroying).unwrap();
+				unsafe_set_state(1, PoolState::Destroying);
 				assert_ok!(fully_unbond_permissioned(10));
 
 				// because everyone else has left, the points
@@ -2882,7 +2889,7 @@ mod withdraw_unbonded {
 				assert_ok!(Pools::withdraw_unbonded(Origin::signed(10), 10, 0));
 
 				// then
-				assert_eq!(Balances::free_balance(&10), 10 + 5);
+				assert_eq!(Balances::free_balance(&10), 10 + 35);
 				assert_eq!(Balances::free_balance(&default_bonded_account()), 0);
 
 				// in this test 10 also gets a fair share of the slash, because the slash was
@@ -2911,9 +2918,9 @@ mod withdraw_unbonded {
 		ExtBuilder::default().build_and_execute(|| {
 			// Given
 			assert_eq!(Balances::minimum_balance(), 5);
-			assert_eq!(Balances::free_balance(&10), 5);
+			assert_eq!(Balances::free_balance(&10), 35);
 			assert_eq!(Balances::free_balance(&default_bonded_account()), 10);
-			unsafe_set_state(1, PoolState::Destroying).unwrap();
+			unsafe_set_state(1, PoolState::Destroying);
 			assert_ok!(Pools::fully_unbond(Origin::signed(10), 10));
 
 			// Simulate a slash that is not accounted for in the sub pools.
@@ -2930,7 +2937,7 @@ mod withdraw_unbonded {
 			assert_ok!(Pools::withdraw_unbonded(Origin::signed(10), 10, 0));
 
 			// Then
-			assert_eq!(Balances::free_balance(10), 10 + 5);
+			assert_eq!(Balances::free_balance(10), 10 + 35);
 			assert_eq!(Balances::free_balance(&default_bonded_account()), 0);
 		});
 	}
@@ -3010,7 +3017,7 @@ mod withdraw_unbonded {
 				);
 
 				// Given
-				unsafe_set_state(1, PoolState::Blocked).unwrap();
+				unsafe_set_state(1, PoolState::Blocked);
 
 				// Cannot kick as a nominator
 				assert_noop!(
@@ -3068,7 +3075,7 @@ mod withdraw_unbonded {
 			);
 
 			// Given
-			unsafe_set_state(1, PoolState::Destroying).unwrap();
+			unsafe_set_state(1, PoolState::Destroying);
 
 			// Can permissionlesly withdraw a member that is not the depositor
 			assert_ok!(Pools::withdraw_unbonded(Origin::signed(420), 100, 0));
@@ -3093,8 +3100,8 @@ mod withdraw_unbonded {
 	#[test]
 	fn partial_withdraw_unbonded_depositor() {
 		ExtBuilder::default().ed(1).build_and_execute(|| {
-			// so the depositor can leave, just keeps the test simpler.
-			unsafe_set_state(1, PoolState::Destroying).unwrap();
+			assert_ok!(Pools::bond_extra(Origin::signed(10), BondExtra::FreeBalance(10)));
+			unsafe_set_state(1, PoolState::Destroying);
 
 			// given
 			assert_ok!(Pools::unbond(Origin::signed(10), 10, 6));
@@ -3114,13 +3121,14 @@ mod withdraw_unbonded {
 					}
 				}
 			);
-			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().active_points(), 3);
+			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().active_points(), 13);
 			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().unbonding_points(), 7);
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
 					Event::Created { depositor: 10, pool_id: 1 },
 					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: false },
 					Event::Unbonded { member: 10, pool_id: 1, points: 6, balance: 6 },
 					Event::Unbonded { member: 10, pool_id: 1, points: 1, balance: 1 }
 				]
@@ -3324,57 +3332,72 @@ mod withdraw_unbonded {
 	#[test]
 	fn full_multi_step_withdrawing_depositor() {
 		ExtBuilder::default().ed(1).build_and_execute(|| {
-			// initially depositor cannot unbond to less than 5.
+			// depositor now has 20, they can unbond to 10.
 			assert_eq!(Pools::depositor_min_bond(), 10);
-			assert_noop!(
-				Pools::unbond(Origin::signed(10), 10, 1),
-				Error::<Runtime>::MinimumBondNotMet
-			);
+			assert_ok!(Pools::bond_extra(Origin::signed(10), BondExtra::FreeBalance(10)));
 
 			// now they can.
-			unsafe_set_state(1, PoolState::Destroying).unwrap();
 			assert_ok!(Pools::unbond(Origin::signed(10), 10, 7));
 
 			// progress one era and unbond the leftover.
 			CurrentEra::set(1);
 			assert_ok!(Pools::unbond(Origin::signed(10), 10, 3));
+
 			assert_eq!(
 				PoolMembers::<Runtime>::get(10).unwrap().unbonding_eras,
 				member_unbonding_eras!(3 => 7, 4 => 3)
 			);
 
+			// they can't unbond to a value below 10 other than 0..
 			assert_noop!(
-				Pools::withdraw_unbonded(Origin::signed(10), 10, 0),
-				Error::<Runtime>::CannotWithdrawAny
+				Pools::unbond(Origin::signed(10), 10, 5),
+				Error::<Runtime>::MinimumBondNotMet
 			);
+
+			// but not even full, because they pool is not yet destroying.
+			assert_noop!(
+				Pools::unbond(Origin::signed(10), 10, 10),
+				Error::<Runtime>::MinimumBondNotMet
+			);
+
+			// but now they can.
+			unsafe_set_state(1, PoolState::Destroying);
+			assert_noop!(
+				Pools::unbond(Origin::signed(10), 10, 5),
+				Error::<Runtime>::MinimumBondNotMet
+			);
+			assert_ok!(Pools::unbond(Origin::signed(10), 10, 10));
 
 			// now the 7 should be free.
 			CurrentEra::set(3);
 			assert_ok!(Pools::withdraw_unbonded(Origin::signed(10), 10, 0));
+
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
 					Event::Created { depositor: 10, pool_id: 1 },
 					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					Event::Unbonded { member: 10, pool_id: 1, points: 7, balance: 7 },
-					Event::Unbonded { member: 10, pool_id: 1, points: 3, balance: 3 },
-					Event::Withdrawn { member: 10, pool_id: 1, points: 7, balance: 7 }
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: false },
+					Event::Unbonded { member: 10, pool_id: 1, balance: 7, points: 7 },
+					Event::Unbonded { member: 10, pool_id: 1, balance: 3, points: 3 },
+					Event::Unbonded { member: 10, pool_id: 1, balance: 10, points: 10 },
+					Event::Withdrawn { member: 10, pool_id: 1, balance: 7, points: 7 }
 				]
 			);
 			assert_eq!(
 				PoolMembers::<Runtime>::get(10).unwrap().unbonding_eras,
-				member_unbonding_eras!(4 => 3)
+				member_unbonding_eras!(4 => 13)
 			);
 
-			// the 25 should be free now, and the member removed.
+			// the 13 should be free now, and the member removed.
 			CurrentEra::set(4);
 			assert_ok!(Pools::withdraw_unbonded(Origin::signed(10), 10, 0));
+
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
-					Event::Withdrawn { member: 10, pool_id: 1, points: 3, balance: 3 },
+					Event::Withdrawn { member: 10, pool_id: 1, points: 13, balance: 13 },
 					Event::MemberRemoved { pool_id: 1, member: 10 },
-					// the pool is also destroyed now.
 					Event::Destroyed { pool_id: 1 },
 				]
 			);
@@ -3603,7 +3626,7 @@ mod set_state {
 			// If the pool is not ok to be open, then anyone can set it to destroying
 
 			// Given
-			unsafe_set_state(1, PoolState::Open).unwrap();
+			unsafe_set_state(1, PoolState::Open);
 			let mut bonded_pool = BondedPool::<Runtime>::get(1).unwrap();
 			bonded_pool.points = 100;
 			bonded_pool.put();
@@ -3614,7 +3637,7 @@ mod set_state {
 
 			// Given
 			Balances::make_free_balance_be(&default_bonded_account(), Balance::max_value() / 10);
-			unsafe_set_state(1, PoolState::Open).unwrap();
+			unsafe_set_state(1, PoolState::Open);
 			// When
 			assert_ok!(Pools::set_state(Origin::signed(11), 1, PoolState::Destroying));
 			// Then
@@ -3622,7 +3645,7 @@ mod set_state {
 
 			// If the pool is not ok to be open, it cannot be permissionleslly set to a state that
 			// isn't destroying
-			unsafe_set_state(1, PoolState::Open).unwrap();
+			unsafe_set_state(1, PoolState::Open);
 			assert_noop!(
 				Pools::set_state(Origin::signed(11), 1, PoolState::Blocked),
 				Error::<Runtime>::CanNotChangeState
@@ -3783,13 +3806,13 @@ mod bond_extra {
 			// given
 			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().points, 10);
 			assert_eq!(BondedPools::<Runtime>::get(1).unwrap().points, 10);
-			assert_eq!(Balances::free_balance(10), 5);
+			assert_eq!(Balances::free_balance(10), 35);
 
 			// when
 			assert_ok!(Pools::bond_extra(Origin::signed(10), BondExtra::Rewards));
 
 			// then
-			assert_eq!(Balances::free_balance(10), 5);
+			assert_eq!(Balances::free_balance(10), 35);
 			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().points, 10 + claimable_reward);
 			assert_eq!(BondedPools::<Runtime>::get(1).unwrap().points, 10 + claimable_reward);
 
@@ -3825,14 +3848,14 @@ mod bond_extra {
 			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().points, 10);
 			assert_eq!(PoolMembers::<Runtime>::get(20).unwrap().points, 20);
 			assert_eq!(BondedPools::<Runtime>::get(1).unwrap().points, 30);
-			assert_eq!(Balances::free_balance(10), 5);
+			assert_eq!(Balances::free_balance(10), 35);
 			assert_eq!(Balances::free_balance(20), 20);
 
 			// when
 			assert_ok!(Pools::bond_extra(Origin::signed(10), BondExtra::Rewards));
 
 			// then
-			assert_eq!(Balances::free_balance(10), 5);
+			assert_eq!(Balances::free_balance(10), 35);
 			// 10's share of the reward is 1/3, since they gave 10/30 of the total shares.
 			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().points, 10 + 1);
 			assert_eq!(BondedPools::<Runtime>::get(1).unwrap().points, 30 + 1);

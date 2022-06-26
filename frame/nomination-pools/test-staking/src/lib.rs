@@ -71,7 +71,7 @@ fn pool_lifecycle_e2e() {
 		// depositor cannot unbond yet.
 		assert_noop!(
 			Pools::unbond(Origin::signed(10), 10, 50),
-			PoolsError::<Runtime>::NotOnlyPoolMember,
+			PoolsError::<Runtime>::MinimumBondNotMet,
 		);
 
 		// now the members want to unbond.
@@ -102,7 +102,7 @@ fn pool_lifecycle_e2e() {
 		// depositor cannot still unbond
 		assert_noop!(
 			Pools::unbond(Origin::signed(10), 10, 50),
-			PoolsError::<Runtime>::NotOnlyPoolMember,
+			PoolsError::<Runtime>::MinimumBondNotMet,
 		);
 
 		for e in 1..BondingDuration::get() {
@@ -119,7 +119,7 @@ fn pool_lifecycle_e2e() {
 		// depositor cannot still unbond
 		assert_noop!(
 			Pools::unbond(Origin::signed(10), 10, 50),
-			PoolsError::<Runtime>::NotOnlyPoolMember,
+			PoolsError::<Runtime>::MinimumBondNotMet,
 		);
 
 		// but members can now withdraw.
