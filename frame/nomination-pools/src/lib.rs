@@ -467,7 +467,7 @@ impl<T: Config> PoolMember<T> {
 			self.points = new_points;
 			Ok(())
 		} else {
-			Err(Error::<T>::NotEnoughPointsToUnbond)
+			Err(Error::<T>::MinimumBondNotMet)
 		}
 	}
 
@@ -796,7 +796,7 @@ impl<T: Config> BondedPool<T> {
 		// any unbond must comply with the balance condition:
 		ensure!(
 			is_full_unbond ||
-				balance_after_unbond >
+				balance_after_unbond >=
 					if is_depositor {
 						Pallet::<T>::depositor_min_bond()
 					} else {
@@ -805,27 +805,34 @@ impl<T: Config> BondedPool<T> {
 			Error::<T>::MinimumBondNotMet
 		);
 
+		// additional checks:
 		match (is_permissioned, is_depositor) {
+			(true, false) => (),
+			(true, true) => {
+				// permission depositor unbond: if destroying and pool is empty, always allowed,
+				// with no additional limits.
+				if self.is_destroying_and_only_depositor(target_member.active_points()) {
+					// everything good, let them unbond anything.
+				} else {
+					// depositor cannot fully unbond yet.
+					ensure!(!is_full_unbond, Error::<T>::MinimumBondNotMet);
+				}
+			},
 			(false, false) => {
 				// If the pool is blocked, then an admin with kicking permissions can remove a
 				// member. If the pool is being destroyed, anyone can remove a member
-				debug_assert!(
-					is_full_unbond,
-					"is_permissioned || is_full_unbond checked, is_permissioned == false, so is_full_unbond == true"
-				);
+				debug_assert!(is_full_unbond);
 				ensure!(
 					self.can_kick(caller) || self.is_destroying(),
 					Error::<T>::NotKickerOrDestroying
 				)
 			},
-			(true, false) => (),
-			(_, true) => {
+			(false, true) => {
+				debug_assert!(is_full_unbond);
 				if self.is_destroying_and_only_depositor(target_member.active_points()) {
-					// if the pool is about to be destroyed, anyone can unbond the depositor, and
-					// they can fully unbond.
+					// everything good, let them unbond anything.
 				} else {
-					// only the depositor can partially unbond.
-					ensure!(is_permissioned, Error::<T>::DoesNotHavePermission);
+					Err(Error::<T>::DoesNotHavePermission)?
 				}
 			},
 		};
@@ -1420,9 +1427,6 @@ pub mod pallet {
 		/// A pool must be in [`PoolState::Destroying`] in order for the depositor to unbond or for
 		/// other members to be permissionlessly unbonded.
 		NotDestroying,
-		/// The depositor must be the only member in the bonded pool in order to unbond. And the
-		/// depositor must be the only member in the sub pools in order to withdraw unbonded.
-		NotOnlyPoolMember,
 		/// The caller does not have nominating permissions for the pool.
 		NotNominator,
 		/// Either a) the caller cannot make a valid kick or b) the pool is not destroying.
@@ -1442,8 +1446,6 @@ pub mod pallet {
 		/// Some error occurred that should never happen. This should be reported to the
 		/// maintainers.
 		Defensive(DefensiveError),
-		/// Not enough points. Ty unbonding less.
-		NotEnoughPointsToUnbond,
 		/// Partial unbonding now allowed permissionlessly.
 		PartialUnbondNotAllowedPermissionlessly,
 	}
