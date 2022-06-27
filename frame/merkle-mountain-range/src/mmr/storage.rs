@@ -18,7 +18,7 @@
 //! A MMR storage implementations.
 
 use codec::Encode;
-use frame_support::{log::info, traits::Get};
+use frame_support::traits::Get;
 use mmr_lib::helper;
 use sp_io::offchain_index;
 use sp_std::iter::Peekable;
@@ -65,11 +65,23 @@ where
 	I: 'static,
 	L: primitives::FullLeaf,
 {
+	/// Move nodes and leaves added by block `N` in offchain db from _fork-aware key_ to
+	/// _canonical key_,
+	/// where `N` is `frame_system::BlockHashCount` blocks behind current block number.
+	///
+	/// This "canonicalization" process is required because the _fork-aware key_ value depends
+	/// on `frame_system::block_hash(block_num)` map which only holds the last
+	/// `frame_system::BlockHashCount` blocks.
+	///
+	/// Should only be called from offchain context, because it requires both read and write
+	/// access to offchain db.
 	pub fn canonicalize_offchain() {
 		use sp_core::offchain::StorageKind;
 		use sp_io::offchain;
 		use sp_runtime::traits::UniqueSaturatedInto;
 
+		// Effectively move a rolling window of fork-unique leaves. Once out of the window, leaves
+		// are "canonicalized" in offchain db by moving them under `Pallet::canon_offchain_key`.
 		let leaves = NumberOfLeaves::<T, I>::get();
 		let window_size =
 			<T as frame_system::Config>::BlockHashCount::get().unique_saturated_into();
@@ -79,31 +91,36 @@ where
 			let leaf_to_canon = leaves.saturating_sub(window_size);
 			let parent_hash_of_leaf = Pallet::<T, I>::parent_hash_of_leaf(leaf_to_canon, leaves);
 			let nodes_to_canon = NodesUtils::right_branch_ending_in_leaf(leaf_to_canon);
-			info!(
-				target: "runtime::mmr",
-				"🥩: nodes to canon for leaf {}: {:?}",
-				leaf_to_canon, nodes_to_canon
-			);
+			sp_std::if_std! {
+				frame_support::log::debug!(
+					target: "runtime::mmr", "Nodes to canon for leaf {}: {:?}",
+					leaf_to_canon, nodes_to_canon
+				);
+			}
 			for pos in nodes_to_canon {
 				let key = Pallet::<T, I>::offchain_key(parent_hash_of_leaf, pos);
 				let canon_key = Pallet::<T, I>::canon_offchain_key(pos);
-				info!(
-					target: "runtime::mmr",
-					"🥩: move elem at pos {} from key {:?} to canon key {:?}",
-					pos, key, canon_key
-				);
-				// Retrieve the element from Off-chain DB.
+				// Retrieve the element from Off-chain DB under fork-aware key.
 				if let Some(elem) = offchain::local_storage_get(StorageKind::PERSISTENT, &key) {
 					// Delete entry with old key.
 					offchain::local_storage_clear(StorageKind::PERSISTENT, &key);
-					// Add under new key.
+					// Add under new canon key.
 					offchain::local_storage_set(StorageKind::PERSISTENT, &canon_key, &elem);
+					sp_std::if_std! {
+						frame_support::log::debug!(
+							target: "runtime::mmr",
+							"Moved elem at pos {} from key {:?} to canon key {:?}",
+							pos, key, canon_key
+						);
+					}
 				} else {
-					info!(
-						target: "runtime::mmr",
-						"🥩: offchain: could not get elem at pos {} using key {:?}",
-						pos, key
-					);
+					sp_std::if_std! {
+						frame_support::log::debug!(
+							target: "runtime::mmr",
+							"Offchain: could not get elem at pos {} using key {:?}",
+							pos, key
+						);
+					}
 				}
 			}
 		}
@@ -125,20 +142,16 @@ where
 		let parent_hash_of_ancestor =
 			Pallet::<T, I>::parent_hash_of_leaf(ancestor_leaf_idx, leaves_count);
 		let key = Pallet::<T, I>::offchain_key(parent_hash_of_ancestor, pos);
-		info!(
-			target: "runtime::mmr",
-			"🥩: offchain get {}: leaf idx {:?}, hash {:?}, key {:?}",
-			pos, ancestor_leaf_idx, parent_hash_of_ancestor, key
-		);
+		sp_std::if_std! {
+			frame_support::log::debug!(
+				target: "runtime::mmr", "offchain get {}: leaf idx {:?}, hash {:?}, key {:?}",
+				pos, ancestor_leaf_idx, parent_hash_of_ancestor, key
+			);
+		}
 		// Retrieve the element from Off-chain DB.
 		Ok(sp_io::offchain::local_storage_get(sp_core::offchain::StorageKind::PERSISTENT, &key)
 			.or_else(|| {
 				let key = Pallet::<T, I>::canon_offchain_key(pos);
-				info!(
-					target: "runtime::mmr",
-					"🥩: not found {}: try final key {:?}",
-					pos, key
-				);
 				sp_io::offchain::local_storage_get(sp_core::offchain::StorageKind::PERSISTENT, &key)
 			})
 			.and_then(|v| codec::Decode::decode(&mut &*v).ok()))
@@ -165,17 +178,11 @@ where
 		}
 
 		sp_std::if_std! {
-			frame_support::log::info!("elems: {:?}", elems.iter().map(|elem| elem.hash()).collect::<Vec<_>>());
+			frame_support::log::trace!("elems: {:?}", elems.iter().map(|elem| elem.hash()).collect::<Vec<_>>());
 		}
 
 		let leaves = NumberOfLeaves::<T, I>::get();
 		let size = NodesUtils::new(leaves).size();
-
-		info!(
-			target: "runtime::mmr",
-			"🥩: append elem {}: leaves {} size {}",
-			pos, leaves, size
-		);
 
 		if pos != size {
 			return Err(mmr_lib::Error::InconsistentStore)
@@ -194,21 +201,7 @@ where
 		// Use parent hash of block adding new nodes (this block) as extra identifier
 		// in offchain DB to avoid DB collisions and overwrites in case of forks.
 		let parent_hash = <frame_system::Pallet<T>>::parent_hash();
-		let block_number = <frame_system::Pallet<T>>::block_number();
 		for elem in elems {
-			if helper::pos_height_in_tree(node_index) == 0 {
-				info!(
-					target: "runtime::mmr",
-					"🥩: appending leaf {}, pos {}, block-num {:?}",
-					leaf_index, node_index, block_number
-				);
-			} else {
-				info!(
-					target: "runtime::mmr",
-					"🥩: appending node pos {}, block-num {:?}",
-					node_index, block_number
-				);
-			}
 			// For now we store this leaf offchain keyed by `(parent_hash, node_index)`
 			// to make it fork-resistant.
 			// Offchain worker task will "canonicalize" it `frame_system::BlockHashCount` blocks
@@ -217,11 +210,12 @@ where
 			// "Canonicalization" in this case means moving this leaf under a new key based
 			// only on the leaf's `node_index`.
 			let key = Pallet::<T, I>::offchain_key(parent_hash, node_index);
-			info!(
-				target: "runtime::mmr",
-				"🥩: offchain set: pos {} parent_hash {:?} key {:?}",
-				node_index, parent_hash, key
-			);
+			sp_std::if_std! {
+				frame_support::log::debug!(
+					target: "runtime::mmr", "offchain set: pos {} parent_hash {:?} key {:?}",
+					node_index, parent_hash, key
+				);
+			}
 			// Indexing API is used to store the full node content (both leaf and inner).
 			elem.using_encoded(|elem| offchain_index::set(&key, elem));
 

@@ -57,7 +57,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::Encode;
-use frame_support::{log::info, weights::Weight};
+use frame_support::weights::Weight;
 use sp_runtime::{
 	traits::{self, One, Saturating},
 	SaturatedConversion,
@@ -202,7 +202,6 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
 		fn on_initialize(_n: T::BlockNumber) -> Weight {
-			info!(target: "runtime::mmr", "🥩: initialize block {:?}", _n);
 			use primitives::LeafDataProvider;
 			let leaves = Self::mmr_leaves();
 			let peaks_before = mmr::utils::NodesUtils::new(leaves).number_of_peaks();
@@ -210,8 +209,6 @@ pub mod pallet {
 			// append new leaf to MMR
 			let mut mmr: ModuleMmr<mmr::storage::RuntimeStorage, T, I> = mmr::Mmr::new(leaves);
 			mmr.push(data).expect("MMR push never fails.");
-
-			info!(target: "runtime::mmr", "🥩: on_initialize(block-num: {:?}): leaves_before {}, peaks_before {}", _n, leaves, peaks_before);
 
 			// update the size
 			let (leaves, root) = mmr.finalize().expect("MMR finalize never fails.");
@@ -222,14 +219,23 @@ pub mod pallet {
 
 			let peaks_after = mmr::utils::NodesUtils::new(leaves).number_of_peaks();
 
-			info!(target: "runtime::mmr", "🥩: on_initialize(block-num: {:?}): leaves {}, peaks {}", _n, leaves, peaks_after);
-
 			T::WeightInfo::on_initialize(peaks_before.max(peaks_after))
 		}
 
 		fn offchain_worker(_n: T::BlockNumber) {
 			use mmr::storage::{OffchainStorage, Storage};
-			info!("🥩 Run MMR offchain worker for block {:?}...", _n);
+			// MMR pallet uses offchain storage to hold full MMR and leaves.
+			// The leaves are saved under fork-unique keys `(parent_hash, pos)`.
+			// MMR Runtime depends on `frame_system::block_hash(block_num)` mappings to find
+			// parent hashes for particular nodes or leaves.
+			// This MMR offchain worker function moves a rolling window of the same size
+			// as `frame_system::block_hash` map, where nodes/leaves added by blocks that are just
+			// about to exit the window are "canonicalized" so that their offchain key no longer
+			// depends on `parent_hash` therefore on access to `frame_system::block_hash`.
+			//
+			// This approach works to eliminate fork-induced leaf collisions in offchain db,
+			// under the assumption that no fork will be deeper than `frame_system::BlockHashCount`
+			// blocks (2400 blocks on Polkadot, Kusama, Rococo, etc).
 			Storage::<OffchainStorage, T, I, LeafOf<T, I>>::canonicalize_offchain();
 		}
 	}
