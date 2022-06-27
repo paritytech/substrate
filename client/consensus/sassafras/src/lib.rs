@@ -25,7 +25,7 @@
 
 use std::{
 	borrow::Cow,
-	collections::HashMap,
+	collections::{BTreeMap, HashMap},
 	future::Future,
 	pin::Pin,
 	sync::Arc,
@@ -76,7 +76,7 @@ use sp_consensus::{
 	BlockOrigin, CacheKeyId, CanAuthorWith, Environment, Error as ConsensusError, Proposer,
 	SelectChain,
 };
-use sp_consensus_sassafras::inherents::SassafrasInherentData;
+use sp_consensus_sassafras::{inherents::SassafrasInherentData, VRFProof};
 use sp_consensus_slots::{Slot, SlotDuration};
 use sp_core::{crypto::ByteArray, traits::SpawnEssentialNamed, ExecutionContext};
 use sp_inherents::{CreateInherentDataProviders, InherentData, InherentDataProvider};
@@ -94,7 +94,7 @@ pub use sp_consensus_sassafras::{
 		SecondaryPreDigest,
 	},
 	AuthorityId, AuthorityPair, AuthoritySignature, SassafrasApi, SassafrasAuthorityWeight,
-	SassafrasEpochConfiguration, SassafrasGenesisConfiguration, SASSAFRAS_ENGINE_ID,
+	SassafrasEpochConfiguration, SassafrasGenesisConfiguration, Ticket, SASSAFRAS_ENGINE_ID,
 	VRF_OUTPUT_LENGTH,
 };
 
@@ -104,7 +104,7 @@ pub mod authorship;
 pub mod aux_schema;
 
 /// Sassafras epoch information
-#[derive(Decode, Encode, PartialEq, Eq, Clone, Debug)]
+#[derive(Encode, Decode, PartialEq, Eq, Clone, Debug)]
 pub struct Epoch {
 	/// The epoch index.
 	pub epoch_index: u64,
@@ -118,6 +118,8 @@ pub struct Epoch {
 	pub randomness: [u8; VRF_OUTPUT_LENGTH],
 	/// Configuration of the epoch.
 	pub config: SassafrasEpochConfiguration,
+	/// Tickets proofs.
+	pub proofs: BTreeMap<u64, VRFProof>,
 }
 
 impl EpochT for Epoch {
@@ -133,6 +135,7 @@ impl EpochT for Epoch {
 			randomness: descriptor.randomness,
 			// TODO-SASS: allow config change on epoch change (i.e. pass as param)
 			config: self.config.clone(),
+			proofs: BTreeMap::new(),
 		}
 	}
 
@@ -156,6 +159,7 @@ impl Epoch {
 			authorities: genesis_config.genesis_authorities.clone(),
 			randomness: genesis_config.randomness,
 			config: SassafrasEpochConfiguration {},
+			proofs: BTreeMap::new(),
 		}
 	}
 }
@@ -471,8 +475,8 @@ async fn tickets_worker<B, C, SC>(
 		if let Some(epoch_desc) = next_epoch_digest {
 			debug!(target: "sassafras", "🌳 New epoch annouced {:x?}", epoch_desc);
 
-			let epoch = {
-				let epoch_changes = epoch_changes.shared_data();
+			let tickets = {
+				let mut epoch_changes = epoch_changes.shared_data();
 
 				let number = *notification.header.number();
 				let position = if number == One::one() {
@@ -480,24 +484,23 @@ async fn tickets_worker<B, C, SC>(
 				} else {
 					EpochIdentifierPosition::Regular
 				};
-				let epoch_identifier =
+				let mut epoch_identifier =
 					EpochIdentifier { position, hash: notification.hash, number };
 
-				let epoch = match epoch_changes.epoch(&epoch_identifier) {
+				let epoch = match epoch_changes.epoch_mut(&mut epoch_identifier) {
 					Some(epoch) => epoch,
 					None => {
 						warn!(target: "sassafras", "🌳 Unexpected missing epoch data for {}", notification.hash);
 						continue
 					},
 				};
-				epoch.clone()
+
+				authorship::generate_epoch_tickets(epoch, 40, 1, &keystore)
 			};
 
-			// TODO-SASS:
-			// maybe we're going to store the both the tickets and proofs in a map within the
-			// epoch_changes tree to be used when claiming slots.
-			// The map key can be the ticket itself.
-			let tickets = authorship::generate_epoch_tickets(&epoch, 40, 1, &keystore);
+			if tickets.is_empty() {
+				continue
+			}
 
 			// Get the best block on which we will build and send the tickets.
 			let best_id = match select_chain.best_chain().await {
@@ -507,9 +510,6 @@ async fn tickets_worker<B, C, SC>(
 					continue
 				},
 			};
-
-			// TODO-SASS
-			// 2. Do not submit tickets if we are already over half of the epoch
 
 			if let Err(err) =
 				client.runtime_api().submit_tickets_unsigned_extrinsic(&best_id, tickets)
@@ -608,7 +608,7 @@ impl<B, C, E, I, ER, SO, L> sc_consensus_slots::SimpleSlotWorker<B>
 where
 	B: BlockT,
 	C: ProvideRuntimeApi<B> + HeaderBackend<B> + HeaderMetadata<B, Error = ClientError>,
-	//C::Api: SassafrasApi<B>, // TODO-SASS ?
+	C::Api: SassafrasApi<B>,
 	E: Environment<B, Error = ER> + Sync,
 	E::Proposer: Proposer<B, Error = ER, Transaction = sp_api::TransactionFor<C, B>>,
 	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
@@ -661,14 +661,21 @@ where
 
 	async fn claim_slot(
 		&self,
-		_parent_header: &B::Header,
+		parent_header: &B::Header,
 		slot: Slot,
 		epoch_descriptor: &ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>,
 	) -> Option<Self::Claim> {
 		debug!(target: "sassafras", "🌳 Attempting to claim slot {}", slot);
 
-		let s = authorship::claim_slot(
+		// Get the next slot ticket
+		let block_id = BlockId::Hash(parent_header.hash());
+		let ticket = self.client.runtime_api().slot_ticket(&block_id, slot).ok()?;
+
+		debug!(target: "sassafras", "🌳 parent {}", parent_header.hash());
+
+		let claim = authorship::claim_slot(
 			slot,
+			ticket,
 			self.epoch_changes
 				.shared_data()
 				.viable_epoch(epoch_descriptor, |slot| {
@@ -678,10 +685,10 @@ where
 			&self.keystore,
 		);
 
-		if s.is_some() {
+		if claim.is_some() {
 			debug!(target: "sassafras", "🌳 Claimed slot {}", slot);
 		}
-		s
+		claim
 	}
 
 	fn notify_slot(

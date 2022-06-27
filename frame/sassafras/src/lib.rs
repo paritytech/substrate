@@ -128,7 +128,7 @@ pub mod pallet {
 		#[pallet::constant]
 		type EpochDuration: Get<u64>;
 
-		/// The expected average block time at which BABE should be creating
+		/// The expected average block time at which Sassafras should be creating
 		/// blocks. Since Sassafras is probabilistic it is not trivial to figure out
 		/// what the expected average block time should be based on the slot
 		/// duration and the security parameter `c` (where `1 - c` represents
@@ -370,9 +370,7 @@ pub mod pallet {
 				}
 
 				// Current slot should be less than half of epoch duration.
-				let diff = CurrentSlot::<T>::get().saturating_sub(Self::current_epoch_start());
-				let epoch_half = T::EpochDuration::get() / 2;
-				if diff >= epoch_half {
+				if Self::current_slot_epoch_index() >= T::EpochDuration::get() / 2 {
 					return InvalidTransaction::Stale.into()
 				}
 
@@ -411,7 +409,7 @@ fn print_tickets(verb: &str, tickets: &[Ticket], slot: u64) {
 // TODO-SASS
 // Inherent methods
 impl<T: Config> Pallet<T> {
-	/// Determine the BABE slot duration based on the Timestamp module configuration.
+	/// Determine the Sassafras slot duration based on the Timestamp module configuration.
 	pub fn slot_duration() -> T::Moment {
 		// TODO-SASS: clarify why this is doubled
 		// we double the minimum block-period so each author can always propose within
@@ -429,10 +427,15 @@ impl<T: Config> Pallet<T> {
 		// The exception is for block 1: the genesis has slot 0, so we treat epoch 0 as having
 		// started at the slot of block 1. We want to use the same randomness and validator set as
 		// signalled in the genesis, so we don't rotate the epoch.
-		now != One::one() && {
-			let diff = CurrentSlot::<T>::get().saturating_sub(Self::current_epoch_start());
-			*diff >= T::EpochDuration::get()
-		}
+		now != One::one() && Self::current_slot_epoch_index() >= T::EpochDuration::get()
+	}
+
+	fn current_slot_epoch_index() -> u64 {
+		Self::slot_epoch_index(CurrentSlot::<T>::get())
+	}
+
+	fn slot_epoch_index(slot: Slot) -> u64 {
+		*slot.saturating_sub(Self::current_epoch_start())
 	}
 
 	/// DANGEROUS: Enact an epoch change. Should be done on every block where `should_epoch_change`
@@ -521,7 +524,6 @@ impl<T: Config> Pallet<T> {
 				}
 				tickets.truncate(max);
 			}
-			// TODO: outside-in sort
 
 			let tickets = BoundedVec::<Ticket, T::MaxTickets>::try_from(tickets)
 				.expect("vector has been eventually truncated; qed");
@@ -649,6 +651,14 @@ impl<T: Config> Pallet<T> {
 		// TODO: reset randomness accumulator? Maybe we can leave it as is...
 
 		this_randomness
+	}
+
+	/// Get ticket for the given slot.
+	pub fn slot_ticket(slot: Slot) -> Option<Ticket> {
+		// TODO-SASS: outside in...
+		let idx = Self::slot_epoch_index(slot);
+		let _ = idx;
+		None
 	}
 
 	/// TODO-SASS: improve docs

@@ -120,8 +120,6 @@ pub struct Ticket {
 	pub authority_index: u32,
 	/// TODO
 	pub vrf_output: VRFOutput,
-	// This should not be required... Required for the claim
-	//pub vrf_proof: VRFProof,
 }
 
 // TODO-SASS
@@ -196,6 +194,9 @@ sp_api::decl_runtime_apis! {
 		fn submit_tickets_unsigned_extrinsic(
 			tickets: Vec<Ticket>
 		) -> Option<()>;
+
+		/// Get ticket for the given slot.
+		fn slot_ticket(slot: Slot) -> Option<Ticket>;
 
 		// TODO-SASS: incomplete API
 	}

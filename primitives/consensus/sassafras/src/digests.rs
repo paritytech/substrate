@@ -40,12 +40,8 @@ pub struct PrimaryPreDigest {
 	pub block_vrf_output: VRFOutput,
 	/// Block VRF proof.
 	pub block_vrf_proof: VRFProof,
-	// /// Index of ticket VRF proof that has been previously committed.
-	// pub ticket_vrf_index: VRFIndex,
-	// /// Attempt number of the ticket VRF proof.
-	// pub ticket_vrf_attempt: u64,
-	// /// Reveal of ticket VRF proof.
-	// pub ticket_vrf_proof: VRFProof,
+	/// Ticket VRF proof.
+	pub ticket_vrf_proof: VRFProof,
 }
 
 /// Sassafras secondary slot assignment pre-digest.

@@ -429,6 +429,10 @@ impl_runtime_apis! {
 		) -> Option<()> {
 			Sassafras::submit_tickets_unsigned_extrinsic(tickets)
 		}
+
+		fn slot_ticket(slot: sp_consensus_sassafras::Slot) -> Option<sp_consensus_sassafras::Ticket> {
+			Sassafras::slot_ticket(slot)
+		}
 	}
 
 	impl sp_session::SessionKeys<Block> for Runtime {
