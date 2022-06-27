@@ -151,7 +151,7 @@ where
 		extensions: Option<Extensions>,
 		offchain_call: bool,
 	) -> sp_blockchain::Result<Vec<u8>> {
-		eprintln!("<LocalCallExecutor as CallExecutor>::call [at: {}; offchain_call: {}; method: {}]", at, offchain_call, method);
+		log::warn!("<LocalCallExecutor as CallExecutor>::call [at: {}; offchain_call: {}; method: {}]", at, offchain_call, method);
 
 		let mut changes = OverlayedChanges::default();
 		let state = self.backend.state_at(*at)?;
@@ -207,7 +207,7 @@ where
 	where
 		ExecutionManager<EM>: Clone,
 	{
-		eprintln!("<LocalCallExecutor as CallExecutor>::contextual_call [at: {}; offchain_call: {}; method: {}]", at, offchain_call, method);
+		log::warn!("<LocalCallExecutor as CallExecutor>::contextual_call [at: {}; offchain_call: {}; method: {}]", at, offchain_call, method);
 
 		let mut storage_transaction_cache = storage_transaction_cache.map(|c| c.borrow_mut());
 
