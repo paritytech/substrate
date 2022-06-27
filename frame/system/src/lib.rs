@@ -371,8 +371,13 @@ pub mod pallet {
 		// that's not possible at present (since it's within the pallet macro).
 		#[pallet::weight(*_ratio * T::BlockWeights::get().max_block)]
 		pub fn fill_block(origin: OriginFor<T>, _ratio: Perbill) -> DispatchResultWithPostInfo {
-			ensure_root(origin)?;
-			Ok(().into())
+			match ensure_root(origin) {
+				Ok(_) => Ok(().into()),
+				Err(_) => {
+					// roughly same as a 4 byte remark since perbill is u32.
+					Ok(Some(T::SystemWeightInfo::remark(4u32)).into())
+				}
+			}
 		}
 
 		/// Make some on-chain remark.
