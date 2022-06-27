@@ -117,10 +117,15 @@ where
 
 	// choose the block where the runtime code is defined.
 	fn block_with_code(&self, block_id: BlockId<Block>, offchain_call: bool) -> sp_blockchain::Result<BlockId<Block>> {
-		if offchain_call {
-			Ok(block_id)
-		} else {
-			Ok(block_id)
+		use sp_api::HeaderT;
+		use sp_runtime::traits::Zero;
+
+		let header = self.backend.blockchain().expect_header(block_id)?;
+
+		match (offchain_call, header.number().is_zero()) {
+			(_, true) => Ok(block_id),
+			(true, false) => Ok(BlockId::Hash(*header.parent_hash())),
+			(false, _) => Ok(block_id),
 		}
 	}
 }
