@@ -191,6 +191,7 @@ where
 		block: Option<Block::Hash>,
 		method: String,
 		call_data: Bytes,
+		offchain_call: bool,
 	) -> std::result::Result<Bytes, Error> {
 		self.block_or_best(block)
 			.and_then(|block| {
@@ -202,6 +203,7 @@ where
 						&*call_data,
 						self.client.execution_extensions().strategies().other,
 						None,
+						offchain_call,
 					)
 					.map(Into::into)
 			})

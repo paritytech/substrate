@@ -59,6 +59,7 @@ pub trait CallExecutor<B: BlockT>: RuntimeVersionOf {
 		call_data: &[u8],
 		strategy: ExecutionStrategy,
 		extensions: Option<Extensions>,
+		offchain_call: bool,
 	) -> Result<Vec<u8>, sp_blockchain::Error>;
 
 	/// Execute a contextual call on top of state in a block of a given hash.
@@ -88,6 +89,7 @@ pub trait CallExecutor<B: BlockT>: RuntimeVersionOf {
 		native_call: Option<NC>,
 		proof_recorder: &Option<ProofRecorder<B>>,
 		extensions: Option<Extensions>,
+		offchain_call: bool,
 	) -> sp_blockchain::Result<NativeOrEncoded<R>>
 	where
 		ExecutionManager<EM>: Clone;

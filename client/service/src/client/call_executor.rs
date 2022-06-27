@@ -149,6 +149,7 @@ where
 		call_data: &[u8],
 		strategy: ExecutionStrategy,
 		extensions: Option<Extensions>,
+		offchain_call: bool,
 	) -> sp_blockchain::Result<Vec<u8>> {
 		let mut changes = OverlayedChanges::default();
 		let state = self.backend.state_at(*at)?;
@@ -199,6 +200,7 @@ where
 		native_call: Option<NC>,
 		recorder: &Option<ProofRecorder<Block>>,
 		extensions: Option<Extensions>,
+		offchain_call: bool,
 	) -> Result<NativeOrEncoded<R>, sp_blockchain::Error>
 	where
 		ExecutionManager<EM>: Clone,

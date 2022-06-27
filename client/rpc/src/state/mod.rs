@@ -64,6 +64,7 @@ where
 		block: Option<Block::Hash>,
 		method: String,
 		call_data: Bytes,
+		offchain_call: bool,
 	) -> Result<Bytes, Error>;
 
 	/// Returns the keys with prefix, leave empty to get all the keys.
@@ -208,7 +209,7 @@ where
 	Client: Send + Sync + 'static,
 {
 	fn call(&self, method: String, data: Bytes, block: Option<Block::Hash>) -> RpcResult<Bytes> {
-		self.backend.call(block, method, data).map_err(Into::into)
+		self.backend.call(block, method, data, /* offchain_call: */ true).map_err(Into::into)
 	}
 
 	fn storage_keys(

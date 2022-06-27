@@ -60,6 +60,7 @@ use sp_consensus::{BlockOrigin, BlockStatus, Error as ConsensusError};
 
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 use sp_core::{
+	ExecutionContext,
 	storage::{
 		well_known_keys, ChildInfo, ChildType, PrefixedStorageKey, Storage, StorageChild,
 		StorageData, StorageKey,
@@ -1667,6 +1668,7 @@ where
 		params: CallApiAtParams<Block, NC, B::State>,
 	) -> Result<NativeOrEncoded<R>, sp_api::ApiError> {
 		let at = params.at;
+		let offchain_call = matches!(params.context, ExecutionContext::OffchainCall {..});
 
 		let (manager, extensions) =
 			self.execution_extensions.manager_and_extensions(at, params.context);
@@ -1682,6 +1684,7 @@ where
 				params.native_call,
 				params.recorder,
 				Some(extensions),
+				offchain_call,
 			)
 			.map_err(Into::into)
 	}
