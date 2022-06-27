@@ -114,6 +114,15 @@ where
 
 		Ok(code)
 	}
+
+	// choose the block where the runtime code is defined.
+	fn block_with_code(&self, block_id: BlockId<Block>, offchain_call: bool) -> sp_blockchain::Result<BlockId<Block>> {
+		if offchain_call {
+			Ok(block_id)
+		} else {
+			Ok(block_id)
+		}
+	}
 }
 
 impl<Block: BlockT, B, E> Clone for LocalCallExecutor<Block, B, E>
@@ -155,7 +164,9 @@ where
 
 		let mut changes = OverlayedChanges::default();
 		let state = self.backend.state_at(*at)?;
-		let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state);
+
+		let state_with_code = self.backend.state_at(self.block_with_code(*at, offchain_call)?)?;
+		let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state_with_code);
 		let runtime_code =
 			state_runtime_code.runtime_code().map_err(sp_blockchain::Error::RuntimeCode)?;
 
@@ -212,7 +223,7 @@ where
 		let mut storage_transaction_cache = storage_transaction_cache.map(|c| c.borrow_mut());
 
 		let state = self.backend.state_at(*at)?;
-
+		
 		let changes = &mut *changes.borrow_mut();
 
 		let at_hash = self.backend.blockchain().block_hash_from_id(at)?.ok_or_else(|| {
@@ -222,7 +233,8 @@ where
 		// It is important to extract the runtime code here before we create the proof
 		// recorder to not record it. We also need to fetch the runtime code from `state` to
 		// make sure we use the caching layers.
-		let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state);
+		let state_with_code = self.backend.state_at(self.block_with_code(*at, offchain_call)?)?;
+		let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state_with_code);
 
 		let runtime_code =
 			state_runtime_code.runtime_code().map_err(sp_blockchain::Error::RuntimeCode)?;
