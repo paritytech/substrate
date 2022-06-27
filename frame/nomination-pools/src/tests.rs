@@ -2490,7 +2490,7 @@ mod unbond {
 		})
 	}
 
-	// depositor can unbond inly up to `MinCreateBond`.
+	// depositor can unbond only up to `MinCreateBond`.
 	#[test]
 	fn depositor_permissioned_partial_unbond() {
 		ExtBuilder::default().ed(1).build_and_execute(|| {
@@ -2521,6 +2521,25 @@ mod unbond {
 				]
 			);
 		});
+	}
+
+	#[test]
+	fn non_depositor_permissioned_partial_unbond() {
+		// TOOD: Nikos.
+		todo!("non-depositor unbonds a few times, but cannot go below the limit, but it can unbond everything that is left")
+	}
+
+	#[test]
+	fn depositor_permissionless_partial_unbond() {
+		todo!()
+	}
+
+	#[test]
+	fn non_depositor_permissionless_partial_unbond() {
+		// TOOD: Nikos.
+		// permissionless unbond is enabled by the pool being blocked, and unbond being called by
+		// the root role.
+		todo!()
 	}
 
 	// same as above, but the pool is slashed and therefore the depositor cannot partially unbond.
