@@ -2523,23 +2523,152 @@ mod unbond {
 		});
 	}
 
+	// depositor can fully unbond only when Pool is in destroying state and is last member
+	#[test]
+	fn depositor_permissioned_fully_unbond() {
+		ExtBuilder::default().ed(1).build_and_execute(|| {
+			// given
+			StakingMinBond::set(5);
+			assert_eq!(Pools::depositor_min_bond(), 5);
+
+			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().active_points(), 10);
+			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().unbonding_points(), 0);
+
+			// depositor cannot fully unbond if pool in not destroying
+			// and be the only one left
+			assert_noop!(
+				Pools::fully_unbond(Origin::signed(10), 10),
+				Error::<Runtime>::MinimumBondNotMet
+			);
+
+			// set Pool in destroy state
+			unsafe_set_state(1, PoolState::Destroying);
+			// depositor now can fully unbond
+			assert_ok!(Pools::fully_unbond(Origin::signed(10), 10));
+		});
+	}
+
 	#[test]
 	fn non_depositor_permissioned_partial_unbond() {
-		// TOOD: Nikos.
-		todo!("non-depositor unbonds a few times, but cannot go below the limit, but it can unbond everything that is left")
+		ExtBuilder::default().add_members(vec![(40, 40)]).ed(1).build_and_execute(|| {
+			// non-depositor unbonds partially 1st time
+			assert_ok!(Pools::unbond(Origin::signed(40), 40, 20));
+			assert_eq!(PoolMembers::<Runtime>::get(40).unwrap().active_points(), 20);
+			assert_eq!(PoolMembers::<Runtime>::get(40).unwrap().unbonding_points(), 20);
+
+			// non-depositor unbonds partially 2nd time
+			assert_ok!(Pools::unbond(Origin::signed(40), 40, 15));
+			assert_eq!(PoolMembers::<Runtime>::get(40).unwrap().active_points(), 5);
+			assert_eq!(PoolMembers::<Runtime>::get(40).unwrap().unbonding_points(), 35);
+
+			// but not less than 2
+			assert_noop!(
+				Pools::unbond(Origin::signed(40), 40, 4),
+				Error::<Runtime>::MinimumBondNotMet
+			);
+
+			// though can unbond everything that is left
+			assert_ok!(Pools::unbond(Origin::signed(40), 40, 5));
+
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::Bonded { member: 40, pool_id: 1, bonded: 40, joined: true },
+					Event::Unbonded { member: 40, pool_id: 1, points: 20, balance: 20 },
+					Event::Unbonded { member: 40, pool_id: 1, points: 15, balance: 15 },
+					Event::Unbonded { member: 40, pool_id: 1, points: 5, balance: 5 },
+				]
+			);
+		});
 	}
 
 	#[test]
 	fn depositor_permissionless_partial_unbond() {
-		todo!()
+		ExtBuilder::default().add_members(vec![(40, 10)]).ed(1).build_and_execute(|| {
+			// given
+			StakingMinBond::set(5);
+			assert_eq!(Pools::depositor_min_bond(), 5);
+
+			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().active_points(), 10);
+			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().unbonding_points(), 0);
+			assert_eq!(PoolMembers::<Runtime>::get(40).unwrap().active_points(), 10);
+			assert_eq!(PoolMembers::<Runtime>::get(40).unwrap().unbonding_points(), 0);
+
+			// depositor cannot permissionlessly make a partial unbond
+			assert_noop!(
+				Pools::unbond(Origin::signed(10), 40, 7),
+				Error::<Runtime>::PartialUnbondNotAllowedPermissionlessly
+			);
+
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::Bonded { member: 40, pool_id: 1, bonded: 10, joined: true },
+				]
+			);
+		});
 	}
 
 	#[test]
 	fn non_depositor_permissionless_partial_unbond() {
-		// TOOD: Nikos.
-		// permissionless unbond is enabled by the pool being blocked, and unbond being called by
-		// the root role.
-		todo!()
+		ExtBuilder::default().add_members(vec![(40, 10)]).ed(1).build_and_execute(|| {
+			assert_eq!(PoolMembers::<Runtime>::get(40).unwrap().active_points(), 10);
+			assert_eq!(PoolMembers::<Runtime>::get(40).unwrap().unbonding_points(), 0);
+
+			// Partial unbond is not allowed
+			assert_noop!(
+				Pools::unbond(Origin::signed(900), 40, 2),
+				Error::<Runtime>::PartialUnbondNotAllowedPermissionlessly
+			);
+		});
+	}
+
+	#[test]
+	fn non_depositor_permissionless_can_kick_if_blocked() {
+		ExtBuilder::default().add_members(vec![(40, 10), (50, 10)]).ed(1).build_and_execute(|| {
+			// Given the pool is blocked
+			unsafe_set_state(1, PoolState::Blocked);
+			assert_eq!(PoolMembers::<Runtime>::get(40).unwrap().active_points(), 10);
+			assert_eq!(PoolMembers::<Runtime>::get(40).unwrap().unbonding_points(), 0);
+			assert_eq!(PoolMembers::<Runtime>::get(50).unwrap().active_points(), 10);
+			assert_eq!(PoolMembers::<Runtime>::get(50).unwrap().unbonding_points(), 0);
+
+			// Cannot kick if permissionless, not depositor and not root/state_toggler
+			assert_noop!(
+				Pools::fully_unbond(Origin::signed(50), 40),
+				Error::<Runtime>::NotKickerOrDestroying
+			);
+
+			// Can kick if permissionless, and root
+			assert_ok!(
+				Pools::fully_unbond(Origin::signed(900), 40)
+			);
+
+			// Can kick if permissionless, and state_toggler
+			assert_ok!(
+				Pools::fully_unbond(Origin::signed(902), 50)
+			);
+		});
+	}
+
+	#[test]
+	fn non_depositor_permissionless_can_kick_if_destroying() {
+		ExtBuilder::default().add_members(vec![(40, 10), (50, 10)]).ed(1).build_and_execute(|| {
+			// Given the pool is blocked
+			unsafe_set_state(1, PoolState::Destroying);
+			assert_eq!(PoolMembers::<Runtime>::get(40).unwrap().active_points(), 10);
+			assert_eq!(PoolMembers::<Runtime>::get(40).unwrap().unbonding_points(), 0);
+			assert_eq!(PoolMembers::<Runtime>::get(50).unwrap().active_points(), 10);
+			assert_eq!(PoolMembers::<Runtime>::get(50).unwrap().unbonding_points(), 0);
+
+			assert_ok!(
+				Pools::fully_unbond(Origin::signed(50), 40)
+			);
+		});
 	}
 
 	// same as above, but the pool is slashed and therefore the depositor cannot partially unbond.
