@@ -829,10 +829,6 @@ impl<T: Config> BondedPool<T> {
 				)
 			},
 			(false, true) => {
-				// depositor = alice
-				// target = alice
-				// caller = bob
-
 				debug_assert!(is_full_unbond);
 				if self.is_destroying_and_only_depositor(target_member.active_points()) {
 					// everything good, let them unbond anything.
