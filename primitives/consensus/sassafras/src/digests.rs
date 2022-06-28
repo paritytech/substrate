@@ -45,8 +45,7 @@ pub struct PrimaryPreDigest {
 }
 
 /// Sassafras secondary slot assignment pre-digest.
-/// TODO-SASS: use this for AURA fallback.
-/// Should we include block randomness here as well? Why not...
+/// TODO-SASS: Should we include block randomness here as well? Why not...
 #[derive(Clone, RuntimeDebug, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub struct SecondaryPreDigest {
 	/// Authority index.

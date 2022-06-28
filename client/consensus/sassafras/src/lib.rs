@@ -76,7 +76,7 @@ use sp_consensus::{
 	BlockOrigin, CacheKeyId, CanAuthorWith, Environment, Error as ConsensusError, Proposer,
 	SelectChain,
 };
-use sp_consensus_sassafras::{inherents::SassafrasInherentData, VRFProof};
+use sp_consensus_sassafras::{inherents::SassafrasInherentData, TicketMetadata, VRFProof};
 use sp_consensus_slots::{Slot, SlotDuration};
 use sp_core::{crypto::ByteArray, traits::SpawnEssentialNamed, ExecutionContext};
 use sp_inherents::{CreateInherentDataProviders, InherentData, InherentDataProvider};
@@ -118,8 +118,8 @@ pub struct Epoch {
 	pub randomness: [u8; VRF_OUTPUT_LENGTH],
 	/// Configuration of the epoch.
 	pub config: SassafrasEpochConfiguration,
-	/// Tickets proofs.
-	pub proofs: BTreeMap<u64, VRFProof>,
+	/// Tickets metadata.
+	pub tickets_info: BTreeMap<Ticket, TicketMetadata>,
 }
 
 impl EpochT for Epoch {
@@ -135,7 +135,7 @@ impl EpochT for Epoch {
 			randomness: descriptor.randomness,
 			// TODO-SASS: allow config change on epoch change (i.e. pass as param)
 			config: self.config.clone(),
-			proofs: BTreeMap::new(),
+			tickets_info: BTreeMap::new(),
 		}
 	}
 
@@ -159,7 +159,7 @@ impl Epoch {
 			authorities: genesis_config.genesis_authorities.clone(),
 			randomness: genesis_config.randomness,
 			config: SassafrasEpochConfiguration {},
-			proofs: BTreeMap::new(),
+			tickets_info: BTreeMap::new(),
 		}
 	}
 }
@@ -516,6 +516,8 @@ async fn tickets_worker<B, C, SC>(
 			{
 				error!(target: "sassafras", "🌳 Unable to submit tickets: {}", err)
 			}
+
+			// TODO-SASS: on error remove tickets from epoch...
 		}
 	}
 }

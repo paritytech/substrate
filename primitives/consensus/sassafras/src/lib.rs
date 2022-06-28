@@ -111,18 +111,20 @@ pub struct SassafrasEpochConfiguration {
 	// L: bound on aa number of tickets that can be gossiped
 }
 
-/// TODO-SASS: docs
-#[derive(Clone, Copy, PartialEq, Eq, Encode, Decode, RuntimeDebug, MaxEncodedLen, TypeInfo)]
-pub struct Ticket {
+// /// TODO-SASS: docs
+pub type Ticket = VRFOutput;
+
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+pub struct TicketMetadata {
 	/// TODO
 	pub attempt: u32,
 	/// TODO
 	pub authority_index: u32,
 	/// TODO
-	pub vrf_output: VRFOutput,
+	pub proof: VRFProof,
 }
 
-// TODO-SASS
+// TODO-SASS: On submit we may want to group together tickets with additional metadata
 // pub struct EpochTickets {
 //  /// Epoch index for the tickets list
 //  pub epoch_index: u64,

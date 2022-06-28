@@ -25,7 +25,7 @@ use sp_application_crypto::AppKey;
 use sp_consensus_sassafras::{
 	digests::{PreDigest, PrimaryPreDigest, SecondaryPreDigest},
 	make_ticket_transcript, make_ticket_transcript_data, make_transcript_data, AuthorityId,
-	SassafrasAuthorityWeight, Slot, Ticket, SASSAFRAS_TICKET_VRF_PREFIX,
+	SassafrasAuthorityWeight, Slot, Ticket, TicketMetadata, SASSAFRAS_TICKET_VRF_PREFIX,
 };
 use sp_consensus_vrf::schnorrkel::{PublicKey, VRFInOut, VRFOutput, VRFProof};
 use sp_core::{twox_64, ByteArray};
@@ -81,9 +81,12 @@ fn claim_primary_slot(
 	keystore: &SyncCryptoStorePtr,
 	authorities: &[(AuthorityId, usize)],
 ) -> Option<(PreDigest, AuthorityId)> {
-	log::debug!(target: "sassafras", "🌳 [TRY PRIMARY] ticket = [ attempt: {}, auth-idx: {} ]", ticket.attempt, ticket.authority_index);
+	log::debug!(target: "sassafras", "🌳 [TRY PRIMARY]");
+	let ticket_info = epoch.tickets_info.get(&ticket)?;
 
-	let idx = ticket.authority_index;
+	log::debug!(target: "sassafras", "🌳 ticket-info = [ attempt: {}, auth-idx: {} ]", ticket_info.attempt, ticket_info.authority_index);
+
+	let idx = ticket_info.authority_index;
 	let expected_author = authorities.get(idx as usize).map(|auth| &auth.0)?;
 
 	for (authority_id, authority_index) in authorities {
@@ -107,7 +110,7 @@ fn claim_primary_slot(
 					slot,
 					block_vrf_output: VRFOutput(signature.output),
 					block_vrf_proof: VRFProof(signature.proof.clone()),
-					ticket_vrf_proof: VRFProof(signature.proof), // TODO-SASS: fetch from epoch
+					ticket_vrf_proof: ticket_info.proof.clone(),
 				});
 				return Some((pre_digest, authority_id.clone()))
 			}
@@ -231,15 +234,14 @@ pub fn generate_epoch_tickets(
 					make_ticket_transcript(&epoch.randomness, attempt as u64, epoch.epoch_index);
 				if let Ok(inout) = signature.output.attach_input_hash(&public, transcript) {
 					if check_threshold(&inout, threshold) {
-						let ticket = Ticket {
+						let ticket = VRFOutput(signature.output);
+						tickets.push(ticket);
+						let ticket_info = TicketMetadata {
 							attempt: attempt as u32,
 							authority_index: authority_index as u32,
-							vrf_output: VRFOutput(signature.output),
+							proof: VRFProof(signature.proof),
 						};
-						tickets.push(ticket);
-						// TODO-SASS
-						let key = (authority_index as u64) << 32 | attempt as u64;
-						epoch.proofs.insert(key, VRFProof(signature.proof));
+						epoch.tickets_info.insert(ticket, ticket_info);
 					}
 				}
 			}

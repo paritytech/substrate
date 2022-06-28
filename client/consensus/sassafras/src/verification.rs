@@ -88,13 +88,16 @@ pub(super) fn check_header<B: BlockT + Sized>(
 	match &pre_digest {
 		PreDigest::Primary(primary) => {
 			// TODO-SASS: check primary
+			// 1. the ticket proof is valid
+			// 2. the block vrf proof is valid
 			let _ = primary;
-			log::debug!("checking primary (TODO)");
+			log::debug!(target: "sassafras", "🌳 checking primary (TODO)");
 		},
 		PreDigest::Secondary(secondary) => {
 			// TODO-SASS: check secondary
+			// 1. the expected author index
 			let _ = secondary;
-			log::debug!("checking secondary (TODO)");
+			log::debug!(target: "sassafras", "🌳 checking secondary (TODO)");
 		},
 	}
 

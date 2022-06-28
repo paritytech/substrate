@@ -340,8 +340,6 @@ pub mod pallet {
 		pub fn submit_tickets(origin: OriginFor<T>, mut tickets: Vec<Ticket>) -> DispatchResult {
 			ensure_none(origin)?;
 
-			print_tickets("Received", &tickets, *CurrentSlot::<T>::get());
-
 			// TODO-SASS
 			// Isn't there something like append? Maybe we can just use a map or a Vec<Vec<>>
 
@@ -402,17 +400,6 @@ pub mod pallet {
 			}
 		}
 	}
-}
-
-fn print_tickets(verb: &str, tickets: &[Ticket], slot: u64) {
-	use core::fmt::Write;
-	let mut w = sp_std::Writer::default();
-	let _ = write!(&mut w, "{} {} tickets (slot = {}): [ ", verb, tickets.len(), slot);
-	for ticket in tickets.iter() {
-		let _ = write!(&mut w, "{}, ", ticket.attempt);
-	}
-	let _ = write!(&mut w, "] \n");
-	log::debug!(target: "sassafras::runtime", "🌳 {}", sp_std::str::from_utf8(w.inner()).unwrap());
 }
 
 // TODO-SASS
@@ -646,7 +633,7 @@ impl<T: Config> Pallet<T> {
 		log::debug!(target: "sassafras", "🌳 Enact tickets for next epoch");
 		let mut tickets = NextTickets::<T>::get().into_inner();
 
-		tickets.sort_unstable_by_key(|t| t.vrf_output);
+		tickets.sort_unstable();
 		if tickets.len() > T::MaxTickets::get() as usize {
 			// Drop extra tickets from the middle
 			let max = T::MaxTickets::get() as usize;
@@ -683,10 +670,7 @@ impl<T: Config> Pallet<T> {
 	/// TODO-SASS: improve docs
 	/// Submit the next epoch validator tickets via an unsigned extrinsic.
 	pub fn submit_tickets_unsigned_extrinsic(tickets: Vec<Ticket>) -> Option<()> {
-		print_tickets("Submitting", &tickets, *CurrentSlot::<T>::get());
-
 		let call = Call::submit_tickets { tickets };
-
 		if let Err(_) = SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into()) {
 			log::error!(target: "sassafras::runtime","🌳 Error submitting tickets");
 		}
