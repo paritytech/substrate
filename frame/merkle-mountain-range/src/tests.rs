@@ -547,3 +547,44 @@ fn should_canonicalize_offchain() {
 		);
 	});
 }
+
+#[test]
+fn should_verify_canonicalized() {
+	use frame_support::traits::Hooks;
+	let _ = env_logger::try_init();
+
+	// How deep is our fork-aware storage (in terms of blocks/leaves, nodes will be more).
+	let block_hash_size: u64 = <Test as frame_system::Config>::BlockHashCount::get();
+
+	// Start off with chain initialisation and storing indexing data off-chain.
+	// Create twice as many leaf entries than our fork-aware capacity,
+	// resulting in ~half of MMR storage to use canonical keys and the other half fork-aware keys.
+	// Verify that proofs can be generated (using leaves and nodes from full set) and verified.
+	let mut ext = new_test_ext();
+	register_offchain_ext(&mut ext);
+	ext.execute_with(|| {
+		for blocknum in 0u32..(2 * block_hash_size).try_into().unwrap() {
+			new_block();
+			<Pallet<Test> as Hooks<BlockNumber>>::offchain_worker(blocknum.into());
+		}
+	});
+	ext.persist_offchain_overlay();
+
+	// Generate proofs for some blocks.
+	let (leaves, proofs) =
+		ext.execute_with(|| crate::Pallet::<Test>::generate_batch_proof(vec![0, 4, 5, 7]).unwrap());
+	// Verify all previously generated proofs.
+	ext.execute_with(|| {
+		assert_eq!(crate::Pallet::<Test>::verify_leaves(leaves, proofs), Ok(()));
+	});
+
+	// Generate proofs for some new blocks.
+	let (leaves, proofs) = ext.execute_with(|| {
+		crate::Pallet::<Test>::generate_batch_proof(vec![block_hash_size + 7]).unwrap()
+	});
+	// Add some more blocks then verify all previously generated proofs.
+	ext.execute_with(|| {
+		add_blocks(7);
+		assert_eq!(crate::Pallet::<Test>::verify_leaves(leaves, proofs), Ok(()));
+	});
+}
