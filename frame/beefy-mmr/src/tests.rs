@@ -134,7 +134,6 @@ fn should_contain_valid_leaf_data() {
 		<frame_system::Pallet<Test>>::parent_hash()
 	});
 
-	// let key =
 	let mmr_leaf = read_mmr_leaf(&mut ext, offchain_key(parent_hash, 1));
 	assert_eq!(
 		mmr_leaf,

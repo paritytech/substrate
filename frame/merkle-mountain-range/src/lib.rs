@@ -235,7 +235,10 @@ pub mod pallet {
 			//
 			// This approach works to eliminate fork-induced leaf collisions in offchain db,
 			// under the assumption that no fork will be deeper than `frame_system::BlockHashCount`
-			// blocks (2400 blocks on Polkadot, Kusama, Rococo, etc).
+			// blocks (2400 blocks on Polkadot, Kusama, Rococo, etc):
+			//   entries pertaining to block `N` where `N < current-2400` are moved to a key based
+			//   solely on block number. The only way to have collisions is if two competing forks
+			//   are deeper than 2400 blocks and they both "canonicalize" their view of block `N`.
 			Storage::<OffchainStorage, T, I, LeafOf<T, I>>::canonicalize_offchain();
 		}
 	}

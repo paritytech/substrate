@@ -91,12 +91,10 @@ where
 			let leaf_to_canon = leaves.saturating_sub(window_size);
 			let parent_hash_of_leaf = Pallet::<T, I>::parent_hash_of_leaf(leaf_to_canon, leaves);
 			let nodes_to_canon = NodesUtils::right_branch_ending_in_leaf(leaf_to_canon);
-			sp_std::if_std! {
-				frame_support::log::debug!(
-					target: "runtime::mmr", "Nodes to canon for leaf {}: {:?}",
-					leaf_to_canon, nodes_to_canon
-				);
-			}
+			frame_support::log::debug!(
+				target: "runtime::mmr", "Nodes to canon for leaf {}: {:?}",
+				leaf_to_canon, nodes_to_canon
+			);
 			for pos in nodes_to_canon {
 				let key = Pallet::<T, I>::offchain_key(parent_hash_of_leaf, pos);
 				let canon_key = Pallet::<T, I>::canon_offchain_key(pos);
@@ -106,21 +104,17 @@ where
 					offchain::local_storage_clear(StorageKind::PERSISTENT, &key);
 					// Add under new canon key.
 					offchain::local_storage_set(StorageKind::PERSISTENT, &canon_key, &elem);
-					sp_std::if_std! {
-						frame_support::log::debug!(
-							target: "runtime::mmr",
-							"Moved elem at pos {} from key {:?} to canon key {:?}",
-							pos, key, canon_key
-						);
-					}
+					frame_support::log::debug!(
+						target: "runtime::mmr",
+						"Moved elem at pos {} from key {:?} to canon key {:?}",
+						pos, key, canon_key
+					);
 				} else {
-					sp_std::if_std! {
-						frame_support::log::debug!(
-							target: "runtime::mmr",
-							"Offchain: could not get elem at pos {} using key {:?}",
-							pos, key
-						);
-					}
+					frame_support::log::debug!(
+						target: "runtime::mmr",
+						"Offchain: could not get elem at pos {} using key {:?}",
+						pos, key
+					);
 				}
 			}
 		}
@@ -142,12 +136,10 @@ where
 		let parent_hash_of_ancestor =
 			Pallet::<T, I>::parent_hash_of_leaf(ancestor_leaf_idx, leaves_count);
 		let key = Pallet::<T, I>::offchain_key(parent_hash_of_ancestor, pos);
-		sp_std::if_std! {
-			frame_support::log::debug!(
-				target: "runtime::mmr", "offchain get {}: leaf idx {:?}, hash {:?}, key {:?}",
-				pos, ancestor_leaf_idx, parent_hash_of_ancestor, key
-			);
-		}
+		frame_support::log::debug!(
+			target: "runtime::mmr", "offchain get {}: leaf idx {:?}, hash {:?}, key {:?}",
+			pos, ancestor_leaf_idx, parent_hash_of_ancestor, key
+		);
 		// Retrieve the element from Off-chain DB.
 		Ok(sp_io::offchain::local_storage_get(sp_core::offchain::StorageKind::PERSISTENT, &key)
 			.or_else(|| {
@@ -177,9 +169,10 @@ where
 			return Ok(())
 		}
 
-		sp_std::if_std! {
-			frame_support::log::trace!("elems: {:?}", elems.iter().map(|elem| elem.hash()).collect::<Vec<_>>());
-		}
+		frame_support::log::trace!(
+			"elems: {:?}",
+			elems.iter().map(|elem| elem.hash()).collect::<Vec<_>>()
+		);
 
 		let leaves = NumberOfLeaves::<T, I>::get();
 		let size = NodesUtils::new(leaves).size();
@@ -210,12 +203,10 @@ where
 			// "Canonicalization" in this case means moving this leaf under a new key based
 			// only on the leaf's `node_index`.
 			let key = Pallet::<T, I>::offchain_key(parent_hash, node_index);
-			sp_std::if_std! {
-				frame_support::log::debug!(
-					target: "runtime::mmr", "offchain set: pos {} parent_hash {:?} key {:?}",
-					node_index, parent_hash, key
-				);
-			}
+			frame_support::log::debug!(
+				target: "runtime::mmr", "offchain set: pos {} parent_hash {:?} key {:?}",
+				node_index, parent_hash, key
+			);
 			// Indexing API is used to store the full node content (both leaf and inner).
 			elem.using_encoded(|elem| offchain_index::set(&key, elem));
 
@@ -251,10 +242,8 @@ fn peaks_to_prune_and_store(
 	// both collections may share a common prefix.
 	let peaks_before = if old_size == 0 { vec![] } else { helper::get_peaks(old_size) };
 	let peaks_after = helper::get_peaks(new_size);
-	sp_std::if_std! {
-		frame_support::log::trace!("peaks_before: {:?}", peaks_before);
-		frame_support::log::trace!("peaks_after: {:?}", peaks_after);
-	}
+	frame_support::log::trace!("peaks_before: {:?}", peaks_before);
+	frame_support::log::trace!("peaks_after: {:?}", peaks_after);
 	let mut peaks_before = peaks_before.into_iter().peekable();
 	let mut peaks_after = peaks_after.into_iter().peekable();
 
