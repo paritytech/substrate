@@ -20,7 +20,7 @@
 use super::{find_pre_digest, sassafras_err, BlockT, Epoch, Error};
 use sc_consensus_slots::CheckedHeader;
 use sp_consensus_sassafras::{
-	digests::{CompatibleDigestItem, PreDigest, PrimaryPreDigest, SecondaryPreDigest},
+	digests::{CompatibleDigestItem, PreDigest},
 	make_transcript, AuthorityId, AuthorityPair, AuthoritySignature,
 };
 use sp_consensus_slots::Slot;
@@ -63,8 +63,8 @@ pub(super) fn check_header<B: BlockT + Sized>(
 
 	let pre_digest = pre_digest.map(Ok).unwrap_or_else(|| find_pre_digest::<B>(&header))?;
 
-	if pre_digest.slot() > slot_now {
-		return Ok(CheckedHeader::Deferred(header, pre_digest.slot()))
+	if pre_digest.slot > slot_now {
+		return Ok(CheckedHeader::Deferred(header, pre_digest.slot))
 	}
 
 	let seal = header
@@ -80,23 +80,21 @@ pub(super) fn check_header<B: BlockT + Sized>(
 	let _pre_hash = header.hash();
 
 	//let authorities = &epoch.authorities;
-	let author = match epoch.authorities.get(pre_digest.authority_index() as usize) {
+	let author = match epoch.authorities.get(pre_digest.authority_index as usize) {
 		Some(author) => author.0.clone(),
 		None => return Err(sassafras_err(Error::SlotAuthorNotFound)),
 	};
 
-	match &pre_digest {
-		PreDigest::Primary(primary) => {
+	match pre_digest.ticket_vrf_proof {
+		Some(_) => {
 			// TODO-SASS: check primary
 			// 1. the ticket proof is valid
 			// 2. the block vrf proof is valid
-			let _ = primary;
 			log::debug!(target: "sassafras", "🌳 checking primary (TODO)");
 		},
-		PreDigest::Secondary(secondary) => {
+		None => {
 			// TODO-SASS: check secondary
 			// 1. the expected author index
-			let _ = secondary;
 			log::debug!(target: "sassafras", "🌳 checking secondary (TODO)");
 		},
 	}

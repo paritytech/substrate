@@ -23,9 +23,9 @@ use crate::Epoch;
 use scale_codec::Encode;
 use sp_application_crypto::AppKey;
 use sp_consensus_sassafras::{
-	digests::{PreDigest, PrimaryPreDigest, SecondaryPreDigest},
-	make_ticket_transcript, make_ticket_transcript_data, make_transcript_data, AuthorityId,
-	SassafrasAuthorityWeight, Slot, Ticket, TicketMetadata, SASSAFRAS_TICKET_VRF_PREFIX,
+	digests::PreDigest, make_ticket_transcript, make_ticket_transcript_data, make_transcript_data,
+	AuthorityId, SassafrasAuthorityWeight, Slot, Ticket, TicketMetadata,
+	SASSAFRAS_TICKET_VRF_PREFIX,
 };
 use sp_consensus_vrf::schnorrkel::{PublicKey, VRFInOut, VRFOutput, VRFProof};
 use sp_core::{twox_64, ByteArray};
@@ -63,30 +63,22 @@ pub fn claim_slot_using_keys(
 		return None
 	}
 
-	// TODO-SASS: if we are not the owner of the primary, we can think of submitting the
-	// secondary for redundancy (as for BABE)...
-	if let Some(ticket) = ticket {
-		claim_primary_slot(slot, ticket, epoch, keystore, authorities)
-	} else {
-		claim_secondary_slot(slot, epoch, keystore, authorities)
-	}
-}
+	// TODO-SASS: fix u32 vs u64 for auth index
+	let (idx, proof) = match ticket {
+		Some(ticket) => {
+			log::debug!(target: "sassafras", "🌳 [TRY PRIMARY]");
+			let ticket_info = epoch.tickets_info.get(&ticket)?;
+			let idx = ticket_info.authority_index as u64;
+			(idx, Some(ticket_info.proof.clone()))
+		},
+		None => {
+			log::debug!(target: "sassafras", "🌳 [TRY SECONDARY]");
+			let idx = u64::from_le_bytes((epoch.randomness, slot).using_encoded(twox_64)) %
+				authorities.len() as u64;
+			(idx, None)
+		},
+	};
 
-/// Claim a primary slot if it is our turn given the ticket.
-/// Returns `None` if it is not our turn.
-fn claim_primary_slot(
-	slot: Slot,
-	ticket: Ticket,
-	epoch: &Epoch,
-	keystore: &SyncCryptoStorePtr,
-	authorities: &[(AuthorityId, usize)],
-) -> Option<(PreDigest, AuthorityId)> {
-	log::debug!(target: "sassafras", "🌳 [TRY PRIMARY]");
-	let ticket_info = epoch.tickets_info.get(&ticket)?;
-
-	log::debug!(target: "sassafras", "🌳 ticket-info = [ attempt: {}, auth-idx: {} ]", ticket_info.attempt, ticket_info.authority_index);
-
-	let idx = ticket_info.authority_index;
 	let expected_author = authorities.get(idx as usize).map(|auth| &auth.0)?;
 
 	for (authority_id, authority_index) in authorities {
@@ -105,50 +97,18 @@ fn claim_primary_slot(
 			);
 
 			if let Ok(Some(signature)) = result {
-				let pre_digest = PreDigest::Primary(PrimaryPreDigest {
+				let pre_digest = PreDigest {
 					authority_index: *authority_index as u32,
 					slot,
 					block_vrf_output: VRFOutput(signature.output),
 					block_vrf_proof: VRFProof(signature.proof.clone()),
-					ticket_vrf_proof: ticket_info.proof.clone(),
-				});
+					ticket_vrf_proof: proof,
+				};
 				return Some((pre_digest, authority_id.clone()))
 			}
 		}
 	}
-	None
-}
 
-/// Claim a secondary slot if it is our turn to propose
-/// Returns `None` if it is not our turn.
-fn claim_secondary_slot(
-	slot: Slot,
-	epoch: &Epoch,
-	keystore: &SyncCryptoStorePtr,
-	authorities: &[(AuthorityId, usize)],
-) -> Option<(PreDigest, AuthorityId)> {
-	log::debug!(target: "sassafras", "🌳 [TRY SECONDARY]");
-
-	let idx = u64::from_le_bytes((epoch.randomness, slot).using_encoded(twox_64)) %
-		authorities.len() as u64;
-	let expected_author = authorities
-		.get(idx as usize)
-		.map(|auth| &auth.0)
-		.expect("authorities not empty and index constrained to list length; qed");
-
-	for (authority_id, authority_index) in authorities {
-		if authority_id == expected_author &&
-			SyncCryptoStore::has_keys(
-				&**keystore,
-				&[(authority_id.to_raw_vec(), AuthorityId::ID)],
-			) {
-			let pre_digest = PreDigest::Secondary(SecondaryPreDigest {
-				authority_index: *authority_index as u32,
-				slot,
-			});
-			return Some((pre_digest, authority_id.clone()))
-		}
-	}
 	None
 }
 
@@ -163,6 +123,7 @@ fn claim_secondary_slot(
 /// - V: number of validator in epoch
 ///
 /// The parameters should be chosen such that T <= 1.
+// TODO-SASS: this shall be analyzed properly.
 #[inline]
 pub fn calculate_threshold(
 	redundancy_factor: usize,

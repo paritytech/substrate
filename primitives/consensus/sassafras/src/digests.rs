@@ -31,7 +31,7 @@ use sp_std::vec::Vec;
 
 /// Sassafras primary slot assignment pre-digest.
 #[derive(Clone, RuntimeDebug, Encode, Decode, MaxEncodedLen, TypeInfo)]
-pub struct PrimaryPreDigest {
+pub struct PreDigest {
 	/// Validator index.
 	pub authority_index: AuthorityIndex,
 	/// Corresponding slot number.
@@ -41,71 +41,7 @@ pub struct PrimaryPreDigest {
 	/// Block VRF proof.
 	pub block_vrf_proof: VRFProof,
 	/// Ticket VRF proof.
-	pub ticket_vrf_proof: VRFProof,
-}
-
-/// Sassafras secondary slot assignment pre-digest.
-/// TODO-SASS: Should we include block randomness here as well? Why not...
-#[derive(Clone, RuntimeDebug, Encode, Decode, MaxEncodedLen, TypeInfo)]
-pub struct SecondaryPreDigest {
-	/// Authority index.
-	pub authority_index: AuthorityIndex,
-	/// Slot number.
-	pub slot: Slot,
-}
-
-/// A Sassafras pre-runtime digest. This contains all data required to validate a
-/// block and for the Sassafras runtime module.
-#[derive(Clone, RuntimeDebug, Encode, Decode, MaxEncodedLen, TypeInfo)]
-pub enum PreDigest {
-	/// Primary VRF-based slot assignment.
-	/// TODO-SASS: is this codec index really required here?
-	#[codec(index = 1)]
-	Primary(PrimaryPreDigest),
-	/// Secondary deterministic slot assignment.
-	#[codec(index = 2)]
-	Secondary(SecondaryPreDigest),
-}
-
-impl PreDigest {
-	/// Returns the slot number of the pre digest.
-	pub fn authority_index(&self) -> AuthorityIndex {
-		match self {
-			PreDigest::Primary(primary) => primary.authority_index,
-			PreDigest::Secondary(secondary) => secondary.authority_index,
-		}
-	}
-
-	/// Returns the slot of the pre digest.
-	pub fn slot(&self) -> Slot {
-		match self {
-			PreDigest::Primary(primary) => primary.slot,
-			PreDigest::Secondary(secondary) => secondary.slot,
-		}
-	}
-
-	/// Returns true if this pre-digest is for a primary slot assignment.
-	pub fn is_primary(&self) -> bool {
-		matches!(self, PreDigest::Primary(_))
-	}
-
-	/// Returns the weight _added_ by this digest, not the cumulative weight
-	/// of the chain.
-	pub fn added_weight(&self) -> crate::SassafrasBlockWeight {
-		match self {
-			PreDigest::Primary(_) => 1,
-			PreDigest::Secondary(_) => 0,
-		}
-	}
-
-	/// Returns the VRF output and proof, if they exist.
-	pub fn vrf(&self) -> Option<(&VRFOutput, &VRFProof)> {
-		match self {
-			PreDigest::Primary(primary) =>
-				Some((&primary.block_vrf_output, &primary.block_vrf_proof)),
-			PreDigest::Secondary(_) => None,
-		}
-	}
+	pub ticket_vrf_proof: Option<VRFProof>,
 }
 
 /// Information about the next epoch. This is broadcast in the first block
@@ -124,6 +60,7 @@ pub enum ConsensusLog {
 	/// The epoch has changed. This provides information about the _next_
 	/// epoch - information about the _current_ epoch (i.e. the one we've just
 	/// entered) should already be available earlier in the chain.
+	// TODO-SASS: are these codex indices requried?
 	#[codec(index = 1)]
 	NextEpochData(NextEpochDescriptor),
 	/// Disable the authority with given index.
@@ -139,14 +76,14 @@ pub trait CompatibleDigestItem: Sized {
 	/// If this item is an Sassafras pre-digest, return it.
 	fn as_sassafras_pre_digest(&self) -> Option<PreDigest>;
 
-	/// Construct a digest item which contains a Sassafras seal.
+	// /// Construct a digest item which contains a Sassafras seal.
 	fn sassafras_seal(signature: AuthoritySignature) -> Self;
 
 	/// If this item is a Sassafras signature, return the signature.
 	fn as_sassafras_seal(&self) -> Option<AuthoritySignature>;
 
-	/// If this item is a Sassafras epoch descriptor, return it.
-	fn as_next_epoch_descriptor(&self) -> Option<NextEpochDescriptor>;
+	// /// If this item is a Sassafras epoch descriptor, return it.
+	//fn as_next_epoch_descriptor(&self) -> Option<NextEpochDescriptor>;
 
 	// TODO-SASS
 	// Add next-config-descriptor
@@ -169,10 +106,10 @@ impl CompatibleDigestItem for DigestItem {
 		self.seal_try_to(&SASSAFRAS_ENGINE_ID)
 	}
 
-	fn as_next_epoch_descriptor(&self) -> Option<NextEpochDescriptor> {
-		self.consensus_try_to(&SASSAFRAS_ENGINE_ID).and_then(|x: ConsensusLog| match x {
-			ConsensusLog::NextEpochData(n) => Some(n),
-			_ => None,
-		})
-	}
+	// fn as_next_epoch_descriptor(&self) -> Option<NextEpochDescriptor> {
+	// 	self.consensus_try_to(&SASSAFRAS_ENGINE_ID).and_then(|x: ConsensusLog| match x {
+	// 		ConsensusLog::NextEpochData(n) => Some(n),
+	// 		_ => None,
+	// 	})
+	// }
 }

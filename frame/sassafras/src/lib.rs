@@ -272,8 +272,9 @@ pub mod pallet {
 			// that this block was the first in a new epoch, the changeover logic has
 			// already occurred at this point, so the under-construction randomness
 			// will only contain outputs from the right epoch.
+			// TODO-SASS: maybe here we can `expect` that is initialized (panic if not)
 			if let Some(pre_digest) = Initialized::<T>::take().flatten() {
-				let authority_index = pre_digest.authority_index();
+				let authority_index = pre_digest.authority_index;
 
 				// TODO-SASS: check for disabled validators
 				// if T::DisabledValidators::is_disabled(authority_index) {
@@ -283,43 +284,47 @@ pub mod pallet {
 				// 	);
 				// }
 
-				if let Some((vrf_output, vrf_proof)) = pre_digest.vrf() {
-					let randomness: Option<schnorrkel::Randomness> = Authorities::<T>::get()
-						.get(authority_index as usize)
-						.and_then(|(authority, _)| {
-							schnorrkel::PublicKey::from_bytes(authority.as_slice()).ok()
-						})
-						.and_then(|pubkey| {
-							let current_slot = CurrentSlot::<T>::get();
+				let randomness: Option<schnorrkel::Randomness> = Authorities::<T>::get()
+					.get(authority_index as usize)
+					.and_then(|(authority, _)| {
+						schnorrkel::PublicKey::from_bytes(authority.as_slice()).ok()
+					})
+					.and_then(|pubkey| {
+						let current_slot = CurrentSlot::<T>::get();
 
-							// TODO-SASS: clarification... why we use the chain randomness here?
-							let transcript = sp_consensus_sassafras::make_transcript(
-								&Self::randomness(),
-								current_slot,
-								EpochIndex::<T>::get(),
-							);
+						let transcript = sp_consensus_sassafras::make_transcript(
+							&Self::randomness(),
+							current_slot,
+							EpochIndex::<T>::get(),
+						);
 
-							// This has already been verified by the client on block import.
-							debug_assert!(pubkey
-								.vrf_verify(transcript.clone(), vrf_output, vrf_proof)
-								.is_ok());
+						// This has already been verified by the client on block import.
+						let vrf_output = pre_digest.block_vrf_output;
+						debug_assert!(pubkey
+							.vrf_verify(
+								transcript.clone(),
+								&vrf_output,
+								&pre_digest.block_vrf_proof
+							)
+							.is_ok());
 
-							vrf_output.0.attach_input_hash(&pubkey, transcript).ok()
-						})
-						.map(|inout| {
-							inout.make_bytes(sp_consensus_sassafras::SASSAFRAS_BLOCK_VRF_PREFIX)
-						});
+						vrf_output.0.attach_input_hash(&pubkey, transcript).ok()
+					})
+					.map(|inout| {
+						inout.make_bytes(sp_consensus_sassafras::SASSAFRAS_BLOCK_VRF_PREFIX)
+					});
 
-					if let Some(randomness) = pre_digest.is_primary().then(|| randomness).flatten()
-					{
-						Self::deposit_randomness(&randomness);
-					}
-
-					// TODO-SASS: is this really required?
-					//AuthorVrfRandomness::<T>::put(randomness);
+				// TODO-SASS: this should be infallible... i.e. randomness always deposited
+				// eventually better panic here
+				if let Some(randomness) = randomness {
+					Self::deposit_randomness(&randomness);
 				}
+
+				// TODO-SASS: is this really required?
+				//AuthorVrfRandomness::<T>::put(randomness);
 			}
 
+			// TODO-SASS
 			// remove temporary "environment" entry from storage
 			//Lateness::<T>::kill();
 
@@ -339,6 +344,8 @@ pub mod pallet {
 		#[pallet::weight(10_000)]
 		pub fn submit_tickets(origin: OriginFor<T>, mut tickets: Vec<Ticket>) -> DispatchResult {
 			ensure_none(origin)?;
+
+			log::debug!(target: "sassafras", "🌳 >>>>>>>>>> received {} tickets", tickets.len());
 
 			// TODO-SASS
 			// Isn't there something like append? Maybe we can just use a map or a Vec<Vec<>>
@@ -402,7 +409,6 @@ pub mod pallet {
 	}
 }
 
-// TODO-SASS
 // Inherent methods
 impl<T: Config> Pallet<T> {
 	/// Determine the Sassafras slot duration based on the Timestamp module configuration.
@@ -527,7 +533,6 @@ impl<T: Config> Pallet<T> {
 	fn deposit_randomness(randomness: &schnorrkel::Randomness) {
 		let mut s = RandomnessAccumulator::<T>::get().to_vec();
 		s.extend_from_slice(randomness);
-
 		let accumulator = sp_io::hashing::blake2_256(&s);
 		RandomnessAccumulator::<T>::put(accumulator);
 	}
@@ -578,9 +583,12 @@ impl<T: Config> Pallet<T> {
 			})
 			.next();
 
+		// TODO-SASS: maybe here we have to assert! the presence of pre_digest...
+		// Every valid sassafras block should come with a pre-digest
+
 		if let Some(ref pre_digest) = pre_digest {
 			// The slot number of the current block being initialized
-			let current_slot = pre_digest.slot();
+			let current_slot = pre_digest.slot;
 
 			// On the first non-zero block (i.e. block #1) this is where the first epoch
 			// (epoch #0) actually starts. We need to adjust internal storage accordingly.
@@ -630,11 +638,12 @@ impl<T: Config> Pallet<T> {
 	// 1. sort a piece on each block (i.e. do not overload wasmtime)
 	// 2. start once we reached half of the epoch (i.e. no more tickets can be submitted)
 	fn enact_tickets() {
-		log::debug!(target: "sassafras", "🌳 Enact tickets for next epoch");
 		let mut tickets = NextTickets::<T>::get().into_inner();
+		log::debug!(target: "sassafras", "🌳 >>>>>>>>> Enact {} tickets for next epoch", tickets.len());
 
 		tickets.sort_unstable();
 		if tickets.len() > T::MaxTickets::get() as usize {
+			log::debug!(target: "sassafras", "🌳 Truncating...");
 			// Drop extra tickets from the middle
 			let max = T::MaxTickets::get() as usize;
 			let diff = tickets.len() - max;
@@ -657,7 +666,7 @@ impl<T: Config> Pallet<T> {
 	pub fn slot_ticket(slot: Slot) -> Option<Ticket> {
 		let duration = T::EpochDuration::get();
 		let idx = Self::slot_epoch_index(slot) % duration;
-		log::debug!(target: "sassafras::runtime", ">>>>>>>>>>>>>>>>>>>>>>>>>>>> SLOT-IDX {}", idx);
+		log::debug!(target: "sassafras::runtime", "🌳 >>>>>>>>>>>>>>>>>>>>>>>>>>>>> SLOT-IDX {}", idx);
 
 		// TODO-SASS: return the tickets "outside-in"
 

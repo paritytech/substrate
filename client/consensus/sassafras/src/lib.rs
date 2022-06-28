@@ -74,9 +74,8 @@ use sp_blockchain::{
 };
 use sp_consensus::{
 	BlockOrigin, CacheKeyId, CanAuthorWith, Environment, Error as ConsensusError, Proposer,
-	SelectChain,
+	SelectChain, SyncOracle,
 };
-use sp_consensus_sassafras::{inherents::SassafrasInherentData, TicketMetadata, VRFProof};
 use sp_consensus_slots::{Slot, SlotDuration};
 use sp_core::{crypto::ByteArray, traits::SpawnEssentialNamed, ExecutionContext};
 use sp_inherents::{CreateInherentDataProviders, InherentData, InherentDataProvider};
@@ -87,15 +86,13 @@ use sp_runtime::{
 	DigestItem,
 };
 
-pub use sp_consensus::SyncOracle;
+// Re-export Sassafras primitives.
 pub use sp_consensus_sassafras::{
-	digests::{
-		CompatibleDigestItem, ConsensusLog, NextEpochDescriptor, PreDigest, PrimaryPreDigest,
-		SecondaryPreDigest,
-	},
+	digests::{CompatibleDigestItem, ConsensusLog, NextEpochDescriptor, PreDigest},
+	inherents::SassafrasInherentData,
 	AuthorityId, AuthorityPair, AuthoritySignature, SassafrasApi, SassafrasAuthorityWeight,
-	SassafrasEpochConfiguration, SassafrasGenesisConfiguration, Ticket, SASSAFRAS_ENGINE_ID,
-	VRF_OUTPUT_LENGTH,
+	SassafrasEpochConfiguration, SassafrasGenesisConfiguration, Ticket, TicketMetadata, VRFOutput,
+	VRFProof, SASSAFRAS_ENGINE_ID, VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH,
 };
 
 mod verification;
@@ -204,18 +201,12 @@ pub enum Error<B: BlockT> {
 	/// Slot author not found
 	#[error("Slot author not found")]
 	SlotAuthorNotFound,
-	/// Secondary slot assignments are disabled for the current epoch.
-	#[error("Secondary slot assignments are disabled for the current epoch.")]
-	SecondarySlotAssignmentsDisabled,
 	/// Bad signature
 	#[error("Bad signature on {0:?}")]
 	BadSignature(B::Hash),
 	/// Invalid author: Expected secondary author
 	#[error("Invalid author: Expected secondary author: {0:?}, got: {1:?}.")]
 	InvalidAuthor(AuthorityId, AuthorityId),
-	/// No secondary author expected.
-	#[error("No secondary author expected.")]
-	NoSecondaryAuthorExpected,
 	/// VRF verification of block by author failed
 	#[error("VRF verification of block by author {0:?} failed: threshold {1} exceeded")]
 	VRFVerificationOfBlockFailed(AuthorityId, u128),
@@ -799,7 +790,7 @@ where
 	}
 
 	fn proposing_remaining_duration(&self, slot_info: &SlotInfo<B>) -> Duration {
-		let parent_slot = find_pre_digest::<B>(&slot_info.chain_head).ok().map(|d| d.slot());
+		let parent_slot = find_pre_digest::<B>(&slot_info.chain_head).ok().map(|d| d.slot);
 
 		// TODO-SASS : clarify this field. In Sassafras this is part of 'self'
 		let block_proposal_slot_portion = sc_consensus_slots::SlotProportion::new(0.5);
@@ -821,7 +812,16 @@ pub fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<PreDigest, Error
 	// Genesis block doesn't contain a pre digest so let's generate a
 	// dummy one to not break any invariants in the rest of the code
 	if header.number().is_zero() {
-		return Ok(PreDigest::Secondary(SecondaryPreDigest { authority_index: 0, slot: 0.into() }))
+		const PROOF: &str = "zero sequence is a valid vrf output/proof; qed";
+		let block_vrf_output = VRFOutput::try_from([0; VRF_OUTPUT_LENGTH]).expect(PROOF);
+		let block_vrf_proof = VRFProof::try_from([0; VRF_PROOF_LENGTH]).expect(PROOF);
+		return Ok(PreDigest {
+			authority_index: 0,
+			slot: 0.into(),
+			block_vrf_output,
+			block_vrf_proof,
+			ticket_vrf_proof: None,
+		})
 	}
 
 	let mut pre_digest: Option<_> = None;
@@ -1034,7 +1034,7 @@ where
 					descendent_query(&*self.client),
 					&parent_hash,
 					parent_header_metadata.number,
-					pre_digest.slot(),
+					pre_digest.slot,
 				)
 				.map_err(|e| Error::<Block>::ForkTree(Box::new(e)))?
 				.ok_or(Error::<Block>::FetchEpoch(parent_hash))?;
@@ -1063,7 +1063,7 @@ where
 					.pre_digest
 					.as_sassafras_pre_digest()
 					.expect("check_header always returns a pre-digest digest item; qed");
-				let slot = sassafras_pre_digest.slot();
+				let slot = sassafras_pre_digest.slot;
 
 				// The header is valid but let's check if there was something else already
 				// proposed at the same slot by the given author. If there was, we will
@@ -1200,7 +1200,7 @@ where
 		let pre_digest = find_pre_digest::<Block>(&block.header).expect(
 			"valid sassafras headers must contain a predigest; header has been already verified; qed",
 		);
-		let slot = pre_digest.slot();
+		let slot = pre_digest.slot;
 
 		let parent_hash = *block.header.parent_hash();
 		let parent_header = self
@@ -1213,7 +1213,7 @@ where
 				)
 			})?;
 
-		let parent_slot = find_pre_digest::<Block>(&parent_header).map(|d| d.slot()).expect(
+		let parent_slot = find_pre_digest::<Block>(&parent_header).map(|d| d.slot).expect(
 			"parent is non-genesis; valid Sassafras headers contain a pre-digest; \
              header has already been verified; qed",
 		);
@@ -1258,7 +1258,8 @@ where
 			let epoch_descriptor = intermediate.epoch_descriptor;
 			let first_in_epoch = parent_slot < epoch_descriptor.start_slot();
 
-			let total_weight = parent_weight + pre_digest.added_weight();
+			let added_weight = pre_digest.ticket_vrf_proof.is_some() as u32;
+			let total_weight = parent_weight + added_weight;
 
 			// Search for this all the time so we can reject unexpected announcements.
 			let next_epoch_digest = find_next_epoch_digest::<Block>(&block.header)
@@ -1438,7 +1439,7 @@ where
 
 		find_pre_digest::<B>(&finalized_header)
 			.expect("finalized header must be valid; valid blocks have a pre-digest; qed")
-			.slot()
+			.slot
 	};
 
 	epoch_changes
