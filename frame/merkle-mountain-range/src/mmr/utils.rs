@@ -92,7 +92,7 @@ mod tests {
 	use mmr_lib::helper::leaf_index_to_pos;
 
 	#[test]
-	fn test_leaf_node_index_to_leaf_index() {
+	fn should_calculate_node_index_from_leaf_index() {
 		for index in 0..100000 {
 			let pos = leaf_index_to_pos(index);
 			assert_eq!(NodesUtils::leaf_node_index_to_leaf_index(pos), index);
@@ -112,10 +112,19 @@ mod tests {
 			right_branch_ending_in_leaf
 		}
 
-		(0..100000u64).for_each(|leaf_index| {
+		for leaf_index in 0..100000 {
 			let pos = mmr_lib::helper::leaf_index_to_pos(leaf_index);
 			assert_eq!(NodesUtils::right_branch_ending_in_leaf(pos), left_jump_sequence(pos));
-		});
+		}
+	}
+
+	#[test]
+	fn should_calculate_rightmost_leaf_node_index_from_pos() {
+		for pos in 0..100000 {
+			let leaf_pos = NodesUtils::rightmost_leaf_node_index_from_pos(pos);
+			let leaf_index = NodesUtils::leaf_node_index_to_leaf_index(leaf_pos);
+			assert!(NodesUtils::right_branch_ending_in_leaf(leaf_index).contains(&pos));
+		}
 	}
 
 	#[test]
