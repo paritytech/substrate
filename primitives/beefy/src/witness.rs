@@ -37,18 +37,18 @@ use crate::commitment::{Commitment, SignedCommitment};
 /// Ethereum Mainnet), in a commit-reveal like scheme, where first we submit only the signed
 /// commitment witness and later on, the client picks only some signatures to verify at random.
 #[derive(Debug, PartialEq, Eq, codec::Encode, codec::Decode)]
-pub struct SignedCommitmentWitness<TBlockNumber, TMerkleRoot> {
+pub struct SignedCommitmentWitness<TBlockNumber, TAggregatedSignature> {
 	/// The full content of the commitment.
 	pub commitment: Commitment<TBlockNumber>,
 
 	/// The bit vector of validators who signed the commitment.
 	pub signed_by: Vec<bool>, // TODO [ToDr] Consider replacing with bitvec crate
 
-	/// A merkle root of signatures in the original signed commitment.
-	pub signatures_merkle_root: TMerkleRoot,
+	/// Either a merkle root of signatures in the original signed commitment or just an aggregated BLS signature 
+	pub aggregated_signature: TAggregatedSignature,
 }
 
-impl<TBlockNumber, TMerkleRoot> SignedCommitmentWitness<TBlockNumber, TMerkleRoot> {
+impl<TBlockNumber, TAggregatedSignature> SignedCommitmentWitness<TBlockNumber, TAggregatedSignature> {
 	/// Convert [SignedCommitment] into [SignedCommitmentWitness].
 	///
 	/// This takes a [SignedCommitment], which contains full signatures
@@ -57,18 +57,18 @@ impl<TBlockNumber, TMerkleRoot> SignedCommitmentWitness<TBlockNumber, TMerkleRoo
 	/// and a merkle root of all signatures.
 	///
 	/// Returns the full list of signatures along with the witness.
-	pub fn from_signed<TMerkelize, TSignature>(
-		signed: SignedCommitment<TBlockNumber, TSignature>,
-		merkelize: TMerkelize,
+	pub fn from_signed<TSignatureAggregator, TSignature, TAggregatableSignature>(
+		signed: SignedCommitment<TBlockNumber, TSignature, TAggregatableSignature>,
+		aggregator: TSignatureAggregator,
 	) -> (Self, Vec<Option<TSignature>>)
 	where
-		TMerkelize: FnOnce(&[Option<TSignature>]) -> TMerkleRoot,
+		TSignatureAggregator: FnOnce(&[Option<TSignature>], &TAggregatableSignature) -> TAggregatedSignature,
 	{
-		let SignedCommitment { commitment, signatures } = signed;
+		let SignedCommitment { commitment, signatures, aggregatable_signature} = signed;
 		let signed_by = signatures.iter().map(|s| s.is_some()).collect();
-		let signatures_merkle_root = merkelize(&signatures);
+		let aggregated_signature = aggregator(&signatures,&aggregatable_signature);
 
-		(Self { commitment, signed_by, signatures_merkle_root }, signatures)
+		(Self { commitment, signed_by, aggregated_signature }, signatures)
 	}
 }
 

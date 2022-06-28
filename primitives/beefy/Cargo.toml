@@ -20,6 +20,7 @@ sp-application-crypto = { version = "6.0.0", default-features = false, path = ".
 sp-core = { version = "6.0.0", default-features = false, path = "../core" }
 sp-runtime = { version = "6.0.0", default-features = false, path = "../runtime" }
 sp-std = { version = "4.0.0", default-features = false, path = "../std" }
+bls-like = "*"
 
 [dev-dependencies]
 hex = "0.4.3"

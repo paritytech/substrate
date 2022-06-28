@@ -21,7 +21,7 @@ use sp_runtime::traits::{Block as BlockT, NumberFor};
 
 /// A commitment with matching BEEFY authorities' signatures.
 pub type BeefySignedCommitment<Block> =
-	beefy_primitives::SignedCommitment<NumberFor<Block>, beefy_primitives::crypto::Signature>;
+	beefy_primitives::SignedCommitment<NumberFor<Block>, beefy_primitives::crypto::Signature, >;
 
 /// The sending half of the notifications channel(s) used to send
 /// notifications about best BEEFY block from the gadget side.

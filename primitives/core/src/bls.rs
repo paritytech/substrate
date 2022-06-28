@@ -42,7 +42,7 @@ use bip39::{Language, Mnemonic, MnemonicType};
 use core::convert::TryFrom;
 #[cfg(feature = "full_crypto")]
 use bls_like::{
-    BLS377, EngineBLS, Keypair, Message, Signature as BLSSignature, pop::{ProofOfPossessionGenerator, ProofOfPossessionVerifier}, pop::BatchAssumingProofsOfPossession, SecretKey, SerializableToBytes
+    BLS377, EngineBLS, Keypair, Message, Signature as BLSSignature, pop::{ProofOfPossessionGenerator, ProofOfPossessionVerifier}, pop::SignatureAggregatorAssumingPoP, SerializableToBytes
 };
 #[cfg(feature = "std")]
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
