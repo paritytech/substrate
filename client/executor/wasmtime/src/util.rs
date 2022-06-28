@@ -144,8 +144,8 @@ fn is_madvise_working() -> std::result::Result<bool, String> {
 #[cfg(test)]
 #[cfg(target_os = "linux")]
 #[test]
-fn test_is_madvise_working() {
-	assert_eq!(is_madvise_working(), Ok(true));
+fn test_is_madvise_working_check_does_not_fail() {
+	assert!(is_madvise_working().is_ok());
 }
 
 /// Checks whether a given instantiation strategy can be safely used, and replaces
