@@ -669,6 +669,10 @@ where
 
 		// Get the next slot ticket
 		let block_id = BlockId::Hash(parent_header.hash());
+
+		// TODO-SASS
+		// Is this efficient? SHould we instead store the tickets list in the Epoch structure
+		// and share it within the `NextEpochData` as done for `randomness`?
 		let ticket = self.client.runtime_api().slot_ticket(&block_id, slot).ok()?;
 
 		debug!(target: "sassafras", "🌳 parent {}", parent_header.hash());

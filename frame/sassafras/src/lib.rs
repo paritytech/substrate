@@ -322,6 +322,12 @@ pub mod pallet {
 
 			// remove temporary "environment" entry from storage
 			//Lateness::<T>::kill();
+
+			// Enact new tickets list before next epoch starts (we don't want to propagate this
+			// list using pre-digest as we're doing with randomness).
+			if Self::current_slot_epoch_index() + 1 >= T::EpochDuration::get() {
+				Self::enact_tickets()
+			}
 		}
 	}
 
@@ -335,6 +341,9 @@ pub mod pallet {
 			ensure_none(origin)?;
 
 			print_tickets("Received", &tickets, *CurrentSlot::<T>::get());
+
+			// TODO-SASS
+			// Isn't there something like append? Maybe we can just use a map or a Vec<Vec<>>
 
 			let mut next_tickets = NextTickets::<T>::get().into_inner();
 			next_tickets.append(&mut tickets);
@@ -435,6 +444,9 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn slot_epoch_index(slot: Slot) -> u64 {
+		if *GenesisSlot::<T>::get() == 0 {
+			return 0
+		}
 		*slot.saturating_sub(Self::current_epoch_start())
 	}
 
@@ -450,8 +462,8 @@ impl<T: Config> Pallet<T> {
 			T::MaxAuthorities,
 		>,
 	) {
-		//TODO-SASS
-
+		//TODO-SASS: we don't depend on session module...
+		//
 		// PRECONDITION: caller has done initialization and is guaranteed by the session module to
 		// be called before this.
 		debug_assert!(Self::initialized().is_some());
@@ -503,34 +515,6 @@ impl<T: Config> Pallet<T> {
 		// 	NextEpochConfig::<T>::put(next_epoch_config);
 		// 	Self::deposit_consensus(ConsensusLog::NextConfigData(pending_epoch_config_change));
 		// }
-
-		// This sort should be benchmarked... for the moment just sort here
-		// NOTE: if using an offchain worker we can:
-		// 1. sort a piece on each block (i.e. do not overload wasmtime)
-		// 2. start once we reached half of the epoch (i.e. no more tickets can be submitted)
-		{
-			// Sort tickets and drop middle values, then sort using outside-in order.
-			let mut tickets = NextTickets::<T>::get().into_inner();
-
-			tickets.sort_unstable_by_key(|t| t.vrf_output);
-			if tickets.len() > T::MaxTickets::get() as usize {
-				// Drop extra tickets from the middle
-				let max = T::MaxTickets::get() as usize;
-				let diff = tickets.len() - max;
-				let off = max / 2;
-				// It is just not efficient to call remove
-				for i in off..off + diff {
-					tickets[i] = tickets[i + diff];
-				}
-				tickets.truncate(max);
-			}
-
-			let tickets = BoundedVec::<Ticket, T::MaxTickets>::try_from(tickets)
-				.expect("vector has been eventually truncated; qed");
-
-			Tickets::<T>::put(tickets);
-			NextTickets::<T>::kill();
-		}
 	}
 
 	/// Finds the start slot of the current epoch. Only guaranteed to give correct results after
@@ -540,8 +524,6 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn epoch_start(epoch_index: u64) -> Slot {
-		// (epoch_index * epoch_duration) + genesis_slot
-
 		const PROOF: &str = "slot number is u64; it should relate in some way to wall clock time; \
 							 if u64 is not enough we should crash for safety; qed.";
 
@@ -653,12 +635,49 @@ impl<T: Config> Pallet<T> {
 		this_randomness
 	}
 
+	/// Enact next epoch tickets list.
+	/// To work properly this should be done as the last action of the last epoch slot.
+	/// (i.e. current tickets list is not used at this point)
+	// This sort should be benchmarked... for the moment just sort here
+	// NOTE: if using an offchain worker we can:
+	// 1. sort a piece on each block (i.e. do not overload wasmtime)
+	// 2. start once we reached half of the epoch (i.e. no more tickets can be submitted)
+	fn enact_tickets() {
+		log::debug!(target: "sassafras", "🌳 Enact tickets for next epoch");
+		let mut tickets = NextTickets::<T>::get().into_inner();
+
+		tickets.sort_unstable_by_key(|t| t.vrf_output);
+		if tickets.len() > T::MaxTickets::get() as usize {
+			// Drop extra tickets from the middle
+			let max = T::MaxTickets::get() as usize;
+			let diff = tickets.len() - max;
+			let off = max / 2;
+			// It is just not efficient to call remove
+			for i in off..off + diff {
+				tickets[i] = tickets[i + diff];
+			}
+			tickets.truncate(max);
+		}
+
+		let tickets = BoundedVec::<Ticket, T::MaxTickets>::try_from(tickets)
+			.expect("vector has been eventually truncated; qed");
+
+		Tickets::<T>::put(tickets);
+		NextTickets::<T>::kill();
+	}
+
 	/// Get ticket for the given slot.
 	pub fn slot_ticket(slot: Slot) -> Option<Ticket> {
-		// TODO-SASS: outside in...
-		let idx = Self::slot_epoch_index(slot);
-		let _ = idx;
-		None
+		let duration = T::EpochDuration::get();
+		let idx = Self::slot_epoch_index(slot) % duration;
+		log::debug!(target: "sassafras::runtime", ">>>>>>>>>>>>>>>>>>>>>>>>>>>> SLOT-IDX {}", idx);
+
+		// TODO-SASS: return the tickets "outside-in"
+
+		// TODO-SASS. It is not efficient to load this vector on each slot.
+		// Maybe we should consider to use another strategy? Like a scattered vector?
+		let tickets = Tickets::<T>::get();
+		tickets.get(idx as usize).cloned()
 	}
 
 	/// TODO-SASS: improve docs

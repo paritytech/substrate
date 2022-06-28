@@ -63,9 +63,13 @@ pub fn claim_slot_using_keys(
 		return None
 	}
 
-	ticket
-		.and_then(|ticket| claim_primary_slot(slot, ticket, epoch, keystore, authorities))
-		.or_else(|| claim_secondary_slot(slot, epoch, keystore, authorities))
+	// TODO-SASS: if we are not the owner of the primary, we can think of submitting the
+	// secondary for redundancy (as for BABE)...
+	if let Some(ticket) = ticket {
+		claim_primary_slot(slot, ticket, epoch, keystore, authorities)
+	} else {
+		claim_secondary_slot(slot, epoch, keystore, authorities)
+	}
 }
 
 /// Claim a primary slot if it is our turn given the ticket.
@@ -77,7 +81,7 @@ fn claim_primary_slot(
 	keystore: &SyncCryptoStorePtr,
 	authorities: &[(AuthorityId, usize)],
 ) -> Option<(PreDigest, AuthorityId)> {
-	log::debug!(target: "sassafras", ">>> [TRY PRIMARY CLAIM] ticket [ attempt: {}, authority_index: {} ]", ticket.attempt, ticket.authority_index);
+	log::debug!(target: "sassafras", "🌳 [TRY PRIMARY] ticket = [ attempt: {}, auth-idx: {} ]", ticket.attempt, ticket.authority_index);
 
 	let idx = ticket.authority_index;
 	let expected_author = authorities.get(idx as usize).map(|auth| &auth.0)?;
@@ -120,7 +124,7 @@ fn claim_secondary_slot(
 	keystore: &SyncCryptoStorePtr,
 	authorities: &[(AuthorityId, usize)],
 ) -> Option<(PreDigest, AuthorityId)> {
-	log::debug!(target: "sassafras", ">>> [TRY SECONDARY CLAIM]");
+	log::debug!(target: "sassafras", "🌳 [TRY SECONDARY]");
 
 	let idx = u64::from_le_bytes((epoch.randomness, slot).using_encoded(twox_64)) %
 		authorities.len() as u64;
@@ -142,7 +146,6 @@ fn claim_secondary_slot(
 			return Some((pre_digest, authority_id.clone()))
 		}
 	}
-
 	None
 }
 
