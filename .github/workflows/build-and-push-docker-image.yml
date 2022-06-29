@@ -7,7 +7,7 @@ env:
   ECR_REPOSITORY: pos-network-node
 jobs:
   build-and-push:
-    runs-on: ubuntu-18.04
+    runs-on: [self-hosted, cere-network-xlarge-workers]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v1

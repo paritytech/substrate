@@ -10,14 +10,8 @@ on:
 
 jobs:
   run-tests:
-    runs-on: ubuntu-18.04
+    runs-on: [self-hosted, cere-network-xlarge-workers]
     steps:
-      - name: Maximize build space
-        uses: easimon/maximize-build-space@v3
-        with:
-          root-reserve-mb: 512
-          swap-size-mb: 1024
-          remove-dotnet: 'true'
       - name: Checkout
         uses: actions/checkout@v2
       - name: Checkout submodules
