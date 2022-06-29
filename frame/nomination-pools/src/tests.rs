@@ -2651,7 +2651,7 @@ mod unbond {
 
 				// Can kick if permissionless, and state_toggler
 				assert_ok!(Pools::fully_unbond(Origin::signed(902), 50));
-		});
+			});
 	}
 
 	#[test]
