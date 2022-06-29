@@ -3,7 +3,6 @@ on:
   push:
     branches:
       - dev-cere
-      - feature/CBI-2060-self-runners
 env:
   ECR_REPOSITORY: pos-network-node
 jobs:
