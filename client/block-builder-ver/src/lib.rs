@@ -226,14 +226,20 @@ where
 				next_header.hash(),
 				Default::default(),
 			);
-			api.initialize_block_with_context(
-				&self.block_id,
-				ExecutionContext::BlockConstruction,
-				&header,
-			)
-			.unwrap();
-			let txs = call(&self.block_id, &api);
-			TransactionOutcome::Rollback(txs)
+
+			if api.is_storage_migration_scheduled(&self.block_id).unwrap() {
+				log::debug!(target:"block_builder", "storage migration scheduled - ignoring any txs");
+				TransactionOutcome::Rollback(vec![])
+			}else{
+				api.initialize_block_with_context(
+					&self.block_id,
+					ExecutionContext::BlockConstruction,
+					&header,
+				)
+				.unwrap();
+				let txs = call(&self.block_id, &api);
+				TransactionOutcome::Rollback(txs)
+			}
 		});
 
 		let storage_changes = self

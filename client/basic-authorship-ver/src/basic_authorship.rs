@@ -451,10 +451,6 @@ where
 			seed,
 			|at,api| {
             let mut valid_txs = Vec::new();
-			if api.is_storage_migration_scheduled(&at).unwrap() {
-				debug!(target:"block_builder", "new session starts in next block, omiting transaction from the pool");
-				return valid_txs;
-			}
 
 			while let Some(pending_tx) = pending_iterator.next() {
 				let now = (self.now)();
