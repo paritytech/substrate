@@ -24,8 +24,7 @@ use scale_codec::Encode;
 use sp_application_crypto::AppKey;
 use sp_consensus_sassafras::{
 	digests::PreDigest, make_ticket_transcript, make_ticket_transcript_data, make_transcript_data,
-	AuthorityId, SassafrasAuthorityWeight, Slot, Ticket, TicketMetadata,
-	SASSAFRAS_TICKET_VRF_PREFIX,
+	AuthorityId, SassafrasAuthorityWeight, Slot, Ticket, TicketInfo, SASSAFRAS_TICKET_VRF_PREFIX,
 };
 use sp_consensus_vrf::schnorrkel::{PublicKey, VRFInOut, VRFOutput, VRFProof};
 use sp_core::{twox_64, ByteArray};
@@ -197,7 +196,7 @@ pub fn generate_epoch_tickets(
 					if check_threshold(&inout, threshold) {
 						let ticket = VRFOutput(signature.output);
 						tickets.push(ticket);
-						let ticket_info = TicketMetadata {
+						let ticket_info = TicketInfo {
 							attempt: attempt as u32,
 							authority_index: authority_index as u32,
 							proof: VRFProof(signature.proof),

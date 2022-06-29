@@ -115,7 +115,7 @@ pub struct SassafrasEpochConfiguration {
 pub type Ticket = VRFOutput;
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
-pub struct TicketMetadata {
+pub struct TicketInfo {
 	/// TODO
 	pub attempt: u32,
 	/// TODO
@@ -187,7 +187,7 @@ pub fn make_ticket_transcript_data(
 sp_api::decl_runtime_apis! {
 	/// API necessary for block authorship with Sassafras.
 	pub trait SassafrasApi {
-		/// Return the genesis configuration for Sassafras. The configuration is only read on genesis.
+		 /// Return the genesis configuration for Sassafras. The configuration is only read on genesis.
 		fn configuration() -> SassafrasGenesisConfiguration;
 
 		/// TODO-SASS: improve docs

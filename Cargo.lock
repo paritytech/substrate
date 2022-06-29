@@ -6121,7 +6121,7 @@ dependencies = [
 
 [[package]]
 name = "pallet-sassafras"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
@@ -8263,7 +8263,7 @@ dependencies = [
 
 [[package]]
 name = "sc-consensus-sassafras"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "async-trait",
  "fork-tree",
@@ -9772,7 +9772,7 @@ dependencies = [
 
 [[package]]
 name = "sp-consensus-sassafras"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "async-trait",
  "merlin",

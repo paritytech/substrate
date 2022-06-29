@@ -26,8 +26,8 @@ sc-telemetry = { version = "4.0.0-dev", path = "../../../client/telemetry" }
 sc-keystore = { version = "4.0.0-dev", path = "../../../client/keystore" }
 sc-transaction-pool = { version = "4.0.0-dev", path = "../../../client/transaction-pool" }
 sc-transaction-pool-api = { version = "4.0.0-dev", path = "../../../client/transaction-pool/api" }
-sc-consensus-sassafras = { version = "0.0.1", path = "../../../client/consensus/sassafras" }
-sp-consensus-sassafras = { version = "0.0.1", path = "../../../primitives/consensus/sassafras" }
+sc-consensus-sassafras = { version = "0.1.0", path = "../../../client/consensus/sassafras" }
+sp-consensus-sassafras = { version = "0.1.0", path = "../../../primitives/consensus/sassafras" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
 sc-consensus = { version = "0.10.0-dev", path = "../../../client/consensus/common" }
 sc-finality-grandpa = { version = "0.10.0-dev", path = "../../../client/finality-grandpa" }

@@ -1,6 +1,6 @@
 [package]
 name = "pallet-sassafras"
-version = "0.0.1"
+version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
 license = "Apache-2.0"
@@ -22,7 +22,7 @@ pallet-session = { version = "4.0.0-dev", default-features = false, path = "../s
 pallet-timestamp = { version = "4.0.0-dev", default-features = false, path = "../timestamp" }
 scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
 sp-application-crypto = { version = "6.0.0", default-features = false, path = "../../primitives/application-crypto" }
-sp-consensus-sassafras = { version = "0.0.1", default-features = false, path = "../../primitives/consensus/sassafras" }
+sp-consensus-sassafras = { version = "0.1.0", default-features = false, path = "../../primitives/consensus/sassafras" }
 sp-consensus-vrf = { version = "0.10.0-dev", default-features = false, path = "../../primitives/consensus/vrf" }
 sp-io = { version = "6.0.0", default-features = false, path = "../../primitives/io" }
 sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }

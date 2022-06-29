@@ -1,3 +1,5 @@
+// This file is part of Substrate.
+
 // This file is part of SubstrateNonepyright (C) 2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
@@ -91,14 +93,13 @@ pub use sp_consensus_sassafras::{
 	digests::{CompatibleDigestItem, ConsensusLog, NextEpochDescriptor, PreDigest},
 	inherents::SassafrasInherentData,
 	AuthorityId, AuthorityPair, AuthoritySignature, SassafrasApi, SassafrasAuthorityWeight,
-	SassafrasEpochConfiguration, SassafrasGenesisConfiguration, Ticket, TicketMetadata, VRFOutput,
+	SassafrasEpochConfiguration, SassafrasGenesisConfiguration, Ticket, TicketInfo, VRFOutput,
 	VRFProof, SASSAFRAS_ENGINE_ID, VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH,
 };
 
+mod authorship;
+mod aux_schema;
 mod verification;
-
-pub mod authorship;
-pub mod aux_schema;
 
 /// Sassafras epoch information
 #[derive(Encode, Decode, PartialEq, Eq, Clone, Debug)]
@@ -116,7 +117,7 @@ pub struct Epoch {
 	/// Configuration of the epoch.
 	pub config: SassafrasEpochConfiguration,
 	/// Tickets metadata.
-	pub tickets_info: BTreeMap<Ticket, TicketMetadata>,
+	pub tickets_info: BTreeMap<Ticket, TicketInfo>,
 }
 
 impl EpochT for Epoch {
@@ -130,7 +131,7 @@ impl EpochT for Epoch {
 			duration: self.duration,
 			authorities: descriptor.authorities,
 			randomness: descriptor.randomness,
-			// TODO-SASS: allow config change on epoch change (i.e. pass as param)
+			// TODO-SASS: allow config change on epoch change
 			config: self.config.clone(),
 			tickets_info: BTreeMap::new(),
 		}
@@ -174,12 +175,12 @@ pub enum Error<B: BlockT> {
 	/// Multiple Sassafras epoch change digests
 	#[error("Multiple Sassafras epoch change digests, rejecting!")]
 	MultipleEpochChangeDigests,
-	/// Multiple Sassafras config change digests
-	#[error("Multiple Sassafras config change digests, rejecting!")]
-	MultipleConfigChangeDigests,
-	/// Could not extract timestamp and slot
-	#[error("Could not extract timestamp and slot: {0}")]
-	Extraction(sp_consensus::Error),
+	// /// Multiple Sassafras config change digests
+	// #[error("Multiple Sassafras config change digests, rejecting!")]
+	// MultipleConfigChangeDigests,
+	// /// Could not extract timestamp and slot
+	// #[error("Could not extract timestamp and slot: {0}")]
+	// Extraction(sp_consensus::Error),
 	/// Could not fetch epoch
 	#[error("Could not fetch epoch at {0:?}")]
 	FetchEpoch(B::Hash),
@@ -201,16 +202,15 @@ pub enum Error<B: BlockT> {
 	/// Slot author not found
 	#[error("Slot author not found")]
 	SlotAuthorNotFound,
-	/// Bad signature
-	#[error("Bad signature on {0:?}")]
-	BadSignature(B::Hash),
-	/// Invalid author: Expected secondary author
-	#[error("Invalid author: Expected secondary author: {0:?}, got: {1:?}.")]
-	InvalidAuthor(AuthorityId, AuthorityId),
-	/// VRF verification of block by author failed
-	#[error("VRF verification of block by author {0:?} failed: threshold {1} exceeded")]
-	VRFVerificationOfBlockFailed(AuthorityId, u128),
-	// TODO-SASS
+	// /// Bad signature
+	// #[error("Bad signature on {0:?}")]
+	// BadSignature(B::Hash),
+	// /// Invalid author: Expected secondary author
+	// #[error("Invalid author: Expected secondary author: {0:?}, got: {1:?}.")]
+	// InvalidAuthor(AuthorityId, AuthorityId),
+	// /// VRF verification of block by author failed
+	// #[error("VRF verification of block by author {0:?} failed: threshold {1} exceeded")]
+	// VRFVerificationOfBlockFailed(AuthorityId, u128),
 	// /// VRF verification failed
 	// #[error("VRF verification failed: {0:?}")]
 	// VRFVerificationFailed(SignatureError),
@@ -220,9 +220,9 @@ pub enum Error<B: BlockT> {
 	/// Expected epoch change to happen.
 	#[error("Expected epoch change to happen at {0:?}, s{1}")]
 	ExpectedEpochChange(B::Hash, Slot),
-	/// Unexpected config change.
-	#[error("Unexpected config change")]
-	UnexpectedConfigChange,
+	// /// Unexpected config change.
+	// #[error("Unexpected config change")]
+	// UnexpectedConfigChange,
 	/// Unexpected epoch change
 	#[error("Unexpected epoch change")]
 	UnexpectedEpochChange,
@@ -278,6 +278,9 @@ pub struct Config {
 
 impl Config {
 	/// Read Sassafras genesis configuration from the runtime.
+	/// TODO-SASS: FIXME
+	/// this doesn't return the genesis configuration... but the Configuration
+	/// at best block. Maybe we can add `Option<BlockId>` to be more explicit (same for Babe)
 	pub fn get<B: BlockT, C>(client: &C) -> ClientResult<Self>
 	where
 		C: AuxStore + ProvideRuntimeApi<B> + UsageProvider<B>,

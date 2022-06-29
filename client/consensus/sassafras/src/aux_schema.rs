@@ -50,7 +50,7 @@ where
 }
 
 /// Update the epoch changes on disk after a change.
-pub(crate) fn write_epoch_changes<Block: BlockT, F, R>(
+pub fn write_epoch_changes<Block: BlockT, F, R>(
 	epoch_changes: &EpochChangesFor<Block, Epoch>,
 	write_aux: F,
 ) -> R
@@ -61,7 +61,7 @@ where
 }
 
 /// Load or initialize persistent epoch change data from backend.
-pub(crate) fn load_epoch_changes<B: BlockT, AS: AuxStore>(
+pub fn load_epoch_changes<B: BlockT, AS: AuxStore>(
 	backend: &AS,
 ) -> ClientResult<SharedEpochChanges<B, Epoch>> {
 	let maybe_epoch_changes =
@@ -81,7 +81,7 @@ pub(crate) fn load_epoch_changes<B: BlockT, AS: AuxStore>(
 }
 
 /// Write the cumulative chain-weight of a block ot aux storage.
-pub(crate) fn write_block_weight<H: Encode, F, R>(
+pub fn write_block_weight<H: Encode, F, R>(
 	block_hash: H,
 	block_weight: SassafrasBlockWeight,
 	write_aux: F,
@@ -94,7 +94,7 @@ where
 }
 
 /// Load the cumulative chain-weight associated with a block.
-pub(crate) fn load_block_weight<H: Encode, B: AuxStore>(
+pub fn load_block_weight<H: Encode, B: AuxStore>(
 	backend: &B,
 	block_hash: H,
 ) -> ClientResult<Option<SassafrasBlockWeight>> {
