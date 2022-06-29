@@ -993,12 +993,14 @@ benchmarks! {
 		for key in keys {
 			Storage::<T>::write(
 				&info.trie_id,
-				&VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?,
+				&VarSizedKey::<T>::try_from(key.clone()).map_err(|e| "Key has wrong length")?,
 				Some(vec![]),
 				None,
 				false,
 			)
 			.map_err(|_| "Failed to write to storage during setup.")?;
+			// Whitelist the key from further DB operations
+			frame_benchmarking::benchmarking::add_to_whitelist(key.into());
 		}
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
