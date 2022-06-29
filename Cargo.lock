@@ -4702,6 +4702,7 @@ dependencies = [
  "pallet-balances",
  "pallet-contracts",
  "pallet-im-online",
+ "pallet-sudo",
  "pallet-timestamp",
  "pallet-treasury",
  "parity-scale-codec",
