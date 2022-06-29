@@ -2629,46 +2629,46 @@ mod unbond {
 
 	#[test]
 	fn non_depositor_permissionless_can_kick_if_blocked() {
-		ExtBuilder::default().add_members(vec![(40, 10), (50, 10)]).ed(1).build_and_execute(|| {
-			// Given the pool is blocked
-			unsafe_set_state(1, PoolState::Blocked);
-			assert_eq!(PoolMembers::<Runtime>::get(40).unwrap().active_points(), 10);
-			assert_eq!(PoolMembers::<Runtime>::get(40).unwrap().unbonding_points(), 0);
-			assert_eq!(PoolMembers::<Runtime>::get(50).unwrap().active_points(), 10);
-			assert_eq!(PoolMembers::<Runtime>::get(50).unwrap().unbonding_points(), 0);
+		ExtBuilder::default()
+			.add_members(vec![(40, 10), (50, 10)])
+			.ed(1)
+			.build_and_execute(|| {
+				// Given the pool is blocked
+				unsafe_set_state(1, PoolState::Blocked);
+				assert_eq!(PoolMembers::<Runtime>::get(40).unwrap().active_points(), 10);
+				assert_eq!(PoolMembers::<Runtime>::get(40).unwrap().unbonding_points(), 0);
+				assert_eq!(PoolMembers::<Runtime>::get(50).unwrap().active_points(), 10);
+				assert_eq!(PoolMembers::<Runtime>::get(50).unwrap().unbonding_points(), 0);
 
-			// Cannot kick if permissionless, not depositor and not root/state_toggler
-			assert_noop!(
-				Pools::fully_unbond(Origin::signed(50), 40),
-				Error::<Runtime>::NotKickerOrDestroying
-			);
+				// Cannot kick if permissionless, not depositor and not root/state_toggler
+				assert_noop!(
+					Pools::fully_unbond(Origin::signed(50), 40),
+					Error::<Runtime>::NotKickerOrDestroying
+				);
 
-			// Can kick if permissionless, and root
-			assert_ok!(
-				Pools::fully_unbond(Origin::signed(900), 40)
-			);
+				// Can kick if permissionless, and root
+				assert_ok!(Pools::fully_unbond(Origin::signed(900), 40));
 
-			// Can kick if permissionless, and state_toggler
-			assert_ok!(
-				Pools::fully_unbond(Origin::signed(902), 50)
-			);
+				// Can kick if permissionless, and state_toggler
+				assert_ok!(Pools::fully_unbond(Origin::signed(902), 50));
 		});
 	}
 
 	#[test]
 	fn non_depositor_permissionless_can_kick_if_destroying() {
-		ExtBuilder::default().add_members(vec![(40, 10), (50, 10)]).ed(1).build_and_execute(|| {
-			// Given the pool is blocked
-			unsafe_set_state(1, PoolState::Destroying);
-			assert_eq!(PoolMembers::<Runtime>::get(40).unwrap().active_points(), 10);
-			assert_eq!(PoolMembers::<Runtime>::get(40).unwrap().unbonding_points(), 0);
-			assert_eq!(PoolMembers::<Runtime>::get(50).unwrap().active_points(), 10);
-			assert_eq!(PoolMembers::<Runtime>::get(50).unwrap().unbonding_points(), 0);
+		ExtBuilder::default()
+			.add_members(vec![(40, 10), (50, 10)])
+			.ed(1)
+			.build_and_execute(|| {
+				// Given the pool is blocked
+				unsafe_set_state(1, PoolState::Destroying);
+				assert_eq!(PoolMembers::<Runtime>::get(40).unwrap().active_points(), 10);
+				assert_eq!(PoolMembers::<Runtime>::get(40).unwrap().unbonding_points(), 0);
+				assert_eq!(PoolMembers::<Runtime>::get(50).unwrap().active_points(), 10);
+				assert_eq!(PoolMembers::<Runtime>::get(50).unwrap().unbonding_points(), 0);
 
-			assert_ok!(
-				Pools::fully_unbond(Origin::signed(50), 40)
-			);
-		});
+				assert_ok!(Pools::fully_unbond(Origin::signed(50), 40));
+			});
 	}
 
 	// same as above, but the pool is slashed and therefore the depositor cannot partially unbond.
