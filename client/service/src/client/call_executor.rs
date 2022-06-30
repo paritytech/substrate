@@ -122,11 +122,14 @@ where
 
 		let header = self.backend.blockchain().expect_header(block_id)?;
 
+		let block_id_with_code = 
 		match (offchain_call, header.number().is_zero()) {
-			(_, true) => Ok(block_id),
-			(true, false) => Ok(BlockId::Hash(*header.parent_hash())),
-			(false, _) => Ok(block_id),
-		}
+			(_, true) => block_id,
+			(true, false) => BlockId::Hash(*header.parent_hash()),
+			(false, _) => block_id,
+		};
+
+		Ok(block_id_with_code)
 	}
 }
 
