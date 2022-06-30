@@ -983,9 +983,7 @@ pub mod pallet {
 			raw_solution: Box<RawSolution<SolutionOf<T::MinerConfig>>>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-
 			ensure!(Self::current_phase().is_emergency(), <Error<T>>::CallNotAllowed);
-
 			let size = Self::snapshot_metadata().ok_or(Error::<T>::MissingSnapshotMetadata)?;
 
 			ensure!(
