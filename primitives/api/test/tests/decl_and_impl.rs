@@ -47,6 +47,15 @@ decl_runtime_apis! {
 		#[changed_in(2)]
 		fn same_name() -> String;
 	}
+
+	#[api_version(2)]
+	pub trait ApiWithMultipleVersions {
+		fn stable_one(data: u64);
+		#[api_version(3)]
+		fn new_one();
+		#[api_version(4)]
+		fn glory_one();
+	}
 }
 
 impl_runtime_apis! {
@@ -70,6 +79,13 @@ impl_runtime_apis! {
 
 	impl self::ApiWithCustomVersion<Block> for Runtime {
 		fn same_name() {}
+	}
+
+	#[api_version(3)]
+	impl self::ApiWithMultipleVersions<Block> for Runtime {
+		fn stable_one(_: u64) {}
+
+		fn new_one() {}
 	}
 
 	impl sp_api::Core<Block> for Runtime {
@@ -176,6 +192,9 @@ fn check_runtime_api_info() {
 		&runtime_decl_for_ApiWithCustomVersion::ID,
 	);
 	assert_eq!(<dyn ApiWithCustomVersion::<Block>>::VERSION, 2);
+
+	// The stable version of the API
+	assert_eq!(<dyn ApiWithMultipleVersions::<Block>>::VERSION, 2);
 }
 
 fn check_runtime_api_versions_contains<T: RuntimeApiInfo + ?Sized>() {
@@ -186,6 +205,9 @@ fn check_runtime_api_versions_contains<T: RuntimeApiInfo + ?Sized>() {
 fn check_runtime_api_versions() {
 	check_runtime_api_versions_contains::<dyn Api<Block>>();
 	check_runtime_api_versions_contains::<dyn ApiWithCustomVersion<Block>>();
+ 	assert!(RUNTIME_API_VERSIONS
+		.iter()
+		.any(|v| v == &(<dyn ApiWithMultipleVersions<Block>>::ID, 3)));
 	check_runtime_api_versions_contains::<dyn sp_api::Core<Block>>();
 }
 

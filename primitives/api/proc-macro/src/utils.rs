@@ -18,15 +18,18 @@
 use proc_macro2::{Span, TokenStream};
 
 use syn::{
-	parse_quote, spanned::Spanned, token::And, Error, FnArg, GenericArgument, Ident, ImplItem,
-	ItemImpl, Pat, Path, PathArguments, Result, ReturnType, Signature, Type, TypePath,
+	parse_quote, spanned::Spanned, token::And, Attribute, Block, Error, FnArg, GenericArgument,
+	Ident, ImplItem, ImplItemMethod, ItemImpl, Lit, Meta, NestedMeta, Pat, Path, PathArguments,
+	Result, ReturnType, Signature, TraitItemMethod, Type, TypePath,
 };
 
-use quote::quote;
+use quote::{format_ident, quote};
 
 use std::env;
 
 use proc_macro_crate::{crate_name, FoundCrate};
+
+use crate::attribute_names::API_VERSION_ATTRIBUTE;
 
 fn generate_hidden_includes_mod_name(unique_id: &'static str) -> Ident {
 	Ident::new(&format!("sp_api_hidden_includes_{}", unique_id), Span::call_site())
@@ -266,4 +269,64 @@ pub fn extract_impl_trait(impl_: &ItemImpl, require: RequireQualifiedTraitPath) 
 				))
 			}
 		})
+}
+
+/// Parse the given attribute as `API_VERSION_ATTRIBUTE`.
+pub fn parse_runtime_api_version(version: &Attribute) -> Result<u64> {
+	let meta = version.parse_meta()?;
+
+	let err = Err(Error::new(
+		meta.span(),
+		&format!(
+			"Unexpected `{api_version}` attribute. The supported format is `{api_version}(1)`",
+			api_version = API_VERSION_ATTRIBUTE
+		),
+	));
+
+	match meta {
+		Meta::List(list) =>
+			if list.nested.len() != 1 {
+				err
+			} else if let Some(NestedMeta::Lit(Lit::Int(i))) = list.nested.first() {
+				i.base10_parse()
+			} else {
+				err
+			},
+		_ => err,
+	}
+}
+
+// Each dummy trait is named 'ApiNameVN' where N is the specific version. E.g. ParachainHostV2
+pub fn dummy_trait_name(trait_ident: &Ident, version: u64) -> Ident {
+	format_ident!("{}V{}", trait_ident, version.to_string())
+}
+
+/// This trait represents a method to which a default implementation can be added. It exists only to
+/// keep the logic for default implementations at a single place.
+pub trait DummyDefaultableMethod {
+	fn set_relevant_fields(&mut self, block: Block, attr: Attribute);
+
+	fn attach_default_impl(&mut self) {
+		let block: Block = parse_quote!({ unimplemented!() });
+		let attr: Attribute = parse_quote!(#[allow(unused_variables)]);
+
+		self.set_relevant_fields(block, attr)
+	}
+}
+
+impl DummyDefaultableMethod for TraitItemMethod {
+	fn set_relevant_fields(&mut self, block: Block, attr: Attribute) {
+		self.default = Some(block);
+		self.attrs.push(attr);
+	}
+}
+impl DummyDefaultableMethod for ImplItemMethod {
+	fn set_relevant_fields(&mut self, block: Block, attr: Attribute) {
+		self.block = block;
+		self.attrs.push(attr);
+	}
+}
+
+pub fn attach_default_method_implementation<T: DummyDefaultableMethod>(method: &mut T) {
+	method.attach_default_impl();
 }
