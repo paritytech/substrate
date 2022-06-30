@@ -137,7 +137,7 @@ pub enum ConsensusLog {
 
 /// Configuration data used by the BABE consensus engine.
 #[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
-pub struct BabeGenesisConfigurationV1 {
+pub struct ConfigurationV1 {
 	/// The slot duration in milliseconds for BABE. Currently, only
 	/// the value provided by this type at genesis will be used.
 	///
@@ -166,8 +166,8 @@ pub struct BabeGenesisConfigurationV1 {
 	pub secondary_slots: bool,
 }
 
-impl From<BabeGenesisConfigurationV1> for BabeGenesisConfiguration {
-	fn from(v1: BabeGenesisConfigurationV1) -> Self {
+impl From<ConfigurationV1> for Configuration {
+	fn from(v1: ConfigurationV1) -> Self {
 		Self {
 			slot_duration: v1.slot_duration,
 			epoch_length: v1.epoch_length,
@@ -185,7 +185,7 @@ impl From<BabeGenesisConfigurationV1> for BabeGenesisConfiguration {
 
 /// Configuration data used by the BABE consensus engine.
 #[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
-pub struct BabeGenesisConfiguration {
+pub struct Configuration {
 	/// The slot duration in milliseconds for BABE. Currently, only
 	/// the value provided by this type at genesis will be used.
 	///
@@ -213,6 +213,13 @@ pub struct BabeGenesisConfiguration {
 	pub allowed_slots: AllowedSlots,
 }
 
+impl Configuration {
+	/// Convenience method to get the slot duration as a `SlotDuration` value.
+	pub fn slot_duration(&self) -> SlotDuration {
+		SlotDuration::from_millis(self.slot_duration)
+	}
+}
+
 /// Types of allowed slots.
 #[derive(Clone, Copy, PartialEq, Eq, Encode, Decode, RuntimeDebug, MaxEncodedLen, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
@@ -237,7 +244,7 @@ impl AllowedSlots {
 	}
 }
 
-/// Configuration data used by the BABE consensus engine.
+/// Configuration data used by the BABE consensus engine that may change with epochs.
 #[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, MaxEncodedLen, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct BabeEpochConfiguration {
@@ -358,11 +365,11 @@ sp_api::decl_runtime_apis! {
 	#[api_version(2)]
 	pub trait BabeApi {
 		/// Return the genesis configuration for BABE. The configuration is only read on genesis.
-		fn configuration() -> BabeGenesisConfiguration;
+		fn configuration() -> Configuration;
 
 		/// Return the configuration for BABE. Version 1.
 		#[changed_in(2)]
-		fn configuration() -> BabeGenesisConfigurationV1;
+		fn configuration() -> ConfigurationV1;
 
 		/// Returns the slot that started the current epoch.
 		fn current_epoch_start() -> Slot;

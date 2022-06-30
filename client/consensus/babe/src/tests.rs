@@ -570,7 +570,7 @@ fn can_author_block() {
 		},
 	};
 
-	let mut config = crate::BabeGenesisConfiguration {
+	let mut config = crate::ProtocolConfiguration {
 		slot_duration: 1000,
 		epoch_length: 100,
 		c: (3, 10),

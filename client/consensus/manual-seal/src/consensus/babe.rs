@@ -24,8 +24,7 @@ use crate::Error;
 use codec::Encode;
 use sc_client_api::{AuxStore, UsageProvider};
 use sc_consensus_babe::{
-	authorship, find_pre_digest, BabeIntermediate, CompatibleDigestItem, Config, Epoch,
-	INTERMEDIATE_KEY,
+	authorship, find_pre_digest, BabeIntermediate, CompatibleDigestItem, Epoch, INTERMEDIATE_KEY,
 };
 use sc_consensus_epochs::{
 	descendent_query, EpochHeader, SharedEpochChanges, ViableEpochDescriptor,
@@ -40,7 +39,8 @@ use sp_consensus::CacheKeyId;
 use sp_consensus_babe::{
 	digests::{NextEpochDescriptor, PreDigest, SecondaryPlainPreDigest},
 	inherents::BabeInherentData,
-	AuthorityId, BabeApi, BabeAuthorityWeight, ConsensusLog, BABE_ENGINE_ID,
+	AuthorityId, BabeApi, BabeAuthorityWeight, Configuration as BabeConfiguration, ConsensusLog,
+	BABE_ENGINE_ID,
 };
 use sp_consensus_slots::Slot;
 use sp_inherents::InherentData;
@@ -64,7 +64,7 @@ pub struct BabeConsensusDataProvider<B: BlockT, C> {
 	epoch_changes: SharedEpochChanges<B, Epoch>,
 
 	/// BABE config, gotten from the runtime.
-	config: Config,
+	config: BabeConfiguration,
 
 	/// Authorities to be used for this babe chain.
 	authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
@@ -151,7 +151,7 @@ where
 			return Err(Error::StringError("Cannot supply empty authority set!".into()))
 		}
 
-		let config = Config::get(&*client)?;
+		let config = sc_consensus_babe::protocol_config(&*client)?;
 
 		Ok(Self { config, client, keystore, epoch_changes, authorities })
 	}
@@ -169,9 +169,7 @@ where
 			.ok_or(sp_consensus::Error::InvalidAuthoritiesSet)?;
 
 		let epoch = epoch_changes
-			.viable_epoch(&epoch_descriptor, |slot| {
-				Epoch::genesis(self.config.genesis_config(), slot)
-			})
+			.viable_epoch(&epoch_descriptor, |slot| Epoch::genesis(&self.config, slot))
 			.ok_or_else(|| {
 				log::info!(target: "babe", "create_digest: no viable_epoch :(");
 				sp_consensus::Error::InvalidAuthoritiesSet
@@ -295,7 +293,7 @@ where
 						identifier,
 						EpochHeader {
 							start_slot: slot,
-							end_slot: (*slot * self.config.genesis_config().epoch_length).into(),
+							end_slot: (*slot * self.config.epoch_length).into(),
 						},
 					),
 				_ => unreachable!(

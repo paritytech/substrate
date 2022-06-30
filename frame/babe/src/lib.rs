@@ -306,6 +306,7 @@ pub mod pallet {
 	/// The configuration for the current epoch. Should never be `None` as it is initialized in
 	/// genesis.
 	#[pallet::storage]
+	#[pallet::getter(fn epoch_config)]
 	pub(super) type EpochConfig<T> = StorageValue<_, BabeEpochConfiguration>;
 
 	/// The configuration for the next epoch, `None` if the config will not change
