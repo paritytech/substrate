@@ -150,7 +150,7 @@ where
 			return Err(Error::StringError("Cannot supply empty authority set!".into()))
 		}
 
-		let config = sc_consensus_babe::protocol_config(&*client)?;
+		let config = sc_consensus_babe::configuration(&*client)?;
 
 		Ok(Self { config, client, keystore, epoch_changes, authorities })
 	}

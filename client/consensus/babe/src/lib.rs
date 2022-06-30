@@ -338,8 +338,8 @@ pub struct BabeIntermediate<B: BlockT> {
 /// Intermediate key for Babe engine.
 pub static INTERMEDIATE_KEY: &[u8] = b"babe1";
 
-/// Read protocol configuration from the runtime state at current best block.
-pub fn protocol_config<B: BlockT, C>(client: &C) -> ClientResult<BabeConfiguration>
+/// Read configuration from the runtime state at current best block.
+pub fn configuration<B: BlockT, C>(client: &C) -> ClientResult<BabeConfiguration>
 where
 	C: AuxStore + ProvideRuntimeApi<B> + UsageProvider<B>,
 	C::Api: BabeApi<B>,
@@ -1855,7 +1855,7 @@ where
 	// Revert epoch changes tree.
 
 	// This config is only used on-genesis.
-	let config = protocol_config(&*client)?;
+	let config = configuration(&*client)?;
 	let epoch_changes = aux_schema::load_epoch_changes::<Block, Client>(&*client, &config)?;
 	let mut epoch_changes = epoch_changes.shared_data();
 

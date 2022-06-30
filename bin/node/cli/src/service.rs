@@ -196,7 +196,7 @@ pub fn new_partial(
 	let justification_import = grandpa_block_import.clone();
 
 	let (block_import, babe_link) = sc_consensus_babe::block_import(
-		sc_consensus_babe::protocol_config(&*client)?,
+		sc_consensus_babe::configuration(&*client)?,
 		grandpa_block_import,
 		client.clone(),
 	)?;
