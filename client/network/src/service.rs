@@ -346,11 +346,14 @@ where
 						.saturating_add(10)
 				};
 
+				let webrtc_cert = params.network_config.webrtc.into_certificate()?;
+
 				transport::build_transport(
 					local_identity.clone(),
 					config_mem,
 					params.network_config.yamux_window_size,
 					yamux_maximum_buffer_size,
+					webrtc_cert,
 				)
 			};
 

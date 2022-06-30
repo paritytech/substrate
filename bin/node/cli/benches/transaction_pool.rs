@@ -27,7 +27,7 @@ use sc_client_api::execution_extensions::ExecutionStrategies;
 use sc_service::{
 	config::{
 		BlocksPruning, DatabaseSource, KeystoreConfig, NetworkConfiguration, OffchainWorkerConfig,
-		PruningMode, TransactionPoolOptions, WasmExecutionMethod,
+		PruningMode, TransactionPoolOptions, WasmExecutionMethod, WebRTCConfig,
 	},
 	BasePath, Configuration, Role,
 };
@@ -46,6 +46,7 @@ fn new_node(tokio_handle: Handle) -> node_cli::service::NewFullBase {
 		Sr25519Keyring::Alice.to_seed(),
 		"network/test/0.1",
 		Default::default(),
+		WebRTCConfig::Ephemeral,
 		None,
 	);
 

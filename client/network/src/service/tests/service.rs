@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::{config, service::tests::TestNetworkBuilder, NetworkService};
+use crate::{config, config::WebRTCConfig, service::tests::TestNetworkBuilder, NetworkService};
 
 use futures::prelude::*;
 use libp2p::PeerId;
@@ -450,6 +450,7 @@ fn ensure_listen_addresses_consistent_with_transport_memory() {
 				"test-node",
 				"test-client",
 				Default::default(),
+				WebRTCConfig::Ephemeral,
 				None,
 			)
 		})
@@ -469,6 +470,7 @@ fn ensure_listen_addresses_consistent_with_transport_not_memory() {
 				"test-node",
 				"test-client",
 				Default::default(),
+				WebRTCConfig::Ephemeral,
 				None,
 			)
 		})
@@ -494,6 +496,7 @@ fn ensure_boot_node_addresses_consistent_with_transport_memory() {
 				"test-node",
 				"test-client",
 				Default::default(),
+				WebRTCConfig::Ephemeral,
 				None,
 			)
 		})
@@ -518,6 +521,7 @@ fn ensure_boot_node_addresses_consistent_with_transport_not_memory() {
 				"test-node",
 				"test-client",
 				Default::default(),
+				WebRTCConfig::Ephemeral,
 				None,
 			)
 		})
@@ -546,6 +550,7 @@ fn ensure_reserved_node_addresses_consistent_with_transport_memory() {
 				"test-node",
 				"test-client",
 				Default::default(),
+				WebRTCConfig::Ephemeral,
 				None,
 			)
 		})
@@ -573,6 +578,7 @@ fn ensure_reserved_node_addresses_consistent_with_transport_not_memory() {
 				"test-node",
 				"test-client",
 				Default::default(),
+				WebRTCConfig::Ephemeral,
 				None,
 			)
 		})
@@ -595,6 +601,7 @@ fn ensure_public_addresses_consistent_with_transport_memory() {
 				"test-node",
 				"test-client",
 				Default::default(),
+				WebRTCConfig::Ephemeral,
 				None,
 			)
 		})
@@ -616,6 +623,7 @@ fn ensure_public_addresses_consistent_with_transport_not_memory() {
 				"test-node",
 				"test-client",
 				Default::default(),
+				WebRTCConfig::Ephemeral,
 				None,
 			)
 		})

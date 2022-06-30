@@ -48,7 +48,7 @@ use sc_consensus::{
 	Verifier,
 };
 use sc_network::{
-	config::{NetworkConfiguration, RequestResponseConfig, Role, SyncMode},
+	config::{NetworkConfiguration, RequestResponseConfig, Role, SyncMode, WebRTCConfig},
 	Multiaddr, NetworkService, NetworkWorker,
 };
 use sc_network_common::{
@@ -789,8 +789,13 @@ where
 
 		let listen_addr = build_multiaddr![Memory(rand::random::<u64>())];
 
-		let mut network_config =
-			NetworkConfiguration::new("test-node", "test-client", Default::default(), None);
+		let mut network_config = NetworkConfiguration::new(
+			"test-node",
+			"test-client",
+			Default::default(),
+			WebRTCConfig::Ephemeral,
+			None,
+		);
 		network_config.sync_mode = config.sync_mode;
 		network_config.transport = TransportConfig::MemoryOnly;
 		network_config.listen_addresses = vec![listen_addr.clone()];

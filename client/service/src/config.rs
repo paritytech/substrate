@@ -22,7 +22,7 @@ pub use sc_client_api::execution_extensions::{ExecutionStrategies, ExecutionStra
 pub use sc_client_db::{BlocksPruning, Database, DatabaseSource, PruningMode};
 pub use sc_executor::{WasmExecutionMethod, WasmtimeInstantiationStrategy};
 pub use sc_network::{
-	config::{NetworkConfiguration, NodeKeyConfig, Role},
+	config::{NetworkConfiguration, NodeKeyConfig, Role, WebRTCConfig},
 	Multiaddr,
 };
 pub use sc_network_common::{
