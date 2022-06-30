@@ -2096,7 +2096,7 @@ mod tests {
 
 			assert_ok!(MultiPhase::submit_emergency_solution(origin, Box::new(solution)));
 
-			// The queed solution shouldn't be none now because the submitted
+			// The queued solution shouldn't be none now because the submitted
 			// solution is correct.
 			assert!(MultiPhase::queued_solution().is_some());
 		});
