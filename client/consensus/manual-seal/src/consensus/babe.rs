@@ -63,6 +63,9 @@ pub struct BabeConsensusDataProvider<B: BlockT, C> {
 	epoch_changes: SharedEpochChanges<B, Epoch>,
 
 	/// BABE config, gotten from the runtime.
+	/// NOTE: This is used to fetch `slot_duration` and `epoch_length` in the
+	/// `ConsensusDataProvider` implementation. Correct as far as these values
+	/// are not changed during an epoch change.
 	config: BabeConfiguration,
 
 	/// Authorities to be used for this babe chain.

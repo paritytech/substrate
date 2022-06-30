@@ -364,7 +364,7 @@ sp_api::decl_runtime_apis! {
 	/// API necessary for block authorship with BABE.
 	#[api_version(2)]
 	pub trait BabeApi {
-		/// Return the genesis configuration for BABE. The configuration is only read on genesis.
+		/// Return the configuration for BABE.
 		fn configuration() -> BabeConfiguration;
 
 		/// Return the configuration for BABE. Version 1.
