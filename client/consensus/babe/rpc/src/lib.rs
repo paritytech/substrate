@@ -223,7 +223,7 @@ mod tests {
 		TestClientBuilderExt,
 	};
 
-	use sc_consensus_babe::{block_import, AuthorityPair, Config};
+	use sc_consensus_babe::{block_import, AuthorityPair};
 	use std::sync::Arc;
 
 	/// creates keystore backed by a temp file
@@ -245,7 +245,7 @@ mod tests {
 		let builder = TestClientBuilder::new();
 		let (client, longest_chain) = builder.build_with_longest_chain();
 		let client = Arc::new(client);
-		let config = Config::get(&*client).expect("config available");
+		let config = sc_consensus_babe::configuration(&*client).expect("config available");
 		let (_, link) = block_import(config.clone(), client.clone(), client.clone())
 			.expect("can initialize block-import");
 

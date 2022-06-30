@@ -143,7 +143,7 @@ mod test {
 	use sc_consensus_epochs::{EpochHeader, PersistedEpoch, PersistedEpochHeader};
 	use sc_network_test::Block as TestBlock;
 	use sp_consensus::Error as ConsensusError;
-	use sp_consensus_babe::{AllowedSlots, Configuration};
+	use sp_consensus_babe::AllowedSlots;
 	use sp_core::H256;
 	use sp_runtime::traits::NumberFor;
 	use substrate_test_runtime_client;
@@ -182,7 +182,7 @@ mod test {
 
 		let epoch_changes = load_epoch_changes::<TestBlock, _>(
 			&client,
-			&Configuration {
+			&BabeConfiguration {
 				slot_duration: 10,
 				epoch_length: 4,
 				c: (3, 10),
