@@ -209,7 +209,9 @@ where
 	Client: Send + Sync + 'static,
 {
 	fn call(&self, method: String, data: Bytes, block: Option<Block::Hash>) -> RpcResult<Bytes> {
-		self.backend.call(block, method, data, /* offchain_call: */ true).map_err(Into::into)
+		self.backend
+			.call(block, method, data, /* offchain_call: */ true)
+			.map_err(Into::into)
 	}
 
 	fn storage_keys(

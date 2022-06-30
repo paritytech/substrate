@@ -1299,8 +1299,7 @@ mod tests {
 	use sc_block_builder::BlockBuilderProvider;
 	use sp_api::ProvideRuntimeApi;
 	use sp_consensus::BlockOrigin;
-	use sp_core::storage::well_known_keys::HEAP_PAGES;
-	use sp_core::ExecutionContext;
+	use sp_core::{storage::well_known_keys::HEAP_PAGES, ExecutionContext};
 	use sp_runtime::generic::BlockId;
 	use sp_state_machine::ExecutionStrategy;
 	use substrate_test_runtime_client::{
@@ -1311,33 +1310,139 @@ mod tests {
 	fn heap_pages_is_respected() {
 		// This tests that the on-chain HEAP_PAGES parameter is respected.
 
-		// Create a client devoting only 8 pages of wasm memory. This gives us ~512k of heap memory.
+		// During the block construction (on top of block N)
+		// the values for the `:code` and `:heappages` are used to construct the Runtime.
+		//
+		// During the querying of an already existing block (Offchain-call to block N)
+		// the same values for `:code` and `:heappages` should be used, that were used during the
+		// construction of that block; i.e. the values of the state at block `N - 1`.
+
+		// The test is performed on three consequent blocks:
+		// 1 — the initial block
+		// 2 — the block which the `:heappages` value is updated at;
+		// 3 — the block that has been constructed with the updated `:heappages` Runtime argument.
+
+		const INITIAL_HEAPSIZE: u64 = 8;
+		const EXTENDED_HEAPSIZE: u64 = 32;
+
+		const QUATER_M: u32 = 256 * 1024;
+		const ONE_M: u32 = 1024 * 1024;
+
 		let mut client = TestClientBuilder::new()
 			.set_execution_strategy(ExecutionStrategy::AlwaysWasm)
-			.set_heap_pages(8)
+			.set_heap_pages(INITIAL_HEAPSIZE)
 			.build();
-		let block_id = BlockId::Number(client.chain_info().best_number);
 
-		// Try to allocate 1024k of memory on heap. This is going to fail since it is twice larger
-		// than the heap.
-		let ret = client.runtime_api().vec_with_capacity_with_context(&block_id, ExecutionContext::BlockConstruction, 1048576);
-		assert!(ret.is_err());
+		let block_id_1 = BlockId::Number(client.chain_info().best_number);
 
-		// Create a block that sets the `:heap_pages` to 32 pages of memory which corresponds to
-		// ~2048k of heap memory.
-		let (new_block_id, block) = {
+		assert!(client
+			.runtime_api()
+			.vec_with_capacity_with_context(
+				&block_id_1,
+				ExecutionContext::OffchainCall(None),
+				QUATER_M
+			)
+			.is_ok());
+		assert!(client
+			.runtime_api()
+			.vec_with_capacity_with_context(
+				&block_id_1,
+				ExecutionContext::OffchainCall(None),
+				ONE_M
+			)
+			.is_err());
+		assert!(client
+			.runtime_api()
+			.vec_with_capacity_with_context(
+				&block_id_1,
+				ExecutionContext::BlockConstruction,
+				QUATER_M
+			)
+			.is_ok());
+		assert!(client
+			.runtime_api()
+			.vec_with_capacity_with_context(&block_id_1, ExecutionContext::BlockConstruction, ONE_M)
+			.is_err());
+
+		let (block_id_2, block_2) = {
 			let mut builder = client.new_block(Default::default()).unwrap();
-			builder.push_storage_change(HEAP_PAGES.to_vec(), Some(32u64.encode())).unwrap();
+			builder
+				.push_storage_change(HEAP_PAGES.to_vec(), Some(EXTENDED_HEAPSIZE.encode()))
+				.unwrap();
 			let block = builder.build().unwrap().block;
 			let hash = block.header.hash();
 			(BlockId::Hash(hash), block)
 		};
+		futures::executor::block_on(client.import(BlockOrigin::Own, block_2)).unwrap();
 
-		futures::executor::block_on(client.import(BlockOrigin::Own, block)).unwrap();
+		assert!(client
+			.runtime_api()
+			.vec_with_capacity_with_context(
+				&block_id_2,
+				ExecutionContext::OffchainCall(None),
+				QUATER_M
+			)
+			.is_ok());
+		assert!(client
+			.runtime_api()
+			.vec_with_capacity_with_context(
+				&block_id_2,
+				ExecutionContext::OffchainCall(None),
+				ONE_M
+			)
+			.is_err());
+		assert!(client
+			.runtime_api()
+			.vec_with_capacity_with_context(
+				&block_id_2,
+				ExecutionContext::BlockConstruction,
+				QUATER_M
+			)
+			.is_ok());
+		assert!(client
+			.runtime_api()
+			.vec_with_capacity_with_context(&block_id_2, ExecutionContext::BlockConstruction, ONE_M)
+			.is_ok());
 
-		// Allocation of 1024k while having ~2048k should succeed.
-		let ret = client.runtime_api().vec_with_capacity_with_context(&new_block_id, ExecutionContext::BlockConstruction, 1048576);
-		assert!(ret.is_ok());
+		let (block_id_3, block_3) = {
+			let mut builder = client.new_block(Default::default()).unwrap();
+			builder
+				.push_storage_change(HEAP_PAGES.to_vec(), Some(EXTENDED_HEAPSIZE.encode()))
+				.unwrap();
+			let block = builder.build().unwrap().block;
+			let hash = block.header.hash();
+			(BlockId::Hash(hash), block)
+		};
+		futures::executor::block_on(client.import(BlockOrigin::Own, block_3)).unwrap();
+
+		assert!(client
+			.runtime_api()
+			.vec_with_capacity_with_context(
+				&block_id_3,
+				ExecutionContext::OffchainCall(None),
+				QUATER_M
+			)
+			.is_ok());
+		assert!(client
+			.runtime_api()
+			.vec_with_capacity_with_context(
+				&block_id_3,
+				ExecutionContext::OffchainCall(None),
+				ONE_M
+			)
+			.is_ok());
+		assert!(client
+			.runtime_api()
+			.vec_with_capacity_with_context(
+				&block_id_3,
+				ExecutionContext::BlockConstruction,
+				QUATER_M
+			)
+			.is_ok());
+		assert!(client
+			.runtime_api()
+			.vec_with_capacity_with_context(&block_id_3, ExecutionContext::BlockConstruction, ONE_M)
+			.is_ok());
 	}
 
 	#[test]

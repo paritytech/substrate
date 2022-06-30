@@ -116,14 +116,17 @@ where
 	}
 
 	// choose the block where the runtime code is defined.
-	fn block_with_code(&self, block_id: BlockId<Block>, offchain_call: bool) -> sp_blockchain::Result<BlockId<Block>> {
+	fn block_with_code(
+		&self,
+		block_id: BlockId<Block>,
+		offchain_call: bool,
+	) -> sp_blockchain::Result<BlockId<Block>> {
 		use sp_api::HeaderT;
 		use sp_runtime::traits::Zero;
 
 		let header = self.backend.blockchain().expect_header(block_id)?;
 
-		let block_id_with_code = 
-		match (offchain_call, header.number().is_zero()) {
+		let block_id_with_code = match (offchain_call, header.number().is_zero()) {
 			(_, true) => block_id,
 			(true, false) => BlockId::Hash(*header.parent_hash()),
 			(false, _) => block_id,
@@ -168,13 +171,19 @@ where
 		extensions: Option<Extensions>,
 		offchain_call: bool,
 	) -> sp_blockchain::Result<Vec<u8>> {
-		log::warn!("<LocalCallExecutor as CallExecutor>::call [at: {}; offchain_call: {}; method: {}]", at, offchain_call, method);
+		log::warn!(
+			"<LocalCallExecutor as CallExecutor>::call [at: {}; offchain_call: {}; method: {}]",
+			at,
+			offchain_call,
+			method
+		);
 
 		let mut changes = OverlayedChanges::default();
 		let state = self.backend.state_at(*at)?;
 
 		let state_with_code = self.backend.state_at(self.block_with_code(*at, offchain_call)?)?;
-		let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state_with_code);
+		let state_runtime_code =
+			sp_state_machine::backend::BackendRuntimeCode::new(&state_with_code);
 		let runtime_code =
 			state_runtime_code.runtime_code().map_err(sp_blockchain::Error::RuntimeCode)?;
 
@@ -231,7 +240,7 @@ where
 		let mut storage_transaction_cache = storage_transaction_cache.map(|c| c.borrow_mut());
 
 		let state = self.backend.state_at(*at)?;
-		
+
 		let changes = &mut *changes.borrow_mut();
 
 		let at_hash = self.backend.blockchain().block_hash_from_id(at)?.ok_or_else(|| {
@@ -242,7 +251,8 @@ where
 		// recorder to not record it. We also need to fetch the runtime code from `state` to
 		// make sure we use the caching layers.
 		let state_with_code = self.backend.state_at(self.block_with_code(*at, offchain_call)?)?;
-		let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state_with_code);
+		let state_runtime_code =
+			sp_state_machine::backend::BackendRuntimeCode::new(&state_with_code);
 
 		let runtime_code =
 			state_runtime_code.runtime_code().map_err(sp_blockchain::Error::RuntimeCode)?;
