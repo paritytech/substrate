@@ -717,7 +717,7 @@ pub mod pallet {
 		/// The multiple of regular deposit needed for signed phase during
 		/// emergency phase.
 		#[pallet::constant]
-		type EmergencyDepositMultiple: Get<u32>;
+		type EmergencyDepositMultiplier: Get<u32>;
 	}
 
 	#[pallet::hooks]
@@ -2121,7 +2121,7 @@ mod tests {
 
 			assert_ok!(MultiPhase::submit_emergency_solution(origin, Box::new(solution)));
 
-			// The queed solution should be none now because the submitted
+			// The queued solution should be none now because the submitted
 			// solution is incorrect.
 			assert!(MultiPhase::queued_solution().is_none());
 		});
