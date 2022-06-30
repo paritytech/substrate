@@ -992,7 +992,6 @@ pub mod pallet {
 			);
 
 			let deposit = Self::deposit_for_emergency(&raw_solution, size);
-
 			T::Currency::reserve(&who, deposit).map_err(|_| Error::<T>::SignedCannotPayDeposit)?;
 
 			let call_fee = {
