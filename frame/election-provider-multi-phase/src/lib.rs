@@ -69,8 +69,8 @@
 //! Upon the end of the signed phase, the solutions are examined from best to worse (i.e. `pop()`ed
 //! until drained). Each solution undergoes an expensive `Pallet::feasibility_check`, which ensures
 //! the score claimed by this score was correct, and it is valid based on the election data (i.e.
-//! votes and targets). At each step, if the current best solution passes the feasibility check,
-//! it is considered to be the best one. The sender of the origin is rewarded, and the rest of the
+//! votes and targets). At each step, if the current best solution passes the feasibility check, it
+//! is considered to be the best one. The sender of the origin is rewarded, and the rest of the
 //! queued solutions get their deposit back and are discarded, without being checked.
 //!
 //! The following example covers all of the cases at the end of the signed phase:
@@ -129,9 +129,9 @@
 //! proceeds to the [`Phase::Emergency`]. During this phase, there are two possibilities. One of
 //! them is to use the [`Pallet::set_emergency_election_result`] function that submits a solution
 //! without any checking. It only accepts solutions from `[`Config::ForceOrigin`]`, hence it should
-//! only be set to a trusted origin, such as the council or root. Once submitted,
-//! the forced solution is kept in [`QueuedSolution`] until the next call to
-//! `T::ElectionProvider::elect`, where it is returned and [`Phase`] goes back to `Off`.
+//! only be set to a trusted origin, such as the council or root. Once submitted, the forced
+//! solution is kept in [`QueuedSolution`] until the next call to `T::ElectionProvider::elect`,
+//! where it is returned and [`Phase`] goes back to `Off`.
 //!
 //! This implies that the user of this pallet (i.e. a staking pallet) should re-try calling
 //! `T::ElectionProvider::elect` in case of error, until `OK(_)` is returned.
@@ -151,13 +151,12 @@
 //!
 //! See the `staking-miner` documentation in the Polkadot repository for more information.
 //!
-//! The other option is to use the `Pallet::submit_emergency_solution` function which allows
-//! you to submit signed solutions during the emergency phase. The only difference between
-//! this function and the [`Pallet::submit`] function is that in
-//! [`Pallet::submit_emergency_solution`] the submissions are checked on the fly.
-//! Good solutions will get rewarded, but bad submissions will be highly punished.
-//! The deposit needed for submitting during the emergency phase is higher compared
-//! to the one in the regular submission.
+//! The other option is to use the `Pallet::submit_emergency_solution` function which allows you to
+//! submit signed solutions during the emergency phase. The only difference between this function
+//! and the [`Pallet::submit`] function is that in [`Pallet::submit_emergency_solution`] the
+//! submissions are checked on the fly. Good solutions will get rewarded, but bad submissions will
+//! be highly punished. The deposit needed for submitting during the emergency phase is higher
+//! compared to the one in the regular submission.
 //!
 //! ## Feasible Solution (correct solution)
 //!
@@ -180,8 +179,8 @@
 //!
 //! ## Error types
 //!
-//! This pallet provides a verbose error system to ease future debugging. The overall
-//! hierarchy of errors is as follows:
+//! This pallet provides a verbose error system to ease future debugging. The overall hierarchy of
+//! errors is as follows:
 //!
 //! 1. [`pallet::Error`]: These are the errors that can be returned in the dispatchables of the
 //!    pallet, either signed or unsigned. Since decomposition with nested enums is not possible
@@ -714,8 +713,7 @@ pub mod pallet {
 		/// The weight of the pallet.
 		type WeightInfo: WeightInfo;
 
-		/// The multiple of regular deposit needed for signed phase during
-		/// emergency phase.
+		/// The multiple of regular deposit needed for signed phase during emergency phase.
 		#[pallet::constant]
 		type EmergencyDepositMultiplier: Get<u32>;
 	}
@@ -1084,13 +1082,12 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Submit a signed solution during the emergency phase.
-		/// It will go through the `feasibility_check` right away.
+		/// Submit a signed solution during the emergency phase. It will go through the
+		/// `feasibility_check` right away.
 		///
 		/// The dispatch origin for this call must be __signed__.
 		///
-		/// The deposit that is reserved might be rewarded or slashed based on
-		/// the outcome.
+		/// The deposit that is reserved might be rewarded or slashed based on the outcome.
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
 		pub fn submit_emergency_solution(
 			origin: OriginFor<T>,
@@ -2093,8 +2090,7 @@ mod tests {
 
 			assert_ok!(MultiPhase::submit_emergency_solution(origin, Box::new(solution)));
 
-			// The queued solution should be some now because the submitted
-			// solution is correct.
+			// The queued solution should be some now because the submitted solution is correct.
 			assert!(MultiPhase::queued_solution().is_some());
 
 			let reward = crate::mock::SignedRewardBase::get();
@@ -2130,8 +2126,7 @@ mod tests {
 
 			assert_ok!(MultiPhase::submit_emergency_solution(origin, Box::new(solution.clone())));
 
-			// The queued solution should be none now because the submitted
-			// solution is incorrect.
+			// The queued solution should be none now because the submitted solution is incorrect.
 			assert!(MultiPhase::queued_solution().is_none());
 
 			let size = MultiPhase::snapshot_metadata().unwrap();
