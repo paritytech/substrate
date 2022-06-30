@@ -28,7 +28,7 @@ use sc_consensus_epochs::{
 	EpochChangesFor, SharedEpochChanges,
 };
 use sp_blockchain::{Error as ClientError, Result as ClientResult};
-use sp_consensus_babe::{BabeBlockWeight, Configuration};
+use sp_consensus_babe::{BabeBlockWeight, BabeConfiguration};
 use sp_runtime::traits::Block as BlockT;
 
 const BABE_EPOCH_CHANGES_VERSION: &[u8] = b"babe_epoch_changes_version";
@@ -57,7 +57,7 @@ where
 /// Load or initialize persistent epoch change data from backend.
 pub fn load_epoch_changes<Block: BlockT, B: AuxStore>(
 	backend: &B,
-	config: &Configuration,
+	config: &BabeConfiguration,
 ) -> ClientResult<SharedEpochChanges<Block, Epoch>> {
 	let version = load_decode::<_, u32>(backend, BABE_EPOCH_CHANGES_VERSION)?;
 

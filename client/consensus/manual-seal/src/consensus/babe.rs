@@ -39,8 +39,7 @@ use sp_consensus::CacheKeyId;
 use sp_consensus_babe::{
 	digests::{NextEpochDescriptor, PreDigest, SecondaryPlainPreDigest},
 	inherents::BabeInherentData,
-	AuthorityId, BabeApi, BabeAuthorityWeight, Configuration as BabeConfiguration, ConsensusLog,
-	BABE_ENGINE_ID,
+	AuthorityId, BabeApi, BabeAuthorityWeight, BabeConfiguration, ConsensusLog, BABE_ENGINE_ID,
 };
 use sp_consensus_slots::Slot;
 use sp_inherents::InherentData;

@@ -138,7 +138,7 @@ pub use sp_consensus_babe::{
 		PrimaryPreDigest, SecondaryPlainPreDigest,
 	},
 	AuthorityId, AuthorityPair, AuthoritySignature, BabeApi, BabeAuthorityWeight, BabeBlockWeight,
-	BabeEpochConfiguration, Configuration, ConsensusLog, BABE_ENGINE_ID, VRF_OUTPUT_LENGTH,
+	BabeConfiguration, BabeEpochConfiguration, ConsensusLog, BABE_ENGINE_ID, VRF_OUTPUT_LENGTH,
 };
 
 pub use aux_schema::load_block_weight as block_weight;
@@ -211,7 +211,7 @@ impl From<sp_consensus_babe::Epoch> for Epoch {
 impl Epoch {
 	/// Create the genesis epoch (epoch #0). This is defined to start at the slot of
 	/// the first block, so that has to be provided.
-	pub fn genesis(genesis_config: &Configuration, slot: Slot) -> Epoch {
+	pub fn genesis(genesis_config: &BabeConfiguration, slot: Slot) -> Epoch {
 		Epoch {
 			epoch_index: 0,
 			start_slot: slot,
@@ -338,8 +338,8 @@ pub struct BabeIntermediate<B: BlockT> {
 /// Intermediate key for Babe engine.
 pub static INTERMEDIATE_KEY: &[u8] = b"babe1";
 
-/// Read Protocol configuration from the runtime state at current best block.
-pub fn protocol_config<B: BlockT, C>(client: &C) -> ClientResult<Configuration>
+/// Read protocol configuration from the runtime state at current best block.
+pub fn protocol_config<B: BlockT, C>(client: &C) -> ClientResult<BabeConfiguration>
 where
 	C: AuxStore + ProvideRuntimeApi<B> + UsageProvider<B>,
 	C::Api: BabeApi<B>,
@@ -591,7 +591,7 @@ fn aux_storage_cleanup<C: HeaderMetadata<Block> + HeaderBackend<Block>, Block: B
 
 async fn answer_requests<B: BlockT, C>(
 	mut request_rx: Receiver<BabeRequest<B>>,
-	config: Configuration,
+	config: BabeConfiguration,
 	client: Arc<C>,
 	epoch_changes: SharedEpochChanges<B, Epoch>,
 ) where
@@ -717,7 +717,7 @@ struct BabeSlotWorker<B: BlockT, C, E, I, SO, L, BS> {
 	keystore: SyncCryptoStorePtr,
 	epoch_changes: SharedEpochChanges<B, Epoch>,
 	slot_notification_sinks: SlotNotificationSinks<B>,
-	config: Configuration,
+	config: BabeConfiguration,
 	block_proposal_slot_portion: SlotProportion,
 	max_block_proposal_slot_portion: Option<SlotProportion>,
 	telemetry: Option<TelemetryHandle>,
@@ -995,7 +995,7 @@ fn find_next_config_digest<B: BlockT>(
 #[derive(Clone)]
 pub struct BabeLink<Block: BlockT> {
 	epoch_changes: SharedEpochChanges<Block, Epoch>,
-	config: Configuration,
+	config: BabeConfiguration,
 }
 
 impl<Block: BlockT> BabeLink<Block> {
@@ -1005,7 +1005,7 @@ impl<Block: BlockT> BabeLink<Block> {
 	}
 
 	/// Get the config of this link.
-	pub fn config(&self) -> &Configuration {
+	pub fn config(&self) -> &BabeConfiguration {
 		&self.config
 	}
 }
@@ -1015,7 +1015,7 @@ pub struct BabeVerifier<Block: BlockT, Client, SelectChain, CAW, CIDP> {
 	client: Arc<Client>,
 	select_chain: SelectChain,
 	create_inherent_data_providers: CIDP,
-	config: Configuration,
+	config: BabeConfiguration,
 	epoch_changes: SharedEpochChanges<Block, Epoch>,
 	can_author_with: CAW,
 	telemetry: Option<TelemetryHandle>,
@@ -1326,7 +1326,7 @@ pub struct BabeBlockImport<Block: BlockT, Client, I> {
 	inner: I,
 	client: Arc<Client>,
 	epoch_changes: SharedEpochChanges<Block, Epoch>,
-	config: Configuration,
+	config: BabeConfiguration,
 }
 
 impl<Block: BlockT, I: Clone, Client> Clone for BabeBlockImport<Block, Client, I> {
@@ -1345,7 +1345,7 @@ impl<Block: BlockT, Client, I> BabeBlockImport<Block, Client, I> {
 		client: Arc<Client>,
 		epoch_changes: SharedEpochChanges<Block, Epoch>,
 		block_import: I,
-		config: Configuration,
+		config: BabeConfiguration,
 	) -> Self {
 		BabeBlockImport { client, inner: block_import, epoch_changes, config }
 	}
@@ -1732,7 +1732,7 @@ where
 /// Also returns a link object used to correctly instantiate the import queue
 /// and background worker.
 pub fn block_import<Client, Block: BlockT, I>(
-	config: Configuration,
+	config: BabeConfiguration,
 	wrapped_block_import: I,
 	client: Arc<Client>,
 ) -> ClientResult<(BabeBlockImport<Block, Client, I>, BabeLink<Block>)>

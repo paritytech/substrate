@@ -34,7 +34,7 @@ use sp_application_crypto::AppKey;
 use sp_blockchain::{Error as BlockChainError, HeaderBackend, HeaderMetadata};
 use sp_consensus::{Error as ConsensusError, SelectChain};
 use sp_consensus_babe::{
-	digests::PreDigest, AuthorityId, BabeApi as BabeRuntimeApi, Configuration as BabeConfiguration,
+	digests::PreDigest, AuthorityId, BabeApi as BabeRuntimeApi, BabeConfiguration,
 };
 use sp_core::crypto::ByteArray;
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
