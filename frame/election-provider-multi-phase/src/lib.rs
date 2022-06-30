@@ -2093,9 +2093,21 @@ mod tests {
 
 			assert_ok!(MultiPhase::submit_emergency_solution(origin, Box::new(solution)));
 
-			// The queued solution shouldn't be none now because the submitted
+			// The queued solution should be some now because the submitted
 			// solution is correct.
 			assert!(MultiPhase::queued_solution().is_some());
+
+			let reward = crate::mock::SignedRewardBase::get();
+
+			assert_eq!(
+				multi_phase_events(),
+				vec![
+					Event::SignedPhaseStarted { round: 1 },
+					Event::UnsignedPhaseStarted { round: 1 },
+					Event::ElectionFinalized { election_compute: None },
+					Event::Rewarded { account: 99, value: reward }
+				]
+			);
 		});
 	}
 
@@ -2116,11 +2128,24 @@ mod tests {
 			solution.round += 1;
 			let origin = crate::mock::Origin::signed(99);
 
-			assert_ok!(MultiPhase::submit_emergency_solution(origin, Box::new(solution)));
+			assert_ok!(MultiPhase::submit_emergency_solution(origin, Box::new(solution.clone())));
 
 			// The queued solution should be none now because the submitted
 			// solution is incorrect.
 			assert!(MultiPhase::queued_solution().is_none());
+
+			let size = MultiPhase::snapshot_metadata().unwrap();
+			let deposit = MultiPhase::deposit_for_emergency(&solution, size);
+
+			assert_eq!(
+				multi_phase_events(),
+				vec![
+					Event::SignedPhaseStarted { round: 1 },
+					Event::UnsignedPhaseStarted { round: 1 },
+					Event::ElectionFinalized { election_compute: None },
+					Event::Slashed { account: 99, value: deposit }
+				]
+			);
 		});
 	}
 
