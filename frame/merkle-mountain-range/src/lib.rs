@@ -222,7 +222,7 @@ pub mod pallet {
 			T::WeightInfo::on_initialize(peaks_before.max(peaks_after))
 		}
 
-		fn offchain_worker(_n: T::BlockNumber) {
+		fn offchain_worker(n: T::BlockNumber) {
 			use mmr::storage::{OffchainStorage, Storage};
 			// MMR pallet uses offchain storage to hold full MMR and leaves.
 			// The leaves are saved under fork-unique keys `(parent_hash, pos)`.
@@ -239,7 +239,7 @@ pub mod pallet {
 			//   entries pertaining to block `N` where `N < current-2400` are moved to a key based
 			//   solely on block number. The only way to have collisions is if two competing forks
 			//   are deeper than 2400 blocks and they both "canonicalize" their view of block `N`.
-			Storage::<OffchainStorage, T, I, LeafOf<T, I>>::canonicalize_offchain();
+			Storage::<OffchainStorage, T, I, LeafOf<T, I>>::canonicalize_offchain(n);
 		}
 	}
 }
@@ -281,7 +281,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Build offchain key from `parent_hash` of block that originally added node `pos` to MMR.
 	///
 	/// This combination makes the offchain (key,value) entry resilient to chain forks.
-	fn offchain_key(
+	fn node_offchain_key(
 		parent_hash: <T as frame_system::Config>::Hash,
 		pos: NodeIndex,
 	) -> sp_std::prelude::Vec<u8> {
@@ -291,27 +291,31 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Build canonical offchain key for node `pos` in MMR.
 	///
 	/// Used for nodes added by now finalized blocks.
-	fn canon_offchain_key(pos: NodeIndex) -> sp_std::prelude::Vec<u8> {
+	fn node_canon_offchain_key(pos: NodeIndex) -> sp_std::prelude::Vec<u8> {
 		(T::INDEXING_PREFIX, pos).encode()
 	}
 
-	/// Provide the parent hash for the block that added `leaf_index` to the MMR.
+	/// Build offchain key for the pruning map.
 	///
-	/// Should only be called for blocks still available in `<frame_system::Pallet<T>>::block_hash`.
-	fn parent_hash_of_leaf(
+	/// Nodes and leaves are initially saved under fork-specific keys in offchain db,
+	/// eventually they are "canonicalized" and this map is used to prune non-canon entries.
+	fn pruning_map_offchain_key() -> sp_std::prelude::Vec<u8> {
+		(T::INDEXING_PREFIX, mmr::storage::OFFCHAIN_PRUNING_MAP_KEY_SUFFIX).encode()
+	}
+
+	/// Provide the parent number for the block that added `leaf_index` to the MMR.
+	fn leaf_index_to_parent_block_num(
 		leaf_index: LeafIndex,
 		leaves_count: LeafIndex,
-	) -> <T as frame_system::Config>::Hash {
+	) -> <T as frame_system::Config>::BlockNumber {
 		// leaves are zero-indexed and were added one per block since pallet activation,
 		// while block numbers are one-indexed, so block number that added `leaf_idx` is:
 		// `block_num = block_num_when_pallet_activated + leaf_idx + 1`
 		// `block_num = (current_block_num - leaves_count) + leaf_idx + 1`
 		// `parent_block_num = current_block_num - leaves_count + leaf_idx`.
-		let parent_block_num: <T as frame_system::Config>::BlockNumber =
-			<frame_system::Pallet<T>>::block_number()
-				.saturating_sub(leaves_count.saturated_into())
-				.saturating_add(leaf_index.saturated_into());
-		<frame_system::Pallet<T>>::block_hash(parent_block_num)
+		<frame_system::Pallet<T>>::block_number()
+			.saturating_sub(leaves_count.saturated_into())
+			.saturating_add(leaf_index.saturated_into())
 	}
 
 	/// Generate a MMR proof for the given `leaf_indices`.

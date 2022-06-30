@@ -20,10 +20,11 @@
 use codec::Encode;
 use frame_support::traits::Get;
 use mmr_lib::helper;
-use sp_io::offchain_index;
-use sp_std::iter::Peekable;
+use sp_core::offchain::StorageKind;
+use sp_io::{offchain, offchain_index};
 #[cfg(not(feature = "std"))]
 use sp_std::prelude::*;
+use sp_std::{collections::btree_map::BTreeMap, iter::Peekable};
 
 use crate::{
 	mmr::{utils::NodesUtils, Node, NodeOf},
@@ -46,6 +47,18 @@ pub struct RuntimeStorage;
 /// MMR nodes are assumed to be stored in the Off-Chain DB. Note this storage type
 /// DOES NOT support adding new items to the MMR.
 pub struct OffchainStorage;
+
+/// Suffix of key for the 'pruning_map'.
+///
+/// Nodes and leaves are initially saved under fork-specific keys in offchain db,
+/// eventually they are "canonicalized" and this map is used to prune non-canon entries.
+pub(crate) const OFFCHAIN_PRUNING_MAP_KEY_SUFFIX: &str = "pruning_map";
+
+/// Used to store offchain mappings of `BlockNumber -> Vec[Hash]` to track all forks.
+/// Size of this offchain map is at most `frame_system::BlockHashCount`, its entries are pruned
+/// as part of the mechanism that prunes the forks this map tracks.
+type PruningMap<T> =
+	BTreeMap<<T as frame_system::Config>::BlockNumber, Vec<<T as frame_system::Config>::Hash>>;
 
 /// A storage layer for MMR.
 ///
@@ -75,47 +88,99 @@ where
 	///
 	/// Should only be called from offchain context, because it requires both read and write
 	/// access to offchain db.
-	pub fn canonicalize_offchain() {
-		use sp_core::offchain::StorageKind;
-		use sp_io::offchain;
+	pub(crate) fn canonicalize_offchain(block: T::BlockNumber) {
 		use sp_runtime::traits::UniqueSaturatedInto;
 
+		let map_key = Pallet::<T, I>::pruning_map_offchain_key();
+		let mut pruning_map: PruningMap<T> =
+			offchain::local_storage_get(StorageKind::PERSISTENT, &map_key)
+				.and_then(|v| codec::Decode::decode(&mut &*v).ok())
+				.unwrap_or_default();
+
+		// Add "block_num -> hash" mapping to offchain db,
+		// with all forks pushing hashes to same entry (for a particular block number).
+		let parent_hash = <frame_system::Pallet<T>>::parent_hash();
+		pruning_map
+			.entry(block)
+			.and_modify(|e| e.push(parent_hash))
+			.or_insert(vec![parent_hash]);
+
 		// Effectively move a rolling window of fork-unique leaves. Once out of the window, leaves
-		// are "canonicalized" in offchain db by moving them under `Pallet::canon_offchain_key`.
+		// are "canonicalized" in offchain by moving them under `Pallet::node_canon_offchain_key`.
 		let leaves = NumberOfLeaves::<T, I>::get();
 		let window_size =
 			<T as frame_system::Config>::BlockHashCount::get().unique_saturated_into();
 		if leaves >= window_size {
-			// move the rolling window towards the end of  `block_num->hash` mappings available
-			// in the runtime: we "canonicalize" the leaf at the end.
-			let leaf_to_canon = leaves.saturating_sub(window_size);
-			let parent_hash_of_leaf = Pallet::<T, I>::parent_hash_of_leaf(leaf_to_canon, leaves);
-			let nodes_to_canon = NodesUtils::right_branch_ending_in_leaf(leaf_to_canon);
+			// Move the rolling window towards the end of  `block_num->hash` mappings available
+			// in the runtime: we "canonicalize" the leaf at the end,
+			let to_canon_leaf = leaves.saturating_sub(window_size);
+			// and all the nodes added by that leaf.
+			let to_canon_nodes = NodesUtils::right_branch_ending_in_leaf(to_canon_leaf);
 			frame_support::log::debug!(
 				target: "runtime::mmr", "Nodes to canon for leaf {}: {:?}",
-				leaf_to_canon, nodes_to_canon
+				to_canon_leaf, to_canon_nodes
 			);
-			for pos in nodes_to_canon {
-				let key = Pallet::<T, I>::offchain_key(parent_hash_of_leaf, pos);
-				let canon_key = Pallet::<T, I>::canon_offchain_key(pos);
-				// Retrieve the element from Off-chain DB under fork-aware key.
-				if let Some(elem) = offchain::local_storage_get(StorageKind::PERSISTENT, &key) {
-					// Delete entry with old key.
-					offchain::local_storage_clear(StorageKind::PERSISTENT, &key);
-					// Add under new canon key.
-					offchain::local_storage_set(StorageKind::PERSISTENT, &canon_key, &elem);
+			// For this block number there may be node entries saved from multiple forks.
+			let to_canon_block_num =
+				Pallet::<T, I>::leaf_index_to_parent_block_num(to_canon_leaf, leaves);
+			// Only entries under this hash (retrieved from state on current canon fork) are to be
+			// persisted. All other entries added by same block number will be cleared.
+			let to_canon_hash = <frame_system::Pallet<T>>::block_hash(to_canon_block_num);
+
+			Self::canonicalize_nodes_for_hash(&to_canon_nodes, to_canon_hash);
+			// Get all the forks to prune, also remove them from the pruning_map.
+			pruning_map
+				.remove(&to_canon_block_num)
+				.map(|forks| {
+					Self::prune_nodes_for_forks(&to_canon_nodes, forks);
+				})
+				.unwrap_or_else(|| {
 					frame_support::log::debug!(
 						target: "runtime::mmr",
-						"Moved elem at pos {} from key {:?} to canon key {:?}",
-						pos, key, canon_key
+						"Offchain: could not prune: no entry in pruning map for block {:?}",
+						to_canon_block_num
 					);
-				} else {
-					frame_support::log::debug!(
-						target: "runtime::mmr",
-						"Offchain: could not get elem at pos {} using key {:?}",
-						pos, key
-					);
-				}
+				})
+		}
+		// Save new, updated pruning map.
+		offchain::local_storage_set(
+			StorageKind::PERSISTENT,
+			&map_key,
+			&Encode::encode(&pruning_map),
+		);
+	}
+
+	fn prune_nodes_for_forks(nodes: &[NodeIndex], forks: Vec<<T as frame_system::Config>::Hash>) {
+		for hash in forks {
+			for pos in nodes {
+				let key = Pallet::<T, I>::node_offchain_key(hash, *pos);
+				offchain::local_storage_clear(StorageKind::PERSISTENT, &key);
+			}
+		}
+	}
+
+	fn canonicalize_nodes_for_hash(
+		to_canon_nodes: &[NodeIndex],
+		to_canon_hash: <T as frame_system::Config>::Hash,
+	) {
+		for pos in to_canon_nodes {
+			let key = Pallet::<T, I>::node_offchain_key(to_canon_hash, *pos);
+			// Retrieve the element from Off-chain DB under fork-aware key.
+			if let Some(elem) = offchain::local_storage_get(StorageKind::PERSISTENT, &key) {
+				let canon_key = Pallet::<T, I>::node_canon_offchain_key(*pos);
+				// Add under new canon key.
+				offchain::local_storage_set(StorageKind::PERSISTENT, &canon_key, &elem);
+				frame_support::log::debug!(
+					target: "runtime::mmr",
+					"Moved elem at pos {} from key {:?} to canon key {:?}",
+					pos, key, canon_key
+				);
+			} else {
+				frame_support::log::debug!(
+					target: "runtime::mmr",
+					"Offchain: could not canonicalize elem at pos {} using key {:?}",
+					pos, key
+				);
 			}
 		}
 	}
@@ -133,17 +198,18 @@ where
 		// Use the hash as extra identifier to differentiate between various `pos` entries
 		// in offchain DB coming from various chain forks.
 		let ancestor_leaf_idx = NodesUtils::leaf_index_that_added_node(pos);
-		let parent_hash_of_ancestor =
-			Pallet::<T, I>::parent_hash_of_leaf(ancestor_leaf_idx, leaves_count);
-		let key = Pallet::<T, I>::offchain_key(parent_hash_of_ancestor, pos);
+		let ancestor_parent_block_num =
+			Pallet::<T, I>::leaf_index_to_parent_block_num(ancestor_leaf_idx, leaves_count);
+		let ancestor_parent_hash = <frame_system::Pallet<T>>::block_hash(ancestor_parent_block_num);
+		let key = Pallet::<T, I>::node_offchain_key(ancestor_parent_hash, pos);
 		frame_support::log::debug!(
 			target: "runtime::mmr", "offchain get {}: leaf idx {:?}, hash {:?}, key {:?}",
-			pos, ancestor_leaf_idx, parent_hash_of_ancestor, key
+			pos, ancestor_leaf_idx, ancestor_parent_hash, key
 		);
 		// Retrieve the element from Off-chain DB.
 		Ok(sp_io::offchain::local_storage_get(sp_core::offchain::StorageKind::PERSISTENT, &key)
 			.or_else(|| {
-				let key = Pallet::<T, I>::canon_offchain_key(pos);
+				let key = Pallet::<T, I>::node_canon_offchain_key(pos);
 				sp_io::offchain::local_storage_get(sp_core::offchain::StorageKind::PERSISTENT, &key)
 			})
 			.and_then(|v| codec::Decode::decode(&mut &*v).ok()))
@@ -202,7 +268,7 @@ where
 			// in the chain that deep).
 			// "Canonicalization" in this case means moving this leaf under a new key based
 			// only on the leaf's `node_index`.
-			let key = Pallet::<T, I>::offchain_key(parent_hash, node_index);
+			let key = Pallet::<T, I>::node_offchain_key(parent_hash, node_index);
 			frame_support::log::debug!(
 				target: "runtime::mmr", "offchain set: pos {} parent_hash {:?} key {:?}",
 				node_index, parent_hash, key

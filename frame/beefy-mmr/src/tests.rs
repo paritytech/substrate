@@ -101,7 +101,7 @@ fn should_contain_mmr_digest() {
 
 #[test]
 fn should_contain_valid_leaf_data() {
-	fn offchain_key(parent_hash: H256, pos: usize) -> Vec<u8> {
+	fn node_offchain_key(parent_hash: H256, pos: usize) -> Vec<u8> {
 		(<Test as pallet_mmr::Config>::INDEXING_PREFIX, parent_hash, pos as u64).encode()
 	}
 
@@ -111,7 +111,7 @@ fn should_contain_valid_leaf_data() {
 		<frame_system::Pallet<Test>>::parent_hash()
 	});
 
-	let mmr_leaf = read_mmr_leaf(&mut ext, offchain_key(parent_hash, 0));
+	let mmr_leaf = read_mmr_leaf(&mut ext, node_offchain_key(parent_hash, 0));
 	assert_eq!(
 		mmr_leaf,
 		MmrLeaf {
@@ -134,7 +134,7 @@ fn should_contain_valid_leaf_data() {
 		<frame_system::Pallet<Test>>::parent_hash()
 	});
 
-	let mmr_leaf = read_mmr_leaf(&mut ext, offchain_key(parent_hash, 1));
+	let mmr_leaf = read_mmr_leaf(&mut ext, node_offchain_key(parent_hash, 1));
 	assert_eq!(
 		mmr_leaf,
 		MmrLeaf {

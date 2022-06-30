@@ -166,25 +166,25 @@ fn should_append_to_mmr_when_on_initialize_is_called() {
 
 	let offchain_db = ext.offchain_db();
 	assert_eq!(
-		offchain_db.get(&MMR::offchain_key(parent_b1, 0)).map(decode_node),
+		offchain_db.get(&MMR::node_offchain_key(parent_b1, 0)).map(decode_node),
 		Some(mmr::Node::Data(((0, H256::repeat_byte(1)), LeafData::new(1),)))
 	);
 	assert_eq!(
-		offchain_db.get(&MMR::offchain_key(parent_b2, 1)).map(decode_node),
+		offchain_db.get(&MMR::node_offchain_key(parent_b2, 1)).map(decode_node),
 		Some(mmr::Node::Data(((1, H256::repeat_byte(2)), LeafData::new(2),)))
 	);
 	assert_eq!(
-		offchain_db.get(&MMR::offchain_key(parent_b2, 2)).map(decode_node),
+		offchain_db.get(&MMR::node_offchain_key(parent_b2, 2)).map(decode_node),
 		Some(mmr::Node::Hash(hex(
 			"672c04a9cd05a644789d769daa552d35d8de7c33129f8a7cbf49e595234c4854"
 		)))
 	);
-	assert_eq!(offchain_db.get(&MMR::offchain_key(parent_b2, 3)), None);
+	assert_eq!(offchain_db.get(&MMR::node_offchain_key(parent_b2, 3)), None);
 
-	assert_eq!(offchain_db.get(&MMR::canon_offchain_key(0)), None);
-	assert_eq!(offchain_db.get(&MMR::canon_offchain_key(1)), None);
-	assert_eq!(offchain_db.get(&MMR::canon_offchain_key(2)), None);
-	assert_eq!(offchain_db.get(&MMR::canon_offchain_key(3)), None);
+	assert_eq!(offchain_db.get(&MMR::node_canon_offchain_key(0)), None);
+	assert_eq!(offchain_db.get(&MMR::node_canon_offchain_key(1)), None);
+	assert_eq!(offchain_db.get(&MMR::node_canon_offchain_key(2)), None);
+	assert_eq!(offchain_db.get(&MMR::node_canon_offchain_key(3)), None);
 }
 
 #[test]
@@ -456,25 +456,30 @@ fn should_canonicalize_offchain() {
 	register_offchain_ext(&mut ext);
 
 	// adding 13 blocks that we'll later check have been canonicalized.
-	let to_canon_count = 13;
+	let to_canon_count = 13u32;
 
 	// add 3 blocks and verify leaves and nodes for them have been added to
 	// offchain MMR using fork-proof keys.
-	ext.execute_with(|| add_blocks(to_canon_count));
+	ext.execute_with(|| {
+		for blocknum in 0..to_canon_count {
+			new_block();
+			<Pallet<Test> as Hooks<BlockNumber>>::offchain_worker(blocknum.into());
+		}
+	});
 	ext.persist_offchain_overlay();
 	let offchain_db = ext.offchain_db();
 	ext.execute_with(|| {
 		// verify leaves added by blocks 1..13
-		for block_num in 1..u32::try_from(to_canon_count).unwrap() {
+		for block_num in 1..to_canon_count {
 			let parent_num: BlockNumber = (block_num - 1).into();
 			let leaf_index = u64::from(block_num - 1);
 			let pos = helper::leaf_index_to_pos(leaf_index.into());
 			// not canon,
-			assert_eq!(offchain_db.get(&MMR::canon_offchain_key(pos)), None);
+			assert_eq!(offchain_db.get(&MMR::node_canon_offchain_key(pos)), None);
 			let parent_hash = <frame_system::Pallet<Test>>::block_hash(parent_num);
 			// but available in fork-proof storage.
 			assert_eq!(
-				offchain_db.get(&MMR::offchain_key(parent_hash, pos)).map(decode_node),
+				offchain_db.get(&MMR::node_offchain_key(parent_hash, pos)).map(decode_node),
 				Some(mmr::Node::Data((
 					(leaf_index, H256::repeat_byte(u8::try_from(block_num).unwrap())),
 					LeafData::new(block_num.into()),
@@ -490,10 +495,10 @@ fn should_canonicalize_offchain() {
 			let parent_num: BlockNumber = leaf_index.try_into().unwrap();
 			let parent_hash = <frame_system::Pallet<Test>>::block_hash(parent_num);
 			// not canon,
-			assert_eq!(offchain_db.get(&MMR::canon_offchain_key(pos)), None);
+			assert_eq!(offchain_db.get(&MMR::node_canon_offchain_key(pos)), None);
 			// but available in fork-proof storage.
 			assert_eq!(
-				offchain_db.get(&MMR::offchain_key(parent_hash, pos)).map(decode_node),
+				offchain_db.get(&MMR::node_offchain_key(parent_hash, pos)).map(decode_node),
 				Some(mmr::Node::Hash(expected))
 			);
 		};
@@ -506,7 +511,7 @@ fn should_canonicalize_offchain() {
 	// added by our original `to_canon_count` blocks have now been canonicalized in offchain db.
 	ext.execute_with(|| {
 		let block_hash_size: u64 = <Test as frame_system::Config>::BlockHashCount::get();
-		let base = u32::try_from(to_canon_count).unwrap();
+		let base = to_canon_count;
 		for blocknum in base..(base + u32::try_from(block_hash_size).unwrap()) {
 			new_block();
 			<Pallet<Test> as Hooks<BlockNumber>>::offchain_worker(blocknum.into());
@@ -515,16 +520,16 @@ fn should_canonicalize_offchain() {
 	ext.persist_offchain_overlay();
 	ext.execute_with(|| {
 		// verify leaves added by blocks 1..13, should be in offchain under canon key.
-		for block_num in 1..u32::try_from(to_canon_count).unwrap() {
+		for block_num in 1..to_canon_count {
 			let leaf_index = u64::from(block_num - 1);
 			let pos = helper::leaf_index_to_pos(leaf_index.into());
 			let parent_num: BlockNumber = (block_num - 1).into();
 			let parent_hash = <frame_system::Pallet<Test>>::block_hash(parent_num);
-			// no longer available in fork-proof storage,
-			assert_eq!(offchain_db.get(&MMR::offchain_key(parent_hash, pos)), None);
+			// no longer available in fork-proof storage (was pruned),
+			assert_eq!(offchain_db.get(&MMR::node_offchain_key(parent_hash, pos)), None);
 			// but available using canon key.
 			assert_eq!(
-				offchain_db.get(&MMR::canon_offchain_key(pos)).map(decode_node),
+				offchain_db.get(&MMR::node_canon_offchain_key(pos)).map(decode_node),
 				Some(mmr::Node::Data((
 					(leaf_index, H256::repeat_byte(u8::try_from(block_num).unwrap())),
 					LeafData::new(block_num.into()),
@@ -539,11 +544,11 @@ fn should_canonicalize_offchain() {
 		let verify = |pos: NodeIndex, leaf_index: LeafIndex, expected: H256| {
 			let parent_num: BlockNumber = leaf_index.try_into().unwrap();
 			let parent_hash = <frame_system::Pallet<Test>>::block_hash(parent_num);
-			// no longer available in fork-proof storage,
-			assert_eq!(offchain_db.get(&MMR::offchain_key(parent_hash, pos)), None);
+			// no longer available in fork-proof storage (was pruned),
+			assert_eq!(offchain_db.get(&MMR::node_offchain_key(parent_hash, pos)), None);
 			// but available using canon key.
 			assert_eq!(
-				offchain_db.get(&MMR::canon_offchain_key(pos)).map(decode_node),
+				offchain_db.get(&MMR::node_canon_offchain_key(pos)).map(decode_node),
 				Some(mmr::Node::Hash(expected))
 			);
 		};
