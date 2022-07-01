@@ -1272,9 +1272,9 @@ impl<T: Config> EnsureOrigin<T::Origin> for EnsureFounder<T> {
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> T::Origin {
-		let founder = Founder::<T>::get().expect("society founder should exist");
-		T::Origin::from(frame_system::RawOrigin::Signed(founder))
+	fn try_successful_origin() -> Result<T::Origin, ()> {
+		let founder = Founder::<T>::get().ok_or(())?;
+		Ok(T::Origin::from(frame_system::RawOrigin::Signed(founder)))
 	}
 }
 

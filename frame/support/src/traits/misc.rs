@@ -21,6 +21,11 @@ use crate::dispatch::Parameter;
 use codec::{CompactLen, Decode, DecodeAll, Encode, EncodeLike, Input, MaxEncodedLen};
 use scale_info::{build::Fields, meta_type, Path, Type, TypeInfo, TypeParameter};
 use sp_arithmetic::traits::{CheckedAdd, CheckedMul, CheckedSub, Saturating};
+#[doc(hidden)]
+pub use sp_runtime::traits::{
+	ConstBool, ConstI128, ConstI16, ConstI32, ConstI64, ConstI8, ConstU128, ConstU16, ConstU32,
+	ConstU64, ConstU8, Get, GetDefault, TryCollect, TypedGet,
+};
 use sp_runtime::{traits::Block as BlockT, DispatchError};
 use sp_std::{cmp::Ordering, prelude::*};
 
@@ -362,16 +367,6 @@ impl<T: Saturating + CheckedAdd + CheckedMul + CheckedSub> DefensiveSaturating f
 	}
 }
 
-/// Try and collect into a collection `C`.
-pub trait TryCollect<C> {
-	type Error;
-	/// Consume self and try to collect the results into `C`.
-	///
-	/// This is useful in preventing the undesirable `.collect().try_into()` call chain on
-	/// collections that need to be converted into a bounded type (e.g. `BoundedVec`).
-	fn try_collect(self) -> Result<C, Self::Error>;
-}
-
 /// Anything that can have a `::len()` method.
 pub trait Len {
 	/// Return the length of data type.
@@ -386,57 +381,6 @@ where
 		self.clone().into_iter().len()
 	}
 }
-
-/// A trait for querying a single value from a type.
-///
-/// It is not required that the value is constant.
-pub trait Get<T> {
-	/// Return the current value.
-	fn get() -> T;
-}
-
-impl<T: Default> Get<T> for () {
-	fn get() -> T {
-		T::default()
-	}
-}
-
-/// Implement Get by returning Default for any type that implements Default.
-pub struct GetDefault;
-impl<T: Default> Get<T> for GetDefault {
-	fn get() -> T {
-		T::default()
-	}
-}
-
-macro_rules! impl_const_get {
-	($name:ident, $t:ty) => {
-		#[derive($crate::RuntimeDebug)]
-		pub struct $name<const T: $t>;
-		impl<const T: $t> Get<$t> for $name<T> {
-			fn get() -> $t {
-				T
-			}
-		}
-		impl<const T: $t> Get<Option<$t>> for $name<T> {
-			fn get() -> Option<$t> {
-				Some(T)
-			}
-		}
-	};
-}
-
-impl_const_get!(ConstBool, bool);
-impl_const_get!(ConstU8, u8);
-impl_const_get!(ConstU16, u16);
-impl_const_get!(ConstU32, u32);
-impl_const_get!(ConstU64, u64);
-impl_const_get!(ConstU128, u128);
-impl_const_get!(ConstI8, i8);
-impl_const_get!(ConstI16, i16);
-impl_const_get!(ConstI32, i32);
-impl_const_get!(ConstI64, i64);
-impl_const_get!(ConstI128, i128);
 
 /// A type for which some values make sense to be able to drop without further consideration.
 pub trait TryDrop: Sized {
@@ -801,7 +745,7 @@ impl<T: Encode> Encode for WrapperOpaque<T> {
 
 impl<T: Decode> Decode for WrapperOpaque<T> {
 	fn decode<I: Input>(input: &mut I) -> Result<Self, codec::Error> {
-		Ok(Self(T::decode(&mut &<Vec<u8>>::decode(input)?[..])?))
+		Ok(Self(T::decode_all(&mut &<Vec<u8>>::decode(input)?[..])?))
 	}
 
 	fn skip<I: Input>(input: &mut I) -> Result<(), codec::Error> {
@@ -1023,6 +967,10 @@ mod test {
 			2usize.pow(14) - 1 + 2
 		);
 		assert_eq!(<WrapperOpaque<[u8; 2usize.pow(14)]>>::max_encoded_len(), 2usize.pow(14) + 4);
+
+		let data = 4u64;
+		// Ensure that we check that the `Vec<u8>` is consumed completly on decode.
+		assert!(WrapperOpaque::<u32>::decode(&mut &data.encode().encode()[..]).is_err());
 	}
 
 	#[test]

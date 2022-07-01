@@ -119,8 +119,9 @@ for PALLET in "${PALLETS[@]}"; do
     --extrinsic="*" \
     --execution=wasm \
     --wasm-execution=compiled \
-    --template=./.maintain/frame-weight-template.hbs \
-    --output="$WEIGHT_FILE" 2>&1
+    --heap-pages=4096 \
+    --output="$WEIGHT_FILE" \
+    --template=./.maintain/frame-weight-template.hbs 2>&1
   )
   if [ $? -ne 0 ]; then
     echo "$OUTPUT" >> "$ERR_FILE"

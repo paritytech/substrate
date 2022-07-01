@@ -19,7 +19,9 @@
 //! generating values representing lazy module function calls.
 
 pub use crate::{
-	codec::{Codec, Decode, Encode, EncodeAsRef, EncodeLike, HasCompact, Input, Output},
+	codec::{
+		Codec, Decode, Encode, EncodeAsRef, EncodeLike, HasCompact, Input, MaxEncodedLen, Output,
+	},
 	scale_info::TypeInfo,
 	sp_std::{
 		fmt, marker,
@@ -63,7 +65,7 @@ pub trait Callable<T> {
 pub type CallableCallFor<A, R> = <A as Callable<R>>::Call;
 
 /// Origin for the System pallet.
-#[derive(PartialEq, Eq, Clone, RuntimeDebug, Encode, Decode, TypeInfo)]
+#[derive(PartialEq, Eq, Clone, RuntimeDebug, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum RawOrigin<AccountId> {
 	/// The system itself ordained this dispatch to happen: this is the highest privilege level.
 	Root,
@@ -200,6 +202,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug + 
 ///
 /// Transactional function discards all changes to storage if it returns `Err`, or commits if
 /// `Ok`, via the #\[transactional\] attribute. Note the attribute must be after #\[weight\].
+/// The #\[transactional\] attribute is deprecated since it is the default behaviour.
 ///
 /// ```
 /// # #[macro_use]
@@ -2697,7 +2700,9 @@ mod tests {
 		}
 	}
 
-	#[derive(TypeInfo, crate::RuntimeDebug, Eq, PartialEq, Clone, Encode, Decode)]
+	#[derive(
+		TypeInfo, crate::RuntimeDebug, Eq, PartialEq, Clone, Encode, Decode, MaxEncodedLen,
+	)]
 	pub struct OuterOrigin;
 
 	impl From<RawOrigin<<TraitImpl as system::Config>::AccountId>> for OuterOrigin {
@@ -2745,6 +2750,9 @@ mod tests {
 			unimplemented!("Not required in tests!")
 		}
 		fn signed(_by: <TraitImpl as system::Config>::AccountId) -> Self {
+			unimplemented!("Not required in tests!")
+		}
+		fn as_signed(self) -> Option<Self::AccountId> {
 			unimplemented!("Not required in tests!")
 		}
 	}
