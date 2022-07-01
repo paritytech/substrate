@@ -225,18 +225,18 @@ impl pallet_randomness_collective_flip::Config for Runtime {}
 parameter_types! {
 	pub const EpochDuration: u64 = EPOCH_DURATION_IN_SLOTS;
 	pub const ExpectedBlockTime: Moment = MILLISECS_PER_BLOCK;
-	// TODO-SASS: small test value
-	pub const MaxAuthorities: u32 = 3;
-	// TODO-SASS: ...
-	pub const MaxTickets: u32 = EPOCH_DURATION_IN_SLOTS as u32;
 }
 
 impl pallet_sassafras::Config for Runtime {
 	type EpochDuration = EpochDuration;
 	type ExpectedBlockTime = ExpectedBlockTime;
 	type EpochChangeTrigger = pallet_sassafras::SameAuthoritiesForever;
-	type MaxAuthorities = MaxAuthorities;
-	type MaxTickets = MaxTickets;
+	// TODO-SASS: small test value
+	type MaxAuthorities = ConstU32<3>;
+	// TODO-SASS: ...
+	type MaxTickets = ConstU32<{ EPOCH_DURATION_IN_SLOTS as u32 }>;
+	// TODO-SASS: ... Add some redundancy
+	type MaxSubmittedTickets = ConstU32<{ 3 * EPOCH_DURATION_IN_SLOTS as u32 }>;
 }
 
 impl pallet_grandpa::Config for Runtime {

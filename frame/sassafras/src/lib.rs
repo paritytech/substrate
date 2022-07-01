@@ -48,7 +48,7 @@
 
 use scale_codec::{Decode, Encode};
 
-use frame_support::{traits::Get, weights::Weight, BoundedVec, WeakBoundedVec};
+use frame_support::{traits::Get, weights::Weight, BoundedBTreeSet, BoundedVec, WeakBoundedVec};
 use frame_system::offchain::{SendTransactionTypes, SubmitTransaction};
 use sp_application_crypto::ByteArray;
 use sp_consensus_vrf::schnorrkel;
@@ -147,9 +147,13 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxAuthorities: Get<u32>;
 
-		/// TODO-SASS
+		/// Max number of tickets that are considered for each epoch.
 		#[pallet::constant]
 		type MaxTickets: Get<u32>;
+
+		/// Max number of tickets that we are going to consider for each epoch.
+		#[pallet::constant]
+		type MaxSubmittedTickets: Get<u32>;
 	}
 
 	// TODO-SASS
@@ -237,7 +241,7 @@ pub mod pallet {
 	/// Each map entry contains a vector of tickets as they are received.
 	#[pallet::storage]
 	pub type NextTickets<T: Config> =
-		StorageValue<_, WeakBoundedVec<Ticket, T::MaxTickets>, ValueQuery>;
+		StorageValue<_, BoundedBTreeSet<Ticket, T::MaxSubmittedTickets>, ValueQuery>;
 
 	/// Genesis configuration for Sassafras protocol.
 	#[cfg_attr(feature = "std", derive(Default))]
@@ -342,17 +346,22 @@ pub mod pallet {
 		/// TODO-SASS:
 		/// BoundedVec with max set by the Config (maybe equal to epoch duration)
 		#[pallet::weight(10_000)]
-		pub fn submit_tickets(origin: OriginFor<T>, mut tickets: Vec<Ticket>) -> DispatchResult {
+		pub fn submit_tickets(origin: OriginFor<T>, tickets: Vec<Ticket>) -> DispatchResult {
 			ensure_none(origin)?;
 
 			log::debug!(target: "sassafras", "🌳 >>>>>>>>>> received {} tickets", tickets.len());
 
-			// TODO-SASS
-			// Isn't there something like append? Maybe we can just use a map or a Vec<Vec<>>
-
-			let mut next_tickets = NextTickets::<T>::get().into_inner();
-			next_tickets.append(&mut tickets);
-			let next_tickets = WeakBoundedVec::force_from(next_tickets, None);
+			// We have to traverse the tickets list one by one to verify the SNARK proofs.
+			let mut next_tickets = NextTickets::<T>::get();
+			for ticket in tickets {
+				// 1. validate proof
+				// 2. append to sorted list
+				if let Err(_ticket) = next_tickets.try_insert(ticket) {
+					log::debug!(target: "sassafras", "🌳 TICKETS OVERFLOW...");
+					// TODO if is worth remove a value from the middle if this one is bigger than
+					// or smaller than the middle value adjacent values.
+				}
+			}
 			NextTickets::<T>::put(next_tickets);
 
 			Ok(())
@@ -638,10 +647,9 @@ impl<T: Config> Pallet<T> {
 	// 1. sort a piece on each block (i.e. do not overload wasmtime)
 	// 2. start once we reached half of the epoch (i.e. no more tickets can be submitted)
 	fn enact_tickets() {
-		let mut tickets = NextTickets::<T>::get().into_inner();
+		let mut tickets = NextTickets::<T>::get().into_iter().collect::<Vec<_>>();
 		log::debug!(target: "sassafras", "🌳 >>>>>>>>> Enact {} tickets for next epoch", tickets.len());
 
-		tickets.sort_unstable();
 		if tickets.len() > T::MaxTickets::get() as usize {
 			log::debug!(target: "sassafras", "🌳 Truncating...");
 			// Drop extra tickets from the middle
