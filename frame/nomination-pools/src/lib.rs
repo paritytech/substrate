@@ -54,7 +54,7 @@
 //!
 //! ### Join
 //!
-//! A account can stake funds with a nomination pool by calling [`Call::join`].
+//! An account can stake funds with a nomination pool by calling [`Call::join`].
 //!
 //! ### Claim rewards
 //!

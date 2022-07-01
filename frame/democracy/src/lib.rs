@@ -600,6 +600,8 @@ pub mod pallet {
 		MaxVotesReached,
 		/// Maximum number of proposals reached.
 		TooManyProposals,
+		/// Voting period too low
+		VotingPeriodLow,
 	}
 
 	#[pallet::hooks]
@@ -800,8 +802,9 @@ pub mod pallet {
 		/// The dispatch of this call must be `FastTrackOrigin`.
 		///
 		/// - `proposal_hash`: The hash of the current external proposal.
-		/// - `voting_period`: The period that is allowed for voting on this proposal. Increased to
-		///   `FastTrackVotingPeriod` if too low.
+		/// - `voting_period`: The period that is allowed for voting on this proposal.
+		/// 	Must be always greater than zero.
+		/// 	For `FastTrackOrigin` must be equal or greater than `FastTrackVotingPeriod`.
 		/// - `delay`: The number of block after voting has ended in approval and this should be
 		///   enacted. This doesn't have a minimum amount.
 		///
@@ -830,7 +833,7 @@ pub mod pallet {
 				T::InstantOrigin::ensure_origin(ensure_instant)?;
 				ensure!(T::InstantAllowed::get(), Error::<T>::InstantNotAllowed);
 			}
-
+			ensure!(voting_period > T::BlockNumber::zero(), Error::<T>::VotingPeriodLow);
 			let (e_proposal_hash, threshold) =
 				<NextExternal<T>>::get().ok_or(Error::<T>::ProposalMissing)?;
 			ensure!(
