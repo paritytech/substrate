@@ -333,7 +333,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			reason: Vec<u8>,
 			who: <T::Lookup as StaticLookup>::Source,
-			#[pallet::compact] tip_value: BalanceOf<T>,
+			#[pallet::compact] tip_value: BalanceOf<T, I>,
 		) -> DispatchResult {
 			let tipper = ensure_signed(origin)?;
 			let who = T::Lookup::lookup(who)?;
