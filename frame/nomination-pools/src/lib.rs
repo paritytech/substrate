@@ -780,7 +780,8 @@ impl<T: Config> BondedPool<T> {
 		let is_full_unbond = unbonding_points == target_member.active_points();
 
 		let balance_after_unbond = {
-			// TODO: clone the member, and actually call `try_unbond`.
+			// NOTE: clone the member, and actually call `try_unbond`, or swap operation in the call
+			// site to receive the `unbonded_target_member` here.
 			let new_depositor_points =
 				target_member.active_points().saturating_sub(unbonding_points);
 			let mut target_member_after_unbond = (*target_member).clone();
@@ -829,13 +830,8 @@ impl<T: Config> BondedPool<T> {
 				)
 			},
 			(false, true) => {
-				debug_assert!(is_full_unbond);
-				if self.is_destroying_and_only_depositor(target_member.active_points()) {
-					// everything good, let them unbond anything.
-				} else {
-					// TODO: kicker should be allowed to do this.
-					Err(Error::<T>::DoesNotHavePermission)?
-				}
+				// the depositor can simply not be unbonded permissionlessly, period.
+				Err(Error::<T>::DoesNotHavePermission)?
 			},
 		};
 

@@ -22,6 +22,7 @@ pub fn default_reward_account() -> AccountId {
 }
 
 parameter_types! {
+	pub static MinJoinBondConfig: Balance = 2;
 	pub static CurrentEra: EraIndex = 0;
 	pub static BondingDuration: EraIndex = 3;
 	pub storage BondedBalanceMap: BTreeMap<AccountId, Balance> = Default::default();
@@ -238,6 +239,11 @@ impl ExtBuilder {
 		self
 	}
 
+	pub(crate) fn min_join_bond(self, min: Balance) -> Self {
+		MinJoinBondConfig::set(min);
+		self
+	}
+
 	pub(crate) fn with_check(self, level: u8) -> Self {
 		CheckLevel::set(level);
 		self
@@ -249,7 +255,7 @@ impl ExtBuilder {
 			frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 
 		let _ = crate::GenesisConfig::<Runtime> {
-			min_join_bond: 2,
+			min_join_bond: MinJoinBondConfig::get(),
 			min_create_bond: 2,
 			max_pools: Some(2),
 			max_members_per_pool: Some(3),
