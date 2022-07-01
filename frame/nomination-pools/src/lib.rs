@@ -69,7 +69,7 @@
 //! First, they must call [`Call::unbond`]. The unbond extrinsic will start the unbonding process by
 //! unbonding all or a portion of the members funds.
 //!
-//! > A member can have up to [`MaxUnbonding`] distinct active unbonding requests.
+//! > A member can have up to [`Config::MaxUnbonding`] distinct active unbonding requests.
 //!
 //! Second, once [`sp_staking::StakingInterface::bonding_duration`] eras have passed, the member can
 //! call [`Call::withdraw_unbonded`] to withdraw any funds that are free.
