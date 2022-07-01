@@ -22,6 +22,7 @@ use frame_support::traits::Get;
 use mmr_lib::helper;
 use sp_core::offchain::StorageKind;
 use sp_io::{offchain, offchain_index};
+use sp_runtime::traits::UniqueSaturatedInto;
 use sp_std::iter::Peekable;
 #[cfg(not(feature = "std"))]
 use sp_std::prelude::*;
@@ -124,8 +125,6 @@ where
 	/// Should only be called from offchain context, because it requires both read and write
 	/// access to offchain db.
 	pub(crate) fn canonicalize_and_prune(block: T::BlockNumber) {
-		use sp_runtime::traits::UniqueSaturatedInto;
-
 		// Add "block_num -> hash" mapping to offchain db,
 		// with all forks pushing hashes to same entry (same block number).
 		let parent_hash = <frame_system::Pallet<T>>::parent_hash();
@@ -212,13 +211,33 @@ where
 	L: primitives::FullLeaf + codec::Decode,
 {
 	fn get_elem(&self, pos: NodeIndex) -> mmr_lib::Result<Option<NodeOf<T, I, L>>> {
-		let leaves_count = NumberOfLeaves::<T, I>::get();
-		// Get the parent hash of the ancestor block that added node at index `pos`.
-		// Use the hash as extra identifier to differentiate between various `pos` entries
-		// in offchain DB coming from various chain forks.
+		let leaves = NumberOfLeaves::<T, I>::get();
+		// Find out which leaf added node `pos` in the MMR.
 		let ancestor_leaf_idx = NodesUtils::leaf_index_that_added_node(pos);
+
+		let window_size =
+			<T as frame_system::Config>::BlockHashCount::get().unique_saturated_into();
+		// Leaves older than this window should have been canonicalized.
+		if leaves.saturating_sub(ancestor_leaf_idx) > window_size {
+			let key = Pallet::<T, I>::node_canon_offchain_key(pos);
+			frame_support::log::debug!(
+				target: "runtime::mmr", "offchain get {}: leaf idx {:?}, key {:?}",
+				pos, ancestor_leaf_idx, key
+			);
+			// Just for safety, to easily handle runtime upgrades where any of the window params
+			// change and maybe we mess up storage migration,
+			// return _if and only if_ node is found (in normal conditions it's always found),
+			if let Some(elem) =
+				sp_io::offchain::local_storage_get(sp_core::offchain::StorageKind::PERSISTENT, &key)
+			{
+				return Ok(codec::Decode::decode(&mut &*elem).ok())
+			}
+			// BUT if we DID MESS UP, fall through to searching node using fork-specific key.
+		}
+
+		// Leaves still within the window will be found in offchain db under fork-aware keys.
 		let ancestor_parent_block_num =
-			Pallet::<T, I>::leaf_index_to_parent_block_num(ancestor_leaf_idx, leaves_count);
+			Pallet::<T, I>::leaf_index_to_parent_block_num(ancestor_leaf_idx, leaves);
 		let ancestor_parent_hash = <frame_system::Pallet<T>>::block_hash(ancestor_parent_block_num);
 		let key = Pallet::<T, I>::node_offchain_key(ancestor_parent_hash, pos);
 		frame_support::log::debug!(
@@ -228,6 +247,10 @@ where
 		// Retrieve the element from Off-chain DB.
 		Ok(sp_io::offchain::local_storage_get(sp_core::offchain::StorageKind::PERSISTENT, &key)
 			.or_else(|| {
+				// Again, this is just us being extra paranoid.
+				// We get here only if we mess up a storage migration for a runtime upgrades where
+				// say the window is increased, and for a little while following the upgrade there's
+				// leaves inside new 'window' that had been already canonicalized before upgrade.
 				let key = Pallet::<T, I>::node_canon_offchain_key(pos);
 				sp_io::offchain::local_storage_get(sp_core::offchain::StorageKind::PERSISTENT, &key)
 			})
