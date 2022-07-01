@@ -91,7 +91,7 @@ fn setup_pot_account<T: Config<I>, I: 'static>() {
 benchmarks_instance_pallet! {
 	report_awesome {
 		let r in 0 .. T::MaximumReasonLength::get();
-		let (caller, reason, awesome_person) = setup_awesome::<T>(r);
+		let (caller, reason, awesome_person) = setup_awesome::<T, I>(r);
 		let awesome_person_lookup = T::Lookup::unlookup(awesome_person);
 		// Whitelist caller account from further DB operations.
 		let caller_key = frame_system::Account::<T>::hashed_key_for(&caller);
@@ -100,9 +100,9 @@ benchmarks_instance_pallet! {
 
 	retract_tip {
 		let r = T::MaximumReasonLength::get();
-		let (caller, reason, awesome_person) = setup_awesome::<T>(r);
+		let (caller, reason, awesome_person) = setup_awesome::<T, I>(r);
 		let awesome_person_lookup = T::Lookup::unlookup(awesome_person.clone());
-		TipsMod::<T>::report_awesome(
+		TipsMod::<T, I>::report_awesome(
 			RawOrigin::Signed(caller.clone()).into(),
 			reason.clone(),
 			awesome_person_lookup
@@ -118,7 +118,7 @@ benchmarks_instance_pallet! {
 		let r in 0 .. T::MaximumReasonLength::get();
 		let t in 1 .. T::Tippers::max_len() as u32;
 
-		let (caller, reason, beneficiary, value) = setup_tip::<T>(r, t)?;
+		let (caller, reason, beneficiary, value) = setup_tip::<T, I>(r, t)?;
 		let beneficiary_lookup = T::Lookup::unlookup(beneficiary);
 		// Whitelist caller account from further DB operations.
 		let caller_key = frame_system::Account::<T>::hashed_key_for(&caller);
@@ -127,7 +127,7 @@ benchmarks_instance_pallet! {
 
 	tip {
 		let t in 1 .. T::Tippers::max_len() as u32;
-		let (member, reason, beneficiary, value) = setup_tip::<T>(0, t)?;
+		let (member, reason, beneficiary, value) = setup_tip::<T, I>(0, t)?;
 		let beneficiary_lookup = T::Lookup::unlookup(beneficiary.clone());
 		let value = T::Currency::minimum_balance().saturating_mul(100u32.into());
 		TipsMod::<T, I>::tip_new(
@@ -153,7 +153,7 @@ benchmarks_instance_pallet! {
 		setup_pot_account::<T, I>();
 
 		// Set up a new tip proposal
-		let (member, reason, beneficiary, value) = setup_tip::<T>(0, t)?;
+		let (member, reason, beneficiary, value) = setup_tip::<T, I>(0, t)?;
 		let beneficiary_lookup = T::Lookup::unlookup(beneficiary.clone());
 		let value = T::Currency::minimum_balance().saturating_mul(100u32.into());
 		TipsMod::<T, I>::tip_new(
@@ -183,7 +183,7 @@ benchmarks_instance_pallet! {
 		setup_pot_account::<T, I>();
 
 		// Set up a new tip proposal
-		let (member, reason, beneficiary, value) = setup_tip::<T>(0, t)?;
+		let (member, reason, beneficiary, value) = setup_tip::<T, I>(0, t)?;
 		let beneficiary_lookup = T::Lookup::unlookup(beneficiary.clone());
 		let value = T::Currency::minimum_balance().saturating_mul(100u32.into());
 		TipsMod::<T, I>::tip_new(
