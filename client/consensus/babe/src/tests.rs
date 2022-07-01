@@ -575,7 +575,7 @@ fn can_author_block() {
 		slot_duration: 1000,
 		epoch_length: 100,
 		c: (3, 10),
-		genesis_authorities: Vec::new(),
+		authorities: Vec::new(),
 		randomness: [0; 32],
 		allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,
 	};

@@ -156,7 +156,7 @@ pub struct BabeConfigurationV1 {
 	pub c: (u64, u64),
 
 	/// The authorities for the genesis epoch.
-	pub genesis_authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
+	pub authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
 
 	/// The randomness for the genesis epoch.
 	pub randomness: Randomness,
@@ -172,7 +172,7 @@ impl From<BabeConfigurationV1> for BabeConfiguration {
 			slot_duration: v1.slot_duration,
 			epoch_length: v1.epoch_length,
 			c: v1.c,
-			genesis_authorities: v1.genesis_authorities,
+			authorities: v1.authorities,
 			randomness: v1.randomness,
 			allowed_slots: if v1.secondary_slots {
 				AllowedSlots::PrimaryAndSecondaryPlainSlots
@@ -203,10 +203,10 @@ pub struct BabeConfiguration {
 	/// of a slot being empty.
 	pub c: (u64, u64),
 
-	/// The authorities for the genesis epoch.
-	pub genesis_authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
+	/// The authorities
+	pub authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
 
-	/// The randomness for the genesis epoch.
+	/// The randomness
 	pub randomness: Randomness,
 
 	/// Type of allowed slots.

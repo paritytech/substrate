@@ -216,7 +216,7 @@ impl Epoch {
 			epoch_index: 0,
 			start_slot: slot,
 			duration: genesis_config.epoch_length,
-			authorities: genesis_config.genesis_authorities.clone(),
+			authorities: genesis_config.authorities.clone(),
 			randomness: genesis_config.randomness,
 			config: BabeEpochConfiguration {
 				c: genesis_config.c,
