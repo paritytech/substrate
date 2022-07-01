@@ -149,3 +149,53 @@ fn should_contain_valid_leaf_data() {
 		}
 	);
 }
+
+#[test]
+fn should_update_authorities() {
+	new_test_ext(vec![1, 2, 3, 4]).execute_with(|| {
+		let auth_set = BeefyMmr::authority_set_proof();
+		let next_auth_set = BeefyMmr::next_authority_set_proof();
+
+		// check current authority set
+		assert_eq!(0, auth_set.id);
+		assert_eq!(2, auth_set.len);
+		let want: H256 =
+			hex!("176e73f1bf656478b728e28dd1a7733c98621b8acf830bff585949763dca7a96").into();
+		assert_eq!(want, auth_set.root);
+
+		// next authority set should have same validators but different id
+		assert_eq!(1, next_auth_set.id);
+		assert_eq!(auth_set.len, next_auth_set.len);
+		assert_eq!(auth_set.root, next_auth_set.root);
+
+		let announced_set = next_auth_set;
+		init_block(1);
+		let auth_set = BeefyMmr::authority_set_proof();
+		let next_auth_set = BeefyMmr::next_authority_set_proof();
+
+		// check new auth are expected ones
+		assert_eq!(announced_set, auth_set);
+		assert_eq!(1, auth_set.id);
+		// check next auth set
+		assert_eq!(2, next_auth_set.id);
+		let want: H256 =
+			hex!("9c6b2c1b0d0b25a008e6c882cc7b415f309965c72ad2b944ac0931048ca31cd5").into();
+		assert_eq!(2, next_auth_set.len);
+		assert_eq!(want, next_auth_set.root);
+
+		let announced_set = next_auth_set;
+		init_block(2);
+		let auth_set = BeefyMmr::authority_set_proof();
+		let next_auth_set = BeefyMmr::next_authority_set_proof();
+
+		// check new auth are expected ones
+		assert_eq!(announced_set, auth_set);
+		assert_eq!(2, auth_set.id);
+		// check next auth set
+		assert_eq!(3, next_auth_set.id);
+		let want: H256 =
+			hex!("9c6b2c1b0d0b25a008e6c882cc7b415f309965c72ad2b944ac0931048ca31cd5").into();
+		assert_eq!(2, next_auth_set.len);
+		assert_eq!(want, next_auth_set.root);
+	});
+}

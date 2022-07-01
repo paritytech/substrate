@@ -160,6 +160,16 @@ pub enum BlockImportStatus<N: std::fmt::Debug + PartialEq> {
 	ImportedUnknown(N, ImportedAux, Option<Origin>),
 }
 
+impl<N: std::fmt::Debug + PartialEq> BlockImportStatus<N> {
+	/// Returns the imported block number.
+	pub fn number(&self) -> &N {
+		match self {
+			BlockImportStatus::ImportedKnown(n, _) |
+			BlockImportStatus::ImportedUnknown(n, _, _) => n,
+		}
+	}
+}
+
 /// Block import error.
 #[derive(Debug, thiserror::Error)]
 pub enum BlockImportError {
