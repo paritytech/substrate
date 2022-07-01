@@ -331,12 +331,6 @@ pub mod pallet {
 			// TODO-SASS
 			// remove temporary "environment" entry from storage
 			//Lateness::<T>::kill();
-
-			// Enact new tickets list before next epoch starts (we don't want to propagate this
-			// list using pre-digest as we're doing with randomness).
-			if Self::current_slot_epoch_index() + 1 >= T::EpochDuration::get() {
-				Self::enact_tickets()
-			}
 		}
 	}
 
@@ -517,6 +511,39 @@ impl<T: Config> Pallet<T> {
 		// 	NextEpochConfig::<T>::put(next_epoch_config);
 		// 	Self::deposit_consensus(ConsensusLog::NextConfigData(pending_epoch_config_change));
 		// }
+
+		Self::enact_tickets()
+	}
+
+	/// Enact next epoch tickets list.
+	/// To work properly this should be done as the last action of the last epoch slot.
+	/// (i.e. current tickets list is not used at this point)
+	// This sort should be benchmarked... for the moment just sort here
+	// NOTE: if using an offchain worker we can:
+	// 1. sort a piece on each block (i.e. do not overload wasmtime)
+	// 2. start once we reached half of the epoch (i.e. no more tickets can be submitted)
+	fn enact_tickets() {
+		let mut tickets = NextTickets::<T>::get().into_iter().collect::<Vec<_>>();
+		log::debug!(target: "sassafras", "🌳 >>>>>>>>> Enact {} tickets for next epoch", tickets.len());
+
+		if tickets.len() > T::MaxTickets::get() as usize {
+			log::debug!(target: "sassafras", "🌳 Truncating...");
+			// Drop extra tickets from the middle
+			let max = T::MaxTickets::get() as usize;
+			let diff = tickets.len() - max;
+			let off = max / 2;
+			// It is just not efficient to call remove
+			for i in off..off + diff {
+				tickets[i] = tickets[i + diff];
+			}
+			tickets.truncate(max);
+		}
+
+		let tickets = BoundedVec::<Ticket, T::MaxTickets>::try_from(tickets)
+			.expect("vector has been eventually truncated; qed");
+
+		Tickets::<T>::put(tickets);
+		NextTickets::<T>::kill();
 	}
 
 	/// Finds the start slot of the current epoch. Only guaranteed to give correct results after
@@ -639,37 +666,6 @@ impl<T: Config> Pallet<T> {
 		this_randomness
 	}
 
-	/// Enact next epoch tickets list.
-	/// To work properly this should be done as the last action of the last epoch slot.
-	/// (i.e. current tickets list is not used at this point)
-	// This sort should be benchmarked... for the moment just sort here
-	// NOTE: if using an offchain worker we can:
-	// 1. sort a piece on each block (i.e. do not overload wasmtime)
-	// 2. start once we reached half of the epoch (i.e. no more tickets can be submitted)
-	fn enact_tickets() {
-		let mut tickets = NextTickets::<T>::get().into_iter().collect::<Vec<_>>();
-		log::debug!(target: "sassafras", "🌳 >>>>>>>>> Enact {} tickets for next epoch", tickets.len());
-
-		if tickets.len() > T::MaxTickets::get() as usize {
-			log::debug!(target: "sassafras", "🌳 Truncating...");
-			// Drop extra tickets from the middle
-			let max = T::MaxTickets::get() as usize;
-			let diff = tickets.len() - max;
-			let off = max / 2;
-			// It is just not efficient to call remove
-			for i in off..off + diff {
-				tickets[i] = tickets[i + diff];
-			}
-			tickets.truncate(max);
-		}
-
-		let tickets = BoundedVec::<Ticket, T::MaxTickets>::try_from(tickets)
-			.expect("vector has been eventually truncated; qed");
-
-		Tickets::<T>::put(tickets);
-		NextTickets::<T>::kill();
-	}
-
 	/// Get ticket for the given slot.
 	pub fn slot_ticket(slot: Slot) -> Option<Ticket> {
 		let duration = T::EpochDuration::get();
@@ -680,8 +676,14 @@ impl<T: Config> Pallet<T> {
 
 		// TODO-SASS. It is not efficient to load this vector on each slot.
 		// Maybe we should consider to use another strategy? Like a scattered vector?
-		let tickets = Tickets::<T>::get();
-		tickets.get(idx as usize).cloned()
+
+		if idx > 0 {
+			let tickets = Tickets::<T>::get();
+			tickets.get(idx as usize).cloned()
+		} else {
+			let tickets = NextTickets::<T>::get();
+			tickets.iter().next().cloned()
+		}
 	}
 
 	/// TODO-SASS: improve docs
