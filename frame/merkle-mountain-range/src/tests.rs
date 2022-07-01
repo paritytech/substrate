@@ -15,7 +15,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{mmr::utils, mock::*, *};
+use crate::{
+	mmr::{storage::PruningMap, utils},
+	mock::*,
+	*,
+};
 
 use frame_support::traits::{Get, OnInitialize};
 use mmr_lib::helper;
@@ -445,6 +449,88 @@ fn should_verify_on_the_next_block_since_there_is_no_pruning_yet() {
 		// then
 		assert_eq!(crate::Pallet::<Test>::verify_leaves(leaves, proof5), Ok(()));
 	});
+}
+
+#[test]
+fn should_verify_pruning_map() {
+	use sp_core::offchain::StorageKind;
+	use sp_io::offchain;
+
+	let _ = env_logger::try_init();
+	let mut ext = new_test_ext();
+	register_offchain_ext(&mut ext);
+
+	ext.execute_with(|| {
+		type TestPruningMap = PruningMap<Test, ()>;
+		fn offchain_decoded(key: Vec<u8>) -> Option<Vec<H256>> {
+			offchain::local_storage_get(StorageKind::PERSISTENT, &key)
+				.and_then(|v| codec::Decode::decode(&mut &*v).ok())
+		}
+
+		// test append
+		{
+			TestPruningMap::append(1, H256::repeat_byte(1));
+
+			TestPruningMap::append(2, H256::repeat_byte(21));
+			TestPruningMap::append(2, H256::repeat_byte(22));
+
+			TestPruningMap::append(3, H256::repeat_byte(31));
+			TestPruningMap::append(3, H256::repeat_byte(32));
+			TestPruningMap::append(3, H256::repeat_byte(33));
+
+			// `0` not present
+			let map_key = TestPruningMap::pruning_map_offchain_key(0);
+			assert_eq!(offchain::local_storage_get(StorageKind::PERSISTENT, &map_key), None);
+
+			// verify `1` entries
+			let map_key = TestPruningMap::pruning_map_offchain_key(1);
+			let expected = vec![H256::repeat_byte(1)];
+			assert_eq!(offchain_decoded(map_key), Some(expected));
+
+			// verify `2` entries
+			let map_key = TestPruningMap::pruning_map_offchain_key(2);
+			let expected = vec![H256::repeat_byte(21), H256::repeat_byte(22)];
+			assert_eq!(offchain_decoded(map_key), Some(expected));
+
+			// verify `3` entries
+			let map_key = TestPruningMap::pruning_map_offchain_key(3);
+			let expected =
+				vec![H256::repeat_byte(31), H256::repeat_byte(32), H256::repeat_byte(33)];
+			assert_eq!(offchain_decoded(map_key), Some(expected));
+
+			// `4` not present
+			let map_key = TestPruningMap::pruning_map_offchain_key(4);
+			assert_eq!(offchain::local_storage_get(StorageKind::PERSISTENT, &map_key), None);
+		}
+
+		// test remove
+		{
+			// `0` doesn't return anything
+			assert_eq!(TestPruningMap::remove(0), None);
+
+			// remove and verify `1` entries
+			let expected = vec![H256::repeat_byte(1)];
+			assert_eq!(TestPruningMap::remove(1), Some(expected));
+
+			// remove and verify `2` entries
+			let expected = vec![H256::repeat_byte(21), H256::repeat_byte(22)];
+			assert_eq!(TestPruningMap::remove(2), Some(expected));
+
+			// remove and verify `3` entries
+			let expected =
+				vec![H256::repeat_byte(31), H256::repeat_byte(32), H256::repeat_byte(33)];
+			assert_eq!(TestPruningMap::remove(3), Some(expected));
+
+			// `4` doesn't return anything
+			assert_eq!(TestPruningMap::remove(4), None);
+
+			// no entries left in offchain map
+			for block in 0..5 {
+				let map_key = TestPruningMap::pruning_map_offchain_key(block);
+				assert_eq!(offchain::local_storage_get(StorageKind::PERSISTENT, &map_key), None);
+			}
+		}
+	})
 }
 
 #[test]

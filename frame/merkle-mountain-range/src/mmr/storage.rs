@@ -22,9 +22,9 @@ use frame_support::traits::Get;
 use mmr_lib::helper;
 use sp_core::offchain::StorageKind;
 use sp_io::{offchain, offchain_index};
+use sp_std::iter::Peekable;
 #[cfg(not(feature = "std"))]
 use sp_std::prelude::*;
-use sp_std::{collections::btree_map::BTreeMap, iter::Peekable};
 
 use crate::{
 	mmr::{utils::NodesUtils, Node, NodeOf},
@@ -52,13 +52,46 @@ pub struct OffchainStorage;
 ///
 /// Nodes and leaves are initially saved under fork-specific keys in offchain db,
 /// eventually they are "canonicalized" and this map is used to prune non-canon entries.
-pub(crate) const OFFCHAIN_PRUNING_MAP_KEY_SUFFIX: &str = "pruning_map";
+const OFFCHAIN_PRUNING_MAP_KEY_SUFFIX: &str = "pruning_map";
 
 /// Used to store offchain mappings of `BlockNumber -> Vec[Hash]` to track all forks.
 /// Size of this offchain map is at most `frame_system::BlockHashCount`, its entries are pruned
 /// as part of the mechanism that prunes the forks this map tracks.
-type PruningMap<T> =
-	BTreeMap<<T as frame_system::Config>::BlockNumber, Vec<<T as frame_system::Config>::Hash>>;
+pub(crate) struct PruningMap<T, I>(sp_std::marker::PhantomData<(T, I)>);
+impl<T, I> PruningMap<T, I>
+where
+	T: Config<I>,
+	I: 'static,
+{
+	pub(crate) fn pruning_map_offchain_key(block: T::BlockNumber) -> sp_std::prelude::Vec<u8> {
+		(T::INDEXING_PREFIX, block, OFFCHAIN_PRUNING_MAP_KEY_SUFFIX).encode()
+	}
+
+	/// Append `hash` to the list of parent hashes for `block` in offchain db.
+	pub fn append(block: T::BlockNumber, hash: <T as frame_system::Config>::Hash) {
+		let map_key = Self::pruning_map_offchain_key(block);
+		offchain::local_storage_get(StorageKind::PERSISTENT, &map_key)
+			.and_then(|v| codec::Decode::decode(&mut &*v).ok())
+			.or_else(|| Some(Vec::<<T as frame_system::Config>::Hash>::new()))
+			.map(|mut parents| {
+				parents.push(hash);
+				offchain::local_storage_set(
+					StorageKind::PERSISTENT,
+					&map_key,
+					&Encode::encode(&parents),
+				);
+			});
+	}
+
+	/// Remove list of parent hashes for `block` from offchain db and return it.
+	pub fn remove(block: T::BlockNumber) -> Option<Vec<<T as frame_system::Config>::Hash>> {
+		let map_key = Self::pruning_map_offchain_key(block);
+		offchain::local_storage_get(StorageKind::PERSISTENT, &map_key).and_then(|v| {
+			offchain::local_storage_clear(StorageKind::PERSISTENT, &map_key);
+			codec::Decode::decode(&mut &*v).ok()
+		})
+	}
+}
 
 /// A storage layer for MMR.
 ///
@@ -86,24 +119,17 @@ where
 	/// on `frame_system::block_hash(block_num)` map which only holds the last
 	/// `frame_system::BlockHashCount` blocks.
 	///
+	/// For the canonicalized block, prune all nodes pertaining to other forks from offchain db.
+	///
 	/// Should only be called from offchain context, because it requires both read and write
 	/// access to offchain db.
-	pub(crate) fn canonicalize_offchain(block: T::BlockNumber) {
+	pub(crate) fn canonicalize_and_prune(block: T::BlockNumber) {
 		use sp_runtime::traits::UniqueSaturatedInto;
 
-		let map_key = Pallet::<T, I>::pruning_map_offchain_key();
-		let mut pruning_map: PruningMap<T> =
-			offchain::local_storage_get(StorageKind::PERSISTENT, &map_key)
-				.and_then(|v| codec::Decode::decode(&mut &*v).ok())
-				.unwrap_or_default();
-
 		// Add "block_num -> hash" mapping to offchain db,
-		// with all forks pushing hashes to same entry (for a particular block number).
+		// with all forks pushing hashes to same entry (same block number).
 		let parent_hash = <frame_system::Pallet<T>>::parent_hash();
-		pruning_map
-			.entry(block)
-			.and_modify(|e| e.push(parent_hash))
-			.or_insert(vec![parent_hash]);
+		PruningMap::<T, I>::append(block, parent_hash);
 
 		// Effectively move a rolling window of fork-unique leaves. Once out of the window, leaves
 		// are "canonicalized" in offchain by moving them under `Pallet::node_canon_offchain_key`.
@@ -128,9 +154,8 @@ where
 			let to_canon_hash = <frame_system::Pallet<T>>::block_hash(to_canon_block_num);
 
 			Self::canonicalize_nodes_for_hash(&to_canon_nodes, to_canon_hash);
-			// Get all the forks to prune, also remove them from the pruning_map.
-			pruning_map
-				.remove(&to_canon_block_num)
+			// Get all the forks to prune, also remove them from the offchain pruning_map.
+			PruningMap::<T, I>::remove(to_canon_block_num)
 				.map(|forks| {
 					Self::prune_nodes_for_forks(&to_canon_nodes, forks);
 				})
@@ -142,12 +167,6 @@ where
 					);
 				})
 		}
-		// Save new, updated pruning map.
-		offchain::local_storage_set(
-			StorageKind::PERSISTENT,
-			&map_key,
-			&Encode::encode(&pruning_map),
-		);
 	}
 
 	fn prune_nodes_for_forks(nodes: &[NodeIndex], forks: Vec<<T as frame_system::Config>::Hash>) {

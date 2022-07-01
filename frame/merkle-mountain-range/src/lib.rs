@@ -239,7 +239,9 @@ pub mod pallet {
 			//   entries pertaining to block `N` where `N < current-2400` are moved to a key based
 			//   solely on block number. The only way to have collisions is if two competing forks
 			//   are deeper than 2400 blocks and they both "canonicalize" their view of block `N`.
-			Storage::<OffchainStorage, T, I, LeafOf<T, I>>::canonicalize_offchain(n);
+			// Once a block is canonicalized, all MMR entries pertaining to sibling blocks from
+			// other forks are pruned from offchain db.
+			Storage::<OffchainStorage, T, I, LeafOf<T, I>>::canonicalize_and_prune(n);
 		}
 	}
 }
@@ -293,14 +295,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Used for nodes added by now finalized blocks.
 	fn node_canon_offchain_key(pos: NodeIndex) -> sp_std::prelude::Vec<u8> {
 		(T::INDEXING_PREFIX, pos).encode()
-	}
-
-	/// Build offchain key for the pruning map.
-	///
-	/// Nodes and leaves are initially saved under fork-specific keys in offchain db,
-	/// eventually they are "canonicalized" and this map is used to prune non-canon entries.
-	fn pruning_map_offchain_key() -> sp_std::prelude::Vec<u8> {
-		(T::INDEXING_PREFIX, mmr::storage::OFFCHAIN_PRUNING_MAP_KEY_SUFFIX).encode()
 	}
 
 	/// Provide the parent number for the block that added `leaf_index` to the MMR.
