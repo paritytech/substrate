@@ -203,7 +203,6 @@ where
 		let proposer = Proposer::<_, _, _, _, PR> {
 			spawn_handle: self.spawn_handle.clone(),
 			client: self.client.clone(),
-			parent_hash,
 			parent_id: id,
 			parent_number: *parent_header.number(),
 			transaction_pool: self.transaction_pool.clone(),
