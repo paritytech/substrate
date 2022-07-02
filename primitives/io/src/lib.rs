@@ -1944,7 +1944,7 @@ mod tests {
 			// invalid ed25519 signature
 			crypto::start_batch_verify();
 			crypto::ed25519_batch_verify(&zero_ed_sig(), &Vec::new(), &zero_ed_pub());
-			assert!(!crypto::finish_batch_verify());
+			assert!(crypto::finish_batch_verify());
 
 			// 2 valid ed25519 signatures
 			crypto::start_batch_verify();
