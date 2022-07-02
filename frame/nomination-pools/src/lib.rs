@@ -904,6 +904,75 @@ impl<T: Config> BondedPool<T> {
 		Ok(points_issued)
 	}
 
+	/// Bond all of the rewards from `member` into this pool.
+	///
+	/// Similar to `try_bond_funds`, but doesn't transfer funds from an account, but instead
+	/// transfers the rewards directly from the member's reward pool to the `bonded_account`.
+	///
+	/// Returns `Ok((points_issues, bonded))`, `Err` otherwise.
+	fn try_bond_funds_from_rewards(
+		&mut self,
+		member_account: &T::AccountId,
+		member: &mut PoolMember<T>,
+		reward_pool: &mut RewardPool<T>,
+		ty: BondType,
+	) -> Result<(BalanceOf<T>, BalanceOf<T>), DispatchError> {
+		debug_assert_eq!(member.pool_id, self.id);
+		// a member who has no skin in the game anymore cannot claim any rewards.
+		ensure!(!member.active_points().is_zero(), Error::<T>::FullyUnbonding);
+		let was_destroying = self.is_destroying();
+
+		let member_payout = Pallet::<T>::calculate_member_payout(member, self, reward_pool)?;
+
+		// if the payout is zero, the issued points are also going to be zero.
+		if member_payout.is_zero() {
+			return Ok((member_payout, member_payout))
+		}
+
+		let bonded_account = self.bonded_account();
+
+		// Transfer payout to the bonded pool.
+		T::Currency::transfer(
+			&self.reward_account(),
+			&bonded_account,
+			member_payout,
+			match ty {
+				BondType::Create => ExistenceRequirement::AllowDeath,
+				BondType::Later => ExistenceRequirement::KeepAlive,
+			},
+		)?;
+
+		Pallet::<T>::deposit_event(Event::<T>::PaidOut {
+			member: member_account.clone(),
+			pool_id: member.pool_id,
+			payout: member_payout,
+		});
+
+		if self.is_destroying() && !was_destroying {
+			Pallet::<T>::deposit_event(Event::<T>::StateChanged {
+				pool_id: member.pool_id,
+				new_state: PoolState::Destroying,
+			});
+		}
+
+		let points_issued = self.issue(member_payout);
+
+		match ty {
+			BondType::Create => T::StakingInterface::bond(
+				bonded_account.clone(),
+				bonded_account,
+				member_payout,
+				self.reward_account(),
+			)?,
+			// The pool should always be created in such a way its in a state to bond extra, but if
+			// the active balance is slashed below the minimum bonded or the account cannot be
+			// found, we exit early.
+			BondType::Later => T::StakingInterface::bond_extra(bonded_account, member_payout)?,
+		}
+
+		Ok((points_issued, member_payout))
+	}
+
 	/// If `n` saturates at it's upper bound, mark the pool as destroying. This is useful when a
 	/// number saturating indicates the pool can no longer correctly keep track of state.
 	fn bound_check(&mut self, n: U256) -> U256 {
@@ -1463,11 +1532,11 @@ pub mod pallet {
 
 		/// Bond `extra` more funds from `origin` into the pool to which they already belong.
 		///
-		/// Additional funds can come from either the free balance of the account, of from the
+		/// Additional funds can come from either the free balance of the account, or from the
 		/// accumulated rewards, see [`BondExtra`].
 		// NOTE: this transaction is implemented with the sole purpose of readability and
 		// correctness, not optimization. We read/write several storage items multiple times instead
-		// of just once, in the spirit reusing code.
+		// of just once, in the spirit of reusing code.
 		#[pallet::weight(
 			T::WeightInfo::bond_extra_transfer()
 			.max(T::WeightInfo::bond_extra_reward())
@@ -1479,15 +1548,12 @@ pub mod pallet {
 			let (points_issued, bonded) = match extra {
 				BondExtra::FreeBalance(amount) =>
 					(bonded_pool.try_bond_funds(&who, amount, BondType::Later)?, amount),
-				BondExtra::Rewards => {
-					let claimed = Self::do_reward_payout(
-						&who,
-						&mut member,
-						&mut bonded_pool,
-						&mut reward_pool,
-					)?;
-					(bonded_pool.try_bond_funds(&who, claimed, BondType::Later)?, claimed)
-				},
+				BondExtra::Rewards => bonded_pool.try_bond_funds_from_rewards(
+					&who,
+					&mut member,
+					&mut reward_pool,
+					BondType::Later,
+				)?,
 			};
 			bonded_pool.ok_to_be_open(bonded)?;
 			member.points = member.points.saturating_add(points_issued);
@@ -2269,8 +2335,8 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// If the member has some rewards, transfer a payout from the reward pool to the member.
-	// Emits events and potentially modifies pool state if any arithmetic saturates, but does
-	// not persist any of the mutable inputs to storage.
+	/// Emits events and potentially modifies pool state if any arithmetic saturates, but does
+	/// not persist any of the mutable inputs to storage.
 	fn do_reward_payout(
 		member_account: &T::AccountId,
 		member: &mut PoolMember<T>,
