@@ -489,7 +489,7 @@ async fn tickets_worker<B, C, SC>(
 					},
 				};
 
-				authorship::generate_epoch_tickets(epoch, 40, 1, &keystore)
+				authorship::generate_epoch_tickets(epoch, 30, 1, &keystore)
 			};
 
 			if tickets.is_empty() {

@@ -65,9 +65,10 @@ pub fn claim_slot_using_keys(
 	// TODO-SASS: fix u32 vs u64 for auth index
 	let (idx, proof) = match ticket {
 		Some(ticket) => {
+			log::debug!(target: "sassafras", "🌳 [TRY PRIMARY]");
 			let ticket_info = epoch.tickets_info.get(&ticket)?;
-			log::debug!(target: "sassafras", "🌳 [TRY PRIMARY] ticket = [auth: {}, attempt: {}]",
-                ticket_info.authority_index, ticket_info.attempt);
+			log::debug!(target: "sassafras", "🌳 Ticket = [ticket: {:02x?}, auth: {}, attempt: {}]",
+                &ticket.as_bytes()[0..8], ticket_info.authority_index, ticket_info.attempt);
 			let idx = ticket_info.authority_index as u64;
 			(idx, Some(ticket_info.proof.clone()))
 		},

@@ -337,25 +337,38 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// Submit next epoch tickets.
-		/// TODO-SASS:
-		/// BoundedVec with max set by the Config (maybe equal to epoch duration)
 		#[pallet::weight(10_000)]
 		pub fn submit_tickets(origin: OriginFor<T>, tickets: Vec<Ticket>) -> DispatchResult {
 			ensure_none(origin)?;
 
-			log::debug!(target: "sassafras", "🌳 >>>>>>>>>> received {} tickets", tickets.len());
+			log::debug!(target: "sassafras", "🌳 @@@@@@@@@@ received {} tickets", tickets.len());
 
 			// We have to traverse the tickets list one by one to verify the SNARK proofs.
 			let mut next_tickets = NextTickets::<T>::get();
-			for ticket in tickets {
-				// 1. validate proof
-				// 2. append to sorted list
-				if let Err(_ticket) = next_tickets.try_insert(ticket) {
-					log::debug!(target: "sassafras", "🌳 TICKETS OVERFLOW...");
-					// TODO if is worth remove a value from the middle if this one is bigger than
-					// or smaller than the middle value adjacent values.
-				}
-			}
+
+			// 1. validate proof
+			// 2. append to sorted list
+			// TODO-SASS: use a scattered structure for tickets
+			next_tickets = next_tickets.try_mutate(|tree| {
+                for ticket in tickets.iter() {
+                    tree.insert(*ticket);
+                }
+                let max_tickets = T::MaxTickets::get() as usize;
+                if tree.len() > max_tickets {
+                    // Remove the mid values
+                    // TODO-SASS... with the new structure this will be performed in a different
+                    // way
+                    let diff = tree.len() - max_tickets;
+                    let off = max_tickets / 2;
+                    let val = tree.iter().nth(off).cloned().unwrap();
+                    let mut mid = tree.split_off(&val);
+                    let val = mid.iter().nth(diff).cloned().unwrap();
+                    let mut tail = mid.split_off(&val);
+                    tree.append(&mut tail);
+                    log::warn!(target: "sassafras", "🌳 TICKETS OVERFLOW, drop {} tickets... (len = {})", diff, tree.len());
+                }
+            }).expect("Tickets list len is within the allowed bounds; qed.");
+
 			NextTickets::<T>::put(next_tickets);
 
 			Ok(())
@@ -378,16 +391,25 @@ pub mod pallet {
 					}
 				);
 
-				if source != TransactionSource::Local && source != TransactionSource::InBlock {
+				if source == TransactionSource::External {
+					// TODO-SASS:
+					// If we only allow these txs on block production, then there is less chance to
+					// submit our tickets if we don't have enough authoring slots.
+					// If we have 0 slots => we have zero chances.
+					// Maybe this is one valid reason to introduce proxies.
 					log::warn!(
 						target: "sassafras::runtime",
-						"🌳 Rejecting unsigned transaction because it is not local/in-block.",
+						"🌳 Rejecting unsigned transaction from external sources.",
 					);
 					return InvalidTransaction::BadSigner.into()
 				}
 
 				// Current slot should be less than half of epoch duration.
 				if Self::current_slot_epoch_index() >= T::EpochDuration::get() / 2 {
+					log::warn!(
+						target: "sassafras::runtime",
+						"🌳 Timeout to propose tickets, bailing out.",
+					);
 					return InvalidTransaction::Stale.into()
 				}
 
@@ -512,33 +534,23 @@ impl<T: Config> Pallet<T> {
 		// 	Self::deposit_consensus(ConsensusLog::NextConfigData(pending_epoch_config_change));
 		// }
 
-		Self::enact_tickets()
+		Self::enact_tickets();
 	}
 
 	/// Enact next epoch tickets list.
 	/// To work properly this should be done as the last action of the last epoch slot.
 	/// (i.e. current tickets list is not used at this point)
-	// This sort should be benchmarked... for the moment just sort here
-	// NOTE: if using an offchain worker we can:
-	// 1. sort a piece on each block (i.e. do not overload wasmtime)
-	// 2. start once we reached half of the epoch (i.e. no more tickets can be submitted)
 	fn enact_tickets() {
+		// TODO-SASS: manage skipped epoch by killing both Tickets and NextTickets
+
 		let mut tickets = NextTickets::<T>::get().into_iter().collect::<Vec<_>>();
-		log::debug!(target: "sassafras", "🌳 >>>>>>>>> Enact {} tickets for next epoch", tickets.len());
+		log::debug!(target: "sassafras", "🌳 @@@@@@@@@ Enacting {} tickets", tickets.len());
 
 		if tickets.len() > T::MaxTickets::get() as usize {
-			log::debug!(target: "sassafras", "🌳 Truncating...");
-			// Drop extra tickets from the middle
+			log::error!(target: "sassafras", "🌳 should never happen...");
 			let max = T::MaxTickets::get() as usize;
-			let diff = tickets.len() - max;
-			let off = max / 2;
-			// It is just not efficient to call remove
-			for i in off..off + diff {
-				tickets[i] = tickets[i + diff];
-			}
 			tickets.truncate(max);
 		}
-
 		let tickets = BoundedVec::<Ticket, T::MaxTickets>::try_from(tickets)
 			.expect("vector has been eventually truncated; qed");
 
@@ -661,34 +673,51 @@ impl<T: Config> Pallet<T> {
 		let next_randomness = sp_io::hashing::blake2_256(&s);
 		NextRandomness::<T>::put(&next_randomness);
 
-		// TODO: reset randomness accumulator? Maybe we can leave it as is...
-
 		this_randomness
 	}
 
 	/// Get ticket for the given slot.
 	pub fn slot_ticket(slot: Slot) -> Option<Ticket> {
 		let duration = T::EpochDuration::get();
-		let idx = Self::slot_epoch_index(slot) % duration;
-		log::debug!(target: "sassafras::runtime", "🌳 >>>>>>>>>>>>>>>>>>>>>>>>>>>>> SLOT-IDX {}", idx);
+		let slot_idx = Self::slot_epoch_index(slot); // % duration;
 
-		// TODO-SASS: return the tickets "outside-in"
+		// TODO-SASS. It is a very efficient and temporary solution.
+		// On refactory we will come up with a better solution (like a scattered vector).
 
-		// TODO-SASS. It is not efficient to load this vector on each slot.
-		// Maybe we should consider to use another strategy? Like a scattered vector?
+		// Given a list of ordered tickets: t0, t1, t2, ..., tk to be assigned to N slots (N>k)
+		// The tickets are assigned to the slots in the following order: t1, t3, ..., t4, t2, t0.
 
-		if idx > 0 {
-			let tickets = Tickets::<T>::get();
-			tickets.get(idx as usize).cloned()
-		} else {
+		let ticket_index = |slot_idx| {
+			log::debug!(target: "sassafras::runtime", "🌳 >>>>>>>>>>>>>>>>>>>>>>>>>>>>> SLOT-IDX {}", slot_idx);
+			let idx = if slot_idx < duration / 2 {
+				2 * slot_idx + 1
+			} else {
+				2 * (duration - (slot_idx + 1))
+			};
+			log::debug!(target: "sassafras::runtime", "🌳 >>>>>>>>>>>>>>>>>>>>>>>>>>>>> TICKET-IDX {}", idx);
+			idx as usize
+		};
+
+		// If this is a ticket for an epoch not enacted yet we have to fetch it from the
+		// `NextTickets` list.
+		// This may happen for example when an author request for the first ticket of a new epoch.
+		if slot_idx >= duration {
 			let tickets = NextTickets::<T>::get();
-			tickets.iter().next().cloned()
+			// Do not use modulus since we want to eventually return `None` for slots crossing the
+			// epoch boundaries.
+			let idx = ticket_index(slot_idx - duration);
+			tickets.iter().nth(idx).cloned()
+		} else {
+			let tickets = Tickets::<T>::get();
+			let idx = ticket_index(slot_idx);
+			tickets.get(idx).cloned()
 		}
 	}
 
 	/// TODO-SASS: improve docs
 	/// Submit the next epoch validator tickets via an unsigned extrinsic.
 	pub fn submit_tickets_unsigned_extrinsic(tickets: Vec<Ticket>) -> Option<()> {
+		log::debug!(target: "sassafras", "🌳 @@@@@@@@@@ submitting {} tickets", tickets.len());
 		let call = Call::submit_tickets { tickets };
 		if let Err(_) = SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into()) {
 			log::error!(target: "sassafras::runtime","🌳 Error submitting tickets");
