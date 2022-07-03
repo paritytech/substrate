@@ -3292,8 +3292,8 @@ fn reentrant_count_works_with_call() {
 			vec![],
 		));
 
-		// adding reentrant count to the input
-		let input = (contract_addr.clone(), 0).encode();
+		// passing reentrant count to the input
+		let input = 0.encode();
 
 		Contracts::bare_call(ALICE, contract_addr, 0, GAS_LIMIT, None, input, true)
 			.result
