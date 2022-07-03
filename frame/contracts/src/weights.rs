@@ -57,57 +57,57 @@ pub trait WeightInfo {
 	fn upload_code(c: u32, ) -> Weight;
 	fn remove_code() -> Weight;
 	fn set_code() -> Weight;
-	fn seal_caller(r: u32, ) -> Weight;
-	fn seal_is_contract(r: u32, ) -> Weight;
-	fn seal_code_hash(r: u32, ) -> Weight;
-	fn seal_own_code_hash(r: u32, ) -> Weight;
-	fn seal_caller_is_origin(r: u32, ) -> Weight;
-	fn seal_address(r: u32, ) -> Weight;
-	fn seal_gas_left(r: u32, ) -> Weight;
-	fn seal_balance(r: u32, ) -> Weight;
-	fn seal_value_transferred(r: u32, ) -> Weight;
-	fn seal_minimum_balance(r: u32, ) -> Weight;
-	fn seal_block_number(r: u32, ) -> Weight;
-	fn seal_now(r: u32, ) -> Weight;
-	fn seal_weight_to_fee(r: u32, ) -> Weight;
-	fn seal_gas(r: u32, ) -> Weight;
-	fn seal_input(r: u32, ) -> Weight;
-	fn seal_input_per_kb(n: u32, ) -> Weight;
-	fn seal_return(r: u32, ) -> Weight;
-	fn seal_return_per_kb(n: u32, ) -> Weight;
-	fn seal_terminate(r: u32, ) -> Weight;
-	fn seal_random(r: u32, ) -> Weight;
-	fn seal_deposit_event(r: u32, ) -> Weight;
-	fn seal_deposit_event_per_topic_and_kb(t: u32, n: u32, ) -> Weight;
-	fn seal_debug_message(r: u32, ) -> Weight;
-	fn seal_set_storage(r: u32, ) -> Weight;
-	fn seal_set_storage_per_new_kb(n: u32, ) -> Weight;
-	fn seal_set_storage_per_old_kb(n: u32, ) -> Weight;
-	fn seal_clear_storage(r: u32, ) -> Weight;
-	fn seal_clear_storage_per_kb(n: u32, ) -> Weight;
-	fn seal_get_storage(r: u32, ) -> Weight;
-	fn seal_get_storage_per_kb(n: u32, ) -> Weight;
-	fn seal_contains_storage(r: u32, ) -> Weight;
-	fn seal_contains_storage_per_kb(n: u32, ) -> Weight;
-	fn seal_take_storage(r: u32, ) -> Weight;
-	fn seal_take_storage_per_kb(n: u32, ) -> Weight;
-	fn seal_transfer(r: u32, ) -> Weight;
+	fn caller(r: u32, ) -> Weight;
+	fn is_contract(r: u32, ) -> Weight;
+	fn code_hash(r: u32, ) -> Weight;
+	fn own_code_hash(r: u32, ) -> Weight;
+	fn caller_is_origin(r: u32, ) -> Weight;
+	fn address(r: u32, ) -> Weight;
+	fn gas_left(r: u32, ) -> Weight;
+	fn balance(r: u32, ) -> Weight;
+	fn value_transferred(r: u32, ) -> Weight;
+	fn minimum_balance(r: u32, ) -> Weight;
+	fn block_number(r: u32, ) -> Weight;
+	fn now(r: u32, ) -> Weight;
+	fn weight_to_fee(r: u32, ) -> Weight;
+	fn gas(r: u32, ) -> Weight;
+	fn input(r: u32, ) -> Weight;
+	fn input_per_kb(n: u32, ) -> Weight;
+	fn r#return(r: u32, ) -> Weight;
+	fn return_per_kb(n: u32, ) -> Weight;
+	fn terminate(r: u32, ) -> Weight;
+	fn random(r: u32, ) -> Weight;
+	fn deposit_event(r: u32, ) -> Weight;
+	fn deposit_event_per_topic_and_kb(t: u32, n: u32, ) -> Weight;
+	fn debug_message(r: u32, ) -> Weight;
+	fn set_storage(r: u32, ) -> Weight;
+	fn set_storage_per_new_kb(n: u32, ) -> Weight;
+	fn set_storage_per_old_kb(n: u32, ) -> Weight;
+	fn clear_storage(r: u32, ) -> Weight;
+	fn clear_storage_per_kb(n: u32, ) -> Weight;
+	fn get_storage(r: u32, ) -> Weight;
+	fn get_storage_per_kb(n: u32, ) -> Weight;
+	fn contains_storage(r: u32, ) -> Weight;
+	fn contains_storage_per_kb(n: u32, ) -> Weight;
+	fn take_storage(r: u32, ) -> Weight;
+	fn take_storage_per_kb(n: u32, ) -> Weight;
+	fn transfer(r: u32, ) -> Weight;
 	fn seal_call(r: u32, ) -> Weight;
-	fn seal_delegate_call(r: u32, ) -> Weight;
-	fn seal_call_per_transfer_clone_kb(t: u32, c: u32, ) -> Weight;
+	fn delegate_call(r: u32, ) -> Weight;
+	fn call_per_transfer_clone_kb(t: u32, c: u32, ) -> Weight;
 	fn seal_instantiate(r: u32, ) -> Weight;
-	fn seal_instantiate_per_transfer_salt_kb(t: u32, s: u32, ) -> Weight;
-	fn seal_hash_sha2_256(r: u32, ) -> Weight;
-	fn seal_hash_sha2_256_per_kb(n: u32, ) -> Weight;
-	fn seal_hash_keccak_256(r: u32, ) -> Weight;
-	fn seal_hash_keccak_256_per_kb(n: u32, ) -> Weight;
-	fn seal_hash_blake2_256(r: u32, ) -> Weight;
-	fn seal_hash_blake2_256_per_kb(n: u32, ) -> Weight;
-	fn seal_hash_blake2_128(r: u32, ) -> Weight;
-	fn seal_hash_blake2_128_per_kb(n: u32, ) -> Weight;
-	fn seal_ecdsa_recover(r: u32, ) -> Weight;
-	fn seal_ecdsa_to_eth_address(r: u32, ) -> Weight;
-	fn seal_set_code_hash(r: u32, ) -> Weight;
+	fn instantiate_per_transfer_salt_kb(t: u32, s: u32, ) -> Weight;
+	fn hash_sha2_256(r: u32, ) -> Weight;
+	fn hash_sha2_256_per_kb(n: u32, ) -> Weight;
+	fn hash_keccak_256(r: u32, ) -> Weight;
+	fn hash_keccak_256_per_kb(n: u32, ) -> Weight;
+	fn hash_blake2_256(r: u32, ) -> Weight;
+	fn hash_blake2_256_per_kb(n: u32, ) -> Weight;
+	fn hash_blake2_128(r: u32, ) -> Weight;
+	fn hash_blake2_128_per_kb(n: u32, ) -> Weight;
+	fn ecdsa_recover(r: u32, ) -> Weight;
+	fn ecdsa_to_eth_address(r: u32, ) -> Weight;
+	fn set_code_hash(r: u32, ) -> Weight;
 	fn instr_i64const(r: u32, ) -> Weight;
 	fn instr_i64load(r: u32, ) -> Weight;
 	fn instr_i64store(r: u32, ) -> Weight;
@@ -282,7 +282,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
-	fn seal_caller(r: u32, ) -> Weight {
+	fn caller(r: u32, ) -> Weight {
 		(206_405_000 as Weight)
 			// Standard Error: 112_000
 			.saturating_add((40_987_000 as Weight).saturating_mul(r as Weight))
@@ -294,7 +294,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
-	fn seal_is_contract(r: u32, ) -> Weight {
+	fn is_contract(r: u32, ) -> Weight {
 		(106_220_000 as Weight)
 			// Standard Error: 710_000
 			.saturating_add((307_648_000 as Weight).saturating_mul(r as Weight))
@@ -307,7 +307,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
-	fn seal_code_hash(r: u32, ) -> Weight {
+	fn code_hash(r: u32, ) -> Weight {
 		(104_498_000 as Weight)
 			// Standard Error: 633_000
 			.saturating_add((368_901_000 as Weight).saturating_mul(r as Weight))
@@ -320,7 +320,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
-	fn seal_own_code_hash(r: u32, ) -> Weight {
+	fn own_code_hash(r: u32, ) -> Weight {
 		(208_696_000 as Weight)
 			// Standard Error: 101_000
 			.saturating_add((44_445_000 as Weight).saturating_mul(r as Weight))
@@ -332,7 +332,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
-	fn seal_caller_is_origin(r: u32, ) -> Weight {
+	fn caller_is_origin(r: u32, ) -> Weight {
 		(205_612_000 as Weight)
 			// Standard Error: 68_000
 			.saturating_add((17_145_000 as Weight).saturating_mul(r as Weight))
@@ -344,7 +344,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
-	fn seal_address(r: u32, ) -> Weight {
+	fn address(r: u32, ) -> Weight {
 		(206_947_000 as Weight)
 			// Standard Error: 107_000
 			.saturating_add((40_789_000 as Weight).saturating_mul(r as Weight))
@@ -356,7 +356,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
-	fn seal_gas_left(r: u32, ) -> Weight {
+	fn gas_left(r: u32, ) -> Weight {
 		(208_692_000 as Weight)
 			// Standard Error: 109_000
 			.saturating_add((40_600_000 as Weight).saturating_mul(r as Weight))
@@ -368,7 +368,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
-	fn seal_balance(r: u32, ) -> Weight {
+	fn balance(r: u32, ) -> Weight {
 		(209_811_000 as Weight)
 			// Standard Error: 208_000
 			.saturating_add((116_831_000 as Weight).saturating_mul(r as Weight))
@@ -380,7 +380,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
-	fn seal_value_transferred(r: u32, ) -> Weight {
+	fn value_transferred(r: u32, ) -> Weight {
 		(207_406_000 as Weight)
 			// Standard Error: 117_000
 			.saturating_add((40_702_000 as Weight).saturating_mul(r as Weight))
@@ -392,7 +392,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
-	fn seal_minimum_balance(r: u32, ) -> Weight {
+	fn minimum_balance(r: u32, ) -> Weight {
 		(209_260_000 as Weight)
 			// Standard Error: 130_000
 			.saturating_add((40_479_000 as Weight).saturating_mul(r as Weight))
@@ -404,7 +404,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
-	fn seal_block_number(r: u32, ) -> Weight {
+	fn block_number(r: u32, ) -> Weight {
 		(206_448_000 as Weight)
 			// Standard Error: 95_000
 			.saturating_add((40_134_000 as Weight).saturating_mul(r as Weight))
@@ -416,7 +416,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
-	fn seal_now(r: u32, ) -> Weight {
+	fn now(r: u32, ) -> Weight {
 		(206_969_000 as Weight)
 			// Standard Error: 116_000
 			.saturating_add((40_251_000 as Weight).saturating_mul(r as Weight))
@@ -429,7 +429,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Timestamp Now (r:1 w:0)
 	// Storage: TransactionPayment NextFeeMultiplier (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
-	fn seal_weight_to_fee(r: u32, ) -> Weight {
+	fn weight_to_fee(r: u32, ) -> Weight {
 		(211_611_000 as Weight)
 			// Standard Error: 175_000
 			.saturating_add((98_675_000 as Weight).saturating_mul(r as Weight))
@@ -441,7 +441,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
-	fn seal_gas(r: u32, ) -> Weight {
+	fn gas(r: u32, ) -> Weight {
 		(134_484_000 as Weight)
 			// Standard Error: 57_000
 			.saturating_add((19_329_000 as Weight).saturating_mul(r as Weight))
@@ -453,7 +453,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
-	fn seal_input(r: u32, ) -> Weight {
+	fn input(r: u32, ) -> Weight {
 		(208_556_000 as Weight)
 			// Standard Error: 125_000
 			.saturating_add((40_328_000 as Weight).saturating_mul(r as Weight))
@@ -465,7 +465,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `n` is `[0, 1024]`.
-	fn seal_input_per_kb(n: u32, ) -> Weight {
+	fn input_per_kb(n: u32, ) -> Weight {
 		(268_886_000 as Weight)
 			// Standard Error: 4_000
 			.saturating_add((9_627_000 as Weight).saturating_mul(n as Weight))
@@ -477,7 +477,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 1]`.
-	fn seal_return(_r: u32, ) -> Weight {
+	fn r#return(_r: u32, ) -> Weight {
 		(203_591_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
@@ -487,7 +487,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `n` is `[0, 1024]`.
-	fn seal_return_per_kb(n: u32, ) -> Weight {
+	fn return_per_kb(n: u32, ) -> Weight {
 		(204_258_000 as Weight)
 			// Standard Error: 0
 			.saturating_add((183_000 as Weight).saturating_mul(n as Weight))
@@ -501,7 +501,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts DeletionQueue (r:1 w:1)
 	// Storage: Contracts OwnerInfoOf (r:1 w:1)
 	/// The range of component `r` is `[0, 1]`.
-	fn seal_terminate(r: u32, ) -> Weight {
+	fn terminate(r: u32, ) -> Weight {
 		(206_625_000 as Weight)
 			// Standard Error: 672_000
 			.saturating_add((59_377_000 as Weight).saturating_mul(r as Weight))
@@ -516,7 +516,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Timestamp Now (r:1 w:0)
 	// Storage: RandomnessCollectiveFlip RandomMaterial (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
-	fn seal_random(r: u32, ) -> Weight {
+	fn random(r: u32, ) -> Weight {
 		(208_866_000 as Weight)
 			// Standard Error: 164_000
 			.saturating_add((133_438_000 as Weight).saturating_mul(r as Weight))
@@ -528,7 +528,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
-	fn seal_deposit_event(r: u32, ) -> Weight {
+	fn deposit_event(r: u32, ) -> Weight {
 		(220_860_000 as Weight)
 			// Standard Error: 209_000
 			.saturating_add((239_951_000 as Weight).saturating_mul(r as Weight))
@@ -542,7 +542,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: System EventTopics (r:80 w:80)
 	/// The range of component `t` is `[0, 4]`.
 	/// The range of component `n` is `[0, 16]`.
-	fn seal_deposit_event_per_topic_and_kb(t: u32, n: u32, ) -> Weight {
+	fn deposit_event_per_topic_and_kb(t: u32, n: u32, ) -> Weight {
 		(439_782_000 as Weight)
 			// Standard Error: 1_643_000
 			.saturating_add((264_687_000 as Weight).saturating_mul(t as Weight))
@@ -558,7 +558,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
-	fn seal_debug_message(r: u32, ) -> Weight {
+	fn debug_message(r: u32, ) -> Weight {
 		(140_280_000 as Weight)
 			// Standard Error: 82_000
 			.saturating_add((32_717_000 as Weight).saturating_mul(r as Weight))
@@ -567,7 +567,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	/// The range of component `r` is `[0, 10]`.
-	fn seal_set_storage(r: u32, ) -> Weight {
+	fn set_storage(r: u32, ) -> Weight {
 		(161_247_000 as Weight)
 			// Standard Error: 883_000
 			.saturating_add((423_997_000 as Weight).saturating_mul(r as Weight))
@@ -578,7 +578,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	/// The range of component `n` is `[0, 8]`.
-	fn seal_set_storage_per_new_kb(n: u32, ) -> Weight {
+	fn set_storage_per_new_kb(n: u32, ) -> Weight {
 		(529_247_000 as Weight)
 			// Standard Error: 2_745_000
 			.saturating_add((85_282_000 as Weight).saturating_mul(n as Weight))
@@ -589,7 +589,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	/// The range of component `n` is `[0, 8]`.
-	fn seal_set_storage_per_old_kb(n: u32, ) -> Weight {
+	fn set_storage_per_old_kb(n: u32, ) -> Weight {
 		(529_812_000 as Weight)
 			// Standard Error: 2_513_000
 			.saturating_add((74_554_000 as Weight).saturating_mul(n as Weight))
@@ -600,7 +600,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	/// The range of component `r` is `[0, 10]`.
-	fn seal_clear_storage(r: u32, ) -> Weight {
+	fn clear_storage(r: u32, ) -> Weight {
 		(184_803_000 as Weight)
 			// Standard Error: 733_000
 			.saturating_add((404_933_000 as Weight).saturating_mul(r as Weight))
@@ -611,7 +611,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	/// The range of component `n` is `[0, 8]`.
-	fn seal_clear_storage_per_kb(n: u32, ) -> Weight {
+	fn clear_storage_per_kb(n: u32, ) -> Weight {
 		(500_958_000 as Weight)
 			// Standard Error: 2_980_000
 			.saturating_add((75_996_000 as Weight).saturating_mul(n as Weight))
@@ -622,7 +622,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	/// The range of component `r` is `[0, 10]`.
-	fn seal_get_storage(r: u32, ) -> Weight {
+	fn get_storage(r: u32, ) -> Weight {
 		(177_682_000 as Weight)
 			// Standard Error: 743_000
 			.saturating_add((338_172_000 as Weight).saturating_mul(r as Weight))
@@ -632,7 +632,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	/// The range of component `n` is `[0, 8]`.
-	fn seal_get_storage_per_kb(n: u32, ) -> Weight {
+	fn get_storage_per_kb(n: u32, ) -> Weight {
 		(465_285_000 as Weight)
 			// Standard Error: 2_599_000
 			.saturating_add((155_106_000 as Weight).saturating_mul(n as Weight))
@@ -642,7 +642,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	/// The range of component `r` is `[0, 10]`.
-	fn seal_contains_storage(r: u32, ) -> Weight {
+	fn contains_storage(r: u32, ) -> Weight {
 		(179_118_000 as Weight)
 			// Standard Error: 572_000
 			.saturating_add((311_083_000 as Weight).saturating_mul(r as Weight))
@@ -652,7 +652,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	/// The range of component `n` is `[0, 8]`.
-	fn seal_contains_storage_per_kb(n: u32, ) -> Weight {
+	fn contains_storage_per_kb(n: u32, ) -> Weight {
 		(423_056_000 as Weight)
 			// Standard Error: 2_037_000
 			.saturating_add((69_665_000 as Weight).saturating_mul(n as Weight))
@@ -662,7 +662,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	/// The range of component `r` is `[0, 10]`.
-	fn seal_take_storage(r: u32, ) -> Weight {
+	fn take_storage(r: u32, ) -> Weight {
 		(188_884_000 as Weight)
 			// Standard Error: 761_000
 			.saturating_add((432_781_000 as Weight).saturating_mul(r as Weight))
@@ -673,7 +673,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	/// The range of component `n` is `[0, 8]`.
-	fn seal_take_storage_per_kb(n: u32, ) -> Weight {
+	fn take_storage_per_kb(n: u32, ) -> Weight {
 		(532_408_000 as Weight)
 			// Standard Error: 3_348_000
 			.saturating_add((164_943_000 as Weight).saturating_mul(n as Weight))
@@ -687,7 +687,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
-	fn seal_transfer(r: u32, ) -> Weight {
+	fn transfer(r: u32, ) -> Weight {
 		(127_181_000 as Weight)
 			// Standard Error: 1_495_000
 			.saturating_add((1_500_589_000 as Weight).saturating_mul(r as Weight))
@@ -715,7 +715,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
-	fn seal_delegate_call(r: u32, ) -> Weight {
+	fn delegate_call(r: u32, ) -> Weight {
 		(0 as Weight)
 			// Standard Error: 6_045_000
 			.saturating_add((14_797_140_000 as Weight).saturating_mul(r as Weight))
@@ -728,7 +728,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `t` is `[0, 1]`.
 	/// The range of component `c` is `[0, 1024]`.
-	fn seal_call_per_transfer_clone_kb(t: u32, c: u32, ) -> Weight {
+	fn call_per_transfer_clone_kb(t: u32, c: u32, ) -> Weight {
 		(9_196_444_000 as Weight)
 			// Standard Error: 20_486_000
 			.saturating_add((1_458_153_000 as Weight).saturating_mul(t as Weight))
@@ -763,7 +763,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts OwnerInfoOf (r:1 w:1)
 	/// The range of component `t` is `[0, 1]`.
 	/// The range of component `s` is `[0, 960]`.
-	fn seal_instantiate_per_transfer_salt_kb(t: u32, s: u32, ) -> Weight {
+	fn instantiate_per_transfer_salt_kb(t: u32, s: u32, ) -> Weight {
 		(12_282_498_000 as Weight)
 			// Standard Error: 48_112_000
 			.saturating_add((720_795_000 as Weight).saturating_mul(t as Weight))
@@ -779,7 +779,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
-	fn seal_hash_sha2_256(r: u32, ) -> Weight {
+	fn hash_sha2_256(r: u32, ) -> Weight {
 		(203_959_000 as Weight)
 			// Standard Error: 142_000
 			.saturating_add((61_311_000 as Weight).saturating_mul(r as Weight))
@@ -791,7 +791,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `n` is `[0, 1024]`.
-	fn seal_hash_sha2_256_per_kb(n: u32, ) -> Weight {
+	fn hash_sha2_256_per_kb(n: u32, ) -> Weight {
 		(349_915_000 as Weight)
 			// Standard Error: 40_000
 			.saturating_add((320_652_000 as Weight).saturating_mul(n as Weight))
@@ -803,7 +803,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
-	fn seal_hash_keccak_256(r: u32, ) -> Weight {
+	fn hash_keccak_256(r: u32, ) -> Weight {
 		(209_219_000 as Weight)
 			// Standard Error: 157_000
 			.saturating_add((73_728_000 as Weight).saturating_mul(r as Weight))
@@ -815,7 +815,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `n` is `[0, 1024]`.
-	fn seal_hash_keccak_256_per_kb(n: u32, ) -> Weight {
+	fn hash_keccak_256_per_kb(n: u32, ) -> Weight {
 		(208_860_000 as Weight)
 			// Standard Error: 25_000
 			.saturating_add((245_718_000 as Weight).saturating_mul(n as Weight))
@@ -827,7 +827,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
-	fn seal_hash_blake2_256(r: u32, ) -> Weight {
+	fn hash_blake2_256(r: u32, ) -> Weight {
 		(206_165_000 as Weight)
 			// Standard Error: 138_000
 			.saturating_add((51_644_000 as Weight).saturating_mul(r as Weight))
@@ -839,7 +839,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `n` is `[0, 1024]`.
-	fn seal_hash_blake2_256_per_kb(n: u32, ) -> Weight {
+	fn hash_blake2_256_per_kb(n: u32, ) -> Weight {
 		(255_955_000 as Weight)
 			// Standard Error: 14_000
 			.saturating_add((95_090_000 as Weight).saturating_mul(n as Weight))
@@ -851,7 +851,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
-	fn seal_hash_blake2_128(r: u32, ) -> Weight {
+	fn hash_blake2_128(r: u32, ) -> Weight {
 		(208_153_000 as Weight)
 			// Standard Error: 140_000
 			.saturating_add((51_264_000 as Weight).saturating_mul(r as Weight))
@@ -863,7 +863,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `n` is `[0, 1024]`.
-	fn seal_hash_blake2_128_per_kb(n: u32, ) -> Weight {
+	fn hash_blake2_128_per_kb(n: u32, ) -> Weight {
 		(278_368_000 as Weight)
 			// Standard Error: 14_000
 			.saturating_add((95_006_000 as Weight).saturating_mul(n as Weight))
@@ -875,7 +875,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
-	fn seal_ecdsa_recover(r: u32, ) -> Weight {
+	fn ecdsa_recover(r: u32, ) -> Weight {
 		(331_955_000 as Weight)
 			// Standard Error: 1_155_000
 			.saturating_add((3_069_955_000 as Weight).saturating_mul(r as Weight))
@@ -887,7 +887,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
-	fn seal_ecdsa_to_eth_address(r: u32, ) -> Weight {
+	fn ecdsa_to_eth_address(r: u32, ) -> Weight {
 		(207_838_000 as Weight)
 			// Standard Error: 783_000
 			.saturating_add((2_058_503_000 as Weight).saturating_mul(r as Weight))
@@ -900,7 +900,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Timestamp Now (r:1 w:0)
 	// Storage: Contracts OwnerInfoOf (r:16 w:16)
 	/// The range of component `r` is `[0, 20]`.
-	fn seal_set_code_hash(r: u32, ) -> Weight {
+	fn set_code_hash(r: u32, ) -> Weight {
 		(0 as Weight)
 			// Standard Error: 1_567_000
 			.saturating_add((774_380_000 as Weight).saturating_mul(r as Weight))
@@ -1335,7 +1335,7 @@ impl WeightInfo for () {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
-	fn seal_caller(r: u32, ) -> Weight {
+	fn caller(r: u32, ) -> Weight {
 		(206_405_000 as Weight)
 			// Standard Error: 112_000
 			.saturating_add((40_987_000 as Weight).saturating_mul(r as Weight))
@@ -1347,7 +1347,7 @@ impl WeightInfo for () {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
-	fn seal_is_contract(r: u32, ) -> Weight {
+	fn is_contract(r: u32, ) -> Weight {
 		(106_220_000 as Weight)
 			// Standard Error: 710_000
 			.saturating_add((307_648_000 as Weight).saturating_mul(r as Weight))
@@ -1360,7 +1360,7 @@ impl WeightInfo for () {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
-	fn seal_code_hash(r: u32, ) -> Weight {
+	fn code_hash(r: u32, ) -> Weight {
 		(104_498_000 as Weight)
 			// Standard Error: 633_000
 			.saturating_add((368_901_000 as Weight).saturating_mul(r as Weight))
@@ -1373,7 +1373,7 @@ impl WeightInfo for () {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
-	fn seal_own_code_hash(r: u32, ) -> Weight {
+	fn own_code_hash(r: u32, ) -> Weight {
 		(208_696_000 as Weight)
 			// Standard Error: 101_000
 			.saturating_add((44_445_000 as Weight).saturating_mul(r as Weight))
@@ -1385,7 +1385,7 @@ impl WeightInfo for () {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
-	fn seal_caller_is_origin(r: u32, ) -> Weight {
+	fn caller_is_origin(r: u32, ) -> Weight {
 		(205_612_000 as Weight)
 			// Standard Error: 68_000
 			.saturating_add((17_145_000 as Weight).saturating_mul(r as Weight))
@@ -1397,7 +1397,7 @@ impl WeightInfo for () {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
-	fn seal_address(r: u32, ) -> Weight {
+	fn address(r: u32, ) -> Weight {
 		(206_947_000 as Weight)
 			// Standard Error: 107_000
 			.saturating_add((40_789_000 as Weight).saturating_mul(r as Weight))
@@ -1409,7 +1409,7 @@ impl WeightInfo for () {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
-	fn seal_gas_left(r: u32, ) -> Weight {
+	fn gas_left(r: u32, ) -> Weight {
 		(208_692_000 as Weight)
 			// Standard Error: 109_000
 			.saturating_add((40_600_000 as Weight).saturating_mul(r as Weight))
@@ -1421,7 +1421,7 @@ impl WeightInfo for () {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
-	fn seal_balance(r: u32, ) -> Weight {
+	fn balance(r: u32, ) -> Weight {
 		(209_811_000 as Weight)
 			// Standard Error: 208_000
 			.saturating_add((116_831_000 as Weight).saturating_mul(r as Weight))
@@ -1433,7 +1433,7 @@ impl WeightInfo for () {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
-	fn seal_value_transferred(r: u32, ) -> Weight {
+	fn value_transferred(r: u32, ) -> Weight {
 		(207_406_000 as Weight)
 			// Standard Error: 117_000
 			.saturating_add((40_702_000 as Weight).saturating_mul(r as Weight))
@@ -1445,7 +1445,7 @@ impl WeightInfo for () {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
-	fn seal_minimum_balance(r: u32, ) -> Weight {
+	fn minimum_balance(r: u32, ) -> Weight {
 		(209_260_000 as Weight)
 			// Standard Error: 130_000
 			.saturating_add((40_479_000 as Weight).saturating_mul(r as Weight))
@@ -1457,7 +1457,7 @@ impl WeightInfo for () {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
-	fn seal_block_number(r: u32, ) -> Weight {
+	fn block_number(r: u32, ) -> Weight {
 		(206_448_000 as Weight)
 			// Standard Error: 95_000
 			.saturating_add((40_134_000 as Weight).saturating_mul(r as Weight))
@@ -1469,7 +1469,7 @@ impl WeightInfo for () {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
-	fn seal_now(r: u32, ) -> Weight {
+	fn now(r: u32, ) -> Weight {
 		(206_969_000 as Weight)
 			// Standard Error: 116_000
 			.saturating_add((40_251_000 as Weight).saturating_mul(r as Weight))
@@ -1482,7 +1482,7 @@ impl WeightInfo for () {
 	// Storage: Timestamp Now (r:1 w:0)
 	// Storage: TransactionPayment NextFeeMultiplier (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
-	fn seal_weight_to_fee(r: u32, ) -> Weight {
+	fn weight_to_fee(r: u32, ) -> Weight {
 		(211_611_000 as Weight)
 			// Standard Error: 175_000
 			.saturating_add((98_675_000 as Weight).saturating_mul(r as Weight))
@@ -1494,7 +1494,7 @@ impl WeightInfo for () {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
-	fn seal_gas(r: u32, ) -> Weight {
+	fn gas(r: u32, ) -> Weight {
 		(134_484_000 as Weight)
 			// Standard Error: 57_000
 			.saturating_add((19_329_000 as Weight).saturating_mul(r as Weight))
@@ -1506,7 +1506,7 @@ impl WeightInfo for () {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
-	fn seal_input(r: u32, ) -> Weight {
+	fn input(r: u32, ) -> Weight {
 		(208_556_000 as Weight)
 			// Standard Error: 125_000
 			.saturating_add((40_328_000 as Weight).saturating_mul(r as Weight))
@@ -1518,7 +1518,7 @@ impl WeightInfo for () {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `n` is `[0, 1024]`.
-	fn seal_input_per_kb(n: u32, ) -> Weight {
+	fn input_per_kb(n: u32, ) -> Weight {
 		(268_886_000 as Weight)
 			// Standard Error: 4_000
 			.saturating_add((9_627_000 as Weight).saturating_mul(n as Weight))
@@ -1530,7 +1530,7 @@ impl WeightInfo for () {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 1]`.
-	fn seal_return(_r: u32, ) -> Weight {
+	fn r#return(_r: u32, ) -> Weight {
 		(203_591_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
@@ -1540,7 +1540,7 @@ impl WeightInfo for () {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `n` is `[0, 1024]`.
-	fn seal_return_per_kb(n: u32, ) -> Weight {
+	fn return_per_kb(n: u32, ) -> Weight {
 		(204_258_000 as Weight)
 			// Standard Error: 0
 			.saturating_add((183_000 as Weight).saturating_mul(n as Weight))
@@ -1554,7 +1554,7 @@ impl WeightInfo for () {
 	// Storage: Contracts DeletionQueue (r:1 w:1)
 	// Storage: Contracts OwnerInfoOf (r:1 w:1)
 	/// The range of component `r` is `[0, 1]`.
-	fn seal_terminate(r: u32, ) -> Weight {
+	fn terminate(r: u32, ) -> Weight {
 		(206_625_000 as Weight)
 			// Standard Error: 672_000
 			.saturating_add((59_377_000 as Weight).saturating_mul(r as Weight))
@@ -1569,7 +1569,7 @@ impl WeightInfo for () {
 	// Storage: Timestamp Now (r:1 w:0)
 	// Storage: RandomnessCollectiveFlip RandomMaterial (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
-	fn seal_random(r: u32, ) -> Weight {
+	fn random(r: u32, ) -> Weight {
 		(208_866_000 as Weight)
 			// Standard Error: 164_000
 			.saturating_add((133_438_000 as Weight).saturating_mul(r as Weight))
@@ -1581,7 +1581,7 @@ impl WeightInfo for () {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
-	fn seal_deposit_event(r: u32, ) -> Weight {
+	fn deposit_event(r: u32, ) -> Weight {
 		(220_860_000 as Weight)
 			// Standard Error: 209_000
 			.saturating_add((239_951_000 as Weight).saturating_mul(r as Weight))
@@ -1595,7 +1595,7 @@ impl WeightInfo for () {
 	// Storage: System EventTopics (r:80 w:80)
 	/// The range of component `t` is `[0, 4]`.
 	/// The range of component `n` is `[0, 16]`.
-	fn seal_deposit_event_per_topic_and_kb(t: u32, n: u32, ) -> Weight {
+	fn deposit_event_per_topic_and_kb(t: u32, n: u32, ) -> Weight {
 		(439_782_000 as Weight)
 			// Standard Error: 1_643_000
 			.saturating_add((264_687_000 as Weight).saturating_mul(t as Weight))
@@ -1611,7 +1611,7 @@ impl WeightInfo for () {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
-	fn seal_debug_message(r: u32, ) -> Weight {
+	fn debug_message(r: u32, ) -> Weight {
 		(140_280_000 as Weight)
 			// Standard Error: 82_000
 			.saturating_add((32_717_000 as Weight).saturating_mul(r as Weight))
@@ -1620,7 +1620,7 @@ impl WeightInfo for () {
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	/// The range of component `r` is `[0, 10]`.
-	fn seal_set_storage(r: u32, ) -> Weight {
+	fn set_storage(r: u32, ) -> Weight {
 		(161_247_000 as Weight)
 			// Standard Error: 883_000
 			.saturating_add((423_997_000 as Weight).saturating_mul(r as Weight))
@@ -1631,7 +1631,7 @@ impl WeightInfo for () {
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	/// The range of component `n` is `[0, 8]`.
-	fn seal_set_storage_per_new_kb(n: u32, ) -> Weight {
+	fn set_storage_per_new_kb(n: u32, ) -> Weight {
 		(529_247_000 as Weight)
 			// Standard Error: 2_745_000
 			.saturating_add((85_282_000 as Weight).saturating_mul(n as Weight))
@@ -1642,7 +1642,7 @@ impl WeightInfo for () {
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	/// The range of component `n` is `[0, 8]`.
-	fn seal_set_storage_per_old_kb(n: u32, ) -> Weight {
+	fn set_storage_per_old_kb(n: u32, ) -> Weight {
 		(529_812_000 as Weight)
 			// Standard Error: 2_513_000
 			.saturating_add((74_554_000 as Weight).saturating_mul(n as Weight))
@@ -1653,7 +1653,7 @@ impl WeightInfo for () {
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	/// The range of component `r` is `[0, 10]`.
-	fn seal_clear_storage(r: u32, ) -> Weight {
+	fn clear_storage(r: u32, ) -> Weight {
 		(184_803_000 as Weight)
 			// Standard Error: 733_000
 			.saturating_add((404_933_000 as Weight).saturating_mul(r as Weight))
@@ -1664,7 +1664,7 @@ impl WeightInfo for () {
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	/// The range of component `n` is `[0, 8]`.
-	fn seal_clear_storage_per_kb(n: u32, ) -> Weight {
+	fn clear_storage_per_kb(n: u32, ) -> Weight {
 		(500_958_000 as Weight)
 			// Standard Error: 2_980_000
 			.saturating_add((75_996_000 as Weight).saturating_mul(n as Weight))
@@ -1675,7 +1675,7 @@ impl WeightInfo for () {
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	/// The range of component `r` is `[0, 10]`.
-	fn seal_get_storage(r: u32, ) -> Weight {
+	fn get_storage(r: u32, ) -> Weight {
 		(177_682_000 as Weight)
 			// Standard Error: 743_000
 			.saturating_add((338_172_000 as Weight).saturating_mul(r as Weight))
@@ -1685,7 +1685,7 @@ impl WeightInfo for () {
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	/// The range of component `n` is `[0, 8]`.
-	fn seal_get_storage_per_kb(n: u32, ) -> Weight {
+	fn get_storage_per_kb(n: u32, ) -> Weight {
 		(465_285_000 as Weight)
 			// Standard Error: 2_599_000
 			.saturating_add((155_106_000 as Weight).saturating_mul(n as Weight))
@@ -1695,7 +1695,7 @@ impl WeightInfo for () {
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	/// The range of component `r` is `[0, 10]`.
-	fn seal_contains_storage(r: u32, ) -> Weight {
+	fn contains_storage(r: u32, ) -> Weight {
 		(179_118_000 as Weight)
 			// Standard Error: 572_000
 			.saturating_add((311_083_000 as Weight).saturating_mul(r as Weight))
@@ -1705,7 +1705,7 @@ impl WeightInfo for () {
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	/// The range of component `n` is `[0, 8]`.
-	fn seal_contains_storage_per_kb(n: u32, ) -> Weight {
+	fn contains_storage_per_kb(n: u32, ) -> Weight {
 		(423_056_000 as Weight)
 			// Standard Error: 2_037_000
 			.saturating_add((69_665_000 as Weight).saturating_mul(n as Weight))
@@ -1715,7 +1715,7 @@ impl WeightInfo for () {
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	/// The range of component `r` is `[0, 10]`.
-	fn seal_take_storage(r: u32, ) -> Weight {
+	fn take_storage(r: u32, ) -> Weight {
 		(188_884_000 as Weight)
 			// Standard Error: 761_000
 			.saturating_add((432_781_000 as Weight).saturating_mul(r as Weight))
@@ -1726,7 +1726,7 @@ impl WeightInfo for () {
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	/// The range of component `n` is `[0, 8]`.
-	fn seal_take_storage_per_kb(n: u32, ) -> Weight {
+	fn take_storage_per_kb(n: u32, ) -> Weight {
 		(532_408_000 as Weight)
 			// Standard Error: 3_348_000
 			.saturating_add((164_943_000 as Weight).saturating_mul(n as Weight))
@@ -1740,7 +1740,7 @@ impl WeightInfo for () {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
-	fn seal_transfer(r: u32, ) -> Weight {
+	fn transfer(r: u32, ) -> Weight {
 		(127_181_000 as Weight)
 			// Standard Error: 1_495_000
 			.saturating_add((1_500_589_000 as Weight).saturating_mul(r as Weight))
@@ -1768,7 +1768,7 @@ impl WeightInfo for () {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
-	fn seal_delegate_call(r: u32, ) -> Weight {
+	fn delegate_call(r: u32, ) -> Weight {
 		(0 as Weight)
 			// Standard Error: 6_045_000
 			.saturating_add((14_797_140_000 as Weight).saturating_mul(r as Weight))
@@ -1781,7 +1781,7 @@ impl WeightInfo for () {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `t` is `[0, 1]`.
 	/// The range of component `c` is `[0, 1024]`.
-	fn seal_call_per_transfer_clone_kb(t: u32, c: u32, ) -> Weight {
+	fn call_per_transfer_clone_kb(t: u32, c: u32, ) -> Weight {
 		(9_196_444_000 as Weight)
 			// Standard Error: 20_486_000
 			.saturating_add((1_458_153_000 as Weight).saturating_mul(t as Weight))
@@ -1816,7 +1816,7 @@ impl WeightInfo for () {
 	// Storage: Contracts OwnerInfoOf (r:1 w:1)
 	/// The range of component `t` is `[0, 1]`.
 	/// The range of component `s` is `[0, 960]`.
-	fn seal_instantiate_per_transfer_salt_kb(t: u32, s: u32, ) -> Weight {
+	fn instantiate_per_transfer_salt_kb(t: u32, s: u32, ) -> Weight {
 		(12_282_498_000 as Weight)
 			// Standard Error: 48_112_000
 			.saturating_add((720_795_000 as Weight).saturating_mul(t as Weight))
@@ -1832,7 +1832,7 @@ impl WeightInfo for () {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
-	fn seal_hash_sha2_256(r: u32, ) -> Weight {
+	fn hash_sha2_256(r: u32, ) -> Weight {
 		(203_959_000 as Weight)
 			// Standard Error: 142_000
 			.saturating_add((61_311_000 as Weight).saturating_mul(r as Weight))
@@ -1844,7 +1844,7 @@ impl WeightInfo for () {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `n` is `[0, 1024]`.
-	fn seal_hash_sha2_256_per_kb(n: u32, ) -> Weight {
+	fn hash_sha2_256_per_kb(n: u32, ) -> Weight {
 		(349_915_000 as Weight)
 			// Standard Error: 40_000
 			.saturating_add((320_652_000 as Weight).saturating_mul(n as Weight))
@@ -1856,7 +1856,7 @@ impl WeightInfo for () {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
-	fn seal_hash_keccak_256(r: u32, ) -> Weight {
+	fn hash_keccak_256(r: u32, ) -> Weight {
 		(209_219_000 as Weight)
 			// Standard Error: 157_000
 			.saturating_add((73_728_000 as Weight).saturating_mul(r as Weight))
@@ -1868,7 +1868,7 @@ impl WeightInfo for () {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `n` is `[0, 1024]`.
-	fn seal_hash_keccak_256_per_kb(n: u32, ) -> Weight {
+	fn hash_keccak_256_per_kb(n: u32, ) -> Weight {
 		(208_860_000 as Weight)
 			// Standard Error: 25_000
 			.saturating_add((245_718_000 as Weight).saturating_mul(n as Weight))
@@ -1880,7 +1880,7 @@ impl WeightInfo for () {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
-	fn seal_hash_blake2_256(r: u32, ) -> Weight {
+	fn hash_blake2_256(r: u32, ) -> Weight {
 		(206_165_000 as Weight)
 			// Standard Error: 138_000
 			.saturating_add((51_644_000 as Weight).saturating_mul(r as Weight))
@@ -1892,7 +1892,7 @@ impl WeightInfo for () {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `n` is `[0, 1024]`.
-	fn seal_hash_blake2_256_per_kb(n: u32, ) -> Weight {
+	fn hash_blake2_256_per_kb(n: u32, ) -> Weight {
 		(255_955_000 as Weight)
 			// Standard Error: 14_000
 			.saturating_add((95_090_000 as Weight).saturating_mul(n as Weight))
@@ -1904,7 +1904,7 @@ impl WeightInfo for () {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
-	fn seal_hash_blake2_128(r: u32, ) -> Weight {
+	fn hash_blake2_128(r: u32, ) -> Weight {
 		(208_153_000 as Weight)
 			// Standard Error: 140_000
 			.saturating_add((51_264_000 as Weight).saturating_mul(r as Weight))
@@ -1916,7 +1916,7 @@ impl WeightInfo for () {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `n` is `[0, 1024]`.
-	fn seal_hash_blake2_128_per_kb(n: u32, ) -> Weight {
+	fn hash_blake2_128_per_kb(n: u32, ) -> Weight {
 		(278_368_000 as Weight)
 			// Standard Error: 14_000
 			.saturating_add((95_006_000 as Weight).saturating_mul(n as Weight))
@@ -1928,7 +1928,7 @@ impl WeightInfo for () {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
-	fn seal_ecdsa_recover(r: u32, ) -> Weight {
+	fn ecdsa_recover(r: u32, ) -> Weight {
 		(331_955_000 as Weight)
 			// Standard Error: 1_155_000
 			.saturating_add((3_069_955_000 as Weight).saturating_mul(r as Weight))
@@ -1940,7 +1940,7 @@ impl WeightInfo for () {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
-	fn seal_ecdsa_to_eth_address(r: u32, ) -> Weight {
+	fn ecdsa_to_eth_address(r: u32, ) -> Weight {
 		(207_838_000 as Weight)
 			// Standard Error: 783_000
 			.saturating_add((2_058_503_000 as Weight).saturating_mul(r as Weight))
@@ -1953,7 +1953,7 @@ impl WeightInfo for () {
 	// Storage: Timestamp Now (r:1 w:0)
 	// Storage: Contracts OwnerInfoOf (r:16 w:16)
 	/// The range of component `r` is `[0, 20]`.
-	fn seal_set_code_hash(r: u32, ) -> Weight {
+	fn set_code_hash(r: u32, ) -> Weight {
 		(0 as Weight)
 			// Standard Error: 1_567_000
 			.saturating_add((774_380_000 as Weight).saturating_mul(r as Weight))

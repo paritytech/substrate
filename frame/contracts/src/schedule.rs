@@ -254,121 +254,121 @@ pub struct InstructionWeights<T: Config> {
 #[derive(Clone, Encode, Decode, PartialEq, Eq, WeightDebug, TypeInfo)]
 #[scale_info(skip_type_params(T))]
 pub struct HostFnWeights<T: Config> {
-	/// Weight of calling `seal_caller`.
+	/// Weight of calling `caller`.
 	pub caller: Weight,
 
-	/// Weight of calling `seal_is_contract`.
+	/// Weight of calling `is_contract`.
 	pub is_contract: Weight,
 
-	/// Weight of calling `seal_code_hash`.
+	/// Weight of calling `code_hash`.
 	pub code_hash: Weight,
 
-	/// Weight of calling `seal_own_code_hash`.
+	/// Weight of calling `own_code_hash`.
 	pub own_code_hash: Weight,
 
-	/// Weight of calling `seal_caller_is_origin`.
+	/// Weight of calling `caller_is_origin`.
 	pub caller_is_origin: Weight,
 
-	/// Weight of calling `seal_address`.
+	/// Weight of calling `address`.
 	pub address: Weight,
 
-	/// Weight of calling `seal_gas_left`.
+	/// Weight of calling `gas_left`.
 	pub gas_left: Weight,
 
-	/// Weight of calling `seal_balance`.
+	/// Weight of calling `balance`.
 	pub balance: Weight,
 
-	/// Weight of calling `seal_value_transferred`.
+	/// Weight of calling `value_transferred`.
 	pub value_transferred: Weight,
 
-	/// Weight of calling `seal_minimum_balance`.
+	/// Weight of calling `minimum_balance`.
 	pub minimum_balance: Weight,
 
-	/// Weight of calling `seal_block_number`.
+	/// Weight of calling `block_number`.
 	pub block_number: Weight,
 
-	/// Weight of calling `seal_now`.
+	/// Weight of calling `now`.
 	pub now: Weight,
 
-	/// Weight of calling `seal_weight_to_fee`.
+	/// Weight of calling `weight_to_fee`.
 	pub weight_to_fee: Weight,
 
 	/// Weight of calling `gas`.
 	pub gas: Weight,
 
-	/// Weight of calling `seal_input`.
+	/// Weight of calling `input`.
 	pub input: Weight,
 
-	/// Weight per input byte copied to contract memory by `seal_input`.
+	/// Weight per input byte copied to contract memory by `input`.
 	pub input_per_byte: Weight,
 
-	/// Weight of calling `seal_return`.
+	/// Weight of calling `r#return`.
 	pub r#return: Weight,
 
-	/// Weight per byte returned through `seal_return`.
+	/// Weight per byte returned through `r#return`.
 	pub return_per_byte: Weight,
 
-	/// Weight of calling `seal_terminate`.
+	/// Weight of calling `terminate`.
 	pub terminate: Weight,
 
-	/// Weight of calling `seal_random`.
+	/// Weight of calling `random`.
 	pub random: Weight,
 
-	/// Weight of calling `seal_reposit_event`.
+	/// Weight of calling `reposit_event`.
 	pub deposit_event: Weight,
 
-	/// Weight per topic supplied to `seal_deposit_event`.
+	/// Weight per topic supplied to `deposit_event`.
 	pub deposit_event_per_topic: Weight,
 
-	/// Weight per byte of an event deposited through `seal_deposit_event`.
+	/// Weight per byte of an event deposited through `deposit_event`.
 	pub deposit_event_per_byte: Weight,
 
-	/// Weight of calling `seal_debug_message`.
+	/// Weight of calling `debug_message`.
 	pub debug_message: Weight,
 
-	/// Weight of calling `seal_set_storage`.
+	/// Weight of calling `set_storage`.
 	pub set_storage: Weight,
 
-	/// Weight per written byten of an item stored with `seal_set_storage`.
+	/// Weight per written byten of an item stored with `set_storage`.
 	pub set_storage_per_new_byte: Weight,
 
-	/// Weight per overwritten byte of an item stored with `seal_set_storage`.
+	/// Weight per overwritten byte of an item stored with `set_storage`.
 	pub set_storage_per_old_byte: Weight,
 
-	/// Weight of calling `seal_set_code_hash`.
+	/// Weight of calling `set_code_hash`.
 	pub set_code_hash: Weight,
 
-	/// Weight of calling `seal_clear_storage`.
+	/// Weight of calling `clear_storage`.
 	pub clear_storage: Weight,
 
-	/// Weight of calling `seal_clear_storage` per byte of the stored item.
+	/// Weight of calling `clear_storage` per byte of the stored item.
 	pub clear_storage_per_byte: Weight,
 
-	/// Weight of calling `seal_contains_storage`.
+	/// Weight of calling `contains_storage`.
 	pub contains_storage: Weight,
 
-	/// Weight of calling `seal_contains_storage` per byte of the stored item.
+	/// Weight of calling `contains_storage` per byte of the stored item.
 	pub contains_storage_per_byte: Weight,
 
-	/// Weight of calling `seal_get_storage`.
+	/// Weight of calling `get_storage`.
 	pub get_storage: Weight,
 
-	/// Weight per byte of an item received via `seal_get_storage`.
+	/// Weight per byte of an item received via `get_storage`.
 	pub get_storage_per_byte: Weight,
 
-	/// Weight of calling `seal_take_storage`.
+	/// Weight of calling `take_storage`.
 	pub take_storage: Weight,
 
-	/// Weight per byte of an item received via `seal_take_storage`.
+	/// Weight per byte of an item received via `take_storage`.
 	pub take_storage_per_byte: Weight,
 
-	/// Weight of calling `seal_transfer`.
+	/// Weight of calling `transfer`.
 	pub transfer: Weight,
 
 	/// Weight of calling `seal_call`.
 	pub call: Weight,
 
-	/// Weight of calling `seal_delegate_call`.
+	/// Weight of calling `delegate_call`.
 	pub delegate_call: Weight,
 
 	/// Weight surcharge that is claimed if `seal_call` does a balance transfer.
@@ -386,34 +386,34 @@ pub struct HostFnWeights<T: Config> {
 	/// Weight per salt byte supplied to `seal_instantiate`.
 	pub instantiate_per_salt_byte: Weight,
 
-	/// Weight of calling `seal_hash_sha_256`.
+	/// Weight of calling `hash_sha_256`.
 	pub hash_sha2_256: Weight,
 
-	/// Weight per byte hashed by `seal_hash_sha_256`.
+	/// Weight per byte hashed by `hash_sha_256`.
 	pub hash_sha2_256_per_byte: Weight,
 
-	/// Weight of calling `seal_hash_keccak_256`.
+	/// Weight of calling `hash_keccak_256`.
 	pub hash_keccak_256: Weight,
 
-	/// Weight per byte hashed by `seal_hash_keccak_256`.
+	/// Weight per byte hashed by `hash_keccak_256`.
 	pub hash_keccak_256_per_byte: Weight,
 
-	/// Weight of calling `seal_hash_blake2_256`.
+	/// Weight of calling `hash_blake2_256`.
 	pub hash_blake2_256: Weight,
 
-	/// Weight per byte hashed by `seal_hash_blake2_256`.
+	/// Weight per byte hashed by `hash_blake2_256`.
 	pub hash_blake2_256_per_byte: Weight,
 
-	/// Weight of calling `seal_hash_blake2_128`.
+	/// Weight of calling `hash_blake2_128`.
 	pub hash_blake2_128: Weight,
 
-	/// Weight per byte hashed by `seal_hash_blake2_128`.
+	/// Weight per byte hashed by `hash_blake2_128`.
 	pub hash_blake2_128_per_byte: Weight,
 
-	/// Weight of calling `seal_ecdsa_recover`.
+	/// Weight of calling `ecdsa_recover`.
 	pub ecdsa_recover: Weight,
 
-	/// Weight of calling `seal_ecdsa_to_eth_address`.
+	/// Weight of calling `ecdsa_to_eth_address`.
 	pub ecdsa_to_eth_address: Weight,
 
 	/// The type parameter is used in the default implementation.
@@ -585,72 +585,68 @@ impl<T: Config> Default for InstructionWeights<T> {
 impl<T: Config> Default for HostFnWeights<T> {
 	fn default() -> Self {
 		Self {
-			caller: cost_batched!(seal_caller),
-			is_contract: cost_batched!(seal_is_contract),
-			code_hash: cost_batched!(seal_code_hash),
-			own_code_hash: cost_batched!(seal_own_code_hash),
-			caller_is_origin: cost_batched!(seal_caller_is_origin),
-			address: cost_batched!(seal_address),
-			gas_left: cost_batched!(seal_gas_left),
-			balance: cost_batched!(seal_balance),
-			value_transferred: cost_batched!(seal_value_transferred),
-			minimum_balance: cost_batched!(seal_minimum_balance),
-			block_number: cost_batched!(seal_block_number),
-			now: cost_batched!(seal_now),
-			weight_to_fee: cost_batched!(seal_weight_to_fee),
-			gas: cost_batched!(seal_gas),
-			input: cost_batched!(seal_input),
-			input_per_byte: cost_byte_batched!(seal_input_per_kb),
-			r#return: cost!(seal_return),
-			return_per_byte: cost_byte!(seal_return_per_kb),
-			terminate: cost!(seal_terminate),
-			random: cost_batched!(seal_random),
-			deposit_event: cost_batched!(seal_deposit_event),
-			deposit_event_per_topic: cost_batched_args!(seal_deposit_event_per_topic_and_kb, 1, 0),
-			deposit_event_per_byte: cost_byte_batched_args!(
-				seal_deposit_event_per_topic_and_kb,
-				0,
-				1
-			),
-			debug_message: cost_batched!(seal_debug_message),
-			set_storage: cost_batched!(seal_set_storage),
-			set_code_hash: cost_batched!(seal_set_code_hash),
-			set_storage_per_new_byte: cost_byte_batched!(seal_set_storage_per_new_kb),
-			set_storage_per_old_byte: cost_byte_batched!(seal_set_storage_per_old_kb),
-			clear_storage: cost_batched!(seal_clear_storage),
-			clear_storage_per_byte: cost_byte_batched!(seal_clear_storage_per_kb),
-			contains_storage: cost_batched!(seal_contains_storage),
-			contains_storage_per_byte: cost_byte_batched!(seal_contains_storage_per_kb),
-			get_storage: cost_batched!(seal_get_storage),
-			get_storage_per_byte: cost_byte_batched!(seal_get_storage_per_kb),
-			take_storage: cost_batched!(seal_take_storage),
-			take_storage_per_byte: cost_byte_batched!(seal_take_storage_per_kb),
-			transfer: cost_batched!(seal_transfer),
+			caller: cost_batched!(caller),
+			is_contract: cost_batched!(is_contract),
+			code_hash: cost_batched!(code_hash),
+			own_code_hash: cost_batched!(own_code_hash),
+			caller_is_origin: cost_batched!(caller_is_origin),
+			address: cost_batched!(address),
+			gas_left: cost_batched!(gas_left),
+			balance: cost_batched!(balance),
+			value_transferred: cost_batched!(value_transferred),
+			minimum_balance: cost_batched!(minimum_balance),
+			block_number: cost_batched!(block_number),
+			now: cost_batched!(now),
+			weight_to_fee: cost_batched!(weight_to_fee),
+			gas: cost_batched!(gas),
+			input: cost_batched!(input),
+			input_per_byte: cost_byte_batched!(input_per_kb),
+			r#return: cost!(r#return),
+			return_per_byte: cost_byte!(return_per_kb),
+			terminate: cost!(terminate),
+			random: cost_batched!(random),
+			deposit_event: cost_batched!(deposit_event),
+			deposit_event_per_topic: cost_batched_args!(deposit_event_per_topic_and_kb, 1, 0),
+			deposit_event_per_byte: cost_byte_batched_args!(deposit_event_per_topic_and_kb, 0, 1),
+			debug_message: cost_batched!(debug_message),
+			set_storage: cost_batched!(set_storage),
+			set_code_hash: cost_batched!(set_code_hash),
+			set_storage_per_new_byte: cost_byte_batched!(set_storage_per_new_kb),
+			set_storage_per_old_byte: cost_byte_batched!(set_storage_per_old_kb),
+			clear_storage: cost_batched!(clear_storage),
+			clear_storage_per_byte: cost_byte_batched!(clear_storage_per_kb),
+			contains_storage: cost_batched!(contains_storage),
+			contains_storage_per_byte: cost_byte_batched!(contains_storage_per_kb),
+			get_storage: cost_batched!(get_storage),
+			get_storage_per_byte: cost_byte_batched!(get_storage_per_kb),
+			take_storage: cost_batched!(take_storage),
+			take_storage_per_byte: cost_byte_batched!(take_storage_per_kb),
+			transfer: cost_batched!(transfer),
 			call: cost_batched!(seal_call),
-			delegate_call: cost_batched!(seal_delegate_call),
-			call_transfer_surcharge: cost_batched_args!(seal_call_per_transfer_clone_kb, 1, 0),
-			call_per_cloned_byte: cost_batched_args!(seal_call_per_transfer_clone_kb, 0, 1),
+			delegate_call: cost_batched!(delegate_call),
+			call_transfer_surcharge: cost_batched_args!(call_per_transfer_clone_kb, 1, 0),
+			call_per_cloned_byte: cost_batched_args!(call_per_transfer_clone_kb, 0, 1),
 			instantiate: cost_batched!(seal_instantiate),
 			instantiate_transfer_surcharge: cost_byte_batched_args!(
-				seal_instantiate_per_transfer_salt_kb,
+				instantiate_per_transfer_salt_kb,
 				1,
 				0
 			),
 			instantiate_per_salt_byte: cost_byte_batched_args!(
-				seal_instantiate_per_transfer_salt_kb,
+				instantiate_per_transfer_salt_kb,
 				0,
 				1
 			),
-			hash_sha2_256: cost_batched!(seal_hash_sha2_256),
-			hash_sha2_256_per_byte: cost_byte_batched!(seal_hash_sha2_256_per_kb),
-			hash_keccak_256: cost_batched!(seal_hash_keccak_256),
-			hash_keccak_256_per_byte: cost_byte_batched!(seal_hash_keccak_256_per_kb),
-			hash_blake2_256: cost_batched!(seal_hash_blake2_256),
-			hash_blake2_256_per_byte: cost_byte_batched!(seal_hash_blake2_256_per_kb),
-			hash_blake2_128: cost_batched!(seal_hash_blake2_128),
-			hash_blake2_128_per_byte: cost_byte_batched!(seal_hash_blake2_128_per_kb),
-			ecdsa_recover: cost_batched!(seal_ecdsa_recover),
-			ecdsa_to_eth_address: cost_batched!(seal_ecdsa_to_eth_address),
+			hash_sha2_256: cost_batched!(hash_sha2_256),
+			hash_sha2_256_per_byte: cost_byte_batched!(hash_sha2_256_per_kb),
+			hash_keccak_256: cost_batched!(hash_keccak_256),
+			hash_keccak_256_per_byte: cost_byte_batched!(hash_keccak_256_per_kb),
+			hash_blake2_256: cost_batched!(hash_blake2_256),
+			hash_blake2_256_per_byte: cost_byte_batched!(hash_blake2_256_per_kb),
+			hash_blake2_128: cost_batched!(hash_blake2_128),
+			hash_blake2_128_per_byte: cost_byte_batched!(hash_blake2_128_per_kb),
+			ecdsa_recover: cost_batched!(ecdsa_recover),
+			ecdsa_to_eth_address: cost_batched!(ecdsa_to_eth_address),
 			_phantom: PhantomData,
 		}
 	}
