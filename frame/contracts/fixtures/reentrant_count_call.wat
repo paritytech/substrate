@@ -6,9 +6,9 @@
 	(import "__unstable__" "seal_reentrant_count" (func $seal_reentrant_count (result i32)))
 	(import "env" "memory" (memory 1 1))
 
-	;; [0, 32) buffer where code hash is copied
+	;; [0, 32) buffer where contract address is copied
 
-	;; [32, 36) buffer for the call stack high
+	;; [32, 36) buffer for the call stack height
 
 	;; [36, 40) size of the input buffer
 	(data (i32.const 36) "\24")
@@ -22,25 +22,26 @@
 		)
 	)
 	(func (export "call")
-		(local $manual_reentrant_count i32)
+		(local $expected_reentrant_count i32)
 		(local $seal_call_exit_code i32)
 
 		;; Reading input
 		(call $seal_input (i32.const 0) (i32.const 36))
 
 		;; reading manually passed reentrant count
-		(set_local $manual_reentrant_count (i32.load (i32.const 32)))
+		(set_local $expected_reentrant_count (i32.load (i32.const 32)))
 
 		;; reentrance count is calculated correctly
 		(call $assert
-			(i32.eq (call $seal_reentrant_count) (get_local $manual_reentrant_count))
+			(i32.eq (call $seal_reentrant_count) (get_local $expected_reentrant_count))
 		)
 
+		;; re-enter 5 times in a row and assert that the reentrant counter works as expected
 		(i32.eq (call $seal_reentrant_count) (i32.const 5))
 		(if
 			(then) ;; recursion exit case
 			(else
-				;; incrementing manual reentrant count high
+				;; incrementing $expected_reentrant_count passed to the contract
 				(i32.store (i32.const 32) (i32.add (i32.load (i32.const 32)) (i32.const 1)))
 
 				;; Call to itself
