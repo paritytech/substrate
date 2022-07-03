@@ -1,3 +1,5 @@
+;; This fixture recursively tests if seal_reentrant_count returns correct reentrant count value when
+;; using seal_delegate_call to make caller contract delegate call to itself
 (module
 	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
 	(import "seal0" "seal_set_storage" (func $seal_set_storage (param i32 i32 i32)))

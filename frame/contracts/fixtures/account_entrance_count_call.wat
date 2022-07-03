@@ -1,3 +1,5 @@
+;; This fixture tests if seal_account_entrance_count works as expected
+;; testing it with 2 different addresses
 (module
 	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
 	(import "__unstable__" "seal_account_entrance_count" (func $seal_account_entrance_count (param i32) (result i32)))
