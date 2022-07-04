@@ -43,8 +43,11 @@ pub mod migration;
 pub mod weights;
 
 use codec::{Decode, Encode};
-use frame_support::traits::{
-	tokens::Locker, BalanceStatus::Reserved, Currency, EnsureOriginWithArg, ReservableCurrency,
+use frame_support::{
+	traits::{
+		tokens::Locker, BalanceStatus::Reserved, Currency, EnsureOriginWithArg, ReservableCurrency,
+	},
+	transactional,
 };
 use frame_system::Config as SystemConfig;
 use sp_runtime::{
@@ -1479,6 +1482,7 @@ pub mod pallet {
 		///
 		/// Emits `ItemBought` on success.
 		#[pallet::weight(T::WeightInfo::buy_item())]
+		#[transactional]
 		pub fn buy_item(
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
