@@ -1,0 +1,68 @@
+[package]
+name = "pallet-alliance"
+version = "4.0.0-dev"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2021"
+license = "Apache-2.0"
+homepage = "https://docs.substrate.io/"
+repository = "https://github.com/paritytech/substrate/"
+description = "The Alliance pallet provides a collective for standard-setting industry collaboration."
+readme = "README.md"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+hex = { version = "0.4", default-features = false, features = ["alloc"], optional = true }
+sha2 = { version = "0.10.1", default-features = false, optional = true }
+log = { version = "0.4.14", default-features = false }
+
+codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"] }
+scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
+
+sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
+sp-core = { version = "6.0.0", default-features = false, path = "../../primitives/core" }
+sp-io = { version = "6.0.0", default-features = false, path = "../../primitives/io" }
+sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
+
+frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
+frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
+frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
+
+pallet-identity = { version = "4.0.0-dev", path = "../identity", default-features = false }
+pallet-collective = { version = "4.0.0-dev", path = "../collective", default-features = false, optional = true }
+
+[dev-dependencies]
+hex-literal = "0.3.1"
+sha2 = "0.10.1"
+pallet-balances = { version = "4.0.0-dev", path = "../balances" }
+pallet-collective = { version = "4.0.0-dev", path = "../collective" }
+
+[features]
+default = ["std"]
+std = [
+	"log/std",
+	"codec/std",
+	"scale-info/std",
+	"sp-std/std",
+	"sp-core/std",
+	"sp-io/std",
+	"sp-runtime/std",
+	"frame-support/std",
+	"frame-system/std",
+	"pallet-identity/std",
+]
+runtime-benchmarks = [
+	"hex",
+	"sha2",
+	"frame-benchmarking",
+	"sp-runtime/runtime-benchmarks",
+	"frame-support/runtime-benchmarks",
+	"frame-system/runtime-benchmarks",
+	"pallet-collective/runtime-benchmarks",
+	"pallet-identity/runtime-benchmarks",
+]
+try-runtime = [
+	"frame-support/try-runtime",
+	"frame-system/try-runtime",
+]

@@ -215,6 +215,7 @@ impl Config for Test {
 	type Event = Event;
 	type Scheduler = Scheduler;
 	type Currency = pallet_balances::Pallet<Self>;
+	type SubmitOrigin = frame_system::EnsureSigned<u64>;
 	type CancelOrigin = EnsureSignedBy<Four, u64>;
 	type KillOrigin = EnsureRoot<u64>;
 	type Slash = ();
@@ -309,7 +310,7 @@ pub fn set_balance_proposal_hash(value: u64) -> H256 {
 pub fn propose_set_balance(who: u64, value: u64, delay: u64) -> DispatchResult {
 	Referenda::submit(
 		Origin::signed(who),
-		frame_system::RawOrigin::Root.into(),
+		Box::new(frame_system::RawOrigin::Root.into()),
 		set_balance_proposal_hash(value),
 		DispatchTime::After(delay),
 	)
@@ -437,7 +438,7 @@ impl RefState {
 	pub fn create(self) -> ReferendumIndex {
 		assert_ok!(Referenda::submit(
 			Origin::signed(1),
-			frame_support::dispatch::RawOrigin::Root.into(),
+			Box::new(frame_support::dispatch::RawOrigin::Root.into()),
 			set_balance_proposal_hash(1),
 			DispatchTime::At(10),
 		));

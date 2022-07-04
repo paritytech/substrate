@@ -18,14 +18,12 @@
 //! Traits for dealing with dispatching calls and the origin from which they are dispatched.
 
 use crate::dispatch::{DispatchResultWithPostInfo, Parameter, RawOrigin};
-use sp_arithmetic::traits::{CheckedSub, Zero};
+use codec::MaxEncodedLen;
 use sp_runtime::{
 	traits::{BadOrigin, Member, Morph, TryMorph},
 	Either,
 };
 use sp_std::marker::PhantomData;
-
-use super::TypedGet;
 
 /// Some sort of check on the origin is performed by this object.
 pub trait EnsureOrigin<OuterOrigin> {
@@ -226,27 +224,6 @@ impl<
 	}
 }
 
-/// Mutator which reduces a scalar by a particular amount.
-pub struct ReduceBy<N>(PhantomData<N>);
-impl<N: TypedGet> TryMorph<N::Type> for ReduceBy<N>
-where
-	N::Type: CheckedSub,
-{
-	type Outcome = N::Type;
-	fn try_morph(r: N::Type) -> Result<N::Type, ()> {
-		r.checked_sub(&N::get()).ok_or(())
-	}
-}
-impl<N: TypedGet> Morph<N::Type> for ReduceBy<N>
-where
-	N::Type: CheckedSub + Zero,
-{
-	type Outcome = N::Type;
-	fn morph(r: N::Type) -> N::Type {
-		r.checked_sub(&N::get()).unwrap_or(Zero::zero())
-	}
-}
-
 /// Type that can be dispatched with an origin but without checking the origin filter.
 ///
 /// Implemented for pallet dispatchable type by `decl_module` and for runtime dispatchable by
@@ -282,7 +259,11 @@ pub trait OriginTrait: Sized {
 	type Call;
 
 	/// The caller origin, overarching type of all pallets origins.
-	type PalletsOrigin: Parameter + Member + Into<Self> + From<RawOrigin<Self::AccountId>>;
+	type PalletsOrigin: Parameter
+		+ Member
+		+ Into<Self>
+		+ From<RawOrigin<Self::AccountId>>
+		+ MaxEncodedLen;
 
 	/// The AccountId used across the system.
 	type AccountId;
@@ -319,6 +300,9 @@ pub trait OriginTrait: Sized {
 
 	/// Create with system signed origin and `frame_system::Config::BaseCallFilter`.
 	fn signed(by: Self::AccountId) -> Self;
+
+	/// Extract the signer from the message if it is a `Signed` origin.
+	fn as_signed(self) -> Option<Self::AccountId>;
 }
 
 #[cfg(test)]

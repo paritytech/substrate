@@ -19,7 +19,7 @@
 //! votes.
 
 use crate::dispatch::{DispatchError, Parameter};
-use codec::HasCompact;
+use codec::{HasCompact, MaxEncodedLen};
 use sp_arithmetic::{
 	traits::{SaturatedConversion, UniqueSaturatedFrom, UniqueSaturatedInto},
 	Perbill,
@@ -122,10 +122,17 @@ impl<Tally, Moment, Class> PollStatus<Tally, Moment, Class> {
 	}
 }
 
+pub struct ClassCountOf<P, T>(sp_std::marker::PhantomData<(P, T)>);
+impl<T, P: Polling<T>> sp_runtime::traits::Get<u32> for ClassCountOf<P, T> {
+	fn get() -> u32 {
+		P::classes().len() as u32
+	}
+}
+
 pub trait Polling<Tally> {
-	type Index: Parameter + Member + Ord + PartialOrd + Copy + HasCompact;
-	type Votes: Parameter + Member + Ord + PartialOrd + Copy + HasCompact;
-	type Class: Parameter + Member + Ord + PartialOrd;
+	type Index: Parameter + Member + Ord + PartialOrd + Copy + HasCompact + MaxEncodedLen;
+	type Votes: Parameter + Member + Ord + PartialOrd + Copy + HasCompact + MaxEncodedLen;
+	type Class: Parameter + Member + Ord + PartialOrd + MaxEncodedLen;
 	type Moment;
 
 	/// Provides a vec of values that `T` may take.

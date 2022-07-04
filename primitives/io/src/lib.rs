@@ -1522,17 +1522,17 @@ mod tracing_setup {
 		fn new_span(&self, attrs: &Attributes<'_>) -> Id {
 			Id::from_u64(wasm_tracing::enter_span(Crossing(attrs.into())))
 		}
-		fn enter(&self, span: &Id) {
+		fn enter(&self, _: &Id) {
 			// Do nothing, we already entered the span previously
 		}
 		/// Not implemented! We do not support recording values later
 		/// Will panic when used.
-		fn record(&self, span: &Id, values: &Record<'_>) {
+		fn record(&self, _: &Id, _: &Record<'_>) {
 			unimplemented! {} // this usage is not supported
 		}
 		/// Not implemented! We do not support recording values later
 		/// Will panic when used.
-		fn record_follows_from(&self, span: &Id, follows: &Id) {
+		fn record_follows_from(&self, _: &Id, _: &Id) {
 			unimplemented! {} // this usage is not supported
 		}
 		fn event(&self, event: &Event<'_>) {

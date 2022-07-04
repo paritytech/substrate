@@ -680,7 +680,7 @@ where
 
 	/// Calculates the fee from the passed `weight` according to the `polynomial`.
 	///
-	/// This should not be overriden in most circumstances. Calculation is done in the
+	/// This should not be overridden in most circumstances. Calculation is done in the
 	/// `Balance` type and never overflows. All evaluation is saturating.
 	fn weight_to_fee(weight: &Weight) -> Self::Balance {
 		Self::polynomial()

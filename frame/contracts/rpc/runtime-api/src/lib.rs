@@ -79,7 +79,7 @@ sp_api::decl_runtime_apis! {
 		/// doesn't exist, or doesn't have a contract then `Err` is returned.
 		fn get_storage(
 			address: AccountId,
-			key: [u8; 32],
+			key: Vec<u8>,
 		) -> GetStorageResult;
 	}
 }

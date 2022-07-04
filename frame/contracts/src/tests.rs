@@ -20,7 +20,7 @@ use crate::{
 		ChainExtension, Environment, Ext, InitState, Result as ExtensionResult, RetVal,
 		ReturnFlags, SysConfig, UncheckedFrom,
 	},
-	exec::Frame,
+	exec::{FixSizedKey, Frame},
 	storage::Storage,
 	wasm::{PrefabWasmModule, ReturnCode as RuntimeReturnCode},
 	weights::WeightInfo,
@@ -291,6 +291,7 @@ impl Config for Test {
 	type ContractAccessWeight = DefaultContractAccessWeight<BlockWeights>;
 	type MaxCodeLen = ConstU32<{ 128 * 1024 }>;
 	type RelaxedMaxCodeLen = ConstU32<{ 256 * 1024 }>;
+	type MaxStorageKeyLen = ConstU32<128>;
 }
 
 pub const ALICE: AccountId32 = AccountId32::new([1u8; 32]);
@@ -1723,8 +1724,14 @@ fn lazy_removal_partial_remove_works() {
 
 		// Put value into the contracts child trie
 		for val in &vals {
-			Storage::<Test>::write(&info.trie_id, &val.0, Some(val.2.clone()), None, false)
-				.unwrap();
+			Storage::<Test>::write(
+				&info.trie_id,
+				&val.0 as &FixSizedKey,
+				Some(val.2.clone()),
+				None,
+				false,
+			)
+			.unwrap();
 		}
 		<ContractInfoOf<Test>>::insert(&addr, info.clone());
 
@@ -1903,8 +1910,14 @@ fn lazy_removal_does_not_use_all_weight() {
 
 		// Put value into the contracts child trie
 		for val in &vals {
-			Storage::<Test>::write(&info.trie_id, &val.0, Some(val.2.clone()), None, false)
-				.unwrap();
+			Storage::<Test>::write(
+				&info.trie_id,
+				&val.0 as &FixSizedKey,
+				Some(val.2.clone()),
+				None,
+				false,
+			)
+			.unwrap();
 		}
 		<ContractInfoOf<Test>>::insert(&addr, info.clone());
 
