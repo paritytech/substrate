@@ -884,6 +884,7 @@ pub mod pallet {
 			string
 		}
 	}
+
 }
 
 #[cfg(feature = "runtime-benchmarks")]
@@ -1041,6 +1042,7 @@ mod mock {
 	use frame_support::{
 		parameter_types,
 		traits::{ConstU32, ConstU64, Hooks},
+		weights::Weight,
 	};
 	use frame_system::{EnsureRoot, EnsureSigned};
 	use sp_core::{
@@ -1117,6 +1119,34 @@ mod mock {
 		type WeightInfo = ();
 	}
 
+	/// Test only Weights for state migration.
+	pub struct StateMigrationTestWeight;
+
+	impl WeightInfo for StateMigrationTestWeight {
+		fn process_top_key(_: u32) -> Weight {
+			1000000
+		}
+		fn continue_migrate() -> Weight {
+			1000000
+		}
+		fn continue_migrate_wrong_witness() -> Weight {
+			1000000
+		}
+		fn migrate_custom_top_fail() -> Weight {
+			1000000
+		}
+		fn migrate_custom_top_success() -> Weight {
+			1000000
+		}
+		fn migrate_custom_child_fail() -> Weight {
+			1000000
+		}
+		fn migrate_custom_child_success() -> Weight {
+			1000000
+		}
+	}
+
+
 	impl pallet_state_trie_migration::Config for Test {
 		type Event = Event;
 		type ControlOrigin = EnsureRoot<u64>;
@@ -1125,7 +1155,7 @@ mod mock {
 		type SignedDepositPerItem = SignedDepositPerItem;
 		type SignedDepositBase = SignedDepositBase;
 		type SignedFilter = EnsureSigned<Self::AccountId>;
-		type WeightInfo = ();
+		type WeightInfo = StateMigrationTestWeight;
 	}
 
 	pub fn new_test_ext(
