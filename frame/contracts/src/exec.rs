@@ -798,9 +798,7 @@ where
 			}
 
 			// Every non delegate call or instantiate also optionally transfers the balance.
-			if self.top_frame().delegate_caller.is_none() {
-				self.initial_transfer()?;
-			}
+			self.initial_transfer()?;
 
 			// Call into the wasm blob.
 			let output = executable
@@ -961,8 +959,14 @@ where
 	// The transfer as performed by a call or instantiate.
 	fn initial_transfer(&self) -> DispatchResult {
 		let frame = self.top_frame();
-		let value = frame.value_transferred;
 
+		// If it is a delegate call, then we've already transferred tokens in the
+		// last non-delegate frame.
+		if frame.delegate_caller.is_some() {
+			return Ok(())
+		}
+
+		let value = frame.value_transferred;
 		Self::transfer(ExistenceRequirement::KeepAlive, self.caller(), &frame.account_id, value)
 	}
 
