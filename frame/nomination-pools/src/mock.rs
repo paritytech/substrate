@@ -111,6 +111,7 @@ impl sp_staking::StakingInterface for StakingMock {
 		Ok(())
 	}
 
+	#[cfg(feature = "runtime-benchmarks")]
 	fn nominations(_: Self::AccountId) -> Option<Vec<Self::AccountId>> {
 		Nominations::get()
 	}

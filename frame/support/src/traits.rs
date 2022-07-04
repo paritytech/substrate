@@ -103,5 +103,6 @@ pub use dispatch::{
 
 mod voting;
 pub use voting::{
-	CurrencyToVote, PollStatus, Polling, SaturatingCurrencyToVote, U128CurrencyToVote, VoteTally,
+	ClassCountOf, CurrencyToVote, PollStatus, Polling, SaturatingCurrencyToVote,
+	U128CurrencyToVote, VoteTally,
 };

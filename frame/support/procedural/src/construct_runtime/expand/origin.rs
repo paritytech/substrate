@@ -200,7 +200,7 @@ pub fn expand_outer_origin(
 
 		#[derive(
 			Clone, PartialEq, Eq, #scrate::RuntimeDebug, #scrate::codec::Encode,
-			#scrate::codec::Decode, #scrate::scale_info::TypeInfo,
+			#scrate::codec::Decode, #scrate::scale_info::TypeInfo, #scrate::codec::MaxEncodedLen,
 		)]
 		#[allow(non_camel_case_types)]
 		pub enum OriginCaller {
