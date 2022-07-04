@@ -304,24 +304,6 @@ mod waiting {
 	}
 }
 
-struct CallOnDrop(Option<Box<dyn FnOnce() + Send + Sync>>);
-
-impl CallOnDrop {
-	fn new<F>(f: F) -> Self
-	where
-		F: FnOnce() + Send + Sync + 'static,
-	{
-		Self(Some(Box::new(f)))
-	}
-}
-
-impl Drop for CallOnDrop {
-	fn drop(&mut self) {
-		let f = self.0.take().expect("Always called once on drop; qed");
-		f();
-	}
-}
-
 /// Starts RPC servers.
 fn start_rpc_servers<R>(
 	config: &Configuration,
@@ -389,12 +371,8 @@ where
 		config.tokio_handle.block_on(futures::future::try_join(http_fut, ws_fut))
 	}) {
 		Ok((http, ws)) => Ok(Box::new((
-			CallOnDrop::new(move || {
-				let _ = http.stop();
-			}),
-			CallOnDrop::new(move || {
-				let _ = ws.stop();
-			}),
+			waiting::HttpServer(Some(http)),
+			waiting::WsServer(Some(ws)),
 		))),
 		Err(e) => Err(Error::Application(e)),
 	}
