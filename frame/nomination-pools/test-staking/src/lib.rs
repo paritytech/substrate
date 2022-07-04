@@ -93,8 +93,8 @@ fn pool_lifecycle_e2e() {
 			pool_events_since_last_call(),
 			vec![
 				PoolsEvent::StateChanged { pool_id: 1, new_state: PoolState::Destroying },
-				PoolsEvent::Unbonded { member: 20, pool_id: 1, points: 10, balance: 10 },
-				PoolsEvent::Unbonded { member: 21, pool_id: 1, points: 10, balance: 10 },
+				PoolsEvent::Unbonded { member: 20, pool_id: 1, points: 10, balance: 10, era: 3 },
+				PoolsEvent::Unbonded { member: 21, pool_id: 1, points: 10, balance: 10, era: 3 },
 			]
 		);
 
@@ -157,7 +157,7 @@ fn pool_lifecycle_e2e() {
 		);
 		assert_eq!(
 			pool_events_since_last_call(),
-			vec![PoolsEvent::Unbonded { member: 10, pool_id: 1, points: 50, balance: 50 }]
+			vec![PoolsEvent::Unbonded { member: 10, pool_id: 1, points: 50, balance: 50, era: 6 }]
 		);
 
 		// waiting another bonding duration:
@@ -235,8 +235,8 @@ fn pool_slash_e2e() {
 		assert_eq!(
 			pool_events_since_last_call(),
 			vec![
-				PoolsEvent::Unbonded { member: 10, pool_id: 1, balance: 10, points: 10 },
-				PoolsEvent::Unbonded { member: 20, pool_id: 1, balance: 10, points: 10 }
+				PoolsEvent::Unbonded { member: 10, pool_id: 1, balance: 10, points: 10, era: 4 },
+				PoolsEvent::Unbonded { member: 20, pool_id: 1, balance: 10, points: 10, era: 4 }
 			]
 		);
 
@@ -260,9 +260,9 @@ fn pool_slash_e2e() {
 		assert_eq!(
 			pool_events_since_last_call(),
 			vec![
-				PoolsEvent::Unbonded { member: 10, pool_id: 1, balance: 10, points: 10 },
-				PoolsEvent::Unbonded { member: 20, pool_id: 1, balance: 10, points: 10 },
-				PoolsEvent::Unbonded { member: 21, pool_id: 1, balance: 10, points: 10 },
+				PoolsEvent::Unbonded { member: 10, pool_id: 1, balance: 10, points: 10, era: 5 },
+				PoolsEvent::Unbonded { member: 20, pool_id: 1, balance: 10, points: 10, era: 5 },
+				PoolsEvent::Unbonded { member: 21, pool_id: 1, balance: 10, points: 10, era: 5 },
 			]
 		);
 
@@ -303,7 +303,7 @@ fn pool_slash_e2e() {
 		assert_eq!(staking_events_since_last_call(), vec![StakingEvent::Unbonded(POOL1_BONDED, 5)]);
 		assert_eq!(
 			pool_events_since_last_call(),
-			vec![PoolsEvent::Unbonded { member: 21, pool_id: 1, balance: 5, points: 5 }]
+			vec![PoolsEvent::Unbonded { member: 21, pool_id: 1, balance: 5, points: 5, era: 6 }]
 		);
 
 		// now we start withdrawing. we do it all at once, at era 6 where 20 and 21 are fully free.
@@ -340,7 +340,7 @@ fn pool_slash_e2e() {
 			pool_events_since_last_call(),
 			vec![
 				PoolsEvent::StateChanged { pool_id: 1, new_state: PoolState::Destroying },
-				PoolsEvent::Unbonded { member: 10, pool_id: 1, points: 10, balance: 10 }
+				PoolsEvent::Unbonded { member: 10, pool_id: 1, points: 10, balance: 10, era: 9 }
 			]
 		);
 
