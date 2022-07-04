@@ -229,11 +229,11 @@ pub fn from_original<
 	}
 
 	// Any suspended candidates remaining are rejected.
-	old::SuspendedCandidates::<T, I>::remove_all(None);
+	let _ = old::SuspendedCandidates::<T, I>::clear(u32::MAX, None);
 
 	// We give the current defender the benefit of the doubt.
 	old::Defender::<T, I>::kill();
-	old::DefenderVotes::<T, I>::remove_all(None);
+	let _ = old::DefenderVotes::<T, I>::clear(u32::MAX, None);
 }
 
 pub fn from_raw_past_payouts<
