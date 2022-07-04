@@ -884,7 +884,6 @@ pub mod pallet {
 			string
 		}
 	}
-
 }
 
 #[cfg(feature = "runtime-benchmarks")]
@@ -1145,7 +1144,6 @@ mod mock {
 			1000000
 		}
 	}
-
 
 	impl pallet_state_trie_migration::Config for Test {
 		type Event = Event;
