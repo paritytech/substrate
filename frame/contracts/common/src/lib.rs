@@ -116,8 +116,6 @@ bitflags! {
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	#[cfg_attr(feature = "std", serde(rename_all = "camelCase", transparent))]
 	pub struct ReturnFlags: u32 {
-		/// If all bits are zero it is successful case.
-		const SUCCESS = 0x0;
 		/// If this bit is set all changes made by the contract execution are rolled back.
 		const REVERT = 0x0000_0001;
 	}

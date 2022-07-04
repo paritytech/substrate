@@ -1570,7 +1570,7 @@ mod tests {
 
 		let success_ch = MockLoader::insert(Call, move |ctx, _| {
 			assert_eq!(ctx.ext.value_transferred(), value);
-			Ok(ExecReturnValue { flags: ReturnFlags::SUCCESS, data: Bytes(Vec::new()) })
+			Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: Bytes(Vec::new()) })
 		});
 
 		ExtBuilder::default().build().execute_with(|| {
@@ -1605,13 +1605,13 @@ mod tests {
 
 		let success_ch = MockLoader::insert(Call, move |ctx, _| {
 			assert_eq!(ctx.ext.value_transferred(), value);
-			Ok(ExecReturnValue { flags: ReturnFlags::SUCCESS, data: Bytes(Vec::new()) })
+			Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: Bytes(Vec::new()) })
 		});
 
 		let delegate_ch = MockLoader::insert(Call, move |ctx, _| {
 			assert_eq!(ctx.ext.value_transferred(), value);
 			let _ = ctx.ext.delegate_call(success_ch, Vec::new())?;
-			Ok(ExecReturnValue { flags: ReturnFlags::SUCCESS, data: Bytes(Vec::new()) })
+			Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: Bytes(Vec::new()) })
 		});
 
 		ExtBuilder::default().build().execute_with(|| {
