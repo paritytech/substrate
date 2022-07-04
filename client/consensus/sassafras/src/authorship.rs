@@ -30,87 +30,61 @@ use sp_consensus_vrf::schnorrkel::{PublicKey, VRFInOut, VRFOutput, VRFProof};
 use sp_core::{twox_64, ByteArray};
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 
-/// Tries to claim the given slot number. This method starts by trying to claim
-/// a primary VRF based slot. If we are not able to claim it, then if we have
-/// secondary slots enabled for the given epoch, we will fallback to trying to
-/// claim a secondary slot.
-pub fn claim_slot(
-	slot: Slot,
-	ticket: Option<Ticket>,
-	epoch: &Epoch,
-	keystore: &SyncCryptoStorePtr,
-) -> Option<(PreDigest, AuthorityId)> {
-	let authorities = epoch
-		.authorities
-		.iter()
-		.enumerate()
-		.map(|(index, a)| (a.0.clone(), index))
-		.collect::<Vec<_>>();
-	claim_slot_using_keys(slot, ticket, epoch, keystore, &authorities)
+/// Get secondary authority index for the given epoch and slot.
+#[inline]
+pub fn secondary_authority_index(slot: Slot, epoch: &Epoch) -> u64 {
+	u64::from_le_bytes((epoch.randomness, slot).using_encoded(twox_64)) %
+		epoch.authorities.len() as u64
 }
 
-/// Like `claim_slot`, but allows passing an explicit set of key pairs. Useful if we intend
-/// to make repeated calls for different slots using the same key pairs.
-pub fn claim_slot_using_keys(
+/// TODO-SASS DOCS
+/// Try to claim a slot.
+///
+/// NOTE: we can't claim primary slot if for some reason the associated ticket information has bot
+/// been preserved within the epoch structure.
+pub fn claim_slot(
 	slot: Slot,
-	ticket: Option<Ticket>,
 	epoch: &Epoch,
+	ticket: Option<Ticket>,
 	keystore: &SyncCryptoStorePtr,
-	authorities: &[(AuthorityId, usize)],
 ) -> Option<(PreDigest, AuthorityId)> {
-	if authorities.is_empty() {
-		return None
-	}
-
-	// TODO-SASS: fix u32 vs u64 for auth index
-	let (idx, proof) = match ticket {
+	let (authority_index, ticket_info) = match ticket {
 		Some(ticket) => {
 			log::debug!(target: "sassafras", "🌳 [TRY PRIMARY]");
-			let ticket_info = epoch.tickets_info.get(&ticket)?;
+			let ticket_info = epoch.tickets_info.get(&ticket)?.clone();
 			log::debug!(target: "sassafras", "🌳 Ticket = [ticket: {:02x?}, auth: {}, attempt: {}]",
                 &ticket.as_bytes()[0..8], ticket_info.authority_index, ticket_info.attempt);
 			let idx = ticket_info.authority_index as u64;
-			(idx, Some(ticket_info.proof.clone()))
+			(idx, Some(ticket_info))
 		},
 		None => {
 			log::debug!(target: "sassafras", "🌳 [TRY SECONDARY]");
-			let idx = u64::from_le_bytes((epoch.randomness, slot).using_encoded(twox_64)) %
-				authorities.len() as u64;
-			(idx, None)
+			(secondary_authority_index(slot, epoch), None)
 		},
 	};
+	let authority_id = epoch.authorities.get(authority_index as usize).map(|auth| &auth.0)?;
 
-	let expected_author = authorities.get(idx as usize).map(|auth| &auth.0)?;
+	let transcript_data = make_transcript_data(&epoch.randomness, slot, epoch.epoch_index);
+	let result = SyncCryptoStore::sr25519_vrf_sign(
+		&**keystore,
+		AuthorityId::ID,
+		authority_id.as_ref(),
+		transcript_data,
+	);
 
-	for (authority_id, authority_index) in authorities {
-		if authority_id == expected_author &&
-			SyncCryptoStore::has_keys(
-				&**keystore,
-				&[(authority_id.to_raw_vec(), AuthorityId::ID)],
-			) {
-			// If we can author we need to push block randomness and proof
-			let transcript_data = make_transcript_data(&epoch.randomness, slot, epoch.epoch_index);
-			let result = SyncCryptoStore::sr25519_vrf_sign(
-				&**keystore,
-				AuthorityId::ID,
-				authority_id.as_ref(),
-				transcript_data,
-			);
-
-			if let Ok(Some(signature)) = result {
-				let pre_digest = PreDigest {
-					authority_index: *authority_index as u32,
-					slot,
-					block_vrf_output: VRFOutput(signature.output),
-					block_vrf_proof: VRFProof(signature.proof.clone()),
-					ticket_vrf_proof: proof,
-				};
-				return Some((pre_digest, authority_id.clone()))
-			}
-		}
+	match result {
+		Ok(Some(signature)) => {
+			let pre_digest = PreDigest {
+				authority_index: authority_index as u32,
+				slot,
+				block_vrf_output: VRFOutput(signature.output),
+				block_vrf_proof: VRFProof(signature.proof.clone()),
+				ticket_info,
+			};
+			Some((pre_digest, authority_id.clone()))
+		},
+		_ => None,
 	}
-
-	None
 }
 
 /// Computes the threshold for a given epoch as:
@@ -124,8 +98,7 @@ pub fn claim_slot_using_keys(
 /// - V: number of validator in epoch
 ///
 /// The parameters should be chosen such that T <= 1.
-// TODO-SASS: this shall be analyzed properly.
-#[inline]
+// TODO-SASS: this shall be double-checked...
 pub fn calculate_threshold(
 	redundancy_factor: usize,
 	number_of_slots: usize,
@@ -169,8 +142,8 @@ pub fn generate_epoch_tickets(
 		epoch.authorities.len(),
 	);
 
-	let authorities = epoch.authorities.iter().enumerate().map(|(index, a)| (&a.0, index));
-	for (authority_id, authority_index) in authorities {
+	let authorities = epoch.authorities.iter().enumerate().map(|(index, a)| (index, &a.0));
+	for (authority_index, authority_id) in authorities {
 		if !SyncCryptoStore::has_keys(&**keystore, &[(authority_id.to_raw_vec(), AuthorityId::ID)])
 		{
 			continue

@@ -114,25 +114,16 @@ pub struct SassafrasEpochConfiguration {
 // /// TODO-SASS: docs
 pub type Ticket = VRFOutput;
 
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+/// TODO-SASS: move to `client`
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub struct TicketInfo {
-	/// TODO
-	pub attempt: u32,
-	/// TODO
+	/// Authority index.
 	pub authority_index: u32,
-	/// TODO
+	/// Attempt number.
+	pub attempt: u32,
+	/// Ticket proof.
 	pub proof: VRFProof,
 }
-
-// TODO-SASS: On submit we may want to group together tickets with additional metadata
-// pub struct EpochTickets {
-//  /// Epoch index for the tickets list
-//  pub epoch_index: u64,
-//  /// Submitter index
-//  pub proxy_index: u32,
-//  /// Tickets list
-//  pub tickets: Vec<Ticket>,
-// }
 
 /// Make a VRF transcript from given randomness, slot number and epoch.
 pub fn make_transcript(randomness: &Randomness, slot: Slot, epoch: u64) -> Transcript {

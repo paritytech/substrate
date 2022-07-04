@@ -47,6 +47,7 @@ use parking_lot::Mutex;
 use prometheus_endpoint::Registry;
 use retain_mut::RetainMut;
 use scale_codec::{Decode, Encode};
+use schnorrkel::SignatureError;
 
 use sc_client_api::{
 	backend::AuxStore, AuxDataOperations, Backend as BackendT, BlockchainEvents,
@@ -202,18 +203,21 @@ pub enum Error<B: BlockT> {
 	/// Slot author not found
 	#[error("Slot author not found")]
 	SlotAuthorNotFound,
-	// /// Bad signature
-	// #[error("Bad signature on {0:?}")]
-	// BadSignature(B::Hash),
+	/// Bad signature
+	#[error("Bad signature on {0:?}")]
+	BadSignature(B::Hash),
 	// /// Invalid author: Expected secondary author
 	// #[error("Invalid author: Expected secondary author: {0:?}, got: {1:?}.")]
 	// InvalidAuthor(AuthorityId, AuthorityId),
 	// /// VRF verification of block by author failed
 	// #[error("VRF verification of block by author {0:?} failed: threshold {1} exceeded")]
 	// VRFVerificationOfBlockFailed(AuthorityId, u128),
-	// /// VRF verification failed
-	// #[error("VRF verification failed: {0:?}")]
-	// VRFVerificationFailed(SignatureError),
+	/// VRF verification failed
+	#[error("VRF verification failed: {0:?}")]
+	VRFVerificationFailed(SignatureError),
+	/// Unexpected authoring mechanism
+	#[error("Unexpected authoring mechanism")]
+	UnexpectedAuthoringMechanism,
 	/// Could not fetch parent header
 	#[error("Could not fetch parent header: {0}")]
 	FetchParentHeader(sp_blockchain::Error),
@@ -424,7 +428,6 @@ where
 		select_chain,
 	);
 
-	// TODO-SASS: proper handler for inbound requests
 	let (worker_tx, worker_rx) = channel(HANDLE_BUFFER_SIZE);
 	let answer_requests = answer_requests(
 		worker_rx,
@@ -525,6 +528,7 @@ pub enum SassafrasRequest<B: BlockT> {
 	EpochForChild(B::Hash, NumberFor<B>, Slot, oneshot::Sender<Result<Epoch, Error<B>>>),
 }
 
+// TODO-SASS: this is currently not used
 async fn answer_requests<B, C>(
 	mut request_rx: Receiver<SassafrasRequest<B>>,
 	_config: Config,
@@ -675,13 +679,13 @@ where
 
 		let claim = authorship::claim_slot(
 			slot,
-			ticket,
 			self.epoch_changes
 				.shared_data()
 				.viable_epoch(epoch_descriptor, |slot| {
 					Epoch::genesis(&self.config.genesis_config, slot)
 				})?
 				.as_ref(),
+			ticket,
 			&self.keystore,
 		);
 
@@ -823,7 +827,7 @@ pub fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<PreDigest, Error
 			slot: 0.into(),
 			block_vrf_output,
 			block_vrf_proof,
-			ticket_vrf_proof: None,
+			ticket_info: None,
 		})
 	}
 
@@ -1010,7 +1014,7 @@ where
 			return Ok((block, Default::default()))
 		}
 
-		debug!(target: "sassafras", "🌳 We have {:?} logs in this header", block.header.digest().logs().len());
+		trace!(target: "sassafras", "🌳 We have {:?} logs in this header", block.header.digest().logs().len());
 
 		let hash = block.header.hash();
 		let parent_hash = *block.header.parent_hash();
@@ -1047,13 +1051,18 @@ where
 				})
 				.ok_or(Error::<Block>::FetchEpoch(parent_hash))?;
 
-			// We add one to the current slot to allow for some small drift.
-			// FIXME #1019 in the future, alter this queue to allow deferring of headers
+			let ticket = self
+				.client
+				.runtime_api()
+				.slot_ticket(&BlockId::Hash(parent_hash), pre_digest.slot)
+				.map_err(|err| err.to_string())?;
+
 			let v_params = verification::VerificationParams {
 				header: block.header.clone(),
-				pre_digest: Some(pre_digest),
-				slot_now: slot_now + 1,
+				pre_digest,
+				slot_now,
 				epoch: viable_epoch.as_ref(),
+				ticket,
 			};
 
 			(verification::check_header::<Block>(v_params)?, epoch_descriptor)
@@ -1261,7 +1270,7 @@ where
 			let epoch_descriptor = intermediate.epoch_descriptor;
 			let first_in_epoch = parent_slot < epoch_descriptor.start_slot();
 
-			let added_weight = pre_digest.ticket_vrf_proof.is_some() as u32;
+			let added_weight = pre_digest.ticket_info.is_some() as u32;
 			let total_weight = parent_weight + added_weight;
 
 			// Search for this all the time so we can reject unexpected announcements.

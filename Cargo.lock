@@ -8279,6 +8279,7 @@ dependencies = [
  "sc-consensus-epochs",
  "sc-consensus-slots",
  "sc-telemetry",
+ "schnorrkel",
  "sp-api",
  "sp-application-crypto",
  "sp-block-builder",

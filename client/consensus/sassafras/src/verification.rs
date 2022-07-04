@@ -17,26 +17,32 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Verification for BABE headers.
-use super::{find_pre_digest, sassafras_err, BlockT, Epoch, Error};
+use super::{authorship, find_pre_digest, sassafras_err, BlockT, Epoch, Error};
 use sc_consensus_slots::CheckedHeader;
 use sp_consensus_sassafras::{
 	digests::{CompatibleDigestItem, PreDigest},
-	make_transcript, AuthorityId, AuthorityPair, AuthoritySignature,
+	make_ticket_transcript, make_transcript, AuthorityId, AuthorityPair, AuthoritySignature,
+	Ticket,
 };
 use sp_consensus_slots::Slot;
+use sp_core::{ByteArray, Pair};
 use sp_runtime::{traits::Header, DigestItem};
+
+// Allowed slot drift.
+const MAX_SLOT_DRIFT: u64 = 1;
 
 /// Sassafras verification parameters
 pub struct VerificationParams<'a, B: 'a + BlockT> {
 	/// The header being verified.
 	pub header: B::Header,
-	/// The pre-digest of the header being verified. This is optional - if prior verification
-	/// code had to read it, it can be included here to avoid duplicate work.
-	pub pre_digest: Option<PreDigest>,
+	/// The pre-digest of the header being verified.
+	pub pre_digest: PreDigest,
 	/// The slot number of the current time.
 	pub slot_now: Slot,
 	/// Epoch descriptor of the epoch this block _should_ be under, if it's valid.
 	pub epoch: &'a Epoch,
+	/// Expected ticket for this block.
+	pub ticket: Option<Ticket>,
 }
 
 pub struct VerifiedHeaderInfo {
@@ -49,55 +55,87 @@ pub struct VerifiedHeaderInfo {
 /// the future, an error will be returned. If successful, returns the pre-header
 /// and the digest item containing the seal.
 ///
-/// The seal must be the last digest.  Otherwise, the whole header is considered
-/// unsigned.  This is required for security and must not be changed.
-///
-/// This digest item will always return `Some` when used with `as_babe_pre_digest`.
+/// The seal must be the last digest. Otherwise, the whole header is considered
+/// unsigned. This is required for security and must not be changed.
 ///
 /// The given header can either be from a primary or secondary slot assignment,
 /// with each having different validation logic.
-pub(super) fn check_header<B: BlockT + Sized>(
+pub fn check_header<B: BlockT + Sized>(
 	params: VerificationParams<B>,
 ) -> Result<CheckedHeader<B::Header, VerifiedHeaderInfo>, Error<B>> {
-	let VerificationParams { mut header, pre_digest, slot_now, epoch } = params;
+	let VerificationParams { mut header, pre_digest, slot_now, epoch, ticket } = params;
 
-	let pre_digest = pre_digest.map(Ok).unwrap_or_else(|| find_pre_digest::<B>(&header))?;
-
-	if pre_digest.slot > slot_now {
+	// Check that the slot is not in the future, with some drift being allowed.
+	if pre_digest.slot > slot_now + MAX_SLOT_DRIFT {
 		return Ok(CheckedHeader::Deferred(header, pre_digest.slot))
 	}
+
+	let author = match epoch.authorities.get(pre_digest.authority_index as usize) {
+		Some(author) => author.0.clone(),
+		None => return Err(sassafras_err(Error::SlotAuthorNotFound)),
+	};
+
+	// Check header signature
 
 	let seal = header
 		.digest_mut()
 		.pop()
 		.ok_or_else(|| sassafras_err(Error::HeaderUnsealed(header.hash())))?;
 
-	let _sig = seal
+	let signature = seal
 		.as_sassafras_seal()
 		.ok_or_else(|| sassafras_err(Error::HeaderBadSeal(header.hash())))?;
 
-	// The pre-hash of the header doesn't include the seal and that's what we sign
-	let _pre_hash = header.hash();
+	let pre_hash = header.hash();
+	if !AuthorityPair::verify(&signature, &pre_hash, &author) {
+		return Err(sassafras_err(Error::BadSignature(pre_hash)))
+	}
 
-	//let authorities = &epoch.authorities;
-	let author = match epoch.authorities.get(pre_digest.authority_index as usize) {
-		Some(author) => author.0.clone(),
-		None => return Err(sassafras_err(Error::SlotAuthorNotFound)),
-	};
+	// Check authorship method and claim
 
-	match pre_digest.ticket_vrf_proof {
-		Some(_) => {
-			// TODO-SASS: check primary
-			// 1. the ticket proof is valid
-			// 2. the block vrf proof is valid
-			log::debug!(target: "sassafras", "🌳 checking primary (TODO)");
+	match (&ticket, &pre_digest.ticket_info) {
+		(Some(ticket), Some(ticket_info)) => {
+			log::debug!(target: "sassafras", "🌳 checking primary");
+			if ticket_info.authority_index != pre_digest.authority_index {
+				// TODO-SASS ... we can eventually remove auth index from ticket info
+				log::error!(target: "sassafras", "🌳 Wrong primary authority index");
+			}
+			let transcript = make_ticket_transcript(
+				&epoch.randomness,
+				ticket_info.attempt as u64,
+				epoch.epoch_index,
+			);
+			schnorrkel::PublicKey::from_bytes(author.as_slice())
+				.and_then(|p| p.vrf_verify(transcript, &ticket, &ticket_info.proof))
+				.map_err(|s| sassafras_err(Error::VRFVerificationFailed(s)))?;
 		},
-		None => {
-			// TODO-SASS: check secondary
-			// 1. the expected author index
-			log::debug!(target: "sassafras", "🌳 checking secondary (TODO)");
+		(None, None) => {
+			log::debug!(target: "sassafras", "🌳 checking secondary");
+			let idx = authorship::secondary_authority_index(pre_digest.slot, params.epoch);
+			if idx != pre_digest.authority_index as u64 {
+				log::error!(target: "sassafras", "🌳 Wrong secondary authority index");
+			}
+		},
+		(Some(_), None) => {
+			log::warn!(target: "sassafras", "🌳 Unexpected secondary authoring mechanism");
+			// TODO-SASS: maybe we can use a different error variant
+			return Err(Error::UnexpectedAuthoringMechanism)
+		},
+		(None, Some(_)) => {
+			log::warn!(target: "sassafras", "🌳 Unexpected primary authoring mechanism");
+			// TODO-SASS: maybe we will use a different error variant
+			return Err(Error::UnexpectedAuthoringMechanism)
 		},
 	}
+
+	// Check block-vrf proof
+
+	let transcript = make_transcript(&epoch.randomness, pre_digest.slot, epoch.epoch_index);
+	schnorrkel::PublicKey::from_bytes(author.as_slice())
+		.and_then(|p| {
+			p.vrf_verify(transcript, &pre_digest.block_vrf_output, &pre_digest.block_vrf_proof)
+		})
+		.map_err(|s| sassafras_err(Error::VRFVerificationFailed(s)))?;
 
 	let info = VerifiedHeaderInfo {
 		pre_digest: CompatibleDigestItem::sassafras_pre_digest(pre_digest),
