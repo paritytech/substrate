@@ -982,7 +982,7 @@ mod claim_payout {
 					Event::Created { depositor: 10, pool_id: 1 },
 					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
 					Event::Bonded { member: 11, pool_id: 1, bonded: 11, joined: true },
-					Event::Unbonded { member: 11, pool_id: 1, points: 11, balance: 11 }
+					Event::Unbonded { member: 11, pool_id: 1, points: 11, balance: 11, era: 3 }
 				]
 			);
 		});
@@ -1624,7 +1624,7 @@ mod unbond {
 						Event::Bonded { member: 40, pool_id: 1, bonded: 40, joined: true },
 						Event::Bonded { member: 550, pool_id: 1, bonded: 550, joined: true },
 						Event::PaidOut { member: 40, pool_id: 1, payout: 40 },
-						Event::Unbonded { member: 40, pool_id: 1, points: 6, balance: 6 }
+						Event::Unbonded { member: 40, pool_id: 1, points: 6, balance: 6, era: 3 }
 					]
 				);
 
@@ -1666,7 +1666,13 @@ mod unbond {
 					pool_events_since_last_call(),
 					vec![
 						Event::PaidOut { member: 550, pool_id: 1, payout: 550 },
-						Event::Unbonded { member: 550, pool_id: 1, points: 92, balance: 92 }
+						Event::Unbonded {
+							member: 550,
+							pool_id: 1,
+							points: 92,
+							balance: 92,
+							era: 3
+						}
 					]
 				);
 
@@ -1704,7 +1710,7 @@ mod unbond {
 						Event::Withdrawn { member: 550, pool_id: 1, points: 92, balance: 92 },
 						Event::MemberRemoved { pool_id: 1, member: 550 },
 						Event::PaidOut { member: 10, pool_id: 1, payout: 10 },
-						Event::Unbonded { member: 10, pool_id: 1, points: 2, balance: 2 }
+						Event::Unbonded { member: 10, pool_id: 1, points: 2, balance: 2, era: 6 }
 					]
 				);
 			});
@@ -1750,7 +1756,7 @@ mod unbond {
 				vec![
 					Event::Created { depositor: 10, pool_id: 1 },
 					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					Event::Unbonded { member: 10, pool_id: 1, points: 10, balance: 10 }
+					Event::Unbonded { member: 10, pool_id: 1, points: 10, balance: 10, era: 9 }
 				]
 			);
 		});
@@ -1785,7 +1791,13 @@ mod unbond {
 						Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
 						Event::Bonded { member: 100, pool_id: 1, bonded: 100, joined: true },
 						Event::Bonded { member: 200, pool_id: 1, bonded: 200, joined: true },
-						Event::Unbonded { member: 100, pool_id: 1, points: 100, balance: 100 },
+						Event::Unbonded {
+							member: 100,
+							pool_id: 1,
+							points: 100,
+							balance: 100,
+							era: 3
+						},
 					]
 				);
 
@@ -1794,7 +1806,13 @@ mod unbond {
 
 				assert_eq!(
 					pool_events_since_last_call(),
-					vec![Event::Unbonded { member: 200, pool_id: 1, points: 200, balance: 200 }]
+					vec![Event::Unbonded {
+						member: 200,
+						pool_id: 1,
+						points: 200,
+						balance: 200,
+						era: 3
+					}]
 				);
 
 				assert_eq!(
@@ -1862,7 +1880,7 @@ mod unbond {
 					Event::Created { depositor: 10, pool_id: 1 },
 					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
 					Event::Bonded { member: 100, pool_id: 1, bonded: 100, joined: true },
-					Event::Unbonded { member: 100, pool_id: 1, points: 100, balance: 100 }
+					Event::Unbonded { member: 100, pool_id: 1, points: 100, balance: 100, era: 3 }
 				]
 			);
 
@@ -2002,7 +2020,7 @@ mod unbond {
 				vec![
 					Event::Created { depositor: 10, pool_id: 1 },
 					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					Event::Unbonded { member: 10, pool_id: 1, points: 1, balance: 1 }
+					Event::Unbonded { member: 10, pool_id: 1, points: 1, balance: 1, era: 3 }
 				]
 			);
 
@@ -2028,7 +2046,7 @@ mod unbond {
 			);
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![Event::Unbonded { member: 10, pool_id: 1, points: 5, balance: 5 }]
+				vec![Event::Unbonded { member: 10, pool_id: 1, points: 5, balance: 5, era: 3 }]
 			);
 
 			// when: casual further unbond, next era.
@@ -2055,7 +2073,7 @@ mod unbond {
 			);
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![Event::Unbonded { member: 10, pool_id: 1, points: 1, balance: 1 }]
+				vec![Event::Unbonded { member: 10, pool_id: 1, points: 1, balance: 1, era: 4 }]
 			);
 
 			// when: unbonding more than our active: error
@@ -2090,7 +2108,7 @@ mod unbond {
 			);
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![Event::Unbonded { member: 10, pool_id: 1, points: 3, balance: 3 }]
+				vec![Event::Unbonded { member: 10, pool_id: 1, points: 3, balance: 3, era: 4 }]
 			);
 		});
 	}
@@ -2134,9 +2152,9 @@ mod unbond {
 				vec![
 					Event::Created { depositor: 10, pool_id: 1 },
 					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					Event::Unbonded { member: 10, pool_id: 1, points: 2, balance: 2 },
-					Event::Unbonded { member: 10, pool_id: 1, points: 3, balance: 3 },
-					Event::Unbonded { member: 10, pool_id: 1, points: 1, balance: 1 }
+					Event::Unbonded { member: 10, pool_id: 1, points: 2, balance: 2, era: 3 },
+					Event::Unbonded { member: 10, pool_id: 1, points: 3, balance: 3, era: 4 },
+					Event::Unbonded { member: 10, pool_id: 1, points: 1, balance: 1, era: 5 }
 				]
 			);
 		})
@@ -2167,7 +2185,7 @@ mod unbond {
 				vec![
 					Event::Created { depositor: 10, pool_id: 1 },
 					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					Event::Unbonded { member: 10, pool_id: 1, points: 3, balance: 3 }
+					Event::Unbonded { member: 10, pool_id: 1, points: 3, balance: 3, era: 3 }
 				]
 			);
 		});
@@ -2223,7 +2241,7 @@ mod unbond {
 					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
 					// exactly equal to ed, all that can be claimed.
 					Event::PaidOut { member: 10, pool_id: 1, payout: 5 },
-					Event::Unbonded { member: 10, pool_id: 1, points: 2, balance: 2 }
+					Event::Unbonded { member: 10, pool_id: 1, points: 2, balance: 2, era: 3 }
 				]
 			);
 
@@ -2239,7 +2257,7 @@ mod unbond {
 				vec![
 					// exactly equal to ed, all that can be claimed.
 					Event::PaidOut { member: 10, pool_id: 1, payout: 5 },
-					Event::Unbonded { member: 10, pool_id: 1, points: 3, balance: 3 }
+					Event::Unbonded { member: 10, pool_id: 1, points: 3, balance: 3, era: 4 }
 				]
 			);
 
@@ -2254,7 +2272,7 @@ mod unbond {
 				pool_events_since_last_call(),
 				vec![
 					Event::PaidOut { member: 10, pool_id: 1, payout: 5 },
-					Event::Unbonded { member: 10, pool_id: 1, points: 5, balance: 5 }
+					Event::Unbonded { member: 10, pool_id: 1, points: 5, balance: 5, era: 5 }
 				]
 			);
 
@@ -2353,7 +2371,6 @@ mod withdraw_unbonded {
 						with_era: Default::default()
 					}
 				);
-
 				assert_eq!(
 					pool_events_since_last_call(),
 					vec![
@@ -2361,8 +2378,14 @@ mod withdraw_unbonded {
 						Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
 						Event::Bonded { member: 40, pool_id: 1, bonded: 40, joined: true },
 						Event::Bonded { member: 550, pool_id: 1, bonded: 550, joined: true },
-						Event::Unbonded { member: 550, pool_id: 1, points: 550, balance: 550 },
-						Event::Unbonded { member: 40, pool_id: 1, points: 40, balance: 40 },
+						Event::Unbonded {
+							member: 550,
+							pool_id: 1,
+							points: 550,
+							balance: 550,
+							era: 3
+						},
+						Event::Unbonded { member: 40, pool_id: 1, points: 40, balance: 40, era: 3 },
 					]
 				);
 				assert_eq!(
@@ -2427,7 +2450,7 @@ mod withdraw_unbonded {
 				assert_eq!(
 					pool_events_since_last_call(),
 					vec![
-						Event::Unbonded { member: 10, pool_id: 1, balance: 5, points: 5 },
+						Event::Unbonded { member: 10, pool_id: 1, balance: 5, points: 5, era: 9 },
 						Event::Withdrawn { member: 10, pool_id: 1, balance: 5, points: 5 },
 						Event::MemberRemoved { pool_id: 1, member: 10 },
 						Event::Destroyed { pool_id: 1 }
@@ -2471,8 +2494,14 @@ mod withdraw_unbonded {
 						Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
 						Event::Bonded { member: 40, pool_id: 1, bonded: 40, joined: true },
 						Event::Bonded { member: 550, pool_id: 1, bonded: 550, joined: true },
-						Event::Unbonded { member: 40, pool_id: 1, balance: 20, points: 20 },
-						Event::Unbonded { member: 550, pool_id: 1, balance: 275, points: 275 },
+						Event::Unbonded { member: 40, pool_id: 1, balance: 20, points: 20, era: 3 },
+						Event::Unbonded {
+							member: 550,
+							pool_id: 1,
+							balance: 275,
+							points: 275,
+							era: 3,
+						}
 					]
 				);
 				assert_eq!(
@@ -2548,7 +2577,7 @@ mod withdraw_unbonded {
 				assert_eq!(
 					pool_events_since_last_call(),
 					vec![
-						Event::Unbonded { member: 10, pool_id: 1, points: 5, balance: 5 },
+						Event::Unbonded { member: 10, pool_id: 1, points: 5, balance: 5, era: 6 },
 						Event::Withdrawn { member: 10, pool_id: 1, points: 5, balance: 5 },
 						Event::MemberRemoved { pool_id: 1, member: 10 },
 						Event::Destroyed { pool_id: 1 }
@@ -2662,8 +2691,20 @@ mod withdraw_unbonded {
 						Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
 						Event::Bonded { member: 100, pool_id: 1, bonded: 100, joined: true },
 						Event::Bonded { member: 200, pool_id: 1, bonded: 200, joined: true },
-						Event::Unbonded { member: 100, pool_id: 1, points: 100, balance: 100 },
-						Event::Unbonded { member: 200, pool_id: 1, points: 200, balance: 200 }
+						Event::Unbonded {
+							member: 100,
+							pool_id: 1,
+							points: 100,
+							balance: 100,
+							era: 3
+						},
+						Event::Unbonded {
+							member: 200,
+							pool_id: 1,
+							points: 200,
+							balance: 200,
+							era: 3
+						}
 					]
 				);
 
@@ -2740,7 +2781,7 @@ mod withdraw_unbonded {
 					Event::Created { depositor: 10, pool_id: 1 },
 					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
 					Event::Bonded { member: 100, pool_id: 1, bonded: 100, joined: true },
-					Event::Unbonded { member: 100, pool_id: 1, points: 100, balance: 100 },
+					Event::Unbonded { member: 100, pool_id: 1, points: 100, balance: 100, era: 3 },
 					Event::Withdrawn { member: 100, pool_id: 1, points: 100, balance: 100 },
 					Event::MemberRemoved { pool_id: 1, member: 100 }
 				]
@@ -2779,8 +2820,8 @@ mod withdraw_unbonded {
 				vec![
 					Event::Created { depositor: 10, pool_id: 1 },
 					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					Event::Unbonded { member: 10, pool_id: 1, points: 6, balance: 6 },
-					Event::Unbonded { member: 10, pool_id: 1, points: 1, balance: 1 }
+					Event::Unbonded { member: 10, pool_id: 1, points: 6, balance: 6, era: 3 },
+					Event::Unbonded { member: 10, pool_id: 1, points: 1, balance: 1, era: 4 }
 				]
 			);
 
@@ -2866,8 +2907,8 @@ mod withdraw_unbonded {
 					Event::Created { depositor: 10, pool_id: 1 },
 					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
 					Event::Bonded { member: 11, pool_id: 1, bonded: 10, joined: true },
-					Event::Unbonded { member: 11, pool_id: 1, points: 6, balance: 6 },
-					Event::Unbonded { member: 11, pool_id: 1, points: 1, balance: 1 }
+					Event::Unbonded { member: 11, pool_id: 1, points: 6, balance: 6, era: 3 },
+					Event::Unbonded { member: 11, pool_id: 1, points: 1, balance: 1, era: 4 }
 				]
 			);
 
@@ -2956,8 +2997,8 @@ mod withdraw_unbonded {
 					Event::Created { depositor: 10, pool_id: 1 },
 					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
 					Event::Bonded { member: 100, pool_id: 1, bonded: 100, joined: true },
-					Event::Unbonded { member: 100, pool_id: 1, points: 75, balance: 75 },
-					Event::Unbonded { member: 100, pool_id: 1, points: 25, balance: 25 },
+					Event::Unbonded { member: 100, pool_id: 1, points: 75, balance: 75, era: 3 },
+					Event::Unbonded { member: 100, pool_id: 1, points: 25, balance: 25, era: 4 },
 					Event::Withdrawn { member: 100, pool_id: 1, points: 75, balance: 75 },
 				]
 			);
@@ -3007,8 +3048,8 @@ mod withdraw_unbonded {
 				vec![
 					Event::Created { depositor: 10, pool_id: 1 },
 					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					Event::Unbonded { member: 10, pool_id: 1, points: 7, balance: 7 },
-					Event::Unbonded { member: 10, pool_id: 1, points: 3, balance: 3 },
+					Event::Unbonded { member: 10, pool_id: 1, points: 7, balance: 7, era: 3 },
+					Event::Unbonded { member: 10, pool_id: 1, points: 3, balance: 3, era: 4 },
 					Event::Withdrawn { member: 10, pool_id: 1, points: 7, balance: 7 }
 				]
 			);
