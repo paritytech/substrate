@@ -369,7 +369,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 
 		info!(
 			target: logging_target,
-			"🔖 Pre-sealed block for proposal at {}. Hash now {:?}, previously {:?}.",
+			"🔖 Pre-sealed block for proposal HACKED HAHAHAH at {}. Hash now {:?}, previously {:?}.",
 			header_num,
 			block_import_params.post_hash(),
 			header_hash,
