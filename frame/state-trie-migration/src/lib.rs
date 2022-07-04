@@ -56,6 +56,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 pub use pallet::*;
+pub mod weights;
 
 const LOG_TARGET: &str = "runtime::state-trie-migration";
 
