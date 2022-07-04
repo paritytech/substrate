@@ -72,6 +72,9 @@ macro_rules! log {
 
 #[frame_support::pallet]
 pub mod pallet {
+
+	pub use crate::weights::WeightInfo;
+
 	use frame_support::{
 		dispatch::{DispatchErrorWithPostInfo, PostDispatchInfo},
 		ensure,
@@ -90,41 +93,6 @@ pub mod pallet {
 
 	pub(crate) type BalanceOf<T> =
 		<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
-
-	/// The weight information of this pallet.
-	pub trait WeightInfo {
-		fn process_top_key(x: u32) -> Weight;
-		fn continue_migrate() -> Weight;
-		fn continue_migrate_wrong_witness() -> Weight;
-		fn migrate_custom_top_fail() -> Weight;
-		fn migrate_custom_top_success() -> Weight;
-		fn migrate_custom_child_fail() -> Weight;
-		fn migrate_custom_child_success() -> Weight;
-	}
-
-	impl WeightInfo for () {
-		fn process_top_key(_: u32) -> Weight {
-			1000000
-		}
-		fn continue_migrate() -> Weight {
-			1000000
-		}
-		fn continue_migrate_wrong_witness() -> Weight {
-			1000000
-		}
-		fn migrate_custom_top_fail() -> Weight {
-			1000000
-		}
-		fn migrate_custom_top_success() -> Weight {
-			1000000
-		}
-		fn migrate_custom_child_fail() -> Weight {
-			1000000
-		}
-		fn migrate_custom_child_success() -> Weight {
-			1000000
-		}
-	}
 
 	/// The progress of either the top or child keys.
 	#[derive(
