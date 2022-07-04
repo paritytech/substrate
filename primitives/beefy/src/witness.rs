@@ -83,8 +83,10 @@ mod tests {
 
 	use crate::{crypto, known_payload_ids, Payload, KEY_TYPE};
 
+    #[derive(Debug, PartialEq, Eq, codec::Encode, codec::Decode)]
+    struct TestNOPAggregatableSignature;
 	type TestCommitment = Commitment<u128>;
-	type TestSignedCommitment = SignedCommitment<u128, crypto::Signature>;
+	type TestSignedCommitment = SignedCommitment<u128, crypto::Signature, TestNOPAggregatableSignature>;
 	type TestSignedCommitmentWitness =
 		SignedCommitmentWitness<u128, Vec<Option<crypto::Signature>>>;
 
@@ -118,7 +120,7 @@ mod tests {
 
 		let sigs = mock_signatures();
 
-		SignedCommitment { commitment, signatures: vec![None, None, Some(sigs.0), Some(sigs.1)] }
+		SignedCommitment { commitment, signatures: vec![None, None, Some(sigs.0), Some(sigs.1)], aggregatable_signature: TestNOPAggregatableSignature}
 	}
 
 	#[test]
@@ -128,7 +130,7 @@ mod tests {
 
 		// when
 		let (witness, signatures) =
-			TestSignedCommitmentWitness::from_signed(signed, |sigs| sigs.to_vec());
+			TestSignedCommitmentWitness::from_signed(signed, |sigs: crypto::Signature, TestNOPAggregatableSignature| sigs.to_vec());
 
 		// then
 		assert_eq!(witness.signatures_merkle_root, signatures);
@@ -138,7 +140,7 @@ mod tests {
 	fn should_encode_and_decode_witness() {
 		// given
 		let signed = signed_commitment();
-		let (witness, _) = TestSignedCommitmentWitness::from_signed(signed, |sigs| sigs.to_vec());
+		let (witness, _) = TestSignedCommitmentWitness::from_signed(signed, |sigs: crypto::Signature, TestNOPAggregatableSignature| sigs.to_vec(), TestNOPAggregatableSignature);
 
 		// when
 		let encoded = codec::Encode::encode(&witness);

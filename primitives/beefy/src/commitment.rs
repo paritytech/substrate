@@ -318,9 +318,12 @@ mod tests {
 
 	use crate::{crypto, KEY_TYPE};
 
+    #[derive(Clone, Debug, PartialEq, codec::Encode, codec::Decode)]
+    struct TestNOPAggregatableSignature;
+
 	type TestCommitment = Commitment<u128>;
-	type TestSignedCommitment = SignedCommitment<u128, crypto::Signature>;
-	type TestVersionedFinalityProof = VersionedFinalityProof<u128, crypto::Signature>;
+	type TestSignedCommitment = SignedCommitment<u128, crypto::Signature, TestNOPAggregatableSignature>;
+	type TestVersionedFinalityProof = VersionedFinalityProof<u128, crypto::Signature, TestNOPAggregatableSignature>;
 
 	// The mock signatures are equivalent to the ones produced by the BEEFY keystore
 	fn mock_signatures() -> (crypto::Signature, crypto::Signature) {
@@ -377,6 +380,7 @@ mod tests {
 		let signed = SignedCommitment {
 			commitment,
 			signatures: vec![None, None, Some(sigs.0), Some(sigs.1)],
+            aggregatable_signature: TestNOPAggregatableSignature,
 		};
 
 		// when
@@ -409,6 +413,7 @@ mod tests {
 		let mut signed = SignedCommitment {
 			commitment,
 			signatures: vec![None, None, Some(sigs.0), Some(sigs.1)],
+            aggregatable_signature: TestNOPAggregatableSignature,
 		};
 		assert_eq!(signed.no_of_signatures(), 2);
 
@@ -454,6 +459,7 @@ mod tests {
 		let signed = SignedCommitment {
 			commitment,
 			signatures: vec![None, None, Some(sigs.0), Some(sigs.1)],
+            aggregatable_signature: TestNOPAggregatableSignature,
 		};
 
 		let versioned = TestVersionedFinalityProof::V1(signed.clone());
@@ -481,7 +487,8 @@ mod tests {
 			.into_iter()
 			.map(|x| if x < 340 { None } else { Some(sigs.0.clone()) })
 			.collect();
-		let signed = SignedCommitment { commitment, signatures };
+        let aggregatable_signature = TestNOPAggregatableSignature;
+		let signed = SignedCommitment { commitment, signatures, aggregatable_signature};
 
 		// when
 		let encoded = codec::Encode::encode(&signed);
