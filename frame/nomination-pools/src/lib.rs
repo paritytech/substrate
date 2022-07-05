@@ -1359,6 +1359,7 @@ pub mod pallet {
 			pool_id: PoolId,
 			balance: BalanceOf<T>,
 			points: BalanceOf<T>,
+			era: u32,
 		},
 		/// A member has withdrawn from their pool.
 		///
@@ -1679,6 +1680,7 @@ pub mod pallet {
 				pool_id: member.pool_id,
 				points: points_unbonded,
 				balance: unbonding_balance,
+				era: unbond_era,
 			});
 
 			// Now that we know everything has worked write the items to storage.
