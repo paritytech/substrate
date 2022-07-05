@@ -18,7 +18,7 @@ log = { version = "0.4.17", default-features = false }
 scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
 serde = { version = "1.0.133", optional = true }
 thousands = { version = "0.2.0", optional = true }
-zstd = { version = "0.10.0", default-features = false, optional = true }
+zstd = { version = "0.11.2", default-features = false, optional = true }
 frame-benchmarking = { default-features = false, optional = true, path = "../benchmarking" }
 frame-support = { default-features = false, path = "../support" }
 frame-system = { default-features = false, path = "../system" }

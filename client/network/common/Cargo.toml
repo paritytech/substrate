@@ -14,13 +14,13 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [build-dependencies]
-prost-build = "0.9"
+prost-build = "0.10"
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "3.0.0", features = [
 	"derive",
 ] }
 futures = "0.3.21"
-libp2p = "0.44.0"
+libp2p = "0.45.1"
 smallvec = "1.8.0"
 sc-peerset = { version = "4.0.0-dev", path = "../../peerset" }

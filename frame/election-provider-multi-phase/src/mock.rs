@@ -39,8 +39,8 @@ use sp_core::{
 	H256,
 };
 use sp_npos_elections::{
-	assignment_ratio_to_staked_normalized, seq_phragmen, to_supports, ElectionResult,
-	EvaluateSupport, ExtendedBalance,
+	assignment_ratio_to_staked_normalized, seq_phragmen, to_supports, BalancingConfig,
+	ElectionResult, EvaluateSupport,
 };
 use sp_runtime::{
 	testing::Header,
@@ -324,7 +324,7 @@ impl InstantElectionProvider for MockFallback {
 }
 
 parameter_types! {
-	pub static Balancing: Option<(usize, ExtendedBalance)> = Some((0, 0));
+	pub static Balancing: Option<BalancingConfig> = Some( BalancingConfig { iterations: 0, tolerance: 0 } );
 }
 
 pub struct TestBenchmarkingConfig;

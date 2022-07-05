@@ -18,7 +18,7 @@ proc-macro = true
 Inflector = "0.11.4"
 proc-macro2 = "1.0.37"
 quote = "1.0.10"
-syn = { version = "1.0.82", features = ["full"] }
+syn = { version = "1.0.98", features = ["full"] }
 frame-support-procedural-tools = { version = "4.0.0-dev", path = "./tools" }
 
 [features]
