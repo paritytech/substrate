@@ -1350,6 +1350,7 @@ pub mod pallet {
 		///   pool.
 		/// - `points` is the number of points that are issued as a result of `balance` being
 		/// dissolved into the corresponding unbonding pool.
+		/// - `era` is the era that the Unbond Event took place.
 		///
 		/// In the absence of slashing, these values will match. In the presence of slashing, the
 		/// number of points that are issued in the unbonding pool will be less than the amount
