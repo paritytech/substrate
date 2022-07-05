@@ -510,7 +510,7 @@ where
 		});
 
 		info!(
-			"🎁 Prepared block for proposing at {} ({} ms) [hash: {:?}; parent_hash: {}; extrinsics ({}): [{}]]",
+			"🎁 Prepared block for proposing HACKED! at {} ({} ms) [hash: {:?}; parent_hash: {}; extrinsics ({}): [{}]]",
 			block.header().number(),
 			block_timer.elapsed().as_millis(),
 			<Block as BlockT>::Hash::from(block.header().hash()),
