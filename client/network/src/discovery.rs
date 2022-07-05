@@ -52,8 +52,8 @@ use futures_timer::Delay;
 use ip_network::IpNetwork;
 use libp2p::{
 	core::{
-		connection::{ConnectionId, ListenerId},
-		ConnectedPoint, Multiaddr, PeerId, PublicKey,
+		connection::ConnectionId, transport::ListenerId, ConnectedPoint, Multiaddr, PeerId,
+		PublicKey,
 	},
 	kad::{
 		handler::KademliaHandlerProto,
