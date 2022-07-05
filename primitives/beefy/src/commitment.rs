@@ -18,8 +18,7 @@
 use codec::{Decode, Encode, Error, Input};
 use sp_std::{cmp, prelude::*};
 
-use crate::ValidatorSetId;
-use crate::bls_crypto::Signature as BLSSignature;
+use crate::{bls_crypto::Signature as BLSSignature, ValidatorSetId};
 
 /// Id of different payloads in the [`Commitment`] data
 pub type BeefyPayloadId = [u8; 2];
@@ -149,13 +148,20 @@ pub struct SignedCommitment<TBlockNumber, TSignature, TAggregatableSignature> {
 	/// [Commitment::validator_set_id]).
 	pub signatures: Vec<Option<TSignature>>,
 
-    //@drskalman: This was the original suggestion, now the suggestion is to SignedCommitment<BlockNumber, (ecdsa::Signature, (bls::Signature, ecsda::Signature))>). It still doesn't leave a place for aggregation, but maybe aggregation happens somewhere else. This also waste space on otherwise aggregatable BLSSignature.
+	//@drskalman: This was the original suggestion, now the suggestion is to
+	//SignedCommitment<BlockNumber, (ecdsa::Signature, (bls::Signature,
+	//ecsda::Signature))>). It still doesn't leave a place for aggregation, but maybe
+	//aggregation happens somewhere else. This also waste space on otherwise
+	//aggregatable BLSSignature.
 
-    //@AlistairStewart also said it does not make sense to gossip list bls singnature withou aggergating them.
-    pub aggregatable_signature: TAggregatableSignature,
+	//@AlistairStewart also said it does not make sense to gossip list bls singnature without
+	//aggergating them.
+	pub aggregatable_signature: TAggregatableSignature,
 }
 
-impl<TBlockNumber, TSignature, TAggregatableSignature> SignedCommitment<TBlockNumber, TSignature, TAggregatableSignature> {
+impl<TBlockNumber, TSignature, TAggregatableSignature>
+	SignedCommitment<TBlockNumber, TSignature, TAggregatableSignature>
+{
 	/// Return the number of collected signatures.
 	pub fn no_of_signatures(&self) -> usize {
 		self.signatures.iter().filter(|x| x.is_some()).count()
@@ -191,15 +197,18 @@ struct CompactSignedCommitment<TBlockNumber, TSignature, TAggregatableSignature>
 	/// signature.
 	signatures_compact: Vec<TSignature>,
 
-    
-    /// A form of signature which can aggregate many signatures in one object rather than a vector.
-    aggregatable_signature: TAggregatableSignature,
+	/// A form of signature which can aggregate many signatures in one object rather than a vector.
+	aggregatable_signature: TAggregatableSignature,
 }
 
-impl<'a, TBlockNumber: Clone, TSignature, TAggregatableSignature> CompactSignedCommitment<TBlockNumber, &'a TSignature, &'a TAggregatableSignature> {
+impl<'a, TBlockNumber: Clone, TSignature, TAggregatableSignature>
+	CompactSignedCommitment<TBlockNumber, &'a TSignature, &'a TAggregatableSignature>
+{
 	/// Packs a `SignedCommitment` into the compressed `CompactSignedCommitment` format for
 	/// efficient network transport.
-	fn pack(signed_commitment: &'a SignedCommitment<TBlockNumber, TSignature, TAggregatableSignature>) -> Self {
+	fn pack(
+		signed_commitment: &'a SignedCommitment<TBlockNumber, TSignature, TAggregatableSignature>,
+	) -> Self {
 		let SignedCommitment { commitment, signatures, aggregatable_signature } = signed_commitment;
 		let validator_set_len = signatures.len() as u32;
 
@@ -234,20 +243,24 @@ impl<'a, TBlockNumber: Clone, TSignature, TAggregatableSignature> CompactSignedC
 			signatures_from,
 			validator_set_len,
 			signatures_compact,
-            aggregatable_signature
+			aggregatable_signature,
 		}
 	}
 
 	/// Unpacks a `CompactSignedCommitment` into the uncompressed `SignedCommitment` form.
 	fn unpack(
-		temporary_signatures: CompactSignedCommitment<TBlockNumber, TSignature, TAggregatableSignature>,
+		temporary_signatures: CompactSignedCommitment<
+			TBlockNumber,
+			TSignature,
+			TAggregatableSignature,
+		>,
 	) -> SignedCommitment<TBlockNumber, TSignature, TAggregatableSignature> {
 		let CompactSignedCommitment {
 			commitment,
 			signatures_from,
 			validator_set_len,
 			signatures_compact,
-            aggregatable_signature
+			aggregatable_signature,
 		} = temporary_signatures;
 		let mut bits: Vec<u8> = vec![];
 
@@ -269,11 +282,12 @@ impl<'a, TBlockNumber: Clone, TSignature, TAggregatableSignature> CompactSignedC
 	}
 }
 
-impl<TBlockNumber, TSignature,TAggregatableSignature> Encode for SignedCommitment<TBlockNumber, TSignature, TAggregatableSignature>
+impl<TBlockNumber, TSignature, TAggregatableSignature> Encode
+	for SignedCommitment<TBlockNumber, TSignature, TAggregatableSignature>
 where
 	TBlockNumber: Encode + Clone,
 	TSignature: Encode,
-    TAggregatableSignature: Encode,
+	TAggregatableSignature: Encode,
 {
 	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
 		let temp = CompactSignedCommitment::pack(self);
@@ -281,11 +295,12 @@ where
 	}
 }
 
-impl<TBlockNumber, TSignature, TAggregatableSignature> Decode for SignedCommitment<TBlockNumber, TSignature, TAggregatableSignature>
+impl<TBlockNumber, TSignature, TAggregatableSignature> Decode
+	for SignedCommitment<TBlockNumber, TSignature, TAggregatableSignature>
 where
 	TBlockNumber: Decode + Clone,
 	TSignature: Decode,
-    TAggregatableSignature: Decode,
+	TAggregatableSignature: Decode,
 {
 	fn decode<I: Input>(input: &mut I) -> Result<Self, Error> {
 		let temp = CompactSignedCommitment::decode(input)?;
@@ -318,12 +333,14 @@ mod tests {
 
 	use crate::{crypto, KEY_TYPE};
 
-    #[derive(Clone, Debug, PartialEq, codec::Encode, codec::Decode)]
-    struct TestNOPAggregatableSignature;
+	#[derive(Clone, Debug, PartialEq, codec::Encode, codec::Decode)]
+	struct TestNOPAggregatableSignature;
 
 	type TestCommitment = Commitment<u128>;
-	type TestSignedCommitment = SignedCommitment<u128, crypto::Signature, TestNOPAggregatableSignature>;
-	type TestVersionedFinalityProof = VersionedFinalityProof<u128, crypto::Signature, TestNOPAggregatableSignature>;
+	type TestSignedCommitment =
+		SignedCommitment<u128, crypto::Signature, TestNOPAggregatableSignature>;
+	type TestVersionedFinalityProof =
+		VersionedFinalityProof<u128, crypto::Signature, TestNOPAggregatableSignature>;
 
 	// The mock signatures are equivalent to the ones produced by the BEEFY keystore
 	fn mock_signatures() -> (crypto::Signature, crypto::Signature) {
@@ -380,7 +397,7 @@ mod tests {
 		let signed = SignedCommitment {
 			commitment,
 			signatures: vec![None, None, Some(sigs.0), Some(sigs.1)],
-            aggregatable_signature: TestNOPAggregatableSignature,
+			aggregatable_signature: TestNOPAggregatableSignature,
 		};
 
 		// when
@@ -413,7 +430,7 @@ mod tests {
 		let mut signed = SignedCommitment {
 			commitment,
 			signatures: vec![None, None, Some(sigs.0), Some(sigs.1)],
-            aggregatable_signature: TestNOPAggregatableSignature,
+			aggregatable_signature: TestNOPAggregatableSignature,
 		};
 		assert_eq!(signed.no_of_signatures(), 2);
 
@@ -459,7 +476,7 @@ mod tests {
 		let signed = SignedCommitment {
 			commitment,
 			signatures: vec![None, None, Some(sigs.0), Some(sigs.1)],
-            aggregatable_signature: TestNOPAggregatableSignature,
+			aggregatable_signature: TestNOPAggregatableSignature,
 		};
 
 		let versioned = TestVersionedFinalityProof::V1(signed.clone());
@@ -487,8 +504,8 @@ mod tests {
 			.into_iter()
 			.map(|x| if x < 340 { None } else { Some(sigs.0.clone()) })
 			.collect();
-        let aggregatable_signature = TestNOPAggregatableSignature;
-		let signed = SignedCommitment { commitment, signatures, aggregatable_signature};
+		let aggregatable_signature = TestNOPAggregatableSignature;
+		let signed = SignedCommitment { commitment, signatures, aggregatable_signature };
 
 		// when
 		let encoded = codec::Encode::encode(&signed);

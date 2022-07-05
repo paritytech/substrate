@@ -44,11 +44,14 @@ pub struct SignedCommitmentWitness<TBlockNumber, TAggregatedSignature> {
 	/// The bit vector of validators who signed the commitment.
 	pub signed_by: Vec<bool>, // TODO [ToDr] Consider replacing with bitvec crate
 
-	/// Either a merkle root of signatures in the original signed commitment or just an aggregated BLS signature 
+	/// Either a merkle root of signatures in the original signed commitment or just an aggregated
+	/// BLS signature
 	pub aggregated_signature: TAggregatedSignature,
 }
 
-impl<TBlockNumber, TAggregatedSignature> SignedCommitmentWitness<TBlockNumber, TAggregatedSignature> {
+impl<TBlockNumber, TAggregatedSignature>
+	SignedCommitmentWitness<TBlockNumber, TAggregatedSignature>
+{
 	/// Convert [SignedCommitment] into [SignedCommitmentWitness].
 	///
 	/// This takes a [SignedCommitment], which contains full signatures
@@ -62,11 +65,12 @@ impl<TBlockNumber, TAggregatedSignature> SignedCommitmentWitness<TBlockNumber, T
 		aggregator: TSignatureAggregator,
 	) -> (Self, Vec<Option<TSignature>>)
 	where
-		TSignatureAggregator: FnOnce(&[Option<TSignature>], &TAggregatableSignature) -> TAggregatedSignature,
+		TSignatureAggregator:
+			FnOnce(&[Option<TSignature>], &TAggregatableSignature) -> TAggregatedSignature,
 	{
-		let SignedCommitment { commitment, signatures, aggregatable_signature} = signed;
+		let SignedCommitment { commitment, signatures, aggregatable_signature } = signed;
 		let signed_by = signatures.iter().map(|s| s.is_some()).collect();
-		let aggregated_signature = aggregator(&signatures,&aggregatable_signature);
+		let aggregated_signature = aggregator(&signatures, &aggregatable_signature);
 
 		(Self { commitment, signed_by, aggregated_signature }, signatures)
 	}
@@ -83,10 +87,11 @@ mod tests {
 
 	use crate::{crypto, known_payload_ids, Payload, KEY_TYPE};
 
-    #[derive(Debug, PartialEq, Eq, codec::Encode, codec::Decode)]
-    struct TestNOPAggregatableSignature;
+	#[derive(Debug, PartialEq, Eq, codec::Encode, codec::Decode)]
+	struct TestNOPAggregatableSignature;
 	type TestCommitment = Commitment<u128>;
-	type TestSignedCommitment = SignedCommitment<u128, crypto::Signature, TestNOPAggregatableSignature>;
+	type TestSignedCommitment =
+		SignedCommitment<u128, crypto::Signature, TestNOPAggregatableSignature>;
 	type TestSignedCommitmentWitness =
 		SignedCommitmentWitness<u128, Vec<Option<crypto::Signature>>>;
 
@@ -120,7 +125,11 @@ mod tests {
 
 		let sigs = mock_signatures();
 
-		SignedCommitment { commitment, signatures: vec![None, None, Some(sigs.0), Some(sigs.1)], aggregatable_signature: TestNOPAggregatableSignature}
+		SignedCommitment {
+			commitment,
+			signatures: vec![None, None, Some(sigs.0), Some(sigs.1)],
+			aggregatable_signature: TestNOPAggregatableSignature,
+		}
 	}
 
 	#[test]
@@ -129,8 +138,12 @@ mod tests {
 		let signed = signed_commitment();
 
 		// when
-		let (witness, signatures) =
-			TestSignedCommitmentWitness::from_signed(signed, |sigs: &[std::option::Option<crypto::Signature>], TestNOPAggregatableSignature| sigs.to_vec());
+		let (witness, signatures) = TestSignedCommitmentWitness::from_signed(
+			signed,
+			|sigs: &[std::option::Option<crypto::Signature>], TestNOPAggregatableSignature| {
+				sigs.to_vec()
+			},
+		);
 
 		// then
 		assert_eq!(witness.aggregated_signature, signatures);
@@ -140,7 +153,12 @@ mod tests {
 	fn should_encode_and_decode_witness() {
 		// given
 		let signed = signed_commitment();
-		let (witness, _) = TestSignedCommitmentWitness::from_signed(signed, |sigs: &[std::option::Option<crypto::Signature>], TestNOPAggregatableSignature| sigs.to_vec());
+		let (witness, _) = TestSignedCommitmentWitness::from_signed(
+			signed,
+			|sigs: &[std::option::Option<crypto::Signature>], TestNOPAggregatableSignature| {
+				sigs.to_vec()
+			},
+		);
 
 		// when
 		let encoded = codec::Encode::encode(&witness);
