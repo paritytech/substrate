@@ -142,7 +142,7 @@ where
 			// and all the nodes added by that leaf.
 			let to_canon_nodes = NodesUtils::right_branch_ending_in_leaf(to_canon_leaf);
 			frame_support::log::debug!(
-				target: "runtime::mmr", "Nodes to canon for leaf {}: {:?}",
+				target: "runtime::mmr::offchain", "Nodes to canon for leaf {}: {:?}",
 				to_canon_leaf, to_canon_nodes
 			);
 			// For this block number there may be node entries saved from multiple forks.
@@ -159,8 +159,8 @@ where
 					Self::prune_nodes_for_forks(&to_canon_nodes, forks);
 				})
 				.unwrap_or_else(|| {
-					frame_support::log::debug!(
-						target: "runtime::mmr",
+					frame_support::log::error!(
+						target: "runtime::mmr::offchain",
 						"Offchain: could not prune: no entry in pruning map for block {:?}",
 						to_canon_block_num
 					);
@@ -172,6 +172,11 @@ where
 		for hash in forks {
 			for pos in nodes {
 				let key = Pallet::<T, I>::node_offchain_key(hash, *pos);
+				frame_support::log::debug!(
+					target: "runtime::mmr::offchain",
+					"Clear elem at pos {} with key {:?}",
+					pos, key
+				);
 				offchain::local_storage_clear(StorageKind::PERSISTENT, &key);
 			}
 		}
@@ -189,14 +194,14 @@ where
 				// Add under new canon key.
 				offchain::local_storage_set(StorageKind::PERSISTENT, &canon_key, &elem);
 				frame_support::log::debug!(
-					target: "runtime::mmr",
+					target: "runtime::mmr::offchain",
 					"Moved elem at pos {} from key {:?} to canon key {:?}",
 					pos, key, canon_key
 				);
 			} else {
-				frame_support::log::debug!(
-					target: "runtime::mmr",
-					"Offchain: could not canonicalize elem at pos {} using key {:?}",
+				frame_support::log::error!(
+					target: "runtime::mmr::offchain",
+					"Could not canonicalize elem at pos {} using key {:?}",
 					pos, key
 				);
 			}
@@ -221,7 +226,7 @@ where
 		if leaves.saturating_sub(ancestor_leaf_idx) > window_size {
 			let key = Pallet::<T, I>::node_canon_offchain_key(pos);
 			frame_support::log::debug!(
-				target: "runtime::mmr", "offchain get {}: leaf idx {:?}, key {:?}",
+				target: "runtime::mmr::offchain", "offchain db get {}: leaf idx {:?}, key {:?}",
 				pos, ancestor_leaf_idx, key
 			);
 			// Just for safety, to easily handle runtime upgrades where any of the window params
@@ -241,7 +246,7 @@ where
 		let ancestor_parent_hash = <frame_system::Pallet<T>>::block_hash(ancestor_parent_block_num);
 		let key = Pallet::<T, I>::node_offchain_key(ancestor_parent_hash, pos);
 		frame_support::log::debug!(
-			target: "runtime::mmr", "offchain get {}: leaf idx {:?}, hash {:?}, key {:?}",
+			target: "runtime::mmr::offchain", "offchain db get {}: leaf idx {:?}, hash {:?}, key {:?}",
 			pos, ancestor_leaf_idx, ancestor_parent_hash, key
 		);
 		// Retrieve the element from Off-chain DB.
@@ -278,6 +283,7 @@ where
 		}
 
 		frame_support::log::trace!(
+			target: "runtime::mmr",
 			"elems: {:?}",
 			elems.iter().map(|elem| elem.hash()).collect::<Vec<_>>()
 		);
@@ -312,7 +318,7 @@ where
 			// only on the leaf's `node_index`.
 			let key = Pallet::<T, I>::node_offchain_key(parent_hash, node_index);
 			frame_support::log::debug!(
-				target: "runtime::mmr", "offchain set: pos {} parent_hash {:?} key {:?}",
+				target: "runtime::mmr::offchain", "offchain db set: pos {} parent_hash {:?} key {:?}",
 				node_index, parent_hash, key
 			);
 			// Indexing API is used to store the full node content (both leaf and inner).
@@ -350,8 +356,8 @@ fn peaks_to_prune_and_store(
 	// both collections may share a common prefix.
 	let peaks_before = if old_size == 0 { vec![] } else { helper::get_peaks(old_size) };
 	let peaks_after = helper::get_peaks(new_size);
-	frame_support::log::trace!("peaks_before: {:?}", peaks_before);
-	frame_support::log::trace!("peaks_after: {:?}", peaks_after);
+	frame_support::log::trace!(target: "runtime::mmr", "peaks_before: {:?}", peaks_before);
+	frame_support::log::trace!(target: "runtime::mmr", "peaks_after: {:?}", peaks_after);
 	let mut peaks_before = peaks_before.into_iter().peekable();
 	let mut peaks_after = peaks_after.into_iter().peekable();
 
