@@ -130,17 +130,17 @@ mod tests {
 
 		// when
 		let (witness, signatures) =
-			TestSignedCommitmentWitness::from_signed(signed, |sigs: crypto::Signature, TestNOPAggregatableSignature| sigs.to_vec());
+			TestSignedCommitmentWitness::from_signed(signed, |sigs: &[std::option::Option<crypto::Signature>], TestNOPAggregatableSignature| sigs.to_vec());
 
 		// then
-		assert_eq!(witness.signatures_merkle_root, signatures);
+		assert_eq!(witness.aggregated_signature, signatures);
 	}
 
 	#[test]
 	fn should_encode_and_decode_witness() {
 		// given
 		let signed = signed_commitment();
-		let (witness, _) = TestSignedCommitmentWitness::from_signed(signed, |sigs: crypto::Signature, TestNOPAggregatableSignature| sigs.to_vec(), TestNOPAggregatableSignature);
+		let (witness, _) = TestSignedCommitmentWitness::from_signed(signed, |sigs: &[std::option::Option<crypto::Signature>], TestNOPAggregatableSignature| sigs.to_vec());
 
 		// when
 		let encoded = codec::Encode::encode(&witness);
