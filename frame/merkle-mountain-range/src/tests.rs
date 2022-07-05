@@ -541,22 +541,23 @@ fn should_canonicalize_offchain() {
 	let mut ext = new_test_ext();
 	register_offchain_ext(&mut ext);
 
-	// adding 13 blocks that we'll later check have been canonicalized.
+	// adding 13 blocks that we'll later check have been canonicalized,
+	// (test assumes `13 < frame_system::BlockHashCount`).
 	let to_canon_count = 13u32;
 
 	// add 3 blocks and verify leaves and nodes for them have been added to
 	// offchain MMR using fork-proof keys.
-	ext.execute_with(|| {
-		for blocknum in 0..to_canon_count {
+	for blocknum in 0..to_canon_count {
+		ext.execute_with(|| {
 			new_block();
 			<Pallet<Test> as Hooks<BlockNumber>>::offchain_worker(blocknum.into());
-		}
-	});
-	ext.persist_offchain_overlay();
+		});
+		ext.persist_offchain_overlay();
+	}
 	let offchain_db = ext.offchain_db();
 	ext.execute_with(|| {
-		// verify leaves added by blocks 1..13
-		for block_num in 1..to_canon_count {
+		// verify leaves added by blocks 1..=13
+		for block_num in 1..=to_canon_count {
 			let parent_num: BlockNumber = (block_num - 1).into();
 			let leaf_index = u64::from(block_num - 1);
 			let pos = helper::leaf_index_to_pos(leaf_index.into());
@@ -595,18 +596,18 @@ fn should_canonicalize_offchain() {
 
 	// add another `frame_system::BlockHashCount` blocks and verify all nodes and leaves
 	// added by our original `to_canon_count` blocks have now been canonicalized in offchain db.
-	ext.execute_with(|| {
-		let block_hash_size: u64 = <Test as frame_system::Config>::BlockHashCount::get();
-		let base = to_canon_count;
-		for blocknum in base..(base + u32::try_from(block_hash_size).unwrap()) {
+	let block_hash_size: u64 = <Test as frame_system::Config>::BlockHashCount::get();
+	let base = to_canon_count;
+	for blocknum in base..(base + u32::try_from(block_hash_size).unwrap()) {
+		ext.execute_with(|| {
 			new_block();
 			<Pallet<Test> as Hooks<BlockNumber>>::offchain_worker(blocknum.into());
-		}
-	});
-	ext.persist_offchain_overlay();
+		});
+		ext.persist_offchain_overlay();
+	}
 	ext.execute_with(|| {
-		// verify leaves added by blocks 1..13, should be in offchain under canon key.
-		for block_num in 1..to_canon_count {
+		// verify leaves added by blocks 1..=13, should be in offchain under canon key.
+		for block_num in 1..=to_canon_count {
 			let leaf_index = u64::from(block_num - 1);
 			let pos = helper::leaf_index_to_pos(leaf_index.into());
 			let parent_num: BlockNumber = (block_num - 1).into();
@@ -658,13 +659,13 @@ fn should_verify_canonicalized() {
 	// Verify that proofs can be generated (using leaves and nodes from full set) and verified.
 	let mut ext = new_test_ext();
 	register_offchain_ext(&mut ext);
-	ext.execute_with(|| {
-		for blocknum in 0u32..(2 * block_hash_size).try_into().unwrap() {
+	for blocknum in 0u32..(2 * block_hash_size).try_into().unwrap() {
+		ext.execute_with(|| {
 			new_block();
 			<Pallet<Test> as Hooks<BlockNumber>>::offchain_worker(blocknum.into());
-		}
-	});
-	ext.persist_offchain_overlay();
+		});
+		ext.persist_offchain_overlay();
+	}
 
 	// Generate proofs for some blocks.
 	let (leaves, proofs) =
