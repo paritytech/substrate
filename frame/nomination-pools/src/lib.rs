@@ -1164,7 +1164,6 @@ pub mod pallet {
 		// a million places, so we prefer doing this.
 		type CurrencyBalance: sp_runtime::traits::AtLeast32BitUnsigned
 			+ codec::FullCodec
-			+ Copy
 			+ MaybeSerializeDeserialize
 			+ sp_std::fmt::Debug
 			+ Default

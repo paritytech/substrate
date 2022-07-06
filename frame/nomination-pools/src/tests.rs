@@ -1374,7 +1374,7 @@ mod claim_payout {
 				]
 			);
 
-			// 30 unbonds to be equal to 10 (10 points each).
+			// 20 unbonds to be equal to 10 (10 points each).
 			assert_ok!(Pools::unbond(Origin::signed(20), 20, 10));
 
 			// more rewards come in.
@@ -1465,7 +1465,6 @@ mod claim_payout {
 
 	#[test]
 	fn bond_extra_and_delayed_claim() {
-		// todo!("10 20 join, reward comes, 10 claims, 20 bonds extra, reward comes both claim");
 		ExtBuilder::default().build_and_execute(|| {
 			let ed = Balances::minimum_balance();
 
