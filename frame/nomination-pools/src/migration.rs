@@ -362,7 +362,6 @@ pub mod v2 {
 			});
 
 			log!(info, "post upgrade hook for MigrateToV2 executed.");
-			log!(info, "system events: {:?}", frame_system::Pallet::<T>::read_events_no_consensus());
 			Ok(())
 		}
 	}
