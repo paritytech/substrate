@@ -1533,11 +1533,8 @@ pub mod pallet {
 			let (points_issued, bonded) = match extra {
 				BondExtra::FreeBalance(amount) =>
 					(bonded_pool.try_bond_funds(&who, amount, BondType::Later)?, amount),
-				BondExtra::Rewards => bonded_pool.try_bond_funds_from_rewards(
-					&who,
-					&mut member,
-					&mut reward_pool
-				)?,
+				BondExtra::Rewards =>
+					bonded_pool.try_bond_funds_from_rewards(&who, &mut member, &mut reward_pool)?,
 			};
 			bonded_pool.ok_to_be_open(bonded)?;
 			member.points = member.points.saturating_add(points_issued);
