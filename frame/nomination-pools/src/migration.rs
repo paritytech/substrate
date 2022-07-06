@@ -191,6 +191,7 @@ pub mod v2 {
 			let mut members_translated = 0u64;
 			// just for logging.
 			let mut total_value_locked = BalanceOf::<T>::zero();
+			let mut total_points_locked = BalanceOf::<T>::zero();
 
 			// store each member of the pool, with their active points. In the process, migrate
 			// their data as well.
@@ -243,6 +244,7 @@ pub mod v2 {
 							};
 
 							total_value_locked += bonded_pool.points_to_balance(points.clone());
+							total_points_locked += bonded_pool.points;
 							let portion = Perbill::from_rational(*points, bonded_pool.points);
 							let last_claim = portion * accumulated_reward;
 
@@ -310,10 +312,11 @@ pub mod v2 {
 
 			log!(
 				info,
-				"Upgraded {} members, {} reward pools, TVL {:?}, storage to version {:?}",
+				"Upgraded {} members, {} reward pools, TVL {:?} TPL {:?}, storage to version {:?}",
 				members_translated,
 				reward_pools_translated,
 				total_value_locked,
+				total_points_locked,
 				current
 			);
 			current.put::<Pallet<T>>();

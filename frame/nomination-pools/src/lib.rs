@@ -383,16 +383,18 @@ impl<T: Config> PoolMember<T> {
 		current_reward_counter: T::RewardCounter,
 	) -> Result<BalanceOf<T>, Error<T>> {
 		// accuracy note: Reward counters are `FixedU128` with base of 10^18. This value is being
-		// multiplied by a point. The worse case of a point is 10x the granularity of the balance.
+		// multiplied by a point. The worse case of a point is 10x the granularity of the balance
+		// (10x is the common configuration of `MaxPointsToBalance`).
+		//
 		// Assuming roughly the current issuance of polkadot (12,047,781,394,999,601,455, which is
-		// 1.2 * 10^9 10^10 = 1.2 * 10^19), the worse case point value is around 10^20.
+		// 1.2 * 10^9 * 10^10 = 1.2 * 10^19), the worse case point value is around 10^20.
 		//
 		// The final multiplication is:
 		//
 		// rc * 10^20 / 10^18 = rc * 100
 		//
 		// meaning that as long as reward_counter's value is less than 1/100th of its max capacity
-		// (u128), `checked_mul_int` won't saturate.
+		// (u128::MAX_VALUE), `checked_mul_int` won't saturate.
 		//
 		// given the nature of reward counter being 'pending_rewards / pool_total_point', the only
 		// (unrealistic) way that super high values can be achieved is for a pool to suddenly
