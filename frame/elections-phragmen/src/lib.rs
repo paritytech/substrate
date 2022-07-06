@@ -100,7 +100,6 @@
 
 use codec::{Decode, Encode};
 use frame_support::{
-	dispatch::WithPostDispatchInfo,
 	traits::{
 		defensive_prelude::*, ChangeMembers, Contains, ContainsLengthBound, Currency,
 		CurrencyToVote, Get, InitializeMembers, LockIdentifier, LockableCurrency, OnUnbalanced,
@@ -125,6 +124,10 @@ pub mod migrations;
 
 /// The maximum votes allowed per voter.
 pub const MAXIMUM_VOTE: usize = 16;
+
+// Some safe temp values to make the wasm execution sane while we still use this pallet.
+pub(crate) const MAX_VOTERS: u32 = 10 * 1000;
+pub(crate) const MAX_CANDIDATES: u32 = 1 * 1000;
 
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
@@ -385,8 +388,9 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 
-			let actual_count = <Candidates<T>>::decode_len().unwrap_or(0);
-			ensure!(actual_count as u32 <= candidate_count, Error::<T>::InvalidWitnessData);
+			let actual_count = <Candidates<T>>::decode_len().unwrap_or(0) as u32;
+			ensure!(actual_count <= candidate_count, Error::<T>::InvalidWitnessData);
+			ensure!(actual_count <= MAX_CANDIDATES, Error::<T>::TooManyCandidates);
 
 			let index = Self::is_candidate(&who).err().ok_or(Error::<T>::DuplicatedCandidate)?;
 
@@ -469,7 +473,11 @@ pub mod pallet {
 		/// the outgoing member is slashed.
 		///
 		/// If a runner-up is available, then the best runner-up will be removed and replaces the
-		/// outgoing member. Otherwise, a new phragmen election is started.
+		/// outgoing member. Otherwise, if `rerun_election` is `true`, a new phragmen election is
+		/// started, else, nothing happens.
+		///
+		/// If `slash_bond` is set to true, the bond of the member being removed is slashed. Else,
+		/// it is returned.
 		///
 		/// The dispatch origin of this call must be root.
 		///
@@ -479,33 +487,24 @@ pub mod pallet {
 		/// If we have a replacement, we use a small weight. Else, since this is a root call and
 		/// will go into phragmen, we assume full block for now.
 		/// # </weight>
-		#[pallet::weight(if *has_replacement {
-			T::WeightInfo::remove_member_with_replacement()
-		} else {
+		#[pallet::weight(if *rerun_election {
 			T::WeightInfo::remove_member_without_replacement()
+		} else {
+			T::WeightInfo::remove_member_with_replacement()
 		})]
 		pub fn remove_member(
 			origin: OriginFor<T>,
 			who: <T::Lookup as StaticLookup>::Source,
-			has_replacement: bool,
+			slash_bond: bool,
+			rerun_election: bool,
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			let who = T::Lookup::lookup(who)?;
 
-			let will_have_replacement = <RunnersUp<T>>::decode_len().map_or(false, |l| l > 0);
-			if will_have_replacement != has_replacement {
-				// In both cases, we will change more weight than need. Refund and abort.
-				return Err(Error::<T>::InvalidReplacement.with_weight(
-					// refund. The weight value comes from a benchmark which is special to this.
-					T::WeightInfo::remove_member_wrong_refund(),
-				))
-			}
-
-			let had_replacement = Self::remove_and_replace_member(&who, true)?;
-			debug_assert_eq!(has_replacement, had_replacement);
+			let _ = Self::remove_and_replace_member(&who, slash_bond)?;
 			Self::deposit_event(Event::MemberKicked { member: who });
 
-			if !had_replacement {
+			if rerun_election {
 				Self::do_phragmen();
 			}
 
@@ -585,10 +584,10 @@ pub mod pallet {
 		UnableToPayBond,
 		/// Must be a voter.
 		MustBeVoter,
-		/// Cannot report self.
-		ReportSelf,
 		/// Duplicated candidate submission.
 		DuplicatedCandidate,
+		/// Too many candidates have been created.
+		TooManyCandidates,
 		/// Member cannot re-submit candidacy.
 		MemberSubmit,
 		/// Runner cannot re-submit candidacy.
@@ -908,6 +907,7 @@ impl<T: Config> Pallet<T> {
 		let mut num_edges: u32 = 0;
 		// used for prime election.
 		let voters_and_stakes = Voting::<T>::iter()
+			.take(MAX_VOTERS as usize)
 			.map(|(voter, Voter { stake, votes, .. })| (voter, stake, votes))
 			.collect::<Vec<_>>();
 		// used for phragmen.
