@@ -200,6 +200,7 @@ pub mod v2 {
 				let id = old_member.pool_id;
 				temp_members.entry(id).or_default().push((key, old_member.points));
 
+				total_points_locked += old_member.points;
 				members_translated += 1;
 				Some(PoolMember::<T> {
 					last_recorded_reward_counter: Zero::zero(),
@@ -244,7 +245,6 @@ pub mod v2 {
 							};
 
 							total_value_locked += bonded_pool.points_to_balance(points.clone());
-							total_points_locked += bonded_pool.points;
 							let portion = Perbill::from_rational(*points, bonded_pool.points);
 							let last_claim = portion * accumulated_reward;
 
@@ -362,6 +362,7 @@ pub mod v2 {
 			});
 
 			log!(info, "post upgrade hook for MigrateToV2 executed.");
+			log!(info, "system events: {:?}", frame_system::Pallet::<T>::read_events_no_consensus());
 			Ok(())
 		}
 	}
