@@ -326,7 +326,7 @@ pub mod pallet {
 			}
 
 			for item in &self.item_metadata {
-				let data = item.2.clone().try_into().expect("can't convect item_metadata's data");
+				let data = item.2.clone().try_into().expect("can't convert item_metadata's data");
 				Pallet::<T, I>::do_set_item_metadata(item.0, item.1, data, item.3, None, |_, _| {
 					Ok(())
 				})
