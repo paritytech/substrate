@@ -1465,7 +1465,6 @@ mod claim_payout {
 
 	#[test]
 	fn bond_extra_and_delayed_claim() {
-		// todo!("10 20 join, reward comes, 10 claims, 20 bonds extra, reward comes both claim");
 		ExtBuilder::default().build_and_execute(|| {
 			let ed = Balances::minimum_balance();
 
