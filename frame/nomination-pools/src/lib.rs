@@ -915,7 +915,6 @@ impl<T: Config> BondedPool<T> {
 		member_account: &T::AccountId,
 		member: &mut PoolMember<T>,
 		reward_pool: &mut RewardPool<T>,
-		ty: BondType,
 	) -> Result<(BalanceOf<T>, BalanceOf<T>), DispatchError> {
 		debug_assert_eq!(member.pool_id, self.id);
 		// a member who has no skin in the game anymore cannot claim any rewards.
@@ -936,10 +935,7 @@ impl<T: Config> BondedPool<T> {
 			&self.reward_account(),
 			&bonded_account,
 			member_payout,
-			match ty {
-				BondType::Create => ExistenceRequirement::AllowDeath,
-				BondType::Later => ExistenceRequirement::KeepAlive,
-			},
+			ExistenceRequirement::KeepAlive,
 		)?;
 
 		Pallet::<T>::deposit_event(Event::<T>::PaidOut {
@@ -957,18 +953,7 @@ impl<T: Config> BondedPool<T> {
 
 		let points_issued = self.issue(member_payout);
 
-		match ty {
-			BondType::Create => T::StakingInterface::bond(
-				bonded_account.clone(),
-				bonded_account,
-				member_payout,
-				self.reward_account(),
-			)?,
-			// The pool should always be created in such a way its in a state to bond extra, but if
-			// the active balance is slashed below the minimum bonded or the account cannot be
-			// found, we exit early.
-			BondType::Later => T::StakingInterface::bond_extra(bonded_account, member_payout)?,
-		}
+		T::StakingInterface::bond_extra(bonded_account, member_payout)?;
 
 		Ok((points_issued, member_payout))
 	}
@@ -1551,8 +1536,7 @@ pub mod pallet {
 				BondExtra::Rewards => bonded_pool.try_bond_funds_from_rewards(
 					&who,
 					&mut member,
-					&mut reward_pool,
-					BondType::Later,
+					&mut reward_pool
 				)?,
 			};
 			bonded_pool.ok_to_be_open(bonded)?;
@@ -1570,7 +1554,7 @@ pub mod pallet {
 		}
 
 		/// A bonded member can use this to claim their payout based on the rewards that the pool
-		/// has accumulated since their last claimed payout (OR since joining if this is there first
+		/// has accumulated since their last claimed payout (OR since joining if this is their first
 		/// time claiming rewards). The payout will be transferred to the member's account.
 		///
 		/// The member will earn rewards pro rata based on the members stake vs the sum of the
