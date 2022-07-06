@@ -320,7 +320,7 @@ pub mod pallet {
 					.2
 					.clone()
 					.try_into()
-					.expect("can't convect collections_attributes's value");
+					.expect("can't convert collections_attributes's value");
 				Pallet::<T, I>::do_set_attribute(item.0, None, key, value)
 					.expect("can't set collection attribute");
 			}
