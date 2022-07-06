@@ -275,6 +275,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			seller: old_owner,
 			buyer,
 		});
+		Ok(())
 	}
 
 	pub fn do_set_item_metadata(
