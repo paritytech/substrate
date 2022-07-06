@@ -516,15 +516,11 @@ fn pool_slash_non_proportional_only_bonded_pool() {
 		assert_ok!(Pools::join(Origin::signed(20), bond, 1));
 		assert_eq!(
 			staking_events_since_last_call(),
-			vec![
-				StakingEvent::Bonded(POOL1_BONDED, bond)
-			]
+			vec![StakingEvent::Bonded(POOL1_BONDED, bond)]
 		);
 		assert_eq!(
 			pool_events_since_last_call(),
-			vec![
-				PoolsEvent::Bonded { member: 20, pool_id: 1, bonded: bond, joined: true }
-			]
+			vec![PoolsEvent::Bonded { member: 20, pool_id: 1, bonded: bond, joined: true }]
 		);
 
 		// progress and unbond.
@@ -553,9 +549,7 @@ fn pool_slash_non_proportional_only_bonded_pool() {
 		assert_eq!(staking_events_since_last_call(), vec![StakingEvent::Slashed(POOL1_BONDED, 30)]);
 		assert_eq!(
 			pool_events_since_last_call(),
-			vec![
-				PoolsEvent::PoolSlashed { pool_id: 1, balance: 10 }
-			]
+			vec![PoolsEvent::PoolSlashed { pool_id: 1, balance: 10 }]
 		);
 	});
 }
@@ -589,15 +583,11 @@ fn pool_slash_non_proportional_bonded_pool_and_chunks() {
 		assert_ok!(Pools::join(Origin::signed(20), bond, 1));
 		assert_eq!(
 			staking_events_since_last_call(),
-			vec![
-				StakingEvent::Bonded(POOL1_BONDED, bond)
-			]
+			vec![StakingEvent::Bonded(POOL1_BONDED, bond)]
 		);
 		assert_eq!(
 			pool_events_since_last_call(),
-			vec![
-				PoolsEvent::Bonded { member: 20, pool_id: 1, bonded: bond, joined: true }
-			]
+			vec![PoolsEvent::Bonded { member: 20, pool_id: 1, bonded: bond, joined: true }]
 		);
 
 		// progress and unbond.
