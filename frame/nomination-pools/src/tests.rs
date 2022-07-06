@@ -1374,7 +1374,7 @@ mod claim_payout {
 				]
 			);
 
-			// 30 unbonds to be equal to 10 (10 points each).
+			// 20 unbonds to be equal to 10 (10 points each).
 			assert_ok!(Pools::unbond(Origin::signed(20), 20, 10));
 
 			// more rewards come in.
