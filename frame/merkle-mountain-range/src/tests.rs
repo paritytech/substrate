@@ -545,7 +545,7 @@ fn should_canonicalize_offchain() {
 	// (test assumes `13 < frame_system::BlockHashCount`).
 	let to_canon_count = 13u32;
 
-	// add 3 blocks and verify leaves and nodes for them have been added to
+	// add 13 blocks and verify leaves and nodes for them have been added to
 	// offchain MMR using fork-proof keys.
 	for blocknum in 0..to_canon_count {
 		ext.execute_with(|| {
