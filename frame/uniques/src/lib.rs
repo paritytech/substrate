@@ -334,7 +334,7 @@ pub mod pallet {
 			}
 
 			for item in &self.item_attributes {
-				let key = item.2.clone().try_into().expect("can't convect item_attributes's key");
+				let key = item.2.clone().try_into().expect("can't convert item_attributes's key");
 				let value =
 					item.3.clone().try_into().expect("can't convect item_attributes's value");
 				Pallet::<T, I>::do_set_attribute(item.0, Some(item.1), key, value)
