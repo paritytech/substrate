@@ -44,7 +44,6 @@ fn create_collection<T: Config<I>, I: 'static>(
 	T::Currency::make_free_balance_be(&caller, DepositBalanceOf::<T, I>::max_value());
 	assert!(Uniques::<T, I>::force_create(
 		SystemOrigin::Root.into(),
-		collection,
 		caller_lookup.clone(),
 		false,
 	)
@@ -143,7 +142,7 @@ benchmarks_instance_pallet! {
 		whitelist_account!(caller);
 		let admin = T::Lookup::unlookup(caller.clone());
 		T::Currency::make_free_balance_be(&caller, DepositBalanceOf::<T, I>::max_value());
-		let call = Call::<T, I>::create { collection, admin };
+		let call = Call::<T, I>::create { admin };
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert_last_event::<T, I>(Event::Created { collection: T::Helper::collection(0), creator: caller.clone(), owner: caller }.into());
@@ -152,7 +151,7 @@ benchmarks_instance_pallet! {
 	force_create {
 		let caller: T::AccountId = whitelisted_caller();
 		let caller_lookup = T::Lookup::unlookup(caller.clone());
-	}: _(SystemOrigin::Root, T::Helper::collection(0), caller_lookup, true)
+	}: _(SystemOrigin::Root, caller_lookup, true)
 	verify {
 		assert_last_event::<T, I>(Event::ForceCreated { collection: T::Helper::collection(0), owner: caller }.into());
 	}
