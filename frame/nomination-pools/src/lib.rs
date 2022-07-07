@@ -43,7 +43,7 @@
 //!
 //! ### Join
 //!
-//! A account can stake funds with a nomination pool by calling [`Call::join`].
+//! An account can stake funds with a nomination pool by calling [`Call::join`].
 //!
 //! ### Claim rewards
 //!
@@ -87,7 +87,7 @@
 //!   [`Call::unbond`] and [`Call::withdraw_unbonded`]. Once a pool is in destroying state, it
 //!   cannot be reverted to another state.
 //!
-//! A pool has 3 administrative roles (see [`PoolRoles`]):
+//! A pool has 4 administrative roles (see [`PoolRoles`]):
 //!
 //! * Depositor: creates the pool and is the initial member. They can only leave the pool once all
 //!   other members have left. Once they fully leave the pool is destroyed.
@@ -297,8 +297,8 @@
 //! * PoolMembers cannot vote with their staked funds because they are transferred into the pools
 //!   account. In the future this can be overcome by allowing the members to vote with their bonded
 //!   funds via vote splitting.
-//! * PoolMembers cannot quickly transfer to another pool if they do no like nominations, instead
-//!   they must wait for the unbonding duration.
+//! * PoolMembers cannot quickly transfer to another pool if they do not like the nominations,
+//!   instead they must wait for the unbonding duration.
 //!
 //! # Runtime builder warnings
 //!
