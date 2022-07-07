@@ -1520,9 +1520,7 @@ where
 		let mut has_error = false;
 		for (_, hash) in &results {
 			self.queue_blocks.remove(hash);
-		}
-		if let Some(from_hash) = results.first().map(|(_, h)| h) {
-			self.blocks.clear_queued(from_hash);
+			self.blocks.clear_queued(hash);
 		}
 		for (result, hash) in results {
 			if has_error {
@@ -3299,23 +3297,34 @@ mod test {
 				);
 			}
 
+			let mut notify_imported: Vec<_> = resp_blocks
+				.iter()
+				.rev()
+				.map(|b| {
+					(
+						Ok(BlockImportStatus::ImportedUnknown(
+							b.header().number().clone(),
+							Default::default(),
+							Some(peer_id1.clone()),
+						)),
+						b.hash(),
+					)
+				})
+				.collect();
+
+			// The import queue may send notifications in batches of varying size. So we simulate
+			// this here by splitting the batch into 2 notifications.
+			let second_batch = notify_imported.split_off(notify_imported.len() / 2);
 			let _ = sync.on_blocks_processed(
 				MAX_BLOCKS_TO_REQUEST as usize,
 				MAX_BLOCKS_TO_REQUEST as usize,
-				resp_blocks
-					.iter()
-					.rev()
-					.map(|b| {
-						(
-							Ok(BlockImportStatus::ImportedUnknown(
-								b.header().number().clone(),
-								Default::default(),
-								Some(peer_id1.clone()),
-							)),
-							b.hash(),
-						)
-					})
-					.collect(),
+				notify_imported,
+			);
+
+			let _ = sync.on_blocks_processed(
+				MAX_BLOCKS_TO_REQUEST as usize,
+				MAX_BLOCKS_TO_REQUEST as usize,
+				second_batch,
 			);
 
 			resp_blocks
