@@ -194,14 +194,14 @@ where
 		client,
 		backend,
 		runtime,
+		sync_oracle,
 		key_store: key_store.into(),
-		signed_commitment_sender,
-		beefy_best_block_sender,
 		gossip_engine,
 		gossip_validator,
-		min_block_delta,
+		beefy_best_block_sender,
+		signed_commitment_sender,
 		metrics,
-		sync_oracle,
+		min_block_delta,
 	};
 
 	let worker = worker::BeefyWorker::<_, _, _, _, _>::new(worker_params);

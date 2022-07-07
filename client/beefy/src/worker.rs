@@ -19,7 +19,6 @@
 use std::{
 	collections::{BTreeMap, BTreeSet},
 	fmt::Debug,
-	marker::PhantomData,
 	sync::Arc,
 	time::Duration,
 };
@@ -62,43 +61,48 @@ pub(crate) struct WorkerParams<B: Block, BE, C, R, SO> {
 	pub client: Arc<C>,
 	pub backend: Arc<BE>,
 	pub runtime: Arc<R>,
+	pub sync_oracle: SO,
 	pub key_store: BeefyKeystore,
-	pub signed_commitment_sender: BeefySignedCommitmentSender<B>,
-	pub beefy_best_block_sender: BeefyBestBlockSender<B>,
 	pub gossip_engine: GossipEngine<B>,
 	pub gossip_validator: Arc<GossipValidator<B>>,
-	pub min_block_delta: u32,
+	pub beefy_best_block_sender: BeefyBestBlockSender<B>,
+	pub signed_commitment_sender: BeefySignedCommitmentSender<B>,
 	pub metrics: Option<Metrics>,
-	pub sync_oracle: SO,
+	pub min_block_delta: u32,
 }
 
 /// A BEEFY worker plays the BEEFY protocol
 pub(crate) struct BeefyWorker<B: Block, BE, C, R, SO> {
+	// utilities
 	client: Arc<C>,
 	backend: Arc<BE>,
 	runtime: Arc<R>,
+	sync_oracle: SO,
 	key_store: BeefyKeystore,
-	signed_commitment_sender: BeefySignedCommitmentSender<B>,
 	gossip_engine: GossipEngine<B>,
 	gossip_validator: Arc<GossipValidator<B>>,
-	/// Min delta in block numbers between two blocks, BEEFY should vote on
-	min_block_delta: u32,
+
+	// channels
+	/// Used to keep RPC worker up to date on latest/best beefy.
+	beefy_best_block_sender: BeefyBestBlockSender<B>,
+	/// Used by RPC worker to forward BEEFY Justifications to subscribed users.
+	signed_commitment_sender: BeefySignedCommitmentSender<B>,
+
+	// voter state
+	/// BEEFY client metrics.
 	metrics: Option<Metrics>,
+	/// Min delta in block numbers between two blocks, BEEFY should vote on.
+	min_block_delta: u32,
+	/// Best block we received a GRANDPA finality for.
+	best_grandpa_block_header: <B as Block>::Header,
+	/// Best block a BEEFY voting round has been concluded for.
+	best_beefy_block: Option<NumberFor<B>>,
+	/// Keeps track of all voting rounds (block numbers) within a session.
 	rounds: Option<Rounds<Payload, B>>,
+	/// Validator set id for the last signed commitment.
+	last_signed_id: u64,
 	/// Buffer holding votes for blocks that the client hasn't seen finality for.
 	pending_votes: BTreeMap<NumberFor<B>, Vec<VoteMessage<NumberFor<B>, AuthorityId, Signature>>>,
-	/// Best block we received a GRANDPA notification for
-	best_grandpa_block_header: <B as Block>::Header,
-	/// Best block a BEEFY voting round has been concluded for
-	best_beefy_block: Option<NumberFor<B>>,
-	/// Used to keep RPC worker up to date on latest/best beefy
-	beefy_best_block_sender: BeefyBestBlockSender<B>,
-	/// Validator set id for the last signed commitment
-	last_signed_id: u64,
-	/// Handle to the sync oracle
-	sync_oracle: SO,
-	// keep rustc happy
-	_backend: PhantomData<BE>,
 }
 
 impl<B, BE, C, R, SO> BeefyWorker<B, BE, C, R, SO>
@@ -122,13 +126,13 @@ where
 			backend,
 			runtime,
 			key_store,
-			signed_commitment_sender,
-			beefy_best_block_sender,
+			sync_oracle,
 			gossip_engine,
 			gossip_validator,
-			min_block_delta,
+			beefy_best_block_sender,
+			signed_commitment_sender,
 			metrics,
-			sync_oracle,
+			min_block_delta,
 		} = worker_params;
 
 		let last_finalized_header = client
@@ -139,21 +143,20 @@ where
 			client: client.clone(),
 			backend,
 			runtime,
+			sync_oracle,
 			key_store,
-			signed_commitment_sender,
 			gossip_engine,
 			gossip_validator,
+			beefy_best_block_sender,
+			signed_commitment_sender,
+			metrics,
 			// always target at least one block better than current best beefy
 			min_block_delta: min_block_delta.max(1),
-			metrics,
-			rounds: None,
-			pending_votes: BTreeMap::new(),
 			best_grandpa_block_header: last_finalized_header,
 			best_beefy_block: None,
+			rounds: None,
 			last_signed_id: 0,
-			beefy_best_block_sender,
-			sync_oracle,
-			_backend: PhantomData,
+			pending_votes: BTreeMap::new(),
 		}
 	}
 
