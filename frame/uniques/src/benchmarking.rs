@@ -42,12 +42,10 @@ fn create_collection<T: Config<I>, I: 'static>(
 	let caller_lookup = T::Lookup::unlookup(caller.clone());
 	let collection = T::Helper::collection(0);
 	T::Currency::make_free_balance_be(&caller, DepositBalanceOf::<T, I>::max_value());
-	assert!(Uniques::<T, I>::force_create(
-		SystemOrigin::Root.into(),
-		caller_lookup.clone(),
-		false,
-	)
-	.is_ok());
+	assert!(
+		Uniques::<T, I>::force_create(SystemOrigin::Root.into(), caller_lookup.clone(), false,)
+			.is_ok()
+	);
 	(collection, caller, caller_lookup)
 }
 
