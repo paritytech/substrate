@@ -165,6 +165,12 @@ pub mod pallet {
 		///
 		/// Note that the leaf at each block MUST be unique. You may want to include a block hash or
 		/// block number as an easiest way to ensure that.
+		/// Also note that the leaf added by each block is expected to only reference data coming
+		/// from ancestor blocks (leaves are saved offchain using `(parent_hash, pos)` key to be
+		/// fork-resistant, as such conflicts could only happen on 1-block deep forks, which means
+		/// two forks with identical line of ancestors compete to write the same offchain key, but
+		/// that's fine as long as leaves only contain data coming from ancestors - conflicting
+		/// writes are identical).
 		type LeafData: primitives::LeafDataProvider;
 
 		/// A hook to act on the new MMR root.
