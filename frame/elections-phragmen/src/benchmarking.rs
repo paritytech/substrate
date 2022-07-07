@@ -404,7 +404,7 @@ benchmarks! {
 		let votes_per_voter = (e / v).min(MAXIMUM_VOTE as u32);
 
 		let all_candidates = submit_candidates_with_self_vote::<T>(c, "candidates")?;
-		let _ = distribute_voters::<T>(all_candidates, v, votes_per_voter as usize)?;
+		let _ = distribute_voters::<T>(all_candidates, v.saturating_sub(c), votes_per_voter as usize)?;
 	}: {
 		<Elections<T>>::on_initialize(T::TermDuration::get());
 	}
@@ -433,7 +433,11 @@ benchmarks! {
 		let votes_per_voter = e / fixed_v;
 
 		let all_candidates = submit_candidates_with_self_vote::<T>(c, "candidates")?;
-		let _ = distribute_voters::<T>(all_candidates, fixed_v, votes_per_voter as usize)?;
+		let _ = distribute_voters::<T>(
+			all_candidates,
+			fixed_v - c,
+			votes_per_voter as usize,
+		)?;
 	}: {
 		<Elections<T>>::on_initialize(T::TermDuration::get());
 	}
@@ -455,7 +459,7 @@ benchmarks! {
 	#[extra]
 	election_phragmen_v {
 		let v in 4 .. 16;
-		let fixed_c = MAX_CANDIDATES;
+		let fixed_c = MAX_CANDIDATES / 10;
 		let fixed_e = 64;
 		clean::<T>();
 

@@ -5707,6 +5707,7 @@ dependencies = [
  "sp-npos-elections",
  "sp-runtime",
  "sp-std",
+ "sp-tracing",
  "substrate-test-utils",
 ]
 
