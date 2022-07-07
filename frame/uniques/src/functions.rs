@@ -64,8 +64,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		free_holding: bool,
 		event: Event<T, I>,
 	) -> DispatchResult {
-		ensure!(!Collection::<T, I>::contains_key(collection), Error::<T, I>::InUse);
-
 		T::Currency::reserve(&owner, deposit)?;
 
 		Collection::<T, I>::insert(
@@ -85,6 +83,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		);
 
 		CollectionAccount::<T, I>::insert(&owner, &collection, ());
+		CollectionsCount::<T, I>::set(collection + T::CollectionId::one());
+
 		Self::deposit_event(event);
 		Ok(())
 	}

@@ -21,6 +21,7 @@ frame-support = { version = "4.0.0-dev", default-features = false, path = "../su
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
+num-traits = "0.2.15"
 
 [dev-dependencies]
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }

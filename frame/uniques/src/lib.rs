@@ -52,6 +52,8 @@ use sp_runtime::{
 };
 use sp_std::prelude::*;
 
+use num_traits::{FromPrimitive, One, Unsigned};
+
 pub use pallet::*;
 pub use types::*;
 pub use weights::WeightInfo;
@@ -88,7 +90,13 @@ pub mod pallet {
 		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// Identifier for the collection of item.
-		type CollectionId: Member + Parameter + MaxEncodedLen + Copy;
+		type CollectionId: Member
+			+ Parameter
+			+ MaxEncodedLen
+			+ Copy
+			+ Default
+			+ Unsigned
+			+ FromPrimitive;
 
 		/// The type used to identify a unique item within a collection.
 		type ItemId: Member + Parameter + MaxEncodedLen + Copy;
@@ -250,6 +258,11 @@ pub mod pallet {
 	pub(super) type CollectionMaxSupply<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Blake2_128Concat, T::CollectionId, u32, OptionQuery>;
 
+	#[pallet::storage]
+	/// Stores the last CollectionId of the collections.
+	pub(super) type CollectionsCount<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, T::CollectionId, ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
@@ -400,7 +413,6 @@ pub mod pallet {
 		/// `ItemDeposit` funds of sender are reserved.
 		///
 		/// Parameters:
-		/// - `collection`: The identifier of the new collection. This must not be currently in use.
 		/// - `admin`: The admin of this collection. The admin is the initial address of each
 		/// member of the collection's admin team.
 		///
@@ -410,9 +422,10 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::create())]
 		pub fn create(
 			origin: OriginFor<T>,
-			collection: T::CollectionId,
 			admin: <T::Lookup as StaticLookup>::Source,
 		) -> DispatchResult {
+			let collection = CollectionsCount::<T, I>::get();
+
 			let owner = T::CreateOrigin::ensure_origin(origin, &collection)?;
 			let admin = T::Lookup::lookup(admin)?;
 
@@ -434,7 +447,6 @@ pub mod pallet {
 		///
 		/// Unlike `create`, no funds are reserved.
 		///
-		/// - `collection`: The identifier of the new item. This must not be currently in use.
 		/// - `owner`: The owner of this collection of items. The owner has full superuser
 		///   permissions
 		/// over this item, but may later change and configure the permissions using
@@ -446,12 +458,13 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::force_create())]
 		pub fn force_create(
 			origin: OriginFor<T>,
-			collection: T::CollectionId,
 			owner: <T::Lookup as StaticLookup>::Source,
 			free_holding: bool,
 		) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
 			let owner = T::Lookup::lookup(owner)?;
+
+			let collection = CollectionsCount::<T, I>::get();
 
 			Self::do_create_collection(
 				collection,
