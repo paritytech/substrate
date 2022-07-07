@@ -493,7 +493,7 @@ impl TraitPair for Pair {
 
 	/// Sign a message.
 	fn sign(&self, message: &[u8]) -> Signature {
-        let mut mutable_self = self.clone();
+		let mut mutable_self = self.clone();
 		let r = mutable_self.0.sign(Message::new(b"", message)).to_bytes();
 		Signature::from_raw(r)
 	}
@@ -553,8 +553,12 @@ impl Pair {
 			Self::from_seed(&padded_seed)
 		})
 	}
-}
 
+	pub fn signed_message(&mut self, message: &[u8]) -> bls_like::SignedMessage<BLS377> {
+		
+		self.0.signed_message(Message::new(b"", message))
+	}
+}
 impl CryptoType for Public {
 	#[cfg(feature = "full_crypto")]
 	type Pair = Pair;

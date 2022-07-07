@@ -18,7 +18,7 @@
 use codec::{Decode, Encode, Error, Input};
 use sp_std::{cmp, prelude::*};
 
-use crate::{bls_crypto::Signature as BLSSignature, ValidatorSetId};
+use crate::ValidatorSetId;
 
 /// Id of different payloads in the [`Commitment`] data
 pub type BeefyPayloadId = [u8; 2];
@@ -325,25 +325,37 @@ pub enum VersionedFinalityProof<N, S, AS> {
 #[cfg(test)]
 mod tests {
 
-	use sp_core::{keccak_256, Pair};
+	use hex::ToHex;
+use sp_core::{keccak_256, Pair};
 	use sp_keystore::{testing::KeyStore, SyncCryptoStore, SyncCryptoStorePtr};
 
 	use super::*;
 	use codec::Decode;
 
-	use crate::{crypto, KEY_TYPE};
+	use crate::{crypto, KEY_TYPE, bls_crypto::{Signature as BLSSignature}};
+	use bls_like::{Keypair, SignedMessage as BLSSignedMessage, Signed, pop::SignatureAggregatorAssumingPoP, BLS377, SerializableToBytes};	
 
+	type TestCommitment = Commitment<u128>;
+
+        ///types for bls-less commitment
 	#[derive(Clone, Debug, PartialEq, codec::Encode, codec::Decode)]
 	struct TestNOPAggregatableSignature;
 
-	type TestCommitment = Commitment<u128>;
 	type TestSignedCommitment =
 		SignedCommitment<u128, crypto::Signature, TestNOPAggregatableSignature>;
 	type TestVersionedFinalityProof =
-		VersionedFinalityProof<u128, crypto::Signature, TestNOPAggregatableSignature>;
+	VersionedFinalityProof<u128, crypto::Signature, TestNOPAggregatableSignature>;
 
+	///types for commitment supporting aggregatable bls signature
+	#[derive(Clone, Debug, PartialEq, codec::Encode, codec::Decode)]
+	struct BLSAggregatableSignature(BLSSignature);
+	type TestBLSSignedCommitment =
+		SignedCommitment<u128, crypto::Signature, BLSAggregatableSignature>;
+	type TestVersionedBLSFinalityProof =
+	VersionedFinalityProof<u128, crypto::Signature, BLSAggregatableSignature>;
+	
 	// The mock signatures are equivalent to the ones produced by the BEEFY keystore
-	fn mock_signatures() -> (crypto::Signature, crypto::Signature) {
+	fn mock_ecdsa_signatures() -> (crypto::Signature, crypto::Signature) {
 		let store: SyncCryptoStorePtr = KeyStore::new().into();
 
 		let alice = sp_core::ecdsa::Pair::from_string("//Alice", None).unwrap();
@@ -360,6 +372,26 @@ mod tests {
 		let sig2 = SyncCryptoStore::ecdsa_sign_prehashed(&*store, KEY_TYPE, &alice.public(), &msg)
 			.unwrap()
 			.unwrap();
+
+		(sig1.into(), sig2.into())
+	}
+
+	///generates mock aggregatable bls signature for generating test commitment
+	///note that with the current scheme we need Signer's BLS public key in order to aggregate
+	///BLS signatures
+	fn mock_bls_signatures() ->  (BLSSignedMessage<BLS377>, BLSSignedMessage<BLS377>) {
+		let store: SyncCryptoStorePtr = KeyStore::new().into();
+
+		let mut alice = sp_core::bls::Pair::from_string("//Alice", None).unwrap();
+		let _ =
+			SyncCryptoStore::insert_unknown(&*store, KEY_TYPE, "//Alice", alice.public().as_ref())
+				.unwrap();
+
+		let msg = b"This is the first message";
+		let sig1 = alice.signed_message(msg);
+
+		let msg = b"This is the second message";
+		let sig2 = alice.signed_message(msg);
 
 		(sig1.into(), sig2.into())
 	}
@@ -392,20 +424,20 @@ mod tests {
 		let commitment: TestCommitment =
 			Commitment { payload, block_number: 5, validator_set_id: 0 };
 
-		let sigs = mock_signatures();
+		let ecdsa_sigs = mock_ecdsa_signatures();
 
-		let signed = SignedCommitment {
-			commitment,
-			signatures: vec![None, None, Some(sigs.0), Some(sigs.1)],
+		let ecdsa_signed = SignedCommitment {
+			commitment: commitment.clone(),
+			signatures: vec![None, None, Some(ecdsa_sigs.0.clone()), Some(ecdsa_sigs.1.clone())],
 			aggregatable_signature: TestNOPAggregatableSignature,
 		};
 
 		// when
-		let encoded = codec::Encode::encode(&signed);
+		let encoded = codec::Encode::encode(&ecdsa_signed);
 		let decoded = TestSignedCommitment::decode(&mut &*encoded);
 
 		// then
-		assert_eq!(decoded, Ok(signed));
+		assert_eq!(decoded, Ok(ecdsa_signed));
 		assert_eq!(
 			encoded,
 			hex_literal::hex!(
@@ -416,7 +448,46 @@ mod tests {
 				6a0046395a71681be3d0c2a00"
 			)
 		);
-	}
+
+		//including bls signature
+		let bls_signed_msgs = mock_bls_signatures();
+
+		//we are going to aggregate the signatures here, in real life, this happens when
+		//validators receives other validators signatures before they are going to gossip
+		//it.
+		let mut aggregatedsigs =  SignatureAggregatorAssumingPoP::new();
+
+		aggregatedsigs.aggregate(&bls_signed_msgs.0);
+		aggregatedsigs.aggregate(&bls_signed_msgs.1);
+
+		let aggregated_signature = (&aggregatedsigs).signature(); //<SignatureAggregatorAssumingPoP<BLS377>) as Signed>::signature(&aggregatedsigs.signature());
+
+		let ecdsa_and_bls_signed = SignedCommitment {
+			commitment,
+			signatures: vec![None, None, Some(ecdsa_sigs.0), Some(ecdsa_sigs.1)], aggregatable_signature: BLSAggregatableSignature(BLSSignature::from(sp_core::bls::Signature(aggregated_signature.to_bytes()))),
+		};
+
+		//when
+		let encoded = codec::Encode::encode(&ecdsa_and_bls_signed);
+		let decoded = TestBLSSignedCommitment::decode(&mut &*encoded);
+
+		// then
+		assert_eq!(decoded, Ok(ecdsa_and_bls_signed));
+		assert_eq!(
+			encoded,
+			hex_literal::hex!(
+				"046d68343048656c6c6f20576f726c6421050000000000000000000000000000000000000000000000
+                                 04300400000008558455ad81279df0795cc985580e4fb75d72d948d1107b2ac80a09abed4da8480c74
+                                 6cc321f2319a5e99a830e314d10dd3cd68ce3dc0c33c86e99bcb7816f9ba012d6e1f8105c337a86cdd
+                                 9aaacdc496577f3db8c55ef9e6fd48f2c5c05a2274707491635d8ba3df64f324575b7b2a34487bca23
+                                 24b6a0046395a71681be3d0c2a00c6f6312da571e1278f0e2420dd3419277883d7b9a2e5d1f6c0eba0
+                                 4d0014f1644ba83ec7a24476e8ea7c4d05d1193d001c7f0bb4b946934de462bb2c3c9ddfcccde6be37
+                                 486b1178ff35013222f529a2d22e043395034290b27ef07c92147401"
+			)
+		);
+
+
+		}
 
 	#[test]
 	fn signed_commitment_count_signatures() {
@@ -425,7 +496,7 @@ mod tests {
 		let commitment: TestCommitment =
 			Commitment { payload, block_number: 5, validator_set_id: 0 };
 
-		let sigs = mock_signatures();
+		let sigs = mock_ecdsa_signatures();
 
 		let mut signed = SignedCommitment {
 			commitment,
@@ -471,7 +542,7 @@ mod tests {
 		let commitment: TestCommitment =
 			Commitment { payload, block_number: 5, validator_set_id: 0 };
 
-		let sigs = mock_signatures();
+		let sigs = mock_ecdsa_signatures();
 
 		let signed = SignedCommitment {
 			commitment,
@@ -498,7 +569,7 @@ mod tests {
 		let commitment: TestCommitment =
 			Commitment { payload, block_number: 5, validator_set_id: 0 };
 
-		let sigs = mock_signatures();
+		let sigs = mock_ecdsa_signatures();
 
 		let signatures: Vec<Option<_>> = (0..1024)
 			.into_iter()
