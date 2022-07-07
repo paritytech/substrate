@@ -168,16 +168,20 @@ impl<Block: traits::Block> ExecutionExtensions<Block> {
 
 		if capabilities.has(offchain::Capability::TransactionPool) {
 			if let Some(pool) = self.transaction_pool.read().as_ref().and_then(|x| x.upgrade()) {
-				extensions.register(TransactionPoolExt(Box::new(TransactionPoolAdapter {
-					at: *at,
-					pool,
-				}) as _));
+				extensions.register(
+					TransactionPoolExt(
+						Box::new(TransactionPoolAdapter {
+							at: *at,
+							pool,
+						}) as _
+					),
+				);
 			}
 		}
 
 		if let ExecutionContext::OffchainCall(Some(ext)) = context {
 			extensions.register(
-				OffchainExt::new(offchain::LimitedExternalities::new(capabilities, ext.0))
+				OffchainExt::new(offchain::LimitedExternalities::new(capabilities, ext.0)),
 			);
 		}
 

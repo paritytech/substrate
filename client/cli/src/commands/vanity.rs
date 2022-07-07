@@ -22,10 +22,11 @@ use crate::{
 	error, utils, with_crypto_scheme,
 	CryptoSchemeFlag, NetworkSchemeFlag, OutputTypeFlag,
 };
-use sp_core::crypto::Ss58Codec;
+use sp_core::crypto::{Ss58Codec, Ss58AddressFormat};
 use structopt::StructOpt;
 use rand::{rngs::OsRng, RngCore};
 use sp_runtime::traits::IdentifyAccount;
+use utils::print_from_uri;
 
 /// The `vanity` command
 #[derive(Debug, StructOpt)]
@@ -54,23 +55,29 @@ pub struct VanityCmd {
 impl VanityCmd {
 	/// Run the command
 	pub fn run(&self) -> error::Result<()> {
-		let formated_seed = with_crypto_scheme!(self.crypto_scheme.scheme, generate_key(&self.pattern))?;
-		use utils::print_from_uri;
+		let formated_seed = with_crypto_scheme!(
+			self.crypto_scheme.scheme,
+			generate_key(&self.pattern, self.network_scheme.network.clone().unwrap_or_default()),
+		)?;
+
 		with_crypto_scheme!(
 			self.crypto_scheme.scheme,
 			print_from_uri(
 				&formated_seed,
 				None,
 				self.network_scheme.network.clone(),
-				self.output_scheme.output_type.clone()
-			)
+				self.output_scheme.output_type.clone(),
+			),
 		);
 		Ok(())
 	}
 }
 
 /// genertae a key based on given pattern
-fn generate_key<Pair>(desired: &str) -> Result<String, &'static str>
+fn generate_key<Pair>(
+	desired: &str,
+	network_override: Ss58AddressFormat,
+) -> Result<String, &'static str>
 	where
 		Pair: sp_core::Pair,
 		Pair::Public: IdentifyAccount,
@@ -91,7 +98,7 @@ fn generate_key<Pair>(desired: &str) -> Result<String, &'static str>
 		}
 
 		let p = Pair::from_seed(&seed);
-		let ss58 = p.public().into_account().to_ss58check();
+		let ss58 = p.public().into_account().to_ss58check_with_version(network_override);
 		let score = calculate_score(&desired, &ss58);
 		if score > best || desired.len() < 2 {
 			best = score;
@@ -171,13 +178,26 @@ mod tests {
 
 	#[test]
 	fn test_generation_with_single_char() {
-		let seed = generate_key::<sr25519::Pair>("j").unwrap();
+		let seed = generate_key::<sr25519::Pair>("ab", Default::default()).unwrap();
 		assert!(
 			sr25519::Pair::from_seed_slice(&hex::decode(&seed[2..]).unwrap())
 				.unwrap()
 				.public()
 				.to_ss58check()
-				.contains("j"));
+				.contains("ab")
+		);
+	}
+
+	#[test]
+	fn generate_key_respects_network_override() {
+		let seed = generate_key::<sr25519::Pair>("ab", Ss58AddressFormat::PolkadotAccount).unwrap();
+		assert!(
+			sr25519::Pair::from_seed_slice(&hex::decode(&seed[2..]).unwrap())
+				.unwrap()
+				.public()
+				.to_ss58check_with_version(Ss58AddressFormat::PolkadotAccount)
+				.contains("ab")
+		);
 	}
 
 	#[test]

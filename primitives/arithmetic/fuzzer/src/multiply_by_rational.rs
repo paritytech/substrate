@@ -16,12 +16,12 @@
 // limitations under the License.
 
 //! # Running
-//! Running this fuzzer can be done with `cargo hfuzz run rational128`. `honggfuzz` CLI options can
+//! Running this fuzzer can be done with `cargo hfuzz run multiply_by_rational`. `honggfuzz` CLI options can
 //! be used by setting `HFUZZ_RUN_ARGS`, such as `-n 4` to use 4 threads.
 //!
 //! # Debugging a panic
 //! Once a panic is found, it can be debugged with
-//! `cargo hfuzz run-debug rational128 hfuzz_workspace/rational128/*.fuzz`.
+//! `cargo hfuzz run-debug multiply_by_rational hfuzz_workspace/multiply_by_rational/*.fuzz`.
 //!
 //! # More information
 //! More information about `honggfuzz` can be found

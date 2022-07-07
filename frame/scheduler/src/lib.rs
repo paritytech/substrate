@@ -63,7 +63,7 @@ use frame_support::{
 	traits::{Get, schedule::{self, DispatchTime}, OriginTrait, EnsureOrigin, IsType},
 	weights::{GetDispatchInfo, Weight},
 };
-use frame_system::{self as system};
+use frame_system::{self as system, ensure_signed};
 
 pub trait WeightInfo {
 	fn schedule(s: u32, ) -> Weight;
@@ -350,6 +350,16 @@ decl_module! {
 				.scan(base_weight, |cumulative_weight, (order, (index, s))| {
 					*cumulative_weight = cumulative_weight
 						.saturating_add(s.call.get_dispatch_info().weight);
+
+					let origin = <<T as Trait>::Origin as From<T::PalletsOrigin>>::from(
+						s.origin.clone()
+					).into();
+
+					if ensure_signed(origin).is_ok() {
+						 // AccountData for inner call origin accountdata.
+						*cumulative_weight = cumulative_weight
+							.saturating_add(T::DbWeight::get().reads_writes(1, 1));
+					}
 
 					if s.maybe_id.is_some() {
 						// Remove/Modify Lookup

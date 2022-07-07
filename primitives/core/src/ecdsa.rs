@@ -53,7 +53,7 @@ type Seed = [u8; 32];
 
 /// The ECDSA compressed public key.
 #[derive(Clone, Encode, Decode, PassByInner)]
-pub struct Public([u8; 33]);
+pub struct Public(pub [u8; 33]);
 
 impl PartialOrd for Public {
 	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
@@ -228,7 +228,7 @@ impl sp_std::hash::Hash for Public {
 
 /// A signature (a 512-bit value, plus 8 bits for recovery ID).
 #[derive(Encode, Decode, PassByInner)]
-pub struct Signature([u8; 65]);
+pub struct Signature(pub [u8; 65]);
 
 impl sp_std::convert::TryFrom<&[u8]> for Signature {
 	type Error = ();

@@ -80,6 +80,32 @@ fn veto_external_works() {
 }
 
 #[test]
+fn external_blacklisting_should_work() {
+	new_test_ext().execute_with(|| {
+		System::set_block_number(0);
+
+		assert_ok!(Democracy::external_propose(
+			Origin::signed(2),
+			set_balance_proposal_hash_and_note(2),
+		));
+
+		let hash = set_balance_proposal_hash(2);
+		assert_ok!(Democracy::blacklist(Origin::root(), hash, None));
+
+		fast_forward_to(2);
+		assert!(Democracy::referendum_status(0).is_err());
+
+		assert_noop!(
+			Democracy::external_propose(
+				Origin::signed(2),
+				set_balance_proposal_hash_and_note(2),
+			),
+			Error::<Test>::ProposalBlacklisted,
+		);
+	});
+}
+
+#[test]
 fn external_referendum_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(0);

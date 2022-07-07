@@ -20,10 +20,11 @@
 #![allow(unused_parens)]
 #![allow(unused_imports)]
 
-use frame_support::weights::{Weight, constants::RocksDbWeight as DbWeight};
+use frame_support::{traits::Get, weights::Weight};
+use sp_std::marker::PhantomData;
 
-pub struct WeightInfo;
-impl pallet_utility::WeightInfo for WeightInfo {
+pub struct WeightInfo<T>(PhantomData<T>);
+impl<T: frame_system::Trait> pallet_utility::WeightInfo for WeightInfo<T> {
 	fn batch(c: u32, ) -> Weight {
 		(16461000 as Weight)
 			.saturating_add((1982000 as Weight).saturating_mul(c as Weight))

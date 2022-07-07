@@ -95,7 +95,7 @@ use frame_support::{
 };
 use frame_support::{
 	weights::{Weight, GetDispatchInfo, Pays},
-	traits::UnfilteredDispatchable,
+	traits::{UnfilteredDispatchable, Get},
 	dispatch::DispatchResultWithPostInfo,
 };
 use frame_system::ensure_signed;
@@ -197,7 +197,13 @@ decl_module! {
 		/// - One DB write (event).
 		/// - Weight of derivative `call` execution + 10,000.
 		/// # </weight>
-		#[weight = (call.get_dispatch_info().weight + 10_000, call.get_dispatch_info().class)]
+		#[weight = (
+			call.get_dispatch_info().weight
+				.saturating_add(10_000)
+				 // AccountData for inner call origin accountdata.
+				.saturating_add(T::DbWeight::get().reads_writes(1, 1)),
+			call.get_dispatch_info().class
+		)]
 		fn sudo_as(origin,
 			who: <T::Lookup as StaticLookup>::Source,
 			call: Box<<T as Trait>::Call>

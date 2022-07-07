@@ -16,7 +16,9 @@
 
 //! Metering tools for consensus
 
-use prometheus_endpoint::{register, U64, Registry, PrometheusError, Opts, CounterVec, HistogramVec, HistogramOpts};
+use prometheus_endpoint::{
+	register, U64, Registry, PrometheusError, Opts, CounterVec, Histogram, HistogramVec, HistogramOpts
+};
 
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 
@@ -27,6 +29,9 @@ use crate::import_queue::{BlockImportResult, BlockImportError};
 pub(crate) struct Metrics {
 	pub import_queue_processed: CounterVec<U64>,
 	pub block_verification_time: HistogramVec,
+	pub block_verification_and_import_time: Histogram,
+	pub finality_proof_import_time: Histogram,
+	pub justification_import_time: Histogram,
 }
 
 impl Metrics {
@@ -43,9 +48,36 @@ impl Metrics {
 				HistogramVec::new(
 					HistogramOpts::new(
 						"block_verification_time",
-						"Histogram of time taken to import blocks",
+						"Time taken to verify blocks",
 					),
 					&["result"],
+				)?,
+				registry,
+			)?,
+			block_verification_and_import_time: register(
+				Histogram::with_opts(
+					HistogramOpts::new(
+						"block_verification_and_import_time",
+						"Time taken to verify and import blocks",
+					),
+				)?,
+				registry,
+			)?,
+			finality_proof_import_time: register(
+				Histogram::with_opts(
+					HistogramOpts::new(
+						"finality_proof_import_time",
+						"Time taken to import finality proofs",
+					),
+				)?,
+				registry,
+			)?,
+			justification_import_time: register(
+				Histogram::with_opts(
+					HistogramOpts::new(
+						"justification_import_time",
+						"Time taken to import justifications",
+					),
 				)?,
 				registry,
 			)?,
@@ -76,5 +108,9 @@ impl Metrics {
 		self.block_verification_time.with_label_values(
 			&[if success { "success" } else { "verification_failed" }]
 		).observe(time.as_secs_f64());
+	}
+
+	pub fn report_verification_and_import(&self, time: std::time::Duration) {
+		self.block_verification_and_import_time.observe(time.as_secs_f64());
 	}
 }
