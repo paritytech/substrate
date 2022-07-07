@@ -1143,7 +1143,6 @@ mod claim_payout {
 			});
 	}
 
-	// TODO: SR-LABS must audit these tests, until the end of the module. Only remove once approved.
 	#[test]
 	fn rewards_distribution_is_fair_basic() {
 		ExtBuilder::default().build_and_execute(|| {
@@ -4027,7 +4026,6 @@ mod update_roles {
 mod reward_counter_precision {
 	use sp_runtime::FixedU128;
 
-	// TODO: SR-LABS must audit these tests. Only remove once approved.
 	use super::*;
 
 	const DOT: Balance = 10u128.pow(10u32);
