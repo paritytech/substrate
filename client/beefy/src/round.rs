@@ -113,12 +113,9 @@ where
 		vote: (Public, Signature),
 		self_vote: bool,
 	) -> bool {
-		if Some(round.1.clone()) <= self.best_done {
-			debug!(
-				target: "beefy",
-				"🥩 received vote for old stale round {:?}, ignoring",
-				round.1
-			);
+		let num = round.1;
+		if num < self.session_start || Some(num) <= self.best_done {
+			debug!(target: "beefy", "🥩 received vote for old stale round {:?}, ignoring", num);
 			false
 		} else if !self.validators().iter().any(|id| vote.0 == *id) {
 			debug!(
@@ -305,6 +302,43 @@ mod tests {
 			(Keyring::Eve.public(), Keyring::Eve.sign(b"I am committed")),
 			false
 		));
+	}
+
+	#[test]
+	fn old_rounds_not_accepted() {
+		sp_tracing::try_init_simple();
+
+		let validators = ValidatorSet::<Public>::new(
+			vec![Keyring::Alice.public(), Keyring::Bob.public(), Keyring::Charlie.public()],
+			42,
+		)
+		.unwrap();
+		let alice = (Keyring::Alice.public(), Keyring::Alice.sign(b"I am committed"));
+
+		let session_start = 10u64.into();
+		let mut rounds = Rounds::<H256, Block>::new(session_start, validators);
+
+		let mut vote = (H256::from_low_u64_le(1), 9);
+		// add vote for previous session, should fail
+		assert!(!rounds.add_vote(&vote, alice.clone(), true));
+		// no votes present
+		assert!(rounds.rounds.is_empty());
+
+		// simulate 11 was concluded
+		rounds.best_done = Some(11);
+		// add votes for current session, but already concluded rounds, should fail
+		vote.1 = 10;
+		assert!(!rounds.add_vote(&vote, alice.clone(), true));
+		vote.1 = 11;
+		assert!(!rounds.add_vote(&vote, alice.clone(), true));
+		// no votes present
+		assert!(rounds.rounds.is_empty());
+
+		// add good vote
+		vote.1 = 12;
+		assert!(rounds.add_vote(&vote, alice, true));
+		// good vote present
+		assert_eq!(rounds.rounds.len(), 1);
 	}
 
 	#[test]
