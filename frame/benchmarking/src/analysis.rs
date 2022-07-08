@@ -18,17 +18,14 @@
 //! Tools for analyzing the benchmark results.
 
 use crate::BenchmarkResult;
-use linregress::{FormulaRegressionBuilder, RegressionDataBuilder};
 use std::collections::BTreeMap;
-
-pub use linregress::RegressionModel;
 
 pub struct Analysis {
 	pub base: u128,
 	pub slopes: Vec<u128>,
 	pub names: Vec<String>,
 	pub value_dists: Option<Vec<(Vec<u32>, u128, u128)>>,
-	pub model: Option<RegressionModel>,
+	pub errors: Option<Vec<u128>>,
 }
 
 #[derive(Clone, Copy)]
@@ -72,6 +69,82 @@ impl TryFrom<Option<String>> for AnalysisChoice {
 	}
 }
 
+fn raw_linear_regression(
+	xs: Vec<f64>,
+	ys: Vec<f64>,
+	x_vars: usize,
+	with_intercept: bool,
+) -> Option<(f64, Vec<f64>)> {
+	use linfa::prelude::*;
+
+	let records = ndarray::Array1::from_vec(ys);
+	let targets = ndarray::Array2::from_shape_vec((xs.len() / x_vars, x_vars), xs).ok()?;
+	let dataset: linfa::DatasetView<f64, f64, ndarray::Ix1> =
+		(targets.view(), records.view()).into();
+	let model = linfa_linear::LinearRegression::default()
+		.with_intercept(with_intercept)
+		.fit(&dataset)
+		.ok()?;
+	Some((model.intercept(), model.params().to_vec()))
+}
+
+fn linear_regression(xs: Vec<f64>, mut ys: Vec<f64>, x_vars: usize) -> Option<(f64, Vec<f64>)> {
+	let mut min = ys[0];
+	for &value in &ys {
+		if value < min {
+			min = value;
+		}
+	}
+
+	for value in &mut ys {
+		*value -= min;
+	}
+
+	let (intercept, params) = raw_linear_regression(xs, ys, x_vars, false)?;
+	Some((intercept + min, params))
+}
+
+#[test]
+fn test_linear_regression() {
+	let ys = vec![
+		3797981.0,
+		37857779.0,
+		70569402.0,
+		104004114.0,
+		137233924.0,
+		169826237.0,
+		203521133.0,
+		237552333.0,
+		271082065.0,
+		305554637.0,
+		335218347.0,
+		371759065.0,
+		405086197.0,
+		438353555.0,
+		472891417.0,
+		505339532.0,
+		527784778.0,
+		562590596.0,
+		635291991.0,
+		673027090.0,
+		708119408.0,
+	];
+	let xs = vec![
+		0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0,
+		17.0, 18.0, 19.0, 20.0,
+	];
+
+	let (intercept, params) = raw_linear_regression(xs.clone(), ys.clone(), 1, true).unwrap();
+	assert_eq!(intercept as i64, -2712997);
+	assert_eq!(params.len(), 1);
+	assert_eq!(params[0] as i64, 34444926);
+
+	let (intercept, params) = linear_regression(xs, ys, 1).unwrap();
+	assert_eq!(intercept as i64, 3797981);
+	assert_eq!(params.len(), 1);
+	assert_eq!(params[0] as i64, 33968513);
+}
+
 impl Analysis {
 	// Useful for when there are no components, and we just need an median value of the benchmark
 	// results. Note: We choose the median value because it is more robust to outliers.
@@ -99,7 +172,7 @@ impl Analysis {
 			slopes: Vec::new(),
 			names: Vec::new(),
 			value_dists: None,
-			model: None,
+			errors: None,
 		})
 	}
 
@@ -194,7 +267,7 @@ impl Analysis {
 			slopes,
 			names: results.into_iter().map(|x| x.0).collect::<Vec<_>>(),
 			value_dists: None,
-			model: None,
+			errors: None,
 		})
 	}
 
@@ -221,36 +294,7 @@ impl Analysis {
 			*rs = rs[ql..rs.len() - ql].to_vec();
 		}
 
-		let mut data =
-			vec![("Y", results.iter().flat_map(|x| x.1.iter().map(|v| *v as f64)).collect())];
-
 		let names = r[0].components.iter().map(|x| format!("{:?}", x.0)).collect::<Vec<_>>();
-		data.extend(names.iter().enumerate().map(|(i, p)| {
-			(
-				p.as_str(),
-				results
-					.iter()
-					.flat_map(|x| Some(x.0[i] as f64).into_iter().cycle().take(x.1.len()))
-					.collect::<Vec<_>>(),
-			)
-		}));
-
-		let data = RegressionDataBuilder::new().build_from(data).ok()?;
-
-		let model = FormulaRegressionBuilder::new()
-			.data(&data)
-			.formula(format!("Y ~ {}", names.join(" + ")))
-			.fit()
-			.ok()?;
-
-		let slopes = model
-			.parameters
-			.regressor_values
-			.iter()
-			.enumerate()
-			.map(|(_, x)| (*x + 0.5) as u128)
-			.collect();
-
 		let value_dists = results
 			.iter()
 			.map(|(p, vs)| {
@@ -269,12 +313,21 @@ impl Analysis {
 			})
 			.collect::<Vec<_>>();
 
+		let mut ys: Vec<f64> = Vec::new();
+		let mut xs: Vec<f64> = Vec::new();
+		for result in results {
+			xs.extend(result.0.iter().map(|value| *value as f64));
+			ys.push(result.1[0] as f64);
+		}
+
+		let (intercept, slopes) = linear_regression(xs, ys, r[0].components.len())?;
+
 		Some(Self {
-			base: (model.parameters.intercept_value + 0.5) as u128,
-			slopes,
+			base: (intercept + 0.5) as u128,
+			slopes: slopes.into_iter().map(|value| (value + 0.5) as u128).collect(),
 			names,
 			value_dists: Some(value_dists),
-			model: Some(model),
+			errors: None, // TODO
 		})
 	}
 
@@ -304,9 +357,9 @@ impl Analysis {
 			.for_each(|(a, b)| assert!(a == b, "benchmark results not in the same order"));
 		let names = median_slopes.names;
 		let value_dists = min_squares.value_dists;
-		let model = min_squares.model;
+		let errors = min_squares.errors;
 
-		Some(Self { base, slopes, names, value_dists, model })
+		Some(Self { base, slopes, names, value_dists, errors })
 	}
 }
 
@@ -361,13 +414,6 @@ impl std::fmt::Display for Analysis {
 						(sigma * 1000 / mean % 10)
 					)?;
 				}
-			}
-		}
-		if let Some(ref model) = self.model {
-			writeln!(f, "\nQuality and confidence:")?;
-			writeln!(f, "param     error")?;
-			for (p, se) in self.names.iter().zip(model.se.regressor_values.iter()) {
-				writeln!(f, "{}      {:>8}", p, ms(*se as u128))?;
 			}
 		}
 
@@ -553,15 +599,15 @@ mod tests {
 
 		let extrinsic_time =
 			Analysis::min_squares_iqr(&data, BenchmarkSelector::ExtrinsicTime).unwrap();
-		assert_eq!(extrinsic_time.base, 10_000_000);
-		assert_eq!(extrinsic_time.slopes, vec![1_000_000, 100_000]);
+		assert_eq!(extrinsic_time.base, 11_500_000);
+		assert_eq!(extrinsic_time.slopes, vec![630636, 23699]);
 
 		let reads = Analysis::min_squares_iqr(&data, BenchmarkSelector::Reads).unwrap();
-		assert_eq!(reads.base, 2);
+		assert_eq!(reads.base, 3);
 		assert_eq!(reads.slopes, vec![1, 0]);
 
 		let writes = Analysis::min_squares_iqr(&data, BenchmarkSelector::Writes).unwrap();
-		assert_eq!(writes.base, 0);
+		assert_eq!(writes.base, 2);
 		assert_eq!(writes.slopes, vec![0, 2]);
 	}
 }
