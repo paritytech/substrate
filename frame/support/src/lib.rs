@@ -679,7 +679,7 @@ macro_rules! assert_noop {
 	) => {
 		let h = $crate::storage_root($crate::StateVersion::V1);
 		$crate::assert_err!($x, $y);
-		assert_eq!(h, $crate::storage_root($crate::StateVersion::V1));
+		assert_eq!(h, $crate::storage_root($crate::StateVersion::V1), "storage has been mutated");
 	};
 }
 
@@ -826,6 +826,7 @@ pub mod tests {
 			pub struct Module<T: Config> for enum Call where origin: T::Origin, system=self  {}
 		}
 	}
+
 	use self::module::Module;
 
 	decl_storage! {
@@ -851,6 +852,7 @@ pub mod tests {
 	}
 
 	struct Test;
+
 	impl Config for Test {
 		type BlockNumber = u32;
 		type Origin = u32;
@@ -867,6 +869,7 @@ pub mod tests {
 	trait Sorted {
 		fn sorted(self) -> Self;
 	}
+
 	impl<T: Ord> Sorted for Vec<T> {
 		fn sorted(mut self) -> Self {
 			self.sort();
