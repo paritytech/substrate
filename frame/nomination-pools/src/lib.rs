@@ -1553,7 +1553,7 @@ pub mod pallet {
 
 			// payout related stuff: we must claim the payouts, and updated recorded payout data
 			// before updating the bonded pool points, similar to that of `join` transaction.
-			let _ = reward_pool.update_records(bonded_pool.id, bonded_pool.points)?;
+			reward_pool.update_records(bonded_pool.id, bonded_pool.points)?;
 			// TODO: optimize this to not touch the free balance of `who ` at all in benchmarks.
 			// Currently, bonding rewards is like a batch. In the same PR, also make this function
 			// take a boolean argument that make it either 100% pure (no storage update), or make it
