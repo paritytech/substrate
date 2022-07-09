@@ -1504,7 +1504,7 @@ pub mod pallet {
 			let mut reward_pool = RewardPools::<T>::get(pool_id)
 				.defensive_ok_or::<Error<T>>(DefensiveError::RewardPoolNotFound.into())?;
 			// IMPORTANT: reward pool records must be updated with the old points.
-			let _ = reward_pool.update_records(pool_id, bonded_pool.points)?;
+			reward_pool.update_records(pool_id, bonded_pool.points)?;
 
 			bonded_pool.try_inc_members()?;
 			let points_issued = bonded_pool.try_bond_funds(&who, amount, BondType::Later)?;
