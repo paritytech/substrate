@@ -544,7 +544,7 @@ impl<T: Config> StakingLedger<T> {
 	/// enough, then the slashing will continue and will consume as much of the active and unlocking
 	/// chunks as needed.
 	///
-	/// This will never slash more than the give amount. If any of the chunks become dusted, the
+	/// This will never slash more than the given amount. If any of the chunks become dusted, the
 	/// last chunk is slashed slightly less to compensate. Returns the amount of funds actually
 	/// slashed.
 	///
