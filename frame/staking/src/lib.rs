@@ -539,7 +539,7 @@ impl<T: Config> StakingLedger<T> {
 	///   the unlocking chunks.
 	/// - If no such chunks exist, then only the active balance is slashed.
 	///
-	/// Note that the above is only a *preference*. If for any reason the active ledger, which or
+	/// Note that the above is only a *preference*. If for any reason the active ledger, with or
 	/// without some portion of the unlocking chunks that are more justified to be slashed are not
 	/// enough, then the slashing will continue and will consume as much of the active and unlocking
 	/// chunks as needed.
