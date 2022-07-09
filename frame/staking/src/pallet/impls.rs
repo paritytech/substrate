@@ -599,20 +599,19 @@ impl<T: Config> Pallet<T> {
 
 	/// Apply previously-unapplied slashes on the beginning of a new era, after a delay.
 	fn apply_unapplied_slashes(active_era: EraIndex) {
-		let slash_defer_duration = T::SlashDeferDuration::get();
-		<Self as Store>::EarliestUnappliedSlash::mutate(|earliest| {
-			if let Some(ref mut earliest) = earliest {
-				let keep_from = active_era.saturating_sub(slash_defer_duration);
-				for era in (*earliest)..keep_from {
-					let era_slashes = <Self as Store>::UnappliedSlashes::take(&era);
-					for slash in era_slashes {
-						slashing::apply_slash::<T>(slash, era);
-					}
-				}
-
-				*earliest = (*earliest).max(keep_from)
+		if <Self as Store>::UnappliedSlashes::contains_key(&active_era) {
+			let era_slashes = <Self as Store>::UnappliedSlashes::take(&active_era);
+			log!(
+				debug,
+				"found {} slashes scheduled to be executed in era {}",
+				active_era,
+				era_slashes.len()
+			);
+			for slash in era_slashes {
+				let slash_era = active_era.saturating_sub(T::SlashDeferDuration::get());
+				slashing::apply_slash::<T>(slash, slash_era);
 			}
-		})
+		}
 	}
 
 	/// Add reward points to validators using their stash account ID.
@@ -1209,11 +1208,6 @@ where
 			}
 		};
 
-		<Self as Store>::EarliestUnappliedSlash::mutate(|earliest| {
-			if earliest.is_none() {
-				*earliest = Some(active_era)
-			}
-		});
 		add_db_reads_writes(1, 1);
 
 		let slash_defer_duration = T::SlashDeferDuration::get();
@@ -1263,9 +1257,18 @@ where
 					}
 				} else {
 					// Defer to end of some `slash_defer_duration` from now.
-					<Self as Store>::UnappliedSlashes::mutate(active_era, move |for_later| {
-						for_later.push(unapplied)
-					});
+					log!(
+						debug,
+						"deferring slash of {:?}% happened in {:?} (reported in {:?}) to {:?}",
+						slash_fraction,
+						slash_era,
+						active_era,
+						slash_era + slash_defer_duration + 1,
+					);
+					<Self as Store>::UnappliedSlashes::mutate(
+						slash_era + slash_defer_duration + 1,
+						move |for_later| for_later.push(unapplied),
+					);
 					add_db_reads_writes(1, 1);
 				}
 			} else {
