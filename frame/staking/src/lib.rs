@@ -620,7 +620,7 @@ impl<T: Config> StakingLedger<T> {
 			// slash out from *target exactly `slash_from_target`.
 			*target = *target - slash_from_target;
 			if *target < minimum_balance {
-				// Slash the rest of the target if its dust. This might cause the last chunk to be
+				// Slash the rest of the target if it's dust. This might cause the last chunk to be
 				// slightly under-slashed, by at most `MaxUnlockingChunks * ED`, which is not a big
 				// deal.
 				slash_from_target =
