@@ -2962,11 +2962,11 @@ fn remove_deferred() {
 
 		mock::start_active_era(2);
 
-		// deferred to start of era 5.
+		// reported later, but deferred to start of era 4 as well.
 		on_offence_in_era(
 			&[OffenceDetails { offender: (11, exposure.clone()), reporters: vec![] }],
 			&[Perbill::from_percent(15)],
-			2,
+			1,
 			DisableStrategy::WhenSlashed,
 		);
 
@@ -2992,32 +2992,27 @@ fn remove_deferred() {
 		let _ = staking_events_since_last_call();
 		mock::start_active_era(4);
 
-		// the first slash for 10% was cancelled, so no effect.
-		assert_eq!(
-			staking_events_since_last_call(),
-			vec![Event::StakersElected, Event::EraPaid(3, 11075, 33225)]
-		);
-		assert_eq!(Balances::free_balance(11), 1000);
-		assert_eq!(Balances::free_balance(101), 2000);
-
-		mock::start_active_era(5);
+		// the first slash for 10% was cancelled, but the 15% one
 		assert_eq!(
 			staking_events_since_last_call(),
 			vec![
 				Event::StakersElected,
-				Event::EraPaid(4, 11075, 33225),
-				Event::Slashed(11, 150),
-				Event::Slashed(101, 19)
+				Event::EraPaid(3, 11075, 33225),
+				Event::Slashed(11, 50),
+				Event::Slashed(101, 7)
 			]
 		);
 
-		// 10% slash was cancelled, but the 15% was applied.
-		let nominator_slash = Perbill::from_percent(15) * nominated_value;
-		let own_slash = Perbill::from_percent(15) * exposure.own;
+		let slash_10 = Perbill::from_percent(10);
+		let slash_15 = Perbill::from_percent(15);
+		let initial_slash = slash_10 * nominated_value;
+
+		let total_slash = slash_15 * nominated_value;
+		let actual_slash = total_slash - initial_slash;
 
 		// 5% slash (15 - 10) processed now.
-		assert_eq!(Balances::free_balance(11), 1000 - own_slash);
-		assert_eq!(Balances::free_balance(101), 2000 - nominator_slash);
+		assert_eq!(Balances::free_balance(11), 950);
+		assert_eq!(Balances::free_balance(101), 2000 - actual_slash);
 	})
 }
 
