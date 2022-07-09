@@ -488,8 +488,8 @@ fn pool_slash_proportional() {
 
 #[test]
 fn pool_slash_non_proportional_only_bonded_pool() {
-	// A typical example where a pool member unbonds in era 99, and he can get away with a slash that
-	// happened in era 99, as long as the pool has enough active bond to cover the slash. If
+	// A typical example where a pool member unbonds in era 99, and he can get away with a slash
+	// that happened in era 99, as long as the pool has enough active bond to cover the slash. If
 	// everything else in the slashing/staking system works, this should always be the case.
 	// Nonetheless, `ledger.slash` has been written such that it will slash greedily from any chunk
 	// if it runs out of chunks that it thinks should be affected by the slash.
@@ -515,15 +515,11 @@ fn pool_slash_non_proportional_only_bonded_pool() {
 		assert_ok!(Pools::join(Origin::signed(20), bond, 1));
 		assert_eq!(
 			staking_events_since_last_call(),
-			vec![
-				StakingEvent::Bonded(POOL1_BONDED, bond)
-			]
+			vec![StakingEvent::Bonded(POOL1_BONDED, bond)]
 		);
 		assert_eq!(
 			pool_events_since_last_call(),
-			vec![
-				PoolsEvent::Bonded { member: 20, pool_id: 1, bonded: bond, joined: true }
-			]
+			vec![PoolsEvent::Bonded { member: 20, pool_id: 1, bonded: bond, joined: true }]
 		);
 
 		// progress and unbond.
@@ -552,9 +548,7 @@ fn pool_slash_non_proportional_only_bonded_pool() {
 		assert_eq!(staking_events_since_last_call(), vec![StakingEvent::Slashed(POOL1_BONDED, 30)]);
 		assert_eq!(
 			pool_events_since_last_call(),
-			vec![
-				PoolsEvent::PoolSlashed { pool_id: 1, balance: 10 }
-			]
+			vec![PoolsEvent::PoolSlashed { pool_id: 1, balance: 10 }]
 		);
 	});
 }
@@ -588,15 +582,11 @@ fn pool_slash_non_proportional_bonded_pool_and_chunks() {
 		assert_ok!(Pools::join(Origin::signed(20), bond, 1));
 		assert_eq!(
 			staking_events_since_last_call(),
-			vec![
-				StakingEvent::Bonded(POOL1_BONDED, bond)
-			]
+			vec![StakingEvent::Bonded(POOL1_BONDED, bond)]
 		);
 		assert_eq!(
 			pool_events_since_last_call(),
-			vec![
-				PoolsEvent::Bonded { member: 20, pool_id: 1, bonded: bond, joined: true }
-			]
+			vec![PoolsEvent::Bonded { member: 20, pool_id: 1, bonded: bond, joined: true }]
 		);
 
 		// progress and unbond.
