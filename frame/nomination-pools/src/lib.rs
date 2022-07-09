@@ -831,7 +831,7 @@ impl<T: Config> BondedPool<T> {
 			},
 			(false, true) => {
 				// the depositor can simply not be unbonded permissionlessly, period.
-				Err(Error::<T>::DoesNotHavePermission)?
+				return Err(Error::<T>::DoesNotHavePermission.into())
 			},
 		};
 
