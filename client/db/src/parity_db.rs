@@ -106,7 +106,7 @@ impl<H: Clone + AsRef<[u8]>> Database<H> for DbAdapter {
 						}
 						return None
 					},
-				Change::Reference(col, key) =>
+				Change::Reference(col, key) => {
 					if ref_counted_column(col) {
 						// FIXME accessing value is not strictly needed, optimize this in parity-db.
 						let value = <Self as Database<H>>::get(self, col, key.as_ref());
@@ -116,7 +116,8 @@ impl<H: Clone + AsRef<[u8]>> Database<H> for DbAdapter {
 							not_ref_counted_column.push(col);
 						}
 						return None
-					},
+					}
+				},
 				Change::Release(col, key) =>
 					if ref_counted_column(col) {
 						(col as u8, key.as_ref().to_vec(), None)

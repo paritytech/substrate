@@ -359,7 +359,14 @@ pub mod pallet {
 
 	#[pallet::origin]
 	#[derive(
-		EqNoBound, RuntimeDebugNoBound, CloneNoBound, PartialEqNoBound, Encode, Decode, TypeInfo,
+		EqNoBound,
+		RuntimeDebugNoBound,
+		CloneNoBound,
+		PartialEqNoBound,
+		Encode,
+		Decode,
+		TypeInfo,
+		MaxEncodedLen,
 	)]
 	pub struct Origin<T>(PhantomData<T>);
 

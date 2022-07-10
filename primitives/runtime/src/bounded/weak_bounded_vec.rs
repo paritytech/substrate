@@ -18,11 +18,17 @@
 //! Traits, types and structs to support putting a bounded vector into storage, as a raw value, map
 //! or a double map.
 
+use super::{BoundedSlice, BoundedVec};
 use crate::traits::Get;
 use codec::{Decode, Encode, MaxEncodedLen};
 use core::{
 	ops::{Deref, Index, IndexMut},
 	slice::SliceIndex,
+};
+#[cfg(feature = "std")]
+use serde::{
+	de::{Error, SeqAccess, Visitor},
+	Deserialize, Deserializer, Serialize,
 };
 use sp_std::{marker::PhantomData, prelude::*};
 
@@ -33,9 +39,72 @@ use sp_std::{marker::PhantomData, prelude::*};
 ///
 /// The length of the vec is not strictly bounded. Decoding a vec with more element that the bound
 /// is accepted, and some method allow to bypass the restriction with warnings.
+#[cfg_attr(feature = "std", derive(Serialize), serde(transparent))]
 #[derive(Encode, scale_info::TypeInfo)]
 #[scale_info(skip_type_params(S))]
-pub struct WeakBoundedVec<T, S>(Vec<T>, PhantomData<S>);
+pub struct WeakBoundedVec<T, S>(
+	pub(super) Vec<T>,
+	#[cfg_attr(feature = "std", serde(skip_serializing))] PhantomData<S>,
+);
+
+#[cfg(feature = "std")]
+impl<'de, T, S: Get<u32>> Deserialize<'de> for WeakBoundedVec<T, S>
+where
+	T: Deserialize<'de>,
+{
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+	where
+		D: Deserializer<'de>,
+	{
+		struct VecVisitor<T, S: Get<u32>>(PhantomData<(T, S)>);
+
+		impl<'de, T, S: Get<u32>> Visitor<'de> for VecVisitor<T, S>
+		where
+			T: Deserialize<'de>,
+		{
+			type Value = Vec<T>;
+
+			fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+				formatter.write_str("a sequence")
+			}
+
+			fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+			where
+				A: SeqAccess<'de>,
+			{
+				let size = seq.size_hint().unwrap_or(0);
+				let max = match usize::try_from(S::get()) {
+					Ok(n) => n,
+					Err(_) => return Err(A::Error::custom("can't convert to usize")),
+				};
+				if size > max {
+					log::warn!(
+						target: "runtime",
+						"length of a bounded vector while deserializing is not respected.",
+					);
+				}
+				let mut values = Vec::with_capacity(size);
+
+				while let Some(value) = seq.next_element()? {
+					values.push(value);
+					if values.len() > max {
+						log::warn!(
+							target: "runtime",
+							"length of a bounded vector while deserializing is not respected.",
+						);
+					}
+				}
+
+				Ok(values)
+			}
+		}
+
+		let visitor: VecVisitor<T, S> = VecVisitor(PhantomData);
+		deserializer.deserialize_seq(visitor).map(|v| {
+			WeakBoundedVec::<T, S>::try_from(v).map_err(|_| Error::custom("out of bounds"))
+		})?
+	}
+}
 
 impl<T: Decode, S: Get<u32>> Decode for WeakBoundedVec<T, S> {
 	fn decode<I: codec::Input>(input: &mut I) -> Result<Self, codec::Error> {
@@ -167,13 +236,12 @@ impl<T, S> Default for WeakBoundedVec<T, S> {
 	}
 }
 
-#[cfg(feature = "std")]
-impl<T, S> std::fmt::Debug for WeakBoundedVec<T, S>
+impl<T, S> sp_std::fmt::Debug for WeakBoundedVec<T, S>
 where
-	T: std::fmt::Debug,
+	Vec<T>: sp_std::fmt::Debug,
 	S: Get<u32>,
 {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
 		f.debug_tuple("WeakBoundedVec").field(&self.0).field(&Self::bound()).finish()
 	}
 }
@@ -283,14 +351,36 @@ impl<T, S> codec::DecodeLength for WeakBoundedVec<T, S> {
 	}
 }
 
-// NOTE: we could also implement this as:
-// impl<T: Value, S1: Get<u32>, S2: Get<u32>> PartialEq<WeakBoundedVec<T, S2>> for WeakBoundedVec<T,
-// S1> to allow comparison of bounded vectors with different bounds.
-impl<T, S> PartialEq for WeakBoundedVec<T, S>
+impl<T, BoundSelf, BoundRhs> PartialEq<WeakBoundedVec<T, BoundRhs>> for WeakBoundedVec<T, BoundSelf>
 where
 	T: PartialEq,
+	BoundSelf: Get<u32>,
+	BoundRhs: Get<u32>,
 {
-	fn eq(&self, rhs: &Self) -> bool {
+	fn eq(&self, rhs: &WeakBoundedVec<T, BoundRhs>) -> bool {
+		self.0 == rhs.0
+	}
+}
+
+impl<T, BoundSelf, BoundRhs> PartialEq<BoundedVec<T, BoundRhs>> for WeakBoundedVec<T, BoundSelf>
+where
+	T: PartialEq,
+	BoundSelf: Get<u32>,
+	BoundRhs: Get<u32>,
+{
+	fn eq(&self, rhs: &BoundedVec<T, BoundRhs>) -> bool {
+		self.0 == rhs.0
+	}
+}
+
+impl<'a, T, BoundSelf, BoundRhs> PartialEq<BoundedSlice<'a, T, BoundRhs>>
+	for WeakBoundedVec<T, BoundSelf>
+where
+	T: PartialEq,
+	BoundSelf: Get<u32>,
+	BoundRhs: Get<u32>,
+{
+	fn eq(&self, rhs: &BoundedSlice<'a, T, BoundRhs>) -> bool {
 		self.0 == rhs.0
 	}
 }
@@ -301,7 +391,48 @@ impl<T: PartialEq, S: Get<u32>> PartialEq<Vec<T>> for WeakBoundedVec<T, S> {
 	}
 }
 
-impl<T, S> Eq for WeakBoundedVec<T, S> where T: Eq {}
+impl<T, S: Get<u32>> Eq for WeakBoundedVec<T, S> where T: Eq {}
+
+impl<T, BoundSelf, BoundRhs> PartialOrd<WeakBoundedVec<T, BoundRhs>>
+	for WeakBoundedVec<T, BoundSelf>
+where
+	T: PartialOrd,
+	BoundSelf: Get<u32>,
+	BoundRhs: Get<u32>,
+{
+	fn partial_cmp(&self, other: &WeakBoundedVec<T, BoundRhs>) -> Option<sp_std::cmp::Ordering> {
+		self.0.partial_cmp(&other.0)
+	}
+}
+
+impl<T, BoundSelf, BoundRhs> PartialOrd<BoundedVec<T, BoundRhs>> for WeakBoundedVec<T, BoundSelf>
+where
+	T: PartialOrd,
+	BoundSelf: Get<u32>,
+	BoundRhs: Get<u32>,
+{
+	fn partial_cmp(&self, other: &BoundedVec<T, BoundRhs>) -> Option<sp_std::cmp::Ordering> {
+		self.0.partial_cmp(&other.0)
+	}
+}
+
+impl<'a, T, BoundSelf, BoundRhs> PartialOrd<BoundedSlice<'a, T, BoundRhs>>
+	for WeakBoundedVec<T, BoundSelf>
+where
+	T: PartialOrd,
+	BoundSelf: Get<u32>,
+	BoundRhs: Get<u32>,
+{
+	fn partial_cmp(&self, other: &BoundedSlice<'a, T, BoundRhs>) -> Option<sp_std::cmp::Ordering> {
+		(&*self.0).partial_cmp(other.0)
+	}
+}
+
+impl<T: Ord, S: Get<u32>> Ord for WeakBoundedVec<T, S> {
+	fn cmp(&self, other: &Self) -> sp_std::cmp::Ordering {
+		self.0.cmp(&other.0)
+	}
+}
 
 impl<T, S> MaxEncodedLen for WeakBoundedVec<T, S>
 where
