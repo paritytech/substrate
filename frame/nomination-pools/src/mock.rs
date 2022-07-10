@@ -225,11 +225,7 @@ pub struct ExtBuilder {
 
 impl Default for ExtBuilder {
 	fn default() -> Self {
-		Self {
-			members: Default::default(),
-			max_members: Some(4),
-			max_members_per_pool: Some(3),
-		}
+		Self { members: Default::default(), max_members: Some(4), max_members_per_pool: Some(3) }
 	}
 }
 

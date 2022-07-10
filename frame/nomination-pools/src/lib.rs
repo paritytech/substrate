@@ -782,8 +782,6 @@ impl<T: Config> BondedPool<T> {
 		let is_full_unbond = unbonding_points == target_member.active_points();
 
 		let balance_after_unbond = {
-			// NOTE: clone the member, and actually call `try_unbond`, or swap operation in the call
-			// site to receive the `unbonded_target_member` here.
 			let new_depositor_points =
 				target_member.active_points().saturating_sub(unbonding_points);
 			let mut target_member_after_unbond = (*target_member).clone();
@@ -1506,15 +1504,17 @@ pub mod pallet {
 			bonded_pool.try_inc_members()?;
 			let points_issued = bonded_pool.try_bond_funds(&who, amount, BondType::Later)?;
 
-			let new_member = PoolMember::<T> {
-				pool_id,
-				points: points_issued,
-				// we just updated `last_known_reward_counter` to the current one in
-				// `update_recorded`.
-				last_recorded_reward_counter: reward_pool.last_recorded_reward_counter(),
-				unbonding_eras: Default::default(),
-			};
-			PoolMembers::insert(who.clone(), new_member);
+			PoolMembers::insert(
+				who.clone(),
+				PoolMember::<T> {
+					pool_id,
+					points: points_issued,
+					// we just updated `last_known_reward_counter` to the current one in
+					// `update_recorded`.
+					last_recorded_reward_counter: reward_pool.last_recorded_reward_counter(),
+					unbonding_eras: Default::default(),
+				},
+			);
 
 			Self::deposit_event(Event::<T>::Bonded {
 				member: who,
