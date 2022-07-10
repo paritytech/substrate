@@ -473,7 +473,6 @@ fn pool_slash_proportional() {
 			vec![
 				// This last pool got slashed only the leftover dust. Otherwise in principle, this
 				// chunk/pool should have not been affected.
-				// TODO: We might improve this in a future PR
 				PoolsEvent::UnbondingPoolSlashed { pool_id: 1, era: 127, balance: 19 },
 				// This pool got slashed 12.5, which rounded down to 12.
 				PoolsEvent::UnbondingPoolSlashed { pool_id: 1, era: 128, balance: 8 },
