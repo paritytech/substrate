@@ -216,9 +216,20 @@ frame_support::construct_runtime!(
 	}
 );
 
-#[derive(Default)]
 pub struct ExtBuilder {
 	members: Vec<(AccountId, Balance)>,
+	max_members: Option<u32>,
+	max_members_per_pool: Option<u32>,
+}
+
+impl Default for ExtBuilder {
+	fn default() -> Self {
+		Self {
+			members: Default::default(),
+			max_members: Some(4),
+			max_members_per_pool: Some(3),
+		}
+	}
 }
 
 impl ExtBuilder {
@@ -243,6 +254,16 @@ impl ExtBuilder {
 		self
 	}
 
+	pub(crate) fn max_members(mut self, max: Option<u32>) -> Self {
+		self.max_members = max;
+		self
+	}
+
+	pub(crate) fn max_members_per_pool(mut self, max: Option<u32>) -> Self {
+		self.max_members_per_pool = max;
+		self
+	}
+
 	pub(crate) fn build(self) -> sp_io::TestExternalities {
 		let mut storage =
 			frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
@@ -251,8 +272,8 @@ impl ExtBuilder {
 			min_join_bond: 2,
 			min_create_bond: 2,
 			max_pools: Some(2),
-			max_members_per_pool: Some(3),
-			max_members: Some(4),
+			max_members_per_pool: self.max_members_per_pool,
+			max_members: self.max_members,
 		}
 		.assimilate_storage(&mut storage);
 

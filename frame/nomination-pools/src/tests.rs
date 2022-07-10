@@ -1878,6 +1878,65 @@ mod claim_payout {
 			assert_eq!(Balances::free_balance(&10), 5 + 5 + 13 + 10 + 1);
 		})
 	}
+
+	#[test]
+	fn claim_payout_large_numbers() {
+		let unit = 10u128.pow(12); // akin to KSM
+		ExistentialDeposit::set(unit);
+		StakingMinBond::set(unit * 1000);
+
+		ExtBuilder::default()
+			.max_members(Some(4))
+			.max_members_per_pool(Some(4))
+			.add_members(vec![(20, 1500 * unit), (21, 2500 * unit), (22, 5000 * unit)])
+			.build_and_execute(|| {
+				// some rewards come in.
+				assert_eq!(Balances::free_balance(&default_reward_account()), unit);
+				Balances::mutate_account(&default_reward_account(), |f| f.free += unit / 1000)
+					.unwrap();
+
+				// everyone claims
+				assert_ok!(Pools::claim_payout(Origin::signed(10)));
+				assert_ok!(Pools::claim_payout(Origin::signed(20)));
+				assert_ok!(Pools::claim_payout(Origin::signed(21)));
+				assert_ok!(Pools::claim_payout(Origin::signed(22)));
+
+				assert_eq!(
+					pool_events_since_last_call(),
+					vec![
+						Event::Created { depositor: 10, pool_id: 1 },
+						Event::Bonded {
+							member: 10,
+							pool_id: 1,
+							bonded: 1000000000000000,
+							joined: true
+						},
+						Event::Bonded {
+							member: 20,
+							pool_id: 1,
+							bonded: 1500000000000000,
+							joined: true
+						},
+						Event::Bonded {
+							member: 21,
+							pool_id: 1,
+							bonded: 2500000000000000,
+							joined: true
+						},
+						Event::Bonded {
+							member: 22,
+							pool_id: 1,
+							bonded: 5000000000000000,
+							joined: true
+						},
+						Event::PaidOut { member: 10, pool_id: 1, payout: 100000000 },
+						Event::PaidOut { member: 20, pool_id: 1, payout: 150000000 },
+						Event::PaidOut { member: 21, pool_id: 1, payout: 250000000 },
+						Event::PaidOut { member: 22, pool_id: 1, payout: 500000000 }
+					]
+				);
+			})
+	}
 }
 
 mod unbond {
