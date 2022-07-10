@@ -200,7 +200,7 @@ impl pools::Config for Runtime {
 	type PalletId = PoolsPalletId;
 	type MaxMetadataLen = MaxMetadataLen;
 	type MaxUnbonding = MaxUnbonding;
-	type MaxPointsToBalance = frame_support::traits::ConstU32<10>;
+	type MaxPointsToBalance = frame_support::traits::ConstU8<10>;
 }
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;
@@ -217,9 +217,20 @@ frame_support::construct_runtime!(
 	}
 );
 
-#[derive(Default)]
 pub struct ExtBuilder {
 	members: Vec<(AccountId, Balance)>,
+	max_members: Option<u32>,
+	max_members_per_pool: Option<u32>,
+}
+
+impl Default for ExtBuilder {
+	fn default() -> Self {
+		Self {
+			members: Default::default(),
+			max_members: Some(4),
+			max_members_per_pool: Some(3),
+		}
+	}
 }
 
 impl ExtBuilder {
@@ -249,6 +260,16 @@ impl ExtBuilder {
 		self
 	}
 
+	pub(crate) fn max_members(mut self, max: Option<u32>) -> Self {
+		self.max_members = max;
+		self
+	}
+
+	pub(crate) fn max_members_per_pool(mut self, max: Option<u32>) -> Self {
+		self.max_members_per_pool = max;
+		self
+	}
+
 	pub(crate) fn build(self) -> sp_io::TestExternalities {
 		sp_tracing::try_init_simple();
 		let mut storage =
@@ -258,8 +279,8 @@ impl ExtBuilder {
 			min_join_bond: MinJoinBondConfig::get(),
 			min_create_bond: 2,
 			max_pools: Some(2),
-			max_members_per_pool: Some(3),
-			max_members: Some(4),
+			max_members_per_pool: self.max_members_per_pool,
+			max_members: self.max_members,
 		}
 		.assimilate_storage(&mut storage);
 

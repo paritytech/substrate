@@ -208,7 +208,7 @@ mod bonded_pool {
 			};
 
 			let max_points_to_balance: u128 =
-				<<Runtime as Config>::MaxPointsToBalance as Get<u32>>::get().into();
+				<<Runtime as Config>::MaxPointsToBalance as Get<u8>>::get().into();
 
 			// Simulate a 100% slashed pool
 			StakingMock::set_bonded_balance(pool.bonded_account(), 0);
@@ -520,7 +520,7 @@ mod join {
 
 			// Force the points:balance ratio to `MaxPointsToBalance` (100/10)
 			let max_points_to_balance: u128 =
-				<<Runtime as Config>::MaxPointsToBalance as Get<u32>>::get().into();
+				<<Runtime as Config>::MaxPointsToBalance as Get<u8>>::get().into();
 
 			StakingMock::set_bonded_balance(
 				Pools::create_bonded_account(123),
@@ -688,19 +688,15 @@ mod claim_payout {
 				assert_eq!(Balances::free_balance(default_reward_account()), ed);
 				assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free += 100));
 
+				let _ = pool_events_since_last_call();
+
 				// When
 				assert_ok!(Pools::claim_payout(Origin::signed(10)));
 
 				// Then
 				assert_eq!(
 					pool_events_since_last_call(),
-					vec![
-						Event::Created { depositor: 10, pool_id: 1 },
-						Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-						Event::Bonded { member: 40, pool_id: 1, bonded: 40, joined: true },
-						Event::Bonded { member: 50, pool_id: 1, bonded: 50, joined: true },
-						Event::PaidOut { member: 10, pool_id: 1, payout: 10 },
-					]
+					vec![Event::PaidOut { member: 10, pool_id: 1, payout: 10 },]
 				);
 				// last recorded reward counter at the time of this member's payout is 1
 				assert_eq!(PoolMembers::<Runtime>::get(10).unwrap(), del(10, 1));
@@ -795,7 +791,6 @@ mod claim_payout {
 				assert_eq!(Balances::free_balance(&10), 15 + 5);
 				assert_eq!(Balances::free_balance(&default_reward_account()), ed + 20);
 
-				// CHECK
 				// Given del 40 hasn't claimed and the reward pool has just earned 400
 				assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free += 400));
 				assert_eq!(Balances::free_balance(&default_reward_account()), ed + 420);
@@ -864,15 +859,9 @@ mod claim_payout {
 	fn reward_payout_errors_if_a_member_is_fully_unbonding() {
 		ExtBuilder::default().add_members(vec![(11, 11)]).build_and_execute(|| {
 			// fully unbond the member.
-			assert_ok!(Pools::fully_unbond(Origin::signed(11), 11));
+			assert_ok!(fully_unbond_permissioned(11));
 
-			let (mut member, mut bonded_pool, mut reward_pool) =
-				Pools::get_member_with_pools(&11).unwrap();
-
-			assert_noop!(
-				Pools::do_reward_payout(&11, &mut member, &mut bonded_pool, &mut reward_pool,),
-				Error::<Runtime>::FullyUnbonding
-			);
+			assert_noop!(Pools::claim_payout(Origin::signed(11)), Error::<Runtime>::FullyUnbonding);
 
 			assert_eq!(
 				pool_events_since_last_call(),
@@ -1889,6 +1878,65 @@ mod claim_payout {
 			// original ed + ed put into reward account + reward + bond + dust.
 			assert_eq!(Balances::free_balance(&10), 35 + 5 + 13 + 10 + 1);
 		})
+	}
+
+	#[test]
+	fn claim_payout_large_numbers() {
+		let unit = 10u128.pow(12); // akin to KSM
+		ExistentialDeposit::set(unit);
+		StakingMinBond::set(unit * 1000);
+
+		ExtBuilder::default()
+			.max_members(Some(4))
+			.max_members_per_pool(Some(4))
+			.add_members(vec![(20, 1500 * unit), (21, 2500 * unit), (22, 5000 * unit)])
+			.build_and_execute(|| {
+				// some rewards come in.
+				assert_eq!(Balances::free_balance(&default_reward_account()), unit);
+				Balances::mutate_account(&default_reward_account(), |f| f.free += unit / 1000)
+					.unwrap();
+
+				// everyone claims
+				assert_ok!(Pools::claim_payout(Origin::signed(10)));
+				assert_ok!(Pools::claim_payout(Origin::signed(20)));
+				assert_ok!(Pools::claim_payout(Origin::signed(21)));
+				assert_ok!(Pools::claim_payout(Origin::signed(22)));
+
+				assert_eq!(
+					pool_events_since_last_call(),
+					vec![
+						Event::Created { depositor: 10, pool_id: 1 },
+						Event::Bonded {
+							member: 10,
+							pool_id: 1,
+							bonded: 1000000000000000,
+							joined: true
+						},
+						Event::Bonded {
+							member: 20,
+							pool_id: 1,
+							bonded: 1500000000000000,
+							joined: true
+						},
+						Event::Bonded {
+							member: 21,
+							pool_id: 1,
+							bonded: 2500000000000000,
+							joined: true
+						},
+						Event::Bonded {
+							member: 22,
+							pool_id: 1,
+							bonded: 5000000000000000,
+							joined: true
+						},
+						Event::PaidOut { member: 10, pool_id: 1, payout: 100000000 },
+						Event::PaidOut { member: 20, pool_id: 1, payout: 150000000 },
+						Event::PaidOut { member: 21, pool_id: 1, payout: 250000000 },
+						Event::PaidOut { member: 22, pool_id: 1, payout: 500000000 }
+					]
+				);
+			})
 	}
 }
 

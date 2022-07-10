@@ -1200,7 +1200,7 @@ pub mod pallet {
 		/// For a value of 10, the threshold would be a pool points-to-balance ratio of 10:1.
 		/// Such a scenario would also be the equivalent of the pool being 90% slashed.
 		#[pallet::constant]
-		type MaxPointsToBalance: Get<u32>;
+		type MaxPointsToBalance: Get<u8>;
 
 		/// Infallible method for converting `Currency::Balance` to `U256`.
 		type BalanceToU256: Convert<BalanceOf<Self>, U256>;

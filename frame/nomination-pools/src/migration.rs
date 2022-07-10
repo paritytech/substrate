@@ -345,13 +345,30 @@ pub mod v2 {
 		}
 
 		#[cfg(feature = "try-runtime")]
+		fn pre_upgrade() -> Result<(), &'static str> {
+			// all reward accounts must have more than ED.
+			RewardPools::<T>::iter().for_each(|(id, _)| {
+				assert!(
+					T::Currency::free_balance(&Pallet::<T>::create_reward_account(id)) >=
+						T::Currency::minimum_balance()
+				)
+			});
+
+			Ok(())
+		}
+
+		#[cfg(feature = "try-runtime")]
 		fn post_upgrade() -> Result<(), &'static str> {
 			// new version must be set.
 			assert_eq!(Pallet::<T>::on_chain_storage_version(), 2);
 
+			// no reward or bonded pool has been skipped.
+			assert_eq!(RewardPools::<T>::iter().count() as u32, RewardPools::<T>::count());
+			assert_eq!(BondedPools::<T>::iter().count() as u32, BondedPools::<T>::count());
+
 			// all reward pools must have exactly ED in them. This means no reward can be claimed,
 			// and that setting reward counters all over the board to zero will work henceforth.
-			RewardPools::<T>::iter().for_each(|(id, _reward_pool)| {
+			RewardPools::<T>::iter().for_each(|(id, _)| {
 				assert_eq!(
 					RewardPool::<T>::current_balance(id),
 					Zero::zero(),
