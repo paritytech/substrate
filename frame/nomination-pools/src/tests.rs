@@ -861,10 +861,7 @@ mod claim_payout {
 			// fully unbond the member.
 			assert_ok!(fully_unbond_permissioned(11));
 
-			assert_noop!(
-				Pools::claim_payout(Origin::signed(11)),
-				Error::<Runtime>::FullyUnbonding
-			);
+			assert_noop!(Pools::claim_payout(Origin::signed(11)), Error::<Runtime>::FullyUnbonding);
 
 			assert_eq!(
 				pool_events_since_last_call(),

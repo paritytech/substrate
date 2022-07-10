@@ -363,12 +363,8 @@ pub mod v2 {
 			assert_eq!(Pallet::<T>::on_chain_storage_version(), 2);
 
 			// no reward or bonded pool has been skipped.
-			assert_eq!(
-				RewardPools::<T>::iter().count() as u32, RewardPools::<T>::count()
-			);
-			assert_eq!(
-				BondedPools::<T>::iter().count() as u32, BondedPools::<T>::count()
-			);
+			assert_eq!(RewardPools::<T>::iter().count() as u32, RewardPools::<T>::count());
+			assert_eq!(BondedPools::<T>::iter().count() as u32, BondedPools::<T>::count());
 
 			// all reward pools must have exactly ED in them. This means no reward can be claimed,
 			// and that setting reward counters all over the board to zero will work henceforth.

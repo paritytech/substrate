@@ -16,7 +16,13 @@
 // limitations under the License.
 
 use frame_election_provider_support::VoteWeight;
-use frame_support::{assert_ok, pallet_prelude::*, parameter_types, traits::{ConstU64, ConstU8}, PalletId};
+use frame_support::{
+	assert_ok,
+	pallet_prelude::*,
+	parameter_types,
+	traits::{ConstU64, ConstU8},
+	PalletId,
+};
 use sp_runtime::{
 	traits::{Convert, IdentityLookup},
 	FixedU128,
