@@ -614,7 +614,11 @@ impl<T: Config> StakingLedger<T> {
 		let mut slash_out_of = |target: &mut BalanceOf<T>, slash_remaining: &mut BalanceOf<T>| {
 			let mut slash_from_target =
 				if is_proportional { ratio * (*target) } else { *slash_remaining }
+					// this is the total that that the slash target has. We can't slash more than
+					// this anyhow!
 					.min(*target)
+					// this is the total amount that we would have wanted to slash
+					// non-proportionally, a proportional slash should never exceed this either!
 					.min(*slash_remaining);
 
 			// slash out from *target exactly `slash_from_target`.
