@@ -199,7 +199,7 @@ impl pools::Config for Runtime {
 	type PalletId = PoolsPalletId;
 	type MaxMetadataLen = MaxMetadataLen;
 	type MaxUnbonding = MaxUnbonding;
-	type MaxPointsToBalance = frame_support::traits::ConstU32<10>;
+	type MaxPointsToBalance = frame_support::traits::ConstU8<10>;
 }
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;

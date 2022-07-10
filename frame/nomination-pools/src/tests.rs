@@ -208,7 +208,7 @@ mod bonded_pool {
 			};
 
 			let max_points_to_balance: u128 =
-				<<Runtime as Config>::MaxPointsToBalance as Get<u32>>::get().into();
+				<<Runtime as Config>::MaxPointsToBalance as Get<u8>>::get().into();
 
 			// Simulate a 100% slashed pool
 			StakingMock::set_bonded_balance(pool.bonded_account(), 0);
@@ -520,7 +520,7 @@ mod join {
 
 			// Force the points:balance ratio to `MaxPointsToBalance` (100/10)
 			let max_points_to_balance: u128 =
-				<<Runtime as Config>::MaxPointsToBalance as Get<u32>>::get().into();
+				<<Runtime as Config>::MaxPointsToBalance as Get<u8>>::get().into();
 
 			StakingMock::set_bonded_balance(
 				Pools::create_bonded_account(123),

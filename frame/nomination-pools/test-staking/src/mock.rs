@@ -16,7 +16,7 @@
 // limitations under the License.
 
 use frame_election_provider_support::VoteWeight;
-use frame_support::{assert_ok, pallet_prelude::*, parameter_types, traits::ConstU64, PalletId};
+use frame_support::{assert_ok, pallet_prelude::*, parameter_types, traits::{ConstU64, ConstU8}, PalletId};
 use sp_runtime::{
 	traits::{Convert, IdentityLookup},
 	FixedU128,
@@ -170,7 +170,7 @@ impl pallet_nomination_pools::Config for Runtime {
 	type PostUnbondingPoolsWindow = PostUnbondingPoolsWindow;
 	type MaxMetadataLen = ConstU32<256>;
 	type MaxUnbonding = ConstU32<8>;
-	type MaxPointsToBalance = ConstU32<10>;
+	type MaxPointsToBalance = ConstU8<10>;
 	type PalletId = PoolsPalletId;
 }
 
