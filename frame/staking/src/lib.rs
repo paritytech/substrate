@@ -529,13 +529,26 @@ impl<T: Config> StakingLedger<T> {
 		(self, unlocking_balance)
 	}
 
-	/// Slash the staker for a given amount of balance. This can grow the value of the slash in the
-	/// case that either the active bonded or some unlocking chunks become dust after slashing.
-	/// Returns the amount of funds actually slashed.
+	/// Slash the staker for a given amount of balance.
+	///
+	/// This implements a proportional slashing system, whereby we set our preference to slash as
+	/// such:
+	///
+	/// - If any unlocking chunks exist that are scheduled to be unlocked at `slash_era +
+	///   bonding_duration` and onwards, the slash is divided equally between the active ledger and
+	///   the unlocking chunks.
+	/// - If no such chunks exist, then only the active balance is slashed.
+	///
+	/// Note that the above is only a *preference*. If for any reason the active ledger, which or
+	/// without some portion of the unlocking chunks that are more justified to be slashed are not
+	/// enough, then the slashing will continue and will consume as much of the active and unlocking
+	/// chunks as needed.
+	///
+	/// This will never slash more than the given amount. If any of the chunks become dusted, the
+	/// last chunk is slashed slightly less to compensate. Returns the amount of funds actually
+	/// slashed.
 	///
 	/// `slash_era` is the era in which the slash (which is being enacted now) actually happened.
-	///
-	/// # Note
 	///
 	/// This calls `Config::OnStakerSlash::on_slash` with information as to how the slash was
 	/// applied.
@@ -554,17 +567,18 @@ impl<T: Config> StakingLedger<T> {
 		let mut remaining_slash = slash_amount;
 		let pre_slash_total = self.total;
 
-		let era_after_slash = slash_era + 1;
-		let chunk_unlock_era_after_slash = era_after_slash + T::BondingDuration::get();
+		// for a slash_era = x, any chunk that is scheduled to be unlocked at era `x + 28` (assuming
+		// 28 is the bonding duration) onwards should be slashed.
+		let slashable_chunks_start = slash_era + T::BondingDuration::get();
 
 		// Calculate the total balance of active funds and unlocking funds in the affected range.
-		let (affected_balance, slash_chunks_priority): (_, Box<dyn Iterator<Item = usize>>) = {
-			if let Some(start_index) =
-				self.unlocking.iter().position(|c| c.era >= chunk_unlock_era_after_slash)
+		let (is_proportional, affected_balance, slash_chunks_priority) = {
+			if let Some(first_slashable_index) =
+				self.unlocking.iter().position(|c| c.era >= slashable_chunks_start)
 			{
 				// The indices of the first chunk after the slash up through the most recent chunk.
 				// (The most recent chunk is at greatest from this era)
-				let affected_indices = start_index..self.unlocking.len();
+				let affected_indices = first_slashable_index..self.unlocking.len();
 				let unbonding_affected_balance =
 					affected_indices.clone().fold(BalanceOf::<T>::zero(), |sum, i| {
 						if let Some(chunk) = self.unlocking.get_mut(i).defensive() {
@@ -574,25 +588,41 @@ impl<T: Config> StakingLedger<T> {
 						}
 					});
 				(
+					true,
 					self.active.saturating_add(unbonding_affected_balance),
-					Box::new(affected_indices.chain((0..start_index).rev())),
+					affected_indices.chain((0..first_slashable_index).rev()).collect::<Vec<_>>(),
 				)
 			} else {
-				(self.active, Box::new((0..self.unlocking.len()).rev()))
+				// We just slash from the last chunk to the most recent one, if need be.
+				(false, self.active, (0..self.unlocking.len()).rev().collect::<Vec<_>>())
 			}
 		};
 
 		// Helper to update `target` and the ledgers total after accounting for slashing `target`.
 		let ratio = Perquintill::from_rational(slash_amount, affected_balance);
+		log!(
+			debug,
+			"slashing {:?} for era {:?} out of {:?}, affected balance = {:?}, priority: {:?}, ratio = {:?}",
+			slash_amount,
+			slash_era,
+			self,
+			affected_balance,
+			slash_chunks_priority,
+			ratio,
+		);
+
 		let mut slash_out_of = |target: &mut BalanceOf<T>, slash_remaining: &mut BalanceOf<T>| {
 			let mut slash_from_target =
-				if slash_amount < affected_balance { ratio * (*target) } else { *slash_remaining }
-					.min(*target);
+				if is_proportional { ratio * (*target) } else { *slash_remaining }
+					.min(*target)
+					.min(*slash_remaining);
 
 			// slash out from *target exactly `slash_from_target`.
 			*target = *target - slash_from_target;
 			if *target < minimum_balance {
-				// Slash the rest of the target if its dust
+				// Slash the rest of the target if its dust. This might cause the last chunk to be
+				// slightly under-slashed, by at most `MaxUnlockingChunks * ED`, which is not a big
+				// deal.
 				slash_from_target =
 					sp_std::mem::replace(target, Zero::zero()).saturating_add(slash_from_target)
 			}

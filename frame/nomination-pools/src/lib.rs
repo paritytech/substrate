@@ -54,7 +54,7 @@
 //!
 //! ### Join
 //!
-//! A account can stake funds with a nomination pool by calling [`Call::join`].
+//! An account can stake funds with a nomination pool by calling [`Call::join`].
 //!
 //! ### Claim rewards
 //!
@@ -383,16 +383,18 @@ impl<T: Config> PoolMember<T> {
 		current_reward_counter: T::RewardCounter,
 	) -> Result<BalanceOf<T>, Error<T>> {
 		// accuracy note: Reward counters are `FixedU128` with base of 10^18. This value is being
-		// multiplied by a point. The worse case of a point is 10x the granularity of the balance.
+		// multiplied by a point. The worse case of a point is 10x the granularity of the balance
+		// (10x is the common configuration of `MaxPointsToBalance`).
+		//
 		// Assuming roughly the current issuance of polkadot (12,047,781,394,999,601,455, which is
-		// 1.2 * 10^9 10^10 = 1.2 * 10^19), the worse case point value is around 10^20.
+		// 1.2 * 10^9 * 10^10 = 1.2 * 10^19), the worse case point value is around 10^20.
 		//
 		// The final multiplication is:
 		//
 		// rc * 10^20 / 10^18 = rc * 100
 		//
 		// meaning that as long as reward_counter's value is less than 1/100th of its max capacity
-		// (u128), `checked_mul_int` won't saturate.
+		// (u128::MAX_VALUE), `checked_mul_int` won't saturate.
 		//
 		// given the nature of reward counter being 'pending_rewards / pool_total_point', the only
 		// (unrealistic) way that super high values can be achieved is for a pool to suddenly
@@ -1159,7 +1161,6 @@ pub mod pallet {
 		// a million places, so we prefer doing this.
 		type CurrencyBalance: sp_runtime::traits::AtLeast32BitUnsigned
 			+ codec::FullCodec
-			+ Copy
 			+ MaybeSerializeDeserialize
 			+ sp_std::fmt::Debug
 			+ Default
@@ -1499,7 +1500,7 @@ pub mod pallet {
 			let mut reward_pool = RewardPools::<T>::get(pool_id)
 				.defensive_ok_or::<Error<T>>(DefensiveError::RewardPoolNotFound.into())?;
 			// IMPORTANT: reward pool records must be updated with the old points.
-			let _ = reward_pool.update_records(pool_id, bonded_pool.points)?;
+			reward_pool.update_records(pool_id, bonded_pool.points)?;
 
 			bonded_pool.try_inc_members()?;
 			let points_issued = bonded_pool.try_bond_funds(&who, amount, BondType::Later)?;
@@ -1546,7 +1547,7 @@ pub mod pallet {
 
 			// payout related stuff: we must claim the payouts, and updated recorded payout data
 			// before updating the bonded pool points, similar to that of `join` transaction.
-			let _ = reward_pool.update_records(bonded_pool.id, bonded_pool.points)?;
+			reward_pool.update_records(bonded_pool.id, bonded_pool.points)?;
 			// TODO: optimize this to not touch the free balance of `who ` at all in benchmarks.
 			// Currently, bonding rewards is like a batch. In the same PR, also make this function
 			// take a boolean argument that make it either 100% pure (no storage update), or make it

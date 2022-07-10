@@ -191,6 +191,7 @@ pub mod v2 {
 			let mut members_translated = 0u64;
 			// just for logging.
 			let mut total_value_locked = BalanceOf::<T>::zero();
+			let mut total_points_locked = BalanceOf::<T>::zero();
 
 			// store each member of the pool, with their active points. In the process, migrate
 			// their data as well.
@@ -199,6 +200,7 @@ pub mod v2 {
 				let id = old_member.pool_id;
 				temp_members.entry(id).or_default().push((key, old_member.points));
 
+				total_points_locked += old_member.points;
 				members_translated += 1;
 				Some(PoolMember::<T> {
 					last_recorded_reward_counter: Zero::zero(),
@@ -310,10 +312,11 @@ pub mod v2 {
 
 			log!(
 				info,
-				"Upgraded {} members, {} reward pools, TVL {:?}, storage to version {:?}",
+				"Upgraded {} members, {} reward pools, TVL {:?} TPL {:?}, storage to version {:?}",
 				members_translated,
 				reward_pools_translated,
 				total_value_locked,
+				total_points_locked,
 				current
 			);
 			current.put::<Pallet<T>>();
