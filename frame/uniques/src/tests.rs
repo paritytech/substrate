@@ -699,9 +699,6 @@ fn max_supply_should_work() {
 fn try_increment_id_works() {
 	new_test_ext().execute_with(|| {
 		// should fail because the next `CollectionId` is not being used.
-		assert_noop!(
-			Uniques::try_increment_id(Origin::signed(2)),
-			Error::<Test>::NextIdNotUsed
-		);
+		assert_noop!(Uniques::try_increment_id(Origin::signed(2)), Error::<Test>::NextIdNotUsed);
 	});
 }
