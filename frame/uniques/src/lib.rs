@@ -1482,7 +1482,6 @@ pub mod pallet {
 		///
 		/// Emits `ItemBought` on success.
 		#[pallet::weight(T::WeightInfo::buy_item())]
-		#[allow(deprecated)]
 		#[transactional]
 		pub fn buy_item(
 			origin: OriginFor<T>,
