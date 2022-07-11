@@ -18,7 +18,7 @@
 
 use crate::message;
 use libp2p::PeerId;
-use log::{debug, trace};
+use log::trace;
 use sp_runtime::traits::{Block as BlockT, NumberFor, One};
 use std::{
 	cmp,
@@ -212,18 +212,13 @@ impl<B: BlockT> BlockCollection<B> {
 	}
 
 	pub fn clear_queued(&mut self, from_hash: &B::Hash) {
-		match self.queued_blocks.remove(from_hash) {
-			None => {
-				debug!(target: "sync", "Can't clear unknown queued blocks from {:?}", from_hash);
-			},
-			Some((from, to)) => {
-				let mut block_num = from;
-				while block_num < to {
-					self.blocks.remove(&block_num);
-					block_num += One::one();
-				}
-				trace!(target: "sync", "Cleared blocks from {:?} to {:?}", from, to);
-			},
+		if let Some((from, to)) = self.queued_blocks.remove(from_hash) {
+			let mut block_num = from;
+			while block_num < to {
+				self.blocks.remove(&block_num);
+				block_num += One::one();
+			}
+			trace!(target: "sync", "Cleared blocks from {:?} to {:?}", from, to);
 		}
 	}
 

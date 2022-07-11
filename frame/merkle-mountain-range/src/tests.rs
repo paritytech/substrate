@@ -15,9 +15,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{mmr::utils, mock::*, *};
+use crate::{
+	mmr::{storage::PruningMap, utils},
+	mock::*,
+	*,
+};
 
-use frame_support::traits::OnInitialize;
+use frame_support::traits::{Get, OnInitialize};
 use mmr_lib::helper;
 use sp_core::{
 	offchain::{testing::TestOffchainExt, OffchainDbExt, OffchainWorkerExt},
@@ -47,7 +51,6 @@ fn new_block() -> u64 {
 
 fn peaks_from_leaves_count(leaves_count: NodeIndex) -> Vec<NodeIndex> {
 	let size = utils::NodesUtils::new(leaves_count).size();
-
 	helper::get_peaks(size)
 }
 
@@ -73,7 +76,7 @@ fn decode_node(
 	}
 }
 
-fn init_chain(blocks: usize) {
+fn add_blocks(blocks: usize) {
 	// given
 	for _ in 0..blocks {
 		new_block();
@@ -115,9 +118,10 @@ fn should_start_empty() {
 fn should_append_to_mmr_when_on_initialize_is_called() {
 	let _ = env_logger::try_init();
 	let mut ext = new_test_ext();
-	ext.execute_with(|| {
+	let (parent_b1, parent_b2) = ext.execute_with(|| {
 		// when
 		new_block();
+		let parent_b1 = <frame_system::Pallet<Test>>::parent_hash();
 
 		// then
 		assert_eq!(crate::NumberOfLeaves::<Test>::get(), 1);
@@ -136,6 +140,7 @@ fn should_append_to_mmr_when_on_initialize_is_called() {
 
 		// when
 		new_block();
+		let parent_b2 = <frame_system::Pallet<Test>>::parent_hash();
 
 		// then
 		assert_eq!(crate::NumberOfLeaves::<Test>::get(), 2);
@@ -157,26 +162,33 @@ fn should_append_to_mmr_when_on_initialize_is_called() {
 				hex("672c04a9cd05a644789d769daa552d35d8de7c33129f8a7cbf49e595234c4854"),
 			)
 		);
-	});
 
+		(parent_b1, parent_b2)
+	});
 	// make sure the leaves end up in the offchain DB
 	ext.persist_offchain_overlay();
+
 	let offchain_db = ext.offchain_db();
 	assert_eq!(
-		offchain_db.get(&MMR::offchain_key(0)).map(decode_node),
+		offchain_db.get(&MMR::node_offchain_key(parent_b1, 0)).map(decode_node),
 		Some(mmr::Node::Data(((0, H256::repeat_byte(1)), LeafData::new(1),)))
 	);
 	assert_eq!(
-		offchain_db.get(&MMR::offchain_key(1)).map(decode_node),
+		offchain_db.get(&MMR::node_offchain_key(parent_b2, 1)).map(decode_node),
 		Some(mmr::Node::Data(((1, H256::repeat_byte(2)), LeafData::new(2),)))
 	);
 	assert_eq!(
-		offchain_db.get(&MMR::offchain_key(2)).map(decode_node),
+		offchain_db.get(&MMR::node_offchain_key(parent_b2, 2)).map(decode_node),
 		Some(mmr::Node::Hash(hex(
 			"672c04a9cd05a644789d769daa552d35d8de7c33129f8a7cbf49e595234c4854"
 		)))
 	);
-	assert_eq!(offchain_db.get(&MMR::offchain_key(3)), None);
+	assert_eq!(offchain_db.get(&MMR::node_offchain_key(parent_b2, 3)), None);
+
+	assert_eq!(offchain_db.get(&MMR::node_canon_offchain_key(0)), None);
+	assert_eq!(offchain_db.get(&MMR::node_canon_offchain_key(1)), None);
+	assert_eq!(offchain_db.get(&MMR::node_canon_offchain_key(2)), None);
+	assert_eq!(offchain_db.get(&MMR::node_canon_offchain_key(3)), None);
 }
 
 #[test]
@@ -184,7 +196,7 @@ fn should_construct_larger_mmr_correctly() {
 	let _ = env_logger::try_init();
 	new_test_ext().execute_with(|| {
 		// when
-		init_chain(7);
+		add_blocks(7);
 
 		// then
 		assert_eq!(crate::NumberOfLeaves::<Test>::get(), 7);
@@ -215,7 +227,7 @@ fn should_generate_proofs_correctly() {
 	let _ = env_logger::try_init();
 	let mut ext = new_test_ext();
 	// given
-	ext.execute_with(|| init_chain(7));
+	ext.execute_with(|| add_blocks(7));
 	ext.persist_offchain_overlay();
 
 	// Try to generate proofs now. This requires the offchain extensions to be present
@@ -283,7 +295,7 @@ fn should_generate_batch_proof_correctly() {
 	let _ = env_logger::try_init();
 	let mut ext = new_test_ext();
 	// given
-	ext.execute_with(|| init_chain(7));
+	ext.execute_with(|| add_blocks(7));
 	ext.persist_offchain_overlay();
 
 	// Try to generate proofs now. This requires the offchain extensions to be present
@@ -316,7 +328,7 @@ fn should_verify() {
 	// Start off with chain initialisation and storing indexing data off-chain
 	// (MMR Leafs)
 	let mut ext = new_test_ext();
-	ext.execute_with(|| init_chain(7));
+	ext.execute_with(|| add_blocks(7));
 	ext.persist_offchain_overlay();
 
 	// Try to generate proof now. This requires the offchain extensions to be present
@@ -328,7 +340,7 @@ fn should_verify() {
 	});
 
 	ext.execute_with(|| {
-		init_chain(7);
+		add_blocks(7);
 		// then
 		assert_eq!(crate::Pallet::<Test>::verify_leaves(leaves, proof5), Ok(()));
 	});
@@ -341,7 +353,7 @@ fn should_verify_batch_proof() {
 	// Start off with chain initialisation and storing indexing data off-chain
 	// (MMR Leafs)
 	let mut ext = new_test_ext();
-	ext.execute_with(|| init_chain(7));
+	ext.execute_with(|| add_blocks(7));
 	ext.persist_offchain_overlay();
 
 	// Try to generate proof now. This requires the offchain extensions to be present
@@ -353,7 +365,7 @@ fn should_verify_batch_proof() {
 	});
 
 	ext.execute_with(|| {
-		init_chain(7);
+		add_blocks(7);
 		// then
 		assert_eq!(crate::Pallet::<Test>::verify_leaves(leaves, proof), Ok(()));
 	});
@@ -366,7 +378,7 @@ fn verification_should_be_stateless() {
 	// Start off with chain initialisation and storing indexing data off-chain
 	// (MMR Leafs)
 	let mut ext = new_test_ext();
-	ext.execute_with(|| init_chain(7));
+	ext.execute_with(|| add_blocks(7));
 	ext.persist_offchain_overlay();
 
 	// Try to generate proof now. This requires the offchain extensions to be present
@@ -393,7 +405,7 @@ fn should_verify_batch_proof_statelessly() {
 	// Start off with chain initialisation and storing indexing data off-chain
 	// (MMR Leafs)
 	let mut ext = new_test_ext();
-	ext.execute_with(|| init_chain(7));
+	ext.execute_with(|| add_blocks(7));
 	ext.persist_offchain_overlay();
 
 	// Try to generate proof now. This requires the offchain extensions to be present
@@ -424,7 +436,7 @@ fn should_verify_on_the_next_block_since_there_is_no_pruning_yet() {
 	let _ = env_logger::try_init();
 	let mut ext = new_test_ext();
 	// given
-	ext.execute_with(|| init_chain(7));
+	ext.execute_with(|| add_blocks(7));
 
 	ext.persist_offchain_overlay();
 	register_offchain_ext(&mut ext);
@@ -436,5 +448,240 @@ fn should_verify_on_the_next_block_since_there_is_no_pruning_yet() {
 
 		// then
 		assert_eq!(crate::Pallet::<Test>::verify_leaves(leaves, proof5), Ok(()));
+	});
+}
+
+#[test]
+fn should_verify_pruning_map() {
+	use sp_core::offchain::StorageKind;
+	use sp_io::offchain;
+
+	let _ = env_logger::try_init();
+	let mut ext = new_test_ext();
+	register_offchain_ext(&mut ext);
+
+	ext.execute_with(|| {
+		type TestPruningMap = PruningMap<Test, ()>;
+		fn offchain_decoded(key: Vec<u8>) -> Option<Vec<H256>> {
+			offchain::local_storage_get(StorageKind::PERSISTENT, &key)
+				.and_then(|v| codec::Decode::decode(&mut &*v).ok())
+		}
+
+		// test append
+		{
+			TestPruningMap::append(1, H256::repeat_byte(1));
+
+			TestPruningMap::append(2, H256::repeat_byte(21));
+			TestPruningMap::append(2, H256::repeat_byte(22));
+
+			TestPruningMap::append(3, H256::repeat_byte(31));
+			TestPruningMap::append(3, H256::repeat_byte(32));
+			TestPruningMap::append(3, H256::repeat_byte(33));
+
+			// `0` not present
+			let map_key = TestPruningMap::pruning_map_offchain_key(0);
+			assert_eq!(offchain::local_storage_get(StorageKind::PERSISTENT, &map_key), None);
+
+			// verify `1` entries
+			let map_key = TestPruningMap::pruning_map_offchain_key(1);
+			let expected = vec![H256::repeat_byte(1)];
+			assert_eq!(offchain_decoded(map_key), Some(expected));
+
+			// verify `2` entries
+			let map_key = TestPruningMap::pruning_map_offchain_key(2);
+			let expected = vec![H256::repeat_byte(21), H256::repeat_byte(22)];
+			assert_eq!(offchain_decoded(map_key), Some(expected));
+
+			// verify `3` entries
+			let map_key = TestPruningMap::pruning_map_offchain_key(3);
+			let expected =
+				vec![H256::repeat_byte(31), H256::repeat_byte(32), H256::repeat_byte(33)];
+			assert_eq!(offchain_decoded(map_key), Some(expected));
+
+			// `4` not present
+			let map_key = TestPruningMap::pruning_map_offchain_key(4);
+			assert_eq!(offchain::local_storage_get(StorageKind::PERSISTENT, &map_key), None);
+		}
+
+		// test remove
+		{
+			// `0` doesn't return anything
+			assert_eq!(TestPruningMap::remove(0), None);
+
+			// remove and verify `1` entries
+			let expected = vec![H256::repeat_byte(1)];
+			assert_eq!(TestPruningMap::remove(1), Some(expected));
+
+			// remove and verify `2` entries
+			let expected = vec![H256::repeat_byte(21), H256::repeat_byte(22)];
+			assert_eq!(TestPruningMap::remove(2), Some(expected));
+
+			// remove and verify `3` entries
+			let expected =
+				vec![H256::repeat_byte(31), H256::repeat_byte(32), H256::repeat_byte(33)];
+			assert_eq!(TestPruningMap::remove(3), Some(expected));
+
+			// `4` doesn't return anything
+			assert_eq!(TestPruningMap::remove(4), None);
+
+			// no entries left in offchain map
+			for block in 0..5 {
+				let map_key = TestPruningMap::pruning_map_offchain_key(block);
+				assert_eq!(offchain::local_storage_get(StorageKind::PERSISTENT, &map_key), None);
+			}
+		}
+	})
+}
+
+#[test]
+fn should_canonicalize_offchain() {
+	use frame_support::traits::Hooks;
+
+	let _ = env_logger::try_init();
+	let mut ext = new_test_ext();
+	register_offchain_ext(&mut ext);
+
+	// adding 13 blocks that we'll later check have been canonicalized,
+	// (test assumes `13 < frame_system::BlockHashCount`).
+	let to_canon_count = 13u32;
+
+	// add 13 blocks and verify leaves and nodes for them have been added to
+	// offchain MMR using fork-proof keys.
+	for blocknum in 0..to_canon_count {
+		ext.execute_with(|| {
+			new_block();
+			<Pallet<Test> as Hooks<BlockNumber>>::offchain_worker(blocknum.into());
+		});
+		ext.persist_offchain_overlay();
+	}
+	let offchain_db = ext.offchain_db();
+	ext.execute_with(|| {
+		// verify leaves added by blocks 1..=13
+		for block_num in 1..=to_canon_count {
+			let parent_num: BlockNumber = (block_num - 1).into();
+			let leaf_index = u64::from(block_num - 1);
+			let pos = helper::leaf_index_to_pos(leaf_index.into());
+			// not canon,
+			assert_eq!(offchain_db.get(&MMR::node_canon_offchain_key(pos)), None);
+			let parent_hash = <frame_system::Pallet<Test>>::block_hash(parent_num);
+			// but available in fork-proof storage.
+			assert_eq!(
+				offchain_db.get(&MMR::node_offchain_key(parent_hash, pos)).map(decode_node),
+				Some(mmr::Node::Data((
+					(leaf_index, H256::repeat_byte(u8::try_from(block_num).unwrap())),
+					LeafData::new(block_num.into()),
+				)))
+			);
+		}
+
+		// verify a couple of nodes and peaks:
+		// 		`pos` is node to verify,
+		// 		`leaf_index` is leaf that added node `pos`,
+		// 		`expected` is expected value of node at `pos`.
+		let verify = |pos: NodeIndex, leaf_index: LeafIndex, expected: H256| {
+			let parent_num: BlockNumber = leaf_index.try_into().unwrap();
+			let parent_hash = <frame_system::Pallet<Test>>::block_hash(parent_num);
+			// not canon,
+			assert_eq!(offchain_db.get(&MMR::node_canon_offchain_key(pos)), None);
+			// but available in fork-proof storage.
+			assert_eq!(
+				offchain_db.get(&MMR::node_offchain_key(parent_hash, pos)).map(decode_node),
+				Some(mmr::Node::Hash(expected))
+			);
+		};
+		verify(2, 1, hex("672c04a9cd05a644789d769daa552d35d8de7c33129f8a7cbf49e595234c4854"));
+		verify(13, 7, hex("441bf63abc7cf9b9e82eb57b8111c883d50ae468d9fd7f301e12269fc0fa1e75"));
+		verify(21, 11, hex("f323ac1a7f56de5f40ed8df3e97af74eec0ee9d72883679e49122ffad2ffd03b"));
+	});
+
+	// add another `frame_system::BlockHashCount` blocks and verify all nodes and leaves
+	// added by our original `to_canon_count` blocks have now been canonicalized in offchain db.
+	let block_hash_size: u64 = <Test as frame_system::Config>::BlockHashCount::get();
+	let base = to_canon_count;
+	for blocknum in base..(base + u32::try_from(block_hash_size).unwrap()) {
+		ext.execute_with(|| {
+			new_block();
+			<Pallet<Test> as Hooks<BlockNumber>>::offchain_worker(blocknum.into());
+		});
+		ext.persist_offchain_overlay();
+	}
+	ext.execute_with(|| {
+		// verify leaves added by blocks 1..=13, should be in offchain under canon key.
+		for block_num in 1..=to_canon_count {
+			let leaf_index = u64::from(block_num - 1);
+			let pos = helper::leaf_index_to_pos(leaf_index.into());
+			let parent_num: BlockNumber = (block_num - 1).into();
+			let parent_hash = <frame_system::Pallet<Test>>::block_hash(parent_num);
+			// no longer available in fork-proof storage (was pruned),
+			assert_eq!(offchain_db.get(&MMR::node_offchain_key(parent_hash, pos)), None);
+			// but available using canon key.
+			assert_eq!(
+				offchain_db.get(&MMR::node_canon_offchain_key(pos)).map(decode_node),
+				Some(mmr::Node::Data((
+					(leaf_index, H256::repeat_byte(u8::try_from(block_num).unwrap())),
+					LeafData::new(block_num.into()),
+				)))
+			);
+		}
+
+		// also check some nodes and peaks:
+		// 		`pos` is node to verify,
+		// 		`leaf_index` is leaf that added node `pos`,
+		// 		`expected` is expected value of node at `pos`.
+		let verify = |pos: NodeIndex, leaf_index: LeafIndex, expected: H256| {
+			let parent_num: BlockNumber = leaf_index.try_into().unwrap();
+			let parent_hash = <frame_system::Pallet<Test>>::block_hash(parent_num);
+			// no longer available in fork-proof storage (was pruned),
+			assert_eq!(offchain_db.get(&MMR::node_offchain_key(parent_hash, pos)), None);
+			// but available using canon key.
+			assert_eq!(
+				offchain_db.get(&MMR::node_canon_offchain_key(pos)).map(decode_node),
+				Some(mmr::Node::Hash(expected))
+			);
+		};
+		verify(2, 1, hex("672c04a9cd05a644789d769daa552d35d8de7c33129f8a7cbf49e595234c4854"));
+		verify(13, 7, hex("441bf63abc7cf9b9e82eb57b8111c883d50ae468d9fd7f301e12269fc0fa1e75"));
+		verify(21, 11, hex("f323ac1a7f56de5f40ed8df3e97af74eec0ee9d72883679e49122ffad2ffd03b"));
+	});
+}
+
+#[test]
+fn should_verify_canonicalized() {
+	use frame_support::traits::Hooks;
+	let _ = env_logger::try_init();
+
+	// How deep is our fork-aware storage (in terms of blocks/leaves, nodes will be more).
+	let block_hash_size: u64 = <Test as frame_system::Config>::BlockHashCount::get();
+
+	// Start off with chain initialisation and storing indexing data off-chain.
+	// Create twice as many leaf entries than our fork-aware capacity,
+	// resulting in ~half of MMR storage to use canonical keys and the other half fork-aware keys.
+	// Verify that proofs can be generated (using leaves and nodes from full set) and verified.
+	let mut ext = new_test_ext();
+	register_offchain_ext(&mut ext);
+	for blocknum in 0u32..(2 * block_hash_size).try_into().unwrap() {
+		ext.execute_with(|| {
+			new_block();
+			<Pallet<Test> as Hooks<BlockNumber>>::offchain_worker(blocknum.into());
+		});
+		ext.persist_offchain_overlay();
+	}
+
+	// Generate proofs for some blocks.
+	let (leaves, proofs) =
+		ext.execute_with(|| crate::Pallet::<Test>::generate_batch_proof(vec![0, 4, 5, 7]).unwrap());
+	// Verify all previously generated proofs.
+	ext.execute_with(|| {
+		assert_eq!(crate::Pallet::<Test>::verify_leaves(leaves, proofs), Ok(()));
+	});
+
+	// Generate proofs for some new blocks.
+	let (leaves, proofs) = ext.execute_with(|| {
+		crate::Pallet::<Test>::generate_batch_proof(vec![block_hash_size + 7]).unwrap()
+	});
+	// Add some more blocks then verify all previously generated proofs.
+	ext.execute_with(|| {
+		add_blocks(7);
+		assert_eq!(crate::Pallet::<Test>::verify_leaves(leaves, proofs), Ok(()));
 	});
 }
