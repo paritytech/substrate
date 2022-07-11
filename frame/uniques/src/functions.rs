@@ -85,7 +85,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		);
 
 		CollectionAccount::<T, I>::insert(&owner, &collection, ());
-		CollectionsCount::<T, I>::set(collection.saturating_add(T::CollectionId::one()));
+		CollectionsCount::<T, I>::set(collection + T::CollectionId::one());
 
 		Self::deposit_event(event);
 		Ok(())

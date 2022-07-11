@@ -96,8 +96,7 @@ pub mod pallet {
 			+ Copy
 			+ Default
 			+ Unsigned
-			+ FromPrimitive
-			+ Saturating;
+			+ FromPrimitive;
 
 		/// The type used to identify a unique item within a collection.
 		type ItemId: Member + Parameter + MaxEncodedLen + Copy;
@@ -492,7 +491,7 @@ pub mod pallet {
 		pub fn try_increment_id(origin: OriginFor<T>) -> DispatchResult {
 			ensure_signed(origin)?;
 
-			let next_id = CollectionsCount::<T, I>::get().saturating_add(T::CollectionId::one());
+			let next_id = CollectionsCount::<T, I>::get() + T::CollectionId::one();
 			ensure!(Collection::<T, I>::contains_key(next_id), Error::<T, I>::NextIdNotUsed);
 
 			CollectionsCount::<T, I>::set(next_id);
