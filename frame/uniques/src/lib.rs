@@ -96,7 +96,8 @@ pub mod pallet {
 			+ Copy
 			+ Default
 			+ Unsigned
-			+ FromPrimitive;
+			+ FromPrimitive
+			+ Saturating;
 
 		/// The type used to identify a unique item within a collection.
 		type ItemId: Member + Parameter + MaxEncodedLen + Copy;
@@ -354,6 +355,8 @@ pub mod pallet {
 		OwnershipAcceptanceChanged { who: T::AccountId, maybe_collection: Option<T::CollectionId> },
 		/// Max supply has been set for a collection.
 		CollectionMaxSupplySet { collection: T::CollectionId, max_supply: u32 },
+		/// Event gets emmited when the `CollectionsCount` gets incremented in `try_increment_id`
+		CollectionsCountIncremented { collections_count: T::CollectionId },
 	}
 
 	#[pallet::error]
@@ -388,6 +391,8 @@ pub mod pallet {
 		MaxSupplyAlreadySet,
 		/// The provided max supply is less to the amount of items a collection already has.
 		MaxSupplyTooSmall,
+		/// The next `CollectionId` is not being used.
+		NextIdNotUsed,
 	}
 
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
@@ -424,8 +429,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			admin: <T::Lookup as StaticLookup>::Source,
 		) -> DispatchResult {
-			let last_collection = CollectionsCount::<T, I>::get();
-			let collection = Self::try_increment_id(last_collection)?;
+			let collection = CollectionsCount::<T, I>::get();
 
 			let owner = T::CreateOrigin::ensure_origin(origin, &collection)?;
 			let admin = T::Lookup::lookup(admin)?;
@@ -465,8 +469,7 @@ pub mod pallet {
 			T::ForceOrigin::ensure_origin(origin)?;
 			let owner = T::Lookup::lookup(owner)?;
 
-			let last_collection = CollectionsCount::<T, I>::get();
-			let collection = Self::try_increment_id(last_collection)?;
+			let collection = CollectionsCount::<T, I>::get();
 
 			Self::do_create_collection(
 				collection,
@@ -476,6 +479,25 @@ pub mod pallet {
 				free_holding,
 				Event::ForceCreated { collection, owner },
 			)
+		}
+
+		/// Increments the `CollectionId` stored in `CollectionsCount`.
+		/// This is only callable when the next `CollectionId` that would be generated is already
+		/// being used.
+		///
+		/// The origin must be Signed and the sender must have sufficient funds free.
+		///
+		/// Weight: `O(1)`
+		#[pallet::weight(T::WeightInfo::try_increment_id())]
+		pub fn try_increment_id(origin: OriginFor<T>) -> DispatchResult {
+			ensure_signed(origin)?;
+
+			let next_id = CollectionsCount::<T, I>::get().saturating_add(T::CollectionId::one());
+			ensure!(Collection::<T, I>::contains_key(next_id), Error::<T, I>::NextIdNotUsed);
+
+			CollectionsCount::<T, I>::set(next_id);
+			Self::deposit_event(Event::CollectionsCountIncremented { collections_count: next_id });
+			Ok(())
 		}
 
 		/// Destroy a collection of fungible items.

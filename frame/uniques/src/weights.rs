@@ -70,6 +70,7 @@ pub trait WeightInfo {
 	fn cancel_approval() -> Weight;
 	fn set_accept_ownership() -> Weight;
 	fn set_collection_max_supply() -> Weight;
+	fn try_increment_id() -> Weight;
 }
 
 /// Weights for pallet_uniques using the Substrate node and recommended hardware.
@@ -270,6 +271,14 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
+
+	// Storage: Uniques CollectionsCount (r:1 w:1)
+	// Storage: Uniques Collection (r:1 w:0)
+	fn try_increment_id() -> Weight {
+		(10_000_000 as Weight)
+			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
+			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+	}
 }
 
 // For backwards compatibility and tests
@@ -466,6 +475,14 @@ impl WeightInfo for () {
 	// Storage: Uniques Class (r:1 w:0)
 	fn set_collection_max_supply() -> Weight {
 		(19_380_000 as Weight)
+			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
+			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+	}
+
+	// Storage: Uniques CollectionsCount (r:1 w:1)
+	// Storage: Uniques Collection (r:1 w:0)
+	fn try_increment_id() -> Weight {
+		(10_000_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}

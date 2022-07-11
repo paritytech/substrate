@@ -64,6 +64,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		free_holding: bool,
 		event: Event<T, I>,
 	) -> DispatchResult {
+		ensure!(!Collection::<T, I>::contains_key(collection), Error::<T, I>::InUse);
+
 		T::Currency::reserve(&owner, deposit)?;
 
 		Collection::<T, I>::insert(
@@ -83,20 +85,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		);
 
 		CollectionAccount::<T, I>::insert(&owner, &collection, ());
+		CollectionsCount::<T, I>::set(collection.saturating_add(T::CollectionId::one()));
 
 		Self::deposit_event(event);
 		Ok(())
-	}
-
-	pub fn try_increment_id(
-		last_collection: T::CollectionId,
-	) -> Result<T::CollectionId, Error<T, I>> {
-		let new_collection = last_collection + T::CollectionId::one();
-
-		CollectionsCount::<T, I>::set(new_collection);
-		ensure!(!Collection::<T, I>::contains_key(new_collection), Error::<T, I>::InUse);
-
-		Ok(new_collection)
 	}
 
 	pub fn do_destroy_collection(
