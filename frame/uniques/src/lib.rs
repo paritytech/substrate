@@ -1178,8 +1178,8 @@ pub mod pallet {
 			let mut collection_details =
 				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
 
-			Self::is_collection_owner(&maybe_check_owner, &collection_details)?;
-			Self::is_unfrozen(&collection, &maybe_item)?;
+			Self::some_is_collection_owner(&maybe_check_owner, &collection_details)?;
+			Self::some_is_unfrozen(&collection, &maybe_item)?;
 
 			let attribute = Attribute::<T, I>::get((collection, maybe_item, &key));
 			if attribute.is_none() {
@@ -1234,8 +1234,8 @@ pub mod pallet {
 			let mut collection_details =
 				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
 
-			Self::is_collection_owner(&maybe_check_owner, &collection_details)?;
-			Self::is_unfrozen(&collection, &maybe_item)?;
+			Self::some_is_collection_owner(&maybe_check_owner, &collection_details)?;
+			Self::some_is_unfrozen(&collection, &maybe_item)?;
 
 			if let Some((_, deposit)) = Attribute::<T, I>::take((collection, maybe_item, &key)) {
 				collection_details.attributes.saturating_dec();
@@ -1284,7 +1284,7 @@ pub mod pallet {
 				maybe_check_owner.clone(),
 				|collection_details, metadata| {
 					let was_frozen = metadata.as_ref().map_or(false, |m| m.is_frozen);
-					Self::is_collection_owner(&maybe_check_owner, &collection_details)?;
+					Self::some_is_collection_owner(&maybe_check_owner, &collection_details)?;
 					ensure!(maybe_check_owner.is_none() || !was_frozen, Error::<T, I>::Frozen);
 					Ok(())
 				},
@@ -1317,7 +1317,7 @@ pub mod pallet {
 			let mut collection_details =
 				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
 
-			Self::is_collection_owner(&maybe_check_owner, &collection_details)?;
+			Self::some_is_collection_owner(&maybe_check_owner, &collection_details)?;
 
 			ItemMetadataOf::<T, I>::try_mutate_exists(collection, item, |metadata| {
 				let was_frozen = metadata.as_ref().map_or(false, |m| m.is_frozen);
@@ -1370,7 +1370,7 @@ pub mod pallet {
 				maybe_check_owner.clone(),
 				|collection_details, metadata| {
 					let was_frozen = metadata.as_ref().map_or(false, |m| m.is_frozen);
-					Self::is_collection_owner(&maybe_check_owner, &collection_details)?;
+					Self::some_is_collection_owner(&maybe_check_owner, &collection_details)?;
 					ensure!(maybe_check_owner.is_none() || !was_frozen, Error::<T, I>::Frozen);
 					Ok(())
 				},
@@ -1400,7 +1400,7 @@ pub mod pallet {
 
 			let details =
 				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
-			Self::is_collection_owner(&maybe_check_owner, &details)?;
+			Self::some_is_collection_owner(&maybe_check_owner, &details)?;
 
 			CollectionMetadataOf::<T, I>::try_mutate_exists(collection, |metadata| {
 				let was_frozen = metadata.as_ref().map_or(false, |m| m.is_frozen);
@@ -1534,7 +1534,7 @@ pub mod pallet {
 	}
 
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
-		fn is_collection_owner(
+		fn some_is_collection_owner(
 			maybe_check_owner: &Option<T::AccountId>,
 			collection_details: &CollectionDetails<T::AccountId, DepositBalanceOf<T, I>>,
 		) -> DispatchResult {
@@ -1545,7 +1545,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		fn is_unfrozen(
+		fn some_is_unfrozen(
 			collection: &T::CollectionId,
 			maybe_item: &Option<T::ItemId>,
 		) -> DispatchResult {
