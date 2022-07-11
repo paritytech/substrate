@@ -578,7 +578,17 @@ where
 
 	/// Returns the best seen block.
 	fn best_seen(&self) -> Option<NumberFor<B>> {
-		let mut best_seens = self.peers.values().map(|p| p.best_number).collect::<Vec<_>>();
+		let mut best_seens = self
+			.peers
+			.values()
+			.filter_map(|p| {
+				if p.best_number > self.best_queued_number {
+					Some(p.best_number)
+				} else {
+					None
+				}
+			})
+			.collect::<Vec<_>>();
 
 		if best_seens.is_empty() {
 			None
