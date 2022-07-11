@@ -92,9 +92,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		last_collection: T::CollectionId,
 	) -> Result<T::CollectionId, Error<T, I>> {
 		let new_collection = last_collection + T::CollectionId::one();
+		
+		CollectionsCount::<T, I>::set(new_collection);
 		ensure!(!Collection::<T, I>::contains_key(new_collection), Error::<T, I>::InUse);
 
-		CollectionsCount::<T, I>::set(new_collection);
 		Ok(new_collection)
 	}
 
