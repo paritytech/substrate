@@ -240,9 +240,7 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 			#config_where_clause
 		{
 			fn count() -> usize { 1 }
-			fn accumulate(
-				acc: &mut #frame_support::sp_std::vec::Vec<#frame_support::traits::PalletInfoData>
-			) {
+			fn infos() -> #frame_support::sp_std::vec::Vec<#frame_support::traits::PalletInfoData> {
 				use #frame_support::traits::PalletInfoAccess;
 				let item = #frame_support::traits::PalletInfoData {
 					index: Self::index(),
@@ -250,7 +248,7 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 					module_name: Self::module_name(),
 					crate_version: Self::crate_version(),
 				};
-				acc.push(item);
+				#frame_support::sp_std::vec![item]
 			}
 		}
 

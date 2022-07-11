@@ -183,7 +183,7 @@ macro_rules! impl_filter_stack {
 /// Type that provide some integrity tests.
 ///
 /// This implemented for modules by `decl_module`.
-#[impl_trait_for_tuples::impl_for_tuples(30)]
+#[impl_trait_for_tuples::impl_for_tuples(100)]
 pub trait IntegrityTest {
 	/// Run integrity test.
 	///
