@@ -112,20 +112,48 @@ pub trait ChainExtension<C: Config> {
 	}
 }
 
-/// Implementation that indicates that no chain extension is available.
-impl<C: Config> ChainExtension<C> for () {
-	fn call<E>(_func_id: u32, mut _env: Environment<E, InitState>) -> Result<RetVal>
+/// A [`ChainExtension`] that can be composed with other extensions using a tuple.
+///
+/// An extension that implements this trait can be put in a tuple in order to have multiple
+/// extensions available. The tuple implementation routes requests based on the first two
+/// MSB bytes of the `func_id` pased to `call`.
+///
+/// # Note
+///
+/// Register your id with the [chain extension registry](https://github.com/paritytech/ChainExtension-registry)
+/// to ensure that there are
+/// no collisions with other vendors.
+pub trait RegisteredChainExtension<C: Config>: ChainExtension<C> {
+	/// The extensions globally unique identifier.
+	const ID: u16;
+}
+
+#[impl_trait_for_tuples::impl_for_tuples(10)]
+#[tuple_types_custom_trait_bound(RegisteredChainExtension<C>)]
+impl<C: Config> ChainExtension<C> for Tuple {
+	fn call<E>(func_id: u32, mut env: Environment<E, InitState>) -> Result<RetVal>
 	where
 		E: Ext<T = C>,
 		<E::T as SysConfig>::AccountId: UncheckedFrom<<E::T as SysConfig>::Hash> + AsRef<[u8]>,
 	{
-		// Never called since [`Self::enabled()`] is set to `false`. Because we want to
-		// avoid panics at all costs we supply a sensible error value here instead
-		// of an `unimplemented!`.
+		for_tuples!(
+			#(
+				if (Tuple::ID == (func_id >> 16) as u16) && Tuple::enabled() {
+					return Tuple::call(func_id, env);
+				}
+			)*
+		);
 		Err(Error::<E::T>::NoChainExtension.into())
 	}
 
 	fn enabled() -> bool {
+		for_tuples!(
+			#(
+				if Tuple::enabled() {
+					return true;
+				}
+			)*
+		);
 		false
 	}
 }
