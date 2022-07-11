@@ -424,7 +424,8 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			admin: <T::Lookup as StaticLookup>::Source,
 		) -> DispatchResult {
-			let collection = CollectionsCount::<T, I>::get();
+			let last_collection = CollectionsCount::<T, I>::get();
+			let collection = Self::try_increment_id(last_collection)?;
 
 			let owner = T::CreateOrigin::ensure_origin(origin, &collection)?;
 			let admin = T::Lookup::lookup(admin)?;
@@ -464,7 +465,8 @@ pub mod pallet {
 			T::ForceOrigin::ensure_origin(origin)?;
 			let owner = T::Lookup::lookup(owner)?;
 
-			let collection = CollectionsCount::<T, I>::get();
+			let last_collection = CollectionsCount::<T, I>::get();
+			let collection = Self::try_increment_id(last_collection)?;
 
 			Self::do_create_collection(
 				collection,
