@@ -193,6 +193,10 @@ impl<B: BlockT> BlockCollection<B> {
 					let len = (blocks.len() as u32).into();
 					prev = start + len;
 					// Remove all elements from `blocks` and add them to `ready`
+					if let Some(BlockData { block, .. }) = blocks.first() {
+						self.queued_blocks
+							.insert(block.hash, (start, start + (blocks.len() as u32).into()));
+					}
 					ready.append(blocks);
 					len
 				},
@@ -201,12 +205,6 @@ impl<B: BlockT> BlockCollection<B> {
 			};
 			*range_data = BlockRangeState::Queued { len };
 		}
-
-		if let Some(BlockData { block, .. }) = ready.first() {
-			self.queued_blocks
-				.insert(block.hash, (from, from + (ready.len() as u32).into()));
-		}
-
 		trace!(target: "sync", "{} blocks ready for import", ready.len());
 		ready
 	}
@@ -398,5 +396,35 @@ mod test {
 		);
 
 		assert_eq!(bc.needed_blocks(peer.clone(), 5, 50, 39, 0, 200), Some(45..50));
+	}
+
+	#[test]
+	fn clear_queued_subsequent_ranges() {
+		let mut bc = BlockCollection::new();
+		assert!(is_empty(&bc));
+		let peer = PeerId::random();
+
+		let blocks = generate_blocks(10);
+
+		// Request 2 ranges
+		assert_eq!(bc.needed_blocks(peer.clone(), 5, 50, 39, 0, 200), Some(40..45));
+		assert_eq!(bc.needed_blocks(peer.clone(), 5, 50, 39, 0, 200), Some(45..50));
+
+		// got a response on the request for `40..50`
+		bc.clear_peer_download(&peer);
+		bc.insert(40, blocks.to_vec(), peer.clone());
+
+		let ready = bc.ready_blocks(1000);
+		assert_eq!(
+			ready,
+			blocks
+				.iter()
+				.map(|b| BlockData { block: b.clone(), origin: Some(peer.clone()) })
+				.collect::<Vec<_>>()
+		);
+
+		bc.clear_queued(&blocks[0].hash);
+		assert!(bc.blocks.is_empty());
+		assert!(bc.queued_blocks.is_empty());
 	}
 }
