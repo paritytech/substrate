@@ -127,9 +127,9 @@ pub const MAXIMUM_VOTE: usize = 16;
 
 // Some safe temp values to make the wasm execution sane while we still use this pallet.
 #[cfg(test)]
-pub(crate) const MAX_CANDIDATES: u32 = 1000;
-#[cfg(not(test))]
 pub(crate) const MAX_CANDIDATES: u32 = 100;
+#[cfg(not(test))]
+pub(crate) const MAX_CANDIDATES: u32 = 1000;
 
 #[cfg(test)]
 pub(crate) const MAX_VOTERS: u32 = 1000;
