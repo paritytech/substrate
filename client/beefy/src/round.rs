@@ -70,9 +70,10 @@ fn threshold(authorities: usize) -> usize {
 /// Does not do any validation on votes or signatures, layers above need to handle that (gossip).
 pub(crate) struct Rounds<Payload, B: Block> {
 	rounds: BTreeMap<(Payload, NumberFor<B>), RoundTracker>,
-	best_done: Option<NumberFor<B>>,
 	session_start: NumberFor<B>,
 	validator_set: ValidatorSet<Public>,
+	mandatory_done: bool,
+	best_done: Option<NumberFor<B>>,
 }
 
 impl<P, B> Rounds<P, B>
@@ -81,15 +82,15 @@ where
 	B: Block,
 {
 	pub(crate) fn new(session_start: NumberFor<B>, validator_set: ValidatorSet<Public>) -> Self {
-		Rounds { rounds: BTreeMap::new(), best_done: None, session_start, validator_set }
+		Rounds {
+			rounds: BTreeMap::new(),
+			session_start,
+			validator_set,
+			mandatory_done: false,
+			best_done: None,
+		}
 	}
-}
 
-impl<P, B> Rounds<P, B>
-where
-	P: Ord + Hash + Clone,
-	B: Block,
-{
 	pub(crate) fn validator_set_id(&self) -> ValidatorSetId {
 		self.validator_set.id()
 	}
@@ -98,8 +99,12 @@ where
 		self.validator_set.validators()
 	}
 
-	pub(crate) fn session_start(&self) -> &NumberFor<B> {
-		&self.session_start
+	pub(crate) fn session_start(&self) -> NumberFor<B> {
+		self.session_start
+	}
+
+	pub(crate) fn mandatory_done(&self) -> bool {
+		self.mandatory_done
 	}
 
 	pub(crate) fn should_self_vote(&self, round: &(P, NumberFor<B>)) -> bool {
@@ -144,6 +149,7 @@ where
 			// remove this and older (now stale) rounds
 			let signatures = self.rounds.remove(round)?.votes;
 			self.rounds.retain(|&(_, number), _| number > round.1);
+			self.mandatory_done = self.mandatory_done || round.1 == self.session_start;
 			self.best_done = self.best_done.max(Some(round.1));
 			debug!(target: "beefy", "🥩 Concluded round #{}", round.1);
 
@@ -156,6 +162,11 @@ where
 		} else {
 			None
 		}
+	}
+
+	#[cfg(test)]
+	pub(crate) fn test_set_mandatory_done(&mut self, done: bool) {
+		self.mandatory_done = done;
 	}
 }
 
@@ -223,7 +234,7 @@ mod tests {
 		let rounds = Rounds::<H256, Block>::new(session_start, validators);
 
 		assert_eq!(42, rounds.validator_set_id());
-		assert_eq!(1, *rounds.session_start());
+		assert_eq!(1, rounds.session_start());
 		assert_eq!(
 			&vec![Keyring::Alice.public(), Keyring::Bob.public(), Keyring::Charlie.public()],
 			rounds.validators()

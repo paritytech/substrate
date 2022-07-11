@@ -32,8 +32,8 @@ pub(crate) struct Metrics {
 	pub beefy_best_block: Gauge<U64>,
 	/// Next block BEEFY should vote on
 	pub beefy_should_vote_on: Gauge<U64>,
-	/// Number of sessions without a signed commitment
-	pub beefy_skipped_sessions: Counter<U64>,
+	/// Number of sessions with lagging signed commitment on mandatory block
+	pub beefy_lagging_sessions: Counter<U64>,
 }
 
 impl Metrics {
@@ -65,10 +65,10 @@ impl Metrics {
 				Gauge::new("substrate_beefy_should_vote_on", "Next block, BEEFY should vote on")?,
 				registry,
 			)?,
-			beefy_skipped_sessions: register(
+			beefy_lagging_sessions: register(
 				Counter::new(
-					"substrate_beefy_skipped_sessions",
-					"Number of sessions without a signed commitment",
+					"substrate_beefy_lagging_sessions",
+					"Number of sessions with lagging signed commitment on mandatory block",
 				)?,
 				registry,
 			)?,
