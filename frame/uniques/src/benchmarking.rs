@@ -405,5 +405,15 @@ benchmarks_instance_pallet! {
 		}.into());
 	}
 
+	try_increment_id {
+		let (_, caller, _) = create_collection::<T, I>();
+		Uniques::<T, I>::set_collections_count(0);
+	}: _(SystemOrigin::Signed(caller.clone()))
+	verify {
+		assert_last_event::<T, I>(Event::CollectionsCountIncremented {
+			collections_count: T::CollectionId::from_u8(1).unwrap()
+		}.into());	
+	}
+
 	impl_benchmark_test_suite!(Uniques, crate::mock::new_test_ext(), crate::mock::Test);
 }

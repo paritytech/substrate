@@ -203,7 +203,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
-	#[cfg(test)]
+	#[cfg(any(test, feature = "runtime-benchmarks"))]
 	pub fn set_collections_count(count: u32) {
 		CollectionsCount::<T, I>::set(T::CollectionId::from_u32(count).unwrap());
 	}

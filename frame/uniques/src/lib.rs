@@ -488,8 +488,10 @@ pub mod pallet {
 		///
 		/// The origin must be Signed and the sender must have sufficient funds free.
 		///
+		/// Emits `CollectionsCountIncremented` event when successful.
+		///
 		/// Weight: `O(1)`
-		#[pallet::weight(T::WeightInfo::try_increment_id())]
+		#[pallet::weight(1000)]
 		pub fn try_increment_id(origin: OriginFor<T>) -> DispatchResult {
 			ensure_signed(origin)?;
 			ensure!(
