@@ -30,7 +30,7 @@ pub struct TransactionPoolParams {
 	#[clap(long, value_name = "COUNT", default_value = "20480")]
 	pub pool_kbytes: usize,
 
-	/// How long the extrinsic is banned for. Defaults to 1800s.
+	/// How long a transaction is banned for, if it is considered invalid. Defaults to 1800s.
 	#[clap(long, value_name = "SECONDS")]
 	pub tx_ban_seconds: Option<u64>,
 }
