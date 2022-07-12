@@ -108,6 +108,9 @@ pub trait StakingInterface {
 		validators: sp_std::vec::Vec<Self::AccountId>,
 	) -> DispatchResult;
 
+	/// Chill `stash`.
+	fn chill(controller: Self::AccountId) -> DispatchResult;
+
 	/// Bond some extra amount in the _Stash_'s free balance against the active bonded balance of
 	/// the account. The amount extra actually bonded will never be more than the _Stash_'s free
 	/// balance.
@@ -125,8 +128,14 @@ pub trait StakingInterface {
 	fn unbond(stash: Self::AccountId, value: Self::Balance) -> DispatchResult;
 
 	/// Unlock any funds schedule to unlock before or at the current era.
+	///
+	/// Returns whether the stash was killed because of this withdraw or not.
 	fn withdraw_unbonded(
 		stash: Self::AccountId,
 		num_slashing_spans: u32,
-	) -> Result<u64, DispatchError>;
+	) -> Result<bool, DispatchError>;
+
+	/// Get the nominations of a stash, if they are a nominator, `None` otherwise.
+	#[cfg(feature = "runtime-benchmarks")]
+	fn nominations(who: Self::AccountId) -> Option<sp_std::prelude::Vec<Self::AccountId>>;
 }

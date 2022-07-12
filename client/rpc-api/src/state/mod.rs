@@ -34,21 +34,17 @@ pub use self::helpers::ReadProof;
 #[rpc(client, server)]
 pub trait StateApi<Hash> {
 	/// Call a contract at a block's state.
-	#[method(name = "state_call", aliases = ["state_callAt"])]
-	async fn call(&self, name: String, bytes: Bytes, hash: Option<Hash>) -> RpcResult<Bytes>;
+	#[method(name = "state_call", aliases = ["state_callAt"], blocking)]
+	fn call(&self, name: String, bytes: Bytes, hash: Option<Hash>) -> RpcResult<Bytes>;
 
 	/// Returns the keys with prefix, leave empty to get all the keys.
-	#[method(name = "state_getKeys")]
+	#[method(name = "state_getKeys", blocking)]
 	#[deprecated(since = "2.0.0", note = "Please use `getKeysPaged` with proper paging support")]
-	async fn storage_keys(
-		&self,
-		prefix: StorageKey,
-		hash: Option<Hash>,
-	) -> RpcResult<Vec<StorageKey>>;
+	fn storage_keys(&self, prefix: StorageKey, hash: Option<Hash>) -> RpcResult<Vec<StorageKey>>;
 
 	/// Returns the keys with prefix, leave empty to get all the keys
-	#[method(name = "state_getPairs")]
-	async fn storage_pairs(
+	#[method(name = "state_getPairs", blocking)]
+	fn storage_pairs(
 		&self,
 		prefix: StorageKey,
 		hash: Option<Hash>,
@@ -57,8 +53,8 @@ pub trait StateApi<Hash> {
 	/// Returns the keys with prefix with pagination support.
 	/// Up to `count` keys will be returned.
 	/// If `start_key` is passed, return next keys in storage in lexicographic order.
-	#[method(name = "state_getKeysPaged", aliases = ["state_getKeysPagedAt"])]
-	async fn storage_keys_paged(
+	#[method(name = "state_getKeysPaged", aliases = ["state_getKeysPagedAt"], blocking)]
+	fn storage_keys_paged(
 		&self,
 		prefix: Option<StorageKey>,
 		count: u32,
@@ -67,32 +63,32 @@ pub trait StateApi<Hash> {
 	) -> RpcResult<Vec<StorageKey>>;
 
 	/// Returns a storage entry at a specific block's state.
-	#[method(name = "state_getStorage", aliases = ["state_getStorageAt"])]
-	async fn storage(&self, key: StorageKey, hash: Option<Hash>) -> RpcResult<Option<StorageData>>;
+	#[method(name = "state_getStorage", aliases = ["state_getStorageAt"], blocking)]
+	fn storage(&self, key: StorageKey, hash: Option<Hash>) -> RpcResult<Option<StorageData>>;
 
 	/// Returns the hash of a storage entry at a block's state.
-	#[method(name = "state_getStorageHash", aliases = ["state_getStorageHashAt"])]
-	async fn storage_hash(&self, key: StorageKey, hash: Option<Hash>) -> RpcResult<Option<Hash>>;
+	#[method(name = "state_getStorageHash", aliases = ["state_getStorageHashAt"], blocking)]
+	fn storage_hash(&self, key: StorageKey, hash: Option<Hash>) -> RpcResult<Option<Hash>>;
 
 	/// Returns the size of a storage entry at a block's state.
-	#[method(name = "state_getStorageSize", aliases = ["state_getStorageSizeAt"])]
-	async fn storage_size(&self, key: StorageKey, hash: Option<Hash>) -> RpcResult<Option<u64>>;
+	#[method(name = "state_getStorageSize", aliases = ["state_getStorageSizeAt"], blocking)]
+	fn storage_size(&self, key: StorageKey, hash: Option<Hash>) -> RpcResult<Option<u64>>;
 
 	/// Returns the runtime metadata as an opaque blob.
-	#[method(name = "state_getMetadata")]
-	async fn metadata(&self, hash: Option<Hash>) -> RpcResult<Bytes>;
+	#[method(name = "state_getMetadata", blocking)]
+	fn metadata(&self, hash: Option<Hash>) -> RpcResult<Bytes>;
 
 	/// Get the runtime version.
-	#[method(name = "state_getRuntimeVersion", aliases = ["chain_getRuntimeVersion"])]
-	async fn runtime_version(&self, hash: Option<Hash>) -> RpcResult<RuntimeVersion>;
+	#[method(name = "state_getRuntimeVersion", aliases = ["chain_getRuntimeVersion"], blocking)]
+	fn runtime_version(&self, hash: Option<Hash>) -> RpcResult<RuntimeVersion>;
 
 	/// Query historical storage entries (by key) starting from a block given as the second
 	/// parameter.
 	///
 	/// NOTE This first returned result contains the initial state of storage for all keys.
 	/// Subsequent values in the vector represent changes to the previous state (diffs).
-	#[method(name = "state_queryStorage")]
-	async fn query_storage(
+	#[method(name = "state_queryStorage", blocking)]
+	fn query_storage(
 		&self,
 		keys: Vec<StorageKey>,
 		block: Hash,
@@ -100,20 +96,16 @@ pub trait StateApi<Hash> {
 	) -> RpcResult<Vec<StorageChangeSet<Hash>>>;
 
 	/// Query storage entries (by key) starting at block hash given as the second parameter.
-	#[method(name = "state_queryStorageAt")]
-	async fn query_storage_at(
+	#[method(name = "state_queryStorageAt", blocking)]
+	fn query_storage_at(
 		&self,
 		keys: Vec<StorageKey>,
 		at: Option<Hash>,
 	) -> RpcResult<Vec<StorageChangeSet<Hash>>>;
 
 	/// Returns proof of storage entries at a specific block's state.
-	#[method(name = "state_getReadProof")]
-	async fn read_proof(
-		&self,
-		keys: Vec<StorageKey>,
-		hash: Option<Hash>,
-	) -> RpcResult<ReadProof<Hash>>;
+	#[method(name = "state_getReadProof", blocking)]
+	fn read_proof(&self, keys: Vec<StorageKey>, hash: Option<Hash>) -> RpcResult<ReadProof<Hash>>;
 
 	/// New runtime version subscription
 	#[subscription(
@@ -285,8 +277,8 @@ pub trait StateApi<Hash> {
 	///
 	/// If you are having issues with maximum payload size you can use the flag
 	/// `-ltracing=trace` to get some logging during tracing.
-	#[method(name = "state_traceBlock")]
-	async fn trace_block(
+	#[method(name = "state_traceBlock", blocking)]
+	fn trace_block(
 		&self,
 		block: Hash,
 		targets: Option<String>,

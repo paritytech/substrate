@@ -110,11 +110,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			for (item, details) in Item::<T, I>::drain_prefix(&collection) {
 				Account::<T, I>::remove((&details.owner, &collection, &item));
 			}
+			#[allow(deprecated)]
 			ItemMetadataOf::<T, I>::remove_prefix(&collection, None);
 			CollectionMetadataOf::<T, I>::remove(&collection);
+			#[allow(deprecated)]
 			Attribute::<T, I>::remove_prefix((&collection,), None);
 			CollectionAccount::<T, I>::remove(&collection_details.owner, &collection);
 			T::Currency::unreserve(&collection_details.owner, collection_details.total_deposit);
+			CollectionMaxSupply::<T, I>::remove(&collection);
 
 			Self::deposit_event(Event::Destroyed { collection });
 

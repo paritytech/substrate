@@ -33,7 +33,7 @@ use sp_runtime::{
 /// The extension affects `longevity` of the transaction according to the [`Era`] definition.
 #[derive(Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
 #[scale_info(skip_type_params(T))]
-pub struct CheckMortality<T: Config + Send + Sync>(Era, sp_std::marker::PhantomData<T>);
+pub struct CheckMortality<T: Config + Send + Sync>(pub Era, sp_std::marker::PhantomData<T>);
 
 impl<T: Config + Send + Sync> CheckMortality<T> {
 	/// utility constructor. Used only in client/factory code.

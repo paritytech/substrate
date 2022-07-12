@@ -36,9 +36,11 @@ const SEED: u32 = 0;
 
 /// This function removes all validators and nominators from storage.
 pub fn clear_validators_and_nominators<T: Config>() {
+	#[allow(deprecated)]
 	Validators::<T>::remove_all();
 
 	// whenever we touch nominators counter we should update `T::VoterList` as well.
+	#[allow(deprecated)]
 	Nominators::<T>::remove_all();
 
 	// NOTE: safe to call outside block production

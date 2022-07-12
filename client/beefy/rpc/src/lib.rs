@@ -100,17 +100,17 @@ pub trait BeefyApi<Notification, Hash> {
 }
 
 /// Implements the BeefyApi RPC trait for interacting with BEEFY.
-pub struct BeefyRpcHandler<Block: BlockT> {
+pub struct Beefy<Block: BlockT> {
 	signed_commitment_stream: BeefySignedCommitmentStream<Block>,
 	beefy_best_block: Arc<RwLock<Option<Block::Hash>>>,
 	executor: SubscriptionTaskExecutor,
 }
 
-impl<Block> BeefyRpcHandler<Block>
+impl<Block> Beefy<Block>
 where
 	Block: BlockT,
 {
-	/// Creates a new BeefyRpcHandler instance.
+	/// Creates a new Beefy Rpc handler instance.
 	pub fn new(
 		signed_commitment_stream: BeefySignedCommitmentStream<Block>,
 		best_block_stream: BeefyBestBlockStream<Block>,
@@ -131,8 +131,7 @@ where
 }
 
 #[async_trait]
-impl<Block> BeefyApiServer<notification::EncodedSignedCommitment, Block::Hash>
-	for BeefyRpcHandler<Block>
+impl<Block> BeefyApiServer<notification::EncodedSignedCommitment, Block::Hash> for Beefy<Block>
 where
 	Block: BlockT,
 {
@@ -174,24 +173,20 @@ mod tests {
 	use sp_runtime::traits::{BlakeTwo256, Hash};
 	use substrate_test_runtime_client::runtime::Block;
 
-	fn setup_io_handler() -> (RpcModule<BeefyRpcHandler<Block>>, BeefySignedCommitmentSender<Block>)
-	{
+	fn setup_io_handler() -> (RpcModule<Beefy<Block>>, BeefySignedCommitmentSender<Block>) {
 		let (_, stream) = BeefyBestBlockStream::<Block>::channel();
 		setup_io_handler_with_best_block_stream(stream)
 	}
 
 	fn setup_io_handler_with_best_block_stream(
 		best_block_stream: BeefyBestBlockStream<Block>,
-	) -> (RpcModule<BeefyRpcHandler<Block>>, BeefySignedCommitmentSender<Block>) {
+	) -> (RpcModule<Beefy<Block>>, BeefySignedCommitmentSender<Block>) {
 		let (commitment_sender, commitment_stream) =
 			BeefySignedCommitmentStream::<Block>::channel();
 
-		let handler = BeefyRpcHandler::new(
-			commitment_stream,
-			best_block_stream,
-			sc_rpc::testing::test_executor(),
-		)
-		.expect("Setting up the BEEFY RPC handler works");
+		let handler =
+			Beefy::new(commitment_stream, best_block_stream, sc_rpc::testing::test_executor())
+				.expect("Setting up the BEEFY RPC handler works");
 
 		(handler.into_rpc(), commitment_sender)
 	}
@@ -244,34 +239,6 @@ mod tests {
 		panic!(
 			"Deadline reached while waiting for best BEEFY block to update. Perhaps the background task is broken?"
 		);
-	}
-
-	#[tokio::test]
-	async fn subscribe_and_unsubscribe_to_justifications() {
-		let (rpc, _) = setup_io_handler();
-
-		// Subscribe call.
-		let sub = rpc
-			.subscribe("beefy_subscribeJustifications", EmptyParams::new())
-			.await
-			.unwrap();
-
-		let ser_id = serde_json::to_string(sub.subscription_id()).unwrap();
-
-		// Unsubscribe
-		let unsub_req = format!(
-			"{{\"jsonrpc\":\"2.0\",\"method\":\"beefy_unsubscribeJustifications\",\"params\":[{}],\"id\":1}}",
-			ser_id
-		);
-		let (response, _) = rpc.raw_json_request(&unsub_req).await.unwrap();
-
-		assert_eq!(response, r#"{"jsonrpc":"2.0","result":true,"id":1}"#);
-
-		// Unsubscribe again and fail
-		let (response, _) = rpc.raw_json_request(&unsub_req).await.unwrap();
-		let expected = r#"{"jsonrpc":"2.0","result":false,"id":1}"#;
-
-		assert_eq!(response, expected);
 	}
 
 	#[tokio::test]
