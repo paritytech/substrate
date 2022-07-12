@@ -96,7 +96,8 @@ pub mod pallet {
 			+ Copy
 			+ Default
 			+ Unsigned
-			+ FromPrimitive;
+			+ FromPrimitive
+			+ Saturating;
 
 		/// The type used to identify a unique item within a collection.
 		type ItemId: Member + Parameter + MaxEncodedLen + Copy;
@@ -496,7 +497,7 @@ pub mod pallet {
 				Error::<T, I>::NextIdNotUsed
 			);
 
-			let next_id = CollectionsCount::<T, I>::get() + T::CollectionId::one();
+			let next_id = CollectionsCount::<T, I>::get().saturating_add(T::CollectionId::one());
 			CollectionsCount::<T, I>::set(next_id);
 			Self::deposit_event(Event::CollectionsCountIncremented { collections_count: next_id });
 			Ok(())
