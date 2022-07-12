@@ -53,7 +53,10 @@ use sp_runtime::{
 
 use substrate_test_runtime_client::{runtime::Header, ClientExt};
 
-use crate::{beefy_protocol_name, keystore::tests::Keyring as BeefyKeyring, notification::*};
+use crate::{
+	beefy_protocol_name, justification::*, keystore::tests::Keyring as BeefyKeyring,
+	notification::*, BeefyVoterLinks,
+};
 
 pub(crate) const BEEFY_PROTOCOL_NAME: &'static str = "/beefy/1";
 const GOOD_MMR_ROOT: MmrRootHash = MmrRootHash::repeat_byte(0xbf);
@@ -343,12 +346,20 @@ where
 
 		let keystore = create_beefy_keystore(*key);
 
-		let (signed_commitment_sender, signed_commitment_stream) =
+		let (to_rpc_justif_sender, signed_commitment_stream) =
 			BeefySignedCommitmentStream::<Block>::channel();
-		let (beefy_best_block_sender, beefy_best_block_stream) =
+		let (to_rpc_best_block_sender, beefy_best_block_stream) =
 			BeefyBestBlockStream::<Block>::channel();
+		let (_, from_block_import_justif_stream) = BeefySignedCommitmentStream::<Block>::channel();
+
 		let beefy_link_half = BeefyLinkHalf { signed_commitment_stream, beefy_best_block_stream };
 		*peer.data.beefy_link_half.lock() = Some(beefy_link_half);
+
+		let links = BeefyVoterLinks {
+			from_block_import_justif_stream,
+			to_rpc_justif_sender,
+			to_rpc_best_block_sender,
+		};
 
 		let beefy_params = crate::BeefyParams {
 			client: peer.client().as_client(),
@@ -356,8 +367,7 @@ where
 			runtime: api.clone(),
 			key_store: Some(keystore),
 			network: peer.network_service().clone(),
-			signed_commitment_sender,
-			beefy_best_block_sender,
+			links,
 			min_block_delta,
 			prometheus_registry: None,
 			protocol_name: BEEFY_PROTOCOL_NAME.into(),

@@ -446,6 +446,7 @@ dependencies = [
 name = "beefy-gadget"
 version = "4.0.0-dev"
 dependencies = [
+ "async-trait",
  "beefy-primitives",
  "fnv",
  "futures",

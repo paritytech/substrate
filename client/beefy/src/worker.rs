@@ -52,9 +52,8 @@ use crate::{
 	keystore::BeefyKeystore,
 	metric_inc, metric_set,
 	metrics::Metrics,
-	notification::{BeefyBestBlockSender, BeefySignedCommitmentSender},
 	round::Rounds,
-	Client,
+	BeefyVoterLinks, Client,
 };
 
 /// Responsible for the voting strategy.
@@ -160,8 +159,7 @@ pub(crate) struct WorkerParams<B: Block, BE, C, R, SO> {
 	pub key_store: BeefyKeystore,
 	pub gossip_engine: GossipEngine<B>,
 	pub gossip_validator: Arc<GossipValidator<B>>,
-	pub beefy_best_block_sender: BeefyBestBlockSender<B>,
-	pub signed_commitment_sender: BeefySignedCommitmentSender<B>,
+	pub links: BeefyVoterLinks<B>,
 	pub metrics: Option<Metrics>,
 	pub min_block_delta: u32,
 }
@@ -178,10 +176,8 @@ pub(crate) struct BeefyWorker<B: Block, BE, C, R, SO> {
 	gossip_validator: Arc<GossipValidator<B>>,
 
 	// channels
-	/// Used to keep RPC worker up to date on latest/best beefy.
-	beefy_best_block_sender: BeefyBestBlockSender<B>,
-	/// Used by RPC worker to forward BEEFY Justifications to subscribed users.
-	signed_commitment_sender: BeefySignedCommitmentSender<B>,
+	/// Links between the block importer, the background voter and the RPC layer.
+	links: BeefyVoterLinks<B>,
 
 	// voter state
 	/// BEEFY client metrics.
@@ -220,8 +216,7 @@ where
 			sync_oracle,
 			gossip_engine,
 			gossip_validator,
-			beefy_best_block_sender,
-			signed_commitment_sender,
+			links,
 			metrics,
 			min_block_delta,
 		} = worker_params;
@@ -238,8 +233,7 @@ where
 			key_store,
 			gossip_engine,
 			gossip_validator,
-			beefy_best_block_sender,
-			signed_commitment_sender,
+			links,
 			metrics,
 			best_grandpa_block_header: last_finalized_header,
 			best_beefy_block: None,
@@ -302,7 +296,8 @@ where
 			};
 			// Update RPC worker with new best BEEFY block hash.
 			block_hash.map(|hash| {
-				self.beefy_best_block_sender
+				self.links
+					.to_rpc_best_block_sender
 					.notify(|| Ok::<_, ()>(hash))
 					.expect("forwards closure result; the closure always returns Ok; qed.")
 			});
@@ -424,7 +419,8 @@ where
 				) {
 					debug!(target: "beefy", "🥩 Error {:?} on appending justification: {:?}", e, signed_commitment);
 				}
-				self.signed_commitment_sender
+				self.links
+					.to_rpc_justif_sender
 					.notify(|| Ok::<_, ()>(signed_commitment))
 					.expect("forwards closure result; the closure always returns Ok; qed.");
 
@@ -799,12 +795,20 @@ pub(crate) mod tests {
 	) -> BeefyWorker<Block, Backend, PeersFullClient, TestApi, Arc<NetworkService<Block, H256>>> {
 		let keystore = create_beefy_keystore(*key);
 
-		let (signed_commitment_sender, signed_commitment_stream) =
+		let (to_rpc_justif_sender, signed_commitment_stream) =
 			BeefySignedCommitmentStream::<Block>::channel();
-		let (beefy_best_block_sender, beefy_best_block_stream) =
+		let (to_rpc_best_block_sender, beefy_best_block_stream) =
 			BeefyBestBlockStream::<Block>::channel();
+		let (_, from_block_import_justif_stream) = BeefySignedCommitmentStream::<Block>::channel();
+
 		let beefy_link_half = BeefyLinkHalf { signed_commitment_stream, beefy_best_block_stream };
 		*peer.data.beefy_link_half.lock() = Some(beefy_link_half);
+
+		let links = BeefyVoterLinks {
+			from_block_import_justif_stream,
+			to_rpc_justif_sender,
+			to_rpc_best_block_sender,
+		};
 
 		let api = Arc::new(TestApi {});
 		let network = peer.network_service().clone();
@@ -817,8 +821,7 @@ pub(crate) mod tests {
 			backend: peer.client().as_backend(),
 			runtime: api,
 			key_store: Some(keystore).into(),
-			signed_commitment_sender,
-			beefy_best_block_sender,
+			links,
 			gossip_engine,
 			gossip_validator,
 			min_block_delta,
