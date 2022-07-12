@@ -651,6 +651,18 @@ where
 						return;
 					}
 				},
+				/* TODO:
+				justif = block_import_justif.next() => {
+					let block_num = justif.block_num;
+					let (start, end) = self.voting_oracle.accepted_interval(best_grandpa)?;
+					if block_num <= self.best_beefy_block {
+						// ignore
+					} else if block_num <= end {
+						// process & finalize
+					} else {
+						// call into custom SYNC and do that until we get all missing mandatory
+					}
+				}, */
 				_ = gossip_engine => {
 					error!(target: "beefy", "🥩 Gossip engine has terminated.");
 					return;
