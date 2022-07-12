@@ -57,8 +57,9 @@ use sc_network::{
 	Multiaddr, NetworkService, NetworkWorker,
 };
 pub use sc_network_common::config::ProtocolId;
-use sc_network_common::sync::warp::{
-	AuthorityList, EncodedProof, SetId, VerificationResult, WarpSyncProvider,
+use sc_network_common::{
+	service::NetworkSyncForkRequest,
+	sync::warp::{AuthorityList, EncodedProof, SetId, VerificationResult, WarpSyncProvider},
 };
 use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
 use sc_network_sync::{

@@ -78,7 +78,7 @@ impl sc_network_gossip::Network<Block> for TestNetwork {
 	}
 }
 
-impl super::NetworkSyncForkRequest<Block> for TestNetwork {
+impl super::NetworkSyncForkRequest<Hash, NumberFor<Block>> for TestNetwork {
 	fn set_sync_fork_request(
 		&self,
 		_peers: Vec<sc_network::PeerId>,

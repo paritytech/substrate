@@ -45,7 +45,7 @@ use finality_grandpa::{
 	Message::{Precommit, Prevote, PrimaryPropose},
 };
 use parity_scale_codec::{Decode, Encode};
-use sc_network::{NetworkService, ReputationChange};
+use sc_network::ReputationChange;
 use sc_network_gossip::{GossipEngine, Network as GossipNetwork};
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_INFO};
 use sp_keystore::SyncCryptoStorePtr;
@@ -58,6 +58,7 @@ use crate::{
 use gossip::{
 	FullCatchUpMessage, FullCommitMessage, GossipMessage, GossipValidator, PeerReport, VoteMessage,
 };
+use sc_network_common::service::NetworkSyncForkRequest;
 use sc_utils::mpsc::TracingUnboundedReceiver;
 use sp_finality_grandpa::{AuthorityId, AuthoritySignature, RoundNumber, SetId as SetIdNumber};
 
@@ -157,44 +158,21 @@ const TELEMETRY_VOTERS_LIMIT: usize = 10;
 /// Something that provides both the capabilities needed for the `gossip_network::Network` trait as
 /// well as the ability to set a fork sync request for a particular block.
 pub trait Network<Block: BlockT>:
-	NetworkSyncForkRequest<Block> + GossipNetwork<Block> + Clone + Send + 'static
+	NetworkSyncForkRequest<Block::Hash, NumberFor<Block>>
+	+ GossipNetwork<Block>
+	+ Clone
+	+ Send
+	+ 'static
 {
 }
 
 impl<Block: BlockT, T> Network<Block> for T where
-	T: NetworkSyncForkRequest<Block> + GossipNetwork<Block> + Clone + Send + 'static
+	T: NetworkSyncForkRequest<Block::Hash, NumberFor<Block>>
+		+ GossipNetwork<Block>
+		+ Clone
+		+ Send
+		+ 'static
 {
-}
-
-/// Provides an ability to set a fork sync request for a particular block.
-pub trait NetworkSyncForkRequest<Block: BlockT> {
-	/// Notifies the sync service to try and sync the given block from the given
-	/// peers.
-	///
-	/// If the given vector of peers is empty then the underlying implementation
-	/// should make a best effort to fetch the block from any peers it is
-	/// connected to (NOTE: this assumption will change in the future #3629).
-	fn set_sync_fork_request(
-		&self,
-		peers: Vec<sc_network::PeerId>,
-		hash: Block::Hash,
-		number: NumberFor<Block>,
-	);
-}
-
-impl<B, H> NetworkSyncForkRequest<B> for Arc<NetworkService<B, H>>
-where
-	B: BlockT,
-	H: sc_network::ExHashT,
-{
-	fn set_sync_fork_request(
-		&self,
-		peers: Vec<sc_network::PeerId>,
-		hash: B::Hash,
-		number: NumberFor<B>,
-	) {
-		NetworkService::set_sync_fork_request(self, peers, hash, number)
-	}
 }
 
 /// Create a unique topic for a round and set-id combo.

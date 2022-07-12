@@ -62,7 +62,7 @@ use parking_lot::Mutex;
 use sc_client_api::{BlockBackend, ProofProvider};
 use sc_consensus::{BlockImportError, BlockImportStatus, ImportQueue, Link};
 use sc_network_common::{
-	service::{NetworkKVProvider, NetworkSigner, Signature, SigningError},
+	service::{NetworkKVProvider, NetworkSigner, NetworkSyncForkRequest, Signature, SigningError},
 	sync::{SyncState, SyncStatus},
 };
 use sc_peerset::PeersetHandle;
@@ -1172,16 +1172,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		}
 	}
 
-	/// Configure an explicit fork sync request.
-	/// Note that this function should not be used for recent blocks.
-	/// Sync should be able to download all the recent forks normally.
-	/// `set_sync_fork_request` should only be used if external code detects that there's
-	/// a stale fork missing.
-	/// Passing empty `peers` set effectively removes the sync request.
-	pub fn set_sync_fork_request(&self, peers: Vec<PeerId>, hash: B::Hash, number: NumberFor<B>) {
-		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::SyncFork(peers, hash, number));
-	}
-
 	/// Add a peer to a set of peers.
 	///
 	/// If the set has slots available, it will try to open a substream with this peer.
@@ -1340,6 +1330,22 @@ where
 	/// item on the [`NetworkWorker`] stream.
 	fn put_value(&self, key: KademliaKey, value: Vec<u8>) {
 		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::PutValue(key, value));
+	}
+}
+
+impl<B, H> NetworkSyncForkRequest<B::Hash, NumberFor<B>> for NetworkService<B, H>
+where
+	B: BlockT + 'static,
+	H: ExHashT,
+{
+	/// Configure an explicit fork sync request.
+	/// Note that this function should not be used for recent blocks.
+	/// Sync should be able to download all the recent forks normally.
+	/// `set_sync_fork_request` should only be used if external code detects that there's
+	/// a stale fork missing.
+	/// Passing empty `peers` set effectively removes the sync request.
+	fn set_sync_fork_request(&self, peers: Vec<PeerId>, hash: B::Hash, number: NumberFor<B>) {
+		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::SyncFork(peers, hash, number));
 	}
 }
 

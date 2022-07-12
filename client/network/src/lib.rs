@@ -267,7 +267,10 @@ pub use protocol::{
 	PeerInfo,
 };
 pub use sc_network_common::{
-	service::{KademliaKey, NetworkKVProvider, NetworkSigner, Signature, SigningError},
+	service::{
+		KademliaKey, NetworkKVProvider, NetworkSigner, NetworkSyncForkRequest, Signature,
+		SigningError,
+	},
 	sync::{
 		warp::{WarpSyncPhase, WarpSyncProgress},
 		StateDownloadProgress, SyncState,
