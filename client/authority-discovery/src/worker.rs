@@ -37,14 +37,15 @@ use ip_network::IpNetwork;
 use libp2p::{
 	core::multiaddr,
 	multihash::{Multihash, MultihashDigest},
+	Multiaddr, PeerId,
 };
 use log::{debug, error, log_enabled};
 use prometheus_endpoint::{register, Counter, CounterVec, Gauge, Opts, U64};
 use prost::Message;
 use rand::{seq::SliceRandom, thread_rng};
 use sc_client_api::blockchain::HeaderBackend;
-use sc_network::{DhtEvent, Multiaddr, NetworkStateInfo, PeerId};
-use sc_network_common::service::{NetworkKVProvider, NetworkSigner};
+use sc_network::{DhtEvent, NetworkStateInfo};
+use sc_network_common::service::{KademliaKey, NetworkKVProvider, NetworkSigner, Signature};
 use sp_api::ProvideRuntimeApi;
 use sp_authority_discovery::{
 	AuthorityDiscoveryApi, AuthorityId, AuthorityPair, AuthoritySignature,
@@ -136,7 +137,7 @@ pub struct Worker<Client, Network, Block, DhtEventStream> {
 	/// Queue of throttled lookups pending to be passed to the network.
 	pending_lookups: Vec<AuthorityId>,
 	/// Set of in-flight lookups.
-	in_flight_lookups: HashMap<sc_network::KademliaKey, AuthorityId>,
+	in_flight_lookups: HashMap<KademliaKey, AuthorityId>,
 
 	addr_cache: addr_cache::AddrCache,
 
@@ -464,10 +465,7 @@ where
 		}
 	}
 
-	fn handle_dht_value_found_event(
-		&mut self,
-		values: Vec<(sc_network::KademliaKey, Vec<u8>)>,
-	) -> Result<()> {
+	fn handle_dht_value_found_event(&mut self, values: Vec<(KademliaKey, Vec<u8>)>) -> Result<()> {
 		// Ensure `values` is not empty and all its keys equal.
 		let remote_key = single(values.iter().map(|(key, _)| key.clone()))
 			.map_err(|_| Error::ReceivingDhtValueFoundEventWithDifferentKeys)?
@@ -523,11 +521,11 @@ where
 				// properly signed by the owner of the PeerId
 
 				if let Some(peer_signature) = peer_signature {
-					let public_key =
-						sc_network::PublicKey::from_protobuf_encoding(&peer_signature.public_key)
-							.map_err(Error::ParsingLibp2pIdentity)?;
-					let signature =
-						sc_network::Signature { public_key, bytes: peer_signature.signature };
+					let public_key = libp2p::identity::PublicKey::from_protobuf_encoding(
+						&peer_signature.public_key,
+					)
+					.map_err(Error::ParsingLibp2pIdentity)?;
+					let signature = Signature { public_key, bytes: peer_signature.signature };
 
 					if !signature.verify(record, &remote_peer_id) {
 						return Err(Error::VerifyingDhtPayload)
@@ -592,13 +590,13 @@ where
 
 /// NetworkProvider provides [`Worker`] with all necessary hooks into the
 /// underlying Substrate networking. Using this trait abstraction instead of
-/// [`sc_network::NetworkService`] directly is necessary to unit test [`Worker`].
+/// `sc_network::NetworkService` directly is necessary to unit test [`Worker`].
 pub trait NetworkProvider: NetworkKVProvider + NetworkStateInfo + NetworkSigner {}
 
 impl<T> NetworkProvider for T where T: NetworkKVProvider + NetworkStateInfo + NetworkSigner {}
 
-fn hash_authority_id(id: &[u8]) -> sc_network::KademliaKey {
-	sc_network::KademliaKey::new(&libp2p::multihash::Code::Sha2_256.digest(id).digest())
+fn hash_authority_id(id: &[u8]) -> KademliaKey {
+	KademliaKey::new(&libp2p::multihash::Code::Sha2_256.digest(id).digest())
 }
 
 // Makes sure all values are the same and returns it
@@ -645,7 +643,7 @@ async fn sign_record_with_authority_ids(
 	peer_signature: Option<schema::PeerSignature>,
 	key_store: &dyn CryptoStore,
 	keys: Vec<CryptoTypePublicPair>,
-) -> Result<Vec<(sc_network::KademliaKey, Vec<u8>)>> {
+) -> Result<Vec<(KademliaKey, Vec<u8>)>> {
 	let signatures = key_store
 		.sign_with_all(key_types::AUTHORITY_DISCOVERY, keys.clone(), &serialized_record)
 		.await
