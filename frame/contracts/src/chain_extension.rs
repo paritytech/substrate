@@ -29,6 +29,20 @@
 //! required for this endeavour are defined or re-exported in this module. There is an
 //! implementation on `()` which can be used to signal that no chain extension is available.
 //!
+//! # Using multiple chain extensions
+//!
+//! Often there is a need for having multiple chain extensions. This is often the case when
+//! some generally useful off-the-shelf extensions should be included. To have multiple chain
+//! extensions they can be put into a tuple which is then passed to `[Config::ChainExtension]` like
+//! this `type Extensions = (ExtensionA, ExtensionB)`.
+//!
+//! However, only extensions implementing [`RegisteredChainExtension`] can be put into a tuple.
+//! This is because the [`RegisteredChainExtension::ID`] is used to decide which of those extensions
+//! should should be used when the contract calls a chain extensions. Extensions which are generally
+//! useful should claim their `ID` with [the registry](https://github.com/paritytech/ChainExtension-registry)
+//! so that no collisions with other vendors will occure. **Chain specific extensions must use the
+//! reserved `ID = 0` that can't be registered with the registry.**
+//!
 //! # Security
 //!
 //! The chain author alone is responsible for the security of the chain extension.
@@ -118,10 +132,14 @@ pub trait ChainExtension<C: Config> {
 /// extensions available. The tuple implementation routes requests based on the first two
 /// MSB bytes of the `func_id` pased to `call`.
 ///
+/// If this extensions is to be used by multiple runtimes consider
+/// [registering it](https://github.com/paritytech/ChainExtension-registry) to ensure that there
+/// are no collisions with other vendors.
+///
 /// # Note
 ///
-/// Register your id with the [chain extension registry](https://github.com/paritytech/ChainExtension-registry)
-/// to ensure that there are no collisions with other vendors.
+/// Currently, we support tuples of up to ten registred chain extensions. If more chain extensions
+/// are needed consider opening an issue.
 pub trait RegisteredChainExtension<C: Config>: ChainExtension<C> {
 	/// The extensions globally unique identifier.
 	const ID: u16;
