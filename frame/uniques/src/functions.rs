@@ -208,6 +208,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		CollectionsCount::<T, I>::set(T::CollectionId::from_u32(count).unwrap());
 	}
 
+	#[cfg(test)]
 	pub fn get_collections_count() -> T::CollectionId {
 		CollectionsCount::<T, I>::get()
 	}
