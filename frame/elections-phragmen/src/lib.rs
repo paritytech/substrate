@@ -127,9 +127,9 @@ pub const MAXIMUM_VOTE: usize = 16;
 
 // Some safe temp values to make the wasm execution sane while we still use this pallet.
 #[cfg(test)]
-pub(crate) const MAX_CANDIDATES: u32 = 1000;
-#[cfg(not(test))]
 pub(crate) const MAX_CANDIDATES: u32 = 100;
+#[cfg(not(test))]
+pub(crate) const MAX_CANDIDATES: u32 = 1000;
 
 #[cfg(test)]
 pub(crate) const MAX_VOTERS: u32 = 1000;
@@ -916,7 +916,7 @@ impl<T: Config> Pallet<T> {
 		// used for prime election.
 		let mut voters_and_stakes = Vec::new();
 		match Voting::<T>::iter().try_for_each(|(voter, Voter { stake, votes, .. })| {
-			if voters_and_stakes.len() <= MAX_VOTERS as usize {
+			if voters_and_stakes.len() < MAX_VOTERS as usize {
 				voters_and_stakes.push((voter, stake, votes));
 				Ok(())
 			} else {
@@ -933,11 +933,6 @@ impl<T: Config> Pallet<T> {
 				return T::DbWeight::get().reads(3 + MAX_VOTERS as u64)
 			},
 		}
-
-		let voters_and_stakes = Voting::<T>::iter()
-			.take(MAX_VOTERS as usize)
-			.map(|(voter, Voter { stake, votes, .. })| (voter, stake, votes))
-			.collect::<Vec<_>>();
 
 		// used for phragmen.
 		let voters_and_votes = voters_and_stakes
