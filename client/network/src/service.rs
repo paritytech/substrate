@@ -1060,26 +1060,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 			.unbounded_send(ServiceToWorkerMsg::DisconnectPeer(who, protocol.into()));
 	}
 
-	/// Request a justification for the given block from the network.
-	///
-	/// On success, the justification will be passed to the import queue that was part at
-	/// initialization as part of the configuration.
-	pub fn request_justification(&self, hash: &B::Hash, number: NumberFor<B>) {
-		let _ = self
-			.to_worker
-			.unbounded_send(ServiceToWorkerMsg::RequestJustification(*hash, number));
-	}
-
-	/// Clear all pending justification requests.
-	pub fn clear_justification_requests(&self) {
-		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::ClearJustificationRequests);
-	}
-
-	/// Are we in the process of downloading the chain?
-	pub fn is_major_syncing(&self) -> bool {
-		self.is_major_syncing.load(Ordering::Relaxed)
-	}
-
 	/// Start getting a value from the DHT.
 	///
 	/// This will generate either a `ValueFound` or a `ValueNotFound` event and pass it as an
@@ -1318,32 +1298,28 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 }
 
 impl<B: BlockT + 'static, H: ExHashT> sp_consensus::SyncOracle for NetworkService<B, H> {
-	fn is_major_syncing(&mut self) -> bool {
-		Self::is_major_syncing(self)
+	fn is_major_syncing(&self) -> bool {
+		self.is_major_syncing.load(Ordering::Relaxed)
 	}
 
-	fn is_offline(&mut self) -> bool {
-		self.num_connected.load(Ordering::Relaxed) == 0
-	}
-}
-
-impl<'a, B: BlockT + 'static, H: ExHashT> sp_consensus::SyncOracle for &'a NetworkService<B, H> {
-	fn is_major_syncing(&mut self) -> bool {
-		NetworkService::is_major_syncing(self)
-	}
-
-	fn is_offline(&mut self) -> bool {
+	fn is_offline(&self) -> bool {
 		self.num_connected.load(Ordering::Relaxed) == 0
 	}
 }
 
 impl<B: BlockT, H: ExHashT> sc_consensus::JustificationSyncLink<B> for NetworkService<B, H> {
+	/// Request a justification for the given block from the network.
+	///
+	/// On success, the justification will be passed to the import queue that was part at
+	/// initialization as part of the configuration.
 	fn request_justification(&self, hash: &B::Hash, number: NumberFor<B>) {
-		Self::request_justification(self, hash, number);
+		let _ = self
+			.to_worker
+			.unbounded_send(ServiceToWorkerMsg::RequestJustification(*hash, number));
 	}
 
 	fn clear_justification_requests(&self) {
-		Self::clear_justification_requests(self);
+		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::ClearJustificationRequests);
 	}
 }
 

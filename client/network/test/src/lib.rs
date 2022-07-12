@@ -45,7 +45,8 @@ use sc_client_api::{
 };
 use sc_consensus::{
 	BasicQueue, BlockCheckParams, BlockImport, BlockImportParams, BoxJustificationImport,
-	ForkChoiceStrategy, ImportResult, JustificationImport, LongestChain, Verifier,
+	ForkChoiceStrategy, ImportResult, JustificationImport, JustificationSyncLink, LongestChain,
+	Verifier,
 };
 pub use sc_network::config::EmptyTransactionPool;
 use sc_network::{
@@ -71,7 +72,7 @@ use sp_blockchain::{
 };
 use sp_consensus::{
 	block_validation::{BlockAnnounceValidator, DefaultBlockAnnounceValidator},
-	BlockOrigin, Error as ConsensusError,
+	BlockOrigin, Error as ConsensusError, SyncOracle,
 };
 use sp_core::H256;
 use sp_runtime::{

@@ -45,6 +45,7 @@ use sc_network::PeerId;
 use sc_rpc_server::WsConfig;
 use sc_utils::mpsc::TracingUnboundedReceiver;
 use sp_blockchain::HeaderMetadata;
+use sp_consensus::SyncOracle;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Header as HeaderT},
