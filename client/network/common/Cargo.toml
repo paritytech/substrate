@@ -31,3 +31,4 @@ sc-peerset = { version = "4.0.0-dev", path = "../../peerset" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
 sp-finality-grandpa = { version = "4.0.0-dev", path = "../../../primitives/finality-grandpa" }
 sp-runtime = { version = "6.0.0", path = "../../../primitives/runtime" }
+thiserror = "1.0"

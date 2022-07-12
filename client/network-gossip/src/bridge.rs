@@ -318,7 +318,10 @@ mod tests {
 	use quickcheck::{Arbitrary, Gen, QuickCheck};
 	use sc_network_common::{
 		protocol::event::ObservedRole,
-		service::{NetworkEventStream, NetworkPeers},
+		service::{
+			NetworkEventStream, NetworkNotification, NetworkPeers, NotificationSender,
+			NotificationSenderError,
+		},
 	};
 	use sp_runtime::{testing::H256, traits::Block as BlockT};
 	use std::{
@@ -422,12 +425,27 @@ mod tests {
 		}
 	}
 
-	impl<B: BlockT> Network<B> for TestNetwork {
-		fn add_set_reserved(&self, _: PeerId, _: Cow<'static, str>) {}
-
-		fn write_notification(&self, _: PeerId, _: Cow<'static, str>, _: Vec<u8>) {
+	impl NetworkNotification for TestNetwork {
+		fn write_notification(
+			&self,
+			_target: PeerId,
+			_protocol: Cow<'static, str>,
+			_message: Vec<u8>,
+		) {
 			unimplemented!();
 		}
+
+		fn notification_sender(
+			&self,
+			_target: PeerId,
+			_protocol: Cow<'static, str>,
+		) -> Result<Box<dyn NotificationSender>, NotificationSenderError> {
+			unimplemented!();
+		}
+	}
+
+	impl<B: BlockT> Network<B> for TestNetwork {
+		fn add_set_reserved(&self, _: PeerId, _: Cow<'static, str>) {}
 
 		fn announce(&self, _: B::Hash, _: Option<Vec<u8>>) {
 			unimplemented!();

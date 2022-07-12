@@ -28,7 +28,10 @@ use parity_scale_codec::Encode;
 use sc_network::{config::Role, Multiaddr, PeerId, ReputationChange};
 use sc_network_common::{
 	protocol::event::{Event as NetworkEvent, ObservedRole},
-	service::{NetworkEventStream, NetworkPeers},
+	service::{
+		NetworkEventStream, NetworkNotification, NetworkPeers, NotificationSender,
+		NotificationSenderError,
+	},
 };
 use sc_network_gossip::Validator;
 use sc_network_test::{Block, Hash};
@@ -138,12 +141,22 @@ impl NetworkEventStream for TestNetwork {
 	}
 }
 
+impl NetworkNotification for TestNetwork {
+	fn write_notification(&self, target: PeerId, _protocol: Cow<'static, str>, message: Vec<u8>) {
+		let _ = self.sender.unbounded_send(Event::WriteNotification(target, message));
+	}
+
+	fn notification_sender(
+		&self,
+		_target: PeerId,
+		_protocol: Cow<'static, str>,
+	) -> Result<Box<dyn NotificationSender>, NotificationSenderError> {
+		unimplemented!();
+	}
+}
+
 impl sc_network_gossip::Network<Block> for TestNetwork {
 	fn add_set_reserved(&self, _: PeerId, _: Cow<'static, str>) {}
-
-	fn write_notification(&self, who: PeerId, _: Cow<'static, str>, message: Vec<u8>) {
-		let _ = self.sender.unbounded_send(Event::WriteNotification(who, message));
-	}
 
 	fn announce(&self, block: Hash, _associated_data: Option<Vec<u8>>) {
 		let _ = self.sender.unbounded_send(Event::Announce(block));
@@ -160,7 +173,7 @@ impl sc_network_gossip::ValidatorContext<Block> for TestNetwork {
 	fn broadcast_message(&mut self, _: Hash, _: Vec<u8>, _: bool) {}
 
 	fn send_message(&mut self, who: &PeerId, data: Vec<u8>) {
-		<Self as sc_network_gossip::Network<Block>>::write_notification(
+		<Self as NetworkNotification>::write_notification(
 			self,
 			who.clone(),
 			grandpa_protocol_name::NAME.into(),

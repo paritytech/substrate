@@ -23,7 +23,7 @@ use libp2p::PeerId;
 use sc_network_common::{
 	config::ProtocolId,
 	protocol::event::Event,
-	service::{NetworkEventStream, NetworkPeers},
+	service::{NetworkEventStream, NetworkNotification, NetworkPeers},
 };
 use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
 use sc_network_sync::{
@@ -476,7 +476,12 @@ fn notifications_back_pressure() {
 		// Sending!
 		for num in 0..TOTAL_NOTIFS {
 			let notif = node1.notification_sender(node2_id.clone(), PROTOCOL_NAME).unwrap();
-			notif.ready().await.unwrap().send(format!("hello #{}", num)).unwrap();
+			notif
+				.ready()
+				.await
+				.unwrap()
+				.send(format!("hello #{}", num).into_bytes())
+				.unwrap();
 		}
 
 		receiver.await;

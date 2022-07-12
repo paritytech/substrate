@@ -43,7 +43,7 @@ use prometheus_endpoint::{register, Counter, PrometheusError, Registry, U64};
 use sc_network_common::{
 	config::ProtocolId,
 	protocol::event::{Event, ObservedRole},
-	service::{NetworkEventStream, NetworkPeers},
+	service::{NetworkEventStream, NetworkNotification, NetworkPeers},
 };
 use sp_runtime::traits::Block as BlockT;
 use std::{

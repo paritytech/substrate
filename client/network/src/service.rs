@@ -64,8 +64,10 @@ use sc_consensus::{BlockImportError, BlockImportStatus, ImportQueue, Link};
 use sc_network_common::{
 	protocol::event::{DhtEvent, Event},
 	service::{
-		NetworkEventStream, NetworkKVProvider, NetworkPeers, NetworkSigner, NetworkStateInfo,
-		NetworkStatus, NetworkStatusProvider, NetworkSyncForkRequest, Signature, SigningError,
+		NetworkEventStream, NetworkKVProvider, NetworkNotification, NetworkPeers, NetworkSigner,
+		NetworkStateInfo, NetworkStatus, NetworkStatusProvider, NetworkSyncForkRequest,
+		NotificationSender as NotificationSenderT, NotificationSenderError,
+		NotificationSenderReady as NotificationSenderReadyT, Signature, SigningError,
 	},
 	sync::{SyncState, SyncStatus},
 };
@@ -719,154 +721,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		&self.local_peer_id
 	}
 
-	/// Appends a notification to the buffer of pending outgoing notifications with the given peer.
-	/// Has no effect if the notifications channel with this protocol name is not open.
-	///
-	/// If the buffer of pending outgoing notifications with that peer is full, the notification
-	/// is silently dropped and the connection to the remote will start being shut down. This
-	/// happens if you call this method at a higher rate than the rate at which the peer processes
-	/// these notifications, or if the available network bandwidth is too low.
-	///
-	/// For this reason, this method is considered soft-deprecated. You are encouraged to use
-	/// [`NetworkService::notification_sender`] instead.
-	///
-	/// > **Note**: The reason why this is a no-op in the situation where we have no channel is
-	/// >			that we don't guarantee message delivery anyway. Networking issues can cause
-	/// >			connections to drop at any time, and higher-level logic shouldn't differentiate
-	/// >			between the remote voluntarily closing a substream or a network error
-	/// >			preventing the message from being delivered.
-	///
-	/// The protocol must have been registered with
-	/// `crate::config::NetworkConfiguration::notifications_protocols`.
-	pub fn write_notification(
-		&self,
-		target: PeerId,
-		protocol: Cow<'static, str>,
-		message: Vec<u8>,
-	) {
-		// We clone the `NotificationsSink` in order to be able to unlock the network-wide
-		// `peers_notifications_sinks` mutex as soon as possible.
-		let sink = {
-			let peers_notifications_sinks = self.peers_notifications_sinks.lock();
-			if let Some(sink) = peers_notifications_sinks.get(&(target, protocol.clone())) {
-				sink.clone()
-			} else {
-				// Notification silently discarded, as documented.
-				debug!(
-					target: "sub-libp2p",
-					"Attempted to send notification on missing or closed substream: {}, {:?}",
-					target, protocol,
-				);
-				return
-			}
-		};
-
-		if let Some(notifications_sizes_metric) = self.notifications_sizes_metric.as_ref() {
-			notifications_sizes_metric
-				.with_label_values(&["out", &protocol])
-				.observe(message.len() as f64);
-		}
-
-		// Sending is communicated to the `NotificationsSink`.
-		trace!(
-			target: "sub-libp2p",
-			"External API => Notification({:?}, {:?}, {} bytes)",
-			target, protocol, message.len()
-		);
-		trace!(target: "sub-libp2p", "Handler({:?}) <= Sync notification", target);
-		sink.send_sync_notification(message);
-	}
-
-	/// Obtains a [`NotificationSender`] for a connected peer, if it exists.
-	///
-	/// A `NotificationSender` is scoped to a particular connection to the peer that holds
-	/// a receiver. With a `NotificationSender` at hand, sending a notification is done in two
-	/// steps:
-	///
-	/// 1.  [`NotificationSender::ready`] is used to wait for the sender to become ready
-	/// for another notification, yielding a [`NotificationSenderReady`] token.
-	/// 2.  [`NotificationSenderReady::send`] enqueues the notification for sending. This operation
-	/// can only fail if the underlying notification substream or connection has suddenly closed.
-	///
-	/// An error is returned by [`NotificationSenderReady::send`] if there exists no open
-	/// notifications substream with that combination of peer and protocol, or if the remote
-	/// has asked to close the notifications substream. If that happens, it is guaranteed that an
-	/// [`Event::NotificationStreamClosed`] has been generated on the stream returned by
-	/// [`NetworkService::event_stream`].
-	///
-	/// If the remote requests to close the notifications substream, all notifications successfully
-	/// enqueued using [`NotificationSenderReady::send`] will finish being sent out before the
-	/// substream actually gets closed, but attempting to enqueue more notifications will now
-	/// return an error. It is however possible for the entire connection to be abruptly closed,
-	/// in which case enqueued notifications will be lost.
-	///
-	/// The protocol must have been registered with
-	/// `crate::config::NetworkConfiguration::notifications_protocols`.
-	///
-	/// # Usage
-	///
-	/// This method returns a struct that allows waiting until there is space available in the
-	/// buffer of messages towards the given peer. If the peer processes notifications at a slower
-	/// rate than we send them, this buffer will quickly fill up.
-	///
-	/// As such, you should never do something like this:
-	///
-	/// ```ignore
-	/// // Do NOT do this
-	/// for peer in peers {
-	/// 	if let Ok(n) = network.notification_sender(peer, ...) {
-	/// 			if let Ok(s) = n.ready().await {
-	/// 				let _ = s.send(...);
-	/// 			}
-	/// 	}
-	/// }
-	/// ```
-	///
-	/// Doing so would slow down all peers to the rate of the slowest one. A malicious or
-	/// malfunctioning peer could intentionally process notifications at a very slow rate.
-	///
-	/// Instead, you are encouraged to maintain your own buffer of notifications on top of the one
-	/// maintained by `sc-network`, and use `notification_sender` to progressively send out
-	/// elements from your buffer. If this additional buffer is full (which will happen at some
-	/// point if the peer is too slow to process notifications), appropriate measures can be taken,
-	/// such as removing non-critical notifications from the buffer or disconnecting the peer
-	/// using [`NetworkService::disconnect_peer`].
-	///
-	///
-	/// Notifications              Per-peer buffer
-	///   broadcast    +------->   of notifications   +-->  `notification_sender`  +-->  Internet
-	///                    ^       (not covered by
-	///                    |         sc-network)
-	///                    +
-	///      Notifications should be dropped
-	///             if buffer is full
-	///
-	///
-	/// See also the `sc-network-gossip` crate for a higher-level way to send notifications.
-	pub fn notification_sender(
-		&self,
-		target: PeerId,
-		protocol: Cow<'static, str>,
-	) -> Result<NotificationSender, NotificationSenderError> {
-		// We clone the `NotificationsSink` in order to be able to unlock the network-wide
-		// `peers_notifications_sinks` mutex as soon as possible.
-		let sink = {
-			let peers_notifications_sinks = self.peers_notifications_sinks.lock();
-			if let Some(sink) = peers_notifications_sinks.get(&(target, protocol.clone())) {
-				sink.clone()
-			} else {
-				return Err(NotificationSenderError::Closed)
-			}
-		};
-
-		let notification_size_metric = self
-			.notifications_sizes_metric
-			.as_ref()
-			.map(|histogram| histogram.with_label_values(&["out", &protocol]));
-
-		Ok(NotificationSender { sink, protocol_name: protocol, notification_size_metric })
-	}
-
 	/// Sends a single targeted request to a specific peer. On success, returns the response of
 	/// the peer.
 	///
@@ -1294,6 +1148,70 @@ where
 	}
 }
 
+impl<B, H> NetworkNotification for NetworkService<B, H>
+where
+	B: BlockT + 'static,
+	H: ExHashT,
+{
+	fn write_notification(&self, target: PeerId, protocol: Cow<'static, str>, message: Vec<u8>) {
+		// We clone the `NotificationsSink` in order to be able to unlock the network-wide
+		// `peers_notifications_sinks` mutex as soon as possible.
+		let sink = {
+			let peers_notifications_sinks = self.peers_notifications_sinks.lock();
+			if let Some(sink) = peers_notifications_sinks.get(&(target, protocol.clone())) {
+				sink.clone()
+			} else {
+				// Notification silently discarded, as documented.
+				debug!(
+					target: "sub-libp2p",
+					"Attempted to send notification on missing or closed substream: {}, {:?}",
+					target, protocol,
+				);
+				return
+			}
+		};
+
+		if let Some(notifications_sizes_metric) = self.notifications_sizes_metric.as_ref() {
+			notifications_sizes_metric
+				.with_label_values(&["out", &protocol])
+				.observe(message.len() as f64);
+		}
+
+		// Sending is communicated to the `NotificationsSink`.
+		trace!(
+			target: "sub-libp2p",
+			"External API => Notification({:?}, {:?}, {} bytes)",
+			target, protocol, message.len()
+		);
+		trace!(target: "sub-libp2p", "Handler({:?}) <= Sync notification", target);
+		sink.send_sync_notification(message);
+	}
+
+	fn notification_sender(
+		&self,
+		target: PeerId,
+		protocol: Cow<'static, str>,
+	) -> Result<Box<dyn NotificationSenderT>, NotificationSenderError> {
+		// We clone the `NotificationsSink` in order to be able to unlock the network-wide
+		// `peers_notifications_sinks` mutex as soon as possible.
+		let sink = {
+			let peers_notifications_sinks = self.peers_notifications_sinks.lock();
+			if let Some(sink) = peers_notifications_sinks.get(&(target, protocol.clone())) {
+				sink.clone()
+			} else {
+				return Err(NotificationSenderError::Closed)
+			}
+		};
+
+		let notification_size_metric = self
+			.notifications_sizes_metric
+			.as_ref()
+			.map(|histogram| histogram.with_label_values(&["out", &protocol]));
+
+		Ok(Box::new(NotificationSender { sink, protocol_name: protocol, notification_size_metric }))
+	}
+}
+
 /// A `NotificationSender` allows for sending notifications to a peer with a chosen protocol.
 #[must_use]
 pub struct NotificationSender {
@@ -1307,26 +1225,27 @@ pub struct NotificationSender {
 	notification_size_metric: Option<Histogram>,
 }
 
-impl NotificationSender {
-	/// Returns a future that resolves when the `NotificationSender` is ready to send a
-	/// notification.
-	pub async fn ready(&self) -> Result<NotificationSenderReady<'_>, NotificationSenderError> {
-		Ok(NotificationSenderReady {
+#[async_trait::async_trait]
+impl NotificationSenderT for NotificationSender {
+	async fn ready(
+		&self,
+	) -> Result<Box<dyn NotificationSenderReadyT + '_>, NotificationSenderError> {
+		Ok(Box::new(NotificationSenderReady {
 			ready: match self.sink.reserve_notification().await {
-				Ok(r) => r,
+				Ok(r) => Some(r),
 				Err(()) => return Err(NotificationSenderError::Closed),
 			},
 			peer_id: self.sink.peer_id(),
 			protocol_name: &self.protocol_name,
 			notification_size_metric: self.notification_size_metric.clone(),
-		})
+		}))
 	}
 }
 
 /// Reserved slot in the notifications buffer, ready to accept data.
 #[must_use]
 pub struct NotificationSenderReady<'a> {
-	ready: Ready<'a>,
+	ready: Option<Ready<'a>>,
 
 	/// Target of the notification.
 	peer_id: &'a PeerId,
@@ -1339,11 +1258,8 @@ pub struct NotificationSenderReady<'a> {
 	notification_size_metric: Option<Histogram>,
 }
 
-impl<'a> NotificationSenderReady<'a> {
-	/// Consumes this slots reservation and actually queues the notification.
-	pub fn send(self, notification: impl Into<Vec<u8>>) -> Result<(), NotificationSenderError> {
-		let notification = notification.into();
-
+impl<'a> NotificationSenderReadyT for NotificationSenderReady<'a> {
+	fn send(&mut self, notification: Vec<u8>) -> Result<(), NotificationSenderError> {
 		if let Some(notification_size_metric) = &self.notification_size_metric {
 			notification_size_metric.observe(notification.len() as f64);
 		}
@@ -1355,24 +1271,12 @@ impl<'a> NotificationSenderReady<'a> {
 		);
 		trace!(target: "sub-libp2p", "Handler({:?}) <= Async notification", self.peer_id);
 
-		self.ready.send(notification).map_err(|()| NotificationSenderError::Closed)
+		self.ready
+			.take()
+			.ok_or(NotificationSenderError::Closed)?
+			.send(notification)
+			.map_err(|()| NotificationSenderError::Closed)
 	}
-}
-
-/// Error returned by [`NetworkService::send_notification`].
-#[derive(Debug, thiserror::Error)]
-pub enum NotificationSenderError {
-	/// The notification receiver has been closed, usually because the underlying connection
-	/// closed.
-	///
-	/// Some of the notifications most recently sent may not have been received. However,
-	/// the peer may still be connected and a new `NotificationSender` for the same
-	/// protocol obtained from [`NetworkService::notification_sender`].
-	#[error("The notification receiver has been closed")]
-	Closed,
-	/// Protocol name hasn't been registered.
-	#[error("Protocol name hasn't been registered")]
-	BadProtocol,
 }
 
 /// Messages sent from the `NetworkService` to the `NetworkWorker`.
