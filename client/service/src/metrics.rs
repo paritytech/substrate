@@ -298,9 +298,10 @@ impl MetricsService {
 						UniqueSaturatedInto::<u64>::unique_saturated_into(num)
 					});
 
-				if let Some(best_seen_block) = best_seen_block {
-					metrics.block_height.with_label_values(&["sync_target"]).set(best_seen_block);
-				}
+				metrics
+					.block_height
+					.with_label_values(&["sync_target"])
+					.set(best_seen_block.unwrap_or(best_number));
 			}
 		}
 	}
