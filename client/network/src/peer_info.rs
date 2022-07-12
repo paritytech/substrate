@@ -21,9 +21,8 @@ use fnv::FnvHashMap;
 use futures::prelude::*;
 use libp2p::{
 	core::{
-		connection::{ConnectionId, ListenerId},
-		either::EitherOutput,
-		ConnectedPoint, PeerId, PublicKey,
+		connection::ConnectionId, either::EitherOutput, transport::ListenerId, ConnectedPoint,
+		PeerId, PublicKey,
 	},
 	identify::{Identify, IdentifyConfig, IdentifyEvent, IdentifyInfo},
 	ping::{Ping, PingConfig, PingEvent, PingSuccess},
