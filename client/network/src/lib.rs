@@ -262,11 +262,9 @@ pub mod transactions;
 
 #[doc(inline)]
 pub use libp2p::{multiaddr, Multiaddr, PeerId};
-pub use protocol::{
-	event::{DhtEvent, Event, ObservedRole},
-	PeerInfo,
-};
+pub use protocol::PeerInfo;
 pub use sc_network_common::{
+	protocol::event::{DhtEvent, Event, ObservedRole},
 	service::{
 		KademliaKey, NetworkKVProvider, NetworkSigner, NetworkStatus, NetworkStatusProvider,
 		NetworkSyncForkRequest, Signature, SigningError,

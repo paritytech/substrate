@@ -25,10 +25,11 @@ use super::{
 use crate::{communication::grandpa_protocol_name, environment::SharedVoterSetState};
 use futures::prelude::*;
 use parity_scale_codec::Encode;
-use sc_network::{
-	config::Role, Event as NetworkEvent, Multiaddr, ObservedRole, PeerId, ReputationChange,
+use sc_network::{config::Role, Multiaddr, PeerId, ReputationChange};
+use sc_network_common::{
+	protocol::event::{Event as NetworkEvent, ObservedRole},
+	service::{NetworkEventStream, NetworkPeers},
 };
-use sc_network_common::service::NetworkPeers;
 use sc_network_gossip::Validator;
 use sc_network_test::{Block, Hash};
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
@@ -114,13 +115,18 @@ impl NetworkPeers for TestNetwork {
 	}
 }
 
-impl sc_network_gossip::Network<Block> for TestNetwork {
-	fn event_stream(&self) -> Pin<Box<dyn Stream<Item = NetworkEvent> + Send>> {
+impl NetworkEventStream for TestNetwork {
+	fn event_stream(
+		&self,
+		_name: &'static str,
+	) -> Pin<Box<dyn Stream<Item = NetworkEvent> + Send>> {
 		let (tx, rx) = tracing_unbounded("test");
 		let _ = self.sender.unbounded_send(Event::EventStream(tx));
 		Box::pin(rx)
 	}
+}
 
+impl sc_network_gossip::Network<Block> for TestNetwork {
 	fn add_set_reserved(&self, _: PeerId, _: Cow<'static, str>) {}
 
 	fn write_notification(&self, who: PeerId, _: Cow<'static, str>, message: Vec<u8>) {

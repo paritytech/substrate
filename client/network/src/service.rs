@@ -37,10 +37,10 @@ use crate::{
 		NetworkState, NotConnectedPeer as NetworkStateNotConnectedPeer, Peer as NetworkStatePeer,
 	},
 	protocol::{
-		self, event::Event, message::generic::Roles, NotificationsSink, NotifsHandlerError,
-		PeerInfo, Protocol, Ready,
+		self, message::generic::Roles, NotificationsSink, NotifsHandlerError, PeerInfo, Protocol,
+		Ready,
 	},
-	transactions, transport, DhtEvent, ExHashT, NetworkStateInfo, ReputationChange,
+	transactions, transport, ExHashT, NetworkStateInfo, ReputationChange,
 };
 
 use codec::Encode as _;
@@ -62,9 +62,10 @@ use parking_lot::Mutex;
 use sc_client_api::{BlockBackend, ProofProvider};
 use sc_consensus::{BlockImportError, BlockImportStatus, ImportQueue, Link};
 use sc_network_common::{
+	protocol::event::{DhtEvent, Event},
 	service::{
-		NetworkKVProvider, NetworkPeers, NetworkSigner, NetworkStatus, NetworkStatusProvider,
-		NetworkSyncForkRequest, Signature, SigningError,
+		NetworkEventStream, NetworkKVProvider, NetworkPeers, NetworkSigner, NetworkStatus,
+		NetworkStatusProvider, NetworkSyncForkRequest, Signature, SigningError,
 	},
 	sync::{SyncState, SyncStatus},
 };
@@ -891,21 +892,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		Ok(NotificationSender { sink, protocol_name: protocol, notification_size_metric })
 	}
 
-	/// Returns a stream containing the events that happen on the network.
-	///
-	/// If this method is called multiple times, the events are duplicated.
-	///
-	/// The stream never ends (unless the `NetworkWorker` gets shut down).
-	///
-	/// The name passed is used to identify the channel in the Prometheus metrics. Note that the
-	/// parameter is a `&'static str`, and not a `String`, in order to avoid accidentally having
-	/// an unbounded set of Prometheus metrics, which would be quite bad in terms of memory
-	pub fn event_stream(&self, name: &'static str) -> impl Stream<Item = Event> {
-		let (tx, rx) = out_events::channel(name);
-		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::EventStream(tx));
-		rx
-	}
-
 	/// Sends a single targeted request to a specific peer. On success, returns the response of
 	/// the peer.
 	///
@@ -1302,6 +1288,18 @@ where
 
 	fn num_connected(&self) -> usize {
 		self.num_connected.load(Ordering::Relaxed)
+	}
+}
+
+impl<B, H> NetworkEventStream for NetworkService<B, H>
+where
+	B: BlockT + 'static,
+	H: ExHashT,
+{
+	fn event_stream(&self, name: &'static str) -> Pin<Box<dyn Stream<Item = Event> + Send>> {
+		let (tx, rx) = out_events::channel(name);
+		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::EventStream(tx));
+		Box::pin(rx)
 	}
 }
 

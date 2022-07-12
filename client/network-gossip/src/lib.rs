@@ -67,21 +67,17 @@ pub use self::{
 	validator::{DiscardAll, MessageIntent, ValidationResult, Validator, ValidatorContext},
 };
 
-use futures::prelude::*;
-use sc_network::{multiaddr, Event, ExHashT, NetworkService, PeerId};
-use sc_network_common::service::NetworkPeers;
+use sc_network::{multiaddr, ExHashT, NetworkService, PeerId};
+use sc_network_common::service::{NetworkEventStream, NetworkPeers};
 use sp_runtime::traits::Block as BlockT;
-use std::{borrow::Cow, iter, pin::Pin, sync::Arc};
+use std::{borrow::Cow, iter, sync::Arc};
 
 mod bridge;
 mod state_machine;
 mod validator;
 
 /// Abstraction over a network.
-pub trait Network<B: BlockT>: NetworkPeers {
-	/// Returns a stream of events representing what happens on the network.
-	fn event_stream(&self) -> Pin<Box<dyn Stream<Item = Event> + Send>>;
-
+pub trait Network<B: BlockT>: NetworkPeers + NetworkEventStream {
 	fn add_set_reserved(&self, who: PeerId, protocol: Cow<'static, str>) {
 		let addr =
 			iter::once(multiaddr::Protocol::P2p(who.into())).collect::<multiaddr::Multiaddr>();
@@ -102,10 +98,6 @@ pub trait Network<B: BlockT>: NetworkPeers {
 }
 
 impl<B: BlockT, H: ExHashT> Network<B> for Arc<NetworkService<B, H>> {
-	fn event_stream(&self) -> Pin<Box<dyn Stream<Item = Event> + Send>> {
-		Box::pin(NetworkService::event_stream(self, "network-gossip"))
-	}
-
 	fn write_notification(&self, who: PeerId, protocol: Cow<'static, str>, message: Vec<u8>) {
 		NetworkService::write_notification(self, who, protocol, message)
 	}

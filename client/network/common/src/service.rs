@@ -18,7 +18,11 @@
 //
 // If you read this, you are very thorough, congratulations.
 
-use crate::sync::{warp::WarpSyncProgress, StateDownloadProgress, SyncState};
+use crate::{
+	protocol::event::Event,
+	sync::{warp::WarpSyncProgress, StateDownloadProgress, SyncState},
+};
+use futures::Stream;
 pub use libp2p::{identity::error::SigningError, kad::record::Key as KademliaKey};
 use libp2p::{Multiaddr, PeerId};
 use sc_peerset::ReputationChange;
@@ -295,5 +299,29 @@ where
 
 	fn num_connected(&self) -> usize {
 		T::num_connected(self)
+	}
+}
+
+/// Provides access to network-level event stream.
+pub trait NetworkEventStream {
+	/// Returns a stream containing the events that happen on the network.
+	///
+	/// If this method is called multiple times, the events are duplicated.
+	///
+	/// The stream never ends (unless the `NetworkWorker` gets shut down).
+	///
+	/// The name passed is used to identify the channel in the Prometheus metrics. Note that the
+	/// parameter is a `&'static str`, and not a `String`, in order to avoid accidentally having
+	/// an unbounded set of Prometheus metrics, which would be quite bad in terms of memory
+	fn event_stream(&self, name: &'static str) -> Pin<Box<dyn Stream<Item = Event> + Send>>;
+}
+
+impl<T> NetworkEventStream for Arc<T>
+where
+	T: ?Sized,
+	T: NetworkEventStream,
+{
+	fn event_stream(&self, name: &'static str) -> Pin<Box<dyn Stream<Item = Event> + Send>> {
+		T::event_stream(self, name)
 	}
 }

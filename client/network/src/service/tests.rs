@@ -16,11 +16,15 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::{config, Event, NetworkService, NetworkWorker};
+use crate::{config, NetworkService, NetworkWorker};
 
 use futures::prelude::*;
 use libp2p::PeerId;
-use sc_network_common::{config::ProtocolId, service::NetworkPeers};
+use sc_network_common::{
+	config::ProtocolId,
+	protocol::event::Event,
+	service::{NetworkEventStream, NetworkPeers},
+};
 use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
 use sc_network_sync::{
 	block_request_handler::BlockRequestHandler, state_request_handler::StateRequestHandler,

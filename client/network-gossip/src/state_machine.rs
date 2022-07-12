@@ -22,7 +22,7 @@ use ahash::AHashSet;
 use libp2p::PeerId;
 use lru::LruCache;
 use prometheus_endpoint::{register, Counter, PrometheusError, Registry, U64};
-use sc_network::ObservedRole;
+use sc_network_common::protocol::event::ObservedRole;
 use sp_runtime::traits::{Block as BlockT, Hash, HashFor};
 use std::{borrow::Cow, collections::HashMap, iter, sync::Arc, time, time::Instant};
 
@@ -513,8 +513,11 @@ mod tests {
 	use super::*;
 	use crate::multiaddr::Multiaddr;
 	use futures::prelude::*;
-	use sc_network::{Event, ReputationChange};
-	use sc_network_common::service::NetworkPeers;
+	use sc_network::ReputationChange;
+	use sc_network_common::{
+		protocol::event::Event,
+		service::{NetworkEventStream, NetworkPeers},
+	};
 	use sp_runtime::testing::{Block as RawBlock, ExtrinsicWrapper, H256};
 	use std::{
 		borrow::Cow,
@@ -637,11 +640,13 @@ mod tests {
 		}
 	}
 
-	impl<B: BlockT> Network<B> for NoOpNetwork {
-		fn event_stream(&self) -> Pin<Box<dyn Stream<Item = Event> + Send>> {
+	impl NetworkEventStream for NoOpNetwork {
+		fn event_stream(&self, _name: &'static str) -> Pin<Box<dyn Stream<Item = Event> + Send>> {
 			unimplemented!();
 		}
+	}
 
+	impl<B: BlockT> Network<B> for NoOpNetwork {
 		fn add_set_reserved(&self, _: PeerId, _: Cow<'static, str>) {}
 
 		fn write_notification(&self, _: PeerId, _: Cow<'static, str>, _: Vec<u8>) {

@@ -4586,6 +4586,7 @@ dependencies = [
  "sc-finality-grandpa",
  "sc-keystore",
  "sc-network",
+ "sc-network-common",
  "sc-rpc",
  "sc-service",
  "sc-service-test",
@@ -8394,6 +8395,7 @@ version = "0.10.0-dev"
 dependencies = [
  "async-trait",
  "bitflags",
+ "bytes",
  "futures",
  "libp2p",
  "parity-scale-codec",

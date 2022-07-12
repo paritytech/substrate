@@ -76,7 +76,6 @@ use std::{
 
 mod notifications;
 
-pub mod event;
 pub mod message;
 
 pub use notifications::{NotificationsSink, NotifsHandlerError, Ready};

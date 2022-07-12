@@ -21,7 +21,8 @@ use crate::{
 	Network, Validator,
 };
 
-use sc_network::{Event, ReputationChange};
+use sc_network::ReputationChange;
+use sc_network_common::protocol::event::Event;
 
 use futures::{
 	channel::mpsc::{channel, Receiver, Sender},
@@ -85,7 +86,7 @@ impl<B: BlockT> GossipEngine<B> {
 		B: 'static,
 	{
 		let protocol = protocol.into();
-		let network_event_stream = network.event_stream();
+		let network_event_stream = network.event_stream("network-gossip");
 
 		GossipEngine {
 			state_machine: ConsensusGossip::new(validator, protocol.clone(), metrics_registry),
@@ -315,8 +316,10 @@ mod tests {
 		future::poll_fn,
 	};
 	use quickcheck::{Arbitrary, Gen, QuickCheck};
-	use sc_network::ObservedRole;
-	use sc_network_common::service::NetworkPeers;
+	use sc_network_common::{
+		protocol::event::ObservedRole,
+		service::{NetworkEventStream, NetworkPeers},
+	};
 	use sp_runtime::{testing::H256, traits::Block as BlockT};
 	use std::{
 		borrow::Cow,
@@ -398,14 +401,16 @@ mod tests {
 		}
 	}
 
-	impl<B: BlockT> Network<B> for TestNetwork {
-		fn event_stream(&self) -> Pin<Box<dyn Stream<Item = Event> + Send>> {
+	impl NetworkEventStream for TestNetwork {
+		fn event_stream(&self, _name: &'static str) -> Pin<Box<dyn Stream<Item = Event> + Send>> {
 			let (tx, rx) = unbounded();
 			self.inner.lock().unwrap().event_senders.push(tx);
 
 			Box::pin(rx)
 		}
+	}
 
+	impl<B: BlockT> Network<B> for TestNetwork {
 		fn add_set_reserved(&self, _: PeerId, _: Cow<'static, str>) {}
 
 		fn write_notification(&self, _: PeerId, _: Cow<'static, str>, _: Vec<u8>) {

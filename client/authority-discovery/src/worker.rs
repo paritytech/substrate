@@ -44,8 +44,11 @@ use prometheus_endpoint::{register, Counter, CounterVec, Gauge, Opts, U64};
 use prost::Message;
 use rand::{seq::SliceRandom, thread_rng};
 use sc_client_api::blockchain::HeaderBackend;
-use sc_network::{DhtEvent, NetworkStateInfo};
-use sc_network_common::service::{KademliaKey, NetworkKVProvider, NetworkSigner, Signature};
+use sc_network::NetworkStateInfo;
+use sc_network_common::{
+	protocol::event::DhtEvent,
+	service::{KademliaKey, NetworkKVProvider, NetworkSigner, Signature},
+};
 use sp_api::ProvideRuntimeApi;
 use sp_authority_discovery::{
 	AuthorityDiscoveryApi, AuthorityId, AuthorityPair, AuthoritySignature,
