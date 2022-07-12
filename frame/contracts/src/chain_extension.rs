@@ -39,7 +39,7 @@
 //! However, only extensions implementing [`RegisteredChainExtension`] can be put into a tuple.
 //! This is because the [`RegisteredChainExtension::ID`] is used to decide which of those extensions
 //! should should be used when the contract calls a chain extensions. Extensions which are generally
-//! useful should claim their `ID` with [the registry](https://github.com/paritytech/ChainExtension-registry)
+//! useful should claim their `ID` with [the registry](https://github.com/paritytech/chainextension-registry)
 //! so that no collisions with other vendors will occure. **Chain specific extensions must use the
 //! reserved `ID = 0` that can't be registered with the registry.**
 //!
@@ -133,7 +133,7 @@ pub trait ChainExtension<C: Config> {
 /// MSB bytes of the `func_id` pased to `call`.
 ///
 /// If this extensions is to be used by multiple runtimes consider
-/// [registering it](https://github.com/paritytech/ChainExtension-registry) to ensure that there
+/// [registering it](https://github.com/paritytech/chainextension-registry) to ensure that there
 /// are no collisions with other vendors.
 ///
 /// # Note
