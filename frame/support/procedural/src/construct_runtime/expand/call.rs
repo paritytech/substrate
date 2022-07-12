@@ -40,10 +40,8 @@ pub fn expand_outer_dispatch(
 		let name = &pallet_declaration.name;
 		let path = &pallet_declaration.path;
 		let index = pallet_declaration.index;
-		let attr = pallet_declaration
-			.cfg_pattern
-			.iter()
-			.fold(TokenStream::new(), |acc, pattern| {
+		let attr =
+			pallet_declaration.cfg_pattern.iter().fold(TokenStream::new(), |acc, pattern| {
 				let attr = TokenStream::from_str(&format!("#[cfg({})]", pattern.original()))
 					.expect("was successfully parsed before; qed");
 				quote! {
@@ -52,13 +50,11 @@ pub fn expand_outer_dispatch(
 				}
 			});
 
-		variant_defs.extend(
-			quote! {
-				#attr
-				#[codec(index = #index)]
-				#name( #scrate::dispatch::CallableCallFor<#name, #runtime> ),
-			}
-		);
+		variant_defs.extend(quote! {
+			#attr
+			#[codec(index = #index)]
+			#name( #scrate::dispatch::CallableCallFor<#name, #runtime> ),
+		});
 		variant_patterns.push(quote!(Call::#name(call)));
 		pallet_names.push(name);
 		pallet_attrs.push(attr);

@@ -48,17 +48,14 @@ pub fn expand_runtime_metadata(
 			let event = expand_pallet_metadata_events(&filtered_names, runtime, scrate, decl);
 			let constants = expand_pallet_metadata_constants(runtime, decl);
 			let errors = expand_pallet_metadata_errors(runtime, decl);
-			let attr = decl
-				.cfg_pattern
-				.iter()
-				.fold(TokenStream::new(), |acc, pattern| {
-					let attr = TokenStream::from_str(&format!("#[cfg({})]", pattern.original()))
-						.expect("was successfully parsed before; qed");
-					quote! {
-						#acc
-						#attr
-					}
-				});
+			let attr = decl.cfg_pattern.iter().fold(TokenStream::new(), |acc, pattern| {
+				let attr = TokenStream::from_str(&format!("#[cfg({})]", pattern.original()))
+					.expect("was successfully parsed before; qed");
+				quote! {
+					#acc
+					#attr
+				}
+			});
 
 			quote! {
 				#attr

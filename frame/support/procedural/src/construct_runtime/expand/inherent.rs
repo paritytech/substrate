@@ -36,17 +36,14 @@ pub fn expand_outer_inherent(
 		if pallet_decl.exists_part("Inherent") {
 			let name = &pallet_decl.name;
 			let path = &pallet_decl.path;
-			let attr = pallet_decl
-				.cfg_pattern
-				.iter()
-				.fold(TokenStream::new(), |acc, pattern| {
-					let attr = TokenStream::from_str(&format!("#[cfg({})]", pattern.original()))
-						.expect("was successfully parsed before; qed");
-					quote! {
-						#acc
-						#attr
-					}
-				});
+			let attr = pallet_decl.cfg_pattern.iter().fold(TokenStream::new(), |acc, pattern| {
+				let attr = TokenStream::from_str(&format!("#[cfg({})]", pattern.original()))
+					.expect("was successfully parsed before; qed");
+				quote! {
+					#acc
+					#attr
+				}
+			});
 
 			pallet_names.push(name);
 			pallet_attrs.push(attr);

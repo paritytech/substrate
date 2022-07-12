@@ -510,17 +510,14 @@ fn decl_pallet_runtime_setup(
 	let pallet_attrs = pallet_declarations
 		.iter()
 		.map(|pallet| {
-			pallet
-				.cfg_pattern
-				.iter()
-				.fold(TokenStream2::new(), |acc, pattern| {
-					let attr = TokenStream2::from_str(&format!("#[cfg({})]", pattern.original()))
-						.expect("was successfully parsed before; qed");
-					quote! {
-						#acc
-						#attr
-					}
-				})
+			pallet.cfg_pattern.iter().fold(TokenStream2::new(), |acc, pattern| {
+				let attr = TokenStream2::from_str(&format!("#[cfg({})]", pattern.original()))
+					.expect("was successfully parsed before; qed");
+				quote! {
+					#acc
+					#attr
+				}
+			})
 		})
 		.collect::<Vec<_>>();
 

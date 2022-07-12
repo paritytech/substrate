@@ -41,17 +41,14 @@ pub fn expand_outer_config(
 			let field_name =
 				&Ident::new(&pallet_name.to_string().to_snake_case(), decl.name.span());
 			let part_is_generic = !pallet_entry.generics.params.is_empty();
-			let attr = &decl
-				.cfg_pattern
-				.iter()
-				.fold(TokenStream::new(), |acc, pattern| {
-					let attr = TokenStream::from_str(&format!("#[cfg({})]", pattern.original()))
-						.expect("was successfully parsed before; qed");
-					quote! {
-						#acc
-						#attr
-					}
-				});
+			let attr = &decl.cfg_pattern.iter().fold(TokenStream::new(), |acc, pattern| {
+				let attr = TokenStream::from_str(&format!("#[cfg({})]", pattern.original()))
+					.expect("was successfully parsed before; qed");
+				quote! {
+					#acc
+					#attr
+				}
+			});
 
 			types.extend(expand_config_types(attr, runtime, decl, &config, part_is_generic));
 			fields.extend(quote!(#attr pub #field_name: #config,));
