@@ -81,7 +81,7 @@ pub struct Proof<Hash> {
 
 /// A full leaf content stored in the offchain-db.
 pub trait FullLeaf: Clone + PartialEq + fmt::Debug {
-	/// Encode the leaf either in it's full or compact form.
+	/// Encode the leaf either in its full or compact form.
 	///
 	/// NOTE the encoding returned here MUST be `Decode`able into `FullLeaf`.
 	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F, compact: bool) -> R;
@@ -167,18 +167,18 @@ impl EncodableOpaqueLeaf {
 	}
 }
 
-/// An element representing either full data or it's hash.
+/// An element representing either full data or its hash.
 ///
 /// See [Compact] to see how it may be used in practice to reduce the size
 /// of proofs in case multiple [LeafDataProvider]s are composed together.
 /// This is also used internally by the MMR to differentiate leaf nodes (data)
 /// and inner nodes (hashes).
 ///
-/// [DataOrHash::hash] method calculates the hash of this element in it's compact form,
+/// [DataOrHash::hash] method calculates the hash of this element in its compact form,
 /// so should be used instead of hashing the encoded form (which will always be non-compact).
 #[derive(RuntimeDebug, Clone, PartialEq)]
 pub enum DataOrHash<H: traits::Hash, L> {
-	/// Arbitrary data in it's full form.
+	/// Arbitrary data in its full form.
 	Data(L),
 	/// A hash of some data.
 	Hash(H::Output),
@@ -339,7 +339,7 @@ where
 	A: FullLeaf,
 	B: FullLeaf,
 {
-	/// Retrieve a hash of this item in it's compact form.
+	/// Retrieve a hash of this item in its compact form.
 	pub fn hash(&self) -> H::Output {
 		self.using_encoded(<H as traits::Hash>::hash, true)
 	}
@@ -447,7 +447,7 @@ sp_api::decl_runtime_apis! {
 		/// Note this function does not require any on-chain storage - the
 		/// proof is verified against given MMR root hash.
 		///
-		/// The leaf data is expected to be encoded in it's compact form.
+		/// The leaf data is expected to be encoded in its compact form.
 		fn verify_proof_stateless(root: Hash, leaf: EncodableOpaqueLeaf, proof: Proof<Hash>)
 			-> Result<(), Error>;
 
