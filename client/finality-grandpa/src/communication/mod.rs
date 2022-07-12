@@ -156,7 +156,18 @@ const TELEMETRY_VOTERS_LIMIT: usize = 10;
 ///
 /// Something that provides both the capabilities needed for the `gossip_network::Network` trait as
 /// well as the ability to set a fork sync request for a particular block.
-pub trait Network<Block: BlockT>: GossipNetwork<Block> + Clone + Send + 'static {
+pub trait Network<Block: BlockT>:
+	NetworkSyncForkRequest<Block> + GossipNetwork<Block> + Clone + Send + 'static
+{
+}
+
+impl<Block: BlockT, T> Network<Block> for T where
+	T: NetworkSyncForkRequest<Block> + GossipNetwork<Block> + Clone + Send + 'static
+{
+}
+
+/// Provides an ability to set a fork sync request for a particular block.
+pub trait NetworkSyncForkRequest<Block: BlockT> {
 	/// Notifies the sync service to try and sync the given block from the given
 	/// peers.
 	///
@@ -171,7 +182,7 @@ pub trait Network<Block: BlockT>: GossipNetwork<Block> + Clone + Send + 'static 
 	);
 }
 
-impl<B, H> Network<B> for Arc<NetworkService<B, H>>
+impl<B, H> NetworkSyncForkRequest<B> for Arc<NetworkService<B, H>>
 where
 	B: BlockT,
 	H: sc_network::ExHashT,
@@ -467,7 +478,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		hash: B::Hash,
 		number: NumberFor<B>,
 	) {
-		Network::set_sync_fork_request(&self.service, peers, hash, number)
+		self.service.set_sync_fork_request(peers, hash, number)
 	}
 }
 
