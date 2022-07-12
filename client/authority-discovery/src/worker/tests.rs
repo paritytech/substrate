@@ -29,8 +29,9 @@ use futures::{
 	sink::SinkExt,
 	task::LocalSpawn,
 };
-use libp2p::{core::multiaddr, PeerId};
+use libp2p::{core::multiaddr, identity::Keypair, PeerId};
 use prometheus_endpoint::prometheus::default_registry;
+use sc_network_common::service::{Signature, SigningError};
 
 use sp_api::{ApiRef, ProvideRuntimeApi};
 use sp_keystore::{testing::KeyStore, CryptoStore};
@@ -152,8 +153,8 @@ impl NetworkSigner for TestNetwork {
 	fn sign_with_local_identity(
 		&self,
 		msg: impl AsRef<[u8]>,
-	) -> std::result::Result<sc_network::Signature, sc_network::SigningError> {
-		sc_network::Signature::sign_message(msg, &self.identity)
+	) -> std::result::Result<Signature, SigningError> {
+		Signature::sign_message(msg, &self.identity)
 	}
 }
 
@@ -184,12 +185,16 @@ impl NetworkStateInfo for TestNetwork {
 	}
 }
 
-impl NetworkSigner for sc_network::Keypair {
+struct TestSigner<'a> {
+	keypair: &'a Keypair,
+}
+
+impl<'a> NetworkSigner for TestSigner<'a> {
 	fn sign_with_local_identity(
 		&self,
 		msg: impl AsRef<[u8]>,
-	) -> std::result::Result<sc_network::Signature, sc_network::SigningError> {
-		sc_network::Signature::sign_message(msg, self)
+	) -> std::result::Result<Signature, SigningError> {
+		Signature::sign_message(msg, self.keypair)
 	}
 }
 
@@ -581,7 +586,7 @@ fn strict_accept_address_with_peer_signature() {
 		vec![addr.clone()],
 		tester.remote_authority_public.clone().into(),
 		&tester.remote_key_store,
-		Some(&tester.remote_node_key),
+		Some(&TestSigner { keypair: &tester.remote_node_key }),
 	));
 
 	let cached_remote_addresses = tester.process_value_found(true, kv_pairs);
@@ -601,7 +606,7 @@ fn reject_address_with_rogue_peer_signature() {
 		vec![tester.multiaddr_with_peer_id(1)],
 		tester.remote_authority_public.clone().into(),
 		&tester.remote_key_store,
-		Some(&rogue_remote_node_key),
+		Some(&TestSigner { keypair: &rogue_remote_node_key }),
 	));
 
 	let cached_remote_addresses = tester.process_value_found(false, kv_pairs);
@@ -619,7 +624,7 @@ fn reject_address_with_invalid_peer_signature() {
 		vec![tester.multiaddr_with_peer_id(1)],
 		tester.remote_authority_public.clone().into(),
 		&tester.remote_key_store,
-		Some(&tester.remote_node_key),
+		Some(&TestSigner { keypair: &tester.remote_node_key }),
 	));
 	// tamper with the signature
 	let mut record = schema::SignedAuthorityRecord::decode(kv_pairs[0].1.as_slice()).unwrap();

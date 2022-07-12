@@ -44,6 +44,7 @@ use prost::Message;
 use rand::{seq::SliceRandom, thread_rng};
 use sc_client_api::blockchain::HeaderBackend;
 use sc_network::{DhtEvent, ExHashT, Multiaddr, NetworkStateInfo, PeerId};
+use sc_network_common::service::NetworkSigner;
 use sp_api::ProvideRuntimeApi;
 use sp_authority_discovery::{
 	AuthorityDiscoveryApi, AuthorityId, AuthorityPair, AuthoritySignature,
@@ -589,14 +590,6 @@ where
 	}
 }
 
-pub trait NetworkSigner {
-	/// Sign a message in the name of `self.local_peer_id()`
-	fn sign_with_local_identity(
-		&self,
-		msg: impl AsRef<[u8]>,
-	) -> std::result::Result<sc_network::Signature, sc_network::SigningError>;
-}
-
 /// NetworkProvider provides [`Worker`] with all necessary hooks into the
 /// underlying Substrate networking. Using this trait abstraction instead of
 /// [`sc_network::NetworkService`] directly is necessary to unit test [`Worker`].
@@ -610,19 +603,6 @@ pub trait NetworkKVProvider {
 
 	/// Start getting a value from the Dht.
 	fn get_value(&self, key: &sc_network::KademliaKey);
-}
-
-impl<B, H> NetworkSigner for sc_network::NetworkService<B, H>
-where
-	B: BlockT + 'static,
-	H: ExHashT,
-{
-	fn sign_with_local_identity(
-		&self,
-		msg: impl AsRef<[u8]>,
-	) -> std::result::Result<sc_network::Signature, sc_network::SigningError> {
-		self.sign_with_local_identity(msg)
-	}
 }
 
 impl<B, H> NetworkKVProvider for sc_network::NetworkService<B, H>

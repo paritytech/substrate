@@ -266,14 +266,16 @@ pub use protocol::{
 	event::{DhtEvent, Event, ObservedRole},
 	PeerInfo,
 };
-pub use sc_network_common::sync::{
-	warp::{WarpSyncPhase, WarpSyncProgress},
-	StateDownloadProgress, SyncState,
+pub use sc_network_common::{
+	service::{NetworkSigner, Signature, SigningError},
+	sync::{
+		warp::{WarpSyncPhase, WarpSyncProgress},
+		StateDownloadProgress, SyncState,
+	},
 };
 pub use service::{
 	DecodingError, IfDisconnected, KademliaKey, Keypair, NetworkService, NetworkWorker,
 	NotificationSender, NotificationSenderReady, OutboundFailure, PublicKey, RequestFailure,
-	Signature, SigningError,
 };
 
 pub use sc_peerset::ReputationChange;

@@ -7708,6 +7708,7 @@ dependencies = [
  "rand 0.7.3",
  "sc-client-api",
  "sc-network",
+ "sc-network-common",
  "sp-api",
  "sp-authority-discovery",
  "sp-blockchain",

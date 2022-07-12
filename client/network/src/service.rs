@@ -60,7 +60,10 @@ use metrics::{Histogram, HistogramVec, MetricSources, Metrics};
 use parking_lot::Mutex;
 use sc_client_api::{BlockBackend, ProofProvider};
 use sc_consensus::{BlockImportError, BlockImportStatus, ImportQueue, Link};
-use sc_network_common::sync::{SyncState, SyncStatus};
+use sc_network_common::{
+	service::{NetworkSigner, Signature, SigningError},
+	sync::{SyncState, SyncStatus},
+};
 use sc_peerset::PeersetHandle;
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_blockchain::{HeaderBackend, HeaderMetadata};
@@ -87,18 +90,13 @@ pub use behaviour::{
 
 mod metrics;
 mod out_events;
-mod signature;
 #[cfg(test)]
 mod tests;
 
 pub use libp2p::{
-	identity::{
-		error::{DecodingError, SigningError},
-		Keypair, PublicKey,
-	},
+	identity::{error::DecodingError, Keypair, PublicKey},
 	kad::record::Key as KademliaKey,
 };
-pub use signature::Signature;
 
 /// Substrate network service. Handles network IO and manages connectivity.
 pub struct NetworkService<B: BlockT + 'static, H: ExHashT> {
@@ -719,14 +717,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		&self.local_peer_id
 	}
 
-	/// Signs the message with the `KeyPair` that defined the local `PeerId`.
-	pub fn sign_with_local_identity(
-		&self,
-		msg: impl AsRef<[u8]>,
-	) -> Result<Signature, SigningError> {
-		Signature::sign_message(msg.as_ref(), &self.local_identity)
-	}
-
 	/// Set authorized peers.
 	///
 	/// Need a better solution to manage authorized peers, but now just use reserved peers for
@@ -1336,6 +1326,16 @@ where
 	/// Returns the local Peer ID.
 	fn local_peer_id(&self) -> PeerId {
 		self.local_peer_id
+	}
+}
+
+impl<B, H> NetworkSigner for NetworkService<B, H>
+where
+	B: sp_runtime::traits::Block,
+	H: ExHashT,
+{
+	fn sign_with_local_identity(&self, msg: impl AsRef<[u8]>) -> Result<Signature, SigningError> {
+		Signature::sign_message(msg.as_ref(), &self.local_identity)
 	}
 }
 
