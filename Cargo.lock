@@ -7696,7 +7696,6 @@ dependencies = [
 name = "sc-authority-discovery"
 version = "0.10.0-dev"
 dependencies = [
- "async-trait",
  "futures",
  "futures-timer",
  "ip_network",

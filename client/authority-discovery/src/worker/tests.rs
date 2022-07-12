@@ -22,7 +22,6 @@ use std::{
 	task::Poll,
 };
 
-use async_trait::async_trait;
 use futures::{
 	channel::mpsc::{self, channel},
 	executor::{block_on, LocalPool},
@@ -158,8 +157,7 @@ impl NetworkSigner for TestNetwork {
 	}
 }
 
-#[async_trait]
-impl NetworkProvider for TestNetwork {
+impl NetworkKVProvider for TestNetwork {
 	fn put_value(&self, key: sc_network::KademliaKey, value: Vec<u8>) {
 		self.put_value_call.lock().unwrap().push((key.clone(), value.clone()));
 		self.event_sender

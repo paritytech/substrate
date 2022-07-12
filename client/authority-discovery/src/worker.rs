@@ -32,7 +32,6 @@ use std::{
 use futures::{channel::mpsc, future, stream::Fuse, FutureExt, Stream, StreamExt};
 
 use addr_cache::AddrCache;
-use async_trait::async_trait;
 use codec::Decode;
 use ip_network::IpNetwork;
 use libp2p::{
@@ -601,8 +600,11 @@ pub trait NetworkSigner {
 /// NetworkProvider provides [`Worker`] with all necessary hooks into the
 /// underlying Substrate networking. Using this trait abstraction instead of
 /// [`sc_network::NetworkService`] directly is necessary to unit test [`Worker`].
-#[async_trait]
-pub trait NetworkProvider: NetworkStateInfo + NetworkSigner {
+pub trait NetworkProvider: NetworkKVProvider + NetworkStateInfo + NetworkSigner {}
+
+impl<T> NetworkProvider for T where T: NetworkKVProvider + NetworkStateInfo + NetworkSigner {}
+
+pub trait NetworkKVProvider {
 	/// Start putting a value in the Dht.
 	fn put_value(&self, key: sc_network::KademliaKey, value: Vec<u8>);
 
@@ -623,8 +625,7 @@ where
 	}
 }
 
-#[async_trait::async_trait]
-impl<B, H> NetworkProvider for sc_network::NetworkService<B, H>
+impl<B, H> NetworkKVProvider for sc_network::NetworkService<B, H>
 where
 	B: BlockT + 'static,
 	H: ExHashT,
