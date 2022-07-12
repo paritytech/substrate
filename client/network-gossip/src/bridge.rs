@@ -181,7 +181,10 @@ impl<B: BlockT> Future for GossipEngine<B> {
 								this.network.add_set_reserved(remote, this.protocol.clone());
 							},
 							Event::SyncDisconnected { remote } => {
-								this.network.remove_set_reserved(remote, this.protocol.clone());
+								this.network.remove_peers_from_reserved_set(
+									this.protocol.clone(),
+									vec![remote],
+								);
 							},
 							Event::NotificationStreamOpened { remote, protocol, role, .. } => {
 								if protocol != this.protocol {
@@ -304,7 +307,7 @@ impl<B: BlockT> futures::future::FusedFuture for GossipEngine<B> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{ValidationResult, ValidatorContext};
+	use crate::{multiaddr::Multiaddr, ValidationResult, ValidatorContext};
 	use async_std::task::spawn;
 	use futures::{
 		channel::mpsc::{unbounded, UnboundedSender},
@@ -313,9 +316,11 @@ mod tests {
 	};
 	use quickcheck::{Arbitrary, Gen, QuickCheck};
 	use sc_network::ObservedRole;
+	use sc_network_common::service::NetworkPeers;
 	use sp_runtime::{testing::H256, traits::Block as BlockT};
 	use std::{
 		borrow::Cow,
+		collections::HashSet,
 		sync::{Arc, Mutex},
 	};
 	use substrate_test_runtime_client::runtime::Block;
@@ -330,6 +335,69 @@ mod tests {
 		event_senders: Vec<UnboundedSender<Event>>,
 	}
 
+	impl NetworkPeers for TestNetwork {
+		fn report_peer(&self, _who: PeerId, _cost_benefit: ReputationChange) {}
+
+		fn disconnect_peer(&self, _who: PeerId, _protocol: Cow<'static, str>) {
+			unimplemented!();
+		}
+
+		fn accept_unreserved_peers(&self) {
+			unimplemented!();
+		}
+
+		fn deny_unreserved_peers(&self) {
+			unimplemented!();
+		}
+
+		fn add_reserved_peer(&self, _peer: String) -> Result<(), String> {
+			unimplemented!();
+		}
+
+		fn remove_reserved_peer(&self, _peer_id: PeerId) {
+			unimplemented!();
+		}
+
+		fn set_reserved_peers(
+			&self,
+			_protocol: Cow<'static, str>,
+			_peers: HashSet<Multiaddr>,
+		) -> Result<(), String> {
+			unimplemented!();
+		}
+
+		fn add_peers_to_reserved_set(
+			&self,
+			_protocol: Cow<'static, str>,
+			_peers: HashSet<Multiaddr>,
+		) -> Result<(), String> {
+			unimplemented!();
+		}
+
+		fn remove_peers_from_reserved_set(
+			&self,
+			_protocol: Cow<'static, str>,
+			_peers: Vec<PeerId>,
+		) {
+		}
+
+		fn add_to_peers_set(
+			&self,
+			_protocol: Cow<'static, str>,
+			_peers: HashSet<Multiaddr>,
+		) -> Result<(), String> {
+			unimplemented!();
+		}
+
+		fn remove_from_peers_set(&self, _protocol: Cow<'static, str>, _peers: Vec<PeerId>) {
+			unimplemented!();
+		}
+
+		fn num_connected(&self) -> usize {
+			unimplemented!();
+		}
+	}
+
 	impl<B: BlockT> Network<B> for TestNetwork {
 		fn event_stream(&self) -> Pin<Box<dyn Stream<Item = Event> + Send>> {
 			let (tx, rx) = unbounded();
@@ -338,15 +406,7 @@ mod tests {
 			Box::pin(rx)
 		}
 
-		fn report_peer(&self, _: PeerId, _: ReputationChange) {}
-
-		fn disconnect_peer(&self, _: PeerId, _: Cow<'static, str>) {
-			unimplemented!();
-		}
-
 		fn add_set_reserved(&self, _: PeerId, _: Cow<'static, str>) {}
-
-		fn remove_set_reserved(&self, _: PeerId, _: Cow<'static, str>) {}
 
 		fn write_notification(&self, _: PeerId, _: Cow<'static, str>, _: Vec<u8>) {
 			unimplemented!();

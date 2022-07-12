@@ -19,11 +19,12 @@
 // If you read this, you are very thorough, congratulations.
 
 use crate::sync::{warp::WarpSyncProgress, StateDownloadProgress, SyncState};
-use libp2p::PeerId;
 pub use libp2p::{identity::error::SigningError, kad::record::Key as KademliaKey};
+use libp2p::{Multiaddr, PeerId};
+use sc_peerset::ReputationChange;
 pub use signature::Signature;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
-use std::{future::Future, pin::Pin, sync::Arc};
+use std::{borrow::Cow, collections::HashSet, future::Future, pin::Pin, sync::Arc};
 
 mod signature;
 
@@ -133,5 +134,166 @@ where
 		Self: 'async_trait,
 	{
 		T::status(self)
+	}
+}
+
+/// Provides low-level API for manipulating network peers.
+pub trait NetworkPeers {
+	/// Report a given peer as either beneficial (+) or costly (-) according to the
+	/// given scalar.
+	fn report_peer(&self, who: PeerId, cost_benefit: ReputationChange);
+
+	/// Disconnect from a node as soon as possible.
+	///
+	/// This triggers the same effects as if the connection had closed itself spontaneously.
+	///
+	/// See also [`NetworkPeers::remove_from_peers_set`], which has the same effect but also
+	/// prevents the local node from re-establishing an outgoing substream to this peer until it
+	/// is added again.
+	fn disconnect_peer(&self, who: PeerId, protocol: Cow<'static, str>);
+
+	/// Connect to unreserved peers and allow unreserved peers to connect for syncing purposes.
+	fn accept_unreserved_peers(&self);
+
+	/// Disconnect from unreserved peers and deny new unreserved peers to connect for syncing
+	/// purposes.
+	fn deny_unreserved_peers(&self);
+
+	/// Adds a `PeerId` and its address as reserved. The string should encode the address
+	/// and peer ID of the remote node.
+	///
+	/// Returns an `Err` if the given string is not a valid multiaddress
+	/// or contains an invalid peer ID (which includes the local peer ID).
+	fn add_reserved_peer(&self, peer: String) -> Result<(), String>;
+
+	/// Removes a `PeerId` from the list of reserved peers.
+	fn remove_reserved_peer(&self, peer_id: PeerId);
+
+	/// Sets the reserved set of a protocol to the given set of peers.
+	///
+	/// Each `Multiaddr` must end with a `/p2p/` component containing the `PeerId`. It can also
+	/// consist of only `/p2p/<peerid>`.
+	///
+	/// The node will start establishing/accepting connections and substreams to/from peers in this
+	/// set, if it doesn't have any substream open with them yet.
+	///
+	/// Note however, if a call to this function results in less peers on the reserved set, they
+	/// will not necessarily get disconnected (depending on available free slots in the peer set).
+	/// If you want to also disconnect those removed peers, you will have to call
+	/// `remove_from_peers_set` on those in addition to updating the reserved set. You can omit
+	/// this step if the peer set is in reserved only mode.
+	///
+	/// Returns an `Err` if one of the given addresses is invalid or contains an
+	/// invalid peer ID (which includes the local peer ID).
+	fn set_reserved_peers(
+		&self,
+		protocol: Cow<'static, str>,
+		peers: HashSet<Multiaddr>,
+	) -> Result<(), String>;
+
+	/// Add peers to a peer set.
+	///
+	/// Each `Multiaddr` must end with a `/p2p/` component containing the `PeerId`. It can also
+	/// consist of only `/p2p/<peerid>`.
+	///
+	/// Returns an `Err` if one of the given addresses is invalid or contains an
+	/// invalid peer ID (which includes the local peer ID).
+	fn add_peers_to_reserved_set(
+		&self,
+		protocol: Cow<'static, str>,
+		peers: HashSet<Multiaddr>,
+	) -> Result<(), String>;
+
+	/// Remove peers from a peer set.
+	fn remove_peers_from_reserved_set(&self, protocol: Cow<'static, str>, peers: Vec<PeerId>);
+
+	/// Add a peer to a set of peers.
+	///
+	/// If the set has slots available, it will try to open a substream with this peer.
+	///
+	/// Each `Multiaddr` must end with a `/p2p/` component containing the `PeerId`. It can also
+	/// consist of only `/p2p/<peerid>`.
+	///
+	/// Returns an `Err` if one of the given addresses is invalid or contains an
+	/// invalid peer ID (which includes the local peer ID).
+	fn add_to_peers_set(
+		&self,
+		protocol: Cow<'static, str>,
+		peers: HashSet<Multiaddr>,
+	) -> Result<(), String>;
+
+	/// Remove peers from a peer set.
+	///
+	/// If we currently have an open substream with this peer, it will soon be closed.
+	fn remove_from_peers_set(&self, protocol: Cow<'static, str>, peers: Vec<PeerId>);
+
+	/// Returns the number of peers we're connected to.
+	fn num_connected(&self) -> usize;
+}
+
+// Manual implementation to avoid extra boxing here
+impl<T> NetworkPeers for Arc<T>
+where
+	T: ?Sized,
+	T: NetworkPeers,
+{
+	fn report_peer(&self, who: PeerId, cost_benefit: ReputationChange) {
+		T::report_peer(self, who, cost_benefit)
+	}
+
+	fn disconnect_peer(&self, who: PeerId, protocol: Cow<'static, str>) {
+		T::disconnect_peer(self, who, protocol)
+	}
+
+	fn accept_unreserved_peers(&self) {
+		T::accept_unreserved_peers(self)
+	}
+
+	fn deny_unreserved_peers(&self) {
+		T::deny_unreserved_peers(self)
+	}
+
+	fn add_reserved_peer(&self, peer: String) -> Result<(), String> {
+		T::add_reserved_peer(self, peer)
+	}
+
+	fn remove_reserved_peer(&self, peer_id: PeerId) {
+		T::remove_reserved_peer(self, peer_id)
+	}
+
+	fn set_reserved_peers(
+		&self,
+		protocol: Cow<'static, str>,
+		peers: HashSet<Multiaddr>,
+	) -> Result<(), String> {
+		T::set_reserved_peers(self, protocol, peers)
+	}
+
+	fn add_peers_to_reserved_set(
+		&self,
+		protocol: Cow<'static, str>,
+		peers: HashSet<Multiaddr>,
+	) -> Result<(), String> {
+		T::add_peers_to_reserved_set(self, protocol, peers)
+	}
+
+	fn remove_peers_from_reserved_set(&self, protocol: Cow<'static, str>, peers: Vec<PeerId>) {
+		T::remove_peers_from_reserved_set(self, protocol, peers)
+	}
+
+	fn add_to_peers_set(
+		&self,
+		protocol: Cow<'static, str>,
+		peers: HashSet<Multiaddr>,
+	) -> Result<(), String> {
+		T::add_to_peers_set(self, protocol, peers)
+	}
+
+	fn remove_from_peers_set(&self, protocol: Cow<'static, str>, peers: Vec<PeerId>) {
+		T::remove_from_peers_set(self, protocol, peers)
+	}
+
+	fn num_connected(&self) -> usize {
+		T::num_connected(self)
 	}
 }

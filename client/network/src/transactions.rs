@@ -40,7 +40,7 @@ use futures::{channel::mpsc, prelude::*, stream::FuturesUnordered};
 use libp2p::{multiaddr, PeerId};
 use log::{debug, trace, warn};
 use prometheus_endpoint::{register, Counter, PrometheusError, Registry, U64};
-use sc_network_common::config::ProtocolId;
+use sc_network_common::{config::ProtocolId, service::NetworkPeers};
 use sp_runtime::traits::Block as BlockT;
 use std::{
 	borrow::Cow,

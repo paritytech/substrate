@@ -511,11 +511,14 @@ impl Metrics {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::multiaddr::Multiaddr;
 	use futures::prelude::*;
 	use sc_network::{Event, ReputationChange};
+	use sc_network_common::service::NetworkPeers;
 	use sp_runtime::testing::{Block as RawBlock, ExtrinsicWrapper, H256};
 	use std::{
 		borrow::Cow,
+		collections::HashSet,
 		pin::Pin,
 		sync::{Arc, Mutex},
 	};
@@ -569,22 +572,77 @@ mod tests {
 		peer_reports: Vec<(PeerId, ReputationChange)>,
 	}
 
+	impl NetworkPeers for NoOpNetwork {
+		fn report_peer(&self, who: PeerId, cost_benefit: ReputationChange) {
+			self.inner.lock().unwrap().peer_reports.push((who, cost_benefit));
+		}
+
+		fn disconnect_peer(&self, _who: PeerId, _protocol: Cow<'static, str>) {
+			unimplemented!();
+		}
+
+		fn accept_unreserved_peers(&self) {
+			unimplemented!();
+		}
+
+		fn deny_unreserved_peers(&self) {
+			unimplemented!();
+		}
+
+		fn add_reserved_peer(&self, _peer: String) -> Result<(), String> {
+			unimplemented!();
+		}
+
+		fn remove_reserved_peer(&self, _peer_id: PeerId) {
+			unimplemented!();
+		}
+
+		fn set_reserved_peers(
+			&self,
+			_protocol: Cow<'static, str>,
+			_peers: HashSet<Multiaddr>,
+		) -> Result<(), String> {
+			unimplemented!();
+		}
+
+		fn add_peers_to_reserved_set(
+			&self,
+			_protocol: Cow<'static, str>,
+			_peers: HashSet<Multiaddr>,
+		) -> Result<(), String> {
+			unimplemented!();
+		}
+
+		fn remove_peers_from_reserved_set(
+			&self,
+			_protocol: Cow<'static, str>,
+			_peers: Vec<PeerId>,
+		) {
+		}
+
+		fn add_to_peers_set(
+			&self,
+			_protocol: Cow<'static, str>,
+			_peers: HashSet<Multiaddr>,
+		) -> Result<(), String> {
+			unimplemented!();
+		}
+
+		fn remove_from_peers_set(&self, _protocol: Cow<'static, str>, _peers: Vec<PeerId>) {
+			unimplemented!();
+		}
+
+		fn num_connected(&self) -> usize {
+			unimplemented!();
+		}
+	}
+
 	impl<B: BlockT> Network<B> for NoOpNetwork {
 		fn event_stream(&self) -> Pin<Box<dyn Stream<Item = Event> + Send>> {
 			unimplemented!();
 		}
 
-		fn report_peer(&self, peer_id: PeerId, reputation_change: ReputationChange) {
-			self.inner.lock().unwrap().peer_reports.push((peer_id, reputation_change));
-		}
-
-		fn disconnect_peer(&self, _: PeerId, _: Cow<'static, str>) {
-			unimplemented!();
-		}
-
 		fn add_set_reserved(&self, _: PeerId, _: Cow<'static, str>) {}
-
-		fn remove_set_reserved(&self, _: PeerId, _: Cow<'static, str>) {}
 
 		fn write_notification(&self, _: PeerId, _: Cow<'static, str>, _: Vec<u8>) {
 			unimplemented!();
