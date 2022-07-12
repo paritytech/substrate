@@ -109,53 +109,6 @@ fn linear_regression(
 	Some((intercept + min, params, errors[1..].to_vec()))
 }
 
-#[test]
-fn test_linear_regression() {
-	let ys = vec![
-		3797981.0,
-		37857779.0,
-		70569402.0,
-		104004114.0,
-		137233924.0,
-		169826237.0,
-		203521133.0,
-		237552333.0,
-		271082065.0,
-		305554637.0,
-		335218347.0,
-		371759065.0,
-		405086197.0,
-		438353555.0,
-		472891417.0,
-		505339532.0,
-		527784778.0,
-		562590596.0,
-		635291991.0,
-		673027090.0,
-		708119408.0,
-	];
-	let xs = vec![
-		0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0,
-		17.0, 18.0, 19.0, 20.0,
-	];
-
-	let (intercept, params, errors) =
-		raw_linear_regression(xs.clone(), ys.clone(), 1, true).unwrap();
-	assert_eq!(intercept as i64, -2712997);
-	assert_eq!(params.len(), 1);
-	assert_eq!(params[0] as i64, 34444926);
-	assert_eq!(errors.len(), 2);
-	assert_eq!(errors[0] as i64, 4805766);
-	assert_eq!(errors[1] as i64, 411084);
-
-	let (intercept, params, errors) = linear_regression(xs, ys, 1).unwrap();
-	assert_eq!(intercept as i64, 3797981);
-	assert_eq!(params.len(), 1);
-	assert_eq!(params[0] as i64, 33968513);
-	assert_eq!(errors.len(), 1);
-	assert_eq!(errors[0] as i64, 217331);
-}
-
 impl Analysis {
 	// Useful for when there are no components, and we just need an median value of the benchmark
 	// results. Note: We choose the median value because it is more robust to outliers.
@@ -478,6 +431,53 @@ mod tests {
 			proof_size: 0,
 			keys: vec![],
 		}
+	}
+
+	#[test]
+	fn test_linear_regression() {
+		let ys = vec![
+			3797981.0,
+			37857779.0,
+			70569402.0,
+			104004114.0,
+			137233924.0,
+			169826237.0,
+			203521133.0,
+			237552333.0,
+			271082065.0,
+			305554637.0,
+			335218347.0,
+			371759065.0,
+			405086197.0,
+			438353555.0,
+			472891417.0,
+			505339532.0,
+			527784778.0,
+			562590596.0,
+			635291991.0,
+			673027090.0,
+			708119408.0,
+		];
+		let xs = vec![
+			0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0,
+			16.0, 17.0, 18.0, 19.0, 20.0,
+		];
+
+		let (intercept, params, errors) =
+			raw_linear_regression(xs.clone(), ys.clone(), 1, true).unwrap();
+		assert_eq!(intercept as i64, -2712997);
+		assert_eq!(params.len(), 1);
+		assert_eq!(params[0] as i64, 34444926);
+		assert_eq!(errors.len(), 2);
+		assert_eq!(errors[0] as i64, 4805766);
+		assert_eq!(errors[1] as i64, 411084);
+
+		let (intercept, params, errors) = linear_regression(xs, ys, 1).unwrap();
+		assert_eq!(intercept as i64, 3797981);
+		assert_eq!(params.len(), 1);
+		assert_eq!(params[0] as i64, 33968513);
+		assert_eq!(errors.len(), 1);
+		assert_eq!(errors[0] as i64, 217331);
 	}
 
 	#[test]
