@@ -259,7 +259,8 @@ pub mod pallet {
 		StorageMap<_, Blake2_128Concat, T::CollectionId, u32, OptionQuery>;
 
 	#[pallet::storage]
-	/// Stores the last CollectionId of the collections.
+	/// Stores the `CollectionId` that is going to be used for the next collection.
+	/// This gets incremented by 1 when creating a collection.
 	pub(super) type CollectionsCount<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, T::CollectionId, ValueQuery>;
 

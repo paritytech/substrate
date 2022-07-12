@@ -717,7 +717,7 @@ fn try_increment_id_works() {
 		assert_eq!(Uniques::get_collections_count(), 1);
 
 		// increment the collections count again.
-		assert_ok!(Uniques::try_incremegnt_id(Origin::signed(2)));	
+		assert_ok!(Uniques::try_incremegnt_id(Origin::signed(2)));
 		// should fail because the next `CollectionId` is not being used.
 		assert_noop!(Uniques::try_increment_id(Origin::signed(2)), Error::<Test>::NextIdNotUsed);
 	});
