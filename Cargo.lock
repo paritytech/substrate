@@ -8310,7 +8310,7 @@ dependencies = [
  "log",
  "parity-util-mem",
  "sc-client-api",
- "sc-network",
+ "sc-network-common",
  "sc-transaction-pool-api",
  "sp-blockchain",
  "sp-runtime",
@@ -8392,6 +8392,7 @@ dependencies = [
 name = "sc-network-common"
 version = "0.10.0-dev"
 dependencies = [
+ "async-trait",
  "bitflags",
  "futures",
  "libp2p",

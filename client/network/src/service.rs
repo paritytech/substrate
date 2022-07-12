@@ -40,7 +40,7 @@ use crate::{
 		self, event::Event, message::generic::Roles, NotificationsSink, NotifsHandlerError,
 		PeerInfo, Protocol, Ready,
 	},
-	transactions, transport, DhtEvent, ExHashT, NetworkStateInfo, NetworkStatus, ReputationChange,
+	transactions, transport, DhtEvent, ExHashT, NetworkStateInfo, ReputationChange,
 };
 
 use codec::Encode as _;
@@ -62,7 +62,10 @@ use parking_lot::Mutex;
 use sc_client_api::{BlockBackend, ProofProvider};
 use sc_consensus::{BlockImportError, BlockImportStatus, ImportQueue, Link};
 use sc_network_common::{
-	service::{NetworkKVProvider, NetworkSigner, NetworkSyncForkRequest, Signature, SigningError},
+	service::{
+		NetworkKVProvider, NetworkSigner, NetworkStatus, NetworkStatusProvider,
+		NetworkSyncForkRequest, Signature, SigningError,
+	},
 	sync::{SyncState, SyncStatus},
 };
 use sc_peerset::PeersetHandle;
@@ -968,23 +971,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		});
 	}
 
-	/// High-level network status information.
-	///
-	/// Returns an error if the `NetworkWorker` is no longer running.
-	pub async fn status(&self) -> Result<NetworkStatus<B>, ()> {
-		let (tx, rx) = oneshot::channel();
-
-		let _ = self
-			.to_worker
-			.unbounded_send(ServiceToWorkerMsg::NetworkStatus { pending_response: tx });
-
-		match rx.await {
-			Ok(v) => v.map_err(|_| ()),
-			// The channel can only be closed if the network worker no longer exists.
-			Err(_) => Err(()),
-		}
-	}
-
 	/// Get network state.
 	///
 	/// **Note**: Use this only for debugging. This API is unstable. There are warnings literally
@@ -1346,6 +1332,27 @@ where
 	/// Passing empty `peers` set effectively removes the sync request.
 	fn set_sync_fork_request(&self, peers: Vec<PeerId>, hash: B::Hash, number: NumberFor<B>) {
 		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::SyncFork(peers, hash, number));
+	}
+}
+
+#[async_trait::async_trait]
+impl<B, H> NetworkStatusProvider<B> for NetworkService<B, H>
+where
+	B: BlockT + 'static,
+	H: ExHashT,
+{
+	async fn status(&self) -> Result<NetworkStatus<B>, ()> {
+		let (tx, rx) = oneshot::channel();
+
+		let _ = self
+			.to_worker
+			.unbounded_send(ServiceToWorkerMsg::NetworkStatus { pending_response: tx });
+
+		match rx.await {
+			Ok(v) => v.map_err(|_| ()),
+			// The channel can only be closed if the network worker no longer exists.
+			Err(_) => Err(()),
+		}
 	}
 }
 
