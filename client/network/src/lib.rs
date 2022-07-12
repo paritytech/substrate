@@ -266,8 +266,8 @@ pub use protocol::PeerInfo;
 pub use sc_network_common::{
 	protocol::event::{DhtEvent, Event, ObservedRole},
 	service::{
-		KademliaKey, NetworkKVProvider, NetworkSigner, NetworkStatus, NetworkStatusProvider,
-		NetworkSyncForkRequest, Signature, SigningError,
+		KademliaKey, NetworkKVProvider, NetworkSigner, NetworkStateInfo, NetworkStatus,
+		NetworkStatusProvider, NetworkSyncForkRequest, Signature, SigningError,
 	},
 	sync::{
 		warp::{WarpSyncPhase, WarpSyncProgress},
@@ -298,12 +298,3 @@ pub trait ExHashT: std::hash::Hash + Eq + std::fmt::Debug + Clone + Send + Sync 
 
 impl<T> ExHashT for T where T: std::hash::Hash + Eq + std::fmt::Debug + Clone + Send + Sync + 'static
 {}
-
-/// Trait for providing information about the local network state
-pub trait NetworkStateInfo {
-	/// Returns the local external addresses.
-	fn external_addresses(&self) -> Vec<Multiaddr>;
-
-	/// Returns the local Peer ID.
-	fn local_peer_id(&self) -> PeerId;
-}

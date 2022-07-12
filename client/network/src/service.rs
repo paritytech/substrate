@@ -40,7 +40,7 @@ use crate::{
 		self, message::generic::Roles, NotificationsSink, NotifsHandlerError, PeerInfo, Protocol,
 		Ready,
 	},
-	transactions, transport, ExHashT, NetworkStateInfo, ReputationChange,
+	transactions, transport, ExHashT, ReputationChange,
 };
 
 use codec::Encode as _;
@@ -64,8 +64,8 @@ use sc_consensus::{BlockImportError, BlockImportStatus, ImportQueue, Link};
 use sc_network_common::{
 	protocol::event::{DhtEvent, Event},
 	service::{
-		NetworkEventStream, NetworkKVProvider, NetworkPeers, NetworkSigner, NetworkStatus,
-		NetworkStatusProvider, NetworkSyncForkRequest, Signature, SigningError,
+		NetworkEventStream, NetworkKVProvider, NetworkPeers, NetworkSigner, NetworkStateInfo,
+		NetworkStatus, NetworkStatusProvider, NetworkSyncForkRequest, Signature, SigningError,
 	},
 	sync::{SyncState, SyncStatus},
 };

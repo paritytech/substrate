@@ -352,3 +352,26 @@ where
 		T::event_stream(self, name)
 	}
 }
+
+/// Trait for providing information about the local network state
+pub trait NetworkStateInfo {
+	/// Returns the local external addresses.
+	fn external_addresses(&self) -> Vec<Multiaddr>;
+
+	/// Returns the local Peer ID.
+	fn local_peer_id(&self) -> PeerId;
+}
+
+impl<T> NetworkStateInfo for Arc<T>
+where
+	T: ?Sized,
+	T: NetworkStateInfo,
+{
+	fn external_addresses(&self) -> Vec<Multiaddr> {
+		T::external_addresses(self)
+	}
+
+	fn local_peer_id(&self) -> PeerId {
+		T::local_peer_id(self)
+	}
+}
