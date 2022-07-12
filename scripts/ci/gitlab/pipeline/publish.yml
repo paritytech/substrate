@@ -147,3 +147,12 @@ publish-draft-release:
   script:
     - ./scripts/ci/gitlab/publish_draft_release.sh
   allow_failure:                   true
+
+update-node-template:
+  stage:                           publish
+  rules:
+    - if: $CI_COMMIT_REF_NAME =~ /^polkadot-v[0-9]+\.[0-9]+.*$/              # i.e. polkadot-v1.0.99, polkadot-v2.1rc1
+  script:
+    - curl -L -o cis.zip https://github.com/paritytech/ci-script/releases/download/v0.1.2/ci-script_v0.1.2_x86_64-unknown-linux-musl.zip
+    - unzip cis.zip cis
+    - ./cis --github-app-id 213518 --github-owner paritytech --github-name substrate ./.github/ciscript/update-node-template.cis

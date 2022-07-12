@@ -1,0 +1,38 @@
+let substrate_branch = env::get("CI_COMMIT_REF_NAME");
+let pr_branch_name = `auto-template-update_${substrate_branch}`;
+
+// Clone the template repo and create a new branch
+let templ_repo = Git.clone("substrate-developer-hub/substrate-node-template", "main");
+templ_repo.branch(pr_branch_name);
+
+// Copy files from the template directory to the template repo
+for f in REPO.ls_files("bin/node-template")
+  .filter(|entry| entry.is_file())
+  .map(|entry| entry.path) {
+    let new_path = f.strip_prefix("bin/node-template");
+    templ_repo.write(new_path, REPO.read(f));
+}
+
+// Patch the `{ path = ".." }` dependencies in the `Cargo.toml` files in the
+// template repo to point to the upstream repo instead.
+for toml in templ_repo.ls_files()
+  .filter(|entry| entry.path.file_name() == "Cargo.toml") {
+    let patched = cargo_toml::replace_path_dependencies_with_git(
+      templ_repo.read(toml.path),
+      REPO.url(),
+      substrate_branch
+    );
+    templ_repo.write(toml.path, patched);
+}
+
+let changes = templ_repo.status().changed() + templ_repo.status().added();
+
+for f in changes {
+  templ_repo.add(f);
+}
+
+if changes.len() > 0 {
+  templ_repo.commit("Update template from substrate release");
+  templ_repo.push(pr_branch_name);
+  templ_repo.create_pr("Update node template", "", pr_branch_name, "main");
+}
