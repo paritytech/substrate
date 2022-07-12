@@ -47,6 +47,7 @@ use codec::Encode as _;
 use futures::{channel::oneshot, prelude::*};
 use libp2p::{
 	core::{either::EitherError, upgrade, ConnectedPoint, Executor},
+	kad::record::Key as KademliaKey,
 	multiaddr,
 	ping::Failure as PingFailure,
 	swarm::{
@@ -61,7 +62,7 @@ use parking_lot::Mutex;
 use sc_client_api::{BlockBackend, ProofProvider};
 use sc_consensus::{BlockImportError, BlockImportStatus, ImportQueue, Link};
 use sc_network_common::{
-	service::{NetworkSigner, Signature, SigningError},
+	service::{NetworkKVProvider, NetworkSigner, Signature, SigningError},
 	sync::{SyncState, SyncStatus},
 };
 use sc_peerset::PeersetHandle;
@@ -93,10 +94,7 @@ mod out_events;
 #[cfg(test)]
 mod tests;
 
-pub use libp2p::{
-	identity::{error::DecodingError, Keypair, PublicKey},
-	kad::record::Key as KademliaKey,
-};
+pub use libp2p::identity::{error::DecodingError, Keypair, PublicKey};
 
 /// Substrate network service. Handles network IO and manages connectivity.
 pub struct NetworkService<B: BlockT + 'static, H: ExHashT> {
@@ -1050,22 +1048,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 			.unbounded_send(ServiceToWorkerMsg::DisconnectPeer(who, protocol.into()));
 	}
 
-	/// Start getting a value from the DHT.
-	///
-	/// This will generate either a `ValueFound` or a `ValueNotFound` event and pass it as an
-	/// item on the [`NetworkWorker`] stream.
-	pub fn get_value(&self, key: &KademliaKey) {
-		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::GetValue(key.clone()));
-	}
-
-	/// Start putting a value in the DHT.
-	///
-	/// This will generate either a `ValuePut` or a `ValuePutFailed` event and pass it as an
-	/// item on the [`NetworkWorker`] stream.
-	pub fn put_value(&self, key: KademliaKey, value: Vec<u8>) {
-		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::PutValue(key, value));
-	}
-
 	/// Connect to unreserved peers and allow unreserved peers to connect for syncing purposes.
 	pub fn accept_unreserved_peers(&self) {
 		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::SetReservedOnly(false));
@@ -1336,6 +1318,28 @@ where
 {
 	fn sign_with_local_identity(&self, msg: impl AsRef<[u8]>) -> Result<Signature, SigningError> {
 		Signature::sign_message(msg.as_ref(), &self.local_identity)
+	}
+}
+
+impl<B, H> NetworkKVProvider for NetworkService<B, H>
+where
+	B: BlockT + 'static,
+	H: ExHashT,
+{
+	/// Start getting a value from the DHT.
+	///
+	/// This will generate either a `ValueFound` or a `ValueNotFound` event and pass it as an
+	/// item on the [`NetworkWorker`] stream.
+	fn get_value(&self, key: &KademliaKey) {
+		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::GetValue(key.clone()));
+	}
+
+	/// Start putting a value in the DHT.
+	///
+	/// This will generate either a `ValuePut` or a `ValuePutFailed` event and pass it as an
+	/// item on the [`NetworkWorker`] stream.
+	fn put_value(&self, key: KademliaKey, value: Vec<u8>) {
+		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::PutValue(key, value));
 	}
 }
 

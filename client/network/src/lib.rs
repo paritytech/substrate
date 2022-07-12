@@ -267,15 +267,15 @@ pub use protocol::{
 	PeerInfo,
 };
 pub use sc_network_common::{
-	service::{NetworkSigner, Signature, SigningError},
+	service::{KademliaKey, NetworkKVProvider, NetworkSigner, Signature, SigningError},
 	sync::{
 		warp::{WarpSyncPhase, WarpSyncProgress},
 		StateDownloadProgress, SyncState,
 	},
 };
 pub use service::{
-	DecodingError, IfDisconnected, KademliaKey, Keypair, NetworkService, NetworkWorker,
-	NotificationSender, NotificationSenderReady, OutboundFailure, PublicKey, RequestFailure,
+	DecodingError, IfDisconnected, Keypair, NetworkService, NetworkWorker, NotificationSender,
+	NotificationSenderReady, OutboundFailure, PublicKey, RequestFailure,
 };
 
 pub use sc_peerset::ReputationChange;

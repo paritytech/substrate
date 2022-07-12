@@ -43,8 +43,8 @@ use prometheus_endpoint::{register, Counter, CounterVec, Gauge, Opts, U64};
 use prost::Message;
 use rand::{seq::SliceRandom, thread_rng};
 use sc_client_api::blockchain::HeaderBackend;
-use sc_network::{DhtEvent, ExHashT, Multiaddr, NetworkStateInfo, PeerId};
-use sc_network_common::service::NetworkSigner;
+use sc_network::{DhtEvent, Multiaddr, NetworkStateInfo, PeerId};
+use sc_network_common::service::{NetworkKVProvider, NetworkSigner};
 use sp_api::ProvideRuntimeApi;
 use sp_authority_discovery::{
 	AuthorityDiscoveryApi, AuthorityId, AuthorityPair, AuthoritySignature,
@@ -596,27 +596,6 @@ where
 pub trait NetworkProvider: NetworkKVProvider + NetworkStateInfo + NetworkSigner {}
 
 impl<T> NetworkProvider for T where T: NetworkKVProvider + NetworkStateInfo + NetworkSigner {}
-
-pub trait NetworkKVProvider {
-	/// Start putting a value in the Dht.
-	fn put_value(&self, key: sc_network::KademliaKey, value: Vec<u8>);
-
-	/// Start getting a value from the Dht.
-	fn get_value(&self, key: &sc_network::KademliaKey);
-}
-
-impl<B, H> NetworkKVProvider for sc_network::NetworkService<B, H>
-where
-	B: BlockT + 'static,
-	H: ExHashT,
-{
-	fn put_value(&self, key: sc_network::KademliaKey, value: Vec<u8>) {
-		self.put_value(key, value)
-	}
-	fn get_value(&self, key: &sc_network::KademliaKey) {
-		self.get_value(key)
-	}
-}
 
 fn hash_authority_id(id: &[u8]) -> sc_network::KademliaKey {
 	sc_network::KademliaKey::new(&libp2p::multihash::Code::Sha2_256.digest(id).digest())
