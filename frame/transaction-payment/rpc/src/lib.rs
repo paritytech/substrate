@@ -48,6 +48,20 @@ pub trait TransactionPaymentApi<BlockHash, ResponseType> {
 		encoded_xt: Bytes,
 		at: Option<BlockHash>,
 	) -> RpcResult<FeeDetails<NumberOrHex>>;
+
+	#[method(name = "payment_queryCallInfo")]
+	fn query_call_info(
+		&self,
+		encoded_call: Bytes,
+		at: Option<BlockHash>,
+	) -> RpcResult<RuntimeDispatchInfo<NumberOrHex>>;
+
+	#[method(name = "payment_queryWeightToFee")]
+	fn query_weight_to_fee(
+		&self,
+		encoded_call: Bytes,
+		at: Option<BlockHash>,
+	) -> RpcResult<NumberOrHex>;
 }
 
 /// Provides RPC methods to query a dispatchable's class, weight and fee.
@@ -165,5 +179,23 @@ where
 			},
 			tip: Default::default(),
 		})
+	}
+
+	fn query_call_info(
+		&self,
+		encoded_call: Bytes,
+		at: Option<Block::Hash>,
+	) -> RpcResult<RuntimeDispatchInfo<NumberOrHex>> {
+		// TODO call api and map runtime api error to Error
+		unimplemented!();
+	}
+
+	fn query_weight_to_fee(
+		&self,
+		encoded_call: Bytes,
+		at: Option<Block::Hash>,
+	) -> RpcResult<NumberOrHex> {
+		// TODO call api and map runtime api error to Error
+		unimplemented!();
 	}
 }
