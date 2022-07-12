@@ -167,7 +167,6 @@ impl ChainExtension<Test> for TestExtension {
 			2 => {
 				let mut env = env.buf_in_buf_out();
 				let weight = env.read(5)?[4].into();
-				println!("Carging extra weight: {}", weight);
 				env.charge_weight(weight)?;
 				Ok(RetVal::Converging(func_id))
 			},
