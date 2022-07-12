@@ -8529,6 +8529,7 @@ dependencies = [
  "sc-client-api",
  "sc-client-db",
  "sc-network",
+ "sc-network-common",
  "sc-transaction-pool",
  "sc-transaction-pool-api",
  "sc-utils",

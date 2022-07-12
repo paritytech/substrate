@@ -719,31 +719,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		&self.local_peer_id
 	}
 
-	/// Set authorized peers.
-	///
-	/// Need a better solution to manage authorized peers, but now just use reserved peers for
-	/// prototyping.
-	pub fn set_authorized_peers(&self, peers: HashSet<PeerId>) {
-		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::SetReserved(peers));
-	}
-
-	/// Set authorized_only flag.
-	///
-	/// Need a better solution to decide authorized_only, but now just use reserved_only flag for
-	/// prototyping.
-	pub fn set_authorized_only(&self, reserved_only: bool) {
-		let _ = self
-			.to_worker
-			.unbounded_send(ServiceToWorkerMsg::SetReservedOnly(reserved_only));
-	}
-
-	/// Adds an address known to a node.
-	pub fn add_known_address(&self, peer_id: PeerId, addr: Multiaddr) {
-		let _ = self
-			.to_worker
-			.unbounded_send(ServiceToWorkerMsg::AddKnownAddress(peer_id, addr));
-	}
-
 	/// Appends a notification to the buffer of pending outgoing notifications with the given peer.
 	/// Has no effect if the notifications channel with this protocol name is not open.
 	///
@@ -1153,6 +1128,22 @@ where
 	B: BlockT + 'static,
 	H: ExHashT,
 {
+	fn set_authorized_peers(&self, peers: HashSet<PeerId>) {
+		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::SetReserved(peers));
+	}
+
+	fn set_authorized_only(&self, reserved_only: bool) {
+		let _ = self
+			.to_worker
+			.unbounded_send(ServiceToWorkerMsg::SetReservedOnly(reserved_only));
+	}
+
+	fn add_known_address(&self, peer_id: PeerId, addr: Multiaddr) {
+		let _ = self
+			.to_worker
+			.unbounded_send(ServiceToWorkerMsg::AddKnownAddress(peer_id, addr));
+	}
+
 	fn report_peer(&self, who: PeerId, cost_benefit: ReputationChange) {
 		self.peerset.report_peer(who, cost_benefit);
 	}

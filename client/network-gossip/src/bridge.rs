@@ -339,6 +339,18 @@ mod tests {
 	}
 
 	impl NetworkPeers for TestNetwork {
+		fn set_authorized_peers(&self, _peers: HashSet<PeerId>) {
+			unimplemented!();
+		}
+
+		fn set_authorized_only(&self, _reserved_only: bool) {
+			unimplemented!();
+		}
+
+		fn add_known_address(&self, _peer_id: PeerId, _addr: Multiaddr) {
+			unimplemented!();
+		}
+
 		fn report_peer(&self, _who: PeerId, _cost_benefit: ReputationChange) {}
 
 		fn disconnect_peer(&self, _who: PeerId, _protocol: Cow<'static, str>) {

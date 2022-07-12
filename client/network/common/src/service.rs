@@ -143,6 +143,21 @@ where
 
 /// Provides low-level API for manipulating network peers.
 pub trait NetworkPeers {
+	/// Set authorized peers.
+	///
+	/// Need a better solution to manage authorized peers, but now just use reserved peers for
+	/// prototyping.
+	fn set_authorized_peers(&self, peers: HashSet<PeerId>);
+
+	/// Set authorized_only flag.
+	///
+	/// Need a better solution to decide authorized_only, but now just use reserved_only flag for
+	/// prototyping.
+	fn set_authorized_only(&self, reserved_only: bool);
+
+	/// Adds an address known to a node.
+	fn add_known_address(&self, peer_id: PeerId, addr: Multiaddr);
+
 	/// Report a given peer as either beneficial (+) or costly (-) according to the
 	/// given scalar.
 	fn report_peer(&self, who: PeerId, cost_benefit: ReputationChange);
@@ -241,6 +256,18 @@ where
 	T: ?Sized,
 	T: NetworkPeers,
 {
+	fn set_authorized_peers(&self, peers: HashSet<PeerId>) {
+		T::set_authorized_peers(self, peers)
+	}
+
+	fn set_authorized_only(&self, reserved_only: bool) {
+		T::set_authorized_only(self, reserved_only)
+	}
+
+	fn add_known_address(&self, peer_id: PeerId, addr: Multiaddr) {
+		T::add_known_address(self, peer_id, addr)
+	}
+
 	fn report_peer(&self, who: PeerId, cost_benefit: ReputationChange) {
 		T::report_peer(self, who, cost_benefit)
 	}

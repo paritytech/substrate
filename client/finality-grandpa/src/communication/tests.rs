@@ -58,6 +58,18 @@ pub(crate) struct TestNetwork {
 }
 
 impl NetworkPeers for TestNetwork {
+	fn set_authorized_peers(&self, _peers: HashSet<PeerId>) {
+		unimplemented!();
+	}
+
+	fn set_authorized_only(&self, _reserved_only: bool) {
+		unimplemented!();
+	}
+
+	fn add_known_address(&self, _peer_id: PeerId, _addr: Multiaddr) {
+		unimplemented!();
+	}
+
 	fn report_peer(&self, who: PeerId, cost_benefit: ReputationChange) {
 		let _ = self.sender.unbounded_send(Event::Report(who, cost_benefit));
 	}
