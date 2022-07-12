@@ -80,6 +80,7 @@ pub use weights::WeightInfo;
 
 pub type BalanceOf<T, I = ()> = pallet_treasury::BalanceOf<T, I>;
 pub type NegativeImbalanceOf<T, I = ()> = pallet_treasury::NegativeImbalanceOf<T, I>;
+type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
 /// An open tipping "motion". Retains all details of a tip including information on the finder
 /// and the members who have voted.
@@ -237,7 +238,7 @@ pub mod pallet {
 		pub fn report_awesome(
 			origin: OriginFor<T>,
 			reason: Vec<u8>,
-			who: <T::Lookup as StaticLookup>::Source,
+			who: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let finder = ensure_signed(origin)?;
 			let who = T::Lookup::lookup(who)?;
@@ -332,7 +333,7 @@ pub mod pallet {
 		pub fn tip_new(
 			origin: OriginFor<T>,
 			reason: Vec<u8>,
-			who: <T::Lookup as StaticLookup>::Source,
+			who: AccountIdLookupOf<T>,
 			#[pallet::compact] tip_value: BalanceOf<T, I>,
 		) -> DispatchResult {
 			let tipper = ensure_signed(origin)?;

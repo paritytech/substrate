@@ -58,6 +58,8 @@ type CallHashOf<T> = <<T as Config>::CallHasher as Hash>::Output;
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
+type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
+	
 /// The parameters under which a particular account has a proxy relationship with some other
 /// account.
 #[derive(
@@ -204,7 +206,7 @@ pub mod pallet {
 		})]
 		pub fn proxy(
 			origin: OriginFor<T>,
-			real: <T::Lookup as StaticLookup>::Source,
+			real: AccountIdLookupOf<T>,
 			force_proxy_type: Option<T::ProxyType>,
 			call: Box<<T as Config>::Call>,
 		) -> DispatchResult {
@@ -234,7 +236,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::add_proxy(T::MaxProxies::get()))]
 		pub fn add_proxy(
 			origin: OriginFor<T>,
-			delegate: <T::Lookup as StaticLookup>::Source,
+			delegate: AccountIdLookupOf<T>,
 			proxy_type: T::ProxyType,
 			delay: T::BlockNumber,
 		) -> DispatchResult {
@@ -257,7 +259,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::remove_proxy(T::MaxProxies::get()))]
 		pub fn remove_proxy(
 			origin: OriginFor<T>,
-			delegate: <T::Lookup as StaticLookup>::Source,
+			delegate: AccountIdLookupOf<T>,
 			proxy_type: T::ProxyType,
 			delay: T::BlockNumber,
 		) -> DispatchResult {
@@ -362,7 +364,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::kill_anonymous(T::MaxProxies::get()))]
 		pub fn kill_anonymous(
 			origin: OriginFor<T>,
-			spawner: <T::Lookup as StaticLookup>::Source,
+			spawner: AccountIdLookupOf<T>,
 			proxy_type: T::ProxyType,
 			index: u16,
 			#[pallet::compact] height: T::BlockNumber,
@@ -405,7 +407,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::announce(T::MaxPending::get(), T::MaxProxies::get()))]
 		pub fn announce(
 			origin: OriginFor<T>,
-			real: <T::Lookup as StaticLookup>::Source,
+			real: AccountIdLookupOf<T>,
 			call_hash: CallHashOf<T>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -463,7 +465,7 @@ pub mod pallet {
 		))]
 		pub fn remove_announcement(
 			origin: OriginFor<T>,
-			real: <T::Lookup as StaticLookup>::Source,
+			real: AccountIdLookupOf<T>,
 			call_hash: CallHashOf<T>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -495,7 +497,7 @@ pub mod pallet {
 		))]
 		pub fn reject_announcement(
 			origin: OriginFor<T>,
-			delegate: <T::Lookup as StaticLookup>::Source,
+			delegate: AccountIdLookupOf<T>,
 			call_hash: CallHashOf<T>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -534,8 +536,8 @@ pub mod pallet {
 		})]
 		pub fn proxy_announced(
 			origin: OriginFor<T>,
-			delegate: <T::Lookup as StaticLookup>::Source,
-			real: <T::Lookup as StaticLookup>::Source,
+			delegate: AccountIdLookupOf<T>,
+			real: AccountIdLookupOf<T>,
 			force_proxy_type: Option<T::ProxyType>,
 			call: Box<<T as Config>::Call>,
 		) -> DispatchResult {

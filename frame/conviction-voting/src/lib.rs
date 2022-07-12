@@ -62,6 +62,7 @@ pub mod benchmarking;
 
 const CONVICTION_VOTING_ID: LockIdentifier = *b"pyconvot";
 
+type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 type BalanceOf<T, I = ()> =
 	<<T as Config<I>>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 type VotingOf<T, I = ()> = Voting<
@@ -245,7 +246,7 @@ pub mod pallet {
 		pub fn delegate(
 			origin: OriginFor<T>,
 			class: ClassOf<T, I>,
-			to: <T::Lookup as StaticLookup>::Source,
+			to: AccountIdLookupOf<T>,
 			conviction: Conviction,
 			balance: BalanceOf<T, I>,
 		) -> DispatchResultWithPostInfo {
@@ -295,7 +296,7 @@ pub mod pallet {
 		pub fn unlock(
 			origin: OriginFor<T>,
 			class: ClassOf<T, I>,
-			target: <T::Lookup as StaticLookup>::Source,
+			target: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			ensure_signed(origin)?;
 			let target = T::Lookup::lookup(target)?;
@@ -361,7 +362,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::remove_other_vote())]
 		pub fn remove_other_vote(
 			origin: OriginFor<T>,
-			target: <T::Lookup as StaticLookup>::Source,
+			target: AccountIdLookupOf<T>,
 			class: ClassOf<T, I>,
 			index: PollIndexOf<T, I>,
 		) -> DispatchResult {

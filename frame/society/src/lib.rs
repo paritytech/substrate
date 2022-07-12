@@ -281,6 +281,7 @@ type BalanceOf<T, I> =
 type NegativeImbalanceOf<T, I> = <<T as Config<I>>::Currency as Currency<
 	<T as frame_system::Config>::AccountId,
 >>::NegativeImbalance;
+type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
 /// A vote by a member on a candidate application.
 #[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
@@ -823,7 +824,7 @@ pub mod pallet {
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn vouch(
 			origin: OriginFor<T>,
-			who: <T::Lookup as StaticLookup>::Source,
+			who: AccountIdLookupOf<T>,
 			value: BalanceOf<T, I>,
 			tip: BalanceOf<T, I>,
 		) -> DispatchResult {
@@ -915,7 +916,7 @@ pub mod pallet {
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn vote(
 			origin: OriginFor<T>,
-			candidate: <T::Lookup as StaticLookup>::Source,
+			candidate: AccountIdLookupOf<T>,
 			approve: bool,
 		) -> DispatchResult {
 			let voter = ensure_signed(origin)?;
@@ -1027,7 +1028,7 @@ pub mod pallet {
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn found(
 			origin: OriginFor<T>,
-			founder: <T::Lookup as StaticLookup>::Source,
+			founder: AccountIdLookupOf<T>,
 			max_members: u32,
 			rules: Vec<u8>,
 		) -> DispatchResult {
@@ -1106,7 +1107,7 @@ pub mod pallet {
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn judge_suspended_member(
 			origin: OriginFor<T>,
-			who: <T::Lookup as StaticLookup>::Source,
+			who: AccountIdLookupOf<T>,
 			forgive: bool,
 		) -> DispatchResult {
 			T::SuspensionJudgementOrigin::ensure_origin(origin)?;
@@ -1183,7 +1184,7 @@ pub mod pallet {
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn judge_suspended_candidate(
 			origin: OriginFor<T>,
-			who: <T::Lookup as StaticLookup>::Source,
+			who: AccountIdLookupOf<T>,
 			judgement: Judgement,
 		) -> DispatchResult {
 			T::SuspensionJudgementOrigin::ensure_origin(origin)?;

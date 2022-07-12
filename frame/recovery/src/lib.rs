@@ -182,6 +182,7 @@ type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
 type FriendsOf<T> = BoundedVec<<T as frame_system::Config>::AccountId, <T as Config>::MaxFriends>;
+type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
 /// An active recovery process.
 #[derive(Clone, Eq, PartialEq, Encode, Decode, Default, RuntimeDebug, TypeInfo, MaxEncodedLen)]
@@ -382,7 +383,7 @@ pub mod pallet {
 			)})]
 		pub fn as_recovered(
 			origin: OriginFor<T>,
-			account: <T::Lookup as StaticLookup>::Source,
+			account: AccountIdLookupOf<T>,
 			call: Box<<T as Config>::Call>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -406,8 +407,8 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::set_recovered())]
 		pub fn set_recovered(
 			origin: OriginFor<T>,
-			lost: <T::Lookup as StaticLookup>::Source,
-			rescuer: <T::Lookup as StaticLookup>::Source,
+			lost: AccountIdLookupOf<T>,
+			rescuer: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			ensure_root(origin)?;
 			let lost = T::Lookup::lookup(lost)?;
@@ -491,7 +492,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::initiate_recovery())]
 		pub fn initiate_recovery(
 			origin: OriginFor<T>,
-			account: <T::Lookup as StaticLookup>::Source,
+			account: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let account = T::Lookup::lookup(account)?;
@@ -535,8 +536,8 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::vouch_recovery(T::MaxFriends::get()))]
 		pub fn vouch_recovery(
 			origin: OriginFor<T>,
-			lost: <T::Lookup as StaticLookup>::Source,
-			rescuer: <T::Lookup as StaticLookup>::Source,
+			lost: AccountIdLookupOf<T>,
+			rescuer: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let lost = T::Lookup::lookup(lost)?;
@@ -578,7 +579,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::claim_recovery(T::MaxFriends::get()))]
 		pub fn claim_recovery(
 			origin: OriginFor<T>,
-			account: <T::Lookup as StaticLookup>::Source,
+			account: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let account = T::Lookup::lookup(account)?;
@@ -625,7 +626,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::close_recovery(T::MaxFriends::get()))]
 		pub fn close_recovery(
 			origin: OriginFor<T>,
-			rescuer: <T::Lookup as StaticLookup>::Source,
+			rescuer: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let rescuer = T::Lookup::lookup(rescuer)?;
@@ -684,7 +685,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::cancel_recovered())]
 		pub fn cancel_recovered(
 			origin: OriginFor<T>,
-			account: <T::Lookup as StaticLookup>::Source,
+			account: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let account = T::Lookup::lookup(account)?;

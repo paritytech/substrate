@@ -50,6 +50,8 @@ use sp_runtime::traits::StaticLookup;
 use sp_std::{collections::btree_set::BTreeSet, iter::FromIterator, prelude::*};
 pub use weights::WeightInfo;
 
+type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -212,7 +214,7 @@ pub mod pallet {
 		pub fn add_well_known_node(
 			origin: OriginFor<T>,
 			node: PeerId,
-			owner: <T::Lookup as StaticLookup>::Source,
+			owner: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			T::AddOrigin::ensure_origin(origin)?;
 			let owner = T::Lookup::lookup(owner)?;
@@ -357,7 +359,7 @@ pub mod pallet {
 		pub fn transfer_node(
 			origin: OriginFor<T>,
 			node: PeerId,
-			owner: <T::Lookup as StaticLookup>::Source,
+			owner: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			let owner = T::Lookup::lookup(owner)?;

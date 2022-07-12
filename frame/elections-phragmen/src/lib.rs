@@ -177,6 +177,8 @@ pub struct SeatHolder<AccountId, Balance> {
 
 pub use pallet::*;
 
+type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -486,7 +488,7 @@ pub mod pallet {
 		})]
 		pub fn remove_member(
 			origin: OriginFor<T>,
-			who: <T::Lookup as StaticLookup>::Source,
+			who: AccountIdLookupOf<T>,
 			has_replacement: bool,
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;

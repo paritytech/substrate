@@ -126,7 +126,7 @@ benchmarks! {
 		let caller = {
 			// The target user
 			let caller: T::AccountId = whitelisted_caller();
-			let caller_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(caller.clone());
+			let caller_lookup: AccountIdLookupOf<T> = T::Lookup::unlookup(caller.clone());
 			let caller_origin: <T as frame_system::Config>::Origin = RawOrigin::Signed(caller.clone()).into();
 			let _ = T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 
@@ -337,7 +337,7 @@ benchmarks! {
 
 		let target: T::AccountId = account("target", 0, SEED);
 		let target_origin: <T as frame_system::Config>::Origin = RawOrigin::Signed(target.clone()).into();
-		let target_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(target.clone());
+		let target_lookup: AccountIdLookupOf<T> = T::Lookup::unlookup(target.clone());
 		let _ = T::Currency::make_free_balance_be(&target, BalanceOf::<T>::max_value());
 
 		let info = create_identity_info::<T>(x);

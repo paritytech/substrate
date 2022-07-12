@@ -36,6 +36,8 @@ pub mod weights;
 pub use pallet::*;
 pub use weights::WeightInfo;
 
+type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -166,7 +168,7 @@ pub mod pallet {
 		#[pallet::weight(50_000_000)]
 		pub fn add_member(
 			origin: OriginFor<T>,
-			who: <T::Lookup as StaticLookup>::Source,
+			who: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			T::AddOrigin::ensure_origin(origin)?;
 			let who = T::Lookup::lookup(who)?;
@@ -191,7 +193,7 @@ pub mod pallet {
 		#[pallet::weight(50_000_000)]
 		pub fn remove_member(
 			origin: OriginFor<T>,
-			who: <T::Lookup as StaticLookup>::Source,
+			who: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			T::RemoveOrigin::ensure_origin(origin)?;
 			let who = T::Lookup::lookup(who)?;
@@ -217,8 +219,8 @@ pub mod pallet {
 		#[pallet::weight(50_000_000)]
 		pub fn swap_member(
 			origin: OriginFor<T>,
-			remove: <T::Lookup as StaticLookup>::Source,
-			add: <T::Lookup as StaticLookup>::Source,
+			remove: AccountIdLookupOf<T>,
+			add: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			T::SwapOrigin::ensure_origin(origin)?;
 			let remove = T::Lookup::lookup(remove)?;
@@ -272,7 +274,7 @@ pub mod pallet {
 		#[pallet::weight(50_000_000)]
 		pub fn change_key(
 			origin: OriginFor<T>,
-			new: <T::Lookup as StaticLookup>::Source,
+			new: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let remove = ensure_signed(origin)?;
 			let new = T::Lookup::lookup(new)?;
@@ -309,7 +311,7 @@ pub mod pallet {
 		#[pallet::weight(50_000_000)]
 		pub fn set_prime(
 			origin: OriginFor<T>,
-			who: <T::Lookup as StaticLookup>::Source,
+			who: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			T::PrimeOrigin::ensure_origin(origin)?;
 			let who = T::Lookup::lookup(who)?;

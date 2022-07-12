@@ -37,7 +37,7 @@ use crate::Pallet as Uniques;
 const SEED: u32 = 0;
 
 fn create_collection<T: Config<I>, I: 'static>(
-) -> (T::CollectionId, T::AccountId, <T::Lookup as StaticLookup>::Source) {
+) -> (T::CollectionId, T::AccountId, AccountIdLookupOf<T>) {
 	let caller: T::AccountId = whitelisted_caller();
 	let caller_lookup = T::Lookup::unlookup(caller.clone());
 	let collection = T::Helper::collection(0);
@@ -53,7 +53,7 @@ fn create_collection<T: Config<I>, I: 'static>(
 }
 
 fn add_collection_metadata<T: Config<I>, I: 'static>(
-) -> (T::AccountId, <T::Lookup as StaticLookup>::Source) {
+) -> (T::AccountId, AccountIdLookupOf<T>) {
 	let caller = Collection::<T, I>::get(T::Helper::collection(0)).unwrap().owner;
 	if caller != whitelisted_caller() {
 		whitelist_account!(caller);
@@ -71,7 +71,7 @@ fn add_collection_metadata<T: Config<I>, I: 'static>(
 
 fn mint_item<T: Config<I>, I: 'static>(
 	index: u16,
-) -> (T::ItemId, T::AccountId, <T::Lookup as StaticLookup>::Source) {
+) -> (T::ItemId, T::AccountId, AccountIdLookupOf<T>) {
 	let caller = Collection::<T, I>::get(T::Helper::collection(0)).unwrap().admin;
 	if caller != whitelisted_caller() {
 		whitelist_account!(caller);
@@ -90,7 +90,7 @@ fn mint_item<T: Config<I>, I: 'static>(
 
 fn add_item_metadata<T: Config<I>, I: 'static>(
 	item: T::ItemId,
-) -> (T::AccountId, <T::Lookup as StaticLookup>::Source) {
+) -> (T::AccountId, AccountIdLookupOf<T>) {
 	let caller = Collection::<T, I>::get(T::Helper::collection(0)).unwrap().owner;
 	if caller != whitelisted_caller() {
 		whitelist_account!(caller);
@@ -109,7 +109,7 @@ fn add_item_metadata<T: Config<I>, I: 'static>(
 
 fn add_item_attribute<T: Config<I>, I: 'static>(
 	item: T::ItemId,
-) -> (BoundedVec<u8, T::KeyLimit>, T::AccountId, <T::Lookup as StaticLookup>::Source) {
+) -> (BoundedVec<u8, T::KeyLimit>, T::AccountId, AccountIdLookupOf<T>) {
 	let caller = Collection::<T, I>::get(T::Helper::collection(0)).unwrap().owner;
 	if caller != whitelisted_caller() {
 		whitelist_account!(caller);

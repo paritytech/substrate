@@ -90,6 +90,8 @@ macro_rules! log {
 	};
 }
 
+type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -224,7 +226,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::rebag_non_terminal().max(T::WeightInfo::rebag_terminal()))]
 		pub fn rebag(
 			origin: OriginFor<T>,
-			dislocated: <T::Lookup as StaticLookup>::Source,
+			dislocated: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			ensure_signed(origin)?;
 			let dislocated = T::Lookup::lookup(dislocated)?;
@@ -245,7 +247,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::put_in_front_of())]
 		pub fn put_in_front_of(
 			origin: OriginFor<T>,
-			lighter: <T::Lookup as StaticLookup>::Source,
+			lighter: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let heavier = ensure_signed(origin)?;
 			let lighter = T::Lookup::lookup(lighter)?;

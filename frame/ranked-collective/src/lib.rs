@@ -113,6 +113,7 @@ impl<M: GetMaxVoters> Tally<M> {
 
 pub type TallyOf<T, I = ()> = Tally<Pallet<T, I>>;
 pub type PollIndexOf<T, I = ()> = <<T as Config<I>>::Polls as Polling<TallyOf<T, I>>>::Index;
+type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
 impl<M: GetMaxVoters> VoteTally<Votes, Rank> for Tally<M> {
 	fn new(_: Rank) -> Self {
@@ -419,7 +420,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::add_member())]
 		pub fn add_member(
 			origin: OriginFor<T>,
-			who: <T::Lookup as StaticLookup>::Source,
+			who: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let _ = T::PromoteOrigin::ensure_origin(origin)?;
 			let who = T::Lookup::lookup(who)?;
@@ -445,7 +446,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::promote_member(0))]
 		pub fn promote_member(
 			origin: OriginFor<T>,
-			who: <T::Lookup as StaticLookup>::Source,
+			who: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let max_rank = T::PromoteOrigin::ensure_origin(origin)?;
 			let who = T::Lookup::lookup(who)?;
@@ -472,7 +473,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::demote_member(0))]
 		pub fn demote_member(
 			origin: OriginFor<T>,
-			who: <T::Lookup as StaticLookup>::Source,
+			who: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let max_rank = T::DemoteOrigin::ensure_origin(origin)?;
 			let who = T::Lookup::lookup(who)?;
@@ -506,7 +507,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::remove_member(*min_rank as u32))]
 		pub fn remove_member(
 			origin: OriginFor<T>,
-			who: <T::Lookup as StaticLookup>::Source,
+			who: AccountIdLookupOf<T>,
 			min_rank: Rank,
 		) -> DispatchResultWithPostInfo {
 			let max_rank = T::DemoteOrigin::ensure_origin(origin)?;

@@ -361,6 +361,8 @@ pub type PoolId = u32;
 
 type UnbondingPoolsWithEra<T> = BoundedBTreeMap<EraIndex, UnbondPool<T>, TotalUnbondingPools<T>>;
 
+type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
+
 pub const POINTS_TO_BALANCE_INIT_RATIO: u32 = 1;
 
 /// Possible operations on the configuration values of this pallet.
@@ -1553,7 +1555,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::unbond())]
 		pub fn unbond(
 			origin: OriginFor<T>,
-			member_account: <T::Lookup as StaticLookup>::Source,
+			member_account: AccountIdLookupOf<T>,
 			#[pallet::compact] unbonding_points: BalanceOf<T>,
 		) -> DispatchResult {
 			let caller = ensure_signed(origin)?;
@@ -1667,7 +1669,7 @@ pub mod pallet {
 		)]
 		pub fn withdraw_unbonded(
 			origin: OriginFor<T>,
-			member_account: <T::Lookup as StaticLookup>::Source,
+			member_account: AccountIdLookupOf<T>,
 			num_slashing_spans: u32,
 		) -> DispatchResultWithPostInfo {
 			let caller = ensure_signed(origin)?;
@@ -1794,9 +1796,9 @@ pub mod pallet {
 		pub fn create(
 			origin: OriginFor<T>,
 			#[pallet::compact] amount: BalanceOf<T>,
-			root: <T::Lookup as StaticLookup>::Source,
-			nominator: <T::Lookup as StaticLookup>::Source,
-			state_toggler: <T::Lookup as StaticLookup>::Source,
+			root: AccountIdLookupOf<T>,
+			nominator: AccountIdLookupOf<T>,
+			state_toggler: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let root = T::Lookup::lookup(root)?;

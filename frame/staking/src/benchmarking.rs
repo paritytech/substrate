@@ -83,7 +83,7 @@ pub fn create_validator_with_nominators<T: Config>(
 	let validator_prefs =
 		ValidatorPrefs { commission: Perbill::from_percent(50), ..Default::default() };
 	Staking::<T>::validate(RawOrigin::Signed(v_controller).into(), validator_prefs)?;
-	let stash_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(v_stash.clone());
+	let stash_lookup: AccountIdLookupOf<T> = T::Lookup::unlookup(v_stash.clone());
 
 	points_total += 10;
 	points_individual.push((v_stash.clone(), 10));
@@ -217,7 +217,7 @@ benchmarks! {
 	bond {
 		let stash = create_funded_user::<T>("stash", USER_SEED, 100);
 		let controller = create_funded_user::<T>("controller", USER_SEED, 100);
-		let controller_lookup: <T::Lookup as StaticLookup>::Source
+		let controller_lookup: AccountIdLookupOf<T>
 			= T::Lookup::unlookup(controller.clone());
 		let reward_destination = RewardDestination::Staked;
 		let amount = T::Currency::minimum_balance() * 10u32.into();
@@ -365,7 +365,7 @@ benchmarks! {
 			100,
 			Default::default(),
 		)?;
-		let stash_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(stash.clone());
+		let stash_lookup: AccountIdLookupOf<T> = T::Lookup::unlookup(stash.clone());
 
 		// they start validating.
 		Staking::<T>::validate(RawOrigin::Signed(controller.clone()).into(), Default::default())?;
