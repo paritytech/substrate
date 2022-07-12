@@ -716,6 +716,7 @@ fn try_increment_id_works() {
 		// because reset, the collections count should be now 1
 		assert_eq!(Uniques::get_collections_count(), 1);
 
+		assert_ok!(Uniques::try_increment_id(Origin::signed(2)));	
 		// should fail because the next `CollectionId` is not being used.
 		assert_noop!(Uniques::try_increment_id(Origin::signed(2)), Error::<Test>::NextIdNotUsed);
 	});
