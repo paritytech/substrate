@@ -180,6 +180,9 @@ impl<B: BlockT> BlockCollection<B> {
 
 	/// Get a valid chain of blocks ordered in descending order and ready for importing into
 	/// the blockchain.
+	/// `from` is the maximum block number for the start of the range that we are interested in.
+	/// The function will return empty Vec if the first block ready is higher than `from`.
+	/// For each returned block hash `clear_queued` must be called at some later stage.
 	pub fn ready_blocks(&mut self, from: NumberFor<B>) -> Vec<BlockData<B>> {
 		let mut ready = Vec::new();
 
@@ -192,11 +195,11 @@ impl<B: BlockT> BlockCollection<B> {
 				BlockRangeState::Complete(blocks) => {
 					let len = (blocks.len() as u32).into();
 					prev = start + len;
-					// Remove all elements from `blocks` and add them to `ready`
 					if let Some(BlockData { block, .. }) = blocks.first() {
 						self.queued_blocks
 							.insert(block.hash, (start, start + (blocks.len() as u32).into()));
 					}
+					// Remove all elements from `blocks` and add them to `ready`
 					ready.append(blocks);
 					len
 				},
@@ -209,8 +212,8 @@ impl<B: BlockT> BlockCollection<B> {
 		ready
 	}
 
-	pub fn clear_queued(&mut self, from_hash: &B::Hash) {
-		if let Some((from, to)) = self.queued_blocks.remove(from_hash) {
+	pub fn clear_queued(&mut self, hash: &B::Hash) {
+		if let Some((from, to)) = self.queued_blocks.remove(hash) {
 			let mut block_num = from;
 			while block_num < to {
 				self.blocks.remove(&block_num);
@@ -414,6 +417,7 @@ mod test {
 		bc.clear_peer_download(&peer);
 		bc.insert(40, blocks.to_vec(), peer.clone());
 
+		// request any blocks starting from 1000 or lower.
 		let ready = bc.ready_blocks(1000);
 		assert_eq!(
 			ready,
