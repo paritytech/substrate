@@ -369,7 +369,7 @@ benchmarks! {
 		// remove any previous stuff.
 		clean::<T>();
 
-		let all_candidates = submit_candidates::<T>(v, "candidates")?;
+		let all_candidates = submit_candidates::<T>(MAX_CANDIDATES, "candidates")?;
 		distribute_voters::<T>(all_candidates, v, MAXIMUM_VOTE)?;
 
 		// all candidates leave.
