@@ -180,6 +180,9 @@ impl<B: BlockT> BlockCollection<B> {
 
 	/// Get a valid chain of blocks ordered in descending order and ready for importing into
 	/// the blockchain.
+	/// `from` is the maximum block number for the start of the range that we are interested in.
+	/// The function will return empty Vec if the first block ready is higher than `from`.
+	/// For each returned block hash `clear_queued` must be called at some later stage.
 	pub fn ready_blocks(&mut self, from: NumberFor<B>) -> Vec<BlockData<B>> {
 		let mut ready = Vec::new();
 
@@ -192,6 +195,10 @@ impl<B: BlockT> BlockCollection<B> {
 				BlockRangeState::Complete(blocks) => {
 					let len = (blocks.len() as u32).into();
 					prev = start + len;
+					if let Some(BlockData { block, .. }) = blocks.first() {
+						self.queued_blocks
+							.insert(block.hash, (start, start + (blocks.len() as u32).into()));
+					}
 					// Remove all elements from `blocks` and add them to `ready`
 					ready.append(blocks);
 					len
@@ -201,18 +208,12 @@ impl<B: BlockT> BlockCollection<B> {
 			};
 			*range_data = BlockRangeState::Queued { len };
 		}
-
-		if let Some(BlockData { block, .. }) = ready.first() {
-			self.queued_blocks
-				.insert(block.hash, (from, from + (ready.len() as u32).into()));
-		}
-
 		trace!(target: "sync", "{} blocks ready for import", ready.len());
 		ready
 	}
 
-	pub fn clear_queued(&mut self, from_hash: &B::Hash) {
-		if let Some((from, to)) = self.queued_blocks.remove(from_hash) {
+	pub fn clear_queued(&mut self, hash: &B::Hash) {
+		if let Some((from, to)) = self.queued_blocks.remove(hash) {
 			let mut block_num = from;
 			while block_num < to {
 				self.blocks.remove(&block_num);
@@ -398,5 +399,36 @@ mod test {
 		);
 
 		assert_eq!(bc.needed_blocks(peer.clone(), 5, 50, 39, 0, 200), Some(45..50));
+	}
+
+	#[test]
+	fn clear_queued_subsequent_ranges() {
+		let mut bc = BlockCollection::new();
+		assert!(is_empty(&bc));
+		let peer = PeerId::random();
+
+		let blocks = generate_blocks(10);
+
+		// Request 2 ranges
+		assert_eq!(bc.needed_blocks(peer.clone(), 5, 50, 39, 0, 200), Some(40..45));
+		assert_eq!(bc.needed_blocks(peer.clone(), 5, 50, 39, 0, 200), Some(45..50));
+
+		// got a response on the request for `40..50`
+		bc.clear_peer_download(&peer);
+		bc.insert(40, blocks.to_vec(), peer.clone());
+
+		// request any blocks starting from 1000 or lower.
+		let ready = bc.ready_blocks(1000);
+		assert_eq!(
+			ready,
+			blocks
+				.iter()
+				.map(|b| BlockData { block: b.clone(), origin: Some(peer.clone()) })
+				.collect::<Vec<_>>()
+		);
+
+		bc.clear_queued(&blocks[0].hash);
+		assert!(bc.blocks.is_empty());
+		assert!(bc.queued_blocks.is_empty());
 	}
 }
