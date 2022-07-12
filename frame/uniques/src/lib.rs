@@ -490,10 +490,12 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::try_increment_id())]
 		pub fn try_increment_id(origin: OriginFor<T>) -> DispatchResult {
 			ensure_signed(origin)?;
+			ensure!(
+				Collection::<T, I>::contains_key(CollectionsCount::<T, I>::get()),
+				Error::<T, I>::NextIdNotUsed
+			);
 
 			let next_id = CollectionsCount::<T, I>::get() + T::CollectionId::one();
-			ensure!(Collection::<T, I>::contains_key(next_id), Error::<T, I>::NextIdNotUsed);
-
 			CollectionsCount::<T, I>::set(next_id);
 			Self::deposit_event(Event::CollectionsCountIncremented { collections_count: next_id });
 			Ok(())

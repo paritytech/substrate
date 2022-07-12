@@ -202,4 +202,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Self::deposit_event(Event::Burned { collection, item, owner });
 		Ok(())
 	}
+
+	#[cfg(test)]
+	pub fn set_collections_count(count: u32) {
+		CollectionsCount::<T, I>::set(T::CollectionId::from_u32(count).unwrap());
+	}
+
+	pub fn get_collections_count() -> T::CollectionId {
+		CollectionsCount::<T, I>::get()
+	}
 }

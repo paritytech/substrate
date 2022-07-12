@@ -700,5 +700,23 @@ fn try_increment_id_works() {
 	new_test_ext().execute_with(|| {
 		// should fail because the next `CollectionId` is not being used.
 		assert_noop!(Uniques::try_increment_id(Origin::signed(2)), Error::<Test>::NextIdNotUsed);
+
+		// create two collections.
+		assert_ok!(Uniques::force_create(Origin::root(), 1, true));
+		assert_ok!(Uniques::force_create(Origin::root(), 1, true));
+
+		// there are now two collections.
+		assert_eq!(Uniques::get_collections_count(), 2);
+
+		// reset the collections counter to test if the `try_increment_id`
+		// works.
+		Uniques::set_collections_count(0);
+		assert_ok!(Uniques::try_increment_id(Origin::signed(2)));
+
+		// because reset, the collections count should be now 1
+		assert_eq!(Uniques::get_collections_count(), 1);
+
+		// should fail because the next `CollectionId` is not being used.
+		assert_noop!(Uniques::try_increment_id(Origin::signed(2)), Error::<Test>::NextIdNotUsed);
 	});
 }
