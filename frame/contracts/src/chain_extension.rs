@@ -121,8 +121,7 @@ pub trait ChainExtension<C: Config> {
 /// # Note
 ///
 /// Register your id with the [chain extension registry](https://github.com/paritytech/ChainExtension-registry)
-/// to ensure that there are
-/// no collisions with other vendors.
+/// to ensure that there are no collisions with other vendors.
 pub trait RegisteredChainExtension<C: Config>: ChainExtension<C> {
 	/// The extensions globally unique identifier.
 	const ID: u16;
