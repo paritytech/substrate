@@ -155,4 +155,4 @@ update-node-template:
   script:
     - curl -L -o cis.zip https://github.com/paritytech/ci-script/releases/download/v0.1.2/ci-script_v0.1.2_x86_64-unknown-linux-musl.zip
     - unzip cis.zip cis
-    - ./cis --github-app-id 213518 --github-owner paritytech --github-name substrate ./.github/ciscript/update-node-template.cis
+    - ./cis --github-app-id 213518 --github-owner paritytech --github-name substrate ./scripts/ci/update-node-template.cis
