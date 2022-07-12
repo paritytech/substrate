@@ -146,10 +146,13 @@ fn map_results(
 
 // Get an iterator of errors.
 fn extract_errors(errors: &Option<Vec<u128>>) -> impl Iterator<Item = u128> + '_ {
-	std::iter::from_fn(move || {
-		// TODO
-		Some(0)
-	})
+	errors
+		.as_ref()
+		.map(|e| e.as_slice())
+		.unwrap_or(&[])
+		.iter()
+		.copied()
+		.chain(std::iter::repeat(0))
 }
 
 // Analyze and return the relevant results for a given benchmark.

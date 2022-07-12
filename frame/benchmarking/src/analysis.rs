@@ -74,21 +74,26 @@ fn raw_linear_regression(
 	ys: Vec<f64>,
 	x_vars: usize,
 	with_intercept: bool,
-) -> Option<(f64, Vec<f64>)> {
-	use linfa::prelude::*;
-
-	let records = ndarray::Array1::from_vec(ys);
-	let targets = ndarray::Array2::from_shape_vec((xs.len() / x_vars, x_vars), xs).ok()?;
-	let dataset: linfa::DatasetView<f64, f64, ndarray::Ix1> =
-		(targets.view(), records.view()).into();
-	let model = linfa_linear::LinearRegression::default()
-		.with_intercept(with_intercept)
-		.fit(&dataset)
-		.ok()?;
-	Some((model.intercept(), model.params().to_vec()))
+) -> Option<(f64, Vec<f64>, Vec<f64>)> {
+	let mut data: Vec<f64> = Vec::new();
+	for (&y, xs) in ys.iter().zip(xs.chunks_exact(x_vars)) {
+		data.push(y);
+		if with_intercept {
+			data.push(1.0);
+		} else {
+			data.push(0.0);
+		}
+		data.extend(xs);
+	}
+	let model = linregress::fit_low_level_regression_model(&data, ys.len(), x_vars + 2).ok()?;
+	Some((model.parameters[0], model.parameters[1..].to_vec(), model.se))
 }
 
-fn linear_regression(xs: Vec<f64>, mut ys: Vec<f64>, x_vars: usize) -> Option<(f64, Vec<f64>)> {
+fn linear_regression(
+	xs: Vec<f64>,
+	mut ys: Vec<f64>,
+	x_vars: usize,
+) -> Option<(f64, Vec<f64>, Vec<f64>)> {
 	let mut min = ys[0];
 	for &value in &ys {
 		if value < min {
@@ -100,8 +105,8 @@ fn linear_regression(xs: Vec<f64>, mut ys: Vec<f64>, x_vars: usize) -> Option<(f
 		*value -= min;
 	}
 
-	let (intercept, params) = raw_linear_regression(xs, ys, x_vars, false)?;
-	Some((intercept + min, params))
+	let (intercept, params, errors) = raw_linear_regression(xs, ys, x_vars, false)?;
+	Some((intercept + min, params, errors[1..].to_vec()))
 }
 
 #[test]
@@ -134,15 +139,21 @@ fn test_linear_regression() {
 		17.0, 18.0, 19.0, 20.0,
 	];
 
-	let (intercept, params) = raw_linear_regression(xs.clone(), ys.clone(), 1, true).unwrap();
+	let (intercept, params, errors) =
+		raw_linear_regression(xs.clone(), ys.clone(), 1, true).unwrap();
 	assert_eq!(intercept as i64, -2712997);
 	assert_eq!(params.len(), 1);
 	assert_eq!(params[0] as i64, 34444926);
+	assert_eq!(errors.len(), 2);
+	assert_eq!(errors[0] as i64, 4805766);
+	assert_eq!(errors[1] as i64, 411084);
 
-	let (intercept, params) = linear_regression(xs, ys, 1).unwrap();
+	let (intercept, params, errors) = linear_regression(xs, ys, 1).unwrap();
 	assert_eq!(intercept as i64, 3797981);
 	assert_eq!(params.len(), 1);
 	assert_eq!(params[0] as i64, 33968513);
+	assert_eq!(errors.len(), 1);
+	assert_eq!(errors[0] as i64, 217331);
 }
 
 impl Analysis {
@@ -320,14 +331,14 @@ impl Analysis {
 			ys.push(result.1[0] as f64);
 		}
 
-		let (intercept, slopes) = linear_regression(xs, ys, r[0].components.len())?;
+		let (intercept, slopes, errors) = linear_regression(xs, ys, r[0].components.len())?;
 
 		Some(Self {
 			base: (intercept + 0.5) as u128,
 			slopes: slopes.into_iter().map(|value| (value + 0.5) as u128).collect(),
 			names,
 			value_dists: Some(value_dists),
-			errors: None, // TODO
+			errors: Some(errors.into_iter().map(|value| value as u128).collect()),
 		})
 	}
 
@@ -414,6 +425,14 @@ impl std::fmt::Display for Analysis {
 						(sigma * 1000 / mean % 10)
 					)?;
 				}
+			}
+		}
+
+		if let Some(ref errors) = self.errors {
+			writeln!(f, "\nQuality and confidence:")?;
+			writeln!(f, "param     error")?;
+			for (p, se) in self.names.iter().zip(errors.iter()) {
+				writeln!(f, "{}      {:>8}", p, ms(*se))?;
 			}
 		}
 
