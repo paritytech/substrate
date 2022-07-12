@@ -1030,7 +1030,7 @@ mod tests {
 				let noise_keys =
 					noise::Keypair::<noise::X25519Spec>::new().into_authentic(&keypair).unwrap();
 
-				let transport = MemoryTransport
+				let transport = MemoryTransport::new()
 					.upgrade(upgrade::Version::V1)
 					.authenticate(noise::NoiseConfig::xx(noise_keys).into_authenticated())
 					.multiplex(yamux::YamuxConfig::default())
