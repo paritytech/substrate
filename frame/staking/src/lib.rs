@@ -581,7 +581,7 @@ impl<T: Config> StakingLedger<T> {
 				let affected_indices = first_slashable_index..self.unlocking.len();
 				let unbonding_affected_balance =
 					affected_indices.clone().fold(BalanceOf::<T>::zero(), |sum, i| {
-						if let Some(chunk) = self.unlocking.get_mut(i).defensive() {
+						if let Some(chunk) = self.unlocking.get(i).defensive() {
 							sum.saturating_add(chunk.value)
 						} else {
 							sum
