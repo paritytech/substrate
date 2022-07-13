@@ -24,6 +24,7 @@
 //! * [`System`](../frame_system/index.html)
 //! * [`Support`](../frame_support/index.html)
 
+#![recursion_limit = "256"]
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -42,8 +43,11 @@ pub mod migration;
 pub mod weights;
 
 use codec::{Decode, Encode};
-use frame_support::traits::{
-	tokens::Locker, BalanceStatus::Reserved, Currency, EnsureOriginWithArg, ReservableCurrency,
+use frame_support::{
+	traits::{
+		tokens::Locker, BalanceStatus::Reserved, Currency, EnsureOriginWithArg, ReservableCurrency,
+	},
+	transactional,
 };
 use frame_system::Config as SystemConfig;
 use sp_runtime::{
@@ -246,6 +250,18 @@ pub mod pallet {
 	>;
 
 	#[pallet::storage]
+	/// Price of an asset instance.
+	pub(super) type ItemPriceOf<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
+		_,
+		Blake2_128Concat,
+		T::CollectionId,
+		Blake2_128Concat,
+		T::ItemId,
+		(ItemPrice<T, I>, Option<T::AccountId>),
+		OptionQuery,
+	>;
+
+	#[pallet::storage]
 	/// Keeps track of the number of items a collection might have.
 	pub(super) type CollectionMaxSupply<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Blake2_128Concat, T::CollectionId, u32, OptionQuery>;
@@ -341,6 +357,23 @@ pub mod pallet {
 		OwnershipAcceptanceChanged { who: T::AccountId, maybe_collection: Option<T::CollectionId> },
 		/// Max supply has been set for a collection.
 		CollectionMaxSupplySet { collection: T::CollectionId, max_supply: u32 },
+		/// The price was set for the instance.
+		ItemPriceSet {
+			collection: T::CollectionId,
+			item: T::ItemId,
+			price: ItemPrice<T, I>,
+			whitelisted_buyer: Option<T::AccountId>,
+		},
+		/// The price for the instance was removed.
+		ItemPriceRemoved { collection: T::CollectionId, item: T::ItemId },
+		/// An item was bought.
+		ItemBought {
+			collection: T::CollectionId,
+			item: T::ItemId,
+			price: ItemPrice<T, I>,
+			seller: T::AccountId,
+			buyer: T::AccountId,
+		},
 	}
 
 	#[pallet::error]
@@ -375,6 +408,12 @@ pub mod pallet {
 		MaxSupplyAlreadySet,
 		/// The provided max supply is less to the amount of items a collection already has.
 		MaxSupplyTooSmall,
+		/// The given item ID is unknown.
+		UnknownItem,
+		/// Item is not for sale.
+		NotForSale,
+		/// The provided bid is too low.
+		BidTooLow,
 	}
 
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
@@ -1407,6 +1446,51 @@ pub mod pallet {
 			CollectionMaxSupply::<T, I>::insert(&collection, max_supply);
 			Self::deposit_event(Event::CollectionMaxSupplySet { collection, max_supply });
 			Ok(())
+		}
+
+		/// Set (or reset) the price for an item.
+		///
+		/// Origin must be Signed and must be the owner of the asset `item`.
+		///
+		/// - `collection`: The collection of the item.
+		/// - `item`: The item to set the price for.
+		/// - `price`: The price for the item. Pass `None`, to reset the price.
+		/// - `buyer`: Restricts the buy operation to a specific account.
+		///
+		/// Emits `ItemPriceSet` on success if the price is not `None`.
+		/// Emits `ItemPriceRemoved` on success if the price is `None`.
+		#[pallet::weight(T::WeightInfo::set_price())]
+		pub fn set_price(
+			origin: OriginFor<T>,
+			collection: T::CollectionId,
+			item: T::ItemId,
+			price: Option<ItemPrice<T, I>>,
+			whitelisted_buyer: Option<<T::Lookup as StaticLookup>::Source>,
+		) -> DispatchResult {
+			let origin = ensure_signed(origin)?;
+			let whitelisted_buyer = whitelisted_buyer.map(T::Lookup::lookup).transpose()?;
+			Self::do_set_price(collection, item, origin, price, whitelisted_buyer)
+		}
+
+		/// Allows to buy an item if it's up for sale.
+		///
+		/// Origin must be Signed and must not be the owner of the `item`.
+		///
+		/// - `collection`: The collection of the item.
+		/// - `item`: The item the sender wants to buy.
+		/// - `bid_price`: The price the sender is willing to pay.
+		///
+		/// Emits `ItemBought` on success.
+		#[pallet::weight(T::WeightInfo::buy_item())]
+		#[transactional]
+		pub fn buy_item(
+			origin: OriginFor<T>,
+			collection: T::CollectionId,
+			item: T::ItemId,
+			bid_price: ItemPrice<T, I>,
+		) -> DispatchResult {
+			let origin = ensure_signed(origin)?;
+			Self::do_buy_item(collection, item, origin, bid_price)
 		}
 	}
 }
