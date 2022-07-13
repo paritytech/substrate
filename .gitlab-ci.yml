@@ -217,6 +217,7 @@ test-linux-stable:
     - time cargo install cargo-nextest
     # this job runs all tests in former runtime-benchmarks, frame-staking and wasmtime tests
     # node-cli is excluded until https://github.com/paritytech/substrate/issues/11321 fixed
+    - echo "Node index - ${CI_NODE_INDEX}. Total amount - ${CI_NODE_TOTAL}"
     - time cargo nextest run --workspace
                              --locked
                              --release
