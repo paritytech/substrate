@@ -24,7 +24,7 @@ names = { version = "0.13.0", default-features = false }
 parity-scale-codec = "3.0.0"
 rand = "0.7.3"
 regex = "1.5.5"
-rpassword = "5.0.0"
+rpassword = "7.0.0"
 serde = "1.0.136"
 serde_json = "1.0.79"
 thiserror = "1.0.30"
