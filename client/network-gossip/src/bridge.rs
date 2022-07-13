@@ -21,8 +21,8 @@ use crate::{
 	Network, Validator,
 };
 
-use sc_network::ReputationChange;
 use sc_network_common::protocol::event::Event;
+use sc_peerset::ReputationChange;
 
 use futures::{
 	channel::mpsc::{channel, Receiver, Sender},
@@ -152,7 +152,7 @@ impl<B: BlockT> GossipEngine<B> {
 
 	/// Send addressed message to the given peers. The message is not kept or multicast
 	/// later on.
-	pub fn send_message(&mut self, who: Vec<sc_network::PeerId>, data: Vec<u8>) {
+	pub fn send_message(&mut self, who: Vec<PeerId>, data: Vec<u8>) {
 		for who in &who {
 			self.state_machine.send_message(&mut *self.network, who, data.clone());
 		}
