@@ -348,6 +348,7 @@ where
 			// Check for and enqueue potential new session.
 			if let Some(new_validator_set) = find_authorities_change::<B>(header) {
 				self.init_session_at(new_validator_set, *header.number());
+				// TODO: when adding SYNC protocol, we will request justifications for this block here.
 			}
 		}
 	}
@@ -684,6 +685,8 @@ where
 						return;
 					}
 				},
+				// TODO: when adding SYNC protocol, join the on-demand justifications stream to
+				// this one, and handle them both here.
 				justif = block_import_justif.next() => {
 					if let Some(justif) = justif {
 						if let Err(err) = self.triage_incoming_justif(justif) {
