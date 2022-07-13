@@ -126,7 +126,7 @@ This call can only be made by the `VetoOrigin`.
 
 - `veto_external` - Vetoes and blacklists the external proposal hash.
 
-#### Root
+#### ProtocolRoot
 
 - `cancel_referendum` - Removes a referendum.
 - `cancel_queued` - Cancels a proposal that is queued for enactment.
