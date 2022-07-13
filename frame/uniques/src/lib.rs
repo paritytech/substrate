@@ -26,6 +26,7 @@
 
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
+#![recursion_limit = "256"]
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
@@ -392,7 +393,7 @@ pub mod pallet {
 		MaxSupplyAlreadySet,
 		/// The provided max supply is less to the amount of items a collection already has.
 		MaxSupplyTooSmall,
-		/// The next `CollectionId` is not being used.
+		/// The `CollectionId` in `NextCollectionId` is not being used.
 		NextIdNotUsed,
 	}
 
