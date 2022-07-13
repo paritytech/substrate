@@ -474,7 +474,6 @@ fn pool_slash_proportional() {
 			vec![
 				// This last pool got slashed only the leftover dust. Otherwise in principle, this
 				// chunk/pool should have not been affected.
-				// TODO: We might improve this in a future PR
 				PoolsEvent::UnbondingPoolSlashed { pool_id: 1, era: 127, balance: 19 },
 				// This pool got slashed 12.5, which rounded down to 12.
 				PoolsEvent::UnbondingPoolSlashed { pool_id: 1, era: 128, balance: 8 },
@@ -489,8 +488,8 @@ fn pool_slash_proportional() {
 
 #[test]
 fn pool_slash_non_proportional_only_bonded_pool() {
-	// A typical example where a pool member unbonds in era 99, and he can get away with a slash tha
-	// happened in era 99, as long as the pool has enough active bond to cover the slash. If
+	// A typical example where a pool member unbonds in era 99, and he can get away with a slash
+	// that happened in era 100, as long as the pool has enough active bond to cover the slash. If
 	// everything else in the slashing/staking system works, this should always be the case.
 	// Nonetheless, `ledger.slash` has been written such that it will slash greedily from any chunk
 	// if it runs out of chunks that it thinks should be affected by the slash.
