@@ -26,6 +26,7 @@ use pallet_nomination_pools::{
 	PoolState,
 };
 use pallet_staking::{CurrentEra, Event as StakingEvent, Payee, RewardDestination};
+use sp_runtime::traits::Zero;
 
 #[test]
 fn pool_lifecycle_e2e() {
@@ -296,7 +297,7 @@ fn pool_slash_e2e() {
 			PoolMember {
 				pool_id: 1,
 				points: 0,
-				reward_pool_total_earnings: 0,
+				last_recorded_reward_counter: Zero::zero(),
 				// the 10 points unlocked just now correspond to 5 points in the unbond pool.
 				unbonding_eras: bounded_btree_map!(5 => 10, 6 => 5)
 			}
@@ -351,7 +352,7 @@ fn pool_slash_e2e() {
 			PoolMember {
 				pool_id: 1,
 				points: 0,
-				reward_pool_total_earnings: 0,
+				last_recorded_reward_counter: Zero::zero(),
 				unbonding_eras: bounded_btree_map!(4 => 10, 5 => 10, 9 => 10)
 			}
 		);
