@@ -16,15 +16,17 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::{
-	config, state_request_handler::StateRequestHandler, Event, NetworkService, NetworkWorker,
-};
+use crate::{config, Event, NetworkService, NetworkWorker};
 
 use futures::prelude::*;
 use libp2p::PeerId;
 use sc_network_common::config::ProtocolId;
 use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
-use sc_network_sync::block_request_handler::BlockRequestHandler;
+use sc_network_sync::{
+	block_request_handler::BlockRequestHandler, state_request_handler::StateRequestHandler,
+	ChainSync,
+};
+use sp_consensus::block_validation::DefaultBlockAnnounceValidator;
 use sp_runtime::traits::{Block as BlockT, Header as _};
 use std::{borrow::Cow, sync::Arc, time::Duration};
 use substrate_test_runtime_client::{TestClientBuilder, TestClientBuilderExt as _};
@@ -109,6 +111,7 @@ fn build_test_full_node(
 		protocol_config
 	};
 
+	let max_parallel_downloads = config.max_parallel_downloads;
 	let worker = NetworkWorker::new(config::Params {
 		role: config::Role::Full,
 		executor: None,
@@ -120,8 +123,17 @@ fn build_test_full_node(
 		transaction_pool: Arc::new(crate::config::EmptyTransactionPool),
 		protocol_id,
 		import_queue,
-		block_announce_validator: Box::new(
-			sp_consensus::block_validation::DefaultBlockAnnounceValidator,
+		create_chain_sync: Box::new(
+			move |sync_mode, chain, warp_sync_provider| match ChainSync::new(
+				sync_mode,
+				chain,
+				Box::new(DefaultBlockAnnounceValidator),
+				max_parallel_downloads,
+				warp_sync_provider,
+			) {
+				Ok(chain_sync) => Ok(Box::new(chain_sync)),
+				Err(error) => Err(Box::new(error).into()),
+			},
 		),
 		metrics_registry: None,
 		block_request_protocol_config,

@@ -23,6 +23,7 @@ use codec::{Decode, Encode};
 use log::debug;
 use sc_client_api::{CompactProof, ProofProvider};
 use sc_consensus::ImportedState;
+use sc_network_common::sync::StateDownloadProgress;
 use smallvec::SmallVec;
 use sp_core::storage::well_known_keys;
 use sp_runtime::traits::{Block as BlockT, Header, NumberFor};
@@ -40,15 +41,6 @@ pub struct StateSync<B: BlockT, Client> {
 	client: Arc<Client>,
 	imported_bytes: u64,
 	skip_proof: bool,
-}
-
-/// Reported state download progress.
-#[derive(Clone, Eq, PartialEq, Debug)]
-pub struct StateDownloadProgress {
-	/// Estimated download percentage.
-	pub percentage: u32,
-	/// Total state size in bytes downloaded so far.
-	pub size: u64,
 }
 
 /// Import state chunk result.
