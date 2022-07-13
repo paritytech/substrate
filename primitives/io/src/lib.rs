@@ -1904,9 +1904,9 @@ mod tests {
 			}
 
 			// push invalid
-			let msg = format!("asdf!");
-			let signature = pair.sign(msg.as_bytes());
-			crypto::sr25519_batch_verify(&signature, msg.as_bytes(), &pair_unused.public());
+			let msg = b"asdf!";
+			let signature = pair.sign(msg);
+			crypto::sr25519_batch_verify(&signature, msg, &pair_unused.public());
 			assert!(!crypto::finish_batch_verify());
 
 			crypto::start_batch_verify();
