@@ -58,7 +58,7 @@ use sc_network::{
 };
 pub use sc_network_common::config::ProtocolId;
 use sc_network_common::{
-	service::NetworkSyncForkRequest,
+	service::{NetworkStateInfo, NetworkSyncForkRequest},
 	sync::warp::{AuthorityList, EncodedProof, SetId, VerificationResult, WarpSyncProvider},
 };
 use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
@@ -245,7 +245,7 @@ where
 {
 	/// Get this peer ID.
 	pub fn id(&self) -> PeerId {
-		*self.network.service().local_peer_id()
+		self.network.service().local_peer_id()
 	}
 
 	/// Returns true if we're major syncing.
@@ -799,7 +799,7 @@ where
 			let addrs = connect_to
 				.iter()
 				.map(|v| {
-					let peer_id = *self.peer(*v).network_service().local_peer_id();
+					let peer_id = self.peer(*v).network_service().local_peer_id();
 					let multiaddr = self.peer(*v).listen_addr.clone();
 					MultiaddrWithPeerId { peer_id, multiaddr }
 				})
@@ -884,7 +884,7 @@ where
 		self.mut_peers(move |peers| {
 			for peer in peers.iter_mut() {
 				peer.network
-					.add_known_address(*network.service().local_peer_id(), listen_addr.clone());
+					.add_known_address(network.service().local_peer_id(), listen_addr.clone());
 			}
 
 			let imported_blocks_stream = Box::pin(client.import_notification_stream().fuse());

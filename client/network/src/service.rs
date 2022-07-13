@@ -716,11 +716,6 @@ where
 }
 
 impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
-	/// Returns the local `PeerId`.
-	pub fn local_peer_id(&self) -> &PeerId {
-		&self.local_peer_id
-	}
-
 	/// Get network state.
 	///
 	/// **Note**: Use this only for debugging. This API is unstable. There are warnings literally

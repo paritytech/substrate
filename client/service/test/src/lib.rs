@@ -26,7 +26,7 @@ use sc_network::{
 	config::{NetworkConfiguration, TransportConfig},
 	multiaddr, Multiaddr,
 };
-use sc_network_common::service::NetworkPeers;
+use sc_network_common::service::{NetworkPeers, NetworkStateInfo};
 use sc_service::{
 	client::Client,
 	config::{BasePath, DatabaseSource, KeystoreConfig},
@@ -321,7 +321,7 @@ where
 
 			handle.spawn(service.clone().map_err(|_| ()));
 			let addr =
-				addr.with(multiaddr::Protocol::P2p((*service.network().local_peer_id()).into()));
+				addr.with(multiaddr::Protocol::P2p((service.network().local_peer_id()).into()));
 			self.authority_nodes.push((self.nodes, service, user_data, addr));
 			self.nodes += 1;
 		}
@@ -341,7 +341,7 @@ where
 
 			handle.spawn(service.clone().map_err(|_| ()));
 			let addr =
-				addr.with(multiaddr::Protocol::P2p((*service.network().local_peer_id()).into()));
+				addr.with(multiaddr::Protocol::P2p((service.network().local_peer_id()).into()));
 			self.full_nodes.push((self.nodes, service, user_data, addr));
 			self.nodes += 1;
 		}
