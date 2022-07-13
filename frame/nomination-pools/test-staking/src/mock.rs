@@ -24,6 +24,8 @@ type AccountIndex = u32;
 type BlockNumber = u64;
 type Balance = u128;
 
+pub(crate) type T = Runtime;
+
 pub(crate) const POOL1_BONDED: AccountId = 20318131474730217858575332831085u128;
 pub(crate) const POOL1_REWARD: AccountId = 20397359637244482196168876781421u128;
 
@@ -194,13 +196,14 @@ frame_support::construct_runtime!(
 );
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
+	sp_tracing::try_init_simple();
 	let mut storage = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 	let _ = pallet_nomination_pools::GenesisConfig::<Runtime> {
 		min_join_bond: 2,
 		min_create_bond: 2,
 		max_pools: Some(3),
-		max_members_per_pool: Some(3),
-		max_members: Some(3 * 3),
+		max_members_per_pool: Some(5),
+		max_members: Some(3 * 5),
 	}
 	.assimilate_storage(&mut storage)
 	.unwrap();

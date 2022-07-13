@@ -22,7 +22,8 @@ mod mock;
 use frame_support::{assert_noop, assert_ok, bounded_btree_map, traits::Currency};
 use mock::*;
 use pallet_nomination_pools::{
-	Error as PoolsError, Event as PoolsEvent, LastPoolId, PoolMember, PoolMembers, PoolState,
+	BondedPools, Error as PoolsError, Event as PoolsEvent, LastPoolId, PoolMember, PoolMembers,
+	PoolState,
 };
 use pallet_staking::{CurrentEra, Event as StakingEvent, Payee, RewardDestination};
 
@@ -273,7 +274,7 @@ fn pool_slash_e2e() {
 			30,
 			&mut Default::default(),
 			&mut Default::default(),
-			1, // slash era 1, affects chunks at era 5 onwards.
+			2, // slash era 2, affects chunks at era 5 onwards.
 		);
 
 		assert_eq!(staking_events_since_last_call(), vec![StakingEvent::Slashed(POOL1_BONDED, 30)]);
@@ -367,6 +368,257 @@ fn pool_slash_e2e() {
 				PoolsEvent::Withdrawn { member: 10, pool_id: 1, balance: 10 + 15, points: 30 },
 				PoolsEvent::MemberRemoved { pool_id: 1, member: 10 },
 				PoolsEvent::Destroyed { pool_id: 1 }
+			]
+		);
+	});
+}
+
+#[test]
+fn pool_slash_proportional() {
+	// a typical example where 3 pool members unbond in era 99, 100, and 101, and a slash that
+	// happened in era 100 should only affect the latter two.
+	new_test_ext().execute_with(|| {
+		ExistentialDeposit::set(1);
+		BondingDuration::set(28);
+		assert_eq!(Balances::minimum_balance(), 1);
+		assert_eq!(Staking::current_era(), None);
+
+		// create the pool, we know this has id 1.
+		assert_ok!(Pools::create(Origin::signed(10), 40, 10, 10, 10));
+		assert_eq!(LastPoolId::<T>::get(), 1);
+
+		assert_eq!(staking_events_since_last_call(), vec![StakingEvent::Bonded(POOL1_BONDED, 40)]);
+		assert_eq!(
+			pool_events_since_last_call(),
+			vec![
+				PoolsEvent::Created { depositor: 10, pool_id: 1 },
+				PoolsEvent::Bonded { member: 10, pool_id: 1, bonded: 40, joined: true },
+			]
+		);
+
+		// have two members join
+		let bond = 20;
+		assert_ok!(Pools::join(Origin::signed(20), bond, 1));
+		assert_ok!(Pools::join(Origin::signed(21), bond, 1));
+		assert_ok!(Pools::join(Origin::signed(22), bond, 1));
+
+		assert_eq!(
+			staking_events_since_last_call(),
+			vec![
+				StakingEvent::Bonded(POOL1_BONDED, bond),
+				StakingEvent::Bonded(POOL1_BONDED, bond),
+				StakingEvent::Bonded(POOL1_BONDED, bond),
+			]
+		);
+		assert_eq!(
+			pool_events_since_last_call(),
+			vec![
+				PoolsEvent::Bonded { member: 20, pool_id: 1, bonded: bond, joined: true },
+				PoolsEvent::Bonded { member: 21, pool_id: 1, bonded: bond, joined: true },
+				PoolsEvent::Bonded { member: 22, pool_id: 1, bonded: bond, joined: true },
+			]
+		);
+
+		// now let's progress a lot.
+		CurrentEra::<T>::set(Some(99));
+
+		// and unbond
+		assert_ok!(Pools::unbond(Origin::signed(20), 20, bond));
+
+		assert_eq!(
+			staking_events_since_last_call(),
+			vec![StakingEvent::Unbonded(POOL1_BONDED, bond),]
+		);
+		assert_eq!(
+			pool_events_since_last_call(),
+			vec![PoolsEvent::Unbonded { member: 20, pool_id: 1, balance: bond, points: bond }]
+		);
+
+		CurrentEra::<T>::set(Some(100));
+		assert_ok!(Pools::unbond(Origin::signed(21), 21, bond));
+		assert_eq!(
+			staking_events_since_last_call(),
+			vec![StakingEvent::Unbonded(POOL1_BONDED, bond),]
+		);
+		assert_eq!(
+			pool_events_since_last_call(),
+			vec![PoolsEvent::Unbonded { member: 21, pool_id: 1, balance: bond, points: bond }]
+		);
+
+		CurrentEra::<T>::set(Some(101));
+		assert_ok!(Pools::unbond(Origin::signed(22), 22, bond));
+		assert_eq!(
+			staking_events_since_last_call(),
+			vec![StakingEvent::Unbonded(POOL1_BONDED, bond),]
+		);
+		assert_eq!(
+			pool_events_since_last_call(),
+			vec![PoolsEvent::Unbonded { member: 22, pool_id: 1, balance: bond, points: bond }]
+		);
+
+		// Apply a slash that happened in era 100. This is typically applied with a delay.
+		// Of the total 100, 50 is slashed.
+		assert_eq!(BondedPools::<T>::get(1).unwrap().points, 40);
+		pallet_staking::slashing::do_slash::<Runtime>(
+			&POOL1_BONDED,
+			50,
+			&mut Default::default(),
+			&mut Default::default(),
+			100,
+		);
+
+		assert_eq!(staking_events_since_last_call(), vec![StakingEvent::Slashed(POOL1_BONDED, 50)]);
+		assert_eq!(
+			pool_events_since_last_call(),
+			vec![
+				// This last pool got slashed only the leftover dust. Otherwise in principle, this
+				// chunk/pool should have not been affected.
+				PoolsEvent::UnbondingPoolSlashed { pool_id: 1, era: 127, balance: 19 },
+				// This pool got slashed 12.5, which rounded down to 12.
+				PoolsEvent::UnbondingPoolSlashed { pool_id: 1, era: 128, balance: 8 },
+				// This pool got slashed 12.5, which rounded down to 12.
+				PoolsEvent::UnbondingPoolSlashed { pool_id: 1, era: 129, balance: 8 },
+				// Bonded pool got slashed for 25, remaining 15 in it.
+				PoolsEvent::PoolSlashed { pool_id: 1, balance: 15 }
+			]
+		);
+	});
+}
+
+#[test]
+fn pool_slash_non_proportional_only_bonded_pool() {
+	// A typical example where a pool member unbonds in era 99, and he can get away with a slash
+	// that happened in era 100, as long as the pool has enough active bond to cover the slash. If
+	// everything else in the slashing/staking system works, this should always be the case.
+	// Nonetheless, `ledger.slash` has been written such that it will slash greedily from any chunk
+	// if it runs out of chunks that it thinks should be affected by the slash.
+	new_test_ext().execute_with(|| {
+		ExistentialDeposit::set(1);
+		BondingDuration::set(28);
+		assert_eq!(Balances::minimum_balance(), 1);
+		assert_eq!(Staking::current_era(), None);
+
+		// create the pool, we know this has id 1.
+		assert_ok!(Pools::create(Origin::signed(10), 40, 10, 10, 10));
+		assert_eq!(staking_events_since_last_call(), vec![StakingEvent::Bonded(POOL1_BONDED, 40)]);
+		assert_eq!(
+			pool_events_since_last_call(),
+			vec![
+				PoolsEvent::Created { depositor: 10, pool_id: 1 },
+				PoolsEvent::Bonded { member: 10, pool_id: 1, bonded: 40, joined: true },
+			]
+		);
+
+		// have two members join
+		let bond = 20;
+		assert_ok!(Pools::join(Origin::signed(20), bond, 1));
+		assert_eq!(
+			staking_events_since_last_call(),
+			vec![StakingEvent::Bonded(POOL1_BONDED, bond)]
+		);
+		assert_eq!(
+			pool_events_since_last_call(),
+			vec![PoolsEvent::Bonded { member: 20, pool_id: 1, bonded: bond, joined: true }]
+		);
+
+		// progress and unbond.
+		CurrentEra::<T>::set(Some(99));
+		assert_ok!(Pools::unbond(Origin::signed(20), 20, bond));
+		assert_eq!(
+			staking_events_since_last_call(),
+			vec![StakingEvent::Unbonded(POOL1_BONDED, bond)]
+		);
+		assert_eq!(
+			pool_events_since_last_call(),
+			vec![PoolsEvent::Unbonded { member: 20, pool_id: 1, balance: bond, points: bond }]
+		);
+
+		// slash for 30. This will be deducted only from the bonded pool.
+		CurrentEra::<T>::set(Some(100));
+		assert_eq!(BondedPools::<T>::get(1).unwrap().points, 40);
+		pallet_staking::slashing::do_slash::<Runtime>(
+			&POOL1_BONDED,
+			30,
+			&mut Default::default(),
+			&mut Default::default(),
+			100,
+		);
+
+		assert_eq!(staking_events_since_last_call(), vec![StakingEvent::Slashed(POOL1_BONDED, 30)]);
+		assert_eq!(
+			pool_events_since_last_call(),
+			vec![PoolsEvent::PoolSlashed { pool_id: 1, balance: 10 }]
+		);
+	});
+}
+
+#[test]
+fn pool_slash_non_proportional_bonded_pool_and_chunks() {
+	// An uncommon example where even though some funds are unlocked such that they should not be
+	// affected by a slash, we still slash out of them. This should not happen at all. If a
+	// nomination has unbonded, from the next era onwards, their exposure will drop, so if an era
+	// happens in that era, then their share of that slash should naturally be less, such that only
+	// their active ledger stake is enough to compensate it.
+	new_test_ext().execute_with(|| {
+		ExistentialDeposit::set(1);
+		BondingDuration::set(28);
+		assert_eq!(Balances::minimum_balance(), 1);
+		assert_eq!(Staking::current_era(), None);
+
+		// create the pool, we know this has id 1.
+		assert_ok!(Pools::create(Origin::signed(10), 40, 10, 10, 10));
+		assert_eq!(staking_events_since_last_call(), vec![StakingEvent::Bonded(POOL1_BONDED, 40)]);
+		assert_eq!(
+			pool_events_since_last_call(),
+			vec![
+				PoolsEvent::Created { depositor: 10, pool_id: 1 },
+				PoolsEvent::Bonded { member: 10, pool_id: 1, bonded: 40, joined: true },
+			]
+		);
+
+		// have two members join
+		let bond = 20;
+		assert_ok!(Pools::join(Origin::signed(20), bond, 1));
+		assert_eq!(
+			staking_events_since_last_call(),
+			vec![StakingEvent::Bonded(POOL1_BONDED, bond)]
+		);
+		assert_eq!(
+			pool_events_since_last_call(),
+			vec![PoolsEvent::Bonded { member: 20, pool_id: 1, bonded: bond, joined: true }]
+		);
+
+		// progress and unbond.
+		CurrentEra::<T>::set(Some(99));
+		assert_ok!(Pools::unbond(Origin::signed(20), 20, bond));
+		assert_eq!(
+			staking_events_since_last_call(),
+			vec![StakingEvent::Unbonded(POOL1_BONDED, bond)]
+		);
+		assert_eq!(
+			pool_events_since_last_call(),
+			vec![PoolsEvent::Unbonded { member: 20, pool_id: 1, balance: bond, points: bond }]
+		);
+
+		// slash 50. This will be deducted only from the bonded pool and one of the unbonding pools.
+		CurrentEra::<T>::set(Some(100));
+		assert_eq!(BondedPools::<T>::get(1).unwrap().points, 40);
+		pallet_staking::slashing::do_slash::<Runtime>(
+			&POOL1_BONDED,
+			50,
+			&mut Default::default(),
+			&mut Default::default(),
+			100,
+		);
+
+		assert_eq!(staking_events_since_last_call(), vec![StakingEvent::Slashed(POOL1_BONDED, 50)]);
+		assert_eq!(
+			pool_events_since_last_call(),
+			vec![
+				// out of 20, 10 was taken.
+				PoolsEvent::UnbondingPoolSlashed { pool_id: 1, era: 127, balance: 10 },
+				// out of 40, all was taken.
+				PoolsEvent::PoolSlashed { pool_id: 1, balance: 0 }
 			]
 		);
 	});
