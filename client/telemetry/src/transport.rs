@@ -31,7 +31,8 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(20);
 
 pub(crate) fn initialize_transport() -> Result<WsTrans, io::Error> {
 	let transport = {
-		let inner = block_on(libp2p::dns::DnsConfig::system(libp2p::tcp::TcpConfig::new()))?;
+		let tcp_transport = libp2p::tcp::TcpTransport::new(libp2p::tcp::GenTcpConfig::new());
+		let inner = block_on(libp2p::dns::DnsConfig::system(tcp_transport))?;
 		libp2p::websocket::framed::WsConfig::new(inner).and_then(|connec, _| {
 			let connec = connec
 				.with(|item| {

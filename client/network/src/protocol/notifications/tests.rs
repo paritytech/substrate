@@ -23,8 +23,8 @@ use crate::protocol::notifications::{Notifications, NotificationsOut, ProtocolCo
 use futures::prelude::*;
 use libp2p::{
 	core::{
-		connection::{ConnectionId, ListenerId},
-		transport::MemoryTransport,
+		connection::ConnectionId,
+		transport::{ListenerId, MemoryTransport},
 		upgrade, ConnectedPoint,
 	},
 	identity, noise,
@@ -56,7 +56,7 @@ fn build_nodes() -> (Swarm<CustomProtoWithAddr>, Swarm<CustomProtoWithAddr>) {
 		let noise_keys =
 			noise::Keypair::<noise::X25519Spec>::new().into_authentic(&keypair).unwrap();
 
-		let transport = MemoryTransport
+		let transport = MemoryTransport::new()
 			.upgrade(upgrade::Version::V1)
 			.authenticate(noise::NoiseConfig::xx(noise_keys).into_authenticated())
 			.multiplex(yamux::YamuxConfig::default())
