@@ -23,32 +23,6 @@ use codec::{Codec, Decode, Encode};
 pub use pallet_nomination_pools::PoolId;
 use sp_std::prelude::*;
 
-/// Some points and balance bundled together.
-#[derive(Encode, Decode, PartialEq, Eq)]
-pub struct PointsAndBalance<B> {
-	pub points: B,
-	pub balance: B,
-}
-
-/// Stats of a member in a pool.
-#[derive(Encode, Decode, PartialEq, Eq)]
-pub struct MemberStatus<B> {
-	/// Active stake, both in points and balance.
-	///
-	/// The balance value is evaluated on the fly and can change based on external factors, such as
-	/// slash.
-	pub active: PointsAndBalance<B>,
-	/// Unbonding stake, per era, both in points and balance.
-	///
-	/// The balance value is evaluated on the fly and can change based on external factors, such as
-	/// slash.
-	pub unbonding: Vec<(u32, PointsAndBalance<B>)>,
-	/// The pending rewards of this member in their existing pool.
-	pub pending_rewards: B,
-	/// The pool to which this member belongs.
-	pub pool_id: PoolId,
-}
-
 sp_api::decl_runtime_apis! {
 	pub trait NominationPoolsApi<AccountId, Balance> where AccountId: Codec, Balance: Codec
 	{
