@@ -706,15 +706,18 @@ fn try_increment_id_works() {
 		assert_ok!(Uniques::force_create(Origin::root(), 1, true));
 
 		// there are now two collections.
-		assert_eq!(Uniques::get_collections_count(), 2);
+		assert_eq!(Uniques::get_next_id(), 2);
 
 		// reset the collections counter to test if the `try_increment_id`
 		// works.
-		Uniques::set_collections_count(0);
+		Uniques::set_next_id(0);
 		assert_ok!(Uniques::try_increment_id(Origin::signed(2)));
 
+		// `try_increment_id` should emit an event when successful.
+		assert!(events().contains(&Event::<Test>::NextCollectionIdIncremented { next_id: 1 }));
+
 		// because reset, the collections count should be now 1
-		assert_eq!(Uniques::get_collections_count(), 1);
+		assert_eq!(Uniques::get_next_id(), 1);
 
 		// increment the collections count again.
 		assert_ok!(Uniques::try_increment_id(Origin::signed(2)));

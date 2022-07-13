@@ -85,7 +85,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		);
 
 		CollectionAccount::<T, I>::insert(&owner, &collection, ());
-		CollectionsCount::<T, I>::set(collection.saturating_add(T::CollectionId::one()));
+		NextCollectionId::<T, I>::set(collection.saturating_add(T::CollectionId::one()));
 
 		Self::deposit_event(event);
 		Ok(())
@@ -204,12 +204,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	#[cfg(any(test, feature = "runtime-benchmarks"))]
-	pub fn set_collections_count(count: u32) {
-		CollectionsCount::<T, I>::set(T::CollectionId::from_u32(count).unwrap());
+	pub fn set_next_id(count: u32) {
+		NextCollectionId::<T, I>::set(T::CollectionId::from_u32(count).unwrap());
 	}
 
 	#[cfg(test)]
-	pub fn get_collections_count() -> T::CollectionId {
-		CollectionsCount::<T, I>::get()
+	pub fn get_next_id() -> T::CollectionId {
+		NextCollectionId::<T, I>::get()
 	}
 }

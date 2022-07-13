@@ -262,7 +262,7 @@ pub mod pallet {
 	#[pallet::storage]
 	/// Stores the `CollectionId` that is going to be used for the next collection.
 	/// This gets incremented by 1 when creating a collection.
-	pub(super) type CollectionsCount<T: Config<I>, I: 'static = ()> =
+	pub(super) type NextCollectionId<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, T::CollectionId, ValueQuery>;
 
 	#[pallet::event]
@@ -356,8 +356,8 @@ pub mod pallet {
 		OwnershipAcceptanceChanged { who: T::AccountId, maybe_collection: Option<T::CollectionId> },
 		/// Max supply has been set for a collection.
 		CollectionMaxSupplySet { collection: T::CollectionId, max_supply: u32 },
-		/// Event gets emmited when the `CollectionsCount` gets incremented in `try_increment_id`
-		CollectionsCountIncremented { collections_count: T::CollectionId },
+		/// Event gets emmited when the `NextCollectionId` gets incremented in `try_increment_id`
+		NextCollectionIdIncremented { next_id: T::CollectionId },
 	}
 
 	#[pallet::error]
@@ -430,7 +430,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			admin: <T::Lookup as StaticLookup>::Source,
 		) -> DispatchResult {
-			let collection = CollectionsCount::<T, I>::get();
+			let collection = NextCollectionId::<T, I>::get();
 
 			let owner = T::CreateOrigin::ensure_origin(origin, &collection)?;
 			let admin = T::Lookup::lookup(admin)?;
@@ -470,7 +470,7 @@ pub mod pallet {
 			T::ForceOrigin::ensure_origin(origin)?;
 			let owner = T::Lookup::lookup(owner)?;
 
-			let collection = CollectionsCount::<T, I>::get();
+			let collection = NextCollectionId::<T, I>::get();
 
 			Self::do_create_collection(
 				collection,
@@ -482,26 +482,28 @@ pub mod pallet {
 			)
 		}
 
-		/// Increments the `CollectionId` stored in `CollectionsCount`.
-		/// This is only callable when the next `CollectionId` that would be generated is already
-		/// being used.
+		/// Increments the `CollectionId` stored in `NextCollectionId`.
 		///
-		/// The origin must be Signed and the sender must have sufficient funds free.
+		///This is only callable when the next `CollectionId` is already being
+		/// used for some other collection.
 		///
-		/// Emits `CollectionsCountIncremented` event when successful.
+		/// The origin must be Signed and the sender must have sufficient funds
+		/// free.
+		///
+		/// Emits `NextCollectionIdIncremented` event when successful.
 		///
 		/// Weight: `O(1)`
 		#[pallet::weight(1000)]
 		pub fn try_increment_id(origin: OriginFor<T>) -> DispatchResult {
 			ensure_signed(origin)?;
 			ensure!(
-				Collection::<T, I>::contains_key(CollectionsCount::<T, I>::get()),
+				Collection::<T, I>::contains_key(NextCollectionId::<T, I>::get()),
 				Error::<T, I>::NextIdNotUsed
 			);
 
-			let next_id = CollectionsCount::<T, I>::get().saturating_add(T::CollectionId::one());
-			CollectionsCount::<T, I>::set(next_id);
-			Self::deposit_event(Event::CollectionsCountIncremented { collections_count: next_id });
+			let next_id = NextCollectionId::<T, I>::get().saturating_add(T::CollectionId::one());
+			NextCollectionId::<T, I>::set(next_id);
+			Self::deposit_event(Event::NextCollectionIdIncremented { next_id });
 			Ok(())
 		}
 

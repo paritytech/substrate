@@ -407,11 +407,11 @@ benchmarks_instance_pallet! {
 
 	try_increment_id {
 		let (_, caller, _) = create_collection::<T, I>();
-		Uniques::<T, I>::set_collections_count(0);
+		Uniques::<T, I>::set_next_id(0);
 	}: _(SystemOrigin::Signed(caller.clone()))
 	verify {
-		assert_last_event::<T, I>(Event::CollectionsCountIncremented {
-			collections_count: T::CollectionId::from_u8(1).unwrap()
+		assert_last_event::<T, I>(Event::NextCollectionIdIncremented {
+			next_id: T::CollectionId::from_u8(1).unwrap()
 		}.into());
 	}
 
