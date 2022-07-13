@@ -2838,8 +2838,10 @@ fn retroactive_deferred_slashes_one_before() {
 		mock::start_active_era(1);
 		let exposure_11_at_era1 = Staking::eras_stakers(active_era(), 11);
 
+		// unbond at slash era.
 		mock::start_active_era(2);
-
+		assert_ok!(Staking::chill(Origin::signed(10)));
+		assert_ok!(Staking::unbond(Origin::signed(10), 100));
 
 		mock::start_active_era(3);
 		on_offence_in_era(
@@ -2853,9 +2855,11 @@ fn retroactive_deferred_slashes_one_before() {
 		mock::start_active_era(4);
 		assert_eq!(
 			staking_events_since_last_call(),
-			vec![Event::StakersElected, Event::EraPaid(3, 7100, 21300)]
+			vec![Event::StakersElected, Event::EraPaid(3, 11075, 33225)]
 		);
 
+		assert_eq!(Staking::ledger(10).unwrap().total, 1000);
+		// slash happens after the next line.
 		mock::start_active_era(5);
 		assert_eq!(
 			staking_events_since_last_call(),
@@ -2866,6 +2870,11 @@ fn retroactive_deferred_slashes_one_before() {
 				Event::Slashed(101, 12)
 			]
 		);
+
+		// their ledger has already been slashed.
+		assert_eq!(Staking::ledger(10).unwrap().total, 900);
+		assert_ok!(Staking::unbond(Origin::signed(10), 1000));
+		assert_eq!(Staking::ledger(10).unwrap().total, 900);
 	})
 }
 
