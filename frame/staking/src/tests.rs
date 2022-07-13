@@ -2800,7 +2800,7 @@ fn deferred_slashes_are_deferred() {
 }
 
 #[test]
-fn retroactive_deferred_slashes_two_eras_before_() {
+fn retroactive_deferred_slashes_two_eras_before() {
 	ExtBuilder::default().slash_defer_duration(2).build_and_execute(|| {
 		assert_eq!(BondingDuration::get(), 3);
 
