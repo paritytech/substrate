@@ -45,7 +45,7 @@ impl<C, P> NominationPoolsRpcType<C, P> {
 }
 
 impl<C, Block, AccountId, Balance>
-	NominationPoolsRpc<<Block as BlockT>::Hash, AccountId, MemberStatus<Balance>>
+	NominationPoolsRpc<<Block as BlockT>::Hash, AccountId, Balance>
 	for NominationPoolsRpcType<C, Block>
 where
 	Block: BlockT,
