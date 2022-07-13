@@ -210,6 +210,7 @@ test-linux-stable:
     WASM_BUILD_RUSTFLAGS:          "-Cdebug-assertions=y -Dwarnings"
     # Ensure we run the UI tests.
     RUN_UI_TESTS:                  1
+    CI_JOB_NAME:                   "test-linux-stable" # needed for rusty-cachier
   parallel: 3
   script:
     - rusty-cachier snapshot create
@@ -226,7 +227,7 @@ test-linux-stable:
                              --manifest-path ./bin/node/cli/Cargo.toml
                              --exclude node-cli
                              --partition count:${CI_NODE_INDEX}/${CI_NODE_TOTAL}
-    - rusty-cachier cache upload
+    - if [ ${CI_NODE_INDEX} == 1 ]; then rusty-cachier cache upload; fi
 
 #### stage:                        deploy
 
