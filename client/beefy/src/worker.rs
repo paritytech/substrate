@@ -348,11 +348,13 @@ where
 			// Check for and enqueue potential new session.
 			if let Some(new_validator_set) = find_authorities_change::<B>(header) {
 				self.init_session_at(new_validator_set, *header.number());
-				// TODO: when adding SYNC protocol, we will request justifications for this block here.
+				// TODO: when adding SYNC protocol, fire up a request for justification for this
+				// mandatory block here.
 			}
 		}
 	}
 
+	/// Based on [VoterOracle] this vote is either processed here or enqueued for later.
 	fn triage_incoming_vote(
 		&mut self,
 		vote: VoteMessage<NumberFor<B>, AuthorityId, Signature>,
@@ -374,6 +376,9 @@ where
 		Ok(())
 	}
 
+	/// Based on [VoterOracle] this justification is either processed here or enqueued for later.
+	///
+	/// Expects `justification` to be valid.
 	fn triage_incoming_justif(
 		&mut self,
 		justification: BeefySignedCommitment<B>,
@@ -439,6 +444,8 @@ where
 	/// 1. Prune irrelevant past sessions from the oracle,
 	/// 2. Set BEEFY best block,
 	/// 3. Send best block hash and `signed_commitment` to RPC worker.
+	///
+	/// Expects `signed commitment` to be valid.
 	fn finalize(&mut self, signed_commitment: BeefySignedCommitment<B>) {
 		// Prune any now "finalized" sessions from queue.
 		self.voting_oracle.try_prune();
@@ -689,6 +696,8 @@ where
 				// this one, and handle them both here.
 				justif = block_import_justif.next() => {
 					if let Some(justif) = justif {
+						// block import justifications have already been verified to be valid
+						// by `BeefyBlockImport`.
 						if let Err(err) = self.triage_incoming_justif(justif) {
 							debug!(target: "beefy", "🥩 {}", err);
 						}

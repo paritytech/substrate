@@ -110,7 +110,7 @@ where
 					.validator_set(&block_id)
 					.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
 					// Deploying `BeefyBlockImport` on chains with dummy BeefyApi will
-					// effectively reject all blocks with justifications.
+					// effectively reject all blocks with BEEFY justifications.
 					.ok_or_else(|| {
 						ConsensusError::ClientImport("Unknown validator set".to_string())
 					})?;
