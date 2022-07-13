@@ -20,9 +20,10 @@
 
 use crate::{
 	protocol::event::Event,
+	request_responses::{IfDisconnected, RequestFailure},
 	sync::{warp::WarpSyncProgress, StateDownloadProgress, SyncState},
 };
-use futures::Stream;
+use futures::{channel::oneshot, Stream};
 pub use libp2p::{identity::error::SigningError, kad::record::Key as KademliaKey};
 use libp2p::{Multiaddr, PeerId};
 use sc_peerset::ReputationChange;
@@ -520,5 +521,85 @@ where
 		protocol: Cow<'static, str>,
 	) -> Result<Box<dyn NotificationSender>, NotificationSenderError> {
 		T::notification_sender(self, target, protocol)
+	}
+}
+
+/// Provides ability to send network requests.
+#[async_trait::async_trait]
+pub trait NetworkRequest {
+	/// Sends a single targeted request to a specific peer. On success, returns the response of
+	/// the peer.
+	///
+	/// Request-response protocols are a way to complement notifications protocols, but
+	/// notifications should remain the default ways of communicating information. For example, a
+	/// peer can announce something through a notification, after which the recipient can obtain
+	/// more information by performing a request.
+	/// As such, call this function with `IfDisconnected::ImmediateError` for `connect`. This way
+	/// you will get an error immediately for disconnected peers, instead of waiting for a
+	/// potentially very long connection attempt, which would suggest that something is wrong
+	/// anyway, as you are supposed to be connected because of the notification protocol.
+	///
+	/// No limit or throttling of concurrent outbound requests per peer and protocol are enforced.
+	/// Such restrictions, if desired, need to be enforced at the call site(s).
+	///
+	/// The protocol must have been registered through
+	/// `NetworkConfiguration::request_response_protocols`.
+	async fn request(
+		&self,
+		target: PeerId,
+		protocol: Cow<'static, str>,
+		request: Vec<u8>,
+		connect: IfDisconnected,
+	) -> Result<Vec<u8>, RequestFailure>;
+
+	/// Variation of `request` which starts a request whose response is delivered on a provided
+	/// channel.
+	///
+	/// Instead of blocking and waiting for a reply, this function returns immediately, sending
+	/// responses via the passed in sender. This alternative API exists to make it easier to
+	/// integrate with message passing APIs.
+	///
+	/// Keep in mind that the connected receiver might receive a `Canceled` event in case of a
+	/// closing connection. This is expected behaviour. With `request` you would get a
+	/// `RequestFailure::Network(OutboundFailure::ConnectionClosed)` in that case.
+	fn start_request(
+		&self,
+		target: PeerId,
+		protocol: Cow<'static, str>,
+		request: Vec<u8>,
+		tx: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
+		connect: IfDisconnected,
+	);
+}
+
+// Manual implementation to avoid extra boxing here
+impl<T> NetworkRequest for Arc<T>
+where
+	T: ?Sized,
+	T: NetworkRequest,
+{
+	fn request<'life0, 'async_trait>(
+		&'life0 self,
+		target: PeerId,
+		protocol: Cow<'static, str>,
+		request: Vec<u8>,
+		connect: IfDisconnected,
+	) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, RequestFailure>> + Send + 'async_trait>>
+	where
+		'life0: 'async_trait,
+		Self: 'async_trait,
+	{
+		T::request(self, target, protocol, request, connect)
+	}
+
+	fn start_request(
+		&self,
+		target: PeerId,
+		protocol: Cow<'static, str>,
+		request: Vec<u8>,
+		tx: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
+		connect: IfDisconnected,
+	) {
+		T::start_request(self, target, protocol, request, tx, connect)
 	}
 }

@@ -18,7 +18,6 @@
 
 use crate::{
 	config, error,
-	request_responses::RequestFailure,
 	utils::{interval, LruHashSet},
 };
 
@@ -45,6 +44,7 @@ use sc_client_api::{BlockBackend, HeaderBackend, ProofProvider};
 use sc_consensus::import_queue::{BlockImportError, BlockImportStatus, IncomingBlock, Origin};
 use sc_network_common::{
 	config::ProtocolId,
+	request_responses::RequestFailure,
 	sync::{
 		message::{
 			BlockAnnounce, BlockAttributes, BlockData, BlockRequest, BlockResponse, BlockState,

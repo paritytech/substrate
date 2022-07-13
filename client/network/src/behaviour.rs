@@ -44,7 +44,7 @@ use sc_consensus::import_queue::{IncomingBlock, Origin};
 use sc_network_common::{
 	config::ProtocolId,
 	protocol::event::{DhtEvent, ObservedRole},
-	request_responses::ProtocolConfig,
+	request_responses::{IfDisconnected, ProtocolConfig, RequestFailure},
 };
 use sc_peerset::PeersetHandle;
 use sp_blockchain::{HeaderBackend, HeaderMetadata};
@@ -61,9 +61,7 @@ use std::{
 	time::Duration,
 };
 
-pub use crate::request_responses::{
-	IfDisconnected, InboundFailure, OutboundFailure, RequestFailure, RequestId, ResponseFailure,
-};
+pub use crate::request_responses::{InboundFailure, OutboundFailure, RequestId, ResponseFailure};
 
 /// General behaviour of the network. Combines all protocols together.
 #[derive(NetworkBehaviour)]

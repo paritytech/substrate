@@ -265,9 +265,10 @@ pub use libp2p::{multiaddr, Multiaddr, PeerId};
 pub use protocol::PeerInfo;
 pub use sc_network_common::{
 	protocol::event::{DhtEvent, Event, ObservedRole},
+	request_responses::{IfDisconnected, RequestFailure},
 	service::{
-		KademliaKey, NetworkKVProvider, NetworkSigner, NetworkStateInfo, NetworkStatus,
-		NetworkStatusProvider, NetworkSyncForkRequest, Signature, SigningError,
+		KademliaKey, NetworkKVProvider, NetworkRequest, NetworkSigner, NetworkStateInfo,
+		NetworkStatus, NetworkStatusProvider, NetworkSyncForkRequest, Signature, SigningError,
 	},
 	sync::{
 		warp::{WarpSyncPhase, WarpSyncProgress},
@@ -275,8 +276,8 @@ pub use sc_network_common::{
 	},
 };
 pub use service::{
-	DecodingError, IfDisconnected, Keypair, NetworkService, NetworkWorker, NotificationSender,
-	NotificationSenderReady, OutboundFailure, PublicKey, RequestFailure,
+	DecodingError, Keypair, NetworkService, NetworkWorker, NotificationSender,
+	NotificationSenderReady, OutboundFailure, PublicKey,
 };
 
 pub use sc_peerset::ReputationChange;
