@@ -570,7 +570,8 @@ impl<T: Config> StakingLedger<T> {
 		// (assuming 28 is the bonding duration) onwards should be slashed.
 		let slashable_chunks_start = slash_era + T::BondingDuration::get();
 
-		// Calculate the total balance of active funds and unlocking funds in the affected range.
+		// `Some(ratio)` if this is proportional, with `ratio`, `None` otherwise. In both cases, we
+		// slash first the active chunk, and then `slash_chunks_priority`.
 		let (maybe_proportional, slash_chunks_priority) = {
 			if let Some(first_slashable_index) =
 				self.unlocking.iter().position(|c| c.era >= slashable_chunks_start)
