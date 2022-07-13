@@ -100,7 +100,7 @@ mod out_events;
 mod tests;
 
 pub use libp2p::identity::{error::DecodingError, Keypair, PublicKey};
-use sc_network_common::service::NetworkRequest;
+use sc_network_common::service::{NetworkRequest, NetworkTransaction};
 
 /// Substrate network service. Handles network IO and manages connectivity.
 pub struct NetworkService<B: BlockT + 'static, H: ExHashT> {
@@ -736,22 +736,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		}
 	}
 
-	/// You may call this when new transactions are imported by the transaction pool.
-	///
-	/// All transactions will be fetched from the `TransactionPool` that was passed at
-	/// initialization as part of the configuration and propagated to peers.
-	pub fn trigger_repropagate(&self) {
-		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::PropagateTransactions);
-	}
-
-	/// You must call when new transaction is imported by the transaction pool.
-	///
-	/// This transaction will be fetched from the `TransactionPool` that was passed at
-	/// initialization as part of the configuration and propagated to peers.
-	pub fn propagate_transaction(&self, hash: H) {
-		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::PropagateTransaction(hash));
-	}
-
 	/// Make sure an important block is propagated to peers.
 	///
 	/// In chain-based consensus, we often need to make sure non-best forks are
@@ -1183,6 +1167,20 @@ where
 			pending_response: tx,
 			connect,
 		});
+	}
+}
+
+impl<B, H> NetworkTransaction<H> for NetworkService<B, H>
+where
+	B: BlockT + 'static,
+	H: ExHashT,
+{
+	fn trigger_repropagate(&self) {
+		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::PropagateTransactions);
+	}
+
+	fn propagate_transaction(&self, hash: H) {
+		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::PropagateTransaction(hash));
 	}
 }
 
