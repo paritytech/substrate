@@ -378,7 +378,7 @@ pub struct PoolMember<T: Config> {
 
 impl<T: Config> PoolMember<T> {
 	/// The pending rewards of this member.
-	fn pending_rewards(
+	pub fn pending_rewards(
 		&self,
 		current_reward_counter: T::RewardCounter,
 	) -> Result<BalanceOf<T>, Error<T>> {
@@ -922,7 +922,7 @@ pub struct RewardPool<T: Config> {
 	///
 	/// This is updated ONLY when the points in the bonded pool change, which means `join`,
 	/// `bond_extra` and `unbond`, all of which is done through `update_recorded`.
-	last_recorded_reward_counter: T::RewardCounter,
+	pub last_recorded_reward_counter: T::RewardCounter,
 	/// The last recorded total payouts of the reward pool.
 	///
 	/// Payouts is essentially income of the pool.
@@ -935,7 +935,7 @@ pub struct RewardPool<T: Config> {
 
 impl<T: Config> RewardPool<T> {
 	/// Getter for [`RewardPool::last_recorded_reward_counter`].
-	fn last_recorded_reward_counter(&self) -> T::RewardCounter {
+	pub fn last_recorded_reward_counter(&self) -> T::RewardCounter {
 		self.last_recorded_reward_counter
 	}
 
