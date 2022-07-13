@@ -20,6 +20,7 @@ use crate::{PeerSync, PeerSyncState};
 use fork_tree::ForkTree;
 use libp2p::PeerId;
 use log::{debug, trace, warn};
+use sc_network_common::sync::metrics::Metrics;
 use sp_blockchain::Error as ClientError;
 use sp_runtime::traits::{Block as BlockT, NumberFor, Zero};
 use std::{
@@ -54,15 +55,6 @@ pub(crate) struct ExtraRequests<B: BlockT> {
 	importing_requests: HashSet<ExtraRequest<B>>,
 	/// the name of this type of extra request (useful for logging.)
 	request_type_name: &'static str,
-}
-
-#[derive(Debug)]
-pub struct Metrics {
-	pub pending_requests: u32,
-	pub active_requests: u32,
-	pub importing_requests: u32,
-	pub failed_requests: u32,
-	_priv: (),
 }
 
 impl<B: BlockT> ExtraRequests<B> {
@@ -258,7 +250,6 @@ impl<B: BlockT> ExtraRequests<B> {
 			active_requests: self.active_requests.len().try_into().unwrap_or(std::u32::MAX),
 			failed_requests: self.failed_requests.len().try_into().unwrap_or(std::u32::MAX),
 			importing_requests: self.importing_requests.len().try_into().unwrap_or(std::u32::MAX),
-			_priv: (),
 		}
 	}
 }
