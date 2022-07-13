@@ -30,13 +30,13 @@ use std::sync::Arc;
 
 mod error;
 mod gossip;
-mod justification;
 mod keystore;
 mod metrics;
 mod round;
 mod worker;
 
 pub mod import;
+pub mod justification;
 pub mod notification;
 
 #[cfg(test)]
