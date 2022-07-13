@@ -58,7 +58,7 @@ use crate::{
 use gossip::{
 	FullCatchUpMessage, FullCommitMessage, GossipMessage, GossipValidator, PeerReport, VoteMessage,
 };
-use sc_network_common::service::NetworkSyncForkRequest;
+use sc_network_common::service::{NetworkBlock, NetworkSyncForkRequest};
 use sc_utils::mpsc::TracingUnboundedReceiver;
 use sp_finality_grandpa::{AuthorityId, AuthoritySignature, RoundNumber, SetId as SetIdNumber};
 
@@ -159,6 +159,7 @@ const TELEMETRY_VOTERS_LIMIT: usize = 10;
 /// well as the ability to set a fork sync request for a particular block.
 pub trait Network<Block: BlockT>:
 	NetworkSyncForkRequest<Block::Hash, NumberFor<Block>>
+	+ NetworkBlock<Block::Hash, NumberFor<Block>>
 	+ GossipNetwork<Block>
 	+ Clone
 	+ Send
@@ -166,12 +167,15 @@ pub trait Network<Block: BlockT>:
 {
 }
 
-impl<Block: BlockT, T> Network<Block> for T where
+impl<Block, T> Network<Block> for T
+where
+	Block: BlockT,
 	T: NetworkSyncForkRequest<Block::Hash, NumberFor<Block>>
+		+ NetworkBlock<Block::Hash, NumberFor<Block>>
 		+ GossipNetwork<Block>
 		+ Clone
 		+ Send
-		+ 'static
+		+ 'static,
 {
 }
 

@@ -100,7 +100,7 @@ mod out_events;
 mod tests;
 
 pub use libp2p::identity::{error::DecodingError, Keypair, PublicKey};
-use sc_network_common::service::{NetworkRequest, NetworkTransaction};
+use sc_network_common::service::{NetworkBlock, NetworkRequest, NetworkTransaction};
 
 /// Substrate network service. Handles network IO and manages connectivity.
 pub struct NetworkService<B: BlockT + 'static, H: ExHashT> {
@@ -736,21 +736,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		}
 	}
 
-	/// Make sure an important block is propagated to peers.
-	///
-	/// In chain-based consensus, we often need to make sure non-best forks are
-	/// at least temporarily synced. This function forces such an announcement.
-	pub fn announce_block(&self, hash: B::Hash, data: Option<Vec<u8>>) {
-		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::AnnounceBlock(hash, data));
-	}
-
-	/// Inform the network service about new best imported block.
-	pub fn new_best_block_imported(&self, hash: B::Hash, number: NumberFor<B>) {
-		let _ = self
-			.to_worker
-			.unbounded_send(ServiceToWorkerMsg::NewBestBlockImported(hash, number));
-	}
-
 	/// Utility function to extract `PeerId` from each `Multiaddr` for peer set updates.
 	///
 	/// Returns an `Err` if one of the given addresses is invalid or contains an
@@ -1181,6 +1166,22 @@ where
 
 	fn propagate_transaction(&self, hash: H) {
 		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::PropagateTransaction(hash));
+	}
+}
+
+impl<B, H> NetworkBlock<B::Hash, NumberFor<B>> for NetworkService<B, H>
+where
+	B: BlockT + 'static,
+	H: ExHashT,
+{
+	fn announce_block(&self, hash: B::Hash, data: Option<Vec<u8>>) {
+		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::AnnounceBlock(hash, data));
+	}
+
+	fn new_best_block_imported(&self, hash: B::Hash, number: NumberFor<B>) {
+		let _ = self
+			.to_worker
+			.unbounded_send(ServiceToWorkerMsg::NewBestBlockImported(hash, number));
 	}
 }
 

@@ -29,8 +29,8 @@ use sc_network::{config::Role, Multiaddr, PeerId, ReputationChange};
 use sc_network_common::{
 	protocol::event::{Event as NetworkEvent, ObservedRole},
 	service::{
-		NetworkEventStream, NetworkNotification, NetworkPeers, NotificationSender,
-		NotificationSenderError,
+		NetworkBlock, NetworkEventStream, NetworkNotification, NetworkPeers,
+		NetworkSyncForkRequest, NotificationSender, NotificationSenderError,
 	},
 };
 use sc_network_gossip::Validator;
@@ -155,15 +155,17 @@ impl NetworkNotification for TestNetwork {
 	}
 }
 
-impl sc_network_gossip::Network<Block> for TestNetwork {
-	fn add_set_reserved(&self, _: PeerId, _: Cow<'static, str>) {}
+impl NetworkBlock<Hash, NumberFor<Block>> for TestNetwork {
+	fn announce_block(&self, hash: Hash, _data: Option<Vec<u8>>) {
+		let _ = self.sender.unbounded_send(Event::Announce(hash));
+	}
 
-	fn announce(&self, block: Hash, _associated_data: Option<Vec<u8>>) {
-		let _ = self.sender.unbounded_send(Event::Announce(block));
+	fn new_best_block_imported(&self, _hash: Hash, _number: NumberFor<Block>) {
+		unimplemented!();
 	}
 }
 
-impl super::NetworkSyncForkRequest<Hash, NumberFor<Block>> for TestNetwork {
+impl NetworkSyncForkRequest<Hash, NumberFor<Block>> for TestNetwork {
 	fn set_sync_fork_request(&self, _peers: Vec<PeerId>, _hash: Hash, _number: NumberFor<Block>) {}
 }
 

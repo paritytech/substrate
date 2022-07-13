@@ -67,17 +67,21 @@ pub use self::{
 	validator::{DiscardAll, MessageIntent, ValidationResult, Validator, ValidatorContext},
 };
 
-use sc_network::{multiaddr, ExHashT, NetworkService, PeerId};
-use sc_network_common::service::{NetworkEventStream, NetworkNotification, NetworkPeers};
-use sp_runtime::traits::Block as BlockT;
-use std::{borrow::Cow, iter, sync::Arc};
+use sc_network::{multiaddr, PeerId};
+use sc_network_common::service::{
+	NetworkBlock, NetworkEventStream, NetworkNotification, NetworkPeers,
+};
+use sp_runtime::traits::{Block as BlockT, NumberFor};
+use std::{borrow::Cow, iter};
 
 mod bridge;
 mod state_machine;
 mod validator;
 
 /// Abstraction over a network.
-pub trait Network<B: BlockT>: NetworkPeers + NetworkEventStream + NetworkNotification {
+pub trait Network<B: BlockT>:
+	NetworkPeers + NetworkEventStream + NetworkNotification + NetworkBlock<B::Hash, NumberFor<B>>
+{
 	fn add_set_reserved(&self, who: PeerId, protocol: Cow<'static, str>) {
 		let addr =
 			iter::once(multiaddr::Protocol::P2p(who.into())).collect::<multiaddr::Multiaddr>();
@@ -86,16 +90,12 @@ pub trait Network<B: BlockT>: NetworkPeers + NetworkEventStream + NetworkNotific
 			log::error!(target: "gossip", "add_set_reserved failed: {}", err);
 		}
 	}
-
-	/// Notify everyone we're connected to that we have the given block.
-	///
-	/// Note: this method isn't strictly related to gossiping and should eventually be moved
-	/// somewhere else.
-	fn announce(&self, block: B::Hash, associated_data: Option<Vec<u8>>);
 }
 
-impl<B: BlockT, H: ExHashT> Network<B> for Arc<NetworkService<B, H>> {
-	fn announce(&self, block: B::Hash, associated_data: Option<Vec<u8>>) {
-		NetworkService::announce_block(self, block, associated_data)
-	}
+impl<T, B: BlockT> Network<B> for T where
+	T: NetworkPeers
+		+ NetworkEventStream
+		+ NetworkNotification
+		+ NetworkBlock<B::Hash, NumberFor<B>>
+{
 }

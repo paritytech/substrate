@@ -267,9 +267,9 @@ pub use sc_network_common::{
 	protocol::event::{DhtEvent, Event, ObservedRole},
 	request_responses::{IfDisconnected, RequestFailure},
 	service::{
-		KademliaKey, NetworkKVProvider, NetworkRequest, NetworkSigner, NetworkStateInfo,
-		NetworkStatus, NetworkStatusProvider, NetworkSyncForkRequest, NetworkTransaction,
-		Signature, SigningError,
+		KademliaKey, NetworkBlock, NetworkKVProvider, NetworkRequest, NetworkSigner,
+		NetworkStateInfo, NetworkStatus, NetworkStatusProvider, NetworkSyncForkRequest,
+		NetworkTransaction, Signature, SigningError,
 	},
 	sync::{
 		warp::{WarpSyncPhase, WarpSyncProgress},

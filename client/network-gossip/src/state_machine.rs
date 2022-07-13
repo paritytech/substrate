@@ -517,11 +517,14 @@ mod tests {
 	use sc_network_common::{
 		protocol::event::Event,
 		service::{
-			NetworkEventStream, NetworkNotification, NetworkPeers, NotificationSender,
-			NotificationSenderError,
+			NetworkBlock, NetworkEventStream, NetworkNotification, NetworkPeers,
+			NotificationSender, NotificationSenderError,
 		},
 	};
-	use sp_runtime::testing::{Block as RawBlock, ExtrinsicWrapper, H256};
+	use sp_runtime::{
+		testing::{Block as RawBlock, ExtrinsicWrapper, H256},
+		traits::NumberFor,
+	};
 	use std::{
 		borrow::Cow,
 		collections::HashSet,
@@ -680,10 +683,16 @@ mod tests {
 		}
 	}
 
-	impl<B: BlockT> Network<B> for NoOpNetwork {
-		fn add_set_reserved(&self, _: PeerId, _: Cow<'static, str>) {}
+	impl NetworkBlock<<Block as BlockT>::Hash, NumberFor<Block>> for NoOpNetwork {
+		fn announce_block(&self, _hash: <Block as BlockT>::Hash, _data: Option<Vec<u8>>) {
+			unimplemented!();
+		}
 
-		fn announce(&self, _: B::Hash, _: Option<Vec<u8>>) {
+		fn new_best_block_imported(
+			&self,
+			_hash: <Block as BlockT>::Hash,
+			_number: NumberFor<Block>,
+		) {
 			unimplemented!();
 		}
 	}

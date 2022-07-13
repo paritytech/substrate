@@ -26,7 +26,7 @@ use sc_network::{
 	config::{NetworkConfiguration, TransportConfig},
 	multiaddr, Multiaddr,
 };
-use sc_network_common::service::{NetworkPeers, NetworkStateInfo};
+use sc_network_common::service::{NetworkBlock, NetworkPeers, NetworkStateInfo};
 use sc_service::{
 	client::Client,
 	config::{BasePath, DatabaseSource, KeystoreConfig},

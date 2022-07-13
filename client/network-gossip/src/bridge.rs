@@ -163,7 +163,7 @@ impl<B: BlockT> GossipEngine<B> {
 	/// Note: this method isn't strictly related to gossiping and should eventually be moved
 	/// somewhere else.
 	pub fn announce(&self, block: B::Hash, associated_data: Option<Vec<u8>>) {
-		self.network.announce(block, associated_data);
+		self.network.announce_block(block, associated_data);
 	}
 }
 
@@ -319,11 +319,14 @@ mod tests {
 	use sc_network_common::{
 		protocol::event::ObservedRole,
 		service::{
-			NetworkEventStream, NetworkNotification, NetworkPeers, NotificationSender,
-			NotificationSenderError,
+			NetworkBlock, NetworkEventStream, NetworkNotification, NetworkPeers,
+			NotificationSender, NotificationSenderError,
 		},
 	};
-	use sp_runtime::{testing::H256, traits::Block as BlockT};
+	use sp_runtime::{
+		testing::H256,
+		traits::{Block as BlockT, NumberFor},
+	};
 	use std::{
 		borrow::Cow,
 		collections::HashSet,
@@ -444,10 +447,16 @@ mod tests {
 		}
 	}
 
-	impl<B: BlockT> Network<B> for TestNetwork {
-		fn add_set_reserved(&self, _: PeerId, _: Cow<'static, str>) {}
+	impl NetworkBlock<<Block as BlockT>::Hash, NumberFor<Block>> for TestNetwork {
+		fn announce_block(&self, _hash: <Block as BlockT>::Hash, _data: Option<Vec<u8>>) {
+			unimplemented!();
+		}
 
-		fn announce(&self, _: B::Hash, _: Option<Vec<u8>>) {
+		fn new_best_block_imported(
+			&self,
+			_hash: <Block as BlockT>::Hash,
+			_number: NumberFor<Block>,
+		) {
 			unimplemented!();
 		}
 	}

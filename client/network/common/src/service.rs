@@ -632,3 +632,29 @@ where
 		T::propagate_transaction(self, hash)
 	}
 }
+
+/// Provides ability to announce blocks to the network.
+pub trait NetworkBlock<BlockHash, BlockNumber> {
+	/// Make sure an important block is propagated to peers.
+	///
+	/// In chain-based consensus, we often need to make sure non-best forks are
+	/// at least temporarily synced. This function forces such an announcement.
+	fn announce_block(&self, hash: BlockHash, data: Option<Vec<u8>>);
+
+	/// Inform the network service about new best imported block.
+	fn new_best_block_imported(&self, hash: BlockHash, number: BlockNumber);
+}
+
+impl<T, BlockHash, BlockNumber> NetworkBlock<BlockHash, BlockNumber> for Arc<T>
+where
+	T: ?Sized,
+	T: NetworkBlock<BlockHash, BlockNumber>,
+{
+	fn announce_block(&self, hash: BlockHash, data: Option<Vec<u8>>) {
+		T::announce_block(self, hash, data)
+	}
+
+	fn new_best_block_imported(&self, hash: BlockHash, number: BlockNumber) {
+		T::new_best_block_imported(self, hash, number)
+	}
+}

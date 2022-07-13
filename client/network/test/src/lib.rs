@@ -58,7 +58,7 @@ use sc_network::{
 };
 pub use sc_network_common::config::ProtocolId;
 use sc_network_common::{
-	service::{NetworkStateInfo, NetworkSyncForkRequest},
+	service::{NetworkBlock, NetworkStateInfo, NetworkSyncForkRequest},
 	sync::warp::{AuthorityList, EncodedProof, SetId, VerificationResult, WarpSyncProvider},
 };
 use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
