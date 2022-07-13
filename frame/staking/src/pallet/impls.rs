@@ -32,7 +32,7 @@ use frame_support::{
 use frame_system::{pallet_prelude::BlockNumberFor, RawOrigin};
 use pallet_session::historical;
 use sp_runtime::{
-	traits::{Bounded, Convert, SaturatedConversion, Saturating, StaticLookup, Zero},
+	traits::{Bounded, Convert, SaturatedConversion, Saturating, StaticLookup, Zero, One},
 	Perbill,
 };
 use sp_staking::{
@@ -599,18 +599,16 @@ impl<T: Config> Pallet<T> {
 
 	/// Apply previously-unapplied slashes on the beginning of a new era, after a delay.
 	fn apply_unapplied_slashes(active_era: EraIndex) {
-		if <Self as Store>::UnappliedSlashes::contains_key(&active_era) {
-			let era_slashes = <Self as Store>::UnappliedSlashes::take(&active_era);
-			log!(
-				debug,
-				"found {} slashes scheduled to be executed in era {}",
-				active_era,
-				era_slashes.len()
-			);
-			for slash in era_slashes {
-				let slash_era = active_era.saturating_sub(T::SlashDeferDuration::get());
-				slashing::apply_slash::<T>(slash, slash_era);
-			}
+		let era_slashes = <Self as Store>::UnappliedSlashes::take(&active_era);
+		log!(
+			debug,
+			"found {} slashes scheduled to be executed in era {:?}",
+			era_slashes.len(),
+			active_era,
+		);
+		for slash in era_slashes {
+			let slash_era = active_era.saturating_sub(T::SlashDeferDuration::get());
+			slashing::apply_slash::<T>(slash, slash_era);
 		}
 	}
 
@@ -1266,7 +1264,7 @@ where
 						slash_era + slash_defer_duration + 1,
 					);
 					<Self as Store>::UnappliedSlashes::mutate(
-						slash_era + slash_defer_duration + 1,
+						slash_era.saturating_add(slash_defer_duration).saturating_add(One::one()),
 						move |for_later| for_later.push(unapplied),
 					);
 					add_db_reads_writes(1, 1);

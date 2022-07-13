@@ -2778,7 +2778,7 @@ fn deferred_slashes_are_deferred() {
 		assert_eq!(Balances::free_balance(11), 1000);
 		assert_eq!(Balances::free_balance(101), 2000);
 
-		let _ = staking_events_since_last_call();
+		System::reset_events();
 
 		// at the start of era 4, slashes from era 1 are processed,
 		// after being deferred for at least 2 full eras.
@@ -2814,7 +2814,7 @@ fn retroactive_deferred_slashes_two_eras_before_() {
 			1, // should be deferred for two full eras, and applied at the beginning of era 4.
 			DisableStrategy::Never,
 		);
-		let _ = staking_events_since_last_call();
+		System::reset_events();
 
 		mock::start_active_era(4);
 
@@ -2838,6 +2838,9 @@ fn retroactive_deferred_slashes_one_before() {
 		mock::start_active_era(1);
 		let exposure_11_at_era1 = Staking::eras_stakers(active_era(), 11);
 
+		mock::start_active_era(2);
+
+
 		mock::start_active_era(3);
 		on_offence_in_era(
 			&[OffenceDetails { offender: (11, exposure_11_at_era1), reporters: vec![] }],
@@ -2845,7 +2848,7 @@ fn retroactive_deferred_slashes_one_before() {
 			2, // should be deferred for two full eras, and applied at the beginning of era 5.
 			DisableStrategy::Never,
 		);
-		let _ = staking_events_since_last_call();
+		System::reset_events();
 
 		mock::start_active_era(4);
 		assert_eq!(
@@ -2989,7 +2992,7 @@ fn remove_deferred() {
 
 		// at the start of era 4, slashes from era 1 are processed,
 		// after being deferred for at least 2 full eras.
-		let _ = staking_events_since_last_call();
+		System::reset_events();
 		mock::start_active_era(4);
 
 		// the first slash for 10% was cancelled, but the 15% one
