@@ -20,7 +20,6 @@
 pub use self::gen_client::Client as NominationPoolsClient;
 use codec::Codec;
 use jsonrpc_derive::rpc;
-use pallet_nomination_pools_rpc_runtime_api::MemberStatus;
 pub use pallet_nomination_pools_rpc_runtime_api::NominationPoolsApi as NominationPoolsRuntimeApi;
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
