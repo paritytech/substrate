@@ -41,7 +41,7 @@ pub(crate) fn decode_and_verify_commitment<Block: BlockT>(
 }
 
 /// Verify the Beefy finality proof against the validator set at the block it was generated.
-pub(crate) fn verify_with_validator_set<Block: BlockT>(
+fn verify_with_validator_set<Block: BlockT>(
 	target_number: NumberFor<Block>,
 	validator_set: &ValidatorSet<AuthorityId>,
 	proof: &VersionedFinalityProof<NumberFor<Block>, Signature>,
@@ -86,16 +86,19 @@ pub(crate) mod tests {
 	use super::*;
 	use crate::{keystore::tests::Keyring, tests::make_beefy_ids};
 
-	pub fn new_signed_commitment(
+	pub(crate) fn new_signed_commitment(
 		block_num: NumberFor<Block>,
 		validator_set: &ValidatorSet<AuthorityId>,
+		keys: &[Keyring],
 	) -> BeefySignedCommitment<Block> {
 		let commitment = Commitment {
 			payload: Payload::new(known_payload_ids::MMR_ROOT_ID, vec![]),
 			block_number: block_num,
 			validator_set_id: validator_set.id(),
 		};
-		SignedCommitment { commitment, signatures: vec![None] }
+		let message = commitment.encode();
+		let signatures = keys.iter().map(|key| Some(key.sign(&message))).collect();
+		SignedCommitment { commitment, signatures }
 	}
 
 	#[test]
@@ -103,14 +106,72 @@ pub(crate) mod tests {
 		let keys = &[Keyring::Alice, Keyring::Bob, Keyring::Charlie];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
 
+		// build valid justification
 		let block_num = 42;
-		let commitment = new_signed_commitment(block_num, &validator_set);
+		let proof = new_signed_commitment(block_num, &validator_set, keys);
 
-		match verify_with_validator_set::<Block>(block_num, &validator_set, &commitment.into()) {
+		let good_proof = proof.clone().into();
+		// should verify successfully
+		verify_with_validator_set::<Block>(block_num, &validator_set, &good_proof).unwrap();
+
+		// wrong block number -> should fail verification
+		let good_proof = proof.clone().into();
+		match verify_with_validator_set::<Block>(block_num + 1, &validator_set, &good_proof) {
 			Err(ConsensusError::InvalidJustification) => (),
 			_ => assert!(false, "Expected Err(ConsensusError::InvalidJustification)"),
 		};
 
-		// TODO: more tests
+		// wrong validator set id -> should fail verification
+		let good_proof = proof.clone().into();
+		let other = ValidatorSet::new(make_beefy_ids(keys), 1).unwrap();
+		match verify_with_validator_set::<Block>(block_num, &other, &good_proof) {
+			Err(ConsensusError::InvalidJustification) => (),
+			_ => assert!(false, "Expected Err(ConsensusError::InvalidJustification)"),
+		};
+
+		// wrong signatures length -> should fail verification
+		let mut bad_proof = proof.clone();
+		// change length of signatures
+		bad_proof.signatures.pop().flatten().unwrap();
+		match verify_with_validator_set::<Block>(block_num + 1, &validator_set, &bad_proof.into()) {
+			Err(ConsensusError::InvalidJustification) => (),
+			_ => assert!(false, "Expected Err(ConsensusError::InvalidJustification)"),
+		};
+
+		// not enough signatures -> should fail verification
+		let mut bad_proof = proof.clone();
+		// remove a signature (but same length)
+		*bad_proof.signatures.first_mut().unwrap() = None;
+		match verify_with_validator_set::<Block>(block_num + 1, &validator_set, &bad_proof.into()) {
+			Err(ConsensusError::InvalidJustification) => (),
+			_ => assert!(false, "Expected Err(ConsensusError::InvalidJustification)"),
+		};
+
+		// not enough _correct_ signatures -> should fail verification
+		let mut bad_proof = proof.clone();
+		// change a signature to a different key
+		*bad_proof.signatures.first_mut().unwrap() =
+			Some(Keyring::Dave.sign(&proof.commitment.encode()));
+		match verify_with_validator_set::<Block>(block_num + 1, &validator_set, &bad_proof.into()) {
+			Err(ConsensusError::InvalidJustification) => (),
+			_ => assert!(false, "Expected Err(ConsensusError::InvalidJustification)"),
+		};
+	}
+
+	#[test]
+	fn should_decode_and_verify_commitment() {
+		let keys = &[Keyring::Alice, Keyring::Bob];
+		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
+		let block_num = 1;
+
+		// build valid justification
+		let proof = new_signed_commitment(block_num, &validator_set, keys);
+		let versioned_proof: VersionedFinalityProof<NumberFor<Block>, Signature> = proof.into();
+		let encoded = versioned_proof.encode();
+
+		// should successfully decode and verify
+		let verified =
+			decode_and_verify_commitment::<Block>(&encoded, block_num, &validator_set).unwrap();
+		assert_eq!(verified, versioned_proof);
 	}
 }
