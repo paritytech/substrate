@@ -70,7 +70,8 @@ where
 				Ok(r) => Ok(r),
 				Err(_) => Err(Error {
 					code: jsonrpc_core::ErrorCode::ServerError(2),
-					message: "An overflow occured when calculating the pending rewards.".to_string(),
+					message: "An overflow occured when calculating the pending rewards."
+						.to_string(),
 					data: None,
 				}),
 			},
