@@ -186,20 +186,53 @@ skip-if-draft:
      - echo "pipeline source is ${CI_PIPELINE_SOURCE}"
      - ./scripts/ci/gitlab/skip_if_draft.sh
 
-include:
-  # check jobs
-  - scripts/ci/gitlab/pipeline/check.yml
-  # tests jobs
-  - scripts/ci/gitlab/pipeline/test.yml
-  # build jobs
-  - scripts/ci/gitlab/pipeline/build.yml
-  # publish jobs
-  - scripts/ci/gitlab/pipeline/publish.yml
+# include:
+#   # check jobs
+#   - scripts/ci/gitlab/pipeline/check.yml
+#   # tests jobs
+#   - scripts/ci/gitlab/pipeline/test.yml
+#   # build jobs
+#   - scripts/ci/gitlab/pipeline/build.yml
+#   # publish jobs
+#   - scripts/ci/gitlab/pipeline/publish.yml
 
+cargo-check-benches:
+  stage:                           test
+  variables:
+    RUSTY_CACHIER_TOOLCHAIN:       nightly
+    CI_JOB_NAME:                   cargo-check-benches
+  extends:
+    - .docker-env
+    - .test-refs
+    - .collect-artifacts
+  before_script:
+    # perform rusty-cachier operations before any further modifications to the git repo to make cargo feel cheated not so much
+    - !reference [.rust-info-script, script]
+    - !reference [.rusty-cachier, before_script]
+    # merges in the master branch on PRs
+    - if [ $CI_COMMIT_REF_NAME != "master" ]; then
+        git fetch origin +master:master;
+        git fetch origin +$CI_COMMIT_REF_NAME:$CI_COMMIT_REF_NAME;
+        git checkout master;
+        git config user.email "ci@gitlab.parity.io";
+        git merge $CI_COMMIT_REF_NAME --verbose --no-edit;
+      fi
+  parallel: 3
+  script:
+    - rusty-cachier snapshot create
+    - mkdir -p ./artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA
+    - if [ ${CI_NODE_INDEX} == 1 ]; then SKIP_WASM_BUILD=1 time cargo +nightly check --benches --all; fi
+    - if [ ${CI_NODE_INDEX} == 2 ]; then cargo run --release -p node-bench -- ::node::import::native::sr25519::transfer_keep_alive::paritydb::small --json
+      | tee ./artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA/::node::import::native::sr25519::transfer_keep_alive::paritydb::small.json; fi
+    - if [ ${CI_NODE_INDEX} == 3 ]; then cargo run --release -p node-bench -- ::trie::read::small --json
+      | tee ./artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA/::trie::read::small.json; fi
+    - if [ ${CI_NODE_INDEX} == 1 ]; then rusty-cachier cache upload; fi
+  tags:
+    - linux-docker-benches
 
 #### stage:                        deploy
 
-deploy-prometheus-alerting-rules:
+.deploy-prometheus-alerting-rules:
   stage:                           deploy
   needs:
     - job:                         test-prometheus-alerting-rules
