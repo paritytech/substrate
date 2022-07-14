@@ -79,6 +79,7 @@ impl Contains<Call> for BaseFilter {
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(1_000_000);
+	pub const DemocracyId: LockIdentifier = *b"democrac";
 }
 impl frame_system::Config for Test {
 	type BaseCallFilter = BaseFilter;
@@ -137,6 +138,7 @@ impl pallet_balances::Config for Test {
 parameter_types! {
 	pub static PreimageByteDeposit: u64 = 0;
 	pub static InstantAllowed: bool = false;
+	pub static RootOrigin: Origin = frame_system::RawOrigin::Root.into();
 }
 ord_parameter_types! {
 	pub const One: u64 = 1;
@@ -184,6 +186,10 @@ impl Config for Test {
 	type PalletsOrigin = OriginCaller;
 	type WeightInfo = ();
 	type MaxProposals = ConstU32<100>;
+	type EnsureRoot = EnsureRoot<u64>;
+	type DemocracyId = DemocracyId;
+	type Origin = Origin;
+	type ProtocolRoot = RootOrigin;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
