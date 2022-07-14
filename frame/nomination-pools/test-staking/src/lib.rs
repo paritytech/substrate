@@ -26,7 +26,6 @@ use pallet_nomination_pools::{
 	PoolState,
 };
 use pallet_staking::{CurrentEra, Event as StakingEvent, Payee, RewardDestination};
-use sp_runtime::traits::Zero;
 
 #[test]
 fn pool_lifecycle_e2e() {
@@ -72,7 +71,7 @@ fn pool_lifecycle_e2e() {
 		// depositor cannot unbond yet.
 		assert_noop!(
 			Pools::unbond(Origin::signed(10), 10, 50),
-			PoolsError::<Runtime>::MinimumBondNotMet,
+			PoolsError::<Runtime>::NotOnlyPoolMember,
 		);
 
 		// now the members want to unbond.
@@ -103,7 +102,7 @@ fn pool_lifecycle_e2e() {
 		// depositor cannot still unbond
 		assert_noop!(
 			Pools::unbond(Origin::signed(10), 10, 50),
-			PoolsError::<Runtime>::MinimumBondNotMet,
+			PoolsError::<Runtime>::NotOnlyPoolMember,
 		);
 
 		for e in 1..BondingDuration::get() {
@@ -120,7 +119,7 @@ fn pool_lifecycle_e2e() {
 		// depositor cannot still unbond
 		assert_noop!(
 			Pools::unbond(Origin::signed(10), 10, 50),
-			PoolsError::<Runtime>::MinimumBondNotMet,
+			PoolsError::<Runtime>::NotOnlyPoolMember,
 		);
 
 		// but members can now withdraw.
@@ -297,7 +296,7 @@ fn pool_slash_e2e() {
 			PoolMember {
 				pool_id: 1,
 				points: 0,
-				last_recorded_reward_counter: Zero::zero(),
+				reward_pool_total_earnings: 0,
 				// the 10 points unlocked just now correspond to 5 points in the unbond pool.
 				unbonding_eras: bounded_btree_map!(5 => 10, 6 => 5)
 			}
@@ -352,7 +351,7 @@ fn pool_slash_e2e() {
 			PoolMember {
 				pool_id: 1,
 				points: 0,
-				last_recorded_reward_counter: Zero::zero(),
+				reward_pool_total_earnings: 0,
 				unbonding_eras: bounded_btree_map!(4 => 10, 5 => 10, 9 => 10)
 			}
 		);

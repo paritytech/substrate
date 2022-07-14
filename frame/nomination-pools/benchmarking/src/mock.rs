@@ -17,10 +17,7 @@
 
 use frame_election_provider_support::VoteWeight;
 use frame_support::{pallet_prelude::*, parameter_types, traits::ConstU64, PalletId};
-use sp_runtime::{
-	traits::{Convert, IdentityLookup},
-	FixedU128,
-};
+use sp_runtime::traits::{Convert, IdentityLookup};
 
 type AccountId = u128;
 type AccountIndex = u32;
@@ -147,15 +144,13 @@ impl Convert<sp_core::U256, Balance> for U256ToBalance {
 parameter_types! {
 	pub static PostUnbondingPoolsWindow: u32 = 10;
 	pub const PoolsPalletId: PalletId = PalletId(*b"py/nopls");
-	pub const MaxPointsToBalance: u8 = 10;
+	pub const MinPointsToBalance: u32 = 10;
 }
 
 impl pallet_nomination_pools::Config for Runtime {
 	type Event = Event;
 	type WeightInfo = ();
 	type Currency = Balances;
-	type CurrencyBalance = Balance;
-	type RewardCounter = FixedU128;
 	type BalanceToU256 = BalanceToU256;
 	type U256ToBalance = U256ToBalance;
 	type StakingInterface = Staking;
@@ -163,7 +158,7 @@ impl pallet_nomination_pools::Config for Runtime {
 	type MaxMetadataLen = ConstU32<256>;
 	type MaxUnbonding = ConstU32<8>;
 	type PalletId = PoolsPalletId;
-	type MaxPointsToBalance = MaxPointsToBalance;
+	type MinPointsToBalance = MinPointsToBalance;
 }
 
 impl crate::Config for Runtime {}

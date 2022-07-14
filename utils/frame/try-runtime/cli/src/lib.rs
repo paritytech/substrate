@@ -472,10 +472,9 @@ pub enum State {
 		#[clap(short, long)]
 		snapshot_path: Option<PathBuf>,
 
-		/// A pallet to scrape. Can be provided multiple times. If empty, entire chain state will
-		/// be scraped.
+		/// The pallets to scrape. If empty, entire chain state will be scraped.
 		#[clap(short, long, multiple_values = true)]
-		pallet: Vec<String>,
+		pallets: Vec<String>,
 
 		/// Fetch the child-keys as well.
 		///
@@ -499,7 +498,7 @@ impl State {
 				Builder::<Block>::new().mode(Mode::Offline(OfflineConfig {
 					state_snapshot: SnapshotConfig::new(snapshot_path),
 				})),
-			State::Live { snapshot_path, pallet, uri, at, child_tree } => {
+			State::Live { snapshot_path, pallets, uri, at, child_tree } => {
 				let at = match at {
 					Some(at_str) => Some(hash_of::<Block>(at_str)?),
 					None => None,
@@ -508,7 +507,7 @@ impl State {
 					.mode(Mode::Online(OnlineConfig {
 						transport: uri.to_owned().into(),
 						state_snapshot: snapshot_path.as_ref().map(SnapshotConfig::new),
-						pallets: pallet.clone(),
+						pallets: pallets.clone(),
 						scrape_children: true,
 						at,
 					}))
