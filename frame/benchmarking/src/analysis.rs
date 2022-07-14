@@ -280,8 +280,11 @@ impl Analysis {
 		let mut ys: Vec<f64> = Vec::new();
 		let mut xs: Vec<f64> = Vec::new();
 		for result in results {
-			xs.extend(result.0.iter().map(|value| *value as f64));
-			ys.push(result.1[0] as f64);
+			let x: Vec<f64> = result.0.iter().map(|value| *value as f64).collect();
+			for y in result.1 {
+				xs.extend(x.iter().copied());
+				ys.push(y as f64);
+			}
 		}
 
 		let (intercept, slopes, errors) = linear_regression(xs, ys, r[0].components.len())?;
@@ -628,5 +631,20 @@ mod tests {
 		let writes = Analysis::min_squares_iqr(&data, BenchmarkSelector::Writes).unwrap();
 		assert_eq!(writes.base, 2);
 		assert_eq!(writes.slopes, vec![0, 2]);
+	}
+
+	#[test]
+	fn analysis_min_squares_iqr_uses_multiple_samples_for_same_parameters() {
+		let data = vec![
+			benchmark_result(vec![(BenchmarkParameter::n, 0)], 2_000_000, 0, 0, 0),
+			benchmark_result(vec![(BenchmarkParameter::n, 0)], 4_000_000, 0, 0, 0),
+			benchmark_result(vec![(BenchmarkParameter::n, 1)], 4_000_000, 0, 0, 0),
+			benchmark_result(vec![(BenchmarkParameter::n, 1)], 8_000_000, 0, 0, 0),
+		];
+
+		let extrinsic_time =
+			Analysis::min_squares_iqr(&data, BenchmarkSelector::ExtrinsicTime).unwrap();
+		assert_eq!(extrinsic_time.base, 2000000);
+		assert_eq!(extrinsic_time.slopes, vec![4000000]);
 	}
 }
