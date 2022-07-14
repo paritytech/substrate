@@ -98,9 +98,9 @@ cargo-check-benches:
     - rusty-cachier snapshot create
     - mkdir -p ./artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA
     # this job is executed in parallel on two runners
+    - echo "___Running benchmarks___";
     - case ${CI_NODE_INDEX} in
         1)
-          echo "___Running benchmarks___";
           SKIP_WASM_BUILD=1 time cargo +nightly check --benches --all;
           cargo run --release -p node-bench -- ::trie::read::small --json
             | tee ./artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA/::trie::read::small.json;
@@ -108,7 +108,6 @@ cargo-check-benches:
           rusty-cachier cache upload
           ;;
         2)
-          echo "___Running benchmarks___";
           cargo run --release -p node-bench -- ::node::import::native::sr25519::transfer_keep_alive::paritydb::small --json
             | tee ./artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA/::node::import::native::sr25519::transfer_keep_alive::paritydb::small.json
           ;;
