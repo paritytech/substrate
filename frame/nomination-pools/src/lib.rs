@@ -922,7 +922,7 @@ pub struct RewardPool<T: Config> {
 	///
 	/// This is updated ONLY when the points in the bonded pool change, which means `join`,
 	/// `bond_extra` and `unbond`, all of which is done through `update_recorded`.
-	pub last_recorded_reward_counter: T::RewardCounter,
+	last_recorded_reward_counter: T::RewardCounter,
 	/// The last recorded total payouts of the reward pool.
 	///
 	/// Payouts is essentially income of the pool.
@@ -935,7 +935,7 @@ pub struct RewardPool<T: Config> {
 
 impl<T: Config> RewardPool<T> {
 	/// Getter for [`RewardPool::last_recorded_reward_counter`].
-	pub fn last_recorded_reward_counter(&self) -> T::RewardCounter {
+	fn last_recorded_reward_counter(&self) -> T::RewardCounter {
 		self.last_recorded_reward_counter
 	}
 
