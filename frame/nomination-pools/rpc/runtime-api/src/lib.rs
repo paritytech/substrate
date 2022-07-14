@@ -27,6 +27,6 @@ sp_api::decl_runtime_apis! {
 		where AccountId: Codec, Balance: Codec
 	{
 		/// Returns the pending rewards for the given member.
-		fn pending_rewards(member: AccountId) -> Result<Balance>;
+		fn pending_rewards(member: AccountId) -> Balance;
 	}
 }
