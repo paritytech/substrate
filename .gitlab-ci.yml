@@ -263,11 +263,15 @@ test-wasmer-sandbox:
     - .docker-env
     - .test-refs
     # - .test-refs-wasmer-sandbox
+  variables:
+    CI_JOB_NAME:                   "test-wasmer-sandbox"
+  parallel: 3
   script:
     - rusty-cachier snapshot create
     - cargo install cargo-nextest
-    - time cargo nextest run --release --features runtime-benchmarks,wasmer-sandbox,disable-ui-tests
-    - rusty-cachier cache upload
+    - echo "Node index - ${CI_NODE_INDEX}. Total amount - ${CI_NODE_TOTAL}"
+    - time cargo nextest run --release --features runtime-benchmarks,wasmer-sandbox,disable-ui-tests --partition count:${CI_NODE_INDEX}/${CI_NODE_TOTAL}
+    - if [ ${CI_NODE_INDEX} == 1 ]; then rusty-cachier cache upload; fi
 
 #### stage:                        deploy
 
