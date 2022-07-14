@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! RPC interface for the transaction payment pallet.
+//! RPC interface for the nomination-pools pallet.
 
 pub use self::gen_client::Client as NominationPoolsClient;
 use codec::Codec;
