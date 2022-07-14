@@ -696,7 +696,7 @@ where
 				// this one, and handle them both here.
 				justif = block_import_justif.next() => {
 					if let Some(justif) = justif {
-						// block import justifications have already been verified to be valid
+						// Block import justifications have already been verified to be valid
 						// by `BeefyBlockImport`.
 						if let Err(err) = self.triage_incoming_justif(justif) {
 							debug!(target: "beefy", "🥩 {}", err);
@@ -707,6 +707,7 @@ where
 				},
 				vote = votes.next() => {
 					if let Some(vote) = vote {
+						// Votes have already been verified to be valid by the gossip validator.
 						if let Err(err) = self.triage_incoming_vote(vote) {
 							debug!(target: "beefy", "🥩 {}", err);
 						}

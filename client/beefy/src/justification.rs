@@ -55,21 +55,62 @@ pub(crate) fn verify_with_validator_set<Block: BlockT>(
 				return Err(ConsensusError::InvalidJustification)
 			}
 
-			// Arrangement of signatures in the commitment should be in the same order as validators
-			// for that set
+			// Arrangement of signatures in the commitment should be in the same order
+			// as validators for that set.
 			let message = signed_commitment.commitment.encode();
-			if validator_set
+			let valid_signatures = validator_set
 				.validators()
 				.into_iter()
 				.zip(signed_commitment.signatures.iter())
-				.filter(|(.., sig)| sig.is_some())
-				.all(|(id, signature)| {
-					BeefyKeystore::verify(id, signature.as_ref().unwrap(), &message[..])
-				}) {
+				.filter(|(id, signature)| {
+					signature
+						.as_ref()
+						.map(|sig| BeefyKeystore::verify(id, sig, &message[..]))
+						.unwrap_or(false)
+				})
+				.count();
+			if valid_signatures >= crate::round::threshold(validator_set.len()) {
 				Ok(())
 			} else {
 				Err(ConsensusError::InvalidJustification)
 			}
 		},
+	}
+}
+
+#[cfg(test)]
+pub(crate) mod tests {
+	use beefy_primitives::{known_payload_ids, Commitment, Payload, SignedCommitment};
+	use substrate_test_runtime_client::runtime::Block;
+
+	use super::*;
+	use crate::{keystore::tests::Keyring, tests::make_beefy_ids};
+
+	pub fn new_signed_commitment(
+		block_num: NumberFor<Block>,
+		validator_set: &ValidatorSet<AuthorityId>,
+	) -> BeefySignedCommitment<Block> {
+		let commitment = Commitment {
+			payload: Payload::new(known_payload_ids::MMR_ROOT_ID, vec![]),
+			block_number: block_num,
+			validator_set_id: validator_set.id(),
+		};
+		SignedCommitment { commitment, signatures: vec![None] }
+	}
+
+	#[test]
+	fn should_verify_with_validator_set() {
+		let keys = &[Keyring::Alice, Keyring::Bob, Keyring::Charlie];
+		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
+
+		let block_num = 42;
+		let commitment = new_signed_commitment(block_num, &validator_set);
+
+		match verify_with_validator_set::<Block>(block_num, &validator_set, &commitment.into()) {
+			Err(ConsensusError::InvalidJustification) => (),
+			_ => assert!(false, "Expected Err(ConsensusError::InvalidJustification)"),
+		};
+
+		// TODO: more tests
 	}
 }

@@ -59,7 +59,8 @@ impl RoundTracker {
 	}
 }
 
-fn threshold(authorities: usize) -> usize {
+/// Minimum size of `authorities` subset that produced valid signatures for a block to finalize.
+pub fn threshold(authorities: usize) -> usize {
 	let faulty = authorities.saturating_sub(1) / 3;
 	authorities - faulty
 }
