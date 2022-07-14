@@ -233,6 +233,8 @@ cargo-check-benches:
           cargo run --release -p node-bench -- ::node::import::native::sr25519::transfer_keep_alive::paritydb::small --json
           | tee ./artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA/::node::import::native::sr25519::transfer_keep_alive::paritydb::small.json
           ;;
+          ;
+        esac
   tags:
     - linux-docker-benches
 
