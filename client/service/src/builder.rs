@@ -38,12 +38,16 @@ use sc_consensus::import_queue::ImportQueue;
 use sc_executor::RuntimeVersionOf;
 use sc_keystore::LocalKeystore;
 use sc_network::{
-	block_request_handler::{self, BlockRequestHandler},
 	config::{Role, SyncMode},
-	light_client_requests::{self, handler::LightClientRequestHandler},
-	state_request_handler::{self, StateRequestHandler},
-	warp_request_handler::{self, RequestHandler as WarpSyncRequestHandler, WarpSyncProvider},
 	NetworkService,
+};
+use sc_network_common::sync::warp::WarpSyncProvider;
+use sc_network_light::light_client_requests::{self, handler::LightClientRequestHandler};
+use sc_network_sync::{
+	block_request_handler::{self, BlockRequestHandler},
+	state_request_handler::{self, StateRequestHandler},
+	warp_request_handler::{self, RequestHandler as WarpSyncRequestHandler},
+	ChainSync,
 };
 use sc_rpc::{
 	author::AuthorApiServer,
@@ -801,6 +805,7 @@ where
 		}
 	};
 
+	let max_parallel_downloads = config.network.max_parallel_downloads;
 	let network_params = sc_network::config::Params {
 		role: config.role.clone(),
 		executor: {
@@ -818,9 +823,20 @@ where
 		network_config: config.network.clone(),
 		chain: client.clone(),
 		transaction_pool: transaction_pool_adapter as _,
-		import_queue: Box::new(import_queue),
 		protocol_id,
-		block_announce_validator,
+		import_queue: Box::new(import_queue),
+		create_chain_sync: Box::new(
+			move |sync_mode, chain, warp_sync_provider| match ChainSync::new(
+				sync_mode,
+				chain,
+				block_announce_validator,
+				max_parallel_downloads,
+				warp_sync_provider,
+			) {
+				Ok(chain_sync) => Ok(Box::new(chain_sync)),
+				Err(error) => Err(Box::new(error).into()),
+			},
+		),
 		metrics_registry: config.prometheus_config.as_ref().map(|config| config.registry.clone()),
 		block_request_protocol_config,
 		state_request_protocol_config,

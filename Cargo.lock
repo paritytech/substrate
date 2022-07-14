@@ -5505,6 +5505,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "hex-literal",
+ "impl-trait-for-tuples",
  "log",
  "pallet-balances",
  "pallet-contracts-primitives",
@@ -8430,6 +8431,7 @@ dependencies = [
  "sc-consensus",
  "sc-keystore",
  "sc-network",
+ "sc-network-common",
  "sc-network-gossip",
  "sc-network-test",
  "sc-telemetry",
@@ -8554,7 +8556,6 @@ dependencies = [
  "sp-blockchain",
  "sp-consensus",
  "sp-core",
- "sp-finality-grandpa",
  "sp-runtime",
  "sp-test-primitives",
  "sp-tracing",
@@ -8572,12 +8573,17 @@ dependencies = [
 name = "sc-network-common"
 version = "0.10.0-dev"
 dependencies = [
+ "bitflags",
  "futures",
  "libp2p",
  "parity-scale-codec",
  "prost-build",
+ "sc-consensus",
  "sc-peerset",
  "smallvec",
+ "sp-consensus",
+ "sp-finality-grandpa",
+ "sp-runtime",
 ]
 
 [[package]]
@@ -8622,8 +8628,6 @@ dependencies = [
 name = "sc-network-sync"
 version = "0.10.0-dev"
 dependencies = [
- "bitflags",
- "either",
  "fork-tree",
  "futures",
  "libp2p",
@@ -8668,6 +8672,8 @@ dependencies = [
  "sc-consensus",
  "sc-network",
  "sc-network-common",
+ "sc-network-light",
+ "sc-network-sync",
  "sc-service",
  "sp-blockchain",
  "sp-consensus",
@@ -8850,6 +8856,8 @@ dependencies = [
  "sc-keystore",
  "sc-network",
  "sc-network-common",
+ "sc-network-light",
+ "sc-network-sync",
  "sc-offchain",
  "sc-rpc",
  "sc-rpc-server",
