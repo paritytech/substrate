@@ -352,8 +352,8 @@ fn should_verify_batch_proofs() {
 
 	use itertools::Itertools;
 	let n = 13;
-	// generate all possible 2-leaf combinations for n = 13
-	let leaves_set: Vec<Vec<u64>> = (0..n).into_iter().combinations(2).collect();
+	// generate powerset (skipping empty set) of all possible leaf combinations
+	let leaves_set: Vec<Vec<u64>> = (0..n).into_iter().powerset().skip(1).collect();
 
 	leaves_set.iter().for_each(|leaves_subset| {
 		// Start off with chain initialisation and storing indexing data off-chain
