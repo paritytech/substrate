@@ -2061,10 +2061,10 @@ mod unbond {
 			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().unbonding_points(), 5);
 
 			// cannot go to below 10:
-			assert_noop!(Pools::unbond(Origin::signed(10), 10, 15), Error::<T>::MinimumBondNotMet);
+			assert_noop!(Pools::unbond(Origin::signed(10), 10, 10), Error::<T>::MinimumBondNotMet);
 
 			// cannot go to 0 either.
-			assert_noop!(Pools::unbond(Origin::signed(10), 10, 20), Error::<T>::MinimumBondNotMet);
+			assert_noop!(Pools::unbond(Origin::signed(10), 10, 15), Error::<T>::MinimumBondNotMet);
 		})
 	}
 
