@@ -136,7 +136,7 @@ where
 		let window_size =
 			<T as frame_system::Config>::BlockHashCount::get().unique_saturated_into();
 		if leaves >= window_size {
-			// Move the rolling window towards the end of  `block_num->hash` mappings available
+			// Move the rolling window towards the end of `block_num->hash` mappings available
 			// in the runtime: we "canonicalize" the leaf at the end,
 			let to_canon_leaf = leaves.saturating_sub(window_size);
 			// and all the nodes added by that leaf.

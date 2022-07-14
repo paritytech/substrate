@@ -5870,6 +5870,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "hex-literal",
+ "itertools",
  "parity-scale-codec",
  "scale-info",
  "sp-core",

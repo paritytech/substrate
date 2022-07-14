@@ -347,27 +347,40 @@ fn should_verify() {
 }
 
 #[test]
-fn should_verify_batch_proof() {
+fn should_verify_batch_proofs() {
 	let _ = env_logger::try_init();
 
-	// Start off with chain initialisation and storing indexing data off-chain
-	// (MMR Leafs)
-	let mut ext = new_test_ext();
-	ext.execute_with(|| add_blocks(7));
-	ext.persist_offchain_overlay();
+	use itertools::Itertools;
+	let n = 13;
+	// generate all possible 2-leaf combinations for n = 13
+	let leaves_set: Vec<Vec<u64>> = (0..n).into_iter().combinations(2).collect();
 
-	// Try to generate proof now. This requires the offchain extensions to be present
-	// to retrieve full leaf data.
-	register_offchain_ext(&mut ext);
-	let (leaves, proof) = ext.execute_with(|| {
-		// when
-		crate::Pallet::<Test>::generate_batch_proof(vec![0, 4, 5]).unwrap()
-	});
+	leaves_set.iter().for_each(|leaves_subset| {
+		// Start off with chain initialisation and storing indexing data off-chain
+		// (MMR Leafs)
+		let mut ext = new_test_ext();
+		ext.execute_with(|| add_blocks(n as usize));
+		ext.persist_offchain_overlay();
 
-	ext.execute_with(|| {
-		add_blocks(7);
-		// then
-		assert_eq!(crate::Pallet::<Test>::verify_leaves(leaves, proof), Ok(()));
+		// Try to generate proof now. This requires the offchain extensions to be present
+		// to retrieve full leaf data.
+		register_offchain_ext(&mut ext);
+		let (leaves, proof) = ext.execute_with(|| {
+			crate::Pallet::<Test>::generate_batch_proof(leaves_subset.to_vec()).unwrap()
+		});
+
+		ext.execute_with(|| {
+			add_blocks(7);
+			// then
+			// test should only fail if two leaves' closest mutual ancestor is of height 4 or more
+			if leaves_subset.iter().any(|leaf| *leaf >= 8 && *leaf < 12) &&
+				leaves_subset.iter().any(|leaf| *leaf < 8) {
+					assert_eq!(crate::Pallet::<Test>::verify_leaves(leaves, proof), Err(Error::Verify));
+				}
+			else {
+				assert_eq!(crate::Pallet::<Test>::verify_leaves(leaves, proof), Ok(()));
+			}
+		})
 	});
 }
 
