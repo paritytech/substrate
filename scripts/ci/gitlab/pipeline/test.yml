@@ -117,7 +117,7 @@ node-bench-regression-guard:
     # this is a DAG
     - job:                         cargo-check-benches
       artifacts:                   true
-    # this does not like a DAG, just polls the artifact
+    # polls artifact from master to compare with current result
     - project:                     $CI_PROJECT_PATH
       job:                         cargo-check-benches
       ref:                         master
