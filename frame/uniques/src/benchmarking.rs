@@ -412,9 +412,9 @@ benchmarks_instance_pallet! {
 	verify {
 		assert_last_event::<T, I>(Event::NextCollectionIdIncremented {
 			next_id: T::CollectionId::from_u8(1).unwrap()
-    }.into());
+	}.into());
   }
-  
+
 	set_price {
 		let (collection, caller, _) = create_collection::<T, I>();
 		let (item, ..) = mint_item::<T, I>(0);
@@ -448,7 +448,7 @@ benchmarks_instance_pallet! {
 			price,
 			seller,
 			buyer,
-    	}.into());
+		}.into());
 	}
 
 	impl_benchmark_test_suite!(Uniques, crate::mock::new_test_ext(), crate::mock::Test);

@@ -723,7 +723,7 @@ fn try_increment_id_works() {
 		assert_ok!(Uniques::try_increment_id(Origin::signed(2)));
 		// should fail because the next `CollectionId` is not being used.
 		assert_noop!(Uniques::try_increment_id(Origin::signed(2)), Error::<Test>::NextIdNotUsed);
-  	});
+	});
 }
 
 #[test]
@@ -899,5 +899,5 @@ fn buy_item_should_work() {
 			});
 			assert_noop!(buy_item_call.dispatch(Origin::signed(user_2)), Error::<Test>::Frozen);
 		}
-  	});
+	});
 }
