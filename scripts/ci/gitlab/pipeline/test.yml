@@ -214,6 +214,7 @@ test-linux-stable:
     # Ensure we run the UI tests.
     RUN_UI_TESTS:                  1
   script:
+    - exit 1
     - rusty-cachier snapshot create
     # TODO: add to paritytech/ci-linux image
     - time cargo install cargo-nextest
