@@ -207,8 +207,8 @@ cargo-check-benches:
     - .collect-artifacts
   before_script:
     # perform rusty-cachier operations before any further modifications to the git repo to make cargo feel cheated not so much
-    # - !reference [.rust-info-script, script]
-    # - !reference [.rusty-cachier, before_script]
+    - !reference [.rust-info-script, script]
+    - !reference [.rusty-cachier, before_script]
     # merges in the master branch on PRs
     - if [ $CI_COMMIT_REF_NAME != "master" ]; then
         git fetch origin +master:master;
@@ -217,49 +217,25 @@ cargo-check-benches:
         git config user.email "ci@gitlab.parity.io";
         git merge $CI_COMMIT_REF_NAME --verbose --no-edit;
       fi
-  # parallel: 2
+  parallel: 2
   script:
-    # - rusty-cachier snapshot create
+    - rusty-cachier snapshot create
     - cargo install cargo-nextest
     - mkdir -p ./artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA
-    - time cargo run --release -p node-bench -- ::trie::read::small --json
-    - time cargo run nextest --release -p node-bench --bench ::trie::read::small --json
-    # - if [ ${CI_NODE_INDEX} == 1 ]; then SKIP_WASM_BUILD=1 time cargo +nightly check --benches --all; fi
-    # - if [ ${CI_NODE_INDEX} == 1 ]; then cargo run --release -p node-bench -- ::trie::read::small --json
-    #   | tee ./artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA/::trie::read::small.json; fi
-    # - if [ ${CI_NODE_INDEX} == 2 ]; then cargo run --release -p node-bench -- ::node::import::native::sr25519::transfer_keep_alive::paritydb::small --json
-    #   | tee ./artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA/::node::import::native::sr25519::transfer_keep_alive::paritydb::small.json; fi
-    # - if [ ${CI_NODE_INDEX} == 1 ]; then rusty-cachier cache upload; fi
-    - rusty-cachier cache upload
+    - case ${CI_NODE_INDEX} in;
+        1)
+          SKIP_WASM_BUILD=1 time cargo +nightly check --benches --all;
+          cargo run --release -p node-bench -- ::trie::read::small --json
+          | tee ./artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA/::trie::read::small.json;
+          rusty-cachier cache upload
+          ;;
+        2)
+          cargo run --release -p node-bench -- ::node::import::native::sr25519::transfer_keep_alive::paritydb::small --json
+          | tee ./artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA/::node::import::native::sr25519::transfer_keep_alive::paritydb::small.json
+          ;;
   tags:
     - linux-docker-benches
 
-.node-bench-regression-guard:
-  # it's not belong to `build` semantically, but dag jobs can't depend on each other
-  # within the single stage - https://gitlab.com/gitlab-org/gitlab/-/issues/30632
-  # more: https://github.com/paritytech/substrate/pull/8519#discussion_r608012402
-  stage:                           build
-  extends:
-    - .docker-env
-    - .test-refs-no-trigger-prs-only
-  needs:
-    # this is a DAG
-    - job:                         cargo-check-benches
-      artifacts:                   true
-    # this does not like a DAG, just polls the artifact
-    - project:                     $CI_PROJECT_PATH
-      job:                         cargo-check-benches
-      ref:                         master
-      artifacts:                   true
-  variables:
-    CI_IMAGE:                      "paritytech/node-bench-regression-guard:latest"
-  before_script: [""]
-  script:
-    - echo "------- IMPORTANT -------"
-    - echo "node-bench-regression-guard depends on the results of a cargo-check-benches job"
-    - echo "In case of this job failure, check your pipeline's cargo-check-benches"
-    - 'node-bench-regression-guard --reference artifacts/benches/master-*
-       --compare-with artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA'
 
 
 #### stage:                        deploy
