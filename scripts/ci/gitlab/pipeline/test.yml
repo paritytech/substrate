@@ -74,6 +74,7 @@ cargo-check-nixos:
 cargo-check-benches:
   stage:                           test
   variables:
+    # Override to use nightly toolchain
     RUSTY_CACHIER_TOOLCHAIN:       nightly
     CI_JOB_NAME:                   cargo-check-benches
   extends:
