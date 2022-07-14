@@ -20,7 +20,7 @@
 
 // FIXME #1021 move this into sp-consensus
 
-use codec::{Decode, Encode};
+use codec::Encode;
 use futures::{
 	channel::oneshot,
 	future,
@@ -535,10 +535,6 @@ where
 			"number" => ?block.header().number(),
 			"hash" => ?<Block as BlockT>::Hash::from(block.header().hash()),
 		);
-
-		if Decode::decode(&mut block.encode().as_slice()).as_ref() != Ok(&block) {
-			error!("Failed to verify block encoding/decoding");
-		}
 
 		if let Err(err) =
 			evaluation::evaluate_initial(&block, &self.parent_hash, self.parent_number)

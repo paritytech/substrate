@@ -44,16 +44,12 @@ pub fn beefy_log(log: ConsensusLog<BeefyId>) -> DigestItem {
 	DigestItem::Consensus(BEEFY_ENGINE_ID, log.encode())
 }
 
-fn offchain_key(pos: usize) -> Vec<u8> {
-	(<Test as pallet_mmr::Config>::INDEXING_PREFIX, pos as u64).encode()
-}
-
-fn read_mmr_leaf(ext: &mut TestExternalities, index: usize) -> MmrLeaf {
+fn read_mmr_leaf(ext: &mut TestExternalities, key: Vec<u8>) -> MmrLeaf {
 	type Node = pallet_mmr::primitives::DataOrHash<Keccak256, MmrLeaf>;
 	ext.persist_offchain_overlay();
 	let offchain_db = ext.offchain_db();
 	offchain_db
-		.get(&offchain_key(index))
+		.get(&key)
 		.map(|d| Node::decode(&mut &*d).unwrap())
 		.map(|n| match n {
 			Node::Data(d) => d,
@@ -105,12 +101,17 @@ fn should_contain_mmr_digest() {
 
 #[test]
 fn should_contain_valid_leaf_data() {
+	fn node_offchain_key(parent_hash: H256, pos: usize) -> Vec<u8> {
+		(<Test as pallet_mmr::Config>::INDEXING_PREFIX, parent_hash, pos as u64).encode()
+	}
+
 	let mut ext = new_test_ext(vec![1, 2, 3, 4]);
-	ext.execute_with(|| {
+	let parent_hash = ext.execute_with(|| {
 		init_block(1);
+		<frame_system::Pallet<Test>>::parent_hash()
 	});
 
-	let mmr_leaf = read_mmr_leaf(&mut ext, 0);
+	let mmr_leaf = read_mmr_leaf(&mut ext, node_offchain_key(parent_hash, 0));
 	assert_eq!(
 		mmr_leaf,
 		MmrLeaf {
@@ -128,11 +129,12 @@ fn should_contain_valid_leaf_data() {
 	);
 
 	// build second block on top
-	ext.execute_with(|| {
+	let parent_hash = ext.execute_with(|| {
 		init_block(2);
+		<frame_system::Pallet<Test>>::parent_hash()
 	});
 
-	let mmr_leaf = read_mmr_leaf(&mut ext, 1);
+	let mmr_leaf = read_mmr_leaf(&mut ext, node_offchain_key(parent_hash, 1));
 	assert_eq!(
 		mmr_leaf,
 		MmrLeaf {
@@ -148,4 +150,54 @@ fn should_contain_valid_leaf_data() {
 				.to_vec()
 		}
 	);
+}
+
+#[test]
+fn should_update_authorities() {
+	new_test_ext(vec![1, 2, 3, 4]).execute_with(|| {
+		let auth_set = BeefyMmr::authority_set_proof();
+		let next_auth_set = BeefyMmr::next_authority_set_proof();
+
+		// check current authority set
+		assert_eq!(0, auth_set.id);
+		assert_eq!(2, auth_set.len);
+		let want: H256 =
+			hex!("176e73f1bf656478b728e28dd1a7733c98621b8acf830bff585949763dca7a96").into();
+		assert_eq!(want, auth_set.root);
+
+		// next authority set should have same validators but different id
+		assert_eq!(1, next_auth_set.id);
+		assert_eq!(auth_set.len, next_auth_set.len);
+		assert_eq!(auth_set.root, next_auth_set.root);
+
+		let announced_set = next_auth_set;
+		init_block(1);
+		let auth_set = BeefyMmr::authority_set_proof();
+		let next_auth_set = BeefyMmr::next_authority_set_proof();
+
+		// check new auth are expected ones
+		assert_eq!(announced_set, auth_set);
+		assert_eq!(1, auth_set.id);
+		// check next auth set
+		assert_eq!(2, next_auth_set.id);
+		let want: H256 =
+			hex!("9c6b2c1b0d0b25a008e6c882cc7b415f309965c72ad2b944ac0931048ca31cd5").into();
+		assert_eq!(2, next_auth_set.len);
+		assert_eq!(want, next_auth_set.root);
+
+		let announced_set = next_auth_set;
+		init_block(2);
+		let auth_set = BeefyMmr::authority_set_proof();
+		let next_auth_set = BeefyMmr::next_authority_set_proof();
+
+		// check new auth are expected ones
+		assert_eq!(announced_set, auth_set);
+		assert_eq!(2, auth_set.id);
+		// check next auth set
+		assert_eq!(3, next_auth_set.id);
+		let want: H256 =
+			hex!("9c6b2c1b0d0b25a008e6c882cc7b415f309965c72ad2b944ac0931048ca31cd5").into();
+		assert_eq!(2, next_auth_set.len);
+		assert_eq!(want, next_auth_set.root);
+	});
 }
