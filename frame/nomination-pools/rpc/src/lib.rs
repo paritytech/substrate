@@ -20,6 +20,7 @@
 pub use self::gen_client::Client as NominationPoolsClient;
 use codec::Codec;
 use jsonrpc_derive::rpc;
+use jsonrpc_core::Error;
 pub use pallet_nomination_pools_rpc_runtime_api::NominationPoolsApi as NominationPoolsRuntimeApi;
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
@@ -30,7 +31,7 @@ use std::sync::Arc;
 pub trait NominationPoolsRpc<BlockHash, AccountId, ResponseType> {
 	#[rpc(name = "nompools_pending_rewards")]
 	fn pending_rewards(&self, member: AccountId, at: Option<BlockHash>)
-		-> Result<ResponseType, ()>;
+		-> Result<ResponseType, Error>;
 }
 
 pub struct NominationPoolsRpcType<C, P> {
@@ -53,10 +54,14 @@ where
 	AccountId: Codec,
 	Balance: Codec,
 {
-	fn pending_rewards(&self, member: AccountId, at: Option<Block::Hash>) -> Result<Balance, ()> {
+	fn pending_rewards(&self, member: AccountId, at: Option<Block::Hash>) -> Result<Balance, Error> {
 		let api = self.client.runtime_api();
 		let at = BlockId::hash(at.unwrap_or_else(|| self.client.info().best_hash));
 
-		api.pending_rewards(&at, member).map_err(|_| ())
+		api.pending_rewards(&at, member).map_err(|e| Error{
+			code: jsonrpc_core::ErrorCode::ServerError(1),
+			message: format!("{:?}", e),
+			data: None
+		})
 	}
 }
