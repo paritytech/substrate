@@ -371,13 +371,17 @@ fn should_verify_batch_proofs() {
 	let _ = env_logger::try_init();
 
 	use itertools::Itertools;
-	let n = 13;
-	// generate powerset (skipping empty set) of all possible leaf combinations
-	let leaves_set: Vec<Vec<u64>> = (0..n).into_iter().powerset().skip(1).collect();
+	for n in 1..14 {
+		// generate powerset (skipping empty set) of all possible leaf combinations
+		let leaves_set: Vec<Vec<u64>> = (0..n).into_iter().powerset().skip(1).collect();
+		// generate all possible 2-leaf combinations for n = 13
+		// let leaves_set: Vec<Vec<u64>> = (0..n).into_iter().combinations(2).collect();
 
-	leaves_set.iter().for_each(|leaves_subset| {
-		generate_and_verify_batch_proof(n, leaves_subset);
-	});
+		leaves_set.iter().for_each(|leaves_subset| {
+			generate_and_verify_batch_proof(n, leaves_subset);
+		});
+	}
+
 }
 
 #[test]
