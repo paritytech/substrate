@@ -372,14 +372,7 @@ fn should_verify_batch_proofs() {
 		ext.execute_with(|| {
 			add_blocks(7);
 			// then
-			// test should only fail if two leaves' closest mutual ancestor is of height 4 or more
-			if leaves_subset.iter().any(|leaf| *leaf >= 8 && *leaf < 12) &&
-				leaves_subset.iter().any(|leaf| *leaf < 8) {
-					assert_eq!(crate::Pallet::<Test>::verify_leaves(leaves, proof), Err(Error::Verify));
-				}
-			else {
-				assert_eq!(crate::Pallet::<Test>::verify_leaves(leaves, proof), Ok(()));
-			}
+			assert_eq!(crate::Pallet::<Test>::verify_leaves(leaves, proof), Ok(()));
 		})
 	});
 }
