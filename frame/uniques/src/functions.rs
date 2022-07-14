@@ -218,7 +218,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	#[cfg(test)]
 	pub fn get_next_id() -> T::CollectionId {
 		NextCollectionId::<T, I>::get()
-  }
+  	}
 
 	pub fn do_set_price(
 		collection: T::CollectionId,
@@ -288,5 +288,5 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		});
 
 		Ok(())
-  }
+  	}
 }

@@ -372,7 +372,7 @@ pub mod pallet {
 		OwnershipAcceptanceChanged { who: T::AccountId, maybe_collection: Option<T::CollectionId> },
 		/// Max supply has been set for a collection.
 		CollectionMaxSupplySet { collection: T::CollectionId, max_supply: u32 },
-		/// Event gets emmited when the `NextCollectionId` gets incremented in `try_increment_id`
+		/// Event gets emmited when the `NextCollectionId` gets incremented in `try_increment_id`.
 		NextCollectionIdIncremented { next_id: T::CollectionId },
 		/// The price was set for the instance.
 		ItemPriceSet {

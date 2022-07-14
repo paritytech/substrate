@@ -723,17 +723,18 @@ fn try_increment_id_works() {
 		assert_ok!(Uniques::try_increment_id(Origin::signed(2)));
 		// should fail because the next `CollectionId` is not being used.
 		assert_noop!(Uniques::try_increment_id(Origin::signed(2)), Error::<Test>::NextIdNotUsed);
-  });
+  	});
 }
 
+#[test]
 fn set_price_should_work() {
 	new_test_ext().execute_with(|| {
 		let user_id = 1;
-		let collection_id = 0;
+		let collection_id: u32 = 0;
 		let item_1 = 1;
 		let item_2 = 2;
 
-		assert_ok!(Uniques::force_create(Origin::root(), collection_id, user_id, true));
+		assert_ok!(Uniques::force_create(Origin::root(), user_id, true));
 
 		assert_ok!(Uniques::mint(Origin::signed(user_id), collection_id, item_1, user_id));
 		assert_ok!(Uniques::mint(Origin::signed(user_id), collection_id, item_2, user_id));
@@ -785,7 +786,7 @@ fn buy_item_should_work() {
 		let user_1 = 1;
 		let user_2 = 2;
 		let user_3 = 3;
-		let collection_id = 0;
+		let collection_id: u32 = 0;
 		let item_1 = 1;
 		let item_2 = 2;
 		let item_3 = 3;
@@ -797,7 +798,7 @@ fn buy_item_should_work() {
 		Balances::make_free_balance_be(&user_2, initial_balance);
 		Balances::make_free_balance_be(&user_3, initial_balance);
 
-		assert_ok!(Uniques::force_create(Origin::root(), collection_id, user_1, true));
+		assert_ok!(Uniques::force_create(Origin::root(), user_1, true));
 
 		assert_ok!(Uniques::mint(Origin::signed(user_1), collection_id, item_1, user_1));
 		assert_ok!(Uniques::mint(Origin::signed(user_1), collection_id, item_2, user_1));
@@ -898,5 +899,5 @@ fn buy_item_should_work() {
 			});
 			assert_noop!(buy_item_call.dispatch(Origin::signed(user_2)), Error::<Test>::Frozen);
 		}
-  }
+  	});
 }

@@ -448,7 +448,7 @@ benchmarks_instance_pallet! {
 			price,
 			seller,
 			buyer,
-    }.into());
+    	}.into());
 	}
 
 	impl_benchmark_test_suite!(Uniques, crate::mock::new_test_ext(), crate::mock::Test);
