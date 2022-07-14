@@ -418,10 +418,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::add_member())]
-		pub fn add_member(
-			origin: OriginFor<T>,
-			who: AccountIdLookupOf<T>,
-		) -> DispatchResult {
+		pub fn add_member(origin: OriginFor<T>, who: AccountIdLookupOf<T>) -> DispatchResult {
 			let _ = T::PromoteOrigin::ensure_origin(origin)?;
 			let who = T::Lookup::lookup(who)?;
 			ensure!(!Members::<T, I>::contains_key(&who), Error::<T, I>::AlreadyMember);
@@ -444,10 +441,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::promote_member(0))]
-		pub fn promote_member(
-			origin: OriginFor<T>,
-			who: AccountIdLookupOf<T>,
-		) -> DispatchResult {
+		pub fn promote_member(origin: OriginFor<T>, who: AccountIdLookupOf<T>) -> DispatchResult {
 			let max_rank = T::PromoteOrigin::ensure_origin(origin)?;
 			let who = T::Lookup::lookup(who)?;
 			let record = Self::ensure_member(&who)?;
@@ -471,10 +465,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`, less if the member's index is highest in its rank.
 		#[pallet::weight(T::WeightInfo::demote_member(0))]
-		pub fn demote_member(
-			origin: OriginFor<T>,
-			who: AccountIdLookupOf<T>,
-		) -> DispatchResult {
+		pub fn demote_member(origin: OriginFor<T>, who: AccountIdLookupOf<T>) -> DispatchResult {
 			let max_rank = T::DemoteOrigin::ensure_origin(origin)?;
 			let who = T::Lookup::lookup(who)?;
 			let mut record = Self::ensure_member(&who)?;

@@ -40,10 +40,10 @@ mod impls;
 pub use impls::*;
 
 use crate::{
-	slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraPayout, EraRewardPoints, Exposure,
-	Forcing, MaxUnlockingChunks, NegativeImbalanceOf, Nominations, PositiveImbalanceOf, Releases,
-	RewardDestination, SessionInterface, StakingLedger, UnappliedSlash, UnlockChunk,
-	ValidatorPrefs, AccountIdLookupOf,
+	slashing, weights::WeightInfo, AccountIdLookupOf, ActiveEraInfo, BalanceOf, EraPayout,
+	EraRewardPoints, Exposure, Forcing, MaxUnlockingChunks, NegativeImbalanceOf, Nominations,
+	PositiveImbalanceOf, Releases, RewardDestination, SessionInterface, StakingLedger,
+	UnappliedSlash, UnlockChunk, ValidatorPrefs,
 };
 
 const STAKING_ID: LockIdentifier = *b"staking ";
@@ -1525,10 +1525,7 @@ pub mod pallet {
 		/// Note: Making this call only makes sense if you first set the validator preferences to
 		/// block any further nominations.
 		#[pallet::weight(T::WeightInfo::kick(who.len() as u32))]
-		pub fn kick(
-			origin: OriginFor<T>,
-			who: Vec<AccountIdLookupOf<T>>,
-		) -> DispatchResult {
+		pub fn kick(origin: OriginFor<T>, who: Vec<AccountIdLookupOf<T>>) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			let stash = &ledger.stash;

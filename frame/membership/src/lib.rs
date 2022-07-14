@@ -166,10 +166,7 @@ pub mod pallet {
 		///
 		/// May only be called from `T::AddOrigin`.
 		#[pallet::weight(50_000_000)]
-		pub fn add_member(
-			origin: OriginFor<T>,
-			who: AccountIdLookupOf<T>,
-		) -> DispatchResult {
+		pub fn add_member(origin: OriginFor<T>, who: AccountIdLookupOf<T>) -> DispatchResult {
 			T::AddOrigin::ensure_origin(origin)?;
 			let who = T::Lookup::lookup(who)?;
 
@@ -191,10 +188,7 @@ pub mod pallet {
 		///
 		/// May only be called from `T::RemoveOrigin`.
 		#[pallet::weight(50_000_000)]
-		pub fn remove_member(
-			origin: OriginFor<T>,
-			who: AccountIdLookupOf<T>,
-		) -> DispatchResult {
+		pub fn remove_member(origin: OriginFor<T>, who: AccountIdLookupOf<T>) -> DispatchResult {
 			T::RemoveOrigin::ensure_origin(origin)?;
 			let who = T::Lookup::lookup(who)?;
 
@@ -272,10 +266,7 @@ pub mod pallet {
 		///
 		/// Prime membership is passed from the origin account to `new`, if extant.
 		#[pallet::weight(50_000_000)]
-		pub fn change_key(
-			origin: OriginFor<T>,
-			new: AccountIdLookupOf<T>,
-		) -> DispatchResult {
+		pub fn change_key(origin: OriginFor<T>, new: AccountIdLookupOf<T>) -> DispatchResult {
 			let remove = ensure_signed(origin)?;
 			let new = T::Lookup::lookup(new)?;
 
@@ -309,10 +300,7 @@ pub mod pallet {
 		///
 		/// May only be called from `T::PrimeOrigin`.
 		#[pallet::weight(50_000_000)]
-		pub fn set_prime(
-			origin: OriginFor<T>,
-			who: AccountIdLookupOf<T>,
-		) -> DispatchResult {
+		pub fn set_prime(origin: OriginFor<T>, who: AccountIdLookupOf<T>) -> DispatchResult {
 			T::PrimeOrigin::ensure_origin(origin)?;
 			let who = T::Lookup::lookup(who)?;
 			Self::members().binary_search(&who).ok().ok_or(Error::<T, I>::NotMember)?;

@@ -282,7 +282,10 @@ use frame_support::{
 use scale_info::TypeInfo;
 use sp_core::U256;
 use sp_runtime::{
-	traits::{AccountIdConversion, Bounded, CheckedAdd, CheckedSub, Convert, Saturating, StaticLookup, Zero},
+	traits::{
+		AccountIdConversion, Bounded, CheckedAdd, CheckedSub, Convert, Saturating, StaticLookup,
+		Zero,
+	},
 	FixedPointNumber, FixedPointOperand,
 };
 use sp_staking::{EraIndex, OnStakerSlash, StakingInterface};
@@ -1640,7 +1643,7 @@ pub mod pallet {
 			#[pallet::compact] unbonding_points: BalanceOf<T>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-      let member_account = T::Lookup::lookup(member_account)?;
+			let member_account = T::Lookup::lookup(member_account)?;
 			let (mut member, mut bonded_pool, mut reward_pool) =
 				Self::get_member_with_pools(&member_account)?;
 

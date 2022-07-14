@@ -322,10 +322,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::vest_other_locked(MaxLocksOf::<T>::get(), T::MAX_VESTING_SCHEDULES)
 			.max(T::WeightInfo::vest_other_unlocked(MaxLocksOf::<T>::get(), T::MAX_VESTING_SCHEDULES))
 		)]
-		pub fn vest_other(
-			origin: OriginFor<T>,
-			target: AccountIdLookupOf<T>,
-		) -> DispatchResult {
+		pub fn vest_other(origin: OriginFor<T>, target: AccountIdLookupOf<T>) -> DispatchResult {
 			ensure_signed(origin)?;
 			let who = T::Lookup::lookup(target)?;
 			Self::do_vest(who)

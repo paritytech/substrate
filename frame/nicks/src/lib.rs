@@ -194,10 +194,7 @@ pub mod pallet {
 		/// - One event.
 		/// # </weight>
 		#[pallet::weight(70_000_000)]
-		pub fn kill_name(
-			origin: OriginFor<T>,
-			target: AccountIdLookupOf<T>,
-		) -> DispatchResult {
+		pub fn kill_name(origin: OriginFor<T>, target: AccountIdLookupOf<T>) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
 
 			// Figure out who we're meant to be clearing.

@@ -920,10 +920,7 @@ pub mod pallet {
 		/// The dispatch origin for this call must be _Signed_ and the sender must have a registered
 		/// sub identity of `sub`.
 		#[pallet::weight(T::WeightInfo::remove_sub(T::MaxSubAccounts::get()))]
-		pub fn remove_sub(
-			origin: OriginFor<T>,
-			sub: AccountIdLookupOf<T>,
-		) -> DispatchResult {
+		pub fn remove_sub(origin: OriginFor<T>, sub: AccountIdLookupOf<T>) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			ensure!(IdentityOf::<T>::contains_key(&sender), Error::<T>::NoIdentity);
 			let sub = T::Lookup::lookup(sub)?;

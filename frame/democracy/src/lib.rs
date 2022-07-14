@@ -1129,10 +1129,7 @@ pub mod pallet {
 			T::WeightInfo::unlock_set(T::MaxVotes::get())
 				.max(T::WeightInfo::unlock_remove(T::MaxVotes::get()))
 		)]
-		pub fn unlock(
-			origin: OriginFor<T>,
-			target: AccountIdLookupOf<T>,
-		) -> DispatchResult {
+		pub fn unlock(origin: OriginFor<T>, target: AccountIdLookupOf<T>) -> DispatchResult {
 			ensure_signed(origin)?;
 			let target = T::Lookup::lookup(target)?;
 			Self::update_lock(&target);

@@ -59,7 +59,7 @@ type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
-	
+
 /// The parameters under which a particular account has a proxy relationship with some other
 /// account.
 #[derive(

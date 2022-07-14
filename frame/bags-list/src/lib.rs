@@ -224,10 +224,7 @@ pub mod pallet {
 		///
 		/// If `dislocated` does not exists, it returns an error.
 		#[pallet::weight(T::WeightInfo::rebag_non_terminal().max(T::WeightInfo::rebag_terminal()))]
-		pub fn rebag(
-			origin: OriginFor<T>,
-			dislocated: AccountIdLookupOf<T>,
-		) -> DispatchResult {
+		pub fn rebag(origin: OriginFor<T>, dislocated: AccountIdLookupOf<T>) -> DispatchResult {
 			ensure_signed(origin)?;
 			let dislocated = T::Lookup::lookup(dislocated)?;
 			let current_score = T::ScoreProvider::score(&dislocated);

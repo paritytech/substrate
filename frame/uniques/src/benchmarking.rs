@@ -52,8 +52,7 @@ fn create_collection<T: Config<I>, I: 'static>(
 	(collection, caller, caller_lookup)
 }
 
-fn add_collection_metadata<T: Config<I>, I: 'static>(
-) -> (T::AccountId, AccountIdLookupOf<T>) {
+fn add_collection_metadata<T: Config<I>, I: 'static>() -> (T::AccountId, AccountIdLookupOf<T>) {
 	let caller = Collection::<T, I>::get(T::Helper::collection(0)).unwrap().owner;
 	if caller != whitelisted_caller() {
 		whitelist_account!(caller);
