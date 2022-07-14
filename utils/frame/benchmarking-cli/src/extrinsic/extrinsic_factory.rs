@@ -50,6 +50,7 @@ pub trait ExtrinsicBuilder {
 	///
 	/// Should be all lowercase.
 	fn pallet(&self) -> &str;
+
 	/// Name of the extrinsic this builder is for.
 	///
 	/// Should be all lowercase.
@@ -62,7 +63,7 @@ pub trait ExtrinsicBuilder {
 }
 
 impl dyn ExtrinsicBuilder + '_ {
-	/// Name of this builder in CSV format `pallet, extrinsic`.
+	/// Name of this builder in CSV format: `pallet, extrinsic`.
 	pub fn name(&self) -> String {
 		format!("{}, {}", self.pallet(), self.extrinsic())
 	}

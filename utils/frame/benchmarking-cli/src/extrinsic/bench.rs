@@ -94,7 +94,7 @@ where
 	/// Benchmark the time of an extrinsic in a full block.
 	///
 	/// First benchmarks an empty block, analogous to `bench_block` and use it as baseline.
-	/// Then benchmarks a full block built with the given `ext_builder` and subtract the baseline
+	/// Then benchmarks a full block built with the given `ext_builder` and subtracts the baseline
 	/// from the result.
 	/// This is necessary to account for the time the inherents use.
 	pub fn bench_extrinsic(&self, ext_builder: &dyn ExtrinsicBuilder) -> Result<Stats> {
@@ -103,8 +103,7 @@ where
 		let base_time = Stats::new(&base)?.select(StatSelect::Average);
 
 		let (block, num_ext) = self.build_block(Some(ext_builder))?;
-		// option to result
-		let num_ext = num_ext.ok_or_else(|| Error::Input("".into()))?;
+		let num_ext = num_ext.ok_or_else(|| Error::Input("Block was empty".into()))?;
 		let mut records = self.measure_block(&block)?;
 
 		for r in &mut records {
