@@ -72,13 +72,13 @@ where
 					code: jsonrpc_core::ErrorCode::ServerError(2),
 					message: format!("An overflow occured when calculating the pending rewards."),
 					data: None,
-				})
+				}),
 			},
 			Err(_) => Err(Error {
 				code: jsonrpc_core::ErrorCode::ServerError(1),
 				message: format!("Member with the given account was not found."),
 				data: None,
-			})
+			}),
 		}
 	}
 }
