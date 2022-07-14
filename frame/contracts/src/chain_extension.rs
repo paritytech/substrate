@@ -40,8 +40,9 @@
 //! This is because the [`RegisteredChainExtension::ID`] is used to decide which of those extensions
 //! should should be used when the contract calls a chain extensions. Extensions which are generally
 //! useful should claim their `ID` with [the registry](https://github.com/paritytech/chainextension-registry)
-//! so that no collisions with other vendors will occure. **Chain specific extensions must use the
-//! reserved `ID = 0` that can't be registered with the registry.**
+//! so that no collisions with other vendors will occur.
+//! 
+//! **Chain specific extensions must use the reserved `ID = 0` so that they can't be registered with the registry.**
 //!
 //! # Security
 //!
@@ -130,7 +131,7 @@ pub trait ChainExtension<C: Config> {
 ///
 /// An extension that implements this trait can be put in a tuple in order to have multiple
 /// extensions available. The tuple implementation routes requests based on the first two
-/// MSB bytes of the `func_id` pased to `call`.
+/// most significant bytes of the `func_id` passed to `call`.
 ///
 /// If this extensions is to be used by multiple runtimes consider
 /// [registering it](https://github.com/paritytech/chainextension-registry) to ensure that there
