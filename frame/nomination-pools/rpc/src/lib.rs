@@ -22,7 +22,6 @@ use codec::Codec;
 use jsonrpc_core::Error;
 use jsonrpc_derive::rpc;
 pub use pallet_nomination_pools_rpc_runtime_api::NominationPoolsApi as NominationPoolsRuntimeApi;
-use pallet_nomination_pools_rpc_runtime_api::NpApiError;
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
@@ -66,19 +65,20 @@ where
 		let api = self.client.runtime_api();
 		let at = BlockId::hash(at.unwrap_or_else(|| self.client.info().best_hash));
 
-		api.pending_rewards(&at, member).map_err(|e| -> Error {
-			match e {
-				NpApiError::MemberNotFound => Error {
-					code: jsonrpc_core::ErrorCode::ServerError(1),
-					message: format!("Member with the given account was not found."),
-					data: None,
-				},
-				NpApiError::OverflowInPendingRewards => Error {
+		match api.pending_rewards(&at, member) {
+			Ok(rewards) => match rewards {
+				Ok(r) => Ok(r),
+				Err(_) => Err(Error {
 					code: jsonrpc_core::ErrorCode::ServerError(2),
 					message: format!("An overflow occured when calculating the pending rewards."),
 					data: None,
-				},
-			}
-		})
+				})
+			},
+			Err(_) => Err(Error {
+				code: jsonrpc_core::ErrorCode::ServerError(1),
+				message: format!("Member with the given account was not found."),
+				data: None,
+			})
+		}
 	}
 }
