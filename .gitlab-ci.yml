@@ -222,7 +222,7 @@ cargo-check-benches:
     - rusty-cachier snapshot create
     - cargo install cargo-nextest
     - mkdir -p ./artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA
-    - case ${CI_NODE_INDEX} in;
+    - case ${CI_NODE_INDEX} in
         1)
           SKIP_WASM_BUILD=1 time cargo +nightly check --benches --all;
           cargo run --release -p node-bench -- ::trie::read::small --json
