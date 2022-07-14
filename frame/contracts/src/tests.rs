@@ -1567,6 +1567,23 @@ fn disabled_chain_extension_errors_on_call() {
 
 #[test]
 fn chain_extension_works() {
+	struct Input<'a> {
+		extension_id: u16,
+		func_id: u16,
+		extra: &'a [u8],
+	}
+
+	impl<'a> From<Input<'a>> for Vec<u8> {
+		fn from(input: Input) -> Vec<u8> {
+			((input.extension_id as u32) << 16 | (input.func_id as u32))
+				.to_le_bytes()
+				.iter()
+				.chain(input.extra)
+				.cloned()
+				.collect()
+		}
+	}
+
 	let (code, hash) = compile_module::<Test>("chain_extension").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		let min_balance = <Test as Config>::Currency::minimum_balance();
@@ -1587,22 +1604,24 @@ fn chain_extension_works() {
 		// func_id.
 
 		// 0 = read input buffer and pass it through as output
-		let result = Contracts::bare_call(
+		let input: Vec<u8> = Input { extension_id: 0, func_id: 0, extra: &[99] }.into();
+		let result =
+			Contracts::bare_call(ALICE, addr.clone(), 0, GAS_LIMIT, None, input.clone(), false);
+		assert_eq!(TestExtension::last_seen_buffer(), input);
+		assert_eq!(result.result.unwrap().data, Bytes(input));
+
+		// 1 = treat inputs as integer primitives and store the supplied integers
+		Contracts::bare_call(
 			ALICE,
 			addr.clone(),
 			0,
 			GAS_LIMIT,
 			None,
-			vec![0, 0, 0, 0, 99],
+			Input { extension_id: 0, func_id: 1, extra: &[] }.into(),
 			false,
-		);
-		assert_eq!(TestExtension::last_seen_buffer(), vec![0, 0, 0, 0, 99]);
-		assert_eq!(result.result.unwrap().data, Bytes(vec![0, 0, 0, 0, 99]));
-
-		// 1 = treat inputs as integer primitives and store the supplied integers
-		Contracts::bare_call(ALICE, addr.clone(), 0, GAS_LIMIT, None, vec![1, 0, 0, 0], false)
-			.result
-			.unwrap();
+		)
+		.result
+		.unwrap();
 		// those values passed in the fixture
 		assert_eq!(TestExtension::last_seen_inputs(), (4, 4, 16, 12));
 
@@ -1613,7 +1632,7 @@ fn chain_extension_works() {
 			0,
 			GAS_LIMIT,
 			None,
-			vec![2, 0, 0, 0, 0],
+			Input { extension_id: 0, func_id: 2, extra: &[0] }.into(),
 			false,
 		);
 		assert_ok!(result.result);
@@ -1624,7 +1643,7 @@ fn chain_extension_works() {
 			0,
 			GAS_LIMIT,
 			None,
-			vec![2, 0, 0, 0, 42],
+			Input { extension_id: 0, func_id: 2, extra: &[42] }.into(),
 			false,
 		);
 		assert_ok!(result.result);
@@ -1635,27 +1654,41 @@ fn chain_extension_works() {
 			0,
 			GAS_LIMIT,
 			None,
-			vec![2, 0, 0, 0, 95],
+			Input { extension_id: 0, func_id: 2, extra: &[95] }.into(),
 			false,
 		);
 		assert_ok!(result.result);
 		assert_eq!(result.gas_consumed, gas_consumed + 95);
 
 		// 3 = diverging chain extension call that sets flags to 0x1 and returns a fixed buffer
-		let result =
-			Contracts::bare_call(ALICE, addr.clone(), 0, GAS_LIMIT, None, vec![3, 0, 0, 0], false)
-				.result
-				.unwrap();
+		let result = Contracts::bare_call(
+			ALICE,
+			addr.clone(),
+			0,
+			GAS_LIMIT,
+			None,
+			Input { extension_id: 0, func_id: 3, extra: &[] }.into(),
+			false,
+		)
+		.result
+		.unwrap();
 		assert_eq!(result.flags, ReturnFlags::REVERT);
 		assert_eq!(result.data, Bytes(vec![42, 99]));
 
 		// diverging to second chain extension that sets flags to 0x1 and returns a fixed buffer
 		// We set the MSB part to 1 (instead of 0) which routes the request into the second
 		// extension
-		let result =
-			Contracts::bare_call(ALICE, addr.clone(), 0, GAS_LIMIT, None, vec![0, 0, 1, 0], false)
-				.result
-				.unwrap();
+		let result = Contracts::bare_call(
+			ALICE,
+			addr.clone(),
+			0,
+			GAS_LIMIT,
+			None,
+			Input { extension_id: 1, func_id: 0, extra: &[] }.into(),
+			false,
+		)
+		.result
+		.unwrap();
 		assert_eq!(result.flags, ReturnFlags::REVERT);
 		assert_eq!(result.data, Bytes(vec![0x4B, 0x1D]));
 
@@ -1668,7 +1701,7 @@ fn chain_extension_works() {
 				0,
 				GAS_LIMIT,
 				None,
-				vec![0, 0, 2, 0]
+				Input { extension_id: 2, func_id: 0, extra: &[] }.into(),
 			),
 			Error::<Test>::NoChainExtension,
 		);

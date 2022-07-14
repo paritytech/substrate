@@ -41,8 +41,9 @@
 //! should should be used when the contract calls a chain extensions. Extensions which are generally
 //! useful should claim their `ID` with [the registry](https://github.com/paritytech/chainextension-registry)
 //! so that no collisions with other vendors will occur.
-//! 
-//! **Chain specific extensions must use the reserved `ID = 0` so that they can't be registered with the registry.**
+//!
+//! **Chain specific extensions must use the reserved `ID = 0` so that they can't be registered with
+//! the registry.**
 //!
 //! # Security
 //!
