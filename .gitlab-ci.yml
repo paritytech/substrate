@@ -234,19 +234,8 @@ rusty-cachier-notify:
 # This job cancels the whole pipeline if any of provided jobs fail.
 # In a DAG, every jobs chain is executed independently of others. The `fail_fast` principle suggests
 # to fail the pipeline as soon as possible to shorten the feedback loop.
-cancel-pipeline:
+.cancel-pipeline-template:
   stage:                           .post
-  needs:
-    - job:                         test-linux-stable
-      artifacts:                   false
-    - job:                         test-linux-stable-int
-      artifacts:                   false
-    - job:                         cargo-check-subkey
-      artifacts:                   false
-    - job:                         cargo-check-benches
-      artifacts:                   false
-    - job:                         check-tracing
-      artifacts:                   false
   rules:
     - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
       when: on_failure
@@ -254,3 +243,33 @@ cancel-pipeline:
     PROJECT_ID:                    "${CI_PROJECT_ID}"
     PIPELINE_ID:                   "${CI_PIPELINE_ID}"
   trigger:                         "parity/infrastructure/ci_cd/pipeline-stopper"
+
+cancel-pipeline-test-linux-stable:
+  extends:                         .cancel-pipeline-template
+  needs:
+    - job:                         test-linux-stable
+      artifacts:                   false
+
+cancel-pipeline-test-linux-stable-int:
+  extends:                         .cancel-pipeline-template
+  needs:
+    - job:                         test-linux-stable-int
+      artifacts:                   false
+
+cancel-pipeline-cargo-check-subkey:
+  extends:                         .cancel-pipeline-template
+  needs:
+    - job:                         cargo-check-subkey
+      artifacts:                   false
+
+cancel-pipeline-cargo-check-benches:
+  extends:                         .cancel-pipeline-template
+  needs:
+    - job:                         cargo-check-benches
+      artifacts:                   false
+
+cancel-pipeline-check-tracing:
+  extends:                         .cancel-pipeline-template
+  needs:
+    - job:                         check-tracing
+      artifacts:                   false
