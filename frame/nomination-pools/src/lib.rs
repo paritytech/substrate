@@ -1416,7 +1416,7 @@ pub mod pallet {
 		/// The amount does not meet the minimum bond to either join or create a pool.
 		///
 		/// The depositor can never unbond to a value less than
-		/// `Pallet::depositor_min_bond`. The The caller does not have nominating
+		/// `Pallet::depositor_min_bond`. The caller does not have nominating
 		/// permissions for the pool. Members can never unbond to a value below `MinJoinBond`.
 		MinimumBondNotMet,
 		/// The transaction could not be executed due to overflow risk for the pool.
