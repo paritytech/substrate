@@ -1836,7 +1836,7 @@ impl_runtime_apis! {
 	}
 
 	impl pallet_nomination_pools_rpc_runtime_api::NominationPoolsApi<Block, AccountId, Balance> for Runtime {
-		fn pending_rewards(member_account: AccountId) -> Balance {
+		fn pending_rewards(member_account: AccountId) -> Result<Balance> {
 			let member = pallet_nomination_pools::PoolMembers::<Runtime>::get(member_account).unwrap();
 
 			member.pending_rewards(member.last_recorded_reward_counter).unwrap()

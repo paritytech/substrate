@@ -23,9 +23,10 @@ use codec::Codec;
 pub use pallet_nomination_pools::PoolId;
 
 sp_api::decl_runtime_apis! {
-	pub trait NominationPoolsApi<AccountId, Balance> where AccountId: Codec, Balance: Codec
+	pub trait NominationPoolsApi<AccountId, Balance>
+		where AccountId: Codec, Balance: Codec
 	{
 		/// Returns the pending rewards for the given member.
-		fn pending_rewards(member: AccountId) -> Balance;
+		fn pending_rewards(member: AccountId) -> Result<Balance>;
 	}
 }
