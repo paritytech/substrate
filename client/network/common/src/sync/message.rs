@@ -124,8 +124,8 @@ impl<H: HeaderT> BlockAnnounce<H> {
 /// Generic types.
 pub mod generic {
 	use super::{BlockAttributes, BlockState, Direction};
+	use crate::message::RequestId;
 	use codec::{Decode, Encode, Input, Output};
-	use sc_network_common::message::RequestId;
 	use sp_runtime::{EncodedJustification, Justifications};
 
 	/// Block data sent in the response.
