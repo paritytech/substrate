@@ -217,20 +217,24 @@ cargo-check-benches:
         git config user.email "ci@gitlab.parity.io";
         git merge $CI_COMMIT_REF_NAME --verbose --no-edit;
       fi
-  parallel: 2
+  # parallel: 2
   script:
     - rusty-cachier snapshot create
+    - cargo install cargo-nextest
     - mkdir -p ./artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA
-    - if [ ${CI_NODE_INDEX} == 1 ]; then SKIP_WASM_BUILD=1 time cargo +nightly check --benches --all; fi
-    - if [ ${CI_NODE_INDEX} == 1 ]; then cargo run --release -p node-bench -- ::trie::read::small --json
-      | tee ./artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA/::trie::read::small.json; fi
-    - if [ ${CI_NODE_INDEX} == 2 ]; then cargo run --release -p node-bench -- ::node::import::native::sr25519::transfer_keep_alive::paritydb::small --json
-      | tee ./artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA/::node::import::native::sr25519::transfer_keep_alive::paritydb::small.json; fi
-    - if [ ${CI_NODE_INDEX} == 1 ]; then rusty-cachier cache upload; fi
+    - time cargo run --release -p node-bench -- ::trie::read::small --json
+    - time cargo run nextest --release -p node-bench --bench ::trie::read::small --json
+    # - if [ ${CI_NODE_INDEX} == 1 ]; then SKIP_WASM_BUILD=1 time cargo +nightly check --benches --all; fi
+    # - if [ ${CI_NODE_INDEX} == 1 ]; then cargo run --release -p node-bench -- ::trie::read::small --json
+    #   | tee ./artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA/::trie::read::small.json; fi
+    # - if [ ${CI_NODE_INDEX} == 2 ]; then cargo run --release -p node-bench -- ::node::import::native::sr25519::transfer_keep_alive::paritydb::small --json
+    #   | tee ./artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA/::node::import::native::sr25519::transfer_keep_alive::paritydb::small.json; fi
+    # - if [ ${CI_NODE_INDEX} == 1 ]; then rusty-cachier cache upload; fi
+    - rusty-cachier cache upload
   tags:
     - linux-docker-benches
 
-node-bench-regression-guard:
+.node-bench-regression-guard:
   # it's not belong to `build` semantically, but dag jobs can't depend on each other
   # within the single stage - https://gitlab.com/gitlab-org/gitlab/-/issues/30632
   # more: https://github.com/paritytech/substrate/pull/8519#discussion_r608012402
@@ -257,21 +261,6 @@ node-bench-regression-guard:
     - 'node-bench-regression-guard --reference artifacts/benches/master-*
        --compare-with artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA'
 
-test-wasmer-sandbox:
-  stage:                           test
-  extends:
-    - .docker-env
-    - .test-refs
-    # - .test-refs-wasmer-sandbox
-  variables:
-    CI_JOB_NAME:                   "test-wasmer-sandbox"
-  parallel: 3
-  script:
-    - rusty-cachier snapshot create
-    - cargo install cargo-nextest
-    - echo "Node index - ${CI_NODE_INDEX}. Total amount - ${CI_NODE_TOTAL}"
-    - time cargo nextest run --release --features runtime-benchmarks,wasmer-sandbox,disable-ui-tests --partition count:${CI_NODE_INDEX}/${CI_NODE_TOTAL}
-    - if [ ${CI_NODE_INDEX} == 1 ]; then rusty-cachier cache upload; fi
 
 #### stage:                        deploy
 
