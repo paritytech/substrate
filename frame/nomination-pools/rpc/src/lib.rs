@@ -70,13 +70,13 @@ where
 				Ok(r) => Ok(r),
 				Err(_) => Err(Error {
 					code: jsonrpc_core::ErrorCode::ServerError(2),
-					message: format!("An overflow occured when calculating the pending rewards."),
+					message: "An overflow occured when calculating the pending rewards.".to_string(),
 					data: None,
 				}),
 			},
 			Err(_) => Err(Error {
 				code: jsonrpc_core::ErrorCode::ServerError(1),
-				message: format!("Member with the given account was not found."),
+				message: "Member with the given account was not found.".to_string(),
 				data: None,
 			}),
 		}
