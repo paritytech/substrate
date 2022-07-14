@@ -543,6 +543,16 @@ where
 	}
 }
 
+pub trait HandleDanglingLiquidityInfo<T> {
+	fn drop_liquidity_info(liquidity_info: T);
+}
+
+impl<T> HandleDanglingLiquidityInfo<T> for () {
+	fn drop_liquidity_info(liquidity_info: T) {
+		drop(liquidity_info);
+	}
+}
+
 /// Require the transactor pay for themselves and maybe include a tip to gain additional priority
 /// in the queue.
 ///
@@ -553,18 +563,35 @@ where
 ///
 /// Operational transactions will receive an additional priority bump, so that they are normally
 /// considered before regular transactions.
-#[derive(Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
-#[scale_info(skip_type_params(T))]
-pub struct ChargeTransactionPayment<T: Config>(#[codec(compact)] BalanceOf<T>);
+#[derive(Encode, Decode, TypeInfo)]
+#[scale_info(skip_type_params(T, L))]
+pub struct ChargeTransactionPayment<T: Config, L = ()>(
+	#[codec(compact)] BalanceOf<T>,
+	core::marker::PhantomData<L>,
+);
 
-impl<T: Config> ChargeTransactionPayment<T>
+impl<T: Config, L> Clone for ChargeTransactionPayment<T, L> {
+	fn clone(&self) -> Self {
+		Self(self.0.clone(), core::marker::PhantomData)
+	}
+}
+
+impl<T: Config, L> PartialEq for ChargeTransactionPayment<T, L> {
+	fn eq(&self, other: &Self) -> bool {
+		self.0 == other.0
+	}
+}
+
+impl<T: Config, L> Eq for ChargeTransactionPayment<T, L> {}
+
+impl<T: Config, L> ChargeTransactionPayment<T, L>
 where
 	T::Call: Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
 	BalanceOf<T>: Send + Sync + FixedPointOperand,
 {
 	/// utility constructor. Used only in client/factory code.
 	pub fn from(fee: BalanceOf<T>) -> Self {
-		Self(fee)
+		Self(fee, core::marker::PhantomData)
 	}
 
 	/// Returns the tip as being choosen by the transaction sender.
@@ -664,7 +691,7 @@ where
 	}
 }
 
-impl<T: Config> sp_std::fmt::Debug for ChargeTransactionPayment<T> {
+impl<T: Config, L> sp_std::fmt::Debug for ChargeTransactionPayment<T, L> {
 	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		write!(f, "ChargeTransactionPayment<{:?}>", self.0)
@@ -675,10 +702,14 @@ impl<T: Config> sp_std::fmt::Debug for ChargeTransactionPayment<T> {
 	}
 }
 
-impl<T: Config> SignedExtension for ChargeTransactionPayment<T>
+impl<T: Config, L> SignedExtension for ChargeTransactionPayment<T, L>
 where
 	BalanceOf<T>: Send + Sync + From<u64> + FixedPointOperand,
 	T::Call: Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
+	L: Send + Sync + 'static,
+	L: HandleDanglingLiquidityInfo<
+		<<T as Config>::OnChargeTransaction as OnChargeTransaction<T>>::LiquidityInfo,
+	>,
 {
 	const IDENTIFIER: &'static str = "ChargeTransactionPayment";
 	type AccountId = T::AccountId;
@@ -703,7 +734,8 @@ where
 		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
 	) -> TransactionValidity {
-		let (final_fee, _) = self.withdraw_fee(who, call, info, len)?;
+		let (final_fee, liquidity_info) = self.withdraw_fee(who, call, info, len)?;
+		L::drop_liquidity_info(liquidity_info);
 		let tip = self.0;
 		Ok(ValidTransaction {
 			priority: Self::get_priority(info, len, tip, final_fee),
@@ -1458,14 +1490,14 @@ mod tests {
 		ExtBuilder::default().balance_factor(100).build().execute_with(|| {
 			let normal =
 				DispatchInfo { weight: 100, class: DispatchClass::Normal, pays_fee: Pays::Yes };
-			let priority = ChargeTransactionPayment::<Runtime>(tip)
+			let priority = ChargeTransactionPayment::<Runtime>::from(tip)
 				.validate(&2, CALL, &normal, len)
 				.unwrap()
 				.priority;
 
 			assert_eq!(priority, 60);
 
-			let priority = ChargeTransactionPayment::<Runtime>(2 * tip)
+			let priority = ChargeTransactionPayment::<Runtime>::from(2 * tip)
 				.validate(&2, CALL, &normal, len)
 				.unwrap()
 				.priority;
@@ -1479,13 +1511,13 @@ mod tests {
 				class: DispatchClass::Operational,
 				pays_fee: Pays::Yes,
 			};
-			let priority = ChargeTransactionPayment::<Runtime>(tip)
+			let priority = ChargeTransactionPayment::<Runtime>::from(tip)
 				.validate(&2, CALL, &op, len)
 				.unwrap()
 				.priority;
 			assert_eq!(priority, 5810);
 
-			let priority = ChargeTransactionPayment::<Runtime>(2 * tip)
+			let priority = ChargeTransactionPayment::<Runtime>::from(2 * tip)
 				.validate(&2, CALL, &op, len)
 				.unwrap()
 				.priority;
@@ -1501,7 +1533,7 @@ mod tests {
 		ExtBuilder::default().balance_factor(100).build().execute_with(|| {
 			let normal =
 				DispatchInfo { weight: 100, class: DispatchClass::Normal, pays_fee: Pays::Yes };
-			let priority = ChargeTransactionPayment::<Runtime>(tip)
+			let priority = ChargeTransactionPayment::<Runtime>::from(tip)
 				.validate(&2, CALL, &normal, len)
 				.unwrap()
 				.priority;
@@ -1515,7 +1547,7 @@ mod tests {
 				class: DispatchClass::Operational,
 				pays_fee: Pays::Yes,
 			};
-			let priority = ChargeTransactionPayment::<Runtime>(tip)
+			let priority = ChargeTransactionPayment::<Runtime>::from(tip)
 				.validate(&2, CALL, &op, len)
 				.unwrap()
 				.priority;
@@ -1532,7 +1564,7 @@ mod tests {
 			ExtBuilder::default().balance_factor(100).build().execute_with(|| {
 				let normal =
 					DispatchInfo { weight: 100, class: DispatchClass::Normal, pays_fee: Pays::Yes };
-				priority1 = ChargeTransactionPayment::<Runtime>(tip)
+				priority1 = ChargeTransactionPayment::<Runtime>::from(tip)
 					.validate(&2, CALL, &normal, len)
 					.unwrap()
 					.priority;
@@ -1544,7 +1576,7 @@ mod tests {
 					class: DispatchClass::Operational,
 					pays_fee: Pays::Yes,
 				};
-				priority2 = ChargeTransactionPayment::<Runtime>(tip)
+				priority2 = ChargeTransactionPayment::<Runtime>::from(tip)
 					.validate(&2, CALL, &op, len)
 					.unwrap()
 					.priority;
