@@ -37,7 +37,7 @@ use serde::Serialize;
 use std::{marker::PhantomData, sync::Arc, time::Instant};
 
 use super::ExtrinsicBuilder;
-use crate::shared::Stats;
+use crate::shared::{StatSelect, Stats};
 
 /// Parameters to configure an *overhead* benchmark.
 #[derive(Debug, Default, Serialize, Clone, PartialEq, Args)]
@@ -84,11 +84,37 @@ where
 		Self { client, params, inherent_data, _p: PhantomData }
 	}
 
-	/// Run the specified benchmark.
-	pub fn bench(&self, ext_builder: Option<&dyn ExtrinsicBuilder>) -> Result<Stats> {
-		let (block, num_ext) = self.build_block(ext_builder)?;
-		let record = self.measure_block(&block, num_ext)?;
+	/// Benchmark a block with only inherents.
+	pub fn bench_block(&self) -> Result<Stats> {
+		let (block, _) = self.build_block(None)?;
+		let record = self.measure_block(&block)?;
 		Stats::new(&record)
+	}
+
+	/// Benchmark the time of an extrinsic in a full block.
+	///
+	/// First benchmarks an empty block, analogous to `bench_block` and use it as baseline.
+	/// Then benchmarks a full block built with the given `ext_builder` and subtract the baseline
+	/// from the result.
+	/// This is necessary to account for the time the inherents use.
+	pub fn bench_extrinsic(&self, ext_builder: &dyn ExtrinsicBuilder) -> Result<Stats> {
+		let (block, _) = self.build_block(None)?;
+		let base = self.measure_block(&block)?;
+		let base_time = Stats::new(&base)?.select(StatSelect::Average);
+
+		let (block, num_ext) = self.build_block(Some(ext_builder))?;
+		// option to result
+		let num_ext = num_ext.ok_or_else(|| Error::Input("".into()))?;
+		let mut records = self.measure_block(&block)?;
+
+		for r in &mut records {
+			// Subtract the base time.
+			*r = r.saturating_sub(base_time);
+			// Divide by the number of extrinsics in the block.
+			*r = ((*r as f64) / (num_ext as f64)).ceil() as u64;
+		}
+
+		Stats::new(&records)
 	}
 
 	/// Builds a block with some optional extrinsics.
@@ -138,11 +164,8 @@ where
 	}
 
 	/// Measures the time that it take to execute a block or an extrinsic.
-	fn measure_block(&self, block: &Block, num_ext: Option<u64>) -> Result<BenchRecord> {
+	fn measure_block(&self, block: &Block) -> Result<BenchRecord> {
 		let mut record = BenchRecord::new();
-		if num_ext == Some(0) {
-			return Err("Num extrinsics was zero".into())
-		}
 		let genesis = BlockId::Number(Zero::zero());
 
 		info!("Running {} warmups...", self.params.warmup);
@@ -166,12 +189,7 @@ where
 				.map_err(|e| Error::Client(RuntimeApiError(e)))?;
 
 			let elapsed = start.elapsed().as_nanos();
-			if let Some(num_ext) = num_ext {
-				// Checked for non-zero div above.
-				record.push((elapsed as f64 / num_ext as f64).ceil() as u64);
-			} else {
-				record.push(elapsed as u64);
-			}
+			record.push(elapsed as u64);
 		}
 
 		Ok(record)

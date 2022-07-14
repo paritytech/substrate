@@ -110,7 +110,7 @@ impl ExtrinsicCmd {
 		};
 
 		let bench = Benchmark::new(client, self.params.bench.clone(), inherent_data);
-		let stats = bench.bench(Some(ext_builder))?;
+		let stats = bench.bench_extrinsic(ext_builder)?;
 		info!(
 			"Executing a {}::{} extrinsic takes[ns]:\n{:?}",
 			ext_builder.pallet(),
