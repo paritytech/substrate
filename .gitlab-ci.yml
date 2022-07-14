@@ -264,6 +264,7 @@ test-wasmer-sandbox:
     - .test-refs
     # - .test-refs-wasmer-sandbox
   script:
+    - cargo install cargo-nextest
     - rusty-cachier snapshot create
     - time cargo nextest run --release --features runtime-benchmarks,wasmer-sandbox,disable-ui-tests
     - rusty-cachier cache upload
