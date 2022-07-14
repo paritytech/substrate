@@ -63,10 +63,12 @@ pub mod generic {
 	use bitflags::bitflags;
 	use codec::{Decode, Encode, Input, Output};
 	use sc_client_api::StorageProof;
-	use sc_network_common::message::RequestId;
-	use sc_network_sync::message::{
-		generic::{BlockRequest, BlockResponse},
-		BlockAnnounce,
+	use sc_network_common::{
+		message::RequestId,
+		sync::message::{
+			generic::{BlockRequest, BlockResponse},
+			BlockAnnounce,
+		},
 	};
 	use sp_runtime::ConsensusEngineId;
 
