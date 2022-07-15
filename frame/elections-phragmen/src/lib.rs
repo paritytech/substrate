@@ -100,7 +100,6 @@
 
 use codec::{Decode, Encode};
 use frame_support::{
-	dispatch::WithPostDispatchInfo,
 	traits::{
 		defensive_prelude::*, ChangeMembers, Contains, ContainsLengthBound, Currency,
 		CurrencyToVote, Get, InitializeMembers, LockIdentifier, LockableCurrency, OnUnbalanced,
@@ -125,6 +124,17 @@ pub mod migrations;
 
 /// The maximum votes allowed per voter.
 pub const MAXIMUM_VOTE: usize = 16;
+
+// Some safe temp values to make the wasm execution sane while we still use this pallet.
+#[cfg(test)]
+pub(crate) const MAX_CANDIDATES: u32 = 100;
+#[cfg(not(test))]
+pub(crate) const MAX_CANDIDATES: u32 = 1000;
+
+#[cfg(test)]
+pub(crate) const MAX_VOTERS: u32 = 1000;
+#[cfg(not(test))]
+pub(crate) const MAX_VOTERS: u32 = 10 * 1000;
 
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
@@ -385,8 +395,9 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 
-			let actual_count = <Candidates<T>>::decode_len().unwrap_or(0);
-			ensure!(actual_count as u32 <= candidate_count, Error::<T>::InvalidWitnessData);
+			let actual_count = <Candidates<T>>::decode_len().unwrap_or(0) as u32;
+			ensure!(actual_count <= candidate_count, Error::<T>::InvalidWitnessData);
+			ensure!(actual_count <= MAX_CANDIDATES, Error::<T>::TooManyCandidates);
 
 			let index = Self::is_candidate(&who).err().ok_or(Error::<T>::DuplicatedCandidate)?;
 
@@ -469,7 +480,11 @@ pub mod pallet {
 		/// the outgoing member is slashed.
 		///
 		/// If a runner-up is available, then the best runner-up will be removed and replaces the
-		/// outgoing member. Otherwise, a new phragmen election is started.
+		/// outgoing member. Otherwise, if `rerun_election` is `true`, a new phragmen election is
+		/// started, else, nothing happens.
+		///
+		/// If `slash_bond` is set to true, the bond of the member being removed is slashed. Else,
+		/// it is returned.
 		///
 		/// The dispatch origin of this call must be root.
 		///
@@ -479,33 +494,24 @@ pub mod pallet {
 		/// If we have a replacement, we use a small weight. Else, since this is a root call and
 		/// will go into phragmen, we assume full block for now.
 		/// # </weight>
-		#[pallet::weight(if *has_replacement {
-			T::WeightInfo::remove_member_with_replacement()
-		} else {
+		#[pallet::weight(if *rerun_election {
 			T::WeightInfo::remove_member_without_replacement()
+		} else {
+			T::WeightInfo::remove_member_with_replacement()
 		})]
 		pub fn remove_member(
 			origin: OriginFor<T>,
 			who: <T::Lookup as StaticLookup>::Source,
-			has_replacement: bool,
+			slash_bond: bool,
+			rerun_election: bool,
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			let who = T::Lookup::lookup(who)?;
 
-			let will_have_replacement = <RunnersUp<T>>::decode_len().map_or(false, |l| l > 0);
-			if will_have_replacement != has_replacement {
-				// In both cases, we will change more weight than need. Refund and abort.
-				return Err(Error::<T>::InvalidReplacement.with_weight(
-					// refund. The weight value comes from a benchmark which is special to this.
-					T::WeightInfo::remove_member_wrong_refund(),
-				))
-			}
-
-			let had_replacement = Self::remove_and_replace_member(&who, true)?;
-			debug_assert_eq!(has_replacement, had_replacement);
+			let _ = Self::remove_and_replace_member(&who, slash_bond)?;
 			Self::deposit_event(Event::MemberKicked { member: who });
 
-			if !had_replacement {
+			if rerun_election {
 				Self::do_phragmen();
 			}
 
@@ -585,10 +591,10 @@ pub mod pallet {
 		UnableToPayBond,
 		/// Must be a voter.
 		MustBeVoter,
-		/// Cannot report self.
-		ReportSelf,
 		/// Duplicated candidate submission.
 		DuplicatedCandidate,
+		/// Too many candidates have been created.
+		TooManyCandidates,
 		/// Member cannot re-submit candidacy.
 		MemberSubmit,
 		/// Runner cannot re-submit candidacy.
@@ -893,7 +899,7 @@ impl<T: Config> Pallet<T> {
 
 		if candidates_and_deposit.len().is_zero() {
 			Self::deposit_event(Event::EmptyTerm);
-			return T::DbWeight::get().reads(5)
+			return T::DbWeight::get().reads(3)
 		}
 
 		// All of the new winners that come out of phragmen will thus have a deposit recorded.
@@ -906,10 +912,28 @@ impl<T: Config> Pallet<T> {
 		let to_balance = |e: ExtendedBalance| T::CurrencyToVote::to_currency(e, total_issuance);
 
 		let mut num_edges: u32 = 0;
+
 		// used for prime election.
-		let voters_and_stakes = Voting::<T>::iter()
-			.map(|(voter, Voter { stake, votes, .. })| (voter, stake, votes))
-			.collect::<Vec<_>>();
+		let mut voters_and_stakes = Vec::new();
+		match Voting::<T>::iter().try_for_each(|(voter, Voter { stake, votes, .. })| {
+			if voters_and_stakes.len() < MAX_VOTERS as usize {
+				voters_and_stakes.push((voter, stake, votes));
+				Ok(())
+			} else {
+				Err(())
+			}
+		}) {
+			Ok(_) => (),
+			Err(_) => {
+				log::error!(
+					target: "runtime::elections-phragmen",
+					"Failed to run election. Number of voters exceeded",
+				);
+				Self::deposit_event(Event::ElectionError);
+				return T::DbWeight::get().reads(3 + MAX_VOTERS as u64)
+			},
+		}
+
 		// used for phragmen.
 		let voters_and_votes = voters_and_stakes
 			.iter()
@@ -1137,7 +1161,7 @@ mod tests {
 	use sp_runtime::{
 		testing::Header,
 		traits::{BlakeTwo256, IdentityLookup},
-		BuildStorage, ModuleError,
+		BuildStorage,
 	};
 	use substrate_test_utils::assert_eq_uvec;
 
@@ -1321,6 +1345,7 @@ mod tests {
 			self
 		}
 		pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
+			sp_tracing::try_init_simple();
 			MEMBERS.with(|m| {
 				*m.borrow_mut() =
 					self.genesis_members.iter().map(|(m, _)| m.clone()).collect::<Vec<_>>()
@@ -2494,57 +2519,11 @@ mod tests {
 			assert_ok!(submit_candidacy(Origin::signed(3)));
 			assert_ok!(vote(Origin::signed(3), vec![3], 30));
 
-			assert_ok!(Elections::remove_member(Origin::root(), 4, false));
+			assert_ok!(Elections::remove_member(Origin::root(), 4, true, true));
 
 			assert_eq!(balances(&4), (35, 2)); // slashed
 			assert_eq!(Elections::election_rounds(), 2); // new election round
 			assert_eq!(members_ids(), vec![3, 5]); // new members
-		});
-	}
-
-	#[test]
-	fn remove_member_should_indicate_replacement() {
-		ExtBuilder::default().build_and_execute(|| {
-			assert_ok!(submit_candidacy(Origin::signed(5)));
-			assert_ok!(submit_candidacy(Origin::signed(4)));
-
-			assert_ok!(vote(Origin::signed(4), vec![4], 40));
-			assert_ok!(vote(Origin::signed(5), vec![5], 50));
-
-			System::set_block_number(5);
-			Elections::on_initialize(System::block_number());
-			assert_eq!(members_ids(), vec![4, 5]);
-
-			// no replacement yet.
-			let unwrapped_error = Elections::remove_member(Origin::root(), 4, true).unwrap_err();
-			assert!(matches!(
-				unwrapped_error.error,
-				DispatchError::Module(ModuleError { message: Some("InvalidReplacement"), .. })
-			));
-			assert!(unwrapped_error.post_info.actual_weight.is_some());
-		});
-
-		ExtBuilder::default().desired_runners_up(1).build_and_execute(|| {
-			assert_ok!(submit_candidacy(Origin::signed(5)));
-			assert_ok!(submit_candidacy(Origin::signed(4)));
-			assert_ok!(submit_candidacy(Origin::signed(3)));
-
-			assert_ok!(vote(Origin::signed(3), vec![3], 30));
-			assert_ok!(vote(Origin::signed(4), vec![4], 40));
-			assert_ok!(vote(Origin::signed(5), vec![5], 50));
-
-			System::set_block_number(5);
-			Elections::on_initialize(System::block_number());
-			assert_eq!(members_ids(), vec![4, 5]);
-			assert_eq!(runners_up_ids(), vec![3]);
-
-			// there is a replacement! and this one needs a weight refund.
-			let unwrapped_error = Elections::remove_member(Origin::root(), 4, false).unwrap_err();
-			assert!(matches!(
-				unwrapped_error.error,
-				DispatchError::Module(ModuleError { message: Some("InvalidReplacement"), .. })
-			));
-			assert!(unwrapped_error.post_info.actual_weight.is_some());
 		});
 	}
 
@@ -2684,7 +2663,7 @@ mod tests {
 			Elections::on_initialize(System::block_number());
 
 			assert_eq!(members_ids(), vec![2, 4]);
-			assert_ok!(Elections::remove_member(Origin::root(), 2, true));
+			assert_ok!(Elections::remove_member(Origin::root(), 2, true, false));
 			assert_eq!(members_ids(), vec![4, 5]);
 		});
 	}
