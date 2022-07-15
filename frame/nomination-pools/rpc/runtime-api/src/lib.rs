@@ -19,23 +19,14 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::{Codec, Decode, Encode};
+use codec::Codec;
 pub use pallet_nomination_pools::PoolId;
-
-/// The possible errors that may occur when getting the pending rewards.
-#[derive(Decode, Encode, Eq, PartialEq)]
-pub enum NpApiError {
-	/// The member was not found.
-	MemberNotFound,
-	/// An overflow occured when calculating the pending rewards.
-	OverflowInPendingRewards,
-}
 
 sp_api::decl_runtime_apis! {
 	pub trait NominationPoolsApi<AccountId, Balance>
 		where AccountId: Codec, Balance: Codec
 	{
 		/// Returns the pending rewards for the given member.
-		fn pending_rewards(member: AccountId) -> Result<Balance, NpApiError>;
+		fn pending_rewards(member: AccountId) -> Balance;
 	}
 }

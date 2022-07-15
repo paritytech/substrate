@@ -22,36 +22,14 @@ use codec::Codec;
 use jsonrpc_core::Error;
 use jsonrpc_derive::rpc;
 pub use pallet_nomination_pools_rpc_runtime_api::NominationPoolsApi as NominationPoolsRuntimeApi;
-use pallet_nomination_pools_rpc_runtime_api::NpApiError;
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 use std::sync::Arc;
 
-trait ToError {
-	fn to_error(&self) -> Error;
-}
-
-impl ToError for NpApiError {
-	fn to_error(&self) -> Error {
-		match self {
-			NpApiError::MemberNotFound => Error {
-				code: jsonrpc_core::ErrorCode::ServerError(2),
-				message: "Member with the given account was not found.".to_string(),
-				data: None,
-			},
-			NpApiError::OverflowInPendingRewards => Error {
-				code: jsonrpc_core::ErrorCode::ServerError(3),
-				message: "An overflow occured when calculating the pending rewards.".to_string(),
-				data: None,
-			},
-		}
-	}
-}
-
 #[rpc]
 pub trait NominationPoolsRpc<BlockHash, AccountId, ResponseType> {
-	#[rpc(name = "nompools_pending_rewards")]
+	#[rpc(name = "nominationPools_pending_rewards")]
 	fn pending_rewards(
 		&self,
 		member: AccountId,
@@ -77,7 +55,7 @@ where
 	C: 'static + ProvideRuntimeApi<Block> + HeaderBackend<Block>,
 	C::Api: NominationPoolsRuntimeApi<Block, AccountId, Balance>,
 	AccountId: Codec,
-	Balance: Codec,
+	Balance: Codec + Default,
 {
 	fn pending_rewards(
 		&self,
@@ -87,13 +65,6 @@ where
 		let api = self.client.runtime_api();
 		let at = BlockId::hash(at.unwrap_or_else(|| self.client.info().best_hash));
 
-		match api.pending_rewards(&at, member) {
-			Ok(rewards) => rewards.map_err(|e| e.to_error()),
-			Err(e) => Err(Error {
-				code: jsonrpc_core::ErrorCode::ServerError(1),
-				message: format!("{:?}", e),
-				data: None,
-			}),
-		}
+		Ok(api.pending_rewards(&at, member).unwrap_or_default())
 	}
 }

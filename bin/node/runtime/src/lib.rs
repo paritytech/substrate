@@ -52,7 +52,6 @@ use pallet_grandpa::{
 	fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
 };
 use pallet_im_online::sr25519::AuthorityId as ImOnlineId;
-use pallet_nomination_pools_rpc_runtime_api::NpApiError;
 use pallet_session::historical::{self as pallet_session_historical};
 pub use pallet_transaction_payment::{CurrencyAdapter, Multiplier, TargetedFeeAdjustment};
 use pallet_transaction_payment::{FeeDetails, RuntimeDispatchInfo};
@@ -1837,11 +1836,11 @@ impl_runtime_apis! {
 	}
 
 	impl pallet_nomination_pools_rpc_runtime_api::NominationPoolsApi<Block, AccountId, Balance> for Runtime {
-		fn pending_rewards(member_account: AccountId) -> Result<Balance, NpApiError> {
+		fn pending_rewards(member_account: AccountId) -> Balance {
 			if let Some(member) = pallet_nomination_pools::PoolMembers::<Runtime>::get(member_account) {
-				return member.pending_rewards(member.last_recorded_reward_counter).map_err(|_| NpApiError::OverflowInPendingRewards);
+				return member.pending_rewards(member.last_recorded_reward_counter).unwrap_or_default();
 			}
-			Err(NpApiError::MemberNotFound)
+			Balance::default()
 		}
 	}
 
