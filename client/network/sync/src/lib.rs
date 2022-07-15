@@ -1719,7 +1719,7 @@ where
 		Ok(sync)
 	}
 
-	/// Returns the best seen block.
+	/// Returns the best seen block number if we don't have that block yet, `None` otherwise.
 	fn best_seen(&self) -> Option<NumberFor<B>> {
 		let mut best_seens = self.peers.values().map(|p| p.best_number).collect::<Vec<_>>();
 
@@ -1729,7 +1729,12 @@ where
 			let middle = best_seens.len() / 2;
 
 			// Not the "perfect median" when we have an even number of peers.
-			Some(*best_seens.select_nth_unstable(middle).1)
+			let median = *best_seens.select_nth_unstable(middle).1;
+			if median > self.best_queued_number {
+				Some(median)
+			} else {
+				None
+			}
 		}
 	}
 
