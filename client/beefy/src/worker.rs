@@ -511,11 +511,13 @@ where
 			for (num, votes) in votes_to_handle.into_iter() {
 				debug!(target: "beefy", "🥩 Handle buffered votes for: {:?}.", num);
 				for v in votes.into_iter() {
-					self.handle_vote(
+					if let Err(err) = self.handle_vote(
 						(v.commitment.payload, v.commitment.block_number),
 						(v.id, v.signature),
 						false,
-					)?;
+					) {
+						error!(target: "beefy", "🥩 Error handling buffered vote: {}", err);
+					};
 				}
 			}
 		}
@@ -605,13 +607,15 @@ where
 
 		debug!(target: "beefy", "🥩 Sent vote message: {:?}", message);
 
-		self.gossip_engine.gossip_message(topic::<B>(), encoded_message, false);
-
-		self.handle_vote(
+		if let Err(err) = self.handle_vote(
 			(message.commitment.payload, message.commitment.block_number),
 			(message.id, message.signature),
 			true,
-		)?;
+		) {
+			error!(target: "beefy", "🥩 Error handling self vote: {}", err);
+		}
+
+		self.gossip_engine.gossip_message(topic::<B>(), encoded_message, false);
 
 		Ok(())
 	}
