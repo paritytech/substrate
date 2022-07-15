@@ -151,6 +151,11 @@ impl Justifications {
 		self.iter().find(|j| j.0 == engine_id).map(|j| &j.1)
 	}
 
+	/// Remove the encoded justification for the given consensus engine, if it exists.
+	pub fn remove(&mut self, engine_id: ConsensusEngineId) {
+		self.0.retain(|j| j.0 != engine_id)
+	}
+
 	/// Return a copy of the encoded justification for the given consensus
 	/// engine, if it exists.
 	pub fn into_justification(self, engine_id: ConsensusEngineId) -> Option<EncodedJustification> {

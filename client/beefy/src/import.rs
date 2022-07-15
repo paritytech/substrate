@@ -23,7 +23,8 @@ use sp_blockchain::well_known_cache_keys;
 use sp_consensus::Error as ConsensusError;
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, Header as HeaderT},
+	traits::{Block as BlockT, Header as HeaderT, NumberFor},
+	EncodedJustification,
 };
 
 use sc_client_api::backend::Backend;
@@ -33,7 +34,7 @@ use crate::{
 	justification::decode_and_verify_commitment, notification::BeefySignedCommitmentSender,
 	Client as BeefyClient,
 };
-use beefy_primitives::{BeefyApi, VersionedFinalityProof, BEEFY_ENGINE_ID};
+use beefy_primitives::{crypto::Signature, BeefyApi, VersionedFinalityProof, BEEFY_ENGINE_ID};
 
 /// A block-import handler for BEEFY.
 ///
@@ -70,6 +71,31 @@ impl<BE, Block: BlockT, Client, I> BeefyBlockImport<BE, Block, Client, I> {
 	}
 }
 
+impl<BE, Block, Client, I> BeefyBlockImport<BE, Block, Client, I>
+where
+	BE: Backend<Block>,
+	Block: BlockT,
+	Client: BeefyClient<Block, BE> + ProvideRuntimeApi<Block>,
+	Client::Api: BeefyApi<Block>,
+{
+	fn import_beefy_justification(
+		&self,
+		encoded: &EncodedJustification,
+		number: NumberFor<Block>,
+		hash: <Block as BlockT>::Hash,
+	) -> Result<VersionedFinalityProof<NumberFor<Block>, Signature>, ConsensusError> {
+		let block_id = BlockId::hash(hash);
+		let validator_set = self
+			.client
+			.runtime_api()
+			.validator_set(&block_id)
+			.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
+			.ok_or_else(|| ConsensusError::ClientImport("Unknown validator set".to_string()))?;
+
+		decode_and_verify_commitment::<Block>(&encoded[..], number, &validator_set)
+	}
+}
+
 #[async_trait::async_trait]
 impl<BE, Block: BlockT, Client, I> BlockImport<Block> for BeefyBlockImport<BE, Block, Client, I>
 where
@@ -88,48 +114,48 @@ where
 
 	async fn import_block(
 		&mut self,
-		block: BlockImportParams<Block, Self::Transaction>,
+		mut block: BlockImportParams<Block, Self::Transaction>,
 		new_cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
 		let hash = block.post_hash();
 		let number = *block.header.number();
-		let beefy_justification = block
+
+		let beefy_proof = block
 			.justifications
 			.as_ref()
-			.and_then(|just| just.get(BEEFY_ENGINE_ID).cloned());
+			.and_then(|just| just.get(BEEFY_ENGINE_ID))
+			.map(|encoded| self.import_beefy_justification(encoded, number, hash))
+			.and_then(|result| match result {
+				Ok(proof) => Some(proof),
+				Err(ConsensusError::InvalidJustification) => {
+					// remove invalid justification from the list before giving to `inner`
+					block.justifications.as_mut().and_then(|j| {
+						j.remove(BEEFY_ENGINE_ID);
+						None
+					})
+				},
+				_ => None,
+			});
 
 		// Run inner block import.
-		let import_result = self.inner.import_block(block, new_cache).await?;
+		let inner_import_result = self.inner.import_block(block, new_cache).await?;
 
-		if let Some(justification) = beefy_justification {
-			if let ImportResult::Imported(_) = &import_result {
-				let block_id = BlockId::hash(hash);
-				let validator_set = self
-					.client
-					.runtime_api()
-					.validator_set(&block_id)
-					.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
-					// Deploying `BeefyBlockImport` on chains with dummy BeefyApi will
-					// effectively reject all blocks with BEEFY justifications.
-					.ok_or_else(|| {
-						ConsensusError::ClientImport("Unknown validator set".to_string())
-					})?;
-
-				match decode_and_verify_commitment::<Block>(
-					&justification[..],
-					number,
-					&validator_set,
-				)? {
-					// TODO: these channels should also use `VersionedFinalityProof`.
+		match (beefy_proof, &inner_import_result) {
+			// If both BEEFY proof valid and block import success, send proof to voter.
+			(Some(proof), ImportResult::Imported(_)) => {
+				match proof {
+					// TODO #11838: Should not unpack, these channels should also use
+					// `VersionedFinalityProof`.
 					VersionedFinalityProof::V1(signed_commitment) => self
 						.justification_sender
 						.notify(|| Ok::<_, ()>(signed_commitment))
 						.expect("forwards closure result; the closure always returns Ok; qed."),
 				};
-			}
+			},
+			_ => (),
 		}
 
-		Ok(import_result)
+		Ok(inner_import_result)
 	}
 
 	async fn check_block(
