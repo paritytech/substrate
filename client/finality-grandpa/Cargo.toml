@@ -36,6 +36,7 @@ sc-consensus = { version = "0.10.0-dev", path = "../consensus/common" }
 sc-keystore = { version = "4.0.0-dev", path = "../keystore" }
 sc-network = { version = "0.10.0-dev", path = "../network" }
 sc-network-gossip = { version = "0.10.0-dev", path = "../network-gossip" }
+sc-network-common = { version = "0.10.0-dev", path = "../network/common" }
 sc-telemetry = { version = "4.0.0-dev", path = "../telemetry" }
 sc-utils = { version = "4.0.0-dev", path = "../utils" }
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
