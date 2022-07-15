@@ -17,24 +17,21 @@
 
 //! RPC interface for the nomination-pools pallet.
 
-pub use self::gen_client::Client as NominationPoolsClient;
 use codec::Codec;
-use jsonrpc_core::Error;
-use jsonrpc_derive::rpc;
+use jsonrpsee::{
+	core::{async_trait, RpcResult},
+	proc_macros::rpc,
+};
 pub use pallet_nomination_pools_rpc_runtime_api::NominationPoolsApi as NominationPoolsRuntimeApi;
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 use std::sync::Arc;
 
-#[rpc]
+#[rpc(client, server)]
 pub trait NominationPoolsRpc<BlockHash, AccountId, ResponseType> {
-	#[rpc(name = "nominationPools_pending_rewards")]
-	fn pending_rewards(
-		&self,
-		member: AccountId,
-		at: Option<BlockHash>,
-	) -> Result<ResponseType, Error>;
+	#[method(name = "nominationPools_pending_rewards")]
+	fn pending_rewards(&self, member: AccountId, at: Option<BlockHash>) -> RpcResult<ResponseType>;
 }
 
 pub struct NominationPoolsRpcType<C, P> {
@@ -48,7 +45,9 @@ impl<C, P> NominationPoolsRpcType<C, P> {
 	}
 }
 
-impl<C, Block, AccountId, Balance> NominationPoolsRpc<<Block as BlockT>::Hash, AccountId, Balance>
+#[async_trait]
+impl<C, Block, AccountId, Balance>
+	NominationPoolsRpcServer<<Block as BlockT>::Hash, AccountId, Balance>
 	for NominationPoolsRpcType<C, Block>
 where
 	Block: BlockT,
@@ -57,11 +56,7 @@ where
 	AccountId: Codec,
 	Balance: Codec + Default,
 {
-	fn pending_rewards(
-		&self,
-		member: AccountId,
-		at: Option<Block::Hash>,
-	) -> Result<Balance, Error> {
+	fn pending_rewards(&self, member: AccountId, at: Option<Block::Hash>) -> RpcResult<Balance> {
 		let api = self.client.runtime_api();
 		let at = BlockId::hash(at.unwrap_or_else(|| self.client.info().best_hash));
 

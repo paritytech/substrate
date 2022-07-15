@@ -16,6 +16,7 @@ node-primitives = { version = "2.0.0", path = "../primitives" }
 pallet-contracts-rpc = { version = "4.0.0-dev", path = "../../../frame/contracts/rpc/" }
 pallet-mmr-rpc = { version = "3.0.0", path = "../../../frame/merkle-mountain-range/rpc/" }
 pallet-transaction-payment-rpc = { version = "4.0.0-dev", path = "../../../frame/transaction-payment/rpc/" }
+pallet-nomination-pools-rpc = { version = "1.0.0-dev", path = "../../../frame/nomination-pools/rpc/"}
 sc-chain-spec = { version = "4.0.0-dev", path = "../../../client/chain-spec" }
 sc-client-api = { version = "4.0.0-dev", path = "../../../client/api" }
 sc-consensus-babe = { version = "0.10.0-dev", path = "../../../client/consensus/babe" }
