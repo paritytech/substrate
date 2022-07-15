@@ -196,7 +196,6 @@ include:
   # publish jobs
   - scripts/ci/gitlab/pipeline/publish.yml
 
-
 #### stage:                        deploy
 
 deploy-prometheus-alerting-rules:
