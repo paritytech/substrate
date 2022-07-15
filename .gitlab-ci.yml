@@ -229,6 +229,7 @@ rusty-cachier-notify:
   variables:
     CI_IMAGE:                      paritytech/rusty-cachier-env:latest
     GIT_STRATEGY:                  none
+  dependencies:                    []
   script:
     - curl -s https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.parity.io/parity/infrastructure/ci_cd/rusty-cachier/client/-/raw/release/util/install.sh | bash
     - rusty-cachier cache notify
