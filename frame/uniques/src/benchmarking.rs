@@ -408,5 +408,41 @@ benchmarks_instance_pallet! {
 		}.into());
 	}
 
+	set_price {
+		let (collection, caller, _) = create_collection::<T, I>();
+		let (item, ..) = mint_item::<T, I>(0);
+		let delegate: T::AccountId = account("delegate", 0, SEED);
+		let delegate_lookup = T::Lookup::unlookup(delegate.clone());
+		let price = ItemPrice::<T, I>::from(100u32);
+	}: _(SystemOrigin::Signed(caller.clone()), collection, item, Some(price), Some(delegate_lookup))
+	verify {
+		assert_last_event::<T, I>(Event::ItemPriceSet {
+			collection,
+			item,
+			price,
+			whitelisted_buyer: Some(delegate),
+		}.into());
+	}
+
+	buy_item {
+		let (collection, seller, _) = create_collection::<T, I>();
+		let (item, ..) = mint_item::<T, I>(0);
+		let buyer: T::AccountId = account("buyer", 0, SEED);
+		let buyer_lookup = T::Lookup::unlookup(buyer.clone());
+		let price = ItemPrice::<T, I>::from(0u32);
+		let origin = SystemOrigin::Signed(seller.clone()).into();
+		Uniques::<T, I>::set_price(origin, collection, item, Some(price.clone()), Some(buyer_lookup))?;
+		T::Currency::make_free_balance_be(&buyer, DepositBalanceOf::<T, I>::max_value());
+	}: _(SystemOrigin::Signed(buyer.clone()), collection, item, price.clone())
+	verify {
+		assert_last_event::<T, I>(Event::ItemBought {
+			collection,
+			item,
+			price,
+			seller,
+			buyer,
+		}.into());
+	}
+
 	impl_benchmark_test_suite!(Uniques, crate::mock::new_test_ext(), crate::mock::Test);
 }

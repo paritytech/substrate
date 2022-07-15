@@ -5505,6 +5505,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "hex-literal",
+ "impl-trait-for-tuples",
  "log",
  "pallet-balances",
  "pallet-contracts-primitives",
