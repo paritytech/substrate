@@ -223,10 +223,15 @@ deploy-prometheus-alerting-rules:
 
 # This job notifies rusty-cachier about the latest commit with the cache.
 # This info is later used for the cache distribution and an overlay creation.
+# Note that we don't use any .rusty-cachier references as we assume that a pipeline has reached this stage with working rusty-cachier.
 rusty-cachier-notify:
   stage:                           notify
-  extends:                         .docker-env
+  extends:                         .kubernetes-env
+  variables:
+    CI_IMAGE:                      paritytech/rusty-cachier-env:latest
+    GIT_STRATEGY:                  none
   script:
+    - curl -s https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.parity.io/parity/infrastructure/ci_cd/rusty-cachier/client/-/raw/release/util/install.sh | bash
     - rusty-cachier cache notify
 
 #### stage:                        .post
