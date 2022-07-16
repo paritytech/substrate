@@ -197,6 +197,10 @@ impl PalletCmd {
 			.for_each(|item| {
 				for benchmark in &item.benchmarks {
 					let benchmark_name = &benchmark.name;
+					// Check if `benchmark` should be excluded.
+					if self.excluded.contains(&format!("{:?}", benchmark_name)) {
+						continue
+					}
 					if extrinsic.is_empty() ||
 						extrinsic.as_bytes() == &b"*"[..] ||
 						extrinsics.contains(&&benchmark_name[..])

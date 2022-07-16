@@ -166,4 +166,11 @@ pub struct PalletCmd {
 	/// template for that purpose.
 	#[clap(long)]
 	pub no_storage_info: bool,
+
+	/// The provided benchmarks are going to be skipped and no weight will be
+	/// generated for them.
+	///
+	/// By default no benchmarks are excluded.
+	#[clap(long)]
+	pub excluded: Vec<String>,
 }
