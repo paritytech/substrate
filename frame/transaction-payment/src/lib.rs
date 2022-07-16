@@ -464,10 +464,18 @@ where
 	}
 
 	/// Query weight_to_fee of a given `Call`.
-	pub fn query_weight_to_fee<Call: GetDispatchInfo>(call: Call) -> BalanceOf<T> {
+	pub fn query_call_fee_details<Call: GetDispatchInfo>(
+		call: Call,
+		len: u32,
+	) -> FeeDetails<BalanceOf<T>>
+	where
+		T::Call: Dispatchable<Info = DispatchInfo>,
+	{
 		let dispatch_info = Call::get_dispatch_info(&call);
 
-		Self::weight_to_fee(dispatch_info.weight)
+		let tip = 0u32.into();
+
+		Self::compute_fee_details(len, &dispatch_info, tip)
 	}
 
 	/// Compute the final fee value for a particular transaction.
@@ -1232,18 +1240,18 @@ mod tests {
 	}
 
 	#[test]
-	fn query_call_info_works() {
+	fn query_call_info_and_fee_details_works() {
 		let call = Call::Balances(BalancesCall::transfer { dest: 2, value: 69 });
 		let info = call.get_dispatch_info();
-		let ext = call.encode();
-		let len = ext.len() as u32;
+		let encoded_call = call.encode();
+		let len = encoded_call.len() as u32;
 
 		ExtBuilder::default().base_weight(5).weight_fee(2).build().execute_with(|| {
 			// all fees should be x1.5
 			<NextFeeMultiplier<Runtime>>::put(Multiplier::saturating_from_rational(3, 2));
 
 			assert_eq!(
-				TransactionPayment::query_call_info(call, len),
+				TransactionPayment::query_call_info(call.clone(), len),
 				RuntimeDispatchInfo {
 					weight: info.weight,
 					class: info.class,
@@ -1252,36 +1260,18 @@ mod tests {
 						+ info.weight.min(BlockWeights::get().max_block) as u64 * 2 * 3 / 2 /* weight */
 				},
 			);
-		});
-	}
-
-	#[test]
-	fn query_weight_to_fee_works() {
-		let call = Call::Balances(BalancesCall::transfer { dest: 2, value: 69 });
-		let info = call.get_dispatch_info();
-
-		let origin = 111111;
-		let extra = ();
-		let xt = TestXt::new(call.clone(), Some((origin, extra)));
-		let xt_info = xt.get_dispatch_info();
-
-		let unsigned_xt = TestXt::<_, ()>::new(call.clone(), None);
-		let unsigned_xt_info = unsigned_xt.get_dispatch_info();
-
-		ExtBuilder::default().weight_fee(2).build().execute_with(|| {
-			assert_eq!(
-				TransactionPayment::query_weight_to_fee(call),
-				info.weight.min(BlockWeights::get().max_block) as u64 * 2,
-			);
 
 			assert_eq!(
-				TransactionPayment::query_weight_to_fee(xt),
-				xt_info.weight.min(BlockWeights::get().max_block) as u64 * 2,
-			);
-
-			assert_eq!(
-				TransactionPayment::query_weight_to_fee(unsigned_xt),
-				unsigned_xt_info.weight.min(BlockWeights::get().max_block) as u64 * 2,
+				TransactionPayment::query_call_fee_details(call, len),
+				FeeDetails {
+					inclusion_fee: Some(InclusionFee {
+						base_fee: 5 * 2,     /* base * weight_fee */
+						len_fee: len as u64, /* len * 1 */
+						adjusted_weight_fee: info.weight.min(BlockWeights::get().max_block) as u64 *
+							2 * 3 / 2  /* weight * weight_fee * multipler */
+					}),
+					tip: 0,
+				},
 			);
 		});
 	}
