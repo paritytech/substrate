@@ -74,12 +74,6 @@ struct Opt {
 	/// so that actual interval can be selected in the profiler of choice.
 	#[clap(short, long, default_value = "regular")]
 	mode: BenchmarkMode,
-	/// Benchmarks to exclude
-	///
-	/// Provide the names of the benchmarks you would like to skip.
-	/// e.g `--exclude benchmark_name`
-	#[clap(long)]
-	exclude: Vec<String>,
 }
 
 fn main() {
@@ -175,7 +169,7 @@ fn main() {
 
 	let mut results = Vec::new();
 	for benchmark in benchmarks {
-		if opt.filter.as_ref().map(|f| benchmark.path().has(f)).unwrap_or(true) {	
+		if opt.filter.as_ref().map(|f| benchmark.path().has(f)).unwrap_or(true) {
 			log::info!("Starting {}", benchmark.name());
 			let result = run_benchmark(benchmark, opt.mode);
 			log::info!("{}", result);
