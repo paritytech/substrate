@@ -469,7 +469,7 @@ impl<T: Config> PoolMember<T> {
 			self.points = new_points;
 			Ok(())
 		} else {
-			Err(Error::<T>::NotEnoughPointsToUnbond)
+			Err(Error::<T>::MinimumBondNotMet)
 		}
 	}
 
@@ -781,45 +781,60 @@ impl<T: Config> BondedPool<T> {
 		let is_depositor = *target_account == self.roles.depositor;
 		let is_full_unbond = unbonding_points == target_member.active_points();
 
+		let balance_after_unbond = {
+			let new_depositor_points =
+				target_member.active_points().saturating_sub(unbonding_points);
+			let mut target_member_after_unbond = (*target_member).clone();
+			target_member_after_unbond.points = new_depositor_points;
+			target_member_after_unbond.active_balance()
+		};
+
 		// any partial unbonding is only ever allowed if this unbond is permissioned.
 		ensure!(
 			is_permissioned || is_full_unbond,
 			Error::<T>::PartialUnbondNotAllowedPermissionlessly
 		);
 
+		// any unbond must comply with the balance condition:
+		ensure!(
+			is_full_unbond ||
+				balance_after_unbond >=
+					if is_depositor {
+						Pallet::<T>::depositor_min_bond()
+					} else {
+						MinJoinBond::<T>::get()
+					},
+			Error::<T>::MinimumBondNotMet
+		);
+
+		// additional checks:
 		match (is_permissioned, is_depositor) {
-			// If the pool is blocked, then an admin with kicking permissions can remove a
-			// member. If the pool is being destroyed, anyone can remove a member
+			(true, false) => (),
+			(true, true) => {
+				// permission depositor unbond: if destroying and pool is empty, always allowed,
+				// with no additional limits.
+				if self.is_destroying_and_only_depositor(target_member.active_points()) {
+					// everything good, let them unbond anything.
+				} else {
+					// depositor cannot fully unbond yet.
+					ensure!(!is_full_unbond, Error::<T>::MinimumBondNotMet);
+				}
+			},
 			(false, false) => {
+				// If the pool is blocked, then an admin with kicking permissions can remove a
+				// member. If the pool is being destroyed, anyone can remove a member
+				debug_assert!(is_full_unbond);
 				ensure!(
 					self.can_kick(caller) || self.is_destroying(),
 					Error::<T>::NotKickerOrDestroying
 				)
 			},
-			// Any member who is not the depositor can always unbond themselves
-			(true, false) => (),
-			(_, true) => {
-				if self.is_destroying_and_only_depositor(target_member.active_points()) {
-					// if the pool is about to be destroyed, anyone can unbond the depositor, and
-					// they can fully unbond.
-				} else {
-					// only the depositor can partially unbond, and they can only unbond up to the
-					// threshold.
-					ensure!(is_permissioned, Error::<T>::DoesNotHavePermission);
-					let balance_after_unbond = {
-						let new_depositor_points =
-							target_member.active_points().saturating_sub(unbonding_points);
-						let mut depositor_after_unbond = (*target_member).clone();
-						depositor_after_unbond.points = new_depositor_points;
-						depositor_after_unbond.active_balance()
-					};
-					ensure!(
-						balance_after_unbond >= MinCreateBond::<T>::get(),
-						Error::<T>::NotOnlyPoolMember
-					);
-				}
+			(false, true) => {
+				// the depositor can simply not be unbonded permissionlessly, period.
+				return Err(Error::<T>::DoesNotHavePermission.into())
 			},
 		};
+
 		Ok(())
 	}
 
@@ -830,25 +845,14 @@ impl<T: Config> BondedPool<T> {
 		&self,
 		caller: &T::AccountId,
 		target_account: &T::AccountId,
-		target_member: &PoolMember<T>,
-		sub_pools: &SubPools<T>,
 	) -> Result<(), DispatchError> {
-		if *target_account == self.roles.depositor {
-			ensure!(
-				sub_pools.sum_unbonding_points() == target_member.unbonding_points(),
-				Error::<T>::NotOnlyPoolMember
-			);
-			debug_assert_eq!(self.member_counter, 1, "only member must exist at this point");
-			Ok(())
-		} else {
-			// This isn't a depositor
-			let is_permissioned = caller == target_account;
-			ensure!(
-				is_permissioned || self.can_kick(caller) || self.is_destroying(),
-				Error::<T>::NotKickerOrDestroying
-			);
-			Ok(())
-		}
+		// This isn't a depositor
+		let is_permissioned = caller == target_account;
+		ensure!(
+			is_permissioned || self.can_kick(caller) || self.is_destroying(),
+			Error::<T>::NotKickerOrDestroying
+		);
+		Ok(())
 	}
 
 	/// Bond exactly `amount` from `who`'s funds into this pool.
@@ -1098,15 +1102,6 @@ impl<T: Config> SubPools<T> {
 		}
 
 		self
-	}
-
-	/// The sum of all unbonding points, regardless of whether they are actually unlocked or not.
-	fn sum_unbonding_points(&self) -> BalanceOf<T> {
-		self.no_era.points.saturating_add(
-			self.with_era
-				.values()
-				.fold(BalanceOf::<T>::zero(), |acc, pool| acc.saturating_add(pool.points)),
-		)
 	}
 
 	/// The sum of all unbonding balance, regardless of whether they are actually unlocked or not.
@@ -1419,15 +1414,16 @@ pub mod pallet {
 		/// None of the funds can be withdrawn yet because the bonding duration has not passed.
 		CannotWithdrawAny,
 		/// The amount does not meet the minimum bond to either join or create a pool.
+		///
+		/// The depositor can never unbond to a value less than
+		/// `Pallet::depositor_min_bond`. The caller does not have nominating
+		/// permissions for the pool. Members can never unbond to a value below `MinJoinBond`.
 		MinimumBondNotMet,
 		/// The transaction could not be executed due to overflow risk for the pool.
 		OverflowRisk,
 		/// A pool must be in [`PoolState::Destroying`] in order for the depositor to unbond or for
 		/// other members to be permissionlessly unbonded.
 		NotDestroying,
-		/// The depositor must be the only member in the bonded pool in order to unbond. And the
-		/// depositor must be the only member in the sub pools in order to withdraw unbonded.
-		NotOnlyPoolMember,
 		/// The caller does not have nominating permissions for the pool.
 		NotNominator,
 		/// Either a) the caller cannot make a valid kick or b) the pool is not destroying.
@@ -1447,8 +1443,6 @@ pub mod pallet {
 		/// Some error occurred that should never happen. This should be reported to the
 		/// maintainers.
 		Defensive(DefensiveError),
-		/// Not enough points. Ty unbonding less.
-		NotEnoughPointsToUnbond,
 		/// Partial unbonding now allowed permissionlessly.
 		PartialUnbondNotAllowedPermissionlessly,
 	}
@@ -1758,12 +1752,7 @@ pub mod pallet {
 			let mut sub_pools = SubPoolsStorage::<T>::get(member.pool_id)
 				.defensive_ok_or::<Error<T>>(DefensiveError::SubPoolsNotFound.into())?;
 
-			bonded_pool.ok_to_withdraw_unbonded_with(
-				&caller,
-				&member_account,
-				&member,
-				&sub_pools,
-			)?;
+			bonded_pool.ok_to_withdraw_unbonded_with(&caller, &member_account)?;
 
 			// NOTE: must do this after we have done the `ok_to_withdraw_unbonded_other_with` check.
 			let withdrawn_points = member.withdraw_unlocked(current_era);
@@ -1878,13 +1867,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
-			ensure!(
-				amount >=
-					T::StakingInterface::minimum_bond()
-						.max(MinCreateBond::<T>::get())
-						.max(MinJoinBond::<T>::get()),
-				Error::<T>::MinimumBondNotMet
-			);
+			ensure!(amount >= Pallet::<T>::depositor_min_bond(), Error::<T>::MinimumBondNotMet);
 			ensure!(
 				MaxPools::<T>::get()
 					.map_or(true, |max_pools| BondedPools::<T>::count() < max_pools),
@@ -2162,6 +2145,18 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
+	/// The amount of bond that MUST REMAIN IN BONDED in ALL POOLS.
+	///
+	/// It is the responsibility of the depositor to put these funds into the pool initially. Upon
+	/// unbond, they can never unbond to a value below this amount.
+	///
+	/// It is essentially `max { MinNominatorBond, MinCreateBond, MinJoinBond }`, where the former
+	/// is coming from the staking pallet and the latter two are configured in this pallet.
+	fn depositor_min_bond() -> BalanceOf<T> {
+		T::StakingInterface::minimum_bond()
+			.max(MinCreateBond::<T>::get())
+			.max(MinJoinBond::<T>::get())
+	}
 	/// Remove everything related to the given bonded pool.
 	///
 	/// All sub-pools are also deleted. All accounts are dusted and the leftover of the reward
