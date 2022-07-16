@@ -1481,7 +1481,7 @@ mod claim_payout {
 			// and 20 bonds more -- they should not have more share of this reward.
 			assert_ok!(Pools::bond_extra(Origin::signed(20), BondExtra::FreeBalance(10)));
 
-			// everyone claim.
+			// everyone claims.
 			assert_ok!(Pools::claim_payout(Origin::signed(10)));
 			assert_ok!(Pools::claim_payout(Origin::signed(20)));
 

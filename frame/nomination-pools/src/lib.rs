@@ -899,7 +899,7 @@ impl<T: Config> BondedPool<T> {
 		Ok(points_issued)
 	}
 
-  /// Bond all of the rewards from `member` into this pool.
+	/// Bond all of the pending_rewards from `member` into this pool.
 	///
 	/// Similar to `try_bond_funds`, but doesn't transfer funds from an account, but instead
 	/// transfers the rewards directly from the member's reward pool to the `bonded_account`.
@@ -912,55 +912,45 @@ impl<T: Config> BondedPool<T> {
 		reward_pool: &mut RewardPool<T>,
 	) -> Result<(BalanceOf<T>, BalanceOf<T>), DispatchError> {
 		debug_assert_eq!(member.pool_id, self.id);
+
 		// a member who has no skin in the game anymore cannot claim any rewards.
 		ensure!(!member.active_points().is_zero(), Error::<T>::FullyUnbonding);
-		let was_destroying = self.is_destroying();
 
-		let member_payout = Pallet::<T>::calculate_member_payout(member, self, reward_pool)?;
+		let bonded_pool = BondedPool::<T>::get(member.pool_id).ok_or(Error::<T>::PoolNotFound)?;
 
-		// if the payout is zero, the issued points are also going to be zero.
-		if member_payout.is_zero() {
-			return Ok((member_payout, member_payout))
+		let current_reward_counter =
+			reward_pool.current_reward_counter(bonded_pool.id, bonded_pool.points)?;
+		let pending_rewards = member.pending_rewards(current_reward_counter)?;
+
+		// if the pending rewards are zero, the issued points are also going to be zero.
+		if pending_rewards.is_zero() {
+			return Ok((BalanceOf::<T>::zero(), pending_rewards))
 		}
+
+		// IFF the reward is non-zero alter the member and reward pool info.
+		member.last_recorded_reward_counter = current_reward_counter;
+		reward_pool.register_claimed_reward(pending_rewards);
 
 		let bonded_account = self.bonded_account();
 
 		// Transfer payout to the bonded pool.
 		T::Currency::transfer(
-			&self.reward_account(),
+			&bonded_pool.reward_account(),
 			&bonded_account,
-			member_payout,
+			pending_rewards,
 			ExistenceRequirement::KeepAlive,
 		)?;
 
 		Pallet::<T>::deposit_event(Event::<T>::PaidOut {
 			member: member_account.clone(),
 			pool_id: member.pool_id,
-			payout: member_payout,
+			payout: pending_rewards,
 		});
 
-		if self.is_destroying() && !was_destroying {
-			Pallet::<T>::deposit_event(Event::<T>::StateChanged {
-				pool_id: member.pool_id,
-				new_state: PoolState::Destroying,
-			});
-		}
+		let points_issued = self.issue(pending_rewards);
 
-		let points_issued = self.issue(member_payout);
-
-		T::StakingInterface::bond_extra(bonded_account, member_payout)?;
-
-		Ok((points_issued, member_payout))
-	}
-
-	/// If `n` saturates at it's upper bound, mark the pool as destroying. This is useful when a
-	/// number saturating indicates the pool can no longer correctly keep track of state.
-	fn bound_check(&mut self, n: U256) -> U256 {
-		if n == U256::max_value() {
-			self.set_state(PoolState::Destroying)
-		}
-
-		n
+		T::StakingInterface::bond_extra(bonded_account, pending_rewards)?;
+		Ok((points_issued, pending_rewards))
 	}
 
 	// Set the state of `self`, and deposit an event if the state changed. State should never be set
@@ -1614,6 +1604,11 @@ pub mod pallet {
 			// payout related stuff: we must claim the payouts, and updated recorded payout data
 			// before updating the bonded pool points, similar to that of `join` transaction.
 			reward_pool.update_records(bonded_pool.id, bonded_pool.points)?;
+
+			// we have to claim the pending_rewards every time we change the bonded amount.
+			if matches!(extra, BondExtra::FreeBalance(_)) {
+				Self::do_reward_payout(&who, &mut member, &mut bonded_pool, &mut reward_pool)?;
+			}
 
 			let (points_issued, bonded) = match extra {
 				BondExtra::FreeBalance(amount) =>
