@@ -382,7 +382,7 @@ fn should_verify_batch_proofs() {
 		let leaves_set: Vec<Vec<u64>> = (0..n).into_iter().powerset().skip(1).collect();
 
 		leaves_set.iter().for_each(|leaves_subset| {
-			generate_and_verify_batch_proof(& mut ext, leaves_subset, 7);
+			generate_and_verify_batch_proof(& mut ext, leaves_subset, 0);
 			ext.persist_offchain_overlay();
 		});
 	}
@@ -397,10 +397,12 @@ fn should_verify_batch_proofs() {
 		let leaves_set: Vec<Vec<u64>> = (0..n).into_iter().combinations(2).collect();
 
 		leaves_set.iter().for_each(|leaves_subset| {
-			generate_and_verify_batch_proof(&mut ext, leaves_subset, 7);
+			generate_and_verify_batch_proof(&mut ext, leaves_subset, 0);
 			ext.persist_offchain_overlay();
 		});
 	}
+
+	generate_and_verify_batch_proof(&mut ext, &vec![7, 11], 20);
 }
 
 #[test]
