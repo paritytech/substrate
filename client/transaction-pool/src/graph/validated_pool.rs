@@ -125,6 +125,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 	/// Create a new transaction pool.
 	pub fn new(options: Options, is_validator: IsValidator, api: Arc<B>) -> Self {
 		let base_pool = base::BasePool::new(options.reject_future_transactions);
+		let ban_time = options.ban_time;
 		Self {
 			is_validator,
 			options,
@@ -132,7 +133,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 			api,
 			pool: RwLock::new(base_pool),
 			import_notification_sinks: Default::default(),
-			rotator: Default::default(),
+			rotator: PoolRotator::new(ban_time),
 		}
 	}
 
