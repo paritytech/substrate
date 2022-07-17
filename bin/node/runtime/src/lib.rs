@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -1838,7 +1838,9 @@ impl_runtime_apis! {
 	impl pallet_nomination_pools_rpc_runtime_api::NominationPoolsApi<Block, AccountId, Balance> for Runtime {
 		fn pending_rewards(member_account: AccountId) -> Balance {
 			if let Some(member) = pallet_nomination_pools::PoolMembers::<Runtime>::get(member_account) {
-				return member.pending_rewards(member.last_recorded_reward_counter).unwrap_or_default();
+				if let Some(pool) = pallet_nomination_pools::RewardPools::<Runtime>::get(member.pool_id) {
+					return member.pending_rewards(pool.last_recorded_reward_counter()).unwrap_or_default();
+				}
 			}
 			Balance::default()
 		}
