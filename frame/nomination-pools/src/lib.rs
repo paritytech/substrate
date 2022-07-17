@@ -2145,7 +2145,7 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
-	/// Returns the pending rewards for the specified member.
+	/// Returns the pending rewards for the specified `member_account`.
 	///
 	/// In case of some error returns balance of 0.
 	pub fn pending_rewards(member_account: T::AccountId) -> BalanceOf<T> {
