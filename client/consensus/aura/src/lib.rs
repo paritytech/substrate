@@ -566,7 +566,6 @@ mod tests {
 	use sc_consensus::BoxJustificationImport;
 	use sc_consensus_slots::{BackoffAuthoringOnFinalizedHeadLagging, SimpleSlotWorker};
 	use sc_keystore::LocalKeystore;
-	use sc_network::config::ProtocolConfig;
 	use sc_network_test::{Block as TestBlock, *};
 	use sp_application_crypto::key_types::AURA;
 	use sp_consensus::{
@@ -645,6 +644,7 @@ mod tests {
 	>;
 	type AuraPeer = Peer<(), PeersClient>;
 
+	#[derive(Default)]
 	pub struct AuraTestNet {
 		peers: Vec<AuraPeer>,
 	}
@@ -654,17 +654,7 @@ mod tests {
 		type PeerData = ();
 		type BlockImport = PeersClient;
 
-		/// Create new test network with peers and given config.
-		fn from_config(_config: &ProtocolConfig) -> Self {
-			AuraTestNet { peers: Vec::new() }
-		}
-
-		fn make_verifier(
-			&self,
-			client: PeersClient,
-			_cfg: &ProtocolConfig,
-			_peer_data: &(),
-		) -> Self::Verifier {
+		fn make_verifier(&self, client: PeersClient, _peer_data: &()) -> Self::Verifier {
 			let client = client.as_client();
 			let slot_duration = slot_duration(&*client).expect("slot duration available");
 
