@@ -353,9 +353,6 @@ fn should_verify_batch_proofs() {
 		leaves: &Vec<u64>,
 		blocks_to_add: usize
 	) {
-		// Try to generate proof now. This requires the offchain extensions to be present
-		// to retrieve full leaf data.
-		register_offchain_ext(ext);
 		let (leaves, proof) = ext.execute_with(|| {
 			crate::Pallet::<Test>::generate_batch_proof(leaves.to_vec()).unwrap()
 		});
@@ -372,6 +369,9 @@ fn should_verify_batch_proofs() {
 	use itertools::Itertools;
 
 	let mut ext = new_test_ext();
+	// require the offchain extensions to be present
+	// to retrieve full leaf data when generating proofs
+	register_offchain_ext(&mut ext);
 
 	// verify that up to n=10, valid proofs are generated for all possible leaf combinations
 	for n in 0..10 {
