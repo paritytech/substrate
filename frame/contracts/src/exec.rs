@@ -797,7 +797,7 @@ where
 				)?;
 			}
 
-			// Every call or instantiate also optionally transferres balance.
+			// Every non delegate call or instantiate also optionally transfers the balance.
 			self.initial_transfer()?;
 
 			// Call into the wasm blob.
@@ -959,8 +959,14 @@ where
 	// The transfer as performed by a call or instantiate.
 	fn initial_transfer(&self) -> DispatchResult {
 		let frame = self.top_frame();
-		let value = frame.value_transferred;
 
+		// If it is a delegate call, then we've already transferred tokens in the
+		// last non-delegate frame.
+		if frame.delegate_caller.is_some() {
+			return Ok(())
+		}
+
+		let value = frame.value_transferred;
 		Self::transfer(ExistenceRequirement::KeepAlive, self.caller(), &frame.account_id, value)
 	}
 
@@ -1557,6 +1563,82 @@ mod tests {
 
 			assert_eq!(get_balance(&origin), 45);
 			assert_eq!(get_balance(&dest), 55);
+		});
+	}
+
+	#[test]
+	fn correct_transfer_on_call() {
+		let origin = ALICE;
+		let dest = BOB;
+		let value = 55;
+
+		let success_ch = MockLoader::insert(Call, move |ctx, _| {
+			assert_eq!(ctx.ext.value_transferred(), value);
+			Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: Bytes(Vec::new()) })
+		});
+
+		ExtBuilder::default().build().execute_with(|| {
+			let schedule = <Test as Config>::Schedule::get();
+			place_contract(&dest, success_ch);
+			set_balance(&origin, 100);
+			let balance = get_balance(&dest);
+			let mut storage_meter = storage::meter::Meter::new(&origin, Some(0), 55).unwrap();
+
+			let _ = MockStack::run_call(
+				origin.clone(),
+				dest.clone(),
+				&mut GasMeter::<Test>::new(GAS_LIMIT),
+				&mut storage_meter,
+				&schedule,
+				value,
+				vec![],
+				None,
+			)
+			.unwrap();
+
+			assert_eq!(get_balance(&origin), 100 - value);
+			assert_eq!(get_balance(&dest), balance + value);
+		});
+	}
+
+	#[test]
+	fn correct_transfer_on_delegate_call() {
+		let origin = ALICE;
+		let dest = BOB;
+		let value = 35;
+
+		let success_ch = MockLoader::insert(Call, move |ctx, _| {
+			assert_eq!(ctx.ext.value_transferred(), value);
+			Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: Bytes(Vec::new()) })
+		});
+
+		let delegate_ch = MockLoader::insert(Call, move |ctx, _| {
+			assert_eq!(ctx.ext.value_transferred(), value);
+			let _ = ctx.ext.delegate_call(success_ch, Vec::new())?;
+			Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: Bytes(Vec::new()) })
+		});
+
+		ExtBuilder::default().build().execute_with(|| {
+			let schedule = <Test as Config>::Schedule::get();
+			place_contract(&dest, delegate_ch);
+			set_balance(&origin, 100);
+			let balance = get_balance(&dest);
+			let mut storage_meter = storage::meter::Meter::new(&origin, Some(0), 55).unwrap();
+
+			let _ = MockStack::run_call(
+				origin.clone(),
+				dest.clone(),
+				&mut GasMeter::<Test>::new(GAS_LIMIT),
+				&mut storage_meter,
+				&schedule,
+				value,
+				vec![],
+				None,
+			)
+			.unwrap();
+
+			assert_eq!(get_balance(&origin), 100 - value);
+			assert_eq!(get_balance(&dest), balance + value);
 		});
 	}
 
