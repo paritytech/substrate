@@ -373,8 +373,8 @@ fn should_verify_batch_proofs() {
 
 	let mut ext = new_test_ext();
 
-	// verify that up to n=7, valid proofs are generated for all possible leaf combinations
-	for n in 1..8 {
+	// verify that up to n=10, valid proofs are generated for all possible leaf combinations
+	for n in 0..10 {
 		ext.execute_with(|| new_block());
 		ext.persist_offchain_overlay();
 
@@ -387,8 +387,8 @@ fn should_verify_batch_proofs() {
 		});
 	}
 
-	// verify that up to n=14, valid proofs are generated for all possible 2-leaf combinations
-	for n in 8..15 {
+	// verify that up to n=15, valid proofs are generated for all possible 2-leaf combinations
+	for n in 10..15 {
 		// (MMR Leafs)
 		ext.execute_with(|| new_block());
 		ext.persist_offchain_overlay();
@@ -403,6 +403,9 @@ fn should_verify_batch_proofs() {
 	}
 
 	generate_and_verify_batch_proof(&mut ext, &vec![7, 11], 20);
+	ext.execute_with(|| add_blocks(1000));
+	ext.persist_offchain_overlay();
+	generate_and_verify_batch_proof(&mut ext, &vec![7, 11, 100, 800], 100);
 }
 
 #[test]
