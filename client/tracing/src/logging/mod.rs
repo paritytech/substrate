@@ -157,7 +157,6 @@ where
 
 	tracing_log::LogTracer::builder()
 		.with_max_level(max_level)
-		.with_interest_cache(tracing_log::InterestCacheConfig::default())
 		.init()?;
 
 	// If we're only logging `INFO` entries then we'll use a simplified logging format.
