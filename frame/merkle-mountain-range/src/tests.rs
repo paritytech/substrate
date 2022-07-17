@@ -348,21 +348,20 @@ fn should_verify() {
 
 #[test]
 fn should_verify_batch_proofs() {
-	fn generate_and_verify_batch_proof(mmr_size: u64, leaves: &Vec<u64>) {
-		// (MMR Leafs)
-		let mut ext = new_test_ext();
-		ext.execute_with(|| add_blocks(mmr_size as usize));
-		ext.persist_offchain_overlay();
-
+	fn generate_and_verify_batch_proof(
+		ext: &mut sp_io::TestExternalities,
+		leaves: &Vec<u64>,
+		blocks_to_add: usize
+	) {
 		// Try to generate proof now. This requires the offchain extensions to be present
 		// to retrieve full leaf data.
-		register_offchain_ext(&mut ext);
+		register_offchain_ext(ext);
 		let (leaves, proof) = ext.execute_with(|| {
 			crate::Pallet::<Test>::generate_batch_proof(leaves.to_vec()).unwrap()
 		});
 
 		ext.execute_with(|| {
-			add_blocks(7);
+			add_blocks(blocks_to_add);
 			// then
 			assert_eq!(crate::Pallet::<Test>::verify_leaves(leaves, proof), Ok(()));
 		})
@@ -371,21 +370,35 @@ fn should_verify_batch_proofs() {
 	let _ = env_logger::try_init();
 
 	use itertools::Itertools;
+
+	let mut ext = new_test_ext();
+
+	// verify that up to n=7, valid proofs are generated for all possible leaf combinations
 	for n in 1..8 {
+		ext.execute_with(|| new_block());
+		ext.persist_offchain_overlay();
+
 		// generate powerset (skipping empty set) of all possible leaf combinations for mmr size n
 		let leaves_set: Vec<Vec<u64>> = (0..n).into_iter().powerset().skip(1).collect();
 
 		leaves_set.iter().for_each(|leaves_subset| {
-			generate_and_verify_batch_proof(n, leaves_subset);
+			generate_and_verify_batch_proof(& mut ext, leaves_subset, 7);
+			ext.persist_offchain_overlay();
 		});
 	}
 
+	// verify that up to n=14, valid proofs are generated for all possible 2-leaf combinations
 	for n in 8..15 {
+		// (MMR Leafs)
+		ext.execute_with(|| new_block());
+		ext.persist_offchain_overlay();
+
 		// generate all possible 2-leaf combinations for mmr size n
 		let leaves_set: Vec<Vec<u64>> = (0..n).into_iter().combinations(2).collect();
 
 		leaves_set.iter().for_each(|leaves_subset| {
-			generate_and_verify_batch_proof(n, leaves_subset);
+			generate_and_verify_batch_proof(&mut ext, leaves_subset, 7);
+			ext.persist_offchain_overlay();
 		});
 	}
 }
