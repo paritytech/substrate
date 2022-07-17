@@ -38,7 +38,7 @@ use sp_runtime::{
 pub use pallet_transaction_payment_rpc_runtime_api::TransactionPaymentApi as TransactionPaymentRuntimeApi;
 
 #[rpc(client, server)]
-pub trait TransactionPaymentApi<BlockHash, ResponseType, Call> {
+pub trait TransactionPaymentApi<BlockHash, ResponseType> {
 	#[method(name = "payment_queryInfo")]
 	fn query_info(&self, encoded_xt: Bytes, at: Option<BlockHash>) -> RpcResult<ResponseType>;
 
@@ -82,14 +82,13 @@ impl From<Error> for i32 {
 }
 
 #[async_trait]
-impl<C, Block, Balance, Call>
-	TransactionPaymentApiServer<<Block as BlockT>::Hash, RuntimeDispatchInfo<Balance>, Call>
+impl<C, Block, Balance>
+	TransactionPaymentApiServer<<Block as BlockT>::Hash, RuntimeDispatchInfo<Balance>>
 	for TransactionPayment<C, Block>
 where
 	Block: BlockT,
 	C: ProvideRuntimeApi<Block> + HeaderBackend<Block> + Send + Sync + 'static,
-	C::Api: TransactionPaymentRuntimeApi<Block, Balance, Call>,
-	Call: Codec + Send + Sync + 'static,
+	C::Api: TransactionPaymentRuntimeApi<Block, Balance>,
 	Balance: Codec + MaybeDisplay + Copy + TryInto<NumberOrHex> + Send + Sync + 'static,
 {
 	fn query_info(
