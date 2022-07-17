@@ -2145,6 +2145,20 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
+	/// Returns the pending rewards for the specified member.
+	///
+	/// In case of some error returns balance of 0.
+	pub fn pending_rewards(member_account: T::AccountId) -> BalanceOf<T> {
+		if let Some(member) = PoolMembers::<T>::get(member_account) {
+			if let Some(pool) = RewardPools::<T>::get(member.pool_id) {
+				return member
+					.pending_rewards(pool.last_recorded_reward_counter())
+					.unwrap_or_default()
+			}
+		}
+		BalanceOf::<T>::default()
+	}
+
 	/// The amount of bond that MUST REMAIN IN BONDED in ALL POOLS.
 	///
 	/// It is the responsibility of the depositor to put these funds into the pool initially. Upon
