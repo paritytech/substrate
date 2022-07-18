@@ -118,7 +118,7 @@ impl frame_system::Config for Runtime {
 }
 
 parameter_types! {
-	pub const MaxConcurrentReportsPerIndex: u32 = 100;
+	pub const MaxConcurrentReportsPerId: u32 = 100;
 	pub const MaxSameKindReports: u32 = 100;
 	pub const MaxSameKindReportsEncodedLen: u32 = 5_000;
 	pub const MaxOpaqueTimeSlotEncodedLen: u32 = 16;
@@ -129,7 +129,7 @@ impl Config for Runtime {
 	type IdentificationTuple = u64;
 	type OnOffenceHandler = OnOffenceHandler;
 
-	type MaxConcurrentReportsPerIndex = MaxConcurrentReportsPerIndex;
+	type MaxConcurrentReportsPerId = MaxConcurrentReportsPerId;
 	type MaxSameKindReports = MaxSameKindReports;
 	type MaxSameKindReportsEncodedLen = MaxSameKindReportsEncodedLen;
 	type MaxOpaqueTimeSlotEncodedLen = MaxOpaqueTimeSlotEncodedLen;

@@ -48,8 +48,7 @@ type ReportIdOf<T> = <T as frame_system::Config>::Hash;
 type SameKindReportsOf<T, TimeSlot> =
 	BoundedVec<(TimeSlot, ReportIdOf<T>), <T as Config>::MaxSameKindReports>;
 
-type ConcurrentReportsOf<T> =
-	BoundedVec<ReportIdOf<T>, <T as Config>::MaxConcurrentReportsPerIndex>;
+type ConcurrentReportsOf<T> = BoundedVec<ReportIdOf<T>, <T as Config>::MaxConcurrentReportsPerId>;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -74,7 +73,7 @@ pub mod pallet {
 
 		/// Maximum number of reports of the same kind that happened at a specific time slot.
 		#[pallet::constant]
-		type MaxConcurrentReportsPerIndex: Get<u32>;
+		type MaxConcurrentReportsPerId: Get<u32>;
 
 		/// The maximum number of reports for the same kind.
 		#[pallet::constant]
@@ -179,8 +178,7 @@ where
 		// The amount new offenders are slashed
 		let new_fraction = O::slash_fraction(offenders_count, validator_set_count);
 
-		let slash_perbill: Vec<_> = (0..concurrent_offenders.len()).map(|_| new_fraction).collect();
-		let slash_perbill: BoundedVec<_, _> = slash_perbill.try_into().expect("todo");
+		let slash_perbill: BoundedVec<_, MaxOffenders> = (0..concurrent_offenders.len()).map(|_| new_fraction).collect::<Vec<_>>().try_into().expect("TriageOutcome has at most MaxOffenders offenders; .map() does not increase the length; qed");
 
 		T::OnOffenceHandler::on_offence(
 			&concurrent_offenders,

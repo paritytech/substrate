@@ -84,6 +84,7 @@ pub mod weights;
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
+	defensive,
 	traits::{
 		EstimateNextSessionRotation, Get, OneSessionHandler, ValidatorSet,
 		ValidatorSetWithIdentification, WrapperOpaque,
@@ -908,14 +909,19 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 		if offenders.is_empty() {
 			Self::deposit_event(Event::<T>::AllGood);
 		} else {
-			Self::deposit_event(Event::<T>::SomeOffline { offline: offenders.clone() });
+			// The Offenders must fit, but just in case we truncate if they don't.
+			let offenders: BoundedVec<_, MaxOffenders> =
+				if offenders.len() as u32 > MaxOffenders::get() {
+					defensive!("More than the maximum number of offenders provided");
+					BoundedVec::truncate_from(offenders)
+				} else {
+					offenders.try_into().expect("Must fit")
+				};
+
+			Self::deposit_event(Event::<T>::SomeOffline { offline: offenders.clone().to_vec() });
 
 			let validator_set_count = keys.len() as u32;
-			let offence = UnresponsivenessOffence {
-				session_index,
-				validator_set_count,
-				offenders: offenders.try_into().expect("TODO"),
-			};
+			let offence = UnresponsivenessOffence { session_index, validator_set_count, offenders };
 			if let Err(e) = T::ReportUnresponsiveness::report_offence(Default::default(), offence) {
 				sp_runtime::print(e);
 			}

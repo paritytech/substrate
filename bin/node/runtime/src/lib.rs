@@ -1244,7 +1244,7 @@ impl pallet_offences::Config for Runtime {
 	type IdentificationTuple = pallet_session::historical::IdentificationTuple<Self>;
 	type OnOffenceHandler = Staking;
 
-	type MaxConcurrentReportsPerIndex = ConstU32<10>;
+	type MaxConcurrentReportsPerId = ConstU32<10>;
 	type MaxSameKindReports = ConstU32<100>;
 	type MaxSameKindReportsEncodedLen = ConstU32<5_000>;
 	type MaxOpaqueTimeSlotEncodedLen = ConstU32<16>;

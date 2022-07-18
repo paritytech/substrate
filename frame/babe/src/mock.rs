@@ -39,10 +39,7 @@ use sp_runtime::{
 	traits::{Header as _, IdentityLookup, OpaqueKeys},
 	Perbill,
 };
-use sp_staking::{
-	offence::{MaxOffenders, MaxReporters},
-	EraIndex, SessionIndex,
-};
+use sp_staking::{EraIndex, SessionIndex};
 
 type DummyValidatorId = u64;
 
@@ -216,7 +213,7 @@ impl pallet_offences::Config for Test {
 	type IdentificationTuple = pallet_session::historical::IdentificationTuple<Self>;
 	type OnOffenceHandler = Staking;
 
-	type MaxConcurrentReportsPerIndex = ConstU32<10>;
+	type MaxConcurrentReportsPerId = ConstU32<10>;
 	type MaxSameKindReports = ConstU32<100>;
 	type MaxSameKindReportsEncodedLen = ConstU32<5_000>;
 	type MaxOpaqueTimeSlotEncodedLen = ConstU32<16>;

@@ -151,7 +151,7 @@ fn create_offender<T: Config>(n: u32, nominators: u32) -> Result<Offender<T>, &'
 	let exposure = Exposure {
 		total: amount * n.into(),
 		own: amount,
-		others: individual_exposures.try_into().expect("TODO"),
+		others: individual_exposures.try_into().expect("Must fit"),
 	};
 	let current_era = 0u32;
 	Staking::<T>::add_era_stakers(current_era, stash.clone(), exposure);
@@ -282,7 +282,7 @@ fn check_events<T: Config, I: Iterator<Item = <T as SystemConfig>::Event>>(expec
 
 benchmarks! {
 	report_offence_im_online {
-		let r in 1 .. MAX_REPORTERS; // TODO @ggwpez
+		let r in 1 .. MAX_REPORTERS;
 		// we skip 1 offender, because in such case there is no slashing
 		let o in 2 .. MAX_OFFENDERS;
 		let n in 0 .. MAX_NOMINATORS.min(<T as pallet_staking::Config>::MaxNominations::get());

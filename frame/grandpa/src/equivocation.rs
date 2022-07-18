@@ -161,7 +161,7 @@ where
 		offenders: &BoundedVec<T::KeyOwnerIdentification, MaxOffenders>,
 		time_slot: &O::TimeSlot,
 	) -> bool {
-		R::is_known_offence(&offenders.to_vec().try_into().expect("TODO"), time_slot)
+		R::is_known_offence(&offenders, time_slot)
 	}
 
 	fn submit_unsigned_equivocation_report(
