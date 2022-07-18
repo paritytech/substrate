@@ -40,10 +40,7 @@ use sp_runtime::{
 	traits::{IdentityLookup, OpaqueKeys},
 	DigestItem, Perbill,
 };
-use sp_staking::{
-	offence::{MaxOffenders, MaxReporters},
-	EraIndex, SessionIndex,
-};
+use sp_staking::{EraIndex, SessionIndex};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
