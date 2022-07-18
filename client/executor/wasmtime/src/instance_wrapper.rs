@@ -187,7 +187,7 @@ impl InstanceWrapper {
 		let mut store = create_store(engine, max_memory_size);
 		let instance = instance_pre.instantiate(&mut store).map_err(|error| {
 			WasmError::Other(
-				format!("failed to instantiate a new WASM module instance: {}", error,),
+				format!("failed to instantiate a new WASM module instance: {:#}", error,),
 			)
 		})?;
 
