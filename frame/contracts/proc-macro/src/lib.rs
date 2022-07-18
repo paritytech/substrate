@@ -21,10 +21,15 @@
 
 extern crate alloc;
 
-use alloc::string::ToString;
+use alloc::{
+	boxed::Box,
+	string::{String, ToString},
+	vec,
+	vec::Vec,
+};
 use proc_macro2::TokenStream;
-use quote::{quote, quote_spanned};
-use syn::{parse_macro_input, Data, DeriveInput, Ident};
+use quote::{quote, quote_spanned, ToTokens};
+use syn::{parse_macro_input, spanned::Spanned, Data, DeriveInput, Ident, Item, ItemFn};
 
 /// This derives `Debug` for a struct where each field must be of some numeric type.
 /// It interprets each field as its represents some weight and formats it as times so that
@@ -85,7 +90,7 @@ fn derive_debug(
 /// This is only used then the `full` feature is activated.
 #[cfg(feature = "full")]
 fn iterate_fields(data: &syn::DataStruct, fmt: impl Fn(&Ident) -> TokenStream) -> TokenStream {
-	use syn::{spanned::Spanned, Fields};
+	use syn::Fields;
 
 	match &data.fields {
 		Fields::Named(fields) => {
@@ -138,5 +143,178 @@ fn format_weight(field: &Ident) -> TokenStream {
 fn format_default(field: &Ident) -> TokenStream {
 	quote_spanned! { field.span() =>
 		&self.#field
+	}
+}
+
+// define_env! macro re-write
+// first we parse env mod
+// then we expand, i.e.
+// should generate code for:
+// 1. can_satisfy checks: #can_satisfy
+//    expand def, so just add parts related to the new func to it, and return updated def as a token
+// stream    see how it's done in pallet proc macro, e.g. in constants
+// 2. impls() for the set of host functions: #impls
+
+/// parsed definition of env
+/// (inspired by pallet attribute macro, see /frame/support/procedural/src/pallet/)
+struct EnvDef {
+	pub item: syn::ItemMod,      // the whole env module
+	pub host_funcs: Vec<HostFn>, // set of host fuctions
+}
+
+struct HostFn {
+	item: syn::ItemFn,
+	module: String,
+	name: String,
+}
+
+trait ToWasmSig {
+	fn to_wasm_sig(&self) -> TokenStream;
+}
+
+impl ToWasmSig for HostFn {
+	fn to_wasm_sig(&self) -> TokenStream {
+		let args = self.item.sig.inputs.iter().skip(1).filter_map(|a| match a {
+			syn::FnArg::Typed(pt) => Some(&pt.ty),
+			_ => None,
+		});
+
+		let returns = match &self.item.sig.output {
+			syn::ReturnType::Type(_, bt) => quote! { vec![ #bt::VALUE_TYPE ] },
+			_ => quote! { vec![] },
+		};
+
+		quote! {
+			 wasm_instrument::parity_wasm::elements::FunctionType::new(
+				vec! [ #(<#args>::VALUE_TYPE),* ],
+				#returns,
+			)
+		}
+	}
+}
+
+impl ToTokens for HostFn {
+	fn to_tokens(&self, tokens: &mut TokenStream) {
+		self.item.to_tokens(tokens);
+	}
+}
+
+impl HostFn {
+	pub fn try_from(mut item: syn::Item) -> syn::Result<Self> {
+		let span = item.span();
+		let err = || {
+			let msg = "Invalid environment definition, only fn with #[host(\"...\")] attribute are allowed.";
+			syn::Error::new(span, msg)
+		};
+
+		let mut item = match item {
+			syn::Item::Fn(i_fn) => Ok(i_fn),
+			_ => Err(err()),
+		}?;
+
+		let attr = item.attrs.pop().ok_or(err())?;
+		let module = attr.parse_args().map(|a: syn::LitStr| a.value())?;
+		let name = item.sig.ident.to_string();
+		attr.path
+			.get_ident()
+			.ok_or(err())?
+			.to_string()
+			.eq("host")
+			.then(|| Ok(Self { item, module, name }))
+			.ok_or(err())?
+	}
+}
+
+impl EnvDef {
+	pub fn try_from(mut item: syn::ItemMod) -> syn::Result<Self> {
+		let item_span = item.span();
+		let items = &mut item
+			.content
+			.as_mut()
+			.ok_or_else(|| {
+				let msg = "Invalid environment definition, expected mod to be inlined.";
+				syn::Error::new(item_span, msg)
+			})?
+			.1;
+		let mut host_funcs = Vec::<HostFn>::default();
+
+		for i in items.iter() {
+			host_funcs.push(HostFn::try_from(i.clone())?);
+		}
+
+		Ok(Self { item, host_funcs })
+	}
+}
+
+fn expand_env(def: &mut EnvDef) -> proc_macro2::TokenStream {
+	// should generate code for:
+	// 1. can_satisfy checks: #can_satisfy
+	//    expand def, so just add parts related to the new func to it, and return updated def as a
+	// token stream    see how it's done in pallet proc macro, e.g. in constants
+	// 2. impls() for the set of host functions: #impls
+	let can_satisfy = expand_can_satisfy(def);
+	// expand_impls(def);
+	quote! {
+			pub struct Env;
+			#can_satisfy
+	}
+	// expand_impls(def);
+}
+
+// Adds check to can_satisfy for a new host fn
+fn expand_can_satisfy(def: &mut EnvDef) -> proc_macro2::TokenStream {
+	let checks = def.host_funcs.iter().map(|f| {
+		let (module, name, signature) = (&f.module, &f.name, &f.to_wasm_sig());
+		quote! {
+			if module == #module.as_bytes()
+				&& name == #name.as_bytes()
+				&& signature == #signature
+			{
+				return true;
+			}
+		}
+	});
+
+	let satisfy_checks = quote! {
+		#( #checks )*
+	};
+
+	quote! {
+		impl crate::wasm::env_def::ImportSatisfyCheck for Env {
+			fn can_satisfy(
+					module: &[u8],
+					name: &[u8],
+					signature: &wasm_instrument::parity_wasm::elements::FunctionType,
+				) -> bool {
+					use crate::wasm::env_def::ConvertibleToWasm;
+					#[cfg(not(feature = "unstable-interface"))]
+					if module == b"__unstable__" {
+						return false;
+					}
+					#satisfy_checks
+					return false;
+				}
+		}
+	}
+}
+//pub fn expand_impls
+// TDB
+
+#[proc_macro_attribute]
+pub fn define_env(
+	attr: proc_macro::TokenStream,
+	item: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
+	if !attr.is_empty() {
+		let msg = "Invalid define_env macro call: expected no attributes, the call must be just \
+			`#[define_env]`";
+		let span = proc_macro2::TokenStream::from(attr).span();
+		return syn::Error::new(span, msg).to_compile_error().into()
+	}
+
+	let i = syn::parse_macro_input!(item as syn::ItemMod);
+	match EnvDef::try_from(i) {
+		Ok(mut def) => expand_env(&mut def).into(),
+		Err(e) => e.to_compile_error().into(),
 	}
 }
