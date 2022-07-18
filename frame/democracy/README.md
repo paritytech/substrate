@@ -132,4 +132,47 @@ This call can only be made by the `VetoOrigin`.
 - `cancel_queued` - Cancels a proposal that is queued for enactment.
 - `clear_public_proposal` - Removes all public proposals.
 
+
+## Model
+
+Vote treshholds and conviction can be modeled with next code:
+
+```python
+electorate = 100 # total supply of asset (total stake)
+against = 0.1 # percentage of stake (total supply)
+approve = 0.1 # percentage of stake
+
+convicted_approve = 8 # leverage obtained from time lock
+convicted_against = 8
+
+assert(approve + against <= 1)
+approve = approve * electorate
+against = against * electorate
+turnout = against + approve  
+
+# maximal leverage is 128 for time locking
+assert(convicted_approve <= 128) 
+assert(convicted_against <= 128) 
+
+convicted_approve = convicted_approve * approve
+convicted_against = convicted_against * against
+
+# harder to approve
+# can be approved only if stack against or very many votes againts
+# positive turnout bias
+super_majority_approve = convicted_against / turnout**1/2 < convicted_approve / electorate**1/2
+
+# easier to approve
+# can be reject if much of stake against or very many voters against
+# negative turnout bias
+super_majority_against = convicted_against / electorate**1/2 < convicted_approve / turnout**1/2 
+
+simple_majority = convicted_approve > convicted_against
+
+print(super_majority_approve)
+print(super_majority_against)
+print(simple_majority)
+```
+
+
 License: Apache-2.0
