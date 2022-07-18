@@ -217,7 +217,7 @@ impl pallet_offences::Config for Test {
 	type IdentificationTuple = pallet_session::historical::IdentificationTuple<Self>;
 	type OnOffenceHandler = Staking;
 
-	type MaxConcurrentReportsPerId = ConstU32<10>;
+	type MaxConcurrentReportsPerId = ConstU32<100>;
 	type MaxSameKindReports = ConstU32<100>;
 	type MaxSameKindReportsEncodedLen = ConstU32<5_000>;
 	type MaxOpaqueTimeSlotEncodedLen = ConstU32<16>;
