@@ -165,3 +165,8 @@ where
 		self.inner.check_block(block).await
 	}
 }
+
+#[cfg(test)]
+pub(crate) mod tests {
+	// TODO
+}
