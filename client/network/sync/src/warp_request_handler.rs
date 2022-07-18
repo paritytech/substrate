@@ -1,4 +1,4 @@
-// Copyright 2021 Parity Technologies (UK) Ltd.
+// Copyright 2022 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -16,7 +16,7 @@
 
 //! Helper for handling (i.e. answering) grandpa warp sync requests from a remote peer.
 
-use codec::{Decode, Encode};
+use codec::Decode;
 use futures::{
 	channel::{mpsc, oneshot},
 	stream::StreamExt,
@@ -27,51 +27,12 @@ use sc_network_common::{
 	request_responses::{
 		IncomingRequest, OutgoingResponse, ProtocolConfig as RequestResponseConfig,
 	},
+	sync::warp::{EncodedProof, WarpProofRequest, WarpSyncProvider},
 };
 use sp_runtime::traits::Block as BlockT;
 use std::{sync::Arc, time::Duration};
 
-pub use sp_finality_grandpa::{AuthorityList, SetId};
-
-/// Scale-encoded warp sync proof response.
-pub struct EncodedProof(pub Vec<u8>);
-
-/// Warp sync request
-#[derive(Encode, Decode, Debug)]
-pub struct Request<B: BlockT> {
-	/// Start collecting proofs from this block.
-	pub begin: B::Hash,
-}
-
 const MAX_RESPONSE_SIZE: u64 = 16 * 1024 * 1024;
-
-/// Proof verification result.
-pub enum VerificationResult<Block: BlockT> {
-	/// Proof is valid, but the target was not reached.
-	Partial(SetId, AuthorityList, Block::Hash),
-	/// Target finality is proved.
-	Complete(SetId, AuthorityList, Block::Header),
-}
-
-/// Warp sync backend. Handles retrieveing and verifying warp sync proofs.
-pub trait WarpSyncProvider<B: BlockT>: Send + Sync {
-	/// Generate proof starting at given block hash. The proof is accumulated until maximum proof
-	/// size is reached.
-	fn generate(
-		&self,
-		start: B::Hash,
-	) -> Result<EncodedProof, Box<dyn std::error::Error + Send + Sync>>;
-	/// Verify warp proof against current set of authorities.
-	fn verify(
-		&self,
-		proof: &EncodedProof,
-		set_id: SetId,
-		authorities: AuthorityList,
-	) -> Result<VerificationResult<B>, Box<dyn std::error::Error + Send + Sync>>;
-	/// Get current list of authorities. This is supposed to be genesis authorities when starting
-	/// sync.
-	fn current_authorities(&self) -> AuthorityList;
-}
 
 /// Generates a [`RequestResponseConfig`] for the grandpa warp sync request protocol, refusing
 /// incoming requests.
@@ -115,7 +76,7 @@ impl<TBlock: BlockT> RequestHandler<TBlock> {
 		payload: Vec<u8>,
 		pending_response: oneshot::Sender<OutgoingResponse>,
 	) -> Result<(), HandleRequestError> {
-		let request = Request::<TBlock>::decode(&mut &payload[..])?;
+		let request = WarpProofRequest::<TBlock>::decode(&mut &payload[..])?;
 
 		let EncodedProof(proof) = self
 			.backend

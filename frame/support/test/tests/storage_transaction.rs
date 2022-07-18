@@ -15,6 +15,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Disable warnings for #\[transactional\] being deprecated.
+#![allow(deprecated)]
+
 use frame_support::{
 	assert_noop, assert_ok, assert_storage_noop,
 	dispatch::{DispatchError, DispatchResult},

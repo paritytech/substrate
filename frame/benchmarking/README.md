@@ -43,7 +43,7 @@ The benchmarking framework comes with the following tools:
 * [A set of macros](./src/lib.rs) (`benchmarks!`, `add_benchmark!`, etc...) to make it easy to
   write, test, and add runtime benchmarks.
 * [A set of linear regression analysis functions](./src/analysis.rs) for processing benchmark data.
-* [A CLI extension](../../utils/frame/benchmarking-cli/) to make it easy to execute benchmarks on your
+* [A CLI extension](../../utils/frame/benchmarking-cli/README.md) to make it easy to execute benchmarks on your
   node.
 
 The end-to-end benchmarking pipeline is disabled by default when compiling a node. If you want to
@@ -150,8 +150,12 @@ feature flag:
 
 ```bash
 cd bin/node/cli
-cargo build --release --features runtime-benchmarks
+cargo build --profile=production --features runtime-benchmarks
 ```
+
+The production profile applies various compiler optimizations.  
+These optimizations slow down the compilation process *a lot*.  
+If you are just testing things out and don't need final numbers, don't include `--profile=production`.
 
 ## Running Benchmarks
 
@@ -161,13 +165,13 @@ benchmarks.
 You can get a list of the available benchmarks by running:
 
 ```bash
-./target/release/substrate benchmark --chain dev --pallet "*" --extrinsic "*" --repeat 0
+./target/production/substrate benchmark pallet --chain dev --pallet "*" --extrinsic "*" --repeat 0
 ```
 
 Then you can run a benchmark like so:
 
 ```bash
-./target/release/substrate benchmark \
+./target/production/substrate benchmark pallet \
     --chain dev \                  # Configurable Chain Spec
     --execution=wasm \             # Always test with Wasm
     --wasm-execution=compiled \    # Always used `wasm-time`
@@ -200,7 +204,7 @@ used for joining all the arguments passed to the CLI.
 To get a full list of available options when running benchmarks, run:
 
 ```bash
-./target/release/substrate benchmark --help
+./target/production/substrate benchmark --help
 ```
 
 License: Apache-2.0

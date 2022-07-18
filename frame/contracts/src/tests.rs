@@ -17,15 +17,15 @@
 
 use crate::{
 	chain_extension::{
-		ChainExtension, Environment, Ext, InitState, Result as ExtensionResult, RetVal,
-		ReturnFlags, SysConfig, UncheckedFrom,
+		ChainExtension, Environment, Ext, InitState, RegisteredChainExtension,
+		Result as ExtensionResult, RetVal, ReturnFlags, SysConfig, UncheckedFrom,
 	},
-	exec::Frame,
+	exec::{FixSizedKey, Frame},
 	storage::Storage,
 	wasm::{PrefabWasmModule, ReturnCode as RuntimeReturnCode},
 	weights::WeightInfo,
 	BalanceOf, Code, CodeStorage, Config, ContractInfoOf, DefaultAddressGenerator,
-	DefaultContractAccessWeight, Error, Pallet, Schedule,
+	DefaultContractAccessWeight, DeletionQueue, Error, Pallet, Schedule,
 };
 use assert_matches::assert_matches;
 use codec::Encode;
@@ -35,7 +35,8 @@ use frame_support::{
 	parameter_types,
 	storage::child,
 	traits::{
-		BalanceStatus, ConstU32, ConstU64, Contains, Currency, OnInitialize, ReservableCurrency,
+		BalanceStatus, ConstU32, ConstU64, Contains, Currency, Get, OnIdle, OnInitialize,
+		ReservableCurrency,
 	},
 	weights::{constants::WEIGHT_PER_SECOND, DispatchClass, PostDispatchInfo, Weight},
 };
@@ -117,6 +118,10 @@ pub struct TestExtension {
 	last_seen_inputs: (u32, u32, u32, u32),
 }
 
+pub struct RevertingExtension;
+
+pub struct DisabledExtension;
+
 impl TestExtension {
 	fn disable() {
 		TEST_EXTENSION.with(|e| e.borrow_mut().enabled = false)
@@ -146,7 +151,7 @@ impl ChainExtension<Test> for TestExtension {
 		match func_id {
 			0 => {
 				let mut env = env.buf_in_buf_out();
-				let input = env.read(2)?;
+				let input = env.read(8)?;
 				env.write(&input, false, None)?;
 				TEST_EXTENSION.with(|e| e.borrow_mut().last_seen_buffer = input);
 				Ok(RetVal::Converging(func_id))
@@ -161,7 +166,7 @@ impl ChainExtension<Test> for TestExtension {
 			},
 			2 => {
 				let mut env = env.buf_in_buf_out();
-				let weight = env.read(2)?[1].into();
+				let weight = env.read(5)?[4].into();
 				env.charge_weight(weight)?;
 				Ok(RetVal::Converging(func_id))
 			},
@@ -175,6 +180,46 @@ impl ChainExtension<Test> for TestExtension {
 	fn enabled() -> bool {
 		TEST_EXTENSION.with(|e| e.borrow().enabled)
 	}
+}
+
+impl RegisteredChainExtension<Test> for TestExtension {
+	const ID: u16 = 0;
+}
+
+impl ChainExtension<Test> for RevertingExtension {
+	fn call<E>(_func_id: u32, _env: Environment<E, InitState>) -> ExtensionResult<RetVal>
+	where
+		E: Ext<T = Test>,
+		<E::T as SysConfig>::AccountId: UncheckedFrom<<E::T as SysConfig>::Hash> + AsRef<[u8]>,
+	{
+		Ok(RetVal::Diverging { flags: ReturnFlags::REVERT, data: vec![0x4B, 0x1D] })
+	}
+
+	fn enabled() -> bool {
+		TEST_EXTENSION.with(|e| e.borrow().enabled)
+	}
+}
+
+impl RegisteredChainExtension<Test> for RevertingExtension {
+	const ID: u16 = 1;
+}
+
+impl ChainExtension<Test> for DisabledExtension {
+	fn call<E>(_func_id: u32, _env: Environment<E, InitState>) -> ExtensionResult<RetVal>
+	where
+		E: Ext<T = Test>,
+		<E::T as SysConfig>::AccountId: UncheckedFrom<<E::T as SysConfig>::Hash> + AsRef<[u8]>,
+	{
+		panic!("Disabled chain extensions are never called")
+	}
+
+	fn enabled() -> bool {
+		false
+	}
+}
+
+impl RegisteredChainExtension<Test> for DisabledExtension {
+	const ID: u16 = 2;
 }
 
 parameter_types! {
@@ -280,7 +325,7 @@ impl Config for Test {
 	type CallStack = [Frame<Self>; 31];
 	type WeightPrice = Self;
 	type WeightInfo = ();
-	type ChainExtension = TestExtension;
+	type ChainExtension = (TestExtension, DisabledExtension, RevertingExtension);
 	type DeletionQueueDepth = ConstU32<1024>;
 	type DeletionWeightLimit = ConstU64<500_000_000_000>;
 	type Schedule = MySchedule;
@@ -290,6 +335,7 @@ impl Config for Test {
 	type ContractAccessWeight = DefaultContractAccessWeight<BlockWeights>;
 	type MaxCodeLen = ConstU32<{ 128 * 1024 }>;
 	type RelaxedMaxCodeLen = ConstU32<{ 256 * 1024 }>;
+	type MaxStorageKeyLen = ConstU32<128>;
 }
 
 pub const ALICE: AccountId32 = AccountId32::new([1u8; 32]);
@@ -1521,6 +1567,23 @@ fn disabled_chain_extension_errors_on_call() {
 
 #[test]
 fn chain_extension_works() {
+	struct Input<'a> {
+		extension_id: u16,
+		func_id: u16,
+		extra: &'a [u8],
+	}
+
+	impl<'a> From<Input<'a>> for Vec<u8> {
+		fn from(input: Input) -> Vec<u8> {
+			((input.extension_id as u32) << 16 | (input.func_id as u32))
+				.to_le_bytes()
+				.iter()
+				.chain(input.extra)
+				.cloned()
+				.collect()
+		}
+	}
+
 	let (code, hash) = compile_module::<Test>("chain_extension").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		let min_balance = <Test as Config>::Currency::minimum_balance();
@@ -1541,31 +1604,107 @@ fn chain_extension_works() {
 		// func_id.
 
 		// 0 = read input buffer and pass it through as output
+		let input: Vec<u8> = Input { extension_id: 0, func_id: 0, extra: &[99] }.into();
 		let result =
-			Contracts::bare_call(ALICE, addr.clone(), 0, GAS_LIMIT, None, vec![0, 99], false);
-		let gas_consumed = result.gas_consumed;
-		assert_eq!(TestExtension::last_seen_buffer(), vec![0, 99]);
-		assert_eq!(result.result.unwrap().data, Bytes(vec![0, 99]));
+			Contracts::bare_call(ALICE, addr.clone(), 0, GAS_LIMIT, None, input.clone(), false);
+		assert_eq!(TestExtension::last_seen_buffer(), input);
+		assert_eq!(result.result.unwrap().data, Bytes(input));
 
 		// 1 = treat inputs as integer primitives and store the supplied integers
-		Contracts::bare_call(ALICE, addr.clone(), 0, GAS_LIMIT, None, vec![1], false)
-			.result
-			.unwrap();
+		Contracts::bare_call(
+			ALICE,
+			addr.clone(),
+			0,
+			GAS_LIMIT,
+			None,
+			Input { extension_id: 0, func_id: 1, extra: &[] }.into(),
+			false,
+		)
+		.result
+		.unwrap();
 		// those values passed in the fixture
-		assert_eq!(TestExtension::last_seen_inputs(), (4, 1, 16, 12));
+		assert_eq!(TestExtension::last_seen_inputs(), (4, 4, 16, 12));
 
-		// 2 = charge some extra weight (amount supplied in second byte)
-		let result =
-			Contracts::bare_call(ALICE, addr.clone(), 0, GAS_LIMIT, None, vec![2, 42], false);
+		// 2 = charge some extra weight (amount supplied in the fifth byte)
+		let result = Contracts::bare_call(
+			ALICE,
+			addr.clone(),
+			0,
+			GAS_LIMIT,
+			None,
+			Input { extension_id: 0, func_id: 2, extra: &[0] }.into(),
+			false,
+		);
+		assert_ok!(result.result);
+		let gas_consumed = result.gas_consumed;
+		let result = Contracts::bare_call(
+			ALICE,
+			addr.clone(),
+			0,
+			GAS_LIMIT,
+			None,
+			Input { extension_id: 0, func_id: 2, extra: &[42] }.into(),
+			false,
+		);
 		assert_ok!(result.result);
 		assert_eq!(result.gas_consumed, gas_consumed + 42);
+		let result = Contracts::bare_call(
+			ALICE,
+			addr.clone(),
+			0,
+			GAS_LIMIT,
+			None,
+			Input { extension_id: 0, func_id: 2, extra: &[95] }.into(),
+			false,
+		);
+		assert_ok!(result.result);
+		assert_eq!(result.gas_consumed, gas_consumed + 95);
 
 		// 3 = diverging chain extension call that sets flags to 0x1 and returns a fixed buffer
-		let result = Contracts::bare_call(ALICE, addr.clone(), 0, GAS_LIMIT, None, vec![3], false)
-			.result
-			.unwrap();
+		let result = Contracts::bare_call(
+			ALICE,
+			addr.clone(),
+			0,
+			GAS_LIMIT,
+			None,
+			Input { extension_id: 0, func_id: 3, extra: &[] }.into(),
+			false,
+		)
+		.result
+		.unwrap();
 		assert_eq!(result.flags, ReturnFlags::REVERT);
 		assert_eq!(result.data, Bytes(vec![42, 99]));
+
+		// diverging to second chain extension that sets flags to 0x1 and returns a fixed buffer
+		// We set the MSB part to 1 (instead of 0) which routes the request into the second
+		// extension
+		let result = Contracts::bare_call(
+			ALICE,
+			addr.clone(),
+			0,
+			GAS_LIMIT,
+			None,
+			Input { extension_id: 1, func_id: 0, extra: &[] }.into(),
+			false,
+		)
+		.result
+		.unwrap();
+		assert_eq!(result.flags, ReturnFlags::REVERT);
+		assert_eq!(result.data, Bytes(vec![0x4B, 0x1D]));
+
+		// Diverging to third chain extension that is disabled
+		// We set the MSB part to 2 (instead of 0) which routes the request into the third extension
+		assert_err_ignore_postinfo!(
+			Contracts::call(
+				Origin::signed(ALICE),
+				addr.clone(),
+				0,
+				GAS_LIMIT,
+				None,
+				Input { extension_id: 2, func_id: 0, extra: &[] }.into(),
+			),
+			Error::<Test>::NoChainExtension,
+		);
 	});
 }
 
@@ -1610,10 +1749,29 @@ fn lazy_removal_works() {
 		assert_matches!(child::get(trie, &[99]), Some(42));
 
 		// Run the lazy removal
-		Contracts::on_initialize(Weight::max_value());
+		Contracts::on_idle(System::block_number(), Weight::max_value());
 
 		// Value should be gone now
 		assert_matches!(child::get::<i32>(trie, &[99]), None);
+	});
+}
+
+#[test]
+fn lazy_removal_on_full_queue_works_on_initialize() {
+	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
+		// Fill the deletion queue with dummy values, so that on_initialize attempts
+		// to clear the queue
+		Storage::<Test>::fill_queue_with_dummies();
+
+		let queue_len_initial = <DeletionQueue<Test>>::decode_len().unwrap_or(0);
+
+		// Run the lazy removal
+		Contracts::on_initialize(System::block_number());
+
+		let queue_len_after_on_initialize = <DeletionQueue<Test>>::decode_len().unwrap_or(0);
+
+		// Queue length should be decreased after call of on_initialize()
+		assert!(queue_len_initial - queue_len_after_on_initialize > 0);
 	});
 }
 
@@ -1661,7 +1819,7 @@ fn lazy_batch_removal_works() {
 		}
 
 		// Run single lazy removal
-		Contracts::on_initialize(Weight::max_value());
+		Contracts::on_idle(System::block_number(), Weight::max_value());
 
 		// The single lazy removal should have removed all queued tries
 		for trie in tries.iter() {
@@ -1703,8 +1861,14 @@ fn lazy_removal_partial_remove_works() {
 
 		// Put value into the contracts child trie
 		for val in &vals {
-			Storage::<Test>::write(&info.trie_id, &val.0, Some(val.2.clone()), None, false)
-				.unwrap();
+			Storage::<Test>::write(
+				&info.trie_id,
+				&val.0 as &FixSizedKey,
+				Some(val.2.clone()),
+				None,
+				false,
+			)
+			.unwrap();
 		}
 		<ContractInfoOf<Test>>::insert(&addr, info.clone());
 
@@ -1761,7 +1925,34 @@ fn lazy_removal_partial_remove_works() {
 }
 
 #[test]
-fn lazy_removal_does_no_run_on_full_block() {
+fn lazy_removal_does_no_run_on_full_queue_and_full_block() {
+	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
+		// Fill up the block which should prevent the lazy storage removal from running.
+		System::register_extra_weight_unchecked(
+			<Test as system::Config>::BlockWeights::get().max_block,
+			DispatchClass::Mandatory,
+		);
+
+		// Fill the deletion queue with dummy values, so that on_initialize attempts
+		// to clear the queue
+		Storage::<Test>::fill_queue_with_dummies();
+
+		// Check that on_initialize() tries to perform lazy removal but removes nothing
+		//  as no more weight is left for that.
+		let weight_used = Contracts::on_initialize(System::block_number());
+		let base = <<Test as Config>::WeightInfo as WeightInfo>::on_process_deletion_queue_batch();
+		assert_eq!(weight_used, base);
+
+		// Check that the deletion queue is still full after execution of the
+		// on_initialize() hook.
+		let max_len: u32 = <Test as Config>::DeletionQueueDepth::get();
+		let queue_len: u32 = <DeletionQueue<Test>>::decode_len().unwrap_or(0).try_into().unwrap();
+		assert_eq!(max_len, queue_len);
+	});
+}
+
+#[test]
+fn lazy_removal_does_no_run_on_low_remaining_weight() {
 	let (code, hash) = compile_module::<Test>("self_destruct").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		let min_balance = <Test as Config>::Currency::minimum_balance();
@@ -1779,19 +1970,10 @@ fn lazy_removal_does_no_run_on_full_block() {
 
 		let addr = Contracts::contract_address(&ALICE, &hash, &[]);
 		let info = <ContractInfoOf<Test>>::get(&addr).unwrap();
-		let max_keys = 30;
-
-		// Create some storage items for the contract.
-		let vals: Vec<_> = (0..max_keys)
-			.map(|i| (blake2_256(&i.encode()), (i as u32), (i as u32).encode()))
-			.collect();
+		let trie = &info.child_trie_info();
 
 		// Put value into the contracts child trie
-		for val in &vals {
-			Storage::<Test>::write(&info.trie_id, &val.0, Some(val.2.clone()), None, false)
-				.unwrap();
-		}
-		<ContractInfoOf<Test>>::insert(&addr, info.clone());
+		child::put(trie, &[99], &42);
 
 		// Terminate the contract
 		assert_ok!(Contracts::call(
@@ -1806,37 +1988,30 @@ fn lazy_removal_does_no_run_on_full_block() {
 		// Contract info should be gone
 		assert!(!<ContractInfoOf::<Test>>::contains_key(&addr));
 
-		let trie = info.child_trie_info();
-
 		// But value should be still there as the lazy removal did not run, yet.
-		for val in &vals {
-			assert_eq!(child::get::<u32>(&trie, &blake2_256(&val.0)), Some(val.1));
-		}
+		assert_matches!(child::get(trie, &[99]), Some(42));
 
-		// Fill up the block which should prevent the lazy storage removal from running.
-		System::register_extra_weight_unchecked(
-			<Test as system::Config>::BlockWeights::get().max_block,
-			DispatchClass::Mandatory,
-		);
+		// Assign a remaining weight which is too low for a successfull deletion of the contract
+		let low_remaining_weight =
+			<<Test as Config>::WeightInfo as WeightInfo>::on_process_deletion_queue_batch();
 
-		// Run the lazy removal without any limit so that all keys would be removed if there
-		// had been some weight left in the block.
-		let weight_used = Contracts::on_initialize(Weight::max_value());
-		let base = <<Test as Config>::WeightInfo as WeightInfo>::on_initialize();
-		assert_eq!(weight_used, base);
+		// Run the lazy removal
+		Contracts::on_idle(System::block_number(), low_remaining_weight);
 
-		// All the keys are still in place
-		for val in &vals {
-			assert_eq!(child::get::<u32>(&trie, &blake2_256(&val.0)), Some(val.1));
-		}
+		// Value should still be there, since remaining weight was too low for removal
+		assert_matches!(child::get::<i32>(trie, &[99]), Some(42));
 
-		// Run the lazy removal directly which disregards the block limits
-		Storage::<Test>::process_deletion_queue_batch(Weight::max_value());
+		// Run the lazy removal while deletion_queue is not full
+		Contracts::on_initialize(System::block_number());
 
-		// Now the keys should be gone
-		for val in &vals {
-			assert_eq!(child::get::<u32>(&trie, &blake2_256(&val.0)), None);
-		}
+		// Value should still be there, since deletion_queue was not full
+		assert_matches!(child::get::<i32>(trie, &[99]), Some(42));
+
+		// Run on_idle with max remaining weight, this should remove the value
+		Contracts::on_idle(System::block_number(), Weight::max_value());
+
+		// Value should be gone
+		assert_matches!(child::get::<i32>(trie, &[99]), None);
 	});
 }
 
@@ -1872,8 +2047,14 @@ fn lazy_removal_does_not_use_all_weight() {
 
 		// Put value into the contracts child trie
 		for val in &vals {
-			Storage::<Test>::write(&info.trie_id, &val.0, Some(val.2.clone()), None, false)
-				.unwrap();
+			Storage::<Test>::write(
+				&info.trie_id,
+				&val.0 as &FixSizedKey,
+				Some(val.2.clone()),
+				None,
+				false,
+			)
+			.unwrap();
 		}
 		<ContractInfoOf<Test>>::insert(&addr, info.clone());
 
