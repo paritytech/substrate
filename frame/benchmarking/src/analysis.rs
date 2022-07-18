@@ -26,6 +26,7 @@ pub struct Analysis {
 	pub names: Vec<String>,
 	pub value_dists: Option<Vec<(Vec<u32>, u128, u128)>>,
 	pub errors: Option<Vec<u128>>,
+	selector: BenchmarkSelector,
 }
 
 #[derive(Clone, Copy)]
@@ -35,6 +36,44 @@ pub enum BenchmarkSelector {
 	Reads,
 	Writes,
 	ProofSize,
+}
+
+/// Multiplies the value by 1000 and converts it into an u128.
+fn mul_1000_into_u128(value: f64) -> u128 {
+	// This is slighly more precise than the alternative of `(value * 1000.0) as u128`.
+	(value as u128)
+		.saturating_mul(1000)
+		.saturating_add((value.fract() * 1000.0) as u128)
+}
+
+impl BenchmarkSelector {
+	fn scale_and_cast_weight(self, value: f64, round_up: bool) -> u128 {
+		if let BenchmarkSelector::ExtrinsicTime = self {
+			mul_1000_into_u128(value)
+		} else {
+			if round_up {
+				(value + 0.5) as u128
+			} else {
+				value as u128
+			}
+		}
+	}
+
+	fn scale_weight(self, value: u128) -> u128 {
+		if let BenchmarkSelector::ExtrinsicTime = self {
+			value.saturating_mul(1000)
+		} else {
+			value
+		}
+	}
+
+	fn nanos_from_weight(self, value: u128) -> u128 {
+		if let BenchmarkSelector::ExtrinsicTime = self {
+			value / 1000
+		} else {
+			value
+		}
+	}
 }
 
 #[derive(Debug)]
@@ -132,11 +171,12 @@ impl Analysis {
 		let mid = values.len() / 2;
 
 		Some(Self {
-			base: values[mid],
+			base: selector.scale_weight(values[mid]),
 			slopes: Vec::new(),
 			names: Vec::new(),
 			value_dists: None,
 			errors: None,
+			selector,
 		})
 	}
 
@@ -223,8 +263,11 @@ impl Analysis {
 			})
 			.collect::<Vec<_>>();
 
-		let base = models[0].0.max(0f64) as u128;
-		let slopes = models.iter().map(|x| x.1.max(0f64) as u128).collect::<Vec<_>>();
+		let base = selector.scale_and_cast_weight(models[0].0.max(0f64), false);
+		let slopes = models
+			.iter()
+			.map(|x| selector.scale_and_cast_weight(x.1.max(0f64), false))
+			.collect::<Vec<_>>();
 
 		Some(Self {
 			base,
@@ -232,6 +275,7 @@ impl Analysis {
 			names: results.into_iter().map(|x| x.0).collect::<Vec<_>>(),
 			value_dists: None,
 			errors: None,
+			selector,
 		})
 	}
 
@@ -290,11 +334,20 @@ impl Analysis {
 		let (intercept, slopes, errors) = linear_regression(xs, ys, r[0].components.len())?;
 
 		Some(Self {
-			base: (intercept + 0.5) as u128,
-			slopes: slopes.into_iter().map(|value| (value + 0.5) as u128).collect(),
+			base: selector.scale_and_cast_weight(intercept, true),
+			slopes: slopes
+				.into_iter()
+				.map(|value| selector.scale_and_cast_weight(value, true))
+				.collect(),
 			names,
 			value_dists: Some(value_dists),
-			errors: Some(errors.into_iter().map(|value| value as u128).collect()),
+			errors: Some(
+				errors
+					.into_iter()
+					.map(|value| selector.scale_and_cast_weight(value, false))
+					.collect(),
+			),
+			selector,
 		})
 	}
 
@@ -326,7 +379,7 @@ impl Analysis {
 		let value_dists = min_squares.value_dists;
 		let errors = min_squares.errors;
 
-		Some(Self { base, slopes, names, value_dists, errors })
+		Some(Self { base, slopes, names, value_dists, errors, selector })
 	}
 }
 
@@ -388,14 +441,14 @@ impl std::fmt::Display for Analysis {
 			writeln!(f, "\nQuality and confidence:")?;
 			writeln!(f, "param     error")?;
 			for (p, se) in self.names.iter().zip(errors.iter()) {
-				writeln!(f, "{}      {:>8}", p, ms(*se))?;
+				writeln!(f, "{}      {:>8}", p, ms(self.selector.nanos_from_weight(*se)))?;
 			}
 		}
 
 		writeln!(f, "\nModel:")?;
-		writeln!(f, "Time ~= {:>8}", ms(self.base))?;
+		writeln!(f, "Time ~= {:>8}", ms(self.selector.nanos_from_weight(self.base)))?;
 		for (&t, n) in self.slopes.iter().zip(self.names.iter()) {
-			writeln!(f, "    + {} {:>8}", n, ms(t))?;
+			writeln!(f, "    + {} {:>8}", n, ms(self.selector.nanos_from_weight(t)))?;
 		}
 		writeln!(f, "              µs")
 	}
@@ -546,8 +599,8 @@ mod tests {
 
 		let extrinsic_time =
 			Analysis::median_slopes(&data, BenchmarkSelector::ExtrinsicTime).unwrap();
-		assert_eq!(extrinsic_time.base, 10_000_000);
-		assert_eq!(extrinsic_time.slopes, vec![1_000_000, 100_000]);
+		assert_eq!(extrinsic_time.base, 10_000_000_000);
+		assert_eq!(extrinsic_time.slopes, vec![1_000_000_000, 100_000_000]);
 
 		let reads = Analysis::median_slopes(&data, BenchmarkSelector::Reads).unwrap();
 		assert_eq!(reads.base, 2);
@@ -621,8 +674,8 @@ mod tests {
 
 		let extrinsic_time =
 			Analysis::min_squares_iqr(&data, BenchmarkSelector::ExtrinsicTime).unwrap();
-		assert_eq!(extrinsic_time.base, 11_500_000);
-		assert_eq!(extrinsic_time.slopes, vec![630636, 23699]);
+		assert_eq!(extrinsic_time.base, 11_500_000_000);
+		assert_eq!(extrinsic_time.slopes, vec![630635838, 23699421]);
 
 		let reads = Analysis::min_squares_iqr(&data, BenchmarkSelector::Reads).unwrap();
 		assert_eq!(reads.base, 3);
@@ -644,7 +697,7 @@ mod tests {
 
 		let extrinsic_time =
 			Analysis::min_squares_iqr(&data, BenchmarkSelector::ExtrinsicTime).unwrap();
-		assert_eq!(extrinsic_time.base, 2000000);
-		assert_eq!(extrinsic_time.slopes, vec![4000000]);
+		assert_eq!(extrinsic_time.base, 2_000_000_000);
+		assert_eq!(extrinsic_time.slopes, vec![4_000_000_000]);
 	}
 }

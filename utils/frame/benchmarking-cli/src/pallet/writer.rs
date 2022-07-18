@@ -197,11 +197,7 @@ fn get_benchmark_data(
 				if !used_components.contains(&name) {
 					used_components.push(name);
 				}
-				used_extrinsic_time.push(ComponentSlope {
-					name: name.clone(),
-					slope: slope.saturating_mul(1000),
-					error: error.saturating_mul(1000),
-				});
+				used_extrinsic_time.push(ComponentSlope { name: name.clone(), slope, error });
 			}
 		});
 	reads
@@ -252,7 +248,7 @@ fn get_benchmark_data(
 	BenchmarkData {
 		name: String::from_utf8(batch.benchmark.clone()).unwrap(),
 		components,
-		base_weight: extrinsic_time.base.saturating_mul(1000),
+		base_weight: extrinsic_time.base,
 		base_reads: reads.base,
 		base_writes: writes.base,
 		component_weight: used_extrinsic_time,
