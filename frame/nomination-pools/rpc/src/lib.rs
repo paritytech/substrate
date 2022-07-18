@@ -16,6 +16,7 @@
 // limitations under the License.
 
 //! RPC interface for the nomination-pools pallet.
+//! Currently supports only one rpc endpoint.
 
 use codec::Codec;
 use jsonrpsee::{
