@@ -2147,7 +2147,7 @@ pub mod pallet {
 impl<T: Config> Pallet<T> {
 	/// Returns the pending rewards for the specified `member_account`.
 	///
-	/// In the case of error the function returns balance of 0.
+	/// In the case of error the function returns balance of zero.
 	pub fn pending_rewards(member_account: T::AccountId) -> BalanceOf<T> {
 		if let Some(member) = PoolMembers::<T>::get(member_account) {
 			if let Some(pool) = RewardPools::<T>::get(member.pool_id) {
