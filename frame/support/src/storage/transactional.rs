@@ -274,6 +274,9 @@ mod tests {
 					recursive_transactional(limit + 1),
 					sp_runtime::TransactionalError::LimitReached
 				);
+			} else {
+				// It is possible to create at least 257 layers.
+				assert_ok!(recursive_transactional(257));
 			}
 
 			assert_eq!(get_transaction_level(), 0);
