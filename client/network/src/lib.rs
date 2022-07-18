@@ -266,13 +266,9 @@ pub use protocol::{
 	event::{DhtEvent, Event, ObservedRole},
 	PeerInfo,
 };
-pub use sc_network_light::light_client_requests;
-pub use sc_network_sync::{
-	block_request_handler,
-	state::StateDownloadProgress,
-	state_request_handler,
+pub use sc_network_common::sync::{
 	warp::{WarpSyncPhase, WarpSyncProgress},
-	warp_request_handler, SyncState,
+	StateDownloadProgress, SyncState,
 };
 pub use service::{
 	DecodingError, IfDisconnected, KademliaKey, Keypair, NetworkService, NetworkWorker,
