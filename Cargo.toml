@@ -307,4 +307,5 @@ lto = "fat"
 codegen-units = 1
 
 [patch.crates-io]
-libp2p = { git = "https://github.com/kpp/rust-libp2p.git", branch = "libp2p-quic" }
+#libp2p = { git = "https://github.com/kpp/rust-libp2p.git", branch = "libp2p-quic" }
+libp2p = { path = "/home/kpp/parity/rust-libp2p" }

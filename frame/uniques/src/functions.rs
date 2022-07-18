@@ -18,7 +18,10 @@
 //! Various pieces of common functionality.
 
 use super::*;
-use frame_support::{ensure, traits::Get};
+use frame_support::{
+	ensure,
+	traits::{ExistenceRequirement, Get},
+};
 use sp_runtime::{DispatchError, DispatchResult};
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
@@ -46,6 +49,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let origin = details.owner;
 		details.owner = dest;
 		Item::<T, I>::insert(&collection, &item, &details);
+		ItemPriceOf::<T, I>::remove(&collection, &item);
 
 		Self::deposit_event(Event::Transferred {
 			collection,
@@ -112,6 +116,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			}
 			#[allow(deprecated)]
 			ItemMetadataOf::<T, I>::remove_prefix(&collection, None);
+			#[allow(deprecated)]
+			ItemPriceOf::<T, I>::remove_prefix(&collection, None);
 			CollectionMetadataOf::<T, I>::remove(&collection);
 			#[allow(deprecated)]
 			Attribute::<T, I>::remove_prefix((&collection,), None);
@@ -196,8 +202,79 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		Item::<T, I>::remove(&collection, &item);
 		Account::<T, I>::remove((&owner, &collection, &item));
+		ItemPriceOf::<T, I>::remove(&collection, &item);
 
 		Self::deposit_event(Event::Burned { collection, item, owner });
+		Ok(())
+	}
+
+	pub fn do_set_price(
+		collection: T::CollectionId,
+		item: T::ItemId,
+		sender: T::AccountId,
+		price: Option<ItemPrice<T, I>>,
+		whitelisted_buyer: Option<T::AccountId>,
+	) -> DispatchResult {
+		let details = Item::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::UnknownItem)?;
+		ensure!(details.owner == sender, Error::<T, I>::NoPermission);
+
+		if let Some(ref price) = price {
+			ItemPriceOf::<T, I>::insert(
+				&collection,
+				&item,
+				(price.clone(), whitelisted_buyer.clone()),
+			);
+			Self::deposit_event(Event::ItemPriceSet {
+				collection,
+				item,
+				price: price.clone(),
+				whitelisted_buyer,
+			});
+		} else {
+			ItemPriceOf::<T, I>::remove(&collection, &item);
+			Self::deposit_event(Event::ItemPriceRemoved { collection, item });
+		}
+
+		Ok(())
+	}
+
+	pub fn do_buy_item(
+		collection: T::CollectionId,
+		item: T::ItemId,
+		buyer: T::AccountId,
+		bid_price: ItemPrice<T, I>,
+	) -> DispatchResult {
+		let details = Item::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::UnknownItem)?;
+		ensure!(details.owner != buyer, Error::<T, I>::NoPermission);
+
+		let price_info =
+			ItemPriceOf::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::NotForSale)?;
+
+		ensure!(bid_price >= price_info.0, Error::<T, I>::BidTooLow);
+
+		if let Some(only_buyer) = price_info.1 {
+			ensure!(only_buyer == buyer, Error::<T, I>::NoPermission);
+		}
+
+		T::Currency::transfer(
+			&buyer,
+			&details.owner,
+			price_info.0,
+			ExistenceRequirement::KeepAlive,
+		)?;
+
+		let old_owner = details.owner.clone();
+
+		Self::do_transfer(collection, item, buyer.clone(), |_, _| Ok(()))?;
+
+		Self::deposit_event(Event::ItemBought {
+			collection,
+			item,
+			price: price_info.0,
+			seller: old_owner,
+			buyer,
+		});
+
 		Ok(())
 	}
 }

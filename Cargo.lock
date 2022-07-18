@@ -932,7 +932,7 @@ dependencies = [
  "ansi_term",
  "clap 3.1.18",
  "node-cli",
- "rand 0.8.4",
+ "rand 0.8.5",
  "sc-chain-spec",
  "sc-keystore",
  "sp-core",
@@ -2098,7 +2098,7 @@ dependencies = [
  "num-traits",
  "parity-scale-codec",
  "parking_lot 0.12.0",
- "rand 0.8.4",
+ "rand 0.8.5",
  "scale-info",
 ]
 
@@ -2109,7 +2109,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cfcf0ed7fe52a17a03854ec54a9f76d6d84508d1c0e66bc1793301c73fc8493c"
 dependencies = [
  "byteorder",
- "rand 0.8.4",
+ "rand 0.8.5",
  "rustc-hex",
  "static_assertions",
 ]
@@ -2201,7 +2201,7 @@ dependencies = [
  "log",
  "memory-db",
  "parity-scale-codec",
- "rand 0.8.4",
+ "rand 0.8.5",
  "rand_pcg 0.3.1",
  "sc-block-builder",
  "sc-cli",
@@ -2273,7 +2273,7 @@ dependencies = [
  "frame-support",
  "honggfuzz",
  "parity-scale-codec",
- "rand 0.8.4",
+ "rand 0.8.5",
  "scale-info",
  "sp-arithmetic",
  "sp-npos-elections",
@@ -3294,7 +3294,7 @@ dependencies = [
  "jsonrpsee-types",
  "lazy_static",
  "parking_lot 0.12.0",
- "rand 0.8.4",
+ "rand 0.8.5",
  "rustc-hash",
  "serde",
  "serde_json",
@@ -3519,7 +3519,6 @@ checksum = "c7d73b3f436185384286bd8098d17ec07c9a7d2388a6599f824d8502b529702a"
 [[package]]
 name = "libp2p"
 version = "0.47.0"
-source = "git+https://github.com/kpp/rust-libp2p.git?branch=libp2p-quic#8aff243f73ed0cd3a44019adf5763b04436734ef"
 dependencies = [
  "bytes",
  "futures",
@@ -3562,8 +3561,7 @@ dependencies = [
 
 [[package]]
 name = "libp2p-autonat"
-version = "0.5.0"
-source = "git+https://github.com/kpp/rust-libp2p.git?branch=libp2p-quic#8aff243f73ed0cd3a44019adf5763b04436734ef"
+version = "0.6.0"
 dependencies = [
  "async-trait",
  "futures",
@@ -3575,13 +3573,12 @@ dependencies = [
  "log",
  "prost",
  "prost-build",
- "rand 0.8.4",
+ "rand 0.8.5",
 ]
 
 [[package]]
 name = "libp2p-core"
 version = "0.34.0"
-source = "git+https://github.com/kpp/rust-libp2p.git?branch=libp2p-quic#8aff243f73ed0cd3a44019adf5763b04436734ef"
 dependencies = [
  "asn1_der",
  "bs58",
@@ -3602,7 +3599,7 @@ dependencies = [
  "pin-project",
  "prost",
  "prost-build",
- "rand 0.8.4",
+ "rand 0.8.5",
  "ring",
  "rw-stream-sink",
  "sha2 0.10.2",
@@ -3616,7 +3613,6 @@ dependencies = [
 [[package]]
 name = "libp2p-deflate"
 version = "0.34.0"
-source = "git+https://github.com/kpp/rust-libp2p.git?branch=libp2p-quic#8aff243f73ed0cd3a44019adf5763b04436734ef"
 dependencies = [
  "flate2",
  "futures",
@@ -3626,7 +3622,6 @@ dependencies = [
 [[package]]
 name = "libp2p-dns"
 version = "0.34.0"
-source = "git+https://github.com/kpp/rust-libp2p.git?branch=libp2p-quic#8aff243f73ed0cd3a44019adf5763b04436734ef"
 dependencies = [
  "async-std-resolver",
  "futures",
@@ -3639,8 +3634,7 @@ dependencies = [
 
 [[package]]
 name = "libp2p-floodsub"
-version = "0.37.0"
-source = "git+https://github.com/kpp/rust-libp2p.git?branch=libp2p-quic#8aff243f73ed0cd3a44019adf5763b04436734ef"
+version = "0.38.0"
 dependencies = [
  "cuckoofilter",
  "fnv",
@@ -3656,8 +3650,7 @@ dependencies = [
 
 [[package]]
 name = "libp2p-gossipsub"
-version = "0.39.0"
-source = "git+https://github.com/kpp/rust-libp2p.git?branch=libp2p-quic#8aff243f73ed0cd3a44019adf5763b04436734ef"
+version = "0.40.0"
 dependencies = [
  "asynchronous-codec",
  "base64",
@@ -3683,8 +3676,7 @@ dependencies = [
 
 [[package]]
 name = "libp2p-identify"
-version = "0.37.0"
-source = "git+https://github.com/kpp/rust-libp2p.git?branch=libp2p-quic#8aff243f73ed0cd3a44019adf5763b04436734ef"
+version = "0.38.0"
 dependencies = [
  "asynchronous-codec",
  "futures",
@@ -3703,8 +3695,7 @@ dependencies = [
 
 [[package]]
 name = "libp2p-kad"
-version = "0.38.0"
-source = "git+https://github.com/kpp/rust-libp2p.git?branch=libp2p-quic#8aff243f73ed0cd3a44019adf5763b04436734ef"
+version = "0.39.0"
 dependencies = [
  "arrayvec 0.7.2",
  "asynchronous-codec",
@@ -3730,8 +3721,7 @@ dependencies = [
 
 [[package]]
 name = "libp2p-mdns"
-version = "0.38.0"
-source = "git+https://github.com/kpp/rust-libp2p.git?branch=libp2p-quic#8aff243f73ed0cd3a44019adf5763b04436734ef"
+version = "0.39.0"
 dependencies = [
  "async-io",
  "data-encoding",
@@ -3742,7 +3732,7 @@ dependencies = [
  "libp2p-core",
  "libp2p-swarm",
  "log",
- "rand 0.8.4",
+ "rand 0.8.5",
  "smallvec",
  "socket2 0.4.4",
  "void",
@@ -3750,8 +3740,7 @@ dependencies = [
 
 [[package]]
 name = "libp2p-metrics"
-version = "0.7.0"
-source = "git+https://github.com/kpp/rust-libp2p.git?branch=libp2p-quic#8aff243f73ed0cd3a44019adf5763b04436734ef"
+version = "0.8.0"
 dependencies = [
  "libp2p-core",
  "libp2p-gossipsub",
@@ -3766,7 +3755,6 @@ dependencies = [
 [[package]]
 name = "libp2p-mplex"
 version = "0.34.0"
-source = "git+https://github.com/kpp/rust-libp2p.git?branch=libp2p-quic#8aff243f73ed0cd3a44019adf5763b04436734ef"
 dependencies = [
  "asynchronous-codec",
  "bytes",
@@ -3783,7 +3771,6 @@ dependencies = [
 [[package]]
 name = "libp2p-noise"
 version = "0.37.0"
-source = "git+https://github.com/kpp/rust-libp2p.git?branch=libp2p-quic#8aff243f73ed0cd3a44019adf5763b04436734ef"
 dependencies = [
  "bytes",
  "curve25519-dalek 3.0.2",
@@ -3793,7 +3780,7 @@ dependencies = [
  "log",
  "prost",
  "prost-build",
- "rand 0.8.4",
+ "rand 0.8.5",
  "sha2 0.10.2",
  "snow",
  "static_assertions",
@@ -3803,8 +3790,7 @@ dependencies = [
 
 [[package]]
 name = "libp2p-ping"
-version = "0.37.0"
-source = "git+https://github.com/kpp/rust-libp2p.git?branch=libp2p-quic#8aff243f73ed0cd3a44019adf5763b04436734ef"
+version = "0.38.0"
 dependencies = [
  "futures",
  "futures-timer",
@@ -3819,7 +3805,6 @@ dependencies = [
 [[package]]
 name = "libp2p-plaintext"
 version = "0.34.0"
-source = "git+https://github.com/kpp/rust-libp2p.git?branch=libp2p-quic#8aff243f73ed0cd3a44019adf5763b04436734ef"
 dependencies = [
  "asynchronous-codec",
  "bytes",
@@ -3835,7 +3820,6 @@ dependencies = [
 [[package]]
 name = "libp2p-pnet"
 version = "0.22.0"
-source = "git+https://github.com/kpp/rust-libp2p.git?branch=libp2p-quic#8aff243f73ed0cd3a44019adf5763b04436734ef"
 dependencies = [
  "futures",
  "log",
@@ -3848,7 +3832,6 @@ dependencies = [
 [[package]]
 name = "libp2p-quic"
 version = "0.7.0"
-source = "git+https://github.com/kpp/rust-libp2p.git?branch=libp2p-quic#8aff243f73ed0cd3a44019adf5763b04436734ef"
 dependencies = [
  "async-global-executor",
  "async-io",
@@ -3857,6 +3840,7 @@ dependencies = [
  "libp2p-core",
  "parking_lot 0.12.0",
  "quinn-proto",
+ "rand 0.8.5",
  "rcgen",
  "ring",
  "rustls",
@@ -3869,8 +3853,7 @@ dependencies = [
 
 [[package]]
 name = "libp2p-relay"
-version = "0.10.0"
-source = "git+https://github.com/kpp/rust-libp2p.git?branch=libp2p-quic#8aff243f73ed0cd3a44019adf5763b04436734ef"
+version = "0.11.0"
 dependencies = [
  "asynchronous-codec",
  "bytes",
@@ -3885,7 +3868,7 @@ dependencies = [
  "prost",
  "prost-build",
  "prost-codec",
- "rand 0.8.4",
+ "rand 0.8.5",
  "smallvec",
  "static_assertions",
  "thiserror",
@@ -3894,8 +3877,7 @@ dependencies = [
 
 [[package]]
 name = "libp2p-rendezvous"
-version = "0.7.0"
-source = "git+https://github.com/kpp/rust-libp2p.git?branch=libp2p-quic#8aff243f73ed0cd3a44019adf5763b04436734ef"
+version = "0.8.0"
 dependencies = [
  "asynchronous-codec",
  "bimap",
@@ -3907,7 +3889,7 @@ dependencies = [
  "log",
  "prost",
  "prost-build",
- "rand 0.8.4",
+ "rand 0.8.5",
  "sha2 0.10.2",
  "thiserror",
  "unsigned-varint",
@@ -3916,8 +3898,7 @@ dependencies = [
 
 [[package]]
 name = "libp2p-request-response"
-version = "0.19.0"
-source = "git+https://github.com/kpp/rust-libp2p.git?branch=libp2p-quic#8aff243f73ed0cd3a44019adf5763b04436734ef"
+version = "0.20.0"
 dependencies = [
  "async-trait",
  "bytes",
@@ -3933,8 +3914,7 @@ dependencies = [
 
 [[package]]
 name = "libp2p-swarm"
-version = "0.37.0"
-source = "git+https://github.com/kpp/rust-libp2p.git?branch=libp2p-quic#8aff243f73ed0cd3a44019adf5763b04436734ef"
+version = "0.38.0"
 dependencies = [
  "either",
  "fnv",
@@ -3952,8 +3932,7 @@ dependencies = [
 
 [[package]]
 name = "libp2p-swarm-derive"
-version = "0.27.2"
-source = "git+https://github.com/kpp/rust-libp2p.git?branch=libp2p-quic#8aff243f73ed0cd3a44019adf5763b04436734ef"
+version = "0.28.0"
 dependencies = [
  "quote",
  "syn",
@@ -3962,7 +3941,6 @@ dependencies = [
 [[package]]
 name = "libp2p-tcp"
 version = "0.34.0"
-source = "git+https://github.com/kpp/rust-libp2p.git?branch=libp2p-quic#8aff243f73ed0cd3a44019adf5763b04436734ef"
 dependencies = [
  "async-io",
  "futures",
@@ -3978,7 +3956,6 @@ dependencies = [
 [[package]]
 name = "libp2p-uds"
 version = "0.33.0"
-source = "git+https://github.com/kpp/rust-libp2p.git?branch=libp2p-quic#8aff243f73ed0cd3a44019adf5763b04436734ef"
 dependencies = [
  "async-std",
  "futures",
@@ -3989,7 +3966,6 @@ dependencies = [
 [[package]]
 name = "libp2p-wasm-ext"
 version = "0.34.0"
-source = "git+https://github.com/kpp/rust-libp2p.git?branch=libp2p-quic#8aff243f73ed0cd3a44019adf5763b04436734ef"
 dependencies = [
  "futures",
  "js-sys",
@@ -4002,7 +3978,6 @@ dependencies = [
 [[package]]
 name = "libp2p-websocket"
 version = "0.36.0"
-source = "git+https://github.com/kpp/rust-libp2p.git?branch=libp2p-quic#8aff243f73ed0cd3a44019adf5763b04436734ef"
 dependencies = [
  "either",
  "futures",
@@ -4020,7 +3995,6 @@ dependencies = [
 [[package]]
 name = "libp2p-yamux"
 version = "0.38.0"
-source = "git+https://github.com/kpp/rust-libp2p.git?branch=libp2p-quic#8aff243f73ed0cd3a44019adf5763b04436734ef"
 dependencies = [
  "futures",
  "libp2p-core",
@@ -4057,7 +4031,7 @@ dependencies = [
  "libsecp256k1-core",
  "libsecp256k1-gen-ecmult",
  "libsecp256k1-gen-genmult",
- "rand 0.8.4",
+ "rand 0.8.5",
  "serde",
  "sha2 0.9.8",
  "typenum",
@@ -4477,7 +4451,6 @@ checksum = "1255076139a83bb467426e7f8d0134968a8118844faa755985e077cf31850333"
 [[package]]
 name = "multistream-select"
 version = "0.11.0"
-source = "git+https://github.com/kpp/rust-libp2p.git?branch=libp2p-quic#8aff243f73ed0cd3a44019adf5763b04436734ef"
 dependencies = [
  "bytes",
  "futures",
@@ -4499,7 +4472,7 @@ dependencies = [
  "num-complex",
  "num-rational 0.4.0",
  "num-traits",
- "rand 0.8.4",
+ "rand 0.8.5",
  "rand_distr",
  "simba",
  "typenum",
@@ -4522,7 +4495,7 @@ version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e7d66043b25d4a6cccb23619d10c19c25304b355a7dccd4a8e11423dd2382146"
 dependencies = [
- "rand 0.8.4",
+ "rand 0.8.5",
 ]
 
 [[package]]
@@ -4682,7 +4655,7 @@ dependencies = [
  "pallet-transaction-payment",
  "parity-scale-codec",
  "platforms",
- "rand 0.8.4",
+ "rand 0.8.5",
  "regex",
  "remote-externalities",
  "sc-authority-discovery",
@@ -5456,7 +5429,7 @@ dependencies = [
  "frame-election-provider-support",
  "honggfuzz",
  "pallet-bags-list",
- "rand 0.8.4",
+ "rand 0.8.5",
 ]
 
 [[package]]
@@ -5600,6 +5573,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "hex-literal",
+ "impl-trait-for-tuples",
  "log",
  "pallet-balances",
  "pallet-contracts-primitives",
@@ -5609,7 +5583,7 @@ dependencies = [
  "pallet-utility",
  "parity-scale-codec",
  "pretty_assertions",
- "rand 0.8.4",
+ "rand 0.8.5",
  "rand_pcg 0.3.1",
  "scale-info",
  "serde",
@@ -5768,6 +5742,7 @@ dependencies = [
  "sp-npos-elections",
  "sp-runtime",
  "sp-std",
+ "sp-tracing",
  "substrate-test-utils",
 ]
 
@@ -6657,7 +6632,7 @@ dependencies = [
  "lz4",
  "memmap2 0.2.1",
  "parking_lot 0.11.2",
- "rand 0.8.4",
+ "rand 0.8.5",
  "snap",
 ]
 
@@ -6840,9 +6815,9 @@ checksum = "19b17cddbe7ec3f8bc800887bab5e717348c95ea2ca0b1bf0837fb964dc67099"
 
 [[package]]
 name = "pem"
-version = "1.0.2"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e9a3b09a20e374558580a4914d3b7d89bd61b954a5a5e1dcbea98753addb1947"
+checksum = "03c64931a1a212348ec4f3b4362585eca7159d0d09cbdf4a7f74f02173596fd4"
 dependencies = [
  "base64",
 ]
@@ -7199,7 +7174,6 @@ dependencies = [
 [[package]]
 name = "prost-codec"
 version = "0.1.0"
-source = "git+https://github.com/kpp/rust-libp2p.git?branch=libp2p-quic#8aff243f73ed0cd3a44019adf5763b04436734ef"
 dependencies = [
  "asynchronous-codec",
  "bytes",
@@ -7278,7 +7252,7 @@ version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "588f6378e4dd99458b60ec275b4477add41ce4fa9f64dcba6f15adccb19b50d6"
 dependencies = [
- "rand 0.8.4",
+ "rand 0.8.5",
 ]
 
 [[package]]
@@ -7300,7 +7274,7 @@ checksum = "3a13a5c0a674c1ce7150c9df7bc4a1e46c2fbbe7c710f56c0dc78b1a810e779e"
 dependencies = [
  "bytes",
  "fxhash",
- "rand 0.8.4",
+ "rand 0.8.5",
  "ring",
  "rustls",
  "rustls-pemfile",
@@ -7361,14 +7335,13 @@ dependencies = [
 
 [[package]]
 name = "rand"
-version = "0.8.4"
+version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2e7573632e6454cf6b99d7aac4ccca54be06da05aca2ef7423d22d27d4d4bcd8"
+checksum = "34af8d1a0e25924bc5b7c43c079c942339d8f0a8b57c39049bef581b46327404"
 dependencies = [
  "libc",
  "rand_chacha 0.3.0",
  "rand_core 0.6.2",
- "rand_hc 0.3.0",
 ]
 
 [[package]]
@@ -7441,7 +7414,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32cb0b9bc82b0a0876c2dd994a7e7a2683d3e7390ca40e6886785ef0c7e3ee31"
 dependencies = [
  "num-traits",
- "rand 0.8.4",
+ "rand 0.8.5",
 ]
 
 [[package]]
@@ -7460,15 +7433,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ca3129af7b92a17112d59ad498c6f81eaf463253766b90396d39ea7a39d6613c"
 dependencies = [
  "rand_core 0.5.1",
-]
-
-[[package]]
-name = "rand_hc"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3190ef7066a446f2e7f42e239d161e905420ccab01eb967c9eb27d21b2322a73"
-dependencies = [
- "rand_core 0.6.2",
 ]
 
 [[package]]
@@ -7575,9 +7539,9 @@ dependencies = [
 
 [[package]]
 name = "rcgen"
-version = "0.9.2"
+version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d7fa2d386df8533b02184941c76ae2e0d0c1d053f5d43339169d80f21275fc5e"
+checksum = "6413f3de1edee53342e6138e75b56d32e7bc6e332b3bd62d497b1929d4cfbcdd"
 dependencies = [
  "pem",
  "ring",
@@ -7961,7 +7925,6 @@ checksum = "f2cc38e8fa666e2de3c4aba7edeb5ffc5246c1c2ed0e3d17e560aeeba736b23f"
 [[package]]
 name = "rw-stream-sink"
 version = "0.3.0"
-source = "git+https://github.com/kpp/rust-libp2p.git?branch=libp2p-quic#8aff243f73ed0cd3a44019adf5763b04436734ef"
 dependencies = [
  "futures",
  "pin-project",
@@ -8563,13 +8526,14 @@ dependencies = [
  "log",
  "parity-scale-codec",
  "parking_lot 0.12.0",
- "rand 0.8.4",
+ "rand 0.8.5",
  "sc-block-builder",
  "sc-chain-spec",
  "sc-client-api",
  "sc-consensus",
  "sc-keystore",
  "sc-network",
+ "sc-network-common",
  "sc-network-gossip",
  "sc-network-test",
  "sc-telemetry",
@@ -8694,7 +8658,6 @@ dependencies = [
  "sp-blockchain",
  "sp-consensus",
  "sp-core",
- "sp-finality-grandpa",
  "sp-runtime",
  "sp-test-primitives",
  "sp-tracing",
@@ -8712,12 +8675,17 @@ dependencies = [
 name = "sc-network-common"
 version = "0.10.0-dev"
 dependencies = [
+ "bitflags",
  "futures",
  "libp2p",
  "parity-scale-codec",
  "prost-build",
+ "sc-consensus",
  "sc-peerset",
  "smallvec",
+ "sp-consensus",
+ "sp-finality-grandpa",
+ "sp-runtime",
 ]
 
 [[package]]
@@ -8762,8 +8730,6 @@ dependencies = [
 name = "sc-network-sync"
 version = "0.10.0-dev"
 dependencies = [
- "bitflags",
- "either",
  "fork-tree",
  "futures",
  "libp2p",
@@ -8808,6 +8774,8 @@ dependencies = [
  "sc-consensus",
  "sc-network",
  "sc-network-common",
+ "sc-network-light",
+ "sc-network-sync",
  "sc-service",
  "sp-blockchain",
  "sp-consensus",
@@ -8990,6 +8958,8 @@ dependencies = [
  "sc-keystore",
  "sc-network",
  "sc-network-common",
+ "sc-network-light",
+ "sc-network-sync",
  "sc-offchain",
  "sc-rpc",
  "sc-rpc-server",
@@ -9663,7 +9633,7 @@ dependencies = [
  "futures",
  "httparse",
  "log",
- "rand 0.8.4",
+ "rand 0.8.5",
  "sha-1 0.9.4",
 ]
 
@@ -10141,7 +10111,7 @@ dependencies = [
  "clap 3.1.18",
  "honggfuzz",
  "parity-scale-codec",
- "rand 0.8.4",
+ "rand 0.8.5",
  "scale-info",
  "sp-npos-elections",
  "sp-runtime",
@@ -10536,7 +10506,7 @@ dependencies = [
  "lazy_static",
  "nalgebra",
  "num-traits",
- "rand 0.8.4",
+ "rand 0.8.5",
 ]
 
 [[package]]
@@ -11340,7 +11310,7 @@ dependencies = [
  "ipnet",
  "lazy_static",
  "log",
- "rand 0.8.4",
+ "rand 0.8.5",
  "smallvec",
  "thiserror",
  "tinyvec",
@@ -11426,7 +11396,7 @@ checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if 1.0.0",
  "digest 0.10.3",
- "rand 0.8.4",
+ "rand 0.6.5",
  "static_assertions",
 ]
 
@@ -12135,7 +12105,7 @@ dependencies = [
  "memfd",
  "memoffset",
  "more-asserts",
- "rand 0.8.4",
+ "rand 0.8.5",
  "region 2.2.0",
  "rustix 0.33.7",
  "thiserror",
@@ -12445,7 +12415,7 @@ dependencies = [
  "log",
  "nohash-hasher",
  "parking_lot 0.12.0",
- "rand 0.8.4",
+ "rand 0.8.5",
  "static_assertions",
 ]
 

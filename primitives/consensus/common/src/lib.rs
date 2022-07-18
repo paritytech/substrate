@@ -33,7 +33,6 @@ use sp_state_machine::StorageProof;
 
 pub mod block_validation;
 pub mod error;
-pub mod evaluation;
 mod select_chain;
 
 pub use self::error::Error;
