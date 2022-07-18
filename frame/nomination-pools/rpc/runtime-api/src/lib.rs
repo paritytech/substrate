@@ -16,6 +16,7 @@
 // limitations under the License.
 
 //! Runtime API definition for nomination-pools pallet.
+//! Currently supports only one rpc endpoint.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
