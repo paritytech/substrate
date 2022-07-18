@@ -33,9 +33,20 @@ use crate::error;
 /// A BEEFY specific keystore implemented as a `Newtype`. This is basically a
 /// wrapper around [`sp_keystore::SyncCryptoStore`] and allows to customize
 /// common cryptographic functionality.
-pub(crate) struct BeefyKeystore(Option<SyncCryptoStorePtr>);
+pub(crate)  trait BeefyKeystore<AggregatableSignature> {
+	pub fn authority_id(&self, keys: &[Public]) -> Option<Public>;
 
-impl BeefyKeystore {
+	pub fn sign(&self, public: &Public, message: &[u8]) -> Result<(Signature,AggregatableSignature),  error::Error>;
+
+	pub fn public_keys(&self) -> Result<Vec<Public>, error::Error>;
+
+	pub fn verify(public: &Public, sig: &Signature, message: &[u8]) -> bool;
+	
+}
+
+trait SimpleBeefyKeystore<AggregatableSignature> : BeefyKeystore<AggregatableSignature>;
+
+impl<AggregatableSignature> BeefyKeystore<AggregatableSignature> for SimpleBeefyKeystore<AggregatableSignature> {
 	/// Check if the keystore contains a private key for one of the public keys
 	/// contained in `keys`. A public key with a matching private key is known
 	/// as a local authority id.
@@ -58,13 +69,12 @@ impl BeefyKeystore {
 
 		public.get(0).cloned()
 	}
-
 	/// Sign `message` with the `public` key.
 	///
 	/// Note that `message` usually will be pre-hashed before being signed.
 	///
 	/// Return the message signature or an error in case of failure.
-	pub fn sign(&self, public: &Public, message: &[u8]) -> Result<Signature, error::Error> {
+	pub fn sign(&self, public: &Public, message: &[u8]) -> Result<(Signature,AggregatableSignature),  error::Error> {
 		let store = self.0.clone().ok_or_else(|| error::Error::Keystore("no Keystore".into()))?;
 
 		let msg = keccak_256(message);
@@ -112,6 +122,23 @@ impl From<Option<SyncCryptoStorePtr>> for BeefyKeystore {
 		BeefyKeystore(store)
 	}
 }
+
+trait AggregatableBeefyKeyStore<TAggregatableSignature> : BeefyKeystore<AggregatableSignature>;
+
+impl<AggretableSignature> BeefyKeystore for AggregatableBeefyKeyStore<AggregatableSignature> {
+	
+}
+
+impl<AggretableSignature> BeefyKeystore for AggregatableBeefyKeyStore<AggregatableSignature> {
+	//TODO: We need to verify an aggregated_signature which needs all public keys at once and a bitfield.
+	//TODO: We need an aggregate function as well and that seems to be the keystore duty.
+
+}
+pub(crate) NonaggregatableBeefyKeyStore(Option<SyncCryptoStorePtr>);
+
+impl BeefyKeystore for NonaggregatableBeefyKeyStore;
+
+pub(crate) BLSBeefyKeyStor(Option<SyncCryptoStorePtr>);
 
 #[cfg(test)]
 pub mod tests {
