@@ -48,7 +48,7 @@ type ReportIdOf<T> = <T as frame_system::Config>::Hash;
 type SameKindReportsOf<T, TimeSlot> =
 	BoundedVec<(TimeSlot, ReportIdOf<T>), <T as Config>::MaxSameKindReports>;
 
-type ConcurrentReportsOf<T> = BoundedVec<ReportIdOf<T>, <T as Config>::MaxConcurrentReportsPerId>;
+type ConcurrentReportsOf<T> = BoundedVec<ReportIdOf<T>, <T as Config>::MaxConcurrentReportsPerTime>;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -73,7 +73,7 @@ pub mod pallet {
 
 		/// Maximum number of reports of the same kind that happened at a specific time slot.
 		#[pallet::constant]
-		type MaxConcurrentReportsPerId: Get<u32>;
+		type MaxConcurrentReportsPerTime: Get<u32>;
 
 		/// The maximum number of reports for the same kind.
 		#[pallet::constant]

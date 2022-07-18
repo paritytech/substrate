@@ -348,7 +348,7 @@ impl<FullIdentification: Clone> Offence<FullIdentification>
 	fn offenders(&self) -> BoundedVec<FullIdentification, MaxOffenders> {
 		vec![self.offender.clone()]
 			.try_into()
-			.defensive_proof("Static config is known good")
+			.defensive_proof("MaxOffenders must be at least 1;")
 			.unwrap()
 	}
 

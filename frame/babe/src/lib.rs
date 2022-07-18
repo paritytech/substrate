@@ -832,7 +832,7 @@ impl<T: Config> Pallet<T> {
 			None => vec![],
 		}
 		.try_into()
-		.defensive_proof("Static config is known good")
+		.defensive_proof("MaxReporters must be at least 1;")
 		.unwrap();
 
 		T::HandleEquivocation::report_offence(reporters, offence)

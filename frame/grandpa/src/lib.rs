@@ -573,7 +573,7 @@ impl<T: Config> Pallet<T> {
 			None => vec![],
 		}
 		.try_into()
-		.expect("MaxReporters must be greater 0");
+		.expect("MaxReporters must be at least 1;");
 
 		// report to the offences module rewarding the sender.
 		T::HandleEquivocation::report_offence(
