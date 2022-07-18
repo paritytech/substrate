@@ -129,6 +129,7 @@ pub struct BeefyVoterLinks<B: Block> {
 }
 
 /// Links used by the BEEFY RPC layer, from the BEEFY background voter.
+#[derive(Clone)]
 pub struct BeefyRPCLinks<B: Block> {
 	/// Stream of signed commitments coming from the voter.
 	pub from_voter_justif_stream: BeefySignedCommitmentStream<B>,

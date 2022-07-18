@@ -837,11 +837,11 @@ pub(crate) mod tests {
 			create_beefy_keystore, get_beefy_streams, make_beefy_ids, two_validators::TestApi,
 			BeefyPeer, BeefyTestNet, BEEFY_PROTOCOL_NAME,
 		},
+		BeefyRPCLinks,
 	};
 
 	use futures::{executor::block_on, future::poll_fn, task::Poll};
 
-	use crate::tests::BeefyLinkHalf;
 	use sc_client_api::HeaderBackend;
 	use sc_network::NetworkService;
 	use sc_network_test::{PeersFullClient, TestNetFactory};
@@ -858,14 +858,15 @@ pub(crate) mod tests {
 	) -> BeefyWorker<Block, Backend, PeersFullClient, TestApi, Arc<NetworkService<Block, H256>>> {
 		let keystore = create_beefy_keystore(*key);
 
-		let (to_rpc_justif_sender, signed_commitment_stream) =
+		let (to_rpc_justif_sender, from_voter_justif_stream) =
 			BeefySignedCommitmentStream::<Block>::channel();
-		let (to_rpc_best_block_sender, beefy_best_block_stream) =
+		let (to_rpc_best_block_sender, from_voter_best_beefy_stream) =
 			BeefyBestBlockStream::<Block>::channel();
 		let (_, from_block_import_justif_stream) = BeefySignedCommitmentStream::<Block>::channel();
 
-		let beefy_link_half = BeefyLinkHalf { signed_commitment_stream, beefy_best_block_stream };
-		*peer.data.beefy_link_half.lock() = Some(beefy_link_half);
+		let beefy_rpc_links =
+			BeefyRPCLinks { from_voter_justif_stream, from_voter_best_beefy_stream };
+		*peer.data.beefy_rpc_links.lock() = Some(beefy_rpc_links);
 
 		let links = BeefyVoterLinks {
 			from_block_import_justif_stream,

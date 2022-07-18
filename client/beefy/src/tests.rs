@@ -55,7 +55,7 @@ use substrate_test_runtime_client::{runtime::Header, ClientExt};
 
 use crate::{
 	beefy_protocol_name, justification::*, keystore::tests::Keyring as BeefyKeyring,
-	notification::*, BeefyVoterLinks,
+	notification::*, BeefyRPCLinks, BeefyVoterLinks,
 };
 
 pub(crate) const BEEFY_PROTOCOL_NAME: &'static str = "/beefy/1";
@@ -101,17 +101,9 @@ fn beefy_protocol_name() {
 	assert_eq!(proto_name.to_string(), expected);
 }
 
-// TODO: compiler warns us about unused `signed_commitment_stream`, will use in later tests
-#[allow(dead_code)]
-#[derive(Clone)]
-pub(crate) struct BeefyLinkHalf {
-	pub signed_commitment_stream: BeefySignedCommitmentStream<Block>,
-	pub beefy_best_block_stream: BeefyBestBlockStream<Block>,
-}
-
 #[derive(Default)]
 pub(crate) struct PeerData {
-	pub(crate) beefy_link_half: Mutex<Option<BeefyLinkHalf>>,
+	pub(crate) beefy_rpc_links: Mutex<Option<BeefyRPCLinks<Block>>>,
 }
 
 pub(crate) struct BeefyTestNet {
@@ -346,14 +338,15 @@ where
 
 		let keystore = create_beefy_keystore(*key);
 
-		let (to_rpc_justif_sender, signed_commitment_stream) =
+		let (to_rpc_justif_sender, from_voter_justif_stream) =
 			BeefySignedCommitmentStream::<Block>::channel();
-		let (to_rpc_best_block_sender, beefy_best_block_stream) =
+		let (to_rpc_best_block_sender, from_voter_best_beefy_stream) =
 			BeefyBestBlockStream::<Block>::channel();
 		let (_, from_block_import_justif_stream) = BeefySignedCommitmentStream::<Block>::channel();
 
-		let beefy_link_half = BeefyLinkHalf { signed_commitment_stream, beefy_best_block_stream };
-		*peer.data.beefy_link_half.lock() = Some(beefy_link_half);
+		let beefy_rpc_links =
+			BeefyRPCLinks { from_voter_justif_stream, from_voter_best_beefy_stream };
+		*peer.data.beefy_rpc_links.lock() = Some(beefy_rpc_links);
 
 		let links = BeefyVoterLinks {
 			from_block_import_justif_stream,
@@ -402,11 +395,11 @@ pub(crate) fn get_beefy_streams(
 	let mut best_block_streams = Vec::new();
 	let mut signed_commitment_streams = Vec::new();
 	for peer_id in 0..peers.len() {
-		let beefy_link_half =
-			net.peer(peer_id).data.beefy_link_half.lock().as_ref().unwrap().clone();
-		let BeefyLinkHalf { signed_commitment_stream, beefy_best_block_stream } = beefy_link_half;
-		best_block_streams.push(beefy_best_block_stream.subscribe());
-		signed_commitment_streams.push(signed_commitment_stream.subscribe());
+		let beefy_rpc_links = net.peer(peer_id).data.beefy_rpc_links.lock().clone().unwrap();
+		let BeefyRPCLinks { from_voter_justif_stream, from_voter_best_beefy_stream } =
+			beefy_rpc_links;
+		best_block_streams.push(from_voter_best_beefy_stream.subscribe());
+		signed_commitment_streams.push(from_voter_justif_stream.subscribe());
 	}
 	(best_block_streams, signed_commitment_streams)
 }
