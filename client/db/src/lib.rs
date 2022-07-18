@@ -881,6 +881,7 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block>
 		block: BlockId<Block>,
 		justification: Option<Justification>,
 	) -> ClientResult<()> {
+		// could change this to accept multiple justifications
 		self.finalized_blocks.push((block, justification));
 		Ok(())
 	}
@@ -1261,6 +1262,7 @@ impl<Block: BlockT> Backend<Block> {
 		self.note_finalized(transaction, header, *hash, finalization_displaced, with_state)?;
 
 		if let Some(justification) = justification {
+			// This keeps single JUSTIFICATION per block :(
 			transaction.set_from_vec(
 				columns::JUSTIFICATIONS,
 				&utils::number_and_hash_to_lookup_key(number, hash)?,

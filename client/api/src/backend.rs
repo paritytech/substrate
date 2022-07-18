@@ -216,6 +216,7 @@ pub trait BlockImportOperation<Block: BlockT> {
 	fn mark_finalized(
 		&mut self,
 		id: BlockId<Block>,
+		// should be multiple Justifications?
 		justification: Option<Justification>,
 	) -> sp_blockchain::Result<()>;
 
@@ -252,6 +253,7 @@ pub trait Finalizer<Block: BlockT, B: Backend<Block>> {
 		&self,
 		operation: &mut ClientImportOperation<Block, B>,
 		id: BlockId<Block>,
+		// single justification...
 		justification: Option<Justification>,
 		notify: bool,
 	) -> sp_blockchain::Result<()>;

@@ -704,6 +704,7 @@ where
 			origin,
 		);
 
+		// could call this from grandpa with included beefy justification
 		operation.op.set_block_data(
 			import_headers.post().clone(),
 			body,
@@ -893,6 +894,8 @@ where
 		}
 
 		assert_eq!(enacted.last().map(|e| e.hash), Some(block));
+		// could call this from grandpa with beefy justification,
+		// but that ends up overwriting instead of appending
 		operation.op.mark_finalized(BlockId::Hash(block), justification)?;
 
 		if notify {
