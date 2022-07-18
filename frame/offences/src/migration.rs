@@ -15,11 +15,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::{Config, OffenceDetails, Perbill, SessionIndex};
-use frame_support::{
-	bounded_vec, pallet_prelude::ValueQuery, storage_alias, traits::Get, weights::Weight,
+use super::{Config, OffenceDetails};
+use frame_support::{pallet_prelude::ValueQuery, storage_alias, traits::Get, weights::Weight};
+use sp_runtime::Perbill;
+use sp_staking::{
+	offence::{DisableStrategy, OnOffenceHandler},
+	SessionIndex,
 };
-use sp_staking::offence::{DisableStrategy, OnOffenceHandler};
 use sp_std::vec::Vec;
 
 /// Type of data stored as a deferred offence
@@ -39,14 +41,21 @@ pub fn remove_deferred_storage<T: Config>() -> Weight {
 	let mut weight = T::DbWeight::get().reads_writes(1, 1);
 	let deferred = <DeferredOffences<T>>::take();
 	log::info!(target: "runtime::offences", "have {} deferred offences, applying.", deferred.len());
-	for (offences, perbill, session) in deferred.iter() {
-		let consumed = T::OnOffenceHandler::on_offence(
-			offences,
-			perbill,
-			*session,
-			DisableStrategy::WhenSlashed,
-		);
-		weight = weight.saturating_add(consumed);
+	for (offences, perbill, session) in deferred.into_iter() {
+		if let (Ok(offences), Ok(perbill)) = (offences.try_into(), perbill.try_into()) {
+			let consumed = T::OnOffenceHandler::on_offence(
+				&offences,
+				&perbill,
+				session,
+				DisableStrategy::WhenSlashed,
+			);
+			weight = weight.saturating_add(consumed);
+		} else {
+			log::error!(
+				target: "runtime::offences",
+				"Deferred offence with wrong bounded length"
+			);
+		}
 	}
 
 	weight
@@ -68,11 +77,13 @@ mod test {
 				assert_eq!(f.clone(), vec![]);
 			});
 
-			let offence_details =
-				OffenceDetails::<T::AccountId, <T as Config>::IdentificationTuple> {
-					offender: 5,
-					reporters: bounded_vec![],
-				};
+			let offence_details = OffenceDetails::<
+				<T as frame_system::Config>::AccountId,
+				<T as Config>::IdentificationTuple,
+			> {
+				offender: 5,
+				reporters: Default::default(),
+			};
 
 			// push deferred offence
 			<DeferredOffences<T>>::append((

@@ -39,7 +39,7 @@ use sp_runtime::{
 	Perbill,
 };
 use sp_staking::{
-	offence::{self, DisableStrategy, Kind, MaxOffenders, MaxReporters, OffenceDetails},
+	offence::{self, DisableStrategy, Kind, MaxOffenders, OffenceDetails},
 	SessionIndex,
 };
 use std::cell::RefCell;
@@ -56,7 +56,7 @@ impl<Reporter, Offender> offence::OnOffenceHandler<Reporter, Offender, Weight>
 {
 	fn on_offence(
 		_offenders: &BoundedVec<OffenceDetails<Reporter, Offender>, MaxOffenders>,
-		slash_fraction: &BoundedVec<Perbill, MaxReporters>,
+		slash_fraction: &BoundedVec<Perbill, MaxOffenders>,
 		_offence_session: SessionIndex,
 		_disable_strategy: DisableStrategy,
 	) -> Weight {

@@ -22,7 +22,7 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-//TODO pub mod migration;
+pub mod migration;
 mod mock;
 mod tests;
 
@@ -39,7 +39,7 @@ pub use pallet::*;
 
 /// A binary blob which represents a SCALE codec-encoded `O::TimeSlot`.
 ///
-/// Needs to be bounded since it is included in events.
+/// Needs to be bounded since it is stored in `ReportIndexStorage`.
 type OpaqueTimeSlotOf<T> = BoundedVec<u8, <T as Config>::MaxOpaqueTimeSlotEncodedLen>;
 
 /// A type alias for a report identifier.
@@ -57,7 +57,6 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
-	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
 	/// The pallet's config trait.
@@ -138,14 +137,24 @@ pub mod pallet {
 		Offence { kind: Kind, timeslot: OpaqueTimeSlotOf<T> },
 	}
 
+	/// Error types that are wrapped into an `OffenceError::Other`
+	/// to be returned by the offences callbacks.
 	#[pallet::error]
 	#[derive(PartialEq, Eq)]
 	pub enum Error<T> {
+		/// Too many concurrent reports per time slot.
+		///
+		/// This is limited by `MaxConcurrentReportsPerTime`.
 		TooManyConcurrentReports,
+
+		/// Too many reports of the same kind.
+		///
+		/// This is limited by `MaxSameKindReports`.
 		TooManySameKindReports,
 
 		/// The length of an encoded time slot is too long.
 		TimeSlotEncodingTooLong,
+
 		/// The length of the encoded same kind reports is too long.
 		SameKindReportsEncodingTooLong,
 	}
@@ -178,7 +187,7 @@ where
 		// The amount new offenders are slashed
 		let new_fraction = O::slash_fraction(offenders_count, validator_set_count);
 
-		let slash_perbill: BoundedVec<_, MaxOffenders> = (0..concurrent_offenders.len()).map(|_| new_fraction).collect::<Vec<_>>().try_into().expect("TriageOutcome has at most MaxOffenders offenders; .map() does not increase the length; qed");
+		let slash_perbill: BoundedVec<_, MaxOffenders> = (0..concurrent_offenders.len()).map(|_| new_fraction).collect::<Vec<_>>().try_into().expect("TriageOutcome has at most MaxOffenders offenders; .map() does not increase that number; qed");
 
 		T::OnOffenceHandler::on_offence(
 			&concurrent_offenders,
@@ -212,6 +221,7 @@ where
 	}
 }
 
+// Convert an Error into an OffenceError.
 impl<T: Config> From<Error<T>> for OffenceError {
 	fn from(err: Error<T>) -> OffenceError {
 		let index = match err {
@@ -263,13 +273,13 @@ impl<T: Config> Pallet<T> {
 
 		if any_new {
 			// Load report details for the all reports happened at the same time.
-			let concurrent_offenders = storage
+			let concurrent_offenders: BoundedVec<_, MaxOffenders> = storage
 				.concurrent_reports
 				.iter()
 				.filter_map(<Reports<T>>::get)
 				.collect::<Vec<_>>()
 				.try_into()
-				.expect("todo");
+				.map_err(|_| Error::<T>::TooManyConcurrentReports)?;
 
 			storage.save()?;
 
